@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { SiteHeader } from "@/components/site-header";
+import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
 
 const inter = Inter({
@@ -29,8 +31,11 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="bg-bg font-sans text-primary antialiased">
+      {/* min-h-dvh + flex-col：页面主体（各路由根元素 flex-1）把页脚推到视口底部 */}
+      <body className="flex min-h-dvh flex-col bg-bg font-sans text-primary antialiased">
+        <SiteHeader />
         {children}
+        <SiteFooter />
       </body>
     </html>
   );
