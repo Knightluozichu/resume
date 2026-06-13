@@ -970,6 +970,20 @@ export default function FerrariScene({ onReady }: { onReady?: () => void }) {
   // 性能档位（HEL-15）：默认满配 high，PerformanceMonitor 掉帧时下调。
   const [tier, setTier] = useState<PerfTier>("high");
 
+  // 初始机位/ fov：按挂载时窗口宽高比直接算到响应式目标（lazy init，仅 client 跑一次）。
+  // 关键——这样 Canvas 第 0 帧就是终态取景，消除「CAMERA_BASE 第 0 帧（车偏大偏上）
+  // → useFrame 才 snap」中间闪一帧的进场跳变（CameraRig 仍会 snap 到同一目标，无跳）。
+  const [initialCam] = useState(() => {
+    const aspect =
+      window.innerHeight > 0 ? window.innerWidth / window.innerHeight : 1.6;
+    const v = new Vector3();
+    const portrait = resolveCameraTarget(aspect, v);
+    return {
+      position: [v.x, v.y, v.z] as [number, number, number],
+      fov: CAMERA.fov + portrait * RESPONSIVE.portraitFovBoost,
+    };
+  });
+
   // 离开页面时释放 GLTF 缓存，避免热更新/导航后的句柄堆积
   useEffect(() => {
     return () => {
@@ -984,9 +998,9 @@ export default function FerrariScene({ onReady }: { onReady?: () => void }) {
       shadows
       // DPR 由性能档位驱动（HEL-15）：掉帧降上限，正常设备维持满配 [1,2]
       dpr={PERF_TIERS[tier].dpr}
-      // 拉远后的基准机位（CAMERA_BASE = baseRaw × dollyScale）；CameraRig 首帧 snap
-      // 到当前 aspect 的响应式目标（消除进场跳变），之后做响应式过渡。
-      camera={{ position: CAMERA_BASE, fov: CAMERA.fov }}
+      // 初始机位按窗口宽高比算到响应式目标（第 0 帧即终态，无进场跳变）；
+      // CameraRig 之后维持并处理 resize。
+      camera={{ position: initialCam.position, fov: initialCam.fov }}
     >
       {/* 模型就绪后通知外层收起加载海报（与 FerrariRig 共享 useGLTF 缓存） */}
       <ModelReady onReady={onReady} />
