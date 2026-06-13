@@ -43,10 +43,11 @@ const FerrariScene = dynamic(() => import("./ferrari-scene"), {
 
 /**
  * 「就绪后淡入」过渡（HEL-17）：dynamic chunk 加载完成 → FerrariScene 挂载，此包裹层
- * 首帧 opacity-0、挂载后下一帧切 opacity-100，让实时画面从海报上柔和淡入，消除硬切。
+ * 首帧 opacity-0、挂载后下一帧切 opacity-100，让实时画面从页面深色底柔和淡入，消除硬切。
  *
- * - 海报在底层（loading 占位 + 不支持 WebGL2 兜底都是它）；实时 Canvas 透明背景叠在其上，
- *   淡入时两者交叠 → 平滑过渡到实时画面。
+ * - 实时 Canvas 透明背景，淡入到页面 --bg 之上（不再用 poster 作永久底层——
+ *   否则旧取景海报会从透明区透出来，与实时小车叠成「两台车」）。
+ * - poster 只作 dynamic loading 占位（chunk 加载期）与 WebGL2 兜底，不进永久层。
  * - 时长用 DESIGN 动效 token --duration-page（320ms，页面级），呼应任务「~0.4s」精神；
  *   reduced-motion 下该 token 自动降为 0ms（globals.css），即瞬时显示，不违反动效原则 4。
  * - 注意：本文件是 three 的 dynamic 边界，禁止 import three（硬规则 6）——
@@ -108,16 +109,7 @@ export function HeroCanvas() {
   const webgl2 = useWebGL2Supported();
   // 不支持 WebGL2：直接静态海报兜底，永不挂载 three（连 chunk 都不拉）
   if (!webgl2) return <HeroPoster />;
-  // 支持：海报作 loading 占位，实时 Canvas 就绪后柔和淡入接管（消除硬切）
-  return (
-    <div className="relative h-full w-full">
-      {/* 底层海报：淡入期间在实时画面之下平滑过渡（loading 占位也是同一张） */}
-      <div className="absolute inset-0">
-        <HeroPoster />
-      </div>
-      <div className="absolute inset-0">
-        <FadeInScene />
-      </div>
-    </div>
-  );
+  // 支持：dynamic loading 期显示海报占位，chunk 就绪后实时 Canvas 从深色底淡入接管。
+  // 不再把海报垫成永久底层（透明画布会让旧取景海报透出 → 两台车）。
+  return <FadeInScene />;
 }

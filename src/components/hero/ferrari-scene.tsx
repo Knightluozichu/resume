@@ -177,30 +177,31 @@ const PAINT_CLEARCOAT_ROUGHNESS = 0.1;
  * 数量纳入 PerformanceMonitor 降级矩阵（见 PERF_TIERS.windCount）。
  */
 const WIND = {
-  /** 桌面满配粒子数（降级时被 PERF_TIERS.windCount 覆盖）。任务要求 1500~3000。↑ 更密更吃 GPU。 */
-  count: 2400,
-  /** 分布包围盒半区间 [x,y,z]：粒子在 [-half,half] 内循环。略大于车身营造环绕风场。 */
-  half: [9, 4.5, 8] as [number, number, number],
-  /** 整体抬高，使风场环绕车身中部偏上、不全堆地面。 */
-  centerY: 1.0,
-  /** 主风向（单位向量量级，会与流场叠加）：整体「春风」缓缓吹向 +x、略上飘。归一化前的方向。 */
-  windDir: [1, 0.15, -0.35] as [number, number, number],
-  /** 主风速（世界单位/秒）：整体平流速度。↑ 飘得更快。0.3~0.8 微妙为上。 */
-  windSpeed: 0.45,
-  /** 卷曲流场强度（世界单位/秒）：sin/cos 涡流叠加幅度，营造「随风卷曲飘逸」。↑ 更卷更乱。 */
-  curlStrength: 0.6,
-  /** 流场空间频率：↑ 涡流更细碎，↓ 更舒展大尺度。0.2~0.6 */
-  curlFreq: 0.35,
-  /** 流场时间频率：↑ 涡流变化更快。0.1~0.4 */
-  curlTimeFreq: 0.18,
-  /** 单粒子基准尺寸（世界单位，点随距离透视缩放）。↑ 更显眼。 */
-  size: 0.13,
-  /** 整体透明度（叠加后亮度）：↓ 更隐约衬托，↑ 更抢眼。 */
-  opacity: 0.55,
-  /** 高光白点占比（0~1）：少量粒子取白色点缀，其余 accent 紫。0=全紫，0.2=两成白。 */
-  whiteRatio: 0.18,
-  /** 软圆贴图分辨率（径向渐变 sprite）。64 足够柔。 */
-  spriteSize: 64,
+  /** 光屑数量（每个 = 头亮尾隐的发光光丝）。降级时被 PERF_TIERS.windCount 覆盖。↑ 更密更吃 GPU。 */
+  // 总监调校：1100→600，避免「光雨/速度线」过密，回到轻盈春风感
+  count: 600,
+  /** 分布包围盒半区间 [x,y,z]：光屑在 [-half,half] 内循环。略大于车身营造环绕风场。 */
+  half: [11, 5.5, 9] as [number, number, number],
+  /** 整体抬高，使风场环绕车身中部偏上。 */
+  centerY: 1.1,
+  /** 主风向（归一化前）：整体「春风」斜向吹过，明确流向（决定光屑流动方向）。 */
+  windDir: [1, 0.12, -0.3] as [number, number, number],
+  /** 主风速（世界单位/秒）：整体平流速度，决定光屑流动快慢与拖尾长度。↑ 飘更快尾更长。 */
+  // 总监调校：1.1→0.8，放缓成「春风」而非强风/光雨
+  windSpeed: 0.8,
+  /** 卷曲流场强度（世界单位/秒）：sin/cos 涡流叠加，让光屑随风卷曲飘逸不呆板。↑ 更卷。 */
+  // 总监调校：0.55→0.9，加大卷曲打破均匀「下雨」感，更像花瓣随风乱舞
+  curlStrength: 0.9,
+  /** 流场空间频率：↑ 涡流更细碎，↓ 更舒展。 */
+  curlFreq: 0.32,
+  /** 流场时间频率：↑ 涡流变化更快。 */
+  curlTimeFreq: 0.16,
+  /** 拖尾时长（秒）：尾顶点 = 头 - 速度×此值。↑ 拖尾更长更「飞驰」，↓ 更短像光点。 */
+  streakTime: 0.5,
+  /** 整体不透明度（additive 叠加亮度）：↓ 更隐约衬托，↑ 更抢眼。 */
+  opacity: 0.6,
+  /** 高光白光屑占比（0~1）：少量取白色点缀，其余 accent 紫。 */
+  whiteRatio: 0.22,
 } as const;
 
 /* ── 背景舞台三要素（HEL-17 新增）──────────────────────────────────────────── */
@@ -227,12 +228,12 @@ const FLOOR = {
 
 /** 车后柔和径向紫光晕（一块大 plane + 径向渐变贴图，把车从黑底托出）。 */
 const GLOW_PLANE = {
-  /** 光晕在车后的位置 [x,y,z]：z 为负 = 车后方，y 抬到车身高度。 */
-  position: [0, 1.4, -6] as [number, number, number],
-  /** 光晕 plane 尺寸 [w,h]。大而柔，作背景氛围。 */
-  scale: [22, 14] as [number, number],
+  /** 光晕在车后的位置 [x,y,z]：z 为负 = 车后方，y 压低到车身中部，作含蓄光池。 */
+  position: [0, 0.9, -5] as [number, number, number],
+  /** 光晕 plane 尺寸 [w,h]。总监调校：收小成车后含蓄光池，不再大块铺背景。 */
+  scale: [15, 9] as [number, number],
   /** 整体不透明度：克制——只是把车托出黑底，不喧宾夺主。↓ 更隐约。 */
-  opacity: 0.5,
+  opacity: 0.34,
   /** 渐变中心色（accent 紫）→ 边缘透明。径向贴图分辨率。 */
   color: ACCENT,
   textureSize: 256,
@@ -258,12 +259,12 @@ const PERF_TIERS: Record<
     reflector: boolean;
   }
 > = {
-  // 满配
-  high: { dpr: [1, 2], windCount: WIND.count, bloom: true, reflector: true },
-  // 中档：降 DPR + 粒子减半 + 保留 Bloom（辉光是 Hero 灵魂）+ 保留反射
-  mid: { dpr: [1, 1.2], windCount: 1200, bloom: true, reflector: true },
-  // 低档：DPR 钉死 1 + 粒子大砍 + 关 Bloom + 关反射，保实时帧率
-  low: { dpr: [1, 1], windCount: 500, bloom: false, reflector: false },
+  // 满配（总监调校：关反射地面——大反射板在低机位把车反射拉伸到地平线，画面乱；改用干净接触阴影）
+  high: { dpr: [1, 2], windCount: WIND.count, bloom: true, reflector: false },
+  // 中档：降 DPR + 光屑减量 + 保留 Bloom（辉光是 Hero 灵魂）
+  mid: { dpr: [1, 1.2], windCount: 380, bloom: true, reflector: false },
+  // 低档：DPR 钉死 1 + 光屑大砍 + 关 Bloom + 关反射，保实时帧率
+  low: { dpr: [1, 1], windCount: 180, bloom: false, reflector: false },
 };
 
 /** tier 升降序，供 onIncline/onDecline 相邻迁移用。 */
@@ -590,58 +591,63 @@ function FerrariModel() {
  * 这里作为普通工厂函数被 useMemo 调用，结果稳定，符合规则。
  */
 function buildWindGeometry(count: number): BufferGeometry {
-  const positions = new Float32Array(count * 3);
-  const colors = new Float32Array(count * 3);
+  // 每个光屑 = 一段线（2 顶点：头 + 尾）。aHead=1 在头、0 在尾 → 头亮尾隐渐变。
+  const positions = new Float32Array(count * 2 * 3);
+  const colors = new Float32Array(count * 2 * 3);
+  const aHead = new Float32Array(count * 2);
   const [hx, hy, hz] = WIND.half;
   const accent = new Color(ACCENT);
   const white = new Color("#ffffff");
   for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() * 2 - 1) * hx;
-    positions[i * 3 + 1] = WIND.centerY + (Math.random() * 2 - 1) * hy;
-    positions[i * 3 + 2] = (Math.random() * 2 - 1) * hz;
+    const x = (Math.random() * 2 - 1) * hx;
+    const y = WIND.centerY + (Math.random() * 2 - 1) * hy;
+    const z = (Math.random() * 2 - 1) * hz;
     const c = Math.random() < WIND.whiteRatio ? white : accent;
-    colors[i * 3] = c.r;
-    colors[i * 3 + 1] = c.g;
-    colors[i * 3 + 2] = c.b;
+    // 头顶点 (2i) 与尾顶点 (2i+1)：初始重合，首帧 advance 后拉出拖尾
+    for (let v = 0; v < 2; v++) {
+      const base = (i * 2 + v) * 3;
+      positions[base] = x;
+      positions[base + 1] = y;
+      positions[base + 2] = z;
+      colors[base] = c.r;
+      colors[base + 1] = c.g;
+      colors[base + 2] = c.b;
+      aHead[i * 2 + v] = v === 0 ? 1 : 0;
+    }
   }
   const geo = new BufferGeometry();
   geo.setAttribute("position", new BufferAttribute(positions, 3));
   geo.setAttribute("color", new BufferAttribute(colors, 3));
+  geo.setAttribute("aHead", new BufferAttribute(aHead, 1));
   return geo;
 }
 
 /**
- * 构建风粒子发光材质（模块级工厂）：顶点色 + 软圆贴图 + additive，sizeAttenuation 透视缩放。
+ * 构建风粒子光丝材质（模块级工厂）：逐顶点色 + aHead 头亮尾隐渐变 + additive 发光。
+ * 用于 LineSegments：每段线头顶点 alpha=uOpacity、尾顶点 alpha=0 → 流光拖尾感。
  */
-function buildWindMaterial(sprite: CanvasTexture): ShaderMaterial {
+function buildWindMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     uniforms: {
-      uSize: { value: WIND.size },
       uOpacity: { value: WIND.opacity },
-      uTexture: { value: sprite },
-      // 与渲染高度相关的点尺寸缩放（透视）；在 useFrame 中经 setWindScale 更新
-      uScale: { value: 300 },
     },
     vertexShader: /* glsl */ `
       attribute vec3 color;
-      uniform float uSize;
-      uniform float uScale;
+      attribute float aHead;
+      uniform float uOpacity;
       varying vec3 vColor;
+      varying float vAlpha;
       void main() {
         vColor = color;
-        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
-        // sizeAttenuation：近大远小
-        gl_PointSize = uSize * uScale / -mvPosition.z;
-        gl_Position = projectionMatrix * mvPosition;
+        vAlpha = aHead * uOpacity; // 头亮(=uOpacity) → 尾透明(0)
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
-      uniform sampler2D uTexture;
-      uniform float uOpacity;
       varying vec3 vColor;
+      varying float vAlpha;
       void main() {
-        vec4 tex = texture2D(uTexture, gl_PointCoord);
-        gl_FragColor = vec4(vColor, tex.a * uOpacity);
+        gl_FragColor = vec4(vColor, vAlpha);
       }
     `,
     transparent: true,
@@ -651,17 +657,8 @@ function buildWindMaterial(sprite: CanvasTexture): ShaderMaterial {
 }
 
 /**
- * 更新点尺寸缩放 uniform（模块级，非 hook 作用域）。
- * 抽出 useFrame 之外：material 由 useMemo 创建，在 useFrame 内直接改其属性会触发
- * react-hooks/immutability（同 lerpCameraFov 的处理思路）；移出 hook 作用域后当作普通
- * 外部对象 mutate，与 BufferAttribute.needsUpdate 等方法式更新一致。
- */
-function setWindScale(material: ShaderMaterial, scale: number): void {
-  material.uniforms.uScale.value = scale;
-}
-
-/**
- * 每帧推进风粒子位置（模块级）：sin/cos 流场平流 + 出界环绕复用。
+ * 每帧推进风粒子光丝（模块级）：头顶点用 sin/cos 流场平流 + 出界环绕复用，
+ * 尾顶点 = 头 - 速度×streakTime（拖尾长度随速度，营造「随风飞驰的光屑」）。
  * 抽出 useFrame 之外，避免对 hook 返回的 geometry 做属性式 mutate 触发 immutability。
  */
 function advanceWind(geometry: BufferGeometry, t: number, delta: number): void {
@@ -671,6 +668,7 @@ function advanceWind(geometry: BufferGeometry, t: number, delta: number): void {
   const f = WIND.curlFreq;
   const tf = WIND.curlTimeFreq;
   const cs = WIND.curlStrength;
+  const st = WIND.streakTime;
   const windVec = new Vector3(...WIND.windDir);
   if (windVec.lengthSq() > 0) windVec.normalize();
   const wx = windVec.x * WIND.windSpeed;
@@ -679,20 +677,28 @@ function advanceWind(geometry: BufferGeometry, t: number, delta: number): void {
   const yLo = WIND.centerY - hy;
   const yHi = WIND.centerY + hy;
 
-  for (let i = 0; i < arr.length; i += 3) {
-    const px = arr[i];
-    const py = arr[i + 1];
-    const pz = arr[i + 2];
+  // 每个光屑占 6 个 float（头顶点 3 + 尾顶点 3）。头是模拟状态，尾由头与速度派生。
+  const particles = arr.length / 6;
+  for (let p = 0; p < particles; p++) {
+    const hi = p * 6; // 头顶点起始
+    const ti = hi + 3; // 尾顶点起始
+    const px = arr[hi];
+    const py = arr[hi + 1];
+    const pz = arr[hi + 2];
 
     // sin/cos 流场（curl-noise 近似）：相互错位的 sin/cos 构造旋转感速度场，
-    // 让粒子局部卷曲、整体仍沿主风向飘。
+    // 让光屑局部卷曲、整体仍沿主风向飘。
     const cx = Math.sin(py * f + t * tf) + Math.cos(pz * f - t * tf);
     const cy = Math.sin(pz * f + t * tf) + Math.cos(px * f - t * tf);
     const cz = Math.sin(px * f + t * tf) + Math.cos(py * f - t * tf);
 
-    let nx = px + (wx + cx * cs) * delta;
-    let ny = py + (wy + cy * cs) * delta;
-    let nz = pz + (wz + cz * cs) * delta;
+    const vx = wx + cx * cs;
+    const vy = wy + cy * cs;
+    const vz = wz + cz * cs;
+
+    let nx = px + vx * delta;
+    let ny = py + vy * delta;
+    let nz = pz + vz * delta;
 
     // 出界环绕复用（从对侧重生），保持密度恒定
     if (nx > hx) nx -= 2 * hx;
@@ -702,39 +708,25 @@ function advanceWind(geometry: BufferGeometry, t: number, delta: number): void {
     if (nz > hz) nz -= 2 * hz;
     else if (nz < -hz) nz += 2 * hz;
 
-    arr[i] = nx;
-    arr[i + 1] = ny;
-    arr[i + 2] = nz;
+    // 头顶点 = 新位置
+    arr[hi] = nx;
+    arr[hi + 1] = ny;
+    arr[hi + 2] = nz;
+    // 尾顶点 = 头 - 速度×streakTime（指向来向，长度随速度 → 自然拖尾）
+    arr[ti] = nx - vx * st;
+    arr[ti + 1] = ny - vy * st;
+    arr[ti + 2] = nz - vz * st;
   }
   attr.needsUpdate = true;
 }
 
-/** 生成径向渐变软圆 sprite（中心实 → 边缘透明），用作发光粒子贴图。 */
-function makeSoftCircleTexture(px: number): CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = px;
-  const ctx = canvas.getContext("2d");
-  if (ctx) {
-    const r = px / 2;
-    const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.4, "rgba(255,255,255,0.5)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, px, px);
-  }
-  const tex = new CanvasTexture(canvas);
-  tex.needsUpdate = true;
-  return tex;
-}
-
 /**
- * 风粒子点云：自写 THREE.Points + BufferGeometry，useFrame 每帧用 sin/cos 流场平流位置——
- * 整体随主风向（windDir × windSpeed）缓缓飘 + 局部卷曲涡流（curl），出界从对侧重生（环绕复用），
- * 营造「春风随风飘动的魔法粒子」。additive blending + 软圆 sprite → 发光、与 Bloom 呼应。
+ * 风粒子光丝（HEL-17 改）：自写 THREE.LineSegments + BufferGeometry，每个光屑是一段线——
+ * 头顶点亮、尾顶点透明（aHead 渐变），头随 sin/cos 流场平流（整体顺主风向飘 + 局部卷曲），
+ * 尾跟在速度反方向拉出拖尾 → 「春风吹动的发光光屑/流光」。additive + Bloom 发光呼应。
  *
  * count 由 PerformanceMonitor 降级驱动（windCount）；count 变化时几何体重建（key 由父级控制）。
- * reducedMotion 时风速 / 卷曲归零，粒子静止。
+ * reducedMotion 时不平流（光丝静止收为短点）。
  */
 function WindParticles({
   count,
@@ -743,29 +735,22 @@ function WindParticles({
   count: number;
   reducedMotion: boolean;
 }) {
-  // 软圆贴图：组件生命周期内只建一次，卸载时释放
-  const sprite = useMemo(() => makeSoftCircleTexture(WIND.spriteSize), []);
-  useEffect(() => () => sprite.dispose(), [sprite]);
-
-  // 初始位置（[-half,half] 均匀分布）+ 每粒子颜色（accent 紫为主，少量白点缀）
+  // 初始位置（[-half,half] 均匀分布）+ 每光屑颜色（accent 紫为主，少量白点缀）+ aHead 头尾标记
   const geometry = useMemo(() => buildWindGeometry(count), [count]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
-  // 发光点材质：顶点色 + 软圆贴图 + additive，sizeAttenuation 让点随距离透视缩放
-  const material = useMemo(() => buildWindMaterial(sprite), [sprite]);
+  // 光丝材质：逐顶点色 + aHead 头亮尾隐 + additive 发光
+  const material = useMemo(() => buildWindMaterial(), []);
   useEffect(() => () => material.dispose(), [material]);
 
-  // 每帧平流：经模块级函数 mutate（geometry / material 由 useMemo 创建，
+  // 每帧平流：经模块级函数 mutate（geometry 由 useMemo 创建，
   // 在 useFrame 内直接改属性会触发 react-hooks/immutability，移到模块函数里处理）。
   useFrame((state, delta) => {
-    // 点尺寸随渲染高度更新（透视缩放系数），保持视觉尺寸稳定
-    const dh = state.size.height * state.viewport.dpr;
-    setWindScale(material, dh * 0.5);
-    if (reducedMotion) return; // 静止：风速 / 卷曲归零
+    if (reducedMotion) return; // 静止：不平流
     advanceWind(geometry, state.clock.elapsedTime, delta);
   });
 
-  return <points geometry={geometry} material={material} />;
+  return <lineSegments geometry={geometry} material={material} />;
 }
 
 /* ── 背景柔光晕（径向渐变 plane）─────────────────────────────────────────── */
