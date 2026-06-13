@@ -202,52 +202,44 @@ $$
     },
   ]}
   frag={`#version 300 es
+// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号
 precision highp float;
-
 uniform vec2 uResolution; // 画布像素尺寸（标准 uniform，自动注入）
 uniform vec2 uMouse; // 鼠标在画布内的归一化位置 0..1（自动注入）
 uniform float uLinearize; // 控件：开关（>0.5 = 线性化），bool 以 0.0/1.0 传入
 uniform float uNear; // 控件：近平面 near
 uniform float uFar; // 控件：远平面 far
 out vec4 FragColor;
-
 // 把 0..1 的非线性深度 d 线性化回真实距离，再归一到 0..1（§4 两步公式）
 float linearize(float d) {
-float ndc = d _ 2.0 - 1.0; // 0..1 → NDC -1..1
-float z = (2.0 _ uNear _ uFar)
-/ (uFar + uNear - ndc _ (uFar - uNear)); // NDC → 视图空间真实距离
+float ndc = d * 2.0 - 1.0; // 0..1 → NDC -1..1
+float z = (2.0 * uNear * uFar)
+/ (uFar + uNear - ndc * (uFar - uNear)); // NDC → 视图空间真实距离
 return clamp(z / uFar, 0.0, 1.0); // 真实距离归一到 0..1
 }
-
 // 把一个圆心 c、半径 r、伪深度 depth 的圆，画到当前像素 p 上。
 // 命中圆内返回其深度，否则返回一个很大的值（视为「没挡住，最远」）。
 float circleDepth(vec2 p, vec2 c, float r, float depth) {
 return distance(p, c) < r ? depth : 2.0;
 }
-
 void main() {
 // 把像素坐标归一化到 0..1，按宽高比校正（避免圆被拉成椭圆）
 vec2 uv = gl_FragCoord.xy / uResolution;
-uv.x \*= uResolution.x / uResolution.y;
+uv.x *= uResolution.x / uResolution.y;
 float aspect = uResolution.x / uResolution.y;
-
 // 鼠标平移视野（轻微），让读者能挪动观察
-vec2 shift = (uMouse - 0.5) \* 0.2;
-
+vec2 shift = (uMouse - 0.5) * 0.2;
 // 三个交叠的圆，各有一个伪深度（near 附近 vs far 附近，跨度大才看得出非线性差异）
-float dA = circleDepth(uv, vec2(0.40 _ aspect, 0.42) + shift, 0.22, 0.20); // 最近
-float dB = circleDepth(uv, vec2(0.58 _ aspect, 0.52) + shift, 0.22, 0.55); // 中
-float dC = circleDepth(uv, vec2(0.50 \* aspect, 0.66) + shift, 0.22, 0.92); // 最远
-
+float dA = circleDepth(uv, vec2(0.40 * aspect, 0.42) + shift, 0.22, 0.20); // 最近
+float dB = circleDepth(uv, vec2(0.58 * aspect, 0.52) + shift, 0.22, 0.55); // 中
+float dC = circleDepth(uv, vec2(0.50 * aspect, 0.66) + shift, 0.22, 0.92); // 最远
 // 深度测试逻辑：取覆盖本像素的「最近」（深度最小）的圆
 float depth = min(dA, min(dB, dC));
-
 // 没有任何圆覆盖：留白底（最远）
 if (depth > 1.5) {
 FragColor = vec4(0.07, 0.07, 0.09, 1.0); // 接近 --bg 的底色
 return;
 }
-
 // 按所选方式把深度涂成灰度：近=黑、远=白
 float g = uLinearize > 0.5 ? linearize(depth) : depth;
 FragColor = vec4(vec3(g), 1.0);
