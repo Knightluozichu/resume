@@ -24,9 +24,8 @@ export function SiteHeader() {
           >
             教程
           </Link>
-          {/* TODO(老板): 仓库地址待定，先用 github.com 占位 */}
           <a
-            href="https://github.com"
+            href="https://github.com/Knightluozichu/resume"
             target="_blank"
             rel="noopener noreferrer"
             aria-label="GitHub 仓库"
