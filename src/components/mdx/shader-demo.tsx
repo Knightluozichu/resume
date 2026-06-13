@@ -9,26 +9,27 @@
  *     它被切成独立 chunk，不进首屏关键路径 / 公共 layout
  *  3. dynamic 的 loading 占位 = 同气质的骨架卡（Demo 容器 + ⚡标签），chunk 就绪后接管
  *
- * 保留 MDX 标签名 ShaderDemo 与同名 props（vert/frag/uniforms），content/*.mdx 无需改写；
- * 另透传 height/aspect/caption 给 ShaderCanvas。
+ * 保留 MDX 标签名 ShaderDemo 与同名 props（vert/frag），content/*.mdx 无需改写入口标签；
+ * 另透传 controls/height/aspect/caption 给 ShaderCanvas。
  *
  * 标准 uniforms（由 ShaderCanvas 自动注入并每帧更新）：uTime / uResolution / uMouse。
- * 衔接：HEL-26 在 ShaderCanvas 之上加 uniform 运行时控件（≤5），HEL-27 加在线改 GLSL
+ * 自定义 uniform（HEL-26）：作者传 controls schema → ShaderCanvas 自动生成滑块/颜色/开关，
+ * 改控件实时驱动同名 uniform（值变不重编译）。HEL-27 将加在线改 GLSL
  * （编译错误回显口已在 ShaderCanvas 内就绪）。
  */
 
 import dynamic from "next/dynamic";
 import { useSyncExternalStore } from "react";
 
-import type { UniformMap } from "./shader/use-shader-program";
+import type { UniformControl } from "./shader/use-shader-program";
 
 type ShaderDemoProps = {
   /** 片段着色器源码（必填，#version 300 es） */
   frag: string;
   /** 顶点着色器源码（可选；省略时用覆盖全屏的直通三角形） */
   vert?: string;
-  /** 自定义 uniform 初值（HEL-26 将据此生成运行时控件） */
-  uniforms?: UniformMap;
+  /** 自定义 uniform 控件声明 schema（HEL-26）。据此自动生成控件并驱动同名 uniform。 */
+  controls?: readonly UniformControl[];
   /** 画布高度（px）。与 aspect 二选一，height 优先。 */
   height?: number;
   /** 画布宽高比（如 16/9）。 */

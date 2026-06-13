@@ -25,17 +25,61 @@ import {
  *    为 HEL-27「在线改 GLSL」预留错误回显口
  *  - 全屏覆盖三角形（单个三角形覆盖整个裁剪空间，比 quad 少一个三角，无对角接缝）
  *  - 每帧更新标准 uniforms：uTime(秒) / uResolution(像素 vec2) / uMouse(画布内归一化 vec2)
- *  - 自定义 uniforms 初值注入（HEL-26 会在此基础上加运行时控件）
+ *  - 自定义 uniforms：值放 ref，每帧从 ref 读并上传（HEL-26 控件改值 → 改 ref → 下一帧反映）
  *  - rAF 渲染循环；离屏（IntersectionObserver 不可见）暂停，进视口恢复
  *  - reduced-motion：不自动推进 uTime（冻结在 0），但保留 uMouse 交互
  *  - 卸载 / 重编译时释放全部 GL 资源（program / shader / buffer / vao），避免泄漏
+ *
+ * 「值变不重编译」（HEL-26 核心，修 HEL-25 遗留）：
+ *  program 只在 frag/vert 变化时构建一次（effect deps 仅 [frag, vert, reducedMotion]）；
+ *  自定义 uniform 的当前值由调用方放进 uniformValuesRef，renderFrame 每帧从 ref 读取并上传。
+ *  控件改值只写 ref，不进 effect deps、不触发重编译、不重建 program——下一帧自动反映。
  */
 
 // ============================ 标准 / 自定义 uniform 类型 ============================
 
-/** 作者可传入的自定义 uniform 初值：标量或 2~4 维向量（HEL-26 将据此生成控件）。 */
+/** 自定义 uniform 的运行时值：标量或 2~4 维向量。 */
 export type UniformValue = number | readonly number[];
 export type UniformMap = Record<string, UniformValue>;
+
+/**
+ * uniform 控件声明 schema（HEL-26）。作者在 .mdx 里声明一组 control，
+ * UniformControls 据此自动生成滑块 / 颜色选择器 / 开关，运行时驱动同名 uniform。
+ *
+ * 着色器侧约定（须与 type 对应声明）：
+ *  - float → `uniform float <name>;`   控件 = 单个 Slider
+ *  - color → `uniform vec3  <name>;`   控件 = 原生 color input（rgb 0..1 传入）
+ *  - bool  → `uniform float <name>;`   控件 = Toggle（传 0.0 / 1.0，非 GLSL bool）
+ *  - vec2  → `uniform vec2  <name>;`   控件 = 2 个分量 Slider
+ *  - vec3  → `uniform vec3  <name>;`   控件 = 3 个分量 Slider
+ *
+ * bool 选用 float 0.0/1.0（而非 GLSL `bool`）以与引擎 setUniform 的 uniform1f 通路统一，
+ * 作者在 frag 里用 `if (<name> > 0.5)` 判定即可，避免 bool uniform 的上传分支。
+ */
+export type UniformControlType = "float" | "color" | "bool" | "vec2" | "vec3";
+
+export type UniformControl = {
+  /** 对应 frag 里的 uniform 名（如 "uSpeed"） */
+  name: string;
+  /** 控件显示标签（缺省回退到 name） */
+  label?: string;
+  /** 控件类型，决定生成哪种控件与上传维度 */
+  type: UniformControlType;
+  /** 滑块下界（float / vec*），缺省 0 */
+  min?: number;
+  /** 滑块上界（float / vec*），缺省 1 */
+  max?: number;
+  /** 滑块步进（float / vec*），缺省 0.01 */
+  step?: number;
+  /**
+   * 默认值（= 初值，也是重置目标）：
+   *  - float → number
+   *  - color → [r, g, b]（0..1）
+   *  - bool  → boolean
+   *  - vec2  → [x, y]；vec3 → [x, y, z]
+   */
+  default: number | boolean | readonly number[];
+};
 
 /** 编译 / 链接结果：成功带 program 句柄，失败带可读 InfoLog（用于容器内回显）。 */
 type CompileResult =
@@ -170,7 +214,12 @@ function usePrefersReducedMotion(): boolean {
 export type UseShaderProgramArgs = {
   frag: string;
   vert?: string;
-  uniforms?: UniformMap;
+  /**
+   * 自定义 uniform 当前值的 ref（HEL-26 关键通路）。
+   * 调用方（ShaderCanvas）持有此 ref，控件改值时直接写 ref.current；
+   * renderFrame 每帧从 ref 读取并上传——值变只写 ref，不进 effect deps、不重编译。
+   */
+  uniformValuesRef?: React.RefObject<UniformMap>;
 };
 
 export type UseShaderProgramReturn = {
@@ -178,18 +227,19 @@ export type UseShaderProgramReturn = {
   canvasRef: React.RefObject<HTMLCanvasElement | null>;
   /** 编译 / 运行状态：ok 或带 InfoLog 的 error（供容器内回显） */
   status: ShaderStatus;
-  /** 重置：uTime 归零、uMouse 复位到中心 */
+  /** 重置：uTime 归零、uMouse 复位到中心（自定义 uniform 的重置由调用方各自处理） */
   reset: () => void;
 };
 
 /**
  * 把一个片段着色器跑在 canvas 上，自动管理 GL 生命周期、动画循环、交互与释放。
- * frag / vert / 自定义 uniforms 变化时自动重编译（旧资源先释放）。
+ * program 只在 frag / vert 变化时构建一次（旧资源先释放）；自定义 uniform 的当前值
+ * 从 uniformValuesRef 每帧读取上传，值变不重编译（见文件头「值变不重编译」说明）。
  */
 export function useShaderProgram({
   frag,
   vert,
-  uniforms,
+  uniformValuesRef,
 }: UseShaderProgramArgs): UseShaderProgramReturn {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const reducedMotion = usePrefersReducedMotion();
@@ -204,9 +254,6 @@ export function useShaderProgram({
     timeRef.current = 0;
     mouseRef.current = [0.5, 0.5];
   }, []);
-
-  // uniforms 对象每次渲染是新引用——序列化成稳定 key，仅在内容真变时才重编译/重传。
-  const uniformsKey = JSON.stringify(uniforms ?? {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -246,16 +293,18 @@ export function useShaderProgram({
     const uResolutionLoc = gl.getUniformLocation(program, "uResolution");
     const uMouseLoc = gl.getUniformLocation(program, "uMouse");
 
-    // 自定义 uniforms 的 location 预取（HEL-26 将让其值可由控件运行时改）。
-    const customUniforms = uniforms ?? {};
-    const customLocations: Array<{
-      location: WebGLUniformLocation;
-      value: UniformValue;
-    }> = [];
-    for (const [name, value] of Object.entries(customUniforms)) {
+    // 自定义 uniforms 的 location 缓存：按名查询一次，缓存 name → location（含 null）。
+    // program 在此 effect 内构建，故缓存随 program 同生命周期；frag/vert 变 → effect 重跑 →
+    // program 重建 → 缓存重建。值不在此处读取，由 renderFrame 每帧从 valuesRef 读（值变不重编译）。
+    // 未被 frag 使用 / 被编译器优化掉的名字缓存为 null，下帧不再重复查询。
+    const customLocations = new Map<string, WebGLUniformLocation | null>();
+    const resolveLocation = (name: string): WebGLUniformLocation | null => {
+      const cached = customLocations.get(name);
+      if (cached !== undefined) return cached;
       const loc = gl.getUniformLocation(program, name);
-      if (loc) customLocations.push({ location: loc, value });
-    }
+      customLocations.set(name, loc);
+      return loc;
+    };
 
     // —— 尺寸：跟随容器，按 devicePixelRatio 渲染（上限 2，省 GPU）——
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -291,8 +340,15 @@ export function useShaderProgram({
         gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
       if (uMouseLoc)
         gl.uniform2f(uMouseLoc, mouseRef.current[0], mouseRef.current[1]);
-      for (const { location, value } of customLocations)
-        setUniform(gl, location, value);
+      // 自定义 uniform：每帧从 ref 读当前值并上传。控件改值只改 ref.current，
+      // 下一帧自动反映——不触发 effect、不重建 program（值变不重编译）。
+      const values = uniformValuesRef?.current;
+      if (values) {
+        for (const name in values) {
+          const loc = resolveLocation(name);
+          if (loc) setUniform(gl, loc, values[name]);
+        }
+      }
       gl.clearColor(0, 0, 0, 0);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -351,7 +407,11 @@ export function useShaderProgram({
       gl.deleteVertexArray(vao);
       gl.deleteProgram(program);
     };
-  }, [frag, vert, uniformsKey, uniforms, reducedMotion]);
+    // deps 含 frag / vert / reducedMotion / uniformValuesRef：program 只在着色器源码或动效
+    // 偏好变化时重建。uniformValuesRef 是稳定 ref 对象（调用方 useRef 创建，identity 不变），
+    // 入 deps 仅满足 exhaustive-deps，不会触发重跑；其 .current 的值变化经每帧读取反映，
+    // 故 uniform 值变不重编译、不重建 program（HEL-26 核心）。
+  }, [frag, vert, reducedMotion, uniformValuesRef]);
 
   return { canvasRef, status, reset };
 }

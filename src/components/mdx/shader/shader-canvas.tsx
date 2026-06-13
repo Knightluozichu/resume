@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * <ShaderCanvas>：片段着色器实时渲染基座（HEL-25）。
+ * <ShaderCanvas>：片段着色器实时渲染基座（HEL-25）+ uniform 自动控件（HEL-26）。
  *
  * !!! 本文件含 WebGL 代码（经 use-shader-program.ts），只允许出现在 next/dynamic
  * 懒加载 chunk 内 —— 由 shader-demo.tsx 用 dynamic(ssr:false) 引入。
@@ -10,29 +10,39 @@
  * 渲染容器走 DESIGN「交互 Demo 容器」气质：
  *  - --bg-elevated 底 + 1px border + 12px 圆角（rounded-card）
  *  - 左上角「⚡ 可交互」标签（accent 小面积）
- *  - 右上角重置按钮（复位 uTime / uMouse）
+ *  - 右上角重置按钮（复位 uTime / uMouse + 全部自定义 uniform 回 default）
  *  - 辉光只在画布（accent-glow 内描边），不在卡片整体
+ *  - 有 controls 时画布下方加分隔线 + 控件区（UniformControls）
  *
  * 标准 uniforms（自动注入并每帧更新）：
  *  - uTime      float  累计秒数（reduced-motion 下冻结在 0）
  *  - uResolution vec2  画布像素尺寸
  *  - uMouse     vec2   画布内归一化 0..1（y 向上），默认中心 (0.5,0.5)
  *
+ * 自定义 uniform（HEL-26）：作者传 controls schema → 自动生成控件；改控件实时驱动着色器。
+ * 值变不重编译——见下方 valuesRef 注释与 use-shader-program 文件头说明。
+ *
  * 编译 / 链接错误：use-shader-program 捕获 getShaderInfoLog / getProgramInfoLog，
  * 在容器内以 <pre> 回显，不抛错、不崩页（为 HEL-27 在线编辑预留回显口）。
  */
 
-import { useId } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 
-import { useShaderProgram, type UniformMap } from "./use-shader-program";
+import {
+  useShaderProgram,
+  type UniformControl,
+  type UniformMap,
+  type UniformValue,
+} from "./use-shader-program";
+import { controlsToInitialValues, UniformControls } from "./uniform-controls";
 
 export type ShaderCanvasProps = {
   /** 片段着色器源码（必填，#version 300 es） */
   frag: string;
   /** 顶点着色器源码（可选；省略时用覆盖全屏的直通三角形） */
   vert?: string;
-  /** 自定义 uniform 初值（HEL-26 将据此生成运行时控件） */
-  uniforms?: UniformMap;
+  /** 自定义 uniform 控件声明 schema（HEL-26）。据此自动生成控件并驱动同名 uniform。 */
+  controls?: readonly UniformControl[];
   /** 画布高度（px）。与 aspect 二选一，height 优先。默认 240。 */
   height?: number;
   /** 画布宽高比（如 16/9）。未给 height 时按容器宽度 × 该比例定高。 */
@@ -41,19 +51,57 @@ export type ShaderCanvasProps = {
   caption?: string;
 };
 
+const EMPTY_CONTROLS: readonly UniformControl[] = [];
+
 export function ShaderCanvas({
   frag,
   vert,
-  uniforms,
+  controls = EMPTY_CONTROLS,
   height,
   aspect,
   caption,
 }: ShaderCanvasProps) {
-  const { canvasRef, status, reset } = useShaderProgram({
+  // 由 schema 算出初值（= 重置目标）。controls 来自 .mdx，按其内容 memo，避免每渲染重算。
+  const controlsKey = useMemo(() => JSON.stringify(controls), [controls]);
+  const initialValues = useMemo(
+    () => controlsToInitialValues(controls),
+    // controlsKey 已涵盖 controls 内容；用它做 dep 以稳引用。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [controlsKey],
+  );
+
+  // valuesRef = 引擎每帧读取的当前 uniform 值（值变不重编译的关键：不入 effect deps）。
+  // values（state）= 仅供控件回显当前值。两者同步更新。
+  const valuesRef = useRef<UniformMap>(initialValues);
+  const [values, setValues] = useState<UniformMap>(initialValues);
+
+  const {
+    canvasRef,
+    status,
+    reset: resetStandard,
+  } = useShaderProgram({
     frag,
     vert,
-    uniforms,
+    uniformValuesRef: valuesRef,
   });
+
+  // 控件改值：先写 ref（驱动着色器，下一帧 renderFrame 从 ref 读），再 setState（驱动控件回显）。
+  const handleControlChange = useCallback(
+    (name: string, value: UniformValue) => {
+      valuesRef.current = { ...valuesRef.current, [name]: value };
+      setValues(valuesRef.current);
+    },
+    [],
+  );
+
+  // 重置：标准 uniform（uTime/uMouse）复位 + 全部自定义 uniform 回 default。
+  const reset = useCallback(() => {
+    resetStandard();
+    valuesRef.current = controlsToInitialValues(controls);
+    setValues(valuesRef.current);
+  }, [resetStandard, controls]);
+
+  const hasControls = controls.length > 0;
   const captionId = useId();
 
   // 画布盒子的高度：height 优先；否则用 aspect-ratio；都没有则默认 240px。
@@ -77,7 +125,11 @@ export function ShaderCanvas({
         <button
           type="button"
           onClick={reset}
-          aria-label="重置演示（时间归零、鼠标复位）"
+          aria-label={
+            hasControls
+              ? "重置演示（时间归零、鼠标复位、参数回默认值）"
+              : "重置演示（时间归零、鼠标复位）"
+          }
           className="rounded-control border border-border px-2 py-1 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
         >
           重置
@@ -116,6 +168,17 @@ export function ShaderCanvas({
           </div>
         )}
       </div>
+
+      {/* 控件区（DESIGN Demo 容器气质：上分隔线 + 间距）。改控件实时驱动着色器（不重编译）。 */}
+      {hasControls && (
+        <div className="mt-4 border-t border-border pt-4">
+          <UniformControls
+            controls={controls}
+            values={values}
+            onChange={handleControlChange}
+          />
+        </div>
+      )}
 
       {caption && (
         <p id={captionId} className="mt-3 text-xs text-secondary">
