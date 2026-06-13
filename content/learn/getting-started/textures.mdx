@@ -1,0 +1,549 @@
+---
+title: 纹理
+type: C
+section: 入门
+order: 4
+description: 学会给三角形「贴图」——把一张图片按 UV 坐标采样铺到几何体上，并能调出环绕、过滤、mipmap 等不同效果，还能把两张图混在一起。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/06%20Textures/
+draft: true
+---
+
+{/* C 实战型章（HEL-34，M5 入门第 4 篇）：主题是纹理——把一张图片贴到几何体上。承接「着色器」（已知 in/out 传逐顶点数据、uniform 传全局值、片段插值），本章把「逐顶点数据」换成 UV 坐标、把「输出颜色」换成「按 UV 从图里采样」。C 型：代码对照为重心（§6 覆盖 ≥80% 关键流程：创建→绑定→上传 texImage2D→设环绕/过滤→generateMipmap→顶点 UV 属性→片段 sampler2D+texture()→activeTexture/纹理单元→mix() 混两图），math:false 整节省略。主 Demo = <TextureDemo />（默认程序化 UV 测试图，调环绕/过滤/UV缩放/放大观察）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 纹理 = 直觉引入「贴壁纸」比喻 + 概念讲解 + 主 Demo；2) 纹理坐标 UV（原点左下、逐顶点指定后插值）= 概念 + <TextureCoordDiagram /> + 代码对照（顶点 UV 属性）；3) 采样 = 概念（按 UV 去图里取颜色）+ texture() 代码；4) 环绕 wrapping（REPEAT/MIRRORED_REPEAT/CLAMP_TO_EDGE）= 概念 + 引导去 §5 Demo 调 UV 缩放看 + 代码对照（glTexParameteri WRAP_S/T）；5) 过滤 filtering（NEAREST 邻近 vs LINEAR 线性）= 概念 + 引导去 §5 Demo 拉放大观察看 + 代码对照（MIN/MAG_FILTER）；6) 多级渐远纹理 mipmap = 概念 + <MipmapPyramidDiagram /> + 代码对照（generateMipmap）；7) 加载与创建纹理 = 代码对照（gl.createTexture / texImage2D 参数顺序）；8) 纹理单元 texture unit = 概念（为什么要 activeTexture + 多 sampler）+ 代码对照（activeTexture/GL_TEXTURE0/uniform1i）；9) sampler2D 与 GLSL texture() = 概念 + 代码对照（片段着色器 sampler2D + texture()）；10) 多纹理混合 mix() = 概念 + 代码对照（mix(texture1, texture2, 0.2)）。Term 共 10 个（纹理 / 纹理坐标(UV) / 采样 / 纹理环绕 / 纹理过滤 / 多级渐远纹理(mipmap) / sampler2D / texture() / 纹理单元 / mix()）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清**纹理坐标（UV）**是什么、原点在哪，以及顶点只给了几个角的 UV，三角形内部每个像素的 UV 是怎么来的
+- 能在 Demo 里改出指定效果：把同一张图平铺 3×3（环绕）、把放大后的图调成「马赛克块」或「平滑过渡」（过滤）
+- 能回答：UV 坐标超过了 1（比如 2.5），那一片到底显示什么？取决于哪个设置？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库——给模型贴壁纸/穿衣服。 */}
+
+## 给三角形「贴一张图」
+
+上一章你已经能给三角形的每个顶点指定颜色，让 GPU 插值出一片渐变。可现实里的物体表面远不止纯色或渐变——一面砖墙、一张木桌、一个人物的脸，全是密密麻麻的花纹和细节。要靠顶点颜色画出砖墙的每一道缝，得堆上成千上万个顶点，谁也受不了。
+
+换个思路：与其用几何体硬画细节，不如**直接贴一张照片上去**。就像给一面白墙贴壁纸、给玩偶穿一件印花衣服——墙还是那面墙，但看上去有了砖纹；衣服的图案不是缝出来的，是印上去的。这张「贴上去的图」就是本章的主角。
+
+贴图要解决一个关键问题：图是方方正正的一张照片，可几何体的形状千奇百怪。**这张图的每个位置，到底该贴到几何体的哪个点上？** 没有一套说清「图的这个角对应物体的那个角」的规则，贴图就成了乱糊一气。这一章讲的就是这套规则，以及贴上去之后怎么把图贴得清楚、贴得自然。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 纹理：贴在表面的那张图
+
+我们贴上去的这张图，在图形学里就叫 <Term def="一张贴到几何体表面的图像（通常就是一张图片）。用它给物体表面加细节（砖纹、木纹、花色），省去用海量顶点硬画细节。本质是一块存在显卡上的、可按坐标查询颜色的数据。">纹理</Term>。它本质就是一张图片——一格一格的像素，每格一个颜色。把它交给 GPU 后，渲染每个像素时就能「去这张图里查一个颜色」贴上来。
+
+为什么用它？因为它把「表面长什么样」和「物体是什么形状」彻底分开了：形状仍由那几个顶点定，表面细节全交给图。在管线里，纹理在**片段着色器**阶段起作用——上一章你已经知道，片段着色器负责给每个像素定颜色；有了纹理，这个颜色就可以不再是写死的，而是「从图里查出来的」。
+
+## 纹理坐标（UV）：图和几何体怎么对齐
+
+要让 GPU 知道「图的哪个位置贴到几何体的哪个点」，靠的是 <Term def="给每个顶点附带的一对坐标 (u, v)，告诉 GPU「这个顶点对应纹理图上的哪个位置」。范围 0~1：(0,0) 是图的左下角，(1,1) 是图的右上角。常简称 UV。">纹理坐标</Term>（常简称 **UV**）。它是一对范围在 0 到 1 之间的数：约定 **(0, 0) 是图的左下角，(1, 1) 是图的右上角**，正中间就是 (0.5, 0.5)。
+
+做法和上一章给顶点配颜色一模一样：**每个顶点附带一对 UV**，告诉 GPU「我这个角对应图上的这个位置」。比如让三角形左下角顶点配 UV `(0, 0)`、右下角配 `(1, 0)`、顶部配 `(0.5, 1)`，就等于说「把图的左下角钉在三角形左下角、右下角钉在右下角……」——图就被这几枚「图钉」绷在了三角形上。
+
+下面这张图把这套对应关系画了出来：左边是 UV 坐标系（注意原点在**左下**），右边是纹理图，看四个顶点的 UV 如何一一钉住图的四角：
+
+<TextureCoordDiagram />
+
+那三角形内部、不在顶点上的那些像素呢？还记得上一章讲的**片段插值**吗——和颜色一样，顶点的 UV 也会被光栅化按远近自动混合：顶点只钉了几个角的 UV，内部每个片段的 UV 都是「混」出来的。于是图就被平滑地、连续地铺满了整个三角形。
+
+## 采样：拿着 UV 去图里取颜色
+
+有了每个片段的 UV，片段着色器就能干一件事：拿这对 UV 当「图上的地址」，去纹理里**取出那个位置的颜色**。这个「按坐标去图里取色」的动作叫 <Term def="片段着色器拿着该片段的 UV 坐标，去纹理图里取出对应位置颜色的动作。在 GLSL 里用 texture(纹理, UV) 完成。是「贴图」最终落到每个像素上的那一步。">采样</Term>（sampling）。
+
+整条链路串起来就是：顶点给 UV → 光栅化把 UV 插值到每个片段 → 片段着色器拿着自己的 UV 去纹理里采样取色 → 输出。一张图就这么贴上了几何体。后面 §6 你会看到，采样在 GLSL 里只是一句 `texture(...)`。
+
+## 纹理环绕：UV 超出 0~1 时怎么办
+
+UV 约定在 0~1，但你完全可以给顶点配超出这个范围的 UV，比如 `(0, 0)` 到 `(3, 3)`。这时 GPU 该怎么显示「图之外」的部分？这由 <Term def="UV 坐标超出 0~1 范围时，GPU 如何取色的规则。常见三种：REPEAT（重复平铺）、MIRRORED_REPEAT（镜像平铺）、CLAMP_TO_EDGE（夹到边缘、拉伸边缘像素）。分别对 U、V 两个方向单独设置。">纹理环绕</Term>方式决定，常见三种：
+
+- **REPEAT（重复）**：默认。把图一张挨一张地平铺。UV 拉到 `(3, 3)` 就铺成 3×3 张。
+- **MIRRORED_REPEAT（镜像重复）**：也平铺，但每隔一张镜像翻转一次，让接缝处对齐、不突兀。
+- **CLAMP_TO_EDGE（夹到边缘）**：超出的部分一律用最边上那排像素的颜色「拉长」填满，于是边缘像被向外抹开。
+
+光看文字不够直观——去本章 §5 的 Demo，把「UV 缩放」拉到大于 1（比如 3），再依次切这三种环绕，亲眼看平铺、镜像、边缘拉伸的差别。
+
+## 纹理过滤：图被放大 / 缩小时怎么取色
+
+UV 是连续的小数，纹理却是一格格离散的像素——当一个片段的 UV 落在「两格像素之间」（贴图被放大、一个纹理像素铺到了好几个屏幕像素时尤其明显），该取哪一格的颜色？这由 <Term def="片段的 UV 落在纹理像素之间时如何取色的规则。NEAREST：取最近的那一格（结果硬、有马赛克块感）；LINEAR：按距离在邻近几格间加权混合（结果平滑）。分放大(MAG)、缩小(MIN)两种情况设置。">纹理过滤</Term>决定，两种基本方式：
+
+- **NEAREST（邻近过滤）**：取离 UV 最近的那一格像素颜色。放大后能看到一块块清晰的「马赛克」方块——像素风游戏就爱用它。
+- **LINEAR（线性过滤）**：在邻近几格之间按距离加权混合，得到平滑过渡。放大后柔和但偏糊。
+
+同样去 §5 的 Demo：把「放大观察」拉到 12（等于把图放得很大），再对比 NEAREST 与 LINEAR——一个是硬边方块，一个是平滑渐变，差别一目了然。
+
+## 多级渐远纹理（mipmap）：远处缩小时怎么办
+
+上面说的是放大。反过来，当物体离得很**远**、一整张大图被挤进屏幕上区区几个像素时，又会出问题：屏幕一个像素要「代表」原图一大片像素，硬取一格会闪烁、出噪点。
+
+解决办法是 <Term def="为一张纹理预先生成的一系列逐级减半的缩小版（原图、1/2、1/4、1/8……）。物体离得远、贴图被缩得小时，GPU 自动改从尺寸合适的那一级取色，避免远处闪烁、噪点。常简称 mipmap。">多级渐远纹理</Term>（**mipmap**）：预先为这张图生成一整套**逐级减半**的缩小版（原图、1/2、1/4、1/8……），堆成一座「纹理金字塔」。物体离得越远、贴图显示得越小，GPU 就自动从金字塔里**尺寸越合适的那一级**去取色，省力又干净。
+
+<MipmapPyramidDiagram />
+
+实际中通常一句 `glGenerateMipmap` 就让 GPU 自动算出整套金字塔（§6 会写到），你不必手动准备这些缩小版。
+
+## 纹理单元：一次想用好几张图
+
+到这里都是贴一张图。但很多效果要同时用**好几张**图——比如一张底图叠一张笑脸贴纸。问题来了：片段着色器里怎么分清「这是第 1 张、那是第 2 张」？
+
+办法是 <Term def="显卡上一组带编号的「插槽」（0、1、2……至少 16 个）。把每张纹理绑到一个编号的单元上，再告诉着色器里每个采样器去第几号单元取图，就能在一次绘制里同时用多张纹理。">纹理单元</Term>（texture unit）：显卡提供一排带编号的「插槽」（0 号、1 号……至少 16 个）。流程是——先用 `activeTexture` 选中某个编号的插槽，把一张图绑上去；再告诉着色器里的某个采样器「你去几号插槽取图」。这样一来，着色器里就能区分多张纹理了。这也是为什么用多张图时既要 `activeTexture`、又要给每个采样器单独指定单元号。具体写法见 §6 最后一步。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。UV 插值的重心坐标公式不展开，沿用「着色器」章已建立的「按远近混合」直觉 + TextureCoordDiagram 代替。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = <TextureDemo />（已 GPU 验证）；默认程序化 UV 测试图；猜一猜引导；控件已内置（环绕/过滤/UV缩放/放大观察/重置，均 ≤5）；自带骨架屏 + WebGL2 兜底。 */}
+
+## 动手：调环绕、过滤、看采样
+
+下面就是本章主 Demo。画面是一块贴满**程序化「UV 测试图」**的方块（棋盘格 + 网格线 + 四角异色 + 中心紫圆，方便你一眼看清图被怎样平铺、采样）。四组控件分别对应本章的核心概念：环绕方式、过滤方式、UV 缩放（看环绕）、放大观察（看过滤）。
+
+> 猜一猜：把「UV 缩放」拉到 3，再依次切 REPEAT / MIRRORED_REPEAT / CLAMP_TO_EDGE，画面会有什么不同？接着把「放大观察」拉到 12，对比 NEAREST 与 LINEAR，棋盘格的边缘会变成什么样？先动手拖一拖，再看下面的代码。
+
+<TextureDemo caption="贴满程序化「UV 测试图」的方块。环绕：UV 缩放 >1 时切 REPEAT / MIRRORED_REPEAT / CLAMP_TO_EDGE 看平铺 / 镜像 / 边缘拉伸。过滤：把放大观察拉大，对比 NEAREST（马赛克硬块）与 LINEAR（平滑过渡）。随时点重置回到初始。" />
+
+调「UV 缩放」改的是顶点 UV 的范围（拉到 3 等于把 UV 推到了 `(0,0)`~`(3,3)`，于是越界部分交给环绕方式处理）；调「放大观察」相当于把图凑近放大看（一个纹理像素铺到很多屏幕像素，于是过滤方式的差别被放大）。这两件事正是 §3 讲的环绕与过滤——现在它们就在你手里。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：六段覆盖 创建+绑定+上传 texImage2D+设环绕/过滤+generateMipmap → 顶点 UV 属性 → 片段 sampler2D+texture() → 多纹理 mix() + activeTexture/纹理单元/uniform1i。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异首现用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+把贴图的全过程摊开看。大致分两摊：一摊在 **CPU 侧**（创建纹理、上传图片、设参数），一摊在**着色器里**（拿 UV 采样）。C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一步：创建并绑定一个纹理对象
+
+先向显卡申请一个纹理对象拿到「句柄」，再把它**绑定**为「当前正在操作的纹理」——之后所有设参数、传数据的调用都作用在这个被绑定的纹理上。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+unsigned int texture;
+glGenTextures(1, &texture);              // 申请 1 个纹理对象，拿到句柄
+glBindTexture(GL_TEXTURE_2D, texture);   // 绑定为「当前的 2D 纹理」
+// 之后的 glTexImage2D / glTexParameteri 都作用在它身上
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const texture = gl.createTexture(); // 申请 1 个纹理对象（返回对象，非数字）
+gl.bindTexture(gl.TEXTURE_2D, texture); // 绑定为「当前的 2D 纹理」
+// 之后的 gl.texImage2D / gl.texParameteri 都作用在它身上
+```
+
+  </Tab>
+</CodeTabs>
+
+逻辑一一对应，差别在「申请」这一步的返回值：
+
+<Callout type="warn">
+  API 差异：C++ 的 `glGenTextures(1, &texture)` 把生成的句柄**写进你传入的
+  `unsigned int`**（一个整数 ID）；WebGL2 的 `gl.createTexture()` 直接**返回一个
+  `WebGLTexture` 对象**（不是数字，失败时为 `null`）。后续 `bindTexture`
+  等调用两端用法一致。
+</Callout>
+
+### 第二步：设环绕和过滤参数
+
+趁纹理还绑着，把 §3 讲的环绕（U / V 两个方向各设一次）和过滤（放大 MAG / 缩小 MIN 各设一次）定下来。这些参数就是 Demo 里那几个控件背后改的东西。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 环绕：S=横向(U)，T=纵向(V)
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+// 过滤：缩小用 LINEAR，放大用 NEAREST（举例）
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 环绕：S=横向(U)，T=纵向(V)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+// 过滤：缩小用 LINEAR，放大用 NEAREST（举例）
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+```
+
+  </Tab>
+</CodeTabs>
+
+`WRAP_S` 对应 U（横向）、`WRAP_T` 对应 V（纵向），可以分开设。把 `GL_REPEAT` 换成 `GL_MIRRORED_REPEAT` / `GL_CLAMP_TO_EDGE` 就切换环绕方式；把 `GL_NEAREST` / `GL_LINEAR` 互换就切换过滤方式。
+
+### 第三步：上传图片数据，并生成 mipmap
+
+把图片的像素数据交给绑定中的纹理，靠 `glTexImage2D` / `gl.texImage2D`。它参数最多、最容易写错，逐个对照：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// data 是 stb_image 读出的像素；参数顺序见下方解说
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
+             width, height, 0,
+             GL_RGB, GL_UNSIGNED_BYTE, data);
+glGenerateMipmap(GL_TEXTURE_2D);   // 自动生成整套缩小版（mipmap 金字塔）
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// image 是已加载完的 HTMLImageElement（WebGL2 可直接传图元素）
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);
+gl.generateMipmap(gl.TEXTURE_2D); // 自动生成整套缩小版（mipmap 金字塔）
+```
+
+  </Tab>
+</CodeTabs>
+
+C++ 版的 `glTexImage2D` 九个参数依次是：① 目标 `GL_TEXTURE_2D`；② mipmap 级别 `0`（基础级）；③ 显卡里存成什么格式（内部格式，如 `GL_RGB`）；④⑤ 图宽、图高；⑥ 边框，**永远填 0**；⑦ 你传进来的数据是什么格式（源格式）；⑧ 数据类型 `GL_UNSIGNED_BYTE`；⑨ 数据指针。`glGenerateMipmap` 则让 GPU 一次性算出 §3 那座金字塔。
+
+<Callout type="warn">
+  API 差异：WebGL2 可以**直接把图片元素 / Canvas / 视频帧**当数据源传给
+  `gl.texImage2D`，由它内部读出宽高和像素，所以参数比 C++
+  少（省去了宽、高、边框、数据指针那几项）；而桌面 OpenGL
+  拿到的是一块裸内存指针，必须自己把宽、高、边框、数据一并报清楚。
+</Callout>
+
+### 第四步：顶点带上 UV 坐标
+
+光有纹理还不够，得告诉每个顶点它对应图上的哪个位置——也就是把 UV 加进顶点数据，再像上一章配置颜色属性那样，给它配一个顶点属性指针。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 顶点数据每行：3 个位置 + 2 个 UV（这里省略位置，只看 UV 在第 4、5 列）
+// 例：位置 x,y,z, u,v —— 每个顶点 5 个 float
+// 把第 2 号属性（UV，vec2）指向每行偏移 3*float 处，步长 5*float：
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
+                      5 * sizeof(float), (void*)(3 * sizeof(float)));
+glEnableVertexAttribArray(2);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 把第 2 号属性（UV，vec2）指向每行偏移 3 个 float 处，步长 5 个 float：
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 5 * 4, 3 * 4);
+gl.enableVertexAttribArray(2);
+```
+
+  </Tab>
+</CodeTabs>
+
+`2` 是属性位置编号（对应顶点着色器里 `layout (location = 2) in vec2 aTexCoord;`）；`2` 是每个 UV 有 2 个分量；步长和偏移按每行 5 个 `float`、UV 在第 4 个起算。WebGL2 里 `sizeof(float)` 就是固定的 `4` 字节。
+
+### 第五步：着色器里采样
+
+顶点着色器把 UV 用 `out` 递给片段着色器（中途被插值）；片段着色器声明一个 <Term def="GLSL 里代表一张 2D 纹理的采样器类型。它本身不存图，而是「指向某个纹理单元」的句柄；配合 texture() 用它去采样取色。">sampler2D</Term> 接住纹理，再用 <Term def="GLSL 的内建采样函数。texture(sampler, uv) 表示「拿着 uv 坐标，去 sampler 指向的那张纹理里取出对应颜色」，返回一个 vec4（rgba）。这是采样落到代码上的那一步。">texture()</Term> 拿 UV 采样取色。两端 GLSL 源码几乎一致，只差版本声明那行：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+// —— 顶点着色器 —— 把 UV 递下去
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 2) in vec2 aTexCoord;
+out vec2 TexCoord;
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+  TexCoord = aTexCoord;        // 递给片段着色器（会被插值）
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+// —— 顶点着色器 —— 把 UV 递下去（WebGL2 用 #version 300 es）
+#version 300 es
+layout (location = 0) in vec3 aPos;
+layout (location = 2) in vec2 aTexCoord;
+out vec2 TexCoord;
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+  TexCoord = aTexCoord;        // 递给片段着色器（会被插值）
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+片段着色器接住插值后的 `TexCoord`，用 `texture()` 去采样——这就是 §3「采样」落到代码上的那一句：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+// —— 片段着色器 —— 采样取色
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D ourTexture;     // 代表那张纹理
+void main() {
+  FragColor = texture(ourTexture, TexCoord);   // 按 UV 采样
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+// —— 片段着色器 —— 采样取色（WebGL2 片段着色器必写 precision）
+#version 300 es
+precision highp float;
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D ourTexture;     // 代表那张纹理
+void main() {
+  FragColor = texture(ourTexture, TexCoord);   // 按 UV 采样
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异：和上一章一样，桌面写 `#version 330 core`、WebGL2 写 `#version 300
+  es`，且 WebGL2 的**片段着色器必须**多一行 `precision highp
+  float;`，否则编译失败。但采样语句 `texture(sampler, uv)`
+  两端写法**完全一样**。
+</Callout>
+
+### 第六步：用多张图——纹理单元 + mix()
+
+要同时用两张图，就轮到 §3 的纹理单元了：把两张图分别绑到 0 号、1 号单元，再告诉着色器里两个采样器各去几号单元取图。CPU 侧这样安排：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+glUseProgram(program);
+// 告诉着色器：采样器 texture1 去 0 号单元，texture2 去 1 号（用 1i 传整数单元号）
+glUniform1i(glGetUniformLocation(program, "texture1"), 0);
+glUniform1i(glGetUniformLocation(program, "texture2"), 1);
+// 每帧绘制前：选中单元，绑上对应纹理
+glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, tex1);
+glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, tex2);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+gl.useProgram(program);
+// 告诉着色器：采样器 texture1 去 0 号单元，texture2 去 1 号（用 1i 传整数单元号）
+gl.uniform1i(gl.getUniformLocation(program, "texture1"), 0);
+gl.uniform1i(gl.getUniformLocation(program, "texture2"), 1);
+// 每帧绘制前：选中单元，绑上对应纹理
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, tex1);
+gl.activeTexture(gl.TEXTURE1);
+gl.bindTexture(gl.TEXTURE_2D, tex2);
+```
+
+  </Tab>
+</CodeTabs>
+
+注意采样器接的不是纹理本身，而是「几号单元」——所以用 `glUniform1i` 传的是单元的**整数编号**（`0`、`1`），不是纹理对象。着色器里则声明两个 `sampler2D`，用 <Term def="GLSL 的线性插值内建函数。mix(a, b, t) 返回 a 和 b 按比例 t 的混合：t=0 全取 a，t=1 全取 b，t=0.2 是 80%a + 20%b。常用来把两张纹理的采样结果按比例叠在一起。">mix()</Term> 把两次采样结果按比例混合：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D texture1;
+uniform sampler2D texture2;
+void main() {
+  // 80% 第一张 + 20% 第二张
+  FragColor = mix(texture(texture1, TexCoord),
+                  texture(texture2, TexCoord), 0.2);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoord;
+out vec4 FragColor;
+uniform sampler2D texture1;
+uniform sampler2D texture2;
+void main() {
+  // 80% 第一张 + 20% 第二张
+  FragColor = mix(texture(texture1, TexCoord),
+                  texture(texture2, TexCoord), 0.2);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+`mix(a, b, 0.2)` = `0.8*a + 0.2*b`：第三个参数从 0 调到 1，画面就从全是第一张图渐变到全是第二张图。完整可运行源码将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；最后一个可在 §5 Demo 亲手触发（UV 越界 + 切环绕）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：贴上去的图**上下颠倒**了（天在下、地在上）。**原因**：图片文件大多
+  从**左上角**第一行开始存，而纹理 UV 的原点在**左下角**——两者 Y
+  方向相反。**修法**：上传前翻转图片的 Y 轴——C++ 用 stb_image 的
+  `stbi_set_flip_vertically_on_load(true)`；WebGL 用
+  `gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用多张图时画面**全黑、串色，或两个采样器取到同一张图**。**原因**：采样器没绑对纹理单元——忘了用
+  `glUniform1i` 告诉着色器「这个采样器去几号单元」，或 `activeTexture`
+  选错了单元号。**修法**：确保每个 `sampler2D` 都用 `uniform1i`
+  指定了正确的单元号，且绑纹理前先 `activeTexture` 选中对应单元。
+</Callout>
+
+<Callout type="trap">
+  **现象**：纹理**完全不显示（一片黑）**，代码看着没错。**原因**：缩小过滤
+  `MIN_FILTER` 设成了带 mipmap 的档（如 `LINEAR_MIPMAP_LINEAR`），却**没调用
+  `generateMipmap`**——GPU
+  找不到缩小版，纹理判为不完整。**修法**：上传图片后补一句
+  `glGenerateMipmap(GL_TEXTURE_2D)`；或把 `MIN_FILTER` 改成不带 mipmap 的
+  `GL_LINEAR` / `GL_NEAREST`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：UV 超出 0~1
+  后，边缘出现**意料之外的重复或拉伸**。**原因**：没注意当前的环绕方式——UV
+  越界时显示什么，**完全由环绕设置决定**（REPEAT 会平铺、CLAMP_TO_EDGE
+  会拉边）。**修法**：按需要设 `WRAP_S` / `WRAP_T`。**亲手看翻车**：到 §5
+  Demo，把「UV 缩放」拉到 3，再轮流切三种环绕——同一份越界 UV
+  显示出截然不同的结果，这就是这个坑的真身。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（含目标效果）+ 1 道独立实现题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **纹理**就是贴到表面的一张图，把「长什么样」和「是什么形状」分开，省去用海量顶点硬画细节
+- **纹理坐标（UV）**逐顶点指定（原点左下、范围 0~1），内部每个片段的 UV 由插值「混」出来
+- **环绕**决定 UV 越界（`>1` 或 `<0`）时怎么显示：REPEAT 平铺 / MIRRORED 镜像 / CLAMP_TO_EDGE 拉边
+- **过滤**决定放大缩小时怎么取色：NEAREST 出马赛克硬块 / LINEAR 平滑；远处缩小用 **mipmap** 防闪烁
+- 着色器里用 **sampler2D + texture()** 采样；多张图靠**纹理单元**区分，再用 **mix()** 按比例混合
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面的 Demo 里调出两个指定效果：①把同一张图**平铺成 3×3**；②让放大后的棋盘格呈现**清晰的马赛克硬块**（而非平滑过渡）。分别说出你动了哪个 / 哪些控件、为什么。
+
+<Answer>
+
+①平铺 3×3：把「UV 缩放」拉到 3，并把环绕设为 **REPEAT**。UV 缩放=3 等于把顶点 UV 推到 `(0,0)`~`(3,3)`，越界部分由 REPEAT 一张张平铺，于是横竖各 3 张、共 3×3。（用 MIRRORED_REPEAT 也是 3×3，但每隔一张镜像翻转。）
+
+②马赛克硬块：把「放大观察」拉大（如 12），过滤设为 **NEAREST**。放大让一个纹理像素铺满很多屏幕像素，NEAREST 只取最近一格、不做混合，于是每格像素都成了清晰的方块。换成 LINEAR 就会变平滑（偏糊）。
+
+</Answer>
+
+**练习 2（问答型）** 顶点只有 3 个角、各配了一对 UV，可三角形内部成千上万个片段，每个片段的 UV 是哪来的？这和上一章顶点颜色变成渐变是同一个机制吗？
+
+<Answer>
+
+是同一个机制——**片段插值**。光栅化把三角形切成片段时，会把三个顶点的 UV 按每个片段离三个角的远近**自动混合**算出来，得到连续过渡的 UV。和上一章顶点颜色被插值成一片渐变完全是同一回事：顶点只定「角上的值」，内部的值都是光栅化「混」出来的。所以你只需在 3 个角钉 UV，整张图就被平滑地铺满三角形。
+
+</Answer>
+
+**练习 3（独立实现题）** 不看上面的代码，写出「在 WebGL2 里把一张已加载好的图片 `image` 贴到几何体上」的关键步骤：从创建纹理到能在片段着色器里采样。目标效果：方块上原样显示这张图。
+
+<Answer>
+
+CPU 侧四步：① `const tex = gl.createTexture();` `gl.bindTexture(gl.TEXTURE_2D, tex);`；②设参数：`gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)`（WRAP_T 同），过滤 `MIN_FILTER` / `MAG_FILTER` 设 `gl.LINEAR`；③上传：`gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB, gl.RGB, gl.UNSIGNED_BYTE, image);`，并给顶点配好 UV 属性（`vertexAttribPointer` + `enableVertexAttribArray`）；④（如需 mipmap）`gl.generateMipmap(gl.TEXTURE_2D)`。
+
+着色器侧：顶点着色器 `out vec2 TexCoord; TexCoord = aTexCoord;` 把 UV 递下去；片段着色器 `uniform sampler2D ourTexture; FragColor = texture(ourTexture, TexCoord);`。要点：先绑定再设参数 / 上传，UV 属性别忘了，片段着色器记得写 `precision highp float;`。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（10 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="纹理">
+  贴到几何体表面的一张图（通常就是一张图片）。用它给物体表面加细节——砖纹、木纹、花色，省得用成千上万个顶点去硬画。本质是一块存在显卡上、能按坐标查颜色的数据。详见本章「纹理」一节。
+</GlossaryItem>
+
+<GlossaryItem term="纹理坐标">
+  给每个顶点附带的一对坐标 `(u, v)`，告诉
+  GPU「这个顶点对应纹理图上的哪个位置」。范围 0~1：`(0,0)`
+  是图的**左下角**、`(1,1)` 是右上角。常简称 UV。详见本章「纹理坐标」一节。
+</GlossaryItem>
+
+<GlossaryItem term="采样">
+  片段着色器拿着自己那对 UV 坐标，去纹理图里取出对应位置颜色的动作。在 GLSL
+  里就是一句 `texture(纹理,
+  UV)`。是「贴图」最终落到每个像素上的那一步。详见本章「采样」一节。
+</GlossaryItem>
+
+<GlossaryItem term="纹理环绕">
+  UV 坐标超出 0~1 时，GPU
+  怎么取色的规则。三种常见：**REPEAT**（一张张重复平铺）、**MIRRORED_REPEAT**（平铺但每隔一张镜像翻转）、**CLAMP_TO_EDGE**（用最边上的像素拉长填满）。横向(U)、纵向(V)
+  可分开设。详见本章「纹理环绕」一节。
+</GlossaryItem>
+
+<GlossaryItem term="纹理过滤">
+  片段的 UV
+  落在「两格纹理像素之间」时怎么取色的规则。**NEAREST**：取最近一格，放大后是马赛克硬块；**LINEAR**：在邻近几格间按距离混合，放大后平滑。分放大(MAG)、缩小(MIN)
+  两种情况设。详见本章「纹理过滤」一节。
+</GlossaryItem>
+
+<GlossaryItem term="多级渐远纹理">
+  为一张纹理预先生成的一整套逐级减半的缩小版（原图、1/2、1/4、1/8……），堆成一座「纹理金字塔」。物体离得远、贴图被缩得小时，GPU
+  自动从尺寸合适的那一级取色，避免远处闪烁、噪点。常简称
+  **mipmap**。详见本章「多级渐远纹理」一节。
+</GlossaryItem>
+
+<GlossaryItem term="纹理单元">
+  显卡上一排带编号的「插槽」（0 号、1 号……至少有 16
+  个）。把每张纹理绑到一个编号的单元上，再告诉着色器里每个采样器去第几号单元取图，就能在一次绘制里同时用多张纹理。详见本章「纹理单元」一节。
+</GlossaryItem>
+
+<GlossaryItem term="sampler2D">
+  GLSL 里代表一张 2D
+  纹理的采样器类型。它本身不存图，而是「指向某个纹理单元」的句柄；配合
+  `texture()` 用它去采样取色。详见本章「第五步：着色器里采样」。
+</GlossaryItem>
+
+<GlossaryItem term="texture()">
+  GLSL 的内建采样函数。`texture(sampler, uv)` 表示「拿着 `uv` 坐标，去 `sampler`
+  指向的那张纹理里取出对应颜色」，返回一个
+  `vec4`（rgba）。是「采样」落到代码上的那一句。详见本章「第五步：着色器里采样」。
+</GlossaryItem>
+
+<GlossaryItem term="mix()">
+  GLSL 的线性插值函数。`mix(a, b, t)` 按比例 `t` 混合：`t=0` 全取 `a`、`t=1`
+  全取 `b`、`t=0.2` 是 80%`a` +
+  20%`b`。常用来把两张纹理的采样结果按比例叠在一起。详见本章「第六步：用多张图」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

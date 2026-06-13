@@ -8,8 +8,10 @@ import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
 import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
+import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
+import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
@@ -68,6 +70,8 @@ import { TextureDemo } from "./texture-demo";
  *  - SetupPipelineDiagram / FrameStageDiagram（你好窗口）、VertexPipelineDiagram（你好三角形）
  *  - ShaderIODiagram / InterpolationDiagram（着色器，HEL-33）：in/out + uniform 数据流、
  *    顶点→片段插值。一律 token 色、无内联多行 SVG 进 mdx（规避 hydration mismatch）。
+ *  - TextureCoordDiagram / MipmapPyramidDiagram（纹理，HEL-34）：UV 四角如何对应纹理四角 +
+ *    逐顶点带 UV / 片段插值采样、mipmap「纹理金字塔」逐级减半按远近取级。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -88,6 +92,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VertexPipelineDiagram,
   ShaderIODiagram,
   InterpolationDiagram,
+  TextureCoordDiagram,
+  MipmapPyramidDiagram,
   Stepper,
   Step,
   Slider,
