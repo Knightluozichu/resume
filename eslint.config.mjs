@@ -17,6 +17,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // 与网站无关的 Python 遗留目录（见 PLAN.md）
     ".venv/**",
+    // 第三方 Draco WASM decoder（three.js 自带产物，原样部署，不参与 lint）
+    "public/draco/**",
   ]),
 ]);
 

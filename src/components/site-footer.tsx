@@ -29,6 +29,9 @@ export function SiteFooter() {
           </a>
           ），遵循 CC BY-NC 4.0
         </p>
+        <p className="text-xs text-secondary">
+          3D 模型 Ferrari 458 Italia by vicent091036，via three.js examples
+        </p>
         <p>© 2026 luozichu</p>
       </div>
     </footer>
