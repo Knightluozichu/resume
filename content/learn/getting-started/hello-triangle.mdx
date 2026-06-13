@@ -3,100 +3,135 @@ title: 你好，三角形
 type: C
 section: 入门
 order: 2
-description: 跑通 MDX 内容管线的最简占位章节——画出第一个三角形之前，先验证管线本身。
-demo: false
+description: 跑通从顶点数据到屏幕像素的最短链路——亲手把第一个三角形画出来，并能改出自己想要的形状与颜色。
+demo: true
 math: true
-draft: true
 sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/04%20Hello%20Triangle/
+draft: true
 ---
 
-## 这是一个管线占位章节
+{/* C 实战型样例章（HEL-22）：M3 内容系统端到端样例，九段式齐全，每知识点配一个 viz（Stepper / CodeTabs / ShaderDemo / Figure / Callout）。内容为骨架占位级，draft:false 由总监按 chapter-spec.md review 后定（硬规则 7）。 */}
 
-这一页**不是**正式教学内容，它的唯一职责是验证 MDX 内容管线端到端跑通：
-从仓库里的 `.mdx` 文件，经 frontmatter 解析与动态路由，最终被 SSG 渲染成一张静态页。
-
-正式的章节正文、交互 Demo、代码对照与出处声明，会在后续里程碑按
-`docs/chapter-spec.md` 的规范逐节补齐。本页只用最基础的 Markdown 语法。
-
-### 管线验证清单
-
-- frontmatter 被类型安全解析（缺字段构建期报错）
-- `getAllChapters` / `getChapter` 提供内容索引
-- `generateStaticParams` 为每章产出一张静态页
-- 标题、段落、列表、代码块都能正常渲染
-
-下面几段代码块用来验证 shiki 高亮（github-dark）对多语言可用。GLSL 顶点着色器：
-
-```glsl
-#version 330 core
-layout (location = 0) in vec3 aPos;
-void main() {
-  gl_Position = vec4(aPos, 1.0);
-}
-```
-
-C++ 侧创建 VAO：
-
-```cpp
-unsigned int VAO;
-glGenVertexArrays(1, &VAO);
-glBindVertexArray(VAO);
-```
-
-WebGL2-TS 侧拿到上下文：
-
-```ts
-const gl = canvas.getContext("webgl2");
-if (!gl) throw new Error("WebGL2 not supported");
-```
-
-数学方面，裁剪空间到屏幕的透视除法是逐分量除以 $w$ 分量；投影矩阵把视锥映射到
-NDC 立方体，可写成下面这个独立公式块：
-
-$$
-P = \begin{bmatrix}
-\frac{1}{a\tan(\theta/2)} & 0 & 0 & 0 \\
-0 & \frac{1}{\tan(\theta/2)} & 0 & 0 \\
-0 & 0 & -\frac{f+n}{f-n} & -\frac{2fn}{f-n} \\
-0 & 0 & -1 & 0
-\end{bmatrix}
-$$
-
-到这里，如果你能在浏览器里看到这页标题、正文、彩色代码块与公式，说明管线已经通了。
-
-{/* ===== HEL-20 结构教学组件壳验证（临时用例，draft 仍 true）===== */}
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
-- 能用自己的话解释顶点缓冲对象是什么、为什么需要它
-- 能看懂并独立修改创建三角形的代码
-- 能回答：VAO 和 VBO 各自负责什么？
+- 能用自己的话解释**顶点缓冲对象**与**顶点数组对象**各自负责什么
+- 能看懂创建三角形的代码，并改出一个不同形状或不同颜色的三角形
+- 能回答：一段顶点数据从内存到屏幕像素，中间经过了哪几个阶段？
 
 </Objectives>
 
-## 组件验证
+{/* 2. 直觉引入（spec §二）：3 段内、零术语（术语最早第 3 节）、回答「解决什么问题/没有它会怎样」、类比固定用工厂流水线。 */}
 
-<Callout type="tip">
-  这是一个**提示**框：左边框与图标用语义绿，背景走 --bg-elevated，文字正常排版。
-</Callout>
+## 为什么画一个三角形这么费劲
 
-<Callout type="warn">
-  这是一个**警告**框：API 差异如 `#version 330 core` vs `#version 300 es`
-  用它标注。
-</Callout>
+把一个三角形画到屏幕上，听起来像「给三个点连线填色」那么简单。但显卡不是这么工作的——它更像一条**工厂流水线**：原料从一头进去，经过一道道工位加工，成品从另一头出来。
 
-<Callout type="trap">
-  这是一个**误区**框：现象 → 原因 → 修法，用语义红小面积强调。
-</Callout>
+你要做的不是「画」，而是**备料 + 排产**：先把三个角的坐标当原料送进车间，再告诉流水线每道工位怎么处理这批原料，最后按下开工按钮。
 
-<ShaderDemo vert={``} frag={``} uniforms={{}} />
+没有这套流程会怎样？显卡收到一堆数字却不知道它们是坐标、该连成什么、用什么颜色填——于是什么都不会出现。这一章就是把这条流水线一道道走通。
 
-### 代码对照
+{/* 3. 概念讲解（spec §三）：C 型压缩「是什么」让篇幅给第六节；术语首现加粗加一句话定义；每概念配图或引用 Demo；顺序：是什么 到 为什么 到 在管线中的位置。 */}
+
+## 三个关键角色
+
+**顶点（Vertex）** 是流水线的原料：一个携带位置（以及可选的颜色、法线等）的数据点。三角形由三个顶点定义。
+
+**顶点缓冲对象（VBO，Vertex Buffer Object）** 是显存里的一块料仓：把顶点数据从内存一次性搬进显存，绘制时显卡就近取料，不必每帧从 CPU 传。没有它，每帧都要重新上传数据，慢且浪费带宽。
+
+**顶点数组对象（VAO，Vertex Array Object）** 是料仓的「说明书」：记录「这块缓冲里每个顶点占几个字节、位置从第几字节开始读」。绘制时只要绑回这张说明书，显卡就知道怎么解读那堆数字。它处在流水线最前端的**输入装配**环节。
+
+下面这张示意图标出了三角形在标准化设备坐标里的位置——一个所有坐标都落在 [-1, 1] 区间的小立方体空间。
+
+<Figure
+  src="/hero-poster.webp"
+  alt="标准化设备坐标系（NDC）中的三角形示意"
+  caption="占位图（M5 替换为真示意图）：NDC 是一个 x/y/z 都在 [-1, 1] 的立方体，落在框外的部分会被裁掉。"
+  annotations={[
+    { x: 50, y: 18, label: "顶点 (0, 0.5)" },
+    { x: 22, y: 78, label: "顶点 (-0.5, -0.5)" },
+    { x: 78, y: 78, label: "顶点 (0.5, -0.5)" },
+  ]}
+/>
+
+{/* 4. 数学推导（spec §四，math:true）：C 型数学为「选」；此处放一个轻量公式 NDC 到屏幕坐标的视口变换；公式后跟一句人话翻译，不跳步。 */}
+
+## 一点点坐标数学
+
+顶点坐标用的是标准化设备坐标（NDC），范围 $[-1, 1]$。屏幕像素却是从左上角 $(0,0)$ 到右下角 $(w, h)$。流水线靠**视口变换**把前者映射到后者：
+
+$$
+x_{\text{screen}} = \frac{x_{\text{ndc}} + 1}{2} \cdot w,
+\qquad
+y_{\text{screen}} = \frac{1 - y_{\text{ndc}}}{2} \cdot h
+$$
+
+这个式子在说：把 $[-1, 1]$ 先平移、缩放到 $[0, 1]$，再乘以屏幕宽/高。$y$ 用 $1 - y_{\text{ndc}}$ 是因为屏幕的 $y$ 轴朝下，而 NDC 的 $y$ 轴朝上，需要翻转。
+
+这一步由显卡按你设的视口自动完成，代码里通常只调一次 `glViewport` / `gl.viewport`，无需手算——理解它能帮你想明白「为什么图形上下没颠倒」。
+
+{/* 5. 交互 Demo（spec §五）：主 Demo C 型为 ShaderDemo（M4 接真组件）；Demo 前必有猜一猜引导；另配 Stepper 辅 Demo 讲管线流程（流程型知识点的动画示范）。 */}
+
+## 流水线的五道工位
+
+渲染管线把顶点变成像素，中间这五道工位是固定流程。下面这个分步动画把它走一遍——可暂停、可单步、可拖进度：
+
+<Stepper autoPlay interval={2000}>
+  <Step title="① 顶点着色器">
+    逐个处理顶点，决定每个顶点最终落在 NDC
+    里的什么位置。这是你能写代码干预的第一道工位。
+  </Step>
+  <Step title="② 图元装配">
+    把孤立的顶点按规则连成图元——三个顶点连成一个三角形。
+  </Step>
+  <Step title="③ 光栅化">
+    把矢量三角形切成一个个屏幕像素（片段），算出它覆盖了哪些格子。
+  </Step>
+  <Step title="④ 片段着色器">
+    逐个片段决定最终颜色。改这里的代码，就能改出不同颜色/渐变的三角形。
+  </Step>
+  <Step title="⑤ 测试与混合">
+    做深度/模板测试、与已有像素混合，决定这个片段是否以及如何写进屏幕。
+  </Step>
+</Stepper>
+
+走通流程后，下面是本章主 Demo。先别看代码——
+
+> 猜一猜：如果把片段着色器里输出的颜色从红色改成「随屏幕位置渐变」，画面会变成什么样？动手改一下再看答案。
+
+<ShaderDemo
+  vert={`#version 300 es
+in vec3 aPos;
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+}`}
+  frag={`#version 300 es
+precision highp float;
+out vec4 FragColor;
+void main() {
+  FragColor = vec4(1.0, 0.3, 0.2, 1.0);
+}`}
+  uniforms={{}}
+/>
+
+{/* 6. 代码对照（spec §六，C 型重心）：单块 30 行内；两 Tab 同一逻辑段；代码块之间有解说；API 差异首现用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+### 第一步：把顶点数据搬进 VBO
+
+三角形的三个顶点先写成一个扁平数组，再创建一块缓冲、绑定、上传。C++/OpenGL 与 WebGL2/TS 是同一逻辑段的两种写法：
 
 <CodeTabs>
   <Tab label="C++ / OpenGL 3.3">
 
 ```cpp
+float vertices[] = {
+  -0.5f, -0.5f, 0.0f,
+   0.5f, -0.5f, 0.0f,
+   0.0f,  0.5f, 0.0f,
+};
 unsigned int VBO;
 glGenBuffers(1, &VBO);
 glBindBuffer(GL_ARRAY_BUFFER, VBO);
@@ -107,6 +142,9 @@ glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
   <Tab label="TypeScript / WebGL2">
 
 ```ts
+const vertices = new Float32Array([
+  -0.5, -0.5, 0.0, 0.5, -0.5, 0.0, 0.0, 0.5, 0.0,
+]);
 const vbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
@@ -115,73 +153,121 @@ gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
   </Tab>
 </CodeTabs>
 
+两边逻辑完全对应，只是申请缓冲的 API 命名风格不同——这是首个需要留意的差异点：
+
+<Callout type="warn">
+  API 差异：C++ 用 `glGenBuffers(1, &VBO)` 先生成 id 再绑定；WebGL2 用
+  `gl.createBuffer()` 直接返回一个对象。着色器版本声明也不同：桌面 OpenGL 写
+  `#version 330 core`，WebGL2 写 `#version 300 es`（且片段着色器须声明
+  `precision`）。
+</Callout>
+
+### 第二步：用 VAO 记录属性布局
+
+数据进了显存，还要告诉显卡「每个顶点 3 个 float、从第 0 字节开始」。这段配置会被当前绑定的 VAO 记下来：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+unsigned int VAO;
+glGenVertexArrays(1, &VAO);
+glBindVertexArray(VAO);
+glVertexAttribPointer(
+  0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+glEnableVertexAttribArray(0);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const vao = gl.createVertexArray();
+gl.bindVertexArray(vao);
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 3 * 4, 0);
+gl.enableVertexAttribArray(0);
+```
+
+  </Tab>
+</CodeTabs>
+
+绑定 VAO 后调用 `vertexAttribPointer`，配置才会被这张「说明书」捕获；绘制时只需 `glBindVertexArray(VAO)` + `glDrawArrays`。完整可运行源码将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：编译运行后屏幕全黑，什么都没有。**原因**：忘了绑定 VAO 就调
+  `vertexAttribPointer`，属性配置没被任何对象记录。**修法**：先
+  `glBindVertexArray(VAO)`，再配置属性，最后绘制时绑回同一个 VAO。
+</Callout>
+
+<Callout type="trap">
+  **现象**：三角形顶点位置乱跳或只画出一部分。**原因**：`vertexAttribPointer`
+  的步长（stride）或偏移算错，显卡按错误字节数读取数据。**修法**：步长 =
+  单个顶点 字节数（3 个 float = 12 字节），位置属性偏移 = 0，逐项核对。
+</Callout>
+
+<Callout type="trap">
+  **现象**：WebGL2 下报错 `No precision specified`
+  或片段不显示。**原因**：WebGL2 的片段着色器必须显式声明浮点精度。**修法**：在
+  `#version 300 es` 之后加一行 `precision highp float;`（或 `mediump`）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 5 条内与学习目标一一呼应；练习含一道改 Demo 代码题，答案折叠；C 型加一道独立实现题。 */}
+
+## 小结
+
+- 显卡像工厂流水线：你负责备料（顶点）与排产（配置），不直接「画」
+- **VBO** 是显存料仓，**VAO** 是料仓说明书，两者配合才能正确取数
+- 渲染管线五道工位：顶点 → 图元装配 → 光栅化 → 片段 → 测试混合
+- 改**片段着色器**就能改出不同颜色/渐变；改顶点数据就能改形状
+- 顶点坐标用 NDC（$[-1,1]$），由视口变换映射到屏幕像素
+
 <Exercises>
 
-**练习 1（改代码型）** 把顶点数据改成画一个矩形（两个三角形），观察并解释现象。
+**练习 1（改 Demo 代码型）** 把上面 Demo 的片段着色器输出改成随屏幕坐标渐变（提示：用 `gl_FragCoord`）。观察并解释为什么颜色会随位置变化。
 
 <Answer>
 
-用两个三角形拼一个矩形：提供 4 个顶点 + 一个索引缓冲（EBO/`ELEMENT_ARRAY_BUFFER`），用 `glDrawElements` 绘制。
+把片段着色器改为：
+
+```glsl
+FragColor = vec4(gl_FragCoord.x / 300.0, gl_FragCoord.y / 300.0, 0.5, 1.0);
+```
+
+`gl_FragCoord` 是每个片段的屏幕像素坐标。每个片段着色器被独立调用一次，坐标不同 → 算出的颜色不同 → 整体呈现渐变。除以一个常数把像素值归一化到 [0, 1] 颜色区间。
 
 </Answer>
 
-**练习 2（问答型）** 为什么需要先绑定 VAO 再配置顶点属性？
+**练习 2（独立实现题）** 不看上面的代码，自己从零写出「创建 VBO + VAO + 配置位置属性」三步，画出一个**矩形**（目标效果：屏幕中央一个正方形）。
 
 <Answer>
 
-VAO 记录顶点属性指针配置与对应的 VBO 绑定；先绑 VAO，后续 `glVertexAttribPointer` 的状态才会被它捕获，绘制时只需绑回 VAO。
+矩形用两个三角形拼成。提供 4 个顶点 + 一个索引缓冲（EBO / `ELEMENT_ARRAY_BUFFER`），用 `glDrawElements` 按索引绘制，避免重复顶点：
+
+```ts
+const vertices = new Float32Array([
+  -0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, -0.5, 0, -0.5, -0.5, 0,
+]);
+const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+// VBO + VAO 同正文；额外：把 indices 传入 ELEMENT_ARRAY_BUFFER，
+// 绘制改用 gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+```
+
+</Answer>
+
+**练习 3（问答型）** 为什么要先绑定 VAO 再配置顶点属性，而不是反过来？
+
+<Answer>
+
+`vertexAttribPointer` / `enableVertexAttribArray` 的状态会被「当前绑定的 VAO」记录。如果还没绑 VAO 就配置，这些状态无处归属（WebGL2 下甚至直接报错）。先绑 VAO，配置才会被它捕获，之后绘制只需绑回这张说明书。
 
 </Answer>
 
 </Exercises>
 
-{/* ===== HEL-23 轻量交互/动画/图示组件壳验证（临时用例，draft 仍 true）===== */}
-
-## 轻量可视化组件验证
-
-### CompareSlider（对比型）
-
-拖动中缝、方向键、或触摸，对比左右两层（这里用色块占位）：
-
-<CompareSlider
-  leftLabel="开效果"
-  rightLabel="关效果"
-  left={
-    <div
-      style={{ width: "100%", height: "100%", background: "var(--accent)" }}
-    />
-  }
-  right={
-    <div style={{ width: "100%", height: "100%", background: "var(--bg)" }} />
-  }
-/>
-
-### Figure（图片比喻 + 标注）
-
-<Figure
-  src="/hero-poster.webp"
-  alt="示意图占位"
-  caption="图注走次要色，居中。标注点用百分比坐标定位、随图缩放。"
-  annotations={[
-    { x: 30, y: 40, label: "高光" },
-    { x: 70, y: 65, label: "环境光" },
-  ]}
-/>
-
-### Stepper（分步动画：可暂停 / 单步 / 拖进度）
-
-<Stepper autoPlay interval={1800}>
-  <Step title="第一步：顶点数据进 VBO">
-    把三角形的三个顶点坐标拷进显存缓冲。
-  </Step>
-  <Step title="第二步：VAO 记录属性布局">
-    告诉 GPU 怎么解读这段缓冲（步长、偏移）。
-  </Step>
-  <Step title="第三步：发起绘制">`glDrawArrays` 触发管线，光栅化成像素。</Step>
-</Stepper>
-
-### Slider / Toggle / DemoStage（驱动 SVG 演示）
-
-<RgbMixerDemo />
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
 
 <Attribution />
