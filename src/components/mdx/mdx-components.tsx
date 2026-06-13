@@ -11,6 +11,7 @@ import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
 import { MathViz } from "./math-viz";
 import { Objectives } from "./objectives";
+import { PipelineViz } from "./pipeline-viz";
 import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
 import { Term } from "./term";
@@ -41,6 +42,11 @@ import { Term } from "./term";
  *  - Client（真交互）：Term（行内术语高亮 + hover/focus tooltip + Esc + 锚点跳词条）
  *  - Server（纯展示）：Glossary / GlossaryItem（章末「人话词典」，词条 id 与 Term 锚点对齐）
  *
+ * 概念型(A)章节主 Demo（HEL-29，非 WebGL）：
+ *  - Client（叶子壳）：PipelineViz —— 渲染管线五阶段数据流 SVG 可视化（点→三角形→
+ *    像素格→上色→帧缓冲），可暂停/单步/拖进度，reduced-motion 默认暂停。自带默认五阶段，
+ *    无 WebGL 故不需 dynamic 切分；作者如需进一步延后可在用例里 dynamic(ssr:false)。
+ *
  * 数学型(B)章节主 Demo（HEL-28，非 WebGL）：
  *  - Client（dynamic 边界）：MathViz —— 2D 向量/矩阵/坐标变换 SVG 交互可视化（拖动输入
  *    向量、调 2×2 矩阵 Slider、实时看 M·v 与变换后网格/基向量、预设/重置/键盘可调）。
@@ -55,6 +61,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Attribution,
   Callout,
   ShaderDemo,
+  PipelineViz,
   MathViz,
   CompareSlider,
   Figure,
