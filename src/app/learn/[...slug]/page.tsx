@@ -53,7 +53,11 @@ const rehypePrettyCodeOptions: RehypePrettyCodeOptions = {
 type Params = { slug: string[] };
 
 export function generateStaticParams(): Params[] {
-  return getAllChapters().map((c) => ({
+  // 开发期把草稿章也注册成路由，否则配合 dynamicParams=false，draft 章在 dev 下也会 404，
+  // 无法预览（getChapter / getChapterTree 已是同一 NODE_ENV 条件）。生产构建仍只产出
+  // 非草稿章（includeDraft 默认 false），硬规则 7 不受影响。
+  const includeDraft = process.env.NODE_ENV !== "production";
+  return getAllChapters({ includeDraft }).map((c) => ({
     slug: [c.sectionSlug, c.chapterSlug],
   }));
 }

@@ -32,34 +32,49 @@ draft: true
 
 没有这套流程会怎样？显卡收到一堆数字却不知道它们是坐标、该连成什么、用什么颜色填——于是什么都不会出现。这一章就是把这条流水线一道道走通。
 
-{/* 3. 概念讲解（spec §三）：C 型压缩「是什么」让篇幅给第六节；术语首现加粗加一句话定义；每概念配图或引用 Demo；顺序：是什么 到 为什么 到 在管线中的位置。 */}
+{/* 3. 概念讲解（spec §三）：C 型压缩「是什么」让篇幅给第六节；一节一概念（顶点/属性 → VBO → VAO+属性指针）；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线中位置。新核心概念：顶点/属性、VBO、VAO、属性指针、输入装配、NDC（NDC 与视口在 §4 用 Term，全章 ≤ 适度）。 */}
 
-## 三个关键角色
+## 第一个角色：顶点，与它携带的「属性」
 
-**顶点（Vertex）** 是流水线的原料：一个携带位置（以及可选的颜色、法线等）的数据点。三角形由三个顶点定义。
+流水线的原料是 <Term def="渲染里最小的数据单元：一个点，至少携带位置，还可附带颜色、法线、纹理坐标等。三角形由 3 个顶点定义。">顶点（Vertex）</Term>——一个数据点。三角形由三个顶点定义。但顶点不只是「一个坐标」：它身上可以挂多种信息，每一种叫一个 <Term def="顶点身上的一项数据，如位置、颜色、法线、纹理坐标。一个顶点可同时带多个属性，着色器按编号（location）读取它们。">顶点属性（attribute）</Term>。
 
-先说料仓：<Term def="Vertex Buffer Object，显存里存放顶点数据的缓冲区，让显卡绘制时就近取料。">顶点缓冲对象（VBO）</Term> 是显存里的一块地方，把顶点数据从内存一次性搬进显存，绘制时显卡就近取料，不必每帧从 CPU 传。没有它，每帧都要重新上传数据，慢且浪费带宽。
+本章最简单的情形：每个顶点只带一个属性——**位置**，用 3 个 `float`（x、y、z）表示。三个顶点连起来就是 9 个 `float`，在内存里挨着排成一条直线：
 
-再说说明书：<Term def="Vertex Array Object，记录顶点数据该怎么解读（每个顶点几个字节、从哪开始读）的「说明书」对象。">顶点数组对象（VAO）</Term> 记录「这块缓冲里每个顶点占几个字节、位置从第几字节开始读」。绘制时只要绑回这张说明书，显卡就知道怎么解读那堆数字。它处在流水线最前端的 <Term def="渲染管线第一道工位，把顶点数据按 VAO 说明书取出、组织好交给后续阶段。">输入装配</Term> 环节。
+```text
+顶点0          顶点1          顶点2
+x0 y0 z0   |   x1 y1 z1   |   x2 y2 z2     ← 内存里就是连续的 9 个 float
+```
 
-下面这张示意图标出了三角形在标准化设备坐标里的位置——一个所有坐标都落在 [-1, 1] 区间的小立方体空间。
+显卡拿到的其实只是这 9 个裸数字，它并不天然知道「每 3 个是一个顶点的位置」——这一点稍后由 VAO 来交代。
 
-<Figure
-  src="/hero-poster.webp"
-  alt="标准化设备坐标系（NDC）中的三角形示意"
-  caption="占位图（M5 替换为真示意图）：NDC 是一个 x/y/z 都在 [-1, 1] 的立方体，落在框外的部分会被裁掉。"
-  annotations={[
-    { x: 50, y: 18, label: "顶点 (0, 0.5)" },
-    { x: 22, y: 78, label: "顶点 (-0.5, -0.5)" },
-    { x: 78, y: 78, label: "顶点 (0.5, -0.5)" },
-  ]}
-/>
+为什么坐标只能写在某个范围里？因为顶点位置用的是 <Term def="Normalized Device Coordinates，标准化设备坐标：x/y/z 都落在 [-1,1] 的标准空间，正中间是 0，框外的会被裁掉。">标准化设备坐标（NDC）</Term>——一个 $x/y/z$ 都落在 $[-1, 1]$ 的标准空间，正中间是原点。不管屏幕多大，先用这套统一坐标写顶点，落在框外的部分会被裁掉。本章三个顶点 `(0, 0.5)`、`(-0.5, -0.5)`、`(0.5, -0.5)` 就是这套坐标里的一个三角形。
+
+## 第二个角色：VBO，把原料一次性搬进显存
+
+顶点数据现在还在内存（CPU 那边）。但绘制发生在显卡（GPU）那边，每帧都从内存现搬数据既慢又浪费带宽。于是先把它搬进 <Term def="Vertex Buffer Object，显存里一块专门存顶点数据的缓冲区；把顶点一次性搬进去，绘制时显卡就近取料，不必每帧从内存重传。">顶点缓冲对象（VBO）</Term>——显存里一块专门的「料仓」。
+
+它解决的问题：把顶点数据**一次性**从内存搬进显存，之后每帧绘制时显卡就近取料。没有它，每帧都要把这堆数字重新上传一遍，慢且浪费带宽。VBO 处在流水线最前端，是顶点数据进显卡的第一站。
+
+## 第三个角色：VAO 与属性指针，告诉显卡怎么读这堆字节
+
+数据进了显存，可显卡看到的还是一串裸字节，它不知道「每个顶点占几个字节、位置从第几字节开始读、一次读几个 `float`」。补上这份说明的，是 <Term def="一个告诉显卡怎么从 VBO 里切出顶点的设置：第几号属性、每次读几个值、什么类型、相邻两个顶点间隔多少字节（步长）、从第几字节起读（偏移）。">属性指针</Term>，它通过 `glVertexAttribPointer` / `gl.vertexAttribPointer` 配置：
+
+- **location**：这是第几号属性（位置属性用 0 号，着色器里 `layout(location = 0)` 对应）
+- **size**：每次读几个值（位置是 3 个 `float`，所以填 3）
+- **stride（步长）**：相邻两个顶点的起点间隔多少字节（每顶点 3 个 `float` = 12 字节）
+- **offset（偏移）**：这个属性从顶点的第几字节开始读（位置在最前，填 0）
+
+而这套「怎么读」的配置本身，得有个东西记下来——这就是 <Term def="Vertex Array Object，记录「顶点数据该怎么解读」的说明书对象：哪些属性开了、各自的步长/偏移/类型。绑回它，显卡就知道怎么读 VBO。">顶点数组对象（VAO）</Term>。VAO 不存顶点数据（数据在 VBO 里），它只存「解读方式」。绑定 VAO 之后再调 `vertexAttribPointer`，配置就被这张说明书捕获；之后绘制时只要绑回 VAO，显卡就知道怎么解读那堆数字。它处在流水线最前端的 <Term def="渲染管线第一道工位，把顶点数据按 VAO 说明书取出、组织好交给后续阶段。">输入装配</Term> 环节。
+
+一句话记住三者关系：**VBO 是料（一串字节），属性指针是「怎么切这串字节」的规则，VAO 是把这套规则记下来的说明书。** 下面这张图把这条链路和「属性指针怎么切字节」画在一起：
+
+<VertexPipelineDiagram />
 
 {/* 4. 数学推导（spec §四，math:true）：C 型数学为「选」；此处放一个轻量公式 NDC 到屏幕坐标的视口变换；公式后跟一句人话翻译，不跳步。 */}
 
 ## 一点点坐标数学
 
-顶点坐标用的是 <Term def="Normalized Device Coordinates，标准化设备坐标：x/y/z 都落在 [-1,1] 的标准空间，框外的会被裁掉。">标准化设备坐标（NDC）</Term>，范围 $[-1, 1]$。屏幕像素却是从左上角 $(0,0)$ 到右下角 $(w, h)$。流水线靠 <Term def="把 [-1,1] 的 NDC 坐标按视口大小映射成屏幕像素坐标的那一步变换。">视口变换</Term> 把前者映射到后者：
+上一节说过，顶点坐标用的是 **NDC**，范围 $[-1, 1]$。屏幕像素却是从左上角 $(0,0)$ 到右下角 $(w, h)$。流水线靠 <Term def="把 [-1,1] 的 NDC 坐标按视口大小映射成屏幕像素坐标的那一步变换。">视口变换</Term> 把前者映射到后者：
 
 $$
 x_{\text{screen}} = \frac{x_{\text{ndc}} + 1}{2} \cdot w,
@@ -89,13 +104,23 @@ $$
 
 <PipelineViz interval={2000} />
 
-走通流程后，下面是本章主 Demo。先别看代码——
+走通流程后，下面是本章主 Demo——一个**真·三角形**：顶点着色器吐出本章那三个 NDC 顶点 `(0, 0.5)`、`(-0.5, -0.5)`、`(0.5, -0.5)`，片段着色器只给三角形覆盖到的片段上色，背景留空（透明）。先别看代码——
 
-> 猜一猜：如果把片段着色器里输出的颜色从红色改成「随屏幕位置渐变」，画面会变成什么样？动手改一下再看答案。
+> 猜一猜：右侧片段着色器现在输出的是「随位置渐变 + 基色」。如果把 `FragColor` 那行整段改成固定红色 `vec4(1.0, 0.0, 0.0, 1.0)`，画面会变成什么样？三角形的形状会变吗？动手改一下再看答案。
 
 <ShaderDemo
   editable
-  caption="片段着色器按屏幕位置 + 时间算出每个像素的颜色；拖「脉动速度」滑块、选「基色」，再移动鼠标，渐变会实时变。右侧可直接改 GLSL，停手后自动重渲染。"
+  caption="一个真三角形：顶点着色器用 gl_VertexID 吐出本章那三个 NDC 顶点，片段着色器只给被三角形覆盖的片段算色。拖「脉动速度」、选「基色」、移动鼠标看实时变化；右侧可直接改 GLSL，停手后自动重渲染——改 FragColor 改颜色，改顶点着色器里的坐标改形状。"
+  vert={`#version 300 es
+// 本章三角形的三个 NDC 顶点，按 gl_VertexID 选出（无需 VBO，引擎画 3 个顶点）。
+const vec2 verts[3] = vec2[3](
+  vec2( 0.0,  0.5),
+  vec2(-0.5, -0.5),
+  vec2( 0.5, -0.5)
+);
+void main() {
+  gl_Position = vec4(verts[gl_VertexID], 0.0, 1.0);
+}`}
   frag={`#version 300 es
 precision highp float;
 uniform vec2 uResolution;
@@ -105,7 +130,7 @@ uniform vec3 uColorA;   // 控件：基色（颜色选择器，rgb 0..1）
 uniform float uSpeed;   // 控件：脉动速度（滑块）
 out vec4 FragColor;
 void main() {
-  // 把像素坐标归一化到 0..1（uv 即「屏幕位置」）
+  // 把片段的屏幕坐标归一化到 0..1（uv 即「这个片段在画布的哪个位置」）
   vec2 uv = gl_FragCoord.xy / uResolution;
   // 蓝随时间脉动（速度可调）、随鼠标偏移
   float b = 0.5 + 0.5 * sin(uTime * uSpeed + uMouse.x * 6.2831);
@@ -127,13 +152,107 @@ void main() {
   ]}
 />
 
-{/* 6. 代码对照（spec §六，C 型重心）：单块 30 行内；两 Tab 同一逻辑段；代码块之间有解说；API 差异首现用 Callout 标注。 */}
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：五步覆盖 着色器源码 → 编译链接 → VBO → VAO+属性指针 → 绘制；单块 ≤30 行；两 Tab 同一逻辑段；代码块之间有解说；API 差异首现用 Callout 标注。 */}
 
 ## 代码逐段拆解
 
-### 第一步：把顶点数据搬进 VBO
+画一个三角形的完整代码就五步：**写两段着色器 → 编译链接成程序 → 把顶点搬进 VBO → 用 VAO 记录怎么读 → 下达绘制命令**。下面逐步对照，C++/OpenGL 与 WebGL2/TS 互为镜像。
 
-三角形的三个顶点先写成一个扁平数组，再创建一块缓冲、绑定、上传。C++/OpenGL 与 WebGL2/TS 是同一逻辑段的两种写法：
+### 第一步：写两段着色器源码
+
+显卡画图靠两段小程序：<Term def="渲染管线里第一段可编程小程序，对每个顶点跑一次，主要把顶点位置摆到 NDC 里（输出 gl_Position）。">顶点着色器</Term> 处理每个顶点的位置，<Term def="光栅化后对每个片段跑一次的小程序，算出这个片段最终是什么颜色（输出到 FragColor）。">片段着色器</Term> 算出每个片段的颜色。本章最简版：顶点着色器把传进来的位置原样输出，片段着色器输出固定的红色。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+const char *vertexSrc = R"(#version 330 core
+layout (location = 0) in vec3 aPos;
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+})";
+const char *fragmentSrc = R"(#version 330 core
+out vec4 FragColor;
+void main() {
+  FragColor = vec4(1.0, 0.0, 0.0, 1.0); // 红
+})";
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const vertexSrc = `#version 300 es
+layout (location = 0) in vec3 aPos;
+void main() {
+  gl_Position = vec4(aPos, 1.0);
+}`;
+const fragmentSrc = `#version 300 es
+precision highp float;
+out vec4 FragColor;
+void main() {
+  FragColor = vec4(1.0, 0.0, 0.0, 1.0); // 红
+}`;
+```
+
+  </Tab>
+</CodeTabs>
+
+两段逻辑完全相同，只有版本声明这一行不同——这是第一个要记住的差异点：
+
+<Callout type="warn">
+  API 差异：着色器版本声明不同——桌面 OpenGL 写 `#version 330 core`，WebGL2 写
+  `#version 300 es`，且 WebGL2 的**片段着色器必须**多写一行 `precision highp
+  float;` 声明浮点精度，否则编译失败。`layout (location = 0)` 把顶点着色器的
+  `aPos` 绑到 0 号属性——和后面属性指针填的 location 0 对上。
+</Callout>
+
+### 第二步：编译、链接成一个着色器程序
+
+源码只是字符串，要先编译成显卡能跑的东西，再把两段链接成一个 <Term def="把编译好的顶点着色器和片段着色器链接到一起、可被显卡执行的整体；绘制前用 useProgram 启用它。">着色器程序</Term>。编译/链接失败时一定要查日志，否则后面只会得到一片黑。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
+glShaderSource(vs, 1, &vertexSrc, NULL);
+glCompileShader(vs);
+unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
+glShaderSource(fs, 1, &fragmentSrc, NULL);
+glCompileShader(fs);
+unsigned int program = glCreateProgram();
+glAttachShader(program, vs);
+glAttachShader(program, fs);
+glLinkProgram(program); // 失败用 glGetProgramInfoLog 查日志
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+function compile(type: number, src: string) {
+  const s = gl.createShader(type)!;
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s) ?? "编译失败");
+  return s;
+}
+const program = gl.createProgram()!;
+gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSrc));
+gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSrc));
+gl.linkProgram(program); // 失败用 gl.getProgramInfoLog 查日志
+```
+
+  </Tab>
+</CodeTabs>
+
+`createShader → shaderSource → compileShader` 编译每一段，`createProgram → attachShader → linkProgram` 把两段焊成一个程序。绘制前再用 `glUseProgram(program)` / `gl.useProgram(program)` 把它启用。接着才轮到准备数据。
+
+### 第三步：把顶点数据搬进 VBO
+
+三角形的三个顶点先写成一个扁平数组，再创建一块缓冲、绑定、上传到显存：
 
 <CodeTabs>
   <Tab label="C++ / OpenGL 3.3">
@@ -165,18 +284,18 @@ gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
   </Tab>
 </CodeTabs>
 
-两边逻辑完全对应，只是申请缓冲的 API 命名风格不同——这是首个需要留意的差异点：
+两边逻辑完全对应，只是申请缓冲的 API 命名风格不同：
 
 <Callout type="warn">
-  API 差异：C++ 用 `glGenBuffers(1, &VBO)` 先生成 id 再绑定；WebGL2 用
-  `gl.createBuffer()` 直接返回一个对象。着色器版本声明也不同：桌面 OpenGL 写
-  `#version 330 core`，WebGL2 写 `#version 300 es`（且片段着色器须声明
-  `precision`）。
+  API 差异：C++ 用 `glGenBuffers(1, &VBO)` 先生成
+  id（一个整数句柄）再绑定；WebGL2 用 `gl.createBuffer()` 直接返回一个
+  `WebGLBuffer` 对象。创建 VAO 也是同理： `glGenVertexArrays` vs
+  `gl.createVertexArray()`。
 </Callout>
 
-### 第二步：用 VAO 记录属性布局
+### 第四步：用 VAO 记录属性布局（属性指针）
 
-数据进了显存，还要告诉显卡「每个顶点 3 个 float、从第 0 字节开始」。这段配置会被当前绑定的 VAO 记下来：
+数据进了显存，还要告诉显卡「每个顶点 3 个 `float`、从第 0 字节开始」。绑定 VAO 后调用 `vertexAttribPointer`，这段配置就被这张「说明书」记下来：
 
 <CodeTabs>
   <Tab label="C++ / OpenGL 3.3">
@@ -203,7 +322,41 @@ gl.enableVertexAttribArray(0);
   </Tab>
 </CodeTabs>
 
-绑定 VAO 后调用 `vertexAttribPointer`，配置才会被这张「说明书」捕获；绘制时只需 `glBindVertexArray(VAO)` + `glDrawArrays`。完整可运行源码将在章末提供（M5）。
+对照 §3 那把尺子看这几个参数：第一个 `0` 是 location（对上着色器里 `layout(location = 0)`）；`3` 是每次读 3 个值；`3 * sizeof(float)` / `3 * 4` 是步长（每顶点 12 字节）；最后的 `0` 是偏移（位置从第 0 字节起读）。
+
+<Callout type="tip">
+  我们直接用 `layout(location = 0)` 写死了属性编号，所以填 0
+  即可。如果着色器没写 `layout`，就得先用 `glGetAttribLocation(program, "aPos")`
+  / `gl.getAttribLocation(program, "aPos")` 按变量名问出编号，再把它填进
+  `vertexAttribPointer` 的第一个参数。
+</Callout>
+
+### 第五步：下达绘制命令
+
+万事俱备——启用程序、绑回 VAO、发一条 <Term def="按 VAO 说明书从 VBO 取顶点、走完整条管线画出图元的绘制命令；glDrawArrays 从第 0 个顶点起画 3 个顶点、组成一个三角形。">绘制调用</Term>，三角形就出现了：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+glUseProgram(program);     // 启用着色器程序
+glBindVertexArray(VAO);    // 绑回说明书
+glDrawArrays(GL_TRIANGLES, 0, 3); // 从第 0 个顶点起画 3 个 → 一个三角形
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+gl.useProgram(program); // 启用着色器程序
+gl.bindVertexArray(vao); // 绑回说明书
+gl.drawArrays(gl.TRIANGLES, 0, 3); // 从第 0 个顶点起画 3 个 → 一个三角形
+```
+
+  </Tab>
+</CodeTabs>
+
+`drawArrays(TRIANGLES, 0, 3)` 的意思是「从第 0 个顶点开始，取 3 个顶点，每 3 个组成一个三角形」。这一条命令一发，§5 那条「点 → 三角形 → 像素 → 上色」的流水线就被完整跑了一遍。完整可运行源码将在章末提供（M5）。
 
 {/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内。 */}
 
@@ -224,7 +377,16 @@ gl.enableVertexAttribArray(0);
 <Callout type="trap">
   **现象**：WebGL2 下报错 `No precision specified`
   或片段不显示。**原因**：WebGL2 的片段着色器必须显式声明浮点精度。**修法**：在
-  `#version 300 es` 之后加一行 `precision highp float;`（或 `mediump`）。
+  `#version 300 es` 之后加一行 `precision highp float;`（或
+  `mediump`）。**亲手看翻车**：到 §5 那个可编辑 Demo 里，把 `precision highp
+  float;`
+  那行删掉，停手后编辑器会标红报错、画面停更——这就是这个坑的真实样子；改回来即恢复。
+</Callout>
+
+<Callout type="trap">
+  **现象**：编译报错或三角形不出现，控制台只有一句模糊的失败。**原因**：着色器编译/链接失败了却没查日志，比如拼错了内置变量名（`gl_Position`
+  写成 `gl_position`）。**修法**：编译后用 `getShaderInfoLog`、链接后用
+  `getProgramInfoLog` 把日志打出来——错误行和原因都在里面，别盲猜。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：小结 5 条内与学习目标一一呼应；练习含一道改 Demo 代码题，答案折叠；C 型加一道独立实现题。 */}
@@ -239,17 +401,19 @@ gl.enableVertexAttribArray(0);
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 把上面 Demo 的片段着色器输出改成随屏幕坐标渐变（提示：用 `gl_FragCoord`）。观察并解释为什么颜色会随位置变化。
+**练习 1（改 Demo 代码型）** 在上面可编辑 Demo 里做两件事：①把片段着色器 `FragColor` 那行改成固定红色 `vec4(1.0, 0.0, 0.0, 1.0)`，看三角形变成纯红；②再把顶点着色器里 `vec2( 0.0, 0.5)` 这个顶点改成 `vec2( 0.0, 0.9)`，看形状怎么变。解释为什么改 frag 只换颜色、改 vert 才换形状。
 
 <Answer>
 
-把片段着色器改为：
+①把片段着色器输出改为固定色：
 
 ```glsl
-FragColor = vec4(gl_FragCoord.x / 300.0, gl_FragCoord.y / 300.0, 0.5, 1.0);
+FragColor = vec4(1.0, 0.0, 0.0, 1.0); // 整块三角形变纯红
 ```
 
-`gl_FragCoord` 是每个片段的屏幕像素坐标。每个片段着色器被独立调用一次，坐标不同 → 算出的颜色不同 → 整体呈现渐变。除以一个常数把像素值归一化到 [0, 1] 颜色区间。
+片段着色器只决定「每个被覆盖的片段是什么颜色」，不决定覆盖了哪些片段——所以改它只换颜色，三角形形状纹丝不动。
+
+②把顶点着色器里的顶点 `vec2(0.0, 0.5)` 抬高到 `vec2(0.0, 0.9)`，顶点位置变了，三角形就被拉高变尖。形状由**顶点**决定，所以要改形状得改顶点着色器（或顶点数据）。这正是「改 frag 改颜色、改顶点改形状」的由来。
 
 </Answer>
 
@@ -280,16 +444,31 @@ const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
 </Exercises>
 
-{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（7 个）；释义面向零基础；难懂词「光栅化」内嵌 Stepper 动画掰碎。位置固定章末、出处声明之前。 */}
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（14 个，按首现顺序）；释义面向零基础；难懂词「光栅化」内嵌 Stepper 动画掰碎。位置固定章末、出处声明之前。 */}
 
 <Glossary>
 
+<GlossaryItem term="顶点（Vertex）">
+  渲染里最小的数据单元——一个点。它至少带「位置」，还可以再挂颜色、法线、纹理坐标等。三角形就是由
+  3 个顶点定义的。详见本章「第一个角色」。
+</GlossaryItem>
+
+<GlossaryItem term="顶点属性（attribute）">
+  挂在一个顶点身上的某一项数据，比如位置、颜色。一个顶点可以同时带好几个属性，着色器按编号（location）去读它们。本章每个顶点只带一个属性：位置。
+</GlossaryItem>
+
 <GlossaryItem term="顶点缓冲对象（VBO）">
-  显存里一块专门存顶点数据的「料仓」。先把三角形三个角的坐标一次性搬进去，显卡画的时候就近取，不用每帧从内存重新搬——快、省。
+  显存里一块专门存顶点数据的「料仓」。先把三角形三个角的坐标一次性搬进去，显卡画的时候就近取，不用每帧从内存重新搬——快、省。详见本章「第二个角色」。
+</GlossaryItem>
+
+<GlossaryItem term="属性指针">
+  一份「怎么从 VBO
+  这串字节里切出一个个顶点」的说明：第几号属性、每次读几个值、相邻顶点隔多少字节（步长）、从第几字节起读（偏移）。靠
+  `vertexAttribPointer` 配置。详见本章「第三个角色」。
 </GlossaryItem>
 
 <GlossaryItem term="顶点数组对象（VAO）">
-  料仓的「说明书」。它不存数据，只记「这堆数字里每个顶点占几个字节、坐标从第几字节开始读」。绑回这张说明书，显卡才知道怎么解读那堆数字。详见本章「三个关键角色」。
+  料仓的「说明书」。它不存数据，只记「这堆数字里每个顶点占几个字节、坐标从第几字节开始读」（也就是上面的属性指针）。绑回这张说明书，显卡才知道怎么解读那堆数字。详见本章「第三个角色」。
 </GlossaryItem>
 
 <GlossaryItem term="输入装配">
@@ -332,6 +511,27 @@ const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
 <GlossaryItem term="片段">
   光栅化后产生的、对应一个像素的「待上色数据点」。它还不是最终像素——要等片段着色器算出颜色、再通过深度/混合测试后，才真正写进屏幕。可以理解成「准像素」。
+</GlossaryItem>
+
+<GlossaryItem term="顶点着色器">
+  管线里第一段你能写的小程序，对每个顶点跑一次，主要任务是把顶点位置摆到正确的地方（输出
+  `gl_Position`）。本章里它只是把传进来的坐标原样输出。详见本章「第一步」。
+</GlossaryItem>
+
+<GlossaryItem term="片段着色器">
+  光栅化后对每个片段跑一次的小程序，决定这个片段最终是什么颜色（输出
+  `FragColor`）。改它就能改出不同颜色或渐变——这正是本章主 Demo 在玩的东西。
+</GlossaryItem>
+
+<GlossaryItem term="着色器程序">
+  把编译好的顶点着色器和片段着色器链接到一起、能被显卡执行的整体。绘制前用
+  `useProgram` 启用它，显卡画图时才知道该跑哪两段着色器。详见本章「第二步」。
+</GlossaryItem>
+
+<GlossaryItem term="绘制调用">
+  按 VAO 说明书从 VBO 取顶点、走完整条管线画出图形的那条命令。本章用
+  `drawArrays(TRIANGLES, 0, 3)`：从第 0 个顶点起取 3
+  个、组成一个三角形。详见本章「第五步」。
 </GlossaryItem>
 
 </Glossary>

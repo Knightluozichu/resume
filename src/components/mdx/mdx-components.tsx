@@ -8,6 +8,7 @@ import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
+import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -69,6 +70,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Figure,
   SetupPipelineDiagram,
   FrameStageDiagram,
+  VertexPipelineDiagram,
   Stepper,
   Step,
   Slider,
