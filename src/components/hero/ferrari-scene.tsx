@@ -209,8 +209,9 @@ export default function FerrariScene() {
       gl={{ alpha: true, antialias: true }}
       shadows
       dpr={[1, 2]}
-      // 3/4 侧前方、略俯视的静态机位，展示车身线条
-      camera={{ position: [4.2, 1.7, 5.2], fov: 38 }}
+      // 3/4 侧前方、略俯视的静态机位；拉远 + 抬高让车落在画面下半部，
+      // 给顶部文字留出干净留白（移动端完整响应式取景见 HEL-15）
+      camera={{ position: [4.8, 2.7, 6.2], fov: 36 }}
     >
       <FerrariRig />
     </Canvas>
