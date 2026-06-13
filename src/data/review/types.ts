@@ -25,7 +25,10 @@ export type ReviewChapterSlug =
   | "materials"
   | "lighting-maps"
   | "light-casters"
-  | "multiple-lights";
+  | "multiple-lights"
+  | "assimp"
+  | "mesh"
+  | "model";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -54,6 +57,9 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lighting-maps": "光照贴图",
   "light-casters": "投光物",
   "multiple-lights": "多光源",
+  assimp: "Assimp",
+  mesh: "网格",
+  model: "模型",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

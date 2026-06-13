@@ -30,6 +30,9 @@ import { multipleLightsQuestions } from "./review/multiple-lights";
 import { shadersQuestions } from "./review/shaders";
 import { texturesQuestions } from "./review/textures";
 import { transformationsQuestions } from "./review/transformations";
+import { assimpQuestions } from "./review/assimp";
+import { meshQuestions } from "./review/mesh";
+import { modelQuestions } from "./review/model";
 
 export {
   CHAPTER_TITLES,
@@ -56,6 +59,9 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lightingMapsQuestions,
   ...lightCastersQuestions,
   ...multipleLightsQuestions,
+  ...assimpQuestions,
+  ...meshQuestions,
+  ...modelQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

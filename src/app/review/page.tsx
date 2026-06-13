@@ -16,7 +16,7 @@ import { ReviewApp } from "@/components/review/review-app";
 export const metadata: Metadata = {
   title: "复习 — remuse",
   description:
-    "卡片问答 + 智能间隔复习：把入门、光照各章的概念、术语、练习刷成肌肉记忆。",
+    "卡片问答 + 智能间隔复习：把每一章的概念、术语、练习刷成肌肉记忆。",
 };
 
 export default function ReviewPage() {
@@ -25,7 +25,7 @@ export default function ReviewPage() {
       <div className="mx-auto w-full max-w-[72ch]">
         <h1 className="text-2xl font-semibold">复习</h1>
         <p className="mt-2 text-secondary">
-          翻卡片自测，答对的题间隔变长、答错的进错题集优先重来——把入门、光照各章刷成肌肉记忆。进度只存在你这台设备的浏览器里。
+          翻卡片自测，答对的题间隔变长、答错的进错题集优先重来——把每一章刷成肌肉记忆。进度只存在你这台设备的浏览器里。
         </p>
         <div className="mt-8">
           <ReviewApp />
