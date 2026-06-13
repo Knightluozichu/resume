@@ -12,9 +12,16 @@
  * Server Component（纯展示，静态 SVG，按 step prop 切状态，无交互、无 three、reduced-motion 无关）。
  * 视觉语言与既有 diagram 一致：token 色（var(--accent)/--success/--warning/--border/
  * --bg/--bg-elevated/--text-primary/--text-secondary），无阴影、rx 圆角、无裸 hex（硬规则 5）。
+ *
+ * view prop：
+ *  - "full"（默认）：左「画布」+ 右「模板缓冲」双面板，<Stepper> 三步用。
+ *  - "canvas"：只画「画布（看到的画面）」单面板（物体方块；step≥2 时加外圈描边环），
+ *    填满 figure 宽度、viewBox 收成近正方形。<CompareSlider> 同构同框对比用——
+ *    左右两侧都传 canvas 视图，擦除滑块时干净呈现「物体 → 物体+外圈描边」。
  */
 
 type OutlineStep = 1 | 2 | 3;
+type OutlineView = "full" | "canvas";
 
 const ARIA: Record<OutlineStep, string> = {
   1: "物体描边两遍法第一步。左边画布上正常画出一个物体方块。右边是模板缓冲，物体覆盖到的像素的模板值被写成 1，用高亮标出，其余区域保持 0。这一遍设置 glStencilOp 为 GL_KEEP GL_KEEP GL_REPLACE，并用 glStencilFunc GL_ALWAYS 1 0xFF 让物体所有片段都把模板值替换成 1。",
@@ -22,12 +29,211 @@ const ARIA: Record<OutlineStep, string> = {
   3: "物体描边两遍法的结果。原物体周围正好留下一圈边框色的轮廓，描边完成。",
 };
 
-export function StencilOutlineStepDiagram({ step }: { step: OutlineStep }) {
+const ARIA_CANVAS: Record<OutlineStep, string> = {
+  1: "画布上正常画出的一个物体方块，没有描边。",
+  2: "画布上的物体方块，外缘多了一圈描边色的外环（两遍法第二遍只在物体外侧上色）。",
+  3: "画布上的物体方块，外缘镶了一圈描边色的轮廓，这是两遍法跑完后的描边效果。",
+};
+
+const CANVAS_CAPTION: Record<OutlineStep, string> = {
+  1: "没做描边：只有物体本身。",
+  2: "第二遍后：物体外缘多了一圈描边环。",
+  3: "两遍法后：物体外缘多了一圈描边。",
+};
+
+/**
+ * 画「画布」上的物体方块（+ step≥2 时的外圈描边环）。供 full / canvas 两种视图复用，
+ * 不要再画一套——传入画布中心 (cx, cy) 即可摆到任意位置。
+ */
+function CanvasContent({
+  step,
+  cx,
+  cy,
+  objHalf,
+  grow,
+  showLabel,
+}: {
+  step: OutlineStep;
+  cx: number;
+  cy: number;
+  objHalf: number;
+  grow: number;
+  showLabel: boolean;
+}) {
+  return (
+    <>
+      {step === 1 && (
+        <>
+          {/* 第一遍：正常画出的物体 */}
+          <rect
+            x={cx - objHalf}
+            y={cy - objHalf}
+            width={objHalf * 2}
+            height={objHalf * 2}
+            rx="4"
+            fill="var(--accent)"
+            opacity="0.85"
+            stroke="var(--border)"
+            strokeWidth="1"
+          />
+          {showLabel && (
+            <text
+              x={cx}
+              y={cy + 4}
+              textAnchor="middle"
+              fontSize="11"
+              fill="var(--text-primary)"
+            >
+              物体
+            </text>
+          )}
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          {/* 第二遍：放大物体外环上描边色（GL_NOTEQUAL 只在模板≠1处） */}
+          <rect
+            x={cx - objHalf - grow}
+            y={cy - objHalf - grow}
+            width={(objHalf + grow) * 2}
+            height={(objHalf + grow) * 2}
+            rx="4"
+            fill="var(--warning)"
+            opacity="0.9"
+            stroke="var(--warning)"
+            strokeWidth="1"
+          />
+          {/* 中心：原物体仍在（模板=1 处放大物体不画，露出第一遍的物体） */}
+          <rect
+            x={cx - objHalf}
+            y={cy - objHalf}
+            width={objHalf * 2}
+            height={objHalf * 2}
+            rx="4"
+            fill="var(--accent)"
+            opacity="0.85"
+            stroke="var(--border)"
+            strokeWidth="1"
+          />
+          {showLabel && (
+            <text
+              x={cx}
+              y={cy - objHalf - grow / 2 + 1}
+              textAnchor="middle"
+              fontSize="9"
+              fontWeight="600"
+              fill="var(--bg)"
+            >
+              只有这一环被画
+            </text>
+          )}
+        </>
+      )}
+
+      {step === 3 && (
+        <>
+          {/* 结果：物体 + 周围一圈描边 */}
+          <rect
+            x={cx - objHalf - grow}
+            y={cy - objHalf - grow}
+            width={(objHalf + grow) * 2}
+            height={(objHalf + grow) * 2}
+            rx="4"
+            fill="var(--warning)"
+            opacity="0.9"
+          />
+          <rect
+            x={cx - objHalf}
+            y={cy - objHalf}
+            width={objHalf * 2}
+            height={objHalf * 2}
+            rx="4"
+            fill="var(--accent)"
+            opacity="0.85"
+            stroke="var(--border)"
+            strokeWidth="1"
+          />
+          {showLabel && (
+            <text
+              x={cx}
+              y={cy + 4}
+              textAnchor="middle"
+              fontSize="11"
+              fill="var(--text-primary)"
+            >
+              物体 + 描边
+            </text>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
+export function StencilOutlineStepDiagram({
+  step,
+  view = "full",
+}: {
+  step: OutlineStep;
+  view?: OutlineView;
+}) {
   // 画布与模板缓冲两个方框共用一套几何。
   const cx = 130; // 左侧画布中心 x
   const cy = 135; // 两图中心 y
   const objHalf = 42; // 原物体半边长
   const grow = 14; // 第二遍放大量（一圈描边宽度）
+
+  // canvas 视图：只画「画布」单面板，填满 figure 宽度、viewBox 近正方形。
+  if (view === "canvas") {
+    const ccx = 130; // 单面板画布中心 x
+    const ccy = 130; // 单面板画布中心 y
+    return (
+      <figure className="mdx-figure mx-auto my-4">
+        <div className="overflow-hidden rounded-card border border-border bg-elevated">
+          <svg
+            viewBox="0 0 260 260"
+            role="img"
+            aria-label={ARIA_CANVAS[step]}
+            className="mx-auto block h-auto w-full max-w-[260px]"
+          >
+            <text
+              x={ccx}
+              y="32"
+              textAnchor="middle"
+              fontSize="12"
+              fontWeight="600"
+              fill="var(--text-primary)"
+            >
+              画布（看到的画面）
+            </text>
+            {/* 画布外框 */}
+            <rect
+              x={ccx - 100}
+              y="48"
+              width="200"
+              height="170"
+              rx="6"
+              fill="var(--bg)"
+              stroke="var(--border)"
+              strokeWidth="1.5"
+            />
+            <CanvasContent
+              step={step}
+              cx={ccx}
+              cy={ccy}
+              objHalf={objHalf}
+              grow={grow}
+              showLabel={false}
+            />
+          </svg>
+        </div>
+        <figcaption className="mt-2 text-center text-xs text-secondary">
+          {CANVAS_CAPTION[step]}
+        </figcaption>
+      </figure>
+    );
+  }
 
   return (
     <figure className="mdx-figure mx-auto my-4">
@@ -61,105 +267,15 @@ export function StencilOutlineStepDiagram({ step }: { step: OutlineStep }) {
             strokeWidth="1.5"
           />
 
-          {step === 1 && (
-            <>
-              {/* 第一遍：正常画出的物体 */}
-              <rect
-                x={cx - objHalf}
-                y={cy - objHalf}
-                width={objHalf * 2}
-                height={objHalf * 2}
-                rx="4"
-                fill="var(--accent)"
-                opacity="0.85"
-                stroke="var(--border)"
-                strokeWidth="1"
-              />
-              <text
-                x={cx}
-                y={cy + 4}
-                textAnchor="middle"
-                fontSize="11"
-                fill="var(--text-primary)"
-              >
-                物体
-              </text>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              {/* 第二遍：放大物体外环上描边色（GL_NOTEQUAL 只在模板≠1处） */}
-              <rect
-                x={cx - objHalf - grow}
-                y={cy - objHalf - grow}
-                width={(objHalf + grow) * 2}
-                height={(objHalf + grow) * 2}
-                rx="4"
-                fill="var(--warning)"
-                opacity="0.9"
-                stroke="var(--warning)"
-                strokeWidth="1"
-              />
-              {/* 中心：原物体仍在（模板=1 处放大物体不画，露出第一遍的物体） */}
-              <rect
-                x={cx - objHalf}
-                y={cy - objHalf}
-                width={objHalf * 2}
-                height={objHalf * 2}
-                rx="4"
-                fill="var(--accent)"
-                opacity="0.85"
-                stroke="var(--border)"
-                strokeWidth="1"
-              />
-              <text
-                x={cx}
-                y={cy - objHalf - grow / 2 + 1}
-                textAnchor="middle"
-                fontSize="9"
-                fontWeight="600"
-                fill="var(--bg)"
-              >
-                只有这一环被画
-              </text>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              {/* 结果：物体 + 周围一圈描边 */}
-              <rect
-                x={cx - objHalf - grow}
-                y={cy - objHalf - grow}
-                width={(objHalf + grow) * 2}
-                height={(objHalf + grow) * 2}
-                rx="4"
-                fill="var(--warning)"
-                opacity="0.9"
-              />
-              <rect
-                x={cx - objHalf}
-                y={cy - objHalf}
-                width={objHalf * 2}
-                height={objHalf * 2}
-                rx="4"
-                fill="var(--accent)"
-                opacity="0.85"
-                stroke="var(--border)"
-                strokeWidth="1"
-              />
-              <text
-                x={cx}
-                y={cy + 4}
-                textAnchor="middle"
-                fontSize="11"
-                fill="var(--text-primary)"
-              >
-                物体 + 描边
-              </text>
-            </>
-          )}
+          {/* 画布上的物体方块（+ step≥2 的外圈描边环），与 canvas 视图共用绘制逻辑 */}
+          <CanvasContent
+            step={step}
+            cx={cx}
+            cy={cy}
+            objHalf={objHalf}
+            grow={grow}
+            showLabel
+          />
 
           {/* ============ 右：模板缓冲此刻状态 ============ */}
           <text
