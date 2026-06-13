@@ -550,6 +550,7 @@ export default function FramebufferCanvas({
     gl.enableVertexAttribArray(1);
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 16, 8);
     gl.bindVertexArray(null);
+    quadVaoRef.current = quadVao;
 
     // 帧缓冲对象 + 颜色纹理附件 + 深度 renderbuffer 附件（尺寸在 ensureFramebuffer 里按画布分配）
     const fbo = gl.createFramebuffer();
