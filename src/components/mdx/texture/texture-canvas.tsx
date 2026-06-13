@@ -13,12 +13,13 @@
  *  - 画布辉光（accent-glow 内描边）只在画布盒子上
  *  - 画布下方分隔线 + 控件区（环绕 / 过滤分段按钮 + uvScale / zoom 滑块）
  *
- * 四类可调（≤5 个控件，chapter-spec §五硬约束）：
- *  1. 环绕方式 wrap：REPEAT / MIRRORED_REPEAT / CLAMP_TO_EDGE（分段按钮）
- *  2. 过滤方式 filter：NEAREST / LINEAR（分段按钮）
- *  3. UV 缩放 uvScale：0.5–4 滑块（>1 越界看环绕）
- *  4. 放大观察 zoom：1–12 滑块（放大看过滤：NEAREST 马赛克 vs LINEAR 平滑）
- *  5. 重置：恢复默认（右上角按钮）
+ * 五类可调（≤5 个控件，chapter-spec §五硬约束；重置不计入）：
+ *  1. 纹理选择 kind：UV 测试图 / 木板 / 砖墙 / 笑脸（分段按钮，HEL-65，切换看真实感差异）
+ *  2. 环绕方式 wrap：REPEAT / MIRRORED_REPEAT / CLAMP_TO_EDGE（分段按钮）
+ *  3. 过滤方式 filter：NEAREST / LINEAR（分段按钮）
+ *  4. UV 缩放 uvScale：0.5–4 滑块（>1 越界看环绕）
+ *  5. 放大观察 zoom：1–12 滑块（放大看过滤：NEAREST 马赛克 vs LINEAR 平滑）
+ *  + 重置：恢复默认（右上角按钮，不计入 5 个可调控件）
  *
  * 数据通路（值变不重编译/不重传，HEL-45 核心）：参数同时写 paramsRef（驱动 GL，requestDraw
  * 从 ref 读）与 React state（驱动控件回显）。引擎不挂 rAF 常转——仅按需重绘一帧。
@@ -29,6 +30,7 @@ import { useCallback, useId, useMemo, useRef, useState } from "react";
 import {
   useTextureProgram,
   type TextureFilter,
+  type TextureKind,
   type TextureParams,
   type TextureWrap,
 } from "./use-texture-program";
@@ -47,7 +49,16 @@ const DEFAULT_PARAMS: TextureParams = {
   filter: "LINEAR",
   uvScale: 1,
   zoom: 1,
+  kind: "uv",
 };
+
+// 纹理选择：默认 UV 测试图（诊断项），另含三张「一眼认得出」的真实感程序化纹理。
+const KIND_OPTIONS: ReadonlyArray<{ value: TextureKind; label: string }> = [
+  { value: "uv", label: "UV 测试图" },
+  { value: "wood", label: "木板" },
+  { value: "brick", label: "砖墙" },
+  { value: "face", label: "笑脸" },
+];
 
 const WRAP_OPTIONS: ReadonlyArray<{ value: TextureWrap; label: string }> = [
   { value: "REPEAT", label: "REPEAT" },
@@ -212,7 +223,7 @@ export function TextureCanvas({
         <button
           type="button"
           onClick={reset}
-          aria-label="重置演示（环绕/过滤/缩放回默认值）"
+          aria-label="重置演示（纹理/环绕/过滤/缩放回默认值）"
           className="rounded-control border border-border px-2 py-1 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
         >
           重置
@@ -246,6 +257,12 @@ export function TextureCanvas({
 
       {/* 控件区（DESIGN Demo 容器气质：上分隔线 + 间距）。改控件实时重绘（不重编译）。 */}
       <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+        <Segmented
+          label="纹理"
+          options={KIND_OPTIONS}
+          value={params.kind}
+          onChange={(kind) => update({ kind })}
+        />
         <Segmented
           label="环绕"
           options={WRAP_OPTIONS}

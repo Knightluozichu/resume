@@ -17,8 +17,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *
  * 职责：
  *  - 编译/链接「带纹理坐标的 quad」program（一次，挂载时）；失败捕获 InfoLog 回显，不崩页
- *  - 上传一张 256×256 纹理：默认程序化「UV 测试图」（棋盘 + 网格线 + 四角异色 + 中心标记），
- *    可选传外部图片 src（加载完成前用默认图兜底，加载好后替换上传）
+ *  - 上传一张 256×256 纹理：内置 4 张程序化纹理可切换（UV 测试图 / 木板 / 砖墙 / 笑脸，
+ *    全 Canvas2D 生成、零外部资源，HEL-65），切换 = 重新 texImage2D 上传该图 + 重绘，不重建
+ *    program；亦可选传外部图片 src（加载完成前用当前内置图兜底，加载好后接管）
  *  - 环绕（wrap S/T）/ 过滤（min/mag filter）经 texParameteri 实时切换——改后只需重绘，
  *    不重编译 program、不重传纹理
  *  - uvScale（平铺/越界看环绕）、zoom（放大看过滤）经 uniform 实时驱动——同样只重绘
@@ -38,6 +39,16 @@ export type TextureWrap = "REPEAT" | "MIRRORED_REPEAT" | "CLAMP_TO_EDGE";
 /** 纹理过滤方式（对应 min/mag filter；本 Demo 不涉及 mipmap，故只用这两档）。 */
 export type TextureFilter = "NEAREST" | "LINEAR";
 
+/**
+ * 内置程序化纹理种类（HEL-65）。全部 Canvas2D 程序化生成、零外部图片资源（与全站
+ * 「无外部资源」一致），且都是「一眼认得出」的真实感纹理，方便读者切换对比：
+ *  - uv：UV 测试图（棋盘 + 网格 + 四角异色 + 中心标记），默认/诊断项，看采样/环绕/过滤
+ *  - wood：木板（横向木纹条 + 板缝 + 色差，棕黄系）
+ *  - brick：砖墙（错缝排布 + 砂浆缝 + 砖色抖动，红棕系）
+ *  - face：笑脸（纯色底 + 两眼 + 一嘴，类 awesomeface，辨识度极高）
+ */
+export type TextureKind = "uv" | "wood" | "brick" | "face";
+
 /** TextureCanvas 每帧从 ref 读取的当前参数快照。 */
 export type TextureParams = {
   wrap: TextureWrap;
@@ -46,6 +57,8 @@ export type TextureParams = {
   uvScale: number;
   /** 放大观察：>1 放大到只覆盖纹理一小块区域，直观展示 NEAREST vs LINEAR 的差异。 */
   zoom: number;
+  /** 当前显示的内置程序化纹理；切换 = 重新 texImage2D 上传该图 + 重绘，不重建 program。 */
+  kind: TextureKind;
 };
 
 export type TextureStatus =
@@ -242,6 +255,195 @@ function createUvTestCanvas(): HTMLCanvasElement | null {
   return canvas;
 }
 
+// ============================ 程序化「真实感」纹理（HEL-65） ============================
+
+/**
+ * 申请一张 256×256 离屏 canvas + 2d context；拿不到 context 返回 null。
+ * 三张真实感纹理共用此入口，保证尺寸一致（POT 256，REPEAT 安全）。
+ */
+function makeTexCanvas(): {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+} | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = TEX_SIZE;
+  canvas.height = TEX_SIZE;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  return { canvas, ctx };
+}
+
+/** 小工具：把 [0,1) 的确定性伪随机（无需引库），同输入恒同输出，纹理可重现。 */
+function hash01(x: number): number {
+  const v = Math.sin(x * 127.1 + 311.7) * 43758.5453;
+  return v - Math.floor(v);
+}
+
+/**
+ * 木板 Wood：横向木纹条 + 板缝 + 自然色差（棕黄系）。
+ * 画法：底铺暖棕；按行分成 5 条木板，每条给一个略不同的基色（色差）；
+ * 板内叠多条细密的横向木纹线（深浅交替，模拟年轮纹理）；板与板之间画一道深色板缝。
+ * 看起来明显是「一块块横铺的木板」。
+ */
+function createWoodCanvas(): HTMLCanvasElement | null {
+  const made = makeTexCanvas();
+  if (!made) return null;
+  const { canvas, ctx } = made;
+  const s = TEX_SIZE;
+
+  ctx.fillStyle = "#7a4a22"; // 暖棕底
+  ctx.fillRect(0, 0, s, s);
+
+  const planks = 5;
+  const plankH = s / planks;
+  for (let p = 0; p < planks; p++) {
+    const y0 = p * plankH;
+    // 每条木板的基色略有色差（棕黄系亮度抖动）
+    const tone = 0.82 + hash01(p * 7.3) * 0.34; // 0.82~1.16
+    const r = Math.round(150 * tone);
+    const g = Math.round(95 * tone);
+    const b = Math.round(48 * tone);
+    ctx.fillStyle = `rgb(${r},${g},${b})`;
+    ctx.fillRect(0, y0, s, plankH);
+
+    // 板内横向木纹线：多条细线，深浅沿 y 缓慢起伏（年轮感）
+    const lines = 14;
+    for (let i = 0; i < lines; i++) {
+      const ly = y0 + (i + 0.5) * (plankH / lines) + hash01(p * 31 + i) * 3 - 1.5;
+      const dark = hash01(p * 17 + i * 3) > 0.5;
+      ctx.strokeStyle = dark
+        ? `rgba(60,34,12,0.45)`
+        : `rgba(210,160,96,0.30)`;
+      ctx.lineWidth = dark ? 1.4 : 1;
+      ctx.beginPath();
+      // 轻微起伏的横线（用几段折线模拟木纹不平直）
+      ctx.moveTo(0, ly);
+      for (let x = 0; x <= s; x += 32) {
+        const wob = (hash01(p * 5 + i + x) - 0.5) * 3;
+        ctx.lineTo(x, ly + wob);
+      }
+      ctx.stroke();
+    }
+
+    // 板缝：板底画一道深色横缝（最后一条板省略，避免和上缘重复）
+    if (p < planks - 1) {
+      ctx.fillStyle = "rgba(40,22,8,0.85)";
+      ctx.fillRect(0, y0 + plankH - 2, s, 3);
+    }
+  }
+
+  return canvas;
+}
+
+/**
+ * 砖墙 Brick：错缝排布的砖块 + 砂浆缝 + 砖色微随机抖动（红棕系）。
+ * 画法：底铺砂浆灰；逐行画砖，相邻行水平错开半块（错缝/丁字缝）；每块砖填一个
+ * 在基准红棕上做亮度抖动的颜色，砖与砖、行与行之间留出砂浆缝（底色透出）。
+ * 看起来明显是「一面错缝砌的砖墙」。
+ */
+function createBrickCanvas(): HTMLCanvasElement | null {
+  const made = makeTexCanvas();
+  if (!made) return null;
+  const { canvas, ctx } = made;
+  const s = TEX_SIZE;
+
+  ctx.fillStyle = "#b9b1a4"; // 砂浆灰底（缝的颜色）
+  ctx.fillRect(0, 0, s, s);
+
+  const rows = 6;
+  const brickH = s / rows;
+  const bricksPerRow = 4;
+  const brickW = s / bricksPerRow;
+  const mortar = 4; // 砂浆缝宽
+
+  for (let row = 0; row < rows; row++) {
+    const y = row * brickH;
+    const offset = row % 2 === 0 ? 0 : -brickW / 2; // 错缝：奇数行左移半块
+    // 多画一块覆盖左移露出的缺口
+    for (let col = -1; col <= bricksPerRow; col++) {
+      const x = col * brickW + offset;
+      // 砖色：红棕基准 + 每块亮度抖动
+      const t = 0.85 + hash01(row * 13.7 + col * 4.1) * 0.4; // 0.85~1.25
+      const r = Math.round(150 * t);
+      const g = Math.round(70 * t);
+      const b = Math.round(52 * t);
+      ctx.fillStyle = `rgb(${Math.min(255, r)},${Math.min(255, g)},${Math.min(255, b)})`;
+      ctx.fillRect(
+        x + mortar / 2,
+        y + mortar / 2,
+        brickW - mortar,
+        brickH - mortar,
+      );
+    }
+  }
+
+  return canvas;
+}
+
+/**
+ * 笑脸 Face：纯色底 + 两只眼睛 + 一张嘴（类 LearnOpenGL 的 awesomeface，辨识度极高）。
+ * 画法：暖橙圆底铺满（背景留一点对比），上半画两只圆眼（白底 + 黑瞳），
+ * 下半画一道上扬的弧线当微笑嘴。看起来明显是「一张笑脸」。
+ */
+function createFaceCanvas(): HTMLCanvasElement | null {
+  const made = makeTexCanvas();
+  if (!made) return null;
+  const { canvas, ctx } = made;
+  const s = TEX_SIZE;
+  const cx = s / 2;
+  const cy = s / 2;
+
+  // 背景（脸外）：深色，让圆脸轮廓清晰
+  ctx.fillStyle = "#2a2233";
+  ctx.fillRect(0, 0, s, s);
+
+  // 脸：暖橙大圆
+  ctx.fillStyle = "#f4b942";
+  ctx.beginPath();
+  ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 眼睛：两只白圆 + 黑瞳
+  const eyeY = cy - s * 0.1;
+  const eyeDx = s * 0.16;
+  const eyeR = s * 0.085;
+  for (const ex of [cx - eyeDx, cx + eyeDx]) {
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(ex, eyeY, eyeR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#2a2233";
+    ctx.beginPath();
+    ctx.arc(ex, eyeY + eyeR * 0.1, eyeR * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 嘴：上扬弧线（微笑）
+  ctx.strokeStyle = "#2a2233";
+  ctx.lineWidth = s * 0.04;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(cx, cy + s * 0.02, s * 0.22, Math.PI * 0.18, Math.PI * 0.82);
+  ctx.stroke();
+
+  return canvas;
+}
+
+/** 按种类选对应的程序化生成器（值变即重选，调用方据此重新上传）。 */
+function createTextureCanvas(kind: TextureKind): HTMLCanvasElement | null {
+  switch (kind) {
+    case "wood":
+      return createWoodCanvas();
+    case "brick":
+      return createBrickCanvas();
+    case "face":
+      return createFaceCanvas();
+    case "uv":
+    default:
+      return createUvTestCanvas();
+  }
+}
+
 // ============================ 主 hook ============================
 
 export type UseTextureProgramArgs = {
@@ -342,11 +544,28 @@ export function useTextureProgram({
       }
     };
 
-    uploadSource(createUvTestCanvas(), TEX_SIZE);
-
     // 当前已应用到 GL 的 wrap/filter，避免每帧无谓地重复 texParameteri（仅变化时下发）。
     let appliedWrap: TextureWrap | null = null;
     let appliedFilter: TextureFilter | null = null;
+
+    // 外部 src（极少用）优先；否则按当前内置种类上传。两者都走 uploadSource → texImage2D。
+    let srcLoaded = false; // 外部图加载成功后置 true，之后切 kind 不再覆盖外部图
+    let appliedKind: TextureKind | null = null;
+
+    // 切换内置纹理（HEL-65）：重新 texImage2D 上传对应程序化图 + 重绘，不重建 program。
+    // 有外部 src 且已加载成功时，内置种类让位给外部图（既有 src 用例不变）。
+    const applyKind = (p: TextureParams) => {
+      if (srcLoaded) return;
+      if (p.kind === appliedKind) return;
+      uploadSource(createTextureCanvas(p.kind), TEX_SIZE);
+      appliedKind = p.kind;
+      // 重新上传后强制下发一次 texParameteri（新纹理对象的参数需重设）。
+      appliedWrap = null;
+      appliedFilter = null;
+    };
+
+    uploadSource(createTextureCanvas(paramsRef.current.kind), TEX_SIZE);
+    appliedKind = paramsRef.current.kind;
 
     const wrapEnum = (w: TextureWrap): number =>
       w === "REPEAT"
@@ -393,6 +612,7 @@ export function useTextureProgram({
       const p = paramsRef.current;
       gl.useProgram(program);
       gl.bindVertexArray(vao);
+      applyKind(p); // 内置纹理切换：种类变则重新上传，再设参数（顺序在 applyTexParams 前）
       applyTexParams(p);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -431,6 +651,7 @@ export function useTextureProgram({
       img.crossOrigin = "anonymous"; // 允许跨域图（需服务端 CORS 头），否则纹理被污染
       img.onload = () => {
         if (cancelled) return;
+        srcLoaded = true; // 外部图接管：之后切内置 kind 不再覆盖它
         uploadSource(img, TEX_SIZE);
         appliedWrap = null; // 重新上传后强制下发一次 texParameteri
         appliedFilter = null;
