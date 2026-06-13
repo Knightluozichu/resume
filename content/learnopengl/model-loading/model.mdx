@@ -1,0 +1,350 @@
+---
+title: 模型
+type: C
+section: 模型加载
+order: 3
+description: 用 Assimp 把一个模型文件递归地拆成一组 Mesh、把材质纹理按缓存加载好，最后一行 Draw 画出整个模型——并能在交互查看器里亲眼看到「模型就是一棵有名字的 mesh 树」。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/03%20Model%20Loading/03%20Model/
+draft: false
+---
+
+{/* C 实战型章（HEL-61，模型加载篇第 3 章 = 收官章）：主题是把上一章手写的 Mesh 升级成一个能加载真实模型文件的 Model 类。承接「网格 Mesh」章（已知 一个 Mesh = vertices + indices + textures，自带 setup/Draw），本章用 Assimp 把一个模型文件读成场景图，递归地拆成一组 Mesh，按缓存加载好纹理，最后一行 Draw 画完整个模型。C 型：代码对照为重心（§6 覆盖 ≥80% 关键代码：Model 类成员 → loadModel → processNode 递归 → processMesh → loadMaterialTextures 缓存 → Draw）。本篇是 C++ + Assimp，无 WebGL2 等价物，所以不用 CodeTabs 双栏，§6 用带逐段讲解的 C++ 代码块覆盖关键代码。math:false（本章无数学）。主 Demo = <ModelDemo />（已建好、已注册的 R3F 交互查看器，加载真 Ferrari、可线框/隔离单 mesh，勿改勿重新实现）。误区 ≥3（忘递归 children / 纹理路径没拼 directory / 没做 textures_loaded 去重 / mTextureCoords[0] 没判空）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) Model 是什么（vector<Mesh> + 加载逻辑）= 直觉引入「乐高说明书」+ 概念总览 + 主 <ModelDemo />（亲眼看模型=一堆有名字的 mesh）；2) Model 类成员（meshes / directory / textures_loaded）= 概念 + 代码对照；3) loadModel(path)（Importer.ReadFile + flags + directory 截取 + processNode）= 概念 + 代码对照；4) processNode 递归（先收本节点 mMeshes、再递归 children）= 概念 + <NodeRecursionDiagram>（树→扁平列表）+ 代码对照 + 头号坑；5) processMesh（遍历 mVertices/mNormals/mTextureCoords[0] 填 Vertex、mFaces 收 indices、取 material 加载纹理）= 概念 + 代码对照 + mTextureCoords[0] 判空坑；6) loadMaterialTextures + textures_loaded 缓存去重（按 path 比对，已加载复用）= 概念 + <ModelCompositionDiagram>（去重箭头）+ 代码对照 + 去重坑；7) directory（纹理相对模型文件的路径，要拼 directory）= 概念 + 路径拼接坑；8) Draw（for each mesh: mesh.Draw）= 概念 + <ModelCompositionDiagram> 底部 + 代码对照。Term 共 5 个（模型(Model) / processNode 递归 / 纹理缓存(textures_loaded) / 目录(directory) / TextureFromFile）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 / 能做出某效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话说清一个「模型」由什么组成，以及 `processNode` 为什么要递归——它把一棵 aiNode 树做了什么
+- 能在交互查看器里隔离出模型里的单个 mesh、切到线框，并据此解释「一个模型就是一组有名字的 mesh」
+- 能回答：`processNode` 忘了递归子节点、或纹理没做 `textures_loaded` 缓存去重，分别会出什么问题？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库（组装/拆解一件成品的味道）。 */}
+
+## 一盒乐高的说明书
+
+上一章你亲手攒出了一个网格——一堆顶点、一份连法、几张贴图，能自己画自己。可一辆车、一个人物可不是一个网格能搞定的：车身一块、四个轮子各一块、玻璃一块、座椅一块……一件像样的物体，是几十上百块这样的小积木拼起来的。
+
+问题来了：美术在专业软件里做好这么一件复杂物体，导出成一个模型文件，你怎么把它读进程序里？文件里不只有一堆堆顶点，还记着「哪块是车身、哪块是轮子、各块之间谁挂在谁下面、每块该贴哪张图」——就像一盒乐高附带的那张说明书。
+
+这章要解决的就是：照着这张说明书，把文件里的整件物体**拆成一块块小网格、把每块要贴的图都备齐**，最后一句话就能把整件东西画出来。没有它，你的屏幕上永远只能摆几个手写的方块和三角形；有了它，你才能把美术做好的真实模型直接搬进场景。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线/流程位置。新核心概念克制（5 个 Term）。 */}
+
+## 模型，就是一堆有名字的网格
+
+先把这章的主角说清楚。所谓 <Term def="在本章里指一个由「一组 Mesh + 加载逻辑」构成的类。它负责把一个模型文件（如 .obj / .gltf）读进来、递归拆成多个 Mesh、把纹理按缓存加载好，并提供一行 Draw 把所有 mesh 画出来。本质上 Model 只是上一章 Mesh 的「容器 + 加载器」。">模型</Term>（Model），在代码里并不神秘——它就是上一章那个 `Mesh` 的**容器加加载器**：里面装着一个 `vector<Mesh>`（这件物体被拆成的所有小网格），外加一套「把文件读进来、拆成这些网格」的加载逻辑。说白了：
+
+- **一个 Mesh** = 一块小积木（自带顶点、连法、贴图，会自己画自己）——上一章讲过；
+- **一个 Model** = 一整盒积木 + 那张说明书 = `vector<Mesh>` + 加载代码——本章讲。
+
+最直观的验证方式，就是把一个真实模型拆开来看。下面这个查看器加载了一辆真实的法拉利模型，你可以**切换线框**看清它的三角网格结构，也可以从下拉里**隔离出任意一个 mesh**（车身、某个轮子、玻璃……）单独高亮：
+
+> 猜一猜：在下面的查看器里，把 mesh 下拉从「全部」切到某一个具体的件，画面会只剩下哪一块？这能不能印证「一个模型其实是一组各自独立、各有名字的 mesh」？先动手试，再往下读。
+
+<ModelDemo caption="一辆真实法拉利模型的交互查看器：切『线框』看三角网格结构；用 mesh 下拉从『全部』切到任意单个 mesh（车身 / 某个轮子 / 玻璃…），它会高亮、其余压暗。亲眼看到——一个模型就是一组各自独立、各有名字的 mesh 拼起来的。随时点重置回到『全部 + 非线框』。" />
+
+拖一拖、切几个 mesh 看下来，「模型 = 一堆有名字的网格」这句话就具体了。接下来几节，就是把「从一个文件读出这一堆网格」这件事，一步步拆给你看。我们用 Assimp 这个库读文件——它能把各种格式（.obj、.gltf 等）统一读成一套**通用的数据结构**，省得你为每种格式各写一套解析器。
+
+## 模型文件读进来，长什么样
+
+Assimp 把文件读进来后，给你的不是一个扁平的网格列表，而是一棵**有父子层级的树**——叫场景图（scene）。树的每个节点是一个 `aiNode`，节点上**不直接存网格数据**，只存一串**索引**（`mMeshes`），指向场景里真正的网格数组 `scene->mMeshes`。同时一个节点可以有若干**子节点**（`mChildren`），子节点又可以再有自己的子节点。
+
+为什么要搞成一棵树而不是一个列表？因为现实物体本就有层级：「车」下面挂着「车身」「四个轮子」，「轮子」下面可能又挂着「轮毂」「轮胎」。这种父子关系对做动画、做整体变换很有用。但本章我们只想要**所有网格本身**，并不关心层级——所以接下来的核心工作，就是**把这棵树压平成一个网格列表**。怎么压平？递归。这是本章最该吃透的一点，下面专门用一张图讲。
+
+## Model 类的三个成员
+
+动手写代码前，先认识 `Model` 类要存哪几样东西。就三个：
+
+- 网格列表 `vector<Mesh> meshes`：这件物体被拆成的所有网格——最终成果就装在这里；
+- 目录字符串 `directory`：模型文件所在的文件夹——加载纹理时要用它拼出贴图的完整路径（贴图路径在文件里是相对的，这点稍后是个常见坑）；
+- 纹理清单 `textures_loaded`：一份已加载纹理的清单——同一张贴图被多个网格共用时，靠它做**去重**，只加载一次。
+
+这里两个名词稍后会反复用到，先点破：所谓 <Term def="一个字符串，存模型文件所在的文件夹路径。模型文件里记录的纹理路径通常是「相对模型文件」的相对路径，所以加载纹理时要把这个目录前缀拼上去，才能拼出磁盘上的完整路径。">目录</Term>（directory）就是上面那个文件夹路径，纹理路径全靠拼它；而 <Term def="一份记录已加载过哪些纹理的清单。每加载一张纹理就把它的路径和数据记进来；下次再遇到同一张贴图，先在这里按路径查一遍，查到就直接复用、不重复从磁盘加载，避免一个模型里多个网格共用同一张贴图时反复加载。">纹理缓存</Term>（textures_loaded）就是上面那份已加载清单，专门用来去重。
+
+构造函数只做一件事：调 `loadModel(path)` 把整件事跑起来。三个成员、一个入口——`Model` 类的骨架就这么简单。下面从入口开始，一段段拆。
+
+{/* 4. 数学推导（math:false，整节省略）：本章无数学。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = <ModelDemo />（已注册，勿改）。主 Demo 已在 §3「模型就是一堆有名字的网格」一节落地（含猜一猜引导 + caption）。本章主 viz 即 ModelDemo，安排在概念讲解处贴近「模型=一堆 mesh」的论点，符合范本 basic-lighting 把主 Demo 放正文论点处的做法。此处不再重复一个 Demo 容器。 */}
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：五段覆盖 loadModel（ReadFile+flags+directory+processNode）→ processNode 递归 → processMesh（顶点/索引/材质，含 mTextureCoords[0] 判空）→ loadMaterialTextures（textures_loaded 缓存去重）→ Draw（for each mesh）。本篇 C++ + Assimp，无 WebGL2 等价物，单 cpp 代码块逐段讲解，不用 CodeTabs。单块 ≤30 行；块间有解说。 */}
+
+## 代码逐段拆解
+
+下面把 `Model` 类从入口到画出来的关键代码一段段摊开。全是 C++ + Assimp，没有 WebGL 端的对照——这是 CPU 侧把文件读成网格的活，和着色器无关。跟着五步走：`loadModel` → `processNode`（递归）→ `processMesh` → `loadMaterialTextures`（缓存）→ `Draw`。
+
+### 第一步：loadModel——把文件交给 Assimp，记下目录，进入递归
+
+入口函数。它做三件事：用 Assimp 的 `Importer` 读文件并指定一组处理标志、做错误检查、把模型文件所在的**目录**记下来，最后从场景图的**根节点**进入递归。
+
+```cpp
+void Model::loadModel(string path) {
+  Assimp::Importer importer;
+  // 读文件，并让 Assimp 顺手帮我们做几样预处理（见下方说明）
+  const aiScene* scene = importer.ReadFile(path,
+      aiProcess_Triangulate | aiProcess_FlipUVs);
+  // 检查：场景为空、数据不完整、或没有根节点，都算失败
+  if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
+    cout << "ERROR::ASSIMP::" << importer.GetErrorString() << endl;
+    return;
+  }
+  // 记下模型文件所在目录（截到最后一个 '/'），加载纹理时要拼它
+  directory = path.substr(0, path.find_last_of('/'));
+  // 从场景图的根节点开始，递归处理整棵树
+  processNode(scene->mRootNode, scene);
+}
+```
+
+`ReadFile` 的第二个参数是一组**后处理标志**：`aiProcess_Triangulate` 让 Assimp 把所有面都拆成三角形（OpenGL 只认三角形），`aiProcess_FlipUVs` 把纹理坐标的 y 翻转一下（多数图片的原点在左上，而 OpenGL 纹理原点在左下，这点纹理章踩过）。`directory = path.substr(0, path.find_last_of('/'))` 把路径截到最后一个 `/`，留下文件夹——记住它，第四步加载纹理就靠它。
+
+<Callout type="warn">
+  `directory`
+  这一步看着不起眼，却是后面纹理能不能加载到的命根子：模型文件里记的贴图路径几乎都是**相对模型文件**的（比如就写个
+  `textures/paint.png`）。不把 `directory`
+  拼在前面，程序会去**当前工作目录**找贴图，找不到 → 模型变全黑或报错。§7
+  专门说这个坑。
+</Callout>
+
+### 第二步：processNode——递归把树压平
+
+本章的心脏。<Term def="Model 加载里的核心递归函数。它对场景图（aiNode 树）做深度优先遍历：每到一个节点，先处理这个节点自己持有的所有网格（把它们 processMesh 后塞进 meshes 列表），再对这个节点的每个子节点递归调用自己。这样整棵有层级的树就被压平成一个扁平的 meshes 列表。">processNode 递归</Term>对每个节点做两件事：**先**处理本节点持有的所有网格（节点的 `mMeshes` 只是索引，真正的网格在 `scene->mMeshes` 里），**再**对本节点的每个子节点递归调用自己。这张图把「树怎么被压平成列表」画清楚：
+
+<NodeRecursionDiagram />
+
+对着图看代码——它就是图里那条深度优先路径的直译：
+
+```cpp
+void Model::processNode(aiNode* node, const aiScene* scene) {
+  // ① 先处理本节点自己持有的网格（mMeshes 存的是索引，去 scene 里取真东西）
+  for (unsigned int i = 0; i < node->mNumMeshes; i++) {
+    aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+    meshes.push_back(processMesh(mesh, scene));  // 拆成我们的 Mesh，塞进列表
+  }
+  // ② 再对每个子节点递归（这一步漏了，模型就只剩根节点那几块）
+  for (unsigned int i = 0; i < node->mNumChildren; i++) {
+    processNode(node->mChildren[i], scene);
+  }
+}
+```
+
+两个循环，顺序不能乱：第一个循环把当前节点的网格收进 `meshes`，第二个循环钻进每个子节点重复同样的事。**第二个循环是递归的关键**——少了它，遍历到根节点就停了，深藏在子节点里的车身、轮子全都收不到。这是本章头号坑（§7 第一条）。
+
+<Callout type="trap">
+  注意 `mMeshes` 里存的是**索引**，不是网格本身——真正的网格数据集中放在
+  `scene->mMeshes` 这个全局数组里，节点只是用索引「点名」自己用哪几个。所以取网格永远是
+  `scene->mMeshes[node->mMeshes[i]]` 这种「拿节点的索引去全局数组里取」的两层写法。
+</Callout>
+
+### 第三步：processMesh——把一个 aiMesh 翻译成我们的 Mesh
+
+`processNode` 把每个网格交给 `processMesh`，让它把 Assimp 的 `aiMesh` 翻译成上一章那个我们自己的 `Mesh`。要填三样：顶点、索引、纹理。先看顶点和索引：
+
+```cpp
+Mesh Model::processMesh(aiMesh* mesh, const aiScene* scene) {
+  vector<Vertex> vertices;
+  vector<unsigned int> indices;
+  vector<Texture> textures;
+  // 顶点：逐个搬位置、法线、纹理坐标
+  for (unsigned int i = 0; i < mesh->mNumVertices; i++) {
+    Vertex vertex;
+    vertex.Position = vec3(mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z);
+    vertex.Normal   = vec3(mesh->mNormals[i].x,  mesh->mNormals[i].y,  mesh->mNormals[i].z);
+    // 纹理坐标可能没有！必须判空，否则越界崩溃
+    if (mesh->mTextureCoords[0])
+      vertex.TexCoords = vec2(mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y);
+    else
+      vertex.TexCoords = vec2(0.0f, 0.0f);
+    vertices.push_back(vertex);
+  }
+```
+
+逐个顶点搬三样数据。最该警惕的是纹理坐标：一个网格**不一定有** UV（比如纯色、不贴图的件），这时 `mesh->mTextureCoords[0]` 是空的。`if (mesh->mTextureCoords[0])` 这句判空不能省，否则一遇到没 UV 的网格就越界崩溃（§7 也会说）。接着收集索引——遍历每个面，把面里的顶点索引一个个收进来：
+
+```cpp
+  // 索引：每个面（已被 Triangulate 成三角形）贡献它的几个顶点索引
+  for (unsigned int i = 0; i < mesh->mNumFaces; i++) {
+    aiFace face = mesh->mFaces[i];
+    for (unsigned int j = 0; j < face.mNumIndices; j++)
+      indices.push_back(face.mIndices[j]);
+  }
+  // 纹理：取这个网格对应的材质，按类型分别加载（漫反射贴图 + 镜面贴图）
+  aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
+  vector<Texture> diffuseMaps = loadMaterialTextures(material,
+      aiTextureType_DIFFUSE, "texture_diffuse");
+  textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+  vector<Texture> specularMaps = loadMaterialTextures(material,
+      aiTextureType_SPECULAR, "texture_specular");
+  textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+  return Mesh(vertices, indices, textures);  // 拼成上一章那个 Mesh
+}
+```
+
+`mesh->mFaces` 是这个网格的所有面；因为第一步指定了 `aiProcess_Triangulate`，每个面都是三角形、正好三个索引。最后取这个网格挂的**材质**（`mesh->mMaterialIndex` 又是个索引，去 `scene->mMaterials` 里取），把它的漫反射、镜面两类贴图加载进来（加载交给下一步的 `loadMaterialTextures`），连同顶点和索引一起拼成一个 `Mesh` 返回。
+
+### 第四步：loadMaterialTextures——缓存去重，同一张贴图只加载一次
+
+加载纹理。一个模型里，车身、引擎盖、车门很可能共用**同一张**贴图。如果每个网格都各自从磁盘重新读一遍，又慢又费内存。所以这里用 `textures_loaded` 做缓存：每张贴图加载前先按**路径**查缓存，查到就直接复用那份、不再读磁盘。这张图把去重画清楚——多个网格的箭头指向缓存里同一张已加载的贴图：
+
+<ModelCompositionDiagram />
+
+代码就是「先查缓存、命中则复用、否则加载并存入缓存」这个套路：
+
+```cpp
+vector<Texture> Model::loadMaterialTextures(aiMaterial* mat,
+    aiTextureType type, string typeName) {
+  vector<Texture> textures;
+  for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
+    aiString path;
+    mat->GetTexture(type, i, &path);             // 取这张贴图的相对路径
+    // ① 先查缓存：这张路径之前加载过吗？
+    bool skip = false;
+    for (unsigned int j = 0; j < textures_loaded.size(); j++) {
+      if (textures_loaded[j].path == path.C_Str()) {
+        textures.push_back(textures_loaded[j]);  // 命中：直接复用，不重复加载
+        skip = true;
+        break;
+      }
+    }
+    // ② 没命中：真正加载，并存进缓存供下次复用
+    if (!skip) {
+      Texture texture;
+      texture.id = TextureFromFile(path.C_Str(), directory); // 注意拼 directory
+      texture.type = typeName;
+      texture.path = path.C_Str();
+      textures.push_back(texture);
+      textures_loaded.push_back(texture);        // 登记进缓存
+    }
+  }
+  return textures;
+}
+```
+
+核心是那个 `skip` 标志：内层循环拿当前贴图的路径去 `textures_loaded` 里比对，命中就把缓存里那份 push 进去并 `skip = true`，跳过真正的加载。只有没命中（`!skip`）时才走 <Term def="一个辅助函数，负责真正从磁盘把一张图片文件读成 OpenGL 纹理对象、返回纹理 id。它接收贴图的相对路径和模型所在目录，内部把两者拼成完整路径再去加载。本章只关心调用它时要把 directory 传进去，实现细节同纹理章。">TextureFromFile</Term> 真正读磁盘，并把结果**登记进缓存**。注意 `TextureFromFile(path.C_Str(), directory)` 这里把 `directory` 传了进去——它内部会把目录和相对路径拼成完整路径。少了去重，一个模型可能把同一张大贴图加载几十遍（§7 第三条）。
+
+### 第五步：Draw——一行画完整个模型
+
+所有网格都拆好、纹理都备齐后，画整个模型就轻松到不可思议——`Model::Draw` 只是个**转发器**，把每个 mesh 各自的 `Draw` 调一遍：
+
+```cpp
+void Model::Draw(Shader& shader) {
+  for (unsigned int i = 0; i < meshes.size(); i++)
+    meshes[i].Draw(shader);  // 每块小网格自己会画自己（上一章实现）
+}
+```
+
+就这么一个循环。真正的绘制逻辑（绑定 VAO、绑纹理、`glDrawElements`）都在上一章的 `Mesh::Draw` 里——`Model` 自己不碰任何 OpenGL 调用，只负责「把活分给手下每个 mesh」。这正是把复杂物体拆成一组自治网格的回报：**加载阶段递归拆开、绘制阶段一行合拢**。完整可运行源码将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含可在 §3 主 Demo 印证的（隔离 mesh 看模型=一组 mesh）。四个坑：忘递归 children / 纹理路径没拼 directory / 没做去重 / mTextureCoords[0] 没判空。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：模型画出来只剩一两块（比如只有车身，没有轮子、玻璃），大半不见了。**原因**：`processNode`
+  漏了**递归子节点**那个循环，遍历到根节点就停了，子节点里的网格全没收进
+  `meshes`。**修法**：`processNode` 末尾一定要 `for` 每个 `node->mChildren[i]`
+  调 `processNode` 递归。对照本章 §3 查看器：把单个 mesh 隔离出来看，就能感受到「一个模型本就是一组各自独立的
+  mesh」，少递归 = 少收了好几块。
+</Callout>
+
+<Callout type="trap">
+  **现象**：模型形状对，但**全是黑的 /
+  贴图全丢**，或加载时报「找不到文件」。**原因**：纹理路径没拼
+  `directory`——模型文件里记的是**相对模型文件**的路径，直接拿去加载会跑到当前工作目录找，找不到。**修法**：加载纹理时一律把
+  `directory` 前缀拼上（`TextureFromFile(path, directory)`
+  内部完成拼接），别用裸相对路径。
+</Callout>
+
+<Callout type="trap">
+  **现象**：加载一个稍大的模型**慢得离谱、内存暴涨**，明明贴图就那么几张。**原因**：没做
+  `textures_loaded`
+  缓存去重——多个网格共用同一张贴图时，每个网格都各自从磁盘重新加载了一遍。**修法**：每张贴图加载前先按
+  `path` 在 `textures_loaded` 里查一遍，命中就复用、不命中才加载并登记进缓存。
+</Callout>
+
+<Callout type="trap">
+  **现象**：加载某些模型时**崩溃 / 读到一堆乱七八糟的纹理坐标**。**原因**：网格**不一定有**纹理坐标（纯色、不贴图的件就没有），直接读
+  `mesh->mTextureCoords[0][i]` 会越界。**修法**：读 UV 前先判
+  `if (mesh->mTextureCoords[0])`，没有就给个 `vec2(0.0f, 0.0f)` 兜底。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改/用 Demo 题（含目标）+ 1 道问答题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **模型** = `vector<Mesh>` + 加载逻辑——上一章 Mesh 的容器加加载器，一行 `Draw` 画完整件物体
+- Assimp 把文件读成一棵 **aiNode 场景图树**，节点上存的是网格**索引**，真正的网格在 `scene->mMeshes` 里
+- **`processNode` 递归**：先收本节点的网格、再递归每个子节点，把树**压平**成扁平的 `meshes`——漏递归 = 模型残缺
+- 纹理靠 **`textures_loaded` 缓存**按路径**去重**：同一张贴图只加载一次、多个网格复用；路径要拼 **`directory`**
+- `processMesh` 里读 UV 前要判 `mTextureCoords[0]` 是否为空，避免越界
+
+<Exercises>
+
+**练习 1（用 Demo / 改代码型）** 打开本章 §3 的模型查看器，把 mesh 下拉**逐个**切过去（车身、各个轮子、玻璃…），数一数这辆车大致由几类件组成；再切到**线框**观察某个轮子。结合你看到的，解释一句话：「为什么 `Model::Draw` 只用一个 `for` 循环就能画完整辆车？」如果让你在加载代码里**少写**哪一行，这辆车就只会剩下根节点那一两块？
+
+<Answer>
+
+逐个隔离能看到这辆车是由**一组各自独立、各有名字的 mesh** 拼成的（车身、若干轮子、玻璃等十几块），每块自己就是上一章那种「会自己画自己」的网格。所以 `Model::Draw` 不需要做任何绘制细节，只要 `for (mesh : meshes) mesh.Draw(shader)` 把每块各画一遍即可——**绘制阶段一行合拢**，因为**加载阶段已经把整棵树递归拆成了这组自治的 mesh**。
+
+少写的那一行就是 `processNode` 末尾**递归子节点**的循环（`for (i…) processNode(node->mChildren[i], scene)`）。少了它，遍历到场景图根节点就停了，藏在子节点里的车身、轮子全收不进 `meshes`，于是只剩根节点直接挂的那一两块。
+
+</Answer>
+
+**练习 2（问答题）** 一个模型里车身、引擎盖、车门共用同一张漆面贴图。`loadMaterialTextures` 如果**去掉** `textures_loaded` 那段查缓存的逻辑，会发生什么？为什么这既费时间又费内存？正确的做法是什么？
+
+<Answer>
+
+去掉缓存后，车身、引擎盖、车门各自调一次 `TextureFromFile`，于是**同一张漆面贴图被从磁盘完整加载了三遍**——三次磁盘读、三次解码、显存里也存了三份一模一样的纹理。模型件越多、共用越普遍，这种重复加载越夸张（一个大模型可能把一张贴图加载几十遍），加载变慢、内存/显存暴涨。
+
+正确做法是用 `textures_loaded` 做**去重**：每张贴图加载前先按 `path` 在缓存里查一遍，**命中就直接复用那份**已加载的纹理、跳过磁盘读；只有没命中时才真正 `TextureFromFile` 加载，并把结果**登记进 `textures_loaded`** 供后续复用。这样同一张贴图全模型只加载一次。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="模型">
+  本章里指一个由「一组 Mesh +
+  加载逻辑」构成的类（`Model`）。它负责把一个模型文件（.obj、.gltf
+  等）读进来、递归拆成多个 Mesh、把纹理按缓存加载好，并提供一行 `Draw` 把所有
+  mesh 画出来。说白了，Model 就是上一章 Mesh 的「容器 +
+  加载器」。详见本章「模型，就是一堆有名字的网格」一节。
+</GlossaryItem>
+
+<GlossaryItem term="processNode 递归">
+  加载模型时的核心递归函数。Assimp 把文件读成一棵有父子层级的 aiNode
+  树，`processNode`
+  对它做深度优先遍历——每到一个节点，**先**处理这个节点自己持有的网格（塞进
+  meshes
+  列表），**再**对它的每个子节点递归调用自己。这样整棵树就被「压平」成一个扁平的网格列表。漏了递归子节点，模型就会残缺。详见本章「processNode——递归把树压平」一节。
+</GlossaryItem>
+
+<GlossaryItem term="纹理缓存">
+  一个记录「已加载过哪些纹理」的清单（`textures_loaded`）。每加载一张贴图就把它的路径和数据记进来；下次再遇到同一张贴图，先在这里按路径查一遍，查到就**直接复用**、不重复从磁盘读。作用是去重——避免一个模型里多个网格共用同一张贴图时反复加载，省时间也省内存。详见本章「loadMaterialTextures——缓存去重」一节。
+</GlossaryItem>
+
+<GlossaryItem term="目录">
+  一个字符串（`directory`），存模型文件所在的**文件夹路径**。模型文件里记录的贴图路径通常是**相对模型文件**的相对路径，所以加载纹理时要把这个目录前缀拼上去，才能拼出磁盘上的完整路径。不拼它，程序会跑到当前工作目录找贴图、找不到，模型就变黑或报错。详见本章「Model
+  类的三个成员」与第一步代码。
+</GlossaryItem>
+
+<GlossaryItem term="TextureFromFile">
+  一个辅助函数，负责真正从磁盘把一张图片文件读成 OpenGL 纹理对象、返回纹理
+  id。它接收贴图的相对路径和模型所在目录（`directory`），内部把两者拼成完整路径再去加载。本章只关心调用它时要把
+  `directory`
+  传进去；具体读图、生成纹理的细节同纹理章。详见本章「loadMaterialTextures——缓存去重」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

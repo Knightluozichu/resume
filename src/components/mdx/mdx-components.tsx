@@ -28,6 +28,12 @@ import { MultipleLightsDiagram } from "./diagrams/multiple-lights-diagram";
 import { TransformOrderDiagram } from "./diagrams/transform-order-diagram";
 import { VectorOpsDiagram } from "./diagrams/vector-ops-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
+import { AssimpSceneGraphDiagram } from "./diagrams/assimp-scene-graph-diagram";
+import { AssimpImportFlowDiagram } from "./diagrams/assimp-import-flow-diagram";
+import { MeshDataLayoutDiagram } from "./diagrams/mesh-data-layout-diagram";
+import { MeshTextureBindingDiagram } from "./diagrams/mesh-texture-binding-diagram";
+import { NodeRecursionDiagram } from "./diagrams/node-recursion-diagram";
+import { ModelCompositionDiagram } from "./diagrams/model-composition-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -109,6 +115,7 @@ import { ModelDemo } from "./model-demo";
  *  - MultipleLightsDiagram（多光源，HEL-55，光照篇收官）：
  *    每类光封成独立函数（CalcDirLight/CalcPointLight/CalcSpotLight）各算各的贡献，三份贡献
  *    汇入 ∑ 相加 = 这块表面最终色；强调「每个光独立算、结果累加」（漏加 = 只显其中一盏）。同款 Server SVG。
+ *  - 模型加载篇：AssimpSceneGraph/AssimpImportFlow（Assimp）、MeshDataLayout/MeshTextureBinding（网格）、NodeRecursion/ModelComposition（模型）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -169,6 +176,12 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LightCastersDiagram,
   AttenuationCurveDiagram,
   MultipleLightsDiagram,
+  AssimpSceneGraphDiagram,
+  AssimpImportFlowDiagram,
+  MeshDataLayoutDiagram,
+  MeshTextureBindingDiagram,
+  NodeRecursionDiagram,
+  ModelCompositionDiagram,
   Stepper,
   Step,
   Slider,
