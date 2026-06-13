@@ -13,7 +13,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 /**
  * 已渲染好的跑车海报（总监用真 GPU 截图，public/hero-poster.webp，1444×1612）。
@@ -40,6 +40,35 @@ const FerrariScene = dynamic(() => import("./ferrari-scene"), {
   // loading 占位 = 同一张海报，3D 就绪后被 Canvas 无缝接管
   loading: () => <HeroPoster />,
 });
+
+/**
+ * 「就绪后淡入」过渡（HEL-17）：dynamic chunk 加载完成 → FerrariScene 挂载，此包裹层
+ * 首帧 opacity-0、挂载后下一帧切 opacity-100，让实时画面从海报上柔和淡入，消除硬切。
+ *
+ * - 海报在底层（loading 占位 + 不支持 WebGL2 兜底都是它）；实时 Canvas 透明背景叠在其上，
+ *   淡入时两者交叠 → 平滑过渡到实时画面。
+ * - 时长用 DESIGN 动效 token --duration-page（320ms，页面级），呼应任务「~0.4s」精神；
+ *   reduced-motion 下该 token 自动降为 0ms（globals.css），即瞬时显示，不违反动效原则 4。
+ * - 注意：本文件是 three 的 dynamic 边界，禁止 import three（硬规则 6）——
+ *   故淡入用纯 CSS opacity + React state，不触碰场景内部。
+ */
+function FadeInScene() {
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    // 下一帧再切到可见，确保 opacity-0 起始态先提交（触发 transition）
+    const id = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+  return (
+    <div
+      className={`h-full w-full transition-opacity duration-(--duration-page) ease-standard ${
+        shown ? "opacity-100" : "opacity-0"
+      }`}
+    >
+      <FerrariScene />
+    </div>
+  );
+}
 
 /**
  * WebGL2 能力检测——SSR 安全。
@@ -79,5 +108,16 @@ export function HeroCanvas() {
   const webgl2 = useWebGL2Supported();
   // 不支持 WebGL2：直接静态海报兜底，永不挂载 three（连 chunk 都不拉）
   if (!webgl2) return <HeroPoster />;
-  return <FerrariScene />;
+  // 支持：海报作 loading 占位，实时 Canvas 就绪后柔和淡入接管（消除硬切）
+  return (
+    <div className="relative h-full w-full">
+      {/* 底层海报：淡入期间在实时画面之下平滑过渡（loading 占位也是同一张） */}
+      <div className="absolute inset-0">
+        <HeroPoster />
+      </div>
+      <div className="absolute inset-0">
+        <FadeInScene />
+      </div>
+    </div>
+  );
 }
