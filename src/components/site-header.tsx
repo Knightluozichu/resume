@@ -33,6 +33,12 @@ export function SiteHeader() {
           >
             教程
           </Link>
+          <Link
+            href="/review"
+            className="rounded-control px-2 py-1 text-secondary transition-colors duration-(--duration-hover) ease-standard hover:text-primary"
+          >
+            复习
+          </Link>
           <SearchOverlay />
           <a
             href="https://github.com/Knightluozichu/resume"
