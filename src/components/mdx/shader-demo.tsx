@@ -1,42 +1,117 @@
+"use client";
+
 /**
- * <ShaderDemo>：M4 桥接占位（chapter-spec §五 交互 Demo）。
+ * <ShaderDemo>：章节里片段着色器实时渲染的 MDX 入口（HEL-25，替换 HEL-20 占位）。
  *
- * !!! 本组件是占位壳，禁止 import three / @react-three/*（硬规则 6：three 必须可 code-split，
- * 禁止进公共/教程渲染路径）。当前只渲染 DESIGN 「交互 Demo 容器」气质的卡片，
- * 内显「交互演示即将上线（M4）」。
+ * 本文件是「dynamic 边界」——只做三件轻量事，绝不 import WebGL 代码（硬规则 2/6）：
+ *  1. WebGL2 能力检测（client，SSR 安全）：不支持 → 静态兜底卡，绝不挂载画布、绝不白屏
+ *  2. 支持 WebGL2 → next/dynamic(ssr:false) 懒加载真正含 WebGL 代码的 <ShaderCanvas>，
+ *     它被切成独立 chunk，不进首屏关键路径 / 公共 layout
+ *  3. dynamic 的 loading 占位 = 同气质的骨架卡（Demo 容器 + ⚡标签），chunk 就绪后接管
  *
- * 卡片气质（DESIGN.md §组件气质速查 / §间距与布局）：
- *  - --bg-elevated 底 + 1px border + 12px 圆角（rounded-card）
- *  - 左上角「⚡ 交互 Demo」标签（accent 小面积）
+ * 保留 MDX 标签名 ShaderDemo 与同名 props（vert/frag/uniforms），content/*.mdx 无需改写；
+ * 另透传 height/aspect/caption 给 ShaderCanvas。
  *
- * 接受 vert/frag/uniforms 等 props 以便 .mdx 现在就能按最终 API 书写，占位期忽略其值。
- *
- * ========================== M4 替换点 ==========================
- * M4 实装时，把本文件替换为：用 next/dynamic + ssr:false 懒加载真正的
- * <ShaderCanvas>（WebGL/R3F），保留同名 props（vert/frag/uniforms），
- * 并补齐：猜一猜引导留白、uniform 控件（≤5）、重置按钮、骨架屏、WebGL2 兜底。
- * three 相关 import 只允许出现在被懒加载的子模块里，不得进入本占位/公共 layout。
- * =============================================================
+ * 标准 uniforms（由 ShaderCanvas 自动注入并每帧更新）：uTime / uResolution / uMouse。
+ * 衔接：HEL-26 在 ShaderCanvas 之上加 uniform 运行时控件（≤5），HEL-27 加在线改 GLSL
+ * （编译错误回显口已在 ShaderCanvas 内就绪）。
  */
-export function ShaderDemo({
-  vert: _vert,
-  frag: _frag,
-  uniforms: _uniforms,
-}: {
+
+import dynamic from "next/dynamic";
+import { useSyncExternalStore } from "react";
+
+import type { UniformMap } from "./shader/use-shader-program";
+
+type ShaderDemoProps = {
+  /** 片段着色器源码（必填，#version 300 es） */
+  frag: string;
+  /** 顶点着色器源码（可选；省略时用覆盖全屏的直通三角形） */
   vert?: string;
-  frag?: string;
-  uniforms?: Record<string, unknown>;
-}) {
+  /** 自定义 uniform 初值（HEL-26 将据此生成运行时控件） */
+  uniforms?: UniformMap;
+  /** 画布高度（px）。与 aspect 二选一，height 优先。 */
+  height?: number;
+  /** 画布宽高比（如 16/9）。 */
+  aspect?: number;
+  /** 图注：画布下方说明文字。 */
+  caption?: string;
+};
+
+/**
+ * 共用「Demo 容器气质」外壳：loading 占位 / WebGL2 兜底卡复用之，
+ * 保证三态（加载中 / 不支持 / 真画布）容器气质一致（无布局跳变）。
+ */
+function DemoShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="mdx-shader-demo my-6 rounded-card border border-border bg-elevated p-6">
-      {/* 左上角「⚡ 交互 Demo」标签：accent 小面积 */}
-      <span className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-xs font-medium text-accent">
-        <span aria-hidden="true">⚡</span>
-        交互 Demo
-      </span>
+      <div className="mb-4">
+        <span className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-xs font-medium text-accent">
+          <span aria-hidden="true">⚡</span>
+          可交互
+        </span>
+      </div>
       <div className="flex min-h-40 items-center justify-center text-center">
-        <p className="text-sm text-secondary">交互演示即将上线（M4）</p>
+        {children}
       </div>
     </div>
   );
+}
+
+/** dynamic loading / 兜底共用的骨架卡。 */
+function LoadingCard() {
+  return (
+    <DemoShell>
+      <p className="text-sm text-secondary">实时演示加载中…</p>
+    </DemoShell>
+  );
+}
+
+/** WebGL2 不支持时的静态兜底卡（DESIGN 容器气质 + 文案），绝不白屏。 */
+function FallbackCard() {
+  return (
+    <DemoShell>
+      <p className="max-w-prose text-sm text-secondary">
+        当前浏览器不支持 WebGL2，无法运行实时着色器演示。请用较新版本的 Chrome /
+        Firefox / Edge / Safari 查看。
+      </p>
+    </DemoShell>
+  );
+}
+
+// 真正含 WebGL 代码的组件——唯一 dynamic 加载点，ssr:false + 独立 chunk。
+const ShaderCanvas = dynamic(() => import("./shader/shader-canvas"), {
+  ssr: false,
+  loading: () => <LoadingCard />,
+});
+
+// —— WebGL2 能力检测（与 hero-canvas 同款一次性探测 + useSyncExternalStore）——
+let cachedWebgl2: boolean | null = null;
+
+function detectWebGL2(): boolean {
+  if (cachedWebgl2 !== null) return cachedWebgl2;
+  try {
+    const canvas = document.createElement("canvas");
+    cachedWebgl2 = !!canvas.getContext("webgl2");
+  } catch {
+    cachedWebgl2 = false;
+  }
+  return cachedWebgl2;
+}
+
+const noopSubscribe = () => () => {};
+
+function useWebGL2Supported(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    detectWebGL2, // client：真实探测（带模块级缓存）
+    () => true, // server：乐观按支持，client 挂载后纠正（避免 hydration 抖动）
+  );
+}
+
+export function ShaderDemo(props: ShaderDemoProps) {
+  const webgl2 = useWebGL2Supported();
+  // 不支持 WebGL2：静态兜底卡，永不拉 WebGL chunk、永不挂画布。
+  if (!webgl2) return <FallbackCard />;
+  // 支持：dynamic 懒加载真画布（loading 期显示骨架卡）。
+  return <ShaderCanvas {...props} />;
 }
