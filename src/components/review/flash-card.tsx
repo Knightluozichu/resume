@@ -1,5 +1,11 @@
 "use client";
 
+// KaTeX 样式表：/review 不在 /learn/* 布局下（那里在 learn/layout.tsx 引入），
+// 故在复习组件树这一侧按需引入，确保卡片里的行内数学（RichText → KaTeX）有样式。
+// 本文件只被 ssr:false 的复习引擎树用到，CSS 随该 chunk 加载，不进 /review 首屏关键路径；
+// 与 /learn 各自路由独立引入、互不重复注入。
+import "katex/dist/katex.min.css";
+
 import { useState } from "react";
 
 import {
@@ -9,6 +15,7 @@ import {
   type ReviewQuestion,
 } from "@/data/review-questions";
 
+import { RichText } from "./rich-text";
 import { usePrefersReducedMotion } from "./use-prefers-reduced-motion";
 
 /**
@@ -94,8 +101,8 @@ export function FlashCard({
               </span>
               <span className="text-xs text-secondary">{chapterTitle}</span>
             </div>
-            <p className="text-lg leading-relaxed text-primary">
-              {question.question}
+            <p className="text-lg leading-relaxed whitespace-pre-line text-primary">
+              <RichText text={question.question} />
             </p>
           </div>
 
@@ -103,7 +110,7 @@ export function FlashCard({
           <div className="review-card-face review-card-back flex flex-col gap-3 rounded-card border border-accent bg-elevated p-6">
             <span className="text-xs text-accent">答案 · {chapterTitle}</span>
             <p className="text-base leading-relaxed whitespace-pre-line text-primary">
-              {question.answer}
+              <RichText text={question.answer} />
             </p>
           </div>
         </button>
