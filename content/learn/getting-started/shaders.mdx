@@ -1,0 +1,466 @@
+---
+title: 着色器
+type: C
+section: 入门
+order: 3
+description: 看懂 GLSL 这门「写给 GPU 的小语言」——in/out 怎么在两段着色器之间传数据、uniform 怎么从你的程序传参进来，并能改出自己的颜色与动画效果。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/05%20Shaders/
+draft: true
+---
+
+{/* C 实战型章（HEL-33，M5 入门第 3 篇）：主题是 GLSL 着色器语言本身——in/out 阶段间传数据、uniform 从 CPU 传参、基本类型、顶点→片段插值、内建变量。承接「你好三角形」（已知两段着色器存在、能跑通三角形），本章把镜头拉近到「这两段小程序内部怎么写、数据怎么流」。C 型：代码对照为重心（§6 ≥80% 覆盖），math:false 整节省略。主 Demo = editable ShaderDemo（uniform + gl_FragCoord 位置插值，改 GLSL/调 uniform 实时看变化）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) GLSL = 给 GPU 的小程序/食谱 = 直觉引入比喻 + 概念讲解；2) in/out 阶段间传数据 = 概念 + <ShaderIODiagram> 数据流图 + 代码对照；3) uniform 从 CPU 传参 = 概念 + <ShaderIODiagram>（旁路注入）+ 主 ShaderDemo（调控件即改 uniform）+ 代码对照（glUniform* / getUniformLocation）；4) 基本类型 float/vec2-4/mat = 概念（文字 + 代码示例，C 型「是什么」压缩）；5) 顶点→片段插值 = 概念 + <InterpolationDiagram> 渐变三角形图 + 主 Demo；6) 内建变量 gl_Position / gl_FragCoord / FragColor = 概念 + 代码对照。Term 共 9 个（GLSL / 着色器程序 / in、out / uniform / 向量类型 vec / swizzle / 片段插值 / 内建变量 / 精度限定符 precision）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话说清 **in/out** 和 **uniform** 各自传的是什么数据、从哪来到哪去
+- 能看懂一对顶点 / 片段着色器，并改出自己想要的颜色与一个随时间变化的动画效果
+- 能回答：片段着色器里那片连续的渐变颜色，明明顶点只有 3 个，中间的颜色是哪来的？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用工厂流水线（承接「你好三角形」同 section 同类比体系）。 */}
+
+## 给 GPU 的两张「食谱」
+
+上一章你已经把三角形画了出来，靠的是两段小程序：一段管「每个角摆在哪」，一段管「每个点染成什么色」。这一章我们把镜头拉近，看清这两段小程序**内部到底怎么写**。
+
+可以把它们想成给 GPU 的两张**食谱**：你不用亲手炒每一道菜（GPU 有成千上万个小厨师同时开火），你只负责把菜谱写清楚——「拿到这份原料，照这几步做，端出这个成品」。GPU 照着菜谱，对每一个顶点、每一个像素各跑一遍。
+
+写菜谱就有两个绕不开的问题：第一张菜谱做出的半成品，怎么**递**给第二张菜谱接着做？做菜时要用的盐和火候这类**全局调料**，又怎么从你（厨房外的采购）手里送进去？没有这两条「递料」的通道，两段程序就是两座孤岛，画面要么算不出、要么永远是死板的一个样。这一章讲的就是这两条通道。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念克制：GLSL / in、out / uniform / 向量类型 / 插值（≤5 主概念，swizzle、内建变量、precision 作辅助术语随文带出）。 */}
+
+## GLSL：写菜谱用的小语言
+
+这两张菜谱用的不是 C++ 也不是 JavaScript，而是一门专门的小语言 <Term def="OpenGL Shading Language，写着色器用的小语言，语法像 C；专为「同一段代码在 GPU 上对成千上万个顶点/像素并行跑」而设计，自带 vec/mat 等图形类型。">GLSL</Term>（OpenGL Shading Language）。它长得很像 C：有 `float`、`if`、`for`、函数、`main()`。
+
+为什么要单独一门语言？因为 GPU 的活法和 CPU 不同——同一段代码会被几千个核心**同时**拿去，各自处理一个顶点或一个像素。GLSL 就是为这种「一份代码、海量并行」量身定做的，还内置了图形最常用的向量、矩阵类型。本章不求把语法学全，只抓住对小白最关键的三件事：**数据怎么进来、怎么在两段之间传、怎么输出**。
+
+## in 和 out：把半成品从上一段递给下一段
+
+第一张菜谱（顶点着色器）做出的半成品，要交给第二张（片段着色器）接着加工。GLSL 用一对关键字管这件事：上一段用 <Term def="GLSL 里声明「输出 / 输入」的关键字。一段着色器用 out 声明要往下一段递的数据，下一段用同名同类型的 in 接收。它们是阶段之间传数据的管道。">in / out</Term> 中的 `out` 声明「我要往下递一份数据」，下一段用同名同类型的 `in` 声明「我来接这份数据」。
+
+这里有条铁律：**上一段 `out` 的名字和类型，必须和下一段 `in` 的名字和类型一字不差**，否则两根管子对不上、接不起来。比如顶点着色器写 `out vec3 vColor;`，片段着色器就得写 `in vec3 vColor;`——名字 `vColor`、类型 `vec3` 都得一致。
+
+下面这张图把本章两条数据通路画在一起：一条是 `in/out`（半成品在两段之间流），另一条就是下一节要讲的 `uniform`（从你的程序旁路注入）。先看个全貌：
+
+<ShaderIODiagram />
+
+## uniform：从你的程序送进去的「全局调料」
+
+`in/out` 传的是「逐顶点 / 逐片段各不相同」的数据。但还有一类数据，是**对这一整次绘制都一样**的——比如当前时间、整体色调、一个变换矩阵。这类「全局调料」由 <Term def="从 CPU（你的程序）传进着色器的全局只读变量。对一次绘制里所有顶点和片段都是同一个值；典型用途：时间、颜色、变换矩阵。在着色器里只能读不能改。">uniform</Term> 负责。
+
+它的特点全在名字里——**uniform（统一的）**：在一次绘制中，每个顶点、每个片段读到的这个值都**完全相同**。你在程序里用一句 `gl.uniform*` 把它上传，着色器里就能读到（但只能读、不能改）。`in/out` 是顺着流水线一段段往下流，`uniform` 则是从流水线**侧面**横插进来，两段着色器都够得着。上面那张图里，从 CPU 虚线垂下来的就是它。
+
+本章的主 Demo 里，「随时间脉动」靠的就是一个名叫 `uTime` 的 uniform，你在控件里调的颜色也是一个 uniform——稍后你会亲手调它们。
+
+## 基本类型：float 和「装一组数的盒子」vec
+
+GLSL 的类型也是为图形定制的。除了熟悉的 `float`（小数）、`int`、`bool`，最常用的是 <Term def="GLSL 的向量类型：vec2/vec3/vec4 分别装 2/3/4 个 float。常用来表示位置(x,y,z)、颜色(r,g,b,a)、纹理坐标等。可整体参与加减乘运算。">向量类型</Term> `vec2` / `vec3` / `vec4`——分别是装 2、3、4 个 `float` 的小盒子：
+
+- 颜色用 `vec4`：`vec4(r, g, b, a)`，四个分量是红、绿、蓝、透明度（都在 0~1）
+- 平面坐标用 `vec2`，空间坐标 / RGB 颜色用 `vec3`
+- 矩阵用 `mat3` / `mat4`（3×3、4×4），做坐标变换用——本章先不展开，留给后面「变换」章
+
+向量取分量很灵活，这套写法叫 <Term def="GLSL 取向量分量的简写：用 .x/.y/.z/.w 或 .r/.g/.b/.a，还能一次取多个并重排，如 color.rgb 取前三个、pos.xy 取前两个、c.bgr 反序。">swizzle</Term>：`color.r` 取红分量，`color.rgb` 一次取前三个，`pos.xy` 取前两个。颜色用 `.rgba`、坐标用 `.xyzw`，指的是同一批分量，只是叫法不同。整组向量还能直接相加、相乘、和 `float` 混算，写起来很省事——这也是 GLSL 比普通语言「图形味」浓的地方。
+
+## 顶点只有 3 个角，中间的颜色哪来的？——插值
+
+这是小白最容易懵的一点。顶点着色器只对**那几个顶点**跑（三角形就 3 个角），可片段着色器要给三角形**铺满的每一个像素**算色——中间那些片段的 `in` 值是哪来的？
+
+答案是 <Term def="光栅化时，三角形内部每个片段的 in 值，由三个顶点的对应 out 值按它到各顶点的远近自动混合算出。所以顶点只给了角上的值，中间是「混」出来的，得到连续过渡。">片段插值</Term>：光栅化把三角形切成一个个片段时，会顺手把三个顶点的 `out` 值，**按这个片段离三个角的远近，自动混合**算出来。靠近红色角的片段偏红，正中间的片段是三色匀混——于是你看到一片连续的渐变，而你只在顶点上定了三个角的值。
+
+<InterpolationDiagram />
+
+记住这个直觉：**顶点着色器定「角上的值」，中间的值是光栅化插值「混」出来的**，到了片段着色器就是现成的 `in`。这正是本章主 Demo 里那片渐变的来历。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。插值的重心坐标公式不展开，用 InterpolationDiagram 的「按远近混合」直觉代替，符合 C 型 + 小白友好。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = editable ShaderDemo；用 uniform（uTime + 自定义 color / speed）+ gl_FragCoord 位置插值；猜一猜引导；控件 2 个（≤5）；自带重置 + 骨架屏 + WebGL2 兜底。frag 用 `{`...`}` 模板字符串表达式传（blockJS:false 生效）。 */}
+
+## 动手：调 uniform、改 GLSL
+
+下面就是本章主 Demo。片段着色器做了两件本章讲过的事：用 `gl_FragCoord`（片段的屏幕位置）做**位置渐变**，再用 `uTime` 这个 uniform 让颜色**随时间脉动**。右侧两个控件——基色和脉动速度——各自驱动一个 uniform，拖一下就实时变。
+
+> 猜一猜：把右边的「脉动速度」调到 0，画面会怎样？再把它调大，又会怎样？这背后变的是哪个 uniform？动手拖一下再看下面的代码。
+
+<ShaderDemo
+  editable
+  caption="片段着色器用 gl_FragCoord 做位置渐变、用 uTime 这个 uniform 随时间脉动。拖「基色」和「脉动速度」两个控件即在改对应的 uniform；移动鼠标看 uMouse 的影响；右侧可直接改 GLSL，停手后自动重渲染。试试改 mix 的比例、换分量，或把脉动那行删掉看静态渐变。"
+  frag={`#version 300 es
+precision highp float;          // WebGL2 片段着色器必写：声明浮点精度
+uniform vec2 uResolution;       // 画布像素尺寸（标准 uniform，自动注入）
+uniform vec2 uMouse;            // 鼠标在画布内的归一化位置（0..1）
+uniform float uTime;            // 运行秒数（标准 uniform，自动注入）
+uniform vec3 uColor;            // 控件：基色（颜色选择器，rgb 0..1）
+uniform float uSpeed;           // 控件：脉动速度（滑块）
+out vec4 FragColor;             // 内建输出：这个片段的最终颜色
+void main() {
+  // gl_FragCoord 是片段的屏幕坐标；除以分辨率归一化到 0..1，得到「在画布的哪个位置」
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  // 随时间脉动的亮度（速度=0 时静止）；叠加一点鼠标影响
+  float pulse = 0.5 + 0.5 * sin(uTime * uSpeed + uMouse.x * 6.2831);
+  // 位置渐变（uv）和作者选的基色混合，再乘脉动亮度
+  vec3 col = mix(uColor, vec3(uv.x, uv.y, pulse), 0.6);
+  FragColor = vec4(col, 1.0);
+}`}
+  controls={[
+    { name: "uColor", label: "基色", type: "color", default: [0.49, 0.36, 1] },
+    {
+      name: "uSpeed",
+      label: "脉动速度",
+      type: "float",
+      min: 0,
+      max: 4,
+      step: 0.1,
+      default: 1,
+    },
+  ]}
+/>
+
+调速度变的是 `uSpeed` 这个 uniform：调到 0，`sin` 里的 `uTime * uSpeed` 恒为 0、`pulse` 不再随时间变，画面就静止；调大则脉动更快。改基色变的是 `uColor`。两个控件都没有重新编译着色器——只是每帧把新值通过 `gl.uniform*` 上传进去，这正是 uniform 的用法。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：四段覆盖 顶点/片段着色器源码（in/out 配对 + 内建变量）→ uniform 声明 → CPU 侧上传（C++ glUniform* ↔ TS gl.uniform* + getUniformLocation）→ 每帧更新；单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异首现用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+把上面 Demo 背后的写法摊开看。一对着色器 + 从你的程序往里传 uniform，关键就这几段。C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一步：一对会「传颜色」的着色器
+
+我们让顶点着色器给每个顶点定一个颜色，用 `out` 递出去；片段着色器用同名 `in` 接收（中间已被插值），原样输出。注意 `out vColor` 与 `in vColor` 的名字、类型必须对上。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 顶点着色器
+#version 330 core
+layout (location = 0) in vec3 aPos;   // 顶点属性：位置（来自 VBO）
+out vec3 vColor;                      // out：往片段着色器递的颜色
+void main() {
+  gl_Position = vec4(aPos, 1.0);      // 内建输出：顶点的裁剪空间位置
+  vColor = aPos * 0.5 + 0.5;          // 用位置算个颜色，递出去
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 顶点着色器（写成字符串）
+const vertexSrc = `#version 300 es
+layout (location = 0) in vec3 aPos;   // 顶点属性：位置（来自 VBO）
+out vec3 vColor;                      // out：往片段着色器递的颜色
+void main() {
+  gl_Position = vec4(aPos, 1.0);      // 内建输出：顶点的裁剪空间位置
+  vColor = aPos * 0.5 + 0.5;          // 用位置算个颜色，递出去
+}`;
+```
+
+  </Tab>
+</CodeTabs>
+
+`gl_Position` 和下面片段着色器的 `FragColor` 都不是我们声明的变量，而是 GLSL 规定好的 <Term def="GLSL 预先定义、有固定含义的特殊变量。如顶点着色器必须写 gl_Position（顶点最终位置）、片段着色器写 gl_FragCoord（片段屏幕坐标，只读）、自定义输出当颜色（如 FragColor）。">内建变量</Term>：顶点着色器**必须**给 `gl_Position` 赋值（顶点的最终位置），片段着色器则把一个 `out vec4` 当最终颜色输出。接着看片段着色器：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 片段着色器
+#version 330 core
+in vec3 vColor;            // in：接住顶点着色器递来的颜色（已被插值）
+out vec4 FragColor;        // out：这个片段的最终颜色
+void main() {
+  FragColor = vec4(vColor, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const fragmentSrc = `#version 300 es
+precision highp float;     // WebGL2 片段着色器必写：声明浮点精度
+in vec3 vColor;            // in：接住顶点着色器递来的颜色（已被插值）
+out vec4 FragColor;        // out：这个片段的最终颜色
+void main() {
+  FragColor = vec4(vColor, 1.0);
+}`;
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑完全相同，差异在版本声明和那行精度声明：
+
+<Callout type="warn">
+  API 差异：桌面 OpenGL 写 `#version 330 core`，WebGL2 写 `#version 300
+  es`；并且 WebGL2 的**片段着色器必须**多写一行{" "}
+  <Term def="GLSL ES（WebGL2）里给浮点数指定计算精度的声明，如 precision highp float;（高精度）。WebGL2 的片段着色器必须显式声明，否则编译失败；桌面 OpenGL 不需要。">
+    精度限定符（precision）
+  </Term>
+  ，即 `precision highp float;`，否则编译直接失败。桌面 OpenGL 不需要这行。
+</Callout>
+
+### 第二步：在着色器里声明要接的 uniform
+
+要从程序里传 `uTime`、颜色这类全局调料，先在着色器里声明同名 `uniform`。声明在两段着色器里都可以写——哪段要用就在哪段声明：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 片段着色器顶部加：
+uniform float uTime;       // 全局：运行时间（秒）
+uniform vec3  uColor;      // 全局：基色
+// main 里就能像普通变量一样读它们（只读）：
+// FragColor = vec4(uColor * abs(sin(uTime)), 1.0);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 片段着色器字符串顶部加（注意 WebGL2 仍需 precision 那行）：
+// uniform float uTime;    // 全局：运行时间（秒）
+// uniform vec3  uColor;   // 全局：基色
+// main 里读法和 C++ 完全一样，GLSL 源码本身两端通用。
+```
+
+  </Tab>
+</CodeTabs>
+
+着色器里的声明两端**完全一样**（都是 GLSL）。真正有 API 差异的是「从你的程序怎么把值送进去」——这才是下一步的重点。
+
+### 第三步：从 CPU 把值上传给 uniform
+
+这里的「程序」指上一章链接好的那个 <Term def="把编译好的顶点着色器和片段着色器链接到一起、能被显卡执行的整体。上传 uniform、绘制前都要先用 useProgram 启用它，显卡才知道该用哪两段着色器、把值写进哪个程序。">着色器程序</Term>。上传分两步：先用 `getUniformLocation` **按名字问出这个 uniform 在程序里的「地址」**（一个句柄），再用 `glUniform*` / `gl.uniform*` 把值写进那个地址。类型要对上——`float` 用 `1f`、`vec3` 用 `3f`：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+glUseProgram(program);  // 上传前必须先启用目标程序！
+// 按名字问出 uniform 的位置（句柄）
+int locTime  = glGetUniformLocation(program, "uTime");
+int locColor = glGetUniformLocation(program, "uColor");
+// 写值：float 用 1f，vec3 用 3f
+glUniform1f(locTime, currentTime);
+glUniform3f(locColor, 0.49f, 0.36f, 1.0f);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+gl.useProgram(program); // 上传前必须先启用目标程序！
+// 按名字问出 uniform 的位置（句柄；查不到返回 null）
+const locTime = gl.getUniformLocation(program, "uTime");
+const locColor = gl.getUniformLocation(program, "uColor");
+// 写值：float 用 1f，vec3 用 3f
+gl.uniform1f(locTime, currentTime);
+gl.uniform3f(locColor, 0.49, 0.36, 1.0);
+```
+
+  </Tab>
+</CodeTabs>
+
+逻辑一一对应，只有两个命名 / 返回值差异需要留意：
+
+<Callout type="warn">
+  API 差异：C++ 的 `glGetUniformLocation` 返回一个 `int`（找不到返回
+  `-1`）；WebGL2 的 `gl.getUniformLocation` 返回一个 `WebGLUniformLocation`
+  对象或 `null`（找不到 / 被优化掉时为 `null`），用前应判
+  `null`。两端都有一个共同 铁律：**调 `uniform*` 前必须先 `useProgram`
+  启用目标程序**，否则值写不进去。
+</Callout>
+
+### 第四步：动画——每帧重新上传 uTime
+
+uniform 只是「写进去的那一刻」的值；要让画面动，得在渲染循环里**每帧**把新的 `uTime` 写一遍。这就是上面 Demo「随时间脉动」的全部秘密：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+while (!glfwWindowShouldClose(window)) {
+  glUseProgram(program);
+  float t = (float)glfwGetTime();         // 取当前秒数
+  glUniform1f(locTime, t);                // 每帧更新 uTime
+  glBindVertexArray(VAO);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+function frame(tMs: number) {
+  gl.useProgram(program);
+  gl.uniform1f(locTime, tMs / 1000); // 每帧更新 uTime（毫秒转秒）
+  gl.bindVertexArray(vao);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+```
+
+  </Tab>
+</CodeTabs>
+
+每帧 `uTime` 变一点，片段着色器里 `sin(uTime)` 跟着变，颜色就动了起来。本站的 `<ShaderDemo>` 已经替你做好了 `uTime` / `uResolution` / `uMouse` 的每帧上传，控件里的自定义 uniform（如 `uColor` / `uSpeed`）也是这套机制——你只管在 GLSL 里读。完整可运行源码将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含 1 个可在 editable demo 亲手触发的错误模式（删 precision 那行）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：编译报错说找不到 / 类型不符，或片段着色器收到的颜色全是
+  0。**原因**：顶点着色器的 `out` 和片段着色器的 `in` 名字或类型对不上（如一边
+  `vColor` 一边 `color`，或一边 `vec3` 一边
+  `vec4`）。**修法**：逐字核对——两段里这对变量的**名字和类型必须完全一致**，是同一根管子的两头。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在程序里 `glUniform*` 写了值，画面却毫无反应。**原因**：上传前忘了
+  `glUseProgram(program)`——uniform
+  是写进「当前启用的程序」的，没启用就写了个寂寞。**修法**：每次 `uniform*`
+  之前先 `useProgram` 启用目标程序，再写值。
+</Callout>
+
+<Callout type="trap">
+  **现象**：调用没报错，但 uniform
+  怎么改画面都不变。**原因**：`getUniformLocation`
+  根本没拿到位置——名字拼错，或这个 uniform 在 GLSL
+  里没被实际用到、被编译器优化掉了，于是返回 `-1` /
+  `null`。**修法**：核对名字拼写；确认 uniform 在 `main` 里真的参与了输出；拿到
+  location 后先判 `-1`（C++）/ `null`（WebGL2）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：WebGL2 下片段着色器编译失败，报 `No precision specified`
+  之类。**原因**：漏写了 `precision` 浮点精度声明（WebGL2
+  片段着色器必写）。**修法**：在 `#version 300 es` 下一行加 `precision highp
+  float;`。**亲手看翻车**：到 §5 那个可编辑 Demo 里，把 `precision highp float;`
+  整行删掉，停手后编辑器会标红报错、画面停更——这就是这个坑的真身；改回来即恢复。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（含目标效果描述）+ 1 道独立实现题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **GLSL** 是写着色器的小语言，一份代码被 GPU 对海量顶点 / 片段并行跑
+- **in/out** 在两段着色器之间传逐顶点 / 逐片段的数据，名字和类型必须配对
+- **uniform** 是从你的程序传进去的全局常量，对一次绘制里所有顶点 / 片段同值，只读
+- 片段着色器那片连续渐变，是顶点的 out 值经**插值**「混」出来的（顶点只定角上的值）
+- 改 uniform / 改 GLSL 就能改出不同颜色与动画；动画 = 每帧重新上传 `uTime`
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面的可编辑 Demo 里，做出「纯色呼吸灯」效果：整块画面是同一种颜色，亮度随时间一明一暗地呼吸（不要位置渐变）。提示：去掉 `uv` 的影响，让颜色只由 `uColor` 和 `pulse` 决定。
+
+<Answer>
+
+把 `main` 里算颜色那两行改成：
+
+```glsl
+float pulse = 0.5 + 0.5 * sin(uTime * uSpeed);
+vec3 col = uColor * pulse;   // 整块同色，只随时间明暗呼吸
+FragColor = vec4(col, 1.0);
+```
+
+去掉了 `uv`（位置）的参与，每个片段的颜色就只剩 `uColor * pulse`——位置不再影响颜色，所以整块画面是同一种色；`pulse` 随 `uTime` 在 0~1 之间起伏，于是整面一起明暗呼吸。把「脉动速度」调大呼吸更快，调到 0 就定住。
+
+</Answer>
+
+**练习 2（问答型）** 顶点着色器里写 `out vec3 vColor;`，片段着色器里写 `in vec4 vColor;`，会发生什么？为什么？
+
+<Answer>
+
+会编译 / 链接失败（或行为未定义）：虽然名字都叫 `vColor`，但类型一边 `vec3` 一边 `vec4` 对不上。`in/out` 是同一根管子的两头，**名字和类型都必须一字不差**才能接上。把片段着色器那行改成 `in vec3 vColor;` 即可。
+
+</Answer>
+
+**练习 3（独立实现题）** 不看上面的代码，自己写出「从程序里把一个 `vec3` 颜色 uniform 传进片段着色器」的完整三步（着色器里声明、问位置、写值），目标效果：让三角形显示成你指定的纯色。
+
+<Answer>
+
+三步：①片段着色器里声明 `uniform vec3 uColor;`，`main` 里 `FragColor = vec4(uColor, 1.0);`；②程序里 `gl.useProgram(program)` 后 `const loc = gl.getUniformLocation(program, "uColor");`；③`gl.uniform3f(loc, 1.0, 0.5, 0.0);`（橙色）。要点：先 `useProgram` 再上传，名字 `uColor` 两边一致，`vec3` 用 `uniform3f`。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（9 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="GLSL">
+  写着色器用的一门小语言（OpenGL Shading Language），语法很像
+  C，但专为「同一段代码在 GPU 上对成千上万个顶点 /
+  像素同时跑」设计，还自带向量、矩阵这些图形常用类型。详见本章「GLSL」一节。
+</GlossaryItem>
+
+<GlossaryItem term="in / out">
+  GLSL 里声明「输入 / 输出」的关键字。一段着色器用 `out`
+  声明要往下一段递的数据，下一段用**同名同类型**的 `in`
+  接收——是两段着色器之间传数据的管道。名字或类型对不上就接不起来。详见本章「in
+  和 out」一节。
+</GlossaryItem>
+
+<GlossaryItem term="uniform">
+  从你的程序（CPU）传进着色器的全局只读变量。一次绘制里，所有顶点和片段读到的它都是同一个值（uniform
+  =
+  统一的），适合放时间、整体颜色、变换矩阵等。着色器里只能读不能改。详见本章「uniform」一节。
+</GlossaryItem>
+
+<GlossaryItem term="向量类型">
+  GLSL 装一组 `float` 的小盒子：`vec2` / `vec3` / `vec4` 分别装 2 / 3 / 4
+  个数。常用来表示位置 `(x,y,z)`、颜色
+  `(r,g,b,a)`、纹理坐标等，还能整组直接加减乘。详见本章「基本类型」一节。
+</GlossaryItem>
+
+<GlossaryItem term="swizzle">
+  取向量分量的简写：用 `.x/.y/.z/.w` 或
+  `.r/.g/.b/.a`，还能一次取多个并重排——`color.rgb` 取前三个、`pos.xy`
+  取前两个、`c.bgr` 反序。坐标习惯用 `xyzw`、颜色用 `rgba`，指的是同一批分量。
+</GlossaryItem>
+
+<GlossaryItem term="片段插值">
+  顶点着色器只对几个顶点跑，可三角形内部铺满了片段。光栅化时，内部每个片段的
+  `in` 值由三个顶点的 `out`
+  值**按它离三个角的远近自动混合**算出——所以顶点只定了角上的值，中间是「混」出来的连续渐变。详见本章「插值」一节。
+</GlossaryItem>
+
+<GlossaryItem term="内建变量">
+  GLSL 预先定义好、有固定含义的特殊变量。比如顶点着色器**必须**给
+  `gl_Position`（顶点最终位置）赋值，片段着色器可读
+  `gl_FragCoord`（当前片段的屏幕坐标，只读），并把一个 `out vec4`
+  当最终颜色输出。详见本章「第一步」。
+</GlossaryItem>
+
+<GlossaryItem term="精度限定符（precision）">
+  GLSL ES（WebGL2）里给浮点数指定计算精度的声明，如 `precision highp
+  float;`（高精度）。WebGL2 的**片段着色器必须**显式声明它，否则编译失败；桌面
+  OpenGL 不需要这行。详见本章「容易踩的坑」。
+</GlossaryItem>
+
+<GlossaryItem term="着色器程序">
+  把编译好的顶点着色器和片段着色器链接到一起、能被显卡执行的整体。上传
+  uniform、绘制前都要先用 `useProgram`
+  启用它，显卡才知道该用哪两段着色器、把值写进哪个程序。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

@@ -7,7 +7,9 @@ import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
+import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
+import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
@@ -54,6 +56,11 @@ import { Term } from "./term";
  *  - Client（dynamic 边界）：MathViz —— 2D 向量/矩阵/坐标变换 SVG 交互可视化（拖动输入
  *    向量、调 2×2 矩阵 Slider、实时看 M·v 与变换后网格/基向量、预设/重置/键盘可调）。
  *    虽非 WebGL 但属重交互组件，按硬规则 2 经 next/dynamic(ssr:false) 懒加载独立 chunk。
+ *
+ * 章节专用静态示意图（Server，纯展示 SVG，无 three / 无交互 / reduced-motion 无关）：
+ *  - SetupPipelineDiagram / FrameStageDiagram（你好窗口）、VertexPipelineDiagram（你好三角形）
+ *  - ShaderIODiagram / InterpolationDiagram（着色器，HEL-33）：in/out + uniform 数据流、
+ *    顶点→片段插值。一律 token 色、无内联多行 SVG 进 mdx（规避 hydration mismatch）。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -71,6 +78,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SetupPipelineDiagram,
   FrameStageDiagram,
   VertexPipelineDiagram,
+  ShaderIODiagram,
+  InterpolationDiagram,
   Stepper,
   Step,
   Slider,
