@@ -17,10 +17,16 @@
  * 不进 /review 首屏关键路径（与全站 WebGL/重数据同一原则）。
  */
 
+import { basicLightingQuestions } from "./review/basic-lighting";
 import { cameraQuestions } from "./review/camera";
+import { colorsQuestions } from "./review/colors";
 import { coordinateSystemsQuestions } from "./review/coordinate-systems";
 import { helloTriangleQuestions } from "./review/hello-triangle";
 import { helloWindowQuestions } from "./review/hello-window";
+import { lightCastersQuestions } from "./review/light-casters";
+import { lightingMapsQuestions } from "./review/lighting-maps";
+import { materialsQuestions } from "./review/materials";
+import { multipleLightsQuestions } from "./review/multiple-lights";
 import { shadersQuestions } from "./review/shaders";
 import { texturesQuestions } from "./review/textures";
 import { transformationsQuestions } from "./review/transformations";
@@ -35,7 +41,7 @@ export {
 
 import type { ReviewQuestion } from "./review/types";
 
-/** 全库（按入门 7 章顺序拼接）。各章数组顺序即卡片自检/小结里的默认章序。 */
+/** 全库（按入门 7 章 + 光照 6 章顺序拼接）。各章数组顺序即卡片自检/小结里的默认章序。 */
 export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...helloWindowQuestions,
   ...helloTriangleQuestions,
@@ -44,6 +50,12 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...transformationsQuestions,
   ...coordinateSystemsQuestions,
   ...cameraQuestions,
+  ...colorsQuestions,
+  ...basicLightingQuestions,
+  ...materialsQuestions,
+  ...lightingMapsQuestions,
+  ...lightCastersQuestions,
+  ...multipleLightsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

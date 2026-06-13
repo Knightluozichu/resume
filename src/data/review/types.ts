@@ -19,7 +19,13 @@ export type ReviewChapterSlug =
   | "textures"
   | "transformations"
   | "coordinate-systems"
-  | "camera";
+  | "camera"
+  | "colors"
+  | "basic-lighting"
+  | "materials"
+  | "lighting-maps"
+  | "light-casters"
+  | "multiple-lights";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -42,6 +48,12 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   transformations: "变换",
   "coordinate-systems": "坐标系统",
   camera: "摄像机",
+  colors: "颜色",
+  "basic-lighting": "基础光照",
+  materials: "材质",
+  "lighting-maps": "光照贴图",
+  "light-casters": "投光物",
+  "multiple-lights": "多光源",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
