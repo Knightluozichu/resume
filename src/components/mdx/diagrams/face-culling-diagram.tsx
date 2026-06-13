@@ -14,7 +14,19 @@
  * --bg/--bg-elevated/--text-primary/--text-secondary），无阴影、rx 圆角、无裸 hex（硬规则 5）。
  */
 
-export function FaceCullingDiagram({ culled = false }: { culled?: boolean }) {
+export function FaceCullingDiagram({
+  culled = false,
+  bare = false,
+}: {
+  culled?: boolean;
+  /**
+   * bare：极简模式（默认 false）。供 <CompareSlider> 左右叠放擦除对比时使用——
+   * 此时去掉 SVG 内的顶部标题、底部一句话结论与外层 figcaption，只画立方体本身
+   * （正面保留 / culled 时背面虚线淡出那套绘制），避免两侧标题/图注重叠成乱码。
+   * viewBox 与非 bare 时完全一致，保证两侧同框；无障碍 aria-label 保留。
+   */
+  bare?: boolean;
+}) {
   const cx = 130;
   const cy = 130;
   const aria = culled
@@ -30,16 +42,18 @@ export function FaceCullingDiagram({ culled = false }: { culled?: boolean }) {
           aria-label={aria}
           className="mx-auto block h-auto w-full max-w-[260px]"
         >
-          <text
-            x={cx}
-            y="30"
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="600"
-            fill={culled ? "var(--success)" : "var(--danger)"}
-          >
-            {culled ? "剔除开：只画正面" : "剔除关：背面也画出来"}
-          </text>
+          {!bare && (
+            <text
+              x={cx}
+              y="30"
+              textAnchor="middle"
+              fontSize="12"
+              fontWeight="600"
+              fill={culled ? "var(--success)" : "var(--danger)"}
+            >
+              {culled ? "剔除开：只画正面" : "剔除关：背面也画出来"}
+            </text>
+          )}
 
           {/* ====== 背面那些面（只有 culled=false 时画出，制造「透视看到内壁」的穿帮感） ====== */}
           {!culled && (
@@ -111,31 +125,35 @@ export function FaceCullingDiagram({ culled = false }: { culled?: boolean }) {
           </text>
 
           {/* 底部一句话结论 */}
-          <text
-            x={cx}
-            y="244"
-            textAnchor="middle"
-            fontSize="11"
-            fontWeight="600"
-            fill={culled ? "var(--success)" : "var(--danger)"}
-          >
-            {culled ? "干净 · 省一半片段" : "杂乱 · 看见不该看的面"}
-          </text>
+          {!bare && (
+            <text
+              x={cx}
+              y="244"
+              textAnchor="middle"
+              fontSize="11"
+              fontWeight="600"
+              fill={culled ? "var(--success)" : "var(--danger)"}
+            >
+              {culled ? "干净 · 省一半片段" : "杂乱 · 看见不该看的面"}
+            </text>
+          )}
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-xs text-secondary">
-        {culled ? (
-          <>
-            剔除<strong>开</strong>：背对镜头的<strong>背面被丢弃</strong>
-            ，只剩朝你的正面，画面干净、还省掉一半片段开销。
-          </>
-        ) : (
-          <>
-            剔除<strong>关</strong>：背面也照画，于是
-            <strong>透过前面看到了内壁/背面</strong>，显得乱、像内外翻穿帮。
-          </>
-        )}
-      </figcaption>
+      {!bare && (
+        <figcaption className="mt-2 text-center text-xs text-secondary">
+          {culled ? (
+            <>
+              剔除<strong>开</strong>：背对镜头的<strong>背面被丢弃</strong>
+              ，只剩朝你的正面，画面干净、还省掉一半片段开销。
+            </>
+          ) : (
+            <>
+              剔除<strong>关</strong>：背面也照画，于是
+              <strong>透过前面看到了内壁/背面</strong>，显得乱、像内外翻穿帮。
+            </>
+          )}
+        </figcaption>
+      )}
     </figure>
   );
 }
