@@ -34,6 +34,10 @@ import { MeshDataLayoutDiagram } from "./diagrams/mesh-data-layout-diagram";
 import { MeshTextureBindingDiagram } from "./diagrams/mesh-texture-binding-diagram";
 import { NodeRecursionDiagram } from "./diagrams/node-recursion-diagram";
 import { ModelCompositionDiagram } from "./diagrams/model-composition-diagram";
+import { DepthBufferDiagram } from "./diagrams/depth-buffer-diagram";
+import { DepthTestStepDiagram } from "./diagrams/depth-test-step-diagram";
+import { DepthPrecisionDiagram } from "./diagrams/depth-precision-diagram";
+import { ZFightingDiagram } from "./diagrams/z-fighting-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -117,6 +121,11 @@ import { ModelDemo } from "./model-demo";
  *    每类光封成独立函数（CalcDirLight/CalcPointLight/CalcSpotLight）各算各的贡献，三份贡献
  *    汇入 ∑ 相加 = 这块表面最终色；强调「每个光独立算、结果累加」（漏加 = 只显其中一盏）。同款 Server SVG。
  *  - 模型加载篇：AssimpSceneGraph/AssimpImportFlow（Assimp）、MeshDataLayout/MeshTextureBinding（网格）、NodeRecursion/ModelComposition（模型）。同款 Server SVG。
+ *  - 高级OpenGL篇·深度测试（HEL-67）：DepthBufferDiagram（每像素颜色+深度、近物盖远物）、
+ *    DepthTestStepDiagram（§5 Stepper 逐片段测试每步图示：①两深度并列待比→②0.3<0.7 通过→
+ *    ③写色 + 深度 0.7→0.3→④更远 0.5 丢弃、那格不变）、
+ *    DepthPrecisionDiagram（非线性深度：near 刻度密 far 稀、精度堆近处）、
+ *    ZFightingDiagram（两面几乎共面争夺同深度 → 撕裂条纹）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -193,6 +202,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MeshTextureBindingDiagram,
   NodeRecursionDiagram,
   ModelCompositionDiagram,
+  DepthBufferDiagram,
+  DepthTestStepDiagram,
+  DepthPrecisionDiagram,
+  ZFightingDiagram,
   Stepper,
   Step,
   Slider,
