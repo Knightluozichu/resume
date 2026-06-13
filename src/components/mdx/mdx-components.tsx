@@ -9,6 +9,7 @@ import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
+import { MathViz } from "./math-viz";
 import { Objectives } from "./objectives";
 import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
@@ -39,6 +40,11 @@ import { Term } from "./term";
  * 术语高亮 + 名词解释（HEL-24）：
  *  - Client（真交互）：Term（行内术语高亮 + hover/focus tooltip + Esc + 锚点跳词条）
  *  - Server（纯展示）：Glossary / GlossaryItem（章末「人话词典」，词条 id 与 Term 锚点对齐）
+ *
+ * 数学型(B)章节主 Demo（HEL-28，非 WebGL）：
+ *  - Client（dynamic 边界）：MathViz —— 2D 向量/矩阵/坐标变换 SVG 交互可视化（拖动输入
+ *    向量、调 2×2 矩阵 Slider、实时看 M·v 与变换后网格/基向量、预设/重置/键盘可调）。
+ *    虽非 WebGL 但属重交互组件，按硬规则 2 经 next/dynamic(ssr:false) 懒加载独立 chunk。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -49,6 +55,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Attribution,
   Callout,
   ShaderDemo,
+  MathViz,
   CompareSlider,
   Figure,
   Stepper,
