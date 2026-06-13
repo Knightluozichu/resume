@@ -8,6 +8,7 @@ import rehypePrettyCode, {
 import rehypeSlug from "rehype-slug";
 import remarkMath from "remark-math";
 
+import { Comments } from "@/components/chapter/comments";
 import { Attribution } from "@/components/mdx/attribution";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import { getAdjacentChapters, getAllChapters, getChapter } from "@/lib/content";
@@ -145,6 +146,9 @@ export default async function ChapterPage({
       {/* 正文容器：max-w 72ch 由 ChapterShell 提供；prose 样式由 globals.css token 化 */}
       <div className="prose mt-8">{content}</div>
       <ChapterPager prev={prev} next={next} />
+      {/* 章末讨论区（HEL-43）：giscus 评论，client 叶子壳 + IntersectionObserver 懒加载，
+          不进首屏关键路径（硬规则 2）；page.tsx 仍为 Server Component。 */}
+      <Comments />
     </ChapterShell>
   );
 }
