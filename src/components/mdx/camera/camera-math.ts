@@ -383,6 +383,23 @@ export const DEFAULT_LIGHTING_PARAMS: LightingParams = {
   shininess: 32,
 };
 
+/**
+ * Phong 三项的「参与与否」开关（分步模式 gating，HEL-64）。
+ * 只决定某项是否计入最终颜色，不改各项的强度语义（强度仍由 LightingParams 控制）。
+ * 三项全开 = 默认，此时渲染与未分步时逐像素一致（向后兼容硬要求）。
+ */
+export type LightingEnabled = {
+  ambient: boolean;
+  diffuse: boolean;
+  specular: boolean;
+};
+
+export const DEFAULT_LIGHTING_ENABLED: LightingEnabled = {
+  ambient: true,
+  diffuse: true,
+  specular: true,
+};
+
 /** 物体色 / 光色（固定预设，DESIGN 品牌紫物体 + 暖白光），非主控件。 */
 export const LIGHTING_OBJECT_COLOR: Vec3 = [0.49, 0.36, 1];
 export const LIGHTING_LIGHT_COLOR: Vec3 = [1, 0.96, 0.9];

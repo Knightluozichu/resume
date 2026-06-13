@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   CUBE_VERTICES_NORMAL,
+  DEFAULT_LIGHTING_ENABLED,
   LIGHTING_LIGHT_COLOR,
   LIGHTING_OBJECT_COLOR,
   lightPosFromAngle,
@@ -14,6 +15,7 @@ import {
   mat4Multiply,
   mat4Perspective,
   mat4Translate,
+  type LightingEnabled,
   type LightingParams,
 } from "../camera/camera-math";
 
@@ -56,6 +58,10 @@ uniform vec3 uViewPos;         // 世界空间
 uniform float uAmbientStrength;
 uniform float uSpecularStrength;
 uniform float uShininess;
+// 分步 gating（HEL-64）：每项是否参与（0/1）。三项全 1 = 默认，等同未分步。
+uniform float uAmbientOn;
+uniform float uDiffuseOn;
+uniform float uSpecularOn;
 out vec4 fragColor;
 void main() {
   vec3 N = normalize(vNormal);
@@ -75,7 +81,10 @@ void main() {
   float spec = pow(specAngle, uShininess);
   vec3 specular = uSpecularStrength * spec * uLightColor;
 
-  vec3 color = (ambient + diffuse + specular) * uObjectColor;
+  // gating 只决定该项是否计入，不改强度语义；全开时与改造前逐像素一致
+  vec3 color =
+    (ambient * uAmbientOn + diffuse * uDiffuseOn + specular * uSpecularOn) *
+    uObjectColor;
   fragColor = vec4(color, 1.0);
 }`;
 
@@ -152,6 +161,9 @@ type ObjectUniforms = {
   uAmbientStrength: WebGLUniformLocation | null;
   uSpecularStrength: WebGLUniformLocation | null;
   uShininess: WebGLUniformLocation | null;
+  uAmbientOn: WebGLUniformLocation | null;
+  uDiffuseOn: WebGLUniformLocation | null;
+  uSpecularOn: WebGLUniformLocation | null;
 };
 
 type LampUniforms = {
@@ -159,7 +171,14 @@ type LampUniforms = {
   uColor: WebGLUniformLocation | null;
 };
 
-export function useLightingProgram(paramsRef: React.RefObject<LightingParams>) {
+export function useLightingProgram(
+  paramsRef: React.RefObject<LightingParams>,
+  /**
+   * 分步 gating 开关（可选）。不传 → 三项全开，渲染与未分步时逐像素一致。
+   * 引擎只读 `.current`，由调用方在切步时改写并 requestDraw()。
+   */
+  enabledRef?: React.RefObject<LightingEnabled>,
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<LightingStatus>({ kind: "ok" });
 
@@ -254,6 +273,12 @@ export function useLightingProgram(paramsRef: React.RefObject<LightingParams>) {
     gl.uniform1f(objectU.uSpecularStrength, params.specularStrength);
     gl.uniform1f(objectU.uShininess, Math.max(1, params.shininess));
 
+    // 分步 gating：不传 enabledRef → 三项全开（默认，等同未分步）
+    const enabled = enabledRef?.current ?? DEFAULT_LIGHTING_ENABLED;
+    gl.uniform1f(objectU.uAmbientOn, enabled.ambient ? 1 : 0);
+    gl.uniform1f(objectU.uDiffuseOn, enabled.diffuse ? 1 : 0);
+    gl.uniform1f(objectU.uSpecularOn, enabled.specular ? 1 : 0);
+
     gl.bindVertexArray(vao);
     gl.drawArrays(gl.TRIANGLES, 0, 36);
 
@@ -291,7 +316,7 @@ export function useLightingProgram(paramsRef: React.RefObject<LightingParams>) {
     gl.drawArrays(gl.TRIANGLES, 0, 36);
 
     gl.bindVertexArray(null);
-  }, [paramsRef]);
+  }, [paramsRef, enabledRef]);
 
   const requestDraw = useCallback(() => {
     if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
@@ -374,6 +399,9 @@ export function useLightingProgram(paramsRef: React.RefObject<LightingParams>) {
       uAmbientStrength: gl.getUniformLocation(objectProg, "uAmbientStrength"),
       uSpecularStrength: gl.getUniformLocation(objectProg, "uSpecularStrength"),
       uShininess: gl.getUniformLocation(objectProg, "uShininess"),
+      uAmbientOn: gl.getUniformLocation(objectProg, "uAmbientOn"),
+      uDiffuseOn: gl.getUniformLocation(objectProg, "uDiffuseOn"),
+      uSpecularOn: gl.getUniformLocation(objectProg, "uSpecularOn"),
     };
     lampUniformsRef.current = {
       uMvp: gl.getUniformLocation(lampProg, "uMvp"),
