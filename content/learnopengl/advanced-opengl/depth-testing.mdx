@@ -170,7 +170,7 @@ $$
 
 > 猜一猜：下面这块画布把三个前后交叠的圆，按各自的「深度」涂成灰度——越近越黑、越远越白。把「线性化」开关从关到开，靠近你的那个圆的灰度会变深还是变浅？非线性那档下，三个圆的灰度差为什么那么不明显？先拖一下再看。
 
-这块画布**没有真正的 3D 深度缓冲**（ShaderDemo 只是跑一个全屏片段着色器）。我们在着色器里手动摆了三个交叠的圆，各给它一个 0~1 的「伪深度」，再用深度测试的逻辑挑出每个像素最近的那个圆，把它的深度按你选的方式涂成灰度——这正是「深度可视化」做的事。`uLinearize` 关时直接显示**非线性**的深度值，开时跑一遍 §4 的线性化公式再显示：
+这块画布**没有真正的 3D 深度缓冲**（ShaderDemo 只是跑一个全屏片段着色器）。我们在着色器里手动摆了三个交叠的圆，各给它一个 0~1 的「伪深度」，再用深度测试的逻辑挑出每个像素最近的那个圆，把它的深度按你选的方式涂成灰度——这正是「深度可视化」做的事。`uLinearize` 关时显示这些圆在透视投影下的**非线性**深度（远处几个被挤到一起、偏白难分），开时按真实距离**线性**显示（即 §4 线性化想还原的那种在 near~far 间均匀拉开的灰阶）：
 
 <ShaderDemo
   caption="三个前后交叠的圆，各有一个伪深度。每个像素取覆盖它的最近的圆，把该深度涂成灰度（近=黑、远=白）。拖『线性化』开关切换『直接显示非线性深度』和『线性化还原成真实距离』：非线性档下三圆灰度都偏白、彼此难分（精度堆在更近处）；线性化档下灰阶才在 near~far 间均匀拉开。拖 near / far 改变可视范围，移动鼠标平移视野。点重置回到初始。"
@@ -202,47 +202,36 @@ $$
     },
   ]}
   frag={`#version 300 es
-// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号
 precision highp float;
-uniform vec2 uResolution; // 画布像素尺寸（标准 uniform，自动注入）
-uniform vec2 uMouse; // 鼠标在画布内的归一化位置 0..1（自动注入）
-uniform float uLinearize; // 控件：开关（>0.5 = 线性化），bool 以 0.0/1.0 传入
-uniform float uNear; // 控件：近平面 near
-uniform float uFar; // 控件：远平面 far
+// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号(*)
+uniform vec2 uResolution;   // 画布像素尺寸（标准 uniform，自动注入）
+uniform vec2 uMouse;        // 鼠标在画布内的归一化位置 0..1（自动注入）
+uniform float uLinearize;   // 控件：开关（>0.5 = 线性化），bool 以 0.0/1.0 传入
+uniform float uNear;        // 控件：近平面 near
+uniform float uFar;         // 控件：远平面 far
 out vec4 FragColor;
-// 把 0..1 的非线性深度 d 线性化回真实距离，再归一到 0..1（§4 两步公式）
-float linearize(float d) {
-float ndc = d * 2.0 - 1.0; // 0..1 → NDC -1..1
-float z = (2.0 * uNear * uFar)
-/ (uFar + uNear - ndc * (uFar - uNear)); // NDC → 视图空间真实距离
-return clamp(z / uFar, 0.0, 1.0); // 真实距离归一到 0..1
+// 给一个「线性深度分数」t（0=近平面、1=远平面，正比于真实距离），算它在透视投影下被压成的
+// 非线性深度值（即 gl_FragCoord.z 的分布）：先把 t 还原成真实距离 z，再按 1/z 映射回 0..1。
+float toNonLinear(float t) {
+  float z = uNear + t * (uFar - uNear);
+  return clamp((1.0 / z - 1.0 / uNear) / (1.0 / uFar - 1.0 / uNear), 0.0, 1.0);
 }
-// 把一个圆心 c、半径 r、伪深度 depth 的圆，画到当前像素 p 上。
-// 命中圆内返回其深度，否则返回一个很大的值（视为「没挡住，最远」）。
-float circleDepth(vec2 p, vec2 c, float r, float depth) {
-return distance(p, c) < r ? depth : 2.0;
+// 命中圆内返回它的线性深度分数 t，否则返回一个很大的值（视为最远、没挡住）。
+float circleT(vec2 p, vec2 c, float r, float t) {
+  return distance(p, c) < r ? t : 2.0;
 }
 void main() {
-// 把像素坐标归一化到 0..1，按宽高比校正（避免圆被拉成椭圆）
-vec2 uv = gl_FragCoord.xy / uResolution;
-uv.x *= uResolution.x / uResolution.y;
-float aspect = uResolution.x / uResolution.y;
-// 鼠标平移视野（轻微），让读者能挪动观察
-vec2 shift = (uMouse - 0.5) * 0.2;
-// 三个交叠的圆，各有一个伪深度（near 附近 vs far 附近，跨度大才看得出非线性差异）
-float dA = circleDepth(uv, vec2(0.40 * aspect, 0.42) + shift, 0.22, 0.20); // 最近
-float dB = circleDepth(uv, vec2(0.58 * aspect, 0.52) + shift, 0.22, 0.55); // 中
-float dC = circleDepth(uv, vec2(0.50 * aspect, 0.66) + shift, 0.22, 0.92); // 最远
-// 深度测试逻辑：取覆盖本像素的「最近」（深度最小）的圆
-float depth = min(dA, min(dB, dC));
-// 没有任何圆覆盖：留白底（最远）
-if (depth > 1.5) {
-FragColor = vec4(0.07, 0.07, 0.09, 1.0); // 接近 --bg 的底色
-return;
-}
-// 按所选方式把深度涂成灰度：近=黑、远=白
-float g = uLinearize > 0.5 ? linearize(depth) : depth;
-FragColor = vec4(vec3(g), 1.0);
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  uv.x *= uResolution.x / uResolution.y;
+  float aspect = uResolution.x / uResolution.y;
+  vec2 shift = (uMouse - 0.5) * 0.2;
+  float tA = circleT(uv, vec2(0.40 * aspect, 0.42) + shift, 0.22, 0.10);
+  float tB = circleT(uv, vec2(0.58 * aspect, 0.52) + shift, 0.22, 0.50);
+  float tC = circleT(uv, vec2(0.50 * aspect, 0.66) + shift, 0.22, 0.92);
+  float t = min(tA, min(tB, tC));
+  if (t > 1.5) { FragColor = vec4(0.07, 0.07, 0.09, 1.0); return; }
+  float g = uLinearize > 0.5 ? t : toNonLinear(t);
+  FragColor = vec4(vec3(g), 1.0);
 }`}
 />
 
