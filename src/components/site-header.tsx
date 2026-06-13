@@ -1,12 +1,21 @@
 import Link from "next/link";
 
+import { SearchOverlay } from "@/components/search/search-overlay";
+
 /**
  * 全站顶部导航（Server Component）
  * 吸顶 + 底部 1px border 分隔；ghost 风格：默认安静，hover 120ms 档亮起
+ *
+ * 搜索入口（SearchOverlay，client）以孤岛形式嵌入：按钮 + ⌘K 快捷键，
+ * pagefind 运行时按需懒加载，不进首屏（HEL-42）。
  */
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-bg">
+    <header
+      // data-pagefind-ignore：顶部导航是全站重复 chrome，排除出搜索索引（HEL-42）
+      data-pagefind-ignore
+      className="sticky top-0 z-10 border-b border-border bg-bg"
+    >
       <nav
         aria-label="全站导航"
         className="flex h-12 items-center justify-between px-6"
@@ -24,6 +33,7 @@ export function SiteHeader() {
           >
             教程
           </Link>
+          <SearchOverlay />
           <a
             href="https://github.com/Knightluozichu/resume"
             target="_blank"

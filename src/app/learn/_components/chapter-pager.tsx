@@ -14,6 +14,8 @@ export function ChapterPager({ prev, next }: AdjacentChapters) {
 
   return (
     <nav
+      // data-pagefind-ignore：章末翻页是导航 chrome（含相邻章标题），排除出搜索索引（HEL-42）
+      data-pagefind-ignore
       aria-label="章节翻页"
       className="mt-12 flex items-stretch justify-between gap-4 border-t border-border pt-8"
     >

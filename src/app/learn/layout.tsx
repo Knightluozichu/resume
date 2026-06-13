@@ -28,8 +28,12 @@ export default function LearnLayout({
 
   return (
     <div className="flex flex-1 flex-col lg:flex-row">
-      {/* lg+：静态左栏（w-60 = 240px） */}
-      <aside className="hidden w-60 shrink-0 border-r border-border bg-elevated lg:block">
+      {/* lg+：静态左栏（w-60 = 240px）。data-pagefind-ignore：章节树为重复导航 chrome，
+          排除出搜索索引，避免每页都把整棵目录当正文（HEL-42）。 */}
+      <aside
+        data-pagefind-ignore
+        className="hidden w-60 shrink-0 border-r border-border bg-elevated lg:block"
+      >
         {/* top-12 与顶部导航高度 h-12 对齐 */}
         <div className="sticky top-12 px-4 py-8">
           <ChapterNav sections={sections} />

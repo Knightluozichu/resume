@@ -18,23 +18,30 @@ SSH_HOST="${SERVER_SSH_USERNAME:-root}@${SERVER_PUBLIC_IP:?local.env 缺少 SERV
 SSH_OPTS=(-i "$SSH_KEY" -p "$SSH_PORT" -o BatchMode=yes)
 APP_DIR="/var/www/remuse"
 
-echo "==> [1/5] 本地构建 (next build, standalone)"
+echo "==> [1/6] 本地构建 (next build, standalone)"
 pnpm build
 
-echo "==> [2/5] 组装 standalone 产物（并入 static 与 public）"
-# next build 每次重建 .next，standalone 为全新目录；静态资源与 public 需手动并入
+echo "==> [2/6] 构建期生成 pagefind 站内搜索索引 → public/pagefind"
+# 必须在 build 之后（要吃 .next/server/app 的 SSG HTML）、组装 standalone 之前
+# （索引落在 public/pagefind，由下一步的 `cp -r public` 一并带入 standalone）。
+# 脚本：扁平 SSG HTML → URL 树 staging → pagefind 索引（见 scripts/build-search-index.mjs）。
+node scripts/build-search-index.mjs
+
+echo "==> [3/6] 组装 standalone 产物（并入 static 与 public，含 pagefind 索引）"
+# next build 每次重建 .next，standalone 为全新目录；静态资源与 public 需手动并入。
+# public/pagefind 即上一步生成的搜索索引，随 public 一起进 standalone → 上线后静态服务 /pagefind/*。
 cp -r .next/static .next/standalone/.next/
 if [[ -d public ]]; then
   cp -r public .next/standalone/
 fi
 
-echo "==> [3/5] 同步 pm2 配置"
+echo "==> [4/6] 同步 pm2 配置"
 rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "${SSH_HOST}:${APP_DIR}/"
 
-echo "==> [4/5] 同步应用产物到 ${APP_DIR}/current/"
+echo "==> [5/6] 同步应用产物到 ${APP_DIR}/current/"
 rsync -az --delete -e "ssh ${SSH_OPTS[*]}" .next/standalone/ "${SSH_HOST}:${APP_DIR}/current/"
 
-echo "==> [5/5] pm2 startOrReload（幂等：无则启，有则热重载）"
+echo "==> [6/6] pm2 startOrReload（幂等：无则启，有则热重载）"
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env && pm2 save --force >/dev/null"
 

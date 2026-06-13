@@ -34,6 +34,8 @@ const eslintConfig = defineConfig([
     ".venv/**",
     // 第三方 Draco WASM decoder（three.js 自带产物，原样部署，不参与 lint）
     "public/draco/**",
+    // pagefind 站内搜索索引/运行时（CLI 构建产物，原样部署，不参与 lint，HEL-42）
+    "public/pagefind/**",
   ]),
 ]);
 

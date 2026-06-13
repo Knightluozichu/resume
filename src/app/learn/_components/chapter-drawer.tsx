@@ -22,8 +22,12 @@ export function ChapterDrawer({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      {/* lg 以下：汉堡按钮工具条 */}
-      <div className="flex items-center border-b border-border px-4 py-2 lg:hidden">
+      {/* lg 以下：汉堡按钮工具条 + 抽屉本体均为重复导航 chrome，data-pagefind-ignore
+          排除出搜索索引（HEL-42） */}
+      <div
+        data-pagefind-ignore
+        className="flex items-center border-b border-border px-4 py-2 lg:hidden"
+      >
         <button
           type="button"
           aria-label={open ? "关闭章节目录" : "打开章节目录"}
@@ -58,6 +62,7 @@ export function ChapterDrawer({ children }: { children: React.ReactNode }) {
 
       {/* 抽屉本体：从左滑入，只动 transform */}
       <aside
+        data-pagefind-ignore
         id="learn-chapter-drawer"
         onClick={(e) => {
           // 点中章节链接后自动收起

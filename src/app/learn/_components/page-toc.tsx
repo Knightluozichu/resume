@@ -48,7 +48,8 @@ export function PageToc({ headings }: { headings: TocHeading[] }) {
   if (headings.length === 0) return null;
 
   return (
-    <nav aria-label="本页目录">
+    // data-pagefind-ignore：右栏本页目录是导航 chrome（重复正文标题），排除出索引（HEL-42）
+    <nav aria-label="本页目录" data-pagefind-ignore>
       <h2 className="px-2 text-xs font-medium text-secondary">本页目录</h2>
       <ul className="mt-2 flex flex-col gap-1 text-xs">
         {headings.map((h) => {

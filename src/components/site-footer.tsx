@@ -6,7 +6,8 @@ const footerLinkClass =
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-border px-6 py-8">
+    // data-pagefind-ignore：页脚是全站重复 chrome（出处声明），排除出搜索索引（HEL-42）
+    <footer data-pagefind-ignore className="border-t border-border px-6 py-8">
       <div className="flex flex-col gap-2 text-xs text-secondary sm:flex-row sm:items-center sm:justify-between">
         <p>
           教程内容改编自{" "}
