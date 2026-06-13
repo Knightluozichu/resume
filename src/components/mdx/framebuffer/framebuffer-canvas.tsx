@@ -240,14 +240,19 @@ export default function FramebufferCanvas({
     uTexel: WebGLUniformLocation | null;
   } | null>(null);
 
-  // 自转状态
+  // 自转状态（连续循环范式：running 标志 + rAF id，参照 use-shader-program）
   const visibleRef = useRef(true);
   const reducedRef = useRef(false);
-  const rafRef = useRef<number | null>(null);
+  // 连续自转 loop 是否在跑（start/stop 切换）；loop 内每帧据此决定是否续帧
+  const runningRef = useRef(false);
+  // 连续 loop 的 rAF id（stop 时取消）
+  const rafIdRef = useRef(0);
+  // 一次性重绘（切核 / resize / 静态态）的 rAF id，与连续 loop 的 id 分开，互不打架
+  const onceRafRef = useRef(0);
   const angleRef = useRef(0);
   const lastTsRef = useRef<number | null>(null);
-  // 持有最新的 loop，供 rAF 自循环引用（避免 useCallback 自引用 / 闭包过期）
-  const loopRef = useRef<(ts: number) => void>(() => {});
+  // 持有最新的 tick，供 rAF 自循环引用（避免 useCallback 自引用 / 闭包过期）
+  const tickRef = useRef<(ts: number) => void>(() => {});
 
   // 复用矩阵
   const projRef = useRef(mat4Create());
@@ -425,39 +430,51 @@ export default function FramebufferCanvas({
     gl.bindVertexArray(null);
   }, [ensureFramebuffer]);
 
-  // 自转循环：仅在可见且未 reduced-motion 时常驻 rAF；否则只按需画一帧。
-  // 自循环经 loopRef 再次排程（不直接引用自身，避免 react-hooks/immutability 自引用报错）。
-  const loop = useCallback(
+  // 连续自转循环（参照 use-shader-program 的 running 标志范式）：
+  //  - tick：runningRef 为真才续帧；推进 angle（reduced-motion 下冻结角度但仍每帧重画以保持可交互）→ draw → 续帧。
+  //  - 自循环经 tickRef 再次排程（不直接引用自身，避免 react-hooks/immutability 自引用报错）。
+  const tick = useCallback(
     (ts: number) => {
+      if (!runningRef.current) return;
       if (lastTsRef.current === null) lastTsRef.current = ts;
       const dt = (ts - lastTsRef.current) / 1000;
       lastTsRef.current = ts;
-      angleRef.current = (angleRef.current + dt * 0.6) % (Math.PI * 2);
-      draw();
-      if (visibleRef.current && !reducedRef.current) {
-        rafRef.current = requestAnimationFrame((t) => loopRef.current(t));
-      } else {
-        rafRef.current = null;
+      // reduced-motion：冻结角度，仍每帧重画（保持画面可交互/可响应）
+      if (!reducedRef.current) {
+        angleRef.current = (angleRef.current + dt * 0.6) % (Math.PI * 2);
       }
+      draw();
+      rafIdRef.current = requestAnimationFrame((t) => tickRef.current(t));
     },
     [draw],
   );
-  // 同步最新 loop 到 ref（在 effect 内更新，不在 render 期写 ref）
+  // 同步最新 tick 到 ref（在 effect 内更新，不在 render 期写 ref）
   useEffect(() => {
-    loopRef.current = loop;
-  }, [loop]);
+    tickRef.current = tick;
+  }, [tick]);
 
-  const startLoop = useCallback(() => {
-    if (rafRef.current !== null) return;
+  // 开始连续循环：已在跑则忽略；重置时间基准后排第一帧（第一 tick 会画一帧）。
+  const start = useCallback(() => {
+    if (runningRef.current) return;
+    runningRef.current = true;
     lastTsRef.current = null;
-    rafRef.current = requestAnimationFrame((t) => loopRef.current(t));
+    rafIdRef.current = requestAnimationFrame((t) => tickRef.current(t));
   }, []);
 
+  // 停连续循环：清 running 标志并取消已排的帧。
+  const stop = useCallback(() => {
+    runningRef.current = false;
+    if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    rafIdRef.current = 0;
+  }, []);
+
+  // 一次性重绘（切核 / resize / 静态态下）：连续 loop 在跑时下一 tick 会自然重画（读 kernelRef），
+  // 无需额外调度；未在跑时取消任何 pending 的一次性帧再重排一次 draw（必出一帧）。
   const requestDraw = useCallback(() => {
-    // 静态态（暂停/reduced-motion/离屏）下的一次性重绘
-    if (rafRef.current !== null) return;
-    rafRef.current = requestAnimationFrame(() => {
-      rafRef.current = null;
+    if (runningRef.current) return;
+    if (onceRafRef.current) cancelAnimationFrame(onceRafRef.current);
+    onceRafRef.current = requestAnimationFrame(() => {
+      onceRafRef.current = 0;
       draw();
     });
   }, [draw]);
@@ -544,37 +561,33 @@ export default function FramebufferCanvas({
 
     setStatus({ kind: "ok" });
 
-    // reduced-motion 检测
+    // reduced-motion 检测：reduce → 停转 + 画一帧静态；非 reduce 且可见 → 起连续循环。
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     reducedRef.current = mq.matches;
     const onMq = () => {
       reducedRef.current = mq.matches;
       if (reducedRef.current) {
-        if (rafRef.current !== null) {
-          cancelAnimationFrame(rafRef.current);
-          rafRef.current = null;
-        }
+        stop();
         requestDraw();
       } else if (visibleRef.current) {
-        startLoop();
+        start();
       }
     };
     mq.addEventListener("change", onMq);
 
+    // 尺寸变化重绘（连续循环在跑时下一 tick 会自然重画，requestDraw 内部会忽略）
     const ro = new ResizeObserver(() => requestDraw());
     ro.observe(canvas);
 
+    // 离屏暂停：可见且非 reduced-motion → 连续自转；否则停转，可见时补画一帧静态。
     const io = new IntersectionObserver(
       (entries) => {
         const vis = entries[0]?.isIntersecting ?? true;
         visibleRef.current = vis;
         if (vis && !reducedRef.current) {
-          startLoop();
+          start();
         } else {
-          if (rafRef.current !== null) {
-            cancelAnimationFrame(rafRef.current);
-            rafRef.current = null;
-          }
+          stop();
           if (vis) requestDraw();
         }
       },
@@ -582,16 +595,18 @@ export default function FramebufferCanvas({
     );
     io.observe(canvas);
 
-    // 首帧
-    if (reducedRef.current) requestDraw();
-    else startLoop();
+    // 无条件画首帧（不依赖 IO/rAF 时序）：挂载即出画面，draw 内部已含 resize。
+    draw();
+    // 非 reduced-motion 且初始可见 → 起连续循环（start 的第一 tick 也会画一帧）。
+    if (!reducedRef.current && visibleRef.current) start();
 
     return () => {
       mq.removeEventListener("change", onMq);
       ro.disconnect();
       io.disconnect();
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+      stop();
+      if (onceRafRef.current) cancelAnimationFrame(onceRafRef.current);
+      onceRafRef.current = 0;
       if (cubeVao) gl.deleteVertexArray(cubeVao);
       if (cubeBuf) gl.deleteBuffer(cubeBuf);
       if (quadVao) gl.deleteVertexArray(quadVao);
@@ -611,7 +626,7 @@ export default function FramebufferCanvas({
       depthRboRef.current = null;
       fboSizeRef.current = { w: 0, h: 0 };
     };
-  }, [requestDraw, startLoop]);
+  }, [draw, requestDraw, start, stop]);
 
   const selectKernel = useCallback(
     (id: KernelId) => {
