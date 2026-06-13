@@ -96,9 +96,8 @@ export default async function ChapterPage({
     source: chapter.source,
     // HEL-20：注入结构教学组件（Objectives/CodeTabs/Tab/Exercises/Answer/
     // Callout/ShaderDemo）。HEL-21：Attribution 改为「按章绑定」——把本章 frontmatter
-    // 的 sourceUrl 闭包进组件，.mdx 内写 <Attribution />（无表达式）即可。
-    // 这样不再需要把 frontmatter 作为 scope 暴露给 MDX 表达式，遂恢复
-    // next-mdx-remote 默认的 blockJS（更安全），并移除 scope。
+    // 的 sourceUrl 闭包进组件，.mdx 内写 <Attribution />（无表达式）即可，
+    // 不再需要把 frontmatter 作为 scope 暴露给 MDX 表达式（scope 已移除）。
     components: {
       ...mdxComponents,
       Attribution: (props) => (
@@ -107,6 +106,15 @@ export default async function ChapterPage({
     },
     options: {
       parseFrontmatter: false,
+      // HEL-25：重启用 blockJS:false。着色器/示例代码是「作者手写、必须用 MDX
+      // 表达式（{...}）传给组件 prop」的内容——典型如 <ShaderDemo frag={`#version
+      // 300 es ...`} />，没有干净的替代写法（不同于 Attribution 那种单一 frontmatter
+      // 字段，可被组件闭包绑定）。HEL-21 收紧时一并默认了 blockJS:true，会把这些
+      // {表达式} 整段拦掉 → frag 实际为 undefined → ShaderDemo 编译报错。
+      // 安全性兜底：内容均为仓库内可信 .mdx（draft:false 须经总监 review 才发布），
+      // 且 next-mdx-remote 默认 blockDangerousJS:true 仍会拦截 eval/Function/process
+      // 等危险用法，blockJS:false 仅放行普通表达式求值。
+      blockJS: false,
       mdxOptions: {
         // $..$ / $$..$$ → math 节点（remark）→ KaTeX HTML（rehype）
         remarkPlugins: [remarkMath],
