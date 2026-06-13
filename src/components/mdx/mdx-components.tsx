@@ -41,6 +41,10 @@ import { ZFightingDiagram } from "./diagrams/z-fighting-diagram";
 import { StencilBufferDiagram } from "./diagrams/stencil-buffer-diagram";
 import { StencilTestFlowDiagram } from "./diagrams/stencil-test-flow-diagram";
 import { StencilOutlineStepDiagram } from "./diagrams/stencil-outline-step-diagram";
+import { BlendEquationDiagram } from "./diagrams/blend-equation-diagram";
+import { DiscardVsBlendDiagram } from "./diagrams/discard-vs-blend-diagram";
+import { AlphaSortDiagram } from "./diagrams/alpha-sort-diagram";
+import { BlendSortStepDiagram } from "./diagrams/blend-sort-step-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -135,6 +139,12 @@ import { ModelDemo } from "./model-demo";
  *    写颜色，标 glStencilOp 的 sfail/dpfail/dppass 三情形；模板测试在深度测试之前）、
  *    StencilOutlineStepDiagram（§5 Stepper 物体描边两遍法每步图示：①画物体 + 模板写 1→
  *    ②画放大物体 + GL_NOTEQUAL 只取外环上描边色→③留下一圈描边）。同款 Server SVG。
+ *  - 高级OpenGL篇·混合（HEL-69）：BlendEquationDiagram（混合方程 C=Csrc·Fsrc+Cdst·Fdst
+ *    图解：源色×源因子 + 目标色×目标因子 = 混出色，over 取 Fsrc=αsrc / Fdst=1−αsrc）、
+ *    DiscardVsBlendDiagram（discard 硬边镂空·草/铁丝网 vs blend 半透明渐变·玻璃，何时用哪个）、
+ *    AlphaSortDiagram（半透明排序：乱序穿帮 vs 从远到近 + 关深度写入 正确透叠）、
+ *    BlendSortStepDiagram（§5 Stepper 半透明排序每步图示：①乱序穿帮→②先画不透明物→
+ *    ③半透明从远到近 + 关深度写入 透叠正确）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -228,6 +238,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   StencilBufferDiagram,
   StencilTestFlowDiagram,
   StencilOutlineStepDiagram,
+  BlendEquationDiagram,
+  DiscardVsBlendDiagram,
+  AlphaSortDiagram,
+  BlendSortStepDiagram,
   Stepper,
   Step,
   Slider,

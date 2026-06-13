@@ -1,0 +1,513 @@
+---
+title: 混合
+type: C
+section: 高级OpenGL
+order: 3
+description: 学会把半透明前景按透明度叠到背景上——混合方程、glBlendFunc 的 over 混合、用 discard 做草这类镂空贴图，以及半透明物体为什么必须从远到近画并关掉深度写入。
+demo: true
+math: true
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/03%20Blending/
+draft: true
+---
+
+{/* C 实战型章（HEL-69，高级OpenGL 篇第 3 篇）：原书「混合 Blending」。重心是代码对照(§6 覆盖≥80% 关键代码)：glEnable(GL_BLEND)+glBlendFunc / 片段着色器 discard 镂空 / 半透明排序 + glDepthMask(false) 关深度写入。math:true 选讲(§4)：混合方程 C=Csrc·Fsrc+Cdst·Fdst + over 展开 Fsrc=αsrc/Fdst=1−αsrc。承接深度/模板章（同 section 工厂流水线管线测试阶段：混合发生在测试之后、写颜色那一刻）。沿用「光与材质 / 颜料」类比：混合像往画布叠一层半透明颜料。主 viz 两个：ShaderDemo over 混合可玩（程序化 src/dst 色块 + uSrcAlpha/uSrcColor 控件）+ Stepper 半透明排序（每步带 BlendSortStepDiagram）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 混合 blending（把源色按透明度叠到目标色上）= 直觉引入 + 概念 + 主 ShaderDemo；2) alpha 通道（颜色第 4 个分量，0 全透 1 不透）= 概念随文带出 + ShaderDemo；3) glEnable(GL_BLEND)（开混合开关）= 概念 + §6 代码对照①；4) 混合方程 C=Csrc·Fsrc+Cdst·Fdst（源因子·源色 + 目标因子·目标色）= 概念 + §4 公式 + <BlendEquationDiagram>；5) 源色/目标色 Csrc/Cdst（前景/画布已有）= 概念 + BlendEquationDiagram；6) 源因子/目标因子 Fsrc/Fdst = §4 + BlendEquationDiagram；7) glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)（最常用 over 混合）= 概念 + §4 over 展开 + 主 ShaderDemo + §6 代码对照①；8) glBlendEquation（加/减等运算符）= 概念随文 + §6 代码对照① Callout；9) discard（片段着色器丢弃全透明片段做镂空，如草/铁丝网）= 概念 + <DiscardVsBlendDiagram> + §6 代码对照②；10) 半透明排序问题（深度测试丢被挡片段 → 半透明物必须从远到近画）= 概念 + <AlphaSortDiagram> + <Stepper>+<BlendSortStepDiagram>（主 viz 2）+ §6 代码对照③ + 误区；11) glDepthMask(GL_FALSE)（关深度写入）= 概念 + §6 代码对照③ + 误区；12) discard vs blend 何时用哪个 = DiscardVsBlendDiagram + 误区。Term 共 9 个（混合 / alpha 通道 / 混合方程 / 源色 / 目标色 / over 混合 / discard / 半透明排序 / 深度写入）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能看懂并改出 over 混合效果：用 `glEnable(GL_BLEND)` + `glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`，把半透明前景按透明度叠到背景上，并说清混合方程 `C = Csrc·Fsrc + Cdst·Fdst` 里每个量是谁
+- 能说出 `discard`（镂空）和 `blend`（半透明叠加）各适合什么，并写出片段着色器里丢弃全透明片段的那一行
+- 能回答：场景里摆了几块半透明玻璃，画出来却互相穿帮、后面的透不出来，是什么原因？该怎么画才对？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质 / 颜料」库（承接高级OpenGL 篇管线测试阶段：混合在测试之后、写颜色那一刻）。 */}
+
+## 往画布上叠一层半透明颜料
+
+想象你在一张已经画好的画上，再盖一层**半透明的颜料**：颜料越浓，越能盖住底下的画；颜料越稀，底下的画就越透出来。一块磨砂玻璃、一片飘动的薄纱、水面下隐约的石头——它们都不是「完全挡住」或「完全没有」，而是让背后的东西**按一定比例透出来**。
+
+可前面几章那套画法做不到这件事：每个色块要么把那个位置整个盖掉、要么因为更远被深度测试丢掉，没有「半盖半透」这个中间档。结果就是你画不出玻璃、画不出薄纱，所有东西都硬邦邦地互相遮挡，假得很。
+
+这一章要解决的就是：**怎么让一块新画上去的颜色，按它自己的「浓度」，和画布上已有的颜色混在一起**。这件事发生在管线很靠后的位置——前几章那些前后遮挡的「质检工序」都过完了，正要把颜色写进画布的那一刻，混合才登场。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念克制。 */}
+
+## 混合：新颜色和旧颜色按比例相加
+
+那「浓度」从哪来？从颜色的第四个分量——<Term def="一个颜色除了红绿蓝（RGB）三个分量，还可以带第四个分量 alpha，记作 a，范围 0~1，表示这个颜色的不透明度：1 = 完全不透明（完全盖住背后），0 = 完全透明（背后完全透出），0.6 = 盖六成、透四成。">alpha 通道</Term>。一个颜色写成 `(r, g, b, a)`，前三个是颜色本身，`a` 就是「这块颜色有多不透明」：`a = 1` 完全盖住背后、`a = 0` 完全透明、`a = 0.6` 盖六成、透四成。
+
+把「按 alpha 把新颜色叠到旧颜色上」这件事，图形学里叫 <Term def="把正在画的「新颜色」（源色）按它的不透明度 alpha，和画布上「已有的颜色」（目标色）按比例相加，得到一个介于两者之间的颜色，写回画布。这就是半透明物体能透出背景的原理。默认是关闭的，要用 glEnable(GL_BLEND) 打开。">混合</Term>（blending）。默认它是**关着**的——关着时新颜色直接覆盖旧颜色，没有「透」这回事；要用 `glEnable(GL_BLEND)` 把开关打开，才进入「按比例相加」的世界。
+
+它在管线里的位置在最末端：一个片段先过深度测试、模板测试（前两章），通过了、轮到把它的颜色写进 <Term def="正在画的这个片段算出来的颜色（前景），在混合方程里记作 Csrc。它带着自己的 alpha，决定要盖住背景多少。">源色</Term>（source，记 `Csrc`）写进画布时——若开了混合，就不直接覆盖，而是把它和画布上那个位置**已有的颜色**，也就是 <Term def="画布（颜色缓冲）上该像素当前已经存着的颜色（背景），在混合方程里记作 Cdst。混合时它会按目标因子被保留一部分，从源色背后透出来。">目标色</Term>（destination，记 `Cdst`），按比例相加。具体怎么个加法，就是下一节的混合方程。
+
+## 混合方程：源色配源因子、目标色配目标因子
+
+混合不是简单地「新的盖旧的」，而是给源色和目标色各配一个**权重因子**，相乘后相加。这条规则叫 <Term def="混合时算最终颜色的规则：C = Csrc·Fsrc + Cdst·Fdst，即源色乘源因子 + 目标色乘目标因子。因子是 0~1 的权重，由 glBlendFunc 指定，挑不同因子得到不同混合效果。">混合方程</Term>（blend equation）：
+
+$$
+C = C_\text{src} \cdot F_\text{src} + C_\text{dst} \cdot F_\text{dst}
+$$
+
+它说：最终颜色 = 源色乘源因子 + 目标色乘目标因子。`Fsrc`（源因子）控制「新颜色占多少」，`Fdst`（目标因子）控制「旧颜色透出多少」。这两个因子由你用 `glBlendFunc` 指定，可以是常数 0、1，也可以是源色的 alpha 等。下面这张图把「两块色块各乘一个权重再相加」画得很直白：
+
+<BlendEquationDiagram />
+
+最常用的一种配法，是把源因子设成**源色的 alpha**、目标因子设成 **1 减源色 alpha**——这正好对应「颜料按浓度盖、背景按剩下的比例透出」，业界叫 <Term def="最常用的一种混合配法：源因子取源色的 alpha、目标因子取 1 减源色 alpha，于是结果 = αsrc·源色 + (1−αsrc)·目标色。前景占 αsrc、背景占剩下的，就像把半透明颜料盖到画上。用 glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA) 设定。">over 混合</Term>（«source over»）。它的展开式 §4 会细推，直觉就一句：**前景占 αsrc，背景占剩下的 1−αsrc**。这也是本章主 Demo 让你亲手调的那条公式。
+
+## discard：全透明的片段，干脆别画
+
+混合擅长「半透明渐变」，但有一类东西不需要渐变——比如一片草、一张铁丝网贴图。它们的纹理里要么是**完全不透明**的草叶/铁丝、要么是**完全透明**的空隙，没有中间档。这种「非 0 即 1」的透明，与其走混合，不如直接把透明的部分**扔掉**。
+
+办法是片段着色器里的 <Term def="片段着色器里的一条命令：一旦执行，当前片段就被立即丢弃，不再往后走、不会进入颜色缓冲。常用来做镂空——纹理里 alpha 很小（接近全透明）的片段直接 discard，于是草叶、铁丝网的空隙就被「抠掉」，露出背后，得到清晰的硬边镂空。">discard</Term>：采样纹理拿到 alpha，若 alpha 小于一个阈值（接近全透明）就 `discard`，这个片段直接被丢掉、连颜色缓冲都不进，于是空隙处「抠空」露出背后。它和混合的区别很值得对照看——一个是硬边镂空、一个是柔和半透明：
+
+<DiscardVsBlendDiagram />
+
+什么时候用哪个？记住一句：**二元透明（草、铁丝网这类非透即不透）用 discard，连续半透明（玻璃、水）用 blend**。用错了会出毛病（§7 会讲），现在先记住这个分界。
+
+## 半透明排序：为什么玻璃会互相穿帮
+
+混合还藏着一个最容易翻车的坑，和上一章的深度测试有关。<Term def="画多个半透明物体时必须注意的绘制顺序问题。因为深度缓冲不区分透明：一个半透明物写颜色时也会写下它的深度，挡在它后面、之后才画的半透明物会被深度测试当成「更远」整片丢弃，于是透不出来、穿帮。解决办法是先画所有不透明物，再把半透明物从远到近排序后逐块画。">半透明排序</Term>问题是这样来的：深度缓冲只记「多远」、**不管透不透明**。你画一块半透明玻璃时，它一边把颜色混进画布，一边也把自己的**深度**写了进去。
+
+于是麻烦来了：如果你先画了一块**近**玻璃，它的深度被记下；之后再画一块**远**玻璃，远玻璃落在近玻璃后面，深度测试一看「更远」，把它整片丢弃——可它是半透明的，本该透过近玻璃看到它才对！结果就是后面的玻璃透不出来，画面穿帮。下面这张图把「乱序穿帮 vs 正确透叠」并排画清楚：
+
+<AlphaSortDiagram />
+
+正确的画法分两招：①先把所有**不透明物体**正常画完（深度测试照旧）；②再把**半透明物体从远到近排序**，并在画它们时**关掉深度写入**（让它们参与深度比较，但不要把自己的深度写回去挡住后面的半透明物），逐块叠画。这里说的<Term def="片段通过深度测试后，把自己的深度值写回深度缓冲的动作。默认开启。画半透明物时要用 glDepthMask(GL_FALSE) 把它关掉：让半透明物仍参与深度比较（被不透明物正确遮挡），但不把自己的深度写回去，免得互相挡掉。画完记得恢复。">深度写入</Term>，正是用 `glDepthMask(GL_FALSE)` 关掉的——这两招的代码 §6 给齐，下面 Demo 先把这个穿帮过程单步走一遍。
+
+{/* 4. 数学推导（spec §四，math:true 选讲）：节首符号表；display 公式后紧跟人话翻译；不跳步；公式 ≤8。讲混合方程 + over 展开。无矩阵。 */}
+
+## 公式：从混合方程到 over
+
+本节就一件事：把混合方程，和它最常用的 over 配法，一步步推清楚。先约定符号：
+
+- $C$：混合后写进画布的**最终颜色**
+- $C_\text{src}$：**源色**，正在画的这个片段的颜色（前景）
+- $C_\text{dst}$：**目标色**，画布上该像素已有的颜色（背景）
+- $F_\text{src}$：**源因子**，乘在源色上的权重（由 `glBlendFunc` 指定）
+- $F_\text{dst}$：**目标因子**，乘在目标色上的权重
+- $\alpha_\text{src}$：源色的 alpha（不透明度，$0\sim1$）
+
+**混合方程**。最一般的形式是源色、目标色各配一个因子，相乘后相加：
+
+$$
+C = F_\text{src} \cdot C_\text{src} + F_\text{dst} \cdot C_\text{dst}
+$$
+
+这个式子在说：最终颜色由两份拼成——一份是「源色乘源因子」（新颜色贡献多少），一份是「目标色乘目标因子」（旧颜色保留多少），把它们加起来。因子是 $0\sim1$ 的权重，由你挑；挑不同的因子，就得到不同的混合效果。
+
+**展开成 over**。最常用的配法把源因子取成源色的 alpha、目标因子取成 1 减这个 alpha：
+
+$$
+F_\text{src} = \alpha_\text{src}, \qquad F_\text{dst} = 1 - \alpha_\text{src}
+$$
+
+这个式子在说：新颜色占的权重就是它自己的不透明度 $\alpha_\text{src}$，旧颜色占剩下的 $1-\alpha_\text{src}$——两份权重加起来正好是 1，不会越加越亮。把这两个因子代回混合方程：
+
+$$
+C = \alpha_\text{src} \cdot C_\text{src} + (1 - \alpha_\text{src}) \cdot C_\text{dst}
+$$
+
+这个式子在说：**前景占 $\alpha_\text{src}$、背景占剩下的 $1-\alpha_\text{src}$**。比如 $\alpha_\text{src} = 0.6$，结果就是 0.6 份前景色 + 0.4 份背景色——前景盖六成、背景透四成，正是「半透明颜料盖到画上」的样子。$\alpha_\text{src}$ 越接近 1，前景越实、越盖住背景；越接近 0，前景越淡、背景越透。下面 Demo 里那个 `uSrcAlpha` 滑块，调的就是这条式子里的 $\alpha_\text{src}$。
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：C 型主 Demo = 自包含程序化 ShaderDemo over 混合可玩。frag 画背景色块(dst)+叠在上面的前景色块(src)，重叠区按 over 公式 result = src.rgb*src.a + dst.rgb*(1-src.a)。控件：uSrcAlpha(float 0..1) + uSrcColor(color)，≤5，自带重置。frag 无空行、乘号 ` * `。猜一猜：alpha 调大重叠区更像前景还是背景（自检：alpha 大→更接近前景色，与文字一致）。 */}
+
+## 动手：把前景透明度调来调去，看重叠区怎么变
+
+> 猜一猜：下面这块画布，左边是一块固定的暖黄**背景**色块，右边叠着一块紫色**前景**色块，两块在中间重叠。把前景的透明度 `uSrcAlpha` 往大调（接近 1）和往小调（接近 0），**重叠区**的颜色会更像前景的紫，还是更像背景的黄？先动手拖一拖，再看下面的解释。
+
+这块画布在片段着色器里手画了两块色块——背景（目标色 `Cdst`）和叠在它上面的前景（源色 `Csrc`），重叠区严格按 over 公式 `result = Csrc·αsrc + Cdst·(1−αsrc)` 算颜色。拖 `uSrcAlpha` 改前景不透明度、拖 `uSrcColor` 换前景颜色，盯着重叠区怎么变：
+
+<ShaderDemo
+  caption="左侧暖黄块是背景（目标色 Cdst），右侧色块是叠在上面的前景（源色 Csrc），中间重叠区按 over 混合 result = Csrc·αsrc + Cdst·(1−αsrc) 实时计算。拖『前景透明度 uSrcAlpha』：调到 1 重叠区几乎全是前景色（盖住背景）、调到 0 重叠区几乎全是背景色（前景透没了）、0.5 左右是两色各半的中间色。拖『前景颜色 uSrcColor』换前景色。点重置回到初始 0.6。"
+  aspect={16 / 9}
+  controls={[
+    {
+      name: "uSrcAlpha",
+      label: "前景透明度 αsrc（0=全透 / 1=不透）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      default: 0.6,
+    },
+    {
+      name: "uSrcColor",
+      label: "前景颜色 Csrc",
+      type: "color",
+      default: [0.486, 0.361, 1],
+    },
+  ]}
+  frag={`#version 300 es
+precision highp float;
+// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号(*)
+uniform vec2 uResolution;   // 画布像素尺寸（标准 uniform，自动注入）
+uniform float uSrcAlpha;    // 控件：前景（源色）的不透明度 αsrc，0..1
+uniform vec3 uSrcColor;     // 控件：前景（源色）颜色 Csrc，rgb 0..1
+out vec4 FragColor;
+// 判断点 p 是否落在矩形 [c-h, c+h] 内（c 中心、h 半尺寸）。
+bool inRect(vec2 p, vec2 c, vec2 h) {
+  vec2 d = abs(p - c);
+  return d.x < h.x && d.y < h.y;
+}
+void main() {
+  // uv 归一化到 0..1，并把 x 按宽高比拉开，保证色块不被拉伸成长条。
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  float aspect = uResolution.x / uResolution.y;
+  vec2 p = vec2(uv.x * aspect, uv.y);
+  // 背景目标色 Cdst（暖黄），整块画布的底色。
+  vec3 dst = vec3(0.898, 0.710, 0.404);
+  // 前景源色 Csrc 来自控件；它占据右侧一块矩形，与背景块在中间重叠。
+  vec3 src = uSrcColor;
+  // 两块矩形：背景块偏左、前景块偏右，中段重叠。半尺寸相同。
+  vec2 half = vec2(0.26 * aspect, 0.30);
+  vec2 bgC = vec2(0.40 * aspect, 0.5);
+  vec2 fgC = vec2(0.66 * aspect, 0.5);
+  bool inBg = inRect(p, bgC, half);
+  bool inFg = inRect(p, fgC, half);
+  // 先铺底：画布外 = 容器底色；落在背景块内 = 纯背景色 dst。
+  vec3 col = vec3(0.043, 0.043, 0.059);
+  if (inBg) col = dst;
+  // 前景块：用 over 混合把 src 叠到「该处当前的颜色」上（重叠区 col 已是 dst）。
+  if (inFg) {
+    vec3 under = inBg ? dst : vec3(0.043, 0.043, 0.059);
+    col = src * uSrcAlpha + under * (1.0 - uSrcAlpha);
+  }
+  FragColor = vec4(col, 1.0);
+}`}
+/>
+
+把 `uSrcAlpha` 调到接近 **1**，重叠区几乎全是前景的紫——前景几乎完全盖住了背景；调到接近 **0**，前景「透没了」，重叠区几乎全是背景的黄；停在 **0.5** 附近，重叠区是前景和背景各占一半的中间色。这正是 over 公式 `Csrc·αsrc + Cdst·(1−αsrc)`：αsrc 越大，前景权重越大、越盖住背景，与上一节那条式子一字对上。
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper 半透明排序——每步带 <BlendSortStepDiagram step>（满足「每步必带图示」，纯文字步=打回）。①乱序穿帮 → ②先画不透明物 → ③半透明从远到近 + 关深度写入 透叠正确。猜一猜引导。 */}
+
+## 半透明排序：单步走一遍从穿帮到正确
+
+> 猜一猜：场景里有三块半透明玻璃，一前一后。如果你**不管顺序**随便画，先画了最近那块、再画后面两块，后面两块会正常透出来，还是会「消失」？想一想深度缓冲那点事，再单步走一遍下面的修法。
+
+下面把「为什么穿帮、两招怎么修」拆成三步。每一步都画出场景这一刻长什么样——盯着哪块玻璃透出来、哪块被丢弃：
+
+<Stepper>
+  <Step title="① 乱序画 → 穿帮">
+    <BlendSortStepDiagram step={1} />
+    不管顺序随便画：先画了最<strong>近</strong>
+    那块玻璃，它把颜色混进画布、也把自己的 <strong>深度</strong>
+    写了进去。之后再画后面更<strong>远</strong>
+    的两块，深度测试一看「更远」，把它们整片 <strong>丢弃</strong>
+    ——可它们是半透明的，本该透出来！结果后面两块消失，穿帮。
+  </Step>
+  <Step title="② 第一招：先画所有不透明物体">
+    <BlendSortStepDiagram step={2} />
+    修法第一步：先把场景里所有<strong>不透明物体</strong>
+    （比如那面墙）用正常深度测试画好，
+    深度缓冲记下它们。这样半透明物之后还能被不透明物正确遮挡。这一步只把「底」铺好，还没动半透明玻璃。
+  </Step>
+  <Step title="③ 第二招：半透明从远到近 + 关深度写入">
+    <BlendSortStepDiagram step={3} />
+    再把半透明玻璃<strong>从远到近</strong>排序，并{" "}
+    <code>glDepthMask(GL_FALSE)</code> <strong>关掉深度写入</strong>
+    ，逐块画：先画最远、再中间、最后最近。每块都叠在已画好的更远色之上， over
+    混合层层透出——三块玻璃正确透叠，不再穿帮。画完记得把深度写入恢复。
+  </Step>
+</Stepper>
+
+走完这遍就明白：穿帮的根子是「深度缓冲不分透明，后画的远半透明物被先画的近半透明物挡掉」。两招对症——**不透明物先画**保证遮挡正确，**半透明物从远到近 + 关深度写入**保证它们彼此能透出来。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：三段——①glEnable(GL_BLEND)+glBlendFunc(+glBlendEquation)；②片段着色器 discard；③半透明排序：先画不透明、glDepthMask(GL_FALSE)、从远到近、恢复。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异用 Callout。 */}
+
+## 代码逐段拆解
+
+混合的代码分三块：**开混合并设因子**、**用 discard 做镂空**、**半透明排序 + 关深度写入**。三块对照看，C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一块：开混合、设 over 因子
+
+混合默认是关的。初始化（或画半透明物之前）开 `GL_BLEND`，再用 `glBlendFunc` 把源因子、目标因子设成 over 那一对——源因子 `GL_SRC_ALPHA`（= 源 alpha）、目标因子 `GL_ONE_MINUS_SRC_ALPHA`（= 1 − 源 alpha）。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 开混合开关（默认关；关着时新颜色直接覆盖，没有「透」）
+glEnable(GL_BLEND);
+// 设 over 混合：源因子 = 源 alpha，目标因子 = 1 - 源 alpha
+glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+// 运算符默认是「相加」(GL_FUNC_ADD)，即 C = Csrc*Fsrc + Cdst*Fdst；
+// 想做相减等可改：glBlendEquation(GL_FUNC_ADD);  // 一般无需改
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 开混合开关（默认关；关着时新颜色直接覆盖，没有「透」）
+gl.enable(gl.BLEND);
+// 设 over 混合：源因子 = 源 alpha，目标因子 = 1 - 源 alpha
+gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+// 运算符默认是「相加」(FUNC_ADD)，即 C = Csrc*Fsrc + Cdst*Fdst；
+// 想做相减等可改：gl.blendEquation(gl.FUNC_ADD);  // 一般无需改
+```
+
+  </Tab>
+</CodeTabs>
+
+`glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)` 两个参数正是 §4 的 `Fsrc` 和 `Fdst`：第一个给源因子、第二个给目标因子。`glBlendEquation` 控制这两份是「相加」还是「相减」，默认相加（就是混合方程那个加号），绝大多数场景不用动。注意两端的 API 差异：
+
+<Callout type="warn">
+  API 差异：桌面是全局函数 + 大写常量 `glEnable(GL_BLEND)` /
+  `glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`；WebGL2 是上下文方法 +
+  上下文上的常量 `gl.enable(gl.BLEND)` / `gl.blendFunc(gl.SRC_ALPHA,
+  gl.ONE_MINUS_SRC_ALPHA)`。常量名去掉 `GL_` 前缀、挂到 `gl`
+  上即可，含义完全一致。
+</Callout>
+
+### 第二块：用 discard 做镂空（草 / 铁丝网）
+
+镂空贴图（草、铁丝网）不走混合，走 `discard`。片段着色器采样纹理后，若 alpha 小于阈值（接近全透明）就 `discard`，这个片段直接被丢弃。两端 GLSL **几乎一样**，只差版本声明与 precision。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+in vec2 TexCoords;
+uniform sampler2D texture1;
+void main() {
+  vec4 texColor = texture(texture1, TexCoords);
+  // alpha 太小（接近全透明）→ 丢弃这个片段，连颜色缓冲都不进
+  if (texColor.a < 0.1)
+    discard;
+  FragColor = texColor;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+precision highp float;
+out vec4 FragColor;
+in vec2 TexCoords;
+uniform sampler2D texture1;
+void main() {
+  vec4 texColor = texture(texture1, TexCoords);
+  // alpha 太小（接近全透明）→ 丢弃这个片段，连颜色缓冲都不进
+  if (texColor.a < 0.1)
+    discard;
+  FragColor = texColor;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+被 `discard` 的片段不写颜色、不写深度，相当于「这里什么都没画」，于是草叶之间的空隙就露出背后——硬边镂空。`discard` 这条命令两端写法完全一致；唯一差别是版本声明：
+
+<Callout type="warn">
+  API 差异：桌面写 `#version 330 core`，WebGL2 写 `#version 300 es`
+  且片段着色器**必须**多一行 `precision highp float;`。`discard`、`texture(...)`
+  采样、`if` 判定两端写法**一字不差**。镂空贴图记得用带 alpha 的格式（`GL_RGBA`
+  / `gl.RGBA`）加载，否则纹理根本没有 alpha 可判。
+</Callout>
+
+### 第三块：半透明排序 + 关深度写入
+
+半透明物体是混合最容易翻车处。正确流程：先画所有不透明物（深度测试照旧），再把半透明物**从远到近排序**、用 `glDepthMask(GL_FALSE)` 关掉深度写入后逐块画，画完恢复。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 1) 先画所有不透明物体（正常深度测试、正常写深度）
+drawOpaqueObjects();
+// 2) 半透明物体从远到近排序（离相机越远排越前面）
+std::map<float, glm::vec3> sorted;
+for (auto& pos : windows)
+  sorted[glm::length(camera.Position - pos)] = pos;
+// 3) 关深度写入：半透明物仍比深度（被不透明物挡住），但不写回自己的深度
+glDepthMask(GL_FALSE);
+for (auto it = sorted.rbegin(); it != sorted.rend(); ++it)
+  drawWindowAt(it->second);   // 从最远的开始画
+glDepthMask(GL_TRUE);         // 画完恢复，别污染下一帧
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 1) 先画所有不透明物体（正常深度测试、正常写深度）
+drawOpaqueObjects();
+// 2) 半透明物体从远到近排序（离相机越远排越前面）
+const sorted = [...windows].sort(
+  (a, b) => dist(camera.pos, b) - dist(camera.pos, a),
+);
+// 3) 关深度写入：半透明物仍比深度（被不透明物挡住），但不写回自己的深度
+gl.depthMask(false);
+for (const pos of sorted) drawWindowAt(pos); // 已是从远到近
+gl.depthMask(true); // 画完恢复，别污染下一帧
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应，只是排序写法不同：C++ 用 `std::map`（按 key 自动升序，故 `rbegin()` 反向 = 从远到近），TS 用 `Array.sort` 按距离**降序**排，得到「远→近」。关键的两步两端一致：`glDepthMask(GL_FALSE)` / `gl.depthMask(false)` 关深度写入，画完 `glDepthMask(GL_TRUE)` / `gl.depthMask(true)` 恢复。
+
+<Callout type="warn">
+  关深度写入 ≠ 关深度测试。`glDepthMask(false)`
+  只是让通过测试的片段**不把自己的深度写回缓冲**——半透明物仍会被前面的**不透明物**正确遮挡（因为它还在「读」深度做比较），只是不会互相挡掉。千万别因此去
+  `glDisable(GL_DEPTH_TEST)`，那会让半透明物连不透明物都穿过去。完整可运行源码将在章末提供。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字；含可联想/亲手触发的。①半透明物忘排序/忘关深度写入 穿帮；②镂空纹理误用 blend 出白边/排序烦恼；③glBlendFunc 因子设错过曝/颜色不对。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：几块半透明玻璃画出来互相**穿帮**——后面的玻璃透不出来、或几块半透明物彼此乱挡。**原因**：半透明物**没排序**（先画了近的、后画的远的被深度测试丢弃），或**没关深度写入**（半透明物把自己深度写回去挡掉了后面的半透明物）。**修法**：先画不透明物；再把半透明物**从远到近**排序、`glDepthMask(GL_FALSE)`
+  关深度写入后逐块画，画完 `glDepthMask(GL_TRUE)` 恢复。
+</Callout>
+
+<Callout type="trap">
+  **现象**：本该用 `discard`
+  的**镂空纹理**（草、铁丝网）改用了混合，结果草叶边缘出现一圈奇怪的**半透明白边**，还平白多出排序烦恼。**原因**：草这类纹理是「非透即不透」的二元透明，用混合会把边缘那些半透明过渡像素也叠进去（常带贴图压缩留下的白边），且半透明就得排序。**修法**：镂空走
+  `discard`——alpha
+  小于阈值直接丢弃，得到干净硬边、还**不必排序**（不写半透明）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：开了混合后画面**过曝发白**，或颜色明明该半透却**完全不透/完全盖死**。**原因**：`glBlendFunc`
+  因子设错了——比如把目标因子写成 `GL_ONE`（背景全额保留 + 前景全额叠加 →
+  越叠越亮、过曝），或把源/目标因子写反、漏了
+  `GL_ONE_MINUS_SRC_ALPHA`。**修法**：over 混合就用 `glBlendFunc(GL_SRC_ALPHA,
+  GL_ONE_MINUS_SRC_ALPHA)` 这一对——源 alpha 配「1 − 源 alpha」，两份权重和为
+  1，才不会越叠越亮。
+</Callout>
+
+<Callout type="trap">
+  **现象**：草 /
+  窗户纹理贴上去，透明部分不是透出背后，而是显示成**纯黑或纯白的块**。**原因**：纹理加载时用了不带
+  alpha 的格式（如 `GL_RGB`），片段着色器里 `texColor.a` 根本拿不到真实
+  alpha，`discard` 判定与混合都失效。**修法**：镂空 / 半透明纹理必须用带 alpha
+  的格式加载（`GL_RGBA` / `gl.RGBA`），保证 `a` 通道有效。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改 Demo 题 + 1 道独立实现/排错题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **混合**把源色（前景）按 alpha 叠到目标色（背景）上：`glEnable(GL_BLEND)` 开开关、默认关时新色直接覆盖
+- **混合方程** `C = Csrc·Fsrc + Cdst·Fdst`；**over** 混合用 `glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)`，即前景占 αsrc、背景占 1−αsrc
+- 二元透明（草、铁丝网）用 **`discard`** 抠出硬边镂空；连续半透明（玻璃、水）才用 **blend**
+- 半透明物必须**先画不透明物、再从远到近**画，否则深度测试会把后画的远半透明物丢弃 → **穿帮**
+- 画半透明物时 `glDepthMask(GL_FALSE)` 关**深度写入**（仍比较、不写回），画完恢复
+
+<Exercises>
+
+**练习 1（改 Demo 代码 / 观察题）** 在上面的 over 混合 Demo 里，把 `uSrcAlpha` 分别拖到 `0`、`0.5`、`1` 三个值，观察重叠区颜色。回答：① 这三个值下重叠区分别最接近什么颜色？② 如果想让 αsrc = 0.6 时重叠区**更偏背景色**（背景透出更多），在不改 alpha 的前提下，该把混合公式里哪个因子改大？这还算 over 混合吗？
+
+<Answer>
+
+① `uSrcAlpha = 0` 时重叠区几乎全是背景的黄（前景全透、透没了）；`= 0.5` 时是前景紫和背景黄各半的中间色；`= 1` 时几乎全是前景的紫（前景完全盖住背景）。这正是 `Csrc·αsrc + Cdst·(1−αsrc)`：αsrc 是前景权重。
+
+② 要在不改 alpha 的前提下让背景透出更多，就得把**目标因子 `Fdst`**（乘在背景色上的权重）改大，比如从 `1−αsrc = 0.4` 改成 `GL_ONE`（= 1，背景全额保留）。但这样**就不再是 over 混合**了——over 的定义就是 `Fsrc=αsrc, Fdst=1−αsrc`、两份权重和为 1。把 `Fdst` 设成 1 会让源 + 背景超过 1，叠出来更亮（甚至过曝），那是另一种混合（更接近「加法混合」），不是 over。
+
+</Answer>
+
+**练习 2（独立实现题）** 你要做一片**草**的贴图（草叶不透明、叶间空隙完全透明）。不看上面的代码，写出片段着色器里做镂空的那一行（或几行），并说清：为什么草用这个而不用混合？这样做需不需要给草排序？
+
+<Answer>
+
+镂空靠 `discard`：
+
+```glsl
+vec4 texColor = texture(texture1, TexCoords);
+if (texColor.a < 0.1)   // alpha 太小（接近全透明）
+  discard;              // 直接丢弃，连颜色缓冲都不进
+FragColor = texColor;
+```
+
+为什么不用混合：草是「非透即不透」的二元透明，没有半透明渐变。用混合不仅多余，还会把边缘那些半透明过渡像素（常带贴图压缩白边）叠进背景，出现奇怪的白边。`discard` 直接把透明片段扔掉，得到干净硬边。
+
+需不需要排序：**不需要**。`discard` 丢弃的片段既不写颜色也不写深度，保留的草叶片段是完全不透明的、正常写深度，所以草和普通不透明物一样靠深度测试自动遮挡，无需从远到近排序——这正是镂空相比半透明混合省事的地方。
+
+</Answer>
+
+**练习 3（排错题）** 某人在场景里摆了一排半透明窗户，开了 `glEnable(GL_BLEND)` 和正确的 over `glBlendFunc`，但发现：站在某些角度看，**后面的窗户透不出来、像消失了**。他怀疑是 `glBlendFunc` 设错。请判断：真正的原因是什么？给出修法。
+
+<Answer>
+
+不是 `glBlendFunc` 的问题（over 因子是对的）。真正的原因是**半透明物没正确排序 / 没关深度写入**：每块窗户写颜色时也把自己的**深度**写进了深度缓冲；如果先画了近窗户，后画的远窗户被深度测试当成「更远」整片丢弃，于是后面的窗户透不出来、像消失了——这就是**半透明排序**问题。
+
+修法两步：① 把所有半透明窗户按到相机的距离**从远到近排序**，逐块画（先画最远的）；② 画窗户前 `glDepthMask(GL_FALSE)` 关掉**深度写入**（让它们仍参与深度比较、被不透明物挡住，但不互相写深度挡掉），画完 `glDepthMask(GL_TRUE)` 恢复。注意别去关深度测试本身，否则窗户会穿过不透明物。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（9 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="alpha 通道">
+  颜色除了红绿蓝（RGB）之外的第四个分量，记作 `a`，范围
+  0~1，表示这块颜色的**不透明度**：1 = 完全不透明（完全盖住背后）、0 =
+  完全透明（背后完全透出）、0.6 = 盖六成透四成。混合就是按 alpha
+  把前景叠到背景上。详见本章「混合」一节。
+</GlossaryItem>
+
+<GlossaryItem term="混合">
+  把正在画的「新颜色」（源色）按它的不透明度
+  alpha，和画布上「已有的颜色」（目标色）按比例**相加**，得到一个介于两者之间的颜色写回画布。这就是半透明物体能透出背景的原理。默认关闭，用
+  `glEnable(GL_BLEND)` 打开。详见本章「混合」一节。
+</GlossaryItem>
+
+<GlossaryItem term="源色">
+  正在画的这个片段算出来的颜色（前景），在混合方程里记作 `Csrc`。它带着自己的
+  alpha，决定要盖住背景多少。详见本章「混合」一节。
+</GlossaryItem>
+
+<GlossaryItem term="目标色">
+  画布（颜色缓冲）上该像素当前**已经存着**的颜色（背景），在混合方程里记作
+  `Cdst`。混合时它按目标因子被保留一部分，从源色背后透出来。详见本章「混合」一节。
+</GlossaryItem>
+
+<GlossaryItem term="混合方程">
+  混合时算最终颜色的规则：`C = Csrc·Fsrc + Cdst·Fdst`——源色乘源因子 +
+  目标色乘目标因子。因子是 0~1 的权重，由 `glBlendFunc`
+  指定；挑不同因子得到不同混合效果。详见本章「混合方程」一节与 §4。
+</GlossaryItem>
+
+<GlossaryItem term="over 混合">
+  最常用的混合配法：源因子取源色 alpha、目标因子取 1 减源色 alpha，于是结果 =
+  `αsrc·Csrc + (1−αsrc)·Cdst`——**前景占
+  αsrc、背景占剩下的**，就像把半透明颜料盖到画上。用 `glBlendFunc(GL_SRC_ALPHA,
+  GL_ONE_MINUS_SRC_ALPHA)` 设定。详见本章「混合方程」一节与 §4。
+</GlossaryItem>
+
+<GlossaryItem term="discard">
+  片段着色器里的一条命令：一旦执行，当前片段就被立即**丢弃**，不往后走、不进颜色缓冲。常用来做**镂空**——纹理里
+  alpha 很小（接近全透明）的片段直接
+  `discard`，于是草、铁丝网的空隙被「抠掉」露出背后，得到清晰硬边。详见本章「discard」一节。
+</GlossaryItem>
+
+<GlossaryItem term="半透明排序">
+  画多个半透明物时必须注意的**绘制顺序**问题。因为深度缓冲不区分透明：一个半透明物写颜色时也写下自己的深度，挡在它后面、之后才画的半透明物会被深度测试当成「更远」整片丢弃，于是透不出来、穿帮。解决：先画所有不透明物，再把半透明物**从远到近**排序后逐块画。详见本章「半透明排序」一节与
+  §5。
+</GlossaryItem>
+
+<GlossaryItem term="深度写入">
+  片段通过深度测试后，把自己的深度值写回深度缓冲的动作（默认开启）。画半透明物时用
+  `glDepthMask(GL_FALSE)`
+  把它**关掉**：让半透明物仍参与深度比较（被不透明物正确遮挡），但不把自己的深度写回去，免得互相挡掉。画完记得恢复。详见本章「半透明排序」一节与
+  §6。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
