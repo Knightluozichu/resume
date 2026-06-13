@@ -1,0 +1,402 @@
+---
+title: 材质
+type: C
+section: 光照
+order: 3
+description: 学会用一个「材质」结构体描述物体表面怎么反光——拆出环境/漫反射/镜面三种颜色加一个反光度，照抄一张材质数值表，就能把同一个物体调成金属、塑料或橡胶的质感。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/03%20Materials/
+draft: true
+---
+
+{/* C 实战型章（HEL-52，M5 光照篇第 3 篇）：主题是材质——把 Phong 三项各自拆成「材质色 × 光强」，用一个 Material 结构体 + 一个 Light 结构体描述「物体表面怎么反光 / 光本身各项多强」，从而调出金属/塑料/橡胶等不同质感。承接「基础光照」（已会 Phong 三项：环境 ambient + 漫反射 diffuse + 镜面 specular，已知 reflect/pow/法线/视线方向）。C 型：代码对照为重心（§6 覆盖 GLSL 的 struct Material / struct Light、片元用 material.* 与 light.* 算 Phong、CPU 侧 setVec3/setFloat 灌 uniform、C++↔WebGL2 差异、材质预设表照抄），math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验好，勿改勿建）：它的环境强度/镜面强度/高光指数三个控件正好对应材质的 ambient/specular/shininess 三维，用来演示 shininess 与镜面对「光泽感」的影响（物体色固定，故「不同材质的颜色」维度靠 §6 材质预设表 + 文字讲，不依赖 Demo 改色）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 材质 material（物体表面怎么反光的一组属性）= 直觉引入「同样的光，金属/塑料看着完全不同」比喻 + 概念讲解 + 主 LightingDemo；2) Material 结构体（ambient/diffuse/specular 三个 vec3 + shininess 一个 float）= 概念 + §6 GLSL 代码对照；3) Light 结构体（ambient/diffuse/specular 三个光强）= 概念 + §6 GLSL 代码对照；4) 为什么把 Phong 三项各自拆成「材质色 × 光强」= 概念（承接「颜色」章的光色×物色，扩到三项各乘一遍）+ §6 片元代码逐行；5) 反光度 shininess 对高光大小的影响（指数越高高光越小越锐 = 越像光滑金属；越低高光越大越散 = 越像哑光橡胶）= 概念 + 主 LightingDemo「猜一猜」拖高光指数看；6) 材质预设表（翡翠/金/红宝石/青塑料/绿橡胶等：不同 ambient/diffuse/specular/shininess 组合 = 不同质感）= §6 代码块预设表照抄 + 文字讲。Term 共 6 个：材质(material) / Material 结构体 / Light 结构体 / 反光度(shininess) / 镜面反射(specular) / 材质预设。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某材质感」一条；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清一个**材质**由哪几样东西描述：环境、漫反射、镜面三种颜色，外加一个「反光度」，以及为什么每一项都要乘上光的强度
+- 能在 Demo 里改出指定质感：把高光指数拉高、镜面拉满，调出**高反光的光滑金属感**；再把高光指数压低，调出**散开的哑光橡胶感**
+- 能回答：照抄材质数值表里「金」的那一行，把它的镜面颜色误填成 `(2, 2, 2)`，物体看上去会出什么毛病？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库——同样的光照在不同表面上看着完全不同。 */}
+
+## 同样的光，金属和橡胶为什么差这么多
+
+上一章你已经能给物体打一束光，让它有了明暗和一块高光。可现实里，把一束一模一样的光打在不同东西上，看着天差地别：一枚金戒指亮得晃眼、有一小块刺目的高光；旁边一块黑橡胶垫却闷闷的，高光糊成一大片、甚至看不太出来。光没变，变的是**表面本身**。
+
+差别就在「这个表面是怎么反光的」。金属几乎把照来的光原样弹回去，而且只在很小一块角度上集中反射，于是又亮又有锐利的高光点；橡胶吸掉大半、只散散地反射一点，高光摊开成一大片、显得哑。要在屏幕上画出「这是金的、那是橡胶的」，光靠调光是不够的——得给每个物体配一套「它该怎么反光」的说明书。
+
+这一章讲的就是这本说明书：怎么用几个数把「表面怎么反光」描述清楚，让同一束光打上去，有的看着像金属、有的像塑料、有的像橡胶。配齐了这套数，质感就对了；配不齐，再好的光也只能照出一坨「说不清是什么做的」的东西。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 §5 Demo；顺序 是什么 → 为什么 → 在管线/光照模型中的位置。新核心概念克制（材质 / 反光度 / 材质预设，承接已学的 Phong 三项，≤5）。 */}
+
+## 材质：一个物体的「反光说明书」
+
+我们把「这个表面该怎么反光」这套属性，打包叫做这个物体的 <Term def="描述一个物体表面「怎么反光」的一组属性。在 Phong 光照里它正好对上三项：环境色、漫反射色、镜面色，外加一个反光度（shininess）。换一套材质数值，同一束光下物体就从金属变成塑料、橡胶。">材质</Term>（material）。上一章的 Phong 光照已经把光分成了三项——四面八方的环境光、正对光源更亮的漫反射、特定角度的镜面高光——材质要做的，就是给**每一项**都配一个「这个表面在这一项上反射什么颜色、反射多少」。
+
+所以一份材质正好是四样东西：**环境色**（物体在底光下的基色）、**漫反射色**（物体的主色调，决定「它是什么颜色的」）、**镜面色**（高光那一小块反射出的颜色，金属常带金属本色、塑料多是白），再加一个**反光度**。前三样都是颜色（红绿蓝三个数），最后一样是单个数。换一套这四样数，同一束光照下来，物体就从金子变成橡胶。这四样怎么在着色器里摆放、怎么参与计算，是 §6 的重头戏。
+
+## 反光度：高光是一个锐点，还是一大片
+
+四样里最不像「颜色」的是<Term def="一个数，控制镜面高光的大小和锐利程度。数值越高，高光越小越集中、越锐利（像光滑金属上那个刺眼的小亮点）；数值越低，高光越大越散、越柔（像哑光橡胶上糊开的一片微光）。在着色器里它是 pow(..., shininess) 的指数。">反光度</Term>（shininess）。它一个数就管住了高光的「大小和锐利度」：
+
+- **反光度高**（比如 128、256）：高光收成很小的一个**锐点**，亮得集中——这是光滑金属、抛光塑料的样子。
+- **反光度低**（比如 8、16）：高光摊开成一**大片**、边缘模糊、不刺眼——这是哑光橡胶、磨砂表面的样子。
+
+它在着色器里就是镜面项里那个「次方的指数」：指数越大，只有反射方向**几乎正对**视线时高光才亮得起来，于是高光被压成一个小点；指数小，稍微偏一点也还挺亮，高光就铺开了。这一项你待会能在 §5 的 Demo 里直接拖着看——把「高光指数」从小拖到大，亲眼看高光怎么从一大片缩成一个锐点。
+
+## 为什么三项都要「材质色 × 光强」
+
+回想「颜色」那一章的核心规则：你看到的 = 光色 × 物色。材质这一章只是把这条规则**用到三项上各乘一遍**。光本身也分三项强度（用一个 <Term def="描述「光本身」三项强度的一组属性，和材质一一对应：环境强度、漫反射强度、镜面强度。通常环境调得很低（免得到处发灰）、漫反射是光的主色（多为亮白）、镜面拉到最强（让高光够亮）。它和材质相乘，得到每一项真正反射进眼睛的颜色。">Light 结构体</Term>装着：环境强度、漫反射强度、镜面强度），于是 Phong 三项各自都是「这一项的材质色 × 这一项的光强」：
+
+- 环境 = 光的环境强度 × 材质环境色
+- 漫反射 = 光的漫反射强度 × 材质漫反射色 ×（还要乘上面朝光源的程度）
+- 镜面 = 光的镜面强度 × 材质镜面色 ×（还要乘上那个反光度次方）
+
+这么拆的好处是**两边都能单独调**：调光（比如把环境强度压低，免得整个场景发灰）只动 Light 那三项；调质感（金属还是橡胶）只动 Material 那四样。它俩相乘，才是最终弹进眼睛的颜色。这正是上一章 Phong 三项的「升级版」——把每一项里写死的颜色，换成了「材质色 × 光强」。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。Phong 三项公式在上一章「基础光照」已建立；本章只把每项的颜色换成「材质色 × 光强」，用 §3 文字 + §6 片元代码逐行 + §5 Demo 的直觉代替，不再上公式。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验证，勿改勿建）。它的环境强度/镜面强度/高光指数三控件正好对应材质 ambient/specular/shininess 三维；物体色固定，故「不同材质颜色」维度交给 §6 预设表。猜一猜引导；控件 ≤5（含光源方位/环境/镜面/高光指数/重置）；自带骨架屏 + WebGL2 兜底。 */}
+
+## 动手：把同一个物体调出金属感和橡胶感
+
+下面是本章的主 Demo（和上一章同一个 Phong 光照演示）。它的三个滑块——**环境强度、镜面强度、高光指数**——正好对应材质的三个维度：环境项、镜面项、反光度。我们就用它来感受**反光度和镜面对「光泽感」的影响**。
+
+> 猜一猜：把**高光指数拉到很高**（比如 256）、**镜面强度拉满**，物体表面会像什么材质？再把**高光指数压到很低**（比如 8）、镜面也调小，又像什么？先在脑子里想想「锐利的小亮点 vs 糊开的一大片」，再拖滑块验证。
+
+<LightingDemo caption="本章把它当材质实验台：环境强度=材质环境项、镜面强度=材质镜面项、高光指数=材质反光度（shininess）。把高光指数拉到 256 + 镜面拉满 → 锐利小高光，光滑金属/抛光塑料感；把高光指数压到 8 + 镜面调小 → 高光摊成一大片，哑光橡胶感。拖光源方位看明暗，随时点重置回到初始。" />
+
+这个 Demo 的物体**颜色是固定的**，所以它只演示「光泽感」这一半——也就是反光度和镜面让表面看起来或光滑或哑。材质的**另一半**是颜色（金子是暖金色、翡翠是绿色、橡胶可能是黑色），那一半不靠这个 Demo 改，而是靠下面 §6 的「材质预设表」——照抄表里的 `ambient/diffuse/specular/shininess` 四样数，就能把物体调成金、翡翠、橡胶等不同质感。Demo 负责让你**摸到** shininess 的手感，预设表负责给你一整套**能照抄**的数。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖关键代码）：四段覆盖 GLSL struct Material + uniform → GLSL struct Light + uniform → 片元 main 用 material.* / light.* 算 Phong 三项 → CPU 侧 setVec3/setFloat 灌 material 与 light uniform；末附材质预设表（用代码块注释呈现，避开无 remark-gfm 的 markdown 表格）。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异首现用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+把材质落到代码上，分两摊：着色器里用两个**结构体**把材质和光各自打包（GLSL 两端几乎一样），CPU 侧把这些数当 uniform 一个个灌进去（C++/WebGL2 互为镜像）。
+
+### 第一步：在着色器里声明 Material 结构体
+
+GLSL 支持像 C 那样定义结构体，把材质四样打成一个包。这就是 <Term def="GLSL 里把材质四样属性打包成一个的结构体：ambient（环境色）、diffuse（漫反射色）、specular（镜面色）三个 vec3，外加 shininess（反光度）一个 float。用 uniform Material material; 声明后，着色器里就能写 material.diffuse 取各项。">Material 结构体</Term>：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+struct Material {
+  vec3 ambient;     // 环境色：底光下的基色
+  vec3 diffuse;     // 漫反射色：物体的主色调
+  vec3 specular;    // 镜面色：高光那一小块的颜色
+  float shininess;  // 反光度：高光的大小 / 锐利度
+};
+uniform Material material;   // 整包当一个 uniform 用
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+precision highp float;       // WebGL2 片段着色器必写：声明浮点精度
+struct Material {
+  vec3 ambient;     // 环境色：底光下的基色
+  vec3 diffuse;     // 漫反射色：物体的主色调
+  vec3 specular;    // 镜面色：高光那一小块的颜色
+  float shininess;  // 反光度：高光的大小 / 锐利度
+};
+uniform Material material;   // 整包当一个 uniform 用
+```
+
+  </Tab>
+</CodeTabs>
+
+声明成结构体只是为了把零散的四样归拢——着色器里就能写 `material.diffuse`、`material.shininess`，比起四个散落的 uniform 整齐多了。两端 GLSL 几乎一致，只差版本声明那行，以及 WebGL2 片段着色器必带的精度声明：
+
+<Callout type="warn">
+  API 差异：桌面 OpenGL 用 `#version 330 core`，WebGL2 用 `#version 300 es`，且
+  WebGL2 的**片段着色器必须**多写一行 `precision highp
+  float;`，否则编译直接失败。`struct` 的写法两端**完全一样**，这是 GLSL
+  语言本身的特性，不分平台。
+</Callout>
+
+### 第二步：再声明一个 Light 结构体
+
+光本身也拆成三项强度，同样打成一个包。注意它和材质**一一对应**：材质有环境/漫反射/镜面三种色，光就有环境/漫反射/镜面三种强度，待会一一相乘。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+struct Light {
+  vec3 position;    // 光源位置（上一章已用过）
+  vec3 ambient;     // 环境强度：通常调得很低
+  vec3 diffuse;     // 漫反射强度：光的主色（多为亮白）
+  vec3 specular;    // 镜面强度：通常拉到最强 (1,1,1)
+};
+uniform Light light;
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+struct Light {
+  vec3 position;    // 光源位置（上一章已用过）
+  vec3 ambient;     // 环境强度：通常调得很低
+  vec3 diffuse;     // 漫反射强度：光的主色（多为亮白）
+  vec3 specular;    // 镜面强度：通常拉到最强 (1,1,1)
+};
+uniform Light light;
+```
+
+  </Tab>
+</CodeTabs>
+
+为什么环境强度要调得很低、镜面要拉到最强？因为环境光是「四面八方都有的底光」，调高了整个物体会发灰、失去明暗；而镜面是那一小块高光，拉满才够亮够「精神」。这三项就是上一章那几个零散强度的「打包版」。
+
+### 第三步：片段着色器里三项各「材质 × 光」
+
+核心来了。上一章的 Phong 三项，现在每一项都改成「这一项的光强 × 这一项的材质色」。和「颜色」章的 `光色 × 物色` 是同一个套路，只是乘了三遍：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+void main() {
+  // 环境 = 光环境强度 × 材质环境色
+  vec3 ambient = light.ambient * material.ambient;
+
+  // 漫反射 = 光漫反射强度 × (面朝光源的程度 × 材质漫反射色)
+  vec3 norm = normalize(Normal);
+  vec3 lightDir = normalize(light.position - FragPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+  vec3 diffuse = light.diffuse * (diff * material.diffuse);
+
+  // 镜面 = 光镜面强度 × (反光度次方 × 材质镜面色)
+  vec3 viewDir = normalize(viewPos - FragPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 specular = light.specular * (spec * material.specular);
+
+  FragColor = vec4(ambient + diffuse + specular, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+void main() {
+  // 环境 = 光环境强度 × 材质环境色
+  vec3 ambient = light.ambient * material.ambient;
+
+  // 漫反射 = 光漫反射强度 × (面朝光源的程度 × 材质漫反射色)
+  vec3 norm = normalize(Normal);
+  vec3 lightDir = normalize(light.position - FragPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+  vec3 diffuse = light.diffuse * (diff * material.diffuse);
+
+  // 镜面 = 光镜面强度 × (反光度次方 × 材质镜面色)
+  vec3 viewDir = normalize(viewPos - FragPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 specular = light.specular * (spec * material.specular);
+
+  FragColor = vec4(ambient + diffuse + specular, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+逐项看：环境项直接两色相乘；漫反射项在中间多乘了个 `diff`（面越正对光源越大，就是上一章的 `N·L`）；<Term def="Phong 三项里的高光那一项——视线方向几乎正对「光的反射方向」时才亮起来的那一小块亮斑。这里它等于 光镜面强度 × 反光度次方 × 材质镜面色。反光度（shininess）越高，这块高光越小越锐。">镜面反射</Term>项多乘了个 `spec`（就是 `pow(..., material.shininess)`，反光度在这里登场）。三项相加就是最终颜色。两端 GLSL 这段**一字不差**，平台差异只在前面那两行声明。
+
+### 第四步：CPU 侧把材质和光灌进去
+
+着色器声明好了 uniform，CPU 侧得把具体数值塞进去——颜色用 `setVec3` / `gl.uniform3f`，反光度那个单数用 `setFloat` / `gl.uniform1f`。结构体成员在 CPU 侧用**带点的名字**（如 `"material.diffuse"`）定位：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 材质：这里是一组「珊瑚红塑料」样的数（换成下方预设表任意一行即可变质感）
+shader.setVec3("material.ambient",  1.0f, 0.5f, 0.31f);
+shader.setVec3("material.diffuse",  1.0f, 0.5f, 0.31f);
+shader.setVec3("material.specular", 0.5f, 0.5f, 0.5f);
+shader.setFloat("material.shininess", 32.0f);
+// 光：环境压低、漫反射中等、镜面拉满
+shader.setVec3("light.ambient",  0.2f, 0.2f, 0.2f);
+shader.setVec3("light.diffuse",  0.5f, 0.5f, 0.5f);
+shader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const p = gl.getUniformLocation.bind(gl, program); // 取位置的简写
+// 材质：换成下方预设表任意一行即可变质感
+gl.uniform3f(p("material.ambient"), 1.0, 0.5, 0.31);
+gl.uniform3f(p("material.diffuse"), 1.0, 0.5, 0.31);
+gl.uniform3f(p("material.specular"), 0.5, 0.5, 0.5);
+gl.uniform1f(p("material.shininess"), 32.0);
+// 光：环境压低、漫反射中等、镜面拉满
+gl.uniform3f(p("light.ambient"), 0.2, 0.2, 0.2);
+gl.uniform3f(p("light.diffuse"), 0.5, 0.5, 0.5);
+gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异：C++ 的 `Shader::setVec3` 是封装好的辅助函数，内部仍是
+  `glGetUniformLocation` 拿位置、再 `glUniform3f` 写值；WebGL2 没有这层封装，得自己先
+  `gl.getUniformLocation(program, "material.diffuse")` 拿位置、再
+  `gl.uniform3f(位置, r, g, b)`。结构体成员名两端都写成带点的字符串
+  `"material.diffuse"`，这点一致。
+
+另外，`vec3` 颜色一律用 **3f 系列**（`uniform3f`）、单个 `float`
+反光度用 **1f 系列**（`uniform1f`），别用错后缀，否则灌不进去或报错。
+
+</Callout>
+
+### 照抄就能用：材质预设表
+
+「哪几个数配出金、哪几个配出橡胶」是门经验活——好在前人已经测好了一整张表，照抄即可。下面是几组常用 <Term def="前人测好的一批现成材质数值——每一行给出一种真实材料（翡翠、金、橡胶等）的 ambient / diffuse / specular 三色和 shininess 反光度。照抄整行灌进 uniform，物体立刻有了对应质感，不必自己一个个试。">材质预设</Term>（数值来自经典的 OpenGL 材质表，`shininess` 已乘成 0~256 区间，可直接填）。把任意一行的四样灌进上面第四步那几个 uniform，并把光的三项强度都设成 `(1,1,1)`（这样物体严格按预设显示），物体就有了对应质感：
+
+```text
+材质        ambient(R,G,B)            diffuse(R,G,B)               specular(R,G,B)              shininess
+翡翠 Emerald  0.0215, 0.1745, 0.0215   0.07568, 0.61424, 0.07568    0.633,    0.7278,  0.633     76.8
+金   Gold     0.24725,0.1995, 0.0745   0.75164, 0.60648, 0.22648    0.62828,  0.5558,  0.36607   51.2
+红宝石Ruby    0.1745, 0.01175,0.01175  0.61424, 0.04136, 0.04136    0.72781,  0.62696, 0.62696   76.8
+青塑料Cyan    0.0,    0.1,    0.06     0.0,     0.50980, 0.50980     0.50196,  0.50196, 0.50196   32.0
+绿橡胶Green   0.0,    0.05,   0.0      0.4,     0.5,     0.4         0.04,     0.7,     0.04       10.0
+```
+
+横向看每一行是一种材质；纵向看四列正是着色器里 `material` 的四样。规律一眼可见：**金属类（金、翡翠、红宝石）反光度高**（51~77），高光小而锐、镜面色还带本色（金的镜面偏暖）；**橡胶类反光度低**（10），高光摊得开、显哑。改质感不用懂物理，照抄一行即可。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含 1 个可在 §5 LightingDemo 亲手触发（高光指数=0/拉满）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：物体**整片过曝、惨白**，看不清明暗和颜色。**原因**：把材质的镜面色（或某个材质色）设成了**大于
+  1** 的值，比如照抄时手滑写成 `(2, 2, 2)`——颜色分量本该在 0~1，超过 1
+  会把那块直接顶到纯白。**修法**：检查 `material.specular` 等三色每个分量都 ≤
+  1；预设表里的数都在 0~1 之间，照抄别加倍。
+</Callout>
+
+<Callout type="trap">
+  **现象**：调了半天分不清效果到底是「光变了」还是「材质变了」，越调越乱。**原因**：把**光的三项强度**（`light.ambient/diffuse/specular`）和**材质的三种色**（`material.ambient/diffuse/specular`）搞混了——它俩名字像、但一个描述「光多强」、一个描述「表面怎么反」。**修法**：想严格照预设表显示质感，就把
+  `light` 三项都设成 `(1,1,1)`，让效果**只由材质**决定；想调暗整体环境，再单独动
+  `light`。两套分开调。
+</Callout>
+
+<Callout type="trap">
+  **现象**：高光要么**铺满整个物体一片白**，要么**几乎看不见**。**原因**：反光度
+  `shininess` 设成了极端值——设成 0（或极小）时，`pow(x, 0)` 恒为
+  1，高光铺满整面；设到上千又太尖，几乎采样不到。**修法**：把 `shininess`
+  控制在常用区间（哑光约 8~32、光滑约 64~256）。**亲手看翻车**：到 §5 的
+  Demo，把「高光指数」拖到最小、镜面拉满——高光糊成一大片；再拖到
+  256——高光收成一个锐点。这就是这个坑的两个极端。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo/调材质题（含目标效果）+ 1 道独立实现题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **材质**是物体的「反光说明书」：环境色 + 漫反射色 + 镜面色三种颜色，外加一个**反光度**
+- Phong 三项各自都是「**材质色 × 光强**」——和「颜色」章的光色×物色同一个套路，乘了三遍
+- **反光度（shininess）**控高光大小：高 → 小而锐（金属感）、低 → 大而散（橡胶感）
+- 着色器里用 `struct Material` / `struct Light` 打包，片元写 `material.* / light.*`；CPU 侧用 `setVec3` 灌颜色、`setFloat` 灌反光度
+- 调质感不用懂物理：照抄**材质预设表**一行（翡翠/金/橡胶……）灌进 uniform 即可
+
+<Exercises>
+
+**练习 1（改 Demo / 调材质型）** 在 §5 的 Demo 里调出两种质感：①**高反光的光滑金属感**（锐利小高光）；②**哑光橡胶感**（高光摊成一大片）。分别说出你怎么动那三个滑块、为什么。
+
+<Answer>
+
+①金属感：把**高光指数拉到很高**（如 256）、**镜面强度拉满**（1.0）、环境强度压低。高光指数高 → `pow(..., shininess)` 只在反射方向几乎正对视线时才亮，高光收成一个锐点；镜面拉满让这个点够亮——合起来就是光滑金属/抛光面的样子。
+
+②橡胶感：把**高光指数压到很低**（如 8）、**镜面强度调小**。指数低 → 稍微偏一点也还亮，高光铺成一大片、边缘模糊；镜面小让它整体不刺眼——合起来就是哑光橡胶的样子。（颜色这一维 Demo 改不了，真要黑橡胶得靠预设表把 `material.diffuse` 设成深色。）
+
+</Answer>
+
+**练习 2（问答型）** 材质里有 `material.ambient/diffuse/specular`，光里也有 `light.ambient/diffuse/specular`，名字一模一样。它俩各自描述的是什么？为什么要分成两套、而不是合并成一套？
+
+<Answer>
+
+`material.*` 描述**表面怎么反光**（这个表面在环境/漫反射/镜面三项上反射什么颜色、反多少）；`light.*` 描述**光本身有多强**（光的环境/漫反射/镜面三项强度）。分成两套是为了**两边能各调各的**：换物体质感（金属↔橡胶）只动 `material`，调场景明暗（光强弱）只动 `light`，互不打架。最终每一项是 `light.X * material.X` 相乘，才是真正反射进眼睛的颜色。
+
+</Answer>
+
+**练习 3（独立实现题）** 不看上面的代码，写出片段着色器里**镜面项**那几行：从 `material` 和 `light` 出发，把镜面高光算出来。目标效果：反光度由 `material.shininess` 控制、高光颜色和强度由 `material.specular` 与 `light.specular` 决定。（已知 `norm`、`lightDir`、`viewDir` 都已算好。）
+
+<Answer>
+
+```glsl
+vec3 reflectDir = reflect(-lightDir, norm);                       // 光的反射方向
+float spec = pow(max(dot(viewDir, reflectDir), 0.0),
+                 material.shininess);                              // 反光度次方：控高光大小
+vec3 specular = light.specular * (spec * material.specular);      // 光镜面强度 × (次方 × 材质镜面色)
+```
+
+要点：① `reflect(-lightDir, norm)` 求反射方向（注意取 `lightDir` 的负方向）；② `pow(..., material.shininess)` 里反光度当指数，越大高光越小越锐；③ 最后 `light.specular *（spec × material.specular）`——光强乘材质色，和环境/漫反射两项是同一个「材质 × 光」套路。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="材质">
+  描述一个物体表面「怎么反光」的一组属性。在 Phong
+  光照里正好对上三项颜色——环境色、漫反射色、镜面色，再加一个反光度。换一套材质数值，同一束光下物体就从金属变成塑料、橡胶。详见本章「材质」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Material 结构体">
+  GLSL
+  里把材质四样属性打包成一个的结构体：`ambient`（环境色）、`diffuse`（漫反射色）、`specular`（镜面色）三个
+  `vec3`，外加 `shininess`（反光度）一个 `float`。用 `uniform Material
+  material;` 声明后，着色器里就能写 `material.diffuse`
+  取各项。详见本章「第一步」。
+</GlossaryItem>
+
+<GlossaryItem term="Light 结构体">
+  描述「光本身」三项强度的一组属性，和材质一一对应：环境强度、漫反射强度、镜面强度。通常环境调得很低（免得到处发灰）、漫反射是光的主色（多为亮白）、镜面拉到最强（让高光够亮）。它和材质相乘，得到每一项真正反射进眼睛的颜色。详见本章「第二步」。
+</GlossaryItem>
+
+<GlossaryItem term="反光度">
+  一个数，控制镜面高光的大小和锐利程度。数值越高，高光越小越集中、越锐利（像光滑金属上那个刺眼的小亮点）；数值越低，高光越大越散、越柔（像哑光橡胶上糊开的一片微光）。在着色器里它是
+  `pow(..., shininess)` 的指数。详见本章「反光度」一节。
+</GlossaryItem>
+
+<GlossaryItem term="镜面反射">
+  Phong
+  三项里的高光那一项——视线方向几乎正对「光的反射方向」时才亮起来的那一小块亮斑。这里它等于
+  光镜面强度 × 反光度次方 ×
+  材质镜面色。反光度越高，这块高光越小越锐。详见本章「第三步」。
+</GlossaryItem>
+
+<GlossaryItem term="材质预设">
+  前人测好的一批现成材质数值——每一行给出一种真实材料（翡翠、金、橡胶等）的
+  `ambient` / `diffuse` / `specular` 三色和 `shininess` 反光度。照抄整行灌进
+  uniform，物体立刻有了对应质感，不必自己一个个试。详见本章「材质预设表」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

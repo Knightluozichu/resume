@@ -18,6 +18,8 @@ import { FrustumDiagram } from "./diagrams/frustum-diagram";
 import { LookAtDiagram } from "./diagrams/lookat-diagram";
 import { EulerAnglesDiagram } from "./diagrams/euler-angles-diagram";
 import { CameraMovementDiagram } from "./diagrams/camera-movement-diagram";
+import { DiffuseNormalDiagram } from "./diagrams/diffuse-normal-diagram";
+import { SpecularReflectDiagram } from "./diagrams/specular-reflect-diagram";
 import { TransformOrderDiagram } from "./diagrams/transform-order-diagram";
 import { VectorOpsDiagram } from "./diagrams/vector-ops-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
@@ -89,6 +91,9 @@ import { LightingDemo } from "./lighting-demo";
  *    五空间流水线 / 透视投影视锥体压进 NDC 立方体 / LookAt 矩阵三轴构造。同款 Server SVG。
  *  - EulerAnglesDiagram / CameraMovementDiagram（摄像机）：
  *    Pitch/Yaw/Roll 三角度示意 / WASD 沿 front·right 移动示意。同款 Server SVG。
+ *  - DiffuseNormalDiagram / SpecularReflectDiagram（基础光照，HEL-51）：
+ *    漫反射看法线 N 与指向光源 L 的夹角（N·L，正对最亮、背光 max 截 0）/ 镜面看反射方向 R
+ *    与观察 V 的贴合度 + 反光度 shininess 是 pow(R·V,n) 的指数（n 越大斑越小越锐）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -133,6 +138,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LookAtDiagram,
   EulerAnglesDiagram,
   CameraMovementDiagram,
+  DiffuseNormalDiagram,
+  SpecularReflectDiagram,
   Stepper,
   Step,
   Slider,
