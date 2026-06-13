@@ -62,6 +62,19 @@ export type ShaderCanvasProps = {
    * error 的 InfoLog 解析错误行号、在编辑器里高亮。非 editable 用法不传，行为不变。
    */
   onStatusChange?: (status: ShaderStatus) => void;
+  /**
+   * 嵌入模式（HEL-30）：true 时不画自己的卡片外壳与头部（⚡标签 + 重置按钮），只渲染
+   * 「画布舞台 + 控件 + 图注」。editable 编排层（shader-editor-canvas）据此把画布嵌进
+   * 它统一的 editable 卡里，避免「卡中卡 + 双 ⚡」（收成单层卡）。默认 false：行为同前，
+   * 画布自带完整 Demo 卡（非 editable 用法不变）。
+   */
+  bare?: boolean;
+  /**
+   * 重置信号（HEL-30，仅 bare 模式有意义）：数值递增一次 → 触发内部 reset（uTime/uMouse
+   * 复位 + 全部自定义 uniform 回 default）。bare 模式下画布无自带重置按钮，由外层 editable
+   * 卡的统一「重置」按钮通过递增本信号驱动画布复位。默认不传（0），不触发。
+   */
+  resetSignal?: number;
 };
 
 const EMPTY_CONTROLS: readonly UniformControl[] = [];
@@ -74,6 +87,8 @@ export function ShaderCanvas({
   aspect,
   caption,
   onStatusChange,
+  bare = false,
+  resetSignal = 0,
 }: ShaderCanvasProps) {
   // 由 schema 算出初值（= 重置目标）。controls 来自 .mdx，按其内容 memo，避免每渲染重算。
   const controlsKey = useMemo(() => JSON.stringify(controls), [controls]);
@@ -125,6 +140,16 @@ export function ShaderCanvas({
     setValues(valuesRef.current);
   }, [resetStandard, controls]);
 
+  // bare 模式（HEL-30）：外层 editable 卡的统一「重置」按钮通过递增 resetSignal 驱动画布复位
+  // （画布在 bare 下无自带重置按钮）。首挂载的 0 不触发；之后每次递增跑一次 reset。
+  const prevResetSignalRef = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal !== prevResetSignalRef.current) {
+      prevResetSignalRef.current = resetSignal;
+      reset();
+    }
+  }, [resetSignal, reset]);
+
   const hasControls = controls.length > 0;
   const captionId = useId();
 
@@ -138,28 +163,9 @@ export function ShaderCanvas({
 
   const hasError = status.kind === "error";
 
-  return (
-    <div className="mdx-shader-canvas my-6 rounded-card border border-border bg-elevated p-6">
-      {/* 头部：左上⚡可交互标签 + 右上重置按钮 */}
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-xs font-medium text-accent">
-          <span aria-hidden="true">⚡</span>
-          可交互
-        </span>
-        <button
-          type="button"
-          onClick={reset}
-          aria-label={
-            hasControls
-              ? "重置演示（时间归零、鼠标复位、参数回默认值）"
-              : "重置演示（时间归零、鼠标复位）"
-          }
-          className="rounded-control border border-border px-2 py-1 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
-        >
-          重置
-        </button>
-      </div>
-
+  // 舞台 + 控件 + 图注：bare 与非 bare 共用这块「内容」，差异只在外壳与头部。
+  const body = (
+    <>
       {/* 舞台：画布 or 错误回显。辉光（accent-glow 内描边）只在此处。 */}
       <div
         className="relative overflow-hidden rounded-control ring-1 ring-accent-glow"
@@ -209,6 +215,39 @@ export function ShaderCanvas({
           {caption}
         </p>
       )}
+    </>
+  );
+
+  // bare 模式（HEL-30）：去掉自带卡片外壳与头部（⚡ + 重置），只输出内容，由外层
+  // editable 卡统一承载头部与边框 —— 收成单层卡、单一 ⚡ 标签。
+  if (bare) {
+    return <div className="mdx-shader-canvas">{body}</div>;
+  }
+
+  // 非 bare（默认）：画布自带完整 Demo 卡（外壳 + ⚡可交互标签 + 重置按钮）。
+  return (
+    <div className="mdx-shader-canvas my-6 rounded-card border border-border bg-elevated p-6">
+      {/* 头部：左上⚡可交互标签 + 右上重置按钮 */}
+      <div className="mb-4 flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-1 rounded-control border border-border px-2 py-1 text-xs font-medium text-accent">
+          <span aria-hidden="true">⚡</span>
+          可交互
+        </span>
+        <button
+          type="button"
+          onClick={reset}
+          aria-label={
+            hasControls
+              ? "重置演示（时间归零、鼠标复位、参数回默认值）"
+              : "重置演示（时间归零、鼠标复位）"
+          }
+          className="rounded-control border border-border px-2 py-1 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+        >
+          重置
+        </button>
+      </div>
+
+      {body}
     </div>
   );
 }

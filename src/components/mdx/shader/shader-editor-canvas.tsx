@@ -19,10 +19,15 @@
  * 喂给引擎编译的也是同一份完整源码，故 InfoLog 的行号（相对被编译源码）= 编辑器行号。
  * 所见即所跑（task 推荐方案），无偏移换算。
  *
- * 布局：宽屏（lg+）编辑器与画布左右并排（各占一半）；窄屏上下堆叠。容器气质沿用
- * ShaderCanvas 的 Demo 卡片，但本层不再画卡片 —— ShaderCanvas 自带卡片，编辑器作为
- * 卡片内 / 卡片侧的一块。为统一，这里整体包一张 Demo 卡，把「画布舞台 + 控件」与「编辑器」
- * 并列放进去（不嵌套两层卡片）。
+ * 布局：宽屏（lg+）编辑器与画布左右并排（各占一半）；窄屏上下堆叠。
+ *
+ * 单层卡（HEL-30 收口）：本层整体画一张 editable Demo 卡（外壳 + 单一「⚡ 可编辑」标签 +
+ * 重置按钮），ShaderCanvas 以 bare 模式嵌进来（不画自己的卡片外壳、不画自己的 ⚡/重置头部），
+ * 编辑器作为同一张卡内的并列一块。由此外层卡统一承载「⚡ + 画布 + 控件 + 编辑器 + 重置」，
+ * 避免早期「⚡可编辑」卡套「⚡可交互」画布卡的卡中卡 + 双 ⚡ 标签。
+ * 重置：本层「重置」按钮既复位源码/编辑器，又通过递增 canvasReset 信号驱动 bare 画布
+ * 复位 uTime/uMouse + 全部自定义 uniform（bare 画布无自带重置按钮）。
+ * 非 editable 的 ShaderDemo 仍走 ShaderCanvas 默认（非 bare）路径，画布自带完整卡，不变。
  */
 
 import dynamic from "next/dynamic";
@@ -108,6 +113,8 @@ export function ShaderEditorCanvas({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // 重置信号：递增 → ShaderEditor 据此把内容覆盖回 initialFrag。
   const [resetSignal, setResetSignal] = useState(0);
+  // 画布重置信号（HEL-30）：递增 → bare 的 ShaderCanvas 复位 uTime/uMouse + 自定义 uniform。
+  const [canvasReset, setCanvasReset] = useState(0);
 
   // —— 编辑 → 防抖 → 喂画布 ——
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,13 +149,15 @@ export function ShaderEditorCanvas({
     setErrorMsg(status.log.trim());
   }, []);
 
-  // —— 重置：源码 / 喂画布的 frag / 错误态都回初始；递增 resetSignal 让编辑器覆盖内容 ——
+  // —— 重置：源码 / 喂画布的 frag / 错误态都回初始；递增 resetSignal 让编辑器覆盖内容；
+  //         递增 canvasReset 让 bare 画布复位 uTime/uMouse + 自定义 uniform ——
   const handleReset = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setLiveFrag(initialFrag);
     setErrorLines([]);
     setErrorMsg(null);
     setResetSignal((n) => n + 1);
+    setCanvasReset((n) => n + 1);
   }, [initialFrag]);
 
   // controls 按内容 memo，稳引用透传（避免 ShaderCanvas 内重算）。
@@ -175,7 +184,7 @@ export function ShaderEditorCanvas({
         <button
           type="button"
           onClick={handleReset}
-          aria-label="重置：把着色器源码恢复到初始内容"
+          aria-label="重置：着色器源码恢复到初始内容、时间归零、鼠标与参数复位"
           className="rounded-control border border-border px-2 py-1 text-xs text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
         >
           重置
@@ -184,7 +193,7 @@ export function ShaderEditorCanvas({
 
       {/* 画布 + 编辑器：宽屏左右并排，窄屏上下堆叠 */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* 画布舞台（ShaderCanvas 自带卡片外壳，这里直接放入网格一格） */}
+        {/* 画布舞台（bare：不画自己的卡片外壳/头部，由本层 editable 卡统一承载——单层卡） */}
         <ShaderCanvas
           frag={liveFrag}
           vert={vert}
@@ -193,6 +202,8 @@ export function ShaderEditorCanvas({
           aspect={aspect}
           caption={caption}
           onStatusChange={handleStatusChange}
+          bare
+          resetSignal={canvasReset}
         />
 
         {/* 编辑器 + 错误信息 */}
