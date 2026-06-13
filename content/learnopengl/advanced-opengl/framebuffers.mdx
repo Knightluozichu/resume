@@ -1,0 +1,538 @@
+---
+title: 帧缓冲
+type: C
+section: 高级OpenGL
+order: 5
+description: 学会另开一块「离屏画板」——帧缓冲对象、颜色纹理附件与深度渲染缓冲附件、用 checkFramebufferStatus 验完整性，先把整个场景渲成一张纹理（render-to-texture），再用全屏四边形对这张图做后处理（反相 / 灰度 / 模糊 / 边缘检测的 3×3 卷积核）。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/05%20Framebuffers/
+draft: true
+---
+
+{/* C 实战型章（HEL-71，高级OpenGL 篇第 5 篇）：原书「帧缓冲 Framebuffers」。重心是代码对照(§6 覆盖≥80% 关键代码)：①建 FBO + 颜色纹理附件 + 深度 renderbuffer 附件 + checkFramebufferStatus 完整性检查；②第一遍绑 FBO 渲场景、第二遍绑回默认帧缓冲(0/null)渲全屏四边形采样纹理；③后处理片段着色器(核采样)。math:false 省略 §4。承接深度/模板/混合篇（同 section 工厂流水线：之前都在「同一块画布」上做测试与混合，本章是「另开一块离屏画板」先渲成图再后期）。沿用「工厂流水线 / 离屏画板」类比。主 viz 两个：FramebufferDemo 渲到纹理后处理可玩(5 个核分段选择) + Stepper 两遍渲染流程(每步带 TwoPassDiagram)。draft:true，老板验收后才发布(硬规则 7)。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 帧缓冲 FBO（自己创建的一块离屏画板，区别于默认帧缓冲＝屏幕）= 直觉引入 + 概念 + <FramebufferAttachmentDiagram> + 主 FramebufferDemo；2) 默认帧缓冲（窗口/屏幕那块，编号 0 / WebGL 里 null）= 概念随文带出 + §6 代码对照②；3) 附件 attachment（往 FBO 上挂的存储槽）= 概念 + FramebufferAttachmentDiagram；4) 颜色纹理附件（画面颜色写这、渲完可当纹理采样）= 概念 + FramebufferAttachmentDiagram + §6 代码对照①；5) 深度/模板 renderbuffer 附件（只写不采、存深度供测试）= 概念 + FramebufferAttachmentDiagram + §6 代码对照① + 误区；6) 帧缓冲完整性 checkFramebufferStatus（挂全才能用）= 概念 + FramebufferAttachmentDiagram + §6 代码对照① + 误区；7) 离屏渲染 / 渲染到纹理 render-to-texture（把场景画进纹理而非屏幕）= 概念 + 主 FramebufferDemo + <TwoPassDiagram>；8) 两遍渲染（第一遍渲到 FBO、第二遍贴满屏处理）= 概念 + <Stepper>+<TwoPassDiagram>（主 viz 2）+ §6 代码对照②；9) 全屏四边形 screen quad（铺满 NDC、贴离屏纹理）= 概念 + TwoPassDiagram + §6 代码对照②③ + 误区（UV/NDC）；10) 后处理 post-processing（对整张图做后期：反相/灰度/核）= 概念 + 主 FramebufferDemo + §6 代码对照③；11) 3×3 卷积核 kernel（对邻域加权求和：模糊/边缘检测）= 概念 + <KernelDiagram> + 主 FramebufferDemo + §6 代码对照③ + 误区（权重和）。Term 共 8 个（帧缓冲 / 默认帧缓冲 / 附件 / 颜色纹理附件 / 渲染缓冲附件 / 帧缓冲完整性 / 渲染到纹理 / 全屏四边形 / 后处理 / 卷积核——精选高亮其中陌生的 8 个）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能搭出一个能用的帧缓冲：`glGenFramebuffers` 建 FBO、挂一张`颜色纹理附件` + 一个`深度 renderbuffer 附件`，并用 `glCheckFramebufferStatus` 确认它`完整`
+- 能改出后处理效果：写出「第一遍渲到 FBO、第二遍绑回默认帧缓冲画全屏四边形采样那张纹理」的两遍流程，并改片段着色器做反相 / 灰度 / 模糊 / 边缘检测
+- 能回答：把场景渲到自建帧缓冲后，立方体的前后面互相穿插、深度乱套了，最可能漏了哪一步？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线 / 离屏画板」库（承接高级OpenGL 篇）。 */}
+
+## 另开一块离屏画板
+
+前面几章，你画的每一笔最后都落在同一块画布上——也就是你屏幕里看到的那块。测试、混合、剔除，全是在「往这块画布上画的过程中」做手脚。可有些效果，光在画的过程里做不到：比如想把**整幅画**变成黑白、整体反相、或者沿着轮廓描一圈边。
+
+这些是对**整张完成图**动手的「后期」，得先有一张完整的图才行。办法是：**另外开一块画板**，先把整个场景画到这块离屏的画板上、当成一张图存起来；再回到屏幕这块画布上，把那张图**贴满整个屏幕**，贴的时候顺手做后期——反相、模糊、描边随你。
+
+这一章要解决的就是：**怎么把整个场景先画进一张「图」、再对这张图整体做加工**。没有它，你只能一笔一笔地画，永远摸不到「先画完、再后期」这种工序，做不出全屏的滤镜效果。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 帧缓冲：自己开的那块离屏画板
+
+你一直在画的那块屏幕，其实是系统替你准备好的一块画板，叫 <Term def="窗口系统替你创建好的那块帧缓冲，渲染结果最终显示到屏幕上的就是它。在桌面 OpenGL 里它的编号是 0，在 WebGL 里用 null 表示。平时不绑别的帧缓冲时，画的内容都落在它上面。">默认帧缓冲</Term>——桌面 OpenGL 里它的编号是 `0`，WebGL 里用 `null` 表示。平时你什么都不绑，画的内容就落在它上面、显示到屏幕。
+
+本章要做的，是**自己再开一块**这样的画板：<Term def="一块可以画进去、但不一定显示到屏幕的「画板」。你可以自己创建多块帧缓冲，把场景渲染到某一块上当成离屏的图，再拿来做后处理、镜像、阴影贴图等。它本身不存像素，只是把若干「附件」挂在一起的容器。">帧缓冲</Term>（framebuffer，常简称 FBO）。它和默认帧缓冲长得一样、用法一样，唯一区别是**画进去的东西默认不显示到屏幕**，而是先存着，供你后续取用。在工厂流水线的比喻里：默认帧缓冲是「成品出货口」，自建帧缓冲是车间里一块「中转画板」，先把半成品画上去，下一道工序再加工。
+
+它在管线里的位置在**最末端**——所有测试、混合都过完、颜色要落地时，落在「当前绑定的帧缓冲」上。绑默认帧缓冲就落到屏幕，绑自建帧缓冲就落到那块离屏画板。怎么往这块画板上挂「能存东西的地方」，是下一节。
+
+## 附件：往画板上挂存储槽
+
+帧缓冲本身**不存像素**——它只是个「框」。真正存数据的，是往这个框上挂的 <Term def="挂到帧缓冲上、真正用来存像素数据的存储槽。帧缓冲本身不存东西，得至少挂一个颜色附件才能用。常见有两种实现：纹理（渲完能被采样）和渲染缓冲对象（只写不采、更快）。">附件</Term>（attachment）。一块帧缓冲想用，至少得挂一个能存颜色的附件。本章用到两类附件，一个存颜色、一个存深度：
+
+第一类是 <Term def="一种帧缓冲附件，它是一张纹理：渲染时画面的颜色写进这张纹理；渲染完之后，这张纹理就能像普通纹理一样被采样。这正是「把场景渲成一张图」的关键——颜色落在纹理里，下一遍就能把它贴出来。挂在 COLOR_ATTACHMENT0 上。">颜色纹理附件</Term>——它是一张**纹理**。渲染时，画面的颜色写进这张纹理；渲完之后，它就能像任何普通纹理一样被**采样**。这正是「把场景渲成一张图、再贴出来」的命门：颜色落在纹理里，下一遍才取得出来。它挂在帧缓冲的 `COLOR_ATTACHMENT0`（颜色附件 0 号位）上。
+
+第二类是 <Term def="一种帧缓冲附件，用渲染缓冲对象（renderbuffer）实现：它和纹理一样能存数据，但只能被写、不能被采样，换来更省更快。常用来挂深度（和模板）——离屏渲染立方体也要做深度测试、判前后遮挡，所以得给帧缓冲挂个深度附件，否则深度测试没地方写。">渲染缓冲附件</Term>——用来存**深度**（和模板）。离屏渲染那个立方体时，前后面也得靠深度测试判遮挡，所以这块离屏画板也必须挂个存深度的地方，否则深度测试无处可写、立方体会前后穿帮。深度数据**只需要写、不需要采样**，所以用一种只写不采、更省更快的 `renderbuffer`（渲染缓冲对象）来存，比用纹理划算。下面这张图把「FBO 这个框 + 挂上去的两个附件」画清楚：
+
+<FramebufferAttachmentDiagram />
+
+## 帧缓冲完整性：挂齐了才能用
+
+附件挂好不等于能用。帧缓冲必须满足几个条件——至少挂了一个附件、至少有一个颜色附件、各附件尺寸一致——才算「能渲染」。这个状态叫 <Term def="帧缓冲是否「可以拿来渲染」的状态。要满足：至少挂了一个附件、至少有一个颜色附件、各附件大小一致等。挂好附件后必须用 glCheckFramebufferStatus 检查它返回 GL_FRAMEBUFFER_COMPLETE，否则往这个帧缓冲渲染会失败或得到一片空白。">帧缓冲完整性</Term>。挂完附件后，**一定要**用 `glCheckFramebufferStatus` 查一下它是不是 `GL_FRAMEBUFFER_COMPLETE`：
+
+是 `COMPLETE` 才能往里渲染；不是的话，往这块帧缓冲画啥都白搭——轻则一片空白、重则报错。这步检查很容易被忘掉，忘了又恰好不完整，就会对着白屏一头雾水（§7 第一个坑就是它）。检查通过，这块离屏画板就备好了。
+
+## 渲染到纹理 + 两遍渲染：先画成图，再贴出来
+
+画板和附件都备齐，整套流程是**两遍渲染**。第一遍叫 <Term def="不把场景画到屏幕，而是画进一张纹理（帧缓冲的颜色纹理附件）。渲完这张纹理就存着整个场景的画面，可以当普通纹理拿去贴、采样、做后处理。是实现后处理、镜像、阴影贴图等一大类效果的基础。">渲染到纹理</Term>（render-to-texture）：绑上自建帧缓冲，把整个场景照常画一遍——但画面没上屏，而是写进了那张颜色纹理附件，存成了一张「图」。
+
+第二遍才上屏：绑回**默认帧缓冲**，画一个铺满整个屏幕的 <Term def="一个顶点正好落在屏幕四角（标准化设备坐标 NDC 的 −1 到 1）的矩形，由两个三角形拼成，铺满整个屏幕。它的作用是「把一张纹理贴满屏幕」：片段着色器逐像素采样那张离屏纹理，顺便做后处理，结果就铺满了整个画面。">全屏四边形</Term>（screen quad）——它的顶点正好落在屏幕四角，由两个三角形拼成、占满整块屏幕。这个四边形的片段着色器**采样第一遍那张纹理**，把它贴满屏幕显示出来。两遍走完，你就把整个场景「先存成图、再贴回屏幕」了。这两遍的流程下面 Demo 会单步走一遍。
+
+## 后处理与卷积核：贴的时候顺手做后期
+
+光是「原样贴回去」没意思——精彩的在于：第二遍采样纹理时，可以对采到的颜色**任意加工**再输出。这种「对整张完成图做整体加工」就叫 <Term def="拿到一张已经渲好的完整画面（离屏纹理），对它整体做加工再显示：反相、转灰度、模糊、描边等。因为是在「把图贴满屏幕」的那一遍逐像素处理，所以能对全屏统一施加效果，是游戏里各种屏幕滤镜的基础。">后处理</Term>（post-processing）。最简单的两种只看**当前像素**：反相就是 `1 − 颜色`，灰度就是按亮度权重把 RGB 压成一个灰度值。
+
+更有意思的是要看**周围像素**的效果，靠 <Term def="一个 3×3（也可更大）的小权重表，对当前像素及其周围 8 个邻居采样，分别乘上表里对应位置的权重再相加，得到这个像素的新颜色。换不同的权重表就得到不同效果：每格 1/9 是模糊（取邻域平均），中心大、四周负是边缘检测（突出明暗突变处）。">卷积核</Term>（kernel）：拿一张 3×3 的小权重表，对当前像素和它周围 8 个邻居各采一次样，分别乘上表里对应的权重再加起来，就是新颜色。换不同的权重表，就是不同滤镜——每格都填 `1/9` 是**模糊**（取邻域平均、抹平细节），中心填大数、四周填负数是**边缘检测**（突出明暗突变、描出轮廓）。下面这张图把「核怎么对邻域加权求和」拆开：
+
+<KernelDiagram />
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。 */}
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：C 型主 Demo = FramebufferDemo 渲到纹理 + 后处理核可玩。第一遍把自转彩色立方体渲进 FBO 颜色纹理，第二遍全屏四边形采样 + 按所选核处理上屏。控件：5 个核分段选择器（原图/反相/灰度/模糊/边缘检测）+ 重置，≤5。猜一猜：切到边缘检测画面会变成什么（自检：只剩立方体轮廓线、平坦面变黑，与文字一致）。 */}
+
+## 动手：切换后处理核，看同一画面被加工
+
+> 猜一猜：下面这块画布里有一个自转的彩色立方体——但它其实是先被画进一张离屏纹理、再贴回屏幕的。如果你把后处理核切到**「边缘检测」**，画面会变成什么样？是整体变暗，还是只剩下立方体的**轮廓线**、平坦的面都变黑？先切一下看看，再读下面的解释。
+
+这块画布严格走了**两遍渲染**：第一遍把自转立方体渲进帧缓冲的颜色纹理附件（开了深度测试、挂了深度 renderbuffer，所以前后面遮挡正确），第二遍画一个全屏四边形采样这张纹理，按你选的核处理后上屏。切换下面的核，盯着同一个立方体怎么被加工：
+
+<FramebufferDemo caption="一个自转彩色立方体，先被渲进离屏帧缓冲的颜色纹理（第一遍），再由全屏四边形采样、按所选后处理核处理后上屏（第二遍）。切『反相』整体颜色翻转（像底片）；切『灰度』变黑白；切『模糊』细节被 3×3 均值核抹平、边缘发糊；切『边缘检测』只剩立方体轮廓线、平坦的面变黑（边缘核突出明暗突变处）。点重置回到『原图』。" />
+
+切到**反相**，颜色全部翻转、像看底片；切到**灰度**，立方体变成黑白；切到**模糊**，每个像素被换成它和邻居的平均色、细节糊掉、边缘发虚；切到**边缘检测**最明显——平坦的面因为「邻域都一样、加权求和接近 0」变黑，只有颜色突变的**棱边**被留下，整个立方体被描成了线框轮廓。后三种都是 3×3 卷积核在起作用，区别只在那张权重表填了什么。
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper 两遍渲染——每步带 <TwoPassDiagram step>（满足「每步必带图示」，纯文字步=打回）。①第一遍渲到 FBO 纹理 → ②绑回默认帧缓冲取出纹理 → ③第二遍全屏四边形采样 + 后处理核上屏。猜一猜引导。 */}
+
+## 两遍渲染：单步走一遍从场景到屏幕
+
+> 猜一猜：上面那个立方体明明显示在屏幕上，凭什么说它「先被画进了一张纹理」？这中间到底分了几遍画、每遍画在哪？想一想「离屏画板」那个比喻，再单步走一遍下面的流程。
+
+下面把整套两遍渲染拆成三步。每一步都画出数据这一刻流到哪了——盯着画面是先进了帧缓冲、还是已经上了屏：
+
+<Stepper>
+  <Step title="① 第一遍：把场景渲进帧缓冲的纹理">
+    <TwoPassDiagram step={1} />
+    第一遍是<strong>离屏</strong>的：先<code>绑定</code>自己创建的
+    <strong>帧缓冲</strong>，再把场景里的彩色立方体照常画一遍（开
+    <strong>深度测试</strong>，靠挂上去的深度附件判前后遮挡）。但这一遍的画面
+    <strong>没有上屏</strong>，而是写进了帧缓冲的<strong>颜色纹理附件</strong>
+    ——整个场景被存成了一张「图」。
+  </Step>
+  <Step title="② 绑回默认帧缓冲，取出那张离屏纹理">
+    <TwoPassDiagram step={2} />
+    把绑定<strong>切回默认帧缓冲</strong>（屏幕那块，编号 0 / WebGL 里
+    null）。第一遍渲好的那张<strong>颜色纹理</strong>现在存着完整画面， 把它
+    <strong>取出来</strong>，准备贴到一个铺满整个屏幕的
+    <strong>全屏四边形</strong>上。这一步还没画，只是切换目标、备好那张图。
+  </Step>
+  <Step title="③ 第二遍：全屏四边形采样纹理 + 后处理 → 上屏">
+    <TwoPassDiagram step={3} />
+    第二遍才<strong>上屏</strong>：画那个全屏四边形，它的片段着色器逐像素
+    <strong>采样</strong>那张离屏纹理，顺手套上一个<strong>后处理核</strong>
+    （图里示意「边缘检测」描边），处理后的结果显示到屏幕。两遍走完，「先渲成图、再后期贴回」就完成了。
+  </Step>
+</Stepper>
+
+走完这遍就清楚了：屏幕上看到的，其实是「先画进纹理、再贴回屏幕」的**第二遍**结果。第一遍只在离屏画板上忙活、不上屏；正因为中间多了「存成一张图」这一道，才有机会对整张图做后处理。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：三段——①建 FBO + 颜色纹理附件 + 深度 renderbuffer + 完整性检查；②第一遍绑 FBO 渲场景、第二遍绑回默认帧缓冲(0/null)渲全屏四边形采样纹理；③后处理片段着色器(核采样)。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异用 Callout。 */}
+
+## 代码逐段拆解
+
+帧缓冲的代码分三块：**建帧缓冲 + 挂附件 + 验完整性**、**两遍渲染的绑定切换**、**后处理片段着色器**。三块对照看，C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一块：建 FBO、挂颜色纹理附件 + 深度 renderbuffer、验完整
+
+先建一个帧缓冲并绑定，往它身上挂一张**颜色纹理附件**（存画面、渲完可采样）和一个**深度 renderbuffer 附件**（存深度供测试），最后用 `glCheckFramebufferStatus` 确认它完整。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 1) 建帧缓冲对象并绑定
+unsigned int fbo;
+glGenFramebuffers(1, &fbo);
+glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+// 2) 颜色纹理附件：建一张空纹理（data = NULL），挂到 COLOR_ATTACHMENT0
+unsigned int texColor;
+glGenTextures(1, &texColor);
+glBindTexture(GL_TEXTURE_2D, texColor);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColor, 0);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 1) 建帧缓冲对象并绑定
+const fbo = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+// 2) 颜色纹理附件：建一张空纹理（data = null），挂到 COLOR_ATTACHMENT0
+const texColor = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, texColor);
+gl.texImage2D(
+  gl.TEXTURE_2D,
+  0,
+  gl.RGBA,
+  800,
+  600,
+  0,
+  gl.RGBA,
+  gl.UNSIGNED_BYTE,
+  null,
+);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.framebufferTexture2D(
+  gl.FRAMEBUFFER,
+  gl.COLOR_ATTACHMENT0,
+  gl.TEXTURE_2D,
+  texColor,
+  0,
+);
+```
+
+  </Tab>
+</CodeTabs>
+
+颜色附件挂好了，还差深度。深度数据只写不采，用 `renderbuffer` 更省。建一个渲染缓冲、给它分配「深度（+模板）」格式的存储、挂到帧缓冲的深度附件点上，最后检查完整性：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 3) 深度 renderbuffer 附件：只写不采，比纹理省
+unsigned int rbo;
+glGenRenderbuffers(1, &rbo);
+glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+// 4) 验完整性：不是 COMPLETE，往这个帧缓冲渲染就白搭
+if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+  std::cout << "ERROR: framebuffer not complete!" << std::endl;
+glBindFramebuffer(GL_FRAMEBUFFER, 0);   // 建完先解绑，回到默认帧缓冲
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 3) 深度 renderbuffer 附件：只写不采，比纹理省
+const rbo = gl.createRenderbuffer();
+gl.bindRenderbuffer(gl.RENDERBUFFER, rbo);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 800, 600);
+gl.framebufferRenderbuffer(
+  gl.FRAMEBUFFER,
+  gl.DEPTH_ATTACHMENT,
+  gl.RENDERBUFFER,
+  rbo,
+);
+// 4) 验完整性：不是 COMPLETE，往这个帧缓冲渲染就白搭
+if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+  console.error("framebuffer not complete!");
+gl.bindFramebuffer(gl.FRAMEBUFFER, null); // 建完先解绑，回到默认帧缓冲
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应，但有几处 API 名称和取值差异要留神：
+
+<Callout type="warn">
+  API 差异：桌面用 `glGenFramebuffers` / `glGenRenderbuffers` 生成对象（先生成
+  id 再绑定）；WebGL2 用 `gl.createFramebuffer()` / `gl.createRenderbuffer()`
+  直接返回对象。解绑回默认帧缓冲：桌面是 `glBindFramebuffer(GL_FRAMEBUFFER,
+  0)`（编号 0），WebGL2 是 `gl.bindFramebuffer(gl.FRAMEBUFFER, null)`（用
+  `null`）。深度格式上，本演示用 WebGL2 都支持的
+  `DEPTH_COMPONENT16`（纯深度）；若要深度 + 模板，桌面常用 `GL_DEPTH24_STENCIL8`
+  + `GL_DEPTH_STENCIL_ATTACHMENT`。
+</Callout>
+
+### 第二块：两遍渲染——绑定切换
+
+每帧画两遍。第一遍**绑自建帧缓冲**、开深度测试、画场景（写进颜色纹理）；第二遍**绑回默认帧缓冲**、关深度测试、画全屏四边形并把第一遍那张纹理绑上去采样。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 第一遍：绑自建帧缓冲，开深度测试，正常画场景（写进颜色纹理）
+glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+glEnable(GL_DEPTH_TEST);
+glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+DrawScene();                       // 立方体等都画进离屏纹理
+// 第二遍：绑回默认帧缓冲(0)，关深度测试，画全屏四边形采样那张纹理
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+glDisable(GL_DEPTH_TEST);
+glClear(GL_COLOR_BUFFER_BIT);
+screenShader.use();
+glBindVertexArray(quadVAO);
+glBindTexture(GL_TEXTURE_2D, texColor);  // 第一遍渲好的颜色纹理
+glDrawArrays(GL_TRIANGLES, 0, 6);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 第一遍：绑自建帧缓冲，开深度测试，正常画场景（写进颜色纹理）
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+gl.enable(gl.DEPTH_TEST);
+gl.clearColor(0.1, 0.1, 0.1, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+drawScene(); // 立方体等都画进离屏纹理
+// 第二遍：绑回默认帧缓冲(null)，关深度测试，画全屏四边形采样那张纹理
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+gl.disable(gl.DEPTH_TEST);
+gl.clear(gl.COLOR_BUFFER_BIT);
+gl.useProgram(screenProgram);
+gl.bindVertexArray(quadVAO);
+gl.bindTexture(gl.TEXTURE_2D, texColor); // 第一遍渲好的颜色纹理
+gl.drawArrays(gl.TRIANGLES, 0, 6);
+```
+
+  </Tab>
+</CodeTabs>
+
+关键就两句对绑：第一遍绑 `fbo`、第二遍绑回 `0` / `null`。每遍各自 `clear` 一次（两块帧缓冲互不影响）。第二遍**关掉深度测试**——全屏四边形只是块平面贴图，不需要深度比较。全屏四边形的顶点和顶点着色器很简单：顶点直接写在 NDC 的四角、UV 写在 0~1 的四角，顶点着色器原样透传：
+
+<Callout type="warn">
+  UV 与 NDC 的方向要对齐。WebGL 纹理的原点（`v =
+  0`）在**左下角**——这一点和你画进帧缓冲时的坐标系一致，所以全屏四边形「NDC
+  左下角 `(-1,-1)` 配 UV `(0,0)`、右上角 `(1,1)` 配
+  `(1,1)`」**不需要翻转**就正。
+  反倒是把图片当普通纹理加载时，常因为图片行序「自上而下」要
+  `flipY`——但帧缓冲渲出来的纹理本就左下原点，**别**对它再翻一次，否则画面上下颠倒。
+</Callout>
+
+### 第三块：后处理片段着色器（核采样）
+
+后处理全在第二遍那个全屏四边形的**片段着色器**里。最简单的反相、灰度只看当前像素一个采样；核效果（模糊、边缘检测）要采当前像素 + 周围 8 格，乘权重再求和。
+
+<CodeTabs>
+  <Tab label="GLSL：反相 / 灰度（只看当前像素）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D screenTexture;
+out vec4 FragColor;
+void main() {
+  vec3 c = texture(screenTexture, TexCoords).rgb;
+  // 反相：1 − 颜色
+  // c = vec3(1.0) - c;
+  // 灰度：按人眼亮度权重把 RGB 压成一个灰度值
+  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = vec3(lum);
+  FragColor = vec4(c, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：3×3 卷积核（看邻域）">
+
+```glsl
+const float offset = 1.0 / 300.0;   // 邻域偏移：1 / 纹理边长
+vec2 offsets[9] = vec2[](
+  vec2(-offset, offset), vec2(0.0, offset), vec2(offset, offset),
+  vec2(-offset, 0.0),    vec2(0.0, 0.0),    vec2(offset, 0.0),
+  vec2(-offset,-offset), vec2(0.0,-offset), vec2(offset,-offset));
+// 模糊核：每格 1/16 加权（权重和 = 1，亮度不变）；边缘检测核见下
+float kernel[9] = float[](
+  1.0/16.0, 2.0/16.0, 1.0/16.0,
+  2.0/16.0, 4.0/16.0, 2.0/16.0,
+  1.0/16.0, 2.0/16.0, 1.0/16.0);
+vec3 col = vec3(0.0);
+for (int i = 0; i < 9; i++)               // 邻域加权求和
+  col += texture(screenTexture, TexCoords + offsets[i]).rgb * kernel[i];
+FragColor = vec4(col, 1.0);
+```
+
+  </Tab>
+</CodeTabs>
+
+核效果的骨架是：先算出 9 个邻域的采样偏移（`offset = 1 / 纹理边长`，正好挪一个像素），对每个偏移采一次样、乘上核里对应权重、累加。换 `kernel` 那张表就换效果——上面是带权模糊核；**边缘检测核**是中心 `8`、四周 `-1`（权重和 `0`，平坦区相加为黑、只剩突变处）。本站 Demo 的「模糊」用的是更直白的 **3×3 均值核**（每格 `1/9`，9 格平均），效果同理：
+
+<Callout type="warn">
+  核的**权重和**决定整体明暗：模糊这类「不该改变亮度」的核，权重和必须 =
+  1（均值核每格 `1/9`、或带权核 `16` 个 `1/16` 加起来 =
+  1）；边缘检测这类「只要突变」的核，权重和 =
+  0（平坦区采样都一样、加权后归零变黑）。权重和若既不是 1 也不是 0
+  又没有意图，画面就会莫名整体变亮 / 变暗。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字；含可联想/亲手触发的。①忘 checkFramebufferStatus / 没挂深度附件 → 深度测试失效穿帮；②全屏四边形 UV/NDC 弄反 → 画面颠倒/采样错位；③核权重和 ≠ 1 → 莫名变亮变暗。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：把场景渲进自建帧缓冲后，立方体的**前后面互相穿插**、近的面被远的面盖住，深度全乱。**原因**：这块自建帧缓冲**没挂深度附件**（只挂了颜色纹理就开画），深度测试无处可写，等于没做深度测试。**修法**：给帧缓冲挂一个深度
+  `renderbuffer` 附件（`renderbufferStorage` 用深度格式 +
+  `DEPTH_ATTACHMENT`），并在挂完后 `checkFramebufferStatus` 确认 `COMPLETE`
+  再渲染。
+</Callout>
+
+<Callout type="trap">
+  **现象**：后处理一切正常，但画面**整个上下颠倒**，或描边、模糊像采错了位置、糊到旁边去。**原因**：全屏四边形的
+  **UV 和 NDC 方向没对齐**——要么把 UV
+  上下写反了，要么把帧缓冲渲出来的纹理又当普通图片 `flipY`
+  翻了一次。**修法**：帧缓冲纹理是左下原点，全屏四边形 NDC 左下 `(-1,-1)` 配 UV
+  `(0,0)`、右上配 `(1,1)`，**不翻转**；别对帧缓冲纹理再做 `flipY`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：套上模糊（或自己写的）核后，画面**莫名整体变亮或变暗**，颜色也不对。**原因**：卷积核的
+  **9 个权重加起来不等于 1**——比如模糊核忘了除以 9（或除以 16），9 个 `1`
+  加起来是 `9`，整张图亮了 9
+  倍直接过曝。**修法**：要保持亮度的核（模糊、锐化），让权重和 =
+  1（均值核每格除以 9）；边缘检测这类故意权重和 = 0 的另当别论，但别让它「既不是
+  1 也不是 0 又没意图」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：往自建帧缓冲渲染，结果**一片空白 /
+  黑屏**，也不报错。**原因**：挂完附件**没调
+  `checkFramebufferStatus`**，恰好帧缓冲不完整（如忘了颜色附件、附件尺寸不一致），渲了个寂寞。**修法**：挂完附件**必须**
+  `checkFramebufferStatus(GL_FRAMEBUFFER)` 确认返回 `GL_FRAMEBUFFER_COMPLETE`
+  才往里渲染；不完整时按返回的错误码排查缺了哪类附件。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改 Demo 题 + 1 道独立实现/排错题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **帧缓冲** FBO 是自己开的一块「离屏画板」，区别于显示到屏幕的**默认帧缓冲**（0 / null）
+- 帧缓冲本身不存像素，要挂**附件**：**颜色纹理附件**（画面写这、渲完可采样）+ **深度 renderbuffer 附件**（存深度供测试）；挂完用 `checkFramebufferStatus` 验**完整性**
+- **两遍渲染**：第一遍绑 FBO 把场景**渲到纹理**、第二遍绑回默认帧缓冲画**全屏四边形**采样那张纹理
+- 第二遍采样时做**后处理**：反相 `1−c`、灰度按亮度权重、或用 **3×3 卷积核**做模糊 / 边缘检测
+- 卷积核对邻域 9 格**加权求和**；权重和 = 1 保持亮度（模糊每格 1/9），= 0 突出边缘（边缘检测核）
+
+<Exercises>
+
+**练习 1（改 Demo 代码 / 设计题）** 在上面的 FramebufferDemo 里你玩过 5 个核。现在要给它**新增一个「锐化」核**（让画面更清晰、边缘更硬）。写出这个 3×3 锐化核的 9 个权重，并说清：① 它的权重和应该是几？为什么？② 在本章那段「3×3 卷积核」的片段着色器里，你要改哪个量来加这个核？
+
+<Answer>
+
+锐化核（sharpen）：
+
+```glsl
+float kernel[9] = float[](
+  -1.0, -1.0, -1.0,
+  -1.0,  9.0, -1.0,
+  -1.0, -1.0, -1.0);
+```
+
+① 权重和 = `9 + 8×(−1) = 1`。**应该是 1**：锐化是「增强当前像素、压低邻居」来突出细节，但不应该改变整体亮度，所以 9 个权重加起来要等于 1，平坦区（邻域都一样）加权后还原成原色、不变亮变暗，只有差异处被放大。
+
+② 在那段核着色器里，只要把 `kernel[9]` 这张**权重表**换成上面这 9 个数即可——`offsets`（邻域偏移）、采样循环、求和那套骨架完全不用动。换核 = 换权重表，这正是卷积核框架的妙处。
+
+</Answer>
+
+**练习 2（独立实现题）** 不看上面的代码，把「建一个能用的帧缓冲」这件事按顺序写出来（用伪代码或函数名即可）：从建 FBO 开始，到挂颜色纹理附件、挂深度 renderbuffer 附件、验完整性、解绑。并说清：为什么颜色用**纹理**附件、深度却用 **renderbuffer** 附件？
+
+<Answer>
+
+顺序（WebGL2 函数名）：
+
+```ts
+const fbo = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo); // 绑定
+// 颜色纹理附件
+const tex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, tex);
+gl.texImage2D(/* ...RGBA, w, h, data=null... */);
+gl.framebufferTexture2D(
+  gl.FRAMEBUFFER,
+  gl.COLOR_ATTACHMENT0,
+  gl.TEXTURE_2D,
+  tex,
+  0,
+);
+// 深度 renderbuffer 附件
+const rbo = gl.createRenderbuffer();
+gl.bindRenderbuffer(gl.RENDERBUFFER, rbo);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, w, h);
+gl.framebufferRenderbuffer(
+  gl.FRAMEBUFFER,
+  gl.DEPTH_ATTACHMENT,
+  gl.RENDERBUFFER,
+  rbo,
+);
+// 验完整性 + 解绑
+gl.checkFramebufferStatus(gl.FRAMEBUFFER); // 须 === FRAMEBUFFER_COMPLETE
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+```
+
+为什么颜色用纹理、深度用 renderbuffer：颜色第二遍**要被采样**（贴到全屏四边形上），所以必须是一张能采样的**纹理**；深度只在第一遍渲染时**被写、被读来做深度测试**，渲完**不需要采样**，用只写不采、更省更快的 **renderbuffer** 更划算。一句话——要回头采样的用纹理，纯内部用的用 renderbuffer。
+
+</Answer>
+
+**练习 3（排错题）** 某人写了帧缓冲后处理，渲出来**一片纯黑、屏幕上什么都没有**，但代码也不报错。他绑了 FBO、挂了颜色纹理、画了场景、绑回默认帧缓冲画了全屏四边形。请列出**至少两个**最可能的原因，并各给修法。
+
+<Answer>
+
+最可能的几个原因（任举两个即可）：
+
+1. **帧缓冲不完整、没检查**：比如忘挂深度附件、或附件尺寸不一致，导致第一遍其实没渲进去。修法：挂完附件 `checkFramebufferStatus` 确认 `FRAMEBUFFER_COMPLETE`，不完整按错误码补附件。
+
+2. **第二遍没把那张颜色纹理绑上 / 采样器 uniform 没设对**：全屏四边形采样的不是第一遍那张纹理（或采样器还指向别的纹理单元），自然采到全黑。修法：第二遍 `bindTexture` 绑上 `texColor`、把采样器 uniform 设到对应纹理单元（如 `uniform1i(uScene, 0)`）。
+
+3. **全屏四边形的 UV / NDC 写错**：四边形没真正铺满屏幕，或 UV 全采到纹理边界外。修法：四边形顶点落在 NDC 四角 `(±1,±1)`、UV 落在 `(0/1)` 四角，一一对应。
+
+4. **第二遍忘了用屏幕着色器 / 没解绑回默认帧缓冲**：还绑着 FBO 就「画」全屏四边形，等于又画进离屏纹理、没上屏。修法：第二遍前 `bindFramebuffer(FRAMEBUFFER, null)` 绑回默认帧缓冲、`useProgram` 切到屏幕着色器。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="默认帧缓冲">
+  窗口系统替你建好的那块帧缓冲，渲染结果最终显示到屏幕的就是它。桌面 OpenGL
+  里编号是 `0`，WebGL 里用 `null`
+  表示。平时不绑别的帧缓冲时，画的内容都落在它上面。详见本章「帧缓冲」一节。
+</GlossaryItem>
+
+<GlossaryItem term="帧缓冲">
+  一块可以画进去、但不一定显示到屏幕的「画板」。你可以自己创建多块，把场景渲到某一块上当成离屏的图，再拿来做后处理、镜像、阴影贴图等。它本身**不存像素**，只是把若干「附件」挂在一起的容器，常简称
+  FBO。详见本章「帧缓冲」一节。
+</GlossaryItem>
+
+<GlossaryItem term="附件">
+  挂到帧缓冲上、真正用来存像素数据的存储槽。帧缓冲本身不存东西，得至少挂一个颜色附件才能用。常见两种实现：**纹理**（渲完能被采样）和**渲染缓冲对象**（只写不采、更快）。详见本章「附件」一节。
+</GlossaryItem>
+
+<GlossaryItem term="颜色纹理附件">
+  一种帧缓冲附件，它是一张**纹理**：渲染时画面颜色写进它，渲染完之后它就能像普通纹理一样被采样。这正是「把场景渲成一张图」的关键——颜色落在纹理里，下一遍就能贴出来。挂在
+  `COLOR_ATTACHMENT0` 上。详见本章「附件」一节。
+</GlossaryItem>
+
+<GlossaryItem term="渲染缓冲附件">
+  一种帧缓冲附件，用**渲染缓冲对象**（renderbuffer）实现：能存数据但**只写不采**，换来更省更快。常用来挂深度（和模板）——离屏渲染立方体也要做深度测试，所以得给帧缓冲挂个深度附件，否则深度测试没地方写。详见本章「附件」一节。
+</GlossaryItem>
+
+<GlossaryItem term="帧缓冲完整性">
+  帧缓冲是否「可以拿来渲染」的状态。要满足：至少挂了一个附件、至少有一个颜色附件、各附件大小一致等。挂好附件后必须用
+  `glCheckFramebufferStatus` 检查它返回
+  `GL_FRAMEBUFFER_COMPLETE`，否则往这个帧缓冲渲染会失败或得到一片空白。详见本章「帧缓冲完整性」一节。
+</GlossaryItem>
+
+<GlossaryItem term="渲染到纹理">
+  不把场景画到屏幕，而是画进一张纹理（帧缓冲的颜色纹理附件）。渲完这张纹理就存着整个场景的画面，可以当普通纹理拿去贴、采样、做后处理。是后处理、镜像、阴影贴图等一大类效果的基础。详见本章「渲染到纹理」一节。
+</GlossaryItem>
+
+<GlossaryItem term="全屏四边形">
+  一个顶点正好落在屏幕四角（标准化设备坐标 NDC 的 −1 到
+  1）的矩形，由两个三角形拼成，铺满整个屏幕。它的作用是「把一张纹理贴满屏幕」：片段着色器逐像素采样那张离屏纹理、顺便做后处理，结果就铺满了整个画面。详见本章「渲染到纹理」一节。
+</GlossaryItem>
+
+<GlossaryItem term="后处理">
+  拿一张已经渲好的完整画面（离屏纹理），对它整体做加工再显示：反相、转灰度、模糊、描边等。因为是在「把图贴满屏幕」那一遍逐像素处理，所以能对全屏统一施加效果，是游戏里各种屏幕滤镜的基础。详见本章「后处理与卷积核」一节。
+</GlossaryItem>
+
+<GlossaryItem term="卷积核">
+  一个 3×3（也可更大）的小权重表，对当前像素及其周围 8
+  个邻居采样，分别乘上表里对应位置的权重再相加，得到这个像素的新颜色。换不同权重表就得到不同效果：每格
+  `1/9`
+  是模糊（取邻域平均），中心大、四周负是边缘检测（突出明暗突变处）。详见本章「后处理与卷积核」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

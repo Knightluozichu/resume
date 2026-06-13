@@ -48,6 +48,9 @@ import { BlendSortStepDiagram } from "./diagrams/blend-sort-step-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
+import { FramebufferAttachmentDiagram } from "./diagrams/framebuffer-attachment-diagram";
+import { TwoPassDiagram } from "./diagrams/two-pass-diagram";
+import { KernelDiagram } from "./diagrams/kernel-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -63,6 +66,7 @@ import { LightingDemo } from "./lighting-demo";
 import { LightingMapsDemo } from "./lighting/lighting-maps-demo";
 import { MultiLightDemo } from "./lighting/multi-light-demo";
 import { ModelDemo } from "./model-demo";
+import { FramebufferDemo } from "./framebuffer-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -153,6 +157,11 @@ import { ModelDemo } from "./model-demo";
  *    ①模型里顶点统一逆时针定义→②投影到屏幕后朝你的仍 CCW=正面 / 背对你的反转成 CW=背面→
  *    ③背面被剔除不画、省片段开销）、FaceCullingDiagram（剔除关 vs 开 同构同框：culled=false 背面也画、
  *    透视看到内壁穿帮 / culled=true 只画正面、干净省一半，供 CompareSlider 两侧分别传）。同款 Server SVG。
+ *  - 高级OpenGL篇·帧缓冲（HEL-71）：FramebufferAttachmentDiagram（帧缓冲 FBO = 只是个「框」+
+ *    挂在上面的颜色纹理附件 / 深度 renderbuffer 附件，旁标 checkFramebufferStatus 完整性检查）、
+ *    TwoPassDiagram（§5 Stepper 两遍渲染每步图示：①第一遍绑自建 FBO 把场景渲进颜色纹理→
+ *    ②绑回默认帧缓冲取出离屏纹理→③第二遍全屏四边形采样纹理 + 后处理核 上屏）、
+ *    KernelDiagram（3×3 卷积核怎么对邻域 9 格加权求和：邻域 ⊗ 权重核 = 新色，权重和 1 不变亮暗 / 0 突出边缘）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -191,6 +200,15 @@ import { ModelDemo } from "./model-demo";
  *    教学核心「模型 = 一堆有名字的 mesh」：运行时 scene.traverse 收集所有 isMesh 节点生成
  *    下拉，选某 mesh = 高亮该件 + 压暗其余；线框开关 + 自转开关（reduced-motion 默认关）+ 重置。
  *    frameloop="demand" + IntersectionObserver 离屏停转（不空转 rAF）。
+ *
+ * WebGL 帧缓冲「渲到纹理 + 后处理核」交互演示（「高级OpenGL篇·帧缓冲」FramebufferDemo，HEL-71）：
+ *  - Client（dynamic 边界）：FramebufferDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 FramebufferCanvas（独立 chunk，硬规则 2/6）。真两遍渲染：第一遍把自转彩色立方体
+ *    （复用 camera-math 带法线立方体 + 矩阵，开深度测试）渲进自建 FBO 的颜色纹理附件 + 深度
+ *    renderbuffer 附件（checkFramebufferStatus 验完整）；第二遍绑回默认帧缓冲、关深度测试，
+ *    画铺满 NDC 的全屏四边形采样离屏纹理，按 uKernel 0..4 输出 原图/反相/灰度/模糊(3×3 均值核)/
+ *    边缘检测(3×3 边缘核)。控件：5 核分段选择器（默认原图）+ 重置；reduced-motion 默认不自转、
+ *    IntersectionObserver 离屏停转、resize 重建附件、卸载释放全部 GL 资源。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -207,6 +225,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LightingMapsDemo,
   MultiLightDemo,
   ModelDemo,
+  FramebufferDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -253,6 +272,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   WindingOrderDiagram,
   WindingCullStepDiagram,
   FaceCullingDiagram,
+  FramebufferAttachmentDiagram,
+  TwoPassDiagram,
+  KernelDiagram,
   Stepper,
   Step,
   Slider,
