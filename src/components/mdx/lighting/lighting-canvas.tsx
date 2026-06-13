@@ -187,7 +187,7 @@ export default function LightingCanvas({
       {hasSteps && currentStep && (
         <section
           aria-label="Phong 分步演示"
-          className="mt-4 space-y-3 border-t border-border pt-4"
+          className="not-prose mt-4 space-y-3 border-t border-border pt-4"
         >
           {/* 步点条 + 序号：每步即该阶段实时渲染，步点驱动 gating（非纯文字） */}
           <div className="flex items-center justify-between gap-3">
