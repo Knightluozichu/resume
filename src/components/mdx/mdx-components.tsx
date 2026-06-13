@@ -7,11 +7,14 @@ import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
+import { HomogeneousTranslateDiagram } from "./diagrams/homogeneous-translate-diagram";
 import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
 import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
+import { TransformOrderDiagram } from "./diagrams/transform-order-diagram";
+import { VectorOpsDiagram } from "./diagrams/vector-ops-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
@@ -72,6 +75,9 @@ import { TextureDemo } from "./texture-demo";
  *    顶点→片段插值。一律 token 色、无内联多行 SVG 进 mdx（规避 hydration mismatch）。
  *  - TextureCoordDiagram / MipmapPyramidDiagram（纹理，HEL-34）：UV 四角如何对应纹理四角 +
  *    逐顶点带 UV / 片段插值采样、mipmap「纹理金字塔」逐级减半按远近取级。同款 Server SVG。
+ *  - VectorOpsDiagram / HomogeneousTranslateDiagram / TransformOrderDiagram（变换，HEL-35）：
+ *    向量加法首尾相接 + 取负 / 数乘 / 点乘叉乘、齐次坐标 w=1 让平移量住进矩阵末列、
+ *    组合顺序不交换（T·S vs S·T 终点不同）。同款 Server SVG，配 §4 数学一起读。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -94,6 +100,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InterpolationDiagram,
   TextureCoordDiagram,
   MipmapPyramidDiagram,
+  VectorOpsDiagram,
+  HomogeneousTranslateDiagram,
+  TransformOrderDiagram,
   Stepper,
   Step,
   Slider,
