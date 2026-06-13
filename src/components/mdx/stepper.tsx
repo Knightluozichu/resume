@@ -93,7 +93,7 @@ export function Stepper({
   return (
     <section
       aria-label="分步演示"
-      className="mdx-stepper my-6 rounded-card border border-border bg-elevated p-6"
+      className="not-prose mdx-stepper my-6 rounded-card border border-border bg-elevated p-6"
     >
       {/* 顶部：⚡标签 + 步点指示 */}
       <div className="mb-4 flex items-center justify-between gap-3">

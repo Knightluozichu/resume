@@ -145,7 +145,7 @@ export function PipelineViz({
   return (
     <section
       aria-label="渲染管线分步可视化"
-      className="mdx-pipeline-viz my-6 rounded-card border border-border bg-elevated p-6"
+      className="not-prose mdx-pipeline-viz my-6 rounded-card border border-border bg-elevated p-6"
     >
       {/* 顶部：⚡标签 + 阶段计数 */}
       <div className="mb-4 flex items-center justify-between gap-3">
