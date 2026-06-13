@@ -32,6 +32,7 @@ import { Step, Stepper } from "./stepper";
 import { Term } from "./term";
 import { TextureDemo } from "./texture-demo";
 import { CameraDemo } from "./camera-demo";
+import { LightingDemo } from "./lighting-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -93,6 +94,13 @@ import { CameraDemo } from "./camera-demo";
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
  *    懒加载 CameraCanvas（独立 chunk，硬规则 2/6）。网格 + 彩色立方体场景，
  *    pitch/yaw/distance/fov 滑块驱动 lookAt 视角，按需重绘。
+ *
+ * WebGL Phong 光照交互演示（「光照篇」2–6 章共享主 viz LightingDemo，HEL-49）：
+ *  - Client（dynamic 边界）：LightingDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 LightingCanvas（独立 chunk，硬规则 2/6）。带法线立方体 + 可公转点光源
+ *    （小自发光标记），片元做 ambient+diffuse+specular Phong；光源方位/环境强度/
+ *    镜面强度/高光指数滑块 + 重置，uniform 驱动按需重绘（不重编译、不挂常驻 rAF）。
+ *    复用 camera-math 矩阵基座（新增 mat3 法线矩阵 / 归一化 / 叉乘 / 带法线立方体）。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -105,6 +113,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ShaderDemo,
   TextureDemo,
   CameraDemo,
+  LightingDemo,
   PipelineViz,
   MathViz,
   CompareSlider,

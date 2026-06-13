@@ -4,6 +4,7 @@
  */
 
 export type Mat4 = Float32Array;
+export type Mat3 = Float32Array;
 export type Vec3 = readonly [number, number, number];
 
 export function mat4Create(): Mat4 {
@@ -251,3 +252,151 @@ export const DEFAULT_CAMERA_PARAMS: CameraParams = {
   distance: 8,
   fov: 45,
 };
+
+// —— 光照（Phong）小工具：法线矩阵 / 向量归一化与叉乘（LightingDemo 复用此基座）——
+
+/** 归一化 vec3（零向量原样返回，避免 NaN）。 */
+export function vec3Normalize(v: Vec3): Vec3 {
+  const len = Math.hypot(v[0], v[1], v[2]);
+  if (len === 0) return v;
+  return [v[0] / len, v[1] / len, v[2] / len];
+}
+
+/** vec3 叉乘 a × b。 */
+export function vec3Cross(a: Vec3, b: Vec3): Vec3 {
+  return [
+    a[1] * b[2] - a[2] * b[1],
+    a[2] * b[0] - a[0] * b[2],
+    a[0] * b[1] - a[1] * b[0],
+  ];
+}
+
+export function mat3Create(): Mat3 {
+  const m = new Float32Array(9);
+  m[0] = m[4] = m[8] = 1;
+  return m;
+}
+
+/**
+ * 由 model 矩阵（mat4，列主序）算法线矩阵 = transpose(inverse(mat3(model)))。
+ * 把 mat4 左上 3×3 取出后求逆再转置；无非均匀缩放时它与 mat3(model) 同向，
+ * 但本实现对一般情形（含非均匀缩放）也正确。逆不存在（行列式≈0）时回退为 mat3(model)。
+ */
+export function mat3NormalFromMat4(out: Mat3, m: Mat4): Mat3 {
+  // 列主序 mat4 的左上 3×3（列优先）
+  const a00 = m[0];
+  const a01 = m[1];
+  const a02 = m[2];
+  const a10 = m[4];
+  const a11 = m[5];
+  const a12 = m[6];
+  const a20 = m[8];
+  const a21 = m[9];
+  const a22 = m[10];
+
+  // 伴随矩阵元素（cofactor）
+  const b01 = a22 * a11 - a12 * a21;
+  const b11 = -a22 * a10 + a12 * a20;
+  const b21 = a21 * a10 - a11 * a20;
+
+  const det = a00 * b01 + a01 * b11 + a02 * b21;
+
+  if (Math.abs(det) < 1e-8) {
+    // 退化：直接用 mat3(model)（列主序拷贝）
+    out[0] = a00;
+    out[1] = a01;
+    out[2] = a02;
+    out[3] = a10;
+    out[4] = a11;
+    out[5] = a12;
+    out[6] = a20;
+    out[7] = a21;
+    out[8] = a22;
+    return out;
+  }
+
+  const invDet = 1 / det;
+  // inverse(mat3) 列主序，再整体转置 → 直接写入转置后的布局
+  const i00 = b01 * invDet;
+  const i01 = (-a22 * a01 + a02 * a21) * invDet;
+  const i02 = (a12 * a01 - a02 * a11) * invDet;
+  const i10 = b11 * invDet;
+  const i11 = (a22 * a00 - a02 * a20) * invDet;
+  const i12 = (-a12 * a00 + a02 * a10) * invDet;
+  const i20 = b21 * invDet;
+  const i21 = (-a21 * a00 + a01 * a20) * invDet;
+  const i22 = (a11 * a00 - a01 * a10) * invDet;
+
+  // transpose(inverse)：列主序写入（即把 inverse 的行写成 out 的列）
+  out[0] = i00;
+  out[1] = i10;
+  out[2] = i20;
+  out[3] = i01;
+  out[4] = i11;
+  out[5] = i21;
+  out[6] = i02;
+  out[7] = i12;
+  out[8] = i22;
+  return out;
+}
+
+/**
+ * 带法线的单位立方体：36 顶点，每顶点 6 float = position(3) + normal(3)。
+ * 每面 2 三角，面法线为该面外向单位向量。中心原点、边长 1。
+ */
+export const CUBE_VERTICES_NORMAL = new Float32Array([
+  // 后面 (-z)  法线 (0,0,-1)
+  -0.5, -0.5, -0.5, 0, 0, -1, 0.5, 0.5, -0.5, 0, 0, -1, 0.5, -0.5, -0.5, 0, 0,
+  -1, 0.5, 0.5, -0.5, 0, 0, -1, -0.5, -0.5, -0.5, 0, 0, -1, -0.5, 0.5, -0.5, 0,
+  0, -1,
+  // 前面 (+z)  法线 (0,0,1)
+  -0.5, -0.5, 0.5, 0, 0, 1, 0.5, -0.5, 0.5, 0, 0, 1, 0.5, 0.5, 0.5, 0, 0, 1,
+  0.5, 0.5, 0.5, 0, 0, 1, -0.5, 0.5, 0.5, 0, 0, 1, -0.5, -0.5, 0.5, 0, 0, 1,
+  // 左面 (-x)  法线 (-1,0,0)
+  -0.5, 0.5, 0.5, -1, 0, 0, -0.5, 0.5, -0.5, -1, 0, 0, -0.5, -0.5, -0.5, -1, 0,
+  0, -0.5, -0.5, -0.5, -1, 0, 0, -0.5, -0.5, 0.5, -1, 0, 0, -0.5, 0.5, 0.5, -1,
+  0, 0,
+  // 右面 (+x)  法线 (1,0,0)
+  0.5, 0.5, 0.5, 1, 0, 0, 0.5, -0.5, -0.5, 1, 0, 0, 0.5, 0.5, -0.5, 1, 0, 0,
+  0.5, -0.5, -0.5, 1, 0, 0, 0.5, 0.5, 0.5, 1, 0, 0, 0.5, -0.5, 0.5, 1, 0, 0,
+  // 下面 (-y)  法线 (0,-1,0)
+  -0.5, -0.5, -0.5, 0, -1, 0, 0.5, -0.5, -0.5, 0, -1, 0, 0.5, -0.5, 0.5, 0, -1,
+  0, 0.5, -0.5, 0.5, 0, -1, 0, -0.5, -0.5, 0.5, 0, -1, 0, -0.5, -0.5, -0.5, 0,
+  -1, 0,
+  // 上面 (+y)  法线 (0,1,0)
+  -0.5, 0.5, -0.5, 0, 1, 0, 0.5, 0.5, 0.5, 0, 1, 0, 0.5, 0.5, -0.5, 0, 1, 0,
+  0.5, 0.5, 0.5, 0, 1, 0, -0.5, 0.5, -0.5, 0, 1, 0, -0.5, 0.5, 0.5, 0, 1, 0,
+]);
+
+export type LightingParams = {
+  /** 光源绕物体公转角度（度，水平面方位） */
+  lightAngle: number;
+  ambientStrength: number;
+  specularStrength: number;
+  shininess: number;
+};
+
+export const DEFAULT_LIGHTING_PARAMS: LightingParams = {
+  lightAngle: 60,
+  ambientStrength: 0.15,
+  specularStrength: 0.5,
+  shininess: 32,
+};
+
+/** 物体色 / 光色（固定预设，DESIGN 品牌紫物体 + 暖白光），非主控件。 */
+export const LIGHTING_OBJECT_COLOR: Vec3 = [0.49, 0.36, 1];
+export const LIGHTING_LIGHT_COLOR: Vec3 = [1, 0.96, 0.9];
+
+/** 光源公转半径与高度（世界空间，绕原点物体一圈）。 */
+export const LIGHTING_LIGHT_RADIUS = 2.2;
+export const LIGHTING_LIGHT_HEIGHT = 1.4;
+
+/** 由公转角度（度）算点光源世界位置。 */
+export function lightPosFromAngle(angleDeg: number): Vec3 {
+  const a = (angleDeg * Math.PI) / 180;
+  return [
+    Math.cos(a) * LIGHTING_LIGHT_RADIUS,
+    LIGHTING_LIGHT_HEIGHT,
+    Math.sin(a) * LIGHTING_LIGHT_RADIUS,
+  ];
+}
