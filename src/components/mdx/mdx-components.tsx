@@ -46,6 +46,7 @@ import { Term } from "./term";
 import { TextureDemo } from "./texture-demo";
 import { CameraDemo } from "./camera-demo";
 import { LightingDemo } from "./lighting-demo";
+import { LightingMapsDemo } from "./lighting/lighting-maps-demo";
 import { ModelDemo } from "./model-demo";
 
 /**
@@ -129,6 +130,15 @@ import { ModelDemo } from "./model-demo";
  *    镜面强度/高光指数滑块 + 重置，uniform 驱动按需重绘（不重编译、不挂常驻 rAF）。
  *    复用 camera-math 矩阵基座（新增 mat3 法线矩阵 / 归一化 / 叉乘 / 带法线立方体）。
  *
+ * WebGL 光照贴图渐进演示（lighting-maps 章 LightingMapsDemo，HEL-65）：
+ *  - Client（dynamic 边界）：LightingMapsDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 LightingMapsCanvas（独立 chunk，硬规则 2/6）。贴图立方体（程序化木箱风 diffuse +
+ *    配套灰度 specular 遮罩，零外部资源，UV 严格对齐）+ 公转点光源（小亮块标记）。
+ *    三步推进：常量材质 → +漫反射贴图（texture(diffuseMap).rgb）→ +镜面光贴图遮罩
+ *    （×texture(specularMap).r）；第 3 步只有钢边/铆钉随光高光、木面哑光。
+ *    自带「位置+法线+UV」立方体常量（不改 camera-math 共享常量）；光源方位滑块 + 自转开关
+ *    （reduced-motion 默认关、离屏停转）+ 重置；切步/改参仅改 uniform 按需重绘，不重编译。
+ *
  * R3F 交互式模型查看器（「模型加载篇·模型 Model 章」ModelDemo，HEL-58）：
  *  - Client（dynamic 边界）：ModelDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
  *    懒加载 ModelCanvas（独立 chunk，硬规则 2/6）。复用 Hero 的 ferrari.glb（drei useGLTF
@@ -149,6 +159,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TextureDemo,
   CameraDemo,
   LightingDemo,
+  LightingMapsDemo,
   ModelDemo,
   PipelineViz,
   MathViz,
