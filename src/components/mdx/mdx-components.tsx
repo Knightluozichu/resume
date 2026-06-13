@@ -13,6 +13,11 @@ import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
+import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
+import { FrustumDiagram } from "./diagrams/frustum-diagram";
+import { LookAtDiagram } from "./diagrams/lookat-diagram";
+import { EulerAnglesDiagram } from "./diagrams/euler-angles-diagram";
+import { CameraMovementDiagram } from "./diagrams/camera-movement-diagram";
 import { TransformOrderDiagram } from "./diagrams/transform-order-diagram";
 import { VectorOpsDiagram } from "./diagrams/vector-ops-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
@@ -26,6 +31,7 @@ import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
 import { Term } from "./term";
 import { TextureDemo } from "./texture-demo";
+import { CameraDemo } from "./camera-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -78,6 +84,15 @@ import { TextureDemo } from "./texture-demo";
  *  - VectorOpsDiagram / HomogeneousTranslateDiagram / TransformOrderDiagram（变换，HEL-35）：
  *    向量加法首尾相接 + 取负 / 数乘 / 点乘叉乘、齐次坐标 w=1 让平移量住进矩阵末列、
  *    组合顺序不交换（T·S vs S·T 终点不同）。同款 Server SVG，配 §4 数学一起读。
+ *  - CoordinatePipelineDiagram / FrustumDiagram / LookAtDiagram（坐标系统）：
+ *    五空间流水线 / 透视投影视锥体压进 NDC 立方体 / LookAt 矩阵三轴构造。同款 Server SVG。
+ *  - EulerAnglesDiagram / CameraMovementDiagram（摄像机）：
+ *    Pitch/Yaw/Roll 三角度示意 / WASD 沿 front·right 移动示意。同款 Server SVG。
+ *
+ * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
+ *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 CameraCanvas（独立 chunk，硬规则 2/6）。网格 + 彩色立方体场景，
+ *    pitch/yaw/distance/fov 滑块驱动 lookAt 视角，按需重绘。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -89,6 +104,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Callout,
   ShaderDemo,
   TextureDemo,
+  CameraDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -103,6 +119,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VectorOpsDiagram,
   HomogeneousTranslateDiagram,
   TransformOrderDiagram,
+  CoordinatePipelineDiagram,
+  FrustumDiagram,
+  LookAtDiagram,
+  EulerAnglesDiagram,
+  CameraMovementDiagram,
   Stepper,
   Step,
   Slider,
