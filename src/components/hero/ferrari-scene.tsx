@@ -953,7 +953,19 @@ function stepTier(current: PerfTier, dir: 1 | -1): PerfTier {
   return TIER_ORDER[next];
 }
 
-export default function FerrariScene() {
+/**
+ * 模型就绪探针：复用 useGLTF 缓存（未就绪则随之 suspend），挂载即代表模型已加载，
+ * useEffect 触发一次 onReady → 外层据此精确收起加载海报（消除「加载→实时」黑闪）。
+ */
+function ModelReady({ onReady }: { onReady?: () => void }) {
+  useGLTF(MODEL_URL, DRACO_DECODER_PATH);
+  useEffect(() => {
+    onReady?.();
+  }, [onReady]);
+  return null;
+}
+
+export default function FerrariScene({ onReady }: { onReady?: () => void }) {
   const reducedMotion = usePrefersReducedMotion();
   // 性能档位（HEL-15）：默认满配 high，PerformanceMonitor 掉帧时下调。
   const [tier, setTier] = useState<PerfTier>("high");
@@ -976,6 +988,8 @@ export default function FerrariScene() {
       // 到当前 aspect 的响应式目标（消除进场跳变），之后做响应式过渡。
       camera={{ position: CAMERA_BASE, fov: CAMERA.fov }}
     >
+      {/* 模型就绪后通知外层收起加载海报（与 FerrariRig 共享 useGLTF 缓存） */}
+      <ModelReady onReady={onReady} />
       {/*
        * 帧率监测（HEL-15）：掉帧 onDecline 降一档，回升 onIncline 升一档，
        * onFallback（持续吃力）直接钉到 low。tier 驱动 DPR / 风粒子数 / Bloom / 反射。

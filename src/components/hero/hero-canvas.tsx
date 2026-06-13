@@ -54,19 +54,27 @@ const FerrariScene = dynamic(() => import("./ferrari-scene"), {
  *   故淡入用纯 CSS opacity + React state，不触碰场景内部。
  */
 function FadeInScene() {
-  const [shown, setShown] = useState(false);
-  useEffect(() => {
-    // 下一帧再切到可见，确保 opacity-0 起始态先提交（触发 transition）
-    const id = requestAnimationFrame(() => setShown(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
+  // ready：实时画面模型已就绪并出帧（FerrariScene 经 onReady 通知）
+  const [ready, setReady] = useState(false);
   return (
-    <div
-      className={`h-full w-full transition-opacity duration-(--duration-page) ease-standard ${
-        shown ? "opacity-100" : "opacity-0"
-      }`}
-    >
-      <FerrariScene />
+    <div className="relative h-full w-full">
+      {/* 实时画面（透明背景），底层；模型未就绪时被上层海报覆盖 */}
+      <div className="absolute inset-0">
+        <FerrariScene onReady={() => setReady(true)} />
+      </div>
+      {/*
+       * 过渡海报：与实时画面同取景，置于上层覆盖「模型加载中的空画布」；
+       * 就绪后淡出（duration-page），交叉淡入到实时画面 → 无黑闪、无「加载→实时」跳变。
+       * 海报与实时同构图，故淡出期间两者重叠也看不出割裂；淡出后不再常驻（不与透明画布叠成双重）。
+       */}
+      <div
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-0 transition-opacity duration-(--duration-page) ease-standard ${
+          ready ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <HeroPoster />
+      </div>
     </div>
   );
 }
