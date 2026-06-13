@@ -1,0 +1,541 @@
+---
+title: 多光源
+type: C
+section: 光照
+order: 6
+description: 把平行光、点光源、聚光各自的 Phong 计算封装成一个 GLSL 函数，main 里让每盏光各算各的贡献、再全部相加——一套代码就能让一个物体同时被多盏不同类型的光照亮，给光照篇收个完整的尾。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/06%20Multiple%20lights/
+draft: true
+---
+
+{/* C 实战型章（HEL-55，M5 光照篇第 6 篇 / 收官）：主题是多光源——前五章都只点一盏光，本章把多盏不同类型的光同时照在一个物体上。核心不是新数学，而是「代码组织」：把每一类光的 Phong 计算各封装成一个 GLSL 函数（CalcDirLight / CalcPointLight / CalcSpotLight，各返回该光对这块片段的颜色贡献），main 里 1 个平行光 + N 个点光源（uniform 数组 + for 循环）+ 1 个聚光，把各自结果相加得最终色。承接「基础光照」（Phong 三项 ambient/diffuse/specular，已会 N·L / reflect / pow）、「材质」（material/light 结构体 + struct uniform）、「投光物」（平行光/点光源/聚光三类 + 距离衰减 attenuation + 聚光切光角）。math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验，勿改勿建）：单光 Phong 回顾 + 猜一猜（多盏光叠加时，被多盏同时照到的地方会更亮，甚至顶到纯白过曝）。新建 1 个静态图示 MultipleLightsDiagram（已注册）：每个光独立算贡献 → ∑ 相加 → 最终色，强调「每个光独立算、结果累加」。§6 代码为重心：三个 Calc 函数签名+主循环累加；C++↔WebGL2；块≤30、块间解说、API 差异 Callout（GLSL 数组/循环、uniform 数组逐元素灌）。误区≥2（光贡献忘相加只显最后一个 / uniform 数组索引越界或没传满 / 性能：片段里光太多）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 多光源（一个片段同时被多盏光照到，最终色 = 各盏贡献相加）= 直觉引入「房间里好几盏灯」比喻 + <MultipleLightsDiagram> + 主 LightingDemo 猜一猜；2) 光贡献函数化（把每类光的 Phong 算法各封装成一个返回 vec3 贡献的 GLSL 函数）= 概念 + MultipleLightsDiagram + §6 三个函数签名；3) CalcDirLight（平行光：方向恒定、不衰减）= §6 代码 + 承接投光物；4) CalcPointLight（点光源：有位置、按距离衰减 attenuation）= §6 代码 + 承接投光物；5) CalcSpotLight（聚光：锥形 + 切光角软边 + 衰减）= §6 代码 + 承接投光物；6) uniform 数组（pointLights[NR_POINT_LIGHTS]，#define 定个数）= 概念 + §6 代码 + 误区（没传满/索引越界）+ API 差异 Callout；7) GLSL for 循环累加（for 循环遍历 N 个点光源，result += 每个的贡献）= 概念 + §6 main 代码；8) 贡献累加（result = dir + Σ point + spot，相加是关键）= MultipleLightsDiagram + §6 + 误区（忘相加只显最后一个）。Term 共 7 个：多光源 / 光贡献函数 / uniform 数组 / 平行光 / 点光源 / 聚光 / 衰减。（平行光/点光源/聚光/衰减在「投光物」章已 Term 高亮，本章作为承接概念再点一次并入 Glossary，保持自洽。） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清把多盏光照到同一个物体上的核心套路：每类光封成一个函数各算各的贡献，最后把所有贡献**相加**
+- 能改出「一个平行光 + 多个点光源 + 一个聚光」同时生效的片段着色器：照着写出三个 `Calc*` 函数的签名，并在 `main` 里用循环累加点光源
+- 能回答：如果在 `main` 里把某盏光的贡献**算了却忘了加进 `result`**，画面会出什么毛病？为什么 `pointLights` 要写成一个**定长数组**？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接全篇手电照墙体系，扩到「房间里好几盏灯」）。 */}
+
+## 一个房间里好几盏灯
+
+前面几章你一直在跟**一盏**灯打交道——手电照墙、绕着立方体转的那个小亮点。可你现在所在的房间，多半不止一盏灯：头顶一盏吸顶灯把整屋照亮，桌上一盏台灯在桌面投下一小圈暖光，墙角也许还有一束射灯打在画上。
+
+看看桌面被照亮的样子：它同时接到了吸顶灯的均匀光、台灯那圈集中的暖光——两份光叠在一起，台灯正下方那块就比别处更亮。一个表面的明暗，从来不是某一盏灯说了算，而是**它接到的所有光加在一起**的结果。
+
+这章要解决的就是：怎么让一个物体同时被好几盏不同类型的灯照亮，而代码又不乱成一团？没有它，你的场景永远只能点一盏灯，平平淡淡；有了它，吸顶灯、台灯、射灯可以一起开，物体被照得有层次——这也正好给整个光照篇收个完整的尾。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线/模型位置。新核心概念克制。 */}
+
+## 多光源：最终色 = 每盏光的贡献相加
+
+把好几盏灯同时照在一个物体上，叫 <Term def="一个场景里同时存在多盏光（不同类型也行），同一个表面会同时接到它们的光。本章的做法是：让每盏光各自算出「它对这块表面的颜色贡献」，再把所有贡献相加，就是这块表面的最终颜色。">多光源</Term>。它背后只有一句话的道理：**一块表面的最终颜色，等于照到它的每一盏光各自贡献的颜色之和**。
+
+这其实不新——前几章你算一盏光时，得到的就是「这盏光对这块表面的贡献」（环境 + 漫反射 + 镜面那一坨）。多光源无非是把这件事**对每盏光各做一遍**，然后**全加起来**。难点不在数学（数学还是上几章那套 Phong），而在**怎么组织代码**：三类光各有各的算法，要是一股脑全塞进 `main`，几十行纠缠在一起，没法看也没法改。
+
+{/* 此处放新建静态图示，掰碎「每个光独立算、结果累加」核心观念 */}
+
+<MultipleLightsDiagram />
+
+如上图，本章的整个套路就是：**每类光封成一个独立的小函数，各算各的贡献；main 里把这些贡献一份份加起来**。下面先认清要应付哪三类光（都来自上一章「投光物」），再讲怎么函数化、怎么累加。
+
+## 要应付的三类光（投光物回顾）
+
+上一章把光按「光怎么打出来」分成了三类，本章要让它们同时上场。第一类是 <Term def="一种「投光物」：假设光源无限远，照过来的全是同方向的平行光线（比如太阳光）。它只有方向、没有位置，也不随距离衰减——场景里各处受到的方向都一样。">平行光</Term>（directional light）：只有方向、没有位置，不随距离变弱，像太阳。第二类是 <Term def="一种「投光物」：有一个具体位置、向四面八方发光的灯泡，光照强度随距离衰减（越远越暗）。点光源是本章里要放好几个、用数组 + 循环处理的那一类。">点光源</Term>（point light）：有位置、向四周发光、离得越远越暗（按距离衰减），像灯泡。第三类是 <Term def="一种「投光物」：从一个位置朝一个方向射出一个锥形光束，只照亮锥内、锥外不照（边缘还能做柔和过渡），像手电或舞台射灯。它同时有位置、方向、切光角和距离衰减。">聚光</Term>（spotlight）：从一个位置朝一个方向射出锥形光束，只照锥内，像手电。
+
+这三类的 Phong 主体（环境 + 漫反射 + 镜面）算法是一样的，差别只在「光从哪来」「要不要按距离衰减」「要不要限制在锥内」。所以它们天生适合各写成一个函数，把这些差异关在各自函数内部。
+
+## 把每盏光的计算装进一个函数
+
+本章真正的主角，是 <Term def="把「某一类光对一块表面的 Phong 计算」整段封装成一个 GLSL 函数（比如 CalcPointLight），函数返回一个 vec3——这盏光对这块片段的颜色贡献。好处是 main 里只需一行调用就拿到一盏光的贡献，代码清爽、可复用、可循环。">光贡献函数</Term>：给每一类光写一个 GLSL 函数，函数算完那一类光的环境 + 漫反射 + 镜面，**返回一个 `vec3`——这盏光对当前这块片段的颜色贡献**。三个函数的名字按惯例叫 `CalcDirLight`、`CalcPointLight`、`CalcSpotLight`。
+
+这么一封装，`main` 就清爽了：算平行光只要 `CalcDirLight(...)`，拿回一份贡献；点光源有好几个，就用一个**循环**逐个调 `CalcPointLight(...)` 累加；最后再加上聚光。每盏光的内部细节（衰减怎么算、锥形怎么判断）都锁在各自函数里，`main` 只管「把各份贡献加起来」。这就是上图说的「函数化 + 累加」——本章没有新数学，整章的功夫全在这套**代码组织**上。具体怎么写，全在 §6。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略（本章无新公式，Phong 数学已在基础光照章讲透，衰减公式在投光物章讲过）。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = 复用 <LightingDemo />（HEL-49 已 GPU 验，勿改勿建）；单光 Phong 回顾 + 猜一猜（多盏光叠加亮处会怎样：会更亮、可能过曝顶到纯白）；控件已内置（光源方位/环境强度/镜面强度/高光指数 + 重置，≤5）；自带骨架屏 + WebGL2 兜底。 */}
+
+## 动手：先回顾一盏光，再想象叠加
+
+本章的代码会同时点好几盏光，但「一盏光对一块表面的贡献」长什么样，前几章的这个 Demo 已经讲透了——下面再用它回顾一次：一个带法线的立方体，被**一盏**绕着它转的点光源照亮，片段着色器跑的正是 `环境 + 漫反射 + 镜面`。本章要做的，就是把这样一份「贡献」对每盏光各算一遍、再相加。
+
+> 猜一猜：现在屏幕上只有**一盏**光。设想我们再加一盏光，从**另一个方向**也照向这个立方体——那么被**两盏光同时照到**的那个面，会比只有一盏光时更亮、还是更暗？如果好几盏光的贡献全加上去，某些面会不会亮到**顶满、变成一片纯白**（过曝）？先在下面拖动这一盏光感受单盏贡献，心里预演一下「相加」会发生什么。
+
+<LightingDemo caption="本章主 Demo（单盏点光源回顾，复用「光照篇」共享演示）：带法线立方体 + 一盏公转点光源，片元做 ambient+diffuse+specular Phong。本章把这样的「一盏光的贡献」对多盏光各算一遍再相加——被多盏光同时照到的面会更亮，贡献加多了甚至会顶满到纯白（过曝）。拖光源方位看单盏贡献，随时点重置。" />
+
+拖动「光源方位」时，你看到的明暗变化，就是**这一盏光**贡献的漫反射在各面上的强弱。把这份贡献记在脑子里：多光源就是再来若干盏、各自算出这样一份贡献，最后 `result = 贡献₁ + 贡献₂ + …` 全加起来。被多盏光同时照到的面，几份漫反射 / 镜面叠加，自然更亮——加太多就会顶到 1.0 变纯白，这正是上面「猜一猜」的答案，也对应 §7 要提醒的一个坑。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：四段覆盖 三个 Calc 函数签名（含 CalcDirLight 完整体）→ CalcPointLight（含衰减）→ CalcSpotLight（含切光角软边）→ uniform 数组 + 结构体声明 → main 累加（dir + for 循环 point + spot）+ CPU 侧逐元素灌数组。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异（version/precision/GLSL 数组与循环两端一致、CPU 侧逐元素灌 uniform 数组）用 Callout。沿用「材质」章的 material/light 结构体 + 纯色（非贴图）风格，自洽不依赖未发布的贴图章。 */}
+
+## 代码逐段拆解
+
+把上面那套「函数化 + 累加」摊开成真代码。沿用前两章的约定：物体材质用一个 `Material` 结构体（环境/漫反射/镜面三色 + 反光度），每一类光各用自己的结构体描述。光照仍算在**片段着色器**里。C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一步：声明三类光的结构体 + 点光源的 uniform 数组
+
+每类光打成一个结构体。平行光只有方向，点光源多了位置和三个衰减系数，聚光在点光源基础上再加方向和两个切光角余弦。最关键的一行：点光源要放**好几个**，于是声明成一个 <Term def="GLSL 里一段连续、定长的同类型 uniform，比如 pointLights[4]。配合 #define 定个数、用下标 pointLights[i] 取第 i 个，就能在着色器里循环处理多盏同类光。长度必须是编译期常量，且 CPU 侧要逐个元素灌值。">uniform 数组</Term>，长度用 `#define` 定个常量 `NR_POINT_LIGHTS`。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+struct DirLight {                 // 平行光：只有方向
+  vec3 direction;
+  vec3 ambient, diffuse, specular;
+};
+struct PointLight {               // 点光源：有位置 + 距离衰减系数
+  vec3 position;
+  float constant, linear, quadratic;
+  vec3 ambient, diffuse, specular;
+};
+struct SpotLight { /* 位置+方向+切光角+衰减，见第四步 */ };
+
+uniform DirLight dirLight;
+#define NR_POINT_LIGHTS 4         // 点光源个数（编译期常量）
+uniform PointLight pointLights[NR_POINT_LIGHTS];  // ← uniform 数组
+uniform SpotLight spotLight;
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+struct DirLight {                 // 平行光：只有方向
+  vec3 direction;
+  vec3 ambient, diffuse, specular;
+};
+struct PointLight {               // 点光源：有位置 + 距离衰减系数
+  vec3 position;
+  float constant, linear, quadratic;
+  vec3 ambient, diffuse, specular;
+};
+struct SpotLight { /* 位置+方向+切光角+衰减，见第四步 */ };
+
+uniform DirLight dirLight;
+#define NR_POINT_LIGHTS 4         // 点光源个数（编译期常量）
+uniform PointLight pointLights[NR_POINT_LIGHTS];  // ← uniform 数组
+uniform SpotLight spotLight;
+```
+
+  </Tab>
+</CodeTabs>
+
+`pointLights[NR_POINT_LIGHTS]` 就是连续放 4 个 `PointLight`，待会儿用 `pointLights[i]` 取第 `i` 个、在循环里逐个算。结构体与 `#define`、数组声明这些 GLSL 语法两端**完全一样**，但「怎么把数组灌进去」两端有差别：
+
+<Callout type="warn">
+  API 差异：`struct` / `#define` / uniform 数组的**声明语法**两端一字不差（GLSL
+  语言本身的特性）。差别在 **CPU 侧灌值**——uniform
+  数组没有「一次灌一整个数组的结构体」的便捷接口，必须**逐个元素、逐个字段**地用带下标的名字写：C++
+  侧 `shader.setVec3("pointLights[0].position", ...)`、WebGL2 侧
+  `gl.uniform3f(gl.getUniformLocation(program, "pointLights[0].position"),
+  ...)`，下标从 `0` 到 `NR_POINT_LIGHTS-1` 都得灌满（见第五步）。另外别忘了
+  WebGL2 片段着色器开头那行 `precision highp float;`，桌面不需要。
+</Callout>
+
+### 第二步：平行光函数 CalcDirLight
+
+第一个光贡献函数。平行光最简单：方向是固定的（用 `-light.direction` 得到「指向光源」的方向），没有位置、不衰减。函数体就是前几章那套 Phong 三项，最后**返回三项之和**。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
+  vec3 lightDir = normalize(-light.direction);   // 平行光：方向恒定
+  float diff = max(dot(normal, lightDir), 0.0);  // 漫反射 N·L
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 ambient  = light.ambient  * material.ambient;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse;
+  vec3 specular = light.specular * spec * material.specular;
+  return ambient + diffuse + specular;           // ← 返回这盏光的贡献
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
+  vec3 lightDir = normalize(-light.direction);   // 平行光：方向恒定
+  float diff = max(dot(normal, lightDir), 0.0);  // 漫反射 N·L
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 ambient  = light.ambient  * material.ambient;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse;
+  vec3 specular = light.specular * spec * material.specular;
+  return ambient + diffuse + specular;           // ← 返回这盏光的贡献
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+注意三项里的 `diff`、`spec`、`material.*`、`light.*` 全是「基础光照」「材质」两章的老朋友，没有任何新东西。新的只有形式：把它们**包进一个函数、返回一个 `vec3`**。这段是纯计算，两端**一字不差**。点光源、聚光的函数就是在这个骨架上各加一点料。
+
+### 第三步：点光源函数 CalcPointLight（多了距离衰减）
+
+点光源比平行光多两件事：`lightDir` 由「光源位置 − 片段位置」算出（它有具体位置），以及按距离做 <Term def="光照强度随「光源到表面的距离」变弱的处理（越远越暗）。点光源/聚光常用 1/(常数项 + 一次项·d + 二次项·d²) 这个衰减系数，乘到环境/漫反射/镜面三项上。它来自上一章「投光物」。">衰减</Term>——离得越远越暗。衰减系数乘到三项上，其余和平行光一样。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+  vec3 lightDir = normalize(light.position - fragPos); // 有位置：指向光源
+  float diff = max(dot(normal, lightDir), 0.0);
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  // 距离衰减：1 / (常数 + 一次·d + 二次·d²)，来自上一章
+  float d = length(light.position - fragPos);
+  float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+  vec3 ambient  = light.ambient  * material.ambient  * att;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse  * att;
+  vec3 specular = light.specular * spec * material.specular * att;
+  return ambient + diffuse + specular;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+  vec3 lightDir = normalize(light.position - fragPos); // 有位置：指向光源
+  float diff = max(dot(normal, lightDir), 0.0);
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  // 距离衰减：1 / (常数 + 一次·d + 二次·d²)，来自上一章
+  float d = length(light.position - fragPos);
+  float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+  vec3 ambient  = light.ambient  * material.ambient  * att;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse  * att;
+  vec3 specular = light.specular * spec * material.specular * att;
+  return ambient + diffuse + specular;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+和 `CalcDirLight` 比，多的就是中间那两行衰减 `att` 和把它乘进三项。它比平行光多收一个 `fragPos` 参数（因为要算距离）。注意函数签名里把 `normal`、`fragPos`、`viewDir` 都当参数传进来——这样函数不依赖任何外部全局，`main` 里循环调它就很干净。这段同样是纯 GLSL，两端**一字不差**。
+
+### 第四步：聚光函数 CalcSpotLight（再加锥形软边）
+
+聚光在点光源基础上，再判断片段是否落在光锥内：用「片段方向与聚光朝向的夹角」和内外切光角余弦比较，做一个 0~1 的强度因子 `intensity`，乘到漫反射 / 镜面上（边缘柔和过渡）。环境光通常保留，让锥外也有点底光。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+  vec3 lightDir = normalize(light.position - fragPos);
+  float diff = max(dot(normal, lightDir), 0.0);
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  float d = length(light.position - fragPos);
+  float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+  // 聚光锥：内外切光角之间做软边过渡（上一章讲过）
+  float theta = dot(lightDir, normalize(-light.direction));
+  float eps = light.cutOff - light.outerCutOff;
+  float intensity = clamp((theta - light.outerCutOff) / eps, 0.0, 1.0);
+  vec3 ambient  = light.ambient  * material.ambient  * att;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse  * att * intensity;
+  vec3 specular = light.specular * spec * material.specular * att * intensity;
+  return ambient + diffuse + specular;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+  vec3 lightDir = normalize(light.position - fragPos);
+  float diff = max(dot(normal, lightDir), 0.0);
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  float d = length(light.position - fragPos);
+  float att = 1.0 / (light.constant + light.linear * d + light.quadratic * d * d);
+  // 聚光锥：内外切光角之间做软边过渡（上一章讲过）
+  float theta = dot(lightDir, normalize(-light.direction));
+  float eps = light.cutOff - light.outerCutOff;
+  float intensity = clamp((theta - light.outerCutOff) / eps, 0.0, 1.0);
+  vec3 ambient  = light.ambient  * material.ambient  * att;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse  * att * intensity;
+  vec3 specular = light.specular * spec * material.specular * att * intensity;
+  return ambient + diffuse + specular;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+三个函数排在一起，结构高度一致——都是「算三项 → 乘衰减/锥形因子 → 返回之和」，差异只在各自多出来的那几行（衰减、锥形）。`cutOff` / `outerCutOff` 是内外切光角的**余弦**、`intensity` 的软边公式都来自上一章「投光物」，这里直接复用。原书把 `CalcSpotLight` 留作练习，本章给出完整版，方便你把光照篇收成一套完整的代码。
+
+### 第五步：main 把三类贡献全部相加
+
+终于到 `main`——也是全章的点睛。先把所有光共用的 `norm`、`viewDir` 备好（**只算一次**），然后：平行光直接调一次；点光源用 **`for` 循环**遍历数组，每次 `result += CalcPointLight(...)`；最后再加上聚光。相加，就是多光源的全部秘密。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+void main() {
+  vec3 norm = normalize(Normal);
+  vec3 viewDir = normalize(viewPos - FragPos);
+
+  // 1) 平行光：一份贡献
+  vec3 result = CalcDirLight(dirLight, norm, viewDir);
+  // 2) N 个点光源：循环逐个累加
+  for (int i = 0; i < NR_POINT_LIGHTS; i++)
+    result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);
+  // 3) 聚光：再加一份
+  result += CalcSpotLight(spotLight, norm, FragPos, viewDir);
+
+  FragColor = vec4(result, 1.0);   // 各份贡献之和 = 最终色
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+void main() {
+  vec3 norm = normalize(Normal);
+  vec3 viewDir = normalize(viewPos - FragPos);
+
+  // 1) 平行光：一份贡献
+  vec3 result = CalcDirLight(dirLight, norm, viewDir);
+  // 2) N 个点光源：循环逐个累加
+  for (int i = 0; i < NR_POINT_LIGHTS; i++)
+    result += CalcPointLight(pointLights[i], norm, FragPos, viewDir);
+  // 3) 聚光：再加一份
+  result += CalcSpotLight(spotLight, norm, FragPos, viewDir);
+
+  FragColor = vec4(result, 1.0);   // 各份贡献之和 = 最终色
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+读这段 `main`，你会发现它几乎就是把 §3 那张图**翻译成了代码**：`CalcDirLight` 出贡献 1、循环里 `CalcPointLight` 出贡献 2…、`CalcSpotLight` 出贡献 3，`result` 把它们 `+=` 累加，写进 `FragColor` 就是最终色。`for` 循环和 `result +=` 这种 GLSL 写法两端**完全一致**。要加第二个聚光、第五个点光源？改一下数组长度或多调一行，`main` 的结构不变——这就是函数化的好处。
+
+### 第六步：CPU 侧逐元素灌满 uniform 数组
+
+着色器声明好了，CPU 侧得把每盏光的数都灌进去。平行光、聚光各灌一组；点光源是数组，必须**带下标逐个灌满**，一个都不能漏（漏的那个会是默认全 0，等于一盏黑灯，见 §7）。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 平行光（一组）
+shader.setVec3("dirLight.direction", -0.2f, -1.0f, -0.3f);
+shader.setVec3("dirLight.diffuse",  0.4f, 0.4f, 0.4f);
+// …dirLight 其余项略
+// 点光源数组：从 0 到 NR_POINT_LIGHTS-1 逐个灌满
+for (int i = 0; i < 4; i++) {
+  std::string p = "pointLights[" + std::to_string(i) + "].";
+  shader.setVec3 (p + "position", positions[i]);
+  shader.setFloat(p + "constant", 1.0f);
+  shader.setFloat(p + "linear",   0.09f);
+  shader.setFloat(p + "quadratic",0.032f);
+  shader.setVec3 (p + "diffuse",  0.8f, 0.8f, 0.8f);
+  // …该点光源其余项略
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+const loc = (name: string) => gl.getUniformLocation(program, name);
+// 平行光（一组）
+gl.uniform3f(loc("dirLight.direction"), -0.2, -1.0, -0.3);
+gl.uniform3f(loc("dirLight.diffuse"), 0.4, 0.4, 0.4);
+// …dirLight 其余项略
+// 点光源数组：从 0 到 NR_POINT_LIGHTS-1 逐个灌满
+for (let i = 0; i < 4; i++) {
+  const p = `pointLights[${i}].`;
+  gl.uniform3f(
+    loc(p + "position"),
+    positions[i][0],
+    positions[i][1],
+    positions[i][2],
+  );
+  gl.uniform1f(loc(p + "constant"), 1.0);
+  gl.uniform1f(loc(p + "linear"), 0.09);
+  gl.uniform1f(loc(p + "quadratic"), 0.032);
+  gl.uniform3f(loc(p + "diffuse"), 0.8, 0.8, 0.8);
+  // …该点光源其余项略
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+两端都是**拼出带下标的字符串名**（`pointLights[0].position`、`pointLights[1].position`…）再灌值——结构体数组没有批量接口，只能这么一个字段一个字段地写，循环帮你把这件繁琐事自动化。完整可运行源码将在章末提供（M5）。
+
+<Callout type="warn">
+  API 差异 + 易错点：拼下标名两端套路一样，但**循环上限必须真覆盖到
+  `NR_POINT_LIGHTS-1`**——着色器里数组是 4 个，CPU 只灌了 `[0]`、`[1]`，那
+  `[2]`、`[3]` 全是 0，会多出两盏「黑灯」（不亮但白白参与计算）。还有：GLSL
+  `for` 循环的**上限最好是常量**（如 `NR_POINT_LIGHTS`），WebGL2 / GLSL ES
+  对「循环次数能否在编译期定下来」比桌面更敏感，用动态变量当上限可能编译失败。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含 1 个可在 §5 主 Demo 亲手触发的（多盏叠加过曝顶白）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：明明写了好几盏光的
+  `Calc*`，画面却**只看到其中一盏的效果**（通常是最后一盏）。**原因**：在 `main`
+  里把某盏光的贡献**算出来了，却忘了 `+=` 加进 `result`**——比如写成 `result =
+  CalcSpotLight(...)`（用了 `=` 覆盖）而非
+  `+=`，前面几盏的贡献被冲掉。**修法**：第一盏可以用 `=` 起头，之后每一盏一律
+  `result += Calc...(...)`；对照 §3 那张图——每份贡献都得加进总和。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景里有些位置**莫名偏暗、或多了不该有的暗影/黑点**，光源数量怎么数都对不上。**原因**：uniform
+  数组**没灌满**——着色器声明了 `NR_POINT_LIGHTS` 个，CPU
+  侧循环上限写小了（或忘了某个下标），漏灌的元素全是
+  0，成了「黑灯」白白参与累加；反过来，若用越界下标 `pointLights[5]`
+  取一个不存在的元素，行为未定义。**修法**：CPU 灌值的循环上限和着色器的
+  `#define` **用同一个常量**，下标从 0 到 N-1 一个不漏；着色器里只用
+  `0..NR_POINT_LIGHTS-1` 取数组。
+</Callout>
+
+<Callout type="trap">
+  **现象**：被**多盏光同时照到**的面**过曝、糊成一片纯白**，丢失明暗细节。**原因**：每盏光的贡献都是正数，相加后某些面超过
+  1.0，被钳到纯白——光太多、太亮时尤其明显。**修法**：调低各盏光的强度（尤其
+  `diffuse` / `specular`），或减少同处叠加的光源数；进阶可上 HDR +
+  色调映射（后续篇章）。**亲手看**：到 §5 Demo
+  把镜面强度、环境强度都拉高，单盏就能逼近顶白——想象再叠几盏，过曝只会更严重。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景一加到几十盏光就**严重掉帧、卡顿**。**原因**：光照在**片段着色器**里逐像素跑，每多一盏光，**每个像素**都多算一整套
+  Phong（还有 `for` 循环、采样）——像素数 ×
+  光源数，开销飙升。**修法**：控制同时生效的光源数（前向渲染里几盏到十几盏为宜）；真要海量光源，得换**延迟渲染**等进阶管线（超出本篇）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo/改代码题 + 1 道独立实现题（C 型）；答案折叠。作为光照篇收官，点一句「Phong + 材质 + 贴图 + 多类光 = 一套完整光照」。 */}
+
+## 小结
+
+- **多光源**的核心只有一句：每类光封成一个函数各算各的贡献，`main` 里把所有贡献**相加**
+- 三个函数 `CalcDirLight` / `CalcPointLight` / `CalcSpotLight` 各返回一个 `vec3` 贡献；内部就是前几章的 Phong，差异（衰减、锥形）锁在各自函数里
+- 多个同类光（点光源）用 **uniform 数组** `pointLights[NR_POINT_LIGHTS]` + **`for` 循环**累加；CPU 侧要带下标**逐元素灌满**
+- 别用 `=` 覆盖 `result`（会只剩最后一盏）、别漏灌数组元素（会多出黑灯）、当心多盏叠加**过曝顶白**
+- 至此光照篇收官：**Phong（基础光照）+ 材质 + 光照贴图 + 多类投光物 + 多光源叠加 = 一套能用的完整光照**
+
+<Exercises>
+
+**练习 1（改代码型）** 现在 `main` 里只有 1 个平行光 + 4 个点光源 + 1 个聚光。要求改成「**0 个平行光 + 8 个点光源 + 0 个聚光**」。说出你要改哪几处：着色器里改什么、`main` 里改什么、CPU 侧改什么？
+
+<Answer>
+
+三处联动改：
+
+1. **着色器声明**：把 `#define NR_POINT_LIGHTS 4` 改成 `8`（数组自动变 8 个）；平行光、聚光的结构体/uniform 可以删掉或留着不用。
+2. **`main`**：删掉 `CalcDirLight(...)` 和 `CalcSpotLight(...)` 两行；第一盏点光源用 `=` 起头、其余 `+=`（或保持 `vec3 result = vec3(0.0);` 再让循环全用 `+=`）。`for` 循环上限自然变成 `NR_POINT_LIGHTS`（=8）。
+3. **CPU 侧**：把灌点光源的循环上限改到 8，**逐个灌满** `pointLights[0..7]` 的所有字段；别再灌 `dirLight` / `spotLight`（已不用）。
+
+关键是着色器的 `#define` 和 CPU 循环上限**用同一个数**，否则要么数组没灌满（黑灯），要么白灌。
+
+</Answer>
+
+**练习 2（独立实现题）** 不看上面的代码，写出 `CalcDirLight` 这个函数的**完整签名和函数体**。已知有全局 `material`（含 `ambient/diffuse/specular/shininess`）和传入的平行光 `light`（含 `direction` 和 `ambient/diffuse/specular`）。目标：返回这盏平行光对当前片段的 Phong 贡献。
+
+<Answer>
+
+```glsl
+vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
+  vec3 lightDir = normalize(-light.direction);          // 指向光源
+  float diff = max(dot(normal, lightDir), 0.0);         // 漫反射 N·L 截负
+  vec3 reflectDir = reflect(-lightDir, normal);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 ambient  = light.ambient  * material.ambient;
+  vec3 diffuse  = light.diffuse  * diff * material.diffuse;
+  vec3 specular = light.specular * spec * material.specular;
+  return ambient + diffuse + specular;                  // 返回这盏光的贡献
+}
+```
+
+要点：平行光的 `lightDir` 用 `-light.direction` 归一化得到（它只有方向、没位置、不衰减）；三项就是 Phong 老套路，每项 `light.X * material.X`；最后 `return` 三项之和——**返回一个 `vec3` 贡献**，这是所有 `Calc*` 函数的统一形态。
+
+</Answer>
+
+**练习 3（问答题）** 为什么点光源要声明成**定长数组** `pointLights[NR_POINT_LIGHTS]`、而不能像「灯有几盏就来几个」那样随用随加？这给 `main` 里的循环带来什么约束？
+
+<Answer>
+
+因为 GLSL 的 uniform 数组长度必须是**编译期常量**——着色器在编译时就得知道要为多少个 `PointLight` 留位置，没法在运行时动态增减。所以用 `#define NR_POINT_LIGHTS 4` 把个数定死，数组长度随之固定。这给 `main` 的约束是：`for` 循环上限最好就用这个常量 `NR_POINT_LIGHTS`（GLSL ES / WebGL2 对「循环次数能否编译期确定」更敏感，动态上限可能编译失败），且只能用 `0..NR_POINT_LIGHTS-1` 的下标取数组，越界是未定义行为。想要更多灯，就改 `#define` 再重新编译着色器（并相应灌满 CPU 侧数组）。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（7 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="多光源">
+  一个场景里同时存在多盏光（类型可以不同），同一个表面会同时接到它们的光。本章的做法是让每盏光各自算出「它对这块表面的颜色贡献」，再把所有贡献相加，就是这块表面的最终颜色。详见本章「多光源：最终色
+  = 每盏光的贡献相加」一节。
+</GlossaryItem>
+
+<GlossaryItem term="光贡献函数">
+  把「某一类光对一块表面的 Phong 计算」整段封装成的一个 GLSL 函数（如
+  `CalcPointLight`），返回一个 `vec3`——这盏光对当前片段的颜色贡献。好处是 `main`
+  里一行调用就拿到一盏光的贡献，代码清爽、可复用、可循环。详见本章「把每盏光的计算装进一个函数」与
+  §6。
+</GlossaryItem>
+
+<GlossaryItem term="uniform 数组">
+  GLSL 里一段连续、定长的同类型 uniform（如 `pointLights[4]`）。配合 `#define`
+  定个数、用下标 `pointLights[i]` 取第 `i`
+  个，就能在着色器里循环处理多盏同类光。长度必须是编译期常量，且 CPU
+  侧要带下标逐个元素灌满，漏灌的会是默认全 0（黑灯）。详见本章 §6 第一、五步。
+</GlossaryItem>
+
+<GlossaryItem term="平行光">
+  一种「投光物」：假设光源无限远，照过来的全是同方向的平行光线（比如太阳光）。它只有方向、没有位置，也不随距离衰减——场景里各处受到的方向都一样。本章用
+  `CalcDirLight` 处理它。详见上一章「投光物」与本章「要应付的三类光」。
+</GlossaryItem>
+
+<GlossaryItem term="点光源">
+  一种「投光物」：有一个具体位置、向四面八方发光的灯泡，光照强度随距离衰减（越远越暗）。点光源是本章里要放好几个、用
+  uniform 数组 + 循环处理的那一类，用 `CalcPointLight`
+  处理。详见上一章「投光物」与本章「要应付的三类光」。
+</GlossaryItem>
+
+<GlossaryItem term="聚光">
+  一种「投光物」：从一个位置朝一个方向射出一个锥形光束，只照亮锥内、锥外不照（边缘还能做柔和过渡），像手电或舞台射灯。它同时有位置、方向、切光角和距离衰减，用
+  `CalcSpotLight` 处理。详见上一章「投光物」与本章「要应付的三类光」。
+</GlossaryItem>
+
+<GlossaryItem term="衰减">
+  光照强度随「光源到表面的距离」变弱的处理（越远越暗）。点光源 / 聚光常用 `1 /
+  (常数项 + 一次项·d + 二次项·d²)` 这个衰减系数，乘到环境 / 漫反射 /
+  镜面三项上。它来自上一章「投光物」，本章在 `CalcPointLight` / `CalcSpotLight`
+  里直接复用。详见本章 §6 第三、四步。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

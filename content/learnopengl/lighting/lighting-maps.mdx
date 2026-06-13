@@ -1,0 +1,406 @@
+---
+title: 光照贴图
+type: C
+section: 光照
+order: 4
+description: 把材质里常量的漫反射色和镜面色换成从贴图采样的逐片段值——用一张漫反射贴图给物体各处不同底色，用一张灰度镜面光贴图当遮罩，让木箱的钢边发亮、木头部位发哑。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/04%20Lighting%20maps/
+draft: true
+---
+
+{/* C 实战型章（HEL-53，M5 光照篇第 4 篇）：主题是光照贴图——把上一章材质里「常量的」diffuse / specular 换成「从纹理采样的逐片段值」。承接两条线：①「材质」章（已会 Material 结构体 ambient/diffuse/specular + shininess、Phong 三项「材质色 × 光强」）；②「纹理」章（已会 sampler2D / texture() / UV / activeTexture / uniform1i / 纹理单元）。本章把这两者合流：material.diffuse / material.specular 由 vec3 改成 sampler2D，片元用 texture(material.diffuse, TexCoords).rgb / texture(material.specular, TexCoords).rgb 取代常量；CPU 侧绑两张贴图到 0/1 号单元、uniform1i 设采样器。C 型：代码=重心（§6 覆盖 GLSL struct 改 sampler2D、顶点传 TexCoords、片元三项采样、CPU 绑两图），math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，Phong 参照，勿改勿建）+「猜一猜」（材质 specular 常量时整块一样亮，换贴图遮罩会怎样）。新建 2 个静态图示：<DiffuseMapDiagram />（漫反射贴图：纹理→逐片段底色）、<SpecularMapDiagram />（镜面贴图：灰度遮罩→哪些部位反光）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 光照贴图 lighting map（用贴图逐片段控制材质各项，而非整块一个常量）= 直觉引入「同一个木箱，木头哑、铁边亮」比喻 + 概念 + 主 LightingDemo「猜一猜」；2) 漫反射贴图 diffuse map（把 material.diffuse 由 vec3 换成 sampler2D，每个片段采样取自己底色）= 概念 + <DiffuseMapDiagram /> + §6 GLSL/片元/CPU 代码；3) 镜面光贴图 specular map（一张灰度图当遮罩，白=反光强、黑=不反光，如木箱钢边亮木头哑）= 概念 + <SpecularMapDiagram /> + §6 代码；4) 灰度遮罩（为什么镜面贴图用灰度——亮度 0~1 直接当镜面强度乘数）= 概念 + <SpecularMapDiagram />；5) sampler2D（GLSL 不透明类型，只能用 uniform 定义，不能当普通变量实例化；承接纹理章但在材质语境重申）= 概念 + §6 代码 + Callout；6) 环境光项跟随漫反射贴图（ambient 通常用同一张 diffuse map 采样值，不另存）= 概念 + §6 片元代码。Term 共 5 个：光照贴图 / 漫反射贴图 / 镜面光贴图 / 灰度遮罩 / sampler2D。纹理单元 / texture() / UV / 纹理坐标(TexCoords) 是「纹理」章已学的旧词，本章以反引号代码 + 文字温故引用，不再设 Term（避免跨章重复堆砌），但 §6 代码与误区里点到承接关系。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清**漫反射贴图**和**镜面光贴图**各自替换了材质里的哪一项，以及镜面光贴图为什么是一张灰度图
+- 能把片元着色器里常量的 `material.diffuse` / `material.specular` 改成从 `sampler2D` 采样，并在 CPU 侧把两张贴图绑到不同纹理单元，改出「木箱钢边发亮、木头部位发哑」的效果
+- 能回答：镜面光贴图里某个部位被画成纯黑，那一片在画面上会是什么样？画成纯白又会怎样？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库——同一束光打在同一个物体的不同部位，反光各不相同。 */}
+
+## 一个木箱，木头发哑、铁边发亮
+
+上一章你已经能给整个物体配一套「反光说明书」，让它看着像金属或像橡胶。可现实里的东西很少是「纯一种材质」：一个带铁皮包角的木箱，木头部分灰扑扑、几乎不反光，可四角那圈钢边一见光就亮得晃眼。用上一章的办法，整个箱子只能共用同一套反光参数——要么整块都哑、要么整块都亮，没法让「同一个箱子上，这块木头哑、那条铁边亮」。
+
+问题出在「整块一个值」上。上一章描述材质用的是几个**固定的数**：一个底色、一个反光强度，全箱子从头到尾都是这一套。可我们想要的是**逐个部位不同**：木头那片底色发暗、不反光；铁边那片底色发亮、反光强。一个数管不了这种「同一物体内部还分区」的细节。
+
+这一章给出的办法很自然：既然一个数不够，那就**换成一张图**。用一张图说清「箱子各处分别是什么底色」，再用另一张图说清「箱子各处分别反不反光、反多强」。物体表面怎么反光，从此能精细到每一个像素——这就是本章要做的事。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 §5 Demo；顺序 是什么 → 为什么 → 在光照模型中的位置。新核心概念克制（光照贴图 / 漫反射贴图 / 镜面光贴图 / 灰度遮罩 / sampler2D，承接「材质」「纹理」两章，≤5）。 */}
+
+## 光照贴图：用图来逐片段控制反光
+
+把「材质各项用一张图来逐片段决定」这种做法，统称 <Term def="用纹理图来逐片段地决定材质各项（底色、反光强弱等），取代上一章那种「整块物体共用一个常量」的做法。常见两张：漫反射贴图（管各处底色）和镜面光贴图（管各处反不反光）。本质是把「纹理」和「材质」两章合到一起。">光照贴图</Term>（lighting map）。它其实是把你已经学过的两件事**合到一起**：「纹理」章教过怎么按 UV 从一张图里采样取色；「材质」章教过 Phong 三项各是「材质色 × 光强」。光照贴图就是把材质里那几个**写死的常量**，换成「每个片段拿自己的 UV 去图里采样得到的值」。
+
+为什么要这么做？因为真实物体表面的属性是**逐点变化**的，一个常量描述不了。在 Phong 光照模型里，最值得这样精细控制的有两项：物体的**底色**（漫反射）和**反光强弱**（镜面）。于是光照贴图最常见的就是两张——一张管底色，一张管反光。下面分别看。
+
+## 漫反射贴图：每个片段查自己的底色
+
+第一张图替换的是材质的漫反射色。上一章 `material.diffuse` 是一个写死的颜色，整块物体共用；现在把它换成一张 <Term def="替换材质漫反射色的那张纹理图。原本 material.diffuse 是一个常量 vec3（整块一色），现在改成一张图，每个片段拿自己的 UV 去采样，得到属于它那个部位的底色——于是木箱的木头、铁边能有各自的颜色。">漫反射贴图</Term>（diffuse map）：每个片段拿自己的 UV 去这张图里采样，取出**属于它那个部位的底色**。于是箱子的木头部位是木纹色、铁边部位是金属色，不再整块一个颜色。
+
+它在着色器里的位置和上一章几乎一样——还是 Phong 的漫反射项「光强 × 底色 ×（面朝光源程度）」，只是「底色」从常量换成了一次采样。下面这张图把「常量 → 贴图」的升级画了出来：
+
+<DiffuseMapDiagram />
+
+## 镜面光贴图：一张「哪里反光」的灰度遮罩
+
+第二张图替换的是材质的镜面色，叫 <Term def="替换材质镜面色的那张纹理图，通常是一张灰度图。每个片段采样它，取出的明暗值直接当作该处镜面高光的强度——亮的地方反光强、暗的地方不反光。木箱的钢边画成白（反光强）、木头画成黑（不反光）。">镜面光贴图</Term>（specular map）。这张图通常是一张**灰度图**：木箱的木头部位涂成黑、钢制边框涂成白、有点磨损的裂缝涂成深灰。
+
+为什么用灰度？因为我们要控制的不是「反光是什么颜色」，而是「这里**反不反光、反多强**」——这只需要一个 0 到 1 的强弱值，正好对应灰度图里每个像素的明暗。这种「用一张图的明暗当强弱开关」的用法叫 <Term def="用一张灰度图（每个像素只有明暗、没有彩色）当作「强弱开关」：白（接近 1.0）表示该处效果强、黑（接近 0.0）表示该处效果弱或没有。镜面光贴图就是用它来控制各处反光强弱——白处反光强、黑处不反光。">灰度遮罩</Term>：白色（值接近 1.0）表示这里反光强、黑色（值接近 0.0）表示这里不反光。片段采样这张图，取出的明暗值直接乘到镜面高光上——白处乘 1 全亮、黑处乘 0 没有高光。
+
+<SpecularMapDiagram />
+
+于是同一束光打到箱子上，钢边亮起锐利高光、木头部位却哑哑的，一张箱子上有了两种反光质感——这正是上一章「整块一个值」做不到的。
+
+## sampler2D：贴图在着色器里的「身份」
+
+要在材质里放下「一张图」，得换一种类型。上一章 `material.diffuse` 是 `vec3`（三个数）；现在要让它代表一张图，类型就得改成 <Term def="GLSL 里代表一张 2D 纹理的采样器类型（「纹理」章见过）。它本身不存图，而是「指向某个纹理单元」的句柄，配合 texture() 去采样取色。它是一种不能当普通变量赋值、只能用 uniform 声明的特殊类型。">sampler2D</Term>——这正是「纹理」章里采样器的那个类型。把结构体里的 `vec3 diffuse;` 改成 `sampler2D diffuse;`，这一项就从「一个颜色」变成了「一张可采样的图」。
+
+有一点要特别记住：`sampler2D` 是一种**特殊类型**，不能像普通变量那样赋值或在函数里临时造一个，**只能用 `uniform` 声明**。所以它一定出现在 `uniform Material material;` 这种从 CPU 传进来的结构体里。具体怎么声明、怎么采样、CPU 侧怎么把两张图喂进去，是下面 §6 的重头戏。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。Phong 三项公式在「基础光照」「材质」两章已建立；本章只把每项里的「材质常量色」换成「一次纹理采样」，不引入新数学，用 §3 文字 + 两张图示 + §6 片元代码逐行 + §5 Demo 直觉代替。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = 复用 <LightingDemo />（HEL-49，Phong 参照，已 GPU 验证，勿改勿建）。它演示的是「整块一个材质常量」的 Phong——正好作为本章「贴图之前」的对照基线。猜一猜引导（常量 specular 时整块一样亮，换灰度遮罩会怎样）；控件 ≤5（光源方位/环境/镜面/高光指数/重置）；自带骨架屏 + WebGL2 兜底。 */}
+
+## 动手：先看「贴图之前」的样子
+
+下面这个 Demo 就是上一章那个 Phong 光照演示——它的物体用的是**整块一套常量材质**（一个固定底色、一个固定镜面强度），正好是本章「换成贴图之前」的样子。先在这里把它的反光行为摸熟，再想象「如果给它换上贴图会怎样」。
+
+> 猜一猜：现在物体表面**整块的镜面强度都一样**，所以拖到合适角度时，整个表面会一起泛起高光。如果我们把这个常量的镜面强度，换成一张**只有钢边是白、其余全黑的灰度镜面光贴图**，同样拖到这个角度，画面会变成什么样？先动手拖光源方位、把镜面强度拉满、感受「整块一起亮」，再想象贴上遮罩后「只剩一圈亮」。
+
+<LightingDemo caption="上一章的 Phong 光照演示：物体用整块一套常量材质（固定底色、固定镜面强度），是本章「换成贴图之前」的对照基线。拖光源方位看明暗，把镜面强度拉满会看到整块表面一起泛高光——这正是常量材质的局限：同一物体上没法分区。想象把这个常量镜面强度换成『钢边白、其余黑』的灰度遮罩，就只有钢边那圈会亮。随时点重置回到初始。" />
+
+这个 Demo 改不了贴图（它是常量材质的演示），所以本章「换成贴图后各处不同」的效果，要靠上面 §3 那两张图示 + 下面 §6 的代码来建立。Demo 负责让你**看清「整块一个值」的局限**——整块要么一起亮、要么一起暗；贴图正是来打破这个局限的。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖关键代码）：四段覆盖 GLSL struct Material 把 diffuse/specular 由 vec3 改 sampler2D → 顶点着色器多传 TexCoords（承接纹理章 UV 属性 location=2）→ 片元三项各用 texture(material.diffuse/specular, TexCoords).rgb 取代常量（含 ambient 跟随 diffuse map）→ CPU 侧 uniform1i 设采样器 + activeTexture/bindTexture 绑两图到 0/1 号单元（承接纹理章纹理单元）。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异首现用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+把上一章「常量材质」改成「贴图材质」，改动集中在四处：着色器里把两项类型换掉、顶点着色器多递一份 UV、片元里把常量换成采样、CPU 侧把两张图绑上去。C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一步：Material 结构体把两项换成 sampler2D
+
+上一章 `material.diffuse` / `material.specular` 是 `vec3`。现在把它俩换成 `sampler2D`——这一项就从「一个颜色」变成「一张图」。反光度 `shininess` 仍是单个 `float`，不动。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+struct Material {
+  sampler2D diffuse;   // 原本是 vec3：现在是「漫反射贴图」
+  sampler2D specular;  // 原本是 vec3：现在是「镜面光贴图」（灰度）
+  float shininess;     // 反光度：仍是单个数，不变
+};
+uniform Material material;   // sampler2D 只能藏在 uniform 里
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+precision highp float;       // WebGL2 片段着色器必写：声明浮点精度
+struct Material {
+  sampler2D diffuse;   // 原本是 vec3：现在是「漫反射贴图」
+  sampler2D specular;  // 原本是 vec3：现在是「镜面光贴图」（灰度）
+  float shininess;     // 反光度：仍是单个数，不变
+};
+uniform Material material;   // sampler2D 只能藏在 uniform 里
+```
+
+  </Tab>
+</CodeTabs>
+
+`struct` 写法两端完全一样，差异只在版本声明和 WebGL2 那行精度声明。但 `sampler2D` 有一个语言级的限制要当心：
+
+<Callout type="warn">
+  API 差异（其实是 GLSL 语言特性）：`sampler2D`
+  是一种**不透明类型**，不能像普通变量那样赋值，也不能在函数里临时造一个，**只能用
+  `uniform` 声明**——所以它必须藏在 `uniform Material material;`
+  这种从外部传进来的结构体里。两端（桌面 / WebGL2）都遵守这一条；平台差异仍只是
+  `#version` 与 `precision` 那两行。
+</Callout>
+
+### 第二步：顶点着色器把 UV 递下去
+
+要采样贴图，每个片段得有自己的 UV。这部分和「纹理」章一模一样：顶点数据里加一份纹理坐标（属性位置 `2`），顶点着色器用 `out` 把它递给片元（中途被插值）。注意现在顶点同时带着**位置、法线、UV** 三样。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;   // 新增：每个顶点的 UV
+out vec3 FragPos;
+out vec3 Normal;
+out vec2 TexCoords;                          // 递给片元（会被插值）
+void main() {
+  // ……（算 FragPos / Normal 同上一章，此处略）
+  TexCoords = aTexCoords;                     // 把 UV 原样递下去
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoords;   // 新增：每个顶点的 UV
+out vec3 FragPos;
+out vec3 Normal;
+out vec2 TexCoords;                          // 递给片元（会被插值）
+void main() {
+  // ……（算 FragPos / Normal 同上一章，此处略）
+  TexCoords = aTexCoords;                     // 把 UV 原样递下去
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+CPU 侧别忘了像「纹理」章那样，给位置 `2` 配一个顶点属性指针（`vertexAttribPointer` + `enableVertexAttribArray`），把每行顶点数据里的 UV 那两列喂给它，否则片元收到的 `TexCoords` 会是空的。
+
+### 第三步：片元把三项常量换成采样
+
+核心改动来了。上一章三项里用的是 `material.diffuse` / `material.specular` 这两个**常量**；现在每处都换成「拿 `TexCoords` 去对应贴图采样、取 `.rgb`」。注意**环境项也跟着漫反射贴图走**——环境色几乎总是等于漫反射色，不必单独再存一张图。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+void main() {
+  // 环境 / 漫反射的「底色」都来自漫反射贴图的同一次采样
+  vec3 baseColor = vec3(texture(material.diffuse, TexCoords));
+  vec3 ambient = light.ambient * baseColor;
+
+  vec3 norm = normalize(Normal);
+  vec3 lightDir = normalize(light.position - FragPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+  vec3 diffuse = light.diffuse * diff * baseColor;
+
+  // 镜面「强度」来自镜面光贴图（灰度遮罩）的采样
+  vec3 viewDir = normalize(viewPos - FragPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 specMask = vec3(texture(material.specular, TexCoords));
+  vec3 specular = light.specular * spec * specMask;
+
+  FragColor = vec4(ambient + diffuse + specular, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+void main() {
+  // 环境 / 漫反射的「底色」都来自漫反射贴图的同一次采样
+  vec3 baseColor = vec3(texture(material.diffuse, TexCoords));
+  vec3 ambient = light.ambient * baseColor;
+
+  vec3 norm = normalize(Normal);
+  vec3 lightDir = normalize(light.position - FragPos);
+  float diff = max(dot(norm, lightDir), 0.0);
+  vec3 diffuse = light.diffuse * diff * baseColor;
+
+  // 镜面「强度」来自镜面光贴图（灰度遮罩）的采样
+  vec3 viewDir = normalize(viewPos - FragPos);
+  vec3 reflectDir = reflect(-lightDir, norm);
+  float spec = pow(max(dot(viewDir, reflectDir), 0.0), material.shininess);
+  vec3 specMask = vec3(texture(material.specular, TexCoords));
+  vec3 specular = light.specular * spec * specMask;
+
+  FragColor = vec4(ambient + diffuse + specular, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+逐项看：环境和漫反射共用 `baseColor`（漫反射贴图采样值），漫反射再多乘一个 `diff`（面朝光源程度，就是上一章的 `N·L`）；镜面项里把上一章那个常量 `material.specular`，换成了 `specMask`——镜面光贴图采样出的灰度值。木头部位采到黑（`specMask≈0`），`specular` 乘出来约等于 0、没高光；钢边采到白（`specMask≈1`），高光照常亮。这就是「钢边亮、木头哑」的全部秘密。两端 GLSL 这段**一字不差**，平台差异仍只在前面那两行声明。
+
+### 第四步：CPU 侧把两张图绑到不同纹理单元
+
+着色器里有两个 `sampler2D` 了，CPU 侧就得把两张贴图分别喂给它们——这正是「纹理」章学过的**纹理单元**用法：把漫反射贴图绑到 0 号单元、镜面光贴图绑到 1 号单元，再用 `uniform1i` 告诉每个采样器去几号单元取图。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+shader.use();
+// 告诉两个采样器各去几号单元（用 1i 传整数单元号，不是纹理对象）
+shader.setInt("material.diffuse", 0);
+shader.setInt("material.specular", 1);
+// 每帧绘制前：选中单元，绑上对应贴图
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, diffuseMap);   // 漫反射贴图 → 0 号
+glActiveTexture(GL_TEXTURE1);
+glBindTexture(GL_TEXTURE_2D, specularMap);  // 镜面光贴图 → 1 号
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+gl.useProgram(program);
+// 告诉两个采样器各去几号单元（用 1i 传整数单元号，不是纹理对象）
+gl.uniform1i(gl.getUniformLocation(program, "material.diffuse"), 0);
+gl.uniform1i(gl.getUniformLocation(program, "material.specular"), 1);
+// 每帧绘制前：选中单元，绑上对应贴图
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, diffuseMap); // 漫反射贴图 → 0 号
+gl.activeTexture(gl.TEXTURE1);
+gl.bindTexture(gl.TEXTURE_2D, specularMap); // 镜面光贴图 → 1 号
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异：C++ 的 `shader.setInt("material.diffuse", 0)`
+  是封装好的辅助函数，内部仍是 `glGetUniformLocation` 拿位置、再 `glUniform1i`
+  写整数；WebGL2 没有这层封装，得自己 `gl.getUniformLocation(program,
+  "material.diffuse")` 拿位置、再 `gl.uniform1i(位置,
+  0)`。两端传的都是**单元的整数编号**（`0` /
+  `1`），不是纹理对象本身。结构体成员名两端都写成带点的字符串
+  `"material.diffuse"`，这点一致。完整可运行源码将在章末提供（M5）。
+</Callout>
+
+到这里改造完成：同一份 Phong 代码，diffuse / specular 两项由常量换成了两张贴图，木箱就有了「木头哑、钢边亮」的逐部位质感。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；三个坑分别覆盖任务卡点名的三类（贴图没绑对单元 / specular 贴图当颜色用错 / TexCoords 没传）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：物体表面**漆黑一片或完全没有花纹**，两张贴图像没生效。**原因**：贴图没绑对纹理单元——忘了用
+  `uniform1i` 告诉采样器「`material.diffuse` 去 0 号、`material.specular` 去 1
+  号」，或 `activeTexture` 选错单元、两张图绑到了同一个单元。**修法**：确认每个
+  `sampler2D` 都用 `uniform1i` 指定了单元号，且绑图前先 `activeTexture`
+  选中对应单元——漫反射 0 号、镜面 1 号，别撞车。
+</Callout>
+
+<Callout type="trap">
+  **现象**：镜面高光区域**染上了奇怪的颜色**，或本该哑光的木头部位也泛起彩色高光。**原因**：把**彩色图**当镜面光贴图用了，或把它当成「镜面的颜色」而不是「镜面的强度」。镜面光贴图本该是**灰度遮罩**——只用明暗当反光强弱（白强黑哑）。**修法**：镜面光贴图用灰度图；片元里它的采样值是当作**强度乘数**乘到镜面项上（`spec
+  * specMask`），不是替代高光颜色。
+</Callout>
+
+<Callout type="trap">
+  **现象**：贴图整块糊成**一个颜色**、或全是同一个像素的色，花纹完全没出来。**原因**：`TexCoords`
+  没正确传到片元——顶点着色器忘了 `out vec2 TexCoords; TexCoords =
+  aTexCoords;`，或 CPU 侧没给位置 `2` 配 UV 顶点属性指针，于是每个片段拿到的 UV
+  都一样。**修法**：顶点着色器声明并赋值 `TexCoords`，CPU 侧给
+  `aTexCoords`（location 2）配好 `vertexAttribPointer` +
+  `enableVertexAttribArray`，让每个片段拿到自己那份插值 UV。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo / 改代码题（含目标效果）+ 1 道独立实现题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **光照贴图**把材质里写死的常量换成「逐片段从图采样的值」，让同一物体内部能分区控制反光
+- **漫反射贴图**替换 `material.diffuse`：每个片段采样取自己那个部位的底色（木纹 / 铁边各不同）
+- **镜面光贴图**是一张**灰度遮罩**：白处反光强、黑处不反光，采样值直接当镜面强度乘数——木箱钢边亮、木头哑
+- 着色器里把两项类型由 `vec3` 改成 **`sampler2D`**（只能用 `uniform` 声明）；片元用 `texture(material.diffuse/specular, TexCoords).rgb` 取代常量，**环境项跟随漫反射贴图**
+- CPU 侧把两张图绑到不同**纹理单元**（0 / 1 号），再用 `uniform1i` 告诉每个采样器去几号取图
+
+<Exercises>
+
+**练习 1（改代码型）** 你想让木箱的**钢边变成「反光带一点暖金色调」**，而不是纯白高光。手里的镜面光贴图是灰度的。在不换贴图的前提下，怎么改片元那一行 `specular`，让钢边的高光偏暖？写出改法并说明原理。
+
+<Answer>
+
+把镜面项乘上一个暖色调系数即可，例如：
+
+```glsl
+vec3 specMask = vec3(texture(material.specular, TexCoords));
+vec3 warmTint = vec3(1.0, 0.85, 0.6);   // 偏暖的色调
+vec3 specular = light.specular * spec * specMask * warmTint;
+```
+
+原理：灰度遮罩 `specMask` 只决定**哪里、反多强**（白处≈1、黑处≈0），它本身不带颜色；再乘一个暖色 `warmTint`，就给「反光的地方」统一染上暖色调。木头部位 `specMask≈0`，乘什么都还是没高光；只有钢边那圈被染暖。（若想各处暖色不同，那才需要换一张**彩色**镜面贴图。）
+
+</Answer>
+
+**练习 2（问答型）** 镜面光贴图里，把某个部位画成**纯黑**，那一片在最终画面上会是什么样？画成**纯白**又会怎样？为什么漫反射贴图反而几乎不用纯黑那样的「遮罩」思路？
+
+<Answer>
+
+纯黑（`specMask≈0`）：那一片**完全没有镜面高光**，只剩环境 + 漫反射，显得哑光（木头部位就这么处理）。纯白（`specMask≈1`）：那一片**镜面高光照常全亮**，反光最强（钢边这么处理）。因为镜面项里 `specular = light.specular * spec * specMask`，灰度值是个 0~1 的**强度乘数**，0 就乘没了、1 就保留。
+
+漫反射贴图不走「遮罩」思路是因为它管的是**底色**——你要的是「这片是什么颜色」而不是「这片反不反光」，所以它通常是一张**彩色**图（木纹色、金属色……），不是黑白开关。
+
+</Answer>
+
+**练习 3（独立实现题）** 不看上面的代码，写出把上一章「常量材质」片元改成「漫反射贴图 + 镜面光贴图」需要改的关键几处：①结构体类型怎么变；②片元三项分别怎么取色；③CPU 侧两张图怎么喂进去。目标效果：木箱木头哑、钢边亮。
+
+<Answer>
+
+①结构体：`vec3 diffuse;` / `vec3 specular;` 改成 `sampler2D diffuse;` / `sampler2D specular;`（`shininess` 不变）。
+
+②片元三项：
+
+```glsl
+vec3 baseColor = vec3(texture(material.diffuse, TexCoords));
+vec3 ambient  = light.ambient  * baseColor;                 // 环境跟随漫反射贴图
+vec3 diffuse  = light.diffuse  * diff * baseColor;
+vec3 specular = light.specular * spec
+              * vec3(texture(material.specular, TexCoords)); // 镜面用灰度遮罩
+```
+
+③CPU 侧：`uniform1i(loc("material.diffuse"), 0)`、`uniform1i(loc("material.specular"), 1)`；绘制前 `activeTexture(TEXTURE0); bindTexture(..., diffuseMap)`、`activeTexture(TEXTURE1); bindTexture(..., specularMap)`。要点：顶点着色器记得 `out vec2 TexCoords; TexCoords = aTexCoords;` 并配好 UV 属性，否则采样全糊成一色。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="光照贴图">
+  用纹理图来逐片段地决定材质各项（底色、反光强弱等），取代上一章那种「整块物体共用一个常量」的做法。最常见两张：漫反射贴图（管各处底色）和镜面光贴图（管各处反不反光）。本质是把「纹理」和「材质」两章合到一起。详见本章「光照贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="漫反射贴图">
+  替换材质漫反射色的那张纹理图。原本 `material.diffuse` 是一个常量
+  `vec3`（整块一色），现在改成一张图，每个片段拿自己的 UV
+  去采样，得到属于它那个部位的底色——于是木箱的木头、铁边能有各自的颜色。详见本章「漫反射贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="镜面光贴图">
+  替换材质镜面色的那张纹理图，通常是一张灰度图。每个片段采样它，取出的明暗值直接当作该处镜面高光的强度——亮的地方反光强、暗的地方不反光。木箱的钢边画成白（反光强）、木头画成黑（不反光）。详见本章「镜面光贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="灰度遮罩">
+  用一张灰度图（每个像素只有明暗、没有彩色）当作「强弱开关」：白（接近
+  1.0）表示该处效果强、黑（接近
+  0.0）表示该处效果弱或没有。镜面光贴图就是用它来控制各处反光强弱——白处反光强、黑处不反光。详见本章「镜面光贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="sampler2D">
+  GLSL 里代表一张 2D
+  纹理的采样器类型（「纹理」章见过）。它本身不存图，而是「指向某个纹理单元」的句柄，配合
+  `texture()` 去采样取色。它是一种不能当普通变量赋值、只能用 `uniform`
+  声明的特殊类型，所以总藏在 `uniform Material material;`
+  这种结构体里。详见本章「sampler2D」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

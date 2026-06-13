@@ -20,6 +20,11 @@ import { EulerAnglesDiagram } from "./diagrams/euler-angles-diagram";
 import { CameraMovementDiagram } from "./diagrams/camera-movement-diagram";
 import { DiffuseNormalDiagram } from "./diagrams/diffuse-normal-diagram";
 import { SpecularReflectDiagram } from "./diagrams/specular-reflect-diagram";
+import { DiffuseMapDiagram } from "./diagrams/diffuse-map-diagram";
+import { SpecularMapDiagram } from "./diagrams/specular-map-diagram";
+import { LightCastersDiagram } from "./diagrams/light-casters-diagram";
+import { AttenuationCurveDiagram } from "./diagrams/attenuation-curve-diagram";
+import { MultipleLightsDiagram } from "./diagrams/multiple-lights-diagram";
 import { TransformOrderDiagram } from "./diagrams/transform-order-diagram";
 import { VectorOpsDiagram } from "./diagrams/vector-ops-diagram";
 import { VertexPipelineDiagram } from "./diagrams/vertex-pipeline-diagram";
@@ -94,6 +99,15 @@ import { LightingDemo } from "./lighting-demo";
  *  - DiffuseNormalDiagram / SpecularReflectDiagram（基础光照，HEL-51）：
  *    漫反射看法线 N 与指向光源 L 的夹角（N·L，正对最亮、背光 max 截 0）/ 镜面看反射方向 R
  *    与观察 V 的贴合度 + 反光度 shininess 是 pow(R·V,n) 的指数（n 越大斑越小越锐）。同款 Server SVG。
+ *  - DiffuseMapDiagram / SpecularMapDiagram（光照贴图，HEL-53）：
+ *    漫反射贴图把常量 diffuse 换成逐片段采样的底色（整块一色 → 各处各色）/ 镜面光贴图是灰度遮罩
+ *    （白=反光强、黑=不反光，木箱钢边亮、木头哑），采样灰度值直接当镜面强度乘数。同款 Server SVG。
+ *  - LightCastersDiagram / AttenuationCurveDiagram（投光物，HEL-54）：
+ *    三类投光物对照（平行光一组平行箭头·只方向不衰减 / 点光源放射 + 同心圆越远越淡·随距离衰减 /
+ *    聚光锥形 + 内外圆锥 + 切光角）/ 衰减曲线（亮度随 d 先陡后缓掉、二次项 Kq·d² 比线性下跌更狠）。同款 Server SVG。
+ *  - MultipleLightsDiagram（多光源，HEL-55，光照篇收官）：
+ *    每类光封成独立函数（CalcDirLight/CalcPointLight/CalcSpotLight）各算各的贡献，三份贡献
+ *    汇入 ∑ 相加 = 这块表面最终色；强调「每个光独立算、结果累加」（漏加 = 只显其中一盏）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -140,6 +154,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CameraMovementDiagram,
   DiffuseNormalDiagram,
   SpecularReflectDiagram,
+  DiffuseMapDiagram,
+  SpecularMapDiagram,
+  LightCastersDiagram,
+  AttenuationCurveDiagram,
+  MultipleLightsDiagram,
   Stepper,
   Step,
   Slider,
