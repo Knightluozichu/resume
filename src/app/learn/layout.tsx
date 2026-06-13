@@ -1,3 +1,8 @@
+// KaTeX 样式表只在教程区按需加载（HEL-19）：
+// 仅 /learn/* 路由引入，不进首页/Hero 关键路径；纯静态自托管（Next 会随构建
+// 复制 katex/dist/fonts 字体），无 CDN 依赖、SSG 离线可用。24KB，可接受。
+import "katex/dist/katex.min.css";
+
 import { ChapterDrawer } from "./_components/chapter-drawer";
 import { ChapterNav } from "./_components/chapter-nav";
 

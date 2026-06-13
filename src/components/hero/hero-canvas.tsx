@@ -13,7 +13,7 @@
  */
 
 import dynamic from "next/dynamic";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 /**
  * 已渲染好的跑车海报（总监用真 GPU 截图，public/hero-poster.webp，1444×1612）。
