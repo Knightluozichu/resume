@@ -38,6 +38,9 @@ import { DepthBufferDiagram } from "./diagrams/depth-buffer-diagram";
 import { DepthTestStepDiagram } from "./diagrams/depth-test-step-diagram";
 import { DepthPrecisionDiagram } from "./diagrams/depth-precision-diagram";
 import { ZFightingDiagram } from "./diagrams/z-fighting-diagram";
+import { StencilBufferDiagram } from "./diagrams/stencil-buffer-diagram";
+import { StencilTestFlowDiagram } from "./diagrams/stencil-test-flow-diagram";
+import { StencilOutlineStepDiagram } from "./diagrams/stencil-outline-step-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -127,6 +130,11 @@ import { ModelDemo } from "./model-demo";
  *    ③写色 + 深度 0.7→0.3→④更远 0.5 丢弃、那格不变）、
  *    DepthPrecisionDiagram（非线性深度：near 刻度密 far 稀、精度堆近处）、
  *    ZFightingDiagram（两面几乎共面争夺同深度 → 撕裂条纹）。同款 Server SVG。
+ *  - 高级OpenGL篇·模板测试（HEL-68）：StencilBufferDiagram（模板缓冲＝喷漆模板：每像素存整数，
+ *    只在镂空/满足比较的格子让漆透到画布）、StencilTestFlowDiagram（一个片段流转：模板测试→深度测试→
+ *    写颜色，标 glStencilOp 的 sfail/dpfail/dppass 三情形；模板测试在深度测试之前）、
+ *    StencilOutlineStepDiagram（§5 Stepper 物体描边两遍法每步图示：①画物体 + 模板写 1→
+ *    ②画放大物体 + GL_NOTEQUAL 只取外环上描边色→③留下一圈描边）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -217,6 +225,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DepthTestStepDiagram,
   DepthPrecisionDiagram,
   ZFightingDiagram,
+  StencilBufferDiagram,
+  StencilTestFlowDiagram,
+  StencilOutlineStepDiagram,
   Stepper,
   Step,
   Slider,
