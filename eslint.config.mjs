@@ -8,6 +8,21 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // 关闭与 prettier 冲突的风格规则（保持在规则配置最后）
   eslintConfigPrettier,
+  // 约定：`_` 前缀的参数/变量/捕获错误为「有意保留但当前未用」
+  // （如占位组件预留的 API props、解构丢弃位），不计未用告警；
+  // 需开发者显式加前缀才生效，不会掩盖真正的未用变量。
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

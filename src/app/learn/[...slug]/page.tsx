@@ -7,6 +7,7 @@ import rehypePrettyCode, {
 } from "rehype-pretty-code";
 import remarkMath from "remark-math";
 
+import { mdxComponents } from "@/components/mdx/mdx-components";
 import { getAllChapters, getChapter } from "@/lib/content";
 
 /**
@@ -80,8 +81,19 @@ export default async function ChapterPage({
 
   const { content } = await compileMDX({
     source: chapter.source,
+    // HEL-20：注入结构教学组件（Objectives/CodeTabs/Tab/Exercises/Answer/
+    // Attribution/Callout/ShaderDemo），使 .mdx 直接用这些标签。
+    components: mdxComponents,
     options: {
       parseFrontmatter: false,
+      // frontmatter 作为 scope 变量暴露给 MDX 表达式（如
+      // <Attribution sourceUrl={frontmatter.sourceUrl} />）；
+      // frontmatter 由 lib/content 解析、此处仅透传（来源单一）。
+      scope: { frontmatter: chapter.frontmatter },
+      // 允许 MDX 内的 {表达式}（next-mdx-remote 默认 blockJS:true 会禁用
+      // {frontmatter.sourceUrl} 这类表达式）。内容为仓库内可信作者撰写，非用户输入；
+      // 仍保留 blockDangerousJS:true（默认）拦截 eval/Function/process 等危险用法。
+      blockJS: false,
       mdxOptions: {
         // $..$ / $$..$$ → math 节点（remark）→ KaTeX HTML（rehype）
         remarkPlugins: [remarkMath],
