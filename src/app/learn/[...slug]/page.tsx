@@ -6,6 +6,7 @@ import rehypePrettyCode, {
   type Options as RehypePrettyCodeOptions,
 } from "rehype-pretty-code";
 import rehypeSlug from "rehype-slug";
+import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 
 import { Comments } from "@/components/chapter/comments";
@@ -123,7 +124,9 @@ export default async function ChapterPage({
       blockJS: false,
       mdxOptions: {
         // $..$ / $$..$$ → math 节点（remark）→ KaTeX HTML（rehype）
-        remarkPlugins: [remarkMath],
+        // remark-gfm：解析 GFM 管道表格（| --- |）、删除线、任务列表等扩展语法。
+        // 没有它，markdown 表格会被整段当裸文本塞进 <p>，竖线原样显示（HEL-63）。
+        remarkPlugins: [remarkMath, remarkGfm],
         rehypePlugins: [
           [rehypePrettyCode, rehypePrettyCodeOptions],
           rehypeKatex,
