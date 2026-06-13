@@ -40,6 +40,7 @@ import { Term } from "./term";
 import { TextureDemo } from "./texture-demo";
 import { CameraDemo } from "./camera-demo";
 import { LightingDemo } from "./lighting-demo";
+import { ModelDemo } from "./model-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -120,6 +121,14 @@ import { LightingDemo } from "./lighting-demo";
  *    （小自发光标记），片元做 ambient+diffuse+specular Phong；光源方位/环境强度/
  *    镜面强度/高光指数滑块 + 重置，uniform 驱动按需重绘（不重编译、不挂常驻 rAF）。
  *    复用 camera-math 矩阵基座（新增 mat3 法线矩阵 / 归一化 / 叉乘 / 带法线立方体）。
+ *
+ * R3F 交互式模型查看器（「模型加载篇·模型 Model 章」ModelDemo，HEL-58）：
+ *  - Client（dynamic 边界）：ModelDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 ModelCanvas（独立 chunk，硬规则 2/6）。复用 Hero 的 ferrari.glb（drei useGLTF
+ *    + 本地 Draco decoder，不新增资源、不跑 gltf-transform，硬规则 3）。
+ *    教学核心「模型 = 一堆有名字的 mesh」：运行时 scene.traverse 收集所有 isMesh 节点生成
+ *    下拉，选某 mesh = 高亮该件 + 压暗其余；线框开关 + 自转开关（reduced-motion 默认关）+ 重置。
+ *    frameloop="demand" + IntersectionObserver 离屏停转（不空转 rAF）。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -133,6 +142,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TextureDemo,
   CameraDemo,
   LightingDemo,
+  ModelDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
