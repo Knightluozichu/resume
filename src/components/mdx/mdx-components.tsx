@@ -20,6 +20,7 @@ import { PipelineViz } from "./pipeline-viz";
 import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
 import { Term } from "./term";
+import { TextureDemo } from "./texture-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -42,6 +43,12 @@ import { Term } from "./term";
  *  - Client（dynamic 边界）：ShaderDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
  *    懒加载含 WebGL 代码的 ShaderCanvas（独立 chunk，不进首屏/公共 layout，硬规则 2/6）。
  *    标准 uniforms：uTime / uResolution / uMouse。HEL-26 加 uniform 控件、HEL-27 加在线改 GLSL。
+ *
+ * WebGL 纹理交互演示（HEL-45，HEL-34「纹理」章核心 viz）：
+ *  - Client（dynamic 边界）：TextureDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载含 WebGL 代码的 TextureCanvas（独立 chunk，硬规则 2/6）。贴满纹理的 quad +
+ *    环绕(REPEAT/MIRRORED/CLAMP) / 过滤(NEAREST/LINEAR) 分段按钮 + UV 缩放 / 放大观察滑块；
+ *    默认程序化「UV 测试图」（无外部资源），按需重绘不挂 rAF 常转（reduced-motion 友好）。
  *
  * 术语高亮 + 名词解释（HEL-24）：
  *  - Client（真交互）：Term（行内术语高亮 + hover/focus tooltip + Esc + 锚点跳词条）
@@ -71,6 +78,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Attribution,
   Callout,
   ShaderDemo,
+  TextureDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
