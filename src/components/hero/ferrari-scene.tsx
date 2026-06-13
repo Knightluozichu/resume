@@ -58,11 +58,13 @@ const BODY_PAINT = "#5b3fd6";
 /** Bloom 辉光参数。目标：紫漆高光 / 车灯 / 镀铬有微辉光，不过曝、不糊成一片。 */
 const BLOOM = {
   /** 亮度阈值：只让 >此值的亮部发光。↑ 更克制（仅最亮处发光），↓ 更多区域发光。0.6~0.8 起步 */
-  luminanceThreshold: 0.72,
+  // 总监调校：0.72→0.82，让辉光更挑（仅车灯/镀铬/最亮棱线），找回漆面 clearcoat 清脆
+  luminanceThreshold: 0.82,
   /** 阈值过渡软硬：↑ 辉光边缘更柔和，↓ 更硬朗。0.02~0.1 */
-  luminanceSmoothing: 0.04,
+  luminanceSmoothing: 0.05,
   /** 强度：↑ 辉光更亮更扩散，↓ 更收敛。0.6~1.0 起步，过曝就往下调 */
-  intensity: 0.85,
+  // 总监调校：0.85→0.62，收敛车身大面积 streaky 辉光，保留热点光晕
+  intensity: 0.62,
   /** mipmap 模糊（现代柔和大范围辉光，取代废弃的 kernelSize/resolution）。建议保持 true */
   mipmapBlur: true,
 } as const;
