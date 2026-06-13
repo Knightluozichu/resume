@@ -20,6 +20,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore,
 } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
@@ -28,6 +29,7 @@ import {
   Environment,
   ContactShadows,
   Lightformer,
+  PerformanceMonitor,
   Sparkles,
 } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
@@ -40,6 +42,7 @@ import {
   Group,
   Vector3,
   type Object3D,
+  type PerspectiveCamera,
 } from "three";
 
 const MODEL_URL = "/models/ferrari.glb";
@@ -93,6 +96,8 @@ const SPARKLES = {
 const CAMERA = {
   /** HEL-13 基准机位，不可破坏的构图原点。 */
   base: [4.8, 2.7, 6.2] as [number, number, number],
+  /** HEL-13 基准 fov（度）。响应式取景在此基础上做增量（见 RESPONSIVE.portraitFovBoost）。 */
+  fov: 36,
   /** 鼠标视差最大偏移量（世界单位）。幅度刻意小，避免晕动与破坏构图。↑ 视差更强 */
   parallax: { x: 0.55, y: 0.32 },
   /** 自动呼吸摆动：绕 base 做有界小角度往复（非 360 旋转，防止车转到文字下方）。 */
@@ -112,6 +117,89 @@ const REVEAL = {
   duration: 0.55,
   /** 起始缩放（略小 → 1）。↑ 接近 1 则入场更微弱 */
   fromScale: 0.94,
+} as const;
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * 性能降级矩阵（HEL-15）—— drei PerformanceMonitor 监测帧率，掉帧时分级降配。
+ *
+ * 三档 tier，由 onDecline / onIncline 在相邻档间切换：
+ *   high（满配，默认）→ mid（降 DPR + 减粒子）→ low（再降 DPR + 关 Bloom）
+ * onFallback（持续达不到目标帧率，设备明显吃力）直接钉到 low。
+ * 高帧率设备恒定停在 high，体验不受影响（HEL-13/14 满配原样）。
+ * ────────────────────────────────────────────────────────────────────────── */
+type PerfTier = "high" | "mid" | "low";
+
+const PERF_TIERS: Record<
+  PerfTier,
+  {
+    /** Canvas dpr 区间 [min,max]。↑ 上限更清晰更吃 GPU，↓ 更省。 */
+    dpr: [number, number];
+    /** Sparkles 粒子数。满配 = SPARKLES.count（90）。 */
+    sparkleCount: number;
+    /** 是否挂载 Bloom EffectComposer。low 档关后处理，省一整条 pass。 */
+    bloom: boolean;
+  }
+> = {
+  // 满配：与 HEL-13/14 现状一致，正常设备维持现状
+  high: { dpr: [1, 2], sparkleCount: SPARKLES.count, bloom: true },
+  // 中档：降 DPR 上限 + 粒子减到 ~40，保留 Bloom（辉光是 Hero 灵魂）
+  mid: { dpr: [1, 1.2], sparkleCount: 40, bloom: true },
+  // 低档：DPR 钉死 1 + 粒子再砍 + 关 Bloom，保实时帧率不卡顿
+  low: { dpr: [1, 1], sparkleCount: 20, bloom: false },
+};
+
+/** tier 升降序，供 onIncline/onDecline 相邻迁移用。 */
+const TIER_ORDER: PerfTier[] = ["low", "mid", "high"];
+
+/**
+ * PerformanceMonitor 触发参数。bounds 给出可接受帧率区间（按屏幕刷新率换算）：
+ * 实测 fps 低于 lower 触发 onDecline，高于 upper 触发 onIncline。
+ * 这里取刷新率的 50%~75% 作为软门槛——明显掉帧才降级，避免对正常波动过敏。
+ */
+const PERF_MONITOR = {
+  /** 采样窗口（ms）。drei 默认 250。 */
+  ms: 250,
+  /** 连续多少次 incline/decline 才真正触发（防抖）。drei 默认 6。 */
+  iterations: 6,
+  /** 可接受 fps 区间（refreshrate 为屏幕刷新率，如 60/120）。 */
+  bounds: (refreshrate: number): [number, number] => [
+    refreshrate * 0.5,
+    refreshrate * 0.75,
+  ],
+} as const;
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * 移动端 / 窄屏响应式取景（HEL-15）。
+ *
+ * 基准机位 CAMERA.base = [4.8,2.7,6.2] fov36 是为「横屏宽视口」调的；竖屏窄视口下
+ * 车显得偏大、CTA 易压车头。策略：按视口「宽高比」线性插值机位与 fov——
+ *   aspect ≥ landscape → 满桌面取景（dolly 0，fov base）
+ *   aspect ≤ portrait  → 最大幅度「拉远 + 抬 fov」，车更小更靠下，顶部留白最大
+ * 之间线性过渡。dolly 沿基准机位方向向外推（保持构图角度不变，只改远近）。
+ *
+ * ⚠️ 总监最该微调的常量：本块的 portraitDollyBack / portraitFovBoost / portraitLookDown
+ *    —— 在真 GPU 用 323px（极窄）与桌面宽度两端核对「车体绝不盖标题/副标题」。
+ *    这里给出合理初值与机制；具体数值由总监按真机微调。
+ * ────────────────────────────────────────────────────────────────────────── */
+const RESPONSIVE = {
+  /** 宽高比插值端点：≥ landscape 视为宽屏（满取景），≤ portrait 视为竖屏（最大降取景）。 */
+  aspectLandscape: 1.4,
+  aspectPortrait: 0.6,
+  /**
+   * 竖屏时沿基准机位方向额外「拉远」的世界单位（dolly back）。
+   * ↑ 车更小、留白更多；过大则车太远失去气势。初值 3.2，按 323px 真机微调。
+   */
+  portraitDollyBack: 3.2,
+  /**
+   * 竖屏时 fov 增量（度）。base fov=36；拉远后适度增 fov 找回画面饱满度、
+   * 让车「小但不空」。↑ 透视更广更夸张。初值 +8，与 dollyBack 配合微调。
+   */
+  portraitFovBoost: 8,
+  /**
+   * 竖屏时 lookAt 目标额外下移的世界单位——视线下压 → 车在画面更靠下，
+   * 顶部腾出更多干净空间给标题/副标题/CTA。↑ 车更靠下。初值 0.5。
+   */
+  portraitLookDown: 0.5,
 } as const;
 
 /**
@@ -235,36 +323,90 @@ function usePrefersReducedMotion(): boolean {
  */
 const LOOK_AT = new Vector3(0, 0.35, 0);
 
+/** 0→1 钳制线性归一化：把 v 在 [a,b] 区间映射到 [0,1]（含端点钳制）。 */
+function clamp01(v: number, a: number, b: number): number {
+  if (a === b) return v >= b ? 1 : 0;
+  return MathUtils.clamp((v - a) / (b - a), 0, 1);
+}
+
+/**
+ * 平滑设置透视相机 fov 并刷新投影矩阵。
+ * 抽成模块级函数：fov 是直接属性赋值，在 useFrame 内联会触发
+ * react-hooks/immutability（不许直接改 hook 返回值的属性）；移出 hook 作用域后，
+ * 这里的相机被当作普通外部对象处理，与 camera.position.lerp() 等方法式 mutate 一致。
+ */
+function lerpCameraFov(
+  camera: PerspectiveCamera,
+  targetFov: number,
+  alpha: number,
+): void {
+  if (Math.abs(camera.fov - targetFov) <= 0.01) return;
+  camera.fov = MathUtils.lerp(camera.fov, targetFov, alpha);
+  camera.updateProjectionMatrix();
+}
+
 function CameraRig({ reducedMotion }: { reducedMotion: boolean }) {
-  const { camera, pointer, clock } = useThree();
+  const { camera, pointer, clock, size } = useThree();
   // 复用临时向量，避免每帧分配
   const target = useRef(new Vector3(...CAMERA.base)).current;
+  const lookTarget = useRef(new Vector3()).current;
+  const baseDir = useRef(new Vector3()).current;
 
   useFrame((_, delta) => {
+    // ── 响应式取景（HEL-15）：按视口宽高比插值「拉远 + 抬 fov + 视线下压」 ──
+    // portrait→0、landscape→1：0 表示最大降取景（竖窄屏），1 表示满桌面取景。
+    const aspect = size.height > 0 ? size.width / size.height : 1;
+    const wide = clamp01(
+      aspect,
+      RESPONSIVE.aspectPortrait,
+      RESPONSIVE.aspectLandscape,
+    );
+    const portrait = 1 - wide; // 1 = 竖屏极窄，0 = 宽屏
+    const [bx, by, bz] = CAMERA.base;
+
+    // 沿基准机位方向向外 dolly：保持构图角度，只改远近
+    baseDir.set(bx, by, bz).normalize();
+    const dolly = portrait * RESPONSIVE.portraitDollyBack;
+    const dx = bx + baseDir.x * dolly;
+    const dy = by + baseDir.y * dolly;
+    const dz = bz + baseDir.z * dolly;
+
     if (reducedMotion) {
-      // 静止：直接钉在基准机位（不读 pointer、不摆动）
-      target.set(...CAMERA.base);
+      // 静止：直接钉在（已 dolly 的）基准机位（不读 pointer、不摆动）
+      target.set(dx, dy, dz);
     } else {
       // 自动呼吸：绕基准在 XZ 平面做有界小角度往复（sin → 有界，永不整圈）
       const t = clock.elapsedTime;
       const ang = Math.sin(t * CAMERA.breathe.speed) * CAMERA.breathe.amplitude;
-      const [bx, by, bz] = CAMERA.base;
       const cos = Math.cos(ang);
       const sin = Math.sin(ang);
-      // 绕 Y 轴旋转基准机位的水平分量
-      const rx = bx * cos - bz * sin;
-      const rz = bx * sin + bz * cos;
+      // 绕 Y 轴旋转（已 dolly 的）机位的水平分量
+      const rx = dx * cos - dz * sin;
+      const rz = dx * sin + dz * cos;
       // 鼠标视差：pointer ∈ [-1,1]，乘以小幅度。Y 取负 → 鼠标上移镜头轻抬
       target.set(
         rx + pointer.x * CAMERA.parallax.x,
-        by - pointer.y * CAMERA.parallax.y,
+        dy - pointer.y * CAMERA.parallax.y,
         rz,
       );
     }
     // 帧率无关的指数阻尼平滑（damp3 风格）
     const a = 1 - Math.exp(-CAMERA.damping * delta);
     camera.position.lerp(target, a);
-    camera.lookAt(LOOK_AT);
+
+    // 竖屏视线下压：lookAt 目标下移 → 车在画面更靠下，顶部留白更多
+    lookTarget.set(
+      LOOK_AT.x,
+      LOOK_AT.y - portrait * RESPONSIVE.portraitLookDown,
+      LOOK_AT.z,
+    );
+    camera.lookAt(lookTarget);
+
+    // 竖屏抬 fov（仅 PerspectiveCamera；R3F 默认透视相机）。
+    if ((camera as PerspectiveCamera).isPerspectiveCamera) {
+      const targetFov = CAMERA.fov + portrait * RESPONSIVE.portraitFovBoost;
+      lerpCameraFov(camera as PerspectiveCamera, targetFov, a);
+    }
   });
 
   return null;
@@ -328,10 +470,17 @@ function FerrariModel() {
   return <primitive object={scene} position={[0, -0.18, 0]} />;
 }
 
-function FerrariRig({ reducedMotion }: { reducedMotion: boolean }) {
+function FerrariRig({
+  reducedMotion,
+  tier,
+}: {
+  reducedMotion: boolean;
+  tier: PerfTier;
+}) {
+  const perf = PERF_TIERS[tier];
   return (
     <>
-      {/* 镜头交互：鼠标视差 + 呼吸摆动（reducedMotion 时静止） */}
+      {/* 镜头交互：鼠标视差 + 呼吸摆动（reducedMotion 时静止）+ 响应式取景 */}
       <CameraRig reducedMotion={reducedMotion} />
 
       {/* 环境光：studio HDRI 撑起金属漆面反射，背景不显示天空盒 */}
@@ -377,7 +526,7 @@ function FerrariRig({ reducedMotion }: { reducedMotion: boolean }) {
          */}
         <Sparkles
           position={[0, SPARKLES.positionY, 0]}
-          count={SPARKLES.count}
+          count={perf.sparkleCount}
           scale={SPARKLES.scale}
           size={SPARKLES.size}
           speed={reducedMotion ? 0 : SPARKLES.speed}
@@ -403,21 +552,33 @@ function FerrariRig({ reducedMotion }: { reducedMotion: boolean }) {
        * - 默认 ADD/SCREEN 混合只「加亮」高光，暗部/透明区不被点亮 →
        *   与 Canvas gl.alpha:true 透明背景兼容，不破坏与页面 --bg 的融合
        * 静态辉光不属「动效」，reducedMotion 下保留。
+       * HEL-15：low 档（perf.bloom=false）整条后处理 pass 不挂载，省 GPU。
        */}
-      <EffectComposer frameBufferType={HalfFloatType}>
-        <Bloom
-          luminanceThreshold={BLOOM.luminanceThreshold}
-          luminanceSmoothing={BLOOM.luminanceSmoothing}
-          intensity={BLOOM.intensity}
-          mipmapBlur={BLOOM.mipmapBlur}
-        />
-      </EffectComposer>
+      {perf.bloom && (
+        <EffectComposer frameBufferType={HalfFloatType}>
+          <Bloom
+            luminanceThreshold={BLOOM.luminanceThreshold}
+            luminanceSmoothing={BLOOM.luminanceSmoothing}
+            intensity={BLOOM.intensity}
+            mipmapBlur={BLOOM.mipmapBlur}
+          />
+        </EffectComposer>
+      )}
     </>
   );
 }
 
+/** tier 相邻迁移：向 high 升一档 / 向 low 降一档（端点钳制）。 */
+function stepTier(current: PerfTier, dir: 1 | -1): PerfTier {
+  const i = TIER_ORDER.indexOf(current);
+  const next = MathUtils.clamp(i + dir, 0, TIER_ORDER.length - 1);
+  return TIER_ORDER[next];
+}
+
 export default function FerrariScene() {
   const reducedMotion = usePrefersReducedMotion();
+  // 性能档位（HEL-15）：默认满配 high，PerformanceMonitor 掉帧时下调。
+  const [tier, setTier] = useState<PerfTier>("high");
 
   // 离开页面时释放 GLTF 缓存，避免热更新/导航后的句柄堆积
   useEffect(() => {
@@ -431,13 +592,26 @@ export default function FerrariScene() {
       // 透明背景，与页面 --bg 融合；不抢首页文字
       gl={{ alpha: true, antialias: true }}
       shadows
-      dpr={[1, 2]}
-      // 3/4 侧前方、略俯视的初始机位；CameraRig 在此基准上做小幅视差/摆动。
-      // 拉远 + 抬高让车落在画面下半部，给顶部文字留出干净留白
-      // （移动端完整响应式取景见 HEL-15）
-      camera={{ position: CAMERA.base, fov: 36 }}
+      // DPR 由性能档位驱动（HEL-15）：掉帧降上限，正常设备维持满配 [1,2]
+      dpr={PERF_TIERS[tier].dpr}
+      // 3/4 侧前方、略俯视的初始机位；CameraRig 在此基准上做小幅视差/摆动 +
+      // 按视口宽高比响应式取景（拉远 / 抬 fov / 视线下压，见 RESPONSIVE）。
+      camera={{ position: CAMERA.base, fov: CAMERA.fov }}
     >
-      <FerrariRig reducedMotion={reducedMotion} />
+      {/*
+       * 帧率监测（HEL-15）：掉帧 onDecline 降一档，回升 onIncline 升一档，
+       * onFallback（持续吃力）直接钉到 low。tier 状态驱动 DPR / 粒子数 / Bloom。
+       */}
+      <PerformanceMonitor
+        ms={PERF_MONITOR.ms}
+        iterations={PERF_MONITOR.iterations}
+        bounds={PERF_MONITOR.bounds}
+        onDecline={() => setTier((t) => stepTier(t, -1))}
+        onIncline={() => setTier((t) => stepTier(t, 1))}
+        onFallback={() => setTier("low")}
+      >
+        <FerrariRig reducedMotion={reducedMotion} tier={tier} />
+      </PerformanceMonitor>
     </Canvas>
   );
 }
