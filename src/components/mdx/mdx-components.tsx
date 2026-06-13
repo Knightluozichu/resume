@@ -45,6 +45,9 @@ import { BlendEquationDiagram } from "./diagrams/blend-equation-diagram";
 import { DiscardVsBlendDiagram } from "./diagrams/discard-vs-blend-diagram";
 import { AlphaSortDiagram } from "./diagrams/alpha-sort-diagram";
 import { BlendSortStepDiagram } from "./diagrams/blend-sort-step-diagram";
+import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
+import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
+import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -145,6 +148,11 @@ import { ModelDemo } from "./model-demo";
  *    AlphaSortDiagram（半透明排序：乱序穿帮 vs 从远到近 + 关深度写入 正确透叠）、
  *    BlendSortStepDiagram（§5 Stepper 半透明排序每步图示：①乱序穿帮→②先画不透明物→
  *    ③半透明从远到近 + 关深度写入 透叠正确）。同款 Server SVG。
+ *  - 高级OpenGL篇·面剔除（HEL-70）：WindingOrderDiagram（环绕顺序判正背：v0→v1→v2 逆时针 CCW=正面
+ *    保留 vs 顺时针 CW=背面剔除，并排对照）、WindingCullStepDiagram（§5 Stepper 环绕判正背每步图示：
+ *    ①模型里顶点统一逆时针定义→②投影到屏幕后朝你的仍 CCW=正面 / 背对你的反转成 CW=背面→
+ *    ③背面被剔除不画、省片段开销）、FaceCullingDiagram（剔除关 vs 开 同构同框：culled=false 背面也画、
+ *    透视看到内壁穿帮 / culled=true 只画正面、干净省一半，供 CompareSlider 两侧分别传）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -242,6 +250,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DiscardVsBlendDiagram,
   AlphaSortDiagram,
   BlendSortStepDiagram,
+  WindingOrderDiagram,
+  WindingCullStepDiagram,
+  FaceCullingDiagram,
   Stepper,
   Step,
   Slider,
