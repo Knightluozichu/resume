@@ -1,0 +1,303 @@
+---
+title: 摄像机
+type: B
+section: 入门
+order: 7
+description: 用欧拉角 Pitch/Yaw 手推方向向量，实现 WASD 自由移动、鼠标视角控制与滚轮 FOV 缩放——把「钉死的 LookAt」变成可交互的摄像机系统。
+demo: true
+math: true
+sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/09%20Camera/
+draft: false
+---
+
+{/* B 数学型章：重心在欧拉角→方向向量三角推导、WASD + delta time、鼠标视角、滚轮 fov。LookAt 矩阵已在坐标系统章详推，本章一句回顾。主 Demo = <CameraDemo>；静态图 = EulerAnglesDiagram / CameraMovementDiagram；复用 LookAtDiagram。Term 8 个；draft:true。 */}
+
+{/* 知识点：1) view 矩阵回顾 2) position+front+up 三要素 3) Pitch/Yaw/Roll 4) front 三角推导 5) WASD 6) delta time 7) 鼠标 8) 滚轮 fov */}
+
+<Objectives>
+
+- 能用自己的话解释 <Term def="用三个旋转角（Pitch/Yaw/Roll）描述物体朝向的表示法。本章只用 Pitch 和 Yaw 控制「抬头低头 / 左右看」，Roll 留给特殊场景。">欧拉角</Term> 里 Pitch、Yaw 分别控制什么，Roll 为什么本章不用
+- 能手推给定 pitch 和 yaw 时，摄像机的 <Term def="从摄像机位置出发、指向「看向哪里」的单位向量，通常记作 front。WASD 的前进后退沿它移动，View 矩阵也靠它和 up 构造。">方向向量</Term> 各分量公式（§4 三角推导）
+- 能回答：为什么 WASD 移动要乘 delta time？鼠标的 yoffset 为什么要取反？
+
+</Objectives>
+
+## 给摄像机装上手柄和云台
+
+上一章你已经会摆模型、会选摄像机位置看向目标——`lookAt(eye, center, up)` 一行搞定 View 矩阵。但真正的相机不是钉在架子上的：你要能**举着它四处走**、转身、抬头低头、拉近拉远。游戏里的第一人称视角、编辑器里的自由漫游，靠的都是同一套**可交互摄像机系统**。
+
+想象你拿着单反：身体位置是 `position`，镜头朝哪是 `front`，哪边算「上」是 `worldUp`。W 键 = 沿镜头方向往前走；鼠标拖动 = 转头看；滚轮 = 换广角/长焦（调 FOV）。本章就是把这三件事从直觉落到公式和代码。
+
+## 摄像机三要素与 View 矩阵
+
+坐标系统章 §3 已经讲过：View 矩阵把世界拉到摄像机面前，让摄像机坐在观察空间原点、面朝 **-z**。构造它需要三个输入——**position（站哪）**、**front（朝哪）**、**worldUp（头顶方向）**——对应 `lookAt(eye, center, up)` 里的三个向量。日常实现里 `center = position + front`，`right = normalize(cross(front, worldUp))`，三根轴互相垂直。
+
+LookAt 三轴怎么叉乘、拼成 View 矩阵，坐标系统章 §4 已完整推导——下面这张图仍可对照：
+
+<LookAtDiagram />
+
+## 欧拉角：用两个角描述「朝哪看」
+
+摄像机的朝向用三个角描述：<Term def="绕 X 轴的旋转——抬头或低头。正值通常表示向上看（抬头），范围常限在 ±89° 以免视角翻转。">Pitch（俯仰角）</Term> 管上下看（抬头低头），<Term def="绕 Y 轴的旋转——向左或向右转头。0° 通常表示朝 +X 或 -Z 方向（依约定），转 360° 回到原处。">Yaw（偏航角）</Term> 管左右看（转头），<Term def="绕 front 轴的旋转——像歪头。FPS 和漫游相机通常锁死为 0，否则画面会翻滚。">Roll（滚转角）</Term> 管歪头——第一人称和漫游相机**几乎不用 Roll**，锁 0 就好，否则画面会天旋地转。
+
+<EulerAnglesDiagram />
+
+Pitch、Yaw 变 → front 变 → 你看到的画面变。下面 §4 用三角函数把这两个角精确翻译成 front 的三个分量。
+
+## WASD：沿 front 和 right 平移
+
+不同帧率下要走得一样远，靠 <Term def="两次渲染之间经过的真实时间（秒）。移动距离 = 速度 × deltaTime，保证 30fps 和 144fps 走一样远。">delta time</Term> —— 它是两次渲染之间经过的真实时间，§6 代码里每帧先算 `deltaTime`，再乘进位移。
+
+WASD 四键对应四个方向：W 沿 **front** 前进，S 沿 **-front** 后退，A 沿 **-right** 左移，D 沿 **+right** 右移。`right = normalize(cross(front, worldUp))`，永远水平于地面（只要 front 没完全朝天/朝地）。
+
+<CameraMovementDiagram />
+
+## 鼠标视角与滚轮缩放
+
+鼠标移动 → 改 Pitch / Yaw：水平位移 `xoffset` 加给 Yaw，垂直 `yoffset` 减给 Pitch（**y 取反**——屏幕坐标 y 向下为正，而「抬头」应让 Pitch 增大）。改完角之后**重新算 front**，再 normalize。
+
+滚轮则调 <Term def="Field of View，视场角——镜头有多「广」。数值越大看得越宽（广角），越小越「长焦」。透视投影矩阵的 fovy 参数就是它。">FOV</Term>：滚轮向上通常**缩小** FOV（看得更窄、像长焦），向下**放大** FOV（广角）。浏览器里用 `wheel` 事件；GLFW 用 `scroll_callback`。
+
+真实 FPS 还会用 <Term def="Pointer Lock——把鼠标锁在画布内、隐藏光标，移动量用 movementX/Y 而不是绝对坐标，避免指针撞屏幕边缘。">光标捕获</Term>（Pointer Lock），这样转 360° 不会撞到屏幕边缘。教学 Demo 用滑块模拟 Pitch/Yaw，原理相同。
+
+## 数学推导：Pitch + Yaw → front
+
+符号：Pitch = $\phi$，Yaw = $\theta$（均用**弧度**）。front 是**单位向量**（长度 1），表示摄像机朝向。
+
+**第一步：只在水平面转 Yaw。** 像站在地上原地转圈——方向向量在 XZ 平面上，长度 1：
+
+$$
+\vec{f}_{\text{flat}} = (\cos\theta,\ 0,\ \sin\theta)
+$$
+
+**第二步：再抬 Pitch。** 把水平分量「折」到 Y 上：水平部分长度变成 $\cos\phi$（因为 $\sin^2\phi + \cos^2\phi = 1$），竖直分量是 $\sin\phi$：
+
+$$
+f_x = \cos\theta \cdot \cos\phi,\quad f_y = \sin\phi,\quad f_z = \sin\theta \cdot \cos\phi
+$$
+
+人话：Yaw 决定你在水平圈上指向哪；Pitch 把整根向量从水平面翘起来——**XZ 两个分量都要乘 $\cos\phi$**，因为翘角越大，水平投影越短；Y 分量直接是 $\sin\phi$。
+
+LearnOpenGL 约定：Yaw 0° 时 front 指向 **+X**，逆时针增加；Pitch 正数向上看。代入验证：$\phi=0,\ \theta=0$ → front $= (1,0,0)$；只抬 Pitch 45° → $(\cos 45°, \sin 45°, 0)$，确实朝右上。
+
+<Callout type="tip">
+  **为什么 Pitch 要限在 ±89°？** 当 $\phi \to 90°$ 时 $\cos\phi \to 0$，front
+  几乎平行于 worldUp，`front × worldUp` 接近零向量，**right
+  算不出来**——视角突然翻转，俗称万向节死锁。FPS 里锁 Pitch 范围是标准做法。
+</Callout>
+
+## 交互 Demo：拖滑块当摄像机
+
+<CameraDemo />
+
+**猜一猜**
+
+1. 把 Pitch 调到 **89°** 极限——画面有什么异常感？网格线是否开始「拧」了？
+2. 固定 Pitch = -15°，把 Yaw 从 **0° 转到 180°**——场景里的立方体发生了什么？（提示：你是在绕场景中心「绕圈看」。）
+3. 把 FOV 拉到 **15°** 和 **90°** 对比——同一距离下，哪个更像「广角镜头」？
+
+## 代码对照：GLFW 与浏览器
+
+<CodeTabs>
+
+<Tab label="C++ / GLFW">
+
+```cpp
+// 每帧开头
+float currentFrame = glfwGetTime();
+float deltaTime = currentFrame - lastFrame;
+lastFrame = currentFrame;
+
+float cameraSpeed = 2.5f * deltaTime;
+if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    cameraPos += cameraSpeed * cameraFront;
+if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    cameraPos -= cameraSpeed * cameraFront;
+if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+    cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+    cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
+
+// 鼠标回调
+void mouse_callback(GLFWwindow*, double xpos, double ypos) {
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos; // 注意取反
+    lastX = xpos; lastY = ypos;
+    float sensitivity = 0.1f;
+    yaw   += xoffset * sensitivity;
+    pitch += yoffset * sensitivity;
+    if (pitch > 89.0f) pitch = 89.0f;
+    if (pitch < -89.0f) pitch = -89.0f;
+    updateCameraVectors(); // 用 pitch/yaw 重算 front
+}
+
+void scroll_callback(GLFWwindow*, double, double yoffset) {
+    fov -= (float)yoffset;
+    if (fov < 1.0f) fov = 1.0f;
+    if (fov > 45.0f) fov = 45.0f;
+}
+```
+
+</Tab>
+
+<Tab label="TypeScript / WebGL2">
+
+```typescript
+let lastFrame = performance.now() / 1000;
+
+function frame() {
+  const now = performance.now() / 1000;
+  const deltaTime = now - lastFrame;
+  lastFrame = now;
+
+  const speed = 2.5 * deltaTime;
+  if (keys.has("w")) cameraPos.addScaledVector(front, speed);
+  if (keys.has("s")) cameraPos.addScaledVector(front, -speed);
+  const right = normalize(cross(front, worldUp));
+  if (keys.has("a")) cameraPos.addScaledVector(right, -speed);
+  if (keys.has("d")) cameraPos.addScaledVector(right, speed);
+
+  const view = mat4LookAt([], cameraPos, add(cameraPos, front), worldUp);
+  const proj = mat4Perspective([], (fov * Math.PI) / 180, aspect, 0.1, 100);
+  // ... draw
+}
+
+canvas.addEventListener("mousemove", (e) => {
+  if (!pointerLocked) return;
+  yaw += e.movementX * 0.1;
+  pitch -= e.movementY * 0.1; // 浏览器 movementY 向下为正，故减
+  pitch = clamp(pitch, -89, 89);
+  front = frontFromAngles(pitch, yaw);
+});
+
+canvas.addEventListener("wheel", (e) => {
+  fov = clamp(fov - Math.sign(e.deltaY), 1, 45);
+});
+```
+
+</Tab>
+
+</CodeTabs>
+
+<Callout type="warn">
+  API 差异：GLFW 的 `glfwGetTime()` 返回秒；浏览器用 `performance.now() /
+  1000`。鼠标在 GLFW 里用**绝对坐标差**（记得 `yoffset = lastY - ypos`
+  取反）；Pointer Lock 下用 `movementX/Y`，垂直方向同样要取反。FOV 在 GLM
+  里传**弧度**（`glm::radians(fov)`），本章 Demo 的 `mat4Perspective` 亦如此。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Pitch 超过 ±90°
+  时画面突然上下颠倒，或左右移动键「失灵」。**原因**：front 与 worldUp
+  几乎平行，叉乘得零向量，right 无法归一化——万向节死锁。**修法**：Pitch 限幅
+  ±89°；需要看天时用四元数或「先 Yaw 再 Pitch」的约束相机。
+</Callout>
+
+<Callout type="trap">
+  **现象**：高配 144fps 走得飞快，低配 30fps
+  挪不动。**原因**：每帧位移写死常数，没乘 deltaTime。**修法**：`位移 = 速度 *
+  deltaTime`，速度单位用「世界单位/秒」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：鼠标往上拖，画面却往下看（或相反）。**原因**：屏幕坐标 y
+  向下增大，而 Pitch 增大应表示抬头，**yoffset 符号反了**。**修法**：GLFW 用
+  `lastY - ypos`；Pointer Lock 用 `pitch -= movementY * sens`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：斜向同时按 W+D 走得比只按 W 快一截（「抄近道」）。**原因**：front
+  向量没 normalize，或把未归一化的 front 和 right
+  相加后没归一化就乘速度。**修法**：`updateCameraVectors()` 末尾 `front =
+  normalize(...)`；组合按键时对合成方向 normalize 再乘 speed。
+</Callout>
+
+## 小结
+
+- 可交互摄像机 = **position + front + worldUp**；View 仍用 LookAt，center = position + front
+- **Pitch / Yaw** 描述朝向，Roll 本章锁 0；front 分量：$f_x=\cos\theta\cos\phi$，$f_y=\sin\phi$，$f_z=\sin\theta\cos\phi$
+- **WASD** 沿 front / right 平移，right = normalize(cross(front, worldUp))
+- 移动必须乘 **deltaTime**；鼠标改 Pitch/Yaw 后重算 front，**yoffset 取反**
+- 滚轮调 **FOV** 改变透视投影的广角感，与「摄像机前后平移」不是一回事
+
+<Exercises>
+
+**练习 1（推导 / 手算题）** 给定 Pitch = 30°，Yaw = 45°（度）。① 手算 front 向量三个分量（保留三位小数）。② 说明 front 是否为单位向量（不必开方，用 $\sin^2+\cos^2$ 论证）。
+
+<Answer>
+
+① 转弧度：$\phi = \pi/6$，$\theta = \pi/4$。
+
+$$
+\begin{aligned}
+f_x &= \cos 45° \cdot \cos 30° = \frac{\sqrt{2}}{2} \cdot \frac{\sqrt{3}}{2} \approx 0.612 \\
+f_y &= \sin 30° = 0.5 \\
+f_z &= \sin 45° \cdot \cos 30° = \frac{\sqrt{2}}{2} \cdot \frac{\sqrt{3}}{2} \approx 0.612
+\end{aligned}
+$$
+
+front $\approx (0.612,\ 0.5,\ 0.612)$。
+
+② 水平长度 $= \cos\phi = \cos 30° = \sqrt{3}/2$；完整长度平方 $= (\cos\phi)^2(\cos^2\theta+\sin^2\theta) + \sin^2\phi = \cos^2\phi + \sin^2\phi = 1$。是单位向量。
+
+</Answer>
+
+**练习 2（改 Demo 题）** 在 `<CameraDemo>` 里：① 把 Pitch 从 -15° 慢慢拉到 89°，观察 right 感知的「水平」是否开始扭曲。② 把 FOV 固定 45°，只改 distance 从 2 拉到 20——这和滚轮调 FOV 的视觉效果有什么本质区别？
+
+<Answer>
+
+① Pitch 接近 90° 时，视线几乎垂直向下/向上，水平 front 分量 $\cos\phi \to 0$，与 worldUp 近平行，叉乘不稳定——你会感到左右移动「不对劲」，这就是限幅 ±89° 的原因。
+
+② **distance** 改变的是 LookAt 里 **eye 到 target 的距离**（人往后退/往前凑）；**FOV** 改变的是透视投影的张角（换镜头焦距）。同样「看得更全」：拉远 distance = 人后退；增大 FOV = 换广角镜头——近处物体透视变形不同。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="欧拉角">
+  用三个旋转角描述朝向：Pitch 绕 X、Yaw 绕 Y、Roll 绕 Z。本章用 Pitch+Yaw 驱动
+  front，Roll 锁 0。详见「欧拉角」一节与 EulerAnglesDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Pitch（俯仰角）">
+  绕 X 轴转——抬头或低头。正值向上看，常限 ±89° 防万向节死锁。详见 §4 推导与 Demo
+  Pitch 滑块。
+</GlossaryItem>
+
+<GlossaryItem term="Yaw（偏航角）">
+  绕 Y 轴转——向左或向右看。LearnOpenGL 约定 0° 朝 +X，逆时针增加。详见 §4 与
+  Demo Yaw 滑块。
+</GlossaryItem>
+
+<GlossaryItem term="Roll（滚转角）">
+  绕 front 轴转——歪头。FPS/漫游相机通常不用，锁 0
+  避免画面翻滚。EulerAnglesDiagram 第三张图有示意。
+</GlossaryItem>
+
+<GlossaryItem term="方向向量">
+  从摄像机出发、指向观看方向的单位向量 front。center = position + front；W
+  键沿它前进。由 Pitch/Yaw 经三角函数算出。详见 §4。
+</GlossaryItem>
+
+<GlossaryItem term="delta time">
+  两帧之间经过的真实秒数。位移 = 速度 × deltaTime，保证不同帧率移动一致。详见 §6
+  代码对照。
+</GlossaryItem>
+
+<GlossaryItem term="光标捕获">
+  Pointer Lock：鼠标锁在画布内、隐藏光标，用 movementX/Y
+  驱动视角，可无限旋转。详见「鼠标视角与滚轮缩放」。
+</GlossaryItem>
+
+<GlossaryItem term="FOV">
+  滚轮调节视场角 FOV，改变透视投影广角/长焦感，不是把摄像机往前推。详见 Demo FOV
+  滑块与 §6 scroll_callback。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
