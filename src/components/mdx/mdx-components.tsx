@@ -6,6 +6,7 @@ import { CodeTabs, Tab } from "./code-tabs";
 import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
+import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
@@ -67,6 +68,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CompareSlider,
   Figure,
   SetupPipelineDiagram,
+  FrameStageDiagram,
   Stepper,
   Step,
   Slider,
