@@ -5,10 +5,19 @@ import rehypeKatex from "rehype-katex";
 import rehypePrettyCode, {
   type Options as RehypePrettyCodeOptions,
 } from "rehype-pretty-code";
+import rehypeSlug from "rehype-slug";
 import remarkMath from "remark-math";
 
+import { Attribution } from "@/components/mdx/attribution";
 import { mdxComponents } from "@/components/mdx/mdx-components";
-import { getAllChapters, getChapter } from "@/lib/content";
+import { getAdjacentChapters, getAllChapters, getChapter } from "@/lib/content";
+import {
+  rehypeCollectHeadings,
+  type TocHeading,
+} from "@/lib/rehype-collect-headings";
+
+import { ChapterPager } from "../_components/chapter-pager";
+import { ChapterShell } from "../_components/chapter-shell";
 
 /**
  * 章节动态路由（HEL-18）
@@ -79,38 +88,51 @@ export default async function ChapterPage({
   const chapter = resolveChapter(slug);
   if (!chapter) notFound();
 
+  // rehypeCollectHeadings 就地填充本数组：编译时从正文 h2/h3 提取本页 TOC，
+  // 已排除自定义组件容器内部的标题（如 Objectives 的「学习目标」）。
+  const headings: TocHeading[] = [];
+
   const { content } = await compileMDX({
     source: chapter.source,
     // HEL-20：注入结构教学组件（Objectives/CodeTabs/Tab/Exercises/Answer/
-    // Attribution/Callout/ShaderDemo），使 .mdx 直接用这些标签。
-    components: mdxComponents,
+    // Callout/ShaderDemo）。HEL-21：Attribution 改为「按章绑定」——把本章 frontmatter
+    // 的 sourceUrl 闭包进组件，.mdx 内写 <Attribution />（无表达式）即可。
+    // 这样不再需要把 frontmatter 作为 scope 暴露给 MDX 表达式，遂恢复
+    // next-mdx-remote 默认的 blockJS（更安全），并移除 scope。
+    components: {
+      ...mdxComponents,
+      Attribution: (props) => (
+        <Attribution sourceUrl={chapter.frontmatter.sourceUrl} {...props} />
+      ),
+    },
     options: {
       parseFrontmatter: false,
-      // frontmatter 作为 scope 变量暴露给 MDX 表达式（如
-      // <Attribution sourceUrl={frontmatter.sourceUrl} />）；
-      // frontmatter 由 lib/content 解析、此处仅透传（来源单一）。
-      scope: { frontmatter: chapter.frontmatter },
-      // 允许 MDX 内的 {表达式}（next-mdx-remote 默认 blockJS:true 会禁用
-      // {frontmatter.sourceUrl} 这类表达式）。内容为仓库内可信作者撰写，非用户输入；
-      // 仍保留 blockDangerousJS:true（默认）拦截 eval/Function/process 等危险用法。
-      blockJS: false,
       mdxOptions: {
         // $..$ / $$..$$ → math 节点（remark）→ KaTeX HTML（rehype）
         remarkPlugins: [remarkMath],
         rehypePlugins: [
           [rehypePrettyCode, rehypePrettyCodeOptions],
           rehypeKatex,
+          // 先收集正文标题并写 id；再用 rehype-slug 为其余标题补 id（已存在 id 不覆盖）
+          () => rehypeCollectHeadings(headings),
+          rehypeSlug,
         ],
       },
     },
   });
 
+  const { prev, next } = getAdjacentChapters(
+    chapter.sectionSlug,
+    chapter.chapterSlug,
+  );
+
   return (
-    <>
+    <ChapterShell headings={headings}>
       <h1 className="text-2xl font-semibold">{chapter.frontmatter.title}</h1>
       <p className="mt-2 text-secondary">{chapter.frontmatter.description}</p>
-      {/* 正文容器复用 /learn 布局的正文区（max-w 72ch）；prose 样式由 globals.css token 化 */}
+      {/* 正文容器：max-w 72ch 由 ChapterShell 提供；prose 样式由 globals.css token 化 */}
       <div className="prose mt-8">{content}</div>
-    </>
+      <ChapterPager prev={prev} next={next} />
+    </ChapterShell>
   );
 }
