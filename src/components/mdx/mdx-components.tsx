@@ -8,9 +8,11 @@ import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
+import { Glossary, GlossaryItem } from "./glossary";
 import { Objectives } from "./objectives";
 import { ShaderDemo } from "./shader-demo";
 import { Step, Stepper } from "./stepper";
+import { Term } from "./term";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -29,6 +31,10 @@ import { Step, Stepper } from "./stepper";
  *  - Client（真交互）：CompareSlider（左右拖动对比）、Stepper+Step（分步动画：
  *    可暂停/单步/拖进度）、Slider/Toggle（内联控件）、DemoStage（Demo 容器卡片）
  * WebGL 重型（ShaderCanvas/MathViz/PipelineViz）属 M4——本卡不引入。
+ *
+ * 术语高亮 + 名词解释（HEL-24）：
+ *  - Client（真交互）：Term（行内术语高亮 + hover/focus tooltip + Esc + 锚点跳词条）
+ *  - Server（纯展示）：Glossary / GlossaryItem（章末「人话词典」，词条 id 与 Term 锚点对齐）
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -47,4 +53,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Toggle,
   DemoStage,
   RgbMixerDemo,
+  Term,
+  Glossary,
+  GlossaryItem,
 };
