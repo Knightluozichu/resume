@@ -14,8 +14,14 @@
  *
  * 标准 uniforms（由 ShaderCanvas 自动注入并每帧更新）：uTime / uResolution / uMouse。
  * 自定义 uniform（HEL-26）：作者传 controls schema → ShaderCanvas 自动生成滑块/颜色/开关，
- * 改控件实时驱动同名 uniform（值变不重编译）。HEL-27 将加在线改 GLSL
- * （编译错误回显口已在 ShaderCanvas 内就绪）。
+ * 改控件实时驱动同名 uniform（值变不重编译）。
+ *
+ * 在线改 GLSL（HEL-27）：传 editable 即在画布旁挂 CodeMirror 编辑器，读者改 frag → 防抖
+ * 重编译 → 实时渲染；编译失败时错误行高亮 + 信息。两条 dynamic 分支严格分包：
+ *  - 非 editable → dynamic(./shader/shader-canvas)：只含 WebGL，绝不拉 CodeMirror。
+ *  - editable    → dynamic(./shader/shader-editor-canvas)：editable 专属 chunk，经它才
+ *    可达 CodeMirror（@codemirror/*）。CodeMirror 因此被切进「仅当 editable demo 挂载时
+ *    才按需加载」的异步 chunk，绝不进 chapter 首屏 / 公共 layout（硬规则 2/6）。
  */
 
 import dynamic from "next/dynamic";
@@ -36,6 +42,13 @@ type ShaderDemoProps = {
   aspect?: number;
   /** 图注：画布下方说明文字。 */
   caption?: string;
+  /**
+   * 在线改 GLSL（HEL-27）：true 时在画布旁挂 CodeMirror 编辑器，frag 作初始内容，编辑
+   * 防抖重编译实时驱动画布。false（默认）行为同 HEL-25/26，且永不加载 CodeMirror chunk。
+   */
+  editable?: boolean;
+  /** editable 时的防抖毫秒（编辑停止后多久重编译）。默认 400。 */
+  debounceMs?: number;
 };
 
 /**
@@ -79,11 +92,21 @@ function FallbackCard() {
   );
 }
 
-// 真正含 WebGL 代码的组件——唯一 dynamic 加载点，ssr:false + 独立 chunk。
+// 非 editable：含 WebGL 的画布组件——ssr:false + 独立 chunk，不含 CodeMirror。
 const ShaderCanvas = dynamic(() => import("./shader/shader-canvas"), {
   ssr: false,
   loading: () => <LoadingCard />,
 });
+
+// editable（HEL-27）：含 WebGL + CodeMirror 的编辑器编排层——独立异步 chunk。
+// 仅在 editable=true 分支引用，故 CodeMirror 只在此 chunk 内、按需加载（硬规则 2/6）。
+const ShaderEditorCanvas = dynamic(
+  () => import("./shader/shader-editor-canvas"),
+  {
+    ssr: false,
+    loading: () => <LoadingCard />,
+  },
+);
 
 // —— WebGL2 能力检测（与 hero-canvas 同款一次性探测 + useSyncExternalStore）——
 let cachedWebgl2: boolean | null = null;
@@ -109,10 +132,12 @@ function useWebGL2Supported(): boolean {
   );
 }
 
-export function ShaderDemo(props: ShaderDemoProps) {
+export function ShaderDemo({ editable, ...props }: ShaderDemoProps) {
   const webgl2 = useWebGL2Supported();
-  // 不支持 WebGL2：静态兜底卡，永不拉 WebGL chunk、永不挂画布。
+  // 不支持 WebGL2：静态兜底卡，永不拉 WebGL / CodeMirror chunk、永不挂画布。
   if (!webgl2) return <FallbackCard />;
-  // 支持：dynamic 懒加载真画布（loading 期显示骨架卡）。
+  // editable：懒加载「画布 + CodeMirror 编辑器」编排层（独立 chunk，含 CodeMirror）。
+  if (editable) return <ShaderEditorCanvas {...props} />;
+  // 默认：懒加载纯画布（不含 CodeMirror，loading 期显示骨架卡）。
   return <ShaderCanvas {...props} />;
 }

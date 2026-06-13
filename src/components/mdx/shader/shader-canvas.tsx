@@ -26,10 +26,18 @@
  * 在容器内以 <pre> 回显，不抛错、不崩页（为 HEL-27 在线编辑预留回显口）。
  */
 
-import { useCallback, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useShaderProgram,
+  type ShaderStatus,
   type UniformControl,
   type UniformMap,
   type UniformValue,
@@ -49,6 +57,11 @@ export type ShaderCanvasProps = {
   aspect?: number;
   /** 图注：画布下方的说明文字（DESIGN：图注用 text-secondary） */
   caption?: string;
+  /**
+   * 编译 / 运行状态变化回调（HEL-27）。editable 包装层（shader-editor-canvas）据此从
+   * error 的 InfoLog 解析错误行号、在编辑器里高亮。非 editable 用法不传，行为不变。
+   */
+  onStatusChange?: (status: ShaderStatus) => void;
 };
 
 const EMPTY_CONTROLS: readonly UniformControl[] = [];
@@ -60,6 +73,7 @@ export function ShaderCanvas({
   height,
   aspect,
   caption,
+  onStatusChange,
 }: ShaderCanvasProps) {
   // 由 schema 算出初值（= 重置目标）。controls 来自 .mdx，按其内容 memo，避免每渲染重算。
   const controlsKey = useMemo(() => JSON.stringify(controls), [controls]);
@@ -84,6 +98,16 @@ export function ShaderCanvas({
     vert,
     uniformValuesRef: valuesRef,
   });
+
+  // 状态上抛（HEL-27）：每次 status 变化通知包装层（editable 时用于解析错误行）。
+  // onChange 用 ref 持有最新引用（在 effect 内同步，避免 render 期写 ref），status 是触发源。
+  const onStatusChangeRef = useRef(onStatusChange);
+  useEffect(() => {
+    onStatusChangeRef.current = onStatusChange;
+  }, [onStatusChange]);
+  useEffect(() => {
+    onStatusChangeRef.current?.(status);
+  }, [status]);
 
   // 控件改值：先写 ref（驱动着色器，下一帧 renderFrame 从 ref 读），再 setState（驱动控件回显）。
   const handleControlChange = useCallback(
