@@ -51,6 +51,7 @@ import { TextureDemo } from "./texture-demo";
 import { CameraDemo } from "./camera-demo";
 import { LightingDemo } from "./lighting-demo";
 import { LightingMapsDemo } from "./lighting/lighting-maps-demo";
+import { MultiLightDemo } from "./lighting/multi-light-demo";
 import { ModelDemo } from "./model-demo";
 
 /**
@@ -148,6 +149,15 @@ import { ModelDemo } from "./model-demo";
  *    自带「位置+法线+UV」立方体常量（不改 camera-math 共享常量）；光源方位滑块 + 自转开关
  *    （reduced-motion 默认关、离屏停转）+ 重置；切步/改参仅改 uniform 按需重绘，不重编译。
  *
+ * WebGL 多光源交互演示（multiple-lights 章 MultiLightDemo，HEL-66）：
+ *  - Client（dynamic 边界）：MultiLightDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 MultiLightCanvas（独立 chunk，硬规则 2/6）。一个立方体同时叠加 1 平行光 +
+ *    至多 4 点光源（可增删，GLSL 固定大小数组 + uActivePointCount 循环防越界）+ 1 聚光；
+ *    片元对每类光各算一份 ambient+diffuse+specular Phong 后相加，**不 clamp**，被多盏同照处
+ *    可顶白过曝（本章核心现象）。主从控件（≤5）：顶部灯管理（选灯/开关/点光源 ＋－）+
+ *    下方只显示选中那盏的颜色/方位/强度/衰减或切光角 + 重置；默认布灯开箱即「多盏叠加亮处过曝」。
+ *    uniform 驱动按需重绘（不重编译、不挂常驻 rAF），离屏暂停，卸载释放 GL 资源。
+ *
  * R3F 交互式模型查看器（「模型加载篇·模型 Model 章」ModelDemo，HEL-58）：
  *  - Client（dynamic 边界）：ModelDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
  *    懒加载 ModelCanvas（独立 chunk，硬规则 2/6）。复用 Hero 的 ferrari.glb（drei useGLTF
@@ -169,6 +179,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CameraDemo,
   LightingDemo,
   LightingMapsDemo,
+  MultiLightDemo,
   ModelDemo,
   PipelineViz,
   MathViz,
