@@ -30,6 +30,9 @@ export default function RootLayout({
     <html
       lang="zh-CN"
       className={`${inter.variable} ${jetbrainsMono.variable}`}
+      // 内联深色底：CSS 包加载完成前的首帧防白闪（FOUC）。此处只能用字面值
+      // 而非 var(--bg)——token 定义在尚未加载的 CSS 包里；值等同 DESIGN --bg #0A0A0F。
+      style={{ backgroundColor: "#0a0a0f" }}
     >
       {/* min-h-dvh + flex-col：页面主体（各路由根元素 flex-1）把页脚推到视口底部 */}
       <body className="flex min-h-dvh flex-col bg-bg font-sans text-primary antialiased">
