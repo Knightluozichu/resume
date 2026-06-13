@@ -36,7 +36,7 @@ import { CameraDemo } from "./camera-demo";
 /**
  * MDX 结构教学组件 map（HEL-20）。
  *
- * 经 page.tsx 的 compileMDX(... components ...) 注入，使 content/learn/*.mdx 可直接用
+ * 经 page.tsx 的 compileMDX(... components ...) 注入，使 content 下各书的 .mdx 可直接用
  * <Objectives> / <CodeTabs><Tab> / <Exercises><Answer> / <Attribution> / <Callout> /
  * <ShaderDemo> 等标签。
  *

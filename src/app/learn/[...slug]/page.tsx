@@ -21,9 +21,10 @@ import { ChapterPager } from "../_components/chapter-pager";
 import { ChapterShell } from "../_components/chapter-shell";
 
 /**
- * 章节动态路由（HEL-18）
+ * 章节动态路由（HEL-18，HEL-48 书化）
  *
- * slug = [sectionSlug, chapterSlug]，对应 content/learn/<section>/<chapter>.mdx。
+ * slug = [bookSlug, sectionSlug, chapterSlug]，对应
+ * content/<book>/<section>/<chapter>.mdx。
  * generateStaticParams 在构建期枚举全部章节 → 每章产出一张静态页（SSG，○ Static）。
  *
  * 本卡仅跑通管线：.mdx 只用基础 markdown（标题/段落/列表/代码块），
@@ -59,15 +60,15 @@ export function generateStaticParams(): Params[] {
   // 非草稿章（includeDraft 默认 false），硬规则 7 不受影响。
   const includeDraft = process.env.NODE_ENV !== "production";
   return getAllChapters({ includeDraft }).map((c) => ({
-    slug: [c.sectionSlug, c.chapterSlug],
+    slug: [c.bookSlug, c.sectionSlug, c.chapterSlug],
   }));
 }
 
 function resolveChapter(slug: string[]) {
-  // 章节路由严格两段：section / chapter
-  if (slug.length !== 2) return null;
-  const [sectionSlug, chapterSlug] = slug;
-  return getChapter(sectionSlug, chapterSlug);
+  // 章节路由严格三段：book / section / chapter
+  if (slug.length !== 3) return null;
+  const [bookSlug, sectionSlug, chapterSlug] = slug;
+  return getChapter(bookSlug, sectionSlug, chapterSlug);
 }
 
 export async function generateMetadata({
@@ -135,6 +136,7 @@ export default async function ChapterPage({
   });
 
   const { prev, next } = getAdjacentChapters(
+    chapter.bookSlug,
     chapter.sectionSlug,
     chapter.chapterSlug,
   );

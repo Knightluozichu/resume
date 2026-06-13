@@ -11,7 +11,7 @@
  *  - 其余为纯文本，`\n` 保留为换行。
  */
 
-/** 章节 slug：与 content/learn/getting-started/<slug>.mdx 一一对应。 */
+/** 章节 slug：与 content/learnopengl/getting-started/<slug>.mdx 一一对应。 */
 export type ReviewChapterSlug =
   | "hello-window"
   | "hello-triangle"

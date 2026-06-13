@@ -11,6 +11,17 @@ const nextConfig: NextConfig = {
   // StrictMode 的双调用仅 dev 生效，prod 构建不双挂载，故线上一直正常、不受此项影响。
   // 这是 R3F 生态对该崩溃的通行解。
   reactStrictMode: false,
+  // 保旧链（HEL-48 书化）：两段式旧 URL /learn/getting-started/* 永久重定向到
+  // 三段式新 URL /learn/learnopengl/getting-started/*（standalone 运行时支持 redirects）。
+  async redirects() {
+    return [
+      {
+        source: "/learn/getting-started/:slug*",
+        destination: "/learn/learnopengl/getting-started/:slug*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;
