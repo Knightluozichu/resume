@@ -67,6 +67,10 @@ import { LoopComparisonDiagram } from "./diagrams/loop-comparison-diagram";
 import { BreakContinueDiagram } from "./diagrams/break-continue-diagram";
 import { ClassLayoutDiagram } from "./diagrams/class-layout-diagram";
 import { AccessControlDiagram } from "./diagrams/access-control-diagram";
+import { IOClassHierarchyDiagram } from "./diagrams/io-class-hierarchy-diagram";
+import { FileStreamLifecycleDiagram } from "./diagrams/file-stream-lifecycle-diagram";
+import { StreamStateDiagram } from "./diagrams/stream-state-diagram";
+import { IOManipulatorTable } from "./diagrams/io-manipulator-table";
 import { ConstructorCallDiagram } from "./diagrams/constructor-call-diagram";
 import { ConstMemberDiagram } from "./diagrams/const-member-diagram";
 import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
@@ -429,6 +433,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ArrayParameterDiagram,
   OverloadResolutionDiagram,
   AccessControlDiagram,
+  IOClassHierarchyDiagram,
+  FileStreamLifecycleDiagram,
+  StreamStateDiagram,
+  IOManipulatorTable,
   Stepper,
   Step,
   Slider,
