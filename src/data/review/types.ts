@@ -47,7 +47,8 @@ export type ReviewChapterSlug =
   | "cpp-statements"
   | "cpp-functions"
   | "cpp-classes"
-  | "cpp-io-library";
+  | "cpp-io-library"
+  | "cpp-sequential-containers";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -98,6 +99,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-functions": "函数",
   "cpp-classes": "类",
   "cpp-io-library": "IO库",
+  "cpp-sequential-containers": "顺序容器",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

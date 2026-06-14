@@ -71,6 +71,10 @@ import { IOClassHierarchyDiagram } from "./diagrams/io-class-hierarchy-diagram";
 import { FileStreamLifecycleDiagram } from "./diagrams/file-stream-lifecycle-diagram";
 import { StreamStateDiagram } from "./diagrams/stream-state-diagram";
 import { IOManipulatorTable } from "./diagrams/io-manipulator-table";
+import { ContainerOverviewDiagram } from "./diagrams/container-overview-diagram";
+import { VectorMemoryModelDiagram } from "./diagrams/vector-memory-model-diagram";
+import { ContainerOperationTable } from "./diagrams/container-operation-table";
+import { AdapterConceptDiagram } from "./diagrams/adapter-concept-diagram";
 import { ConstructorCallDiagram } from "./diagrams/constructor-call-diagram";
 import { ConstMemberDiagram } from "./diagrams/const-member-diagram";
 import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
@@ -437,6 +441,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FileStreamLifecycleDiagram,
   StreamStateDiagram,
   IOManipulatorTable,
+  ContainerOverviewDiagram,
+  VectorMemoryModelDiagram,
+  ContainerOperationTable,
+  AdapterConceptDiagram,
   Stepper,
   Step,
   Slider,
