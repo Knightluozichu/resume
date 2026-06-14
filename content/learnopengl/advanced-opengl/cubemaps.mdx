@@ -1,0 +1,540 @@
+---
+title: 立方体贴图
+type: C
+section: 高级OpenGL
+order: 6
+description: 把周围环境拍成 6 张贴在一个盒子内壁的图，用一根方向向量去采样——这就是立方体贴图。本章用它搭一个天空盒（视角去平移、永远在最远处当背景），再做环境映射：让物体像镜子一样反射环境（reflect），或像玻璃一样折射环境（refract）。
+demo: true
+math: true
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/06%20Cubemaps/
+draft: true
+---
+
+{/* C 实战型章（HEL-72，高级OpenGL 篇第 6 篇）：原书「立方体贴图 Cubemaps」。重心是代码对照(§6 覆盖≥80% 关键代码)：①创建 cubemap 纹理 + 6 面 glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X+i) + 参数(CLAMP_TO_EDGE×3 / LINEAR)；②天空盒着色器(局部坐标当方向向量、view 去平移 mat4(mat3(view))、深度技巧 gl_Position=pos.xyww + GL_LEQUAL)；③反射/折射片段着色器(reflect/refract + texture(skybox,R))。math:true 保留 §4(reflect 公式 + refract/Snell 直觉)。承接高级OpenGL 篇，类比固定用「相机与摄影/环境」库（立方体贴图＝把环境拍成 6 张贴盒内壁的照片）。主 viz 两个：CubemapDemo(天空盒 + 反射/折射/漫反射球可切) + Stepper 讲方向向量采样/去平移(每步带图)。draft:true，老板验收后才发布(硬规则 7)。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 立方体贴图 cubemap（6 面贴在立方体内壁）= 直觉引入 + 概念 + <Cubemap6FacesDiagram> + 主 CubemapDemo；2) 用方向向量采样（不是 uv，而是 3D 方向）= 概念 + Cubemap6FacesDiagram + <Stepper>；3) GL_TEXTURE_CUBE_MAP + 6 个 GL_TEXTURE_CUBE_MAP_POSITIVE_X… 枚举 = 概念随文带出 + §6 代码对照①；4) 天空盒 skybox = 概念 + 主 CubemapDemo + <SkyboxDiagram>；5) 天空盒去平移（取 view 的 mat3 去位移）= 概念(难点) + <SkyboxDiagram> + <Stepper> + §6 代码对照②；6) 深度技巧 gl_Position=pos.xyww + GL_LEQUAL（天空盒在最远处）= 概念 + §6 代码对照② + 误区；7) 环境映射 environment mapping = 概念 + 主 CubemapDemo；8) 反射 reflection（R=reflect(I,N)）= 概念(难点) + §4 数学 + <ReflectionRefractionDiagram> + 主 CubemapDemo + §6 代码对照③；9) 折射 refraction（R=refract(I,N,ratio)，折射率比）= 概念(难点) + §4 数学 + ReflectionRefractionDiagram + 主 CubemapDemo + §6 代码对照③ + 误区。Term 共 8 个（立方体贴图 / 方向向量采样 / 天空盒 / 天空盒去平移 / 环境映射 / 反射 / 折射 / 折射率比）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能搭出一个天空盒：用 6 张面图建一张`立方体贴图`（`GL_TEXTURE_CUBE_MAP` + 6 面 `glTexImage2D`），写天空盒着色器，并用 `mat4(mat3(view))` 把视角`去平移`、让它永远在最远处当背景
+- 能改出环境映射效果：把一个物体的片段着色器从`反射`（`R = reflect(I, N)`）改成`折射`（`R = refract(I, N, ratio)`），用反射/折射向量去采样立方体贴图，做出镜子球和玻璃球
+- 能回答：相机一移动，天空盒就「糊到脸上」、跟着平移穿模，最可能是哪一步没做对？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「相机与摄影 / 环境」库。 */}
+
+## 把周围的环境「拍」下来
+
+想象你站在一个空旷的地方，举起相机朝**六个方向**各拍一张：前、后、左、右、上、下。把这六张照片贴在一个正方体盒子的六个内壁上，再把你自己放进盒子正中央——往任意方向看出去，看到的就是当初拍下来的那片环境。盒子很大很远，你怎么走都走不到盒壁，它就成了永远在最远处的「背景天空」。
+
+这正是这一章要做的第一件事：**用六张图拼出一整圈环境当背景**。更妙的是，有了这一整圈环境，还能让场景里的物体「照」到它——一个金属球可以像镜子一样把四周环境映在表面，一个玻璃球可以让背后的环境透过来、还被弯折一下。
+
+这一章解决的就是：**怎么用六张图表示「物体周围一整圈的环境」，再拿这圈环境当背景、或让物体反射 / 折射它**。没有它，你的场景只有一个纯色背景，物体表面也照不出周遭的世界，金属和玻璃都会显得很假。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 立方体贴图：6 张图，用方向向量去采样
+
+把那六张环境照片打包成一个整体，就是一张 <Term def="一种特殊纹理，它由 6 张 2D 图组成，分别贴在一个立方体的 6 个面（内壁）上：右(+X)、左(−X)、上(+Y)、下(−Y)、后(+Z)、前(−Z)。它最大的特点是用一根「方向向量」来采样，而不是用平面纹理那样的二维 uv 坐标——非常适合表示「物体周围一整圈的环境」。">立方体贴图</Term>（cubemap）。它和你熟悉的普通 2D 纹理不一样：普通纹理是一张平面图，用二维的 uv 坐标 `(u, v)` 去取颜色；立方体贴图是**六张图拼成一个盒子**，取色的方式也跟着变了。
+
+立方体贴图最关键、也最容易让人愣住的一点是：它用一根 <Term def="采样立方体贴图的方式：给一个从立方体中心射出的三维方向向量（x, y, z），这根向量会戳中 6 个面中某一个面的某一点，那一点的颜色就是采样结果。向量的长度不重要，只看方向。这和普通 2D 纹理用二维 uv 坐标采样完全不同。">方向向量来采样</Term>，而不是 uv。你给它一个三维向量 `(x, y, z)`——想象从盒子正中心朝这个方向射一根激光，它会戳中六个面里某一个面上的某一点，**那一点的颜色就是采样结果**。向量多长不重要，只看它指向哪。下面这张图把「6 张面图」和「方向向量怎么戳中某一点」一起画清楚：
+
+<Cubemap6FacesDiagram />
+
+六个面在 OpenGL 里有固定的名字和顺序，是一组连续的枚举：`GL_TEXTURE_CUBE_MAP_POSITIVE_X`（右）、`NEGATIVE_X`（左）、`POSITIVE_Y`（上）、`NEGATIVE_Y`（下）、`POSITIVE_Z`（后）、`NEGATIVE_Z`（前）。因为它们的枚举值是连续递增的，所以加载时可以用 `POSITIVE_X + i` 一个循环把六张图依次塞进去（§6 第一段代码就靠这招）。
+
+## 天空盒：把这圈环境当成最远的背景
+
+有了立方体贴图，第一个用法就是 <Term def="用立方体贴图当背景的一个大盒子：把相机放在盒子正中央，盒子的 6 个内壁贴着环境图，往任意方向看出去都是那圈环境。关键是它要永远在「最远处」当背景——相机怎么移动都到不了盒壁，盒子始终以相机为中心。常用来做天空、远山、室内全景等背景。">天空盒</Term>（skybox）。做法是：画一个立方体把相机罩在正中，立方体的六个内壁贴上立方体贴图。因为立方体的每个顶点本身就是一个从中心指向那个角的方向向量，所以**顶点坐标直接拿来当采样方向**就行——不需要另外准备 uv。
+
+但天空盒有个非做不可的处理，否则立刻穿帮：<Term def="渲染天空盒时，要让它只随相机「旋转」、不随相机「位移」。做法是取观察矩阵（view）的左上角 3×3 部分 mat3(view)（只保留旋转、丢掉位移），再补成 4×4。这样相机往任意方向走，天空盒都跟着平移、永远以相机为中心，相机到不了盒壁——天空盒就成了永远在最远处的背景。不去平移的话，相机一移动就会「撞」到盒壁、糊到脸上。">天空盒去平移</Term>。想想前面那个比喻——你站在盒子正中，盒子应该**永远以你为中心**，你往哪走它就跟着挪，你永远走不到盒壁。可如果天空盒老老实实跟着相机的位移走位，你一移动就会「撞」到某面盒壁、糊一脸。解决办法是渲染天空盒时，把观察矩阵里**管位移的那部分抹掉、只留旋转**——也就是取它左上角的 3×3 部分 `mat3(view)`。下面这张图把「去 / 不去平移」的差别摆在一起：
+
+<SkyboxDiagram />
+
+还有一个让天空盒**永远在最远处**的小技巧：在天空盒的顶点着色器里把输出位置的 `z` 分量设成等于 `w`（`gl_Position = pos.xyww`），透视除法后深度恒为最大值 `1.0`；再把深度测试从默认的 `GL_LESS` 改成 `GL_LEQUAL`，天空盒就只会画在「场景里没有任何物体挡着」的地方——既当了背景，又不会盖住任何物体（细节见 §6）。
+
+## 环境映射：让物体「照」到这圈环境
+
+天空盒只是背景。立方体贴图更精彩的用法，是让场景里的**物体表面**也照出这圈环境——这类技术统称 <Term def="用立方体贴图给物体表面「照」上周围环境的一类技术。物体每个片段都算出一个方向向量（反射方向或折射方向），拿它去采样环境立方体贴图，把环境的颜色映到表面上。最常见的两种：反射（像镜子，把环境原样映上去）和折射（像玻璃，让环境弯折着透过来）。">环境映射</Term>（environment mapping）。原理很统一：物体的**每个片段**都算出一根方向向量，拿它去采样环境立方体贴图，采到的环境颜色就是这个片段的颜色。区别只在「这根方向向量怎么算」。
+
+第一种是 <Term def="环境映射的一种：让物体表面像镜子一样把周围环境原样映出来。对每个片段，从相机看向该点的方向 I 打到表面，按表面法线 N 算出反射方向 R = reflect(I, N)（关于法线对称弹出，入射角=反射角），用 R 去采样环境立方体贴图。金属、镜面、水面等都靠它。">反射</Term>（reflection）——像镜子。从相机看向物体某点的视线打到表面，按表面法线**对称弹出**一根反射方向，用它采样环境，物体表面就把环境原样映了出来，像一面铬镜。
+
+第二种是 <Term def="环境映射的一种：让物体像玻璃/水一样，把背后的环境弯折着透过来。对每个片段，视线 I 打到表面后穿过界面进入介质，按折射率比 ratio = n1/n2 被弯折，得到折射方向 R = refract(I, N, ratio)，用 R 去采样环境立方体贴图。玻璃、水、冰、宝石等透明物体都靠它。">折射</Term>（refraction）——像玻璃。视线打到表面后不是弹回去，而是**穿进介质、被弯折**一下，再透出去采样背后的环境。弯多少，由两种介质的 <Term def="光从一种介质进入另一种介质时弯折程度的决定因素，等于两种介质折射率之比 ratio = n1/n2（n1 是入射侧介质如空气的折射率，n2 是进入侧介质如玻璃的折射率）。常见折射率：空气 1.00、水 1.33、冰 1.309、玻璃 1.52、钻石 2.42。比值不同，弯折程度不同；若把 n1、n2 写反，弯折方向就错、图像会翻。">折射率比</Term>决定。反射用 `reflect`、折射用 `refract`，这两个 GLSL 内置函数的几何含义，下一节用公式和图讲清楚。
+
+{/* 4. 数学推导（spec §四，math:true 保留）：节首符号表；reflect 公式 R=I−2(N·I)N + 人话；refract/Snell 折射率比直觉；每 display 公式后人话，不跳步，≤8。 */}
+
+## 反射与折射的数学：reflect 和 refract 在算什么
+
+这一节把 `reflect` 和 `refract` 两个内置函数背后的几何讲清楚。先约定符号（都用**单位向量**，矩阵/向量与 GLSL 一致）：
+
+| 符号   | 含义                                                         |
+| ------ | ------------------------------------------------------------ |
+| $I$    | 入射方向（incident）：从相机指向表面该点的视线方向，单位向量 |
+| $N$    | 表面法线（normal）：表面在该点朝外的垂直方向，单位向量       |
+| $R$    | 结果方向：反射方向或折射方向，用来采样环境立方体贴图         |
+| $\eta$ | 折射率比 ratio $= n_1 / n_2$（入射侧折射率 / 进入侧折射率）  |
+
+### 反射：关于法线对称弹出
+
+反射方向 $R$ 由内置函数 `reflect(I, N)` 给出，公式是：
+
+$$
+R = I - 2\,(N \cdot I)\,N
+$$
+
+这个式子在说：把入射方向 $I$ **沿法线方向的那一份分量**（大小是 $N \cdot I$）减掉两倍，就得到反射方向。直觉上，$N \cdot I$ 是 $I$ 在法线上的投影；减去一倍只是把 $I$「拍平」到表面上，减去**两倍**则是让它越过表面、对称地弹到另一侧——结果就是「入射角 = 反射角」的镜面反射。下面左半张图正是这个对称弹出：
+
+<ReflectionRefractionDiagram />
+
+### 折射：按折射率比弯折
+
+折射方向由 `refract(I, N, ratio)` 给出，它背后是物理里的 <Term def="描述光线从一种介质进入另一种介质时如何弯折的物理定律：入射角的正弦与折射角的正弦之比，等于两种介质折射率的反比。直观结论是——光进入更「密」（折射率更大）的介质时会弯向法线，进入更「稀」的介质时弯离法线。GLSL 的 refract 函数内部就按这条定律算折射方向。">斯涅尔定律</Term>（Snell 定律）：
+
+$$
+n_1 \sin\theta_1 = n_2 \sin\theta_2
+$$
+
+这个式子在说：入射角 $\theta_1$ 和折射角 $\theta_2$ 的正弦之比，等于两种介质折射率的反比。直观结论只有一句话——**光进入更「密」的介质（折射率更大，如从空气进玻璃）时，会弯向法线**（折射角更小）；进入更「稀」的介质则弯离法线。`refract` 内部就按这条定律算出折射方向 $R$，你只要把折射率比 $\eta = n_1/n_2$ 喂给它。上面右半张图就是「进玻璃弯向法线」的情形。
+
+举个具体的：空气折射率 $n_1 = 1.00$、玻璃 $n_2 = 1.52$，那么
+
+$$
+\eta = \frac{n_1}{n_2} = \frac{1.00}{1.52} \approx 0.658
+$$
+
+这个 $\eta$ 喂给 `refract`，就得到「从空气进玻璃」的折射方向。**注意 $\eta$ 的分子分母别写反**——写成 $1.52/1.00$ 就成了「从玻璃出空气」，弯折方向反过来、画面会翻（§7 的坑之一）。
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：C 型主 Demo = CubemapDemo 天空盒 + 反射/折射/漫反射球可切。猜一猜：把材质从反射切到折射，球面会变成什么样。控件：材质分段选择器(反射/折射/漫反射) + OrbitControls 拖拽 + 重置，≤5。 */}
+
+## 动手：切换材质，看同一个球反射 / 折射环境
+
+> 猜一猜：下面这块画布里，四周是一个程序化的「黄昏天空盒」（六个面各写了方位字 RIGHT / LEFT / TOP …），正中是一个球。现在它是**反射**模式，球面像镜子一样映着四周环境。如果你把材质切到**「折射」**，球面会变成什么样？是依旧像镜子映出环境，还是变成**玻璃**、能看到背后被**弯折**着透过来的环境？先切一下看看，再读解释。
+
+这块画布严格对应本章三件事：四周的天空盒是一张**程序化生成的立方体贴图**（六面用代码画，没有任何外部贴图），它被设为场景背景、自动做了**去平移**（你拖动转视角，天空盒只跟着转、永远在最远处）；正中的球按你选的材质，用**反射**或**折射**方向去采样这张环境贴图。拖动画布转视角，分别切三种材质对比：
+
+<CubemapDemo caption="四周是程序化『黄昏天空盒』（6 面写了方位字）。中央球三材质：『反射』像镜子，把四周环境原样映在球面（注意能在球面读到反过来的方位字）；『折射』像玻璃，背后的环境被弯折着透过来、还带一点色散；『漫反射』是普通哑光球，完全不反射环境，作对照——这一眼就看出环境映射给了物体多少『周遭感』。拖动转视角、滚轮缩放。" />
+
+切到**反射**，球是一面完美的镜子，四周天空盒原样映在球面上，你甚至能在球面上读到**反过来**的方位字；切到**折射**，球变成一颗玻璃珠，看到的不再是表面映像，而是**背后**的环境透过玻璃、被弯折着挤进来；切到**漫反射**，球立刻「失去周遭感」——变成一个普通的哑光灰球，环境一点都照不上去。同一个球、同一圈环境，差别全在「片段着色器用哪根方向向量去采样」。
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper 讲「方向向量采样 + 去平移」——每步带图（满足「每步必带图示」，纯文字步=打回）。①方向向量戳中某面某点(Cubemap6FacesDiagram)→②天空盒不去平移则糊脸(SkyboxDiagram)→③反射/折射各算一根方向去采样(ReflectionRefractionDiagram)。猜一猜引导。 */}
+
+## 单步走一遍：方向向量是怎么贯穿全章的
+
+> 猜一猜：天空盒、反射、折射，看起来是三件不同的事，但它们其实共用同一个核心动作。是哪一个动作？想一想上面 Demo 里「球面映出环境」和「天空盒当背景」有什么共同点，再单步走一遍。
+
+下面把贯穿全章的那条主线拆成三步。每一步都配一张图，盯着「那根方向向量这一刻指向哪、采到环境的哪一点」：
+
+<Stepper>
+  <Step title="① 核心动作：用方向向量采样立方体贴图">
+    <Cubemap6FacesDiagram />
+    全章的共同核心只有一个：给一根<strong>方向向量</strong>
+    ，从立方体中心射出去， 戳中 6 个面中某一面的某一点，
+    <strong>那一点的颜色</strong>就是采样结果（注意是 3D 方向，
+    <strong>不是</strong> 2D 的
+    uv）。天空盒、反射、折射的区别，只在于这根方向向量是怎么来的。
+  </Step>
+  <Step title="② 天空盒：方向向量 = 看出去的视线，且必须去平移">
+    <SkyboxDiagram />
+    天空盒用的方向向量，就是相机<strong>看出去</strong>
+    的方向（立方体顶点本身就是从中心指向那个角的方向）。 关键是渲染时要
+    <strong>去平移</strong>——取 <code>mat3(view)</code>
+    只留旋转、丢掉位移，天空盒才会永远以相机为中心、在最远处当背景；否则相机一移动，盒壁就糊到脸上。
+  </Step>
+  <Step title="③ 反射 / 折射：各算一根方向向量去采样同一张环境">
+    <ReflectionRefractionDiagram />
+    物体表面则对每个片段<strong>算一根方向向量</strong>：反射用
+    <code>R = reflect(I, N)</code>（关于法线对称弹出），折射用
+    <code>R = refract(I, N, ratio)</code>（按折射率比弯折）。算出的 R 拿去采样
+    <strong>同一张</strong>环境立方体贴图——镜子和玻璃就这么做出来了。
+  </Step>
+</Stepper>
+
+走完这遍就清楚了：天空盒、反射、折射看着是三件事，骨子里都是「**算一根方向向量、去采样同一张立方体贴图**」。变的只是方向向量的来历，不变的是采样动作。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：三段——①创建 cubemap + 6 面 glTexImage2D(POSITIVE_X+i) + 参数(CLAMP_TO_EDGE×3/LINEAR)；②天空盒着色器(局部坐标当方向、view 去平移 mat4(mat3(view))、深度技巧 xyww + LEQUAL)；③反射/折射片段着色器(reflect/refract + texture(skybox,R))。单块≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异 Callout。 */}
+
+## 代码逐段拆解
+
+立方体贴图的代码分三块：**创建立方体贴图 + 加载 6 面**、**天空盒着色器（去平移 + 深度技巧）**、**反射 / 折射片段着色器**。三块对照看，C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一块：创建立方体贴图、加载 6 个面
+
+绑定到 `GL_TEXTURE_CUBE_MAP`，然后用一个循环把六张面图依次塞进六个面——靠 `GL_TEXTURE_CUBE_MAP_POSITIVE_X + i` 这组连续枚举遍历。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+unsigned int loadCubemap(std::vector<std::string> faces) {
+  unsigned int texID;
+  glGenTextures(1, &texID);
+  glBindTexture(GL_TEXTURE_CUBE_MAP, texID);
+  int w, h, n;
+  for (unsigned int i = 0; i < faces.size(); i++) {
+    unsigned char *data = stbi_load(faces[i].c_str(), &w, &h, &n, 0);
+    // 关键：POSITIVE_X + i 依次命中右/左/上/下/后/前 6 个面
+    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB,
+                 w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+    stbi_image_free(data);
+  }
+  return texID;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+function loadCubemap(faces: TexImageSource[]): WebGLTexture {
+  const texID = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_CUBE_MAP, texID);
+  for (let i = 0; i < faces.length; i++) {
+    // 关键：TEXTURE_CUBE_MAP_POSITIVE_X + i 依次命中右/左/上/下/后/前 6 个面
+    gl.texImage2D(
+      gl.TEXTURE_CUBE_MAP_POSITIVE_X + i,
+      0,
+      gl.RGB,
+      gl.RGB,
+      gl.UNSIGNED_BYTE,
+      faces[i],
+    );
+  }
+  return texID;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+六张图塞好后，**一定要设环绕和过滤参数**——尤其是环绕方式要用 `GL_CLAMP_TO_EDGE`，把三个维度（S/T/R）都钳住，否则六个面交界处会因为采样到边界外而出现接缝伪影：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+// 三个维度都钳到边缘，消除面交界处的接缝
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+// 三个维度都钳到边缘，消除面交界处的接缝
+gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应，但有几处 API 差异要留神：
+
+<Callout type="warn">
+  API 差异：立方体贴图的目标常量从 `GL_TEXTURE_2D` 换成 `GL_TEXTURE_CUBE_MAP`，6
+  个面是 `GL_TEXTURE_CUBE_MAP_POSITIVE_X + i`（顺序固定：右/左/上/下/后/前）。环绕方式比 2D
+  多一个第三维 `GL_TEXTURE_WRAP_R`（立方体贴图是 3D 采样，要钳三个维度）。另外
+  WebGL2 的 `gl.texImage2D` 直接吃 `TexImageSource`（`<img>`/`<canvas>`
+  等），不像桌面要先 `stbi_load` 读像素再传指针。
+</Callout>
+
+### 第二块：天空盒着色器——去平移 + 深度技巧
+
+天空盒的顶点着色器做两件本章核心的事：把**局部坐标直接当方向向量**传给片段着色器（立方体顶点本身就是方向），以及用 `pos.xyww` 把深度顶到最远。**去平移**则在 CPU 端把 `view` 取 `mat3` 再补回 `mat4`：
+
+<CodeTabs>
+  <Tab label="GLSL：天空盒顶点 + 片段着色器">
+
+```glsl
+// 顶点着色器
+#version 300 es
+layout(location = 0) in vec3 aPos;
+out vec3 TexCoords;
+uniform mat4 projection;
+uniform mat4 view;        // 已在 CPU 端去平移：mat4(mat3(view))
+void main() {
+  TexCoords = aPos;       // 局部坐标 = 采样方向（立方体顶点本身就是方向）
+  vec4 pos = projection * view * vec4(aPos, 1.0);
+  gl_Position = pos.xyww; // z=w，透视除法后深度恒为 1.0（最远）
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：片段（采样立方体贴图）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec3 TexCoords;
+out vec4 FragColor;
+uniform samplerCube skybox;   // 注意是 samplerCube，不是 sampler2D
+void main() {
+  // 用方向向量 TexCoords 采样，而不是 2D 的 uv
+  FragColor = texture(skybox, TexCoords);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+CPU 端配合两件事：把观察矩阵**去平移**后再传给天空盒着色器，以及把深度函数改成 `GL_LEQUAL`（因为天空盒深度恒为 `1.0`，默认的 `GL_LESS` 会让它一个像素都画不出来）。天空盒通常**最后画**：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 场景里别的物体都画完后，最后画天空盒
+glDepthFunc(GL_LEQUAL);              // 深度恒为 1.0，需 LEQUAL 才过测试
+skyboxShader.use();
+// 去平移：取 view 的 3×3（只留旋转），再补成 4×4
+glm::mat4 view = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+skyboxShader.setMat4("view", view);
+skyboxShader.setMat4("projection", projection);
+glBindVertexArray(skyboxVAO);
+glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+glDrawArrays(GL_TRIANGLES, 0, 36);
+glDepthFunc(GL_LESS);                // 画完恢复默认
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 场景里别的物体都画完后，最后画天空盒
+gl.depthFunc(gl.LEQUAL); // 深度恒为 1.0，需 LEQUAL 才过测试
+gl.useProgram(skyboxProgram);
+// 去平移：把 view 的位移列清零，只留左上 3×3 的旋转（等价 mat4(mat3(view))）
+const viewNoTrans = mat3ToMat4(mat3FromMat4(view));
+gl.uniformMatrix4fv(uView, false, viewNoTrans);
+gl.uniformMatrix4fv(uProjection, false, projection);
+gl.bindVertexArray(skyboxVAO);
+gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubemapTexture);
+gl.drawArrays(gl.TRIANGLES, 0, 36);
+gl.depthFunc(gl.LESS); // 画完恢复默认
+```
+
+  </Tab>
+</CodeTabs>
+
+去平移那一句是本章的命门：`mat3(view)` 把第四列（位移）丢掉、只留旋转，再补成 `mat4`，天空盒就只随相机转、不随相机走。少了它，相机一移动天空盒就跟着平移、糊脸（§7 第一个坑）。
+
+### 第三块：反射 / 折射片段着色器
+
+环境映射的物体（注意是**普通物体**、不是天空盒）需要世界空间的**位置**和**法线**，顶点着色器照常算并传出；片段着色器里算出 `I`，再分别用 `reflect` 或 `refract` 得到方向 `R`，拿 `R` 采样环境。反射和折射**只差一行**：
+
+<CodeTabs>
+  <Tab label="GLSL：反射片段着色器">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec3 Normal;           // 世界空间法线
+in vec3 Position;         // 世界空间位置
+out vec4 FragColor;
+uniform vec3 cameraPos;
+uniform samplerCube skybox;
+void main() {
+  vec3 I = normalize(Position - cameraPos);   // 视线：相机 → 该点
+  vec3 R = reflect(I, normalize(Normal));      // 反射：对称弹出
+  FragColor = vec4(texture(skybox, R).rgb, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：折射片段着色器（只改两行）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec3 Normal;
+in vec3 Position;
+out vec4 FragColor;
+uniform vec3 cameraPos;
+uniform samplerCube skybox;
+void main() {
+  float ratio = 1.00 / 1.52;                   // 空气→玻璃的折射率比
+  vec3 I = normalize(Position - cameraPos);
+  vec3 R = refract(I, normalize(Normal), ratio); // 折射：按 ratio 弯折
+  FragColor = vec4(texture(skybox, R).rgb, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+对照两段：从反射切到折射，**只把 `reflect(I, N)` 换成 `refract(I, N, ratio)`、多一个折射率比**，其余一模一样——这正是上面 Demo 切材质时背后发生的事。两个内置函数都要求 `I` 和 `N` 是**单位向量**，所以采样前对 `Normal` 做了 `normalize`：
+
+<Callout type="warn">
+  采样方向不必手动归一化（立方体贴图采样只看方向、不看长度），但 `reflect` /
+  `refract` 的输入 `I`、`N`
+  **必须是单位向量**，否则算出的反射/折射方向是错的——所以代码里对 `Position -
+  cameraPos` 和 `Normal` 都做了 `normalize`。另外片段着色器的采样器类型是
+  `samplerCube`（不是 `sampler2D`），采样函数 `texture(skybox, R)` 第二个参数是
+  3D 方向向量（不是 2D 的 `vec2` uv）。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字。①天空盒忘去平移 → 移动时糊脸/穿模；②采样方向没归一化(reflect/refract 输入)或用 uv 而非方向；③折射率比设反 → 弯折方向错/图像翻。再补一个深度技巧相关坑。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：天空盒在不动时一切正常，但相机一**移动**，天空盒就跟着平移、**糊到脸上**或整个穿模，像背景在追着你跑。**原因**：渲染天空盒时**没去平移**——直接用了带位移的
+  `view`
+  矩阵，天空盒被当成一个固定在世界某处的盒子，相机走近就撞上去了。**修法**：渲染天空盒时把观察矩阵取
+  `mat4(mat3(view))`（只留旋转、丢掉位移），天空盒就永远以相机为中心、在最远处当背景。
+</Callout>
+
+<Callout type="trap">
+  **现象**：天空盒一**像素都画不出来**（背景还是纯色），或物体被天空盒整个盖住。**原因**：天空盒顶点着色器用了
+  `gl_Position = pos.xyww`，深度恒为 `1.0`，而深度函数还是默认的
+  `GL_LESS`——`1.0 < 1.0` 永远不成立，天空盒全被深度测试丢弃。**修法**：画天空盒前把深度函数改成
+  `glDepthFunc(GL_LEQUAL)`（`1.0 <= 1.0` 成立），画完再恢复 `GL_LESS`；并确保天空盒**最后画**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：反射/折射的物体表面**一片乱、方向不对**，或镜面映出的环境位置错乱。**原因**：把
+  `reflect` / `refract` 的输入
+  `I`、`N`**没归一化**（这两个内置函数要求单位向量），或误以为立方体贴图要用 2D
+  uv 去采样。**修法**：对视线 `Position - cameraPos` 和法线 `Normal` 都做
+  `normalize` 再传给 `reflect`/`refract`；采样用 `texture(skybox,
+  R)`，第二个参数是 **3D 方向向量**（不是 `vec2`）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：折射做出来，玻璃里的环境**整个翻了 /
+  弯折方向反了**，不像玻璃倒像哈哈镜。**原因**：折射率比 `ratio`
+  的**分子分母写反了**——写成 `1.52/1.00`（玻璃→空气）而不是
+  `1.00/1.52`（空气→玻璃），弯折方向就整个颠倒。**修法**：`ratio = n1/n2`，`n1`
+  是**入射侧**介质（通常是空气 `1.00`）、`n2` 是**进入侧**介质（如玻璃
+  `1.52`），别写反。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改 Demo 题 + 1 道独立实现/推导题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **立方体贴图**是 6 张面图（`GL_TEXTURE_CUBE_MAP_POSITIVE_X + i` 加载），用一根**方向向量**采样、不是 uv；环绕方式用 `GL_CLAMP_TO_EDGE` 消接缝
+- **天空盒**用立方体顶点当方向采样当背景；必须**去平移** `mat4(mat3(view))`，否则相机一动就糊脸
+- 天空盒用 `gl_Position = pos.xyww` 把深度顶到最远 + `GL_LEQUAL`，既当背景又不盖物体
+- **环境映射**让物体照出环境：**反射** `R = reflect(I, N)`（对称弹出，像镜子），**折射** `R = refract(I, N, ratio)`（按折射率比弯折，像玻璃）
+- 反射切折射**只差一行**：`reflect(I,N)` → `refract(I,N,ratio)`；`I`、`N` 须归一化，`ratio = n1/n2` 别写反
+
+<Exercises>
+
+**练习 1（改 Demo 代码）** 上面的 CubemapDemo 折射模式用的是「空气→玻璃」（`ratio = 1.00 / 1.52`）。现在要把它改成**水**（折射率 `1.33`）做的球。① 写出新的 `ratio` 表达式；② 与玻璃相比，水球里的环境弯折会更强还是更弱？为什么？
+
+<Answer>
+
+① 水的折射率比：`ratio = 1.00 / 1.33 ≈ 0.752`（空气 `n1 = 1.00` → 水 `n2 = 1.33`）。在那段折射片段着色器里，只要把 `float ratio = 1.00 / 1.52;` 改成 `float ratio = 1.00 / 1.33;` 即可，其余 `I`、`R = refract(...)`、采样都不动。
+
+② 弯折会**更弱**。折射率差越大、弯折越狠：玻璃 `1.52` 比水 `1.33` 折射率更高，光从空气进玻璃比进水弯得更厉害。`ratio` 越接近 `1`（两介质折射率越接近），弯折越小——水的 `ratio ≈ 0.752` 比玻璃的 `≈ 0.658` 更接近 1，所以水球里的环境看起来更接近「没怎么弯」，玻璃球的弯折更夸张。
+
+</Answer>
+
+**练习 2（推导 / 排错题）** 某人写了天空盒，画出来一切正常；但他一让相机前进，天空盒就「贴到脸上」、整个穿模。他确认深度函数已改成 `GL_LEQUAL`、立方体贴图也加载对了。请指出最可能的**那一步**漏了什么，并写出修法的关键代码。
+
+<Answer>
+
+最可能漏了**去平移**：渲染天空盒时传给着色器的 `view` 矩阵**没有去掉位移**，还带着相机的平移分量。于是天空盒被当成世界里一个固定的盒子，相机往前走就会撞上盒壁、糊脸。
+
+修法的关键，是渲染天空盒前把观察矩阵的位移抹掉、只留旋转：
+
+```cpp
+// 取 view 的左上 3×3（只含旋转），再补成 4×4（位移列归零）
+glm::mat4 viewNoTrans = glm::mat4(glm::mat3(camera.GetViewMatrix()));
+skyboxShader.setMat4("view", viewNoTrans);
+```
+
+这样相机怎么平移，天空盒都跟着移、永远以相机为中心。注意：`GL_LEQUAL` 和 `pos.xyww` 解决的是「天空盒在最远处当背景、不盖物体」，和「去平移」是两件互不替代的事——这个人正是只做了前者、漏了后者。
+
+</Answer>
+
+**练习 3（推导题）** 反射公式是 $R = I - 2(N \cdot I)N$。设入射方向 $I = (0, -1, 0)$（垂直向下打），表面法线 $N = (0, 1, 0)$（朝上）。手算反射方向 $R$，并说明结果是否符合「镜面正对」的直觉。
+
+<Answer>
+
+先算 $N \cdot I = (0)(0) + (1)(-1) + (0)(0) = -1$。代入公式：
+
+$$
+R = I - 2(N \cdot I)N = (0,-1,0) - 2 \cdot (-1) \cdot (0,1,0) = (0,-1,0) + (0,2,0) = (0,1,0)
+$$
+
+所以 $R = (0, 1, 0)$，**垂直向上**。这完全符合直觉：一束光垂直向下打到一面水平镜子上，会被**原路垂直弹回**、向上反射。入射 $(0,-1,0)$、反射 $(0,1,0)$，入射角 = 反射角 = 0°，正是「正对镜面、原路返回」的情形。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="立方体贴图">
+  一种特殊纹理，由 6 张 2D 图组成，分别贴在一个立方体的 6
+  个内壁上：右(+X)、左(−X)、上(+Y)、下(−Y)、后(+Z)、前(−Z)。它用一根**方向向量**来采样、而不是平面纹理那样的二维
+  uv 坐标，非常适合表示「物体周围一整圈的环境」。详见本章「立方体贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="方向向量来采样">
+  采样立方体贴图的方式：给一根从立方体中心射出的三维方向向量 `(x, y,
+  z)`，它会戳中 6
+  个面里某一面的某一点，那一点的颜色就是采样结果。向量多长不重要，只看方向。这和普通
+  2D 纹理用二维 uv 坐标采样完全不同。详见本章「立方体贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="天空盒">
+  用立方体贴图当背景的一个大盒子：相机放在正中央，盒子 6
+  个内壁贴着环境图，往任意方向看都是那圈环境。关键是它要永远在「最远处」当背景——相机怎么移动都到不了盒壁。常用来做天空、远山、室内全景等背景。详见本章「天空盒」一节。
+</GlossaryItem>
+
+<GlossaryItem term="天空盒去平移">
+  渲染天空盒时让它只随相机**旋转**、不随相机**位移**。做法是取观察矩阵的左上 3×3
+  部分 `mat3(view)`（只留旋转、丢掉位移），再补成
+  `mat4`。这样相机往哪走，天空盒都跟着、永远以相机为中心、在最远处当背景。不去平移的话，相机一移动天空盒就糊到脸上。详见本章「天空盒」一节。
+</GlossaryItem>
+
+<GlossaryItem term="环境映射">
+  用立方体贴图给物体表面「照」上周围环境的一类技术。物体每个片段都算出一根方向向量（反射方向或折射方向），拿它去采样环境立方体贴图，把环境颜色映到表面上。最常见两种：**反射**（像镜子）和**折射**（像玻璃）。详见本章「环境映射」一节。
+</GlossaryItem>
+
+<GlossaryItem term="反射">
+  环境映射的一种：物体表面像镜子一样把周围环境原样映出来。对每个片段，从相机看向该点的视线
+  `I` 打到表面，按法线 `N` 算出反射方向 `R = reflect(I,
+  N)`（关于法线对称弹出，入射角 = 反射角），用 `R`
+  采样环境立方体贴图。金属、镜面、水面都靠它。详见本章「环境映射」一节。
+</GlossaryItem>
+
+<GlossaryItem term="折射">
+  环境映射的一种：物体像玻璃/水一样，把背后的环境弯折着透过来。对每个片段，视线
+  `I` 打到表面后穿过界面进入介质，按折射率比 `ratio = n1/n2`
+  被弯折，得到折射方向 `R = refract(I, N, ratio)`，用 `R`
+  采样环境立方体贴图。玻璃、水、冰、宝石都靠它。详见本章「环境映射」一节。
+</GlossaryItem>
+
+<GlossaryItem term="折射率比">
+  光从一种介质进入另一种介质时弯折程度的决定因素，等于两介质折射率之比 `ratio =
+  n1/n2`（`n1` 是入射侧如空气、`n2` 是进入侧如玻璃）。常见折射率：空气 1.00、水
+  1.33、玻璃 1.52、钻石 2.42。比值不同弯折程度不同；若把 `n1`、`n2`
+  写反，弯折方向就错、图像会翻。详见本章「环境映射」一节与「反射与折射的数学」一节。
+</GlossaryItem>
+
+<GlossaryItem term="斯涅尔定律">
+  描述光从一种介质进入另一种介质时如何弯折的物理定律：入射角与折射角的正弦之比，等于两介质折射率的反比。直观结论是——光进入更「密」（折射率更大）的介质会**弯向法线**，进入更「稀」的介质会弯离法线。GLSL
+  的 `refract` 内部就按这条定律算折射方向。详见本章「反射与折射的数学」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

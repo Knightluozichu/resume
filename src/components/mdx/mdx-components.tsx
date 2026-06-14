@@ -51,6 +51,9 @@ import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
 import { FramebufferAttachmentDiagram } from "./diagrams/framebuffer-attachment-diagram";
 import { TwoPassDiagram } from "./diagrams/two-pass-diagram";
 import { KernelDiagram } from "./diagrams/kernel-diagram";
+import { Cubemap6FacesDiagram } from "./diagrams/cubemap-6faces-diagram";
+import { SkyboxDiagram } from "./diagrams/skybox-diagram";
+import { ReflectionRefractionDiagram } from "./diagrams/reflection-refraction-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -67,6 +70,7 @@ import { LightingMapsDemo } from "./lighting/lighting-maps-demo";
 import { MultiLightDemo } from "./lighting/multi-light-demo";
 import { ModelDemo } from "./model-demo";
 import { FramebufferDemo } from "./framebuffer-demo";
+import { CubemapDemo } from "./cubemap-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -162,6 +166,11 @@ import { FramebufferDemo } from "./framebuffer-demo";
  *    TwoPassDiagram（§5 Stepper 两遍渲染每步图示：①第一遍绑自建 FBO 把场景渲进颜色纹理→
  *    ②绑回默认帧缓冲取出离屏纹理→③第二遍全屏四边形采样纹理 + 后处理核 上屏）、
  *    KernelDiagram（3×3 卷积核怎么对邻域 9 格加权求和：邻域 ⊗ 权重核 = 新色，权重和 1 不变亮暗 / 0 突出边缘）。同款 Server SVG。
+ *  - 高级OpenGL篇·立方体贴图（HEL-72）：Cubemap6FacesDiagram（立方体贴图＝6 张面图 +X/−X/+Y/−Y/+Z/−Z
+ *    十字展开 + 一根从中心射出的方向向量命中某面某点示意「用方向向量采样、不是 uv」）、
+ *    SkyboxDiagram（天空盒去平移对照：没去平移则盒子跟相机位移糊脸 vs 去平移 mat3(view) 盒永以相机为中心在最远处）、
+ *    ReflectionRefractionDiagram（反射 R=reflect(I,N) 关于法线对称弹出 vs 折射 R=refract(I,N,ratio)
+ *    穿界面弯折、弯折量由 ratio=n₁/n₂ 定）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -209,6 +218,18 @@ import { FramebufferDemo } from "./framebuffer-demo";
  *    画铺满 NDC 的全屏四边形采样离屏纹理，按 uKernel 0..4 输出 原图/反相/灰度/模糊(3×3 均值核)/
  *    边缘检测(3×3 边缘核)。控件：5 核分段选择器（默认原图）+ 重置；reduced-motion 默认不自转、
  *    IntersectionObserver 离屏停转、resize 重建附件、卸载释放全部 GL 资源。
+ *
+ * R3F 立方体贴图「天空盒 + 反射/折射/漫反射」交互演示（「高级OpenGL篇·立方体贴图」CubemapDemo，HEL-72）：
+ *  - Client（dynamic 边界）：CubemapDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 CubemapCanvas（独立 chunk，硬规则 2/6）。R3F + drei 实现，避开手写裸 WebGL2 两遍管线。
+ *    程序化环境（禁外部资源，硬规则 3）：6 面用 canvas 代码画「黄昏天空盒」（上紫天/下近黑地/
+ *    四周地平线渐变 + 网格 + 方位字 RIGHT/LEFT/…）拼成 CubeTexture，设为 scene.background（天空盒
+ *    去平移由 three background 机制自动完成）+ 一个 BackSide 大球作冗余背景。中央球三材质切换：
+ *    反射（MeshStandardMaterial metalness=1/roughness=0 + envMap 全镜面）/ 折射（drei
+ *    MeshTransmissionMaterial 玻璃 ior 1.5）/ 漫反射（哑光中性、不挂 envMap 对照）。控件：材质
+ *    分段选择器（默认反射）+ OrbitControls 拖拽转视角/滚轮缩放 + 重置；frameloop="demand"、
+ *    OrbitControls onChange/切材质/离屏恢复时 invalidate，无自转动画（天然 reduced-motion 友好），
+ *    卸载 dispose 立方体贴图。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -226,6 +247,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MultiLightDemo,
   ModelDemo,
   FramebufferDemo,
+  CubemapDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -275,6 +297,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FramebufferAttachmentDiagram,
   TwoPassDiagram,
   KernelDiagram,
+  Cubemap6FacesDiagram,
+  SkyboxDiagram,
+  ReflectionRefractionDiagram,
   Stepper,
   Step,
   Slider,
