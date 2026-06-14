@@ -1,0 +1,415 @@
+---
+title: 点阴影
+type: C
+section: 高级光照
+order: 4
+description: 能讲清点光源向四面八方发光、为什么一张 2D 深度图罩不住要用「深度立方体贴图」6 个面才能包住 360°；为什么第一遍存的是「片元到光源的线性距离」而非裁剪空间深度；第二遍怎么用「方向向量 fragPos − lightPos」去 cubemap 采样最近距离再和实际距离比来判阴影；并能在 demo 里把点光源在房间内移动、亲眼看四面墙和地面的影子全向同时变化。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/02%20Point%20Shadows/
+draft: true
+---
+
+{/* C 实战型章（HEL-83，高级光照篇第 4 篇）：原书「点阴影 Point Shadows」。本章 = 上一章「阴影映射」的全向版，承接它已讲过的深度图/光空间/深度比较/bias/PCF，本章只讲「如何扩展到点光源的 360°」。重心是代码对照(spec C 列 §6 重)：①第一遍——6 个面的 view 矩阵（6 个朝向）+ 渲「片元到光源距离」到 depth cubemap；②第二遍片段着色器——vec3 fragToLight = fragPos − lightPos / 采样 cubemap texture(depthCubemap, fragToLight).r * far_plane 取最近距离 / 和 length(fragToLight) 比 + bias + 可选 PCF 方向偏移。C++/GLSL330（含几何着色器一遍渲 6 面）↔ WebGL2/GLSL300es（无几何着色器需渲 6 次）同逻辑段，差异用 Callout warn 诚实标注。沿用「光与材质 / 相机与摄影」类比库（这次相机要朝 6 个方向各拍一张）。C 型段式：概念讲解(§3 必，是什么压篇幅让给 §6) + 数学 math:false 整节省略(§4) + 交互 Demo(§5 必，主 R3F PointLight 内建点阴影·移光源看四壁全向变 + Stepper 深度立方图四步每步带图) + 代码对照(§6 重) + 误区 ≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)。主 viz = PointShadowsDemo（three.js 内建 PointLight castShadow = 深度立方图全向阴影，控件：光源方位/高度 + 阴影图分辨率 + depth bias + 物体自转 + 重置，头牌 = 移光源看四壁阴影全向同时变）；图解 = PointShadowStepDiagram（Stepper 深度立方图四步配图）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 全向阴影需求（点光源向 360° 发光，单张 2D 深度图罩不住，需 6 个方向都记录遮挡）= 直觉引入 + 概念 + <PointShadowStepDiagram step=1>；2) 深度立方体贴图 depth cubemap（6 个面各存一个方向的深度图，拼成立方体把光源全包住）= 概念 + <PointShadowStepDiagram step=2> + 主 PointShadowsDemo；3) 存「片元到光源的距离」而非裁剪空间深度（点光全向，用线性距离更自然）= 概念 + <PointShadowStepDiagram step=3> + §6 代码；4) 用方向向量采样（fragPos − lightPos 这个方向去 cubemap 取最近遮挡距离）= 概念 + <PointShadowStepDiagram step=4> + §6 代码；5) 线性深度归一化（距离 ÷ far_plane 映射到 [0,1] 存储）= §6 代码 + 图解 step3；6) 点阴影的 PCF（沿多个方向偏移采样 cubemap 软化，承接上一章 PCF）= 概念 + §6；7) 为何点光必须 cubemap 而非单张 2D（对比方向光）= 概念 + 对比 + 图解 step1。Term 共 4 个新核心（全向阴影 / 深度立方体贴图 / 到光源的距离 / 方向向量采样）；上一章已讲过的「光空间 / 深度比较 / shadow acne / peter panning / PCF」不再设 Term，正文引用即可，控制在 spec §3「全章新概念 ≤5」内。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条（能在 demo 移光源看四壁全向阴影）；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释**为什么点光源要用「深度立方体贴图」**：点光向四面八方发光，上一章方向光那张 2D 深度图只罩得住一个方向，要用 **6 个面**各渲一张距离图把光源 360° 全包住——说得清「6 个面分别朝哪、为什么单张 2D 不够」
+- 能在下面的 demo 里**把点光源在房间内移动**，让四面墙和地面的影子**全向同时变化**；并能说出第一遍存的是**片元到光源的线性距离**（不是裁剪空间深度）、第二遍是用**方向向量 `fragPos − lightPos`** 去 cubemap 采样判阴影
+- 能回答：第二遍判阴影时，从 cubemap 采样回来的「最近距离」是除以 `far_plane` 归一化存的，那要和片元到光源的**实际距离**比之前，得先对它做一步什么操作？漏了这步会怎样？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「相机与摄影」库（承接上一章「光源 = 一台相机」，这次相机朝 6 个方向各拍一张）。 */}
+
+## 一台相机不够，得朝 6 个方向各拍一张
+
+上一章你让太阳那样的**方向光**投出了影子：把一台「相机」搬到光的位置朝场景拍一张，拍不到的角落就是影子。可那台相机只朝**一个**方向看——太阳的光是平行的、就一个方向，一张就够。
+
+但屋里那盏灯泡不一样：它向**四面八方**发光，左边的墙、右边的墙、头顶、脚下，处处都该有影子。这时只朝一个方向拍的那一张，就只罩得住一个方向，其余方向全是没记录的盲区——墙上该有的影子直接没了。
+
+这一章要解决的就是这件事：**怎么让一盏向 360° 发光的灯，把四面八方的遮挡全都记下来**。办法很直接——既然一张照片只看一个方向，那就让相机站在灯的位置、朝**上下左右前后 6 个方向**各拍一张，6 张拼起来正好把灯**整个包住**。没有它，点光源的影子只能照顾一个方向；有了它，屋里每面墙才都稳稳落上影子。
+
+{/* 3. 概念讲解（spec §三，C 型「是什么」压缩、篇幅让给 §6）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在流程位置。新核心 Term 4 个：全向阴影 / 深度立方体贴图 / 到光源的距离 / 方向向量采样。已学概念（深度图/光空间/深度比较/bias/PCF）引用不重讲。 */}
+
+## 核心思想：让光源朝 6 个方向各看一眼
+
+上一章的整套两遍法你已经会了：第一遍从光源视角渲一张**深度图**记下每个方向最近的遮挡距离，第二遍从相机渲场景、把片元变到光的视角下做**深度比较**判阴影。点阴影没有推翻这套，它只改了一处——把「**一张**深度图」换成「**6 张**」，好让点光源向四面八方的遮挡都被记下来。这种把光源周围所有方向的遮挡都覆盖到的阴影，就叫 <Term def="点光源（向四面八方 360° 发光的光源，如灯泡）产生的阴影。和上一章方向光只朝一个方向不同，点光的光线射向所有方向，所以它的遮挡必须在「所有方向」上都被记录下来——一张只看一个方向的 2D 深度图罩不住，要用 6 个面的深度立方体贴图把光源整个包住。">全向阴影</Term>（omnidirectional shadows）。
+
+为什么一张不够？想象灯泡在屋子正中：朝右拍的那张只记得住右墙方向的遮挡，左墙、天花板、地板方向它一概看不见。下面这张图把方向光（一张就够）和点光源（一张只罩一个方向、其余漏掉）摆在一起，一眼就明白差在哪：
+
+<PointShadowStepDiagram step={1} />
+
+补这个缺口的办法是：让光源朝 **+X / −X / +Y / −Y / +Z / −Z** 这 6 个方向各放一台朝外的小相机，每台各渲一张深度图，6 张拼成一个把光源严严实实包住的立方体——这就是 <Term def="把点光源周围 6 个方向（+X/−X/+Y/−Y/+Z/−Z 上下左右前后）各渲染一张深度图，拼成的一个立方体贴图（cubemap）。它的每个面记录的是「沿这个方向望出去，离光源最近的遮挡物有多远」。6 个面合起来正好把光源 360° 全包住，所以点光源任何方向上的遮挡都能查到。也叫 depth cubemap。">深度立方体贴图</Term>（depth cubemap）。它和上一章用过的立方体贴图（天空盒那种）是同一种结构——6 张面图贴在立方体的 6 个内壁上，只不过这里每面存的不是颜色，而是距离：
+
+<PointShadowStepDiagram step={2} />
+
+## 存什么、怎么查：距离 + 方向向量
+
+6 个面里到底存什么？上一章方向光存的是「裁剪空间深度」（一个被透视/正交投影压过的非线性 z）。点光源换了个更自然的量：直接存 <Term def="第一遍渲深度立方图时，每个面存的不是被投影压过的裁剪空间深度，而是「这个方向上，离光源最近的遮挡物到光源的真实直线距离」（length(fragPos − lightPos)）。因为点光向所有方向发光，用「到光源的距离」描述遮挡比某个方向的投影深度更直接、更对称。存的时候除以 far_plane 归一化到 [0,1]，第二遍采样回来再乘回 far_plane 还原成真实距离。">到光源的距离</Term>——也就是每个遮挡点离灯泡有多远（`length(fragPos − lightPos)`）。点光向所有方向对称地发光，用「直线距离」描述遮挡比某个方向的投影深度更自然。存进 cubemap 前把这个距离**除以 `far_plane`** 归一化到 `[0,1]`（深度纹理只存 `[0,1]`），第二遍采样回来再**乘回 `far_plane`** 还原成真实距离：
+
+<PointShadowStepDiagram step={3} />
+
+第二遍判阴影时，上一章是用片元在光空间的 `proj.xy` 当 2D 坐标去采样。点光的 cubemap 不用 2D 坐标，而是和天空盒一样用一根**方向向量**去采样——这就是 <Term def="从立方体贴图取值的方式：不用二维 uv 坐标，而是用一根从立方体中心射出的方向向量，方向指向哪个面的哪个点，就取那一点的值。点阴影里这根方向向量就是「从光源指向当前片元」的向量 fragToLight = fragPos − lightPos：用它去深度立方图采样，取回的就是「这个方向上离光源最近的遮挡距离」。">方向向量采样</Term>。具体地，对每个片元算出「从光源指向它」的方向 `fragToLight = fragPos − lightPos`，用这根方向去 cubemap 采样，取回这个方向上存的最近距离（乘回 `far_plane` 还原），再和片元自己到光源的实际距离 `length(fragToLight)` 做**深度比较**：实际距离更大 ⇒ 前面有更近的东西先挡住了光 ⇒ 在阴影；两者基本相等 ⇒ 它自己就是最近的 ⇒ 受光。
+
+<PointShadowStepDiagram step={4} />
+
+这一步的判定逻辑和上一章的深度比较一模一样，只是「比的量」从「投影深度」换成了「到光源的距离」、「取数据的方式」从「2D 坐标」换成了「方向向量」。上一章踩过的 **shadow acne**（自遮挡条纹）、**peter panning**（bias 过大阴影脱离）、**PCF**（采样邻域软化边缘）在点阴影里全都还在——只是 PCF 这次要沿**多个三维方向**偏移采样 cubemap，而不再是在 2D 平面上偏一圈。下面 Demo 先让你把点光源在屋里移起来、看四壁全向变化，代码对照再把 6 个面和方向向量采样落到 shader。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。6 个面的 view 矩阵、距离归一化都在 §6 代码对照里逐行讲，符合任务卡「math:false，6 面 view 矩阵在代码对照里讲」。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五，C 型主 viz = PointShadowsDemo，three.js 内建 PointLight castShadow = 深度立方图全向阴影）：控件 光源方位+高度 / 阴影图分辨率 / depth bias / 物体自转 + 重置（≤5）。猜一猜引导（光源移到角落哪面墙影子最长）。诚实化：头牌演示「点光全向投影·移光源四壁同时变」+ 分辨率锯齿；bias 按「太大→peter panning」描述，不声称拖得出 acne。caption 诚实说明用 three 内建点光阴影、底层就是深度立方图。 */}
+
+## 动手：在房间里移动点光源，看四壁全向变
+
+> 猜一猜：下面是一间四壁朝内的房间，正中飘着一盏点光源，地上摆了几个物体。把**光源方位**拖一圈、再把光源**移到房间一个角落**，你觉得**哪面墙**上物体的影子会被拉得**最长**？是离光最近的墙，还是离光最远的那面墙？先动手拖一拖，再看下面的解释。
+
+这个 demo 用的是 three.js 的**内建点光阴影**（`PointLight` 开 `castShadow`）——它的底层做的正是本章讲的事：朝 6 个方向各渲一张距离图、拼成**深度立方体贴图**把光源 360° 全包住，再用方向向量采样判阴影。我们把要教的参数全做成了实时控件：**光源方位 / 高度**让光在房间里移动、看**四面墙和地面的影子全向同时变**（这是点阴影 vs 上一章方向光单向阴影最直观的差异，也是本 demo 头牌）；**阴影图分辨率**切 256↔2048（点光是 6 面 cubemap、每面这个尺寸）、看阴影边缘的锯齿；**depth bias** 往大拖、造出又修掉 **peter panning** 阴影脱离；**物体自转**让影子随物体动。
+
+<PointShadowsDemo />
+
+谜底：把光源移到房间一角，**离光最远的那面墙**上影子最长——光从角落斜斜地照过去，物体投在远墙上的影子被拉得又细又长（就像傍晚太阳低垂时影子拖得老远）。最该上手的是头牌那条：**拖「光源方位」转一圈，盯着四面墙看**——你会看到每面墙上的影子方向、长短都在**同时**变化，没有哪个方向是「盲区」，这正是 6 面深度立方图把光源全包住的效果。再把**分辨率**从 2048 切到 256，阴影边缘从平滑变成粗粗的**阶梯锯齿**；把 **bias 拖到最大**，影子和物体脚下脱节、往后缩，物体像重新飘起来——这就是上一章见过的 **peter panning**，点光的 bias 比方向光更娇气，得更细地调（原因见误区）。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：a. 第一遍——6 个面的 view 矩阵（6 个朝向）+ 渲距离到 depth cubemap；b. 片段着色器——vec3 fragToLight = fragPos − lightPos / 采样 cubemap 取最近距离 ×far / 和 length 比 + bias + 可选 PCF 方向偏移。C++/GLSL330（几何着色器一遍渲 6 面）↔ WebGL2/GLSL300es（无几何着色器渲 6 次）同逻辑段，单块 ≤30 行，块间解说，差异用 Callout warn 诚实标注。 */}
+
+## 代码对照：6 个面 + 方向向量采样怎么落到 shader
+
+上面的 demo 是 three 帮你封装好的；这一节把底层「裸写」一遍。先看**第一遍**：点光阴影相机是**透视投影**（视场角 90°、宽高比 1，正好一格一面无缝拼接），然后为 6 个方向各算一个 `lookAt` **观察矩阵**——`+X` 看向右、`−X` 看向左、`+Y` 看向上……6 个朝向把光源周围全覆盖。注意每个面的 `up` 向量要选对，否则相邻面会扭转拼不上：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（6 个面的光空间矩阵）">
+
+```cpp
+// 点光阴影相机：透视、90° 视场、宽高比 1（一格一面无缝拼接）
+float aspect = (float)SHADOW_W / (float)SHADOW_H;     // = 1
+float near = 0.1f, far = 25.0f;
+glm::mat4 shadowProj = glm::perspective(glm::radians(90.0f), aspect, near, far);
+// 6 个朝向的观察矩阵：+X/−X/+Y/−Y/+Z/−Z，注意每面的 up 选对
+std::vector<glm::mat4> shadowTransforms;
+glm::vec3 P = lightPos;
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3( 1,0,0), glm::vec3(0,-1, 0)));
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3(-1,0,0), glm::vec3(0,-1, 0)));
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3(0, 1,0), glm::vec3(0, 0, 1)));
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3(0,-1,0), glm::vec3(0, 0,-1)));
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3(0,0, 1), glm::vec3(0,-1, 0)));
+shadowTransforms.push_back(shadowProj * glm::lookAt(P, P + glm::vec3(0,0,-1), glm::vec3(0,-1, 0)));
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（6 个面的光空间矩阵）">
+
+```ts
+// 点光阴影相机：透视、90° 视场、宽高比 1（一格一面无缝拼接）
+const aspect = SHADOW_W / SHADOW_H; // = 1
+const near = 0.1,
+  far = 25.0;
+const shadowProj = mat4.perspective(Math.PI / 2, aspect, near, far);
+// 6 个朝向的观察矩阵：+X/−X/+Y/−Y/+Z/−Z，注意每面的 up 选对
+const P = lightPos;
+const dirs: [number[], number[]][] = [
+  [
+    [1, 0, 0],
+    [0, -1, 0],
+  ],
+  [
+    [-1, 0, 0],
+    [0, -1, 0],
+  ],
+  [
+    [0, 1, 0],
+    [0, 0, 1],
+  ],
+  [
+    [0, -1, 0],
+    [0, 0, -1],
+  ],
+  [
+    [0, 0, 1],
+    [0, -1, 0],
+  ],
+  [
+    [0, 0, -1],
+    [0, -1, 0],
+  ],
+];
+const shadowTransforms = dirs.map(([d, up]) =>
+  mat4.multiply(shadowProj, mat4.lookAt(P, vec3.add(P, d), up)),
+);
+```
+
+  </Tab>
+</CodeTabs>
+
+有了这 6 个矩阵就该渲深度立方图了——这里桌面和 WebGL2 走的是**两条不同的路**，是本章最大的一处跨端差异：
+
+<Callout type="warn">
+  桌面 OpenGL 可以用**几何着色器**一次 draw call 渲完 6 个面：几何着色器里循环
+  `gl_Layer = 0..5`、对每个面用对应的 `shadowTransforms[i]`
+  把三角形发到立方体贴图的第 i 层，**一遍**搞定。**WebGL2
+  没有几何着色器**（也没有 `gl_Layer` 那一套 layered
+  rendering），只能老老实实**循环 6 次**：每次把 cubemap 的一个面绑到 FBO 的
+  `COLOR_ATTACHMENT0`（用 `framebufferTexture2D(..., TEXTURE_CUBE_MAP_POSITIVE_X
+  + i, ...)`），用第 i 个矩阵把场景渲一遍，6 次填满 6 个面。逻辑等价，只是
+  WebGL2 多 5 趟绘制。
+</Callout>
+
+第一遍的片段着色器是关键：它不靠硬件写深度，而是**手动算「片元到光源的距离」**，除以 `far_plane` 归一化后写进颜色（用一张浮点 cubemap 当距离图）。两端这段 GLSL 逻辑一致，只差版本声明：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（第一遍 · 写「到光源距离」）">
+
+```glsl
+#version 330 core
+in vec4 FragPos;              // 几何着色器透传的世界坐标
+uniform vec3 lightPos;
+uniform float far_plane;
+void main() {
+  // 片元到光源的真实直线距离
+  float lightDistance = length(FragPos.xyz - lightPos);
+  // 除以 far_plane 归一化到 [0,1] 再写入（深度图只存 [0,1]）
+  gl_FragDepth = lightDistance / far_plane;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（第一遍 · 写「到光源距离」）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec4 FragPos;             // 顶点着色器透传的世界坐标
+uniform vec3 lightPos;
+uniform float far_plane;
+out vec4 fragColor;
+void main() {
+  // 片元到光源的真实直线距离
+  float lightDistance = length(FragPos.xyz - lightPos);
+  // 除以 far_plane 归一化到 [0,1]，写进距离图（WebGL2 用颜色附件存）
+  fragColor = vec4(vec3(lightDistance / far_plane), 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+第二遍是相机正常渲场景，判阴影全在片段着色器里。核心三步：① 算方向 `fragToLight = fragPos − lightPos`；② 用它去 cubemap 采样取存的最近距离、**乘回 `far_plane`** 还原；③ 和片元到光的实际距离 `length(fragToLight)` 比 + bias。注意采样**直接传方向向量**，不需要归一化、也不需要 2D 坐标：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（第二遍 · 方向向量采样判阴影）">
+
+```glsl
+float ShadowCalculation(vec3 fragPos) {
+  // ① 从光源指向片元的方向向量（cubemap 就用它采样）
+  vec3 fragToLight = fragPos - lightPos;
+  // ② 用方向采样 cubemap，取回存的最近距离，乘回 far_plane 还原成真实距离
+  float closestDepth = texture(depthCubemap, fragToLight).r * far_plane;
+  // ③ 片元到光的实际距离
+  float currentDepth = length(fragToLight);
+  // 实际距离比最近遮挡还远（+bias 防自遮挡）⇒ 被挡 ⇒ 在阴影
+  float bias = 0.05;
+  return currentDepth - bias > closestDepth ? 1.0 : 0.0;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（第二遍 · 方向向量采样判阴影）">
+
+```glsl
+float ShadowCalculation(vec3 fragPos) {
+  // ① 从光源指向片元的方向向量（cubemap 就用它采样）
+  vec3 fragToLight = fragPos - lightPos;
+  // ② 用方向采样 cubemap，取回存的最近距离，乘回 far_plane 还原成真实距离
+  float closestDepth = texture(depthCubemap, fragToLight).r * far_plane;
+  // ③ 片元到光的实际距离
+  float currentDepth = length(fragToLight);
+  // 实际距离比最近遮挡还远（+bias 防自遮挡）⇒ 被挡 ⇒ 在阴影
+  float bias = 0.05;
+  return currentDepth - bias > closestDepth ? 1.0 : 0.0;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+上面只采样了**一个**方向，阴影边缘会是硬边、还带锯齿。点阴影的 **PCF** 修法和上一章同理——多采样几次取平均，只是这次沿**多个三维方向**偏移采样 cubemap（在 fragToLight 周围的小立方体邻域里取一圈样），而不是在 2D 平面上偏一圈。把上面的单次采样换成对一组方向偏移的循环：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（点阴影 PCF · 多方向偏移采样）">
+
+```glsl
+// 沿一组三维方向偏移采样 cubemap，平均「在阴影」的比例（软化边缘）
+vec3 sampleOffsets[20] = vec3[](
+  vec3( 1, 1, 1), vec3( 1,-1, 1), vec3(-1,-1, 1), vec3(-1, 1, 1),
+  vec3( 1, 1,-1), vec3( 1,-1,-1), vec3(-1,-1,-1), vec3(-1, 1,-1),
+  vec3( 1, 1, 0), vec3( 1,-1, 0), vec3(-1,-1, 0), vec3(-1, 1, 0),
+  vec3( 1, 0, 1), vec3(-1, 0, 1), vec3( 1, 0,-1), vec3(-1, 0,-1),
+  vec3( 0, 1, 1), vec3( 0,-1, 1), vec3( 0,-1,-1), vec3( 0, 1,-1));
+float shadow = 0.0, diskRadius = 0.05, bias = 0.05;
+float currentDepth = length(fragToLight);
+for (int i = 0; i < 20; ++i) {
+  float d = texture(depthCubemap, fragToLight + sampleOffsets[i] * diskRadius).r * far_plane;
+  shadow += currentDepth - bias > d ? 1.0 : 0.0;
+}
+shadow /= 20.0;                         // 20 次取平均 → 软边
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（点阴影 PCF · 多方向偏移采样）">
+
+```glsl
+// 沿一组三维方向偏移采样 cubemap，平均「在阴影」的比例（软化边缘）
+vec3 sampleOffsets[20] = vec3[](
+  vec3( 1, 1, 1), vec3( 1,-1, 1), vec3(-1,-1, 1), vec3(-1, 1, 1),
+  vec3( 1, 1,-1), vec3( 1,-1,-1), vec3(-1,-1,-1), vec3(-1, 1,-1),
+  vec3( 1, 1, 0), vec3( 1,-1, 0), vec3(-1,-1, 0), vec3(-1, 1, 0),
+  vec3( 1, 0, 1), vec3(-1, 0, 1), vec3( 1, 0,-1), vec3(-1, 0,-1),
+  vec3( 0, 1, 1), vec3( 0,-1, 1), vec3( 0,-1,-1), vec3( 0, 1,-1));
+float shadow = 0.0, diskRadius = 0.05, bias = 0.05;
+float currentDepth = length(fragToLight);
+for (int i = 0; i < 20; ++i) {
+  float d = texture(depthCubemap, fragToLight + sampleOffsets[i] * diskRadius).r * far_plane;
+  shadow += currentDepth - bias > d ? 1.0 : 0.0;
+}
+shadow /= 20.0;                         // 20 次取平均 → 软边
+```
+
+  </Tab>
+</CodeTabs>
+
+最后把 `shadow`（0 受光 ~ 1 全影）乘进光照，和上一章一样：`(ambient + (1.0 - shadow) * (diffuse + specular)) * color`。这几段计算两端 GLSL 一字不差，差异只有老几样：
+
+<Callout type="warn">
+  跨端区别还是：桌面写 `#version 330 core`、WebGL2 写 `#version 300 es`，且
+  WebGL2 片段着色器开头必须加 `precision highp float;`、采样器建议 `precision
+  highp samplerCube;`。`texture()` 对 `samplerCube`
+  两端同名、都用**方向向量**采样（不是 2D
+  坐标）。最大的实质差异是第一遍：桌面可用**几何着色器一遍渲 6 面**，WebGL2
+  无几何着色器、需**循环渲 6 次**（见上文）。
+</Callout>
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能在 §5 Demo 亲手触发（peter panning）。必含任务卡列出的：①far_plane 没归一化/采样回来忘乘 far → 阴影全错；②fragToLight 方向取反；③点阴影 bias 比方向光更需调、PCF 方向偏移搞错；④房间盒子法线朝外（没用 BackSide）导致不 receiveShadow。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象（影子全错 /
+  满屏全亮或全黑）**：影子完全对不上，要么到处都是阴影、要么哪都没有。**原因**：`far_plane`
+  的归一化**没配对**——第一遍存的时候除了 `far_plane`，第二遍采样回来却**忘了乘回
+  `far_plane`**（或反过来），于是拿一个 `[0,1]`
+  的小数去和几米的真实距离比，怎么比都错。**修法**：存「`距离 /
+  far_plane`」、采样回来「`closestDepth *
+  far_plane`」**必须成对出现**，两步都用同一个 `far_plane`。
+</Callout>
+
+<Callout type="trap">
+  **现象（影子方向反了 /
+  该亮的暗、该暗的亮）**：阴影像镜像翻转，物体背光面亮、向光面反而黑。**原因**：方向向量取**反**了——写成了
+  `lightPos − fragPos`（从片元指向光），而 cubemap
+  采样要的是**从光源指向片元**的 `fragToLight = fragPos −
+  lightPos`。方向一反，采样取到的就是对面那个面的距离。**修法**：牢记
+  `fragToLight = fragPos −
+  lightPos`（光在前、被减；片元在后、当起点终点顺序别颠倒）。
+</Callout>
+
+<Callout type="trap">
+  **现象（peter
+  panning：影子和物体脚下脱节、往后缩）**：物体的影子缺了根、整片往后缩，物体看着重新「飘」起来——demo
+  里把 **bias
+  拖到最大**就能亲手触发。**原因**：点阴影存的是**线性距离**、量级比上一章的非线性深度大，bias
+  的「合适范围」也不同，**加过头**就把贴地接触处本该有的影子也判成了受光。**修法**：bias
+  取**够用就好**的小值；点光的 bias 比方向光更娇气，需要更细地调（这也是上一章
+  shadow acne / peter panning 那对双刃剑在点阴影里的延续）。
+</Callout>
+
+<Callout type="trap">
+  **现象（房间四壁收不到影子 / 从外面看是个实心盒子）**：物体明明
+  castShadow，可墙上就是没影子，或者整个房间看着像个不透的实心块。**原因**：当房间的盒子用了**默认正面**（法线**朝外**），从房间**内部**看到的是被剔除/背对的面，它既不正常显示、也**收不到阴影**。**修法**：房间盒子的材质设
+  `side =
+  BackSide`（只渲朝内的背面），让法线**朝内**——这样站在房间里既能看到四壁，四壁也能正常
+  `receiveShadow`（本章 demo 的房间正是这么做的）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（移光源/调分辨率复现现象）+ C 型 1 道独立实现题（列裸 WebGL2 渲 6 面 depth cubemap 关键步骤）；答案折叠。 */}
+
+## 小结
+
+- **点阴影 = 阴影映射的全向版**：点光向 360° 发光，一张 2D 深度图只罩一个方向，要用 **6 个面（+X/−X/+Y/−Y/+Z/−Z）**各渲一张拼成**深度立方体贴图**把光源全包住
+- 第一遍每个面存的是**片元到光源的线性距离**（不是裁剪空间深度），存前 **÷ `far_plane`** 归一化、采样回来 **× `far_plane`** 还原——这两步必须成对
+- 第二遍用**方向向量 `fragToLight = fragPos − lightPos`** 去 cubemap 采样取最近距离，再和片元的实际距离 `length(fragToLight)` 做**深度比较** + bias 判阴影
+- 上一章的 **shadow acne / peter panning / PCF** 在点阴影里照旧：bias 仍是双刃剑（点光更需细调），PCF 改为沿**多个三维方向**偏移采样 cubemap 软化边缘
+- 跨端最大差异在第一遍：桌面可用**几何着色器一遍渲 6 面**，**WebGL2 无几何着色器**需**循环渲 6 次**；房间盒子要 `side = BackSide` 才能从里面看到四壁并 receiveShadow
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面的 demo 里，先**验证「全向」**：把**光源方位**拖一整圈，盯着四面墙看——说出你观察到墙上影子怎么变，并解释为什么没有哪个方向是「盲区」。再把光源移到房间一角，说出**哪面墙**影子最长、为什么。最后切**阴影图分辨率**到 256，描述阴影边缘的变化并解释成因。
+
+<Answer>
+
+- **全向验证**：拖一圈方位，**四面墙和地面的影子方向、长短同时**变化，没有哪个方向不出影子——因为深度立方图的 6 个面把光源 360° 全包住了，任何方向上的遮挡都有记录，所以不存在「盲区」（这正是点阴影 vs 方向光单向阴影的核心差异）。
+- **角落最长**：光源移到一角时，**离光最远的那面墙**影子最长——光从角落斜斜照过去，物体投到远墙上的影子被拉得又细又长（类比傍晚太阳低垂、影子拖得老远）。
+- **降分辨率**：切到 256，阴影边缘从平滑变成粗粗的**阶梯锯齿**——点光的距离图是 6 面 cubemap、每面只有 256×256，单位面积分到的像素少，边缘量化得更粗，所以锯齿更明显。
+
+</Answer>
+
+**练习 2（独立实现题 · C 型）** 不依赖 three 这类封装，自己用**裸 WebGL2**（无几何着色器）渲一张点光源的**深度立方体贴图**。列出你需要的关键步骤（不必写全部代码，但要点要全，尤其是「WebGL2 怎么补几何着色器的缺」）。
+
+<Answer>
+
+关键步骤（对应正文第一遍）：
+
+1. **建距离 cubemap + FBO**：用 `gl.texImage2D` 给 cubemap 的 6 个面各分配一张纹理（WebGL2 无几何着色器，用**颜色附件**存距离，建议 `R16F`/`RGBA16F` 浮点格式存 `[0,1]` 距离），再建一个 FBO 和一张同尺寸的深度 renderbuffer。
+2. **算 6 个面的矩阵**：透视投影 `perspective(90°, 1, near, far)`；为 `+X/−X/+Y/−Y/+Z/−Z` 各算一个 `lookAt(lightPos, lightPos + dir_i, up_i)`，注意每面的 `up` 选对（见正文 6 个 dir/up）。
+3. **循环渲 6 次（补几何着色器的缺）**：`for i in 0..5`：把 cubemap 第 i 面绑到 FBO 颜色附件——`framebufferTexture2D(FRAMEBUFFER, COLOR_ATTACHMENT0, TEXTURE_CUBE_MAP_POSITIVE_X + i, cubemap, 0)`；设 viewport 为阴影图尺寸、清缓冲；用第 i 个矩阵把场景渲一遍。
+4. **第一遍片段着色器写距离**：把世界坐标 `FragPos` 透传进来，算 `lightDistance = length(FragPos − lightPos)`，写出 `lightDistance / far_plane`（归一化到 `[0,1]`）。
+5. **采样参数**：cubemap 设 `CLAMP_TO_EDGE`（三个轴 S/T/R）+ `LINEAR`，避免接缝处采样越界。
+   （第二遍判阴影：`fragToLight = fragPos − lightPos` → `texture(depthCubemap, fragToLight).r * far_plane` → 和 `length(fragToLight)` 比 + bias；想软边再换成多方向偏移的 PCF。）
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（4 个新核心，按首现顺序）；释义零基础大白话。已学概念（光空间/深度比较/shadow acne/peter panning/PCF）不重复设词条。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="全向阴影">
+  点光源（向四面八方 360°
+  发光的光源，比如屋里一盏灯泡）产生的阴影。和上一章方向光只朝**一个**方向不同，点光的光线射向**所有**方向，所以它的遮挡必须在**所有方向**上都被记录下来——一张只看一个方向的
+  2D
+  深度图罩不住，要用一个把光源整个包住的「深度立方体贴图」。详见本章「核心思想」一节。
+</GlossaryItem>
+
+<GlossaryItem term="深度立方体贴图">
+  把点光源周围 **6
+  个方向**（+X/−X/+Y/−Y/+Z/−Z，也就是上下左右前后）各渲染一张深度图，拼成的一个**立方体贴图**。它和天空盒那种立方体贴图是同一种结构——6
+  张面图贴在立方体的 6
+  个内壁上，只是这里每面存的不是颜色，而是「沿这个方向望出去，离光源**最近**的遮挡物有多远」。6
+  个面合起来正好把光源 360° 全包住，点光任何方向的遮挡都能查到。也叫 depth
+  cubemap。详见本章「核心思想」一节。
+</GlossaryItem>
+
+<GlossaryItem term="到光源的距离">
+  第一遍渲深度立方图时，每个面里存的那个值。上一章方向光存的是被投影压过的「裁剪空间深度」，点阴影换成更自然的量——直接存「这个方向上，最近的遮挡物到光源的**真实直线距离**」（`length(fragPos
+  −
+  lightPos)`）。因为点光向所有方向对称发光，用「距离」描述遮挡比某个方向的投影深度更直接。存的时候除以
+  `far_plane` 归一化到 `[0,1]`，采样回来再乘回 `far_plane`
+  还原。详见本章「存什么、怎么查」一节。
+</GlossaryItem>
+
+<GlossaryItem term="方向向量采样">
+  从立方体贴图取值的方式：不用二维 uv
+  坐标，而是用一根从立方体中心射出的**方向向量**——方向指向哪个面的哪个点，就取那一点的值。点阴影里这根方向向量就是「从光源指向当前片元」的
+  `fragToLight = fragPos −
+  lightPos`：用它去深度立方图采样，取回的就是「这个方向上离光源最近的遮挡距离」。方向不必归一化，cubemap
+  采样只看方向。详见本章「存什么、怎么查」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

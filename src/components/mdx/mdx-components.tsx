@@ -74,6 +74,7 @@ import { GammaCurveDiagram } from "./diagrams/gamma-curve-diagram";
 import { GammaGradientBarDiagram } from "./diagrams/gamma-gradient-bar-diagram";
 import { ShadowMapStepDiagram } from "./diagrams/shadow-map-step-diagram";
 import { ShadowAcneDiagram } from "./diagrams/shadow-acne-diagram";
+import { PointShadowStepDiagram } from "./diagrams/point-shadow-step-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -93,6 +94,7 @@ import { FramebufferDemo } from "./framebuffer-demo";
 import { CubemapDemo } from "./cubemap-demo";
 import { InstancingDemo } from "./instancing-demo";
 import { ShadowMappingDemo } from "./shadow-mapping-demo";
+import { PointShadowsDemo } from "./point-shadows-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -237,6 +239,10 @@ import { ShadowMappingDemo } from "./shadow-mapping-demo";
  *    ③第二遍从相机渲、用光的 view×proj 把每片元变到光空间取当前深度→④比深度判阴影：current>closest=被挡在阴影(红)
  *    / current≈closest=自己最近受光(绿)）、ShadowAcneDiagram（mode=acne/bias：深度图一格覆盖斜面一小片只存取样点一个最近深度，
  *    远光半 current>stored 被自己误判「在阴影」→交替亮暗条纹=shadow acne vs 加 depth bias 把 stored 往更远推一点·整片受光条纹消失）。同款 Server SVG。
+ *  - 高级光照篇·点阴影（HEL-83，C 实战型，阴影映射的全向版）：PointShadowStepDiagram（§5 Stepper 深度立方图全向阴影四步配图：
+ *    ①方向光只朝一向·一张 2D 够 vs 点光源向 360° 发光·单张 2D 只罩一个方向其余漏掉→②用 6 个面 +X/−X/+Y/−Y/+Z/−Z 的朝外小相机
+ *    把光源包住各渲一张 = 深度立方体贴图·全包住→③每面存「到光源的最近线性距离」而非裁剪空间深度·距离÷far 归一化·亮=近暗=远→
+ *    ④第二遍用 方向=fragPos−lightPos 去 cubemap 采样取最近距离·×far 还原·和 length(fragToLight) 比：更大=在阴影(红)/相等=受光(绿)）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -315,6 +321,18 @@ import { ShadowMappingDemo } from "./shadow-mapping-demo";
  *    ④PCF 软阴影开关（R3F 声明式 <Canvas shadows={pcf?"soft":"basic"}>：soft=PCFSoftShadowMap 软边 ↔ basic=BasicShadowMap 硬边）+ 重置。
  *    frameloop 可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放，
  *    改参 invalidate 踢一帧（场景静止·天然 reduced-motion 友好）。
+ *
+ * R3F 点阴影「内建点光阴影 = 深度立方图全向阴影」交互演示（「高级光照篇·点阴影」PointShadowsDemo，HEL-83）：
+ *  - Client（dynamic 边界）：PointShadowsDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 PointShadowsCanvas（独立 chunk，硬规则 2/6）。<Canvas shadows> + 一盏 PointLight castShadow（位置可动），
+ *    一个朝内的大盒子当房间（boxGeometry side=BackSide + receiveShadow）+ 房间内两立方体一球 castShadow/receiveShadow，
+ *    零外部资源（硬规则 3）。three.js 的 PointLight 内建阴影本质就是本章的深度立方体贴图（朝 6 个方向各渲一张距离图把光源
+ *    360° 全包住），把要教的参数全做成实时控件让读者亲手拖出概念：①光源方位 + 高度（头牌：在房间内移动点光源·四壁阴影全向同时变·
+ *    点阴影 vs 方向光单向阴影最直观差异）②阴影图分辨率 256/512/1024/2048 分段（点光是 6 面 cubemap·每面这个尺寸·改后 dispose 旧
+ *    shadow.map 重建·看锯齿随分辨率变）③depth bias 滑块（拖最大→peter panning 阴影脱离/中间干净·诚实化不声称拖得出 acne）
+ *    ④物体自转开关（reduced-motion 默认关）+ 重置。点光阴影相机是透视（shadow-camera near/far 罩住整间房）。
+ *    frameloop 可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放，
+ *    改参 invalidate 踢一帧。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -335,6 +353,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CubemapDemo,
   InstancingDemo,
   ShadowMappingDemo,
+  PointShadowsDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -407,6 +426,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GammaGradientBarDiagram,
   ShadowMapStepDiagram,
   ShadowAcneDiagram,
+  PointShadowStepDiagram,
   Stepper,
   Step,
   Slider,
