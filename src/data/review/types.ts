@@ -52,7 +52,8 @@ export type ReviewChapterSlug =
   | "cpp-generic-algorithms"
   | "cpp-associative-containers"
   | "cpp-dynamic-memory"
-  | "cpp-copy-control";
+  | "cpp-copy-control"
+  | "cpp-overloaded-operations";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -108,6 +109,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-associative-containers": "关联容器",
   "cpp-dynamic-memory": "动态内存",
   "cpp-copy-control": "拷贝控制",
+  "cpp-overloaded-operations": "重载运算与类型转换",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

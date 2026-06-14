@@ -1,0 +1,711 @@
+---
+title: 重载运算与类型转换
+type: C
+section: 类设计者工具
+order: 2
+description: 掌握运算符重载——算术/关系/赋值/下标/递增递减/函数调用运算符，以及类型转换运算符——让你的类像内置类型一样自然使用
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（C++ Primer §14 改编）：重载运算与类型转换——"类设计者工具"第二篇。
+   重心在概念图示(§3) + Stepper(§5) + 代码对照(§6)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 运算符重载基础（成员vs非成员、参数规则）— viz: OperatorOverloadTable（常用运算符重载参数对照表）
+   2) 输入输出运算符（<< >>）— viz: OperatorChainDiagram step=2（链式输出示意）+ 代码示例
+   3) 算术与关系运算符（+ - == <）— 代码示例 + OperatorChainDiagram step=3
+   4) 赋值运算符（= 复合赋值 +=）— 代码示例 + OperatorChainDiagram step=1
+   5) 下标运算符（operator[]）— 代码示例
+   6) 递增递减运算符（++ -- 前缀与后缀区别）— 代码示例
+   7) 函数调用运算符（operator()）— 代码示例
+   8) 可调用对象概念（函数指针/lambda/functor 关系）— viz: CallableConceptDiagram
+   9) 类型转换运算符（operator int/double/bool + explicit）— viz: TypeConversionOperatorDiagram + 代码示例 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释运算符重载的成员 vs 非成员选择规则——哪些必须是成员、哪些推荐非成员、为什么赋值/下标/调用/箭头必须是成员函数
+- 能根据类的语义正确实现输入输出运算符（`<<` `>>`）、算术/关系运算符、赋值运算符、下标运算符、递增递减运算符和函数调用运算符——知道每一步返回值为什么是这个类型、`return *this` 为什么是链式调用的关键
+- 能回答：`SalesData` 类需要支持 `cout << s` 输出、`s1 + s2` 加法、`s1 == s2` 比较、`s[0]` 取字符——写出对应的四个运算符重载声明（成员或非成员），并说明每一步的设计理由。
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——运算符像语言内置的操作界面，你的类通过重载它来接入这套界面。 */}
+
+## 让你的类用起来像内置类型
+
+你写 `int a = 3 + 5;`、`cout << 42;`、`if (x == y)` 时，这些 `+` `<<` `==` 符号背后是语言内置的一套规则——编译器知道 `int` 和 `int` 怎么加、`int` 和 `ostream` 怎么输出。现在你要写自己的类了——`SalesData`、`Complex`、`StringBlob`。你希望别人用它们时也能写 `a + b`、`cout << obj`、`if (a == b)`——像用内置类型一样顺手。
+
+想象工厂流水线上的每个工位都有统一的操作界面：扳手、螺丝刀、卡尺。不管流水线上跑的是零件A还是零件B，操作员用同样的工具就行。运算符就是 C++ 语言给你内置的"统一操作界面"——`+` `==` `<<` `[]` `()` 这些符号。通过重载它们，你设计的类就能无缝接入这套界面——别人用你的类就像用 `int` 和 `string` 一样自然。
+
+**这一章解决什么问题？** 教你重载语言里几乎所有的运算符——从基础的加减比较，到输入输出、下标访问、递增递减，再到函数调用和类型转换。你会学会什么时候用成员函数、什么时候用普通函数、什么情况下返回引用、什么情况下返回新对象——每一步都有明确的"为什么"。没有这一章，你设计的类永远只能靠笨重的成员函数名（`add()`、`print()`、`equal()`）操作——别人根本不想用你的类。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 运算符重载的基本规则：成员还是普通函数？
+
+当你写 `a + b` 时，编译器把它翻译成两种等价形式之一：① `a.operator+(b)`（成员函数形式）；② `operator+(a, b)`（非成员函数形式）。这两条背后是 <Term def="C++ 中让运算符作用于类类型的机制——通过定义名为 operatorX 的函数，使自定义类型也能使用内置运算符语法。实际上就是对函数调用的语法糖——a+b 等价于 a.operator+(b) 或 operator+(a,b)。">运算符重载（operator overloading）</Term>——只是语法糖，背后就是一个普通的函数调用。
+
+那么"成员还是非成员"怎么选？
+
+<Term def="运算符重载的一种形式——定义在类内部的成员函数。左操作数固定为 this 所指的对象（自身），形参少一个。赋值=、下标[]、调用()、箭头-> 必须是成员函数。算术和关系也可用成员，但左操作数必须是该类对象，不支持左操作数的隐式转换。">成员运算符函数（member operator）</Term>的第一个操作数是隐式参数 `this`——左操作数必须是它自己的类型。这对赋值(`=`)、下标(`[]`)、调用(`()`)、箭头(`->`) 是**强制要求**——它们只接受成员形式。
+
+<Term def="运算符重载的一种形式——定义在类外部的普通函数。两个操作数都以参数传入——都参与隐式类型转换。输入输出（<< >>）必须是非成员（左操作数是 stream 不是你的类）。算术和关系强烈建议非成员——双侧都可以做隐式转换，比成员更自然。">非成员运算符函数（non-member operator）</Term>两个操作数都作为参数传进来——**两侧都可以享受隐式转换**。比如 `"hello" + s`（`s` 是自定义字符串类）——如果 `+` 是成员函数，左操作数 `"hello"` 不是你的类类型，编译失败。如果 `+` 是非成员函数，`const char*` 可以隐式转成你的类，顺利通过。
+
+<OperatorOverloadTable />
+
+上表总结了最常用运算符的重载方式。记住四条选择铁律：
+- **必须是成员的**：`=`、`[]`、`()`、`->`——语言规定
+- **必须是非成员的**：`<<`、`>>`——左操作数是 `ostream`/`istream`，不可能是你的类
+- **推荐非成员的**：算术（`+`、`-`、`*`、`/`）和关系（`==`、`<`、`>`）——双侧都可隐式转换
+- **推荐成员的**：复合赋值（`+=`、`-=`）——返回 `*this` 支持链式，自然做成员
+
+## 输入与输出运算符：让流认识你的类
+
+你肯定见过 `cout << 42` 和 `cin >> x`。现在你要让 `cout << myObj` 也能工作。
+
+输出运算符 `<<` 必须是非成员函数——左操作数是 `std::ostream&`（流对象），不是你的类。它需要访问类的内部状态——通常声明为 <Term def="用 friend 关键字在类内声明的外部函数或类——它虽然不是这个类的成员，但可以访问这个类的 private 和 protected 成员。常用于运算符重载中需要访问私有成员的非成员函数。打破封装性——只在非成员但必须看私有时使用。">友元（friend）</Term> 函数：
+
+```cpp
+class SalesData {
+    friend std::ostream& operator<<(std::ostream&, const SalesData&);
+    // ...
+};
+
+// 定义在类外部——非成员函数
+std::ostream& operator<<(std::ostream &os, const SalesData &item) {
+    os << item.isbn() << " " << item.units() << " " << item.revenue();
+    return os;  // 返回 ostream&——支持链式输出！！！
+}
+```
+
+返回 `ostream&` 是**链式调用的关键**——`cout << a << b << c;` 先执行 `(cout << a)` 返回 `cout` 的引用，再对其执行 `<< b`，再 `<< c`。这就是 OperatorChainDiagram 展示的机制：
+
+<OperatorChainDiagram step={2} />
+
+输入运算符 `>>` 类似但更复杂——要处理输入失败的情况：
+
+```cpp
+std::istream& operator>>(std::istream &is, SalesData &item) {
+    double price = 0;
+    is >> item.bookNo >> item.unitsSold >> price;
+    if (is)                    // 检查输入是否成功
+        item.revenue = item.unitsSold * price;
+    else                       // 输入失败——把对象重置到默认状态
+        item = SalesData();
+    return is;
+}
+```
+
+输入和输出的关键区别：输入的对象必须是非 const 引用（要被写入），输出的对象是 const 引用（只读）。输入要检查流状态——读失败了把对象重置到某种安全状态，而不是留下半坏的数据。
+
+## 算术与关系运算符：让你的类加减乘除
+
+算术运算符（`+` `-` `*` `/`）强烈推荐非成员——原因在前面已经提过了：两侧隐式转换。它们的实现通常借助对应的复合赋值运算符：
+
+```cpp
+// 非成员：借助 += 实现 +——不需要 friend（靠 +=，+= 是成员已可访问私有数据）
+SalesData operator+(const SalesData &lhs, const SalesData &rhs) {
+    SalesData sum = lhs;   // 拷贝左操作数
+    sum += rhs;            // 用 += 把右操作数加进去
+    return sum;            // 返回新对象——不是引用！！！
+}
+```
+
+返回的是**值**（新对象），不是引用——`a + b` 产生了一个新的临时结果，当然不能返回局部的引用。如果你定义了 `+`，通常也应该定义 `+=`——前者借助后者实现。注意顺序——先定义 `+=`（成员，返回 `*this&` 支持 `a += b += c`），再让 `+`（非成员）委托给 `+=`。
+
+关系运算符（`==` `<` `>` `!=`）也应该非成员——两侧都可隐式转换，且保持对称性（期望 `a == b` 和 `b == a` 效果一样）：
+
+```cpp
+bool operator==(const SalesData &lhs, const SalesData &rhs) {
+    return lhs.isbn() == rhs.isbn()
+        && lhs.units() == rhs.units()
+        && lhs.revenue() == rhs.revenue();
+}
+
+bool operator!=(const SalesData &lhs, const SalesData &rhs) {
+    return !(lhs == rhs);  // != 直接委托给 ==——永不重复逻辑
+}
+```
+
+定义了 `==`，就**一定**定义 `!=`——而且是委托给 `==`，不重复实现同一比较逻辑。定义了 `<`，通常也定义 `>`、`<=`、`>=`——但本章只演示基础和关系最常用的两个，其余按同样模式扩展即可。
+
+## 赋值、下标、递增、递减：返回 *this 的成员四兄弟
+
+<Term def="C++ 运算符重载中的一种典型模式——赋值、复合赋值、递增递减等运算符返回 *this（自身）的引用，使得表达式的结果就是对象本身，从而支持链式书写 a=b=c 或连续操作。这是「返回引用而非值」的典型应用场景。">`return *this` 模式</Term> 是下面四个运算符的核心——它们修改对象自身且期待可以串联使用。
+
+### 赋值运算符
+
+`=` 必须是成员。你已经在前一章（拷贝控制）见过拷贝赋值和移动赋值——它们正是赋值运算符的重载。除此之外，C++11 引入了 <Term def="用花括号{}初始化列表作为右值的赋值运算符。形如 StrVec& operator=(initializer_list<string> il)。让对象可以从花括号列表重新赋值——如 v = {'a','b','c'}。">初始化列表赋值（initializer_list assignment）</Term>——让对象可以通过花括号列表重新赋值：
+
+```cpp
+StrVec& StrVec::operator=(std::initializer_list<std::string> il) {
+    auto *newData = alloc_n_copy(il.begin(), il.end());
+    free();
+    elements = newData.first;
+    first_free = cap = newData.second;
+    return *this;
+}
+```
+
+### 复合赋值运算符
+
+`+=` `-=` `*=` `/=` 推荐成员——返回 `*this&` 支持链式：
+
+```cpp
+SalesData& SalesData::operator+=(const SalesData &rhs) {
+    unitsSold += rhs.unitsSold;
+    revenue += rhs.revenue;
+    return *this;  // 链式：a += b += c
+}
+
+// 非成员 + 委托给 +=
+SalesData operator+(const SalesData &lhs, const SalesData &rhs) {
+    SalesData sum = lhs;
+    sum += rhs;
+    return sum;
+}
+```
+
+这就是「先 `+=`→后 `+`」模式的完整落地——成员做实际工作、非成员封装调用。
+
+### 下标运算符
+
+<Term def="用方括号[]访问对象内部元素的重载运算符——必须是成员函数，通常提供两个版本：非常量版本返回普通引用（可读写）、常量版本返回 const 引用（只读）。用于容器类（如 array、vector、string）让 obj[i] 的语法像内置数组一样自然。">下标运算符（subscript operator）</Term> 让你的类支持 `obj[i]` 语法——像访问数组一样。它**必须是成员函数**——这是语言强制要求。通常提供一对重载：非常量版本和 const 版本：
+
+```cpp
+class StrVec {
+public:
+    std::string& operator[](std::size_t n) {
+        return elements[n];  // 非常量版本——返回普通引用，可读可写
+    }
+    const std::string& operator[](std::size_t n) const {
+        return elements[n];  // 常量版本——返回 const 引用，只读
+    }
+};
+```
+
+为什么需要两个版本？`const StrVec sv; sv[0]` 必须返回 `const string&`——不能允许通过 const 对象修改内部数据。返回引用而不是值——因为通常期望能对它赋值（`v[0] = "hello"`）。
+
+### 递增递减运算符
+
+`++` 和 `--` 有一个有趣的难题——前缀和后缀用同一个符号。C++ 的解决方案是：**后缀版本接受一个 `int` 形参（编译器传 0，只用于区分，不实际使用）**：
+
+```cpp
+class StrBlobPtr {
+public:
+    // 前缀：++p ——先加后返回，返回引用
+    StrBlobPtr& operator++() {
+        check(curr, "increment past end");
+        ++curr;
+        return *this;         // 返回递增后的自身引用
+    }
+
+    // 后缀：p++ ——先返回旧值再加，返回值（副本）
+    StrBlobPtr operator++(int) {  // int 只用于区分——不实际使用
+        StrBlobPtr ret = *this;   // 保存当前状态
+        ++*this;                  // 调用前缀++实现实际递增
+        return ret;               // 返回旧的副本——值不是引用
+    }
+};
+```
+
+<Term def="递增递减运算符的两种形式。前缀（++i）：先执行自增，返回自增后的自身引用（StrBlobPtr&）——高效无拷贝。后缀（i++）：先保存旧值，再自增，返回旧值的副本（StrBlobPtr）——多一次拷贝开销。后缀的 int 形参纯粹用于与前缀区分，不实际使用。">前缀与后缀的区别</Term> 核心就是返回值——前缀返回引用（`*this`，零拷贝），后缀返回值（副本，多一次拷贝）。因此**能用前缀就不要用后缀**——除非确实需要旧值。
+
+## 函数调用运算符：让对象变成函数
+
+<Term def="重载了 operator() 的类——其实例可以像函数一样被调用 obj(args...)。也叫仿函数（functor）。与普通函数的区别：函数对象可以拥有状态（成员变量），可复用、可配合模板和标准算法。lambda 本质就是编译器生成的匿名函数对象。">函数对象（function object / functor）</Term> 是一个重载了 `operator()` 的类——它的实例可以直接被"调用"：
+
+```cpp
+class Abs {
+public:
+    int operator()(int val) const {
+        return val < 0 ? -val : val;
+    }
+};
+
+Abs absObj;
+int x = absObj(-5);  // x = 5——看起来像函数调用，其实是 absObj.operator()(-5)
+```
+
+这有什么优势？函数对象可以**有状态**——普通函数指针不能携带任何成员变量：
+
+```cpp
+class PrintString {
+public:
+    PrintString(std::ostream &o = std::cout, char c = ' ')
+        : os(o), sep(c) {}
+    void operator()(const std::string &s) const {
+        os << s << sep;
+    }
+private:
+    std::ostream &os;   // 状态——输出到哪个流
+    char sep;            // 状态——分隔符用什么
+};
+
+PrintString printer(std::cerr, '\n');
+printer("error");       // 输出到 cerr，每行换行符分隔
+```
+
+`operator()` 必须是成员函数——这是语言规定。如果你的类需要支持 `f(args...)` 这种调用语法——这就是唯一的实现方式。
+
+## 可调用对象：函数指针、lambda 和函数对象的关系
+
+现在你学过了函数指针（C 语言基础）、lambda 表达式（上一章）、和 operator() 重载（本章）。这三者其实属于一个统一的概念——<Term def="C++ 中所有可以用调用运算符 () 使用的实体——包括函数、函数指针、lambda、重载了 operator() 的类实例、std::function 包装器等。通过模板或 std::function 可以统一处理所有可调用对象。">可调用对象（Callable）</Term>：
+
+<CallableConceptDiagram />
+
+看上面这张图——lambda 的本质就是编译器自动给你生成的函数对象（重载了 `operator()` 的匿名类）。函数指针是最基础的形式——只指向已有函数，无状态。而函数对象拥有自己的成员变量（状态），可以重复使用、可以配合标准算法做灵活的事情。
+
+三者通过 `std::function` 或模板可以统一使用——只要一个东西能用 `()` 调用，就可以传进接受可调用对象的模板参数里：
+
+```cpp
+std::function<int(int,int)> f1 = add;            // 函数指针
+std::function<int(int,int)> f2 = divide();       // 函数对象
+std::function<int(int,int)> f3 = [](int a, int b) { return a % b; };  // lambda
+
+// 三者都能以相同方式使用：
+std::cout << f1(4, 2) << '\n';  // 6
+```
+
+## 类型转换运算符：让你的类可以"变成" int、double、bool
+
+前面学转换构造函数时你学过"内置类型 → 类类型"的隐式转换——那么反过来呢？类类型能不能自动转成内置类型？答案是需要 <Term def="在类内部定义的、将类类型转换为其他类型的特殊成员函数。形如 operator int() const 或 operator double() const。定义后类对象可以隐式转换为目标类型——但注意不要滥用（意外转换可能导致诡异的 bug）。C++11 引入了 explicit operator bool() 防止意外转 int。">类型转换运算符（conversion operator）</Term>：
+
+```cpp
+class SmallInt {
+public:
+    SmallInt(int i = 0) : val(i) {  // 转换构造：int → SmallInt
+        if (i < 0 || i > 255) throw std::out_of_range("Bad SmallInt");
+    }
+    operator int() const { return val; }  // 类型转换：SmallInt → int
+
+private:
+    std::size_t val;
+};
+
+SmallInt si(3);
+int i = si + 4;  // si 隐式转换为 int → 3+4=7。省略了写 int(si)+4
+```
+
+但这太危险了——你定义了 `operator int()` 后，任何需要 `int` 的地方 `SmallInt` 都会隐式转——这可能不是你想要的行为。更安全的做法是 C++11 的 <Term def="用 explicit 关键字修饰的类型转换运算符。explicit operator bool() 定义的转换不会自动发生——必须显式写 static_cast<bool>(obj) 或用在条件（if/while/for/?:/!）等「被当作布尔值的语境」（此时 explicit 转换仍隐式发生）。防止类的对象被意外隐式转为 int。">explicit 类型转换运算符（explicit conversion operator）</Term>——特别是 `explicit operator bool()`：
+
+```cpp
+class SmallInt {
+public:
+    explicit operator int() const { return val; }   // 只能显式转换
+    explicit operator bool() const { return val != 0; }
+};
+
+SmallInt si(3);
+// int x = si + 4;        // ✗ 编译错误——explicit 不允许隐式
+int x = static_cast<int>(si) + 4;  // ✓ 显式转换 OK
+if (si) { /* ... */ }              // ✓ explicit bool 在条件中仍可用！
+```
+
+`explicit operator bool()` 的特殊之处在于——条件判断语境（`if`、`while`、`for`、`?:`、`!`、`&&`、`||`）中它仍然隐式生效。这条规则让 `if (obj)` 和 `while (obj)` 等常见写法能自然工作，同时阻止 `int x = obj + 5;` 这种离谱的隐式转换。
+
+<TypeConversionOperatorDiagram />
+
+上图总结了三条转换路径。核心决策：转换构造函数加不加 `explicit`？类型转换运算符返回什么类型、加不加 `explicit`？原则是**宁愿写 `explicit` 也不要放任隐式转换制造隐藏 bug**——编译期的 "no" 比运行期的诡异行为好一万遍。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为 Stepper——OperatorChainDiagram 三步演示链式调用的 return *this 机制。
+   猜一猜引导；每步必须带 SVG 可视化。 */}
+
+## 动手：一步步看 return *this 如何让链式调用跑起来
+
+下面用一个 Stepper 演示链式调用的核心机制——每一步 `operator=` 或 `operator<<` 或 `operator+=` 都返回 `*this`，使得上一步的结果恰好就是下一步需要的类型。每条链式语句都配一张 OperatorChainDiagram 帮你把抽象规则翻译成可视化的步骤。
+
+> 猜一猜：`a = b = c;` 和 `cout << a << b;` 为什么能串联？如果把 `operator=` 的返回类型改成 `void`——会发生什么？用 Stepper 逐步验证你的猜想。
+
+<Stepper>
+  <Step title="① 链式赋值：a = b = c">
+
+    <OperatorChainDiagram step={1} />
+
+    `a = b = c` 先执行 `b = c`：`operator=(c)` 被执行——拷贝 `c` 的数据到 `b`，然后 `return *this` 返回 `b` 自身的引用。这个返回值成为下一步的右操作数——`a = (b的引用)`，调用 `a.operator=(b的引用)`。两步都返回 `*this`，所以链可以无限延伸。
+  </Step>
+  <Step title="② 链式输出：cout << a << b">
+
+    <OperatorChainDiagram step={2} />
+
+    `cout << a` 调用 `operator<<(cout, a)`——这是一个非成员函数，左参数是 `ostream&`、右参数是你的类。函数把 `a` 的内容写入流，然后 `return os` 返回这个 `ostream&` 引用。下一步 `(ostream的引用) << b` 再次调用同一个函数。如果返回类型是 `void`——第一条输出就断了，后面接不了 `<< b`。
+  </Step>
+  <Step title="③ 链式复合赋值：a += b += c">
+
+    <OperatorChainDiagram step={3} />
+
+    `a += b += c` 先执行 `b += c`：`b.operator+=(c)` 更新 `b` 的值、返回 `*this`。然后 `a += (b的引用)` 执行 `a.operator+=(b)`——此时 `b` 已经是 `b+c` 的结果了。每一步返回引用保证链式运算语义正确——如果 `+=` 返回 `void`，编译器会报 `no match for operator+=` 而不是默默地做错误的事。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  每张图展示的"返回 *this"是运算符重载最常见的模式——目标不是返回一个新对象，而是返回调用运算符的这个对象本身。理解了它，你就理解了赋值、复合赋值、递增、递减、函数调用的返回值设计——它们全都在不同程度上复用了这个模式。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说。 */}
+
+## 代码逐段拆解：完整运算符重载示例
+
+以下是覆盖本章主要运算符的一套完整实现——输入输出、算术、复合赋值、关系、下标、递增递减、函数调用、类型转换——每段有独立的设计决策解说。
+
+### 类定义骨架 + 输入输出运算符
+
+```cpp
+#include <iostream>
+#include <string>
+
+class SalesData {
+    friend std::ostream& operator<<(std::ostream&, const SalesData&);
+    friend std::istream& operator>>(std::istream&, SalesData&);
+    friend SalesData operator+(const SalesData&, const SalesData&);
+    friend bool operator==(const SalesData&, const SalesData&);
+    friend bool operator<(const SalesData&, const SalesData&);
+
+public:
+    SalesData(const std::string &s, unsigned n, double p)
+        : bookNo(s), unitsSold(n), revenue(p * n) {}
+    SalesData() = default;
+```
+
+输入输出运算符被声明为友元——它们需要访问私有成员 `bookNo`、`unitsSold`、`revenue`，但不是类的成员（左操作数是 `ostream`/`istream`，不是 `SalesData`）。算术和关系运算符同样声明为友元——同样是非成员，需要访问内部状态。注意构造函数——不是 `explicit`、允许隐式转换（可接受 `string` 参数构造）。
+
+### 算术 + 复合赋值
+
+```cpp
+    // 复合赋值：成员——返回 *this 支持链式
+    SalesData& operator+=(const SalesData &rhs) {
+        unitsSold += rhs.unitsSold;
+        revenue += rhs.revenue;
+        return *this;
+    }
+};
+
+// 算术：非成员——借助 += 实现
+SalesData operator+(const SalesData &lhs, const SalesData &rhs) {
+    SalesData sum = lhs;   // 拷贝左参数——不让 operator+ 修改 lhs
+    sum += rhs;            // 委托给成员 +=
+    return sum;            // 返回值——新对象，不能返回引用
+}
+```
+
+`+=` 是成员、返回 `*this&`。`+` 是非成员——委托给 `+=` 实现、返回新对象（值）。`const SalesData&` 参数保证不修改源数据。为什么 `+` 不返回引用？因为 `sum` 是局部变量——函数结束就销毁了、返回引用就是 dangling reference。
+
+### 关系运算符
+
+```cpp
+bool operator==(const SalesData &lhs, const SalesData &rhs) {
+    return lhs.bookNo == rhs.bookNo
+        && lhs.unitsSold == rhs.unitsSold
+        && lhs.revenue == rhs.revenue;
+}
+
+bool operator!=(const SalesData &lhs, const SalesData &rhs) {
+    return !(lhs == rhs);    // != 委托给 ==——永远不复制比较逻辑
+}
+
+bool operator<(const SalesData &lhs, const SalesData &rhs) {
+    return lhs.bookNo < rhs.bookNo;  // 按 ISBN 字典序比较
+}
+```
+
+`!=` 严格委托给 `==`——这是铁律：一处逻辑，不要在两处重复，保证 `a != b` 的语义总是和 `!(a == b)` 一致。
+
+### 下标运算符 + 输入运算符
+
+```cpp
+// 假设 SalesData 内部有一个 chars 数组成员用于下标访问
+class SalesData {
+public:
+    // 下标：成员（必须）
+    char& operator[](std::size_t n) { return chars[n]; }
+    const char& operator[](std::size_t n) const { return chars[n]; }
+    // ...
+};
+
+// 输入：非成员
+std::istream& operator>>(std::istream &is, SalesData &item) {
+    double price = 0;
+    is >> item.bookNo >> item.unitsSold >> price;
+    if (is)
+        item.revenue = item.unitsSold * price;
+    else
+        item = SalesData();    // 输入失败——重置到默认状态
+    return is;
+}
+```
+
+下标必须是一对——常量和非常量版本。常量对象只能调常量版本、返回 `const char&` 不可修改。输入运算符在失败时将对象重置——防止外部拿到一个半坏的对象继续使用。
+
+### 递增递减 + 函数调用运算符
+
+```cpp
+class StrBlobPtr {
+public:
+    // 前缀 ++
+    StrBlobPtr& operator++() { check(curr, "increment"); ++curr; return *this; }
+    // 后缀 ++（int 形参仅用于区分）
+    StrBlobPtr operator++(int) {
+        StrBlobPtr ret = *this; ++*this; return ret;
+    }
+    // 解引用
+    std::string& operator*() const { check(curr, "dereference"); return (*wptr.lock())[curr]; }
+};
+
+// 函数对象：有状态的 operator()
+class PrintString {
+public:
+    PrintString(std::ostream &o = std::cout, char c = ' ') : os(o), sep(c) {}
+    void operator()(const std::string &s) const { os << s << sep; }
+private:
+    std::ostream &os;
+    char sep;
+};
+```
+
+后缀 `++` 返回**值**（副本）——保存当前状态、自增、返回旧值。前缀 `++` 返回**引用**（`*this`）——直接自增并返回自己、零拷贝开销。函数对象 `PrintString` 的状态（`os` 和 `sep`）在构造时设定——此后每次调用无需重复指定参数。
+
+### 类型转换运算符
+
+```cpp
+class SmallInt {
+public:
+    SmallInt(int i = 0) : val(i) {
+        if (i < 0 || i > 255) throw std::out_of_range("Bad SmallInt");
+    }
+    explicit operator int() const { return val; }   // 必须显式转
+    explicit operator bool() const { return val != 0; }
+private:
+    std::size_t val;
+};
+```
+
+`operator int()` 加了 `explicit`——防止 `SmallInt` 在需要 `int` 的任何地方被自动转换。`operator bool()` 也加了 `explicit`——保证条件判断（`if(si)`）正常、但算术（`si + 5`）必须显式转 `int`。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 写了 `operator+` 作为成员函数后，发现 `a + 1` 能编译但 `1 + a` 报错——"no match for operator+"。
+  **原因** → 成员函数形式的运算符重载左操作数是隐式参数 `this`——必须是该类类型。`1 + a` 的左操作数是 `int`（非类类型），没有任何隐式转换适用于左操作数——所以找不到匹配的重载。
+  **修法** → 算术和关系运算符用非成员函数——两侧操作数都是函数参数、都可参与隐式转换。通常借助对应的复合赋值成员（如 `+=`）实现。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `cout << a << b` 能输出但输出顺序乱、或者只输出 `a` 就断了。看了代码发现写成了 `cout << a; cout << b;` 或者 `operator<<` 返回 `void`。
+  **原因** → 链式调用 `cout << a << b` 的等价形式是 `operator<<(operator<<(cout, a), b)`——第一次调用必须返回一个 `ostream&` 才能接第二次调用。返回 `void` 就断了。
+  **修法** → 输出和输入运算符必须返回 `std::ostream&` 和 `std::istream&`——几乎一定是第一个参数的原样返回。同理赋值、复合赋值、递增递减返回 `*this` 引用。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 定义了 `operator bool()`，然后在需要 `int` 的地方编译器自动把类对象转了 `bool` 又转了 `int`——"用户报告说 `si << 2` 的输出是 1 而不是期望的左移——因为 `si` 先转了 `bool(true)` 再转了 `int(1)`！"
+  **原因** → 非 explicit 的类型转换运算符会导致**意外的隐式转换链**——编译器在找不到直接匹配时，可能会用类型转换运算符把对象转到某个中间类型、再转成目标类型。这种隐式转换链极易产生离奇的 bug。
+  **修法** → 类型转换运算符**一律加 `explicit`**——特别是 `explicit operator bool()`。`explicit bool` 在条件判断（if/while/for/?:）中仍自动生效，所以不破坏 `if(obj)` 的自然写法、又防止算术和位运算中的意外转换。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 用 `const` 对象调用 `operator[]` 时报编译错误——"passing const X as this discards qualifiers"。
+  **原因** → 只定义了 `char& operator[](size_t)`（非常量版本）而没有定义 `const char& operator[](size_t) const`。const 对象只能调用 const 成员函数——找不到匹配就等于禁止下标访问。
+  **修法** → 下标运算符**永远成对出现**——非常量版本返回普通引用（可读可写）、常量版本返回 const 引用（只读）。容器类的下标访问是基本语义，不允许 const 对象不能用下标。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- 运算符重载只是语法糖——`a+b` 背后是 `operator+(a,b)` 或 `a.operator+(b)` 的普通函数调用。记住铁律：`=`/`[]`/`()`/`->` 必须是成员，`<<`/`>>` 必须非成员，算术/关系推荐非成员
+- `return *this` 模式是赋值/复合赋值/递增递减/函数调用的灵魂——每一步返回自身引用让链式调用成立。如果是产生新结果的运算符（`+`、`-`、后缀`++`）就返回值而不是引用
+- 类型转换运算符让类对象可以"变成"内置类型——但始终加 `explicit` 防止隐式链式转换的诡异 bug。`explicit operator bool()` 在条件判断中仍然有效
+- 函数对象（重载 `operator()` 的类）有状态、可复用——lambda 是编译器的语法糖，本质就是生成这样的匿名函数对象
+- 输入输出、算术、复合赋值、关系形成"组合拳"——`+=` 先实现 → `+` 委托给它 → `==`先实现 → `!=` 委托给它。一处逻辑不重复
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的 `Complex` 类定义了加法和乘法的重载——找出至少三个设计问题，写出修正后的完整版本（只修运算符相关部分）。
+
+```cpp
+class Complex {
+public:
+    Complex(double r = 0, double i = 0) : real(r), imag(i) {}
+
+    // 问题：成员函数形式
+    Complex operator+(const Complex &rhs) {
+        return Complex(real + rhs.real, imag + rhs.imag);
+    }
+    Complex operator*(const Complex &rhs) {
+        return Complex(real*rhs.real - imag*rhs.imag,
+                       real*rhs.imag + imag*rhs.real);
+    }
+    // 没有 += 和 *=
+
+private:
+    double real, imag;
+};
+```
+
+<Answer>
+
+三个问题：① `operator+` 和 `operator*` 写成成员——应改为非成员以支持双侧隐式转换。② 缺少 `operator+=` 和 `operator*=`——复合赋值成员应先实现，算术非成员委托给它。③ 算术运算符的参数和返回都可加 `const`（非成员无 `this`）。修正版：
+
+```cpp
+class Complex {
+public:
+    Complex(double r = 0, double i = 0) : real(r), imag(i) {}
+
+    Complex& operator+=(const Complex &rhs) {
+        real += rhs.real;
+        imag += rhs.imag;
+        return *this;
+    }
+    Complex& operator*=(const Complex &rhs) {
+        double r = real * rhs.real - imag * rhs.imag;
+        imag = real * rhs.imag + imag * rhs.real;
+        real = r;
+        return *this;
+    }
+
+private:
+    double real, imag;
+};
+
+// 非成员：委托给 +=
+Complex operator+(const Complex &lhs, const Complex &rhs) {
+    Complex sum = lhs;
+    sum += rhs;
+    return sum;
+}
+Complex operator*(const Complex &lhs, const Complex &rhs) {
+    Complex prod = lhs;
+    prod *= rhs;
+    return prod;
+}
+```
+
+</Answer>
+
+**练习 2（独立实现题）** 设计并实现一个 `Counter` 类：
+- 内部用 `int value` 计数值，初始为 0
+- 提供 `++` 前缀（`Counter&`）和后缀（`Counter`）
+- 提供 `operator()(int delta)`——函数调用运算符，把 value 加上 delta，返回 `*this` 引用（支持 `counter(1)(2)(3)` 链式递增）
+- 提供 `explicit operator int() const` 和 `explicit operator bool() const`（value > 0 为 true）
+- 在 main 中测试：创建 `Counter c;` 执行 `++c; c(5);` 然后用 `static_cast<int>(c)` 验证 value 是 6
+
+<Answer>
+
+```cpp
+#include <iostream>
+
+class Counter {
+public:
+    Counter(int v = 0) : value(v) {}
+
+    // 前缀 ++
+    Counter& operator++() { ++value; return *this; }
+    // 后缀 ++
+    Counter operator++(int) { Counter ret = *this; ++value; return ret; }
+
+    // 函数调用：链式递增
+    Counter& operator()(int delta) { value += delta; return *this; }
+
+    // explicit 类型转换
+    explicit operator int() const { return value; }
+    explicit operator bool() const { return value > 0; }
+
+private:
+    int value;
+};
+
+int main() {
+    Counter c;
+    ++c;          // value = 1
+    c(5);         // value = 6
+    std::cout << static_cast<int>(c) << '\n';  // 6
+    if (c) std::cout << "c > 0\n";             // 输出此行
+    return 0;
+}
+```
+
+设计要点：① `operator()(int delta)` 返回 `Counter&`（`*this`）支持链式 `c(1)(2)(3)` 一次性加 6 ② `operator int()` 和 `operator bool()` 都加 `explicit`——`if(c)` 自然工作、`int x = c` 必须显式写 `static_cast` ③ 前缀 `++` 返回 `Counter&` 不拷贝、后缀返回 `Counter` 多一次拷贝。
+
+</Answer>
+
+**练习 3（问答型）** `StringBlobPtr` 类需要支持 `++p`、`p++`、`*p`、`p[n]` 这四种操作。`++p` 和 `p++` 的区别对 `*p` 和 `p[n]` 有什么要求？这四个运算符函数中哪些返回引用、哪些返回值？为什么？
+
+<Answer>
+
+1. **`++p`（前缀）**：返回 `StringBlobPtr&`（*this 引用）——零拷贝、支持 `++(++p)` 的链式递增（虽然不推荐但语义合法）。
+2. **`p++`（后缀）**：返回 `StringBlobPtr`（值，旧状态的副本）——先保存当前状态、再自增、再返回旧值的**副本**。不能返回引用因为旧状态是局部变量。
+3. **`*p`（解引用）**：返回 `string&`（引用）——解引用就是要看/改内部的 string 数据，返回引用允许 `*p = "new"` 这种赋值。
+4. **`p[n]`（下标）**：通常返回 `string&`（引用）——虽然对指针/迭代器来说不太常用（`p + n` 后解引用即可），但如果实现它，语义等同于用 `*p` 访问第 n 个位置的元素——同样可读可写、返回引用。
+
+核心规律：**产生新结果（算术、后缀++）返回值，修改自身并期待链式连接（赋值、复合赋值、前缀++、函数调用）返回 *this 引用，访问内部数据（解引用、下标）返回引用。**</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（10 个，按首现顺序）；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="运算符重载（operator overloading）">
+  C++ 中让自定义类型也能使用 `+` `==` `<<` `[]` 等内置运算符的机制。本质是定义一个叫 `operatorX` 的函数——`a + b` 等价于调用 `a.operator+(b)`（成员）或 `operator+(a,b)`（非成员）。让类用起来像内置类型一样自然。不是创造新运算符——是给已有运算符赋予新的参数类型。
+</GlossaryItem>
+
+<GlossaryItem term="成员运算符函数（member operator）">
+  定义在类内部的运算符重载——左操作数是隐式 `this` 指针指向的对象。形参比操作数少一个（右操作数是唯一显式参数）。`=`、`[]`、`()`、`->` 必须是成员函数——语言强制要求。算术/关系也可用成员——但不支持左操作数的隐式转换。
+</GlossaryItem>
+
+<GlossaryItem term="非成员运算符函数（non-member operator）">
+  定义在类外部的运算符重载——两个操作数都以函数参数传入。两侧都可享受隐式类型转换——这是推荐用于算术/关系运算符的核心原因。`<<` `>>` 必须是非成员——左操作数是 `ostream`/`istream`（标准库类，你不可能给它加成员函数）。
+</GlossaryItem>
+
+<GlossaryItem term="友元（friend）">
+  用 `friend` 关键字在类内声明的外部函数或类——它不是类的成员，但可以访问类的 `private` 和 `protected` 成员。常用于运算符重载中需要访问私有成员的非成员函数（如 `operator<<`）。打破了封装性——仅在确实需要且不能通过公有接口访问时才使用。
+</GlossaryItem>
+
+<GlossaryItem term="return *this 模式">
+  返回调用对象的自身引用（`*this`）的重载模式。赋值、复合赋值、前缀递增递减、函数调用运算符都返回 `*this&`——使链式调用成为可能（`a=b=c`、`a+=b+=c`、`++(++p)`）。是运算符重载中最常见的返回值设计。
+</GlossaryItem>
+
+<GlossaryItem term="初始化列表赋值（initializer_list assignment）">
+  C++11 引入的赋值运算符重载——形如 `ClassName& operator=(initializer_list<T> il)`。让对象可直接从花括号列表重新赋值——如 `vec = {a, b, c}`。本质仍是赋值（已有对象被覆盖），不是构造（新对象才走构造）。
+</GlossaryItem>
+
+<GlossaryItem term="下标运算符（subscript operator）">
+  用 `operator[]` 让对象支持方括号索引语法 `obj[i]`。必须是成员函数——语言规定。通常提供一对：非常量版返回 `Elem&`（可读写）、常量版返回 `const Elem&`（只读）。返回引用（不是值）——因为通常期望能通过索引赋值（`v[0] = x`）。
+</GlossaryItem>
+
+<GlossaryItem term="前缀与后缀的区别">
+  递增递减运算符的两种形式。前缀（`++p`）先自增再返回自增后的自身引用——零拷贝、高效。后缀（`p++`）先保存旧值副本、再自增、返回旧值副本——多一次拷贝开销。后缀的 `int` 形参纯粹用来区分前缀——编译器自动传 `0`，实际不使用。能用前缀就不要用后缀——除非确实需要旧值。
+</GlossaryItem>
+
+<GlossaryItem term="函数对象（function object / functor）">
+  重载了 `operator()` 的类的实例——可以像函数一样被调用（`obj(args)`）。和普通函数的区别：函数对象可以拥有**状态**（成员变量）——构造时设定参数、调用时无需重复传递。lambda 本质就是编译器自动生成的匿名函数对象。配合标准算法（`for_each` 等）灵活使用。
+</GlossaryItem>
+
+<GlossaryItem term="可调用对象（Callable）">
+  C++ 中所有可以用 `()` 调用的实体——包括普通函数、函数指针、lambda 表达式、重载了 `operator()` 的类实例、`std::function` 包装器等。通过模板或 `std::function` 可以统一处理——只要满足「能像函数一样调用」，就算是可调用对象。
+</GlossaryItem>
+
+<GlossaryItem term="类型转换运算符（conversion operator）">
+  类内定义的将类类型转换为其他类型的特殊函数——形如 `operator int() const`、`operator bool() const`。没有返回类型（目标类型就是函数名）。定义后类对象可隐式转换为目标类型——危险在于可能产生意外的隐式转换链。一律加 `explicit` 可防。`explicit operator bool()` 在条件判断（if/while/for/?:）中仍隐式生效。
+</GlossaryItem>
+
+<GlossaryItem term="explicit 类型转换运算符（explicit conversion operator）">
+  C++11 引入的显式类型转换——`explicit operator int() const`。阻止在算术、赋值等语境中的意外隐式转换。需要转换时必须显式写 `static_cast<int>(obj)`。特殊的 `explicit operator bool()` 在条件判断中仍然可以隐式使用——保留了 `if (obj)` 的自然写法。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §14 改编重写，sourceUrl 自动注入。 */}
+
+<Attribution />

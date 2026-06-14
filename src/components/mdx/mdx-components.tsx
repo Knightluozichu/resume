@@ -97,6 +97,10 @@ import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram
 import { ParameterPassingDiagram } from "./diagrams/parameter-passing-diagram";
 import { ArrayParameterDiagram } from "./diagrams/array-parameter-diagram";
 import { OverloadResolutionDiagram } from "./diagrams/overload-resolution-diagram";
+import { OperatorOverloadTable } from "./diagrams/operator-overload-table";
+import { OperatorChainDiagram } from "./diagrams/operator-chain-diagram";
+import { TypeConversionOperatorDiagram } from "./diagrams/type-conversion-operator-diagram";
+import { CallableConceptDiagram } from "./diagrams/callable-concept-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -452,6 +456,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ParameterPassingDiagram,
   ArrayParameterDiagram,
   OverloadResolutionDiagram,
+  OperatorOverloadTable,
+  OperatorChainDiagram,
+  TypeConversionOperatorDiagram,
+  CallableConceptDiagram,
   AccessControlDiagram,
   IOClassHierarchyDiagram,
   FileStreamLifecycleDiagram,

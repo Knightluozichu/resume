@@ -57,6 +57,7 @@ import { cppGenericAlgorithmsQuestions } from "./review/cpp-generic-algorithms";
 import { cppAssociativeContainersQuestions } from "./review/cpp-associative-containers";
 import { cppDynamicMemoryQuestions } from "./review/cpp-dynamic-memory";
 import { cppCopyControlQuestions } from "./review/cpp-copy-control";
+import { cppOverloadedOperationsQuestions } from "./review/cpp-overloaded-operations";
 
 export {
   CHAPTER_TITLES,
@@ -110,6 +111,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppAssociativeContainersQuestions,
   ...cppDynamicMemoryQuestions,
   ...cppCopyControlQuestions,
+  ...cppOverloadedOperationsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
