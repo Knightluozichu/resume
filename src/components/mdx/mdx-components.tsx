@@ -70,6 +70,8 @@ import { MsaaSampleDiagram } from "./diagrams/msaa-sample-diagram";
 import { SsaaVsMsaaDiagram } from "./diagrams/ssaa-vs-msaa-diagram";
 import { PhongBlinnHighlightDiagram } from "./diagrams/phong-blinn-highlight-diagram";
 import { HalfVectorDiagram } from "./diagrams/half-vector-diagram";
+import { GammaCurveDiagram } from "./diagrams/gamma-curve-diagram";
+import { GammaGradientBarDiagram } from "./diagrams/gamma-gradient-bar-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -221,6 +223,12 @@ import { InstancingDemo } from "./instancing-demo";
  *    blinn 用 N·H 全程圆润曲线平滑滑到 0·无硬边，同坐标轴/表面/光视方位同框，供 CompareSlider 两侧分别传）、
  *    HalfVectorDiagram（左 Phong 先求 L 关于 N 的反射 R 再看 R·V vs 右 Blinn 把 L、V 相加归一化得半程向量
  *    H=normalize(L+V) 落在 L、V 正中间·改看 N·H，点明 H 总在 L、V 间故 N·H 夹角永不越界=平滑根）。同款 Server SVG。
+ *  - 高级光照篇·Gamma 校正（HEL-81，A 概念型 + math:true）：GammaCurveDiagram（同坐标系画三条幂曲线：
+ *    y=x 线性基准虚线 / y=x^2.2 显示器非线性响应=sRGB 编码曲线·压暗中间调(0.5→约0.22) / y=x^(1/2.2)
+ *    gamma 校正曲线·提亮中间调(0.5→约0.73)，后两条互为反函数串起来=线性对角线，点明「校正抵消显示器压暗」，
+ *    本章核心概念图）、GammaGradientBarDiagram（corrected=false/true + bare：黑到白渐变条，未校正 线性值
+ *    直接显示·中段被显示器压暗偏黑·过渡挤亮端 vs 已校正 pow(c,1/2.2) 提亮中段·过渡均匀，同框供 CompareSlider
+ *    两侧分别传）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -375,6 +383,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SsaaVsMsaaDiagram,
   PhongBlinnHighlightDiagram,
   HalfVectorDiagram,
+  GammaCurveDiagram,
+  GammaGradientBarDiagram,
   Stepper,
   Step,
   Slider,
