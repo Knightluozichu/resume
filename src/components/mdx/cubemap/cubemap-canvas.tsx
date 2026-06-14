@@ -241,6 +241,13 @@ function Scene({
     onControls(invalidate);
   }, [invalidate, onControls]);
 
+  // 挂载即踢一帧（demand 模式首帧保证）：rAF 包一层，确保在 R3F 完成尺寸测量之后再 invalidate；
+  // mode / envMap 变化时同样 rAF 后重绘一帧。
+  useEffect(() => {
+    const id = requestAnimationFrame(() => invalidate());
+    return () => cancelAnimationFrame(id);
+  }, [invalidate, mode, envMap]);
+
   return (
     <>
       <ambientLight intensity={0.7} />
@@ -298,7 +305,8 @@ export default function CubemapCanvas({
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) invalidateRef.current?.();
+        if (entry.isIntersecting)
+          requestAnimationFrame(() => invalidateRef.current?.());
       },
       { threshold: 0.01 },
     );
@@ -338,8 +346,9 @@ export default function CubemapCanvas({
           gl={{ antialias: true }}
           camera={{ position: [0, 0.6, 4.5], fov: 45 }}
           style={{ height, width: "100%", display: "block" }}
-          onCreated={({ gl }) => {
-            gl.setClearColor(new Color("#0a0a0f"), 1);
+          onCreated={(state) => {
+            state.gl.setClearColor(new Color("#0a0a0f"), 1);
+            state.invalidate();
           }}
         >
           <Scene mode={mode} envMap={envMap} onControls={onControls} />
