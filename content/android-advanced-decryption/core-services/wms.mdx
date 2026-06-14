@@ -1,0 +1,119 @@
+---
+title: 理解 WindowManagerService
+type: A
+section: 核心服务
+order: 8
+description: 深入 WMS 的内部机制——窗口的添加、Z-Order 层级管理、输入事件分发和窗口动画。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第8章改编）：讲清 WMS 窗口管理、Z-Order 层级、输入分发。 */}
+
+<Objectives>
+
+- 能解释 WMS 如何管理屏幕上的窗口层级——Z-Order 和窗口类型的关系
+- 能画出触摸事件从硬件到 Activity.onTouchEvent 的完整分发链路
+- 能回答：为什么全屏 Activity 上弹一个 Toast，Toast 的触摸会穿透到下面的 Activity？
+
+</Objectives>
+
+## WMS——屏幕窗口的"总调度"
+
+WMS（WindowManagerService）跟 AMS 一样跑在 system_server 进程里。如果说 AMS 管的是"逻辑世界"——Activity 的生命周期和任务栈，那 WMS 管的就是"物理世界"——屏幕上每个窗口的大小、位置、层级、谁在上面谁在下面。
+
+WMS 的三大职责：
+1. **窗口管理**：添加/删除/更新窗口，维护窗口层级（Z-Order）
+2. **输入事件分发**：从 InputManagerService 拿到触摸事件，决定发给哪个窗口
+3. **窗口动画**：Activity 切换动画、Toast 出现消失动画
+
+## 窗口层级：Z-Order
+
+屏幕上所有窗口不是平铺的——它们有上下关系。WMS 用一个"Z-Order"值来维护每个窗口的层级。Z-Order 越大越在上面。
+
+**窗口类型决定基础层级**（回顾：应用窗口 1-99 < 子窗口 1000-1999 < 系统窗口 2000-2999）。但同一类型内的多个窗口（比如一个 App 的 Activity 和它弹的 Dialog），WMS 通过添加顺序和父子关系来排先后：Dialog 作为 Activity 窗口的子窗口，一定在 Activity 上面。
+
+<Callout type="tip">
+  Toast 的窗口类型是 TYPE_TOAST（系统窗口级），所以 Toast 可以显示在任何 App 窗口之上——即使不是这个 App 弹出的。
+</Callout>
+
+## 输入事件分发链路
+
+触摸事件从硬件到最终触达 Activity 的 `onTouchEvent`，经历了漫长的传递链：
+
+```
+硬件触摸屏 → Linux 内核驱动 → EventHub → InputReader → InputDispatcher
+→ system_server 里的 InputManagerService → WMS 查找目标窗口
+→ 通过 Socket 发送到目标 App 进程 → ViewRootImpl
+→ 投递到主线程消息队列 → DecorView.dispatchTouchEvent → Activity.dispatchTouchEvent
+→ View 树的 dispatchTouchEvent → onTouchEvent
+```
+
+关键节点：WMS 负责根据触摸坐标和窗口 Z-Order 判断"应该发给哪个窗口"——坐标落在哪个窗口范围内、且这个窗口是可见且不透明的。
+
+Toast 为什么不消费触摸？因为 Toast 的 Window 设置了 `FLAG_NOT_TOUCHABLE`——WMS 看到这个 flag 后就跳过它，让触摸穿透到下面的窗口。这就是为什么 Toast 浮在最上面但你还能操作下面的界面。
+
+## WMS 的内部数据结构
+
+WMS 内部维护几个关键集合：
+
+- **mWindowMap**（HashMap<IBinder, WindowState>）：以 Binder token 为键，存储所有窗口。App 端的每个 ViewRootImpl 对应一个唯一 Binder token
+- **WindowState**：一个窗口的完整状态——大小、位置、Z-Order、可见性、关联的 Surface、触摸模式
+- **mPolicy（PhoneWindowManager）**：窗口策略——决定 Home 键、Back 键、电源键等物理按键的行为
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在一个全屏 Activity 上突然弹了一个 Dialog，点击 Dialog 外部时 Dialog 消失——但你发现 Dialog 弹出来时下面的 Activity 暂停了动画。**原因**：Dialog 弹出来时，Activity 的 Window 可能因焦点丢失而暂停某些渲染。**修法**：理解焦点切换——Dialog 出现后 Activity 进入 onPause（如果 Dialog 是全屏主题）或保持 onResume（默认 Dialog 主题）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：使用系统级别的 Window Type 添加浮窗，被 Android 10+ 的系统弹窗权限拦截。**原因**：Android 10 限制了后台 App 启动系统级窗口——需要 SYSTEM_ALERT_WINDOW 权限且在设置里手动开启。**修法**：检查 Settings.canDrawOverlays()，引导用户去设置里授权。
+</Callout>
+
+## 小结
+
+- WMS 管"物理世界"：窗口大小/位置/Z-Order/可见性；AMS 管"逻辑世界"：Activity 生命周期/任务栈
+- Z-Order 决定窗口上下层级——窗口类型决定基础层，同一类型内按添加顺序
+- 触摸事件链路：硬件→InputReader→InputDispatcher→WMS找目标→App进程→ViewRootImpl→View树
+- Toast 设置 FLAG_NOT_TOUCHABLE 让触摸穿透——所以你能操作 Toast 下面的界面
+
+<Exercises>
+
+**练习 1（问答型）** 触摸事件从手指碰到屏幕到 Activity.onTouchEvent，中间经过哪些关键节点？
+
+<Answer>
+硬件→内核驱动→EventHub→InputReader→InputDispatcher→InputManagerService→WMS查找目标窗口→Socket发送到App进程→ViewRootImpl→主线程消息队列→DecorView.dispatchTouchEvent→Activity.dispatchTouchEvent→View树dispatchTouchEvent→最终目标View.onTouchEvent。
+</Answer>
+
+**练习 2（问答型）** Toast 浮在屏幕最上面，为什么触摸它能点到下面的按钮？
+
+<Answer>
+Toast 的 Window 设置了 FLAG_NOT_TOUCHABLE。WMS 在查找触摸目标窗口时看到这个 flag 就跳过它，把事件发给下面真正的窗口。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="WMS">
+  WindowManagerService——管理屏幕所有窗口的系统服务。负责窗口的添加/删除、Z-Order 层级管理、触摸事件目标窗口查找、窗口动画。跑在 system_server 进程里。
+</GlossaryItem>
+
+<GlossaryItem term="Z-Order">
+  窗口上下层级的数值表示。值越大越在上层。由窗口类型（应用/子/系统窗口）和添加顺序共同决定。
+</GlossaryItem>
+
+<GlossaryItem term="WindowState">
+  WMS 内部的一个窗口的完整状态记录——包含大小、位置、Z-Order、Surface 引用、输入特性（触摸/焦点）。
+</GlossaryItem>
+
+<GlossaryItem term="InputManagerService">
+  输入管理服务——负责从内核读取原始输入事件（触摸/按键），经由 InputReader 解析、InputDispatcher 分发到目标窗口。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

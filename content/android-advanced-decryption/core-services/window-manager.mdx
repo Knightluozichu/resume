@@ -1,0 +1,134 @@
+---
+title: 理解 WindowManager
+type: A
+section: 核心服务
+order: 7
+description: 理解 Window、WindowManager、ViewRootImpl 三者的关系——从 addView 到界面上屏的完整链路。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第7章改编）：讲清 WindowManager 和 ViewRootImpl 如何把 View 显示到屏幕上。 */}
+
+<Objectives>
+
+- 能解释 Window、WindowManager、ViewRootImpl 三者的关系——各自负责什么
+- 能画出 addView 到 View 上屏的完整流程：WindowManager → WMS → ViewRootImpl → 绘制
+- 能回答：为什么 Dialog 关闭后 Activity 的触摸事件才恢复？
+
+</Objectives>
+
+## 屏幕上的"窗口"到底是谁在管？
+
+你写的每一个布局 XML，最终都是被一个"窗口"承载着显示出来的。Activity 有一个 Window，Dialog 有一个 Window，Toast 也有一个 Window。这些 Window 的管理者就是 WindowManager。
+
+Window 本身只是一个抽象概念——它定义了窗口的样式和行为（全屏还是弹窗、能不能接收触摸）。真正把 View 画到屏幕上的，是 WindowManager 和 ViewRootImpl 的协作。
+
+## 三剑客：Window / WindowManager / ViewRootImpl
+
+| 角色 | 职责 |
+|---|---|
+| **Window** | 抽象窗口——定义窗口类型、标志位（FLAG）、样式 |
+| **WindowManager** | 窗口管理器——App 调它来添加/删除/更新 Window。它是个 Binder 客户端，代理对 WMS 的调用 |
+| **ViewRootImpl** | 真正的"绘制引擎"——管理 View 的测量/布局/绘制、处理输入事件、跟 WMS 通信 |
+
+关系图：
+
+```
+App 进程                          system_server 进程       SurfaceFlinger
+  │                                    │                       │
+  │ WindowManager.addView()            │                       │
+  │──Binder──→                         │ WMS 创建窗口记录        │
+  │                                    │ 分配 Surface           │
+  │ ←──Binder──                        │                       │
+  │                                    │                       │
+  │ ViewRootImpl.setView()             │                       │
+  │  → requestLayout()                 │                       │
+  │  → performTraversals()             │                       │
+  │    → measure → layout → draw       │                       │
+  │                                    │                       │──Surface──→ 合成上屏
+```
+
+## addView 全流程
+
+当你调用 `WindowManager.addView(decorView, params)` 时：
+
+1. **WindowManager 通过 Binder 向 WMS 请求**：创建一个新窗口，传入布局参数（位置、大小、类型）
+2. **WMS 分配 Surface**：在 system_server 侧创建窗口记录，通过 SurfaceFlinger 分配一块绘制用的 Surface（画布）
+3. **创建 ViewRootImpl**：App 进程里创建 ViewRootImpl，它持有这个 Surface
+4. **ViewRootImpl.setView()**：把 DecorView 设置到 ViewRootImpl
+5. **requestLayout() → performTraversals()**：ViewRootImpl 开始接管绘制——依次执行 measure（测量）、layout（布局）、draw（绘制）
+6. **draw 的结果通过 Surface 提交到 SurfaceFlinger**：由 SurfaceFlinger 合成所有窗口后输出到屏幕
+
+<Callout type="tip">
+  关键点：**App 进程负责"画"（View 的 measure/layout/draw），WMS 负责"管"（窗口大小/位置/层级），SurfaceFlinger 负责"合"（把多个窗口的 Surface 叠在一起输出到屏幕）**。三者分工明确。
+</Callout>
+
+## 窗口类型
+
+WindowManager.LayoutParams.type 决定了窗口的层级——谁在最上面：
+
+| 类型 | 范围 | 例子 |
+|---|---|---|
+| 应用窗口 | 1-99 | Activity 窗口 |
+| 子窗口 | 1000-1999 | Dialog、PopupWindow |
+| 系统窗口 | 2000-2999 | Toast、状态栏、输入法、音量条 |
+
+类型值越大越在上面。Dialog 的 type 是 TYPE_APPLICATION，它需要挂在 Activity 的 Window Token 下。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 Activity.onCreate() 里直接调 WindowManager.addView() 添加一个 View——但 View 不显示或大小不对。**原因**：此时 Activity 的 DecorView 还没完成 measure/layout，拿不到正确的尺寸。**修法**：在 onWindowFocusChanged 或 View.post() 回调里执行 addView。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Dialog 弹出来时点击对话框外面的区域，对话框不消失——但触摸事件被 Dialog 挡住了，下面的 Activity 也无法操作。**原因**：Dialog 的 Window 默认设置了 FLAG_NOT_TOUCH_MODAL（触摸只拦截在窗口范围内），但没有设置 FLAG_DIM_BEHIND。**修法**：根据需求选择 flag 组合。
+</Callout>
+
+## 小结
+
+- Window = 抽象窗口概念；WindowManager = App 端窗口管理器（Binder 客户端）；ViewRootImpl = 绘制引擎
+- addView 流程：WMS 创建窗口+分配 Surface → ViewRootImpl 接管绘制 → measure/layout/draw → SurfaceFlinger 合成上屏
+- App 画内容、WMS 管窗口、SurfaceFlinger 合到屏幕——三权分立
+- 窗口 type 决定层级——值越大越在上面
+
+<Exercises>
+
+**练习 1（画图型）** 画出 addView 到 View 上屏的完整流程，标注每一步发生在哪个进程。
+
+<Answer>
+App进程：WindowManager.addView → Binder → system_server进程：WMS创建窗口、分配Surface → Binder返回Surface → App进程：创建ViewRootImpl → setView → requestLayout → performTraversals(measure/layout/draw) → Surface提交 → SurfaceFlinger进程：合成上屏。
+</Answer>
+
+**练习 2（问答型）** Window、WindowManager、ViewRootImpl 分别是什么角色？怎么协作的？
+
+<Answer>
+Window定义窗口样式和类型；WindowManager是App端管理器（通过Binder调WMS）；ViewRootImpl负责真正的绘制（measure/layout/draw）和事件分发。三者协作：WindowManager调WMS分配Surface→ViewRootImpl绑定这个Surface→ViewRootImpl执行绘制→结果提交SurfaceFlinger上屏。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Window">
+  抽象窗口——定义窗口类型（应用窗口/系统窗口）、标志位（全屏/透明/触摸模式）、样式。不只是 Activity 有 Window，Dialog、Toast、PopupWindow 都有。
+</GlossaryItem>
+
+<GlossaryItem term="WindowManager">
+  App 进程里的窗口管理器。App 通过它向 WMS 发出添加/删除/更新窗口的请求。它是一个 Binder 客户端代理。
+</GlossaryItem>
+
+<GlossaryItem term="ViewRootImpl">
+  绘制引擎和事件中枢。管理 DecorView 的 measure/layout/draw 全流程，处理触摸事件的收集和分发（从 WMS 收到事件→分发给 View 树）。每个 Window 对应一个 ViewRootImpl。
+</GlossaryItem>
+
+<GlossaryItem term="SurfaceFlinger">
+  Android 的显示合成服务。所有窗口的绘制内容（Surface）最终汇聚到 SurfaceFlinger，由它把多个 Surface 叠在一起输出到物理屏幕。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

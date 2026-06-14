@@ -1,0 +1,143 @@
+---
+title: 理解上下文 Context
+type: A
+section: 核心服务
+order: 5
+description: 从源码角度深入理解 Context——它是什么、继承体系如何、Application/Activity/Service 的 Context 各有什么不同。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第5章改编）：讲清 Context 的继承体系与作用域。 */}
+
+<Objectives>
+
+- 能画出 Context 的继承树：Context → ContextImpl / ContextWrapper → Application / Activity / Service
+- 能说出 Application Context 和 Activity Context 的关键区别——哪些场景必须用哪个
+- 能回答：为什么 Dialog 必须用 Activity 的 Context 而不能用 Application 的？
+
+</Objectives>
+
+## 无处不在的 Context
+
+你写 Android 代码时可能每行都在用 Context：`startActivity(context, intent)`、`context.getResources()`、`context.getSharedPreferences()`……但 Context 到底是什么？简单说，Context 是 Android 应用环境的"身份证"——它代表了你当前代码**所在的执行环境**，提供访问系统服务和资源的入口。
+
+用**工厂**类比：Application 的 Context 是"整个工厂的通关证"——拿着它可以去任何车间、调用任何工厂级的服务。Activity 的 Context 是"本车间的通行证"——除了工厂级服务外还带这个车间的特有信息（比如这个车间的主题、窗口）。
+
+## Context 的继承体系
+
+```
+Context（抽象类）
+  ├── ContextImpl（真正干活的实现类）
+  └── ContextWrapper（装饰器基类——把调用转发给内部的 ContextImpl）
+        ├── Application
+        └── ContextThemeWrapper
+              └── Activity
+```
+
+关键理解：
+- **ContextImpl** 是唯一真正实现了 Context 所有方法的类——系统服务绑定、资源访问都在这里
+- **ContextWrapper** 是装饰器模式——持有 ContextImpl 的引用，把所有方法调用转发过去。它的存在是为了让 Application、Activity、Service 这些不同的"环境"在 Context 的基础上增加自己的特性
+- **Application** 继承 ContextWrapper——代表整个 App 的 Context，生命周期跟 App 一样长
+- **Activity** 继承 ContextThemeWrapper（它又继承 ContextWrapper）——多了一个**主题**的概念。Activity 的 Context 知道自己的主题是什么，Application 的 Context 不知道
+
+## Application Context vs Activity Context
+
+| 对比维度 | Application Context | Activity Context |
+|---|---|---|
+| 生命周期 | 跟 App 同长（直到进程被杀） | 跟 Activity 同长（onDestroy 后失效） |
+| 主题支持 | 无——`getTheme()` 抛异常 | 有——知道当前 Activity 的主题 |
+| 启动 Activity | 必须加 FLAG_ACTIVITY_NEW_TASK | 默认在当前任务栈启动 |
+| 显示 Dialog | **不行**——Dialog 需要 Window Token | **可以**——Activity 有 Window Token |
+| 布局填充 | LayoutInflater 用默认主题 | LayoutInflater 用 Activity 主题 |
+| 内存泄漏风险 | 不存在（跟进程同生命） | 有——静态变量持有 Activity Context 会泄漏 |
+
+<Callout type="trap">
+  **关键规则**：凡是跟 UI 相关的操作——显示 Dialog、PopupWindow、加载带主题的布局——必须用 Activity Context。凡是生命周期比单个 Activity 长的对象——单例、长期后台任务——用 Application Context 避免内存泄漏。
+</Callout>
+
+## 为什么 Dialog 必须用 Activity Context？
+
+Dialog 显示时需要"挂靠"一个 **Window Token**——它是一个窗口归属的标识。每个 Activity 在 `onResume` 后会被 WMS 分配一个 Window Token。Dialog 的 Window 必须挂在这个 Token 下面才算"属于这个 Activity"。
+
+Application Context 没有 Window Token——它不是一个窗口，WMS 不会给它分配。所以如果用 Application Context 创建 Dialog 会抛出 `BadTokenException`。
+
+## Context 的数量
+
+一个 App 的 Context 总数 = Application(1个) + Activity(若干个) + Service(若干个) + ContentProvider(初始化时的那个)。每个 Activity 和 Service 都是不同的 Context 实例——但它们底层的 ContextImpl 可能共享同一个资源管理器。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：单例类持有 Activity Context，屏幕旋转后 Activity 重建——老 Activity 已被销毁但单例还持有它的引用，导致整个 Activity 泄漏（连带它持有的所有 View 树）。**原因**：单例生命周期 = 进程，Activity Context 生命周期 = 这个 Activity 实例。**修法**：单例用 Application Context（`context.getApplicationContext()`），绝不持有 Activity Context。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 Application Context 创建 Dialog 崩溃 BadTokenException。**原因**：Application Context 没有 Window Token。**修法**：Dialog 必须用 Activity Context。
+</Callout>
+
+## 小结
+
+- Context 是 Android 执行环境的抽象——提供系统服务和资源访问的入口
+- 继承链：ContextImpl（真正干活）← ContextWrapper（装饰器）← Application / Activity
+- Application Context：生命周期 = App，无主题，无 Window Token
+- Activity Context：生命周期 = Activity，有主题，有 Window Token——UI 操作用它
+- 核心原则：UI 相关 = Activity Context；长期持有 = Application Context
+
+<Exercises>
+
+**练习 1（问答型）** 为什么 Dialog 必须用 Activity Context 而不能用 Application Context？
+
+<Answer>
+Dialog 创建需要 Window Token——这是在 WindowManager 里标识窗口归属的凭据。Activity 在 onResume 后由 WMS 分配 Window Token，Application Context 没有窗口、没有 Token。强行用 Application Context 创建 Dialog 会抛 BadTokenException。
+</Answer>
+
+**练习 2（改代码型）** 以下代码有什么问题？怎么修改？
+
+```java
+public class MyManager {
+    private static MyManager instance;
+    private Context context;
+    
+    public static MyManager getInstance(Context context) {
+        if (instance == null) {
+            instance = new MyManager(context);
+        }
+        return instance;
+    }
+    
+    private MyManager(Context context) {
+        this.context = context; // 潜在大坑
+    }
+}
+```
+
+<Answer>
+问题：传入的 context 如果是 Activity，单例持有它会导致 Activity 泄漏（屏幕旋转时老 Activity 无法被 GC）。修改：`this.context = context.getApplicationContext();`
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Context">
+  Android 应用执行环境的抽象接口。提供访问系统服务（getSystemService）、资源（getResources）、数据库（openOrCreateDatabase）等能力。Application、Activity、Service 都是 Context 的不同子类。
+</GlossaryItem>
+
+<GlossaryItem term="ContextImpl">
+  Context 抽象类的真正实现——所有系统服务调用最终都落在这里。持有 ActivityThread、LoadedApk、ResourcesManager 等内部对象。
+</GlossaryItem>
+
+<GlossaryItem term="ContextWrapper">
+  Context 的装饰器基类——持有 ContextImpl 引用，所有方法转发给 ContextImpl。Application、Activity 都通过它间接使用 ContextImpl。
+</GlossaryItem>
+
+<GlossaryItem term="Window Token">
+  窗口归属标识——由 WMS 分配，每个 Activity 的窗口都有一个 Token。Dialog 必须挂在某个 Activity 的 Token 下才能显示——所以 Dialog 必须用 Activity Context。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

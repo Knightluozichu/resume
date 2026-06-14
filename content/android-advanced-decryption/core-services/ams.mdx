@@ -1,0 +1,137 @@
+---
+title: 理解 ActivityManagerService
+type: A
+section: 核心服务
+order: 6
+description: 深入 AMS 的启动过程、核心数据结构（ProcessRecord/ActivityRecord/TaskRecord）和 Activity 栈管理机制。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第6章改编）：讲清 AMS 家族、启动过程、数据结构和栈管理。 */}
+
+<Objectives>
+
+- 能画出 AMS 家族关系图：ActivityManagerService / ActivityStackSupervisor / ActivityStack / TaskRecord / ActivityRecord
+- 能解释 ProcessRecord、ActivityRecord、TaskRecord 各自记录什么信息，之间的关联关系
+- 能回答：为什么 Android 用 Task（任务栈）而不是窗口列表来管理 Activity？
+
+</Objectives>
+
+## AMS——Android 的"大脑"
+
+AMS（ActivityManagerService）是 Android 框架层最重要、最复杂的系统服务之一。它跑在 system_server 进程里，职责包括：
+- 管理所有 Activity 的启动、跳转和生命周期
+- 管理所有 App 进程的创建和回收
+- 管理任务栈（Task）和最近任务列表
+- 处理 Intent 解析和权限检查
+- OOM 时决定杀哪个进程
+
+AMS 不是单一的一个类——它有一个"家族"，各成员分工协作。
+
+## AMS 家族关系
+
+```
+ActivityManagerService（总指挥）
+  └── ActivityStackSupervisor（栈监督员）
+        └── ActivityStack（单个栈——如 Launcher 栈 / 应用栈）
+              └── TaskRecord（一个"任务"= 一组关联的 Activity）
+                    └── ActivityRecord（一个 Activity 实例的元信息）
+```
+
+各角色的分工：
+
+- **ActivityManagerService**：总入口——所有 `startActivity()` 请求最终都来到这
+- **ActivityStackSupervisor**：管理所有栈——比如从 Launcher 栈切到 App 栈
+- **ActivityStack**：一个"栈"——同一个类型的 Activity 放在一起。Android 分 Home 栈（Launcher）和其他 App 栈
+- **TaskRecord**：一个"任务"——用户眼中"一个 App"的 Activity 集合。按 Back 键会在这个 Task 内部回退
+- **ActivityRecord**：一个 Activity 实例的详细记录——它属于哪个进程、哪个 Task、当前状态（INITIALIZING / RESUMED / PAUSED / STOPPED 等）
+
+## 核心数据结构
+
+AMS 在内存中维护了三张核心表：
+
+### ProcessRecord 表
+记录每个 App 进程的信息：进程名、uid、pid、当前 OOM 优先级、进程里有哪些 Activity/Service/BroadcastReceiver。AMS 通过这张表判断进程是否存在、该不该杀。
+
+### ActivityRecord 表
+记录每个 Activity 实例：它属于哪个 Task、当前生命周期状态、关联的窗口信息。`startActivity()` 时 AMS 创建或复用 ActivityRecord。
+
+### TaskRecord 表
+记录每个任务栈：栈里有哪些 Activity（按先后顺序）、这个 Task 属于哪个 App。用户按 Recent Apps 看到的就是一堆 TaskRecord。
+
+三者关联关系：`ProcessRecord ← 多个 ActivityRecord → 属于 → TaskRecord`
+
+## Activity 栈管理
+
+Android 用"任务栈"模型而不是简单的"窗口列表"来管理 Activity，因为用户操作是一个"任务"概念——浏览商品 → 加购物车 → 下单 → 支付，这一串 Activity 是同属一个"任务"的。按 Back 键应该在这个任务内部回退，而不是跳到上一个 App。
+
+### Launch Mode 对栈的影响
+
+| Launch Mode | 行为 |
+|---|---|
+| standard | 每次启动都创建新实例，放入当前 Task |
+| singleTop | 如果在当前 Task 栈顶则复用（调 onNewIntent），否则新建 |
+| singleTask | 整个系统中只存在一个实例——如已存在则把它上面的 Activity 全清掉 |
+| singleInstance | 独占一个 Task——这个 Task 里只能有这一个 Activity |
+
+<Callout type="tip">
+  面试高频：`singleTask` 和 `singleInstance` 的区别？singleTask 还是放在 Task 里的（只是同 Task 只有一个实例），singleInstance 独占整个 Task。singleInstance 常用于其他 App 也能调起的页面（比如拨号界面）。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：startActivity 后界面迟迟不显示，ANR 了。**原因**：AMS 等待新 Activity 启动超时（通常是目标进程 fork 慢或 Application.onCreate 耗时太长）。**修法**：检查 Application.onCreate 耗时，用 StrictMode 检测主线程磁盘读写，把重操作放到子线程或延迟初始化。
+</Callout>
+
+<Callout type="trap">
+  **现象**：singleTask 的 Activity 启动后前面的页面消失了。**原因**：singleTask 默认会清掉它上面的所有 Activity（clearTop）。**修法**：如需保留栈内其他页面，在 Intent 里加 FLAG_ACTIVITY_REORDER_TO_FRONT。
+</Callout>
+
+<Callout type="trap">
+  **现象**：ProcessRecord 里的 oom_adj 值影响进程被杀顺序，但不清楚 OOM 优先级规则。**原因**：AMS 根据进程的重要性（前台 > 可见 > 服务 > 后台 > 空进程）动态调整每个进程的 oom_adj 值，内存不足时从低优先级开始杀。**修法**：保持前台 Service 可以提升进程优先级——但这会耗电，不要滥用。
+</Callout>
+
+## 小结
+
+- AMS 家族：AMS → ActivityStackSupervisor → ActivityStack → TaskRecord → ActivityRecord，各司其职
+- 三张核心表：ProcessRecord（进程）→ ActivityRecord（Activity实例）→ TaskRecord（任务栈）
+- 任务栈模型让用户操作更自然——按 Back 在同一个"任务"内回退，不乱跳
+- Launch Mode 影响栈行为：standard 随意创建 / singleTop 栈顶复用 / singleTask 全局唯一 / singleInstance 独占栈
+
+<Exercises>
+
+**练习 1（画图型）** 画出 AMS 家族从 AMS 到 ActivityRecord 的五层关系图，每层写职责。
+
+<Answer>
+AMS（总入口）→ ActivityStackSupervisor（管理所有栈）→ ActivityStack（一个栈=同类型Activity集合）→ TaskRecord（一个任务=一个App的Activity组）→ ActivityRecord（一个Activity实例的详细记录）。
+</Answer>
+
+**练习 2（问答型）** singleTask 和 singleInstance 有什么区别？各适合什么场景？
+
+<Answer>
+singleTask：全局只有一个实例，在同一个 Task 里——适合 App 主页（点入口总是回主页）。singleInstance：独占一个 Task——适合被其他 App 调起的独立页面（如拨号界面——从你的 App 跳过去拨号，按 Back 回到你的 App，不会留在电话 App 的 Task 里）。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="AMS">
+  ActivityManagerService——Android 系统服务的核心。管理所有 Activity 的启动/生命周期/栈、所有 App 进程的创建/回收/OOM 排序。跑在 system_server 进程里。
+</GlossaryItem>
+
+<GlossaryItem term="TaskRecord">
+  一个"任务"的记录——用户眼中一个 App 的 Activity 集合。包含一组 ActivityRecord，按 Back 键在此 Task 内回退。
+</GlossaryItem>
+
+<GlossaryItem term="ProcessRecord">
+  一个 App 进程的记录——进程名、uid/pid、当前 OOM 优先级、进程中包含的组件列表。AMS 内存不足时依据优先级决定杀谁。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
