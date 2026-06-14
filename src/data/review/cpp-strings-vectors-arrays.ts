@@ -141,7 +141,7 @@ export const cppStringsVectorsArraysQuestions: ReviewQuestion[] = [
     question:
       "下面这段代码有四处问题。找出它们并解释每处会出什么错。\n```cpp\nvector<int> v;\nv[0] = 10;\nfor (int i = 0; i <= v.size(); i++)\n    cout << v[i] << endl;\n```",
     answer:
-      "① `v[0] = 10;`——vector 是空的（size=0），下标 0 的元素不存在，这是**未定义行为**。应该用 `v.push_back(10);`。② `i <= v.size()`——循环条件包含了 `v.size()` 这个下标，但最后一个有效下标是 `v.size() - 1`，访问 `v[v.size()]` 越界。应改为 `i < v.size()`。③ 如果 v 是空的，`v.size()` 是 0 而 `size()` 返回 `size_type` (unsigned)，`i <= 0u` 把 i=0 和 0u 比较没问题，但习惯上不该用 `<=`。④ `cout` 前缺少 `std::` 或 `using` 声明。",
+      "① `v[0] = 10;`——vector 是空的（size=0），下标 0 的元素不存在，这是**未定义行为**。应该用 `v.push_back(10);`。② `i <= v.size()`——循环条件包含了 `v.size()` 这个下标，但最后一个有效下标是 `v.size() - 1`，访问 `v[v.size()]` 越界。应改为 `i < v.size()`。③ `vector` 前缺少 `std::` 或 `using std::vector;` 声明，编译报 vector 未声明。④ `cout` 前缺少 `std::` 或 `using std::cout;` 声明。（补充：`v.size()` 返回的是无符号的 `size_type`，和 `int i` 比较时会有 signed/unsigned 隐式转换，规范写法是把 `i` 也声明成 `v.size()` 的类型或用范围 for——但这不算上面四处错误之一。）",
     tags: ["vector", "越界", "push_back", "排错"],
   },
   {
@@ -151,7 +151,7 @@ export const cppStringsVectorsArraysQuestions: ReviewQuestion[] = [
     question:
       "读下面代码，说出每次 cout 的输出结果。\n```cpp\nvector<int> v{1, 2, 3};\ncout << v.size() << endl;      // ①\nv.push_back(4);\ncout << v.size() << endl;      // ②\ncout << v[3] << endl;           // ③\ncout << v.capacity() << endl;   // ④（≥ v.size()）\n```",
     answer:
-      "① 3——初始列表初始化了 3 个元素。② 4——push_back 后 size 加 1。③ 4——v[3] 是第 4 个元素（下标 3），值为 4。④ capacity 的值取决于实现——至少 ≥ 4，可能是 4 或 6（列表初始化后 capacity 至少 3，push 第 4 个时可能触发扩容翻倍）。",
+      "① 3——初始列表初始化了 3 个元素。② 4——push_back 后 size 加 1。③ 4——v[3] 是第 4 个元素（下标 3），值为 4。④ capacity 的具体值由实现决定，标准只保证 `capacity ≥ size`；在主流实现（libstdc++/libc++）下通常是 6——列表初始化后 capacity 精确为 3，push 第 4 个时触发扩容翻倍到 6。",
     tags: ["vector", "size", "capacity", "下标"],
   },
   {

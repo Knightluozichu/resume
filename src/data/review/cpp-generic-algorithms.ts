@@ -182,8 +182,8 @@ export const cppGenericAlgorithmsQuestions: ReviewQuestion[] = [
     id: "cga-22",
     chapter: "cpp-generic-algorithms",
     level: 4,
-    question: "`partition`、`stable_partition`、`sort` 三者的区别是什么？给你一个数组 `{4,1,3,2,5}`，用 `partition` 把 `<=2` 的放前面，结果大概是怎样的？",
-    answer: "`partition` 把满足谓词的元素放前面，不满足的放后面——不保证各自内部顺序。结果可能如 `{1,2,4,3,5}`（1和2在前面但无序）。`stable_partition` 做同样的事但保持各自内部原顺序——结果为 `{1,2,4,3,5}`（1和2保持原本相对顺序1→2, 4/3/5保持原序）。`sort` 是全排序，完全重排。三者复杂度：partition O(n)，stable_partition O(n log n)（可能需要额外内存），sort O(n log n)。",
+    question: "`partition`、`stable_partition`、`sort` 三者的区别是什么？给你一个数组 `{3,1,4,1,5,2}`，用 `<=2` 作谓词分区，`partition` 和 `stable_partition` 的结果分别是怎样的？",
+    answer: "三者都按谓词把元素分两组，区别在于是否保序。`stable_partition` 保持各组内部的原始相对顺序——对 `{3,1,4,1,5,2}` 用 `<=2`，满足的 `1,1,2` 按原序在前、不满足的 `3,4,5` 按原序在后，结果**确定**为 `{1,1,2,3,4,5}`。`partition` 只保证满足谓词的元素在前、不满足的在后，**不保证各组内部顺序**——前段一定是 `{1,1,2}` 的某种排列、后段是 `{3,4,5}` 的某种排列，具体顺序由实现决定、不可依赖（例如可能得到 `{2,1,1,5,3,4}`）。`sort` 是全排序、完全重排。三者复杂度：partition O(n)，stable_partition O(n log n)（可能需要额外内存），sort O(n log n)。",
     tags: ["partition", "stable_partition", "综合"],
   },
   {

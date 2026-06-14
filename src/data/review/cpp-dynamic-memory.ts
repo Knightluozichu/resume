@@ -125,7 +125,7 @@ export const cppDynamicMemoryQuestions: ReviewQuestion[] = [
     question:
       "在没有 make_unique 的 C++11 环境下，怎么安全地创建 unique_ptr？",
     answer:
-      "① 手动实现一个 make_unique（7 行模板）：\n```cpp\ntemplate<typename T, typename... Args>\nstd::unique_ptr<T> make_unique(Args&&... args) {\n    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));\n}\n```\n② 直接构造：`std::unique_ptr<int> up(new int(42));`——注意不要让这个 `new` 出现在可能抛异常的参数列表里。如果有多参数函数调用，先 `new` 再传 unique_ptr 构造是安全的（只要 `new` 成功、unique_ptr 构造不会失败）。",
+      "① 手动实现一个 make_unique（7 行模板）：\n```cpp\ntemplate<typename T, typename... Args>\nstd::unique_ptr<T> make_unique(Args&&... args) {\n    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));\n}\n```\n② 直接构造：`std::unique_ptr<int> up(new int(42));`——注意不要让这个 `new` 出现在可能抛异常的参数列表里。「先 new 再传 unique_ptr 构造」只有在把 `T* p = new T(...);` 和 `std::unique_ptr<T> up(p);` 写成两条独立语句、且二者之间不混入其他可能抛异常的求值时才安全；若塞进同一个函数实参列表里（如 `f(unique_ptr<int>(new int(42)), g())`，C++17 前求值顺序未定），中途抛异常仍可能泄漏。因此 C++14 起一律优先用 make_unique。",
     tags: ["make_unique", "C++11", "unique_ptr"],
   },
   {
@@ -147,7 +147,7 @@ export const cppDynamicMemoryQuestions: ReviewQuestion[] = [
     question:
       "设计一个 Widget 工厂类，要求：(1) 用工厂方法 create() 创建 Widget 并返回所有权；(2) Widget 持有创建它的工厂的引用用于日志记录；(3) 工厂可能离开作用域时 Widget 还在用——确保不悬垂。写出 Widget 和 Factory 的骨架代码，并解释为什么选择这种智能指针组合。",
     answer:
-      "```cpp\nstruct Factory;\n\nstruct Widget {\n    std::string name;\n    std::weak_ptr<Factory> factory;  // 不拥有工厂，工厂可能先挂\n    Widget(const std::string& n, std::shared_ptr<Factory> f)\n        : name(n), factory(f) {}\n    void log();\n};\n\nstruct Factory {\n    std::vector<std::shared_ptr<Widget>> widgets;\n\n    std::shared_ptr<Widget> create(const std::string& name) {\n        auto w = std::make_shared<Widget>(name, shared_from_this());\n        widgets.push_back(w);\n        return w;\n    }\n};\n```\n选择原因：① Factory::create 返回 shared_ptr——调用方可能需要共享所有权；② Factory 持有 widgets 列表也用的是 shared_ptr——多个地方可能持有同一个 Widget；③ Widget 对 Factory 用 weak_ptr——工厂可能先于 Widget 销毁（Widget 被别的持有者保留），weak_ptr 保证不会形成循环引用也不会造成悬垂（lock() 判空）。",
+      "```cpp\nstruct Factory;\n\nstruct Widget {\n    std::string name;\n    std::weak_ptr<Factory> factory;  // 不拥有工厂，工厂可能先挂\n    Widget(const std::string& n, std::shared_ptr<Factory> f)\n        : name(n), factory(f) {}\n    void log();\n};\n\nstruct Factory : std::enable_shared_from_this<Factory> {\n    std::vector<std::shared_ptr<Widget>> widgets;\n\n    std::shared_ptr<Widget> create(const std::string& name) {\n        auto w = std::make_shared<Widget>(name, shared_from_this());\n        widgets.push_back(w);\n        return w;\n    }\n};\n```\n选择原因：① Factory::create 返回 shared_ptr——调用方可能需要共享所有权；② Factory 持有 widgets 列表也用的是 shared_ptr——多个地方可能持有同一个 Widget；③ Widget 对 Factory 用 weak_ptr——工厂可能先于 Widget 销毁（Widget 被别的持有者保留），weak_ptr 保证不会形成循环引用也不会造成悬垂（lock() 判空）。⚠️ 关键前提：要在 create() 内调用 shared_from_this()，Factory 必须继承 std::enable_shared_from_this<Factory>，并且这个 Factory 对象本身已经被某个 shared_ptr 持有（如使用者写 `auto f = std::make_shared<Factory>();`）；否则 shared_from_this() 会抛 std::bad_weak_ptr（C++17 前为未定义行为）。",
     tags: ["智能指针", "工厂模式", "生命周期"],
   },
   {
@@ -167,7 +167,7 @@ export const cppDynamicMemoryQuestions: ReviewQuestion[] = [
     question:
       "给定一个用 raw pointer 实现的简单链表（struct Node { int data; Node* next; };），请完整改写为用智能指针实现，确保没有内存泄漏，并支持打印链表和销毁。要求：销毁时不要递归（防止栈溢出）。",
     answer:
-      "```cpp\nstruct Node {\n    int data;\n    std::unique_ptr<Node> next;  // 独占所有权，链表一路向下\n    Node(int d) : data(d) {}\n};\n\n// 打印\nvoid print(const std::unique_ptr<Node>& head) {\n    for (auto* p = head.get(); p != nullptr; p = p->next.get())\n        std::cout << p->data << ' ';\n}\n\n// 销毁：不用递归！unique_ptr 的链式析构本身就是非递归的——\n// 当一个 unique_ptr 析构时，它 delete 对象，然后对象的 next 成员\n// 是另一个 unique_ptr，它析构时又会 delete 下一个……\n// 但这可能造成深度递归析构导致栈溢出。安全做法：迭代释放\nvoid destroy(std::unique_ptr<Node> head) {\n    while (head) {\n        head = std::move(head->next);  // 转移到当前 head，旧的被 delete\n    }\n}\n```\n选择 unique_ptr 的原因：链表是单向、线性的所有权模型——每个节点只属于前一个节点。不需要 shared_ptr 的共享语义。用迭代销毁的原因：如果链表很长（>1000），unique_ptr 的嵌套析构可能触发递归调用析构函数直到爆栈。",
+      "```cpp\nstruct Node {\n    int data;\n    std::unique_ptr<Node> next;  // 独占所有权，链表一路向下\n    Node(int d) : data(d) {}\n};\n\n// 打印\nvoid print(const std::unique_ptr<Node>& head) {\n    for (auto* p = head.get(); p != nullptr; p = p->next.get())\n        std::cout << p->data << ' ';\n}\n\n// 销毁：默认的 unique_ptr 链式析构是递归的——\n// 当一个 unique_ptr 析构时，它 delete 对象，然后对象的 next 成员\n// 是另一个 unique_ptr，它析构时又会 delete 下一个……（A 析构→A.next 析构→…）\n// 链表很长时这条递归链会爆栈。安全做法：用 while 循环把析构改成迭代\nvoid destroy(std::unique_ptr<Node> head) {\n    while (head) {\n        head = std::move(head->next);  // 转移到当前 head，旧的被 delete\n    }\n}\n```\n选择 unique_ptr 的原因：链表是单向、线性的所有权模型——每个节点只属于前一个节点。不需要 shared_ptr 的共享语义。用迭代销毁的原因：如果链表很长（>1000），unique_ptr 的嵌套析构可能触发递归调用析构函数直到爆栈。",
     tags: ["unique_ptr", "链表", "析构", "栈溢出"],
   },
   {

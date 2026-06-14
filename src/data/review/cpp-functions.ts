@@ -120,7 +120,7 @@ export const cppFunctionsQuestions: ReviewQuestion[] = [
     level: 2,
     question: "为什么建议用 `const T&` 传递大对象而不是 `T`？什么情况下该用 `T`？",
     answer:
-      "`const T&` 传递不拷贝整个对象——只传引用（84 字节的 string 只传 8 字节的引用），函数内只能读不能改。`T` 值传递会在栈上创建对象的完整副本——对于 vector/string/自定义类可能是数千字节拷贝，时间和空间开销大。该用 `T` 的场景：① 小对象（如 int/double 本身就 4-8 字节，拷贝和引用开销一样甚至更小）② 函数确实要改副本而非原值（如 `string toUpper(string s) { /* 改 s */ return s; }`）。刚接触以 const T& 为默认、需要改副本/小对象才用值传递。",
+      "`const T&` 传递不拷贝整个对象——只传引用（一个可能持有几十到几千字节内容的 string，传引用只需 8 字节），函数内只能读不能改。`T` 值传递会在栈上创建对象的完整副本——对于 vector/string/自定义类可能是数千字节拷贝，时间和空间开销大。该用 `T` 的场景：① 小对象（如 int/double 本身就 4-8 字节，拷贝和引用开销一样甚至更小）② 函数确实要改副本而非原值（如 `string toUpper(string s) { /* 改 s */ return s; }`）。刚接触以 const T& 为默认、需要改副本/小对象才用值传递。",
     tags: ["const引用", "值传递", "性能", "拷贝"],
   },
   {
@@ -239,7 +239,7 @@ export const cppFunctionsQuestions: ReviewQuestion[] = [
     question:
       "综合题：设计并实现一个函数 `countLetters`，要求：(1) 接收一个 `const string &` 文本和一个 `char` 要统计的字符；(2) **不区分大小写**统计字符出现次数（'A' 和 'a' 算同一个）；(3) 用 `inline` 声明；(4) 处理空白字符——跳过空格和制表符。给出完整实现和调用示例。",
     answer:
-      "```cpp\n#include <string>\n#include <cctype>\ninline int countLetters(const std::string &text, char target) {\n    target = std::tolower(static_cast<unsigned char>(target));\n    int count = 0;\n    for (char ch : text) {\n        if (std::isspace(static_cast<unsigned char>(ch))) continue;\n        if (std::tolower(static_cast<unsigned char>(ch)) == target) count++;\n    }\n    return count;\n}\n// 调用：countLetters(\"Hello World\", 'l') → 3 (两个 'l' + 一个 'L')\n```\n要点：① 参数 text 用 const string& 避免拷贝 ② target 先统一转小写、循环中逐个比 ③ static_cast<unsigned char> 处理 char 转 unsigned char 避免符号扩展 ④ inline 适合这种体积极小的工具函数。",
+      "```cpp\n#include <string>\n#include <cctype>\ninline int countLetters(const std::string &text, char target) {\n    target = std::tolower(static_cast<unsigned char>(target));\n    int count = 0;\n    for (char ch : text) {\n        if (std::isspace(static_cast<unsigned char>(ch))) continue;\n        if (std::tolower(static_cast<unsigned char>(ch)) == target) count++;\n    }\n    return count;\n}\n// 调用：countLetters(\"Hello World\", 'l') → 3（Hello 里两个 l + World 里一个 l，全是小写）\n```\n要点：① 参数 text 用 const string& 避免拷贝 ② target 先统一转小写、循环中逐个比 ③ static_cast<unsigned char> 处理 char 转 unsigned char 避免符号扩展 ④ inline 适合这种体积极小的工具函数。",
     tags: ["综合", "inline", "const引用", "string", "tolower"],
   },
   {

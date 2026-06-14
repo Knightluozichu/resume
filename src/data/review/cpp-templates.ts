@@ -6,7 +6,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   // ── L1 认记：术语 / 定义 ──
   {
     id: "ct-1",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "什么是函数模板？它和普通函数的本质区别是什么？",
     answer:
@@ -15,7 +15,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-2",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "什么是模板实例化？隐式实例化和显式实例化的区别？",
     answer:
@@ -24,7 +24,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-3",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "类模板的成员函数在类外定义时需要注意什么？为什么 `Stack::push` 会编译报错？",
     answer:
@@ -33,7 +33,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-4",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "什么是非类型模板参数？给一个常见的使用场景。",
     answer:
@@ -42,7 +42,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-5",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "全特化和偏特化有什么区别？函数模板能偏特化吗？",
     answer:
@@ -51,7 +51,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-6",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 1,
     question: "什么是可变参数模板？`typename... Args` 和 `sizeof...(Args)` 分别是什么？",
     answer:
@@ -62,7 +62,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   // ── L2 理解：用法与区别 ──
   {
     id: "ct-7",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 2,
     question: "函数模板的类型参数推导有哪些规则？`max(3, 4.5)` 为什么编译失败？",
     answer:
@@ -71,7 +71,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-8",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 2,
     question: "`Stack<int>` 和 `Stack<string>` 这两个类型之间是什么关系？它们的 `static` 成员变量会共享吗？",
     answer:
@@ -80,7 +80,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-9",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 2,
     question: "模板和非模板的代码组织方式有什么区别？为什么模板的声明和定义通常放在同一个头文件中？",
     answer:
@@ -89,7 +89,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-10",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 2,
     question: "可变参数模板的递归展开机制是怎样的？如果忘了写终止条件（base case）会有什么后果？",
     answer:
@@ -100,7 +100,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   // ── L3 应用：代码级判断与用法 ──
   {
     id: "ct-11",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 3,
     question:
       `下面代码有两个问题——找出并修正：\n\`\`\`cpp\ntemplate<typename T>\nT average(const std::vector<T> &v) {\n    T sum = 0;\n    for (auto &x : v) sum += x;\n    return sum / v.size();\n}\n\`\`\``,
@@ -110,7 +110,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-12",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 3,
     question:
       "为 `Stack<T>` 类模板写出完整的类外成员函数定义——`push`、`pop`、`top`、`empty`、`size`。包含必要的异常检查和访问控制。",
@@ -120,7 +120,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-13",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 3,
     question:
       "实现一个 `compare` 函数模板的三个版本：(1) 通用版本 `compare(const T&, const T&)` 用 `<` 比较；(2) 全特化为 `const char*` 用 `strcmp`；(3) 针对指针类型的**重载**函数模板（非偏特化）`compare(T*, T*)` 使用 `*` 解引用后调用通用版本。说明为什么指针版用重载而非偏特化。",
@@ -130,7 +130,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-14",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 3,
     question:
       "实现一个 `print_all` 可变参数模板——接受任意数量的任意类型参数，将它们全部输出到 `std::cout`，参数间用空格分隔，最后输出换行。必须包含终止条件。",
@@ -140,7 +140,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-15",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 3,
     question:
       '解释为什么以下代码在链接时报错——undefined reference to Stack<int>::push(int)。模板定义在 stack.cpp 中、声明在 stack.h 中。如何修复？\n```cpp\n// stack.h\ntemplate<typename T> class Stack {\npublic: void push(const T &val);\n};\n// stack.cpp\ntemplate<typename T>\nvoid Stack<T>::push(const T &val) { /* ... */ }\n```',
@@ -152,7 +152,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   // ── L4 综合：场景选型与完整设计 ──
   {
     id: "ct-16",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 4,
     question:
       "设计一个 `DimArray<T, N, M>` 类模板——表示 N×M 的二维定长数组。(1) 写出模板声明；(2) 提供 `operator()(int row, int col)` 取元素；(3) 提供 `size()` 返回总元素数 `N*M`；(4) 说明非类型模板参数 `N` 和 `M` 的约束。",
@@ -162,7 +162,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-17",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 4,
     question:
       "设计一个 `Vector<T>` 类模板的特化层次：(1) 主模板——通用 `Vector<T>`（内部用 `std::vector<T>`）；(2) 偏特化 `Vector<T*>`——存储指针时自动 `delete` 所指向的对象；(3) 全特化 `Vector<bool>`——用位压缩存储节省空间。说明编译器的选择规则。",
@@ -172,7 +172,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-18",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 4,
     question: '判断对错并解释：类模板的 static 成员变量在所有实例化之间共享——因为模板只有一份代码。',
     answer:
@@ -181,7 +181,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-19",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 4,
     question:
       "实现一个 `sum_all` 可变参数模板——接受任意数量的算术类型参数，返回它们的和。要求：(1) 用折叠表达式（C++17）写一个版本；(2) 用递归展开写另一个版本；(3) 比较两种实现的优劣。",
@@ -191,7 +191,7 @@ export const cppTemplatesQuestions: ReviewQuestion[] = [
   },
   {
     id: "ct-20",
-    chapter: "cpp-templates" as any,
+    chapter: "cpp-templates",
     level: 4,
     question:
       "你接手了一个旧的代码库——`Matrix<T>` 用模板实现但类外成员函数定义被放在了 `.cpp` 中。现在使用方编译时报 undefined reference to Matrix<double>::invert()。解释这个错误的根因，给出两种修复方案，并分析各自的适用场景。",

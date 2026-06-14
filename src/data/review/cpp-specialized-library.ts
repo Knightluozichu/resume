@@ -162,7 +162,7 @@ export const cppSpecializedLibraryQuestions: ReviewQuestion[] = [
     question:
       "写出一个 lambda 封装 `[a,b]` 范围均匀随机整数的 `rand_int` 函数对象，然后写一个骰子类 `Dice` 用这个模式每次调用返回 1~6 的随机值。",
     answer:
-      '```cpp\n#include <random>\n#include <functional>\n\n// 引擎和分布各创建一次，lambda 捕获引用，每次调用推进引擎\nauto make_rand_int(int a, int b) {\n    // 注意：引擎不能是局部变量——否则每次调用 make_rand_int 都创建新引擎\n    // 应该用 static 或在外层作用域创建\n    static std::mt19937 gen(std::random_device{}());\n    std::uniform_int_distribution<int> dist(a, b);\n    return [&gen, dist]() mutable { return dist(gen); };\n}\n\n// 骰子类\nclass Dice {\npublic:\n    Dice() : gen_(std::random_device{}()), dist_(1, 6) {}\n    int roll() { return dist_(gen_); }\n    void reseed(unsigned s) { gen_.seed(s); }\n\nprivate:\n    std::mt19937 gen_;\n    std::uniform_int_distribution<int> dist_;\n};\n\nDice d6;\nstd::cout << d6.roll();  // 每次随机出 1~6\n```\n设计要点：① 引擎创建一次（构造或 static）——反复创建引擎浪费且序列差 ② random_device 做种子——真随机种子 + 伪随机序列 ③ `mutable` 让 lambda 能修改捕获的 dist 状态 ④ 封装成类更清晰——Dice 持有引擎+分布，roll() 一行调用。',
+      '```cpp\n#include <random>\n#include <functional>\n\n// 引擎和分布各创建一次，每次调用推进引擎\nauto make_rand_int(int a, int b) {\n    // 注意：引擎不能是局部变量——否则每次调用 make_rand_int 都创建新引擎\n    // 应该用 static 或在外层作用域创建\n    static std::mt19937 gen(std::random_device{}());\n    std::uniform_int_distribution<int> dist(a, b);\n    return [dist]() mutable { return dist(gen); };  // gen 是 static——lambda 体内可直接用，禁止显式捕获\n}\n\n// 骰子类\nclass Dice {\npublic:\n    Dice() : gen_(std::random_device{}()), dist_(1, 6) {}\n    int roll() { return dist_(gen_); }\n    void reseed(unsigned s) { gen_.seed(s); }\n\nprivate:\n    std::mt19937 gen_;\n    std::uniform_int_distribution<int> dist_;\n};\n\nDice d6;\nstd::cout << d6.roll();  // 每次随机出 1~6\n```\n设计要点：① 引擎创建一次（构造或 static）——反复创建引擎浪费且序列差 ② random_device 做种子——真随机种子 + 伪随机序列 ③ `mutable` 让 lambda 能修改捕获的 dist 状态 ④ 封装成类更清晰——Dice 持有引擎+分布，roll() 一行调用。',
     tags: ["random", "lambda", "Dice", "封装", "mt19937"],
   },
   {
@@ -194,7 +194,7 @@ export const cppSpecializedLibraryQuestions: ReviewQuestion[] = [
     question:
       "判断对错并解释：在同一个程序中——`uniform_int_distribution<int>(1, 100)` 创建两个分布对象，用同一个引擎分别调用它们，两个分布对象返回的随机序列相同。",
     answer:
-      "**错**。分布对象不是无状态的——它内部维护自己的状态（用于将引擎的原始输出映射到目标分布上）。**同一个分布对象**用同一个引擎每次调用会推进引擎状态，产生不同值。但**两个独立创建的分布对象**——即使范围参数相同、使用同一个引擎——它们的内部状态是**独立的**。每个分布对象各自维护自己的状态机——各调各的、互不影响、不产生相同序列。想要相同的随机序列——应该用一个分布对象多次调用，而不是创建两个相同的分布对象。这和各种分布的算法实现有关——分布不只是简单的线性变换，内部可能有缓存/拒绝采样等状态。",
+      "**错**（两个分布不会产生相同序列）。但原因不是「每个分布各自维护状态机」——`uniform_int_distribution` 在调用之间其实没有持久状态。真正的原因是：两个分布**共享同一个引擎**，依次消耗这唯一一个引擎的输出——第一个分布调用时推进了引擎，第二个分布接着从被推进后的状态继续取值，于是序列不同。如果给两个分布**各配一个同种子的独立引擎**，它们会产生**完全相同**的序列。补充：少数分布确实带内部状态（如 `normal_distribution` 用 Box-Muller 会缓存第二个生成值），但 `uniform_int_distribution` 不是——别把它当成有状态的。结论：想复现序列，关键在引擎的种子/状态，而不在分布对象本身。",
     tags: ["分布", "状态", "序列", "独立对象"],
   },
   {

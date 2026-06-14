@@ -5,7 +5,7 @@ import type { ReviewQuestion } from "./types";
 export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
   // ── L1 认记 ──
   {
-    id: "cst-1",
+    id: "cstool-1",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "什么是 placement new？它和普通 new 有什么区别？",
@@ -14,7 +14,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["placement new", "operator new", "内存池", "构造"],
   },
   {
-    id: "cst-2",
+    id: "cstool-2",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "RTTI 是什么？它由哪三个核心组件构成？",
@@ -23,7 +23,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["RTTI", "typeid", "dynamic_cast", "type_info"],
   },
   {
-    id: "cst-3",
+    id: "cstool-3",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "`enum class` 和传统 `enum` 有什么区别？各自的优缺点？",
@@ -32,7 +32,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["enum class", "enum", "作用域", "类型安全", "隐式转换"],
   },
   {
-    id: "cst-4",
+    id: "cstool-4",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "`union` 是什么？它和 `struct`/`class` 有什么区别？C++11 中 `union` 有什么改进？",
@@ -41,7 +41,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["union", "联合", "内存共享", "C++11"],
   },
   {
-    id: "cst-5",
+    id: "cstool-5",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "什么是成员指针？`指向数据成员的指针` 和 `指向成员函数的指针` 的声明语法？",
@@ -50,7 +50,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["成员指针", "pointer to member", ".*", "->*"],
   },
   {
-    id: "cst-6",
+    id: "cstool-6",
     chapter: "cpp-specialized-tools",
     level: 1,
     question: "什么是嵌套类？它在 C++ 中怎么声明和访问？",
@@ -61,7 +61,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
 
   // ── L2 理解 ──
   {
-    id: "cst-7",
+    id: "cstool-7",
     chapter: "cpp-specialized-tools",
     level: 2,
     question: "placement new 创建的对象的生命周期如何管理？为什么不能用 `delete` 释放？",
@@ -70,7 +70,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["placement new", "析构", "生命周期", "operator new"],
   },
   {
-    id: "cst-8",
+    id: "cstool-8",
     chapter: "cpp-specialized-tools",
     level: 2,
     question: "`typeid` 和 `dynamic_cast` 分别在什么场景下使用？它们有什么不同？",
@@ -79,7 +79,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["typeid", "dynamic_cast", "RTTI", "类型转换"],
   },
   {
-    id: "cst-9",
+    id: "cstool-9",
     chapter: "cpp-specialized-tools",
     level: 2,
     question: "`enum class` 底层类型的默认值和指定规则？为什么允许 `enum class Perm : uint8_t` 这样的前置声明？",
@@ -88,7 +88,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["enum class", "底层类型", "前置声明", "uint8_t"],
   },
   {
-    id: "cst-10",
+    id: "cstool-10",
     chapter: "cpp-specialized-tools",
     level: 2,
     question: "什么时候应该用 `union` 而不是 `std::variant`？union 的 C++11 改进具体解决了什么问题？",
@@ -99,7 +99,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
 
   // ── L3 应用 ──
   {
-    id: "cst-11",
+    id: "cstool-11",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -109,7 +109,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["内存池", "placement new", "operator new", "析构"],
   },
   {
-    id: "cst-12",
+    id: "cstool-12",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -119,7 +119,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["typeid", "dynamic_cast", "RTTI", "虚函数"],
   },
   {
-    id: "cst-13",
+    id: "cstool-13",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -129,7 +129,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["enum class", "switch", "static_cast", "底层类型"],
   },
   {
-    id: "cst-14",
+    id: "cstool-14",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -139,7 +139,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["union", "tagged union", "placement new", "variant"],
   },
   {
-    id: "cst-15",
+    id: "cstool-15",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -149,7 +149,7 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
     tags: ["成员函数指针", "map", "回调", "std::invoke"],
   },
   {
-    id: "cst-16",
+    id: "cstool-16",
     chapter: "cpp-specialized-tools",
     level: 3,
     question:
@@ -161,37 +161,37 @@ export const cppSpecializedToolsQuestions: ReviewQuestion[] = [
 
   // ── L4 综合 ──
   {
-    id: "cst-17",
+    id: "cstool-17",
     chapter: "cpp-specialized-tools",
     level: 4,
     question:
-      "设计一个 `ArenaAllocator` 类——用 placement new 和 RTTI 实现：预分配一大块内存，`create<T>(args...)` 在 arena 中构造对象（placement new + 完美转发），`reset()` 销毁 arena 中所有对象（对每个对象调析构——需要追踪类型来调正确的析构函数）。回答：为什么需要用 RTTI 来追踪类型？如何设计析构顺序？",
+      "设计一个 `ArenaAllocator` 类——用 placement new 和类型擦除实现：预分配一大块内存，`create<T>(args...)` 在 arena 中构造对象（placement new + 完美转发），`reset()` 销毁 arena 中所有对象（对每个对象调析构——需要追踪类型来调正确的析构函数）。回答：为什么用类型擦除而非 RTTI 来追踪析构？如何设计析构顺序？",
     answer:
       "```cpp\n#include <new>\n#include <typeinfo>\n#include <vector>\n#include <tuple>\n\nclass ArenaAllocator {\npublic:\n    explicit ArenaAllocator(std::size_t size)\n        : buffer_(::operator new(size)), capacity_(size), offset_(0) {}\n\n    ~ArenaAllocator() { reset(); ::operator delete(buffer_); }\n\n    template<typename T, typename... Args>\n    T* create(Args&&... args) {\n        std::size_t align = alignof(T);\n        std::size_t padded_offset = (offset_ + align - 1) & ~(align - 1);\n        if (padded_offset + sizeof(T) > capacity_) return nullptr;\n        void* addr = static_cast<char*>(buffer_) + padded_offset;\n        T* obj = new (addr) T(std::forward<Args>(args)...);\n        // 记录对象地址和析构器\n        records_.emplace_back(addr, [](void* p) {\n            static_cast<T*>(p)->~T();\n        });\n        offset_ = padded_offset + sizeof(T);\n        return obj;\n    }\n\n    void reset() {\n        // 逆序析构（后创建的先析构——依赖关系更安全）\n        for (auto it = records_.rbegin(); it != records_.rend(); ++it) {\n            it->second(it->first);\n        }\n        records_.clear();\n        offset_ = 0;\n    }\n\n    ArenaAllocator(const ArenaAllocator&) = delete;\n    ArenaAllocator& operator=(const ArenaAllocator&) = delete;\n\nprivate:\n    void* buffer_;\n    std::size_t capacity_;\n    std::size_t offset_;\n    // (对象地址, 类型擦除的析构函数)\n    std::vector<std::pair<void*, std::function<void(void*)>>> records_;\n};\n\n// 使用:\nArenaAllocator arena(4096);\nauto* s = arena.create<std::string>(\"hello\");\nauto* v = arena.create<std::vector<int>>();\narena.reset();  // 逆序析构 v 再析构 s\n```\n为什么需要追踪类型——placement new 构造的对象必须显式调析构函数。`operator delete` 不知道对象类型（看到的是原始 `void*` 字节），无法调用正确的析构函数（如 `string` 的析构需要释放其堆内存，`int` 的析构什么都不做）。本方案不用 RTTI（`typeid`）而用 **类型擦除**（lambda 捕获了模板类型 T）——`create<T>` 时就记录了析构函数 = `static_cast<T*>(p)->~T()`——比 RTTI 更轻量且不要求虚函数。析构顺序必须是**逆序**——后创建的可能依赖先创建的对象，先毁掉依赖方再毁被依赖的。",
     tags: ["placement new", "类型擦除", "Arena", "析构顺序", "RTTI"],
   },
   {
-    id: "cst-18",
+    id: "cstool-18",
     chapter: "cpp-specialized-tools",
     level: 4,
     question:
       "综合实战——写一个 `Variant` 类（类似简化版 `std::variant`）：用 `union` + `enum class` + placement new 实现。支持 `int`、`double`、`std::string` 三种类型。要求：正确管理生命周期（拷贝/移动/赋值/析构）、提供 `get<T>()` 和 `visit(visitor)`。",
     answer:
-      "```cpp\n#include <string>\n#include <stdexcept>\n\nclass Variant {\npublic:\n    enum class Type { None, Int, Double, String };\n\n    Variant(): tag_(Type::None) {}\n    explicit Variant(int v): tag_(Type::Int)       { new (&data_.i) int(v); }\n    explicit Variant(double v): tag_(Type::Double)  { new (&data_.d) double(v); }\n    explicit Variant(const std::string &v): tag_(Type::String) {\n        new (&data_.s) std::string(v);\n    }\n\n    ~Variant() { destroy(); }\n\n    Variant(const Variant &other): tag_(other.tag_) {\n        copy_from(other);\n    }\n\n    Variant& operator=(const Variant &other) {\n        if (this != &other) {\n            destroy();\n            tag_ = other.tag_;\n            copy_from(other);\n        }\n        return *this;\n    }\n\n    template<typename T> T& get() {\n        check_type<T>();\n        if constexpr (std::is_same_v<T, int>) return data_.i;\n        else if constexpr (std::is_same_v<T, double>) return data_.d;\n        else if constexpr (std::is_same_v<T, std::string>) return data_.s;\n    }\n\n    template<typename Visitor>\n    auto visit(Visitor &&visitor) {\n        switch (tag_) {\n            case Type::Int:    return visitor(data_.i);\n            case Type::Double: return visitor(data_.d);\n            case Type::String: return visitor(data_.s);\n            default: throw std::runtime_error(\"empty variant\");\n        }\n    }\n\n    Type tag() const { return tag_; }\n\nprivate:\n    union Data {\n        int i;\n        double d;\n        std::string s;\n        Data() {}\n        ~Data() {}\n    } data_;\n\n    Type tag_;\n\n    void destroy() {\n        switch (tag_) {\n            case Type::None: break;\n            case Type::Int: break;\n            case Type::Double: break;\n            case Type::String: data_.s.std::string::~string(); break;\n        }\n        tag_ = Type::None;\n    }\n\n    void copy_from(const Variant &other) {\n        switch (other.tag_) {\n            case Type::None: break;\n            case Type::Int:    new (&data_.i) int(other.data_.i); break;\n            case Type::Double: new (&data_.d) double(other.data_.d); break;\n            case Type::String: new (&data_.s) std::string(other.data_.s); break;\n        }\n    }\n\n    template<typename T> void check_type() const {\n        if constexpr (std::is_same_v<T, int>)\n            { if (tag_ != Type::Int) throw std::bad_variant_access{}; }\n        else if constexpr (std::is_same_v<T, double>)\n            { if (tag_ != Type::Double) throw std::bad_variant_access{}; }\n        else if constexpr (std::is_same_v<T, std::string>)\n            { if (tag_ != Type::String) throw std::bad_variant_access{}; }\n    }\n};\n```\n设计要点：① union + tag 是裸版 variant 的经典实现——C++17 引入 `std::variant` 之前的标准做法；② `destroy()` 只析构非 trivial 成员（`string`）；③ `copy_from` 用 placement new 拷贝构造正确的成员类型；④ `visit` 模仿 `std::visit`——传入泛型 lambda 或函数对象去处理每种类型的值；⑤ `check_type` 保证类型安全——访问错误的类型抛异常而非未定义行为。",
+      "```cpp\n#include <string>\n#include <stdexcept>\n#include <variant>  // std::bad_variant_access\n\nclass Variant {\npublic:\n    enum class Type { None, Int, Double, String };\n\n    Variant(): tag_(Type::None) {}\n    explicit Variant(int v): tag_(Type::Int)       { new (&data_.i) int(v); }\n    explicit Variant(double v): tag_(Type::Double)  { new (&data_.d) double(v); }\n    explicit Variant(const std::string &v): tag_(Type::String) {\n        new (&data_.s) std::string(v);\n    }\n\n    ~Variant() { destroy(); }\n\n    Variant(const Variant &other): tag_(other.tag_) {\n        copy_from(other);\n    }\n\n    Variant& operator=(const Variant &other) {\n        if (this != &other) {\n            destroy();\n            tag_ = other.tag_;\n            copy_from(other);\n        }\n        return *this;\n    }\n\n    template<typename T> T& get() {\n        check_type<T>();\n        if constexpr (std::is_same_v<T, int>) return data_.i;\n        else if constexpr (std::is_same_v<T, double>) return data_.d;\n        else if constexpr (std::is_same_v<T, std::string>) return data_.s;\n    }\n\n    template<typename Visitor>\n    auto visit(Visitor &&visitor) {\n        switch (tag_) {\n            case Type::Int:    return visitor(data_.i);\n            case Type::Double: return visitor(data_.d);\n            case Type::String: return visitor(data_.s);\n            default: throw std::runtime_error(\"empty variant\");\n        }\n    }\n\n    Type tag() const { return tag_; }\n\nprivate:\n    union Data {\n        int i;\n        double d;\n        std::string s;\n        Data() {}\n        ~Data() {}\n    } data_;\n\n    Type tag_;\n\n    void destroy() {\n        switch (tag_) {\n            case Type::None: break;\n            case Type::Int: break;\n            case Type::Double: break;\n            case Type::String: data_.s.std::string::~string(); break;\n        }\n        tag_ = Type::None;\n    }\n\n    void copy_from(const Variant &other) {\n        switch (other.tag_) {\n            case Type::None: break;\n            case Type::Int:    new (&data_.i) int(other.data_.i); break;\n            case Type::Double: new (&data_.d) double(other.data_.d); break;\n            case Type::String: new (&data_.s) std::string(other.data_.s); break;\n        }\n    }\n\n    template<typename T> void check_type() const {\n        if constexpr (std::is_same_v<T, int>)\n            { if (tag_ != Type::Int) throw std::bad_variant_access{}; }\n        else if constexpr (std::is_same_v<T, double>)\n            { if (tag_ != Type::Double) throw std::bad_variant_access{}; }\n        else if constexpr (std::is_same_v<T, std::string>)\n            { if (tag_ != Type::String) throw std::bad_variant_access{}; }\n    }\n};\n```\n设计要点：① union + tag 是裸版 variant 的经典实现——C++17 引入 `std::variant` 之前的标准做法；② `destroy()` 只析构非 trivial 成员（`string`）；③ `copy_from` 用 placement new 拷贝构造正确的成员类型；④ `visit` 模仿 `std::visit`——传入泛型 lambda 或函数对象去处理每种类型的值；⑤ `check_type` 保证类型安全——访问错误的类型抛异常而非未定义行为。",
     tags: ["union", "variant", "placement new", "visit", "tagged union"],
   },
   {
-    id: "cst-19",
+    id: "cstool-19",
     chapter: "cpp-specialized-tools",
     level: 4,
     question:
       "判断对错并解释：「`enum class` 的底层类型默认是 `int`，因此所有 `enum class` 的前置声明都不需要指定底层类型」。",
     answer:
-      "**对**——这是 C++ 标准（C++11 起）的规定。`enum class`（和 C++11 的限定作用域枚举）的默认底层类型强制为 `int`——这和传统 `enum` 不同（传统 enum 底层类型由编译器根据枚举值大小自动选择）。因此前置声明 `enum class Color;` 等价于 `enum class Color : int;`——编译器在没看到枚举值列表时也知道 `sizeof(Color) == sizeof(int)`。这条规则适用于 `enum class` 和 `enum struct`（同义）。但**习惯上**如果底层类型不是 `int`（如 `enum class Perm : uint8_t`），前置声明必须显式指定——`enum class Perm : uint8_t;`。所以严格来说题目表述需要在「不显式指定底层类型的 enum class」这个前提下才对——但按规范，`enum class` 不加 `: type` 默认就是 `int`，前置声明不必要写 `: int`。",
+      "**错**——题面用了「所有……都不需要」这一全称命题，而它只在「不显式指定底层类型的 enum class」这个前提下才成立，因此作为全称命题为假。两点拆开看：① **默认底层类型确实是 `int`**——这是 C++ 标准（C++11 起）的规定，`enum class` 的默认底层类型强制为 `int`（这和传统 `enum` 不同——传统 enum 底层类型由编译器根据枚举值大小自动选择）。所以前置声明 `enum class Color;` 等价于 `enum class Color : int;`，不必写 `: int`，编译器也知道 `sizeof(Color) == sizeof(int)`。② **但底层类型非 int 时，前置声明必须显式写出该底层类型**——例如定义为 `enum class Perm : uint8_t { ... };`，其前置声明就必须写成 `enum class Perm : uint8_t;`。若前置声明漏写 `: uint8_t`，则按默认当成 `: int`，与真实定义的底层类型冲突——clang++ 实测报 `enumeration redeclared with different underlying type` 编译错误。结论：仅当 enum class 不显式指定底层类型（默认 int）时前置声明可省略 `: type`；一旦底层类型非 int，前置声明必须显式写出该底层类型，所以「所有 enum class 的前置声明都不需要指定底层类型」是错的。",
     tags: ["enum class", "前置声明", "底层类型", "int"],
   },
   {
-    id: "cst-20",
+    id: "cstool-20",
     chapter: "cpp-specialized-tools",
     level: 4,
     question:

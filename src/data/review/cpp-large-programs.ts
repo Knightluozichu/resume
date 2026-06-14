@@ -91,7 +91,7 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     level: 1,
     question: "什么是多重继承中的菱形继承问题？它为什么会产生歧义？",
     answer:
-      "菱形继承——一个类同时继承两个基类，而这两个基类又都继承自同一个共同祖先。最终派生类对象中**包含共同祖先的多份拷贝**——每个继承路径各存一份。访问共同祖先的成员时产生**名字歧义**——编译器不知道你想通过哪条路径访问哪个拷贝。例如 `Panda : Bear, Endangered` 且两者都继承 `ZooAnimal`——`panda.name` 编译报错，必须写 `panda.Bear::name` 才能消除歧义。",
+      "菱形继承——一个类同时继承两个基类，而这两个基类又都继承自同一个共同祖先。最终派生类对象中**包含共同祖先的多份拷贝**——每个继承路径各存一份。访问共同祖先的成员时产生**名字歧义**——编译器不知道你想通过哪条路径访问哪个拷贝。例如 `SmartPanel : Display, Sensor` 且两者都继承 `Device`——`panel.serial` 编译报错，必须写 `panel.Display::serial` 才能消除歧义。",
     tags: ["菱形继承", "MI", "歧义"],
   },
   {
@@ -100,7 +100,7 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     level: 1,
     question: "虚继承的语法是什么？怎么声明虚基类？",
     answer:
-      "在继承列表中用 `virtual` 关键字修饰：`class Bear : virtual public ZooAnimal {};`。`virtual` 和访问说明符（`public`/`protected`/`private`）的位置可以互换。虚基类在最终派生类对象中**只存一份子对象**——所有虚继承路径共享同一份。实现方式：每个类内部多加一个隐藏指针（类似虚函数表的 vptr）间接定位虚基类。",
+      "在继承列表中用 `virtual` 关键字修饰：`class Display : virtual public Device {};`。`virtual` 和访问说明符（`public`/`protected`/`private`）的位置可以互换。虚基类在最终派生类对象中**只存一份子对象**——所有虚继承路径共享同一份。实现方式：每个类内部多加一个隐藏指针（类似虚函数表的 vptr）间接定位虚基类。",
     tags: ["虚继承", "virtual", "虚基类"],
   },
   {
@@ -147,7 +147,7 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     level: 2,
     question: "虚继承比普通继承多了什么代价？具体说至少两个方面的开销。",
     answer:
-      "① **对象多一条额外指针**——每个包含虚基类的类内部都有一个隐藏指针（类似 vptr）用来间接定位虚基类子对象——对象变大（每个类 +8 字节 on 64-bit）。② **访问虚基类成员需要通过指针间接寻址**——`panda.name` 实际上先读 vptr → 找到虚基类偏移 → 再读 `name`。比普通继承的直接偏移多一次间接跳转，每次访问都稍慢。因此只在**菱形继承**里用虚继承——一般单继承绝不加 `virtual`。",
+      "① **对象多一条额外指针**——每个包含虚基类的类内部都有一个隐藏指针（类似 vptr）用来间接定位虚基类子对象——对象变大（每个类 +8 字节 on 64-bit）。② **访问虚基类成员需要通过指针间接寻址**——`panel.serial` 实际上先读 vptr → 找到虚基类偏移 → 再读 `serial`。比普通继承的直接偏移多一次间接跳转，每次访问都稍慢。因此只在**菱形继承**里用虚继承——一般单继承绝不加 `virtual`。",
     tags: ["虚继承", "性能代价", "vptr"],
   },
 
@@ -176,7 +176,7 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     level: 3,
     question: "用 C++17 嵌套命名空间语法写出三层命名空间 `company::product::core`，包含一个 `static constexpr int VERSION = 2;` 和一个返回 `const std::string&` 的 `name()` 函数。",
     answer:
-      "```cpp\nnamespace company::product::core {\n    inline constexpr int VERSION = 2;\n\n    const std::string &name() {\n        static const std::string n = \"core\";\n        return n;\n    }\n}\n\n// 调用端\nstd::cout << company::product::core::VERSION;  // 2\nstd::cout << company::product::core::name();    // \"core\"\n```\n\nC++17 一行 `::` 嵌套语法避免了深层花括号。`inline constexpr` 让 `VERSION` 在不同翻译单元中共享同一地址（C++17 起 static constexpr 成员变量可内联）。",
+      "```cpp\nnamespace company::product::core {\n    inline constexpr int VERSION = 2;\n\n    const std::string &name() {\n        static const std::string n = \"core\";\n        return n;\n    }\n}\n\n// 调用端\nstd::cout << company::product::core::VERSION;  // 2\nstd::cout << company::product::core::name();    // \"core\"\n```\n\nC++17 一行 `::` 嵌套语法避免了深层花括号。`inline constexpr` 是 C++17 的 **inline 变量**：namespace 作用域的 inline constexpr 变量在多个翻译单元中是**同一个实体、同一个地址**，多个 `.cpp` 包含同一头文件也不会触发 ODR 重复定义错误。",
     tags: ["嵌套命名空间", "C++17", "inline constexpr"],
   },
   {
@@ -194,10 +194,10 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     id: "clp-21",
     chapter: "cpp-large-programs",
     level: 4,
-    question: "在构造函数中使用函数 try 块：`MyClass(int n) try : ptr_(new int[n]) {} catch (const std::bad_alloc &e) { log(e); }`——这段代码有什么致命问题？怎么修？",
+    question: "在构造函数中使用函数 try 块：`MyClass(int n) try : ptr_(new int[n]) {} catch (const std::bad_alloc &e) { log(e); }`——catch 里只 log 没写 throw，这个 bad_alloc 会被吞掉吗？调用方拿到的是构造成功的对象吗？",
     answer:
-      "致命问题：构造函数 try 块的 catch **必须重新抛出异常或抛一个新异常**——因为构造失败的对象是不完整的，不允许 try 块正常结束。当前代码 catch 只 `log` 后让控制流自然离开——等于抑制了 `bad_alloc`，让调用方以为构造成功了——使用一个未初始化的对象是 UB。修正：在 catch 块的末尾加上 `throw;`（重新抛出原始异常）。构造失败 → 调用方收到异常 → 知道这个对象没构造成功。",
-    tags: ["构造函数", "函数try块", "重新抛出"],
+      "反直觉之处：构造函数（和析构函数）的函数 try 块处理器，如果控制流到达处理器末尾而**没有显式 throw**，C++ 标准（[except.handle]）规定当前异常会被**隐式自动重新抛出**。所以本例即使 catch 只 `log` 后自然离开，`bad_alloc` 仍会被自动 rethrow 传播给调用方——**不会被吞**，调用方不会拿到一个构造成功的对象，也不存在使用未初始化对象的 UB。建议：仍然显式在 catch 末尾写 `throw;`——不是为了改变行为（写不写都会重抛），而是提升可读性、避免读者误以为异常被吞掉。注意：这条规则只对构造/析构函数成立；普通函数的函数 try 块落空则不会自动重抛。",
+    tags: ["构造函数", "函数try块", "自动重抛"],
   },
   {
     id: "clp-22",
@@ -212,9 +212,9 @@ export const cppLargeProgramsQuestions: ReviewQuestion[] = [
     id: "clp-23",
     chapter: "cpp-large-programs",
     level: 4,
-    question: "虚继承链中，Bear 和 Endangered 都虚继承 ZooAnimal。如果你用 Bear 单独构造对象（不是 Panda），Bear 的构造函数里写的 ZooAnimal 初始化调用会生效吗？为什么？",
+    question: "虚继承链中，Display 和 Sensor 都虚继承 Device。如果你用 Display 单独构造对象（不是 SmartPanel），Display 的构造函数里写的 Device 初始化调用会生效吗？为什么？",
     answer:
-      "**会生效。** Bear 单独构造对象时——Bear 就是最底层派生类。虚基类的构造规则是：**当前构造的「最底层派生类」负责虚基类的初始化**。当 `Bear obj;` 时——Bear 是最底层类 → Bear 初始化列表中的 `ZooAnimal(...)` 调用生效。只有 Bear 作为 Panda 的基类被构造时——Bear 的初始化列表中 `ZooAnimal(...)` 才被绕过、由 Panda 直接接管虚基类构造。同一个 Bear 类——在继承链中某一层时可能是中间类（此时虚基类初始化被忽略），单独用时又变成最底层类（此时虚基类初始化生效）。",
+      "**会生效。** Display 单独构造对象时——Display 就是最底层派生类。虚基类的构造规则是：**当前构造的「最底层派生类」负责虚基类的初始化**。当 `Display obj;` 时——Display 是最底层类 → Display 初始化列表中的 `Device(...)` 调用生效。只有 Display 作为 SmartPanel 的基类被构造时——Display 的初始化列表中 `Device(...)` 才被绕过、由 SmartPanel 直接接管虚基类构造。同一个 Display 类——在继承链中某一层时可能是中间类（此时虚基类初始化被忽略），单独用时又变成最底层类（此时虚基类初始化生效）。",
     tags: ["虚继承构造", "最底层派生类", "上下文依赖"],
   },
   {

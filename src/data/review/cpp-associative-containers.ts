@@ -176,7 +176,7 @@ export const cppAssociativeContainersQuestions: ReviewQuestion[] = [
     level: 3,
     question: "在 map 中边遍历边 erase——下面代码有什么问题？如何修正？\n  `map<int, int> m = {{1,10}, {2,20}, {3,30}};`\n  `for (auto it = m.begin(); it != m.end(); ++it)`\n  `    if (it->second > 15) m.erase(it);`",
     answer:
-      "问题：`m.erase(it)` 使 `it` 失效——紧接着 `++it` 在失效迭代器上操作——**未定义行为**。这与 vector 不同——在 map 中 erase 只使被删元素的迭代器失效——但这也够了——for 循环仍然会在失效的 it 上执行 `++it`。修正：`for (auto it = m.begin(); it != m.end(); ) { if (it->second > 15) it = m.erase(it); else ++it; }`。C++11 起 `erase(it)` 返回被删除元素的下一个有效迭代器。另一个写法——就地组合：`m.erase(it++)`（先 ++ 返回旧 it 给 erase，但这是未定义行为因为编译器对参数的求值顺序不确定的——避免用这种取巧手法，用 erase 返回值或 erase(++it, original) 安全写法）。",
+      "问题：`m.erase(it)` 使 `it` 失效——紧接着 `++it` 在失效迭代器上操作——**未定义行为**。这与 vector 不同——在 map 中 erase 只使被删元素的迭代器失效——但这也够了——for 循环仍然会在失效的 it 上执行 `++it`。修正：`for (auto it = m.begin(); it != m.end(); ) { if (it->second > 15) it = m.erase(it); else ++it; }`。C++11 起 `erase(it)` 返回被删除元素的下一个有效迭代器。另一个写法——`m.erase(it++)` 是 C++11 以前的经典良定义惯用法——后缀 `++` 先把 it 推进、再把旧值传给 erase，因此被删的是旧位置、it 已指向下一个，安全（只有一个函数实参，根本不存在多实参求值顺序问题）。C++11 起更推荐直接用 erase 的返回值 `it = m.erase(it)`，可读性更好。",
     tags: ["erase", "迭代器失效", "map", "遍历删除", "未定义行为"],
   },
   {
@@ -185,7 +185,7 @@ export const cppAssociativeContainersQuestions: ReviewQuestion[] = [
     level: 3,
     question: "下面用 unordered_set 想检查元素是否存在——有什么更高效的写法？\n  `unordered_set<int> s = {...};`\n  `if (s.count(x) > 0) { /* 存在 */ }`",
     answer:
-      "功能正确——但 `count` 会遍历该桶的所有元素（即使找到第一个匹配后可能继续数）。对 set/unordered_set（唯一 key），`count` 返回值只能是 0 或 1——用 `count` 只是语义上没错，但现在 C++20 引入了更直观的 `contains`：`if (s.contains(x)) { /* 存在 */ }`。C++20 之前的替代——`if (s.find(x) != s.end()) { /* 存在 */ }`。`find` 和 `contains` 都只查找是否存在、不在找到后继续——效率一致。`count` 的优势在于 multimap/multiset——这时它确实能返回某个 key 的出现次数（>1 可能）。总结——检查存在：C++20 用 `contains`，C++17 及以前用 `find`。",
+      "功能正确。对唯一键容器（set/unordered_set），`count` 只返回 0/1，复杂度与 `find` 相同，并无明显性能差距；只是语义上 `contains`/`find` 更直白地表达「查存在」。C++20 引入了更直观的 `contains`：`if (s.contains(x)) { /* 存在 */ }`。C++20 之前的替代——`if (s.find(x) != s.end()) { /* 存在 */ }`。`count` 的优势在于 multimap/multiset——这时它确实能返回某个 key 的出现次数（>1 可能）。总结——检查存在：C++20 用 `contains`，C++17 及以前用 `find`。",
     tags: ["contains", "count", "find", "unordered_set", "C++20"],
   },
 
@@ -214,7 +214,7 @@ export const cppAssociativeContainersQuestions: ReviewQuestion[] = [
     level: 4,
     question: "综合题：你需要存储 1000 万个键值对（key=string，value=int），对每个操作做 100 万次查找。测试发现 unordered_map 首次运行慢得离谱——为什么？怎么优化？",
     answer:
-      "可能原因：① **没有预分配桶**——`unordered_map` 默认初始桶数很少（通常 8-16 个）——插入 1000 万个元素时会触发多次 rehash——每次 rehash 拷贝所有已有元素——累积 O(n²) 级别开销。② **string 的哈希开销**——1 千万次 `hash(string)` 本身的时间不可忽略。③ **负载因子太保守或太高**——max_load_factor 默认 1.0——如果 key 分布不均导致某些桶很长——退化为 O(n)。优化方案：① `m.reserve(10000000)`（插入前预分配）或 `m.rehash(ceil(10000000 / m.max_load_factor()))`——一次分配到位，消除所有 rehash。② 如果 string key 已知长度范围——可以考虑用定长 char 数组或 `string_view`（减少内存分配）。③ 提供自定义哈希函数——如果 key 有特殊分布可以设计更均匀的哈希。④ 如果内存不是问题——调低 max_load_factor（如 0.5）——用更多桶换取更快的冲突解决。",
+      "可能原因：① **没有预分配桶**——`unordered_map` 默认初始桶数很少（通常 8-16 个）——插入 1000 万个元素时会触发多次 rehash——虽然按几何扩容、总摊还为 O(n)，但常数因子很大（反复拷贝整表 + 重哈希），实测可慢数倍。② **string 的哈希开销**——1 千万次 `hash(string)` 本身的时间不可忽略。③ **负载因子太保守或太高**——max_load_factor 默认 1.0——如果 key 分布不均导致某些桶很长——退化为 O(n)。优化方案：① `m.reserve(10000000)`（插入前预分配）或 `m.rehash(ceil(10000000 / m.max_load_factor()))`——一次分配到位，消除所有 rehash。② 如果 string key 已知长度范围——可以考虑用定长 char 数组或 `string_view`（减少内存分配）。③ 提供自定义哈希函数——如果 key 有特殊分布可以设计更均匀的哈希。④ 如果内存不是问题——调低 max_load_factor（如 0.5）——用更多桶换取更快的冲突解决。",
     tags: ["综合", "性能", "rehash", "reserve", "大容量"],
   },
   {

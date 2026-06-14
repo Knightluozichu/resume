@@ -176,7 +176,7 @@ export const cppClassesQuestions: ReviewQuestion[] = [
     question:
       "说明以下场景分别应该用普通函数、成员函数还是友元函数实现，并解释原因：\n① 比较两个 `Sales_data` 对象的 ISBN 是否相同\n② 把一个 `Sales_data` 对象的内容打印到 `std::cout`\n③ 计算一个 `Sales_data` 对象的平均售价",
     answer:
-      "③ 成员函数（const）——它的核心操作只依赖一个对象的状态（自己的 revenue/units_sold），这种「问对象自己能回答的问题」用成员函数最自然。① 普通函数——比较两个对象的 ISBN 是「两者之间的关系」，不偏向任何一个，不需要碰 private 数据（通过 `isbn()` 接口即可），没必要用友元。② 友元函数——`operator<<` 必须是非成员函数（左操作数是 `ostream&`，不是 `Sales_data`），如果只需要公开接口可以不用友元，但如果为了效率需要直接读 private 字段则声明为 friend。",
+      "③ 成员函数（const）——它的核心操作只依赖一个对象的状态（自己的 revenue/units_sold），这种「问对象自己能回答的问题」用成员函数最自然。① 普通函数——比较两个对象的 ISBN 是「两者之间的关系」，不偏向任何一个，不需要碰 private 数据（通过 `isbn()` 接口即可），没必要用友元。② 非成员函数（如本章的 `print`）——输出操作的左操作数是 `ostream&` 而不是 `Sales_data`，天然不能是成员函数；如果只需要公开接口（`isbn()`、`avg_price()` 等）就用普通非成员函数即可，若为了效率要直接读 private 字段，则在类里把它声明为 `friend`。（日后学运算符重载时，`operator<<` 同理——也是非成员、需要时设友元。）",
     tags: ["成员 vs 非成员", "友元", "函数设计", "接口选择"],
   },
 ];

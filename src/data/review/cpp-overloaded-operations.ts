@@ -145,7 +145,7 @@ export const cppOverloadedOperationsQuestions: ReviewQuestion[] = [
     question:
       "下面的代码中 `si << 2` 的输出是什么？为什么？\n```cpp\nclass SmallInt {\npublic:\n    SmallInt(int i = 0) : val(i) {}\n    operator int() const { return val; }  // 非 explicit\nprivate:\n    int val;\n};\nSmallInt si(3);\ncout << (si << 2) << endl;\n```",
     answer:
-      "输出是 **12**（不是 3 &lt;&lt; 2 = 1 &lt;&lt; 2 = ???），因为 `operator int()` 不是 explicit——编译器将 `si << 2` 解释为：① `si` 隐式转为 `int(3)` → ② `3 << 2`（左移运算）→ ③ 结果是 `12`。但这暴露了危险——如果类设计者期望 `si << 2` 报编译错误（因为 SmallInt 没有定义左移运算符），非 explicit 的类型转换就制造了一个看似正确但实际错误的结果。修法：`explicit operator int() const`——逼迫使用者显式写 `static_cast<int>(si) << 2`，消除歧义。",
+      "输出是 **12**：`si` 经非 explicit `operator int()` 隐式转为 `int(3)`，再算 `3 << 2 = 12`。编译器将 `si << 2` 解释为：① `si` 隐式转为 `int(3)` → ② `3 << 2`（左移运算）→ ③ 结果是 `12`。但这暴露了危险——如果类设计者期望 `si << 2` 报编译错误（因为 SmallInt 没有定义左移运算符），非 explicit 的类型转换就制造了一个看似正确但实际错误的结果。修法：`explicit operator int() const`——逼迫使用者显式写 `static_cast<int>(si) << 2`，消除歧义。",
     tags: ["类型转换", "explicit", "隐式转换", "歧义"],
   },
 

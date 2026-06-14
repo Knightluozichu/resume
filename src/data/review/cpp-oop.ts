@@ -6,7 +6,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   // ── L1 认记：术语 / 定义 ──
   {
     id: "coop-1",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "什么是面向对象编程（OOP）中的继承？C++ 如何声明派生类？",
     answer:
@@ -15,7 +15,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-2",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "什么是虚函数（virtual function）？它的核心目的是什么？",
     answer:
@@ -24,7 +24,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-3",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "override 和 final 关键字分别有什么用？什么时候应该使用它们？",
     answer:
@@ -33,7 +33,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-4",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "什么是动态绑定（dynamic binding）？它与静态绑定有什么区别？",
     answer:
@@ -42,7 +42,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-5",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "纯虚函数是什么？什么是抽象基类？能创建抽象基类的对象吗？",
     answer:
@@ -51,7 +51,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-6",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 1,
     question: "基类的析构函数为什么通常应该定义为 virtual？如果不 virtual 会怎样？",
     answer:
@@ -62,7 +62,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   // ── L2 理解：用法与区别 ──
   {
     id: "coop-7",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 2,
     question: "虚函数表（vtable）和虚函数指针（vptr）是什么？它们如何实现动态绑定？",
     answer:
@@ -71,7 +71,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-8",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 2,
     question: "派生类的构造函数执行顺序是什么？析构函数的执行顺序呢？与普通类相比有什么不同？",
     answer:
@@ -80,7 +80,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-9",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 2,
     question: "什么情况下派生类必须覆盖基类的虚函数？什么情况下可覆盖可不覆盖？",
     answer:
@@ -89,7 +89,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-10",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 2,
     question: "什么是静态类型和动态类型？在什么情况下它们不一致？",
     answer:
@@ -100,7 +100,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   // ── L3 应用：代码级判断与写法 ──
   {
     id: "coop-11",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 3,
     question:
       "下面代码有什么问题？\n```cpp\nclass Base {\npublic:\n    void f() { cout << \"Base::f\" << endl; }\n};\nclass Derived : public Base {\npublic:\n    void f() { cout << \"Derived::f\" << endl; }\n};\nint main() {\n    Base *p = new Derived;\n    p->f();  // 期望输出 Derived::f\n    delete p;\n}\n```",
@@ -110,7 +110,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-12",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 3,
     question:
       "判断下面代码的输出并解释原因：\n```cpp\nclass A {\npublic:\n    virtual void f() { cout << \"A\"; }\n    A() { f(); }    // 构造函数中调用虚函数\n};\nclass B : public A {\npublic:\n    void f() override { cout << \"B\"; }\n};\nint main() { B b; }\n```",
@@ -120,7 +120,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-13",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 3,
     question:
       "定义抽象基类 `Shape`，包含纯虚函数 `double area() const = 0;`。然后定义 `Circle` 和 `Rectangle` 两个派生类，各实现 `area()`。写出完整代码，并说明抽象基类不能实例化但可以定义指针/引用的意义。",
@@ -130,7 +130,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-14",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 3,
     question:
       "为 `Quote` 和 `Bulk_quote` 写出完整的拷贝控制成员（拷贝构造/拷贝赋值/移动构造/移动赋值/析构），说明派生类拷贝/移动构造必须显式调用基类对应构造的原因和语法。",
@@ -140,7 +140,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-15",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 3,
     question:
       "写出 `print_total` 函数的完整实现——它接收一个 `ostream&`、一个 `const Quote&` 和一个数量 `n`，打印出书号、总价。说明为什么参数用 const 引用而不是值，以及内部 `item.net_price(n)` 为什么能自动走到正确的版本。",
@@ -152,7 +152,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   // ── L4 综合：完整类体系设计 ──
   {
     id: "coop-16",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 4,
     question:
       "设计一个`Vehicle`类体系：(1) 抽象基类 `Vehicle` 包含纯虚函数 `void drive() const = 0;` 和 `double maxSpeed() const = 0;` (2) `Car` 和 `Bike` 各实现自己的版本 (3) 添加一个非虚函数 `void info() const` 打印\"这是一辆车\" (4) 说明如果通过 `Vehicle*` 调用 `info()` 会调用谁的版本——并解释为什么。",
@@ -162,7 +162,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-17",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 4,
     question:
       "给出一个场景判断：设计一个 `Document` 类和一个 `Printable` 抽象接口类。`Document` 不是可打印的，但 `PdfDocument` 和 `WordDocument` 都是 `Document` 的派生类，同时也是可打印的。使用多重继承写出类层次结构，并说明虚基类（virtual base）是否需要。",
@@ -172,7 +172,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-18",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 4,
     question:
       "下列继承层次有什么设计问题？\n```cpp\nclass Base {\npublic:\n    virtual void f(int) { cout << \"Base::f(int)\\n\"; }\n};\nclass Derived : public Base {\npublic:\n    // 意图：覆盖 f\n    void f(double) { cout << \"Derived::f(double)\\n\"; }\n};\nint main() {\n    Derived d;\n    Base *p = &d;\n    p->f(42);  // 期望 Derived\n    d.f(42);   // 期望 Derived\n    d.f(3.14);\n}\n```输出是什么？如何修复？",
@@ -182,7 +182,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-19",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 4,
     question:
       "设计一个完整的 `Animal` 抽象类体系：① `Animal` 包含纯虚函数 `string sound() const = 0;` 和 `string name() const = 0;` ② `Dog` 和 `Cat` 实现各自的声音和名字 ③ 添加非虚函数 `void speak() const` 打印 `name() + \" says \" + sound()` ④ 添加 `class Kennel` 管理 `vector<unique_ptr<Animal>>`，提供 `add()` 和 `allSpeak()` 方法 ⑤ 说明 `speak()` 中为什么 `name()` 和 `sound()` 会动态派发而 `speak()` 自己不会。",
@@ -192,7 +192,7 @@ export const cppOopQuestions: ReviewQuestion[] = [
   },
   {
     id: "coop-20",
-    chapter: "cpp-oop" as any,
+    chapter: "cpp-oop",
     level: 4,
     question:
       "比较 public 继承、private 继承和组合（composition）三种代码复用方式。在什么场景下应该选哪一种？举例说明。",

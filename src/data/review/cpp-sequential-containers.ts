@@ -55,7 +55,7 @@ export const cppSequentialContainersQuestions: ReviewQuestion[] = [
     level: 1,
     question: "stack 和 queue 都默认使用 deque 作为底层容器。它们暴露的接口有什么不同？",
     answer:
-      "stack 只暴露「一端」操作——`top()`（查看栈顶）、`push()`（压入栈顶）、`pop()`（弹出栈顶）。本质是把 deque 的 push_back + back + pop_back 三个操作包装起来——后进先出。queue 暴露「两端」操作——`front()`（查看队首）、`back()`（查看队尾）、`push()`（入队尾）、`pop()`（出队首）。本质是把 deque 的 push_back + front + pop_front + back 包装起来——后进后出。关键区别：stack 只能看/操作「最近加入」的元素——queue 可以同时看「最早加入」（front）和「最近加入」（back）两个元素。",
+      "stack 只暴露「一端」操作——`top()`（查看栈顶）、`push()`（压入栈顶）、`pop()`（弹出栈顶）。本质是把 deque 的 push_back + back + pop_back 三个操作包装起来——后进先出。queue 暴露「两端」操作——`front()`（查看队首）、`back()`（查看队尾）、`push()`（入队尾）、`pop()`（出队首）。本质是把 deque 的 push_back + front + pop_front + back 包装起来——先进先出。关键区别：stack 只能看/操作「最近加入」的元素——queue 可以同时看「最早加入」（front）和「最近加入」（back）两个元素。",
     tags: ["stack", "queue", "LIFO", "FIFO", "top", "front", "back"],
   },
   {

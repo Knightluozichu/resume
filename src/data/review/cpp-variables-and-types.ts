@@ -8,7 +8,7 @@ export const cppVariablesAndTypesQuestions: ReviewQuestion[] = [
     id: "cvt-1",
     chapter: "cpp-variables-and-types",
     level: 1,
-    question: "C++ 内置的基本算术类型有哪些？按类别说出至少五类。",
+    question: "C++ 内置的基本算术类型有哪些？按类别说出四大类。",
     answer:
       "整型（short / int / long / long long）、浮点型（float / double / long double）、字符型（char / wchar_t）、布尔型（bool）。共四大类。",
     tags: ["基本类型", "算术类型"],
