@@ -1,0 +1,144 @@
+---
+title: 应用程序进程启动过程
+type: A
+section: 进程管理
+order: 3
+description: 理解 AMS 如何通过 Socket 请求 Zygote fork 出一个 App 进程，以及新进程启动后怎样初始化并运行。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第3章改编）：讲清 App 进程从请求到运行的全流程。 */}
+
+<Objectives>
+
+- 能画出 App 进程创建的流程图：AMS 发请求 → Zygote fork → 新进程初始化 → ActivityThread.main()
+- 能解释 ActivityThread 在 App 进程启动中的角色——它为什么是 App 的"main 函数"
+- 能回答：Zygote fork 出的新进程和 Zygote 本身共享哪些内容？不共享哪些？
+
+</Objectives>
+
+## 你的 App 是怎么"出生"的？
+
+你点击桌面上的微信图标，一个微信进程就在后台被创建出来了。这个过程在用户看来只是一瞬间——但对 Android 系统来说，中间经历了一次精密的跨进程通信。
+
+用**工厂流水线**类比：AMS 是"调度中心"——它收到"启动微信"的指令后，向 Zygote 这个"模板工厂"发去一张订单（fork 请求）。Zygote 收到后 fork 出一个新的进程——这个新进程就像刚从模板工厂产出的"毛坯"，跟 Zygote 长得一模一样。然后新进程快速装修自己（初始化运行环境、加载 App 代码），最终变成一个能跑微信的完整 App 进程。
+
+这一章就带你走完这条 App 进程出生的完整流水线。
+
+## App 进程启动全流程
+
+App 进程的创建过程共分四步。每一步都有明确的输入和产出：
+
+### 第一步：AMS 发起创建请求
+
+当你点击一个 App 图标（或通过代码 `startActivity()`），Launcher 或当前 App 通过 Binder 向 AMS 发送请求。AMS 检查权限、任务栈等一系列条件后，判断目标 Activity 需要的进程是否存在——如果不存在，它就要创建一个新的。
+
+AMS 通过 Socket 向 Zygote 发送 fork 请求，携带参数包括：
+- 进程的 uid/gid（决定权限）
+- 进程名
+- App 的入口 Activity 信息
+
+### 第二步：Zygote fork 新进程
+
+Zygote 一直在监听 `/dev/socket/zygote`。它收到 AMS 的 fork 请求后，调用 Linux 的 `fork()` 系统调用。这一步是 Zygote 价值的核心体现——fork 出来的子进程通过 COW 机制继承了 Zygote 的全部内存：
+
+<Callout type="tip">
+  **共享的**：ART 虚拟机实例、预加载的数千个系统类（Activity、View 等）、JNI 绑定的 C/C++ 库。<br/>
+  **不共享的**：进程 ID、线程（fork 只复制当前线程）、文件描述符表（子进程拿到一份拷贝，但独立维护）。
+</Callout>
+
+### 第三步：新进程初始化
+
+fork 之后，新进程马上开始初始化自己的运行环境。这一步由 **AndroidRuntime** 负责：
+
+1. 启动 Binder 线程池——让新进程也能通过 Binder 跟系统服务通信
+2. 创建 App 的主线程 **ActivityThread**
+3. 调用 **ActivityThread.main()**——这就是 App 进程真正的"入口函数"
+
+`ActivityThread.main()` 做了两件事：
+1. 准备主线程的 `Looper`（消息循环）——让主线程能处理消息队列
+2. 通过 Binder 向 AMS **attach**——告诉 AMS "我创建好了，可以启动 Activity 了"
+
+### 第四步：启动目标 Activity
+
+AMS 收到新进程的 attach 通知后，通过 Binder 告诉新进程里的 ActivityThread："启动这个 Activity"。ActivityThread 通过反射创建目标 Activity 实例，依次回调 `onCreate` → `onStart` → `onResume`。App 界面最终显示。
+
+<AndroidStartupSequenceDiagram />
+
+## 动手：AMS → Zygote → 新进程，一步步走
+
+> 猜一猜：Zygote fork 一个耗时 500ms，然后新进程加载 App 代码又花 500ms。总创建时间是不是 1000ms？动手看第三步的解释再说你的答案。
+
+<Stepper>
+  <Step title="① AMS 发送创建请求">
+    <AndroidStartupSequenceDiagram />
+    用户点击图标 → Launcher 通过 Binder 告诉 AMS → AMS 检查权限和任务栈 → 发现目标进程不存在 → 通过 Socket 向 Zygote 发送 fork 请求，携带 uid/gid、进程名、入口 Activity 信息。
+  </Step>
+  <Step title="② Zygote 执行 fork()">
+    <AndroidStartupSequenceDiagram />
+    Zygote 调用 fork() 创建一个跟它一模一样的新进程。通过 COW，新进程继承 Zygote 的全部内存（ART 实例、已加载的系统类等）。但 PID 是新的，线程只有当前这条。
+  </Step>
+  <Step title="③ 新进程初始化——ActivityThread.main()">
+    <AndroidStartupSequenceDiagram />
+    新进程启动 Binder 线程池，创建 ActivityThread，调用其 main() 方法。main() 准备主线程 Looper（消息循环），然后通过 Binder 向 AMS attach——"我准备好了！"。注意：fork 和加载是两步——虽然都是 500ms 量级，但它们一定先后执行，所以总时间确实是 ~1000ms。
+  </Step>
+  <Step title="④ AMS 启动目标 Activity">
+    <AndroidStartupSequenceDiagram />
+    AMS 收到 attach 后，通过 Binder 通知新进程的 ActivityThread 启动指定 Activity。ActivityThread 反射创建 Activity 实例，回调 onCreate → onStart → onResume。界面显示，App 启动完成。
+  </Step>
+</Stepper>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：面试被问"App 的 main 方法在哪？"答不上来。**原因**：天天写 App 代码但不知道 App 进程的真正入口是 ActivityThread.main()——不是 Application.onCreate()，也不是 Activity.onCreate()。**修法**：App 进程的 main 是 ActivityThread.main()，它准备 Looper、attach 到 AMS。Application 和 Activity 的生命周期回调都是在这个 main 运行起来之后、由 AMS 调度触发的。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为"fork 新进程 = 完整复制 Zygote"。**原因**：忽略了 COW 和线程复制细节。**修法**：fork 确实复制了内存空间——但 COW 让两个进程共享只读页（系统类代码等），只有写入时才真正复制。另外 fork 只复制调用线程——如果 Zygote 有多条线程，子进程里只保留 fork 调用的那一条。
+</Callout>
+
+## 小结
+
+- App 进程创建四步：AMS 发请求 → Zygote fork → 新进程初始化（ActivityThread.main）→ AMS 启动 Activity
+- fork + COW：新进程继承 Zygote 内存，只读不写 = 共享物理内存，写入触发复制
+- ActivityThread.main() 是 App 进程真正的入口——准备 Looper + attach 到 AMS
+- 新进程通过反射创建 Activity 实例，AMS 远程调度生命周期回调
+- AMS 不是自己创建进程——它通过 Socket 让 Zygote 代为 fork
+
+<Exercises>
+
+**练习 1（问答型）** ActivityThread.main() 做了哪两件关键的事？
+
+<Answer>
+① 准备主线程 Looper（消息循环）——让主线程能处理消息队列（事件分发、生命周期回调都靠它）；② 通过 Binder 向 AMS attach——告诉系统"新进程准备好了，可以启动我的 Activity 了"。
+</Answer>
+
+**练习 2（问答型）** Zygote fork 新进程后，子进程继承了 ART 虚拟机实例——这带来什么好处？如果不继承呢？
+
+<Answer>
+如果不继承 ART 实例，每个 App 进程启动时都要从零创建 ART（加载系统类、初始化 JNI 绑定等），启动会慢很多倍。继承 ART 实例 = 跳过这步，App 启动时间大幅缩短。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="ActivityThread">
+  App 进程的"主线程管家"。它的 main() 方法是 App 进程真正的入口函数——准备主线程消息循环（Looper）、向 AMS attach、然后等待 AMS 远程调度 Activity 生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="AndroidRuntime">
+  Zygote fork 出的新进程中负责初始化运行环境的组件。包括启动 Binder 线程池、创建 ActivityThread、加载 App 的 dex 代码等。
+</GlossaryItem>
+
+<GlossaryItem term="Looper">
+  Android 消息循环机制。主线程通过 Looper 不断从消息队列取消息处理——触摸事件、生命周期回调、View 刷新都是通过它分发的。没有 Looper 主线程跑完就停了。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

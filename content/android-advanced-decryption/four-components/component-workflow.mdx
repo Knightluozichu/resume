@@ -1,0 +1,194 @@
+---
+title: 四大组件的工作过程
+type: C
+section: 四大组件
+order: 4
+description: 详解 Android 四大组件的工作机制——根 Activity 如何启动、Service 的启动与绑定、广播的注册发送接收、ContentProvider 的启动与数据共享。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第4章改编）：讲清四大组件的工作过程与源码链路。 */}
+
+<Objectives>
+
+- 能画出根 Activity 从 Launcher 点击到 onCreate 的完整调用链（跨进程 IPC 路径）
+- 能解释 startService 和 bindService 的区别——启动方式、生命周期、通信方式各不同
+- 能回答：广播的"动态注册"和"静态注册"有什么本质区别？为什么 Android 8.0 限制了静态广播？
+
+</Objectives>
+
+## 四大组件——Android App 的四根支柱
+
+每一个 Android App 都由四种"零件"拼成：Activity（用户看到的页面）、Service（后台干活的工人）、BroadcastReceiver（监听系统事件的耳朵）、ContentProvider（管理数据的管家）。它们各有各的启动方式、生命周期和 IPC 通信路径。
+
+用**工厂**类比：Activity 是工厂的各个**车间**（顾客进来看到的），Service 是在车间后面默默运转的**流水线**（不需要人来看着），BroadcastReceiver 是工厂里的**广播喇叭**（一有通知全厂都听到），ContentProvider 是工厂的**档案室**（统一管理数据、谁借都要登记）。
+
+本章聚焦四大组件**怎么启动、怎么通信**——不讲怎么写代码（那是入门书的事），只讲源码层的调用链路。这是理解 AMS、WMS 等系统服务如何调度 App 的基础。
+
+## 1. 根 Activity 的启动过程
+
+"根 Activity"就是 Launcher 桌面上点击图标后打开的第一个 Activity。从点击到界面显示，中间经过了一条精密的跨进程调用链：
+
+### 调用链路全景
+
+```
+Launcher 进程                 system_server 进程           新 App 进程
+    │                              │                         │
+    │──startActivity()──Binder──→  │ AMS 检查权限/栈          │
+    │                              │ AMS 通知 Zygote fork ──→ │
+    │                              │                         │ 进程创建
+    │                              │                         │ ActivityThread.main()
+    │                              │ ←──Binder attach──────── │
+    │                              │                         │
+    │                              │──scheduleLaunchActivity→ │
+    │                              │                         │ 反射创建 Activity
+    │                              │                         │ onCreate → onStart
+    │                              │                         │ onResume → 界面显示
+```
+
+关键节点：
+1. **Launcher 通过 Binder 调用 AMS.startActivity()**：把 Intent 信息发给 system_server 里的 AMS
+2. **AMS 处理**：检查权限、解析 Intent、查找目标 Activity、管理任务栈
+3. **AMS 请求 Zygote fork 新进程**（如果目标进程还不存在）
+4. **新进程 attach 到 AMS**：ActivityThread.main() 启动后用 Binder 告诉 AMS "我好了"
+5. **AMS 通过 ApplicationThread 调度 Activity 生命周期**：这是一个 Binder 回调——AMS 远程调用 App 进程里的 ApplicationThread，后者把消息投递到主线程的消息队列
+6. **Activity.onCreate() 执行**：App 开始初始化界面
+
+<Callout type="tip">
+  关键理解：AMS 在 system_server 进程里（Java 对象），Activity 在 App 进程里。AMS 无法直接调 App 进程里 Activity 的方法——它通过 Binder 远调 App 进程里的 ApplicationThread，ApplicationThread 再把消息投到主线程的 Handler 队列，最终在主线程上执行生命周期回调。
+</Callout>
+
+### ApplicationThread——App 进程的"对讲机"
+
+ApplicationThread 是 ActivityThread 的一个内部类，它是一个 Binder 服务端。AMS 远程调用它的方法（如 `scheduleLaunchActivity()`），它再通过主线程 Handler 把消息投递到消息队列——最终在主线程上执行真实的生命周期回调。这就是典型的 **Binder 线程 → Handler → 主线程** 的消息桥接模式。
+
+## 2. Service 的启动与绑定
+
+Service 有两种启动方式，它们走的 AMS 调用路径不同：
+
+### startService
+
+调用 `context.startService(intent)` → Binder 到 AMS → AMS 检查进程是否存在 → 如需要则 Zygote fork → 新进程中 ActivityThread 收到 `scheduleCreateService` → 反射创建 Service → `onCreate()` → `onStartCommand()`。
+
+startService 启动的 Service **跟调用者没有直接通信通道**。调用者启动后就走了——Service 在后台独立运行。想跟它通信？得用广播或者 bindService。
+
+### bindService
+
+调用 `context.bindService(intent, connection, flags)` → Binder 到 AMS → AMS 走同样的进程创建流程 → Service 的 `onBind()` 返回一个 Binder 对象 → AMS 把这个 Binder 对象回传给调用者。
+
+bindService 启动的 Service **跟调用者建立了 Binder 通信**。调用者拿到 Service.onBind() 返回的 Binder 接口后，可以直接调 Service 里的方法——就像调本地方法一样（Binder 帮你做了跨进程的序列化/反序列化）。
+
+```
+startService: 调用者 ──→ Service（启动后断开，无回调通道）
+bindService:  调用者 ←──Binder──→ Service（双向通信，调用者可调Service方法）
+```
+
+生命周期的区别：startService 需要显式调用 `stopService()` 或 Service 自身 `stopSelf()` 才会停止；bindService 在所有绑定者 unbind 后自动停止。
+
+## 3. 广播的注册、发送和接收
+
+BroadcastReceiver 是 Android 的事件总线——系统或 App 发出广播，注册了这个广播的接收者就能收到。
+
+### 注册方式：动态 vs 静态
+
+| | 动态注册 | 静态注册 |
+|---|---|---|
+| **注册方式** | 代码里 `registerReceiver()` | AndroidManifest.xml 声明 |
+| **生命周期** | 跟注册者的生命周期绑定 | App 安装后常驻——即使 App 没启动也能接收 |
+| **实现机制** | AMS 内部注册表中登记 | PMS 解析 Manifest 时登记到 AMS |
+| **Android 8.0+** | 无限制 | 大部分隐式广播被禁止（省电优化） |
+
+Android 8.0 为什么限制静态广播？因为每个 App 在 Manifest 里声明几十个静态广播接收器，系统一有变化（网络切换、时区变化、电量变化），所有声明了对应接收器的 App 都得从后台被拉起来——即使它们根本没在运行。结果是大量 App 被频繁唤醒，耗电极快。Google 一刀切：大部分隐式广播只能用动态注册，只有少数关键广播（开机完成等）保留静态注册能力。
+
+### 发送流程
+
+`sendBroadcast(intent)` → Binder 到 AMS → AMS 查找注册表中所有匹配的接收者 → 逐个分发——如果接收者所在进程不存在则先拉起 → 接收者进程里的 ActivityThread 收到 `scheduleReceiver` → 执行 `onReceive()`。
+
+### 有序广播 vs 普通广播
+
+- **普通广播**（sendBroadcast）：所有接收者同时收到，无法中断
+- **有序广播**（sendOrderedBroadcast）：按优先级依次传递，高优先级的可以拦截不往下传或修改数据
+
+## 4. ContentProvider 的启动过程
+
+ContentProvider 是 App 间数据共享的标准方式。跟 Activity/Service 不同，ContentProvider 在 Application.onCreate() **之前**就初始化了——因为它可能在 Application 初始化过程中就被其他进程调用。
+
+### 启动流程
+
+当 App A 通过 `ContentResolver.query()` 访问 App B 的 ContentProvider 时：
+1. A 的 ContentResolver 通过 Binder 向 AMS 请求 ContentProvider
+2. AMS 检查 B 进程是否在运行——如果不在则拉起 B（Zygote fork）
+3. B 进程初始化——但是 **先初始化 ContentProvider，再初始化 Application**
+4. AMS 把 ContentProvider 的 Binder 代理对象返回给 A
+5. A 通过 Binder 直接调 B 的 ContentProvider 进行 CRUD
+
+关键设计：ContentProvider 的初始化顺序在 Application 之前——这意味着 ContentProvider 的 `onCreate()` 里不能依赖 Application 已经初始化完毕。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 Application.onCreate() 里做数据库初始化，但 ContentProvider 的 onCreate() 先于 Application.onCreate() 执行，导致数据库还没初始化就开始读写。**原因**：ContentProvider 初始化顺序在 Application 之前。**修法**：数据库初始化放在 ContentProvider.onCreate() 里（或延迟到首次使用），不要依赖 Application 先初始化。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用静态广播接通知想在 App 没启动时也能收到——Android 8.0 上无效。**原因**：Android 8.0 限制隐式静态广播。**修法**：改用动态注册（App 运行时注册）或 JobScheduler/WorkManager 替代。
+</Callout>
+
+<Callout type="trap">
+  **现象**：bindService 后想在一段时间后主动停止 Service——但一直不触发 onDestroy。**原因**：bindService 创建的 Service 在所有绑定者 unbind 后才停止——即使你调了 stopService，只要还有绑定者在，它就不会停。**修法**：确保所有绑定者都调了 unbindService()。
+</Callout>
+
+## 小结
+
+- Activity 启动经过五步 Binder IPC：Launcher→AMS→Zygote→新进程attach→AMS调度生命周期
+- ApplicationThread 是 AMS 和 App 进程之间的 Binder 对讲机——远程调度转主线程 Handler 执行
+- startService（单向启动）vs bindService（双向 Binder 通信），生命周期管理不同
+- 动态广播跟注册者同生命周期；静态广播注册在 Manifest，Android 8.0 后大部分被禁
+- ContentProvider 在 Application 之前初始化——它的 onCreate() 不能依赖 Application 已就绪
+
+<Exercises>
+
+**练习 1（画图型）** 画出 Activity 启动的完整 Binder IPC 调用链，标注每次 IPC 的方向和传输的数据。
+
+<Answer>
+Launcher →(startActivity)→ AMS →(fork请求,Socket)→ Zygote →(fork)→ 新进程 →(attach,Binder)→ AMS →(scheduleLaunchActivity,Binder)→ ApplicationThread →(Handler消息)→ 主线程 → onCreate/onStart/onResume
+</Answer>
+
+**练习 2（问答型）** startService 启动的 Service 有什么生命周期特点？跟 bindService 有什么不同？
+
+<Answer>
+startService：调 stopService/stopSelf 才停止，跟调用者无通信通道。bindService：所有绑定者 unbind 后自动停止，调用者通过 Binder 可直接调 Service 方法（双向通信）。
+</Answer>
+
+**练习 3（问答型）** 为什么 Android 8.0 限制静态注册广播？你的 App 如果要监听网络状态变化怎么办？
+
+<Answer>
+限制原因：大量 App 在 Manifest 声明静态广播接收器→系统每次变化都要拉起大量后台 App→耗电极快。解决方案：改用动态注册 registerReceiver()（在 App 运行时注册），或用 ConnectivityManager.registerDefaultNetworkCallback() 监听网络变化。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="ApplicationThread">
+  ActivityThread 的内部类，是 App 进程的 Binder 服务端。AMS 通过 Binder 远程调用它的方法（如 scheduleLaunchActivity），它再把消息投到主线程 Handler 执行——实现系统进程到 App 进程的生命周期调度。
+</GlossaryItem>
+
+<GlossaryItem term="动态注册 vs 静态注册广播">
+  动态：代码 registerReceiver()，跟注册者同生命周期。静态：Manifest 声明，App 安装后常驻（即使没启动也能接广播）。Android 8.0 后大部分隐式广播禁止静态注册以省电。
+</GlossaryItem>
+
+<GlossaryItem term="有序广播">
+  按优先级依次传递的广播——高优先级接收者可以拦截（abortBroadcast）不让后续接收者收到，也可以修改广播中的数据传给下一个。
+</GlossaryItem>
+
+<GlossaryItem term="ContentProvider">
+  Android 四大组件中的数据管家。App 通过 ContentResolver 跨进程查询/修改其他 App 的数据。初始化顺序在 Application 之前。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
