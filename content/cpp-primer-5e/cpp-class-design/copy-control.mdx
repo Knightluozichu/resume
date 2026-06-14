@@ -1,0 +1,591 @@
+---
+title: 拷贝控制
+type: C
+section: 类设计者工具
+order: 1
+description: 掌握C++三/五法则——拷贝构造/拷贝赋值/析构/移动构造/移动赋值，理解值语义与资源管理的核心机制
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（C++ Primer §13 改编）：拷贝/移动/析构——"类设计者工具"第一篇。
+   重心在概念图示 + Stepper(§5) + 代码对照(§6)，概念讲解(§3)配四个 SVG 图示，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 拷贝构造与拷贝赋值（合成的vs自定义、浅拷贝的陷阱）— viz: CopySemanticsDiagram（浅vs深对比图）
+   2) 析构函数（何时需要、释放顺序、合成析构的行为）— 代码示例
+   3) 三/五法则（为什么自定义一个就要定义全部）— viz: RuleOfFiveDiagram（五成员关系图）
+   4) 移动构造与移动赋值（&&、std::move、移动后状态、noexcept）— viz: MoveSemanticsDiagram（step prop 1-3）
+   5) 阻止拷贝（=delete、合成的拷贝控制成员被删除的场景）— 代码示例
+   额外 viz: ResourceLifetimeDiagram（完整生命周期时间线）*/}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释合成拷贝控制成员的行为——什么情况下编译器替你生成、生成的拷贝是浅拷贝还是深拷贝，以及为什么管理堆资源的类不能依赖合成的拷贝
+- 能根据类的资源管理需求，正确实现拷贝构造/拷贝赋值/析构函数——知道拷贝赋值必须先释放旧资源、处理自赋值，析构必须释放所有堆资源
+- 能回答：下面 `HasPtr` 类的合成拷贝控制成员有什么问题？写出修正后的完整五法则实现。
+  ```cpp
+  class HasPtr {
+  public:
+      HasPtr(const std::string &s) : ps(new std::string(s)), i(0) {}
+  private:
+      std::string *ps;
+      int i;
+  };
+  ```
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——对象像产品，拷贝控制像流水线规则。 */}
+
+## 对象拷贝时，到底发生了什么？
+
+你已经习惯写 `auto b = a;` 把 `a` 的值拷贝给 `b`。对于 `int`、`double` 这些简单类型，拷贝就是复制那几个字节——干净利落。但现在你开始设计自己的类了——里面可能有指向堆内存的指针、有文件句柄、有网络连接——这时候 `auto b = a;` 到底该干什么？
+
+想象工厂流水线上有个零件盒——里面装着螺丝、垫片、还有一张"去仓库第3排货架取专用夹具"的取货单。现在你要复制这个盒子——你是只复印取货单（两个人拿着同一张单子去同一个货架打架），还是真的去仓库拿一副新夹具放进新盒子？前者就是默认的「浅拷贝」——只复制指针本身，不复制指针指向的数据。
+
+**这一章解决什么问题？** 教你怎么定制五个"特殊函数"——对象被拷贝时、被赋值时、被移动时、被销毁时分别该干什么。没有它们，管理堆资源的类一拷就崩——两个对象抢同一块内存，析构时删两次直接炸掉。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 合成的拷贝：编译器替你做了什么
+
+如果你不为类定义拷贝构造函数和拷贝赋值运算符，编译器会替你合成一份。<Term def="编译器在没有自定义拷贝控制成员时自动生成的版本。对内置类型成员逐字节拷贝其值；对类类型成员调用该成员的拷贝构造/拷贝赋值。合成的拷贝是浅拷贝——只复制指针值，不复制指针指向的堆数据。">合成的拷贝控制成员（synthesized copy control）</Term>对每个非 static 成员逐个拷贝：
+
+- 类类型成员（如 `string`、`vector`）调用其自身的拷贝构造函数——`string` 的拷贝会正确分配新内存并复制字符串内容，所以这一部分是**深拷贝**
+- 内置类型成员（如 `int`、`double`）直接复制其值——纯值拷贝，没有问题
+- **指针成员**（如 `int*`）只复制指针的地址值——不复制指针指向的堆数据
+
+<Term def="只复制指针本身的值，不复制指针指向的堆内存内容。结果：两个对象里的指针指向同一块堆内存——修改一个影响另一个，析构时双重释放崩溃。也被称为逐成员拷贝">浅拷贝（shallow copy）</Term>只对指针本身的地址做拷贝——比如 `ps` 值是 `0x1000`，拷贝后就得到另一个也指向 `0x1000` 的指针。两个人看着同一张取货单去同一个货架搬东西——你不炸谁炸。
+
+<CopySemanticsDiagram />
+
+看上面对比图。左半边展示的就是合成的拷贝——两个 `HasPtr` 对象的 `ps` 都指向堆上同一个 `string`。你改了一个的 `*ps`，另一个的也变了。更致命的是析构：两个对象离开作用域时都对自己的 `ps` 执行 `delete`——同一块内存被释放两次，这叫 <Term def="对同一块已释放的堆内存再次执行 delete 导致的严重错误——属于未定义行为（undefined behavior），程序可能立即崩溃、静默破坏数据、或在一段随机时间后崩溃。是浅拷贝最典型的后果。">双重释放（double free）</Term>，程序直接炸。
+
+看右侧那张图——正确的做法是为新对象**单独分配**一块堆内存，把源对象 `*ps` 的内容**复制进去**。两个对象各管各的堆内存，改一个不影响另一个，析构时各删各的——这叫深拷贝。
+
+## 深拷贝的正确姿势：拷贝构造 + 拷贝赋值
+
+要解决上面左图的问题，你需要自己写拷贝构造函数和拷贝赋值运算符。它们是五个特殊成员函数中的前两个。
+
+<Term def="用已有对象初始化新对象的构造函数。形如 ClassName(const ClassName&)。第一参数必须是自身类型的 const 引用。新对象尚未存在——先分配成员的堆内存，再拷贝内容。">拷贝构造函数（copy constructor）</Term>的第一个参数是 `const ClassName&`——用已有对象初始化一个**刚诞生**的新对象：
+
+```cpp
+HasPtr(const HasPtr &orig)
+    : ps(new std::string(*orig.ps)), i(orig.i) {}
+//      ↑ 先 new 分配新内存，再拷贝 *orig.ps 内容
+```
+
+关键点：构造时 `this` 对象刚分配还没内容——只需要分配+拷贝，不需要释放任何东西（本来就没有）。
+
+<Term def="将一个已有对象的值赋给另一个已有对象的运算符重载。形如 ClassName& operator=(const ClassName&)。通常三步走：①检查自赋值、②释放当前持有资源、③分配新资源并拷贝。返回 *this 的引用以支持链式赋值 a=b=c。">拷贝赋值运算符（copy assignment operator）</Term>就不同了——`a = b` 调用时 `a` 已经存在，可能正持有一块堆内存。必须先释放旧的，再分配新的：
+
+```cpp
+HasPtr& operator=(const HasPtr &rhs) {
+    auto *newp = new std::string(*rhs.ps);  // ① 先分配新内存（防止异常时丢失旧数据）
+    delete ps;                               // ② 释放旧内存
+    ps = newp;                               // ③ 接管新内存
+    i = rhs.i;
+    return *this;                            // ④ 返回自身引用——支持链式赋值
+}
+```
+
+注意顺序——如果先 `delete ps` 再 `new`，万一 `new` 抛异常，`ps` 已经丢了旧数据，对象就坏了。先 `new` 再 `delete` 是异常安全的正确写法。
+
+还有一个必须处理的边界情况：**自赋值**。当调用方写 `a = a;` 时，上面的代码仍然成立——`newp` 分配成功后再 `delete` 旧数据，没有问题。但如果有人错误地写成先 `delete` 再判断 `this != &rhs` 再 `new`——自赋值时你先把 `ps` 释放了，然后用 `*rhs.ps` 去拷贝……而 `rhs` 就是自己，`*rhs.ps` 在 `delete` 后已经是野指针了。
+
+## 析构函数：对象死的时候该做什么
+
+一个对象的生命走到尽头——离开作用域、被显式 `delete`、或智能指针的引用计数归零——此时必须有人把它的所有堆资源还回去。这个角色就是 <Term def="对象销毁前自动调用的特殊成员函数。形如 ~ClassName()，无参数无返回类型。负责释放对象持有的所有资源（堆内存、文件句柄等）。先执行函数体，再按成员声明逆序销毁各成员。">析构函数（destructor）</Term>：
+
+```cpp
+~HasPtr() { delete ps; }
+// 对象即将销毁 → 把 ps 指向的 string 还回堆 → 各成员逆序析构
+```
+
+什么时候必须自己写析构函数？一句话：**当你的类管理了需要手动释放的资源时**。具体信号是类里有裸指针成员指向动态分配的内存——如果你 new 了，就必须在析构里 delete。如上面的 `HasPtr`——`ps` 指向一个 `new` 出来的 `string`，析构函数不 `delete ps` 就是内存泄漏。
+
+如果类里没有裸指针资源（比如成员都是 `string`、`vector`、`shared_ptr`），析构函数就不需要自己做任何事——编译器合成一个空的析构，然后自动调用每个类类型成员的析构函数。
+
+析构函数体执行完毕后，成员的销毁按**声明顺序的逆序**进行——后声明的先销毁。而析构函数**本身不能有参数、不能重载**——一个类只有一个析构函数。
+
+## 三/五法则：为什么牵一发而动全身
+
+前面讲的三个函数——拷贝构造、拷贝赋值、析构——构成了 <Term def="C++ 的经典准则：如果一个类需要自定义析构函数、拷贝构造函数或拷贝赋值运算符中的任意一个，那么它几乎一定需要自定义全部三个。C++11 扩展为五法则——再加上移动构造函数和移动赋值运算符。">三法则（Rule of Three）</Term>。看上面 `HasPtr` 的例子：你定义了析构（因为有 `delete ps`）→ 就必须定义拷贝构造和拷贝赋值（避免浅拷贝导致双重释放）。
+
+C++11 引入了移动语义，法则升级为 <Term def="C++11 对三法则的扩展。如果一个类需要自定义析构、拷贝构造、拷贝赋值、移动构造或移动赋值中的任意一个，那么它几乎一定需要显式定义或 =default/=delete 全部五个。核心：拷贝/移动/析构是彼此关联的资源管理决策。">五法则（Rule of Five）</Term>——加上移动构造函数和移动赋值运算符。
+
+<RuleOfFiveDiagram />
+
+看上图的关系——析构函数是基础：它决定了"资源应该怎么还"。拷贝控制（构造+赋值）决定了"怎么安全复制一份"。移动控制（构造+赋值）决定了"怎么高效转移所有权，不复制数据"。
+
+实际决策口诀：
+- 如果**不需要**任何资源管理 → 全都不写，让编译器合成（= 零法则）
+- 如果类管理了堆资源 → **写全五个**，或明确 `= default` / `= delete`
+- 不确定时，先写析构——析构需要 `delete` 就说明必须有拷贝和移动控制
+
+## 移动语义：不拷贝数据，只转移所有权
+
+拷贝要做深拷贝——分配新内存并逐字节复制。如果源对象马上就要被销毁（比如一个临时对象、函数返回的局部变量），这完全是浪费——明明直接把数据"搬过来"就行。
+
+C++11 引入 `<Term def="C++11 引入的核心语言特性——不拷贝资源本身，只把资源的所有权从源对象转移到目标对象。通过右值引用 T&& 和 std::move 实现。转移后源对象处于'有效但未指定'状态——可安全析构或重新赋值，但不保证内容。移动是 O(1) 常数时间操作。">移动语义（move semantics）</Term>` 解决这个问题——把源对象里的裸指针直接"偷"过来，再把源对象的指针置空，O(1) 时间完成：
+
+```cpp
+// 移动构造函数：接管 rhs 的资源，把它置空
+HasPtr(HasPtr &&rhs) noexcept
+    : ps(rhs.ps), i(rhs.i) {
+    rhs.ps = nullptr;  // 源对象安全了——析构时 delete nullptr 是空操作
+}
+```
+
+<Term def="C++11 的类型——T&&，只能绑定到即将销毁的右值（临时对象、std::move 的结果）。移动构造/移动赋值的参数就是右值引用——区别于左值引用 T& 用于拷贝控制。">右值引用（rvalue reference）</Term> `T&&` 是移动语义的类型基础——它只能绑定到"即将被销毁"的对象（右值）。`const T&` 绑定左值用于拷贝；`T&&` 绑定右值用于移动。
+
+<Term def="标准库函数——显式地将一个左值转换为右值引用，告诉编译器'这个对象以后我不再用了，你可以移走它的资源'。本身不移动任何东西——只是类型转换。调用后对象处于'可移动'状态，实际移动行为由移动构造/赋值决定。">`std::move`</Term> 把一个左值强制转成右值引用——相当于向编译器声明："我以后不再用这个对象了，你可以安全地偷走它的资源"。但 `std::move` 本身不移动任何东西——真正执行移动的是移动构造函数或移动赋值运算符。
+
+<MoveSemanticsDiagram step={1} />
+
+移动赋值运算符和拷贝赋值的结构类似——先释放自己当前持有的资源，再接管源的资源：
+
+```cpp
+HasPtr& operator=(HasPtr &&rhs) noexcept {
+    if (this != &rhs) {        // 防止自赋值（虽然 a = std::move(a) 很罕见）
+        delete ps;             // 释放当前资源
+        ps = rhs.ps;           // 接管 rhs 的资源
+        i = rhs.i;
+        rhs.ps = nullptr;      // rhs 安全了
+    }
+    return *this;
+}
+```
+
+移动后源对象处于什么状态？**"有效但未指定"**——你可以销毁它（析构安全），可以重新给它赋值，但不能假设它里面还有什么。上面的代码把 `rhs.ps` 设成了 `nullptr`——析构时 `delete nullptr` 合法且无事发生，这是最典型的做法。
+
+`noexcept` 为什么重要？移动操作通常不分配内存、不抛异常——标上 `noexcept` 能让标准库容器（如 `vector`）在扩容时优先选用移动而非拷贝，大幅提升性能。如果移动构造没标 `noexcept`，`vector` 宁愿做慢得多的拷贝来保证异常安全。
+
+## = delete：明确说「这个操作不允许」
+
+有些类的语义里，拷贝根本不成立。比如 `unique_ptr`——同一时刻只有一个所有者，拷贝就是违反它存在的意义。C++11 提供了 `= delete` 语法来在编译期杜绝这种行为：
+
+```cpp
+class NonCopyable {
+public:
+    NonCopyable() = default;
+    NonCopyable(const NonCopyable&) = delete;            // 禁止拷贝构造
+    NonCopyable& operator=(const NonCopyable&) = delete;  // 禁止拷贝赋值
+};
+```
+
+与 `= default`（请求编译器合成默认版本）相反，`= delete` 明确告诉编译器"这个函数不存在"。任何试图拷贝 `NonCopyable` 的代码都会在**编译期**直接报错——不会默默出 bug。
+
+即使不写 `= delete`，某些场景下编译器也会**静默删除**合成的拷贝控制成员：比如类里有一个 `const` 成员——`const` 不能被赋值，所以合成的拷贝赋值被隐式 `= delete`。又比如类里有一个 `unique_ptr` 成员——`unique_ptr` 不能拷贝，于是整个类的合成拷贝构造和拷贝赋值都被删除。
+
+实际应用口诀：① 需要独占资源 → 只保留移动，删除拷贝；② 需要共享资源 → 保留拷贝，移动自动生成或也手动写；③ 对象语义上不可拷贝（如数据库连接、互斥锁）→ 直接 `= delete` 拷贝两个。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为 Stepper——MoveSemanticsDiagram 三步展示移动所有权的转移。
+   猜一猜引导；每步必须带 SVG 可视化。 */}
+
+## 动手：一步步看资源所有权的转移
+
+下面用一个 Stepper 演示一个 `HasPtr` 对象被 `std::move` 后，它的 `ps` 指针如何从指向堆数据变成了 `nullptr`。每一步下方配一张 MoveSemanticsDiagram 让你直观看到内存里发生了什么。
+
+> 猜一猜：执行 `auto dest = std::move(source);` 之后，`source.ps` 还是原来那个值吗？用 Stepper 逐步验证你的猜想。
+
+<Stepper>
+  <Step title="① 移动前：源对象持有堆资源">
+
+    <MoveSemanticsDiagram step={1} />
+
+    源对象 `source` 正常存在——`ps` 指向堆上一个 `string("hello")`，`i` 值为 `0`。目标对象 `dest` 尚不存在（如果是移动构造）或已存在并持有自己的旧资源（如果是移动赋值）。此时源对象一切正常，可以正常读写。图中源指针用紫色箭号指向堆资源，说明所有权归源对象。
+  </Step>
+  <Step title="② 移动中：执行指针转移 + 源置空">
+
+    <MoveSemanticsDiagram step={2} />
+
+    移动构造执行两行关键代码：`ps = rhs.ps;` 把堆资源指针从源对象"搬"到新对象——没有任何 `new` 分配，只是复制了一个指针值。接着 `rhs.ps = nullptr;` 把源对象的指针抹成空——防止析构时双重释放。整个过程是 O(1) 常数时间，零内存分配。如果有 `int` 等非指针成员（如 `i`），直接拷贝它们的值就行——这些不是堆资源，不存在所有权问题。
+  </Step>
+  <Step title="③ 移动后：目标对象接管、源对象安全">
+
+    <MoveSemanticsDiagram step={3} />
+
+    移动完成。目标对象 `dest` 接管了原属于 `source` 的堆资源——`dest.ps` 指向那个 `string("hello")`，`source.ps` 已经变成 `nullptr`。源对象处于"有效但未指定"状态——你可以安全地析构它（`delete nullptr` 无事发生）、可以重新给它赋值（`source = HasPtr("new")`），但不要读 `*source.ps`（那是空指针解引用）。如果源对象后续离开作用域，析构函数执行 `delete ps`——对 `nullptr` 来说合法且什么也不做。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  这个 Stepper 的核心教具价值：让你亲眼看到指针从"指向一块内存"变成空——所有权确实被转移了。理解了移动语义，你才能理解为什么 `vector` 扩容时可以不拷贝元素、为什么 `unique_ptr` 能零开销独享资源、为什么函数返回大对象时不需要额外拷贝。
+</Callout>
+
+## 完整生命周期：一口看完从生到死的六个阶段
+
+结合前面所有概念——把拷贝、移动、析构串在一起，看一个管理堆资源的对象从构造到销毁的完整旅程：
+
+<ResourceLifetimeDiagram />
+
+上图按时间顺序展示了六个阶段。注意几个关键转折：拷贝构造创建新堆内存（深拷贝），拷贝赋值先 `delete` 旧内存再创建新的（自赋值也安全），移动构造直接把指针"偷"过来（源变空），析构做最后清理（`delete` 所有堆资源）。
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说。 */}
+
+## 代码逐段拆解：HasPtr 五法则完整实现
+
+以下是前面 `HasPtr` 的完整五法则实现——每一个特殊成员函数都手动写了，每一项设计决策都有解释。
+
+### 类定义骨架 + 构造函数
+
+```cpp
+#include <string>
+#include <iostream>
+
+class HasPtr {
+    friend void swap(HasPtr&, HasPtr&);
+
+public:
+    // 默认构造
+    HasPtr(const std::string &s = std::string())
+        : ps(new std::string(s)), i(0) {}
+
+    // 拷贝构造
+    HasPtr(const HasPtr &orig)
+        : ps(new std::string(*orig.ps)), i(orig.i) {}
+```
+
+析构决定"怎么释放"、拷贝构造决定"怎么安全复制"——这两个是五法则的基础。构造的 `ps` 总是通过 `new` 分配新的堆字符串——无论是默认构造还是拷贝构造。`i` 是普通 `int`，直接复制即可。注意拷贝构造没有释放任何东西——`this` 刚分配，还没有旧资源。
+
+### 拷贝赋值 + 析构
+
+```cpp
+    // 拷贝赋值
+    HasPtr& operator=(const HasPtr &rhs) {
+        auto *newp = new std::string(*rhs.ps);  // 先分配新——防止异常丢失旧数据
+        delete ps;                               // 再释放旧
+        ps = newp;                               // 接管新
+        i = rhs.i;
+        return *this;
+    }
+
+    // 析构
+    ~HasPtr() { delete ps; }
+```
+
+拷贝赋值三步策略：**先分配新 → 再释放旧 → 接管新**。这是异常安全的标准做法。自赋值时 `newp` 是旧数据的副本，之后 `delete ps` 释放旧数据，不存在"删了自己又读自己"的问题。返回 `*this` 引用支持 `a = b = c`。
+
+析构函数简单直接——`delete ps`。`ps` 可能为 `nullptr`（如果对象被移动过），`delete nullptr` 合法且什么都不做。析构完成后各成员按声明逆序析构——这里 `i` 是 `int`，析构它什么也不做。
+
+### 移动构造 + 移动赋值
+
+```cpp
+    // 移动构造
+    HasPtr(HasPtr &&rhs) noexcept
+        : ps(rhs.ps), i(rhs.i) {
+        rhs.ps = nullptr;
+    }
+
+    // 移动赋值
+    HasPtr& operator=(HasPtr &&rhs) noexcept {
+        if (this != &rhs) {
+            delete ps;
+            ps = rhs.ps;
+            i = rhs.i;
+            rhs.ps = nullptr;
+        }
+        return *this;
+    }
+```
+
+移动构造直接接管源对象的指针——`ps(rhs.ps)`——没有任何 `new`，这是 O(1) 时间操作。紧接着 `rhs.ps = nullptr` 把源对象置安全。标了 `noexcept`——`vector` 扩容时会优先用移动。
+
+移动赋值先处理自赋值检测（`this != &rhs` 可防止 `a = std::move(a)` 这样的诡异操作），再 `delete` 当前资源 → 接管 `rhs` 的指针 → 把 `rhs` 置空。
+
+### swap 辅助函数
+
+```cpp
+private:
+    std::string *ps;
+    int i;
+};
+
+// 自定义 swap——高效交换两个对象的资源
+inline void swap(HasPtr &lhs, HasPtr &rhs) {
+    using std::swap;
+    swap(lhs.ps, rhs.ps);  // 只交换指针——不拷贝 string
+    swap(lhs.i, rhs.i);
+}
+```
+
+自定义 `swap` 只交换两个对象的 `ps` 指针——两个 `string` 的内容一个字节都没动。如果你用标准库的 `std::swap`，它会调用拷贝构造和拷贝赋值各一次——一次完整深拷贝。这个优化在排序等大量交换场景下效果显著。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 程序在对象离开作用域时崩溃——堆栈指向 `free()` 或 `delete`，报 `double free or corruption`。
+  **原因** → 类管理了指向堆内存的裸指针，但用了合成的拷贝。两个对象各自的析构函数都对同一块内存执行 `delete`——第二次就是 double free。典型就是 `HasPtr` 没写拷贝控制成员。
+  **修法** → 写拷贝构造和拷贝赋值，为每个新对象分配独立的堆内存并复制内容。或者直接用 `std::string` 代替 `std::string*`——让 `string` 的拷贝构造替你管深拷贝。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 拷贝赋值运算符写成了这样：`delete ps; ps = new string(*rhs.ps);`——大多数时候正常，但在 `*rhs.ps` 很大且内存紧张时偶尔崩溃，而且丢了旧数据。
+  **原因** → 先 `delete` 后 `new`：如果 `new` 抛 `std::bad_alloc` 异常，`ps` 已经变成野指针——也不指向旧数据了（被 `delete` 了），也没拿到新数据。对象处于崩溃状态。即使没抛异常，自赋值时会先把自己的资源 `delete` 再试图从已释放的自己复制——未定义行为。
+  **修法** → 始终"先分配新 → 再释放旧 → 接管新"。三步走保证异常安全——即使 `new` 失败，旧数据还在，对象仍然有效。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 在 `vector` 中存了自定义类型后写 `v.push_back(x)`；`vector` 扩容时有时很快、有时很慢——看汇编发现有时走的是拷贝构造而非移动构造。
+  **原因** → 移动构造没标 `noexcept`。`vector` 扩容时严格保证异常安全——如果移动构造可能抛异常，`vector` 就拒绝使用它，转而用拷贝（更慢但安全）。标准库容器只会用 `noexcept` 的移动操作。
+  **修法** → 给移动构造和移动赋值都加上 `noexcept`。只要它们不分配内存、不调用可能抛异常的操作（通常如此），它们就该标 `noexcept`。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 用了 `std::move(a)` 后继续读 `a` 的成员，有时正常、有时读到垃圾值——行为不稳定。
+  **原因** → `std::move` 把 `a` 转成了右值引用，如果后续 `a` 实际被移动（调了移动构造或移动赋值），`a` 就处于"有效但未指定"状态。可以析构、可以重新赋值，但读其内容是不确定的——取决于移动实现把源成员设成了什么。
+  **修法** → `std::move` 后不再使用源对象，除非你紧接着重新给它赋了确定的值（如 `a = HasPtr("new")`）。`std::move` 是对代码读者的承诺："我以后不用它了"——遵守这个承诺。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- 合成的拷贝逐成员拷贝——指针成员只复制地址（浅拷贝），导致共享堆数据和双重释放。管理堆资源的类必须自定义深拷贝
+- 五法则：自定义析构/拷贝/移动中任一个，大概率全部五个都要管——它们是一整套资源管理决策
+- 拷贝赋值三步走「先分配新 → 再释放旧 → 接管新」——异常安全且自赋值也正确
+- 移动语义 O(1) 偷资源——把源对象的裸指针接管后源置空，标 `noexcept` 让标准库容器优先走移动
+- `= delete` 在编译期禁止不该发生的操作——比运行时崩溃好一万倍。`= default` 请求编译器合成默认版本——用在想保留默认行为但编译器不再自动生成的场景
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的 `StringHolder` 类管理一个动态分配的 C 风格字符串——找出拷贝控制相关的问题，写出修正后的完整五法则实现（包含移动语义）。
+
+```cpp
+#include <cstring>
+
+class StringHolder {
+public:
+    StringHolder(const char *s) : sz(std::strlen(s)) {
+        data = new char[sz + 1];
+        std::strcpy(data, s);
+    }
+    ~StringHolder() { delete[] data; }
+
+private:
+    char *data;
+    std::size_t sz;
+};
+```
+
+<Answer>
+
+问题：只定义了析构——合成的拷贝只复制 `data` 的指针值，导致浅拷贝和双重释放。没有移动语义——每次赋值都要深拷贝。修正后的完整实现：
+
+```cpp
+#include <cstring>
+#include <utility>
+
+class StringHolder {
+public:
+    StringHolder(const char *s) : sz(std::strlen(s)) {
+        data = new char[sz + 1];
+        std::strcpy(data, s);
+    }
+
+    // 拷贝构造
+    StringHolder(const StringHolder &rhs) : sz(rhs.sz) {
+        data = new char[sz + 1];
+        std::strcpy(data, rhs.data);
+    }
+
+    // 拷贝赋值
+    StringHolder& operator=(const StringHolder &rhs) {
+        if (this != &rhs) {
+            auto *new_data = new char[rhs.sz + 1];
+            std::strcpy(new_data, rhs.data);
+            delete[] data;
+            data = new_data;
+            sz = rhs.sz;
+        }
+        return *this;
+    }
+
+    // 移动构造
+    StringHolder(StringHolder &&rhs) noexcept
+        : data(rhs.data), sz(rhs.sz) {
+        rhs.data = nullptr;
+        rhs.sz = 0;
+    }
+
+    // 移动赋值
+    StringHolder& operator=(StringHolder &&rhs) noexcept {
+        if (this != &rhs) {
+            delete[] data;
+            data = rhs.data;
+            sz = rhs.sz;
+            rhs.data = nullptr;
+            rhs.sz = 0;
+        }
+        return *this;
+    }
+
+    ~StringHolder() { delete[] data; }
+
+private:
+    char *data;
+    std::size_t sz;
+};
+```
+
+关键点：① 用 `new char[]` 所以析构必须用 `delete[]`（不是 `delete`）② 拷贝赋值先分配新再释放旧——异常安全 ③ 移动后源 `data` 变 `nullptr`——`delete[] nullptr` 合法且无事发生。
+
+</Answer>
+
+**练习 2（独立实现题）** 设计并实现一个 `ResourceManager` 类：
+- 它管理一个 `int*` 动态分配的整数，初始为 `nullptr`
+- 默认构造：`ptr = nullptr`
+- `allocate(int value)`：分配 `new int(value)` 并设置给 `ptr`（如果已分配则先释放旧的）
+- 完整五法则实现（拷贝/移动/析构）
+- `int getValue() const`：返回 `*ptr`，如果 `ptr == nullptr` 抛异常 `std::runtime_error`
+- 在 main 中测试：创建 `rm1`、给它分配值 42、用移动构造创建 `rm2`、验证 `rm2.getValue() == 42` 且 `rm1` 的 `ptr` 为 nullptr
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <stdexcept>
+
+class ResourceManager {
+public:
+    ResourceManager() : ptr(nullptr) {}
+
+    explicit ResourceManager(int value) : ptr(new int(value)) {}
+
+    ResourceManager(const ResourceManager &rhs)
+        : ptr(rhs.ptr ? new int(*rhs.ptr) : nullptr) {}
+
+    ResourceManager& operator=(const ResourceManager &rhs) {
+        if (this != &rhs) {
+            delete ptr;
+            ptr = rhs.ptr ? new int(*rhs.ptr) : nullptr;
+        }
+        return *this;
+    }
+
+    ResourceManager(ResourceManager &&rhs) noexcept
+        : ptr(rhs.ptr) {
+        rhs.ptr = nullptr;
+    }
+
+    ResourceManager& operator=(ResourceManager &&rhs) noexcept {
+        if (this != &rhs) {
+            delete ptr;
+            ptr = rhs.ptr;
+            rhs.ptr = nullptr;
+        }
+        return *this;
+    }
+
+    ~ResourceManager() { delete ptr; }
+
+    void allocate(int value) {
+        delete ptr;
+        ptr = new int(value);
+    }
+
+    int getValue() const {
+        if (!ptr) throw std::runtime_error("ptr is null");
+        return *ptr;
+    }
+
+private:
+    int *ptr;
+};
+
+int main() {
+    ResourceManager rm1(42);
+    ResourceManager rm2(std::move(rm1));
+
+    std::cout << rm2.getValue() << '\n';  // 42
+    // rm1.getValue() 会抛异常——ptr 已被移动置空
+
+    return 0;
+}
+```
+
+设计要点：① 拷贝构造处理 `ptr` 可能为 `nullptr`——不空时才 `new`，空时直接 `nullptr` ② 移动构造和移动赋值都标了 `noexcept` ③ `allocate` 演示了"先 delete 旧 → 再 new 新"——如果 `allocate` 抛异常 `ptr` 已变，但 `allocate` 的逻辑决定了旧资源无论如何要丢弃，所以 `delete` 先执行是对的。
+
+</Answer>
+
+**练习 3（问答型）** `Message` 类包含一个 `string` 和一个指向 `Folder` 的指针。如果 `Folder` 不归 `Message` 所有（`Message` 不负责删它），`Message` 需要自定义析构函数吗？拷贝构造呢？为什么？五法则里哪些需要写？
+
+<Answer>
+
+1. **析构函数**：不需要自定义。`string` 成员会自己析构（释放内部堆字符串），`Folder*` 如果不归 `Message` 所有——`Message` 不应对它 `delete`。编译器的合成析构会析构 `string` 成员，对 `Folder*`（裸指针、内置类型成员）什么都不做——这正是你想要的。
+
+2. **拷贝构造**：需要判断 `Folder*` 的语义。如果拷贝 `Message` 后新 `Message` 的 `Folder*` 应该指向同一个 `Folder`（共享），那合成的拷贝就行——直接复制指针值。如果拷贝需要注册到 `Folder` 的某种结构中——那就需要自定义。纯指针值拷贝的场景，合成拷贝就够了。
+
+3. **五法则**：不需要写满五个。因为没有堆资源归 `Message` 直接管理（`string` 自己管自己，`Folder*` 是外部管理的），<strong>零法则</strong>适用——什么都不写，全部用合成的。但如果后续 `Message` 需要"保存到 `Folder` 的一组 `Message` 列表里"，那拷贝构造和析构就都要写——此时回到三法则。
+
+这道题的核心判断：<strong>凡是非所有权的指针——不拥有、不负责释放——靠合成的就够了。只有"我 new 的东西"才触发五法则。</strong>
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（10 个，按首现顺序）；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="合成的拷贝控制成员（synthesized copy control）">
+  编译器自动生成的拷贝构造/拷贝赋值/析构函数。对内置类型（int、指针）逐字节拷贝——所以指针只复制地址不复制数据（浅拷贝）。对类类型成员调用其自身的拷贝控制。管理堆资源的类不能依赖合成版本。
+</GlossaryItem>
+
+<GlossaryItem term="浅拷贝（shallow copy）">
+  只拷贝指针本身的值（地址），不拷贝指针指向的堆数据。结果：两个对象的指针指向同一块堆内存——修改互相影响，析构导致双重释放。合成的拷贝控制成员对指针就是浅拷贝。类比：只复印了取货单上的货架号，两个人拿着同一张单去同一个货架拿东西。
+</GlossaryItem>
+
+<GlossaryItem term="双重释放（double free）">
+  对同一块堆内存执行两次 delete 的严重错误。属于未定义行为——可能立即崩溃、静默损坏内存、或延迟崩溃。浅拷贝最常见的后果——两个对象析构时各自 delete 同一个指针。修法：深拷贝——每个对象管自己的堆数据。
+</GlossaryItem>
+
+<GlossaryItem term="拷贝构造函数（copy constructor）">
+  用已有对象初始化新对象的构造函数——形如 `ClassName(const ClassName&)`。新对象刚诞生、没有旧资源——只需分配新堆内存并复制数据。必须传引用（否则拷贝参数本身又触发拷贝构造——无限递归）。
+</GlossaryItem>
+
+<GlossaryItem term="拷贝赋值运算符（copy assignment operator）">
+  把已有对象值赋给另一个已有对象的运算符——形如 `ClassName& operator=(const ClassName&)`。需要先释放当前资源、再分配新资源、最后复制数据。返回 `*this` 引用以支持 `a = b = c` 链式赋值。
+</GlossaryItem>
+
+<GlossaryItem term="析构函数（destructor）">
+  对象销毁前自动调用的特殊函数——形如 `~ClassName()`。无参数、无返回类型、不能重载。负责释放对象持有的全部资源。体执行后成员按声明逆序销毁。管理堆资源的类必须自定义析构（`delete` 所有裸指针指向的内存）。
+</GlossaryItem>
+
+<GlossaryItem term="三法则（Rule of Three）">
+  C++ 经典准则：自定义了析构、拷贝构造或拷贝赋值中任意一个，几乎一定需要全部三个。因为这三个都是"资源管理"的不同侧面——从不同入口做同一件事。反例：如果你不需要析构（没有资源），大概率拷贝也只要合成的版本。
+</GlossaryItem>
+
+<GlossaryItem term="五法则（Rule of Five）">
+  C++11 对三法则的扩展——加上移动构造和移动赋值。自定义了五个中任一，五个都应显式处理（写实现或 =default/=delete）。拷贝提供深复制、移动提供高效所有权转移、析构提供资源释放——它们是相互关联的一整套资源管理决策。
+</GlossaryItem>
+
+<GlossaryItem term="移动语义（move semantics）">
+  C++11 引入的核心特性——不拷贝数据，只窃取资源的所有权。通过右值引用 `T&&` 和 `std::move` 实现。移后源对象指针被置空、处于"有效但未指定"状态——可安全析构或重新赋值。O(1) 常数时间，零内存分配。类比：不是复印整本书，而是把书直接递给你——书的"所有权"变了，原主手里没书了。
+</GlossaryItem>
+
+<GlossaryItem term="右值引用（rvalue reference）">
+  用 `T&&` 声明，只能绑定到即将销毁的临时对象（右值）。与左值引用 `T&` 的语义互补——`const T&` 用于拷贝（不修改源）、`T&&` 用于移动（窃取源的资源）。详见本章「移动语义」一节和 MoveSemanticsDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="std::move">
+  标准库函数——将左值显式转换为右值引用。本身不做任何移动——只是告诉编译器「这个对象以后我不再用了，可以安全移走它的资源」。真正的移动由移动构造/移动赋值执行。调用后不应再使用源对象（除非重新赋值）。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §13 改编重写，sourceUrl 自动注入。 */}
+
+<Attribution />

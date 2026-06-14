@@ -84,6 +84,10 @@ import { SmartPointerOverviewDiagram } from "./diagrams/smart-pointer-overview-d
 import { SharedPtrInternalsDiagram } from "./diagrams/shared-ptr-internals-diagram";
 import { CircularReferenceDiagram } from "./diagrams/circular-reference-diagram";
 import { DynamicArrayDiagram } from "./diagrams/dynamic-array-diagram";
+import { CopySemanticsDiagram } from "./diagrams/copy-semantics-diagram";
+import { RuleOfFiveDiagram } from "./diagrams/rule-of-five-diagram";
+import { MoveSemanticsDiagram } from "./diagrams/move-semantics-diagram";
+import { ResourceLifetimeDiagram } from "./diagrams/resource-lifetime-diagram";
 import { AlgorithmExecutionDiagram } from "./diagrams/algorithm-execution-diagram";
 import { SortStagesDiagram } from "./diagrams/sort-stages-diagram";
 import { LambdaSyntaxDiagram } from "./diagrams/lambda-syntax-diagram";
@@ -469,6 +473,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SharedPtrInternalsDiagram,
   CircularReferenceDiagram,
   DynamicArrayDiagram,
+  CopySemanticsDiagram,
+  RuleOfFiveDiagram,
+  MoveSemanticsDiagram,
+  ResourceLifetimeDiagram,
   Stepper,
   Step,
   Slider,
