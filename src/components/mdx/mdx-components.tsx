@@ -57,6 +57,10 @@ import { StringMemoryDiagram } from "./diagrams/string-memory-diagram";
 import { VectorGrowthDiagram } from "./diagrams/vector-growth-diagram";
 import { IteratorDiagram } from "./diagrams/iterator-diagram";
 import { ArrayVsVectorDiagram } from "./diagrams/array-vs-vector-diagram";
+import { ExpressionTreeDiagram } from "./diagrams/expression-tree-diagram";
+import { PrecedenceTable } from "./diagrams/precedence-table";
+import { IncrementDecrementDiagram } from "./diagrams/increment-decrement-diagram";
+import { TypeConversionDiagram } from "./diagrams/type-conversion-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -220,6 +224,10 @@ import { InstancingDemo } from "./instancing-demo";
  *    divisor=0 逐顶点步进 每个顶点读一条 vs divisor=1 每实例步进 一条覆盖整个实例所有顶点，compare 并列 + 「忘设 1 = 被当逐顶点读」提醒）、
  *    DrawcallCompareDiagram（不实例化 CPU 喊 N 遍 N 根红箭头·瓶颈 vs 实例化 CPU 喊 1 遍 1 根绿粗箭头 instanceCount=N·流畅，
  *    点明省的是 CPU 反复喊话发起 draw call 的通信开销）。同款 Server SVG。
+ *  - C++ Primer·表达式（cpp-primer-ch4，A 概念型）：ExpressionTreeDiagram（a+b*c 表达式树，标求值顺序）、
+ *    PrecedenceTable（运算符优先级速查表 SVG）、IncrementDecrementDiagram（++i 前缀 vs i++ 后缀时序对照）、
+ *    TypeConversionDiagram（内建类型隐式转换方向链，支持 step prop 选展示层）。同款 Server SVG。
+ *
  *  - 高级OpenGL篇·抗锯齿（HEL-77，A 概念型，篇收官）：AliasingDiagram（aa 布尔 + bare：屏幕是方格纸，斜边落格上
  *    aa=false 每格整涂/不涂成硬阶梯·锯齿 vs aa=true 边缘格按覆盖度涂半深过渡灰·平滑，虚线标理想斜边，
  *    供 Stepper 第一步 + CompareSlider 两侧分别传）、MsaaSampleDiagram（§5 Stepper MSAA 判覆盖度每步图示：
@@ -390,6 +398,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VectorGrowthDiagram,
   IteratorDiagram,
   ArrayVsVectorDiagram,
+  ExpressionTreeDiagram,
+  PrecedenceTable,
+  IncrementDecrementDiagram,
+  TypeConversionDiagram,
   Stepper,
   Step,
   Slider,
