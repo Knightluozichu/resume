@@ -97,8 +97,8 @@ export function LambdaSyntaxDiagram() {
             <g transform="translate(0, 18)">
               {[
                 { label: "[=]", desc: "按值捕获全部", x: 0 },
-                { label: "[&amp;]", desc: "按引用捕获全部", x: 136 },
-                { label: "[x, &amp;y]", desc: "x 按值，y 按引用", x: 310 },
+                { label: "[&]", desc: "按引用捕获全部", x: 136 },
+                { label: "[x, &y]", desc: "x 按值，y 按引用", x: 310 },
                 { label: "[this]", desc: "捕获 this 指针", x: 518 },
               ].map((c) => (
                 <g key={c.label} transform={`translate(${c.x}, 0)`}>
