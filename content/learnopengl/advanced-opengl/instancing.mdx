@@ -1,0 +1,440 @@
+---
+title: 实例化
+type: C
+section: 高级OpenGL
+order: 10
+description: 要画一万个一模一样的小行星，逐个「画一个→吩咐一次」会喊一万遍（一万次 draw call，CPU 累死）。实例化是一次吩咐「照这个模子盖一万个，每个的位置看这张表」——一次 draw call 全画完。本章讲透 glDrawArraysInstanced / gl_InstanceID / 实例化数组 / glVertexAttribDivisor，并用 InstancingDemo 当场把实例数从 100 拖到 10000。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/10%20Instancing/
+draft: true
+---
+
+{/* C 实战型章（HEL-76，高级OpenGL 篇第 10 篇）：原书「实例化 Instancing」。重心是代码对照(§6 覆盖≥80% 关键代码)：①glDrawArraysInstanced/glDrawElementsInstanced(带 instanceCount 一次画多个)；②gl_InstanceID 在顶点着色器取偏移(offsets[gl_InstanceID])+ uniform 数组上限；③实例化数组 + glVertexAttribDivisor(loc,1)(每实例一份变换/矩阵 mat4 占 4 个属性位)。math:false，§4 整节省略。类比固定「工厂流水线/盖章」库。主 viz 两个：InstancingDemo(R3F instancedMesh 行星带，滑块改 count 100~10000、draw call 对比) + AttribDivisorDiagram Stepper(divisor=0 逐顶点 vs divisor=1 每实例)。draft:true，老板验收后才发布(硬规则 7)。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 实例化 instancing（一次 draw call 画多个相同网格）= 直觉引入 + 概念 + <InstancingDiagram> + 主 InstancingDemo；2) draw call 开销（每次 draw call 的 CPU→GPU 通信成本，N 次 vs 1 次）= 概念(难点) + <DrawcallCompareDiagram> + 主 InstancingDemo；3) glDrawArraysInstanced / glDrawElementsInstanced（带 instanceCount 的绘制）= 概念随文带出 + §6 代码对照①；4) gl_InstanceID（着色器里当前第几个实例）= 概念 + <InstancingDiagram> + §6 代码对照②；5) 实例化数组 instanced array（每实例一份的顶点属性）= 概念 + <AttribDivisorDiagram> + §6 代码对照③；6) glVertexAttribDivisor（divisor=0 逐顶点 vs divisor=1 每实例——核心难点）= 概念(难点) + <AttribDivisorDiagram> + <Stepper> + §6 代码对照③ + 误区；7) 行星带 asteroid field 案例（mat4 实例化矩阵占 4 个属性位）= 概念 + 主 InstancingDemo + §6 代码对照③。Term 共 6 个（实例化 / draw call 开销 / gl_InstanceID / 实例化数组 / 实例化步进 divisor / 行星带）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出/能用 ___ 一次画一片」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用一次实例化绘制画出一大片相同网格：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，一次 draw call 画 `instanceCount` 个，而不是循环调用 `instanceCount` 次
+- 能改出「每个实例摆在不同位置」：用 `gl_InstanceID` 配 uniform 数组取偏移，或建一个`实例化数组`并 `glVertexAttribDivisor(loc, 1)`，让每个实例读到属于自己那一份的偏移 / 变换矩阵
+- 能回答：实例化数组的属性忘了设 `glVertexAttribDivisor(loc, 1)`，画面会变成什么样？为什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线 / 盖章」库。 */}
+
+## 一万次「吩咐」，还是一次
+
+想象你要在纸上印一万个一模一样的小图章。笨办法是：拿起图章、蘸墨、盖一个，再拿起、再蘸、再盖……重复一万次。盖图章这个动作本身很快，但**每次「拿起、吩咐手去盖」的来回**才是真正拖慢你的——一万次来回，胳膊先废了。
+
+聪明办法是：跟工厂说一句「照这一个模子，盖一万个，每个盖在哪、盖多大，看这张表」。模子只有一个，表上一行写一个位置。工厂一口气盖完一万个，而你**只吩咐了一遍**。
+
+这一章解决的就是：**要画很多个一模一样的东西时，怎么只「吩咐」一次、而不是一个一个地吩咐一万遍**。没有它，画一千个绕行星飞的小行星就得发起一千次绘制请求，CPU 光是反复「吩咐 GPU」就忙不过来，帧率掉到个位数；有了它，画上万个也能稳稳流畅。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 实例化：一次 draw call 画一整片
+
+把「吩咐一次、盖一万个」翻译成图形术语，就是 <Term def="一种绘制技术：用一次绘制调用（一次 draw call）画出很多个相同的网格（同一份几何），而不是循环调用很多次。每个实例（instance）几何完全相同，只是各自的变换（位置/缩放/朝向）或某些属性不同。常用来画大量重复物体：草地、森林、粒子、行星带等。">实例化</Term>（instancing）。它的前提是：你要画的这一大片东西**几何完全一样**——同一个网格、同一份顶点数据。区别只在每个的位置、大小、朝向（统称「变换」）不同。实例化就是把「这一份几何」连同「每个实例各自的变换」一次性交给 GPU，让它一口气画完。
+
+为什么要这么做？关键在 <Term def="一次 draw call（绘制调用，如 glDrawArrays / glDrawElements）背后是一趟「CPU 把绘制命令和状态打包、发给 GPU」的通信。这趟通信本身有固定开销（驱动校验、状态切换、命令提交），和你画 3 个顶点还是 3000 个顶点关系不大。所以画大量小物体时，瓶颈往往不是 GPU 画三角形，而是 CPU 反复发起成千上万次 draw call 的通信开销。实例化把 N 次 draw call 压成 1 次，正是省这笔开销。">draw call 开销</Term>。每次你调用 `glDrawArrays` 或 `glDrawElements`，CPU 都要把绘制命令打包、发给 GPU——这趟「来回」本身就有固定成本，和你这次画 3 个顶点还是 3000 个顶点关系不大。所以画一千个小行星时，真正拖慢的不是 GPU 画三角形，而是 CPU **发起了一千次 draw call**。下面这张图把「N 次喊话 vs 1 次喊话」摆在一起：
+
+<DrawcallCompareDiagram />
+
+实例化把这 N 次 draw call 压成 **1 次**。你只调用一次带 `instanceCount` 的绘制函数，GPU 内部就把同一份几何重复画 `instanceCount` 遍。那「每个实例摆在哪」的信息怎么进去？这是接下来两节的事。先看这张「模子 + 每实例变换表 → 盖出 N 个」的总览：
+
+<InstancingDiagram />
+
+## 怎么让每个实例不一样：gl_InstanceID 与实例化数组
+
+同一个模子盖出来的 N 个实例，如果都摆在同一个位置，就会**完全重叠成一个**——没意义。所以必须让每个实例读到「属于自己那一份」的变换。OpenGL 给了两条路。
+
+第一条路靠一个内置变量 <Term def="顶点着色器里的一个内置整数变量，表示「当前正在画的是第几个实例」，从 0 开始递增：第 0 个实例时它是 0、第 1 个实例时是 1……只在实例化绘制时有意义。常见用法是拿它当下标去取「每实例数据」，比如 offsets[gl_InstanceID]，给每个实例一个不同的偏移。">gl_InstanceID</Term>。在顶点着色器里，它告诉你「现在画的是第几个实例」——第 0 个实例时它是 `0`，第 1 个实例时是 `1`，依此类推。你可以拿它当下标去一个 uniform 数组里取偏移：`offsets[gl_InstanceID]`，于是第 `i` 个实例就读到 `offsets[i]`、摆到不同位置。简单直接，但有个硬上限：**uniform 数组不能太大**（受 GPU 的 uniform 容量限制），塞个一百个偏移还行，要塞一万个就爆了。
+
+第二条路没有这个上限，叫 <Term def="一种「每个实例一份」的顶点属性：把每实例的数据（比如每个实例的偏移向量、或整个变换矩阵）放进一个 VBO，像普通顶点属性那样用 glVertexAttribPointer 设好，再用 glVertexAttribDivisor(loc, 1) 告诉 GPU「这个属性每个实例才往下读一条、不是每个顶点」。这样想画多少实例就准备多少条数据，不受 uniform 数组大小限制，是画海量实例的标准做法。">实例化数组</Term>（instanced array）。思路是把「每实例的数据」（每个实例的偏移、甚至整个变换矩阵）放进一个 VBO，像普通顶点属性那样在着色器里 `in` 进来。但这里有个关键差别要交代清楚：普通顶点属性是**每个顶点**读一条，而实例化数组要的是**每个实例**才读一条。这个「多久读一条」的开关，就是下一节的主角。
+
+## 核心难点：glVertexAttribDivisor —— 逐顶点还是逐实例
+
+实例化里最该一次搞懂的，就是 <Term def="glVertexAttribDivisor(loc, divisor) 设置某个顶点属性「多久往下读一条数据」：divisor=0（默认）是逐顶点步进——着色器每处理一个顶点，就读这个属性的下一条；divisor=1 是每实例步进——着色器每开始画一个新实例，才读下一条，同一个实例内的所有顶点共用同一条。实例化数组必须设 divisor=1，否则它会被当成普通逐顶点属性、每个实例的数据全乱。divisor=n 则每 n 个实例读一条。">实例化步进 divisor</Term>。函数是 `glVertexAttribDivisor(location, divisor)`，它给某个顶点属性设一个「步进频率」：
+
+- `divisor = 0`（默认）：**逐顶点**步进。着色器每处理一个顶点，就往下读这个属性的下一条。普通的位置、法线、纹理坐标都是这样——每个顶点各有各的。
+- `divisor = 1`：**每实例**步进。着色器只有每开始画一个**新实例**时，才往下读一条；同一个实例内部的所有顶点，**共用同一条**。
+
+实例化数组要的正是 `divisor = 1`——一个实例的所有顶点应该共享同一份「这个实例的偏移 / 矩阵」。下面这张图把两种步进并排掰碎，是本章最该盯着看的一张：
+
+<AttribDivisorDiagram />
+
+一句话记住：**普通属性逐顶点读（divisor=0），实例化数组逐实例读（divisor=1）**。忘了把实例化数组设成 `divisor=1`，它就会被当成逐顶点属性，每个实例的偏移全错——这是本章头号大坑（§7 第一个）。
+
+## 行星带：把整个变换矩阵当实例化属性
+
+把上面这套用到极致，就是原书的 <Term def="实例化的经典案例：让上千上万颗小行星绕一颗行星排成一圈飞行。每颗小行星是同一个网格（同一份几何），但各有不同的位置、缩放、朝向，于是给每个实例准备一个 4×4 变换矩阵 mat4 作为实例化数组属性，一次 draw call 画出整条带子。因为 mat4 太大，一个顶点属性位置只能放一个 vec4，所以它要占用 4 个连续的属性位置（location）、各设 divisor=1。">行星带</Term>（asteroid field）：上千上万颗小行星绕着一颗行星排成一圈飞。每颗小行星是同一个网格，但位置、缩放、朝向各不相同——这正好是「整个变换矩阵每实例一份」。于是给每个实例准备一个 `mat4` 变换矩阵，作为实例化数组属性。只是 `mat4` 太大、一个属性位置只能装一个 `vec4`，所以它要**占用 4 个连续的属性位置**，每个都设 `divisor=1`（§6 第三段代码就是这么做的）。本章 Demo 画的就是这样一条程序化的行星带——你能亲手把它从一百颗拖到一万颗。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：C 型主 Demo = InstancingDemo R3F instancedMesh 行星带。猜一猜：实例数从 100 拖到 10000 会不会卡。控件：实例数滑块(100~10000) + 自转开关 + OrbitControls 拖拽 + 重置，≤5。 */}
+
+## 动手：把实例数从 100 拖到 10000
+
+> 猜一猜：下面这块画布里是一整条「行星带」，成百上千颗小行星全是**同一个程序化小立方体**。现在拖动「实例数」滑块，把它从 100 一路拉到 10000——画面会**卡成幻灯片**吗？还是依旧丝般顺滑？先拖一下试试，再读解释。
+
+这块画布严格对应本章核心：所有小行星由**一个 `<instancedMesh>`** 画出（three.js 的实例化网格，底层就是 `gl.drawElementsInstanced` 一次 draw call）。同一份立方体几何只存一份，每颗小行星的位置 / 缩放 / 朝向由一份「每实例变换矩阵」决定，颜色按实例编号程序化生成——**没有任何外部模型或贴图**。拖动滑块改的只是「画多少个实例」（`mesh.count`），不重建任何几何：
+
+<InstancingDemo caption="一整条程序化『行星带』：成百上千颗小行星全是同一个小立方体，由一个 <instancedMesh> 一次 draw call 画出。拖动『实例数』滑块从 100 到 10000，画面始终流畅——因为无论多少颗，都只发起 1 次 draw call（右上角计数恒为 1）；而『不实例化』要发起的次数 = 实例数，几千几万次就会把 CPU 拖垮。拖动画布转视角、滚轮缩放。" />
+
+拖到 10000，画面照样流畅——因为无论多少颗小行星，都只是**一次** draw call（看右上角，实例化的 draw call 计数恒为 `1`）。作为对比，旁边标着「不实例化需要的次数」会随滑块一路涨到一万：如果真的一颗一颗画，CPU 要发起一万次 draw call，那才会卡成幻灯片。**同一片小行星、同样的几何，差别全在「喊一遍」还是「喊一万遍」。**
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper 讲核心难点 glVertexAttribDivisor——每步带图（满足「每步必带图示」，纯文字步=打回）。①divisor=0 逐顶点(AttribDivisorDiagram mode=divisor0)→②divisor=1 每实例(mode=divisor1)→③忘设 divisor=1 翻车(InstancingDiagram 提醒/对照)。猜一猜引导。 */}
+
+## 单步走一遍：divisor 到底改了什么
+
+> 猜一猜：普通顶点属性（位置、法线）和实例化数组属性（每实例的偏移矩阵），它们**读数据的频率**一样吗？如果把实例化数组当成普通属性那样「逐顶点读」，会发生什么？单步走一遍就明白了。
+
+下面把 `glVertexAttribDivisor` 的语义拆成三步，每一步配一张图，盯着「着色器多久才往下读一条属性」：
+
+<Stepper>
+  <Step title="① divisor=0（默认）：每个顶点读一条">
+    <AttribDivisorDiagram mode="divisor0" />
+    普通顶点属性（位置 / 法线 / uv）的步进方式：着色器
+    <strong>每处理一个顶点</strong>
+    ，就从属性表里往下读一条。一个网格有 4 个顶点，就读 4
+    条，一条对一个顶点。这是<strong>逐顶点</strong>步进，<code>divisor</code>{" "}
+    的默认值就是 <code>0</code>。
+  </Step>
+  <Step title="② divisor=1：每个实例才读一条">
+    <AttribDivisorDiagram mode="divisor1" />
+    实例化数组要的步进方式：着色器<strong>每开始画一个新实例</strong>
+    ，才往下读一条；同一个实例内部的<strong>所有顶点共用这一条</strong>。画 3
+    个实例就只读 3 条——每条是「这个实例的偏移 / 变换矩阵」。设法就是{" "}
+    <code>glVertexAttribDivisor(loc, 1)</code>。
+  </Step>
+  <Step title="③ 忘设 divisor=1 = 翻车">
+    <InstancingDiagram />
+    如果实例化数组
+    <strong>
+      忘了设 <code>divisor=1</code>
+    </strong>
+    ，它会被当成普通逐顶点属性（divisor=0）：着色器每个顶点都往下读一条偏移，
+    于是「每实例一份」的对应关系全乱——所有实例的偏移错位、
+    <strong>叠在一起或乱掉</strong>
+    ，根本排不成上面那张表里的整齐阵列。一句 <code>divisor=1</code> 之差。
+  </Step>
+</Stepper>
+
+走完这遍就清楚了：`divisor` 只决定一件事——**这个属性多久往下读一条**。普通属性逐顶点读（`0`），实例化数组逐实例读（`1`）。一个数字之差，整片实例排得齐还是乱。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：三段——①glDrawArraysInstanced/glDrawElementsInstanced(一次画 instanceCount 个)；②gl_InstanceID 取偏移(offsets[gl_InstanceID])+ uniform 数组上限；③实例化数组 + glVertexAttribDivisor(loc,1)(每实例一份变换/mat4 占 4 个位置)。C++/OpenGL ↔ TS/WebGL2 双 Tab；单块≤30 行；块间有解说；API 差异 Callout。 */}
+
+## 代码逐段拆解
+
+实例化的代码分三块：**实例化绘制调用**、**gl_InstanceID + uniform 数组取偏移**、**实例化数组 + divisor**。三块对照看，C++/OpenGL 与 WebGL2/TS 互为镜像。好消息是 **WebGL2 原生支持实例化**（`gl.drawArraysInstanced` / `gl.vertexAttribDivisor` 等），不像几何着色器那样缺席。
+
+### 第一块：实例化绘制调用
+
+把普通的 `glDrawArrays` / `glDrawElements` 换成带 `instanceCount` 的实例化版本，一次画 `instanceCount` 个：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 普通：一次画一个网格（36 个顶点的立方体）
+glDrawArrays(GL_TRIANGLES, 0, 36);
+
+// 实例化：一次画 amount 个（最后多一个 instanceCount 参数）
+glDrawArraysInstanced(GL_TRIANGLES, 0, 36, amount);
+
+// 带索引的版本（行星带用这个）
+glDrawElementsInstanced(GL_TRIANGLES, indexCount,
+                        GL_UNSIGNED_INT, 0, amount);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 普通：一次画一个网格
+gl.drawArrays(gl.TRIANGLES, 0, 36);
+
+// 实例化：一次画 amount 个（最后多一个 instanceCount 参数）
+gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, amount);
+
+// 带索引的版本
+gl.drawElementsInstanced(gl.TRIANGLES, indexCount, gl.UNSIGNED_INT, 0, amount);
+```
+
+  </Tab>
+</CodeTabs>
+
+就这一行的差别：`Instanced` 版本末尾多一个 `instanceCount`（这里是 `amount`），GPU 就把同一份几何重复画 `amount` 遍。但光这样画出来的 `amount` 个会**完全重叠**——还得告诉每个实例「你摆哪」，这是下面两块的事：
+
+<Callout type="warn">
+  API 差异：实例化函数名 OpenGL 与 WebGL2 一致（`drawArraysInstanced` /
+  `drawElementsInstanced` / `vertexAttribDivisor`），只是去掉 `gl`
+  前缀小驼峰化。WebGL2 默认就支持实例化（无需扩展）；WebGL**1** 才需要
+  `ANGLE_instanced_arrays` 扩展、且函数名带 `ANGLE` 后缀。本站基于
+  WebGL2，直接用即可。
+</Callout>
+
+### 第二块：gl_InstanceID + uniform 数组取偏移（少量实例）
+
+实例少时，最简单的做法是把每实例偏移塞进一个 uniform 数组，顶点着色器用 `gl_InstanceID` 当下标取出自己那一份：
+
+<CodeTabs>
+  <Tab label="GLSL：顶点着色器（uniform 数组 + gl_InstanceID）">
+
+```glsl
+#version 300 es
+layout(location = 0) in vec2 aPos;
+uniform vec2 offsets[100];   // 每实例一个偏移，上限受 GPU uniform 容量限制
+void main() {
+  // gl_InstanceID：当前是第几个实例（0,1,2…），拿它取自己那份偏移
+  vec2 offset = offsets[gl_InstanceID];
+  gl_Position = vec4(aPos + offset, 0.0, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（CPU 端传 uniform 数组）">
+
+```ts
+// CPU 端：把 100 个偏移一次性传进 uniform 数组
+const offsets = new Float32Array(100 * 2);
+for (let i = 0; i < 100; i++) {
+  offsets[i * 2 + 0] = /* 第 i 个的 x */ x;
+  offsets[i * 2 + 1] = /* 第 i 个的 y */ y;
+}
+gl.uniform2fv(gl.getUniformLocation(program, "offsets"), offsets);
+gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, 100); // 画 100 个
+```
+
+  </Tab>
+</CodeTabs>
+
+这招简单，但 `offsets[100]` 这个 uniform 数组**有大小上限**——GPU 的 uniform 容量有限，塞一百个还行，要画一万个就远远不够了。实例一多，就得换成下面的实例化数组：
+
+<Callout type="warn">
+  `gl_InstanceID` 在 OpenGL 和 WebGL2/GLSL ES 3.00 里都可用（必须 `#version 300
+  es` 或更高，WebGL1 没有）。配 uniform 数组只适合**少量**实例：uniform
+  数组的最大长度受 `GL_MAX_VERTEX_UNIFORM_COMPONENTS`
+  限制，超了要么编译失败、要么读到越界。大量实例**必须**改用实例化数组（下一段），别硬撑
+  uniform 数组。
+</Callout>
+
+### 第三块：实例化数组 + glVertexAttribDivisor（海量实例）
+
+把每实例数据放进 VBO、当顶点属性传，并用 `glVertexAttribDivisor(loc, 1)` 设成「每实例读一条」。先看最简单的 `vec2` 偏移：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 把每实例偏移放进一个 VBO
+unsigned int instanceVBO;
+glGenBuffers(1, &instanceVBO);
+glBindBuffer(GL_ARRAY_BUFFER, instanceVBO);
+glBufferData(GL_ARRAY_BUFFER, sizeof(glm::vec2) * 100,
+             &translations[0], GL_STATIC_DRAW);
+// 像普通属性那样设 location=2
+glEnableVertexAttribArray(2);
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+// 关键：每实例才读一条（不是每顶点）
+glVertexAttribDivisor(2, 1);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 把每实例偏移放进一个 VBO
+const instanceVBO = gl.createBuffer()!;
+gl.bindBuffer(gl.ARRAY_BUFFER, instanceVBO);
+gl.bufferData(gl.ARRAY_BUFFER, translations, gl.STATIC_DRAW);
+// 像普通属性那样设 location=2
+gl.enableVertexAttribArray(2);
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 2 * 4, 0);
+// 关键：每实例才读一条（不是每顶点）
+gl.vertexAttribDivisor(2, 1);
+```
+
+  </Tab>
+</CodeTabs>
+
+顶点着色器把它当普通 `in` 属性收：`layout(location = 2) in vec2 aOffset;`，然后 `gl_Position = vec4(aPos + aOffset, 0.0, 1.0);`。重点是那句 `glVertexAttribDivisor(2, 1)`——少了它，`aOffset` 会被当逐顶点读、整片实例错乱。
+
+行星带要的不是 `vec2` 偏移、而是整个 `mat4` 变换矩阵。`mat4` 一个属性位置装不下（一个属性位最多 `vec4`），所以它**占 4 个连续的属性位置**，每个都要单独设 `divisor=1`：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（mat4 占 4 个属性位）">
+
+```cpp
+glBindBuffer(GL_ARRAY_BUFFER, matrixVBO); // 存了 amount 个 mat4
+GLsizei vec4Size = sizeof(glm::vec4);
+// mat4 = 4 列 vec4，占 location 3、4、5、6 四个属性位
+for (int i = 0; i < 4; i++) {
+  glEnableVertexAttribArray(3 + i);
+  glVertexAttribPointer(3 + i, 4, GL_FLOAT, GL_FALSE,
+                        4 * vec4Size, (void*)(i * vec4Size));
+  glVertexAttribDivisor(3 + i, 1); // 4 个位置都要逐实例
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：顶点着色器（mat4 实例化属性）">
+
+```glsl
+#version 300 es
+layout(location = 0) in vec3 aPos;
+layout(location = 3) in mat4 instanceMatrix; // 占 location 3,4,5,6
+uniform mat4 projection;
+uniform mat4 view;
+void main() {
+  // 每个实例用自己那份变换矩阵
+  gl_Position = projection * view * instanceMatrix * vec4(aPos, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+对照看：`mat4 instanceMatrix` 在着色器里只占一个 `layout(location = 3)`，但 CPU 端要把它拆成 **4 个 `vec4` 属性位**（`3`、`4`、`5`、`6`）逐个 `vertexAttribPointer` + `vertexAttribDivisor(., 1)`。配好后一句 `glDrawElementsInstanced(..., amount)`，整条行星带一次画完——这正是上面 Demo 的底层做法。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字。①忘 glVertexAttribDivisor(loc,1) → 实例属性当逐顶点读、叠一起/错乱；②uniform 数组传偏移有上限 → 大量实例应改实例化数组；③以为实例化能画不同网格 → 实例化是同一网格的多份。再补一个 mat4 占 4 个属性位漏设的坑。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：实例化数组设好了，画出来的实例却**全叠在一起、或位置乱成一团**，根本排不成预期的阵列。**原因**：实例化数组属性**忘了设
+  `glVertexAttribDivisor(loc, 1)`——它默认 `divisor=0`、被当成普通逐顶点属性读，
+  「每实例一份」的对应关系全错。**修法**：给每个实例化数组属性显式调
+  `glVertexAttribDivisor(loc, 1)`；若是 `mat4` 占 4 个属性位，**4
+  个位置都要单独设**，漏一个那一列就乱。
+</Callout>
+
+<Callout type="trap">
+  **现象**：少量实例时用 `gl_InstanceID` + `uniform vec2 offsets[N]`
+  一切正常，实例数一调大就**着色器编译失败 / 渲染错乱**。**原因**：uniform
+  数组有**大小上限**（受 `GL_MAX_VERTEX_UNIFORM_COMPONENTS`
+  限制），`offsets[10000]` 远超容量。**修法**：大量实例别用 uniform
+  数组，改用**实例化数组**（把每实例数据放进 VBO +
+  `divisor=1`），想画多少就准备多少条，不受 uniform 容量限制。
+</Callout>
+
+<Callout type="trap">
+  **现象**：想用实例化「一次画一片**各不相同**的物体」（一棵树、一块石头、一栋房子混着画），结果发现做不到。**原因**：实例化画的是**同一个网格的多份**——所有实例**几何完全相同**，只能让变换
+  /
+  属性不同，**不能换几何**。**修法**：不同的网格分别用各自的实例化绘制（每种网格一次
+  `glDrawElementsInstanced`）；想真正混画不同几何，那是另一套技术（如多绘制
+  `glMultiDrawElements`），不在实例化范畴。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `mat4` 实例化矩阵，画出来的实例**只有一部分变换生效、或整片扭曲**。**原因**：`mat4`
+  占 **4 个连续属性位**（如 location 3/4/5/6），CPU 端只设了第一个（location
+  3）、漏设了其余三列的
+  `vertexAttribPointer` / `enableVertexAttribArray` / `divisor`。**修法**：用一个 `for
+  (i=0;i<4;i++)` 循环把 location `3+i`
+  四个位置全部 `enable + pointer(offset=i*vec4Size) + divisor(3+i, 1)` 设齐。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改 Demo 题 + 1 道独立实现/排错题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **实例化** = 一次 draw call 画很多个**相同网格**：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，省的是 CPU 反复发起 draw call 的**通信开销**
+- 让每个实例不一样有两条路：**`gl_InstanceID`** 当下标取 uniform 数组偏移（实例少时简单，有大小上限），或**实例化数组**（每实例一份属性，画海量实例）
+- **`glVertexAttribDivisor(loc, divisor)`** 是核心：`0` 逐顶点读、`1` 每实例读；实例化数组**必须设 `1`**，忘了就被当逐顶点、整片错乱
+- **行星带**用 `mat4` 实例化矩阵：一个 `mat4` 占 **4 个连续属性位**，每个都要 `divisor=1`，一次画完上万颗
+- 实例化只能画同一网格的多份（变换 / 属性可不同、几何不能换）
+
+<Exercises>
+
+**练习 1（改 Demo 代码）** 上面的 InstancingDemo 把实例数最高拖到 10000，画面仍流畅，因为始终只有 **1 次** draw call。现在假设有人「优化」掉了实例化、改成**循环逐个绘制**（每颗小行星调一次 `gl.drawElements`）。① 画 5000 颗时会发起多少次 draw call？② 用本章术语解释为什么这种写法会让画面卡顿，而实例化不会。
+
+<Answer>
+
+① **5000 次** draw call（循环每次调一次 `drawElements`，5000 颗就调 5000 次；这正是 Demo 里「不实例化需要的次数」那个计数）。
+
+② 关键是 **draw call 开销**：每次 `drawElements` 都要 CPU 把绘制命令打包发给 GPU，这趟「来回通信」有固定成本，和这次画多少顶点关系不大。逐个绘制 = 5000 趟通信，CPU 光是反复发起 draw call 就忙不过来、成为瓶颈，帧率暴跌。而**实例化只发起 1 次** draw call（`gl.drawElementsInstanced(..., 5000)`），GPU 内部重复画 5000 遍——通信只有 1 趟，CPU 几乎没负担，所以拖到上万也流畅。省的不是 GPU 画三角形的活，是 CPU 反复喊话的开销。
+
+</Answer>
+
+**练习 2（排错题）** 某人写实例化数组：把每实例偏移 `vec2` 放进 VBO、`glVertexAttribPointer(2, 2, GL_FLOAT, ...)` 设好了 `location=2`，顶点着色器也写了 `layout(location=2) in vec2 aOffset;`，然后 `glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 100)`。结果 100 个实例**全叠在了同一个位置**。他漏了哪一句？为什么这一句能解决问题？
+
+<Answer>
+
+漏了 **`glVertexAttribDivisor(2, 1)`**。
+
+他设 `location=2` 时没改步进频率，`aOffset` 默认 `divisor=0`（**逐顶点**步进）。于是着色器画每个顶点都往下读一条偏移，根本不是「每实例一条」——「这是第几个实例就读第几条偏移」的对应关系彻底错位，结果所有实例读到的偏移乱套、挤在一起。
+
+加上 `glVertexAttribDivisor(2, 1)` 后，`aOffset` 变成**每实例**步进：第 0 个实例读 `translations[0]`、第 1 个读 `translations[1]`……同一个实例内的 6 个顶点共用同一条偏移，100 个实例就整整齐齐摆到 100 个不同位置。一句 `divisor=1` 之差。
+
+</Answer>
+
+**练习 3（独立实现题）** 你要画一片 1000 棵的草地，每棵草是同一个网格，但**位置不同、且各自有不同的随机朝向**（绕 Y 轴旋转一个随机角度）。问：① 每棵草的「位置 + 旋转」该用什么数据结构当实例化属性最合适？② 这个数据结构在 CPU 端配置 `vertexAttribPointer` 时有什么特别之处？
+
+<Answer>
+
+① 最合适的是给每棵草一个 **`mat4` 变换矩阵**（把「平移到这棵草的位置」和「绕 Y 轴转随机角度」组合进一个矩阵）。这样位置和朝向打包成一份数据，顶点着色器里 `gl_Position = projection * view * instanceMatrix * vec4(aPos, 1.0)` 一气呵成。（若嫌 `mat4` 大，也可拆成 `vec3` 位置 + `float` 角度两个实例化属性，各设 `divisor=1`，但 `mat4` 最通用。）
+
+② 特别之处：`mat4` **占 4 个连续的属性位置**（一个属性位最多装一个 `vec4`，`mat4` 是 4 列）。所以要用一个 `for (i=0;i<4;i++)` 循环，对 location `loc+0`、`loc+1`、`loc+2`、`loc+3` 各调一遍 `enableVertexAttribArray` + `vertexAttribPointer(loc+i, 4, FLOAT, false, 4*vec4Size, i*vec4Size)` + `vertexAttribDivisor(loc+i, 1)`——4 个位置全设齐、都设 `divisor=1`，漏一个那一列就乱。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="实例化">
+  一种绘制技术：用**一次** draw call
+  画出很多个相同的网格（同一份几何），而不是循环调用很多次。每个实例几何完全一样，只是各自的位置
+  / 缩放 /
+  朝向（变换）或某些属性不同。常用来画大量重复物体：草地、森林、粒子、行星带。详见本章「实例化」一节。
+</GlossaryItem>
+
+<GlossaryItem term="draw call 开销">
+  一次 draw call（如 `glDrawArrays`）背后是一趟「CPU 把绘制命令打包、发给
+  GPU」的通信，这趟通信本身有固定成本，和你画多少顶点关系不大。所以画大量小物体时，瓶颈往往是
+  CPU 反复发起成千上万次 draw call 的开销，而不是 GPU 画三角形。实例化把 N 次
+  draw call 压成 1 次，正是省这笔钱。详见本章「实例化：一次 draw call
+  画一整片」一节。
+</GlossaryItem>
+
+<GlossaryItem term="gl_InstanceID">
+  顶点着色器里的一个内置整数，表示「当前画的是第几个实例」，从 0 开始递增（第 0
+  个实例是 0、第 1 个是
+  1……），只在实例化绘制时有意义。常拿它当下标去取每实例数据，比如
+  `offsets[gl_InstanceID]`，给每个实例一个不同偏移。详见本章「怎么让每个实例不一样」一节。
+</GlossaryItem>
+
+<GlossaryItem term="实例化数组">
+  一种「每个实例一份」的顶点属性：把每实例的数据（偏移向量、或整个变换矩阵）放进一个
+  VBO，像普通顶点属性那样设好，再用 `glVertexAttribDivisor(loc, 1)` 告诉
+  GPU「这个属性每个实例才读一条、不是每个顶点」。想画多少实例就准备多少条，不受
+  uniform
+  数组大小限制，是画海量实例的标准做法。详见本章「怎么让每个实例不一样」一节。
+</GlossaryItem>
+
+<GlossaryItem term="实例化步进 divisor">
+  `glVertexAttribDivisor(loc, divisor)`
+  设某个顶点属性「多久往下读一条」：`divisor=0`（默认）是**逐顶点**——每处理一个顶点就读下一条；`divisor=1`
+  是**每实例**——每开始一个新实例才读下一条，同一实例内所有顶点共用一条。实例化数组必须设
+  `1`，否则被当逐顶点读、整片错乱。详见本章「核心难点：glVertexAttribDivisor」一节。
+</GlossaryItem>
+
+<GlossaryItem term="行星带">
+  实例化的经典案例：上千上万颗小行星绕一颗行星排成一圈飞。每颗是同一个网格，但位置
+  / 缩放 / 朝向各异，于是给每个实例一个 `mat4` 变换矩阵当实例化数组属性，一次
+  draw call 画完整条带。因为 `mat4` 太大，要占 **4 个连续属性位置**、各设
+  `divisor=1`。详见本章「行星带」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

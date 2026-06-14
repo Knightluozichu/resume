@@ -62,6 +62,9 @@ import { UboBindingDiagram } from "./diagrams/ubo-binding-diagram";
 import { GeometryShaderPipelineDiagram } from "./diagrams/geometry-shader-pipeline-diagram";
 import { EmitVertexDiagram } from "./diagrams/emit-vertex-diagram";
 import { ExplodeDiagram } from "./diagrams/explode-diagram";
+import { InstancingDiagram } from "./diagrams/instancing-diagram";
+import { AttribDivisorDiagram } from "./diagrams/attrib-divisor-diagram";
+import { DrawcallCompareDiagram } from "./diagrams/drawcall-compare-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -79,6 +82,7 @@ import { MultiLightDemo } from "./lighting/multi-light-demo";
 import { ModelDemo } from "./model-demo";
 import { FramebufferDemo } from "./framebuffer-demo";
 import { CubemapDemo } from "./cubemap-demo";
+import { InstancingDemo } from "./instancing-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -196,6 +200,11 @@ import { CubemapDemo } from "./cubemap-demo";
  *    triangle_strip 连成 1 个 billboard 四边形，「0 维点凭空长成一片面」）、ExplodeDiagram（爆破 explode 同构同框：
  *    exploded=false 六三角形紧凑拼合 vs exploded=true 各片沿面法线推开 magnitude 飞溅碎片 + 绿法线箭头，bare 去图注，
  *    供 Stepper 第三步 + CompareSlider 两侧分别传）。同款 Server SVG。
+ *  - 高级OpenGL篇·实例化（HEL-76，C 实战型）：InstancingDiagram（一个网格模子「只存一份」+ 一张「每实例变换表」
+ *    第 i 行 = gl_InstanceID==i → 照表盖出 N 个实例，一次 draw call）、AttribDivisorDiagram（mode=divisor0/divisor1/compare：
+ *    divisor=0 逐顶点步进 每个顶点读一条 vs divisor=1 每实例步进 一条覆盖整个实例所有顶点，compare 并列 + 「忘设 1 = 被当逐顶点读」提醒）、
+ *    DrawcallCompareDiagram（不实例化 CPU 喊 N 遍 N 根红箭头·瓶颈 vs 实例化 CPU 喊 1 遍 1 根绿粗箭头 instanceCount=N·流畅，
+ *    点明省的是 CPU 反复喊话发起 draw call 的通信开销）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -255,6 +264,14 @@ import { CubemapDemo } from "./cubemap-demo";
  *    分段选择器（默认反射）+ OrbitControls 拖拽转视角/滚轮缩放 + 重置；frameloop="demand"、
  *    OrbitControls onChange/切材质/离屏恢复时 invalidate，无自转动画（天然 reduced-motion 友好），
  *    卸载 dispose 立方体贴图。
+ *
+ * R3F 实例化「行星带」交互演示（「高级OpenGL篇·实例化」InstancingDemo，HEL-76）：
+ *  - Client（dynamic 边界）：InstancingDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 InstancingCanvas（独立 chunk，硬规则 2/6）。一个 <instancedMesh args={[geo, mat, MAX]}> 画一整条
+ *    程序化「行星带」（同一个小立方体几何，固定种子伪随机摆环形阵列 + setColorAt 每实例 HSL 渐变色，零外部资源，
+ *    硬规则 3）。滑块改实例数 100~10000 只调 mesh.count（实例化下几乎零成本，画到上万仍流畅）；自转开关
+ *    （reduced-motion 默认关）+ 重置；顶部 draw call 对比条：实例化恒 1 vs 不实例化需 count 次。frameloop
+ *    可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -273,6 +290,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ModelDemo,
   FramebufferDemo,
   CubemapDemo,
+  InstancingDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -333,6 +351,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GeometryShaderPipelineDiagram,
   EmitVertexDiagram,
   ExplodeDiagram,
+  InstancingDiagram,
+  AttribDivisorDiagram,
+  DrawcallCompareDiagram,
   Stepper,
   Step,
   Slider,
