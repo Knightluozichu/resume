@@ -34,8 +34,9 @@ export default function LearnLayout({
         data-pagefind-ignore
         className="hidden w-60 shrink-0 border-r border-border bg-elevated lg:block"
       >
-        {/* top-12 与顶部导航高度 h-12 对齐 */}
-        <div className="sticky top-12 px-4 py-8">
+        {/* top-12 与顶部导航高度 h-12 对齐；max-h 留出这 48px，内容超视口时
+            侧栏内部纵向滚动（出现滚动条、可滚到最底篇章） */}
+        <div className="sticky top-12 max-h-[calc(100vh-3rem)] overflow-y-auto px-4 py-8">
           <ChapterNav books={books} />
         </div>
       </aside>

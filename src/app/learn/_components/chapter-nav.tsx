@@ -42,6 +42,25 @@ export function ChapterNav({ books }: { books: NavBook[] }) {
   const toggle = (bookSlug: string) =>
     setExpanded((prev) => ({ ...prev, [bookSlug]: !prev[bookSlug] }));
 
+  // 初始 section 展开集（key = `${bookSlug}::${section}`，section 名为中文）：
+  // 仅「包含当前章的那个 section」默认展开（该组里存在某 chapter.href === pathname），
+  // 其余 section 收起 → 侧栏紧凑、聚焦当前位置。由 pathname 推导 → SSR/CSR 一致。
+  const [sectionExpanded, setSectionExpanded] = useState<
+    Record<string, boolean>
+  >(() => {
+    const init: Record<string, boolean> = {};
+    for (const book of books) {
+      for (const group of book.sections) {
+        const key = `${book.bookSlug}::${group.section}`;
+        init[key] = group.chapters.some((c) => c.href === pathname);
+      }
+    }
+    return init;
+  });
+
+  const toggleSection = (key: string) =>
+    setSectionExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
+
   return (
     <nav aria-label="章节目录" className="flex flex-col gap-4">
       {books.map((book) => {
@@ -77,40 +96,76 @@ export function ChapterNav({ books }: { books: NavBook[] }) {
             {/* 书下的 section 分组（折叠面板）。收起时不渲染，保持 DOM 精简。 */}
             {isOpen && (
               <div id={panelId} className="mt-2 flex flex-col gap-4 pl-2">
-                {book.sections.map((group) => (
-                  <div key={group.section}>
-                    <h2 className="px-2 text-xs font-medium text-secondary">
-                      {group.section}
-                    </h2>
-                    <ul className="mt-2 flex flex-col gap-1">
-                      {group.chapters.map((chapter) => {
-                        const active = pathname === chapter.href;
-                        return (
-                          <li key={chapter.href}>
-                            <Link
-                              href={chapter.href}
-                              aria-current={active ? "page" : undefined}
-                              className={`flex items-center gap-2 rounded-control px-2 py-1 transition-colors duration-(--duration-hover) ease-standard ${
-                                active
-                                  ? "bg-elevated text-accent"
-                                  : "text-secondary hover:text-primary"
-                              }`}
-                            >
-                              <span className="min-w-0 truncate">
-                                {chapter.title}
-                              </span>
-                              {chapter.draft && (
-                                <span className="shrink-0 rounded-control border border-border px-1 text-[10px] leading-4 text-secondary">
-                                  草稿
-                                </span>
-                              )}
-                            </Link>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
+                {book.sections.map((group) => {
+                  const sectionKey = `${book.bookSlug}::${group.section}`;
+                  const sectionOpen = sectionExpanded[sectionKey] ?? false;
+                  const sectionPanelId = `section-${book.bookSlug}-${group.section}`;
+
+                  return (
+                    <div key={group.section}>
+                      {/* section 头：仿书层折叠范式，子层级样式（比书头小一档）。
+                          标题保持 heading 语义（h2），交互落在内层 button。 */}
+                      <h2>
+                        <button
+                          type="button"
+                          aria-expanded={sectionOpen}
+                          aria-controls={sectionPanelId}
+                          onClick={() => toggleSection(sectionKey)}
+                          className="flex w-full items-center gap-2 rounded-control px-2 py-1 text-left text-xs font-medium text-secondary transition-colors duration-(--duration-hover) ease-standard hover:text-primary"
+                        >
+                          {/* 折叠指示：▾ 展开 / ▸ 收起；transform 旋转，走 expand 档动效 */}
+                          <span
+                            aria-hidden="true"
+                            className="inline-block shrink-0 text-secondary transition-transform duration-(--duration-expand) ease-standard"
+                            style={{
+                              transform: sectionOpen
+                                ? "rotate(0deg)"
+                                : "rotate(-90deg)",
+                            }}
+                          >
+                            ▾
+                          </span>
+                          <span className="min-w-0 truncate">
+                            {group.section}
+                          </span>
+                        </button>
+                      </h2>
+                      {/* section 下章节列表（折叠面板）。收起时不渲染，与书层一致。 */}
+                      {sectionOpen && (
+                        <ul
+                          id={sectionPanelId}
+                          className="mt-2 flex flex-col gap-1"
+                        >
+                          {group.chapters.map((chapter) => {
+                            const active = pathname === chapter.href;
+                            return (
+                              <li key={chapter.href}>
+                                <Link
+                                  href={chapter.href}
+                                  aria-current={active ? "page" : undefined}
+                                  className={`flex items-center gap-2 rounded-control px-2 py-1 transition-colors duration-(--duration-hover) ease-standard ${
+                                    active
+                                      ? "bg-elevated text-accent"
+                                      : "text-secondary hover:text-primary"
+                                  }`}
+                                >
+                                  <span className="min-w-0 truncate">
+                                    {chapter.title}
+                                  </span>
+                                  {chapter.draft && (
+                                    <span className="shrink-0 rounded-control border border-border px-1 text-[10px] leading-4 text-secondary">
+                                      草稿
+                                    </span>
+                                  )}
+                                </Link>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
