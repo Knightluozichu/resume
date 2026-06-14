@@ -50,6 +50,7 @@ import { cppStringsVectorsArraysQuestions } from "./review/cpp-strings-vectors-a
 import { cppExpressionsQuestions } from "./review/cpp-expressions";
 import { cppStatementsQuestions } from "./review/cpp-statements";
 import { cppFunctionsQuestions } from "./review/cpp-functions";
+import { cppClassesQuestions } from "./review/cpp-classes";
 
 export {
   CHAPTER_TITLES,
@@ -96,6 +97,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppExpressionsQuestions,
   ...cppStatementsQuestions,
   ...cppFunctionsQuestions,
+  ...cppClassesQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
