@@ -113,6 +113,14 @@ import { TupleLayoutDiagram } from "./diagrams/tuple-layout-diagram";
 import { BitsetOperationDiagram } from "./diagrams/bitset-operation-diagram";
 import { RegexMatchDiagram } from "./diagrams/regex-match-diagram";
 import { RandomPipelineDiagram } from "./diagrams/random-pipeline-diagram";
+import { ExceptionHierarchyDiagram } from "./diagrams/exception-hierarchy-diagram";
+import { NamespaceNestingDiagram } from "./diagrams/namespace-nesting-diagram";
+import { MultipleInheritanceDiagram } from "./diagrams/multiple-inheritance-diagram";
+import { ExceptionSafetyTable } from "./diagrams/exception-safety-table";
+import { MemoryLayoutDiagram } from "./diagrams/memory-layout-diagram";
+import { RTTIDiagram } from "./diagrams/rtti-diagram";
+import { EnumUnionDiagram } from "./diagrams/enum-union-diagram";
+import { AdvancedFeatureTable } from "./diagrams/advanced-feature-table";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -484,6 +492,14 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   BitsetOperationDiagram,
   RegexMatchDiagram,
   RandomPipelineDiagram,
+  ExceptionHierarchyDiagram,
+  NamespaceNestingDiagram,
+  MultipleInheritanceDiagram,
+  ExceptionSafetyTable,
+  MemoryLayoutDiagram,
+  RTTIDiagram,
+  EnumUnionDiagram,
+  AdvancedFeatureTable,
   AccessControlDiagram,
   IOClassHierarchyDiagram,
   FileStreamLifecycleDiagram,

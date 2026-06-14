@@ -1,0 +1,607 @@
+---
+title: 特殊工具与技术
+type: C
+section: 高级主题
+order: 3
+description: 掌握内存管理底层机制、运行时类型识别(RTTI)、枚举与联合、函数指针与成员指针等C++高级特性——全书压轴章节（高级主题篇第3章）
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（C++ Primer §19 改编）：特殊工具与技术——"高级主题"压轴章。
+   重心在概念图示(§3) + Stepper(§5) + 代码对照(§6)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) placement new/operator new重载— viz: MemoryLayoutDiagram step=1-2（堆/栈/placement new三区对比图）
+   2) RTTI (typeid/dynamic_cast/type_info)— viz: RTTIDiagram step=1-3（dynamic_cast运行时类型安全检查流程图）
+   3) enum/enum class/union— viz: EnumUnionDiagram（enum class作用域 vs 传统enum + union成员布局对比图）
+   4) 成员指针与嵌套类— 代码示例（成员函数指针回调map + 嵌套类TreeNode）
+   5) 六特性速查— viz: AdvancedFeatureTable（placement new/RTTI/enum class/union/成员指针/嵌套类速查表） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用 placement new 在已分配内存上构造对象并正确管理生命周期——预分配原始内存、在指定地址构造、显式析构但不 delete
+- 能用 RTTI（`typeid` 和 `dynamic_cast`）在运行时安全地识别和转换类型——用基类指针调用派生类特有方法而不崩
+- 能用 `enum class` 定义类型安全的枚举——理解它和传统 `enum` 的作用域、类型转换差异，何时用 `union` 共享内存
+- 能声明和使用成员指针——数据成员指针、成员函数指针、`.*` 和 `->*` 操作符
+- 能回答：`enum class` 的值为什么不能隐式转成 `int`？`dynamic_cast` 失败时指针版和引用版分别发生什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线。 */}
+
+## 为什么需要这些特殊工具
+
+你已经走完了 C++ 的核心旅程——变量、容器、算法、类、模板、继承。这些构成了你日常编程的 95%。但还有一批"特种工具"——它们不常用，可一旦进入某些特定领域，不用它就写不出正确代码。这些工具是 C++ 的"精密手术刀"——普通场景用不上，关键场景少了不行。
+
+想象工厂流水线上有四个特种工位：**精确安放站**把零件精确安放在工作台上某个位置再开始加工（placement new）、**身份验证站**在传送带上分拣——"这个箱子里装的是精密仪器还是一般零件"并据此绕去不同车间（RTTI）、**分拣模具站**每个槽只能同时放一种形状的零件、上一件取出才换下一件（union）、**分类标签站**给零件打上防混淆的专属标签——没有标签的零件混进整条线数不清（enum class）。
+还有两个辅助工具：指挥调度台上的**快捷拨号键**——每个键按下去不是直接打电话，而是指向某个特定人的分机号码（成员指针）——按下去就拨那个人；流水线上的**隔离小舱**——舱外的人只知道舱门编号，不知道里面具体放着什么机器零件（嵌套类）。
+
+**这一章解决什么问题？** 把六种仅在高级场景出现的工具逐个讲透——不是让你"知道有这个东西"，而是"遇到场景时知道该用哪个、怎么用、有什么坑"。你不用把这些全记住——但你需要有能力在遇到它们的时候自己读懂、自己改对。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## placement new：在指定地址上构造对象
+
+普通的 `new` 做了两件事——先向系统要一块内存（`operator new`），在这块内存上调构造函数初始化对象。两者一步完成——你写 `new T()`，对象创建好、内存也分配好了，`delete` 时析构加释放也是一步到位。但有时你需要把这两步拆开——比如你要重复使用一块已分配的大内存，不希望每次构造新对象都重新申请内存、析构旧对象时也不希望释放整块内存——只要析构这个对象，把位置腾出来给下一个对象用。
+
+`<Term def="new 的一种特殊形式——不分配内存，只在已分配好的内存地址上调用构造函数。语法：new (ptr) Type(args)。适用场景：自定义内存池、反复使用同一块缓冲区。placement new 构造的对象必须显式调用析构函数（ptr->~Type()），但绝不能 delete——delete 会释放不属于它的内存。">placement new</Term>` 就是这个"只构造、不分配"的工具——你提供一块已经分配好的原始内存地址，它就在那个地址上调用构造函数。析构同理——只析构、不释放。
+
+<MemoryLayoutDiagram step={1} />
+
+### operator new 与 operator delete 的底层机制
+
+`<Term def="C++ 内存分配的低层函数——operator new(size_t) 只分配指定字节数的原始内存（void*），不调用构造函数。operator delete(void*) 只释放内存，不调用析构函数。new 表达式 = operator new + 构造函数，delete 表达式 = 析构函数 + operator delete。placement new 只调构造函数，跳过 operator new。">operator new / operator delete</Term>` 就是被 new/delete 表达式在背后调用的底层内存函数。它们只关心字节——分配指定字节数的原始内存（返回 `void*`），或释放由 `operator new` 分配的内存。它们**不关心类型、不调构造/析构函数**。
+
+```cpp
+#include <new>
+
+// operator new——只分配原始字节，不构造对象
+void* raw = ::operator new(sizeof(std::string));
+
+// placement new——在 raw 地址上构造一个 string
+std::string* s = new (raw) std::string("hello");
+
+// 用完：必须先析构再释放
+s->~string();               // 显式调析构——释放 string 管理的堆内存
+::operator delete(raw);     // 释放原始字节
+```
+
+### placement new 的真正价值
+
+下面用 Stepper 展示 placement new 的核心理念——把内存管理和对象构造分成独立的两步：
+
+<Stepper>
+  <Step title="① 普通 new——分配+构造不分离">
+    <MemoryLayoutDiagram step={1} />
+
+    `new T()` 一步两步合一——从堆上申请新内存、在申请到的位置构造对象。`delete` 也是析构+释放一步完成。易用但频繁 new/delete 时内存碎片和开销大。
+  </Step>
+  <Step title="② placement new——分离关注点">
+    <MemoryLayoutDiagram step={2} />
+
+    第一步（只做一次）：`operator new` 预分配一大块原始内存。第二步（可重复做 N 次）：placement new 在预分配的内存中逐个构造对象。内存只分配一次——后续只是构造/析构的循环。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  核心记忆：`operator new` 只分配字节 → placement new 只构造对象 → 显式析构 → `operator delete` 只释放字节。四步是分离的——哪步该做什么不要混。placement new 构造的对象**严禁 delete**——`delete` 既析构又释放，而这块内存你不该让它释放。
+</Callout>
+
+## RTTI：运行时的类型识别与安全导航
+
+当程序在运行时——一个基类指针 `Base* bp` 可能真的指向 `Base` 对象、也可能指向 `Derived` 对象、甚至指向更远的孙子类。编译期只知道 `bp` 的**静态类型**是 `Base*`——它"是什么"在编译时并没有确定。但程序运行中——你可能需要知道"`bp` 到底指向什么"和"能不能把它当作某种派生类来用"。
+
+`<Term def="Run-Time Type Identification——C++ 的运行时类型信息机制。运行期获取对象的实际类型：typeid 查询类型、dynamic_cast 安全向下转型。前提是类至少有一个虚函数——因为需要 vtable 中的 RTTI 信息。type_info 类存类型标识，支持 name()/before()/==/!=。">RTTI（运行时类型识别）</Term>` 就是这个问题的答案——它让你在程序运行时安全地查询和转换对象类型。
+
+### typeid：查询对象"你是谁"
+
+`typeid(e)` 返回一个 `type_info` 对象的引用——描述表达式 `e` 的实际类型。`type_info` 提供 `name()`（返回类型名，不同编译器格式不同）、`before()`（排序用）、`==` / `!=`（类型比较）：
+
+```cpp
+#include <typeinfo>
+
+Base* bp = new DerivedA();
+if (typeid(*bp) == typeid(DerivedA))
+    std::cout << "bp really points to DerivedA\n";
+// typeid(*bp)——解引用查动态类型（需要虚函数）
+// typeid(bp)——不查动态类型，只返回 Base*
+```
+
+`<Term def="std::type_info 类——存类型的标识信息。typeid 返回其引用。提供 name()（各编译器不同格式）、before()（实现定义的排序）、== / !=（比较两个 type_info 对象是否描述同一类型）。不能拷贝、不能移动——只能通过 typeid 获取引用。">type_info</Term>` 的 `name()` 返回的字符串格式在各编译器间不同——不要把它用于跨平台输出，只用于调试和类型比较。
+
+### dynamic_cast：安全向下转型
+
+`typeid` 只能问"你是谁"，但不能帮你"把你当某种类型来用"。`<Term def="安全的运行时向下转型运算符——dynamic_cast<T*>(ptr)：实际类型匹配 T 时返回有效地址，不匹配返回 nullptr（指针版）或抛 std::bad_cast（引用版）。需要运行时检查 vtable 中的类型信息——因此要求类至少有一个虚函数。dynamic_cast 比 static_cast 安全——转换失败不会产生未定义行为。">dynamic_cast</Term>` 则一步到位——直接尝试把基类指针/引用转为派生类，并告诉你是否成功：
+
+```cpp
+Base* bp = new DerivedB();
+
+// 指针版：失败返回 nullptr
+auto* db = dynamic_cast<DerivedB*>(bp);
+if (db) db->derivedOnlyMethod();  // 安全——转换成功才调用
+
+// 引用版：失败抛 std::bad_cast
+try {
+    DerivedB& ref = dynamic_cast<DerivedB&>(*bp);
+    ref.derivedOnlyMethod();
+} catch (const std::bad_cast&) {
+    // 转换失败——处理异常
+}
+```
+
+下面用 Stepper 逐步展示 RTTI 的完整工作流程：
+
+<Stepper>
+  <Step title="① 问题：基类指针看不到派生类成员">
+    <RTTIDiagram step={1} />
+
+    `Base* bp = new DerivedB();`——编译期只看到 bp 是 `Base*`，只能调 Base 的方法。派生类特有的方法通过 bp 直接调用——编译报错。
+  </Step>
+  <Step title="② dynamic_cast&lt;T*&gt;——指针版安全检查">
+    <RTTIDiagram step={2} />
+
+    `auto* db = dynamic_cast<DerivedB*>(bp);`——运行时检查 bp 实际指向的是不是 DerivedB。是→返回有效指针、不是→返回 nullptr。if 判空后安全调用派生类方法。
+  </Step>
+  <Step title="③ 指针版 vs 引用版——两种失败方式">
+    <RTTIDiagram step={3} />
+
+    指针版（`dynamic_cast<T*>`）：失败返回 nullptr——if 判空即可。引用版（`dynamic_cast<T&>`）：失败抛 `std::bad_cast` 异常——需要 try/catch。指针版更安全常用——不抛异常。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  RTTI 的前提——类必须至少有一个虚函数（通常是虚析构函数）。没有虚函数——vtable 不存在、`dynamic_cast` 编译就直接报错。RTTI 有性能开销——别在热循环中滥用。日常编程优先用虚函数和多态设计解决问题——RTTI 是备选方案而非首选。
+</Callout>
+
+## enum class 与 union：类型安全和共享存储
+
+### enum class：带作用域的安全枚举
+
+C 风格的 `enum` 有个经典的尴尬——你可以把 `Red` 直接当整数写 `int c = Red;`，两个枚举里的 `Red` 会撞名。C++11 引入的 `<Term def="限定作用域的枚举类型——C++11 引入。成员必须通过作用域限定符访问（如 Color::Red），不能隐式转为整数（需 static_cast），默认底层类型为 int 且可显式指定（如 enum class Perm : uint8_t）。支持前置声明。比传统 enum 更类型安全——是 C++ 推荐的新代码默认选择。">enum class</Term>`（限定作用域枚举）解决了这两个痛点——成员必须写 `Color::Red`（不怕重名），不能偷偷转成 int（不经过 `static_cast` 就不通过编译）：
+
+```cpp
+// 传统 enum：成员暴露、可隐式转 int
+enum TraditionalColor { Red, Green, Blue };
+int c = Red;          // 编译通过——Red 隐式转 0
+// enum 不加 class 直接在当前作用域创建 Red/Green/Blue——两个枚举有同名成员会撞
+
+// enum class：限定作用域、不能隐式转换
+enum class SafeColor { Red, Green, Blue };
+auto sc = SafeColor::Red;          // "Red" 在 SafeColor 作用域内——不污染全局
+int x = static_cast<int>(sc);      // 转整数必须显式写——不写就编译报错
+```
+
+`enum class` 允许显式指定底层类型——用 `: type` 语法。这带来了两个好处：你能控制枚举在内存中占多大（`uint8_t` 只占 1 字节），还能在没看到所有枚举值的情况下前置声明：
+
+```cpp
+enum class Permission : uint8_t { Read = 1, Write = 2, Exec = 4 };
+// sizeof(Permission) == 1——省内存
+// 前置声明：enum class Permission : uint8_t;——可在头文件中只声明不定义
+```
+
+下面这张图把 `enum class`、传统 `enum`、`union` 在六个维度上并排对比——作用域、隐式转换、底层类型、前置声明、存储模型一目了然：
+
+<EnumUnionDiagram />
+
+### union：所有成员共享同一块内存
+
+`<Term def="联合体——一种特殊的类。所有非静态数据成员共享同一块内存（起始地址相同），任何时候只有一个成员是有值的。sizeof(union) = 最大成员的大小（可能加对齐填充）。C++11 允许 union 包含非平凡类型的成员（如 string）——但需要手动管理构造/析构。常用场景：存储多类型值但同一时刻只用一种、解释内存的不同视图。">union（联合体）</Term>` 的核心理念很简单——它不是 `struct`（字段各自占一块地），而是所有字段**叠**在同一起始地址上。写入一个成员——其他成员的值就被覆盖了。`sizeof(union)` = 最大成员的大小（确保任何成员都放得下）：
+
+```cpp
+union IntOrDouble {
+    int i;
+    double d;
+};
+// sizeof(IntOrDouble) == sizeof(double) == 8（兼容最大的成员）
+// i 和 d 从同一个地址开始——写入 i 后再读 d 得到的是覆盖后的垃圾值
+
+IntOrDouble u;
+u.i = 42;      // 活跃成员是 i
+u.d = 3.14;    // 活跃成员变成 d——i 的值被覆盖
+// std::cout << u.i;  // 未定义行为！读的不是活跃成员
+```
+
+C++11 的重要改进——union 可以包含有非平凡特殊成员函数的类型（比如 `std::string`）。但这意味着你得**手动管理生命周期**——用 `placement new` 构造、显式调用析构、用额外的 `tag`（标签）变量追踪当前活跃的成员：
+
+```cpp
+class Token {
+    enum class Tag { INT, DOUBLE, STRING } tag;
+    union {
+        int i;
+        double d;
+        std::string s;  // C++11: union 可以有非平凡成员
+    };
+public:
+    Token(int v) : tag(Tag::INT) { new (&i) int(v); }
+    Token(const std::string& v) : tag(Tag::STRING) { new (&s) std::string(v); }
+    ~Token() {
+        if (tag == Tag::STRING) s.std::string::~string();  // 只析构 string
+        // int 和 double 是 trivial 类型——无需析构
+    }
+    Token(const Token&) = delete;  // 简化为不可拷贝——实际产品需实现深拷贝
+};
+```
+
+<Callout type="warn">
+  在 C++17 引入了 `std::variant` 之后——手工维护 union + tag 的模式在新代码中应当被 `variant` 取代。`variant` 自动追踪活跃成员、自动管理生命周期、提供 `std::visit` 模式匹配。裸 union 只在性能极度敏感、C ABI 兼容、或已有 C 代码库维护时使用。
+</Callout>
+
+## 成员指针与嵌套类
+
+### 成员指针：指向类成员的偏移量
+
+`<Term def="指向类的某个成员的指针——不是指向特定对象中的成员，而是描述「这个成员在类内的偏移量」。声明用 Class::* 语法：int C::*pm = &C::m;（数据成员指针），void (C::*pf)() = &C::f;（成员函数指针）。必须有具体对象才能通过成员指针使用——obj.*pm 或 p->*pm 或 std::invoke。适用场景：回调表、命令映射。">成员指针（pointer to member）</Term>` 不像普通指针指向内存中的某个地址——它指向的是某个**类的某个成员**——描述了这个成员在该类中"位于第几个字节偏移处"（数据成员指针）或"调用入口在哪"（成员函数指针）。它不是一个可以直接解引用的地址——必须和一个具体的**对象**绑定后才能使用：
+
+```cpp
+struct Widget {
+    int value;
+    void show() const { std::cout << value << '\n'; }
+};
+
+// 声明成员指针——不指定具体对象
+int Widget::*pValue = &Widget::value;           // 数据成员指针
+void (Widget::*pShow)() const = &Widget::show;   // 成员函数指针
+
+Widget w{42};
+w.*pValue = 100;      // 通过对象使用数据成员指针
+(w.*pShow)();          // 通过对象调用成员函数——输出 100
+
+Widget* pw = &w;
+pw->*pValue = 200;    // 通过指针使用——->* 操作符
+(pw->*pShow)();       // 输出 200
+```
+
+成员函数指针最实用的场景——**回调表**。把函数名到成员函数指针的映射存起来，运行时按名字查找并调用：
+
+```cpp
+#include <map>
+#include <string>
+
+class Menu {
+    using Action = void (Menu::*)();
+    std::map<std::string, Action> actions;
+public:
+    void add(const std::string& name, Action act) { actions[name] = act; }
+    void invoke(const std::string& name) {
+        auto it = actions.find(name);
+        if (it != actions.end()) (this->*(it->second))();
+    }
+    void save()  { std::cout << "save\n"; }
+    void load()  { std::cout << "load\n"; }
+};
+// Menu m; m.add("save", &Menu::save); m.invoke("save");
+```
+
+C++17 的 `<Term def="C++17 引入的统一调用工具——std::invoke(callable, args...)。对普通函数像普通调用一样，对成员函数指针自动处理 obj.*pf 或 ptr->*pf，对所有可调用对象可用。替代手写的 (obj.*pf)(args) 或 (ptr->*pf)(args) 的啰嗦语法。">std::invoke</Term>` 可以把 `(this->*ptr)()` 写成 `std::invoke(ptr, this)`——省掉 `.*` 和 `->*` 的语法噪声。
+
+### 嵌套类：把辅助类型藏在类内部
+
+`<Term def="定义在另一个类内部的类——class Outer { class Inner { ... }; }。Inner 是独立类，不自动获得 Outer 私有成员的访问权（与 Java 内部类不同）。嵌套类主要是名字隐藏——Inner 的全名是 Outer::Inner，避免全局命名空间污染。常用于定义辅助类型：迭代器、节点、策略类。">嵌套类（nested class）</Term>` 本质上是一个在另一个类中定义的类——它和普通类没什么差别，只是名字被限制在了封闭类的作用域内。嵌套类**不自动访问**封闭类的私有成员——这和 Java 等语言的内部类不同——记住：C++ 嵌套类只有名字隐藏，没有特殊访问权：
+
+```cpp
+class BinaryTree {
+    struct Node {                    // 嵌套类——外部不可见
+        int data;
+        Node* left = nullptr;
+        Node* right = nullptr;
+        Node(int v) : data(v) {}
+    };
+    Node* root = nullptr;
+public:
+    void insert(int v) { /* 用 Node 构建树 */ }
+    bool find(int v) const { /* 在树中查找 */ }
+};
+// 外部代码完全不知道 Node 的存在——只能通过 BinaryTree 的接口操作
+```
+
+嵌套类的典型用途——定义外部不需要知道的内部实现细节。Node 作为树的内部节点类型，用户只需要 `insert` / `find` / `traverse`——不需要知道树的内部节点长什么样。
+
+<AdvancedFeatureTable />
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为双 Stepper——MemoryLayoutDiagram 两步（placement new 拆解）+ RTTIDiagram 三步（运行时类型安全），放在 §3 概念讲解内。 */}
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段讲解，覆盖 ≥80% 关键代码；单块 ≤30 行。 */}
+
+## 实战：写一个 TaggedPointer——placement new + RTTI + union 的三合一
+
+下面是一个把本章三个核心概念串联起来的完整示例——一个可以安全存储三种完全不同类型值（`int`、`double`、`std::string`）的对象，通过 RTTI 在运行时获取当前存储的是什么类型。这其实就是 `std::variant` 的极简手工版——你敲完这段代码就能理解 `variant` 内部的大概原理。
+
+### 第一部分：用 union 共享内存 + Tag 追踪类型
+
+```cpp
+#include <string>
+#include <new>      // placement new
+#include <typeinfo>  // RTTI
+#include <stdexcept>
+
+class TaggedPointer {
+    enum class Type { NONE, INT, DOUBLE, STRING } tag_ = Type::NONE;
+    union {
+        int i;
+        double d;
+        std::string s;
+        // C++11: union 可以有非平凡成员——但要手动管理生命周期
+    } data_;
+```
+
+`union` 确保三种类型的值共享同一块内存——任何时候只有一个是"活跃"的。`tag_` 用 `enum class` 记录当前活跃成员是哪个——防止你错读成员引发未定义行为。
+
+### 第二部分：placement new 构造 + 显式析构管理生命周期
+
+```cpp
+public:
+    TaggedPointer(int v) : tag_(Type::INT)    { new (&data_.i) int(v); }
+    TaggedPointer(double v) : tag_(Type::DOUBLE) { new (&data_.d) double(v); }
+    TaggedPointer(const std::string& v) : tag_(Type::STRING) {
+        new (&data_.s) std::string(v);  // placement new 构造 string
+    }
+
+    ~TaggedPointer() {
+        if (tag_ == Type::STRING) data_.s.std::string::~string();
+        // int 和 double 是 trivial 类型——不需要显式析构
+    }
+```
+
+`new (&data_.i) int(v)`——placement new 在 `data_.i` 的地址上直接构造 `int`。析构时只有 `string` 需要显式调析构函数——因为它自己内部还有堆上分配的内存。`int` 和 `double` 是基础类型——析构等于什么都不做。
+
+### 第三部分：RTTI——用 typeid 安全获取类型
+
+```cpp
+    const std::type_info& type() const {
+        switch (tag_) {
+            case Type::INT:    return typeid(data_.i);
+            case Type::DOUBLE: return typeid(data_.d);
+            case Type::STRING: return typeid(data_.s);
+            default:           return typeid(void);
+        }
+    }
+
+    template<typename T>
+    T& get() {
+        if (typeid(T) != type()) throw std::bad_cast();
+        if constexpr (std::is_same_v<T, int>)    return data_.i;
+        if constexpr (std::is_same_v<T, double>)  return data_.d;
+        if constexpr (std::is_same_v<T, std::string>) return data_.s;
+    }
+};
+```
+
+用 `typeid` 和 `tag_` 双重确认当前存储的类型——如果访问的类型不匹配就抛异常。`if constexpr`（C++17）在编译期根据 `T` 的不同生成不同的分支——不匹配的分支直接被编译器丢掉——零运行时开销。
+
+使用时——同一个对象在不同时刻可以存不同类型，通过 `typeid` 在运行时探查实际类型：
+
+```cpp
+TaggedPointer tp(42);
+std::cout << tp.type().name() << '\n';     // "int"（或编译器特定格式）
+std::cout << tp.get<int>() << '\n';        // 42——安全，类型匹配
+
+tp = TaggedPointer(std::string("hello"));  // 替换为 string——之前 int 被覆盖
+std::cout << tp.get<std::string>() << '\n'; // "hello"
+// tp.get<int>();  // 抛出 bad_cast——当前存的是 string 不是 int
+```
+
+这个示例囊括了本章四分之三的技术——union 共享内存 + enum class 追踪活跃成员 + placement new 手动管理生命周期 + RTTI 查询类型。你写一遍这段代码，这四种工具的用法就全都握在手里了。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 在 `placement new` 构造的对象上调 `delete`——程序崩了或堆损坏。
+
+  **原因** → `delete` 做两件事——先调析构函数、再调用 `operator delete` 释放内存。placement new 使用的内存不是 `operator new` 单独分配的——它可能属于某个内存池中的一块、栈上的数组、或更大的缓冲区。`operator delete` 试图把这块内存当独立分配块还回去→破坏内存分配器内部数据结构。
+
+  **修法** → placement new 构造的对象只显式调析构函数——`p->~T()`——**永远不调 `delete`**。内存的释放由最初分配者决定——分配者可能是内存池、可能是上层容器、可能一直不释放。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `dynamic_cast<Derived*>(bp)` 编译报错——"'Base' is not a polymorphic type"。
+
+  **原因** → `dynamic_cast` 需要运行时类型信息（存储在 vtable 中），vtable 只在类至少有一个虚函数时才存在。如果你的基类没有任何虚函数——编译器连 vtable 都不生成，`dynamic_cast` 没有可用的类型信息——直接编译失败。
+
+  **修法** → 在基类的公有部分加上虚析构函数——`virtual ~Base() = default;`。这是 RTTI 工作的最低门槛——且虚析构是基类的标准做法（保证通过基类指针 `delete` 派生类对象时正确析构）。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `union` 中存储了 `std::string`，切换成 `int` 后程序泄漏内存或崩溃。
+
+  **原因** → 写入 union 的另一个成员时——旧成员（`string`）在内存中的表示被覆盖了。但 `string` 内部指向堆上实际字符数据的指针也随之消失——堆上的字符数据永远泄漏。更糟的是——如果析构 union 时没意识到当前不是 `string` 活跃，误调了 `string` 的析构函数去释放已被覆盖的内存→程序崩溃。
+
+  **修法** → 用 `tag_`（自维护的枚举类型标签）追踪当前活跃成员。写入新成员前——先根据 `tag_` 判断旧成员是不是非平凡类型（如 `string`），若是——显式调用其析构函数。析构时同样只析构当前活跃成员。如果你不想要手动管理——直接用 `std::variant`。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `typeid(bp) == typeid(Derived)`——一直返回 false，但 bp 确实指向子类。
+
+  **原因** → `typeid(bp)`——写的是指针变量 `bp` 本身（没有解引用 `*bp`）。`bp` 的静态类型是 `Base*`——`typeid(bp)` 永远返回 `Base*`。只有 `typeid(*bp)`——解引用后再查类型——才会根据 bp 指向的实际对象类型返回 `Derived`（前提——类有虚函数）。
+
+  **修法** → 写 `typeid(*bp)` 而不是 `typeid(bp)`。`*` 解引用这一步让 `typeid` 进入多态分发——对于有虚函数的类型，`*bp` 的静态类型是 `Base&` 但动态类型是实际对象类型——`typeid` 返回动态类型。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 deploy 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- **placement new** = 内存和构造分离——`operator new` 分原始字节（只一次），`new (addr) T(args)` 原地构造（可重复）。用完必须显式析构 `p->~T()`，**绝不调 `delete`**。四步是独立操作——不要搞混
+- **RTTI** = 运行时类型识别——`typeid` 查询（需要 `*` 解引用）、`dynamic_cast` 转换（指针版失败返 `nullptr`、引用版抛 `bad_cast`）。前提——基类有虚函数（虚析构即可）。日常编程优先用多态——RTTI 是备选方案
+- **enum class** = 类型安全的枚举——成员必须加作用域前缀（`Color::Red`），不能隐式转 int（需 `static_cast`），可指定底层类型且支持前置声明。新代码默认用 `enum class`——不再用无作用域的 `enum`
+- **union** = 所有成员共享内存——`sizeof` = 最大成员。用 `tag`（enum class）追踪活跃成员，手动管理非平凡成员的构造/析构。C++17 起 `std::variant` 是更安全的替代——只在性能极敏感、C ABI 或维护老代码时用裸 `union`
+- **成员指针** = 指向类成员偏移量——`int C::*pm`（数据成员）、`void (C::*pf)()`（成员函数）。`obj.*ptr` 或 `ptr->*ptr` 访问，`std::invoke` 简化。用 `void (C::*)()` 做回调表——函数名到成员函数映射
+- **嵌套类** = 在类内部定义辅助类型——名字隐藏（全名 `Outer::Inner`），**不自动访问**封闭类的私有成员（与 Java 内部类不同！）。用途——迭代器、节点、策略类等外部不需要知道的内部实现
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的代码在 `delete` 处有问题——找出并写出正确的析构方法。
+
+```cpp
+#include <new>
+#include <string>
+
+void* buf = ::operator new(1024);
+auto* s = new (buf) std::string("hello");
+*s = "world";
+delete s;  // 这行有什么问题？
+```
+
+<Answer>
+
+问题——`delete s` 做两件事：先析构（正确——`string` 的堆内存会释放），再调用 `operator delete` 释放 `buf` 这块内存（**错误**——`buf` 不属于独立分配的 `string` 内存，是大缓冲区的起点）。正确写法：
+
+```cpp
+s->~string();             // ① 显式析构——释放 string 自身的堆内存
+// buf 这块 1024 字节不释放——后面还能用 placement new 构造新对象
+// 当整个缓冲区不用时：::operator delete(buf);
+```
+
+关键区别——`delete ptr` = 析构 + operator delete。placement new 只做析构（`ptr->~T()`）——内存是预分配的，不属于这个对象。
+</Answer>
+
+**练习 2（独立实现题）** 写一个 `TypeChecker` 类——用 `typeid` 和 `dynamic_cast` 实现。有一个 `set(Base*)` 方法存基类指针，提供一个 `is_type<T>()` 方法（用 `typeid` 判断当前存的是什么类型）和一个 `as<T>()` 方法（用 `dynamic_cast` 安全转型并返回）。处理空指针和类型不匹配的情况。
+
+<Answer>
+
+```cpp
+#include <typeinfo>
+#include <stdexcept>
+
+class Base { public: virtual ~Base() = default; };
+class DerivedA : public Base {};
+class DerivedB : public Base { public: void extra() {} };
+
+class TypeChecker {
+    Base* ptr_ = nullptr;
+public:
+    void set(Base* p) { ptr_ = p; }
+
+    template<typename T>
+    bool is_type() const {
+        if (!ptr_) return false;
+        return typeid(*ptr_) == typeid(T);
+    }
+
+    template<typename T>
+    T* as() {
+        if (!ptr_) throw std::runtime_error("null pointer");
+        auto* result = dynamic_cast<T*>(ptr_);
+        if (!result) throw std::bad_cast();
+        return result;
+    }
+};
+
+// 使用：
+TypeChecker tc;
+DerivedB db;
+tc.set(&db);
+if (tc.is_type<DerivedB>()) {               // true
+    auto* p = tc.as<DerivedB>();            // 安全转型
+    p->extra();                             // 调用派生类特有方法
+}
+// tc.as<DerivedA>();                       // 抛 bad_cast——实际类型是 DerivedB
+```
+
+设计要点：① `typeid(*ptr_)` 用解引用取动态类型 ② `dynamic_cast<T*>` 失败返 nullptr ③ 空指针的情况要单独处理 ④ `as()` 名字是 C++ 中转型函数的命名惯例（`dynamic_cast` 太啰嗦）。
+</Answer>
+
+**练习 3（改代码型）** 下面的代码把 `enum class` 当传统 `enum` 用了——找出三个错误并修正。
+
+```cpp
+enum class Level { Low = 1, Medium = 5, High = 10 };
+
+void print_bonus(Level lv) {
+    int bonus = lv * 100;          // 错误 1
+    if (lv == High)                // 错误 2
+        std::cout << "Max bonus\n";
+}
+
+int main() {
+    Level l = 1;                   // 错误 3
+}
+```
+
+<Answer>
+
+三个错误：
+
+错误 1——`lv * 100`：`enum class` 不能隐式转 `int`，乘法操作符不接受枚举类型。修正：`int bonus = static_cast<int>(lv) * 100;`。
+
+错误 2——`lv == High`：`enum class` 的成员必须加作用域前缀。修正：`lv == Level::High`。
+
+错误 3——`Level l = 1;`：不能用整数直接初始化 `enum class` 变量（没有隐式整数→枚举的转型）。修正：`Level l = Level::Low;` 或 `Level l = static_cast<Level>(1);`。
+
+修正后的代码：
+
+```cpp
+enum class Level { Low = 1, Medium = 5, High = 10 };
+
+void print_bonus(Level lv) {
+    int bonus = static_cast<int>(lv) * 100;
+    if (lv == Level::High)
+        std::cout << "Max bonus\n";
+}
+
+int main() {
+    Level l = Level::Low;
+    // 或: auto l = Level::Low;
+}
+```
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="placement new">
+  `new` 的一种特殊形式——不分配新内存，只在已分配好的内存地址上调用构造函数。语法——`new (ptr) Type(args)`。`ptr` 是预先分配好的原始内存地址。适用场景——自定义内存池、重复使用同一块缓冲区避免频繁 new/delete。构造函数由你手动控制，析构函数也**必须**你手动调用（`ptr->~Type()`）。**禁止**对 placement new 构造的对象调 `delete`——`delete` 会尝试释放不属于这个对象独立拥有的内存。
+</GlossaryItem>
+
+<GlossaryItem term="operator new / operator delete">
+  C++ 内存分配的低层函数。`operator new(size_t)` 只分配指定字节数的原始内存（返回 `void*`），**不调用构造函数**。`operator delete(void*)` 只释放内存，**不调用析构函数**。`new` 表达式 = `operator new` + 构造函数，`delete` 表达式 = 析构函数 + `operator delete`。placement new 跳过了 `operator new`——只做构造这一步。
+</GlossaryItem>
+
+<GlossaryItem term="RTTI（运行时类型识别）">
+  Run-Time Type Identification——C++ 在程序运行时获取对象实际类型的机制。三个核心组件——① `typeid(e)` 查询类型（返回 `type_info&`）、② `dynamic_cast<T>(e)` 安全向下转型（失败指针返回 `nullptr`、引用抛 `bad_cast`）、③ `type_info` 类存储类型标识。RTTI 的前提——类至少有一个虚函数（虚析构就行）——因为运行时类型信息存在 vtable 中。有性能开销——不要滥用，优先用多态设计。
+</GlossaryItem>
+
+<GlossaryItem term="type_info">
+  `std::type_info` 类——存储 C++ 类型的标识信息。通过 `typeid` 获取引用。提供 `name()` 返回类型名（不同编译器格式不同——只用于调试），`before()` 提供实现定义的排序，`==` / `!=` 比较两个 `type_info` 是否描述同一个类型。不能拷贝、不能移动——只能从 `typeid` 取得引用。
+</GlossaryItem>
+
+<GlossaryItem term="dynamic_cast">
+  安全的运行时向下转型运算符。`dynamic_cast<T*>(ptr)`——实际类型匹配 T 时返回有效指针，不匹配返回 `nullptr`。`dynamic_cast<T&>(ref)`——成功返回引用，失败抛 `std::bad_cast` 异常。需要 vtable 中的运行时类型信息——因此要求类至少有一个虚函数。比 `static_cast` 安全——转型失败不会产生未定义行为，而是明确地返回 `nullptr` 或抛异常。
+</GlossaryItem>
+
+<GlossaryItem term="enum class">
+  C++11 引入的限定作用域枚举。成员必须通过作用域前缀访问（`Color::Red`），不能隐式转为整数（必须 `static_cast<int>`），默认底层类型是 `int`（可显式指定，如 `: uint8_t`），支持前置声明。比传统 C 风格 `enum` 更类型安全、作用域更清晰。新代码一律用 `enum class`——老代码中的传统 `enum` 只在维护时碰到。
+</GlossaryItem>
+
+<GlossaryItem term="union（联合体）">
+  一种特殊的类——所有非静态数据成员共享同一块内存。任何时候只有一个成员是"活跃"的（有有效值），写入一个成员会覆盖其他成员。`sizeof(union)` = 最大成员的大小（可能加对齐）。C++11 起允许包含非平凡类型成员（如 `std::string`）——但需要你手动用 placement new 构造、显式调析构、用 tag 变量追踪活跃成员。C++17 的 `std::variant` 在大多数场景下是更安全的选择——自动管理生命周期和类型安全。
+</GlossaryItem>
+
+<GlossaryItem term="成员指针（pointer to member）">
+  指向类的某个成员的指针——不指向特定对象中的那个成员，而是描述"这个成员在类内位于第几个字节"（数据成员指针）或"这个成员函数的调用入口在哪"（成员函数指针）。声明语法——数据成员 `int C::*pm = &C::value`，成员函数 `void (C::*pf)() = &C::f`。必须给定具体对象才能使用——`obj.*pm` 或 `ptr->*pm`。C++17 的 `std::invoke` 简化了调用：`std::invoke(pf, obj, args)`。典型场景——回调函数表（`map<string, void(C::*)()>）`。
+</GlossaryItem>
+
+<GlossaryItem term="std::invoke">
+  C++17 引入的统一调用工具——`std::invoke(callable, args...)`。对普通函数——就和直接调用一样。对成员函数指针——自动处理 `obj.*pf` 或 `ptr->*pf`——省掉啰嗦的 `.*` / `->*` 语法。对所有可调用对象（函数、函数对象、lambda）都能用——比直接调用更通用，常在模板元编程中使用。
+</GlossaryItem>
+
+<GlossaryItem term="嵌套类（nested class）">
+  定义在另一个类内部的类——`class Outer { class Inner { ... }; }`。`Inner` 是独立类——不自动获得 `Outer` 私有成员的访问权（这和 Java 内部类不同！）。嵌套类的作用主要是名字隐藏——`Inner` 的全名是 `Outer::Inner`，不在全局命名空间暴露。常用于定义辅助类型——迭代器、树节点、策略类——这些实现细节用户不需要直接看到和操作。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §19 改编重写。 */}
+
+<Attribution />

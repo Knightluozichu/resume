@@ -61,6 +61,8 @@ import { cppOverloadedOperationsQuestions } from "./review/cpp-overloaded-operat
 import { cppOopQuestions } from "./review/cpp-oop";
 import { cppTemplatesQuestions } from "./review/cpp-templates";
 import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library";
+import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
+import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
 
 export {
   CHAPTER_TITLES,
@@ -118,6 +120,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppTemplatesQuestions,
   ...cppOopQuestions,
   ...cppSpecializedLibraryQuestions,
+  ...cppSpecializedToolsQuestions,
+  ...cppLargeProgramsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
