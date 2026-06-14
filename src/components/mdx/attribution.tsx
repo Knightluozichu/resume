@@ -14,7 +14,6 @@
  * 颜色/间距/圆角全部走 DESIGN token（硬规则 5）。
  */
 
-const CN_BASE = "https://learnopengl-cn.github.io/";
 const EN_HOME = "https://learnopengl.com/";
 const LICENSE_NAME = "CC BY-NC 4.0";
 const LICENSE_URL = "https://creativecommons.org/licenses/by-nc/4.0/";
@@ -41,8 +40,48 @@ function toEnglishUrl(sourceUrl: string): string {
   }
 }
 
-export function Attribution({ sourceUrl }: { sourceUrl: string }) {
+export interface AttributionProps {
+  sourceUrl?: string;
+  /** 非 LearnOpenGL 改编：书名或出处标题 */
+  adaptedFrom?: string;
+  /** 原作链接（如 Packt 图书页） */
+  adaptedUrl?: string;
+}
+
+export function Attribution({
+  sourceUrl = "",
+  adaptedFrom,
+  adaptedUrl,
+}: AttributionProps) {
   const cnUrl = sourceUrl?.trim();
+
+  if (adaptedFrom?.trim()) {
+    const title = adaptedFrom.trim();
+    const url = adaptedUrl?.trim();
+    return (
+      <footer
+        aria-label="出处声明"
+        className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
+      >
+        <p className="mb-2 font-semibold text-primary">出处声明</p>
+        <p>
+          本文为改编重写，参考{" "}
+          {url ? (
+            <a href={url} target="_blank" rel="noopener noreferrer nofollow">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+          。教学结构与表述经 remuse 重写，非逐字翻译。
+        </p>
+        <p className="mt-2">
+          原作版权归原出版社及作者所有；本站改编内容仅供学习交流，请勿用于商业用途。
+        </p>
+      </footer>
+    );
+  }
+
   // 原创内容（无出处 URL）：显示通用原创声明
   if (!cnUrl) {
     return (

@@ -1,0 +1,241 @@
+---
+title: 评估性能问题
+type: A
+section: 基础脚本优化
+order: 1
+description: 学会用 Unity Profiler 建立性能基线，判断 CPU/GPU 瓶颈，再动手优化。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型（Unity Game Optimization Ch1 改编）：Profile First + Profiler 工具链。
+   重心是概念讲解(§3)与 Profiler 工作流 Stepper(§5)，数学省略，代码对照选贴。 */}
+
+{/* 知识点清单：
+   1) Profile First = ProfilerWorkflowDiagram + Stepper
+   2) Profiler 模块 CPU/Rendering/Memory/Audio = UnityProfilerWindowDiagram
+   3) 性能基线 = ProfilerWorkflowDiagram step 1
+   4) CPU bound vs GPU bound = CpuGpuBottleneckDiagram
+   5) Frame Debugger / Profile Analyzer = ProfilingToolsDiagram */}
+
+<Objectives>
+
+- 能解释「Profile First」在 Unity 优化流程中的位置，以及为什么盲改代码往往无效
+- 能说出 Profiler 四大模块（CPU、Rendering、Memory、Audio）各自回答什么问题
+- 能根据 CPU ms 与 GPU ms 判断当前帧更可能是 CPU bound 还是 GPU bound，并回答：没有基线数据时，你为什么不该先改 Shader？
+
+</Objectives>
+
+## 游戏卡了，先别改代码
+
+你的场景一运行就掉帧：角色多了就幻灯片，切场景要转半天。第一反应往往是「是不是某段脚本写坏了？」「把画质调低试试？」——然后开始在项目里到处改，改完却有时快、有时更慢，还说不清到底哪一刀有效。
+
+这章要解决的，就是**在动刀之前先量清楚**：慢在哪里、慢多少、对照尺是什么。没有测量就优化，就像蒙着眼修钟表——碰运气，还很容易把别的地方搞坏。
+
+<Term def="在改代码或资源之前，先用 Profiler 等工具采集数据、建立可对比基线的原则；业界口诀叫 Measure twice, cut once。">Profile First（先测量再优化）</Term> 是 Unity 性能工作的第一条铁律。没有它，你后面的每一章优化技巧都可能用错地方。
+
+## 测量先于优化
+
+<Term def="在固定场景与画质下记录的一组性能对照数据，优化前后用同一套条件复测，才能判断改动是否有效。">性能基线</Term> 是整条优化流水线的起点。你可以把它想成工厂流水线里的「首件检验」——先记下标准品的数据，后面每道工序改完都要和这张单子比，而不是凭感觉说「好像快了一点」。
+
+<ProfilerWorkflowDiagram />
+
+整条工作流分四步：**建立基线 → 定位瓶颈 → 验证修复 → 回归测试**。本章先把前两步的工具和概念铺好；后两步会在你动手改脚本、改渲染时反复用到。
+
+### 为什么「感觉快了」不算数
+
+玩家说「有点卡」、你自己觉得「好像顺了一点」，都是主观感受。帧时间差 2ms，人眼未必分辨得出；但 200 个这样的「小优化」堆在一起，或者某次「优化」其实增加了隐藏开销，只有数字能告诉你真相。基线就是把这些数字钉在墙上。
+
+## Profiler 窗口：四块仪表盘
+
+Unity 内置的 <Term def="Unity 编辑器附带的性能分析窗口，Play 模式下按帧采样 CPU、渲染、内存、音频等耗时，是 Profile First 的核心工具。">Profiler</Term> 把一帧里发生的事拆成纵向四块，像四块叠在一起的仪表盘：
+
+<UnityProfilerWindowDiagram />
+
+### CPU Usage：脚本与主线程
+
+<Term def="Profiler 中显示各线程 CPU 耗时的模块，可展开到具体 C# 函数与引擎子系统（Physics、Animation 等）。">CPU Usage</Term> 回答「**哪段逻辑在吃 CPU**」。主线程上的 `Update`、`FixedUpdate`、物理、动画、UI 重建都会出现在这里。Self 时间是函数自身耗时，Total 包含它调用的子函数——找热点时通常先看 Total 最高的条目。
+
+<UnityProfilerWindowDiagram highlight="cpu" />
+
+### Rendering：GPU 与绘制
+
+<Term def="Profiler 中展示 Draw Call、Batches、SetPass、GPU 时间等渲染指标的模块，反映 GPU 侧绘制压力。">Rendering</Term> 回答「**这一帧画了多狠**」。Draw Call 和 Batches 过高、GPU 时间顶满帧预算，往往意味着合批不足、Overdraw 严重或着色器过重。它和 CPU Usage 是两条线——**CPU 忙不等于 GPU 忙**。
+
+<UnityProfilerWindowDiagram highlight="rendering" />
+
+### Memory 与 Audio
+
+<Term def="Profiler 中查看堆内存、纹理、网格、音频等资源占用与分配趋势的模块。">Memory</Term> 模块看**谁占了多少 RAM**——纹理、网格、AudioClip、托管堆（C# 对象）各有多大，有没有只增不减的泄漏趋势。移动平台上内存触顶会直接被杀进程。
+
+<Term def="Profiler 中显示音频混音与 DSP 耗时的模块，用于排查音频导致的 CPU 开销。">Audio</Term> 模块在音频较重的项目里才显眼；多数卡顿先从 CPU Usage 和 Rendering 查起，但背景音乐、大量 3D 音源也会占 CPU。
+
+<UnityProfilerWindowDiagram highlight="memory" />
+
+录制时勾选 **Deep Profile** 可以看到每个 C# 函数的开销，但**开销极大、会严重拖慢帧率**，只适合短场景、小范围排查——不要用 Deep Profile 的数据当帧率基线。
+
+## CPU bound 还是 GPU bound？
+
+一帧的总时间受两侧限制：<Term def="帧时间主要受 CPU 主线程或脚本逻辑限制，GPU 仍有空闲；优化应优先减 CPU 工作（脚本、物理、GC 等）。">CPU bound</Term> 时，主线程忙到接近帧预算（60 FPS 约 16.6ms），GPU 还在等命令；<Term def="帧时间主要受 GPU 绘制限制，CPU 提前交完活；优化应优先减 Draw Call、Overdraw、着色器复杂度等。">GPU bound</Term> 时则相反，Rendering 里 GPU 时间顶满，CPU 还有余量。
+
+<CpuGpuBottleneckDiagram mode="cpu" />
+
+判断口诀：**看 Profiler 里 CPU 主线程耗时和 GPU 时间（Rendering 模块）谁更接近帧预算上限，就先优化谁**。注意 VSync 打开时 GPU 可能「等垂直同步」显示虚高——要在目标平台上、用与发布接近的画质设置测。
+
+<CpuGpuBottleneckDiagram mode="gpu" />
+
+两侧都高叫双瓶颈，先砍更高的那一侧；两侧都低却掉帧，查同步等待、加载卡顿或编辑器开销（要用 Development Build 在真机上测）。
+
+## Frame Debugger 与 Profile Analyzer
+
+Profiler 告诉你「**哪一类系统慢**」；下面两个工具帮你看「**这一帧具体画了什么 / 多次采样稳不稳定**」。
+
+<ProfilingToolsDiagram />
+
+**Frame Debugger**（菜单 Window → Analysis → Frame Debugger）逐帧列出每个 Draw Call：用的材质、网格、Shader Pass。适合查多余绘制、透明排序错误、本该合批却拆开的情况——Profiler 的 Rendering 只给总数，Frame Debugger 给清单。
+
+**Profile Analyzer** 可导入多份 Profiler 采样文件，做均值、分位数、对比图表。单次采样可能撞上「运气好的一帧」；Analyzer 帮你看优化是否在**多次运行、多设备**上稳定生效，也是回归测试的得力助手。
+
+{/* 5. 交互 Demo：Stepper + ProfilerWorkflowDiagram */}
+
+## 动手：走一遍 Profiler 工作流
+
+下面用分步演示把 Profile First 四步走一遍。**每切一步，流程图会高亮当前阶段**——建议对照你自己项目里一个最卡的场景，在编辑器里同步打开 Profiler 试一次。
+
+> 猜一猜：如果跳过第 ① 步直接改代码，第 ③ 步「验证修复」时你会遇到什么麻烦？
+
+<Stepper>
+  <Step title="① 建立基线：固定场景，录一轮 Profiler">
+    <ProfilerWorkflowDiagram step={0} />
+    选定一个**固定**测试场景（出生点、镜头、画质档位都记下来）。进入 Play，打开 Profiler，点 Record，跑 30–60 秒典型玩法。记下平均 FPS、CPU 主线程 ms、GPU ms、GC Alloc。把画质和场景名写进团队文档——这就是你的对照尺。
+  </Step>
+  <Step title="② 定位瓶颈：展开 CPU / Rendering 找热点">
+    <ProfilerWorkflowDiagram step={1} />
+    在 CPU Usage 里按 Total 时间排序，看最上面的函数或子系统；切换到 Rendering，看 Batches 与 GPU 时间。对照上一节的 CPU/GPU bound 判断，决定先查脚本还是先看渲染。必要时开 Frame Debugger 看具体 Draw Call。
+  </Step>
+  <Step title="③ 验证修复：同场景复测，对比基线">
+    <ProfilerWorkflowDiagram step={2} />
+    只做**一处**改动（便于归因），回到同一场景、同一画质再录一轮。把新数字和基线并排放——CPU 从 18ms 降到 12ms 才算有效；如果 GPU 变了但 CPU 没变，说明你可能优化错了维度。
+  </Step>
+  <Step title="④ 回归测试：多轮、多设备，防止性能回退">
+    <ProfilerWorkflowDiagram step={3} />
+    把通过验证的场景纳入定期性能测试（真机 Development Build + Profile Analyzer 批量对比）。新功能合入前跑一遍，避免「上次修好的卡顿」下个月又回来。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  编辑器里 Play 模式的帧率不等于真机。基线与瓶颈判断请以**目标平台 Development Build** 为准；编辑器 Profiler 适合快速迭代，不能替代上架前的设备测试。
+</Callout>
+
+## 代码速查：打开 Profiler 与录制
+
+Unity 没有「一行代码代替 Profiler」，但可以用脚本在测试构建里自动开始录制，方便 QA 复现：
+
+```csharp
+// 放在测试场景的入口；仅 Development Build 生效
+#if DEVELOPMENT_BUILD
+void Start() {
+    UnityEngine.Profiling.Profiler.logFile = "profilerlog.raw";
+    UnityEngine.Profiling.Profiler.enabled = true;
+}
+#endif
+```
+
+录制的 `.raw` / `.data` 可在 Profile Analyzer 中导入对比。日常开发更常用编辑器菜单 **Window → Analysis → Profiler**（快捷键通常绑定在 Unity 版本说明里）。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：没录基线就开始改 Update，改完觉得「流畅了」，合入后测试说更卡。**原因**：你对比的是不同场景、不同画质，或编辑器 Play 与真机表现相反。**修法**：回到固定场景重录基线；改动前后用同一设备、同一画质各录 3 次取中位数。
+</Callout>
+
+<Callout type="trap">
+  **现象**：开着 Deep Profile 看帧率，优化后 FPS 从 15 变 25，上真机仍是 15。**原因**：Deep Profile 本身让 CPU 开销暴涨，测到的不是真实帧时间。**修法**：关 Deep Profile 做基线；只在定位具体 C# 热点时短开几秒。
+</Callout>
+
+<Callout type="trap">
+  **现象**：CPU Usage 很低，但 Rendering 里 GPU 时间一直 16ms，你却在狂优化脚本。**原因**：这是典型的 GPU bound，脚本再快也抬不动帧率。**修法**：看 CpuGpuBottleneckDiagram 的判断；转 Frame Debugger 查 Overdraw 与合批。
+</Callout>
+
+## 小结
+
+- **Profile First**：先测量再优化，基线是对照一切改动的尺子
+- Profiler 四模块：**CPU Usage**（逻辑）、**Rendering**（绘制）、**Memory**（内存）、**Audio**（音频）
+- **CPU bound / GPU bound** 看哪一侧顶满帧预算，先优化瓶颈侧
+- **Frame Debugger** 逐帧看 Draw Call；**Profile Analyzer** 多样本统计对比
+- 验证与**回归测试**必须在固定场景、目标设备上重复进行
+
+<Exercises>
+
+**练习 1（改 Demo 型）** 在你项目里最卡的场景打开 Profiler，录 30 秒，写下 CPU 主线程 ms、GPU ms、Batches 三个数作为基线。然后**只关闭一个**你认为最可疑的脚本组件，同场景再录 30 秒。三次数字填表对比——你的改动有效吗？属于 CPU 侧还是 GPU 侧变化？
+
+<Answer>
+
+有效对比需要：同场景、同画质、同设备，各录至少 3 次取中位数。若 CPU ms 明显下降而 GPU 几乎不变，说明该脚本确实是 CPU 热点；若数字几乎不变，说明瓶颈不在这里或样本太少。把基线表存档，便于以后回归。
+
+</Answer>
+
+**练习 2（问答型）** 某关 CPU 主线程 14ms，GPU 4ms，目标 60 FPS。这是 CPU bound 还是 GPU bound？你下一步会打开 Profiler 的哪个模块、看什么？
+
+<Answer>
+
+CPU bound（14ms 接近 16.6ms 预算，GPU 4ms 有余量）。下一步展开 CPU Usage，按 Total 时间排序找最热函数；同时看 GC Alloc 是否每帧分配过多。Rendering 优先级靠后，除非 CPU 优化后 GPU 成为新瓶颈。
+
+</Answer>
+
+**练习 3（问答型）** Frame Debugger 和 Profile Analyzer 分别解决什么问题？各举一个适合使用的场景。
+
+<Answer>
+
+Frame Debugger：逐帧审查 Draw Call，适合「Profiler 显示 Batches 很高但不知道谁在画」——例如 UI 与场景透明物体重叠导致 Overdraw。Profile Analyzer：对比多次采样，适合「优化后想确认低端机上是否稳定快 5ms」或版本迭代间的性能回归检查。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Profile First（先测量再优化）">
+  动刀之前先用 Profiler 等工具采数据、建基线。没有对照尺的优化等于猜谜。详见本章「测量先于优化」。
+</GlossaryItem>
+
+<GlossaryItem term="性能基线">
+  固定场景与画质下记录的一组 FPS、CPU ms、GPU ms 等数字，优化前后用同一条件复测。详见工作流第 ① 步。
+</GlossaryItem>
+
+<GlossaryItem term="Profiler">
+  Unity 内置性能分析窗口，按帧展示 CPU、渲染、内存、音频。Play 时 Record 即可采样。详见「Profiler 窗口」一节。
+</GlossaryItem>
+
+<GlossaryItem term="CPU Usage">
+  Profiler 模块，显示各线程与函数的 CPU 耗时，查脚本与引擎系统热点。详见「CPU Usage」小节。
+</GlossaryItem>
+
+<GlossaryItem term="Rendering">
+  Profiler 模块，显示 Draw Call、Batches、GPU 时间等，查绘制压力。详见「Rendering」小节。
+</GlossaryItem>
+
+<GlossaryItem term="Memory">
+  Profiler 模块，显示纹理、网格、托管堆等内存占用与分配。详见「Memory 与 Audio」。
+</GlossaryItem>
+
+<GlossaryItem term="Audio">
+  Profiler 模块，显示音频混音与 DSP 的 CPU 开销。音频重的项目需关注。
+</GlossaryItem>
+
+<GlossaryItem term="CPU bound">
+  帧时间主要受 CPU 限制，GPU 有空闲。应优先减脚本、物理、GC 等 CPU 工作。详见「CPU bound 还是 GPU bound」。
+</GlossaryItem>
+
+<GlossaryItem term="GPU bound">
+  帧时间主要受 GPU 绘制限制。应优先减 Draw Call、Overdraw、着色器开销。详见「CPU bound 还是 GPU bound」。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>
