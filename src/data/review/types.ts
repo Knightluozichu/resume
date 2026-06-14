@@ -40,7 +40,8 @@ export type ReviewChapterSlug =
   | "geometry-shader"
   | "instancing"
   | "anti-aliasing"
-  | "cpp-getting-started";
+  | "cpp-getting-started"
+  | "cpp-variables-and-types";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -84,6 +85,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   instancing: "实例化",
   "anti-aliasing": "抗锯齿",
   "cpp-getting-started": "快速入门",
+  "cpp-variables-and-types": "变量和基本类型",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

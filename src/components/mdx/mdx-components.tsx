@@ -48,6 +48,11 @@ import { BlendEquationDiagram } from "./diagrams/blend-equation-diagram";
 import { DiscardVsBlendDiagram } from "./diagrams/discard-vs-blend-diagram";
 import { AlphaSortDiagram } from "./diagrams/alpha-sort-diagram";
 import { BlendSortStepDiagram } from "./diagrams/blend-sort-step-diagram";
+import { TypeSizeDiagram } from "./diagrams/type-size-diagram";
+import { SignedUnsignedDiagram } from "./diagrams/signed-unsigned-diagram";
+import { LiteralTypesDiagram } from "./diagrams/literal-types-diagram";
+import { ScopeNestingDiagram } from "./diagrams/scope-nesting-diagram";
+import { VariableLifecycleDiagram } from "./diagrams/variable-lifecycle-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -372,6 +377,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CompilationPipelineDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
+  TypeSizeDiagram,
+  SignedUnsignedDiagram,
+  LiteralTypesDiagram,
+  ScopeNestingDiagram,
+  VariableLifecycleDiagram,
   Stepper,
   Step,
   Slider,

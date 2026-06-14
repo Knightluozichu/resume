@@ -45,6 +45,7 @@ import { geometryShaderQuestions } from "./review/geometry-shader";
 import { instancingQuestions } from "./review/instancing";
 import { antiAliasingQuestions } from "./review/anti-aliasing";
 import { cppGettingStartedQuestions } from "./review/cpp-getting-started";
+import { cppVariablesAndTypesQuestions } from "./review/cpp-variables-and-types";
 
 export {
   CHAPTER_TITLES,
@@ -86,6 +87,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...instancingQuestions,
   ...antiAliasingQuestions,
   ...cppGettingStartedQuestions,
+  ...cppVariablesAndTypesQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
