@@ -54,6 +54,7 @@ import { cppClassesQuestions } from "./review/cpp-classes";
 import { cppIoLibraryQuestions } from "./review/cpp-io-library";
 import { cppSequentialContainersQuestions } from "./review/cpp-sequential-containers";
 import { cppGenericAlgorithmsQuestions } from "./review/cpp-generic-algorithms";
+import { cppAssociativeContainersQuestions } from "./review/cpp-associative-containers";
 
 export {
   CHAPTER_TITLES,
@@ -104,6 +105,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppIoLibraryQuestions,
   ...cppSequentialContainersQuestions,
   ...cppGenericAlgorithmsQuestions,
+  ...cppAssociativeContainersQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

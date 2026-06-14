@@ -49,7 +49,8 @@ export type ReviewChapterSlug =
   | "cpp-classes"
   | "cpp-io-library"
   | "cpp-sequential-containers"
-  | "cpp-generic-algorithms";
+  | "cpp-generic-algorithms"
+  | "cpp-associative-containers";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -102,6 +103,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-io-library": "IO库",
   "cpp-sequential-containers": "顺序容器",
   "cpp-generic-algorithms": "泛型算法",
+  "cpp-associative-containers": "关联容器",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

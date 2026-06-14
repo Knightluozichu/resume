@@ -76,6 +76,10 @@ import { VectorMemoryModelDiagram } from "./diagrams/vector-memory-model-diagram
 import { ContainerOperationTable } from "./diagrams/container-operation-table";
 import { AdapterConceptDiagram } from "./diagrams/adapter-concept-diagram";
 import { AlgorithmArchitectureDiagram } from "./diagrams/algorithm-architecture-diagram";
+import { AssociativeContainerOverviewDiagram } from "./diagrams/associative-container-overview-diagram";
+import { MapOperationTable } from "./diagrams/map-operation-table";
+import { UnorderedMapInternalsDiagram } from "./diagrams/unordered-map-internals-diagram";
+import { ContainerSelectionFlow } from "./diagrams/container-selection-flow";
 import { AlgorithmExecutionDiagram } from "./diagrams/algorithm-execution-diagram";
 import { SortStagesDiagram } from "./diagrams/sort-stages-diagram";
 import { LambdaSyntaxDiagram } from "./diagrams/lambda-syntax-diagram";
@@ -453,6 +457,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AlgorithmExecutionDiagram,
   SortStagesDiagram,
   LambdaSyntaxDiagram,
+  AssociativeContainerOverviewDiagram,
+  MapOperationTable,
+  UnorderedMapInternalsDiagram,
+  ContainerSelectionFlow,
   Stepper,
   Step,
   Slider,
