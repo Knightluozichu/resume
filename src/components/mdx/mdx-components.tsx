@@ -75,6 +75,10 @@ import { ContainerOverviewDiagram } from "./diagrams/container-overview-diagram"
 import { VectorMemoryModelDiagram } from "./diagrams/vector-memory-model-diagram";
 import { ContainerOperationTable } from "./diagrams/container-operation-table";
 import { AdapterConceptDiagram } from "./diagrams/adapter-concept-diagram";
+import { AlgorithmArchitectureDiagram } from "./diagrams/algorithm-architecture-diagram";
+import { AlgorithmExecutionDiagram } from "./diagrams/algorithm-execution-diagram";
+import { SortStagesDiagram } from "./diagrams/sort-stages-diagram";
+import { LambdaSyntaxDiagram } from "./diagrams/lambda-syntax-diagram";
 import { ConstructorCallDiagram } from "./diagrams/constructor-call-diagram";
 import { ConstMemberDiagram } from "./diagrams/const-member-diagram";
 import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
@@ -445,6 +449,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VectorMemoryModelDiagram,
   ContainerOperationTable,
   AdapterConceptDiagram,
+  AlgorithmArchitectureDiagram,
+  AlgorithmExecutionDiagram,
+  SortStagesDiagram,
+  LambdaSyntaxDiagram,
   Stepper,
   Step,
   Slider,

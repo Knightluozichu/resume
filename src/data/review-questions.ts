@@ -53,6 +53,7 @@ import { cppFunctionsQuestions } from "./review/cpp-functions";
 import { cppClassesQuestions } from "./review/cpp-classes";
 import { cppIoLibraryQuestions } from "./review/cpp-io-library";
 import { cppSequentialContainersQuestions } from "./review/cpp-sequential-containers";
+import { cppGenericAlgorithmsQuestions } from "./review/cpp-generic-algorithms";
 
 export {
   CHAPTER_TITLES,
@@ -102,6 +103,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppClassesQuestions,
   ...cppIoLibraryQuestions,
   ...cppSequentialContainersQuestions,
+  ...cppGenericAlgorithmsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
