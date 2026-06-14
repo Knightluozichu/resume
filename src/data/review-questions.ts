@@ -48,6 +48,7 @@ import { cppGettingStartedQuestions } from "./review/cpp-getting-started";
 import { cppVariablesAndTypesQuestions } from "./review/cpp-variables-and-types";
 import { cppStringsVectorsArraysQuestions } from "./review/cpp-strings-vectors-arrays";
 import { cppExpressionsQuestions } from "./review/cpp-expressions";
+import { cppStatementsQuestions } from "./review/cpp-statements";
 
 export {
   CHAPTER_TITLES,
@@ -92,6 +93,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppVariablesAndTypesQuestions,
   ...cppStringsVectorsArraysQuestions,
   ...cppExpressionsQuestions,
+  ...cppStatementsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

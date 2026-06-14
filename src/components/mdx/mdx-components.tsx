@@ -61,6 +61,10 @@ import { ExpressionTreeDiagram } from "./diagrams/expression-tree-diagram";
 import { PrecedenceTable } from "./diagrams/precedence-table";
 import { IncrementDecrementDiagram } from "./diagrams/increment-decrement-diagram";
 import { TypeConversionDiagram } from "./diagrams/type-conversion-diagram";
+import { IfElseFlowDiagram } from "./diagrams/if-else-flow-diagram";
+import { SwitchFlowDiagram } from "./diagrams/switch-flow-diagram";
+import { LoopComparisonDiagram } from "./diagrams/loop-comparison-diagram";
+import { BreakContinueDiagram } from "./diagrams/break-continue-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -227,6 +231,9 @@ import { InstancingDemo } from "./instancing-demo";
  *  - C++ Primer·表达式（cpp-primer-ch4，A 概念型）：ExpressionTreeDiagram（a+b*c 表达式树，标求值顺序）、
  *    PrecedenceTable（运算符优先级速查表 SVG）、IncrementDecrementDiagram（++i 前缀 vs i++ 后缀时序对照）、
  *    TypeConversionDiagram（内建类型隐式转换方向链，支持 step prop 选展示层）。同款 Server SVG。
+ *  - C++ Primer·语句（cpp-primer-ch5，C 实战型）：IfElseFlowDiagram（if→else if→else 菱形判断分支图）、
+ *    SwitchFlowDiagram（switch 多路 case/default 跳转图）、LoopComparisonDiagram（while/for/do-while 三栏对比）、
+ *    BreakContinueDiagram（break 跳出循环 vs continue 跳到下一轮的语义对比图）。同款 Server SVG。
  *
  *  - 高级OpenGL篇·抗锯齿（HEL-77，A 概念型，篇收官）：AliasingDiagram（aa 布尔 + bare：屏幕是方格纸，斜边落格上
  *    aa=false 每格整涂/不涂成硬阶梯·锯齿 vs aa=true 边缘格按覆盖度涂半深过渡灰·平滑，虚线标理想斜边，
@@ -402,6 +409,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PrecedenceTable,
   IncrementDecrementDiagram,
   TypeConversionDiagram,
+  IfElseFlowDiagram,
+  SwitchFlowDiagram,
+  LoopComparisonDiagram,
+  BreakContinueDiagram,
   Stepper,
   Step,
   Slider,

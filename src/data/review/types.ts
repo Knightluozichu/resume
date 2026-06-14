@@ -43,7 +43,8 @@ export type ReviewChapterSlug =
   | "cpp-getting-started"
   | "cpp-variables-and-types"
   | "cpp-strings-vectors-arrays"
-  | "cpp-expressions";
+  | "cpp-expressions"
+  | "cpp-statements";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -90,6 +91,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-variables-and-types": "变量和基本类型",
   "cpp-strings-vectors-arrays": "字符串、向量和数组",
   "cpp-expressions": "表达式",
+  "cpp-statements": "语句",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
