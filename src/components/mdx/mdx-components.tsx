@@ -53,6 +53,10 @@ import { SignedUnsignedDiagram } from "./diagrams/signed-unsigned-diagram";
 import { LiteralTypesDiagram } from "./diagrams/literal-types-diagram";
 import { ScopeNestingDiagram } from "./diagrams/scope-nesting-diagram";
 import { VariableLifecycleDiagram } from "./diagrams/variable-lifecycle-diagram";
+import { StringMemoryDiagram } from "./diagrams/string-memory-diagram";
+import { VectorGrowthDiagram } from "./diagrams/vector-growth-diagram";
+import { IteratorDiagram } from "./diagrams/iterator-diagram";
+import { ArrayVsVectorDiagram } from "./diagrams/array-vs-vector-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -382,6 +386,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LiteralTypesDiagram,
   ScopeNestingDiagram,
   VariableLifecycleDiagram,
+  StringMemoryDiagram,
+  VectorGrowthDiagram,
+  IteratorDiagram,
+  ArrayVsVectorDiagram,
   Stepper,
   Step,
   Slider,

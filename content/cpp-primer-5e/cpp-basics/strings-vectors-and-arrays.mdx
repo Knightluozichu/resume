@@ -1,0 +1,476 @@
+---
+title: 字符串、向量和数组
+type: C
+section: C++基础
+order: 3
+description: 掌握 C++ 标准库中最常用的三种容器——string、vector、array，会声明、遍历、操作它们
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（C++ Primer §3 改编）：讲 string、vector、迭代器、数组。
+   重心在交互 Demo Stepper(§5)+ 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) string 类型（构造/读写/拼接/比较/大小）→ StringMemoryDiagram（C风格 vs std::string 内存布局对比）
+   2) vector 容器（创建/push_back/下标/遍历/大小）→ VectorGrowthDiagram（push_back 动态扩容分步）+ Stepper
+   3) 迭代器（begin/end/解引用/类型）→ IteratorDiagram（begin/end 与容器元素关系）
+   4) C 风格数组（声明/遍历/指针与数组关系）→ ArrayVsVectorDiagram（C数组 vs vector 并排对比）
+   5) 范围 for 循环 → 代码示例对比 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能声明并操作 `string` 和 `vector`——会创建、读写、拼接、遍历它们，并解释底层内存发生了什么
+- 能独立写出用迭代器和范围 for 遍历容器的代码，区分何时该用引用、何时该用拷贝
+- 能回答：`vector<int> v; v[0] = 10;` 这段代码出什么问题？把 vector 从空填到装满 1000 个数的过程中，底层动态内存发生了多少次重新分配？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——容器像流水线上装载零件的箱子。 */}
+
+## 为什么要学这三种「装数据的家伙」？
+
+前面你已经会声明单个变量——`int x = 5;`、`double pi = 3.14;`。但真实程序里很少只有一个数：你要存全班 50 个同学的成绩、要处理用户输入的一整行文字、要记住游戏里 100 个敌人的位置。一个变量装一个数据——装 100 个难道要写 100 个变量？不可能。
+
+C++ 给出了三种专门「装一大堆东西」的工具，像工厂流水线上三种不同规格的箱子：第一种是**专门装文字的箱子**——灵活的字符串；第二种是**能自动伸缩的箱子**——想装多少就推多少进去的动态数组；第三种是**规格写死但最朴素的箱子**——C 语言传下来的固定大小数组。
+
+这一章就教你打开这三种箱子：怎么往里放东西、怎么取出东西、怎么一个个遍历过去。没有这些箱子会怎样？你只能写一百行 `int s0 = ...; int s1 = ...;`，程序一改需求就得全盘重写——这在真实开发中根本走不通。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §6 代码）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 第一个箱子：专门装文字的 string
+
+在 C 语言里，一段文字是这样存的：`char name[] = "Alice";`——栈上挤出 6 个格子，A、l、i、c、e、\0 排好。这六个格子写死了：你永远不能把 "Alice" 换成 "Alice Cooper"——格子的个数在出生时就定好了，改不了。
+
+C++ 在标准库里给了你一个<Term def="C++ 标准库提供的字符串类型，可以动态改变长度，支持拼接(+)、比较(==!=<>)、取子串(substr)、查找(find)等全套文字操作，替代了 C 语言里脆弱的手动 char[] 管理。`#include <string>` 后即可使用。">string</Term> 类型——**把它理解成「能自动伸缩的文字箱子」**。你往里面倒 "Alice"，它就装 "Alice"；你接着倒 " Cooper"，它就自己变长、把两段接起来。下面这张图把 C 的 `char[]` 和 `std::string` 的底层差别画了出来：
+
+<StringMemoryDiagram />
+
+核心差异一目了然：C 的 `char[]` 所有字符挤在栈上，大小写死；`std::string` 只在**栈上存一根指针**加几个管理字段，实际文字丢在**堆**里。堆是程序运行时的一大片自由空地——堆上的东西大小可以随时变。所以 string 换长内容不需要你操心：自动在堆上找一块更大的空地、搬过去、老地方退还。这种「栈上是柄、堆里是料」的设计，让 string 用起来像变魔术，但魔术底下就是这么个简单的结构。
+
+`string` 能做什么？看代码比看文字直观：
+
+```cpp
+#include <string>
+#include <iostream>
+using std::string;
+
+string s1 = "Hello";           // 从 C 字符串初始化
+string s2("World");            // 另一种写法
+string s3 = s1 + " " + s2;     // 拼接——s3 是 "Hello World"
+bool eq = (s1 == s2);          // false——内容不同
+bool lt = (s1 < s2);           // true——'H' < 'W'，字典序比较
+auto len = s3.size();          // 11——有多少个字符
+char c = s3[0];                // 'H'——像数组一样按下标取字符
+```
+
+<Callout type="tip">
+  `+`、`==`、`<` 这些运算符对 string 做了「重新定义」——不再是给数字用的加减乘除，而是拼接、比较内容。这叫做**运算符重载**。你可以直观地把 `s1 + s2` 读成「把 s2 接到 s1 后面」，把 `s1 < s2` 读成「s1 在字典里排在 s2 前面吗」。
+</Callout>
+
+## 第二个箱子：能自动伸缩的 vector
+
+你存全班 50 个成绩，用固定的语法写 50 个 `int` 变量是不可能的。你需要一个「格子串」——它得满足三件事：①能存很多个同类型的值；②不用提前知道到底存几个；③能把值轻松地塞进去、查出来、遍历一遍。C++ 标准库给你准备了<Term def="C++ 标准库中的动态数组容器（`#include <vector>`）。和 C 数组一样元素在内存中连续存放（支持快速下标访问），但大小可以在运行时动态改变——push_back 在末尾加元素、自动扩容。是 C++ 里使用频率最高的容器之一。">vector</Term> 这个容器。
+
+**把它理解成工厂流水线上一根「能自动变长的传送带」，同行只能放同一种零件**：你推一个零件到带子末尾（`push_back`），如果带子满了它会自己接一段延长（扩容），你从任意位置取零件（`v[i]`），也能知道带子上现在有几个零件（`v.size()`）。
+
+push_back 过程中带子怎么自己变长，在 §5 Stepper 里会分步演示。先把 vector 的最基本语法看清楚：
+
+```cpp
+#include <vector>
+using std::vector;
+
+vector<int> v1;              // 空 vector，size=0
+vector<int> v2(5, 0);        // 5 个 0：{0, 0, 0, 0, 0}
+vector<int> v3{10, 20, 30};  // 列表初始化：{10, 20, 30}
+
+v1.push_back(42);            // 尾加 42
+int n = v3[1];               // 下标访问：20
+auto sz = v3.size();         // 3
+```
+
+### 下标 vs push_back——分清「改」和「加」
+
+这两个操作很容易搞混，但它们做的事完全不同：
+
+| 操作 | 做什么 | 改变 size？ | 前置条件 |
+|---|---|---|---|
+| `v[i] = x` | 把第 i 格的值**换成** x | 不 | i 必须 < v.size() |
+| `v.push_back(x)` | 在末尾**新开一格**，放入 x | +1 | 无（总能加） |
+
+如果你在一个空的 vector 上写 `v[0] = 10;`，程序不会报错但已经发生了**未定义行为**——第 0 格根本不存在，你在往一个不存在的格子里写东西。结果可能是立刻崩溃，也可能是悄悄写坏了隔壁内存（更难排查）。所以铁律：**加元素用 push_back，改已有元素用下标。** 如果不确定，先用 push_back 把元素加上去再说。
+
+## 第三个工具：帮你指着格子的——迭代器
+
+你已经会用下标 `v[i]` 访问 vector 里的元素了。但下标不是万能的——很多高级容器（如 map、set、list）根本不支持 `[i]` 这种按下标寻址的方式，它们的数据不是连续排列的。C++ 想出了一个通用的概念：<Term def="一种像指针一样的对象，用来指着一个容器中某个元素的位置，并且知道怎么移到下一个元素。通过 `*it` 可以拿到被指元素的值，通过 `++it` 可以移到下一个。所有 C++ 标准容器都支持迭代器，让你用同一种写法遍历任何容器。">迭代器（iterator）</Term>——**把它理解成一根可以移动的指针，专门帮你「指着」容器里某个格子，还知道怎么移到下一格。**
+
+每个容器都提供两个关键迭代器：
+
+- `v.begin()`——返回一根指着**第一个元素**的迭代器
+- `v.end()`——返回一根指着**最后一个元素之后位置**的迭代器（叫<Term def="迭代器指向的位置，不在容器的任何一个真实元素上，而是最后一个元素的「下一个」位置。作用类似于一个 'Stop' 哨兵——遍历时遇到它就结束。">尾后迭代器（off-the-end iterator）</Term>，是一个哨兵标记，本身不指向任何真正存在的数据）
+
+<IteratorDiagram />
+
+用迭代器遍历 vector 的写法是这样的：
+
+```cpp
+for (auto it = v.begin(); it != v.end(); ++it) {
+    cout << *it << ' ';   // *it 拿到 it 当前指着的那个元素的值
+}
+```
+
+这个循环里 `auto it` 让编译器自己推导 it 的类型，`*it` 是**解引用**——像指针的 `*ptr` 一样拿到被指着的东西。`++it` 把迭代器往前挪一格。当 `it == v.end()` 碰上尾后哨兵，循环结束。
+
+<Callout type="warn">
+  不要把 `end()` 当成「最后一个元素」——它指着最后一个元素的**下一格**，那是块不存在的虚空。对它解引用 `*v.end()` 是**未定义行为**。
+</Callout>
+
+## 第四个工具：C 语言传下来的——数组
+
+这个你可能已经认识了——`int scores[5] = {90, 85, 92, 78, 88};`。这就是 C 风格的<Term def="一种固定大小、连续存放的同类型数据的集合。大小必须是编译时就已知的常量（int arr[10]）。元素用下标 arr[i] 访问，超过下标没有保护。在 C++ 中，如果有 vector 可以用，优先用它而不是原生数组。">数组（array）</Term>。它的特点是：**大小是类型的一部分**——`int[5]` 和 `int[10]` 是不同的类型。一旦声明了 5 个格子，就永远只能装 5 个。
+
+<ArrayVsVectorDiagram />
+
+数组最坑人的一条特性叫**指针退化**：把数组当参数传给函数时，它悄悄退化成了一根指向首元素的指针——大小信息**全部丢失**。
+
+```cpp
+void print_size(int arr[10]) {
+    cout << sizeof(arr);  // 输出 8（指针大小！不是 40）
+}
+```
+
+所以老手常说：**新代码优先用 vector；只在两种情况下用原生数组**——跟 C 语言写的旧接口打交道时、或者在编译器能帮你把一切优化到极致的极端性能场景。初学阶段默认用 vector 就够了。
+
+## 第五个工具：范围 for——C++ 给你最省心的遍历
+
+如果每次遍历都要写一长串 `for (auto it = v.begin(); it != v.end(); ++it)` ，那也太啰嗦了。C++11 引入了<Term def="C++11 引入的简洁遍历语法：`for (declaration : container) { body }`。自动从容器第一个元素走到最后一个，每次迭代把当前元素赋给你声明的变量。用 `auto &` 可以在循环里修改原容器的元素。">范围 for 循环（range-based for loop）</Term>——**把它理解成「你只管说对谁、做什么，C++ 帮你把走到每格的事情全包了」。**
+
+对比一下三种遍历方式：
+
+```cpp
+vector<int> v{10, 20, 30, 40};
+
+// 方式一：下标遍历（老写法，有越界风险）
+for (int i = 0; i < v.size(); ++i)
+    cout << v[i] << ' ';
+
+// 方式二：迭代器遍历（通用但啰嗦）
+for (auto it = v.begin(); it != v.end(); ++it)
+    cout << *it << ' ';
+
+// 方式三：范围 for（最简洁，推荐）
+for (auto x : v)
+    cout << x << ' ';
+```
+
+三行 `for (auto x : v)` 达成同样的效果。如果你要**修改**容器里的元素，记得写引用 `auto &x : v`——不加 `&` 的话 x 只是原元素的副本，你怎么改副本，原容器纹丝不动。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型用 Stepper 展示 vector 动态扩容流程。
+   猜一猜引导；每步必须带图示/SVG 可视化（用 VectorGrowthDiagram step prop）。 */}
+
+## 动手：一步一步看 vector 怎么长大
+
+你已经看到 `push_back` 能让 vector 变大——但底层到底发生了什么？为什么大家都说「扩容很贵」？下面这个分步演示，把一个 `vector<int> v;` 从空的初始状态开始，push_back 三次，**每切一步，上方图示会高亮当前内存布局——哪些格子里有你的数据，哪些是预留的空位**。
+
+> 猜一猜：push_back(3) 这一步，capacity 会变成 3 还是 4？翻到这个 step 看看你是对是错，再回去看原因。
+
+<Stepper>
+  <Step title="① 初始状态：空 vector">
+    <VectorGrowthDiagram step={1} />
+    刚创建的 `vector<int> v;` 还没分配任何空间——`size = 0`，`capacity = 0`。此刻 `v[0]` 不存在，你不能用下标读写任何东西。就像一个还没接电的传送带——带子都还没铺出来。
+  </Step>
+  <Step title="② push_back(1)：申请第一格">
+    <VectorGrowthDiagram step={2} />
+    第一次 push_back——没有空间可用了，vector 向堆内存申请一块能装 1 个 int 的位置。然后把 1 放进这一格，`size` 和 `capacity` 都变成 1。这一步就像传送带终于铺上了第一截。
+  </Step>
+  <Step title="③ push_back(2)：第一个关卡——装不下了">
+    <VectorGrowthDiagram step={3} />
+    再 push_back 一个 2——`size = capacity = 1`，没有空位了。vector 必须扩容：找一块能装 **2 个** int 的地方（常见翻倍策略），把原来的 1 拷贝过去，再往第 2 格放 2，最后释放在第二步里申请的那块旧内存。现在 `size = 2, capacity = 2`。注意：旧数据被拷贝了——这就是扩容的代价。
+  </Step>
+  <Step title="④ push_back(3)：再扩容——capacity 翻到 4">
+    <VectorGrowthDiagram step={4} />
+    第三次 push_back 3——又满了。重复扩容流程：找一块新地方，这次要多大？常见的 `2×` 策略让它直接要了**4 个**格子（虽然你只要第 3 个），然后把原来的 1 和 2 拷过去、塞入 3。`size = 3, capacity = 4`——还有 1 个空位预留给下一次 push_back，下回就不用扩容了。这就是均摊 O(1) 的由来：偶尔扩容一次花 O(n) 拷贝，但平摊到 n 次 push_back 上，每次平均只花常数时间。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  扩容的代价是**拷贝旧元素 + 释放旧内存**。如果你的 vector 存的是 string 这样的大型对象，拷贝代价更大。如果你**提前知道大概要存多少元素**，用 `v.reserve(n)` 提前一次性申请好足够的内存——之后的 push_back 就再也不会触发扩容了。省下来的不仅仅是内存分配的时间，更是避免了反复拷贝大对象的开销。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说）。 */}
+
+## 代码逐段拆解：把所有工具串起来
+
+这一节把本章五个工具（string、vector、迭代器、范围 for、数组）的**核心用法**逐段展示——每段一个主题，看完就能上手。
+
+### string 的日常操作
+
+下面这段代码覆盖了 string 最常用的操作：初始化、读取输入、拼接、比较、取子串、遍历每个字符。
+
+```cpp
+#include <iostream>
+#include <string>
+using std::string; using std::cout; using std::cin;
+
+int main() {
+    string name;
+    cout << "你叫什么名字？";
+    getline(cin, name);           // 读一整行（含空格）
+
+    string greeting = "你好，" + name;   // 拼接
+    cout << greeting << '\n';
+
+    if (name == "Alice")                 // 比较内容
+        cout << "欢迎回来！\n";
+
+    cout << "你的名字有 " << name.size() << " 个字符\n";
+
+    for (auto c : name)                  // 范围 for 逐字符
+        cout << '[' << c << "] ";        // [A] [l] [i] [c] [e]
+    return 0;
+}
+```
+
+要点：`getline` 读一行不打断空格（`cin >> name` 只会读到第一个空格前）。`+` 拼接。`.size()` 返回字符数（不含 `\0`）。范围 for 一个字符一个字符地走。
+
+### vector 的增删改查
+
+```cpp
+#include <vector>
+#include <iostream>
+using std::vector; using std::cout;
+
+int main() {
+    vector<int> scores;               // 空的，size=0
+
+    scores.push_back(88);             // 尾加
+    scores.push_back(95);
+    scores.push_back(73);
+
+    cout << "共有 " << scores.size() << " 个成绩\n";   // 3
+
+    scores[0] = 90;                   // 把第一个改成 90
+
+    int sum = 0;
+    for (auto s : scores)             // 遍历求和
+        sum += s;
+
+    cout << "平均分：" << static_cast<double>(sum) / scores.size() << '\n';
+    return 0;
+}
+```
+
+这段展示了 vector 的标准生命周期：空箱创建 → push_back 填数据 → 下标修改 → 范围 for 遍历计算。`static_cast<double>` 是为了做浮点除法（两个 int 相除会丢掉小数）。
+
+### 用迭代器完成一次「查找并替换」
+
+```cpp
+// 在 vector 中找到第一个 99，把它改成 100
+vector<int> v{10, 20, 99, 30, 40};
+
+for (auto it = v.begin(); it != v.end(); ++it) {
+    if (*it == 99) {           // *it 拿到当前元素的值
+        *it = 100;             // 通过迭代器修改原元素
+        break;                 // 只改第一个
+    }
+}
+// 现在 v 是 {10, 20, 100, 30, 40}
+```
+
+迭代器 `it` 在循环里从头走到尾，`*it` 用来取值或改写值。`++it` 移至下一格。这种写法虽然比范围 for 啰嗦，但能更精细地控制——比如「只处理前三个元素」、「跳过第一个再开始」这种定制需求。而且它也是后面学习 map、set 等容器的统一入口。
+
+### 数组的注意事项
+
+```cpp
+int arr[5] = {1, 2, 3, 4, 5};      // 大小 = 5，写死了
+cout << arr[0];                       // 1——和 vector 一样用 []
+
+// 遍历：需要自己记住大小
+for (int i = 0; i < 5; i++)          // 5 是自己记的！
+    cout << arr[i] << ' ';
+
+// 数组也可以范围 for（定义作用域内编译器知道大小）
+for (auto x : arr)
+    cout << x << ' ';                 // 1 2 3 4 5
+```
+
+但数组传给函数会退化——C 语言的历史包袱。如果你把 `arr` 传给一个函数处理，记得**同时传大小**：`void process(int arr[], int size)`。vector 就没这个烦恼——`.size()` 走到哪都可用。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：编译通过，运行狂输出乱七八糟的数字，或者直接 segment fault 崩溃。
+  **原因**：在 vector 为空或下标越界时直接用 `v[i]`——未定义行为。下标操作**不检查** i 是否合法（`.at(i)` 会检查抛异常，但 `[i]` 不会）。
+  **修法**：铁律——`vector` 为空时只能用 `push_back` 加元素；用下标前确保 `i < v.size()`。不确定？用 `.at(i)` 代替 `[i]`（失败时会抛异常帮你定位）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用范围 for 遍历 vector，在循环体里把每个元素 *= 2，出来发现原 vector 里的值全没变。
+  **原因**：写了 `for (auto x : v)` 而不是 `for (auto &x : v)`——`auto` 按值拷贝，x 是副本。你改的是副本，原元素根本没被碰。
+  **修法**：要修改容器元素时，**加一个 `&`**：`for (auto &x : v) x *= 2;`。只读遍历但元素是大对象时，用 `const auto &x : v` 既防意外修改又省拷贝。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`for (unsigned i = v.size() - 1; i >= 0; --i)` 从后往前遍历 vector，结果变成死循环。
+  **原因**：`v.size()` 返回的不是 int 而是 **unsigned 类型**（`size_type`）。`--i` 到 `i = 0` 后再减——`0u - 1` 不是 -1，而是绕回一个巨大的正数（4294967295），永远 ≥ 0。死循环。
+  **修法**：用 `int i = static_cast<int>(v.size()) - 1; i >= 0; --i`，或用反向迭代器 `for (auto it = v.rbegin(); it != v.rend(); ++it)`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `cin >> s` 读完数字后，接一个 `getline(cin, s)` 想读下一行文字，结果 s 是空的。
+  **原因**：`cin >> num` 把数字读走后，**换行符 `\n` 还留在输入流里**。紧接着的 `getline` 一读就撞上这个换行符，以为是空行。
+  **修法**：在 `cin >>` 和 `getline` 之间加一行 `cin.ignore();`——吞掉残留的换行符。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- `string` 是能自动伸缩的文字箱——支持 `+` 拼接、`==` 比较、`.size()` 查长度、`getline` 读整行，底层用「栈上指针 + 堆上数据」实现
+- `vector` 是能长大的数组——用 `push_back` 尾加、`[i]` 访问、`.size()` 查元素数；扩容按翻倍策略，均摊 O(1)
+- 迭代器 `begin()` 指向首元、`end()` 指向尾后（哨兵）——`*it` 取值、`++it` 前进，是所有容器统一的访问语言
+- 范围 for `for (auto &x : v)` 是最简洁的遍历方式——要修改原元素必加 `&`，否则只改副本
+- C 数组大小是类型的一部分且不可变，传参会退化成指针——新代码首选 vector，只在跟 C 接口交互时用原生数组
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这段代码有四处错误。找出它们并解释每处会出什么错，然后给出修正后的完整代码。
+
+```cpp
+#include <iostream>
+#include <vector>
+int main() {
+    vector<int> v;
+    v[0] = 100;
+    for (int i = 0; i <= v.size(); i++)
+        cout << v[i] << endl;
+    return 0;
+}
+```
+
+<Answer>
+
+四处问题：
+1. `v[0] = 100;`——vector 是空的，下标 0 的元素不存在（未定义行为）。应改为 `v.push_back(100);`
+2. `i <= v.size()`——合法下标范围 `0 ~ size()-1`，越界。应改为 `i < v.size()`
+3. `cout` 前缺少 `std::` 或 `using std::cout;`
+4. `vector` 前缺少 `std::` 或 `using std::vector;`
+
+修正后：
+
+```cpp
+#include <iostream>
+#include <vector>
+using std::vector; using std::cout; using std::endl;
+
+int main() {
+    vector<int> v;
+    v.push_back(100);
+    for (int i = 0; i < v.size(); i++)
+        cout << v[i] << endl;
+    return 0;
+}
+```
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个函数 `word_stats`，接收一段文字（`const string &text`），返回一个 `vector<string>`，里面按文字中出现的顺序存放所有的**英文单词**（连续字母）。单词全部转成大写。写完后用一个 `"Hello, C++ World!  Let's learn."` 测试，输出应为 `["HELLO", "C++", "WORLD", "LET'S", "LEARN"]`。
+
+提示：用 `isalpha()` 判断一个字符是否是英文字母，用 `toupper()` 转大写。它们需要 `#include <cctype>`。
+
+<Answer>
+
+```cpp
+#include <string>
+#include <vector>
+#include <cctype>
+#include <iostream>
+using std::string; using std::vector; using std::cout;
+
+vector<string> word_stats(const string &text) {
+    vector<string> words;
+    string current;
+    for (auto c : text) {
+        if (isalpha(static_cast<unsigned char>(c))) {
+            current += toupper(static_cast<unsigned char>(c));
+        } else if (!current.empty()) {
+            words.push_back(current);
+            current.clear();
+        }
+    }
+    if (!current.empty())
+        words.push_back(current);
+    return words;
+}
+```
+
+核心思路：逐字符扫描——遇到字母就转大写追加到 `current`；遇到非字母就把攒好的 `current` push 进 words（如果非空）。最后检查是否还有未 push 的单词。
+
+</Answer>
+
+**练习 3（问答型）** 在 §5 的 Stepper 里，push_back(3) 触发扩容时 capacity 变成了 4 而不是 3。为什么要多预留那一个格子？如果把扩容策略从「翻倍」改成「每次加 1」，把 1000 个数挨个 push_back 进一个空 vector，总共会发生多少次重新分配内存？翻倍策略下大约是多少次？
+
+<Answer>
+
+多预留的原因是**均摊开销**。如果每次都只扩容 1 格（capacity=size），那 push_back 每推一个元素都要重新分配内存并拷贝全部已有元素——推 n 个元素的总拷贝次数是 `0+1+2+...+(n-1) = n(n-1)/2`，推 1000 个要拷约 50 万次、重新分配 1000 次内存。翻倍策略下，扩容只发生在 size = 1, 2, 4, 8, 16, 32, 64, 128, 256, 512 这些时刻，总共约 **10 次**扩容——虽然每次扩容拷贝次数多，但次数极少，均摊到每次 push_back 是常数 O(1)。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（9 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="string">
+  C++ 标准库里的字符串类型（`#include <string>`）。能动态改变长度，想多长就多长。支持用 `+` 拼起来、用 `==` 比较内容是否一样、用 `.size()` 看有几个字符、用 `getline(cin, s)` 读一整行文字。底层实现：栈上存一根指针，真正的字符存在堆上。详见本章「第一个箱子」一节和 StringMemoryDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="vector">
+  C++ 标准库里的动态数组（`#include <vector>`）。元素在内存里一排紧挨着放（和 C 数组一样），但大小可以在运行时用 `push_back` 动态增大——满了自动找更大的内存块搬过去，每次翻倍扩容让均摊开销接近常数时间。`.size()` 查有多少元素，`[i]` 像数组一样取值。详见本章「第二个箱子」一节和 §5 Stepper 演示。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器（iterator）">
+  一种「像个指针」的对象，指着一个容器中某个元素的位置，并且知道怎么走到下一个（`++it`）。用 `*it` 拿到当前元素的值。所有 C++ 标准容器都提供 `begin()`（指向第一个元素）和 `end()`（哨兵——指向最后一个元素之后的位置）。详见「第三个工具」一节和 IteratorDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="尾后迭代器（off-the-end iterator）">
+  `v.end()` 返回的那个迭代器。它不指向任何一个真的元素，而是最后一个元素**之后**那一格（不存在的位置）。它的作用是当「停止信号」——遍历时碰到它就知道走完了。对它解引用 `*v.end()` 是未定义行为。详见「第三个工具」一节和 IteratorDiagram 中黄色箭头。
+</GlossaryItem>
+
+<GlossaryItem term="数组（array）">
+  C/C++ 里最基础的数据集合：`int arr[5]`。大小在编译时就写死了，运行时不能改变。元素连续排布，用 `arr[i]` 下标访问。传给函数时会退化成指针，丢失大小信息。新代码里能用 vector 时优先用 vector。详见「第四个工具」一节和 ArrayVsVectorDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="范围 for 循环（range-based for loop）">
+  C++11 引入的简写遍历语法：`for (auto x : container)`，自动从第一个元素走到最后一个。`auto x` 每次拿出一个元素的**拷贝**；改成 `auto &x` 就是引用——可以直接修改原值。详见「第五个工具」一节。
+</GlossaryItem>
+
+<GlossaryItem term="size_type">
+  容器内部定义的一种无符号整数类型，专门用来表示元素个数和下标。`vector<int>::size_type` 就是 vector 用来存 size 的类型。用 int 存 size 不够准确——size 不可能为负，而且在不同平台上 int 的位数可能不够。size_type 保证在任何平台上都够用。
+</GlossaryItem>
+
+<GlossaryItem term="push_back">
+  vector 的成员函数，在末尾添加一个元素。每次 push_back 之后 size 加 1。如果 capacity 不够了，vector 会自动扩容（分配更大内存、拷贝旧元素、释放旧内存）。详见 §5 的 Stepper 演示和 VectorGrowthDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="指针退化（pointer decay）">
+  C 风格数组作为函数参数时，悄悄从「数组」变成「指向首元素的指针」的行为。`void f(int arr[10])` 里的 arr 实际上是一根 `int*` 指针，`sizeof(arr)` 返回指针大小（8 字节）而不是数组大小（40 字节）。这是推荐用 vector 替代原生数组的重要原因之一。详见「第四个工具」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
+
+<Attribution />
