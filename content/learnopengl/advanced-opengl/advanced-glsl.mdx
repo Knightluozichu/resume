@@ -1,0 +1,522 @@
+---
+title: 高级GLSL
+type: C
+section: 高级OpenGL
+order: 8
+description: 认识 GLSL 流水线在每个工位免费发的「工牌 / 仪表」——内建变量 gl_FragCoord / gl_FrontFacing / gl_FragDepth 等，再学接口块把一组 in/out 打包整组传，以及用 Uniform 缓冲对象（UBO）让多个着色器共享同一块数据，并能算清 std140 对齐。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/08%20Advanced%20GLSL/
+draft: true
+---
+
+{/* C 实战型章（HEL-74，高级OpenGL 篇第 8 篇）：原书「高级GLSL Advanced GLSL」。重心是代码对照(§6 覆盖≥80% 关键代码)：①内建变量 gl_FragCoord（窗口像素坐标）+ gl_FrontFacing（正反面给不同色）②接口块 interface block（out VS_OUT{...}vs_out / in VS_OUT{...}fs_in）③UBO（GLSL 端 layout(std140) uniform Matrices{...} + CPU 端 createBuffer/bindBufferBase/uniformBlockBinding/getUniformBlockIndex/bindBufferRange）。math:false 整节省略§4。承接深度/混合/帧缓冲（同 section 工厂流水线类比库：GLSL 内建变量是流水线每个工位免费发的「工牌/仪表」，UBO 是一块「公告板」多个 shader 都来读）。主 viz 两个：ShaderDemo gl_FragCoord 分屏可视化（uSplit 分界线 + 两色）+ Stepper UBO 共享（每步带 UboBindingDiagram step）。新建 3 图：GlFragCoordDiagram / InterfaceBlockDiagram / UboBindingDiagram。误区 ≥3（gl_FragCoord 当 NDC / std140 对齐算错 / 绑定点不对齐）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 内建变量 built-in variable（GLSL 预留、有固定含义的特殊变量）= 直觉引入比喻「免费工牌/仪表」+ 概念总览；2) gl_Position（顶点输出裁剪坐标，已学，一句带过）= 概念；3) gl_PointSize（画点时控制点大小）= 概念随文；4) gl_VertexID（当前是第几个顶点）= 概念随文；5) gl_FragCoord（片段窗口像素坐标 xy + 深度 z，本章重点）= 概念 + <GlFragCoordDiagram> + 主 <ShaderDemo>（分屏）+ §6 代码对照① + 误区；6) gl_FrontFacing（正面/背面 bool，可给正反不同色）= 概念 + §6 代码对照①；7) gl_FragDepth（片段着色器改写深度，会关掉提前深度测试）= 概念 + Callout；8) 接口块 interface block（一组 in/out 打包成块整组传）= 概念 + <InterfaceBlockDiagram> + §6 代码对照②；9) UBO Uniform 缓冲对象（多 shader 共享同一块 uniform 数据）= 概念 + <UboBindingDiagram> + <Stepper>（主 viz 2）+ §6 代码对照③ + 误区；10) std140 内存布局（成员对齐/padding 规则）= 概念 + UboBindingDiagram step3 + §6 代码对照③ + 误区；11) 绑定点 binding point（UBO 经它接到多个 program）= 概念 + UboBindingDiagram step2 + §6 代码对照③ + 误区。Term 共 9 个（内建变量 / gl_FragCoord / gl_FrontFacing / gl_FragDepth / 接口块 / Uniform 缓冲对象 UBO / std140 布局 / 绑定点 / 着色器程序——着色器程序在着色器章已收，本章不重复 Term，仅自然引用，故新 Term 8 个）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清 `gl_FragCoord` 装的是片段在画布上的**窗口像素坐标**（不是 -1..1 的 NDC），并能用它在片段着色器里改出「按屏幕位置左右分屏上色」的效果
+- 能用接口块把一组 `in/out` 打包整组传，并能写出用 UBO 让两个着色器**共享同一份投影 / 视图矩阵**的 GLSL 与 CPU 两端代码
+- 能回答：往 UBO 里塞一个 `vec3`，它在 std140 布局下到底占几个字节？为什么 CPU 写下一个成员前要先「空一段」？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库（承接高级OpenGL 篇同 section 同类比体系：管线/工位）。 */}
+
+## 流水线每个工位，都免费发一块「工牌」
+
+把渲染想成一条工厂流水线：顶点在前面的工位被摆好位置，到了后面的工位被一个个像素地上色。流水线很贴心——每到一个工位，它都顺手塞给你几块**免费的工牌和小仪表**：一块告诉你「你现在处理的这个像素，落在画布的哪个格子上」，一块告诉你「你看到的这一面，是物体的正面还是背面」。你不用自己费劲去算，低头看一眼工牌就知道。
+
+可光有工牌还不够。流水线上同时跑着好几台机器（好几个着色器程序），它们经常要用到**同一份**配料表——比如「相机怎么看这个世界」的那两个矩阵。要是每台机器都自己抄一份、改的时候挨个去改，既费事又容易漏掉一台，画面就花了。更好的办法是在车间墙上挂一块**公告板**，配料表只写一份贴上去，所有机器都抬头看同一块板，改一次全体同步。
+
+这一章讲的就是这两件事：怎么读流水线发的那些工牌（内建变量），以及怎么用一块公告板（Uniform 缓冲对象）让多台机器共享同一份数据。没有它们，你也能画——只是会写很多本可以省掉的重复代码，还得自己算一堆本该流水线告诉你的信息。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念克制。 */}
+
+## 内建变量：流水线免费发的「工牌」
+
+GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term def="GLSL 预先定义好、有固定含义、不用你声明就能直接读写的特殊变量。它们由渲染流水线在对应阶段自动填好（如顶点的最终位置、片段的屏幕坐标、正反面标志），名字都以 gl_ 开头。读对应的工牌就能拿到流水线算好的信息，不必自己算。">内建变量</Term>（built-in variable）——名字都以 `gl_` 开头，就像流水线在每个工位发的工牌。有的是**输出**（你往上写，告诉流水线结果），有的是**输入**（流水线填好给你读）。先把本章会碰到的几块工牌过一遍：
+
+- `gl_Position`（输出）：顶点着色器里写的**顶点最终位置**（裁剪坐标），前面「你好三角形」「坐标系统」章已经天天在用，本章不展开；
+- `gl_PointSize`（输出）：用 `GL_POINTS` 画点时，控制每个点画多大；
+- `gl_VertexID`（输入）：当前正在处理的是**第几个顶点**（一个整数索引）；
+- `gl_FragCoord`（输入，本章重点）：当前片段在画布上的**窗口像素坐标**；
+- `gl_FrontFacing`（输入）：当前片段属于物体的**正面还是背面**；
+- `gl_FragDepth`（输出）：让你在片段着色器里**改写这个片段的深度值**。
+
+`gl_Position` / `gl_PointSize` / `gl_VertexID` 这三块都很直白，看名字即知用途，下面重点拆三块最有用、也最容易踩坑的：`gl_FragCoord`、`gl_FrontFacing`、`gl_FragDepth`。
+
+## gl_FragCoord：这个片段落在屏幕的哪个像素
+
+片段着色器对**每个像素**各跑一遍。跑的时候，它怎么知道「我正在画的是画布上哪个位置的像素」？答案就是读这块工牌：<Term def="片段着色器里的只读内建变量，存当前片段在画布上的「窗口像素坐标」。xy 是像素位置（原点在画布左下角，向右是 x、向上是 y），z 是这个片段的深度值。关键：xy 是像素值（0..画布宽、0..画布高），不是 -1..1 的 NDC，要除以分辨率才能归一化到 0..1。">gl_FragCoord</Term>。它的 `xy` 就是这个片段的**屏幕像素坐标**：原点在画布**左下角**，向右数像素是 `x`、向上数像素是 `y`；`z` 分量则是这个片段的深度值。
+
+这里有个小白最容易栽的坑，先用图掐死它：`gl_FragCoord.xy` 是**像素值**——`x` 从 0 到画布宽、`y` 从 0 到画布高，**不是** -1 到 1 的那种归一化坐标（NDC）。所以想把它变成 0..1 的比例，得**除以画布分辨率**：
+
+<GlFragCoordDiagram />
+
+最经典的玩法就是拿它做**屏幕分屏**：判断 `gl_FragCoord.x` 落在画布左半还是右半，左半涂一色、右半涂另一色——画面立刻被切成两块。本章的主 Demo 就是这个，等会儿你能亲手拖那条分界线。
+
+## gl_FrontFacing：你看到的是正面还是背面
+
+还记得「面剔除」章里「正面 / 背面」的概念吗？片段着色器也能查这块工牌：<Term def="片段着色器里的只读内建布尔内建变量，告诉你当前片段属于物体的正面（true）还是背面（false）。常用来给正反两面上不同的颜色或纹理——比如从外面看箱子是一种贴图、从里面看（看到背面）换另一种。判正反靠顶点的环绕顺序，和面剔除同一套规则。">gl_FrontFacing</Term>。它是个 `bool`：当前片段在**正面**就是 `true`、在**背面**就是 `false`。
+
+它有什么用？最直观的就是给正反两面**上不同的颜色或纹理**。比如一个箱子，从外面看（正面）贴木纹、走进它内部看到的背面贴另一种图，只要一句 `gl_FrontFacing ? frontColor : backColor` 就分开了。注意：要看得到背面，通常得先把「面剔除」关掉（不然背面早被剔了），这点 §6 会提。
+
+## gl_FragDepth：自己改写片段的深度
+
+正常情况下，一个片段的深度是流水线自动算好的（就是 `gl_FragCoord.z`），你不用管。但有时你想**手动改它**——比如做某些特效要把深度往后推一点。这就用到 <Term def="片段着色器里的可写内建变量，让你手动指定这个片段的深度值（覆盖流水线自动算的那个）。代价不小：一旦在着色器里写了它，GPU 就没法在运行片段着色器之前提前做深度测试（提前深度测试 early depth test），性能会下降，所以非必要别写。">gl_FragDepth</Term>：往它写一个 0..1 的值，就覆盖了流水线默认的深度。
+
+但它有个**代价**，得先说清楚：正常时 GPU 会在跑片段着色器**之前**就提前做深度测试（提前剔掉被挡住的片段、省得白算颜色，这叫提前深度测试）；可一旦你在着色器里**写了** `gl_FragDepth`，GPU 没法预知你要写成多少，只能**等片段着色器跑完**才能测深度——提前优化就泡汤了，性能下降。所以**非必要别碰它**，这点也进 §6 的提醒。
+
+## 接口块：把一组 in/out 打包整组传
+
+着色器章讲过，两段着色器之间靠一对对同名的 `in/out` 传数据。可当要传的东西变多——纹理坐标、法线、世界坐标……一根根 `out`、再一根根 `in`，又长又乱，还容易把名字写错对不上。GLSL 给了个整洁的写法：<Term def="把一组要在着色器之间传递的 in 或 out 变量，用一个有名字的「块」打包起来整组传，而不是一个个零散声明。顶点端写 out 块名{ ... } 实例名，片段端写同名 in 块名{ ... } 实例名。块名两端必须一致，实例名（块在本段内的代号）两端可以不同。让传一大组数据时命名整洁、不易写错。">接口块</Term>（interface block）——把一组 `in` 或 `out` 装进一个**有名字的盒子**，整组打包传。
+
+写法是顶点端 `out VS_OUT { ... } vs_out;`、片段端 `in VS_OUT { ... } fs_in;`。注意两个名字的分工：`VS_OUT` 是**块名**，两端**必须一致**（靠它配对）；`vs_out` / `fs_in` 是**实例名**，只是这个块在本段着色器里的代号，两端**可以不同**。块内用 `vs_out.TexCoords` 这样的点号访问。下面这张图把「散装」和「打包」并排对照：
+
+<InterfaceBlockDiagram />
+
+接口块不改变数据怎么流（还是顶点 → 片段、还是会被插值），只是把声明组织得更整洁——传的东西越多，它越省心。
+
+## Uniform 缓冲对象：墙上那块共享的「公告板」
+
+最后一块大头，也是直觉引入里那块**公告板**。前面我们传 uniform，都是「一个着色器程序一份、一个一个 `gl.uniform*` 上传」。可像投影矩阵、视图矩阵这类数据，**好几个着色器程序都要用同一份**——难道每个程序都各传一遍？改相机时挨个去改？太蠢了。<Term def="一块能被多个着色器程序共享的 uniform 数据缓冲。把一组常用 uniform（如投影矩阵、视图矩阵）放进这一块缓冲，经一个「绑定点」同时接到多个着色器程序上；改一次缓冲，所有连着它的程序立刻都读到新值，不必逐个程序各传一遍。英文 Uniform Buffer Object，简称 UBO。">Uniform 缓冲对象</Term>（UBO）就是来解决这个的：把这组共享数据放进**一块缓冲**，让多个程序都连到它，改一次、全体同步。
+
+它怎么「连到多个程序」？靠一个 <Term def="一个带编号的「插座」，UBO 缓冲插在这个编号上，多个着色器程序也都声明连到同一个编号，于是它们就共享了这块缓冲。CPU 侧用 glBindBufferBase/glBindBufferRange 把缓冲接到某个编号，再用 glUniformBlockBinding 把每个程序里的 uniform 块也指到同一个编号——编号对齐，连接就成立。编号不一致就会读到错数据。">绑定点</Term>（binding point）——可以理解成一个带编号的「插座」。UBO 缓冲插在 0 号插座上，每个要共享它的程序也都声明「我连 0 号插座」，于是它们就连到同一块缓冲了。下面这张图就是公告板的全貌（左右滑看「不用 UBO 各传一遍」和「用 UBO 一处生效」的差别）：
+
+<UboBindingDiagram step={2} />
+
+还有一个绕不开的细节：UBO 这块缓冲里的数据，CPU 和 GPU 必须**对同一套摆放方式达成一致**，否则 CPU 写在这、GPU 读在那，全错位。这套约定最常用的叫 <Term def="UBO 缓冲里成员怎么摆放（每个成员从第几个字节开始）的一套对齐规则。核心：成员要按各自的「对齐量」对齐——标量（float/int）对齐到 4 字节，vec2 对齐到 8 字节，vec3 和 vec4 都对齐到 16 字节（所以 vec3 后面会留一段空白 padding），mat4 当成 4 个 vec4。CPU 往缓冲写数据时必须照这套偏移摆，GPU 才能读对。std140 是「显式、可预测」的布局，跨平台一致。">std140 布局</Term>：它规定每个成员从第几个字节开始。最坑的一条是——一个 `vec3` 明明只有 3 个数，却要**占满 16 字节**（后面补一段空白 padding）。这条规则下面 §6 和误区会反复出现，先记住这个直觉：**std140 里万物向 16 字节对齐看齐**。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。std140 的字节偏移不当公式推，用 UboBindingDiagram step3 的「内存条 + padding」图示 + §6 代码对照里的偏移注释直观讲，符合 C 型 + 小白友好。 */}
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：C 型主 Demo = 自包含程序化 ShaderDemo，用 gl_FragCoord 做屏幕分屏可视化。frag 用 gl_FragCoord.x / uResolution.x 归一化，与 uSplit 比较：左半一色右半另一色，分界线高亮。控件：uSplit(float 0..1 分界线位置) + uLeftColor/uRightColor(color)，≤5，自带重置。frag 无空行、乘号 ` * `、无保留字。猜一猜：分界线滑到最右画面会怎样（自检：uSplit=1 时几乎处处 norm<1 成立 → 全是左色，与文字一致）。 */}
+
+## 动手：用 gl_FragCoord 把画面切成两半
+
+> 猜一猜：下面这块画布用 `gl_FragCoord` 判断每个像素落在分界线左边还是右边，左边涂一色、右边涂另一色。如果你把那条分界线一路滑到**最右边**，画面会变成什么样？是左色铺满、右色铺满，还是没变化？先动手拖一拖，再看下面的解释。
+
+这块画布在片段着色器里读 `gl_FragCoord.x`、除以画布宽得到「这个像素在水平方向的 0..1 比例」，再和你拖的 `uSplit` 比较：比它小（在左边）涂左色、比它大（在右边）涂右色，分界线那一道高亮成品牌紫。盯着拖 `uSplit` 时分界线怎么走：
+
+<ShaderDemo
+  caption="片段着色器读 gl_FragCoord.x（这个像素的窗口像素 x 坐标），除以 uResolution.x 归一化到 0..1，再和分界线位置 uSplit 比较：左半涂左色、右半涂右色，分界处一道紫线。拖『分界线位置 uSplit』：滑到 0 画面几乎全是右色、滑到 1 几乎全是左色、0.5 左右两色各占一半。拖两个颜色换左右色。点重置回到初始 0.5。"
+  aspect={16 / 9}
+  controls={[
+    {
+      name: "uSplit",
+      label: "分界线位置 uSplit（0=最左 / 1=最右）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      default: 0.5,
+    },
+    {
+      name: "uLeftColor",
+      label: "左半颜色",
+      type: "color",
+      default: [0.486, 0.361, 1],
+    },
+    {
+      name: "uRightColor",
+      label: "右半颜色",
+      type: "color",
+      default: [0.898, 0.71, 0.404],
+    },
+  ]}
+  frag={`#version 300 es
+precision highp float;
+// 注意：本 frag 内禁止空行——空行会让 prettier-MDX 把模板串当 markdown 而损坏乘号(*)
+uniform vec2 uResolution;   // 画布像素尺寸（标准 uniform，自动注入）
+uniform float uSplit;       // 控件：分界线水平位置，0..1
+uniform vec3 uLeftColor;    // 控件：左半颜色
+uniform vec3 uRightColor;   // 控件：右半颜色
+out vec4 FragColor;
+void main() {
+  // gl_FragCoord.x 是这个片段的窗口像素 x 坐标（0..画布宽，不是 -1..1）；
+  // 除以画布宽，归一化成 0..1 的水平比例 norm。
+  float norm = gl_FragCoord.x / uResolution.x;
+  // 和分界线比：norm < uSplit 在左边、否则在右边。
+  vec3 col = norm < uSplit ? uLeftColor : uRightColor;
+  // 分界线附近一窄带高亮成品牌紫，标出那条切割线。
+  float edge = abs(norm - uSplit);
+  if (edge < 0.004) col = vec3(0.486, 0.361, 1.0);
+  FragColor = vec4(col, 1.0);
+}`}
+/>
+
+把 `uSplit` 滑到**最右边（1）**，几乎每个像素的 `norm` 都比它小、都判进「左边」，于是画面几乎被**左色铺满**；滑到**最左边（0）**则反过来，几乎全是右色；停在 **0.5** 附近，左右两色各占一半。这整套切割，靠的就是片段着色器从 `gl_FragCoord` 这块工牌上读到「我是哪个像素」——这正是 `gl_FragCoord` 最朴素的用法：**让每个片段知道自己在屏幕上的位置**。
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper UBO 共享——每步带 <UboBindingDiagram step>（满足「每步必带图示」，纯文字步=打回）。①不用 UBO 各传一遍 → ②用 UBO 经绑定点共享 → ③std140 对齐示意。猜一猜引导。 */}
+
+## UBO 怎么让多个着色器共享同一块数据：单步走一遍
+
+> 猜一猜：场景里有三个着色器程序，都要用同一份投影 / 视图矩阵。如果**不用** UBO，你改一次相机，得往几个程序传矩阵？用了 UBO 之后又变几次？想一想，再单步走下面三步。
+
+下面把「为什么要 UBO、它怎么共享、内存怎么对齐」拆成三步，每一步都画出那一刻的数据怎么流：
+
+<Stepper>
+  <Step title="① 不用 UBO：每个程序各传一遍">
+    <UboBindingDiagram step={1} />
+    不用 UBO 时，每个<strong>着色器程序</strong>里都各自存一份{" "}
+    <code>projection</code> / <code>view</code> 的 uniform。想改一次相机，CPU
+    就得
+    <strong>挨个程序</strong>
+    各上传一遍——三个程序传三遍，五个传五遍，又冗余又容易漏掉某一个，漏了的那个画面就和别人对不上。
+  </Step>
+  <Step title="② 用 UBO：一块缓冲经绑定点接到所有程序">
+    <UboBindingDiagram step={2} />用 UBO：把 <code>projection</code> /{" "}
+    <code>view</code> 放进
+    <strong>一块共享缓冲</strong>，让它插在 <strong>0 号绑定点</strong>
+    上；每个程序也都声明「我连 0 号绑定点」。于是 CPU 只往这块缓冲
+    <strong>写一次</strong>，三个程序立刻全都读到新值——改一次、全体生效。
+  </Step>
+  <Step title="③ std140：成员按 16 字节对齐摆进缓冲">
+    <UboBindingDiagram step={3} />但 CPU 和 GPU 要对「数据怎么摆」达成一致。
+    <strong>std140</strong> 规定每个成员的起始字节：
+    <code>float</code> 占 4 字节、后面补到 16；<code>vec3</code> 虽只有 3 个数也
+    <strong>吃满 16 字节</strong>（第 4 格是 padding 空白）；<code>vec4</code>{" "}
+    正好占满 16。CPU 往缓冲写数据时必须照这套偏移摆，GPU 才读得对。
+  </Step>
+</Stepper>
+
+走完三步答案就清楚了：不用 UBO 改一次相机要传 N 遍，用了 UBO 只传 **1 遍**。代价是你得照 std140 的对齐规则把数据摆进缓冲——下面 §6 就把这两端的代码摊开。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：三段——①内建变量 gl_FragCoord + gl_FrontFacing（片段着色器，两端 GLSL 一样）②接口块 out/in VS_OUT 块（两端 GLSL 一样）③UBO：GLSL 端 layout(std140) uniform Matrices + CPU 端 C++/WebGL2 双 Tab（API 差异大，重点）。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异 + std140 对齐坑用 Callout 标注。 */}
+
+## 代码逐段拆解
+
+把上面用到的东西摊开看：读内建变量、用接口块打包、用 UBO 共享。前两段是纯 GLSL，C++/OpenGL 与 WebGL2 **写法完全一样**；第三段（UBO 的 CPU 侧）两端 API 差异较大，重点对照。
+
+### 内建变量：读 gl_FragCoord 做分屏、用 gl_FrontFacing 分正反
+
+片段着色器里直接读这两块工牌即可，不用声明。下面这段把上面 Demo 的分屏逻辑、和「正反面给不同色」拼在一起：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+uniform vec2 uResolution;
+void main() {
+  // gl_FragCoord.xy 是窗口像素坐标（不是 NDC！），除以分辨率归一化
+  float norm = gl_FragCoord.x / uResolution.x;
+  vec3 col = norm < 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  // gl_FrontFacing：正面 true / 背面 false，给正反不同色
+  if (!gl_FrontFacing) col = col * 0.3;  // 背面压暗
+  FragColor = vec4(col, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+#version 300 es
+precision highp float;
+out vec4 FragColor;
+uniform vec2 uResolution;
+void main() {
+  // gl_FragCoord.xy 是窗口像素坐标（不是 NDC！），除以分辨率归一化
+  float norm = gl_FragCoord.x / uResolution.x;
+  vec3 col = norm < 0.5 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0);
+  // gl_FrontFacing：正面 true / 背面 false，给正反不同色
+  if (!gl_FrontFacing) col = col * 0.3;  // 背面压暗
+  FragColor = vec4(col, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+两端**一字不差**——内建变量是 GLSL 语言本身的东西，和桌面 / WebGL2 无关。唯一差异还是老两样：版本声明和精度声明。`gl_FragCoord` 那行是关键，别当 NDC 用：
+
+<Callout type="warn">
+  API 差异：桌面写 `#version 330 core`，WebGL2 写 `#version 300 es`
+  且片段着色器多一行 `precision highp float;`。另外想看到 `gl_FrontFacing`
+  的**背面**，得先在 CPU 侧关掉面剔除（`glDisable(GL_CULL_FACE)` /
+  `gl.disable(gl.CULL_FACE)`），否则背面早被剔了根本不进片段着色器。**别在着色器里写
+  `gl_FragDepth`** 除非真有必要——一写就关掉了提前深度测试，性能下降。
+</Callout>
+
+### 接口块：把一组 out / in 打包
+
+顶点端用 `out 块名 { ... } 实例名`、片段端用同名 `in 块名 { ... } 实例名`。块名两端一致、实例名可不同。这段也是两端通用的纯 GLSL：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```glsl
+// —— 顶点着色器：打包成一个 out 块 ——
+out VS_OUT {
+  vec2 TexCoords;
+  vec3 Normal;
+} vs_out;                 // vs_out 是本段的实例名
+void main() {
+  // …gl_Position 照常…
+  vs_out.TexCoords = aTexCoords;   // 用「实例名.成员」访问
+}
+// —— 片段着色器：同名 in 块接住 ——
+in VS_OUT {
+  vec2 TexCoords;
+  vec3 Normal;
+} fs_in;                  // 块名 VS_OUT 必须一致，实例名可不同
+// main 里：texture(tex, fs_in.TexCoords);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```glsl
+// —— 顶点着色器：打包成一个 out 块 ——
+out VS_OUT {
+  vec2 TexCoords;
+  vec3 Normal;
+} vs_out;                 // vs_out 是本段的实例名
+void main() {
+  // …gl_Position 照常…
+  vs_out.TexCoords = aTexCoords;   // 用「实例名.成员」访问
+}
+// —— 片段着色器：同名 in 块接住 ——
+in VS_OUT {
+  vec2 TexCoords;
+  vec3 Normal;
+} fs_in;                  // 块名 VS_OUT 必须一致，实例名可不同
+// main 里：texture(tex, fs_in.TexCoords);
+```
+
+  </Tab>
+</CodeTabs>
+
+接口块只是组织方式的改进——它不改变数据怎么流（顶点 → 片段、照样插值），只在传一大组变量时让命名更整洁、不易把 `in/out` 名字写岔。
+
+### UBO：让两个着色器共享投影 / 视图矩阵
+
+这才是本节重点，分两半：**GLSL 端声明 uniform 块**（两端通用），和 **CPU 端建缓冲 + 接绑定点 + 填数据**（API 差异大）。先看 GLSL 端——两段着色器都写同一个 `std140` uniform 块：
+
+```glsl
+// 顶点着色器里（两端 GLSL 完全一样）
+layout (std140) uniform Matrices {
+  mat4 projection;   // 偏移 0：mat4 = 4 列 × 16 字节
+  mat4 view;         // 偏移 64：紧接在 projection 之后
+};
+uniform mat4 model;  // model 各物体不同，仍走普通 uniform
+// main 里直接用：gl_Position = projection * view * model * vec4(aPos, 1.0);
+```
+
+注意块里成员直接当全局变量用（不用写实例名前缀）。`std140` 声明了内存布局——`mat4` 当 4 个 `vec4` 算、各占 16 字节，所以 `view` 紧跟在偏移 64。接着是 CPU 端，这里两端 API 差异最大：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 1) 建缓冲，开 2 个 mat4 的空间（128 字节）
+unsigned int ubo;
+glGenBuffers(1, &ubo);
+glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
+// 2) 把缓冲接到 0 号绑定点
+glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
+// 3) 把每个程序的 Matrices 块也指到 0 号绑定点
+unsigned int idx = glGetUniformBlockIndex(shaderA, "Matrices");
+glUniformBlockBinding(shaderA, idx, 0);   // 对 shaderB 同样来一遍
+// 4) 按 std140 偏移填数据：projection 在 0、view 在 64
+glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), &projection[0][0]);
+glBufferSubData(GL_UNIFORM_BUFFER, 64, sizeof(glm::mat4), &view[0][0]);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 1) 建缓冲，开 2 个 mat4 的空间（128 字节）
+const ubo = gl.createBuffer();
+gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
+gl.bufferData(gl.UNIFORM_BUFFER, 2 * 64, gl.STATIC_DRAW);
+// 2) 把缓冲接到 0 号绑定点
+gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, ubo);
+// 3) 把每个程序的 Matrices 块也指到 0 号绑定点
+const idx = gl.getUniformBlockIndex(programA, "Matrices");
+gl.uniformBlockBinding(programA, idx, 0); // 对 programB 同样来一遍
+// 4) 按 std140 偏移填数据：projection 在 0、view 在 64
+gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
+gl.bufferSubData(gl.UNIFORM_BUFFER, 0, projection); // Float32Array(16)
+gl.bufferSubData(gl.UNIFORM_BUFFER, 64, view); // 偏移 64 字节
+```
+
+  </Tab>
+</CodeTabs>
+
+四步逻辑一一对应：建缓冲 → 缓冲接 0 号绑定点（`bindBufferBase`）→ 每个程序的块也指 0 号绑定点（`getUniformBlockIndex` + `uniformBlockBinding`）→ 按偏移填数据。WebGL2 完整支持 UBO，命名也几乎照搬 GL：
+
+<Callout type="warn">
+  两个对齐必须扣死：① **绑定点编号要一致**——`bindBufferBase` 把缓冲接到的那个
+  编号（这里 0），必须和 `uniformBlockBinding`
+  给每个程序块设的编号相同，对不上就读到错数据（§7）。② **std140
+  偏移要算对**——`view` 的偏移是 **64**（紧跟在 `mat4 projection` 后）， 不是 4
+  或 16；填数据时 `bufferSubData` 的 offset 必须照 std140 排，错一个字节
+  整组矩阵全乱。`mat4` = 4 列 × 16 字节 = 64 字节。
+</Callout>
+
+写好后，CPU 每帧（或相机一变）只往这块缓冲 `bufferSubData` 写一次 `projection` / `view`，连着 0 号绑定点的所有着色器程序就全都更新了——这正是 §5 第②步那张图的实况。完整可运行源码将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含可联想到主 Demo / §6 代码的。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：本想用 `gl_FragCoord` 做屏幕分屏 /
+  渐变，结果画面要么全一色、要么花得没规律。**原因**：把 `gl_FragCoord.xy`
+  **当成 NDC（-1..1）**用了——它其实是**窗口像素坐标**（`x` 从 0 到画布宽、`y` 从
+  0 到画布高）。直接拿它和 0.5、1.0
+  这种小数比，几乎处处不成立。**修法**：先**除以 `uResolution`** 归一化到 0..1
+  再比较（见 §5 Demo 里 `gl_FragCoord.x / uResolution.x`），就和直觉对上了。
+</Callout>
+
+<Callout type="trap">
+  **现象**：UBO
+  里的矩阵全乱——物体扭曲、错位，或某个成员读出来是垃圾值。**原因**：**std140
+  对齐 / padding 算错**。最常见的是以为 `vec3` 占 12
+  字节，于是把下一个成员的偏移算少了 4——可 std140 里 `vec3` 要**吃满 16
+  字节**（后面有 padding）。**修法**：照 std140 规则重算偏移（vec3/vec4/mat4
+  列都对齐 16），`bufferSubData` 的 offset 按这套来；拿不准就把每个成员都当
+  `vec4` 倍数对齐，最稳。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用了
+  UBO，但着色器读到的矩阵根本不对（像没更新，或读到另一组数据）。**原因**：**绑定点编号对不上**——CPU
+  侧 `bindBufferBase` 把缓冲接到了 0 号，但 `uniformBlockBinding`
+  把某个程序的块设成了 1 号（或反过来），GLSL 里 `binding` 和 CPU
+  不一致。**修法**：让三处编号**完全相同**——缓冲接的绑定点、每个程序块绑的绑定点，用同一个数字（如都用
+  0），逐个核对。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在片段着色器里写了 `gl_FragDepth`
+  后，明明画面没变，帧率却掉了一截。**原因**：一旦你写 `gl_FragDepth`，GPU
+  就没法在跑片段着色器**之前**提前做深度测试（不知道你要把深度改成多少），只能等着色器跑完再测，**提前深度测试**优化失效。**修法**：**非必要别写**
+  `gl_FragDepth`；正常深度用流水线自动算的就好。真要写，也尽量把它放在能用深度条件优化的场景。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（含目标效果）+ 1 道独立实现/问答题（C 型）；答案折叠。 */}
+
+## 小结
+
+- **内建变量**是流水线发的「免费工牌」：`gl_FragCoord`（片段的**窗口像素坐标**）、`gl_FrontFacing`（正/背面）、`gl_FragDepth`（改写深度，慎用）
+- `gl_FragCoord.xy` 是**像素值不是 NDC**，要**除以 `uResolution`** 才归一化到 0..1——这是 §5 分屏 Demo 的关键
+- **接口块**把一组 `in/out` 打包成有名字的块整组传：块名两端一致、实例名可不同，传一大组数据时更整洁
+- **UBO** 是块共享「公告板」：一块缓冲经**绑定点**接到多个着色器程序，改一次全体生效，省掉逐个程序各传一遍
+- **std140** 规定 UBO 成员怎么对齐——`vec3` 也吃满 16 字节（留 padding）；绑定点编号、std140 偏移**两端必须扣死**
+
+<Exercises>
+
+**练习 1（改 Demo 代码题）** 在上面的 `gl_FragCoord` 分屏 Demo 里，把「左右分屏」改成「**上下分屏**」：画面上半一色、下半另一色，分界线水平、可由 `uSplit` 控制高低。提示：换一个 `gl_FragCoord` 的分量、除以对应的分辨率分量。
+
+<Answer>
+
+把 `main` 里算 `norm` 那行从用 `x` 改成用 `y`：
+
+```glsl
+// 改用 gl_FragCoord.y，除以画布高 uResolution.y，得到垂直方向 0..1 比例
+float norm = gl_FragCoord.y / uResolution.y;
+vec3 col = norm < uSplit ? uLeftColor : uRightColor;  // 下半 uLeftColor、上半 uRightColor
+```
+
+关键就一处：把 `gl_FragCoord.x / uResolution.x` 换成 `gl_FragCoord.y / uResolution.y`。因为 `gl_FragCoord` 的原点在画布**左下角**、`y` 向上增大，所以 `norm` 小的是**下半**、大的是**上半**，分界线就成了一条水平线，拖 `uSplit` 调它的高低。
+
+</Answer>
+
+**练习 2（std140 对齐题）** 一个 UBO 块按 std140 布局，依次有：`float a;` `vec3 b;` `vec2 c;`。写出 `a`、`b`、`c` 三个成员各自的**起始字节偏移**，并说明为什么 `b` 不是从偏移 4 开始。
+
+<Answer>
+
+- `a`（float）：偏移 **0**，占 4 字节；
+- `b`（vec3）：偏移 **16**——不是 4！因为 std140 里 `vec3` 的对齐量是 16，必须从 16 的倍数处开始，于是 `a` 后面（偏移 4~15）那 12 字节是 padding 空着；`b` 本身又吃满到偏移 32（vec3 占满 16 字节）；
+- `c`（vec2）：偏移 **32**——vec2 对齐量是 8，而 32 已经是 8 的倍数，正好紧接 `b` 之后。
+
+核心原因：std140 里万物向各自的对齐量看齐，`vec3`/`vec4`/`mat4` 列都对齐到 16，所以 `a` 这种小成员后面常常被迫留一段 padding，下一个成员要跳到下一个对齐位置开始。
+
+</Answer>
+
+**练习 3（问答题）** 某人用 UBO 共享投影 / 视图矩阵，CPU 侧写了 `glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo)`，又对着色器写了 `glUniformBlockBinding(shader, idx, 1)`。运行后画面里物体位置完全不对。问题出在哪？怎么改？
+
+<Answer>
+
+问题出在**绑定点编号对不上**：缓冲被 `glBindBufferBase` 接到了 **0** 号绑定点，但 `glUniformBlockBinding` 把着色器里那个 `Matrices` 块绑到了 **1** 号绑定点。两者不是同一个插座——着色器去 1 号读，那里却没有缓冲（或是别的数据），于是读到的矩阵全错，物体位置自然不对。
+
+改法：让两处编号**完全一致**。要么把 `glUniformBlockBinding(shader, idx, 1)` 改成 `0`，要么把 `glBindBufferBase(..., 0, ubo)` 改成 `1`——只要缓冲接的绑定点、和每个程序块绑的绑定点是同一个数字就行。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 个新 Term，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="内建变量">
+  GLSL 预先定义好、有固定含义、不用你声明就能直接用的特殊变量，名字都以 `gl_`
+  开头。它们由渲染流水线在对应阶段自动填好——比如顶点的最终位置
+  `gl_Position`、片段的屏幕坐标 `gl_FragCoord`、正反面标志
+  `gl_FrontFacing`。读对应的「工牌」就能拿到流水线算好的信息，不必自己算。详见本章「内建变量」一节。
+</GlossaryItem>
+
+<GlossaryItem term="gl_FragCoord">
+  片段着色器里的只读内建变量，存当前片段在画布上的「窗口像素坐标」。`xy`
+  是像素位置（原点在画布**左下角**，向右是 `x`、向上是 `y`），`z`
+  是这个片段的深度。**关键**：`xy` 是像素值（`x` 从 0 到画布宽、`y` 从 0
+  到画布高），**不是** -1..1 的 NDC，要**除以分辨率**才能归一化到
+  0..1。详见本章「gl_FragCoord」一节与 §5。
+</GlossaryItem>
+
+<GlossaryItem term="gl_FrontFacing">
+  片段着色器里的只读布尔内建变量，告诉你当前片段属于物体的**正面**（`true`）还是**背面**（`false`）。常用来给正反两面上不同的颜色或纹理（从外面看一种、看到背面换另一种）。判正反和「面剔除」同一套环绕顺序规则；想看到背面通常得先关掉面剔除。详见本章「gl_FrontFacing」一节。
+</GlossaryItem>
+
+<GlossaryItem term="gl_FragDepth">
+  片段着色器里的可写内建变量，让你手动指定这个片段的深度值（覆盖流水线自动算的那个）。代价不小：一旦在着色器里写了它，GPU
+  就没法在跑片段着色器**之前**提前做深度测试（提前深度测试），性能会下降，所以**非必要别写**。详见本章「gl_FragDepth」一节。
+</GlossaryItem>
+
+<GlossaryItem term="接口块">
+  把一组要在着色器之间传递的 `in` 或 `out`
+  变量，用一个有名字的「块」打包起来整组传，而不是一个个零散声明。顶点端写
+  `out 块名 { ... } 实例名`、片段端写同名 `in 块名 { ... } 实例名`：**块名**两端必须一致（靠它配对），**实例名**（块在本段里的代号）两端可以不同。传一大组数据时命名整洁、不易写错。详见本章「接口块」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Uniform 缓冲对象">
+  一块能被多个着色器程序**共享**的 uniform 数据缓冲（英文 Uniform Buffer
+  Object，简称 UBO）。把一组常用
+  uniform（如投影矩阵、视图矩阵）放进这一块缓冲，经一个「绑定点」同时接到多个程序上；改一次缓冲，所有连着它的程序立刻都读到新值，不必逐个程序各传一遍。详见本章「Uniform
+  缓冲对象」一节与 §5、§6。
+</GlossaryItem>
+
+<GlossaryItem term="绑定点">
+  一个带编号的「插座」。UBO
+  缓冲插在这个编号上，多个着色器程序也都声明连到同一个编号，于是它们就共享了这块缓冲。CPU
+  侧用 `glBindBufferBase` / `glBindBufferRange` 把缓冲接到某个编号，再用
+  `glUniformBlockBinding` 把每个程序里的 uniform
+  块也指到同一个编号——编号对齐，连接才成立；编号不一致就会读到错数据。详见本章「Uniform
+  缓冲对象」一节与 §6。
+</GlossaryItem>
+
+<GlossaryItem term="std140 布局">
+  UBO
+  缓冲里成员怎么摆放（每个成员从第几个字节开始）的一套对齐规则。核心：成员要按各自的「对齐量」对齐——标量（`float`/`int`）对齐
+  4 字节、`vec2` 对齐 8、`vec3` 和 `vec4` 都对齐 **16**（所以 `vec3`
+  后面会留一段空白 padding），`mat4` 当成 4 个 `vec4`。CPU
+  往缓冲写数据时必须照这套偏移摆，GPU 才能读对。详见本章「Uniform
+  缓冲对象」一节与 §6。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

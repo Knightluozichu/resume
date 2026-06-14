@@ -56,6 +56,9 @@ import { SkyboxDiagram } from "./diagrams/skybox-diagram";
 import { ReflectionRefractionDiagram } from "./diagrams/reflection-refraction-diagram";
 import { BufferLayoutDiagram } from "./diagrams/buffer-layout-diagram";
 import { BufferSubDataDiagram } from "./diagrams/buffer-subdata-diagram";
+import { GlFragCoordDiagram } from "./diagrams/gl-fragcoord-diagram";
+import { InterfaceBlockDiagram } from "./diagrams/interface-block-diagram";
+import { UboBindingDiagram } from "./diagrams/ubo-binding-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -178,6 +181,12 @@ import { CubemapDemo } from "./cubemap-demo";
  *    各属性独立 stride=12/12/8·offset=各段起点；compare 两条并列「同一 VAO 只是 stride/offset 填法不同」，
  *    兼作 §5 Stepper 三步配图）、BufferSubDataDiagram（glBufferData 整块重建 vs glBufferSubData(offset,size,data)
  *    只覆盖中间一段·标 offset 起点 + size 长度）。同款 Server SVG。
+ *  - 高级OpenGL篇·高级GLSL（HEL-74）：GlFragCoordDiagram（gl_FragCoord 是窗口像素坐标：左下原点 (0,0)、
+ *    向右 x 向上 y、右上 (宽,高)，标「x∈0..宽/y∈0..高，不是 -1..1，要除 uResolution」掐死 NDC 误区）、
+ *    InterfaceBlockDiagram（散装 in/out 一根根连·易乱 vs 接口块 out VS_OUT{...}vs_out / in VS_OUT{...}fs_in
+ *    整组打包·块名两端对上即可、实例名可不同）、UboBindingDiagram（step=1/2/3：①不用 UBO 每 program 各传一遍·
+ *    冗余 → ②用 UBO 一块缓冲经绑定点 0 接多 program·改一次全体生效 → ③std140 内存条·vec3 补齐 16 字节留 padding，
+ *    兼作 §5 Stepper 三步配图）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -309,6 +318,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ReflectionRefractionDiagram,
   BufferLayoutDiagram,
   BufferSubDataDiagram,
+  GlFragCoordDiagram,
+  InterfaceBlockDiagram,
+  UboBindingDiagram,
   Stepper,
   Step,
   Slider,
