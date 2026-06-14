@@ -1,0 +1,541 @@
+---
+title: 泛光
+type: C
+section: 高级光照
+order: 8
+description: 讲清泛光怎么把场景里超亮的区域（亮度 >阈值）单独提取出来当「泛光源」、用两遍可分离高斯把它糊成柔和光晕、再叠加回原图，让强光源透出像眩光一样的辉光；说清两遍可分离高斯把每像素采样从 N² 降到 2N、乒乓帧缓冲怎么反复横纵模糊；并在 demo 里开关泛光、调亮度阈值与泛光强度，亲眼看辉光从无到有、从弱到强。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/07%20Bloom/
+draft: true
+---
+
+{/* C 实战型章（HEL-87，高级光照篇第 8 篇）：原书「泛光 Bloom」。重心是代码对照(spec C 列 §6 重，覆盖 MRT 两张图 + 可分离高斯 + 乒乓 + 合成)。承接 HDR（泛光只对 >1 的高亮区生效·亮度阈值提取就是从 HDR 颜色里挑 >阈值的）+ framebuffers（多遍帧缓冲·泛光是典型多遍渲染）。沿用「相机与摄影 / 光与材质（夜里看路灯柔光、镜头对强光的眩光）」类比。math:false（高斯权重、可分离原理 §3 行内点到，§4 整节省略）。主 viz = ShaderDemo（frag 内程序化构造暗背景 + 几个超亮光点的 HDR 场景，单遍解析地叠加高斯光晕近似辉光：uBloom 开关 / uThreshold 亮度阈值 / uIntensity 泛光强度，caption 诚实说明这是单遍近似、真多遍乒乓高斯见代码对照）；辅 viz = CompareSlider（左 关泛光硬光点 / 右 开泛光柔和辉光，用静态 BloomPipelineDiagram step 截图态，不塞两个 WebGL 画布）；流程图 BloomPipelineDiagram（§5 Stepper 四步：MRT→横→纵→合成）+ SeparableGaussianDiagram（N²→2N）。draft:true，老板验收后才发布(硬规则 7)。诚实化（HEL-82 教训）：只演示确信能渲的——开关辉光有无、阈值/强度调辉光强弱，不声称「泛光多遍渲染正常」（单 frag 做不了真乒乓）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 泛光效果（很亮的光源/高光向四周溢出柔和光晕，像肉眼/相机看强光的眩光）= 直觉引入 + 概念 + 主 ShaderDemo + CompareSlider 开关；2) 亮度阈值提取（只把亮度 >阈值如 1 的像素挑出来当泛光源，暗的不参与）= 概念 + BloomPipelineDiagram step1 + demo 阈值控件 + §6 代码；3) MRT 多渲染目标（几何 pass 一次输出两张图：正常场景色 + 仅亮区色）= 概念 + BloomPipelineDiagram step1 + §6 代码；4) 高斯模糊（钟形权重核把亮区图糊成光晕）= 概念 + BloomPipelineDiagram step2/3 + §6 代码；5) 两遍可分离高斯（2D 高斯 = 先横一遍再纵一遍，N×N 采样降成 N+N）= SeparableGaussianDiagram + §6 代码；6) 乒乓帧缓冲 ping-pong（两个 FBO 交替当输入/输出反复横纵模糊多次）= BloomPipelineDiagram step3 + 概念 + §6 代码；7) 叠加合成（模糊光晕加回原场景再 tonemap+gamma）= 概念 + BloomPipelineDiagram step4 + §6 代码。Term 共 6 个：泛光 / 亮度阈值提取 / MRT 多渲染目标 / 高斯模糊 / 可分离高斯 / 乒乓帧缓冲。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释 **泛光** 怎么把场景里超亮的区域（亮度 `>阈值`）单独提取出来、糊成柔和光晕、再叠加回原图，让强光源透出像眩光一样的辉光
+- 能改出 **泛光** 效果：在 demo 里开关泛光看辉光从无到有、调 **亮度阈值** 让发光的范围变多变少、调 **泛光强度** 看辉光变浓变淡；并能写出「MRT 出两张图 → 两遍可分离高斯 → 叠加合成」这条多遍流程
+- 能回答：**为什么用两遍可分离高斯，而不是直接拿一个 2D N×N 大核糊一遍**？两者结果一样吗，差在哪？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「相机与摄影 / 光与材质（眩光）」库（承接同 section）。 */}
+
+## 夜里看路灯：那圈化不开的柔光
+
+夜里盯着一盏路灯看，灯泡本身那一点是刺眼的亮，可它周围总像晕开一圈**化不开的柔光**，越靠近灯越亮、越往外越淡，把灯衬得格外耀眼。拿手机拍强光也一样：对着太阳或一束车灯，照片里强光处会**溢出**一片光雾，糊住周边。
+
+这圈柔光不是灯真的那么大，而是我们的眼睛和相机镜头在面对**特别强的光**时，光线会向四周散开、漫出来。正是这一圈溢出的辉光，让画面里的强光看起来「真的很亮、很刺眼」。
+
+游戏渲染里，光源和高光算出来的亮度其实也分外悬殊，但如果只是把它们硬画成几个亮点，画面会显得「平、假」——亮是亮，却不刺眼、不出彩。这一章要解决的就是：**怎么让场景里超亮的地方自己透出一圈柔和的辉光**。没有它，强光只是几个生硬的亮斑；有了它，灯和高光才真的「发光」。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 泛光是什么：让超亮区自己溢出光晕
+
+先一句话说清。<Term def="Bloom，泛光。一种后处理效果：把画面里特别亮（亮度超过某个阈值）的区域单独提取出来，模糊成柔和的光晕，再叠加回原画面。效果是强光源和高光周围透出一圈化不开的辉光，模拟肉眼/相机面对强光时光线向四周溢出的现象，让画面里的亮处看起来更刺眼、更真实。">泛光</Term>（Bloom）是一种**后处理**效果：把画面里特别亮的区域挑出来，糊成一片柔和的光晕，再**叠加回**原画面。结果就是强光源和高光周围透出一圈辉光——正是夜里路灯那圈化不开的柔光。
+
+它必须建立在 [HDR](/learn/learnopengl/advanced-lighting/hdr) 之上：只有当颜色能**真的 `>1`**（浮点帧缓冲存住的高动态范围值），我们才能凭「亮度有没有超过 1」干脆利落地把强光源从普通表面里区分出来。如果画面早被截在 `[0,1]`，满屏一堆 `1.0`，根本分不清哪个是「该发光的强光」、哪个只是「白墙」。所以泛光的位置很明确：在 HDR 场景渲完、还没 tonemap 上屏之前，插进这一道「提亮 → 模糊 → 合成」的多遍处理。
+
+整条流水线分四步，下面这个分步图每步都配了张缩略图示意数据长什么样，先扫一眼建立全局印象，后面 Demo 里我们再走一遍：
+
+## 第一步：只把「够亮」的挑出来当泛光源
+
+泛光绝不能糊**整个**画面——那只会让全图发虚变脏。关键的第一刀是 <Term def="按亮度把画面里超过某个阈值的像素单独挑出来的操作。具体做法是算每个像素的感知亮度（常用 dot(color, vec3(0.2126,0.7152,0.0722)) 这个加权和），只有亮度大于阈值（如 1.0）的像素才被保留进『亮区图』当泛光源，其余的全部置黑、不参与后续模糊。阈值调高 → 只有最亮的才发光晕；调低 → 更多区域参与泛光。">亮度阈值提取</Term>：算出每个像素的感知亮度（用 `dot(color, vec3(0.2126, 0.7152, 0.0722))` 这个加权和，对人眼更敏感的绿色权重最大），**只有亮度超过阈值（比如 `1.0`）的像素**才被留下来当「泛光源」，其余一律置黑、不参与发光。
+
+那这张「只剩亮区」的图怎么来？最高效的做法是 <Term def="Multiple Render Targets，多渲染目标。让一次几何渲染（一个片段着色器）同时往多个颜色附件输出不同的结果，靠 layout(location=N) 指定写到第几个附件。泛光里用它一次性输出两张图：location 0 写正常场景色、location 1 写按亮度阈值筛出的亮区色，省得为了拿亮区图再把整个场景重渲一遍。">MRT 多渲染目标</Term>（Multiple Render Targets）：让几何 pass 的片段着色器**一次性输出两张图**——`location 0` 写正常的场景色，`location 1` 写按阈值筛出的亮区色。这样不必为拿亮区图再把场景重渲一遍。
+
+<BloomPipelineDiagram step={1} />
+
+## 第二、三步：用可分离高斯把亮区糊成光晕
+
+挑出亮区后，要把这些孤立的亮点「糊开」成柔和光晕，靠的是 <Term def="一种模糊算法：用一个钟形（高斯函数形状）的权重核，把每个像素替换成它和周围邻居的加权平均，中心权重最大、越往外越小。权重之和为 1，所以不改变整体亮暗、只是把亮的地方向四周平滑铺开。泛光用它把提取出来的亮区点糊成柔和的光晕。">高斯模糊</Term>（Gaussian Blur）：用一个**钟形权重核**把每个像素替换成它和周围邻居的加权平均，中心权重最大、越往外越小，权重之和为 1（不改变整体亮暗），亮的地方就被平滑地向四周铺开。
+
+但如果直接拿一个 `N×N` 的二维核糊，一个像素要采它周围整片 `N²` 个邻居，采样次数随核变大**平方级暴涨**。这里有个关键技巧——<Term def="把一个二维高斯核拆成『先做一遍水平方向的一维核、再做一遍垂直方向的一维核』两步来算。因为高斯函数数学上可以分离，这样做出来的模糊结果和直接用二维核完全等价，但每像素采样次数从 N×N（N²）降到 N+N（2N），N 越大省得越多。泛光的模糊就靠它来压低开销。">可分离高斯</Term>：二维高斯核在数学上可以拆成「先横一遍 `1×N`、再纵一遍 `N×1`」两步，**结果完全等价**，但每像素采样次数从 `N²` 降到 `2N`：
+
+<SeparableGaussianDiagram />
+
+而且一遍横纵往往糊得不够柔，得来回多糊几遍。这就用上 <Term def="ping-pong framebuffer，乒乓帧缓冲。准备两个内容一样的帧缓冲（FBO），让它们交替充当『输入』和『输出』：第一遍从 A 读、写进 B（横向模糊），第二遍从 B 读、写回 A（纵向模糊），如此来回（像打乒乓）反复若干次。这样只用两个 FBO 就能把横、纵模糊交替做很多遍，把亮区越糊越柔，又不必为每一遍都新建一个帧缓冲。">乒乓帧缓冲</Term>（ping-pong）：准备两个帧缓冲交替当输入/输出，第一遍从 A 读、写进 B（横向），第二遍从 B 读、写回 A（纵向），像打乒乓一样来回若干次，只用两个 FBO 就能把横、纵模糊反复做很多遍，越糊越柔：
+
+<BloomPipelineDiagram step={3} />
+
+## 第四步：把光晕加回原图
+
+最后一步最简单：把糊好的光晕图直接**加回**原始场景色——`scene + bloom`，亮点周围就透出了那圈辉光。加完之后，整张图还是 HDR（`>1` 的值），所以照例走 [HDR](/learn/learnopengl/advanced-lighting/hdr) 那章的出口：先 **色调映射**（tonemap）压回 `[0,1]`，再 **gamma 校正** 编码回 sRGB 上屏。整条流水线到这里闭环：
+
+<BloomPipelineDiagram step={4} />
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。高斯权重（钟形、和为 1）、可分离原理（2D = 横×纵）已在 §3 概念节用行内文字 + SeparableGaussianDiagram 点到，符合任务卡。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo，frag 内程序化构造暗背景 + 几个超亮光点的 HDR 场景，单遍解析地叠加高斯光晕近似辉光。uBloom 开关 / uThreshold 阈值 / uIntensity 强度。猜一猜引导。诚实化：只演示确信能渲的——开关辉光有无、阈值/强度调辉光强弱；caption 说明这是单遍近似、真多遍乒乓见 §6。frag 无空行（各段 // 注释分隔）。 */}
+
+## 动手：开关泛光、调阈值和强度，把辉光玩出来
+
+> 猜一猜：下面是一片暗背景上的几个**超亮光点**（HDR 值远 `>1`）。先把「泛光开关」关掉——你会看到几个**边缘生硬的亮点**，干干净净没有光晕。把开关打开，你觉得这些亮点周围会发生什么？再想想：如果把**亮度阈值**调得很高、只剩最亮的那个超过阈值，会怎样？先动手试，再读下面。
+
+这块画布里，片段着色器程序化地摆了**几个亮度远超 1 的光点**。三个控件：**泛光开关**（关＝只见硬光点、无辉光，开＝亮点透出柔和光晕）；**亮度阈值**（只有亮度超过它的光点才发光晕，调高→只剩最亮的泛光、调低→更多点参与）；**泛光强度**（光晕叠加的浓淡）。盯着光点，逐个拨一拨：
+
+<ShaderDemo
+  aspect={1.7}
+  caption="暗背景上几个超亮光点（HDR 值远大于 1）。泛光开关：关＝只画硬光点、无光晕；开＝亮点按亮度阈值发出柔和辉光。亮度阈值：只有亮度超过它的光点才发光晕，调高→只剩最亮的泛光、调低→更多点参与。泛光强度：光晕叠加的浓淡。注意：为了能在单个片段着色器里演示，这里是『解析地给每个超过阈值的光点叠加一圈高斯光晕』的单遍近似；真实泛光是 MRT 提亮 + 乒乓横纵高斯多遍模糊 + 合成的多遍流程，见下方『代码逐段拆解』。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uBloom;
+uniform float uThreshold;
+uniform float uIntensity;
+out vec4 FragColor;
+// 感知亮度：对人眼更敏感的绿色权重最大（与 §6 阈值提取同一套权重）
+float luma(vec3 c) {
+  return dot(c, vec3(0.2126, 0.7152, 0.0722));
+}
+// 程序化场景：暗背景 + N 个超亮光点(HDR 值远大于 1)
+// 返回这一片元的『硬光点』颜色(不含光晕)，同时把光点信息留给下面叠光晕
+const int LIGHT_COUNT = 4;
+// 4 个光点的位置(归一化坐标)、颜色、HDR 强度
+vec2 lightPos(int i) {
+  if (i == 0) return vec2(0.26, 0.40);
+  if (i == 1) return vec2(0.54, 0.64);
+  if (i == 2) return vec2(0.74, 0.32);
+  return vec2(0.42, 0.78);
+}
+vec3 lightColor(int i) {
+  if (i == 0) return vec3(1.0, 0.55, 0.30);
+  if (i == 1) return vec3(0.45, 0.55, 1.0);
+  if (i == 2) return vec3(1.0, 0.95, 0.55);
+  return vec3(0.85, 0.40, 1.0);
+}
+// 各光点的 HDR 峰值强度(远大于 1，最亮的是 1 号灯)
+float lightPower(int i) {
+  if (i == 0) return 3.2;
+  if (i == 1) return 6.5;
+  if (i == 2) return 2.1;
+  return 4.0;
+}
+void main() {
+  // 画布像素纵横比修正，避免光点被拉椭圆
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  float aspect = uResolution.x / uResolution.y;
+  vec2 p = vec2(uv.x * aspect, uv.y);
+  // 暗背景
+  vec3 scene = vec3(0.015, 0.015, 0.025);
+  vec3 bloom = vec3(0.0);
+  // 逐光点：画硬核 + (开泛光时)按阈值叠加一圈解析高斯光晕
+  for (int i = 0; i < LIGHT_COUNT; i++) {
+    vec2 lp = vec2(lightPos(i).x * aspect, lightPos(i).y);
+    float dist = length(p - lp);
+    vec3 col = lightColor(i) * lightPower(i);
+    // 硬核：一个很小的实心亮盘(关泛光时就只剩这些硬光点)
+    scene += col * smoothstep(0.020, 0.012, dist);
+    // 亮度阈值提取：只有这个光点亮度超过阈值，才让它发光晕
+    float passes = step(uThreshold, luma(col));
+    // 解析高斯光晕：exp(-d^2 / s^2) 钟形，向四周柔和散开(近似真模糊)
+    float halo = exp(-(dist * dist) / 0.0045);
+    bloom += col * halo * passes;
+  }
+  // 泛光开关 + 强度：把光晕按强度加回场景(uBloom 0 关 / 1 开)
+  vec3 hdr = scene + bloom * uIntensity * uBloom;
+  // 出口同 HDR 那章：先 tonemap(Reinhard)压回 [0,1]，再 gamma 校正上屏
+  vec3 mapped = hdr / (hdr + vec3(1.0));
+  FragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0);
+}`}
+  controls={[
+    {
+      name: "uBloom",
+      label: "泛光开关（0 关 · 1 开）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 1,
+    },
+    {
+      name: "uThreshold",
+      label: "亮度阈值（高=只剩最亮的泛光）",
+      type: "float",
+      min: 0.5,
+      max: 6,
+      step: 0.1,
+      default: 1,
+    },
+    {
+      name: "uIntensity",
+      label: "泛光强度（光晕浓淡）",
+      type: "float",
+      min: 0,
+      max: 2.5,
+      step: 0.05,
+      default: 1.2,
+    },
+  ]}
+/>
+
+谜底：**关**泛光时，只剩几个边缘生硬的小亮盘，干净但「不刺眼」；**开**泛光，每个超过阈值的光点周围都晕开一圈柔光，画面立刻「发光」了。把**亮度阈值**往上推，发光的光点越来越少——推到 `6` 以上时只剩最亮的那盏（1 号，HDR `6.5`）还在泛光，其余光点亮度不够阈值，光晕一个个熄灭，画面回归冷清。把**泛光强度**拖大，光晕越叠越浓、向外铺得越远；拖到 0 就等于关了泛光。
+
+## 流程走一遍：从 MRT 到合成
+
+上面是单遍近似，真实泛光是**多遍**的。用下面这个分步走一遍正经流程，每一步都配了缩略图示意那一刻的数据长什么样：
+
+<Stepper>
+  <Step title="① 几何 pass + MRT：一次出 场景色 + 亮区色">
+    <BloomPipelineDiagram step={1} />
+    几何 pass 的片段着色器靠 <strong>MRT</strong> 一次输出两张图：
+    <code>location 0</code> 是正常<strong>场景色</strong>，
+    <code>location 1</code> 是按<strong>亮度阈值</strong>筛出的
+    <strong>亮区色</strong>——只有亮度 <code>&gt;阈值</code>{" "}
+    的像素留下当泛光源，暗的全黑、不发光晕。
+  </Step>
+  <Step title="② 横向高斯：把亮区图沿水平糊一遍">
+    <BloomPipelineDiagram step={2} />
+    取出亮区图，用<strong>高斯模糊</strong>的横核（<code>1×N</code>
+    ）沿水平方向糊一遍：每个像素取同一行左右邻居按钟形权重加权，几个孤立亮点被
+    <strong>横向拉成模糊横条</strong>。这是<strong>可分离高斯</strong>的前半。
+  </Step>
+  <Step title="③ 纵向高斯：再沿垂直糊（乒乓 N 次）">
+    <BloomPipelineDiagram step={3} />
+    再用纵核（<code>N×1</code>）沿垂直方向糊一遍，横条铺成柔和光团。横、纵交替靠
+    <strong>乒乓帧缓冲</strong>反复做 <code>N</code> 次（两个 FBO 来回读写），
+    糊的遍数越多，<strong>光晕越柔和饱满</strong>。
+  </Step>
+  <Step title="④ 叠加合成：scene + bloom → tonemap → 上屏">
+    <BloomPipelineDiagram step={4} />
+    把糊好的光晕图直接<strong>加回</strong>原始场景色（
+    <code>scene + bloom</code>
+    ），亮点周围透出辉光。结果仍是 HDR，照例先<strong>色调映射</strong>压回{" "}
+    <code>[0,1]</code>、再<strong>gamma 校正</strong>上屏。流水线闭环。
+  </Step>
+</Stepper>
+
+## 左右擦一擦：关泛光 vs 开泛光
+
+下面把「关泛光」和「开泛光」定格成两态——左边只有几个硬光点（几何 pass 直出、没经泛光），右边是经过完整多遍流程后亮点透出柔和辉光的样子：
+
+<CompareSlider
+  leftLabel="关泛光（硬光点 · 无辉光）"
+  rightLabel="开泛光（柔和辉光 · scene + bloom）"
+  initial={42}
+  left={<BloomPipelineDiagram step={1} />}
+  right={<BloomPipelineDiagram step={4} />}
+/>
+
+左侧几何 pass 直出的亮区只是几个生硬的点；右侧走完「提亮 → 横纵高斯 → 合成」后，那几个点周围晕开了柔和的光晕。一句话：泛光做的就是把左边的**硬亮点**，变成右边那圈**化得开的辉光**。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：四段——a. 几何 pass MRT 双输出 + 按亮度阈值决定 BrightColor；b. 可分离高斯(weight[] 钟形 + horizontal 切横纵)；c. 乒乓两 FBO 交替 N 次；d. 合成 scene+bloom 再 tonemap+gamma。C++/GLSL330 ↔ WebGL2/GLSL300es，单块 ≤30 行，块间解说，MRT/drawBuffers 差异 Callout warn。 */}
+
+## 代码逐段拆解
+
+泛光的代码就四块，全建立在 [HDR](/learn/learnopengl/advanced-lighting/hdr) 浮点帧缓冲和[帧缓冲](/learn/learnopengl/advanced-opengl/framebuffers)多遍渲染之上：**MRT 出两张图**、**可分离高斯**、**乒乓循环**、**叠加合成**。
+
+### 第一块：几何 pass 用 MRT 一次输出两张图
+
+几何 pass 的片段着色器声明**两个**输出，靠 `layout(location=N)` 指定写到第几个颜色附件：`location 0` 写场景色、`location 1` 写亮区色。亮区色怎么定？算出片元亮度，**超过阈值才原样写、否则写黑**：
+
+<CodeTabs>
+  <Tab label="GLSL：几何 pass 片段着色器（MRT 双输出）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec3 LightingColor;     // 上游算好的 HDR 光照结果（可能 >1）
+layout(location = 0) out vec4 FragColor;    // 附件 0：正常场景色
+layout(location = 1) out vec4 BrightColor;  // 附件 1：仅亮区色
+void main() {
+  vec3 color = LightingColor;
+  FragColor = vec4(color, 1.0);
+  // 亮度阈值提取：算感知亮度，>1.0 才当泛光源，否则写黑
+  float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  if (brightness > 1.0) BrightColor = vec4(color, 1.0);
+  else BrightColor = vec4(0.0, 0.0, 0.0, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="C++ / OpenGL 3.3：建两个颜色附件 + 启用 MRT">
+
+```cpp
+// HDR FBO 挂两张 RGBA16F 浮点纹理（colorBuffers[0] 场景色 / [1] 亮区色）
+unsigned int colorBuffers[2];
+glGenTextures(2, colorBuffers);
+for (unsigned int i = 0; i < 2; i++) {
+  glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, W, H, 0, GL_RGBA, GL_FLOAT, NULL);
+  // （过滤/环绕设置从略，同 HDR 那章）
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i,
+                         GL_TEXTURE_2D, colorBuffers[i], 0);
+}
+// 关键：告诉这次渲染要往「两个」附件写，否则只有附件 0 生效
+unsigned int attachments[2] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1};
+glDrawBuffers(2, attachments);
+```
+
+  </Tab>
+</CodeTabs>
+
+着色器声明了两个输出还不够——还得告诉这次渲染「确实要往两个附件写」，这就是 `glDrawBuffers`。这一步在 WebGL2 里 API 名字不同：
+
+<Callout type="warn">
+  MRT 启用 API 差异：桌面 OpenGL 用 `glDrawBuffers(2, attachments)`（参数是
+  `GL_COLOR_ATTACHMENT0/1` 数组）；WebGL2 里同名能力叫
+  `gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1])`（数组形式，
+  WebGL2 核心自带，不需扩展——这是 WebGL1 才要 `WEBGL_draw_buffers` 的旧事）。
+  **漏了这一步**：着色器里 `location 1` 的 `BrightColor` 写了也白写，亮区图全黑，
+  泛光自然出不来。另外这两张附件务必是 `RGBA16F` 浮点的（承接 HDR），用
+  `RGBA8` 的话亮区色一写入就被截在 1，阈值 `>1` 提取从一开始就失效。
+</Callout>
+
+### 第二块：可分离高斯——一个 weight[] + horizontal 切横纵
+
+高斯模糊的着色器只写**一遍**就够：核心是一个**钟形权重数组** `weight[]`（中心权重最大、向外递减、和为 1），再用一个 `horizontal` uniform 切「这遍是横还是纵」——横向就只在 `x` 方向取邻居，纵向就只在 `y` 方向。同一段代码，横纵复用：
+
+<CodeTabs>
+  <Tab label="GLSL：可分离高斯模糊（横/纵复用一段）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D image;       // 上一遍的结果（亮区图 / 半成品）
+uniform bool horizontal;       // true=横向这遍, false=纵向这遍
+out vec4 FragColor;
+// 钟形权重：中心最大、向外递减、和≈1（只列正半边，对称使用）
+const float weight[5] = float[](0.227027, 0.194594, 0.121621, 0.054054, 0.016216);
+void main() {
+  vec2 texel = 1.0 / vec2(textureSize(image, 0));  // 一个纹素的步距
+  vec3 result = texture(image, TexCoords).rgb * weight[0];  // 中心
+  for (int i = 1; i < 5; i++) {
+    // 横向遍只在 x 取邻居、纵向遍只在 y 取——这就是『可分离』的关键
+    vec2 off = horizontal ? vec2(texel.x * float(i), 0.0)
+                          : vec2(0.0, texel.y * float(i));
+    result += texture(image, TexCoords + off).rgb * weight[i];  // 正方向邻居
+    result += texture(image, TexCoords - off).rgb * weight[i];  // 负方向邻居
+  }
+  FragColor = vec4(result, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+注意循环里只在**一个轴**上取邻居：横向遍走 `x`、纵向遍走 `y`。一遍只采 `2N` 个邻居（这里 `N=5`，含中心共 9 个），而不是 `N×N` 的整片——这正是上面 `SeparableGaussianDiagram` 画的 `N²→2N`。
+
+### 第三块：乒乓循环——两个 FBO 交替糊 N 次
+
+光有「一遍模糊」着色器还不够柔，得横纵交替反复糊。CPU 侧用两个 FBO 打**乒乓**：每次绑其中一个当输出、采另一个当输入，`horizontal` 在 `true/false` 间翻转，循环若干次：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+bool horizontal = true, first = true;
+int amount = 10;  // 模糊总遍数（5 横 + 5 纵）
+blurShader.use();
+for (int i = 0; i < amount; i++) {
+  glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);  // 输出到一个
+  blurShader.setBool("horizontal", horizontal);
+  // 第一遍采亮区图，之后采另一个 pingpong 纹理（交替读写=乒乓）
+  glBindTexture(GL_TEXTURE_2D,
+    first ? brightTexture : pingpongTex[!horizontal]);
+  RenderQuad();                 // 画全屏四边形，跑一遍模糊
+  horizontal = !horizontal;     // 翻转方向：横→纵→横…
+  if (first) first = false;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+let horizontal = true,
+  first = true;
+const amount = 10; // 模糊总遍数（5 横 + 5 纵）
+blurProgram.use();
+for (let i = 0; i < amount; i++) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pingpongFBO[horizontal ? 1 : 0]);
+  gl.uniform1i(uHorizontal, horizontal ? 1 : 0);
+  // 第一遍采亮区图，之后采另一个 pingpong 纹理（交替读写=乒乓）
+  gl.bindTexture(
+    gl.TEXTURE_2D,
+    first ? brightTexture : pingpongTex[horizontal ? 0 : 1],
+  );
+  renderQuad(); // 画全屏四边形，跑一遍模糊
+  horizontal = !horizontal; // 翻转方向：横→纵→横…
+  first = false;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应：`amount=10` 就是 5 次横 + 5 次纵交替。方向 `horizontal` 每遍翻转，输入/输出 FBO 也跟着换——这就是「乒乓」。糊完后，最后一个 pingpong 纹理里就是那张柔和的光晕图。
+
+### 第四块：叠加合成——scene + bloom 再 tonemap + gamma
+
+最后绑回默认帧缓冲，画一个全屏四边形，**采两张纹理**：原始场景色 + 糊好的光晕，**相加**后照 HDR 那章的出口先 tonemap、再 gamma：
+
+<CodeTabs>
+  <Tab label="GLSL：合成片段着色器">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D scene;     // 原始场景色（附件 0）
+uniform sampler2D bloomBlur; // 糊好的光晕（乒乓最终结果）
+uniform float intensity;     // 泛光强度（光晕浓淡）
+out vec4 FragColor;
+void main() {
+  vec3 hdrColor = texture(scene, TexCoords).rgb;
+  vec3 bloom = texture(bloomBlur, TexCoords).rgb;
+  hdrColor += bloom * intensity;                 // 叠加合成：scene + bloom
+  vec3 mapped = hdrColor / (hdrColor + vec3(1.0)); // tonemap(Reinhard)
+  FragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0); // 再 gamma 校正上屏
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+`hdrColor += bloom * intensity` 就是那圈辉光的来源，`intensity` 正对应上面 demo 的「泛光强度」滑块。加完仍是 HDR，所以末尾两行雷打不动：**先 tonemap、再 gamma**（顺序反了颜色全乱，这是 HDR 那章的硬规矩）。整条出口流水线：`MRT 出两图 → 乒乓横纵高斯糊亮区 → scene + bloom 合成 → tonemap → gamma → 上屏`。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字；含可在 §5 Demo 亲手触发的。①没做亮度阈值直接糊整图→全图发糊变脏；②用 2D N×N 核而非可分离→采样暴涨性能崩；③乒乓没交替/方向搞反→只横不纵糊成条纹；④泛光在 LDR 上做→亮区提取不出/阈值失效（承接 HDR）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：开了泛光后**整个画面都发糊、发灰发脏**，连不该亮的墙面、地面都泛起一层雾。**原因**：
+  跳过了**亮度阈值提取**，直接把整张场景图拿去高斯模糊再叠加——暗区也被糊进光晕里。**修法**：
+  必须先按亮度筛（`dot(color, 亮度权重) > 阈值` 才留），只让超过阈值的强光当泛光源；
+  上面 demo 把亮度阈值调低到接近 `0.5`，就是在演示「阈值太低、太多区域参与」时画面变脏的趋势。
+</Callout>
+
+<Callout type="trap">
+  **现象**：泛光效果是对的，但核一调大，**帧率断崖式下跌**、卡成幻灯片。**原因**：
+  用了一个 `N×N` 的**二维大核**直接糊，每像素采 `N²` 个邻居——`N=21` 就是 441
+  次采样/像素， 核越大平方级暴涨。**修法**：改用**两遍可分离高斯**，横一遍 +
+  纵一遍，每像素只 `2N` 次 （`N=21` 时是 42 次，省一个数量级），结果与 2D
+  核完全等价。这正是本章学习目标那道检验题。
+</Callout>
+
+<Callout type="trap">
+  **现象**：泛光的光晕**只朝一个方向拖**，亮点糊成了一道道**横条**（或竖条），不是圆乎乎的光团。**原因**：
+  乒乓循环里 `horizontal` 没在 `true/false`
+  间**交替**，或方向写反了——结果只反复糊了横向、从没糊纵向。**修法**：
+  每遍结束后务必 `horizontal = !horizontal` 翻转，并让输入/输出两个 FBO
+  也跟着交替（真正的乒乓）， 横纵都糊到，光晕才会是各向均匀的圆。
+</Callout>
+
+<Callout type="trap">
+  **现象**：颜色附件用的是普通 `RGBA8` 帧缓冲，结果**亮区图几乎全黑或全白**，阈值 `>1`
+  怎么调都筛不出东西，泛光做不出来。**原因**：`RGBA8` 把颜色截在 `[0,1]`，强光源算出来的
+  `6.0` 在**写入那刻**就成了 `1.0`——画面里早没有「`>1` 的高亮区」可供阈值提取了（承接 HDR）。**修法**：
+  泛光必须建立在 **HDR 浮点帧缓冲**（`RGBA16F`）上，让颜色真的能 `>1`，亮度阈值才有意义。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题 + C 型独立实现/选型题；答案折叠。 */}
+
+## 小结
+
+- **泛光** 把画面里超亮的区域提取出来、糊成柔和光晕、再加回原图，让强光源透出像眩光一样的辉光——夜里路灯那圈柔光
+- 第一刀是 **亮度阈值提取**：只把亮度 `>阈值` 的像素当泛光源（暗的全黑、不发光），通常靠 **MRT** 在几何 pass 一次同时输出 场景色 + 亮区色
+- 把亮区糊成光晕用 **可分离高斯**：二维核拆成「先横后纵」两遍，结果等价但采样从 `N²` 降到 `2N`；靠 **乒乓帧缓冲** 两个 FBO 交替反复横纵糊多次
+- 最后 **叠加合成** `scene + bloom`，仍是 HDR，照例先色调映射、再 gamma 校正上屏
+- 泛光必须建在 **HDR 浮点帧缓冲**（`RGBA16F`）上，颜色能真的 `>1`，`>阈值` 的提取才成立
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个光点 demo 里，把「亮度阈值提取」这件事亲手拨明白：① 找到 frag 里决定「这个光点发不发光晕」的那行代码，说出它在做什么；② 如果想让**所有**光点都泛光（无论亮度），把阈值控件拖到什么位置就行？为什么？
+
+<Answer>
+
+① 那行是：
+
+```glsl
+float passes = step(uThreshold, luma(col));
+```
+
+`luma(col)` 算这个光点颜色的感知亮度，`step(uThreshold, luma)` 在亮度 `≥ 阈值` 时返回 `1.0`、否则 `0.0`。后面 `bloom += col * halo * passes`——`passes` 为 0 的光点光晕被乘没了，等于「不发光晕」。这就是亮度阈值提取的开关。
+
+② 把**亮度阈值控件拖到最低（`0.5`）**。四个光点最暗的是 2 号（HDR `2.1`，亮度也远大于 0.5），阈值降到 0.5 后所有光点的 `luma` 都 `≥ 阈值`，`passes` 全为 1，于是每个光点都发光晕。阈值越低、参与泛光的越多——但调太低会把本该暗的也糊进来、画面发脏（见误区一）。
+
+</Answer>
+
+**练习 2（独立实现 / 选型题 · C 型）** 你要给一个 HDR 场景加泛光，目标效果：几个强光源周围有**又大又柔**的圆形光晕，且要在中端机上**流畅**跑。下面两个实现方案，选哪个？错的那个会怎样？
+
+- **方案 A**：一遍渲染，片段着色器里对每像素采它周围 `25×25` 的二维核做高斯模糊。
+- **方案 B**：先 MRT 出亮区图，再用两个 FBO 乒乓、横纵各糊 5 遍的可分离高斯，最后 `scene + bloom`。
+
+<Answer>
+
+选 **方案 B**。
+
+- **方案 A 错在性能**：`25×25` 的二维核每像素要采 `625` 个邻居，全屏每个像素都这么干，中端机直接卡死——这是「用 2D N×N 核而非可分离」的典型翻车（误区二）。而且一遍很难糊得「又大又柔」。
+- **方案 B 对**：① MRT 出亮区图 = 先做了亮度阈值提取，只糊强光、画面不脏；② 可分离高斯把每像素采样从 `N²` 降到 `2N`，开销低一个数量级；③ 乒乓横纵各糊多遍，光晕越糊越大越柔、还是各向均匀的圆；④ `scene + bloom` 合成出辉光。要「又大又柔又流畅」，多遍可分离 + 乒乓是标准答案。
+
+一句话原则：**泛光要的是「先按阈值挑亮区 → 可分离高斯多遍糊 → 合成」，永远别拿一个 2D 大核硬糊整图**。
+
+</Answer>
+
+**练习 3（问答型）** 有人做泛光：颜色附件用了普通 `RGBA8` 帧缓冲，几何 pass 里写 `if (brightness > 1.0) BrightColor = ...`。结果亮区图全黑，泛光完全没效果。问题出在哪？怎么改？
+
+<Answer>
+
+问题出在**用了 `RGBA8` 而不是 HDR 浮点帧缓冲**（误区四）。`RGBA8` 每通道只存 `[0,1]`，强光源算出来的 `6.0` 在**写入附件那一刻**就被截成了 `1.0`。等到判断 `brightness > 1.0` 时，画面里所有颜色都 `≤ 1.0`，没有任何像素的亮度能严格超过 `1.0`——`BrightColor` 全部走 `else` 写黑，亮区图自然全黑，泛光没有任何东西可糊。
+
+改法：把两张颜色附件的内部格式换成 **`RGBA16F`**（浮点，承接 HDR 那章，WebGL2 还要 `EXT_color_buffer_float`），让 `>1` 的高亮真的能存进去。这样 `brightness > 1.0` 才筛得出强光源，泛光才成立。这也说明：**泛光是 HDR 之上的效果，没有 HDR 就没有泛光**。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="泛光">
+  Bloom，**泛光**。一种后处理效果：把画面里特别亮（亮度超过某个阈值）的区域单独提取出来、模糊成柔和的光晕，再叠加回原画面。效果是强光源和高光周围透出一圈化不开的辉光，模拟肉眼/相机面对强光时光线向四周溢出的现象——就像夜里看路灯那圈柔光。详见本章「泛光是什么」一节。
+</GlossaryItem>
+
+<GlossaryItem term="亮度阈值提取">
+  按亮度把画面里**超过阈值**的像素单独挑出来。算每个像素的感知亮度（常用
+  `dot(color, vec3(0.2126,0.7152,0.0722))` 这个加权和，绿色权重最大），只有亮度
+  `>阈值`（如 `1.0`）的像素才留进「亮区图」当泛光源，其余全置黑、不参与模糊。阈值调高
+  → 只有最亮的才发光晕；调低 → 更多区域参与。详见本章「第一步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="MRT 多渲染目标">
+  Multiple Render
+  Targets，**多渲染目标**。让一次几何渲染（一个片段着色器）同时往多个颜色附件输出不同结果，靠
+  `layout(location=N)` 指定写到第几个附件。泛光用它一次输出两张图：`location 0`
+  写正常场景色、`location 1`
+  写按亮度阈值筛出的亮区色，省得为拿亮区图把场景重渲一遍。详见本章「第一步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="高斯模糊">
+  一种模糊算法：用一个**钟形**（高斯函数形状）的权重核，把每个像素替换成它和周围邻居的加权平均，中心权重最大、越往外越小，权重之和为
+  1（不改变整体亮暗）。亮的地方就被平滑地向四周铺开。泛光用它把提取出的亮区点糊成柔和光晕。详见本章「第二、三步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="可分离高斯">
+  把一个二维高斯核拆成「**先做一遍水平方向的一维核、再做一遍垂直方向的一维核**」两步。因为高斯函数可分离，做出来的结果和直接用二维核**完全等价**，但每像素采样次数从
+  `N×N`（`N²`）降到 `N+N`（`2N`），`N`
+  越大省得越多。泛光的模糊就靠它压低开销。详见本章「第二、三步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="乒乓帧缓冲">
+  ping-pong
+  framebuffer，**乒乓帧缓冲**。准备两个内容相同的帧缓冲（FBO），让它们交替充当「输入」和「输出」：第一遍从
+  A 读、写进 B（横向模糊），第二遍从 B 读、写回
+  A（纵向模糊），像打乒乓一样来回若干次。只用两个 FBO
+  就能把横、纵模糊交替做很多遍，把亮区越糊越柔。详见本章「第二、三步」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

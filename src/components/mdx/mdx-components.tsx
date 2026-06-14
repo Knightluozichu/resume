@@ -81,6 +81,8 @@ import { ParallaxPrincipleDiagram } from "./diagrams/parallax-principle-diagram"
 import { SteepParallaxStepDiagram } from "./diagrams/steep-parallax-step-diagram";
 import { DynamicRangeDiagram } from "./diagrams/dynamic-range-diagram";
 import { ToneMapCurveDiagram } from "./diagrams/tone-map-curve-diagram";
+import { BloomPipelineDiagram } from "./diagrams/bloom-pipeline-diagram";
+import { SeparableGaussianDiagram } from "./diagrams/separable-gaussian-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -356,6 +358,11 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    直观展示「截断 vs 保留」）、ToneMapCurveDiagram（同坐标系画三条色调映射曲线把 [0,∞) 压回 [0,1]：clamp=min(x,1)
  *    到 1 水平封顶·>1 死白无层次 / Reinhard=x/(x+1) 平滑趋近 1 保高光层次 / exposure=1−exp(−x·k) 模拟相机曝光·形状由曝光值调，
  *    横轴 HDR 输入 0~5 远超 1、纵轴输出 0~1，x=1 对照虚线 + 图例）。同款 Server SVG。
+ *  - 高级光照篇·泛光 Bloom（HEL-87，C 实战型，承接 HDR + framebuffers）：BloomPipelineDiagram（§5 Stepper 泛光多遍流程四步配图：
+ *    ①几何 pass + MRT 一次输出 场景色 + 仅亮区色（亮度 >阈值才留·暗区全黑不发光晕）→②横向高斯把亮区图沿水平糊一遍（孤立亮点拉成模糊横条）→
+ *    ③纵向高斯再沿垂直糊·横纵交替反复=乒乓 N 次越糊越柔→④叠加合成 scene+bloom 加回原图·再 tonemap+gamma 上屏·亮点透出柔和辉光，每步带缩略图示意数据形态）、
+ *    SeparableGaussianDiagram（左 2D N×N 核 一像素采整片 N²=25 个邻居 vs 右 先横 1×N 再纵 N×1 两遍各 N 次合计 2N=10·中间「=」标结果等价，
+ *    点明采样次数 N²→2N·N 越大省越狠 N=9 时 81 vs 18，讲清为何做两遍可分离而非一遍 2D 大核）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -456,6 +463,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SteepParallaxStepDiagram,
   DynamicRangeDiagram,
   ToneMapCurveDiagram,
+  BloomPipelineDiagram,
+  SeparableGaussianDiagram,
   Stepper,
   Step,
   Slider,
