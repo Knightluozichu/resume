@@ -75,6 +75,8 @@ import { GammaGradientBarDiagram } from "./diagrams/gamma-gradient-bar-diagram";
 import { ShadowMapStepDiagram } from "./diagrams/shadow-map-step-diagram";
 import { ShadowAcneDiagram } from "./diagrams/shadow-acne-diagram";
 import { PointShadowStepDiagram } from "./diagrams/point-shadow-step-diagram";
+import { TBNDiagram } from "./diagrams/tbn-diagram";
+import { NormalDecodeDiagram } from "./diagrams/normal-decode-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -333,6 +335,11 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    ④物体自转开关（reduced-motion 默认关）+ 重置。点光阴影相机是透视（shadow-camera near/far 罩住整间房）。
  *    frameloop 可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放，
  *    改参 invalidate 踢一帧。
+ *  - 高级光照篇·法线贴图（HEL-84，C 实战型）：TBNDiagram（一块带透视的表面上某点立起三个互相垂直的轴：
+ *    切线 T 沿纹理 U·副切线 B 沿纹理 V·法线 N 垂直表面朝外 = 切线空间「以表面自己为参照」的局部坐标系，
+ *    标「三个轴当矩阵三列 → TBN 矩阵 [T|B|N]」，点明法线图里的法线是相对表面自身存的、靠 TBN 在切线↔世界空间换算）、
+ *    NormalDecodeDiagram（三栏：左 法线图里存的偏蓝色块 RGB(0.5,0.5,1.0) → 中 解码公式 normal=texColor*2.0-1.0 把 0~1 拉回 -1~1 →
+ *    右 解出 (0,0,1) 正对外不扰动的箭头 + 偏色→法线推歪=凹凸一例，底部警示「忘了 *2-1 直接当法线 → z 恒正 → 光照全错整片发蓝」）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -427,6 +434,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ShadowMapStepDiagram,
   ShadowAcneDiagram,
   PointShadowStepDiagram,
+  TBNDiagram,
+  NormalDecodeDiagram,
   Stepper,
   Step,
   Slider,

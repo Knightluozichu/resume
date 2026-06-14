@@ -1,0 +1,516 @@
+---
+title: 法线贴图
+type: C
+section: 高级光照
+order: 5
+description: 学会用一张「法线图」逐片元扰动表面法线，在一面平整的墙上造出砖缝、凹凸的光影细节，却不加一个三角形；能讲清切线空间和 TBN 矩阵为什么必要、采样到的法线为什么要 *2-1 解码，并在 demo 里开关法线贴图、移动光源看凹凸感随光出现。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/04%20Normal%20Mapping/
+draft: true
+---
+
+{/* C 实战型章（HEL-84，高级光照篇第 5 篇）：原书「法线贴图 Normal Mapping」。重心是代码实现（spec C 列 §6 重）：用一张法线图逐片元扰动法线、在平整表面造凹凸细节而不加几何。承接 textures（法线贴图也是一种纹理）+ basic-lighting/blinn-phong（法线 N 参与漫反射/镜面）+ gamma-correction（法线图是线性数据、绝不能当 sRGB 做 gamma 解码）。C 型段式：概念讲解(§3 必，是什么压一段) + 代码对照(§6 重，顶点算/传 TBN + 片段采样解码光照，C++/GLSL330 ↔ WebGL2/GLSL300es) + 误区≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)；math:false 整节省略(§4)，TBN 构造放 §6 代码对照讲。主 viz = ShaderDemo（程序化法线图的平整表面 + 可移动点光源，uNormalMap 开关 + uLightX/uLightY 移光 + uStrength 凹凸强度）；辅 viz = CompareSlider（关法线贴图平 vs 开凹凸，两个静态 SVG）+ TBNDiagram + NormalDecodeDiagram。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 法线贴图原理（逐片元扰动表面法线、用一张法线图造凹凸细节而不加真实几何）= 直觉引入 + 概念 + 主 ShaderDemo + CompareSlider 开关对比；2) 切线空间 tangent space（法线图里的法线是相对表面自身存的，不是世界空间）= 概念 + <TBNDiagram />；3) TBN 矩阵（切线 T / 副切线 B / 法线 N 三轴组成的基，在切线空间和世界/视空间之间换算）= 概念 + <TBNDiagram /> + §6 代码；4) 为什么要切线空间（同一张法线图能贴到任意朝向的表面复用）= 概念；5) 从法线图采样要解码 [0,1]→[-1,1]（贴图存 normal*0.5+0.5，用前 *2-1 还原）= 概念 + <NormalDecodeDiagram /> + §6 代码；6) 世界空间 vs 切线空间两种实现（把光/视向量变到切线空间，或把采样法线变到世界空间）= 概念 + §6 代码对照。Term 共 5 个：法线贴图 / 切线空间 / TBN 矩阵 / 切线·副切线 / 法线解码。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释**法线贴图**怎么用一张图**逐片元扰动表面法线**，在一面平整的墙上造出砖缝、凹凸的光影，却**不加一个三角形**——知道凹凸感是「光照上的假象」而非真几何
+- 能在 Demo 里改出指定效果：**开关法线贴图**让同一面墙在「平」和「凹凸」之间切换、**移动光源**看高光与暗影沿砖缝爬动；并能说出片段着色器里采样法线后**为什么要 `* 2.0 - 1.0` 解码**
+- 能回答：法线图采样出来的颜色直接拿去当法线（**不做 `*2-1`**）会怎样？为什么法线图**绝不能**像漫反射贴图那样做 gamma 解码？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接同 section 手电照墙）。 */}
+
+## 给平墙贴一张「凹凸说明书」
+
+你已经会给一面墙贴上砖墙照片了——看着是有砖纹，可只要光一斜过来就露馅：真砖墙的每道缝都会投出细小的阴影、每块砖的鼓面都会迎光发亮，而你那面贴了图的墙，无论灯怎么照都**平得像一张纸**，砖纹只是「印」在上面的花色，没有半点立体感。
+
+想让砖缝真的凹下去、砖面真的鼓起来，最笨的办法是用几何体把每道缝、每个鼓面都建出来——可一面墙就得堆上几十万个三角形，多几面墙显卡就跪了。这一章换个聪明办法：**再贴一张图，但这张图不画颜色，而是逐点告诉光照「这里的表面其实是朝哪个方向歪的」**。光照一信，平墙就「假装」自己坑坑洼洼，砖缝的阴影、砖面的高光全冒出来了。
+
+这一章要解决的就是这件事：**怎么不加一个三角形，光靠一张图就让平整表面在光下显出真实的凹凸**。没有它，你的贴图墙永远是张平纸；有了它，一面四个顶点的平墙也能在灯下坑洼分明。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段、篇幅让给 §6）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念 ≤5。 */}
+
+## 法线贴图：逐片元改写表面法线
+
+那张「凹凸说明书」就叫 <Term def="一张专门存「表面法线」的纹理：每个像素的 RGB 不是颜色，而是编码了「这一点的表面其实朝哪个方向」的一个法线向量。渲染时片段着色器逐片元从它采样、解码出法线，用这个被扰动过的法线去算光照——于是平整几何也能显出凹凸细节，却不增加任何三角形。">法线贴图</Term>（normal map）。它和漫反射贴图一样是张图、一样按 UV 采样，唯一的区别是：**它每个像素存的不是颜色，而是一个法线方向**。
+
+回想基础光照那一章：一块表面有多亮，取决于它的**法线 N** 和光线方向的夹角（漫反射 `N·L`、镜面也都靠 N）。一面平墙上所有片元的 N 都一模一样（都垂直墙面），所以无论怎么照都均匀一片、没有起伏。法线贴图的把戏就在这里：**渲染每个片元时，不再用那个统一的几何法线，而是从法线图里采样出一个『被扰动过的法线』来算光照**。砖缝处的法线被画成微微朝下、砖面处朝上——光照一算，缝里就暗、面上就亮，凹凸感凭空出现。它在管线里就作用在**片段着色器**：采样、解码、然后拿这个新法线替换原来的 N 去做漫反射和镜面。
+
+## 切线空间：法线图里的法线，是相对「表面自己」存的
+
+这里藏着一个最绕、也最关键的问题：法线图里那些法线，是**按什么参照系存的**？
+
+你可能以为存的是世界空间的法线。但那样的话，一张法线图就只能贴在某个固定朝向的墙上——墙一转、或者贴到地板上，里面的法线方向全错了。实际上，法线图里的法线存在一个特殊的局部参照系里，叫 <Term def="以表面自身为参照建立的局部坐标系。它的三个轴贴着这块表面：一个沿纹理 U 方向（切线 T）、一个沿纹理 V 方向（副切线 B）、一个垂直表面朝外（法线 N）。法线图里存的法线就是相对这个空间的——所以它默认「正对外」是 (0,0,1)，整张图偏蓝。正因为参照的是表面自己而非世界，同一张法线图才能贴到任意朝向的表面上复用。">切线空间</Term>（tangent space）：一个**贴着表面、以表面自己为参照**的坐标系。
+
+它有三个互相垂直的轴：一个沿纹理的 **U 方向**躺在表面上（叫<Term def="切线空间的两个「躺在表面上」的轴。切线 T（tangent）沿纹理 U 方向、副切线 B（bitangent）沿纹理 V 方向，二者都贴着表面且互相垂直；它们和垂直表面的法线 N 一起，组成切线空间这组局部坐标基（即 TBN 矩阵的三列）。">切线 T</Term>），一个沿纹理的 **V 方向**也躺在表面上（叫**副切线 B**），还有一个**垂直表面朝外**（就是几何法线 N）。下面这张图把这三个轴立在一块表面上：
+
+<TBNDiagram />
+
+关键就在这里：因为法线图里的法线**参照的是「表面自己」而不是世界**，所以哪怕你把这张图贴到一面竖墙、一块斜坡、还是一个球面上，里面写的「这点朝表面外偏一点」都仍然成立——<Term def="切线空间是相对表面自身定义的，所以法线图里存的方向不绑定任何特定朝向。同一张法线图因此能贴到任意朝向、任意弯曲的表面上反复复用，无需为每个朝向单独做一张——这正是法线贴图要用切线空间、而非世界空间的根本原因。">同一张法线图能贴到任意朝向的表面上复用</Term>，这正是非用切线空间不可的根本原因。也正因为切线空间里「正对外」是 `(0, 0, 1)`，法线图里绝大多数像素都接近这个值，整张法线图看上去才**偏蓝紫色**。
+
+## TBN 矩阵：在两个空间之间换算法线
+
+可问题还没完：法线图给你的是**切线空间**里的法线，而你算光照用的光线方向、观察方向通常在**世界空间**（或视空间）里。两个空间的向量不能直接点乘——得先把它们换算到同一个空间。
+
+负责这次换算的就是 <Term def="由切线 T、副切线 B、法线 N 三个轴当作三列拼成的 3×3 矩阵：TBN = [T | B | N]。它把一个切线空间里的向量变换到世界（或视）空间——比如把法线图采样解码出的切线空间法线，乘上 TBN 就得到世界空间法线，再和世界空间的光线方向算光照。反过来用它的转置（因为三轴正交，转置即逆），可把世界空间的光/视向量变到切线空间。两种实现二选一。">TBN 矩阵</Term>：把切线 T、副切线 B、法线 N 这**三个轴当作矩阵的三列**拼起来，`TBN = [T | B | N]`。用它一乘，就能把一个切线空间的向量变到世界空间。所以最直接的做法是：从法线图采样解码出切线空间法线，**乘上 TBN** 得到世界空间法线，再拿去和世界空间的光线方向算光照。
+
+反过来也行：因为 T、B、N 互相垂直（正交），TBN 矩阵的**转置就等于它的逆**，用转置可以把世界空间的光线、观察方向**变到切线空间**里，在切线空间内做光照。这就引出后面 §6 要对照的**两种实现**——把光/视向量变到切线空间，或把采样法线变到世界空间，逻辑等价、二选一。
+
+## 采样要解码：把 [0,1] 还原成 [-1,1]
+
+最后一个必踩的坑：法线图里每个像素是 RGB，**取值范围 0~1**；可法线向量的每个分量取值是 **-1~1**（朝左是负、朝右是正）。存图的时候做了一步压缩——把法线的 `-1~1` 用 `normal * 0.5 + 0.5` 映射进了 `0~1` 才能当颜色存。
+
+所以你在着色器里 `texture()` 采样出来的 RGB，**不是法线本身**，得先做<Term def="法线图里每个分量按 normal * 0.5 + 0.5 被压进了 0~1 的颜色范围存储；采样后必须反过来做 normal = texColor * 2.0 - 1.0，把 0~1 拉回真正的 -1~1，才能当法线用。忘了这一步，所有分量都变成正数、z 分量恒为正，光照会全错、画面整片发蓝。这一步叫法线解码。">法线解码</Term>把它还原回去：`normal = texColor * 2.0 - 1.0`，把 `0~1` 拉回 `-1~1`。下面这张图把这步换算画清楚——基准色 `RGB(0.5, 0.5, 1.0)` 正好解出 `(0, 0, 1)`，也就是「正对表面外、不扰动」：
+
+<NormalDecodeDiagram />
+
+要是忘了这步 `* 2.0 - 1.0`、直接拿采样到的 `0~1` 当法线用，所有分量都成了正数、z 分量恒为正，光照会全盘算错、画面整片**发蓝**——这是法线贴图最经典的翻车现场（§7 还会细说）。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。TBN 矩阵构造（T/B/N 当三列、转置=逆）已在 §3 概念节用文字 + TBNDiagram 讲，落地构造放 §6 代码对照，符合任务卡「TBN 放代码对照讲」「C 型 §4 选/省」。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五，C 型主 viz = ShaderDemo 片段着色器）：程序化法线图的平整表面 + 可移动点光源。控件 uNormalMap(0/1 开关) + uLightX/uLightY(移光) + uStrength(凹凸强度)≤5 + 内建重置。平面正对 +Z、TBN 平凡(T=+X,B=+Y,N=+Z)，直接用解析扰动法线做光照。猜一猜引导。frag 无空行（各段 // 注释分隔）。诚实化：只演示确信能渲出的 平↔凹凸差异 + 移光凹凸感变化。 */}
+
+## 动手：开关法线贴图，看平墙长出凹凸
+
+> 猜一猜：下面是一面**正对你的平整表面**，上面用代码画了一张「砖块凹凸」的法线图，一盏点光源照着它。**关着**法线贴图时，表面是用平整的几何法线算光照、看着是平的。把开关**打开**——你觉得砖缝和砖面会怎样？再拖动光源到不同位置，凹凸感会跟着变吗？先动手，再读下面。
+
+这面墙是片段着色器里**逐像素算**出来的：先用一个函数解析地算出每个像素处「砖块凹凸」该有的扰动法线（这就相当于一张程序化的法线图，**不用任何外部贴图**），再拿这个法线和点光源算 Blinn-Phong 光照。因为表面正对 `+Z`、切线空间是平凡的（`T=+X, B=+Y, N=+Z`），这里可以直接用解析法线做光照——把复杂的 TBN 换算留到下面 §6 讲任意朝向的情况。四个控件：**法线贴图开关**（关＝用平的几何法线、看着是平的；开＝用扰动法线、砖缝凹凸随光出现）；**光源 X / Y** 移动点光源；**凹凸强度**调扰动幅度：
+
+<ShaderDemo
+  aspect={1.5}
+  caption="一面正对视线的平整表面，贴了一张程序化生成的「砖块凹凸」法线图（片段着色器里解析算出每点的扰动法线，无外部贴图），一盏点光源照着。法线贴图开关：关＝用平整几何法线、整面均匀像张纸；开＝用扰动法线、砖缝凹下砖面鼓起、随光出现凹凸。光源 X / Y：移动点光源，看高光与暗影沿砖缝爬动（开着时才看得出凹凸跟着变）。凹凸强度：调法线扰动幅度，0 几乎回到平面、越大越坑洼。把开关在关/开间切，盯着砖缝——关着平、开着立刻坑洼分明。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uNormalMap;
+uniform float uLightX;
+uniform float uLightY;
+uniform float uStrength;
+out vec4 FragColor;
+// 砖块「高度场」：砖缝处低、砖面处高。row/col 错缝排布，缝隙是细窄的低谷
+float brickHeight(vec2 uv) {
+  // 每行砖错半块缝（奇偶行横向偏移），制造真实砖墙的错缝
+  float row = floor(uv.y * 6.0);
+  float ox = mod(row, 2.0) * 0.5;
+  vec2 cell = vec2(uv.x * 4.0 + ox, uv.y * 6.0);
+  vec2 f = fract(cell);
+  // 到最近缝（格子四边）的距离：越靠缝越接近 0
+  float gx = min(f.x, 1.0 - f.x);
+  float gy = min(f.y, 1.0 - f.y);
+  float g = min(gx, gy);
+  // smoothstep 把缝做成细窄低谷，砖面是平顶高地
+  return smoothstep(0.0, 0.07, g);
+}
+// 由高度场用有限差分求扰动法线（切线空间，N=+Z）
+vec3 perturbedNormal(vec2 uv) {
+  float e = 0.004;
+  // 高度对 x、y 的斜率：缝边斜率大 → 法线被推歪
+  float hx = brickHeight(uv + vec2(e, 0.0)) - brickHeight(uv - vec2(e, 0.0));
+  float hy = brickHeight(uv + vec2(0.0, e)) - brickHeight(uv - vec2(0.0, e));
+  // 法线 = (-dH/dx, -dH/dy, 1)，再归一化；uStrength 放大凹凸幅度
+  vec3 n = normalize(vec3(-hx * uStrength * 40.0, -hy * uStrength * 40.0, 1.0));
+  return n;
+}
+void main() {
+  // 像素 → uv（0..1），按宽高比让砖块不被拉伸
+  vec2 uv = gl_FragCoord.xy / uResolution.xy;
+  float aspect = uResolution.x / uResolution.y;
+  uv.x *= aspect;
+  // 表面正对 +Z：几何法线就是 (0,0,1)；开法线贴图则换成扰动法线
+  vec3 N = vec3(0.0, 0.0, 1.0);
+  if (uNormalMap > 0.5) {
+    N = perturbedNormal(uv);
+  }
+  // 点光源位置（在表面前方 z>0 处，xy 由控件移动），片元在 z=0 平面上
+  vec3 fragPos = vec3(uv.x, uv.y, 0.0);
+  vec3 lightPos = vec3(uLightX * aspect, uLightY, 0.6);
+  vec3 L = normalize(lightPos - fragPos);
+  vec3 V = vec3(0.0, 0.0, 1.0);
+  // Blinn-Phong：环境 + 漫反射 + 半程向量镜面
+  float diff = max(dot(N, L), 0.0);
+  vec3 H = normalize(L + V);
+  float spec = pow(max(dot(N, H), 0.0), 32.0);
+  vec3 brickColor = vec3(0.62, 0.34, 0.28);
+  vec3 col = brickColor * (0.18 + 0.85 * diff) + vec3(0.6) * spec * 0.5;
+  // 轻微 gamma，提一点对比
+  col = pow(col, vec3(0.85));
+  FragColor = vec4(col, 1.0);
+}`}
+  controls={[
+    {
+      name: "uNormalMap",
+      label: "法线贴图（0 关 · 1 开）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 1,
+    },
+    {
+      name: "uLightX",
+      label: "光源 X",
+      type: "float",
+      min: 0,
+      max: 1.5,
+      step: 0.01,
+      default: 0.35,
+    },
+    {
+      name: "uLightY",
+      label: "光源 Y",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      default: 0.7,
+    },
+    {
+      name: "uStrength",
+      label: "凹凸强度",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.01,
+      default: 0.5,
+    },
+  ]}
+/>
+
+谜底：把法线贴图**关掉**，整面墙是均匀一片、像张平纸——因为每个片元用的都是同一个几何法线 `(0,0,1)`，光照处处一样。**打开**，砖缝立刻凹下去（缝边法线被推歪，迎光那侧亮、背光那侧暗）、砖面鼓起来，凹凸感凭空出现。再拖**光源 X / Y**：开着法线贴图时，高光和暗影会沿砖缝**爬动**——这正是凹凸感「随光而变」的证据；关着时怎么移光都还是均匀的平面。这就是法线贴图的全部魔法：几何还是那块平面，凹凸全是法线被扰动后「算」出来的光影假象。
+
+{/* 5(辅 viz). CompareSlider（spec §五，C 型辅 ≤2）：左 关法线贴图（平）vs 右 开（凹凸）。用两个静态 SVG diagram（复用 NormalDecodeDiagram + TBNDiagram 不合适，这里用两段说明性的轻图——但任务卡说别塞两个 WebGL；改用两个 NormalDecode 不对。按任务卡「可用两个静态 SVG diagram 或两段说明」——这里用上面已有的 TBN/解码图不合语义，故用 CompareSlider 包两段文字卡说明 平↔凹凸 的本质差异，不塞 WebGL）。 */}
+
+## 一句话对比：关 = 平纸，开 = 坑洼
+
+> 猜一猜：同一面四个顶点的平墙、同一盏灯，只差「有没有用法线图扰动法线」。左边没扰动、右边有扰动，你觉得**几何**变了吗？变的到底是什么？
+
+把滑块拖到中线两侧对照：两边是**同一块平整几何**（顶点、三角形数一模一样），唯一的差别是右边在片段着色器里用法线图把每个片元的法线推歪了。左边法线处处相同 → 光照均匀 → 看着是平的；右边法线被逐片元扰动 → 缝暗面亮 → 看着坑洼。变的从来不是几何，而是**光照所用的那个法线**：
+
+<CompareSlider
+  leftLabel="关法线贴图（法线处处相同 · 平）"
+  rightLabel="开法线贴图（法线被逐片元扰动 · 凹凸）"
+  initial={42}
+  left={
+    <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 p-6 text-center">
+      <div className="text-sm font-semibold text-secondary">关</div>
+      <div className="text-xs leading-relaxed text-secondary">
+        每个片元都用同一个几何法线 <code>(0,0,1)</code>
+        ，光照处处一样 → 整面均匀、像一张平纸，砖纹只是印上去的颜色。
+      </div>
+    </div>
+  }
+  right={
+    <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 p-6 text-center">
+      <div className="text-sm font-semibold text-accent">开</div>
+      <div className="text-xs leading-relaxed text-secondary">
+        法线图逐片元把法线推歪：砖缝处朝下、砖面处朝上 →
+        缝里暗、面上亮，凹凸感凭空出现。<strong>几何一个三角形都没加。</strong>
+      </div>
+    </div>
+  }
+/>
+
+{/* 6. 代码对照（spec §六，C 实战型重心）：a. 顶点着色器算/传 TBN（用顶点属性 aTangent 构造 TBN，传切线空间的光/视向量）；b. 片段着色器：采样法线图 texture(normalMap,uv).rgb、解码 normal=normalize(texColor*2.0-1.0)、在切线空间做 Blinn-Phong。C++/GLSL330 ↔ WebGL2/GLSL300es 同逻辑段；单块≤30 行；块间解说；version/precision 差异 Callout warn。覆盖两种实现。 */}
+
+## 代码对照：从顶点的 TBN 到片段的解码光照
+
+落到真代码，法线贴图要解决两件事：**①顶点着色器构造 TBN 矩阵**（demo 里平面正对 +Z 太特殊，真实场景表面朝向千变万化，必须靠 TBN 换算）；**②片段着色器采样法线图、解码、用扰动法线算光照**。先看顶点着色器：每个顶点除了位置、UV，还带一个**切线 aTangent**（由建模工具或代码算出），副切线可由 `cross(N, T)` 补出，三者组成 TBN。这里走「**把法线变到世界空间**」这一种实现，顶点只管把 TBN 算好传给片段：
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（顶点：构造 TBN）">
+
+```glsl
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+layout(location = 2) in vec2 aTexCoords;
+layout(location = 3) in vec3 aTangent;   // 切线，沿纹理 U 方向（建模/代码算出）
+out vec2 TexCoords;
+out vec3 FragPos;
+out mat3 TBN;                            // 切线空间 → 世界空间
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+  FragPos = vec3(model * vec4(aPos, 1.0));
+  TexCoords = aTexCoords;
+  // 用法线矩阵把 T、N 变到世界空间，副切线由叉乘补出
+  vec3 T = normalize(mat3(model) * aTangent);
+  vec3 N = normalize(mat3(model) * aNormal);
+  T = normalize(T - dot(T, N) * N);      // 施密特正交化：T 减去在 N 上的分量
+  vec3 B = cross(N, T);                  // B = N × T，凑齐第三轴
+  TBN = mat3(T, B, N);                   // 三轴当三列 → TBN 矩阵
+  gl_Position = projection * view * vec4(FragPos, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（顶点：构造 TBN）">
+
+```glsl
+#version 300 es
+in vec3 aPos;
+in vec3 aNormal;
+in vec2 aTexCoords;
+in vec3 aTangent;                        // 切线，沿纹理 U 方向（建模/代码算出）
+out vec2 TexCoords;
+out vec3 FragPos;
+out mat3 TBN;                            // 切线空间 → 世界空间
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
+void main() {
+  FragPos = vec3(model * vec4(aPos, 1.0));
+  TexCoords = aTexCoords;
+  // 用法线矩阵把 T、N 变到世界空间，副切线由叉乘补出
+  vec3 T = normalize(mat3(model) * aTangent);
+  vec3 N = normalize(mat3(model) * aNormal);
+  T = normalize(T - dot(T, N) * N);      // 施密特正交化：T 减去在 N 上的分量
+  vec3 B = cross(N, T);                  // B = N × T，凑齐第三轴
+  TBN = mat3(T, B, N);                   // 三轴当三列 → TBN 矩阵
+  gl_Position = projection * view * vec4(FragPos, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+注意那行**施密特正交化** `T = normalize(T - dot(T, N) * N)`：建模导出的切线未必和法线严格垂直，减去它在 N 上的投影分量，能保证 T⊥N，TBN 三轴才正交（后面误区会讲不正交的后果）。顶点把世界空间的 TBN 传下来，接力交给片段着色器——这才是法线贴图的核心：**采样、解码、用扰动法线算光照**。
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（片段：采样解码 + 光照）">
+
+```glsl
+#version 330 core
+out vec4 FragColor;
+in vec2 TexCoords;
+in vec3 FragPos;
+in mat3 TBN;
+uniform sampler2D diffuseMap;
+uniform sampler2D normalMap;     // 法线图（线性数据，不可当 sRGB 解码！）
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+void main() {
+  // ① 采样法线图：拿到 [0,1] 的 RGB（不是法线本身）
+  vec3 sampled = texture(normalMap, TexCoords).rgb;
+  // ② 解码：*2-1 把 [0,1] 还原成 [-1,1] 的切线空间法线
+  vec3 normal = normalize(sampled * 2.0 - 1.0);
+  // ③ 换算：乘 TBN 把切线空间法线变到世界空间
+  normal = normalize(TBN * normal);
+  // ④ 用这个被扰动的法线照常算 Blinn-Phong
+  vec3 color = texture(diffuseMap, TexCoords).rgb;
+  vec3 L = normalize(lightPos - FragPos);
+  vec3 V = normalize(viewPos - FragPos);
+  vec3 H = normalize(L + V);
+  float diff = max(dot(normal, L), 0.0);
+  float spec = pow(max(dot(normal, H), 0.0), 32.0);
+  FragColor = vec4(color * (0.1 + diff) + vec3(0.3) * spec, 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（片段：采样解码 + 光照）">
+
+```glsl
+#version 300 es
+precision highp float;           // WebGL2 片段着色器必写：声明浮点精度
+out vec4 FragColor;
+in vec2 TexCoords;
+in vec3 FragPos;
+in mat3 TBN;
+uniform sampler2D diffuseMap;
+uniform sampler2D normalMap;     // 法线图（线性数据，不可当 sRGB 解码！）
+uniform vec3 lightPos;
+uniform vec3 viewPos;
+void main() {
+  // ① 采样法线图：拿到 [0,1] 的 RGB（不是法线本身）
+  vec3 sampled = texture(normalMap, TexCoords).rgb;
+  // ② 解码：*2-1 把 [0,1] 还原成 [-1,1] 的切线空间法线
+  vec3 normal = normalize(sampled * 2.0 - 1.0);
+  // ③ 换算：乘 TBN 把切线空间法线变到世界空间
+  normal = normalize(TBN * normal);
+  // ④ 用这个被扰动的法线照常算 Blinn-Phong
+  vec3 color = texture(diffuseMap, TexCoords).rgb;
+  vec3 L = normalize(lightPos - FragPos);
+  vec3 V = normalize(viewPos - FragPos);
+  vec3 H = normalize(L + V);
+  float diff = max(dot(normal, L), 0.0);
+  float spec = pow(max(dot(normal, H), 0.0), 32.0);
+  FragColor = vec4(color * (0.1 + diff) + vec3(0.3) * spec, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+四步是法线贴图的全部精髓：**采样 → 解码 `*2-1` → 乘 TBN 换到世界空间 → 照常算光照**。剩下的漫反射、镜面和上一篇 Blinn-Phong 一模一样，只是 `normal` 不再是几何法线，而是从图里采出来的扰动法线。
+
+<Callout type="warn">
+  两端 GLSL 几乎一字不差，跨端差异还是老几样：桌面 `#version 330 core` +
+  `layout(location=…)` 显式定属性位置；WebGL2 `#version 300 es`、片段着色器必写
+  `precision highp float;`，且属性位置一般用 JS 端 `gl.bindAttribLocation` /
+  `getAttribLocation` 绑定而非 `layout`。采样、解码、TBN
+  换算这几行计算逻辑完全一致。
+</Callout>
+
+上面走的是「**把法线变到世界空间**」（采样法线 `× TBN`）。还有等价的另一种实现——「**把光 / 视向量变到切线空间**」：在顶点着色器里用 **TBN 的转置**（正交矩阵转置即逆）把 `lightPos`、`viewPos`、`FragPos` 先变进切线空间传给片段，片段里采样的法线就**不用再乘 TBN**，直接和切线空间的光 / 视向量算光照。它的好处是把矩阵乘法挪到顶点着色器（顶点比片段少），片段更省：
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（另一种实现：顶点里转到切线空间）">
+
+```glsl
+// 顶点着色器片段：用 TBN 的转置把光/视/片元位置变进切线空间
+mat3 TBN = transpose(mat3(T, B, N));   // 正交 → 转置 = 逆，变到切线空间
+TangentLightPos = TBN * lightPos;      // 光源位置 → 切线空间
+TangentViewPos  = TBN * viewPos;       // 观察位置 → 切线空间
+TangentFragPos  = TBN * FragPos;       // 片元位置 → 切线空间
+// 片段着色器里：法线 = normalize(texture(normalMap, uv).rgb * 2.0 - 1.0)
+// 直接和 TangentLightPos / TangentViewPos 算光照，无需再乘 TBN
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（另一种实现：顶点里转到切线空间）">
+
+```glsl
+// 顶点着色器片段：用 TBN 的转置把光/视/片元位置变进切线空间
+mat3 TBN = transpose(mat3(T, B, N));   // 正交 → 转置 = 逆，变到切线空间
+TangentLightPos = TBN * lightPos;      // 光源位置 → 切线空间
+TangentViewPos  = TBN * viewPos;       // 观察位置 → 切线空间
+TangentFragPos  = TBN * FragPos;       // 片元位置 → 切线空间
+// 片段着色器里：法线 = normalize(texture(normalMap, uv).rgb * 2.0 - 1.0)
+// 直接和 TangentLightPos / TangentViewPos 算光照，无需再乘 TBN
+```
+
+  </Tab>
+</CodeTabs>
+
+两种实现**逻辑等价**：要么把采样法线推到世界空间，要么把光 / 视向量拉进切线空间，只要双方落在同一个空间，点乘就对。前者直观（法线一乘就好），后者更省（片段不做矩阵乘）。挑一种用，别两种混着——混用是下面误区里最隐蔽的坑。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。必含：①忘 *2-1 解码 → 光照全错偏蓝；②法线图当 sRGB 做了 gamma 解码 → 法线数据被毁（承接 gamma 章！法线图是线性数据）；③TBN 没正交化/handedness 反 → 凹凸方向反；④切线/世界空间向量混用。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象（忘了解码）**：开了法线贴图后画面**整片发蓝、光照全乱**，凹凸方向也不对。**原因**：采样到的是
+  `[0,1]` 的 RGB，**没做 `*2-1` 解码**就直接当法线用——所有分量都成了正数、z
+  分量恒为正（最常见的底色 `(0.5,0.5,1)`
+  直接当法线就是一个偏蓝的歪向量）。**修法**：采样后必须 `normal =
+  normalize(texColor * 2.0 - 1.0)` 把 `[0,1]` 拉回 `[-1,1]` 再用。
+</Callout>
+
+<Callout type="trap">
+  **现象（把法线图当 sRGB 解码了）**：开了 gamma
+  流程后，法线贴图照亮的表面**凹凸方向乱掉、光照发闷**，比不做 gamma
+  还糟。**原因**：上一章学过颜色 / 漫反射贴图是 sRGB、要 `pow(c, 2.2)`
+  解码；但**法线图存的是数据不是颜色**，它本就是**线性**的——错误地对它也做 gamma
+  解码，法线分量被 `^2.2` 一压，数据当场毁掉。**修法**：只对颜色贴图做 sRGB
+  解码；法线图**保持线性、绝不 gamma 解码**（用普通 `RGB` 纹理格式、别用
+  `SRGB8`）。
+</Callout>
+
+<Callout type="trap">
+  **现象（TBN 不正交 /
+  朝向反）**：凹凸看着「**凹凸反了**」（该凸的凹、该凹的凸），或表面有歪斜的错位光照。**原因**：建模导出的切线和法线**没正交化**，或副切线
+  `cross` 的顺序 / handedness 反了，导致 TBN
+  三轴不互相垂直、或某轴朝向相反。**修法**：顶点里做施密特正交化 `T =
+  normalize(T - dot(T, N) * N)`、再 `B = cross(N, T)`；若凹凸整体反向，检查
+  `cross` 顺序或副切线符号（必要时按 UV handedness 翻转 B）。
+</Callout>
+
+<Callout type="trap">
+  **现象（两空间向量混用）**：高光、暗影位置整个**错位**，移动光源时凹凸响应方向不对。**原因**：把**切线空间**的采样法线和**世界空间**的光
+  /
+  视向量直接点乘了——两个空间的向量混在一起算，结果毫无意义。**修法**：二选一并贯彻到底——要么把采样法线
+  `× TBN` 推到世界空间和世界空间的光 / 视算，要么把光 / 视用 `transpose(TBN)`
+  拉进切线空间和切线空间法线算，**别两种混用**。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题 + C 型 1 道独立实现题（给法线图写片段着色器关键几行）；答案折叠。 */}
+
+## 小结
+
+- **法线贴图**＝一张存「法线方向」的图，渲染时**逐片元采样出扰动法线**替换几何法线去算光照——在平整几何上造出砖缝、凹凸，却**不加一个三角形**
+- 法线图里的法线存在**切线空间**（以表面自己为参照的局部坐标系），所以同一张图能贴到**任意朝向**的表面复用——这是它非用切线空间不可的原因
+- **TBN 矩阵**＝切线 T / 副切线 B / 法线 N 当三列拼成，负责在切线空间和世界（视）空间之间**换算**向量；两种实现（法线推到世界 / 光视拉进切线）逻辑等价、二选一
+- 采样到的是 `[0,1]` 的 RGB，**必须 `* 2.0 - 1.0` 解码**回 `[-1,1]` 才是法线；忘了就整片发蓝、光照全错
+- 法线图是**线性数据**，**绝不能**像颜色贴图那样做 gamma / sRGB 解码（会毁掉法线数据）
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个 Demo 里，把它调成这样的目标效果：**砖缝里的凹凸阴影最分明、最立体**。说出你把四个控件各调到什么方向，并解释为什么这组参数最能凸显凹凸。
+
+<Answer>
+
+- **法线贴图开关**：必须**打开**（关着用平整几何法线，根本没有凹凸可言）。
+- **凹凸强度**：调**大**（往最大方向拖）——扰动幅度越大，缝边法线被推得越歪，迎光 / 背光两侧明暗差越大、越立体。
+- **光源 X / Y**：把光源拖到**偏侧**的位置（别正对表面中心）——光越斜着照，砖缝里背光那侧的暗影越长越明显；正对着照时凹凸的明暗差最小。
+
+合起来：开法线贴图提供凹凸、强度拉满放大明暗差、侧光制造长阴影，凹凸感最强。把光源拖回正中、强度调到 0，凹凸几乎消失，验证「凹凸全是法线扰动算出来的光影假象」。
+
+</Answer>
+
+**练习 2（独立实现题 · C 型）** 给你一张法线图 `normalMap` 和一个已经传进片段着色器的、把切线空间变到世界空间的 `TBN` 矩阵（`in mat3 TBN;`），片元的 UV 是 `TexCoords`。写出片段着色器里**采样法线图、解码、换算到世界空间**得到最终世界空间法线 `worldNormal` 的**关键三行**。
+
+<Answer>
+
+```glsl
+vec3 sampled = texture(normalMap, TexCoords).rgb;   // ① 采样：拿到 [0,1] 的 RGB
+vec3 tangentN = normalize(sampled * 2.0 - 1.0);     // ② 解码：*2-1 还原成 [-1,1] 切线空间法线
+vec3 worldNormal = normalize(TBN * tangentN);       // ③ 换算：× TBN 推到世界空间
+```
+
+要点：**先采样、再 `*2-1` 解码、最后 `× TBN`** 推到世界空间，顺序不能乱。采样后没解码就乘 TBN → 整片发蓝（误区一）；少了 `× TBN`、直接拿切线空间法线和世界空间的光算 → 光照错位（误区四）。之后用 `worldNormal` 和世界空间的 `L`、`V` 照常算 Blinn-Phong 即可。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="法线贴图">
+  一张专门存「表面法线」的纹理：每个像素的 RGB
+  不是颜色，而是编码了「这一点的表面其实朝哪个方向」。渲染时片段着色器逐片元从它采样、解码出法线，用这个被扰动过的法线去算光照——于是平整几何也能显出砖缝、凹凸的光影细节，却**不增加任何三角形**。详见本章「法线贴图：逐片元改写表面法线」一节。
+</GlossaryItem>
+
+<GlossaryItem term="切线空间">
+  以表面**自身**为参照建立的局部坐标系。三个轴贴着这块表面：一个沿纹理 U
+  方向（切线 T）、一个沿纹理 V 方向（副切线 B）、一个垂直表面朝外（法线
+  N）。法线图里存的法线就是相对这个空间的——所以默认「正对外」是
+  `(0,0,1)`、整张图偏蓝。正因为参照的是表面自己而非世界，**同一张法线图才能贴到任意朝向的表面上复用**。详见本章「切线空间」一节。
+</GlossaryItem>
+
+<GlossaryItem term="切线·副切线">
+  切线空间里「躺在表面上」的两个轴。**切线 T** 沿纹理 U 方向、**副切线 B**
+  沿纹理 V 方向，二者都贴着表面且互相垂直；它们和垂直表面的法线 N
+  一起，组成切线空间这组局部坐标基（也就是 TBN
+  矩阵的三列）。详见本章「切线空间」一节。
+</GlossaryItem>
+
+<GlossaryItem term="TBN 矩阵">
+  由切线 T、副切线 B、法线 N 三个轴当作三列拼成的 3×3 矩阵：`TBN = [T | B |
+  N]`。它把一个**切线空间**里的向量变换到**世界（或视）空间**——比如把法线图解码出的切线空间法线乘上
+  TBN
+  得到世界空间法线，再去算光照。反过来用它的**转置**（三轴正交，转置即逆），可把世界空间的光
+  / 视向量变到切线空间。两种实现二选一。详见本章「TBN 矩阵」一节。
+</GlossaryItem>
+
+<GlossaryItem term="法线解码">
+  法线图里每个分量按 `normal * 0.5 + 0.5` 被压进了 `0~1`
+  的颜色范围存储；采样后必须反过来做 `normal = texColor * 2.0 - 1.0`，把 `0~1`
+  拉回真正的 `-1~1`，才能当法线用。忘了这一步，所有分量都变成正数、z
+  分量恒为正，光照会全错、画面**整片发蓝**。详见本章「采样要解码」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
