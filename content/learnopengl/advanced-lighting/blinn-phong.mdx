@@ -1,0 +1,378 @@
+---
+title: 高级光照
+type: D
+section: 高级光照
+order: 1
+description: 看懂 Phong 镜面光为什么在掠射光 + 低反光度下会「断裂」出一道硬边，并用半程向量 H 把镜面项从 R·V 换成 N·H，亲手把同一个高光从突然截断调成平滑连续——还知道换成 Blinn 后反光度指数为什么得调大 2~4 倍。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/01%20Advanced%20Lighting/
+draft: true
+---
+
+{/* D 对比型章（HEL-80，高级光照篇第 1 篇 · 开篇，新建 advanced-lighting/ section 目录）：原书「高级光照 Advanced Lighting」。重心是「方案差异与取舍」(spec D 列)：上一篇基础光照学的 Phong 镜面（R·V）在掠射光 + 低反光度下会断裂出硬边，Blinn-Phong 用半程向量 H 把镜面项换成 N·H 修掉它。承接 basic-lighting（已学 环境/漫反射/镜面、reflect、pow(R·V,n)、世界空间），沿用「光与材质（手电照墙）」类比库。D 型段式：概念讲解(§3 必) + 代码对照并排 diff(§6 必，Phong vs Blinn 镜面计算) + 误区含「场景选错方案」坑(§7 必) + 小结含场景选型题(§8 必)；math:false 整节省略(§4)，N·H vs R·V 对比在概念节用 1~2 个行内公式点到。主 viz = CompareSlider（左 PhongBlinnHighlightDiagram mode=phong 硬边断裂示意 / 右 mode=blinn 平滑示意，同构同框 bare），辅 viz = ShaderDemo（解析渲染一个被点光源照的球，控件 uShininess/uModel(Phong↔Blinn)/uLightAngle 掠射角，亲手重现断裂 + 切平滑，≤2 辅）+ HalfVectorDiagram（H 几何）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) Phong 镜面光的断裂问题（视线与反射向量 R 夹角 >90° 时 R·V 被 max 截成 0，低反光度+掠射光下高光出现硬边/突然截断）= 直觉引入 + 概念 + 主 CompareSlider（PhongBlinnHighlightDiagram mode=phong）+ 辅 ShaderDemo「错误模式」；2) 半程向量 H = normalize(L + V)（光线方向与视线方向的中分线）= 概念 + <HalfVectorDiagram>；3) 用 N·H 替代 R·V 算镜面 = 概念 + 行内公式对照 + 代码对照 + 辅 ShaderDemo；4) 为何 Blinn 高光更平滑连续（H 与 N 夹角永不越界、不会被 clamp）= 概念 + 主 CompareSlider（PhongBlinnHighlightDiagram mode=blinn）直观；5) 反光度指数差异（Blinn 通常需 2~4 倍于 Phong 的指数才得同样大小高光）= 概念 + 辅 ShaderDemo uShininess 滑块 + 误区；6) 能量守恒/物理合理性直觉（Blinn 更接近真实微表面、是离线渲染长期默认）= 概念。Term 共 5 个（Phong 镜面断裂 / 半程向量 / Blinn-Phong 镜面 / 反光度指数 / 能量守恒）。 */}
+
+{/* 1. 学习目标（spec §一）：D 型必含「能说出什么场景用哪个」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释 Phong 镜面光在「掠射光 + 低反光度」下为什么会**断裂**出一道硬边——问题出在哪一步、哪个向量
+- 能说出什么场景该用 Phong、什么场景该换 **Blinn-Phong**：知道 Blinn 用**半程向量 H** 把镜面项从 `R·V` 换成 `N·H`，以及换了之后**反光度指数要调大 2~4 倍**才得到同样大小的高光
+- 能回答：同一个低反光度的平面被一束很斜的光照着，Phong 的高光边缘会出什么毛病，Blinn 为什么没有？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接基础光照同 section 同类比体系：手电照墙）。 */}
+
+## 高光边上那道扎眼的硬边
+
+上一篇你用冯氏光照给立方体点上了高光——一小块会随视角挪动的亮斑。多数时候它挺好看。可一旦你把光源压得很低、几乎贴着墙面斜射过来，再让墙不太光滑（高光散成一大片那种），怪事就来了：那片本该柔和散开的亮斑，边上会突然冒出一道**生硬的直边**，像被一把剪刀「咔」地剪断，而不是自然地淡出去。
+
+这道硬边不是你代码写错了，而是冯氏算高光的那套办法，在这种「斜光 + 钝面」的极端情况下**算不下去了**——它中途遇到一个迈不过去的坎，只好把高光强行掐成 0，于是留下一道断口。
+
+这一章要解决的就是这件事：**怎么让高光在任何角度的光下都平滑地淡出、不再断裂**。办法是换一个更聪明的角度去量「这块表面有多反光」。没有它，你的反光物体在掠射光下永远会露出这道扎眼的硬边；有了它，高光从此圆润到底。
+
+{/* 3. 概念讲解（spec §三，D 型必）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在光照模型中的位置。新核心概念 ≤5。 */}
+
+## 病根：Phong 的反射向量会「越界」
+
+先看清冯氏（Phong）镜面是怎么断的。上一篇讲过，它的算法是：把光线关于法线**反射**出一个方向 R，再看你的观察方向 V 有多贴近 R——用 `R·V`（两个单位向量点乘 = 夹角余弦）来量，越贴近越亮，最后 `pow(R·V, 反光度)` 收一下锐度。
+
+问题就藏在「`R·V` 再 `max(…, 0)`」这一步。当光源压得很低、你又从某些角度看过去，反射方向 R 和观察方向 V 的夹角会**超过 90°**。一旦超过 90°，`R·V` 就变成**负数**，被 `max(…, 0)` 一刀切成 0——高光强度在这个角度**啪一下掉到 0**，再往后全是 0。这就是<Term def="冯氏（Phong）镜面光在「掠射光 + 低反光度」下出现的硬边/突然截断现象。Phong 用反射向量 R 与观察方向 V 的点乘 R·V 算高光，当 R 与 V 夹角超过 90°，R·V 变负被 max(…,0) 截成 0，高光强度在那个角度骤然归零，留下一道生硬的直边而非平滑淡出。反光度越低（高光越大）、光越掠射，这道断边越明显。">Phong 镜面断裂</Term>——本该平滑淡出的高光，被这条 0 边界硬生生截出一道直边。
+
+为什么**低反光度**时特别明显？反光度低 → 高光本来就铺得很大、淡出得很缓，它会一路铺到 R·V 接近 0 的边缘地带；恰好这片边缘地带最容易越过 90° 那道坎，于是断口正好落在高光还挺亮的地方，格外扎眼。反光度高时高光缩成一小撮、远离边界，就看不太出来。这道断裂下面 Demo 里你能亲手调出来。
+
+## 解法：换个量法——半程向量 H
+
+Blinn 的修法不在于「修反射向量」，而是**根本不去求反射向量 R 了**。他换了一个更稳的量法：与其问「反射方向 R 和你的视线 V 有多贴」，不如问「**光线方向和视线方向的'正中间'，和法线有多贴**」。
+
+这个「正中间」就是 <Term def="光线方向 L 和视线方向 V 的「中分线」方向，等于两者相加再归一化：H = normalize(L + V)。它永远落在 L 和 V 之间。几何意义：当 H 正好和表面法线 N 重合时，说明你的视线恰好处在镜面反射最强的方位上。Blinn-Phong 用 N 与 H 的贴合度（N·H）代替 Phong 的 R·V 来算高光。">半程向量</Term>（halfway vector，记作 H）：把指向光源的方向 L 和指向眼睛的方向 V **加起来、再归一化**，`H = normalize(L + V)`，得到的就是正好夹在 L 和 V 当中的那个方向。下面这张图把「Phong 求 R」和「Blinn 求 H」并排画清楚：
+
+<HalfVectorDiagram />
+
+H 的妙处在于它的几何含义：**当 H 正好和法线 N 重合时，你的视线恰恰处在镜面反射最强的方位上**——这一刻高光最亮。于是 Blinn 干脆用 `N·H`（法线和半程向量的贴合度）来量高光强弱，整套 <Term def="冯氏镜面项的改进版（Blinn-Phong）。不求反射向量 R，而是先算半程向量 H = normalize(L+V)，再用 N·H 代替 Phong 的 R·V 算高光：spec = pow(max(N·H, 0), 反光度)。因为 H 总落在 L 和 V 之间、N 与 H 的夹角永不超过 90°，N·H 几乎不会被截负，高光得以平滑连续，不会出现 Phong 那种硬边断裂。">Blinn-Phong 镜面</Term>就是把上一篇那行 `pow(max(R·V, 0), n)` 换成 `pow(max(N·H, 0), n)`，别的全不动。
+
+## 为什么 Blinn 不断裂：N 与 H 的夹角永不越界
+
+关键来了：**H 永远落在 L 和 V 之间**（它就是两者的中分线）。只要表面被这盏灯照得到（漫反射那关 `N·L > 0`），N 和 L 的夹角就小于 90°；而 H 夹在 L、V 中间，N 和 H 的夹角自然**也跨不过 90° 那道坎**。换句话说 `N·H` 几乎**不会变负**，就没有「被 `max(…, 0)` 一刀切掉」这回事——高光只会随着你偏离最佳方位而**平滑地、连续地**变暗，一路淡到 0，绝不会中途出现 Phong 那道硬边。
+
+下面这个对比把两者的高光强度沿表面铺开画出来，你一眼就看出区别：左边 Phong 走到中途突然竖直跌断，右边 Blinn 全程是圆润的曲线。这正是后面交互 Demo 里你能亲手擦出来的差异。
+
+## 代价：反光度指数得调大 2~4 倍
+
+天下没有白换的算法。`N·H` 和 `R·V` 虽然都在量「你多正对反光方位」，但它们对角度的**敏感度不同**：在同样偏离最佳方位的角度上，`N·H` 衰减得比 `R·V` 慢。结果就是：同一个反光度指数，Blinn 算出来的高光**比 Phong 更大、更糊**。
+
+所以换到 Blinn 后，想得到和原来 Phong **一样大小**的高光斑，<Term def="镜面高光的「锐度」指数（GLSL 里 pow 的指数，上一篇叫反光度 shininess）。Blinn-Phong 用 N·H、Phong 用 R·V，二者对角度的敏感度不同：相同指数下 Blinn 的高光更大更糊。所以从 Phong 迁到 Blinn 时，要把这个指数调大到原来的约 2~4 倍，才能得到同样大小的高光斑。忘了调大是从 Phong 换 Blinn 最常见的「失真」原因。">反光度指数</Term>得**调大到原来的大约 2~4 倍**（经验值，不是精确换算）。比如 Phong 用 32，换 Blinn 大概要用 64~128。这一步特别容易忘——很多人换完 Blinn 觉得「高光怎么变得又大又肉」，就是没把指数调大。下面 Demo 里你可以一边切 Phong/Blinn、一边拖反光度，亲眼校准这个倍数。
+
+## 顺带一提：Blinn 不只是「修 bug」，它还更"对"
+
+修掉断裂只是最直接的好处。半程向量这套量法其实更**贴近真实物理**：现实里光滑表面是无数朝向略有差异的「微小镜面」组成的，能反光到你眼里的，正是那些**法线恰好对齐半程向量 H** 的微表面——Blinn 的 `N·H` 直接对应了这个图景，也更容易做到<Term def="一个物理直觉约束：一个表面反射出去的光，总量不该超过照进来的光（不能凭空变亮）。Blinn-Phong 的半程向量模型比原始 Phong 更贴近真实微表面的反光机制，也更容易让镜面项满足这个约束，因此在追求真实感的离线渲染里长期作为默认镜面项，并启发了后来的基于物理渲染 PBR。">能量守恒</Term>（反射的光不超过照进来的光）。正因如此，Blinn-Phong 长期是离线渲染的默认镜面项，也启发了后来更讲究的基于物理渲染。本章只取它「修断裂 + 更平滑」这层好处，物理那套留给后面 PBR 篇。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。N·H vs R·V 的对比已在 §3 概念节用行内公式 pow(max(N·H,0),n) vs pow(max(R·V,0),n) 点到，符合任务卡「每公式后跟人话翻译」「D 型 §4 选/省」。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五，D 型主 viz = CompareSlider）：左右用 <PhongBlinnHighlightDiagram mode={phong|blinn} bare> 同构同框（同坐标轴/表面/光视方位，只差高光强度带 硬边 vs 平滑）。猜一猜引导。 */}
+
+## 对比一下：Phong 断裂 vs Blinn 平滑
+
+> 猜一猜：下面把同一束**掠射光**照在同一个**低反光度**表面上，沿着表面把每一处算出的高光强度画成一条「强度带」。左边是 Phong（用 `R·V`）、右边是 Blinn（用 `N·H`）。把滑块从左拖到右——你觉得左边那条强度带会在中途**突然竖直跌断**，还是和右边一样**圆润地滑到 0**？先拖一拖，再看下面的解释。
+
+左边 Phong 的强度带从峰值往右下滑，走到中间某处时 `R·V` 越过了 0、被 `max(…, 0)` 截断，强度**啪一下竖直掉到 0**，留下一道刺眼的硬边；右边 Blinn 用 `N·H`，半程向量 H 夹在 L、V 之间、夹角永不越界，强度是一条**一路圆润滑到 0** 的曲线，没有任何断口。两侧是**同一束光、同一个反光度**，只差「用哪个点乘量高光」：
+
+<CompareSlider
+  leftLabel="Phong（R·V · 硬边断裂）"
+  rightLabel="Blinn（N·H · 平滑连续）"
+  initial={42}
+  left={<PhongBlinnHighlightDiagram mode="phong" bare />}
+  right={<PhongBlinnHighlightDiagram mode="blinn" bare />}
+/>
+
+看出来了吧——区别全在那道**竖直硬边**上。Phong 不是不想让高光淡出，而是 `R·V` 撞上了 90° 那道坎、被强行截成 0，淡出被「咔」地打断；Blinn 换了量法绕开了这道坎，于是高光自然地淡到底。一切就这一处差异，但在掠射光下它就是那道扎眼硬边的有无。
+
+{/* 5(辅 viz 1). 交互 Demo（spec §五，D 型辅 ≤2）：ShaderDemo 解析渲染一个被点光源照的球（ray-sphere 求交），片元算镜面项。控件 uModel(Phong↔Blinn，float bool)/uShininess(反光度)/uLightAngle(光源掠射角)≤5 + 内建重置。猜一猜引导：把光调掠射 + 反光度调低，切 Phong 看断裂、切 Blinn 看平滑。frag 无空行（各段 // 注释分隔）。 */}
+
+## 动手：把光调掠射，亲眼看高光断裂与修复
+
+> 猜一猜：下面是一个被点光源照亮的球。把**光源角度**拖到很掠射（光几乎贴着球面斜射）、把**反光度**调低（高光铺得很大），然后在 **Phong / Blinn** 之间来回切——Phong 那侧高光边缘会出现什么？Blinn 切过去后那道边会怎样？先动手拖，再读下面。
+
+这个球是片段着色器里**逐像素解析算**出来的（对每个像素和球求交、算法线、算光照）。三个控件：**光照模型**在 Phong（`R·V`）和 Blinn（`N·H`）之间切；**反光度**调高光锐度（调低高光变大，断裂更明显）；**光源角度**把点光源从正上方一路压到贴着球面掠射。把光压掠射、反光度调低、切到 Phong，盯着高光朝向背光那侧的边缘——你会看到 Phong 那道硬边；切回 Blinn，硬边立刻被抹平：
+
+<ShaderDemo
+  aspect={1.6}
+  caption="一个被点光源照亮的球（片段着色器逐像素 ray-sphere 求交后算光照）。光照模型：在 Phong（R·V）/ Blinn（N·H）间切。反光度：调高光锐度，调低→高光变大、断裂更易现。光源角度：从正上方压到贴球面掠射。把光压掠射 + 反光度调低 + 切 Phong，看高光边缘那道硬边；切 Blinn 立刻抹平。注意：切到 Blinn 想要同样大小的高光，需把反光度调大约 2~4 倍。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uModel;
+uniform float uShininess;
+uniform float uLightAngle;
+out vec4 FragColor;
+// ray-sphere 求交：球心原点、半径 r，命中返回 t（最近正根），未命中返回 -1
+float hitSphere(vec3 ro, vec3 rd, float r) {
+  float b = dot(ro, rd);
+  float c = dot(ro, ro) - r * r;
+  float h = b * b - c;
+  if (h < 0.0) return -1.0;
+  return -b - sqrt(h);
+}
+void main() {
+  // 像素 → [-1,1] 的归一化坐标（按宽高比校正）
+  vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+  // 正交相机：视线沿 -z，眼睛在 +z 往里看
+  vec3 ro = vec3(uv, 2.0);
+  vec3 rd = vec3(0.0, 0.0, -1.0);
+  vec3 bg = vec3(0.04, 0.04, 0.06);
+  float t = hitSphere(ro, rd, 1.0);
+  if (t < 0.0) {
+    FragColor = vec4(bg, 1.0);
+    return;
+  }
+  // 命中点 P 与表面法线 N（球心在原点，法线就是 P 归一化）
+  vec3 P = ro + t * rd;
+  vec3 N = normalize(P);
+  // 点光源位置：uLightAngle 把它从正上方(小角)压到贴球面掠射(大角)
+  float a = uLightAngle;
+  vec3 lightPos = vec3(sin(a) * 3.0, cos(a) * 3.0, 0.6);
+  vec3 L = normalize(lightPos - P);
+  vec3 V = normalize(ro - P);
+  // 漫反射 + 一点环境光托底
+  float diff = max(dot(N, L), 0.0);
+  vec3 objColor = vec3(0.45, 0.42, 0.55);
+  vec3 col = (0.12 + 0.7 * diff) * objColor;
+  // 镜面：uModel>0.5 走 Blinn(N·H)，否则走 Phong(R·V)
+  float spec = 0.0;
+  if (diff > 0.0) {
+    if (uModel > 0.5) {
+      // Blinn-Phong：半程向量 H = normalize(L + V)，看 N·H
+      vec3 H = normalize(L + V);
+      spec = pow(max(dot(N, H), 0.0), uShininess);
+    } else {
+      // Phong：反射向量 R = reflect(-L, N)，看 R·V（会越界被 clamp）
+      vec3 R = reflect(-L, N);
+      spec = pow(max(dot(R, V), 0.0), uShininess);
+    }
+  }
+  // 高光叠加（白色高光）
+  col += spec * vec3(1.0);
+  // 简单 gamma，提一点对比
+  col = pow(col, vec3(0.85));
+  FragColor = vec4(col, 1.0);
+}`}
+  controls={[
+    {
+      name: "uModel",
+      label: "光照模型（左 Phong · 右 Blinn）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 0,
+    },
+    {
+      name: "uShininess",
+      label: "反光度",
+      type: "float",
+      min: 2,
+      max: 128,
+      step: 1,
+      default: 16,
+    },
+    {
+      name: "uLightAngle",
+      label: "光源角度（大=掠射）",
+      type: "float",
+      min: 0.2,
+      max: 1.55,
+      step: 0.01,
+      default: 1.3,
+    },
+  ]}
+/>
+
+切到 Phong、把光压掠射、反光度压到很低（比如 8~16），高光朝背光那侧的边缘会出现一道偏硬的截断；同样参数切到 Blinn，那道边立刻变平滑。再试这条：先在 Phong 下记住高光斑大小，切到 Blinn 你会发现高光「胖」了一圈——这时把反光度往上调 2~4 倍（如 16→48），高光斑就缩回差不多大小。这就是上一节那条「换 Blinn 要调大指数」的实感。
+
+{/* 6. 代码对照（spec §六，D 型必，并排 diff）：Phong vs Blinn 的镜面计算 diff，C++/GLSL330 ↔ WebGL2/GLSL300es 同逻辑段；单块 ≤30 行；块间有解说；API/version 差异用 Callout。 */}
+
+## 代码对照：镜面那几行的 diff
+
+改动小到惊人——从 Phong 到 Blinn，只动镜面那 2~3 行，漫反射、环境光、总装全不变。先看**原来的 Phong 镜面**（上一篇那段）：求反射向量 R，再 `pow(R·V, n)`。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（Phong）">
+
+```glsl
+// Phong 镜面：先把光反射成 R，再看 R 与观察方向 V 多贴近
+vec3 viewDir = normalize(viewPos - FragPos);
+vec3 reflectDir = reflect(-lightDir, norm);          // R = 光关于 N 的反射
+float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+vec3 specular = specularStrength * spec * lightColor;
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（Phong）">
+
+```glsl
+// Phong 镜面：先把光反射成 R，再看 R 与观察方向 V 多贴近
+vec3 viewDir = normalize(viewPos - FragPos);
+vec3 reflectDir = reflect(-lightDir, norm);          // R = 光关于 N 的反射
+float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+vec3 specular = specularStrength * spec * lightColor;
+```
+
+  </Tab>
+</CodeTabs>
+
+换成 **Blinn-Phong**：不再求 `reflectDir`，改求**半程向量** `halfwayDir = normalize(lightDir + viewDir)`，把 `dot(viewDir, reflectDir)` 换成 `dot(norm, halfwayDir)`，并且把指数 `32.0` 调大（这里示意调到 `64.0`，约 2 倍）。变的就这三处：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3（Blinn-Phong）">
+
+```glsl
+// Blinn-Phong 镜面：求半程向量 H，再看 N 与 H 多贴近
+vec3 viewDir = normalize(viewPos - FragPos);
+vec3 halfwayDir = normalize(lightDir + viewDir);     // H = normalize(L + V)
+float spec = pow(max(dot(norm, halfwayDir), 0.0), 64.0); // 指数调大约 2~4 倍
+vec3 specular = specularStrength * spec * lightColor;
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（Blinn-Phong）">
+
+```glsl
+// Blinn-Phong 镜面：求半程向量 H，再看 N 与 H 多贴近
+vec3 viewDir = normalize(viewPos - FragPos);
+vec3 halfwayDir = normalize(lightDir + viewDir);     // H = normalize(L + V)
+float spec = pow(max(dot(norm, halfwayDir), 0.0), 64.0); // 指数调大约 2~4 倍
+vec3 specular = specularStrength * spec * lightColor;
+```
+
+  </Tab>
+</CodeTabs>
+
+三处差异并排看：① `reflect(-lightDir, norm)` → `normalize(lightDir + viewDir)`（求 R 改成求 H）；② `dot(viewDir, reflectDir)` → `dot(norm, halfwayDir)`（R·V 改成 N·H）；③ 指数 `32.0` → `64.0`（调大约 2~4 倍）。`lightDir`、`viewDir`、`norm` 的算法和上一篇完全一样，依旧都要 `normalize`。
+
+<Callout type="warn">
+  两端 GLSL 一字不差——这段纯计算没有任何 API
+  差异。唯一的跨端差异还是老几样：桌面写 `#version 330 core`、WebGL2 写
+  `#version 300 es`，且 WebGL2 片段着色器必须加一行 `precision highp
+  float;`。镜面这几行本身，桌面和 WebGL2 完全一致。
+</Callout>
+
+注意半程向量这里用的是 `lightDir + viewDir`（两个都是**从表面指向外**的方向：指向光源、指向眼睛），相加再归一化。别误传成 `-lightDir`——那是 Phong 里喂给 `reflect` 的「光打过来」的方向，两处用的方向相反，别搞混。
+
+{/* 7. 常见误区（spec §七，D 型 ≥2，必含一个「场景选错方案」坑）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；含可在 §5 Demo/CompareSlider 亲手触发的。①换 Blinn 忘调大指数→高光又大又糊（场景选错方案的变体：以为换了就行）；②H 用错方向/没归一化；③在 gamma 空间下沿用 Phong 参数迁 Blinn（场景选错方案）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：从 Phong 换到 Blinn
+  后，高光**变得又大又糊**，整个物体像蒙了层油光，怎么看都比原来「肉」。**原因**：只把
+  `R·V` 换成了 `N·H`，却**忘了把反光度指数调大**——`N·H` 衰减比 `R·V`
+  慢，同指数下 Blinn 高光天生更大。**修法**：换 Blinn 后把 `pow`
+  的指数调大到原来的**约 2~4 倍**（如 32→64~128）；到上面 Demo 里切
+  Blinn、把反光度往上拖，看高光缩回正常大小。
+</Callout>
+
+<Callout type="trap">
+  **现象**：高光位置或亮度明显不对，甚至比 Phong
+  还糟。**原因**：半程向量算错了——把 `H` 写成了 `normalize(-lightDir +
+  viewDir)`（用错了光线方向），或者 `lightDir + viewDir` 之后**忘了
+  `normalize`**。**修法**：`H = normalize(lightDir +
+  viewDir)`，两个都用**从表面指向外**的方向（指向光源 `lightDir`、指向眼睛
+  `viewDir`），相加后**必须归一化**再去和 `N` 点乘。
+</Callout>
+
+<Callout type="trap">
+  **现象（场景选错方案）**：明明知道 Blinn 更好，却在一个**做了 gamma 校正 /
+  走线性空间**的管线里，直接套用从某个 **sRGB 空间老教程**抄来的 Phong
+  反光度和强度，结果高光要么过曝一片、要么贼小看不见。**原因**：选「Blinn 还是
+  Phong」只是镜面项的事，但**反光度参数和它所处的颜色空间强绑定**——线性空间下高光的视觉表现和
+  sRGB 空间差很多，老参数照搬必然失真。**修法**：明确自己在**线性还是
+  sRGB**空间调参，换 Blinn 时**重新校准**反光度（别从异空间的 Phong
+  教程直接抄数值）；gamma 校正放到最后统一做。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题 + D 型 1 道场景选型题；答案折叠。 */}
+
+## 小结
+
+- **Phong 镜面**用 `R·V`，掠射光 + 低反光度下 `R·V` 越过 90° 被 `max(…,0)` 截成 0，高光**断裂**出硬边
+- **Blinn-Phong** 改用**半程向量** `H = normalize(L + V)`，看 `N·H`——H 总在 L、V 之间，夹角永不越界，高光**平滑连续**
+- 代码上只改镜面那几行：求 R 改成求 H、`R·V` 改成 `N·H`，其余全不动
+- 换 Blinn 后 `N·H` 衰减更慢，**反光度指数要调大约 2~4 倍**才得到同样大小的高光（最常被忘）
+- 何时用哪个：要平滑高光 / 真实感 / 掠射光场景用 **Blinn**（也更贴近能量守恒，是离线渲染默认）；只在高反光度、不在乎掠射边缘时，Phong 也够用且省一个 `reflect`
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个球的 Demo 里，把它调成这样的目标效果：**一束很掠射的光**照着一个**低反光度**的球，高光边缘**有明显硬边**——也就是把 Phong 的断裂调到最扎眼。说出你把三个控件各调到什么方向，并解释为什么这组参数最容易看出断裂。
+
+<Answer>
+
+- **光照模型**：切到 **Phong**（断裂是 Phong 才有的毛病，Blinn 没有）。
+- **光源角度**：拖到**最掠射**（最大值附近，光几乎贴着球面斜射）——只有掠射时反射向量 R 与视线 V 的夹角才容易越过 90°，`R·V` 才会被截负。
+- **反光度**：调到**很低**（如 8 左右）——反光度低高光铺得大、淡出缓，会一路铺到 `R·V` 接近 0 的边界地带，断口正好落在高光还挺亮处，最扎眼。
+
+三者合起来：掠射制造「越界」、低反光度让高光铺到越界处、Phong 提供那把会截负的「剪刀」。切到 Blinn 同样参数，硬边消失——因为 `N·H` 不越界。
+
+</Answer>
+
+**练习 2（场景选型题 · D 型）** 三个场景，分别该用 Phong 还是 Blinn-Phong，给一句理由：① 一块潮湿的地砖被夕阳几乎水平地掠射，镜头扫过会看到长长的反光带；② 一颗抛光金属小珠，高光是极小一点、光源在正上方；③ 一个追求真实感、做了 gamma 校正的离线渲染场景。
+
+<Answer>
+
+- **①潮湿地砖 + 夕阳掠射 → Blinn-Phong**。这是 Phong 断裂的重灾区：光极度掠射、反光带铺得长，Phong 会沿反光带边缘截出硬边；Blinn 的 `N·H` 不越界，反光带平滑淡出。
+- **②抛光金属珠 + 高反光度 + 光在正上方 → Phong 也行**。高反光度高光缩成一小点、远离 90° 边界，几乎不会断裂；光在正上方也非掠射。这种场景 Phong 够用，还省一次 `reflect`。当然用 Blinn 也没问题（把指数调大即可）。
+- **③真实感 + gamma 校正离线渲染 → Blinn-Phong**。它更贴近真实微表面、更容易满足能量守恒，是离线渲染长期默认的镜面项；线性空间记得重新校准反光度，别从 sRGB 老教程照搬。
+
+一句话原则：**怕掠射断裂、要平滑、要真实 → Blinn；只在高反光度小高光、不掠射的场合 → Phong 也够**。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="Phong 镜面断裂">
+  冯氏（Phong）镜面光在「光很掠射 + 反光度很低」时出现的**硬边 /
+  突然截断**。Phong 用反射向量 R 和视线 V 的点乘 `R·V` 算高光，当 R 与 V
+  的夹角超过 90°，`R·V` 变负、被 `max(…,0)` 截成
+  0，高光强度在那个角度**啪一下归零**，留下一道生硬直边而不是平滑淡出。反光度越低、光越掠射越明显。详见本章「病根」一节。
+</GlossaryItem>
+
+<GlossaryItem term="半程向量">
+  光线方向 L 和视线方向 V 的「中分线」方向，等于两者**相加再归一化**：`H =
+  normalize(L + V)`。它永远落在 L 和 V 之间。几何含义：当 H 正好和表面法线 N
+  重合时，你的视线恰好处在镜面反射最强的方位上、高光最亮。Blinn-Phong
+  用它代替反射向量来算高光。详见本章「解法」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Blinn-Phong 镜面">
+  冯氏镜面项的改进版。不求反射向量 R，而是先算半程向量 `H =
+  normalize(L+V)`，再用 `N·H` 代替 Phong 的 `R·V` 算高光：`spec = pow(max(N·H,
+  0), 反光度)`。因为 H 总在 L、V 之间、N 与 H 的夹角永不越界，`N·H`
+  几乎不会被截负，高光得以**平滑连续**，没有 Phong
+  那种硬边断裂。详见本章「解法」一节。
+</GlossaryItem>
+
+<GlossaryItem term="反光度指数">
+  镜面高光的「锐度」指数（GLSL 里 `pow` 的指数，上一篇叫反光度
+  shininess）。Blinn 用 `N·H`、Phong 用 `R·V`，二者对角度敏感度不同：相同指数下
+  Blinn 高光更大更糊。所以从 Phong 迁到 Blinn 时要把这个指数调大到原来的**约 2~4
+  倍**，才得到同样大小的高光斑。忘了调大是换 Blinn
+  后高光「变肉」的最常见原因。详见本章「代价」一节。
+</GlossaryItem>
+
+<GlossaryItem term="能量守恒">
+  一个物理直觉约束：一个表面反射出去的光，总量**不该超过照进来的光**（不能凭空变亮）。Blinn-Phong
+  的半程向量模型比原始 Phong
+  更贴近真实微表面的反光机制，也更容易让镜面项满足这个约束，因此在追求真实感的离线渲染里长期作为默认镜面项，并启发了后来的基于物理渲染（PBR）。详见本章「顺带一提」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

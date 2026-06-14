@@ -68,6 +68,8 @@ import { DrawcallCompareDiagram } from "./diagrams/drawcall-compare-diagram";
 import { AliasingDiagram } from "./diagrams/aliasing-diagram";
 import { MsaaSampleDiagram } from "./diagrams/msaa-sample-diagram";
 import { SsaaVsMsaaDiagram } from "./diagrams/ssaa-vs-msaa-diagram";
+import { PhongBlinnHighlightDiagram } from "./diagrams/phong-blinn-highlight-diagram";
+import { HalfVectorDiagram } from "./diagrams/half-vector-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -214,6 +216,11 @@ import { InstancingDemo } from "./instancing-demo";
  *    ①一条斜边压过一个像素格切成内/外两片→②像素内放 4 个采样点数 2/4 在内=覆盖度 50%→
  *    ③按覆盖度 50% 取图元色与背景色中间色填边缘像素·柔和）、SsaaVsMsaaDiagram（SSAA 每像素拆 4 子像素且
  *    每个子像素都着色·贵 vs MSAA 只边缘多采样点判覆盖度·片段着色仍每像素一次·性价比，并排对照）。同款 Server SVG。
+ *  - 高级光照篇·Blinn-Phong（HEL-80，D 对比型，篇开篇）：PhongBlinnHighlightDiagram（mode=phong/blinn + bare：
+ *    掠射光下沿表面的高光强度带，phong 用 R·V 走到中途 R·V<0 被 clamp 成 0「啪」掉成竖直硬边·断裂 vs
+ *    blinn 用 N·H 全程圆润曲线平滑滑到 0·无硬边，同坐标轴/表面/光视方位同框，供 CompareSlider 两侧分别传）、
+ *    HalfVectorDiagram（左 Phong 先求 L 关于 N 的反射 R 再看 R·V vs 右 Blinn 把 L、V 相加归一化得半程向量
+ *    H=normalize(L+V) 落在 L、V 正中间·改看 N·H，点明 H 总在 L、V 间故 N·H 夹角永不越界=平滑根）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -366,6 +373,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AliasingDiagram,
   MsaaSampleDiagram,
   SsaaVsMsaaDiagram,
+  PhongBlinnHighlightDiagram,
+  HalfVectorDiagram,
   Stepper,
   Step,
   Slider,
