@@ -1,0 +1,123 @@
+---
+title: 热修复原理
+type: C
+section: 高级技术
+order: 13
+description: 理解热修复的底层原理——ClassLoader 方案、底层替换方案、Instant Run 方案，以及 Sophix 的三合一设计。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第13章改编）：讲清热修复三种方案的原理与优劣。 */}
+
+<Objectives>
+
+- 能解释热修复的三大方案：ClassLoader 方案、底层替换方案、Instant Run 方案——各怎么工作
+- 能画出 ClassLoader 方案的核心流程：补丁 dex 插入 dexElements 前面
+- 能回答：为什么有些热修复方案需要重启 App 而有些不需要？
+
+</Objectives>
+
+## 热修复——线上 Bug 的急救方案
+
+App 发版后发现了一个严重 bug——传统做法是紧急修复、测试、打包、提审、等审核通过、灰度发布……至少一天过去了。热修复允许你**不发布新版本**就能修复线上 bug——把补丁下发到用户设备，App 下次启动（或即时生效）就修复好了。
+
+## 方案一：ClassLoader 方案（类替换）
+
+**原理**：把修复了 bug 的 .dex（补丁包）插入到 PathClassLoader 的 dexElements 数组**最前面**。ClassLoader 加载类时从前往后遍历——先找到补丁里的修复版、原来有 bug 的类在后面被"遮蔽"。
+
+**流程**：
+```
+应用启动 → 下载补丁 dex → 反射获取 PathClassLoader 的 dexElements
+→ 把补丁 dexElements 合并到数组最前面 → 后续加载类时优先从补丁找
+```
+
+**优点**：原理简单、兼容性好。**缺点**：需要重启 App 才能生效（因为已加载的类不会重新加载）。只作用于类加载——不能修复已经加载到内存中的类实例。
+
+代表：腾讯 Tinker。
+
+## 方案二：底层替换方案（Native 层替换方法指针）
+
+**原理**：不替换整个类——只在 Native 层把有 bug 的 Java 方法的 ArtMethod 指针**直接替换**为修复版方法的指针。
+
+ArtMethod 是 ART 里代表一个 Java 方法的内部结构体。它包含了方法的入口地址、dex 索引等。补丁里修复过的函数被编译成一个新的 ArtMethod。底层替换方案直接把旧方法的 ArtMethod 内容**整个覆写**为新方法的内容——这样 Java 层完全无感知，但旧方法实际上执行的是修复版逻辑。
+
+**优点**：即时生效（不需要重启、不需要重新加载类）。**缺点**：兼容性差——Android N 以后 ART 的内部结构变了，直接操作 ArtMethod 会崩溃。
+
+代表：阿里 AndFix。
+
+## 方案三：Instant Run 方案（插桩替换）
+
+**原理**：借鉴 Android Studio 的 Instant Run 机制——在编译期给每个类**插入一个代理方法的桩**。补丁下发后，代理方法指向补丁的新实现，原方法被绕过。
+
+**优点**：兼容性好（纯 Java 层实现，不碰 Native）、即时生效。**缺点**：全量插桩——所有方法都被插了桩，即使它们不需要修复。包体积有增加、运行时也有轻微性能损耗。
+
+代表：美团 Robust。
+
+## 三种方案对比
+
+| 方案 | 生效方式 | 兼容性 | 性能影响 | 代表 |
+|---|---|---|---|---|
+| ClassLoader 替换 | 需重启 | 好 | 无 | Tinker |
+| 底层 Native 替换 | 即时生效 | 差（Android N+ 受限） | 无 | AndFix |
+| 插桩替换 | 即时生效 | 好 | 编译期全量插桩 | Robust |
+
+## Sophix：三合一的终极方案
+
+阿里 Sophix 把三种方案各取所长：
+1. 对**不涉及方法替换的修改**（资源修复、新增类）→ ClassLoader 方案（稳）
+2. 对**需要即时生效的方法修复** → 底层替换方案（快，Android N 以下）
+3. 对**Android N+ 上的方法修复** → 插桩替换方案（兼容）
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：热修复补丁下发了但 bug 没修好——用户那边的旧类已经加载过了。**原因**：ClassLoader 方案只能影响后续新加载的类——如果 bug 类在补丁生效前已经被 ClassLoader 加载并缓存了，补丁 dex 里修复版不会被使用。**修法**：在 Application.attachBaseContext() 里尽早加载补丁——这是 ClassLoader 开始加载 App 类之前的最早时机。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用底层替换方案在 Android 8.0 上崩溃。**原因**：ART 内部结构随版本变化——AndFix 的 ArtMethod 结构体假设在某些 Android 版本上不成立。**修法**：Android N+ 上改用 Sophix 的混合方案或插桩方案。
+</Callout>
+
+## 小结
+
+- 热修复三大方案：ClassLoader 替换（强兼容、需重启）、底层 Native 替换（即时生效、兼容差）、插桩替换（即时生效、需编译期插桩）
+- ClassLoader 方案核心：补丁 dex 插入 dexElements 前面 → 优先加载修复版类
+- 生效时机关键：Application.attachBaseContext 是最早的补丁加载窗口
+- Sophix 三合一：ClassLoader（稳）+ 底层替换（快，N 以下）+ 插桩（兼容，N 以上）
+
+<Exercises>
+
+**练习 1（问答型）** 为什么有些热修复方案需要重启 App 才能生效？
+
+<Answer>
+ClassLoader 方案替换的是 dexElements 顺序——只有后续新加载的类才会从补丁 dex 找。已经加载过的类缓存在 ClassLoader 里不会被重新加载，所以必须重启 App（让 ClassLoader 重新加载所有类）补丁才能生效。
+</Answer>
+
+**练习 2（问答型）** 底层替换方案为什么在 Android 7.0+ 上容易出问题？
+
+<Answer>
+底层替换方案直接操作 ArtMethod 的内部结构体内容（覆写方法入口地址等）。ArtMethod 的结构在 Android 不同版本间会变化——N 以后 ART 引入 JIT 编译器、ArtMethod 结构变大变复杂，直接内存覆写容易覆盖错误或遗漏字段，导致崩溃。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="热修复">
+  不发布新版本就能修复线上 bug 的技术。常用三种方案：ClassLoader 替换 dex、Native 替换 ArtMethod、编译期插桩替换方法。
+</GlossaryItem>
+
+<GlossaryItem term="ArtMethod">
+  ART 虚拟机中表示一个 Java 方法的内部 C++ 结构体。包含方法的入口地址、dex 方法索引、访问标志等。底层替换方案直接覆写这个结构体来替换方法实现。
+</GlossaryItem>
+
+<GlossaryItem term="补丁 dex">
+  热修复下发的修复文件——里面只包含修复过的 .class 文件打包成 .dex。因为只包含改动的类，文件很小（通常几十 KB）。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

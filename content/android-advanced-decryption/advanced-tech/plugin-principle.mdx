@@ -1,0 +1,137 @@
+---
+title: 插件化原理
+type: C
+section: 高级技术
+order: 15
+description: 深入插件化框架的底层原理——占坑 Activity 绕过 AMS 校验、资源加载、动态代理 Instrumentation，以及 RePlugin/Atlas 等方案对比。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第15章改编）：讲清插件化绕过 AMS、资源加载和组件生命周期管理。 */}
+
+<Objectives>
+
+- 能解释插件化要解决的三大问题：组件生命周期（Activity 没有在 Manifest 注册）、类加载（插件 APK 的 dex）、资源加载（插件 APK 的 Resources）
+- 能画出"占坑 Activity"的完整 Hook 流程——StubActivity → Instrumentation 代理 → 真实 PluginActivity
+- 能回答：为什么插件化需要 Hook AMS 和 Instrumentation？
+
+</Objectives>
+
+## 插件化——让 App 像积木一样组装
+
+插件化允许 App 在**不安装**的情况下加载外部 APK 里的功能模块。电商 App 的直播模块、游戏引擎的热更新、超级 App 的小程序容器——这些都是插件化的应用场景。
+
+插件化要解决的核心问题只有三个：
+
+## 问题一：组件生命周期——Activity 没有在 Manifest 注册
+
+Android 的规则：所有 Activity 必须在 AndroidManifest.xml 里声明，否则 AMS 拒绝启动。但插件 APK 是**动态下发的**——不可能提前在宿主 Manifest 里声明插件的 Activity（因为你不知道插件里有哪些 Activity）。
+
+### 解决方案：占坑 Activity（Stub Activity）
+
+```
+真实流程：
+Intent("com.plugin.RealActivity") 
+  → 被 Hook 的 Instrumentation 拦截
+  → 把 Intent 里的目标改为已注册的 StubActivity
+  → AMS 检查：StubActivity 在 Manifest 里 ✓ → 通过
+  → StubActivity 创建
+  → 在 StubActivity.onCreate() 里创建真正的 RealActivity
+  → RealActivity 自己管理自己的生命周期（但没有 AMS 的调度）
+```
+
+关键步骤：
+1. **Hook Instrumentation.execStartActivity()**：拦截原始 Intent，把目标 Activity 换成占坑的 StubActivity（宿主 Manifest 里已声明）
+2. **Hook Instrumentation.newActivity()**：当 AMS 返回创建 StubActivity 时，把它换回真正的 RealActivity
+3. **RealActivity 自己管理生命周期**：因为它绕过了 AMS，所以需要自己处理 onPause/onResume 等调用
+
+## 问题二：类加载——插件 APK 的 dex
+
+插件 APK 里的类不在宿主 ClassLoader 能找到的路径——需要创建一个新的 DexClassLoader 来加载插件的 dex。
+
+```java
+DexClassLoader pluginLoader = new DexClassLoader(
+    pluginApkPath,       // 插件 APK 路径
+    optimizedDir,        // dex 优化目录
+    nativeLibDir,        // .so 目录
+    hostClassLoader      // parent = 宿主 ClassLoader
+);
+// 用 pluginLoader 加载插件里的类
+```
+
+## 问题三：资源加载——插件 APK 的 Resources
+
+每个 App 有自己的 Resources 对象，通过 Context.getResources() 访问。插件的 Activity 也需要访问自己 APK 里的资源（layout、string、drawable 等），而不是宿主的。
+
+解决方案：给插件创建独立的 `Resources` 和 `AssetManager`：
+
+```java
+AssetManager assetManager = AssetManager.class.newInstance();
+Method addAssetPath = AssetManager.class.getMethod("addAssetPath", String.class);
+addAssetPath.invoke(assetManager, pluginApkPath);
+Resources pluginResources = new Resources(assetManager, 
+    hostResources.getDisplayMetrics(), hostResources.getConfiguration());
+// 在插件的 Context 中重写 getResources() 返回 pluginResources
+```
+
+## 插件化方案对比
+
+| 方案 | 核心思路 | 优点 | 缺点 | 代表 |
+|---|---|---|---|---|
+| 静态代理 | 编译期生成占坑类 | 最简单 | 不灵活——插件Activity必须预先声明 | - |
+| 动态代理 Instrumentation | Hook Instrumentation 替换 Intent/Activity | 通用性好 | Hook 点多、适配成本高 | 早期 DroidPlugin |
+| 坑位 + 动态加载 | 预先声明一批 StubActivity + ClassLoader | 平衡 | 需要预留足够坑位 | RePlugin/Atlas |
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：插件的 Activity 能启动但界面一片空白——没有 layout。**原因**：插件的 Activity 拿到了宿主的 Resources 对象——插件 APK 里的 R.layout.xxx 资源 ID 在宿主的资源表里对应的可能是另一个 layout（甚至不存在）。**修法**：必须给插件创建独立的 Resources 对象，用插件 APK 路径构建 AssetManager。
+</Callout>
+
+<Callout type="trap">
+  **现象**：插件的 Activity 正常显示但 onResume 和 onPause 调用时序异常。**原因**：插件的 Activity 绕过了 AMS 的生命周期调度——它需要自己监听宿主的生命周期回调，模拟 AMS 的行为。**修法**：用宿主的 Application.ActivityLifecycleCallbacks 监听全局生命周期变化，同步到插件 Activity。
+</Callout>
+
+## 小结
+
+- 插件化三座大山：生命周期（占坑绕过 AMS）、类加载（DexClassLoader）、资源加载（独立 Resources）
+- 占坑 Activity 流程：Hook Instrumentation → 把插件 Activity 换成占坑 StubActivity → AMS 通过 → 创建时换回真实 Activity
+- 插件化 = Hook 技术的集大成者——Hook AMS + Hook Instrumentation + Hook ClassLoader + Hook Resources
+- 现代方案（RePlugin/Atlas）把三座大山封装成框架——开发者像写普通 App 一样写插件
+
+<Exercises>
+
+**练习 1（画图型）** 画出占坑 Activity 的完整流程——从 startActivity 到插件 Activity 显示的关键 Hook 点。
+
+<Answer>
+① Hook Instrumentation.execStartActivity → 拦截 Intent → 把 PluginActivity 换成 StubActivity → ② AMS 检查 StubActivity 在 Manifest ✓ → ③ Zygote fork 新进程 → ④ Hook Instrumentation.newActivity → 把 StubActivity 换回 PluginActivity → ⑤ PluginActivity.onCreate → 用插件 Resources 加载布局 → 显示。
+</Answer>
+
+**练习 2（问答型）** 为什么插件化需要同时 Hook AMS 和 Instrumentation？只 Hook 一个行不行？
+
+<Answer>
+不行。需要 Hook Instrumentation 两次：execStartActivity 时把 Intent 改为 StubActivity（骗过 AMS），newActivity 时把 StubActivity 替换回真正的 PluginActivity。如果只 Hook AMS，可以在 AMS 层做代理拦截——但更复杂且不稳定。Instrumentation 是官方提供的扩展点，更干净。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="占坑 Activity">
+  在宿主 Manifest 里预先声明的空白 Activity，作为插件 Activity 的"替身"。启动插件 Activity 时先用它骗过 AMS 的 Manifest 校验，创建时再换成真正的插件 Activity。
+</GlossaryItem>
+
+<GlossaryItem term="Instrumentation">
+  Android 里负责监控 App 和系统交互的类——在 startActivity 前、newActivity 时都有 Hook 点。插件化最常见的 Hook 目标。
+</GlossaryItem>
+
+<GlossaryItem term="AssetManager">
+  管理 APK 内资源（layout、string、drawable 等）的类。插件需要独立的 AssetManager 来访问自己 APK 里的资源，否则会拿到宿主的资源。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
