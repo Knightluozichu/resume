@@ -77,6 +77,8 @@ import { ShadowAcneDiagram } from "./diagrams/shadow-acne-diagram";
 import { PointShadowStepDiagram } from "./diagrams/point-shadow-step-diagram";
 import { TBNDiagram } from "./diagrams/tbn-diagram";
 import { NormalDecodeDiagram } from "./diagrams/normal-decode-diagram";
+import { ParallaxPrincipleDiagram } from "./diagrams/parallax-principle-diagram";
+import { SteepParallaxStepDiagram } from "./diagrams/steep-parallax-step-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -340,6 +342,12 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    标「三个轴当矩阵三列 → TBN 矩阵 [T|B|N]」，点明法线图里的法线是相对表面自身存的、靠 TBN 在切线↔世界空间换算）、
  *    NormalDecodeDiagram（三栏：左 法线图里存的偏蓝色块 RGB(0.5,0.5,1.0) → 中 解码公式 normal=texColor*2.0-1.0 把 0~1 拉回 -1~1 →
  *    右 解出 (0,0,1) 正对外不扰动的箭头 + 偏色→法线推歪=凹凸一例，底部警示「忘了 *2-1 直接当法线 → z 恒正 → 光照全错整片发蓝」）。同款 Server SVG。
+ *  - 高级光照篇·视差贴图（HEL-85，C 实战型，承接法线贴图）：ParallaxPrincipleDiagram（本章最核心直觉图·侧视图：
+ *    眼睛斜射一条视线到几何平面、本该采样几何交点 A（红），但真实表面轮廓在 B 处先凸起挡住视线、眼睛真正该看到的是 B（绿），
+ *    视差偏移就是沿视方向把采样 UV 从 A 挪到 B·标偏移量 offset，点明「视线越斜 A↔B 差越大·正看 A≈B 视差几乎无效」）、
+ *    SteepParallaxStepDiagram（§5 Stepper 陡峭视差分层步进四步配图：①把深度切几层·视线沿视方向往深处走每层横移一点 UV→
+ *    ②逐层采样高度图比较「层深度<表面深度？」成立=仍在表面上方继续下探→③某层层深度首次≥表面深度=钻到表面下=命中·该层 UV 即采样点→
+ *    ④POM 在命中层与上一层之间线性插值·逼近真实交点更平滑）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -436,6 +444,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PointShadowStepDiagram,
   TBNDiagram,
   NormalDecodeDiagram,
+  ParallaxPrincipleDiagram,
+  SteepParallaxStepDiagram,
   Stepper,
   Step,
   Slider,

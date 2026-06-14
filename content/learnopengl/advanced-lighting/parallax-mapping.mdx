@@ -1,0 +1,490 @@
+---
+title: 视差贴图
+type: C
+section: 高级光照
+order: 6
+description: 学会用视差贴图靠「按观察方向偏移纹理坐标」让一面平墙在斜看时显出真实的凹凸深度和遮挡，比法线贴图更立体；能区分基础视差 / 陡峭视差 / 视差遮蔽映射 POM 三档的取舍；并在 demo 里斜看、调深度看砖块凸起挡住后面。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/05%20Parallax%20Mapping/
+draft: true
+---
+
+{/* C 实战型章（HEL-85，高级光照篇第 6 篇）：原书「视差贴图 Parallax Mapping」。重心是代码实现（spec C 列 §6 重）：按观察方向偏移纹理坐标，让平面斜看时显出真实凹凸深度与遮挡。直接承接上一篇 normal-mapping（切线空间 / TBN / 视方向已讲，本章不重复，只承接：视差也在切线空间用视方向偏移 UV）。C 型段式：概念讲解(§3 必，是什么压一段) + 代码对照(§6 重，基础视差 / 陡峭视差 for 循环 / POM 插值，C++/GLSL330 ↔ WebGL2/GLSL300es) + 误区≥3(§7) + 小结含改 Demo 题 + C 型独立实现/选型题(§8)；math:false 整节省略(§4)，偏移公式放 §6 代码对照讲。主 viz = ShaderDemo（程序化砖块高度图的可斜看表面，uViewAngle 斜看 + uDepth 深度 + uMode 三档 0关/1基础/2陡峭+POM）；辅 viz = CompareSlider（法线贴图 vs 视差贴图，两个文字卡，不塞 WebGL）+ ParallaxPrincipleDiagram（侧视偏移原理）+ SteepParallaxStepDiagram（配 Stepper 分层步进）。draft:true，老板验收后才发布（硬规则 7）。诚实化（HEL-82 教训）：只演示确信能渲出的——斜看深度/遮挡感、深度缩放、三档模式差异；边缘瑕疵在某模式下展示或图解讲，不声称演示不确定效果。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 高度图/深度贴图（一张灰度图存表面的高低/深浅，这里约定白=高/黑=深）= 概念 + 图解(借 demo 解析高度场)；2) 视差贴图核心思想（按观察方向偏移纹理坐标，让平面斜看时假装有真实凹凸深度、近处凸起挡住后面）= 直觉引入 + 概念 + <ParallaxPrincipleDiagram> 侧视原理图 + 主 ShaderDemo；3) 基础视差公式（用视方向在切线空间的 xy 分量 / viewDir.z × 高度 × 缩放，偏移 UV）= 概念 + §6 代码；4) 陡峭视差 Steep Parallax（把深度分层、沿视线步进直到采样点低于表面，解决基础视差在陡处失真）= <Stepper> + <SteepParallaxStepDiagram> 分层步进图 + §6 代码；5) 视差遮蔽映射 POM（命中层与上一层之间线性插值精修得更平滑）= 概念 + SteepParallaxStepDiagram step4 + §6 代码；6) 边缘瑕疵与 discard（偏移后 UV 超出 [0,1] 丢弃片元，避免拉伸假象）= 误区 + 概念。Term 共 5 个：高度贴图 / 视差贴图 / 陡峭视差 / 视差遮蔽映射POM / 自遮挡。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释**视差贴图**怎么靠「**按观察方向偏移纹理坐标**」，让一面平墙在斜看时显出**真实的凹凸深度和遮挡**——近处的砖块凸起会挡住它后面的砖缝，比法线贴图更立体
+- 能在 Demo 里改出指定效果：**斜看**这面墙、**调大深度**让砖块凸起愈发明显、并在**三档模式**（关 / 基础视差 / 陡峭+POM）间切换，看出基础视差在陡处失真、陡峭+POM 正确遮挡
+- 能回答：视差效果为什么**正对着看几乎无效、斜着看才明显**？以及基础视差用在很深的高度图上为什么会**断裂失真**、陡峭视差是怎么修掉它的？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接同 section 砖墙）、承接法线贴图「骗了光、轮廓还是平的」。 */}
+
+## 法线贴图只骗了光，这次连「你看到哪一点」都骗
+
+上一章你给平墙贴了张法线图，砖缝在灯下凹下去、砖面鼓起来——可那其实只是**光照上的假象**：墙的几何还是一张纸。你只要把视线压低、贴着墙面斜着看过去，就会发现砖块根本没有「厚度」：该被前面砖块挡住的砖缝，照样露在外面；轮廓边缘还是齐刷刷一条直线，平得没有半点立体。
+
+问题出在哪？法线贴图只改了「这一点该有多亮」，却没改「你斜看时该看到表面的**哪一点**」。真实的凹凸墙斜看时，近处凸起的砖块会**挡住**它后面凹陷的砖缝——这种「近的遮住远的」才是立体感的关键，而法线贴图完全没有它。
+
+这一章要解决的就是这件事：**怎么不加一个三角形，让一面平墙在斜看时不光有明暗、还真的显出深度和遮挡**。办法是再准备一张图存「每点的高低深浅」，然后**按你的观察方向偏移采样的纹理坐标**，让平面「假装」自己有那样的凹凸——近处凸起就真的把后面挡住了。没有它，你的墙斜看永远是张平纸；有了它，平墙也能斜看见砖块的厚度。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段、篇幅让给 §6）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念 ≤5。不重复讲已在上一章讲过的切线空间/TBN/视方向。 */}
+
+## 高度图：一张灰度图存「表面的高低深浅」
+
+视差贴图要用一张新图：<Term def="一张灰度图，每个像素的明暗不是颜色，而是编码了「这一点的表面高低 / 深浅」。本章按 LearnOpenGL 的约定把它当「深度图」用——白＝深（凹下去多）、黑＝浅（接近顶面），所以砖缝处偏白、砖面处偏黑。视差贴图按这张图给出的深度，沿观察方向偏移采样坐标。">高度贴图</Term>（height map）。它和法线图一样按 UV 采样、一样不存颜色，但它每个像素只存**一个灰度值**，表示「这一点的表面是高是低、是深是浅」。
+
+灰度的含义可以有两种约定，本章跟随原书把它当**深度图**用：**白＝深**（这一点凹得最深）、**黑＝浅**（接近顶面）。于是砖缝处偏白（凹下去）、砖面处偏黑（鼓在外）。后面 demo 里这张高度图不用外部贴图，而是在片段着色器里**解析地算出来**——给定一个 UV，直接算出该处砖块该有的深度，效果等同于采样一张真实的高度图。
+
+## 视差贴图：按观察方向偏移纹理坐标
+
+有了深度，<Term def="一种在平整几何上伪造凹凸立体感的技术：渲染每个片元时，先按观察方向和该点的高度图深度，把要采样的纹理坐标偏移一点，再用偏移后的坐标去采样颜色 / 法线。效果是平面斜看时显出真实的凹凸深度和遮挡——近处凸起会挡住它后面的部分，比只改光照的法线贴图更立体。它和法线贴图一样工作在切线空间、用视方向做偏移。">视差贴图</Term>（parallax mapping）的核心思想就一句话：**渲染每个片元时，先按你的观察方向把要采样的纹理坐标偏移一点，再用偏移后的坐标去采样**。
+
+为什么偏移就能造出深度？想象斜着看一面真实凹凸的墙：你的视线本该打在平面的某点 A，但表面在更靠近你的地方先凸起、把视线挡住了，于是你实际看到的是另一点 B 的纹理。视差贴图就照着这个几何关系，把采样坐标从 A 沿视方向挪到 B——平面于是「假装」自己在 B 处有那样的凸起。下面这张侧视图把这个偏移画清楚：
+
+<ParallaxPrincipleDiagram />
+
+它和法线贴图一样工作在**切线空间**、一样用**视方向**（这两个概念上一章已经讲透，这里直接接着用）：视差偏移就是把切线空间里的视方向投影到表面平面、按高度缩放，得到一段 UV 偏移量。它作用在**片段着色器**最前面——先偏移 UV，再拿偏移后的 UV 去采样颜色图、法线图做后续光照。关键差别在于：法线贴图只改了「这点多亮」，视差贴图连「你该看到哪一点」都改了，所以它能造出**近处挡住远处**的真遮挡感——这正是立体感的来源。
+
+## 为什么基础视差不够：陡处会失真
+
+最朴素的做法（**基础视差**）是：在当前 UV 处采一次高度，按这个高度一步算出偏移量，挪一下就完事。这在表面起伏平缓时够用、又快又简单。可一旦高度图很「陡」（深度大、坡很急），一步偏移就会**估歪**——它假设从当前点到目标点之间表面是平的，但陡坡上根本不平，偏移量算多算少都会让纹理**断裂、游泳**，凸起和凹陷接不上。
+
+修法是把「一步到位」换成「**一步步逼近**」。<Term def="基础视差的改进：把表面深度切成若干等距的层，让视线从顶面沿观察方向一层层往深处步进，每到一层就采样高度图比较「当前层深度 vs 该处表面深度」，直到层深度首次超过表面深度＝视线钻到表面以下＝命中，命中层对应的偏移坐标就是采样点。逐层逼近比基础视差一步到位准得多，陡坡上也不失真。">陡峭视差</Term>（steep parallax mapping）把深度切成几层水平面，让视线从顶面沿观察方向**一层层往深处探**，每到一层就采样高度图比一下，直到视线钻到表面以下才停。下面用 Stepper 单步走一遍这个分层步进：
+
+<Stepper>
+  <Step title="① 分层：把深度切成几层，视线沿视方向往深处走">
+    <SteepParallaxStepDiagram step={1} />
+    把表面下 <code>0~1</code>{" "}
+    的深度切成几条等距的层。视线从顶面入口沿观察方向往深处走，每往下走一层，采样坐标就横向偏移一点。
+  </Step>
+  <Step title="② 逐层比较：层深度 < 表面深度吗？">
+    <SteepParallaxStepDiagram step={2} />
+    每走到一层，就在当前偏移坐标处采样高度图、拿到该点的真实表面深度，和当前层深度比。只要
+    <strong>层深度还小于表面深度</strong>
+    ，说明视线仍在表面上方，继续往下一层探。
+  </Step>
+  <Step title="③ 命中：层深度首次 ≥ 表面深度 → 钻到表面以下">
+    <SteepParallaxStepDiagram step={3} />
+    走到某一层时，<strong>层深度第一次大于等于该处表面深度</strong>
+    ——视线钻到真实表面以下了，停下。这一层对应的偏移坐标，就是陡峭视差最终采样的纹理坐标。
+  </Step>
+  <Step title="④ POM 精修：命中层与上一层之间插值">
+    <SteepParallaxStepDiagram step={4} />
+    真实交点其实落在<strong>命中层和它上一层之间</strong>
+    。在这两层之间做一次线性插值，得到比整层取值更平滑的命中点——这就是下面要说的
+    POM。
+  </Step>
+</Stepper>
+
+## 视差遮蔽映射 POM：把命中点磨平滑
+
+陡峭视差只能停在某一层、取整层的坐标，层数少时会有「**台阶感**」。<Term id="term-视差遮蔽映射pom" def="Parallax Occlusion Mapping，陡峭视差的精修版：陡峭视差找到命中层后，真实交点其实落在命中层与上一层之间，POM 取这两层各自的「层深度与表面深度之差」做线性插值，算出更接近真实交点的命中坐标。比单纯取整层平滑很多，是视差三档里效果最好的。">视差遮蔽映射 POM</Term>（Parallax Occlusion Mapping）在陡峭视差的基础上多做一步：命中层和它的上一层之间，真实交点其实在中间某处——拿这两层各自「层深度与表面深度之差」做一次**线性插值**，算出更接近真实交点的坐标。代价只多一点点，台阶感却被磨平，是三档里效果最好的（上面 Stepper 第 ④ 步画的就是它）。
+
+最后还有个收尾问题：偏移后的 UV 可能被推出 `[0,1]` 范围，导致边缘出现拉伸或重复的假象。常见做法是**偏移后 UV 越界就 `discard` 丢弃片元**，让边缘干脆缺一块也比拉花强——这一点放到 §7 误区里细说。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略，不写。基础视差偏移公式 viewDir.xy/viewDir.z*height*scale、陡峭视差分层步进、POM 插值都放 §6 代码对照讲，符合任务卡「偏移公式放 §6」「C 型 §4 选/省」。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五，C 型主 viz = ShaderDemo 片段着色器）：程序化砖块高度图的可斜看表面（frag 解析算高度，无外部贴图）。控件 uViewAngle(斜看角)+uDepth(深度缩放)+uMode(0关/1基础/2陡峭+POM)≤5 + 内建重置。平面正对、切线空间平凡（视方向 xy 偏移直接在 frag 做）。猜一猜引导。frag 无空行（各段 // 注释分隔）。诚实化：只演示确信能渲出的 斜看深度/遮挡感 + 深度缩放 + 三档差异。 */}
+
+## 动手：斜着看，让砖块凸起挡住后面
+
+> 猜一猜：下面是一面贴了「砖块凹凸」的表面，你可以**调倾斜角**斜着去看它。先把模式调到「关」——表面是平的；切到「基础视差」或「陡峭+POM」，再把**倾斜角**拖大、**深度**拖深，你觉得砖块会怎样？正对着看（倾斜角＝0）和斜着看，哪种视差效果更明显？先动手，再读下面。
+
+这面墙在片段着色器里**逐像素算**出来：先解析地算出每个像素处「砖块」的高度（这就相当于一张程序化的高度图，**不用任何外部贴图**），再按当前模式做视差偏移、用偏移后的坐标取砖块颜色和明暗。表面正对你、切线空间是平凡的，所以视方向的 xy 分量直接就是偏移方向——把真实场景才需要的 TBN 换算留到 §6。三个控件：**倾斜角**（视线斜看的角度，0＝正对、越大越斜）；**深度**（砖块凹凸的深浅，0＝平、越大越深）；**模式**（关 / 基础视差 / 陡峭+POM，看三档差异）：
+
+<ShaderDemo
+  aspect={1.5}
+  caption="一面贴了程序化「砖块凹凸」的表面（片段着色器里解析算出每点高度，无外部贴图）。倾斜角：把视线从正对压到斜看——视差只在斜看时才明显，正对几乎无效。深度：砖块凹凸的深浅，0 几乎是平面、越大砖块凸起越厚。模式：关＝纯平贴图、无深度；基础视差＝一步偏移，深度大 + 斜看时砖缝处会断裂游泳；陡峭+POM＝分层步进 + 插值，凸起正确挡住后面、不失真。把模式切到陡峭+POM、倾斜角拖大、深度拖深，盯着砖块边缘——近处砖块凸起会盖住它后面的砖缝，立体感出来了。再切回基础视差对比那道断裂。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uViewAngle;
+uniform float uDepth;
+uniform float uMode;
+out vec4 FragColor;
+// 砖块「高度场」：返回该 uv 处的高度 0..1（1=砖面凸顶、0=砖缝凹底）。row/col 错缝排布
+float brickHeight(vec2 uv) {
+  // 每行砖错半块缝（奇偶行横向偏移），制造真实砖墙的错缝
+  float row = floor(uv.y * 6.0);
+  float ox = mod(row, 2.0) * 0.5;
+  vec2 cell = vec2(uv.x * 4.0 + ox, uv.y * 6.0);
+  vec2 f = fract(cell);
+  // 到最近缝（格子四边）的距离：越靠缝越接近 0
+  float gx = min(f.x, 1.0 - f.x);
+  float gy = min(f.y, 1.0 - f.y);
+  float g = min(gx, gy);
+  // smoothstep 把缝做成细窄低谷，砖面是平顶高地（高=砖面，低=砖缝）
+  return smoothstep(0.0, 0.07, g);
+}
+// 深度图：本章约定 深度 = 1 - 高度（砖缝深、砖面浅），视差用「深度」沿视方向偏移
+float depthAt(vec2 uv) {
+  return 1.0 - brickHeight(uv);
+}
+// 基础视差：在当前 uv 采一次深度，按视方向 xy / z 一步偏移
+vec2 basicParallax(vec2 uv, vec3 V) {
+  float d = depthAt(uv) * uDepth;
+  vec2 off = V.xy / V.z * d;
+  return uv - off;
+}
+// 陡峭视差 + POM：把深度分层、沿视方向步进到命中层，再在命中层与上一层间插值
+vec2 steepParallax(vec2 uv, vec3 V) {
+  const float numLayers = 16.0;
+  float layerDepth = 1.0 / numLayers;
+  vec2 P = V.xy / V.z * uDepth;
+  vec2 deltaUv = P / numLayers;
+  float curLayerDepth = 0.0;
+  vec2 curUv = uv;
+  float curDepth = depthAt(curUv);
+  // 沿视方向一层层下探，直到层深度 >= 该处表面深度 = 命中
+  for (int i = 0; i < 32; i++) {
+    if (curLayerDepth >= curDepth) break;
+    curUv -= deltaUv;
+    curDepth = depthAt(curUv);
+    curLayerDepth += layerDepth;
+  }
+  // POM：命中层与上一层之间按「层深度-表面深度」之差线性插值
+  vec2 prevUv = curUv + deltaUv;
+  float after = curDepth - curLayerDepth;
+  float before = depthAt(prevUv) - (curLayerDepth - layerDepth);
+  float w = after / (after - before);
+  return mix(curUv, prevUv, w);
+}
+void main() {
+  // 像素 → uv（0..1），按宽高比让砖块不被拉伸
+  vec2 uv = gl_FragCoord.xy / uResolution.xy;
+  float aspect = uResolution.x / uResolution.y;
+  uv.x *= aspect;
+  // 切线空间视方向：正对时 (0,0,1)，倾斜角把它往 +x 压成斜看（xy 分量变大）
+  float a = uViewAngle;
+  vec3 V = normalize(vec3(sin(a), sin(a) * 0.35, cos(a)));
+  // 按模式选偏移后的采样坐标
+  vec2 sampleUv = uv;
+  if (uMode > 1.5) {
+    sampleUv = steepParallax(uv, V);
+  } else if (uMode > 0.5) {
+    sampleUv = basicParallax(uv, V);
+  }
+  // 偏移后 UV 越界 → discard，避免边缘拉伸假象
+  if (sampleUv.x > aspect || sampleUv.x < 0.0 || sampleUv.y > 1.0 || sampleUv.y < 0.0) {
+    FragColor = vec4(0.04, 0.04, 0.06, 1.0);
+    return;
+  }
+  // 用偏移后的坐标取砖块明暗：砖面亮、砖缝暗（深度大处暗 = 凹陷的影）
+  float h = brickHeight(sampleUv);
+  vec3 brickColor = vec3(0.62, 0.34, 0.28);
+  float shade = 0.35 + 0.65 * h;
+  vec3 col = brickColor * shade;
+  // 轻微 gamma，提一点对比
+  col = pow(col, vec3(0.85));
+  FragColor = vec4(col, 1.0);
+}`}
+  controls={[
+    {
+      name: "uViewAngle",
+      label: "倾斜角（0 正对 · 大=斜看）",
+      type: "float",
+      min: 0,
+      max: 1.2,
+      step: 0.01,
+      default: 0.8,
+    },
+    {
+      name: "uDepth",
+      label: "深度（0 平 · 越大越深）",
+      type: "float",
+      min: 0,
+      max: 0.4,
+      step: 0.005,
+      default: 0.18,
+    },
+    {
+      name: "uMode",
+      label: "模式（0 关 · 1 基础 · 2 陡峭+POM）",
+      type: "float",
+      min: 0,
+      max: 2,
+      step: 1,
+      default: 2,
+    },
+  ]}
+/>
+
+谜底：模式调到**关**时，无论怎么斜看，墙都是张平纸——砖纹只是「印」上去的，没有厚度。切到**基础视差**、再把倾斜角和深度都拖大，砖块开始有凸起感，但盯着砖缝看会发现纹理在陡处**断裂、游来游去**——这就是一步偏移在陡坡上估歪的后果。切到**陡峭+POM**，同样的斜看和深度下，凸起干净利落、近处砖块**正确挡住**后面的砖缝，立体感稳稳出来。再把**倾斜角拖回 0**（正对着看）：三档几乎看不出差别——这印证了那条「视差正看几乎无效、斜看才明显」：偏移量正比于视方向的 xy 分量，正看时 xy≈0，偏移几乎为零。
+
+{/* 5(辅 viz). CompareSlider（spec §五，C 型辅 ≤2）：左 法线贴图（凹凸是光影假象、轮廓还是平的）vs 右 视差贴图（连纹理位置都偏移、近处真挡住远处）。用两段文字卡，不塞两个 WebGL 画布（任务卡明确）。 */}
+
+## 一句话对比：法线贴图 vs 视差贴图
+
+> 猜一猜：同一面平墙、同一张「砖块凹凸」信息。左边用法线贴图、右边用视差贴图。斜着看过去，哪一边的砖块会**真的挡住**它后面的砖缝？两者骗的到底是什么不一样？
+
+把滑块拖到中线两侧对照：法线贴图只改「这点多亮」，斜看时轮廓还是平的、砖缝照样露在外面；视差贴图连「你该看到哪一点」都改，斜看时近处凸起**真的遮住**后面——这就是它更立体的原因：
+
+<CompareSlider
+  leftLabel="法线贴图（只骗光照 · 轮廓还是平的）"
+  rightLabel="视差贴图（偏移纹理坐标 · 近处真挡住远处）"
+  initial={46}
+  left={
+    <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 p-6 text-center">
+      <div className="text-sm font-semibold text-secondary">法线贴图</div>
+      <div className="text-xs leading-relaxed text-secondary">
+        只逐片元扰动<strong>法线</strong>、改「这点多亮」。凹凸全是
+        <strong>光影假象</strong>
+        ——斜着看，轮廓还是齐刷刷一条平线，砖缝照样露在外面，没有遮挡。
+      </div>
+    </div>
+  }
+  right={
+    <div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 p-6 text-center">
+      <div className="text-sm font-semibold text-accent">视差贴图</div>
+      <div className="text-xs leading-relaxed text-secondary">
+        按观察方向<strong>偏移采样坐标</strong>
+        、改「你看到哪一点」。斜着看，近处凸起的砖块
+        <strong>真的挡住</strong>后面的砖缝——有了真遮挡，才有真立体。
+      </div>
+    </div>
+  }
+/>
+
+{/* 6. 代码对照（spec §六，C 实战型重心）：a. 基础视差——切线空间视方向 viewDir.xy/viewDir.z*(height*scale)、uv-=offset；b. 陡峭视差——分层 for 循环沿视方向步进采样深度图直到命中；c. POM——命中层与上一层线性插值。C++/GLSL330 ↔ WebGL2/GLSL300es 同逻辑段；单块≤30 行；块间解说；version/precision 差异 Callout warn。 */}
+
+## 代码对照：从基础视差到陡峭视差再到 POM
+
+落到真代码，视差贴图就是在片段着色器最前面算出**偏移后的 UV**，再用它去采样颜色 / 法线图。下面三段从浅到深。先看**基础视差**：在当前 UV 采一次深度，按切线空间视方向 `viewDir` 的 `xy/z` 一步偏移。`viewDir` 是上一章那个变进切线空间的视方向（指向眼睛），`depthScale` 控制凹凸深浅：
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（基础视差）">
+
+```glsl
+// 基础视差：当前 uv 采一次深度，按视方向 xy/z 一步偏移
+vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir) {
+  float height = texture(depthMap, texCoords).r;  // 深度图：白=深
+  // viewDir.xy / viewDir.z 把视方向投影到表面、按高度和缩放定偏移量
+  vec2 p = viewDir.xy / viewDir.z * (height * depthScale);
+  return texCoords - p;                           // 沿视方向把 uv 挪一步
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（基础视差）">
+
+```glsl
+// 基础视差：当前 uv 采一次深度，按视方向 xy/z 一步偏移
+vec2 ParallaxMapping(vec2 texCoords, vec3 viewDir) {
+  float height = texture(depthMap, texCoords).r;  // 深度图：白=深
+  // viewDir.xy / viewDir.z 把视方向投影到表面、按高度和缩放定偏移量
+  vec2 p = viewDir.xy / viewDir.z * (height * depthScale);
+  return texCoords - p;                           // 沿视方向把 uv 挪一步
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+注意那个 `/ viewDir.z`：视线越斜，`viewDir.z`（朝表面外的分量）越小、偏移量越大，所以斜看视差才明显；正看时 `viewDir.z≈1`、`xy≈0`，偏移几乎为零。一步偏移在陡处会估歪，于是换成**陡峭视差**——把深度分层、沿视方向一层层步进，直到层深度首次超过该处表面深度就停（命中）：
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（陡峭视差：分层步进）">
+
+```glsl
+// 陡峭视差：深度分 N 层，沿视方向逐层下探到命中层
+const float numLayers = 16.0;
+float layerDepth = 1.0 / numLayers;
+float curLayerDepth = 0.0;
+vec2 P = viewDir.xy / viewDir.z * depthScale;     // 总偏移方向 × 缩放
+vec2 deltaUv = P / numLayers;                     // 每层挪一小段
+vec2 curUv = texCoords;
+float curDepth = texture(depthMap, curUv).r;
+while (curLayerDepth < curDepth) {                // 层深度 < 表面深度就继续探
+  curUv -= deltaUv;                               // 沿视方向再挪一层
+  curDepth = texture(depthMap, curUv).r;
+  curLayerDepth += layerDepth;
+}
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（陡峭视差：分层步进）">
+
+```glsl
+// 陡峭视差：深度分 N 层，沿视方向逐层下探到命中层
+const float numLayers = 16.0;
+float layerDepth = 1.0 / numLayers;
+float curLayerDepth = 0.0;
+vec2 P = viewDir.xy / viewDir.z * depthScale;     // 总偏移方向 × 缩放
+vec2 deltaUv = P / numLayers;                     // 每层挪一小段
+vec2 curUv = texCoords;
+float curDepth = texture(depthMap, curUv).r;
+for (int i = 0; i < 32; i++) {                    // WebGL2 循环上界须常量
+  if (curLayerDepth >= curDepth) break;           // 命中即停
+  curUv -= deltaUv;
+  curDepth = texture(depthMap, curUv).r;
+  curLayerDepth += layerDepth;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  跨端差异这里有个**真坑**：桌面 GLSL 可以写 `while (条件) { … }`
+  这种循环边界不定的循环；**WebGL2（GLSL 300 es）的 for
+  循环上界必须是编译期常量**，不能用变量当上界。所以 WebGL2 端要写成
+  `for (int i = 0; i &lt; 32; i++) { if (命中) break; … }`——用一个够大的固定上界
+  + 提前 `break`。其余 `#version 330 core` vs `#version 300 es`、片段着色器必写
+  `precision highp float;` 是老几样，视差的计算逻辑两端完全一致。
+</Callout>
+
+陡峭视差只能停在某一层，层少时有台阶感。**POM** 在命中层和上一层之间，用两层各自「层深度 − 表面深度」之差做线性插值，把命中点磨平滑：
+
+<CodeTabs>
+  <Tab label="C++ / GLSL 330（POM：命中层插值）">
+
+```glsl
+// POM：命中层 curUv 与上一层 prevUv 之间线性插值精修
+vec2 prevUv = curUv + deltaUv;                    // 回退到上一层
+// 两层各自「层深度 - 表面深度」之差（命中后为正、命中前为负）
+float afterDepth  = curDepth - curLayerDepth;
+float beforeDepth = texture(depthMap, prevUv).r - (curLayerDepth - layerDepth);
+float weight = afterDepth / (afterDepth - beforeDepth);
+vec2 finalUv = mix(curUv, prevUv, weight);        // 按权重在两层间插值
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2（POM：命中层插值）">
+
+```glsl
+// POM：命中层 curUv 与上一层 prevUv 之间线性插值精修
+vec2 prevUv = curUv + deltaUv;                    // 回退到上一层
+// 两层各自「层深度 - 表面深度」之差（命中后为正、命中前为负）
+float afterDepth  = curDepth - curLayerDepth;
+float beforeDepth = texture(depthMap, prevUv).r - (curLayerDepth - layerDepth);
+float weight = afterDepth / (afterDepth - beforeDepth);
+vec2 finalUv = mix(curUv, prevUv, weight);        // 按权重在两层间插值
+```
+
+  </Tab>
+</CodeTabs>
+
+拿到 `finalUv`（基础视差是 `texCoords - p`，陡峭是命中层 `curUv`，POM 是插值后的 `finalUv`）后，剩下的和上一章一模一样：用这个偏移后的 UV 去采样颜色图、采样法线图解码、算 Blinn-Phong。视差只是在所有采样**之前**先把 UV 挪到了「你斜看真正该看到的那一点」。
+
+{/* 7. 误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。必含：①视差方向/除以 viewDir.z 搞反→凹凸内陷或浮起反了；②深度缩放过大→陡角处剧烈失真/游泳；③偏移后 UV 越界没 discard→边缘拉伸重复假象；④基础视差用在陡峭高度图上→断裂。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象（偏移方向反了）**：开了视差后，砖块不是凸出来、而是
+  **凹进去**（或本该凹的缝反而鼓起），整体立体感「内外翻」。**原因**：偏移要么用了
+  `texCoords +
+  p`（该减成了加），要么把「高度图」和「深度图」的明暗约定搞反了（白到底是高还是深）。**修法**：约定清楚——本章用**深度图**（白=深），沿视方向
+  `texCoords - p` 偏移；若你的图是**高度图**（白=高），需把含义反过来（`height =
+  1.0 - sample`）再用。先在 demo 里调小深度确认方向对了，再加大。
+</Callout>
+
+<Callout type="trap">
+  **现象（深度缩放过大）**：把深度往大里拖，纹理在陡角处**剧烈失真、来回游泳**，凸起和凹陷接不上、像贴歪了。**原因**：`depthScale`
+  太大 →
+  一步（或每层）偏移量过大，基础视差的「表面是平的」假设彻底失效，连陡峭视差的分层都跨过了真实交点。**修法**：把
+  `depthScale` 收到一个**温和**的值（demo
+  里别拉满）；深度确实要大时，提高陡峭视差的**层数**（`numLayers`
+  调大）让步进更细。深度和层数要匹配，不能只猛拉深度。
+</Callout>
+
+<Callout type="trap">
+  **现象（边缘拉伸 /
+  重复）**：表面边缘出现**被拉长、或纹理重复**的假象，像贴图溢出了边界。**原因**：视差偏移把采样
+  UV 推出了 `[0,1]` 范围，采样器按环绕方式（REPEAT / CLAMP）取了边界外的值，造成
+  <Term def="斜看时近处凸起会自然挡住它后面较低的部分。视差偏移把采样坐标推出表面边界、或推到本该被遮住的区域时，若不丢弃就会露出错误拉伸的纹理——所谓自遮挡瑕疵。常见修法是偏移后 UV 越界就 discard 丢弃片元，让边缘缺一块也比拉花强。">
+    自遮挡
+  </Term>
+  瑕疵。**修法**：偏移后判断 `texCoords` 是否越界，越界就 `discard`
+  丢弃这个片元——边缘缺一小块，远比拉花重复好看。
+</Callout>
+
+<Callout type="trap">
+  **现象（基础视差用在陡高度图上）**：换了张深度大、坡很急的高度图，基础视差立刻**断裂、错位**，凸起边缘崩开。**原因**：基础视差只采一次、一步偏移，默认从当前点到目标点之间表面是平的；陡坡上这个假设大错，偏移量必然估歪。**修法**：陡高度图改用**陡峭视差
+  /
+  POM**——分层步进逐层逼近真实命中点。基础视差只留给**起伏平缓**的表面（平缓时它又快又够用）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题 + C 型 1 道独立实现/选型题（基础 vs 陡峭 vs POM 怎么选）；答案折叠。 */}
+
+## 小结
+
+- **视差贴图**＝渲染每个片元时，先**按观察方向偏移采样的纹理坐标**、再去采样，让平整几何在斜看时显出真实的凹凸深度和**遮挡**（近处凸起挡住后面），比只改光照的法线贴图更立体
+- 偏移量正比于切线空间视方向的 `xy/z`：所以视差**斜看才明显、正看几乎无效**（正看 xy≈0）
+- **基础视差**只采一次、一步偏移，平缓表面够用；陡 / 深的高度图上会**断裂游泳**
+- **陡峭视差**把深度分层、沿视方向**逐层步进**到命中层，修掉陡处失真；**POM** 再在命中层与上一层间**线性插值**，把台阶感磨平滑——三档里效果最好
+- 偏移后 UV 越界要 `discard`，否则边缘出现**拉伸 / 重复**的自遮挡瑕疵
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个 Demo 里，把它调成这样的目标效果：**砖块凸起最立体、近处砖块明显挡住后面的砖缝，且没有断裂失真**。说出你把三个控件各调到什么方向，并解释为什么这组参数最能体现视差的真遮挡。
+
+<Answer>
+
+- **模式**：切到**陡峭+POM**（关＝没有视差；基础视差在深 + 斜看时会断裂，体现不出干净的遮挡）。
+- **倾斜角**：拖**大**（往斜看方向拖）——视差偏移正比于视方向的 xy 分量，越斜偏移越大，近处凸起才越能盖住后面；正对着看（倾斜角＝0）几乎没有遮挡。
+- **深度**：拖**深**（往大里拖，但别拉到最满）——深度越大砖块凸起越厚、遮挡越明显；但太满会超出陡峭视差的层数能力，反而开始失真，所以取一个「深而不崩」的值。
+
+合起来：陡峭+POM 提供正确的分层步进（不失真）、大倾斜角制造斜看（让偏移显著）、适中偏大的深度放大凸起（遮挡明显）。把模式切回基础视差对比，同样的深 + 斜看下那道断裂就回来了，验证「陡处要用陡峭视差」。
+
+</Answer>
+
+**练习 2（独立选型题 · C 型）** 你要给三种表面分别选视差方案：(a) 一面起伏**平缓**的磨砂石膏墙；(b) 一块**深沟壑**的鹅卵石路面，要求斜看时石头之间有清晰遮挡、不能失真；(c) 一个性能吃紧、但又想要鹅卵石那种**最平滑**遮挡的手游场景。分别该选**基础视差 / 陡峭视差 / 视差遮蔽映射 POM** 中的哪个？为什么？
+
+<Answer>
+
+- **(a) 平缓石膏墙 → 基础视差**。起伏小、坡平缓，「一步偏移、表面近似平」的假设基本成立，基础视差又快又够用，没必要上分层步进的开销。
+- **(b) 深沟壑鹅卵石 + 要清晰遮挡不失真 → 陡峭视差（至少）**。深度大、坡陡，基础视差必断裂；陡峭视差分层逐层逼近命中点，才能正确算出「近石头挡住后石头」的遮挡。
+- **(c) 性能吃紧但要最平滑 → POM，但把层数压到够用**。POM 是三档里最平滑的（命中层插值磨掉台阶），相比陡峭视差只多一次插值、开销增加很小；性能吃紧时主要靠**减少层数 `numLayers`** 来省，而不是退回陡峭视差——插值这一步很便宜、却换来明显更平滑的边缘。
+
+要点：选型本质是「表面有多陡」和「能花多少步进」的权衡。平缓用基础（省）、陡用陡峭（准）、要平滑加 POM（插值便宜），深度越大越需要更多层数撑住。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="高度贴图">
+  一张灰度图，每个像素的明暗不是颜色，而是编码「这一点的表面高低 /
+  深浅」。本章按原书约定把它当**深度图**用：**白=深**（凹下去多）、**黑=浅**（接近顶面），所以砖缝偏白、砖面偏黑。视差贴图按这张图给的深度，沿观察方向偏移采样坐标。详见本章「高度图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="视差贴图">
+  一种在平整几何上**伪造凹凸立体感**的技术：渲染每个片元时，先**按观察方向**和该点的高度图深度，把要采样的纹理坐标**偏移一点**，再用偏移后的坐标采样。效果是平面斜看时显出真实的凹凸深度和**遮挡**——近处凸起挡住后面，比只改光照的法线贴图更立体。和法线贴图一样工作在切线空间、用视方向。详见本章「视差贴图」一节。
+</GlossaryItem>
+
+<GlossaryItem term="陡峭视差">
+  基础视差的改进。基础视差一步偏移、陡坡上会估歪；陡峭视差把深度切成若干**等距的层**，让视线从顶面沿观察方向**一层层往深处步进**，每层采样高度图比较「当前层深度
+  vs
+  该处表面深度」，直到层深度首次超过表面深度＝视线钻到表面以下＝**命中**，命中层对应的偏移坐标就是采样点。逐层逼近比一步到位准得多。详见本章「为什么基础视差不够」一节。
+</GlossaryItem>
+
+<GlossaryItem term="视差遮蔽映射POM">
+  Parallax Occlusion
+  Mapping，陡峭视差的**精修版**。陡峭视差找到命中层后，真实交点其实落在命中层与上一层之间；POM
+  取这两层各自「层深度 −
+  表面深度」之差做**线性插值**，算出更接近真实交点的命中坐标，把陡峭视差的台阶感磨平滑。代价只多一次插值，是视差三档里效果最好的。详见本章「视差遮蔽映射
+  POM」一节。
+</GlossaryItem>
+
+<GlossaryItem term="自遮挡">
+  斜看时近处凸起会自然挡住它后面较低的部分。视差偏移把采样坐标**推出表面边界**、或推到本该被遮住的区域时，若不丢弃就会露出错误拉伸
+  / 重复的纹理——这种瑕疵就叫自遮挡瑕疵。常见修法是偏移后 UV 越界就 `discard`
+  丢弃片元，让边缘缺一块也比拉花强。详见本章「容易踩的坑」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
