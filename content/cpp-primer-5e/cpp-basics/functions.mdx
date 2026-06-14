@@ -1,0 +1,583 @@
+---
+title: 函数
+type: C
+section: C++基础
+order: 6
+description: 掌握函数的定义、调用、参数传递（值/引用/指针/const）、返回类型、重载与内联——把代码组织成可复用的模块
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §6 改编）：函数定义/调用、参数传递（值/引用/指针/const）、数组形参、重载、内联/constexpr。
+   重心在交互 Demo Stepper(§5)+ 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 函数基础（声明/定义/调用/返回类型）— viz: FunctionCallStackDiagram（调用栈示意图，支持 step prop）
+   2) 参数传递（值传递、引用传递、const引用）— viz: ParameterPassingDiagram（值vs引用内存对比）
+   3) 数组形参与返回值 — viz: ArrayParameterDiagram（数组退化示意图）
+   4) 函数重载 — viz: OverloadResolutionDiagram（重载匹配规则流程图）
+   5) 内联函数/constexpr函数 — 代码示例 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能正确定义和调用一个函数——写出返回类型、形参列表和函数体，并能解释实参到形参的值传递过程
+- 能根据场景正确选择值传递、引用传递或 const 引用传递，并通过重载为同一个操作提供不同参数类型的版本
+- 能回答：`void reset(int &x) { x = 0; }` 和 `void reset(int x) { x = 0; }` 在调用 `int a = 5; reset(a);` 之后，a 的值分别是什么？为什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用①空间与地图——函数像加工车间，你把原材料送进去，拿到成品出来。 */}
+
+## 你的代码需要一个「加工车间」
+
+到目前为止你写的程序都可以装在一个 `main()` 里面——所有代码从上到下一口气跑完。但真实世界的软件不是这样的：一个程序可能有几千行甚至几百万行代码——如果全挤在一个大块里，你找不到哪段代码在干什么、也没法说「同样的逻辑别写两遍，下次直接调用」。
+
+想象你要给 100 个不同的零件打孔——你不会每次跑到厂房里手画图纸重新造一台钻床。你会造一台「钻床车间」——画好图纸、标好参数（材料进、钻头型号、打多深），之后每次只消把材料送进去就能拿到打好孔的成品。C++ 里的**函数**就是你的钻床车间——你把数据送进去，拿到计算结果出来，再也不用重写同样的代码。
+
+如果没有函数会怎样？你会在 `main` 里反复写一样的逻辑——「计算平方」要写十几遍、「判断素数」每一处都拷贝粘贴——代码又长又难改。本章教你建造自己的加工车间：怎么写、怎么送材料进去、怎么拿成品出来——这是从「写顺序步骤」到「设计可复用的代码模块」的关口。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §6 代码）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+{/* 3.1 函数基础 */}
+
+## 函数是什么：四个零件拼出一个加工车间
+
+在 C++ 里定义一个函数需要四个零件——缺一个都不行：
+
+<Term def="C++ 中最基本的代码复用单元。由返回类型、函数名、形参列表和函数体四部分组成。函数定义是完整的实现；函数声明（只写前面三部分加分号）告诉编译器「有这个函数、后面会定义」。调用函数时实参的值被拷贝给形参（值传递），函数体执行完毕后把返回值（如果有的话）交还给调用方。">函数（function）</Term>——**理解成一张车间蓝图**：车间名字（函数名）、需要什么原材料（形参列表）、产出什么（返回类型）、以及怎么加工（函数体）。
+
+<FunctionCallStackDiagram />
+
+把车间蓝图翻译成 C++ 代码——下面是一个完整的函数定义和调用：
+
+```cpp
+// 函数定义 —— 车间蓝图
+int add(int x, int y) {          // int: 返回类型，return 的东西的类型
+    int result = x + y;          // 形参 x, y: 原材料；函数体: 怎么加工
+    return result;               // return: 把成品扔出去
+}
+
+// 调用 —— 把材料送进去、拿成品出来
+int main() {
+    int sum = add(3, 5);         // 3 和 5 是实参——实际的原材料
+    std::cout << sum;            // 输出 8
+    return 0;
+}
+```
+
+整个过程分五步——看上面的 FunctionCallStackDiagram 图，每一步对应图上一个高亮部分：
+
+1. **调用前**：`main()` 正常运行，栈上只有 main 的局部变量。
+2. **传参**：实参 3 和 5 被**拷贝**给形参 x 和 y——这是关键：x 和 y 是 3 和 5 的副本，不在同一个内存位置。
+3. **执行**：CPU 跳到 add 第一行——`int result = x + y`，算出 result = 8。此时 main 处于暂停状态。
+4. **返回**：`return result`——把 8 放到约定的寄存器（eax/rax）里，add 即将退出。
+5. **栈帧销毁**：add 的整个「车间」——形参 x、y 和局部变量 result——随着栈帧回收全部消失。CPU 回到 main 继续执行，把寄存器的 8 赋给 sum。
+
+<Callout type="tip">
+  函数声明 vs 定义：声明只告诉编译器「有这么个函数」——`int add(int, int);`（写形参类型就行，名字可以省）；定义是完整的实现——包含函数体 `{...}`。声明放在头文件里让其他 .cpp 知道这个函数存在；定义放在一个 .cpp 文件里避免重复定义。
+</Callout>
+
+## 参数传递：拷贝还是别名？——这是整章最重要的一节
+
+上一节说了函数调用时实参会被「拷贝」给形参。但 C++ 给了你三种传递原材料的方式——**什么时候用哪一种，是这章最重要的决策**。
+
+<Term def="把实参的值拷贝一份给形参。函数内修改形参不影响实参——因为改的是副本。适合小对象（int、double 等基本类型）或者函数确实需要独立副本来修改的场景。拷贝大对象（如 vector、string）开销大。">值传递（pass by value）</Term>——**就是复印图纸**：车间拿到的是原稿的复印件，在上面写字画图不影响原件。
+
+<Term def="形参用 T& 声明——不拷贝实参，而是让形参直接引用实参的内存。函数内修改形参就是修改实参。适合函数确实需要修改原值的场景（如 swap 交换两个变量）。不能接受字面值（f(5) 编译错误）——因为临时值没有有名字的内存地址可以引用。">引用传递（pass by reference）</Term>——**就是直接把原件递给你**：你往原件上写字，原件就变了。
+
+<Term def="形参用 const T& 声明——不拷贝实参（避免大对象拷贝开销），但也不能修改它。可以接受字面值和临时对象。函数的设计意图清晰——「我只读、不改」。是传递 string、vector、自定义类等大对象的首选方案。">const 引用传递（const reference）</Term>——**就是给你看原件但不许动笔**：你能读上面的全部内容，但不能做任何修改——同时省了复印的成本。
+
+<ParameterPassingDiagram />
+
+看上面的对比图——左边是值传递：实参 a 存 5 在地址 0x100，形参 x 存 5 的拷贝在地址 0x200——两块**独立内存**，改 x 不影响 a。右边是引用传递：`int &x = a` 让 x 和 a 共享同一块内存——修改 x 就是修改 a。
+
+代码对照——三种传递方式的行为差异：
+
+```cpp
+// ① 值传递：改不了原值
+void addOne_val(int x) { x = x + 1; }    // 改的是副本
+
+// ② 引用传递：能改原值
+void addOne_ref(int &x) { x = x + 1; }   // 改的是原值本身
+
+// ③ const 引用：只读不拷贝
+void print_vec(const std::vector<int> &v) {
+    // v.push_back(1);  ← 编译错误，const 不能改
+    std::cout << v.size();  // ✓ 只读 OK，且没拷贝整个 vector
+}
+
+int main() {
+    int a = 5;
+    addOne_val(a);         // a 还是 5
+    addOne_ref(a);         // a 变成 6
+    print_vec({1,2,3});    // const 引用能接受临时对象
+    return 0;
+}
+```
+
+<Callout type="warn">
+  **初学法则**：先记住两条——**需要改原值用 `T&`，只读且不拷大对象用 `const T&`，基本类型（int/double）用值传递。** 这两条适用 90% 的场景。后面会学指针传递——它是把原件的门牌号复印给你（地址是值拷贝），然后你按门牌号找到门进去改。入门阶段先把值和引用搞清楚就够。
+</Callout>
+
+## 把数组当参数传进去——一个你必须知道的大坑
+
+现在你知道值传递会拷贝实参——那把整个数组拷一份传给函数行不行？**不行。** C++ 在设计上不允许直接拷贝数组——所以「传数组」这件事有一个特殊的规则。
+
+<Term def="C++ 中数组作为函数形参时会自动转换成指向首元素的指针。void f(int arr[10]) 和 void f(int* arr) 完全等价——不管 [] 里写什么数，编译器都当 T* 处理。函数内部 sizeof(arr) 返回指针大小而非数组大小，必须单独传长度参数。C 和 C++ 的标准委员会几十年来一直在为「怎么安全传数组」争执——目前最安全的办法是用 std::array 或 std::vector。">数组退化（array decay）</Term>——**数组一进函数就脱掉了「数组」的外套，只剩一根指向第一个元素的指针**。函数永远不知道你传进来的数组有多长。
+
+<ArrayParameterDiagram />
+
+看上面的图——左边调用方有一个完整的 `int arr[5] = {1,2,3,4,5}`，`sizeof(arr) = 20` 能算长度。传进函数后，形参 `int arr[]` 实际上是 `int* arr`——一根 8 字节的指针。函数内部的 `sizeof(arr)` 返回 8，不是 20——长度信息丢了。
+
+代码验证——四种写法的形参完全等价：
+
+```cpp
+// 下面四个函数声明——完全等价！都只收到一个 int* 指针
+void print1(int arr[10]);    // [10] 被编译器无视
+void print2(int arr[5]);     // [5] 也被无视
+void print3(int arr[]);      // 空括号同样退化为指针
+void print4(int *arr);       // 这才是它真正的样子
+
+// 函数内部 sizeof(arr) = 8 —— 指针大小，不是数组大小
+// 必须单独传长度：
+void print_correct(int *arr, int n) {
+    for (int i = 0; i < n; i++)   // n 是调用方传入的长度
+        std::cout << arr[i] << ' ';
+}
+```
+
+<Callout type="warn">
+  唯一的例外：`void f(int (&arr)[10])`——带括号的引用可以保留数组长度信息。但使用受限——只能传长度恰好为 10 的数组、不能传别的长度。实践中极少使用这条语法。业界推荐：要安全传数组用 `std::array<int, 10>` 或 `std::vector<int>`——它们自带长度信息，不会退化。
+</Callout>
+
+## 同一车间，多种订单：函数重载
+
+有时候你需要「同一个操作名、但接受不同类型的原材料」。比如 `max(3, 5)` 比较两个 int、`max(3.14, 2.71)` 比较两个 double——你不想起两个名字叫 `maxInt` 和 `maxDouble`，而是想用一个 `max` 搞定。
+
+<Term def="C++ 允许同一作用域内有多个同名函数，只要它们的形参列表不同（数量、类型或顺序）。编译器通过比较实参和形参的类型在多个重载版本中选择最匹配的那一个。只改返回类型不算重载——重载只看形参列表。匹配过程分三步：候选函数（同名可见）→ 可行函数（数量对、类型能配）→ 最佳匹配（转换代价最小）。">函数重载（function overloading）</Term>——**就是把同一种操作注册为多个工单类型**：车间看到来的是 int 就走 int 产线、来的是 double 就走 double 产线。
+
+<OverloadResolutionDiagram />
+
+看上面的流程图——编译器做了三步筛选才能确定调用哪个重载：
+
+1. **候选**：找所有叫同一个名字且可见的函数——不管形参类型对不对。
+2. **可行**：筛出形参数量对得上、每个实参都能通过隐式转换配上对应形参的。
+3. **最佳匹配**：在可行函数里挑隐式转换最少的那一个。
+
+代码示例——用 `max` 重载处理 int 和 double：
+
+```cpp
+// 两个重载：同名、形参类型不同
+int max(int a, int b) {
+    return a > b ? a : b;
+}
+double max(double a, double b) {
+    return a > b ? a : b;
+}
+
+int main() {
+    auto r1 = max(5, 3);       // 调用 max(int, int)  → 5
+    auto r2 = max(3.14, 2.71); // 调用 max(double, double) → 3.14
+    return 0;
+}
+```
+
+重载的匹配有优先级——从高到低：① 精确匹配（类型完全一样）② const 转换 ③ 类型提升（int→long）④ 算术/指针转换 ⑤ 类类型转换。如果两个重载版本匹配得「一样好」——就会出现**二义性（ambiguous）**，编译器报错。
+
+## 特殊车间：内联函数和编译期函数
+
+普通的函数调用有开销——压栈、跳转、返回。对于特别短小的函数（比如一行 `return a + b`），调用开销可能比函数体本身还大。C++ 提供了两个机制让它变快：
+
+<Term def="用 inline 关键字声明的函数——建议编译器在调用点直接展开函数体，省去 push/call/ret 的栈帧开销。inline 只是对编译器的建议而非强制命令——编译器可以拒绝内联复杂函数。现代编译器会自动内联简单函数，不写 inline 也可能被内联。inline 函数必须定义在头文件中（每个编译单元都要看到完整定义）。">内联函数（inline function）</Term>——**就是把车间拆了，加工工序直接搬到使用它的地方**。适合体积极小、调用频繁的工具函数。
+
+<Term def="用 constexpr 关键字声明的函数——暗示编译器在编译期就能算出结果。要求函数体足够简单（C++11 只允许一条 return 语句，C++14 放宽了），返回值和所有形参都必须是字面值类型。如果所有实参都是常量，编译器在编译期直接算出结果——零运行时开销。如果实参中有变量，退化为普通函数在运行时执行。">constexpr 函数</Term>——**就是在工厂开工之前就把结果算好了**。适合需要在编译阶段就确定值的场景——比如数组大小、模板参数。
+
+```cpp
+// inline：一行小工具——建议编译器展开
+inline int square(int x) {
+    return x * x;           // 体积极小、调用频繁
+}
+
+// constexpr：在编译期就能算出来
+constexpr int factorial(int n) {
+    return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+int main() {
+    int a = square(5);          // 运行时或内联——看编译器心情
+
+    constexpr int b = factorial(5);  // 编译期计算——b = 120
+    int arr[factorial(3)];           // 编译期算出来 6——用作数组大小
+    return 0;
+}
+```
+
+<Callout type="tip">
+  inline 和 constexpr 可以组合：`constexpr` 函数隐式也是 `inline` 的——因为编译期求值和调用点展开都要求编译器能在当前编译单元看到函数定义。所以 constexpr 函数同样需要放在头文件里。现代 C++ 的趋势是：小工具函数优先用 constexpr 而非 inline——编译期求值比运行期内联更好。
+</Callout>
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型用 Stepper 展示函数调用栈从调用→传参→执行→返回全过程。
+   猜一猜引导；每步必须带图示/SVG 可视化。 */}
+
+## 动手：一步步看函数调用在栈上发生了什么
+
+每次函数调用 CPU 都在栈上做一套精准的机械动作——压入实参、创建局部变量、执行函数体、回收整个帧。下面把 `int add(int x, int y) { int z = x + y; return z; }` 的调用拆成五步——每一步对应 FunctionCallStackDiagram 图中高亮的那一帧。
+
+> 猜一猜：`int add(int x, int y) { x = 100; return x + y; }` 调用 `add(3, 5)` 后，函数返回什么？调用方传进去的 3 在 add 里面被改成 100 之后，调用方手里的 3 受影响了吗？通过下面 Stepper 一步步看。
+
+<Stepper>
+  <Step title="① 调用前：main 的栈帧">
+    <FunctionCallStackDiagram step={0} />
+    调用 `add(3, 5)` 之前——栈上只有 `main()` 的栈帧。main 的局部变量（如果有的话）舒舒服服待在帧里，add 还什么都没分到。
+  </Step>
+  <Step title="② 传参：实参被拷贝进栈">
+    <FunctionCallStackDiagram step={1} />
+    程序准备调用 add——实参 3 和 5 按照调用约定被压入栈中（或被放入寄存器——取决于平台）。注意这里传的是**值**：3 和 5 这两个 int 是原值的拷贝——和调用方手里的 3 没有内存上的关联。
+  </Step>
+  <Step title="③ 执行：add 的栈帧压入，计算开始">
+    <FunctionCallStackDiagram step={2} />
+    CPU 跳转到 add 的第一行。形参 x=3、y=5 和局部变量 z 都在新分配的 add 栈帧里。此时 main 的栈帧在下面等着——暂停状态。`int z = x + y` 算出 z = 8。如果函数体内写了 `x = 100`，改的只是栈帧里的这个副本——main 手里的 3 毫发无伤。
+  </Step>
+  <Step title="④ 返回值：z=8 写入寄存器">
+    <FunctionCallStackDiagram step={3} />
+    `return z` 执行——z 的值 8 被放到约定的返回寄存器（如 eax/rax）。CPU 记住返回地址——等栈帧一销毁就回到 main 的调用点继续执行。
+  </Step>
+  <Step title="⑤ 栈帧销毁：add 的一切烟消云散">
+    <FunctionCallStackDiagram step={4} />
+    栈指针拨回 add 调用前的位置——整个 add 栈帧被回收。形参 x、y 和局部变量 z 的内存区域被操作系统收回，下一场函数调用随时会覆盖这里。CPU 回到 main，把返回寄存器的 8 赋给 sum 或 cout 输出。函数的生命周期到此结束。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  这个 Stepper 的核心教具价值：让你亲眼看到形参和实参**不是同一个东西**——形参是实参的副本、住在栈帧里的一块独立内存。这就是为什么 `add` 里面就算 `x = 100` 也不影响 main 里的 3。理解了这一点你就能回答学习目标第三条的检验问题。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说）。 */}
+
+## 代码逐段拆解：把本章所有工具串起来
+
+这一节覆盖本章函数定义、参数传递、引用与 const、数组、重载、inline/constexpr 的核心用法——每段一个主题，读完就能在自己的程序里设计和使用函数。
+
+### 用引用参数实现真正的 swap
+
+```cpp
+#include <iostream>
+
+// 引用的经典用例——交换两个变量的值
+void swap(int &a, int &b) {
+    int temp = a;          // 把 a 存起来
+    a = b;                 // 把 b 写进 a —— 改的就是原值
+    b = temp;              // 把暂存的 a 写进 b
+}
+
+int main() {
+    int x = 10, y = 20;
+    std::cout << "交换前: " << x << " " << y << '\n';
+    swap(x, y);
+    std::cout << "交换后: " << x << " " << y << '\n';
+    return 0;
+}
+```
+
+这是引用传递最经典的例子。如果形参没有 `&`——`void swap(int a, int b)`——交换的只是副本，x 和 y 纹丝不动。加上 `&` 之后，a 就是 x 的别名、b 就是 y 的别名——交换 a 和 b 就是交换 x 和 y。
+
+### const 引用 vs 值传递的性能对比
+
+```cpp
+#include <iostream>
+#include <string>
+
+// 值传递：拷贝一整个 string——str 在这被完整复制了一份
+void greet_copy(std::string str) {
+    std::cout << "你好，" << str << "!\n";
+}
+
+// const 引用：不拷贝——直接引用调用方手里的 string
+void greet_ref(const std::string &str) {
+    std::cout << "你好，" << str << "!\n";
+    // str = "别的";  ← 编译错误——const 不能改
+}
+
+int main() {
+    std::string name = "张三李四王五赵六钱七孙八周吴郑王";
+    greet_copy(name);   // 把整个 string 拷贝一份进栈
+    greet_ref(name);    // 只传 8 字节引用，零开销
+    return 0;
+}
+```
+
+差别在哪？`greet_copy` 把整个 `name` 字符串（可能是几十到几千字节）完整拷贝一份到形参 `str`——内存和时间开销。`greet_ref` 只传一个 8 字节的引用——零拷贝。结论：**凡是比 int/double 大的对象，默认用 `const T&` 传**——除非函数确实需要修改原值或要改独立的副本。
+
+### 遍历数组并返回统计结果
+
+```cpp
+#include <iostream>
+
+// 传数组 = 传指针 —— 必须同时传长度
+void analyze(const int *arr, int n, int &sum, int &max) {
+    sum = 0;
+    max = arr[0];
+    for (int i = 0; i < n; i++) {
+        sum += arr[i];
+        if (arr[i] > max) max = arr[i];
+    }
+}
+
+int main() {
+    int scores[] = {88, 95, 73, 64, 91, 55};
+    int n = sizeof(scores) / sizeof(scores[0]);
+
+    int total, highest;
+    analyze(scores, n, total, highest);
+
+    std::cout << "总和: " << total << '\n';
+    std::cout << "最高: " << highest << '\n';
+    std::cout << "平均: " << static_cast<double>(total) / n << '\n';
+    return 0;
+}
+```
+
+设计要点：① `const int *arr`——只读指针，函数不修改数组内容 ② `int &sum` 和 `int &max`——引用参数作为「输出」渠道，把计算结果送出去 ③ C++ 风格里一个函数通常通过 `return` 返回一个值，用引用参数输出附加结果 ④ `sizeof(scores)/sizeof(scores[0])` 只在定义数组的作用域里能算出长度——传给 analyze 后 `sizeof(arr)` 就是 8 了。
+
+### 函数重载：同一个名字、不同类型
+
+```cpp
+#include <iostream>
+#include <string>
+
+// 三个重载——同名、不同形参
+void print(int x) {
+    std::cout << "整数: " << x << '\n';
+}
+void print(double x) {
+    std::cout << "浮点数: " << x << '\n';
+}
+void print(const std::string &s) {
+    std::cout << "字符串: " << s << '\n';
+}
+
+int main() {
+    print(42);              // 匹配 print(int)
+    print(3.14);            // 匹配 print(double)
+    print(std::string("hello")); // 匹配 print(const string&)
+    return 0;
+}
+```
+
+编译器根据实参类型自动选择匹配的版本。`print(42)` 里 42 是 `int` 字面值，选 `print(int)`。`print("hello")` 不行——`"hello"` 是 `const char[6]`，不会自动变成 `std::string`——需要显式转换或调 `print(std::string("hello"))`。这提示我们重载时要注意隐式转换的边界。
+
+### 用 constexpr 在编译期算阶乘
+
+```cpp
+#include <iostream>
+
+constexpr int factorial(int n) {
+    return n <= 1 ? 1 : n * factorial(n - 1);
+}
+
+int main() {
+    constexpr int f5 = factorial(5);    // 编译期计算 = 120
+    int arr[factorial(4)];              // 编译期 24——用作数组大小
+
+    int user_input;
+    std::cin >> user_input;
+    int f_user = factorial(user_input); // 运行时计算——实参不是常量
+
+    std::cout << "5! = " << f5 << '\n';
+    std::cout << user_input << "! = " << f_user << '\n';
+    return 0;
+}
+```
+
+`factorial(5)` 在编译期展开为 `5*4*3*2*1` 并算出 120——运行时零开销。同时同一个函数在运行期对用户输入也能正常算——constexpr 函数根据实参是否常量自动切换计算时机。这是现代 C++ 的精妙设计。
+
+### 静态局部变量：函数调用的记忆
+
+```cpp
+#include <iostream>
+
+// 每次调用都返回当前调用次数——static 变量跨调用保持值
+int count_calls() {
+    static int call_count = 0;   // 只在第一次调用时初始化一次
+    return ++call_count;          // 之后每次调用 += 1
+}
+
+int main() {
+    for (int i = 0; i < 5; i++)
+        std::cout << count_calls() << ' ';
+    // 输出：1 2 3 4 5
+    return 0;
+}
+```
+
+`static int call_count` 是局部静态对象——只在第一次执行到这行时初始化为 0，之后每次调用 `count_calls()` 返回自增后的值。它的生命周期是整个程序运行期间——不像普通局部变量函数返回就销毁。适合做「调用计数」「第一次标记」「单例中的持久状态」等场景。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：写了一个 swap 函数交换两个变量，调用完发现两个变量根本没变。
+  **原因**：参数忘了写 `&`——`void swap(int a, int b)` 是值传递。函数体内交换的是副本，外面的变量不受影响。这是新手最高频的函数 bug 之一。
+  **修法**：把形参改成引用——`void swap(int &a, int &b)`。编译通过后立刻测试——交换前后的值不等才正常。
+</Callout>
+
+<Callout type="trap">
+  **现象**：函数里用 `sizeof(arr)` 想算数组长度，拿到的是一个固定的小数字（8），不是心里想的 40。
+  **原因**：数组形参退化为指针——`sizeof(arr)` = `sizeof(int*)` = 8 字节。函数永远不知道数组多长。
+  **修法**：把数组长度作为独立参数传进函数——`void f(int *arr, int n)`。或者直接用 `std::vector` / `std::array`——它们自带 `.size()`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：只声明了 `print(long)` 和 `print(double)`（没有 int 版本），调用 `print(0)` 编译报错「ambiguous」。
+  **原因**：`0` 是 int 字面值，int→long 是整型转换、int→double 是浮点转换——两者同属标准转换、等级相同，没有唯一最佳匹配 → 二义性。注意：如果存在 `print(int)`，`0` 对它是精确匹配，会直接选中、绝不会 ambiguous。
+  **修法**：增加一个精确匹配的 `print(int)` 重载即可消除二义。设计重载时记住：「没有唯一最佳就是编译错误」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：返回局部变量的引用或指针——编译器可能会警告，也可能编译通过，但运行结果不可预测。
+  **原因**：`int &f() { int x = 5; return x; }`——x 是局部变量，函数返回后 x 的栈帧被回收，返回的引用指向已释放的内存——任何对它的读写都是未定义行为。
+  **修法**：返回类型和局部变量类型一致——`int f() { int x = 5; return x; }` 按值返回 x 的副本。非要做引用返回的，只能返回**函数外部**的对象（如全局变量、传入的引用形参、static 局部变量）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- 函数由返回类型、函数名、形参列表和函数体四个部分组成——定义是完整实现，声明是告诉编译器「有这函数」
+- 参数传递有三种：值传递（改副本不动原值）、引用传递（改别名动原值）、const 引用（不拷贝只读）——90% 场景选 const T& 或 T&
+- 数组作为形参退化为指针——函数内部永远不知道数组长度，必须单独传 n——或用 `std::vector`/`std::array`
+- 函数重载允许同名函数经形参列表区分——编译器通过「候选→可行→最佳」三步匹配，无法唯一选出就是编译错误
+- inline 消除短函数调用开销、constexpr 让编译期算出结果——现代 C++ 优先考虑 constexpr
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这段代码试图写一个函数 `doubleArray` 把数组里每个元素翻倍。但它有 bug——找出并写出修正后的代码。
+
+```cpp
+#include <iostream>
+void doubleArray(int arr[10]) {
+    for (int i = 0; i < 10; i++)
+        arr[i] *= 2;
+}
+int main() {
+    int nums[] = {1, 2, 3, 4, 5};
+    doubleArray(nums);
+    for (int i = 0; i < 5; i++)
+        std::cout << nums[i] << ' ';
+    return 0;
+}
+```
+
+<Answer>
+
+Bug：`doubleArray` 假设数组长度总是 10——但它无法从形参获得数组长度（arr 退化为指针）。`nums` 实际只有 5 个元素——遍历到 i=5..9 时访问了越界内存（未定义行为）。修正——传长度参数：
+
+```cpp
+#include <iostream>
+void doubleArray(int *arr, int n) {
+    for (int i = 0; i < n; i++)
+        arr[i] *= 2;
+}
+int main() {
+    int nums[] = {1, 2, 3, 4, 5};
+    int n = sizeof(nums) / sizeof(nums[0]);
+    doubleArray(nums, n);
+    for (int i = 0; i < n; i++)
+        std::cout << nums[i] << ' ';   // 输出：2 4 6 8 10
+    return 0;
+}
+```
+
+更推荐现代 C++ 版——用 `std::vector` 替代数组：`void doubleArray(std::vector<int> &v) { for (int &x : v) x *= 2; }`——安全、不退化、自带长度。
+
+</Answer>
+
+**练习 2（独立实现题）** 设计并实现一个函数 `read_numbers`，从标准输入读取一组整数存进 `std::vector<int>` 返回。要求：(1) 读到非整数或 EOF 时停止——用 while 循环 (2) 返回 `vector<int>`（不是引用、不是用引用参数输出）(3) 在 main 中用范围 for 循环打印每个元素及其下标。提示：用 `while (std::cin >> val)` 判断是否成功读到数。
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <vector>
+
+std::vector<int> read_numbers() {
+    std::vector<int> result;
+    int val;
+    while (std::cin >> val)       // 读到非整数或 EOF 停止
+        result.push_back(val);
+    return result;                 // C++11 起编译器自动将 result 移动出去
+}
+
+int main() {
+    std::cout << "输入整数（Ctrl+D/Enter 后 Ctrl+Z 结束）：\n";
+    auto nums = read_numbers();
+
+    for (std::size_t i = 0; i < nums.size(); i++)
+        std::cout << "索引 " << i << ": " << nums[i] << '\n';
+    return 0;
+}
+```
+
+为什么返回 `vector<int>` 而不是用引用参数 `vector<int> &out`？因为返回值语义更清晰——调用方直接 `auto nums = read_numbers()` 就能用，不关心内部怎么构建。C++11 移动语义消除了「返回大对象拷贝」的顾虑——局部 vector 返回时内部指针直接移交给调用方，零拷贝。
+
+</Answer>
+
+**练习 3（问答型）** 本章 §5 Stepper 演示了值传递——形参 x 是实参 3 的副本。如果把 `int add(int x, int y)` 改成 `int add(const int &x, const int &y)`，函数的调用栈会发生什么变化？形参 x 和 y 还会被「拷贝」吗？修改 x 在 const 引用下能通过编译吗？
+
+<Answer>
+
+改成 `const int &x` 和 `const int &y` 后：① 形参 x 和 y 不再是实参的副本——它们直接引用调用方传入的 3 和 5 的临时对象。② 栈帧里不再分配两个 int 的存储空间——只存两个引用（各 8 字节）到临时对象。③ `x = 100` 之类修改代码编译失败——const 保证只读。④ 因为 `add` 不修改形参，用 const 引用传递更高效——省了两个 int 的拷贝（对 int 来说差别微乎其微，对大型对象是质的差别）。⑤ 但 `add` 的语义和返回值没有任何变化——8 照样输出到 main。这就是为什么「只读不拷」的形参应该用 const T&。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="函数（function）">
+  C++ 中最基本的代码复用单元。由四部分构成：返回类型（产出什么）、函数名（车间名字）、形参列表（需要什么原材料）、函数体（怎么加工）。`int add(int x, int y) { return x + y; }` 就是一个完整的函数定义。调用时把实参的值拷贝给形参后执行函数体，return 后整个栈帧被销毁。详见本章「函数基础」一节和 FunctionCallStackDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="值传递（pass by value）">
+  把实参的值拷贝一份给形参——修改形参不影响实参。适合小对象（int、double 等基本类型）或函数需要独立副本来修改的场景。`void f(int x)` 就是值传递。拷贝大对象（string、vector）开销大——此时用 const 引用更好。详见本章「参数传递」一节和 ParameterPassingDiagram 图示中左侧的内存对比。
+</GlossaryItem>
+
+<GlossaryItem term="引用传递（pass by reference）">
+  形参用 `T&` 声明——不拷贝实参，而是让形参直接引用实参的内存。`void f(int &x) { x = 0; }` 中修改 x 就是修改调用方传进来的原变量。经典用例是 swap 交换两值。不能接受字面值（`f(5)` 编译错误）——因为临时值没有可以修改的内存地址。详见本章「参数传递」一节和右侧的内存对比图。
+</GlossaryItem>
+
+<GlossaryItem term="const 引用传递（const reference）">
+  形参用 `const T&` 声明——不拷贝实参但也不能修改它。可以接受字面值和临时对象。`void f(const std::string &s)` 是传大对象的首选——清晰表达「我只读」的意图同时还省了拷贝。详见本章「参数传递」一节和 const 引用 vs 值传递的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="数组退化（array decay）">
+  C++ 中数组作为函数形参时自动转换成指向首元素的指针。`void f(int arr[10])` 和 `void f(int* arr)` 完全等价——编译器不管 `[]` 里写什么数字都当 `T*` 处理。函数内部 `sizeof(arr)` 返回指针大小而非数组大小，必须单独传长度参数。详见本章「数组形参」一节和 ArrayParameterDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="函数重载（function overloading）">
+  C++ 允许同一作用域内同名函数但形参列表不同（类型、数量、顺序）。编译器比较实参与形参类型按优先级自动匹配——「候选→可行→最佳」三步。如果找不到唯一最佳就是 ambiguous（二义性）——编译报错。只改返回类型不算重载。详见本章「函数重载」一节和 OverloadResolutionDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="内联函数（inline function）">
+  用 `inline` 关键字声明的函数——建议编译器在调用点直接展开函数体，省去压栈/跳转/返回开销。`inline int max(int a, int b) { return a > b ? a : b; }`。inline 是请求而非命令——复杂函数可被编译器拒绝内联。必须定义在头文件中。详见本章「内联函数」一节。
+</GlossaryItem>
+
+<GlossaryItem term="constexpr 函数">
+  用 `constexpr` 声明的函数——当所有实参都是常量表达式时编译器在编译期就能算出结果。`constexpr int factorial(int n) { return n <= 1 ? 1 : n * factorial(n - 1); }` 可在编译期计算并用于数组大小等场景。如果实参中有变量则退化为普通运行时函数。constexpr 函数隐式是 inline 的。详见本章「constexpr 函数」一节的编译期与运行时对照示例。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
+
+<Attribution />

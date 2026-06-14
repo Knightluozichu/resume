@@ -1,0 +1,521 @@
+---
+title: 顺序容器
+type: C
+section: C++标准库
+order: 2
+description: 掌握vector/deque/list/forward_list/array/string六种顺序容器——了解各自内部结构（连续/链表/双端）、操作接口（插入/删除/访问）与性能特征，能根据场景选对容器
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §9 改编）：六种顺序容器对比 + vector 深度（capacity/size）+ 通用操作 +
+   容器适配器（stack/queue/priority_queue）+ 选型原则。
+   重心在 Stepper §5 + 代码对照 §6，概念讲解 §3 压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 六种顺序容器总览（vector/deque/list/forward_list/array/string）— viz: ContainerOverviewDiagram（并排对比图）
+   2) 通用容器操作（迭代器/添加/删除/大小/关系运算符）— 代码示例 + ContainerOperationTable（操作速查表）
+   3) vector 的 size vs capacity 与扩容策略 — viz: VectorMemoryModelDiagram（支持 step prop，Stepper 每步配图）
+   4) 容器适配器（stack/queue/priority_queue）— viz: AdapterConceptDiagram（底层容器适配关系图）
+   5) 选用原则 — 代码示例 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能正确使用迭代器遍历任意顺序容器——通过 `begin()`/`end()` 获取范围、`*iter` 解引用、`++iter` 前进，并识别哪些操作会导致迭代器失效
+- 能根据场景选择合适的容器——需要频繁中间插入选 `list`、需要频繁两端操作选 `deque`、需要随机访问且只末尾插入选 `vector`
+- 能回答：一个程序用 `vector<int>` 存储数据，不断在开头 `insert` 新元素——运行一段时间后为什么越来越慢？换成什么容器能解决？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——容器是不同规格的物料箱。 */}
+
+## 为什么不能只用一种容器？
+
+你已经学了用 `vector` 装数据——它简单好用，往末尾塞数据又快又稳。但如果你的程序需要在开头频繁插入、在中间随机删除、或者数据量巨大——`vector` 就开始喘气了。
+
+想象工厂里有六种物料箱：**长条槽**（vector）按顺序排放零件、取第 N 个直接走过去就行——但想在中间插一个？后面所有零件都得往后挪。**分段托盘**（deque）两端都能快速取放。**链条挂架**（list）每个零件独立挂着——插哪都只是挂个钩子，不用搬别的零件。**单向流水钩**（forward_list）每个零件只知道下一个在哪——轻便但只能往一个方向走。**固定格子盘**（array）出厂就焊死格子数——零额外开销。**标签带**（string）专门处理字符——除了当容器，还能搜索、切割、比较。
+
+**没有选型意识会怎样？** 你可能把 `vector` 当万能容器用——在所有场景都用它——结果程序运行得越久越慢，内存碎片化，一个简单操作要搬动成千上万个元素。这一章教你六种容器的内部构造——从此「这个场景该用什么」你心里有数。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo。 */}
+
+## 六种容器，六种底层结构
+
+在 C++ 里，<Term def="按元素加入顺序依次排列的容器——第 i 个元素的位置由插入顺序决定（不是你指定 key 来确定位置）。区别于关联容器（map/set 等按 key 排序）。C++ 标准库提供六种：vector、deque、list、forward_list、array、string。">顺序容器（sequential container）</Term> 就是按你插入的顺序存放元素的盒子——第一个塞进去的元素就在第一个位置。但不同的「盒子」内部结构完全不同——这决定了哪些操作快、哪些操作慢。
+
+<ContainerOverviewDiagram />
+
+上面这张图把六种容器的内部结构并排展示——注意它们的核心差异：
+
+- **vector**：一块连续内存，像一排紧挨着的停车位。访问第 N 个车位——直接算地址、O(1)。想在中间插一个车位——后面的车全部要挪（O(n)）。尾部加车——有预留车位就直接停，否则重新划一片更大的地。
+- **deque**：分段存储——由多个固定大小的数据块拼成，中间由一个指针数组串起来。两端都能快速插（O(1)），访问也需要通过指针中转（仍是 O(1)，比 vector 多一次间接跳转）。
+- **list**：每个元素独立存储——每个「节点」里除了数据还有两个指针——指向前一个节点和后一个节点。插入删除只改四个指针——O(1)，不搬动任何其他元素。代价是不能随机访问——要找第 N 个必须从头走（O(n)）。
+- **forward_list**：list 的瘦身版——每个节点只存一个 `next` 指针。更省内存，但只能向前走——没有 `--iter`，没有 `push_back`。
+- **array**：固定大小——大小写死在模板参数里。零额外开销——不分配堆内存，没有 capacity 管理。代价是大小不能改——不能 push_back，不能 insert。
+- **string**：专为字符设计——和 `vector<char>` 一样是连续存储，但多了专属武器：`substr` 切子串、`find` 搜索、`compare` 比较、`+` 拼接。短字符串有优化（SSO）——不经堆直接存在对象内部。
+
+## 所有容器都听你的同一套指令
+
+不管你选了哪种容器，C++ 给你一套 <Term def="访问容器中元素的统一机制——像指向容器元素的智能指针。通过 *iter 得到元素值、++iter 移到下一个位置、begin() 返回第一个元素的迭代器、end() 返回最后一个元素之后的位置（尾后迭代器）。所有顺序容器都支持迭代器。注意某些操作（如 vector 的 push_back 扩容）会让已有迭代器失效。">迭代器（iterator）</Term> 让你用同样的方式遍历、读、写——`begin()` 永远指第一个元素，`end()` 永远指最后一个元素之后的位置，`*iter` 解引用得到元素自己。
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <list>
+
+// 同一个模板对 vector / list 通用——只要容器支持迭代器
+template <typename Container>
+void print_all(const Container &c) {
+    // auto 让编译器推导迭代器类型——vector/list 都能用
+    for (auto it = c.cbegin(); it != c.cend(); ++it)
+        std::cout << *it << ' ';
+    std::cout << '\n';
+}
+
+int main() {
+    std::vector<int> v = {1, 2, 3};
+    std::list<int>   lst = {4, 5, 6};
+
+    print_all(v);   // 1 2 3
+    print_all(lst); // 4 5 6
+}
+```
+
+上面的 `print_all` 函数——对 `vector` 和 `list` 用同一套代码遍历。除了 `cbegin()/cend()`（只读），还有 `begin()/end()`（可读写）、`crbegin()/crend()`（反向只读）。
+
+除了迭代器，所有容器还有一套共同的增删改操作：
+
+```cpp
+std::vector<int> a = {1, 2, 3};
+std::list<int>   b = {4, 5, 6};
+
+a.swap(b);        // 交换内容——vector 和 list 不能直接 swap，需同类型
+// 但概念上都有 swap——同类型之间交换指针，O(1)
+
+a.assign(5, 42);  // 替换内容为 5 个 42 → [42,42,42,42,42]
+a.clear();        // 清空所有元素——size 变 0
+```
+
+下面这张表帮你速查——哪些操作在哪个容器上支持、效率如何：
+
+<ContainerOperationTable />
+
+**最重要的两个记忆点**：
+
+1. `push_back`——vector/deque/list/string 都有——vector/string 尾部最快（均摊 O(1)），deque O(1)，list O(1)。forward_list 和 array 没有。
+2. `insert`——在任意位置插入——list/forward_list 最快 O(1)（只改指针），vector/deque/string 是 O(n)（要搬元素）。array 不支持。
+
+## vector 的隐藏能力：capacity 和 reserve
+
+你已经知道 `v.size()` 返回元素个数。但 vector 还有一个不常被注意的「幕后容量」——<Term def="已分配内存能容纳的元素数量（≥ size）。size 是已存储的元素数，capacity 是已申请的内存槽位数。当 push_back 让 size 超过 capacity 时触发重新分配——分配更大的新内存、拷贝旧元素、释放旧内存。通过 reserve(n) 可预先分配至少 n 个槽位——避免多次 push_back 时反复触发重分配。">capacity</Term> 和 `size` 不是一回事。
+
+<VectorMemoryModelDiagram step={4} />
+
+用 Stepper 一步步看 vector 在 `push_back` 的过程中 capacity 如何变化：
+
+<Stepper>
+
+<Step title="初始空 vector">
+
+`vector<std::string> v;`——刚构造出来时 size=0，capacity=0。没有分配任何堆内存——三个指针都是 nullptr。
+
+<VectorMemoryModelDiagram step={1} />
+
+</Step>
+
+<Step title="第一次 push_back">
+
+`v.push_back("a");`——capacity 不够（0 < 1），分配一块能容纳 1 个元素的新内存，size=1，capacity=1。第一个元素 "a" 占用了唯一的位置。
+
+<VectorMemoryModelDiagram step={2} />
+
+</Step>
+
+<Step title="第二次 push_back（触发扩容）">
+
+`v.push_back("b");`——size==capacity==1，没位置了。触发扩容——分配一块**翻倍大小**（capacity=2）的新内存，把 "a" 拷贝过去，释放旧内存，然后在新内存末尾构造 "b"。现在 size=2，capacity=2。
+
+<VectorMemoryModelDiagram step={3} />
+
+扩容时发生的事：分配新内存 → 拷贝旧元素 → 释放旧内存 → 构造新元素。`size` 递增 1，`capacity` 翻倍。
+
+</Step>
+
+<Step title="第三次 push_back（再次扩容）">
+
+`v.push_back("c");`——又满了（size==capacity==2）——再次触发扩容，capacity 翻倍到 4。3 个已用元素 + 1 个预留槽。旧内存（capacity=2 的那块）已释放。
+
+<VectorMemoryModelDiagram step={4} />
+
+现在 `v` 有 3 个元素：`["a", "b", "c"]`，但底层的连续内存能装 4 个——下一个 `push_back` 不需要扩容。
+
+</Step>
+
+</Stepper>
+
+**实用技巧**——如果你事先知道大概要装多少个元素：
+
+```cpp
+std::vector<int> scores;
+scores.reserve(10000);  // 预分配 10000 个槽位
+for (int i = 0; i < 10000; ++i)
+    scores.push_back(compute_score(i));  // 这 10000 次都不扩容
+scores.shrink_to_fit();  // 回收多余内存（请求，不保证立即释放）
+```
+
+`reserve(n)` 前一定要确认 n 大于当前 `capacity()` 才有意义。`reserve` 只影响 capacity——不影响 size——不能用来添加元素。
+
+## 三个适配器——让 deque 变成栈、队列、堆
+
+你已经有了底层容器（deque、vector、list）——但有时候你不想暴露这么多操作。比如需要一个「只能从一端进出」的栈——你不用自己写一个类，C++ 提供了 <Term def="拿一个底层顺序容器（默认 deque），只暴露一部分操作接口而封装出的受限数据结构。三种适配器：stack（只暴露 top/push/pop，LIFO）、queue（只暴露 front/back/push/pop，FIFO）、priority_queue（只暴露 top/push/pop，用堆维护优先级）。你可以指定底层容器——如 stack<int, vector<int>> 用 vector 代替默认的 deque。">容器适配器（container adaptor）</Term>——包装底层容器，只露出你需要的那几个接口。
+
+<AdapterConceptDiagram />
+
+三层适配器把同一个 `deque` 变成三种完全不同的数据结构：
+
+```cpp
+#include <stack>
+#include <queue>
+
+// stack：后进先出——最后放进去的最先拿出来
+std::stack<int> stk;
+stk.push(1);  stk.push(2);  stk.push(3);
+while (!stk.empty()) {          // 输出 3 2 1
+    std::cout << stk.top();     // 只能看栈顶
+    stk.pop();
+}
+
+// queue：先进先出——最先放进去的最先拿出来
+std::queue<int> q;
+q.push(1);  q.push(2);  q.push(3);
+while (!q.empty()) {            // 输出 1 2 3
+    std::cout << q.front();     // 看队首（最早入队）
+    q.pop();                    // 从队首移除
+}
+
+// priority_queue：按优先级——大的（默认）先出来
+std::priority_queue<int> pq;
+pq.push(3);  pq.push(1);  pq.push(5);  pq.push(2);
+while (!pq.empty()) {           // 输出 5 3 2 1
+    std::cout << pq.top();      // 总是当前最大的
+    pq.pop();
+}
+```
+
+**关键规则**——适配器不提供自己的存储，你必须指定底层容器：
+
+```cpp
+// 默认底层容器：
+std::stack<int> s1;                 // 底层用 deque<int>
+std::queue<int> q1;                 // 底层用 deque<int>
+std::priority_queue<int> pq1;       // 底层用 vector<int>
+
+// 显式指定底层容器：
+std::stack<int, std::vector<int>> s2;         // 用 vector 作底层
+std::queue<int, std::list<int>> q2;           // 用 list 作底层
+// std::queue<int, std::vector<int>> q3;      // 错误！vector 没有 pop_front
+```
+
+`queue` 不能用 `vector` 作底层——因为 vector 没有 `pop_front()`（从前面删除是 O(n) 的，queue 要求 O(1)）。`priority_queue` 不能用 `list` 作底层——因为堆操作需要随机访问。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80% 关键代码讲解）：单块 ≤30 行；块间有解说文字；C++ 独立展示。 */}
+
+## 实战：选对容器——四个场景对比
+
+### 场景一：成绩管理系统——频繁在末尾添加、偶尔排序
+
+<Callout type="tip">
+  操作模式：读入学生成绩 → push_back 追加 → sort 排序 → 输出。需要随机访问（排序要求 RandomAccess 迭代器）。
+</Callout>
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <iostream>
+
+int main() {
+    std::vector<int> scores;
+
+    // 读入阶段：只做 push_back —— vector 均摊 O(1)
+    int s;
+    while (std::cin >> s)
+        scores.push_back(s);
+
+    // 排序阶段：需要随机访问 —— vector 支持，list 不支持
+    std::sort(scores.begin(), scores.end());
+
+    // 输出统计
+    if (!scores.empty())
+        std::cout << "中位数: " << scores[scores.size() / 2] << '\n';
+}
+```
+
+选 `vector` 而不是 `list` 的关键原因——`std::sort` 要求 RandomAccess 迭代器——`list` 的迭代器只能 `++`/`--`，不能 `it + n`。
+
+### 场景二：LRU 缓存——频繁在任意位置增删
+
+<Callout type="tip">
+  操作模式：访问某个元素时把它移到最前面——涉及「找到并删除 + 在最前面插入」。需要中间插入 O(1)、迭代器不失效。
+</Callout>
+
+对于这个场景，`list` 是自然选择——`splice` 操作直接把一个节点从任意位置「移植」到另一个位置，不拷贝数据，不释放内存：
+
+```cpp
+#include <list>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::list<std::string> cache;
+
+    // 初始化缓存
+    cache.push_back("home");
+    cache.push_back("settings");
+    cache.push_back("profile");
+
+    // 访问 "settings" —— 把它移到最前面
+    auto it = std::find(cache.begin(), cache.end(), "settings");
+    if (it != cache.end())
+        cache.splice(cache.begin(), cache, it);
+    // splice 是 O(1)：把节点从 it 位置取下，接到 begin() 前
+
+    for (auto &s : cache)
+        std::cout << s << ' ';  // settings home profile
+}
+```
+
+`splice` 是 `list` 的独门武器——它只修改几个指针，O(1)——比任何「拷贝+删除+插入」的方案快得多。vector 不可能做到这一点——vector 的 erase + insert 需要搬动所有元素，O(n)。
+
+### 场景三：文本编辑器——频繁在中间插入删除字符
+
+<Callout type="tip">
+  操作模式：光标在文本中间时按键——在中间位置插入/删除字符。用 `string`？每次插入移动 N/2 个字符——太慢了。
+</Callout>
+
+`list<char>` 在中间插入字符 O(1)——不搬动其他字符。但同时也丧失了随机访问——跳到第 100 个字符需要走 100 步。这就是经典的「时间-空间-功能」三角权衡：
+
+```cpp
+#include <list>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::list<char> text = {'H', 'e', 'l', 'o'};  // "Helo" — 少了第二个 'l'
+
+    // 中间插入 'l'：找到 'o' 的位置，在它前面插入
+    auto pos = std::find(text.begin(), text.end(), 'o');
+    text.insert(pos, 'l');  // O(1) — 只改指针，不改其他字符
+
+    for (char c : text)
+        std::cout << c;  // Hello
+}
+```
+
+`string` 的 `insert` 也会做同样的事——但需要把 'o' 及之后所有字符往后挪一位——O(n)。text editor 场景下每按一个键对 `string` 做一次 O(n) 插入不可接受——`list` 的 O(1) 是正确答案。
+
+### 场景四：令牌桶限流器——两端操作
+
+<Callout type="tip">
+  操作模式：定时从后端补充令牌（push_back），请求到来时从前端消耗令牌（pop_front）。两端都要 O(1)。
+</Callout>
+
+`deque` 是唯一选择——`vector` 没有 `pop_front`（O(n) 代价太大），`list` 有但这场景不需要中间插入能力——`deque` 既满足两端 O(1)、又有随机访问能力、内存比 list 紧凑：
+
+```cpp
+#include <deque>
+#include <iostream>
+
+int main() {
+    std::deque<int> tokens;
+
+    // 定时补充：从后端放令牌
+    for (int i = 0; i < 5; i++)
+        tokens.push_back(i);
+
+    // 请求消耗：从前端取令牌
+    while (!tokens.empty()) {
+        int token = tokens.front();  // peek 而不 pop
+        std::cout << "使用令牌 " << token << '\n';
+        tokens.pop_front();          // O(1)
+    }
+}
+```
+
+### 选型速查
+
+| 你的场景 | 选这个 |
+|---|---|
+| 只在末尾添加、需要随机访问、需要排序 | `vector` |
+| 频繁在任意位置插入删除、不随机访问 | `list` |
+| 频繁在两端操作、偶尔随机访问 | `deque` |
+| 编译期已知大小、零开销 | `array` |
+| 操作文本、需要查找/切割/拼接 | `string` |
+| 只需一端操作（后进先出）| `stack`（适配 `deque`） |
+| 需要先进先出 | `queue`（适配 `deque`） |
+| 需要按优先级处理 | `priority_queue`（适配 `vector`） |
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 `vector` 上迭代的同时 `erase` 元素——某些元素被跳过、或者程序崩溃。
+  **原因**：`erase(it)` 让它及之后所有迭代器失效——for 循环的 `++it` 在失效迭代器上执行——可能跳过一个元素，或者 erase 了最后一个元素后 `it` 变成 `end()`，再 `++it` 越界。
+  **修法**：用 `it = v.erase(it)` 接收 erase 返回的下一个有效迭代器。或者用 erase-remove 惯用法：`v.erase(std::remove_if(v.begin(), v.end(), pred), v.end())`——一次性清理，不需要在循环里 erase。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`v.reserve(100)` 之后写 `v[50] = 42`，程序有时崩溃有时不崩——诡异。
+  **原因**：`reserve(100)` 只分配内存——没有构造元素——`size()` 仍是 0。`v[50]` 访问的是不存在的元素——未定义行为。崩溃「有时」是因为那块内存可能恰好可访问但数据是垃圾——不崩溃时才更危险。
+  **修法**：确认 `size() > 50` 后再用 `operator[]`。想创建 100 个元素——用 `v.resize(100)` 而不是 `v.reserve(100)`。不确定尺码时——用 `v.at(50)` 代替 `v[50]`——`at()` 会在越界时抛 `std::out_of_range` 异常。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把 `vector<bool>` 的元素引用存入 `auto &ref = v[0]`——编译错误。
+  **原因**：`vector<bool>` 是特化版本——每个 `bool` 只占 1 位（位压缩优化），`v[0]` 返回的是代理对象（`vector<bool>::reference`），不是 `bool&`。不能用 `auto &` 绑定代理对象。
+  **修法**：用 `auto b = v[0]`（按值，通过代理对象隐式转换为 bool）。或用 `vector<char>` 代替 `vector<bool>`——每个 bool 占 1 字节，语义完全正常，空间稍多但远好过诡异的 API。或用 `deque<bool>`——deque 没有 `vector<bool>` 的特殊化。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `container.swap(other)` 之后元素的指针/引用仍然指向旧元素——但现在它在另一个容器里了。
+  **原因**：`swap` 交换的是内部指针/数据结构——不移动元素本身。所有指向元素的指针、引用、迭代器在 swap 后仍然有效——但它们所属的容器变了。不是 bug——这是 swap 的保证行为。
+  **修法**：如果你需要的是「把所有元素移动到另一个容器」并且旧的应该清空——用 `swap` 没问题——它的语义就是交换内容。如果你需要「移动语义」——用 `std::move` 或者 C++11 的移动赋值：`other = std::move(container)`——老容器变成「有效但未指定」状态。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- 六种顺序容器按底层结构分三类：连续存储（vector/string/array）随机访问 O(1) 但中间插入 O(n)；链式存储（list/forward_list）任意位置插入 O(1) 但不支持随机访问；分段存储（deque）兼顾两端插入 O(1) 和随机访问 O(1)
+- 所有容器共享一套迭代器接口——`begin()`/`end()`、`*iter`、`++iter`——同一套代码可遍历不同容器；vector 的 push_back 扩容会令所有迭代器失效，list 的 erase 只让被删元素的迭代器失效
+- vector 的 `capacity` ≥ `size`——`reserve(n)` 预分配内存避免反复扩容、`shrink_to_fit()` 回收多余内存；扩容策略（通常 2× 翻倍）使 push_back 均摊 O(1)
+- 容器适配器（stack/queue/priority_queue）包装底层容器、只暴露受限接口——默认都用 deque（priority_queue 用 vector）；可根据需要指定底层容器（queue 不能用 vector——没有 pop_front）
+- 选容器先分析最频繁的操作——频繁中间插入选 list、频繁两端操作选 deque、需要排序选 vector、编译期大小确定选 array、处理文本选 string
+
+<Exercises>
+
+**练习 1（改代码型）** 下面代码试图删除 vector 中所有负数——找出 bug 并写出修正后的代码。
+
+```cpp
+#include <vector>
+#include <iostream>
+int main() {
+    std::vector<int> v = {3, -1, 2, -3, 5, -2};
+    for (auto it = v.begin(); it != v.end(); ++it)
+        if (*it < 0)
+            v.erase(it);
+    for (int x : v) std::cout << x << ' ';
+}
+```
+
+<Answer>
+
+Bug：`erase(it)` 让 `it` 及其之后所有迭代器失效——紧接着 `++it` 在失效迭代器上操作。现象：删除 -1 后 `++it` 跳过了原本 -1 后面的 2——然后继续。最终输出可能是 `3 2 -3 5`——还有负数没删掉。修正——用 erase-remove 惯用法：
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <iostream>
+int main() {
+    std::vector<int> v = {3, -1, 2, -3, 5, -2};
+    // remove_if 把非负数往前挪，返回「新末尾」
+    auto new_end = std::remove_if(v.begin(), v.end(),
+                                   [](int x) { return x < 0; });
+    v.erase(new_end, v.end());  // 真正删除末尾的"垃圾"
+    for (int x : v) std::cout << x << ' ';  // 3 2 5
+}
+```
+
+或手动写循环的正确姿势：`for (auto it = v.begin(); it != v.end(); ) { if (*it < 0) it = v.erase(it); else ++it; }`。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个程序：用 `stack` 和 `queue` 组合检测一个输入字符串是否回文（正反读一样）。用 `std::stack<char>` + `std::queue<char>`，不用其他数据结构。先获取用户输入 `std::string`，逐字符压入两个适配器，再逐个对比（`stack::top()` vs `queue::front()`）。
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <string>
+#include <stack>
+#include <queue>
+
+bool is_palindrome(const std::string &s) {
+    std::stack<char> stk;
+    std::queue<char> q;
+
+    // 压入：stack 最后入的在顶、queue 最前入的在队首
+    for (char c : s) {
+        stk.push(c);
+        q.push(c);
+    }
+
+    while (!stk.empty()) {
+        if (stk.top() != q.front()) return false;
+        stk.pop();   // stack 从顶移除（逆序）
+        q.pop();     // queue 从队首移除（正序）
+    }
+    return true;
+}
+
+int main() {
+    std::string input;
+    std::cout << "输入字符串: ";
+    std::cin >> input;
+    std::cout << (is_palindrome(input) ? "是回文" : "不是回文") << '\n';
+    return 0;
+}
+```
+
+核心思想：同时压入 stack 和 queue——stack 的 LIFO 自然产生逆序，queue 的 FIFO 保留正序——对比 stack.pop()（逆序字符）和 queue.pop()（正序字符）是否每一步都一致。
+
+</Answer>
+
+**练习 3（选型题）** 以下三个场景分别应该选哪个容器？各用一句话解释原因。
+
+- **A**：需要维护一个「最近访问的 20 个页面」列表——访问某页面时把它移到最前面，超过 20 个则删除最旧的。
+- **B**：读入一个 10 万行日志文件——每行是一条文本，要求支持随机跳转到第 N 行。
+- **C**：需要存储一个 4×4 的变换矩阵——大小固定，希望零开销、栈上分配、支持容器接口。
+
+<Answer>
+
+- **A**：`list`。频繁「找到元素 → 移到最前面」（splice O(1)）+ 「删除最旧元素」（pop_back O(1)）。vector 的 insert/erase 需要搬动元素，O(n) 太慢。
+- **B**：`vector<string>` 或 `deque<string>`。需要随机访问第 N 行——list 不支持 `[]` 运算符。vector 连续内存更紧凑，适合一次性读入后只读不写的场景。
+- **C**：`array<float, 16>`。编译期固定大小、栈上分配、零额外开销——同时还有 `.begin()/.end()/.at()` 等容器接口。`std::array<std::array<float, 4>, 4>` 表示二维矩阵。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（4 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="顺序容器（sequential container）">
+  按元素加入顺序依次排列的容器——第 i 个元素的位置由插入顺序决定（不是你指定 key 来确定位置）。区别于关联容器（map/set 等按 key 排序）。C++ 标准库提供六种顺序容器：vector（连续数组）、deque（双端分段数组）、list（双向链表）、forward_list（单向链表）、array（固定大小数组）、string（字符数组）。详见本章「六种容器，六种底层结构」一节的 ContainerOverviewDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器（iterator）">
+  访问容器中元素的统一机制——像指向容器元素的智能指针。通过 `*iter` 得到元素值、`++iter` 移到下一个位置、`begin()` 返回第一个元素的迭代器、`end()` 返回最后一个元素**之后**的位置（尾后迭代器，不能解引用）。所有顺序容器都支持迭代器。注意某些操作会让已有迭代器失效——vector 的 push_back 扩容会让所有迭代器失效，list 的 erase 只让被删元素的迭代器失效。详见本章「所有容器都听你的同一套指令」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="capacity">
+  vector/string 独有的概念——已分配内存能容纳的元素数量（≥ size）。size 是已存储的元素数，capacity 是已申请的内存槽位数。当 push_back 让 size 超过 capacity 时触发重新分配——分配更大的新内存、拷贝旧元素、释放旧内存。通过 `reserve(n)` 可预先分配至少 n 个槽位——避免多次 push_back 时反复触发重分配。`shrink_to_fit()` 请求回收多余空间（不保证立即释放）。详见本章「vector 的隐藏能力」一节的 VectorMemoryModelDiagram 和 Stepper 演示。
+</GlossaryItem>
+
+<GlossaryItem term="容器适配器（container adaptor）">
+  拿一个底层顺序容器（默认 deque），只暴露一部分操作接口而封装出的受限数据结构。三种适配器：① stack——只暴露 top()/push()/pop()，LIFO（后进先出）。② queue——只暴露 front()/back()/push()/pop()，FIFO（先进先出）。③ priority_queue——只暴露 top()/push()/pop()，内部用堆维护优先级（默认最大堆）。可以指定底层容器类型——如 `stack<int, vector<int>>`。queue 不能用 vector 作底层（vector 没有 pop_front），priority_queue 不能用 list（堆需要随机访问）。详见本章「三个适配器」一节的 AdapterConceptDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（改编自 C++ Primer §9），Attribution 标签自动处理。 */}
+
+<Attribution />

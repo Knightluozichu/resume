@@ -13,6 +13,9 @@ import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
+import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
+import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
+import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
 import { FrustumDiagram } from "./diagrams/frustum-diagram";
 import { LookAtDiagram } from "./diagrams/lookat-diagram";
@@ -45,6 +48,79 @@ import { BlendEquationDiagram } from "./diagrams/blend-equation-diagram";
 import { DiscardVsBlendDiagram } from "./diagrams/discard-vs-blend-diagram";
 import { AlphaSortDiagram } from "./diagrams/alpha-sort-diagram";
 import { BlendSortStepDiagram } from "./diagrams/blend-sort-step-diagram";
+import { TypeSizeDiagram } from "./diagrams/type-size-diagram";
+import { SignedUnsignedDiagram } from "./diagrams/signed-unsigned-diagram";
+import { LiteralTypesDiagram } from "./diagrams/literal-types-diagram";
+import { ScopeNestingDiagram } from "./diagrams/scope-nesting-diagram";
+import { VariableLifecycleDiagram } from "./diagrams/variable-lifecycle-diagram";
+import { StringMemoryDiagram } from "./diagrams/string-memory-diagram";
+import { VectorGrowthDiagram } from "./diagrams/vector-growth-diagram";
+import { IteratorDiagram } from "./diagrams/iterator-diagram";
+import { ArrayVsVectorDiagram } from "./diagrams/array-vs-vector-diagram";
+import { ExpressionTreeDiagram } from "./diagrams/expression-tree-diagram";
+import { PrecedenceTable } from "./diagrams/precedence-table";
+import { IncrementDecrementDiagram } from "./diagrams/increment-decrement-diagram";
+import { TypeConversionDiagram } from "./diagrams/type-conversion-diagram";
+import { IfElseFlowDiagram } from "./diagrams/if-else-flow-diagram";
+import { SwitchFlowDiagram } from "./diagrams/switch-flow-diagram";
+import { LoopComparisonDiagram } from "./diagrams/loop-comparison-diagram";
+import { BreakContinueDiagram } from "./diagrams/break-continue-diagram";
+import { ClassLayoutDiagram } from "./diagrams/class-layout-diagram";
+import { AccessControlDiagram } from "./diagrams/access-control-diagram";
+import { IOClassHierarchyDiagram } from "./diagrams/io-class-hierarchy-diagram";
+import { FileStreamLifecycleDiagram } from "./diagrams/file-stream-lifecycle-diagram";
+import { StreamStateDiagram } from "./diagrams/stream-state-diagram";
+import { IOManipulatorTable } from "./diagrams/io-manipulator-table";
+import { ContainerOverviewDiagram } from "./diagrams/container-overview-diagram";
+import { VectorMemoryModelDiagram } from "./diagrams/vector-memory-model-diagram";
+import { ContainerOperationTable } from "./diagrams/container-operation-table";
+import { AdapterConceptDiagram } from "./diagrams/adapter-concept-diagram";
+import { AlgorithmArchitectureDiagram } from "./diagrams/algorithm-architecture-diagram";
+import { AssociativeContainerOverviewDiagram } from "./diagrams/associative-container-overview-diagram";
+import { MapOperationTable } from "./diagrams/map-operation-table";
+import { UnorderedMapInternalsDiagram } from "./diagrams/unordered-map-internals-diagram";
+import { ContainerSelectionFlow } from "./diagrams/container-selection-flow";
+import { SmartPointerOverviewDiagram } from "./diagrams/smart-pointer-overview-diagram";
+import { SharedPtrInternalsDiagram } from "./diagrams/shared-ptr-internals-diagram";
+import { CircularReferenceDiagram } from "./diagrams/circular-reference-diagram";
+import { DynamicArrayDiagram } from "./diagrams/dynamic-array-diagram";
+import { CopySemanticsDiagram } from "./diagrams/copy-semantics-diagram";
+import { RuleOfFiveDiagram } from "./diagrams/rule-of-five-diagram";
+import { MoveSemanticsDiagram } from "./diagrams/move-semantics-diagram";
+import { ResourceLifetimeDiagram } from "./diagrams/resource-lifetime-diagram";
+import { AlgorithmExecutionDiagram } from "./diagrams/algorithm-execution-diagram";
+import { SortStagesDiagram } from "./diagrams/sort-stages-diagram";
+import { LambdaSyntaxDiagram } from "./diagrams/lambda-syntax-diagram";
+import { ConstructorCallDiagram } from "./diagrams/constructor-call-diagram";
+import { ConstMemberDiagram } from "./diagrams/const-member-diagram";
+import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
+import { ParameterPassingDiagram } from "./diagrams/parameter-passing-diagram";
+import { ArrayParameterDiagram } from "./diagrams/array-parameter-diagram";
+import { OverloadResolutionDiagram } from "./diagrams/overload-resolution-diagram";
+import { OperatorOverloadTable } from "./diagrams/operator-overload-table";
+import { OperatorChainDiagram } from "./diagrams/operator-chain-diagram";
+import { TypeConversionOperatorDiagram } from "./diagrams/type-conversion-operator-diagram";
+import { CallableConceptDiagram } from "./diagrams/callable-concept-diagram";
+import { InheritanceHierarchyDiagram } from "./diagrams/inheritance-hierarchy-diagram";
+import { VTableDiagram } from "./diagrams/vtable-diagram";
+import { InheritanceLifetimeDiagram } from "./diagrams/inheritance-lifetime-diagram";
+import { AccessInheritanceTable } from "./diagrams/access-inheritance-table";
+import { TemplateInstantiationDiagram } from "./diagrams/template-instantiation-diagram";
+import { ClassTemplateDiagram } from "./diagrams/class-template-diagram";
+import { TemplateSpecializationDiagram } from "./diagrams/template-specialization-diagram";
+import { VariadicTemplateDiagram } from "./diagrams/variadic-template-diagram";
+import { TupleLayoutDiagram } from "./diagrams/tuple-layout-diagram";
+import { BitsetOperationDiagram } from "./diagrams/bitset-operation-diagram";
+import { RegexMatchDiagram } from "./diagrams/regex-match-diagram";
+import { RandomPipelineDiagram } from "./diagrams/random-pipeline-diagram";
+import { ExceptionHierarchyDiagram } from "./diagrams/exception-hierarchy-diagram";
+import { NamespaceNestingDiagram } from "./diagrams/namespace-nesting-diagram";
+import { MultipleInheritanceDiagram } from "./diagrams/multiple-inheritance-diagram";
+import { ExceptionSafetyTable } from "./diagrams/exception-safety-table";
+import { MemoryLayoutDiagram } from "./diagrams/memory-layout-diagram";
+import { RTTIDiagram } from "./diagrams/rtti-diagram";
+import { EnumUnionDiagram } from "./diagrams/enum-union-diagram";
+import { AdvancedFeatureTable } from "./diagrams/advanced-feature-table";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -230,6 +306,13 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    divisor=0 逐顶点步进 每个顶点读一条 vs divisor=1 每实例步进 一条覆盖整个实例所有顶点，compare 并列 + 「忘设 1 = 被当逐顶点读」提醒）、
  *    DrawcallCompareDiagram（不实例化 CPU 喊 N 遍 N 根红箭头·瓶颈 vs 实例化 CPU 喊 1 遍 1 根绿粗箭头 instanceCount=N·流畅，
  *    点明省的是 CPU 反复喊话发起 draw call 的通信开销）。同款 Server SVG。
+ *  - C++ Primer·表达式（cpp-primer-ch4，A 概念型）：ExpressionTreeDiagram（a+b*c 表达式树，标求值顺序）、
+ *    PrecedenceTable（运算符优先级速查表 SVG）、IncrementDecrementDiagram（++i 前缀 vs i++ 后缀时序对照）、
+ *    TypeConversionDiagram（内建类型隐式转换方向链，支持 step prop 选展示层）。同款 Server SVG。
+ *  - C++ Primer·语句（cpp-primer-ch5，C 实战型）：IfElseFlowDiagram（if→else if→else 菱形判断分支图）、
+ *    SwitchFlowDiagram（switch 多路 case/default 跳转图）、LoopComparisonDiagram（while/for/do-while 三栏对比）、
+ *    BreakContinueDiagram（break 跳出循环 vs continue 跳到下一轮的语义对比图）。同款 Server SVG。
+ *
  *  - 高级OpenGL篇·抗锯齿（HEL-77，A 概念型，篇收官）：AliasingDiagram（aa 布尔 + bare：屏幕是方格纸，斜边落格上
  *    aa=false 每格整涂/不涂成硬阶梯·锯齿 vs aa=true 边缘格按覆盖度涂半深过渡灰·平滑，虚线标理想斜边，
  *    供 Stepper 第一步 + CompareSlider 两侧分别传）、MsaaSampleDiagram（§5 Stepper MSAA 判覆盖度每步图示：
@@ -489,6 +572,82 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HemisphereKernelDiagram,
   DepthCompareDiagram,
   NoiseBlurDiagram,
+  CompilationPipelineDiagram,
+  HelloWorldAnnotatedDiagram,
+  IOStreamDiagram,
+  TypeSizeDiagram,
+  SignedUnsignedDiagram,
+  LiteralTypesDiagram,
+  ScopeNestingDiagram,
+  VariableLifecycleDiagram,
+  StringMemoryDiagram,
+  VectorGrowthDiagram,
+  IteratorDiagram,
+  ArrayVsVectorDiagram,
+  ExpressionTreeDiagram,
+  PrecedenceTable,
+  IncrementDecrementDiagram,
+  TypeConversionDiagram,
+  IfElseFlowDiagram,
+  SwitchFlowDiagram,
+  LoopComparisonDiagram,
+  BreakContinueDiagram,
+  ClassLayoutDiagram,
+  ConstMemberDiagram,
+  ConstructorCallDiagram,
+  FunctionCallStackDiagram,
+  ParameterPassingDiagram,
+  ArrayParameterDiagram,
+  OverloadResolutionDiagram,
+  OperatorOverloadTable,
+  OperatorChainDiagram,
+  TypeConversionOperatorDiagram,
+  CallableConceptDiagram,
+  InheritanceHierarchyDiagram,
+  VTableDiagram,
+  InheritanceLifetimeDiagram,
+  AccessInheritanceTable,
+  TemplateInstantiationDiagram,
+  ClassTemplateDiagram,
+  TemplateSpecializationDiagram,
+  VariadicTemplateDiagram,
+  TupleLayoutDiagram,
+  BitsetOperationDiagram,
+  RegexMatchDiagram,
+  RandomPipelineDiagram,
+  ExceptionHierarchyDiagram,
+  NamespaceNestingDiagram,
+  MultipleInheritanceDiagram,
+  ExceptionSafetyTable,
+  MemoryLayoutDiagram,
+  RTTIDiagram,
+  EnumUnionDiagram,
+  AdvancedFeatureTable,
+  AccessControlDiagram,
+  IOClassHierarchyDiagram,
+  FileStreamLifecycleDiagram,
+  StreamStateDiagram,
+  IOManipulatorTable,
+  ContainerOverviewDiagram,
+  VectorMemoryModelDiagram,
+  ContainerOperationTable,
+  AdapterConceptDiagram,
+  AlgorithmArchitectureDiagram,
+  AlgorithmExecutionDiagram,
+  SortStagesDiagram,
+  LambdaSyntaxDiagram,
+  AssociativeContainerOverviewDiagram,
+  MapOperationTable,
+  UnorderedMapInternalsDiagram,
+  ContainerSelectionFlow,
+  SmartPointerOverviewDiagram,
+  SharedPtrInternalsDiagram,
+  CircularReferenceDiagram,
+  DynamicArrayDiagram,
+  CopySemanticsDiagram,
+  RuleOfFiveDiagram,
+  MoveSemanticsDiagram,
+  ResourceLifetimeDiagram,
   Stepper,
   Step,
   Slider,

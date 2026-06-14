@@ -54,6 +54,25 @@ import { hdrQuestions } from "./review/hdr";
 import { bloomQuestions } from "./review/bloom";
 import { deferredShadingQuestions } from "./review/deferred-shading";
 import { ssaoQuestions } from "./review/ssao";
+import { cppGettingStartedQuestions } from "./review/cpp-getting-started";
+import { cppVariablesAndTypesQuestions } from "./review/cpp-variables-and-types";
+import { cppStringsVectorsArraysQuestions } from "./review/cpp-strings-vectors-arrays";
+import { cppExpressionsQuestions } from "./review/cpp-expressions";
+import { cppStatementsQuestions } from "./review/cpp-statements";
+import { cppFunctionsQuestions } from "./review/cpp-functions";
+import { cppClassesQuestions } from "./review/cpp-classes";
+import { cppIoLibraryQuestions } from "./review/cpp-io-library";
+import { cppSequentialContainersQuestions } from "./review/cpp-sequential-containers";
+import { cppGenericAlgorithmsQuestions } from "./review/cpp-generic-algorithms";
+import { cppAssociativeContainersQuestions } from "./review/cpp-associative-containers";
+import { cppDynamicMemoryQuestions } from "./review/cpp-dynamic-memory";
+import { cppCopyControlQuestions } from "./review/cpp-copy-control";
+import { cppOverloadedOperationsQuestions } from "./review/cpp-overloaded-operations";
+import { cppOopQuestions } from "./review/cpp-oop";
+import { cppTemplatesQuestions } from "./review/cpp-templates";
+import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library";
+import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
+import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
 
 export {
   CHAPTER_TITLES,
@@ -104,6 +123,25 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bloomQuestions,
   ...deferredShadingQuestions,
   ...ssaoQuestions,
+  ...cppGettingStartedQuestions,
+  ...cppVariablesAndTypesQuestions,
+  ...cppStringsVectorsArraysQuestions,
+  ...cppExpressionsQuestions,
+  ...cppStatementsQuestions,
+  ...cppFunctionsQuestions,
+  ...cppClassesQuestions,
+  ...cppIoLibraryQuestions,
+  ...cppSequentialContainersQuestions,
+  ...cppGenericAlgorithmsQuestions,
+  ...cppAssociativeContainersQuestions,
+  ...cppDynamicMemoryQuestions,
+  ...cppCopyControlQuestions,
+  ...cppOverloadedOperationsQuestions,
+  ...cppTemplatesQuestions,
+  ...cppOopQuestions,
+  ...cppSpecializedLibraryQuestions,
+  ...cppSpecializedToolsQuestions,
+  ...cppLargeProgramsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

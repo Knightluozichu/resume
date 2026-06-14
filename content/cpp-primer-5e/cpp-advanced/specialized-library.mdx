@@ -1,0 +1,594 @@
+---
+title: 标准库特殊设施
+type: C
+section: 高级主题
+order: 1
+description: 掌握tuple/bitset/正则表达式/随机数四组特殊标准库设施——组合任意类型的数据组、操作位集合、文本匹配和高质量随机数生成（高级主题篇第1章）
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §17 改编）：标准库特殊设施——"高级主题"第一篇。
+   重心在概念图示(§3) + Stepper(§5) + 代码对照(§6)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) tuple（make_tuple/get/tie/结构化绑定）— viz: TupleLayoutDiagram step=1-4（tuple内存布局：连续存储异构类型，get<>编译期索引访问图示）
+   2) bitset（位操作、to_string/to_ulong）— viz: BitsetOperationDiagram（位集合操作示意图：set/reset/flip/test/count 五操作可视化）
+   3) regex（正则匹配、子表达式、regex_iterator）— viz: RegexMatchDiagram step=1-4（正则匹配过程图：模式→输入→逐字符匹配→捕获组）
+   4) random（引擎/分布/lambda封装）— viz: RandomPipelineDiagram step=1-4（随机数生成流水线：引擎→分布→值三阶段 + lambda封装） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用 `tuple` 组合任意类型的数据组——用 `make_tuple` 创建、用 `get<N>` 或结构化绑定访问、用 `tie` 解包到已有变量
+- 能正确操作 `bitset` 的位集合——`set`/`reset`/`flip`/`test`/`count`，理解位集合的字符串和整数表示
+- 能用正则表达式匹配和提取文本——构造 `regex` 对象、用 `regex_search` 搜索、用 `smatch` 捕获组提取子表达式、用 `sregex_iterator` 遍历所有匹配
+- 能写出高质量随机数生成代码——用 `<random>` 库的引擎+分布替代 `rand()`，并封装成可复用的函数对象
+- 能回答：为什么 `rand() % 6 + 1` 不是好的骰子？改用 `<random>` 写出正确的骰子代码，并说明它和 `rand()` 相比好在哪？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——tuple是打包箱、bitset是开关面板、regex是筛子、random是定制模具。 */}
+
+## 为什么需要这四种特殊工具
+
+你已经学完了 C++ 的核心——变量、容器、算法、类、模板。这些已经够你写 90% 的程序。但还有一撮"特殊场景"——它们不常用，可一但到了那个场景，没有这些工具就非常难受。这四种工具是标准库为你准备的"特种兵"——平时不显眼，该出手时一招制敌。
+
+想象工厂流水线上有四个特殊工位：**打包站**把不同类型的零件捆成一个包裹（tuple）、**开关面板**控制一排指示灯每盏的明灭（bitset）、**筛子**从一堆文字里挑出符合特定形状的碎片（regex）、**定制模具**把原料按你指定的形状压出来（random）。每个工位解决一类因为"类型/形状/规则"产生的麻烦——它们不像 vector 或 sort 那样天天用，但你遇到时没它真不行。
+
+**这一章解决什么问题？** 教你四样特殊工具的正确用法和最佳时机——让你不是"知道有这个东西"，而是"遇到问题能瞬间想到该用哪个"。没有它们？打包异类数据只能硬扛 struct（啰嗦）、操作标志位只能 & | ^（易错）、匹配文字只能手写字符比对（累死）、随机数只能用 `rand()`（质量差且偏差大）。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## tuple：把不同类型捆成一个包裹
+
+有时你需要从函数返回三个值——一个 `int`、一个 `double`、一个 `string`。你当然可以写一个 struct，但这就为了传一次数据而定义一个类——太重了。`<Term def="C++11 引入的固定大小异构容器——可以存放任意数量、任意类型的元素。本质是递归继承的编译期数据结构——每个元素类型不同，通过 get<N> 按编译期索引访问，返回元素类型的引用。pair 只能存两个，tuple 可以存任意多个。">tuple（元组）</Term>` 就是 "临时打包" 的最佳选择——把不同类型的值绑在一起，用完即忘。
+
+```cpp
+#include <tuple>
+
+std::tuple<int, double, std::string> t(42, 3.14, "hello");
+// t 是一个打包好的三元素包裹
+```
+
+tuple 的元素在内存中**连续存放**——索引 0 是 `int`、索引 1 是 `double`、索引 2 是 `string`。下面用 Stepper 展示 tuple 的内存布局和 `get<N>` 的访问机制：
+
+<TupleLayoutDiagram step={1} />
+
+### 创建 tuple 的三种方式
+
+```cpp
+// 方式一：直接构造（显式写类型）
+std::tuple<int, double, std::string> t1(42, 3.14, "hello");
+
+// 方式二：make_tuple（自动推导——最常用）
+auto t2 = std::make_tuple(42, 3.14, "hello");
+// t2 的类型被推导为 tuple<int, double, const char*>
+
+// 方式三：C++17 类模板参数推导（CTAD）
+std::tuple t3(42, 3.14, std::string("hello"));
+// t3 的类型: tuple<int, double, string>
+```
+
+<Term def="根据构造函数实参自动推导类模板参数（C++17）。写 tuple t(1,2.0) 而不必写 tuple<int,double> t(1,2.0)。只适用于有构造函数的类模板——如果构造函数不存在或参数不足以推导，CTAD 不生效。">类模板参数推导（CTAD）</Term> 让 C++17 起的 tuple 创建更简洁——直接写 `tuple t(1, 2.0, "hi")`，编译器从参数类型推出 `tuple<int, double, const char*>`。但如果需要精确控制类型（比如想要 `string` 而不是 `const char*`），显式写类型或用 `make_tuple` 加转型。
+
+### 访问元素：`get<N>` 与结构化绑定
+
+`get<0>(t)` 返回 tuple 中第 0 个元素的**引用**——你可以读它，也可以直接赋值修改它。`N` 必须是编译期常量——写 `get<3>(t)`（超出范围）编译器直接报错，绝不会活到运行时才崩。
+
+```cpp
+auto t = std::make_tuple(42, 3.14, std::string("hello"));
+int x = std::get<0>(t);              // x = 42
+std::get<0>(t) = 100;                // 直接修改 tuple 中的 int
+```
+
+解包 tuple 到已有变量用 `<Term def="std::tie——把已有变量的引用绑到 tuple 的各个元素上。tie(a,b,c) = t 等价于 a=get<0>(t); b=get<1>(t); c=get<2>(t)。用 std::ignore 占位跳过不需要的元素。需要预先声明变量——和结构化绑定互补。">tie</Term>`，需要跳过某个元素时用 `<Term def="std::ignore——在 tie 解包时作为占位符，表示"这个位置我不关心，跳过"。tie(name, std::ignore, gpa) = student; 跳过第二个元素的赋值。">ignore</Term>` 占位。C++17 的**结构化绑定**是 tie 的语法糖，用 `auto [a,b,c] = t` 一行声明+赋值：
+
+**先猜一猜**：对一个三元素的 tuple 写 `get<3>(t)` 会怎样——编译期报错，还是运行时崩？带着这个猜测看下面四步：
+
+<Stepper>
+  <Step title="① tuple 整体——连续存放三个异构元素">
+    <TupleLayoutDiagram step={1} />
+
+    三个不同类型的值打包在一个对象里——索引 0 是 `int`、索引 1 是 `double`、索引 2 是 `string`。它们在内存中连续排列。
+  </Step>
+  <Step title="② get<0>(t)——编译期定位第一个元素">
+    <TupleLayoutDiagram step={2} />
+
+    `get<0>(t)` 返回 `int&`——编译器在编译期就知道第 0 个位置的类型，返回引用保证零开销。
+  </Step>
+  <Step title="③ get<1>/get<2>——依次访问后续元素">
+    <TupleLayoutDiagram step={3} />
+
+    每个 `get<N>` 在编译期返回对应类型的引用。如果写成 `get<3>(t)`（只有三个元素），**编译期就报错**——不会等到运行期。
+  </Step>
+  <Step title="④ 结构化绑定 auto [x,y,z] = t——一行拆三个">
+    <TupleLayoutDiagram step={4} />
+
+    `auto [x, y, z] = t;` 是 `get<0>/get<1>/get<2>` 的语法糖——一次性声明三个变量并赋值。比 `tie` 更简洁——不需要预先声明变量。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  核心记忆：`make_tuple` 创建、`get<N>` 访问（编译期索引）、`tie` 解包到已有变量、`auto [a,b,c]` 声明新变量。碰见"函数需要返回多个值"——tuple 比临时 struct 更轻量。
+</Callout>
+
+## bitset：把二进制位当作独立对象来操作
+
+标志位是编程里最古老的数据模式之一——一个整数代表 32 个开关，每个 bit 开/关表示某个状态。以前你用 `int flags` + `& | ^ ~` 手动操作每一位——容易写错、不可读。`<Term def="固定大小的二进制位集合类模板——bitset<N> 中 N 是编译期常量位数。每一位可独立操作（set/reset/flip/test/count），支持位移、位运算、to_string/to_ulong 转换。适合管理标志位集合——比手动 & | ^ 安全且可读。">bitset（位集合）</Term>` 把每一位变成一个独立的对象——直接对它说"把第 3 位设成 1"而不是算 `flags | (1 << 3)`。
+
+```cpp
+#include <bitset>
+
+std::bitset<8> b("10100110");  // 用二进制字符串初始化 8 位
+// b[0] = 0, b[1] = 1, b[2] = 1, b[3] = 0, b[4] = 0, b[5] = 1, b[6] = 0, b[7] = 1
+```
+
+下面这张图展示了 bitset 上的五种核心操作——每一步都可视化位的实际变化：
+
+<BitsetOperationDiagram />
+
+操作速览（`N` 必须是编译期常量——写在 `bitset<N>` 的尖括号里）：
+
+| 方法 | 作用 | 示例 | 结果 |
+|---|---|---|---|
+| `set(pos)` | 指定位设 1 | `b.set(3)` | 第 3 位变为 1 |
+| `reset(pos)` | 指定位清 0 | `b.reset(6)` | 第 6 位变为 0 |
+| `flip(pos)` | 指定位翻转 | `b.flip(5)` | 第 5 位 0↔1 |
+| `test(pos)` | 查询指定位（不改值） | `b.test(0)` | 返回 bool |
+| `count()` | 统计值为 1 的位数 | `b.count()` | 返回 size_t |
+
+此外，bitset 还支持**类整数运算**——`<<` 左移、`>>` 右移、`& | ^ ~` 位运算、`== !=` 比较。`to_string()` 转成二进制字符串（如 `"10100110"`），`to_ulong()` / `to_ullong()` 转成整数——值超出目标类型范围时抛 `overflow_error` 异常。
+
+```cpp
+std::bitset<8> b(0b10100110);
+b <<= 3;                            // 左移 3 位，低位补 0
+std::cout << b;                     // 直接输出二进制——00110000
+std::cout << b.count();             // 2——只有原来的第 5、6 位还是 1
+```
+
+<Callout type="tip">
+  bitset 的大小 `N` 是模板参数——编译期常量。不能声明 `bitset<n>`（n 是变量）。编译期确定大小意味着无堆分配——bitset 的内部存储是栈上的定长整数数组。
+</Callout>
+
+## regex：用模式匹配代替手写字符比对
+
+"检查字符串里有没有连续三个数字"——手写：逐字符读、判断是否数字、数连续个数。正则让你直接说：找 `\d{3}`。`<Term def="标准库正则表达式库（<regex>）。核心组件：regex（编译后的模式）、smatch（匹配结果含捕获组）、regex_search（搜索匹配）、regex_match（全串匹配）、regex_replace（替换）、sregex_iterator（遍历所有匹配）。">regex（正则表达式）</Term>` 是文本处理的"搜索语言"——用一套简洁符号描述"长什么样"而不是"怎么找"。
+
+下面用 Stepper 展示正则匹配的完整过程——从模式编译到捕获组提取：
+
+<Stepper>
+  <Step title="① 模式——编译正则表达式">
+    <RegexMatchDiagram step={1} />
+
+    把模式字符串交给 `regex` 构造函数——引擎将其编译为内部匹配自动机。`(\d+)-(\w+)` 表示：一组数字 + 连字符 + 一组字母数字。
+  </Step>
+  <Step title="② 输入——待匹配的字符串">
+    <RegexMatchDiagram step={2} />
+
+    `"123-abc, 456-def"` 是待搜索的文本。`regex_search` 或 `sregex_iterator` 开始从左到右扫描——寻找第一个匹配位置。
+  </Step>
+  <Step title="③ 匹配——引擎逐字符比对">
+    <RegexMatchDiagram step={3} />
+
+    引擎从位置 0 开始：`\d+` 匹配 `"123"` → 连字符 `-` 匹配 → `\w+` 匹配 `"abc"`。整个过程自动完成——你不用管比对细节。匹配成功后位置移到 7（逗号之后）继续搜索。
+  </Step>
+  <Step title="④ 捕获组——提取子表达式">
+    <RegexMatchDiagram step={4} />
+
+    `smatch[0]` = `"123-abc"`（完整匹配）、`smatch[1]` = `"123"`（第一个捕获组 `\d+`）、`smatch[2]` = `"abc"`（第二个捕获组 `\w+`）。用 `sregex_iterator` 继续扫描 → 下一个匹配：`"456-def"`。
+  </Step>
+</Stepper>
+
+### 三种匹配方式对比
+
+```cpp
+std::regex re(R"((\d+)-(\w+))");     // R"(...)" 是原始字符串——反斜杠不用转义
+std::string s = "abc 123-xyz def";
+
+// regex_search：子串匹配——"123-xyz" 匹配成功
+std::smatch m;
+bool found = std::regex_search(s, m, re);  // found=true, m[0]="123-xyz"
+
+// regex_match：全串匹配——整个 s 必须完全符合模式（"abc 123-xyz def" 不符合）→ false
+bool full = std::regex_match(s, re);       // full=false
+
+// regex_replace：替换——把所有匹配替换成指定格式
+std::string replaced = std::regex_replace(s, re, "[$1:$2]");
+// "abc [123:xyz] def"
+```
+
+| 函数 | 行为 | 典型场景 |
+|---|---|---|
+| `regex_search` | 找**第一个匹配的子串** | 日志里找所有 IP 地址 |
+| `regex_match` | 检查**整个字符串**是否完全匹配 | 验证用户输入是否是合法邮箱 |
+| `regex_replace` | 替换所有匹配 | 隐藏手机号中间四位 |
+| `sregex_iterator` | 遍历**所有匹配** | 提取一篇文章里所有 URL |
+
+<Term def="原始字符串字面量——R“(...)” 语法。括号内的所有字符按原样处理——反斜杠就是反斜杠，不需要转义。写正则时必备：R“((\d+))” 里只需要写 \d 而不是 \\d。">原始字符串（raw string）</Term> `R"(...)"` 对正则来说是救命稻草——普通字符串里每一个 `\` 都得写成 `\\`，原始字符串里 `\d` 就是 `\d`，不用写 `\\d`。正则模式越长，这个区别越致命。
+
+### 遍历所有匹配
+
+`sregex_iterator` 是遍历字符串中所有匹配的标准方式——它把字符串和正则对象绑定，每次 `++` 找到下一个匹配，直到变成尾后哨兵（默认构造的 `sregex_iterator{}`）：
+
+```cpp
+std::string text = "Alice: 1, Bob: 2, Charlie: 3";
+std::regex re(R"((\w+): (\d+))");
+
+for (auto it = std::sregex_iterator(text.begin(), text.end(), re);
+     it != std::sregex_iterator{}; ++it) {
+    std::cout << "Name: " << (*it)[1]      // 捕获组 1——名字
+              << ", Num: " << (*it)[2]     // 捕获组 2——数字
+              << '\n';
+}
+// Name: Alice, Num: 1
+// Name: Bob, Num: 2
+// Name: Charlie, Num: 3
+```
+
+<Callout type="tip">
+  三个高频错误：① 把 `regex_search` 当 `regex_match` 用——后者要求全串匹配；② 忘了捕获组下标从 1 开始（`[0]` 是全文）；③ 没判断 `regex_search` 返回值——直接访问 `smatch[1]` 可能导致访问空匹配的未定义行为。永远先检查返回值！
+</Callout>
+
+## random：告别 rand()，拥抱高质量随机数
+
+C 语言遗产 `rand()` 的问题比你想象的严重——`RAND_MAX` 通常只有 32767，取模引入偏差，种子机制不可靠，实现质量随平台而异。C++11 引入的 `<random>` 库完全推翻了这种模式——把随机数的"质量"和"形状"拆成两个独立概念：<Term def="随机数引擎——生成原始伪随机 bits 的算法。std::mt19937（梅森旋转）是最推荐的引擎——状态空间大、周期极长(~2^19937)、质量高。其他引擎：minstd_rand（线性同余，快但质量差）、ranlux48（更高质量但更慢）。引擎需要种子初始化——常用 random_device 提供真随机种子。">随机数引擎（engine）</Term> 负责产生高质量的伪随机 bits，`<Term def="随机数分布——将引擎的原始输出映射到指定范围和形状的数学函数。uniform_int_distribution(a,b) 均匀整数、normal_distribution(μ,σ) 正态分布、bernoulli_distribution(p) 伯努利分布。分布对象重载了 operator()(engine)——每次调用返回分布后的随机值。分布和引擎独立——同一引擎可搭配不同分布。">分布（distribution）</Term>` 负责把这些 bits 映射到你需要的范围和形状——均匀、正态、指数……怎么组合都行。
+
+下面用 Stepper 展示 `<random>` 的四阶段流水线——从引擎创建到可复用的封装：
+
+**先猜一猜**：`rand() % 6 + 1` 做骰子，数字 1 出现的概率比 2~6 偏高大概有多少——千分之几、百分之几，还是几乎为零？看完流水线再回头印证：
+
+<Stepper>
+  <Step title="① 引擎——种子 → 内部状态 → 原始随机 bits">
+    <RandomPipelineDiagram step={1} />
+
+    `mt19937 gen(seed);` 用种子初始化梅森旋转引擎。引擎内部有约 2.5KB 的状态空间——gen() 每次推进状态并输出一个无符号整数。**引擎只创建一次**——反复创建引擎浪费且破坏序列质量。
+  </Step>
+  <Step title="② 分布——参数 + 引擎输出 → 目标范围内的值">
+    <RandomPipelineDiagram step={2} />
+
+    `uniform_int_distribution<int> dist(1, 6);` 定义了"骰子"的形状——`(1,6)` 范围均匀分布。每次 `dist(gen)` 都向引擎索取原始随机值并映射到 `[1,6]`。（少数分布如 `normal_distribution` 内部会缓存中间结果，但 `uniform_int_distribution` 在调用间无持久状态。）
+  </Step>
+  <Step title="③ 输出——每次 dist(gen) 得到一个随机值">
+    <RandomPipelineDiagram step={3} />
+
+    `int dice = dist(gen);` 每次调用得到一个 1~6 的随机整数。引擎状态自动推进——下次调用的结果几乎一定不同。多线程注意——引擎不是线程安全的，每线程要各有自己的引擎。
+  </Step>
+  <Step title="④ 封装——lambda 打包引擎+分布">
+    <RandomPipelineDiagram step={4} />
+
+    把引擎和分布封装成 lambda——`auto roll = [&gen, dist]() mutable { return dist(gen); };`。每次 `roll()` 就得到一个随机数。`mutable` 是必需的——lambda 需要修改 `dist` 的内部状态。
+  </Step>
+</Stepper>
+
+### 引擎选择 + 分布组合 = 无限可能
+
+```cpp
+#include <random>
+#include <iostream>
+
+// 创建引擎——只创建一次（用 random_device 做种子）
+std::mt19937 gen(std::random_device{}());
+
+// 分布——按需创建，用完即弃，成本极低
+auto dice = std::uniform_int_distribution<int>(1, 6);
+auto prob = std::uniform_real_distribution<double>(0.0, 1.0);
+auto height = std::normal_distribution<double>(170.0, 10.0);  // 身高：均值 170，标准差 10
+auto coin = std::bernoulli_distribution(0.5);                 // 公平硬币
+
+// 使用——分布对象像函数一样调用
+std::cout << dice(gen);    // 1~6 均匀骰子
+std::cout << prob(gen);    // [0.0, 1.0) 均匀实数
+std::cout << height(gen);  // 近似正态分布的身高模拟
+std::cout << coin(gen);    // true/false 各 50%
+```
+
+### 为什么 rand() % 6 + 1 不好
+
+三个致命问题——任何一个都足以让你换掉它：
+
+1. **取模偏差**——`RAND_MAX` 不是 6 的倍数时，前几个数字的概率略高。`32767 % 6 = 1`——数字 1 出现的概率比 2-6 多了约 0.003%——很小但确实不公平。
+2. **范围极小**——`RAND_MAX` 通常只有 32767。需要更大范围？只能组合多次调用，又引入新的偏差。
+3. **随机性质量差**——`rand()` 的实现通常是线性同余法——低位随机性尤其差（奇偶交替）。`mt19937` 的周期长达 2^19937-1——宇宙年龄都跑不完。
+
+<Callout type="warn">
+  `rand()` 不是"勉强能用"——它是"不再适合任何需要随机性的场景"。任何提到"随机"的需求——游戏、模拟、测试数据、密码——都用 `<random>`。`rand() % N` 的唯一优点是你不用 `#include <random>`——这个优点不值一提。
+</Callout>
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为双 Stepper——tuple 内存布局访问四步 + random 四阶段流水线，上面已放在 §3 各小节。Regex 匹配过程 Stepper 也已放在 regex 小节。 */}
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段讲解，覆盖 ≥80% 关键代码；单块 ≤30 行。 */}
+
+## 实战：写一个配置解析器——tuple + regex + bitset 联合作战
+
+下面是一个把本章三个设施串联的完整应用——从文本配置中提取键值对，打包成 tuple，用 bitset 存标志位状态。示例配置行格式：`feature:dark_mode=1;caching=1;logging=0;debug=0`。
+
+### 第一部分：正则提取所有键值对
+
+```cpp
+#include <regex>
+#include <string>
+#include <tuple>
+#include <vector>
+#include <bitset>
+#include <iostream>
+
+// 用正则从配置行提取所有 "key=value" 对
+auto parse_config(const std::string &line) {
+    std::regex re(R"((\w+)=(\d+))");  // key=数字
+    std::vector<std::tuple<std::string, int>> result;
+
+    auto begin = std::sregex_iterator(line.begin(), line.end(), re);
+    for (auto it = begin; it != std::sregex_iterator{}; ++it) {
+        result.emplace_back(
+            (*it)[1].str(),              // key —— 捕获组 1
+            std::stoi((*it)[2].str())   // value —— 捕获组 2，转整数
+        );
+    }
+    return result;
+}
+```
+
+`sregex_iterator` 自动跳过不匹配的部分（如 `"feature:"` 前缀），只提取 `(\w+)=(\d+)` 格式的片段。`emplace_back` 直接在 vector 里原地构造 `tuple<string, int>`——比 `push_back(make_tuple(...))` 少一次拷贝。
+
+### 第二部分：tuple 存配置项、bitset 存标志状态
+
+```cpp
+int main() {
+    std::string config = "feature:dark_mode=1;caching=1;logging=0;debug=0";
+
+    auto items = parse_config(config);
+    // items = { {"dark_mode",1}, {"caching",1}, {"logging",0}, {"debug",0} }
+
+    // 用 bitset 存四位标志——每一位对应一个配置开关
+    std::bitset<4> flags;
+    for (std::size_t i = 0; i < items.size(); ++i) {
+        if (std::get<1>(items[i]) == 1)   // 如果 value=1
+            flags.set(i);                  // 对应的标志位置 1
+    }
+    std::cout << "flags: " << flags << '\n';          // 1100
+    std::cout << "count: " << flags.count() << '\n';  // 2 项开启
+
+    // C++17 结构化绑定遍历
+    for (auto &[key, val] : items) {
+        std::cout << key << " = " << val << '\n';
+    }
+    // dark_mode = 1
+    // caching = 1
+    // logging = 0
+    // debug = 0
+}
+```
+
+正则负责提取、tuple 负责打包、bitset 负责标志——三个设施各自做最擅长的事，组合成一段清晰、类型安全的配置解析代码。没有任何 `new/delete`、没有任何手动 char 遍历、没有任何 `int` + `<<` 位运算——全交给标准库。
+
+### 第三部分：随机生成测试配置
+
+为了让测试更真实——用 `<random>` 随机生成 100 行配置，每一行随机开关 dark_mode、caching、logging、debug：
+
+```cpp
+#include <random>
+
+std::string make_random_config() {
+    static std::mt19937 gen(std::random_device{}());
+    std::uniform_int_distribution<int> coin(0, 1);
+
+    return std::string("feature:")
+        + "dark_mode=" + std::to_string(coin(gen)) + ";"
+        + "caching="   + std::to_string(coin(gen)) + ";"
+        + "logging="   + std::to_string(coin(gen)) + ";"
+        + "debug="     + std::to_string(coin(gen));
+}
+
+// 生成 100 行随机配置并解析
+for (int i = 0; i < 100; ++i) {
+    auto items = parse_config(make_random_config());
+    // ...
+}
+```
+
+`static` 引擎确保 100 行配置共用同一个引擎——不会每行重新创建。这恰好呼应了前面 random 的 Stepper 第四步——"引擎只建一次、分布按需创建"。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → `get<i>(tuple_obj)` 编译失败——报 "i is not usable in a constant expression"。
+
+  **原因** → `get<N>` 的 `N` 必须是编译期常量——因为每个位置的返回类型不同（int& vs double& vs string&）。如果 `N` 是变量，编译器无法在编译期确定返回类型。
+
+  **修法** → 把 `N` 改成字面量或 `constexpr` 变量：`get<0>(t)` 而不是 `get[i](t)`。如果确实需要运行时索引——tuple 不是合适的工具，考虑用 `vector<variant<T1,T2,T3>>`。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `rand() % 6 + 1` 运行了很久——出现数字 1 的次数统计上略高于 2-6，但偏差极小不易察觉。
+
+  **原因** → **取模偏差**——`RAND_MAX` (32767) 不是 6 的倍数（32767 % 6 = 1）。取模后数字 0（+1 后变为 1）被多命中一次——概率不严格均匀。
+
+  **修法** → 用 `<random>`：`mt19937 gen(random_device{}()); uniform_int_distribution<int> dist(1, 6); dist(gen);`。分布类内部用算法纠正了取模偏差——真正均匀。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `regex_search` 匹配到了但打印 `smatch[1]` 时崩溃或输出乱码。
+
+  **原因** → ① 没检查 `regex_search` 的返回值——匹配失败时 smatch 为空，访问 `smatch[1]` 是未定义行为。② 把捕获组下标和完整匹配搞混——`smatch[0]` 是全文，`smatch[1]` 才是第一个括号捕获组。
+
+  **修法** → 永远先判断 `if (regex_search(...))` 再访问 smatch。记住——`[0]` = 完整匹配，`[1]` = 第一个 `()`，`[2]` = 第二个 `()`……括号数 = 捕获组数。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 在多线程中每个线程用同一个 `mt19937` 引擎——偶尔出现两个线程同时拿到相同的"随机数"。
+
+  **原因** → 引擎不是线程安全的——并发调用 `gen()` 会引发数据竞争（data race），是未定义行为。两个线程可能读到相同的引擎内部状态，返回相同值。
+
+  **修法** → 每个线程创建自己的引擎（用不同种子——`random_device` 每次不同）。或用 `thread_local mt19937 gen(random_device{}());`——C++11 的 `thread_local` 让每个线程自动拥有独立引擎，零锁开销。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- **tuple** = 临时打包箱——`make_tuple` 创建、`get<N>` 编译期访问、`tie` 解包到已有变量、`auto [a,b,c]` 一拆三。多种类型、临时传递——选 tuple 而不是临时 struct
+- **bitset** = 位开关面板——`set`/`reset`/`flip`/`test`/`count` 五操作比手动 `& | ^ >>` 安全百倍。`to_string` 看二进制、`to_ulong` 转整数
+- **regex** = 文本模式引擎——`regex_search` 搜匹配、`regex_match` 验全串、`sregex_iterator` 遍历所有、`regex_replace` 替换。捕获组 `$1/$2`、原始字符串 `R"(...)"`
+- **random** = 引擎 + 分布双模块——`mt19937`（高质量引擎）+ `uniform_int_distribution`（分布）= 安全骰子。引擎建一次（static）、分布按需建、lambda 封装三步走——永远告别 `rand()`
+- **组合使用**——正则提取文本 → tuple 打包异构数据 → bitset 存标志。`<random>` 生成测试数据。四个设施各司其职、互不打架
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的骰子函数有三个致命问题——找出并修正，然后用正确的 `<random>` 重写。
+
+```cpp
+#include <cstdlib>
+#include <ctime>
+
+int roll_dice() {
+    std::srand(std::time(nullptr));  // 每调用一次就重新播种！
+    return std::rand() % 6 + 1;
+}
+
+int main() {
+    for (int i = 0; i < 5; ++i)
+        std::cout << roll_dice() << ' ';  // 连续五次——可能全一样
+}
+```
+
+<Answer>
+
+三个问题：① **每次调用都 `srand`**——重新播种把引擎状态重置到同一秒的同一个起点。连续调用时——如果在同一秒内——全部返回相同的"随机数"。② **`rand() % 6 + 1` 有取模偏差**——RAND_MAX 不一定是 6 的倍数。③ **`rand()` 的随机质量差**——线性同余法、小周期、低质量。
+
+正确写法：
+
+```cpp
+#include <random>
+#include <iostream>
+
+int roll_dice() {
+    static std::mt19937 gen(std::random_device{}());   // 只建一次
+    static std::uniform_int_distribution<int> dist(1, 6);
+    return dist(gen);
+}
+
+int main() {
+    for (int i = 0; i < 5; ++i)
+        std::cout << roll_dice() << ' ';  // 每次不同，真正的均匀随机
+}
+```
+
+关键变化：① `static` 引擎——只初始化一次，种子只播一次 ② `uniform_int_distribution`（不是 `%`）——无偏差 ③ `mt19937`——周期 2^19937-1，质量业界顶级。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个函数 `parse_log_line`——输入一行日志 `[2024-05-17 14:30:22] ERROR: connection timeout (retry 3/5)`，用正则提取并返回 `tuple<string, string, int>`（时间、级别、重试次数）。如果格式不匹配返回 `nullopt`。
+
+<Answer>
+
+```cpp
+#include <regex>
+#include <tuple>
+#include <optional>
+#include <string>
+
+std::optional<std::tuple<std::string, std::string, int>>
+parse_log_line(const std::string &line) {
+    std::regex re(
+        R"(\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] )"
+        R"((\w+): .+\(retry (\d+)/\d+\))");
+    std::smatch m;
+    if (std::regex_search(line, m, re)) {
+        return std::make_tuple(
+            m[1].str(),
+            m[2].str(),
+            std::stoi(m[3])
+        );
+    }
+    return std::nullopt;
+}
+```
+
+设计要点：① 两个 `R"(...)"` 拼接——长正则分行，可读性好 ② 三个捕获组：时间→`[1]`、级别→`[2]`、retry 次数→`[3]` ③ `regex_search`（不用 `regex_match`）——行首可能有其他内容 ④ `optional<tuple<...>>` 是 C++17 无异常的错误传播模式。
+
+</Answer>
+
+**练习 3（改代码型）** 下面的 bitset 代码有两个问题——找出并修正，然后输出正确的二进制形式。
+
+```cpp
+std::bitset<10> flags("1100101");   // 只有 7 个字符
+flags.set(10);                        // 第 10 位？！
+flags.reset(9);
+std::cout << flags.to_ulong() << '\n';
+std::cout << flags.to_string() << '\n';
+```
+
+<Answer>
+
+两个问题：① **`bitset<10>` 只允许索引 0-9**——`flags.set(10)` 尝试设置第 10 位（超出 `bitset<10>` 索引范围为 0-9），**编译期通过、运行时抛出 `std::out_of_range` 异常**（`set` 带参数时 `_Pos >= _Size` 会抛 `out_of_range`；不带参数的 `set()` 设置所有位为 1）。② **`"1100101"` 是 7 个字符**——`bitset<10>` 初始化时会**高位补零**（`"1100101"` → `"0001100101"`，写法是从右往左对齐，高位补 0）。
+
+修正版：
+
+```cpp
+std::bitset<10> flags("1100101");  // → 0001100101
+flags.set(9);                       // 第 9 位（最高位）= 1
+flags.reset(0);                     // 第 0 位（最低位）= 0
+std::cout << flags.to_string() << '\n';  // "1001100100"
+std::cout << flags.to_ulong() << '\n';   // 612
+```
+
+注意 bitset 初始化时——字符串最右边的字符对应第 0 位（最低位）。`"1100101"` 中最后一位 `1` 是 `b[0]`、第一个 `1` 是 `b[6]`。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="tuple（元组）">
+  C++11 引入的固定大小异构容器——不同类型的值打包成一个对象。`tuple<int,double,string>` 三个元素在内存中连续存放。`get<0>(t)` 按编译期索引访问，写错索引编译期报错。可以替代"临时小 struct"——当函数需要返回多个不同类型的值时。`make_tuple` 自动推导类型创建，`tie` 解包到已有变量，C++17 结构化绑定 `auto [a,b,c]` 一行拆包。
+</GlossaryItem>
+
+<GlossaryItem term="类模板参数推导（CTAD）">
+  Class Template Argument Deduction——C++17 起允许从构造函数实参自动推导类模板参数。写 `tuple t(1, 2.0, "hi")` 等价于 `tuple<int, double, const char*> t(1, 2.0, "hi")`。只适用于有构造函数的类模板。省掉重复写类型的繁琐——但精确控制类型时仍需显式写。
+</GlossaryItem>
+
+<GlossaryItem term="tie">
+  `std::tie` 把已有变量的引用绑到 tuple 各元素上——`tie(a,b,c) = t` 等价于 `a=get<0>(t); b=get<1>(t); c=get<2>(t)`。需要提前声明变量——和结构化绑定互补（一个复用已有变量、一个声明新变量）。用 `std::ignore` 占位跳过不需要的元素：`tie(name, std::ignore, gpa) = student;`。
+</GlossaryItem>
+
+<GlossaryItem term="ignore">
+  `std::ignore` 在 `tie` 解包时作为占位符——表示"这个位置我不需要，跳过"。`tie(a, ignore, c) = t;` 只提取第 0 和第 2 个元素，第 1 个被丢弃。本质是一个未命名类型的对象，赋值给它什么也不发生。
+</GlossaryItem>
+
+<GlossaryItem term="bitset（位集合）">
+  固定大小的二进制位集合类模板——`bitset<N>`（N 是编译期常量）。把每个二进制位当作独立对象操作：`set(pos)` 置 1、`reset(pos)` 清 0、`flip(pos)` 翻转、`test(pos)` 查询、`count()` 统计 1 的个数。支持类整数运算（`<<` `>>` `&` `|` `^`）、`to_string()` 转二进制字符串、`to_ulong()` 转整数。比手动 `int` + `& | ^` 位运算安全且可读。
+</GlossaryItem>
+
+<GlossaryItem term="regex（正则表达式）">
+  C++ `<regex>` 库——用模式匹配和提取文本。`regex` 对象编译模式字符串为内部自动机；`regex_search` 搜索子串匹配、`regex_match` 验证全串匹配、`regex_replace` 替换匹配；`smatch` 存匹配结果（`[0]` 全文、`[1]` 起各捕获组）；`sregex_iterator` 遍历所有匹配。`R"(...)"` 原始字符串避免反斜杠地狱。
+</GlossaryItem>
+
+<GlossaryItem term="原始字符串（raw string）">
+  C++11 的 `R"(...)"` 语法——括号内的所有字符按原样处理，反斜杠就是反斜杠，不需要转义。写正则的救命稻草：正则里 `\d` 就直接写 `\d`，不用写 `\\d`。括号内可以包含换行。`R"delim(...)delim"` 可以自定义分隔符（如果内容本身含 `)"` 序列）。
+</GlossaryItem>
+
+<GlossaryItem term="随机数引擎（engine）">
+  生成原始伪随机 bits 的算法。`std::mt19937`（32 位梅森旋转）是最推荐的选择——状态空间大（约 2.5KB）、周期长达 2^19937-1、输出质量高。引擎用种子初始化——常用 `std::random_device{}()` （硬件真随机源）作为种子。引擎不是线程安全的。引擎只创建一次——反复创建浪费且序列质量差。
+</GlossaryItem>
+
+<GlossaryItem term="分布（distribution）">
+  将引擎的原始随机输出映射到目标范围和形状的数学变换。`uniform_int_distribution(a,b)`→范围 [a,b] 均匀整数；`normal_distribution(μ,σ)`→正态分布；`bernoulli_distribution(p)`→概率 p 返回 true。分布对象重载 `operator()(engine)`——像函数一样调用。分布轻量——在需要时创建（局部变量），用完即弃。引擎选"质量"、分布选"形状"——两个维度独立。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §17 改编重写。 */}
+
+<Attribution />

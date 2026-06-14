@@ -42,7 +42,19 @@ function toEnglishUrl(sourceUrl: string): string {
 }
 
 export function Attribution({ sourceUrl }: { sourceUrl: string }) {
-  const cnUrl = sourceUrl?.trim() || CN_BASE;
+  const cnUrl = sourceUrl?.trim();
+  // 原创内容（无出处 URL）：显示通用原创声明
+  if (!cnUrl) {
+    return (
+      <footer
+        aria-label="原创声明"
+        className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
+      >
+        <p className="mb-2 font-semibold text-primary">原创声明</p>
+        <p>本章为 remuse 原创教学内容，未改编自外部来源。</p>
+      </footer>
+    );
+  }
   const enUrl = toEnglishUrl(cnUrl);
 
   return (

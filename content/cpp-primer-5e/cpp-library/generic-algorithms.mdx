@@ -1,0 +1,614 @@
+---
+title: 泛型算法
+type: C
+section: C++标准库
+order: 3
+description: 掌握C++标准算法库——find/sort/count/accumulate/copy/transform等核心算法，理解迭代器如何将算法与容器解耦
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §10 改编）：泛型算法概述 + 只读算法 + 写算法 + 排序定制 + lambda。
+   重心在 Stepper §5 + 代码对照 §6，概念讲解 §3 压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 泛型算法三层架构（算法/迭代器/容器解耦）— viz: AlgorithmArchitectureDiagram（三层架构图）
+   2) 只读算法（find/count/accumulate/equal）— 代码示例
+   3) 写算法（fill/copy/replace/transform）— viz: AlgorithmExecutionDiagram（支持 step prop，Stepper 逐步展示执行过程）
+   4) 排序过程（sort/unique/stable_sort）— viz: SortStagesDiagram（支持 step prop，四阶段分步图）
+   5) lambda 表达式（[capture](params)->ret { body }）— viz: LambdaSyntaxDiagram（语法拆解标注图） */}
+
+<Objectives>
+
+- 能正确使用 `find`/`count`/`accumulate`/`equal` 操作任意顺序容器——通过迭代器范围 `[begin, end)` 传递，理解算法只认迭代器不认容器的设计思想
+- 能用 `sort`/`unique`/`stable_sort` 配合自定义谓词完成排序与去重——并且能独立写出一个 lambda 表达式作为 `sort` 的第三个参数实现降序排列
+- 能改出：把一段 `for` 循环里逐个检查并删除特定元素的代码，改写为 `remove_if` + lambda + `erase` 的惯用写法（erase-remove idiom）
+
+</Objectives>
+
+## 为什么 100 种容器不能有 100 种算法？
+
+你已经学了六种容器——每种都有自己的一套操作接口。如果要在 `vector` 里找一个值，你会写一个循环；要在 `list` 里找同样的值，再写一个循环——除了容器名字变了，代码几乎一模一样。难道每学一种新容器，就要把排序、查找、计数这些"工序"重写一遍？
+
+想象工厂流水线有一套标准加工工序：**分拣**（find）、**计数**（count）、**排序**（sort）、**填充**（fill）——这些工序不关心物料是装在长条槽（vector）里、挂在链条上（list）、还是放在分段托盘（deque）里。它们只需要一根**统一的输送带**（迭代器）把物料一个接一个送到加工位。输送带只需回答三个问题：这是哪件物料？下一件在哪？送到哪一站结束？
+
+这套"标准工序"就是 C++ 的 100 多个标准算法——你只要学会它们一次，就能作用在所有提供输送带的容器上。**没有这套算法库会怎样？** 你会一遍遍写循环——查找、排序、去重——或者更糟，自己手写一个又慢又容易出错的排序，而不用标准库里早已调优好的版本。这一章教你用标准算法代替手写循环，从此「这个操作该选哪个算法」你心里有数。
+
+## 算法不认识容器——只认迭代器
+
+C++ 标准库提供超过 100 个 <Term def="作用于序列元素上的标准函数模板。通过迭代器范围 [begin, end) 接收数据，不依赖具体容器类型。包括查找（find）、排序（sort）、计数（count）、累加（accumulate）、复制（copy）、变换（transform）等。定义在头文件 <algorithm> 和 <numeric> 中。">泛型算法（generic algorithm）</Term>——它们被设计成与容器类型完全无关。算法不是容器的成员函数，也不接受容器作为参数——它们只认识一样东西：<Term def="一对迭代器组成的左闭右开区间 [begin, end)。begin 指向第一个元素，end 指向最后一个元素之后的位置（尾后迭代器）。所有标准算法都通过迭代器范围来接收数据——这就是算法与容器解耦的关键。">迭代器范围（iterator range）</Term>。
+
+<AlgorithmArchitectureDiagram />
+
+上图展示了泛型算法的核心设计：三层解耦。算法层只认 `begin()` 和 `end()` 两个迭代器——至于这两个迭代器背后是 vector、list 还是 deque——算法毫不知情。这就像工厂的加工工序只认输送带上的物料——物料是从长条槽滑过来的、从链条挂架递来的、还是从分段托盘转接的——工序不关心。
+
+### 算法在头文件中，不在容器里
+
+```cpp
+#include <algorithm>   // find, sort, count, copy, fill, replace, ...
+#include <numeric>     // accumulate, inner_product, partial_sum, ...
+```
+
+大部分算法定义在 `<algorithm>` 中，数值相关的算法（如 `accumulate`）在 `<numeric>` 中。注意——**算法是独立函数，不是容器方法**——你不需要 `v.sort()`，而是 `std::sort(v.begin(), v.end())`。
+
+### 第一个例子：用 find 代替手写循环
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <iostream>
+
+int main() {
+    std::vector<int> v = {3, 7, 1, 9, 2, 7, 4, 8};
+
+    // 手写循环——3 行，只对 vector 有效
+    auto it_manual = v.begin();
+    while (it_manual != v.end() && *it_manual != 7)
+        ++it_manual;
+
+    // 泛型算法——1 行，对任何容器都有效
+    auto it_algo = std::find(v.begin(), v.end(), 7);
+
+    // 两者结果相同
+    std::cout << (it_manual == it_algo) << '\n';  // 1（true）
+}
+```
+
+`find` 接受三个参数：前两个定义搜索范围 `[begin, end)`，第三个是要找的值。它从 `begin` 开始逐个比对，找到就返回指向该元素的迭代器，找不到就返回 `end`。
+
+## Stepper：算法怎么一步步执行？
+
+猜一猜：把下面 Stepper 从第一步逐一切换到最后一步，你看到 `find` 的执行过程——它每一轮检查哪个元素？找到目标值后立即停止还是继续扫描？
+
+<Stepper>
+
+<Step step={0} label="初始数组">
+
+`vector<int> v = {3, 7, 1, 9, 2, 7, 4, 8};`——目标值 `7`。算法准备从 `begin()` 开始逐个扫描。
+
+<AlgorithmExecutionDiagram step={1} />
+
+</Step>
+
+<Step step={1} label="find：检查第一个元素">
+
+`find(v.begin(), v.end(), 7)`——迭代器指向 `v[0] = 3`。3 ≠ 7，不匹配，前进到下一个位置。
+
+<AlgorithmExecutionDiagram step={2} />
+
+</Step>
+
+<Step step={2} label="find：找到目标值">
+
+迭代器指向 `v[1] = 7`。7 == 7，匹配成功！`find` 立即返回这个迭代器，不会继续扫描后面的元素。
+
+<AlgorithmExecutionDiagram step={3} />
+
+<Callout type="tip">
+  **关键细节**：find 找到第一个匹配就立刻返回——不会继续扫描后面的元素。如果要统计所有匹配的次数，应该用 count 而不是 find。
+</Callout>
+
+</Step>
+
+<Step step={3} label="count：统计出现次数">
+
+`count(v.begin(), v.end(), 7)`——这次不提前停止，扫描完整个范围，遇到值 `7` 就累加计数器。结果：`7` 在数组中出现了 2 次。
+
+<AlgorithmExecutionDiagram step={4} />
+
+</Step>
+
+<Step step={4} label="fill：区间填充">
+
+`fill(v.begin(), v.begin() + 4, 0)`——把前 4 个位置的元素全替换为 0。fill 不需要迭代器做比较——它只负责写入。
+
+<AlgorithmExecutionDiagram step={5} />
+
+</Step>
+
+<Step step={5} label="transform：逐元素变换">
+
+`transform(src.begin(), src.end(), dst.begin(), [](int x) { return x * 2; })`——对源序列的每个元素应用函数对象，结果写入目标序列。源和目标可以是同一个容器（原地变换），但要注意大小足够。
+
+<AlgorithmExecutionDiagram step={6} />
+
+</Step>
+
+</Stepper>
+
+## 只读算法：只看不改
+
+<Term def="遍历序列的每个元素，读取它们但不修改原有数据的算法。典型如 find（查找）、count（计数）、accumulate（累加）、equal（比较）。接受一对迭代器定义范围，必要时额外参数指定操作。">只读算法（read-only algorithm）</Term> 不会修改容器中的元素——它们只是"浏览"一遍。
+
+### find——找到第一个匹配元素
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <string>
+
+int main() {
+    std::vector<std::string> words = {"apple", "banana", "cherry", "date"};
+
+    auto it = std::find(words.begin(), words.end(), "cherry");
+    if (it != words.end())
+        std::cout << "找到: " << *it << '\n';  // "找到: cherry"
+    else
+        std::cout << "未找到\n";
+}
+```
+
+`find` 返回一个迭代器——指向第一个匹配元素。未找到则返回 `end()` 迭代器（尾后位置，不可解引用）。**常见错误**：不检查 `!= end()` 就直接解引用——如果是 `end()`，那是未定义行为。
+
+`find_if` 是其变体——接受一个谓词（返回 `bool` 的函数）而不是具体值：
+
+```cpp
+// 找到第一个长度 > 5 的单词
+auto it = std::find_if(words.begin(), words.end(),
+    [](const std::string &s) { return s.size() > 5; });
+// it 指向 "banana"
+```
+
+### count——统计出现次数
+
+```cpp
+std::vector<int> v = {1, 2, 3, 2, 1, 2, 4};
+int n = std::count(v.begin(), v.end(), 2);  // n = 3
+```
+
+`count` 遍历整个范围，统计等于目标值的元素个数。`count_if` 统计满足谓词的元素数。`accumulate` 是累加版本——它定义在 `<numeric>` 而非 `<algorithm>`：
+
+```cpp
+#include <numeric>
+std::vector<int> v = {1, 2, 3, 4, 5};
+int sum = std::accumulate(v.begin(), v.end(), 0);        // sum = 15
+int product = std::accumulate(v.begin(), v.end(), 1,
+    [](int a, int b) { return a * b; });                  // product = 120
+```
+
+`accumulate` 的第三个参数是**初始值**——它是累加的"起点"，同时也决定了返回值的类型。
+
+<Callout type="warn">
+  `accumulate` 的第三个参数 0 是 `int` 字面量——如果你把 `vector<double>` 的内容累加到 `int` 上，小数部分会被截断！写成 `0.0` 保证返回 `double`。
+</Callout>
+
+### equal——比较两个序列是否相等
+
+```cpp
+std::vector<int> a = {1, 2, 3, 4, 5};
+std::vector<int> b = {1, 2, 3, 4, 5};
+
+bool same = std::equal(a.begin(), a.end(), b.begin());
+// same = true
+```
+
+`equal` 假设第二个序列至少和第一个一样长——它只接受第二个序列的**起始迭代器**，不会检查长度是否足够。如果第二个序列比第一个短——未定义行为。
+
+## 写算法：会改容器内容
+
+<Term def="遍历序列的过程中会修改元素值的算法。包括 fill（填充）、copy（复制）、replace（替换）、transform（变换）等。其中 copy/transform 涉及目标位置——需要输出迭代器。与只读算法不同，写算法要求目标范围必须有足够的空间。">写算法（write algorithm）</Term> 会改变元素的值——因此你需要确保目标有足够的"位置"来接收结果。
+
+### fill——从头到尾写入同一值
+
+`fill(begin, end, val)` 把区间内的每个元素都设成 `val`。`fill_n(dest, n, val)` 从 `dest` 开始写入 `n` 个 `val`：
+
+```cpp
+std::vector<int> v = {1, 2, 3, 4, 5};
+std::fill(v.begin(), v.begin() + 3, 0);  // v: {0, 0, 0, 4, 5}
+
+std::vector<int> v2;
+std::fill_n(std::back_inserter(v2), 5, 42);  // v2: {42, 42, 42, 42, 42}
+```
+
+第二段使用了 <Term def="一种特殊的迭代器适配器，把赋值操作转换为 push_back 调用。当你往 back_inserter(v) 写值时，等价于 v.push_back(value)。解决了目标容器空间不够的问题。头文件 <iterator>。">插入迭代器（back_inserter）</Term>——它把"往迭代器写入"的操作自动转换为 `push_back`，解决目标不够大的问题。
+
+### copy——整段搬运
+
+`copy(src_begin, src_end, dst)` 把源区间的元素一个个复制到目标：
+
+```cpp
+std::vector<int> src = {1, 2, 3, 4, 5};
+std::vector<int> dst(5);                       // 必须预分配足够空间！
+std::copy(src.begin(), src.end(), dst.begin()); // dst: {1, 2, 3, 4, 5}
+```
+
+**最常见的错误**：`dst` 没有预分配空间——`copy` 只是写入到已有位置，**不会自动扩容**。如果你不确定目标有多大，用 `back_inserter`：
+
+```cpp
+std::vector<int> dst;  // 空！
+std::copy(src.begin(), src.end(), std::back_inserter(dst));  // 正确：自动 push_back
+```
+
+### replace——条件替换
+
+```cpp
+std::vector<int> v = {1, 2, 3, 2, 4, 2, 5};
+std::replace(v.begin(), v.end(), 2, 99);  // 所有 2 → 99
+// v: {1, 99, 3, 99, 4, 99, 5}
+```
+
+`replace_copy` 是"复制并替换"的版本——源不变，改版写入目标：
+
+```cpp
+std::vector<int> src = {1, 2, 3, 2, 4};
+std::vector<int> dst;
+std::replace_copy(src.begin(), src.end(),
+    std::back_inserter(dst), 2, 99);
+// src: {1, 2, 3, 2, 4}  不变
+// dst: {1, 99, 3, 99, 4}
+```
+
+### transform——逐元素变形
+
+`transform` 是对每个元素调用函数对象、把结果写入目标的通用武器：
+
+```cpp
+std::vector<int> src = {1, 2, 3, 4, 5};
+std::vector<int> dst(src.size());  // 预分配
+
+// 每个元素 ×2
+std::transform(src.begin(), src.end(), dst.begin(),
+    [](int x) { return x * 2; });
+// dst: {2, 4, 6, 8, 10}
+
+// 原地平方——src 和 dst 可以是同一个容器
+std::transform(src.begin(), src.end(), src.begin(),
+    [](int x) { return x * x; });
+// src: {1, 4, 9, 16, 25}
+```
+
+`transform` 接受三个必需参数：源范围 `[begin, end)` + 目标起始位置 + 一个**可调用对象**（函数、函数指针、函数对象、lambda）。`transform` 的强大在于——你自己决定"怎么变"，它负责把"变"施加到每个元素。
+
+## 排序定制：sort、unique、stable_sort
+
+### sort——快速排序
+
+`sort(begin, end)` 对区间进行升序排序——默认用 `<` 比较。要求迭代器是 <Term def="支持随机访问的迭代器类型——可以对迭代器做 +n、-n、[] 等操作，像指针一样直接跳到任意位置。vector、deque、array、string 的迭代器是 RandomAccess；list、forward_list 的迭代器不是（只能 ++/--）。std::sort 要求 RandomAccess 迭代器。">随机访问迭代器（RandomAccess Iterator）</Term>——这意味着 `vector`/`deque`/`array`/`string` 可用，`list` 不可用（要用 `list::sort`）。这一节用「快速排序」作通俗讲法，但标准库实现通常是内省排序 introsort——以快排为主、必要时切换到堆排序，以此保证最坏情况仍是 O(n log n)。
+
+```cpp
+std::vector<int> v = {5, 2, 8, 1, 9, 3, 6, 4, 7};
+std::sort(v.begin(), v.end());
+// v: {1, 2, 3, 4, 5, 6, 7, 8, 9}
+```
+
+用 Stepper 看排序一个数组时，内部在发生什么：
+
+<Stepper>
+
+<Step step={0} label="原始数组">
+
+开始排序前——`{5, 2, 8, 1, 9, 3, 6, 4, 7}`，完全是随机顺序。
+
+<SortStagesDiagram step={1} />
+
+</Step>
+
+<Step step={1} label="分区（Partition）">
+
+快排选择一个"基准"元素（pivot，这里选 5），把所有小于它的元素移到左边，大于它的移到右边。这一步叫分区（partition），O(n) 时间完成。现在 5 左边的 `[2,1,3,4]` 比 5 小，右边的 `[8,9,6,7]` 比 5 大。
+
+<SortStagesDiagram step={2} />
+
+</Step>
+
+<Step step={2} label="递归排序子区间">
+
+基准 5 已经到了它的最终位置（第 4 位）——不会再移动了。现在左右子区间各自独立排序：左边 `[2,1,3,4]` → `[1,2,3,4]`，右边 `[8,9,6,7]` → `[6,7,8,9]`。
+
+<SortStagesDiagram step={3} />
+
+</Step>
+
+<Step step={3} label="排序完成">
+
+所有子区间递归完毕——整个数组有序。每层 O(n) × 约 log₂n 层 = O(n log n)。
+
+<SortStagesDiagram step={4} />
+
+</Step>
+
+</Stepper>
+
+### 自定义排序规则
+
+`sort` 默认按升序排。要降序怎么办？传入第三个参数——一个比较函数：
+
+```cpp
+std::vector<int> v = {5, 2, 8, 1, 9};
+
+// 降序排序
+std::sort(v.begin(), v.end(),
+    [](int a, int b) { return a > b; });
+// v: {9, 8, 5, 2, 1}
+```
+
+这个比较函数被称为 <Term def="返回 bool 值的可调用对象——用于判断谁应该排前面。sort 的第三个参数就是谓词：返回 true 表示第一个参数应该排在第二个参数前面。lambda 是最常用的谓词形式。">谓词（predicate）</Term>——`sort` 在比较两个元素时会调用它。返回 `true` 表示 `a` 应该排在 `b` 前面。
+
+更实际的例子——对结构体按某个字段排序：
+
+```cpp
+struct Student {
+    std::string name;
+    int score;
+};
+
+std::vector<Student> students = {
+    {"Alice", 92}, {"Bob", 85}, {"Charlie", 97}
+};
+
+// 按成绩降序排
+std::sort(students.begin(), students.end(),
+    [](const Student &a, const Student &b) {
+        return a.score > b.score;
+    });
+// Charlie(97) > Alice(92) > Bob(85)
+```
+
+### unique——去重
+
+`unique` 把重复的相邻元素"挤"到末尾——注意它**只处理相邻重复**，不会真正删除元素：
+
+```cpp
+std::vector<int> v = {1, 2, 2, 3, 3, 3, 4, 5, 5};
+auto new_end = std::unique(v.begin(), v.end());
+// v 内容现在是 {1, 2, 3, 4, 5, ???, ???, ???, ???}
+// new_end 指向第一个"垃圾"元素
+
+v.erase(new_end, v.end());  // 真正删除末尾的"垃圾"
+// v: {1, 2, 3, 4, 5}
+```
+
+<Term def="对值相等的元素保持它们原始的前后顺序。stable_sort 在排序时如果两个元素值相等，它们在结果中的相对顺序与排序前一致。sort 不保证稳定——相等的元素顺序可能被交换。">稳定排序（stable_sort）</Term> 与 `sort` 的唯一区别——相等的元素保持原序：
+
+```cpp
+// 假设有多个 Student score=90——stable_sort 保持他们的原始顺序
+std::stable_sort(students.begin(), students.end(),
+    [](const Student &a, const Student &b) {
+        return a.score > b.score;
+    });
+```
+
+## lambda 表达式：就地生成一个函数
+
+你已经见过几次了——`[](int x) { return x > 0; }` 这种写在代码中间的"函数"。这是 <Term def="一种就地定义匿名函数的语法——写在需要函数对象的地方，无需单独命名。形式为 [capture](params) -> ret { body }，其中 capture 指定如何访问外部变量（按值 =、按引用 &）。编译器将 lambda 展开为一个匿名函数对象类（闭包）。C++11 引入。">lambda 表达式（lambda expression）</Term>——C++11 引入的语法糖，让你在需要函数对象的地方当场写一个"匿名函数"。
+
+<LambdaSyntaxDiagram />
+
+lambda 的四个组成部分：
+
+- **① 捕获列表 `[capture]`**：告诉 lambda 它如何访问**外部**变量。`[=]` 按值捕获（复制一份）、`[&]` 按引用捕获（共享原变量）、`[x, &y]` 混合——x 按值、y 按引用
+- **② 参数列表 `(params)`**：和普通函数一样的参数——调用者传进来的东西
+- **③ 返回类型 `-> ret`**：大多数情况可省略——编译器能从函数体推导
+- **④ 函数体 `{ body }`**：lambda 的执行逻辑
+
+```cpp
+int threshold = 10;
+std::vector<int> v = {5, 15, 8, 20, 3};
+
+// [=] 按值捕获 threshold——lambda 内部可以读取它
+auto it = std::find_if(v.begin(), v.end(),
+    [=](int x) { return x > threshold; });   // *it = 15
+
+// [&] 按引用捕获——lambda 内部可以修改外部变量
+int count = 0;
+std::for_each(v.begin(), v.end(),
+    [&](int x) { if (x > threshold) ++count; });
+// count = 2
+```
+
+<Callout type="warn">
+  **lambda 不是函数指针**——它是编译器生成的一个匿名类的**对象**。每个 lambda 有自己独一无二的类型——不能把两个不同的 lambda 赋给同一个变量（除非用 `std::function`）。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`copy(src.begin(), src.end(), dst.begin())` 运行崩溃或数据错乱——有时正常有时不正常。
+  **原因**：`copy` 不会检查目标是否有足够空间——它只是机械地把元素写入 `dst.begin()` 开始的连续位置。如果 `dst` 是空的 vector，写入的是野指针指向的内存——未定义行为。
+  **修法**：目标为空时用 `std::back_inserter(dst)` 代替 `dst.begin()`，或者调用前 `dst.resize(src.size())`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`unique` 调用后打印容器——末尾有一堆重复的"垃圾"值。元素没被删掉。
+  **原因**：`unique` 只把重复元素"挪"到末尾、返回新逻辑末尾的迭代器——它**不删除**元素。它不知道容器到底多长，也不调用容器的 `erase`。
+  **修法**：配合 `erase` 使用——标准写法：`v.erase(std::unique(v.begin(), v.end()), v.end())`——先 `unique` 重排再 `erase` 真删。这叫做 **erase-unique idiom**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：lambda 里修改了外部变量，出了 lambda 变量值没变。
+  **原因**：用了 `[=]` 按值捕获——lambda 内部操作的是外部变量的**副本**，不是原变量。副本的修改不会影响外部。
+  **修法**：需要在 lambda 里修改外部变量并能看到结果——用 `[&]` 按引用捕获，或 `[&var]` 只按引用捕获目标变量。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`sort` 传入自定义比较函数后程序崩溃——或者排序结果诡异（有元素"消失"了）。
+  **原因**：比较函数违反了**严格弱序**——最常见是用 `<=` 而不是 `<`。`sort` 要求比较函数满足：`cmp(a, a)` 必须为 false。用 `<=` 会使 `cmp(a, a)` 返回 `true`——矛盾，行为未定义。
+  **修法**：比较函数永远用**严格小于 `<`**。降序用 `>`、升序用 `<`。把 `>=` 改成 `>`。
+</Callout>
+
+## 小结
+
+- 泛型算法与容器解耦——通过迭代器范围 `[begin, end)` 接收数据，同一算法可作用于 vector/list/deque/array 等任何提供迭代器的容器；`find`/`count` 等只读算法不改数据，`fill`/`copy`/`transform` 等写算法需要目标空间足够
+- `sort` 对 RandomAccess 迭代器区间 O(n log n) 排序——接受可选的第三个参数（谓词）自定义排序规则；`unique` 只压缩重复不删除——配合 `erase` 完成真正的去重操作
+- lambda 是就地定义的匿名函数——`[capture](params) -> ret { body }`；`[=]` 按值捕获外部变量（副本）、`[&]` 按引用捕获（共享）；lambda 作为谓词传入算法——大幅减少独立函数定义
+- 写算法不自动扩容——`copy`/`transform` 写入时目标容器空间必须足够，否则用 `back_inserter` 自动 push_back；`fill_n` 同理——n 个位置必须有效
+- 手写循环能被标准算法替换的场景——查找用 `find`/`find_if`、计数用 `count`/`count_if`、删除元素用 `remove_if` + `erase`
+
+<Exercises>
+
+**练习 1（改代码型）** 下面代码试图从一个 vector 中删除所有负数——但不只一个 bug。找出所有问题并写出修正后的代码。
+
+```cpp
+#include <vector>
+#include <iostream>
+int main() {
+    std::vector<int> v = {3, -1, 2, -3, 5, -2};
+    for (auto it = v.begin(); it != v.end(); ++it) {
+        if (*it < 0) {
+            v.erase(it);    // Bug 1
+        }                   // Bug 2
+    }
+    for (int x : v) std::cout << x << ' ';  // 应该输出 3 2 5
+}
+```
+
+<Answer>
+
+两个 Bug：
+1. `erase(it)` 让 `it` 及之后所有迭代器失效——紧接着 `++it` 在失效迭代器上操作
+2. erase 后 `++it` 会跳过一个元素（被删除元素后面的元素会被移动到被删位置，但 `it` 被先 `++` 了）
+
+修正——用 erase-remove 惯用法（一行代码、无 bug）：
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <iostream>
+int main() {
+    std::vector<int> v = {3, -1, 2, -3, 5, -2};
+    auto newEnd = std::remove_if(v.begin(), v.end(),
+        [](int x) { return x < 0; });
+    v.erase(newEnd, v.end());
+    for (int x : v) std::cout << x << ' ';  // 3 2 5
+}
+```
+
+`remove_if` 把不满足谓词的元素往前挪——返回"新末尾"的迭代器——`erase` 把新末尾到原来 `end()` 的元素真正删除。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个函数 `top_n`，输入一个 `vector<Student>` 和整数 `n`，返回成绩（score）最高的 n 个学生——按成绩从高到低排列。用 `sort` + lambda 完成排序。
+
+```cpp
+struct Student {
+    std::string name;
+    int score;
+};
+std::vector<Student> top_n(std::vector<Student> students, int n);
+```
+
+<Answer>
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <string>
+#include <iostream>
+
+struct Student {
+    std::string name;
+    int score;
+};
+
+std::vector<Student> top_n(std::vector<Student> students, int n) {
+    // 降序排列——成绩高的在前面
+    std::sort(students.begin(), students.end(),
+        [](const Student &a, const Student &b) {
+            return a.score > b.score;  // 降序：a > b 时 a 排 b 前
+        });
+
+    // 取前 n 个（n 太大时取全部）
+    if (n > static_cast<int>(students.size()))
+        n = students.size();
+
+    return std::vector<Student>(students.begin(), students.begin() + n);
+}
+
+int main() {
+    std::vector<Student> all = {
+        {"Alice", 85}, {"Bob", 92}, {"Charlie", 78},
+        {"Diana", 95}, {"Eve", 88}
+    };
+    auto top = top_n(all, 3);
+    for (const auto &s : top)
+        std::cout << s.name << ": " << s.score << '\n';
+    // Diana: 95 / Bob: 92 / Eve: 88
+}
+```
+
+核心思路：`sort` + lambda——比较函数的返回 `a.score > b.score` 表示"a 分数比 b 高时 a 排在 b 前面"——降序排列。然后用迭代器范围构造取前 n 个。
+
+</Answer>
+
+**练习 3（选型题）** 对于以下三个场景，应该用哪个标准算法？各用一句话说明原因。
+
+- **A**：有一个 `vector<string>`，需要把所有长度超过 10 的单词替换为 `"[LONG]"`。
+- **B**：检查一个 `vector<int>` 是否所有元素都为正数——返回 `bool`。
+- **C**：把一个 `vector<int>` 的每个元素加 10——结果存到另一个 `list<int>` 中。
+
+<Answer>
+
+- **A**：`replace_if`。它是"条件替换"的标准算法——接受谓词（判断长度 > 10？）+ 替换值 "[LONG]"。不需要手动写 for 循环 + if 判断。
+- **B**：`all_of`。它接受一个区间和一个一元谓词——对每个元素调用谓词，全部返回 `true` 则整体返回 `true`。`all_of(v.begin(), v.end(), [](int x){ return x > 0; })` 一行搞定。
+- **C**：`transform` + `back_inserter`。`transform` 对源容器每个元素施加函数对象（+10）→ 写入目标。因为目标是 `list`，用 `back_inserter(lst)` 作输出迭代器——自动 `push_back` 到 list 末尾。
+
+</Answer>
+
+</Exercises>
+
+<Attribution />
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="泛型算法（generic algorithm）">
+  作用于序列元素上的标准函数模板。通过迭代器范围 [begin, end) 接收数据，不依赖具体容器类型——这是"泛型"的含义：同一份算法代码适配所有容器。包括查找（find）、排序（sort）、计数（count）、累加（accumulate）、复制（copy）、变换（transform）等 100 多个。定义在 algorithm 和 numeric 头文件中。详见本章「算法不认识容器」一节。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器范围（iterator range）">
+  一对迭代器组成的左闭右开区间 [begin, end)。begin 指向第一个元素，end 指向最后一个元素之后的位置（尾后迭代器，不可解引用）。所有标准算法都通过迭代器范围来接收数据——这就是算法与容器解耦的关键。详见本章 AlgorithmArchitectureDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="只读算法（read-only algorithm）">
+  遍历序列的每个元素，读取它们但不修改原有数据的算法。典型包括 find（查找特定值）、count（统计出现次数）、accumulate（累加求和）、equal（比较两序列是否相等）。只接受输入迭代器，不要求目标空间。详见本章「只读算法」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="写算法（write algorithm）">
+  遍历序列的过程中会修改元素值的算法。包括 fill（填充同一值）、copy（复制整段）、replace（条件替换）、transform（逐元素变换）。其中 copy/transform 涉及目标位置——需要目标区间有足够空间，否则用 back_inserter 自动扩容。详见本章「写算法」一节和 AlgorithmExecutionDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="插入迭代器（back_inserter）">
+  一种特殊的迭代器适配器，把往某个位置写入值的操作自动转换为 push_back(value)。当你写 *back_inserter(v) = 42 时，等价于 v.push_back(42)。解决了目标容器空间不够的问题。定义在 iterator 中。详见本章「copy——整段搬运」小节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="lambda 表达式（lambda expression）">
+  一种就地定义匿名函数的语法——写在需要函数对象的地方，无需单独命名。形式为 `[capture](params) -> ret { body }`。capture 指定如何访问外部变量（[=] 按值复制一份、[&] 按引用共享原变量）；params 是调用者传入的参数；-> ret 是返回值类型（通常可省略、编译器自动推导）；`{ body }` 是函数体。编译器将 lambda 展开为一个匿名函数对象类（闭包）。C++11 引入。详见本章 LambdaSyntaxDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="谓词（predicate）">
+  返回 bool 值的可调用对象（函数、函数指针、函数对象或 lambda）。一元谓词接受一个参数，二元谓词接受两个参数（如 sort 的比较函数）。sort 通过二元谓词决定两个元素的相对顺序，find_if/count_if 通过一元谓词筛选元素。详见本章「自定义排序规则」和「lambda 表达式」节。
+</GlossaryItem>
+
+<GlossaryItem term="稳定排序（stable_sort）">
+  排序时对值相等的元素保持它们原始的前后顺序。std::sort 不保证稳定性——相等的元素顺序可能被交换。std::stable_sort 保证相等元素不改变相对位置——当排序涉及多个字段时，稳定性很重要。详见本章「unique——去重」小节。
+</GlossaryItem>
+
+<GlossaryItem term="随机访问迭代器（RandomAccess Iterator）">
+  能像指针一样「一跳到任意位置」的迭代器——可以 it+n、it-n、it[k] 直接跳转，而不必一步步挪。vector/deque/array/string 的迭代器是这种；list/forward_list 只能一步步 ++/--。std::sort 需要随机访问能力（要快速跳到中点、跳到任意分区位置），所以不能用于 list，list 只能用自带的 sort 成员函数。详见本章「sort」小节。
+</GlossaryItem>
+
+</Glossary>

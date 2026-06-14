@@ -1,0 +1,532 @@
+---
+title: 类
+type: C
+section: C++基础
+order: 7
+description: 掌握C++面向对象的基石——类的定义、成员（数据/函数/const）、构造函数、访问控制、友元——能设计并实现自己的类
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §7 改编）：类的定义与成员、访问控制 public/private、构造函数与初始化列表、const 成员函数、友元。
+   重心在交互 Demo Stepper(§5)+ 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 类的定义（class/struct、数据成员+成员函数、this指针）— viz: ClassLayoutDiagram（内存布局图）
+   2) 访问控制（public/private、封装）— viz: AccessControlDiagram（接口 vs 实现边界图）
+   3) 构造函数（默认/带参/成员初始化列表）— viz: ConstructorCallDiagram（构造链顺序图，支持 step prop）
+   4) const 成员函数 — viz: ConstMemberDiagram（const vs 非const 对象调用权对比）
+   5) 友元（friend 函数/类）— 代码示例 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能定义一个完整的类——正确写出 class 声明、public/private 访问控制、数据成员和成员函数，并能解释 this 指针在幕后做了什么
+- 能设计并实现构造函数——正确使用成员初始化列表初始化成员，区分默认构造函数和带参构造函数，并在自己的类中写出构造链
+- 能回答：`const Sales_data item;` 定义的对象能调用 `item.isbn()` 但不能调用 `item.combine(rhs)`——为什么？如果把 `combine` 改成 `combine(...) const` 会有什么后果？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——类像一张零件图纸，对象是按图纸造出来的具体零件。 */}
+
+## 你的代码需要一张「零件图纸」
+
+到目前为止，你一直在用 C++ 内置的类型——`int`、`double`、`string`、`vector`。但真实世界的软件里，数据从来不是孤立的——一本书有书名、销量和单价，一个学生有姓名、学号和成绩。这些数据天然应该捆在一起。
+
+想象一个零件加工厂：你不会每次都手画一张新图纸从头切一块铝——你会先画一张「标准零件图纸」：标好尺寸、材料、公差。之后想要这个零件？对着图纸开工就行。C++ 里你要做的就是这样一张**数据图纸**——先画清楚这种东西长什么样（有哪些数据、能做哪些操作），之后照着这张图就能造出一个个具体的成品。
+
+不这么做，描述一本书就得用三个零散变量 `string bookNo; unsigned sold; double revenue;`，每个操作都要手动一个个传进去，参数越列越长。本章教你画第一张自己的零件图——这是从「照着现成的零件图开工」迈向「自己动手画零件图」的关口。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §6 代码）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+{/* 3.1 类的定义（class/struct、数据成员+成员函数、this指针） */}
+
+## 类是什么：一张图纸 + 工厂
+
+<Term def="C++ 中自定义类型的蓝图。用 class 或 struct 关键字定义，包含数据成员（描述状态）和成员函数（描述操作）。class 是图纸，对象是按图纸造出的具体实例。">类（class）</Term>——**蓝图**，规定了这种类型里有什么数据、能做什么操作。用这张蓝图造出来的每一个实例叫做**对象**。
+
+<ClassLayoutDiagram />
+
+看上面的内存布局图——一个对象在内存中只是一块连续的数据区域。成员函数不占对象空间——它们的代码在另一块区域，所有同类的对象共享。
+
+那么成员函数怎么知道它在操作哪一个对象？秘密藏在 <Term def="成员函数内部隐含的指针，指向调用该函数的对象。函数内对数据成员的访问实际是 this->member 的简写。this 的类型是 T* 或 const T*（取决于函数是否 const）。">this 指针</Term> 里——每个非静态成员函数都有一个隐藏的 `this` 形参：当你写 `item.isbn()` 时，编译器实际生成 `Sales_data::isbn(&item)`——把 `&item` 传进函数，内部通过 `this->bookNo` 访问数据成员。
+
+<Term def="在类内部定义的函数。可以访问该类的所有成员（包括 private）。内部对数据成员的直接引用（如 bookNo）实际是 this->bookNo 的简写。在类外部定义时用 类名::函数名 标明所属。">成员函数（member function）</Term> 定义在类内部或外部——在外部定义时用 `类名::函数名`：
+
+```cpp
+// 在类外部定义成员函数——用 Sales_data:: 标明它属于哪个类
+double Sales_data::avg_price() const {
+    if (units_sold)                    // units_sold 其实是 this->units_sold
+        return revenue / units_sold;
+    else
+        return 0;
+}
+```
+
+<Term def="使用 struct 关键字定义的类。和 class 唯一的区别是默认访问权限——struct 默认 public，class 默认 private。除此之外 struct 也能有构造函数、成员函数、析构函数。业界惯例：纯数据聚合用 struct，需要封装行为的用 class。">struct vs class</Term>——你可能会问：之前用过 `struct`，和 `class` 有什么区别？**唯一的区别是默认访问权限**：`struct` 默认 `public`，`class` 默认 `private`。除此之外完全一样——`struct` 也能有构造函数和成员函数。惯例：纯数据聚合用 `struct`，需要封装行为的用 `class`。
+
+## 访问控制：谁可以碰我的数据？
+
+上一节看到数据存在对象里——那外部代码能不能直接读写这些数据？如果能，调用方就可能绕过你的规则乱改——比如把收入设成负数。C++ 用 <Term def="C++ 通过 public 和 private 关键字控制类成员的访问权限。public 成员构成接口——任何代码可访问；private 成员构成实现细节——只有类的成员函数和友元可访问。这是封装的核心机制。">访问控制（access control）</Term> 解决这个问题。
+
+<AccessControlDiagram />
+
+看上面的分界线图。`public:` 下面的成员是类的**接口**——外部调用方可以随意使用。`private:` 下面的成员是类的**实现细节**——外部代码碰不到，直接编译报错。
+
+<Term def="把数据和操作数据的函数捆在类内部，用 private 隐藏实现、用 public 暴露接口。封装让调用方不必关心内部实现——改了 private 数据存储方式，只要 public 接口不变，外部代码无需修改。">封装（encapsulation）</Term>的设计意图：外部只能通过 `public` 函数间接操作数据，类作者可在函数内部加校验——比如检查 ISBN 是否匹配。改了内部实现（比如换一种存储方式），只要 public 接口不变，调用方一行代码不用改。
+
+一个完整的类骨架：
+
+```cpp
+class Sales_data {
+public:   // ← 从这里往下都是公开接口
+    std::string isbn() const { return bookNo; }
+    Sales_data& combine(const Sales_data&);
+    double avg_price() const;
+
+private:  // ← 从这里往下都是隐藏实现
+    std::string bookNo;
+    unsigned units_sold = 0;
+    double revenue = 0.0;
+};
+```
+
+## 构造函数：对象诞生的那一刻
+
+定义了一个 `Sales_data` 变量之后，它的数据成员分别是什么值？谁来初始化它们？答案藏在 <Term def="类的一种特殊成员函数——对象创建时自动调用。函数名=类名、无返回类型（连 void 都不写）。可以有多个重载。负责初始化对象的数据成员。未显式初始化则执行默认初始化。">构造函数（constructor）</Term> 里。
+
+<Term def="构造函数参数列表右括号后、函数体左花括号前的初始化表达式。用冒号开头：: member(value), ...。初始化在构造体执行前完成——进入 {} 时成员已有确定值。比在函数体内赋值更高效，对 const 成员和引用成员是唯一初始化途径。">成员初始化列表（member initializer list）</Term> 写在参数列表右括号后、函数体左花括号前：
+
+```cpp
+Sales_data(const std::string &s, unsigned n, double p)
+    : bookNo(s), units_sold(n), revenue(p) { }
+//  ↑ 成员初始化列表（在构造体之前执行）
+```
+
+<ConstructorCallDiagram />
+
+看上面的构造链图——构造分两阶段：先跑成员初始化列表（各数据成员按声明顺序初始化），再跑构造体。进入 `{}` 时成员已经初始化好了。
+
+<Term def="编译器在没有自定义任何构造函数时自动生成的无参构造。有类内初始值的用它，类类型成员调自身默认构造，内置类型成员未定义。一旦自定义了任何构造函数，编译器就不再合成——此时 Sales_data item; 会编译报错。">合成默认构造函数（synthesized default constructor）</Term>——如果你一个构造函数都没写，编译器自动生成一个。但内置类型成员（如 `unsigned`、`double`）的初始值未定义。
+
+**关键规则**：一旦你写了**任何**一个构造函数，编译器就不再生成默认构造函数：
+
+```cpp
+Sales_data(const std::string &s) : bookNo(s) {}
+// 只定义了这一个构造函数
+Sales_data item;  // ✗ 编译错误！没有默认构造函数
+```
+
+修法：手动加默认构造函数——`Sales_data() = default;` 或给全部参数提供默认值：
+
+```cpp
+Sales_data(const std::string &s = "") : bookNo(s) {}
+// 有了默认实参，这一个构造函数同时充当默认和带参两种角色
+```
+
+## const 成员函数：承诺「我不改这个对象」
+
+有时候你有一个 `const` 对象——只想读数据、不想改。但编译器怎么知道某个成员函数会不会偷偷改数据？答案：<Term def="参数列表右括号后加 const 关键字的成员函数。把 this 从 T* 变 const T*——承诺不修改 *this。const 对象只能调 const 成员函数；非 const 对象两者都能调。只读不写的成员函数一律标 const。">const 成员函数</Term>——在参数列表后面加一个 `const`：
+
+```cpp
+std::string isbn() const { return bookNo; }
+//                     ↑ 这个 const——承诺不改 *this
+```
+
+<ConstMemberDiagram />
+
+看上面的对比图——非 const 对象什么函数都能调；const 对象只能调标了 `const` 的函数，没标的被编译拒绝。
+
+const 成员函数的底层机制：把 `this` 从 `T*` 变成 `const T*`——不能通过这个指针修改对象。设计原则：**只读的成员函数一律标 const**。这既是给编译器的承诺，也是给读代码的人一个信号。
+
+## 友元：给特定函数开后门
+
+private 成员外部不能访问——但有些函数确实需要碰 private 数据才算合理。比如把对象输出到屏幕的 `print` 函数——如果它只能通过 `isbn()`、`avg_price()` 等公开接口间接凑信息，写出来啰嗦又低效。
+
+<Term def="用 friend 关键字在类内部声明的外部函数或另一个类——授权访问本类的 private 成员。friend 声明不是成员函数，位置在 public 还是 private 区无关。友元不传递。主要用于操作符重载（<< >>）和紧密关联的非成员函数。">友元（friend）</Term>——在类内部用 `friend` 声明外部函数，授权访问 private：
+
+```cpp
+class Sales_data {
+    // 友元声明——print/read/add 不是成员函数，但可以碰 private 数据
+    friend std::ostream& print(std::ostream&, const Sales_data&);
+    friend std::istream& read(std::istream&, Sales_data&);
+    friend Sales_data add(const Sales_data&, const Sales_data&);
+public:
+    // ... public 成员
+private:
+    std::string bookNo;
+    unsigned units_sold = 0;
+    double revenue = 0.0;
+};
+
+// print 是普通函数，但因为 friend 声明可以直接访问 private 成员
+std::ostream& print(std::ostream &os, const Sales_data &item) {
+    os << item.isbn() << " " << item.units_sold << " "  // 直接读 units_sold
+       << item.revenue << " " << item.avg_price();      // 直接读 revenue
+    return os;
+}
+```
+
+友元不是类的成员——声明在 public 区还是 private 区都一样。友元不具有传递性：A 是 B 的友元、B 是 C 的友元，不意味着 A 能访问 C 的 private。使用原则：只在**操作符重载**（`<<`、`>>`）和**紧密关联的非成员函数**（如上面的 `print`/`read`/`add`）中用友元——不要为了省事乱开 friend。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型用 Stepper 分步展示对象构造的五个阶段（分析类定义→分配内存→成员初始化列表→构造体执行→构造完成），与 ConstructorCallDiagram 的五阶段一一对齐。
+   猜一猜引导；每步必须带图示/SVG 可视化——ConstructorCallDiagram step prop。 */}
+
+## 动手：一步步看一个对象是怎么构造出来的
+
+构造一个对象分五个阶段：分析类定义 → 分配内存 → 成员初始化列表 → 构造体执行 → 构造完成。每一步下面用 ConstructorCallDiagram 高亮对应阶段——图上高亮哪一步，正文就在讲哪一步。
+
+> 猜一猜：定义 `Sales_data item;` 之后立刻用 `cout << item.avg_price()`——会输出什么？如果类内部没写任何构造函数，编译器生成的默认构造会把 `revenue` 初始化成什么？通过下面 Stepper 一步步看。
+
+<Stepper>
+  <Step title="① 定义对象——编译器看到类定义">
+    <ConstructorCallDiagram step={0} />
+    编译器扫描类的定义——记录所有数据成员的类型和名字（`string bookNo`、`unsigned units_sold`、`double revenue`），以及所有 public 成员函数的签名（`isbn()`、`combine()`、`avg_price()`）。此时还没分配任何内存——只是在编译器的符号表里注册了这个类型。类定义的作用就是告诉编译器一个概念上完整的数据类型长什么样。
+  </Step>
+  <Step title="② 分配内存——在栈上开辟对象空间">
+    <ConstructorCallDiagram step={1} />
+    执行 `Sales_data item;`——编译器在栈上分配一块连续内存，大小等于 `sizeof(Sales_data)`。数据成员在栈上依次排列：`bookNo`（string）、`units_sold`（4 字节）、`revenue`（8 字节，可能有对齐填充）。成员函数不占这块空间。注意此时内存内容还是随机的——还没初始化。
+  </Step>
+  <Step title="③ 成员初始化列表——给每个数据成员定下初值">
+    <ConstructorCallDiagram step={2} />
+    成员初始化列表开始执行。类内初始值 `units_sold = 0` 和 `revenue = 0.0` 生效，`bookNo` 调用 string 默认构造变空串。注意成员初始化的顺序由它们在类定义中声明的顺序决定——不是初始化列表中写的顺序。此时若调猜一猜里那个 `avg_price()` 会返回 0——因为 `units_sold == 0`，函数里的 `if` 守卫直接返回 0，根本不会执行除法。
+  </Step>
+  <Step title="④ 构造体执行——跑构造函数 {} 里的代码">
+    <ConstructorCallDiagram step={3} />
+    成员初始化列表跑完后，才进入构造函数的函数体 `{}`——执行里面写的代码。`Sales_data() = default;` 的构造体是空的，所以这一步什么都不做；如果是自定义构造（比如从流读数据的 `Sales_data(std::istream&)`），就在这里跑校验、读输入等逻辑。关键时序：进入 `{}` 时所有成员已经初始化完毕——构造体里读到的成员都是确定值，不是随机内存。
+  </Step>
+  <Step title="⑤ 构造完成——对象诞生，可以正常使用">
+    <ConstructorCallDiagram step={4} />
+    构造体执行完毕，对象正式诞生——三个成员都已是确定值（`bookNo=""`、`units_sold=0`、`revenue=0.0`），`item` 现在是一个状态合法、可以正常使用的对象。之后调用 `item.isbn()`、`item.combine(rhs)`、`item.avg_price()` 时，编译器隐式把 `&item` 作为 this 传进成员函数——函数内部通过 this 知道在操作哪个对象。至此「对象怎么造出来」这条链就走完了。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  这个 Stepper 的核心教具价值：让你亲眼看到对象「在哪分配、谁初始化、什么时候成员才有确定值」。看清了「成员初始化列表先于构造体执行」这个时序，你才能回答「为什么初始化列表比在构造体内赋值更好」「为什么 const 成员和引用成员只能用初始化列表」这类问题。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说）。 */}
+
+## 代码逐段拆解：从零设计并实现一个完整的类
+
+把本章类的定义、构造函数、const 成员函数、访问控制、友元串在一起——设计一个 `Sales_data` 类，实现所有关键成员。每段一个主题，读完你就能自己写类。
+
+### 类定义骨架：public 接口 + private 数据
+
+```cpp
+#include <iostream>
+#include <string>
+
+class Sales_data {
+// 友元——普通函数，被授权访问 private 成员
+friend Sales_data add(const Sales_data&, const Sales_data&);
+friend std::ostream& print(std::ostream&, const Sales_data&);
+friend std::istream& read(std::istream&, Sales_data&);
+
+public:
+    // 构造函数
+    Sales_data() = default;                          // ① 默认构造
+    Sales_data(const std::string &s) : bookNo(s) {}  // ② 只给书名
+    Sales_data(const std::string &s, unsigned n, double p)
+        : bookNo(s), units_sold(n), revenue(p) {}    // ③ 全参构造
+    Sales_data(std::istream&);                       // ④ 从流构造
+
+    // 成员函数——const 表示不修改 *this
+    std::string isbn() const { return bookNo; }
+    Sales_data& combine(const Sales_data&);
+    double avg_price() const;
+
+private:
+    std::string bookNo;
+    unsigned units_sold = 0;      // 类内初始值——给默认构造用
+    double revenue = 0.0;
+};
+```
+
+设计要点：① 四个构造函数覆盖不同场景——空对象、只给书名、给定全部字段、从流读取。`= default` 告诉编译器「我要默认行为」——但这里必须显式写，因为后面定义了其他构造函数，编译器不会自动合成。② `avg_price()` 和 `isbn()` 标了 `const`——不修改对象状态。③ `combine()` 没标 `const`——它会修改 `units_sold` 和 `revenue`。④ 友元声明在类的顶部——位置无所谓，但统一放开头更清晰。
+
+### combine：把两笔销售合并
+
+```cpp
+Sales_data& Sales_data::combine(const Sales_data &rhs) {
+    units_sold += rhs.units_sold;    // 累加销量
+    revenue += rhs.revenue;          // 累加收入
+    return *this;                     // 返回当前对象——支持链式调用
+}
+```
+
+`combine` 是典型的需要修改 `*this` 的成员函数——所以不能标 `const`。返回 `Sales_data&`（自身引用）允许链式调用：`a.combine(b).combine(c)`。`rhs` 用 `const Sales_data&` 传——只需要读它、不修改、不需要拷贝。
+
+### avg_price：只读、不修改
+
+```cpp
+double Sales_data::avg_price() const {
+    if (units_sold)
+        return revenue / units_sold;
+    else
+        return 0;
+}
+```
+
+`avg_price` 是 const 成员函数的典型——只读、不改。`revenue / units_sold` 实际是 `this->revenue / this->units_sold`。销量为 0 时浮点除零结果未定义（0/0 得 NaN、非零/0 得 inf），都不是有意义的均价，所以加保护返回 0。
+
+### read / print：友元函数读写对象
+
+```cpp
+// read——从输入流读取一笔交易，填进 item
+std::istream& read(std::istream &is, Sales_data &item) {
+    double price = 0;       // 单价（用户输入的是单价，不存进对象）
+    is >> item.bookNo >> item.units_sold >> price;
+    item.revenue = price * item.units_sold;  // 收入 = 单价 × 销量
+    return is;
+}
+
+// print——把 item 的状态输出到流
+std::ostream& print(std::ostream &os, const Sales_data &item) {
+    os << item.isbn() << " " << item.units_sold << " "
+       << item.revenue << " " << item.avg_price();
+    return os;
+}
+```
+
+两个关键设计决策：① `read` 的参数 `Sales_data &item` 不是 const——要修改 item。② `print` 的参数 `const Sales_data &item`——只读不拷贝。③ 用户输入的是单价 `price` 而非收入——`price` 只是 read 的局部变量，不存进对象。④ 返回 `istream&` / `ostream&` 是为了能链式调用。
+
+### add：相加两笔交易（ISBN 相同才合法）
+
+```cpp
+Sales_data add(const Sales_data &lhs, const Sales_data &rhs) {
+    Sales_data sum = lhs;   // 拷贝 lhs 的数据
+    sum.combine(rhs);       // 把 rhs 的数据合进来
+    return sum;              // 返回结果（C++11 移动语义零拷贝）
+}
+```
+
+两个参数都是 `const` 引用——不修改。以 `lhs` 为基础构造 `sum`，然后调 `combine` 合并 `rhs`。返回 `Sales_data` 按值——C++11 起编译器自动用移动语义，不产生额外拷贝。
+
+### 完整的使用示例
+
+```cpp
+int main() {
+    Sales_data total;                      // 默认构造——所有成员为默认值
+    if (read(std::cin, total)) {           // 读第一笔——read 返回 cin 引用
+        Sales_data trans;                  // 当前交易
+        while (read(std::cin, trans)) {    // 逐笔读入
+            if (total.isbn() == trans.isbn())
+                total.combine(trans);       // 同书号——合并
+            else {
+                print(std::cout, total) << '\n';  // 不同书号——输出上一本
+                total = trans;                     // 开始处理新书号
+            }
+        }
+        print(std::cout, total) << '\n';   // 输出最后一本
+    } else {
+        std::cerr << "没有数据！\n";
+    }
+    return 0;
+}
+```
+
+这段是前面的书店程序用类重写的版本——对比之前用裸变量和函数的版本：`total.isbn()` 代替了手动传字符串，`total.combine(trans)` 代替了手动 `total_sold += trans_sold; total_revenue += trans_revenue;`。数据和行为捆在一起后，代码干净了多少？
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：定义了一个带参构造函数后，`Sales_data item;` 编译失败——`error: no matching constructor`。
+  **原因**：一旦你定义了**任何**构造函数（哪怕是带参的），编译器就不再合成默认构造函数。`Sales_data item;` 需要一个无参的默认构造——但类里只提供了 `Sales_data(const string &s)`，没有无参版本。
+  **修法**：手动加 `Sales_data() = default;` 或用默认实参 `Sales_data(const string &s = "")`。`= default` 在现代 C++ 中是明确告诉编译器「我想要默认行为」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：构造函数里写了 `: units_sold(n), bookNo(s)`（先 units_sold 后 bookNo），编译器有时警告「initializer order does not match declaration order」。程序偶尔异常——因为 `units_sold` 的初值依赖了 `bookNo` 还没初始化的状态。
+  **原因**：成员初始化列表的**执行顺序是声明顺序**，不是列表中写的顺序。编译器静默按声明顺序执行——如果两个成员的初始化有依赖，顺序搞反了就读到未初始化的值。
+  **修法**：让初始化列表的书写顺序和类定义中声明顺序一致。初始化有依赖的成员时，确保被依赖的成员在声明中更靠前——否则把依赖逻辑移到构造体内。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`const Sales_data c;` 调用 `c.combine(rhs)` 编译报错——`passing 'const Sales_data' as 'this' argument discards qualifiers`。
+  **原因**：`combine` 不是 const 成员函数——它的 `this` 是 `Sales_data*`。const 对象 `c` 的 `this` 是 `const Sales_data*`——不能把 `const T*` 传给期待 `T*` 的函数。
+  **修法**：如果函数确实需要修改对象——const 对象就不该调它，编译器拦你是对的。如果函数只读不写——补上 const 关键字。原则：只读的成员函数一律加 const。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 private 区域写了一个辅助函数——外部代码正常编译用不到它，但链接时报 `undefined reference`。或者：辅助函数只被成员调用，却暴露在了 public 区域。
+  **原因**：把实现细节暴露在接口中——调用方可能误解「这个我能用」并产生依赖。未来你改了或删了这个函数，调用方代码就编译失败。
+  **修法**：只为外部设计的函数放 `public:`；只有类内部使用的辅助函数放 `private:`。不确定时默认 `private:`——想清楚再暴露，永远比盲目暴露再撤回好。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- 类由数据成员和成员函数组成——数据存对象里，函数代码所有对象共享，通过 this 指针区分操作哪个对象
+- 构造函数在对象创建时自动执行——先跑成员初始化列表（按声明顺序）、再跑构造体——一旦自定义构造，编译器不再合成默认构造
+- public 是接口（外部可调）、private 是实现（外部碰不到）——封装让修改内部实现不影响调用方
+- const 成员函数承诺不修改 *this——const 对象只能调 const 函数，非 const 对象两者都能调
+- 友元用 friend 声明授权外部函数或类访问 private——用于操作符重载和紧密关联的非成员函数，不滥用
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这个 `Person` 类的设计有几个问题——找出并写出修正后的代码。
+
+```cpp
+#include <string>
+
+class Person {
+    std::string name;
+    std::string address;
+
+public:
+    std::string getName() { return name; }
+    std::string getAddress() { return address; }
+};
+```
+
+<Answer>
+
+两个问题：① `getName()` 和 `getAddress()` 只读不写——应该标 `const`。② 没有构造函数——编译器合成默认构造、`name` 和 `address` 初始化为空串，但外部无法指定初值——需要加构造。
+
+```cpp
+#include <string>
+
+class Person {
+    std::string name;
+    std::string address;
+
+public:
+    Person() = default;
+    Person(const std::string &n, const std::string &a)
+        : name(n), address(a) {}
+
+    std::string getName() const { return name; }        // ← 加了 const
+    std::string getAddress() const { return address; }  // ← 加了 const
+};
+```
+
+</Answer>
+
+**练习 2（独立实现题）** 设计并实现一个 `Student` 类，包含：
+- 数据成员：姓名 `name`（string）、学号 `id`（int）、成绩 `score`（double）
+- 构造函数：默认构造（name=""、id=0、score=0.0）、全参构造（给定全部三个字段）
+- `getName()` const / `getId()` const / `getScore()` const
+- `setScore(double s)`——修改成绩
+- `bool isPassed() const`——成绩 ≥ 60 返回 true
+- 在 main 中用 `vector<Student>` 存 3 个学生，打印每个学生的姓名和是否及格
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <string>
+#include <vector>
+
+class Student {
+    std::string name;
+    int id;
+    double score;
+
+public:
+    Student() : name(""), id(0), score(0.0) {}
+    Student(const std::string &n, int i, double s)
+        : name(n), id(i), score(s) {}
+
+    std::string getName() const { return name; }
+    int getId() const { return id; }
+    double getScore() const { return score; }
+    void setScore(double s) { score = s; }
+    bool isPassed() const { return score >= 60.0; }
+};
+
+int main() {
+    std::vector<Student> students = {
+        {"张三", 1001, 85.5},
+        {"李四", 1002, 55.0},
+        {"王五", 1003, 92.0}
+    };
+
+    for (const auto &s : students) {
+        std::cout << s.getName() << " (学号 " << s.getId()
+                  << "): " << (s.isPassed() ? "及格" : "不及格")
+                  << " (" << s.getScore() << "分)\n";
+    }
+    return 0;
+}
+```
+
+设计要点：`isPassed()` 标了 const——只读判断。`setScore()` 没标 const——修改 score。用 `vector<Student>` 管理多个学生——类是类型，对象可以放进容器，像用内置类型一样用自定义类型。
+
+</Answer>
+
+**练习 3（问答型）** 如果把 `Sales_data` 的 `combine()` 改成 `Sales_data& combine(const Sales_data&) const;`（末尾加 const），这个设计有什么问题？内部实现能通过编译吗？如果能通过，调用方调用后会发生什么？
+
+<Answer>
+
+如果 `combine()` 标了 const——`this` 变成 `const Sales_data*`，函数体内 `units_sold += rhs.units_sold` 和 `revenue += rhs.revenue` 这两行会**编译失败**——因为不能通过 const 指针修改对象的数据成员。
+
+如果强行绕过编译器（比如把数据成员声明为 `mutable`——后面章节知识点），即使编译通过了，这个设计也是**语义矛盾**的：`combine` 的职责就是修改对象——标 const 等于公开撒谎「我不改对象」但实际在改。调用方拿到 `const Sales_data c;` 以为 `c.combine(rhs)` 不会碰 c 的内部——但实际上 c 被偷偷修改了。这就是典型的「const 正确性」被破坏——**函数声明必须如实反映它对对象做了什么**。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（11 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="类（class）">
+  C++ 中自定义类型的蓝图。用 class 或 struct 定义，包含数据成员（状态）和成员函数（操作）。class 是图纸，对象是按图纸造出的零件——你定义一个 class 之后，创建变量时用的就是这个名字。详见本章「类是什么」一节和 ClassLayoutDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="成员函数（member function）">
+  在类内部定义的函数。可以访问该类的所有成员（包括 private）。内部通过隐藏的 this 指针知道在操作哪个对象——`bookNo` 实际是 `this->bookNo` 的简写。在类外部定义时用 `类名::函数名` 标明所属。详见本章「类是什么」一节。
+</GlossaryItem>
+
+<GlossaryItem term="this 指针">
+  成员函数内部隐含的指针，指向调用该函数的对象——`item.isbn()` 时编译器把 `&item` 作为隐藏参数传给 `isbn()`。const 成员函数中 this 变成 `const T*`。详见本章「类是什么」一节和 ClassLayoutDiagram 图中 this 箭头的标注。
+</GlossaryItem>
+
+<GlossaryItem term="struct vs class">
+  唯一区别是默认访问权限——struct 默认 public、class 默认 private。除此之外 struct 也能有构造函数、析构函数、成员函数。惯例：纯数据聚合用 struct，需要封装行为的用 class。详见本章「类是什么」一节。
+</GlossaryItem>
+
+<GlossaryItem term="访问控制（access control）">
+  C++ 通过 public/private 控制谁能访问类成员。public 构成接口——外部可随意调用；private 是隐藏实现——只有自己人（成员函数+友元）能碰。class 默认 private。详见本章「访问控制」一节和 AccessControlDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="封装（encapsulation）">
+  把数据和操作捆在类内部，用 private 隐藏实现、用 public 暴露接口。封装让调用方不依赖内部实现——改了 private 存储方式，只要接口不变外部代码无需修改。详见本章「访问控制」一节。
+</GlossaryItem>
+
+<GlossaryItem term="构造函数（constructor）">
+  类的一种特殊函数——对象创建时自动调用。函数名=类名、无返回类型。可以有多个重载。负责初始化数据成员。一旦自定义任何构造，默认构造不再自动生成。详见本章「构造函数」一节和 ConstructorCallDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="成员初始化列表（member initializer list）">
+  构造函数参数列表右括号后、函数体花括号前的初始化表达式：`: bookNo(s), units_sold(n)`。在构造体执行之前完成——进入 `{}` 时成员已有确定值。对 const 成员和引用成员是唯一初始化途径。执行顺序是声明顺序。详见本章「构造函数」一节。
+</GlossaryItem>
+
+<GlossaryItem term="合成默认构造函数（synthesized default constructor）">
+  编译器在没有自定义任何构造时自动生成的默认构造。有类内初始值用它，类类型成员调自身默认构造，内置类型成员未定义。自定义任何构造后编译器不再生成。详见本章「构造函数」一节。
+</GlossaryItem>
+
+<GlossaryItem term="const 成员函数">
+  参数列表后加 const 的成员函数：`double avg_price() const`。把 this 从 `T*` 变 `const T*`——函数内不能修改数据成员。const 对象只能调 const 函数。只读不写的成员函数一律标 const。详见本章「const 成员函数」一节和 ConstMemberDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="友元（friend）">
+  用 friend 关键字在类内部声明的外部函数或另一个类——授权访问本类 private。声明位置无关，不是成员，不传递。主要用于操作符重载（`<<` `>>`）和紧密关联的非成员函数。详见本章「友元」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空，Attribution 标签处理。 */}
+
+<Attribution />

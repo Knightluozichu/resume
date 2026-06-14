@@ -1,0 +1,684 @@
+---
+title: 用于大型程序的工具
+type: C
+section: 高级主题
+order: 2
+description: 掌握异常处理全面策略、命名空间管理、多重继承与虚继承三大大型工程必备工具——从try-catch到异常安全等级、从命名空间污染到using最佳实践、从菱形继承歧义到虚基类构造链（高级主题篇第2章）
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §18 改编）：用于大型程序的工具——"高级主题"第二篇。
+   重心在概念图示(§3) + Stepper(§5) + 代码对照(§6)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 异常处理（throw/try-catch/异常安全/noexcept/异常类层次）— viz: ExceptionHierarchyDiagram（标准异常类继承树图）+ ExceptionSafetyTable（三级保证对比速查表）
+   2) 命名空间（声明/using/嵌套/匿名/内联）— viz: NamespaceNestingDiagram step=1-3（嵌套命名空间可见性图）
+   3) 多重继承与虚继承（MI的歧义性/虚基类/构造顺序）— viz: MultipleInheritanceDiagram step=1-2（普通MI（数据重复）vs 虚继承（共享基类子对象）并排对比图） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能正确使用 `try`/`catch`/`throw` 捕获并处理异常——包括构造函数的函数 try 块和 `catch(...)` 万能捕获
+- 能说出三个异常安全级别（基本/强/nothrow）的区别，并用 RAII 和 copy-and-swap 惯用法写出异常安全的代码
+- 能设计命名空间层次来管理大型工程的名字冲突——掌握嵌套命名空间、匿名命名空间、`using` 声明和 `using namespace` 指令的最佳实践
+- 能解释多重继承的菱形歧义问题，并正确使用虚继承消除数据重复——理解最底层派生类直接构造虚基类的链式构造规则
+- 能回答：下面这段代码的异常安全级别够不够？如果换成 `copy-and-swap` 该怎么改？`Class &operator=(const Class &rhs) { delete p_; p_ = new Data(*rhs.p_); return *this; }`
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——异常处理=安全工程师、命名空间=分区门牌号、多重继承=多源头合并流水线。 */}
+
+## 为什么需要这三种大型工程工具
+
+你已经掌握了类的设计、拷贝控制、模板——这些是写一个类的"微观本事"。但程序规模大到几百个类、几千行代码、甚至多团队协作时，你需要三样"宏观武器"来管住混乱——它们各自看守工程的一个维度。
+
+想象一条工厂流水线。**安全巡检员**随时盯着每个工位——谁一出故障就立刻按下停止键、打扫现场、换成备用件（异常处理）；**分区门牌号**给成千上万个零件命名——仓库 A 区的"螺杆"不会和仓库 B 区的"螺杆"撞名（命名空间）；**多源头合并生产线**让一个"智能设备"同时继承显示屏的显示能力和通讯模块的收发能力——但要避开"同一个电池被装两次"的尴尬（多重继承与虚继承）。
+
+**这一章解决什么问题？** 教你如何在大型程序中管住错误传播、名字冲突和复杂继承关系——让你不是"凑合能用"，而是"靠得住的架构级代码"。没有这些工具？错误一抛就内存泄漏且状态败坏、名字多了撞成一团、菱形继承把基类数据存两遍占内存又出歧义——整个工程会在规模变大时从"还行"塌成"没法管"。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 异常处理：从 throw 到异常安全的完整策略
+
+程序跑着跑着出了错——除零、内存耗尽、文件找不到——怎么告诉调用者？C 风格是返回错误码，但调用者经常忘了检查就继续跑。`<Term def="C++ 错误报告机制——用 throw 抛出异常对象，沿调用栈向上寻找匹配的 catch 块。未捕获的异常到达 main 后调用 std::terminate() 终止程序。与错误码不同——异常不能被忽略，不捕获就一定终止。">异常（exception）</Term>` 是一条"不可被忽略"的错误通道——不处理就一路炸到 `main`，然后程序终止。
+
+```cpp
+#include <stdexcept>
+#include <iostream>
+#include <cmath>
+
+void risky(int x) {
+    if (x < 0) throw std::invalid_argument("x must be >= 0");
+    std::cout << std::sqrt(x) << '\n';
+}
+
+try {
+    risky(-5);
+} catch (const std::invalid_argument &e) {
+    std::cerr << "Caught: " << e.what() << '\n';  // "Caught: x must be >= 0"
+}
+```
+
+### 标准异常类的层次结构
+
+C++ 标准库有一棵精心设计的异常继承树——根是 `<Term def="C++ 所有标准异常的基类（<exception>）。提供虚函数 const char* what() const noexcept 返回异常描述字符串。自定义异常应继承自 logic_error 或 runtime_error，而非直接继承 exception。">std::exception</Term>`，向下分叉为两大类：`<Term def="logic_error 及其子类——代表「程序启动前就能发现的错误」：invalid_argument 参数不对、out_of_range 越界、length_error 长度超限、domain_error 定义域错误。通常可以通过前置检查避免——应该在调用前验证参数。">logic_error（逻辑错误）</Term>` 和 `<Term def="runtime_error 及其子类——代表「程序运行后才发生的错误」：range_error 内部计算越界、overflow_error 上溢、underflow_error 下溢。无法提前预判——只能运行时捕获处理。">runtime_error（运行时错误）</Term>`。下面这张图展示了完整继承树：
+
+<ExceptionHierarchyDiagram />
+
+一条铁律：**自定义异常应该继承自 `logic_error` 或 `runtime_error`，而不是直接继承 `exception`**——因为标准库的子类提供了带 `std::string` 参数的构造函数（`what()` 返回有意义的消息），而裸的 `exception` 没有。
+
+### try-catch 的完整用法
+
+不是只写 `try { ... } catch (...) { ... }` 就够了。C++ 提供了三种特殊形式：
+
+**函数 try 块**：用于**构造函数**——初始化列表中的异常也能被同一个 catch 捕获（正常情况下，初始化列表抛异常不会进入构造函数体）：
+
+```cpp
+struct Widget {
+    std::string name;
+    Widget(const std::string &n) try : name(n) {
+        // 构造函数体
+    } catch (const std::exception &e) {
+        std::cerr << "ctor failed: " << e.what() << '\n';
+        throw;  // 构造函数 try 块的 catch 必须重新抛出或抛另一个异常
+    }
+};
+```
+
+**`catch(...)` 万能捕获**：匹配一切异常类型——通常用于资源清理后重新抛出（`throw;`），或转换异常类型后抛出新异常：
+
+```cpp
+try {
+    call_external_library();
+} catch (...) {
+    // 1. 记录日志或清理资源
+    cleanup_resources();
+    // 2. 重新抛出或转成已知类型再抛
+    throw std::runtime_error("external library failed");
+}
+```
+
+**重新抛出 `throw;`**（注意：后面没有表达式）——把当前捕获的异常原样抛出去，不拷贝、不切掉派生类信息：
+
+```cpp
+catch (const std::exception &e) {
+    log(e.what());
+    throw;   // 重新抛出原始异常——保留实际派生类型（可能是 runtime_error 子类）
+    // throw e; ← 错误！这会切片——只抛出 exception 部分，丢失派生类信息
+}
+```
+
+### noexcept：承诺不抛异常
+
+`<Term def="noexcept 关键字——声明函数不抛出异常。noexcept 函数内部抛异常 = 程序直接调 std::terminate() 终止。noexcept 不是注释——是契约：编译器据此做优化（move 走快路径）、库据此选代码路径。析构函数默认 noexcept——若析构抛异常 = terminate()。">noexcept（不抛异常声明）</Term>` 不仅是注释——它承诺"这个函数打死也不抛"，编译器据此做两件事：<Term def="noexcept 运算符——编译期判断表达式是否为 noexcept。noexcept(expr) 返回 bool。常用于模板代码——在泛型中判断移动操作是否不抛异常，决定走快路径还是慢路径。">noexcept 运算符</Term>（`noexcept(expr)`）在编译期判断，条件满足时释放激进优化（跳过栈展开机械）；容器（如 `std::vector`）用它决定 `push_back` 时是走移动快路径还是复制慢路径。
+
+```cpp
+void safe_swap(std::string &a, std::string &b) noexcept {
+    std::swap(a, b);  // std::string 的 swap 是 noexcept——只交换内部指针，不分配内存不抛
+}
+
+// noexcept 也支持条件形式
+template <typename T>
+void maybe_noexcept_swap(T &a, T &b)
+    noexcept(noexcept(std::swap(a, b))) {  // 外层 noexcept 声明、内层 noexcept 运算符
+    std::swap(a, b);
+}
+```
+
+**析构函数隐式 `noexcept`**。如果你在析构函数里抛异常 = 直接 `terminate()` 杀死程序。这是铁律——绝不破坏资源清理的安全性。
+
+### 异常安全三级保证
+
+写对 `try-catch` 只是起点。真正的功夫在"抛异常时保证数据不变坏"——C++ 把这件事分成三个等级，用速查表一目了然：
+
+<ExceptionSafetyTable />
+
+核心实现技巧：
+
+1. **<Term def="RAII（Resource Acquisition Is Initialization）——资源获取即初始化。在构造函数中获取资源（new/fopen/lock），在析构函数中释放资源（delete/fclose/unlock）。利用栈对象自动析构的确定性，异常抛出一律安全清理。C++ 异常安全的基石——没有 RAII 就做不到基本保证。">RAII（资源获取即初始化）</Term>**：把资源包在类里——构造函数拿资源、析构函数放资源。栈展开时局部对象的析构函数自动执行——资源永不泄漏。RAII 是"基本保证"的根基。
+
+2. **copy-and-swap 惯用法**：先拷贝一份临时副本，在副本上干活——成功了再 `swap` 替换掉原始数据，失败了临时副本自然析构。这是"强保证"的标准实现方式。
+
+```cpp
+// 强保证的赋值操作——copy-and-swap
+MyVec &operator=(const MyVec &rhs) {
+    MyVec temp(rhs);        // 可能抛异常——但 this 对象还没改！
+    swap(*this, temp);      // noexcept——替换成功
+    return *this;           // temp 在离开作用域时析构，释放旧资源
+}
+```
+
+<Callout type="tip">
+  记忆顺序：**先用 RAII 保住基本保证（不泄漏），再用 copy-and-swap 升级到强保证。** 如果连 RAII（new/delete 配对、lock/unlock 配对）都没做好——讨论异常安全级别是空谈。
+</Callout>
+
+## 命名空间：工程规模的名字隔离系统
+
+当一个工程同时用了两个 GitHub 上的第三方库——它们各自定义了一个叫 `Logger` 的类。如果这两个 `Logger` 全扔进全局——编译报"重复定义"，你怎么办？重命名其中的一个？修完这次，下次再撞怎么办？
+
+`<Term def="C++ 的名字隔离机制——namespace 关键字定义的命名作用域。不同命名空间的同名标识符互不冲突。全局名字实际在无名的全局命名空间中。用 :: 作用域运算符逐级访问嵌套命名空间中的名字。">命名空间（namespace）</Term>` 是最优雅的答案——给每个库分配自己的"家"，库 A 的 `Logger` 在家 A 里、库 B 的 `Logger` 在家 B 里，通过 `::` 区分：`A::Logger`、`B::Logger`——各自独门独院，绝不打架。
+
+### 嵌套命名空间与可见性
+
+C++17 起，嵌套可以一行写完：
+
+```cpp
+namespace outer::middle::inner {
+    int value = 42;          // 完整路径：outer::middle::inner::value
+    void helper() {}
+}
+// 等价于 namespace outer { namespace middle { namespace inner { ... } } }
+```
+
+内层命名空间自动"看到"外层的名字——就像嵌套作用域一样。下面用 Stepper 展示命名空间的嵌套结构和两种 `using` 的本质区别：
+
+<Stepper>
+  <Step title="① 嵌套命名空间——三层逐级嵌套">
+    <NamespaceNestingDiagram step={1} />
+
+    C++17 起用 `namespace A::B::C` 一行写出嵌套——等价于三层花括号。内层名字 `value` 的完整路径是 `outer::middle::inner::value`——每一级 `::` 都是精确的位置描述，绝无名冲突。
+  </Step>
+  <Step title="② using 声明——只导入一个名字">
+    <NamespaceNestingDiagram step={2} />
+
+    `using outer::middle::inner::value;` 只把 `value` **一个名字**导入当前作用域——就像声明了一个本地变量。精确、安全——如果 `value` 与当前作用域的已有名字冲突，**编译期直接报错**。在头文件里要特别小心——using 声明会污染所有包含这个头文件的翻译单元。
+  </Step>
+  <Step title="③ using namespace 指令——整包提升">
+    <NamespaceNestingDiagram step={3} />
+
+    `using namespace outer::middle::inner;` 把 `inner` 里**所有名字**提升到最近的外层作用域——范围大但可能引入隐式名字冲突。**永远不要放在头文件的全局作用域里**——那等于把整个命名空间倒进全局，任何包含这个头文件的 `.cpp` 都会被污染。只有在 `.cpp` 文件内部、小作用域里才安全。
+  </Step>
+</Stepper>
+
+### 匿名命名空间与内联命名空间
+
+**<Term def="无名的命名空间——namespace { ... } 语法。其中的名字只在当前翻译单元(.cpp)内可见——具有内部链接性（internal linkage）。是 C++ 用来替代 static 全局变量/函数的现代方式。每个文件独享一套——不同文件中同名匿名命名空间的定义不会冲突。">匿名命名空间（unnamed namespace）</Term>** 是替换老式 `static` 全局变量的现代方式——名字只在当前 `.cpp` 文件里可见：
+
+```cpp
+// file1.cpp
+namespace {
+    int counter = 0;     // 只在 file1.cpp 可见
+    void init() {}       // 只在 file1.cpp 可见——不会和 file2.cpp 的同名函数冲突
+}
+
+// file2.cpp
+namespace {
+    int counter = 100;   // 独立的 counter——和 file1.cpp 的完全无关
+}
+// 老写法：static int counter = 0;  ← C++ 推荐改用匿名命名空间
+```
+
+**<Term def="内联命名空间——inline namespace { ... }。名字自动暴露到外层命名空间——使用方可以省略这一级命名空间名。典型用例：版本控制——v1/v2 内联切换，外层代码无需修改。">内联命名空间（inline namespace）</Term>** 是版本管理的利器——外层可以直接用内层的名字，仿佛内层的名字就在外层：
+
+```cpp
+namespace lib {
+    inline namespace v2 {   // 当前版本设为 inline
+        class Feature {};   // 可以直接用 lib::Feature
+    }
+    namespace v1 {
+        class Feature {};   // 必须写 lib::v1::Feature
+    }
+}
+
+lib::Feature f;             // 自动拿到 v2 的 Feature——升级版本不用改调用代码
+lib::v1::Feature old;       // 仍然可以显式用旧版本
+```
+
+<Callout type="tip">
+  using 声明的铁律：**在 .cpp 文件里解决名字查找，绝对不要在 .h 文件全局层搞 using namespace XXX**——改库方的名字不影响你调用的规律会被打破，所有包含你的头文件的代码编译时名字空间全被污染。
+</Callout>
+
+## 多重继承与虚继承：当一条继承链不够用
+
+你已经会单继承——一个类只从**一个**基类继承。但现实世界中有些东西天然需要从两个源头同时继承——比如一个"飞行汽车"既是一辆车（有轮子/加速/刹车）又是一架飞行器（有螺旋桨/升降/悬停）。`<Term def="一个类同时从多个直接基类继承—— class D : public B1, public B2 { ... }。每个基类路径在派生类对象中产生一份独立的基类子对象。好处是组合多个接口/实现，代价是可能出现菱形歧义。">多重继承（Multiple Inheritance, MI）</Term>` 让一个类声明多个基类——每个基类都贡献一份子对象到派生类的内存布局里。
+
+### 菱形继承与歧义
+
+问题来了——如果多个基类又都继承自同一个共同祖先，派生类对象里会含有**这个祖先子对象的多份拷贝**——经典的"菱形继承"：
+
+```cpp
+class Device {
+public:
+    std::string serial;   // 每台设备的序列号
+};
+
+class Display : public Device {};  // Display 里有一份 Device
+class Sensor : public Device {};   // Sensor 里也有一份 Device
+
+class SmartPanel : public Display, public Sensor {};
+// SmartPanel 对象里面——有两份 Device 子对象！
+
+SmartPanel p;
+p.serial;            // ❌ 歧义！是 Display::serial 还是 Sensor::serial？
+p.Device::serial;    // ❌ 仍然歧义！有两个 Device 子对象
+p.Display::serial;   // ✓ 明确——通过 Display 路径访问的那个 serial
+```
+
+下面这张并排对比图展示了普通 MI 和虚继承的内存布局差异：
+
+<MultipleInheritanceDiagram step={1} />
+
+{/* ===== Section reusing Stepper for the concept ===== */}
+
+<Stepper>
+  <Step title="① 普通 MI——两份基类子对象导致数据重复">
+    <MultipleInheritanceDiagram step={1} />
+
+    Display 和 Sensor 各自继承了 **一份独立的 Device**。SmartPanel 对象里 Display 部分存一份 serial、Sensor 部分又存一份 serial——浪费内存 + 所有对 serial 的访问产生名字歧义。必须显式写 `panel.Display::serial` 消除歧义。
+  </Step>
+  <Step title="② 虚继承——所有路径共享唯一的虚基类子对象">
+    <MultipleInheritanceDiagram step={2} />
+
+    在继承声明中加 `virtual` 关键字——<Term def="用 virtual 修饰继承声明（class B : virtual public A），让最终派生类对象中虚基类子对象只存一份，无论从多少条路径到达，所有路径都共享这唯一的一份。">虚继承（virtual inheritance）</Term> 写成 `class Display : virtual public Device`。编译器保证在最终派生类 SmartPanel 里**只放一份 Device 子对象**——所有间接基类的路径通过一个内部指针（类似 vptr）间接定位到这份唯一的子对象。`panel.serial` 直接访问——不再歧义。
+  </Step>
+</Stepper>
+
+### 虚继承的核心语法与构造链
+
+声明虚继承用 `virtual` 关键字——写在继承列表里：
+
+```cpp
+class Device { /* ... */ };
+class Display : virtual public Device {};   // Display 虚继承 Device
+class Sensor : virtual public Device {};    // Sensor 虚继承 Device
+class SmartPanel : public Display, public Sensor {}; // SmartPanel 得到一个共享的 Device
+```
+
+**最底层派生类直接构造虚基类**——这是虚继承最反直觉的规则：
+
+```cpp
+// Display 的构造函数——虽然声明了 virtual Device，但不负责初始化它
+Display::Display() : Device() { /* ... */ }  // ← 如果 SmartPanel 是最终类，这行被忽略！
+
+// SmartPanel 的构造函数——直接调用虚基类 Device 的构造函数
+SmartPanel::SmartPanel()
+    : Device()        // ← SmartPanel 负责直接初始化虚基类！
+    , Display()
+    , Sensor()
+{ }
+```
+
+构造顺序：虚基类 Device（由最底层派生类 SmartPanel 构造）→ 直接基类 Display → 直接基类 Sensor（按声明顺序）→ SmartPanel 自己的成员。无论继承链有多深、有多少个中间类都在虚基类构造函数调用中靠边站——只有最底层的派生类说了算。
+
+<Callout type="warn">
+  虚继承的代价：① **每个对象多一条额外指针**（vptr）定位虚基类，对象变大；② **通过指针访问虚基类成员比普通继承稍慢**（多次间接寻址）。只在菱形继承里用它——一般单继承别挂 `virtual`。
+</Callout>
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 形态为 Stepper——NamespaceNestingDiagram 三步 + MultipleInheritanceDiagram 两步 均已嵌入 §3 各小节。ExceptionSafetyTable 速查表也已嵌入 */}
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段讲解，覆盖 ≥80% 关键代码；单块 ≤30 行。 */}
+
+## 实战：组装一个可抛出正确异常的逐行日志解析器
+
+下面是一个把异常处理 + 命名空间 + 虚继承三个工具串联的项目级应用——从文件里逐行读日志，按字段拆解成结构化数据，抛规范的异常，用继承体系建模不同日志类型。
+
+### 第一部分：命名空间隔离 + 自定义异常类层次
+
+```cpp
+namespace logparser {
+// 自定义异常基类——继承自 std::runtime_error
+class ParseError : public std::runtime_error {
+public:
+    explicit ParseError(const std::string &msg)
+        : std::runtime_error("logparser: " + msg) {}
+};
+
+// 字段数量不对
+class FieldCountError : public ParseError {
+public:
+    explicit FieldCountError(int expected, int actual)
+        : ParseError("expected " + std::to_string(expected)
+                     + " fields, got " + std::to_string(actual)) {}
+};
+
+// 时间格式非法
+class TimeFormatError : public ParseError {
+public:
+    explicit TimeFormatError(const std::string &raw)
+        : ParseError("invalid time format: " + raw) {}
+};
+} // namespace logparser
+```
+
+**设计要点**：① 异常继承链是 `runtime_error → ParseError → FieldCountError/TimeFormatError`——每级加新的信息（字段数/时间串长度），catch 点可以按粒度捕获（最低抓 `ParseError`、最细抓 `FieldCountError`）；② 全部封在 `logparser` 命名空间里——万一另一个库也定义了 `ParseError`，`logparser::ParseError` 和 `other::ParseError` 互不打架。
+
+### 第二部分：虚继承建模日志类型层次
+
+日志的类型有层级——所有日志都有"时间"和"级别"，但"网络请求日志"额外有"耗时"字段、"应用日志"额外有"模块名"字段。用虚继承给它们一个共同的 `Timestamped` 基类：
+
+```cpp
+namespace logparser {
+
+// 虚基类：所有日志都有时间戳
+class Timestamped {
+public:
+    std::string time;
+    virtual ~Timestamped() = default;
+};
+
+// 级别也是虚基类——和 Timestamped 平级
+class Leveled {
+public:
+    std::string level;    // INFO / WARN / ERROR
+    virtual ~Leveled() = default;
+};
+
+// 具体日志类型——虚继承保证 hierarchy 中只有一份 Timestamped
+class NetworkLog : virtual public Timestamped, virtual public Leveled {
+public:
+    int latency_ms = 0;
+};
+
+class AppLog : virtual public Timestamped, virtual public Leveled {
+public:
+    std::string module;
+};
+
+} // namespace logparser
+```
+
+如果以后定义 `HybridLog : public NetworkLog, public AppLog`——`Timestamped` 和 `Leveled` 仍然只各有一份（虚继承保证共享）。这个设计让日志类型可以按需叠加维度（时间/级别/耗时/模块……），而不会像普通 MI 那样每个维度都复制一遍。
+
+### 第三部分：noexcept 保证的解析函数 + 异常安全的错误传播
+
+核心解析函数——抛出规范的异常、析构安全，标记 `noexcept` 的辅助函数：
+
+```cpp
+namespace logparser {
+
+// 主解析函数：逐字段解析一行日志，可能抛出 ParseError
+std::unique_ptr<AppLog> parse_app_line(const std::string &line) {
+    auto fields = split(line, ',');          // 按逗号拆字段
+    if (fields.size() != 3)
+        throw FieldCountError(3, fields.size()); // 抛出——调用方决定是否捕获
+
+    if (!is_valid_time(fields[0]))
+        throw TimeFormatError(fields[0]);
+
+    auto entry = std::make_unique<AppLog>();  // RAII——new 成功才继续
+    entry->time = fields[0];
+    entry->level = fields[1];
+    entry->module = fields[2];
+    return entry;  // 成功——unique_ptr 的所有权转移给调用方
+}
+
+} // namespace logparser
+```
+
+**异常安全分析**：`split` 可能分配失败（`vector` 保证基本安全——不泄漏）；`make_unique` 分配失败时之前的字段 vector 自动析构（RAII 栈展开）；`throw` 触发栈展开——`fields` 析构、allocated memory 收回。没有 `new`/`delete` 手写——全靠智能指针和容器 RAII 自动扛住异常路径。
+
+### 第四部分：调用端统一 try-catch ——按粒度捕获
+
+```cpp
+int main() {
+    try {
+        auto entry = logparser::parse_app_line(
+            "2024-05-17 14:30:22,ERROR,auth");
+        process(entry);
+    }
+    catch (const logparser::TimeFormatError &e) {
+        std::cerr << "Time parse failed: " << e.what() << '\n';
+    }
+    catch (const logparser::ParseError &e) {
+        std::cerr << "Parse failed: " << e.what() << '\n';
+    }
+    catch (const std::exception &e) {
+        std::cerr << "Unexpected: " << e.what() << '\n';
+        throw;  // 未知异常原样往上抛——不吞
+    }
+}
+```
+
+catch 顺序是关键——**先捕获最具体的异常类型，后捕获通用类型**。`TimeFormatError` 是 `ParseError` 的子类——如果 `catch(ParseError)` 在前面，`TimeFormatError` 永远不会被单独处理（因为被前面的 `ParseError` 匹配掉了）。这就是为什么继承树上越"叶子"越靠前。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 构造函数抛出异常后 `terminate()` 被调用、程序直接崩溃——而不是 catch 块处理异常。
+
+  **原因** → **析构函数抛出了异常**。构造函数抛异常 → 栈展开 → 已构造完成的成员变量的析构函数被调用 → 如果这些析构函数中又抛出异常 → C++ 检测到两个同时活跃的异常（析构期间的二次异常）= 调用 `terminate()`。
+
+  **修法** → 析构函数绝不做可能抛异常的事。编译器默认把析构函数标为 `noexcept`（隐式）——如果析构中真抛出异常会直接 `terminate()`。所有清理资源走 RAII、释放资源前先捕获所有可能的异常并吞掉。
+</Callout>
+
+<Callout type="trap">
+  **现象** → `catch (std::exception &e)` 捕获到了异常，但 `throw e;` 再抛出去后调用方收到的 `e.what()` 是空字符串或基类的默认信息——派生类的额外信息全丢了。
+
+  **原因** → **异常切片（slicing）**——`throw e;` 用的是 `e` 的**静态类型**（`std::exception`）拷贝一份抛出，而不是原始异常对象的**动态类型**（如 `FieldCountError`）。field count 的信息被切掉了。
+
+  **修法** → 重新抛出用 `throw;`——后面不带任何表达式。这条语句把当前正在处理的同一异常对象原样往上抛——不拷贝、不切片、保留完整类型和额外数据字段。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 在头文件里写了 `using namespace std;`——所有包含这个头文件的 `.cpp` 编译时 `vector`/`string`/`map` 都从 `std` 直接导入了。后来你改动了某个名字——所有包含链上的 `.cpp` 重新编译，且还可能产生名字冲突。
+
+  **原因** → **头文件的 using namespace 是全有或全无的核武器**——`using namespace` 把所有名字直接抛进当前作用域，头文件相当于把这个"污染"扩散到了所有包含它的人。
+
+  **修法** → **头文件永远不写 `using namespace`**。只在 `.cpp` 文件的局部作用域（函数体内、条件块内）使用。头文件里实在想省 `::` 用 `using 声明`——`using std::vector;` 只导入一个名字，比整包精准得多。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 虚继承链中，Display 的构造函数里初始化了 Device，但 SmartPanel 用 Display 构造出来后发现 Device 子对象的值不是 Display 给的——是**默认构造函数**的值。
+
+  **原因** → **最底层派生类（SmartPanel）负责构造虚基类（Device）。** 虚继承的规则：只有当 SmartPanel 是"最底层"类时才由它调 Device 的构造函数；如果创建的是 Display 对象（Display 是最终类），则由 Display 自己构造 Device。但用 SmartPanel 时——所有中间类的虚基类初始化调用全部被忽略。
+
+  **修法** → 在**最底层派生类**的构造函数初始化列表中显式写虚基类的构造调用：`SmartPanel::SmartPanel() : Device(...) , Display() , Sensor() { }`。不要把虚基类的初始化信任给中间派生类——中间类的构造函数调用在最终类构造时会被跳过。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- **异常处理** = throw 抛异常→try-catch 捕获→RAII 自动清理（基本保证）→copy-and-swap 升级强保证→noexcept 承诺不抛。析构隐式 noexcept——抛则 terminate
+- **命名空间** = C++17 `A::B::C` 嵌套一行写完→匿名命名空间替换 static 全局→内联命名空间做版本键→头文件禁用 `using namespace`（全局污染）、只在 .cpp 里用
+- **多重继承** = 一个类从多基类继承合并接口——菱形继承会产生多份基类子对象（数据重复+名字歧义）；**虚继承**用 `virtual` 关键字让所有路径共享唯一虚基类子对象；最底层派生类直接构造虚基类（中间类的构造调用被忽略）
+- **三种工具协同** = 命名空间隔离名字（不打架）→异常处理保证错误不扩散不泄漏→虚继承在类层次中共享基类维度（无浪费无歧义）；三个工具各管一个维度——名字/错误/继承——大型工程的三脚架
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的赋值操作符没有异常安全保证——找出问题，用 copy-and-swap 惯用法重写成强保证。
+
+```cpp
+class Buffer {
+    char *data_;
+    std::size_t size_;
+public:
+    Buffer &operator=(const Buffer &rhs) {
+        if (this != &rhs) {
+            delete[] data_;                       // ① 先删旧数据——如果下面 new 失败，
+            data_ = new char[rhs.size_];          // ② 这里抛 bad_alloc——this 的 data_ 指向已释放内存！
+            std::copy(rhs.data_, rhs.data_ + rhs.size_, data_);
+            size_ = rhs.size_;
+        }
+        return *this;
+    }
+};
+```
+
+<Answer>
+
+问题：第①行先 `delete[]` 了旧数据，第②行 `new`（可能抛异常）失败后，`data_` 仍然指向**已释放的内存**——再访问 `*this` 是未定义行为，甚至连析构函数都 double-free。这就是典型的"没有强保证"——失败了对象状态已坏。
+
+正确写法（copy-and-swap 惯用法）：
+
+```cpp
+Buffer &operator=(const Buffer &rhs) {
+    if (this != &rhs) {
+        Buffer temp(rhs);          // ① 在临时对象上拷贝——可能抛异常，但 this 还没动
+        swap(*this, temp);         // ② swap noexcept——成功替换
+    }                             // ③ temp 析构时释放旧数据
+    return *this;
+}
+
+void swap(Buffer &a, Buffer &b) noexcept {
+    std::swap(a.data_, b.data_);
+    std::swap(a.size_, b.size_);
+}
+```
+
+关键变化：① 不碰 `this` 的数据——全部操作都在临时副本 `temp` 上做；② 只有 `swap`（不抛异常）才动 `this`；③ copy 失败 → `temp` 析构（正常清理副本）、`this` 原封不动 = **强保证**。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个函数 `parse_range`——输入字符串 `"10,25"`，用 `std::istringstream` 读取两个整数，返回 `std::tuple<int, int>`。如果字段数不为 2 则抛出自定义异常 `InvalidFormatError`（继承自 `std::runtime_error`，消息中给出原始字符串和实际字段数）；如果字段不能转成整数则抛出 `std::invalid_argument`。函数标记为 `noexcept(false)`（明确可抛）。
+
+<Answer>
+
+```cpp
+#include <tuple>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+
+// 自定义异常——继承自 runtime_error
+class InvalidFormatError : public std::runtime_error {
+public:
+    explicit InvalidFormatError(const std::string &input,
+                                int expected, int actual)
+        : std::runtime_error(
+              "InvalidFormatError: expected " + std::to_string(expected)
+              + " fields, got " + std::to_string(actual)
+              + " in \"" + input + "\"") {}
+};
+
+// 解析 "a,b" 格式，返回 tuple<int,int>
+std::tuple<int, int> parse_range(const std::string &input)
+    noexcept(false) {
+    std::istringstream iss(input);
+    int a, b;
+    char comma;
+    // 尝试读 int→comma→int
+    if (!(iss >> a >> comma >> b) || comma != ',') {
+        // 数一下实际逗号分隔的字段数
+        int count = std::count(input.begin(), input.end(), ',') + 1;
+        throw InvalidFormatError(input, 2, count);
+    }
+    // 检查是否有残留字符（如 "10,25xxx"）
+    std::string leftover;
+    if (iss >> leftover)
+        throw InvalidFormatError(input, 2, 1);
+
+    return {a, b};
+}
+```
+
+设计要点：① `InvalidFormatError` 继承 `runtime_error`——提供 `what()` 返回有意义消息 ② 逗号之后残留字符也作为格式错误处理（完整校验） ③ `noexcept(false)` 显式说明本函数可抛异常——给调用方明确的信号。
+
+</Answer>
+
+**练习 3（选型题）** 画一个类层次——`Vehicle`（车牌号/年份）是虚基类，`Car`（座位数）和 `Boat`（排水量）分别虚继承 `Vehicle`。`Amphibious`（两栖车，同时是一辆车和一艘船）多重继承 `Car` 和 `Boat`。写出 `Amphibious` 的构造函数初始化列表，说明虚基类 `Vehicle` 由谁初始化。
+
+<Answer>
+
+```
+        Vehicle（虚基类）
+        /         \
+       /           \
+   Car（virtual）  Boat（virtual）
+       \           /
+        \         /
+       Amphibious（最终派生类）
+```
+
+```cpp
+class Vehicle {
+public:
+    std::string plate;
+    int year;
+    Vehicle(const std::string &p, int y) : plate(p), year(y) {}
+};
+
+class Car : virtual public Vehicle {
+public:
+    int seats;
+    Car(const std::string &p, int y, int s) : Vehicle(p, y), seats(s) {}
+};
+
+class Boat : virtual public Vehicle {
+public:
+    double displacement;
+    Boat(const std::string &p, int y, double d) : Vehicle(p, y), displacement(d) {}
+};
+
+class Amphibious : public Car, public Boat {
+public:
+    Amphibious(const std::string &p, int y, int s, double d)
+        : Vehicle(p, y)    // ← Amphibious 直接构造虚基类！
+        , Car(p, y, s)     //   Car 里的 Vehicle(p,y) 调用**被跳过**
+        , Boat(p, y, d)    //   Boat 里的 Vehicle(p,y) 调用**也被跳过**
+    {}
+};
+```
+
+**关键规则**：`Amphibious` 是最底层派生类——虚基类 `Vehicle` 由 `Amphibious` 的构造函数直接初始化。`Car` 和 `Boat` 的构造函数中虽然都写了 `Vehicle(p, y)`，但当 `Amphibious` 构造对象时这两行调用都**被编译器忽略**——只有最底层派生类的构造列表说了算。如果你忘了在 `Amphibious` 的初始化列表中写 `Vehicle(...)`，编译器会调用 `Vehicle` 的**默认构造函数**——如果 `Vehicle` 没有默认构造函数，编译报错。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="异常（exception）">
+  C++ 错误报告机制——用 `throw` 抛出异常对象，沿调用栈逐级向上找匹配的 `catch` 块。如果一直到 `main` 都没人捕获——程序调用 `std::terminate()` 终止。和 C 语言的错误码不同——异常不能被忽略（不管它就一定 crash），迫使你处理错误。`std::exception::what()` 返回描述错误的人类可读字符串。自定义异常类应继承自 `std::logic_error` 或 `std::runtime_error`——标准库的子类提供带字符串消息的构造函数。
+</GlossaryItem>
+
+<GlossaryItem term="logic_error（逻辑错误）">
+  `std::logic_error` 及其子类（`invalid_argument`、`out_of_range`、`length_error`、`domain_error`）——代表"程序启动前理论上就能检查出来的错误"：参数值不对、索引越界、长度超出范围等。通常有办法提前检查避免——比如调用 `vec.at(idx)` 之前先把 `idx < vec.size()` 检查一遍。
+</GlossaryItem>
+
+<GlossaryItem term="runtime_error（运行时错误）">
+  `std::runtime_error` 及其子类（`range_error`、`overflow_error`、`underflow_error`）——代表"只有程序跑起来后才可能出的错"：内部计算结果超出范围、整数上溢/下溢。不是参数逻辑错误——而是运行中意外触发的条件。通常无法提前预判——只能运行时 `catch` 处理。
+</GlossaryItem>
+
+<GlossaryItem term="std::exception">
+  C++ 所有标准异常的基类（定义在 `<exception>` 头）。提供虚函数 `const char* what() const noexcept` 返回异常的描述字符串。**自定义异常应继承自 `logic_error` 或 `runtime_error`，而不是直接继承裸 `exception`**——因为 `exception` 类没有接受 `std::string` 的构造函数，`what()` 只能返回默认的空消息。
+</GlossaryItem>
+
+<GlossaryItem term="noexcept（不抛异常声明）">
+  声明函数永远不会抛出异常的关键字。标记为 `noexcept` 的函数如果在内部抛出了异常——不等于被 catch 偷偷处理——而是直接调 `std::terminate()` 终止整个程序。`noexcept` 是一个契约/承诺：编译器基于这个承诺做激进优化（跳过栈展开）、`std::vector` 等容器用它决定走 `move` 快路径还是 `copy` 慢路径。析构函数**隐式 noexcept**——在析构函数里抛异常 = 直接 terminate()。
+</GlossaryItem>
+
+<GlossaryItem term="noexcept 运算符">
+  编译期运算符——`noexcept(expr)` 返回 `bool`，判断表达式 `expr` 是否保证不抛异常。不执行实际代码——纯静态判断。常用于模板代码：`noexcept(std::swap(a, b))` 判断当前类型的 swap 是否不抛——配合条件 `noexcept` 声明精确控制异常承诺。
+</GlossaryItem>
+
+<GlossaryItem term="RAII（资源获取即初始化）">
+  Resource Acquisition Is Initialization——C++ 异常安全的基石。把资源（内存、文件句柄、锁……）的获取操作放进构造函数，把释放操作放进析构函数。利用栈对象的**确定性析构**——无论正常 return 还是异常 unwind，局部对象的析构函数都保证执行。没有 RAII，异常一旦抛出——`new` 分配的内存永远收不回来、锁永远解不开。
+</GlossaryItem>
+
+<GlossaryItem term="命名空间（namespace）">
+  C++ 的名字隔离机制——不同的命名空间可以有同名的标识符而互不冲突。`namespace A { int x; } namespace B { int x; }` 分别创造 `A::x` 和 `B::x`——两个不同的变量。全局名字实际处于全局无名命名空间中。C++17 起用 `namespace A::B::C { }` 一行写出嵌套命名空间。`using` 声明精确导入一个名字、`using namespace` 整个命名空间名字全部提升一级——只在 .cpp 内部使用，绝不能放在头文件的全局层。
+</GlossaryItem>
+
+<GlossaryItem term="匿名命名空间（unnamed namespace）">
+  无名的命名空间——`namespace { int x; }`。其中的名字具有**内部链接性**（internal linkage）——只在自己所在的翻译单元(.cpp)里可见。不同的 .cpp 文件中的匿名命名空间是完全独立的——即使含有同名的成员也不会冲突。这是替代 `static` 全局变量/函数的 C++ 现代化写法。
+</GlossaryItem>
+
+<GlossaryItem term="内联命名空间（inline namespace）">
+  用 `inline namespace v2 { }` 声明的命名空间——其成员名字自动暴露到外层命名空间，可以直接通过外层名字访问（不用写中间的 `v2::`）。典型用例是版本管理——将当前版本设为 inline，外部代码用 `lib::Feature` 就能直接拿到最新版本的 `Feature`。需要旧版本时仍然可以通过显式路径 `lib::v1::Feature` 访问。
+</GlossaryItem>
+
+<GlossaryItem term="多重继承（Multiple Inheritance, MI）">
+  一个类同时从多个基类继承——`class D : public B1, public B2 { }`。每个基类都在派生类对象中生成一份独立的子对象。好处是可以合并多个类的接口和实现，但经典问题是**菱形继承**——多个基类又继承自同一个共同祖先 → 派生类对象中包含同一祖先的多份拷贝 → 浪费内存 + 名字歧义（`d.name` 不知道指的是哪份祖类中的 `name`）。
+</GlossaryItem>
+
+<GlossaryItem term="虚继承（virtual inheritance）">
+  用 `virtual` 关键字修饰继承声明——`class B : virtual public A { }`。在最终的派生类对象中，虚基类 `A` 的子对象**只有一份**——无论从多少条虚继承路径到达 `A`，这些路径都共享同一个 `A` 子对象。实现方式是每个类内部多加一个隐藏指针（类似虚函数表的 vptr）间接定位虚基类。**最底层派生类**负责直接构造虚基类——中间类的虚基类构造函数调用在最底层类构造时被编译器忽略。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §18 改编重写。 */}
+
+<Attribution />

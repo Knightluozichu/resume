@@ -49,7 +49,26 @@ export type ReviewChapterSlug =
   | "hdr"
   | "bloom"
   | "deferred-shading"
-  | "ssao";
+  | "ssao"
+  | "cpp-getting-started"
+  | "cpp-variables-and-types"
+  | "cpp-strings-vectors-arrays"
+  | "cpp-expressions"
+  | "cpp-statements"
+  | "cpp-functions"
+  | "cpp-classes"
+  | "cpp-io-library"
+  | "cpp-sequential-containers"
+  | "cpp-generic-algorithms"
+  | "cpp-associative-containers"
+  | "cpp-dynamic-memory"
+  | "cpp-copy-control"
+  | "cpp-overloaded-operations"
+  | "cpp-templates"
+  | "cpp-oop"
+  | "cpp-specialized-library"
+  | "cpp-specialized-tools"
+  | "cpp-large-programs";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -102,6 +121,25 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   bloom: "泛光",
   "deferred-shading": "延迟着色",
   ssao: "SSAO",
+  "cpp-getting-started": "快速入门",
+  "cpp-variables-and-types": "变量和基本类型",
+  "cpp-strings-vectors-arrays": "字符串、向量和数组",
+  "cpp-expressions": "表达式",
+  "cpp-statements": "语句",
+  "cpp-functions": "函数",
+  "cpp-classes": "类",
+  "cpp-io-library": "IO库",
+  "cpp-sequential-containers": "顺序容器",
+  "cpp-generic-algorithms": "泛型算法",
+  "cpp-associative-containers": "关联容器",
+  "cpp-dynamic-memory": "动态内存",
+  "cpp-copy-control": "拷贝控制",
+  "cpp-overloaded-operations": "重载运算与类型转换",
+  "cpp-templates": "模板与泛型编程",
+  "cpp-oop": "面向对象程序设计",
+  "cpp-specialized-library": "标准库特殊设施",
+  "cpp-specialized-tools": "特殊工具与技术",
+  "cpp-large-programs": "用于大型程序的工具",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

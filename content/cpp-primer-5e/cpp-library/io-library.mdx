@@ -1,0 +1,593 @@
+---
+title: IO库
+type: C
+section: C++标准库
+order: 1
+description: 掌握C++的输入输出体系——iostream/fstream/sstream三种流，文件读写、字符串流格式化、流状态管理
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §8 改编）：iostream 继承体系、fstream 文件读写、sstream 字符串流、流状态管理、格式化操纵符。
+   重心在交互 Demo Stepper(§5) + 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) iostream层次结构（ios_base→ios→istream/ostream→iostream/fstream/sstream）— viz: IOClassHierarchyDiagram（继承树图）
+   2) 文件流 fstream（打开模式、读写、关闭）— viz: FileStreamLifecycleDiagram（文件流生命周期，支持step prop，Stepper每步配图）
+   3) 字符串流 sstream（读取格式化输入、输出到字符串）— 代码示例
+   4) 流状态管理（good/fail/eof/bad + rdstate/clear）— viz: StreamStateDiagram（状态机转换图）
+   5) 格式化输出（setw/setprecision/fixed等操纵符）— viz: IOManipulatorTable（速查表） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能选择正确的流类型（iostream/fstream/sstream）完成输入输出——打开文件、逐行读取、用格式化操纵符对齐输出到控制台
+- 能检测和恢复流状态——通过 `good()`/`fail()`/`eof()` 判断读是否成功，并在读到 EOF 后用 `clear()`+`seekg()` 重新读取
+- 能回答：用 `while (file >> num)` 读文件里的整数，循环为什么会在读到末尾时自动停止？如果下一次再跑同样的循环会怎样？怎么修正？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——IO流像原料输送带。 */}
+
+## 程序靠什么和外界说话？
+
+你已经用 `cin` 读键盘输入、用 `cout` 往屏幕上打字——这是程序和外界的两次对话。但真实的程序不会只和键盘屏幕打交道——它要读配置文件、写日志文件、解析 CSV 数据、把内存里的结果拼成格式化报告。
+
+想象一条工厂流水线：原料从进料口送进来，经过加工，成品从出料口送出去。进料口可以是手推车（键盘输入）、集装箱（文件）、小料斗（字符串）——但流水线上的加工步骤完全一样。C++ 提供的就是这样一条通用输送带——无论数据从哪来、去哪，你用的读写方式都一样。
+
+**没有这条通用输送带会怎样？** 读写文件要学一套独有的做法、操作字符串又是另一套——每种数据源都是全新的用法，代码不能复用。这一章教你用同一套读写方式操作所有数据源——从此「在哪读、读到哪」是选的，不是重写的。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §6 代码）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo。 */}
+
+## IO 流家族：一张继承树看清三条分支
+
+在 C++ 里，<Term def="C++ 输入输出的抽象概念。流是一个字符序列——你可以从中读取字符（输入流）或向其写入字符（输出流）。C++ 标准库提供了统一的流接口（>> 和 << 运算符、getline 等），无论数据来自键盘、文件还是内存字符串，操作方式完全一致。">流（stream）</Term> 是你读写数据的统一通道。所有流类都源自同一个基础——一张继承树把三条分支清楚分开：
+
+<IOClassHierarchyDiagram />
+
+看上面的继承树——`ios_base` 是根，管理格式状态（精度、进制、宽度）和流状态（正常/失败/结束等）。`ios` 继承它，增加了对缓冲区的管理。从 `ios` 分出两条腿：`istream`（只负责读）和 `ostream`（只负责写）。然后三条分支各自展开：
+
+- **<Term def="标准控制台 IO 流，包含 cin（标准输入）、cout（标准输出）、cerr（标准错误，无缓冲）、clog（标准日志，有缓冲）。#include <iostream> 即可使用，不需要显式打开或关闭。">iostream</Term> 分支**：`iostream` 同时继承 `istream` 和 `ostream`——既能读又能写。你每天用的 `cin` 就是 `istream` 对象，`cout` 就是 `ostream` 对象。
+
+- **<Term def="文件 IO 流。ifstream 从文件读取，ofstream 写入文件，fstream 同时读写同一个文件。通过构造函数的文件名参数打开文件，析构时自动关闭。支持多种打开模式（in/out/app/binary 等）。">fstream</Term> 分支**：`ifstream`（读文件）继承 `istream`，`ofstream`（写文件）继承 `ostream`，`fstream`（读写文件）继承 `iostream`。所以 `ifstream` 有 `>>` 和 `getline`——和 `cin` 的用法一模一样。
+
+- **<Term def="字符串 IO 流。istringstream 从字符串中读取，ostringstream 把各种类型的数据拼接输出到字符串，stringstream 同时支持读写。它们把字符串当作流的「数据源」或「数据目标」——用法和 cin/cout 完全一致。">sstream</Term> 分支**：`istringstream`（读字符串）继承 `istream`，`ostringstream`（写字符串）继承 `ostream`，`stringstream`（读写字符串）继承 `iostream`。所以 `istringstream` 和 `cin` 用法一样——只是数据来源变成了一段内存里的字符串。
+
+三层共用同一个接口的根源：它们都继承自 `ios_base` 的格式状态和流状态管理，继承自 `istream`/`ostream` 的操作接口（`>>`/`<<`/`getline` 等），还共用同一套 <Term def="流对象通过一块内存区域（缓冲区）来批量读写——一次从硬盘读满一整个缓冲区，后续的 >> 操作直接从内存缓冲区取数据，比逐字节读硬盘快几百倍。输出时数据先写入输出缓冲区，缓冲区满了或用 endl/flush 时才真正写入目标。流对象被销毁时也会自动刷新（flush）缓冲区。">缓冲区（buffer）</Term> 机制——这就是为什么对 cin 学会的东西在文件和字符串上完全能用。
+
+<Callout type="tip">
+  **核心设计思想**：把函数的形参声明为 `istream &` 而不是 `ifstream &`——这样同一个函数既可以接受 `cin`（控制台输入），也可以接受 `ifstream` 对象（文件输入），还可以接受 `istringstream` 对象（字符串输入）。这是面向对象设计的精髓——针对基类的引用或指针写代码。
+</Callout>
+
+## 文件流：把数据存到硬盘、从硬盘读回来
+
+程序跑完数据就没了——除非你把它写进文件。<Term def="创建 ifstream/ofstream/fstream 对象时传给构造函数的第二个参数（默认有合理值）。共六种：in（读）、out（写，默认截断）、app（追加，每次写前自动 seek 到文件末尾）、ate（打开时 seek 到末尾）、trunc（截断，打开时清空文件内容）、binary（禁止换行符转换，Windows 尤其重要）。多个模式用 | 组合（如 ios::in | ios::binary）。">打开模式（open mode）</Term> 告诉流你要对文件做什么操作——只读？追加？还是覆盖？
+
+用文件流做三件事：打开、读写、关闭。整个过程像一个闭环——打开把文件句柄领到手，读写操作数据，关闭归还句柄。看下面的 Stepper 演示每一步做了什么事。
+
+### 文件流生命周期：一步一步走
+
+<Stepper>
+
+<Step step={0} label="打开文件">
+
+先把 `ifstream` 对象构造起来——传入文件名和打开模式。构造瞬间系统去磁盘上找这个文件、准备好读取通道。
+
+<FileStreamLifecycleDiagram step={0} />
+
+```cpp
+#include <fstream>   // 文件流的头文件
+#include <iostream>
+
+int main() {
+    std::ifstream file("data.txt");  // ① 构造即打开：打开名为 data.txt 的文件
+    if (!file) {                     // ② 必须检查：文件不存在→构造失败→流进入fail状态
+        std::cerr << "无法打开文件！\n";
+        return 1;
+    }
+    // 现在 file 就绪——可以读了
+```
+
+打开模式可以组合——`ios::in | ios::binary` 同时指定读模式 + 禁止换行符转换（二进制数据必须加）：
+
+```cpp
+std::ifstream binFile("data.bin", std::ios::binary);  // 二进制读模式
+std::ofstream log("app.log", std::ios::app);           // 追加写模式：新内容接在文件末尾
+```
+
+</Step>
+
+<Step step={1} label="读取数据">
+
+流就绪后——用和 cin 一模一样的 `>>` 和 `getline` 从文件读数据。读一个整数、读一行、读一个词——和键盘输入完全相同的操作。
+
+<FileStreamLifecycleDiagram step={1} />
+
+```cpp
+    // 方式一：逐词读取 >>（按空白分隔）
+    std::string word;
+    while (file >> word)          // 每次读一个词，读到末尾或出错自动停止
+        std::cout << word << '\n';
+
+    // 方式二：逐行读取 getline（按换行分隔，保留空格和tab）
+    std::string line;
+    while (std::getline(file, line))  // 每次读一整行（不含换行符）
+        std::cout << line << '\n';
+
+    // 方式三：读取数值类型——和 cin 完全一样
+    int num;
+    double val;
+    file >> num >> val;          // 从文件中读入整数和浮点数
+```
+
+<Callout type="warn">
+  `>>` 和 `getline` 混用注意：`>>` 读完数据后会留下 `\n` 在缓冲区——紧接着的 `getline` 第一个读到就是那个残留换行符。混用时在 `>>` 之后加一个 `file.ignore()` 吞掉残留空白再开始 getline。
+</Callout>
+
+</Step>
+
+<Step step={2} label="处理数据">
+
+数据读到内存后——用你已有的 C++ 知识处理它们。排序、统计、转换、存入容器——流只负责「运数据」，不负责「处理数据」。
+
+<FileStreamLifecycleDiagram step={2} />
+
+```cpp
+    // 把文件里所有整数读入 vector 并排序
+    std::vector<int> nums;
+    int n;
+    while (file >> n)            // 流只管读——这个 while 循环自动停
+        nums.push_back(n);
+    std::sort(nums.begin(), nums.end());
+
+    // 或者把文件内容逐行变换——比如全部转大写
+    std::string line;
+    while (std::getline(file, line)) {
+        for (char &c : line) c = std::toupper(c);  // 处理数据
+        std::cout << line << '\n';                  // 输出处理结果
+    }
+```
+
+</Step>
+
+<Step step={3} label="关闭文件">
+
+读完了——显式调用 `close()` 或者让流对象离开作用域自动析构。两种方式效果一样，但 `close()` 让你能释放文件句柄后立即用同一个流对象打开另一个文件。
+
+<FileStreamLifecycleDiagram step={3} />
+
+```cpp
+    file.close();  // ④ 关闭文件——释放文件句柄，刷新缓冲区
+    // 现在 file 可以重新打开另一个文件——
+    // file.open("another.txt");
+}  // ⑤ 离开作用域析构——即使忘了 close()，析构函数也会自动关闭文件
+```
+
+析构函数保证——哪怕程序中途抛异常，文件也会被正确关闭（不会丢数据、不会占住句柄不放）。这就是 RAII（资源获取即初始化）：构造时获取资源、析构时释放资源——绝不会忘。
+
+</Step>
+
+</Stepper>
+
+## 字符串流：字符串就是你的「临时控制台」
+
+你需要把三个数字拼成 `"scores: 85, 92, 78"` 这种格式；你拿到一段 `"Bob 85  90\r\n"` 这样的字符串需要提取名字和分数——这些场景下，<Term def="ostringstream 对象的成员函数 str()，返回当前流中已写入的全部内容的 string 副本。等价于「把往控制台打的东西全部收集成一整根字符串」。">`str()` 方法</Term> 是钥匙。
+
+```cpp
+#include <sstream>
+#include <iostream>
+#include <string>
+
+// 场景一：把多种类型拼成格式字符串——像 cout 一样往 string 里写
+std::ostringstream oss;
+oss << "scores: " << 85 << ", " << 92 << ", " << 78;
+std::string result = oss.str();          // "scores: 85, 92, 78"
+std::cout << result << std::endl;
+
+// 场景二：从字符串中提取格式化数据——像 cin 一样从 string 里读
+std::string raw = "Bob 85  90";
+std::istringstream iss(raw);
+std::string name;
+int a, b;
+iss >> name >> a >> b;                 // 单词 "Bob"、数字 85、数字 90
+std::cout << name << " 总分: " << a + b << std::endl;  // Bob 总分: 175
+
+// 场景三：逐行处理文本后用 stringstream 拆词
+std::string line = "apple banana cherry";
+std::istringstream words(line);
+std::string w;
+while (words >> w)                      // 逐个读出三个词
+    std::cout << "[" << w << "] ";     // [apple] [banana] [cherry]
+```
+
+用 stringstream 代替直接字符串拼接的三大好处：① 自动处理类型转换——`oss << 3.14159` 不需要 `to_string`；② 格式化操纵符全支持——`fixed << setprecision(2)` 照样用；③ 测试方便——用 istringstream 模拟文件输入，不需要写临时文件。
+
+## 流状态：每一步都知道「刚才读成功了吗」
+
+你已经用了 `while (file >> num)` 这种写法——它为什么能在文件读完时自动停？因为每次 IO 操作后流内部有一组标志位记录着刚才的操作是否成功——这组标志构成了流的 <Term def="C++ 流对象内部的一组标志位（iostate 枚举），用于跟踪最近一次 IO 操作的结果。四种可能：goodbit（一切正常）、eofbit（读到文件末尾）、failbit（操作失败但流可恢复）、badbit（流已崩溃、不可恢复）。通过 rdstate() 获取当前掩码，good()/eof()/fail()/bad() 分别检查各个位，clear() 重置所有位。">流状态（stream state）</Term>。
+
+<StreamStateDiagram />
+
+四种状态各司其职：
+
+- **`goodbit`**（值为 0）：一切正常——`good()` 返回 true。上次操作成功，可以继续读。
+- **`eofbit`**：读到文件末尾——`eof()` 返回 true。不是错误——是「数据没更多了」的通知。
+- **`failbit`**：操作失败但流可恢复——比如试图把 `"abc"` 读进 `int`、或者已经 EOF 后再读。`fail()` 返回 true。
+- **`badbit`**：流崩溃、不可恢复——底层系统 IO 错误、缓冲区损坏。`bad()` 返回 true。这个流基本废了。
+
+<Callout type="tip">
+  **最重要的检查口决**：`while (file >> value)` 等价于 `while (!file.fail())`——只要流没进入 fail 或 bad 状态就继续读。读到 EOF 后的第一次 `>>` 会同时设置 eofbit 和 failbit——循环自动停止。所以这种循环不需要额外写 `!file.eof()` 判断。
+</Callout>
+
+状态管理只靠三个操作：
+
+```cpp
+std::ifstream file("data.txt");
+auto state = file.rdstate();        // 读取当前状态（返回 iostate 掩码）
+
+if (file.eof()) {
+    file.clear();                   // 重置所有状态位——流恢复正常
+    file.seekg(0, std::ios::beg);   // 把文件读取位置移回开头
+    // 现在可以重新读一遍文件了
+}
+
+file.setstate(std::ios::failbit);   // 手动设置 failbit——模拟失败场景
+```
+
+**不先 `clear()` 就 `seekg()` 是 bug**——流处于错误状态时所有操作都失败，seekg 也不例外。正确的顺序是 clear() 先恢复流、再 seekg() 移位置。
+
+## 格式化输出：让数字和文字排版整齐
+
+往控制台或文件输出数据时——原始数字挤在一起根本没法看。C++ 的 <Term def="对 IO 流插入（<<）或提取（>>）的特殊函数或对象，用来改变流的格式行为。如 std::setw(n) 设字段宽度、std::fixed 固定小数格式、std::hex 切十六进制。定义在 <iomanip> 头文件。注意 setw 只对下一次输出生效，其余（fixed/hex/left 等）一旦设置就持久生效。">格式化操纵符（manipulator）</Term> 就是排版工具——控制宽度、精度、进制、对齐方式。
+
+<IOManipulatorTable />
+
+操纵符分两类——记忆规则就是「width 只用一次，其他持久生效」：
+
+**仅一次生效（用完就忘）：**
+
+```cpp
+#include <iomanip>
+std::cout << std::setw(6) << 42 << std::setw(6) << 100;
+// 输出：    42   100（每个字段占 6 个字符宽度，右对齐）
+```
+
+**持久生效（设一次影响后续所有输出）：**
+
+```cpp
+std::cout << std::fixed << std::setprecision(3);   // 这一行设好格式
+std::cout << 3.14159 << '\n';  // 3.142（固定小数 + 3 位精度）
+std::cout << 2.71828 << '\n';  // 2.718（格式持续生效）
+std::cout << std::defaultfloat; // 恢复默认浮点格式
+```
+
+最常见的格式化输出模板——靠左排名字、靠右排分数，每列宽度固定：
+
+```cpp
+#include <iostream>
+#include <iomanip>
+#include <string>
+
+int main() {
+    struct { std::string name; int score; } data[] = {
+        {"Alice", 92}, {"Bob", 85}, {"Charlie", 78}
+    };
+
+    // 表头
+    std::cout << std::left  << std::setw(12) << "姓名"
+              << std::right << std::setw(8)  << "分数\n";
+    std::cout << std::string(20, '-') << '\n';
+
+    // 数据行
+    for (auto &d : data)
+        std::cout << std::left  << std::setw(12) << d.name
+                  << std::right << std::setw(8)  << d.score << '\n';
+}
+// 输出：
+// 姓名          分数
+// --------------------
+// Alice             92
+// Bob               85
+// Charlie           78
+```
+
+<Callout type="warn">
+  `setw` 按字符的字节数计宽，含中文等多字节字符时（UTF-8 下一个汉字占 3 字节）实际控制台对齐会偏移。本例数据列用的是 ASCII 名（Alice/Bob/Charlie），故对齐准确；若把数据列换成中文姓名，需要自己按显示列宽补空格，不能只靠 `setw`。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80% 关键代码讲解）：单块 ≤30 行；块间有解说文字；C++ 独立展示（本书无 WebGL 对照）。 */}
+
+## 实战：一个完整的文件处理程序
+
+把本章所有知识点拧在一起——写一个程序：读取 `input.txt` 文件，统计每个单词出现的次数，按词频降序输出到 `output.txt`，带格式化的对齐表格。
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <map>
+#include <vector>
+#include <algorithm>
+#include <iomanip>
+
+int main() {
+    // 第一步：打开输入文件（ifstream 构造 + 立即检查）
+    std::ifstream in("input.txt");
+    if (!in) {
+        std::cerr << "无法打开 input.txt\n";
+        return 1;
+    }
+```
+
+检查文件是否打开成功是第一条纪律——`if (!in)` 在构造后立即判断。所有 IO 对象都可以放在布尔上下文中——等于 `!fail()`。
+
+```cpp
+    // 第二步：逐行读取，每行用 stringstream 拆词
+    std::map<std::string, int> freq;
+    std::string line;
+    while (std::getline(in, line)) {
+        std::istringstream iss(line);
+        std::string word;
+        while (iss >> word)       // sstream 的 >> 自动按空白切词
+            freq[word]++;         // map::operator[] 不存在的 key 默认值 0
+    }
+    in.close();  // 读完就关——尽早释放文件句柄
+```
+
+getline(文件, line) → istringstream(line) → iss >> word 是逐行处理的标准三板斧。比起直接在文件上 `>>`，这样能逐行把控——一行出错不会影响其他行。
+
+```cpp
+    // 第三步：排序——map 按 key 排，需要按 value 排就转 vector
+    std::vector<std::pair<std::string, int>> items(freq.begin(), freq.end());
+    std::sort(items.begin(), items.end(),
+              [](auto &a, auto &b) { return a.second > b.second; });
+```
+
+`std::map` 自动按 key（单词）排序——要按 value（词频）排序，把它倒进 `vector<pair>` 再用自定义比较函数。
+
+```cpp
+    // 第四步：格式化输出到文件
+    std::ofstream out("output.txt");
+    if (!out) {
+        std::cerr << "无法创建 output.txt\n";
+        return 1;
+    }
+    out << std::left << std::setw(20) << "单词"
+        << std::right << std::setw(8) << "次数\n";
+    out << std::string(28, '-') << '\n';
+    for (auto &[word, count] : items)
+        out << std::left << std::setw(20) << word
+            << std::right << std::setw(8) << count << '\n';
+    // out 离开作用域自动析构——自动 close + flush
+}
+```
+
+left 让单词左对齐、right 让数字右对齐、setw 给每列固定宽度——一套操纵符把原始数据变成可阅读的表格。ofstream 对象不用手动 close——析构函数替你做了。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`getline(file, line)` 循环和 `file >> num` 混用时，第一个 getline 读到的是一行空白。
+  **原因**：`>>` 读完数字后把 `\n` 留在输入缓冲区里——下一个 `getline` 直接读到了这个残留的换行符，整行就是空的。
+  **修法**：在 `>>` 和 `getline` 之间加一个 `file.ignore()` 吞掉残留的空白。更推荐的做法是统一只用 getline 读行、再用 istringstream 解析每行内容——彻底分离「读行」和「解析」两个阶段。
+</Callout>
+
+<Callout type="trap">
+  **现象**：同一个 ifstream 对象第一次读文件正常，想重新读一遍时循环一次都不执行——所有值都是默认值。
+  **原因**：第一遍读完后文件位置指针在末尾，同时 eofbit 被设置了。流处于错误状态，后续所有 `>>` 操作直接失败。即使文件数据还在硬盘上，流「拒绝」再读。
+  **修法**：重新读之前做两步——先 `file.clear()` 恢复流状态，再 `file.seekg(0, ios::beg)` 把读取位置移回开头。两步缺一不可：不 clear 则 seekg 对处于 fail 状态的流是无效操作（什么都不做），位置指针不会被移动；不 seekg 则 clear 后立刻又读到 EOF。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `ofstream("data", ios::binary)` 然后 `file << 123` 写东西——打开文件发现是文本 "123"，不是二进制数据。
+  **原因**：`<<` 运算符永远做文本输出——把数据转成可读字符再写。`ios::binary` 只影响换行符转换（`\n` 不转 `\r\n`），不改变 `<<` 的行为。
+  **修法**：需要二进制写入时用 `write()` 方法——`file.write(reinterpret_cast<const char*>(&data), sizeof(data))`。这是把内存中的比特原样拷进文件，不做任何转换。读回用 `read()` 方法。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`setprecision(2)` 在 `fixed` 加不加时输出的数字位数完全不同——同一个 3.14159 有时输出 3.1、有时输出 3.14。
+  **原因**：`setprecision` 的含义和 `fixed`/`scientific`/`defaultfloat` 的状态绑定。`defaultfloat`（默认）下 precision 控制**总有效位数**——precison=2 时 3.14159 输出 3.1（两位有效数字）。`fixed` 下 precision 控制**小数点后位数**——precision=2 时输出 3.14。
+  **修法**：需要控制小数点后位数的时候一定加上 `fixed`——`cout << fixed << setprecision(2) << 3.14159`。需要控制总有效位数时不要加 fixed。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- C++ IO 库由 iostream（控制台）、fstream（文件）、sstream（字符串）三族组成——都继承自 ios_base/ios/istream/ostream 体系，共享 `>>`/`<<`/`getline` 等相同接口
+- 文件流通过构造打开、析构关闭——打开后立即检查 `!file`，读模式用 `>>` 和 `getline`，二进制模式加 `ios::binary` 并用 `write()`/`read()` 代替 `<<`/`>>`
+- 字符串流让字符串拥有流操作能力——`ostringstream` 像 cout 一样把数据拼进 string，`istringstream` 像 cin 一样从 string 提取数据
+- 流状态用 good()/fail()/eof()/bad() 检测——eof 后重新读需先 `clear()` 再 `seekg()`，`while (file >> x)` 是最高频的正确读法
+- 格式化操纵符控制输出外观——setw 只影响下一次，fixed/hex/left 等持久生效；`setprecision` 的含义在 defaultfloat 和 fixed 下完全不同
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这段代码从文件读取整数并求和——但它有一个常见 bug：第一行是标题 "Scores:"，导致程序不能正确处理。找出 bug 并写出修正后的代码。
+
+```cpp
+#include <iostream>
+#include <fstream>
+int main() {
+    std::ifstream file("scores.txt");  // 第一行: "Scores:"
+    int total = 0, count = 0, val;
+    while (file >> val) {
+        total += val;
+        count++;
+    }
+    std::cout << "总和: " << total << ", 平均: "
+              << static_cast<double>(total) / count << '\n';
+    return 0;
+}
+```
+
+<Answer>
+
+Bug：第一行 "Scores:" 不是整数——`file >> val` 遇到字符串 "Scores:" 时 `failbit` 立即被设置——while 循环一次都不执行，total 和 count 始终是 0，最后算平均时除以零。修正——先跳过标题行再读数据：
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <string>
+int main() {
+    std::ifstream file("scores.txt");
+    if (!file) { std::cerr << "文件打开失败\n"; return 1; }
+
+    std::string header;
+    std::getline(file, header);  // 跳过第一行标题
+
+    int total = 0, count = 0, val;
+    while (file >> val) { total += val; count++; }
+
+    if (count > 0)
+        std::cout << "总和: " << total << ", 平均: "
+                  << static_cast<double>(total) / count << '\n';
+    else
+        std::cout << "没有有效数据\n";
+    return 0;
+}
+```
+
+先用 getline 吞掉标题，再用 while 循环读整数——一个简单的分步处理解决格式不一致问题。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个程序：读取 `data.txt` 文件（每行是 `姓名 数学 语文 英语` 的格式，如 `"Alice 92 88 95"`），计算每个人的平均分，把结果输出到 `results.txt`——格式化成整齐的表格（名字左对齐 12 字符、各科右对齐 6 字符、平均分右对齐 8 字符且保留一位小数）。输出示例：`"Alice           92    88    95    91.7"`。
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <iomanip>
+
+int main() {
+    std::ifstream in("data.txt");
+    if (!in) { std::cerr << "无法打开 data.txt\n"; return 1; }
+
+    std::ofstream out("results.txt");
+    if (!out) { std::cerr << "无法创建 results.txt\n"; return 1; }
+
+    std::string line;
+    while (std::getline(in, line)) {
+        std::istringstream iss(line);
+        std::string name;
+        int math, chinese, english;
+        if (!(iss >> name >> math >> chinese >> english)) {
+            std::cerr << "格式错误，跳过: " << line << '\n';
+            continue;   // 坏行跳过不崩
+        }
+        double avg = (math + chinese + english) / 3.0;
+        out << std::left  << std::setw(12) << name
+            << std::right << std::setw(6)  << math
+            << std::right << std::setw(6)  << chinese
+            << std::right << std::setw(6)  << english
+            << std::right << std::setw(8)  << std::fixed
+            << std::setprecision(1) << avg << '\n';
+    }
+    std::cout << "处理完成，结果已写入 results.txt\n";
+    return 0;
+}
+```
+
+要点：① getline+istringstream 标准三板斧 ② `>>` 结果放 if 里判断——解析失败跳过而非崩溃 ③ left 靠左排名字、right 靠右排数字 ④ fixed+setprecision(1) 控制小数点一位。
+
+</Answer>
+
+**练习 3（问答型）** 本章 §5 Stepper 演示了文件流生命周期——从打开、读取、处理到关闭。如果把整个程序改成「所有数据源一律从 `istream &` 引用参数传入」，文件的读法和键盘的读法在一个函数里怎么统一？写出函数签名和简短的调用示例。
+
+<Answer>
+
+把函数签名里的 `ifstream &` 换成 `istream &`——因为 ifstream 继承自 istream，所以可以传任何 istream 的派生类对象：
+
+```cpp
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <vector>
+
+// 统一接口——传 istream&，不关心数据源
+std::vector<int> read_ints(std::istream &is) {
+    std::vector<int> result;
+    int val;
+    while (is >> val) result.push_back(val);
+    return result;
+}
+
+int main() {
+    // 数据源 1：键盘输入
+    auto v1 = read_ints(std::cin);  // 把 cin 当 istream& 传
+
+    // 数据源 2：文件输入
+    std::ifstream file("data.txt");
+    auto v2 = read_ints(file);       // 把 ifstream 当 istream& 传——类型兼容
+
+    // 数据源 3：字符串输入
+    std::istringstream iss("1 2 3 4 5");
+    auto v3 = read_ints(iss);        // 把 istringstream 当 istream& 传——同样兼容
+
+    return 0;
+}
+```
+
+这就是 IO 流继承体系的核心价值——对基类引用写代码，所有子类自动兼容。测试时用 istringstream 模拟真实输入，不需要创建临时文件。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="流（stream）">
+  C++ 输入输出的抽象概念。流是一个字符序列——你可以从中读取字符（输入流）或向其写入字符（输出流）。C++ 标准库提供了统一的流接口（`>>` 和 `<<` 运算符、getline 等），无论数据来自键盘、文件还是内存字符串，操作方式完全一致。详见本章「IO 流家族」一节的继承树图。
+</GlossaryItem>
+
+<GlossaryItem term="iostream">
+  标准控制台 IO 流，包含 cin（标准输入）、cout（标准输出）、cerr（标准错误，无缓冲）、clog（标准日志，有缓冲）。#include &lt;iostream&gt; 即可使用，不需要显式打开或关闭。cin 是 istream 的对象，cout/cerr/clog 是 ostream 的对象。详见本章「IO 流家族」一节的继承树最左侧分支。
+</GlossaryItem>
+
+<GlossaryItem term="fstream">
+  文件 IO 流。ifstream 从文件读取，ofstream 写入文件，fstream 同时读写同一个文件。通过构造函数的文件名参数打开文件，析构时自动关闭。支持多种打开模式（in/out/app/ate/trunc/binary，可用 | 组合）。对 ifstream 用 >> 和 getline 的方式和 cin 完全一样——因为它们都继承自 istream。详见本章「文件流」一节和 Stepper 演示。
+</GlossaryItem>
+
+<GlossaryItem term="sstream">
+  字符串 IO 流。istringstream 从字符串中读取（像 cin 从键盘读一样从内存字符串读），ostringstream 把各种类型的数据拼接输出到字符串（像 cout 打到屏幕一样打到 string），stringstream 同时支持读写。用法和 cin/cout 完全一致——只是数据源/目标从键盘屏幕换成了字符串。详见本章「字符串流」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="str() 方法">
+  ostringstream/stringstream 对象的成员函数。`ostringstream::str()` 返回流中全部已写入内容的 string 副本——相当于把输出流里的所有东西收成一根字符串。详见本章「字符串流」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="打开模式（open mode）">
+  创建 ifstream/ofstream/fstream 对象时传给构造函数的第二个参数（默认有合理值）。共六种：in（读）、out（写，默认截断）、app（追加，每次写前自动 seek 到文件末尾——防止多进程覆盖）、ate（打开时 seek 到末尾，之后可自由 seek）、trunc（截断，打开时清空文件内容）、binary（禁止换行符转换——\n 不转 \r\n，Windows 上写二进制数据必须加）。多个模式用 | 组合——如 ios::in | ios::binary。详见本章「文件流」一节的 Stepper 第一步。
+</GlossaryItem>
+
+<GlossaryItem term="流状态（stream state）">
+  C++ 流对象内部的一组标志位（iostate 枚举），用于跟踪最近一次 IO 操作的结果。四种可能：goodbit（一切正常）、eofbit（读到文件末尾）、failbit（操作失败但流可恢复——如格式错）、badbit（流已崩溃、不可恢复——如底层 IO 错误）。通过 rdstate() 获取当前掩码，good()/eof()/fail()/bad() 分别检查各个位，clear() 重置所有状态位恢复为可用。详见本章「流状态」一节的 StreamStateDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="缓冲区（buffer）">
+  流对象通过一块内存区域（缓冲区）来批量读写——一次从硬盘读满一整个缓冲区（通常是 4096 字节），后续的 >> 操作直接从内存缓冲区取数据，比逐字节读硬盘快几百倍。输出时数据先写入输出缓冲区，缓冲区满了或用 endl/flush 时才真正写入目标。流对象析构时也会自动刷新（flush）缓冲区，保证数据不丢失。缓冲区由 streambuf 对象管理（ios 持有它的指针）。
+</GlossaryItem>
+
+<GlossaryItem term="格式化操纵符（manipulator）">
+  对 IO 流插入（`<<`）或提取（`>>`）的特殊函数或对象，用来改变流的格式行为。如 std::setw(n) 设字段宽度、std::fixed 固定小数格式、std::hex 切换进制、std::left/right 控制对齐方向。定义在 &lt;iomanip&gt; 头文件。注意 setw 只对下一次输出生效（用完自动重置为 0），其余（fixed/hex/left 等）一旦设置就持久生效。详见本章「格式化输出」一节的 IOManipulatorTable 速查表。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
+
+<Attribution />

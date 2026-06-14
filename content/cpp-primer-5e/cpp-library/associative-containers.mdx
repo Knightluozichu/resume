@@ -1,0 +1,578 @@
+---
+title: 关联容器
+type: C
+section: C++标准库
+order: 4
+description: 掌握map/set/unordered_map/unordered_set等八种关联容器——了解红黑树底层与哈希表底层的差异，知道何时选有序、何时选无序，能用map做键值映射、用set做去重与存在判断
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型（C++ Primer §11 改编）：八种关联容器 + pair + map/set 操作 +
+   无序容器（哈希表+桶+负载因子）+ 选用原则。
+   重心在 Stepper §5 + 代码对照 §6，概念讲解 §3 配图，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 关联容器概述（map/set/multimap/multiset/unordered_xxx）— viz: AssociativeContainerOverviewDiagram（六种容器内部结构对比：红黑树 vs 哈希表）
+   2) map/set 的基本操作（insert/find/erase/下标访问[]）— 代码示例 + MapOperationTable（操作速查表）
+   3) pair 类型 — 代码示例
+   4) unordered_map/unordered_set（哈希桶、负载因子）— viz: UnorderedMapInternalsDiagram（哈希表桶+链表结构图，支持step prop）
+   5) 选用原则（有序 vs 无序容器的场景判断）— viz: ContainerSelectionFlow（选择流程图，支持step prop） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能正确使用 map 完成键值映射——通过 key 查找 value、安全地使用 `find()`（而不是 `[]` 静默插入默认值），在遍历中用结构化绑定 `const auto &[key,val]` 同时访问 key 和 value
+- 能根据场景选择合适的关联容器——需要按键排序遍历选 `map/set`，追求最快查找选 `unordered_map/unordered_set`，需要同一 key 多个值选 `multimap`
+- 能回答：一个程序用 `map<string,int>` 统计单词出现次数，写出 `++word_count[word]` 后，`word_count["apple"]` 返回什么？用 `map` 和 `unordered_map` 分别实现有什么区别？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——容器是不同规格的物料箱。 */}
+
+## 为什么位置编号不够用？
+
+你学过了顺序容器——用 `vector` 按位置 `v[3]` 访问元素。但想想这些场景：查电话号码——你输入名字 "Alice"，想知道她的号码——你不可能说「我要第 5 个元素」——你不知道 Alice 在第几个位置。你需要的是按「名字」直接找到「号码」——这就是键值对的核心：通过 key 找到 value。
+
+想象工厂里有一本**分类索引目录**（map）——每个条目按类别编号排列好——你翻目录时整本都是有序的——翻到「A 类」区域很快（红黑树 O(log n)）。还有一种**快速检索终端**（unordered_map）——你输入类别，机器用公式算出柜子的位置——几乎不用翻——直接走过去取（哈希表均摊 O(1)）。目录有序但不快；终端快但没法按顺序浏览。
+
+**没有关联容器的世界会怎样？** 你只能用两个 `vector` 并行维护——一个存名字、一个存号码——每次查名字都得遍历整个数组（O(n)）——一万条数据就要走一万步。删除 Alice 的条目后两个 vector 要同步移动——复杂、易出错、慢。这一章教你「以 key 为核心」的数据组织方式——查找、插入、删除都是 O(log n) 甚至 O(1)。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo。 */}
+
+## 八种容器，两大阵营
+
+在 C++ 里，<Term def="与顺序容器相对——元素通过 key（键）来存取和排序，而不是通过插入顺序。你通过 key 查找元素（如 m[&quot;name&quot;]），而不是第几个位置（如 v[5]）。C++ 标准库提供八种关联容器：四大有序（map/set/multimap/multiset）底层是红黑树；四大无序（unordered_map/set/multimap/multiset）底层是哈希表。">关联容器（associative container）</Term> 把你的元素按 key 组织——key 就是你的搜索字——通过它直达数据。
+
+<AssociativeContainerOverviewDiagram />
+
+上图展示了两大阵营的底层结构差异：
+
+- **有序容器（map/set/multimap/multiset）** 底层是 <Term def="一种自平衡二叉搜索树——每次插入/删除后通过旋转和重新着色维持树的平衡，保证所有操作的复杂度都是 O(log n)。C++ 标准要求有序关联容器以此（或等价的平衡树）实现。每个节点有 left/right/parent 指针 + color 位（红或黑）。">红黑树（red-black tree）</Term>——元素按 key 自动排序。插入、删除、查找都是 O(log n)。遍历——中序遍历自然获得按键排序的输出。
+- **无序容器（unordered_map/set/multimap/multiset）** 底层是 <Term def="通过哈希函数 hash(key) 将 key 映射到桶号（bucket index），桶内用链表（拉链法）存储所有散列到该桶的元素。理想情况（哈希均匀、负载因子适当）下操作均摊 O(1)——但最坏情况（所有 key 落入同一桶）退化到 O(n)。">哈希表（hash table）</Term>——插入、查找都是均摊 O(1)——不需要比较 key。遍历——输出顺序不确定——每次运行可能都不同。
+
+重要的区别——有序容器名只有核心词（map/set），无序容器名字前面加 `unordered_` 前缀。
+
+### map——你的键值字典
+
+<Term def="关联容器的一种——存储 key→value 键值对，每个 key 唯一（不可重复）。通过 key 索引 value：m[key] 返回对应的 value。底层红黑树按 key 排序。value_type 是 pair&lt;const Key, T&gt;——key 是 const 不可修改。">map</Term> 是最常用的关联容器——你给它 key，它返回关联的 value——像一个字典。
+
+```cpp
+#include <map>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::map<std::string, int> phonebook;
+
+    // 三种插入方式
+    phonebook["Alice"] = 5551234;            // operator[] 插入
+    phonebook.insert({"Bob", 5555678});      // insert + 列表初始化
+    phonebook.emplace("Charlie", 5559012);   // emplace 原地构造
+
+    // 查找——用 find，别用 []（[] 在 key 不存在时会插入默认值）
+    auto it = phonebook.find("Alice");
+    if (it != phonebook.end())
+        std::cout << it->second << '\n';     // 5551234
+
+    // 遍历——有序！
+    for (const auto &[name, num] : phonebook)
+        std::cout << name << ": " << num << '\n';
+    // 输出：Alice: 5551234  Bob: 5555678  Charlie: 5559012
+    // —— 按键的字母序排列
+}
+```
+
+注意遍历结果是**按 key 排序**的（"Alice" < "Bob" < "Charlie"）——这就是有序容器的「附加值」——免费用了红黑树的中序遍历。
+
+### set——只存 key 的去重集合
+
+<Term def="关联容器的一种——只存 key，不存 value。每个 key 唯一（不可重复）。适合「是否存在」「白名单」等场景。底层也用红黑树按 key 排序。虽然叫 set，但元素仍有序。">set</Term> 是 map 的「value-less」版——你只关心某个 key 是否存在或维护一个不重复的集合。
+
+```cpp
+#include <set>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::set<std::string> whitelist = {"admin", "root", "deploy"};
+
+    // 检查是否存在
+    if (whitelist.contains("admin"))          // C++20
+        std::cout << "通过\n";
+    // or: if (whitelist.find("admin") != whitelist.end())
+
+    // 插入 + 检查是否成功
+    auto [it, inserted] = whitelist.insert("guest");
+    std::cout << (inserted ? "插入成功" : "已存在") << '\n';
+
+    // 遍历——有序（字母序）
+    for (const auto &u : whitelist)
+        std::cout << u << ' ';  // admin deploy guest root
+}
+```
+
+`insert` 返回 `pair<iterator, bool>`——`second=true` 表示插入成功（是新 key），`false` 表示 key 已存在。
+
+### 当 key 需要重复——multimap 和 multiset
+
+有时候一个 key 需要对应多个值——比如一个作者写了多本书、一个学生选多门课。这时用 <Term def="允许同一 key 出现多次的关联容器。multimap 是 map 的去唯一约束版（一个 key→多个 value）；multiset 是 set 的去唯一约束版（key 可重复）。仍按 key 排序，但没有 operator[]（一个 key 对应多个 value 没有唯一返回）。查找用 equal_range 或 lower_bound/upper_bound。">multimap/multiset</Term>。
+
+```cpp
+#include <map>
+#include <iostream>
+
+int main() {
+    std::multimap<std::string, std::string> books;
+    books.insert({"Orwell", "1984"});
+    books.insert({"Orwell", "Animal Farm"});
+    books.insert({"Huxley", "Brave New World"});
+
+    // 查找 Orwell 的所有书
+    auto [begin, end] = books.equal_range("Orwell");
+    for (auto it = begin; it != end; ++it)
+        std::cout << it->second << ' ';  // 1984 Animal Farm
+}
+```
+
+multimap/multiset 没有 `operator[]`——如果一个 key 有多个值、应该返回哪一个？没有唯一答案。取而代之用 `equal_range` 拿到所有值。
+
+## pair——两个值的简单打包
+
+<Term def="一个简单的模板结构，保存两个值（first 和 second）。定义在 &lt;utility&gt; 头文件。map 的 value_type 就是 pair&lt;const Key, T&gt;。支持比较（先比 first、first 相等再比 second）。C++11 起可用 {a, b} 列表初始化。">pair</Term> 出现在关联容器的各个角落——insert 的返回值是 pair、map 的每个元素是 pair、equal_range 的返回值也是 pair。
+
+```cpp
+#include <utility>
+#include <string>
+
+// 创建 pair 的三种方式
+std::pair<int, std::string> p1(42, "answer");
+auto p2 = std::make_pair(42, "answer");  // 自动推导类型
+std::pair<int, std::string> p3 = {42, "answer"};  // C++11 列表初始化
+
+// 访问
+std::cout << p1.first << ' ' << p1.second;  // 42 answer
+
+// map 的 insert 返回值
+std::map<int, std::string> m;
+auto ret = m.insert({1, "one"});
+// ret.first  是迭代器，指向 {1, "one"}
+// ret.second 是 bool，值为 true（插入成功）
+```
+
+一对很方便的使用模式——C++17 起用**结构化绑定**一次解包：
+
+```cpp
+auto [iter, success] = m.insert({2, "two"});   // 解包 pair<iterator, bool>
+for (const auto &[key, val] : m)               // 解包 pair<const Key, T>
+    std::cout << key << " -> " << val << '\n';
+```
+
+## unordered_map——哈希表的速度
+
+<AssociativeContainerOverviewDiagram /> 右边展示了无序容器的哈希表结构。`unordered_map` 用哈希表替代红黑树——插入、查找都是均摊 O(1)。
+
+用 Stepper 一步步看哈希表如何工作：
+
+<Stepper>
+
+<Step step={0} label="桶数组——哈希表的骨架">
+
+哈希表最底层是一个桶数组——每个桶是一个槽位。没有元素时所有桶都是空的。
+
+<UnorderedMapInternalsDiagram step={1} />
+
+"桶数"不是固定的——当元素增多、负载因子过高时——自动 rehash——重新分配更多桶。
+
+</Step>
+
+<Step step={1} label="哈希函数——key 变桶号">
+
+插入 `{"Alice", 30}`——先调用哈希函数 `hash("Alice")` 得到一个整数——再 `% bucket_count` 算出桶号。落入哪个桶纯看哈希结果——没有顺序、没有排序。
+
+<UnorderedMapInternalsDiagram step={2} />
+
+如果 `hash("Bob")` 也算出同一个桶号——这就是**哈希冲突**——下面用拉链法解决。
+
+</Step>
+
+<Step step={2} label="拉链法——同一桶内的链表">
+
+桶 2 里现在有两个元素——`"Alice"→30` 和 `"Bob"→25`——它们串在同一根链上。查找 "Bob" 时——先算桶号→桶 2→沿链逐个比 key→找到。
+
+<UnorderedMapInternalsDiagram step={3} />
+
+在理想情况下（哈希函数均匀、负载因子 ≈1.0）——每条链只挂 1-2 个元素——实际就是 O(1)。但最坏情况——所有 key 落入同一个桶——退化成链表 O(n)。标准库的 `std::hash` 对内置类型和 string 都保证了很好的均匀性。
+
+</Step>
+
+</Stepper>
+
+**关键控制**——你可以手动调优哈希表：
+
+```cpp
+std::unordered_map<std::string, int> m;
+
+m.reserve(10000);       // 预分配桶——保证至少能装 10000 个元素不 rehash
+m.rehash(20000);        // 手动设桶数为 20000
+m.max_load_factor(0.5); // 降负载因子——更稀疏的桶=更快查找=更多内存
+m.load_factor();        // 当前负载因子 = size/bucket_count
+```
+
+{/* 5. 交互 Demo（spec §五，C 型主 Demo 选 ShaderDemo，本章提供选择流程图） */}
+
+## 选一个容器——你指向哪里？
+
+来做一个决策——你有一个场景，该选八种关联容器中的哪个？走一遍这个决策流。
+
+<ContainerSelectionFlow step={4} />
+
+用 Stepper 跟着走——每一步做一个判断：
+
+<Stepper>
+
+<Step step={0} label="第一问：需要 key→value 映射吗？">
+
+第一个问题把关联容器和顺序容器分开——如果你不需要通过 key 找 value——你只是按位置访问、在末尾追加——那回到顺序容器（vector/list/deque）。
+
+<ContainerSelectionFlow step={1} />
+
+**No → 顺序容器 ｜ Yes → 继续**
+
+</Step>
+
+<Step step={1} label="第二问：需要按键排序吗？">
+
+有序（红黑树）和无序（哈希表）之间的抉择——这一步最影响性能特征。
+
+<ContainerSelectionFlow step={2} />
+
+**No → unordered_set / unordered_map**——均摊 O(1) 查找/插入——适合「只关心快速查找、不关心顺序」的场景。
+
+**Yes → 继续**——你需要红黑树的有序特性——按键遍历、范围查询。
+
+</Step>
+
+<Step step={2} label="第三问：key 允许重复吗？">
+
+你需不需要同一 key 对应多个元素？这一步区分普通版和 multi 版。
+
+<ContainerSelectionFlow step={3} />
+
+**No → set / map**——最常用的选择——唯一 key + 有序。
+
+**Yes → multiset / multimap**——一书多作者、学生多课程等一对多场景。
+
+</Step>
+
+<Step step={3} label="最终选型——回忆无序这边">
+
+无序分支同样有普通版和 multi 版——最终落在四个无序容器之一。
+
+<ContainerSelectionFlow step={4} />
+
+**小结**：`unordered_map` 是大多数场景的默认选择（快 + 直觉）。如果要求遍历有序 → `map`。如果 key 可重复 → 加 `multi` 前缀。如果不需要 value → `set` 替代 `map`。
+
+</Step>
+
+</Stepper>
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80% 关键代码讲解）：单块 ≤30 行；块间有解说文字。 */}
+
+## 实战：四个经典场景
+
+<MapOperationTable />
+
+接下来用四个真实场景练习——对每种场景选对容器并写出实现。
+
+### 场景一：单词统计器——map 统计频率
+
+<Callout type="tip">
+  操作模式：逐单词读入→用 map 记录每个单词出现次数→按键排序输出。核心操作是「若存在加1、不存在置1」——`++word_count[word]` 一行解决问题。
+</Callout>
+
+```cpp
+#include <map>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::map<std::string, int> word_count;
+    std::string word;
+
+    while (std::cin >> word)
+        ++word_count[word];  // 不存在则插入 {word,0}→++变1
+
+    for (const auto &[w, cnt] : word_count)
+        std::cout << w << ": " << cnt << '\n';
+}
+```
+
+`++word_count[word]` 这行包含了隐式的「不存在时插入默认值 0」——是 map 的 `operator[]` 的经典用法。如果你用 find——代码会长得多——但更显式：`auto it = word_count.find(word); if (it == word_count.end()) word_count[word] = 1; else ++it->second;`。
+
+> **选 unordered_map 则是均摊 O(1) 插入、输出无序**——如果不需要字母序更推荐。
+
+### 场景二：去重检查器——set 判存在
+
+<Callout type="tip">
+  操作模式：不断接收输入→判断输入是否之前出现过（重复）→记录已出现的元素。需要 O(log n) 或 O(1) 的存在性检查——set 是完美答案。
+</Callout>
+
+```cpp
+#include <set>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::set<std::string> seen;
+    std::string word;
+
+    while (std::cin >> word) {
+        if (!seen.insert(word).second)   // 已存在——重复
+            std::cout << word << " 重复了！\n";
+        // seen.insert(word).second == true → 首次出现，已插入
+    }
+}
+```
+
+`seen.insert(word)` 返回 `pair<iterator, bool>`——`.second` 直接告诉你是不是首次。一行就把「判断+插入」做完了——没有额外查找。
+
+### 场景三：无序翻译器——unordered_map 的高速查找
+
+<Callout type="tip">
+  操作模式：预处理阶段一次性建好 map（英语单词→中文翻译）；查询阶段大量查找翻译、不需要输出排序。插入少、查找极多——unordered_map 的均摊 O(1) 最合适。
+</Callout>
+
+```cpp
+#include <unordered_map>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::unordered_map<std::string, std::string> dict;
+
+    dict.reserve(20000);  // 预分配——避免 rehash
+
+    // 建词库阶段
+    dict["hello"] = "你好";
+    dict["world"] = "世界";
+
+    // 查询阶段——均摊 O(1)
+    std::string query;
+    while (std::cin >> query) {
+        auto it = dict.find(query);
+        if (it != dict.end())
+            std::cout << it->second << '\n';
+        else
+            std::cout << query << " 未找到\n";
+    }
+}
+```
+
+用 `find()` 而不是 `dict[query]` 来做只读查找——避免 `operator[]` 把不存在的 query 也插入。用 `reserve(20000)` 预分配桶——避免多次 rehash（在加载词库阶段特别重要）。
+
+### 场景四：区间定价器——map 的范围查询（lower_bound）
+
+<Callout type="tip">
+  操作模式：价格分段——0-99元一个价位、100-199一个价位——用 map 存分段边界→费率。给定价格用 lower_bound 找到对应费率。有序容器特有操作。
+</Callout>
+
+```cpp
+#include <map>
+#include <iostream>
+
+int main() {
+    // 分段边界 → 费率：每个阈值是「该级起步价」
+    std::map<int, double> tiers = {
+        {0, 0.05},    // 0-99  费率 5%
+        {100, 0.08},  // 100-199 费率 8%
+        {200, 0.12},  // 200+   费率 12%
+    };
+
+    int price = 150;
+    auto it = tiers.upper_bound(price);  // 第一个 >price 的边界
+    --it;
+    std::cout << "价格 " << price << " 费率: " << it->second << '\n';
+    // 输出: 价格 150 费率: 0.08
+}
+```
+
+`upper_bound(150)` 返回指向 `{200, 0.12}` 的迭代器（第一个 >150 的边界）——往回退一步（`--it`）就是 `{100, 0.08}`——150 落在它的区间。这就是有序容器的范围查询能力——unordered_map 做不到。
+
+### 选型速查
+
+| 你的场景 | 选这个 |
+|---|---|
+| 需要 key→value 映射、key 唯一、需要按键遍历 | `map` |
+| 只关心 key 是否存在、需要按键排列 | `set` |
+| key→value、key 可重复（一对多）| `multimap` |
+| 只关心 key 是否存在、key 可重复、需有序 | `multiset` |
+| key→value、key 唯一、追求最快查找、无序输出 | `unordered_map` |
+| 只关心是否存在、最快插入 | `unordered_set` |
+| key→value、key 可重复、无序 | `unordered_multimap` |
+| 只关心存在、key 可重复、无序 | `unordered_multiset` |
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：用 `m[k]` 做「只读查找」——结果 `m.size()` 凭空变大了——map 里多了一些莫名其妙的默认值。
+  **原因**：`operator[]` 是**带副作用的查找**——如果 k 不存在，它静默插入 `{k, 默认值}`，然后返回默认值的引用。`m[k]` 不是 find——它是「找或插入」的复合操作。
+  **修法**：只读查——用 `m.find(k)`（返回迭代器/end）或 C++20 的 `m.contains(k)`（返回 bool）。只读+需要抛异常——用 `m.at(k)`（不存在抛出 out_of_range）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `auto &p : m` 遍历 map，试图写 `p.first = newKey`——编译报错「assignment of read-only member」。
+  **原因**：map 的 value_type 是 `pair<const Key, T>`——key 是 const。修改 key 但没有同步调整它在红黑树的位置→树被破坏。编译器通过 const 阻止你。
+  **修法**：真要改 key——**erase 旧元素 + insert 新元素**——`auto val = m[k_old]; m.erase(k_old); m[k_new] = val;`。C++17 起用 extract 避免拷贝 value：`auto node = m.extract(it); node.key() = newKey; m.insert(std::move(node));`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：自定义类型作为 map 的 key——编译报错「no match for `operator<`」。或作为 unordered_map 的 key——报错「implicit instantiation of undefined template std::hash」。
+  **原因**：有序容器需要 `operator<`（严格弱序），无序容器需要 `hash<T>` 特化和 `operator==`。自定义类型没有这些——编译器找不到。
+  **修法**：有序容器——定义 `bool operator<(const T &o) const` 或传自定义比较器（`map<T, V, MyCmp>`）。无序容器——为你的类型特化 `std::hash` 或传自定义 hasher + equality（`unordered_map<T, V, MyHash, MyEq>`）。内置类型和 string 不需要——标准库已提供了。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 map/set 上遍历时 erase 元素——用 `for (auto it = m.begin(); it != m.end(); ++it) { m.erase(it); }`——程序崩溃。
+  **原因**：`m.erase(it)` 使 `it` 失效。map 的 erase 只使被删除元素失效（不像 vector 全部失效）——但 for 循环仍然在失效的 it 上执行 `++it`——未定义行为。
+  **修法**：`for (auto it = m.begin(); it != m.end(); ) { if (need_erase) it = m.erase(it); else ++it; }`。C++11 起 erase 返回被删除元素的下一个有效迭代器。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
+
+## 小结
+
+- 关联容器通过 key 存取——八种容器分两大阵营：有序（map/set/multimap/multiset）底层红黑树 O(log n) 且自动排序；无序（unordered_...）底层哈希表均摊 O(1) 但无序遍历
+- map 是 key→value 的字典——`m[k]` 自动插入默认值（有副作用）、`find(k)` 纯查找不插入、`at(k)` 抛异常；遍历顺序 = 按键排序；set 是只存 key 的去重集合
+- pair 是 map 的构成单元——`pair<const K, V>` 的 key 不可修改；用结构化绑定 `auto &[k, v]` 遍历 map 最清晰
+- 无序容器通过 hash(key) → bucket → 链表工作——`reserve(n)` 预分配桶避免 rehash、`max_load_factor(x)` 调控密度；哈希冲突靠拉链法在同一条链表上解决
+- 选容器三步问——需要 key→value 就选 map 系否则 set 系→要求有序输出选 map/set 否则选 unordered_→允许多个同 key 就加 multi 前缀
+
+<Exercises>
+
+**练习 1（改代码型）** 下面代码想检查 "admin" 是否在 set 中并打印——找出 bug 并写出修正。
+
+```cpp
+#include <set>
+#include <string>
+#include <iostream>
+int main() {
+    std::set<std::string> users = {"alice", "bob"};
+    std::cout << users["admin"];  // 打印 admin 的状态？
+    return 0;
+}
+```
+
+<Answer>
+
+Bug：set 没有 `operator[]`——编译报错。operator[] 是 map 独有的（因为 map 有 key→value 的关联——返回 value 的引用）。set 只存 key 不存 value——没有东西可返回。修正——用 `find()` 或 `contains()`（C++20）：
+
+```cpp
+if (users.find("admin") != users.end())
+    std::cout << "admin 存在\n";
+// or C++20:
+if (users.contains("admin"))
+    std::cout << "admin 存在\n";
+```
+
+核心教训——检查元素是否存在用 `find()`（返回迭代器→与 end 比较）或 `contains()`（C++20 返回 bool）——不要想当然地把顺序容器的 `[]` 习惯带过来。
+
+</Answer>
+
+**练习 2（独立实现题）** 写一个程序：用 `multimap<string, string>` 实现一个「书籍作者索引」。支持插入书名和作者名（一个作者可以写多本书），然后输入一个作者名——输出他的所有书。用 `equal_range` 实现查询部分。
+
+<Answer>
+
+```cpp
+#include <map>
+#include <string>
+#include <iostream>
+
+int main() {
+    std::multimap<std::string, std::string> books;
+
+    // 插入书籍（作者→书）
+    books.insert({"Orwell", "1984"});
+    books.insert({"Orwell", "Animal Farm"});
+    books.insert({"Huxley", "Brave New World"});
+    books.insert({"Tolkien", "The Hobbit"});
+    books.insert({"Tolkien", "The Lord of the Rings"});
+
+    // 查询 Or well 的所有书
+    std::string author = "Orwell";
+    auto [begin, end] = books.equal_range(author);
+
+    std::cout << author << " 的作品:\n";
+    for (auto it = begin; it != end; ++it)
+        std::cout << "  - " << it->second << '\n';
+
+    // 如果该作者不存在——equal_range 返回空范围 begin==end
+    return 0;
+}
+```
+
+要点：① multimap 允许多个相同 key（同一作者多本书）② `equal_range` 返回 `{lower_bound, upper_bound}`——恰好涵盖该 key 的所有元素 ③ multimap 没有 `operator[]`——因为一个 key 对应多个 value 没有唯一返回。
+
+</Answer>
+
+**练习 3（选型题）** 以下三个场景分别应该选哪个容器？各用一句话解释原因。
+
+- **A**：需要按日期（int key）排序输出财务流水——每个月有几千条记录，需要支持范围查询「查询 2024年1月 到 3月 的所有记录」。
+- **B**：需要快速检查一个 URL 是否已经被爬虫访问过——URL 数量在千万级——只关心存在性、不需要排序输出。
+- **C**：需要建立 IP 地址到物理地址的映射——每个 IP 唯一对应一个国家/城市——数据量在亿级——希望查询时能 O(log n) 找到对应的地理信息。
+
+<Answer>
+
+- **A**：`map<Date, Record>` 或 `set<Record>`（如果按日期排序可以放在 Record 内部）。需要有序输出+范围查询（lower_bound/upper_bound）——这是有序容器的强项。用 unordered_map 需要额外 sort——总代价反而更高。
+- **B**：`unordered_set<string>`。只关心存在性、不需要排序——哈希表均摊 O(1) 比红黑树 O(log n) 快得多——千万级数据下差距明显。`reserve(10000000)` 预分配桶避免 rehash。
+- **C**：`unordered_map<uint32_t, GeoInfo>`。亿级数据——O(log n) 在亿级大概是 27 次比较——均摊 O(1) 只做 1 次哈希——差距巨大。如果 IP 是 IPv4（32位整数），哈希函数几乎免费——直接用 `std::hash<uint32_t>`。如果内存压力大——可以考虑二分查找已排序的 `vector<pair<IP, Geo>>`（内存紧凑、缓存友好、同样 O(log n)）。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（8 条，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="关联容器（associative container）">
+  与顺序容器相对——元素通过 key（键）来存取和排序，而不是通过插入顺序。你通过 key 查找元素（如 `m["name"]`），而不是第几个位置（如 `v[5]`）。C++ 标准库提供八种关联容器：四大有序（map/set/multimap/multiset）底层是红黑树；四大无序（unordered_map/set/multimap/multiset）底层是哈希表。详见本章「八种容器，两大阵营」一节的 AssociativeContainerOverviewDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="红黑树（red-black tree）">
+  一种自平衡二叉搜索树——每次插入/删除后通过旋转和重新着色维持树的平衡，保证所有操作（插入/删除/查找）的复杂度都是 O(log n)。每个节点存储 left/right/parent 三个指针 + color 位（红或黑）。C++ 标准要求有序关联容器以此（或等价的平衡树）实现。详见本章「八种容器，两大阵营」一节的对比图。
+</GlossaryItem>
+
+<GlossaryItem term="哈希表（hash table）">
+  通过哈希函数 `hash(key)` 将 key 映射到桶号（bucket index），桶内用链表（拉链法）存储所有散列到该桶的元素。理想情况（哈希函数均匀、负载因子适当）下插入/查找/删除均摊 O(1)——但最坏情况（所有 key 落入同一桶）退化到 O(n)。详见本章「unordered_map——哈希表的速度」一节的 UnorderedMapInternalsDiagram + Stepper。
+</GlossaryItem>
+
+<GlossaryItem term="map">
+  关联容器的一种——存储 key→value 键值对，每个 key 唯一（不可重复）。通过 key 索引 value：`m[key]` 返回对应的 value。底层红黑树按 key 排序。value_type 是 `pair<const Key, T>`——key 是 const 不可修改。注意 `m[k]` 在 key 不存在时会插入默认值——有副作用。详见本章「map——你的键值字典」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="set">
+  关联容器的一种——只存 key，不存 value。每个 key 唯一（不可重复）。适合「是否存在」「白名单」「去重」等场景。底层也用红黑树按 key 排序。没有 operator[]（因为没有 value 可返回）。insert 返回 `pair<iterator, bool>`——second 指示是否是新 key。详见本章「set——只存 key 的去重集合」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="multimap/multiset">
+  允许同一 key 出现多次的关联容器。multimap 是 map 的去唯一约束版（一个 key→多个 value）；multiset 是 set 的去唯一约束版（key 可重复）。仍然按 key 排序，但没有 operator[]（一个 key 对应多个 value 没有唯一返回）。查找用 equal_range 或 lower_bound/upper_bound 取得该 key 的所有元素范围。详见本章「当 key 需要重复」一节的代码示例。
+</GlossaryItem>
+
+<GlossaryItem term="pair">
+  一个简单的模板结构（在 `<utility>` 中），保存两个值：`first`（第一个）和 `second`（第二个）。map 的 value_type 就是 `pair<const Key, T>`。map 的 insert 返回值也是 pair（`pair<iterator, bool>`）。创建 pair 的三种方式：构造 `pair<int,string>(42,"x")`、make_pair(42,"x")、列表 `{42,"x"}`。详见本章「pair——两个值的简单打包」一节的代码示例。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（改编自 C++ Primer §11），Attribution 标签自动处理。 */}
+
+<Attribution />
