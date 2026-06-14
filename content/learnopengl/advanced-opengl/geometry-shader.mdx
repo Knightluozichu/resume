@@ -1,0 +1,426 @@
+---
+title: 几何着色器
+type: C
+section: 高级OpenGL
+order: 9
+description: 在顶点着色器和光栅化之间插一道能凭空增删图元的工位——几何着色器：一个点造一个四边形、一个三角形沿面法线炸成飞溅碎片。讲透 layout 输入输出图元类型、EmitVertex / EndPrimitive、max_vertices 与 explode 算法，并诚实标注 WebGL2 根本没有这个阶段、本站只能用顶点位移近似。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/09%20Geometry%20Shader/
+draft: true
+---
+
+{/* C 实战型（HEL-75，高级OpenGL 篇第 9 篇）：原书「几何着色器 Geometry Shader」。重心是代码对照(§6 ≥80%)：①最简 pass-through 几何着色器骨架（layout(triangles)in + layout(triangle_strip,max_vertices=3)out + for 里 EmitVertex/EndPrimitive 原样直通）②explode 几何着色器（GetNormal 算面法线 + gl_in[i].gl_Position + vec4(normal*magnitude,0) 推开后 EmitVertex）③⚠诚实对照：桌面 GLSL 330 几何着色器 vs WebGL2 顶点着色器近似（aPos+aNormal*uExplode）。math:false（§4 整节省略，无公式）。承接高级GLSL（同 section 管线/着色器叙述），沿用工厂流水线类比库（几何着色器是流水线上一道「中途加工/复制裁剪」工位）。⚠⚠本章红线：WebGL2（GLSL ES 3.0）根本没有几何着色器阶段，必须用 <Callout type=warn> 诚实告知、绝不假装能跑。本章不写 bespoke demo：爆破用 <CompareSlider>（ExplodeDiagram 两态同框）。主 viz：Stepper（管线位置→EmitVertex 造四边形→explode 沿法线推开，每步带 SVG）+ CompareSlider（爆破前后）。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 几何着色器 geometry shader（图元装配后、光栅化前的可选阶段，能增删改图元）= 直觉引入 + 概念 + <GeometryShaderPipelineDiagram>（管线位置）+ Stepper 第一步；2) 图元 primitive（点/线/三角形这种最小绘制单元）= 概念（讲 layout 输入输出类型时用）；3) 输入输出图元类型 layout（layout(points/lines/triangles)in、layout(triangle_strip,max_vertices=N)out）= 概念 + 代码对照（骨架）；4) EmitVertex()（发出一个顶点）= 概念 + <EmitVertexDiagram>（点→四边形）+ Stepper 第二步 + 代码对照；5) EndPrimitive()（结束当前图元）= 概念 + EmitVertexDiagram + 代码对照 + 误区①；6) max_vertices（最多发多少顶点）= 概念 + 代码对照 + 误区②；7) 面法线 face normal（GetNormal 用两条边叉乘算一个三角形的朝外法线，explode 沿它推开）= 概念 + <ExplodeDiagram> + Stepper 第三步 + 代码对照（explode）；8) explode 爆破（沿面法线把三角形整体推开 magnitude）= 概念 + ExplodeDiagram + <CompareSlider>（前后）+ 代码对照；9) ⚠WebGL2 无几何着色器阶段（核心提醒，本站只能顶点位移近似）= <Callout type=warn> + 代码对照③ + 误区③。Term 共 7 个（几何着色器 / 图元 / EmitVertex / EndPrimitive / max_vertices / 面法线 / 顶点位移近似）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；A 型味的「能解释管线位置」也很贴；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释**几何着色器**在渲染管线里处在什么位置（图元装配**之后**、光栅化**之前**），以及它比顶点 / 片段着色器多出来的独门本事：**凭空增删改图元**（输入 1 个图元 → 输出 0 个、1 个或多个）
+- 能读懂并改出一个 **explode 爆破**几何着色器：用 `GetNormal` 算出三角形的面法线，把三个顶点**沿法线整体推开**一段 `magnitude`，再 `EmitVertex` / `EndPrimitive` 发出去
+- 能回答：本站的 Demo 跑在 WebGL2 上，可这章讲的几何着色器**在 WebGL2 里根本不存在**——那本站的「爆破」效果到底是怎么做出来的？它和真几何着色器差在哪？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用工厂流水线库（高级OpenGL 篇沿用：流水线上一道「中途加工 / 复制裁剪」工位）。 */}
+
+## 给流水线加一道「中途加工」工位
+
+前面那条流水线，工位是固定死的：顶点着色器一次只搬一个顶点、片段着色器一次只涂一个像素，谁都**不能凭空多造或扔掉零件**。送进去三个顶点，出来还是这三个顶点围的那一片，形状增不了也减不了。
+
+这一章在流水线中段插一道**能动剪刀的加工工位**：上一道工序送来一整个零件（一个点、一根线、一片三角形），这道工位可以把它**改造、复制、裁掉、甚至凭空多生出几个新零件**再往下送。于是一个孤零零的点能当场长成一面小广告牌，一片三角形能炸成漫天飞溅的碎片，每个面还能顺手长出一根「法线毛刺」。
+
+没有它会怎样？你照样能画三角形，但形状只能在建模时定死、运行时动不了分毫——想让模型炸开、想给点云批量长出方块、想可视化每根法线，要么 CPU 累死要么干脆做不到。**但这里有个本站绕不过去的坎**：这道神奇工位在桌面 OpenGL 上有，在本站跑的 WebGL2 上**压根没有**——这一点 §3 一开口就得跟你讲清楚，绝不糊弄。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线中位置。新核心概念克制。⚠红线：开篇即诚实告知 WebGL2 无此阶段。 */}
+
+## 几何着色器：管线中段那把能动的剪刀
+
+这道能动剪刀就是 <Term def="渲染管线里一道可选的着色阶段，夹在顶点着色器和光栅化之间。它一次收下一个完整图元（点 / 线 / 三角形），可以对它增、删、改，输出零个、一个或多个新图元再送往光栅化。这是管线里唯一能在运行时凭空生成 / 丢弃图元的阶段。注意：桌面 OpenGL 3.2+ 才有它，WebGL2（GLSL ES 3.0）没有这个阶段。">几何着色器</Term>（geometry shader）：它是一道**可选**的着色阶段，卡在顶点着色器和光栅化之间。顶点着色器逐顶点处理完后，把一整个图元交给它；它可以增、删、改这个图元，输出**零个、一个或多个**新图元，再送往光栅化。
+
+它在管线里的位置很关键：
+
+<GeometryShaderPipelineDiagram step={1} />
+
+和前两个着色器最大的不同在于「能不能改变零件数量」：顶点着色器**一进一出**（一个顶点进、一个顶点出），片段着色器**一片段一片段地涂**，谁都不能凭空增删；而几何着色器**一进多出**——这是它独一份的本事，也是它能做爆破、长毛刺、点造广告牌的根。
+
+<Callout type="warn">
+  **本章红线，先说断**：上面这道「几何着色器」阶段，是**桌面 OpenGL 3.2
+  以上**才有的。本站所有 Demo 跑在浏览器的 **WebGL2（GLSL ES 3.0）上，而 WebGL2
+  根本没有几何着色器这个阶段**——你在 WebGL2 里写 `layout(triangles) in;`、调
+  `EmitVertex()`
+  都是非法的，编译直接报错。所以本章的桌面端代码是**真几何着色器**，本站的「爆破」效果则是**用顶点着色器近似**出来的（§6
+  会原原本本对照）。**全程别把这两件事搞混。**
+</Callout>
+
+## 图元、输入输出类型：这把剪刀收什么、出什么
+
+几何着色器处理的单位是 <Term def="渲染管线里最小的可绘制单元：一个点（point）、一根线段（line）、或一片三角形（triangle）。顶点着色器处理单个顶点，而几何着色器一次收下一整个图元——即组成它的那一组顶点。">图元</Term>（primitive）——点、线、三角形这种最小绘制单元。用它之前，你得先在着色器顶上**声明这把剪刀收什么、出什么**，靠两行 `layout`：
+
+- **输入类型**：`layout(points) in;` / `layout(lines) in;` / `layout(triangles) in;` ——告诉它每次收到的是 1 个点、2 个顶点的线、还是 3 个顶点的三角形。收进来的这组顶点放在内建数组 `gl_in[]` 里，`gl_in[0].gl_Position`、`gl_in[1].gl_Position` …… 就是它们各自的位置。
+- **输出类型 + 上限**：`layout(triangle_strip, max_vertices = 3) out;` ——告诉它你打算输出哪种图元（点 `points` / 线带 `line_strip` / 三角形带 `triangle_strip`），以及最多发多少个顶点，也就是 <Term def="几何着色器输出声明里的上限：layout(triangle_strip, max_vertices = N) out; 中的 N，表示单次 main 里最多能发多少个顶点。EmitVertex 调用次数超过它，超出的顶点会被 GPU 悄悄丢弃（不报错），几何就残缺。把它设成 ≥ 实际最大发顶点数即可。">`max_vertices`</Term>。
+
+输入和输出类型**完全可以不一样**——这正是它的魔力所在：输入一个**点**，输出一片**三角形带**（点造广告牌）；输入一片**三角形**，输出还是三角形但顶点被推开了（爆破）。怎么把声明好的顶点真正「发出去」，看下一节这两个动作。
+
+## EmitVertex 与 EndPrimitive：一个一个发、发完收尾
+
+声明好类型，几何着色器在 `main` 里靠两个内建函数干活。先是 <Term def="几何着色器里『发出一个顶点』的动作：把你当前赋给 gl_Position（以及其它要传给片段着色器的输出变量）的值，作为输出图元的一个顶点提交出去。每调用一次就多发一个顶点，连续发出的顶点会按输出类型（如 triangle_strip）依次连接。">`EmitVertex()`</Term>：你先把一个位置赋给 `gl_Position`，再调一次 `EmitVertex()`，就等于「把这个顶点发出去」；想要几个顶点就调几次。然后是 <Term def="几何着色器里『结束当前图元』的动作：告诉 GPU 到此为止发出的这一串顶点凑成一个完整图元，下一次 EmitVertex 将开始一个全新的图元。忘了调它，前后发出的顶点会被当成同一条 triangle_strip 连成一长条、糊在一起。">`EndPrimitive()`</Term>：发完一个图元该有的顶点后调一次，告诉 GPU「这个图元到此为止，后面再发的算下一个新图元」。
+
+下面这张图把「一个点 → 发 4 个顶点 → 收尾成一个四边形」整套走一遍：
+
+<EmitVertexDiagram />
+
+记住这个节奏：**赋 `gl_Position` → `EmitVertex()`，重复 N 次，最后 `EndPrimitive()` 收尾**。`max_vertices` 必须 ≥ 你实际调 `EmitVertex` 的次数，否则超出的顶点会被悄悄丢弃（§7 第二个坑）。
+
+## 面法线与爆破：让三角形沿法线飞出去
+
+本章的招牌效果是**爆破 explode**：把模型的每个三角形**沿着它自己朝外的方向整体推开一段**，模型就像被炸成漫天飞溅的碎片。这「朝外的方向」就是这个三角形的 <Term def="一个三角形所在平面的垂直朝外方向。几何着色器用三角形的两条边做叉乘（cross）再归一化得到它：normalize(cross(边1, 边2))。爆破时让三个顶点都沿这个方向平移，整片三角形就被整体推离原位。">面法线</Term>（face normal）——用三角形的两条边**叉乘**再归一化就能算出来（`normalize(cross(a, b))`）。
+
+有了面法线，爆破就是一句话：让三角形的三个顶点**都沿这个法线方向平移同样一段距离** `magnitude`，三角形整体被推离原位、又不变形。下面这张图把「紧凑的原模型」和「各片沿法线炸开」并排画出来（绿箭头就是各片的面法线 / 推开方向）：
+
+<ExplodeDiagram exploded={true} />
+
+注意一个细节：爆破推的是**面法线**（整片三角形共一个、朝外），不是顶点法线（每个顶点一个、用于光照）。因为几何着色器手里正好攥着一个三角形的三个顶点，当场叉乘算面法线最方便。`magnitude` 让它随时间从 0 涨到某个值，模型就有了「逐渐炸开」的动画——这正是 §5 和 §6 要拆的主菜。
+
+{/* 4. 数学推导（spec §四，math:false）：几何着色器是图元操作、叉乘求法线属向量运算无需推导，整节按规范省略。 */}
+
+{/* 5(主 viz 1). 交互 Demo（spec §五）：⚠本章不写 bespoke WebGL/R3F demo（避风险，且 WebGL2 无几何着色器阶段也跑不了）。用 <Stepper> 把「几何着色器三件事」分步——每步必带 SVG（chapter-spec §五：纯文字步 = 打回）：①管线位置（GeometryShaderPipelineDiagram）②一个点 emit 成四边形（EmitVertexDiagram）③explode 沿法线推开（ExplodeDiagram exploded）。猜一猜引导。 */}
+
+## 单步走一遍：几何着色器到底在干什么
+
+把上面几节串起来，用三步走完「几何着色器在管线哪、怎么发顶点造图元、怎么爆破」整套直觉。
+
+> 猜一猜：几何着色器输入**一个孤零零的点**，最后却能在屏幕上画出**一片四边形**——一个 0 维的点，凭空变出了一片有面积的面。它是怎么「无中生有」造出这片面的？先想一想，再单步走下面三步。
+
+每一步左边画**这一步的几何**、右边的小字说**这一步做了什么**，盯着「图元怎么被增删改造」，就懂了：
+
+<Stepper>
+  <Step title="① 管线位置：它夹在顶点着色器和光栅化之间">
+    <GeometryShaderPipelineDiagram step={1} />
+    顶点着色器逐顶点处理完，把<strong>一个完整图元</strong>
+    （这里是一个点）交给几何着色器。几何着色器卡在
+    <strong>图元装配之后、光栅化之前</strong>
+    ，是管线里唯一能<strong>凭空增删图元</strong>
+    的工位——处理完再送往光栅化拆成片段。
+  </Step>
+  <Step title="② 造图元：一个点 EmitVertex 4 次 → 一个四边形">
+    <EmitVertexDiagram />
+    输入只有<strong>一个点</strong>（<code>gl_in[0]</code>
+    ）。几何着色器在它周围用
+    <code>EmitVertex()</code>依次<strong>发出 4 个顶点</strong>（①→④），发完用
+    <code>EndPrimitive()</code>收尾，<code>triangle_strip</code>
+    就把这 4 个顶点连成<strong>一个四边形</strong>——0
+    维的点凭空长成了一片面。这就是「无中生有」的真相：
+    <strong>多发了几个顶点</strong>。
+  </Step>
+  <Step title="③ 爆破：每个三角形沿面法线整体推开 magnitude">
+    <ExplodeDiagram exploded={true} />
+    换个输入——一片片三角形。几何着色器先用叉乘算出每片的<strong>面法线</strong>
+    （绿箭头），再让三角形的三个顶点都<strong>沿法线平移</strong>同样一段
+    <code>magnitude</code>，<code>EmitVertex</code> 发出、
+    <code>EndPrimitive</code>收尾。紧凑的模型就这么
+    <strong>炸成了飞溅的碎片</strong>。
+  </Step>
+</Stepper>
+
+走完这一遍就明白：几何着色器的全部魔力，归根结底就是 **「在 `main` 里自己决定赋什么 `gl_Position`、`EmitVertex` 发几次、`EndPrimitive` 怎么分段」**——发的顶点比收的多，就是「造」；少，就是「删」；位置变了，就是「改」。
+
+{/* 5(主 viz 2). 交互 Demo（spec §五）：A 型辅 viz = <CompareSlider> 对比「爆破前 vs 后」，左右两侧用 <ExplodeDiagram exploded={false|true} bare> 当同构同框示意（同 viewBox 物体，只差炸不炸）。CompareSlider 前给猜一猜。⚠注明这是 SVG 示意（非真 WebGL，WebGL2 无几何着色器）。 */}
+
+## 对比一下：爆破前 vs 爆破后
+
+> 猜一猜：把下面这个滑块从左拖到右，左边是「没炸开的原模型」、右边是「炸开后」。两边的三角形**数量一样不一样**？炸开后各片是**随便乱飞**，还是**朝着各自一个固定的方向**飞？拖动看看，再回想 §3——它们正是沿各自的**面法线**飞出去的。
+
+左边是紧凑的原模型（六个三角形严丝合缝拼成一圈），右边是几何着色器把每片**沿它的面法线推开 `magnitude`** 之后的样子——三角形**一个没多也没少**，只是各自朝外飞了一段。拖动中间滑块左右对比：
+
+<CompareSlider
+  leftLabel="爆破前（原模型 · 紧凑）"
+  rightLabel="爆破后（各片沿法线飞溅）"
+  initial={42}
+  left={<ExplodeDiagram exploded={false} bare />}
+  right={<ExplodeDiagram exploded={true} bare />}
+/>
+
+看出来了吧——爆破**不增删三角形**，它只是把每片**沿面法线整体平移**了一下（`magnitude` 控制飞多远）。这是几何着色器「改图元」的典型用法。这两张是 **SVG 示意图**：本站跑在 WebGL2 上、**没有几何着色器阶段**，真实渲染里这个效果是用顶点着色器近似的——下一节代码对照把「桌面真几何着色器」和「WebGL2 近似」原原本本摆在一起。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：分段——①最简骨架（pass-through）②explode 几何着色器③⚠WebGL2 端诚实对照（顶点着色器近似）。单块 ≤30 行；两块间有解说；API 差异（GL_GEOMETRY_SHADER / WebGL2 无此阶段）用 Callout 标注。⚠红线：第三段必须诚实说 WebGL2 无几何着色器、改顶点着色器近似。 */}
+
+## 代码逐段拆解：从骨架到爆破，再到 WebGL2 的诚实近似
+
+下面三段层层递进：先看最简的「原样直通」骨架认全套语法，再看真正有用的 explode 爆破，最后看本站在 WebGL2 上**只能怎么近似**它。
+
+### 第一段：最简骨架——原样直通一个三角形
+
+先认全套语法。这个几何着色器什么花活都不做，收到一个三角形、把三个顶点**原封不动**发出去——但它把 `layout` 声明、`gl_in[]` 取值、`EmitVertex` / `EndPrimitive` 的节奏全摆齐了。这是桌面 OpenGL 3.3 的**真几何着色器**：
+
+```glsl
+#version 330 core
+layout (triangles) in;                       // 收：一片三角形（3 个顶点）
+layout (triangle_strip, max_vertices = 3) out; // 出：一条三角形带，最多发 3 个顶点
+
+void main() {
+  for (int i = 0; i < 3; i++) {
+    gl_Position = gl_in[i].gl_Position;  // 取第 i 个输入顶点的位置，原样赋给输出
+    EmitVertex();                        // 发出这个顶点
+  }
+  EndPrimitive();                        // 3 个发完 → 收尾成一个三角形
+}
+```
+
+读懂这段，几何着色器的骨架就清楚了：顶上两行 `layout` 定好「收三角形、出三角形带最多 3 顶点」；`gl_in[i].gl_Position` 是顶点着色器送来的第 `i` 个顶点位置；循环里赋值 + `EmitVertex` 把三个顶点逐个发出，`EndPrimitive` 收尾。把循环里的位置改一改，就从「原样直通」变成各种花活。
+
+<Callout type="warn">
+  编译方式差异：桌面端用 `glCreateShader(GL_GEOMETRY_SHADER)`
+  单独编译这段，再和顶点 / 片段着色器一起 link 进同一个 program。但 **WebGL2
+  没有 `GEOMETRY_SHADER` 这个常量、也没有这个阶段**——这段 `#version 330 core` +
+  `layout (triangles) in;` 的代码**在浏览器里根本无法编译**。这一段是讲给你看
+  「桌面真几何着色器长什么样」的，第三段才是本站能跑的写法。
+</Callout>
+
+### 第二段：explode 爆破——沿面法线推开三个顶点
+
+把骨架里「原样赋值」换成「沿面法线推开一段」，就是爆破。多两件事：`GetNormal` 用两条边叉乘算出这片三角形的<Term def="见上文：一个三角形所在平面的垂直朝外方向，用两条边叉乘归一化得到。爆破让三个顶点都沿它平移。">面法线</Term>；`explode` 把一个顶点沿法线推开 `magnitude`（让它随 `time` 从 0 涨起来就有了「逐渐炸开」的动画）：
+
+```glsl
+#version 330 core
+layout (triangles) in;
+layout (triangle_strip, max_vertices = 3) out;
+uniform float time;
+vec3 GetNormal() {                        // 两条边叉乘 → 这片三角形的面法线
+  vec3 a = vec3(gl_in[0].gl_Position) - vec3(gl_in[1].gl_Position);
+  vec3 b = vec3(gl_in[2].gl_Position) - vec3(gl_in[1].gl_Position);
+  return normalize(cross(a, b));
+}
+vec4 explode(vec4 pos, vec3 normal) {     // 沿法线推开 magnitude（随 time 起伏）
+  float magnitude = 2.0;
+  vec3 dir = normal * ((sin(time) + 1.0) / 2.0) * magnitude;
+  return pos + vec4(dir, 0.0);
+}
+void main() {
+  vec3 normal = GetNormal();
+  for (int i = 0; i < 3; i++) {
+    gl_Position = explode(gl_in[i].gl_Position, normal);  // 推开后再发
+    EmitVertex();
+  }
+  EndPrimitive();
+}
+```
+
+和骨架的唯一区别，就是 `EmitVertex` 之前把 `gl_in[i].gl_Position` 换成了 `explode(...)`——三个顶点都加上同一个「面法线 × magnitude」的位移，整片三角形就被整体推离原位、形状不变。三角形数量**一个没改**，这是几何着色器的「改图元」用法。`(sin(time) + 1.0) / 2.0` 把 `magnitude` 系数在 0~1 之间来回拉，模型就一张一合地呼吸式爆破。
+
+### 第三段：⚠ WebGL2 没有几何着色器——本站只能这样近似
+
+现在面对本章红线。上面两段桌面代码**在本站的 WebGL2 里一行都跑不了**：WebGL2（GLSL ES 3.0）压根没有几何着色器阶段。那本站的「爆破」效果怎么办？答案是**退一步、在顶点着色器里做<Term def="因为 WebGL2 没有几何着色器，本站把『沿法线推开』这件事挪到顶点着色器里做：每个顶点用它自带的顶点法线 aNormal，按 aPos + aNormal * uExplode 自己往外位移。它能近似爆破的『膨胀 / 飞溅』观感，但顶点着色器一进一出、不能增删图元，所以做不了几何着色器那些『造新几何』的活。">顶点位移近似</Term>**：
+
+<CodeTabs>
+  <Tab label="桌面 / 真几何着色器（GLSL 330）">
+
+```glsl
+// 几何着色器阶段：手里攥着整片三角形的 3 个顶点
+// 当场叉乘算「面法线」，把三个顶点沿它整体推开，还能增删图元
+vec3 normal = GetNormal();               // 面法线（整片共一个）
+gl_Position = explode(gl_in[i].gl_Position, normal);
+EmitVertex();  // ← 能多发 / 少发顶点，凭空造新几何
+```
+
+  </Tab>
+  <Tab label="WebGL2 / 顶点着色器近似（GLSL ES 300）">
+
+```glsl
+#version 300 es
+in vec3 aPos;
+in vec3 aNormal;            // 顶点自带的「顶点法线」（建模时备好）
+uniform float uExplode;     // 0 = 原样，越大越炸开
+uniform mat4 uMVP;
+void main() {
+  // 每个顶点各自沿「自己的顶点法线」往外位移——膨胀 / 飞溅观感的近似
+  vec3 pos = aPos + aNormal * uExplode;
+  gl_Position = uMVP * vec4(pos, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+两者**根本不是一回事**，差异必须讲清：
+
+<Callout type="warn">
+  **WebGL2
+  无几何着色器（本章红线）**：真几何着色器在**图元级**工作，手里有整片三角形的三个顶点，能算**面法线**、能
+  **增删图元**（造广告牌、长法线毛刺、把面切碎）。WebGL2
+  的近似挪到**顶点着色器**做，是**逐顶点**的——每个顶点只能沿**自己的顶点法线**位移，**一进一出、绝不能增删图元**。所以它只能近似爆破的「膨胀
+  / 飞溅」观感，**做不了**几何着色器那些「凭空造新几何」的活。要在 WebGL2
+  里真造几何，得换别的招：**transform
+  feedback**、**实例化（instancing）**（见下一章）、或 CPU 端预生成。
+</Callout>
+
+一句话收口：本章前两段是**桌面真几何着色器**，最后这段是**本站 WebGL2 的诚实近似**——上面那两张爆破示意图，对应的就是这第三段近似在跑。完整可运行示例将在章末提供（M5）。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能让读者亲眼看翻车。① 忘 EndPrimitive → 顶点连成一长条 triangle_strip、图元糊在一起；② max_vertices 设小 → 超出顶点被丢弃、几何不完整；③ ⚠以为 WebGL2 能跑几何着色器 → 它没这阶段、要改顶点着色器近似 / transform feedback / 实例化。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：本想发出几个**独立**的三角形 /
+  四边形，结果它们**糊成一长条、连成奇怪的带状**，相邻图元之间多出根本没想要的三角形。**原因**：忘了在每个图元发完后调
+  `EndPrimitive()`——不收尾，GPU 就把前后 `EmitVertex` 发出的所有顶点当成**同一条
+  triangle_strip** 连下去。**修法**：每发完一个完整图元就调一次 `EndPrimitive()`
+  分段，下一个图元的顶点才会被当成新图元。
+</Callout>
+
+<Callout type="trap">
+  **现象**：几何只画出来**一部分**——四边形缺一角、爆破的碎片只剩半片，越往后越残缺。**原因**：`max_vertices`
+  设小了。你 `EmitVertex()` 调了 5 次、`max_vertices` 却写成 3，**超出的 2
+  个顶点被 GPU 悄悄丢弃**，不报错。**修法**：把 `max_vertices` 设成 ≥ 单次
+  `main` 里实际 `EmitVertex` 的**最大次数**（造 5 顶点的房子就写 `max_vertices =
+  5`）；它只是上限，写大点不影响正确性。
+</Callout>
+
+<Callout type="trap">
+  **现象（本章必踩）**：照着桌面教程在**浏览器 / WebGL2**
+  里写了几何着色器，`layout (triangles) in;` 一编译就**报错**、Demo
+  白屏，怎么调都过不了。**原因**：**WebGL2（GLSL ES
+  3.0）根本没有几何着色器这个阶段**——`GEOMETRY_SHADER`
+  常量、`EmitVertex`、几何阶段的 `layout` 全不存在。**修法**：在 WebGL2
+  里别指望几何着色器。要近似爆破 / 膨胀，挪到**顶点着色器**做顶点位移（`aPos +
+  aNormal * uExplode`，见 §6 第三段）；要真**增删几何**，改用 **transform
+  feedback**、**实例化** 或 CPU 端预生成。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应（含「WebGL2 无此阶段」一条）；练习 2-3 题含 1 道「读懂/改几何着色器」题 + 1 道问答题「为什么本站只能近似」，答案折叠。 */}
+
+## 小结
+
+- **几何着色器**夹在顶点着色器和光栅化之间，是管线里**唯一能凭空增删改图元**的可选阶段（输入 1 个图元 → 输出 0/1/多个）
+- 用前先声明**输入输出图元类型**：`layout(triangles) in;` / `layout(triangle_strip, max_vertices=N) out;`；输入输出类型可以**不一样**（点造四边形、三角形炸成碎片）
+- 干活靠两个动作：**`EmitVertex()`** 发一个顶点（赋 `gl_Position` 后调）、**`EndPrimitive()`** 收尾成一个图元；忘了收尾会糊成一长条，`max_vertices` 设小会丢顶点
+- **explode 爆破**：`GetNormal` 叉乘算**面法线**，把三个顶点都沿法线推开 `magnitude`，三角形数量不变、整体飞溅
+- **⚠ WebGL2（本站）没有几何着色器阶段**——爆破只能在**顶点着色器**里用顶点位移近似（`aPos + aNormal * uExplode`），它做不了真几何着色器那种「造新几何」的活
+
+<Exercises>
+
+**练习 1（读懂 / 改几何着色器代码题）** 下面这个几何着色器收到一个**点**，想把它造成一个**四边形**（4 个顶点），可它写错了，运行后四边形**缺了一角、还和相邻图元糊在了一起**。找出**两处**错误并改对：
+
+```glsl
+#version 330 core
+layout (points) in;
+layout (triangle_strip, max_vertices = 3) out;  // (A)
+void main() {
+  vec4 p = gl_in[0].gl_Position;
+  gl_Position = p + vec4(-0.1, -0.1, 0.0, 0.0); EmitVertex();
+  gl_Position = p + vec4( 0.1, -0.1, 0.0, 0.0); EmitVertex();
+  gl_Position = p + vec4(-0.1,  0.1, 0.0, 0.0); EmitVertex();
+  gl_Position = p + vec4( 0.1,  0.1, 0.0, 0.0); EmitVertex();
+  // (B)
+}
+```
+
+<Answer>
+
+两处错误，正好对应 §7 的前两个坑：
+
+**(A) `max_vertices` 设小了。** 代码里实际调了 **4 次** `EmitVertex()`（要发 4 个顶点凑成四边形），`max_vertices` 却写成 `3`——第 4 个顶点被 GPU 悄悄丢弃，于是四边形**缺一角**。改成 `max_vertices = 4`。
+
+**(B) 忘了 `EndPrimitive()`。** `main` 末尾没有收尾，这个四边形发完后没分段，GPU 会把它和**下一个点造的四边形**的顶点当成同一条 `triangle_strip` 连下去，相邻图元**糊在一起**。在末尾补一行 `EndPrimitive();`。
+
+改对后：
+
+```glsl
+layout (triangle_strip, max_vertices = 4) out;  // (A) 3 → 4
+// …四次 EmitVertex 不变…
+EndPrimitive();                                  // (B) 补上收尾
+```
+
+</Answer>
+
+**练习 2（问答题：为什么本站只能近似）** 本站的爆破 Demo 跑在 WebGL2 上。有人问：「既然原书用几何着色器做爆破，直接把那段几何着色器搬进本站不就行了？」请回答：① 这样做会发生什么？② 本站实际用什么办法近似爆破？③ 这个近似和真几何着色器在能力上差在哪？
+
+<Answer>
+
+① **直接搬会编译失败、Demo 白屏**。WebGL2（GLSL ES 3.0）**根本没有几何着色器这个阶段**——`GEOMETRY_SHADER` 常量、`EmitVertex` / `EndPrimitive`、几何阶段的 `layout(triangles) in;` 全不存在，那段 `#version 330 core` 的几何着色器在浏览器里一编译就报错。
+
+② **本站把爆破挪到顶点着色器里做顶点位移**：每个顶点沿自己的**顶点法线** `aNormal` 往外推 `aPos + aNormal * uExplode`，近似出「膨胀 / 飞溅」的观感。
+
+③ **能力差在「能不能增删图元」**。真几何着色器在**图元级**工作，能算**面法线**、能**凭空增删图元**（造广告牌、长法线毛刺、把面切碎）；顶点着色器近似是**逐顶点、一进一出**的，只能沿顶点法线位移、**绝不能增删图元**，所以只能仿出爆破的「推开」外观，做不了真几何着色器那些「造新几何」的活。要在 WebGL2 里真造几何得换 transform feedback / 实例化 / CPU 预生成。
+
+</Answer>
+
+**练习 3（改效果题）** §6 第二段的 explode 几何着色器里，`magnitude` 写死成 `2.0`，方向用 `(sin(time)+1.0)/2.0` 在 0~1 间起伏，所以模型**反复一张一合地呼吸式爆破**。如果你想让它**炸开后就保持炸开、不再合回去**（一次性爆破），该怎么改这两行？
+
+<Answer>
+
+呼吸效果来自 `(sin(time) + 1.0) / 2.0` 这个**周期性**系数——`sin(time)` 在 −1~1 之间反复，映射到 0~1 反复，于是 `magnitude` 也反复涨落、模型一张一合。
+
+想「炸开后保持」，把这个**周期系数换成一个只增不减、最终饱和**的量即可。最简单的几种改法：
+
+```glsl
+// 改法一：直接用固定满值（瞬间炸到底、不动了）
+vec3 dir = normal * magnitude;
+
+// 改法二：随 time 单调涨到 magnitude 后封顶（渐渐炸开、到位停住）
+vec3 dir = normal * min(time, magnitude);
+```
+
+关键是去掉 `sin` 这种**周期函数**，换成**单调不减**（如 `min(time, magnitude)`）或**常量**，`magnitude` 就不会再回落，模型炸开后定格。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（7 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。含「WebGL2 无几何着色器」诚实标注。 */}
+
+<Glossary>
+
+<GlossaryItem term="几何着色器">
+  渲染管线里一道**可选**的着色阶段，夹在顶点着色器和光栅化之间。它一次收下一个完整图元（点
+  / 线 /
+  三角形），可以对它增、删、改，输出零个、一个或多个新图元再送往光栅化——是管线里**唯一能在运行时凭空生成
+  / 丢弃图元**的阶段。**注意：桌面 OpenGL 3.2+ 才有它，本站跑的 WebGL2（GLSL ES
+  3.0）没有这个阶段。**详见本章「几何着色器」一节。
+</GlossaryItem>
+
+<GlossaryItem term="图元">
+  渲染管线里最小的可绘制单元：一个**点**（point）、一根**线段**（line）、或一片**三角形**（triangle）。顶点着色器处理单个顶点，而几何着色器一次收下一整个图元——也就是组成它的那一组顶点（放在内建数组
+  `gl_in[]` 里）。详见本章「图元、输入输出类型」一节。
+</GlossaryItem>
+
+<GlossaryItem term="EmitVertex">
+  几何着色器里「**发出一个顶点**」的动作：把你当前赋给
+  `gl_Position`（以及其它要传给片段着色器的输出）的值，作为输出图元的一个顶点提交出去。每调一次就多发一个顶点，连续发出的顶点按输出类型（如
+  `triangle_strip`）依次连接。详见本章「EmitVertex 与 EndPrimitive」一节。
+</GlossaryItem>
+
+<GlossaryItem term="EndPrimitive">
+  几何着色器里「**结束当前图元**」的动作：告诉 GPU
+  到此为止发出的这一串顶点凑成一个完整图元，下一次 `EmitVertex`
+  将开始一个全新图元。忘了调它，前后发出的顶点会被当成**同一条 triangle_strip**
+  连成一长条、糊在一起。详见本章「EmitVertex 与 EndPrimitive」一节。
+</GlossaryItem>
+
+<GlossaryItem term="max_vertices">
+  几何着色器输出声明里的上限：`layout(triangle_strip, max_vertices = N) out;`
+  中的 `N`，表示单次 `main` 里**最多能发多少个顶点**。`EmitVertex`
+  调用次数**超过它**，超出的顶点会被 GPU
+  **悄悄丢弃**（不报错），几何就残缺。把它设成 ≥
+  实际最大发顶点数即可。详见本章「图元、输入输出类型」一节与 §7。
+</GlossaryItem>
+
+<GlossaryItem term="面法线">
+  一个三角形所在平面的**垂直朝外**方向。几何着色器用三角形的两条边做**叉乘**（`cross`）再归一化得到它：`normalize(cross(边1,
+  边2))`。爆破时让三个顶点都沿这个方向平移，整片三角形就被整体推离原位。注意它是**整片三角形共一个**的「面法线」，区别于每个顶点各一个、用于光照的「顶点法线」。详见本章「面法线与爆破」一节。
+</GlossaryItem>
+
+<GlossaryItem term="顶点位移近似">
+  因为 WebGL2
+  **没有几何着色器**，本站把「沿法线推开」这件事挪到**顶点着色器**里做：每个顶点用它自带的**顶点法线**
+  `aNormal`，按 `aPos + aNormal * uExplode` 自己往外位移。它能近似爆破的「膨胀 /
+  飞溅」观感，但顶点着色器**一进一出、不能增删图元**，所以做不了几何着色器那些「造新几何」的活。详见本章「代码逐段拆解」第三段。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

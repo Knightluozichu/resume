@@ -59,6 +59,9 @@ import { BufferSubDataDiagram } from "./diagrams/buffer-subdata-diagram";
 import { GlFragCoordDiagram } from "./diagrams/gl-fragcoord-diagram";
 import { InterfaceBlockDiagram } from "./diagrams/interface-block-diagram";
 import { UboBindingDiagram } from "./diagrams/ubo-binding-diagram";
+import { GeometryShaderPipelineDiagram } from "./diagrams/geometry-shader-pipeline-diagram";
+import { EmitVertexDiagram } from "./diagrams/emit-vertex-diagram";
+import { ExplodeDiagram } from "./diagrams/explode-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -187,6 +190,12 @@ import { CubemapDemo } from "./cubemap-demo";
  *    整组打包·块名两端对上即可、实例名可不同）、UboBindingDiagram（step=1/2/3：①不用 UBO 每 program 各传一遍·
  *    冗余 → ②用 UBO 一块缓冲经绑定点 0 接多 program·改一次全体生效 → ③std140 内存条·vec3 补齐 16 字节留 padding，
  *    兼作 §5 Stepper 三步配图）。同款 Server SVG。
+ *  - 高级OpenGL篇·几何着色器（HEL-75，⚠WebGL2 无此阶段）：GeometryShaderPipelineDiagram（管线位置：顶点着色器→
+ *    【几何着色器·可增删改图元·可选阶段】→光栅化，中间格高亮、标「图元装配后/光栅化前·输入 1 图元→输出 0/1/多个」）、
+ *    EmitVertexDiagram（一个点如何被造成四边形：输入 1 点 → EmitVertex×4 发顶点 ①②③④ → EndPrimitive 收尾 →
+ *    triangle_strip 连成 1 个 billboard 四边形，「0 维点凭空长成一片面」）、ExplodeDiagram（爆破 explode 同构同框：
+ *    exploded=false 六三角形紧凑拼合 vs exploded=true 各片沿面法线推开 magnitude 飞溅碎片 + 绿法线箭头，bare 去图注，
+ *    供 Stepper 第三步 + CompareSlider 两侧分别传）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -321,6 +330,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GlFragCoordDiagram,
   InterfaceBlockDiagram,
   UboBindingDiagram,
+  GeometryShaderPipelineDiagram,
+  EmitVertexDiagram,
+  ExplodeDiagram,
   Stepper,
   Step,
   Slider,
