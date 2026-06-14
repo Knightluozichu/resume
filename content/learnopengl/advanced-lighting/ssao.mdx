@@ -1,0 +1,631 @@
+---
+title: SSAO
+type: C
+section: 高级光照
+order: 10
+description: 讲清环境光遮蔽为什么让墙角、缝隙、物体接触处变暗才更真实（纯常量环境光照不出这种细节），屏幕空间 SSAO 怎么用 G-buffer 的位置/法线在片元法线半球内撒点采样 + 深度比较，估算每个片元被周围挡了多少，为什么要用随机向量纹理旋转采样核再小盒式模糊去掉条带与颗粒，最后只把算出的 AO 乘到环境光上、不动直接光；并能在 demo 里开关 SSAO、调半径与强度，亲眼看球与地面、球与球接触处的暗角随之出现与收缩。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/09%20SSAO/
+draft: true
+---
+
+{/* C 实战型章（HEL-89，高级光照篇第 10 篇·收官）：原书「SSAO 屏幕空间环境光遮蔽」。重心在代码对照(spec §6，SSAO pass 半球核采样+深度比较+range check / 模糊 pass / ambient*=AO，C 实战要实) + Demo(spec §5 必，开关 AO 看接触暗角)。承接 deferred-shading（直接复用 G-buffer 的位置/法线）+ HDR/Bloom（浮点 FBO 多遍）。沿用「光与材质」类比库（墙角缝隙照不进光）。math:false。主 viz = ShaderDemo（复用上一章 ray-sphere/plane 场景：地面 + 几个球，frag 里对解析场景近似算 AO——对每个片元在其法线半球方向做若干次短距 ray-march 命中检测估遮蔽，控件 uAO 开关 / uRadius 半径 / uPower 强度 / uView 看最终合成 or AO 灰度图，caption 诚实说明这是对解析场景的 AO 近似、真 SSAO 是 G-buffer 屏幕空间深度半球采样见代码对照）；辅 viz = CompareSlider（左 关 SSAO 接触处一样亮显假 / 右 开 SSAO 接触缝隙暗立体，用静态 SVG 两态，不塞两个 WebGL 画布）；图解 HemisphereKernelDiagram（半球核采样）+ DepthCompareDiagram（深度比较判遮蔽）+ NoiseBlurDiagram（随机旋转→模糊去噪）。draft:true，老板验收后才发布（硬规则 7）。诚实化（HEL-82/88 教训）：只演示确信能渲的——开关 AO 接触暗角有无、半径/强度变化、AO 灰度图，不声称「真 SSAO 屏幕空间多 pass 渲染正常」（单 frag 做不了真 G-buffer 多 pass）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 环境光遮蔽 AO（墙角/缝隙/接触处接收的环境光更少、该更暗，纯常量环境光照不出）= 直觉引入 + 概念 + 主 demo + CompareSlider；2) 屏幕空间 SSAO（不用真几何、用 G-buffer 位置/法线在屏幕空间近似估遮蔽）= 概念 + §6 代码；3) 半球核采样 hemisphere kernel（片元法线半球内撒随机采样点看几个被挡）= HemisphereKernelDiagram + §6 代码；4) 深度比较判遮蔽（采样点投影读 G-buffer 深度，该处几何更近=被挡遮蔽+1）= DepthCompareDiagram + §6 代码；5) 随机旋转 noise（小随机向量纹理平铺逐像素旋转核打散条带 banding）= 概念 + NoiseBlurDiagram + §6；6) 范围检查 range check（遮挡物太远不算遮蔽、按距离加权避免远背景误暗）= 概念 + 误区；7) 模糊去噪（噪声旋转后 AO 有颗粒、小盒式模糊抹平）= 概念 + NoiseBlurDiagram + §6；8) 与延迟结合（最终 ambient *= AO，只压环境光不动直接光）= 概念 + demo final + 误区。Term 共 6 个（挑核心）：环境光遮蔽 / SSAO / 半球核采样 / 随机旋转 noise / 范围检查 / AO 模糊。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释 **环境光遮蔽** 为什么让墙角、缝隙、物体接触处变暗才更真实（纯常量环境光把这些地方照得和平面一样亮、显假），以及 **SSAO** 怎么用 G-buffer 的位置/法线在 **屏幕空间** 近似估出「每个片元被周围挡了多少」
+- 能改出 SSAO 的「接触处出暗角」效果：在 demo 里 **开关 SSAO** 看球与地面、球与球接触处的暗角有无，再调 **半径** 看暗角范围、调 **强度** 看压暗力度，并切到 **AO 灰度图** 看遮蔽本身长什么样
+- 能回答：**SSAO 为什么只把 AO 乘到环境光上、不动直接光**？如果乘到了整体颜色或直接光上，画面会怎样？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（墙角缝隙照不进光）。 */}
+
+## 墙角为什么总是更暗
+
+留意一下你周围：墙的两面相交的那道角、桌子底下、书页合拢的缝里、两个物体挨在一起的接触处——这些地方总是**比旁边的平面更暗一点**。不是因为有谁专门给它们打了阴影，而是因为它们**三面被围住**，四面八方漫射过来的光被周围的东西挡掉了大半，能照进去的自然少。
+
+可你之前给场景加的环境光，是给所有表面**统一加一个常数**——墙角和空旷的平面拿到的环境光一模一样。结果墙角缝隙和平整墙面一样亮，画面就**塌成一片、没有立体感、一眼假**。越是该有「脏角、暗缝」的地方越平，越不像真东西。
+
+这一章要解决的就是这个：**怎么让那些被周围挡住的角落、缝隙、接触处，自动地暗下去**。没有它，环境光是张「平贴的均匀漆」；有了它，画面立刻多出一层接触阴影的脏旧感和厚重感——这正是真实世界里光的样子。
+
+{/* 3. 概念讲解（spec §三）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。AO 是什么→为什么屏幕空间近似→半球采样→深度比较→noise 旋转→模糊→只乘环境光。C 实战型把「是什么」压缩，篇幅让给 §6。 */}
+
+## 环境光遮蔽：被挡住的地方该更暗
+
+先给那个「墙角更暗」的现象起个正名。它叫 <Term def="Ambient Occlusion，环境光遮蔽，常缩写 AO。描述一个表面点能接收到多少四面八方漫射来的环境光：开阔处（如平整墙面中央）几乎不被遮挡、能收满环境光、该亮；而墙角、缝隙、物体接触处被周围几何围住，大部分方向的环境光被挡掉、能收的少、该暗。所以 AO 是『每个点被周围挡了多少』的一个 0~1 系数（1=完全不挡、0=被挡死），把它乘到环境光项上，就能给画面加上接触阴影那层立体的脏旧感。常量环境光对所有点一视同仁，照不出这种细节。">环境光遮蔽</Term>（ambient occlusion，AO）：描述一个表面点**能接收到多少四面八方漫射来的环境光**。开阔处几乎没遮挡、收得满、该亮；墙角缝隙被围住、收得少、该暗。
+
+所以 AO 本质是个 `0~1` 的系数——`1` 表示完全不被挡（开阔），`0` 表示被挡死（深缝）。算出每个点的 AO，乘到环境光上，墙角缝隙就自动暗下去了。难点只有一个：**怎么知道一个点被周围挡了多少**？严格算要看它周围真实的几何，太贵。
+
+## 屏幕空间 SSAO：不算真几何，借 G-buffer 近似
+
+实时里我们用一个聪明的近似——<Term def="Screen-Space Ambient Occlusion，屏幕空间环境光遮蔽，缩写 SSAO。一种实时近似 AO 的技术：不去遍历场景里真实的几何来判断遮挡（太贵），而是直接利用延迟着色已经存好的 G-buffer——里面每个屏幕像素都记着它对应表面点的位置和法线。SSAO 在每个片元的法线半球内撒若干采样点，把它们投影回屏幕、读 G-buffer 在那处存的表面深度做比较，估出这个片元周围被实体挡住的比例。因为整个判断只在屏幕空间、靠已有的深度/位置缓冲完成，所以又快又能塞进延迟管线，是它『屏幕空间』三个字的由来。">SSAO</Term>（screen-space ambient occlusion，屏幕空间环境光遮蔽）。它不去遍历场景的真实几何，而是直接用[延迟着色](/learn/learnopengl/advanced-lighting/deferred-shading)那章存好的 **G-buffer**——里面每个屏幕像素都记着它对应表面点的**位置**和**法线**。
+
+有了这两样，SSAO 就能在屏幕空间里近似判断「这个片元周围被实体挡了多少」，全程不碰真几何，又快又能直接塞进延迟管线。这也是它名字里「屏幕空间」的由来。具体怎么近似？分两步：**在片元法线半球内撒点**，再**用深度比较判断每个点有没有被挡**。
+
+## 半球核采样：在法线半球里撒点，看几个被挡
+
+第一步是 <Term def="Hemisphere Kernel，半球核（采样核）。SSAO 估遮蔽的采样方式：以当前片元为中心，在它法线 N 朝向的那个半球（不是整球）内，预先取一组随机分布的偏移向量（这组向量就叫采样核 kernel，常 16~64 个），把它们加到片元位置上得到若干采样点。逐个判断这些采样点有没有被周围几何挡住，挡住的比例就是这个片元的遮蔽程度。之所以用半球而非整球：朝向表面背面的采样点永远在几何内部、会让平坦表面也凭空变暗，限制在法线半球内才只采到表面上方有意义的空间。核里的采样点还常按距中心由近到远加权，让靠近表面的遮挡贡献更大。">半球核采样</Term>（hemisphere kernel）。以当前片元为中心，在它**法线 `N` 朝向的半球**内取一组随机偏移向量（这组向量就叫**采样核**，常 16~64 个），加到片元位置上得到若干采样点。下面这张图把它画清楚：
+
+<HemisphereKernelDiagram />
+
+数有多少采样点落进了周围几何里——挡得越多，这片元被围得越严、能收的环境光越少、就该越暗。注意是 **半球不是整球**：如果用整球，朝向表面背面的采样点永远在几何内部，会让一面平整的墙也凭空变暗（这是后面要讲的一个坑）。限制在法线半球内，才只采到表面上方那一侧有意义的空间。
+
+## 深度比较：怎么判断一个采样点被挡了
+
+第二步，怎么知道某个采样点「落进几何里」了？靠**深度比较**（depth comparison）：把这个采样点**投影到屏幕**，读出 G-buffer 在那个屏幕位置存的**真实表面深度 `D`**，再比一比深浅。
+
+<DepthCompareDiagram />
+
+如果采样点自己比 `D` **离相机更远**，说明它正藏在那处真实表面的**后面**、被前面的实体挡住了——遮蔽 `+1`；如果它比 `D` **更近**，说明它前面是空的、没东西挡——不计。逐个采样点这样比、累加被挡的个数，就得到这片元的遮蔽程度。关键是：整个判断**只读 G-buffer 已存的深度、不重算几何**，所以快——这正是「屏幕空间」省钱的地方。
+
+## 随机旋转 + 模糊：把丑陋的条带换成干净 AO
+
+直接这么做会有个难看的副作用。为了快，采样核只能取很少几个点（16~64），且整屏用同一套固定方向——结果 AO 上爬满**规则的条带（banding）**，像水波纹一样刺眼。修法是两步配合：
+
+第一步，<Term def="Random Rotation Noise，随机旋转（噪声）。SSAO 去条带的关键技巧：因为采样核点数少又整屏共用固定方向，AO 会出现规则的条带 banding。做法是预生成一张很小的随机向量纹理（如 4×4），在屏幕上平铺，用它逐像素地把采样核绕法线旋转一个随机角度——这样相邻像素的采样方向各不相同，原本规则的条带就被打散成细碎的、各处随机的噪点。它把『刺眼的规则条带』换成了『可控的随机噪点』，噪点再交给下一步的模糊去抹平。">随机旋转 noise</Term>（random rotation）：用一张很小的随机向量纹理（如 `4×4`）平铺整屏，逐像素把采样核绕法线**转一个随机角度**。相邻像素采样方向就各不相同，规则条带被打散成**细碎噪点**。
+
+第二步，<Term def="AO Blur，AO 模糊（去噪）。随机旋转把条带换成了噪点，画面虽不再有规则条带、却变得颗粒粗糙。AO 模糊就是在算完 SSAO 后、把 AO 灰度图过一道很小的盒式模糊（如 4×4 邻域取平均），把这些噪点抹平成柔和连续的 AO，再拿去乘环境光。因为随机旋转用的 noise 纹理是 4×4 平铺的，模糊核取 4×4 邻域正好抹掉一个完整噪声周期。随机旋转负责打散条带、模糊负责抹平噪点，两步缺一不可。">AO 模糊</Term>（AO blur）：算完 SSAO 后，把 AO 灰度图过一道**很小的盒式模糊**（如 `4×4` 邻域取平均），把噪点抹平成柔和连续的 AO，再拿去乘环境光。下面这张图把「条带 → 噪点 → 干净」三态并排：
+
+<NoiseBlurDiagram />
+
+随机旋转负责**把条带打散成噪点**，模糊负责**把噪点抹平**——两步缺一不可。只旋转不模糊，画面是颗粒；只模糊不旋转，规则条带糊不掉。
+
+## 范围检查：别让远处的背景误暗
+
+还有一个必须做的修正。深度比较只看「采样点是不是比那处表面更远」，但有个陷阱：如果那处表面是**很远的背景**（比如片元在物体边缘，旁边就是几米外的墙），深度差巨大——按规则它也会被算成「被挡」，于是物体边缘凭空多一圈黑边、黑晕。
+
+修法叫 <Term def="Range Check，范围检查。SSAO 的一个必要修正：深度比较只看采样点是否比该处表面更远，但如果那处表面是离得很远的背景（深度差巨大），它本不该对当前片元造成遮蔽，否则物体边缘会凭空出现黑边黑晕。范围检查就是按『当前片元深度与该处表面深度之差』做加权：深度差在采样半径量级内的遮挡才算数（权重接近 1），差得太远的（远背景）权重衰减到接近 0、不计入遮蔽。常用 smoothstep(0, 1, radius / abs(深度差)) 之类的平滑权重实现。">范围检查</Term>（range check）：按「当前片元深度与那处表面深度之差」做**加权**——深度差在采样半径量级内的遮挡才算数，差得太远的（远背景）权重衰减到接近 `0`、不计。这样既保住了近处接触缝的暗角，又不让远背景误暗。
+
+## 收尾：只把 AO 乘到环境光上
+
+最后一步最关键，也最容易做错。SSAO 算出的 AO，**只乘到环境光项上**，直接光（漫反射、镜面）一概不动：
+
+```glsl
+vec3 ambient = ambientColor * Albedo * AO;  // 只有这里乘 AO
+vec3 lighting = ambient + diffuse + specular; // 直接光照旧
+```
+
+为什么？因为 AO 描述的是「**漫射环境光**被周围挡了多少」——那是没有明确来向、四面八方匀着来的光。而直接光有明确光源方向，它该不该照到、照多亮，由[阴影映射](/learn/learnopengl/advanced-lighting/shadow-mapping)那套（`N·L`、shadow map）管，跟 AO 是两码事。把 AO 乘到直接光或整体颜色上，画面会整体发黑、过暗、脏——这是头号误区，后面单列。
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。SSAO 本章重点在采样/深度比较/去噪的工程实现与取舍，无需公式推导，符合任务卡。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五）：复用上一章 ray-sphere/plane 场景（地面 + 几个球），frag 里对解析场景近似算 AO——对每个片元在其法线半球方向做若干次短距 ray-march 命中检测估遮蔽。控件 uAO 开关 / uRadius 半径 / uPower 强度 / uView 看最终 or AO 灰度图。猜一猜引导。诚实化：caption 说明这是对解析场景的 AO 近似、真 SSAO 是 G-buffer 屏幕空间深度半球采样见 §6。frag 无空行（各段 // 注释分隔）、逐行核 swizzle 维度。 */}
+
+## 动手：开关 SSAO，看接触处的暗角
+
+> 猜一猜：下面这块画布里有一块地面和几个球，球就坐在地面上、彼此还挨得很近。先把「SSAO 开关」关掉——只剩纯常量环境光。你觉得球和地面**接触的那一圈**会是什么样？是和旁边的空地一样亮、看不出球是「坐在」地上的，还是接触处自带一圈暗角、像真的压着地面？先关着看一眼，再打开。
+
+这块画布里，片段着色器用 [ray-sphere 求交](/learn/learnopengl/advanced-lighting/advanced-lighting) 程序化渲了一块地面 + 几个挨在一起的球。对每个命中片元，它在该片元的**法线半球方向做若干次短距探测**，估出周围被挡了多少（近似的 AO），再把这份 AO **只乘到环境光上**。四个控件：**SSAO 开关**（关＝纯常量环境光、接触处不暗；开＝接触/缝隙处暗角出现）、**半径**（探测的影响范围，调大暗角铺得更广）、**强度**（AO 压暗的力度），以及 **查看**（最终合成 / 只看 AO 灰度图——白=不遮挡、黑=强遮挡）：
+
+<ShaderDemo
+  aspect={1.6}
+  caption="一块地面 + 几个挨在一起的球（片段着色器 ray-sphere/plane 求交程序化渲染）。SSAO 开关：关=纯常量环境光、球与地面/球与球接触处一样亮显假；开=接触/缝隙处出暗角、立体真实。半径：探测的影响范围，调大暗角铺更广。强度：AO 压暗力度。查看：0 最终合成 / 1 只看 AO 灰度图（白=不遮挡、黑=强遮挡）。注意：为了能在单个片段着色器里演示，这里是对解析场景做的 AO 近似——对每个片元在其法线半球方向做几次短距 ray-march 命中检测估遮蔽；真实 SSAO 是用 G-buffer 的位置/法线在屏幕空间对深度做半球采样 + 深度比较（见下方『代码逐段拆解』）。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uAO;
+uniform float uRadius;
+uniform float uPower;
+uniform float uView;
+out vec4 FragColor;
+// 一盏主方向光（直接光，AO 不动它），加一点常量环境光
+const vec3 LIGHT_DIR = vec3(0.5, 0.85, 0.45);
+// 4 个挨在一起的球：圆心 xyz + 半径 w（接触处该出暗角）
+vec4 sphereGeo(int i) {
+  if (i == 0) return vec4(-0.75, -0.45, 0.0, 0.35);
+  if (i == 1) return vec4(-0.05, -0.45, 0.15, 0.35);
+  if (i == 2) return vec4(0.62, -0.42, -0.1, 0.38);
+  return vec4(0.05, -0.05, -0.05, 0.3);
+}
+vec3 sphereAlbedo(int i) {
+  if (i == 0) return vec3(0.80, 0.34, 0.30);
+  if (i == 1) return vec3(0.34, 0.56, 0.88);
+  if (i == 2) return vec3(0.88, 0.78, 0.36);
+  return vec3(0.50, 0.82, 0.54);
+}
+// ray-sphere 求交：返回最近正根 t，未命中返回 -1
+float hitSphere(vec3 ro, vec3 rd, vec3 ce, float r) {
+  vec3 oc = ro - ce;
+  float b = dot(oc, rd);
+  float c = dot(oc, oc) - r * r;
+  float h = b * b - c;
+  if (h < 0.0) return -1.0;
+  float t = -b - sqrt(h);
+  return t > 0.0 ? t : -1.0;
+}
+// 一个点在不在任何实体内部（球或地面下方）：在=被挡
+// 用来近似「半球采样点落进几何里=遮蔽」
+float insideGeo(vec3 p) {
+  for (int i = 0; i < 4; i++) {
+    vec4 g = sphereGeo(i);
+    if (length(p - g.xyz) < g.w) return 1.0;
+  }
+  if (p.y < -0.8) return 1.0;
+  return 0.0;
+}
+// 在法线半球方向撒几个采样点，数有多少落进几何 = 近似 AO 遮蔽
+float computeAO(vec3 pos, vec3 nrm) {
+  // 构一组半球内的固定偏移方向（已大致在 +z 半球，下面旋到法线半球）
+  vec3 kernel[6];
+  kernel[0] = vec3(0.30, 0.20, 0.55);
+  kernel[1] = vec3(-0.40, 0.10, 0.45);
+  kernel[2] = vec3(0.10, -0.30, 0.60);
+  kernel[3] = vec3(-0.20, -0.25, 0.50);
+  kernel[4] = vec3(0.45, 0.35, 0.40);
+  kernel[5] = vec3(-0.35, 0.40, 0.35);
+  // 构 TBN：把半球核从 +z 旋到片元法线朝向（这里 nrm 是 vec3，下面只用 .xyz）
+  vec3 up = abs(nrm.y) < 0.99 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+  vec3 tangent = normalize(cross(up, nrm));
+  vec3 bitangent = cross(nrm, tangent);
+  float occ = 0.0;
+  for (int i = 0; i < 6; i++) {
+    vec3 k = kernel[i];
+    // 把核方向 k 从 +z 半球旋到法线半球：T*k.x + B*k.y + N*k.z
+    vec3 dir = tangent * k.x + bitangent * k.y + nrm * k.z;
+    // 采样点 = 片元位置 + 半径 * 方向（uRadius 调影响范围）
+    vec3 samp = pos + dir * uRadius;
+    occ += insideGeo(samp);
+  }
+  // 遮蔽比例 → AO 系数（1 不挡、0 挡死），uPower 调压暗力度
+  float ao = 1.0 - (occ / 6.0);
+  return pow(clamp(ao, 0.0, 1.0), uPower);
+}
+void main() {
+  // 像素 → [-1,1] 归一化坐标（按宽高比校正）
+  vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+  // 相机：眼睛在 +z 往里看，视线沿 -z（微微俯视）
+  vec3 ro = vec3(0.0, 0.55, 3.4);
+  vec3 rd = normalize(vec3(uv.x, uv.y - 0.1, -1.3));
+  // —— 求最近命中：拿到这个可见片元的 位置/法线/反照率（= G-buffer 三样）——
+  float bestT = 1e9;
+  vec3 gPos = vec3(0.0);
+  vec3 gNrm = vec3(0.0);
+  vec3 gAlb = vec3(0.0);
+  bool hit = false;
+  for (int i = 0; i < 4; i++) {
+    vec4 g = sphereGeo(i);
+    float t = hitSphere(ro, rd, g.xyz, g.w);
+    if (t > 0.0 && t < bestT) {
+      bestT = t;
+      gPos = ro + t * rd;
+      gNrm = normalize(gPos - g.xyz);
+      gAlb = sphereAlbedo(i);
+      hit = true;
+    }
+  }
+  // 地面 y=-0.8，比球更近才覆盖
+  float tg = (rd.y < 0.0) ? (-0.8 - ro.y) / rd.y : -1.0;
+  if (tg > 0.0 && tg < bestT) {
+    bestT = tg;
+    gPos = ro + tg * rd;
+    gNrm = vec3(0.0, 1.0, 0.0);
+    gAlb = vec3(0.32);
+    hit = true;
+  }
+  if (!hit) {
+    FragColor = vec4(0.04, 0.04, 0.06, 1.0);
+    return;
+  }
+  // —— 算 AO（SSAO 开关：关则恒为 1=不遮蔽）——
+  float ao = (uAO > 0.5) ? computeAO(gPos, gNrm) : 1.0;
+  // 查看通道 1：只看 AO 灰度图（白=不挡、黑=强遮挡）
+  if (uView > 0.5) {
+    FragColor = vec4(vec3(ao), 1.0);
+    return;
+  }
+  // —— 最终合成：环境光 *= AO（只压环境光），直接光不动 ——
+  vec3 L = normalize(LIGHT_DIR);
+  vec3 V = normalize(ro - gPos);
+  vec3 ambient = gAlb * 0.35 * ao;
+  float diff = max(dot(gNrm, L), 0.0);
+  vec3 H = normalize(L + V);
+  float spec = pow(max(dot(gNrm, H), 0.0), 24.0);
+  vec3 direct = gAlb * diff + vec3(0.4) * spec;
+  vec3 outColor = ambient + direct;
+  // 简单 gamma 提一点对比
+  FragColor = vec4(pow(outColor, vec3(0.85)), 1.0);
+}`}
+  controls={[
+    {
+      name: "uAO",
+      label: "SSAO 开关（0 关 · 1 开）",
+      type: "bool",
+      default: true,
+    },
+    {
+      name: "uRadius",
+      label: "半径（探测影响范围）",
+      type: "float",
+      min: 0.1,
+      max: 1.2,
+      step: 0.05,
+      default: 0.5,
+    },
+    {
+      name: "uPower",
+      label: "强度（AO 压暗力度）",
+      type: "float",
+      min: 0.5,
+      max: 4,
+      step: 0.1,
+      default: 2,
+    },
+    {
+      name: "uView",
+      label: "查看（0 最终合成 · 1 AO 灰度图）",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 0,
+    },
+  ]}
+/>
+
+谜底：**关掉 SSAO**，球和地面接触的那一圈、球与球挨着的缝隙，都和旁边的空地一样亮——球像是「浮」在地上、缝隙平塌塌的，一眼假。**打开 SSAO**，接触处和缝隙立刻自动暗下去一圈，球终于像「坐」在地上、挨在一起的球之间有了厚重的接触阴影。再把**半径**拖大，暗角铺得更广（探测够得更远）；把**强度**拖大，同样的遮蔽被压得更黑。最后切到 **AO 灰度图**：开阔的平地是白的（不遮挡），接触缝隙是一团团黑（强遮挡）——这张灰度图就是 SSAO 真正算出来的东西，最终合成时它只乘在环境光上。
+
+## 流程走一遍：从半球采样到只乘环境光
+
+把 SSAO 串成正经的三步流程，每步配图示意那一刻的数据形态：
+
+<Stepper>
+  <Step title="① SSAO pass：半球核采样 + 深度比较，输出 AO 灰度">
+    <HemisphereKernelDiagram />
+    对每个可见片元，采 G-buffer 拿到它的<strong>位置/法线</strong>，在
+    <strong>法线半球</strong>内撒一组随机采样点（用 noise 纹理逐像素
+    <strong>旋转</strong>采样核去条带）。把每个采样点投影到屏幕、读 G-buffer
+    那处深度做<strong>深度比较</strong> + <strong>范围检查</strong>
+    ，累加被挡的个数 → 输出一张 AO 灰度图（白=不挡、黑=强遮挡）。
+  </Step>
+  <Step title="② 模糊 pass：小盒式模糊抹平噪点">
+    <NoiseBlurDiagram />
+    旋转采样核换来的 AO 带<strong>颗粒噪点</strong>，过一道很小的
+    <strong>盒式模糊</strong>（如 <code>4×4</code> 邻域取平均，正好抹掉一个
+    noise 平铺周期），得到柔和连续的 AO。
+  </Step>
+  <Step title="③ 光照 pass：ambient *= AO，直接光不动">
+    <DepthCompareDiagram />
+    在延迟的光照 pass 里，把这张干净 AO <strong>只乘到环境光项</strong>上（
+    <code>ambient *= AO</code>），漫反射/镜面等<strong>直接光照旧</strong>
+    。墙角缝隙接触处的环境光被压暗，画面多出接触阴影那层立体感。
+  </Step>
+</Stepper>
+
+## 左右擦一擦：关 SSAO vs 开 SSAO
+
+把「关 SSAO（接触处一样亮、显假）」和「开 SSAO（接触缝隙暗、立体）」定格成两态——左边纯常量环境光、接触处和平面一样亮，右边接触缝隙处自动出暗角：
+
+<CompareSlider
+  leftLabel="关 SSAO（接触一样亮 · 显假）"
+  rightLabel="开 SSAO（接触缝隙暗 · 立体）"
+  initial={42}
+  left={<NoiseBlurDiagram />}
+  right={<HemisphereKernelDiagram />}
+/>
+
+左右两图各取一态作示意——重点在那句话：关 SSAO 时墙角缝隙和平面拿到一样的环境光、画面塌成平片；开 SSAO 后接触处被自动压暗一圈，球与地面、球与球之间有了厚重的接触阴影。一句话：**SSAO 把均匀的环境光，按「每个点被周围挡了多少」分了三六九等**。
+
+{/* 6. 代码对照（spec §六，C 重心）：a. SSAO pass——采 G-buffer 位置/法线、用 noise 旋转的 TBN 构半球核、for 循环采样点投影到屏幕采深度比较累加遮蔽 + range check，输出 AO 灰度；b. 模糊 pass——小盒式模糊抹掉 noise 颗粒；c. 光照里 ambient *= AO。C++/GLSL330 ↔ WebGL2/GLSL300es，单块 ≤30 行，块间解说，noise 纹理/深度采样差异 Callout warn。 */}
+
+## 代码逐段拆解
+
+真正的 SSAO 代码就三块，全建立在[延迟着色](/learn/learnopengl/advanced-lighting/deferred-shading)的 G-buffer（位置/法线）之上：**SSAO pass（半球采样 + 深度比较，输出 AO 灰度）**、**模糊 pass（小盒式模糊抹噪点）**、**光照 pass（`ambient *= AO`）**。和 demo 里的解析近似不同，这里是工业界的真做法：对屏幕空间的 G-buffer 深度做投影采样。
+
+### 第一块：SSAO pass 片段着色器——半球采样 + 深度比较
+
+核心着色器：采 G-buffer 拿到当前片元的视空间位置/法线，用 noise 纹理旋转后的 **TBN** 把预生成的半球核旋到法线朝向，`for` 循环每个采样点——投影到屏幕、读 G-buffer 那处深度、比较累加遮蔽：
+
+<CodeTabs>
+  <Tab label="GLSL：SSAO pass 片段着色器（半球采样 + 深度比较）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D gPosition; // G-buffer：视空间位置
+uniform sampler2D gNormal;   // G-buffer：视空间法线
+uniform sampler2D texNoise;  // 4x4 随机向量纹理（平铺）
+uniform vec3 samples[64];    // 预生成的半球核（CPU 端造，见下）
+uniform mat4 projection;     // 把视空间采样点投影回屏幕
+uniform float radius;        // 采样半径（对应 demo「半径」）
+uniform float power;         // 压暗力度（对应 demo「强度」）
+out float FragColor;         // 只输出一个 AO 灰度值
+const vec2 noiseScale = vec2(1280.0 / 4.0, 720.0 / 4.0); // 屏幕/noise 平铺
+void main() {
+  vec3 fragPos = texture(gPosition, TexCoords).xyz; // 当前片元视空间位置
+  vec3 normal = normalize(texture(gNormal, TexCoords).xyz);
+  vec3 randVec = texture(texNoise, TexCoords * noiseScale).xyz; // 逐像素随机向量
+  // 用随机向量 + 法线构 TBN：把半球核旋到法线半球、且逐像素随机旋转(去条带)
+  vec3 tangent = normalize(randVec - normal * dot(randVec, normal));
+  vec3 bitangent = cross(normal, tangent);
+  mat3 TBN = mat3(tangent, bitangent, normal);
+  float occlusion = 0.0; // 下一块继续：循环采样 + 深度比较 + range check
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：SSAO 循环体（投影采深度 + range check 累加遮蔽）">
+
+```glsl
+// 接上：循环每个采样点，投影到屏幕、读 G-buffer 深度比较
+for (int i = 0; i < 64; i++) {
+  // 1) 半球核方向旋到法线朝向，按半径放到片元周围
+  vec3 samplePos = fragPos + (TBN * samples[i]) * radius;
+  // 2) 投影到屏幕，拿到该采样点对应的屏幕 uv
+  vec4 offset = projection * vec4(samplePos, 1.0);
+  offset.xyz /= offset.w;              // 透视除法 → NDC
+  offset.xy = offset.xy * 0.5 + 0.5;   // NDC[-1,1] → uv[0,1]
+  // 3) 读 G-buffer 在该屏幕位置存的真实表面深度（视空间 z）
+  float sampleDepth = texture(gPosition, offset.xy).z;
+  // 4) range check：那处表面离当前片元太远(远背景)就别算遮蔽
+  float rangeCheck = smoothstep(0.0, 1.0, radius / abs(fragPos.z - sampleDepth));
+  // 5) 深度比较：该处表面比采样点更近(+bias 防自遮挡) = 采样点被挡 → 遮蔽+1
+  occlusion += (sampleDepth >= samplePos.z + 0.025 ? 1.0 : 0.0) * rangeCheck;
+}
+// 遮蔽比例 → AO 系数(1 不挡、0 挡死)，power 调压暗力度
+FragColor = pow(clamp(1.0 - occlusion / 64.0, 0.0, 1.0), power);
+```
+
+  </Tab>
+</CodeTabs>
+
+注意上面用的是 G-buffer 的 **视空间** 位置/法线（不是世界空间）——这样投影矩阵 `projection` 才能把采样点直接投回屏幕。半球核 `samples[64]` 和 `texNoise` 这两样要在 CPU 端预先造好：
+
+<Callout type="warn">
+  两处关键差异。**①半球核 + noise 在 CPU 端造**：`samples[64]` 是一组在 `+z`
+  半球内的随机向量（常按 `i/64`
+  的平方做加速插值，让采样点靠近中心更密）；`texNoise` 是张 `4×4`
+  随机向量纹理。桌面/WebGL2 都用随机数在 CPU 生成后上传——WebGL2 里这张 noise
+  纹理务必用 `gl.NEAREST` 过滤 + `gl.REPEAT`
+  环绕平铺（线性过滤会把随机向量插值糊掉、失去打散条带的作用）。**②AO
+  缓冲格式**：SSAO pass 只输出一个标量 AO，桌面常用单通道 `GL_RED`（`GL_R8` 或
+  `GL_R16F`）省带宽；WebGL2 单通道浮点要 `gl.R16F` +
+  `EXT_color_buffer_float`（承接 HDR），嫌麻烦也可退回 `RGBA8` 只用 `r` 通道。
+</Callout>
+
+### 第二块：模糊 pass 片段着色器——小盒式模糊抹噪点
+
+旋转采样核换来的 AO 带颗粒，过一道很小的盒式模糊抹平。因为 noise 是 `4×4` 平铺的，模糊核取 `4×4` 邻域正好抹掉一个完整噪声周期：
+
+<CodeTabs>
+  <Tab label="GLSL：AO 模糊 pass 片段着色器（4×4 盒式模糊）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D ssaoInput; // 上一步带噪点的 AO 灰度图
+out float FragColor;
+void main() {
+  // 一个纹素的大小（用于按整数偏移取邻域）
+  vec2 texelSize = 1.0 / vec2(textureSize(ssaoInput, 0));
+  float result = 0.0;
+  // 4x4 邻域取平均（对应 noise 的 4x4 平铺周期）
+  for (int x = -2; x < 2; x++) {
+    for (int y = -2; y < 2; y++) {
+      vec2 offset = vec2(float(x), float(y)) * texelSize;
+      result += texture(ssaoInput, TexCoords + offset).r;
+    }
+  }
+  // 16 个样本求平均 → 抹平噪点的干净 AO
+  FragColor = result / 16.0;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+模糊后这张干净 AO 就能拿去乘环境光了。最后一块最关键也最短——在光照 pass 里把 AO **只乘到环境光项**上：
+
+### 第三块：光照 pass——ambient \*= AO，直接光不动
+
+<CodeTabs>
+  <Tab label="GLSL：光照 pass 片段着色器（ambient *= AO）">
+
+```glsl
+// 光照 pass 里：采 G-buffer + 采模糊后的 AO
+float AmbientOcclusion = texture(ssaoBlur, TexCoords).r;
+vec3 Albedo = texture(gAlbedoSpec, TexCoords).rgb;
+// 关键：AO 只乘到「环境光」项上
+vec3 ambient = vec3(0.3) * Albedo * AmbientOcclusion;
+vec3 lighting = ambient; // 直接光从这里往后加，一概不乘 AO
+// for 循环每盏灯累加 漫反射 + 镜面（这些是直接光，不动 AO）
+for (int i = 0; i < activeLights; i++) {
+  vec3 L = normalize(lights[i].Position - FragPos);
+  float diff = max(dot(Normal, L), 0.0);
+  lighting += lights[i].Color * Albedo * diff; // 直接光：不乘 AO
+  // …镜面同理，也不乘 AO（从略）
+}
+FragColor = vec4(lighting, 1.0);
+```
+
+  </Tab>
+  <Tab label="C++ / OpenGL 3.3：CPU 侧三遍调度">
+
+```cpp
+// 第一遍·SSAO pass：绑 SSAO FBO，喂 G-buffer 位置/法线 + noise，渲全屏四边形
+glBindFramebuffer(GL_FRAMEBUFFER, ssaoFBO);
+glClear(GL_COLOR_BUFFER_BIT);
+ssaoShader.use();
+// （绑 gPosition/gNormal/texNoise + 传 samples[64]/projection/radius/power，从略）
+RenderQuad();
+// 第二遍·模糊 pass：绑 blur FBO，把上一步 AO 图过 4x4 盒式模糊
+glBindFramebuffer(GL_FRAMEBUFFER, ssaoBlurFBO);
+glClear(GL_COLOR_BUFFER_BIT);
+blurShader.use();
+glBindTexture(GL_TEXTURE_2D, ssaoColorBuffer); // 输入：带噪点 AO
+RenderQuad();
+// 第三遍·光照 pass：绑回默认帧缓冲，光照里采模糊后的 AO 乘环境光
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+lightingShader.use();
+glBindTexture(GL_TEXTURE_2D, ssaoBlurColorBuffer); // 干净 AO 喂给光照
+RenderQuad();
+```
+
+  </Tab>
+</CodeTabs>
+
+三遍串起来就是完整的 SSAO：`几何 pass 填 G-buffer（上一章）→ SSAO pass 半球采样输出 AO 灰度 → 模糊 pass 抹噪点 → 光照 pass 把 AO 只乘环境光`。和上面 demo 的解析近似对照着看：demo 用「点在不在球/地面内部」代替了「投影读 G-buffer 深度」，但「法线半球撒点数遮蔽 → 只压环境光」的内核完全一致。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。必含：①AO 乘到直接光/整体颜色而非只乘环境光→整体发黑过暗；②没做 range check→远背景/大深度差误判遮蔽出黑边黑晕；③没用 noise 旋转核或没模糊→AO 出条带 banding/颗粒噪点；④半径太大→AO 糊成大片脏污失去接触细节。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：加了 SSAO
+  后整个画面**发黑、灰扑扑、过暗**，连开阔的受光平面、亮处高光都被压暗了，不只是墙角变暗。**原因**：把
+  AO 乘到了**整体颜色或直接光**上（`finalColor *= AO` 或 `diffuse *= AO`）。可
+  AO
+  只描述「漫射环境光被挡多少」，直接光该不该照由光源方向/阴影管，跟它无关。**修法**：AO
+  **只乘环境光项**——`ambient *= AO`，漫反射、镜面等直接光一概不动。这是 SSAO
+  的头号坑。
+</Callout>
+
+<Callout type="trap">
+  **现象**：物体的**边缘、轮廓处凭空出现一圈黑边、黑晕**，尤其物体前面紧挨着远处背景（如墙）时最明显。**原因**：没做
+  **范围检查**。深度比较只看「采样点是否比那处表面更远」，可那处若是几米外的远背景、深度差巨大，也被误算成「被挡」，于是边缘多出黑圈。**修法**：加
+  **range check**——按当前片元与采样处的**深度差**加权（如 `smoothstep(0, 1,
+  radius / abs(深度差))`），深度差远超采样半径的（远背景）权重衰减到
+  `0`、不计入遮蔽。
+</Callout>
+
+<Callout type="trap">
+  **现象**：AO
+  上爬满**规则的水波纹条带（banding）**，或者画面满是**粗糙颗粒噪点**，怎么看都不干净。**原因**：条带是因为采样核点数少又
+  **没用 noise
+  逐像素旋转**（整屏共用固定采样方向）；颗粒是**旋转了却没模糊**（随机方向带来的噪点没被抹平）。**修法**：两步必须配齐——先用
+  `4×4` 随机向量纹理平铺、**逐像素旋转采样核**把条带打散成噪点，再用 `4×4`
+  **盒式模糊**把噪点抹平。少任一步都不干净。
+</Callout>
+
+<Callout type="trap">
+  **现象**：SSAO
+  是出暗角了，但暗角**糊成一大片脏兮兮的污渍**、铺得到处都是，接触缝、墙角那种「细节暗角」反而看不清了。**原因**：**采样半径
+  `radius` 调得太大**——半球探得太远，远处不相干的几何也被算进遮蔽，AO
+  失去了贴近接触面的细节、糊成大块。**修法**：把半径调回**贴合场景接触尺度**的小值（让它只够得着邻近的接触面/缝隙）；半径管的是「暗角影响范围」，强度
+  `power` 才管「压多黑」，别用半径凑黑度。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（开关 AO/调半径强度/看 AO 灰度图）+ C 型问答/选型题；答案折叠。收官：小结后点一句承上启下→PBR。 */}
+
+## 小结
+
+- **环境光遮蔽 AO** 描述一个点被周围挡住、收不到多少环境光：墙角缝隙接触处该暗；常量环境光对所有点一视同仁、照不出这种立体细节
+- **SSAO** 在屏幕空间近似 AO：直接用[延迟着色](/learn/learnopengl/advanced-lighting/deferred-shading)的 **G-buffer**（位置/法线），不重算真几何，又快又能塞进延迟管线
+- 做法两步：在片元**法线半球**内撒随机采样核 → 每个采样点投影到屏幕、**深度比较** + **范围检查** 累加被挡的个数 = 遮蔽
+- 去噪两步配合：**noise 纹理逐像素旋转**采样核把条带换成噪点 → **小盒式模糊**把噪点抹平成干净 AO
+- 收尾铁律：算出的 AO **只乘到环境光**（`ambient *= AO`），直接光（漫反射/镜面/阴影）一概不动，否则画面整体发黑
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个 demo 里把 SSAO 走一遍：① 先关 SSAO、再开，球与地面接触处、球与球缝隙处分别有什么变化？这对应哪条原理？② 把「查看」切到 **AO 灰度图**，描述开阔平地和接触缝隙分别是什么颜色（白/黑），它代表什么？③ 把「半径」拖到最大、再把「强度」拖到最大，两者把画面改成不同的样子——分别改了什么？
+
+<Answer>
+
+① **关 SSAO** 时接触处、缝隙和旁边空地一样亮，球像浮在地上、缝隙平塌；**开 SSAO** 后接触处和缝隙自动暗下一圈，球像坐在地上、缝里有厚重接触阴影。对应**环境光遮蔽**原理：被周围围住的地方收到的环境光少、该更暗。
+
+② **AO 灰度图**里，开阔平地是**白**的（不被遮挡、AO≈1），球与地面/球与球的接触缝隙是一团团**黑**（强遮蔽、AO→0）。这张灰度图就是 SSAO 真正算出来的「每个点被挡了多少」，最终合成时它**只乘在环境光上**。
+
+③ **半径**拖大 → 探测够得更远，暗角**铺得更广**（范围变大，太大会糊成片）；**强度**（`power`）拖大 → 同样的遮蔽被**压得更黑**（黑度变深，范围不变）。一个管「影响范围」、一个管「压多黑」，别混用。
+
+</Answer>
+
+**练习 2（问答型 · C 型核心）** 有人做 SSAO：半球采样、深度比较、范围检查、noise 旋转、模糊全做对了，AO 灰度图也很干净，墙角缝隙该黑的都黑。可一接到光照里，**整个画面（连受光的开阔亮面、镜面高光）都灰暗了一截**。问题最可能出在哪一行？怎么改？为什么？
+
+<Answer>
+
+问题出在**把 AO 乘错了地方**——大概率是 `finalColor *= AO` 或 `diffuse *= AO`（乘到了整体颜色或直接光上），而不是只乘环境光。
+
+改法：只保留 `ambient *= AO`（或 `ambient = ambientColor * Albedo * AO`），漫反射、镜面、阴影等**直接光照旧、一概不乘 AO**。
+
+为什么：AO 描述的是**漫射环境光**被周围挡了多少——那是没有明确来向的环境光。直接光有明确光源方向，它照不照得到、照多亮，由 `N·L` 和[阴影映射](/learn/learnopengl/advanced-lighting/shadow-mapping)管，跟「被环境光遮挡多少」是两件事。把 AO 乘到直接光/整体上，等于把本该只压暗环境光的系数施加到了所有光照，画面自然整体发黑、过暗。
+
+</Answer>
+
+**练习 3（选型/排错题 · C 型）** 下面三个 SSAO 症状，各对应哪个被漏掉/调错的环节，怎么修？① AO 上有规则的水波纹条带；② 物体边缘紧挨远处墙时，边缘多一圈黑晕；③ 暗角糊成一大片污渍、接触缝细节反而没了。
+
+<Answer>
+
+- **① 规则水波纹条带 → 没用 noise 逐像素旋转采样核**（或核点数太少又共用固定方向）。修：用 `4×4` 随机向量纹理平铺、逐像素把采样核绕法线随机旋转，把条带打散成噪点，再模糊。
+- **② 边缘黑晕 → 没做范围检查 range check**。深度比较把几米外的远背景也误算成遮挡。修：按当前片元与采样处的**深度差**加权（`smoothstep(0,1, radius/abs(深度差))`），远背景权重衰减到 0。
+- **③ 暗角糊成污渍 → 采样半径 `radius` 太大**。半球探得太远，把不相干的远几何也算进遮蔽，丢了接触细节。修：把半径调回贴合接触尺度的小值；要更黑用 `power`（强度），别用半径凑。
+
+</Answer>
+
+</Exercises>
+
+<Callout type="tip">
+  **高级光照篇到此收官。** 这一篇你从
+  [Blinn-Phong](/learn/learnopengl/advanced-lighting/advanced-lighting)
+  起步，走过 [Gamma
+  校正](/learn/learnopengl/advanced-lighting/gamma-correction)、
+  [阴影映射](/learn/learnopengl/advanced-lighting/shadow-mapping) /
+  [点阴影](/learn/learnopengl/advanced-lighting/point-shadows)、
+  [法线贴图](/learn/learnopengl/advanced-lighting/normal-mapping) /
+  [视差贴图](/learn/learnopengl/advanced-lighting/parallax-mapping)、
+  [HDR](/learn/learnopengl/advanced-lighting/hdr) /
+  [Bloom](/learn/learnopengl/advanced-lighting/bloom)、
+  [延迟着色](/learn/learnopengl/advanced-lighting/deferred-shading)，到这章
+  SSAO——把「光怎么打、怎么算得快、怎么显得真」一块块拼齐了。下一步通往
+  **基于物理的渲染（PBR）**：把这些经验法则换成一套基于物理的光照模型，让材质在任何光照下都自洽地真实。
+</Callout>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="环境光遮蔽">
+  Ambient
+  Occlusion，**环境光遮蔽**（AO）。描述一个表面点能收到多少四面八方漫射来的环境光：开阔处（平整墙面中央）几乎不被挡、收得满、该亮；墙角、缝隙、物体接触处被周围围住、收得少、该暗。所以
+  AO 是个 `0~1`
+  系数（1=完全不挡、0=被挡死），乘到环境光项上就给画面加上接触阴影那层立体感。常量环境光对所有点一视同仁，照不出这种细节。详见本章「环境光遮蔽」一节。
+</GlossaryItem>
+
+<GlossaryItem term="SSAO">
+  Screen-Space Ambient Occlusion，**屏幕空间环境光遮蔽**。一种实时近似 AO
+  的技术：不遍历真实几何（太贵），而是直接用延迟着色已存好的
+  G-buffer（每个屏幕像素的位置/法线），在每个片元的法线半球内撒采样点、投影回屏幕读
+  G-buffer
+  深度比较，估出周围被挡的比例。整个判断只在屏幕空间、靠已有缓冲完成，所以又快又能塞进延迟管线。详见本章「屏幕空间
+  SSAO」一节。
+</GlossaryItem>
+
+<GlossaryItem term="半球核采样">
+  Hemisphere Kernel，**半球核（采样核）**。SSAO
+  估遮蔽的采样方式：以片元为中心、在它法线 N
+  朝向的**半球**（不是整球）内取一组随机偏移向量（这组就叫采样核，常 16~64
+  个），加到片元位置得到若干采样点，逐个判断有没有被几何挡住。用半球而非整球是为了不让朝向表面背面的采样点把平坦面也凭空算暗。详见本章「半球核采样」一节。
+</GlossaryItem>
+
+<GlossaryItem term="随机旋转 noise">
+  Random Rotation Noise，**随机旋转（噪声）**。SSAO
+  去条带的关键技巧：采样核点数少又整屏共用固定方向会让 AO 出现规则条带
+  banding。做法是用一张很小的随机向量纹理（如
+  `4×4`）平铺整屏，逐像素把采样核绕法线转一个随机角度，相邻像素方向各异，规则条带就被打散成细碎噪点；噪点再交给模糊抹平。详见本章「随机旋转
+  + 模糊」一节。
+</GlossaryItem>
+
+<GlossaryItem term="范围检查">
+  Range Check，**范围检查**。SSAO
+  的必要修正：深度比较只看采样点是否比那处表面更远，但如果那处是离得很远的背景（深度差巨大），它本不该遮挡当前片元，否则物体边缘会凭空出黑边黑晕。范围检查按「当前片元与采样处的深度差」加权：差在采样半径量级内的遮挡才算（权重≈1），差太远的（远背景）权重衰减到≈0。详见本章「范围检查」一节。
+</GlossaryItem>
+
+<GlossaryItem term="AO 模糊">
+  AO Blur，**AO 模糊（去噪）**。随机旋转把条带换成了噪点、画面变颗粒；AO
+  模糊就是算完 SSAO 后把 AO 灰度图过一道很小的盒式模糊（如 `4×4`
+  邻域取平均，正好抹掉一个 noise 平铺周期），把噪点抹平成柔和连续的
+  AO，再拿去乘环境光。随机旋转负责打散条带、模糊负责抹平噪点，两步缺一不可。详见本章「随机旋转
+  + 模糊」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />

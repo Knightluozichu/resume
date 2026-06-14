@@ -85,6 +85,9 @@ import { BloomPipelineDiagram } from "./diagrams/bloom-pipeline-diagram";
 import { SeparableGaussianDiagram } from "./diagrams/separable-gaussian-diagram";
 import { GBufferDiagram } from "./diagrams/gbuffer-diagram";
 import { ForwardVsDeferredDiagram } from "./diagrams/forward-vs-deferred-diagram";
+import { HemisphereKernelDiagram } from "./diagrams/hemisphere-kernel-diagram";
+import { DepthCompareDiagram } from "./diagrams/depth-compare-diagram";
+import { NoiseBlurDiagram } from "./diagrams/noise-blur-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -372,6 +375,13 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    每个物体片元含被遮挡的 × 每盏灯立刻算光照·overdraw 浪费·光照次数 ~ 物体片元数×灯·标红 vs 下排延迟 几何 pass 填
  *    G-buffer 不点灯 → 光照 pass 全屏四边形只对每个可见像素 × 灯算一次·光照次数 ~ 屏幕像素数×灯·与场景复杂度/overdraw 解耦·
  *    标绿，点明延迟把光照从「每个物体片元都算」变成「只对可见像素算一次」→ 轻松上几百盏灯）。同款 Server SVG。
+ *  - 高级光照篇·SSAO 屏幕空间环境光遮蔽（HEL-89，C 实战型，篇收官，承接 deferred-shading G-buffer 位置/法线）：
+ *    HemisphereKernelDiagram（侧视片元 P + 朝外法线 N，在 N 朝向的半球内撒若干随机采样点，落进周围几何的标红=被挡遮蔽+1、
+ *    落在空气里的标绿=不计；点明「被挡越多→接收环境光越少→越暗」，并强调只用法线半球而非整球以免平坦面凭空变暗）、
+ *    DepthCompareDiagram（采样点投影到屏幕、读 G-buffer 该处存的真实表面深度 D 比一比：采样点在表面后面/更远=被前面实体挡住=遮蔽+1·红、
+ *    在表面前面/更近=没挡=不计·绿，点明 SSAO 不重算真几何只借 G-buffer 已存深度近似=「屏幕空间」由来）、
+ *    NoiseBlurDiagram（三格并排去噪：①核不旋转→规则条带 banding·红 → ②小随机向量纹理逐像素旋转核→碎噪点 noise·黄 →
+ *    ③小盒式模糊抹平→干净柔和 AO·绿，点明随机旋转是用可控噪点换刺眼条带、模糊再抹平噪点，两步配合缺一不可）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -476,6 +486,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SeparableGaussianDiagram,
   GBufferDiagram,
   ForwardVsDeferredDiagram,
+  HemisphereKernelDiagram,
+  DepthCompareDiagram,
+  NoiseBlurDiagram,
   Stepper,
   Step,
   Slider,
