@@ -1,0 +1,678 @@
+---
+title: 模板与泛型编程
+type: C
+section: 类设计者工具
+order: 4
+description: 掌握C++模板编程——函数模板/类模板/模板实例化/模板参数推导/可变参数模板——写出类型无关的泛型代码（类设计者工具篇收官）
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（C++ Primer §16 改编）：模板与泛型编程——"类设计者工具"第四篇（收官）。
+   重心在概念图示(§3) + Stepper(§5) + 代码对照(§6)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 函数模板（template声明、类型参数推导、隐式vs显式实例化）— viz: TemplateInstantiationDiagram step=1-4（模板→实例化四阶段过程图）
+   2) 类模板（成员函数定义、类外定义语法）— viz: ClassTemplateDiagram（类模板的代码结构拆解图）
+   3) 非类型模板参数（template<int N>、数组大小/常量）— 代码示例
+   4) 模板特化（全特化/偏特化、匹配优先级）— viz: TemplateSpecializationDiagram（特化层次树）
+   5) 可变参数模板（parameter pack、sizeof...、递归展开）— viz: VariadicTemplateDiagram step=1-5（参数包递归展开过程图） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释函数模板和类模板的工作机制——编译器如何在编译期从模板生成具体类型的代码，隐式和显式实例化的区别，以及类型参数推导的规则
+- 能自己写出泛型的数据结构（`Stack<T>`、`Pair<T,U>`）和泛型算法（`find`、`compare`），正确处理类外成员函数定义的 `template` 前缀和 `ClassName<T>::` 作用域限定
+- 能回答：写一个 `Stack` 类模板，支持 `push`、`pop`、`top`、`empty`——写出头文件中的完整模板声明（类体 + 类外成员函数定义），并说明 `Stack<int>` 和 `Stack<string>` 这两个"类"之间是什么关系
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——模板是蓝图/模具，参数一填就批量生产不同型号。 */}
+
+## 为什么需要模板
+
+你写了一个排序函数——接受 `int` 数组排序。老板说"同样的排序逻辑，`double` 数组也要"。你复制粘贴，改了类型。老板又说 `string` 数组也要、`long` 也要——你复制了四次几乎一模一样的代码，只改了类型名。每次代码逻辑出现 bug，你要改四个地方。这显然不是一个好办法。
+
+想象工厂里有一个模具——你向模具里注入不同的材料，就能批量生产不同型号的产品。模具本身定义的是"形状"而不是"材料"。模板就是 C++ 的"代码模具"——你用 `T` 这个占位符代替具体类型，写下函数的逻辑一次。当调用时，编译器自动把 `T` 替换成实际类型——`int`、`double`、`string`——帮你批量生成不同类型的版本。
+
+**这一章解决什么问题？** 教你用模板写出"类型无关"的代码——一套逻辑，所有类型通用。你不再需要为 `int` 写一遍、为 `double` 写一遍、为 `string` 写一遍——写一次就够了。没有模板，你的代码库会被大量"只有类型不同"的重复代码撑爆——更可怕的是每份副本都可能藏着彼此不同步的 bug。模板是 C++ 标准库的基石——从 `vector<int>` 到 `sort(v.begin(), v.end())`——它们全都是用模板实现的。
+
+{/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 函数模板：从具体函数到类型无关的公式
+
+你写 `int max(int a, int b) { return a > b ? a : b; }`——这个函数接受两个 `int`，返回较大的 `int`。要支持 `double`？再写 `double max(double a, double b)`——**逻辑一模一样，只是类型名不同**。
+
+<Term def="C++ 中用 template 关键字定义的、参数类型尚未确定的函数蓝图。编译器在调用点根据实参类型推导出模板参数，然后生成该类型的专属版本（实例化）。本质是编译器替你"复印"代码——你写一次泛型逻辑，编译器为你需要的每种类型生成一份。">函数模板（function template）</Term>解决了这个问题——你把类型变成参数：
+
+```cpp
+template<typename T>
+T max(T a, T b) {
+    return a > b ? a : b;
+}
+```
+
+`template<typename T>` 声明了一个 <Term def="模板参数列表中用 typename 或 class 关键字声明的占位符——T、U 等名字代表"某种尚未确定的类型"。实例化时，编译器用实际类型（如 int、string）替换这个占位符。可以声明多个：<typename T, typename U>。">类型参数（type parameter）</Term> `T`。现在 `max` 不再绑定到某个具体类型——`T` 是一个占位符，编译器会在你来调用时自动推导它。
+
+### 实例化：编译器如何"复印"出具体函数
+
+当你写 `int result = max(3, 7);` 时，编译器做了四件事——这称为 <Term def="编译器根据模板和实际使用的类型参数，自动生成一份对应类型的代码的过程。分为隐式实例化（编译器从调用自动推导类型后生成）和显式实例化（程序员手动指定类型）。每个不同的类型实参组合都生成一份独立的代码——int 版和 double 版是两个完全独立的函数。">模板实例化（template instantiation）</Term>：
+
+<TemplateInstantiationDiagram step={1} />
+
+### 隐式推导 vs 显式指定
+
+大多数时候，编译器从实参类型自动推导模板参数——这叫 <Term def="编译器从函数调用中的实参类型自动推导出模板参数的过程。这是最常用的方式——写 max(3,7) 时编译器看到实参是 int，自动决定 T=int。推导失败时会报错——比如实参类型不一致又无法统一时。">隐式实例化（implicit instantiation）</Term>：`max(3, 7)` → 编译器推导 `T = int`，生成 `int max(int, int)`。
+
+有时推导不出来——或者你想强制指定——就用 <Term def="程序员在调用点手动写出模板参数的方式。形如 max<double>(3.2, 5)——尖括号中的 double 显式告诉编译器 T=double，即使实参看起来像 int 也按 double 处理。在类型推导有歧义或需要强制特定类型时使用。">显式实例化（explicit instantiation）</Term>：
+
+```cpp
+auto x = max<double>(3.2, 5);    // 显式指定 T=double
+                                   // 5 会被转为 double
+template int max<int>(int, int);  // 显式实例化声明——强制编译器生成 int 版本
+```
+
+### 模板参数推导的规则
+
+编译器推导 `T` 时有几条重要规则：
+- 每个模板参数必须能从函数参数推导出来——推导不出来就编译错误
+- 同一个 `T` 出现多次时，推导出的类型必须一致——`max(3, 4.5)` 报错（`T` 既要是 `int` 又要是 `double`）
+- 只有函数参数参与推导——返回类型不参与（如果返回类型是参数化的，需要显式指定或另加模板参数）
+- 顶层的 `const` 和引用在推导时被忽略，但底层的（指向的）不忽略
+
+## 类模板：让整个类变成类型无关的
+
+你见过 `vector<int>`、`vector<string>`、`vector<double>`——它们都是同一个 <Term def="用 template 关键字定义的、类体中使用了类型参数的类。实例化时用具体类型替换类型参数——每个不同的类型实参组合都生成一个独立的类。标准容器（vector、list、map）全部是类模板。">类模板（class template）</Term> `vector` 的不同实例化。这次把"整个类"的类型推迟到使用时再决定：
+
+```cpp
+template<typename T>
+class Stack {
+public:
+    void push(const T &val);
+    T pop();
+    T top() const;
+    bool empty() const { return data.empty(); }
+
+private:
+    std::vector<T> data;
+};
+```
+
+`Stack<int>` 内部是 `vector<int>`，`Stack<string>` 内部是 `vector<string>`——类的结构相同，但底层数据类型完全不同。**`Stack<int>` 和 `Stack<string>` 是两个独立的类——它们之间没有任何继承或友元关系。**
+
+### 类外成员函数定义：必须重写 template 前缀
+
+类的成员函数如果在**类外定义**——必须重写 `template<typename T>` 前缀，并用 `ClassName<T>::` 限定作用域：
+
+```cpp
+template<typename T>
+void Stack<T>::push(const T &val)   // Stack<T>:: 不能省略——Stack 不是类名
+{
+    data.push_back(val);
+}
+
+template<typename T>
+T Stack<T>::pop()
+{
+    T topVal = data.back();
+    data.pop_back();
+    return topVal;
+}
+```
+
+两处容易踩坑：① **忘写 `template<typename T>`**——编译器不认识类外的 `T` 是什么；② **误写 `Stack::push` 而不是 `Stack<T>::push`**——`Stack` 只是一个模板名，不是真正的类名。只有 `Stack<T>`（带上类型参数）才是类。
+
+<ClassTemplateDiagram />
+
+### 模板的声明与定义：为什么要放头文件里
+
+模板不是"普通的函数或类"——它是蓝图，不是成品。编译器需要看到模板的**完整定义**才能实例化。因此模板的声明和定义通常一起放在头文件中——不能像普通函数那样把声明放 `.h`、定义放 `.cpp`（否则链接器找不到生成的实例）。
+
+## 非类型模板参数：把值也变成参数
+
+模板参数不止可以是类型——也可以是值。这称为 <Term def="模板参数列表中不是 typename 声明的类型参数，而是一个具体的值——如 template<int N> 中的 N。编译期就必须知道它的值（常量表达式）。常用于指定数组大小、容器初始容量等。注意：非类型参数不能是浮点数、类类型或字符串字面量（C++20 放宽了部分限制，但基本规则仍是整型+指针）。">非类型模板参数（non-type template parameter）</Term>：
+
+```cpp
+template<typename T, std::size_t N>
+class Array {
+public:
+    T& operator[](std::size_t i) { return data[i]; }
+    constexpr std::size_t size() const { return N; }
+
+private:
+    T data[N];  // N 是编译期常量——数组大小
+};
+
+Array<int, 10> arr1;    // T=int, N=10
+Array<double, 5> arr2;  // T=double, N=5
+```
+
+`N` 必须在编译时就能确定——它是常量表达式。不能用变量当非类型参数——`int n = 5; Array<int, n>` 编译错误。非类型模板参数常用的类型：整数、枚举、指针、引用（C++20 新增了 `auto` 类型的非类型参数和浮点+类类型支持）。
+
+标准库中的 `std::array<T, N>` 就是类模板 + 非类型模板参数的典范——`array<int, 10>` 是一个编译期固定大小的数组，不分配堆内存、性能媲美内置数组。
+
+### 模板参数的默认值
+
+模板参数也可以有默认值——和函数默认参数类似。标准库处处依赖这个机制：
+
+```cpp
+template<typename T, typename Container = std::vector<T>>
+class Stack {
+    Container data;
+    // ...
+};
+
+Stack<int> s1;              // 使用默认：Stack<int, vector<int>>
+Stack<int, std::deque<int>> s2;  // 覆盖默认——底层用 deque
+```
+
+## 模板特化：为特定类型定制实现
+
+大部分时候，泛型代码对所有类型都能正确处理。但有时对某个特定类型需要不同的实现——例如 `bool` 的 `vector` 应该用位压缩而不是逐元素存 `bool`。这就是 <Term def="为模板的某个特定参数组合提供独立实现的方式。全特化——所有模板参数都固定（如 template<> struct X<int>）；偏特化——只固定部分参数或限定模式（如 template<typename T> struct X<T*>）。编译器总是选择最具体（匹配度最高）的版本——全特化优先于偏特化优先于主模板。">模板特化（template specialization）</Term>：
+
+```cpp
+// 主模板——通用版本
+template<typename T>
+struct RemoveReference {
+    using type = T;
+};
+
+// 偏特化——匹配左值引用 T&
+template<typename T>
+struct RemoveReference<T&> {
+    using type = T;
+};
+
+// 偏特化——匹配右值引用 T&&
+template<typename T>
+struct RemoveReference<T&&> {
+    using type = T;
+};
+```
+
+三种形式在层次树中的关系：
+
+<TemplateSpecializationDiagram />
+
+### 全特化 vs 偏特化
+
+- <Term def="模板的所有模板参数都被固定为具体类型的特化版本。形如 template<> struct MyClass<int, double>——尖括号里是空的，后面所有参数都替换为具体类型。函数模板只能全特化，不能偏特化。">全特化（full specialization）</Term>：所有模板参数都固定为具体值——`template<> struct X<int>`。匹配优先级最高。
+- <Term def="只固定了部分模板参数或限定了参数模式的特化版本。形如 template<typename T> struct MyClass<T*>——匹配所有指针类型。偏特化后模板参数列表仍然包含未确定的 typename，但参数模式比主模板更具体。类模板可以做偏特化，函数模板不能。">偏特化（partial specialization）</Term>：只限制参数的模式，不全部固定——`template<typename T> struct X<T*>` 匹配所有指针类型。只适用于类模板——**函数模板不能偏特化**（但可以通过重载模板函数实现类似效果）。
+
+调用 `RemoveReference<int&>::type` 时——编译器检查三个版本：① 主模板（不匹配——模式 `T` 匹配了但优先级低）② 偏特化 `T&`（匹配且更具体）→ 选择 `T&` 版本，`type` = `int`。全特化 > 偏特化 > 主模板——这是编译器的匹配铁律。
+
+### 函数模板只能全特化
+
+```cpp
+// 主模板
+template<typename T>
+int compare(const T &a, const T &b) {
+    if (a < b) return -1;
+    if (b < a) return 1;
+    return 0;
+}
+
+// 全特化——为 const char* 定制
+template<>
+int compare(const char* const &a, const char* const &b) {
+    return std::strcmp(a, b);  // 对字符串——比字典序而不是比指针地址
+}
+```
+
+函数模板不能偏特化——如果需要针对某种模式（如 `T*`）做不同处理，用**重载**一个新的模板函数而不是写特化。重载优先，特化容易有隐蔽的匹配意外。
+
+## 可变参数模板：接受任意数量、任意类型的参数
+
+前面的模板参数数量是固定的——一个 `T`、两个 `T, U`。如果需要接受**任意数量的参数**（像 `printf` 那样），就需要 <Term def="C++11 引入的、接受零个或多个模板参数的模板。用 typename... 或 class... 声明参数包（parameter pack），通过递归展开（每次取出一个参数，对剩余包递归调用自身）逐个处理。sizeof...(Args) 查询包中参数数量。递归终止靠空包匹配到无参版本（base case）。">可变参数模板（variadic template）</Term>：
+
+```cpp
+// Base case——终止递归
+void print() { }
+
+// 可变参数模板——每次取出第一个，对剩下的递归
+template<typename T, typename... Args>
+void print(const T &first, const Args&... rest) {
+    std::cout << first;
+    if constexpr (sizeof...(rest) > 0) {
+        std::cout << ", ";
+    }
+    print(rest...);  // 递归调用，rest... 被展开
+}
+
+print("hello", 42, 3.14, 'x');  // → "hello, 42, 3.14, x"
+```
+
+`typename... Args` 声明了 <Term def="可变参数模板中用 typename... 或 class... 声明的、代表零个或多个类型的集合。可以包含任意数量（0 到 N）的模板参数。函数参数中对应为 Args... rest（函数形参包）。通过递归方式展开——每次取出包中的第一个元素处理，对剩余包递归。sizeof...(Args) 在编译期返回包中的参数数量。">参数包（parameter pack）</Term>——`Args` 可以匹配零个、一个、任意多个类型。`rest...` 是包展开——把捕获到的所有剩余参数一次性传给下一次调用。
+
+下面就通过 Stepper 分步看 `print("hello", 42, 3.14)` 这个调用如何一步步递归展开，直到参数包为空、调用终止。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为双 Stepper——
+   Stepper 1 展示函数模板实例化四阶段（TemplateInstantiationDiagram）；
+   Stepper 2 展示可变参数模板递归展开（VariadicTemplateDiagram）。
+   猜一猜引导；每步必须带 SVG 可视化。 */}
+
+## 动手：一步步看模板如何从蓝图变成代码、参数包如何被递归吃掉
+
+下面用两个 Stepper 演示模板编程中最核心的两条"动起来"的机制：① 函数模板从声明到编译器生成实例的全过程；② 可变参数模板每次递归吃掉一个参数直到空包终止。每条步骤都配图示把抽象规则翻译成可视化的步骤。
+
+### 函数模板实例化四阶段
+
+> 猜一猜：写 `template<typename T> T max(T a, T b)` 后，什么时候才会生成 `int max(int, int)`？第一次写这行代码的时候？还是第一次用它的时候？用 Stepper 验证你的猜想。
+
+<Stepper>
+  <Step title="① 模板声明——只写蓝图，不生成代码">
+
+    <TemplateInstantiationDiagram step={1} />
+
+    `template<typename T>` 只是向编译器注册了一个蓝图。此时 `T` 还是占位符——没有类型确定、没有任何代码生成。就像图纸放在抽屉里——**不占成品库空间**。
+  </Step>
+  <Step title="② 函数调用——编译器发现调用点">
+
+    <TemplateInstantiationDiagram step={2} />
+
+    当编译器在 `int x = max(3, 7);` 遇到调用——它认出 `max` 不是普通函数而是函数模板。此时编译器决定"需要用这个蓝图生成一个具体版本"——**实例化的触发时机就是第一次使用**。
+  </Step>
+  <Step title="③ 隐式推导——自动确定模板参数">
+
+    <TemplateInstantiationDiagram step={3} />
+
+    编译器检查实参 `3` 和 `7`——都是 `int` 类型。推导出 `T = int`。检查签名 `int max(int, int)` 是否和调用匹配（参数个数、类型）——全部通过。如果没有这一步自动推导，你每用一个模板就得手动写 `max<int>(3, 7)`。
+  </Step>
+  <Step title="④ 生成实例——编译器"复印"出一份 int 版本">
+
+    <TemplateInstantiationDiagram step={4} />
+
+    推导完成 → 编译器生成 `int max(int a, int b)` 的代码 → 把它插入到调用点。此后 `max(3, 7)` 和调用一个普通函数没有区别——只是这份"普通函数"是编译器悄悄帮你写的。**每个不同的 `T` 都生成一份独立副本**——`int` 版、`double` 版彼此无关。
+  </Step>
+</Stepper>
+
+### 可变参数模板递归展开
+
+> 猜一猜：`print("a", 1, 2.5)` 这个调用——最终会产生几次函数调用？如果忘了写终止条件（base case），编译器会怎样？用 Stepper 逐步验证。
+
+<Stepper>
+  <Step title="① 初始调用——参数包包含三个参数">
+
+    <VariadicTemplateDiagram step={1} />
+
+    `print("hello", 42, 3.14)` → 编译器推导 `T = const char*`，`Args = {int, double}`。`first = "hello"`，`rest = {42, 3.14}`。输出 `"hello"`，然后对 `rest` 递归调用 `print(42, 3.14)`。
+  </Step>
+  <Step title="② 第一次递归——吃掉一个参数">
+
+    <VariadicTemplateDiagram step={2} />
+
+    第二次调用 `print(42, 3.14)` → 推导 `T = int`，`Args = {double}`。`first = 42`，`rest = {3.14}`。输出 `42`，递归调用 `print(3.14)`。注意 `sizeof...(Args)` 已经从 3 变成了 2——包在缩小。
+  </Step>
+  <Step title="③ 第二次递归——再吃掉一个">
+
+    <VariadicTemplateDiagram step={3} />
+
+    第三次调用 `print(3.14)` → 推导 `T = double`，`Args = {}`（空包！）。`first = 3.14`，`rest` 为空。输出 `3.14`，递归调用 `print()`——参数包空了，这次不会匹配到模板版本。
+  </Step>
+  <Step title="④ 最后一次调用——只剩一个参数">
+
+    <VariadicTemplateDiagram step={4} />
+
+    `print(3.14)` 执行完毕。下一次递归调用 `print()` 时——`Args` 是空包。编译器在重载集中查找 `print()` → 匹配到无参的 base case `void print() {}`。优先选择普通函数而不是模板。
+  </Step>
+  <Step title="⑤ 递归终止——空包调用 base case">
+
+    <VariadicTemplateDiagram step={5} />
+
+    `void print() {}` 被调用——什么也不做，直接返回。递归链条收拢：`print("hello", 42, 3.14)` → `print(42, 3.14)` → `print(3.14)` → `print()`（终止）。总共产生了 **4 次函数调用**——这就是可变参数模板的运行时展开成本。**如果忘了写 `void print() {}`——编译到第四步时找不到匹配的 print() → 编译错误**。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  可变参数模板的关键记忆点：每次递归消耗包里的第一个元素，对剩余包递归调用自身——就像剥洋葱，一层一层。`sizeof...(Args)` 告诉你当前这层还有多少层要剥。终止条件（base case）必须提供——否则最后一层剥完无所适从，编译器直接报错。
+</Callout>
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段全讲 ≥80% 关键代码，单块 ≤30 行，块间必有解说。 */}
+
+## 代码逐段拆解：完整模板示例
+
+以下是覆盖本章五个核心知识点的完整实现——函数模板、类模板、非类型参数、特化、可变参数模板——每段有独立的设计决策解说。
+
+### 函数模板：通用的比较与打印
+
+```cpp
+#include <iostream>
+#include <cstring>
+
+// 通用比较——只要类型支持 < 就能用
+template<typename T>
+int compare(const T &a, const T &b) {
+    if (a < b) return -1;
+    if (b < a) return 1;
+    return 0;
+}
+```
+
+`const T&` 避免大对象拷贝。`T` 只需要支持 `<` 运算——这就是模板的"隐式接口"：模板不要求继承某个基类、不要求显式声明接口——只要实际类型能用 `<` 就行。如果 `T` 没有定义 `<`，编译期就能发现（而不是运行期崩溃）——这叫编译期多态。
+
+### 全特化：为 const char* 定制
+
+```cpp
+// 全特化——const char* 不能用 < 比字典序
+template<>
+int compare(const char* const &a, const char* const &b) {
+    return std::strcmp(a, b);  // strcmp 返回 <0 / 0 / >0
+}
+```
+
+当 `compare("abc", "xyz")` 被调用时——如果走通用版本，比较的是两个指针地址而不是字符串内容。全特化版本改用 `strcmp` 比较字典序——这是覆盖默认逻辑的正确方式。注意参数类型中的 `const char* const&`——引用指向的指针本身是 const（不能修改指针），指针指向的是 const char。
+
+### 类模板 Stack：完整的类外定义
+
+```cpp
+template<typename T>
+class Stack {
+public:
+    void push(const T &val);
+    T pop();
+    T top() const;
+    bool empty() const { return data.empty(); }
+    std::size_t size() const { return data.size(); }
+
+private:
+    std::vector<T> data;
+};
+
+// 类外定义——每个都需要 template 前缀
+template<typename T>
+void Stack<T>::push(const T &val) { data.push_back(val); }
+
+template<typename T>
+T Stack<T>::pop() {
+    if (data.empty()) throw std::out_of_range("pop empty stack");
+    T val = data.back();
+    data.pop_back();
+    return val;
+}
+
+template<typename T>
+T Stack<T>::top() const {
+    if (data.empty()) throw std::out_of_range("top empty stack");
+    return data.back();
+}
+```
+
+类内 `empty` 和 `size` 直接在类体内定义——不需要类外的 `template` 前缀。类外的 `push`、`pop`、`top` 必须各自带上 `template<typename T>` 和 `Stack<T>::` 作用域。`pop` 和 `top` 加了空栈检查——抛出异常而不是未定义行为。`pop` 返回**值**（不是引用）——因为 `pop` 后栈顶元素被销毁了，返回的必须是转移出去的副本。
+
+### 非类型模板参数：编译期确定大小的数组
+
+```cpp
+template<typename T, std::size_t N>
+class FixedArray {
+public:
+    T& operator[](std::size_t i) { return data[i]; }
+    const T& operator[](std::size_t i) const { return data[i]; }
+    constexpr std::size_t size() const { return N; }
+
+    T* begin() { return data; }
+    T* end()   { return data + N; }
+    const T* begin() const { return data; }
+    const T* end()   const { return data + N; }
+
+private:
+    T data[N];
+};
+```
+
+`N` 是编译期常量——`size()` 可以标记为 `constexpr`（编译期可算）。支持 `begin()`/`end()` 意味着可以和范围 for 循环配合——`for (auto &x : arr)`。注意下标的 const 重载——和前面章节学的 `operator[]`一样，const 版返回 `const T&` 保证只读。
+
+### 可变参数模板：递归打印
+
+```cpp
+// Base case——参数包为空时终止
+template<typename T>
+std::ostream& print(std::ostream &os, const T &t) {
+    return os << t;
+}
+
+// Variadic——每次取出第一个，对剩下的递归
+template<typename T, typename... Args>
+std::ostream& print(std::ostream &os, const T &t, const Args&... rest) {
+    os << t;
+    if constexpr (sizeof...(rest) > 0) os << ", ";
+    return print(os, rest...);  // 递归
+}
+```
+
+这里用了一个单参数版本作为终止条件——它最后被调用时输出最后一个参数并返回 `ostream&`。`if constexpr` 保证在编译期就决定要不要加逗号——如果是最后一次递归就不加。和前面 Stepper 演示的 `print` 机制完全一致——每次消耗一个参数，直到碰到终止条件。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个，固定三行格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 在 `.h` 声明模板、`.cpp` 定义模板，链接时报"undefined reference to Stack&lt;int&gt;::push(int)"——明明定义在 `.cpp` 里写好了却链不上。
+  **原因** → 模板不是普通函数——编译器在**编译调用处**时需要看到模板的**完整定义**才能实例化。声明放在 `.h`、定义放在 `.cpp` 时，编译 `main.cpp` 时看不到定义→无法实例化→链接时找不到。
+  **修法** → 模板的声明和定义**全部放头文件**（`.h` 或 `.hpp`）。或者保持分离但引入 `.tpp` / `.impl.h` 并在头文件末尾 `#include` 进来。小项目直接全部放头文件。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 类外定义成员函数时写了 `template<typename T> void Stack::push(...)`——编译报错"'Stack'不是类模板"。
+  **原因** → `Stack` 只是模板名，不是类名。真正的类名是 `Stack<T>`（带上类型参数）。类外定义必须写 `Stack<T>::push`，让编译器知道 `push` 属于实例化后的 `Stack<T>` 而不是模板本身。
+  **修法** → 类外定义写 `template<typename T> void Stack<T>::push(const T &val)`。`Stack<T>::` 不能省略也不能写成 `Stack::`。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 函数模板偏特化——写 `template<typename T> void func(T*)` 想作为 `template<typename T> void func(T)` 的特化版——编译器要么报错，要么默默用错了版本（它选了重载而不是特化，匹配规则不同）。
+  **原因** → **函数模板不支持偏特化**——只有类模板可以做偏特化（匹配 `T*` 等模式）。你写第二个看似"部分特化"的版本时，编译器把它当成**另一个重载**——重载和特化的选择规则不同，可能导致期望的特化版永远不被选中。
+  **修法** → 对函数模板——不用偏特化，改用**函数重载**（写一个新的、更具体的模板函数）。对类模板——写偏特化 `template<typename T> struct X<T*>`（注意 `X<T*>` 的模式）。用重载而非特化更安全——重载的匹配规则更直观、暗坑更少。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 可变参数模板 `print(rest...)` 递归到最后一层——参数包空了但仍被模板版本匹配，无限递归导致编译报错（几十层递归深度）或运行时栈溢出。
+  **原因** → 忘了提供**终止条件**（无参 base case）。当 `Args` 为空时，编译器在重载集中找 `print()`——如果只有 `print(T, Args...)` 模板版本，推导 `T` 时没有实参可用→编译错误；如果它设法推导出 `T` 却进入同一模板→无限递归。
+  **修法** → 永远写一个接受零参数的 base case：`void print() {}` 或 `std::ostream& print(std::ostream &os)`。它在参数包为空时优先于模板版本被选中（普通函数优先于模板），终止递归。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
+
+## 小结
+
+- 模板是"代码模具"——函数模板和类模板让你把类型变成参数，一套逻辑对所有类型通用。编译器在调用点自动推导类型、生成实例——每个不同的类型组合 = 一份独立的代码
+- 类外定义成员函数时，必须重写 `template<typename T>` 前缀 + `ClassName<T>::` 作用域限定。`Stack` 只是模板名，`Stack<T>` 才是类名——这点写错就编译失败
+- 非类型模板参数把值也变成编译期参数——`template<int N>` 让数组大小由模板决定。`std::array<T, N>` 是这个模式的标准用法
+- 特化是为特定类型定制实现——全特化（所有参数固定）、偏特化（限定模式如 `T*`）。函数模板不能偏特化——用重载一个更具体的模板来替代
+- 可变参数模板（`typename... Args`）接受任意数量参数——通过递归每次消耗一个参数，直到空包触发终止。`sizeof...(Args)` 在编译期告诉你包里还剩多少
+
+<Exercises>
+
+**练习 1（改代码型）** 下面的 `Stack` 类模板有三个问题——找出它们并写出修正后的完整版本。
+
+```cpp
+template<typename T>
+class Stack {
+public:
+    void push(const T &val) { data.push_back(val); }
+    T pop() { T v = data.back(); data.pop_back(); return v; }
+    // 缺少 top()
+    // 缺少 empty()
+private:
+    std::vector<T> data;
+};
+
+// 问题版本：类外定义的 print 函数
+template<typename T>
+void Stack::print() const {
+    for (size_t i = data.size(); i > 0; --i)
+        std::cout << data[i-1] << " ";
+    std::cout << "\n";
+}
+```
+
+<Answer>
+
+三个问题：
+1. **缺少 `top()` 和 `empty()`**——任何栈都必须有这两个基本操作，不然使用方没法安全地查看栈顶或判断是否为空。
+2. **类外定义 `Stack::print` 而不是 `Stack<T>::print`**——`Stack` 是模板名不是类名，必须写 `Stack<T>::`。
+3. **`print` 用 `for (size_t i = data.size()...`**——应该从顶往下打印（栈的语义）。修后可以从 `vector` 的反向迭代或 `size()-1` 递减，但更好的方式是用 `auto &` 遍历 `data`。
+
+修正版：
+
+```cpp
+template<typename T>
+class Stack {
+public:
+    void push(const T &val) { data.push_back(val); }
+    T pop() {
+        if (data.empty()) throw std::out_of_range("pop empty stack");
+        T v = data.back();
+        data.pop_back();
+        return v;
+    }
+    T top() const {
+        if (data.empty()) throw std::out_of_range("top empty stack");
+        return data.back();
+    }
+    bool empty() const { return data.empty(); }
+    void print() const;  // 类内声明
+
+private:
+    std::vector<T> data;
+};
+
+// 类外定义——必须 Stack<T>::
+template<typename T>
+void Stack<T>::print() const {
+    std::cout << "[top] ";
+    for (auto it = data.rbegin(); it != data.rend(); ++it)
+        std::cout << *it << " ";
+    std::cout << "[bottom]\n";
+}
+```
+
+</Answer>
+
+**练习 2（独立实现题）** 设计并实现一个 `Pair<T, U>` 类模板：
+- 有两个公有成员：`T first; U second;`
+- 提供两个**类外定义**的成员函数：`Pair make_pair(T f, U s)`（静态工厂）和 `void swap(Pair &other)`
+- 提供一个非成员函数模板 `operator==`（比较两个 `Pair`——`first` 和 `second` 都相等才为 true）
+- 写出使用示例：创建 `Pair<int, string>`、`Pair<double, char>` 并测试比较运算符
+
+<Answer>
+
+```cpp
+template<typename T, typename U>
+class Pair {
+public:
+    T first;
+    U second;
+
+    Pair() = default;
+    Pair(const T &f, const U &s) : first(f), second(s) {}
+
+    static Pair make_pair(const T &f, const U &s);
+
+    void swap(Pair &other);
+};
+
+// 类外定义静态工厂
+template<typename T, typename U>
+Pair<T, U> Pair<T, U>::make_pair(const T &f, const U &s) {
+    return Pair<T, U>(f, s);
+}
+
+// 类外定义 swap
+template<typename T, typename U>
+void Pair<T, U>::swap(Pair<T, U> &other) {
+    std::swap(first, other.first);
+    std::swap(second, other.second);
+}
+
+// 非成员——比较运算符
+template<typename T, typename U>
+bool operator==(const Pair<T, U> &lhs, const Pair<T, U> &rhs) {
+    return lhs.first == rhs.first && lhs.second == rhs.second;
+}
+
+// 使用示例
+Pair<int, std::string> p1(42, "hello");
+Pair<int, std::string> p2 = Pair<int, std::string>::make_pair(42, "hello");
+std::cout << std::boolalpha << (p1 == p2) << '\n';  // true
+```
+
+设计要点：① 公有成员 `first`/`second`——简单数据结构不需要 getter/setter ② `make_pair` 是静态工厂——通过类名调用、返回 `Pair<T,U>`（值） ③ `operator==` 是非成员——支持左右隐式转换（虽然此处参数类型一致看不出区别，模式正确） ④ 全放头文件——模板必须如此。
+
+</Answer>
+
+**练习 3（问答型）** `Stack<int>` 和 `Stack<string>` 之间是什么关系？如果 `Stack<int>` 的一个成员函数用到某个 `static` 局部变量——`Stack<string>` 会共享同一个 `static` 变量吗？为什么？
+
+<Answer>
+
+`Stack<int>` 和 `Stack<string>` 是**两个完全独立的类**——它们之间没有任何继承、友元或关联关系。它们共享的是**同一套源代码模板**而不是同一个类。
+
+关于 `static` 变量——**`Stack<int>` 和 `Stack<string>` 各自拥有一份独立的 `static` 变量**。因为它们是两个不同的类（两个不同的实例化），每个类有自己的 `static` 成员存储空间。`Stack<int>::staticData` 和 `Stack<string>::staticData` 是两个完全独立的变量——它们在内存中相隔万里，互不影响。
+
+这和"两个类之间没有关系"是一致的——模板只是编译器复印代码的蓝图，每次复印出来都是全新的、独立的"成品"。</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（11 个，按首现顺序）；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="函数模板（function template）">
+  C++ 中用 `template` 关键字定义的、参数类型尚未确定的函数蓝图。模板本身不是函数——只是"代码模具"。当你调用时，编译器根据实参类型推导模板参数、生成该类型的专属版本（实例化）。一次编写、多类型通用——是消除"只有类型不同"的重复代码的主要手段。本质是编译器替你"复印"。
+</GlossaryItem>
+
+<GlossaryItem term="类型参数（type parameter）">
+  模板参数列表中用 `typename` 或 `class` 声明的占位符——`T`、`U` 等名字代表"某种尚未确定的类型"。你可以把它理解成一个变量——只是这个变量的值不是数字，而是一个类型（如 `int`、`string`）。实例化时，编译器用实际类型替换这个占位符。在同一个模板中，类型参数可以出现在类型名、参数类型、返回类型等任何需要写类型的位置。
+</GlossaryItem>
+
+<GlossaryItem term="模板实例化（template instantiation）">
+  编译器根据模板和实际使用的类型参数，自动生成一份对应类型代码的过程。分隐式（编译器从调用自动推导类型后生成）和显式（程序员手动写出具体类型）。每个不同的类型参数组合都生成一份独立的代码——`max<int>` 和 `max<double>` 是两个完全独立的函数。实例化发生在编译期——没有运行期开销。
+</GlossaryItem>
+
+<GlossaryItem term="隐式实例化（implicit instantiation）">
+  编译器从函数调用的实参类型自动推导模板参数、然后生成代码的过程。这是模板最常用的方式——写 `max(3, 7)` 时看到实参是 `int`，自动推导 `T = int`、生成 `int max(int, int)`。不需要手动指定类型——大多数时候这种自动推导足够用且不出错。推导失败（如参数类型不一致无法统一）时编译器直接报错。
+</GlossaryItem>
+
+<GlossaryItem term="显式实例化（explicit instantiation）">
+  程序员在调用时或声明时手动写出模板参数的方式。调用时形如 `max<double>(3.2, 5)`——尖括号中的 `double` 明确告诉编译器 `T = double`。也可在声明中使用 `template int max<int>(int, int);` 强制生成某个版本。用于类型推导有歧义时、或希望预先在某处集中生成所有需要的实例。
+</GlossaryItem>
+
+<GlossaryItem term="类模板（class template）">
+  用 `template` 关键字定义的、类体中使用了类型参数的类。它不是真正的类——是类的蓝图。实例化后每个不同的类型参数组合都生成一个独立的类：`vector<int>` 和 `vector<string>` 是两个完全不同的类型、彼此无任何关系。所有标准容器（`vector`、`list`、`map`、`array` 等）都是类模板。
+</GlossaryItem>
+
+<GlossaryItem term="非类型模板参数（non-type template parameter）">
+  模板参数列表中不是类型名、而是一个具体的值——如 `template<int N>` 中的 `N`。编译期就必须知道它的值（常量表达式）。常用于指定数组大小、容器容量等编译期确定的值。常用的非类型参数类型包括整数、枚举、指针、引用。`std::array<T, N>` 是最标准的用法——`N` 是元素个数。
+</GlossaryItem>
+
+<GlossaryItem term="模板特化（template specialization）">
+  为模板的某个特定参数组合提供独立实现的方式。全特化——所有模板参数都固定（如 `template<> struct X<int>`）；偏特化——只固定部分参数或限定参数模式（如 `template<typename T> struct X<T*>` 匹配所有指针类型）。编译器总是选择匹配度最高的版本——全特化优先于偏特化优先于主模板。用于为特定类型定制不同于通用的行为。
+</GlossaryItem>
+
+<GlossaryItem term="全特化（full specialization）">
+  模板的所有模板参数都被固定为具体类型的特化版本。形如 `template<> struct MyClass<int, double>`——尖括号里是空的，后面所有参数都替换为具体类型。匹配优先级最高（优先于偏特化和主模板）。函数模板只支持全特化，不支持偏特化。
+</GlossaryItem>
+
+<GlossaryItem term="偏特化（partial specialization）">
+  只固定了部分模板参数或限定了参数模式的模板特化。形如 `template<typename T> struct MyClass<T*>`——匹配所有指针类型。偏特化后模板参数列表仍然包含未确定的 `typename`，但模式比主模板更具体、匹配优先级在两者之间。只适用于类模板——函数模板不能用偏特化（需要用函数重载替代）。
+</GlossaryItem>
+
+<GlossaryItem term="可变参数模板（variadic template）">
+  C++11 引入的、接受零个或多个模板参数的模板。用 `typename...` 声明参数包（parameter pack）——可匹配任意数量（0 到 N 个）的参数。通过递归方式展开——每次取出包中第一个元素处理、对剩余包递归调用自身。`sizeof...(Args)` 在编译期查询包中参数数量。递归终止靠空包匹配到无参版本（base case）。标准库中的 `std::tuple`、`std::make_shared` 等都是用可变参数模板实现的。
+</GlossaryItem>
+
+<GlossaryItem term="参数包（parameter pack）">
+  可变参数模板中用 `typename...` 或 `class...` 声明的、代表零个或多个类型的集合。函数参数中对应为 `Args... rest`（函数形参包）。编译器通过递归每次取出第一个元素处理、对剩余的元素继续递归——像剥洋葱一样层层消耗。`sizeof...(Args)` 返回编译期包中元素个数。C++17 引入的折叠表达式简化了包的展开——但递归展开仍是理解其机制的核心方式。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章为 C++ Primer §16 改编重写，无 LearnOpenGL 来源。 */}
+
+<Attribution />

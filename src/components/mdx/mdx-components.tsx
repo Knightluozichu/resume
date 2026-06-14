@@ -101,6 +101,14 @@ import { OperatorOverloadTable } from "./diagrams/operator-overload-table";
 import { OperatorChainDiagram } from "./diagrams/operator-chain-diagram";
 import { TypeConversionOperatorDiagram } from "./diagrams/type-conversion-operator-diagram";
 import { CallableConceptDiagram } from "./diagrams/callable-concept-diagram";
+import { InheritanceHierarchyDiagram } from "./diagrams/inheritance-hierarchy-diagram";
+import { VTableDiagram } from "./diagrams/vtable-diagram";
+import { InheritanceLifetimeDiagram } from "./diagrams/inheritance-lifetime-diagram";
+import { AccessInheritanceTable } from "./diagrams/access-inheritance-table";
+import { TemplateInstantiationDiagram } from "./diagrams/template-instantiation-diagram";
+import { ClassTemplateDiagram } from "./diagrams/class-template-diagram";
+import { TemplateSpecializationDiagram } from "./diagrams/template-specialization-diagram";
+import { VariadicTemplateDiagram } from "./diagrams/variadic-template-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -460,6 +468,14 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   OperatorChainDiagram,
   TypeConversionOperatorDiagram,
   CallableConceptDiagram,
+  InheritanceHierarchyDiagram,
+  VTableDiagram,
+  InheritanceLifetimeDiagram,
+  AccessInheritanceTable,
+  TemplateInstantiationDiagram,
+  ClassTemplateDiagram,
+  TemplateSpecializationDiagram,
+  VariadicTemplateDiagram,
   AccessControlDiagram,
   IOClassHierarchyDiagram,
   FileStreamLifecycleDiagram,
