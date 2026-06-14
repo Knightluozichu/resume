@@ -60,6 +60,7 @@ import { cppCopyControlQuestions } from "./review/cpp-copy-control";
 import { cppOverloadedOperationsQuestions } from "./review/cpp-overloaded-operations";
 import { cppOopQuestions } from "./review/cpp-oop";
 import { cppTemplatesQuestions } from "./review/cpp-templates";
+import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library";
 
 export {
   CHAPTER_TITLES,
@@ -116,6 +117,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppOverloadedOperationsQuestions,
   ...cppTemplatesQuestions,
   ...cppOopQuestions,
+  ...cppSpecializedLibraryQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

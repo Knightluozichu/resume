@@ -109,6 +109,10 @@ import { TemplateInstantiationDiagram } from "./diagrams/template-instantiation-
 import { ClassTemplateDiagram } from "./diagrams/class-template-diagram";
 import { TemplateSpecializationDiagram } from "./diagrams/template-specialization-diagram";
 import { VariadicTemplateDiagram } from "./diagrams/variadic-template-diagram";
+import { TupleLayoutDiagram } from "./diagrams/tuple-layout-diagram";
+import { BitsetOperationDiagram } from "./diagrams/bitset-operation-diagram";
+import { RegexMatchDiagram } from "./diagrams/regex-match-diagram";
+import { RandomPipelineDiagram } from "./diagrams/random-pipeline-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -476,6 +480,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ClassTemplateDiagram,
   TemplateSpecializationDiagram,
   VariadicTemplateDiagram,
+  TupleLayoutDiagram,
+  BitsetOperationDiagram,
+  RegexMatchDiagram,
+  RandomPipelineDiagram,
   AccessControlDiagram,
   IOClassHierarchyDiagram,
   FileStreamLifecycleDiagram,

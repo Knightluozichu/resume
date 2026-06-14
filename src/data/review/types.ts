@@ -55,7 +55,8 @@ export type ReviewChapterSlug =
   | "cpp-copy-control"
   | "cpp-overloaded-operations"
   | "cpp-templates"
-  | "cpp-oop";
+  | "cpp-oop"
+  | "cpp-specialized-library";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -114,6 +115,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-overloaded-operations": "重载运算与类型转换",
   "cpp-templates": "模板与泛型编程",
   "cpp-oop": "面向对象程序设计",
+  "cpp-specialized-library": "标准库特殊设施",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
