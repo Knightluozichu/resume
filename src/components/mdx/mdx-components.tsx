@@ -65,6 +65,10 @@ import { IfElseFlowDiagram } from "./diagrams/if-else-flow-diagram";
 import { SwitchFlowDiagram } from "./diagrams/switch-flow-diagram";
 import { LoopComparisonDiagram } from "./diagrams/loop-comparison-diagram";
 import { BreakContinueDiagram } from "./diagrams/break-continue-diagram";
+import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
+import { ParameterPassingDiagram } from "./diagrams/parameter-passing-diagram";
+import { ArrayParameterDiagram } from "./diagrams/array-parameter-diagram";
+import { OverloadResolutionDiagram } from "./diagrams/overload-resolution-diagram";
 import { WindingOrderDiagram } from "./diagrams/winding-order-diagram";
 import { WindingCullStepDiagram } from "./diagrams/winding-cull-step-diagram";
 import { FaceCullingDiagram } from "./diagrams/face-culling-diagram";
@@ -413,6 +417,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SwitchFlowDiagram,
   LoopComparisonDiagram,
   BreakContinueDiagram,
+  FunctionCallStackDiagram,
+  ParameterPassingDiagram,
+  ArrayParameterDiagram,
+  OverloadResolutionDiagram,
   Stepper,
   Step,
   Slider,
