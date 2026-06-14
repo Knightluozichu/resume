@@ -1,0 +1,120 @@
+---
+title: 绘制优化
+type: C
+section: 性能优化
+order: 16
+description: 深入 Android 界面渲染机制——过度绘制检测、布局层级优化、ViewStub 懒加载、自定义 View 性能优化和渲染性能分析。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第16章改编）：讲清 Android 界面渲染优化。 */}
+
+<Objectives>
+
+- 能解释 Android 界面的渲染流水线：measure → layout → draw，每阶段可能出现什么性能问题
+- 能使用 GPU 过度绘制检测工具定位界面性能瓶颈
+- 能回答：为什么 RelativeLayout 比 ConstraintLayout 慢？为什么嵌套 LinearLayout 是性能杀手？
+
+</Objectives>
+
+## 界面卡顿的根源
+
+Android 每 16ms 必须刷新一帧（60fps）。如果一帧的渲染工作超过 16ms 还没完成，这帧就被"丢弃"了——用户看到的就是**掉帧**、卡顿。
+
+一帧渲染的完整流程：
+
+```
+VSYNC信号 → Input → Animation → measure → layout → draw → 合成 → 上屏
+                                    ↑ 这段必须在16ms内完成 ↑
+```
+
+### measure（测量）——最耗时
+
+系统从根 View 开始，深度优先遍历整棵 View 树，确定每个 View 的尺寸。父 View 可能多次调用子 View 的 measure——布局层级越深、measure 调用次数指数增长。
+
+### layout（布局）
+
+确定每个 View 在屏幕上的位置（left/top/right/bottom）。
+
+### draw（绘制）
+
+把 View 的内容画到 Canvas 上。先画背景 → 再画自己（onDraw）→ 最后画子 View（dispatchDraw）。
+
+## 过度绘制（Overdraw）
+
+**过度绘制** = 屏幕上一个像素被重复绘制了多次。比如一个全屏背景（第 1 次画），上面叠了一个全屏的 CardView（第 2 次画），CardView 里又有一个 TextView 的文字区域（第 3 次画）——这个像素被画了 3 次。
+
+Android 的**GPU 过度绘制检测**工具：
+- 原色（无过度绘制）——合理
+- 蓝色（1x 过度绘制）——可接受
+- 绿色（2x 过度绘制）——中等
+- 淡红（3x 过度绘制）——需要优化
+- 深红（4x+ 过度绘制）——严重问题
+
+### 减少过度绘制的手段
+
+1. **移除 Window 的默认背景**：Activity 的 DecorView 默认有一个全屏背景色。如果你的布局本身已经有背景，主题里设置 `<item name="android:windowBackground">@null</item>` 可以减少一层
+2. **减少不必要的背景嵌套**：不要给每个子 View 都设置背景——只有需要背景的才设
+3. **clipChildren + clipToPadding**：ViewGroup 默认会裁剪子 View 的绘制范围——布局确定不需要裁剪时关闭这个功能减少绘制区域计算
+
+## 布局层级优化
+
+| 优化手段 | 说明 |
+|---|---|
+| **ConstraintLayout 替代嵌套 LinearLayout** | 单层解决所有约束关系——避免 LinearLayout 深层嵌套带来的多次 measure 传递 |
+| **merge 标签** | 减少一层 ViewGroup——直接把内容合并到父布局 |
+| **ViewStub 懒加载** | 不立即显示的 View 用 ViewStub 占位——使用时才 inflate |
+| **include 复用** | 复用布局减少代码重复——但对性能帮助有限 |
+
+为什么嵌套 LinearLayout 是性能杀手？每多一层 LinearLayout，子 View 的 measure 就多触发一轮（因为 LinearLayout 需要测量两次——第一次算权重、第二次分配）。三层 LinearLayout 嵌套 = 最深层子 View 被 measure 了 6+ 次。
+
+## 自定义 View 优化
+
+1. **避免在 onDraw 里创建对象**：onDraw 每帧调用——如果在里面 new Paint()、new Path()，每帧都在触发 GC
+2. **使用 clipRect 裁剪不可见区域**：告诉 Canvas 只画某个区域——Canvas 不会真的画外面
+3. **使用硬件加速**：Android 3.0 起默认开启——但复杂的自定义 draw 操作可能退化到软件渲染（慢）
+4. **避免 `requestLayout()` 触发整树重测**：尽量用 `invalidate()` 只触发重绘而不重测
+
+## 小结
+
+- 16ms 渲染流水线：VSYNC → Input → Animation → measure → layout → draw → 合成上屏
+- 过度绘制 = 同像素被画多次 → 用开发者选项的 GPU 过度绘制检测定位
+- 布局优化：ConstraintLayout 替代嵌套、merge 减层级、ViewStub 懒加载
+- 自定义 View 优化：onDraw 里不创建对象、clipRect 裁剪、避免不必要的 requestLayout
+
+<Exercises>
+
+**练习 1（实操型）** 打开手机的开发者选项 → GPU 过度绘制 → 打开你最常用的 App 看看哪些区域是红色/深红色的。截图，思考怎么优化。
+
+<Answer>
+常见红色区域：多层嵌套的背景（最外层有背景、往里CardView有背景、再往里列表项有背景）。优化：移除最外层windowBackground、用ConstraintLayout替代嵌套LinearLayout、给列表项背景设到最深的子View。
+</Answer>
+
+**练习 2（问答型）** 为什么 LinearLayout 嵌套三层会让最深层的 View 被 measure 多次？
+
+<Answer>
+LinearLayout 需要两次 measure：第一轮测量所有子 View 的原始尺寸，第二**轮根据权重(weight)重新分配剩余空间。每嵌套一层，子 View 的 measure 次数翻倍。三层嵌套 = 最深层 View 被 measure 了至少 2³ = 8 次。ConstraintLayout 单层解决——不会触发多重 measure 传递。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="VSYNC">
+  屏幕刷新同步信号——每 16ms 一次（60Hz）。Android 的渲染流水线以 VSYNC 为节拍器——一帧的所有工作必须在下一个 VSYNC 来临前完成。
+</GlossaryItem>
+
+<GlossaryItem term="过度绘制（Overdraw）">
+  同一像素在单帧内被绘制了多次。用 GPU 过度绘制检测工具可视化——原色好，红色表示严重过度绘制需要优化。
+</GlossaryItem>
+
+<GlossaryItem term="ViewStub">
+  轻量级的占位 View——不占用布局测量时间，只有在 inflate() 时才真正加载目标布局。适合"大多数时候不可见"的界面区域（空态、错误页）。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

@@ -1,0 +1,177 @@
+---
+title: 内存优化
+type: C
+section: 性能优化
+order: 17
+description: 深入 Android 内存管理机制——内存泄漏的检测与修复、MAT/LeakCanary 工具使用、Bitmap 内存优化和 App 内存占用分析。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第17章改编）：讲清内存泄漏检测与优化。 */}
+
+<Objectives>
+
+- 能解释 Android 内存泄漏的四大经典场景：静态变量持有 Activity、非静态内部类、未注销的监听器、资源未关闭
+- 能使用 LeakCanary 或 Android Studio Profiler 定位内存泄漏
+- 能回答：为什么 Bitmap 是 Android 内存的"头号杀手"，怎么优化？
+
+</Objectives>
+
+## App 为什么会 OOM？
+
+Android 为每个 App 分配了一个**堆内存上限**（由 `dalvik.vm.heapgrowthlimit` 决定——通常 128MB-512MB，随设备变化）。当 App 使用的堆内存超过这个上限时，系统抛出 `OutOfMemoryError`，进程被杀。
+
+OOM 的两大原因：
+1. **内存泄漏**：本该回收的对象一直被持有引用，GC 无法回收 → 可用内存越来越少
+2. **内存峰值**：某个操作瞬间需要大量内存（比如加载一张超大的 Bitmap），即使没有泄漏也直接爆了上限
+
+## 四大经典内存泄漏场景
+
+### 1. 静态变量持有 Activity
+
+```java
+public class MyManager {
+    private static MyManager instance;
+    private Context context; // 如果传入的是 Activity → 泄漏！
+    
+    public static MyManager getInstance(Context context) {
+        if (instance == null) {
+            instance = new MyManager(context);
+        }
+        return instance;
+    }
+}
+```
+
+单例的生命周期 = 整个进程。如果它持有的 Context 是 Activity，Activity 销毁后单例还活着 → GC Root（单例的静态引用）→ Activity → Activity 无法被回收 → 连带它持有的整个 View 树全泄漏。
+
+**修复**：`this.context = context.getApplicationContext();`
+
+### 2. 非静态内部类 / 匿名内部类
+
+```java
+public class MyActivity extends Activity {
+    // Handler 是匿名内部类 → 隐式持有外部类 MyActivity 的引用
+    private Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            // ...
+        }
+    };
+    
+    @Override
+    protected void onCreate(Bundle b) {
+        handler.postDelayed(task, 60000); // 延迟1分钟的消息
+    }
+}
+```
+
+Handler 的 Message 在消息队列里排队——如果这条 Message 要等 1 分钟才处理，那这 1 分钟内 Handler 隐式持有的 Activity 无法被 GC。如果用户在这 1 分钟内关闭了 Activity……泄漏！
+
+**修复**：使用静态内部类 + WeakReference，或在 onDestroy 里 `handler.removeCallbacksAndMessages(null);`
+
+### 3. 未注销的监听器
+
+```java
+// 注册了广播但忘记注销
+registerReceiver(receiver, filter);
+// onDestroy 里忘了 unregisterReceiver → 系统一直持有 receiver 引用 → Activity 泄漏
+```
+
+同样的还有：`addOnGlobalLayoutListener` 忘记 remove、EventBus 注册忘记 unregister、Cursor 忘记 close。
+
+### 4. 资源未关闭
+
+`FileInputStream`、`Cursor`、`Bitmap`（老版本）、`SQLiteDatabase` 等系统资源忘了 close——系统持有的 native 内存不释放。
+
+## 内存泄漏检测工具
+
+| 工具 | 适用场景 | 使用方式 |
+|---|---|---|
+| **LeakCanary** | 开发阶段自动检测 | 接入库即可——泄漏时自动 dump hprof + 分析引用链 + 通知栏提示 |
+| **Android Studio Profiler** | 手动分析 | 实时监控内存曲线——点击 dump heap → 查看对象数量 → 对比快照找出未回收对象 |
+| **MAT (Memory Analyzer Tool)** | 深度分析 .hprof | 导入 heap dump → Histogram 查对象数量 → Dominator Tree 找大对象 → Path to GC Roots 追溯引用链 |
+
+### LeakCanary 工作原理
+
+在 Activity.onDestroy() 后，用一个弱引用持有它 → 等待 GC → 检查弱引用是否被回收 → 没被回收 = 泄漏 → dump heap 并分析最短的 GC Root 路径 → 展示泄漏链。
+
+## Bitmap 内存优化
+
+Bitmap 是 Android 内存的"头号杀手"——一张 1920×1080 的 ARGB_8888 图片占内存约 8MB（1920 × 1080 × 4 bytes）。如果加载不当，几张图就能让内存爆掉。
+
+优化策略：
+
+1. **按需采样**：用 `BitmapFactory.Options.inSampleSize` 缩放——显示缩略图不需要原图分辨率
+2. **使用合适的色彩格式**：不需要透明度 → 用 RGB_565（2 bytes/pixel，比 ARGB_8888 省一半）
+3. **复用 Bitmap**：`inBitmap` 参数复用已回收的 Bitmap 内存
+4. **及时回收**：不再用的 Bitmap 调 `recycle()`（Android 3.0 前必要，之后 GC 会自动回收但可能不及时）
+5. **使用图片加载库**：Glide、Coil 等会自动处理采样、缓存、生命周期绑定——不要手动处理 Bitmap
+
+## 小结
+
+- OOM 两大原因：内存泄漏（慢性的）和内存峰值（瞬时的）
+- 四大泄漏场景：静态持有 Activity、非静态内部类（Handler）、未注销监听器、资源未关闭
+- LeakCanary 自动检测泄漏并展示最短引用链——开发必备
+- Bitmap 优化：inSampleSize 采样、RGB_565 省一半、Glide/Picasso 自动管理生命周期
+- GC Root 可达性分析：静态变量/活跃线程/系统回调持有引用 → 被引用对象无法回收
+
+<Exercises>
+
+**练习 1（找泄漏）** 以下代码有什么内存泄漏？怎么修复？
+
+```java
+public class DataLoader {
+    private static DataLoader instance;
+    private Context ctx;
+    
+    public static void init(Context context) {
+        instance = new DataLoader();
+        instance.ctx = context;
+    }
+    
+    public void load() {
+        new Thread(() -> {
+            // 耗时操作
+            instance.ctx.getString(R.string.app_name); // Thread 还拿着 ctx
+        }).start();
+    }
+}
+```
+
+<Answer>
+两处泄漏：① init() 的 context 可能是 Activity，单例静态持有导致 Activity 泄漏（修复：ctx = context.getApplicationContext()）；② Thread 是匿名内部类 → 隐式持有 DataLoader 实例 → 间接持有 ctx。如果 Thread 跑很久才结束，泄漏时间很长。修复：确保 Thread 不持有不必要的引用，或用 WeakReference。
+</Answer>
+
+**练习 2（问答型）** LeakCanary 怎么检测一个 Activity 是否泄漏了？
+
+<Answer>
+在 Activity.onDestroy() 后，用 WeakReference 持有 Activity → 触发 GC → 检查 WeakReference.get() 是否返回 null。null = 正常回收；非 null = 泄漏 → dump heap 分析 → 找出从 GC Roots 到 Activity 的最短引用路径 → 展示泄漏链。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="OOM（OutOfMemoryError）">
+  App 使用的堆内存超过系统分配上限时抛出的异常。原因可能是内存泄漏（内存只涨不降）或内存峰值（瞬间大量分配）。
+</GlossaryItem>
+
+<GlossaryItem term="LeakCanary">
+  Square 开源的内存泄漏检测库。自动监控 Activity/Fragment 销毁后的回收情况，发现泄漏时 dump heap 分析并展示最短引用链。
+</GlossaryItem>
+
+<GlossaryItem term="WeakReference">
+  弱引用——被弱引用指向的对象，在下一次 GC 时会被回收（不管内存是否充足）。适合避免 Handler 等内部类持有 Activity 导致泄漏。
+</GlossaryItem>
+
+<GlossaryItem term="hprof">
+  Java Heap Dump 文件格式。记录了 dump 时刻堆里所有对象和引用关系。可用 MAT、Android Studio Profiler 打开分析。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
