@@ -1,0 +1,176 @@
+---
+title: Android 系统启动
+type: A
+section: 系统启动
+order: 1
+description: 从按下电源键到看到桌面，Android 启动全链路——init → Zygote → SystemServer → Launcher，每一步发生了什么。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第2章改编）：讲清 Android 启动四步流程。 */}
+
+<Objectives>
+
+- 能用自己的话画出 Android 启动全链路（init → Zygote → SystemServer → Launcher），说出每一步的关键产出
+- 能解释 Zygote 为什么要"预加载"系统类，以及它如何通过 Socket 等待 fork 请求
+- 能回答：如果 SystemServer 启动过程中 AMS 挂了，会发生什么？用户能看到桌面吗？
+
+</Objectives>
+
+## 按下电源键之后发生了什么？
+
+你早上按下手机电源键，几秒后就看到了桌面。这几秒钟里，Android 系统内部发生了一连串精密的启动流程——就像一座工厂从停电状态恢复生产：先给发电机点火（内核），再打开总配电柜（init），接着启动各个车间的主控电脑（Zygote），最后各个生产线陆续上电（SystemServer 启动各种系统服务），直到最终产品——你的桌面——展现在屏幕上。
+
+这条链路有四道关键工序：init 进程作为"大管家"拉起一切 → Zygote 作为"模板工厂"准备好所有 Java 类 → SystemServer 点亮系统的"大脑"（AMS、WMS 等）→ Launcher 作为最终的"门面"显示出来。
+
+如果其中任何一道工序出错——比如 Zygote 没起来——你会看到手机卡在开机动画上，永远进不了桌面。这一章就带你走一遍这四道工序，清楚每一步在干什么、产出什么。
+
+## Android 启动全链路，四步走
+
+<AndroidStartupSequenceDiagram />
+
+### 第一步：init 进程——开天辟地第一号
+
+Linux 内核加载完成后，它拉起用户空间的**第一个进程**——<Term def="Android用户空间第一个进程PID=1，内核启动后最早被拉起的用户态进程，解析init.rc并按序拉起ServiceManager和Zygote。">init 进程</Term>（PID=1）。init 是 Android 用户空间的"始祖进程"，所有其他用户进程——不管是 Zygote 还是你写的 App——归根结底都是从 init 直接或间接 fork 出来的。
+
+init 做的核心工作：
+
+1. **创建目录和挂载文件系统**：`/dev`、`/proc`、`/sys` 等
+2. **解析 `init.rc` 配置文件**：这是一个描述"开机要做哪些事"的脚本
+3. **启动 <Term def="Binder IPC的服务注册中心——系统服务启动时必须来此登记，App调用服务前必须先来此查找，像一个公共电话本。">ServiceManager</Term>**：Binder 通信的"电话本"
+4. **启动 Zygote**：按照 init.rc 配置拉起 Zygote 进程
+
+### 第二步：Zygote——App 进程的"模板工厂"
+
+Zygote 的名字来源于生物学里的"受精卵"——它是所有 Android App 进程的**父进程**。
+
+<Term def="所有App进程的父进程。启动后预加载framework.jar等系统类到内存，然后通过Socket等待fork请求。利用写时复制(COW)让所有App共享只读系统类代码。">Zygote 进程</Term> 被 init 拉起来之后：
+
+1. **创建 ART 虚拟机实例**
+2. **预加载系统类**：把 `framework.jar`、`core-libart.jar` 等数千个 Java 类预先加载到内存
+3. **注册 Socket**（`/dev/socket/zygote`）：进入等待循环，等着接收 fork 请求
+
+**为什么 Zygote 要预加载？** 当你启动一个新 App 时，AMS 通过 Socket 告诉 Zygote fork 一个新进程。利用 Linux 的 **<Term def="写时复制(Copy-On-Write)。Zygote fork App进程时，父子共享同一份物理内存页；只有某进程尝试写某页时，内核才为它复制一份独立副本。">写时复制（COW）</Term>** 机制——fork 出来的新进程如果只读不写，就跟 Zygote 共用同一块物理内存。结果：所有 App 共享的系统类代码只占一份物理内存。
+
+### 第三步：SystemServer——点亮系统的"大脑"
+
+Zygote 启动后做的第一件大事，就是 fork 出 <Term def="Android框架层的「大脑」进程。内部运行AMS、WMS、PMS等几十个系统服务(均为Java对象)，App通过Binder向其请求服务。">system_server 进程</Term>。
+
+system_server 启动后会依次初始化几十个关键的系统服务：
+
+| 服务 | 职责 | 如果挂了会怎样 |
+|---|---|---|
+| **AMS** | 管理所有 Activity 的生命周期 | App 无法启动，系统假死 |
+| **WMS** | 管理屏幕窗口层级和输入事件 | 界面冻结，触摸无响应 |
+| **PMS** | 管理已安装的 APK 和权限 | 无法安装/卸载 App |
+| **PowerManagerService** | 电源管理 | 屏幕不亮或不灭 |
+
+每个服务启动后都要向 ServiceManager 注册。所有核心服务就绪后，AMS 启动桌面 Launcher。
+
+### 第四步：Launcher 启动——终于看到桌面
+
+AMS 向 PackageManagerService 查询 Home 类型的 App，然后走标准 Activity 启动流程——通知 Zygote fork 新进程，加载 Launcher 代码，渲染出满屏图标。启动完成。
+
+## 动手：一步步走过 Android 启动流程
+
+> 猜一猜：Zygote fork 一个新 App 进程时，真的把几百 MB 的内存全复制一份吗？动手切到第二步，仔细看解释再说你的答案。
+
+<Stepper>
+  <Step title="① init 进程：解析 init.rc 并拉起 Zygote">
+    <AndroidStartupSequenceDiagram />
+    Linux 内核启动完毕后拉起 PID=1 的 init 进程。init 挂载文件系统，解析 init.rc 并按配置启动 ServiceManager 和 Zygote。如果 init.rc 有错，手机就会卡在第一屏。
+  </Step>
+  <Step title="② Zygote 进程：预加载系统类，等待 fork 请求">
+    <AndroidStartupSequenceDiagram />
+    Zygote 创建 ART 实例，预加载 framework.jar 等数千个系统类，然后注册 Socket 进入监听循环。之后所有 App 启动请求都通过这个 Socket 发过来。fork 出的新进程通过 COW 共享已加载的系统类。
+  </Step>
+  <Step title="③ SystemServer：启动 AMS/WMS/PMS 等系统服务">
+    <AndroidStartupSequenceDiagram />
+    Zygote fork 出 system_server 进程，内部依次初始化 AMS、WMS、PMS 等几十个系统服务。每个服务向 ServiceManager 注册。全部就绪后 AMS 开始启动桌面。
+  </Step>
+  <Step title="④ Launcher 启动：桌面出现了">
+    <AndroidStartupSequenceDiagram />
+    AMS 查询 Home 类型 App → 通知 Zygote fork → 加载 Launcher → 渲染桌面。启动完成。全链路：Kernel → init → Zygote → system_server → Launcher。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  面试高频题："Zygote 为什么要有预加载机制？"答：预加载 + fork + COW 让所有 App 共享系统类代码，既快又省内存——每个 App 不用从头加载，且只读数据物理内存只占一份。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：以为"AMS 是一个独立进程"。**原因**：混淆进程和对象。AMS 是 Java 对象，跑在 system_server 进程里。WMS、PMS 也一样。**修法**：system_server 是进程，AMS/WMS/PMS 是它里面的服务对象——App 通过 Binder 向 system_server 进程里的 AMS 对象发请求。
+</Callout>
+
+<Callout type="trap">
+  **现象**：面试被问"Zygote 为什么 fork 而不新建线程？"答不上来。**原因**：没理解 fork + COW 的价值。fork 新进程 = 安全沙箱隔离；COW = 共享只读系统类节省内存。线程共享进程 = 无安全隔离。**修法**：记住"安全隔离 + 内存共享"双赢组合。
+</Callout>
+
+<Callout type="trap">
+  **现象**：手机卡开机动画。**原因**：某系统服务启动超时或崩溃（比如 PMS 扫描到损坏的 APK）。Watchdog 检测后重启 system_server。**修法**：抓 logcat 开机日志搜索 "Watchdog" 或 "BOOT_COMPLETED" 定位卡点。
+</Callout>
+
+## 小结
+
+- Android 启动全链路：Kernel → init(PID=1) → Zygote（预加载+Socket）→ system_server（启动 AMS/WMS/PMS）→ Launcher（桌面）
+- Zygote 核心价值：预加载系统类 + fork + COW，让所有 App 快速启动且共享只读内存
+- system_server 是一个进程，AMS/WMS/PMS 是它里面的 Java 对象——不是独立进程
+- ServiceManager 是 Binder 服务注册中心——所有系统服务启动后必须来此登记
+- 启动流程任何一环挂了都会导致无法进桌面——Watchdog 负责检测并尝试恢复
+
+<Exercises>
+
+**练习 1（画图型）** 凭记忆画出 Android 启动全链路，标注每步关键产出。对比上面的序列图。
+
+<Answer>
+四步：① init → 文件系统、ServiceManager、Zygote；② Zygote → ART实例、预加载类、Socket等待；③ system_server → fork自Zygote、初始化AMS/WMS/PMS等、向ServiceManager注册；④ Launcher → AMS启动Home Activity、桌面显示。
+</Answer>
+
+**练习 2（问答型）** 如果 Zygote 不做预加载，每次启动 App 各自加载系统类，有什么后果？
+
+<Answer>
+两个后果：① 每个App启动巨慢（相当于每次开App都要等预加载时间）；② 内存爆炸——每个App独占一份相同系统类代码，100个App就是100份。预加载+COW让所有App共享一份。
+</Answer>
+
+**练习 3（探索型）** adb shell ps -A | grep system_server 看看PID，再 grep zygote。为什么 Zygote 的 PID 更小？
+
+<Answer>
+Zygote 先于 system_server 启动（Zygote 是 system_server 的父进程），所以 PID 更小。Linux 进程创建顺序直接体现为 PID 大小。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="init 进程">
+  Android 用户空间 PID=1 的始祖进程。内核启动后第一个被拉起的用户态进程，解析 init.rc 并按序启动 ServiceManager、Zygote 等。所有用户进程都是 init 直接或间接 fork 出来的。
+</GlossaryItem>
+
+<GlossaryItem term="ServiceManager">
+  Binder IPC 的服务注册中心——像个公共电话本。系统服务启动时来登记，App 调用服务时先来查找。
+</GlossaryItem>
+
+<GlossaryItem term="Zygote 进程">
+  所有 App 进程的父进程。预加载系统类到内存，通过 Socket 等待 fork 请求。fork 出的子进程通过 COW 共享只读内存。
+</GlossaryItem>
+
+<GlossaryItem term="写时复制（COW）">
+  Copy-On-Write。fork 后父子进程共享同一份物理页，只有写入时才复制独立副本。让所有 App 共享只读系统类代码，物理内存只占一份。
+</GlossaryItem>
+
+<GlossaryItem term="system_server 进程">
+  Android 框架层的大脑进程。内部运行 AMS、WMS、PMS 等几十个系统服务（均为 Java 对象），App 通过 Binder 向其请求服务。
+</GlossaryItem>
+
+<GlossaryItem term="Launcher">
+  Android 桌面应用。本质是声明了 Home category 的普通 App，系统启动完毕时 AMS 负责启动它。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

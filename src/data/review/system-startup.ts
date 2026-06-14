@@ -1,0 +1,86 @@
+/** 复习题库 · Android 系统启动（system-startup）。《Android进阶解密》第2章。 */
+
+import type { ReviewQuestion } from "./types";
+
+export const systemStartupQuestions: ReviewQuestion[] = [
+  {
+    id: "ss-1",
+    chapter: "system-startup",
+    level: 1,
+    question: "Android 系统启动有哪四道工序？按顺序说。",
+    answer: "init 进程（PID=1）→ Zygote 进程（预加载系统类）→ SystemServer（启动 AMS/WMS/PMS 等服务）→ Launcher（显示桌面）。",
+    tags: ["启动流程"],
+  },
+  {
+    id: "ss-2",
+    chapter: "system-startup",
+    level: 1,
+    question: "init 进程的 PID 是多少？它根据什么文件来决定启动哪些服务？",
+    answer: "PID=1。它解析 init.rc 配置文件来决定启动顺序——该文件用 Android Init Language 描述了开机任务清单。",
+    tags: ["init", "init.rc"],
+  },
+  {
+    id: "ss-3",
+    chapter: "system-startup",
+    level: 1,
+    question: "ServiceManager 是什么？在启动流程中什么时候被拉起来？",
+    answer: "Binder IPC 的服务注册中心（电话本），系统服务启动时必须来登记，App 调用服务前先来查找。它在 init 阶段被拉起来——比 Zygote 还早。",
+    tags: ["ServiceManager", "Binder"],
+  },
+  {
+    id: "ss-4",
+    chapter: "system-startup",
+    level: 1,
+    question: "Zygote 预加载了哪些内容？预加载之后它做什么？",
+    answer: "预加载 framework.jar、core-libart.jar 等核心 jar 里的数千个 Java 系统类。加载完后注册 Socket（/dev/socket/zygote），进入监听循环，等待 AMS 发来 fork 请求。",
+    tags: ["Zygote", "预加载"],
+  },
+  {
+    id: "ss-5",
+    chapter: "system-startup",
+    level: 2,
+    question: "写时复制（COW）在 Zygote fork 时怎么起作用？为什么能省内存？",
+    answer: "Zygote fork App 进程后，父子共享同一份物理内存页。只有当 App 进程尝试写某页时，内核才复制一份独立副本。结果：所有 App 共享的只读系统类代码物理内存只占一份。",
+    tags: ["COW", "内存"],
+  },
+  {
+    id: "ss-6",
+    chapter: "system-startup",
+    level: 2,
+    question: "AMS、WMS、PMS 是独立进程吗？如果不是，它们在哪里？",
+    answer: "不是独立进程——它们都是 Java 对象，跑在 system_server 这个进程里。App 通过 Binder 向 system_server 进程里的 AMS/WMS/PMS 对象发请求。",
+    tags: ["AMS", "system_server"],
+  },
+  {
+    id: "ss-7",
+    chapter: "system-startup",
+    level: 2,
+    question: "Zygote 为什么用 fork 而不是新建线程来创建 App 进程？",
+    answer: "fork 新进程 = 每个 App 有独立内存空间（安全沙箱隔离，一个 App 崩了不影响别的）；线程共享进程 = 无隔离，不安全。fork + COW 实现了「安全隔离 + 共享公共只读资源」的最优解。",
+    tags: ["fork", "进程隔离"],
+  },
+  {
+    id: "ss-8",
+    chapter: "system-startup",
+    level: 3,
+    question: "如果 Zygote 不做预加载，每个 App 启动时各自加载系统类，会有什么后果？",
+    answer: "① 启动极慢——每次开 App 都要重新加载数千个系统类（开机动画那种等待每次都要来一遍）；② 内存浪费——每个 App 独占一份相同的系统类代码，N 个 App 就是 N 倍内存。",
+    tags: ["预加载", "性能"],
+  },
+  {
+    id: "ss-9",
+    chapter: "system-startup",
+    level: 3,
+    question: "手机卡在开机动画进不了桌面，最可能是什么原因？怎么排查？",
+    answer: "最常见是某系统服务启动超时或崩溃——比如 PMS 扫描到损坏 APK、AMS 内部死锁。Watchdog 检测到后可能反复重启 system_server。排查：抓 logcat 开机日志，搜索 'Watchdog' 或 'BOOT_COMPLETED' 定位卡在哪一步。",
+    tags: ["排查", "Watchdog"],
+  },
+  {
+    id: "ss-10",
+    chapter: "system-startup",
+    level: 3,
+    question: "AMS 是怎么触发 Launcher 启动的？Launcher 是特殊 App 吗？",
+    answer: "所有系统服务启动完毕后 AMS 收到「系统就绪」通知，然后向 PMS 查询哪些 App 声明了 Home category，选中默认桌面，走标准 Activity 启动流程。Launcher 就是声明了 Home category 的普通 App——不是硬编码的特殊进程。",
+    tags: ["Launcher", "AMS"],
+  },
+];

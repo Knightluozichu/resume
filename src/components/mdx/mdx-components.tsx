@@ -165,6 +165,7 @@ import { HemisphereKernelDiagram } from "./diagrams/hemisphere-kernel-diagram";
 import { DepthCompareDiagram } from "./diagrams/depth-compare-diagram";
 import { NoiseBlurDiagram } from "./diagrams/noise-blur-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
+import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -577,6 +578,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   AndroidArchLayersDiagram,
+  AndroidStartupSequenceDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
   LiteralTypesDiagram,
