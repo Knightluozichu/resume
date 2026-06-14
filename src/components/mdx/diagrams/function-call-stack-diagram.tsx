@@ -77,7 +77,7 @@ export function FunctionCallStackDiagram({
           </text>
 
           {/* ═══════ Step 0: 调用前 ═══════ */}
-          <g opacity={active(0) ? 1 : 0.3}>
+          <g opacity={active(0) ? 1 : 0}>
             {/* 调用方栈帧 */}
             <rect
               x={stackX + 12}
@@ -123,7 +123,7 @@ export function FunctionCallStackDiagram({
           </g>
 
           {/* ═══════ Step 1: 传参 ═══════ */}
-          <g opacity={active(1) ? 1 : 0.3}>
+          <g opacity={active(1) ? 1 : 0}>
             {/* 实参压栈 */}
             <rect
               x={stackX + 12}
@@ -196,7 +196,7 @@ export function FunctionCallStackDiagram({
           </g>
 
           {/* ═══════ Step 2: 执行中 ═══════ */}
-          <g opacity={active(2) ? 1 : 0.3}>
+          <g opacity={active(2) ? 1 : 0}>
             {/* 被调函数栈帧 */}
             <rect
               x={stackX + 12}
@@ -306,7 +306,7 @@ export function FunctionCallStackDiagram({
           </g>
 
           {/* ═══════ Step 3: 返回值 ═══════ */}
-          <g opacity={active(3) ? 1 : 0.3}>
+          <g opacity={active(3) ? 1 : 0}>
             <rect
               x={stackX + 12}
               y={100}
@@ -383,7 +383,7 @@ export function FunctionCallStackDiagram({
           </g>
 
           {/* ═══════ Step 4: 栈帧销毁 ═══════ */}
-          <g opacity={active(4) ? 1 : 0.3}>
+          <g opacity={active(4) ? 1 : 0}>
             {/* add 帧消失 */}
             <rect
               x={stackX + 12}
