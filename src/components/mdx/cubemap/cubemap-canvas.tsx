@@ -282,6 +282,10 @@ export default function CubemapCanvas({
   caption = "中央是同一个球：『反射』时它像一面镜子，把四周程序化天空盒原样映在表面；切到『折射』它变成玻璃，背后的环境被弯折着透过来；『漫反射』则是普通哑光球，完全不反射环境，作对照。拖动可转视角。",
 }: CubemapCanvasProps) {
   const [mode, setMode] = useState<MaterialMode>("reflect");
+  // 可见性门控 frameloop（ShaderCanvas 同款范式）：可见时连续渲染（立即出图、自然处理
+  // 尺寸 resize），离屏时不渲染（不空转 GPU）。放弃 demand —— demand 下画布尺寸卡在默认
+  // 300×150 的测量竞态会致首屏黑屏。球是静态的，可见时 always 重渲同一帧开销可接受。
+  const [visible, setVisible] = useState(false);
 
   // 程序化立方体贴图：组件内只建一次（依赖空），卸载时 dispose 释放显存。
   const envMap = useMemo(() => buildProceduralCubeTexture(), []);
@@ -298,15 +302,14 @@ export default function CubemapCanvas({
     invalidateRef.current?.();
   }, [mode]);
 
-  // 离屏暂停：IntersectionObserver 监测容器是否在视口，回到视口踢一帧。
+  // 离屏暂停：IntersectionObserver 监测容器是否在视口，驱动 visible 切 frameloop。
   const wrapRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
     const io = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting)
-          requestAnimationFrame(() => invalidateRef.current?.());
+        setVisible(entry.isIntersecting);
       },
       { threshold: 0.01 },
     );
@@ -341,14 +344,13 @@ export default function CubemapCanvas({
         style={{ boxShadow: "inset 0 0 0 1px var(--accent-glow)" }}
       >
         <Canvas
-          frameloop="demand"
+          frameloop={visible ? "always" : "never"}
           dpr={[1, 2]}
           gl={{ antialias: true }}
           camera={{ position: [0, 0.6, 4.5], fov: 45 }}
           style={{ height, width: "100%", display: "block" }}
           onCreated={(state) => {
             state.gl.setClearColor(new Color("#0a0a0f"), 1);
-            state.invalidate();
           }}
         >
           <Scene mode={mode} envMap={envMap} onControls={onControls} />
