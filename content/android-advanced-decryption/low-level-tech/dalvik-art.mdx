@@ -1,0 +1,137 @@
+---
+title: Dalvik 和 ART
+type: D
+section: 底层技术
+order: 11
+description: Dalvik 和 ART 的全面对比——JIT vs AOT、.dex vs .oat、安装速度 vs 启动速度的权衡，以及 Android 7.0 的混合编译模式。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* D 对比型（《Android进阶解密》第11章改编）：Dalvik vs ART 全方位对比。 */}
+
+<Objectives>
+
+- 能画出 Dalvik JIT 和 ART AOT 的编译流程对比图
+- 能解释 Android 7.0 的 JIT + AOT 混合编译模式——安装快且启动快是如何兼得的
+- 能回答：为什么升级到 ART 后 App 安装变慢了但运行变快了？
+
+</Objectives>
+
+## Dalvik → ART：Android 虚拟机进化史
+
+从 Android 1.0 到 4.4，Android 一直使用 Dalvik 虚拟机。Android 5.0 开始，ART 全面取代 Dalvik。这次升级是 Android 性能史上最大的一次跨越——App 启动速度平均提升 2 倍，但安装时间也增加了不少。
+
+## 编译模式对比
+
+### Dalvik：JIT（Just-In-Time）
+
+每次 App 运行时，Dalvik 的 JIT 编译器在**运行时**把热点代码（频繁执行的方法）从 dex 字节码翻译成机器码。App 刚启动时走解释执行（慢），跑着跑着 JIT 把热点编译了（变快）。
+
+```
+.dex 字节码 —→ [安装：只做 dexopt 优化，不编译] —→ 运行时 JIT 翻译
+```
+
+**优点**：安装快（不编译）、占用空间小。**缺点**：每次运行都要 JIT（耗电）、刚启动时解释执行慢。
+
+### ART：AOT（Ahead-Of-Time）— Android 5.0
+
+ART 在 **App 安装时**就把 dex 字节码全部编译成机器码，存为 .oat 文件。App 运行时直接执行机器码——不需要 JIT。
+
+```
+.dex 字节码 —→ [安装：AOT 编译全部 → .oat 机器码文件] —→ 运行时直接执行
+```
+
+**优点**：启动快（不需要编译）、运行快、省电。**缺点**：安装时间长（全量编译）、占用存储空间大（.oat 文件可能是 .dex 的 2-3 倍）、系统 OTA 升级后需要重新编译所有 App（"正在优化应用"的漫长等待）。
+
+### 混合编译：JIT + AOT — Android 7.0+
+
+Android 7.0 找到了最优解——**混合编译**：
+
+1. App 安装时**不做** AOT 编译（安装快）
+2. 运行时解释执行 + **JIT 编译热点代码**——跟 Dalvik 一样
+3. JIT 编译过的代码被**记录下来**（profiling）
+4. 设备空闲 + 充电时，后台进程根据 profiling 数据**只 AOT 编译热点代码**——不是全量编译
+
+```
+.dex —→ [安装：不编译] → 运行时 JIT 热点 → [空闲时：AOT 编译热点] → .oat（仅热点代码的机器码）
+```
+
+**效果**：安装快 + 启动快 + 存储空间小 + OTA 升级无需重新编译所有 App。
+
+## 全面对比
+
+| 维度 | Dalvik | ART 5.0 (纯AOT) | ART 7.0+ (混合) |
+|---|---|---|---|
+| 安装速度 | 快 | 慢 | 快 |
+| App 启动速度 | 慢 | 快 | 快 |
+| 运行时性能 | 中等 | 快 | 快 |
+| 存储占用 | 小 | 大 | 中 |
+| 耗电 | 较高 | 低 | 低 |
+| OTA 升级 | 无需重编译 | 全量重编译 | 无需重编译 |
+
+## 为什么 ART 的 GC 也更好？
+
+Dalvik 的 GC 是**非并发**的——GC 时 App 所有线程暂停（两次短暂 STW）。ART 改成了**并发 GC**——GC 可以在 App 运行的同时进行，只在极短时间内暂停。结果是 App 更流畅、卡顿更少。
+
+另外 ART 引入了**紧凑型 GC**——移动活对象以减少内存碎片。Dalvik 的 GC 不移动对象，长时间运行后内存碎片化严重。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：系统 OTA 升级后出现"Android 正在优化 X/Y 个应用"的进度条，等很久。**原因**：这是旧版 ART（5.0-6.0）OTA 后重编译所有 App 的 oat 文件。**修法**：Android 7.0 混合编译解决了这个问题——不再全量 AOT。
+</Callout>
+
+<Callout type="trap">
+  **现象**：debug 版本 App 正常，release 版本启动时卡顿或 ANR。**原因**：release 版可能启用了 AOT 编译，某些代码路径的机器码有 bug（ART 编译器 bug，极少见但存在）。**修法**：检查是否是特定机型 + Android 版本的 ART 编译器问题。
+</Callout>
+
+## 小结
+
+- Dalvik：JIT 运行时编译——安装快但运行慢
+- ART 5.0：AOT 安装时全量编译——安装慢但运行快，OTA 升级需重编
+- ART 7.0+ 混合模式：安装不编译 + 运行时 JIT 热点 + 空闲时 AOT 热点 = 最优解
+- ART 的 GC 更好：并发 GC（少暂停）+ 紧凑型 GC（少碎片）
+- 结论：Dalvik 已成历史，现代 Android 的 ART 在性能和功耗上全面碾压
+
+<Exercises>
+
+**练习 1（画图型）** 画出三种编译模式的流程对比图：Dalvik JIT → ART 纯 AOT → ART 混合编译。
+
+<Answer>
+Dalvik：dex → 安装时不编译 → 运行时JIT热点翻译 → 每次运行都JIT。
+ART 5.0：dex → 安装时AOT全编译 → .oat → 运行时直接执行。
+ART 7.0+：dex → 安装不编译 → 运行时解释+JIT热点 → 空闲时根据profiling数据AOT编译热点 → 下次启动直接执行热点代码。
+</Answer>
+
+**练习 2（问答型）** 为什么 Android 7.0 的混合编译是"最优解"？
+
+<Answer>
+它取了三者之长：安装快（不像纯AOT要全编译）、启动快（已AOT的热点代码直接跑）、存储小（只编译热点不是全量）、OTA升级无等待（不重编译）。Dalvik的安装快但不启动快，ART 5.0的启动快但安装慢——混合编译两者兼得。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="JIT 编译">
+  Just-In-Time——运行时把热点代码从字节码翻译成机器码。优点是不增加安装时间和存储，缺点是每次运行都要编译、启动时解释执行慢。
+</GlossaryItem>
+
+<GlossaryItem term="AOT 编译">
+  Ahead-Of-Time——安装时就把所有字节码编译成机器码。运行时直接执行，启动快运行快。缺点是安装时间长、占用存储大。
+</GlossaryItem>
+
+<GlossaryItem term=".oat 文件">
+  ART 的 AOT 编译产物——dex 字节码编译为机器码后存的 ELF 格式文件。App 启动时 ART 直接 mmap 这个文件到内存执行。
+</GlossaryItem>
+
+<GlossaryItem term="混合编译">
+  Android 7.0+ 的编译策略：安装时不做 AOT、运行时 JIT 热点并记录 profiling 数据、设备空闲时后台 AOT 编译热点代码。三者兼得：安装快 + 启动快 + 存储小。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

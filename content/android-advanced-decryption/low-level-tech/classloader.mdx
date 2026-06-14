@@ -1,0 +1,148 @@
+---
+title: 理解 ClassLoader
+type: A
+section: 底层技术
+order: 12
+description: 深入 Android ClassLoader 的继承体系——双亲委派模型、PathClassLoader vs DexClassLoader、热修复和插件化的类加载基础。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型（《Android进阶解密》第12章改编）：讲清 ClassLoader 继承体系与双亲委派。 */}
+
+<Objectives>
+
+- 能画出 Android ClassLoader 继承树：ClassLoader → BootClassLoader → BaseDexClassLoader → PathClassLoader / DexClassLoader
+- 能解释双亲委派模型的原理——为什么要先让父 ClassLoader 加载
+- 能回答：热修复怎么利用 ClassLoader 替换有 bug 的类？
+
+</Objectives>
+
+## ClassLoader——类是怎么被加载的？
+
+你写的每一行 Java/Kotlin 代码，编译成 .dex 文件后，都必须被 **ClassLoader** 加载到内存才能执行。Android 的 ClassLoader 继承体系跟标准 Java 很像但有自己的特点——这跟 .dex 格式和移动设备的特性有关。
+
+## Android ClassLoader 继承体系
+
+```
+ClassLoader（抽象基类）
+  └── BootClassLoader（系统核心类加载器——加载 framework.jar 里的类）
+  └── BaseDexClassLoader（.dex 加载的公共实现）
+        ├── PathClassLoader（加载已安装 App 的 .dex——系统默认使用）
+        └── DexClassLoader（加载外部 .dex/.jar/.apk 文件——插件化/热修复用）
+```
+
+关键区别：
+- **BootClassLoader**：Android 的"根 ClassLoader"。加载 Android Framework 的核心类（Activity、View 等）。它是 PathClassLoader 的 parent
+- **PathClassLoader**：Android 默认的 App ClassLoader。加载已安装的 APK 里的 classes.dex。只能加载已安装应用路径下的 dex
+- **DexClassLoader**：可以从任意路径加载 .dex/.jar/.apk。**热修复和插件化的底层基础**——可以从 sdcard、网络下载的 dex 加载类
+
+## 双亲委派模型
+
+ClassLoader 加载类时遵循"双亲委派"原则：
+
+```
+loadClass("com.example.MyClass"):
+  ① 检查自己是否已经加载过 → 是 → 返回缓存的 Class
+  ② 委托 parent ClassLoader 加载（递归往上）
+  ③ parent 找不到 → 自己尝试 findClass()
+  ④ 找不到 → ClassNotFoundException
+```
+
+以 Android App 为例：PathClassLoader.loadClass("android.app.Activity")：
+- 先问 BootClassLoader（parent）："你加载过 Activity 吗？" → BootClassLoader 从 framework.jar 找到 → 返回
+- 不会往下走到 PathClassLoader 自己去找——因为父已经找到了
+
+**为什么要双亲委派？** 安全——防止核心类被篡改。如果有人写了一个 `java.lang.String` 想替换掉系统的 String 类，双亲委派让 BootClassLoader 先加载到系统的 String，自定义的那个永远不会被加载。
+
+## 热修复如何利用 ClassLoader
+
+热修复的核心原理：把一个修复了 bug 的 .dex 文件插入到 PathClassLoader 的 dexElements 数组**最前面**。当 ClassLoader 查找类时，从前往后遍历 dexElements——先找到的是修复版的类，原来有 bug 的类在后面被"遮蔽"了。
+
+```java
+// 热修复伪代码
+// 1. 加载补丁 dex
+DexClassLoader patchLoader = ...;
+// 2. 反射获取 PathClassLoader 的 dexElements
+Object[] baseElements = getDexElements(pathClassLoader);
+Object[] patchElements = getDexElements(patchLoader);
+// 3. 把补丁 dexElements 插到最前面
+Object[] merged = mergeArrays(patchElements, baseElements);
+setDexElements(pathClassLoader, merged);
+// 之后 ClassLoader 查找类时先找到补丁里的修复版——bug 修复完成
+```
+
+## 插件化如何利用 ClassLoader
+
+插件化需要加载未安装的 APK 里的类——PathClassLoader 做不到（它只加载已安装 APK），所以用 DexClassLoader：
+
+```java
+DexClassLoader pluginLoader = new DexClassLoader(
+    pluginApkPath,    // 插件 APK 的路径（sdcard/asset 里）
+    optimizedDir,     // 解压后 dex 的优化目录
+    null,             // lib 目录
+    hostClassLoader   // parent = 宿主 ClassLoader
+);
+// 用 pluginLoader 加载插件里的类
+Class<?> pluginActivity = pluginLoader.loadClass("com.plugin.MainActivity");
+```
+
+插件的 Activity 还需要通过"占坑"机制绕过 AMS 的 Manifest 校验——第 15 章详解。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：热修复补丁打上去不生效——旧类还是被加载了。**原因**：类的加载有时机——如果旧类在补丁加载之前就已经被 PathClassLoader 加载并缓存了，后面插到 dexElements 前面的补丁类不会被使用（因为 loadClass 第一步就返回了缓存）。**修法**：确保补丁在所有类加载之前就生效——Application.attachBaseContext 是加载补丁的最早时机。
+</Callout>
+
+<Callout type="trap">
+  **现象**：插件化的 App 里出现 `ClassNotFoundException`，但其实类文件在插件 APK 里确实存在。**原因**：DexClassLoader 的 parent 设置不对——如果 parent 宿主 ClassLoader 而类在插件 APK 里，宿主 ClassLoader 找不到但 DexClassLoader 自己的 findClass 也没走到（父加载失败抛异常、不会继续往下找）。**修法**：确保 DexClassLoader 的 findClass 能被正确调用——双亲委派是父找不到后子才找，但父如果抛异常需要处理。
+</Callout>
+
+## 小结
+
+- Android ClassLoader 继承链：BootClassLoader（Framework 类）→ PathClassLoader（App 类） / DexClassLoader（外部 dex）
+- 双亲委派：先让父加载 → 父找不到自己才找 → 保证核心类不被篡改
+- 热修复原理：补丁 dex 插入 dexElements 最前面 → 修复版类"遮蔽" bug 版
+- 插件化用 DexClassLoader 加载外部 APK 的类 → 需要配合占坑机制绕过 AMS
+- Application.attachBaseContext 是加载补丁/插件的最后时机——必须抢先
+
+<Exercises>
+
+**练习 1（问答型）** 双亲委派模型的核心流程是什么？为什么 Android 需要这个机制？
+
+<Answer>
+流程：loadClass → 检查缓存 → 委托 parent 加载 → parent 找不到 → 自己 findClass。Android 需要它：防止核心类被篡改——如果 App 里写了一个 android.app.Activity 想替换系统类，BootClassLoader 先加载到系统的版本，自定义的永远不会被加载。保证系统安全。
+</Answer>
+
+**练习 2（问答型）** 热修复补丁不生效最常见的原因是什么？怎么解决？
+
+<Answer>
+最常见原因：补丁加载太晚——要修复的类在补丁加载前已经被 PathClassLoader 加载并缓存了。loadClass 第一步就命中缓存返回旧类，补丁 dex 里修复版没机会被用到。解决：在 Application.attachBaseContext 里尽早加载补丁。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="双亲委派模型">
+  ClassLoader 加载类的策略：先委托 parent ClassLoader 加载 → parent 找不到 → 自己 findClass。保证核心类不被篡改，同时避免重复加载。
+</GlossaryItem>
+
+<GlossaryItem term="PathClassLoader">
+  Android App 默认的 ClassLoader——加载已安装 APK 里 classes.dex 的类。parent 是 BootClassLoader。
+</GlossaryItem>
+
+<GlossaryItem term="DexClassLoader">
+  可以从任意路径（sdcard、网络下载）加载 .dex 文件的 ClassLoader。热修复加载补丁 dex、插件化加载插件 APK 都靠它。
+</GlossaryItem>
+
+<GlossaryItem term="dexElements">
+  BaseDexClassLoader 内部的 Element 数组——每个 Element 指向一个 .dex 文件。加载类时从前往后遍历查找。热修复把补丁插在最前面实现"遮蔽"。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

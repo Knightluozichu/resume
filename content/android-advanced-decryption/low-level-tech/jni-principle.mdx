@@ -1,0 +1,171 @@
+---
+title: JNI 原理
+type: C
+section: 底层技术
+order: 9
+description: 从 Java 到 C/C++ 的桥梁——理解 JNI 的静态注册与动态注册、native 方法的查找过程、以及 JNIEnv 的工作机制。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android进阶解密》第9章改编）：讲清 JNI 的注册方式、函数签名规则和调用流程。 */}
+
+<Objectives>
+
+- 能解释 JNI 的静态注册和动态注册有什么区别——各自的工作原理
+- 能看懂一个 JNI 函数签名，说出每个字母代表什么类型
+- 能回答：Java 层调用一个 native 方法时，ART 是怎么找到对应的 C/C++ 函数的？
+
+</Objectives>
+
+## JNI——Java 和 C/C++ 的"翻译官"
+
+Android 上层用 Java/Kotlin 写，底层大量代码是 C/C++（图形渲染、音视频编解码、加密算法）。JNI（Java Native Interface）就是两者之间的桥梁——让 Java 能调用 C/C++ 函数，也让 C/C++ 能回调 Java 方法。
+
+Android Framework 源码里到处都是 JNI——SurfaceFlinger 是 C++ 写的但要被 Java 层的 WMS 调用；MediaPlayer 的底层解码器是 C++ 写的；Binder 的底层实现也是 C++ 的。理解 JNI 是理解 Android 全栈的必修课。
+
+## 静态注册 vs 动态注册
+
+JNI 函数有两种注册方式：
+
+### 静态注册
+
+按照固定的命名规则写 C/C++ 函数名：`Java_包名_类名_方法名`。
+
+```cpp
+// Java 层: com.example.MyClass.nativeMethod()
+// JNI 层:
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_example_MyClass_nativeMethod(JNIEnv* env, jobject thiz) {
+    return env->NewStringUTF("Hello from C++");
+}
+```
+
+规则：`Java_` + 包名（`.` 换 `_`）+ 类名 + `_` + 方法名。ART 在加载 .so 库时按这个命名规则去符号表里找对应函数。
+
+优点：简单、不需要额外代码。缺点：
+- 函数名非常长（包名一长，函数名就几十上百个字符）
+- ART 首次调用 native 方法时要遍历整个 .so 符号表查找——耗时
+- 不支持混淆——如果 Java 层类名/包名被 ProGuard 改了，函数名就对不上了
+
+### 动态注册
+
+在 `JNI_OnLoad()` 里手动建立 Java 方法和 C 函数指针的映射表：
+
+```cpp
+static JNINativeMethod gMethods[] = {
+    {"nativeMethod", "()Ljava/lang/String;", (void*)myNativeMethod},
+};
+
+jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv* env;
+    vm->GetEnv((void**)&env, JNI_VERSION_1_6);
+    jclass clazz = env->FindClass("com/example/MyClass");
+    env->RegisterNatives(clazz, gMethods, sizeof(gMethods)/sizeof(gMethods[0]));
+    return JNI_VERSION_1_6;
+}
+```
+
+`JNINativeMethod` 结构体包含三部分：Java 方法名、函数签名、C 函数指针。`RegisterNatives` 一次性注册整个映射表。
+
+优点：
+- 函数名随意（不需要那一长串 `Java_com_example_...`）
+- ART 不需要遍历符号表查找——注册时就建立好了映射
+- 更灵活——可以在运行时动态替换 native 实现
+
+Android Framework 源码中几乎全部使用动态注册——Zygote、AMS、Binder、SurfaceFlinger 等所有系统服务的 JNI 层都是动态注册的。
+
+## JNI 函数签名
+
+动态注册时必须提供正确的函数签名。签名格式：`(参数类型)返回类型`。
+
+| Java 类型 | 签名 |
+|---|---|
+| void | V |
+| boolean | Z |
+| int | I |
+| long | J |
+| float | F |
+| double | D |
+| String | Ljava/lang/String; |
+| Object | L完全限定类名; |
+| int[] | [I |
+| Object[] | [L完全限定类名; |
+
+示例：
+- `int getValue()` → `"()I"`
+- `void setValue(int, String)` → `"(ILjava/lang/String;)V"`
+- `String toString(byte[])` → `"([B)Ljava/lang/String;"`
+
+## JNIEnv 和 JavaVM
+
+- **JavaVM**：代表 Java 虚拟机本身——每个进程一个。通过它可以获取当前线程的 JNIEnv
+- **JNIEnv**：代表当前线程的 JNI 执行环境——每个线程独立。**JNIEnv 不能跨线程传递**——A 线程的 JNIEnv 传给 B 线程用会崩溃。如果要跨线程使用 JNI，必须通过 JavaVM 获取那个线程自己的 JNIEnv
+
+JNIEnv 提供的能力：
+- 调用 Java 方法（`CallStaticMethod`, `CallObjectMethod` 等）
+- 访问/修改 Java 字段（`GetFieldID`, `SetIntField` 等）
+- 创建 Java 对象（`NewObject`）
+- 异常处理（`ExceptionCheck`, `ExceptionClear`）
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：静态注册的 native 方法找不到——`UnsatisfiedLinkError`。**原因**：最常见是 ProGuard 混淆了 Java 类名/包名，导致生成的函数名和实际的 C 函数名不匹配。或者 .so 库没有被正确加载。**修法**：要么在 ProGuard 规则里 keep 包含 native 方法的类，要么改用动态注册（不受混淆影响）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在子线程里调 JNI 函数崩溃——`JNI DETECTED ERROR IN APPLICATION: JNIEnv is not valid`。**原因**：JNIEnv 是线程绑定的，子线程默认没有 JNIEnv。**修法**：通过 JavaVM 的 AttachCurrentThread 获取当前线程的 JNIEnv，用完 DetachCurrentThread。
+</Callout>
+
+## 小结
+
+- JNI 是 Java ↔ C/C++ 的桥梁——native 方法通过它调用底层实现
+- 静态注册：按 `Java_包名_类名_方法名` 命名，简单但怕混淆
+- 动态注册：在 JNI_OnLoad 里 RegisterNatives，灵活不怕混淆——Android Framework 全部使用
+- JNIEnv 线程绑定——不能跨线程传递。子线程用必须先 AttachCurrentThread
+- 函数签名格式：`(参数类型)返回类型`——动态注册必须写对
+
+<Exercises>
+
+**练习 1（代码型）** 写出下面 Java 方法对应的 JNI 函数签名（静态注册和动态注册的签名各写一个）：
+
+```java
+package com.example.utils;
+public class NativeLib {
+    public static native byte[] encrypt(String input, int key);
+}
+```
+
+<Answer>
+静态注册函数名：`Java_com_example_utils_NativeLib_encrypt`
+动态注册签名：`"(Ljava/lang/String;I)[B"`
+</Answer>
+
+**练习 2（问答型）** 为什么 Android Framework 源码里全部使用动态注册而不是静态注册？
+
+<Answer>
+① 不受 ProGuard 混淆影响（符号表里不需要对应命名规则的函数）；② 更高效——RegisterNatives 直接建立映射表，不需要运行时遍历符号表查找；③ 更灵活——可以在 JNI_OnLoad 中控制注册时机甚至条件注册。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="JNI">
+  Java Native Interface——Java 调用 C/C++ 代码的标准接口。Android 底层大量使用 JNI 让 Java 层调用 C/C++ 实现的系统服务（SurfaceFlinger、Binder 驱动等）。
+</GlossaryItem>
+
+<GlossaryItem term="JNIEnv">
+  线程绑定的 JNI 执行环境——通过它可以调用 Java 方法、访问 Java 字段、创建 Java 对象。每个线程有自己的 JNIEnv，不能跨线程共享。
+</GlossaryItem>
+
+<GlossaryItem term="JNI_OnLoad">
+  .so 库被 System.loadLibrary 加载时调用的入口函数。通常在这里调用 RegisterNatives 完成动态注册。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
