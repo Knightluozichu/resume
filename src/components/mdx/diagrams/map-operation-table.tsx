@@ -16,8 +16,8 @@ export function MapOperationTable() {
   const err = "rgb(229,103,92)";
 
   const w = 820;
-  const colX = [0, 160, 230, 410, 700];
-  const colW = [150, 60, 170, 110, 100];
+  const colX = [0, 100, 250, 600, 695];
+  const colW = [100, 150, 350, 95, 120];
 
   const rows: { op: string; sig: string; desc: string; complexity: string; set: string }[] = [
     {
@@ -58,14 +58,14 @@ export function MapOperationTable() {
     {
       op: "operator[]",
       sig: "m[k]",
-      desc: "访问 key 对应的 value——若 key 不存在则插入默认值并返回引用。**仅 map/unordered_map 支持**",
+      desc: "访问 value；key 不存在则插入默认值并返回引用",
       complexity: "O(log n)",
       set: "—（set 无 []）",
     },
     {
       op: "at",
       sig: "m.at(k)",
-      desc: "访问 key 对应的 value——若 key 不存在则抛出 out_of_range 异常",
+      desc: "访问 value；key 不存在则抛 out_of_range 异常",
       complexity: "O(log n)",
       set: "—（set 无 at）",
     },
@@ -151,12 +151,12 @@ export function MapOperationTable() {
                 </text>
 
                 {/* 语法签名 */}
-                <text x={colX[1] + 8} y={rowH / 2 + 4} fontSize="10" fill={primary} fontFamily="monospace">
+                <text x={colX[1] + 8} y={rowH / 2 + 4} fontSize="9" fill={primary} fontFamily="monospace">
                   {row.sig}
                 </text>
 
                 {/* 说明 */}
-                <text x={colX[2] + 8} y={rowH / 2 + 4} fontSize="10" fill={secondary}>
+                <text x={colX[2] + 8} y={rowH / 2 + 4} fontSize="9" fill={secondary}>
                   {row.desc}
                 </text>
 

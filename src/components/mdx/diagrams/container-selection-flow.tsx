@@ -38,7 +38,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
   };
 
   const w = 820;
-  const h = step <= 2 ? 260 : step === 3 ? 400 : 520;
+  const h = step <= 2 ? 260 : step === 3 ? 400 : 580;
 
   // 节点坐标
   const nodes = {
@@ -166,27 +166,27 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
                   <line
                     x1={nodes.q2.x + 80}
                     y1={nodes.q2.y}
-                    x2={520}
-                    y2={250}
+                    x2={515}
+                    y2={312}
                     stroke={warn}
                     strokeWidth="1.2"
                     markerEnd="url(#arrRight)"
                   />
-                  <text x={380} y={245} fontSize="9" fill={warn} textAnchor="middle">
+                  <text x={370} y={250} fontSize="9" fill={warn} textAnchor="middle">
                     NO（无序）
                   </text>
-                  <text x={520} y={265} fontSize="10" fill={accent} textAnchor="middle">
+                  <text x={520} y={328} fontSize="10" fill={accent} textAnchor="middle">
                     unordered_set
                   </text>
-                  <text x={520} y={280} fontSize="10" fill={accent} textAnchor="middle">
+                  <text x={520} y={343} fontSize="10" fill={accent} textAnchor="middle">
                     unordered_map
                   </text>
                   {showQ4 && (
                     <>
-                      <text x={520} y={295} fontSize="10" fill={secondary} textAnchor="middle">
+                      <text x={520} y={358} fontSize="10" fill={secondary} textAnchor="middle">
                         unordered_multiset
                       </text>
-                      <text x={520} y={310} fontSize="10" fill={secondary} textAnchor="middle">
+                      <text x={520} y={373} fontSize="10" fill={secondary} textAnchor="middle">
                         unordered_multimap
                       </text>
                     </>
@@ -261,7 +261,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
           {showQ4 && (
             <>
               {/* unordered_set/map 结果框 */}
-              <g transform={`translate(${w / 2 - 210}, 440)`}>
+              <g transform={`translate(${w / 2 - 210}, 424)`}>
                 <rect x="0" y="0" width="420" height="60" rx="8" fill={accent} opacity="0.04" stroke={border} />
                 <text x="210" y="20" fontSize="12" fontWeight="600" fill={primary} textAnchor="middle">
                   无序 + 不可重复key → unordered_set / unordered_map
@@ -272,7 +272,7 @@ export function ContainerSelectionFlow({ step = 4 }: Props) {
               </g>
 
               {/* unordered_multiset/multimap 结果框 */}
-              <g transform={`translate(${w / 2 - 210}, 460)`}>
+              <g transform={`translate(${w / 2 - 210}, 496)`}>
                 <rect x="0" y="0" width="420" height="46" rx="8" fill={bg} stroke={border} />
                 <text x="210" y="18" fontSize="12" fontWeight="600" fill={secondary} textAnchor="middle">
                   无序 + 可重复key → unordered_multiset / unordered_multimap
