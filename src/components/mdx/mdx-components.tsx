@@ -72,6 +72,8 @@ import { PhongBlinnHighlightDiagram } from "./diagrams/phong-blinn-highlight-dia
 import { HalfVectorDiagram } from "./diagrams/half-vector-diagram";
 import { GammaCurveDiagram } from "./diagrams/gamma-curve-diagram";
 import { GammaGradientBarDiagram } from "./diagrams/gamma-gradient-bar-diagram";
+import { ShadowMapStepDiagram } from "./diagrams/shadow-map-step-diagram";
+import { ShadowAcneDiagram } from "./diagrams/shadow-acne-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -90,6 +92,7 @@ import { ModelDemo } from "./model-demo";
 import { FramebufferDemo } from "./framebuffer-demo";
 import { CubemapDemo } from "./cubemap-demo";
 import { InstancingDemo } from "./instancing-demo";
+import { ShadowMappingDemo } from "./shadow-mapping-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -229,6 +232,11 @@ import { InstancingDemo } from "./instancing-demo";
  *    本章核心概念图）、GammaGradientBarDiagram（corrected=false/true + bare：黑到白渐变条，未校正 线性值
  *    直接显示·中段被显示器压暗偏黑·过渡挤亮端 vs 已校正 pow(c,1/2.2) 提亮中段·过渡均匀，同框供 CompareSlider
  *    两侧分别传）。同款 Server SVG。
+ *  - 高级光照篇·阴影映射（HEL-82，C 实战型）：ShadowMapStepDiagram（§5 Stepper 两遍法四步配图：
+ *    ①第一遍从光源视角沿每方向记最近遮挡距离渲进深度图 shadow map（亮=近/暗=远）→②存下这张深度图→
+ *    ③第二遍从相机渲、用光的 view×proj 把每片元变到光空间取当前深度→④比深度判阴影：current>closest=被挡在阴影(红)
+ *    / current≈closest=自己最近受光(绿)）、ShadowAcneDiagram（mode=acne/bias：深度图一格覆盖斜面一小片只存取样点一个最近深度，
+ *    远光半 current>stored 被自己误判「在阴影」→交替亮暗条纹=shadow acne vs 加 depth bias 把 stored 往更远推一点·整片受光条纹消失）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -296,6 +304,17 @@ import { InstancingDemo } from "./instancing-demo";
  *    硬规则 3）。滑块改实例数 100~10000 只调 mesh.count（实例化下几乎零成本，画到上万仍流畅）；自转开关
  *    （reduced-motion 默认关）+ 重置；顶部 draw call 对比条：实例化恒 1 vs 不实例化需 count 次。frameloop
  *    可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放。
+ *
+ * R3F 阴影映射「内建 shadow map 实时调参」交互演示（「高级光照篇·阴影映射」ShadowMappingDemo，HEL-82）：
+ *  - Client（dynamic 边界）：ShadowMappingDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
+ *    懒加载 ShadowMappingCanvas（独立 chunk，硬规则 2/6）。<Canvas shadows> + 一盏 DirectionalLight castShadow，
+ *    地面 receiveShadow + 两立方体一球 castShadow/receiveShadow，零外部资源（硬规则 3）。three.js 内建 shadow map
+ *    本质就是本章两遍法（光源视角渲深度图→相机比深度判阴影），把要教的参数全做成实时控件让读者亲手拖出概念：
+ *    ①光源角度（绕场景转光看阴影方向变）②阴影图分辨率 256/512/1024/2048 分段（改后 dispose 旧 shadow.map 重建·看锯齿随分辨率变）
+ *    ③depth bias 滑块（拖最小→shadow acne 自遮挡条纹/拖最大→peter panning 阴影脱离悬浮/中间干净）
+ *    ④PCF 软阴影开关（R3F 声明式 <Canvas shadows={pcf?"soft":"basic"}>：soft=PCFSoftShadowMap 软边 ↔ basic=BasicShadowMap 硬边）+ 重置。
+ *    frameloop 可见性门控 always/never（离屏停转、避开 demand 首屏黑屏），OrbitControls 拖拽转视角/滚轮缩放，
+ *    改参 invalidate 踢一帧（场景静止·天然 reduced-motion 友好）。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -315,6 +334,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FramebufferDemo,
   CubemapDemo,
   InstancingDemo,
+  ShadowMappingDemo,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -385,6 +405,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HalfVectorDiagram,
   GammaCurveDiagram,
   GammaGradientBarDiagram,
+  ShadowMapStepDiagram,
+  ShadowAcneDiagram,
   Stepper,
   Step,
   Slider,
