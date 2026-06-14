@@ -44,6 +44,16 @@ import { advancedGlslQuestions } from "./review/advanced-glsl";
 import { geometryShaderQuestions } from "./review/geometry-shader";
 import { instancingQuestions } from "./review/instancing";
 import { antiAliasingQuestions } from "./review/anti-aliasing";
+import { blinnPhongQuestions } from "./review/blinn-phong";
+import { gammaCorrectionQuestions } from "./review/gamma-correction";
+import { shadowMappingQuestions } from "./review/shadow-mapping";
+import { pointShadowsQuestions } from "./review/point-shadows";
+import { normalMappingQuestions } from "./review/normal-mapping";
+import { parallaxMappingQuestions } from "./review/parallax-mapping";
+import { hdrQuestions } from "./review/hdr";
+import { bloomQuestions } from "./review/bloom";
+import { deferredShadingQuestions } from "./review/deferred-shading";
+import { ssaoQuestions } from "./review/ssao";
 
 export {
   CHAPTER_TITLES,
@@ -84,6 +94,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...geometryShaderQuestions,
   ...instancingQuestions,
   ...antiAliasingQuestions,
+  ...blinnPhongQuestions,
+  ...gammaCorrectionQuestions,
+  ...shadowMappingQuestions,
+  ...pointShadowsQuestions,
+  ...normalMappingQuestions,
+  ...parallaxMappingQuestions,
+  ...hdrQuestions,
+  ...bloomQuestions,
+  ...deferredShadingQuestions,
+  ...ssaoQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -39,7 +39,17 @@ export type ReviewChapterSlug =
   | "advanced-glsl"
   | "geometry-shader"
   | "instancing"
-  | "anti-aliasing";
+  | "anti-aliasing"
+  | "blinn-phong"
+  | "gamma-correction"
+  | "shadow-mapping"
+  | "point-shadows"
+  | "normal-mapping"
+  | "parallax-mapping"
+  | "hdr"
+  | "bloom"
+  | "deferred-shading"
+  | "ssao";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -82,6 +92,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "geometry-shader": "几何着色器",
   instancing: "实例化",
   "anti-aliasing": "抗锯齿",
+  "blinn-phong": "高级光照",
+  "gamma-correction": "Gamma 校正",
+  "shadow-mapping": "阴影映射",
+  "point-shadows": "点阴影",
+  "normal-mapping": "法线贴图",
+  "parallax-mapping": "视差贴图",
+  hdr: "HDR",
+  bloom: "泛光",
+  "deferred-shading": "延迟着色",
+  ssao: "SSAO",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
