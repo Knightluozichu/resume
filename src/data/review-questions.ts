@@ -33,6 +33,17 @@ import { transformationsQuestions } from "./review/transformations";
 import { assimpQuestions } from "./review/assimp";
 import { meshQuestions } from "./review/mesh";
 import { modelQuestions } from "./review/model";
+import { depthTestingQuestions } from "./review/depth-testing";
+import { stencilTestingQuestions } from "./review/stencil-testing";
+import { blendingQuestions } from "./review/blending";
+import { faceCullingQuestions } from "./review/face-culling";
+import { framebuffersQuestions } from "./review/framebuffers";
+import { cubemapsQuestions } from "./review/cubemaps";
+import { advancedDataQuestions } from "./review/advanced-data";
+import { advancedGlslQuestions } from "./review/advanced-glsl";
+import { geometryShaderQuestions } from "./review/geometry-shader";
+import { instancingQuestions } from "./review/instancing";
+import { antiAliasingQuestions } from "./review/anti-aliasing";
 
 export {
   CHAPTER_TITLES,
@@ -62,6 +73,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...assimpQuestions,
   ...meshQuestions,
   ...modelQuestions,
+  ...depthTestingQuestions,
+  ...stencilTestingQuestions,
+  ...blendingQuestions,
+  ...faceCullingQuestions,
+  ...framebuffersQuestions,
+  ...cubemapsQuestions,
+  ...advancedDataQuestions,
+  ...advancedGlslQuestions,
+  ...geometryShaderQuestions,
+  ...instancingQuestions,
+  ...antiAliasingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

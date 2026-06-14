@@ -28,7 +28,18 @@ export type ReviewChapterSlug =
   | "multiple-lights"
   | "assimp"
   | "mesh"
-  | "model";
+  | "model"
+  | "depth-testing"
+  | "stencil-testing"
+  | "blending"
+  | "face-culling"
+  | "framebuffers"
+  | "cubemaps"
+  | "advanced-data"
+  | "advanced-glsl"
+  | "geometry-shader"
+  | "instancing"
+  | "anti-aliasing";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -60,6 +71,17 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   assimp: "Assimp",
   mesh: "网格",
   model: "模型",
+  "depth-testing": "深度测试",
+  "stencil-testing": "模板测试",
+  blending: "混合",
+  "face-culling": "面剔除",
+  framebuffers: "帧缓冲",
+  cubemaps: "立方体贴图",
+  "advanced-data": "高级数据",
+  "advanced-glsl": "高级 GLSL",
+  "geometry-shader": "几何着色器",
+  instancing: "实例化",
+  "anti-aliasing": "抗锯齿",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
