@@ -79,6 +79,8 @@ import { TBNDiagram } from "./diagrams/tbn-diagram";
 import { NormalDecodeDiagram } from "./diagrams/normal-decode-diagram";
 import { ParallaxPrincipleDiagram } from "./diagrams/parallax-principle-diagram";
 import { SteepParallaxStepDiagram } from "./diagrams/steep-parallax-step-diagram";
+import { DynamicRangeDiagram } from "./diagrams/dynamic-range-diagram";
+import { ToneMapCurveDiagram } from "./diagrams/tone-map-curve-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -348,6 +350,12 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    SteepParallaxStepDiagram（§5 Stepper 陡峭视差分层步进四步配图：①把深度切几层·视线沿视方向往深处走每层横移一点 UV→
  *    ②逐层采样高度图比较「层深度<表面深度？」成立=仍在表面上方继续下探→③某层层深度首次≥表面深度=钻到表面下=命中·该层 UV 即采样点→
  *    ④POM 在命中层与上一层之间线性插值·逼近真实交点更平滑）。同款 Server SVG。
+ *  - 高级光照篇·HDR（HEL-86，C 实战型，承接 gamma-correction + framebuffers）：DynamicRangeDiagram（一条 0→6 的强度轴上下排对照：
+ *    上排 普通 LDR 帧缓冲 RGBA8 每通道只存 0~1·强度 >1 的整段全压成纯白·高光层次在写入时就丢失·死白一片 vs
+ *    下排 HDR 浮点帧缓冲 RGBA16F 把 >1 完整存下·高光仍有层次留给色调映射，强度=1 处竖直分界虚线标「普通帧缓冲上限」，
+ *    直观展示「截断 vs 保留」）、ToneMapCurveDiagram（同坐标系画三条色调映射曲线把 [0,∞) 压回 [0,1]：clamp=min(x,1)
+ *    到 1 水平封顶·>1 死白无层次 / Reinhard=x/(x+1) 平滑趋近 1 保高光层次 / exposure=1−exp(−x·k) 模拟相机曝光·形状由曝光值调，
+ *    横轴 HDR 输入 0~5 远超 1、纵轴输出 0~1，x=1 对照虚线 + 图例）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -446,6 +454,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   NormalDecodeDiagram,
   ParallaxPrincipleDiagram,
   SteepParallaxStepDiagram,
+  DynamicRangeDiagram,
+  ToneMapCurveDiagram,
   Stepper,
   Step,
   Slider,

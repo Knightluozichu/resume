@@ -1,0 +1,462 @@
+---
+title: HDR
+type: C
+section: 高级光照
+order: 7
+description: 搞懂普通帧缓冲每通道只存 [0,1]、算出来比 1 还亮的强光区一上屏就被截成死白丢了所有细节，为什么要先用浮点帧缓冲 RGBA16F 把 >1 的高动态范围颜色完整存下来，再用色调映射（Reinhard / 曝光）把它压回 [0,1] 保住亮部层次；并在 demo 里切 clamp / Reinhard / 曝光、拖曝光看一扇极亮的窗与墙面暗部此消彼长地被救回来。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/06%20HDR/
+draft: true
+---
+
+{/* C 实战型章（HEL-86，高级光照篇第 7 篇）：原书「HDR」。重心是代码对照(spec C 列 §6 重，覆盖建浮点 FBO + 两遍渲染 + tonemap 着色器)。承接 gamma-correction（tonemap 后还要 gamma 校正、顺序先 tonemap 后 gamma）+ framebuffers（第一遍渲到浮点 FBO、第二遍 tonemap 上屏，与它同构两遍渲染）。沿用「相机与摄影（逆光拍照）」类比。math:false（Reinhard c/(c+1)、exposure 1-exp(-c*k) 行内点到 + 代码讲，§4 整节省略）。主 viz = ShaderDemo（frag 内直接构造一个走廊尽头有极亮窗的 HDR 场景，uMode 切 clamp/Reinhard/exposure + uExposure 曝光滑块，亲手救回死白与暗部）；辅 viz = CompareSlider（左 clamp 死白 / 右 tonemap 保层次，用静态 DynamicRangeDiagram 截断 vs 保留，不塞两个 WebGL 画布）；概念图 DynamicRangeDiagram（动态范围截断）+ ToneMapCurveDiagram（三条映射曲线）。draft:true，老板验收后才发布（硬规则 7）。诚实化（HEL-82 教训）：只演示确信能渲出的——clamp 死白+暗黑 vs tonemap 保层次、曝光此消彼长，不声称真浮点 FBO 渲染正常（frag 内部 float 算 HDR 本就高精度）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) LDR vs HDR（普通帧缓冲每通道只存 [0,1]，亮过 1 全被截成纯白丢失细节；HDR 允许颜色暂时 >1 保住高光信息）= 直觉引入 + 概念 + DynamicRangeDiagram + 主 ShaderDemo；2) 为什么 [0,1] 截断丢高光（一扇亮窗、一盏强灯算出来远大于 1，clamp 后全是死白看不出层次）= 概念 + demo clamp 模式 + CompareSlider；3) 浮点帧缓冲 RGBA16F（用 16 位浮点纹理当颜色附件，能存 >1，先把场景渲进它）= 概念 + §6 代码①（含 EXT_color_buffer_float）；4) 色调映射 tone mapping（把 [0,∞) 的 HDR 颜色压回 [0,1] 显示，保住亮部层次）= 概念 + ToneMapCurveDiagram + demo；5) Reinhard 映射（c/(c+1)，简单均匀压缩）= §6 代码③ + 曲线；6) 曝光 exposure 映射（1-exp(-c*exposure)，模拟相机曝光，可调亮暗）= demo 曝光滑块 + §6 代码③ + 曲线；7) HDR 与 gamma 的顺序（先 tonemap 再 gamma 校正，承接上一章）= 概念 + 误区。Term 共 5 个：HDR / 动态范围 / 浮点帧缓冲 / 色调映射 / 曝光。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释普通帧缓冲为什么把颜色截在 `[0,1]` 会让强光区**死白丢细节**，以及**浮点帧缓冲**（`RGBA16F`）凭什么能先把算出来 `>1` 的颜色完整存下来
+- 能改出 **HDR** 上屏效果：在 demo 里切 **色调映射** 模式（直接截断 / Reinhard / 曝光）把死白救成有层次，拖**曝光值**看暗处提亮、亮处压住的此消彼长；并能写出「第一遍渲进浮点 FBO、第二遍 tonemap 再 gamma 校正上屏」的两遍流程
+- 能回答：为什么色调映射（tonemap）必须放在 **gamma 校正之前**？顺序反了会怎样？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「相机与摄影（逆光拍照）」库（承接同 section）。 */}
+
+## 逆光拍照：要么窗外白成一片，要么屋里黑成一团
+
+你一定拍过这种照片：人站在窗前，想把人和窗外的风景一起拍清楚。可手机一拍——要么窗外亮得**白成一片**、什么都看不见，要么为了看清窗外把曝光压低，结果屋里的人**黑成一团**。亮处和暗处，相机好像只能照顾一头。
+
+渲染里也是同一个坎。一个场景里常常既有一扇**极亮的窗**（亮到刺眼）、又有墙角的**暗部细节**。问题在于：屏幕能显示的亮度就那么一个范围，最亮也就是「纯白」。窗户那块算出来远比纯白还亮，可一上屏就被强行摁成纯白——它和旁边稍暗一点的高光全糊成同一片死白，层次全没了。
+
+这一章要解决的就是这件事：**怎么让一张图同时照顾住极亮的窗和昏暗的墙角**。办法分两步——先用一块「能装下超亮颜色」的画板把场景原样存住，再像调相机曝光一样把它**柔和地**压回屏幕能显示的范围。没有它，你的强光区永远是一坨没细节的死白；有了它，亮处暗处都能看清。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
+
+## 死白的根源：普通帧缓冲只装得下 [0,1]
+
+先说清死白是怎么来的。你之前画到的帧缓冲，每个颜色通道用 8 位整数存（`RGBA8`），能表示的范围被锁死在 <Term def="Low Dynamic Range，低动态范围。指颜色每个通道被限制在 [0,1]（或 0~255 整数）的普通表示方式，最亮就是纯白 1。亮度超过 1 的部分无法存储，会被截断（clamp）成 1，所以强光区会糊成一片没有层次的死白。普通的 RGBA8 帧缓冲就是 LDR 的。">LDR</Term>（低动态范围）的 `0` 到 `1` 之间——`0` 是黑、`1` 是能显示的最亮（纯白），再没有「比纯白还亮」这回事。
+
+可光照算出来的颜色根本不守这个规矩。一扇正对太阳的窗、一盏贴脸的强灯，按公式（多盏光叠加、强光源）算出来的值轻松就 `3.0`、`6.0`——远比 `1.0` 大。这些「亮过头」的值一旦写进 LDR 帧缓冲，就被无情地 **截断（clamp）成 1**：窗户中心算出 `6.0`、窗框边上算出 `2.5`，写进去全成了 `1.0`，本该有的明暗层次在这一刻就**永久丢了**。这就是一个场景能容纳的明暗跨度——它的 <Term def="一个场景里最亮和最暗之间的亮度跨度。真实世界跨度极大（正午太阳能比阴影亮上万倍），渲染时强光源、多光叠加也会让某些区域远亮于 1。普通 LDR 帧缓冲只能表示 [0,1] 这一小段动态范围，跨度大的场景里超过 1 的高光就被压成死白、丢失层次。">动态范围</Term>——被这块小画板硬生生砍掉了一截。下面这张图把「截断 vs 保留」上下排开：
+
+<DynamicRangeDiagram />
+
+上排普通帧缓冲，强度过了 `1` 就全是纯白；下排我们想要的，是把 `>1` 那一截**完整存下来**。
+
+## 解法第一步：用浮点帧缓冲先把 >1 存住
+
+既然 8 位整数装不下 `>1` 的颜色，那就换一块**能装下**的画板。这就是 <Term def="一种颜色附件用 16 位（或 32 位）浮点数存储的帧缓冲，WebGL2 里用 RGBA16F 这类内部格式。浮点数能表示远大于 1 的值（也能表示很小的小数），所以光照算出来 >1 的高动态范围颜色可以原封不动地存进去、不被截断。HDR 的第一遍渲染就是把整个场景渲进这块浮点帧缓冲。">浮点帧缓冲</Term>：把帧缓冲的颜色附件从普通 8 位纹理换成 **16 位浮点纹理**（`RGBA16F`）。浮点数能轻松表示 `6.0`、`100.0` 这种远超 `1` 的值，于是窗户的 `6.0`、窗框的 `2.5` 都被**原封不动**地存进去，一个细节都不丢。
+
+这一步就是整套 <Term def="High Dynamic Range，高动态范围。这里指一套渲染做法：先把场景渲进能存 >1 的浮点帧缓冲（保住超亮高光的全部层次），再用色调映射把这个大范围压回屏幕能显示的 [0,1]。好处是强光区不再死白一片，亮处暗处都能保留细节——就像相机的 HDR 模式同时照顾逆光下的亮处和暗处。">HDR</Term>（高动态范围）做法的开端：跟[帧缓冲](/learn/learnopengl/advanced-opengl/framebuffers)那章一样另开一块离屏画板，只不过这次它的颜色附件是浮点纹理。**第一遍**把整个场景照常渲进这块浮点帧缓冲——所有 `>1` 的高光都安然存住。但它还不能直接上屏：屏幕只认 `[0,1]`，你把 `6.0` 直接丢给屏幕，照样被截成纯白。还差关键的第二步。
+
+## 解法第二步：色调映射把大范围压回 [0,1]
+
+存住了大范围，怎么把它「塞进」屏幕只认的 `[0,1]`、又不丢层次？答案是 <Term def="Tone Mapping，把 [0,∞) 的高动态范围颜色用一个函数压回屏幕能显示的 [0,1] 的过程。关键是它不是硬截断，而是平滑地压缩：越亮的部分压得越狠，但仍保留相对层次，于是窗户中心和窗框不再糊成同一片白。常见做法有 Reinhard（c/(c+1)）和曝光映射（1-exp(-c*曝光)）。是 HDR 第二遍上屏前必做的一步。">色调映射</Term>（tone mapping）。它不是简单地一刀切（那就退回死白了），而是用一个**平滑压缩**的函数：越亮的地方压得越狠，但亮处之间的相对层次保留下来。于是 `6.0` 和 `2.5` 被压成两个不同的、都在 `[0,1]` 内的值——窗户中心和窗框终于分得开了。
+
+本章用两种最常见的映射，下面这张曲线图把它们和「直接截断」画在一起对照：
+
+<ToneMapCurveDiagram />
+
+第一种是 **Reinhard**：`c / (c + 1)`。它把任意大的 `c` 都平滑地压进 `[0,1)`——`c=1` 压成 `0.5`、`c=6` 压成约 `0.86`、`c` 再大也只是越来越逼近 `1` 但永远到不了，所以高光区始终有层次、绝不死白。简单、均匀，是最常用的入门映射。
+
+第二种是 <Term def="一种色调映射方式，模拟相机的曝光：tonemap 时乘上一个可调的曝光值，公式常用 1 - exp(-c * 曝光)。曝光值调大，暗处被快速提亮（适合看清昏暗细节），但亮处更容易压到接近 1；曝光值调小，亮处保留更多层次（适合强光场景），但暗处偏黑。本质是让你像调相机曝光一样，在『照顾亮处』和『照顾暗处』之间权衡。">曝光</Term>（exposure）映射：`1 - exp(-c * 曝光)`。它多了一个**曝光值**让你像调相机一样权衡——曝光调大，暗处被快速提亮、看清墙角细节，但亮处更容易顶到接近 `1`；曝光调小，亮处保留更多层次、看清窗外，但暗处偏黑。亮处暗处此消彼长，正是逆光拍照里那个取舍，现在交到你手里。
+
+## 别忘了承接上一章：先 tonemap，再 gamma 校正
+
+色调映射把颜色压回了 `[0,1]`，但**还没上屏**——别忘了[上一章](/learn/learnopengl/advanced-lighting/gamma-correction)的 gamma 校正：所有光照计算（包括 tonemap）都在**线性空间**做，最后一步才 `pow(color, 1/2.2)` 编码回 sRGB 给屏幕。所以完整的出口顺序是：**先色调映射、再 gamma 校正**。
+
+顺序为什么不能反？tonemap 是在线性空间里把亮度压缩，它假设输入是线性的；要是先做了 gamma 校正（颜色已被提亮、不再线性），再拿去 tonemap，压缩曲线就作用在错误的数值上，颜色全乱。记牢这条出口流水线：**浮点 FBO 存住 HDR → 色调映射压回 [0,1] → gamma 校正编码回 sRGB → 上屏**。这一步的坑后面误区还会细说。
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。Reinhard c/(c+1)、exposure 1-exp(-c*k) 已在 §3 概念节用行内公式点到 + 人话翻译，符合任务卡。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo，frag 内直接构造走廊尽头有极亮窗的 HDR 场景（float 算本就高精度），uMode 切 clamp/Reinhard/exposure + uExposure 曝光滑块。猜一猜引导。诚实化：只演示确信能渲的——clamp 死白+暗黑 vs tonemap 保层次、曝光此消彼长。frag 无空行（各段 // 注释分隔）。 */}
+
+## 动手：切色调映射模式，把死白的窗救回来
+
+> 猜一猜：下面是一条走廊，尽头有一扇**极亮的窗**（算出来的颜色值约是 `6.0`——比纸白还亮 6 倍），两侧墙面有暗部纹理。先看「直接截断（clamp）」模式：你觉得那扇窗会显出窗框的层次，还是糊成**一整块死白**？而两侧昏暗的墙角，你能看清纹理吗？先切一下，再读下面。
+
+这块画布里，片段着色器**直接算出**了一个高动态范围的场景：窗户中心亮到 `6.0`、墙面只有零点几。三种 **色调映射模式** 在「直接截断 / Reinhard / 曝光」之间切；**曝光值** 滑块只在曝光模式下生效，拖它看亮处暗处此消彼长。盯着窗户和墙角，对比三种模式：
+
+<ShaderDemo
+  aspect={1.7}
+  caption="一条走廊，尽头一扇极亮的窗（HDR 颜色约 6.0），两侧墙面有暗部纹理。色调映射模式：0 直接截断 clamp（窗户糊成死白一片、墙角暗部全黑，看不出层次）；1 Reinhard c/(c+1)（窗户透出窗框层次、墙角细节回来）；2 曝光 1-exp(-c*曝光)（同样保层次，且可调）。曝光值：仅曝光模式生效，调大→墙角提亮但窗户更易接近全白，调小→窗户层次更足但墙角偏黑（此消彼长）。先 tonemap 再做 gamma 校正后上屏。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uMode;
+uniform float uExposure;
+out vec4 FragColor;
+// 在 frag 内直接构造一个 HDR 场景：走廊尽头一扇极亮的窗 + 两侧带纹理的暗墙
+// 返回的颜色是线性空间的 HDR 值（窗户区域远大于 1，本就是高动态范围）
+vec3 sceneHDR(vec2 uv) {
+  // uv 居中到 [-0.5,0.5]，x 横向、y 纵向
+  vec2 p = uv - 0.5;
+  // 走廊尽头那扇窗：屏幕中心一个矩形区域，亮度极高(约 6.0)
+  vec2 winHalf = vec2(0.16, 0.26);
+  vec2 d = abs(p) - winHalf;
+  float inWindow = step(max(d.x, d.y), 0.0);
+  // 窗内做一点横竖窗框纹理(亮度在 4.5~6.0 间起伏)，证明高光区"本有层次"
+  float pane = 0.5 + 0.5 * cos(p.x * 60.0) * cos(p.y * 40.0);
+  vec3 windowColor = vec3(5.2, 5.4, 6.0) * (0.78 + 0.22 * pane);
+  // 两侧墙面：暗部底色 + 砖块纹理(亮度只有零点几，暗处细节)
+  float bricks = 0.5 + 0.5 * sin(uv.x * 38.0) * sin(uv.y * 22.0);
+  float wallFalloff = smoothstep(0.0, 0.55, abs(p.x));
+  vec3 wallColor = vec3(0.06, 0.05, 0.045) + 0.10 * bricks * wallFalloff;
+  // 窗内取窗光、窗外取墙；窗边缘做一点泛光让强光"溢出"更真实
+  float glow = inWindow + (1.0 - inWindow) * 0.6 * exp(-12.0 * max(0.0, max(d.x, d.y)));
+  return mix(wallColor, windowColor, glow);
+}
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  vec3 hdr = sceneHDR(uv);
+  // 三种色调映射，把 HDR 颜色压回 [0,1]
+  vec3 mapped;
+  if (uMode < 0.5) {
+    // 模式 0：直接截断 clamp —— >1 全被摁成 1，窗户死白、毫无层次
+    mapped = clamp(hdr, 0.0, 1.0);
+  } else if (uMode < 1.5) {
+    // 模式 1：Reinhard c/(c+1) —— 平滑压缩，高光仍有层次
+    mapped = hdr / (hdr + vec3(1.0));
+  } else {
+    // 模式 2：曝光 1-exp(-c*曝光) —— 模拟相机曝光，拖滑块看此消彼长
+    mapped = vec3(1.0) - exp(-hdr * uExposure);
+  }
+  // 出口顺序：先 tonemap(上面)，再 gamma 校正回 sRGB(承接上一章)
+  vec3 outColor = pow(mapped, vec3(1.0 / 2.2));
+  FragColor = vec4(outColor, 1.0);
+}`}
+  controls={[
+    {
+      name: "uMode",
+      label: "色调映射（0 截断 · 1 Reinhard · 2 曝光）",
+      type: "float",
+      min: 0,
+      max: 2,
+      step: 1,
+      default: 0,
+    },
+    {
+      name: "uExposure",
+      label: "曝光值（仅曝光模式生效）",
+      type: "float",
+      min: 0.2,
+      max: 3,
+      step: 0.05,
+      default: 1,
+    },
+  ]}
+/>
+
+谜底：**直接截断**模式下，窗户中心算出的 `6.0` 和窗框的 `4.5` 全被摁成 `1.0`——整扇窗糊成**一块死白**，窗框层次荡然无存；同时为了「不过曝」你又没法提亮，两侧墙角**漆黑一片**看不清纹理。切到 **Reinhard**，`6.0` 被压成约 `0.86`、`4.5` 压成约 `0.82`，窗框层次透出来了，墙角细节也回来了。切到 **曝光**模式拖滑块：曝光调大，墙角越来越亮、但窗户更接近全白；曝光调小，窗户层次更足、但墙角转暗——这就是逆光取舍的此消彼长，全凭你一只手调。
+
+## 左右擦一擦：截断 vs 色调映射
+
+下面这个对比把「截断丢层次」和「色调映射保层次」定格成两态——左边是普通帧缓冲把 `>1` 全压成死白（高光层次丢失），右边是浮点帧缓冲把 `>1` 完整存下、再由色调映射压回带层次：
+
+<CompareSlider
+  leftLabel="截断（>1 死白 · 层次丢失）"
+  rightLabel="色调映射（>1 保留 · 有层次）"
+  initial={42}
+  left={<DynamicRangeDiagram />}
+  right={<ToneMapCurveDiagram />}
+/>
+
+左侧那条强度轴超过 `1` 的整段全是纯白——这正是 clamp 模式下窗户的样子；右侧三条曲线里，红线 `clamp` 到 1 就封顶（还是死白），而紫线 `Reinhard`、灰虚线 `exposure` 平滑趋近 1，把同样 `>1` 的高光压成一段段不同的灰、层次保住了。一句话：截断是「砍掉超出的」，色调映射是「柔和地压缩进来」。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：三段——①建 RGBA16F 浮点 FBO 当颜色附件（含 WebGL2 需 EXT_color_buffer_float、桌面用 GL_RGBA16F）；②第一遍把场景渲进浮点 FBO；③第二遍 tonemap 着色器：采样浮点纹理→Reinhard 或 exposure→再 gamma 校正→上屏。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；浮点纹理扩展差异 Callout warn。 */}
+
+## 代码逐段拆解
+
+HDR 的代码就三块，和[帧缓冲](/learn/learnopengl/advanced-opengl/framebuffers)那章的两遍渲染同构，只是颜色附件换成了**浮点纹理**：**建浮点 FBO**、**第一遍渲进它**、**第二遍 tonemap + gamma 上屏**。
+
+### 第一块：建一个 RGBA16F 浮点帧缓冲
+
+和普通帧缓冲唯一的区别在颜色纹理的**内部格式**——从 `RGB`/`RGBA8` 换成 `RGBA16F`（16 位浮点），这样才存得下 `>1`。WebGL2 里要先启用 `EXT_color_buffer_float` 扩展，否则浮点纹理不能当可渲染的颜色附件：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 浮点颜色纹理：内部格式 GL_RGBA16F（16 位浮点，存得下 >1）
+unsigned int hdrFBO;
+glGenFramebuffers(1, &hdrFBO);
+glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+unsigned int colorBuffer;
+glGenTextures(1, &colorBuffer);
+glBindTexture(GL_TEXTURE_2D, colorBuffer);
+// 关键：GL_RGBA16F 内部格式，数据类型 GL_FLOAT
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, W, H, 0, GL_RGBA, GL_FLOAT, NULL);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colorBuffer, 0);
+// （深度 renderbuffer 附件 + checkFramebufferStatus 同帧缓冲那章，从略）
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// WebGL2 必须先启用浮点可渲染扩展，否则 RGBA16F 当颜色附件会不完整
+const ext = gl.getExtension("EXT_color_buffer_float");
+if (!ext) console.error("EXT_color_buffer_float 不可用，无法用 RGBA16F 渲染");
+const hdrFBO = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFBO);
+const colorBuffer = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, colorBuffer);
+// 关键：内部格式 gl.RGBA16F，数据类型 gl.FLOAT
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, W, H, 0, gl.RGBA, gl.FLOAT, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.framebufferTexture2D(
+  gl.FRAMEBUFFER,
+  gl.COLOR_ATTACHMENT0,
+  gl.TEXTURE_2D,
+  colorBuffer,
+  0,
+);
+// （深度 renderbuffer 附件 + checkFramebufferStatus 同帧缓冲那章，从略）
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应，差异都集中在「浮点纹理能不能渲」这件事上：
+
+<Callout type="warn">
+  浮点纹理扩展差异：桌面 OpenGL 3.x 直接用内部格式 `GL_RGBA16F`
+  即可（核心支持）。 WebGL2 里 `RGBA16F`
+  是合法的纹理格式，但**默认不能当可渲染的颜色附件**—— 必须先
+  `gl.getExtension("EXT_color_buffer_float")`，拿不到这个扩展就建不出可渲染的浮点
+  FBO（`checkFramebufferStatus` 会返回 incomplete）。另外 WebGL2 写 `#version
+  300 es`、 片段着色器必须加 `precision highp float;`（HDR 值范围大，`highp`
+  别省）。
+</Callout>
+
+### 第二块：第一遍——把场景渲进浮点 FBO
+
+绑上浮点 FBO，开深度测试，把整个场景**照常**渲一遍。光照算出来 `>1` 的高光，这一遍原封不动地写进了 `RGBA16F` 颜色纹理——一个细节都不丢，**这一遍不做任何 tonemap、也不 gamma 校正**：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 第一遍：绑浮点 FBO，正常渲场景（>1 的高光原样写进 RGBA16F 纹理）
+glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+glEnable(GL_DEPTH_TEST);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+RenderScene();   // 强光源、多盏灯叠加，算出来 >1 的颜色照样存下
+glBindFramebuffer(GL_FRAMEBUFFER, 0);   // 解绑，准备第二遍上屏
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 第一遍：绑浮点 FBO，正常渲场景（>1 的高光原样写进 RGBA16F 纹理）
+gl.bindFramebuffer(gl.FRAMEBUFFER, hdrFBO);
+gl.enable(gl.DEPTH_TEST);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+renderScene(); // 强光源、多盏灯叠加，算出来 >1 的颜色照样存下
+gl.bindFramebuffer(gl.FRAMEBUFFER, null); // 解绑，准备第二遍上屏
+```
+
+  </Tab>
+</CodeTabs>
+
+第二遍才是 HDR 的关键：绑回默认帧缓冲、画一个全屏四边形采样这张浮点纹理，在它的片段着色器里做 **色调映射 + gamma 校正**。下面这段就是那个 tonemap 着色器。
+
+### 第三块：第二遍——tonemap + gamma 上屏（核心）
+
+采样浮点纹理拿到原始 HDR 颜色，按所选模式做 Reinhard 或曝光映射压回 `[0,1]`，**最后一步**再 gamma 校正编码回 sRGB。注意这三行的先后：tonemap 在前、gamma 在后：
+
+<CodeTabs>
+  <Tab label="GLSL：Reinhard tonemap + gamma">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D hdrBuffer;
+out vec4 FragColor;
+void main() {
+  // 1) 采样浮点纹理，拿到原始 HDR 颜色（可能 >1）
+  vec3 hdr = texture(hdrBuffer, TexCoords).rgb;
+  // 2) 色调映射：Reinhard c/(c+1)，平滑压回 [0,1)、保住高光层次
+  vec3 mapped = hdr / (hdr + vec3(1.0));
+  // 3) 再 gamma 校正（顺序：先 tonemap 后 gamma！）编码回 sRGB 上屏
+  FragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0);
+}
+```
+
+  </Tab>
+  <Tab label="GLSL：曝光 exposure tonemap + gamma">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D hdrBuffer;
+uniform float exposure;          // 像相机一样可调的曝光值
+out vec4 FragColor;
+void main() {
+  // 1) 采样浮点纹理，拿到原始 HDR 颜色（可能 >1）
+  vec3 hdr = texture(hdrBuffer, TexCoords).rgb;
+  // 2) 曝光映射：1 - exp(-c * 曝光)，曝光大→暗处提亮、亮处易顶白
+  vec3 mapped = vec3(1.0) - exp(-hdr * exposure);
+  // 3) 再 gamma 校正（先 tonemap 后 gamma）编码回 sRGB 上屏
+  FragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+两段就第 2 行不同——Reinhard 是固定的 `c/(c+1)`，曝光多了个 `exposure` uniform 让你实时调。第 1 行采样、第 3 行 gamma 校正完全一样。整套出口顺序固定：**采样 HDR → tonemap 压回 [0,1] → gamma 校正 → 上屏**，三步谁也不能换位置（尤其 tonemap 和 gamma，反了颜色全乱，下面误区细说）。
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字；含可在 §5 Demo 亲手触发的。①用了浮点 FBO 却忘 tonemap→还是被硬截断；②tonemap 后忘 gamma 或顺序反（先 gamma 后 tonemap）→颜色不对（承接上一章）；③普通 RGBA8 FBO 当 HDR 用→>1 写入时就被截了；④WebGL2 没启用 EXT_color_buffer_float 就建 RGBA16F 可渲染 FBO→不完整/报错。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：明明用了 `RGBA16F` 浮点帧缓冲，画面**还是死白一片**，HDR 像没做。**原因**：第一遍把
+  `>1` 的颜色好好存进浮点纹理了，第二遍却**忘了色调映射**——直接把浮点纹理原样输出，
+  屏幕只认 `[0,1]`，`>1` 在上屏那刻照样被硬截断成纯白。**修法**：第二遍片段着色器里务必先做 tonemap
+  （Reinhard `c/(c+1)` 或曝光），把 HDR 压回 `[0,1]` 再上屏；上面 demo 切「直接截断」就是这个翻车现场。
+</Callout>
+
+<Callout type="trap">
+  **现象**：做了
+  tonemap，但画面**颜色发暗、发闷**，或对比度怪异——明暗都不对劲。**原因**：tonemap
+  和 gamma 校正的**顺序反了**（先 `pow(c,1/2.2)` 再 tonemap），或者**忘了 gamma
+  校正**（承接上一章）。 tonemap 假设输入是线性的，先 gamma
+  提亮再压缩，曲线作用在错误数值上。**修法**：固定顺序—— **先色调映射、最后才
+  gamma 校正**：`pow(tonemap(hdr), 1.0/2.2)`，两步别换位、别漏。
+</Callout>
+
+<Callout type="trap">
+  **现象**：换上「HDR 流程」后高光**依旧死白**，调 tonemap 怎么都救不回层次。**原因**：颜色附件
+  其实还是普通 `RGBA8`（8 位整数）纹理，根本**存不下 `>1`**——`6.0` 在**第一遍写入帧缓冲那一刻**
+  就被截成 `1.0` 了，等到第二遍 tonemap 时层次早没了，压谁都白搭。**修法**：颜色纹理内部格式必须是
+  浮点的 `RGBA16F`（数据类型 `GL_FLOAT` / `gl.FLOAT`），别用 `RGB`/`RGBA8`。
+</Callout>
+
+<Callout type="trap">
+  **现象（WebGL2）**：建浮点 FBO 后 `checkFramebufferStatus`
+  返回**不完整**，或控制台报错，画面全黑。**原因**： WebGL2 默认**不允许
+  `RGBA16F` 当可渲染的颜色附件**，没启用扩展就直接建可渲染浮点
+  FBO。**修法**：建之前先 `gl.getExtension("EXT_color_buffer_float")`，拿到才建
+  `RGBA16F` 渲染附件；拿不到（老设备）就降级用 普通 LDR
+  帧缓冲并告知用户，别硬上。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题 + C 型独立实现/选型题（Reinhard vs 曝光怎么选）；答案折叠。 */}
+
+## 小结
+
+- 普通帧缓冲（`RGBA8`）每通道只存 **`[0,1]`**，光照算出 `>1` 的高光在**写入时**就被截成死白、层次永久丢失
+- 解法第一步：用 **浮点帧缓冲**（`RGBA16F`）当颜色附件，第一遍把场景渲进它，`>1` 的高 **动态范围** 颜色原样存住
+- 解法第二步：第二遍做 **色调映射**——Reinhard `c/(c+1)` 平滑均匀压缩，或 **曝光** `1-exp(-c*曝光)` 模拟相机、亮暗可调
+- 出口顺序固定：**先 tonemap 压回 `[0,1]`，再 gamma 校正** 编码回 sRGB 上屏，顺序反了颜色全乱
+- WebGL2 建 `RGBA16F` 可渲染 FBO 前必须启用 `EXT_color_buffer_float` 扩展
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个走廊 demo 里，亲手把「直接截断」的死白翻车现场**写出来**，再改成 Reinhard 救回层次。说出：① clamp 模式那行代码是什么、为什么会死白？② 改成 Reinhard 要把它换成哪一行？
+
+<Answer>
+
+① clamp 模式那行是 `mapped = clamp(hdr, 0.0, 1.0);`。窗户区域 `hdr` 算出来约 `6.0`、窗框约 `4.5`，`clamp` 把所有 `>1` 的值一刀切成 `1.0`——窗户中心和窗框全成了 `1.0`，糊成同一片纯白，明暗层次在截断那刻就没了，所以死白。
+
+② 换成 Reinhard：
+
+```glsl
+mapped = hdr / (hdr + vec3(1.0));
+```
+
+`6.0` 被压成 `6/7 ≈ 0.86`、`4.5` 压成 `4.5/5.5 ≈ 0.82`——两个值不同、都在 `[0,1)` 内，窗框层次就透出来了。任意大的 `hdr` 都被平滑压进 `[0,1)`，永远逼近 1 但到不了，所以高光不死白。
+
+</Answer>
+
+**练习 2（选型题 · C 型）** 三个场景，色调映射该用 **Reinhard** 还是 **曝光**，各给一句理由：① 一个室内夜景，想让玩家能手动「眯眼/睁眼」适应明暗（像相机曝光）；② 一个不需要交互、只要把任意亮度都稳妥压进 `[0,1]` 的离屏缩略图渲染；③ 一个逆光场景，美术希望调到「既看清窗外、墙角也不全黑」的那个平衡点。
+
+<Answer>
+
+- **①室内夜景 + 玩家手动适应 → 曝光**。曝光映射多一个曝光值，正好对应「眯眼/睁眼」——玩家拖大曝光提亮暗处、拖小压住亮处，交互感和相机一致；Reinhard 没有这个旋钮。
+- **②离屏缩略图 + 只要稳妥压进 [0,1] → Reinhard**。它简单、无参、对任意大的输入都平滑压进 `[0,1)`，不需要调，最省心；缩略图不需要曝光交互。
+- **③逆光找平衡点 → 曝光**。要在「看清窗外」和「墙角不全黑」之间找那个点，正是曝光值在调的此消彼长；美术拖曝光滑块到满意为止。Reinhard 给的是固定一条曲线，没有这个调节余地。
+
+一句话原则：**要可调、要模拟相机曝光 → 曝光映射；要无参、稳妥、省心 → Reinhard**。
+
+</Answer>
+
+**练习 3（问答型）** 有人做了 HDR：第一遍渲进 `RGBA16F` 浮点 FBO，第二遍先 `pow(hdr, 1/2.2)` 做 gamma 校正、再 `c/(c+1)` 做 Reinhard。画面颜色不对。问题出在哪？怎么改？
+
+<Answer>
+
+问题出在**顺序反了**：他先做了 gamma 校正、后做 tonemap。色调映射假设输入是**线性**的 HDR 值，可 `pow(hdr, 1/2.2)` 已经把颜色提亮、推到非线性 sRGB 空间了，再拿去 `c/(c+1)` 压缩，曲线作用在错误的数值上，颜色自然不对（通常发灰、对比异常）。
+
+改法：把两步换回正确顺序——**先 tonemap、最后 gamma**：
+
+```glsl
+vec3 mapped = hdr / (hdr + vec3(1.0));   // 先在线性空间 tonemap
+FragColor = vec4(pow(mapped, vec3(1.0 / 2.2)), 1.0);  // 最后才 gamma 校正
+```
+
+记牢出口流水线：采样 HDR → tonemap → gamma 校正 → 上屏，gamma 永远是最后一步。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="LDR">
+  Low Dynamic Range，**低动态范围**。颜色每个通道被锁在 `[0,1]`（或 0~255
+  整数）的普通表示，最亮就是纯白 `1`，存不下「比纯白还亮」的值。亮度超过 1
+  的部分会被**截断成 1**，所以强光区糊成一片没层次的死白。普通的 `RGBA8`
+  帧缓冲就是 LDR 的。详见本章「死白的根源」一节。
+</GlossaryItem>
+
+<GlossaryItem term="动态范围">
+  一个场景里**最亮和最暗之间的亮度跨度**。真实世界跨度极大（正午太阳能比阴影亮上万倍），渲染时强光源、多光叠加也会让某些区域远亮于
+  1。普通 LDR 帧缓冲只能表示 `[0,1]` 这一小段，跨度大的场景里超过 1
+  的高光就被压成死白、丢了层次。详见本章「死白的根源」一节。
+</GlossaryItem>
+
+<GlossaryItem term="HDR">
+  High Dynamic Range，**高动态范围**。一套渲染做法：先把场景渲进能存 `>1`
+  的浮点帧缓冲（保住超亮高光的全部层次），再用色调映射把这个大范围压回屏幕能显示的
+  `[0,1]`。好处是强光区不再死白，亮处暗处都保留细节——就像相机的 HDR
+  模式同时照顾逆光下的亮处和暗处。详见本章「解法第一步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="浮点帧缓冲">
+  颜色附件用 **16 位（或 32 位）浮点数**存储的帧缓冲（WebGL2 里用 `RGBA16F`
+  这类内部格式）。浮点数能表示远大于 1 的值，所以光照算出来 `>1`
+  的高动态范围颜色可以原封不动存进去、不被截断。HDR
+  的第一遍渲染就是把场景渲进它。详见本章「解法第一步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="色调映射">
+  Tone Mapping，把 `[0,∞)` 的高动态范围颜色用一个函数**平滑压回**屏幕能显示的
+  `[0,1]`。关键是它不硬截断，而是越亮压得越狠、但保留相对层次，于是窗户中心和窗框不再糊成同一片白。常见做法有
+  Reinhard（`c/(c+1)`）和曝光映射（`1-exp(-c*曝光)`）。详见本章「解法第二步」一节。
+</GlossaryItem>
+
+<GlossaryItem term="曝光">
+  一种色调映射方式，**模拟相机的曝光**：tonemap 时乘上一个可调的曝光值，公式常用
+  `1 - exp(-c *
+  曝光)`。曝光调大，暗处被快速提亮（看清昏暗细节），但亮处更易顶到接近
+  1；曝光调小，亮处保留更多层次（看清强光），但暗处偏黑。本质是让你像调相机一样在「照顾亮处」和「照顾暗处」之间权衡。详见本章「解法第二步」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
