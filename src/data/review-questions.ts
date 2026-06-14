@@ -72,6 +72,7 @@ import { cppOopQuestions } from "./review/cpp-oop";
 import { cppTemplatesQuestions } from "./review/cpp-templates";
 import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library";
 import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
+import { androidArchitectureQuestions } from "./review/android-architecture";
 import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
 
 export {
@@ -142,6 +143,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppSpecializedLibraryQuestions,
   ...cppSpecializedToolsQuestions,
   ...cppLargeProgramsQuestions,
+  ...androidArchitectureQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,295 @@
+---
+title: Android 系统架构
+type: A
+section: 系统架构
+order: 1
+description: 看懂 Android 系统五层架构，能说出每一层叫什么、做什么、有哪些关键组件。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型首章（《Android进阶解密》第1章改编）：讲清 Android 五层架构是什么、每层干什么。
+   重心是概念讲解(§3)与架构可视化(§5)，数学省略(math:false)，代码对照放源码目录浏览(§6)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz 形态；术语首现用 <Term> 高亮，章末 <Glossary> 一一对应）：
+   1) Android 五层架构（应用层→框架层→运行库层→HAL→Kernel）= AndroidArchLayersDiagram 五层分层 SVG 图
+   2) 各层关键组件（AMS/WMS/SurfaceFlinger/Binder 等）= Stepper 逐层剖析，每层高亮+组件说明
+   3) Android 源码目录结构 = SourceTreeDiagram 树状图
+   4) Binder IPC 跨层通信机制 = BinderOverviewDiagram（简述，第5-6章深入）
+   5) Android 系统启动流程概览 = StartupOverviewDiagram（简述，第2章深入） */}
+
+{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在 Android 架构中的位置」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话画出 Android 五层架构图，说出每层的名字、职责、一两个关键组件
+- 能看懂 Android 源码目录的顶层结构，知道想看某个模块该去哪个目录找
+- 能回答：一个 App 从点击图标到界面显示，中间经过了哪几层？每层干了什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用②工厂流水线。 */}
+
+## 为什么 Android 要分成这么多层？
+
+你点开一个 App，几秒内就能看到界面。这个看似简单的事情背后，实际上经过了 Android 系统五层结构的一连串传递。每一层都像一个专门车间，只负责自己擅长的那件事。
+
+用**工厂流水线**的类比来理解：最底层的 Linux 内核就像工厂的供电和运输系统——负责管理 CPU、内存、硬件驱动。往上的硬件抽象层（HAL）就像标准化的零件接口——不管你用的是三星还是索尼的摄像头，上层都通过同一套"插座"来调用。再往上的运行库和框架层就像工厂里的各个加工车间——有的负责界面绘制，有的负责数据存储。最顶层的应用层就是最终的产品——你每天使用的各种 App。
+
+没有这套分层架构会怎样？每个 App 都得自己跟硬件打交道，开发者要为每一款手机单独写代码，Android 生态瞬间崩塌。分层让"应用开发者只管写应用逻辑，硬件变化由下层消化"这件事成为可能。
+
+{/* 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo。 */}
+
+## Android 五层架构，逐层拆开看
+
+Android 不是一块铁板，而是精心设计的五层蛋糕。每一层只干自己擅长的事，上层通过定义好的接口调用下层。下面先看全景图，再逐层拆解。
+
+<AndroidArchLayersDiagram />
+
+### 第 1 层：Linux 内核——整个系统的"地基"
+
+<Term def="Android 底层基于 Linux 内核，它负责管理硬件设备、分配内存、调度进程，是所有上层软件运行的基石。">Linux 内核</Term> 是 Android 的基石。它直接跟 CPU、内存、摄像头、触摸屏这些硬件打交道，给上层提供一套统一的抽象接口。你不用关心手机用的是高通的 CPU 还是联发科的——内核帮你把这些差异全部藏起来了。
+
+内核层的核心职责：
+- **进程管理**：哪个 App 该给 CPU 跑、什么时候跑
+- **内存管理**：每个 App 只能用自己那一块内存，不能偷看别人的
+- **<Term def="Binder 是 Android 独有的进程间通信机制——不同 App（甚至 App 和系统服务）之间通过它来传数据和调方法，像打电话一样。它是 Android 安全的基石之一。">Binder IPC</Term>**：Android 独有的跨进程通信机制，App 和系统服务、不同 App 之间"打电话"全靠它
+- **电源管理**：屏幕亮了、灭了、省电模式的调度
+
+如果把 Android 比作一座大楼，内核就是整栋楼的地基和供电系统。楼塌不了、电断不了，全靠这一层。
+
+### 第 2 层：硬件抽象层（HAL）——给硬件穿上"统一制服"
+
+HAL（<Term def="硬件抽象层（Hardware Abstraction Layer），在 Linux 内核和 Android 框架之间搭一座桥。它定义了一套标准接口，让上层不用管底层硬件是哪个厂商的——只要硬件驱动实现了这些接口，框架层就能无差别调用。">Hardware Abstraction Layer</Term>）夹在内核和框架之间。它做的事情非常纯粹：定义一套标准接口，让上层不用管底层硬件到底是哪家的。
+
+比如摄像头 HAL 定义了一个 `takePicture()` 方法，上层框架只管调用这个方法拍照，至于底层是索尼的摄像头模组还是三星的——HAL 层会帮你转发到对应厂商的驱动实现。
+
+Android 为什么要有 HAL？因为 Android 是开源的，任何厂商都可以用它做手机。每家厂商的摄像头、传感器、音频芯片都不一样——如果框架层直接跟驱动打交道，每换一个供应商就得改一堆代码。HAL 解决了这个问题：**接口统一，实现各厂商自己写**。
+
+常见的 HAL 模块：
+- Camera HAL —— 拍照、录像
+- Audio HAL —— 录音、播放
+- Sensor HAL —— 加速度计、陀螺仪、光线传感器
+- Graphics HAL —— 画面渲染
+
+### 第 3 层：系统运行库——Android 的"心脏"
+
+这一层其实包含两大部分：**Android 运行时（ART）** 和 **C/C++ 原生库**。
+
+<Term def="Android Runtime（ART）是 Android 上运行 Java/Kotlin 代码的虚拟机。它把 App 的字节码提前编译（AOT）或运行时编译（JIT）成机器码来执行，比老版本 Dalvik 的纯解释执行快得多。">ART（Android Runtime）</Term> 是 Android 自己的"Java 虚拟机"。你写的 Kotlin/Java 代码编译后会变成 dex 字节码，ART 负责把这些字节码翻译成机器能直接跑的 CPU 指令。从 Android 5.0 开始，ART 全面取代了老旧的 Dalvik 虚拟机，带来了 AOT 预编译等性能提升。
+
+C/C++ 原生库提供了一系列底层能力，很多都是用 C/C++ 写的，因为直接跟硬件打交道需要更高的性能：
+
+- **<Term def="一个功能强大的 2D 图形渲染引擎，Android 系统的窗口、View、动画等在底层都是 Skia 在画。它是 Android UI 流畅度的关键角色之一。">Skia</Term> 图形引擎**：Android 屏幕上画的每一个像素、每一个按钮、每一帧动画，底层都是 Skia 在画
+
+- **SQLite 数据库**：轻量级的关系型数据库，Android App 本地存数据（比如聊天记录、设置项）底层用的就是它
+
+- **WebKit 浏览器引擎**：Android 的 WebView 内核，负责渲染网页
+
+- **OpenGL ES**：3D 图形渲染，游戏和复杂的动画效果靠它
+
+- **Media Framework**：音频视频的播放和录制
+
+### 第 4 层：应用框架层——开发者直接打交道的地方
+
+<Term def="应用框架层是 Android 为开发者提供的一套 API，让你不用从头写所有代码。Activity Manager 管理页面跳转，Window Manager 管理窗口布局，Content Provider 让不同 App 之间共享数据，等等。这是大多数 Android 开发者最熟悉的层。">应用框架层（Application Framework）</Term> 就是你写 Android App 时天天打交道的那些 API 所在的层。它把下面几层的能力包装成好用的 Java/Kotlin 接口，让开发者专注写业务逻辑，不用管底层细节。
+
+框架层的核心组件：
+
+- **Activity Manager Service（AMS）**：管理所有 App 的"页面"（Activity）——哪个 Activity 在前台显示、哪个该回收、从一个页面跳到另一个页面怎么调度，全是 AMS 在管
+
+- **Window Manager Service（WMS）**：管理屏幕上所有"窗口"——每个 App 的界面都是一个窗口，WMS 负责决定谁在谁上面、谁盖住谁、窗口大小和位置
+
+- **Content Provider**：让不同 App 之间安全地共享数据。比如你的 App 想读取系统通讯录，不是直接去翻文件，而是通过 Content Provider 这个"门卫"来访问
+
+- **Package Manager**：管理所有已安装的 App——这个 App 叫什么、图标是哪个、有哪些权限、它注册了哪些组件
+
+- **View System**：你写的 Button、TextView、RecyclerView 这些 UI 控件，背后就是 View System 在管理和绘制
+
+### 第 5 层：应用层——用户直接看到的东西
+
+最顶层就是所有 App——系统预装的（电话、短信、相机、设置）和你自己安装的（微信、抖音、你的项目）。这一层的代码全是用 Java/Kotlin 写的，通过框架层提供的 API 来工作。
+
+一个 App 通常由四大组件构成（详细在第 4 章展开）：
+
+- **Activity**：一个可见的"页面"
+- **Service**：后台默默干活的"无界面组件"
+- **BroadcastReceiver**：监听系统广播的"耳朵"
+- **ContentProvider**：管理本 App 数据的"管家"
+
+{/* 5. 交互 Demo（spec §五）：A 型用 Stepper 把架构五层一步步掰碎。 */}
+
+## 动手：一层一层走过 Android 架构
+
+下面这个分步演示带你从下往上走过 Android 的五层架构。**每切一步，左侧的架构图会高亮当前层，右侧告诉你这层干了什么**。
+
+> 猜一猜：哪一层是 Android 独有的（别的操作系统没有的）？提示：跟"不同 App 之间安全通信"有关。动手切一切，看看每一步的解释再说你的答案。
+
+<Stepper>
+  <Step title="① Linux 内核：地基和供电">
+    <AndroidArchLayersDiagram />
+    Linux 内核是 Android 的基石。它直接管理 CPU、内存、文件系统、网络协议栈和各种硬件驱动。Android 在标准 Linux 内核上加了几个关键补丁：Binder IPC（Android 独有的进程间通信）、Ashmem（匿名共享内存）、Wakelock（电源管理）等。每一台 Android 手机开机后，最先跑起来的就是内核——没有它，上面的任何一层都没法工作。
+  </Step>
+  <Step title="② HAL：统一硬件接口">
+    <AndroidArchLayersDiagram />
+    HAL 是 Android 的"硬件翻译官"。它定义了一套标准接口（比如 `open()`、`takePicture()`），各厂商的硬件驱动只要实现这些接口就行。上层框架不需要知道你这个手机用的是什么牌子的摄像头——它只跟 HAL 说话，HAL 负责把指令翻译给真正的硬件驱动。这套设计让 Android 能跑在成千上万种不同硬件配置的设备上。
+  </Step>
+  <Step title="③ 运行库 + ART：翻译和渲染">
+    <AndroidArchLayersDiagram />
+    这一层是 Android 的性能引擎。ART 虚拟机负责把你写的 Java/Kotlin 代码翻译成机器码来执行。C/C++ 原生库（Skia 画界面、SQLite 存数据、WebKit 渲染网页、OpenGL ES 画 3D）提供高性能的基础能力。从 Android 7.0 开始，ART 采用 JIT + AOT 混合编译：App 安装时预编译热点代码（启动快），运行时动态优化（不占存储空间）。
+  </Step>
+  <Step title="④ 应用框架：开发者工具箱">
+    <AndroidArchLayersDiagram />
+    框架层是 Android 开发者每天打交道的地方。Activity Manager 管理页面跳转和生命周期，Window Manager 管理窗口层级，Content Provider 让 App 间安全共享数据，Package Manager 管安装包，Notification Manager 管通知推送。这些系统服务都跑在独立的进程里，App 通过 Binder IPC 跟它们通信——你调 `startActivity()` 时，实际上是通过 Binder 向系统进程的 AMS 发了一个请求。
+  </Step>
+  <Step title="⑤ 应用层：用户看到的一切">
+    <AndroidArchLayersDiagram />
+    最顶层是所有 App。系统自带的应用（桌面 Launcher、电话、设置）跟你自己写的 App 在架构上没有本质区别——都跑在 ART 上，都通过框架层 API 调用下层能力。唯一的区别是系统应用有更高的权限（比如直接访问硬件、修改系统设置），而第三方 App 受到严格的权限沙箱限制——这就是 Android 安全模型的核心。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  Binder IPC 是 Android 独有的跨进程通信机制，Linux 原生没有。它是 Android 安全模型的核心——App 之间不能直接访问对方的内存，所有"越界操作"都必须通过 Binder 向系统服务申请。第 5-6 章会深入剖析 Binder 的工作原理。
+</Callout>
+
+{/* 6. 代码对照（spec §六，A 型选，只贴最能说明概念的 1-2 段）：源码目录结构浏览。 */}
+
+## 对照源码：看真实 Android 项目的目录长什么样
+
+你把 Android 源码下载下来（或者去 [AndroidXRef](http://androidxref.com/) 在线看），顶层目录结构大致长这样：
+
+```
+aosp/
+├── art/                  ← ART 虚拟机的源码
+├── bionic/               ← Android 的 C 标准库（不是 glibc！）
+├── bootable/             ← 启动引导相关代码
+├── build/                ← 编译系统（Soong / Blueprint）
+├── cts/                  ← 兼容性测试套件
+├── dalvik/               ← 老版 Dalvik 虚拟机（仅遗留）
+├── developers/           ← 开发者工具和示例
+├── development/          ← 开发辅助工具
+├── device/               ← 各厂商设备配置（三星/谷歌/小米等）
+├── external/             ← 引入的第三方开源库（Skia, SQLite, WebKit 等）
+├── frameworks/           ← ★ 应用框架层源码（AMS/WMS/PMS 在这里！）
+│   ├── base/             ← 核心框架代码
+│   │   ├── core/         ←   framework.jar（四大组件等）
+│   │   └── services/     ←   services.jar（系统服务）
+│   └── native/           ← 框架层 C++ 代码（SurfaceFlinger 等）
+├── hardware/             ← ★ HAL 层接口定义和各厂商实现
+├── kernel/               ← Linux 内核（各厂商定制版）
+├── libcore/              ← Java 核心类库
+├── libnativehelper/      ← JNI 辅助库
+├── packages/             ← ★ 系统应用源码（Launcher/设置/电话等）
+│   └── apps/             ←   各系统 App
+├── pdk/                  ← 平台开发套件
+├── platform_testing/     ← 平台测试
+├── prebuilts/            ← 预编译工具链（clang, JDK 等）
+├── sdk/                  ← SDK 开发工具
+├── system/               ← 系统底层组件（init, adbd, logcat 等）
+└── tools/                ← 开发工具
+```
+
+几个最常翻的目录：
+
+| 想看什么 | 去哪个目录 |
+|---|---|
+| Activity 怎么启动的 | `frameworks/base/services/core/java/com/android/server/am/` |
+| Window 是怎么管理的 | `frameworks/base/services/core/java/com/android/server/wm/` |
+| 桌面的代码 | `packages/apps/Launcher3/` |
+| Binder 的底层实现 | `frameworks/native/libs/binder/` |
+| ART 虚拟机 | `art/runtime/` |
+
+{/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：看书上画了五层架构，面试时画了四层被面试官追问"少了一层吧？"。
+  **原因**：不同资料对"系统运行库层"和"ART"是合在一起说还是分开说，画法不一致。有的把 HAL 也合并进内核层。严格划分是五层——ART + 原生库是一层、HAL 是独立一层。
+  **修法**：记住标准五层：应用层 → 应用框架层 → 系统运行库层（ART + C/C++ 库）→ HAL → Linux 内核。HAL 是 Android 架构的独特设计，不可省略。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为"Binder 就是用来做 IPC 的，跟 socket 差不多"。被问到"Binder 跟 Linux 原生的 pipe/socket/shm 有什么区别"时答不上来。
+  **原因**：Binder 不仅仅是"一种 IPC"，它是 Android 安全模型的基石。Binder 有身份校验机制——系统能知道"谁在叫我"，从而做权限检查。普通 Linux IPC（socket、pipe）做不到这点。
+  **修法**：把 Binder 理解为 "IPC + 身份认证"的组合。它不仅是"传数据"，还是 Android 沙箱安全体系的实施工具——第 5-6 章会透彻讲解。
+</Callout>
+
+<Callout type="trap">
+  **现象**：下载了 AOSP 源码，打开目录一看一脸懵——"frameworks 下面 base、native、av 什么关系？我要找 AMS 去哪找？"
+  **原因**：frameworks 目录结构不是按"功能"划分而是按"语言和归属"划分的。Java 层的核心框架在 `frameworks/base/`，C++ 层在 `frameworks/native/`，音视频相关在 `frameworks/av/`。
+  **修法**：先记住关键路径：Java 系统服务 → `frameworks/base/services/`，C++ 系统服务 → `frameworks/native/services/`，四大组件的 API 层 → `frameworks/base/core/java/android/`。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道画图题，答案折叠。 */}
+
+## 小结
+
+- Android 采用五层分层架构：应用层 → 框架层 → 运行库层 → HAL → Linux 内核，每层只做自己擅长的事
+- Linux 内核管硬件和进程，HAL 统一硬件接口，ART 跑 Java/Kotlin 代码，框架层提供开发者 API
+- Binder IPC 是 Android 独有的跨进程通信机制，也是安全隔离的核心工具
+- 源码目录中 `frameworks/base/` 是框架层核心、`packages/apps/` 是系统应用、`hardware/` 是 HAL
+- 一个 App 从点击图标到画面显示，经过了 Launcher → AMS → 进程创建 → Activity 启动 → WMS/SurfaceFlinger 渲染 → 屏幕输出的全链路
+
+<Exercises>
+
+**练习 1（画图型）** 拿出一张白纸（或打开随便一个画图工具），凭记忆画出 Android 五层架构图。每层写上至少两个关键组件。画完跟上面的图对比，看少了什么。
+
+<Answer>
+标准答案：从上到下——① 应用层（系统 App + 第三方 App）、② 应用框架层（AMS、WMS、ContentProvider、PackageManager）、③ 系统运行库层（ART 虚拟机 + C/C++ 库如 Skia/SQLite/WebKit）、④ HAL（Camera HAL、Audio HAL 等）、⑤ Linux 内核（驱动、Binder、电源管理）。你画对了几层？
+</Answer>
+
+**练习 2（问答型）** 为什么 Android 需要 HAL 这一层？如果没有 HAL，会出现什么问题？
+
+<Answer>
+HAL 解决了"Android 要跑在成千上万种不同硬件上"的问题。每种手机的摄像头、传感器、音频芯片都不一样。如果没有 HAL，框架层就得直接跟每家厂商的驱动打交道——每换一个零件就得改框架代码。HAL 定义了一套标准接口（比如拍照就是 `takePicture()`），各厂商只要让自己的驱动实现这个接口就行了。框架层只跟 HAL 接口说话，不关心底层是谁家的硬件。
+</Answer>
+
+**练习 3（探索型）** 去 [AndroidXRef](http://androidxref.com/) 搜索 `ActivityManagerService`，看看这个类在哪个目录里、有多少行代码。看看这个类的注释说了什么。
+
+<Answer>
+`ActivityManagerService` 在 `frameworks/base/services/core/java/com/android/server/am/ActivityManagerService.java`。不同 Android 版本的行数不同（Android 8.0 约 2 万行）。类注释会说明这是"管理 Activity 启动、生命周期和任务栈的系统服务"。这个类是 AMS 的心脏，后续第 4 章和第 6 章会深入分析它。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（7 个）；释义面向零基础。 */}
+
+<Glossary>
+
+<GlossaryItem term="Linux 内核">
+  Android 系统最底层的"地基"，直接跟硬件打交道。它负责管理 CPU（谁先跑谁后跑）、内存（每个 App 只能用自己那一块）、文件读写、网络通信。Android 在标准 Linux 内核上加了几个独家功能——最重要的是 Binder（App 之间安全通信的管道）。详见本章「Linux 内核」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Binder IPC">
+  Android 独有的跨进程通信机制。你可以把它想象成 App 和系统服务之间的"加密电话"——不光能传数据，系统还能确认"打电话过来的是谁"，从而判断它有没有权限做这件事。普通的 Linux IPC（管道、socket）做不到身份验证这一步。Binder 是 Android 安全隔离体系的核心工具。详见本章「Linux 内核」一节，第 5-6 章会深入剖析。
+</GlossaryItem>
+
+<GlossaryItem term="HAL（硬件抽象层）">
+  夹在 Linux 内核和应用框架之间的一层翻译官。它定义了一套标准接口（比如"拍照"这个动作统一叫 `takePicture()`），各家硬件厂商各自实现这套接口。这样上面写 App 的人只用学会调 `takePicture()`，不用管底层摄像头是索尼的还是三星的。详见本章「HAL」一节。
+</GlossaryItem>
+
+<GlossaryItem term="ART（Android Runtime）">
+  Android 上跑 Java/Kotlin 代码的"虚拟机器"。你写的代码编译后会变成 dex 字节码，ART 把它翻译成 CPU 能直接执行的机器指令。从 Android 5.0 起全面取代老版 Dalvik，采用 AOT 预编译 + JIT 即时编译混合模式，启动快、运行时也快。详见本章「系统运行库」一节，第 11 章深入对比 Dalvik 和 ART。
+</GlossaryItem>
+
+<GlossaryItem term="Skia">
+  Android 的 2D 图形渲染引擎。屏幕上你看到的每一个界面——按钮、文字、动画——底层都是 Skia 在"画"。它是 C++ 写的（快！），Android 从 1.0 起就用它，Chrome 浏览器也是同一套引擎。详见本章「系统运行库」一节。
+</GlossaryItem>
+
+<GlossaryItem term="应用框架层">
+  Android 给开发者提供的一整套 API 所在层。Activity Manager 管页面跳转，Window Manager 管窗口布局，Content Provider 管数据共享，Package Manager 管安装包管理。你写 App 就是在跟这一层打交道。详见本章「应用框架层」一节。
+</GlossaryItem>
+
+<GlossaryItem term="SQLite">
+  Android 内嵌的轻量级数据库。App 本地存数据（聊天记录、草稿、设置项）底层就是 SQLite 在管。它是一个文件就是一个数据库——不需要装 MySQL 那种重型数据库服务器。详见本章「系统运行库」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本章改编自《Android进阶解密》第1章，刘望舒著。 */}
+
+<Attribution />

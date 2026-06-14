@@ -68,7 +68,8 @@ export type ReviewChapterSlug =
   | "cpp-oop"
   | "cpp-specialized-library"
   | "cpp-specialized-tools"
-  | "cpp-large-programs";
+  | "cpp-large-programs"
+  | "android-architecture";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -140,6 +141,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-specialized-library": "标准库特殊设施",
   "cpp-specialized-tools": "特殊工具与技术",
   "cpp-large-programs": "用于大型程序的工具",
+  "android-architecture": "Android 系统架构",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
