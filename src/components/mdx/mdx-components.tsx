@@ -80,6 +80,10 @@ import { AssociativeContainerOverviewDiagram } from "./diagrams/associative-cont
 import { MapOperationTable } from "./diagrams/map-operation-table";
 import { UnorderedMapInternalsDiagram } from "./diagrams/unordered-map-internals-diagram";
 import { ContainerSelectionFlow } from "./diagrams/container-selection-flow";
+import { SmartPointerOverviewDiagram } from "./diagrams/smart-pointer-overview-diagram";
+import { SharedPtrInternalsDiagram } from "./diagrams/shared-ptr-internals-diagram";
+import { CircularReferenceDiagram } from "./diagrams/circular-reference-diagram";
+import { DynamicArrayDiagram } from "./diagrams/dynamic-array-diagram";
 import { AlgorithmExecutionDiagram } from "./diagrams/algorithm-execution-diagram";
 import { SortStagesDiagram } from "./diagrams/sort-stages-diagram";
 import { LambdaSyntaxDiagram } from "./diagrams/lambda-syntax-diagram";
@@ -461,6 +465,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MapOperationTable,
   UnorderedMapInternalsDiagram,
   ContainerSelectionFlow,
+  SmartPointerOverviewDiagram,
+  SharedPtrInternalsDiagram,
+  CircularReferenceDiagram,
+  DynamicArrayDiagram,
   Stepper,
   Step,
   Slider,
