@@ -3,23 +3,23 @@ title: 阴影映射
 type: C
 section: 高级光照
 order: 3
-description: 能讲清阴影映射的两遍流程——先从光源视角渲一张深度图记下每个方向最近的遮挡距离，再回相机比深度判断每个片元是否被挡；能在 demo 里拖 depth bias 亲手造出又修掉 shadow acne 自遮挡条纹和 peter panning 阴影脱离，还能说出阴影锯齿和阴影图分辨率、PCF 软阴影之间的关系。
+description: 能讲清阴影映射的两遍流程——先从光源视角渲一张深度图记下每个方向最近的遮挡距离，再回相机比深度判断每个片元是否被挡；能在 demo 里拖 depth bias 亲手造出又修掉 peter panning 阴影脱离，并能解释 shadow acne 自遮挡条纹的成因和 bias 修法，还能说出阴影锯齿和阴影图分辨率、PCF 软阴影之间的关系。
 demo: true
 math: false
 sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/01%20Shadow%20Mapping/
 draft: true
 ---
 
-{/* C 实战型章（HEL-82，高级光照篇第 3 篇）：原书「阴影映射 Shadow Mapping」。重心是代码对照(spec C 列 §6 重，覆盖两遍法关键代码)：①第一遍——光空间矩阵 lightProjection×lightView + 渲深度到深度纹理 FBO；②第二遍片段着色器——FragPos 变光空间 / 透视除法 / 转 [0,1] / 采样 shadow map / 深度比较 + bias + PCF 3×3。承接同篇 blinn-phong / gamma-correction（已学世界空间光照、点乘、片段着色器），沿用「光与材质 / 相机与摄影」类比库（光源也是一台「相机」）。C 型段式：概念讲解(§3 必，是什么压一段篇幅让给 §6) + 数学 math:false 整节省略(§4，光空间矩阵在 §6 代码对照里讲) + 交互 Demo(§5 必，主 R3F 内建 shadow map 调参 + Stepper 两遍法每步带图) + 代码对照(§6 重) + 误区 ≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)。主 viz = ShadowMappingDemo（three.js 内建 shadow map，控件：光源角度/阴影图分辨率/depth bias/PCF 开关 + 重置，亲手拖出 acne/peter panning/锯齿/软硬）；图解 = ShadowMapStepDiagram（Stepper 两遍法四步配图）+ ShadowAcneDiagram（acne 成因 + bias 修法）。draft:true，老板验收后才发布（硬规则 7）。 */}
+{/* C 实战型章（HEL-82，高级光照篇第 3 篇）：原书「阴影映射 Shadow Mapping」。重心是代码对照(spec C 列 §6 重，覆盖两遍法关键代码)：①第一遍——光空间矩阵 lightProjection×lightView + 渲深度到深度纹理 FBO；②第二遍片段着色器——FragPos 变光空间 / 透视除法 / 转 [0,1] / 采样 shadow map / 深度比较 + bias + PCF 3×3。承接同篇 blinn-phong / gamma-correction（已学世界空间光照、点乘、片段着色器），沿用「光与材质 / 相机与摄影」类比库（光源也是一台「相机」）。C 型段式：概念讲解(§3 必，是什么压一段篇幅让给 §6) + 数学 math:false 整节省略(§4，光空间矩阵在 §6 代码对照里讲) + 交互 Demo(§5 必，主 R3F 内建 shadow map 调参 + Stepper 两遍法每步带图) + 代码对照(§6 重) + 误区 ≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)。主 viz = ShadowMappingDemo（three.js 内建 shadow map，控件：光源角度/阴影图分辨率/depth bias/PCF 开关 + 重置，亲手拖出 peter panning/锯齿/软硬——acne 因 three 内建偏移太稳盲调演示不出，归图解/误区）；图解 = ShadowMapStepDiagram（Stepper 两遍法四步配图）+ ShadowAcneDiagram（acne 成因 + bias 修法）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
-{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 阴影成因（光被遮挡处变暗）= 直觉引入 + 概念；2) shadow map 核心思想（先从光源视角把场景渲成一张深度图，记下每个方向最近遮挡距离）= 概念 + <ShadowMapStepDiagram step=1/2> + 主 ShadowMappingDemo；3) 光空间变换（用光的 view×proj 把片元变到光裁剪空间、取 [0,1] 深度）= 概念 + §6 代码对照 + ShadowMapStepDiagram step=3；4) 深度比较判阴影（current > 深度图存的 closest ⇒ 被挡 ⇒ 在阴影）= <ShadowMapStepDiagram step=4> + §6 代码对照；5) shadow acne 自遮挡条纹 + depth bias 偏移修法 = 误区 + <ShadowAcneDiagram mode=acne/bias> + demo bias 控件；6) PCF 百分比邻近滤波（采样周围多点取平均、软化锯齿边）= 概念 + demo PCF 开关 + §6 代码对照 PCF 3×3；7) peter panning（bias 过大致阴影脱离悬浮）= 误区 + demo bias 拖大；8) 阴影图分辨率 / 光锥（分辨率低→阶梯锯齿；超出光锥范围处理）= demo 分辨率切换 + 误区。Term 共 6 个（阴影映射 / shadow map / 光空间 / 深度比较 / shadow acne / PCF），控制在 ≤6 核心、不超 spec §3「全章新概念 ≤5」太多。 */}
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 阴影成因（光被遮挡处变暗）= 直觉引入 + 概念；2) shadow map 核心思想（先从光源视角把场景渲成一张深度图，记下每个方向最近遮挡距离）= 概念 + <ShadowMapStepDiagram step=1/2> + 主 ShadowMappingDemo；3) 光空间变换（用光的 view×proj 把片元变到光裁剪空间、取 [0,1] 深度）= 概念 + §6 代码对照 + ShadowMapStepDiagram step=3；4) 深度比较判阴影（current > 深度图存的 closest ⇒ 被挡 ⇒ 在阴影）= <ShadowMapStepDiagram step=4> + §6 代码对照；5) shadow acne 自遮挡条纹 + depth bias 偏移修法 = 误区 + <ShadowAcneDiagram mode=acne/bias>（图解讲透；three 内建偏移太稳，demo 盲调演示不出 acne）；6) PCF 百分比邻近滤波（采样周围多点取平均、软化锯齿边）= 概念 + demo PCF 开关 + §6 代码对照 PCF 3×3；7) peter panning（bias 过大致阴影脱离悬浮）= 误区 + demo bias 拖大；8) 阴影图分辨率 / 光锥（分辨率低→阶梯锯齿；超出光锥范围处理）= demo 分辨率切换 + 误区。Term 共 6 个（阴影映射 / shadow map / 光空间 / 深度比较 / shadow acne / PCF），控制在 ≤6 核心、不超 spec §3「全章新概念 ≤5」太多。 */}
 
-{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条（能在 demo 调出/修掉 shadow acne）；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条（能在 demo 拖 bias 调出/修掉 peter panning——three 内建偏移太稳，acne 演示不出，归图解/误区）；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
 
 <Objectives>
 
 - 能解释**阴影映射的两遍流程**：第一遍从光源视角渲一张**深度图**记下每个方向最近的遮挡距离，第二遍从相机渲场景、把每个片元变到**光空间**比深度——说得清「比什么、比出什么算在阴影里」
-- 能在下面的 demo 里**亲手调出又修掉**两个经典翻车：把 **depth bias** 拖到最小造出 **shadow acne** 自遮挡条纹、再拖大修掉它（但拖太大会出 **peter panning** 阴影脱离）；还能说出阴影边缘**锯齿**和**阴影图分辨率 / PCF** 的关系
+- 能在下面的 demo 里把 **depth bias** 拖到**最大**造出 **peter panning**（影子与物体脚下脱节）再拖回修掉；并能解释 **shadow acne** 自遮挡条纹的成因和 depth bias 的修法（见图解）；还能说出阴影边缘**锯齿**和**阴影图分辨率 / PCF** 的关系
 - 能回答：一个片元在光空间算出的深度，比深度图里存的「最近遮挡距离」**大**，这说明它被挡住了还是没被挡住？所以它在不在阴影里？
 
 </Objectives>
@@ -87,17 +87,17 @@ draft: true
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。光空间矩阵（lightProjection×lightView）+ 透视除法 + [0,1] 映射 已在 §3 概念节点到、§6 代码对照里逐行讲，符合任务卡「math:false 整节省略，光空间矩阵在代码对照里讲」。 */}
 
-{/* 5(主 viz). 交互 Demo（spec §五，C 型主 viz = ShadowMappingDemo，three.js 内建 shadow map）：控件 光源角度/阴影图分辨率/depth bias/PCF 开关 + 重置（≤5）。猜一猜引导（bias 调到最小冒出 acne）。caption 诚实说明用 three 内建 shadow map、与两遍法同原理。 */}
+{/* 5(主 viz). 交互 Demo（spec §五，C 型主 viz = ShadowMappingDemo，three.js 内建 shadow map）：控件 光源角度/阴影图分辨率/depth bias/PCF 开关 + 重置（≤5）。猜一猜引导（bias 拖到最大出 peter panning——three 内建偏移太稳、盲调演示不出 acne，acne 交给图解/误区）。caption 诚实说明用 three 内建 shadow map、与两遍法同原理。 */}
 
-## 动手：拖 bias 造出又修掉 shadow acne
+## 动手：拖 bias 造出又修掉 peter panning
 
-> 猜一猜：下面的场景已经有了干净的阴影。把 **depth bias** 滑块拖到**最小**（负到底），你觉得地面和物体表面会冒出什么？是更黑的影子，还是一片**爬满条纹的脏东西**？先动手拖一拖，再看下面的解释。
+> 猜一猜：下面的场景已经有了干净的阴影。把 **depth bias** 滑块拖到**最大**，你觉得物体的影子会怎样？是变得更黑，还是和物体**脚下脱了节、整片往后缩**、物体像重新飘起来？先动手拖一拖，再看下面的解释。
 
-这个 demo 用的是 three.js 的**内建 shadow map**——它的底层做的正是本章讲的两遍法（先从光源视角渲一张深度图、再回相机比深度判阴影），只是 three 把它封装好了。我们把本章要教的参数全做成了实时控件，让你亲手拖出每个概念：**光源角度**绕场景转光、看阴影方向怎么变；**阴影图分辨率**切 256↔2048、看阴影边缘的锯齿；**depth bias** 拖小拖大、造出又修掉两个翻车；**PCF 软阴影**开关、看硬边变软边。
+这个 demo 用的是 three.js 的**内建 shadow map**——它的底层做的正是本章讲的两遍法（先从光源视角渲一张深度图、再回相机比深度判阴影），只是 three 把它封装好了。我们把本章要教的参数全做成了实时控件，让你亲手拖出每个概念：**光源角度**绕场景转光、看阴影方向怎么变；**阴影图分辨率**切 256↔2048、看阴影边缘的锯齿；**depth bias** 往大拖、造出又修掉 **peter panning** 阴影脱离；**PCF 软阴影**开关、看硬边变软边。
 
 <ShadowMappingDemo />
 
-谜底：把 **bias 拖到最小**，地面和物体受光面会爬满一道道**交替的亮暗条纹**（像水波纹），这就是 <Term def="阴影映射里本该干净的受光表面爬满交替亮暗条纹的自遮挡现象（像摩尔纹）。根因：深度图分辨率有限，一个像素覆盖地面斜斜一小片，整片只存取样点一个最近深度，片内更远离光的半边 current > stored 被自己误判「在阴影」。修法是加 depth bias 把存的最近深度往更远推一点点，让本该受光的半边越不过这条线。">shadow acne</Term> 自遮挡条纹——表面把**自己**误判成了「挡住自己的东西」。把 bias 往回拖一点点，条纹就消失、表面恢复干净。但**别拖过头**：bias 拖到很大，你会看到物体的影子**和物体脚下脱了节、整片往后缩**，球像重新飘起来了——这是 **peter panning**。中间那段才是干净的影子。再试试把**分辨率**从 2048 切到 256：阴影边缘从平滑变成粗粗的**阶梯锯齿**；把 **PCF** 关掉，边缘是生硬的硬边，开开就软化了。每个控件都对着一个本章概念，多拖几次就有手感了。
+谜底：把 **bias 拖到最大**，你会看到物体的影子**和物体脚下脱了节、整片往后缩**，球像重新飘了起来——这就是 **peter panning**。把 bias 往回拖到中间那段，影子重新贴回物体脚下、恢复干净。再试试把**分辨率**从 2048 切到 256：阴影边缘从平滑变成粗粗的**阶梯锯齿**；把 **PCF** 关掉，边缘是生硬的硬边，开开就软化了。每个控件都对着一个本章概念，多拖几次就有手感了。至于 bias **太小**会出的 <Term def="阴影映射里本该干净的受光表面爬满交替亮暗条纹的自遮挡现象（像摩尔纹）。根因：深度图分辨率有限，一个像素覆盖地面斜斜一小片，整片只存取样点一个最近深度，片内更远离光的半边 current > stored 被自己误判「在阴影」。修法是加 depth bias 把存的最近深度往更远推一点点，让本该受光的半边越不过这条线。">shadow acne</Term> 自遮挡条纹，这台 three.js 演示因内建偏移很稳、盲调不易拖出，下一节「容易踩的坑」用图解把它的成因和 bias 修法讲清。
 
 {/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键代码）：两遍法 C++/GLSL330 ↔ WebGL2/GLSL300es 同逻辑段；单块 ≤30 行；块间有解说；version/precision/深度纹理格式差异 Callout warn。a. 第一遍光空间矩阵 + 渲深度 FBO；b. 第二遍片段着色器：FragPos 变光空间 / 透视除法 / 转 [0,1] / 采样 shadow map / 深度比较 + bias + PCF 3×3。 */}
 
@@ -278,7 +278,7 @@ shadow /= 9.0;                             // 9 次比较取平均 → 软边
   就是 `[0,1]` 的深度。
 </Callout>
 
-{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能在 §5 Demo 亲手触发。必含：①shadow acne 没加 bias 自遮挡条纹（demo 可触发，配 ShadowAcneDiagram）；②peter panning bias 过大阴影脱离（demo 可触发）；③光锥外/越界采样致远处全黑或全亮（clamp/border 或范围判断）。可选第四：忘了透视除法 / 光空间矩阵算错。 */}
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能在 §5 Demo 亲手触发。必含：①shadow acne 没加 bias 自遮挡条纹（成因/修法靠 ShadowAcneDiagram 图解——three 内建偏移太稳，demo 盲调演示不出 acne）；②peter panning bias 过大阴影脱离（demo 可触发）；③光锥外/越界采样致远处全黑或全亮（clamp/border 或范围判断）。可选第四：忘了透视除法 / 光空间矩阵算错。 */}
 
 ## 容易踩的坑
 
@@ -327,19 +327,19 @@ shadow /= 9.0;                             // 9 次比较取平均 → 软边
 
 - **阴影映射 = 两遍法**：第一遍从光源视角渲一张**深度图**（shadow map），只记「每个方向最近的遮挡距离」；第二遍从相机渲场景顺便判阴影
 - 第二遍每个片元做两件事：用**光空间矩阵**把它变到光眼里（含透视除法 + 映射到 `[0,1]`），再做**深度比较**——`current > 深度图存的 closest` ⇒ 被挡 ⇒ 在阴影
-- **shadow acne** 自遮挡条纹是深度图分辨率有限 + 自遮挡所致，加 **depth bias**（把存的深度往更远推一点）修掉；推过头则出 **peter panning** 阴影脱离，bias 取够用就好
+- **shadow acne** 自遮挡条纹是深度图分辨率有限 + 自遮挡所致（成因与 bias 修法见图解），加 **depth bias**（把存的深度往更远推一点）修掉；推**过头**则出 **peter panning** 阴影脱离——这一头在 demo 里把 bias 拖到最大就能亲手看到，bias 取够用就好
 - 单像素采样的阴影边缘是硬边 + 阶梯锯齿；**PCF** 采样 3×3 邻域取平均把边缘**软化、抹平锯齿**；**阴影图分辨率**越高锯齿越细
 - 片元落在**光锥外**（`proj.xy` 越界 / `proj.z > 1`）要 clamp 到边界白色并直接判受光，否则远处会整片全黑或全亮
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 在上面的 demo 里，把控件调成这样一组组合，**复现 shadow acne** 然后**修掉它**：先造出爬满条纹的脏表面，再只动一个控件把它修干净。说出你怎么调，并解释为什么这组合最容易出 acne、又为什么那一步能修掉。
+**练习 1（改 Demo 代码型）** 在上面的 demo 里，**复现 peter panning** 然后**修掉它**：先把影子和物体脚下拖到脱节、缩回去（物体像重新飘起来），再只动一个控件把它修回贴地。说出你怎么调，并解释为什么那样会出 peter panning、又为什么那一步能修掉。
 
 <Answer>
 
-- **造出 acne**：把 **depth bias** 拖到**最小**（负到底）。bias 越小，深度图里存的最近深度没有被往「更远」推，本该受光的斜面半边 `current` 就会越过 `stored`、被自己误判在阴影 ⇒ 交替亮暗条纹冒出来。再把**阴影图分辨率**切到 **256** 会更明显——分辨率越低，一个像素覆盖地面的斜片越大，自遮挡越严重。
-- **修掉它**：只把 **depth bias** 往回拖到**中间**那段。这相当于把存的最近深度统一往更远推一点点，本该受光的半边再也越不过这条线，整片判受光、条纹消失。
-- 注意别拖过头：bias 拖到**最大**会把贴地接触处的影子也推没，出现 peter panning（影子脱离），所以「够用就好」。
+- **造出 peter panning**：把 **depth bias** 拖到**最大**。bias 加过头，相当于把深度图里存的最近深度往「更远」推得太多，连物体**贴地接触处那一圈本该有的影子**也被一起判成了受光 ⇒ 影子缺了根、与物体脚下分离、整片往后缩，物体看着重新「飘」了起来。
+- **修掉它**：只把 **depth bias** 往回拖到**中间**那段。把存的最近深度只往更远推一点点（够用就好），贴地接触处的影子重新被判在阴影里、影子贴回物体脚下。
+- 这也说明 bias 是把双刃剑：太大出 peter panning（影子脱离），太小则理论上会出 shadow acne（自遮挡条纹，成因见上方图解与误区）——「够用就好」的中间值才两全。
 
 </Answer>
 

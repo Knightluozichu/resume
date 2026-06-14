@@ -18,7 +18,8 @@
  * 控件（≤5，照 InstancingCanvas 控件 + 重置范式）：
  *  ① 光源角度（绕场景转光源，看阴影方向变化）
  *  ② 阴影图分辨率（256 / 512 / 1024 / 2048 分段，看锯齿随分辨率变化）
- *  ③ depth bias（滑块：拖小→shadow acne 自遮挡条纹冒出；拖大→peter panning 阴影脱离悬浮；中间正常）
+ *  ③ depth bias（滑块：往最大拖→peter panning 阴影脱离悬浮；负方向影子贴紧物体；中间干净。
+ *    shadow acne 概念交给正文图解/误区——three.js 内建偏移太稳，盲调演示不出 acne）
  *  ④ PCF 软阴影开关（BasicShadowMap 硬边 ↔ PCFSoftShadowMap 软边）
  *  必有重置。
  *
@@ -46,7 +47,7 @@ type Resolution = (typeof RESOLUTIONS)[number];
 
 /** 默认值（开箱即展示干净阴影：1024 + PCF + 适中 bias + 斜上方光）。 */
 const DEFAULT_RESOLUTION: Resolution = 1024;
-const DEFAULT_BIAS = -0.0012; // 适中负偏移：无 acne 也无明显 peter panning
+const DEFAULT_BIAS = -0.0015; // 适中负偏移：默认干净（无 peter panning，影子贴紧物体）
 const DEFAULT_PCF = true;
 const DEFAULT_ANGLE = 0.9; // 光源绕 Y 轴的方位角（弧度）
 
@@ -85,6 +86,9 @@ function ShadowLight({
     const light = ref.current;
     if (!light) return;
     light.shadow.mapSize.set(resolution, resolution);
+    // normalBias = 0：关掉 three 的法线方向偏移，让正 depth bias 的 peter panning
+    // 阴影脱离更清楚（否则 normalBias 会额外补偿、削弱正 bias 的脱离效果）。
+    light.shadow.normalBias = 0;
     const map = light.shadow.map;
     if (map) {
       map.dispose();
@@ -105,7 +109,7 @@ function ShadowLight({
       position={[x, y, z]}
       intensity={2.4}
       castShadow
-      // depth bias（控件③）：声明式，拖小→shadow acne、拖大→peter panning。
+      // depth bias（控件③）：声明式，往大拖→peter panning 阴影脱离；负方向影子贴紧物体。
       shadow-bias={bias}
       // 阴影图分辨率（控件②）：声明式，effect 里再 dispose 旧 map 触发按新尺寸重建。
       shadow-mapSize-width={resolution}
@@ -193,7 +197,7 @@ function Scene({
 
 export default function ShadowMappingCanvas({
   height = 400,
-  caption = "本 demo 用 three.js 内建 shadow map（与本章讲的「先从光源渲一张深度图、再回相机比深度判阴影」两遍法同一原理）。光源角度：绕场景转光，看阴影方向变。阴影图分辨率：256↔2048，越低阴影边缘锯齿越粗。depth bias：往最小拖会冒出 shadow acne 自遮挡条纹，往最大拖会出 peter panning 阴影脱离悬浮，中间值干净。PCF：关 = 硬边、开 = 软化锯齿边。想看底层 GLSL 实现见下方「代码对照」。拖动画布转视角、滚轮缩放，点重置回初始。",
+  caption = "本 demo 用 three.js 内建 shadow map（与本章讲的「先从光源渲一张深度图、再回相机比深度判阴影」两遍法同一原理）。光源角度：绕场景转光，看阴影方向变。阴影图分辨率：256↔2048，越低阴影边缘锯齿越粗。depth bias：往最大拖 → peter panning 阴影脱离悬浮；负方向让影子贴紧物体；中间值干净（shadow acne 成因见正文图解）。PCF：关 = 硬边、开 = 软化锯齿边。想看底层 GLSL 实现见下方「代码对照」。拖动画布转视角、滚轮缩放，点重置回初始。",
 }: ShadowMappingCanvasProps) {
   const [angle, setAngle] = useState(DEFAULT_ANGLE);
   const [resolution, setResolution] = useState<Resolution>(DEFAULT_RESOLUTION);
@@ -343,7 +347,7 @@ export default function ShadowMappingCanvas({
             id={`${groupId}-bias`}
             type="range"
             min={-0.006}
-            max={0.006}
+            max={0.012}
             step={0.0001}
             value={bias}
             onChange={(e) => setBias(Number(e.target.value))}
@@ -354,8 +358,9 @@ export default function ShadowMappingCanvas({
           </span>
         </div>
         <p className="pl-28 text-xs text-secondary">
-          往最小（负到底）拖 → <strong>shadow acne</strong> 自遮挡条纹；往最大拖
-          → <strong>peter panning</strong> 阴影脱离悬浮；中间值干净。
+          往<strong>最大</strong>拖 → <strong>peter panning</strong>{" "}
+          阴影和物体脚下脱节、缩回；负方向让影子贴紧物体；中间值干净。（shadow
+          acne 的成因见正文图解与误区）
         </p>
 
         {/* ④ PCF 软阴影开关 */}
@@ -378,9 +383,10 @@ export default function ShadowMappingCanvas({
         </div>
 
         <p className="text-xs text-secondary">
-          猜一猜：把 <strong>depth bias</strong>{" "}
-          拖到最小（负到底），地面和物体表面会冒出什么？ 这就是没加偏移时的{" "}
-          <strong>shadow acne</strong> 自遮挡条纹。无任何外部资源。
+          猜一猜：把 <strong>depth bias</strong> 拖到<strong>最大</strong>
+          ，物体的影子会怎样？是更黑，还是和物体
+          <strong>脚下脱了节、整片缩回去</strong>？这就是 bias 加过头的{" "}
+          <strong>peter panning</strong>。无任何外部资源。
         </p>
       </div>
 
