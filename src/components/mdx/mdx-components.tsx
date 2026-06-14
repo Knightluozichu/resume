@@ -83,6 +83,8 @@ import { DynamicRangeDiagram } from "./diagrams/dynamic-range-diagram";
 import { ToneMapCurveDiagram } from "./diagrams/tone-map-curve-diagram";
 import { BloomPipelineDiagram } from "./diagrams/bloom-pipeline-diagram";
 import { SeparableGaussianDiagram } from "./diagrams/separable-gaussian-diagram";
+import { GBufferDiagram } from "./diagrams/gbuffer-diagram";
+import { ForwardVsDeferredDiagram } from "./diagrams/forward-vs-deferred-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -363,6 +365,13 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    ③纵向高斯再沿垂直糊·横纵交替反复=乒乓 N 次越糊越柔→④叠加合成 scene+bloom 加回原图·再 tonemap+gamma 上屏·亮点透出柔和辉光，每步带缩略图示意数据形态）、
  *    SeparableGaussianDiagram（左 2D N×N 核 一像素采整片 N²=25 个邻居 vs 右 先横 1×N 再纵 N×1 两遍各 N 次合计 2N=10·中间「=」标结果等价，
  *    点明采样次数 N²→2N·N 越大省越狠 N=9 时 81 vs 18，讲清为何做两遍可分离而非一遍 2D 大核）。同款 Server SVG。
+ *  - 高级光照篇·延迟着色 Deferred Shading（HEL-88，A 概念 + C 实战型，承接 framebuffers MRT + HDR/Bloom 浮点 FBO 多遍）：
+ *    GBufferDiagram（G-buffer 几何缓冲三图并排：①位置图 gPosition xyz→rgb 彩色编码·②法线图 gNormal n*0.5+0.5 偏蓝紫·
+ *    ③反照率图 gAlbedoSpec 物体本色 + 镜面强度塞 a 通道，顶部标「几何 pass 一次 MRT 输出这几张·都不含光照」，
+ *    底部点明「光照 pass 再采这几张算一次光」）、ForwardVsDeferredDiagram（上下两条管线对比：上排前向 几何 →
+ *    每个物体片元含被遮挡的 × 每盏灯立刻算光照·overdraw 浪费·光照次数 ~ 物体片元数×灯·标红 vs 下排延迟 几何 pass 填
+ *    G-buffer 不点灯 → 光照 pass 全屏四边形只对每个可见像素 × 灯算一次·光照次数 ~ 屏幕像素数×灯·与场景复杂度/overdraw 解耦·
+ *    标绿，点明延迟把光照从「每个物体片元都算」变成「只对可见像素算一次」→ 轻松上几百盏灯）。同款 Server SVG。
  */
 export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Objectives,
@@ -465,6 +474,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToneMapCurveDiagram,
   BloomPipelineDiagram,
   SeparableGaussianDiagram,
+  GBufferDiagram,
+  ForwardVsDeferredDiagram,
   Stepper,
   Step,
   Slider,

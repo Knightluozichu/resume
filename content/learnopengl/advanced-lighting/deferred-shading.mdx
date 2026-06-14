@@ -1,0 +1,606 @@
+---
+title: 延迟着色
+type: C
+section: 高级光照
+order: 9
+description: 讲清前向着色为什么在多光源、复杂场景下重复浪费光照计算（每个物体片元、连被遮挡的也得乘每盏灯算一遍），延迟着色怎么把渲染拆成「几何 pass 用 MRT 把位置/法线/反照率存进 G-buffer」+「光照 pass 只对每个可见片元算一次光照」两步，从而把光照成本和场景复杂度解耦、轻松上几百盏灯；并能看懂 G-buffer 每张图存什么、说出延迟的局限（透明物体没法延迟、MSAA 难做、G-buffer 占带宽显存）。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/08%20Deferred%20Shading/
+draft: true
+---
+
+{/* A 概念 + C 实战型章（HEL-88，高级光照篇第 9 篇）：原书「延迟着色 Deferred Shading」。重心兼顾概念讲解(spec §3，前向 vs 延迟取舍给足，A 概念偏重) + 代码对照(spec §6，G-buffer MRT 几何 pass + 光照 pass 循环 N 灯，C 实战要实)。承接 framebuffers（MRT 多附件·G-buffer 就是 MRT 一次出多张）+ HDR/Bloom（都用浮点 FBO 多遍·G-buffer 位置法线也要 RGBA16F 浮点）。沿用「工厂流水线（先登记半成品属性、最后统一加工）」类比库。math:false。主 viz = ShaderDemo（复用 blinn-phong ray-sphere/plane 范式，frag 里渲一块地面 + 4 个不同反照率球，对每个命中片元算 位置/法线/反照率=G-buffer 内容，控件 uView 切 albedo/normal/position/final 四通道看 G-buffer 每张图 + uLights 调 1~N 点光源看多光，caption 诚实说明这是单 frag 同时算 G-buffer 与光照来可视化、真实延迟是 MRT 存进纹理 + 独立光照 pass 采样见代码对照）；辅 viz = CompareSlider（左 前向每片元含被遮挡的都算 / 右 延迟只对可见片元算一次，用 ForwardVsDeferredDiagram 静态对比图两态，不塞两个 WebGL 画布）；图解 GBufferDiagram（G-buffer 三图）+ ForwardVsDeferredDiagram（前向 vs 延迟管线 + 光照次数差异）。draft:true，老板验收后才发布（硬规则 7）。诚实化（HEL-82 教训）：只演示确信能渲的——切通道看 G-buffer 每张图、调光源数看多光照亮，不声称「真延迟 MRT 多 pass 渲染正常」（单 frag 做不了真 MRT 多 pass）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 前向着色 vs 延迟着色（前向：每个物体片元都立刻算光照、被遮挡的也白算了 overdraw；延迟：先只存几何属性、最后只对可见片元算一次光照）= 直觉引入 + 概念 + ForwardVsDeferredDiagram + 主 ShaderDemo + CompareSlider；2) G-buffer 几何缓冲（用 MRT 把每片元的 位置/法线/反照率+镜面 存进几张纹理、不算光照）= 概念 + GBufferDiagram 三图 + 主 demo 切通道 + §6 代码；3) 几何 pass（第一遍只填 G-buffer、不点灯）= 概念 + §6 代码 a；4) 光照 pass（第二遍全屏四边形采样 G-buffer、对每个可见片元算一次光照）= 概念 + §6 代码 b + demo final 通道；5) 大量光源的优势（延迟下光照成本只和『屏幕像素数 × 光源数』有关、与场景复杂度/overdraw 解耦，所以能上成百上千光源）= 概念 + ForwardVsDeferredDiagram + demo 光源数滑块；6) MRT 多渲染目标（G-buffer 就是 MRT 一次输出多张，承接 bloom）= 概念 + §6 代码 a；7) 延迟的局限（透明物体没法延迟、MSAA 难做、G-buffer 占带宽显存）= 误区/概念；8) 光体积 light volume（只在光影响范围内的像素算该光、进一步省）= 概念 + 误区。Term 共 6 个（挑核心）：前向着色 / 延迟着色 / G-buffer / 几何 pass / 光照 pass / 光体积。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能解释 **前向着色** 为什么在多光源、复杂场景下重复浪费光照计算（每个物体片元、连被遮挡的也得乘每盏灯算一遍），以及 **延迟着色** 怎么把渲染拆成「几何 pass 填 **G-buffer**」+「光照 pass 只对可见片元算一次」两步绕开这份浪费
+- 能改出延迟着色的「先存几何、再点灯」效果：在 demo 里切 **查看通道**（反照率 / 法线 / 位置 / 最终光照）亲眼看 G-buffer 每张图长什么样、再看它们怎么合成最终光照，并调 **光源数** 看延迟下轻松上多盏灯
+- 能回答：**延迟着色为什么对大量光源更省**？它的光照计算次数和什么成正比、和什么无关？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库（管线/流程类）。 */}
+
+## 工厂的浪费：每来一个半成品就从头加工一遍
+
+想象一条灯具加工流水线：每来一个半成品零件，工人就立刻把它从打磨、上色到抛光全套加工一遍——哪怕这个零件最后会被压在箱底、根本没人看见，工人也照样花了同样的功夫。零件一多、工序一复杂，工人就被这些**白做的活**拖垮了。
+
+更糟的是：加工的工序（相当于场景里的「灯」）越多，每个零件要重复的功夫就翻倍——十道工序，每个零件（包括那些注定看不见的）都得走十遍。零件数 × 工序数，开销爆炸式增长。
+
+这一章要解决的就是这种浪费：**怎么不让看不见的零件白白被加工、又怎么在工序很多时不至于成本失控**。聪明的做法是换个流程——先把所有零件的属性（形状、材质、朝向）登记造册，确定哪些最终会露面，**最后只对露面的那些统一加工一遍**。没有这套办法，场景里灯一多就卡成幻灯片；有了它，几百盏灯也能流畅跑。
+
+{/* 3. 概念讲解（spec §三，A 概念偏重，给足）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。前向的浪费→延迟两步拆分→G-buffer 存什么→光照 pass→为什么多光源省→局限。 */}
+
+## 前向着色的浪费：被遮挡的片元也白算光照
+
+先看清那条「来一个加工一个」的老流程叫什么。你之前画场景一直用的就是 <Term def="Forward Rendering / Forward Shading，前向着色。最常规的渲染方式：把每个物体逐一画出来，每个物体的每个片元（像素）一生成，就立刻在它的片段着色器里把所有光照（环境光 + 每盏灯的漫反射 + 镜面）算完写进帧缓冲。问题是：很多片元最终会被前面的物体盖住（overdraw），但它们的光照在被覆盖前已经白算了；而且光源越多，每个片元要乘的灯就越多，成本随『物体片元数 × 光源数』暴涨，多光源场景下极易卡顿。">前向着色</Term>（forward shading）：把物体一个个画出来，每个物体的每个片元一生成，就**立刻**在片段着色器里把光照全算完——环境光、每盏灯的漫反射和镜面，一并写进帧缓冲。
+
+这套流程在光少时挺好。但它有两处藏不住的浪费。第一是 **overdraw**：一个片元算完了光照写进帧缓冲，结果后面又画了一个更近的物体把它盖住——那次光照**白算了**。场景越复杂、物体叠得越多，这种「算了又被盖掉」的浪费越多。第二更要命：片段着色器里要 **`for` 循环每一盏灯**，光源数翻倍、每个片元的光照计算就翻倍，成本随「**物体片元数 × 光源数**」一起涨。想上一百盏灯？前向直接卡死。
+
+## 延迟着色：先登记几何、最后只对可见片元点一次灯
+
+解法是把渲染**拆成两遍**，这就是 <Term def="Deferred Shading / Deferred Rendering，延迟着色。把渲染拆成两遍来绕开前向的浪费：第一遍『几何 pass』只把每个片元的几何属性（位置、法线、反照率、镜面强度）用 MRT 存进一组叫 G-buffer 的纹理，完全不算光照；第二遍『光照 pass』画一个全屏四边形，对屏幕上每个可见像素采样 G-buffer 拿到几何属性，只算一次光照。因为光照只对最终可见的像素算（被遮挡的根本没进 G-buffer 的最上层）、且次数只和屏幕像素数 × 光源数有关，与场景里物体多少、overdraw 解耦，所以能轻松支持成百上千盏灯。">延迟着色</Term>（deferred shading）的核心。把「立刻点灯」这件事**推迟（defer）**到最后：
+
+- **第一遍**不点任何灯，只把每个片元的**几何属性**（它在哪、法线朝哪、是什么颜色）记录下来。深度测试会保证：屏幕每个像素最后记的是**最靠前那个可见片元**的属性，被挡住的根本不会留在最上层。
+- **第二遍**才点灯：对屏幕上**每个可见像素**，取出它记下的几何属性，**只算一次**光照。
+
+回到工厂的比喻：第一遍是「给每个会露面的零件登记造册——形状、朝向、材质」，第二遍是「照着登记表，只给露面的零件统一抛光上灯」。被箱底压住的零件压根没上登记表的最上层，自然不会白白加工。下面这张图把两条流水线上下排开，一眼看出差别：
+
+<ForwardVsDeferredDiagram />
+
+上排前向：被遮挡的片元也乘每盏灯白算了；下排延迟：几何 pass 只登记、光照 pass 只对可见像素点一次灯。
+
+## G-buffer：那张「几何属性登记表」
+
+第一遍记下的那组属性，存在一个专门的「登记表」里，叫 <Term def="Geometry Buffer，几何缓冲。延迟着色第一遍渲染输出的一组纹理，专门存每个片元的几何属性而不存光照结果。典型存：①位置（片元的世界/视空间坐标 xyz）②法线（朝向）③反照率 albedo（物体的漫反射底色）+ 镜面强度（常塞进 alpha 通道）。靠 MRT 一次几何渲染同时写这几张纹理。第二遍光照 pass 再采样它们、对每个可见像素算一次光照。位置和法线必须用浮点格式（如 RGBA16F）存，否则精度不够、光照会发斑错位。">G-buffer</Term>（几何缓冲）。它不是一张图，而是**几张纹理**，每张存一种几何属性。最常见的三样：
+
+- **位置** `gPosition`：每个片元在空间里的坐标 `xyz`，当 `rgb` 存进一张纹理（看起来是一片按位置编码的彩色）。
+- **法线** `gNormal`：每个片元的法线朝向。法线分量在 `[-1,1]`，存进 `[0,1]` 的纹理要做 `n*0.5+0.5`，所以法线图看起来**整体偏蓝紫**（大多朝外的法线 `z` 偏大）。
+- **反照率** `gAlbedoSpec`：物体的**漫反射本色**（不含任何光照），镜面强度顺手塞进 `alpha` 通道。这张图看起来就是物体本来的颜色。
+
+<GBufferDiagram />
+
+关键是：**这三张图里一点光照都没有**，全是「几何事实」。它们是怎么**一次**就全画出来的？靠的是 **MRT 多渲染目标**（Multiple Render Targets）——和[泛光](/learn/learnopengl/advanced-lighting/bloom)那章一次输出「场景色 + 亮区色」是同一个能力（那章已细讲，这里直接复用）：一个片段着色器靠 `layout(location=N)` 同时往好几个颜色附件写。
+
+## 几何 pass 与光照 pass：两遍各干一件事
+
+把这两遍正式起个名。第一遍叫 <Term def="Geometry Pass，几何 pass。延迟着色的第一遍渲染：把场景里所有物体照常画一遍，但片段着色器不算任何光照，只用 MRT 把每个片元的几何属性（位置、法线、反照率、镜面强度）写进 G-buffer 的几张纹理。开着深度测试，所以每个像素最后留下的是最靠前的可见片元的属性。这一遍结束，G-buffer 就填好了。">几何 pass</Term>（geometry pass）：把所有物体照常渲一遍，但片段着色器**只填 G-buffer、不点灯**。开着深度测试，所以每个像素留下的是最靠前的可见片元。
+
+第二遍叫 <Term def="Lighting Pass，光照 pass。延迟着色的第二遍渲染：绑回默认帧缓冲，画一个铺满屏幕的全屏四边形，它的片段着色器对每个屏幕像素采样 G-buffer 拿到位置/法线/反照率，然后 for 循环每盏灯累加光照（如 Blinn-Phong），算出最终颜色上屏。因为这一遍只对每个可见像素算一次光照、和屏幕像素数成正比，与场景里有多少物体无关，所以这是延迟着色省下大量光照计算的关键一步。">光照 pass</Term>（lighting pass）：绑回默认帧缓冲，画一个**铺满屏幕的全屏四边形**，它的片段着色器对每个屏幕像素采样 G-buffer 拿到位置/法线/反照率，再 `for` 循环每盏灯累加光照，算出最终色。整条出口流水线：`几何 pass 填 G-buffer → 光照 pass 采 G-buffer 对每个可见像素点一次灯 → 上屏`。
+
+## 为什么延迟对大量光源更省
+
+现在能回答开头那个浪费问题了。延迟着色把光照计算挪到了光照 pass，而光照 pass **只对屏幕上每个可见像素算一次**。所以它的光照计算次数 ≈ **屏幕像素数 × 光源数**——注意这里**没有「物体片元数」**了：场景里塞一千个物体还是十个物体、有没有 overdraw，光照 pass 都只看那固定的「屏幕像素数」。光照成本和**场景复杂度彻底解耦**了。
+
+对比前向的「物体片元数 × 光源数」：物体片元数往往远大于屏幕像素数（因为 overdraw、因为很多片元被遮挡）。所以光源一多，延迟的优势就压倒性地显现——这正是延迟着色被发明出来的理由：**让你能在场景里塞成百上千盏灯还不卡**。上面那张对比图下排标的就是这个「屏幕像素数 × 灯」。
+
+## 别忘了局限：延迟不是万能的
+
+延迟很香，但有几个绕不开的代价，写在前面免得你以为它能包治百病：
+
+- **透明物体没法延迟**：G-buffer 每个像素只存**一个**片元的属性（最靠前那个），可透明物体需要把它后面的东西也透出来、要多层混合——一个像素一份属性根本存不下。所以透明物体得**单独用前向再画一遍**。
+- **MSAA 难做**：硬件 [MSAA](/learn/learnopengl/advanced-opengl/anti-aliasing) 在光栅化阶段对边缘多采样，可延迟的光照发生在之后的全屏 pass 里，边缘信息已经摊平成 G-buffer 的像素了，传统 MSAA 用不上，得另想办法（如 FXAA 等后处理抗锯齿）。
+- **G-buffer 占带宽和显存**：好几张全屏的浮点纹理（位置、法线、反照率…）既吃显存，每帧读写又吃带宽——这是延迟实打实的固定开销。
+
+还有一个进一步的省法值得一提：<Term def="Light Volume，光体积。一盏灯（尤其点光源）的光照其实只能影响它周围一小块范围（超出衰减半径基本就照不到了）。光体积的思路是：在光照 pass 里不要让每盏灯都全屏算一遍，而是只在这盏灯影响得到的那块屏幕区域里的像素才算它的贡献。常见做法是为每盏灯画一个包住它影响范围的球体/锥体（它的『体积』），只对落在体积内的像素累加该灯。这样远处的小灯就不会浪费全屏的光照计算，是延迟着色上更多光源时的标准优化。">光体积</Term>（light volume）：一盏灯（尤其点光源）其实只照亮周围一小块，光体积就是**只在这盏灯影响得到的那块屏幕区域里**才算它的贡献，远处的小灯不必全屏白算——延迟上更多光时的标准优化。
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。延迟着色本章重点在管线拆分与取舍，无需公式推导，符合任务卡。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五）：复用 blinn-phong 的 ray-sphere/plane 范式，frag 里渲一块地面 + 4 个不同反照率球，对每个命中片元算 位置/法线/反照率=G-buffer 内容。uView 切 0 albedo/1 normal(n*0.5+0.5)/2 position/3 final 四通道、uLights 1~4 点光源。猜一猜引导。诚实化：caption 说明这是单 frag 同时算 G-buffer 与光照来可视化、真延迟是 MRT 存纹理 + 独立光照 pass 采样见 §6。frag 无空行（各段 // 注释分隔）。 */}
+
+## 动手：切通道看 G-buffer，调光源数看多光
+
+> 猜一猜：下面这块画布里有一块地面 + 几个不同颜色的球。先把「查看通道」切到 **法线**——每个片元的法线被 `n*0.5+0.5` 编码成颜色。你觉得画面会变成什么样？是五颜六色乱成一团，还是**整体偏蓝紫**（朝你这侧的面 `z` 偏大）、球面上颜色随朝向平滑过渡？先切一下，再读下面。
+
+这块画布里，片段着色器用 [ray-sphere 求交](/learn/learnopengl/advanced-lighting/advanced-lighting) 程序化渲了一块地面 + 4 个不同反照率的球，**对每个命中片元算出它的 位置 / 法线 / 反照率**——这正是 G-buffer 存的三样东西。两个控件：**查看通道**在「反照率 / 法线 / 位置 / 最终光照」之间切，亲眼看 G-buffer 每张图长什么样、再看它们怎么合成最终光照；**光源数**从 1 加到 4 盏点光源，看延迟下轻松点多盏灯（光照通道里就是 `for` 循环这几盏灯累加）：
+
+<ShaderDemo
+  aspect={1.6}
+  caption="一块地面 + 4 个不同反照率的球（片段着色器 ray-sphere/plane 求交程序化渲染）。查看通道：0 反照率 albedo（物体本色、零光照，G-buffer 第三张）/ 1 法线 normal（n*0.5+0.5 编码成颜色、整体偏蓝紫，G-buffer 第二张）/ 2 位置 position（命中点坐标 xyz 当 rgb、彩色编码，G-buffer 第一张）/ 3 最终光照 final（采上面三样、for 循环每盏灯算 Blinn-Phong 合成）。光源数：1~4 盏点光源，演示延迟轻松上多光。注意：为了能在单个片段着色器里演示，这里是『同一个 frag 内同时算出 G-buffer 三样属性、并按通道切换显示或合成光照』；真实延迟着色是几何 pass 用 MRT 把这三样存进纹理、再由独立的光照 pass 采样它们算一次光（见下方『代码逐段拆解』）。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uView;
+uniform float uLights;
+out vec4 FragColor;
+// 4 盏点光源的位置与颜色（光照 pass 里循环累加，演示延迟轻松上多光）
+const int MAX_LIGHTS = 4;
+vec3 lightPosi(int i) {
+  if (i == 0) return vec3(-2.0, 2.4, 1.5);
+  if (i == 1) return vec3(2.2, 2.0, 1.0);
+  if (i == 2) return vec3(0.0, 2.6, -2.0);
+  return vec3(1.4, 1.2, 2.6);
+}
+vec3 lightCol(int i) {
+  if (i == 0) return vec3(1.0, 0.85, 0.6);
+  if (i == 1) return vec3(0.5, 0.7, 1.0);
+  if (i == 2) return vec3(1.0, 0.5, 0.7);
+  return vec3(0.6, 1.0, 0.7);
+}
+// 4 个球的圆心、半径、反照率本色（geometry pass 要登记的物体属性）
+vec4 sphereGeo(int i) {
+  if (i == 0) return vec4(-1.1, -0.3, -0.5, 0.7);
+  if (i == 1) return vec4(0.9, -0.35, 0.2, 0.65);
+  if (i == 2) return vec4(0.1, -0.2, -1.6, 0.8);
+  return vec4(1.8, -0.45, -0.9, 0.55);
+}
+vec3 sphereAlbedo(int i) {
+  if (i == 0) return vec3(0.85, 0.30, 0.28);
+  if (i == 1) return vec3(0.30, 0.55, 0.90);
+  if (i == 2) return vec3(0.90, 0.80, 0.35);
+  return vec3(0.45, 0.80, 0.50);
+}
+// ray-sphere 求交：返回最近正根 t，未命中返回 -1
+float hitSphere(vec3 ro, vec3 rd, vec3 ce, float r) {
+  vec3 oc = ro - ce;
+  float b = dot(oc, rd);
+  float c = dot(oc, oc) - r * r;
+  float h = b * b - c;
+  if (h < 0.0) return -1.0;
+  float t = -b - sqrt(h);
+  return t > 0.0 ? t : -1.0;
+}
+void main() {
+  // 像素 → [-1,1] 归一化坐标（按宽高比校正）
+  vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+  // 相机：眼睛在 +z 往里看，视线沿 -z（微微俯视）
+  vec3 ro = vec3(0.0, 0.6, 4.0);
+  vec3 rd = normalize(vec3(uv.x, uv.y - 0.12, -1.3));
+  // —— 这一段就是『几何 pass』要登记的 G-buffer 三样：位置 / 法线 / 反照率 ——
+  float bestT = 1e9;
+  vec3 gPos = vec3(0.0);
+  vec3 gNrm = vec3(0.0);
+  vec3 gAlb = vec3(0.0);
+  bool hit = false;
+  // 先和 4 个球求交，取最近的（深度测试：留最靠前的可见片元）
+  for (int i = 0; i < MAX_LIGHTS; i++) {
+    vec4 g = sphereGeo(i);
+    float t = hitSphere(ro, rd, g.xyz, g.w);
+    if (t > 0.0 && t < bestT) {
+      bestT = t;
+      gPos = ro + t * rd;
+      gNrm = normalize(gPos - g.xyz);
+      gAlb = sphereAlbedo(i);
+      hit = true;
+    }
+  }
+  // 再和地面 y=-0.8 求交，比球更近才覆盖
+  float tg = (rd.y < 0.0) ? (-0.8 - ro.y) / rd.y : -1.0;
+  if (tg > 0.0 && tg < bestT) {
+    bestT = tg;
+    gPos = ro + tg * rd;
+    gNrm = vec3(0.0, 1.0, 0.0);
+    // 地面棋盘格反照率（两种灰）
+    vec2 c = floor(gPos.xz);
+    float chk = mod(c.x + c.z, 2.0);
+    gAlb = mix(vec3(0.22), vec3(0.40), chk);
+    hit = true;
+  }
+  // 没命中任何东西：暗背景
+  if (!hit) {
+    FragColor = vec4(0.03, 0.03, 0.05, 1.0);
+    return;
+  }
+  // —— 查看通道：0 反照率 / 1 法线 / 2 位置 / 3 最终光照 ——
+  vec3 outColor;
+  if (uView < 0.5) {
+    // 通道 0：反照率 albedo（物体本色，零光照）
+    outColor = gAlb;
+  } else if (uView < 1.5) {
+    // 通道 1：法线 normal，n*0.5+0.5 编码成颜色（整体偏蓝紫）
+    outColor = gNrm * 0.5 + 0.5;
+  } else if (uView < 2.5) {
+    // 通道 2：位置 position，命中点 xyz 当 rgb（拉到 [0,1] 看个意思）
+    outColor = fract(gPos * 0.35 + 0.5);
+  } else {
+    // 通道 3：最终光照 = 采上面 G-buffer 三样，for 循环每盏灯累加 Blinn-Phong
+    int n = int(uLights + 0.5);
+    vec3 V = normalize(ro - gPos);
+    vec3 lit = gAlb * 0.12; // 环境光托底
+    for (int i = 0; i < MAX_LIGHTS; i++) {
+      if (i >= n) break;
+      vec3 Lvec = lightPosi(i) - gPos;
+      float dist = length(Lvec);
+      vec3 L = Lvec / dist;
+      float atten = 1.0 / (1.0 + 0.18 * dist * dist);
+      float diff = max(dot(gNrm, L), 0.0);
+      vec3 H = normalize(L + V);
+      float spec = pow(max(dot(gNrm, H), 0.0), 32.0);
+      lit += lightCol(i) * atten * (gAlb * diff + spec * 0.5);
+    }
+    outColor = lit;
+  }
+  // 简单 gamma 提一点对比
+  FragColor = vec4(pow(outColor, vec3(0.85)), 1.0);
+}`}
+  controls={[
+    {
+      name: "uView",
+      label: "查看通道（0 反照率 · 1 法线 · 2 位置 · 3 最终光照）",
+      type: "float",
+      min: 0,
+      max: 3,
+      step: 1,
+      default: 0,
+    },
+    {
+      name: "uLights",
+      label: "光源数（仅最终光照通道生效）",
+      type: "float",
+      min: 1,
+      max: 4,
+      step: 1,
+      default: 2,
+    },
+  ]}
+/>
+
+谜底：切到 **反照率**，看到的是几个球和棋盘地面的**纯本色**——一点光照都没有，平板板的，这正是 G-buffer 第三张存的东西。切到 **法线**，果然**整体偏蓝紫**，每个球面上的颜色随朝向平滑过渡（朝左偏红、朝右偏绿、朝你偏蓝），地面是一整片同色（法线全朝上）。切到 **位置**，是一片随坐标变化的彩色编码图。最后切到 **最终光照**——这才是把前三样**合成**出来的成品：地面和球被点亮、有了高光和阴影感。再把**光源数**从 1 拖到 4，画面一盏盏地被点亮、色彩叠加——这就是延迟着色「先存几何、再点灯」里**点灯那一步**，循环几盏就点几盏，加灯几乎只是多跑一次循环。
+
+## 流程走一遍：从几何 pass 到光照 pass
+
+把上面切的四个通道串成正经的两遍流程，每一步都配了图示意那一刻的数据形态：
+
+<Stepper>
+  <Step title="① 几何 pass + MRT：一次填好 G-buffer 三张图">
+    <GBufferDiagram />
+    <strong>几何 pass</strong> 把所有物体照常画一遍，但片段着色器
+    <strong>不点灯</strong>，靠 <strong>MRT</strong> 一次把每个片元的
+    <strong>位置</strong>（<code>location 0</code>）、<strong>法线</strong>（
+    <code>location 1</code>）、<strong>反照率 + 镜面</strong>（
+    <code>location 2</code>）写进 G-buffer 三张纹理。开着深度测试，每个像素只留
+    <strong>最靠前的可见片元</strong>。
+  </Step>
+  <Step title="② 光照 pass：全屏四边形采 G-buffer，对可见像素点一次灯">
+    <ForwardVsDeferredDiagram />
+    绑回默认帧缓冲，画一个<strong>铺满屏幕的全屏四边形</strong>
+    ，它的片段着色器对
+    <strong>每个可见像素</strong>采样 G-buffer 拿到 位置/法线/反照率，再
+    <code>for</code> 循环<strong>每盏灯</strong>累加 Blinn-Phong。光照只算这
+    <strong>一次</strong>，次数 ~ <code>屏幕像素数 × 灯</code>，
+    和场景里多少物体、 overdraw 全<strong>无关</strong>。
+  </Step>
+</Stepper>
+
+## 左右擦一擦：前向 vs 延迟
+
+把「前向每片元都算（含被遮挡的浪费）」和「延迟只对可见片元算一次」定格成两态——左边是前向管线（每个物体片元 × 灯立刻算光照，被遮挡的也白算），右边是延迟管线（几何 pass 填 G-buffer → 光照 pass 只对可见像素 × 灯算一次）：
+
+<CompareSlider
+  leftLabel="前向（每片元都算 · 含被遮挡的浪费）"
+  rightLabel="延迟（只对可见片元算一次）"
+  initial={42}
+  left={<ForwardVsDeferredDiagram />}
+  right={<ForwardVsDeferredDiagram />}
+/>
+
+两侧画的是同一张管线对比图（上排前向、下排延迟）——重点不在左右不同，而在对照那两行**光照次数**：前向是「物体片元数 × 灯」（含被遮挡的浪费），延迟是「屏幕像素数 × 灯」（与场景复杂度解耦）。一句话：延迟把光照从「**每个物体片元都算**」变成「**只对可见像素算一次**」。
+
+{/* 6. 代码对照（spec §六，C 重心）：a. 几何 pass 片段着色器 MRT 三输出 layout(location) gPosition/gNormal/gAlbedoSpec 只写几何不算光照；b. 光照 pass 片段着色器 采样三张 G-buffer 纹理 + for 循环 N 盏灯累加 Blinn-Phong；c. C++ 侧建 MRT + drawBuffers（含 RGBA16F 浮点格式差异 Callout warn）。C++/GLSL330 ↔ WebGL2/GLSL300es，单块 ≤30 行，块间解说。 */}
+
+## 代码逐段拆解
+
+延迟着色的代码就三块，全建立在[帧缓冲](/learn/learnopengl/advanced-opengl/framebuffers)的多附件 FBO 和 [HDR](/learn/learnopengl/advanced-lighting/hdr) 浮点纹理之上：**几何 pass 片段着色器（MRT 填 G-buffer）**、**建 G-buffer FBO（多浮点附件 + drawBuffers）**、**光照 pass 片段着色器（采 G-buffer + 循环 N 灯）**。
+
+### 第一块：几何 pass 片段着色器——MRT 三输出，只写几何不点灯
+
+几何 pass 的片段着色器声明**三个**输出，靠 `layout(location=N)` 指定写到第几个颜色附件：位置、法线、反照率+镜面。注意它**完全不算光照**，只把上游传来的几何属性原样写进去：
+
+<CodeTabs>
+  <Tab label="GLSL：几何 pass 片段着色器（MRT 填 G-buffer）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec3 FragPos;    // 片元位置（视/世界空间，来自顶点着色器）
+in vec3 Normal;     // 片元法线
+in vec2 TexCoords;  // 用于采反照率/镜面贴图
+layout(location = 0) out vec4 gPosition;   // 附件 0：位置
+layout(location = 1) out vec4 gNormal;     // 附件 1：法线
+layout(location = 2) out vec4 gAlbedoSpec; // 附件 2：反照率(rgb)+镜面(a)
+uniform sampler2D texDiffuse;
+uniform sampler2D texSpecular;
+void main() {
+  // 只登记几何属性，一行光照都不算
+  gPosition = vec4(FragPos, 1.0);
+  gNormal = vec4(normalize(Normal), 1.0);
+  gAlbedoSpec.rgb = texture(texDiffuse, TexCoords).rgb;  // 反照率本色
+  gAlbedoSpec.a = texture(texSpecular, TexCoords).r;     // 镜面强度塞 a 通道
+}
+```
+
+  </Tab>
+  <Tab label="C++ / OpenGL 3.3：建 G-buffer 多浮点附件 + drawBuffers">
+
+```cpp
+// G-buffer FBO：挂三张纹理附件（位置/法线/反照率）
+unsigned int gBuffer, gPosition, gNormal, gAlbedoSpec;
+glGenFramebuffers(1, &gBuffer);
+glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+unsigned int atts[3] = {GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1,
+                        GL_COLOR_ATTACHMENT2};
+// 位置、法线：必须 RGBA16F 浮点（精度），反照率 RGBA8 即可
+// gPosition / gNormal 用 GL_RGBA16F + GL_FLOAT；gAlbedoSpec 用 GL_RGBA + GL_UNSIGNED_BYTE
+// （每张 glGenTextures + glTexImage2D + glFramebufferTexture2D 到对应附件，从略）
+// 关键：告诉这次渲染要往「三个」附件写，否则只有附件 0 生效
+glDrawBuffers(3, atts);
+// （深度 renderbuffer 附件 + checkFramebufferStatus 同帧缓冲那章，从略）
+```
+
+  </Tab>
+</CodeTabs>
+
+着色器声明了三个输出还不够——还得用 `glDrawBuffers` 告诉这次渲染「确实要往三个附件写」，这步在 WebGL2 里 API 名字不同；且位置/法线这两张**必须是浮点**纹理：
+
+<Callout type="warn">
+  两处关键差异。**①MRT 启用**：桌面用 `glDrawBuffers(3,
+  atts)`（`GL_COLOR_ATTACHMENT0/1/2` 数组）；WebGL2 用
+  `gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1,
+  gl.COLOR_ATTACHMENT2])`（数组形式，WebGL2
+  核心自带，不需扩展）。漏了它，`location 1/2`
+  写了也白写。**②浮点格式**：`gPosition` / `gNormal` 务必用 `RGBA16F`
+  浮点（位置坐标、法线分量 范围大、要精度）——WebGL2 还要先
+  `gl.getExtension("EXT_color_buffer_float")`（承接 HDR）。 用 `RGBA8`
+  存位置/法线，精度不够，光照会发斑、错位（见下面误区一）。反照率是 `[0,1]`
+  颜色， `RGBA8` 反而够用还省带宽。
+</Callout>
+
+### 第二块：光照 pass 片段着色器——采 G-buffer，循环 N 盏灯
+
+几何 pass 跑完，G-buffer 三张纹理就填好了。第二遍绑回默认帧缓冲、画一个全屏四边形，它的片段着色器**采样这三张纹理**拿到几何属性，再 `for` 循环每盏灯累加 Blinn-Phong——这是延迟省下大量计算的关键一步，**对每个可见像素只算这一次**：
+
+<CodeTabs>
+  <Tab label="GLSL：光照 pass 片段着色器（采 G-buffer + 循环 N 灯）">
+
+```glsl
+#version 300 es
+precision highp float;
+in vec2 TexCoords;
+uniform sampler2D gPosition;   // 采 G-buffer 三张纹理
+uniform sampler2D gNormal;
+uniform sampler2D gAlbedoSpec;
+uniform vec3 lightPos[64];     // 几十上百盏灯也只是个数组
+uniform vec3 lightColor[64];
+uniform int activeLights;      // 当前生效灯数（对应 demo「光源数」）
+uniform vec3 viewPos;
+out vec4 FragColor;
+void main() {
+  // 1) 采 G-buffer：拿到这个可见像素的 位置/法线/反照率/镜面
+  vec3 FragPos = texture(gPosition, TexCoords).rgb;
+  vec3 Normal = texture(gNormal, TexCoords).rgb;
+  vec3 Albedo = texture(gAlbedoSpec, TexCoords).rgb;
+  float Spec = texture(gAlbedoSpec, TexCoords).a;
+  // 2) 只算这一次光照：for 循环每盏灯累加 Blinn-Phong
+  vec3 lighting = Albedo * 0.1;            // 环境光托底
+  vec3 V = normalize(viewPos - FragPos);
+  for (int i = 0; i < activeLights; i++) {
+    vec3 L = normalize(lightPos[i] - FragPos);
+    float diff = max(dot(Normal, L), 0.0);
+    vec3 H = normalize(L + V);
+    float s = pow(max(dot(Normal, H), 0.0), 32.0) * Spec;
+    lighting += lightColor[i] * (Albedo * diff + s);  // 漫反射 + 镜面
+  }
+  FragColor = vec4(lighting, 1.0);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+注意这段和[泛光](/learn/learnopengl/advanced-lighting/bloom)、[HDR](/learn/learnopengl/advanced-lighting/hdr) 是连着的：算出来的 `lighting` 可能 `>1`（多盏灯叠加），所以延迟通常也渲进**浮点帧缓冲**，后面接 tonemap、甚至 Bloom。这里的 `for (i < activeLights)` 正对应上面 demo 的「光源数」滑块——加灯就是多跑一次循环，**每个可见像素的成本只随灯数线性涨**，和场景里有多少物体无关。
+
+### 第三块：CPU 侧把两遍串起来
+
+最后看 CPU 侧怎么调度这两遍：第一遍绑 G-buffer FBO 渲场景填属性，第二遍绑回默认帧缓冲、把三张纹理喂给光照着色器、画全屏四边形：
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 第一遍·几何 pass：绑 G-buffer，正常渲场景（片段着色器只填属性、不点灯）
+glBindFramebuffer(GL_FRAMEBUFFER, gBuffer);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+geometryShader.use();
+RenderScene();   // 所有物体照常画，写进 gPosition/gNormal/gAlbedoSpec
+// 第二遍·光照 pass：绑回默认帧缓冲，把三张 G-buffer 纹理喂给光照着色器
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+glClear(GL_COLOR_BUFFER_BIT);
+lightingShader.use();
+glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, gPosition);
+glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, gNormal);
+glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, gAlbedoSpec);
+RenderQuad();    // 画全屏四边形，对每个可见像素只算一次光照
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 第一遍·几何 pass：绑 G-buffer，正常渲场景（片段着色器只填属性、不点灯）
+gl.bindFramebuffer(gl.FRAMEBUFFER, gBuffer);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+geometryProgram.use();
+renderScene(); // 所有物体照常画，写进 gPosition/gNormal/gAlbedoSpec
+// 第二遍·光照 pass：绑回默认帧缓冲，把三张 G-buffer 纹理喂给光照着色器
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+gl.clear(gl.COLOR_BUFFER_BIT);
+lightingProgram.use();
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, gPosition);
+gl.activeTexture(gl.TEXTURE1);
+gl.bindTexture(gl.TEXTURE_2D, gNormal);
+gl.activeTexture(gl.TEXTURE2);
+gl.bindTexture(gl.TEXTURE_2D, gAlbedoSpec);
+renderQuad(); // 画全屏四边形，对每个可见像素只算一次光照
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应：第一遍把光照「推迟」掉、只填 G-buffer；第二遍才点灯，而且只对全屏四边形覆盖的**每个可见像素**点一次。整条流水线：`几何 pass 填 G-buffer（MRT）→ 光照 pass 采 G-buffer 循环 N 灯 → 上屏`。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象 → 原因 → 修法；每个 ≤150 字。必含：①RGBA8 存位置/法线→精度不够发斑错位；②延迟里直接画透明物体→透明没法延迟；③以为延迟省了几何 overdraw 和带宽（其实只省光照）；④光源多但每盏全屏算→没用光体积裁剪。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：延迟跑通了，但光照**发斑、有色块、物体边缘错位**，离相机越远越糟。**原因**：G-buffer
+  的 `gPosition` / `gNormal` 用了普通 `RGBA8`（每通道只 8 位、范围截在
+  `[0,1]`）——
+  位置坐标和法线分量根本塞不进去，精度严重不足，采样出来的位置/法线全是台阶状的错值。**修法**：
+  位置、法线两张纹理必须用**浮点格式 `RGBA16F`**（WebGL2 还要
+  `EXT_color_buffer_float`）。 反照率是 `[0,1]` 颜色，`RGBA8`
+  才够用且省带宽，别一刀切全用浮点。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景里的**玻璃、水、半透明物体一加进延迟管线，要么变成不透明、要么直接消失/穿帮**。**原因**：
+  G-buffer
+  每个像素只存**一个**片元的属性（最靠前那个），而透明要把它后面的东西也透出来、需要多层混合——
+  一份属性根本存不下。**修法**：透明物体**不能走延迟**，得在延迟的光照 pass
+  之后，
+  **单独用前向再画一遍**半透明物体（从远到近、开混合），这是工业界的标准混合管线做法。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为「换了延迟，场景的所有开销都降了」，结果复杂场景**还是卡**，百思不得其解。**原因**：
+  延迟省的**只是光照计算**——几何 pass 该画的物体一个不少，它的
+  **overdraw、顶点/光栅化、G-buffer
+  的显存和带宽开销照旧存在**。物体本身多、面数高，几何 pass
+  一样慢。**修法**：摆正预期——
+  延迟是「**多光源**」的解药，不是「复杂几何」的解药；几何太重还得靠
+  LOD、剔除、批处理等手段， 和延不延迟是两码事。
+</Callout>
+
+<Callout type="trap">
+  **现象**：上了几百盏灯，延迟下帧率**还是往下掉**，灯越多越慢，没体验到「轻松上多光」。**原因**：
+  光照 pass
+  里**每盏灯都对全屏所有像素算了一遍**——可一盏小灯其实只照亮周围一小块，远处的像素
+  算它纯属浪费。**修法**：用**光体积**裁剪——为每盏灯画一个包住其影响范围的球/锥，**只对落在体积内的
+  像素**累加该灯，远处小灯不再全屏白算。这是延迟上大量光源时绕不开的优化。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（切通道/调光源数）+ C 型选型题（什么场景用延迟、什么场景前向更合适）；答案折叠。 */}
+
+## 小结
+
+- **前向着色**每个物体片元一生成就立刻算光照，被遮挡的也**白算**（overdraw），且成本随「**物体片元数 × 灯**」涨，多光源下卡死
+- **延迟着色**把渲染拆两遍：**几何 pass** 用 **MRT** 把 位置/法线/反照率 填进 **G-buffer**（不点灯），**光照 pass** 画全屏四边形、只对**可见像素**采 G-buffer 算一次光
+- 延迟的光照成本 ~「**屏幕像素数 × 灯**」，与场景复杂度 / overdraw **解耦**——所以能轻松上**几百盏灯**
+- G-buffer 的**位置 / 法线必须用浮点 `RGBA16F`**（精度），反照率 `RGBA8` 够用；这组纹理是延迟的固定带宽/显存开销
+- 局限：**透明物体没法延迟**（要单独前向画）、**MSAA 难做**（改用 FXAA 等）；灯极多时用**光体积**只对受影响像素算
+
+<Exercises>
+
+**练习 1（改 Demo 代码型）** 在上面那个 demo 里，亲手把「先存几何、再点灯」走一遍：① 把「查看通道」依次切到 反照率 → 法线 → 位置 → 最终光照，说出前三个通道分别对应 G-buffer 的哪张纹理、最终光照这一通道做了什么；② 在最终光照通道下，把「光源数」从 1 拖到 4，画面怎么变？对应代码里哪一行？
+
+<Answer>
+
+① 前三个通道正是 G-buffer 的三张纹理，**零光照**：
+
+- **反照率**：物体的漫反射本色（`gAlbedoSpec` 的 `rgb`），平板板没有明暗。
+- **法线**：每片元法线 `n*0.5+0.5` 编码成颜色（`gNormal`），整体偏蓝紫、随朝向平滑过渡。
+- **位置**：命中点坐标 `xyz` 当颜色（`gPosition`），随空间位置变化的彩色编码。
+
+**最终光照**通道不再直接显示某张纹理，而是**采上面这三样**、对每个像素 `for` 循环每盏灯累加 Blinn-Phong（漫反射 + 镜面），合成出被点亮的成品——这就是光照 pass 干的事。
+
+② 拖大光源数，画面被**一盏盏点亮**、不同颜色的光叠加上去。对应代码里光照通道的循环：
+
+```glsl
+int n = int(uLights + 0.5);
+for (int i = 0; i < MAX_LIGHTS; i++) {
+  if (i >= n) break;   // 这里：光源数 n 决定循环跑几盏灯
+  // …累加这盏灯的漫反射 + 镜面
+}
+```
+
+`uLights` 就是循环上界 `n`——加灯只是多跑一次循环，这正是延迟「点灯那一步」的成本模型：每个可见像素的开销只随灯数线性涨。
+
+</Answer>
+
+**练习 2（选型题 · C 型）** 三个场景，分别该用 **前向** 还是 **延迟**，各给一句理由：① 一个夜晚的赛博朋克街区，几百盏霓虹灯、车灯、广告牌都在发光，几何不算特别复杂；② 一款手机休闲游戏，全场景只有一盏太阳光（平行光），但要支持很多半透明的水面和玻璃，还要开 MSAA 抗锯齿省功夫；③ 一个有大量半透明粒子特效（烟、火、魔法）叠在不透明物体上的场景。
+
+<Answer>
+
+- **①几百盏灯 + 几何不复杂 → 延迟**。这是延迟的主场：光源极多，前向的「物体片元数 × 几百盏灯」直接爆炸，延迟的「屏幕像素数 × 灯」把成本和场景解耦，几百盏霓虹也能流畅；几何不复杂，G-buffer 带宽开销也不痛。
+- **②单光源 + 大量半透明 + 要 MSAA → 前向**。延迟在这里全是短板：只有一盏灯，延迟省光照的优势根本用不上；半透明没法延迟、MSAA 延迟也难做——而这些恰恰是前向的强项。单光源场景前向又简单又快。
+- **③大量半透明粒子叠不透明 → 混合管线（延迟画不透明 + 前向画半透明）**。不透明物体如果光源多可以走延迟；但那些半透明粒子**必须单独用前向**在延迟之后画（从远到近、开混合）——这正是误区二说的「透明物体没法延迟」。纯延迟会让粒子穿帮。
+
+一句话原则：**光源多、几何不爆、不透明为主 → 延迟；光源少、或大量半透明、或要 MSAA → 前向（半透明部分永远前向）**。
+
+</Answer>
+
+**练习 3（问答型）** 有人做延迟着色：G-buffer 的位置、法线、反照率三张纹理图省事全用了 `RGBA8`，结果反照率看着没问题，但点灯后光照**发斑、远处物体边缘错位**。问题出在哪？怎么改？
+
+<Answer>
+
+问题出在**位置和法线用了 `RGBA8`**（误区一）。`RGBA8` 每通道只有 8 位、范围截在 `[0,1]`——可位置坐标（可能是几十上百的世界坐标）和法线分量（`[-1,1]`）的精度需求远超 8 位整数能表示的，存进去就被严重量化成台阶状的错值。光照 pass 采样出这些错误的位置/法线去算 `N·L`、`N·H`，自然发斑、错位，离相机越远坐标越大、量化误差越明显。
+
+改法：**位置、法线两张换成浮点 `RGBA16F`**（数据类型 `GL_FLOAT` / `gl.FLOAT`，WebGL2 还要 `EXT_color_buffer_float`），让坐标和法线有足够精度。反照率本来就是 `[0,1]` 颜色，`RGBA8` 够用、还省带宽，不用动——所以这位同学只需把三张里的两张改成浮点即可。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（6 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="前向着色">
+  Forward
+  Shading，**前向着色**。最常规的渲染方式：物体一个个画，每个物体的每个片元一生成，就立刻在片段着色器里把所有光照（环境光
+  + 每盏灯的漫反射 +
+  镜面）算完写进帧缓冲。问题：很多片元最终被前面的物体盖住（overdraw），它们的光照白算了；而且光源越多每个片元要乘的灯越多，成本随「物体片元数
+  × 光源数」暴涨，多光源场景极易卡顿。详见本章「前向着色的浪费」一节。
+</GlossaryItem>
+
+<GlossaryItem term="延迟着色">
+  Deferred Shading，**延迟着色**。把渲染拆成两遍绕开前向的浪费：第一遍「几何
+  pass」只把每片元的几何属性（位置/法线/反照率/镜面）用 MRT 存进
+  G-buffer、不算光照；第二遍「光照 pass」画全屏四边形，对每个可见像素采样
+  G-buffer 只算一次光照。因为光照只对可见像素算、次数只和「屏幕像素数 ×
+  光源数」有关，与场景物体多少、overdraw
+  解耦，所以能轻松支持成百上千盏灯。详见本章「延迟着色」一节。
+</GlossaryItem>
+
+<GlossaryItem term="G-buffer">
+  Geometry
+  Buffer，**几何缓冲**。延迟着色第一遍渲染输出的一组纹理，专门存每片元的几何属性而不存光照：①位置（坐标
+  `xyz`）②法线（朝向）③反照率 albedo（漫反射底色）+ 镜面强度（常塞 `a`
+  通道）。靠 MRT 一次几何渲染同时写这几张。位置和法线必须用浮点格式（如
+  `RGBA16F`）存，否则精度不够、光照发斑错位。详见本章「G-buffer」一节。
+</GlossaryItem>
+
+<GlossaryItem term="几何 pass">
+  Geometry Pass，**几何
+  pass**。延迟着色第一遍：把所有物体照常画一遍，但片段着色器
+  **不算任何光照**，只用 MRT 把每片元的几何属性写进 G-buffer
+  的几张纹理。开着深度测试，所以每个像素留下的是最靠前的可见片元的属性。这一遍结束，G-buffer
+  就填好了。详见本章「几何 pass 与光照 pass」一节。
+</GlossaryItem>
+
+<GlossaryItem term="光照 pass">
+  Lighting Pass，**光照
+  pass**。延迟着色第二遍：绑回默认帧缓冲，画一个铺满屏幕的全屏四边形，它的片段着色器对每个屏幕像素采样
+  G-buffer 拿到位置/法线/反照率，再 `for` 循环每盏灯累加光照（如
+  Blinn-Phong）算出最终色上屏。因为只对每个可见像素算一次、和屏幕像素数成正比，与场景物体多少无关，这是延迟省下大量光照计算的关键一步。详见本章「几何
+  pass 与光照 pass」一节。
+</GlossaryItem>
+
+<GlossaryItem term="光体积">
+  Light
+  Volume，**光体积**。一盏灯（尤其点光源）只照亮周围一小块（超出衰减半径基本照不到）。光体积的思路是：光照
+  pass
+  里不让每盏灯都全屏算一遍，而是只在这盏灯影响得到的那块屏幕区域内的像素才算它的贡献——常为每盏灯画一个包住其影响范围的球/锥（它的「体积」），只对落在体积内的像素累加该灯。这样远处小灯不浪费全屏计算，是延迟上更多光源时的标准优化。详见本章「别忘了局限」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
