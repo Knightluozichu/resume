@@ -54,6 +54,8 @@ import { KernelDiagram } from "./diagrams/kernel-diagram";
 import { Cubemap6FacesDiagram } from "./diagrams/cubemap-6faces-diagram";
 import { SkyboxDiagram } from "./diagrams/skybox-diagram";
 import { ReflectionRefractionDiagram } from "./diagrams/reflection-refraction-diagram";
+import { BufferLayoutDiagram } from "./diagrams/buffer-layout-diagram";
+import { BufferSubDataDiagram } from "./diagrams/buffer-subdata-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -171,6 +173,11 @@ import { CubemapDemo } from "./cubemap-demo";
  *    SkyboxDiagram（天空盒去平移对照：没去平移则盒子跟相机位移糊脸 vs 去平移 mat3(view) 盒永以相机为中心在最远处）、
  *    ReflectionRefractionDiagram（反射 R=reflect(I,N) 关于法线对称弹出 vs 折射 R=refract(I,N,ratio)
  *    穿界面弯折、弯折量由 ratio=n₁/n₂ 定）。同款 Server SVG。
+ *  - 高级OpenGL篇·高级数据（HEL-73）：BufferLayoutDiagram（mode=interleaved/batched/compare：交错布局
+ *    一个顶点 P|N|U 挨着重复·stride=32 共用·offset 0/12/24 vs 分批布局 所有 P 一段|所有 N 一段|所有 U 一段·
+ *    各属性独立 stride=12/12/8·offset=各段起点；compare 两条并列「同一 VAO 只是 stride/offset 填法不同」，
+ *    兼作 §5 Stepper 三步配图）、BufferSubDataDiagram（glBufferData 整块重建 vs glBufferSubData(offset,size,data)
+ *    只覆盖中间一段·标 offset 起点 + size 长度）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -300,6 +307,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Cubemap6FacesDiagram,
   SkyboxDiagram,
   ReflectionRefractionDiagram,
+  BufferLayoutDiagram,
+  BufferSubDataDiagram,
   Stepper,
   Step,
   Slider,

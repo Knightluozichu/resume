@@ -1,0 +1,416 @@
+---
+title: 高级数据
+type: C
+section: 高级OpenGL
+order: 7
+description: 把缓冲当成显存里一块能任意摆字节的货架——glBufferData 一次性全量上传 vs glBufferSubData 只补一段、glCopyBufferSubData 缓冲间搬字节，以及把同一批顶点摆成交错布局（interleaved）还是分批布局（batched），两种布局下 glVertexAttribPointer 的 stride 与 offset 怎么填。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/07%20Advanced%20Data/
+draft: true
+---
+
+{/* C 实战型章（HEL-73，高级OpenGL 篇第 7 篇）：原书「高级数据 Advanced Data」。重心是代码对照(§6 覆盖≥80% 关键代码)：①glBufferData 全量 vs glBufferSubData(offset,size,data) 局部更新；②交错布局 interleaved 的 glVertexAttribPointer（stride=sizeof(Vertex)、offset 用 offsetof/手算）；③分批布局 batched 的 attribPointer（各属性独立 offset=各段起点、stride=自身大小）；④glCopyBufferSubData 缓冲间复制 + WebGL2 无 glMapBuffer 的 Callout。math:false 省略 §4。本章偏数据布局、较短、无 bespoke WebGL demo（用 Stepper + 静态 SVG）。承接前几章（同 section 工厂流水线/货架：之前讲怎么对画布做测试混合后处理，本章回到「数据怎么进显存、怎么摆」这层基建）。沿用「工厂流水线 / 仓库货架」类比。主 viz 两个：Stepper 三步交错 vs 分批内存排布（每步带 BufferLayoutDiagram mode）+ BufferSubDataDiagram 局部更新图。draft:true，老板验收后才发布(硬规则 7)。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮 + 章末 Glossary 一一对应）：1) 缓冲 buffer 再认识（显存里一块可任意摆字节的货架）= 直觉引入 + 概念；2) glBufferData 全量上传（一次性灌满整块，data=NULL 只分配不填）= 概念 + <BufferSubDataDiagram> + §6 代码①；3) glBufferSubData(target,offset,size,data) 局部更新（缓冲已存在、只覆盖一段，不重建）= 概念 + <BufferSubDataDiagram> + §6 代码① + 误区③；4) glMapBufferRange/glMapBuffer 内存映射（把缓冲映射到内存指针直接写）= 概念 + Callout 标 WebGL2 无、用 bufferSubData 替代 + §6 代码④；5) glCopyBufferSubData(readtarget,writetarget,readoffset,writeoffset,size) 缓冲间复制字节 = 概念 + §6 代码④；6) 交错布局 interleaved（一个顶点各属性挨着 xyz·nxyz·uv 重复）= 概念 + <Stepper>+<BufferLayoutDiagram mode=interleaved>（主 viz1）+ §6 代码②；7) 分批布局 batched（所有位置一段、所有法线一段、所有 uv 一段）= 概念 + <Stepper>+<BufferLayoutDiagram mode=batched> + §6 代码③；8) glVertexAttribPointer 的 stride/offset 在两种布局下怎么填 = 概念 + <BufferLayoutDiagram mode=compare> + §6 代码②③ + 误区①。Term 共 7 个：缓冲对象(buffer) / glBufferData / glBufferSubData / 内存映射(glMapBuffer) / glCopyBufferSubData / 交错布局(interleaved) / 分批布局(batched)。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出/能实现 ___」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清缓冲就是显存里一块「字节货架」，并写出 `glBufferData` 一次性全量上传与 `glBufferSubData(target, offset, size, data)` 只补一段的区别
+- 能把同一批顶点摆成`交错布局`或`分批布局`，并据此正确填出 `glVertexAttribPointer` 的 **stride（步长）** 和 **offset（偏移）**
+- 能回答：一个顶点结构体是 `位置 vec3 + 法线 vec3 + 纹理坐标 vec2`，交错布局下「法线」属性的 stride 和 offset 各填多少字节？算错会怎样？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线 / 仓库货架」库（承接高级OpenGL 篇）。 */}
+
+## 显存里的一块货架
+
+前面几章你忙着对画好的画面做手脚——测试、混合、后处理。这一章往回退一步，看一个一直在用、却没仔细端详过的东西：你画的那些顶点，到底是怎么进显存、在显存里怎么摆的。
+
+把显存里那块装顶点的地方想成仓库里的**一排货架**：你可以一次把整架货全部换新，也可以只把中间某一格的货补一下；可以把同一批零件「一个顶点的所有零件挨着摆」，也可以「所有同类零件堆一摞」。怎么摆、怎么补货，直接决定取货的人（GPU）要走几步、你每次上货要搬多少东西。
+
+这一章要解决的就是：**怎么把数据更聪明地塞进显存、怎么摆放，让上传更省、让 GPU 取得更顺**。不懂这些，你只会每次都把整架货推倒重来、只会一种摆法，数据一多就慢，属性偏移一填错就满屏花屏。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线/数据组织中的位置。新核心概念克制（缓冲再认识 / bufferData·SubData / 内存映射 / copyBufferSubData / 交错 vs 分批，≤5 个核心新概念簇）。 */}
+
+## 缓冲：一块能任意摆字节的货架
+
+你之前建的 VBO、EBO，本质都是一个 <Term def="显存里一块连续的、能任意摆放字节的存储区。它不在乎你存的是位置、法线还是索引——对它而言只是一串字节。你通过「绑定到某个目标（如 GL_ARRAY_BUFFER）」来操作当前缓冲：往里灌数据、改某一段、或从别处复制过来。VBO、EBO 都是缓冲对象，区别只在绑到了哪个目标。">缓冲对象</Term>（buffer）。它就是显存里一块连续的字节货架，本身**不关心**你存的是位置、法线还是索引——对它来说只是一串字节。你通过「把它绑定到某个**目标**」（比如 `GL_ARRAY_BUFFER`）来操作它：往里灌数据、改某一段、或者从别的缓冲复制过来。
+
+理解这一点很关键：本章后面所有操作，都只是「对这块字节货架做不同的搬运动作」。先看怎么上货。
+
+## 上货的两种方式：整架换新 vs 只补一格
+
+把数据灌进缓冲，最常见的是 <Term def="一次性给缓冲分配空间并灌满数据：glBufferData(target, size, data, usage)。它会（重新）开辟 size 大小的存储、把 data 整块拷进去。如果 data 传 NULL，则只开辟空间、不填内容（之后再用 glBufferSubData 分段填）。每调一次就是「整架货推倒重来」。">glBufferData</Term>——它一次性给缓冲开辟空间、把整块数据灌进去，相当于「整架货全部换新」。如果只想先占好位置、内容晚点再填，可以把数据参数传 `NULL`（WebGL2 里传容量数字），就只分配空间不填东西。
+
+可如果你只是想改其中一小段（比如一个顶点动了），整架推倒重来太浪费。这时用 <Term def="在已存在的缓冲上只更新一小段：glBufferSubData(target, offset, size, data)。它不重新分配空间，只把从字节 offset 处起、长 size 的那一段覆盖成新的 data，其余字节保持原样。前提是这块缓冲已经用 glBufferData 开辟过空间。只有一小段数据变化时用它，比每帧整块重传省得多。">glBufferSubData</Term>——它**不重新分配**空间，只把从字节 `offset` 起、长 `size` 的那一段覆盖掉，其余字节原封不动，相当于「只补中间那一格」。前提是这块缓冲已经用 `glBufferData` 开辟过空间。下面这张图把两者画在同一块缓冲上对照：
+
+<BufferSubDataDiagram />
+
+还有一种更「贴身」的写法叫 <Term def="把缓冲映射到一段你能直接用指针读写的内存：glMapBuffer / glMapBufferRange 返回一个指针，你像操作普通数组一样往里 memcpy 写数据，写完 glUnmapBuffer 解除映射。好处是省掉一次中间拷贝。注意：WebGL2 没有这套 API，浏览器里用 glBufferSubData 替代。">内存映射</Term>（`glMapBuffer` / `glMapBufferRange`）：它把缓冲「摊开」成一段你能直接用指针读写的内存，你像写普通数组一样 `memcpy` 进去、写完再「合上」。它在桌面 OpenGL 里能省一次中间拷贝，但**WebGL2 里没有这套 API**——浏览器里改缓冲一律用 `glBufferSubData`（§6 末尾会专门标这处差异）。
+
+## 在缓冲之间搬货：glCopyBufferSubData
+
+有时你想把一块缓冲里的字节**原样搬到另一块缓冲**（比如把旧 VBO 的数据迁到新 VBO），不必先读回 CPU 再传上去。<Term def="在两块缓冲之间直接复制一段字节：glCopyBufferSubData(readtarget, writetarget, readoffset, writeoffset, size)。从读缓冲的 readoffset 处取 size 字节、写到写缓冲的 writeoffset 处，全程在显存里完成、不经过 CPU。常把两块缓冲分别绑到 GL_COPY_READ_BUFFER 和 GL_COPY_WRITE_BUFFER 这两个专用目标上再复制。">glCopyBufferSubData</Term> 就干这事：从读缓冲的某偏移取一段，写到写缓冲的某偏移，**全程在显存里完成**、不绕 CPU 一圈。通常把两块缓冲分别绑到 `GL_COPY_READ_BUFFER` 和 `GL_COPY_WRITE_BUFFER` 这两个专用目标上，再调它复制。
+
+## 同一批顶点的两种摆法：交错 vs 分批
+
+货怎么摆，比怎么上货更影响性能。同一批顶点（每个带位置、法线、纹理坐标），有两种截然不同的摆法。
+
+第一种是你之前一直用的 <Term def="把一个顶点的各个属性（位置、法线、纹理坐标）紧挨着连续存放，下一个顶点紧跟其后，循环重复：P N U | P N U | P N U …。一个顶点的数据是连续的一小块。好处是只用一个 VBO、GPU 读一个顶点时它的各属性就在一起（缓存友好），是最常用的摆法。">交错布局</Term>（interleaved）：一个顶点的位置、法线、纹理坐标**挨着摆**，下一个顶点紧跟其后，循环重复（`P N U | P N U | …`）。一个顶点的数据是连续的一小块，GPU 读一个顶点时各属性就在一起，缓存友好，是最常用的摆法。
+
+第二种是 <Term def="把所有顶点的同类属性堆在一起：所有位置排成一整段、所有法线排成另一整段、所有纹理坐标排成又一整段（P P P P … | N N N N … | U U U U …）。每个属性各占缓冲里连续的一块。适合「某一类属性单独更新」或从分散的数组直接分段上传的场景。">分批布局</Term>（batched）：把**所有顶点的同类属性堆在一起**——所有位置排成一整段、所有法线排成另一整段、所有纹理坐标排成又一整段（`P P P P … | N N N N … | U U U U …`）。当你的数据本来就分散在三个数组（一个 positions、一个 normals、一个 texCoords）里时，用 `glBufferSubData` 分三段灌进去最省事。
+
+两种摆法存的是**同一批数据**，也都喂给**同一个 VAO**——区别只在于，告诉 GPU「每个属性从哪个字节起、隔多远是下一个」时，`glVertexAttribPointer` 的 **stride（步长）** 和 **offset（偏移）** 填得不一样。下面 Demo 单步走一遍这两种摆法，再到 §6 看代码怎么填。
+
+{/* 4. 数学推导：math:false，整节省略（spec §四）。本章无任何公式。 */}
+
+{/* 5(主 viz). 交互 Demo（spec §五）：本章无 bespoke WebGL demo，用 <Stepper> 三步交错 vs 分批内存排布——每步带 <BufferLayoutDiagram mode>（满足「每步必带图示」，纯文字步=打回）。①交错布局 stride=32/offset 0,12,24 → ②分批布局 各属性独立 stride 12/12/8/offset 各段起点 → ③对比 同一 VAO 只是 stride/offset 填法不同。猜一猜引导。 */}
+
+## 单步看：同一批顶点，两种摆法
+
+> 猜一猜：同样是「位置 + 法线 + 纹理坐标」这一批顶点，如果改成「所有位置堆一摞、所有法线堆一摞、所有纹理坐标堆一摞」来摆，那 `glVertexAttribPointer` 里「跨到下一个同属性」的步长，会变大还是变小？先想一想，再单步走下面三步。
+
+下面把交错布局、分批布局、以及两者对比拆成三步。每一步都画出字节在缓冲里**实际怎么排**、stride 和 offset 该填什么：
+
+<Stepper>
+  <Step title="① 交错布局 interleaved：一个顶点的 P N U 挨着，循环重复">
+    <BufferLayoutDiagram mode="interleaved" />
+    一个顶点的<strong>位置 P、法线 N、纹理坐标 U 挨着摆</strong>
+    ，下一个顶点紧跟其后。三个属性<strong>共用同一个步长</strong>
+    <code>stride = 32</code>（一个顶点结构体的总字节数），偏移分别是
+    <code>0 / 12 / 24</code>。这是最常用、缓存最友好的摆法。
+  </Step>
+  <Step title="② 分批布局 batched：所有 P 一段、所有 N 一段、所有 U 一段">
+    <BufferLayoutDiagram mode="batched" />
+    换成<strong>所有位置堆一段、所有法线堆一段、所有纹理坐标堆一段</strong>
+    。这下每个属性
+    <strong>各自独立</strong>：步长等于<strong>自身大小</strong>（位置法线各
+    <code>12</code>、纹理坐标 <code>8</code>），偏移是
+    <strong>各段的起点</strong>
+    （位置 <code>0</code>、法线在所有位置之后、纹理坐标再往后）。
+  </Step>
+  <Step title="③ 对比：同一个 VAO，只是 stride / offset 填法不同">
+    <BufferLayoutDiagram mode="compare" />
+    两种布局存的是<strong>同一批顶点</strong>，也都喂给
+    <strong>同一个 VAO</strong>
+    ，画出来一模一样。唯一的区别，就是
+    <code>glVertexAttribPointer</code> 里那两个参数——
+    <strong>stride</strong>（隔多远是下一个同属性）和
+    <strong>offset</strong>（这个属性从第几字节起）——填的数不同。
+  </Step>
+</Stepper>
+
+走完就清楚了：所谓「布局」，落到代码里只是 `glVertexAttribPointer` 那两个数字的差别。回到「猜一猜」——分批布局下，每个属性的步长**变小**了（从整个顶点的 32 缩成自身的 12 / 12 / 8），因为同属性在自己那一段里是紧挨着的，跨一步只需跨过一个自己。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80% 关键代码）：四段——①glBufferData 全量 vs glBufferSubData 局部更新；②交错布局 attribPointer（stride=sizeof(Vertex)、offset 手算/offsetof）；③分批布局 attribPointer（各属性独立 offset=各段起点、stride=自身大小）；④glCopyBufferSubData + WebGL2 无 glMapBuffer 的 Callout。单块 ≤30 行；两 Tab 同一逻辑段；块间有解说；API 差异用 Callout。 */}
+
+## 代码逐段拆解
+
+下面四段把本章的操作全部落到代码：**全量 vs 局部上传**、**交错布局填 attribPointer**、**分批布局填 attribPointer**、**缓冲间复制**。C++/OpenGL 与 WebGL2/TS 互为镜像。
+
+### 第一段：glBufferData 全量 vs glBufferSubData 局部
+
+`glBufferData` 一次性开辟空间并灌满整块；之后若只想改一段，用 `glBufferSubData` 给定**起点 offset** 和**长度 size** 覆盖那一段，不动其余字节。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 全量：一次性开辟空间并灌满整块数据
+glBindBuffer(GL_ARRAY_BUFFER, vbo);
+glBufferData(GL_ARRAY_BUFFER, sizeof(data), data, GL_STATIC_DRAW);
+// 也可只分配不填：data 传 NULL，之后再用 SubData 分段填
+// glBufferData(GL_ARRAY_BUFFER, sizeof(data), NULL, GL_STATIC_DRAW);
+
+// 局部：只覆盖从字节 24 起、长 sizeof(sub) 的那一段，其余不动
+glBufferSubData(GL_ARRAY_BUFFER, 24, sizeof(sub), sub);
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 全量：一次性开辟空间并灌满整块数据
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+// 也可只分配不填：第二参传容量字节数，之后再用 subData 分段填
+// gl.bufferData(gl.ARRAY_BUFFER, data.byteLength, gl.STATIC_DRAW);
+
+// 局部：只覆盖从字节 24 起的那一段（长度由 sub 自身决定），其余不动
+gl.bufferSubData(gl.ARRAY_BUFFER, 24, sub);
+```
+
+  </Tab>
+</CodeTabs>
+
+两端逻辑一一对应，但 `glBufferSubData` 一定要先有 `glBufferData` 开辟过的空间，且覆盖范围别越界。配上「只在数据变化时才 `subData`、不每帧整块 `bufferData`」，就能省下大量上传开销。接着是更要命的部分——属性指针怎么填。
+
+### 第二段：交错布局的 glVertexAttribPointer
+
+交错布局下，三个属性**共用步长** `stride = sizeof(Vertex) = 32`（跨一步正好到下一个顶点的同属性），偏移则是各属性在结构体里的起点 `0 / 12 / 24`。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 顶点结构体：Position(vec3,12B) | Normal(vec3,12B) | TexCoords(vec2,8B)，共 32B
+// stride 全填 sizeof(Vertex)=32；offset 用 offsetof 自动算（0 / 12 / 24）
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+                      sizeof(Vertex), (void*)0);
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+                      sizeof(Vertex), (void*)offsetof(Vertex, Normal));
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE,
+                      sizeof(Vertex), (void*)offsetof(Vertex, TexCoords));
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 同一批顶点，交错布局：stride 全填 32 字节；offset 手算 0 / 12 / 24
+const STRIDE = 8 * 4; // 8 个 float × 4 字节 = 32
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, STRIDE, 0); // 位置 @0
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, STRIDE, 3 * 4); // 法线 @12
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, STRIDE, 6 * 4); // uv @24
+```
+
+  </Tab>
+</CodeTabs>
+
+关键就是那两个字节数：**stride 都填 32**（三属性共用，因为下一个同属性要跨过整整一个顶点），**offset** 是 `0 / 12 / 24`。每个浮点数占 4 字节，所以位置占 3×4=12、法线再 3×4=12、纹理坐标 2×4=8，偏移依次累加。手算容易错，C++ 端用 `offsetof` 让编译器代算更稳。
+
+### 第三段：分批布局的 glVertexAttribPointer
+
+换成分批布局，每个属性自成一段、各自连续，于是**步长变成自身大小**（位置法线各 12、纹理坐标 8），**偏移是各段的起点**——位置段从 0 起，法线段从「所有位置的总字节数」起，纹理坐标段再往后。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 数据本来就在三个数组里：positions[] / normals[] / tex[]
+// 用 SubData 分三段灌进同一个 VBO（先 bufferData(NULL) 开好总空间）
+glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(positions), positions);
+glBufferSubData(GL_ARRAY_BUFFER, sizeof(positions), sizeof(normals), normals);
+glBufferSubData(GL_ARRAY_BUFFER, sizeof(positions) + sizeof(normals),
+                sizeof(tex), tex);
+// 各属性独立：stride=自身大小；offset=各段起点
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float),
+                      (void*)(sizeof(positions)));
+glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float),
+                      (void*)(sizeof(positions) + sizeof(normals)));
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// 同一批顶点的分批布局：N 个顶点
+const posBytes = N * 3 * 4; // 所有位置占的字节数
+const norBytes = N * 3 * 4; // 所有法线占的字节数
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 3 * 4, 0); // 位置段 @0
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 3 * 4, posBytes); // 法线段 @posBytes
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 2 * 4, posBytes + norBytes); // uv 段
+```
+
+  </Tab>
+</CodeTabs>
+
+对比第二段就一目了然：交错布局三个 stride 都是 32、offset 是固定的 `0/12/24`；分批布局每个 stride 缩成自身大小、offset 是各段起点（要乘上顶点总数 N）。**这两段填的是同一批数据、画出来完全一样**——布局变了，attribPointer 的填法就得跟着变，这正是本章最该记牢的点。
+
+### 第四段：glCopyBufferSubData 缓冲间复制（附 WebGL2 映射差异）
+
+最后是缓冲间搬字节。把源缓冲绑到 `GL_COPY_READ_BUFFER`、目标缓冲绑到 `GL_COPY_WRITE_BUFFER`，调 `glCopyBufferSubData` 给定双方偏移和长度，复制全程在显存里完成。
+
+<CodeTabs>
+  <Tab label="C++ / OpenGL 3.3">
+
+```cpp
+// 把 vbo1 的全部数据原样复制到 vbo2，全程在显存里、不经 CPU
+glBindBuffer(GL_COPY_READ_BUFFER, vbo1);
+glBindBuffer(GL_COPY_WRITE_BUFFER, vbo2);
+glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER,
+                    0, 0, sizeof(vertexData)); // readoffset, writeoffset, size
+```
+
+  </Tab>
+  <Tab label="TypeScript / WebGL2">
+
+```ts
+// WebGL2 有等价的 copyBufferSubData
+gl.bindBuffer(gl.COPY_READ_BUFFER, vbo1);
+gl.bindBuffer(gl.COPY_WRITE_BUFFER, vbo2);
+gl.copyBufferSubData(
+  gl.COPY_READ_BUFFER,
+  gl.COPY_WRITE_BUFFER,
+  0,
+  0,
+  sizeBytes,
+);
+```
+
+  </Tab>
+</CodeTabs>
+
+`glCopyBufferSubData` 的五个参数是：读目标、写目标、读偏移、写偏移、复制字节数。它和 `glBufferSubData` 都是「只动一段」，区别是前者源是**另一块缓冲**、后者源是 **CPU 内存**。最后单独提一句内存映射的差异：
+
+<Callout type="warn">
+  API 差异：桌面 OpenGL 有 `glMapBuffer` /
+  `glMapBufferRange`，能把缓冲映射成一段指针、直接 `memcpy`
+  写进去（省一次中间拷贝）；**WebGL2 没有这套映射
+  API**。在浏览器里要改缓冲内容，一律用 `gl.bufferSubData(target, offset, data)`
+  替代——效果一样，只是少了「拿指针直接写」这条路。 `glBufferData` /
+  `glBufferSubData` / `glCopyBufferSubData` 三者 WebGL2 都有等价。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字。①stride/offset 字节算错（忘 ×4）→ 属性错位花屏；②以为 WebGL2 有 glMapBuffer → 没有，用 bufferSubData；③每帧 bufferData 全量重传不变数据 → 性能浪费，应只在变时 subData。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：模型**扭曲、错位、满屏花**，法线乱、贴图被撕。**原因**：`glVertexAttribPointer`
+  的 stride / offset **字节数算错**——最常见是忘了乘
+  `sizeof(float)=4`（把偏移填成 `3` 而非 `12`），或交错布局漏填 stride（填了 `0`
+  让它当紧密排列）。**修法**：每个浮点 4 字节，交错 stride 一律 `8*4=32`、offset
+  `0 / 12 / 24`；C++ 端用 `sizeof`/`offsetof` 让编译器算，别填裸数字。
+</Callout>
+
+<Callout type="trap">
+  **现象**：照搬桌面教程写 `gl.mapBuffer(...)`
+  改缓冲，**报错说没这个方法**。**原因**：`glMapBuffer` / `glMapBufferRange`
+  这套内存映射 API **WebGL2
+  根本不存在**，浏览器里没有「拿指针直接写显存」这条路。**修法**：改缓冲内容用
+  `gl.bufferSubData(target, offset, data)` 替代；要在缓冲间搬数据用
+  `gl.copyBufferSubData`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景明明大部分顶点**一帧都没变**，帧率却很低、CPU
+  上传忙。**原因**：每帧都用 `glBufferData`
+  把**整块**顶点重新上传了一遍——哪怕只有几个顶点动，也整架推倒重来，白白浪费带宽。**修法**：不变的数据**只在初始化时传一次**；真有一小段要改，用
+  `glBufferSubData(offset, size, data)` 只补那一段。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道「给定结构体算 stride/offset」实现题 + 1 道排错题；答案折叠。 */}
+
+## 小结
+
+- 缓冲就是显存里一块**字节货架**，绑到某个目标后对它灌、补、搬字节
+- `glBufferData` **整块上传**（`NULL`/容量数只分配不填）；`glBufferSubData(target, offset, size, data)` **只补一段**、其余不动——数据小改用它，别每帧整块重传
+- `glCopyBufferSubData` 在**两块缓冲间**直接搬字节，不绕 CPU；内存映射 `glMapBuffer` **WebGL2 没有**，用 `bufferSubData` 替代
+- **交错布局**（一个顶点 P N U 挨着）三属性共用 `stride=32`、offset `0/12/24`；**分批布局**（同类堆一段）各属性 `stride=自身大小`、offset=各段起点
+- 两种布局是同一批数据、同一个 VAO，区别只在 `glVertexAttribPointer` 的 **stride / offset** 怎么填
+
+<Exercises>
+
+**练习 1（给定结构体算 stride/offset 实现题）** 一个顶点结构体是 `位置 vec3 + 法线 vec3 + 纹理坐标 vec2 + 切线 vec3`（每个分量都是 `float`，4 字节）。按**交错布局**，写出这 4 个属性各自的 `glVertexAttribPointer` 调用，标清每个的 **stride** 和 **offset** 各填多少字节。
+
+<Answer>
+
+先数字节：位置 3×4=12、法线 3×4=12、纹理坐标 2×4=8、切线 3×4=12，整个结构体 `sizeof = 12+12+8+12 = 44` 字节。交错布局下 **stride 四个都填 44**；offset 依次累加：位置 `0`、法线 `12`、纹理坐标 `24`、切线 `32`。
+
+```ts
+const STRIDE = 44; // = 11 个 float × 4
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, STRIDE, 0); // 位置 @0
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, STRIDE, 12); // 法线 @12
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, STRIDE, 24); // 纹理坐标 @24
+gl.vertexAttribPointer(3, 3, gl.FLOAT, false, STRIDE, 32); // 切线 @32
+```
+
+要点：stride 是**整个顶点的总字节数**（44），与有几个属性无关；offset 是该属性**前面所有字段的字节数之和**。C++ 端这些数应交给 `sizeof(Vertex)` 和 `offsetof(Vertex, 字段)`，改结构体也不会算错。
+
+</Answer>
+
+**练习 2（排错题）** 某人把上面那批顶点（位置 + 法线 + 纹理坐标，交错布局）的属性指针写成了下面这样，结果模型严重扭曲。请指出**两处**错误，并给出修正。
+
+```ts
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 8, 0); // 位置
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 8, 3); // 法线
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 8, 6); // 纹理坐标
+```
+
+<Answer>
+
+两处错误都源于**忘了乘 `sizeof(float)=4`**，把「分量个数」当成了字节数：
+
+1. **stride 错**：填的是 `8`，但这是「每个顶点 8 个 float」的**个数**，真正的字节步长应是 `8 * 4 = 32`。stride 单位是**字节**。
+2. **offset 错**：位置 `0` 对，但法线填 `3`、纹理坐标填 `6`，这也是 float **个数**；换算成字节应是 `3*4=12` 和 `6*4=24`。
+
+修正（与第二段代码一致）：
+
+```ts
+const STRIDE = 32; // 8 * 4
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, STRIDE, 0); // @0
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, STRIDE, 12); // @12
+gl.vertexAttribPointer(2, 2, gl.FLOAT, false, STRIDE, 24); // @24
+```
+
+一句话：`glVertexAttribPointer` 的 stride 和 offset 都以**字节**计，凡是 float 一律 ×4。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（7 个，按首现顺序）；释义零基础大白话。位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="缓冲对象">
+  显存里一块连续的、能任意摆放字节的存储区。它不在乎你存的是位置、法线还是索引——对它而言只是一串字节。通过「绑定到某个目标」（如
+  `GL_ARRAY_BUFFER`）来操作它：往里灌、改某段、或从别处复制。VBO、EBO
+  都是缓冲对象，区别只在绑到了哪个目标。详见本章「缓冲：一块能任意摆字节的货架」。
+</GlossaryItem>
+
+<GlossaryItem term="glBufferData">
+  一次性给缓冲分配空间并灌满数据：`glBufferData(target, size, data,
+  usage)`。它会（重新）开辟 `size` 大小的存储、把整块 `data` 拷进去；`data` 传
+  `NULL`（WebGL2
+  传容量数）则只开空间不填。相当于「整架货推倒重来」。详见本章「上货的两种方式」。
+</GlossaryItem>
+
+<GlossaryItem term="glBufferSubData">
+  在已存在的缓冲上只更新一小段：`glBufferSubData(target, offset, size,
+  data)`。它不重新分配空间，只把从字节 `offset` 起、长 `size`
+  的那段覆盖成新数据，其余不动。前提是这块缓冲已用 `glBufferData`
+  开过空间。只有一小段变时用它，比整块重传省。详见本章「上货的两种方式」。
+</GlossaryItem>
+
+<GlossaryItem term="内存映射">
+  把缓冲映射成一段你能直接用指针读写的内存：桌面 OpenGL 的 `glMapBuffer` /
+  `glMapBufferRange` 返回一个指针，你像写普通数组一样 `memcpy`
+  进去、写完解除映射，省掉一次中间拷贝。**注意：WebGL2 没有这套
+  API**，浏览器里改缓冲一律用 `glBufferSubData`
+  替代。详见本章「上货的两种方式」。
+</GlossaryItem>
+
+<GlossaryItem term="glCopyBufferSubData">
+  在两块缓冲之间直接复制一段字节：`glCopyBufferSubData(readtarget, writetarget,
+  readoffset, writeoffset,
+  size)`。从读缓冲取一段、写到写缓冲，全程在显存里完成、不经
+  CPU。常把两块缓冲分别绑到 `GL_COPY_READ_BUFFER` 和 `GL_COPY_WRITE_BUFFER`
+  再复制。详见本章「在缓冲之间搬货」。
+</GlossaryItem>
+
+<GlossaryItem term="交错布局">
+  interleaved：把一个顶点的各属性（位置、法线、纹理坐标）紧挨着连续存放，下一个顶点紧跟其后、循环重复（`P
+  N U | P N U | …`）。一个顶点的数据是连续的一小块，GPU
+  读起来缓存友好，是最常用的摆法。此布局下三属性共用同一
+  stride。详见本章「同一批顶点的两种摆法」。
+</GlossaryItem>
+
+<GlossaryItem term="分批布局">
+  batched：把所有顶点的同类属性堆在一起——所有位置一整段、所有法线一整段、所有纹理坐标一整段（`P
+  P P … | N N N … | U U U
+  …`）。每个属性各占连续一块，适合从分散的数组分段上传、或某类属性单独更新。此布局下每个属性的
+  stride 等于自身大小、offset 是各段起点。详见本章「同一批顶点的两种摆法」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：Attribution 由 page.tsx 闭包注入本章 frontmatter.sourceUrl，写空标签即可（硬规则 4）。 */}
+
+<Attribution />
