@@ -74,6 +74,21 @@ import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library
 import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
 import { androidArchitectureQuestions } from "./review/android-architecture";
 import { systemStartupQuestions } from "./review/system-startup";
+import { appProcessStartupQuestions } from "./review/app-process-startup";
+import { componentWorkflowQuestions } from "./review/component-workflow";
+import { contextQuestions } from "./review/context";
+import { amsQuestions } from "./review/ams";
+import { windowManagerQuestions } from "./review/window-manager";
+import { wmsQuestions } from "./review/wms";
+import { jniPrincipleQuestions } from "./review/jni-principle";
+import { javaVmQuestions } from "./review/java-vm";
+import { dalvikArtQuestions } from "./review/dalvik-art";
+import { classloaderQuestions } from "./review/classloader";
+import { hotfixPrincipleQuestions } from "./review/hotfix-principle";
+import { hookTechnologyQuestions } from "./review/hook-technology";
+import { pluginPrincipleQuestions } from "./review/plugin-principle";
+import { drawOptimizationQuestions } from "./review/draw-optimization";
+import { memoryOptimizationQuestions } from "./review/memory-optimization";
 import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
 
 export {
@@ -146,6 +161,21 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppLargeProgramsQuestions,
   ...androidArchitectureQuestions,
   ...systemStartupQuestions,
+  ...appProcessStartupQuestions,
+  ...componentWorkflowQuestions,
+  ...contextQuestions,
+  ...amsQuestions,
+  ...windowManagerQuestions,
+  ...wmsQuestions,
+  ...jniPrincipleQuestions,
+  ...javaVmQuestions,
+  ...dalvikArtQuestions,
+  ...classloaderQuestions,
+  ...hotfixPrincipleQuestions,
+  ...hookTechnologyQuestions,
+  ...pluginPrincipleQuestions,
+  ...drawOptimizationQuestions,
+  ...memoryOptimizationQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
