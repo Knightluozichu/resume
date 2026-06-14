@@ -62,11 +62,12 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 侧边栏分书与全局上/下一章顺序均以此为准。未列入的书排在已知书之后，
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
-export const BOOK_ORDER = ["learnopengl"] as const;
+export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e"] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
+  "cpp-primer-5e": "C++ Primer 第5版",
 };
 
 /** 取某书在教学顺序中的位次；未知书返回一个大于所有已知位次的值 */
@@ -89,6 +90,11 @@ export const SECTION_ORDER = [
   "高级OpenGL",
   "高级光照",
   "PBR",
+  // C++ Primer 第5版
+  "C++基础",
+  "C++标准库",
+  "类设计者工具",
+  "高级主题",
 ] as const;
 
 /** 取某 section 在教学顺序中的位次；未知 section 返回一个大于所有已知位次的值 */
@@ -110,6 +116,12 @@ function parseFrontmatter(
     const v = raw[key];
     if (typeof v !== "string" || v.trim() === "")
       fail(`字段 \`${key}\` 必须是非空字符串`);
+    return v as string;
+  };
+  /** 允许 sourceUrl 为空（原创内容/非 LearnOpenGL 改编章节可无出处） */
+  const optStr = (key: "sourceUrl"): string => {
+    const v = raw[key];
+    if (typeof v !== "string") fail(`字段 \`${key}\` 必须是字符串`);
     return v as string;
   };
   const bool = (key: keyof ChapterFrontmatter): boolean => {
@@ -135,7 +147,7 @@ function parseFrontmatter(
     demo: bool("demo"),
     math: bool("math"),
     draft: bool("draft"),
-    sourceUrl: str("sourceUrl"),
+    sourceUrl: optStr("sourceUrl"),
   };
 }
 

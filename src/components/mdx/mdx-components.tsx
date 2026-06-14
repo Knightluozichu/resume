@@ -13,6 +13,9 @@ import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
+import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
+import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
+import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
 import { FrustumDiagram } from "./diagrams/frustum-diagram";
 import { LookAtDiagram } from "./diagrams/lookat-diagram";
@@ -366,6 +369,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AliasingDiagram,
   MsaaSampleDiagram,
   SsaaVsMsaaDiagram,
+  CompilationPipelineDiagram,
+  HelloWorldAnnotatedDiagram,
+  IOStreamDiagram,
   Stepper,
   Step,
   Slider,
