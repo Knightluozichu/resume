@@ -65,6 +65,9 @@ import { ExplodeDiagram } from "./diagrams/explode-diagram";
 import { InstancingDiagram } from "./diagrams/instancing-diagram";
 import { AttribDivisorDiagram } from "./diagrams/attrib-divisor-diagram";
 import { DrawcallCompareDiagram } from "./diagrams/drawcall-compare-diagram";
+import { AliasingDiagram } from "./diagrams/aliasing-diagram";
+import { MsaaSampleDiagram } from "./diagrams/msaa-sample-diagram";
+import { SsaaVsMsaaDiagram } from "./diagrams/ssaa-vs-msaa-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -205,6 +208,12 @@ import { InstancingDemo } from "./instancing-demo";
  *    divisor=0 逐顶点步进 每个顶点读一条 vs divisor=1 每实例步进 一条覆盖整个实例所有顶点，compare 并列 + 「忘设 1 = 被当逐顶点读」提醒）、
  *    DrawcallCompareDiagram（不实例化 CPU 喊 N 遍 N 根红箭头·瓶颈 vs 实例化 CPU 喊 1 遍 1 根绿粗箭头 instanceCount=N·流畅，
  *    点明省的是 CPU 反复喊话发起 draw call 的通信开销）。同款 Server SVG。
+ *  - 高级OpenGL篇·抗锯齿（HEL-77，A 概念型，篇收官）：AliasingDiagram（aa 布尔 + bare：屏幕是方格纸，斜边落格上
+ *    aa=false 每格整涂/不涂成硬阶梯·锯齿 vs aa=true 边缘格按覆盖度涂半深过渡灰·平滑，虚线标理想斜边，
+ *    供 Stepper 第一步 + CompareSlider 两侧分别传）、MsaaSampleDiagram（§5 Stepper MSAA 判覆盖度每步图示：
+ *    ①一条斜边压过一个像素格切成内/外两片→②像素内放 4 个采样点数 2/4 在内=覆盖度 50%→
+ *    ③按覆盖度 50% 取图元色与背景色中间色填边缘像素·柔和）、SsaaVsMsaaDiagram（SSAA 每像素拆 4 子像素且
+ *    每个子像素都着色·贵 vs MSAA 只边缘多采样点判覆盖度·片段着色仍每像素一次·性价比，并排对照）。同款 Server SVG。
  *
  * WebGL 摄像机视角交互演示（摄像机章 CameraDemo）：
  *  - Client（dynamic 边界）：CameraDemo —— WebGL2 能力检测 + next/dynamic(ssr:false)
@@ -354,6 +363,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InstancingDiagram,
   AttribDivisorDiagram,
   DrawcallCompareDiagram,
+  AliasingDiagram,
+  MsaaSampleDiagram,
+  SsaaVsMsaaDiagram,
   Stepper,
   Step,
   Slider,
