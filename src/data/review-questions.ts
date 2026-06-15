@@ -87,6 +87,7 @@ import { profProfilingWorkflowBaselineQuestions } from "./review/prof-profiling-
 import { profCpuProfilerDeepDiveQuestions } from "./review/prof-cpu-profiler-deep-dive";
 import { profGpuPerformanceAnalysisQuestions } from "./review/prof-gpu-performance-analysis";
 import { profMemoryProfilerQuestions } from "./review/prof-memory-profiler";
+import { profProfileAnalyzerRegressionQuestions } from "./review/prof-profile-analyzer-regression";
 
 export {
   CHAPTER_TITLES,
@@ -170,6 +171,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...profCpuProfilerDeepDiveQuestions,
   ...profGpuPerformanceAnalysisQuestions,
   ...profMemoryProfilerQuestions,
+  ...profProfileAnalyzerRegressionQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -22,6 +22,10 @@ import { UnityProfilerWindowDiagram } from "./diagrams/unity-profiler-window-dia
 import { CpuGpuBottleneckDiagram } from "./diagrams/cpu-gpu-bottleneck-diagram";
 import { ProfilingToolsDiagram } from "./diagrams/profiling-tools-diagram";
 import { ProfilerExportDiagram } from "./diagrams/profiler-export-diagram";
+import { ProfileAnalyzerWorkflowDiagram } from "./diagrams/profile-analyzer-workflow-diagram";
+import { PercentileStatisticsDiagram } from "./diagrams/percentile-statistics-diagram";
+import { RegressionDetectionDiagram } from "./diagrams/regression-detection-diagram";
+import { CIProfilingDiagram } from "./diagrams/ci-profiling-diagram";
 import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram";
 import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
 import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
@@ -622,6 +626,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CpuGpuBottleneckDiagram,
   ProfilingToolsDiagram,
   ProfilerExportDiagram,
+  ProfileAnalyzerWorkflowDiagram,
+  PercentileStatisticsDiagram,
+  RegressionDetectionDiagram,
+  CIProfilingDiagram,
   GetComponentCacheDiagram,
   EmptyCallbackDiagram,
   UpdateMechanismDiagram,

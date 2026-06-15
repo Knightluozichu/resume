@@ -82,7 +82,8 @@ export type ReviewChapterSlug =
   | "prof-profiling-workflow-baseline"
   | "prof-cpu-profiler-deep-dive"
   | "prof-gpu-performance-analysis"
-  | "prof-memory-profiler";
+  | "prof-memory-profiler"
+  | "prof-profile-analyzer-regression";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -168,6 +169,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "prof-cpu-profiler-deep-dive": "CPU Profiler 深度使用",
   "prof-gpu-performance-analysis": "GPU 性能分析",
   "prof-memory-profiler": "Memory Profiler 内存分析",
+  "prof-profile-analyzer-regression": "Profile Analyzer 与回归测试",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
