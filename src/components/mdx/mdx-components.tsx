@@ -359,6 +359,7 @@ import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram"
 import { MvcDataFlowDiagram } from "./diagrams/mvc-data-flow-diagram";
 import { BackStackDiagram } from "./diagrams/back-stack-diagram";
 import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diagram";
+import { RecyclerViewRecyclingDiagram } from "./diagrams/recyclerview-recycling-diagram";
 import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
@@ -862,6 +863,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MvcDataFlowDiagram,
   BackStackDiagram,
   FragmentTransactionDiagram,
+  RecyclerViewRecyclingDiagram,
   ConfigChangeViewModelDiagram,
   LogcatLineAnatomyDiagram,
   DebugLoopDiagram,
