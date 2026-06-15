@@ -26,6 +26,10 @@ import { ProfileAnalyzerWorkflowDiagram } from "./diagrams/profile-analyzer-work
 import { PercentileStatisticsDiagram } from "./diagrams/percentile-statistics-diagram";
 import { RegressionDetectionDiagram } from "./diagrams/regression-detection-diagram";
 import { CIProfilingDiagram } from "./diagrams/ci-profiling-diagram";
+import { PowerFrameRateDiagram } from "./diagrams/power-frame-rate-diagram";
+import { VsyncFrameBudgetDiagram } from "./diagrams/vsync-frame-budget-diagram";
+import { PlatformProfilingOverviewDiagram } from "./diagrams/platform-profiling-overview-diagram";
+import { RemoteProfilerDiagram } from "./diagrams/remote-profiler-diagram";
 import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram";
 import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
 import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
@@ -630,6 +634,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PercentileStatisticsDiagram,
   RegressionDetectionDiagram,
   CIProfilingDiagram,
+  PowerFrameRateDiagram,
+  VsyncFrameBudgetDiagram,
+  PlatformProfilingOverviewDiagram,
+  RemoteProfilerDiagram,
   GetComponentCacheDiagram,
   EmptyCallbackDiagram,
   UpdateMechanismDiagram,

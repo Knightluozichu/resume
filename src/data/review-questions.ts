@@ -88,6 +88,8 @@ import { profCpuProfilerDeepDiveQuestions } from "./review/prof-cpu-profiler-dee
 import { profGpuPerformanceAnalysisQuestions } from "./review/prof-gpu-performance-analysis";
 import { profMemoryProfilerQuestions } from "./review/prof-memory-profiler";
 import { profProfileAnalyzerRegressionQuestions } from "./review/prof-profile-analyzer-regression";
+import { profPowerOptimizationQuestions } from "./review/prof-power-optimization";
+import { profPlatformSpecificProfilingQuestions } from "./review/prof-platform-specific-profiling";
 
 export {
   CHAPTER_TITLES,
@@ -172,6 +174,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...profGpuPerformanceAnalysisQuestions,
   ...profMemoryProfilerQuestions,
   ...profProfileAnalyzerRegressionQuestions,
+  ...profPowerOptimizationQuestions,
+  ...profPlatformSpecificProfilingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
