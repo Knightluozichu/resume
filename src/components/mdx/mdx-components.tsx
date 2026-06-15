@@ -62,6 +62,9 @@ import { ThreadingProblemDiagram } from "./diagrams/threading-problem-diagram";
 import { JobSystemDiagram } from "./diagrams/job-system-diagram";
 import { EcsArchitectureDiagram } from "./diagrams/ecs-architecture-diagram";
 import { BurstCompilerDiagram } from "./diagrams/burst-compiler-diagram";
+import { BurstThreadDiagram } from "./diagrams/burst-thread-diagram";
+import { DrawCallExplanationDiagram } from "./diagrams/draw-call-explanation-diagram";
+import { AssetBreakdownDiagram } from "./diagrams/asset-breakdown-diagram";
 import { GameObjectToEcsDiagram } from "./diagrams/gameobject-to-ecs-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
@@ -670,6 +673,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JobSystemDiagram,
   EcsArchitectureDiagram,
   BurstCompilerDiagram,
+  BurstThreadDiagram,
+  DrawCallExplanationDiagram,
+  AssetBreakdownDiagram,
   GameObjectToEcsDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,

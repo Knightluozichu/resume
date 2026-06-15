@@ -14,7 +14,7 @@ export function PlatformProfilingOverviewDiagram() {
       key: "需开发机授权\n功能受限",
       x: 28,
       w: 110,
-      color: "#7C5CFF",
+      color: "var(--accent)",
     },
     {
       name: "PC",
@@ -24,7 +24,7 @@ export function PlatformProfilingOverviewDiagram() {
       key: "Editor 直测\n最方便",
       x: 152,
       w: 110,
-      color: "#3FB97F",
+      color: "var(--success)",
     },
     {
       name: "Mobile",
@@ -34,7 +34,7 @@ export function PlatformProfilingOverviewDiagram() {
       key: "需 Development\nBuild + 连线",
       x: 276,
       w: 110,
-      color: "#E5B567",
+      color: "var(--warning)",
     },
     {
       name: "XR",
@@ -44,7 +44,7 @@ export function PlatformProfilingOverviewDiagram() {
       key: "帧预算极紧\n11ms/帧",
       x: 400,
       w: 110,
-      color: "#E5675C",
+      color: "var(--danger)",
     },
     {
       name: "Web",
@@ -54,7 +54,7 @@ export function PlatformProfilingOverviewDiagram() {
       key: "浏览器沙箱\n无法连 Profiler",
       x: 524,
       w: 110,
-      color: "#9B59B6",
+      color: "var(--info)",
     },
   ];
 
