@@ -358,6 +358,7 @@ import { PointShadowsDemo } from "./point-shadows-demo";
 import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram";
 import { MvcDataFlowDiagram } from "./diagrams/mvc-data-flow-diagram";
 import { BackStackDiagram } from "./diagrams/back-stack-diagram";
+import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -856,6 +857,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ActivityLifecycleDiagram,
   MvcDataFlowDiagram,
   BackStackDiagram,
+  ConfigChangeViewModelDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
   LiteralTypesDiagram,
