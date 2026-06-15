@@ -16,7 +16,7 @@ export function ProfilerExportDiagram() {
       step: 2,
       label: "批量导入",
       detail: "Profile Analyzer\n拖入多份 .data 对齐",
-      color: "var(--accent-secondary)",
+      color: "var(--accent)",
     },
     {
       step: 3,
