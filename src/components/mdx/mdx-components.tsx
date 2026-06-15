@@ -381,6 +381,7 @@ import { ResourceQualifierDiagram } from "./diagrams/resource-qualifier-diagram"
 import { AccessibilityTreeDiagram } from "./diagrams/accessibility-tree-diagram";
 import { ThreadModelDiagram } from "./diagrams/thread-model-diagram";
 import { SearchFlowDiagram } from "./diagrams/search-flow-diagram";
+import { WorkManagerDiagram } from "./diagrams/work-manager-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -885,6 +886,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AccessibilityTreeDiagram,
   ThreadModelDiagram,
   SearchFlowDiagram,
+  WorkManagerDiagram,
   BackStackDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
