@@ -1,0 +1,468 @@
+---
+title: IBL 漫反射辐照
+type: C
+section: PBR
+order: 3
+description: 用环境贴图点亮整个场景——把上一章硬编码的 0.03 常量环境光替换成基于图像的光照（IBL）。本章实现等距柱状投影→立方体贴图转换、辐照度卷积预计算、以及漫反射 IBL 着色器，让 PBR 球从四面八方收到来自环境的真实漫反射光。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/07%20PBR/03%20IBL/01%20Diffuse%20irradiance/
+draft: true
+---
+
+{/* C 实战型章（HEL-164，PBR 篇第 3 篇）：原书「IBL - 漫反射辐照度 Diffuse Irradiance」。重心是把硬编码环境光换成真实 IBL（spec C 列）：加载 HDR 等距柱状贴图 → 转成立方体贴图 → 对每面做半球卷积预计算辐照度贴图 → PBR 着色器用法线采样辐照度替换 0.03 常量。C 型段式：概念讲解(§3 压缩) + 交互 Demo(§5 必，ShaderDemo) + 代码对照(§6 核心，≥80% 覆盖) + 误区(§7 ≥4) + 练习(§8 含实现题)。主 viz = ShaderDemo（ray-sphere IBL/非IBL 可切换）+ 3 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单：1) IBL 概念（环境贴图作为无穷方向光源）= IblConceptDiagram；2) HDR 等距柱状投影（.hdr 格式、2:1宽高比）= EquirectToCubemapDiagram；3) 等距柱状→立方体贴图转换（SampleSphericalMap、渲染立方体内表面）= EquirectToCubemapDiagram + §6 代码；4) 辐照度卷积（半球采样加权求和，cos×sin 权重，32×32 分辨率）= HemisphereConvolutionDiagram + §6 代码；5) fresnelSchlickRoughness（粗糙度修正 Fresnel，IBL 专用）= §6 代码；6) 漫反射 IBL 合并（kD * irradiance * albedo 替换 vec3(0.03)，IBL 开关对比）= ShaderDemo。Term 共 7 个。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能改出 PBR 球的环境光照方式：把硬编码的 `vec3(0.03)` 常量替换成基于环境贴图的漫反射 IBL，让球从环境中接收真实的漫反射光
+- 能说出 IBL 漫反射的完整预计算管线：加载 HDR → 等距柱状转立方体贴图 → 半球卷积得到辐照度贴图 → 着色器用法线采样
+- 能回答：为什么辐照度贴图只需要 32×32 这么低的分辨率就够用？卷积过程中 cos(θ)×sin(θ) 权重分别在补偿什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库。 */}
+
+## 暗面不再漆黑
+
+上一章把 PBR 球渲出来了——但拨开那四盏点光源，球的暗面是一片死黑，只靠 `vec3(0.03) * albedo` 这个硬编码常量打点底光。现实里的暗面从不是死黑的：墙上、地板、天空都在往那里补光。
+
+没有环境光的 PBR，就像把球放进一个漆黑的房间里只用手电筒照。手电直射的那面很亮，背光的那面漆黑。你知道这不对——房间的墙和地面会把光弹来弹去，把暗面也照亮。
+
+这一章要做的就是：**把一张环境照片「包」在场景外面当全方向光源**，让球从四面八方收到来自环境的真实漫反射光。
+
+{/* 3. 概念讲解（spec §三，C 型可压缩，篇幅让给 §6）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## IBL：环境贴图作为光源
+
+<Term def="IBL（Image-Based Lighting，基于图像的光照）：用一张（或多张）图像代替离散光源，把图像上每个像素都当作一个方向的入射光，从而捕捉真实世界的复杂光照环境。分漫反射 IBL（辐照度贴图）和镜面 IBL（预滤波环境贴图 + BRDF LUT）两部分。">IBL</Term> 的核心思想很简单：不用 4 盏灯，而是用一张全景照片。照片上的每个像素都代表一个方向的光——蓝天的像素是蓝色入射光，草地的像素是绿棕色入射光，灯光区域的像素亮度极高。
+
+<IblConceptDiagram />
+
+这样一张照片要能「包住」整个场景，就需要一种能表示所有方向的投影格式。
+
+## HDR 与等距柱状投影
+
+真实世界的光照动态范围极大——太阳直射可以是阴影区亮度的几千倍。普通 8bit/通道的 JPG 把这一切压成 0~1，高光全爆白。<Term def="HDR（High Dynamic Range）环境贴图：使用浮点数（如 RGBE 或 float16）存储颜色值，允许超过 1.0 的亮度，真实保留高光与阴影的亮度比例。文件格式通常是 .hdr（RGBE）或 .exr（OpenEXR）。">HDR 环境贴图</Term>用浮点数存储，让太阳和阴影的亮度差真实保留下来，这样卷积出的环境光才能正确反映明暗对比。
+
+常用格式是<Term def="等距柱状投影（Equirectangular Projection）：把球面展开成宽高比 2:1 的矩形。横轴是经度（0°~360°，方位角），纵轴是纬度（-90°~90°，仰角）。优点是简单直观；缺点是极点区域严重拉伸。">等距柱状投影</Term>（.hdr 文件宽高比 2:1）——把球面展开成一张矩形，左右两端是接缝，上下是南北极。
+
+<EquirectToCubemapDiagram />
+
+这张贴图不能直接拿来用——GPU 更擅长采样<Term def="立方体贴图（Cubemap）：由 6 张正方形纹理（+X/-X/+Y/-Y/+Z/-Z）拼成的立方体表面贴图。用一个 3D 方向向量采样，GPU 自动计算命中哪个面的哪个点。支持 GPU 硬件滤波，全方向采样效率高。">立方体贴图</Term>（Cubemap）。所以第一步是把等距柱状 HDR 转成 Cubemap：对立方体六个面各渲一遍，逐片段用方向向量调用 `SampleSphericalMap` 从 HDR 贴图采样。
+
+## 辐照度卷积
+
+拿到立方体环境贴图之后，漫反射 IBL 需要预计算每个法线方向的<Term def="辐照度（Irradiance）：单位面积上从所有方向接收到的辐射通量总和（单位 W/m²）。漫反射 BRDF 只依赖法线方向的辐照度，而非入射方向细节，因此可以预计算成辐照度贴图。">辐照度</Term>——即对以法线 N 为轴的半球，把所有方向的环境光加权积分起来。
+
+<HemisphereConvolutionDiagram />
+
+这个积分对每个法线方向都做一遍，结果存进一张 32×32 的辐照度贴图。**32×32 就够**，因为漫反射 BRDF 对高频细节不敏感——不同法线方向的辐照度变化很平滑，高分辨率是浪费。
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo。ray-sphere PBR 球，IBL 开关可切换。 */}
+
+## 动手：开关 IBL，看环境光怎么点亮暗面
+
+> 猜一猜：把「IBL 环境光」滑块拖到 0（关掉），球的暗面会变成什么颜色？再拖到 1（开启），暗面的光从哪里来？拖一拖粗糙度，观察 IBL 与粗糙度如何相互影响。
+
+<ShaderDemo
+  aspect={1}
+  caption="PBR 球加上漫反射 IBL。关掉 IBL（拖到 0）= 硬编码 vec3(0.03) 常量环境光，暗面死黑；开启 IBL（拖到 1）= 程序化天空辐照度，暗面从环境中收光变亮。粗糙度控制高光形状，金属度控制颜色来源。IBL 滑块可以在 0~1 之间线性混合，感受两种环境光的差异。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uRoughness;
+uniform float uMetallic;
+uniform float uIBL;
+out vec4 FragColor;
+// --- constants ---
+const float PI = 3.14159265359;
+// --- D: GGX NDF ---
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = PI * denom * denom;
+    return a2 / denom;
+}
+// --- G: Schlick-GGX (single) ---
+float GeometrySchlickGGX(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+// --- G: Smith (both) ---
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return GeometrySchlickGGX(NdotV, k) * GeometrySchlickGGX(NdotL, k);
+}
+// --- F: Fresnel-Schlick (direct lighting) ---
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// --- F: Fresnel-Schlick with roughness (IBL) ---
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// --- ray-sphere intersection ---
+float hitSphere(vec3 ro, vec3 rd, float r) {
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - r * r;
+    float h = b * b - c;
+    if (h < 0.0) return -1.0;
+    return -b - sqrt(h);
+}
+// --- procedural irradiance: sky + ground blended by normal.y ---
+vec3 proceduralIrradiance(vec3 N) {
+    float skyFactor = N.y * 0.5 + 0.5;
+    vec3 skyColor = vec3(0.4, 0.6, 1.0);
+    vec3 groundColor = vec3(0.5, 0.35, 0.2);
+    vec3 equatorColor = vec3(0.6, 0.55, 0.5);
+    vec3 color = mix(groundColor, equatorColor, smoothstep(0.0, 0.5, skyFactor));
+    color = mix(color, skyColor, smoothstep(0.5, 1.0, skyFactor));
+    return color * 0.8;
+}
+// --- procedural sky background (matches irradiance colors) ---
+vec3 skyBackground(vec3 rd) {
+    float skyFactor = rd.y * 0.5 + 0.5;
+    vec3 skyColor = vec3(0.4, 0.6, 1.0);
+    vec3 groundColor = vec3(0.5, 0.35, 0.2);
+    vec3 equatorColor = vec3(0.6, 0.55, 0.5);
+    vec3 color = mix(groundColor, equatorColor, smoothstep(0.0, 0.5, skyFactor));
+    color = mix(color, skyColor, smoothstep(0.5, 1.0, skyFactor));
+    return mix(vec3(0.02, 0.02, 0.04), color, uIBL);
+}
+// --- main ---
+void main() {
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+    vec3 ro = vec3(uv, 2.0);
+    vec3 rd = vec3(0.0, 0.0, -1.0);
+    float t = hitSphere(ro, rd, 0.85);
+    if (t < 0.0) { FragColor = vec4(skyBackground(rd), 1.0); return; }
+    // hit point and normal
+    vec3 P = ro + t * rd;
+    vec3 N = normalize(P);
+    vec3 V = normalize(ro - P);
+    // material params
+    vec3 albedo = vec3(0.8, 0.2, 0.2);
+    float roughness = uRoughness;
+    float metallic = uMetallic;
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    // 4 point lights (direct lighting)
+    vec3 lightPositions[4] = vec3[](
+        vec3(-2.0, 2.0, 2.0),
+        vec3( 2.0, 2.0, 2.0),
+        vec3(-2.0,-2.0, 2.0),
+        vec3( 2.0,-2.0, 2.0)
+    );
+    vec3 lightColors[4] = vec3[](
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0)
+    );
+    vec3 Lo = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec3 L = normalize(lightPositions[i] - P);
+        vec3 H = normalize(V + L);
+        float dist = length(lightPositions[i] - P);
+        float attenuation = 1.0 / (dist * dist);
+        vec3 radiance = lightColors[i] * attenuation;
+        float D = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 numerator = D * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+        vec3 kS = F;
+        vec3 kD = (1.0 - kS) * (1.0 - metallic);
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+    // IBL diffuse: use fresnelSchlickRoughness (not fresnelSchlick)
+    vec3 kS_ibl = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic);
+    vec3 irradiance = proceduralIrradiance(N);
+    vec3 diffuseIBL = irradiance * albedo;
+    // toggle: IBL=1 uses env irradiance; IBL=0 uses 0.03 constant
+    vec3 ambient = mix(vec3(0.03) * albedo, kD_ibl * diffuseIBL, uIBL);
+    vec3 color = ambient + Lo;
+    // Reinhard tone mapping
+    color = color / (color + vec3(1.0));
+    // gamma correction
+    color = pow(color, vec3(1.0 / 2.2));
+    FragColor = vec4(color, 1.0);
+}`}
+  controls={[
+    {
+      name: "uRoughness",
+      label: "粗糙度",
+      type: "float",
+      min: 0.05,
+      max: 1,
+      step: 0.05,
+      default: 0.5,
+    },
+    {
+      name: "uMetallic",
+      label: "金属度",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      default: 0,
+    },
+    {
+      name: "uIBL",
+      label: "IBL 环境光",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 1,
+    },
+  ]}
+/>
+
+拖完之后你应该看到：
+
+- **IBL=1（开启）**：背景变成蓝天→地面渐变，球的暗面收到来自天空和地面颜色的环境光——上方暗面偏蓝，下方暗面偏棕
+- **IBL=0（关闭）**：背景变暗色，暗面退回死黑的 `0.03` 常量，高光孤立在漆黑球上，明显不自然
+- **粗糙度拉高**：IBL 环境光在粗糙球上散得更匀，暗面更「饱满」；光滑球的 IBL 影响集中在法线朝上的区域
+- **金属度拉高**：`kD_ibl` 被压到零，漫反射 IBL 消失——金属表面没有漫反射
+
+{/* 6. 代码逐段拆解（spec §六，C 型核心，≥80% 覆盖）。 */}
+
+## 代码逐段拆解
+
+这一节把 ShaderDemo 里 IBL 相关的代码从整体着色器中抽出来逐段讲。直接光照部分（D/G/F + 逐光源循环）与上一章完全相同，这里重点放在四个 IBL 新增部分。
+
+### a) SampleSphericalMap：等距柱状 UV 转换
+
+在实际项目里，把 HDR 等距柱状投影转成立方体贴图，需要对立方体六个面各渲一遍，每个片段调用：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 把归一化方向向量转成等距柱状贴图 UV
+// 输入: v = normalize(localPos)（立方体片段的本地空间方向）
+// 输出: UV ∈ [0,1]
+vec2 SampleSphericalMap(vec3 v) {
+    // atan(z,x): 方位角 (-π, π)，除以 2π → (-0.5, 0.5)
+    // asin(y):   仰角 (-π/2, π/2)，除以 π → (-0.5, 0.5)
+    // + 0.5 → (0, 1)
+    const vec2 invAtan = vec2(0.1591, 0.3183); // 1/2π, 1/π
+    vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
+    uv *= invAtan;
+    uv += 0.5;
+    return uv;
+}
+```
+</Tab>
+</CodeTabs>
+
+两个反三角函数分别对应经度和纬度：`atan(z, x)` 算方位角（球面水平位置），`asin(y)` 算仰角（球面垂直位置）。乘以 `invAtan` 把范围从 (-π, π)/(−π/2, π/2) 归一化到 (-0.5, 0.5)，再 + 0.5 移到 (0, 1)。
+
+### b) 辐照度卷积着色器：半球采样
+
+这是预计算步骤（离线渲染辐照度贴图），不在每帧执行：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// irradiance convolution fragment shader
+// 对当前面片法线方向 N 的上半球离散采样，加权求和
+void main() {
+    vec3 N = normalize(localPos); // 当前立方体面上的法线
+    // 构建切线空间（以 N 为 up 的局部坐标系）
+    vec3 up    = abs(N.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+    vec3 right = normalize(cross(up, N));
+    up         = normalize(cross(N, right));
+    // 双重循环：经度 φ ∈ [0, 2π]，纬度 θ ∈ [0, π/2]
+    vec3 irradiance = vec3(0.0);
+    float sampleDelta = 0.025;
+    float nrSamples = 0.0;
+    for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {
+        for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {
+            // 球坐标转笛卡尔（切线空间）
+            vec3 tangentSample = vec3(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta));
+            // 切线空间 → 世界空间
+            vec3 sampleVec = tangentSample.x*right + tangentSample.y*up + tangentSample.z*N;
+            // cos(θ): 朗伯余弦律；sin(θ): 球面雅可比（面积权重）
+            irradiance += texture(environmentMap, sampleVec).rgb * cos(theta) * sin(theta);
+            nrSamples++;
+        }
+    }
+    irradiance = PI * irradiance / nrSamples;
+    FragColor = vec4(irradiance, 1.0);
+}
+```
+</Tab>
+</CodeTabs>
+
+双重循环遍历半球上所有方向：外层 φ 是方位角（绕 N 轴转一圈），内层 θ 是仰角（从顶部到赤道）。`cos(theta)` 是朗伯余弦律——正对法线的方向贡献最大；`sin(theta)` 是球面面积的雅可比补偿——越靠近赤道，同样角度增量对应的球面面积越大。最后乘以 π 是半球积分公式的归一化常量。
+
+### c) fresnelSchlickRoughness：IBL 专用 Fresnel
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// IBL 版 Fresnel：max(vec3(1-roughness), F0) 替代 vec3(1.0)
+// 粗糙面在掠射角不应达到全反射；用 roughness 压低上限
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0)
+              * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+```
+</Tab>
+</CodeTabs>
+
+与直接光照的 `fresnelSchlick` 相比，只有一处不同：`(1.0 - F0)` 变成了 `(max(vec3(1.0 - roughness), F0) - F0)`。当粗糙度为 0，退化成普通菲涅尔；当粗糙度为 1，反射率上限被压到 `F0`，掠射角不再趋近全反射——符合粗糙表面的物理行为。
+
+IBL 里用这个变体而非普通 `fresnelSchlick`，是因为 IBL 输入的 `cosTheta` 是 `dot(N, V)`（而不是 `dot(H, V)`），直接看法线时 cos 值最大，普通 Fresnel 在此处返回 F0，不会出问题；但掠射角 `dot(N,V)≈0` 时普通 Fresnel 会把粗糙面的 kS 推得很高，导致漫反射 `kD` 被压得过低，画面偏暗且不物理正确。
+
+### d) 漫反射 IBL 合并：替换 0.03 常量
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// IBL 漫反射：用粗糙度修正的 Fresnel 计算 kD_ibl
+vec3 kS_ibl = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic);
+// 从辐照度贴图采样（此处用程序化辐照度模拟）
+vec3 irradiance = proceduralIrradiance(N);
+vec3 diffuseIBL = irradiance * albedo;
+// 最终环境光 = kD_ibl × 辐照度 × albedo
+vec3 ambient = kD_ibl * diffuseIBL;
+// （上一章：vec3 ambient = vec3(0.03) * albedo;）
+vec3 color = ambient + Lo;
+```
+</Tab>
+</CodeTabs>
+
+关键变化只有两行：
+
+1. `irradiance = texture(irradianceMap, N).rgb` 从辐照度贴图采样（Demo 里用程序化模拟）——输入是法线方向，返回该法线方向接收到的漫反射光总量
+2. `ambient = kD_ibl * irradiance * albedo`——比上一章多了 `kD_ibl` 能量守恒因子，防止反射率（kS）和漫反射率（kD）之和超过 1
+
+`vec3(0.03) * albedo` 被完全取代，球的暗面不再是死黑，而是从环境中接收到各方向的漫反射光。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3 条）。 */}
+
+## 常见误区
+
+<Callout type="warn">
+
+**IBL 里用普通 fresnelSchlick 而非 fresnelSchlickRoughness**
+
+直接把直接光照的 `fresnelSchlick` 带入 IBL，参数 `cosTheta = dot(N, V)` 在粗糙面掠射角时 cos 趋近 0，Fresnel 结果趋近 1.0，把 kS 推到 1.0，kD 被压到 0，漫反射 IBL 全部消失——粗糙非金属在边缘变成一圈暗带，完全不符合物理。修法：换用 `fresnelSchlickRoughness`，用 roughness 压低掠射角的反射率上限。
+
+</Callout>
+
+<Callout type="warn">
+
+**辐照度卷积采样步长太大，出现条纹或噪点**
+
+把 `sampleDelta` 从 0.025 放大到 0.2 或更大，采样方向稀疏，辐照度贴图上出现规则条纹（phi/theta 网格的走样）。反之步长太小会让预计算时间极长。正确做法：0.025 对应约 5000 次采样，生成 32×32 贴图质量够用；如果预计算时间是瓶颈，用重要性采样（蒙特卡洛）替代均匀格点。
+
+</Callout>
+
+<Callout type="warn">
+
+**等距柱状转换时忘记 normalize(localPos)**
+
+渲染立方体六面时，`localPos` 是立方体顶点插值的本地坐标，不一定是单位向量。把它直接传给 `SampleSphericalMap` 而不先 normalize，`atan` 和 `asin` 的输入不在单位球面上，接缝处出现黑线或拉伸变形。修法：始终先做 `vec3 N = normalize(localPos)`，再传给转换函数。
+
+</Callout>
+
+<Callout type="warn">
+
+**HDR 环境贴图未用浮点格式存储，高亮区域被截断**
+
+如果加载 HDR 贴图时用了 `GL_RGB8`（8 位无符号整数），值超过 1.0 的高光区域被截断成 1.0，辐照度卷积时那些方向的光贡献被低估，IBL 整体偏暗、高光环境光失真。修法：HDR 贴图必须用 `GL_RGB16F` 或 `GL_RGB32F` 格式存储，保留浮点精度。
+
+</Callout>
+
+{/* 8. 小结练习（spec §八，C 型含实现题）。 */}
+
+## 小结与练习
+
+这一章把上一章的 `vec3(0.03) * albedo` 常量环境光替换成了真实的漫反射 IBL：加载 HDR 等距柱状贴图 → 用 `SampleSphericalMap` 转成 Cubemap → 半球卷积积分出 32×32 辐照度贴图 → PBR 着色器用法线采样辐照度 × `kD_ibl` 得到真实漫反射环境光。球的暗面不再是死黑，而是从各方向收到来自环境的漫反射光。
+
+- 预计算一次辐照度贴图，运行时只需一次贴图采样
+- `fresnelSchlickRoughness` 是 IBL 版专用 Fresnel，用 roughness 压低掠射角上限
+- 辐照度只需 32×32，因为漫反射是低频信号
+- 下一章将处理镜面 IBL（预滤波环境贴图 + BRDF LUT），让高光也从环境中取光
+
+<Exercises>
+
+### 实现题
+
+1. 在 Demo 的 `proceduralIrradiance` 函数里，把天空颜色从蓝色 `vec3(0.4, 0.6, 1.0)` 改成红橙色日落 `vec3(1.0, 0.4, 0.2)`，地面颜色改成深绿色 `vec3(0.1, 0.3, 0.1)`。观察球的暗面颜色如何随法线方向变化——朝上的区域和朝下的区域分别收到什么颜色的 IBL？
+
+<Answer>
+朝上（N.y 接近 1）的区域收到天空方向的辐照度，暗面偏红橙色（日落天空色）；朝下（N.y 接近 -1）的区域收到地面方向的辐照度，暗面偏深绿色。这正是辐照度贴图的工作原理——用法线方向采样，每个方向返回该方向聚集的环境漫反射光。物理直觉：朝上的表面被天空照亮，朝下的表面被地面反光照亮。
+</Answer>
+
+2. 把 IBL 那行 `vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic)` 简化成 `vec3 kD_ibl = vec3(1.0 - metallic)`（去掉 `(1.0 - kS_ibl)` 能量守恒因子），观察非金属球面的高光边缘有什么变化。
+
+<Answer>
+去掉 `(1.0 - kS_ibl)` 后，`kD_ibl` 不再考虑反射光（kS）已经占了能量的一部分。在高光边缘（kS 较大的掠射角区域），漫反射 IBL 没有被对应压低，该区域的环境光贡献被高估，画面整体偏亮，高光边缘出现不物理的亮晕。这违反了能量守恒：反射的光（kS）+漫反射的光（kD）≤ 1。
+</Answer>
+
+### 概念题
+
+3. 辐照度卷积的双重循环（φ 方位角 × θ 仰角）使用均匀步长采样。球面上越靠近赤道，每个角度增量对应的球面积越大，越靠近极点越小。不加 `sin(theta)` 权重的话，极点附近的采样会被过度计数。解释为什么 `sin(theta)` 能修正这个偏差：当 θ 趋近 90°（赤道方向），sin 值接近 1（权重大，覆盖面积大）；当 θ 趋近 0°（极点方向），sin 值接近 0（权重小，覆盖面积小）。这个补偿因子在数学上的来源是什么？
+
+<Answer>
+`sin(theta)` 是球面面积元的雅可比行列式——把球坐标积分 ∫∫ f(θ,φ) dΩ 展开成双重积分 ∫∫ f(θ,φ) sin(θ) dθ dφ，其中 sin(θ) 就是球面面积元 dΩ = sin(θ)dθdφ 的一部分。均匀网格采样时，每个 (Δθ, Δφ) 格点在球面上对应的实际面积是 sin(θ)ΔθΔφ，极点附近 sin(θ)→0 面积极小，赤道处 sin(θ)=1 面积最大。乘以 sin(θ) 权重，就是把「每个样本的贡献量正比于它覆盖的面积」——这是把黎曼和逼近球面积分的必要修正。
+</Answer>
+
+4. 为什么辐照度贴图可以低至 32×32 分辨率？如果把辐照度直接从原始 2K HDR 环境贴图逐像素计算（不预计算），每帧的开销是多少？
+
+<Answer>
+辐照度是半球方向的积分结果，天然是低频信号——相邻方向的辐照度值变化平缓，不含高频边缘细节。高分辨率只会浪费显存和采样带宽，32×32 对漫反射已经足够。如果不预计算、每帧逐像素从 2K 环境贴图积分：一个 2K 球面有约 400 万像素方向，每像素需约 5000 次采样，屏幕上几十万片段都要做这个积分，每帧会有数千亿次纹理采样——完全不可实时。预计算辐照度贴图把这个积分从 per-frame/per-pixel 移到了一次离线预处理，运行时只需一次 32×32 贴图采样。
+</Answer>
+
+</Exercises>
+
+{/* 9. 出处声明 */}
+
+<Attribution
+  title="PBR - IBL 漫反射辐照"
+  author="Joey de Vries"
+  url="https://learnopengl-cn.github.io/07%20PBR/03%20IBL/01%20Diffuse%20irradiance/"
+  license="CC BY-NC 4.0"
+/>
+
+{/* 10. 名词解释 */}
+
+<Glossary>
+  <GlossaryItem term="IBL" id="IBL">
+    Image-Based Lighting（基于图像的光照）：用一张（或多张）图像代替离散光源，把图像上每个像素都当作一个方向的入射光，从而捕捉真实世界的复杂光照环境。分漫反射 IBL（辐照度贴图）和镜面 IBL（预滤波环境贴图 + BRDF LUT）两部分。
+  </GlossaryItem>
+  <GlossaryItem term="HDR 环境贴图" id="HDR环境贴图">
+    High Dynamic Range 环境贴图：使用浮点数（如 RGBE 或 float16）存储颜色值，允许超过 1.0 的亮度，真实保留高光与阴影的亮度比例。文件格式通常是 .hdr（RGBE）或 .exr（OpenEXR）。须用 GL_RGB16F 格式上传 GPU。
+  </GlossaryItem>
+  <GlossaryItem term="等距柱状投影" id="等距柱状投影">
+    Equirectangular Projection：把球面展开成宽高比 2:1 的矩形。横轴是经度（0°~360°，方位角），纵轴是纬度（-90°~90°，仰角）。常见于 .hdr 全景贴图格式。
+  </GlossaryItem>
+  <GlossaryItem term="立方体贴图" id="立方体贴图">
+    Cubemap：由 6 张正方形纹理（+X/-X/+Y/-Y/+Z/-Z）拼成的立方体表面贴图。用一个 3D 方向向量采样，GPU 自动计算命中哪个面。支持 GPU 硬件滤波，全方向采样效率高。
+  </GlossaryItem>
+  <GlossaryItem term="辐照度" id="辐照度">
+    Irradiance：单位面积上从所有方向接收到的辐射通量总和（单位 W/m²）。漫反射 BRDF 只依赖法线方向的辐照度，而非入射方向细节，因此可以预计算成低分辨率（32×32）辐照度贴图。
+  </GlossaryItem>
+  <GlossaryItem term="辐照度卷积" id="辐照度卷积">
+    Irradiance Convolution：对每个法线方向，在其朝向的上半球对环境光做加权积分，权重为 cos(θ)×sin(θ)。结果存成辐照度贴图，在 PBR 着色器里用法线采样替代常量环境光。
+  </GlossaryItem>
+  <GlossaryItem term="fresnelSchlickRoughness" id="fresnelSchlickRoughness">
+    IBL 专用 Fresnel 变体：把普通 Fresnel-Schlick 的反射率上限 vec3(1.0) 替换成 max(vec3(1-roughness), F0)，用粗糙度压低掠射角时的最大反射率，防止粗糙面边缘 kS 趋近 1 导致漫反射 IBL 消失。
+  </GlossaryItem>
+</Glossary>

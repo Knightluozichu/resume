@@ -304,6 +304,9 @@ import { MetallicWorkflowDiagram } from "./diagrams/metallic-workflow-diagram";
 import { PbrLightSetupDiagram } from "./diagrams/pbr-light-setup-diagram";
 import { PbrRenderLoopDiagram } from "./diagrams/pbr-render-loop-diagram";
 import { LinearHdrPipelineDiagram } from "./diagrams/linear-hdr-pipeline-diagram";
+import { IblConceptDiagram } from "./diagrams/ibl-concept-diagram";
+import { EquirectToCubemapDiagram } from "./diagrams/equirect-to-cubemap-diagram";
+import { HemisphereConvolutionDiagram } from "./diagrams/hemisphere-convolution-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
 import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
@@ -753,6 +756,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PbrLightSetupDiagram,
   PbrRenderLoopDiagram,
   LinearHdrPipelineDiagram,
+  IblConceptDiagram,
+  EquirectToCubemapDiagram,
+  HemisphereConvolutionDiagram,
   CompilationPipelineDiagram,
   CHistoryTimelineDiagram,
   CCompilationDiagram,
