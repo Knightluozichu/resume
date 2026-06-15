@@ -37,7 +37,7 @@ export function TemplateSpecializationDiagram() {
           </text>
 
           {/* ── Level 1：主模板 ── */}
-          <g transform="translate(cx - 180, 56)">
+          <g transform={`translate(${cx - 180}, 56)`}>
             <rect x="0" y="0" width="360" height="56" rx="10" fill={green} fillOpacity="0.08" stroke={green} strokeWidth="2" />
             <text x="180" y="22" fontSize="12" fontWeight="700" fill={green} textAnchor="middle">
               主模板（Primary Template）
@@ -106,7 +106,7 @@ export function TemplateSpecializationDiagram() {
           <line x1="687" y1="292" x2="687" y2="320" stroke={border} strokeWidth="1" markerEnd="url(#arrowAccent)" />
 
           {/* ── Level 3：全特化 ── */}
-          <g transform="translate(cx - 180, 330)">
+          <g transform={`translate(${cx - 180}, 330)`}>
             <rect x="0" y="0" width="360" height="48" rx="10" fill={accent} fillOpacity="0.1" stroke={accent} strokeWidth="2" />
             <text x="180" y="20" fontSize="12" fontWeight="700" fill={accent} textAnchor="middle">
               全特化 int

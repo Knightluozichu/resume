@@ -27,10 +27,10 @@ export function TypeConversionDiagram({ step = 1 }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 610 300"
+          viewBox="0 0 680 300"
           role="img"
           aria-label="C++ 内建算术类型的隐式转换方向链"
-          className="mx-auto block h-auto w-full max-w-[610px]"
+          className="mx-auto block h-auto w-full max-w-[680px]"
         >
           {/* ---- 整型链：bool → char → short → int → long ---- */}
           {types.slice(0, 5).map((t, i) => (
@@ -163,8 +163,10 @@ export function TypeConversionDiagram({ step = 1 }: Props) {
           <text x={14} y={20} fontSize="12" fontWeight="700" fill="var(--accent)">
             隐式转换方向（窄 → 宽）—— 编译器自动帮你做，不丢信息
           </text>
-          <text x={14} y={248} fontSize="11" fill="var(--text-secondary)">
+          <text x={14} y={240} fontSize="11" fill="var(--text-secondary)">
             C++ 的「类型提升」规则：如果两个操作数类型不同，编译器先把窄类型转成宽类型再运算。
+          </text>
+          <text x={14} y={258} fontSize="11" fill="var(--text-secondary)">
             逆方向需显式 static_cast，如 static_cast&lt;int&gt;(3.14) → 3。
           </text>
         </svg>

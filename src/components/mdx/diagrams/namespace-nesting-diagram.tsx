@@ -77,11 +77,11 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
             namespace middle {'{'}
           </text>
 
-          <rect x={innerRt.x} y={innerRt.y} width={innerRt.w} height={innerRt.h} rx={4} fill={elevated} stroke={orange} strokeWidth={1} />
+          <rect x={innerRt.x} y={innerRt.y} width={innerRt.w} height={64} rx={4} fill={elevated} stroke={orange} strokeWidth={1} />
           <text x={innerRt.x + 16} y={innerRt.y + 18} fontSize={10} fill={orange} fontFamily="monospace">
             namespace inner {'{'}
           </text>
-          <text x={innerRt.x + 16} y={innerRt.y + 38} fontSize={10} fill={primary} fontFamily="monospace">
+          <text x={innerRt.x + 16} y={innerRt.y + 48} fontSize={10} fill={primary} fontFamily="monospace">
             int value = 42;
           </text>
 
@@ -94,7 +94,7 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
               <text x={midRt.x + 16} y={midRt.y + 90} fontSize={10} fill={secondary} fontFamily="monospace">
                 {'}'}
               </text>
-              <text x={innerRt.x + 16} y={innerRt.y + 34} fontSize={10} fill={secondary} fontFamily="monospace">
+              <text x={innerRt.x + 16} y={innerRt.y + 60} fontSize={10} fill={secondary} fontFamily="monospace">
                 {'}'}
               </text>
 

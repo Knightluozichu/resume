@@ -175,7 +175,7 @@ export function ExceptionHierarchyDiagram() {
 
           {/* Logic error section */}
           <rect x={20} y={rootY + 72} width={400} height={260} rx={10} fill={blue + "06"} stroke={border} strokeWidth={1} strokeDasharray="4,3" />
-          <text x={40} y={rootY + 92} fontSize={11} fontWeight={700} fill={blue}>
+          <text x={40} y={rootY + 88} fontSize={10} fontWeight={700} fill={blue}>
             逻辑错误——程序启动前就能发现的错误
           </text>
           {drawNode(logicX, logicY, "logic_error", "逻辑错误基类", blue)}
@@ -198,7 +198,7 @@ export function ExceptionHierarchyDiagram() {
 
           {/* Runtime error section */}
           <rect x={480} y={rootY + 72} width={400} height={340} rx={10} fill={orange + "06"} stroke={border} strokeWidth={1} strokeDasharray="4,3" />
-          <text x={500} y={rootY + 92} fontSize={11} fontWeight={700} fill={orange}>
+          <text x={500} y={rootY + 88} fontSize={10} fontWeight={700} fill={orange}>
             运行时错误——程序运行后才会发生的错误
           </text>
           {drawNode(runtimeX, logicY, "runtime_error", "运行时错误基类", orange)}

@@ -59,7 +59,7 @@ export function LiteralTypesDiagram() {
   ];
 
   const cardW = 250;
-  const cardH = 170;
+  const cardH = 200;
   const gapX = 20;
   const gapY = 24;
   const startX = 16;
@@ -82,7 +82,7 @@ export function LiteralTypesDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 556 700"
+          viewBox="0 0 556 760"
           role="img"
           aria-label="C++ 字面值常量分类：整数字面值（十进制/八进制/十六进制+后缀）、浮点字面值（小数/科学计数法+后缀）、字符字面值、字符串字面值、转义序列"
           className="mx-auto block h-auto w-full max-w-[556px]"

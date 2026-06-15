@@ -51,7 +51,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
           <text x="32" y={topBlockY + 20} fontSize="11" fill={primary} fontWeight="600">
             模式
           </text>
-          <g transform="translate(100, topBlockY)">
+          <g transform={`translate(100, ${topBlockY})`}>
             <rect x="0" y="0" width="340" height="36" rx="6" stroke={accent} strokeWidth={step >= 1 ? 2 : 1} fill={step >= 1 ? `${accent}0C` : "transparent"} />
             <text x="12" y="14" fontSize="11" fill={accent} fontFamily="monospace">
               regex re(R"((\d+)-(\w+))");
@@ -65,7 +65,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
           <text x="32" y={topBlockY + 68} fontSize="11" fill={primary} fontWeight="600">
             输入
           </text>
-          <g transform="translate(100, topBlockY + 50)">
+          <g transform={`translate(100, ${topBlockY + 50})`}>
             {input.split("").map((c, i) => {
               const isFirstMatch = step >= 3 && i >= 0 && i <= 6;
               const isSecondMatch = step >= 3 && i >= 8 && i <= 14;
@@ -110,7 +110,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
               <text x="32" y={topBlockY + 124} fontSize="11" fill={primary} fontWeight="600">
                 引擎
               </text>
-              <g transform="translate(100, topBlockY + 108)">
+              <g transform={`translate(100, ${topBlockY + 108})`}>
                 <rect x="0" y="0" width={input.length * charW} height="30" rx="6" fill={border} fillOpacity="0.15" stroke={border} />
                 <text x="8" y="12" fontSize="10" fill={secondary} fontFamily="monospace">
                   regex_search / sregex_iterator 从左到右扫描...
@@ -129,7 +129,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
               <text x="32" y={topBlockY + 180} fontSize="11" fill={primary} fontWeight="600">
                 结果
               </text>
-              <g transform="translate(100, topBlockY + 164)">
+              <g transform={`translate(100, ${topBlockY + 164})`}>
                 {/* smatch result table */}
                 <rect x="0" y="0" width="360" height="72" rx="8" fill="var(--code-bg)" stroke={border} />
 
@@ -163,7 +163,7 @@ export function RegexMatchDiagram({ step = 1 }: RegexMatchDiagramProps) {
 
           {/* Next match indicator */}
           {step >= 4 && (
-            <g transform="translate(100, topBlockY + 256)">
+            <g transform={`translate(100, ${topBlockY + 256})`}>
               <text x="0" y="0" fontSize="10" fill={secondary} fontFamily="monospace">
                 sregex_iterator 继续 → 下一个匹配："456-def" → $0["456-def"] $1["456"] $2["def"]
               </text>

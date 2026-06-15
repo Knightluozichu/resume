@@ -17,10 +17,10 @@ interface Props {
 
 export function CompilationPipelineDiagram({ step = 0 }: Props) {
   const stages = [
-    { label: "预处理", sub: "宏展开·头文件", detail: "#include→展开\n#define→替换", x: 20, w: 130 },
-    { label: "编译", sub: "C++→汇编", detail: "语法检查\n生成 .s", x: 170, w: 130 },
-    { label: "汇编", sub: "汇编→机器码", detail: "生成 .o\n目标文件", x: 320, w: 130 },
-    { label: "链接", sub: "合并·解析符号", detail: "多 .o + 库\n→ 可执行文件", x: 470, w: 130 },
+    { label: "预处理", sub: "宏展开·头文件", detail: "#include→展开\n#define→替换", x: 110, w: 130 },
+    { label: "编译", sub: "C++→汇编", detail: "语法检查\n生成 .s", x: 260, w: 130 },
+    { label: "汇编", sub: "汇编→机器码", detail: "生成 .o\n目标文件", x: 410, w: 130 },
+    { label: "链接", sub: "合并·解析符号", detail: "多 .o + 库\n→ 可执行文件", x: 560, w: 130 },
   ];
 
   const isActive = (idx: number) => step === 0 || step === idx + 1;
@@ -37,10 +37,10 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 220"
+          viewBox="0 0 730 220"
           role="img"
           aria-label="C++ 编译流水线四阶段：预处理→编译→汇编→链接→可执行文件"
-          className="mx-auto block h-auto w-full max-w-[640px]"
+          className="mx-auto block h-auto w-full max-w-[730px]"
         >
           {/* 左侧：源码入口 */}
           <rect
@@ -148,53 +148,64 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             </g>
           ))}
 
-          {/* 箭头 ①→② */}
+          {/* 源码→① 箭头 */}
           <line
-            x1="150"
+            x1="94"
             y1="90"
-            x2="166"
+            x2="106"
             y2="90"
             stroke={arrowStroke(0)}
             strokeWidth="2"
           />
-          <path d="M166 90 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
+          <path d="M106 90 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
+
+          {/* 箭头 ①→② */}
+          <line
+            x1="240"
+            y1="90"
+            x2="256"
+            y2="90"
+            stroke={arrowStroke(0)}
+            strokeWidth="2"
+          />
+          <path d="M256 90 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
 
           {/* 箭头 ②→③ */}
           <line
-            x1="300"
+            x1="390"
             y1="90"
-            x2="316"
+            x2="406"
             y2="90"
             stroke={arrowStroke(1)}
             strokeWidth="2"
           />
-          <path d="M316 90 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
+          <path d="M406 90 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
 
           {/* 箭头 ③→④ */}
           <line
-            x1="450"
+            x1="540"
             y1="90"
-            x2="466"
+            x2="556"
             y2="90"
             stroke={arrowStroke(2)}
             strokeWidth="2"
           />
-          <path d="M466 90 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
+          <path d="M556 90 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
 
           {/* ④→可执行文件 */}
           <line
-            x1="600"
+            x1="690"
             y1="90"
-            x2="610"
+            x2="700"
             y2="90"
             stroke={arrowStroke(3)}
             strokeWidth="2"
           />
-          <path d="M610 90 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
+          <path d="M700 90 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
 
           {/* 顶部阶段产出标注 */}
           <text
-            x="84"
+            x="54"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -204,7 +215,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             .cpp
           </text>
           <text
-            x="235"
+            x="175"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -214,7 +225,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             .i
           </text>
           <text
-            x="385"
+            x="325"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -224,7 +235,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             .s
           </text>
           <text
-            x="535"
+            x="475"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -234,7 +245,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
             .o
           </text>
           <text
-            x="610"
+            x="700"
             y="38"
             fontSize="10"
             fill="var(--accent)"
@@ -247,7 +258,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           {/* 底部说明 */}
           {step === 0 && (
             <text
-              x="320"
+              x="365"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -258,7 +269,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           )}
           {step === 1 && (
             <text
-              x="320"
+              x="365"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -269,7 +280,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           )}
           {step === 2 && (
             <text
-              x="320"
+              x="365"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -280,7 +291,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           )}
           {step === 3 && (
             <text
-              x="320"
+              x="365"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -291,7 +302,7 @@ export function CompilationPipelineDiagram({ step = 0 }: Props) {
           )}
           {step === 4 && (
             <text
-              x="320"
+              x="365"
               y="175"
               textAnchor="middle"
               fontSize="12"

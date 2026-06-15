@@ -120,7 +120,7 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
 
           {/* Step 4: structured binding visualization */}
           {step === 4 && (
-            <g transform="translate(0, topY + boxH + 30)">
+            <g transform={`translate(0, ${topY + boxH + 30})`}>
               {/* Arrow down from each element */}
               {elements.map((el, i) => {
                 const elX = startX + i * (boxW + gap) + boxW / 2;

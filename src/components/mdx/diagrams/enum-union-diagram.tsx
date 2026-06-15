@@ -16,7 +16,7 @@ export function EnumUnionDiagram() {
   const err = "rgb(229,103,92)";
 
   const w = 820;
-  const h = 500;
+  const h = 540;
   const cx = w / 2;
 
   const col1X = 20;

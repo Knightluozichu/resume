@@ -56,7 +56,7 @@ export function BitsetOperationDiagram() {
             bitset 操作示意图——8 个二进制位的集合
           </text>
 
-          <text x={cx} y="50" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
+          <text x={cx} y="44" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
             bitset&lt;8&gt; b(&quot;10100110&quot;);
           </text>
 

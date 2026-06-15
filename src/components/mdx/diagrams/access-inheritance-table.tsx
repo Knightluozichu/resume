@@ -14,7 +14,7 @@ export function AccessInheritanceTable() {
   const danger = "rgb(229,103,92)";
 
   const w = 720;
-  const h = 440;
+  const h = 454;
   const rowH = 48;
 
   const colX = [30, 165, 395, 575];
@@ -85,7 +85,7 @@ export function AccessInheritanceTable() {
           })}
 
           {/* Three rules */}
-          <rect x={30} y={270} width={660} height={152} rx={8} fill={bg} stroke={accent} strokeWidth={1.5} />
+          <rect x={30} y={270} width={660} height={166} rx={8} fill={bg} stroke={accent} strokeWidth={1.5} />
           <text x={360} y={296} fontSize="13" fontWeight={700} fill={accent} textAnchor="middle">
             Three Golden Rules for Access Control
           </text>

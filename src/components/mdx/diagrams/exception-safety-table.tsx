@@ -19,7 +19,7 @@ export function ExceptionSafetyTable() {
   const red = "rgb(229,103,92)";
 
   const w = 860;
-  const h = 480;
+  const h = 580;
 
   const colW = 260;
   const colGap = 30;
@@ -145,18 +145,6 @@ export function ExceptionSafetyTable() {
                   >
                     {item.label}
                   </text>
-                  {/* Value - wrapped into multiple lines */}
-                  <text
-                    x={col.x + 10}
-                    y={itemY + 36}
-                    fontSize={9}
-                    fill={primary}
-                  >
-                    {item.value.length > 80
-                      ? item.value.slice(0, Math.floor(item.value.length / 2)).trim()
-                      : item.value}
-                    {/* This is tight—will use foreignObject for wrapping below */}
-                  </text>
                 </g>
               );
             })
@@ -172,7 +160,7 @@ export function ExceptionSafetyTable() {
                   x={col.x + 8}
                   y={itemY + 26}
                   width={colW - 16}
-                  height={62}
+                  height={70}
                 >
                   <div style={{ fontSize: "9px", lineHeight: "1.4", color: "var(--text-primary)" }}>
                     {item.value}
@@ -183,8 +171,8 @@ export function ExceptionSafetyTable() {
           )}
 
           {/* Summary bar at bottom */}
-          <rect x={20} y={topY + 56 + 4 * 102 + 8} width={w - 40} height={44} rx={6} fill={accent + "08"} stroke={border} strokeWidth={0.5} />
-          <text x={w / 2} y={topY + 56 + 4 * 102 + 32} fontSize={11} fontWeight={600} fill={accent} textAnchor="middle">
+          <rect x={20} y={topY + 56 + 4 * 102 + 8} width={w - 40} height={58} rx={6} fill={accent + "08"} stroke={border} strokeWidth={0.5} />
+          <text x={w / 2} y={topY + 56 + 4 * 102 + 30} fontSize={11} fontWeight={600} fill={accent} textAnchor="middle">
             记忆口诀：基本「不乱丢数据」——强「要全成就回滚」——nothrow「打死也不扔」
           </text>
           <text x={w / 2} y={topY + 56 + 4 * 102 + 48} fontSize={9} fill={secondary} textAnchor="middle">

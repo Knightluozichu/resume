@@ -14,17 +14,17 @@ export function ScopeNestingDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 620 520"
+          viewBox="0 0 620 540"
           role="img"
           aria-label="C++ 嵌套作用域：全局域→main 内层块，嵌套方框标注各层可见变量，展示同名变量遮蔽（shadowing）"
-          className="mx-auto block h-auto w-full max-w-[620px]"
+          className="mx-auto block h-auto w-full max-w-[640px]"
         >
           {/* ===== 最外层：全局作用域 ===== */}
           <rect
             x="24"
             y="32"
             width="572"
-            height="440"
+            height="468"
             rx="12"
             fill="var(--bg)"
             stroke="var(--border)"

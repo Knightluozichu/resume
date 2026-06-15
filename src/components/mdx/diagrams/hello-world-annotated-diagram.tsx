@@ -23,10 +23,10 @@ export function HelloWorldAnnotatedDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 620 180"
+          viewBox="0 0 620 200"
           role="img"
           aria-label="Hello World C++ 程序，带气泡标注：include 头文件声明、main 函数入口、cout 输出到控制台、return 返回状态码"
-          className="mx-auto block h-auto w-full max-w-[620px]"
+          className="mx-auto block h-auto w-full max-w-[640px]"
         >
           {/* 代码框背景 */}
           <rect
@@ -51,7 +51,7 @@ export function HelloWorldAnnotatedDiagram() {
           <rect x="8" y="24" width="340" height="6" fill="var(--border)" />
           <text
             x="22"
-            y="23"
+            y="21"
             fontSize="11"
             fill="var(--text-secondary)"
             fontFamily="monospace"
@@ -134,7 +134,7 @@ export function HelloWorldAnnotatedDiagram() {
           {/* 底部说明 */}
           <text
             x="16"
-            y="168"
+            y="188"
             fontSize="11"
             fill="var(--text-secondary)"
           >

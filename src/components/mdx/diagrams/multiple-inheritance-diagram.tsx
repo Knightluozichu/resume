@@ -210,7 +210,7 @@ export function MultipleInheritanceDiagram({ step = 1 }: MultipleInheritanceDiag
             </text>
 
             {/* Virtual VTable pointer annotation */}
-            <text x={680} y={252} fontSize={9} fill={secondary} textAnchor="middle" fontFamily="monospace">
+            <text x={680} y={260} fontSize={9} fill={secondary} textAnchor="middle" fontFamily="monospace">
               虚基类通过指针间接访问
             </text>
 

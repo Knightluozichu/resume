@@ -44,7 +44,7 @@ export function RandomPipelineDiagram({ step = 1 }: RandomPipelineDiagramProps) 
           </text>
 
           {/* ── Stage 1: Engine ── */}
-          <g transform="translate(20, topY)">
+          <g transform={`translate(20, ${topY})`}>
             <rect x="0" y="0" width={boxW} height={boxH} rx="10" fill={step >= 1 ? `${blue}12` : "transparent"} stroke={step >= 1 ? blue : border} strokeWidth={step >= 1 ? 2 : 1} />
             <text x={boxW / 2} y="22" fontSize="12" fontWeight="700" fill={blue} textAnchor="middle">
               ① 随机数引擎
@@ -67,7 +67,7 @@ export function RandomPipelineDiagram({ step = 1 }: RandomPipelineDiagramProps) 
           </text>
 
           {/* ── Stage 2: Distribution ── */}
-          <g transform="translate(300, topY)">
+          <g transform={`translate(300, ${topY})`}>
             <rect x="0" y="0" width={boxW} height={boxH} rx="10" fill={step >= 2 ? `${warn}12` : "transparent"} stroke={step >= 2 ? warn : border} strokeWidth={step >= 2 ? 2 : 1} />
             <text x={boxW / 2} y="22" fontSize="12" fontWeight="700" fill={warn} textAnchor="middle">
               ② 分布对象
@@ -90,7 +90,7 @@ export function RandomPipelineDiagram({ step = 1 }: RandomPipelineDiagramProps) 
           </text>
 
           {/* ── Stage 3: Output ── */}
-          <g transform="translate(580, topY)">
+          <g transform={`translate(580, ${topY})`}>
             <rect x="0" y="0" width={boxW} height={boxH} rx="10" fill={step >= 3 ? `${good}12` : "transparent"} stroke={step >= 3 ? good : border} strokeWidth={step >= 3 ? 2 : 1} />
             <text x={boxW / 2} y="22" fontSize="12" fontWeight="700" fill={good} textAnchor="middle">
               ③ 输出：骰子值
@@ -110,7 +110,7 @@ export function RandomPipelineDiagram({ step = 1 }: RandomPipelineDiagramProps) 
 
           {/* ── Stage 4: Lambda encapsulation ── */}
           {step >= 4 && (
-            <g transform="translate(cx - 300, topY + boxH + 28)">
+            <g transform={`translate(${cx - 300}, ${topY + boxH + 28})`}>
               <rect x="0" y="0" width="600" height="68" rx="10" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="2" />
               <text x="300" y="20" fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">
                 ④ 封装：把引擎+分布打包成可复用的函数

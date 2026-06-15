@@ -37,7 +37,7 @@ export function TypeSizeDiagram() {
   const colX = { type: 16, bytes: 160, signed: 250, min: 380, max: 410 };
   const headerY = 44;
   const rowH = 36;
-  const startY = 60;
+  const startY = 76;
 
   return (
     <figure className="mdx-figure mx-auto my-6">

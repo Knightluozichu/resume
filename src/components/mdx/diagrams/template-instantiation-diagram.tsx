@@ -151,7 +151,7 @@ export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiation
           </text>
 
           {/* Bottom: code pane showing current state */}
-          <g transform="translate(40, topY + 140)">
+          <g transform={`translate(40, ${topY + 140})`}>
             <rect x="0" y="0" width={w - 80} height="90" rx="8" fill="var(--code-bg)" stroke={border} />
 
             {step >= 1 && (
