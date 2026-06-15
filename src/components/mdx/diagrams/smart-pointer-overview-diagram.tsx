@@ -173,9 +173,9 @@ export function SmartPointerOverviewDiagram() {
 
               <line x1={cardInnerW / 2} y1={30} x2={cardInnerW / 2 + 50} y2={56} stroke={good} strokeWidth={1.5} strokeDasharray="5 3" markerEnd="url(#spArrowG)" />
 
-              <rect x={0} y={58} width={cardInnerW - 70} height={24} rx={5} fill={elevated} stroke={border} />
-              <text x={(cardInnerW - 70) / 2} y={74} fontSize={9} fill={secondary} textAnchor="middle" fontFamily="monospace">sp</text>
-              <line x1={(cardInnerW - 70) / 2} y1={82} x2={cardInnerW / 2 - 36} y2={100} stroke={accent} strokeWidth={1} />
+              <rect x={0} y={58} width={100} height={24} rx={5} fill={elevated} stroke={border} />
+              <text x={50} y={74} fontSize={9} fill={secondary} textAnchor="middle" fontFamily="monospace">sp</text>
+              <line x1={50} y1={82} x2={cardInnerW / 2 - 36} y2={106} stroke={accent} strokeWidth={1} />
 
               <rect x={cardInnerW / 2 + 8} y={58} width={80} height={44} rx={6} fill={accent} opacity={0.12} stroke={accent} />
               <text x={cardInnerW / 2 + 48} y={74} fontSize={9} fill={accent} textAnchor="middle" fontFamily="monospace">use: 1</text>

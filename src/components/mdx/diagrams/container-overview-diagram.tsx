@@ -22,7 +22,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "vector",
       x: 10,
-      y: 30,
+      y: 48,
       desc: "连续内存",
       access: "O(1)",
       insFront: "O(n)",
@@ -33,7 +33,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "deque",
       x: 170,
-      y: 30,
+      y: 48,
       desc: "分段数组",
       access: "O(1)",
       insFront: "O(1)",
@@ -44,7 +44,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "list",
       x: 330,
-      y: 30,
+      y: 48,
       desc: "双向链表",
       access: "O(n)",
       insFront: "O(1)",
@@ -55,7 +55,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "forward_list",
       x: 490,
-      y: 30,
+      y: 48,
       desc: "单向链表",
       access: "O(n)",
       insFront: "O(1)",
@@ -66,7 +66,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "array",
       x: 650,
-      y: 30,
+      y: 48,
       desc: "固定数组",
       access: "O(1)",
       insFront: "N/A",
@@ -77,7 +77,7 @@ export function ContainerOverviewDiagram() {
     {
       name: "string",
       x: 810,
-      y: 30,
+      y: 48,
       desc: "字符数组",
       access: "O(1)",
       insFront: "O(n)",

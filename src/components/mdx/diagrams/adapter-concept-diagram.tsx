@@ -8,6 +8,9 @@
  *
  * Server Component（纯展示，静态 SVG，无交互、无 three、reduced-motion 无关）。
  * token 色（var(--xxx)），无阴影。
+ *
+ * 布局：每个适配器盒按「名称 → 暴露接口列表 → 结构示意图 → 数据流规则 → 默认底层」
+ * 五段从上到下纵向排开，各段不重叠；结构示意图放在接口列表下方的独立条带里。
  */
 export function AdapterConceptDiagram() {
   const accent = "var(--accent)";
@@ -20,10 +23,10 @@ export function AdapterConceptDiagram() {
   const good = "rgb(63,185,127)";
 
   const w = 900;
-  const h = 520;
+  const h = 530;
 
   // 底层容器
-  const bottomY = 350;
+  const bottomY = 400;
   const bottomBoxes = [
     { name: "deque", x: 140, w: 180, desc: "默认底层" },
     { name: "vector", x: 360, w: 180, desc: "备选底层" },
@@ -67,7 +70,7 @@ export function AdapterConceptDiagram() {
     },
   ];
 
-  const boxH = 220;
+  const boxH = 268;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -102,19 +105,19 @@ export function AdapterConceptDiagram() {
                 />
 
                 {/* 适配器名称 */}
-                <text x={centerX} y={adp.y + 26} fontSize="15" fontWeight="700" fill={accent} textAnchor="middle" fontFamily="monospace">
+                <text x={centerX} y={adp.y + 24} fontSize="15" fontWeight="700" fill={accent} textAnchor="middle" fontFamily="monospace">
                   {adp.name}
                 </text>
 
                 {/* 操作接口 */}
-                <text x={centerX} y={adp.y + 48} fontSize="10" fill={secondary} textAnchor="middle">
+                <text x={centerX} y={adp.y + 42} fontSize="10" fill={secondary} textAnchor="middle">
                   暴露接口：
                 </text>
                 {adp.ops.map((op, oi) => (
                   <text
                     key={op}
                     x={centerX}
-                    y={adp.y + 66 + oi * 18}
+                    y={adp.y + 58 + oi * 15}
                     fontSize="11"
                     fill={good}
                     textAnchor="middle"
@@ -127,7 +130,7 @@ export function AdapterConceptDiagram() {
                 {/* 数据流规则 */}
                 <rect
                   x={adp.x + 10}
-                  y={adp.y + boxH - 66}
+                  y={adp.y + boxH - 54}
                   width={adp.w - 20}
                   height="22"
                   rx="6"
@@ -136,7 +139,7 @@ export function AdapterConceptDiagram() {
                 />
                 <text
                   x={centerX}
-                  y={adp.y + boxH - 51}
+                  y={adp.y + boxH - 39}
                   fontSize="10"
                   fontWeight="600"
                   fill={warn}
@@ -148,7 +151,7 @@ export function AdapterConceptDiagram() {
                 {/* 默认标记 */}
                 <text
                   x={centerX}
-                  y={adp.y + boxH - 24}
+                  y={adp.y + boxH - 14}
                   fontSize="9"
                   fill={secondary}
                   textAnchor="middle"
@@ -200,61 +203,60 @@ export function AdapterConceptDiagram() {
 
           {/* 连接线：queue → deque */}
           <line x1="450" y1={adapters[1].y + boxH} x2="230" y2={bottomY + 28} stroke={accent} strokeWidth="2" markerEnd="url(#arrBig)" strokeDasharray="6 3" opacity="0.6" />
-          <text x="320" y={bottomY - 10} fontSize="9" fill={secondary} fontFamily="monospace">
+          <text x="312" y={bottomY - 6} fontSize="9" fill={secondary} fontFamily="monospace">
             ≈ deque 只暴露 push_back + pop_front
           </text>
 
           {/* 连接线：priority_queue → vector */}
           <line x1="680" y1={adapters[2].y + boxH} x2="470" y2={bottomY + 28} stroke={accent} strokeWidth="2" markerEnd="url(#arrBig)" />
-          <text x="530" y={bottomY - 10} fontSize="9" fill={secondary} fontFamily="monospace">
+          <text x="540" y={bottomY - 24} fontSize="9" fill={secondary} fontFamily="monospace">
             ≈ vector 内部维护堆
           </text>
 
           {/* 结构示意：stack（垂直） */}
-          <g transform={`translate(190, ${adapters[0].y + 94})`}>
+          <g transform={`translate(190, ${adapters[0].y + 116})`}>
             <rect x="0" y="32" width="50" height="12" rx="2" fill={accent} opacity="0.2" stroke={accent} />
-            <text x="25" y="40" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">3</text>
+            <text x="25" y="41" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">3</text>
             <rect x="0" y="16" width="50" height="12" rx="2" fill={accent} opacity="0.15" stroke={accent} />
-            <text x="25" y="24" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">2</text>
+            <text x="25" y="25" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">2</text>
             <rect x="0" y="0" width="50" height="12" rx="2" fill={accent} opacity="0.1" stroke={accent} />
-            <text x="25" y="8" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">1</text>
-            <line x1="25" y1="44" x2="25" y2="56" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrTop)" />
-            <text x="25" y="66" fontSize="7" fill={secondary} textAnchor="middle">top</text>
+            <text x="25" y="9" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">1</text>
+            <line x1="62" y1="6" x2="62" y2="38" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrTop)" />
+            <text x="78" y="26" fontSize="7" fill={secondary} textAnchor="middle">top</text>
           </g>
 
           {/* 结构示意：queue（水平） */}
-          <g transform={`translate(${adapters[1].x + 10}, ${adapters[1].y + 94})`}>
+          <g transform={`translate(${adapters[1].x + 24}, ${adapters[1].y + 124})`}>
             <rect x="60" y="4" width="22" height="14" rx="2" fill={accent} opacity="0.2" stroke={accent} />
-            <text x="71" y="13" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">3</text>
+            <text x="71" y="14" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">3</text>
             <rect x="34" y="4" width="22" height="14" rx="2" fill={accent} opacity="0.15" stroke={accent} />
-            <text x="45" y="13" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">2</text>
+            <text x="45" y="14" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">2</text>
             <rect x="8" y="4" width="22" height="14" rx="2" fill={accent} opacity="0.1" stroke={accent} />
-            <text x="19" y="13" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">1</text>
-            <line x1="8" y1="11" x2="0" y2="11" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrLeft)" />
-            <text x="-2" y="24" fontSize="7" fill={secondary} textAnchor="middle">front</text>
-            <line x1="82" y1="11" x2="94" y2="11" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrRight)" />
-            <text x="94" y="24" fontSize="7" fill={secondary} textAnchor="middle">back</text>
+            <text x="19" y="14" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">1</text>
+            <line x1="8" y1="11" x2="-2" y2="11" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrLeft)" />
+            <text x="-4" y="30" fontSize="7" fill={secondary} textAnchor="middle">front</text>
+            <line x1="82" y1="11" x2="92" y2="11" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrRight)" />
+            <text x="92" y="30" fontSize="7" fill={secondary} textAnchor="middle">back</text>
           </g>
 
           {/* 结构示意：priority_queue（堆） */}
-          <g transform={`translate(${adapters[2].x + 14}, ${adapters[2].y + 94})`}>
-            <text x="80" y="0" fontSize="7" fill={secondary} textAnchor="middle">max</text>
-            <text x="80" y="10" fontSize="7" fill={secondary} textAnchor="middle">▼</text>
-            <rect x="70" y="16" width="20" height="14" rx="2" fill={accent} opacity="0.25" stroke={accent} />
-            <text x="80" y="25" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">9</text>
-            <line x1="72" y1="30" x2="56" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
-            <line x1="88" y1="30" x2="104" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
-            <rect x="48" y="50" width="18" height="14" rx="2" fill={accent} opacity="0.15" stroke={accent} />
-            <text x="57" y="59" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">7</text>
-            <rect x="96" y="50" width="18" height="14" rx="2" fill={accent} opacity="0.1" stroke={accent} />
-            <text x="105" y="59" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">5</text>
+          <g transform={`translate(${adapters[2].x + 14}, ${adapters[2].y + 116})`}>
+            <text x="80" y="4" fontSize="7" fill={secondary} textAnchor="middle">max ▼</text>
+            <rect x="70" y="14" width="20" height="14" rx="2" fill={accent} opacity="0.25" stroke={accent} />
+            <text x="80" y="24" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">9</text>
+            <line x1="72" y1="28" x2="56" y2="48" stroke={accent} opacity="0.5" strokeWidth="1" />
+            <line x1="88" y1="28" x2="104" y2="48" stroke={accent} opacity="0.5" strokeWidth="1" />
+            <rect x="48" y="48" width="18" height="14" rx="2" fill={accent} opacity="0.15" stroke={accent} />
+            <text x="57" y="58" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">7</text>
+            <rect x="96" y="48" width="18" height="14" rx="2" fill={accent} opacity="0.1" stroke={accent} />
+            <text x="105" y="58" fontSize="7" fill={accent} textAnchor="middle" fontFamily="monospace">5</text>
           </g>
 
           <defs>
             <marker id="arrBig" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
               <polygon points="0,1 7,4 0,7" fill={accent} />
             </marker>
-            <marker id="arrTop" markerWidth="6" markerHeight="6" refX="3" refY="3">
+            <marker id="arrTop" markerWidth="6" markerHeight="6" refX="3" refY="3" orient="auto">
               <polygon points="1,5 3,1 5,5" fill={accent} />
             </marker>
             <marker id="arrLeft" markerWidth="6" markerHeight="6" refX="5" refY="3">

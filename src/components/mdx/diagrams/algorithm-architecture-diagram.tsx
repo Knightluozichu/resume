@@ -247,8 +247,8 @@ export function AlgorithmArchitectureDiagram() {
             ))}
           </g>
 
-          {/* 右侧解耦说明 */}
-          <g transform={`translate(${rightCol + 18}, ${algoY - 10})`}>
+          {/* 右侧解耦说明（放在迭代器盒与算法盒之间的右侧空白，避免压住算法盒） */}
+          <g transform={`translate(${rightCol + 6}, ${iterY + 86})`}>
             <text x="0" y="0" fontSize="10" fill={secondary}>
               <tspan x="0" dy="0" fill={accent} fontWeight="600">算法</tspan>
               {" "}不认容器

@@ -34,7 +34,7 @@ export function TypeSizeDiagram() {
     { type: "double", bytes: 8, min: "~2.2×10⁻³⁰⁸", max: "~1.8×10³⁰⁸", signed: true, note: "15位有效数字" },
   ];
 
-  const colX = { type: 16, bytes: 172, signed: 268, min: 316, max: 416 };
+  const colX = { type: 16, bytes: 160, signed: 250, min: 380, max: 410 };
   const headerY = 44;
   const rowH = 36;
   const startY = 60;
@@ -43,13 +43,13 @@ export function TypeSizeDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-x-auto overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 540 580"
+          viewBox="0 0 640 580"
           role="img"
           aria-label="C++ 基本算术类型大小对照表：各类型的字节数、取值范围、有无符号"
-          className="mx-auto block h-auto w-full max-w-[540px]"
+          className="mx-auto block h-auto w-full max-w-[640px]"
         >
           {/* 表头背景 */}
-          <rect x="8" y={headerY - 12} width="516" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
+          <rect x="8" y={headerY - 12} width="624" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
           {/* 表头文字 */}
           <text x={colX.type} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">类型</text>
           <text x={colX.bytes} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">字节</text>
@@ -66,7 +66,7 @@ export function TypeSizeDiagram() {
             return (
               <g key={r.type}>
                 {/* 行背景 */}
-                <rect x="8" y={y - 10} width="516" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect x="8" y={y - 10} width="624" height={rowH - 4} rx="4" fill={rowBg} />
                 {/* 类型名 */}
                 <text
                   x={colX.type}
@@ -123,7 +123,7 @@ export function TypeSizeDiagram() {
                 {/* 备注 */}
                 {r.note && (
                   <text
-                    x={colX.max + 52}
+                    x={colX.max + 90}
                     y={y + 4}
                     fontSize="10"
                     fill="var(--text-secondary)"
@@ -140,7 +140,7 @@ export function TypeSizeDiagram() {
           <line
             x1="24"
             y1={startY + rows.length * rowH + 8}
-            x2="520"
+            x2="620"
             y2={startY + rows.length * rowH + 8}
             stroke="var(--border)"
             strokeWidth="1"
