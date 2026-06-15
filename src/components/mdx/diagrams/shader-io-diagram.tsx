@@ -75,7 +75,7 @@ export function ShaderIODiagram() {
           <text x="200" y="92" fontSize="11" fill="var(--accent)">
             uniform
           </text>
-          <text x="460" y="168" fontSize="11" fill="var(--accent)">
+          <text x="460" y="152" fontSize="11" fill="var(--accent)">
             uniform
           </text>
 

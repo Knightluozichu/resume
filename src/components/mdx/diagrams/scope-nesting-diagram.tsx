@@ -50,7 +50,7 @@ export function ScopeNestingDiagram() {
             x="48"
             y="112"
             width="528"
-            height="340"
+            height="320"
             rx="10"
             fill="var(--bg-elevated)"
             stroke="var(--border)"
@@ -59,7 +59,7 @@ export function ScopeNestingDiagram() {
           />
           <rect x="48" y="112" width="528" height="28" rx="10" fill="var(--accent)" opacity="0.08" />
           <rect x="48" y="132" width="528" height="8" fill="var(--accent)" opacity="0.08" />
-          <text x="66" y="132" fontSize="13" fontWeight="700" fill="var(--text-primary)">
+          <text x="66" y="128" fontSize="13" fontWeight="700" fill="var(--text-primary)">
             main 函数作用域
           </text>
 
@@ -86,7 +86,7 @@ export function ScopeNestingDiagram() {
           />
           <rect x="80" y="200" width="472" height="26" rx="8" fill="var(--accent)" opacity="0.1" />
           <rect x="80" y="218" width="472" height="8" fill="var(--accent)" opacity="0.1" />
-          <text x="98" y="218" fontSize="12" fontWeight="700" fill="var(--accent)">
+          <text x="98" y="214" fontSize="12" fontWeight="700" fill="var(--accent)">
             内层代码块 {'{}'} 作用域
           </text>
 

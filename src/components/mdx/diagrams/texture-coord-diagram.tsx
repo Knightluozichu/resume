@@ -99,7 +99,7 @@ export function TextureCoordDiagram() {
             strokeWidth="1.5"
           />
           <path d="M40 44 l-5 10 l10 0 z" fill="var(--accent)" />
-          <text x="26" y="48" fontSize="11" fill="var(--accent)">
+          <text x="26" y="40" fontSize="11" fill="var(--accent)">
             V
           </text>
 
@@ -113,7 +113,7 @@ export function TextureCoordDiagram() {
           <text x="150" y="46" fontSize="11" fill="var(--text-secondary)">
             (1,1)
           </text>
-          <text x="14" y="46" fontSize="11" fill="var(--text-secondary)">
+          <text x="14" y="58" fontSize="11" fill="var(--text-secondary)">
             (0,1)
           </text>
           <text
