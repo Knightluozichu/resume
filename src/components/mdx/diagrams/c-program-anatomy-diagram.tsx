@@ -11,11 +11,11 @@
 
 export function CProgramAnatomyDiagram() {
   const codeLines = [
-    { text: "#include <stdio.h>", annotation: "#include：告诉预处理器去把 stdio.h 的内容粘贴到这里", annX: 380, annY: 20 },
+    { text: "#include <stdio.h>", annotation: "#include：把 stdio.h 内容粘贴到这里", annX: 370, annY: 22 },
     { text: "" },
-    { text: "int main(void) {", annotation: "main 函数：程序从这里开始执行，int 是返回值类型", annX: 390, annY: 58 },
-    { text: '    printf("Hello, World!\\n");', annotation: "printf：把括号里的字符串输出到控制台；\\n 是换行", annX: 410, annY: 82 },
-    { text: "    return 0;", annotation: "return 0：告诉操作系统「程序正常结束」", annX: 390, annY: 106 },
+    { text: "int main(void) {", annotation: "main 函数：程序从这里开始执行", annX: 370, annY: 60 },
+    { text: '    printf("Hello, World!\\n");', annotation: "printf：输出字符串；\\n 是换行", annX: 370, annY: 84 },
+    { text: "    return 0;", annotation: "return 0：程序正常结束", annX: 370, annY: 108 },
     { text: "}" },
   ];
 
@@ -25,14 +25,14 @@ export function CProgramAnatomyDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 620 170"
+          viewBox="0 0 660 185"
           role="img"
           aria-label="最小 C 程序的四个关键部分：include stdio.h 头文件、int main 函数入口、printf 输出语句、return 0 返回值"
-          className="mx-auto block h-auto w-full max-w-[620px]"
+          className="mx-auto block h-auto w-full max-w-[660px]"
         >
           {/* 代码框背景 */}
           <rect
-            x="8" y="8" width="340" height="136" rx="6"
+            x="8" y="8" width="340" height="152" rx="6"
             fill="var(--bg)" stroke="var(--border)" strokeWidth="1.5"
           />
           {/* 标题栏 */}
@@ -62,19 +62,19 @@ export function CProgramAnatomyDiagram() {
           {codeLines.map((line, i) => {
             if (!line.annotation) return null;
             const srcY = lineY(i);
-            const annY = line.annY;
+            const annY = line.annY!;
             return (
               <g key={`ann-${i}`}>
                 <polyline
-                  points={`348,${srcY} 364,${srcY} 364,${annY} 376,${annY}`}
+                  points={`348,${srcY} 362,${srcY} 362,${annY} 366,${annY}`}
                   fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="3 2"
                 />
                 <circle cx="348" cy={srcY} r="3" fill="var(--accent)" />
                 <rect
-                  x={line.annX - 6} y={annY - 12} width="210" height="18" rx="4"
+                  x={line.annX! - 4} y={annY - 12} width="276" height="18" rx="4"
                   fill="var(--bg)" stroke="var(--accent)" strokeWidth="1" opacity="0.92"
                 />
-                <text x={line.annX + 4} y={annY + 1} fontSize="10" fill="var(--text-primary)">
+                <text x={line.annX! + 4} y={annY + 1} fontSize="10" fill="var(--text-primary)">
                   {line.annotation}
                 </text>
               </g>
@@ -82,7 +82,7 @@ export function CProgramAnatomyDiagram() {
           })}
 
           {/* 底部说明 */}
-          <text x="12" y="162" fontSize="11" fill="var(--text-secondary)">
+          <text x="12" y="178" fontSize="11" fill="var(--text-secondary)">
             最小 C 程序：include 引入能力、main 定义入口、printf 输出文字、return 返回状态
           </text>
         </svg>

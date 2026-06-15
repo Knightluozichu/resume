@@ -19,9 +19,9 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
 
   const entryY = 72;
   const case1Y = 140;
-  const case2Y = case1Y + gap;
+  const case2Y = case1Y + gap + 16;
   const case3Y = case2Y + gap;
-  const endY = 340;
+  const endY = 356;
 
   const mid = (y: number) => y + codeH / 2;
   const isActive = (st: number) => step >= st;
@@ -30,7 +30,7 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 520 400"
+          viewBox="0 0 520 420"
           role="img"
           aria-label="switch-case 多路选择与 fall-through 穿透图"
           className="mx-auto block h-auto w-full max-w-[520px]"
@@ -104,7 +104,7 @@ export function SwitchCaseDiagram({ step = 4 }: SwitchCaseDiagramProps) {
             所有分支汇合，继续执行 switch 之后的代码
           </text>
 
-          <text x={24} y={388} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
+          <text x={24} y={408} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
             case 标签只做跳转，不自动隔离代码块；break 负责跳出，漏写则继续执行下方 case
           </text>
 

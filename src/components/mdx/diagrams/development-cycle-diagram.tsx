@@ -48,7 +48,7 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 720 280"
+          viewBox="0 0 720 300"
           role="img"
           aria-label="编程七步骤循环图：定义目标→设计→编写→编译→运行→测试→维护，首尾相连"
           className="mx-auto block h-auto w-full max-w-[720px]"
@@ -189,7 +189,7 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
           {isActive(step) && (
             <text
               x={cx}
-              y={248}
+              y={272}
               textAnchor="middle"
               fontSize="12"
               fill="var(--accent)"

@@ -33,10 +33,10 @@ export function MemoryRegionsDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 560 380"
+          viewBox="0 0 620 400"
           role="img"
           aria-label="C 程序内存布局：代码段、静态区、BSS、堆、栈"
-          className="mx-auto block h-auto w-full max-w-[560px]"
+          className="mx-auto block h-auto w-full max-w-[620px]"
         >
           <text x={24} y={24} fontSize="16" fontWeight="700" fill={primary}>
             典型进程虚拟内存（低地址在上）
@@ -61,10 +61,10 @@ export function MemoryRegionsDiagram() {
                 <text x={cx + 12} y={ry + 16} fontSize="12" fontWeight="700" fill={r.color}>
                   {r.label}
                 </text>
-                <text x={cx + 12} y={ry + 36} fontSize="10" fill={secondary}>
+                <text x={cx + 12} y={ry + 32} fontSize="10" fill={secondary}>
                   {r.sub}
                 </text>
-                <text x={cx + 12} y={ry + r.h - 10} fontSize="10" fill={primary} fontFamily="monospace">
+                <text x={cx + 12} y={ry + r.h - 6} fontSize="10" fill={primary} fontFamily="monospace">
                   {r.example}
                 </text>
               </g>
@@ -116,7 +116,7 @@ export function MemoryRegionsDiagram() {
             · malloc → 堆
           </text>
 
-          <text x={24} y={360} fontSize="11" fill={secondary}>
+          <text x={24} y={385} fontSize="11" fill={secondary}>
             栈空间有限；大块或生命周期跨函数的内存应放堆，并记得 free。
           </text>
 

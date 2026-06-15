@@ -29,7 +29,7 @@ export function FileOpenModesDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 340"
+          viewBox="0 0 640 360"
           role="img"
           aria-label="fopen 六种文本模式：读、写、追加、清空、创建与定位能力对照"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -84,7 +84,7 @@ export function FileOpenModesDiagram() {
             );
           })}
 
-          <text x={24} y={318} fontSize="10" fill={secondary}>
+          <text x={24} y={342} fontSize="10" fill={secondary}>
             失败返回 NULL，用 perror 或 strerror(errno) 查原因；成功务必 fclose。
           </text>
         </svg>

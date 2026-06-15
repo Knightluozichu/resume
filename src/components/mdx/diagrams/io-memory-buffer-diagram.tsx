@@ -22,7 +22,7 @@ export function IOMemoryBufferDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 700 380"
+          viewBox="0 0 700 390"
           role="img"
           aria-label="printf/scanf 与输出/输入缓冲区、控制台的关系图"
           className="mx-auto block h-auto w-full max-w-[700px]"
@@ -107,27 +107,27 @@ export function IOMemoryBufferDiagram() {
           </text>
 
           {/* ===== 底部解释区 ===== */}
-          <rect x="40" y="210" width="630" height="72" rx="6" fill={token.bg} stroke={token.border} />
+          <rect x="40" y="210" width="630" height="84" rx="6" fill={token.bg} stroke={token.border} />
           <text x="60" y="234" fontSize="12" fontWeight="700" fill={token.textPrimary}>
             "缓冲"是什么意思？为什么不直接从键盘读？
           </text>
-          <text x="60" y="256" fontSize="11" fill={token.textSecondary}>
-            缓冲 = 在程序和硬件之间放一个中转站。键盘驱动是一个字符一个字符送过来的，
-            输入缓冲区帮 scanf 攒够了再一起处理——不然 scanf("%d") 每次读到一个数字就要跟键盘交互一次，慢到不可用。
+          <text x="60" y="250" fontSize="11" fill={token.textSecondary}>
+            缓冲 = 程序和硬件之间的中转站。键盘逐字符送来，缓冲区攒够再一起处理，
           </text>
-          <text x="60" y="274" fontSize="11" fill={token.textSecondary}>
-            同理，输出缓冲区先把 printf 的内容攒着，遇到换行符或缓冲区满了才一次性刷到控制台——
-            这就是为什么有些程序 printf 后不写 \n，你死活看不到输出的原因。
+          <text x="60" y="264" fontSize="11" fill={token.textSecondary}>
+            避免 scanf("%d") 每次都跟键盘交互一次。
+          </text>
+          <text x="60" y="278" fontSize="11" fill={token.textSecondary}>
+            输出缓冲区攒着 printf 内容，遇到换行符或缓冲区满才刷到控制台。
           </text>
 
           {/* ===== 缓冲区残留提醒 ===== */}
-          <rect x="40" y="298" width="630" height="56" rx="6" fill="rgb(229,181,103)" opacity="0.08" stroke="rgb(229,181,103)" strokeWidth="1" strokeDasharray="4 3" />
-          <text x="60" y="320" fontSize="11" fontWeight="700" fill="rgb(229,181,103)">
-            ⚠ 重要：输入缓冲区的残留问题
+          <rect x="40" y="310" width="630" height="60" rx="6" fill="rgb(229,181,103)" opacity="0.08" stroke="rgb(229,181,103)" strokeWidth="1" strokeDasharray="4 3" />
+          <text x="60" y="330" fontSize="11" fontWeight="700" fill="rgb(229,181,103)">
+            ⚠ 重要：输入缓冲区残留问题
           </text>
-          <text x="60" y="340" fontSize="11" fill="rgb(229,181,103)">
-            scanf 只吃掉跟格式匹配的内容——换行符、不匹配的字符全部留在输入缓冲区。
-            下一次 scanf 或 getchar 会优先读到这些"剩菜"，导致输入行为不符预期。
+          <text x="60" y="348" fontSize="11" fill="rgb(229,181,103)">
+            scanf 只吃掉匹配内容——换行符等留在缓冲区，下次读取会意外读到"剩菜"。
           </text>
 
           {/* 箭头标记 */}

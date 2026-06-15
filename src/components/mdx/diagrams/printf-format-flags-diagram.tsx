@@ -38,7 +38,7 @@ export function PrintfFormatFlagsDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 630 410"
+          viewBox="0 0 630 470"
           role="img"
           aria-label="printf 格式标志速查表：%d/%f/%s/%c/%.2f/%10d/%-10d/%-#x 等常用格式说明"
           className="mx-auto block h-auto w-full max-w-[630px]"

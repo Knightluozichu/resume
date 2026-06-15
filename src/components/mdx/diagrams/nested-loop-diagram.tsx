@@ -16,7 +16,7 @@ const PAD = 48;
 
 export function NestedLoopDiagram({ highlightUpTo = 9 }: NestedLoopDiagramProps) {
   const w = PAD * 2 + GRID * CELL + 160;
-  const h = PAD * 2 + GRID * CELL + 80;
+  const h = PAD * 2 + GRID * CELL + 100;
 
   const cells: { row: number; col: number; order: number }[] = [];
   let order = 1;
@@ -73,8 +73,11 @@ export function NestedLoopDiagram({ highlightUpTo = 9 }: NestedLoopDiagramProps)
             process(r,c);
           </text>
 
-          <text x={PAD} y={h - 24} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
-            外循环换行、内循环扫列——数字是访问顺序。总次数 = 外层次数 × 内层次数 = 3×3 = 9
+          <text x={PAD} y={h - 30} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            外循环换行、内循环扫列——数字是访问顺序。
+          </text>
+          <text x={PAD} y={h - 14} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            总次数 = 外层次数 × 内层次数 = 3×3 = 9
           </text>
         </svg>
       </div>

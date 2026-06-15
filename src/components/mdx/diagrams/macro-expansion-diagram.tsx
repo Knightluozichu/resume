@@ -42,10 +42,10 @@ export function MacroExpansionDiagram() {
           <text x={320} y={108} textAnchor="middle" fontSize="22" fill={accent}>
             →
           </text>
-          <text x={320} y={132} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={134} textAnchor="middle" fontSize="10" fill={secondary}>
             预处理器
           </text>
-          <text x={320} y={146} textAnchor="middle" fontSize="10" fill={secondary}>
+          <text x={320} y={158} textAnchor="middle" fontSize="10" fill={secondary}>
             纯文本替换
           </text>
 

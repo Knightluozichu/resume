@@ -17,10 +17,10 @@ interface Props {
 
 export function CCompilationDiagram({ step = 0 }: Props) {
   const stages = [
-    { label: "预处理", sub: "#include 展开\n注释删除", detail: "把头文件粘贴进来\n宏替换·去注释\n生成 .i 文件", x: 20, w: 130 },
-    { label: "编译", sub: "C→汇编", detail: "语法检查\n语义分析\n生成 .s 文件", x: 170, w: 130 },
-    { label: "汇编", sub: "汇编→机器码", detail: "汇编→二进制\n生成 .o 文件\n目标文件（零件）", x: 320, w: 130 },
-    { label: "链接", sub: "合并·解析符号", detail: "多 .o + 库\n符号解析\n→ 可执行文件", x: 470, w: 130 },
+    { label: "预处理", sub: ["#include 展开", "注释删除"], detail: "把头文件粘贴进来\n宏替换·去注释\n生成 .i 文件", x: 20, w: 130 },
+    { label: "编译", sub: ["C→汇编", ""], detail: "语法检查\n语义分析\n生成 .s 文件", x: 170, w: 130 },
+    { label: "汇编", sub: ["汇编→机器码", ""], detail: "汇编→二进制\n生成 .o 文件\n目标文件（零件）", x: 320, w: 130 },
+    { label: "链接", sub: ["合并·解析符号", ""], detail: "多 .o + 库\n符号解析\n→ 可执行文件", x: 470, w: 130 },
   ];
 
   const isActive = (idx: number) => step === 0 || step === idx + 1;
@@ -116,19 +116,32 @@ export function CCompilationDiagram({ step = 0 }: Props) {
                 {s.label}
               </text>
               {/* 副标签 */}
-              <text
-                x={s.x + s.w / 2}
-                y="90"
-                textAnchor="middle"
-                fontSize="12"
-                fill={textFill(i)}
-              >
-                {s.sub}
-              </text>
+              {s.sub[0] && (
+                <text
+                  x={s.x + s.w / 2}
+                  y="86"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fill={textFill(i)}
+                >
+                  {s.sub[0]}
+                </text>
+              )}
+              {s.sub[1] && (
+                <text
+                  x={s.x + s.w / 2}
+                  y="100"
+                  textAnchor="middle"
+                  fontSize="11"
+                  fill={textFill(i)}
+                >
+                  {s.sub[1]}
+                </text>
+              )}
               {/* 详情第一行 */}
               <text
                 x={s.x + s.w / 2}
-                y="118"
+                y="116"
                 textAnchor="middle"
                 fontSize="10"
                 fill="var(--text-secondary)"
@@ -137,7 +150,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
               </text>
               <text
                 x={s.x + s.w / 2}
-                y="132"
+                y="128"
                 textAnchor="middle"
                 fontSize="10"
                 fill="var(--text-secondary)"

@@ -18,15 +18,15 @@ export function CStringNullTerminatorDiagram() {
     { ch: "t", idx: 2 },
     { ch: "\\0", idx: 3, isNull: true },
   ];
-  const cellW = 72;
-  const startX = 80;
+  const cellW = 58;
+  const startX = 24;
   const memY = 72;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 320"
+          viewBox="0 0 640 340"
           role="img"
           aria-label="C 字符串以空字符 \0 结尾的内存布局"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -67,7 +67,7 @@ export function CStringNullTerminatorDiagram() {
                 </text>
                 <text
                   x={x + (cellW - 4) / 2}
-                  y={memY + 72}
+                  y={memY + 68}
                   textAnchor="middle"
                   fontSize="11"
                   fill={secondary}
@@ -107,7 +107,7 @@ export function CStringNullTerminatorDiagram() {
                 </text>
                 <text
                   x={x + (cellW - 4) / 2}
-                  y={memY + 72}
+                  y={memY + 68}
                   textAnchor="middle"
                   fontSize="10"
                   fill={secondary}
@@ -119,15 +119,15 @@ export function CStringNullTerminatorDiagram() {
           })}
 
           <line
-            x1={startX - 8}
-            y1={memY + 26}
-            x2={startX + 4 * cellW - 8}
-            y2={memY + 26}
+            x1={startX - 4}
+            y1={memY + 80}
+            x2={startX + 4 * cellW - 4}
+            y2={memY + 80}
             stroke="rgb(63,185,127)"
             strokeWidth="2"
             markerEnd="url(#nullTermArrow)"
           />
-          <text x={startX + 2 * cellW} y={memY + 16} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(63,185,127)">
+          <text x={startX + 2 * cellW} y={memY + 96} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(63,185,127)">
             strlen → 3（数到 \0 之前）
           </text>
 
@@ -136,13 +136,13 @@ export function CStringNullTerminatorDiagram() {
             字符串结束标记
           </text>
 
-          <text x={24} y={200} fontSize="12" fontWeight="600" fill={accent}>
+          <text x={24} y={212} fontSize="12" fontWeight="600" fill={accent}>
             铁律：所有 string.h 函数都靠 \0 判断「字符串到哪结束」
           </text>
-          <text x={24} y={222} fontSize="11" fill={secondary}>
+          <text x={24} y={234} fontSize="11" fill={secondary}>
             没有 \0 → strlen/strcpy 会一直往后读，直到撞上别的内存（未定义行为）。
           </text>
-          <text x={24} y={244} fontSize="11" fill={secondary}>
+          <text x={24} y={256} fontSize="11" fill={secondary}>
             char ar[n] 初始化不足时，剩余元素自动填 \0；手动逐字赋值时你必须自己写上结尾 \0。
           </text>
 

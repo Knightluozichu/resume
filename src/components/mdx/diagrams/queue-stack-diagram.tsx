@@ -118,10 +118,10 @@ export function QueueStackDiagram() {
           </text>
           {drawStack(436, ["1", "2", "3"], "top")}
 
-          <text x={480} y={228} textAnchor="middle" fontSize="10" fill={accent}>
+          <text x={480} y={244} textAnchor="middle" fontSize="10" fill={accent}>
             ↑ push 入栈 / pop 出栈都在 top
           </text>
-          <text x={480} y={248} textAnchor="middle" fontSize="11" fill={secondary}>
+          <text x={480} y={262} textAnchor="middle" fontSize="11" fill={secondary}>
             像一摞盘子：最后放上的最先拿走
           </text>
 

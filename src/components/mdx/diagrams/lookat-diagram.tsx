@@ -13,7 +13,7 @@ export function LookAtDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 660 340"
+          viewBox="0 0 660 400"
           role="img"
           aria-label="LookAt 矩阵构造过程。左手侧给出摄像机位置 position、要看向的目标 target、以及朝上的方向 up 三个输入。通过 cross 叉乘依次算出摄像机前向轴 front（从 position 指向 target 的归一化向量）、右轴 right（front 叉乘 up 再归一化）、上轴 upReal（right 叉乘 front）。三根正交轴排成一个 3×3 旋转矩阵，再结合平移，就组成了 4×4 的 LookAt 矩阵——作用是把世界绕着摄像机平移和旋转，让摄像机变成新原点。"
           className="mx-auto block h-auto w-full max-w-[660px]"

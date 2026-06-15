@@ -140,9 +140,9 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
               </text>
               <text
                 x={s.x + s.w / 2}
-                y="90"
+                y="98"
                 textAnchor="middle"
-                fontSize="12"
+                fontSize="11"
                 fill={textFill(i)}
               >
                 {s.sub}

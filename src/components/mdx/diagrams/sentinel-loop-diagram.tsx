@@ -106,7 +106,7 @@ export function SentinelLoopDiagram({ step = 4 }: SentinelLoopDiagramProps) {
               strokeWidth="1.5"
               markerEnd="url(#sent-arrow)"
             />
-            <text x={w - 38} y={(readY + processY) / 2} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
+            <text x={w - 58} y={(readY + processY) / 2} fontSize="10" fill={"var(--accent)"} fontFamily="system-ui">
               ④ 再读入
             </text>
           </g>

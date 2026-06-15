@@ -43,7 +43,7 @@ export function StringFunctionTableDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 340"
+          viewBox="0 0 640 360"
           role="img"
           aria-label="string.h 常用函数速查表"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -84,7 +84,7 @@ export function StringFunctionTableDiagram() {
             );
           })}
 
-          <text x={24} y={310} fontSize="11" fill={secondary}>
+          <text x={24} y={330} fontSize="11" fill={secondary}>
             均需以 \\0 结尾的有效 C 字符串。更安全变体：strncpy、strncat、strncmp、strnlen（C11）。
           </text>
         </svg>

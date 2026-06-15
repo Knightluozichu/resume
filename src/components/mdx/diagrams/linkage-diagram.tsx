@@ -37,7 +37,7 @@ export function LinkageDiagram() {
           <text x={52} y={110} fontSize="11" fill={internalColor} fontFamily="monospace">
             static int counter = 0;
           </text>
-          <text x={52} y={128} fontSize="9" fill={secondary}>
+          <text x={52} y={122} fontSize="9" fill={secondary}>
             内部链接 — 仅 file_a.c 可见
           </text>
 
@@ -45,7 +45,7 @@ export function LinkageDiagram() {
           <text x={52} y={162} fontSize="11" fill={externalColor} fontFamily="monospace">
             int shared = 100;
           </text>
-          <text x={52} y={180} fontSize="9" fill={secondary}>
+          <text x={52} y={174} fontSize="9" fill={secondary}>
             外部链接 — 整个程序共享一份
           </text>
 
@@ -53,7 +53,7 @@ export function LinkageDiagram() {
           <text x={52} y={214} fontSize="11" fill={externalColor} fontFamily="monospace">
             extern int shared;
           </text>
-          <text x={52} y={232} fontSize="9" fill={secondary}>
+          <text x={52} y={226} fontSize="9" fill={secondary}>
             声明：别处有定义（可写在头文件）
           </text>
 
@@ -67,7 +67,7 @@ export function LinkageDiagram() {
           <text x={364} y={122} fontSize="11" fill={externalColor} fontFamily="monospace">
             extern int shared;
           </text>
-          <text x={364} y={140} fontSize="9" fill={secondary}>
+          <text x={364} y={133} fontSize="9" fill={secondary}>
             引用 file_a 中的 shared
           </text>
 

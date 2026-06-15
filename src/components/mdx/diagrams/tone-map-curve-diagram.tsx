@@ -45,7 +45,7 @@ export function ToneMapCurveDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 480 300"
+          viewBox="0 0 480 310"
           role="img"
           aria-label="色调映射曲线对照图。横轴是 HDR 输入值，从 0 到 5，远超 1，纵轴是输出值 0 到 1，即可显示范围。三条曲线：clamp 直接截断等于取输入与 1 的较小值，到 1 就水平封顶、大于 1 的高光全压成纯白没有层次；Reinhard 等于 x 除以 x 加 1，平滑地把任意大的输入压进小于 1，永远逼近 1 但保留高光层次；曝光等于 1 减去 e 的负 x 乘曝光值次幂，同样平滑趋近 1，曲线形状由曝光值调节。"
           className="mx-auto block h-auto w-full max-w-[480px]"

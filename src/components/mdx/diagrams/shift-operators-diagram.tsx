@@ -100,8 +100,8 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
             <text x={44} y={154} fontSize="12" fontWeight="700" fill={step === 2 ? accent : secondary}>
               ② 无符号右移 &gt;&gt; n
             </text>
-            {renderBits(["0", "0", "1", "1", "0", "0", "0", "0"], 44, 168, "1011 0000 >> 2", 6)}
-            <text x={280} y={186} fontSize="10" fill={secondary}>
+            {renderBits(["0", "0", "1", "1", "0", "0", "0", "0"], 44, 178, "1011 0000 >> 2", 6)}
+            <text x={280} y={196} fontSize="10" fill={secondary}>
               左侧补 0；等价 ÷ 2^n（整除）
             </text>
           </g>
@@ -120,8 +120,8 @@ export function ShiftOperatorsDiagram({ step = 3 }: ShiftOperatorsDiagramProps) 
             <text x={44} y={242} fontSize="12" fontWeight="700" fill={step === 3 ? accent : secondary}>
               ③ 有符号右移 &gt;&gt; n（算术右移）
             </text>
-            {renderBits(["1", "1", "0", "1", "0", "0", "0", "0"], 44, 256, "1101 0000 >> 2 (signed)", 6)}
-            <text x={280} y={274} fontSize="10" fill={warn}>
+            {renderBits(["1", "1", "0", "1", "0", "0", "0", "0"], 44, 262, "1101 0000 >> 2 (signed)", 6)}
+            <text x={280} y={280} fontSize="10" fill={warn}>
               左侧补**符号位**（负数补 1）；C 对有符号 &gt;&gt; 实现定义，多数平台为算术右移
             </text>
             <text x={44} y={298} fontSize="10" fill={secondary}>

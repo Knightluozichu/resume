@@ -85,8 +85,8 @@ export function TypePromotionDiagram() {
           <text x={marginL} y={totalH - 60} fontSize="12" fill="var(--text-secondary)" fontFamily="system-ui">
             混合类型表达式中，低级别类型自动向高级别提升以避免数据丢失
           </text>
-          <text x={marginL} y={totalH - 40} fontSize="12" fill="var(--accent)" fontFamily="system-ui">
-            char / short 先提升为 int（整型提升） → 再按「把级别低的转换为级别高的」→ 赋值时反向强制截断（cast）
+          <text x={marginL} y={totalH - 44} fontSize="12" fill="var(--accent)" fontFamily="system-ui">
+            char / short 先提升为 int（整型提升）→ 再按「低→高」统一 → 赋值时反向截断（cast）
           </text>
           <text x={marginL} y={totalH - 20} fontSize="11" fill="var(--text-secondary)" fontFamily="system-ui">
             赋值转换向下（窄化，可能丢数据） · 表达式求值中的隐式转换向上

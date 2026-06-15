@@ -43,7 +43,7 @@ export function GammaCurveDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 480 290"
+          viewBox="0 0 480 298"
           role="img"
           aria-label="Gamma 幂曲线对照图。横轴是输入值 0 到 1，纵轴是输出值 0 到 1。三条曲线：对角直线 y=x 是理想的线性关系，作基准；向下凹的曲线 y=x 的 2.2 次方是显示器的非线性 gamma 响应，把中间调压暗，0.5 的输入只输出约 0.22；向上凸的曲线 y=x 的 1 除以 2.2 次方是 gamma 校正曲线，把中间调提亮，0.5 的输入输出约 0.73。校正曲线和显示器响应曲线互为反函数，串起来正好回到线性对角线。"
           className="mx-auto block h-auto w-full max-w-[480px]"

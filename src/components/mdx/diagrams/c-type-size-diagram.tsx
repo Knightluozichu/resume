@@ -31,7 +31,7 @@ export function CTypeSizeDiagram() {
     { type: "long double", bytes: "8/10/16", min: "依平台", max: "依平台", note: "≥ double" },
   ];
 
-  const colX = { type: 16, bytes: 172, signed: 272, min: 350, max: 490 };
+  const colX = { type: 16, bytes: 172, signed: 310, min: 400, max: 535 };
   const headerY = 44;
   const rowH = 34;
   const startY = 60;
@@ -40,13 +40,13 @@ export function CTypeSizeDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-x-auto overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 620 560"
+          viewBox="0 0 700 560"
           role="img"
           aria-label="C 基本类型大小对照表：各类型的字节数、最小最大值"
-          className="mx-auto block h-auto w-full max-w-[620px]"
+          className="mx-auto block h-auto w-full max-w-[700px]"
         >
           {/* 表头背景 */}
-          <rect x="8" y={headerY - 12} width="596" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
+          <rect x="8" y={headerY - 12} width="684" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
           {/* 表头文字 */}
           <text x={colX.type} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">类型</text>
           <text x={colX.bytes} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">字节</text>
@@ -62,7 +62,7 @@ export function CTypeSizeDiagram() {
 
             return (
               <g key={r.type}>
-                <rect x="8" y={y - 10} width="596" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect x="8" y={y - 10} width="684" height={rowH - 4} rx="4" fill={rowBg} />
                 <text
                   x={colX.type}
                   y={y + 4}
@@ -113,7 +113,7 @@ export function CTypeSizeDiagram() {
                 </text>
                 {r.note && (
                   <text
-                    x={colX.max + 62}
+                    x={colX.max + 58}
                     y={y + 4}
                     fontSize="10"
                     fill="var(--text-secondary)"
@@ -130,7 +130,7 @@ export function CTypeSizeDiagram() {
           <line
             x1="16"
             y1={startY + rows.length * rowH + 8}
-            x2="600"
+            x2="684"
             y2={startY + rows.length * rowH + 8}
             stroke="var(--border)"
             strokeWidth="1"
@@ -150,7 +150,7 @@ export function CTypeSizeDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            float 约 6 位有效数字，double 约 15 位。用 sizeof 运算符可在你的机器上确认实际字节数。
+            float 约 6 位有效数字，double 约 15 位。用 sizeof 运算符可确认实际字节数。
           </text>
         </svg>
       </div>

@@ -33,7 +33,7 @@ export function VariableMemoryDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 500 260"
+          viewBox="0 0 500 280"
           role="img"
           aria-label="变量内存布局示意图：int num=10 占 4 字节、char ch='A' 占 1 字节、float pi=3.14 占 4 字节"
           className="mx-auto block h-auto w-full max-w-[500px]"
@@ -97,8 +97,11 @@ export function VariableMemoryDiagram() {
           })}
 
           {/* 底部说明 */}
-          <text x="180" y={startY + slots.length * (slotH + gap) + 24} fontSize="11" fill="var(--text-secondary)">
-            每个变量在栈上占用一段连续的内存空间。int 和 float 通常占 4 字节，char 占 1 字节。
+          <text x="16" y={startY + slots.length * (slotH + gap) + 24} fontSize="11" fill="var(--text-secondary)">
+            每个变量在栈上占用一段连续的内存空间。
+          </text>
+          <text x="16" y={startY + slots.length * (slotH + gap) + 40} fontSize="11" fill="var(--text-secondary)">
+            int 和 float 通常占 4 字节，char 占 1 字节。
           </text>
         </svg>
       </div>

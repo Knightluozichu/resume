@@ -40,19 +40,19 @@ export function BitwiseOperatorsDiagram() {
       <text x={ox} y={oy} fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">
         {title}
       </text>
-      <text x={ox + 120} y={oy} fontSize="11" fill={secondary} fontFamily="monospace">
+      <text x={ox} y={oy + 14} fontSize="10" fill={secondary}>
         {op}
       </text>
       {["A", "B", "结果"].map((h, i) => (
-        <text key={h} x={ox + i * 44 + 18} y={oy + 22} textAnchor="middle" fontSize="9" fill={secondary}>
+        <text key={h} x={ox + i * 44 + 18} y={oy + 30} textAnchor="middle" fontSize="9" fill={secondary}>
           {h}
         </text>
       ))}
       {rows.map(([a, b, r], ri) => (
         <g key={`${title}-${ri}`}>
-          {cell(ox, oy + 28 + ri * 32, a)}
-          {cell(ox + 44, oy + 28 + ri * 32, b)}
-          {cell(ox + 88, oy + 28 + ri * 32, r, r === "1")}
+          {cell(ox, oy + 36 + ri * 32, a)}
+          {cell(ox + 44, oy + 36 + ri * 32, b)}
+          {cell(ox + 88, oy + 36 + ri * 32, r, r === "1")}
         </g>
       ))}
     </g>

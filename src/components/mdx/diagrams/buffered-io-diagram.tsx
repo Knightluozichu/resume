@@ -15,7 +15,7 @@ export function BufferedIODiagram({ step = 3 }: BufferedIODiagramProps) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 400"
+          viewBox="0 0 640 416"
           role="img"
           aria-label="行缓冲、全缓冲与无缓冲对比图"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -95,8 +95,11 @@ export function BufferedIODiagram({ step = 3 }: BufferedIODiagramProps) {
             </text>
           </g>
 
-          <text x={24} y={384} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
-            getchar/putchar 工作在字符层；底层仍受 stdin/stdout 缓冲策略影响——这就是为什么有时 printf 后要 fflush(stdout) 才能和 scanf 配合。
+          <text x={24} y={378} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            getchar/putchar 工作在字符层；底层仍受 stdin/stdout 缓冲策略影响。
+          </text>
+          <text x={24} y={394} fontSize="11" fill={"var(--text-secondary)"} fontFamily="system-ui">
+            有时 printf 后需要 fflush(stdout) 才能和 scanf 配合。
           </text>
         </svg>
       </div>
