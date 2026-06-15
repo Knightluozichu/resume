@@ -20,12 +20,11 @@ export function UrpVsBuiltinDiagram() {
 
           {/* Objects */}
           {[0, 1, 2].map((i) => (
-            <g key={`b-obj-${i}`}>
-              <rect x={60 + i * 70} y="82" width="44" height="28" rx="4" fill="var(--bg-elevated)" stroke={i === 0 ? "var(--success)" : i === 1 ? "var(--warning)" : "var(--accent)"} strokeWidth="2" />
-              <line x1={240} y1={96} x2={280} y2={96} stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="3,3" />
-              <text x={280} y={100} fontSize="9" fill="var(--text-secondary)" textAnchor="end">SetPass ×3</text>
-            </g>
+            <rect key={`b-obj-${i}`} x={60 + i * 70} y="82" width="44" height="28" rx="4" fill="var(--bg-elevated)" stroke={i === 0 ? "var(--success)" : i === 1 ? "var(--warning)" : "var(--accent)"} strokeWidth="2" />
           ))}
+          {/* SetPass label — rendered once outside the object loop */}
+          <line x1="240" y1="96" x2="276" y2="96" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="3,3" />
+          <text x="276" y="100" fontSize="9" fill="var(--text-secondary)" textAnchor="end">SetPass ×3</text>
 
           {/* GPU side */}
           <rect x="60" y="120" width="180" height="50" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />

@@ -189,7 +189,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
           ))}
           {/* Dynamic FPS arrow hint */}
           <path
-            d="M480 118 Q510 100 540 118"
+            d="M480 126 Q510 112 540 126"
             fill="none"
             stroke="var(--border)"
             strokeWidth="1.5"
@@ -197,7 +197,7 @@ export function PowerFrameRateDiagram({ step }: Props) {
           />
           <text
             x="510"
-            y="105"
+            y="112"
             textAnchor="middle"
             fontSize="9"
             fill="var(--text-secondary)"

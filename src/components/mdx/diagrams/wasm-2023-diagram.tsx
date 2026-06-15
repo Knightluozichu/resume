@@ -19,23 +19,27 @@ export function Wasm2023Diagram() {
           <rect x="20" y="48" width="90" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="65" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">C# 源码</text>
 
-          <text x="118" y="72" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="112" y1="68" x2="122" y2="68" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="118,62 128,68 118,74" fill="var(--accent)" />
 
           <rect x="130" y="48" width="90" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="175" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">IL2CPP</text>
 
-          <text x="228" y="72" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="222" y1="68" x2="232" y2="68" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="228,62 238,68 228,74" fill="var(--accent)" />
 
           <rect x="240" y="48" width="100" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
           <text x="290" y="72" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">C++ 中间码</text>
 
-          <text x="348" y="72" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="342" y1="68" x2="352" y2="68" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="348,62 358,68 348,74" fill="var(--accent)" />
 
           <rect x="360" y="48" width="110" height="40" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
           <text x="415" y="68" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">Emscripten</text>
           <text x="415" y="82" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">+ Wasm 2023</text>
 
-          <text x="478" y="72" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="472" y1="68" x2="482" y2="68" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="478,62 488,68 478,74" fill="var(--accent)" />
 
           <rect x="490" y="48" width="100" height="40" rx="6" fill="var(--bg)" stroke="var(--success)" strokeWidth="2" />
           <text x="540" y="68" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--success)">.wasm</text>

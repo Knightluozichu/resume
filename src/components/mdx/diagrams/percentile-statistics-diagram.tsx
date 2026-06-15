@@ -10,7 +10,7 @@ export function PercentileStatisticsDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 280"
+          viewBox="0 0 640 290"
           role="img"
           aria-label="统计指标可视化：左侧帧耗时分布直方图标注均值、中位数、P95位置；右侧四个指标卡片含义"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -38,7 +38,7 @@ export function PercentileStatisticsDiagram() {
 
           {/* X axis */}
           <line x1="44" y1="198" x2="370" y2="198" stroke="var(--border)" strokeWidth="1" />
-          <text x="207" y="214" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="207" y="222" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             帧耗时 (ms) →
           </text>
 

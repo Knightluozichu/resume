@@ -103,7 +103,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* Sub label */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 60}
+                y={r.y + 48}
                 textAnchor="middle"
                 fontSize="11"
                 fill="var(--text-secondary)"
@@ -113,7 +113,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* FPS */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 80}
+                y={r.y + 76}
                 textAnchor="middle"
                 fontSize="22"
                 fontWeight="700"
@@ -165,14 +165,14 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                 <>
                   <line
                     x1={r.x + colW + 4}
-                    y1={r.y + 70}
+                    y1={r.y + 66}
                     x2={r.x + colW + 18}
-                    y2={r.y + 70}
+                    y2={r.y + 66}
                     stroke={lineStroke(i)}
                     strokeWidth="2"
                   />
                   <path
-                    d={`M${r.x + colW + 18} ${r.y + 70} l-6 -3.5 l0 7 z`}
+                    d={`M${r.x + colW + 18} ${r.y + 66} l-6 -3.5 l0 7 z`}
                     fill={lineStroke(i)}
                   />
                 </>

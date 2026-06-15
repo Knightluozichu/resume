@@ -8,7 +8,7 @@ export function XrInputFlowDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 270"
+          viewBox="0 0 640 286"
           role="img"
           aria-label="XR 输入管线：HMD/控制器/手部追踪经 Input Subsystem 轮询后进入游戏逻辑——缓存、合并 Poll、减 Raycast 是关键优化点"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -59,11 +59,11 @@ export function XrInputFlowDiagram() {
           <text x="556" y="130" textAnchor="middle" fontSize="9" fill="var(--text-primary)">动画/触觉</text>
 
           {/* Bottom recommendations */}
-          <rect x="20" y="190" width="520" height="68" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
+          <rect x="20" y="190" width="600" height="80" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <text x="36" y="212" fontSize="10" fontWeight="600" fill="var(--text-primary)">三项 CPU 优化建议：</text>
-          <text x="36" y="230" fontSize="9" fill="var(--text-secondary)">① 在 Awake() 中缓存 InputDevice/Action 引用——Update 不反复 GetDeviceAtXRNode()</text>
-          <text x="36" y="246" fontSize="9" fill="var(--text-secondary)">② XR Interaction Toolkit：减少 XRRayInteractor 的 Raycast 层级和频率</text>
-          <text x="36" y="262" fontSize="9" fill="var(--text-secondary)">③ 不需要每帧读的输入（如 Hand Bone）降低 Poll 频率到每 2–3 帧</text>
+          <text x="36" y="228" fontSize="9" fill="var(--text-secondary)">① 在 Awake() 中缓存 InputDevice/Action 引用——Update 不反复 GetDeviceAtXRNode()</text>
+          <text x="36" y="244" fontSize="9" fill="var(--text-secondary)">② XR Interaction Toolkit：减少 XRRayInteractor 的 Raycast 层级和频率</text>
+          <text x="36" y="260" fontSize="9" fill="var(--text-secondary)">③ 不需要每帧读的输入（如 Hand Bone）降低 Poll 频率到每 2–3 帧</text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">

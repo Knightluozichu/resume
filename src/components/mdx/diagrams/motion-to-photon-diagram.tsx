@@ -23,7 +23,8 @@ export function MotionToPhotonDiagram() {
           <text x="90" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：低延迟 IMU 模式</text>
 
           {/* Arrow */}
-          <text x="168" y="88" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="164" y1="84" x2="176" y2="84" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="172,78 182,84 172,90" fill="var(--accent)" />
 
           {/* Stage 2: CPU */}
           <rect x="180" y="44" width="140" height="80" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
@@ -33,7 +34,8 @@ export function MotionToPhotonDiagram() {
           <text x="250" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：缓存引用·分帧执行</text>
 
           {/* Arrow */}
-          <text x="328" y="88" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="324" y1="84" x2="336" y2="84" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="332,78 342,84 332,90" fill="var(--accent)" />
 
           {/* Stage 3: GPU */}
           <rect x="340" y="44" width="140" height="80" rx="6" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />
@@ -43,7 +45,8 @@ export function MotionToPhotonDiagram() {
           <text x="410" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">优化：SPI/FFR/RenderScale</text>
 
           {/* Arrow */}
-          <text x="488" y="88" fontSize="14" fill="var(--accent)">→</text>
+          <line x1="484" y1="84" x2="496" y2="84" stroke="var(--accent)" strokeWidth="2" />
+          <polygon points="492,78 502,84 492,90" fill="var(--accent)" />
 
           {/* Stage 4: Comp + Display */}
           <rect x="500" y="44" width="130" height="80" rx="6" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.5" />
