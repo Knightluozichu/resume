@@ -161,6 +161,10 @@ import { mxrwMobileOptimizationQuestions } from "./review/mxrw-mobile-optimizati
 import { mxrwXrSpecificOptimizationQuestions } from "./review/mxrw-xr-specific-optimization";
 import { mxrwWebSpecificOptimizationQuestions } from "./review/mxrw-web-specific-optimization";
 import { mxrwCrossPlatformChecklistQuestions } from "./review/mxrw-cross-platform-checklist";
+import { pbrTheoryQuestions } from "./review/pbr-theory";
+import { pbrLightingQuestions } from "./review/pbr-lighting";
+import { pbrIblDiffuseQuestions } from "./review/pbr-ibl-diffuse";
+import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
 
 export {
   CHAPTER_TITLES,
@@ -318,6 +322,10 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mxrwXrSpecificOptimizationQuestions,
   ...mxrwWebSpecificOptimizationQuestions,
   ...mxrwCrossPlatformChecklistQuestions,
+  ...pbrTheoryQuestions,
+  ...pbrLightingQuestions,
+  ...pbrIblDiffuseQuestions,
+  ...pbrIblSpecularQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -162,7 +162,12 @@ export type ReviewChapterSlug =
   | "mxrw-mobile-optimization"
   | "mxrw-xr-specific-optimization"
   | "mxrw-web-specific-optimization"
-  | "mxrw-cross-platform-checklist";
+  | "mxrw-cross-platform-checklist"
+  // PBR
+  | "pbr-theory"
+  | "pbr-lighting"
+  | "pbr-ibl-diffuse"
+  | "pbr-ibl-specular";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -328,6 +333,11 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mxrw-xr-specific-optimization": "XR 专项优化",
   "mxrw-web-specific-optimization": "Web 专项优化",
   "mxrw-cross-platform-checklist": "跨平台性能检查清单",
+  // PBR
+  "pbr-theory": "PBR 理论",
+  "pbr-lighting": "PBR 光照",
+  "pbr-ibl-diffuse": "IBL 漫反射辐照",
+  "pbr-ibl-specular": "IBL 镜面反射",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
