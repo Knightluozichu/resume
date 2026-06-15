@@ -174,7 +174,7 @@ export function ExceptionSafetyTable() {
                   width={colW - 16}
                   height={62}
                 >
-                  <div style={{ fontSize: "9px", lineHeight: "1.4", color: "#EDEDF2" }}>
+                  <div style={{ fontSize: "9px", lineHeight: "1.4", color: "var(--text-primary)" }}>
                     {item.value}
                   </div>
                 </foreignObject>

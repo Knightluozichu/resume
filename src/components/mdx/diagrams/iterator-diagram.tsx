@@ -129,7 +129,7 @@ export function IteratorDiagram() {
             y1={startY + cellSize + 46}
             x2={startX + elements.length * (cellSize + gap) - gap / 2}
             y2={startY + cellSize + 10}
-            stroke="rgb(229,181,103)"
+            stroke="var(--warning)"
             strokeWidth="2"
             markerEnd="url(#arrowHeadYellow)"
           />
@@ -139,7 +139,7 @@ export function IteratorDiagram() {
             y={startY + cellSize + 64}
             fontSize="13"
             fontWeight="600"
-            fill="rgb(229,181,103)"
+            fill="var(--warning)"
             textAnchor="middle"
             fontFamily="monospace"
           >
@@ -163,7 +163,7 @@ export function IteratorDiagram() {
             height={cellSize}
             rx="4"
             fill="none"
-            stroke="rgb(229,181,103)"
+            stroke="var(--warning)"
             strokeDasharray="4 4"
             opacity="0.6"
           />
@@ -178,7 +178,7 @@ export function IteratorDiagram() {
               <path d="M0,0 L8,4 L0,8 Z" fill={token.accent} />
             </marker>
             <marker id="arrowHeadYellow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto">
-              <path d="M0,0 L8,4 L0,8 Z" fill="rgb(229,181,103)" />
+              <path d="M0,0 L8,4 L0,8 Z" fill="var(--warning)" />
             </marker>
           </defs>
         </svg>
