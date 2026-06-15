@@ -364,6 +364,7 @@ import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diag
 import { RecyclerViewRecyclingDiagram } from "./diagrams/recyclerview-recycling-diagram";
 import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram";
+import { XmlDrawableTypesDiagram } from "./diagrams/xml-drawable-types-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
 import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
 import { TestPyramidDiagram } from "./diagrams/test-pyramid-diagram";
@@ -884,6 +885,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RecyclerViewRecyclingDiagram,
   ConfigChangeViewModelDiagram,
   LogcatLineAnatomyDiagram,
+  XmlDrawableTypesDiagram,
   DebugLoopDiagram,
   SdkVersionAxisDiagram,
   TestPyramidDiagram,
