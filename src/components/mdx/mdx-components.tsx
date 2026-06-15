@@ -325,6 +325,7 @@ import { MenuDriverDiagram } from "./diagrams/menu-driver-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
+import { BrdfCurveExplorer } from "./brdf-curve-explorer";
 import { MathViz } from "./math-viz";
 import { Objectives } from "./objectives";
 import { PipelineViz } from "./pipeline-viz";
@@ -616,6 +617,13 @@ import { PointShadowsDemo } from "./point-shadows-demo";
  *    每个物体片元含被遮挡的 × 每盏灯立刻算光照·overdraw 浪费·光照次数 ~ 物体片元数×灯·标红 vs 下排延迟 几何 pass 填
  *    G-buffer 不点灯 → 光照 pass 全屏四边形只对每个可见像素 × 灯算一次·光照次数 ~ 屏幕像素数×灯·与场景复杂度/overdraw 解耦·
  *    标绿，点明延迟把光照从「每个物体片元都算」变成「只对可见像素算一次」→ 轻松上几百盏灯）。同款 Server SVG。
+ * PBR 篇·BRDF 曲线交互（HEL-167，B 数学型主 Demo）：
+ *  - Client（dynamic 边界）：BrdfCurveExplorer —— next/dynamic(ssr:false) 懒加载
+ *    BrdfCurveCanvas（独立 chunk，硬规则 2）。Canvas2D 绘制 D(NDF GGX)、G(Smith-Schlick-GGX)、
+ *    F(Fresnel-Schlick) 三条曲线随 theta 0..90deg 变化。粗糙度 Slider 0.05~1.0 + metallic
+ *    Toggle 电介质/金属（F0=0.04 vs 0.7）+ 重置。颜色全部 CSS 变量运行时读取（硬规则 5）。
+ *    ResizeObserver 自适应宽度，无 three.js / 无 WebGL。
+ *
  *  - 高级光照篇·SSAO 屏幕空间环境光遮蔽（HEL-89，C 实战型，篇收官，承接 deferred-shading G-buffer 位置/法线）：
  *    HemisphereKernelDiagram（侧视片元 P + 朝外法线 N，在 N 朝向的半球内撒若干随机采样点，落进周围几何的标红=被挡遮蔽+1、
  *    落在空气里的标绿=不计；点明「被挡越多→接收环境光越少→越暗」，并强调只用法线半球而非整球以免平坦面凭空变暗）、
@@ -644,6 +652,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InstancingDemo,
   ShadowMappingDemo,
   PointShadowsDemo,
+  BrdfCurveExplorer,
   PipelineViz,
   MathViz,
   CompareSlider,
