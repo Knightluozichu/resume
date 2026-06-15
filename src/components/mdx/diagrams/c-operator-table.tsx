@@ -50,7 +50,7 @@ export function COperatorTable() {
     },
   ];
 
-  const totalH = 50 + 30 + cats.reduce((s, c) => s + 30 + c.rows.length * rowH + 16, 0) + 60;
+  const totalH = 68 + cats.reduce((s, c) => s + 2 * rowH + c.rows.length * rowH + 16, 0) + 40;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
