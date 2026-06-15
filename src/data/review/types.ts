@@ -78,7 +78,8 @@ export type ReviewChapterSlug =
   | "ugo-xr-optimizations"
   | "ugo-memory-management"
   | "ugo-data-oriented-technology-stack"
-  | "ugo-tactical-tips-and-tricks";
+  | "ugo-tactical-tips-and-tricks"
+  | "prof-profiling-workflow-baseline";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -160,6 +161,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ugo-memory-management": "内存管理",
   "ugo-data-oriented-technology-stack": "DOTS 数据导向技术栈",
   "ugo-tactical-tips-and-tricks": "战术技巧",
+  "prof-profiling-workflow-baseline": "Profiling 工作流与基线",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

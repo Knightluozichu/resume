@@ -66,6 +66,7 @@ export const BOOK_ORDER = [
   "learnopengl",
   "cpp-primer-5e",
   "unity-game-optimization",
+  "profiling-unity-games",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -73,6 +74,7 @@ export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
   "cpp-primer-5e": "C++ Primer 第5版",
   "unity-game-optimization": "Unity 游戏优化",
+  "profiling-unity-games": "Unity Profiling 指南",
 };
 
 /** 取某书在教学顺序中的位次；未知书返回一个大于所有已知位次的值 */
@@ -104,6 +106,12 @@ export const SECTION_ORDER = [
   "基础脚本优化",
   "图形优化",
   "高级优化",
+  // Profiling Unity Games
+  "Profiling 工作流",
+  "CPU 性能分析",
+  "GPU 性能分析",
+  "内存与功耗",
+  "平台专项",
 ] as const;
 
 /** 取某 section 在教学顺序中的位次；未知 section 返回一个大于所有已知位次的值 */

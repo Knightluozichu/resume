@@ -83,6 +83,7 @@ import { ugoXrOptimizationsQuestions } from "./review/ugo-xr-optimizations";
 import { ugoMemoryManagementQuestions } from "./review/ugo-memory-management";
 import { ugoDataOrientedTechnologyStackQuestions } from "./review/ugo-data-oriented-technology-stack";
 import { ugoTacticalTipsAndTricksQuestions } from "./review/ugo-tactical-tips-and-tricks";
+import { profProfilingWorkflowBaselineQuestions } from "./review/prof-profiling-workflow-baseline";
 
 export {
   CHAPTER_TITLES,
@@ -162,6 +163,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ugoMemoryManagementQuestions,
   ...ugoDataOrientedTechnologyStackQuestions,
   ...ugoTacticalTipsAndTricksQuestions,
+  ...profProfilingWorkflowBaselineQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -21,6 +21,7 @@ import { BuildSizeDiagram } from "./diagrams/build-size-diagram";
 import { UnityProfilerWindowDiagram } from "./diagrams/unity-profiler-window-diagram";
 import { CpuGpuBottleneckDiagram } from "./diagrams/cpu-gpu-bottleneck-diagram";
 import { ProfilingToolsDiagram } from "./diagrams/profiling-tools-diagram";
+import { ProfilerExportDiagram } from "./diagrams/profiler-export-diagram";
 import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram";
 import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
 import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
@@ -620,6 +621,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   UnityProfilerWindowDiagram,
   CpuGpuBottleneckDiagram,
   ProfilingToolsDiagram,
+  ProfilerExportDiagram,
   GetComponentCacheDiagram,
   EmptyCallbackDiagram,
   UpdateMechanismDiagram,
