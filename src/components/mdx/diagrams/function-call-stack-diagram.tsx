@@ -22,14 +22,14 @@ export function FunctionCallStackDiagram({
   const marginL = 16;
 
   // 栈区域
-  const stackX = 420;
-  const stackW = 160;
+  const stackX = 440;
+  const stackW = 190;
   const stackTop = 40;
-  const stackBot = 360;
+  const stackBot = 400;
 
   // 各阶段标签
   const labelX = marginL + 10;
-  const labelY = [72, 146, 220, 296, 360];
+  const labelY = [72, 156, 240, 326, 404];
 
   const accent = "var(--accent)";
   const primary = "var(--text-primary)";
@@ -41,10 +41,10 @@ export function FunctionCallStackDiagram({
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 420"
+          viewBox="0 0 750 480"
           role="img"
           aria-label="函数调用栈示意图：展示调用方从调用到传参、函数执行、返回值、栈帧销毁的全过程"
-          className="mx-auto block h-auto w-full max-w-[640px]"
+          className="mx-auto block h-auto w-full max-w-[750px]"
         >
           {/* ── 栈外框 ── */}
           <rect
@@ -81,9 +81,9 @@ export function FunctionCallStackDiagram({
             {/* 调用方栈帧 */}
             <rect
               x={stackX + 12}
-              y={260}
+              y={290}
               width={stackW - 24}
-              height={56}
+              height={68}
               rx="4"
               fill={bg}
               stroke={border}
@@ -91,7 +91,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={282}
+              y={316}
               textAnchor="middle"
               fontSize="11"
               fontWeight={active(0) ? 700 : 500}
@@ -102,7 +102,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={302}
+              y={340}
               textAnchor="middle"
               fontSize="10"
               fill={secondary}
@@ -126,9 +126,9 @@ export function FunctionCallStackDiagram({
             {/* 实参压栈 */}
             <rect
               x={stackX + 12}
-              y={190}
+              y={216}
               width={stackW - 24}
-              height={40}
+              height={48}
               rx="4"
               fill={accent}
               opacity={0.12}
@@ -137,7 +137,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={205}
+              y={236}
               textAnchor="middle"
               fontSize="11"
               fontWeight="700"
@@ -148,7 +148,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={222}
+              y={254}
               textAnchor="middle"
               fontSize="10"
               fill={accent}
@@ -159,9 +159,9 @@ export function FunctionCallStackDiagram({
             {/* main 帧缩小 */}
             <rect
               x={stackX + 12}
-              y={248}
+              y={280}
               width={stackW - 24}
-              height={56}
+              height={64}
               rx="4"
               fill={bg}
               stroke={border}
@@ -169,7 +169,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={270}
+              y={316}
               textAnchor="middle"
               fontSize="11"
               fill={secondary}
@@ -189,7 +189,7 @@ export function FunctionCallStackDiagram({
             </text>
 
             {/* 调用箭头 */}
-            <text x={135} y={180} fontSize="22" fill={accent} fontWeight="700">
+            <text x={135} y={200} fontSize="22" fill={accent} fontWeight="700">
               add(5, 3)
             </text>
           </g>
@@ -201,7 +201,7 @@ export function FunctionCallStackDiagram({
               x={stackX + 12}
               y={100}
               width={stackW - 24}
-              height={78}
+              height={100}
               rx="4"
               fill={accent}
               opacity={0.15}
@@ -210,7 +210,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={120}
+              y={122}
               textAnchor="middle"
               fontSize="12"
               fontWeight="700"
@@ -221,7 +221,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={140}
+              y={144}
               textAnchor="middle"
               fontSize="10"
               fill={primary}
@@ -231,7 +231,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={156}
+              y={164}
               textAnchor="middle"
               fontSize="10"
               fill={primary}
@@ -241,7 +241,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={172}
+              y={190}
               textAnchor="middle"
               fontSize="10"
               fill={accent}
@@ -252,9 +252,9 @@ export function FunctionCallStackDiagram({
             {/* 参数区 */}
             <rect
               x={stackX + 12}
-              y={190}
+              y={214}
               width={stackW - 24}
-              height={32}
+              height={36}
               rx="4"
               fill={bg}
               stroke={border}
@@ -262,7 +262,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={211}
+              y={237}
               textAnchor="middle"
               fontSize="10"
               fill={secondary}
@@ -274,9 +274,9 @@ export function FunctionCallStackDiagram({
             {/* main */}
             <rect
               x={stackX + 12}
-              y={240}
+              y={266}
               width={stackW - 24}
-              height={56}
+              height={64}
               rx="4"
               fill={bg}
               stroke={border}
@@ -284,7 +284,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={262}
+              y={302}
               textAnchor="middle"
               fontSize="11"
               fill={secondary}
@@ -310,7 +310,7 @@ export function FunctionCallStackDiagram({
               x={stackX + 12}
               y={100}
               width={stackW - 24}
-              height={78}
+              height={100}
               rx="4"
               fill={accent}
               opacity={0.08}
@@ -320,7 +320,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={125}
+              y={126}
               textAnchor="middle"
               fontSize="11"
               fontWeight="700"
@@ -331,7 +331,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={148}
+              y={156}
               textAnchor="middle"
               fontSize="10"
               fill={accent}
@@ -341,7 +341,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={168}
+              y={186}
               textAnchor="middle"
               fontSize="10"
               fill={secondary}
@@ -351,9 +351,9 @@ export function FunctionCallStackDiagram({
 
             <rect
               x={stackX + 12}
-              y={240}
+              y={266}
               width={stackW - 24}
-              height={56}
+              height={64}
               rx="4"
               fill={bg}
               stroke={border}
@@ -361,7 +361,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={262}
+              y={302}
               textAnchor="middle"
               fontSize="11"
               fill={secondary}
@@ -388,7 +388,7 @@ export function FunctionCallStackDiagram({
               x={stackX + 12}
               y={100}
               width={stackW - 24}
-              height={78}
+              height={100}
               rx="4"
               fill="none"
               stroke={secondary}
@@ -398,7 +398,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={140}
+              y={155}
               textAnchor="middle"
               fontSize="10"
               fill={secondary}
@@ -409,9 +409,9 @@ export function FunctionCallStackDiagram({
             {/* main 恢复 */}
             <rect
               x={stackX + 12}
-              y={248}
+              y={280}
               width={stackW - 24}
-              height={56}
+              height={64}
               rx="4"
               fill={bg}
               stroke={accent}
@@ -419,7 +419,7 @@ export function FunctionCallStackDiagram({
             />
             <text
               x={stackX + stackW / 2}
-              y={270}
+              y={306}
               textAnchor="middle"
               fontSize="11"
               fontWeight="700"
@@ -430,7 +430,7 @@ export function FunctionCallStackDiagram({
             </text>
             <text
               x={stackX + stackW / 2}
-              y={290}
+              y={328}
               textAnchor="middle"
               fontSize="10"
               fill={primary}
@@ -440,7 +440,7 @@ export function FunctionCallStackDiagram({
             </text>
 
             {/* 从 add 出来的箭头 */}
-            <text x={140} y={145} fontSize="13" fontWeight="700" fill={accent}>
+            <text x={140} y={155} fontSize="13" fontWeight="700" fill={accent}>
               返回 main
             </text>
 
@@ -456,8 +456,11 @@ export function FunctionCallStackDiagram({
           </g>
 
           {/* ── 图例 ── */}
-          <text x={marginL + 10} y={410} fontSize="11" fill={secondary} fontFamily="monospace">
-            ⬜ 栈帧 = 内存中一块区域（存形参、局部变量、返回地址）    紫色 = 当前活跃帧
+          <text x={marginL + 10} y={465} fontSize="11" fill={secondary} fontFamily="monospace">
+            ⬜ 栈帧 = 内存中一块区域（存形参、局部变量、返回地址）
+          </text>
+          <text x={marginL + 10} y={465} fontSize="11" fill={secondary} fontFamily="monospace" dx="380">
+            紫色 = 当前活跃帧
           </text>
 
           <defs>

@@ -19,28 +19,28 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
       label: "预处理",
       sub: "宏·include·条件",
       detail: "#define 展开\n#include 粘贴\n#ifdef 裁剪",
-      x: 20,
+      x: 120,
       w: 130,
     },
     {
       label: "编译",
       sub: "C → 汇编",
       detail: "语法检查\n语义分析\n生成 .s",
-      x: 170,
+      x: 270,
       w: 130,
     },
     {
       label: "汇编",
       sub: "汇编 → 机器码",
       detail: "助记符→二进制\n生成 .o\n目标文件",
-      x: 320,
+      x: 420,
       w: 130,
     },
     {
       label: "链接",
       sub: "合并·解析符号",
       detail: "多 .o + 库\n符号解析\n→ 可执行",
-      x: 470,
+      x: 570,
       w: 130,
     },
   ];
@@ -64,15 +64,15 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 220"
+          viewBox="0 0 740 220"
           role="img"
           aria-label="C 编译流水线：预处理、编译、汇编、链接四阶段"
-          className="mx-auto block h-auto w-full max-w-[640px]"
+          className="mx-auto block h-auto w-full max-w-[740px]"
         >
           <rect
             x="14"
             y="64"
-            width="80"
+            width="72"
             height="52"
             rx="6"
             fill="var(--bg)"
@@ -80,7 +80,7 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
             strokeWidth="2"
           />
           <text
-            x="54"
+            x="50"
             y="86"
             textAnchor="middle"
             fontSize="13"
@@ -91,7 +91,7 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
             .c
           </text>
           <text
-            x="54"
+            x="50"
             y="104"
             textAnchor="middle"
             fontSize="11"
@@ -99,6 +99,9 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
           >
             源码
           </text>
+          {/* 源码 → 预处理 箭头 */}
+          <line x1="86" y1="92" x2="116" y2="92" stroke={arrowStroke(0)} strokeWidth="2" />
+          <path d="M116 92 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
 
           {stages.map((s, i) => (
             <g key={s.label}>
@@ -168,17 +171,17 @@ export function PreprocessorPipelineDiagram({ step = 0 }: Props) {
             </g>
           ))}
 
-          <line x1="150" y1="92" x2="166" y2="92" stroke={arrowStroke(0)} strokeWidth="2" />
-          <path d="M166 92 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
-          <line x1="300" y1="92" x2="316" y2="92" stroke={arrowStroke(1)} strokeWidth="2" />
-          <path d="M316 92 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
-          <line x1="450" y1="92" x2="466" y2="92" stroke={arrowStroke(2)} strokeWidth="2" />
-          <path d="M466 92 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
-          <line x1="600" y1="92" x2="612" y2="92" stroke={arrowStroke(3)} strokeWidth="2" />
-          <path d="M612 92 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
+          <line x1="250" y1="92" x2="266" y2="92" stroke={arrowStroke(0)} strokeWidth="2" />
+          <path d="M266 92 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
+          <line x1="400" y1="92" x2="416" y2="92" stroke={arrowStroke(1)} strokeWidth="2" />
+          <path d="M416 92 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
+          <line x1="550" y1="92" x2="566" y2="92" stroke={arrowStroke(2)} strokeWidth="2" />
+          <path d="M566 92 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
+          <line x1="700" y1="92" x2="716" y2="92" stroke={arrowStroke(3)} strokeWidth="2" />
+          <path d="M716 92 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
 
           <text
-            x="320"
+            x="370"
             y="175"
             textAnchor="middle"
             fontSize="12"

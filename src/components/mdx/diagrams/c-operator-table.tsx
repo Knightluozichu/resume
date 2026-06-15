@@ -8,12 +8,12 @@
 export function COperatorTable() {
   const marginL = 24;
   const marginR = 24;
-  const w = 640;
+  const w = 700;
 
   // 表格参数
-  const colX = [marginL, 182, 340, 472];
-  const colW = [156, 156, 130, 110];
-  const rowH = 28;
+  const colX = [marginL, 190, 358, 520];
+  const colW = [164, 166, 160, 140];
+  const rowH = 34;
   const headerY = 50;
   const header2Y = 82;
 
@@ -59,7 +59,7 @@ export function COperatorTable() {
           viewBox={`0 0 ${w} ${totalH}`}
           role="img"
           aria-label="C语言运算符速查表：算术、关系、逻辑、赋值与自增自减运算符以及优先级规则"
-          className="mx-auto block h-auto w-full max-w-[640px]"
+          className="mx-auto block h-auto w-full max-w-[700px]"
         >
           {/* 标题 */}
           <text x={marginL} y={30} fontSize="17" fontWeight="700" fill="var(--text-primary)" fontFamily="system-ui">
@@ -73,21 +73,21 @@ export function COperatorTable() {
             cats.forEach((cat, ci) => {
               // 分类标题行（accent 背景条）
               elements.push(
-                <rect key={`cat-bg-${ci}`} x={marginL} y={curY - rowH + 2} width={w - marginL - marginR} height={rowH - 2} rx="4" fill="var(--accent)" opacity="0.1" />,
+                <rect key={`cat-bg-${ci}`} x={marginL} y={curY - rowH + 4} width={w - marginL - marginR} height={rowH - 4} rx="4" fill="var(--accent)" opacity="0.1" />,
               );
               elements.push(
-                <text key={`cat-t-${ci}`} x={marginL + 10} y={curY - 2} fontSize="13" fontWeight="700" fill="var(--accent)" fontFamily="system-ui">
+                <text key={`cat-t-${ci}`} x={marginL + 10} y={curY + 2} fontSize="13" fontWeight="700" fill="var(--accent)" fontFamily="system-ui">
                   {cat.title}
                 </text>,
               );
 
-              curY += rowH - 4;
+              curY += rowH - 2;
 
               // 表头
               const headers = ["运算符", "含义", "示例", "优先级"];
               headers.forEach((h, hi) => {
                 elements.push(
-                  <text key={`hdr-${ci}-${hi}`} x={colX[hi] + 8} y={curY + 18} fontSize="11" fontWeight="600" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">
+                  <text key={`hdr-${ci}-${hi}`} x={colX[hi] + 10} y={curY + 20} fontSize="11" fontWeight="600" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">
                     {h}
                   </text>,
                 );
@@ -95,10 +95,10 @@ export function COperatorTable() {
 
               // 分隔线
               elements.push(
-                <line key={`sep-${ci}`} x1={marginL} y1={curY + 28} x2={w - marginR} y2={curY + 28} stroke="var(--border)" strokeWidth="1" />,
+                <line key={`sep-${ci}`} x1={marginL} y1={curY + 30} x2={w - marginR} y2={curY + 30} stroke="var(--border)" strokeWidth="1" />,
               );
 
-              curY += rowH;
+              curY += rowH + 2;
 
               // 表格行
               cat.rows.forEach((row, ri) => {
@@ -109,16 +109,16 @@ export function COperatorTable() {
                   );
                 }
                 elements.push(
-                  <text key={`row-${ci}-${ri}-a`} x={colX[0] + 8} y={rowY + 19} fontSize="11" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace" textAnchor="start">{row.op}</text>,
+                  <text key={`row-${ci}-${ri}-a`} x={colX[0] + 10} y={rowY + 22} fontSize="11" fontWeight="600" fill="var(--text-primary)" fontFamily="monospace" textAnchor="start">{row.op}</text>,
                 );
                 elements.push(
-                  <text key={`row-${ci}-${ri}-b`} x={colX[1] + 8} y={rowY + 19} fontSize="11" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">{row.meaning}</text>,
+                  <text key={`row-${ci}-${ri}-b`} x={colX[1] + 10} y={rowY + 22} fontSize="11" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">{row.meaning}</text>,
                 );
                 elements.push(
-                  <text key={`row-${ci}-${ri}-c`} x={colX[2] + 8} y={rowY + 19} fontSize="11" fill="var(--text-secondary)" fontFamily="monospace" textAnchor="start">{row.example}</text>,
+                  <text key={`row-${ci}-${ri}-c`} x={colX[2] + 10} y={rowY + 22} fontSize="11" fill="var(--text-secondary)" fontFamily="monospace" textAnchor="start">{row.example}</text>,
                 );
                 elements.push(
-                  <text key={`row-${ci}-${ri}-d`} x={colX[3] + 8} y={rowY + 19} fontSize="11" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">{row.prec}</text>,
+                  <text key={`row-${ci}-${ri}-d`} x={colX[3] + 10} y={rowY + 22} fontSize="11" fill="var(--text-secondary)" fontFamily="system-ui" textAnchor="start">{row.prec}</text>,
                 );
               });
 

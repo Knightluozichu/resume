@@ -19,7 +19,7 @@ export function LinkedListDiagram({ step = 0 }: Props) {
   const secondary = "var(--text-secondary)";
   const border = "var(--border)";
   const bg = "var(--bg)";
-  const warn = "#E5B567";
+  const warn = "var(--warning)";
 
   const isActive = (n: ListStep) => step === 0 || step >= n;
   const nodeStroke = (idx: number) =>
@@ -34,9 +34,9 @@ export function LinkedListDiagram({ step = 0 }: Props) {
   };
 
   const nodes = [
-    { label: "A", x: 180 },
+    { label: "A", x: 170 },
     { label: "B", x: 320 },
-    { label: "C", x: 460 },
+    { label: "C", x: 470 },
   ];
 
   return (
@@ -73,13 +73,13 @@ export function LinkedListDiagram({ step = 0 }: Props) {
           <line
             x1={88}
             y1={104}
-            x2={148}
+            x2={138}
             y2={104}
             stroke={isActive(2) ? accent : border}
             strokeWidth="2"
           />
           <path
-            d="M148 104 l-8 -4 l0 8 z"
+            d="M138 104 l-8 -4 l0 8 z"
             fill={isActive(2) ? accent : border}
           />
           <text x={100} y={96} fontSize="10" fill={secondary}>
@@ -90,35 +90,35 @@ export function LinkedListDiagram({ step = 0 }: Props) {
             <g key={n.label}>
               <rect
                 x={n.x}
-                y={88}
-                width={100}
-                height={56}
+                y={84}
+                width={110}
+                height={66}
                 rx="8"
                 fill={bg}
                 stroke={nodeStroke(i)}
                 strokeWidth={step >= 3 || (step === 2 && i === 0) ? 2 : 1.5}
               />
-              <text x={n.x + 28} y={112} fontSize="11" fill={secondary}>
+              <text x={n.x + 30} y={108} fontSize="11" fill={secondary}>
                 data
               </text>
-              <text x={n.x + 24} y={132} fontSize="16" fontWeight="700" fill={accent}>
+              <text x={n.x + 28} y={136} fontSize="16" fontWeight="700" fill={accent}>
                 {n.label}
               </text>
-              <text x={n.x + 68} y={112} fontSize="11" fill={secondary}>
+              <text x={n.x + 74} y={108} fontSize="11" fill={secondary}>
                 next
               </text>
               {i < nodes.length - 1 && isActive(3) && (
                 <>
                   <line
-                    x1={n.x + 100}
-                    y1={116}
+                    x1={n.x + 110}
+                    y1={117}
                     x2={nodes[i + 1].x}
-                    y2={116}
+                    y2={117}
                     stroke={accent}
                     strokeWidth="2"
                   />
                   <path
-                    d={`M${nodes[i + 1].x} 116 l-8 -4 l0 8 z`}
+                    d={`M${nodes[i + 1].x} 117 l-8 -4 l0 8 z`}
                     fill={accent}
                   />
                 </>
@@ -129,8 +129,8 @@ export function LinkedListDiagram({ step = 0 }: Props) {
           {/* NULL terminator */}
           {isActive(3) && (
             <>
-              <line x1={560} y1={116} x2={592} y2={116} stroke={accent} strokeWidth="2" />
-              <text x={608} y={120} fontSize="12" fill={warn} fontFamily="monospace">
+              <line x1={580} y1={117} x2={604} y2={117} stroke={accent} strokeWidth="2" />
+              <text x={612} y={121} fontSize="12" fill={warn} fontFamily="monospace">
                 NULL
               </text>
             </>
@@ -139,16 +139,16 @@ export function LinkedListDiagram({ step = 0 }: Props) {
           {/* traverse cursor */}
           {isActive(4) && (
             <>
-              <text x={180} y={168} fontSize="11" fill={accent} fontWeight="600">
+              <text x={170} y={174} fontSize="11" fill={accent} fontWeight="600">
                 p →
               </text>
               <path
-                d="M 200 172 L 220 188 L 200 204"
+                d="M 190 178 L 210 194 L 190 210"
                 fill="none"
                 stroke={accent}
                 strokeWidth="2"
               />
-              <text x={320} y={200} textAnchor="middle" fontSize="11" fill={primary}>
+              <text x={320} y={206} textAnchor="middle" fontSize="11" fill={primary}>
                 p = p-&gt;next 逐步后移
               </text>
             </>
