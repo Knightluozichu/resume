@@ -35,7 +35,7 @@ export function UrpVsBuiltinDiagram() {
           <rect x="60" y="182" width="56" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--success)" strokeWidth="1.5" />
           <rect x="124" y="182" width="56" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--warning)" strokeWidth="1.5" />
           <rect x="188" y="182" width="56" height="24" rx="4" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="152" y="224" textAnchor="middle" fontSize="10" fill="#e57373">3× 管线配置 = 3× 开销</text>
+          <text x="152" y="224" textAnchor="middle" fontSize="10" fill="var(--danger)">3× 管线配置 = 3× 开销</text>
 
           {/* ---- URP side ---- */}
           <rect x="340" y="20" width="280" height="240" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" strokeWidth="2" />

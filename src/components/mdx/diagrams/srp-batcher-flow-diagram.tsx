@@ -61,7 +61,7 @@ export function SrpBatcherFlowDiagram() {
 
           {/* Requirements */}
           <rect x="16" y="224" width="574" height="42" rx="6" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1" />
-          <text x="24" y="246" fontSize="10" fill="#e57373">⚠ 中断 SRP Batcher 的操作：① MaterialPropertyBlock ② 不兼容的 Shader ③ 修改 Render State 参数（Blend/ZTest 等）</text>
+          <text x="24" y="246" fontSize="10" fill="var(--danger)">⚠ 中断 SRP Batcher 的操作：① MaterialPropertyBlock ② 不兼容的 Shader ③ 修改 Render State 参数（Blend/ZTest 等）</text>
           <text x="24" y="260" fontSize="10" fill="var(--text-secondary)">验证方法：Frame Debugger → 查看 Draw Call 是否有 SRP Batch 标签</text>
         </svg>
       </div>

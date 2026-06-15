@@ -57,8 +57,8 @@ export function MotionToPhotonDiagram() {
           <text x="40" y="164" fontSize="11" fontWeight="600" fill="var(--text-primary)">总延迟 = ① + ② + ③ + ④ = ≤20ms 为可接受 · ≤15ms 为舒适 · &gt;20ms 引发晕动</text>
 
           {/* Deadline warning */}
-          <rect x="20" y="186" width="610" height="24" rx="4" fill="var(--bg)" stroke="#e57373" strokeWidth="1" />
-          <text x="325" y="203" textAnchor="middle" fontSize="10" fill="#e57373">
+          <rect x="20" y="186" width="610" height="24" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1" />
+          <text x="325" y="203" textAnchor="middle" fontSize="10" fill="var(--danger)">
             ⚠ 任何阶段超时 → 错过帧提交截止 → 合成重显上一帧 → 视觉跳跃 → 用户晕
           </text>
         </svg>

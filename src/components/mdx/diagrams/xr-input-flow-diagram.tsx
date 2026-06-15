@@ -8,10 +8,10 @@ export function XrInputFlowDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 560 270"
+          viewBox="0 0 640 270"
           role="img"
           aria-label="XR 输入管线：HMD/控制器/手部追踪经 Input Subsystem 轮询后进入游戏逻辑——缓存、合并 Poll、减 Raycast 是关键优化点"
-          className="mx-auto block h-auto w-full max-w-[560px]"
+          className="mx-auto block h-auto w-full max-w-[640px]"
         >
           <text x="20" y="28" fontSize="13" fontWeight="600" fill="var(--text-primary)">XR 输入管线 · 每帧 CPU 数据流</text>
 
@@ -35,7 +35,7 @@ export function XrInputFlowDiagram() {
           <text x="235" y="92" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--accent)">Subsystem</text>
           <text x="235" y="112" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">每帧 Poll 设备</text>
           <text x="235" y="128" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">姿态·按钮·触觉</text>
-          <text x="235" y="150" textAnchor="middle" fontSize="8" fill="#e57373">开销 ≈0.3–1.5ms/帧</text>
+          <text x="235" y="150" textAnchor="middle" fontSize="8" fill="var(--danger)">开销 ≈0.3–1.5ms/帧</text>
 
           {/* Arrow to Caching */}
           <line x1="300" y1="109" x2="344" y2="109" stroke="var(--accent)" strokeWidth="1.5" />

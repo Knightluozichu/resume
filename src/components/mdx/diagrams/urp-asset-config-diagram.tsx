@@ -25,8 +25,8 @@ export function UrpAssetConfigDiagram() {
           <rect x="314" y="42" width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1.5" />
           <text x="392" y="60" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">Medium（中端机）</text>
 
-          <rect x="474" y="42" width="156" height="28" rx="4" fill="var(--bg)" stroke="#e57373" strokeWidth="1.5" />
-          <text x="552" y="60" textAnchor="middle" fontSize="11" fontWeight="600" fill="#e57373">Low（低端机）</text>
+          <rect x="474" y="42" width="156" height="28" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1.5" />
+          <text x="552" y="60" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">Low（低端机）</text>
 
           {/* Rows */}
           {[

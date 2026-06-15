@@ -54,7 +54,7 @@ export function TileBasedGpuDiagram() {
 
           {/* Bottom cost annotation */}
           <rect x="20" y="220" width="520" height="90" rx="6" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1" />
-          <text x="36" y="244" fontSize="11" fontWeight="600" fill="#e57373">每 Tile 的 Load/Store 开销</text>
+          <text x="36" y="244" fontSize="11" fontWeight="600" fill="var(--danger)">每 Tile 的 Load/Store 开销</text>
           <text x="36" y="264" fontSize="10" fill="var(--text-secondary)">Load：把像素数据从 DRAM 加载到 Tile Memory（按需操作）</text>
           <text x="36" y="280" fontSize="10" fill="var(--text-secondary)">Store：渲染完成后从 Tile Memory 写回 DRAM（逐 Tile 执行）</text>
           <text x="36" y="296" fontSize="10" fill="var(--text-secondary)">

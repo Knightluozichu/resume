@@ -65,20 +65,20 @@ export function SinglePassStereoDiagram({ mode = "single" }: Props) {
             <>
               <line x1="120" y1="76" x2="170" y2="76" stroke="var(--border)" strokeWidth="1.5" />
               <line x1="120" y1="92" x2="170" y2="108" stroke="var(--border)" strokeWidth="1.5" />
-              <rect x="170" y="52" width="120" height="40" rx="6" fill="var(--bg)" stroke="#e57373" strokeWidth="1.5" />
+              <rect x="170" y="52" width="120" height="40" rx="6" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1.5" />
               <text x="230" y="76" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
                 Pass 1 · 左眼
               </text>
-              <rect x="170" y="100" width="120" height="40" rx="6" fill="var(--bg)" stroke="#e57373" strokeWidth="1.5" />
+              <rect x="170" y="100" width="120" height="40" rx="6" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1.5" />
               <text x="230" y="124" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
                 Pass 2 · 右眼
               </text>
               <rect x="320" y="52" width="80" height="36" rx="4" fill="var(--bg)" stroke="var(--border)" />
               <rect x="320" y="100" width="80" height="36" rx="4" fill="var(--bg)" stroke="var(--border)" />
-              <text x="420" y="76" fontSize="9" fill="#e57373">
+              <text x="420" y="76" fontSize="9" fill="var(--danger)">
                 CPU 提交 ×2
               </text>
-              <text x="420" y="124" fontSize="9" fill="#e57373">
+              <text x="420" y="124" fontSize="9" fill="var(--danger)">
                 SetPass ×2
               </text>
             </>
@@ -109,7 +109,7 @@ export function SinglePassStereoDiagram({ mode = "single" }: Props) {
               <text x="36" y="198" fontSize="9" fill="var(--text-secondary)">
                 • 透明排序/后处理需分别处理两眼 · 移动端极少使用
               </text>
-              <text x="36" y="214" fontSize="9" fill="#e57373">
+              <text x="36" y="214" fontSize="9" fill="var(--danger)">
                 • 迁移到 Single Pass 可显著降 CPU 与驱动开销
               </text>
             </>
