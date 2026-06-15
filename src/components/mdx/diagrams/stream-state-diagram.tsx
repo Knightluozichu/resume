@@ -15,9 +15,9 @@ export function StreamStateDiagram() {
   const border = "var(--border)";
   const bg = "var(--bg)";
   const elevated = "var(--bg-elevated)";
-  const green = "#3FB97F";
-  const yellow = "#E5B567";
-  const red = "#E5675C";
+  const green = "var(--success)";
+  const yellow = "var(--warning)";
+  const red = "var(--danger)";
 
   // 四个状态位置（菱形排列）
   const cx = 320;

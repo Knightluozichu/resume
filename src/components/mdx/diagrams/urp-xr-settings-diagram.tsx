@@ -91,7 +91,7 @@ export function UrpXrSettingsDiagram({ highlight = "all" }: Props) {
                   </text>
                 ))}
                 {row.key === "input" && on && (
-                  <text x="380" y={row.y + 50} fontSize="10" fill="#e57373" fontWeight="600">
+                  <text x="380" y={row.y + 50} fontSize="10" fill="var(--danger)" fontWeight="600">
                     CPU ↑
                   </text>
                 )}

@@ -85,20 +85,20 @@ export function TypeConversionDiagram({ step = 1 }: Props) {
                 y1={types[3].y + types[3].h}
                 x2={types[5].x + types[5].w / 2}
                 y2={types[5].y}
-                stroke="#E5B567"
+                stroke="var(--warning)"
                 strokeWidth="2"
                 strokeDasharray="6 3"
               />
               <polygon
                 points={`${types[5].x + types[5].w / 2},${types[5].y} ${types[5].x + types[5].w / 2 - 6},${types[5].y + 8} ${types[5].x + types[5].w / 2 + 6},${types[5].y + 8}`}
-                fill="#E5B567"
+                fill="var(--warning)"
               />
               <text
                 x={types[3].x + types[3].w / 2}
                 y={types[3].y + types[3].h + 20}
                 textAnchor="middle"
                 fontSize="11"
-                fill="#E5B567"
+                fill="var(--warning)"
               >
                 ⚠ 隐式转换 可能丢精度
               </text>

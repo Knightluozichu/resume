@@ -46,10 +46,10 @@ export function ConstMemberDiagram() {
             可调用所有函数：
           </text>
 
-          <text x={36} y={148} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ isbn() const</text>
-          <text x={36} y={170} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ avg_price() const</text>
-          <text x={36} y={192} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ combine(rhs)</text>
-          <text x={36} y={214} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ print()</text>
+          <text x={36} y={148} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ isbn() const</text>
+          <text x={36} y={170} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ avg_price() const</text>
+          <text x={36} y={192} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ combine(rhs)</text>
+          <text x={36} y={214} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ print()</text>
 
           {/* 底部说明 */}
           <text x={36} y={252} fontSize="9" fill={secondary}>const 成员函数：承诺不改 this</text>
@@ -77,12 +77,12 @@ export function ConstMemberDiagram() {
             只能调 const 函数：
           </text>
 
-          <text x={350} y={148} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ isbn() const</text>
-          <text x={350} y={170} fontSize="11" fill="var(--semantic-green, #3FB97F)" fontFamily="monospace">✓ avg_price() const</text>
-          <text x={350} y={192} fontSize="11" fill="var(--semantic-red, #E5675C)" fontFamily="monospace">✗ combine(rhs)</text>
-          <text x={520} y={192} fontSize="8" fill="var(--semantic-red, #E5675C)">编译错误</text>
-          <text x={350} y={214} fontSize="11" fill="var(--semantic-red, #E5675C)" fontFamily="monospace">✗ print()</text>
-          <text x={520} y={214} fontSize="8" fill="var(--semantic-red, #E5675C)">编译错误</text>
+          <text x={350} y={148} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ isbn() const</text>
+          <text x={350} y={170} fontSize="11" fill="var(--success)" fontFamily="monospace">✓ avg_price() const</text>
+          <text x={350} y={192} fontSize="11" fill="var(--danger)" fontFamily="monospace">✗ combine(rhs)</text>
+          <text x={520} y={192} fontSize="8" fill="var(--danger)">编译错误</text>
+          <text x={350} y={214} fontSize="11" fill="var(--danger)" fontFamily="monospace">✗ print()</text>
+          <text x={520} y={214} fontSize="8" fill="var(--danger)">编译错误</text>
 
           {/* 底部说明 */}
           <text x={350} y={252} fontSize="9" fill={secondary}>只读承诺升级：const 对象 →</text>

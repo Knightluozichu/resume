@@ -79,27 +79,27 @@ export function AccessControlDiagram() {
 
           <defs>
             <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-              <polygon points="0,1 6,4 0,7" fill="var(--semantic-green, #3FB97F)" />
+              <polygon points="0,1 6,4 0,7" fill="var(--success)" />
             </marker>
             <marker id="arrowRed" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-              <polygon points="0,1 6,4 0,7" fill="var(--semantic-red, #E5675C)" />
+              <polygon points="0,1 6,4 0,7" fill="var(--danger)" />
             </marker>
           </defs>
 
           {/* 调用方 → public */}
-          <line x1={120} y1={308} x2={200} y2={308} stroke="var(--semantic-green, #3FB97F)" strokeWidth="1.5" markerEnd="url(#arrowGreen)" />
-          <text x={160} y={302} textAnchor="middle" fontSize="9" fill="var(--semantic-green, #3FB97F)">
+          <line x1={120} y1={308} x2={200} y2={308} stroke="var(--success)" strokeWidth="1.5" markerEnd="url(#arrowGreen)" />
+          <text x={160} y={302} textAnchor="middle" fontSize="9" fill="var(--success)">
             .isbn()
           </text>
 
           {/* 调用方 → private（被阻止） */}
-          <line x1={120} y1={320} x2={200} y2={320} stroke="var(--semantic-red, #E5675C)" strokeWidth="1.5" markerEnd="url(#arrowRed)" />
-          <text x={160} y={332} textAnchor="middle" fontSize="9" fill="var(--semantic-red, #E5675C)">
+          <line x1={120} y1={320} x2={200} y2={320} stroke="var(--danger)" strokeWidth="1.5" markerEnd="url(#arrowRed)" />
+          <text x={160} y={332} textAnchor="middle" fontSize="9" fill="var(--danger)">
             .bookNo
           </text>
 
           {/* 编译错误标注 */}
-          <text x={210} y={334} fontSize="9" fill="var(--semantic-red, #E5675C)" fontFamily="monospace">
+          <text x={210} y={334} fontSize="9" fill="var(--danger)" fontFamily="monospace">
             ✗ error: private member
           </text>
 
