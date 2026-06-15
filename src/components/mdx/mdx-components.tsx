@@ -367,6 +367,7 @@ import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram
 import { XmlDrawableTypesDiagram } from "./diagrams/xml-drawable-types-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
 import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
+import { LaunchModeDiagram } from "./diagrams/launch-mode-diagram";
 import { TestPyramidDiagram } from "./diagrams/test-pyramid-diagram";
 import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
@@ -888,6 +889,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   XmlDrawableTypesDiagram,
   DebugLoopDiagram,
   SdkVersionAxisDiagram,
+  LaunchModeDiagram,
   TestPyramidDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
