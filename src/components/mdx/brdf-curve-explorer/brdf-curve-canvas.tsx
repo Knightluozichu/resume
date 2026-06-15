@@ -142,8 +142,6 @@ export default function BrdfCurveCanvas() {
     ctx.lineWidth = 0.5;
 
     // Horizontal grid lines
-    const yTicks = yMax <= 2 ? [0, 0.25, 0.5, 0.75, 1.0] : [0, 0.5, 1.0, Math.round(yMax * 0.5 * 10) / 10, Math.round(yMax * 10) / 10];
-    // Compute nice y ticks
     const niceYTicks: number[] = [];
     const yStep = yMax <= 1.5 ? 0.25 : yMax <= 3 ? 0.5 : yMax <= 6 ? 1 : 2;
     for (let v = 0; v <= yMax; v += yStep) {
