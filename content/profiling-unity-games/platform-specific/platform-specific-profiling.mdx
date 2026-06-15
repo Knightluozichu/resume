@@ -3,438 +3,396 @@ title: 平台专项 Profiling
 type: C
 section: 平台专项
 order: 1
-description: Console/PC/Mobile/XR/Web 各平台 Profiling 工具链与差异——选对工具、读对自己平台的数据。
+description: Console/PC/Mobile/XR/Web 各平台的工具链、配置与 Profiling 差异——选对工具、读对自己平台的数据。
 demo: true
 math: false
 draft: true
 sourceUrl: ""
 ---
 
-{/* C 实战型：平台专项 Profiling —— 4 个知识点，CodeTabs + diagram；3-4 个 diagram；≥10 道复习题。
-    §2 零术语；DESIGN CSS 变量；Attribution 在章末。 */}
+{/* C 实战型章：核心是代码实现。主 viz = 示意图 + Stepper + 代码对照。
+按 chapter-spec §〇：概念讲解可压缩、代码对照为重心、主 Demo 形态示意图/Stepper。
+知识点清单（动笔先行、每项配 viz）：
 
-{/* 1. 学习目标（spec §一）：C 型必含「能改出某效果」一条；末条为可当场自测的检验问题。 */}
+1. 五平台工具总览（Profiler 连接方式差异）→ PlatformProfilingOverviewDiagram (SVG 全貌)
+2. Android/iOS 远程 Profiler 连接 → RemoteProfilerDiagram (SVG 分步) + 代码对照 (CodeTabs)
+3. RenderDoc / Xcode Instruments / Perfdog → 代码对照 + Callout 说明
+4. Web (Chrome DevTools) → 代码对照 (CodeTabs)
+5. 平台配置清单 → Stepper (分步图示)
+   Term 高亮术语：Development Build、Autoconnect Profiler、ADB 端口转发、
+   RenderDoc、Xcode Instruments、Perfdog、Chrome DevTools Performance 面板、帧预算 → 均进章末 Glossary */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；2–3 条可检验动词；末条检验问题。 */}
 
 <Objectives>
-
-- 能列举 Console/PC/Mobile/XR/Web 五个平台的 Profiling 工具链，并说出它们各自针对什么平台
-- 能独立完成 Unity Profiler 远程连接到 Android/iOS 设备的全流程配置
-- 能用至少一种第三方工具（RenderDoc/Perfdog/Xcode Instruments/Chrome DevTools）抓取并解读一帧数据
-
+- 能独立在至少两个平台（Android + PC 或 iOS + Web）上完成从「连接 Profiler」到「抓取采样数据」的完整链路
+- 能改出「根据目标平台选对工具链」的配置脚本——不是靠记忆背工具名，而是理解每个工具看什么、什么场景用哪个
+- 能回答：你在做一个 PC+Mobile+Console 同步上线的项目——各平台分别用什么工具链定位 GPU 瓶颈？
 </Objectives>
 
-{/* 2. 直觉引入（spec §二）：≤3 段、零术语、回答「解决什么问题/没有它会怎样」。 */}
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语（术语最早第三节）；
+回答「解决什么问题」「没有它会怎样」；类比用工厂流水线。 */}
 
-## 每台机器都在演自己的戏
+## 一台设备一个性格
 
-你辛辛苦苦优化好了一个场景——PC 上跑得飞快，帧率稳在 120。可玩家反馈说手机端卡成幻灯片，还有人说 Web 端加载要等半分钟。
+你在开发机上写好游戏了，电脑上跑 60 帧稳稳的。推到手机上装好打开——帧率不到 20。不是你的代码写错了，是你写代码的那台电脑和玩家手里的手机完全是两个世界里的设备。
 
-道理很简单：每台设备都是一台不同的「舞台」——PC 有独立显卡、大内存；手机靠一块小芯片连 CPU 和 GPU 挤在一起散热；游戏机硬件完全固定但工具链封闭；眼镜戴在脸上对帧率比手机还敏感；网页端跑在浏览器沙箱里，能用的资源最小最受限。
+电脑有独立显卡、几十 GB 内存、强力散热风扇；手机只有一小块芯片贴在玻璃后盖上——没风扇、只有巴掌大的散热区域。更复杂的是：连电脑用的工具到了手机上根本打不开了——手机的调试端口不一样、浏览器和游戏主机上的更不一样。每换一个平台就像到了一个说着不同语言的城市——你必须学会用这个平台的工具说话。
 
-**你没有一种工具能通吃这五个舞台。** 每个平台各有一套数据采集方式，换平台不看数据、靠猜——百分之百会出问题。这一章就是帮你把五个平台的工具链和标志性套路梳理清楚。
+这一章教你五套平台的工具语言：电脑、手机、游戏主机、头戴设备和网页——每个平台的工具有什么、怎么把调试线接过去、怎么读出性能数据。读完你会发现不同平台的性能分析不是「同样的操作搬到不同机器上」——而是每一步都不一样。
 
+{/* 3. 概念讲解（spec §三）：C 实战型可把「是什么」压缩至一段、篇幅让给第六节代码对照。
+五个概念：五平台工具全览 / Android+iOS 远程连接 / RenderDoc+Xcode+Perfdog / Web DevTools / 平台配置清单 */}
 
-{/* 3. 概念讲解（spec §三）：C 型压缩篇幅给第六节代码；每概念配图。共 4 个知识点。 */}
+## 第一个概念：五平台，五种连法
 
-## 知识点一：五平台差异总览
-
-先把五个平台的标志性工具和典型瓶颈画在一张图上：
+在开始动手连设备之前，先看一张全景图——五个平台的 Profiling 工具链概览：
 
 <PlatformProfilingOverviewDiagram />
 
-再拆开看每个平台的独特之处：
+每一条横栏代表一个平台，栏内从上到下依次是：连接方式、推荐的分析工具、该平台最关键的差异。先看一分钟，心里对「五个平台五个性格」有个整体印象。接下来逐平台展开讲。
 
-- **Console（PS5 / Xbox / Switch）**：硬件完全固定，调试工具由厂商提供（SN Systems / PIX / NintendoTargetManager）。<Term def="一种调试时通过 USB/网络把 PC 上的分析工具连接至运行中的游戏机的方式，无需游戏机本地安装完整工具链。">远程调试</Term> 是标配——PC 上跑一套 Profiler 工具，通过网线接到开发机上的游戏。帧预算极度严格（PS5/Xbox Series 通常要求 60 FPS @ 16.67ms 预算内有足够的 CPU/GPU 并行空间）。
-- **PC**：最开放的平台。Unity Profiler 直接本地跑；RenderDoc 可以逐帧截取、逐 Draw Call 回放；显卡厂商也各有关键工具（NVIDIA NSight / AMD Radeon GPU Profiler / Intel GPA）。
+## 第二个概念：把 Profiler 搬到手机上——Android 和 iOS 的远程连接
 
-- **Mobile（Android / iOS）**：**省电比绝对值更重要**。Unity Profiler 要通过 ADB（Android）或 USB（iOS）远程连；第三方工具 Perfdog 不需要连 Unity，直接跑在手机上抓系统级数据（CPU/GPU/温度/FPS 同时看）。**最大的坑**：开发机上测的数据和手机上测的数据往往不在一个量级——移动端必须实机验证。
-
-- **XR（VR / MR 眼镜）**：帧率就是体验生命线——低于 72 FPS 就可能导致晕动症。所有 XR 平台都强制 VSync 且帧预算极紧（Quest 的 TimeWarp 管道在 CPU 侧必须赶在 vBlank 前完成）。工具链上 Oculus 用 OVR Metrics Tool，OpenXR 依赖各 SDK 内置的 Performance HUD。
-
-- **Web（WebGL）**：运行在浏览器沙箱里，无法调用系统 Profiler。唯一靠谱的工具是 Chrome DevTools 的 Performance 面板 + Memory 面板。与原生最大的区别：受浏览器主线程调度干扰，帧时间图中几乎总能看到「不是你的代码在跑，而是浏览器 GC 在跑」的尖刺。
-
-## 知识点二：Unity Profiler 远程连接（Android / iOS）
-
-Unity 自带 Profiler 是所有平台都能用的入口工具。PC 上直接打开即可，移动端需要先建立连接。
-
-### Android 端连接步骤
-
-1. 在 Unity 里勾选 **Build Settings → Development Build** 和 **Autoconnect Profiler**
-2. 用 USB 连接手机，确认 `adb devices` 能看到设备
-3. 手机打开 **USB 调试**
-4. Build & Run 到手机上
-5. Unity 的 Profiler 窗口（Window → Analysis → Profiler）会自动检测设备并连接
-
-```csharp
-// 如果要在代码里控制 Profiler 状态（只在 Development Build 下有效）
-using UnityEngine.Profiling;
-
-// 开启 CPU Profiler 采样
-Profiler.enabled = true;
-
-// 只在你关注的帧范围内记录
-Profiler.BeginSample("MyCustomMarker");
-// ... 你需要测量的代码
-Profiler.EndSample();
-```
-
-<Callout type="warn">
-  Android 连接失败的常见原因（按概率排序）：① USB 线只支持充电不支持数据传输；
-  ② 没开 Development Build；③ ADB 未授权（手机上弹窗点了拒绝）；
-  ④ 手机和 PC 不在同一局域网（WiFi 模式）。
-</Callout>
-
-### iOS 端连接步骤
-
-iOS 连接比 Android 多一个门槛——需要 Xcode 作为中转：
-
-```csharp
-// iOS 上 Unity Profiler 的额外要求
-// 1. Build Settings 中 Target SDK 设为 "Device SDK"
-// 2. 在 Xcode 中打开导出的 .xcodeproj
-// 3. 用 USB 连 iPhone，Xcode 选中设备
-// 4. Build & Run，Unity Profiler 会自动发现设备
-```
-
-<Callout type="tip">
-  iOS 端 Profiler 连接的标志性问题是**不显示设备**——
-  通常是因为 Xcode 未信任开发者证书或手机未解锁。确保 iPhone 亮屏且已解锁再用
-  USB 连接。
-</Callout>
+在 <Term def="一种内置 Profiler 连接支持、但不做 Release 级优化的特殊构建版本。语法接近 Release 构建但允许 Editor 的 Profiler 远程连接，用于在真机上做性能分析。">Development Build</Term> 上你已经勾了 <Term def="Development Build 的一项构建设置：勾选后设备运行时会自动搜索并连接同局域网内的 Editor Profiler，省去手动输入 IP 地址的步骤。">Autoconnect Profiler</Term>，但 Android 和 iOS 的底层连接方式完全不同——不是「都插根线就行」。
 
 <RemoteProfilerDiagram />
 
-## 知识点三：第三方工具——各平台的不二之选
+**Android** 走 ADB 端口转发：把真机 Android 设备和电脑之间的调试数据通过 USB 线或 WiFi 用一个特定端口（默认 55000）打通。插入 USB 线后在终端跑一条命令就把设备的数据流导到 Editor 了：
 
-Unity Profiler 是第一步，但要看到 GPU 的逐帧细节、抓系统级功耗温度、或是 Web 端的内存快照——必须靠第三方工具。
-
-### RenderDoc：逐帧截取与逐 Draw Call 回放
-
-<Term def="开源 GPU 帧调试器，能在 PC 上截取任意一帧的完整渲染状态——所有 Draw Call、所有 RenderTexture 中间结果、所有 Shader 输入/输出——逐步骤回放。">RenderDoc</Term> 是 GPU 调试的瑞士军刀。它通过注入渲染管线来截取一帧的全部状态，你可以单独查看某一时刻某个 RenderTexture 里画的是什么，逐个 Draw Call 回放、看每步加减了什么。
-
-适合平台：**PC、Console（开发机）**。不适合 Mobile（需要 root 或特殊驱动签名）。
-
-```csharp
-// 在 Unity 代码里嵌入 RenderDoc 集成：
-// 按钮按一次就自动截取当前帧并保存为 .rdc 文件
-if (Input.GetKeyDown(KeyCode.F12)) {
-    // RenderDoc 集成通常在构建中以插件形式调用
-    // 等价命令行：renderdoccmd capture -w <进程名>
-    Debug.Log("RenderDoc capture triggered (需要 RenderDoc 处于运行状态)");
-}
+```bash
+# Android：ADB 端口转发——把设备上的 Profiler 端口
+# 映射到 PC 的 55000 端口
+adb forward tcp:55000 tcp:55000
 ```
 
-### Perfdog：移动端的最强系统级监视器
+之后在 Unity Editor 的 Profiler 窗口顶部的 Active Profiler Target 下拉里选择 `AndroidPlayer`——Profiler 数据开始传输。
 
-<Callout type="tip">
-  不需要修改 Unity 工程！Perfdog 是一个独立 app，装在手机上后台跑，
-  同时记录 FPS、CPU/GPU 占用率、功耗（mW）、电池电流（mA）、温度——全部实时。
-  导出 CSV 后可以在 PC 端分析历史趋势。
+如果 Autoconnect 失败，手动输入设备 IP：
+
+```bash
+# 查看设备 IP（在 WiFi 连接下）
+adb shell ip addr show wlan0
+
+# Profiler 窗口 → Active Profiler Target → 输入
+# 192.168.x.x:55000
+```
+
+**iOS** 走和 Android 完全不同的路径：iOS 设备必须通过一台 Mac 电脑中转——用 USB 线连 Mac、在 Xcode 的 Devices 窗口里确保设备「可被发现」，Unity Editor 同一台 Mac 上的 Profiler 会自动发现这个设备。iOS 设备无法直接和 Windows Editor 建立 Profiler 连接。
+
+<Callout type="warn">
+  两个设备不能在同一个 Profiler 窗口同时连接——一个 Profiler 窗口只能同时监听一个 Target 设备。如果要同时对比两台设备的数据，每台各录一段 .data 文件后导入 Profile Analyzer 做离线对比。
 </Callout>
 
-适合平台：**Android、iOS**。尤其适合排查间歇性卡顿——因为它在后台持续记录，不漏掉任何一帧。
+连接后的第一步验证——在 Profiler 窗口看顶部帧率是否和真机上一致、CPU Usage 色条是否在变化。确认数据在流了再开始真正的分析。
 
-### Xcode Instruments：iOS 专属系统底层工具
+## 第三个概念：三个独立工具——RenderDoc、Xcode Instruments、Perfdog
 
-iOS 开发绕不开它——可以追踪线程调度、内存分配调用栈、Metal/GPU 性能计数器。
+Unity Profiler 告诉你「这帧 GPU 花了 14ms」——但不告诉你这 14ms 花在哪几个 Draw Call 上、每个 Draw Call 的 Shader 在做什么、CPU 在同时跑什么。这些是 Platform-Specific 工具的领地。
 
-适合平台：**iOS 独占**。
+<Term def="开源的跨平台 GPU 帧调试器（支持 Vulkan/D3D/Metal/GLES）。捕获单帧所有 Draw Call、查看每个 Draw Call 的输入/输出纹理、Shader 编译结果、资源绑定——逐 Draw 分析 GPU 热点。">RenderDoc</Term> 是通用的 GPU 帧逐帧分析工具——Android Vulkan/GLES、PC DirectX/Vulkan、甚至 Switch 都支持（iOS 用 Xcode 自带的 GPU Frame Capture 代替）。工作流是：用 Unity Profiler 发现 GPU Bound → 用 RenderDoc 捕获那一帧 → 逐 Draw Call 展开看 GPU Duration、输入纹理、Shader 汇编代码。
 
-### Chrome DevTools：WebGL 的唯一出路
+```bash
+# RenderDoc 捕获步骤（以 Android Vulkan 为例）
+# ① 在 Unity 中 Build Android Development Build（勾选 Vulkan）
+# ② 在 RenderDoc 的 Launch Application 里指向 apk
+# ③ 设备上运行游戏、RenderDoc 里按 F12 捕获一帧
+# ④ 展开 Event Browser 找到 GPU Duration 最高的 Draw Call
+```
 
-WebGL 游戏跑在浏览器里，无法调 Unity Profiler。Chrome DevTools 的 Performance 面板能录帧时间线、Memory 面板能拍堆快照——这是 Web 端唯二靠谱的分析入口。
+每个慢 Draw Call 展开后可以看：输入纹理（检查分辨率是否过大）、Shader 汇编（检查采样次数和分支）、输出 Render Target 的最终效果——这是 Unity Profiler 完全看不到的深度。
 
-<ToolComparisonDiagram />
+<Term def="Xcode 内置的性能分析套件：提供系统级 CPU 能耗等级、GPU 能耗报告、Metal 时间线、整个进程的物理内存压力（PSS/RSS）和温度状态——Unity Profiler 看不到的系统外部指标。">Xcode Instruments</Term> 是 iOS 端必备的补充——Unity Profiler 看引擎内部的 CPU/GPU 模块，Instruments 看系统外部的整体功耗、内存压力和温度状态。配合使用能回答：「引擎内部 GPU 只有 8ms，为什么系统说你的 GPU 已经热得快降频了？」
 
-## 知识点四：平台配置清单
+<Term def="腾讯出品的移动端性能测试工具：通过系统级采集直接读 FPS、CPU/GPU 频率、温度、电流、功耗曲线——无需 Development Build，Release 包直接测。与 Unity Profiler 互补。">Perfdog（性能狗）</Term> 不需要 Development Build——Release 构建的包就能测，更接近玩家真实体验。Perfdog 看 FPS 曲线、CPU/GPU 频率、温度、电流和功耗——这些 Unity Profiler 完全看不到。
 
-一个项目导出到五个平台时，至少应该配好这些设置。下面是一个逐步骤对照清单：
+三个工具各看一层——RenderDoc 逐 Draw 看 GPU 内部、Xcode Instruments 看系统级功耗和内存压力、Perfdog 看整体温度和耗电。一个完整的平台性能分析流程通常是三把刀并用。
+
+## 第四个概念：Web 平台——浏览器里找瓶颈
+
+WebGL 构建运行在浏览器的沙箱里——Unity Editor 无法通过常规网络协议与浏览器内的 WebAssembly 运行时建立 Profiler 连接。但浏览器自带的开发者工具就是一套强大的性能分析工具——不需要额外安装任何东西。
+
+<Term def="Chrome 浏览器自带的性能分析面板：录制 Web 页面的帧时间线（FPS、JS/WASM 调用耗时、GPU 光栅化时间）——是 WebGL 游戏性能分析的核心工具。">
+  Chrome DevTools Performance 面板
+</Term>是 WebGL 游戏分析的唯一入口：
+
+1. 打开 Chrome → 按 F12 打开 DevTools → 切到 **Performance** 标签
+2. 点 Record（圆形按钮）→ 在 WebGL 游戏里正常操作 5-10 秒 → 点 Stop
+3. 看 FPS 曲线（绿色横线）、JS/WASM 调用火焰图（每个函数的 Self Time）、GPU 光栅化耗时
+
+```javascript
+// JavaScript Console 里手动打标记——在时间线上标关键节点
+// 在 Unity 中通过 Debug.Log 输出到 Console，配合 Performance 时间线找对应区间
+console.time("BattleLoop");
+// ... 战斗逻辑 ...
+console.timeEnd("BattleLoop");
+```
+
+<Callout type="tip">
+  DevTools 的 **Memory** 面板可以抓堆快照（Heap Snapshot）做前后对比——在进入场景前抓一份、场景退出后抓一份，看哪些对象没被回收。这就是 WebGL 版的「Memory Profiler 快照对比」，最适用于排查 Web 端的内存泄漏。
+</Callout>
+
+**Rendering 面板**（DevTools → 三个点 → More Tools → Rendering）是 WebGL 端另一个重要工具——可以实时看到 FPS 仪表、Paint Flashing（高亮每帧重绘区域）、Layer Borders（看哪些元素被 GPU 合成层）。
+
+## 第五个概念：平台配置清单——上线前必须逐项检查
 
 <Stepper>
-  <Step title="Console 平台配置">
-    ① 设好帧预算（PS5/Xbox Series：16.67ms；Switch：33.33ms 手持模式）。
-    ② 关闭 Console 的 VSync（由系统层面已强制）。
-    ③ 用厂商工具（SN Systems / PIX）锁定 GPU Profile 模式。
-    ④ 用 Burst Compiler + Jobs 系统榨 CPU 的 SIMD 并行。
+  <Step title="① 在 Build Settings 启用对应平台的 Development Build">
+    File → Build Settings → 选目标平台（Android / iOS / PC Standalone / WebGL）→ 勾选 Development Build。Console 平台（PS5/Xbox/Switch）需要在对应 SDK 里配置 DevKit 连接，不走 Unity 的 Build Settings。
   </Step>
-  <Step title="PC 平台配置">
-    ① QualitySettings 里开最高档，默认 targetFrameRate = -1（让玩家自行限帧）。
-    ② 如果有 RenderDoc 依赖，构建时带上 Developer Build 模式。
-    ③ 用 `SystemInfo.graphicsDeviceType` 区分 Vulkan / DX12 / Metal 后端。
+  <Step title="② 确认真机 Profiler 连接方式并验证数据流通">
+    Android：USB ADB 端口转发或 WiFi 同网段 → Profiler 窗口选 AndroidPlayer → 检查 CPU Usage 色条是否在变。iOS：USB 连 Mac → Xcode Devices 确认可发现 → Profiler 窗口选 iOSPlayer。Web：打开 DevTools Performance 面板 → Record 看时间线。
   </Step>
-  <Step title="Mobile 平台配置">
-    ① 强制 targetFrameRate = 30（见第 6 章）。
-    ② 关闭 MSAA、把 Render Scale 拉到 0.7。
-    ③ 关闭 VSync。
-    ④ 加上温控退让策略。
+  <Step title="③ 检查各平台的帧预算是否在目标范围内">
+    不同平台的帧预算完全不同：PC 通常 60FPS（16.67ms）、移动端可 30/60FPS（16/33ms）、XR 必须 ≥72FPS（≤13.9ms）、Console 需锁定在目标帧率且每帧必须在预算内（认证强制要求）。用 Profiler 看每帧的 CPU Total + GPU Total 时间，确认加起来在预算范围内。
   </Step>
-  <Step title="XR 平台配置">
-    ① `Application.targetFrameRate` = 平台刷新率（Quest 72/80/90/120，Vision Pro 90/96/100）。
-    ② 强制开启 Single-Pass Instanced 渲染（每眼不再重复算一帧）。
-    ③ 打开 Foveated Rendering（只把视点中心区域高分辨率渲染）。
-    ④ 调 TimeWarp 管线：CPU 侧必须在 vBlank 前完成提交。
-  </Step>
-  <Step title="Web 平台配置">
-    ① 关闭 Development Build（WebGL 上严重影响大小和速度）。
-    ② 用 `PlayerSettings.WebGL.emscriptenArgs` 加 `-s ASSERTIONS=0` 祛除断言检查。
-    ③ 加载完成后用 Chrome DevTools → Performance 录制 5 秒帧时间线，找尖刺。
+  <Step title="④ 跑一次同场景、同操作的全平台基线录制并存档 .data">
+    在所有目标平台上各跑一次相同的操作（如「进场景 → 跑 5 秒 → 放技能」），每台平台录一份 .data 文件存档。这在后续做「同场景下不同平台的性能对比」时是唯一可靠的比对基准——不同平台的数字不具有天然的可比性（PC 的 10ms 和移动端的 10ms 含义完全不同）。
   </Step>
 </Stepper>
 
-{/* 4. 数学推导（spec §四）：math:false，跳过。 */}
+{/* 4. 数学推导：math:false，整节删除。 */}
 
-{/* 5. 交互 Demo（spec §五）：C 型用一个平台数据对比 Demo；
-    可切换五个平台看各自的帧预算饼图 + Profiler 界面的标志性差异。 */}
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为示意图/Stepper。猜一猜引导。 */}
 
-## 五个平台，五组数据
+## 实战：五平台一次完整的 Profiling 流程
 
-下面这个 Demo 让你在五平台之间切换，直观对比各自的帧预算分配和典型瓶颈来源。
+> 猜一猜：你在 PC 上开发 Unity 游戏、发现 GPU Time 很高——下一步用什么工具深入分析 GPU 瓶颈？答案在 §八练习里自测。
 
-> 猜一猜：拖动平台切换器，从 PC 切到 Mobile，帧预算中「阴影渲染」那一块的占比会发生什么变化？再切到 Web——你会看到一个叫「浏览器开销」的额外板块冒出来。
+<Stepper>
+  <Step title="① 发现瓶颈：从 Unity Profiler 到平台工具">
+    在 PC 上用 Unity Profiler 录一段 GPU Bound 场景的数据——发现 Rendering 模块的 GPU 时间占整帧 60%。记住这一帧的帧号——下一步 RenderDoc 会精确捕获这一帧。
+  </Step>
+  <Step title="② GPU 深度分析：RenderDoc 捕获单帧">
+    用 RenderDoc 连接 Unity 进程（PC 端直接 Launch Application 指向 .exe），在相同场景下按 F12 捕获一帧。展开 Event Browser 按 GPU Duration 降序——找到 Duration 最高的 3 个 Draw Call。展开每个慢 Draw：看 Fragment Shader 的汇编（是否有大量纹理采样、复杂分支）、输入纹理分辨率（是否不必要的大图）、输出 Render Target 格式（是否浮点 RT 带来额外带宽）。
+  </Step>
+  <Step title="③ 移动端验证：Perfdog 看温度与能耗">
+    优化完 GPU 热点后同步推 Mobile 包——用 Perfdog 录 10 分钟对比优化前后的 GPU 频率曲线、温度曲线和耗电量。PC 上 GPU 时间从 12ms 降到 7ms——在移动端可能表现为：GPU 频率从 500MHz 降到 350MHz，芯片温度降了 5°C，10 分钟省了 200mAh 电量。这些数字 Unity Profiler 拿不到，只有 Perfdog 能告诉你。
+  </Step>
+  <Step title="④ WebGL 端录制性能帧时间线">
+    Web 端打开 Chrome DevTools Performance 面板，在相同场景录 5 秒——看 FPS 曲线是否平稳、有无明显的 Long Task（>50ms 的黄色块）打断帧率。有 Long Task 就展开看调用栈定位是哪段 WASM 调用/GC 暂停导致的。Memory 面板抓前后快照对比——检查场景切换后是否存在 Managed 对象未回收的情况。
+  </Step>
+</Stepper>
 
-<PlatformProfilingDemo
-  caption="五平台帧预算对比：切换平台标签查看各平台一帧的 CPU/GPU 时间分配。注意 Mobile 平台 GPU 时间占比远小于 PC（因为降了分辨率和画质）；Web 平台总时间最长（因为多了一层浏览器沙箱开销）。"
-/>
+{/* 6. 代码对照（spec §六）：C 型重心本节，逐段讲解覆盖 ≥80% 关键代码。 */}
 
-{/* 6. 代码对照（spec §六）：C 型重心，覆盖关键代码；单块 ≤30 行；两 Tab 同一逻辑段。 */}
+## 关键代码：平台自动检测与工具链路配置
 
-## 平台检测与自动配置
+### Android ADB 连接自动检查脚本
 
-跨平台项目中，第一个要写的代码就是平台检测和配置切换。下面是三个场景的核心实现。
+每次插设备连 Profiler——如果每次都要手动敲 `adb forward` 然后输 IP 再去 Profiler 窗口选——重复操作非常低效。下面这段 Editor 脚本自动做设备检测和端口转发：
 
-### 场景一：构建时排除不兼容代码
+<CodeTabs>
+  <Tab label="✓ Editor 脚本自动 ADB 连接">
+
+```csharp
+using UnityEditor;
+using System.Diagnostics;
+
+public static class AndroidProfilerConnector
+{
+    [MenuItem("Tools/Profiler/Auto Connect Android")]
+    public static void AutoConnect()
+    {
+        // ① 检查 ADB 是否可用
+        var check = Process.Start(new ProcessStartInfo
+        {
+            FileName = "adb",
+            Arguments = "devices",
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+        string output = check.StandardOutput.ReadToEnd();
+        check.WaitForExit();
+
+        // ② 确认至少有一台设备在线
+        if (!output.Contains("\tdevice"))
+        {
+            EditorUtility.DisplayDialog("No Device",
+                "没有检测到 Android 设备——请用 USB 连接并开启调试", "OK");
+            return;
+        }
+
+        // ③ 端口转发：把设备的 Profiler 端口接到 PC 55000
+        Process.Start("adb", "forward tcp:55000 tcp:55000")
+              .WaitForExit();
+
+        // ④ 提示用户在 Profiler 窗口选 AndroidPlayer
+        EditorUtility.DisplayDialog("Connected",
+            "ADB 端口已转发。请在 Profiler 窗口顶部 Active Target 选 AndroidPlayer",
+            "OK");
+    }
+}
+```
+  </Tab>
+  <Tab label="✗ 手动重复步骤（低效）">
+
+```bash
+# 每次都要手动敲这 4 条命令
+adb devices                          # 检查设备在不在
+adb forward tcp:55000 tcp:55000     # 端口转发
+adb shell ip addr show wlan0        # 查 IP（仅 WiFi）
+# 然后去 Profiler 窗口手动选 Target 输 IP——太慢了
+```
+  </Tab>
+</CodeTabs>
+
+### 平台自识别与工具选择器
+
+当项目同时发布多个平台时——在代码里写一套工具选择逻辑，根据当前构建目标平台自动选对工具链路：
 
 ```csharp
 using UnityEngine;
-
-public class PlatformSetup : MonoBehaviour {
-    void Awake() {
-#if UNITY_STANDALONE || UNITY_EDITOR
-        // PC/Editor：开全特效
-        QualitySettings.SetQualityLevel(5);
-        Application.targetFrameRate = -1;
-#elif UNITY_ANDROID || UNITY_IOS
-        // 移动端：按 GPU 自动选档
-        QualitySettings.SetQualityLevel(
-            SystemInfo.graphicsDeviceName.Contains("Adreno 7") ? 3 : 1
-        );
-        Application.targetFrameRate = 30;
-#elif UNITY_WEBGL
-        // Web：最低画质、强制 30FPS
-        QualitySettings.SetQualityLevel(0);
-        Application.targetFrameRate = 30;
-#elif UNITY_XBOXONE || UNITY_PS5 || UNITY_GAMECORE_SCARLETT
-        // Console：最高画质、让平台管理帧率
-        QualitySettings.SetQualityLevel(5);
+#if UNITY_EDITOR
+using UnityEditor;
 #endif
+
+public static class PlatformProfilingHelper
+{
+    public enum Platform { PC, Android, iOS, Console, Web }
+
+    // 根据编译目标自动判断当前平台
+    public static Platform CurrentPlatform
+    {
+        get
+        {
+#if UNITY_STANDALONE_WIN || UNITY_STANDALONE_OSX || UNITY_STANDALONE_LINUX
+            return Platform.PC;
+#elif UNITY_ANDROID
+            return Platform.Android;
+#elif UNITY_IOS
+            return Platform.iOS;
+#elif UNITY_PS5 || UNITY_GAMECORE_XBOXSERIES || UNITY_SWITCH
+            return Platform.Console;
+#elif UNITY_WEBGL
+            return Platform.Web;
+#else
+            return Platform.PC;
+#endif
+        }
+    }
+
+    // 获取当前平台推荐的 GPU 分析工具
+    public static string RecommendedGpuTool()
+    {
+        return CurrentPlatform switch
+        {
+            Platform.PC      => "RenderDoc 或 NSight Graphics（N卡）",
+            Platform.Android => "RenderDoc（Vulkan/GLES）",
+            Platform.iOS     => "Xcode GPU Frame Capture（Metal）",
+            Platform.Console => "平台 SDK 自带工具（PIX/Razor）",
+            Platform.Web     => "Chrome DevTools Rendering 面板",
+            _                => "Unity Profiler Rendering 模块",
+        };
+    }
+
+    // 获取当前平台推荐的整体性能分析方案
+    public static string RecommendedPipeline()
+    {
+        return CurrentPlatform switch
+        {
+            Platform.PC => "Unity Profiler → RenderDoc → Profile Analyzer",
+            Platform.Android => "Perfdog（系统级）→ Unity Profiler Remote → RenderDoc",
+            Platform.iOS => "Xcode Instruments → Unity Profiler → Metal GPU Frame Capture",
+            Platform.Console => "DevKit Profiler → SDK 专用 GPU 工具",
+            Platform.Web => "Chrome DevTools Performance → Memory → Rendering",
+            _ => "Unity Profiler",
+        };
     }
 }
 ```
 
-<Callout type="warn">
-  预处理指令 `#if UNITY_ANDROID` 只在**构建时**生效，编辑器里这段代码不会跑。
-  如果你要在编辑器里模拟移动端行为，使用 `Application.isMobilePlatform` 做运行时判断。
-</Callout>
-
-### 场景二：Profiler API 自定义标记
-
-```csharp
-using UnityEngine.Profiling;
-
-public class ProfilerMarkers : MonoBehaviour {
-    void Update() {
-        Profiler.BeginSample("Game.Update.AI");
-        UpdateAI();  // 把 AI 耗时单独标出来
-        Profiler.EndSample();
-
-        Profiler.BeginSample("Game.Update.Physics");
-        Physics.Simulate(Time.deltaTime);
-        Profiler.EndSample();
-
-        Profiler.BeginSample("Game.Update.Render");
-        // 可嵌套标记，方便在 Profiler 里定位瓶颈函数
-        Profiler.BeginSample("Game.Update.Render.Shadows");
-        RenderShadows();
-        Profiler.EndSample();
-        Profiler.EndSample();
-    }
-}
-```
-
-<Callout type="tip">
-  `Profiler.BeginSample` / `EndSample` 是零成本开销的——在非 Development Build
-  中编译器会直接剔除这些调用。所以正式发布的包不会因为这些标记变慢。
-</Callout>
-
-### 场景三：平台后端检测
-
-```csharp
-// 不同平台默认的图形 API 后端不同，甚至可以强制切换
-using UnityEngine.Rendering;
-
-if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan) {
-    Debug.Log("跑在 Vulkan 上——移动端/PC 均支持");
-} else if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Metal) {
-    Debug.Log("跑在 Metal 上——iOS/macOS 独占");
-} else if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D12) {
-    Debug.Log("跑在 DX12 上——Windows 独占");
-} else if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES3) {
-    Debug.Log("跑在 GLES3 上——WebGL/部分 Android 回退");
-}
-```
-
-{/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象→原因→修法；每个 150 字内。 */}
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个；固定 现象→原因→修法 格式。 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：PC Profiler 里帧时间只有 8ms（轻松 120 FPS），部署到手机上变成 45ms（掉到
-  22 FPS）。**原因**：PC 的独立显卡和手机的集成 GPU 性能差距巨大——不是在「线性缩放」，
-  而是在跨越硬件代际。移动 GPU 对透明材质、多 Pass Shader、MSAA 的惩罚比 PC 重得多。
-  **修法**：关闭后处理（Post-Processing）中的 Bloom/DOF；减少 Shader Pass 数；
-  关闭 MSAA 改用 FXAA/TAA；用 URP 代替内置管线。**永远在目标设备上实机验证**。
+  **现象**：Android 连接了 USB 线、跑了 `adb forward`、Profiler 窗口也选了 AndroidPlayer——但等了半分钟没有任何数据过来。**原因**：最常见原因：①没有勾选 `Development Build` 和 `Autoconnect Profiler` 两个都勾；②Android 的防火墙/权限没有开 INTERNET；③ADB 本身没识别到设备（`adb devices` 结果显示 offline）。**修法**：先用 `adb devices` 确认设备状态是 `device`（不是 offline）→ 在 Build Settings 里确认 Dev Build + Autoconnect 都已勾（一个不能少）→ 检查 AndroidManifest 是否有 `<uses-permission android:name="android.permission.INTERNET"/>` → 最后 `adb forward tcp:55000 tcp:55000` 再试。
 </Callout>
 
 <Callout type="trap">
-  **现象**：WebGL 版本的帧时间图中总有规律性尖刺，CPU Profiler 显示标记为
-  `(idle)` 而非你的代码。**原因**：浏览器的主线程会被 JavaScript GC、样式计算、
-  DOM 事件处理等系统任务抢占——这些不是 Unity 的问题，是浏览器调度的固有开销。
-  **修法**：减小堆分配、避免每帧创建新对象（触发高频 GC）；降低目标帧率到 30；
-  关闭 `PlayerSettings.WebGL.exceptionSupport`（改为 None 可以省掉异常处理开销）。
+  **现象**：用 RenderDoc 捕获了一帧，展开看每个 Draw Call 的 GPU Duration 都很短——加起来却远小于 Unity Profiler 里显示的 GPU 总时间。**原因**：RenderDoc 只捕获了应用自己的 GPU 命令——而 Unity Profiler 的 GPU Total 包含了**整个 GPU 时间轴**（包括系统合成、其他进程占用 GPU、VSync 等待等不在你 Draw Call 列表里的 GPU 时间）。RenderDoc 的数字是「你的 Draw Call 们在 GPU 上花了多久」——Profiler 的数字是「这帧的 GPU 一共工作了多久」。**修法**：两块数字一起看——RenderDoc 精准定位你的 Draw Call 中的热点、Profiler 告诉你 GPU 在帧里是否还有你控制不了的外部等待时间。如果 Profiler 的 GPU time >> RenderDoc 的 Draw Call 总和 ≈ 存在你控制不了的外部 GPU 等待。
 </Callout>
 
 <Callout type="trap">
-  **现象**：Android 上 Profiler 连上了，但 Profiler 窗口里 CPU Usage 一直为 0 或
-  数据完全不变。**原因**：Development Build 里打开了 Autoconnect Profiler 却没开
-  **"Record"**（Profiler 窗口左上角的录制按钮）。Unity Profiler 连上≠在录制——必须手动点录制。
-  **修法**：点击 Profiler 窗口的红色录制按钮，或者 Window → Analysis → Profiler
-  的 Record 开关。
+  **现象**：Chrome DevTools Performance 面板显示 WebGL 游戏的 FPS 很高（60 稳定），但玩家反馈说「时不时画面会定住半秒」。**原因**：Performance 面板默认看的滚动平均帧率会抹平偶发的长停顿。这种偶发的停顿（200–500ms）在几秒钟的录制里可能只出现一次，但玩家会明显感知到画面突然冻结。**修法**：在 Performance 面板上放大时间轴、检查有没有超过 50ms 的黄色 Long Task 条块——如果有，展开看调用栈定位是 `WASM 编译`、`GC 暂停` 还是某帧突然计算量激增。同时去 Memory 面板抓 Heap Snapshot——看是否在停顿瞬间分配了大量临时对象触发 GC。
 </Callout>
 
-{/* 8. 小结与练习（spec §八）：小结 5 条内与学习目标一一呼应；练习含一道改 Demo 代码题，答案折叠；C 型加一道独立实现题。 */}
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条 bullet；与 §一目标一一呼应；
+C 型 +1 道独立实现题。 */}
 
 ## 小结
 
-- 五个平台各有一套工具链：Console = 厂商工具 + RenderDoc；PC = Unity Profiler + RenderDoc；Mobile = Unity Profiler 远程 + Perfdog；XR = OVR Metrics + SDK Perf HUD；Web = Chrome DevTools
-- Unity Profiler 远程连接 Android 需要 ADB + USB 调试 + Development Build；iOS 还需要 Xcode 中转
-- 第三方工具各有专长：RenderDoc 看 GPU 帧细节；Perfdog 看移动端系统级功耗温度；Xcode Instruments 看 iOS 底层；Chrome DevTools 看 Web 端
-- 每个平台都有自己的「非你代码」瓶颈源的标志特征——Web 的浏览器 GC、Mobile 的温控降频、Console 的帧预算硬限制
-- 预处理指令 + 运行时检测配合使用，才能让同一份代码在五个平台上编译通过并正确运行
+- **五个平台五种连法**：PC 直连 / Android ADB / iOS 必须过 Mac / Console DevKit / Web 浏览器 DevTools
+- **Unity Profiler 定位到瓶颈类别**——**平台专用工具逐帧深度分析**：RenderDoc 逐 Draw 看 GPU、Instruments 看系统功耗、Perfdog 看温度和电流曲线
+- **WebGL 没有 Profiler 端口**——Chrome DevTools Performance + Memory + Rendering 三大面板代替
+- 跨平台上线前必须**同场景、同操作、全平台各录基线**归档——PC 的 10ms 和 Mobile 的 10ms 含义完全不同
+- **平台配置清单**：Dev Build 勾选 → 真机连接验证 → 帧预算达标确认 → 全平台基线录制
 
 <Exercises>
 
-**练习 1（改代码型）** 修改上面的 `PlatformSetup.Awake()` 代码：增加 XR 分支
-（`#elif UNITY_XR` 系列），要求 XR 设备上强制 targetFrameRate = 72、开启
-Single-Pass Instanced 渲染。
+**练习 1（操作题）** 在你的项目里做一次跨平台 Profiling：①在 PC Standalone 上录一段同场景的 Unity Profiler 数据；②在 Android 设备上用 Development Build 连接 Profiler 录同一段场景；③对比两者的 CPU Usage 总时间——在同场景下差异是多少？记录下来并解释为什么会有这个差异。
 
 <Answer>
-
-```csharp
-#elif UNITY_XR
-    // XR 眼镜：帧率必须 ≥ 72，低于此会造成晕动症
-    Application.targetFrameRate = 72;
-    // 开启 Single-Pass Instanced（两眼的帧不重复计算）
-    UnityEngine.XR.XRSettings.stereoRenderingMode =
-        UnityEngine.XR.XRSettings.StereoRenderingMode.SinglePassInstanced;
-    QualitySettings.SetQualityLevel(3); // 中高画质——XR 分辨率有限，画质不需要最高
-```
-
-另外建议在 Player Settings → XR Plug-in Management 中为各目标 XR 设备预开启
-Single-Pass Instanced。
-
+操作步骤：按 §五 Stepper 的第一步在 PC 上录、第二步在 Android 上录。差异原因通常：PC 的 CPU 是 x86 高频大核、IL2CPP 生成的 x86 代码直接跑在桌面 CPU 上；Android 的 CPU 是 ARM 架构、频率受限于移动设备的热限制——同样一段 C# 脚本编译成 ARM IL2CPP 后运行效率可能只有 PC 的 1/3 甚至更低。另外 PC 直连 Editor 的 Profiler 几乎无连接开销，Android 的 USB/WiFi Profiler 连接会引入额外 CPU 开销（约 1–3ms 每帧的数据序列化+传输）。
 </Answer>
 
-**练习 2（独立实现题）** 不看上面的代码，写一个 `PlatformProfilerSetup.cs` 脚本：
-它根据当前运行时平台打印一行包含「建议 Profiler 工具 + 目标帧率」的日志。
-例如在 Android 上输出 "Perfdog + Unity Profiler remote, target 30FPS"，在 PC 上
-输出 "Unity Profiler + RenderDoc, target unlimited"。
+**练习 2（操作题·C 型实现）** 写一个 Editor 脚本——`Tools/Profiler/Platform Check` 菜单项，点击后在 Console 输出：①当前构建目标平台 ②当前平台推荐的 GPU 分析工具 ③当前平台推荐的完整 Profiling 工具链路。参考 §六的 `PlatformProfilingHelper` 类。
 
 <Answer>
-
-```csharp
-using UnityEngine;
-
-public class PlatformProfilerSetup : MonoBehaviour {
-    void Start() {
-        string tool;
-        string fps;
-
-        if (Application.isMobilePlatform) {
-            tool = "Perfdog + Unity Profiler remote";
-            fps = "30";
-        }
-#if UNITY_STANDALONE || UNITY_EDITOR
-        else {
-            tool = "Unity Profiler + RenderDoc";
-            fps = "unlimited";
-        }
-#elif UNITY_WEBGL
-        else {
-            tool = "Chrome DevTools";
-            fps = "30";
-        }
-#endif
-
-        Debug.Log($"{tool}, target {fps}FPS");
-    }
-}
-```
-
+参考 §六的第二个代码块 `PlatformProfilingHelper`。扩展需求：加一个 `[MenuItem]` 方法调用 `RecommendedGpuTool()` 和 `RecommendedPipeline()`，用 `Debug.Log` 输出到 Console。
 </Answer>
 
-**练习 3（问答型）** 为什么 WebGL 不能用 Unity Profiler，而必须用
-Chrome DevTools？
+**练习 3（问答型）** 你在 PC 上开发 Unity 游戏、Unity Profiler 发现 GPU Time 很高——下一步用什么工具深入分析 GPU 瓶颈？为什么不用别的工具？
 
 <Answer>
-
-WebGL 游戏运行在浏览器沙箱里——它能访问的 API 只有 Web 标准规定的那几项（WebGL
-2.0、Web Audio 等）。Unity Profiler 需要和引擎内部通信（通常是网络 socket），
-这在浏览器安全模型下是禁止的。Chrome DevTools 是浏览器自带的开发者工具，
-能直接看到 JavaScript 调用栈、帧时间线和内存分配，是 Web 端唯一能用的性能分析通道。
-
+用 RenderDoc 捕获一帧逐 Draw 看 GPU 热点。选择 RenderDoc 而不是别的工具是因为：RenderDoc 是唯一跨平台（PC/Android/Switch）、能捕获单帧所有 Draw Call 并查看每个 Draw 的输入纹理/Shader 编译结果/资源绑定的通用 GPU 帧调试工具。Unity Profiler 只能告诉你「GPU 花了多少毫秒」，RenderDoc 能告诉你「哪个 Draw 吃了最多 GPU」和「为什么」（纹理太大？Shader 太复杂？还是带宽不够？）。如果是 NVIDIA 显卡也可用 NSight Graphics——看 GPU 硬件计数器更全——但 RenderDoc 更通用。
 </Answer>
 
 </Exercises>
 
-{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础。 */}
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（8 个，按首现顺序）。 */}
 
 <Glossary>
 
-<GlossaryItem term="远程调试">
-  把 PC 上运行的分析工具通过网络或 USB 连接到一台正在运行游戏的设备上，
-  读取它的性能数据。游戏机上叫「DevKit 调试」，手机上就是 ADB 或 Xcode 连接。
+<GlossaryItem term="Development Build">
+  内置 Profiler 连接支持的特殊构建版本：语法接近 Release 但保留 Profiler 数据端口让 Editor 远程连接。Build Settings → Development Build 勾选即可。所有真机平台的 Profiling 必须基于 Development Build——Release 构建不带 Profiler 连接模块。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Autoconnect Profiler">
+  Development Build 的便捷设置：勾选后真机游戏启动时自动搜索并连接同一局域网内的 Editor Profiler，省去手动输入 IP。底层是多播网络发现 + 自动握手，解决「设备重启后 IP 变了要重新输」的烦恼。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="ADB 端口转发">
+  通过 `adb forward tcp:55000 tcp:55000` 把 Android 设备的 Profiler 端口映射到 PC 的同一端口——让 Unity Editor 能直接跟 Android 设备通信。是 Android 远程 Profiler 连接的第一步（先转发端口、再在 Profiler 窗口选设备）。详见本章「第二个概念」和「§六 ADB 代码」。
 </GlossaryItem>
 
 <GlossaryItem term="RenderDoc">
-  一个免费开源的 GPU 帧调试器。可以截取游戏中任意一帧的完整渲染状态——
-  包括所有 Draw Call、中间 RenderTexture、Shader 输入输出——然后逐步骤回放，
-  是 PC/Console 端 GPU 调试的瑞士军刀。
-</GlossaryItem>
-
-<GlossaryItem term="Perfdog">
-  移动端独立性能监视 App。不需修改 Unity 工程，装在手机上后台持续记录
-  FPS、CPU/GPU 百分比、功耗（mW）、电池电流（mA）、温度——用于排查
-  间歇性卡顿问题，可导出 CSV 历史数据离线分析。
+  开源的跨平台 GPU 帧调试器——捕获单帧所有 Draw Call 并按 GPU Duration 排序。展开每个 Draw 能看到顶点/片段 Shader 汇编、输入纹理分辨率、输出 Render Target 效果、资源绑定表——逐像素追查 GPU 瓶颈在哪个具体 Draw Call 上。Unity Profiler 只给总 GPU Time，RenderDoc 给逐 Draw Call 拆解。详见本章「第三个概念」。
 </GlossaryItem>
 
 <GlossaryItem term="Xcode Instruments">
-  Apple 为 iOS/macOS 提供的系统级性能分析工具套件。能追踪线程调度、
-  Metal GPU 性能计数器、内存分配调用栈、耗电归属。iOS 性能瓶颈定位必备。
+  Xcode 内置的 iOS 性能分析套件——看系统级 CPU/GPU/Metal 能耗报告、物理内存统计、温度和电池数据。这些 Unity Profiler 全局看不到的指标在 Instruments 里展开是对应的——配合使用能完整定位 iOS 平台性能问题。详见本章「第三个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="Chrome DevTools">
-  Chrome 浏览器自带的开发者工具。Performance 面板记录帧时间线和 JavaScript
-  调用栈，Memory 面板抓取堆内存快照——是 WebGL 游戏唯二可用的性能分析入口。
+<GlossaryItem term="Perfdog（性能狗）">
+  腾讯出品的移动端性能测试工具——直接通过系统级采集获取 FPS、CPU/GPU 频率和电流曲线。不需要 Development Build——Release 包就能测，更贴近玩家体验。与 Unity Profiler 互补：Perfdog 看系统级能耗和温控状态，Unity Profiler 看引擎内部热点函数。详见本章「第三个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="TimeWarp">
-  一种 XR 渲染管线中的独占技术——在 CPU 端渲染完成、但实际显示之前，
-  再根据头部姿态的最新追踪数据「微调」画面。如果 CPU 没在 vBlank
-  前完成，TimeWarp 就会卡住，导致画面撕裂或抖动。
+<GlossaryItem term="Chrome DevTools Performance 面板">
+  Chrome 浏览器自带的性能分析面板：录制 WebGL 游戏的帧时间线（FPS、JS/WASM 调用耗时、GPU 光栅化时间）。由于 WebGL 运行在浏览器沙箱内无法由 Editor 直连 Profiler，Performance 面板是 WebGL 的唯一入口工具。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="帧预算">
+  目标帧率对应的单帧最大可承受时间：60FPS → 16.67ms 总预算（含 CPU+GPU+系统开销），30FPS → 33.33ms，90FPS → 11.11ms。任何平台 Profiling 的第一步都不是找热点——而是确认帧 CPU+GPU 总时间在当前平台的帧预算之内。详见本章「平台配置清单」的第三步。
 </GlossaryItem>
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）。 */}
+{/* 9. 出处声明（spec §九）：固定 Attribution。 */}
 
-<Attribution adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

@@ -1,0 +1,326 @@
+---
+title: Memory Profiler 内存分析
+type: A
+section: 内存与功耗
+order: 1
+description: 用 Memory Profiler 抓快照、对比前后、追踪纹理/网格/Mono 堆——找到内存泄漏与峰值。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型章：讲清「是什么/在哪环节」。主 viz = 示意图 + Stepper 动画。
+按 chapter-spec §〇：概念讲解为重心、无数学、主 Demo 形态 PipelineViz/示意图。
+知识点清单（动笔先行、每项配 viz）：
+
+1. Memory Profiler 快照/对比流程 → MemorySnapshotWorkflowDiagram (SVG 示意图)
+2. Managed vs Native 内存分类 → ManagedVsNativeDiagram (对比图)
+3. 纹理/网格/音频资源分类 → AssetBreakdownDiagram (饼图示意)
+4. 内存泄漏追踪方法 → MemoryLeakTrackingDiagram + Stepper 分步
+   Term 高亮术语：Memory Profiler、Take Sample、Managed Heap、Native Memory、
+   内存泄漏、快照对比、纹理内存、网格内存、音频内存 → 均进章末 Glossary */}
+
+{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在渲染管线中的位置」—— 内存分析在优化流程中的位置；2–3 条可检验动词；末条检验问题。 */}
+
+<Objectives>
+- 能解释 Memory Profiler 在性能分析流程中的位置：它不是「优化完代码后再看看」的辅助工具，而是在 CPU 和 GPU 分析之前就该关注的——内存超标是移动端的头号杀手
+- 能独立用 Memory Profiler 的 Take Sample 功能抓取前后快照，并对比差异找出内存增长的具体来源（哪类资源、哪个对象）
+- 能回答：Managed Heap 和 Native Memory 的区别是什么？为什么 Native 内存增长但你自己的 C# 代码里没有 `new`？
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题」+"没有它会怎样"；类比用工厂流水线。 */}
+
+## 为什么内存是移动端的头号杀手
+
+CPU 慢可以降帧，GPU 慢可以降画质——但内存一旦超了，系统会直接杀掉你的应用。不是「帧率低一点」，而是「闪退」。对移动游戏开发来说，内存上限是最硬的硬限制。
+
+没有内存分析会怎样？你的游戏在你自己的手机上跑得好好的——因为你是最新款的旗舰机、6GB 空闲内存。一上测试机（2GB 中低端机型）就崩了。你完全不知道是哪个纹理加载了没释放、哪个对象的引用一直被持有、还是某个音频资源在后台持续分配。
+
+这一章教你系统地管理 Unity 里的内存——不是「写代码少 new 点东西」这种简单建议，而是学会用 Memory Profiler 看透托管内存和原生内存的两层结构，用快照对比找到泄漏点，在超标之前就发现问题。
+
+{/* 3. 概念讲解（spec §三）：A 型重心本节；一节一概念；Term 高亮；每概念配图；新概念 ≤5个。
+四个概念：Memory Profiler 快照 / Managed vs Native / 资源分类 纹理·网格·音频 / 泄漏追踪 */}
+
+## 第一个概念：Memory Profiler——给内存拍 X 光
+
+<Term def="Unity Profiler 中专门记录运行时内存占用的模块：按类别（纹理、网格、音频、动画、Mono 托管堆等）用色块展示当前帧的总内存和各分类占用。支持 Take Sample 抓取快照做前后对比。">
+  Memory Profiler
+</Term>
+不像 CPU 分析那样需要你盯着色条看函数耗时——它更像一张「内存账单」：打开后，左边是总内存数量的柱状图趋势，右边是按类别拆分的色块，告诉你是纹理吃了 500MB 还是 Mono 托管堆堆到了 200MB。
+
+<MemorySnapshotWorkflowDiagram />
+
+Memory Profiler 最核心的操作——也是它区别于其他模块的独特能力——是 <Term def="Memory Profiler 中的采样操作：在当前帧抓取一份完整的内存快照，记录下所有对象的引用关系与内存占用，之后可以和另一份快照做 Diff 对比找出增长。">
+  Take Sample
+</Term>（抓快照）。Take Sample 不是你点一下就给你一份「报告」——它抓的是**一份能在之后被对比的基准数据**。流程是：
+
+1. 进入场景前，点一次 Take Sample → 得到快照 A（初始基线）
+2. 进场景、跑一段时间（或重现某个疑似泄漏的操作），再点一次 Take Sample → 得到快照 B
+3. 对比 A 和 B，看**哪类资源的字节数涨了**。涨的不管，涨了之后**没降回来**的，就是泄漏或异常持留
+
+如果你只抓了一份快照就看，你只能知道「当前用了多少内存」——一个绝对数值回答不了「是不是越用越多」。前后对比才是 Memory Profiler 的灵魂。
+
+## 第二个概念：两套内存——Managed 与 Native
+
+<Term def="C# 脚本通过 Mono/IL2CPP 运行时分配的托管内存——所有 C# 的对象（class、array、string、delegate 等）都在这块里。由 GC（垃圾回收器）自动管理生命周期。">
+  Managed Heap
+</Term>
+和
+<Term def="Unity 引擎的 C++ 底层、第三方原生库、以及 GPU 驱动直接分配的非托管内存——包括纹理数据、网格顶点缓冲区、音频解码缓冲区、AssetBundle 加载等。GC 管不到它，需要开发者手动释放或用 Unity 的资源管理系统管理。">
+  Native Memory
+</Term>
+是 Unity 内存的两层结构。很多初学者以为「C# 的 GC 负责所有内存」——错了，GC 只管托管堆上的 C# 对象。纹理、网格、音频、Shader 这些——它们的实际数据存在 Native 内存里，由 Unity 的引擎代码管理，**GC 碰都不碰**。
+
+<ManagedVsNativeDiagram />
+
+这意味着什么？你写的 C# 代码里可能一行 `new` 都没有——但 Native 内存仍然在暴涨。因为你的代码在调用 `Resources.Load()`、`AssetBundle.LoadAsset()`、`Texture2D.Apply()` 时，Unity 在底层分配了一大块 Native 内存来存这些资源的数据。C# 侧只拿到一个空壳引用（包装对象），壳本身可能只有几十字节在托管堆——但壳背后指着的实际数据在 Native 内存里可能是几十 MB。
+
+最常见的内存翻车：你在 `OnDestroy()` 里把 C# 引用设成 `null`，托管堆上的壳确实被 GC 回收了——但 Native 侧的那几十 MB 纹理数据没有任何代码去 `Destroy()` 或 `Resources.UnloadUnusedAssets()`——Native 内存就这样被「忘」在那里了，直到应用被杀它都不会消失。
+
+Memory Profiler 里把 Managed 和 Native 分开显示就是为了让你看到真相——如果只有 Managed 涨了，那是你 C# 代码的 GC 分配；如果只有 Native 涨了，那是你加载了资源但忘了释放。方向完全不同，修复策略也完全不同。
+
+## 第三个概念：纹理、网格、音频——内存大户三兄弟
+
+打开 Memory Profiler 看一眼分类色块——**排名前三的几乎永远是纹理、网格、音频**。这些是任何游戏项目里的内存「三巨头」，加起来通常占总内存的 70%–90%。
+
+<AssetBreakdownDiagram />
+
+- **纹理（Textures）**：一张 2048×2048 的 RGBA 纹理在显存里占用 16MB（2048 × 2048 × 4 bytes），如果还生成了 Mipmap 则再加约 33%（~21MB）。如果你在场景里同时加载了 20 张这样的纹理——显存已经接近 400MB，还没算网格和音频。**压缩格式（ETC2/ASTC）可以把纹理从 RGBA32 的每像素 4 字节压到 1–0.5 字节**——但你在 Memory Profiler 里看到的「Native 纹理内存」是加载到显存后的实际大小，不是压缩文件的大小。
+- **网格（Meshes）**：一个高面数的角色模型可能有 10 万顶点——包含位置、法线、UV、切线、骨骼权重等十几套顶点属性，每套顶点属性按 float（4 字节）存——一个角色的网格数据轻松破 10MB。而且 LOD 的每个等级都是一份独立网格数据——LOD0 + LOD1 + LOD2 = 三份网格同时在内存里。
+- **音频（Audio）**：一段 5 分钟的 44.1kHz 立体声 WAV 文件本身约 50MB。Unity 里设置加载类型为「Decompress On Load」会把整个音频解码成 PCM 数据塞进 Native 内存——一首背景音乐可能吃掉 30–50MB Native 内存。改成「Streaming」只缓存一小段播放缓冲区才能显著降低内存占用。
+
+Memory Profiler 里点开任意一个分类色块，可以看到该分类下**每个具体资源的名称和各自的占用字节数**——这也是找到「哪一张纹理最胖」「哪个网格面数太高」「哪段音频忘了释放」的最直接方法。
+
+## 第四个概念：内存泄漏追踪——别等系统帮你杀
+
+<Term def="应用在运行过程中持续分配内存但不再使用的对象无法被回收——表现为 Native 或 Managed 内存在重复某操作后只增不减。Memory Profiler 的前后快照对比是诊断内存泄漏的核心工具。">
+  内存泄漏
+</Term>
+在 Unity 里不是「忘记写 `Destroy()`」这么简单。常见的泄漏模式有好几种，每一种在 Memory Profiler 里的表象不同：
+
+**模式一：托管泄漏——GC 根引用没断。** 某个 C# 对象的引用被一个静态变量或单例永久持有，GC 判定它「还活着」——不会回收。Memory Profiler 表现为：Managed Heap 大小在多次 Take Sample 之间持续增长，且打开「Detailed」视图能看到某个类的实例数永远在涨。
+
+**模式二：Native 泄漏——资源加载后未卸载。** 场景切换了、UI 关闭了——但 `Resources.Load()` 出来的纹理还在 Native 内存里。表现为 Native 内存只涨不跌（Managed 一侧没有变化）。检验方法：在一段「打开面板 → 关闭面板」的操作循环后对比快照，看 Native 纹理/网格增长数——正常的场景切换后这些资源应该回到基线水平。
+
+**模式三：碎片化——分配频繁但总量不大。** Managed Heap 总大小不大，但 GC Alloc 频率高、内存中产生了大量碎片（小空洞），导致即使有空闲内存也分配不了大块连续空间。Memory Profiler 里的「Unity Objects」详细视图 + Profiler 里的 GC 触发频率一起分析。
+
+追踪流程固定：
+1. 建立基线 → Take Sample (A)（场景刚加载完，什么都不做）
+2. 执行泄漏操作 → 反复开关 UI 面板 10 轮 → Take Sample (B)
+3. 对比 (B) － (A) → 看哪个分类的字节数净增长
+4. 展开该分类 → 找到「实例数净增长 + 字节净增长」的资源——这就是泄漏源
+
+{/* 4. 数学推导：math:false，整节删除。 */}
+
+{/* 5. 交互 Demo（spec §五）：A 型主 Demo 为 PipelineViz/示意图；猜一猜引导；Stepper 每步带图示。 */}
+
+## 实战：完整的一次内存泄漏排查
+
+前面学了四个概念——Memory Profiler 快照、Managed vs Native、资源分类、泄漏追踪。现在把它串成一次标准的内存泄漏排查：
+
+<Stepper>
+  <Step title="① 建立初始基线">
+    打开 Memory Profiler。在场景刚加载完、还没有任何 UI 弹出、没有任何操作时，点 Take Sample → 命名 "Baseline_Initial"。这是你的对照基准——之后的所有对比都跟它比。
+
+
+  </Step>
+  <Step title="② 执行泄漏操作并抓第二份快照">
+    执行你想要排查的操作（打开背包界面 → 关闭 → 再打开 → 再关闭，重复 10 次）。操作完成后立刻 Take Sample → 命名 "After_10_Cycles"。
+
+
+  </Step>
+  <Step title="③ 对比快照：看哪类资源净增长">
+    切换到对比视图（或者手动记录两组快照的各分类字节数）。找净增长最大的分类（通常是 Textures 或 Meshes）。如果 Native 净增长了 50MB 但 Managed 只涨了 2MB——典型资源泄漏。如果只有 Managed 在涨——托管对象持有泄漏。
+
+
+  </Step>
+  <Step title="④ 展开分类，找具体资源">
+    点开净增长最多的分类（如 Textures），按内存大小排序——找那些在 After 快照里出现但在 Baseline 里没有的纹理名。这些就是操作过程中加载但操作结束后没卸载的资源。记下它们的名字。
+
+
+  </Step>
+  <Step title="⑤ 回到代码找加载点并加释放逻辑">
+    用资源名在项目中反向搜索加载调用（如 `Resources.Load("UIPanel_BG")`、`Addressables.LoadAssetAsync("...")`）。确认在 UI 关闭、场景卸载时有没有对应的 `Resources.UnloadAsset()` 或 `Addressables.Release()`。没有就加上，然后从头跑一次①②③——确认净增长归零。
+
+
+  </Step>
+</Stepper>
+
+> 猜一猜：在步骤②你反复开闭 UI 面板 10 轮后，对比快照发现 Managed Heap 只涨了 3MB，但 Native 纹理内存涨了 80MB。这说明是哪种泄漏？答案在 §八练习里自测。
+
+{/* 6. 代码对照（spec §六）：A 型只贴最能说明概念的 1–3 段关键代码。 */}
+
+## 关键代码：正确的资源生命周期管理
+
+### 加载规范与释放规范对照
+
+这是 Unity 内存管理最核心的一段对比——同一个纹理加载，三种写法，三种不同的内存结果：
+
+<CodeTabs>
+  <Tab label="✓ 正确：场景内暂用、退出释放">
+
+```csharp
+// 场景里用一次、场景退出时释放
+Texture2D m_PanelBg;
+
+void Start()
+{
+    m_PanelBg = Resources.Load<Texture2D>("UI/Panel_BG");
+}
+
+void OnDestroy()
+{
+    if (m_PanelBg != null)
+    {
+        Resources.UnloadAsset(m_PanelBg);
+        m_PanelBg = null;
+    }
+}
+```
+  </Tab>
+  <Tab label="✗ 错误：只置 null，Native 不释放">
+
+```csharp
+// ✗ 危险：OnDestroy 里只把引用设 null
+// C# GC 只回收托管壳（~50 bytes）
+// 实际纹理数据（~16MB Native 内存）永远不释放
+void OnDestroy()
+{
+    m_PanelBg = null;
+}
+```
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  `m_PanelBg = null` 只对托管堆有效——GC 在之后某个时刻回收那个微不足道的 C# 包装对象。纹理的像素数据存在 Native 内存，GC 不负责——必须显式调用 `Resources.UnloadAsset()` 或等场景完全卸载后调用 `Resources.UnloadUnusedAssets()` 来清理这些「无主的 Native 内存」。
+</Callout>
+
+### 使用 Addressables 管理内存（推荐方式）
+
+如果你的项目用的是 Addressables 资源系统，它有自带的引用计数管理——加载和释放是对称的：
+
+```csharp
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class UIManager : MonoBehaviour
+{
+    AsyncOperationHandle<Texture2D> m_BgHandle;
+
+    void Start()
+    {
+        // Addressables 加载：返回 AsyncOperationHandle
+        m_BgHandle = Addressables.LoadAssetAsync<Texture2D>("UIPanel_BG");
+    }
+
+    void OnDestroy()
+    {
+        // Addressables 释放：引用计数 -1
+        // 计数归零时自动释放 Native 内存
+        if (m_BgHandle.IsValid())
+            Addressables.Release(m_BgHandle);
+    }
+}
+```
+
+`Addressables.Release()` 内部维护一个引用计数器——你 Load 一次计数 +1，Release 一次计数 -1，归零时自动调用底层的资源释放。这比手写 `Resources.UnloadAsset()` 更安全——特别是多个地方引用同一资源的时候，手写 `UnloadAsset` 容易提前释放导致其他地方拿到空引用，Addressables 的计数机制天然避免了这个问题。
+
+{/* 7. 常见误区（spec §七）：A 型 ≥2 个；固定 现象→原因→修法 格式。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Memory Profiler 显示总内存正常，但过了一段时间应用闪退了。一看系统日志——「lowmemorykiller」或「jetsam」杀了进程。**原因**：Memory Profiler 显示的是 Unity 进程的**虚拟内存**（VSIZE），而系统在意的指标是**物理内存压力**（PSS/RSS）——虚拟内存看起来不大，但分配粒度碎片化导致物理页面占用高，系统看你占着这么多物理页就杀了你。加上后台驻留、缓存数据、GPU 驱动分配等不属于 Unity 进程的物理内存也计入系统统计。**修法**：用平台原生工具验证——Android 用 `adb shell dumpsys meminfo <包名>` 看 PSS 总量，iOS 用 Xcode Memory Gauge 或 Instruments Allocations——只看 Unity 内部数字不够。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Texture 设置里 Import Settings → Max Size 设了 512，Memory Profiler 里显示却还是用了 2048 级别的内存。**原因**：Max Size 是导入时从原图**下采样**到不大于该值——但你的源图本来就是 2048、Quality 设置里又选了 Full Res，下采样没生效。另外某些平台会覆盖导入设置里的 Max Size。**修法**：在 Memory Profiler 里点开该纹理条目，看实际加载到显存的尺寸；到 Build Settings → Player Settings → 对应平台的 Texture Import 覆盖设置里确认没有强制重载分辨率；必要时手动用 Editor 脚本 `TextureImporter.maxTextureSize` 设得更保守。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景切换后 Memory Profiler 显示 Native 内存没降——但你已经调了 `Resources.UnloadUnusedAssets()`。**原因**：`UnloadUnusedAssets()` 只清理「没有任何引用」的资源——如果你某个全局单例或 DontDestroyOnLoad 的 GameObject 上挂了一个材质引用，这个材质引用的纹理就「还有引用」——不会被卸载。你以为是垃圾，GC 和 UnloadUnusedAssets 都判定它「活着」。**修法**：先断引用（`Destroy()` 或把引用设 null），再调用 `Resources.UnloadUnusedAssets()`。或者直接用 Addressables 的 Release 机制，它的引用计数能让你知道到底还有谁在持有这个资源。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条 bullet；与 §一目标一一呼应；A 型不加推导/实现题。 */}
+
+## 小结
+
+- **Memory Profiler** 拍内存 X 光——分类色块 + Take Sample 快照对比，找到泄漏和峰值
+- **Managed 内存** GC 管（C# 对象在托管堆），**Native 内存** GC 不管（纹理/网格/音频数据需手动释放）
+- 内存三巨头：**纹理**（压缩格式减体积）、**网格**（LOD 注意多份副本）、**音频**（Streaming 而非 Decompress On Load）
+- **快照对比**（Before → After）是排查泄漏的核心——只看一次绝对数字看不出趋势
+- **Addressables.Release()** 比手写 `UnloadAsset` 更安全——引用计数天然避免提前释放和忘记释放
+
+<Exercises>
+
+**练习 1（操作题）** 在你的项目中打开 Memory Profiler。①在场景加载完成后立刻 Take Sample（快照 A）。②任意打开一个 UI 面板再关闭，Take Sample（快照 B）。③对比 A 和 B——哪类资源出现了净增长（字节数和实例数都增长）？记录资源名称和增长的字节数。
+
+<Answer>
+规范回答格式：快照 A → 快照 B，纹理（Textures）净增长 XX KB，实例数 +N，增长资源名 "UIPanel_BG" 等。如果 UI 面板正确释放了资源，则 B 应回到 A 的水平（净增长 ≈ 0）。如果有净增长，说明 UI 关闭时资源没被释放。
+</Answer>
+
+**练习 2（问答型）** 反复开闭 UI 面板 10 轮后对比快照，Managed Heap 只涨了 3MB，Native 内存却涨了 80MB——这是什么泄漏类型？修复从哪入手？
+
+<Answer>
+这是典型的 Native 资源泄漏——你加载了纹理/网格/音频等资源，但关闭面板时没有调用 `Resources.UnloadAsset()` 或 `Addressables.Release()`。C# 侧只拿了引用壳（Managed Heap 涨那么一点），实际数据全在 Native 内存里。修复从查面板关闭代码入手：确认 `OnDestroy()` 或关闭回调中是否有对应的资源释放调用。如果面板用的是 `Resources.Load()`，加 `Resources.UnloadAsset()`；如果是 Addressables，加 `Addressables.Release(handle)`。
+</Answer>
+
+**练习 3（问答型）** `m_Texture = null` 和 `Resources.UnloadAsset(m_Texture)` 有什么区别？为什么只写前者可能导致内存不降？
+
+<Answer>
+`m_Texture = null` 只把 C# 代码里的托管引用设为空——C# GC 会在以后回收那个托管包装对象（可能只有几十字节在 Managed Heap）。但纹理的实际像素数据（16MB 甚至更多）存在 Native 内存里，这个数据不由 GC 管理。你不调用 `Resources.UnloadAsset()` 或让 `Resources.UnloadUnusedAssets()` 检测到它无引用，Native 内存里的像素数据就永远留在那。Memory Profiler 里表现出来就是「Managed 降了，Native 纹丝不动」。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（9 个，按首现顺序）。 */}
+
+<Glossary>
+
+<GlossaryItem term="Memory Profiler">
+  Unity Profiler 中专门记录运行时内存占用的模块——用分类色块（纹理/网格/音频/Mono 堆等）展示当前帧的内存分配，支持 Take Sample 快照对比功能。是移动端开发中最重要的 Profiler 模块之一，因为内存超限直接导致系统杀进程。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Take Sample">
+  Memory Profiler 中的关键操作：在当前帧抓取一份完整的内存快照，记录所有对象的引用关系和内存占用。单份快照只告诉你「当前用了多少」，两份快照的差异告诉你「多了什么」——前后对比才是 Memory Profiler 的灵魂。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Managed Heap">
+  C# 脚本通过 Mono/IL2CPP 运行时分配的托管内存——所有 C# 的 class、array、string、delegate 等对象都在这里。由 GC（垃圾回收器）自动管理生命周期。Memory Profiler 里显示为 "Managed" 类别。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Native Memory">
+  Unity 引擎 C++ 底层、第三方库、GPU 驱动直接分配的非托管内存——纹理像素数据、网格顶点缓冲区、音频解码缓冲区等大块数据都在这里。GC 不管它，必须手动调用释放或依赖 Unity 的资源管理系统。Memory Profiler 里和 Managed 并列显示——如果 Native 只增不减，而你 C# 代码里也没 new，那就是忘记释放资源了。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="内存泄漏">
+  应用在运行过程中分配了内存但不再使用的对象无法被回收。在 Memory Profiler 里表现为：重复操作后快照对比显示某类资源的字节数和实例数只增不减。Managed 泄漏 = GC 引用没断；Native 泄漏 = 资源加载后没释放。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="纹理内存">
+  纹理加载到显存后占用的实际 Native 内存。一张 2048×2048 RGBA 纹理约 16MB（加 Mipmap 约 21MB），用压缩格式（ETC2/ASTC）可降到每像素 1–0.5 字节。Memory Profiler 里 Textures 分类每个条目显示的字节数是加载后的实际显存占用，不是压缩文件大小。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="网格内存">
+  网格（Mesh）的顶点数据（位置、法线、UV、切线、骨骼权重等）占用的 Native 内存。高面数模型 + LOD 多份副本 = 网格内存很容易成为第二高的分类。Memory Profiler 里 Meshes 分类可逐条看每个网格的顶点数和字节数。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="音频内存">
+  音频文件加载到内存后的 Native 占用。Decompress On Load = 整段音频解码为 PCM 全量加载（一首 BGM 可占 30–50MB）。Streaming = 只缓存播放缓冲区（几 MB 级别），适合长音频。Memory Profiler 里 Audio 分类显示实际解码后的内存大小。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="快照对比">
+  Memory Profiler 的核心工作模式：抓两份 Take Sample（操作前后各一份），对比两者的分类字节数和实例数差异。净增长 ≠ 0 且操作结束没有回落 = 泄漏或异常持留。这是排查内存问题的「测前测后」标准方法。详见本章「第一个概念」和「第四个概念」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：固定 Attribution。 */}
+
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

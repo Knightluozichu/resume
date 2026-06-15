@@ -3,321 +3,289 @@ title: 跨平台性能检查清单
 type: C
 section: Web 专项优化
 order: 2
-description: 从 Profiler 到画质设置——上线前三平台的逐项检查，确保不漏任何性能暗坑。
+description: 上线前三平台逐项检查——移动/XR/Web 各一杯，不漏任何性能暗坑。
 demo: true
 math: false
-sourceUrl: "https://docs.unity3d.com/"
 draft: true
+sourceUrl: ""
 ---
 
-{/* C 实战型（Unity《Optimize your game performance》跨平台收尾章节改编）：
-   知识点清单与 viz：
-   1) 三平台通用 Profiler 基线 — 代码对照
-   2) 移动平台清单 — Stepper
-   3) XR 平台清单 — Stepper
-   4) Web 平台清单 — Stepper
-   5) 自测脚本 — 代码对照
-*/}
+{/* C 实战型章：通用 Profiler 基线、三平台清单、自测脚本。
+知识点清单（每项配 viz）：
+1. 通用 Profiler 基线 → 代码对照
+2. 移动端清单 → Stepper
+3. XR 清单 → Stepper
+4. Web 清单 → Stepper
+5. 自测脚本 → 代码对照
+Term 高亮术语：Profiler 基线、帧预算、合批、Overdraw、LOD、Draw Call → 均进章末 Glossary */}
 
 <Objectives>
 
-- 能建立三平台（移动端/XR/Web）通用的 Profiler 性能基线，并持续监控偏离
-- 能逐项执行各平台上线前的检查清单，不漏任何关键性能暗坑
-- 能回答：一个同时发布三平台的游戏，上线前分别需要做哪三类检查？各自的最关键项是什么？
+- 能建立一套项目上线前跑通三平台（移动/XR/Web）的性能自检清单
+- 能用 Stepper 分步走通每平台的检查项，不漏关键指标
+- 能写一段自动化自测脚本，在 CI 中验证关键性能指标没有回退
 
 </Objectives>
 
-## 为什么上线前要走清单
+{/* 2. 直觉引入 */}
 
-游戏开发到中后期，团队每个人都在冲刺改 Bug、调手感、加功能。这时候最容易出现的是"性能静默退化"——某个同事改了 Shader 把移动端帧率从 30 拉到了 25、另一个人加了几个粒子导致 Web 端首次加载超了 5 秒——没人发现，因为大家都在忙自己的活。
+## 你有三杯水，不能只喝一杯
 
-一份硬性的上线前检查清单解决的就是这个问题：**不看感觉、不看印象——只看数据。** 本章把三平台的检查项逐条列出——移动端看温控和电池、XR 看 Motion-to-Photon 和帧稳定性、Web 看首次加载和浏览器兼容——每条都是一个硬指标，过 = 上线、不过 = 打回。
+前面四章分别讲了 URP、移动端、XR、Web 的优化手段。如果你只优化了其中一种平台就上线——那另外两个平台的用户看到的就是你不在乎的样子。
 
-## 1. 三平台通用 Profiler 基线
+上线前的性能检查不是「再跑一遍 Profiler 看一眼」——你需要在**每个目标平台**上系统性地检查同一组指标，确定每个指标都在预算内。这不是感觉，是清单。移动/XR/Web 各一杯水，喝完才发版。
 
-**上线前必须建立的一份数据锚点**——用 Unity Profiler 在当前项目的主场景中录制 30 秒的运行数据，记录以下核心指标作为"基线"。之后每次改代码、改 Asset、改配置都和新基线对比——偏差 > 20% 报警。
+这一章不长——它是一张清单。照着走就行。
+
+{/* 4. 通用基线 */}
+
+## 通用 Profiler 基线：三平台都用这把尺
+
+在上线前，为你的项目建立一份性能基线卡——不是「看着还行」的那种，而是数字：
 
 ```csharp
-// Editor 脚本：一键录基线
-using UnityEditor;
 using UnityEngine;
-using System.IO;
 
-public class PerformanceBaselineRecorder : EditorWindow
+public class PerformanceBaseline : MonoBehaviour
 {
-    [MenuItem("Tools/记录性能基线")]
-    static void RecordBaseline()
+    [System.Serializable]
+    public struct BaselineMetrics
     {
-        // 确保在 Play Mode 中运行——最好自动进入 Play Mode
-        if (!Application.isPlaying)
-        {
-            EditorApplication.EnterPlaymode();
-            return;
-        }
+        public int targetFPS;
+        public float cpuBudgetMs;   // CPU 预算（毫秒）
+        public float gpuBudgetMs;   // GPU 预算（毫秒）
+        public int maxDrawCalls;     // Draw Call 上限
+        public int maxSetPassCalls;  // SetPass Call 上限
+        public long maxMemoryMB;     // 总内存上限（MB）
+    }
 
-        // 方法一：用 Profiler 录制（手动的更可靠）
-        Debug.Log("请手动打开 Profiler 窗口 → 录制 30 秒 → 导出数据");
+    // 三平台基线配置
+    public static readonly BaselineMetrics MobileBaseline = new()
+    {
+        targetFPS = 60, cpuBudgetMs = 14f, gpuBudgetMs = 12f,
+        maxDrawCalls = 500, maxSetPassCalls = 80, maxMemoryMB = 800
+    };
 
-        // 方法二：自动采样
-        float avgFPS = 1f / Time.unscaledDeltaTime;
-        int drawCalls = UnityStats.drawCalls;
-        int setPassCalls = UnityStats.setPassCalls;
+    public static readonly BaselineMetrics XrBaseline = new()
+    {
+        targetFPS = 90, cpuBudgetMs = 9f, gpuBudgetMs = 8f,
+        maxDrawCalls = 300, maxSetPassCalls = 50, maxMemoryMB = 1200
+    };
 
-        string report = $"=== 性能基线 ===\n"
-            + $"FPS: {avgFPS:F1}\n"
-            + $"Draw Calls: {drawCalls}\n"
-            + $"SetPass Calls: {setPassCalls}\n";
+    public static readonly BaselineMetrics WebBaseline = new()
+    {
+        targetFPS = 60, cpuBudgetMs = 13f, gpuBudgetMs = 10f,
+        maxDrawCalls = 300, maxSetPassCalls = 60, maxMemoryMB = 512
+    };
 
-        File.WriteAllText("Assets/BaselineReport.txt", report);
-        Debug.Log(report);
+    void Start()
+    {
+        BaselineMetrics current = GetCurrentPlatformBaseline();
+        Debug.Log($"Platform baseline: {current.targetFPS} FPS, " +
+                  $"CPU budget: {current.cpuBudgetMs}ms, " +
+                  $"GPU budget: {current.gpuBudgetMs}ms");
+    }
+
+    BaselineMetrics GetCurrentPlatformBaseline()
+    {
+#if UNITY_ANDROID || UNITY_IOS
+        return MobileBaseline;
+#elif UNITY_WEBGL
+        return WebBaseline;
+#else
+        // XR 平台需在运行时检测 XR 是否激活
+        return UnityEngine.XR.XRSettings.enabled ? XrBaseline : MobileBaseline;
+#endif
     }
 }
 ```
 
-**基线核心指标（三平台通用）**：
+三句记住：
+- **移动端 60 FPS** = 每帧 16.6ms → CPU ≤14ms / GPU ≤12ms（留合成余量）
+- **XR 90 FPS** = 每帧 11.1ms → CPU ≤9ms / GPU ≤8ms（留合成+姿态预测余量）
+- **Web 60 FPS** = 每帧 16.6ms → CPU ≤13ms / GPU ≤10ms（留 Wasm→WebGL 桥接余量）
 
-| 指标 | 说明 | 如何获取 |
-|---|---|---|
-| 平均 FPS | 录制期间的平均帧率 | Profiler 窗口 → CPU Usage → 导出 |
-| Draw Calls | 每帧绘制调用次数 | Profiler → Rendering 模块 |
-| SetPass Calls | 实际 GPU 状态切换次数 | Profiler → Rendering 模块 |
-| 总内存 | 纹理 + 网格 + 其他资源 | Profiler → Memory 模块 |
-| GC 分配 | 每帧 KB 数 | Profiler → CPU Usage → GC.Alloc |
-| 构建体积 | APK/AIP/wasm+data 大小 | Build Report |
+{/* 移动端清单 */}
 
-<Callout type="tip">
-  **CI 自动化**：把基线录制脚本嵌入 CI 管线——每晚自动出一份 Play Mode 下的 Profiler 录制数据，和上次构建的基线做对比。若 Draw Call 突增 30% → CI 构建标记为 Unstable → 团队第二天早上就能看到。
-</Callout>
-
-## 2. 移动平台清单
+## 移动端检查清单
 
 <Stepper>
-  <Step title="① 温控测试——跑满 30 分钟">
-    游戏运行 30 分钟不间断（录屏 + Perfdog 后台记录 FPS/CPU 频率/GPU 频率/电池温度）。确认：30 分钟后 CPU/GPU 频率无台阶下跌（如 2.8→1.5GHz）→ 如跌了说明触发温控降频，需降 `targetFrameRate` 或关耗能特性（阴影/Bloom）。**如果 20 分钟就降频等于游戏只能玩 20 分钟——这是上线前的最高优先级。**
+  <Step title="① 纹理压缩">
+    在 Memory Profiler 中确认所有纹理的实际占用格式——没有 RGBA32 裸奔的。漫反射贴图至少 ASTC 6×6、法线贴图 ASTC 4×4、大背景 ASTC 8×8。Android/iOS 分别检查平台 override 生效。
   </Step>
-  <Step title="② 电池消耗——1 小时 < 25%">
-    设备满电（100%）、屏幕亮度 50%、连 Wi-Fi→游戏运行 1 小时→记录剩余电量。消耗应 < 25%——超过意味着正常玩游戏 3-4 小时就会用光电量→玩家会差评。优化：`targetFrameRate = 30` + 后台降帧到 10 + 关不必要的计算。
+  <Step title="② Render Scale + MSAA">
+    URP Asset 中确认 Render Scale ≤1.0（低端机 ≤0.75）、MSAA ≤2x。Open Frame Debugger 看 MSAA resolve 是否只在 final pass 做一次。
   </Step>
-  <Step title="③ 弱网/断网恢复">
-    打开飞行模式运行游戏 5 秒→关飞行模式恢复网络→确认：无崩溃、无白屏、联网功能自行恢复。Addressables 下载失败后应自动重试而非报错退出。模拟 3G 限速（Chrome DevTools Network throttling）→ AssetBundle 下载超时后有 fallback 资源或友好提示。
+  <Step title="③ Draw Call / SetPass">
+    跑最消耗的场景（战斗/关卡），看 Profiler Rendering 模块：Draw Call ≤500、SetPass ≤80。如果超了：GPU Instancing 盖相同 Prefab 群、SRP Batcher 盖同 Shader 不同材质、Static Batching 盖不动的静态场景部件。
   </Step>
-  <Step title="④ 内存压力测试">
-    连续切换场景 10 次→每次切换后观察 Memory Profiler→确认无残留 Scene 引用或未释放的纹理。`Resources.UnloadUnusedAssets()` 应在每场景卸载后调用。如果内存从 200MB 一路涨到 600MB→必有泄漏。
+  <Step title="④ CPU Update 耗时">
+    Profiler CPU Usage 展开 PlayerLoop → 找出 Update/ScriptRunBehaviourUpdate 下 Self Time 最高的三个函数。确认没有每帧 `Find()`、`GetComponent()`、`new` 分配、字符串拼接 GC。全在 `Awake()` 缓存了引用。
   </Step>
-  <Step title="⑤ 最低端设备验证">
-    在目标最低端设备上运行游戏（如骁龙 660、3GB RAM 手机）→确认：Quality Level 0 配置下 FPS ≥ 25、无 OOM 崩溃。这是最容易漏的——开发机往往是旗舰机、目标用户可能是两年前的手机。
+  <Step title="⑤ 热降频测试">
+    在设备开发者选项里关温控（临时），跑最消耗场景 10 分钟 → 看 FPS 有没有因为温控掉。如果没关温控时掉帧严重 → GPU/CPU bound 要先修、再靠 Adaptive Performance 救急。
+  </Step>
+  <Step title="⑥ 弱网/离线">
+    关 WiFi + 关蜂窝数据 → 重新打开 App → 基础功能可玩。需要网络的资源有本地 fallback。下载超时提示友好（不显示 404 裸错误）。
   </Step>
 </Stepper>
 
-## 3. XR 平台清单
+## XR 检查清单
 
 <Stepper>
-  <Step title="① Motion-to-Photon 延迟——全程 < 20ms">
-    用 OVR Metrics Tool（Quest 内置的性能 HUD）实时监控→录一段包含激烈战斗/复杂场景的 5 分钟视频→回放确认：99% 帧的 MTP 延迟 < 20ms。**如果有任何一帧超过 25ms——用户可能会吐。这不是 99% 够用的问题——是 100% 必须达标的红线。**
+  <Step title="① Single Pass Instanced 确认">
+    Frame Debugger 中确认立体帧只有一个 Draw Call（标 Instanced）而非左右眼各一个。URP Renderer → Stereo Rendering Mode = Single Pass Instanced。
   </Step>
-  <Step title="② 帧率稳定性——99%帧在预算内">
-    72FPS 模式：99% 的帧渲染时间 < 13.9ms。检查 CPU 和 GPU 两端的帧时间分布——若 GPU 次次满载但 CPU 空闲→瓶颈在 GPU（降后处理/阴影/粒子）；若 CPU 满载 GPU 等→瓶颈在脚本（Inspector → CPU Usage 定位最贵函数）。
+  <Step title="② Motion-to-Photon 延迟">
+    用 OVR Metrics Tool（Quest）或 RenderDoc/Xcode GPU Capture 测真正 MTP 延迟 ≤20ms（理想 15ms 以内）。Editor 的数字不可信。
   </Step>
-  <Step title="③ UI 立体渲染正确性">
-    所有 UI（菜单、HUD、对话窗、准星）挂 World Space Canvas→距离摄像机 1-2 米→确认：左右眼画面中 UI 位置一致无重影/偏移。测试项：转头到极限角度→UI 是否仍可见？按键/抓取触发菜单弹出→位置是否遮挡视野？
+  <Step title="③ Foveated Rendering 级别">
+    在头显上实测 FFR 不同级别（Low/Medium/High），找「人注意不到 shimmer」的最高级。有眼动追踪的设备优先 Dynamic Foveated。
   </Step>
-  <Step title="④ Single Pass Instanced 确认开启">
-    URP Asset → Stereo Rendering Mode = Instanced（不是 Multi Pass）。用 RenderDoc 或 Frame Debugger 录制一帧→确认：一个 Draw Call 输出了两个 Render Target（左/右眼）→不是两次 Draw Call。
+  <Step title="④ XR Input 开销">
+    Profiler CPU Usage 中搜 `XRInput` 和 `XRInteraction` → 确认每帧 Poll 耗时不超 1ms。减少不必要的每帧 Raycast、缓存 Device/Action 引用。
   </Step>
-  <Step title="⑤ Adaptive Performance 兜底验证">
-    手动限制 CPU 频率（adb shell 模拟低性能设备）或故意在高负载场景跑→观察 Adaptive Performance 是否自动降低 Render Scale / LOD / 粒子数并维持帧率。若 Adaptive 干预后帧率仍掉→手动优化基线不够。
+  <Step title="⑤ ASW/合成检查">
+    看 OVR Metrics Tool 中 ASW 触发次数——如果频繁触发 → 渲染帧超预算了，优化渲染而非依赖 ASW 救场。ASW 是安全网、不是正常状态。
+  </Step>
+  <Step title="⑥ 连续续航 + 热降频">
+    戴上头显实际玩 20 分钟 → 记录 FPS 趋势。如果前 5 分钟正常、5 分钟后掉帧 → 触发温控降频了，GPU/CPU 需降低负载。
   </Step>
 </Stepper>
 
-## 4. Web 平台清单
+## Web 检查清单
 
 <Stepper>
-  <Step title="① 首次加载时间——LCP ≤ 4 秒">
-    用 Chrome DevTools → Lighthouse 或 WebPageTest → 测量 LCP（最大内容绘制）。Wasm + data 文件开启 GZip 或 Brotli→文件大小应压缩 50-70%。AssetBundle 用 `UnityCache` localStorage 缓存→第二次访问秒开。加载超 5 秒→考虑 Splash Screen 加进度条防用户以为白屏死掉。
+  <Step title="① 下载体积">
+    Build Report 看总 Build Size——Wasm 模块 ≤15MB、Data 文件 ≤30MB（首场景）。如果超了：Managed Stripping 调到 High、纹理 override 为 DXT5/BC7、音频压缩为 Vorbis。
   </Step>
-  <Step title="② 浏览器兼容矩阵测试">
-    至少测 Chrome 91+（Windows/Mac/Android）/ Firefox 89+ / Safari 15+（iOS+macOS）/ Edge 91+ 四个浏览器。测试项：加载→正常渲染→交互→音效→关闭不崩。记录结果到兼容性矩阵表→标每个浏览器的已知局限性（如 Safari 无 SIMD 前版本性能差）。
+  <Step title="② 首次加载时间">
+    在 Chrome DevTools Network Panel 里 Throttle 选 "Fast 3G" → 刷新页面 → 首帧画面 ≤10 秒。如果超了：首场景资源打进主 build（非远程 AB）、删除不用的内置 Shader Variant。
   </Step>
-  <Step title="③ 服务器头配置验证">
-    curl 请求你的 .wasm 文件→确认 `Content-Type: application/wasm`（不是 application/octet-stream）。请求主页→确认 `Cross-Origin-Opener-Policy: same-origin` 和 `Cross-Origin-Embedder-Policy: require-corp` 存在→若不存在 SharedArrayBuffer = undefined = 单线程 = 长痛。
+  <Step title="③ Chrome DevTools Performance">
+    加载完成后录制 5 秒 → Flame Chart 中黄色 Wasm 块的 Self Time 从高到低排序 → 处理前三名热点函数。
   </Step>
-  <Step title="④ 内存泄漏扫描">
-    Chrome DevTools Memory 面板→录制 5 分钟堆分配时间线→确认 Wasm Memory 和 JS Heap 不持续增长。若有增长→点击对应的矩形→定位到创建最多的 C# 类型→追踪是哪里在持续 `new` 而不是用对象池。**Web 端泄漏比移动端更致命——浏览器沙箱 OOM = 整个 Tab 崩溃。**
+  <Step title="④ AssetBundle 缓存">
+    DevTools Network Panel 中看 AssetBundle 请求是否返回 304 Not Modified（命中浏览器缓存）。确认 CDN 配置了 `Cache-Control: max-age=604800`（至少缓存一周）。
   </Step>
-  <Step title="⑤ 移动浏览器真机验证">
-    在 iPhone（iOS 15+）和 Android Chrome 上各跑 5 分钟→确认帧率可接受（Web 30FPS 为可接受目标）、无白屏、无崩溃。**PC Chrome 流畅 ≠ 手机 Chrome 流畅——手机 GPU 带宽只有桌面的 1/5。**
+  <Step title="⑤ 多浏览器兼容">
+    Chrome + Safari + Firefox + 移动端 Safari/Chrome 各跑一遍 → 每浏览器的 FPS 和加载时间记录在表格中。重点查 Safari WebGL 2.0 扩展不支持（浮点 RT 变黑）和 iOS Safari Wasm 内存超限崩溃。
+  </Step>
+  <Step title="⑥ 内存检查">
+    Chrome Task Manager（Shift+Esc）看标签页内存占用 ≤512MB、iOS Safari 看是否接近 1.2GB 天花板。Web 端内存泄漏不会 OOM——但标签页会被浏览器杀掉。
   </Step>
 </Stepper>
 
-## 5. 自测脚本——让代码帮你跑清单
+{/* 6. 自测脚本 */}
 
-手工逐一检查不仅慢——而且可能漏。把部分检查项写成 Editor 脚本，一次点击全跑。
+## 自测脚本：把清单变成自动化
+
+上面的清单可以部分自动化——在 CI 里跑一遍防止性能回退：
 
 ```csharp
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering;
-using System.Text;
 
-public class PreReleaseChecklist : EditorWindow
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
+
+public class PerformanceSelfCheck : MonoBehaviour
 {
-    [MenuItem("Tools/上线前检查")]
+    [SerializeField] private int maxDrawCalls = 500;
+    [SerializeField] private int maxSetPassCalls = 80;
+
+    void Update()
+    {
+        // 每 60 帧检查一次（不在每帧做避免影响性能）
+        if (Time.frameCount % 60 != 0) return;
+
+        int drawCalls = UnityEngine.Rendering.OnDemandRendering.renderFrameCount;
+        // 注意：drawCalls 需要从 Profiler Recorder 或手动帧计数器获取
+        // 此处展示检查框架——实际数从 ProfilerRecorder 或 FrameDebugger 取
+
+        // ProfilerRecorder 示例（Unity 2021+）
+        // using UnityEngine.Profiling;
+        // var recorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
+        // int dc = recorder.LastValue;
+    }
+
+    // Editor 工具：一键跑检查清单
+#if UNITY_EDITOR
+    [MenuItem("Tools/Run Performance Checklist")]
     static void RunChecklist()
     {
-        var report = new StringBuilder();
-        int passed = 0, failed = 0;
-
-        // 1. URP 配置检查
-        var rp = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-        if (rp != null)
-        {
-            if (rp.supportsHDR)
-            {
-                report.AppendLine("⚠ HDR 已开启——确认三平台 HDR 策略");
-                failed++;
-            }
-            else { report.AppendLine("✓ HDR 关闭"); passed++; }
-
-            if (rp.msaaSampleCount > 2)
-            {
-                report.AppendLine("⚠ MSAA > 2x——移动端/XR 性能影响大");
-                failed++;
-            }
-            else { report.AppendLine("✓ MSAA ≤ 2x"); passed++; }
-
-            if (rp.renderScale < 1.0f)
-            {
-                report.AppendLine($"✓ Render Scale = {rp.renderScale}（已降分辨率）");
-                passed++;
-            }
-            else { report.AppendLine("⚠ Render Scale = 1.0——考虑中低端设 0.7-0.8"); failed++; }
-        }
-
-        // 2. 纹理检查
-        var textures = AssetDatabase.FindAssets("t:Texture");
-        foreach (var guid in textures)
-        {
-            var path = AssetDatabase.GUIDToAssetPath(guid);
-            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (importer != null && importer.maxTextureSize > 1024)
-            {
-                report.AppendLine($"⚠ 大纹理: {path}（maxSize={importer.maxTextureSize}）");
-                failed++;
-            }
-        }
-
-        // 3. 构建体积检查
-        // （实际需要在 Build 后统计，此处简化）
-
-        report.AppendLine($"\n=== 检查完成：通过 {passed} / 失败 {failed} / 共 {passed+failed} ===");
-        Debug.Log(report.ToString());
+        Debug.Log("=== Performance Checklist ===");
+        Debug.Log("[Texture] Check Memory Profiler → Texture format = ASTC/DXT5, not RGBA32");
+        Debug.Log("[DrawCall] Check Profiler Rendering → Draw Calls ≤ 500, SetPass ≤ 80");
+        Debug.Log("[CPU]     Check Profiler CPU Usage → Top 3 Self Time functions, no Find()/GetComponent() in Update");
+        Debug.Log("[Memory]  Check Memory Profiler → Total ≤ platform limit (Mobile:800MB/XR:1.2GB/Web:512MB)");
+        Debug.Log("[Loading] Check Network/DevTools → First frame ≤ 10s (Web), Remote resources have fallback");
+        Debug.Log("=== Checklist Complete: verify each item manually ===");
     }
+#endif
 }
 ```
 
 <Callout type="tip">
-  **扩展这项检查**：加上 Shader 变体统计（`ShaderUtil.GetShaderVariantEntries`——变体超 5000 警告编译时间）、场景引用完整性（`EditorSceneManager.GetActiveScene().GetRootGameObjects` 遍历）、Missing Script 扫描。这是一份活的检查清单——你每踩一次坑就往上加一条。
+  完整的 CI 自测流程：①在 Jenkins/GitHub Actions 中构建各平台 Build → ②对每个 Build
+  跑一组指定场景的自动化 Profiler 录制 → ③用 Profile Analyzer CLI 比对先前基线 →
+  ④关键指标（FPS 均值、CPU/GPU ms）恶化超过 5% → CI 标红阻止合入。本章代码是骨架，
+  具体 CI 集成参考 Unity 官方 Profile Analyzer CLI 文档。
 </Callout>
 
-## 容易踩的坑
-
-<Callout type="trap">
-  **现象**：三平台清单都过了，但唯独 Web 平台忘了测移动端浏览器——iPhone Safari 上一打开就白屏。**原因**：iOS Safari 对 `SharedArrayBuffer` 的支持在 iOS 15.2 之前有 bug，加上 COOP/COEP 头的实现不如桌面 Chrome 稳定。**修法**：**永远不要只在桌面 Chrome 测 Web 版本**——上线前必须在至少一部 iPhone 和一部 Android 手机的真机浏览器上各跑 5 分钟。
-</Callout>
-
-<Callout type="trap">
-  **现象**：把所有检查项写成自测脚本后，每次 Build 都跑一遍——CI 时间从 5 分钟膨胀到 25 分钟。**原因**：纹理/场景遍历检查在 Editor 下是 IO 密集的——上千个资源逐个读 Import 设置很耗时。**修法**：分层检查——"快速检查"（URP 配置 + Quality Settings + targetFrameRate）每次 Build 跑；"全量扫描"（纹理+模型+Shader 变体审计）每晚跑一次。
-</Callout>
-
-<Callout type="trap">
-  **现象**：建立基线后第一次跑就发现 Draw Call 超了 3 倍——查了一圈发现是有人不小心把一个小物体关了 Static Batching。**原因**：没有人在上线前逐条检查——清单挂在 wiki 上没人看。**修法**：把清单嵌到 CI 里，**自动跑、自动报**——人肉检查只作为兜底验证（清单上简单易漏的那些项）。
-</Callout>
+{/* 8. 小结与练习 */}
 
 ## 小结
 
-- Profiler 基线（FPS/Draw Call/Memory）是你和性能退化的最后一面墙——CI 自动跑、偏差报警
-- 移动端清单：温控 30 分钟不降频 → 电池 < 25%/h → 弱网恢复 → 内存不泄漏 → 最低端设备可玩
-- XR 清单：MTP < 20ms → 99% 帧在预算 → UI 双眼一致 → SPI 确认 → Adaptive 兜底有效
-- Web 清单：首次加载 ≤ 4s → 四浏览器兼容 → 服务器头正确 → 无内存泄漏 → 手机真机验证
-- 清单 = 活的——每踩一次新坑就往上加一条；能自动化的绝不靠人肉
+- **通用 Profiler 基线**：移动 60FPS/14ms CPU / XR 90FPS/9ms CPU / Web 60FPS/13ms CPU——每个平台有自己的数字
+- **移动端清单六步**：纹理压缩 → Render Scale+MSAA → Draw Call+SetPass → CPU Update → 热降频 → 弱网离线
+- **XR 清单六步**：Single Pass Instanced → MTP 延迟 → Foveated Rendering → XR Input → ASW 检查 → 连续续航热降频
+- **Web 清单六步**：下载体积 → 首次加载 → DevTools Performance → AB 缓存 → 多浏览器兼容 → 内存
+- **CI 自测脚本**：把重复检查自动化——基线比对 ±5% 合入门禁
 
 <Exercises>
 
-**练习 1（改代码型）** 扩充上面的上线前检查脚本：加上对构建体积的检查——统计 Build 目录的 `Build/xxx.data` 文件大小，> 50MB 时报警输出"Web 首次加载将超限"。
+**练习 1（操作题）** 拿你的当前项目，按本章移动端清单走完六步检查。在每一步中记录实际数字和判断结果（通过/未通过/待修复）。
 
 <Answer>
-```csharp
-string buildDir = "Build";
-if (Directory.Exists(buildDir))
-{
-    var dataFiles = Directory.GetFiles(buildDir, "*.data", SearchOption.AllDirectories);
-    long totalBytes = 0;
-    foreach (var f in dataFiles)
-        totalBytes += new FileInfo(f).Length;
 
-    double totalMB = totalBytes / (1024.0 * 1024.0);
-    if (totalMB > 50)
-    {
-        report.AppendLine($"⚠ .data 文件总大小 {totalMB:F0}MB > 50MB——Web 首次加载过长");
-        failed++;
-    }
-    else
-        report.AppendLine($"✓ .data 文件 {totalMB:F0}MB（Web 可接受）");
-}
-```
+按移动端 Stepper 的六步逐项走：①Memory Profiler 记下所有纹理格式分布 → 数有多少个 RGBA32 → 标出需要转 ASTC 的；②记录 URP Asset 的 Render Scale 和 MSAA Level；③Profiler Rendering 模块记 Draw Call 和 SetPass 峰值；④CPU Usage 展开记前三 Self Time 函数；⑤开发机选项关温控跑 10 分钟记 FPS 曲线；⑥关网重开记体验。最终输出一份 markdown 表格：「检查项 | 实际值 | 预算 | 结果 | 修法」。
+
 </Answer>
 
-**练习 2（问答型）** 为什么 XR 的 Motion-to-Photon 检查是"100% 必须达标"而不是"99% 够用就行"？
+**练习 2（选型题）** 你的项目需要同时出 Android + iOS + Quest + WebGL 四个 Build。设计一个 TextureImporter 批量脚本，为这四个平台各设正确的纹理压缩格式。写出完整的平台→格式映射表。
 
 <Answer>
-生理原因：晕动症是身体对感官冲突的**无条件**反射——不是"有时候有点晕"、而是每帧 MTP > 20ms 都在累积不适。大脑不会因为"之前 99 帧都好"就原谅第 100 帧超限——它依然会记录这份不适。经过几分钟的累积后用户会产生持续性眩晕——所以只要有一帧超过了红线，那一次体验就已经被影响了。
-</Answer>
 
-**练习 3（实现型）** 把三个平台清单用 Unity Editor Window 做成一个 Checklist 面板——每个条目一个勾选框，手动勾选后保存状态到 EditorPrefs，下次打开自动恢复。
+平台→格式映射：
+- Android：ASTC 6×6（通用）、ASTC 4×4（法线）、ASTC 8×8（大背景）
+- iOS：ASTC 6×6（同 Android，iOS 全系支持 ASTC 自 A8 起）
+- Quest（Android Standalone VR）：ASTC 6×6（Quest 就是 Android 系统 + Qualcomm GPU = ASTC）
+- WebGL：DXT5/BC3（通用）、BC7（高质量纹理，检测支持）
 
-<Answer>
-```csharp
-public class ChecklistWindow : EditorWindow
-{
-    string[] mobileItems = { "温控 30 分钟", "电池 < 25%/h", "弱网恢复", "内存无泄漏", "低端设备验证" };
-    bool[] mobileChecks = new bool[5];
+脚本结构：遍历所有 Texture → `importer.GetPlatformTextureSettings("Android")` 设 ASTC 6×6 → `GetPlatformTextureSettings("iPhone")` 设 ASTC 6×6 → `GetPlatformTextureSettings("WebGL")` 设 DXT5 → Quest 走 Android 设置（同一平台）。
 
-    [MenuItem("Tools/上线清单")]
-    static void Open() => GetWindow<ChecklistWindow>("上线清单");
-
-    void OnEnable()
-    {
-        for (int i = 0; i < mobileChecks.Length; i++)
-            mobileChecks[i] = EditorPrefs.GetBool($"checklist_mobile_{i}", false);
-    }
-
-    void OnGUI()
-    {
-        GUILayout.Label("移动端清单", EditorStyles.boldLabel);
-        for (int i = 0; i < mobileItems.Length; i++)
-        {
-            bool old = mobileChecks[i];
-            mobileChecks[i] = EditorGUILayout.Toggle(mobileItems[i], mobileChecks[i]);
-            if (old != mobileChecks[i])
-                EditorPrefs.SetBool($"checklist_mobile_{i}", mobileChecks[i]);
-        }
-    }
-}
-```
 </Answer>
 
 </Exercises>
 
 <Glossary>
 
-<GlossaryItem term="性能基线（Baseline）">一帧、一秒、三十秒下的核心性能指标的"锚点数据"（FPS/Draw Call/内存量/构建体积）。以后每次改代码/Asset 都和基线对比——偏差超 20% 报警。类比：体重秤上的初始体重——之后的变化都和它比较。
+<GlossaryItem term="Profiler 基线">
+  在固定条件下录制的一组 Profiler 指标（FPS/CPU ms/GPU ms/Draw Call/SetPass/内存），作为「改前的对照数」。上线前每个目标平台都要建立并跑通基线。详见本章「通用 Profiler 基线」节。
+</GlossaryItem>
 
-<GlossaryItem term="温控降频（Thermal Throttling）">手机/VR 头显发热后系统自动压低 CPU/GPU 频率以散热保护的机制。降频一旦触发帧率对半砍——是移动端性能监控的最高优先级事件。
+<GlossaryItem term="帧预算">
+  每帧允许的最大处理时间：移动 60FPS = 16.6ms 总预算（CPU+GPU）、VR 90FPS = 11.1ms。CPU 和 GPU 各自拿总预算的一部分，另一半留给合成/驱动开销。
+</GlossaryItem>
 
-<GlossaryItem term="LCP（Largest Contentful Paint）">Web 性能指标——从开始加载到页面最大可见内容完成渲染的时间。Google 推荐 < 2.5 秒，Unity Web 游戏首次加载因 Wasm 体积大一般 ≤ 4 秒为可接受目标。
-
-<GlossaryItem term="UnityCache">Unity 6 的 WebGL 平台内置缓存机制——用浏览器 IndexedDB 存储已下载的 AssetBundle 和 data 文件。第二次访问不用重新下载，只需拉取小的版本头来确认缓存有效期。
+<GlossaryItem term="Overdraw">
+  同一像素被多次绘制（后面的物体画完被前面盖掉再画一次）。Tile-based GPU 对此敏感——会增加 Tile Memory 的 Load/Store。移动端减少 Overdraw 比桌面端更重要。
+</GlossaryItem>
 
 </Glossary>
 
-<Attribution adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

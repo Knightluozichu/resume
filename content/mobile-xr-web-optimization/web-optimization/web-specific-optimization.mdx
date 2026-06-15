@@ -3,282 +3,261 @@ title: Web 专项优化
 type: C
 section: Web 专项优化
 order: 1
-description: WebAssembly 2023、Chrome DevTools Profiling、Web 纹理与 AssetBundle——把 Unity 带到浏览器。
+description: WebAssembly 2023、Chrome DevTools Profiling、Web 纹理格式——把 Unity 高效带到浏览器。
 demo: true
 math: false
-sourceUrl: ""
 draft: true
+sourceUrl: ""
 ---
 
-{/* C 实战型（Unity《Optimize your game performance》Web 章节改编）：
-   知识点清单与 viz：
-   1) WebAssembly 2023 新特性 — WebAssemblyFeatureDiagram
-   2) Chrome DevTools 抓 Unity Web 帧 — 代码对照
-   3) Web 纹理格式与 Memory — 代码对照
-   4) AssetBundle 远程加载 — 代码对照
-   5) 浏览器兼容性清单 — Callout
-*/}
+{/* C 实战型章：Wasm 2023、Chrome DevTools、Web 纹理、AssetBundle、兼容性。
+知识点清单（每项配 viz）：
+1. Wasm 2023 → Wasm2023Diagram (SVG 示意图)
+2. Chrome DevTools → 代码对照
+3. Web 纹理格式 → 代码对照
+4. AssetBundle 加载 → 代码对照
+5. 浏览器兼容性 → Callout(warn)
+Term 高亮术语：WebAssembly、Wasm 2023、Chrome DevTools、DXT5/BC7、AssetBundle、Addressables → 均进章末 Glossary */}
 
 <Objectives>
 
-- 能用 Chrome DevTools 的 Performance 面板抓取 Unity Web 游戏的帧时间线，定位渲染瓶颈
-- 能配置 Unity WebGL 项目的纹理压缩格式和 AssetBundle 远程加载策略
-- 能回答：Unity Web 游戏的首次加载为什么需要 5-10 秒？有哪些手段可以缩短到 3 秒以内？
+- 能解释 WebAssembly 2023 相比旧版 Wasm 的改进，以及它对 Unity Web 导出的性能影响
+- 能使用 Chrome DevTools Performance Panel 定位 Unity WebGL Build 的瓶颈帧
+- 能正确选择 Web 平台的纹理压缩格式，并建立 Web 平台的 AssetBundle 加载策略
 
 </Objectives>
 
-## 为什么把 Unity 带到浏览器
+{/* 2. 直觉引入 */}
 
-十年前，在浏览器里跑 3D 游戏是个笑话——Flash 都卡得不行，别说 3A 级渲染。2023 年，你在任何一个 Chromium 内核的浏览器里打开 itch.io，能直接玩到用 Unity 6 构建的全 3D 游戏——不需要下载、不需要安装、不需要高端显卡。
+## 把 Unity 搬到浏览器——不是缩小版 EXE
 
-这一切依赖三样东西：**WebGL 2.0**（浏览器里的 GPU API）、**WebAssembly**（接近原生的 C++ 运行速度）、以及 **Unity 的 IL2CPP Web 构建管线**——这套组合把游戏引擎编译成一个 `.wasm` 二进制 + JavaScript 胶水代码，在浏览器的沙箱里直接运行。
+Unity WebGL Build 是把你的 C# 代码编译成 <Term def="一种在浏览器中运行二进制代码的低级指令格式：比纯 JavaScript 快数倍，是现代浏览器的内置能力。Unity 的 IL2CPP 将 C# 编译为 Wasm 后在浏览器中执行。">WebAssembly</Term>（Wasm）、把 C++ 引擎底层也交叉编译成 Wasm、把纹理/网格/音频等资产打成 `.data` 文件一起扔到服务器上，用户打开网页就会下载十几 MB 甚至上百 MB 的东西并在浏览器里跑完整游戏引擎。
 
-代价也有：Wasm 的 CPU 性能约是原生 C++ 的 60-80%、WebGL 2 没有 Compute Shader（也无法用最新的 GPU 功能）、浏览器对内存和线程的访问有严格的安全限制。**Web 专项优化就是在这个受限的沙箱里，尽力逼近原生体验。**
+所以 Web 优化不是「改两个设置就行」——你需要同时管三件事：**下载体积**（包体越小、用户等得越短）、**运行时性能**（浏览器里的 GPU 是 WebGL 2.0，不是 Vulkan/Metal）、**浏览器兼容性**（Chrome 好不等于 Safari 也好）。
 
-## 1. WebAssembly 2023——从"能用"到"好用"
+这一章从 WebAssembly 2023 的新能力出发，一步一步走到 Chrome DevTools Profiling、Web 纹理格式选择和 AssetBundle 加载——读完你就能把一个 Unity 项目稳稳地跑在浏览器里，且加载和帧率都可度量。
 
-**WebAssembly 的进化不是渐进的——2023 年的四个核心特性让它从"能跑"跨越到"接近好用"。**
+{/* 3. 核心概念 */}
 
-<WebAssemblyFeatureDiagram />
+## 第一个概念：WebAssembly 2023——从基础到现代
 
-```csharp
-// Unity 6 中确认 Wasm 特性开启的方法：
-// 在 PlayerSettings → WebGL → Player → Other Settings →
-//   Enable WebAssembly SIMD（默认开启）
-//   Enable WebAssembly 2023（Unity 6 默认开启）
-//
-// 构建后可通过浏览器 Console 验证：
-// console.log(Module.wasmFeatures);
-// 输出应包含：simd, bulk-memory, threads
-```
+Unity 6 的 WebGL Build 已经全面转向 IL2CPP + Wasm 2023。不是旧版 Wasm 上打个补丁——而是一次显著的底层升级：
 
-<Term def="SIMD 128：一条 CPU 指令同时处理 4 个 32 位浮点数——向量加法/乘法/点乘一次做完，数学库直接受益 2-4 倍加速">SIMD 128</Term> 对 Unity 游戏的影响最大：物理引擎的向量运算、蒙皮动画的矩阵乘法、粒子系统——这些以前要被编译成一串串标量指令的工作，现在一条 SIMD 指令搞定。
+<Wasm2023Diagram />
 
-<Term def="Bulk Memory：Wasm 的批量内存操作指令集——memcpy/memset 由单条指令完成而非逐字节循环，AssetBundle 解压和场景加载瞬间加速 3-5 倍">Bulk Memory</Term> 则解决了 Web 端最慢的一环——加载。AssetBundle 从服务器下载后需要解压进 Wasm 线性内存——以前是 JavaScript 逐字节拷过去，Bulk Memory 用 C 级原生指令直接搬整个内存块——3-5 倍提速。
+2023 版核心改进：
 
-## 2. Chrome DevTools——Web 端的 Unity Profiler
+- **Sign Extension / Non-Trapping FP-to-Int / Bulk Memory 等指令集完成**：让 IL2CPP 生成的 Wasm 代码更紧凑、运行时更快——没有这些指令时 C++ 编译器只能「绕路」实现相同功能（多出一堆辅助指令）
+- **更好的 GC 交互**：Wasm GC 提案部分落地，让 IL2CPP 的托管对象（C# 里的 class 实例）能与浏览器 JS 引擎的 GC 更高效地协作——旧版全靠手动 pin/unpin 和引用计数桥接，开销大
+- **Native Wasm Threads**：多线程支持从实验走向稳定——配合 C# Job System/Burst，可以在浏览器 Worker 线程中跑 Burst 编译的 Job，不阻塞主线程
 
-Unity Profiler 在 Web 端不可用——浏览器的安全沙箱阻止了引擎建立网络 socket 来传输 Profiler 数据。你的工具是**浏览器自带的开发者工具**。
+<Callout type="tip">
+  Wasm 2023 的核心变化一句话：指令集更完备 → IL2CPP 生成的 Wasm 字节码更短 →
+  下载体积缩小、解析加速 → 首帧启动更快。单是 Sign Extension 和 Bulk Memory
+  指令的落地就让典型 Wasm 模块体积缩了 5–15%。
+</Callout>
+
+## 第二个概念：Chrome DevTools——Web 端的 Profiler
+
+桌面/移动端用 Unity Profiler，Web 端你得用浏览器的 DevTools。Chrome 的 Performance Panel 就是 WebGL Build 的 Profiler 入口：
 
 ```javascript
-// 在浏览器 Console 中可手动触发 Unity 内部的一些性能数据
-// 前提：Build 时勾选了 Development Build
-// unityInstance 是全局的 Unity 游戏实例
+// 在浏览器 Console 中标记 Unity 帧起止——帮助 DevTools 定位帧边界
+// Unity WebGL 在每一帧开始时会调用 JS 桥接的 requestAnimationFrame
+// 打开 Chrome DevTools → Performance → 录制 → 在 Flame Chart 里看 Wasm 函数耗时
+// 放大每个黄色 Wasm 条块定位热点 C# 函数（IL2CPP 保留了函数名映射）
+```
 
-// 获取当前帧时间（毫秒）
-console.log(Module['_getFrameTime']());
+DevTools Performance 录制步骤：
 
-// 或者通过 Unity 的 SendMessage 获取自定义数据
-// C# 端：
-public class WebPerfReporter : MonoBehaviour {
-    void Update() {
-        float frameTime = Time.unscaledDeltaTime * 1000f;
-        // 把数据通过 Application.ExternalCall 推到 JS
-        Application.ExternalCall("onFrameTimeUpdate", frameTime);
+1. 打开 Chrome DevTools（F12）→ Performance 面板
+2. 点录制按钮 → 在 Unity WebGL 页面正常操作 3–5 秒 → 停止录制
+3. 在 Flame Chart 中：
+   - 灰色块 = 浏览器原生任务（渲染合成/垃圾回收等）
+   - **黄色块 = Wasm 执行**（你的 C# 代码转成的 Wasm 在跑）
+   - 展开黄色块 → 看函数名（IL2CPP 保留的 C# 原名）→ 找 Self Time 最高的函数
+4. 底部的 Summary 面板显示各函数 Self 时间排行——这和 Unity Profiler 的 CPU Usage 展开是一个思路
+
+<Callout type="tip">
+  WebGL Build 的 IL2CPP 函数名映射：在 Project Settings → Player → Publishing Settings
+  → 启用 `Enable Exceptions` 至少选择 `Explicitly Thrown Exceptions Only`，可保留部分
+  异常信息和函数名映射——彻底关掉异常会让 DevTools 里 Wasm 栈只显示十六进制地址。
+</Callout>
+
+## 第三个概念：Web 平台的纹理压缩——DXT/BC 的世界
+
+Web 平台和移动端反过来——浏览器用的 GPU 是桌面显卡（通过 WebGL），所以纹理格式 **不支持 ASTC/ETC2，但支持 DXT/BC 系列**：
+
+| 格式 | 浏览器支持 | 适用纹理类型 |
+|------|-----------|-------------|
+| **DXT1 (BC1)** | 所有 WebGL 1.0/2.0 | 不透明漫反射（无 Alpha 通道） |
+| **DXT5 (BC3)** | 所有 WebGL 1.0/2.0 | 带 Alpha 通道的漫反射 |
+| **BC7** | WebGL 2.0（少数老设备不支持） | 高质量纹理（优于 DXT5） |
+
+```csharp
+// Web 平台纹理格式设置（Texture Importer Override）
+using UnityEditor;
+
+public class WebTextureSettings
+{
+    [MenuItem("Tools/Set WebGL Texture Format")]
+    static void SetWebGLFormat()
+    {
+        foreach (var obj in Selection.objects)
+        {
+            string path = AssetDatabase.GetAssetPath(obj);
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) continue;
+
+            // DXT5 (BC3) 是 WebGL 通用的带 Alpha 格式
+            var settings = importer.GetPlatformTextureSettings("WebGL");
+            settings.format = TextureImporterFormat.DXT5;
+            settings.overridden = true;
+            importer.SetPlatformTextureSettings(settings);
+
+            importer.SaveAndReimport();
+        }
+        AssetDatabase.Refresh();
     }
 }
 ```
 
-**Chrome DevTools Performance 面板操作流程：**
-
-1. 打开页面 → F12 → Performance 面板
-2. 点击录制按钮（圆点）→ 等待游戏运行 5-10 帧 → 停止
-3. 在时间线中找到 **F 标记**（frame）——hover 看每帧耗时
-4. 展开 Main 线程火焰图——紫红色块是 Wasm 代码执行（`wasm-to-js`），黄色块是 JS 脚本，绿色块是 GPU 等待
-5. Memory 面板 → 录制堆快照 → 检查 Wasm Memory 和 JS Heap 是否持续增长
-
-<Callout type="tip">
-  **看懂火焰图**：DevTools 把 Wasm 函数名渲染成了 C++ mangled 格式（`__Z10MyFunctionv` 之类）。可以用 Chrome 的 "demangle" 扩展或 Wasm dissasembler 还原成可读的函数名——或者简单地在 C# 中给函数起名字足够独特以便搜索。
-</Callout>
-
-## 3. Web 纹理格式与内存
-
-Web 端没有 ASTC/ETC2 硬件解码器——纹理压缩格式只能选浏览器 WebGL 实现直接支持的：
-
-```csharp
-// Unity Texture Importer → Platform-specific Overrides → WebGL
-//
-// 推荐格式：
-// DXT5 (RGBA) / DXT1 (RGB) — 桌面 Chrome/Firefox/Edge 全部支持
-// ETC2 (RGB) / ETC2_EAC (RGBA) — 移动浏览器 Android/iOS Chrome 支持
-//
-// WebP 纹理暂不支持——WebGL 不认 WebP 作为 GPU 纹理格式
-//
-// Build 后的纹理内存用量：
-// 1024×1024 RGBA DXT5 = 512KB（1/8 原大小）
-// 1024×1024 RGB  DXT1 = 512KB（1/8 原大小）
-```
-
 <Callout type="warn">
-  **Web 端纹理内存限制**：iOS Safari 的 WebGL 内存上限约 1GB——但这包含 Wasm 堆 + JS 堆 + GPU 纹理。一张完全不压缩的 4K 贴图（4096×4096 RGBA）就是 64MB——游戏里拉 20 张就撞墙。务必用 DXT/ETC2 压缩所有 Web 纹理，且对 >1024 的纹理用 Mipmap（引入额外 1/3 内存，但采样性能省很多）。
+  移动端和 Web 端的纹理格式几乎完全相反——一个项目如果同时出 Android+iOS+WebGL
+  三端，必须按平台 override 格式：Android/iOS → ASTC、WebGL → DXT5/BC7。
+  不要用 RGBA32（未压缩）——30MB 的纹理在 Web 端就是 30MB 的下载量。
 </Callout>
 
-## 4. AssetBundle 远程加载——Web 端必须做
+## AssetBundle 与 Addressables：Web 端的增量加载
 
-APK 可以 150MB+，Web 游戏首次加载必须 ≤ 50MB（否则用户等不起）。解决方案就是 **AssetBundle 按需从服务器加载**。
+Web 平台的资源加载和桌面/移动端有一个根本区别：**用户的「安装包」实际上是每次打开网页的下载**。没人愿意等 200MB 下载完才看到画面。
 
 ```csharp
-// Web 端 AssetBundle 加载必须用 UnityWebRequest（不能用 LoadFromFile）
-using UnityEngine.Networking;
-using System.Collections;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 public class WebAssetLoader : MonoBehaviour
 {
-    public string bundleURL = "https://cdn.example.com/bundles/mylevel";
+    [SerializeField] private AssetReferenceGameObject levelPrefab;
 
-    IEnumerator Start()
+    async void Start()
     {
-        using var request = UnityWebRequestAssetBundle.GetAssetBundle(bundleURL);
+        // Addressables 异步加载——Web 端必须非阻塞
+        var handle = Addressables.LoadAssetAsync<GameObject>(levelPrefab);
+        await handle.Task;
 
-        // Web 端设置超时（网络比本地 IO 不可靠得多）
-        request.timeout = 30;
-
-        yield return request.SendWebRequest();
-
-        if (request.result != UnityWebRequest.Result.Success)
+        if (handle.Status == AsyncOperationStatus.Succeeded)
         {
-            Debug.LogError($"下载失败: {request.error}");
-            yield break;
+            Instantiate(handle.Result);
+        }
+        else
+        {
+            Debug.LogError($"Failed to load asset: {handle.OperationException}");
         }
 
-        var bundle = DownloadHandlerAssetBundle.GetContent(request);
-
-        // 加载 Bundle 中的资源
-        var prefab = bundle.LoadAsset<GameObject>("MyPrefab");
-        Instantiate(prefab);
-
-        // 记得卸载 Bundle（但不卸载已实例化的资源）
-        bundle.Unload(false);
+        // 用完记得释放（不释放 = Web 端内存泄漏）
+        // Addressables.Release(handle);
     }
 }
 ```
 
-<Callout type="trap">
-  **CORS 头缺失**：Web 游戏从 `cdn.example.com` 加载 AssetBundle 时，该服务器必须返回 `Access-Control-Allow-Origin` 头——不然浏览器出于安全策略直接拒绝加载。本地测试时 `localhost` 加载本地文件通常不受限，但一部署到生产就挂——**提前确认 CDN 配置 CORS 头。**
-</Callout>
+Web AssetBundle 策略四步：
 
-## 5. 浏览器兼容性清单——三座大山
+1. **首场景资源打进主 build**：最小可玩体验的资源（登录/主菜单/Loading UI）打包进 Wasm 主文件——用户打开网页 5 秒内有画面
+2. **后续 AssetBundle 走 CDN**：关卡、角色、音频等大资源放在 CDN 上，Addressables 远程 catalog 指向 CDN URL
+3. **加载提示**：Web 端远程资源下载速度取决于用户网络——一定要有下载进度条和预计剩余时间，否则用户以为卡死了
+4. **缓存策略**：AssetBundle 的 `Caching.compressionEnabled = true` + `Caching.ready` 检查，已下载过的 AB 从浏览器缓存读而不重新下载
 
-**① WebGL 2.0 支持**：Chrome 56+（2017 年 1 月）、Firefox 51+（2017 年 1 月）、Safari 15+（2021 年 9 月）。任何不支持 WebGL 2 的浏览器完全无法运行 Unity Web 游戏——但 2025 年往后这个限制几乎只影响 IE 11（已退役）。
+{/* 浏览器兼容性 */}
 
-**② SharedArrayBuffer 和跨域隔离**：Unity 多线程依赖 `SharedArrayBuffer`——它需要服务器返回两个 HTTP 响应头：
-
-```
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-缺这两个头 → `SharedArrayBuffer` = `undefined` → Unity 回退为单线程 → 性能差 50%+。
-
-**③ iOS Safari 的 AudioContext 限制**：iOS Safari 不允许在用户触摸屏幕前播放音频（`AudioContext` 处于 `suspended` 状态）。Unity Web 必须监听第一个 `touchend` 事件并调用 `audioContext.resume()`——否则游戏全程静音。Unity 6 的默认 WebGL 模板已处理此限制。
+## 浏览器兼容性：Chrome 好不等于 Safari 好
 
 <Callout type="warn">
-  **别忘了移动浏览器**：你的 Web 游戏可能在桌面 Chrome 里跑 60FPS，在 iPhone Safari 里掉到 15FPS。iOS 的 WebGL 性能限制更多：无 SIMD（直到 iOS 16.4）、内存上限更低、散热降频更快。**必须用真机测。**
+  浏览器兼容性暗坑：①Safari 对 WebGL 2.0 部分扩展支持有限（如
+  `EXT_color_buffer_float` 部分不可用 → 浮点 RT 渲染失败）；②iOS Safari 的 Wasm
+  内存上限为 ~1.2GB（比桌面 Safari 小得多）→ 复杂场景内存超限直接崩溃；③Firefox
+  的 Wasm 编译速度通常慢于 Chrome（Firefox 用 Cranelift/Cranelift 慢路径、Chrome
+  用 Liftoff/TurboFan 快路径）→ 首帧启动 Firefox 慢 2–3 秒；④微信内置浏览器 X5
+  内核对 WebGL 兼容极差——需要单独检测并提示用户切到系统浏览器打开。上线前必须在
+  **至少 Chrome + Safari + Firefox + 移动端 Safari/Chrome** 上全部跑一遍。
 </Callout>
+
+{/* 7. 常见误区 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：Web 游戏在本地 `localhost` 测试正常，部署到服务器后 Wasm 文件加载失败——控制台提示 "unsupported MIME type"。**原因**：服务器没有配置 `.wasm` 文件的 MIME 类型。**修法**：服务器配置中添加 `application/wasm` MIME 类型映射。对 Nginx：`types { application/wasm wasm; }`；对 S3/CloudFront：上传时指定 Content-Type。
+  **现象**：Unity WebGL Build 出来 120MB，用户打开网页白屏 20 秒。**原因**：纹理全用 RGBA32 未压缩（每张 2K 纹理 16MB）、音频未压缩（PCM → .data 塞满）、IL2CPP 的 managed stripping 没开（C# 不用的代码也全编译进 Wasm）。**修法**：①纹理按平台 override 为 DXT5/BC7（WebGL 平台）；②音频压缩为 Vorbis（Quality 50–70%）；③Player Settings → Managed Stripping Level 设为 High；④Build Report 看各资源体积分布，从最大的文件开始砍。
 </Callout>
 
 <Callout type="trap">
-  **现象**：Web 游戏加载后每 3-5 秒出现一个规律性的帧率尖刺，标记为 `idle`。**原因**：浏览器的 JavaScript GC 在主线程上的 stop-the-world 回收——Unity 的 IL2CPP 生成的 Wasm 代码不会触发 GC，但 C# 对象的分配会映射到 JS 堆上的创建/销毁。**修法**：减少 C# 的堆分配——用对象池代替 Instantiate/Destroy、Strcut 代替 class（值类型不在堆上）、PlayerSettings → Strip Engine Code 剥离未用代码→减少 Wasm 体积也减少 JS 胶水代码的 GC 压力。
+  **现象**：AssetBundle 在 Editor 里加载正常，WebGL Build 上线后一直 404 或 CORS 错误。**原因**：远程 AssetBundle URL 使用了相对路径（Web 端的相对路径以网页域名为基础）、或 CDN 服务器没配 CORS 头。**修法**：Addressables Remote Catalog 用绝对 URL（如 `https://cdn.example.com/bundles/`）；CDN 服务器加 `Access-Control-Allow-Origin: *` 头；Safari 还要求 CDN 返回 `Cross-Origin-Resource-Policy: cross-origin` 头。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`UnityWebRequestAssetBundle.GetAssetBundle` 下载完成后 `LoadAsset` 返回 null。**原因**：AssetBundle 文件本身的版本或平台不匹配——Web 端要用 WebGL 平台下的 AssetBundle（`BuildTarget.WebGL`）。**修法**：确保 AssetBundle 是针对 WebGL 构建的。在 AssetBundle Browser 工具中选择 Build Target = WebGL 重新打包。
+  **现象**：网站在 Chrome 上跑 60 FPS 流畅，Safari 上只有 15 FPS 且风扇狂转。**原因**：Safari 的 WebGL 2.0 实现在一些操作上比 Chrome 慢得多——尤其是频繁切换 Render Target、多次 Post-processing Pass、和消耗大量 GPU 带宽的实现。Chrome 的 ANGLE 层（把 WebGL 翻译成 Metal/D3D11）对移动端优化更好；Safari 在 iOS 上受限于浏览器本身的 JS→Wasm→WebGL 多跳开销。**修法**：减少全屏 Post Pass（合并到一个 Pass）、Render Scale 设 0.8–0.9、不用 CPU-heavy 的每帧操作（如 `Camera.main` 在 Update 里反复调）。
 </Callout>
+
+{/* 8. 小结与练习 */}
 
 ## 小结
 
-- WebAssembly SIMD 128 加速向量/矩阵运算 2-4×、Bulk Memory 加速 AssetBundle 解压 3-5×——Unity 6 默认开启
-- Chrome DevTools Performance 面板是 Web 端的唯一 Profiler——学会看 F 标记、火焰图和 Wasm 代码占用
-- Web 纹理用 DXT5/DXT1（桌面）和 ETC2（移动浏览器），iOS Safari WebGL 内存上限 ~1GB
-- AssetBundle 远程用 `UnityWebRequest` 加载（禁 `LoadFromFile`）——服务器必配 CORS 头
-- 兼容性三座山：WebGL 2 浏览器支持 + COOP/COEP 头开启 SharedArrayBuffer + iOS Safari AudioContext 解锁
+- **WebAssembly 2023** 指令集更完备 → IL2CPP 生成的 Wasm 更紧凑 → 下载体积小、解析快、首帧启动提速
+- **Chrome DevTools Performance Panel** 是 Web 端的 Profiler——黄色 Wasm 块 = 你的 C# 代码 > 找 Self Time 最高的函数
+- **Web 纹理格式和移动端完全相反**：DXT5/BC7（桌面 GPU 格式）而非 ASTC/ETC2
+- **AssetBundle 走 CDN + 首场景打进包 + 进度条 + 缓存** = Web 端资源加载四件套
+- **多浏览器兼容测试是刚需**：Chrome + Safari + Firefox + 移动端各测一遍
 
 <Exercises>
 
-**练习 1（改代码型）** 为一个 Unity Web 项目添加运行时帧时间监控：每 60 帧（1 秒）把平均帧时间通过 `Application.ExternalCall` 发送到浏览器的 `console.log`。在 DevTools Performance 面板中交叉验证这两个数据是否一致。
+**练习 1（操作题）** 创建一个新的空 Unity 项目，切换到 WebGL 平台，做一个 Build。打开 Build Report 看各部分（Code/Data/Resources）的体积分布——哪部分最大？然后在 Player Settings 里把 Managed Stripping Level 设为 High、纹理格式 override 为 DXT5，再做一次 Build，对比两次 Build Report 的总 Size。
 
 <Answer>
-```csharp
-using System.Collections.Generic;
 
-public class FrameTimeTracker : MonoBehaviour
-{
-    Queue<float> frameTimes = new();
-    const int reportInterval = 60;
+操作步骤：File → Build Profiles → 添加 WebGL → Switch Platform → Build。完成后在 Console 看 Build Report（或点 `Open Build Report`）。典型空项目：Code（Wasm）约 6–8MB、Data（默认资源+纹理）约 2–3MB。将 Managed Stripping Level 调高后 Code 可缩 20–30%；纹理格式改 DXT5 对空项目影响不大（没什么纹理），但纹理多的项目 Data 可缩数倍。重点体验 Build Report 的使用——以后所有 Web 优化都从这个报告开始。
 
-    void Update()
-    {
-        frameTimes.Enqueue(Time.unscaledDeltaTime * 1000f);
-        if (frameTimes.Count > reportInterval)
-            frameTimes.Dequeue();
-    }
-
-    IEnumerator ReportLoop()
-    {
-        while (true)
-        {
-            yield return new WaitForSeconds(1f);
-            float avg = 0;
-            foreach (var t in frameTimes) avg += t;
-            avg /= frameTimes.Count;
-            Application.ExternalCall("console.log", $"Avg frame: {avg:F1}ms");
-        }
-    }
-}
-```
 </Answer>
 
-**练习 2（问答型）** 为什么 Web 端的 `SharedArrayBuffer` 需要特殊的 HTTP 响应头？这两个头各自起什么作用？
+**练习 2（排错题）** 你的 WebGL 项目在主菜单帧率正常（60 FPS），进入战斗关卡掉到 20 FPS。用 Chrome DevTools Performance Panel 录制了 5 秒，发现黄色 Wasm 块中 `BattleManager.Update()` 的 Self Time 占了 70%。列出你的排查和修复路径。
 
 <Answer>
-`Cross-Origin-Opener-Policy: same-origin` 把当前页面和最顶层的浏览上下文绑定在同一个 origin 下——防止跨域页面通过 `window.open` 访问 SharedArrayBuffer。`Cross-Origin-Embedder-Policy: require-corp` 要求页面上所有跨域资源（图片、脚本等）必须明示允许被嵌入——防止恶意页面把你的资源加载进自己的页面后利用 SharedArrayBuffer 做侧信道攻击。两个头合在一起 = 浏览器信任你这个页面是"隔离安全的"——才允许使用共享内存。
+
+1. 展开 `BattleManager.Update()` 旗下的子函数，找到 Self Time 最高的子函数（可能是 AI 逻辑、物理查询、或调试日志）。2. 检查该函数是否有每帧分配（`new List<T>()`、字符串拼接 `+`、`foreach` over non-generic 产生 Boxing）→ IL2CPP GC 在 Wasm 环境下代价极高。3. 检查是否有 `Find()`/`GetComponent()` 在 Update 反复调 → 改缓存。4. 如果是纯计算太多（如 500 个单位每帧都在判断视线）：分帧执行（每帧只更新 1/N 个单位）或切到 C# Job System + Burst（如果启用了 Wasm Threads）。5. 如果以上都不行：Profile 确认瓶颈函数 → 降级相关逻辑（如 AI 更新频率从每帧到每 3 帧）。
+
 </Answer>
 
-**练习 3（实现型）** 写一个 WebGL 平台的资源管理器：用 `UnityCache`（IndexedDB 缓存）实现 AssetBundle 的本地缓存——首次下载后存入缓存，下次直接从缓存加载，只在服务器版本号更新时重新下载。
+**练习 3（代码题）** 写一个 `WebPreloader` MonoBehaviour：①在 `Start()` 中先显示加载进度条；②用 Addressables 异步加载一个标记为远程的 AssetBundle；③加载过程中实时更新进度条（百分比）；④加载完成后隐藏进度条并 Instantiate 加载的 GameObject。
 
 <Answer>
-```csharp
-IEnumerator LoadBundleCached(string bundleName, uint version)
-{
-    string url = $"https://cdn.example.com/bundles/{bundleName}";
 
-    using var request = UnityWebRequestAssetBundle.GetAssetBundle(url, version, 0);
-    // version 参数让浏览器 IndexedDB 自动判断缓存是否过期
-    yield return request.SendWebRequest();
+参考本章「AssetBundle 与 Addressables」节的代码。核心：`Addressables.GetDownloadSizeAsync()` 检查需下载量 → `Addressables.DownloadDependenciesAsync()` 下载 → 在 `AsyncOperationHandle.PercentComplete` 回调中更新 Slider → `Addressables.LoadAssetAsync<GameObject>()` 加载资产 → `Instantiate()`。Web 端必须用 async/await 非阻塞方式、不能用同步 `WaitForCompletion`（会卡整个浏览器 Tab）。
 
-    if (request.result != UnityWebRequest.Result.Success)
-    {
-        Debug.LogError($"加载失败: {request.error}");
-        yield break;
-    }
-
-    var bundle = DownloadHandlerAssetBundle.GetContent(request);
-    // 使用 bundle...
-}
-// Unity 6 的 UnityWebRequestAssetBundle 已内置 IndexedDB 本地缓存
-// 只需提供 version 参数——版本号变化时自动失效缓存并重下载
-```
 </Answer>
 
 </Exercises>
 
 <Glossary>
 
-<GlossaryItem term="WebAssembly（Wasm）">一种二进制指令格式，在浏览器里以接近原生速度运行 C/C++/Rust 编译产生的代码。Unity IL2CPP 把 C# 编译成 Wasm——是现代 Web 3D 游戏的关键。《类比》：浏览器是操作系统，Wasm 是它的 exe 格式。
+<GlossaryItem term="WebAssembly (Wasm)">
+  在现代浏览器中运行的低级二进制指令格式。Unity IL2CPP 将 C# 编译为 Wasm 后直接在浏览器沙箱中执行，比纯 JavaScript 快数倍。2023 版新增完整指令集和多线程支持。详见本章「第一个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="SIMD 128">"单指令多数据"——一条 CPU 指令同时处理 4 个 float。向量加法 (x1+x2,y1+y2,z1+z2,w1+w2) 原本需要 4 条指令，SIMD 一条搞定——Unity Mathematics 包直接受益。
+<GlossaryItem term="Chrome DevTools">
+  Chrome 浏览器内置的开发者工具集：Performance Panel 可录制帧级别的时间线用于定位 Unity WebGL Build 的瓶颈帧——黄色 Wasm 块对应 C# 代码（IL2CPP 编译产物）。详见本章「第二个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="Bulk Memory">Wasm 的批量内存操作：`memory.copy`（一次性搬一个内存块到另一位置）、`memory.fill`（一次性填充一块内存）——替代逐字节循环。AssetBundle 解压从 JS 字节拷贝变 Wasm 内存块传输——3-5 倍加速。
+<GlossaryItem term="AssetBundle">
+  Unity 的资源打包格式：将纹理/网格/音频/预制体等打包成 `.bundle` 文件，运行时按需下载和加载。Web 端 AssetBundle 走 CDN 增量分发，避免全部打进主 build 造成数分钟下载等待。详见本章「AssetBundle 与 Addressables」节。
+</GlossaryItem>
 
-<GlossaryItem term="CORS（Cross-Origin Resource Sharing）">浏览器的跨域安全机制——A 域名的网页加载 B 域名的资源时，B 必须明确说"允许 A 来拿"。CDN 上放的 AssetBundle 必须返回 `Access-Control-Allow-Origin` 头——否则浏览器拒绝加载。
-
-<GlossaryItem term="SharedArrayBuffer">让 Web Workers 和主线程共享同一块内存——Unity 多线程依赖它。浏览器出于安全（Spectre 漏洞）默认禁用——需要 COOP/COEP 头显式授权。
+<GlossaryItem term="Addressables">
+  Unity 的资源地址化系统：通过地址（而非直接引用）管理和加载资源，支持本地/远程资源混合部署。Web 端用 Addressables 的 Remote Catalog 管理 CDN 资源加载。详见本章「AssetBundle 与 Addressables」节。
+</GlossaryItem>
 
 </Glossary>
 
-<Attribution adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

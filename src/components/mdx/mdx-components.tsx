@@ -47,6 +47,56 @@ import { MultiFileCompilationDiagram } from "./diagrams/multi-file-compilation-d
 import { CCompilationDiagram } from "./diagrams/c-compilation-diagram";
 import { DevelopmentCycleDiagram } from "./diagrams/development-cycle-diagram";
 import { PortabilityDiagram } from "./diagrams/portability-diagram";
+import { ProfilerWorkflowDiagram } from "./diagrams/profiler-workflow-diagram";
+import { EditorTipsDiagram } from "./diagrams/editor-tips-diagram";
+import { ProfilerSamplingDiagram } from "./diagrams/profiler-sampling-diagram";
+import { BuildSizeDiagram } from "./diagrams/build-size-diagram";
+import { UnityProfilerWindowDiagram } from "./diagrams/unity-profiler-window-diagram";
+import { CpuGpuBottleneckDiagram } from "./diagrams/cpu-gpu-bottleneck-diagram";
+import { ProfilingToolsDiagram } from "./diagrams/profiling-tools-diagram";
+import { ProfilerExportDiagram } from "./diagrams/profiler-export-diagram";
+import { ProfileAnalyzerWorkflowDiagram } from "./diagrams/profile-analyzer-workflow-diagram";
+import { PercentileStatisticsDiagram } from "./diagrams/percentile-statistics-diagram";
+import { RegressionDetectionDiagram } from "./diagrams/regression-detection-diagram";
+import { CIProfilingDiagram } from "./diagrams/ci-profiling-diagram";
+import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram";
+import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
+import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
+import { FindSendMessageDiagram } from "./diagrams/find-send-message-diagram";
+import { DrawCallPipelineDiagram } from "./diagrams/draw-call-pipeline-diagram";
+import { DynamicBatchingDiagram } from "./diagrams/dynamic-batching-diagram";
+import { StaticBatchingDiagram } from "./diagrams/static-batching-diagram";
+import { SrpBatcherDiagram } from "./diagrams/srp-batcher-diagram";
+import { FrameDebuggerBatchDiagram } from "./diagrams/frame-debugger-batch-diagram";
+import { MeshImportDiagram } from "./diagrams/mesh-import-diagram";
+import { TextureImportDiagram } from "./diagrams/texture-import-diagram";
+import { ResourcesAssetBundleDiagram } from "./diagrams/resources-assetbundle-diagram";
+import { AsyncLoadDiagram } from "./diagrams/async-load-diagram";
+import { PhysicsTimestepDiagram } from "./diagrams/physics-timestep-diagram";
+import { LayerCollisionDiagram } from "./diagrams/layer-collision-diagram";
+import { RigidbodySleepDiagram } from "./diagrams/rigidbody-sleep-diagram";
+import { CollisionDetectionDiagram } from "./diagrams/collision-detection-diagram";
+import { RenderingPipelineGpuDiagram } from "./diagrams/rendering-pipeline-gpu-diagram";
+import { LodTransitionDiagram } from "./diagrams/lod-transition-diagram";
+import { OcclusionCullingDiagram } from "./diagrams/occlusion-culling-diagram";
+import { PostProcessStackDiagram } from "./diagrams/post-process-stack-diagram";
+import { XrPerformanceBudgetDiagram } from "./diagrams/xr-performance-budget-diagram";
+import { SinglePassStereoDiagram } from "./diagrams/single-pass-stereo-diagram";
+import { FoveatedRenderingDiagram } from "./diagrams/foveated-rendering-diagram";
+import { UrpXrSettingsDiagram } from "./diagrams/urp-xr-settings-diagram";
+import { MonoIl2cppRuntimeDiagram } from "./diagrams/mono-il2cpp-runtime-diagram";
+import { GcAllocDiagram } from "./diagrams/gc-alloc-diagram";
+import { ObjectPoolDiagram } from "./diagrams/object-pool-diagram";
+import { ThreadingProblemDiagram } from "./diagrams/threading-problem-diagram";
+import { JobSystemDiagram } from "./diagrams/job-system-diagram";
+import { EcsArchitectureDiagram } from "./diagrams/ecs-architecture-diagram";
+import { BurstCompilerDiagram } from "./diagrams/burst-compiler-diagram";
+import { GameObjectToEcsDiagram } from "./diagrams/gameobject-to-ecs-diagram";
+import { UrpVsBuiltinDiagram } from "./diagrams/urp-vs-builtin-diagram";
+import { SrpBatcherFlowDiagram } from "./diagrams/srp-batcher-flow-diagram";
+import { MotionToPhotonDiagram } from "./diagrams/motion-to-photon-diagram";
+import { XrInputFlowDiagram } from "./diagrams/xr-input-flow-diagram";
+import { Wasm2023Diagram } from "./diagrams/wasm-2023-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -673,6 +723,56 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IOMemoryBufferDiagram,
   CStringMemoryDiagram,
   MultiFileCompilationDiagram,
+  ProfilerWorkflowDiagram,
+  EditorTipsDiagram,
+  ProfilerSamplingDiagram,
+  BuildSizeDiagram,
+  UnityProfilerWindowDiagram,
+  CpuGpuBottleneckDiagram,
+  ProfilingToolsDiagram,
+  ProfilerExportDiagram,
+  ProfileAnalyzerWorkflowDiagram,
+  PercentileStatisticsDiagram,
+  RegressionDetectionDiagram,
+  CIProfilingDiagram,
+  GetComponentCacheDiagram,
+  EmptyCallbackDiagram,
+  UpdateMechanismDiagram,
+  FindSendMessageDiagram,
+  DrawCallPipelineDiagram,
+  DynamicBatchingDiagram,
+  StaticBatchingDiagram,
+  SrpBatcherDiagram,
+  FrameDebuggerBatchDiagram,
+  MeshImportDiagram,
+  TextureImportDiagram,
+  ResourcesAssetBundleDiagram,
+  AsyncLoadDiagram,
+  PhysicsTimestepDiagram,
+  LayerCollisionDiagram,
+  RigidbodySleepDiagram,
+  CollisionDetectionDiagram,
+  RenderingPipelineGpuDiagram,
+  LodTransitionDiagram,
+  OcclusionCullingDiagram,
+  PostProcessStackDiagram,
+  XrPerformanceBudgetDiagram,
+  SinglePassStereoDiagram,
+  FoveatedRenderingDiagram,
+  UrpXrSettingsDiagram,
+  MonoIl2cppRuntimeDiagram,
+  GcAllocDiagram,
+  ObjectPoolDiagram,
+  ThreadingProblemDiagram,
+  JobSystemDiagram,
+  EcsArchitectureDiagram,
+  BurstCompilerDiagram,
+  GameObjectToEcsDiagram,
+  UrpVsBuiltinDiagram,
+  SrpBatcherFlowDiagram,
+  MotionToPhotonDiagram,
+  XrInputFlowDiagram,
+  Wasm2023Diagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   AndroidArchLayersDiagram,

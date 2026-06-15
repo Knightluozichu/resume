@@ -1,0 +1,342 @@
+---
+title: DOTS 数据导向技术栈
+type: A
+section: 高级优化
+order: 3
+description: 理解 Unity ECS、Job System 与 Burst 编译器——用数据导向架构突破主线程瓶颈。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型（Unity Game Optimization Ch9 改编）：DOTS 数据导向技术栈。
+   重心是概念讲解(§3)：多线程难点 → Job System → ECS 架构 → Burst 编译器 → 迁移思路。 */}
+
+{/* 知识点清单：
+   1) 为什么多线程难（数据竞争、锁） — ThreadingProblemDiagram
+   2) Unity Job System（IJob / IJobParallelFor） — JobSystemDiagram + 代码对照
+   3) ECS（Entity / Component / System 分离） — EcsArchitectureDiagram
+   4) Burst Compiler — BurstCompilerDiagram + 代码对照 + Callout
+   5) GameObject → ECS 迁移思路 — GameObjectToEcsDiagram + Stepper */}
+
+<Objectives>
+
+- 能解释数据竞争与锁的本质问题，以及 Unity 主线程为何是性能瓶颈
+- 能说出 ECS 中 Entity、Component、System 各自的职责，以及 ECS 为什么天然适合并行
+- 能回答：你想把项目中的 AI 寻路系统加速 10 倍——先拆 Component 还是先加 [BurstCompile]？为什么？
+
+</Objectives>
+
+## 主线程挤满了，多核却在睡觉
+
+前一章你把内存管得干干净净——纹理不再翻倍、GC 不再抖帧。可帧率还是上不去。打开 Profiler，八个核心只有一颗在 80% 忙，其余七颗在 20% 摸鱼。你的 CPU 有十六个核，但 Update 只跑在一个上。
+
+这就是传统 GameObject 模式的终极天花板：**所有逻辑跑在主线程**，多核几乎用不上。更糟的是——多线程编程本身就难：数据竞争让你结果不可预测，加锁又让并行变串行。
+
+这章要讲的 DOTS（Data-Oriented Technology Stack），就是 Unity 对这个问题的系统性回答：**把数据和控制流彻底拆开，让数据导向并行、让编译器吃透代码**。
+
+## 像厨房切菜：一个人切一根胡萝卜 vs 四个人各切一根
+
+想象厨房里有一堆胡萝卜要切片。**一个人**（主线程）一根接一根切——再快也有上限。**四个人**（多核）各拿一根同时切——快四倍。但如果四人要抢同一把刀（共享变量无锁），就会切到手（数据竞争）；如果每次只准一人拿刀（加锁），那实际上还是排着队切。
+
+**Job System** 相当于给每人发一根胡萝卜、一把专用刀：「切自己的，不许碰别人的」——无锁、无竞争、真并行。**ECS** 则把「胡萝卜」和「切的动作」彻底分开：胡萝卜是纯数据（Component）、切的动作是纯逻辑（System）、至于这根胡萝卜叫什么编号——只是个标签（Entity）。**Burst** 是给刀换了把激光刀——同一段切菜代码，编译成机器码后快了几十倍。
+
+## 数据竞争：为什么多线程这么难
+
+多线程编程最根本的矛盾：**多个线程访问同一块内存**。
+
+<Term def="两个或多个线程同时读写同一变量，且至少一个是写操作，导致最终结果取决于线程执行顺序的不可预测行为。">数据竞争（Data Race）</Term> 是多线程 bug 的万恶之源。看一个最简单的例子：两个线程同时对 `int x = 0` 做 `x++`。你期望结果是 2，但实际可能是 1——因为 `x++` 在 CPU 层面是「读取 → 加 1 → 写回」三步，两步之间另一线程可能读到旧值。
+
+<ThreadingProblemDiagram />
+
+<Term def="一种同步原语，确保同一时刻只有一个线程进入临界区，消除数据竞争但要付出等待开销。">锁（Lock）</Term> 解决了正确性，但换来新的代价：持有锁的线程阻塞其他线程，上下文切换消耗 CPU，高频加锁 ≈ 单线程——多核又白买了。
+
+**Unity 主线瓶颈**，本质上是这个困境的系统级体现：GameObject 的 Transform、Component 等 API **不是线程安全的**——你几乎不能从别的线程安全地操作它们。于是所有更新、渲染、物理、动画全挤在主线程做，多核闲着。
+
+## Job System：把工作拆成「Job」，丢给 Worker
+
+Unity 的 **C# Job System** 是这个困境的第一个解法。核心思路是：**把数据从 GameObject 身上剥下来，变成纯数据数组，Job 只吃数据、不碰 GameObject**。
+
+<JobSystemDiagram />
+
+### IJob：单次作业
+
+`IJob` 用于单次执行的计算任务。你定义一个实现了 `IJob` 接口的结构体，填充数据字段，再实现 `Execute()` 方法：
+
+```csharp
+[BurstCompile]
+public struct MyCalculationJob : IJob
+{
+    public NativeArray<float> results;
+    public float multiplier;
+
+    public void Execute()
+    {
+        for (int i = 0; i < results.Length; i++)
+            results[i] *= multiplier;
+    }
+}
+```
+
+`schedule` 后，一个 Worker 线程执行一次 `Execute`。主线程通过 `JobHandle.Complete()` 等待完成、取回结果。
+
+### IJobParallelFor：数组自动切片并行
+
+`IJobParallelFor` 是 Job System 真正的杀手锏——把一个 NativeArray **自动切片**分给多个 Worker 并行处理：
+
+```csharp
+[BurstCompile]
+public struct ParallelMoveJob : IJobParallelFor
+{
+    public NativeArray<float3> positions;
+    public float deltaTime;
+    public float speed;
+
+    public void Execute(int index)
+    {
+        positions[index] += new float3(0, 0, speed * deltaTime);
+    }
+}
+
+// 调度：10000 个位置，每批 64 个，自动分给所有可用 Worker
+var handle = new ParallelMoveJob { positions = positions, ... }
+    .Schedule(positions.Length, 64);
+handle.Complete();
+```
+
+你只管「第 i 个元素怎么处理」，Job System 负责把 [0,1,…,N-1] 切成分片喂给不同 Worker，**数据天然不相交 = 无锁并行**。
+
+<Term def="Job System 编译期+运行时双重检查机制，确保同一 NativeContainer 在同一时刻不会被两个 Job 同时写入——若违反则报错。">Safety System（安全系统）</Term> 在编译期和运行时双重检查依赖关系：同一时刻不能有两个 Job 对同一个 `NativeArray` 写入。如果你忘了 `Complete()` 就去读还在跑的 Job 的结果，直接报错——**绝不让你写出静默的数据竞争**。
+
+<Term def="存放非托管类型数据的容器（NativeArray/List/HashMap），由 Job System 追踪生命周期和读写依赖，必须 Dispose 释放非托管内存。">NativeContainer</Term> 是 Job 间的共享数据桥梁：`NativeArray<T>` 用于连续数组、`NativeList<T>` 用于可变列表、`NativeHashMap<K,V>` 用于键值对。它们都是非托管内存，用 `Dispose()` 手动释放——**不进 GC 堆**。
+
+## ECS：彻底打散 Class，只剩「数据」和「逻辑」
+
+Job System 解决了「怎么并行」，但 **「数据从哪来」** 还没解决。ECS（Entity Component System）就是数据组织的终极答案。
+
+<EcsArchitectureDiagram />
+
+### Entity：只是一个号码牌
+
+<Term def="ECS 中的实体，仅是一个 int ID，不包含任何数据或方法——等同于数据库里的主键/行号。">Entity</Term> 是 ECS 里的原子单位。它不是 `GameObject`，没有 `Transform`，没有 `name`，没有层级——只是一个 `int` 型的 ID。可以把 Entity 理解为「数据库里的一行」，这一行的列（数据）来自它挂载的 Component。
+
+### Component：纯数据，无逻辑，零引用
+
+<Term def="ECS 中的组件，用 IComponentData 标记的非托管结构体，只含 blittable 字段（float/int/bool/float3 等），无引用类型、无虚方法。">Component（ECS 组件）</Term> 与传统 `MonoBehaviour` 完全相反：
+
+- 是 `struct`，不是 `class`
+- 只含 `<Term def="可直接按比特拷贝到非托管内存的类型，如 bool/int/float/float3/quaternion，不含 class 引用、string、数组。">blittable</Term> 字段（`float`、`int`、`float3`、`quaternion` 等）
+- 不含任何方法、不含虚函数、不含 `GameObject` 引用
+- 在内存中**紧挨着连续排布**——遍历 Component 数组就是一段连续内存的线性扫描，CPU 缓存命中率极高
+
+```csharp
+public struct Translation : IComponentData
+{
+    public float3 Value;
+}
+
+public struct Health : IComponentData
+{
+    public float Current;
+    public float Max;
+}
+```
+
+一个 Enemy **Entity** = `Entity(42)` + `<Translation, Health, MoveSpeed>`——组合而非继承，需要什么挂什么。
+
+### System：纯逻辑，只吃匹配合约的 Entity
+
+<Term def="ECS 中的系统，只包含纯函数逻辑（无状态），通过 EntityQuery 选择满足特定 Component 组合的 Entity，只操作其 Component 数据。">System</Term> 是 ECS 的执行者：
+
+```csharp
+[BurstCompile]
+public partial struct EnemyMoveSystem : ISystem
+{
+    public void OnUpdate(ref SystemState state)
+    {
+        float dt = SystemAPI.Time.DeltaTime;
+        foreach (var (transform, speed) in
+            SystemAPI.Query<RefRW<Translation>, RefRO<MoveSpeed>>())
+        {
+            transform.ValueRW.Value += new float3(0, 0, speed.ValueRO.Value * dt);
+        }
+    }
+}
+```
+
+这条 `foreach` 看起来像遍历，实际上在运行时等价于：**只选出同时有 Translation + MoveSpeed 的 Entity**，把它们在内存中紧密排列的 Component 数组一块喂给 Job，**多个 Worker 各算各的分片**。表驱动调度——数据决定了执行计划。
+
+## Burst：同一段 C#，快 100 倍
+
+Job 能在多核上跑了，但每个核上的代码跑得够快吗？Mono JIT 和 IL2CPP AOT 产生的机器码，和手写 C++ 仍有非常大差距。
+
+<Term def="Unity 的高性能 C# 编译器，将 C# IL 翻译到 LLVM IR 并生成向量化 SIMD 机器码，专为 Job System 设计。">Burst Compiler</Term> 就是这个差距的填平者：**在已有的 C# 代码上只加 `[BurstCompile]` 一个标签**，编译时就把你的 C# 先转成 LLVM 中间表示，再用 LLVM 的优化管线——自动向量化（SIMD）、循环展开、常量折叠、内联——生成性能逼近手写汇编的机器码。
+
+<BurstCompilerDiagram />
+
+<Callout type="warn">
+  Burst 不是 C++、不是新语言、不需要重写代码。**它就是同一段 C# 的另一个编译器后端**——IL2CPP 走 Mono C++ 路线，Burst 走 LLVM 路线。所有 Burst Job 必须用非托管类型（blittable struct + NativeContainer），这是它与常规 C# 的唯一约束。
+</Callout>
+
+### 什么能 Burst
+
+- `IJob`、`IJobParallelFor`、`ISystem` 的结构体（加 `[BurstCompile]`）
+- 只操作 `float`、`int`、`float3`、`quaternion`、`NativeArray` 等非托管类型
+- 数学函数（`math.mul`、`math.length` 等）——Burst 是 Unity.Mathematics 的深度受益者
+
+### 什么不能 Burst
+
+- `class`、`string`、`List<T>`、任何引用类型
+- `Debug.Log`、`GameObject` 相关 API
+- 虚方法、反射、`foreach` 遍历托管集合
+
+简单记法：**struct + 纯数据 = 能 Burst；class + 引用 = 不能 Burst**。
+
+## 动手：把 GameObject 换成 Entity——五步渐进
+
+整个 DOTS 堆栈的执行流很清晰，但这不意味着你要把现有项目推倒重来。下面走通「把 Enemy 的移动逻辑从 MonoBehaviour 迁到 ECS」的完整过程。
+
+> 猜一猜：你有一个 MonoBehaviour 移动系统，每帧遍历 5000 个敌人数组算位置。迁移 ECS 后，这五个步骤中哪一步真正省了 CPU 时间？
+
+<GameObjectToEcsDiagram />
+
+<Stepper>
+  <Step title="① 拆数据：MonoBehaviour → 多个 IComponentData">
+    写 C# 时习惯了 `class Enemy : MonoBehaviour {"{"} float hp; Vector3 pos; {"}"}`——一个类包所有。ECS 的第一步是把数据打散：
+    ```csharp
+    public struct Translation : IComponentData {"{"} public float3 Value; {"}"}
+    public struct Health : IComponentData {"{"} public float Current; {"}"}
+    public struct MoveSpeed : IComponentData {"{"} public float Value; {"}"}
+    ```
+    每项只是一个结构体，**只含数据、不含行为**。需要什么组合就挂什么 Component。
+  </Step>
+  <Step title="② 写 System：把 Update 逻辑抽成纯函数">
+    ```csharp
+    [BurstCompile]
+    public partial struct EnemyMoveSystem : ISystem
+    {
+        public void OnUpdate(ref SystemState state)
+        {
+            float dt = SystemAPI.Time.DeltaTime;
+            foreach (var (transform, speed) in
+                SystemAPI.Query<RefRW<Translation>, RefRO<MoveSpeed>>())
+                transform.ValueRW.Value.z += speed.ValueRO.Value * dt;
+        }
+    }
+    ```
+    `ISystem` 是 ECS 1.0 的推荐接口——纯结构体、可 Burst。`SystemAPI.Query<>` 自动选出匹配 Entity，`RefRW` 是可读写、`RefRO` 是只读。
+  </Step>
+  <Step title="③ 标记 [BurstCompile]">
+    在这段 `EnemyMoveSystem` 上只加一行 `[BurstCompile]`，同一段 C# 瞬间走 LLVM 编译路径——自动向量化循环、字段对齐、SIMD 指令。通常这一步加的 CPU 收益是 **2–5 倍**。
+  </Step>
+  <Step title="④ 混合运行：GameObject 与 Entity 共存">
+    迁移不必全量——Unity 允许 **GameObject 和 Entity 在同一场景共存**。对于还没迁的 `MonoBehaviour`，你可以在 `OnUpdate` 里用 `World.DefaultGameObjectInjectionWorld.EntityManager` 创建 Entity、挂 Component；GameObject 的 `Transform` 仍可独立运行。`ConvertToEntity` 组件可以一键把预制体转成 Entity。
+  </Step>
+  <Step title="⑤ 观察验证：Profiler + Entity Debugger">
+    打开 Profiler，看 CPU Usage 中主线程 (Main Thread) 的占用——迁移后的 System 应该出现在 **"Others"** 区域（Job 线程）而非主线程。Entity Debugger（Window → DOTS → Entities）可直观查看当前 World 中每个 System 的运行时间和处理的 Entity 数。
+  </Step>
+</Stepper>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`IJobParallelFor` 正常跑了一分钟，突然抛 `InvalidOperationException`。**原因**：`NativeArray` 只 `Dispose()` 了一次，但 Job 还在跑——Safety System 检测到容器在 Job 完成前被释放。**修法**：先 `Complete()` 等 Job 跑完，再 `Dispose()` 容器。或者用 `Job.WithDisposeOnCompletion(handle)` 把容器的生命周期绑在 JobHandle 上。
+</Callout>
+
+<Callout type="trap">
+  **现象**：[BurstCompile] 加了但没看到性能提升。**原因**：结构体里含了引用类型（`string`、`class` 字段或 `NativeArray` 用了 `[ReadOnly]` 之外的非托管属性），Burst 静默退化为非 Burst 执行——Profiler 里该 Job 标为 "Not Bursted"。**修法**：用 Burst Inspector（Jobs → Burst → Open Inspector）检查为何没编译；确保所有字段都是 blittable 类型。
+</Callout>
+
+<Callout type="trap">
+  **现象**：ECS 的 `foreach` 看起来像托管遍历，但修改 Component 数据后其他 System 读到的值不对。**原因**：ECS 的 System 执行顺序由 `[UpdateInGroup]` / `[UpdateBefore]` / `[UpdateAfter]` 属性控制——不是 MonoBehaviour 的「写在前面先执行」顺序。依赖未声明的 System 执行次序 = 数据依赖崩溃。**修法**：用 `[UpdateAfter(typeof(PreviousSystem))]` 明确声明执行依赖；Entity Debugger 查看 System 执行顺序图。
+</Callout>
+
+## 小结
+
+- **数据竞争** 是多线程编程的根本难题：多线程同时读写同一变量 → 不可预测结果；**加锁** 解决正确性但引入等待开销
+- **Job System** 把数据剥成 `NativeArray`、Job 只吃数据不碰 GameObject → IJob 单次执行、IJobParallelFor 自动切片并行
+- **ECS** 彻底打散 Class：Entity 只是 ID、Component 是纯数据 struct、System 是纯函数逻辑 → 数据连续排布 + Cache-Friendly + 天然并行
+- **Burst Compiler** 同一段 C# 加 `[BurstCompile]` 走 LLVM → SIMD 向量化 + 循环展开 + 内联 → 可达 Mono 的 10–100 倍
+- **迁移策略**：拆数据 → 写 System → 加 Burst → 混合运行 → 观察验证——逐系统替换，非全量重写
+
+<Exercises>
+
+**练习 1（改代码型）** 写一个 `IJobParallelFor` 的 Job：输入 `NativeArray<float>`，在 `Execute` 中把每个值乘以 2。用 `Schedule` 执行，`Complete` 等完成。测 100 万个元素，对比主循环 for 和 Job 的耗时。
+
+<Answer>
+
+主循环 for 全部在主线程、线性执行；Job ParallelFor 自动切分片、多 Worker 并行。100 万元素通常能见到 3–5 倍加速（Worker 数 × Burst），且主线程只花 `Schedule` + `Complete` 的少量时间。
+
+</Answer>
+
+**练习 2（问答型）** Entity 为什么只是一个 int？如果 Entity 也像 GameObject 一样存 Transform 引用，ECS 能并行吗？
+
+<Answer>
+
+Entity 只是 int 是因为 ECS 要求「ID 与数据彻底分离」。如果 Entity 含 Transform 引用，那 CreateEntity / DestroyEntity 需要操作引用、跨线程不安全。int 无引用 = 完全线程安全。数据全部放在 Component 的连续数组里，System 只遍历数组——天然并行。
+
+</Answer>
+
+**练习 3（实战型）** 在你的项目里找一个 `MonoBehaviour.Update` 中遍历数组做简单计算的系统（如敌人移动、资源生成）。拆成：① 创建一个 `IComponentData` 存数据 ② 写一个 `ISystem` 替代 `Update` ③ 加 `[BurstCompile]` ④ 用 Profiler 对比迁移前后主线程占用。
+
+<Answer>
+
+关键改动：原 `MonoBehaviour` 中 `Update` 在主线程遍历 `List<Enemy>` → 迁移后 `ISystem` 中的 `SystemAPI.Query` 由 Job System 调度到 Worker 线程并行。Profiler 验证：迁移前 Main Thread 占用 7–8ms → 迁移后降至 0.5–1ms（仅剩调度开销）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="数据竞争（Data Race）">
+  两个或多个线程同时读写同一变量且至少一个为写操作，最终结果取决于线程执行顺序——不可预测的并发 bug。详见 ThreadingProblemDiagram 左侧。
+</GlossaryItem>
+
+<GlossaryItem term="锁（Lock）">
+  同步原语，确保同一时刻只有一个线程进入临界区。解决数据竞争但引入等待开销——高频加锁 ≈ 单线程。
+</GlossaryItem>
+
+<GlossaryItem term="Job System">
+  Unity C# 多线程任务调度框架。将纯数据数组分发给 Worker 线程并行处理，Safety System 编译/运行时双重检查杜绝数据竞争。
+</GlossaryItem>
+
+<GlossaryItem term="Safety System（安全系统）">
+  Job System 内置的依赖与冲突检测：同一 NativeContainer 同一时刻不能被两个 Job 同时写入；忘记 Complete 就读取 = 运行时报错。
+</GlossaryItem>
+
+<GlossaryItem term="NativeContainer">
+  Job System 的非托管数据容器（NativeArray/List/HashMap），由 Safety System 追踪生命周期与读写依赖，必须 Dispose 释放。
+</GlossaryItem>
+
+<GlossaryItem term="Entity">
+  ECS 的原子单位——只是一个 int ID，不含任何数据或行为。等价于数据库里的行号/主键。
+</GlossaryItem>
+
+<GlossaryItem term="Component（ECS 组件）">
+  IComponentData 标记的非托管结构体，只含 blittable 字段（float/int/float3 等），无引用类型、无虚方法。与传统 MonoBehaviour 完全相反。
+</GlossaryItem>
+
+<GlossaryItem term="blittable">
+  可直接按比特拷贝到非托管内存的类型（bool/int/float/float3/quaternion 等），不含 class 引用、string、数组。Burst 和 Job System 的唯一准入类型。
+</GlossaryItem>
+
+<GlossaryItem term="System（ECS 系统）">
+  ECS 的执行者。纯函数逻辑、无状态，通过 EntityQuery 选匹配 Entity，只操作其 Component 数据。推荐 ISystem + [BurstCompile]。
+</GlossaryItem>
+
+<GlossaryItem term="Burst Compiler">
+  Unity 高性能 C# 编译器。IL→LLVM→SIMD 机器码，加 [BurstCompile] 即可。对向量/数学密集型计算加速 10–100 倍。详见 BurstCompilerDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="DOTS（Data-Oriented Technology Stack）">
+  数据导向技术栈 = ECS + Job System + Burst Compiler 的统称，是 Unity 针对多核性能瓶颈的系统性解决方案。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版 Chapter 9"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>

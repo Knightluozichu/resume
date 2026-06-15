@@ -70,6 +70,7 @@ export type ReviewChapterSlug =
   | "cpp-specialized-library"
   | "cpp-specialized-tools"
   | "cpp-large-programs"
+  // C Primer Plus（第6版）
   | "cpr-getting-ready"
   | "cpr-introducing-c"
   | "cpr-strings-io"
@@ -86,6 +87,7 @@ export type ReviewChapterSlug =
   | "cpr-preprocessor"
   | "cpr-bit-fiddling"
   | "cpr-advanced-data"
+  // Android进阶解密
   | "android-architecture"
   | "system-startup"
   | "app-process-startup"
@@ -103,6 +105,7 @@ export type ReviewChapterSlug =
   | "plugin-principle"
   | "draw-optimization"
   | "memory-optimization"
+  // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
   | "bnrg-lifecycle"
@@ -135,13 +138,31 @@ export type ReviewChapterSlug =
   | "bnrg-custom-views"
   | "bnrg-property-animation"
   | "bnrg-afterword"
+  // Unity Game Optimization
+  | "ugo-evaluating-performance-problems"
+  | "ugo-scripting-strategies"
+  | "ugo-benefits-of-batching"
+  | "ugo-optimizing-art-assets"
+  | "ugo-faster-physics"
+  | "ugo-dynamic-graphics"
+  | "ugo-xr-optimizations"
+  | "ugo-memory-management"
+  | "ugo-data-oriented-technology-stack"
+  | "ugo-tactical-tips-and-tricks"
+  // Profiling Unity Games
+  | "prof-profiling-workflow-baseline"
+  | "prof-cpu-profiler-deep-dive"
+  | "prof-gpu-performance-analysis"
+  | "prof-memory-profiler"
+  | "prof-profile-analyzer-regression"
   | "prof-power-optimization"
   | "prof-platform-specific-profiling"
-  | "prof-mxrw-urp-optimization"
-  | "prof-mxrw-mobile-optimization"
-  | "prof-mxrw-xr-optimization"
-  | "prof-mxrw-web-optimization"
-  | "prof-mxrw-cross-platform-checklist";
+  // Mobile/XR/Web Optimization
+  | "mxrw-urp-optimization"
+  | "mxrw-mobile-optimization"
+  | "mxrw-xr-specific-optimization"
+  | "mxrw-web-specific-optimization"
+  | "mxrw-cross-platform-checklist";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -214,6 +235,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-specialized-library": "标准库特殊设施",
   "cpp-specialized-tools": "特殊工具与技术",
   "cpp-large-programs": "用于大型程序的工具",
+  // C Primer Plus（第6版）
   "cpr-getting-ready": "初识C语言",
   "cpr-introducing-c": "C语言概述",
   "cpr-strings-io": "字符串和格式化输入/输出",
@@ -230,6 +252,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpr-preprocessor": "C预处理器",
   "cpr-bit-fiddling": "位操作",
   "cpr-advanced-data": "高级数据表示",
+  // Android进阶解密
   "android-architecture": "Android 系统架构",
   "system-startup": "Android 系统启动",
   "app-process-startup": "应用程序进程启动",
@@ -247,6 +270,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "plugin-principle": "插件化原理",
   "draw-optimization": "绘制优化",
   "memory-optimization": "内存优化",
+  // BNRG
   "bnrg-first-app": "Android开发初体验",
   "bnrg-mvc": "Android与MVC设计模式",
   "bnrg-lifecycle": "activity的生命周期",
@@ -279,13 +303,31 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "bnrg-custom-views": "定制视图与触摸事件",
   "bnrg-property-animation": "属性动画",
   "bnrg-afterword": "编后语",
+  // Unity Game Optimization
+  "ugo-evaluating-performance-problems": "评估性能问题",
+  "ugo-scripting-strategies": "脚本优化策略",
+  "ugo-benefits-of-batching": "合批的收益",
+  "ugo-optimizing-art-assets": "美术资源优化",
+  "ugo-faster-physics": "物理加速",
+  "ugo-dynamic-graphics": "动态图形",
+  "ugo-xr-optimizations": "XR 优化",
+  "ugo-memory-management": "内存管理",
+  "ugo-data-oriented-technology-stack": "DOTS 数据导向技术栈",
+  "ugo-tactical-tips-and-tricks": "战术技巧",
+  // Profiling Unity Games
+  "prof-profiling-workflow-baseline": "Profiling 工作流与基线",
+  "prof-cpu-profiler-deep-dive": "CPU Profiler 深度使用",
+  "prof-gpu-performance-analysis": "GPU 性能分析",
+  "prof-memory-profiler": "Memory Profiler 内存分析",
+  "prof-profile-analyzer-regression": "Profile Analyzer 与回归测试",
   "prof-power-optimization": "功耗优化",
   "prof-platform-specific-profiling": "平台专项 Profiling",
-  "prof-mxrw-urp-optimization": "URP 专项优化",
-  "prof-mxrw-mobile-optimization": "移动端性能优化",
-  "prof-mxrw-xr-optimization": "XR 专项优化",
-  "prof-mxrw-web-optimization": "Web 专项优化",
-  "prof-mxrw-cross-platform-checklist": "跨平台性能检查清单",
+  // Mobile/XR/Web Optimization
+  "mxrw-urp-optimization": "URP 专项优化",
+  "mxrw-mobile-optimization": "移动端性能优化",
+  "mxrw-xr-specific-optimization": "XR 专项优化",
+  "mxrw-web-specific-optimization": "Web 专项优化",
+  "mxrw-cross-platform-checklist": "跨平台性能检查清单",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

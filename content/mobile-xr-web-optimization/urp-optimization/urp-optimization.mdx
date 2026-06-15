@@ -3,192 +3,254 @@ title: URP 专项优化
 type: A
 section: URP 专项优化
 order: 1
-description: 掌握 Universal Render Pipeline 的性能架构、SRP Batcher 与 URP Asset 配置——移动端画面质量与帧率的平衡之道。
+description: 掌握 URP 架构、SRP Batcher 与 URP Asset 配置——移动端画面质量与帧率的平衡之道。
 demo: true
 math: false
-sourceUrl: ""
 draft: true
+sourceUrl: ""
 ---
 
-{/* A 概念型（Unity《Optimize your game performance》URP 章节改编）：
-   知识点清单与 viz：
-   1) URP 架构 vs Built-in — UrpArchitectureDiagram
-   2) SRP Batcher 原理与兼容性 — 代码对照
-   3) URP Asset 配置项（Render Scale/MSAA/Shadow）— UrpAssetConfigDiagram
-   4) 前向 vs 延迟渲染 URP 选型 — 代码对照 + Callout
-   5) Adaptive Probe Volumes — 代码对照
-*/}
+{/* A 概念型章：URP 架构 vs Built-in、SRP Batcher 原理、URP Asset 配置、前向vs延迟选型。
+知识点清单（每项配 viz）：
+1. URP vs Built-in 架构 → UrpVsBuiltinDiagram (SVG 示意图)
+2. SRP Batcher 原理 → SrpBatcherFlowDiagram (SVG 示意图) + 代码
+3. URP Asset 配置 → UrpAssetConfigDiagram (SVG 示意图)
+4. 前向 vs 延迟选型 → 代码对照
+5. Adaptive Probe Volumes → Callout(tip)
+Term 高亮术语：URP、SRP Batcher、SetPass Call、URP Asset、Renderer Feature、前向渲染、延迟渲染、Adaptive Probe Volumes → 均进章末 Glossary */}
 
 <Objectives>
 
-- 能用自己的话解释 URP 与 Built-in 渲染管线的架构差异，并说出 URP 在渲染管线中的位置
-- 能看懂 SRP Batcher 的工作原理，并在自己的 Shader 中写出兼容 SRP Batcher 的 CBUFFER 代码
-- 能回答：一张 URP Asset 里哪些配置项对移动端帧率影响最大？如何为高中低端设备准备不同的 URP 配置？
+- 能用自己的话解释 URP 相对于 Built-in 管线做了哪些架构改进，以及 SRP Batcher 在其中的位置
+- 能在 URP Asset 中正确配置 Render Scale、MSAA、Shadow Distance 等关键质量/性能参数
+- 能回答：前向渲染和延迟渲染各适合什么场景？在 URP 里如何选择？
 
 </Objectives>
 
-## 为什么需要 URP——当一条管线终于统一了所有渲染
+{/* 2. 直觉引入：≤3 段 × ≤120 字；零术语；类比工厂流水线。 */}
 
-想象一间工厂有五条生产线——前向渲染一条、延迟渲染一条、旧版路径又一条——每条线用不同的工具、不同的原料规格、不同的人操作。新需求来了（比如想在所有画面前加一个自定义后处理），你得在五条线上各自改一遍。
+## 为什么 URP 是移动端的正确选择
 
-这就是 Unity Built-in Render Pipeline 的真实处境。Built-in 管线从 Unity 5 时代一路积累，各种渲染模式各走各的路——Shader 不通用、配置散落各处、性能优化得一个平台一个平台手动调。
+Unity 有两套渲染管线。旧的那套叫 Built-in，功能全面但像个什么都想干的万能工具箱——桌面端够用，到了移动端就开始拖后腿。新的那套叫 URP（通用渲染管线），是专门为「一个画面同时跑在手机、平板、游戏主机上」设计的。
 
-而 URP 把五条线合并成了一条。所有渲染——无论前向还是延迟——都经过同一个可控的管线、同一套 Shader 标准、同一个全局配置文件。你改一次 = 全平台生效。
+不用 URP 会怎样？你的移动端项目会发现 Draw Call 降不下去、Shader 改个参数就要重新提交一堆数据、想加个自定义后处理还得从头摸索管线扩展点。URP 把这些坑填平了——它把 Shader 数据批量提交（SRP Batcher）、把画质参数统一管理（URP Asset）、把管线扩展整成插件式（Renderer Feature）。
 
-没有 URP，跨平台优化是一场噩梦：你得为移动端单独写一套低配 Shader、为 PC 写一套高配 Shader、再为 Web 写一套精简 Shader——三套代码、三条路、三倍出 Bug 的风险。
+这一章不是让你背 URP 每个设置项，而是建立一条清晰的思维线：架构长什么样 → 数据怎么批量走 → 配置怎么调 → 前向还是延迟，最后选哪个。读完你就能看懂 URP 文档，知道每个选项在公式里的位置。
 
-## URP 是怎么工作的
+{/* 3. 概念讲解：A 型重心；本节为主。 */}
 
-### SRP 的统一哲学
+## 第一个概念：URP vs Built-in——架构级差异
 
-<Term def="Scriptable Render Pipeline：开发者可完全控制渲染管线的 C# 脚本化框架，URP/HDRP 都是基于它的实现">SRP（Scriptable Render Pipeline）</Term> 是 Unity 给渲染管线开的"手术刀接口"。以前渲染管线是引擎硬编码的黑盒——你只能调几个设置按钮。SRP 把这个黑盒拆开，变成可编程的 C# 代码，你可以在渲染循环里插入自定义 Pass、改变绘制顺序、替换整个光照模型。
+<Term def="Unity 的可编程渲染管线（Scriptable Render Pipeline）家族中的通用管线，专为跨平台（移动/桌面/主机/Web）设计，替代旧 Built-in 管线。">URP</Term> 和旧 Built-in 管线最根本的区别不在画质——而在**管线本身是不是可拆可改的**。
 
-**URP 就是 Built-in 管线的"统一替代"。** 它把 Built-in 的五条散装管线合并成一条：所有 Shader 遵循同一套结构（URP Shader Library 中的 Core.hlsl），所有材质属性走同一个 SRP Batcher 高速通道，所有渲染配置收敛到一张 URP Asset 里。
+Built-in 管线像一个黑盒：材质参数（颜色、纹理、Shader 关键字）每次切换材质都要从 CPU 重新打包发送给 GPU，每个不同材质的物体都产生一次 <Term def="每次 GPU 切换渲染状态（Shader/Material/纹理绑定），CPU 都需要发送一组新的管线设置命令；SetPass 次数是衡量 CPU→GPU 通信开销的核心指标。">SetPass Call</Term>。100 个不同材质的物体 = 100 次 SetPass——CPU 端累得半死，GPU 等着接活干。
 
-<UrpArchitectureDiagram />
+URP 把这个问题从根上改了：
 
-### SRP Batcher——Draw Call 的真正加速器
+<UrpVsBuiltinDiagram />
 
-在 Built-in 管线里，每次切换材质就要重新设置 GPU 状态——上传 Shader 参数、切换纹理绑定、更新常量缓冲区。每帧几百次这样的小切换积累起来，CPU 时间就被"上下文切换"吃掉了。
+- **SRP Batcher（核心武器）**：Shader 的「大参数」（常量缓冲 CB）按统一布局存，兼容同一 Shader 变体的不同材质只需提交参数内容、不用重建整个管线状态。几百个不同颜色的物体 → 同一批提交。
+- **Renderer Feature**：URP 管线不是黑盒，提供了插件式扩展点（`RenderObjects`、`RenderPassEvent`），后处理效果、自定义 Pass 都以 Renderer Feature 形式插入，不碰管线源码。
+- **Render Graph（Unity 6 新）**：URP 内部把 Pass 间的资源依赖（RT 创建/复用/释放）自动化管理，减少显式临时 RT 分配和手动清理。
 
-<Term def="SRP 框架下的批量渲染优化技术：将材质属性按大块上传 GPU 常量缓冲区，消除 Draw Call 间的状态切换开销">SRP Batcher</Term> 把材质属性数据按"大块"批次上传——每个材质一段数据、每个 Draw Call 只需更新一个指针指向对应块。**只要 Shader 声明兼容 CBUFFER，材质对象不做任何修改就能自动受益。**
+总结一句：Built-in 是「每次换个材质就把整个桌面清空重铺」，URP 是「桌子不动、只换上面的东西」。
 
-要确认你的 Shader 是否兼容 SRP Batcher：打开 Frame Debugger（Window → Analysis → Frame Debugger），找一个 Draw Call——如果看到 "SRP Batcher" 字样就是兼容的，如果是 "SetPass Call" 就是没走快速通道。
+## 第二个概念：SRP Batcher 是怎么做到的
 
-代码这样写才兼容：
+SRP Batcher 不是 GPU Instancing 的替代，它是另一种机制——两者经常被混淆，但它们解决的是不同层面的问题：
+
+<SrpBatcherFlowDiagram />
+
+- **GPU Instancing**：1 个 Draw Call 画 N 个**完全相同**的网格+材质。前提是网格和材质一模一样（草、子弹、相同 Prefab 的物体群）。
+- **SRP Batcher**：N 个**不同材质**但**同一 Shader 变体**的物体，共享一次管线状态设置。前提是 Shader 兼容 SRP Batcher（URP/HDRP 的 Lit/Simple Lit/Unlit 等内置 Shader 默认兼容）。
+
+> 打个比方：GPU Instancing 是一张蓝图复印 N 份同一张纸；SRP Batcher 是同一台打印机、不停换不同颜色纸——不用重新装墨盒（管线状态），只换纸（材质参数）。
+
+SRP Batcher 生效的前提：Shader 必须声明 `CBUFFER_START(UnityPerMaterial)` 把所有逐材质属性包进去。URP 内置 Shader 都这么写了，自定义 Shader 如果照做也能享受 Batcher 加速。
+
+下面是一个兼容 SRP Batcher 的自定义 Shader 片段：
 
 ```hlsl
-// 兼容 SRP Batcher：材质独有属性放在 UnityPerMaterial
 CBUFFER_START(UnityPerMaterial)
-    half4 _BaseColor;
-    half _Smoothness;
-CBUFFER_END
-
-// 全局共享属性放在 UnityPerDraw
-CBUFFER_START(UnityPerDraw)
-    float4x4 unity_ObjectToWorld;
-    float4x4 unity_MatrixVP;
+    float4 _BaseColor;
+    float _Metallic;
+    float _Smoothness;
+    // 所有逐材质属性和纹理声明都放这里
 CBUFFER_END
 ```
 
+Shader 声明了这个后，URP 的 SRP Batcher 就能把不同材质实例的 `_BaseColor`/`_Metallic` 等参数打包进同一个常量缓冲布局、批量提交到 GPU，不用重新设置管线状态。
+
 <Callout type="tip">
-  **关键一步**：写完 Shader 后去 Inspector 面板查看 Shader 的 SRP Batcher 兼容状态——显示 "Compatible" 就是绿标通过。如果显示 not compatible，通常是因为材质属性没放在 `UnityPerMaterial` CBUFFER 里，或者在 CBUFFER 外面声明了 sampler 等不兼容的类型。
+  验证 SRP Batcher 是否生效：打开 Frame Debugger，切换一帧查看每个 Draw Call——如果
+  SRP Batcher 激活，你会看到 `SRP Batch` 标签而不是 `SetPass
+  Call`。影响 Batcher 的常见因素：Shader 不兼容（非 URP/HDRP 或未声明
+  UnityPerMaterial CB）、使用了 MaterialPropertyBlock（会中断 Batcher）。
 </Callout>
 
-### URP Asset——一张纸管全管线
+## 第三个概念：URP Asset——画质与性能的中控台
 
-**URP Asset 是本管线的全局配置入口。** 所有性能开关、质量设置、渲染特性都集中在这里。一张 Asset 可以同时被所有支持的平台引用，也可以为不同质量等级建多张。
+URP 的所有质量/性能参数集中在一个东西里：<Term def="URP 的核心配置资产（.asset 文件），集中管理渲染比例、MSAA、阴影距离、后处理、中间纹理格式等所有画质与性能参数。">URP Asset</Term>。你不需要分别跑到 Project Settings、Quality Settings、Graphics Settings 里各改各的——URP Asset 就是一个中控台。
 
 <UrpAssetConfigDiagram />
 
-最重要的性能配置项：
+关键参数速查：
 
-| 配置项 | 作用 | 移动端推荐 |
-|---|---|---|
-| **Render Scale** | 渲染分辨率缩放比 | 0.7–0.8 |
-| **MSAA** | 多重采样抗锯齿 | 关闭或 2× |
-| **Main Light Shadow Resolution** | 主方向光阴影图分辨率 | ≤ 1024 |
-| **Cascade Count** | 级联阴影层数 | ≤ 2 |
-| **HDR** | 浮点帧缓冲 | 关闭 |
+| 参数 | 作用 | 移动端建议 |
+|------|------|-----------|
+| **Render Scale** | 缩放 eye buffer 分辨率 | 0.7–0.85（GPU bound 时优先降此项） |
+| **MSAA** | 多重采样抗锯齿 | 2x 或关（移动 Tile GPU 对 MSAA 敏感） |
+| **Shadow Distance** | 阴影可见范围（米） | 30–50m，大于此距离不渲阴影 |
+| **Cascade Count** | 方向光阴影级联层数 | 2（移动端远距阴影可关） |
+| **HDR** | 浮点颜色缓冲 | 关（移动端 HDR 增加带宽，画面提升有限） |
+| **Depth/Color Texture** | 是否暴露 `_CameraDepthTexture`/`_CameraColorTexture` | 仅在自定义效果需要时开启 |
+
+同一项目可以有多个 URP Asset（如 `URP-High.asset`、`URP-Medium.asset`、`URP-Low.asset`），在 Quality Settings 里对应 High/Medium/Low 三档——这就是画质分级的基础设施。
+
+## 第四个概念：前向 vs 延迟——该怎么选
+
+<Term def="逐物体逐光源计算光照的渲染方式：每个物体被每盏灯照亮一次，光照计算嵌套在物体渲染循环内——移动端默认选择。">前向渲染</Term> 和 <Term def="先把场景几何信息（位置/法线/反照率）渲进多张 G-Buffer、再单独对每个像素逐光源计算光照的渲染方式——光源多时效率高，但对带宽和 G-Buffer 格式要求高。">延迟渲染</Term> 是两条不同的光照计算路，没有绝对对错，只有场景适配问题：
+
+```csharp
+// 在 URP Asset 的 Inspector 面板中切换
+// 前向渲染（移动端推荐）：每盏额外灯成本 = 物体片元数 × 灯数
+//   → 适合：场景灯少（一般 ≤4 盏实时灯）、移动端、VR
+// 延迟渲染（高端平台）：每盏额外灯成本 = 屏幕像素数 × 灯数
+//   → 适合：多灯光场景（几十盏）、PC/主机、光照计算 >> 带宽成本
+```
 
 <Callout type="warn">
-  **不要忽略 Render Scale**——0.7 意味着像素量降到 49%，片元着色器工作量直接减半，而上采样到屏幕几乎看不出区别。这是移动端"零成本"性能提升的头号利器。
+  延迟渲染在移动端不推荐——G-Buffer 需要多张高精度 RT（位置/法线/反照率/镜面），对移动
+  GPU 的 tile memory 和带宽是沉重负担。移动端老老实实选前向。如果场景确实需要几十盏动态灯
+  ——优先考虑烘焙 Lightmap 或 Light Probe 替代实时灯，而不是切延迟。
 </Callout>
 
-### 前向渲染 vs 延迟渲染——URP 里的二选一
+## Adaptive Probe Volumes：Unity 6 的新探针方案
 
-URP 支持两种渲染路径，它们的差别核心在**光照计算的方式**：
+<Term def="Unity 6 中替代旧 Light Probe Group 的光照探针系统：自动在场景中布设 3D 探针体积网格，按需细分（靠近几何体更密），减少手动布置工作量并改善动态物体的间接光照采样质量。">Adaptive Probe Volumes</Term> 是 Unity 6 URP 引入的新光照方案，替代了旧的 Light Probe Group 手动布置方式：
 
-| | Forward（前向渲染） | Deferred（延迟渲染） |
-|---|---|---|
-| **光照计算时机** | 画每个物体的同时算光 | 先填 G-Buffer，再统一算光 |
-| **多灯性能** | 每盏灯 × 每个片元 = 易爆炸 | 每盏灯 × 屏幕像素数 = 与物体数无关 |
-| **移动端 GPU 适配** | 架构简单、MSAA 可用 | 需要 MRT、带宽高、无 MSAA |
-| **适用场景** | ≤ 4 盏动态灯 | 大量动态灯 / 复杂光照 |
-
-```csharp
-// URP Asset 中切换渲染路径的等效代码
-// 实际中在 URP Asset Inspector 中选 Rendering Path
-// Forward 是移动端的默认首选
-UniversalRenderPipelineAsset urpAsset = ...;
-urpAsset.supportsHDR = false;        // 移动端关 HDR
-urpAsset.msaaSampleCount = 2;        // 前向可用 MSAA
-urpAsset.renderScale = 0.8f;         // 移动端降分辨率
-```
-
-<Callout type="trap">
-  **常见误判**：看到 PC 上 Deferred 渲染跑得好，就觉得移动端也没问题。实际上移动 GPU 的 MRT（多渲染目标）+ 大 G-Buffer 远超 Tile 缓存容量——频繁的 Tile Store/Load 会让带宽成为瓶颈。**移动端默认选 Forward。**
+<Callout type="tip">
+  Adaptive Probe Volumes 的核心改进：自动细分——不用再手动在场景里摆几百个 Probe
+  球体。在 Lighting 窗口里创建 Adaptive Probe Volume，Unity
+  自动根据场景几何密度生成探针网格（墙边密、空旷处疏），动态物体进入不同区域自动采样最近探针。
+  配合 Lightmap 烘焙使用，可大幅减少实时灯数量。
 </Callout>
 
-### Adaptive Probe Volumes——从手动摆探针到自动填空间
+{/* 6. 代码对照：选型代码 + SRP Batcher 验证 */}
 
-传统 <Term def="Light Probe：场景中手动放置的采样点，存储该位置的间接光照信息，动态物体用它来做环境光">Light Probe</Term> 需要手动放置——走廊里放一排、房间里放一圈、转角处放一个——大场景下几百上千个探针，摆到什么时候？
+## 验证 SRP Batcher 是否生效
 
-<Term def="Adaptive Probe Volumes：自动生成的 3D 体素网格探针系统，根据场景几何密度自适应加密或稀疏探针分布">APV（Adaptive Probe Volumes）</Term> 自动生成适应场景几何密度的探针网格。空间复杂处（室内走廊）自动加密，空旷处（大草原）自动稀疏——不再需要手动拖探针了。
+Frame Debugger 是直观验证工具，如果想在代码中检查，可以用 `SystemInfo`：
 
 ```csharp
-// APV 的场景烘焙流程（在 Lighting 窗口中操作）
-// 1. 创建 Adaptive Probe Volumes → Create → Volume
-// 2. Lighting 窗口中切换 Light Probe 模式为 Adaptive Probe Volumes
-// 3. Generate Lighting → 自动生成探针网格
-// 4. 运行时对象自动采样最近的探针来获得间接光照
+using UnityEngine;
+using UnityEngine.Rendering;
+
+public class SrpBatcherCheck : MonoBehaviour
+{
+    void Start()
+    {
+        // 检查当前管线是否支持 SRP Batcher（URP/HDRP）
+        bool supported = SystemInfo.supportsSetPassCallsRebuilt;
+        Debug.Log($"SRP Batcher supported: {supported}");
+
+        // 检查 Graphics Settings 中 SRP Batcher 是否勾选
+        //（在 Window → Analysis → Frame Debugger 中更直观验证）
+    }
+}
 ```
+
+{/* 7. 常见误区 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：SRP Batcher 已经开启但项目里 SetPass Call 数量没变。**原因**：有部分 Shader 不兼容 SRP Batcher → 这些 Shader 的 Draw Call 会把整批"打破"——每个不兼容的 Shader 都回退到慢路径，且打断后面的批次。**修法**：用 Frame Debugger 逐 Draw Call 检查，找到不兼容的 Shader，把它的材质属性放进 `UnityPerMaterial` CBUFFER。
+  **现象**：项目切到 URP 后 Draw Call 没减少，和 Built-in 时差不多。**原因**：SRP Batcher 缩短的是 SetPass Call（管线状态切换）而非 Draw Call 数本身——如果看 Frame Debugger 发现 SetPass 从 200 降到 20 但 Draw Call 还是 500，Batching 已经在工作了，你盯错指标了。**修法**：看 SetPass 数量而非 Draw Call；合批（GPU Instancing/Static Batching）才降 Draw Call 数。
 </Callout>
 
 <Callout type="trap">
-  **现象**：移动端开启了 HDR 后 Bloom 效果正常，但帧率从 60 掉到 35。**原因**：HDR 要求 RenderTexture 使用 16 位浮点格式（RGBAHalf）——显存带宽是 RGBA8 的两倍。移动 GPU 的 Tile 缓存容量有限，浮点 RT 的 Tile 频繁写入显存→吃掉所有带宽。**修法**：移动端关闭 `supportsHDR`，Bloom 等依赖 HDR 的后处理效果用 LDR 替代方案（或干脆关掉）。
+  **现象**：在 URP Asset 里开了 HDR，移动端帧率掉了一半。**原因**：HDR 需要 RGBA16F 浮点格式的颜色缓冲，数据量是普通 RGBA8 的 2 倍——移动 GPU 的 tile memory 和带宽压力直接翻倍。**修法**：移动端关掉 HDR（大多数手机屏幕也不支持真正的 HDR 显示）；如果确实需要 HDR 效果（如 Bloom），优先考虑伪 HDR 后处理技巧替代。
 </Callout>
 
 <Callout type="trap">
-  **现象**：URP 项目从 Built-in 迁移后，一堆材质变成紫色（missing shader）。**原因**：Built-in 的 Standard Shader 在 URP 中不存在——URP 有自己的一套 Shader（URP/Lit、URP/SimpleLit 等）。**修法**：选中所有紫色材质 → Edit → Rendering → Materials → Convert Selected Built-in Materials to URP。
+  **现象**：自定义 Shader 死活不进入 SRP Batcher，Frame Debugger 里始终显示 SetPass。**原因**：Shader 没声明 `CBUFFER_START(UnityPerMaterial)` 逐材质常量缓冲、或者使用了 `MaterialPropertyBlock`（中断 Batcher 的最常见原因）。**修法**：按本章第二个概念的代码片段重构 Shader 属性声明；避免对需要合批的物体使用 MaterialPropertyBlock——如果确实需要运行时改属性，考虑用不同的 Material 实例（SRP Batcher 支持不同材质参数但同一 Shader 变体）。
 </Callout>
+
+{/* 8. 小结与练习 */}
 
 ## 小结
 
-- URP 用统一单管线替代了 Built-in 的散装路径——SRP Batcher 合批、URP Asset 集中配置、Renderer Feature 可插拔
-- SRP Batcher 是本管线最大的性能增益：把材质属性放 `UnityPerMaterial` CBUFFER 即自动受益
-- URP Asset 的 Render Scale（0.7→49% 像素）、MSAA（关/2×）、Shadow Resolution（≤1024）是移动端三把性能钥匙
-- 移动端选 Forward 渲染路径（开销恒定、MSAA 可用）；非必要不用 Deferred（MRT+带宽不适合移动 GPU）
+- **URP ≠ 降画质版 Built-in**——它是可编程管线，SRP Batcher 批量提交材质参数，Renderer Feature 插件化扩展
+- **SRP Batcher** 降 SetPass、不降 Draw Call——适合「同 Shader 不同材质参数」的海量物体场景
+- **URP Asset** 是中控台：Render Scale、MSAA、Shadow Distance、HDR 四个参数是移动端调优四件套
+- **前向 vs 延迟**：移动端选前向（≤4 盏实时灯 + Lightmap 烘焙），多灯场景先烘焙再考虑延迟
+- **Adaptive Probe Volumes**（Unity 6）：自动布探针网格，替代手动 Probe Group
 
 <Exercises>
 
-**练习 1（改代码型）** 打开项目中任意一个 Shader，检查它是否兼容 SRP Batcher。如果不兼容，修改它的 CBUFFER 结构使其兼容，并用 Frame Debugger 验证。
+**练习 1（操作题）** 打开你的 URP 项目的 Frame Debugger，找到一帧中的任意一个 Draw Call，记录它的 SetPass Call 数量和 SRP Batch 标签。然后关掉 Graphics Settings 里的 SRP Batcher 重新 Build，再看同一帧的 SetPass Call 数——对比前后的变化。
 
 <Answer>
-在 Shader 文件中：把材质可变属性包进 `CBUFFER_START(UnityPerMaterial)` / `CBUFFER_END`。全局共享属性放 `CBUFFER_START(UnityPerDraw)`。保存后在 Shader 的 Inspector 面板看 "SRP Batcher: Compatible" 标签。Window → Analysis → Frame Debugger → 找到使用该 Shader 的 Draw Call → 确认显示 "SRP Batcher"。
+
+操作步骤：Window → Analysis → Frame Debugger → Enable，点击一帧展开渲染顺序。在左侧树中找到带 `Draw Mesh` 标签的条目，右侧面板会显示 `SRP Batch`（如果 Batcher 激活）或 `SetPass Call`。记录数量后，Edit → Project Settings → Graphics → 取消勾选 `SRP Batcher`，重新 Play 并 Frame Debugger 再截同一帧，对比 SetPass Call 变化。合理预期：SRP Batcher 激活时 SetPass 大幅减少（从数百到几十）。
+
 </Answer>
 
-**练习 2（问答型）** Render Scale 从 1.0 降到 0.7，像素量减少了多少？原理上为什么能省渲染时间？
+**练习 2（问答型）** 一个场景里有 200 棵树，每棵树用不同颜色的同一材质（Lit Shader）。在这个场景中，SRP Batcher 和 GPU Instancing 哪个更有效？为什么？
 
 <Answer>
-像素量 = 0.7 × 0.7 = 0.49，即减少了 51%。片元着色器的工作量直接与像素数成正比——像素减半 = 片元着色器工作量减半。渲染完成后上一帧的缩小图像被上采样到屏幕分辨率（GPU 硬件加速），几乎无额外延迟。
+
+SRP Batcher 更有效。因为 200 棵树材质不同（颜色不同），GPU Instancing 要求网格和材质完全相同才能一次画多份——不同颜色意味着不同材质实例，Instancing 不生效。SRP Batcher 正好解决这个场景：同一 Shader 变体（Lit）、不同材质参数（不同颜色），通过统一的常量缓冲布局批量提交，大幅减少 SetPass。
+
 </Answer>
 
-**练习 3（场景选型型）** 一个移动端 RPG 游戏有一盏太阳光（方向光）+ 偶尔出现的火把（点光源，最多同时 2 盏），应该选 Forward 还是 Deferred？如果一个 PC 端竞技场游戏有 20+ 盏动态灯光呢？
+**练习 3（选型题）** 你正在做一个移动端室内场景项目：一个房间里有 6 盏实时点光源 + 窗外方向光。分析你为什么不该在移动端切到延迟渲染来优化这 6 盏灯——并给出替代方案。
 
 <Answer>
-移动端 RPG（≤3 盏灯）→ Forward：架构简单、MSAA 可用、MRT 显存开销省。PC 端竞技场（20+ 动态灯）→ Deferred：前向下每片元 × 每盏灯 × 重叠物体会产生巨额 overdraw，延迟渲染把光照次数固定在"屏幕像素数 × 灯数"，不受物体数和 overdraw 影响，轻松跑几百盏灯。
+
+移动端选延迟渲染不划算：G-Buffer（至少 4 张 RT）每帧消耗的 tile memory 和带宽远超这 6 盏灯在前向渲染下的额外开销。替代方案：①把 6 盏灯里大部分改成 Baked（Lightmap 烘焙），只留 1–2 盏关键灯做实时；②用 Light Probe 给动态物体补齐间接光照；③考虑 Adaptive Probe Volumes（Unity 6）自动布探针。对于移动端室内场景，前向 + 烘焙 + 探针是标准解法。
+
 </Answer>
 
 </Exercises>
 
 <Glossary>
 
-<GlossaryItem term="SRP（Scriptable Render Pipeline）">Unity 的可编程渲染管线框架，把渲染循环拆成 C# 可控步骤。URP 和 HDRP 都是基于 SRP 的实现——类比：Built-in 是自动挡，SRP 是手动挡。</GlossaryItem>
+<GlossaryItem term="URP">
+  Unity 可编程渲染管线家族中的「通用管线」，专为跨平台设计（手机/平板/PC/主机/Web）。替代旧 Built-in 管线，内置 SRP Batcher、Renderer Feature 插件机制、Render Graph 自动资源管理。详见本章「第一个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="SRP Batcher">URP 下的批量渲染加速技术：把材质属性打包成大数据块上传 GPU，Draw Call 之间不重新设置状态，只更新一个指针。要求 Shader 在 CBUFFER 中声明属性。</GlossaryItem>
+<GlossaryItem term="SRP Batcher">
+  URP/HDRP 的核心批量提交技术：把兼容同一 Shader 变体的不同材质的参数（颜色/纹理/数值）按统一常量缓冲布局打包，减少 CPU→GPU 管线状态切换的次数（降 SetPass 而非 Draw Call）。详见本章「第二个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="URP Asset">URP 的全局配置文件——一张 ScriptableObject 资产集中管理 Render Scale、阴影、MSAA、HDR、后处理等所有渲染选项。可按 Quality Level 建多张。</GlossaryItem>
+<GlossaryItem term="SetPass Call">
+  每次 GPU 切换渲染状态（换 Shader 或材质）时，CPU 重建管线设置的那次指令通信。SetPass 数量是 CPU 端渲染开销的关键指标——降 SetPass 就是降 CPU 负担。详见本章「第一个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="Render Scale">渲染分辨率缩放系数：0.7 即实际按屏幕的 70% 渲染→像素量 49%→片元工作量减半，完成后上采样到全屏。移动端最有效的单参数性能优化。</GlossaryItem>
+<GlossaryItem term="URP Asset">
+  URP 管线所有质量/性能参数的集中配置文件（.asset 后缀）。Render Scale/MSAA/Shadow Distance/Cascade Count/HDR 等都在这里改。同一项目可有多个 Asset 对应不同画质档位。详见本章「第三个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="APV（Adaptive Probe Volumes）">替代传统手动摆放 Light Probe 的自动探针网格系统：根据场景几何密度自动决定哪里多放探针、哪里少放。烘焙后动态物体自动采样获取间接光照。</GlossaryItem>
+<GlossaryItem term="Renderer Feature">
+  URP 的管线扩展插件机制：不碰管线源码就能在渲染流程中插入自定义 Pass（如自定义后处理、覆盖渲染、深度/模板操作），在 URP Asset 的 Renderer Data 中添加。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="前向渲染">
+  逐物体×逐光源计算光照：每个物体被场景中每盏实时灯各照一次。移动端和 VR 默认选择——灯少时效率高，灯多时成本暴增（物体片元数×灯数）。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="延迟渲染">
+  先把场景的几何信息（位置/法线/反照率）渲进多张 G-Buffer，再对每个屏幕像素逐光源算一次光照。多灯光场景效率极高（光照成本=屏幕像素数×灯数，与物体数无关），但 G-Buffer 带宽负担大，移动端不推荐。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Adaptive Probe Volumes">
+  Unity 6 替代旧 Light Probe Group 的方案：自动根据场景几何生成 3D 探针体积网格，靠近几何体自动细分更密。动态物体进入区域后自动采样最近探针获取间接光照。详见本章「Adaptive Probe Volumes」节。
+</GlossaryItem>
 
 </Glossary>
 
-<Attribution adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

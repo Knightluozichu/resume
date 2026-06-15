@@ -14,7 +14,6 @@
  * 颜色/间距/圆角全部走 DESIGN token（硬规则 5）。
  */
 
-const CN_BASE = "https://learnopengl-cn.github.io/";
 const EN_HOME = "https://learnopengl.com/";
 const LICENSE_NAME = "CC BY-NC 4.0";
 const LICENSE_URL = "https://creativecommons.org/licenses/by-nc/4.0/";
@@ -41,37 +40,48 @@ function toEnglishUrl(sourceUrl: string): string {
   }
 }
 
+export interface AttributionProps {
+  sourceUrl?: string;
+  /** 非 LearnOpenGL 改编：书名或出处标题 */
+  adaptedFrom?: string;
+  /** 原作链接（如 Packt 图书页） */
+  adaptedUrl?: string;
+}
+
 export function Attribution({
-  sourceUrl,
+  sourceUrl = "",
   adaptedFrom,
   adaptedUrl,
-}: {
-  sourceUrl: string;
-  adaptedFrom?: string;
-  adaptedUrl?: string;
-}) {
+}: AttributionProps) {
   const cnUrl = sourceUrl?.trim();
-  // 非 LearnOpenGL 改编源（如 Unity 文档）：显示改编声明
-  if (!cnUrl && adaptedFrom && adaptedUrl) {
+
+  if (adaptedFrom?.trim()) {
+    const title = adaptedFrom.trim();
+    const url = adaptedUrl?.trim();
     return (
       <footer
-        aria-label="改编声明"
+        aria-label="出处声明"
         className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
       >
-        <p className="mb-2 font-semibold text-primary">改编声明</p>
+        <p className="mb-2 font-semibold text-primary">出处声明</p>
         <p>
-          本文为改编重写，改编自{" "}
-          <a href={adaptedUrl} target="_blank" rel="noopener noreferrer nofollow">
-            {adaptedFrom}
-          </a>
-          。
+          本文为改编重写，参考{" "}
+          {url ? (
+            <a href={url} target="_blank" rel="noopener noreferrer nofollow">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+          。教学结构与表述经 remuse 重写，非逐字翻译。
         </p>
         <p className="mt-2">
-          本改编版为教学目的进行重述与补充，不声称替代阅读原作。原文版权归原作者所有。
+          原作版权归原出版社及作者所有；本站改编内容仅供学习交流，请勿用于商业用途。
         </p>
       </footer>
     );
   }
+
   // 原创内容（无出处 URL）：显示通用原创声明
   if (!cnUrl) {
     return (

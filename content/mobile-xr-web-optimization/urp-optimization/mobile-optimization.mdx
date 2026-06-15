@@ -3,290 +3,298 @@ title: 移动端性能优化
 type: C
 section: URP 专项优化
 order: 2
-description: 移动 GPU Tile-based 架构适配、纹理压缩（ASTC/ETC2）、移动画质分级与 A/B 帧策略。
+description: Tile-based GPU 适配、ASTC/ETC2 纹理压缩、画质分级与帧率/电池策略——移动端的性能铁三角。
 demo: true
 math: false
-sourceUrl: ""
 draft: true
+sourceUrl: ""
 ---
 
-{/* C 实战型（Unity《Optimize your game performance》移动端章节改编）
-   知识点清单与 viz：
-   1) 移动 GPU Tile-Based Rendering — TileBasedGpuDiagram
-   2) 纹理压缩（ASTC/ETC2）— 代码对照
-   3) QualitySettings 移动分级 — 代码对照
-   4) Application.targetFrameRate / 移动电池策略 — 代码对照
-   5) 窄带/弱网资源下载 — Callout + 代码对照
-*/}
+{/* C 实战型章：Tile-based GPU、纹理压缩选型、QualitySettings 分级、帧率策略。
+知识点清单（每项配 viz）：
+1. Tile-based GPU → TileBasedGpuDiagram (SVG 示意图)
+2. 纹理压缩选型 → 代码对照
+3. QualitySettings 分级 → 代码对照
+4. targetFrameRate → 代码对照
+5. 弱网资源 → Callout(tip)
+Term 高亮术语：Tile-based GPU、ASTC、ETC2、Render Target Load/Store、QualitySettings、vSync、弱网资源管理 → 均进章末 Glossary */}
 
 <Objectives>
 
-- 能解释移动 GPU 的 Tile-Based Rendering 架构，说出它与桌面 GPU 的关键区别
-- 能为 Android/iOS 项目正确配置 ASTC 纹理压缩，并根据设备内存设置多级 QualitySettings
-- 能回答：移动端 60FPS 降到 30FPS 能省多少电？为什么不是"线性省 50%"？
+- 能解释 Tile-based GPU（Mali/Adreno/Apple GPU）的工作方式，以及为什么常规 PC GPU 优化策略搬到移动端会失效
+- 能为项目选择合适的纹理压缩格式（ASTC/ETC2），并说出每种格式的适用平台
+- 能实现一套基础画质分级系统：不同画质档位自动切换 URP Asset、目标帧率和 vSync
 
 </Objectives>
 
-## 为什么移动端性能是个"专属问题"
+{/* 2. 直觉引入 */}
 
-当你把一台 3kg 的游戏本和一部 200g 的手机放一起——前者有独立显卡 + 风扇散热 + 200W 功耗预算，后者只有集成在一块芯片上的 GPU，连个风扇都没有，整机功耗预算不到 5W。**给移动端做优化不是因为"懒得优化 PC"，而是因为这俩根本不是同一类设备。**
+## 移动端不是缩小的 PC
 
-更关键的是，移动 GPU 的硬件架构和桌面 GPU 完全不同。桌面 GPU 是"流水线模式"——顶点、光栅、片元像工厂流水线一样顺序过，每个像素直接写显存。移动 GPU 是"瓷砖模式"——把屏幕切成几十块小方块（Tile），每块在自己的高速芯片内缓存上渲染完，才写回显存。
+手机 GPU 和电脑 GPU 看起来都是「画图的芯片」，但内部的工作方式完全不同。电脑 GPU 拿到一帧画面后可以一股脑把整张画布从头画到尾——显存管够、带宽管够、电也管够。手机 GPU 不行——它用电池、屏幕小但像素密度高、还得和 5G/WiFi/GPS 抢电抢带宽。
 
-这个差异意味着：在底座 GPU 上写 RenderTexture → 再采样它 → 几乎无感；在移动端这样来回读写就是性能灾难。**你不理解 Tile 架构，就不知道为什么某些"看起来没问题"的写法会让手机发烫。**
+所以移动端优化不是「把 PC 版的设置调低就行」。你需要理解手机 GPU 到底怎么画画的——它把画面切成小块（Tile）一块一块处理，每块在芯片内部用极快的「便签纸」画完才写回显存。这个差别决定了纹理压缩怎么选、Render Scale 怎么调、甚至代码怎么写。
 
-## 1. 移动 GPU 架构——Tile-Based Rendering
+这一章教你三件事：怎么伺候 Tile-based GPU、怎么选纹理压缩格式、怎么搭画质分级和帧率控制。读完你就能拿出一个项目说：「这个版本在手机上能稳 60 帧」。
 
-<Term def="Tile-Based Rendering：移动 GPU 使用的渲染架构——将屏幕分成小方块（Tile）在片上高速缓存储内存中独立渲染，每 Tile 完成后才写回显存，大幅节省带宽">TBDR（Tile-Based Deferred Rendering）</Term> 是 Mali、Adreno、Apple GPU 的共同选择。
+{/* 3. 核心概念：Tile-based GPU */}
+
+## 第一个概念：Tile-based GPU——小块作画
+
+<Term def="移动端 GPU（Mali/Adreno/Apple GPU/PowerVR）普遍采用的架构：把屏幕切成若干小方块（Tile，通常 16×16 或 32×32 像素），每块在 GPU 内部的超快片上 SRAM（Tile Memory）中完成所有渲染后再一次性写回主显存——大幅降低外部带宽消耗。">Tile-based GPU</Term> 是移动端优化的逻辑原点。
 
 <TileBasedGpuDiagram />
 
-TBDR 的两个关键行为：
+关键行为约束：
 
-1. **帧内显存写入极少**：正常一帧每个像素只写一次显存（最终画面）——不像桌面 GPU 可能反复读改写。
-2. **Render Pass 切换很贵**：每次切换渲染目标时，当前 Tile 的临时数据必须从芯片缓存写回显存，下一 Pass 再从显存读回来——即 Tile 的 Store/Load。**一帧内有 5 个互相依赖的 Render Pass？每个像素可能被反复搬运 5 次。**
+1. **Render Target Load/Store**：每次载入一块 Tile 到内部 SRAM、画完再写回显存，这个「载入/写出」动作的代价在桌面 GPU 上可以忽略、在移动端却是真开销。不必要的 Load/Store（如每帧把 Color Buffer 读出来再写回去）会白白烧带宽。
+2. **MSAA 在 Tile 内处理**：移动 GPU 对 MSAA 2x/4x 有硬件加速——采样在 Tile Memory 里完成、resolve 后才写回显存，性能损失比桌面 GPU 小得多。所以移动端 2x MSAA 的代价往往可以接受。
+3. **过度 Draw Call 更致命**：桌面 GPU 把一整帧一次性处理，Tile GPU 要切分后逐块处理——复杂的渲染状态切换（换 Shader/换 RT）在移动端会被放大，因为每个 Tile 都要重新建立状态。
 
-```csharp
-// TBDR 友好写法：把不依赖前面结果的 Pass 合并，减少 RT 切换
-// 不好：多次切换 RenderTexture
-RenderTexture rtA = RenderTexture.GetTemporary(w, h);
-RenderTexture rtB = RenderTexture.GetTemporary(w, h);
-Graphics.Blit(src, rtA, matA);    // Pass 1 → Tile Store to RAM
-Graphics.Blit(rtA, rtB, matB);    // Pass 2 → Tile Load + Store again
-Graphics.Blit(rtB, dest, matC);   // Pass 3 → Tile Load + Store again
-// 每 Pass 都触发一次 Tile 往返——三倍带宽开销
+> 类比：桌面 GPU 是一口气画一整面墙；Tile GPU 是 100 块瓷砖各画各的，每块搬进工作台（Tile Memory）画完再贴回墙上——搬进搬出就是 Load/Store 带宽。
 
-// 更好：URP 的 RenderPass API 自动合并兼容的 Pass
-// 或手动在同一个 RT 上用多个 Material 的 DrawMesh 连续画
-```
-
-<Callout type="tip">
-  **TBDR 优化铁律**：尽量减少一帧内不同 RenderTexture 之间的"渲染→采样→再渲染→再采样"链条。URP 的 `ScriptableRenderPass` 原生支持 Render Pass 合并——确保 `ConfigureInput` 只声明实际需要的附件。
+<Callout type="warn">
+  PC 优化常见禁术在移动端是致命错误——比如 `RenderTexture.GetTemporary` 在每帧里反复创建/销毁临时 RT（产生 Tiling Load/Store）、频繁切换 Render Target（每个 Tile 都要重载）、以及「先画不透明再半透明」的排序反了导致额外 Blit。在移动端做渲染优化前，先用 Render Doc 或 Xcode GPU Frame Capture 抓一帧看 Load/Store 动作。
 </Callout>
 
-## 2. 纹理压缩——比你想的重要得多
+{/* 纹理压缩 */}
 
-一张 1024×1024 的 RGBA 纹理，未压缩 = **4MB 显存**。一个场景可能有几百张贴图，未压缩意味着几百 MB 显存——直接 OOM。
+## 纹理压缩：移动端显存和带宽的最大杠杆
 
-<Term def="Adaptive Scalable Texture Compression：Khronos 标准的跨平台纹理压缩格式，支持 4×4 到 12×12 多种块大小，Android/iOS 全面支持">ASTC</Term> 是移动端的首选压缩格式。一张 1024×1024 RGBA 纹理：**ASTC 4×4 = 1MB，ASTC 6×6 = 437KB。** 每像素从 32 位（RGBA8）降到 8 位甚至 3.56 位。
+移动端最大的内存和带宽消耗通常不是代码、不是网格——是纹理。一张 2048×2048 的 RGBA 纹理在未压缩状态下占 16 MB，ASTC 6×6 压缩后约 1.4 MB——差了 11 倍。
 
-```csharp
-// Unity Texture Importer 中的纹理压缩设置
-// 在 Inspector 中选中纹理 → Override for Android/iOS → Format:
-//
-// ASTC 4×4: 最高质量、每像素 8 位——角色皮肤/UI/法线贴图
-// ASTC 6×6: 中等质量、每像素 ~3.56 位——场景物件/远景贴图
-// ASTC 8×8: 节省优先——天空盒/粒子等对精度要求低的内容
-//
-// 也支持运行时检测：
-if (SystemInfo.SupportsTextureFormat(TextureFormat.ASTC_4x4)) {
-    Debug.Log("ASTC 4x4 supported");
-}
-```
+| 格式 | 支持平台 | 压缩比（估） | 适用纹理类型 | 备注 |
+|------|---------|-------------|-------------|------|
+| <Term def="Adaptive Scalable Texture Compression：ARM 提出的有损纹理压缩格式，支持从 4×4 到 12×12 的可变块大小——块越小质量越高文件越大，是现代移动端（iOS/Android）的首选。">ASTC</Term> 4×4 | iOS(A8+) / Android(Mali/Adreno 5xx+) | ~4:1 | 法线贴图、高质量 UI | 质量最高 |
+| ASTC 6×6 | 同上 | ~9:1 | 漫反射贴图、一般纹理 | 推荐默认 |
+| ASTC 8×8 | 同上 | ~16:1 | 大尺寸背景、天空盒 | 移动端大图首选 |
+| <Term def="Ericsson Texture Compression 2：OpenGL ES 3.0+ 的通用有损纹理压缩格式，几乎所有 Android 设备支持但不支持 iOS（iOS 用 ASTC）。">ETC2</Term> | Android (GLES 4.3+) | ~4:1 | 兼容降级方案 | iOS 不支持 |
+| DXT5/BC7 | PC/主机 | ~4:1 | — | 移动端不支持 |
 
-<Callout type="trap">
-  **不要给带 Alpha 的纹理用 ETC2 RGB**——ETC2 RGB 只支持 RGB 三个通道，没有 Alpha。如果贴图需要透明度（如树叶、UI），用 ETC2 RGBA 或直接 ASTC。否则透明度信息会丢失，树叶变实心方块。
-</Callout>
-
-## 3. QualitySettings——高中低三档自动切换
-
-<Term def="Unity 的质量等级系统：一个整数 Level 对应一套配置（URP Asset、阴影质量、纹理 Mipmap 等），运行时切换无需重启">QualitySettings</Term> 让你为不同性能档次的设备准备不同配置。不是所有手机都该跑同一套画面设置。
+代码侧配置：
 
 ```csharp
-// 启动时根据设备内存大小自动选档
-void Awake()
+using UnityEditor;
+
+public class TextureImportSettings
 {
-    int memMB = SystemInfo.systemMemorySize;  // 设备总内存（MB）
-
-    if (memMB < 3072)  // < 3GB RAM → 低端机
+    [MenuItem("Tools/Set Mobile Texture Format")]
+    static void SetMobileFormat()
     {
-        QualitySettings.SetQualityLevel(0);
-        Application.targetFrameRate = 30;
-    }
-    else if (memMB < 6144)  // 3–6GB → 中端机
-    {
-        QualitySettings.SetQualityLevel(1);
-        Application.targetFrameRate = 30;
-    }
-    else  // > 6GB → 高端机
-    {
-        QualitySettings.SetQualityLevel(2);
-        Application.targetFrameRate = 60;
-    }
-}
-```
-
-三档典型配置：
-
-| Level | 阴影 | 抗锯齿 | Render Scale | 纹理 | 帧率 |
-|---|---|---|---|---|---|
-| 0 低端 | 关闭 | 关闭 | 0.6 | ASTC 6×6 | 30 |
-| 1 中端 | 硬阴影 | SMAA | 0.8 | ASTC 4×4 | 30 |
-| 2 高端 | 软阴影 | 2× MSAA | 1.0 | ASTC 4×4 | 60 |
-
-## 4. 电池策略——帧率不是越高越好
-
-移动端用户最关心的是"玩多久没电"。**帧率翻倍不是功耗翻倍——是超线性上涨。**
-
-<Term def="Application.targetFrameRate：Unity 的帧率上限设置。设为 -1（默认）即跟随平台 VSync，设为具体整数即强制锁定该帧率上限">targetFrameRate</Term> 设 30 = 每帧预算 33.3ms、CPU/GPU 有大量空档可降频休息——**功耗降 60%+，不只是少算 50% 的事。**
-
-```csharp
-// 移动端推荐配置
-void Start()
-{
-    // 锁定 30FPS 并关闭 VSync（避免双缓冲排队延迟）
-    Application.targetFrameRate = 30;
-    QualitySettings.vSyncCount = 0;
-
-    // 后台降帧：切到后台时降到 15FPS 以省电
-    Application.runInBackground = false; // 默认就是 false
-}
-
-// 配合 OnApplicationPause / OnApplicationFocus 手动降帧
-void OnApplicationPause(bool pauseStatus)
-{
-    if (pauseStatus)
-    {
-        // App 进入后台 → 降到极低帧率省电
-        Application.targetFrameRate = 10;
-    }
-    else
-    {
-        Application.targetFrameRate = 30;
-    }
-}
-```
-
-<Callout type="tip">
-  **非线性省电原理**：低帧率下 GPU 有更长的"帧间空闲期"——空闲期芯片可以降电压/降频率进入节能状态。不是"少干活省电"，而是"活慢了→可以降频休息→电省得更多"。这就像一个工人：干快没空歇 = 全天高速运转 / 干慢一半 = 一半时间可以打盹 = 能耗远低于 50%。
-</Callout>
-
-## 5. 窄带/弱网下的资源加载
-
-移动端不是时刻连着高速 Wi-Fi——地铁、电梯、地下停车场里，网络说断就断。资源下载策略必须考虑弱网。
-
-```csharp
-// Addressables + 弱网重试策略
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
-
-IEnumerator LoadAssetWithRetry(string key, int maxRetries = 3)
-{
-    int attempt = 0;
-    AsyncOperationHandle<GameObject> handle;
-
-    while (attempt < maxRetries)
-    {
-        handle = Addressables.LoadAssetAsync<GameObject>(key);
-        yield return handle;
-
-        if (handle.Status == AsyncOperationStatus.Succeeded)
+        // 对选中的纹理批量设置为 ASTC 6×6
+        foreach (var obj in Selection.objects)
         {
-            Instantiate(handle.Result);
-            yield break;  // 加载成功
+            string path = AssetDatabase.GetAssetPath(obj);
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) continue;
+
+            var settings = importer.GetPlatformTextureSettings("Android");
+            settings.format = TextureImporterFormat.ASTC_6x6;
+            settings.overridden = true;
+            importer.SetPlatformTextureSettings(settings);
+
+            // iOS 也用 ASTC
+            settings = importer.GetPlatformTextureSettings("iPhone");
+            settings.format = TextureImporterFormat.ASTC_6x6;
+            settings.overridden = true;
+            importer.SetPlatformTextureSettings(settings);
+
+            importer.SaveAndReimport();
+        }
+        AssetDatabase.Refresh();
+    }
+}
+```
+
+<Callout type="tip">
+  纹理压缩黄金规则：①所有不透明的漫反射贴图 → ASTC 6×6；②法线贴图/细节要求高的 →
+  ASTC 4×4；③UI/Sprite 尽量用 ASTC 而非 RGBA32；④完全不需要透明度的纹理关掉 Alpha
+  Is Transparency 省一个通道。用 Memory Profiler 查看纹理实际占用，
+  一张 2K 纹理占 16MB 就是没压缩。
+</Callout>
+
+{/* 画质分级 */}
+
+## 画质分级：同一项目、不同设备、不同体验
+
+不是所有手机都能跑最高画质。你需要一套 <Term def="根据设备性能自动或手动切换画质等级（Low/Medium/High）的系统，通过 QualitySettings API 控制 URP Asset、阴影质量、纹理分辨率、粒子数量等参数。">QualitySettings</Term> 分级系统——让高端机跑高画质、低端机跑流畅：
+
+```csharp
+using UnityEngine;
+
+public class QualityManager : MonoBehaviour
+{
+    public enum QualityTier { Low, Medium, High }
+
+    void Start()
+    {
+        // 自动检测设备性能并应用对应画质
+        QualityTier tier = DetectDeviceTier();
+        ApplyQualitySettings(tier);
+    }
+
+    QualityTier DetectDeviceTier()
+    {
+        // 简化版：根据 GPU 显存大小判断
+        int memorySize = SystemInfo.graphicsMemorySize;
+        if (memorySize >= 4096) return QualityTier.High;
+        if (memorySize >= 2048) return QualityTier.Medium;
+        return QualityTier.Low;
+    }
+
+    void ApplyQualitySettings(QualityTier tier)
+    {
+        switch (tier)
+        {
+            case QualityTier.High:
+                QualitySettings.SetQualityLevel(2); // High
+                break;
+            case QualityTier.Medium:
+                QualitySettings.SetQualityLevel(1); // Medium
+                break;
+            case QualityTier.Low:
+                QualitySettings.SetQualityLevel(0); // Low
+                break;
         }
 
-        attempt++;
-        Debug.LogWarning($"加载失败 ({attempt}/{maxRetries})，{2 * attempt} 秒后重试...");
-        yield return new WaitForSeconds(2 * attempt);  // 递增等待
+        // 对应 Quality Settings 里的 URP Asset 自动切换
+        Debug.Log($"Applied quality: {QualitySettings.names[QualitySettings.GetQualityLevel()]}");
     }
+}
+```
 
-    // 全部重试失败 → 用本地内置的低质量替代品
-    var fallback = Addressables.LoadAssetAsync<GameObject>("Fallback_LowRes");
-    yield return fallback;
-    Instantiate(fallback.Result);
+在 Editor 里设置画质档位：Edit → Project Settings → Quality → 每档（Low/Medium/High）各绑定一个 URP Asset（如 `URP-Low.asset` 的 Render Scale 0.6、MSAA 关、Shadow Distance 20m 对比 `URP-High.asset` 的 Scale 1.0、MSAA 4x、Shadow Distance 50m）。
+
+## 帧率与电池：不能只顾帧数
+
+移动端有两个桌面上不存在的外部约束：**电池**和**发热**。
+
+```csharp
+using UnityEngine;
+
+public class FrameRateController : MonoBehaviour
+{
+    void Awake()
+    {
+        // 所有平台先设目标帧率
+        Application.targetFrameRate = 60;
+
+        // 移动端：电池低于 20% 自动降帧省电
+#if UNITY_IOS || UNITY_ANDROID
+        float batteryLevel = SystemInfo.batteryLevel; // 0.0 ~ 1.0
+        if (batteryLevel > 0 && batteryLevel < 0.2f)
+        {
+            Application.targetFrameRate = 30;
+        }
+#endif
+
+        // vSync：桌面端开启防撕裂、移动端关掉让 targetFrameRate 生效
+#if UNITY_STANDALONE
+        QualitySettings.vSyncCount = 1;
+#else
+        QualitySettings.vSyncCount = 0; // 移动端 targetFrameRate 必须在 vSync=0 时才生效
+#endif
+    }
 }
 ```
 
 <Callout type="tip">
-  **资源加载最佳实践**：① 必需资源打包进安装包（不超过 APK 150MB 限制）；② 非必需资源用 Addressables 远程按需加载——Wi-Fi 预下载、4G/5G 不自动下载；③ 支持断点续传——记录已下载 Bundle 的 CRC 版本号；④ 大资源渐进式——先下载低分辨率版本让玩家进入游戏，后台静默下载高清版替换。
+  移动端帧率策略三原则：①默认 targetFrameRate = 60（大多数手机 60Hz 屏）；②只有高端
+  ProMotion 设备才开 120 FPS；③电池低电量自动降到 30——用户宁要「手机不烫、电量不掉」
+  也不要 60 FPS。发热会触发 CPU/GPU 降频，降频后的 60 FPS 可能比稳定 30 FPS 体验更差。
 </Callout>
+
+{/* 弱网资源 */}
+
+## 弱网场景：移动端特有的资源加载问题
+
+<Callout type="warn">
+  弱网或离线场景下，依赖远程 AssetBundle/Addressables 下载的游戏直接不可玩。策略：①
+  首包资源打到 APK/IPA 里（StreamingAssets），保证离线基础体验；②
+  Addressables 的远程 catalog 设置本地 fallback；③用 `UnityEngine.Networking.UnityWebRequest`
+  的 timeout 设合理值（≤5s），超时切本地资源；④预下载逻辑加 Wi-Fi-only 选项，4G/5G
+  不限流量但用户不一定愿意烧。
+</Callout>
+
+{/* 7. 常见误区 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：移动端真机帧率远低于 PC Editor 预期——PC 上看 Profiler 每帧 8ms，手机上同样场景 45ms。**原因**：不是慢一点而是慢很多倍——移动 GPU 的显存带宽只有桌面 GPU 的 1/10 到 1/20，透明材质、多 Pass Shader、大面积 Overdraw 在移动端惩罚重得多。**修法**：用真机 Profiler 验证——必须在目标设备上跑，PC 的 Profiler 不等于移动端真实性能。
+  **现象**：在 PC Editor 上优化完帧率稳 120 FPS，打到手机上变 8 FPS。**原因**：PC GPU 是 Immediate Mode（一帧整体处理），手机 GPU 是 Tile-based（逐块处理）。PC 上「GPU 不忙」的操作（如连续换 Render Target、全屏后处理 Blit）在手机上触发 N 次 Tile Load/Store，带宽直接爆。**修法**：移动端做渲染优化必须在真机上用 Render Doc 或 Xcode GPU Frame Capture 抓帧看 Load/Store 动作；减少 RT 切换次数、后处理合并在同一个 Pass 里做。
 </Callout>
 
 <Callout type="trap">
-  **现象**：开启 `targetFrameRate = 60` 后手机 20 分钟开始严重发热→帧率突然掉到 25。**原因**：手机触发了温控降频——CPU/GPU 温度 > 40°C 时系统强制降低频率保护硬件。**修法**：要么降低目标帧率到 30（发热大幅缓解）；要么实施逐级退让策略——35°C 时降到 40FPS、40°C 降到 30FPS、45°C 降到 20FPS，提前主动退让避免系统一刀切。
+  **现象**：纹理压缩选的是 DXT5（BC3），打到 Android 真机上纹理变成紫色/黑色。**原因**：DXT/BC 系列是 PC/主机专属格式，移动端 GPU 不支持；不支持时 Unity 会在运行时解压成 RGBA32——不仅格式不对、还吃了 CPU 解压时间和 4 倍显存。**修法**：Android 平台用 ASTC 或 ETC2，iOS 用 ASTC——在 Texture Importer 里按平台 override 格式。
 </Callout>
 
 <Callout type="trap">
-  **现象**：ASTC 6×6 压缩后的法线贴图出现明显块状条纹。**原因**：ASTC 是有损压缩——块大小越大（6×6 对比 4×4）对高频细节（如法线方向骤变）的损失越严重。**修法**：法线贴图、UI 等对精度要求高的纹理用 ASTC 4×4；场景物件的漫反射贴图和粗糙度贴图可以用 6×6 甚至 8×8。
+  **现象**：设置 `Application.targetFrameRate = 60` 但手机稳不住 60，一直跑在 30 甚至更低。**原因**：可能 vSync 没关（`QualitySettings.vSyncCount > 0` 时 targetFrameRate 被忽略，手机强制按屏幕刷新率的整数倍跑——60Hz 屏 vSync=1 就是 60，GPU 画不完下一帧就跳到 30）；或手机触发了热降频。**修法**：关 vSync + 设 targetFrameRate；用 Unity Profiler 看 GPU 耗时是否超帧预算；用设备的开发者选项关掉温控做 A/B 测试确认是否降频。
 </Callout>
+
+{/* 8. 小结与练习 */}
 
 ## 小结
 
-- 移动 GPU 是 Tile-Based 架构——省带宽但切换 RenderTexture 代价大，减少 Pass 间的 RT 依赖
-- 纹理压缩首选 ASTC：4×4（1MB/1024×1024）高精度 / 6×6（437KB）适中 / 带 Alpha 避免用 ETC2 RGB
-- 用 `SystemInfo.systemMemorySize` 自动选 Quality Level：低端（<3GB→关阴影+0.6 Scale+30FPS）/ 中端（3–6GB）/ 高端（>6GB）
-- `Application.targetFrameRate = 30` 功耗省 60%+（非线性来自降频休息），配合后台降帧到 10
-- 弱网资源加载：重试 + 递增退避 + 内置 fallback 低质量替代品
+- **Tile-based GPU 改变一切**：Render Target Load/Store 是隐藏带宽杀手，减少 RT 切换比桌面端优先 10 倍
+- **ASTC 是移动端默认纹理格式**：6×6 为通用推荐，4×4 给法线，8×8 给大背景——iOS/Android 双端统一
+- **QualitySettings** 是画质分级的车头：不同 URP Asset 绑定不同档位，一拖就走
+- **targetFrameRate + vSync=0 + 电池检测** = 移动端帧率策略三件套
+- **弱网优先本地资源**：首次可玩不需要网络，远程资源只做增量
 
 <Exercises>
 
-**练习 1（改代码型）** 改造上面的 QualitySettings 自动选档代码：加入 `SystemInfo.graphicsMemorySize` 判断逻辑，同时检测 GPU 内存大小和系统内存大小，两者都低时才选最低档。
+**练习 1（操作题）** 在 Texture Importer 中选一张项目里的 2048×2048 漫反射贴图，分别查看它在 RGBA32 未压缩和 ASTC 6×6 压缩下的文件大小。在 Memory Profiler 中记录两张的实际显存占用差异。
 
 <Answer>
-```csharp
-int sysMem = SystemInfo.systemMemorySize;
-int gpuMem = SystemInfo.graphicsMemorySize;
 
-if (sysMem < 3072 || gpuMem < 1024)  // 系统 <3GB 或 GPU <1GB → 低端
-    QualitySettings.SetQualityLevel(0);
-else if (sysMem < 6144 || gpuMem < 2048)  // 中端
-    QualitySettings.SetQualityLevel(1);
-else
-    QualitySettings.SetQualityLevel(2);
-```
+操作步骤：①选中纹理 → Inspector 里看底部 Preview 区域的 `Format` 和 `Size`；②在 Texture Importer 的 `Platform Settings` 中选 Android → 格式选 `ASTC 6×6` → Apply → 再记一次 Size。RGBA32 约 16MB（2048×2048×4/1024/1024），ASTC 6×6 约 1.4MB（2048×2048×1 bpp/8/1024/1024），差异约 11 倍。Memory Profiler 中看 Texture 分类的总 Size 变化验证。
+
 </Answer>
 
-**练习 2（问答型）** 为什么 TBDR 架构下同一帧内多次来回切换 RenderTexture 是性能杀手？
+**练习 2（代码题）** 写一个 `MobilePerformanceHelper` 类，在 `Awake()` 中自动完成：①检测设备 GPU 内存 → 选择画质档位；②设 targetFrameRate 为 60；③关 vSync（移动端）。在三个档位的 URP Asset 中提前配置好 Render Scale（High=1.0, Medium=0.75, Low=0.6）。
 
 <Answer>
-每次 Render Pass 切换时，当前 Tile 在片上 SRAM 中的临时渲染数据必须写回显存（Store），下一 Pass 开始前再从显存加载回来（Load）。三次切换 = 每个像素被搬运六次。而 TBDR 设计的初衷就是把写显存降到最少——频繁 RT 切换恰恰做反了这一点。
+
+参考本章「画质分级」和「帧率与电池」两节的代码。核心步骤：`SystemInfo.graphicsMemorySize` 读显存 → 小于 2GB=Low/2–4GB=Medium/大于 4GB=High → `QualitySettings.SetQualityLevel()` 切换 → `Application.targetFrameRate=60` + `QualitySettings.vSyncCount=0`。URP Asset 的三档 Render Scale 在 Editor 里手动设置（各档独立的 .asset 文件）。
+
 </Answer>
 
-**练习 3（实现型）** 实现一个网络状态检测器，监听 `Application.internetReachability` 的变化：Wi-Fi 时预下载下一场景的资源，4G 时不自动下载但允许玩家手动触发，无网络时使用内置的 fallback 资源。
+**练习 3（排错题）** 你的项目在小米 12 上跑 60 FPS 很稳，但到小米 8 上只有 20 FPS。你抓了 Profiler 发现 GPU 端 Render Target Load/Store 占了 40% 的帧时。列出至少两个可能导致这个问题的渲染设置，以及对应的修法。
 
 <Answer>
-```csharp
-void CheckNetworkAndLoad()
-{
-    if (Application.internetReachability == NetworkReachability.ReachableViaLocalAreaNetwork)
-    {
-        // Wi-Fi → 预下载全部资源
-        StartCoroutine(PreloadAllBundles());
-    }
-    else if (Application.internetReachability == NetworkReachability.ReachableViaCarrierDataNetwork)
-    {
-        // 4G/5G → 不自动下载，显示"下载"按钮给玩家
-        downloadButton.gameObject.SetActive(true);
-    }
-    else
-    {
-        // 无网络 → 使用内置 fallback
-        LoadFallbackAssets();
-    }
-}
-```
+
+可能原因：①URP Asset 里开了 `Depth Texture` 和 `Opaque Texture`——每帧额外的一次全屏 RT Load/Store 用于生成 _CameraDepthTexture 和 _CameraColorTexture，低端机吃不消。修法：关掉不必要的 Pass（除非有自定义后处理/Shader 需要）；②滥用全屏后处理或 GrabPass——每个全屏 Pass 都是一次 RT Load+Store。修法：合并后处理到 URP Renderer Feature 中、减少 GrabPass 使用；③Render Scale 设 1.0 对所有设备一样——低端机应自动降到 0.6–0.7。修法：加画质分级系统、每档不同的 Render Scale。排查顺序：逐项关掉 → 每次看 GPU Load/Store 占比 → 锁定最大凶手。
+
 </Answer>
 
 </Exercises>
 
 <Glossary>
 
-<GlossaryItem term="TBDR（Tile-Based Deferred Rendering）">移动 GPU 的渲染架构：把屏幕切成小方块在片上高速缓存里独立渲染，每块完成后一次性写回显存——省带宽但多 RT 切换代价大。类比：在大纸上一次画一小块，每块颜料只换一次——比反复换颜料笔省力。</GlossaryItem>
+<GlossaryItem term="Tile-based GPU">
+  移动端 GPU 的通用架构（Mali/Adreno/Apple GPU/PowerVR）：把屏幕切成小块（Tile），每块在 GPU 内部超快 SRAM 渲染完再写回显存，以最小化电池消耗和外部带宽。核心概念：Render Target Load/Store 是隐藏性能开销。详见本章「第一个概念」。
+</GlossaryItem>
 
-<GlossaryItem term="ASTC（Adaptive Scalable Texture Compression）">跨平台 GPU 硬件纹理压缩格式，支持 4×4 到 12×12 的块大小和每像素 8 位到 2 位不等的压缩率。Android/iOS 全面支持，是移动端纹理压缩首选。</GlossaryItem>
+<GlossaryItem term="ASTC">
+  ARM 提出的跨平台有损纹理压缩格式。从 4×4（最高质量）到 12×12（最小文件）的可变块大小。iOS（A8+）和 Android（Mali/Adreno 5xx+）都支持，是现代移动项目的首选压缩格式。详见本章「纹理压缩」节。
+</GlossaryItem>
 
-<GlossaryItem term="QualitySettings">Unity 画质等级系统：每个整数 Level 可绑定不同的 URP Asset，控制阴影、抗锯齿、纹理质量等——运行时不重启切换。</GlossaryItem>
+<GlossaryItem term="ETC2">
+  OpenGL ES 3.0 基础纹理压缩格式，几乎所有 Android 设备支持。但 iOS 不支持（iOS 用 ASTC），且压缩质量低于 ASTC。适用于需兼容极老设备的 Android fallback 方案。详见本章「纹理压缩」节。
+</GlossaryItem>
 
-<GlossaryItem term="targetFrameRate">CPU/GPU 帧率上限：-1 跟随 VSync，正整数值锁定帧率。移动端设 30 带来的功耗节省远超直觉——因为低帧率让芯片有大段空闲可以降频。</GlossaryItem>
+<GlossaryItem term="QualitySettings">
+  Unity 的画质分级系统：通过 Project Settings → Quality 定义 Low/Medium/High 等多档，每档可绑定不同 URP Asset、阴影质量、粒子预算等。代码通过 `QualitySettings.SetQualityLevel()` 切换。详见本章「画质分级」节。
+</GlossaryItem>
 
-<GlossaryItem term="降频（Throttling）">手机发热后系统自动压低 CPU/GPU 频率以保护硬件。30 FPS 比 60 FPS 发热少 → 不易触发降频 → 反而能稳定在 30 FPS，而本应激进的 60 FPS 可能 15 分钟后就被碾到 25 FPS。</GlossaryItem>
+<GlossaryItem term="弱网资源管理">
+  移动应用在网络差或离线时的资源加载策略：首包资源打进安装包保证基础可玩，远程 AssetBundle 设置本地 fallback，下载超时自动切本地。详见本章「弱网场景」节。
+</GlossaryItem>
 
 </Glossary>
 
-<Attribution adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

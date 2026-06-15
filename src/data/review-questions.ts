@@ -139,13 +139,28 @@ import { bnrgWebviewQuestions } from "./review/bnrg-webview";
 import { bnrgCustomViewsQuestions } from "./review/bnrg-custom-views";
 import { bnrgPropertyAnimationQuestions } from "./review/bnrg-property-animation";
 import { bnrgAfterwordQuestions } from "./review/bnrg-afterword";
+import { ugoEvaluatingPerformanceProblemsQuestions } from "./review/ugo-evaluating-performance-problems";
+import { ugoScriptingStrategiesQuestions } from "./review/ugo-scripting-strategies";
+import { ugoBenefitsOfBatchingQuestions } from "./review/ugo-benefits-of-batching";
+import { ugoOptimizingArtAssetsQuestions } from "./review/ugo-optimizing-art-assets";
+import { ugoFasterPhysicsQuestions } from "./review/ugo-faster-physics";
+import { ugoDynamicGraphicsQuestions } from "./review/ugo-dynamic-graphics";
+import { ugoXrOptimizationsQuestions } from "./review/ugo-xr-optimizations";
+import { ugoMemoryManagementQuestions } from "./review/ugo-memory-management";
+import { ugoDataOrientedTechnologyStackQuestions } from "./review/ugo-data-oriented-technology-stack";
+import { ugoTacticalTipsAndTricksQuestions } from "./review/ugo-tactical-tips-and-tricks";
+import { profProfilingWorkflowBaselineQuestions } from "./review/prof-profiling-workflow-baseline";
+import { profCpuProfilerDeepDiveQuestions } from "./review/prof-cpu-profiler-deep-dive";
+import { profGpuPerformanceAnalysisQuestions } from "./review/prof-gpu-performance-analysis";
+import { profMemoryProfilerQuestions } from "./review/prof-memory-profiler";
+import { profProfileAnalyzerRegressionQuestions } from "./review/prof-profile-analyzer-regression";
 import { profPowerOptimizationQuestions } from "./review/prof-power-optimization";
-import { profMxrwCrossPlatformChecklistQuestions } from "./review/prof-mxrw-cross-platform-checklist";
-import { profMxrwMobileOptimizationQuestions } from "./review/prof-mxrw-mobile-optimization";
-import { profMxrwUrpOptimizationQuestions } from "./review/prof-mxrw-urp-optimization";
-import { profMxrwWebOptimizationQuestions } from "./review/prof-mxrw-web-optimization";
-import { profMxrwXrOptimizationQuestions } from "./review/prof-mxrw-xr-optimization";
 import { profPlatformSpecificProfilingQuestions } from "./review/prof-platform-specific-profiling";
+import { mxrwUrpOptimizationQuestions } from "./review/mxrw-urp-optimization";
+import { mxrwMobileOptimizationQuestions } from "./review/mxrw-mobile-optimization";
+import { mxrwXrSpecificOptimizationQuestions } from "./review/mxrw-xr-specific-optimization";
+import { mxrwWebSpecificOptimizationQuestions } from "./review/mxrw-web-specific-optimization";
+import { mxrwCrossPlatformChecklistQuestions } from "./review/mxrw-cross-platform-checklist";
 
 export {
   CHAPTER_TITLES,
@@ -281,13 +296,28 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bnrgCustomViewsQuestions,
   ...bnrgPropertyAnimationQuestions,
   ...bnrgAfterwordQuestions,
+  ...ugoEvaluatingPerformanceProblemsQuestions,
+  ...ugoScriptingStrategiesQuestions,
+  ...ugoBenefitsOfBatchingQuestions,
+  ...ugoOptimizingArtAssetsQuestions,
+  ...ugoFasterPhysicsQuestions,
+  ...ugoDynamicGraphicsQuestions,
+  ...ugoXrOptimizationsQuestions,
+  ...ugoMemoryManagementQuestions,
+  ...ugoDataOrientedTechnologyStackQuestions,
+  ...ugoTacticalTipsAndTricksQuestions,
+  ...profProfilingWorkflowBaselineQuestions,
+  ...profCpuProfilerDeepDiveQuestions,
+  ...profGpuPerformanceAnalysisQuestions,
+  ...profMemoryProfilerQuestions,
+  ...profProfileAnalyzerRegressionQuestions,
   ...profPowerOptimizationQuestions,
   ...profPlatformSpecificProfilingQuestions,
-  ...profMxrwUrpOptimizationQuestions,
-  ...profMxrwMobileOptimizationQuestions,
-  ...profMxrwXrOptimizationQuestions,
-  ...profMxrwWebOptimizationQuestions,
-  ...profMxrwCrossPlatformChecklistQuestions,
+  ...mxrwUrpOptimizationQuestions,
+  ...mxrwMobileOptimizationQuestions,
+  ...mxrwXrSpecificOptimizationQuestions,
+  ...mxrwWebSpecificOptimizationQuestions,
+  ...mxrwCrossPlatformChecklistQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -10,429 +10,435 @@ draft: true
 sourceUrl: ""
 ---
 
-{/* A 概念型：功耗优化 —— 5 个知识点，每条配 viz；3-4 个 diagram；≥10 道复习题。
-    §2 零术语；DESIGN CSS 变量；Attribution 在章末。 */}
+{/* A 概念型章：讲清「是什么/在哪环节」。主 viz = 示意图 + Stepper 动画。
+按 chapter-spec §〇：概念讲解为重心、无数学、主 Demo 形态示意图/Stepper。
+知识点清单（动笔先行、每项配 viz）：
 
-{/* 1. 学习目标（spec §一）：A 型首位「能用自己的话解释…」；末条为可当场自测的检验问题。 */}
+1. 帧率与功耗的关系（30FPS vs 60FPS vs 动态帧率）→ PowerFrameRateDiagram (SVG 对比图)
+2. 分辨率/Render Scale 降级 → 代码对照 (CodeTabs)
+3. TargetFrameRate 与 VSync → VsyncFrameBudgetDiagram (SVG 对比图)
+4. 温控降频检测与应对 → 代码对照 (CodeTabs)
+5. QualitySettings 移动端分级 → 代码对照 (CodeTabs)
+   Term 高亮术语：帧率、功耗、动态帧率、Render Scale、VSync、帧预算、
+   TargetFrameRate、温控降频、Adaptive Performance、QualitySettings → 均进章末 Glossary */}
+
+{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在渲染管线中的位置」——此章在优化流程中的位置；2–3 条可检验动词；末条检验问题。 */}
 
 <Objectives>
-
-- 能用自己的话解释帧率与功耗之间的非线性关系——为什么 60→30 FPS 省的电不止一半
-- 能说出至少三种在移动端降低功耗的手段，并解释各自的工作原理
-- 能回答：温控降频发生时，游戏应该怎么应对，以及为什么不能硬撑 60 FPS？
-
+- 能解释帧率、Render Scale 与功耗三者之间的定量关系和权衡逻辑
+- 能独立在项目里用 `Application.targetFrameRate` 与 `QualitySettings.SetQualityLevel()` 实现分档省电策略
+- 能回答：设备发热掉帧时，你应该从哪几个维度切入降温——而不是关掉渲染？
 </Objectives>
 
-{/* 2. 直觉引入（spec §二）：≤3 段、零术语、回答「解决什么问题/没有它会怎样」、类比固定用工厂流水线。 */}
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语（术语最早第三节）；
+回答「解决什么问题」「没有它会怎样」；类比用工厂流水线。 */}
 
-## 为什么手机玩一会就烫手、电量狂掉
+## 你的手机为什么这么烫
 
-你正在地铁上打一局手游，画面流畅、手感正好。十分钟后，手机背面开始发烫，画面突然卡了一下，状态栏的电量从 40% 掉到了 25%。你赶紧关了游戏，心想：「这游戏也太费电了吧。」
+你正在地铁上玩半小时手游，突然手游变卡了、手机后背烫得握不住、电量从 80% 掉到了 40%——这不是游戏代码写崩了，是大量消耗的能量正在从你的手掌流失。
 
-这章要说的就是这件事：**能量去了哪里，以及怎么让它少走一点。**
+每一帧画面背后是一套数字流水线在跑：芯片计算颜色、显存放图片、屏幕按节拍刷新。这套流水线跑得快画面流畅，但能量也消耗得飞快——就像工厂把传送带加速，电表也跟着猛转。
 
-每一帧画面从 CPU 准备到 GPU 渲染，都要消耗电池里有限的电能。帧率越高，每秒要算的画面越多，电就烧得越快——这个关系不是简单的「少一半帧就省一半电」，而是一条更陡的曲线。把这件事想通，你就能在流畅与省电之间找到平衡，让玩家的手机撑完一整趟通勤。
+这一章教你管理这套流水线的速度：不是永远全速冲刺，而是学会在需要时加速、在空闲时踩刹车——让游戏不卡的同时，电池多撑一倍的时间。
 
-没有这种平衡会怎样？要么游戏硬跑高帧率、把手机烧成暖手宝、十几分钟就断电；要么一刀切压到极低帧率、画面卡到没法玩。真正的工程，是在这两端之间找到那个「刚好够用」的点。
+{/* 3. 概念讲解（spec §三）：A 型重心本节；一节一概念；Term 高亮；每概念配图或代码；新核心概念 ≤5 个。
+五个概念：帧率与功耗关系 / Render Scale 降级 / TargetFrameRate 与 VSync / 温控降频 / QualitySettings 分级 */}
 
-{/* 3. 概念讲解（spec §三）：A 型每个概念必配图或引用 Demo；术语首现 <Term def> 高亮且进章末 Glossary；
-   每概念配图；顺序 是什么 → 为什么 → 在管线中位置。共 5 个知识点。 */}
+## 第一个概念：帧率越高，功耗不是只翻一倍
 
-## 知识点一：帧率与功耗的非线性关系
+<Term def="屏幕每秒刷新的画面数量。30FPS 即每秒 30 张画面、60FPS 即每秒 60 张。帧率翻倍意味着 CPU/GPU 单位时间处理像素量翻倍，但功耗因芯片频率的非线性关系往往翻 2–4 倍。">帧率</Term>决定了你给这条流水线多紧的节奏。从 30FPS 切到 60FPS，像素吞吐量正好翻一倍——但 <Term def="芯片在执行渲染计算时所消耗的电能速率。帧率越高、渲染分辨率越高、芯片频率越高，功耗越大。移动端功耗直接决定电池续航和发热程度。">功耗</Term>翻的不止一倍。
 
-### 为什么 60→30 FPS 不止省一半电
-
-先把话说清楚：一个游戏的每一帧都需要 <Term def="中央处理器，负责逻辑计算、物理模拟、Draw Call 准备等。在 Unity 中每帧的主线程工作都在 CPU 上完成。">CPU</Term> 准备数据、<Term def="图形处理器，负责把 CPU 准备好的数据渲染成像素显示到屏幕上。">GPU</Term> 算像素。帧率翻倍，两者各自的工作量也翻倍——但功耗的上涨不是两条直线。
-
-来看一组典型数据（移动端实测，以某中等复杂度 3D 场景为基准，分辨率固定为设备原生分辨率）：
-
-| 帧率 | CPU 功耗占比 | GPU 功耗占比 | 总功耗（相对 30FPS） |
-|------|------------|------------|-------------------|
-| 30 FPS | 40% | 60% | 1.0×（基准） |
-| 60 FPS | 45% | 55% | 约 2.5× |
-| 120 FPS | 40% | 60% | 约 5.5× |
+原因在于芯片频率和功耗是非线性的关系：GPU 核心在低频下工作省电效率高，但一旦需要赶上更紧的帧时间（60FPS 里每帧只剩约 16ms，CPU 最多只能花 12ms 在这帧上），芯片电压必须抬高、频率随之飞涨——功耗约随频率的三次方增长。帧率翻倍 → 每帧预算减半 → 频率必须提 30%–50% → 功耗翻了 2–4 倍。
 
 <PowerFrameRateDiagram />
 
-核心原因是：CPU 和 GPU 在低帧率下有大量「等待时间」——60 FPS 时每帧只有约 16.6ms 预算，CPU/GPU 几乎全程满载、时钟频率被拉满；30 FPS 时预算翻倍到 33ms，CPU 可以降频、GPU 空闲时间更长、漏电流功耗也大幅下降。这就是 <Term def="芯片在完成一帧工作后、下一帧开始前处于空闲状态的时长。空闲期越长，芯片可以降频，功耗越低。">帧间空闲</Term> 带来的非线性省电效应。
+下面这张图就是帧率三档的全景对比：30FPS 留给每帧约 33ms 空闲——CPU/GPU 有大量时间降频「偷懒」、省电效果最好；60FPS 把每帧预算压到 ~16ms——芯片必须满速运转、发热和耗电剧烈上升。还有第三种选择——不是死扣 30 或 60，而是按场景需求切换：
 
-一句话总结：**帧率减半，功耗可能降 60% 以上**。这不是「少干一半活所以省一半电」，而是「活慢了，芯片可以降频休息、省得更多」。
+<Term def="根据场景负载自动切换目标帧率的策略：战斗场景切 60FPS（需要精确操作）、探索场景切 30FPS（省电）、菜单场景可更低。Unity 的 Adaptive Performance 包提供了系统级支持。">动态帧率</Term>就是为这种场景设计的：战斗状态（玩家在匹配操作）切高帧率确保手感流畅，探索跑图时降到 30FPS 省电，菜单/背包打开时再降到 30 以下——全程只在玩家能感知到的地方用高帧率。
 
-## 知识点二：分辨率与 Render Scale 降级
+## 第二个概念：Render Scale——画少一点，省一大块
 
-### 让 GPU 画小一点再放大
+<Term def="渲染分辨率与屏幕实际分辨率的比例系数。设 0.8 即每边渲染原 80% 的像素数，总像素 = 0.8² = 0.64，GPU 只需处理 64% 的像素，大幅省电且能对抗温控降频。">
+  Render Scale
+</Term>是移动端功耗治理最直接、最有效的单一调整项——比优化任何 Shader 都见效快。
 
-在移动设备上，分辨率是一个巨大的功耗因变量。一块 1440p 屏幕的像素量是 1080p 的 1.78 倍，GPU 要算的像素量也接近翻倍。但屏幕的物理分辨率写在硬件上，你不能改——那怎么给 GPU 省工作量？
+为什么这么有效？GPU 在渲染一帧时的第一大工作就是给屏幕上的每一个像素写颜色——这叫像素填充。屏幕有 1080×2400 ≈ 260 万像素，GPU 每帧要把这 260 万个像素点按你的 Shader 逻辑全算一遍。你把 Render Scale 从 1.0 降到 0.8 —— GPU 处理的像素数立刻从 260 万降到 0.8×0.8×260万 ≈ 166 万，减少了 36% 像素量。GPU 工作量直降，频率就可以调低，功耗明显下降。
 
-答案是把「渲染分辨率」和「显示分辨率」分开。Unity 的 <Term def="表示渲染分辨率相对于实际屏幕分辨率的缩放倍率。设为 0.7 即用屏幕的 70% 分辨率渲染，再拉伸到全屏。">Render Scale</Term> 就是这个意思：比如设为 0.7，就是让 GPU 画一张只有屏幕 70% 宽/高的画面，然后放大填满全屏。70% 的宽 × 70% 的高 = 只算了 49% 的像素——GPU 负载直接砍半。
-
-<RenderScaleDiagram />
-
-来看代码：
+在 Unity 里调 Render Scale 只需要一行代码：
 
 ```csharp
-// 在 UI 上拉低分辨率，引擎自动缩放最后输出到屏幕
+// 把渲染分辨率降为屏幕的 70%（每边像素数 × 0.7）
+// 总像素 = 0.7 × 0.7 ≈ 49%，GPU 工作量减半
 Screen.SetResolution(
-    (int)(Screen.currentResolution.width * 0.7f),
-    (int)(Screen.currentResolution.height * 0.7f),
-    FullScreenMode.FullScreenWindow
+    Mathf.RoundToInt(Screen.currentResolution.width * 0.7f),
+    Mathf.RoundToInt(Screen.currentResolution.height * 0.7f),
+    true   // 保持全屏
 );
 ```
 
-不过不推荐硬编码一个数字。更好的做法是提供选项：
+或者在 URP 项目的 Quality 设置里直接拉 `Render Scale` 滑块——不需要改一行代码，Editor 里调一下立刻生效。配合自适应画质调整（检测到设备温度升高→主动降到 0.7；温度正常→恢复到 1.0），这就是最温控友好的功耗策略。
 
-```csharp
-public enum RenderQuality { Low, Medium, High, Native }
+## 第三个概念：TargetFrameRate 与 VSync——两位帧率管控者
 
-public void ApplyRenderScale(RenderQuality quality) {
-    float scale = quality switch {
-        RenderQuality.Low => 0.5f,
-        RenderQuality.Medium => 0.7f,
-        RenderQuality.High => 0.85f,
-        RenderQuality.Native => 1.0f,
-        _ => 0.7f
-    };
-    Screen.SetResolution(
-        (int)(Screen.currentResolution.width * scale),
-        (int)(Screen.currentResolution.height * scale),
-        FullScreenMode.FullScreenWindow
-    );
-}
-```
+帧率不是靠「猜」来控制的——Unity 给了你两个互相关联的开关来精确限制每帧产出频率。
 
-什么场景下调 Render Scale 最划算？**画面快速运动、玩家注意力集中在操作上**的时候——竞速、射击、动作类游戏，0.7 倍渲染玩家几乎看不出来。反过来，**静态文字、精细 UI 界面**——比如策略游戏的菜单——降低了缩放比后文字会发虚，这种场景换其他手段更合适。
+<Term def="Unity 引擎级别的帧率目标 API（Application.targetFrameRate）。设为 60 时引擎尝试每帧在 ~16ms 内完成并控制帧率不超过 60。与 VSync 同时设置时有冲突规则。">
+  TargetFrameRate
+</Term>是软性上限：设 `Application.targetFrameRate = 30` 后引擎会尽量让你跑不到 30 帧——但它只是尽力而为，GPU 画快了有可能超过去。
 
-## 知识点三：VSync 与帧预算
-
-### 屏幕刷新的节奏，你只能跟着走
-
-手机屏幕通常以 60Hz 刷新，也就是每 16.67ms 刷新一次画面。这个节奏是硬件定死的——你算出来的帧，必须在屏幕上刷新的那个瞬间对齐到一次「发送」，否则就会撕裂画面。而一旦开了 <Term def="Vertical Synchronization，垂直同步。强制 GPU 渲染节奏与屏幕刷新频率对齐，消除画面撕裂，但也会引入输入延迟和帧率阶梯效应。">VSync</Term>，你的 CPU/GPU 就得跟着这块屏幕的节拍走。
-
-Unity 里用 `Application.targetFrameRate` 来控制这个节拍：
-
-```csharp
-// 目标 30 FPS：每两屏刷一次
-Application.targetFrameRate = 30;
-
-// 目标 60 FPS：每屏刷一次
-Application.targetFrameRate = 60;
-
-// -1 为系统默认（通常 = 屏幕刷新率）
-Application.targetFrameRate = -1;
-```
-
-</* VsyncBudgetStepper: 分步展示 30 / 60 FPS 帧预算变化 */>
-
-<Stepper>
-  <Step title="60 FPS 帧预算">
-    屏幕每 16.67ms 刷新一次。你只有 16.67ms 完成一整帧的 CPU + GPU 工作，中间不能超时。
-    CPU/GPU 几乎全程满载——这是最流畅但也最耗电的模式。
-  </Step>
-  <Step title="30 FPS 帧预算">
-    每两屏才交一帧，预算翻倍到 33.3ms。CPU 可以降频到更低时钟运行，GPU 有大段空闲时间可以关掉部分单元。
-    画面流畅度降低但多数休闲游戏完全够用。
-  </Step>
-  <Step title="VSync Count 进阶">
-    不止 30/60 二元：VBlank 的整倍数。Unity 的
-    `QualitySettings.vSyncCount` 能设 0（不同步／撕裂）、1（每屏同步 =
-    60）、2（每隔两屏同步 = 30）。设多少都要是屏幕刷新周期的整数倍。
-  </Step>
-</Stepper>
+<Term def="屏幕硬件发出的垂直同步信号，60Hz 屏幕约每 16.67ms 发出一次。开启 VSync 后 GPU 必须等收到信号才能交换渲染完成的画面到屏幕——防止画面撕裂，但帧率被锁定为刷新率的整数分频。">
+  VSync
+</Term>是硬性节拍器：屏幕每刷新一次就发一次垂直同步信号（60Hz 屏幕 ≈ 每 16.67ms 一次），GPU 必须等收到这个信号才能把画好的画面换到屏幕上——不等就强行换会导致画面从中间撕裂（上半张是上一帧、下半张是这一帧）。
 
 <VsyncFrameBudgetDiagram />
 
-<TargetFrameRateDiagram />
+两套机制各有各的用场：
 
-帧率从 60 掉到 30，GPU 省了整整一半的片段着色器计算量，CPU 的空闲占比从接近 0 翻到约 50%。这就是帧率省电的核心机制——不是「帧少了所以省」，而是「帧少了所以**有空降频**，降频才能真省」。
+- **VSync 用于稳定节奏场景**：`QualitySettings.vSyncCount = 1`（每帧等一个 VSync = 60FPS）、`= 2`（每两个 VSync 才换一帧 = 30FPS）——帧间隔绝对均匀，适合画面敏感的动作游戏。
+- **TargetFrameRate 用于动态调整场景**：先把 `QualitySettings.vSyncCount = 0` 完全关掉 VSync，再用 `Application.targetFrameRate` 在不同场景里设不同值——战斗切 60、探索切 30、菜单切 20。
 
-## 知识点四：温控降频——当手机说「不行了」
-
-### 不是你想跑 60 FPS 就能跑
-
-手机硬件有一层 <Term def="Dynamic Thermal Management，动态热管理。当芯片温度过高时自动降低 CPU/GPU 频率以保护硬件、防止烧毁。触发后性能会大幅下降。">温控降频</Term> 机制：温度一旦超过阈值，系统毫不留情地砍时钟频率——你代码写再多，硬件不给你算了。
-
-<Callout type="warn">
-  现象：游戏玩到一半帧率突然从 60 掉到 20，持续一会儿又恢复，循环往复。
-  这不是你的代码有 bug——是手机在主动降频保护硬件。
-</Callout>
-
-应对的核心思路不是「硬撑」，而是**主动退让**。
-
-第一，用 `Application.isMobilePlatform` 判断当前平台：
+两者同时设置时的规则：VSync Count > 0 会直接覆盖 TargetFrameRate——因为硬同步信号决定了帧交换时刻，引擎的软目标在 VSync 开启时被忽略。所以你如果要做动态帧率，必须先关掉 VSync。
 
 ```csharp
-// 只在移动平台拉低默认帧率
-if (Application.isMobilePlatform) {
-    Application.targetFrameRate = 30;  // 手机默认跑 30 即可
-} else {
-    Application.targetFrameRate = 60;  // PC/Console 可以上 60
+// 先关 VSync 以允许手动控制帧率
+QualitySettings.vSyncCount = 0;
+
+// 在不同场景切帧率
+void OnEnterBattle() => Application.targetFrameRate = 60;
+void OnEnterExplore() => Application.targetFrameRate = 30;
+void OnEnterMenu() => Application.targetFrameRate = 20;
+```
+
+## 第四个概念：设备发热不是你的错——但你要能应对
+
+<Term def="手机 SoC 温度超过安全阈值后，系统固件强制降低 CPU/GPU 工作频率的保护机制。此时即使应用渲染逻辑能在 16ms 内跑完，因芯片频率被强制压在低位，实际渲染远慢于正常、帧率显著下降。">
+  温控降频
+</Term>是移动开发里躲不开的现实：手机玩游戏时间一长，芯片温度升高，系统为了保护硬件不烧坏，直接把 CPU/GPU 频率强制压下来——你写的代码再高效也没用，硬件拒绝了你的请求，每帧时间因为频率低而被拉长，帧率硬生生掉下来。
+
+Unity 的 <Term def="Unity 的官方包（Adaptive Performance），可读取设备温度状态、当前性能等级、温控警告等系统级指标，并在过热告警触发时让应用自主降画质以保护帧率。支持 Samsung GameSDK 和 Android 原生 API。">
+  Adaptive Performance
+</Term>包就是为这种场景准备的——它给你提供了读取系统温度、性能等级、温控状态的 API，让你在设备将热未热时就先下手为强：
+
+```csharp
+using UnityEngine;
+using UnityEngine.AdaptivePerformance;
+
+public class ThermalManager : MonoBehaviour
+{
+    IAdaptivePerformance m_Ap;
+
+    void Start()
+    {
+        // 检查设备是否支持 Adaptive Performance
+        if (AdaptivePerformanceGeneralSettings.Instance == null)
+            return;
+        m_Ap = Holder.Instance;
+        if (m_Ap == null || !m_Ap.Active)
+            return;
+
+        // 注册温控状态变化回调
+        m_Ap.Thermal.ThermalStatusChanged += OnThermalChanged;
+    }
+
+    void OnThermalChanged(ThermalMetrics metrics)
+    {
+        // WarningLevel: 0=NoWarning / 1=ThrottlingImminent / 2=Throttling
+        switch (metrics.WarningLevel)
+        {
+            case WarningLevel.ThrottlingImminent:
+                // 温度即将超标，主动提前降配保帧率
+                Screen.SetResolution(1920, 1080, true);  // 降到 1080p
+                LODManager.SetMaxLOD(2);                 // 切粗 LOD
+                break;
+            case WarningLevel.Throttling:
+                // 已经降频了——进一步收紧各项开销
+                Screen.SetResolution(1280, 720, true);   // 降到 720p
+                QualitySettings.shadows = ShadowQuality.Disable;
+                PostProcessingManager.Disable();
+                break;
+            case WarningLevel.NoWarning:
+                // 温度恢复正常——恢复画质
+                Screen.SetResolution(2400, 1080, true);
+                LODManager.SetMaxLOD(0);
+                QualitySettings.shadows = ShadowQuality.All;
+                PostProcessingManager.Enable();
+                break;
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (m_Ap != null && m_Ap.Active)
+            m_Ap.Thermal.ThermalStatusChanged -= OnThermalChanged;
+    }
 }
 ```
 
-第二，把热管理当作一阶系统来超前响应，而不是等到温度超阈值再被动降频：
+核心理念：不是在设备已经发烫降频后才去补救（那时候硬件频率已经被按死了），而是当你读到「温度即将超标」的告警时，在降频发生之前就主动降低开销、减少发热——这样频率就能保持在正常水平，帧率不受影响。
+
+## 第五个概念：QualitySettings 分级——一套配置适配所有档位
+
+<Term def="Unity 中管理画质档位的全局配置 API。Project Settings → Quality 面板预设若干档位（Fastest/Fast/Simple/Good/Beautiful/Fantastic），每档独立控制阴影质量、纹理质量、抗锯齿、VSync、像素光数量等。运行时用 SetQualityLevel(index) 切换。">
+  QualitySettings
+</Term>是 Unity 给每个画质档位预设好的一切渲染参数的集合——不是只有「高画质」和「低画质」两个极端，而是几组预先配好的、按钮点一下就全部切换的档次。
+
+移动端通常设 3–4 档，每档该关什么有标准答案：
+
+| 档位 | 定位 | 阴影 | 后处理 | 纹理分辨率 | Render Scale |
+|------|------|------|--------|------------|--------------|
+| Low | 中低端机/省电模式 | 关闭 | 关闭 | 512 | 0.7 |
+| Medium | 中端机/日常模式 | 低质量 | Bloom 仅 | 1024 | 0.85 |
+| High | 旗舰机/性能模式 | 全开 | 全效果 | 2048 | 1.0 |
+| Ultra | 超旗舰/极佳画质 | 全开+软影 | 全效果+SSAO | 4096 | 1.0 |
+
+在 Unity 里预设好这些档位后，检测到设备性能等级就切到对应档位：
+
+```csharp
+// 根据设备性能等级选画质档位
+int SelectQualityLevel(PerformanceLevel perf)
+{
+    return perf switch
+    {
+        PerformanceLevel.Low    => 0,  // QualitySettings.names[0] = "Low"
+        PerformanceLevel.Medium => 1,  // "Medium"
+        PerformanceLevel.High   => 2,  // "High"
+        _                       => 2,
+    };
+}
+
+void ApplyQualityForDevice()
+{
+    int level = SelectQualityLevel(GetDevicePerformanceLevel());
+    QualitySettings.SetQualityLevel(level, applyExpensiveChanges: true);
+    // applyExpensiveChanges: true = 立即触发纹理重加载等耗时操作
+    // 仅在场景加载阶段调用，不要在游戏过程中调
+}
+```
+
+<Term def="设备在当前温控/电量状态下的实时可用性能等级（PerformanceLevel）：系统根据芯片型号、当前温度、电池电量综合评估出的设备性能可用余量，反映的是当下实际可用的算力而非纸面规格。">
+  性能等级
+</Term>——注意：不是设备售价（「这是旗舰机开 Ultra」），而是**当下这台设备在当前温度和电量下的实际可用算力余量**。一台旗舰机在电量只有 5% 且已经发烫的时候，实际可用性能可能级别只能跑 Medium 档——系统级的 Adaptive Performance 会真实反映这个数据。
+
+{/* 4. 数学推导：math:false，整节删除。 */}
+
+{/* 5. 交互 Demo（spec §五）：A 型主 Demo 为示意图 + Stepper；猜一猜引导；Stepper 每步带图示，图示用 diagram 的 step prop。 */}
+
+## 实战：一次完整的功耗调优闭环
+
+前面学了五个概念——帧率功耗关系、Render Scale、VSync/TargetFrameRate、温控降频应对、QualitySettings 分级。现在把它们串成一次标准的移动端功耗调优流程：
+
+<Stepper>
+  <Step title="① 建立基准：测当前功耗">
+    在目标设备上（如 iPhone 12 或中端 Android）跑游戏 10 分钟，用 <Term def="腾讯出品的移动端性能测试工具：无需 Development Build，通过系统级采集直接读 FPS、CPU/GPU 频率、温度、电流、功耗等底层指标。与 Unity Profiler 互补——Perfdog 看系统级功耗和温度、Unity Profiler 看引擎内部热点。">Perfdog（性能狗）</Term> 录制全程的帧率、GPU 频率、温度和电流曲线。记录：①全程平均帧率 ②GPU 平均频率和温度 ③10 分钟总耗电量（mAh）。
+
+
+    <PowerFrameRateDiagram step={1} />
+  </Step>
+  <Step title="② 找最大功耗来源">
+    用 Unity Profiler 连接 Development Build 录制一段同场景的 CPU Usage 和 Rendering 数据。找：①GPU 是 Bound（帧时间里 GPU 那一段最长）②Fill Rate 是否接近设备上限（高分辨率 + 大量半透明 UI = 每像素被反复画多次）。如果 GPU Bound 且 Fill Rate 是瓶颈——降 Render Scale 是最快见效的降功耗手段。
+
+
+    <PowerFrameRateDiagram step={2} />
+  </Step>
+  <Step title="③ 切帧率目标 + 降 Render Scale">
+    设 `Application.targetFrameRate = 30`（回合制或探索场景）、`QualitySettings.vSyncCount = 0`。同步调 Render Scale：`Screen.SetResolution(w*0.8, h*0.8, true)`。再跑 10 分钟 Perfdog 录制——对比第一次的电流曲线和温度曲线，看功耗降了多少。
+
+
+    <VsyncFrameBudgetDiagram step={2} />
+  </Step>
+  <Step title="④ 加温控自适应保护">
+    接入 Adaptive Performance 包——在温度即将超标（ThrottlingImminent 告警）时提前降 Render Scale 到 0.6 并关阴影；温度恢复正常后恢复画质。跟 Step③ 一样跑 10 分钟——对比有没有出现过温度冲上降频线的情况。
+
+
+  </Step>
+</Stepper>
+
+> 猜一猜：在 Step③ 你已经把帧率降到 30 且 Render Scale 降到 0.8 了——但 Perfdog 显示 GPU 温度仍然在涨，为什么？——答案在 §八练习里自测。
+
+{/* 6. 代码对照（spec §六）：A 型只贴最能说明概念的 1–3 段关键代码。 */}
+
+## 关键代码：分档省电策略的完整实现
+
+### Render Scale + TargetFrameRate 联动省电
+
+这是移动端功耗优化最常用的一段组合——Render Scale 和帧率目标一起调整：
+
+<CodeTabs>
+  <Tab label="✓ 完整：分场景动态调整">
 
 ```csharp
 using UnityEngine;
 
-public class ThermalManager : MonoBehaviour {
-    private float _targetFps = 60f;
-    private float _currentFps = 60f;
+public class PowerManager : MonoBehaviour
+{
+    // 根据场景类型切省电策略
+    public void ApplyPowerProfile(GameScene scene)
+    {
+        // 先关闭 VSync 以允许手动控帧
+        QualitySettings.vSyncCount = 0;
 
-    void Update() {
-        // 每 5 秒采样一次温度（降低采样开销）
+        switch (scene)
+        {
+            case GameScene.Combat:
+                // 战斗：流畅优先
+                Application.targetFrameRate = 60;
+                SetRenderScale(1.0f);
+                break;
+            case GameScene.Exploration:
+                // 探索：平衡省电
+                Application.targetFrameRate = 30;
+                SetRenderScale(0.85f);
+                break;
+            case GameScene.Menu:
+                // 菜单：省电优先
+                Application.targetFrameRate = 20;
+                SetRenderScale(0.7f);
+                break;
+        }
+    }
+
+    void SetRenderScale(float scale)
+    {
+        int w = Mathf.RoundToInt(
+            Screen.currentResolution.width * scale);
+        int h = Mathf.RoundToInt(
+            Screen.currentResolution.height * scale);
+        Screen.SetResolution(w, h, true);
     }
 }
-void Start() {
-    // 读取设备出厂设定的温控阈值和当前温度
-    // 一旦接近阈值就提前拉低帧率
-    }
+```
+  </Tab>
+  <Tab label="✗ 错误：只改帧率不改分辨率">
+
+```csharp
+// ✗ 问题：设了 30FPS 但 GPU 仍按全分辨率渲染
+// GPU Fill Rate 没降 → GPU 频率仍高位 → 功耗没降
+void WrongApproach()
+{
+    Application.targetFrameRate = 30;
+    // 忘了调用 Screen.SetResolution(...)
+    // 以为降帧率 = 省电——实际省的是 CPU、GPU 还在全量跑
+}
+```
+  </Tab>
+</CodeTabs>
+
+### Adaptive Performance 温控保护骨架
+
+上面那段是项目骨架——不是每个项目都需要这么详细，但关键三行（注册回调、读温控状态、降配策略）必不可少：
+
+```csharp
+// 最小可用温控保护（3 行核心逻辑）
+m_Ap.Thermal.ThermalStatusChanged += (metrics) =>
+{
+    if (metrics.WarningLevel == WarningLevel.ThrottlingImminent)
+        Screen.SetResolution(1280, 720, true);   // 马上降到 720p
+    else if (metrics.WarningLevel == WarningLevel.NoWarning)
+        Screen.SetResolution(2400, 1080, true);  // 恢复全分辨率
+};
 ```
 
 <Callout type="tip">
-  真正的温控应对策略是分层级的：温度正常（< 35°C）跑 60 FPS；温热（35–40°C）
-  降到 40 FPS；烫手（40–45°C）压到 30 FPS；严重（> 45°C）降到 20 FPS 并降分辨率。
-  每一层提前触发（比硬件阈值低 5°C 左右），给系统留出缓冲。
+  每个项目在接入 Adaptive Performance 后都应该至少测一次完整的「从常温跑游戏到温度触发降频」的流程（用 Perfdog 全程录制电流/温度/帧率三条曲线）：确认温度告警触发时机是否合理、降配策略是否真的压住了温度上升、温度恢复后画质是否正常回来。
 </Callout>
 
-<ThermalThrottlingDiagram />
-
-## 知识点五：移动端质量分级
-
-### 不用每台设备都跑最高画质
-
-Unity 的 `QualitySettings` 体系给每款游戏预置了一组从「非常低」到「非常高」的质量档位，每档控制着几十个底层参数——阴影距离、抗锯齿等级、纹理 Mip 偏移、粒子预算……
-
-移动端应该用 CPU/GPU 性能来自动匹配档位，而不是让玩家手动选：
-
-```csharp
-using UnityEngine;
-
-public static class MobileQualityPicker {
-    public static void AutoSelect() {
-        // 用 GPU 型号字符串判断设备档位
-        var gpu = SystemInfo.graphicsDeviceName.ToLower();
-
-        if (gpu.Contains("adreno 7") || gpu.Contains("mali-g7")) {
-            // 高端 GPU：开最高画质
-            QualitySettings.SetQualityLevel(3); // 高
-        } else if (gpu.Contains("adreno 6") || gpu.Contains("mali-g6")) {
-            // 中端 GPU
-            QualitySettings.SetQualityLevel(2); // 中
-        } else {
-            // 低端 / 老旧 GPU ：最低画质
-            QualitySettings.SetQualityLevel(0); // 非常低
-        }
-
-        // 补充：手机平台统一锁 30 FPS
-        if (Application.isMobilePlatform) {
-            Application.targetFrameRate = 30;
-        }
-    }
-}
-```
-
-`QualitySettings` 背后控制了至少这几样东西——在移动端最吃功耗的几项：
-
-| 设置项 | 低功耗推荐 | 原因 |
-|--------|---------|------|
-| 阴影质量 | 关闭或 Hard Only | 阴影是移动端 GPU 最大杀手之一 |
-| 抗锯齿（MSAA） | 关闭 | 每个采样点 = 一倍的片段着色器调用 |
-| 纹理质量 | Half Res（减半） | 纹理采样占用内存带宽和 GPU 时间 |
-| 粒子质量 | 低或关闭 | 移动端粒子系统 CPU 开销高 |
-| 软粒子 | 关闭 | 需要读深度缓冲、增加带宽 |
-
-<MobileQualityDiagram />
-
-{/* 4. 数学推导（spec §四）：math:false，跳过。 */}
-
-{/* 5. 交互 Demo（spec §五）：A 型用一个轻量可视 Demo —— 帧率 vs 功耗对比滑块，
-    拖一拖看功耗曲线怎么非线性偏折。猜一猜引导在先。 */}
-
-## 亲自拖一拖：帧率怎么影响功耗
-
-下面这个 Demo 可以拖动「目标帧率」滑块，实时看到：在给定的 CPU/GPU 利用率设定下，改动帧率对功耗（红色曲线）和帧预算空闲（蓝色曲线）的影响。
-
-> 猜一猜：把帧率从 60 拖到 30，功耗栏会掉到原来的百分之几？你会看到它掉得不止一半——试着把帧率拖到 15，看到什么了？
-
-<PowerDemo
-  caption="帧率—功耗对比：拖滑块改变目标帧率，红条是相对功耗（以 30FPS 为 100%），蓝条是帧预算空闲占比。注意 60→30 功耗栏不是从 200% 掉到 100%，而是一下掉到 40% 附近——这就是降频省电的非线性。"
-/>
-
-{/* 6. 代码对照（spec §六）：A 型代码不是重心，仅择关键概念给单 Tab 代码块，节篇幅压缩。
-    共含 TargetFrameRate / RenderScale / MobileDetect / QualitySettings 四个代码段。 */}
-
-## 关键代码对照
-
-下面把本章五个知识点对应的关键 API 集中展示，方便查阅对照。
-
-### 设置目标帧率
-
-```csharp
-// Unity 中控制帧率的一行代码
-Application.targetFrameRate = 30; // 目标 30 FPS
-
-// 恢复到系统默认（通常等于屏幕刷新率）
-Application.targetFrameRate = -1;
-
-// VSync 数量控制（= 每几屏更新一次画面）
-QualitySettings.vSyncCount = 0; // 不等待垂直同步（可能撕裂）
-QualitySettings.vSyncCount = 1; // 每屏一次（60FPS on 60Hz 屏幕）
-QualitySettings.vSyncCount = 2; // 每隔两屏一次（30FPS）
-```
-
-<Callout type="warn">
-  `targetFrameRate` 和 `vSyncCount` 互斥：设了 `vSyncCount > 0`，
-  `targetFrameRate` 会被忽略，且平台行为有差异（iOS 上 `vSyncCount` 默认有效；
-  Android 上可能需要额外设置）。建议移动端一律用 `targetFrameRate`。
-</Callout>
-
-### Render Scale 缩放
-
-```csharp
-// 以 70% 分辨率渲染（GPU 工作量减半）
-Screen.SetResolution(
-    (int)(Screen.currentResolution.width * 0.7f),
-    (int)(Screen.currentResolution.height * 0.7f),
-    FullScreenMode.FullScreenWindow
-);
-```
-
-### 自动检测移动平台
-
-```csharp
-if (Application.isMobilePlatform) {
-    Application.targetFrameRate = 30;
-    QualitySettings.SetQualityLevel(1); // 中等画质
-} else {
-    Application.targetFrameRate = 60;
-    QualitySettings.SetQualityLevel(3); // 高画质
-}
-```
-
-### GPU 型号检测
-
-```csharp
-// 按 GPU 型号自动选画质档位
-string gpu = SystemInfo.graphicsDeviceName;
-int level = gpu.Contains("Adreno 7") ? 3 :
-            gpu.Contains("Adreno 6") ? 2 :
-            gpu.Contains("Mali-G7") ? 3 :
-            gpu.Contains("Mali-G6") ? 2 : 0;
-QualitySettings.SetQualityLevel(level);
-```
-
-{/* 7. 常见误区（spec §七）：A 型至少 2 个；固定格式 现象→原因→修法；每个 150 字内。 */}
+{/* 7. 常见误区（spec §七）：A 型 ≥2 个；固定 现象→原因→修法 格式。此处提供 3 个。 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：帧率设成 30 但手机还是烫，电量仍然快速下降。**原因**：只设了帧率但
-  **没有同步降画质**——GPU 依然在全分辨率画全特效，只是每两屏交一帧。
-  CPU/GPU 的功耗没降下来。**修法**：配合 Render Scale 降分辨率，关掉 MSAA，
-  把阴影设置调低。帧率是省电手段之一，不是唯一。
+  **现象**：设了 `Application.targetFrameRate = 30`，但设备温度仍然一路上涨，Perfdog 显示 GPU 频率仍高居不下。**原因**：只降了 CPU 这边的目标帧率，GPU 的 Render Scale 仍为 1.0——GPU 还在按全分辨率渲染像素，它的工作量没有变化，频率就不会降下来。**修法**：降帧率同时必须降 Render Scale（`Screen.SetResolution`）——让 CPU 和 GPU 两边的负载一起下降才能显著降低功耗。只降 CPU 不减 GPU 负载 = 功耗省了个寂寞。
 </Callout>
 
 <Callout type="trap">
-  **现象**：游戏在某些手机上帧率为零（画面冻结），但 Profiler 里 CPU 在跑。
-  **原因**：`vSyncCount` 设了大于 0 的值，但设备的显示驱动不支持该模式
-  （多见于部分 Android 低端机），GPU 在等一个永远不会来的垂直同步信号。
-  **修法**：用 `targetFrameRate` 代替 `vSyncCount`，或尝试关闭 VSync（
-  `vSyncCount = 0`）。
+  **现象**：在 120Hz 屏幕（如 iPad Pro）上设 `Application.targetFrameRate = 60`，实际跑出来的却是接近 120FPS，功耗远超预期——为什么 60 没生效？**原因**：高刷新率设备上系统默认走最高刷新率 `VSync Count = 0 或 1`（120Hz 屏幕即 120FPS）。Unity 的 `targetFrameRate = 60` 在某些平台上被系统忽略——因为系统级刷新率本身是 120Hz，你不显式限制 VSync 等级，GPU 就按每标刷新来换帧。**修法**：在高刷设备上需要同时设 `Application.targetFrameRate = 60` **并**用 `Screen.SetResolution(w, h, true, 60)` 的第五个参数（Unity 2022+）来显式限制刷新率，或设 `QualitySettings.vSyncCount = 2`（每两个 VSync 换一帧=60FPS）。
 </Callout>
 
 <Callout type="trap">
-  **现象**：高温降频后帧率突然跳水，玩家感受到明显顿挫。
-  **原因**：温控降频是瞬时生效的——温度一超就一刀切砍频，没有渐变。
-  你的游戏还在尝试跑高帧率，但硬件已经不给力了。**修法**：提前监测温度趋势，
-  在接近阈值时渐进降帧（比如从 60→55→45→30），而非等到一刀切。
+  **现象**：QualitySettings 预设了 4 档画质，但切到 Low 档后对比 High 档功耗几乎没降——GPU 频率曲线几乎一样高。**原因**：Low 档只调了纹理精度、阴影、抗锯齿这些**不决定像素填充量**的参数——这些参数确实省了 GPU Shader 的计算量，但 Fill Rate（每帧要填充的像素总数）一毛没变。手机屏幕是 1080×2400，GPU 每一帧还是要填满 260 万像素——这才是功耗的大头。**修法**：Low 档必须降 Render Scale（如 0.7），让 GPU 总像素量直降 50%——这是唯一能显著拉低 GPU 频率的调整项。
 </Callout>
 
-{/* 8. 小结与练习（spec §八）：小结 5 条内与学习目标一一呼应；练习含一道改 Demo 代码题，答案折叠；A 型可只设问答型。 */}
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条 bullet × ≤40 字；与 §一目标一一呼应；A 型不加推导/实现题。 */}
 
 ## 小结
 
-- 帧率与功耗是非线性关系：60→30 FPS 省电不止一半，因为低帧率让 CPU/GPU 有足够空闲时间降频
-- Render Scale 是移动端最有效的省电手段之一：0.7 倍分辨率 = 只算 49% 的像素
-- VSync 和帧预算决定每帧有多少时间——帧预算越多，越能降频省电
-- 温控降频发生时，游戏应主动退让（渐进降帧），而不是硬撑
-- `QualitySettings` 从阴影到纹理到粒子等几十个参数统一控制，移动端应按设备自动匹配档位
+- **帧率 ×2 ≠ 功耗 ×2**：芯片频率与功耗的非线性关系导致功耗翻 2–4 倍
+- **Render Scale 是第一抓手**：降 1 个比例系数 → 像素量呈平方下降 → GPU 大幅省电
+- **TargetFrameRate + VSync**：两个开关一个软一个硬，动态帧率先关 VSync 再设 TargetFrameRate
+- **Adaptive Performance**：在设备发烫之前就感知、提前降配防降频——不是等频率被按下去再补救
+- **QualitySettings 分档**：关键看 Render Scale 和阴影——只调纹理和抗锯齿省不了多少功耗
 
 <Exercises>
 
-**练习 1（改代码型）** 在 §5 的 Demo 中，把 Render Scale 设成 0.5，然后设成 1.0，观察功耗变化。再试：把帧率设为 15、画质设为「最低」档，观察此时功耗。说说为什么这三项里哪一项对功耗的影响最大？
+**练习 1（改代码型）** 在你的 Unity 项目中加入一个 `PowerManager` 脚本，实现战斗场景切换 60FPS + Render Scale 1.0、探索场景切换 30FPS + Render Scale 0.85、菜单场景切换 20FPS + Render Scale 0.7 的分场景策略。跑 Perfdog 录两次（各 5 分钟）：第一次用「全程 60FPS + Render Scale 1.0」、第二次用你的分场景策略——对比两次的耗电量和 GPU 温度曲线。
 
 <Answer>
-
-将 Render Scale 设成 0.5 时，渲染分辨率只有全屏的 25%（0.5 × 0.5），GPU 的片段着色器负载降到四分之一，功耗下降最明显。帧率从 60 降到 15 让 CPU/GPU 有巨大的帧间空闲期、可大幅降频。画质「最低」档关掉了阴影、抗锯齿等最吃硬件的功能，也省电——但综合来看，**Render Scale 对移动端功耗影响最大**，因为它直接砍掉了 GPU 最重的工作量（每一帧上百万个像素着色器的调用量）。帧率其次、画质设置第三。
-
+核心代码见 §六「分场景动态调整」Tab。测试预期：分场景策略在 5 分钟内大部分时间处于探索/菜单场景，GPU 频率和温度应明显低于全程 60FPS 的对照组。如果两者差异不大——检查你的 Render Scale 是否在 `SetResolution` 调用后生效（在 Perfdog 里看屏幕分辨率是否真的变了）。
 </Answer>
 
-**练习 2（问答型）** 为什么不能在所有手机上统一设成 60 FPS？从温控降频的角度解释。
+**练习 2（问答型）** Step③ 已经降到 30FPS 且 Render Scale 0.8 ——Perfdog 显示 GPU 温度仍在涨，为什么？
 
 <Answer>
-
-不同手机的散热能力和芯片能效差异巨大。一台旗舰机可能轻松跑 60 FPS 不过热；一台中端机可能 5 分钟就触发温控降频——硬件一刀切砍频后，实际帧率可能只有 15-20 FPS，还不如一开始就设 30 FPS 来得稳。统一 60 FPS 的后果是：中低端设备剧烈发热、触温控降频后帧率剧烈抖动，体验比稳定的 30 FPS 差得多。
-
+降了帧率和 Render Scale 都不等于温度不涨——只是涨的速度变慢了。原因可能是：①场景本身在持续加载资源（纹理/网格流入 Native 内存），内存带宽占用让芯片持续饱和→温度继续上升。②降了 CPU/GPU 的工作量但没降它们在芯片内部的频率——芯片在低频高负载状态下功耗曲线不一定线性下降，长时间稳在高负载区间仍发热。③系统后台有其他进程在消耗资源（如录制自身 Perfdog），增加了芯片总体功耗。要彻底停涨温度需要进一步收紧频率（目标帧率降到 20 甚至 15）+ 主动等待温度回落（例如暂停渲染 1-2 秒）。
 </Answer>
 
-**练习 3（问答型）** `vSyncCount = 2` 和 `targetFrameRate = 30` 在 60Hz 屏幕上效果一样，为什么更推荐后者？
+**练习 3（问答型）** 为什么 120Hz 屏幕上设 `targetFrameRate = 60` 可能不生效？写出具体原因和两层修复方案。
 
 <Answer>
-
-因为 `targetFrameRate` 跨平台行为一致，不依赖显卡驱动的 VSync 实现。而 `vSyncCount` 在部分 Android 设备上可能被忽略或行为异常（冻结），也更容易与 Render Scale 等其他设置产生不预期的交互。Unity 官方建议在移动平台优先使用 `targetFrameRate`。
-
+原因：高刷新率设备上系统级默认 VSync 走 120Hz，`targetFrameRate` 是个软目标——在 VSync 面前被忽略。修复方案一：用 `Screen.SetResolution(w, h, true, 60)` 的第五个参数（Unity 2022+）显式要求系统把刷新率限制到 60Hz。修复方案二：设 `QualitySettings.vSyncCount = 2`（每两个 120Hz VSync 换一帧=60FPS）——这是硬同步，不会像 TargetFrameRate 一样被系统忽略。
 </Answer>
 
 </Exercises>
 
-{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础。 */}
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（10 个，按首现顺序）。 */}
 
 <Glossary>
 
-<GlossaryItem term="CPU">
-  手机的「大脑」——每帧负责算游戏逻辑、物理碰撞、准备交给显卡的数据。
-  功耗大头之一，帧率越高越容易成为瓶颈。
+<GlossaryItem term="帧率">
+  屏幕每秒刷新的画面张数。30FPS 每帧约 33ms 预算（含系统和开销），60FPS 每帧约 16ms。帧率翻倍 = CPU/GPU 单位时间工作量翻倍——但因芯片频率需提升才能赶上更紧的帧预算、功耗涨 2–4 倍。详见本章「第一个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="GPU">
-  手机的「画家」——把 CPU 准备好的数据渲染成屏幕上的一格一格像素。
-  移动端最耗电的组件之一，尤其是在高分辨率和高帧率下。
+<GlossaryItem term="功耗">
+  芯片在运行渲染工作时消耗的电能——表现为电池掉电速度和发热程度。帧率越高、Render Scale 越大、芯片频率越高，功耗越大。移动端功耗上限是电池容量和散热能力——超限 = 系统强制降频甚至杀进程。详见本章「第一个概念」和「第四个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="帧间空闲">
-  芯片在完成一帧工作后、下一帧开始前的「无事可做」时间段。
-  空闲时间越长，芯片可以把频率降低，省电就越多。这是低帧率省电的核心机制。
+<GlossaryItem term="动态帧率">
+  按场景需求自适应切换目标帧率的优化策略。核心逻辑：只在玩家能感知的流畅场景用高帧率（战斗 60FPS），在不需要高帧率的场景降到 30FPS 或更低（省电）。Unity Adaptive Performance 包支持系统级动态帧率感知。详见本章「第一个概念」。
 </GlossaryItem>
 
 <GlossaryItem term="Render Scale">
-  渲染分辨率相对屏幕分辨率的缩放比率。0.7 意思是让 GPU 先画一张 70% 宽/高的画，
-  然后拉大填满屏幕——这样 GPU 只算了约一半的像素，功耗大幅下降。
+  渲染分辨率与屏幕物理分辨率的比例系数。设 0.8 = 每边渲染原 80% 像素，总像素量 0.8² = 0.64，GPU 只需处理 64% 像素量。移动到端省电最直接有效的手段——Fill Rate 直降，GPU 频率随之降低。Unity 里用 `Screen.SetResolution` 或 URP Quality 设置里的 Render Scale 滑块调整。详见本章「第二个概念」。
 </GlossaryItem>
 
 <GlossaryItem term="VSync">
-  垂直同步。一种强制 GPU 输出节奏与屏幕刷新步调对齐的技术。
-  打开后画面不撕裂但帧率只能是 60、30、20……这些刷新周期的整数分之一；
-  关掉后帧率随意但画面可能撕裂。
+  显示器发出的垂直同步信号。60Hz 屏幕每 16.67ms 发一次——开 VSync 时 GPU 必须等信号到才能换帧（画面完整无撕裂），关 VSync 时 GPU 画完立刻换帧（可能画面撕裂）。`QualitySettings.vSyncCount` 控制等待几个 VSync 信号换一帧。详见本章「第三个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="vBlank">
-  屏幕刷新周期中的垂直消隐期。两个 vBlank 之间就是一帧的时间（如 60Hz 屏幕为
-  16.67ms）。GPU 在 vBlank 时刻交出新画面。
+<GlossaryItem term="TargetFrameRate">
+  Unity 的引擎级帧率目标 API：`Application.targetFrameRate`。设 60 时引擎控制帧率 ≤60，但这是软目标——在 VSync 开启时被覆盖。适用于关了 VSync 后手动调帧——战斗 60、探索 30、菜单 20。详见本章「第三个概念」。
 </GlossaryItem>
 
 <GlossaryItem term="温控降频">
-  手机在检测到芯片温度超过安全阈值时，主动降低 CPU/GPU 的时钟频率来保护硬件、防止烧毁。
-  一旦触发，性能会急剧下降——不是你的代码写的慢，是硬件不给力了。
+  手机 SoC 在温度超过安全阈值时系统固件强制降低 CPU/GPU 频率的保护机制——此时渲染代码再高效也没用，因为硬件被限频了。Unity Adaptive Performance 包提供 API 可以在降频发生前就检测到温度预警、主动降画质保护帧率。详见本章「第四个概念」。
 </GlossaryItem>
 
-<GlossaryItem term="VBlank 整倍数">
-  VSync 同步下，帧率只能是屏幕刷新周期的整数分之一。比如 60Hz 屏幕可以跑到
-  60（每 1 周期 1 帧）、30（每 2 周期 1 帧）、20（每 3 周期 1 帧）……
-  不存在 45 或 50 FPS，因为那不能对齐整周期。
+<GlossaryItem term="Adaptive Performance">
+  Unity 官方包：可读取设备当前的温度状态、性能等级、温控告警等系统级实时指标。核心理念：在温控降频发生之前就接获告警、主动降低渲染开销——避免被硬件强制降频后帧率崩盘。支持 Samsung GameSDK 和 Android 原生温控 API。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="QualitySettings">
+  Unity 管理画质档位的全局 API：在 Project Settings → Quality 里预设若干档位（每档独立控制阴影、纹理、抗锯齿、VSync、像素光数量等），运行时用 `QualitySettings.SetQualityLevel(index)` 一键切换整组配置。移动端建议至少分 Low / Medium / High 三档，Low 档必须降 Render Scale。详见本章「第五个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Perfdog（性能狗）">
+  腾讯出品的移动端性能测试工具。无需 Development Build，通过系统级采集（adb shell dumpsys / Xcode instruments）直接读设备的 FPS、CPU/GPU 频率、温度、电流、功耗曲线——这些 Unity Profiler 看不到。与 Unity Profiler 互补：Perfdog 看系统级能耗和温控状态，Unity Profiler 看引擎内部热点。详见本章 Stepper 流程。
 </GlossaryItem>
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）。 */}
+{/* 9. 出处声明（spec §九）：固定 Attribution。 */}
 
-<Attribution adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版" adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6" />
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

@@ -1,0 +1,341 @@
+---
+title: Profiling 工作流与基线
+type: A
+section: Profiling 工作流
+order: 1
+description: 建立 Profiler 工作流基线——Profiler 窗口、采样模式与 Development Build 链路。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/\* A 概念型章：讲清「是什么/在哪环节」。主 viz = 示意图 + Stepper 动画。
+按 chapter-spec §〇：概念讲解为重心、无数学、主 Demo 形态 PipelineViz/示意图。
+知识点清单（动笔先行、每项配 viz）：
+
+1.  Profiler 窗口模块总览 → UnityProfilerWindowDiagram (SVG 示意图)
+2.  采样模式选择（Deep/Standard/Better Stream）→ 代码对照 + ProfilerSamplingDiagram
+3.  Development Build + Autoconnect Profiler → 代码对照 + Callout(tip)
+4.  性能基线建立方法论 → Stepper(分步图示) + ProfilerWorkflowDiagram
+5.  Profiler 数据导出流程 → ProfilerExportDiagram (SVG 示意图)
+    Term 高亮术语：Profiler、Development Build、Autoconnect Profiler、采样模式、
+    Deep Profile、Better Stream、性能基线、Profile Analyzer、.data 文件 → 均进章末 Glossary \*/}
+
+{/_ 1. 学习目标（spec §一）：A 型必含「能解释 \_\_\_ 在渲染管线中的位置」；
+2–3 条可检验动词开头；末条检验问题。 _/}
+
+<Objectives>
+
+- 能用自己的话解释 Unity Profiler 四大模块分别负责什么，以及它们在整个性能分析流程中的位置
+- 能在 Development Build 中启用 Autoconnect Profiler，并独立完成一次采样录制
+- 能回答：在一个真实项目中，建立一条从「基线建立 → 瓶颈定位 → 验证修复 → 回归测试」的完整工作流需要哪几步？
+
+</Objectives>
+
+{/_ 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语（术语最早第三节）；
+回答「解决什么问题」「没有它会怎样」；类比用工厂流水线。 _/}
+
+## 为什么需要一套工作流
+
+游戏优化最怕一件事：改了代码却不知道到底有没有变快。不是「凭感觉」——帧数有时候高了有时候低了，你没法判断是自己的改动起效了，还是场景里刚好没在打架所以不卡了。
+
+没有一套标准的工作流会怎样？你会在「改代码 → 跑一下看看 → 好像快了 → 推到真机上又卡了」这个循环里来回折腾，到最后没人知道哪个优化真的有用、哪个是心理安慰。浪费的不仅是时间，更致命的是**方向错了就没法回头**。
+
+这一章就是建立这把「性能尺」——从打开 Profiler 的第一眼开始，到建立可复现的基线，再到每次优化后都能精确比对。读完你就有了一套流程：不是凭感觉，而是**用数据说话**。
+
+{/_ 3. 概念讲解（spec §三）：A 型重心本节；一节一概念；术语首现用 Term 高亮；
+每概念配图或引用 Demo；新核心概念 ≤5 个；顺序 是什么→为什么→在管线中的位置。
+新概念：Profiler 窗口、采样模式(Deep/Standard/Better Stream)、Dev Build、基线 _/}
+
+## 第一个概念：Profiler 窗口，性能的「体检报告」
+
+<Term def="Unity 内建的实时性能分析工具：录制游戏运⾏时的 CPU/GPU/内存/音频等指标，以时间轴和色条展示各模块耗时。">
+  Profiler
+</Term>
+是 Unity
+给你的性能体检报告。它不帮你改代码，但它告诉你病在哪。每次跑游戏时，Profiler
+在后台默默记录每一帧里 CPU 花了多少毫秒、GPU 画了多少个 Draw
+Call、内存分配了多少字节——然后把这些数字排成一条条色带，让你一目了然。
+
+下面这张图就是 Profiler 的主窗口：
+
+<UnityProfilerWindowDiagram />
+
+四大模块各司其职：
+
+- **CPU Usage**：记录主线程与 Job 线程上 C# 脚本、物理（Physics）、动画（Animation）、粒子（Particles）等 CPU 耗时。展开层级可以看到具体函数名和 Self/Total 时间——这是你找「哪段代码最慢」的第一站。
+- **Rendering**：关注 GPU 侧绘制性能：每帧 Draw Call 数量、Batches、SetPass Calls，以及 GPU 耗时。当渲染慢的时候先看这里。
+- **Memory**：记录运行时堆内存、纹理、网格、音频等资源占用。内存超限是移动端的头号杀手，这个模块帮你发现未压缩纹理、重复加载、泄漏性增长。
+- **Audio**：追踪音频混音、DSP 效果器、音频片段加载的开销。一般项目关注度最低，但音游或语音密集型应用不可忽略。
+
+Profiler 在整个优化流程中位于**第一步**：先看整体（哪个模块超过帧预算），再深入（展开到具体函数），最后锁定热点。没有它，你对性能的所有判断都是盲人摸象。
+
+## 第二个概念：三种采样模式，不同场景选不同刀
+
+Profiler 不是只有一种录制方式。Unity 给了你三把刀，各切各的菜：
+
+<ProfilerSamplingDiagram />
+
+| 模式                                                                                                                                             | 采样频率         | 开销       | 适用场景                 |
+| ------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------- | ---------- | ------------------------ |
+| 标准同步采样                                                                                                                                     | 每帧一次         | 低         | 日常诊断、建立基线       |
+| <Term def="插桩每个 C# 方法调用记录精确耗时的采样模式——信息完整但开销极大，帧率失真严重，仅在定位特定可疑函数时短时间开启。">Deep Profile</Term> | 每个 C# 方法调用 | 极高       | 精确定位某个函数内部热点 |
+| <Term def="Profiler 的流式录制模式：把数据持续写入磁盘文件、不占 Editor 内存，适合数十分钟的长时录制来抓取偶发卡顿。">Better Stream</Term>       | 持续流式写入     | 低（内存） | 长时复现、抓偶发卡顿     |
+
+标准模式是你 90% 时间该用的——开销低、不影响帧率，适合日常摸清整体状况和建立基线。Deep Profile 是查疑难杂症的 CT 扫描：信息密度极高，但每帧要多花好几倍时间，开出来的帧率数字完全不可信。只在怀疑某个具体函数、且标准模式看不清时才开一小段。Better Stream 则是用来抓「跑了半小时后才卡」那种偶发 Bug——把数据从头到尾写进硬盘，不撑爆内存。
+
+现实工作中最常见的翻车：开着 Deep Profile 测帧率然后说「不行，你这段代码太慢了」——那帧率被 Deep Profile 自己拖慢的，数据完全不具可比性。切记：建立基线和常规自查只用标准模式。
+
+## 第三个概念：Development Build——把 Profiler 搬到真机上
+
+<Term def="一种内置 Profiler 连接支持、但不做 Release 级优化的特殊构建版本。语法接近 Release 构建但允许 Editor 的 Profiler 远程连接，用于在真机上做性能分析。">
+  Development Build
+</Term>
+是你从 Editor 走向真机性能分析的第一张船票。
+
+为什么不能用 Editor 测？Editor 在跑你的游戏的同时还在渲染 Scene View、Inspector 面板、Console 窗口……这些编辑器本身的渲染和更新逻辑都在同一个进程中，会吃掉大量 CPU 和 GPU 时间。你在 Editor 里看到的 30 FPS，换到真机上可能稳稳 60 FPS——也可能反过来：Editor 的 60 FPS 到了真机上的 Mali GPU 只剩下 15 FPS，因为 Editor 走的是桌面显卡的驱动路径，跟移动端 GPU 完全不同。
+
+所以真机性能分析是**必做项**，而 Development Build 就是为此设计的：
+
+- 勾选 `Build Settings` → `Development Build`：生成一个保留 Profiler 连接端口的 APK/IPA/EXE，代码优化级别接近 Release（但不完全等于 Release——Release Build 会把 IL2CPP 的 C++ 编译优化开到最高，Dev Build 会略保守一点以保留符号）。
+- 再勾选 `Autoconnect Profiler`：设备启动后自动搜索同局域网内的 Editor 并建立 Profiler 连接，省去手动输入 IP。
+
+<Callout type="tip">
+  在 `Build Settings` 里依次勾选 `Development Build` → `Autoconnect
+  Profiler`，然后选目标设备 Build & Run。构建完成后真机上运行，Editor 的
+  Profiler 窗口会自动出现这个设备——点击 `Record` 就开始录制。
+</Callout>
+
+<Term def="Development Build 的一项构建设置：勾选后设备运行时会自动搜索并连接同局域网内的 Editor Profiler，省去手动输入 IP 地址的步骤。">
+  Autoconnect Profiler
+</Term>
+省掉的不是「输入 IP」这 3 秒，而是「设备 IP 变了又要重新输入」的那种烦躁——特别是
+Android 设备每次连 WiFi 都可能换 IP。
+
+如果 Autoconnect 失败，去 Window → Analysis → Profiler → 顶部 Active Profiler Target 下拉里手动输入设备 IP（Android/iOS 设置 → 关于本机里看 IP 地址）。确保设备和 Editor 主机在同一个局域网（同一 WiFi 或 USB 共享网络），且防火墙没拦 54998–55511 端口。
+
+{/* 4. 数学推导：math:false，整节删除。 */}
+
+{/_ 5. 交互 Demo（spec §五）：A 型主 Demo 为 PipelineViz/示意图；猜一猜引导；Stepper 每步必带图示。
+这里用 Stepper 讲「性能基线建立方法论」全程四步，每步配图和 Markdown。 _/}
+
+## 性能基线：你的对照尺
+
+前面学了工具和方法，现在把这些串起来变成一套可重复的流程。所谓 <Term def="优化前在固定条件（同一场景、同一画质、同一设备）下录制的一组 Profiler 对照数据，后续每次优化都在相同条件下重新测试、与基线比对来判断效果。">性能基线</Term>，就是「改之前先记下现状，改完再量一次，一比就知道有没有用」。
+
+下面这个 Stepper 用四步走完「建立基线 → 定位瓶颈 → 验证修复 → 回归测试」的完整循环：
+
+<Stepper>
+  <Step title="① 建立基线：先记下现状">
+    选定一台目标设备 + 固定画质档位（比如 iPhone 12 / Medium 画质 / 60 FPS 目标）。打开 Profiler 的 CPU Usage 和 Rendering 两个模块，在固定场景（最好是最耗的那个关卡）里正常游玩 5–10 秒，点 Record 录下第一份 .data 采样——这就是你的初始基线。
+
+    记下录制条件：设备型号、画质设置、场景名称、帧预算（如 16.6ms@60FPS）、当前 CPU ms 和 GPU ms 的峰值与均值。这些比 .data 文件本身还重要——三个月后有人问「为什么基线里 CPU 是 12ms」，你得能翻出当时是怎么测的。
+
+  </Step>
+  <Step title="② 定位瓶颈：找到最慢的那块">
+    在 CPU Usage 模块里按 Total 时间从高到低展开，找到 Self 时间占比最高的函数。别只看顶层——`Update()` 里你自己写的 `AIManager.Update()` 才是本体，`Update()` 本身只是框架调用入口。
+
+    同时看看 Rendering 模块：Draw Call 数是否合理（300–500 内一般不算多，破 1000 就该查合批了）、有没有过多的 SetPass Call（每个新材质/Shader 都会产生一个）。用 Frame Debugger 切一帧来看渲染顺序，排除 Overdraw 和意外透明排序。
+
+  </Step>
+  <Step title="③ 验证修复：改完再量一次">
+    改代码后，在**完全相同的场景、画质、设备**下重新录一次 Profiler。把前后两份 .data 拖进 <Term def="Unity 官方辅助分析工具：可导入多份 .data Profiler 采样文件做批量统计对比——看均值、中位数、标准差和回归趋势，排除单次偶然波动。">Profile Analyzer</Term>，对比 CPU ms 均值、GPU ms 均值、峰值和标准差——四组数字一起看，不只盯一个。
+
+    如果优化有效但不是完全生效（比如 CPU 从 18ms 降到 14ms 但目标预算 12ms），说明方向对但力度不够——再做一轮。如果优化反而变差（从不该出现的数字），立即回滚——不要硬改。
+
+  </Step>
+  <Step title="④ 回归测试：防回退">
+    一次有效还不够——后续的代码变更可能又把性能改回去。至少再跑 3 次同场景下的采样（不同时间、不同后台负载），确认改善稳定。
+
+    有条件的话把基线 .data 和 Profile Analyzer 的比对脚本纳入 CI：每次有性能相关 PR，CI 自动在目标设备上跑固定场景录制并对比初始基线，关键指标恶化超过阈值（如 5%）就标红阻止合入。这一步看起来工程量大，但它省下的是「上线后发现卡爆、回滚版本、连夜排查」的几十倍时间。
+
+  </Step>
+</Stepper>
+
+走完四步的工作流归纳为一张图：
+
+<ProfilerWorkflowDiagram />
+
+> 猜一猜：如果跳过第④步回归测试，直接把一次「好像变快了」的优化上线，最大的风险是什么？——答案在 §八练习里自测。
+
+{/_ 6. 代码对照（spec §六）：A 型只贴最能说明概念的 1–3 段关键代码；
+正好贴 Development Build 启用方式代码对照（Editor 脚本设置 BuildOptions）。 _/}
+
+## 关键代码：用脚本自动设置 Development Build
+
+上面说的 Build Settings 里手动勾选是平时开发的做法。但当你想在 CI 或自动化构建中启用 Dev Build + Autoconnect 时，需要用 Editor 脚本来写：
+
+```csharp
+// Editor 脚本 — 通过代码构建 Development Build + 自动连接 Profiler
+using UnityEditor;
+using System.Linq;
+
+public static class ProfilerBuild
+{
+    [MenuItem("Tools/Build Dev With Profiler")]
+    public static void Build()
+    {
+        var scenes = EditorBuildSettings.scenes
+            .Where(s => s.enabled)
+            .Select(s => s.path)
+            .ToArray();
+
+        BuildPipeline.BuildPlayer(scenes, "Build/DevGame.apk",
+            BuildTarget.Android,
+            BuildOptions.Development | BuildOptions.ConnectToHost);
+            //             ^^^^^^^^^^^^^^^^^   ^^^^^^^^^^^^^^^^^^^^^^^^
+            //             Development Build     Autoconnect Profiler
+    }
+}
+```
+
+`BuildOptions.Development` 对应 Build Settings 里的 `Development Build` 勾选框；`BuildOptions.ConnectToHost` 对应 `Autoconnect Profiler`。两个 flag 或在一起就是完整的 Dev Build + Profiler 连接链路。
+
+<Callout type="warn">
+  不要把 `BuildOptions.Development` 误当成 Release 配置提交到应用商店——Dev Build
+  的性能比 Release 略差（IL2CPP 优化级别较低、包含 Profiler
+  注入代码），只能内部测试用。正式发布请用不带 Dev flag 的标准构建。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：A 型 ≥2 个；固定 现象→原因→修法 三行格式。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 Editor 里测 60 FPS，真机上掉到 20 FPS。**原因**：Editor
+  走的是桌面 GPU 驱动路径（你开发机上的独立显卡），而真机是移动
+  GPU（Adreno/Mali/Apple Silicon 的 tile-based
+  架构完全不同的优化策略）。**修法**：一切性能结论必须在目标设备上用 Development
+  Build 实测，Editor 数字只作参考。
+</Callout>
+
+<Callout type="trap">
+  **现象**：开了 Deep Profile
+  之后帧率暴跌到个位数，以为游戏优化很烂。**原因**：Deep Profile 插桩了每一个 C#
+  方法调用，开销远超过游戏本身的逻辑——此时帧率已完全失真。**修法**：日常只用标准模式测帧率；Deep
+  Profile
+  只在怀疑某一个具体函数时开一小段、看方法级耗时分布，拿到想要的数据后立刻关掉。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Autoconnect Profiler 勾了，但真机上 Editor 就是搜不到设备。**原因**：五成是设备与 Editor 主机不在同一子网（WiFi 连了不同的 SSID 或一个在有线、一个在无线），三成是防火墙拦了 Unity 的多播端口（54998–55511），剩下两成是 Android 忘了开 INTERNET 权限或 iOS 忘了允许本地网络。**修法**：①确认同一局域网 → ②关掉主机防火墙试一次 → ③手动输入设备 IP 到 Active Profiler Target → ④还不行就 USB 连接 + `adb forward tcp:54998 localabstract:Unity-<包名>` 走有线转发。
+</Callout>
+
+{/_ 8. 小结与练习（spec §八）：小结 ≤5 条 bullet × ≤40 字，与 §一学习目标一一呼应；
+练习 2–3 题含 1 道改 Demo 代码题（此处没有 Demo 代码，改为查 Profiler 操作题）；
+A 型不加推导/实现/选型题。 _/}
+
+## 小结
+
+- **Profiler 四大模块**：CPU Usage（脚本/物理）、Rendering（Draw Call/GPU）、Memory（资源占用）、Audio（音频开销）
+- **三种采样模式**：标准（日常）、Deep Profile（定位函数）、Better Stream（抓偶发卡顿）
+- **Development Build + Autoconnect** 是真机性能分析的唯一正路——Editor 数字不可信
+- **性能基线 = 条件固定的对照数据**：改前记下几条数，改后同样条件再量一遍
+- 完整工作流四步闭环：**建立基线 → 定位瓶颈 → 验证修复 → 回归测试**
+
+<Exercises>
+
+**练习 1（操作题）** 打开你的 Unity 项目，做下面三件事：①在 Build Settings 里勾选 `Development Build` + `Autoconnect Profiler`，Build 到真机；②在 Editor 的 Profiler 窗口里确认设备已连接，录一段 5 秒的 CPU Usage 数据；③截图录下的 Profiler 面板，标出 CPU 总耗时、帧率（FPS）和你项目中耗时最高的一个函数名。
+
+<Answer>
+
+操作步骤：File → Build Settings → 选中你的目标平台（如 Android/iOS），勾选 `Development Build` 和 `Autoconnect Profiler` → Build & Run。设备启动后，Editor 里 Window → Analysis → Profiler 打开 Profiler 窗口，顶部 Active Profiler Target 应出现你的设备名。点 Record 录制 5 秒后暂停，在 CPU Usage 模块中找到最宽的色条、展开看函数名和耗时。截图时确保 FPS 数值、CPU ms 和展开后的函数名可见。
+
+</Answer>
+
+**练习 2（问答型）** 为什么「开着 Deep Profile 建立性能基线」是错误的？写出具体原因。
+
+<Answer>
+
+Deep Profile 会插桩每一个 C# 方法调用，产生极大的额外开销——占用的 CPU 时间可能比游戏本身逻辑还多。此时记录下来的帧率和耗时是完全失真的，不代表真实的游戏表现。用这样的失真数据当基线，后续所有对比都建立在错误参照上——哪怕你优化了真正的问题，基线数字（失真的那版）也可能比优化后的数字「更好看」，于是你以为优化没效果甚至变差了。基线必须用标准采样模式，确保记录的是游戏本身的性能，而不是 Profiler 自身的开销。
+
+</Answer>
+
+**练习 3（问答型）** 跳过回归测试直接上线一个「好像变快了」的优化，最大的风险是什么？从书中工作流的角度回答。
+
+<Answer>
+
+最大的风险是**性能回退（performance regression）**：这次优化确实变快了，但可能在特殊场景下不生效（比如只在空场景有改善、到满载场景反而更慢），或者后续某次代码提交无意间把这次的优化效果破坏掉（比如别人不知道你用了缓存策略，加了一个新的每帧分配导致 GC 又回来了）。回归测试通过多轮 + 多场景复测 + CI 门禁来防止这种「优化回退」，跳过这一步等于把性能当消耗品——每次迭代都在赌这次没退步。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（9 个，按首现顺序）；释义面向零基础；每项大白话 + 必要时类比。 */}
+
+<Glossary>
+
+<GlossaryItem term="Profiler">
+  Unity 内建的实时性能体检工具。跑游戏时它在后台记录每帧 CPU 耗时、GPU
+  绘制、内存占用等指标，排成时间轴和彩色横条让你一眼看到「哪里最慢」。类比成医院体检报告：不治病，但告诉你病在哪。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Deep Profile">
+  Profiler 的一种极高精度采样模式——不是每帧记一次，而是每个 C#
+  方法调用都单独记录一次耗时。信息极全但本身开销极大，会让帧率严重失真。类比 CT
+  全身扫描：看得一清二楚但辐射量大，只在怀疑某个器官有问题才做一次，不会拿来当体检常规项。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Better Stream">
+  Profiler
+  的流式录制模式：把采样数据持续写入硬盘而不是留在内存。适合录制几十分钟来抓「偶尔才出现一次」的卡顿或
+  Bug，内存不会爆。类比行车记录仪的 24
+  小时循环录像：平时不看，出事才回放。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Development Build">
+  一种内置 Profiler 连接能力的特殊构建版本。代码优化级别接近
+  Release（但不完全等于）、保留符号和 Profiler
+  端口，专供真机性能分析用。类比汽车测试跑道：和公路一样但旁边装了各种传感器。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Autoconnect Profiler">
+  Development Build 的一项便捷设置：勾选后真机游戏一启动就自动搜索同局域网内的
+  Editor 并连上，省去每次手动输入 IP。本质是多播网络发现 +
+  自动握手。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="性能基线">
+  优化前在固定条件下录制的一组 Profiler
+  对照数据（同一设备、同一场景、同一画质）。后续每次优化都在相同条件下重测，和基线比：「CPU
+  从 18ms 降到 14ms」还是「从 18ms 升到
+  22ms」。类比减肥前的体重秤拍照：不拍没办法证明瘦了。详见本章「性能基线」节。
+</GlossaryItem>
+
+<GlossaryItem term="Profile Analyzer">
+  Unity 官方辅助分析工具：把多份 .data Profiler
+  采样批量导入，自动算均值、中位数、标准差和回归趋势。解决「一次采样可能撞上偶然卡顿」的问题——看多份的平均和分布才可靠。类比多次考试取平均分：一次满分不代表成绩好，全班平均排名才能说明水平。详见本章
+  Stepper 第三步。
+</GlossaryItem>
+
+<GlossaryItem term=".data 文件">
+  Unity Profiler 录制的原始采样数据文件格式。可以用 Profile Analyzer
+  打开、对比、导出 CSV/PNG/报告。类比医院检查的原始 CT
+  影像：不是结论，但所有分析都基于它。详见本章「Profiler 数据导出」节。
+</GlossaryItem>
+
+<GlossaryItem term="采样模式">
+  Profiler 录制数据的方式选择：标准（每帧一次、低开销）、Deep
+  Profile（每个方法一次、高开销）、Better
+  Stream（流式写入磁盘、低内存）。不同场景选不同模式是第一课。详见本章「第二个概念」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* Profiler 数据导出流程：三步——录制 .data → 批量导入 Profile Analyzer → 统计导出 CSV/PNG/报告 */}
+
+## Profiler 数据导出
+
+录完 .data 不是终点——把数据拿出来做统计分析和存档才是完整流程。下面这张图给出了标准导出链路：
+
+<ProfilerExportDiagram />
+
+三步走：①在 Profiler 窗口录好后点 Save 保存 .data 文件（一次录一段，不要一次录十几分钟——分多段方便后续统计）；②打开 Window → Analysis → Profile Analyzer，把多份 .data 拖进去并对齐帧范围；③在 Profile Analyzer 里看均值、中位数、标准差和回归趋势，确认结论后导出 CSV 表格或 PNG 截图存档。
+
+{/* 9. 出处声明（spec §九）：非 LearnOpenGL 改编，用 adaptedFrom/adaptedUrl；Attribution 组件已支持此写法。 */}
+
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

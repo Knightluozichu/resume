@@ -1,319 +1,243 @@
 /**
- * <VsyncFrameBudgetDiagram>：Ch6 功耗优化 §3「VSync 与帧预算」核心图示。
+ * <VsyncFrameBudgetDiagram step={0|1|2}>：TargetFrameRate 与 VSync 帧预算。
  *
- * 展示 60Hz 屏幕上 60 FPS vs 30 FPS 的帧预算对比：
- *  - 上排 60 FPS：每 16.67ms 交一帧，CPU/GPU 几乎全程满载，空闲接近零
- *  - 下排 30 FPS：每 33.3ms（两屏）交一帧，CPU/GPU 有整整一半时间空闲可降频
- *
- * 左右两栏：左栏是「帧预算时间条」——实色=工作时长、半透明=空闲时长；
- * 右栏是「VSync 节奏线」——每 16.67ms 一条竖虚线标记屏幕刷新时刻，箭头标 VBlank。
- *
- * Server Component（纯展示，静态 SVG，无交互、无 three、reduced-motion 无关）。
- * 视觉语言与既有 diagram 一致：token 色（var(--accent)/--bg/--bg-elevated/--border/
- * --text-primary/--text-secondary），无阴影、无裸 hex（硬规则 5）。
+ * step=0：全览（三行并排：VSync Off / VSync On 60FPS / VSync On 30FPS）
+ * step=1：VSync Off（无等待、画面撕裂）
+ * step=2：VSync On 60FPS / 30FPS（等待 vsync 信号、画面完整）
  */
-export function VsyncFrameBudgetDiagram() {
-  const barW = 280;
-  const barH = 28;
+
+type VsyncStep = 0 | 1 | 2;
+
+interface Props {
+  step?: VsyncStep;
+}
+
+export function VsyncFrameBudgetDiagram({ step }: Props) {
+  const rows = [
+    {
+      label: "VSync Off",
+      sub: "无垂直同步等待",
+      fps: "不限帧",
+      frameTime: "不等 VSync 信号",
+      result: "画面撕裂（Tearing）",
+      detail: "GPU 渲染一帧立刻上屏\n可能切到上一帧一半",
+      x: 40,
+      y: 50,
+    },
+    {
+      label: "VSync On\n60FPS",
+      sub: "每 16.67ms 一帧",
+      fps: "60 FPS 上限",
+      frameTime: "Application.targetFrameRate = 60",
+      result: "流畅无撕裂",
+      detail: "错过一个 VSync = 掉帧\n预算 16ms，超了就等下个",
+      x: 220,
+      y: 50,
+    },
+    {
+      label: "VSync On\n30FPS",
+      sub: "每 33.33ms 一帧",
+      fps: "30 FPS 上限",
+      frameTime: "Application.targetFrameRate = 30",
+      result: "流畅省电",
+      detail: "GPU 渲染完等 2 个 VSync\n功耗大幅下降",
+      x: 400,
+      y: 50,
+    },
+  ];
+
+  const isActive = (idx: number) =>
+    step === undefined || step === 0 || step - 1 === idx;
+
+  const boxStroke = (idx: number) =>
+    isActive(idx) ? "var(--accent)" : "var(--border)";
+  const boxBg = (idx: number) =>
+    isActive(idx) ? "var(--bg-elevated)" : "var(--bg)";
+  const textFill = (idx: number) =>
+    isActive(idx) ? "var(--text-primary)" : "var(--text-secondary)";
+  const lineStroke = (idx: number) =>
+    isActive(idx) ? "var(--accent)" : "var(--border)";
+
+  const colW = 170;
+  const bottomHints: Record<number | "all", string> = {
+    all: "VSync 是 GPU 上屏的节拍器：开了 = 等刷新周期（画面完整）、关了 = 抢跑上屏（撕裂）",
+    1: "VSync Off（不限帧）：GPU 画完立刻抢占屏幕缓冲区，上帧下半还没显示完就被覆盖——画面中间出现水平撕裂线",
+    2: "VSync On：Application.targetFrameRate 配合 VSync 设帧率上限，每帧必须等下一 vsync 信号才交换缓冲区——画面完整无撕裂",
+  };
 
   return (
     <figure className="mdx-figure mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
           viewBox="0 0 640 260"
           role="img"
-          aria-label="VSync 帧预算对比示意图。上排 60 FPS：每帧预算只有 16.67 毫秒，CPU 和 GPU 几乎全程满载没有空闲。下排 30 FPS：帧预算翻倍到 33.3 毫秒，CPU 工作 16 毫秒后有一半时间空闲可以降频，GPU 在第一个 VBlank 交出画面后第二个 VBlank 时无事可做。垂直虚线标记屏幕刷新时刻 VBlank，箭头指示每两个 VBlank 之间 GPU 才交一次新画面。底下一行字说明：vSyncCount=2 不是每隔两秒，而是每两个 VBlank 同步一次，所以 60Hz 屏幕上 vSyncCount=2 就是 30 FPS。"
+          aria-label="VSync 帧预算：VSync Off 画面撕裂、VSync On 60FPS 流畅、VSync On 30FPS 省电"
           className="mx-auto block h-auto w-full max-w-[640px]"
         >
-          {/* ==== 上排：60 FPS ==== */}
-          <text
-            x="16"
-            y="44"
-            fontSize="13"
-            fontWeight="700"
-            fill="var(--text-primary)"
-          >
-            60 FPS
-          </text>
-          <text
-            x="80"
-            y="44"
-            fontSize="11"
-            fill="var(--text-secondary)"
-          >
-            每帧预算 16.67ms
-          </text>
-
-          {/* CPU 条 */}
-          <text x="16" y="74" fontSize="10" fill="var(--text-secondary)">
-            CPU
-          </text>
-          <rect
-            x="52"
-            y="62"
-            width={barW}
-            height={barH}
-            rx="4"
-            fill="var(--bg)"
-            stroke="var(--border)"
-            strokeWidth="1"
-          />
-          {/* 满载 — 几乎整条 */}
-          <rect
-            x="54"
-            y="64"
-            width={barW - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.75"
-          />
-          <text
-            x="196"
-            y="80"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--bg)"
-          >
-            满载 ≈16ms
-          </text>
-
-          {/* GPU 条 */}
-          <text x="16" y="118" fontSize="10" fill="var(--text-secondary)">
-            GPU
-          </text>
-          <rect
-            x="52"
-            y="106"
-            width={barW}
-            height={barH}
-            rx="4"
-            fill="var(--bg)"
-            stroke="var(--border)"
-            strokeWidth="1"
-          />
-          <rect
-            x="54"
-            y="108"
-            width={barW - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.75"
-          />
-          <text
-            x="196"
-            y="124"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--bg)"
-          >
-            满载 ≈15ms
-          </text>
-
-          {/* 右侧 VBlank 标记 */}
-          {[0, 1, 2, 3, 4].map((i) => {
-            const x = 370 + i * 60;
-            return (
-              <g key={`vsync-60-${i}`}>
-                <line
-                  x1={x}
-                  y1="58"
-                  x2={x}
-                  y2={132}
-                  stroke="var(--border)"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
+          {rows.map((r, i) => (
+            <g key={r.label}>
+              <rect
+                x={r.x}
+                y={r.y}
+                width={colW}
+                height="140"
+                rx="8"
+                fill={boxBg(i)}
+                stroke={boxStroke(i)}
+                strokeWidth={isActive(i) ? 2.5 : 1.5}
+              />
+              {/* Mode label */}
+              {r.label.split("\n").map((line, li) => (
                 <text
-                  x={x}
-                  y="54"
+                  key={li}
+                  x={r.x + colW / 2}
+                  y={r.y + 22 + li * 18}
                   textAnchor="middle"
-                  fontSize="7"
-                  fill="var(--text-secondary)"
+                  fontSize="14"
+                  fontWeight="600"
+                  fill={textFill(i)}
                 >
-                  V
+                  {line}
                 </text>
-              </g>
-            );
-          })}
-          <text
-            x="580"
-            y="98"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--text-secondary)"
-          >
-            VBlank
-            <tspan x="580" dy="12">
-              每 16.67ms
-            </tspan>
-          </text>
-
-          {/* 30/60 分隔线 */}
+              ))}
+              {/* Sub label */}
+              <text
+                x={r.x + colW / 2}
+                y={r.y + 60}
+                textAnchor="middle"
+                fontSize="11"
+                fill="var(--text-secondary)"
+              >
+                {r.sub}
+              </text>
+              {/* FPS */}
+              <text
+                x={r.x + colW / 2}
+                y={r.y + 80}
+                textAnchor="middle"
+                fontSize="22"
+                fontWeight="700"
+                fill={isActive(i) ? "var(--accent)" : "var(--text-primary)"}
+              >
+                {r.fps}
+              </text>
+              {/* frameTime */}
+              <text
+                x={r.x + colW / 2}
+                y={r.y + 100}
+                textAnchor="middle"
+                fontSize="10"
+                fill="var(--text-secondary)"
+              >
+                {r.frameTime}
+              </text>
+              {/* Result */}
+              <rect
+                x={r.x + 10}
+                y={r.y + 112}
+                width={colW - 20}
+                height="22"
+                rx="4"
+                fill={isActive(i) ? "var(--accent-glow)" : "var(--bg)"}
+              />
+              <text
+                x={r.x + colW / 2}
+                y={r.y + 127}
+                textAnchor="middle"
+                fontSize="10"
+                fontWeight="600"
+                fill={isActive(i) ? "var(--accent)" : "var(--text-secondary)"}
+              >
+                {r.result}
+              </text>
+              {/* Detail */}
+              <text
+                x={r.x + colW / 2}
+                y={r.y + 152}
+                textAnchor="middle"
+                fontSize="9"
+                fill="var(--text-secondary)"
+              >
+                {r.detail.split("\n")[0]}
+              </text>
+              {/* Arrow between */}
+              {i < rows.length - 1 && (
+                <>
+                  <line
+                    x1={r.x + colW + 4}
+                    y1={r.y + 70}
+                    x2={r.x + colW + 18}
+                    y2={r.y + 70}
+                    stroke={lineStroke(i)}
+                    strokeWidth="2"
+                  />
+                  <path
+                    d={`M${r.x + colW + 18} ${r.y + 70} l-6 -3.5 l0 7 z`}
+                    fill={lineStroke(i)}
+                  />
+                </>
+              )}
+            </g>
+          ))}
+          {/* VSync timeline */}
           <line
-            x1="16"
-            y1="148"
+            x1="20"
+            y1="215"
             x2="620"
-            y2="148"
+            y2="215"
             stroke="var(--border)"
             strokeWidth="1"
-            strokeDasharray="4 4"
+            strokeDasharray="8,4"
           />
-
-          {/* ==== 下排：30 FPS ==== */}
-          <text
-            x="16"
-            y="180"
-            fontSize="13"
-            fontWeight="700"
-            fill="var(--text-primary)"
-          >
-            30 FPS
+          <text x="20" y="230" fontSize="9" fill="var(--text-secondary)">
+            VSync 信号（每 16.67ms 一次）
           </text>
+          {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((t) => (
+            <g key={t}>
+              <line
+                x1={20 + (t * 600) / 8}
+                y1="209"
+                x2={20 + (t * 600) / 8}
+                y2="221"
+                stroke={
+                  isActive(0) || isActive(1) || isActive(2)
+                    ? "var(--accent)"
+                    : "var(--border)"
+                }
+                strokeWidth="1"
+              />
+              <circle
+                cx={20 + (t * 600) / 8}
+                cy="215"
+                r="3"
+                fill="var(--accent)"
+                opacity={
+                  isActive(0) || isActive(1) || isActive(2) ? 0.5 : 0.2
+                }
+              />
+            </g>
+          ))}
+          {/* Bottom hint */}
           <text
-            x="80"
-            y="180"
+            x="320"
+            y="250"
+            textAnchor="middle"
             fontSize="11"
-            fill="var(--text-secondary)"
+            fill={
+              step === undefined
+                ? "var(--text-secondary)"
+                : "var(--text-primary)"
+            }
           >
-            每帧预算 33.3ms（两屏）
+            {step === undefined
+              ? bottomHints.all
+              : bottomHints[step]}
           </text>
-
-          {/* CPU 条 — 一半工作一半空闲 */}
-          <text x="16" y="210" fontSize="10" fill="var(--text-secondary)">
-            CPU
-          </text>
-          <rect
-            x="52"
-            y="198"
-            width={barW}
-            height={barH}
-            rx="4"
-            fill="var(--bg)"
-            stroke="var(--border)"
-            strokeWidth="1"
-          />
-          <rect // 工作段 — 前一半
-            x="54"
-            y="200"
-            width={barW / 2 - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.75"
-          />
-          <rect // 空闲段 — 后半半透明
-            x={54 + barW / 2}
-            y="200"
-            width={barW / 2 - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.15"
-          />
-          <text
-            x="124"
-            y="216"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--bg)"
-          >
-            工作 ≈16ms
-          </text>
-          <text
-            x="264"
-            y="216"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--text-secondary)"
-          >
-            空闲 降频
-          </text>
-
-          {/* GPU 条 — 交一帧后空闲 */}
-          <text x="16" y="252" fontSize="10" fill="var(--text-secondary)">
-            GPU
-          </text>
-          <rect
-            x="52"
-            y="240"
-            width={barW}
-            height={barH}
-            rx="4"
-            fill="var(--bg)"
-            stroke="var(--border)"
-            strokeWidth="1"
-          />
-          <rect // 工作段 — 前一半
-            x="54"
-            y="242"
-            width={barW / 2 - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.75"
-          />
-          <rect // 空闲段 — 后半
-            x={54 + barW / 2}
-            y="242"
-            width={barW / 2 - 4}
-            height={barH - 4}
-            rx="3"
-            fill="var(--accent)"
-            opacity="0.15"
-          />
-          <text
-            x="124"
-            y="258"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--bg)"
-          >
-            工作 ≈15ms
-          </text>
-          <text
-            x="264"
-            y="258"
-            textAnchor="middle"
-            fontSize="9"
-            fill="var(--text-secondary)"
-          >
-            空闲 降频
-          </text>
-
-          {/* 右 VBlank 30FPS */}
-          {[0, 1, 2].map((i) => {
-            const x = 370 + i * 120;
-            return (
-              <g key={`vsync-30-${i}`}>
-                <line
-                  x1={x}
-                  y1="194"
-                  x2={x}
-                  y2={268}
-                  stroke="var(--border)"
-                  strokeWidth="1"
-                  strokeDasharray="3 3"
-                />
-                <text
-                  x={x + 60}
-                  y="236"
-                  textAnchor="middle"
-                  fontSize="8"
-                  fill="var(--accent)"
-                >
-                  交帧
-                </text>
-              </g>
-            );
-          })}
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        <strong>60 FPS</strong>：CPU/GPU 几乎全程满载，无空闲降频。
-        <strong>30 FPS</strong>：帧预算翻倍，一半时间空闲——芯片降频后功耗大降。
-        VSync 把帧率锁在屏幕刷新周期的整数分之一。
+        VSync = 垂直同步信号，由显示器每 16.67ms（60Hz）发出一次。用
+        Application.targetFrameRate 与 VSync 配合控制帧预算上限。
       </figcaption>
     </figure>
   );

@@ -1,0 +1,543 @@
+---
+title: Profile Analyzer 与回归测试
+type: C
+section: Profiling 工作流
+order: 2
+description: 用 Profile Analyzer 做多帧统计对比、分位数分析与 CI 性能回归检测。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型章：核心是代码实现与操作流程。主 viz = 示意图 + 代码对照。
+按 chapter-spec §〇：代码对照为重心、无数学、主 Demo 形态示意图/Stepper。
+知识点清单（动笔先行、每项配 viz）：
+
+1. Profile Analyzer 多帧导入/对比流程 → ProfileAnalyzerWorkflowDiagram (SVG 示意图)
+2. 均值/中位数/P95/标准差解读 → PercentileStatisticsDiagram + CodeTabs
+3. 性能回归检测原理（diff 对比+阈值门禁）→ RegressionDetectionDiagram (SVG 示意图)
+4. CI Profiling 接入（命令行采集+自动化比对）→ CIProfilingDiagram + CodeTabs
+   Term 高亮术语：Profile Analyzer、分位数(P95/P99)、均值、中位数、标准差、
+   性能回归、回归测试、CI Profiling → 均进章末 Glossary */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；2–3 条；末条检验问题。 */}
+
+<Objectives>
+- 能独立将多份 Profiler .data 文件导入 Profile Analyzer，完成均值、中位数、P95 和标准差的统计对比
+- 能改出一套 CI Profiling 自动化脚本——采集多帧数据后自动与基线比对、阈值超标时输出报告
+- 能回答：为什么一次优化后只盯均值不够？P95 和中位数分别告诉你什么信息是均值不会说的？
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题」+"没有它会怎样"；类比用工厂流水线。 */}
+
+## 为什么单次采样不够
+
+你做了一次优化，跑了一下发现帧数高了 5 帧——兴高采烈地合了代码。第二天同事说「你那个优化在第四个关卡反而卡了」。你不信，自己又跑了一次——这次帧数没涨也没跌。到底有没有变快？你翻来覆去地跑、每次数字都不一样、没人知道真相。
+
+问题不在你的优化——在于你只跑了一次。单次采集撞上缓存预热、刚好没刷怪、后台没在下载更新——任何一个随机因素都能让你的单次数字完全偏离真相。游戏性能不是一张静止的照片，它是一段持续波动的曲线。你需要的不是「跑一次看看」，是**跑多次、看分布、比趋势**。
+
+这一章就是把「感觉变快了」变成「有统计证据支持的结论」——从均值到分位数到标准差，从手动对比到自动化 CI 门禁，一步一步把性能分析从玄学变成科学。
+
+{/* 3. 概念讲解（spec §三）：C 型把"是什么"压缩到一段，篇幅让给第六节。
+新概念：Profile Analyzer / 分位数 P95/P99 / 均值·中位数·标准差 / 回归检测 */}
+
+## 第一个概念：Profile Analyzer——多帧数据的「统计实验室」
+
+你在 Profiler 里录了 10 次采样、每次 5 秒、每份 .data 包含几百帧——然后把它们一股脑拖进 <Term def="Unity 官方辅助分析工具：可导入多份 .data Profiler 采样文件做批量统计对比——自动计算每份数据的均值、中位数、P95 分位数、标准差等指标，并以并排柱状图或折线图展示对比结果。">Profile Analyzer</Term>——它瞬间给你一张干干净净的统计表：十次采样的 CPU 均值分别是多少、P95 是多少、标准差多大——不用你手动加加减减。
+
+<ProfileAnalyzerWorkflowDiagram />
+
+Profile Analyzer 的核心能力三句话就能讲清：
+
+- **多帧导入**：拖入任意多份 .data 文件，每一份都运行一次统计，所有结果并排展示——十次实验十列数据，一眼看出哪次异常。
+- **自动对齐帧范围**：每份采样可能包含了场景加载期的异常帧（帧率极低、不具代表性），Profile Analyzer 允许你手动框选帧范围（如只取游戏逻辑运行的第 100–500 帧），排除加载/切场景的干扰。
+- **统计指标生成**：均值、中位数、P95 分位数、标准差四个核心指标自动计算——不只是「这一份采样平均每帧花了多少毫秒」，还包括「最慢的那 5% 帧花了多少毫秒」（P95）、「帧与帧之间的波动大不大」（标准差）。
+
+标准工作流是：优化前录 3–5 份采样（在不同时间、不同后台负载下各录一份，增加统计稳健性）→ 导入 Profile Analyzer 建立基线统计 → 优化后在同条件下再录 3 份 → 导入并对比四组数字 → 如果均值/中位数/P95 都比基线显著降低、且标准差没有增大（帧率没有变得更抖），结论才是「优化有效」。
+
+## 第二个概念：均值、中位数、P95——三个维度看性能
+
+你把一份采样里全部几百帧的 CPU 耗时列成一行数字——怎么用一个数字概括它？用均值（平均数）——这是所有人的第一反应，也是最大的陷阱。
+
+<PercentileStatisticsDiagram />
+
+<Term def="一份采样中所有帧的算术平均值——所有帧耗时相加除以帧数。均值反映整体水平，但对极端值非常敏感：一帧卡了 200ms 能把均值拉高好几个毫秒。">均值</Term>太好骗了：你录了 500 帧、前 499 帧都是 12ms、最后一帧因为 GC 卡了 300ms——均值一下子从 12ms 跳到 12.6ms（300 ÷ 500 ≈ 0.6ms 拉高）。如果有人看了均值说「你这个场景平均是 12.6ms」，你没法辩解——因为统计上确实如此。但那 499 帧的感受完全是 12ms 级别的流畅。
+
+<Term def="把一帧内所有耗时从低到高排序，取正中间那个值（第 50 百分位）。中位数不受极端值影响：前 499 帧 12ms + 最后一帧 300ms，中位数仍是 12ms（第 250 帧的值）。">中位数</Term>比均值「耐造」得多——上面那个例子，中位数稳稳是 12ms，不会被那一帧 GC 扰动。中位数回答的问题是：「一个普通玩家玩这个场景，**典型的一帧**是什么样的体验？」
+
+<Term def="第 95 百分位数：把所有帧耗时从低到高排序，排在第 95% 位置的那一帧的耗时。P95 = 20ms 意味着 95% 的帧都 ≤20ms，只有 5% 的帧比它更慢。P95 是捕捉偶发卡顿的核心指标。">P95 分位数</Term>回答的是另一个问题：「**最差的那 5% 帧**有多差？」——均值是 12ms、中位数是 12ms——看起来完美——但 P95 是 45ms。说明每一百帧里有五帧卡了 45ms，玩家会明显感受到这 5% 的间歇性卡顿。均值和中位数都看不出这个。
+
+<Term def="帧耗时围绕均值的离散程度——标准差小 = 帧率稳定，标准差大 = 帧率波动剧烈。等均值但标准差翻倍 = 玩家体验从'一直流畅'变成'忽快忽慢'。">标准差</Term>是你验证优化是否引入新抖动的关键：优化后均值降了 2ms，但标准差翻了 3 倍——说明你把一些帧优化快了，但引入了新的间歇性瓶颈（比如开了一些对象池但池容量不够、大部分帧快但偶尔触发扩容的几帧极慢）。均值降了但标准差翻倍 = 优化不完整。
+
+四个指标一起看，结论才成立。均值降 + 中位数降 + P95 降 + 标准差不变或降 → 全面有效。均值降但 P95 不变 → 你优化了简单帧但没碰瓶颈帧——方向对但力度不够。
+
+## 第三个概念：性能回归——优化效果会被后续改动破坏
+
+<Term def="一次性能优化后，后续的代码变更无意间把性能又改回了优化前或更差的状态。Profile Analyzer 的主页场景就是——不定期跑一次全场景采样、和基线做统计对比，发现有回归就定位到具体 Commit。">性能回归</Term>是游戏优化里最头疼的问题——你花了三天把场景 A 的 CPU 从 18ms 优化到 12ms，一周后另一个同事改了场景 A 的 AI 逻辑（他不知道你做了优化），CPU 又悄悄回到了 17ms。没人发现——直到两周后玩家抱怨「这个场景怎么比上个版本卡了」。
+
+<RegressionDetectionDiagram />
+
+回归检测的方法论很简单——但执行起来需要在流程上花功夫：
+
+1. **建基线**：首次优化后，用 Profile Analyzer 对目标场景录 5 份采样（不同时间），记录四组统计值（均值/中位数/P95/标准差）作为「黄金基线」
+2. **设定阈值**：定义「什么算回归」——比如均值超过基线 5%、P95 超过基线 8%、标准差超过基线 10%——三个条件任意一个触发就算回归
+3. **定时检测**：每次发版前、每次合并到主分支前，在目标设备上跑同场景、录 3 份采样、跟基线做统计对比
+
+回归检测不能靠「有空跑一下看看」——必须自动化。这就是下一节的主角：CI Profiling。
+
+## 第四个概念：CI Profiling——把性能检测写进流水线
+
+<Term def="把 Profiler 数据采集和 Profile Analyzer 统计对比集成到持续集成（CI）管道中——每次代码提交/PR 触发后，CI 自动构建 Development Build、在目标设备上运行固定场景、采集 .data、用命令行工具和基线对比。超标时自动阻止合入。">CI Profiling</Term>是把「人工跑 Profiler 再目测对比」变成「机器做、持续做、每次 PR 都做」的最后一步。听起来工程量大，但一旦跑通，你永远不需要担心「代码合并之后才发现性能退步」。
+
+<CIProfilingDiagram />
+
+核心链路：**CI 触发 → 构建 Development Build → 安装到真机/模拟器 → 用自动化测试脚本操作游戏进入目标场景 → 录制 Profiler 数据 → 导出 .data → 用 Profile Analyzer 命令行对比基线 → 阈值判定 → Pass/Fail**。
+
+Unity 不直接提供一键 CI Profiling 方案——你需要自己拼装这些部件。下面第六节会逐段拆解一套可行的 CI Profiling 脚本体系。
+
+{/* 4. 数学推导：math:false，整节删除。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为示意图/Stepper；猜一猜引导；Stepper 每步带图示。 */}
+
+## 实战：一次完整的 Profile Analyzer 统计对比
+
+前面学了四个概念——Profile Analyzer、均值/中位数/P95/标准差、回归检测、CI Profiling。现在把这套统计方法论走一遍：
+
+<Stepper>
+  <Step title="① 录基线：同场景录 3–5 份采样">
+    在目标设备上，固定画质档位和场景（选你最关心的那个关卡），正常游玩 10 秒，点 Profiler 的 Record 按钮录制 .data 文件。保存为 `Baseline_01.data`、`Baseline_02.data`、`Baseline_03.data`——至少三份。不同时段录（例如间隔 1 分钟），确保覆盖缓存状态、随机负载等变量。
+  </Step>
+  <Step title="② 导入 Profile Analyzer，框选有效帧范围">
+    打开 Window → Analysis → Profile Analyzer → 把三份 .data 拖进 Pull Data 区域。每份数据加载后，手动框选帧范围——切掉开头（场景初始化的异常帧）和结尾（暂停时的空帧），只保留中间稳定运行的 5–8 秒。这是消除加载干扰的关键步骤。
+  </Step>
+  <Step title="③ 记录四项统计指标作为基线">
+    在 Compare 面板查看 CPU Mean、CPU Median、CPU P95、CPU StdDev 四列。把三份基线的四组数值记录到文档里（建议用 Google Sheets 或 Markdown 表格，后续对比就查这张表）。例如：Baseline Mean 12.3ms / Median 12.1ms / P95 18.2ms / StdDev 2.1ms。
+  </Step>
+  <Step title="④ 优化后录制对比采样">
+    改完代码后，在完全相同条件下再录三份后优化采样 `Optimized_01~03.data`。同样导入 Profile Analyzer，同样框选帧范围。对比面板自动把基线和优化后的六份数据并排显示。
+  </Step>
+  <Step title="⑤ 读对比结果，下结论">
+    看四组数字的变化：均值从 12.3ms → 10.1ms（↓18%）→ 整体有效。中位数从 12.1ms → 9.8ms（↓19%）→ 典型帧显著变快。P95 从 18.2ms → 14.5ms（↓20%）→ 最差那 5% 帧也明显改善。标准差从 2.1ms → 1.8ms → 帧率更稳了。四个指标全部绿灯——优化全面有效，可以合入。
+  </Step>
+</Stepper>
+
+> 猜一猜：优化后均值从 12ms 降到 9ms，但 P95 从 18ms 涨到了 28ms——这个优化该合入吗？答案在 §八练习里自测。
+
+{/* 6. 代码对照（spec §六）：C 实战型逐段讲解 ≥80% 关键代码；每块 ≤30 行；之间必须有解说。 */}
+
+## 代码逐段拆解
+
+手动操作 Profile Analyzer 是一回事——把整个统计流程自动化、塞进 CI 是另一回事。下面逐段拆解一套可行的 CI Profiling 自动化体系，从数据采集到统计对比到阈值判定。
+
+### 用代码控制 Profiler 录制
+
+Unity 不提供直接在脚本里触发 Profiler 录制的公开 API——但你可以用 `Profiler.logFile` 指定输出路径、用 `Profiler.enabled` 控制开关：
+
+<CodeTabs>
+  <Tab label="C# / Unity — Profiler 录制控制">
+
+```csharp
+using UnityEngine;
+using UnityEngine.Profiling;
+
+public class CIRecorder : MonoBehaviour
+{
+    public string outputPath = "/data/profiler_output.raw";
+
+    void Start()
+    {
+        // 指定 Profiler 数据输出到文件（而非 Editor 内存）
+        Profiler.logFile = outputPath;
+        // 启用 Profiler，开始录制
+        Profiler.enabled = true;
+    }
+
+    void OnDestroy()
+    {
+        // 场景销毁时停止录制、关闭文件
+        Profiler.enabled = false;
+        Profiler.logFile = "";
+    }
+}
+```
+  </Tab>
+  <Tab label="旧方式：手动点 Record">
+
+```csharp
+// 手动操作流程（非自动化）：
+// 1. Window → Analysis → Profiler
+// 2. 点击 Record 按钮
+// 3. 在游戏中走到目标场景
+// 4. 暂停 Record → 点 Save 导出 .data
+//
+// 自动化方案：
+// 用 Profiler.logFile 指定文件路径，
+// 用 Profiler.enabled 控制录制开关
+```
+  </Tab>
+</CodeTabs>
+
+`Profiler.logFile` 把一个 .raw 文件写到磁盘——这个文件可以用 Unity Editor 的 Profiler 窗口打开、也可以导出为 .data。录制完成后要记住调用 `Profiler.enabled = false` 并清空 `logFile`，否则数据会一直写入占磁盘。
+
+### 自动化测试脚本：让 CI 进入场景并录制
+
+CI 环境里没有人在点鼠标——需要一段自动化测试脚本，启动游戏后自动加载目标场景、等待场景稳定后触发录制、然后在固定时长后停止：
+
+```csharp
+using System.Collections;
+using UnityEngine;
+using UnityEngine.Profiling;
+using UnityEngine.SceneManagement;
+
+public class CIAutoProfiler : MonoBehaviour
+{
+    public string targetScene = "Level_Battle";
+    public float recordDuration = 10f;
+    public string outputFile = "/tmp/profiler_ci.raw";
+
+    IEnumerator Start()
+    {
+        // 加载目标场景（如果不在当前场景）
+        if (SceneManager.GetActiveScene().name != targetScene)
+        {
+            var op = SceneManager.LoadSceneAsync(targetScene);
+            while (!op.isDone) yield return null;
+        }
+
+        // 等 2 秒让场景完全初始化（资源加载、首帧渲染完成）
+        yield return new WaitForSeconds(2f);
+
+        // 开始录制
+        Profiler.logFile = outputFile;
+        Profiler.enabled = true;
+        Debug.Log($"[CI] Profiling started → {outputFile}");
+
+        // 录制指定时长
+        yield return new WaitForSeconds(recordDuration);
+
+        // 停止录制
+        Profiler.enabled = false;
+        Profiler.logFile = "";
+        Debug.Log("[CI] Profiling stopped");
+
+        // 退出应用（CI 环境 Exit Code 0 = 成功）
+        Application.Quit(0);
+    }
+}
+```
+
+`SceneManager.LoadSceneAsync` 异步加载场景不卡主线程——CI 里场景切换不能用手动等待。`WaitForSeconds(2f)` 确保场景完全初始化——Profiler 录制前这两秒冷却期是必需的，否则你录到的前几帧全是场景加载期的异常帧。
+
+### 从 .raw 导出为 .data（Editor 脚本）
+
+CI 通常在 headless（无图形界面）模式下运行——但 .raw 转 .data 需要 Editor API。这步通常在 CI 的「后处理」阶段完成——用 Editor 命令行模式启动一个一次性的导出任务：
+
+```csharp
+// 放在 Editor/ 目录下
+// 命令行启动：Unity -batchmode -quit -executeMethod CIRawExporter.Export
+using UnityEditor;
+using UnityEditorInternal;
+using System.IO;
+
+public static class CIRawExporter
+{
+    public static void Export()
+    {
+        string rawPath = "/tmp/profiler_ci.raw";
+        string dataPath = "/tmp/profiler_ci.data";
+
+        if (!File.Exists(rawPath))
+        {
+            Debug.LogError($"Raw file not found: {rawPath}");
+            EditorApplication.Exit(1);
+            return;
+        }
+
+        // 加载 .raw 并保存为 .data
+        // 注意：API ProfilerDriver 在 Unity 不同版本中路径和接口可能不同
+        // Unity 2021+ 推荐用 ProfilerDriver.LoadProfile + SaveProfile
+        ProfilerDriver.LoadProfile(rawPath, false);
+        ProfilerDriver.SaveProfile(dataPath);
+
+        Debug.Log($"[CI] Exported: {dataPath}");
+    }
+}
+```
+
+### 命令行对比脚本：用 Python/Shell 实现阈值判定
+
+Profile Analyzer 本身没有命令行版本——但你可以对多份帧数据做简单的统计计算来实现阈值判定。思路是：把 .data 里的帧耗时提取出来（Unity 可以从 Profiler 导出 CSV 格式），然后用脚本算统计值并和基线对比：
+
+```python
+#!/usr/bin/env python3
+"""CI Profiling 回归检测脚本。
+从 CSV 格式的帧耗时数据中提取 CPU/GPU 耗时，
+计算均值/P95/标准差，和基线对比判定 pass/fail。
+"""
+import csv
+import sys
+import numpy as np
+
+BASELINE = {
+    "cpu_mean": 12.3, "cpu_p95": 18.2, "gpu_mean": 8.1
+}
+THRESHOLDS = {"mean": 1.05, "p95": 1.08}  # 5% / 8% 容忍度
+
+def load_frame_data(csv_path):
+    """从 Profiler 导出的 CSV 中提取 CPU 和 GPU 耗时列。"""
+    cpu_times = []
+    with open(csv_path) as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            cpu = float(row.get("CPU ms", 0))
+            if cpu > 0:
+                cpu_times.append(cpu)
+    return np.array(cpu_times)
+
+def check_regression(cpu_arr):
+    mean = float(np.mean(cpu_arr))
+    p95 = float(np.percentile(cpu_arr, 95))
+    failed = False
+
+    if mean > BASELINE["cpu_mean"] * THRESHOLDS["mean"]:
+        print(f"FAIL: CPU mean {mean:.2f} > baseline {BASELINE['cpu_mean'] * THRESHOLDS['mean']:.2f}")
+        failed = True
+    if p95 > BASELINE["cpu_p95"] * THRESHOLDS["p95"]:
+        print(f"FAIL: CPU P95 {p95:.2f} > baseline {BASELINE['cpu_p95'] * THRESHOLDS['p95']:.2f}")
+        failed = True
+
+    if not failed:
+        print(f"PASS: CPU mean={mean:.2f} P95={p95:.2f}")
+    return 1 if failed else 0
+
+if __name__ == "__main__":
+    sys.exit(check_regression(load_frame_data(sys.argv[1])))
+```
+
+<Callout type="tip">
+  CSV 导出步骤：Profiler 窗口 → 选中你要的帧范围 → 右上角下拉菜单 → `Export Selected Frames to CSV`。导出后 CSV 包含 Frame、CPU ms、GPU ms 等列，上面的脚本用 `csv.DictReader` 按列名读取。在 CI 里，这步可以由 Editor 脚本自动化调用 `ProfilerDriver.SaveProfile` 导出 CSV。
+</Callout>
+
+### 完整 CI YAML 配置示例（GitHub Actions 风格）
+
+把上面所有部件串起来，一份 CI 流水线大概是这样的：
+
+```yaml
+# .github/workflows/perf-regression.yml
+name: Performance Regression Test
+on:
+  pull_request:
+    paths:
+      - "Assets/Scripts/**"
+      - "Assets/Scenes/**"
+
+jobs:
+  perf-test:
+    runs-on: [self-hosted, android-device]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Development APK
+        run: |
+          /opt/unity/Unity -quit -batchmode \
+            -projectPath . -buildTarget Android \
+            -executeMethod ProfilerBuild.BuildDev \
+            -logFile build.log
+
+      - name: Install & Run Profiling
+        run: |
+          adb install -r Build/DevGame.apk
+          adb shell am start -n com.game/.MainActivity \
+            --es scene "Level_Battle"
+          sleep 15  # 等待录制完成
+          adb pull /sdcard/profiler_ci.raw .
+
+      - name: Export to CSV
+        run: |
+          /opt/unity/Unity -quit -batchmode \
+            -projectPath . \
+            -executeMethod CIRawExporter.ExportToCSV \
+            -logFile export.log
+
+      - name: Run Regression Check
+        run: python3 ci/check_regression.py profiler_ci.csv
+
+      - name: Upload Report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-regression-report
+          path: profiler_ci.csv
+```
+
+<Callout type="warn">
+  上面的 YAML 使用了 `self-hosted` runner（自托管运行器）——因为 Unity 需要许可证激活、Android 设备需要 USB 连接、以及图形渲染需要 GPU。GitHub 的云 runner 没有 Unity License 也没有物理设备——CI Profiling 必须有你自己的硬件 runner。这是投入 CI Profiling 的最大门槛（人力成本高于硬件成本），但一旦建好就是永久的防火墙。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个；固定 现象→原因→修法 三行格式。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：优化后均值降了 3ms，兴高采烈地合了代码——第二天玩家反馈「场景还是卡，而且忽快忽慢的」。
+  **原因**：只看了均值。P95 显示最差的 5% 帧从 20ms 升到了 35ms——你把简单帧优化了（均值好看），但引入了新的间歇瓶颈（比如对象池扩容时的那几帧极慢）。标准差翻了 3 倍——帧率忽快忽慢的体验比一直慢 3ms 更恶心。
+  **修法**：每次对比必须看四组数字（均值、中位数、P95、标准差），缺一不可。P95 不变或飙升 = 优化不完整。
+</Callout>
+
+<Callout type="trap">
+  **现象**：CI Profiling 搭好了，跑了几周发现每天的数据都在慢慢变差（CPU 每周 +0.3ms），但单次看都不到阈值。
+  **原因**：你的阈值设得太宽松（比如允许 5%），但缓慢退化（creeping regression）是一小步一小步走的——每次 PR 都涨 0.5%，连续 10 个 PR 之后早就超过 5% 了，但单次对比每次都 Pass。
+  **修法**：除了单 PR 阈值，加上**趋势线检测**——每次 PR 的结果累积到趋势图，如果连续 5 个 PR 都在同方向微量恶化（即使都没超标），发出警告。脚本里加一个线性回归拟合上一周的数据点，斜率 > 0 就预警。
+</Callout>
+
+<Callout type="trap">
+  **现象**：CI Profiling 脚本写好了，在本地跑正常，一到 CI 环境就失败——「Profiler.logFile 写入权限被拒绝」。
+  **原因**：Android 设备上，Profiler 输出路径默认是应用私有目录——CI 里 adb pull 能从 `/sdcard/` 拉文件，但不能从 `/data/data/<包名>/files/` 拉（需要 root）。你的录制脚本把输出路径写到了没有 pull 权限的目录。
+  **修法**：把 `Profiler.logFile` 设到 `/sdcard/` 或 `Application.persistentDataPath`（Android 上通常是 `/sdcard/Android/data/<包名>/files/`），确保 CI runner 的 `adb pull` 能拉到。另外别忘了在 AndroidManifest 里加上 `WRITE_EXTERNAL_STORAGE` 权限（Android 10 以下）或使用 scoped storage API。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条 bullet × ≤40 字，与 §一目标一一呼应；C 型含实现题。 */}
+
+## 小结
+
+- **Profile Analyzer** 把多份 .data 的统计对比自动化——均值、中位数、P95、标准差四个维度一看就知
+- **均值**怕极端（被一帧卡顿拉高），**中位数**扛干扰（典型一帧体验），**P95** 抓卡顿（最差 5% 帧多差）
+- **性能回归** = 后续改动无意间破坏优化效果——每次 PR 跑对比才能防住
+- **CI Profiling** 把「人工跑一次看看」变成每次 PR 自动跑、超标自动拦
+- 判定标准：均值降 + 中位数降 + P95 降 + 标准差不变或降 = 全面有效
+
+<Exercises>
+
+**练习 1（改代码型）** 上面 `CIAutoProfiler` 脚本里，`recordDuration` 设成了 10 秒。改成 20 秒，并在场景里加一段自动操作（比如让角色自动往前走 5 秒再往回走 5 秒）来模拟真实游玩路径。改写后的脚本要确保录制的是有操作变化的帧数据，而不是挂机空跑的帧。
+
+<Answer>
+
+```csharp
+IEnumerator Start()
+{
+    // ... 场景加载代码同上 ...
+
+    yield return new WaitForSeconds(2f);
+
+    Profiler.logFile = outputFile;
+    Profiler.enabled = true;
+
+    // 模拟操作：前 5 秒向前走
+    float walkStart = Time.time;
+    while (Time.time - walkStart < 5f)
+    {
+        transform.Translate(Vector3.forward * 3f * Time.deltaTime);
+        yield return null;
+    }
+
+    // 后 5 秒转身走回
+    transform.Rotate(0, 180, 0);
+    walkStart = Time.time;
+    while (Time.time - walkStart < 5f)
+    {
+        transform.Translate(Vector3.forward * 3f * Time.deltaTime);
+        yield return null;
+    }
+
+    yield return new WaitForSeconds(5f); // 剩余录制时间
+
+    Profiler.enabled = false;
+    Profiler.logFile = "";
+    Application.Quit(0);
+}
+```
+
+关键改动：用 `while` + `Time.deltaTime` 做帧同步移动而非 `WaitForSeconds`——后者只等时间、不产生任何 CPU 负载；前者每帧都在执行 `Transform.Translate`，能真实反映游戏逻辑开销。
+
+</Answer>
+
+**练习 2（独立实现型）** 实现一个简单的 Python 脚本，读取两份 CSV（baseline.csv 和 optimized.csv），对比四组统计指标（均值/中位数/P95/标准差）的变化百分比，并输出结果。用 `csv` 模块读数据、用 `statistics` 模块算统计值。
+
+<Answer>
+
+```python
+import csv
+import statistics
+import sys
+
+def load(path):
+    with open(path) as f:
+        return [float(row["CPU ms"]) for row in csv.DictReader(f) if float(row.get("CPU ms",0))>0]
+
+def stats(arr):
+    return {
+        "mean": statistics.mean(arr),
+        "median": statistics.median(arr),
+        "p95": sorted(arr)[int(len(arr)*0.95)],
+        "stdev": statistics.stdev(arr)
+    }
+
+def compare(a, b):
+    for k in a:
+        change = (b[k] - a[k]) / a[k] * 100
+        label = "↑" if change > 0 else "↓"
+        print(f"{k:>8}: {a[k]:6.2f} → {b[k]:6.2f} ({label}{abs(change):.1f}%)")
+
+if __name__ == "__main__":
+    baseline = stats(load(sys.argv[1]))
+    optimized = stats(load(sys.argv[2]))
+    compare(baseline, optimized)
+```
+
+</Answer>
+
+**练习 3（问答型）** 优化后均值从 12ms 降到 9ms（降了 25%），但 P95 从 18ms 涨到了 28ms——这个优化该合入吗？从四个统计指标的角度分析。
+
+<Answer>
+
+该优化**不应该直接合入**，需要排查后再决定。均值降了 25% 说明大多数帧显著变快——这部分是有效的。但 P95 从 18ms 涨到 28ms（涨 55%）说明最差的 5% 帧反而变得更慢了。可能原因：你的优化引入了某种「大多数时候快、偶尔极慢」的模式——比如对象池扩容、LOD 切换、或异步加载的回调在主线程做重操作——这几帧会把玩家的流畅感彻底打碎（一卡一卡的比一直慢更难受）。修复方向：在 Profile Analyzer 里单独拉出 P95 以上的帧（最差 5%），点开那些帧看它们的 CPU Hierarchy，找到具体的卡顿来源函数——修掉这几帧的瓶颈后，P95 回到 18ms 以下才能合入。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（8 个，按首现顺序）。 */}
+
+<Glossary>
+
+<GlossaryItem term="Profile Analyzer">
+  Unity 官方辅助分析工具——把多份 Profiler .data 采样导进去，自动算出均值、中位数、P95、标准差等统计值，用并排图表展示对比结果。解决「只看一次采样不靠谱」的问题——多份数据的统计分布让你看到性能和稳定性的全貌。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="均值">
+  一份采样中所有帧的算术平均值。反映整体水平，但对极端值极其敏感——一帧卡了 300ms 能把几百帧的均值拉高好几个毫秒。类比全班平均成绩：一个考满分的学生拉高了全班平均，但大多数人的成绩并没有变好。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="中位数">
+  把所有帧耗时从低到高排序后，正中间那一帧的值。不受极端值干扰——499 帧 12ms + 1 帧 300ms，中位数仍然是 12ms。回答「典型一帧是什么样的体验」。类比工资中位数比平均工资更诚实——高管的高薪不会把中位数抬高。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="P95 分位数">
+  第 95 百分位数——把所有帧耗时排序后，排在第 95% 位置的值。P95=20ms 意味着 95% 的帧 ≤20ms，只有 5% 的帧比它更慢。是捕捉偶发卡顿的核心指标——均值看不出间歇性卡顿。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="标准差">
+  衡量帧耗时的离散程度——标准差小说明帧率稳定、标准差大说明帧率波动剧烈。等均值但标准差翻倍意味着玩家体验从「一直流畅」变成了「忽快忽慢」。优化后必须检查标准差有没有变大。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="性能回归">
+  一次优化之后，后续的代码改动无意间又把性能改回了优化前甚至更差的水平。根源在于：后改的人不知道前人的优化做了什么。Profile Analyzer 定时对比基线 + CI 门禁就是为了防止回归。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="CI Profiling">
+  持续集成性能检测——把 Profiler 录制和 Profile Analyzer 统计对比自动化、嵌入 CI 管道。每次 PR 提交，CI 自动在目标设备上跑固定场景录制、对比基线、超标阻止合入。把「人工偶尔跑一次」变成「机器每次都跑」。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="回归测试">
+  验证当前版本在某些关键指标上是否退化到基准版本以下的测试方法。在性能领域特指：每次构建后自动跑场景采集 Profiler 数据、与初始基线做统计对比、判断是否发生性能退化。区别于功能回归测试（验证功能逻辑没有退步）。详见本章「第三个概念」和「第四个概念」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：固定 Attribution。 */}
+
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

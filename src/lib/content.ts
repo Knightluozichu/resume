@@ -62,7 +62,16 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 侧边栏分书与全局上/下一章顺序均以此为准。未列入的书排在已知书之后，
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
-export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e", "c-primer-plus", "android-advanced-decryption", "big-nerd-ranch-guide", "profiling-unity-games"] as const;
+export const BOOK_ORDER = [
+  "learnopengl",
+  "cpp-primer-5e",
+  "c-primer-plus",
+  "android-advanced-decryption",
+  "big-nerd-ranch-guide",
+  "unity-game-optimization",
+  "profiling-unity-games",
+  "mobile-xr-web-optimization",
+] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
@@ -71,7 +80,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "c-primer-plus": "C Primer Plus（第6版）",
   "android-advanced-decryption": "Android进阶解密",
   "big-nerd-ranch-guide": "Android 编程权威指南（第4版）",
-  "profiling-unity-games": "Unity 性能分析指南",
+  "unity-game-optimization": "Unity 游戏优化",
+  "profiling-unity-games": "Unity Profiling 指南",
+  "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
 };
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -119,9 +130,20 @@ export const SECTION_ORDER = [
   "Intent与数据",
   "后台与网络",
   "高级UI与动画",
-  // Unity 性能分析指南
+  // Unity Game Optimization
+  "基础脚本优化",
+  "图形优化",
+  "高级优化",
+  // Profiling Unity Games
+  "Profiling 工作流",
+  "CPU 性能分析",
+  "GPU 性能分析",
   "内存与功耗",
   "平台专项",
+  // Mobile XR Web Optimization
+  "URP 专项优化",
+  "XR 专项优化",
+  "Web 专项优化",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
