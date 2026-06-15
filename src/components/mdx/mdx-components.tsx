@@ -366,6 +366,7 @@ import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel
 import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
 import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
+import { TestPyramidDiagram } from "./diagrams/test-pyramid-diagram";
 import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
 import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
@@ -884,6 +885,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LogcatLineAnatomyDiagram,
   DebugLoopDiagram,
   SdkVersionAxisDiagram,
+  TestPyramidDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
   DialogFragmentDiagram,
