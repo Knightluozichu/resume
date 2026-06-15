@@ -73,7 +73,8 @@ export type ReviewChapterSlug =
   | "ugo-scripting-strategies"
   | "ugo-benefits-of-batching"
   | "ugo-optimizing-art-assets"
-  | "ugo-faster-physics";
+  | "ugo-faster-physics"
+  | "ugo-dynamic-graphics";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -150,6 +151,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ugo-benefits-of-batching": "合批的收益",
   "ugo-optimizing-art-assets": "美术资源优化",
   "ugo-faster-physics": "物理加速",
+  "ugo-dynamic-graphics": "动态图形",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

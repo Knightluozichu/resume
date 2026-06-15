@@ -35,6 +35,10 @@ import { PhysicsTimestepDiagram } from "./diagrams/physics-timestep-diagram";
 import { LayerCollisionDiagram } from "./diagrams/layer-collision-diagram";
 import { RigidbodySleepDiagram } from "./diagrams/rigidbody-sleep-diagram";
 import { CollisionDetectionDiagram } from "./diagrams/collision-detection-diagram";
+import { RenderingPipelineGpuDiagram } from "./diagrams/rendering-pipeline-gpu-diagram";
+import { LodTransitionDiagram } from "./diagrams/lod-transition-diagram";
+import { OcclusionCullingDiagram } from "./diagrams/occlusion-culling-diagram";
+import { PostProcessStackDiagram } from "./diagrams/post-process-stack-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -615,6 +619,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LayerCollisionDiagram,
   RigidbodySleepDiagram,
   CollisionDetectionDiagram,
+  RenderingPipelineGpuDiagram,
+  LodTransitionDiagram,
+  OcclusionCullingDiagram,
+  PostProcessStackDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,

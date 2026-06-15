@@ -1,0 +1,237 @@
+---
+title: 动态图形
+type: A
+section: 图形优化
+order: 4
+description: 在运行时控制 LOD、遮挡剔除与后处理，定位并缓解 GPU 侧动态渲染压力。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型（Unity Game Optimization Ch6 改编）：运行时图形优化。
+   重心是 GPU 瓶颈定位(§3)、LOD Stepper(§5)、Occlusion(§4)、后处理栈(§6)、粒子 Callout(§7)。 */}
+
+{/* 知识点清单：
+   1) 渲染管线 GPU 瓶颈定位 — RenderingPipelineGpuDiagram
+   2) LOD 组与切换 — LodTransitionDiagram + Stepper
+   3) Occlusion Culling — OcclusionCullingDiagram
+   4) 后处理栈开销 — PostProcessStackDiagram
+   5) 粒子/LineRenderer 动态开销 — Callout */}
+
+<Objectives>
+
+- 能解释 Profiler / Frame Debugger 中 GPU ms 高时，如何区分 Vertex、Fragment（Overdraw）与 Post-processing 三类瓶颈
+- 能说出 LOD Group、Occlusion Culling 与后处理 Volume 各自削减哪一类 GPU 成本，以及各自的启用前提
+- 能回答：开放世界远景卡顿、室内转角仍绘制墙后物体、移动端后处理拖帧——你会先查 LOD、Occlusion 还是 Post Stack 中的哪一项？
+
+</Objectives>
+
+## 镜头一转远景就掉帧，GPU 在忙什么
+
+你已经把 Draw Call 合批了、物理也睡了——帧率却在 **拉远镜头看城市场景** 或 **打开全屏 Bloom + 景深** 时掉到 40。Profiler 里 **GPU ms** 顶满 16.6ms 预算，CPU 却还有余量。这不是提交慢，而是 **显卡在顶点、像素或后处理上算不过来**。
+
+上一章物理是 CPU 侧；这章要解决的，是 **运行时仍随镜头、距离、特效变化的 GPU 账单**。目标不是关掉画面，而是 **远处换简模、被挡的不画、用不上的后处理别每帧全屏算**。
+
+## 像摄影棚灯光：近景精修，远景只留轮廓
+
+想象拍外景：**近处演员** 要高清妆容与布料褶皱；**百米外的楼群** 观众看不清窗框，只要 silhouette 对就行。若远处仍用近景道具、还把被墙挡住的布景也打光渲染，灯光师（GPU）会烧断保险丝。
+
+这章的三把剪刀——**LOD、遮挡剔除、后处理分级**——都是按「观众真的看得到吗」动态减工作量。
+
+## GPU 瓶颈：先分清卡在管线哪一段
+
+Ch1 你已会用 Profiler 对比 CPU ms 与 GPU ms。当 **GPU bound** 时，下一步不是继续合批，而是看 **GPU 在干什么**。
+
+<Term def="图形处理器执行顶点变换、光栅化、像素着色与后处理全屏 Pass 的总耗时；Profiler GPU 模块或 Render Thread 可观测。">GPU 渲染耗时</Term> 在 Frame Debugger 里体现为 **一串自上而下执行的 Render Pass**。常见三类热点：
+
+<RenderingPipelineGpuDiagram />
+
+- **Vertex / 几何**：Stats 里 **Triangles、Vertices** 极高——远景仍提交高面数、大量 Skinned Mesh
+- **Fragment / Fill**：**Overdraw** 高——半透明粒子叠层、UI 全屏、大分辨率
+- **Post-processing**：Volume 里 Bloom、DOF、SSR 等多 Pass 全屏
+
+<RenderingPipelineGpuDiagram highlight="fragment" />
+
+<RenderingPipelineGpuDiagram highlight="post" />
+
+<Callout type="tip">
+  Game 视图右上角 **Stats** 同时看 **Tris / Batches / SetPass** 与 **Saved by batching**。GPU ms 高且 Tris 随镜头拉远仍暴涨 → 先查 LOD；Overdraw 高 → 查透明与粒子；Post ms 高 → 查 Volume Profile。
+</Callout>
+
+## LOD Group：远处换简模
+
+<Term def="Level of Detail：按与相机距离切换不同精度网格，近高远低，超出最大距离可完全不渲染。">LOD（细节层次）</Term> 由 **LOD Group** 组件管理：每个级别绑定一个 Renderer（或子物体），Inspector 里设置 **Screen Relative Height** 或 **Distance** 切换阈值。
+
+<LodTransitionDiagram lod={0} />
+
+<LodTransitionDiagram lod={1} />
+
+<LodTransitionDiagram lod={2} />
+
+<LodTransitionDiagram lod="culled" />
+
+### 配置要点
+
+- **LOD0** 保留玩家能看清的细节；**LOD2** 可用极简 proxy 或 impostor
+- 最后一级可设为 **Culled**，超出距离 **0 Draw Call**
+- 跨级 **pop** 明显时：启用 **Fade Mode**（Cross Fade / Speed Tree）或略重叠阈值（hysteresis）
+- **Skinned Mesh** 也支持 LOD，但切换时注意动画是否共用同一 Avatar
+
+<Callout type="tip">
+  Window → Analysis → **LOD Group Visualization**（或 Scene 视图 LOD 色条）可预览各级生效范围。批量生成 LOD 可用 **LOD Group Generator** 或 DCC 导出多级网格。
+</Callout>
+
+## Occlusion Culling：被墙挡住的别画
+
+<Term def="视锥剔除：相机视锥外的物体不提交。遮挡剔除：视锥内但被静态遮挡物挡住的物体也不提交。">Occlusion Culling（遮挡剔除）</Term> 解决 **Frustum Culling 管不到** 的情况：转角后整栋楼的 Renderer 仍在视锥内，却被墙体完全挡住。
+
+<OcclusionCullingDiagram mode="off" />
+
+未烘焙或未启用时，墙后物体 **仍会 Draw**，浪费 Vertex 与 Overdraw。
+
+<OcclusionCullingDiagram mode="on" />
+
+启用后需 **烘焙 Occlusion 数据**（Window → Rendering → Occlusion Culling）：标记 **Occluder Static** 的墙体参与遮挡，**Occludee** 物体被写入剔除单元。适合 **室内、走廊、城市峡谷** 等静态遮挡丰富的场景；开放平原收益有限。
+
+<Callout type="tip">
+  烘焙前缩小测试场景验证：Occlusion 窗口 **Visualization** 看哪些单元被剔除。动态大物体（玩家、载具）通常作 Occludee 而非 Occluder；过小 Occluder 可能漏剔除。
+</Callout>
+
+## 后处理栈：全屏 Pass 叠加
+
+<Term def="渲染完不透明/透明物体后，对整帧图像依次施加 Bloom、DOF、Color Grading 等效果的 Volume 管线。">Post-processing Stack（后处理栈）</Term> 在 URP/HDRP 中由 **Volume Profile** 驱动。每个 Effect 多为 **至少一次全屏 Draw**，分辨率越高、Pass 越多，**Fragment 带宽** 越贵。
+
+<PostProcessStackDiagram />
+
+<PostProcessStackDiagram highlight="bloom" />
+
+<PostProcessStackDiagram highlight="dof" />
+
+移动端常见策略：**全局 Volume 只留 Tonemap + 轻 Bloom**；DOF / Motion Blur / SSR 按 **Quality Level** 或场景局部 Volume 开关。Profiler 里逐项 **禁用 Volume Override** 对比 GPU ms，比凭感觉调参快。
+
+## 粒子与 LineRenderer：动态生成的 GPU 税
+
+<Term def="Particle System 与 LineRenderer 每帧重建或更新网格，常触发 Dynamic Batching 失败与大量透明 Overdraw。">粒子 / LineRenderer 动态开销</Term> 不属于静态 LOD/Occlusion 能覆盖的范围——它们 **每帧变**，且多为 **半透明、从近到远叠满屏幕**。
+
+<Callout type="tip">
+  **粒子**：限制 **Max Particles**、缩短 **Lifetime**、用 **Mesh 粒子** 替代大量小 Billboard；同屏多种特效合并 Atlas、共用材质以保 Instancing。**LineRenderer**：`positionCount` 与分段数直接决定顶点数；静态轨迹改 Mesh 或贴图，动态轨迹限制更新频率、避免每帧 `SetPosition` 全数组。**Profiler**：Rendering 里 **Particles** 与 Transparent 队列 ms；Frame Debugger 看是否每粒子单独 Batch。
+</Callout>
+
+<Callout type="trap">
+  **现象**：技能特效全开时 GPU ms 爆、Overdraw 满屏。**原因**：数百 Billboard 粒子 + Additive 混合 + 全分辨率。**修法**：分级 Quality 减粒子上限；近处才 spawn 高密度；用 **Sub Emitters** 替代叠 5 层独立 System。
+</Callout>
+
+## 动手：GPU 动态图形排查
+
+下面五步把「GPU bound + 镜头相关卡顿」从定位到改动走通。**每切一步，示意图对应当前关注点**——建议在卡顿镜头下同步打开 Profiler GPU 与 Frame Debugger。
+
+> 猜一猜：拉远镜头 Tris 几乎不变，和 Tris 随距离明显下降，分别更该先查 LOD 还是 Occlusion？
+
+<Stepper>
+  <Step title="① 基线：确认 GPU bound 与 Stats 读数">
+    <RenderingPipelineGpuDiagram highlight="all" />
+    Play 卡顿场景，Profiler 对比 CPU ms 与 GPU ms。Game **Stats** 记下 **Tris、Batches、SetPass**；GPU 更高则本清单有效。Frame Debugger 看 Pass 列表哪段最长。
+  </Step>
+  <Step title="② LOD：远景 Tris 是否仍过高">
+    <LodTransitionDiagram lod={1} />
+    拉远镜头看 **Tris** 是否下降。若无 LOD Group，给建筑/植被加 **LOD0/1/2 + Culled**。Scene LOD 可视化检查切换距离；复测同镜头 GPU ms 与 Tris。
+  </Step>
+  <Step title="③ Occlusion：室内/转角是否仍 Draw 墙后物体">
+    <OcclusionCullingDiagram mode="on" />
+    转角场景 Frame Debugger：墙后 Renderer 是否仍出现。Window → Rendering → **Occlusion Culling** 烘焙；Occluder 墙标 Static。Visualization 确认单元剔除，对比 Batches/Tris。
+  </Step>
+  <Step title="④ 后处理：逐项关 Volume 对比 GPU ms">
+    <PostProcessStackDiagram highlight="stack" />
+    Global Volume 暂时禁用 Bloom、DOF、Motion Blur 等，每次只改一项。Profiler **Post-processing** 或 URP Camera 附加数据 ms 是否骤降；移动端建立 **Low/Medium/High** 三套 Profile。
+  </Step>
+  <Step title="⑤ 粒子 / LineRenderer：Overdraw 与透明队列">
+    <RenderingPipelineGpuDiagram highlight="fragment" />
+    技能/雨效场景看 Stats **Overdraw** 与 Frame Debugger **Transparent** 队列。减 Max Particles、合并材质；LineRenderer 降分段或改 Mesh。复测 GPU ms。
+  </Step>
+</Stepper>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：加了 LOD Group 但拉远 Tris 不变。**原因**：各级 LOD 绑了同一高精度网格，或 **LOD Bias** / 切换阈值设错。**修法**：每级必须用不同面数网格；用 LOD Visualization 看实际生效级别。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Occlusion 烘焙后墙后物体仍绘制。**原因**：墙未标 **Occluder Static**、场景未 Include in Build、或动态物体尺寸覆盖整个单元。**修法**：检查 Occlusion 窗口 Bake 与 Visualization；大 Occludee 拆小；动态遮挡用其他手段（Portal、手动 culling）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：关闭后处理 FPS 仍低。**原因**：瓶颈在 Vertex/Overdraw（LOD/Occlusion/粒子），不是 Post。**修法**：勿只砍 Bloom；回到 Frame Debugger 看 Opaque/Transparent Pass 占时，对症 LOD 或粒子。
+</Callout>
+
+## 小结
+
+- **GPU bound** 时先分 **Vertex（Tris）/ Fragment（Overdraw）/ Post** 三类瓶颈
+- **LOD Group** 按距离降面数或 Culled；需真实多级网格与合理阈值
+- **Occlusion Culling** 剔除视锥内被挡静态物；需烘焙，适合室内/城市
+- **后处理栈** 每层≈全屏 Pass；按平台分级 Volume，逐项 Profiler 对比
+- **粒子 / LineRenderer** 动态透明叠层是常见 Fill bound；限数量、并材质、降更新
+
+<Exercises>
+
+**练习 1（改 Demo 型）** 在 GPU ms 最高的镜头打开 Stats，记下 Tris 与 Batches。任选 **为一个重复 Prefab 加 LOD Group** 或 **烘焙 Occlusion 一个小室内** 只做一处改动，同镜头复测——GPU ms 与 Tris 变化多少？
+
+<Answer>
+
+有效对比需同镜头、同后处理设置。LOD 应使拉远时 Tris 明显下降；Occlusion 在转角场景降 Batches/墙后 Draw。若不变，说明瓶颈可能在粒子 Overdraw 或后处理，需继续查 Fragment/Post 段。
+</Answer>
+
+**练习 2（问答型）** Frustum Culling 与 Occlusion Culling 各剔除哪类物体？为何开放平原 Occlusion 收益小？
+
+<Answer>
+
+Frustum：相机视锥 **外** 的物体不渲染。Occlusion：视锥 **内** 但被静态遮挡物 **完全挡住** 的物体不渲染。开放平原缺少大 Occluder，墙后剔除机会少，烘焙数据也难划分有效单元，收益低于室内场景。
+</Answer>
+
+**练习 3（问答型）** 后处理 Bloom 为何比 Color Grading 更耗 GPU？移动端常如何取舍？
+
+<Answer>
+
+Bloom 需亮区提取 + 多遍（乒乓）高斯模糊，多次全屏 Pass 与高带宽；Color Grading 多为单次 LUT/曲线，相对轻。移动端常保留轻 Tonemap/Grading，降 Bloom Iterations 或分辨率，关 DOF/Motion Blur/SSR，按 Quality Level 切换 Volume Profile。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="LOD（细节层次）">
+  按与相机距离切换网格精度。详见 LodTransitionDiagram 与 LOD Group Stepper。
+</GlossaryItem>
+
+<GlossaryItem term="LOD Group">
+  管理多级 Renderer 与切换阈值的组件。详见 LodTransitionDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Occlusion Culling（遮挡剔除）">
+  剔除视锥内被静态遮挡物挡住的物体。详见 OcclusionCullingDiagram mode on。
+</GlossaryItem>
+
+<GlossaryItem term="Frustum Culling（视锥剔除）">
+  相机视锥外物体不提交；引擎默认开启，与 Occlusion 互补。
+</GlossaryItem>
+
+<GlossaryItem term="Post-processing Stack（后处理栈）">
+  渲染完成后依次施加的全屏效果链。详见 PostProcessStackDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Overdraw">
+  同一像素被多次绘制；Stats 与 Fragment bound 的关键指标。详见 RenderingPipelineGpuDiagram highlight fragment。
+</GlossaryItem>
+
+<GlossaryItem term="Volume Profile">
+  URP/HDRP 中挂载后处理参数的 ScriptableObject，可按全局/局部/Quality 分级。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>
