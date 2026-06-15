@@ -367,6 +367,7 @@ import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
 import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
 import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
+import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -874,6 +875,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SdkVersionAxisDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
+  DialogFragmentDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
   LiteralTypesDiagram,
