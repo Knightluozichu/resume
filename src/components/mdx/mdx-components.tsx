@@ -352,6 +352,7 @@ import { CubemapDemo } from "./cubemap-demo";
 import { InstancingDemo } from "./instancing-demo";
 import { ShadowMappingDemo } from "./shadow-mapping-demo";
 import { PointShadowsDemo } from "./point-shadows-demo";
+import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -844,6 +845,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IOStreamDiagram,
   AndroidArchLayersDiagram,
   AndroidStartupSequenceDiagram,
+  ActivityLifecycleDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
   LiteralTypesDiagram,
