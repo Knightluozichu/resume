@@ -369,6 +369,7 @@ import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
 import { TestPyramidDiagram } from "./diagrams/test-pyramid-diagram";
 import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
+import { StyleThemeInheritanceDiagram } from "./diagrams/style-theme-inheritance-diagram";
 import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
 import { AppBarMenuDiagram } from "./diagrams/app-bar-menu-diagram";
 import { ImplicitIntentResolutionDiagram } from "./diagrams/implicit-intent-resolution-diagram";
@@ -888,6 +889,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TestPyramidDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
+  StyleThemeInheritanceDiagram,
   DialogFragmentDiagram,
   AppBarMenuDiagram,
   TypeSizeDiagram,
