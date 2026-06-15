@@ -63,6 +63,13 @@ import { JobSystemDiagram } from "./diagrams/job-system-diagram";
 import { EcsArchitectureDiagram } from "./diagrams/ecs-architecture-diagram";
 import { BurstCompilerDiagram } from "./diagrams/burst-compiler-diagram";
 import { GameObjectToEcsDiagram } from "./diagrams/gameobject-to-ecs-diagram";
+import { UrpVsBuiltinDiagram } from "./diagrams/urp-vs-builtin-diagram";
+import { SrpBatcherFlowDiagram } from "./diagrams/srp-batcher-flow-diagram";
+import { UrpAssetConfigDiagram } from "./diagrams/urp-asset-config-diagram";
+import { TileBasedGpuDiagram } from "./diagrams/tile-based-gpu-diagram";
+import { MotionToPhotonDiagram } from "./diagrams/motion-to-photon-diagram";
+import { XrInputFlowDiagram } from "./diagrams/xr-input-flow-diagram";
+import { Wasm2023Diagram } from "./diagrams/wasm-2023-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -671,6 +678,13 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EcsArchitectureDiagram,
   BurstCompilerDiagram,
   GameObjectToEcsDiagram,
+  UrpVsBuiltinDiagram,
+  SrpBatcherFlowDiagram,
+  UrpAssetConfigDiagram,
+  TileBasedGpuDiagram,
+  MotionToPhotonDiagram,
+  XrInputFlowDiagram,
+  Wasm2023Diagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,

@@ -1,0 +1,263 @@
+---
+title: Web 专项优化
+type: C
+section: Web 专项优化
+order: 1
+description: WebAssembly 2023、Chrome DevTools Profiling、Web 纹理格式——把 Unity 高效带到浏览器。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型章：Wasm 2023、Chrome DevTools、Web 纹理、AssetBundle、兼容性。
+知识点清单（每项配 viz）：
+1. Wasm 2023 → Wasm2023Diagram (SVG 示意图)
+2. Chrome DevTools → 代码对照
+3. Web 纹理格式 → 代码对照
+4. AssetBundle 加载 → 代码对照
+5. 浏览器兼容性 → Callout(warn)
+Term 高亮术语：WebAssembly、Wasm 2023、Chrome DevTools、DXT5/BC7、AssetBundle、Addressables → 均进章末 Glossary */}
+
+<Objectives>
+
+- 能解释 WebAssembly 2023 相比旧版 Wasm 的改进，以及它对 Unity Web 导出的性能影响
+- 能使用 Chrome DevTools Performance Panel 定位 Unity WebGL Build 的瓶颈帧
+- 能正确选择 Web 平台的纹理压缩格式，并建立 Web 平台的 AssetBundle 加载策略
+
+</Objectives>
+
+{/* 2. 直觉引入 */}
+
+## 把 Unity 搬到浏览器——不是缩小版 EXE
+
+Unity WebGL Build 是把你的 C# 代码编译成 <Term def="一种在浏览器中运行二进制代码的低级指令格式：比纯 JavaScript 快数倍，是现代浏览器的内置能力。Unity 的 IL2CPP 将 C# 编译为 Wasm 后在浏览器中执行。">WebAssembly</Term>（Wasm）、把 C++ 引擎底层也交叉编译成 Wasm、把纹理/网格/音频等资产打成 `.data` 文件一起扔到服务器上，用户打开网页就会下载十几 MB 甚至上百 MB 的东西并在浏览器里跑完整游戏引擎。
+
+所以 Web 优化不是「改两个设置就行」——你需要同时管三件事：**下载体积**（包体越小、用户等得越短）、**运行时性能**（浏览器里的 GPU 是 WebGL 2.0，不是 Vulkan/Metal）、**浏览器兼容性**（Chrome 好不等于 Safari 也好）。
+
+这一章从 WebAssembly 2023 的新能力出发，一步一步走到 Chrome DevTools Profiling、Web 纹理格式选择和 AssetBundle 加载——读完你就能把一个 Unity 项目稳稳地跑在浏览器里，且加载和帧率都可度量。
+
+{/* 3. 核心概念 */}
+
+## 第一个概念：WebAssembly 2023——从基础到现代
+
+Unity 6 的 WebGL Build 已经全面转向 IL2CPP + Wasm 2023。不是旧版 Wasm 上打个补丁——而是一次显著的底层升级：
+
+<Wasm2023Diagram />
+
+2023 版核心改进：
+
+- **Sign Extension / Non-Trapping FP-to-Int / Bulk Memory 等指令集完成**：让 IL2CPP 生成的 Wasm 代码更紧凑、运行时更快——没有这些指令时 C++ 编译器只能「绕路」实现相同功能（多出一堆辅助指令）
+- **更好的 GC 交互**：Wasm GC 提案部分落地，让 IL2CPP 的托管对象（C# 里的 class 实例）能与浏览器 JS 引擎的 GC 更高效地协作——旧版全靠手动 pin/unpin 和引用计数桥接，开销大
+- **Native Wasm Threads**：多线程支持从实验走向稳定——配合 C# Job System/Burst，可以在浏览器 Worker 线程中跑 Burst 编译的 Job，不阻塞主线程
+
+<Callout type="info">
+  Wasm 2023 的核心变化一句话：指令集更完备 → IL2CPP 生成的 Wasm 字节码更短 →
+  下载体积缩小、解析加速 → 首帧启动更快。单是 Sign Extension 和 Bulk Memory
+  指令的落地就让典型 Wasm 模块体积缩了 5–15%。
+</Callout>
+
+## 第二个概念：Chrome DevTools——Web 端的 Profiler
+
+桌面/移动端用 Unity Profiler，Web 端你得用浏览器的 DevTools。Chrome 的 Performance Panel 就是 WebGL Build 的 Profiler 入口：
+
+```javascript
+// 在浏览器 Console 中标记 Unity 帧起止——帮助 DevTools 定位帧边界
+// Unity WebGL 在每一帧开始时会调用 JS 桥接的 requestAnimationFrame
+// 打开 Chrome DevTools → Performance → 录制 → 在 Flame Chart 里看 Wasm 函数耗时
+// 放大每个黄色 Wasm 条块定位热点 C# 函数（IL2CPP 保留了函数名映射）
+```
+
+DevTools Performance 录制步骤：
+
+1. 打开 Chrome DevTools（F12）→ Performance 面板
+2. 点录制按钮 → 在 Unity WebGL 页面正常操作 3–5 秒 → 停止录制
+3. 在 Flame Chart 中：
+   - 灰色块 = 浏览器原生任务（渲染合成/垃圾回收等）
+   - **黄色块 = Wasm 执行**（你的 C# 代码转成的 Wasm 在跑）
+   - 展开黄色块 → 看函数名（IL2CPP 保留的 C# 原名）→ 找 Self Time 最高的函数
+4. 底部的 Summary 面板显示各函数 Self 时间排行——这和 Unity Profiler 的 CPU Usage 展开是一个思路
+
+<Callout type="tip">
+  WebGL Build 的 IL2CPP 函数名映射：在 Project Settings → Player → Publishing Settings
+  → 启用 `Enable Exceptions` 至少选择 `Explicitly Thrown Exceptions Only`，可保留部分
+  异常信息和函数名映射——彻底关掉异常会让 DevTools 里 Wasm 栈只显示十六进制地址。
+</Callout>
+
+## 第三个概念：Web 平台的纹理压缩——DXT/BC 的世界
+
+Web 平台和移动端反过来——浏览器用的 GPU 是桌面显卡（通过 WebGL），所以纹理格式 **不支持 ASTC/ETC2，但支持 DXT/BC 系列**：
+
+| 格式 | 浏览器支持 | 适用纹理类型 |
+|------|-----------|-------------|
+| **DXT1 (BC1)** | 所有 WebGL 1.0/2.0 | 不透明漫反射（无 Alpha 通道） |
+| **DXT5 (BC3)** | 所有 WebGL 1.0/2.0 | 带 Alpha 通道的漫反射 |
+| **BC7** | WebGL 2.0（少数老设备不支持） | 高质量纹理（优于 DXT5） |
+
+```csharp
+// Web 平台纹理格式设置（Texture Importer Override）
+using UnityEditor;
+
+public class WebTextureSettings
+{
+    [MenuItem("Tools/Set WebGL Texture Format")]
+    static void SetWebGLFormat()
+    {
+        foreach (var obj in Selection.objects)
+        {
+            string path = AssetDatabase.GetAssetPath(obj);
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) continue;
+
+            // DXT5 (BC3) 是 WebGL 通用的带 Alpha 格式
+            var settings = importer.GetPlatformTextureSettings("WebGL");
+            settings.format = TextureImporterFormat.DXT5;
+            settings.overridden = true;
+            importer.SetPlatformTextureSettings(settings);
+
+            importer.SaveAndReimport();
+        }
+        AssetDatabase.Refresh();
+    }
+}
+```
+
+<Callout type="warn">
+  移动端和 Web 端的纹理格式几乎完全相反——一个项目如果同时出 Android+iOS+WebGL
+  三端，必须按平台 override 格式：Android/iOS → ASTC、WebGL → DXT5/BC7。
+  不要用 RGBA32（未压缩）——30MB 的纹理在 Web 端就是 30MB 的下载量。
+</Callout>
+
+## AssetBundle 与 Addressables：Web 端的增量加载
+
+Web 平台的资源加载和桌面/移动端有一个根本区别：**用户的「安装包」实际上是每次打开网页的下载**。没人愿意等 200MB 下载完才看到画面。
+
+```csharp
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
+
+public class WebAssetLoader : MonoBehaviour
+{
+    [SerializeField] private AssetReferenceGameObject levelPrefab;
+
+    async void Start()
+    {
+        // Addressables 异步加载——Web 端必须非阻塞
+        var handle = Addressables.LoadAssetAsync<GameObject>(levelPrefab);
+        await handle.Task;
+
+        if (handle.Status == AsyncOperationStatus.Succeeded)
+        {
+            Instantiate(handle.Result);
+        }
+        else
+        {
+            Debug.LogError($"Failed to load asset: {handle.OperationException}");
+        }
+
+        // 用完记得释放（不释放 = Web 端内存泄漏）
+        // Addressables.Release(handle);
+    }
+}
+```
+
+Web AssetBundle 策略四步：
+
+1. **首场景资源打进主 build**：最小可玩体验的资源（登录/主菜单/Loading UI）打包进 Wasm 主文件——用户打开网页 5 秒内有画面
+2. **后续 AssetBundle 走 CDN**：关卡、角色、音频等大资源放在 CDN 上，Addressables 远程 catalog 指向 CDN URL
+3. **加载提示**：Web 端远程资源下载速度取决于用户网络——一定要有下载进度条和预计剩余时间，否则用户以为卡死了
+4. **缓存策略**：AssetBundle 的 `Caching.compressionEnabled = true` + `Caching.ready` 检查，已下载过的 AB 从浏览器缓存读而不重新下载
+
+{/* 浏览器兼容性 */}
+
+## 浏览器兼容性：Chrome 好不等于 Safari 好
+
+<Callout type="warn">
+  浏览器兼容性暗坑：①Safari 对 WebGL 2.0 部分扩展支持有限（如
+  `EXT_color_buffer_float` 部分不可用 → 浮点 RT 渲染失败）；②iOS Safari 的 Wasm
+  内存上限为 ~1.2GB（比桌面 Safari 小得多）→ 复杂场景内存超限直接崩溃；③Firefox
+  的 Wasm 编译速度通常慢于 Chrome（Firefox 用 Cranelift/Cranelift 慢路径、Chrome
+  用 Liftoff/TurboFan 快路径）→ 首帧启动 Firefox 慢 2–3 秒；④微信内置浏览器 X5
+  内核对 WebGL 兼容极差——需要单独检测并提示用户切到系统浏览器打开。上线前必须在
+  **至少 Chrome + Safari + Firefox + 移动端 Safari/Chrome** 上全部跑一遍。
+</Callout>
+
+{/* 7. 常见误区 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Unity WebGL Build 出来 120MB，用户打开网页白屏 20 秒。**原因**：纹理全用 RGBA32 未压缩（每张 2K 纹理 16MB）、音频未压缩（PCM → .data 塞满）、IL2CPP 的 managed stripping 没开（C# 不用的代码也全编译进 Wasm）。**修法**：①纹理按平台 override 为 DXT5/BC7（WebGL 平台）；②音频压缩为 Vorbis（Quality 50–70%）；③Player Settings → Managed Stripping Level 设为 High；④Build Report 看各资源体积分布，从最大的文件开始砍。
+</Callout>
+
+<Callout type="trap">
+  **现象**：AssetBundle 在 Editor 里加载正常，WebGL Build 上线后一直 404 或 CORS 错误。**原因**：远程 AssetBundle URL 使用了相对路径（Web 端的相对路径以网页域名为基础）、或 CDN 服务器没配 CORS 头。**修法**：Addressables Remote Catalog 用绝对 URL（如 `https://cdn.example.com/bundles/`）；CDN 服务器加 `Access-Control-Allow-Origin: *` 头；Safari 还要求 CDN 返回 `Cross-Origin-Resource-Policy: cross-origin` 头。
+</Callout>
+
+<Callout type="trap">
+  **现象**：网站在 Chrome 上跑 60 FPS 流畅，Safari 上只有 15 FPS 且风扇狂转。**原因**：Safari 的 WebGL 2.0 实现在一些操作上比 Chrome 慢得多——尤其是频繁切换 Render Target、多次 Post-processing Pass、和消耗大量 GPU 带宽的实现。Chrome 的 ANGLE 层（把 WebGL 翻译成 Metal/D3D11）对移动端优化更好；Safari 在 iOS 上受限于浏览器本身的 JS→Wasm→WebGL 多跳开销。**修法**：减少全屏 Post Pass（合并到一个 Pass）、Render Scale 设 0.8–0.9、不用 CPU-heavy 的每帧操作（如 `Camera.main` 在 Update 里反复调）。
+</Callout>
+
+{/* 8. 小结与练习 */}
+
+## 小结
+
+- **WebAssembly 2023** 指令集更完备 → IL2CPP 生成的 Wasm 更紧凑 → 下载体积小、解析快、首帧启动提速
+- **Chrome DevTools Performance Panel** 是 Web 端的 Profiler——黄色 Wasm 块 = 你的 C# 代码 > 找 Self Time 最高的函数
+- **Web 纹理格式和移动端完全相反**：DXT5/BC7（桌面 GPU 格式）而非 ASTC/ETC2
+- **AssetBundle 走 CDN + 首场景打进包 + 进度条 + 缓存** = Web 端资源加载四件套
+- **多浏览器兼容测试是刚需**：Chrome + Safari + Firefox + 移动端各测一遍
+
+<Exercises>
+
+**练习 1（操作题）** 创建一个新的空 Unity 项目，切换到 WebGL 平台，做一个 Build。打开 Build Report 看各部分（Code/Data/Resources）的体积分布——哪部分最大？然后在 Player Settings 里把 Managed Stripping Level 设为 High、纹理格式 override 为 DXT5，再做一次 Build，对比两次 Build Report 的总 Size。
+
+<Answer>
+
+操作步骤：File → Build Profiles → 添加 WebGL → Switch Platform → Build。完成后在 Console 看 Build Report（或点 `Open Build Report`）。典型空项目：Code（Wasm）约 6–8MB、Data（默认资源+纹理）约 2–3MB。将 Managed Stripping Level 调高后 Code 可缩 20–30%；纹理格式改 DXT5 对空项目影响不大（没什么纹理），但纹理多的项目 Data 可缩数倍。重点体验 Build Report 的使用——以后所有 Web 优化都从这个报告开始。
+
+</Answer>
+
+**练习 2（排错题）** 你的 WebGL 项目在主菜单帧率正常（60 FPS），进入战斗关卡掉到 20 FPS。用 Chrome DevTools Performance Panel 录制了 5 秒，发现黄色 Wasm 块中 `BattleManager.Update()` 的 Self Time 占了 70%。列出你的排查和修复路径。
+
+<Answer>
+
+1. 展开 `BattleManager.Update()` 旗下的子函数，找到 Self Time 最高的子函数（可能是 AI 逻辑、物理查询、或调试日志）。2. 检查该函数是否有每帧分配（`new List<T>()`、字符串拼接 `+`、`foreach` over non-generic 产生 Boxing）→ IL2CPP GC 在 Wasm 环境下代价极高。3. 检查是否有 `Find()`/`GetComponent()` 在 Update 反复调 → 改缓存。4. 如果是纯计算太多（如 500 个单位每帧都在判断视线）：分帧执行（每帧只更新 1/N 个单位）或切到 C# Job System + Burst（如果启用了 Wasm Threads）。5. 如果以上都不行：Profile 确认瓶颈函数 → 降级相关逻辑（如 AI 更新频率从每帧到每 3 帧）。
+
+</Answer>
+
+**练习 3（代码题）** 写一个 `WebPreloader` MonoBehaviour：①在 `Start()` 中先显示加载进度条；②用 Addressables 异步加载一个标记为远程的 AssetBundle；③加载过程中实时更新进度条（百分比）；④加载完成后隐藏进度条并 Instantiate 加载的 GameObject。
+
+<Answer>
+
+参考本章「AssetBundle 与 Addressables」节的代码。核心：`Addressables.GetDownloadSizeAsync()` 检查需下载量 → `Addressables.DownloadDependenciesAsync()` 下载 → 在 `AsyncOperationHandle.PercentComplete` 回调中更新 Slider → `Addressables.LoadAssetAsync<GameObject>()` 加载资产 → `Instantiate()`。Web 端必须用 async/await 非阻塞方式、不能用同步 `WaitForCompletion`（会卡整个浏览器 Tab）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="WebAssembly (Wasm)">
+  在现代浏览器中运行的低级二进制指令格式。Unity IL2CPP 将 C# 编译为 Wasm 后直接在浏览器沙箱中执行，比纯 JavaScript 快数倍。2023 版新增完整指令集和多线程支持。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Chrome DevTools">
+  Chrome 浏览器内置的开发者工具集：Performance Panel 可录制帧级别的时间线用于定位 Unity WebGL Build 的瓶颈帧——黄色 Wasm 块对应 C# 代码（IL2CPP 编译产物）。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="AssetBundle">
+  Unity 的资源打包格式：将纹理/网格/音频/预制体等打包成 `.bundle` 文件，运行时按需下载和加载。Web 端 AssetBundle 走 CDN 增量分发，避免全部打进主 build 造成数分钟下载等待。详见本章「AssetBundle 与 Addressables」节。
+</GlossaryItem>
+
+<GlossaryItem term="Addressables">
+  Unity 的资源地址化系统：通过地址（而非直接引用）管理和加载资源，支持本地/远程资源混合部署。Web 端用 Addressables 的 Remote Catalog 管理 CDN 资源加载。详见本章「AssetBundle 与 Addressables」节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

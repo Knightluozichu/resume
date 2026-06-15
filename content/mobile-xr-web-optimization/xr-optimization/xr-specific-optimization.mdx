@@ -1,0 +1,254 @@
+---
+title: XR 专项优化
+type: A
+section: XR 专项优化
+order: 1
+description: XR 90/120FPS 帧预算、Single Pass Instanced、Foveated Rendering 与 XR 输入处理——VR/AR 不晕的硬指标。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型章：XR 帧预算、Single Pass Instanced、Foveated Rendering、XR 输入管线。
+知识点清单（每项配 viz）：
+1. Motion-to-Photon → MotionToPhotonDiagram (SVG 示意图)
+2. Single Pass Instanced → 代码对照
+3. Foveated Rendering URP 设置 → 代码对照
+4. XR 输入管线 → XrInputFlowDiagram (SVG 示意图)
+5. 自适应性能 → Callout(tip)
+Term 高亮术语：Motion-to-Photon、Single Pass Instanced、Foveated Rendering、ASW、XR Input Subsystem → 均进章末 Glossary */}
+
+<Objectives>
+
+- 能解释 Motion-to-Photon 延迟的四个阶段，以及每个阶段的优化手段
+- 能在 URP 中正确配置 Single Pass Instanced，并说出它相比 Multi-Pass 的性能优势
+- 能解释 Foveated Rendering 的工作原理，以及它在 Standalone VR 上的成本收益比
+
+</Objectives>
+
+{/* 2. 直觉引入 */}
+
+## XR 不是「给游戏加个头显」
+
+桌面游戏跑 30 FPS 用户可能觉得「还行」。VR 跑 30 FPS 用户会摘头显去吐——因为整个人被包在画面里，眼睛看到的和身体感觉到的慢了哪怕一丁点，大脑就开始抗议。这就是 XR 性能的起点：不是帧率越高越好，而是**低于某个阈值就不可用**。
+
+XR 的硬指标：
+- PC VR：90 FPS（≈ 11.1ms/帧）是底线
+- Standalone（Quest/Pico）：72–90 FPS（≈ 13.9–11.1ms/帧）
+- 一些高端设备（Quest 3/Pro、Apple Vision Pro）：最高 120 FPS（≈ 8.3ms/帧）
+
+这些帧预算不仅包含你的游戏逻辑和渲染——还要给设备留出时间做姿态预测、镜头畸变校正、异步时间扭曲（ATW/ASW）等「补救合成」。实际游戏渲染可用时间比帧预算还少 2–3ms。
+
+这一章从 XR 最核心的概念——Motion-to-Photon 延迟——出发，把每条优化路径讲透。读完你就知道 XR 项目优化不是在 PC 优化的基础上加几个勾——而是从「帧预算」倒推每一毫秒能花在哪。
+
+{/* 3. 概念讲解 */}
+
+## 第一个概念：Motion-to-Photon——XR 性能的终极度量
+
+<Term def="从头显运动（头或手移动）到对应画面光子打到用户视网膜上的总延迟。包含传感器采样→CPU 处理→GPU 渲染→合成→屏幕刷新→光子发出等环节，是 XR 体验不晕的核心指标。">Motion-to-Photon</Term> 延迟是 XR 性能的唯一真神。你不需要背每个数字，但需要理解每一段延迟在哪、怎么缩。
+
+<MotionToPhotonDiagram />
+
+四段延迟各自怎么砍：
+
+1. **传感器→CPU**（~1–3ms）：硬件固定，优化空间小——选低延迟 IMU 模式、减 XR Input Poll 频率（确实需要的才每帧询）。
+2. **CPU 游戏逻辑**（你的代码）：脚本 Update/物理/动画的总耗时。大块头如 AI 寻路、场景加载要异步或分帧——5ms 预算里不能都扔给 Update。
+3. **GPU 渲染**（双眼）：×2 倍的像素量是天然负担。Single Pass Instanced（下一节）把 Draw Call 从 2× 压回 1×，Foveated Rendering（再下一节）把周边像素密度降低。降 Render Scale 是最后一张牌。
+4. **合成+显示**（~2–4ms）：设备端最后一步——姿态预测、镜片畸变校正、ATW/ASW 重投影。合成本身很快，但**你赶不上帧提交的截止时间才是一切灾难的根**——Late Latch 是为此救场的技术。
+
+<Callout type="tip">
+  测量 Motion-to-Photon 延迟：Meta Quest 开发者 Hub 里的 OVR Metrics Tool / RenderDoc
+  的 GPU Trace / Apple Vision Pro 用 Xcode Metal Frame Capture。Editor 里测不出真实
+  MTP 延迟——因为 Editor 不走真实设备的合成管线。
+</Callout>
+
+## 第二个概念：Single Pass Instanced——双眼渲染的最大杠杆
+
+<Term def="URP/XR 下的一种立体渲染模式：GPU 通过一次 Draw Call + 硬件 Instancing 同时将几何体输出给左右眼两张纹理（Texture Array），避免对场景做两次遍历（Multi-Pass），大幅降低 CPU Draw Call 和 GPU Vertex Shader 开销。">Single Pass Instanced</Term> 是 URP XR 优化的第一步——没开这个就等于浪费了一半 CPU：
+
+```csharp
+// URP Renderer Data 中配置 Stereo Rendering Mode
+// Project Settings → XR Plug-in Management → 启用 OpenXR 或 Oculus Loader
+// 然后 URP Asset → Renderer → Stereo Rendering Mode 选 "Single Pass Instanced"
+```
+
+代码中检查当前立体渲染模式：
+
+```csharp
+using UnityEngine;
+using UnityEngine.XR;
+
+public class XrSetupCheck : MonoBehaviour
+{
+    void Start()
+    {
+        // 检查 XR 是否启用
+        if (!XRSettings.enabled) return;
+
+        // 输出当前立体渲染模式
+        Debug.Log($"Stereo mode: {XRSettings.stereoRenderingMode}");
+
+        if (XRSettings.stereoRenderingMode != XRSettings.StereoRenderingMode.SinglePassInstanced)
+        {
+            Debug.LogWarning("Single Pass Instanced not enabled! Expect ~2x CPU/GPU overhead for stereo rendering.");
+        }
+    }
+}
+```
+
+<Callout type="warn">
+  切到 Single Pass Instanced 后检查：①自定义 Fullscreen/Post Pass 是否处理了双眼
+  Texture Array（需要 XR 兼容 Shader 宏如 `UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX`）；②UI
+  Canvas 的渲染是否正确覆盖双眼；③使用 Frame Debugger 分别检查 Left Eye/Right Eye
+  ——某只眼黑屏或 Post 只对单眼生效是常见 bug。
+</Callout>
+
+## 第三个概念：Foveated Rendering——只在注视点花 GPU
+
+<Term def="注视点渲染：对视野中央（注视中心、黄斑区）以全分辨率渲染，对周边区域逐步降低着色密度或分辨率——利用人眼在周边视野的感光细胞密度远低于中央的生理特性来节省 GPU。">Foveated Rendering</Term> 的原理基于一个生理事实：你眼球的「高清区」（黄斑中心凹）只有几度的视野范围，往外的周边视野天生就模糊——GPU 在周边画得再精细你也看不清。
+
+URP 中的配置：
+
+```csharp
+using UnityEngine;
+using UnityEngine.XR;
+
+public class FoveatedRenderingSetup : MonoBehaviour
+{
+    void Start()
+    {
+        // 检查设备是否支持 Foveated Rendering
+        if (XRSettings.supportsFoveatedRendering)
+        {
+            // 在 URP Asset 里设 Foveated Rendering Level：
+            // Low / Medium / High — 对应周边着色密度降低的程度
+            // 一般从 Medium 开始试、实机看周边模糊程度是否可接受
+            Debug.Log("Foveated Rendering is supported on this device");
+        }
+    }
+}
+```
+
+Foveated Rendering 级别选择指南：
+
+| 级别 | 周边着色密度 | GPU 节省（估） | 建议场景 |
+|------|-------------|---------------|---------|
+| Off | 全分辨率 | 0% | 基准对照 |
+| Low | 轻度降低 | ~10–15% | 画质敏感项目（如电影化体验） |
+| Medium | 中度降低 | ~20–30% | 大多数游戏推荐起点 |
+| High | 大幅降低 | ~35–50% | GPU bound 严重的项目 |
+
+<Callout type="tip">
+  Foveated Rendering 的代价：快速转头时周边低分辨率区域可能会看到「闪烁」或「游泳感」
+  （shimmer）。Level 越高越明显。在头显上实测不同 Level，找「人注意不到闪烁」的
+  最高等级——不要只在 Editor 里判断。眼动追踪设备（如 Quest Pro/Apple Vision Pro）可
+  以做 Dynamic Foveated Rendering（注视点跟随眼球实时移动），效果远比 Fixed Foveated 好。
+</Callout>
+
+## XR 输入管线：CPU 的另一条消耗链
+
+<Term def="Unity 的 XR 输入系统：通过 XR Plug-in Management 和 Input System 每帧从 HMD、控制器、手部追踪等设备轮询姿态、按钮、触控、触觉反馈数据。过于频繁或未缓存的 Poll 会吃掉大量 CPU 预算。">XR Input</Term> 管线在每帧运行时的开销经常被忽视——开发者盯着 GPU 降 Draw Call，却没注意 CPU 在不停地问头显「你现在看向哪」问了十遍。
+
+<XrInputFlowDiagram />
+
+优化 XR 输入的关键动作：
+
+- **合并 Poll 频率**：不需要每帧读所有输入——比如只在 UI 交互时读射线命中、只在手部动画时读骨骼数据
+- **缓存 Device/Action**：不要在 `Update()` 里反复 `InputDevices.GetDeviceAtXRNode()` ——缓存到 `Awake()`/`Start()`
+- **减 Physics Raycast**：XR Interaction Toolkit 默认对每个 Interactor 做射线检测，多个 Interactor + 多次检测 = CPU 杀手。用 `XRInteractionManager` 的 Layer Mask 缩小检测范围
+
+{/* 自适应性能 */}
+
+## 自适应性能：动态保帧
+
+<Callout type="tip">
+  Standalone 设备上最怕的不是某帧慢了——是连续慢帧导致合成跟不上触发重投影（ATW/ASW），
+  用户体验直接跳水。Unity 的 Adaptive Performance 包（`com.unity.adaptiveperformance`）能在
+  GPU/CPU 接近帧预算上限时自动降 Render Scale、降 MSAA、关 Post 以保住帧率——在热降频
+  和高负载场景中有奇效。Quest 平台还有 OVR Metrics Tool 看 Thermal 状态、Application
+  SpaceWarp（ASW，自动从 45FPS 补到 90FPS 的合成插值技术）。
+</Callout>
+
+{/* 7. 常见误区 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Editor Game 视图里 XR 项目跑得流畅稳定，一到 Quest 头显上就掉帧+头晕。**原因**：Editor 没走真实 XR 合成分离——编辑器的帧显示的是双眼合成前的帧时；真实设备还有合成+姿态预测+ATW 等步骤吃预算。此外 Editor 不会触发设备热降频。**修法**：一切 XR 性能结论必须在目标头显上实测——用 OVR Metrics Tool（Quest）或 Xcode GPU Capture（Vision Pro）看真实帧分解。
+</Callout>
+
+<Callout type="trap">
+  **现象**：开了 Single Pass Instanced 后自定义 Post 效果只有左眼生效、右眼全黑。**原因**：Post Pass 的 Shader 没处理双眼 Texture Array——XR 立体模式下 Color Buffer 是 Texture2DArray，旧版全屏 Shader 只采样了 array[0]（左眼）就输出。**修法**：自定义 Post Shader 加 `UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX` 宏处理双眼索引；优先使用 URP 内置的 XR 兼容 Post，避免一次性全屏自定义 Pass。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 XR 项目里频繁用 `GameObject.Find()` 和 `GetComponent<T>()`，SteamVR/Oculus 的 HMD 追踪数据更新奇慢。**原因**：`Find()`/`GetComponent()` 本身是 CPU 杀手，在 XR 环境下（帧预算只有 11ms）每毫秒都被放大——一个 1ms 的 Find 在桌面端只是 6% 的帧时，在 VR 里是 9% 且可能导致帧超时。**修法**：所有 Component 引用在 `Awake()` 里缓存；不用 `Find()`（用 Inspector 拖引用或依赖注入）；XR Input 设备引用缓存到成员变量不在 Update 里反复查。
+</Callout>
+
+{/* 8. 小结与练习 */}
+
+## 小结
+
+- **Motion-to-Photon** 是 XR 终极指标——四个阶段（传感器/CPU/GPU/合成）都要控制在帧预算内
+- **Single Pass Instanced** 是 XR 第一步：一次 Draw Call 画双眼，CPU Draw 从 2× 降到 1×
+- **Foveated Rendering** 利用人眼生理特性降 GPU 负担——Medium 起点、实机验证、眼动追踪更佳
+- **XR Input** 是隐藏 CPU 杀手——缓存 Device/Action、减 Physics Raycast、合并 Poll
+- **Adaptive Performance + ASW** 是救火队——接近帧预算时自动降画质保帧率
+
+<Exercises>
+
+**练习 1（排错题）** 你的 VR 项目帧率在 85–91 FPS 之间剧烈波动——偶尔正好在 90（刚好过线），偶尔掉到 85（掉帧）。分析这种「徘徊在阈值上下的帧率」为什么比「稳定的 72 FPS」更糟糕——从 Motion-to-Photon 的角度回答。
+
+<Answer>
+
+稳定 72 FPS 意味着每帧渲染时间稳定在 ~13.9ms 且从不超时——设备合成管线能准确预测下一个显示时刻。而 85–91 FPS 在阈值 90 上下波动意味着：某些帧在 11.1ms 内完成（达到 90 FPS），某些帧超时（掉到 85 → ~11.8ms）。超时帧错过了提交截止时间 → 设备合成重显示上一帧 → 产生视觉跳跃 → 用户晕。按 MTP 模型：不稳定的帧刷新时间 = 不稳定的光子到达时间 = 大脑检测到「看和动不同步」= 晕眩。结论：宁稳 72 也不错 85–91。
+
+</Answer>
+
+**练习 2（操作题）** 打开 Frame Debugger，检查你的 XR 项目中的任意一帧。找到双眼分别渲染的 Draw Call，验证 Single Pass Instanced 是否生效（看是两次 Draw 还是一次 Instanced Draw）。如果没生效，追溯配置原因。
+
+<Answer>
+
+操作步骤：Window → Analysis → Frame Debugger → Enable，选一帧。展开树形结构，如果看到两个 `Draw Mesh` 节点分别标 `Left Eye` 和 `Right Eye` 且内容基本一样 → Single Pass Instanced 未生效（走了 Multi-Pass）。如果是单个 `Draw Mesh` 节点、右侧面板显示 `Stereo Instanced` 或 `Instanced` → 生效。没生效的排查：URP Asset → Renderer → Stereo Rendering Mode 是否选 Single Pass Instanced；Project Settings → XR Plug-in Management → 目标平台是否启用了 OpenXR/Oculus Loader。
+
+</Answer>
+
+**练习 3（选型题）** 你的 Standalone VR 项目 GPU bound——帧渲染需 16ms 但目标 11.1ms（90FPS）。列出你的优化优先级从第一步到最后一步——不跳过任何排列依据。
+
+<Answer>
+
+优先级顺序：①开 Single Pass Instanced（如果还没开）→ CPU+GPU 双降 ~30–40% 渲染成本，第一优先级无争议。②设 Foveated Rendering = Medium → 降 GPU Fill ~20–30%，几乎无画质损失（人眼周边天然模糊）。③降 Render Scale 到 0.85 → 观察帧时变化，降到够线就行。④降 MSAA 从 4x 到 2x（Tile GPU 的 MSAA 代价小但仍有用）。⑤降 Shadow Distance 和 Cascade Count → 如果阴影是热点。⑥如果还差就要动美术资产了：减顶点数、纹理分辨率、合并网格。顺序逻辑：先改设置不伤资产（①②③④）→ 再动阴影（⑤）→ 最后动资产（⑥）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Motion-to-Photon">
+  头显运动（传感器）到画面光子到达视网膜的总延迟链：传感器采样 → CPU 游戏逻辑 → GPU 渲染 → 合成+显示。VR 要求 ≤20ms，15ms 以下为舒服区。每段延迟都有对应优化手段。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Single Pass Instanced">
+  URP XR 下最推荐的立体渲染模式：GPU 侧用 Instancing 一次 Draw Call 同时输出几何体到左右眼 Texture Array，CPU Draw 从 2× 压到 1×。自定义 Post 需做双眼兼容。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Foveated Rendering">
+  利用人眼周边视觉天然模糊的特性，降低注视区以外像素着色密度以节省 GPU。Fixed（固定注视区）所有设备可用；Dynamic（眼动追踪实时跟随）需硬件支持。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="XR Input">
+  Unity XR 输入管线：每帧从 HMD/控制器/手部追踪设备轮询姿态、按钮和触觉数据。频繁未缓存 Poll 是 XR CPU 消耗的重要来源。缓存 Device/Action、减 Raycast。详见本章「XR 输入管线」节。
+</GlossaryItem>
+
+<GlossaryItem term="ASW (Application SpaceWarp)">
+  Meta Quest 平台的合成插值技术：当应用无法维持目标帧率时，从 45FPS 渲染 + ASW 合成插值补到 90FPS。极大缓解掉帧的晕眩感——但不是「优化替代品」，应配合真正优化使用。详见本章「自适应性能」节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Unity《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

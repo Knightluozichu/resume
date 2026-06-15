@@ -85,7 +85,12 @@ export type ReviewChapterSlug =
   | "prof-memory-profiler"
   | "prof-profile-analyzer-regression"
   | "prof-power-optimization"
-  | "prof-platform-specific-profiling";
+  | "prof-platform-specific-profiling"
+  | "mxrw-urp-optimization"
+  | "mxrw-mobile-optimization"
+  | "mxrw-xr-specific-optimization"
+  | "mxrw-web-specific-optimization"
+  | "mxrw-cross-platform-checklist";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -174,6 +179,11 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "prof-profile-analyzer-regression": "Profile Analyzer 与回归测试",
   "prof-power-optimization": "功耗优化",
   "prof-platform-specific-profiling": "平台专项 Profiling",
+  "mxrw-urp-optimization": "URP 专项优化",
+  "mxrw-mobile-optimization": "移动端性能优化",
+  "mxrw-xr-specific-optimization": "XR 专项优化",
+  "mxrw-web-specific-optimization": "Web 专项优化",
+  "mxrw-cross-platform-checklist": "跨平台性能检查清单",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

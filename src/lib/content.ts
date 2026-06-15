@@ -67,6 +67,7 @@ export const BOOK_ORDER = [
   "cpp-primer-5e",
   "unity-game-optimization",
   "profiling-unity-games",
+  "mobile-xr-web-optimization",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -75,6 +76,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "cpp-primer-5e": "C++ Primer 第5版",
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
+  "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
 };
 
 /** 取某书在教学顺序中的位次；未知书返回一个大于所有已知位次的值 */
@@ -112,6 +114,10 @@ export const SECTION_ORDER = [
   "GPU 性能分析",
   "内存与功耗",
   "平台专项",
+  // Mobile XR Web Optimization
+  "URP 专项优化",
+  "XR 专项优化",
+  "Web 专项优化",
 ] as const;
 
 /** 取某 section 在教学顺序中的位次；未知 section 返回一个大于所有已知位次的值 */

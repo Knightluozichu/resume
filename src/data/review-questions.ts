@@ -90,6 +90,11 @@ import { profMemoryProfilerQuestions } from "./review/prof-memory-profiler";
 import { profProfileAnalyzerRegressionQuestions } from "./review/prof-profile-analyzer-regression";
 import { profPowerOptimizationQuestions } from "./review/prof-power-optimization";
 import { profPlatformSpecificProfilingQuestions } from "./review/prof-platform-specific-profiling";
+import { mxrwUrpOptimizationQuestions } from "./review/mxrw-urp-optimization";
+import { mxrwMobileOptimizationQuestions } from "./review/mxrw-mobile-optimization";
+import { mxrwXrSpecificOptimizationQuestions } from "./review/mxrw-xr-specific-optimization";
+import { mxrwWebSpecificOptimizationQuestions } from "./review/mxrw-web-specific-optimization";
+import { mxrwCrossPlatformChecklistQuestions } from "./review/mxrw-cross-platform-checklist";
 
 export {
   CHAPTER_TITLES,
@@ -176,6 +181,11 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...profProfileAnalyzerRegressionQuestions,
   ...profPowerOptimizationQuestions,
   ...profPlatformSpecificProfilingQuestions,
+  ...mxrwUrpOptimizationQuestions,
+  ...mxrwMobileOptimizationQuestions,
+  ...mxrwXrSpecificOptimizationQuestions,
+  ...mxrwWebSpecificOptimizationQuestions,
+  ...mxrwCrossPlatformChecklistQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
