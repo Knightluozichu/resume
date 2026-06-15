@@ -150,7 +150,7 @@ export function SteepParallaxStepDiagram({ step }: { step: SteepStep }) {
             stroke="var(--accent)"
             strokeWidth="2"
           />
-          <text x="404" y="216" fontSize="9.5" fill="var(--accent)">
+          <text x="404" y="226" fontSize="9.5" fill="var(--accent)">
             真实表面深度（高度图）
           </text>
 

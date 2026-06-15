@@ -16,10 +16,10 @@ export function CameraMovementDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 400 320"
+          viewBox="0 0 440 320"
           role="img"
           aria-label="WASD 移动示意。W 沿摄像机 front 方向前进，S 沿 front 反方向后退，A 沿 right 方向左横移，D 沿 right 方向右横移。right 向量由 front 与 world up 叉乘得到。"
-          className="mx-auto block h-auto w-full max-w-[400px]"
+          className="mx-auto block h-auto w-full max-w-[440px]"
         >
           <defs>
             <marker
@@ -246,7 +246,7 @@ export function CameraMovementDiagram() {
           </g>
 
           <text
-            x="200"
+            x="220"
             y="298"
             textAnchor="middle"
             fontSize="11"

@@ -29,7 +29,7 @@ export function GlFragCoordDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 520 280"
+          viewBox="0 0 520 300"
           role="img"
           aria-label="gl_FragCoord 是片段在画布上的窗口像素坐标。一块代表画布的网格，左下角是原点 (0,0)，向右是 x 像素、向上是 y 像素，右上角是 (宽, 高)。其中一个被点亮的片段方格，它的 gl_FragCoord.xy 是一对整数像素坐标，比如 (520, 300)，表示它在画布第几个像素的位置。x 的范围是 0 到画布宽、y 的范围是 0 到画布高，不是 -1 到 1，要除以 uResolution 才能归一化到 0 到 1。"
           className="mx-auto block h-auto w-full max-w-[520px]"
@@ -180,7 +180,7 @@ export function GlFragCoordDiagram() {
           {/* —— 关键提示：范围是像素，不是 NDC —— */}
           <rect
             x="80"
-            y="232"
+            y="252"
             width="360"
             height="34"
             rx="6"
@@ -191,7 +191,7 @@ export function GlFragCoordDiagram() {
           />
           <text
             x="260"
-            y="248"
+            y="268"
             textAnchor="middle"
             fontSize="10.5"
             fontWeight="600"
@@ -201,7 +201,7 @@ export function GlFragCoordDiagram() {
           </text>
           <text
             x="260"
-            y="262"
+            y="282"
             textAnchor="middle"
             fontSize="10"
             fill="var(--text-secondary)"

@@ -106,7 +106,7 @@ export function GammaCurveDiagram() {
           </text>
           <text
             x={(x0 + x1) / 2}
-            y={yBot + 20}
+            y={yBot + 30}
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"
@@ -137,7 +137,7 @@ export function GammaCurveDiagram() {
           />
           <text
             x={sx(0.5)}
-            y={yBot + 16}
+            y={yBot + 14}
             textAnchor="middle"
             fontSize="9"
             fill="var(--text-secondary)"

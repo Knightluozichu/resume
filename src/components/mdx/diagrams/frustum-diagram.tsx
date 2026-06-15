@@ -188,7 +188,7 @@ export function FrustumDiagram() {
           />
           <text
             x="212"
-            y="250"
+            y="262"
             textAnchor="middle"
             fontSize="9"
             fill="var(--text-secondary)"
@@ -229,7 +229,7 @@ export function FrustumDiagram() {
           />
           <text
             x="542"
-            y="214"
+            y="270"
             textAnchor="middle"
             fontSize="10"
             fontWeight="600"
@@ -239,7 +239,7 @@ export function FrustumDiagram() {
           </text>
           <text
             x="542"
-            y="228"
+            y="284"
             textAnchor="middle"
             fontSize="9"
             fill="var(--text-secondary)"

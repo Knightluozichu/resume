@@ -93,7 +93,7 @@ export function ParallaxPrincipleDiagram() {
             stroke="var(--border)"
             strokeWidth="2"
           />
-          <text x="64" y="172" fontSize="10" fill="var(--text-secondary)">
+          <text x="430" y="172" fontSize="10" fill="var(--text-secondary)">
             几何平面（着色器以为表面是平的）
           </text>
 

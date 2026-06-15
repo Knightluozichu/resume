@@ -154,10 +154,10 @@ export function CoordinatePipelineDiagram({
                     >
                       {s.label === "透视除法\n+视口变换" ? (
                         <>
-                          <tspan x={fn} dy="-8">
+                          <tspan x={fn} dy="-10">
                             透视除法
                           </tspan>
-                          <tspan x={fn} dy="18">
+                          <tspan x={fn} dy="16">
                             + 视口变换
                           </tspan>
                         </>
@@ -168,7 +168,7 @@ export function CoordinatePipelineDiagram({
                     {s.sub && (
                       <text
                         x={fn}
-                        y={y + 42}
+                        y={s.label === "透视除法\n+视口变换" ? y + 52 : y + 42}
                         textAnchor="middle"
                         fontSize="10"
                         fill="var(--text-secondary)"

@@ -34,7 +34,7 @@ export function MipmapPyramidDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 640 420"
+          viewBox="0 0 640 440"
           role="img"
           aria-label="多级渐远纹理是一摞逐级减半的纹理副本：从原图 Level 0 往下，每一级边长砍半，越来越小。右侧轴显示物体离相机越近用越大越清晰的级别，离得越远、在屏幕上只占几个像素时用越小的级别。"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -161,7 +161,7 @@ export function MipmapPyramidDiagram() {
           {/* 底部一句话 */}
           <text
             x="320"
-            y="404"
+            y="424"
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"

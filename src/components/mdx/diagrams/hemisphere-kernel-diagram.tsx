@@ -33,7 +33,7 @@ export function HemisphereKernelDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 560 320"
+          viewBox="0 0 560 340"
           role="img"
           aria-label="半球核采样示意，侧视图。一块水平表面上的片元 P 立起一条朝外的法线 N。以 P 为圆心、在法线朝向的上半球内撒了若干随机采样点。其中一些采样点落进了表面附近凸起的几何内部，算作被遮挡；另一些落在空气里没被挡。SSAO 就是看半球内的采样点有多少被周围几何挡住，被挡得越多，这个片元接收到的环境光越少、应该越暗。之所以只用法线朝向的半球而不是整球，是因为朝向表面背面的采样点总在几何内部，会让平坦表面也凭空变暗。"
           className="mx-auto block h-auto w-full max-w-[560px]"
@@ -176,7 +176,7 @@ export function HemisphereKernelDiagram() {
           {/* 底部一句话总括 */}
           <text
             x="280"
-            y="306"
+            y="326"
             textAnchor="middle"
             fontSize="11"
             fontWeight="600"
