@@ -374,6 +374,7 @@ import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
 import { StyleThemeInheritanceDiagram } from "./diagrams/style-theme-inheritance-diagram";
 import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
+import { WebViewAnatomyDiagram } from "./diagrams/web-view-anatomy-diagram";
 import { AppBarMenuDiagram } from "./diagrams/app-bar-menu-diagram";
 import { ImplicitIntentResolutionDiagram } from "./diagrams/implicit-intent-resolution-diagram";
 import { CameraIntentFlowDiagram } from "./diagrams/camera-intent-flow-diagram";
@@ -905,6 +906,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RoomArchitectureDiagram,
   StyleThemeInheritanceDiagram,
   DialogFragmentDiagram,
+  WebViewAnatomyDiagram,
   AppBarMenuDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
