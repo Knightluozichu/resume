@@ -370,6 +370,7 @@ import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
 import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
 import { AppBarMenuDiagram } from "./diagrams/app-bar-menu-diagram";
 import { ImplicitIntentResolutionDiagram } from "./diagrams/implicit-intent-resolution-diagram";
+import { CameraIntentFlowDiagram } from "./diagrams/camera-intent-flow-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -868,6 +869,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ActivityLifecycleDiagram,
   MvcDataFlowDiagram,
   ImplicitIntentResolutionDiagram,
+  CameraIntentFlowDiagram,
   BackStackDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
