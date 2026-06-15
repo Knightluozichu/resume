@@ -1,0 +1,437 @@
+---
+title: PBR 光照
+type: C
+section: PBR
+order: 2
+description: 把上一章推导的 Cook-Torrance 反射率方程写进 GLSL——在片段着色器里跑起来，实时渲染一个 PBR 球阵（粗糙度×金属度梯度），亲手拖参数看 D/G/F 三项怎么把数学变成画面。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/07%20PBR/02%20Lighting/
+draft: true
+---
+
+{/* C 实战型章（HEL-163，PBR 篇第 2 篇）：原书「PBR 光照 Lighting」。重心是代码实现（spec C 列）：把上一章推导的 Cook-Torrance 反射率方程翻译成 GLSL，在片段着色器里跑起来，渲染一个 PBR 球。C 型段式：概念讲解(§3 压缩) + 交互 Demo(§5 必，ShaderDemo) + 代码对照(§6 核心，≥80% 覆盖) + 误区(§7 ≥3) + 练习(§8 含实现题)。主 viz = ShaderDemo（ray-sphere PBR 球，roughness/metallic 可调）+ 3 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮+章末 Glossary 一一对应）：1) PBR 直接光照实现（积分→对每盏灯求和）= 概念 + PbrRenderLoopDiagram；2) 点光源辐射度（lightColor * 1/d^2）= 概念 + PbrLightSetupDiagram；3) Cook-Torrance GLSL 实现（D/G/F→shader 代码）= §6 代码对照核心 + PbrRenderLoopDiagram；4) 多光源叠加（for loop 累加 Lo）= §6 + PbrRenderLoopDiagram；5) 线性空间+HDR+色调映射+Gamma 校正 = 概念 + LinearHdrPipelineDiagram + §6。Term 共 6 个。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能改出一个 PBR 球的**粗糙度和金属度**效果：在片段着色器里实现完整的 Cook-Torrance BRDF（D/G/F 三项 + 漫反射 + 镜面反射），拖 roughness 和 metallic 两个滑块看高光和颜色变化
+- 能说出逐片段 PBR 光照循环的完整流程：对每盏点光源算辐射度 → 算 D/G/F → 组合 Cook-Torrance 镜面项 → 累加 Lo → 加环境光 → Reinhard 色调映射 → gamma 校正
+- 能回答：如果你在 sRGB 空间（而不是线性空间）做了光照计算，渲染出来的球会有什么问题？色调映射那一步在防止什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库。 */}
+
+## 让公式亮起来
+
+上一章把物理规律拆成了公式——什么样的表面反多少光、从哪个角度更亮。但公式写在纸上不会发光。这一章要做的就是：**把纸上的公式一行一行翻译成着色器代码，让 GPU 真正算出每个像素该多亮多暗**。
+
+翻译的过程并不复杂：上一章推了一个积分，但真实场景里光源数量有限（比如 4 盏灯），积分变成了简单的循环求和——每盏灯算一遍贡献，加起来就行。难点在于把每一项写对、不漏、顺序不错。
+
+写完之后你将得到一个可以拖参数的 PBR 球：拖粗糙度，高光从小而亮变成大而暗；拖金属度，漫反射消失、高光染上颜色——上一章的公式全部变成了肉眼可见的画面。
+
+{/* 3. 概念讲解（spec §三，C 型可压缩至一段，篇幅让给 §6）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 从积分到循环：直接光照的离散化
+
+上一章的反射率方程是一个半球积分——把所有方向的入射光贡献积起来。但在<Term def="直接光照（Direct Lighting）：光源直接照到表面的光照计算方式。与环境光（ambient）和间接光（IBL/GI）相对。直接光照中，每盏光源单独计算辐射度和 BRDF 贡献，再循环求和。">直接光照</Term>场景中，光源数量是有限的（比如 4 盏点光源），半球上绝大部分方向没有光。于是积分退化成一个简单的求和：
+
+**对每盏灯循环：算出这盏灯打过来的辐射度，乘以 BRDF 和余弦项，累加到出射辐射度 Lo 上。**
+
+<PbrRenderLoopDiagram />
+
+## 点光源辐射度：光强除以距离的平方
+
+一盏<Term def="点光源（Point Light）：从一个点向所有方向均匀发光的理想化光源。辐射度随距离平方反比衰减：radiance = lightColor / distance^2。距离翻倍，亮度降到四分之一。">点光源</Term>朝所有方向均匀发光，到达表面某点的辐射度取决于两件事：**光有多亮**（lightColor）和**离多远**（distance）。距离翻倍，光照面积扩大四倍，单位面积能量降到四分之一——这就是<Term def="平方反比衰减（Inverse-Square Attenuation）：物理学定律——点光源的辐射度与距离的平方成反比。attenuation = 1 / distance^2。PBR 采用物理正确的平方反比衰减，而非旧式光照的线性/二次多项式衰减。">平方反比衰减</Term>：
+
+```
+radiance = lightColor * (1.0 / (distance * distance))
+```
+
+<PbrLightSetupDiagram />
+
+## 线性空间与 HDR 管线
+
+PBR 要求**所有光照运算在线性空间中进行**。线性空间意味着数值翻倍 = 亮度翻倍，物理上才算对。但光源辐射度可以很大（比如 150.0），累加后颜色值远超 1.0——这就是 <Term def="HDR（High Dynamic Range，高动态范围）：颜色值允许超过 1.0 的渲染方式。PBR 场景中光源辐射度通常很大，累积后的 Lo 可能远超 1.0。最后通过色调映射（tone mapping）把高动态范围压缩到显示器能显示的 0~1 范围。">HDR</Term>。最后用<Term def="色调映射（Tone Mapping）：把 HDR 高动态范围的颜色值压缩到 0~1 的低动态范围，以便在显示器上正确显示。常用算法：Reinhard（c / (c + 1)），简单有效。还有 ACES、Uncharted 2 等更高级的映射曲线。">色调映射</Term>把 HDR 压缩到 0~1，再做 gamma 校正输出到屏幕：
+
+<LinearHdrPipelineDiagram />
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo。ray-sphere PBR 球，roughness/metallic 可调。 */}
+
+## 动手：拖粗糙度和金属度，看 PBR 球怎么变
+
+> 猜一猜：把粗糙度从 0.05 一路拉到 1.0，球面的高光会发生什么变化？再把金属度从 0 拉到 1，球的颜色来源会从哪儿变到哪儿？先动手拖一拖，再往下看代码解释。
+
+<ShaderDemo
+  aspect={1}
+  caption="一颗 PBR 球（片段着色器 ray-sphere 求交 + Cook-Torrance BRDF）。4 盏点光源照射。粗糙度：从镜面光滑拖到极粗糙，看高光从小亮点变成大片弥散。金属度：从非金属（红色漫反射+白色高光）拖到金属（无漫反射+有色高光）。点重置回到初始。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uRoughness;
+uniform float uMetallic;
+out vec4 FragColor;
+// --- PBR constants ---
+const float PI = 3.14159265359;
+// --- D: GGX NDF ---
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    // denom = pi * ((NdotH^2)*(a2-1)+1)^2
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = PI * denom * denom;
+    return a2 / denom;
+}
+// --- G: Schlick-GGX (single direction) ---
+float GeometrySchlickGGX(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+// --- G: Smith (both directions) ---
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return GeometrySchlickGGX(NdotV, k) * GeometrySchlickGGX(NdotL, k);
+}
+// --- F: Fresnel-Schlick ---
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// --- ray-sphere intersection ---
+float hitSphere(vec3 ro, vec3 rd, float r) {
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - r * r;
+    float h = b * b - c;
+    if (h < 0.0) return -1.0;
+    return -b - sqrt(h);
+}
+// --- main ---
+void main() {
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+    vec3 ro = vec3(uv, 2.0);
+    vec3 rd = vec3(0.0, 0.0, -1.0);
+    // background gradient
+    vec3 bg = mix(vec3(0.02, 0.02, 0.04), vec3(0.06, 0.04, 0.08), uv.y * 0.5 + 0.5);
+    float t = hitSphere(ro, rd, 0.85);
+    if (t < 0.0) { FragColor = vec4(bg, 1.0); return; }
+    // hit point and normal
+    vec3 P = ro + t * rd;
+    vec3 N = normalize(P);
+    vec3 V = normalize(ro - P);
+    // material params
+    vec3 albedo = vec3(0.8, 0.2, 0.2);
+    float roughness = uRoughness;
+    float metallic = uMetallic;
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    // 4 point lights
+    vec3 lightPositions[4] = vec3[](
+        vec3(-2.0, 2.0, 2.0),
+        vec3( 2.0, 2.0, 2.0),
+        vec3(-2.0,-2.0, 2.0),
+        vec3( 2.0,-2.0, 2.0)
+    );
+    vec3 lightColors[4] = vec3[](
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0)
+    );
+    // accumulate per-light radiance
+    vec3 Lo = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec3 L = normalize(lightPositions[i] - P);
+        vec3 H = normalize(V + L);
+        float dist = length(lightPositions[i] - P);
+        float attenuation = 1.0 / (dist * dist);
+        vec3 radiance = lightColors[i] * attenuation;
+        // Cook-Torrance BRDF
+        float D = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        // specular
+        vec3 numerator = D * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+        // energy conservation: kS from Fresnel, kD = (1-kS)*(1-metallic)
+        vec3 kS = F;
+        vec3 kD = (1.0 - kS) * (1.0 - metallic);
+        // accumulate
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+    // ambient approximation
+    vec3 ambient = vec3(0.03) * albedo;
+    vec3 color = ambient + Lo;
+    // Reinhard tone mapping
+    color = color / (color + vec3(1.0));
+    // gamma correction
+    color = pow(color, vec3(1.0 / 2.2));
+    FragColor = vec4(color, 1.0);
+}`}
+  controls={[
+    {
+      name: "uRoughness",
+      label: "粗糙度",
+      type: "float",
+      min: 0.05,
+      max: 1,
+      step: 0.05,
+      default: 0.5,
+    },
+    {
+      name: "uMetallic",
+      label: "金属度",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      default: 0,
+    },
+  ]}
+/>
+
+拖完之后你应该看到：
+
+- **粗糙度 0.05**：球面几乎像镜子，4 个高光点极小极亮
+- **粗糙度 1.0**：高光散成一大片，球面看起来像粉笔
+- **金属度 0**：球是红色的（有漫反射），高光接近白色
+- **金属度 1**：红色消失（漫反射被压到零），高光变成红色（F0 = albedo）
+
+{/* 6. 代码逐段拆解（spec §六，C 型核心，≥80% 覆盖）。 */}
+
+## 代码逐段拆解
+
+这一节把上面 ShaderDemo 里的 GLSL 逐段拆开讲。D/G/F 三个函数在上一章已推导过，这里只点出「公式→代码」翻译中的关键细节；重点放在**光照循环的组装逻辑**和**后处理管线**。
+
+### D / G / F 三函数回顾
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// ======== D：GGX NDF ========
+// roughness 先平方一次 → alpha（业界约定）
+// alpha 再平方 → a2，代入公式
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a  = roughness * roughness;
+    float a2 = a * a;
+    float NdotH  = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = PI * denom * denom;
+    return a2 / denom;
+}
+// ======== G：Smith-Schlick-GGX ========
+// 直接光照 k = (roughness+1)^2 / 8
+float GeometrySchlickGGX(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    return GeometrySchlickGGX(max(dot(N,V),0.0), k)
+         * GeometrySchlickGGX(max(dot(N,L),0.0), k);
+}
+// ======== F：Fresnel-Schlick ========
+// cosTheta = dot(H, V)；clamp 防负值；返回 vec3（金属 F0 有色）
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+```
+</Tab>
+</CodeTabs>
+
+这三个函数和上一章的公式一一对应。唯一需要注意的是 `DistributionGGX` 里 `roughness` 被平方了两次（先 `a = roughness * roughness`，再 `a2 = a * a`）——这是业界约定，让美术调粗糙度时手感更线性。
+
+### 材质参数与 F0
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+vec3 albedo = vec3(0.8, 0.2, 0.2);   // 反照率颜色（红色）
+float roughness = uRoughness;          // 从控件读入
+float metallic  = uMetallic;           // 从控件读入
+// F0：非金属固定 0.04，金属用 albedo 颜色
+vec3 F0 = mix(vec3(0.04), albedo, metallic);
+```
+</Tab>
+</CodeTabs>
+
+`mix(vec3(0.04), albedo, metallic)` 是一行关键代码：当 `metallic = 0` 时 F0 = 0.04（电介质通用值）；当 `metallic = 1` 时 F0 = albedo 颜色（金属的基础反射率就是它的颜色）。中间值做线性插值。
+
+### 逐光源循环（核心）
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+vec3 Lo = vec3(0.0);
+for (int i = 0; i < 4; i++) {
+    // ① 方向和半程向量
+    vec3 L = normalize(lightPositions[i] - P);
+    vec3 H = normalize(V + L);
+    // ② 点光源辐射度 = 光色 × 平方反比衰减
+    float dist = length(lightPositions[i] - P);
+    float attenuation = 1.0 / (dist * dist);
+    vec3 radiance = lightColors[i] * attenuation;
+    // ③ Cook-Torrance 三项
+    float D = DistributionGGX(N, H, roughness);
+    float G = GeometrySmith(N, V, L, roughness);
+    vec3  F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+    // ④ 镜面项 = DGF / (4 · NdotV · NdotL)
+    vec3 numerator   = D * G * F;
+    float denominator = 4.0 * max(dot(N,V),0.0) * max(dot(N,L),0.0) + 0.0001;
+    vec3 specular = numerator / denominator;
+    // ⑤ 能量守恒：kS 来自 Fresnel，kD = (1-kS)·(1-metallic)
+    vec3 kS = F;
+    vec3 kD = (1.0 - kS) * (1.0 - metallic);
+    // ⑥ 漫反射 + 镜面反射，乘辐射度和余弦项，累加
+    float NdotL = max(dot(N, L), 0.0);
+    Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+}
+```
+</Tab>
+</CodeTabs>
+
+逐行对照：
+
+1. **L 和 H**：光线方向和半程向量，和上一章定义一致
+2. **辐射度**：`lightColors[i]` 值很大（150.0），乘以衰减后才变合理——这就是 HDR
+3. **D/G/F**：分别调上面三个函数，输入都是标准的 N、H、V、L、roughness、F0
+4. **镜面项分母**：`4 * NdotV * NdotL` 是 Cook-Torrance 的归一化修正。**`+ 0.0001`** 防止分母为零导致黑点（误区之一）
+5. **能量守恒**：`kS = F`（Fresnel 给出反射占比），`kD = (1 - kS) * (1 - metallic)`。乘以 `(1 - metallic)` 确保金属的漫反射为零
+6. **累加**：`kD * albedo / PI` 是 Lambertian 漫反射；`specular` 是 Cook-Torrance 镜面；两者加起来乘辐射度和余弦项，就是这盏灯的贡献
+
+### 后处理：环境光 + 色调映射 + Gamma
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 简易环境光（后续 IBL 篇会替换成基于图像的环境光照）
+vec3 ambient = vec3(0.03) * albedo;
+vec3 color = ambient + Lo;
+// Reinhard 色调映射：把 HDR 压缩到 [0,1]
+color = color / (color + vec3(1.0));
+// Gamma 校正：线性空间 → sRGB
+color = pow(color, vec3(1.0 / 2.2));
+FragColor = vec4(color, 1.0);
+```
+</Tab>
+</CodeTabs>
+
+三步后处理缺一不可：
+
+- **环境光**：`0.03 * albedo` 是一个极简近似，让球的暗面不至于纯黑。后续 IBL 篇会换成真正的基于图像的环境光
+- **Reinhard 色调映射**：`c / (c + 1)` 把无穷大的 HDR 值压缩到 0~1。值越大越接近 1 但永远到不了——保留了亮部细节又不会爆白
+- **Gamma 校正**：`pow(c, 1/2.2)` 把线性空间的值转换到 sRGB 显示空间。显示器硬件会做一个 2.2 次方的「反转」，两次抵消后你看到的才是物理正确的亮度
+
+{/* 7. 常见误区（spec §七，C 型 ≥3 条）。 */}
+
+## 常见误区
+
+<Callout type="warn">
+
+**在 sRGB 空间做光照计算（应该在线性空间）**
+
+sRGB 是显示器用的非线性编码——中间灰实际只有 0.18 而不是 0.5。如果你在 sRGB 空间直接做光照运算，所有乘法和加法都在错误的数值刻度上，结果是暗部过暗、亮部过亮、颜色偏色。正确做法：纹理采样后先做 `pow(texture, 2.2)` 转线性，所有光照算完后再 `pow(result, 1/2.2)` 转回 sRGB。
+
+</Callout>
+
+<Callout type="warn">
+
+**漏掉分母的 0.0001 防除零导致黑点**
+
+Cook-Torrance 分母 `4 * NdotV * NdotL` 在掠射角时可能为零（光线或视线几乎平行于表面）。如果你不加那个 `+ 0.0001`，GPU 做除法得到 `Inf` 或 `NaN`，在球的边缘出现一圈黑点或闪烁。这是最容易漏掉的一行。
+
+</Callout>
+
+<Callout type="warn">
+
+**忘记乘 NdotL 余弦项导致场景过亮**
+
+循环里最后那一乘 `* NdotL`（`max(dot(N, L), 0.0)`）不是可选的——它是反射率方程积分里的余弦项。漏了它，背光面也会被加上正面的全额光照，球的暗面和亮面一样亮，整个场景偏白偏亮。
+
+</Callout>
+
+<Callout type="warn">
+
+**对金属漏乘 (1 - metallic) 导致金属有漫反射**
+
+代码里 `kD = (1.0 - kS) * (1.0 - metallic)` 的第二个乘法确保金属的漫反射为零。如果你只写了 `kD = 1.0 - kS` 而忘了乘 `(1 - metallic)`，金属球上会出现不应存在的漫反射颜色，看起来像塑料涂了一层金漆。
+
+</Callout>
+
+{/* 8. 小结练习（spec §八，C 型含实现题）。 */}
+
+## 小结与练习
+
+这一章把上一篇的 Cook-Torrance 反射率方程从纸上搬到了 GLSL 里：D/G/F 三个函数直接翻译公式，逐光源循环累加 Lo，加上环境光后经 Reinhard 色调映射 + gamma 校正输出。你现在有了一个可拖参数的 PBR 球——粗糙度控制高光形状，金属度控制颜色来源和漫反射有无。下一章将用纹理贴图替代这些 uniform 标量，让同一个球上不同位置有不同材质。
+
+<Exercises>
+
+### 实现题
+
+1. 把上面 ShaderDemo 的 `albedo` 从代码里的 `vec3(0.8, 0.2, 0.2)`（红色）改成 `vec3(1.0, 0.86, 0.57)`（金色），同时把 `metallic` 默认值设为 1.0，观察效果。说一说为什么金属球的高光是金色而不是白色——是哪行代码导致的？
+
+<Answer>
+金属球的高光是金色，因为 `F0 = mix(vec3(0.04), albedo, metallic)`——当 `metallic = 1.0` 时 `F0 = albedo = vec3(1.0, 0.86, 0.57)`，菲涅尔函数 `fresnelSchlick` 在正看时返回 `F0` 本身，所以镜面反射带上了 albedo 的金色。同时 `kD = (1.0 - kS) * (1.0 - metallic) = 0`，漫反射为零——你看到的全部是有色镜面反射。
+</Answer>
+
+2. 试着把色调映射那一行 `color = color / (color + vec3(1.0))` 注释掉（直接输出 HDR 值经 gamma 后的结果），观察球面亮部发生了什么。再把 gamma 校正也注释掉，看暗部有什么变化。
+
+<Answer>
+去掉 Reinhard 色调映射后，HDR 值直接被 gamma 抬升——亮部会大面积过曝爆白，细节全丢。再去掉 gamma 校正后，显示器硬件的 2.2 次方使得暗部变得极暗，中间调偏暗偏对比度高（显示器以为你给的是 sRGB 值，但实际是线性值，中间灰 0.18 在屏幕上被压成极暗）。
+</Answer>
+
+3. 把 4 盏灯的颜色从全白 `vec3(150.0)` 改成不同颜色（如红、绿、蓝、黄各 150.0），观察球面上的高光如何混色。解释为什么 PBR 能自然混色而不用你手动调——背后的数学原理是什么？
+
+<Answer>
+PBR 的光照循环对每盏灯独立计算辐射度和 BRDF 贡献，然后**线性累加** `Lo +=`。线性空间中加法满足叠加原理——红光和绿光重叠自然产生黄色，不需要任何特殊处理。这正是在线性空间做光照计算的好处：物理上正确的叠加 = 自然的混色。如果在 sRGB 空间累加，混色结果会偏亮偏不自然。
+</Answer>
+
+### 概念题
+
+4. Cook-Torrance 分母 `4 * NdotV * NdotL + 0.0001` 中，为什么需要同时出现 `NdotV`（观察方向余弦）和 `NdotL`（光线方向余弦）两项？如果只有其中一个会怎样？
+
+<Answer>
+分母中的 `NdotV` 和 `NdotL` 来自微面 BRDF 推导中从微面空间到宏观表面空间的雅可比变换——它把微面级别的反射率转换成宏观级别的 BRDF 值。两项分别对应出射方向和入射方向的投影校正。缺任何一个，BRDF 在对应方向的掠射角时会偏大，导致能量不守恒——球的边缘出现过亮的光环。
+</Answer>
+
+</Exercises>
+
+{/* 9. 出处声明 */}
+
+<Attribution
+  title="PBR - 光照"
+  author="Joey de Vries"
+  url="https://learnopengl-cn.github.io/07%20PBR/02%20Lighting/"
+  license="CC BY-NC 4.0"
+/>
+
+{/* 10. 名词解释 */}
+
+<Glossary>
+  <GlossaryItem term="直接光照" id="直接光照">
+    Direct Lighting：光源直接照到表面的光照方式。每盏光源独立计算辐射度和 BRDF 贡献，循环求和。与 IBL（基于图像的光照）/ GI（全局光照）相对。
+  </GlossaryItem>
+  <GlossaryItem term="点光源" id="点光源">
+    Point Light：从一个点向所有方向均匀发光的理想化光源。辐射度按平方反比衰减：radiance = lightColor / distance^2。
+  </GlossaryItem>
+  <GlossaryItem term="平方反比衰减" id="平方反比衰减">
+    Inverse-Square Attenuation：点光源辐射度与距离的平方成反比。距离翻倍，亮度降到四分之一。PBR 使用物理正确的平方反比，而非旧式线性/二次多项式衰减。
+  </GlossaryItem>
+  <GlossaryItem term="HDR" id="HDR">
+    High Dynamic Range（高动态范围）：颜色值允许超过 1.0。PBR 场景中光源辐射度通常很大，累积后 Lo 可能远超 1.0，需通过色调映射压缩到 0~1 才能显示。
+  </GlossaryItem>
+  <GlossaryItem term="色调映射" id="色调映射">
+    Tone Mapping：把 HDR 颜色值压缩到显示器能显示的 0~1 范围。Reinhard 映射（c / (c + 1)）简单有效；ACES、Uncharted 2 等提供更精细的对比度控制。
+  </GlossaryItem>
+  <GlossaryItem term="Gamma 校正" id="Gamma校正">
+    Gamma Correction：在线性空间完成光照计算后，通过 pow(c, 1/2.2) 将值转换到 sRGB 显示空间。显示器硬件做 2.2 次方的反转，两次抵消后人眼看到物理正确的亮度。
+  </GlossaryItem>
+</Glossary>

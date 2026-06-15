@@ -301,6 +301,9 @@ import { NdfRoughnessDiagram } from "./diagrams/ndf-roughness-diagram";
 import { GeometryOcclusionDiagram } from "./diagrams/geometry-occlusion-diagram";
 import { FresnelEffectDiagram } from "./diagrams/fresnel-effect-diagram";
 import { MetallicWorkflowDiagram } from "./diagrams/metallic-workflow-diagram";
+import { PbrLightSetupDiagram } from "./diagrams/pbr-light-setup-diagram";
+import { PbrRenderLoopDiagram } from "./diagrams/pbr-render-loop-diagram";
+import { LinearHdrPipelineDiagram } from "./diagrams/linear-hdr-pipeline-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
 import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
@@ -747,6 +750,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GeometryOcclusionDiagram,
   FresnelEffectDiagram,
   MetallicWorkflowDiagram,
+  PbrLightSetupDiagram,
+  PbrRenderLoopDiagram,
+  LinearHdrPipelineDiagram,
   CompilationPipelineDiagram,
   CHistoryTimelineDiagram,
   CCompilationDiagram,
