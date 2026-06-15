@@ -19,6 +19,14 @@ import {
   ToolComparisonDiagram,
   PlatformProfilingDemo,
 } from "./diagrams/profiling-diagrams";
+import {
+  UrpArchitectureDiagram,
+  UrpAssetConfigDiagram,
+  TileBasedGpuDiagram,
+  XrFrameBudgetDiagram,
+  XrInputOverheadDiagram,
+  WebAssemblyFeatureDiagram,
+} from "./diagrams/prof-mxrw-diagrams";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
 import { HomogeneousTranslateDiagram } from "./diagrams/homogeneous-translate-diagram";
 import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
@@ -812,6 +820,12 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RemoteProfilerDiagram,
   ToolComparisonDiagram,
   PlatformProfilingDemo,
+  UrpArchitectureDiagram,
+  UrpAssetConfigDiagram,
+  TileBasedGpuDiagram,
+  XrFrameBudgetDiagram,
+  XrInputOverheadDiagram,
+  WebAssemblyFeatureDiagram,
   Term,
   Glossary,
   GlossaryItem,

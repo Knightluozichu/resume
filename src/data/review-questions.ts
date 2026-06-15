@@ -140,6 +140,11 @@ import { bnrgCustomViewsQuestions } from "./review/bnrg-custom-views";
 import { bnrgPropertyAnimationQuestions } from "./review/bnrg-property-animation";
 import { bnrgAfterwordQuestions } from "./review/bnrg-afterword";
 import { profPowerOptimizationQuestions } from "./review/prof-power-optimization";
+import { profMxrwCrossPlatformChecklistQuestions } from "./review/prof-mxrw-cross-platform-checklist";
+import { profMxrwMobileOptimizationQuestions } from "./review/prof-mxrw-mobile-optimization";
+import { profMxrwUrpOptimizationQuestions } from "./review/prof-mxrw-urp-optimization";
+import { profMxrwWebOptimizationQuestions } from "./review/prof-mxrw-web-optimization";
+import { profMxrwXrOptimizationQuestions } from "./review/prof-mxrw-xr-optimization";
 import { profPlatformSpecificProfilingQuestions } from "./review/prof-platform-specific-profiling";
 
 export {
@@ -278,6 +283,11 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bnrgAfterwordQuestions,
   ...profPowerOptimizationQuestions,
   ...profPlatformSpecificProfilingQuestions,
+  ...profMxrwUrpOptimizationQuestions,
+  ...profMxrwMobileOptimizationQuestions,
+  ...profMxrwXrOptimizationQuestions,
+  ...profMxrwWebOptimizationQuestions,
+  ...profMxrwCrossPlatformChecklistQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
