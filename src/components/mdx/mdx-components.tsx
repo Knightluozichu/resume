@@ -312,6 +312,9 @@ import { PrefilterMipDiagram } from "./diagrams/prefilter-mip-diagram";
 import { BrdfLutDiagram } from "./diagrams/brdf-lut-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
+import { AndroidProjectStructureDiagram } from "./diagrams/android-project-structure-diagram";
+import { GradleBuildPipelineDiagram } from "./diagrams/gradle-build-pipeline-diagram";
+import { ApkAnatomyDiagram } from "./diagrams/apk-anatomy-diagram";
 import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
 import { IntegerRangeDiagram } from "./diagrams/integer-range-diagram";
 import { EscapeSequenceDiagram } from "./diagrams/escape-sequence-diagram";
@@ -845,6 +848,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IOStreamDiagram,
   AndroidArchLayersDiagram,
   AndroidStartupSequenceDiagram,
+  AndroidProjectStructureDiagram,
+  GradleBuildPipelineDiagram,
+  ApkAnatomyDiagram,
   ActivityLifecycleDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
