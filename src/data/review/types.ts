@@ -70,7 +70,8 @@ export type ReviewChapterSlug =
   | "cpp-specialized-tools"
   | "cpp-large-programs"
   | "ugo-evaluating-performance-problems"
-  | "ugo-scripting-strategies";
+  | "ugo-scripting-strategies"
+  | "ugo-benefits-of-batching";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -144,6 +145,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-large-programs": "用于大型程序的工具",
   "ugo-evaluating-performance-problems": "评估性能问题",
   "ugo-scripting-strategies": "脚本优化策略",
+  "ugo-benefits-of-batching": "合批的收益",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

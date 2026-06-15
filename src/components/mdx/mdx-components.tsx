@@ -22,6 +22,11 @@ import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram
 import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
 import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
 import { FindSendMessageDiagram } from "./diagrams/find-send-message-diagram";
+import { DrawCallPipelineDiagram } from "./diagrams/draw-call-pipeline-diagram";
+import { DynamicBatchingDiagram } from "./diagrams/dynamic-batching-diagram";
+import { StaticBatchingDiagram } from "./diagrams/static-batching-diagram";
+import { SrpBatcherDiagram } from "./diagrams/srp-batcher-diagram";
+import { FrameDebuggerBatchDiagram } from "./diagrams/frame-debugger-batch-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -589,6 +594,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EmptyCallbackDiagram,
   UpdateMechanismDiagram,
   FindSendMessageDiagram,
+  DrawCallPipelineDiagram,
+  DynamicBatchingDiagram,
+  StaticBatchingDiagram,
+  SrpBatcherDiagram,
+  FrameDebuggerBatchDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,
