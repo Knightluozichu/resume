@@ -380,6 +380,7 @@ import { CameraIntentFlowDiagram } from "./diagrams/camera-intent-flow-diagram";
 import { ResourceQualifierDiagram } from "./diagrams/resource-qualifier-diagram";
 import { AccessibilityTreeDiagram } from "./diagrams/accessibility-tree-diagram";
 import { ThreadModelDiagram } from "./diagrams/thread-model-diagram";
+import { SearchFlowDiagram } from "./diagrams/search-flow-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -883,6 +884,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ResourceQualifierDiagram,
   AccessibilityTreeDiagram,
   ThreadModelDiagram,
+  SearchFlowDiagram,
   BackStackDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
