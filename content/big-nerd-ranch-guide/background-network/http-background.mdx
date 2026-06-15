@@ -155,6 +155,21 @@ handler.post {
 
 `@SerializedName` 注解解决了 JSON 键名 `avatar_url`（下划线）到 Kotlin 属性名 `avatarUrl`（驼峰）的映射问题——这是 Java/Android 世界里 JSON 解析最常见的需求之一。
 
+<Stepper>
+  <Step title="① 检查网络连接">
+    调用 `ConnectivityManager.getActiveNetworkInfo()` 检查当前网络是否可用。如果返回 `null`，直接提示用户"无网络连接"而不是让后续请求抛 `UnknownHostException`。建议封装为 `isNetworkAvailable(): Boolean` 工具方法。
+  </Step>
+  <Step title="② 创建网络请求">
+    `OkHttpClient()` 创建客户端（全局复用一个实例），`Request.Builder().url("https://api.example.com/data").build()` 构建请求。GET 请求无需设置 method，POST 请求需额外调用 `.post(requestBody)` 并设置 `Content-Type` 头。
+  </Step>
+  <Step title="③ 在后台线程发起请求">
+    用 `thread { }` 或 `viewModelScope.launch(Dispatchers.IO) { }` 在后台执行 `client.newCall(request).execute()`。**绝对不能在主线程调用 `execute()`**——会立即抛出 `NetworkOnMainThreadException`。响应回来后在同一后台线程解析 JSON。
+  </Step>
+  <Step title="④ 解析 JSON → 切回主线程更新 UI">
+    用 Gson 的 `fromJson(json, DataClass::class.java)` 将响应体反序列化为 Kotlin 数据类。然后通过 `handler.post { }` 或 `withContext(Dispatchers.Main) { }` 切回主线程，用解析结果更新 TextView、ImageView 等 UI 控件。
+  </Step>
+</Stepper>
+
 {/* 7. 常见误区（spec §七，C 型 ≥3） */}
 ## 容易踩的坑
 

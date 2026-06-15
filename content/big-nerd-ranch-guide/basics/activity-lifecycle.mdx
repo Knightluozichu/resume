@@ -44,18 +44,40 @@ draft: true
 | `onStop()` | 完全不可见 | 释放重资源 |
 | `onDestroy()` | Activity 被销毁 | 最终清理 |
 
-### Stepper：A 启动全屏 B 时发生了什么
+<Stepper>
+  <Step title="① A.onPause()">
+    A 失去交互焦点，但仍可能部分可见（若 B 不是全屏）。此时应该暂停动画、保存轻量状态——onPause 是系统在低内存时最后保证执行的回调，持久化关键数据应在此完成。
+  </Step>
+  <Step title="② B.onCreate() → onStart() → onResume()">
+    新 Activity B 经历完整的三回调序列进入前台，此时 B 可与用户交互。
 
-1. **A.onPause()** —— A 失去焦点，但仍部分可见（若 B 非全屏）
-2. **B.onCreate() → onStart() → onResume()** —— B 到前台
-3. **A.onStop()** —— A 完全不可见
+    ```kotlin
+    class BActivity : AppCompatActivity() {
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContentView(R.layout.activity_b)
+            // 此时 A 已经 onPause，B 的界面即将显示
+        }
+    }
+    ```
+  </Step>
+  <Step title="③ A.onStop()">
+    B 完全覆盖屏幕后，A 变为不可见，进入 Stopped 状态。此时应释放重资源（如传感器注册、网络监听）。按 Back 返回时顺序相反：B.onPause → A.onRestart/onStart/onResume → B.onStop/onDestroy。
+  </Step>
+</Stepper>
 
-按 Back 返回时顺序相反：B.onPause → A.onRestart/onStart/onResume → B.onStop/onDestroy。
+<Stepper>
+  <Step title="① onPause → onStop → onDestroy">
+    系统检测到屏幕方向变化，旧 Activity 实例依次经历暂停、停止、销毁三个回调。原有成员变量（如 EditText 输入、Activity 级状态）全部清空。
 
-### Stepper：旋转屏幕（配置变更）
-
-1. onPause → onStop → **onDestroy**（旧实例销毁）
-2. onCreate → onStart → onResume（新实例创建）
+    ```
+    // 旋转前用户输入了 "Hello"，onDestroy 后 mEditText 不复存在
+    ```
+  </Step>
+  <Step title="② onCreate → onStart → onResume">
+    系统以新的 Configuration（横屏/竖屏）重建 Activity 实例。新实例从零开始——如果没有 ViewModel 或 onSaveInstanceState，所有 UI 状态归零。
+  </Step>
+</Stepper>
 
 实例被重建——成员变量默认清空，必须靠 ViewModel 或 `onSaveInstanceState` 保状态（下一章详讲）。
 
