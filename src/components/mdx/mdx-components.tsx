@@ -361,6 +361,7 @@ import { BackStackDiagram } from "./diagrams/back-stack-diagram";
 import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
+import { SdkVersionAxisDiagram } from "./diagrams/sdk-version-axis-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -862,6 +863,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ConfigChangeViewModelDiagram,
   LogcatLineAnatomyDiagram,
   DebugLoopDiagram,
+  SdkVersionAxisDiagram,
   TypeSizeDiagram,
   SignedUnsignedDiagram,
   LiteralTypesDiagram,
