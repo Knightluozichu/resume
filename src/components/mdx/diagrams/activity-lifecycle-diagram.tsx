@@ -84,9 +84,10 @@ export function ActivityLifecycleDiagram() {
       STEPS.forEach((step, i) => {
         const el = highlightRefs.current[step.label];
         if (!el) return;
-        // 每个回调一拍：高亮层从「灭」淡入到「亮」并轻微放大，打 label 锚点。
-        // 先在该 label 处把上一节点的高亮压回去（用 set），形成「逐个点亮」的接力。
-        tl.label(step.label, TEACHING_BEAT_MS * i);
+        // 节点 i 的淡入占据时间窗 [BEAT*i, BEAT*(i+1)]：在「进入第 i 步」的过程中从灭淡入到亮。
+        // lit = BEAT*(i+1) = 节点 i 完全点亮（opacity=1）的时刻，正是 label i 的锚点——
+        // 这样 seek 到 label i 时该节点恰好最亮，修正旧实现 label 落在淡入起点的 off-by-one。
+        const lit = TEACHING_BEAT_MS * (i + 1);
         tl.add(
           el,
           {
@@ -97,12 +98,14 @@ export function ActivityLifecycleDiagram() {
           },
           TEACHING_BEAT_MS * i,
         );
-        // 下一拍开始时把当前高亮淡出（除最后一个），保证同一时刻只亮一个。
+        tl.label(step.label, lit);
+        // 离开第 i 步时（从 lit 开始）把当前高亮淡出（除最后一个，onDestroy 停在 1），
+        // 与下一节点的淡入衔接，保证同一时刻当前步节点最亮。两段不重叠，v4 正常接力。
         if (i < STEPS.length - 1) {
           tl.add(
             el,
             { opacity: [1, 0.18], duration: TEACHING_BEAT_MS * 0.5, ease: "in(2)" },
-            TEACHING_BEAT_MS * (i + 1),
+            lit,
           );
         }
       });
