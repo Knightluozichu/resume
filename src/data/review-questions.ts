@@ -77,6 +77,7 @@ import { ugoEvaluatingPerformanceProblemsQuestions } from "./review/ugo-evaluati
 import { ugoScriptingStrategiesQuestions } from "./review/ugo-scripting-strategies";
 import { ugoBenefitsOfBatchingQuestions } from "./review/ugo-benefits-of-batching";
 import { ugoOptimizingArtAssetsQuestions } from "./review/ugo-optimizing-art-assets";
+import { ugoFasterPhysicsQuestions } from "./review/ugo-faster-physics";
 
 export {
   CHAPTER_TITLES,
@@ -150,6 +151,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ugoScriptingStrategiesQuestions,
   ...ugoBenefitsOfBatchingQuestions,
   ...ugoOptimizingArtAssetsQuestions,
+  ...ugoFasterPhysicsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

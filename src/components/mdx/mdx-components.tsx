@@ -31,6 +31,10 @@ import { MeshImportDiagram } from "./diagrams/mesh-import-diagram";
 import { TextureImportDiagram } from "./diagrams/texture-import-diagram";
 import { ResourcesAssetBundleDiagram } from "./diagrams/resources-assetbundle-diagram";
 import { AsyncLoadDiagram } from "./diagrams/async-load-diagram";
+import { PhysicsTimestepDiagram } from "./diagrams/physics-timestep-diagram";
+import { LayerCollisionDiagram } from "./diagrams/layer-collision-diagram";
+import { RigidbodySleepDiagram } from "./diagrams/rigidbody-sleep-diagram";
+import { CollisionDetectionDiagram } from "./diagrams/collision-detection-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -607,6 +611,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TextureImportDiagram,
   ResourcesAssetBundleDiagram,
   AsyncLoadDiagram,
+  PhysicsTimestepDiagram,
+  LayerCollisionDiagram,
+  RigidbodySleepDiagram,
+  CollisionDetectionDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,
