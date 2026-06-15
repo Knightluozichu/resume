@@ -46,6 +46,11 @@ import { UrpXrSettingsDiagram } from "./diagrams/urp-xr-settings-diagram";
 import { MonoIl2cppRuntimeDiagram } from "./diagrams/mono-il2cpp-runtime-diagram";
 import { GcAllocDiagram } from "./diagrams/gc-alloc-diagram";
 import { ObjectPoolDiagram } from "./diagrams/object-pool-diagram";
+import { ThreadingProblemDiagram } from "./diagrams/threading-problem-diagram";
+import { JobSystemDiagram } from "./diagrams/job-system-diagram";
+import { EcsArchitectureDiagram } from "./diagrams/ecs-architecture-diagram";
+import { BurstCompilerDiagram } from "./diagrams/burst-compiler-diagram";
+import { GameObjectToEcsDiagram } from "./diagrams/gameobject-to-ecs-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -637,6 +642,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MonoIl2cppRuntimeDiagram,
   GcAllocDiagram,
   ObjectPoolDiagram,
+  ThreadingProblemDiagram,
+  JobSystemDiagram,
+  EcsArchitectureDiagram,
+  BurstCompilerDiagram,
+  GameObjectToEcsDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,

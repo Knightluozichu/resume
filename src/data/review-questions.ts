@@ -81,6 +81,7 @@ import { ugoFasterPhysicsQuestions } from "./review/ugo-faster-physics";
 import { ugoDynamicGraphicsQuestions } from "./review/ugo-dynamic-graphics";
 import { ugoXrOptimizationsQuestions } from "./review/ugo-xr-optimizations";
 import { ugoMemoryManagementQuestions } from "./review/ugo-memory-management";
+import { ugoDataOrientedTechnologyStackQuestions } from "./review/ugo-data-oriented-technology-stack";
 
 export {
   CHAPTER_TITLES,
@@ -158,6 +159,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ugoDynamicGraphicsQuestions,
   ...ugoXrOptimizationsQuestions,
   ...ugoMemoryManagementQuestions,
+  ...ugoDataOrientedTechnologyStackQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
