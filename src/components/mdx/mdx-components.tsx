@@ -357,6 +357,7 @@ import { ShadowMappingDemo } from "./shadow-mapping-demo";
 import { PointShadowsDemo } from "./point-shadows-demo";
 import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram";
 import { MvcDataFlowDiagram } from "./diagrams/mvc-data-flow-diagram";
+import { MvvmDataFlowDiagram } from "./diagrams/mvvm-data-flow-diagram";
 import { BackStackDiagram } from "./diagrams/back-stack-diagram";
 import { NavGraphDiagram } from "./diagrams/nav-graph-diagram";
 import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diagram";
@@ -870,6 +871,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ApkAnatomyDiagram,
   ActivityLifecycleDiagram,
   MvcDataFlowDiagram,
+  MvvmDataFlowDiagram,
   ImplicitIntentResolutionDiagram,
   CameraIntentFlowDiagram,
   ResourceQualifierDiagram,
