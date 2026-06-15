@@ -139,6 +139,8 @@ import { bnrgWebviewQuestions } from "./review/bnrg-webview";
 import { bnrgCustomViewsQuestions } from "./review/bnrg-custom-views";
 import { bnrgPropertyAnimationQuestions } from "./review/bnrg-property-animation";
 import { bnrgAfterwordQuestions } from "./review/bnrg-afterword";
+import { profPowerOptimizationQuestions } from "./review/prof-power-optimization";
+import { profPlatformSpecificProfilingQuestions } from "./review/prof-platform-specific-profiling";
 
 export {
   CHAPTER_TITLES,
@@ -274,6 +276,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bnrgCustomViewsQuestions,
   ...bnrgPropertyAnimationQuestions,
   ...bnrgAfterwordQuestions,
+  ...profPowerOptimizationQuestions,
+  ...profPlatformSpecificProfilingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

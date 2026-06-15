@@ -134,7 +134,9 @@ export type ReviewChapterSlug =
   | "bnrg-webview"
   | "bnrg-custom-views"
   | "bnrg-property-animation"
-  | "bnrg-afterword";
+  | "bnrg-afterword"
+  | "prof-power-optimization"
+  | "prof-platform-specific-profiling";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -272,6 +274,8 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "bnrg-custom-views": "定制视图与触摸事件",
   "bnrg-property-animation": "属性动画",
   "bnrg-afterword": "编后语",
+  "prof-power-optimization": "功耗优化",
+  "prof-platform-specific-profiling": "平台专项 Profiling",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

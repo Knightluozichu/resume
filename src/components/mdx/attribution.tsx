@@ -41,8 +41,37 @@ function toEnglishUrl(sourceUrl: string): string {
   }
 }
 
-export function Attribution({ sourceUrl }: { sourceUrl: string }) {
+export function Attribution({
+  sourceUrl,
+  adaptedFrom,
+  adaptedUrl,
+}: {
+  sourceUrl: string;
+  adaptedFrom?: string;
+  adaptedUrl?: string;
+}) {
   const cnUrl = sourceUrl?.trim();
+  // 非 LearnOpenGL 改编源（如 Unity 文档）：显示改编声明
+  if (!cnUrl && adaptedFrom && adaptedUrl) {
+    return (
+      <footer
+        aria-label="改编声明"
+        className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
+      >
+        <p className="mb-2 font-semibold text-primary">改编声明</p>
+        <p>
+          本文为改编重写，改编自{" "}
+          <a href={adaptedUrl} target="_blank" rel="noopener noreferrer nofollow">
+            {adaptedFrom}
+          </a>
+          。
+        </p>
+        <p className="mt-2">
+          本改编版为教学目的进行重述与补充，不声称替代阅读原作。原文版权归原作者所有。
+        </p>
+      </footer>
+    );
+  }
   // 原创内容（无出处 URL）：显示通用原创声明
   if (!cnUrl) {
     return (

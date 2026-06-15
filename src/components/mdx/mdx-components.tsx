@@ -6,6 +6,17 @@ import { CodeTabs, Tab } from "./code-tabs";
 import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
 import { RgbMixerDemo } from "./demos/rgb-mixer-demo";
+import {
+  PowerFrameRateDiagram,
+  RenderScaleDiagram,
+  TargetFrameRateDiagram,
+  ThermalThrottlingDiagram,
+  MobileQualityDiagram,
+  PowerDemo,
+  PlatformProfilingOverviewDiagram,
+  ToolComparisonDiagram,
+  PlatformProfilingDemo,
+} from "./diagrams/profiling-diagrams";
 import { FrameStageDiagram } from "./diagrams/frame-stage-diagram";
 import { HomogeneousTranslateDiagram } from "./diagrams/homogeneous-translate-diagram";
 import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
@@ -788,6 +799,15 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Toggle,
   DemoStage,
   RgbMixerDemo,
+  PowerFrameRateDiagram,
+  RenderScaleDiagram,
+  TargetFrameRateDiagram,
+  ThermalThrottlingDiagram,
+  MobileQualityDiagram,
+  PowerDemo,
+  PlatformProfilingOverviewDiagram,
+  ToolComparisonDiagram,
+  PlatformProfilingDemo,
   Term,
   Glossary,
   GlossaryItem,
