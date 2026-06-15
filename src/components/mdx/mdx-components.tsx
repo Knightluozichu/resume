@@ -372,6 +372,7 @@ import { AppBarMenuDiagram } from "./diagrams/app-bar-menu-diagram";
 import { ImplicitIntentResolutionDiagram } from "./diagrams/implicit-intent-resolution-diagram";
 import { CameraIntentFlowDiagram } from "./diagrams/camera-intent-flow-diagram";
 import { ResourceQualifierDiagram } from "./diagrams/resource-qualifier-diagram";
+import { AccessibilityTreeDiagram } from "./diagrams/accessibility-tree-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -872,6 +873,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ImplicitIntentResolutionDiagram,
   CameraIntentFlowDiagram,
   ResourceQualifierDiagram,
+  AccessibilityTreeDiagram,
   BackStackDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
