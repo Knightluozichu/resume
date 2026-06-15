@@ -1,0 +1,259 @@
+---
+title: UI fragment与fragment管理器
+type: C
+section: UI与Fragment
+order: 8
+description: 掌握 Fragment 的生命周期、FragmentManager 的事务操作、以及 Fragment 与 Activity 的通信模式。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：Fragment 核心概念与代码实现。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单（动笔前摊开，术语首现用 <Term> 高亮，章末 <Glossary> 一一对应）：
+   1) Fragment 是什么、为什么存在 = Stepper 示意图（Activity 内嵌 Fragment 的布局层次）
+   2) Fragment 生命周期 vs Activity 生命周期 = 生命周期对比图（并行时间线）
+   3) FragmentManager & FragmentTransaction = 代码对照（add/replace/remove 的 Kotlin 示例）
+   4) Fragment.onCreateView 与布局绑定 = 代码对照（layout inflater 用法）
+   5) Fragment 参数传递（Arguments Bundle）= 代码对照（newInstance 工厂模式）
+   6) Fragment 与 Activity 通信模式 = 代码对照（接口回调 vs 共享 ViewModel） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话解释 Fragment 存在的意义，以及它和 Activity 的职责边界
+- 能在代码中创建 Fragment、用 FragmentManager 执行事务（add/replace/remove）
+- 能回答：假如一个 Fragment 在旋转屏幕时被销毁重建，如何保证它持有的数据不丢失？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语。 */}
+
+## 为什么需要 Fragment？
+
+想象你在写一个平板应用：左边是列表，右边是详情。如果只有 Activity 这一个"页面"单位，你只能把列表和详情硬塞进同一个布局里——代码会像千层饼一样越堆越厚，想复用其中一部分到别的页面？基本不可能。
+
+Fragment 就是来解决这个痛点的：它把 UI 拆成一个个可以**灵活组装、独立管理**的"积木块"。一个 Activity 可以容纳多个 Fragment，Fragment 自己也可以被不同的 Activity 复用。平板上的列表+详情布局，用两个 Fragment 各管各的，代码清爽，复用也轻松。
+
+没有 Fragment 会怎样？大屏适配会变成噩梦——你要么为每种屏幕尺寸写一套 Activity，要么在一个 Activity 里写满 `if (isTablet)`。Fragment 让 UI 模块化成为可能。
+
+{/* 3. 概念讲解（spec §三）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary。 */}
+
+## Fragment 是怎么工作的
+
+### Fragment 是什么
+
+一个 Fragment 就是一个可复用的 UI 片段，它有自己的布局、自己的生命周期、自己的事件处理逻辑，但它**必须寄生在一个宿主 Activity 里面**才能显示。
+
+Fragment 和 Activity 的关系可以类比为"乐高积木"和"底板"：<Term def="Activity 是 Android 里代表一个屏幕页面的组件，Fragment 必须附着在 Activity 上才能显示。">Activity</Term> 是底板，<Term def="Fragment 是 Android 里一个可复用的 UI 片段，必须由 Activity 承载，拥有自己的生命周期和布局。">Fragment</Term> 是拼在上面的积木块。底板负责在屏幕上占一个位置，积木块负责填充具体内容。
+
+### Fragment 的生命周期
+
+Fragment 有自己的生命周期，但它的生命周期**被宿主 Activity 的生命周期牵着走**。Activity 暂停，里面的 Fragment 也会暂停；Activity 销毁，Fragment 也会跟着销毁。
+
+下面是 Fragment 生命周期中最常打交道的方法：
+
+| 方法 | 触发时机 | 典型的活 |
+|------|----------|---------|
+| `onAttach()` | Fragment 被绑定到 Activity | 获取宿主引用 |
+| `onCreate()` | Fragment 被创建 | 初始化非 UI 数据 |
+| `onCreateView()` | Fragment 即将渲染布局 | **inflate 布局文件** |
+| `onViewCreated()` | 布局创建完毕后 | findViewById、设置监听器 |
+| `onStart()` | Fragment 即将可见 | 注册观察者 |
+| `onResume()` | Fragment 获得焦点 | 开始动画、相机预览 |
+| `onPause()` | Fragment 失去焦点 | 暂停动画、释放相机 |
+| `onStop()` | Fragment 不可见 | 注销观察者 |
+| `onDestroyView()` | Fragment 布局被销毁 | 清理 View 引用 |
+| `onDestroy()` | Fragment 被销毁 | 释放所有资源 |
+| `onDetach()` | Fragment 与 Activity 解绑 | 取消宿主引用 |
+
+**核心记忆**：`onCreateView()` 创建 View，`onViewCreated()` 操作 View，`onDestroyView()` 清理 View。
+
+### FragmentManager：谁来管 Fragment
+
+你不需要手动管理 Fragment 的生死——交给 FragmentManager。它是一个"Fragment 管家"，负责：
+
+- 把 Fragment 加入 Activity（`add()`）
+- 把 Fragment 换成另一个（`replace()`）
+- 把 Fragment 从屏幕上去掉（`remove()`）
+- 管理回退栈（按返回键回到上一个 Fragment）
+
+所有这些操作都通过 FragmentTransaction 执行，而且遵循"打包-提交"模式：把想做的操作一条条写进事务，最后 `commit()` 一次性执行。
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段讲解 ≥80% 关键代码。 */}
+
+## 代码逐段拆解
+
+### 第一步：创建 Fragment 类
+
+```kotlin
+import androidx.fragment.app.Fragment
+
+class CrimeFragment : Fragment(R.layout.fragment_crime) {
+    // 构造器里直接传布局 ID，省掉重写 onCreateView
+}
+```
+
+使用 `Fragment(R.layout.fragment_crime)` 这个构造函数是 Fragment 1.1.0 引入的便捷方式。它内部自动帮你做了 `LayoutInflater.inflate()` 的事情。等价于传统写法：
+
+```kotlin
+class CrimeFragment : Fragment() {
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        return inflater.inflate(R.layout.fragment_crime, container, false)
+    }
+}
+```
+
+<Callout type="warn">
+  注意 `inflate()` 第三个参数必须传 `false`——意思是"不要自动把 inflate 出来的 View 加到 container 里"。FragmentManager 会自己决定什么时候加，你代劳的话会报 `IllegalStateException`。
+</Callout>
+
+### 第二步：用 FragmentManager 把 Fragment 放到 Activity 里
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val fragmentManager = supportFragmentManager
+        val fragmentTransaction = fragmentManager.beginTransaction()
+
+        fragmentTransaction
+            .add(R.id.fragment_container, CrimeFragment())
+            .commit()
+    }
+}
+```
+
+`R.id.fragment_container` 是你在 Activity 布局里预留的"Fragment 插槽"——通常是一个 `FrameLayout`。
+
+### 第三步：用 Arguments 传参数给 Fragment
+
+Fragment 的构造函数不能带参数（系统重建 Fragment 时会用无参构造器）。正确的传参方式是用 `Bundle`，这叫做 **Fragment Arguments 模式**：
+
+```kotlin
+class CrimeFragment : Fragment() {
+
+    companion object {
+        private const val ARG_CRIME_ID = "crime_id"
+
+        fun newInstance(crimeId: UUID): CrimeFragment {
+            val args = Bundle().apply {
+                putSerializable(ARG_CRIME_ID, crimeId)
+            }
+            return CrimeFragment().apply {
+                arguments = args
+            }
+        }
+    }
+
+    private val crimeId: UUID by lazy {
+        arguments?.getSerializable(ARG_CRIME_ID) as UUID
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // arguments 在 onCreate 里已经可用
+    }
+}
+```
+
+`newInstance()` 是一个工厂方法——把传参逻辑封装进去，外部调用者只需 `CrimeFragment.newInstance(someId)`，不用关心内部怎么传的 Bundle。
+
+### 第四步：Fragment 与 Activity 通信
+
+**方案一：接口回调（经典方式）**
+
+```kotlin
+class CrimeFragment : Fragment() {
+    interface Callbacks {
+        fun onCrimeSelected(crimeId: UUID)
+    }
+
+    private var callbacks: Callbacks? = null
+
+    override fun onAttach(context: Context) {
+        super.onAttach(context)
+        callbacks = context as? Callbacks
+    }
+
+    override fun onDetach() {
+        super.onDetach()
+        callbacks = null
+    }
+}
+```
+
+**方案二：共享 ViewModel（现代推荐方式）**
+
+```kotlin
+class CrimeFragment : Fragment() {
+    private val sharedViewModel: CrimeViewModel by activityViewModels()
+}
+```
+
+`by activityViewModels()` 拿到的 ViewModel 跟宿主 Activity 是同一个实例，所以同一 Activity 里的所有 Fragment 天然共享同一个 ViewModel——这是最干净的数据共享方案。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3 个）。 */}
+
+## 容易踩的坑
+
+- **现象 →** 旋转屏幕后 Fragment 上的数据显示了旧内容。**原因 →** Activity 重建时默认重建 Fragment，你没处理 Arguments 或 ViewModel 的保留。**修法 →** 在 `onCreate()` 里设 `retainInstance = true`（已废弃）或者用 ViewModel 跨重建保留数据；Arguments Bundle 会自动保留，标准参数用 Arguments 传即可。
+
+- **现象 →** `FragmentTransaction.commit()` 后界面没变，还报了 `IllegalStateException`。**原因 →** 你在 `onCreate()` 或 `onStart()` 里提交事务，但此时 Activity 还没恢复完，状态不能丢。**修法 →** 改为 `commitAllowingStateLoss()`（风险——丢失状态），或者把事务推迟到 `onResumeFragments()` 里执行。
+
+- **现象 →** `findViewById()` 在 Fragment 里返回 null。**原因 →** 你在 `onCreateView()` 里调了 `findViewById()`，但 View 还没创建完毕。**修法 →** 把 View 操作移到 `onViewCreated()` 里——那时 `view` 已经是个可用的 View 对象了。
+
+{/* 8. 小结与练习（spec §八）：小结呼应学习目标，C 型含独立实现题。 */}
+
+## 小结
+
+- Fragment 是可复用的 UI 模块，寄生在 Activity 里，有自己独立但受控的生命周期
+- FragmentManager + FragmentTransaction 是操作 Fragment 的唯一入口（add/replace/remove）
+- 参数传递用 Arguments Bundle + newInstance 工厂模式，不要用自定义构造器
+- Fragment 与 Activity 通信推荐用共享 ViewModel；经典回调也可行但耦合度高
+
+<Exercises>
+
+1. （改代码）写一个 `CrimeListFragment`，用 FragmentManager 把它放进 Activity。再用 FragmentTransaction 的 `replace()` 把它替换成 `CrimeDetailFragment`，测试回退栈行为。
+
+2. （实现题）为 `CrimeFragment` 实现 Arguments 模式：让它接收一个 `crimeId: UUID` 参数，在 `onCreate()` 里记录日志打印出这个 ID，验证旋转屏幕后 ID 不丢。
+
+3. （问答）为什么 Fragment 不能把参数写在构造函数里？系统重建 Fragment 时发生了什么事导致自定义构造器失效？
+
+<Answer>
+
+1. replace 后的回退栈：如果 replace 之前没有调 `addToBackStack(null)`，按返回键会直接退出 Activity；如果调了 `addToBackStack(null)`，按返回键会回到上一个 Fragment。
+
+2. Arguments Bundle 由系统在 `Fragment.onSaveInstanceState()` 里保存，重建时由 `Fragment.setInitialSavedState()` 恢复，所以旋转屏幕不丢。
+
+3. 系统重建 Fragment 时（如配置变更后），Android 调用 `Fragment.instantiate()` 使用**无参构造器**来重新创建实例。如果你的构造器带了自定义参数，系统不知道传什么值——所以自定义构造器里的参数会丢失。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Activity">Android 里代表一个全屏页面的组件。像一个舞台，Fragment 是上面的演员——舞台提供场地，演员负责表演。</GlossaryItem>
+  <GlossaryItem term="Fragment">寄生在 Activity 里的可复用 UI 模块。有自己的布局、生命周期和逻辑，但不能独立显示——必须有一个宿主 Activity。</GlossaryItem>
+  <GlossaryItem term="FragmentManager">Fragment 的管家。负责把 Fragment 往 Activity 里加、换、删，管理回退栈。通过 `supportFragmentManager` 获取。</GlossaryItem>
+  <GlossaryItem term="FragmentTransaction">FragmentManager 执行操作时的一个"打包事务"。把要做的 add/replace/remove 等操作写到事务里，最后 commit 一次性提交。像银行转账——要么全做，要么全不做。</GlossaryItem>
+  <GlossaryItem term="Bundle">Android 里的"键值对背包"，用于在组件间传递数据。Fragment 用 Bundle（Arguments）接收参数，因为构造器不能带参数。</GlossaryItem>
+</Glossary>
+
+{/* 9. 出处声明（spec §九）。 */}
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

@@ -1,0 +1,256 @@
+---
+title: 对话框
+type: C
+section: UI与Fragment
+order: 13
+description: 掌握 AlertDialog 构建模式、DialogFragment 的配置变更安全机制、以及 FragmentResult API 的双向数据传递。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：对话框完整用法。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单：
+   1) AlertDialog.Builder 构建器模式 = 代码对照
+   2) DialogFragment 配置变更安全 = Stepper 对比（普通 Dialog vs DialogFragment 旋转屏幕）
+   3) DatePickerDialog & TimePickerDialog = 代码对照
+   4) 自定义布局 Dialog = 代码对照
+   5) FragmentResult API（双向数据传输） = 代码对照
+   6) setTargetFragment（传统方式，已废弃） = 对比说明 */}
+
+{/* 1. 学习目标。 */}
+
+<Objectives>
+
+- 能解释为什么对话框要用 DialogFragment 包装，而不是直接 `.show()` 一个 AlertDialog
+- 能在项目中使用 DialogFragment + FragmentResult API 实现对话框的打开和数据回传
+- 能回答：`setTargetFragment()` 和 `FragmentResult` 两种对话框回传方式的核心差异是什么？为什么后者更好？
+
+</Objectives>
+
+{/* 2. 直觉引入。 */}
+
+## 为什么需要对话框？
+
+你在用 App 时肯定见过这些场景：弹出一个窗口问"确定删除吗？"、选个日期、输个名字。这些都是对话框——一种悬浮在主界面之上的轻量级 UI。
+
+对话框的核心价值：**打断用户当前操作，强制做出一个选择后再继续**。它不是"顺便问问你"的那种弱提醒（那是 Snackbar/Toast 的活），而是"你不回答我就不让你往下走"的强交互。
+
+用得好，对话框让交互清晰且安全（删除前确认）。用不好，对话框满天飞就是用户体验灾难——所以 Android 提供了一套规范的对话框 API，把常见的模式（确认、输入、选择、日期）都帮你封装好了。
+
+{/* 3. 概念讲解。 */}
+
+## 对话框是怎么工作的
+
+### AlertDialog：最通用的对话框
+
+<Term def="AlertDialog 是 Android 最通用的对话框类。用 Builder 构建器模式（链式调用 setTitle、setMessage、setPositiveButton 等），最后 build() 创建、show() 显示。">AlertDialog</Term> 使用构建器模式——你先用 `AlertDialog.Builder` 一点点搭好对话框的样子（标题、内容、按钮），最后 `build()` 创建它。三个区域的按钮分工明确：
+
+- **Positive 按钮**（确定/保存）——肯定操作，通常在右侧
+- **Negative 按钮**（取消）——否定操作，Positive 左边
+- **Neutral 按钮**（稍后提醒）——中立操作，最左边
+
+<Callout type="tip">
+  标准 Material Design 对话框建议最多三个按钮，且按钮文案用动词而非"是/否"——"删除"比"是"更能让用户明白点了会发生什么。
+</Callout>
+
+### DialogFragment：配置变更的安全网
+
+为什么不能直接在 Activity 里 `AlertDialog.Builder(...).show()`？
+
+问题出在**屏幕旋转**。当你旋转手机时，Activity 被销毁重建——但那个正在显示的对话框不属于 Activity 生命周期管理范围，重建后对话框消失了，用户之前的选择也丢了。DialogFragment 解决了这个问题：它本身是一个 Fragment，受 FragmentManager 管理，旋转屏幕时跟普通 Fragment 一样被保存和恢复。
+
+- <Term def="DialogFragment 是一个特殊的 Fragment——它是对话框的"安全壳"。对话框的生命周期跟 DialogFragment 绑定，享受 FragmentManager 的自动保存和恢复。">DialogFragment</Term> 就是一个"包着对话框的 Fragment"——对话框的显示和隐藏跟 DialogFragment 的生命周期绑定，配置变更时自动保存恢复，你不需要做任何额外操作。
+
+### FragmentResult API：对话框怎么把结果传回来
+
+对话框最常见的需求就是"用户选完了之后，发起方要知道选了什么"。传统做法用 `setTargetFragment()`（现已废弃）——发起方把 Fragment 设为目标，接收方通过 `onActivityResult` 接收。这套方案的耦合度太高了。
+
+现代的做法是 FragmentResult API——可以理解为"广播机制"：
+
+- 对话框里用 `setFragmentResult(requestKey, bundle)` 发出结果
+- 发起方用 `setFragmentResultListener(requestKey)` 监听结果
+- 双方通过 `requestKey`（一个字符串）配对——发的人和收的人用同一个 key，就跟对讲机共用同一个频道一样
+
+```kotlin
+// 发起方 (CrimeDetailFragment)
+setFragmentResultListener("requestKey") { _, bundle ->
+    val result = bundle.getString("selectedDate")
+}
+
+// 对话框方 (DatePickerFragment) 在用户选完日期后
+setFragmentResult("requestKey", bundleOf("selectedDate" to date.toString()))
+```
+
+{/* 6. 代码对照。 */}
+
+## 代码逐段拆解
+
+### 第一步：创建带 DatePicker 的 DialogFragment
+
+```kotlin
+import androidx.fragment.app.DialogFragment
+import android.app.DatePickerDialog
+import java.util.Calendar
+
+class DatePickerFragment : DialogFragment() {
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val calendar = Calendar.getInstance()
+        val year = calendar.get(Calendar.YEAR)
+        val month = calendar.get(Calendar.MONTH)
+        val day = calendar.get(Calendar.DAY_OF_MONTH)
+
+        return DatePickerDialog(
+            requireContext(),
+            null, // 实现 DatePickerDialog.OnDateSetListener 时设 null
+            year, month, day
+        )
+    }
+}
+```
+
+重写 `onCreateDialog()` 返回一个系统对话框——这是最简单的方式。
+
+### 第二步：把选择的日期传回发起方
+
+```kotlin
+class DatePickerFragment : DialogFragment() {
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val calendar = Calendar.getInstance()
+
+        return DatePickerDialog(
+            requireContext(),
+            { _, year, month, day ->
+                val resultDate = GregorianCalendar(year, month, day).time
+                val resultBundle = Bundle().apply {
+                    putSerializable(KEY_DATE, resultDate)
+                }
+                setFragmentResult(REQUEST_KEY, resultBundle)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    companion object {
+        const val REQUEST_KEY = "DATE_PICKER_RESULT"
+        const val KEY_DATE = "selected_date"
+    }
+}
+```
+
+注意：`DatePickerDialog` 构造器的第二个参数就是回调——用户选完日期后触发。在这里把选好的日期打成 Bundle，用 `setFragmentResult` 发出去。
+
+### 第三步：发起方监听结果
+
+```kotlin
+class CrimeDetailFragment : Fragment(R.layout.fragment_crime_detail) {
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        childFragmentManager.setFragmentResultListener(
+            DatePickerFragment.REQUEST_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            val date = bundle.getSerializable(DatePickerFragment.KEY_DATE) as Date
+            updateDate(date)
+        }
+    }
+
+    private fun showDatePicker() {
+        DatePickerFragment().show(
+            childFragmentManager,
+            "DatePicker"
+        )
+    }
+}
+```
+
+这里用的是 `childFragmentManager` 而不是 `supportFragmentManager`——因为对话框是当前 Fragment 的子 Fragment，用子 FragmentManager 管理。`viewLifecycleOwner` 确保只在 Fragment 的 View 活着的时候监听——View 销毁后自动取消监听，避免泄漏。
+
+### 第四步：自定义布局的对话框
+
+```kotlin
+class InputDialogFragment : DialogFragment() {
+
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
+        val view = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_input, null, false)
+
+        val editText = view.findViewById<EditText>(R.id.input_text)
+
+        return AlertDialog.Builder(requireContext())
+            .setView(view)
+            .setTitle("输入嫌疑人姓名")
+            .setPositiveButton("确定") { _, _ ->
+                val result = editText.text.toString()
+                setFragmentResult(
+                    REQUEST_KEY,
+                    Bundle().apply { putString(KEY_INPUT, result) }
+                )
+            }
+            .setNegativeButton("取消", null)
+            .create()
+    }
+}
+```
+
+`.setView(view)` 把自定义布局塞进对话框的"内容区域"。按钮处理中拿到的 `editText` 引用在回调触发时仍然有效（View 还没销毁）。
+
+<Callout type="tip">
+  自定义布局的 EditText 设置了 `text` 后，按键盘回车不会自动关闭对话框。如果想回车=确定，给 EditText 设 `setOnEditorActionListener` 监听 `IME_ACTION_DONE`，在监听器里手动调 `dialog.dismiss()`。
+</Callout>
+
+{/* 7. 常见误区：C 型 ≥3 个。 */}
+
+## 容易踩的坑
+
+- **现象 →** 旋转屏幕后对话框消失了，用户选的数据也丢了。**原因 →** 直接用 `AlertDialog.Builder().show()` 显示对话框——这个对话框不属于任何生命周期管理范围，Activity 重建时它被系统丢弃。**修法 →** 用 `DialogFragment` 包装——把它当成普通 Fragment，旋转屏幕时 FramgnentManager 自动保存恢复。
+
+- **现象 →** `setFragmentResultListener` 的回调没收到数据，但发起方设置了 listener。**原因 →** listener 的注册时机在对话框结果**发出之后**。FragmentResult API 只把结果发给当前已注册的 listener——你后注册的 listener 收不到已发过的结果。**修法 →** 在对话框 `show()` 之前注册 listener——在 `show()` 之前调 `setFragmentResultListener`。
+
+- **现象 →** 用 `childFragmentManager` show DialogFragment 时崩溃：`IllegalStateException: Fragment already added`。**原因 →** 连续快速点击按钮创建了两个 DialogFragment 实例（同一个 tag），第二个 `show()` 时发现同 tag 的 Fragment 已存在。**修法 →** 在 `show()` 之前先 `commit()` 或者加一个 `isAdded` 检查——或者在按钮上设防抖，`isEnabled = false` 再 `show()`。
+
+{/* 8. 小结与练习。 */}
+
+## 小结
+
+- AlertDialog 用 Builder 模式构建——setTitle/setMessage/setPositiveButton 链式调完后 build()
+- DialogFragment 是对话框的"安全壳"——旋转屏幕自动保存恢复，FragmentManager 统一管理
+- FragmentResult API 用 requestKey 配对，发起方 listener 必须在 show() 之前注册
+- 自定义布局用 `setView(view)`，按钮回调中 View 引用仍然有效
+
+<Exercises>
+
+1. （改代码）把 `DatePickerFragment` 改为接收一个初始日期参数（通过 Arguments），让日历默认显示这个日期而不是今天。
+
+2. （实现题）写一个 `ConfirmDeleteDialogFragment`：两个按钮（删除/取消），删除按钮点下去后用 FragmentResult 通知发起方。发起方在收到结果后删除数据并刷新列表。
+
+3. （问答）为什么 `FragmentResultListener` 的生命周期 owner 建议传 `viewLifecycleOwner` 而不是 `this`？
+
+<Answer>
+
+3. `viewLifecycleOwner` 的生命周期比 Fragment 自身短——它在 `onDestroyView` 时就结束，Fragment 自身到 `onDestroy` 才结束。如果用 `this`，Fragment 的 View 已销毁但监听器还活着——可能在后台收到数据后尝试更新已销毁的 View（崩溃或静默失败）。`viewLifecycleOwner` 在 View 销毁时自动解绑 listener，更安全。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="AlertDialog">Android 最通用的对话框类。通过 Builder 构建器模式（链式调用 setTitle/setMessage/setPositiveButton 等）构建，最后 show() 显示。它悬浮在 Activity 之上、遮挡背景——迫使用户做出选择。</GlossaryItem>
+  <GlossaryItem term="DialogFragment">对话框的 Fragment 包装器。把对话框纳入 FragmentManager 管理——享受自动保存恢复、生命周期协同的好处。解决了普通 Dialog 旋转屏幕会消失的经典问题。</GlossaryItem>
+  <GlossaryItem term="FragmentResult API">Fragment 间通信的现代方案。一对"请求 key" + Bundle 的配对机制：发送方 `setFragmentResult`，接收方 `setFragmentResultListener`。取代了已废弃的 `setTargetFragment`。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

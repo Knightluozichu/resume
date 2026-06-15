@@ -1,0 +1,141 @@
+---
+title: 第二个Activity
+type: C
+section: 基础入门
+order: 6
+description: 学会启动第二个 Activity——显式 Intent、Activity 间传递数据、Activity Result API 接收返回结果。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) 显式 Intent 启动 = 代码对照
+   2) putExtra / getXxxExtra = 传参
+   3) Activity Result API = 现代回调
+   4) launchMode 初识 = Callout
+   5) 返回栈 = Stepper
+*/}
+
+<Objectives>
+
+- 能用显式 Intent 从 Activity A 启动 Activity B
+- 能用 putExtra 传递数据，在目标 Activity 的 onCreate 中读取
+- 能用 Activity Result API 启动 Activity 并接收返回结果——替代已废弃的 startActivityForResult
+
+</Objectives>
+
+## 一个 App 里通常不止一个屏幕
+
+列表页点进详情、设置页返回主界面——每个屏幕通常是一个 <Term def="Android 中承载单一界面的组件，通过 Intent 启动，在返回栈中按后进先出管理。">Activity</Term>。用 <Term def="显式指定目标组件类名的 Intent，用于应用内页面跳转。">显式 Intent</Term> 告诉系统「打开哪个 Activity」。
+
+## 启动第二个 Activity
+
+```kotlin
+// CrimeListActivity.kt
+val intent = Intent(this, CrimeDetailActivity::class.java)
+startActivity(intent)
+```
+
+## 传递数据
+
+```kotlin
+intent.putExtra("crime_id", crime.id)
+intent.putExtra("crime_title", crime.title)
+
+// CrimeDetailActivity.kt
+val crimeId = intent.getStringExtra("crime_id")
+```
+
+复杂对象用 `Parcelable`（Kotlin `@Parcelize`）或 `Serializable`，推荐 Parcelable。
+
+## Activity Result API
+
+```kotlin
+private val detailLauncher = registerForActivityResult(
+    ActivityResultContracts.StartActivityForResult()
+) { result ->
+    if (result.resultCode == Activity.RESULT_OK) {
+        val updatedId = result.data?.getStringExtra("updated_id")
+        // 刷新列表
+    }
+}
+
+fun openDetail(crimeId: String) {
+    val intent = Intent(this, CrimeDetailActivity::class.java)
+    intent.putExtra("crime_id", crimeId)
+    detailLauncher.launch(intent)
+}
+
+// 详情页返回
+setResult(Activity.RESULT_OK, Intent().putExtra("updated_id", crime.id))
+finish()
+```
+
+### Stepper：列表 → 详情 → 返回
+
+1. 列表 `detailLauncher.launch(intent)` → 详情 onCreate
+2. 用户编辑后 `setResult(RESULT_OK, data)` + `finish()`
+3. 列表 launcher 回调收到 `resultCode` 与 `data` → 刷新
+
+<Callout type="tip">
+  新代码一律用 **Activity Result API**——`registerForActivityResult` 在 onCreate 之前注册，避免旋转后回调丢失；权限、拍照等同理用对应 Contract。
+</Callout>
+
+<Callout type="trap">
+  忘记 `finish()` → 详情页留在返回栈，用户按 Back 又回到详情而非列表。只读详情也应在完成后 finish。
+</Callout>
+
+<Callout type="trap">
+  `getStringExtra` 可能为 null——目标 Activity 被系统重建或未传参时崩溃。用 `requireNotNull` 或默认值，Manifest 里不要用 exported 接收外部 Intent 却不校验。
+</Callout>
+
+## 小结
+
+- 显式 Intent + `startActivity` / Result API
+- putExtra / getXxxExtra 传简单数据
+- setResult + finish 回传；检查 resultCode
+
+<Exercises>
+
+**练习 1（代码）** 从 A 打开 B 并等 B 返回一个 Int 分数，写出 A 侧 register 与 launch 骨架。
+
+<Answer>
+```kotlin
+private val scoreLauncher = registerForActivityResult(
+    ActivityResultContracts.StartActivityForResult()
+) { r ->
+    if (r.resultCode == RESULT_OK) {
+        val score = r.data?.getIntExtra("score", 0) ?: 0
+    }
+}
+scoreLauncher.launch(Intent(this, ScoreActivity::class.java))
+```
+</Answer>
+
+**练习 2（概念）** 显式 Intent 和隐式 Intent 区别？本章为何用显式？
+
+<Answer>
+显式指定组件类，仅应用内跳转；隐式声明 action/category，系统解析多个 App。应用内页面跳转用显式，避免被其他 App 劫持且更清晰。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="显式Intent">
+  通过 setClass/setComponent 指定目标 Activity 的 Intent，用于应用内导航。
+</GlossaryItem>
+
+<GlossaryItem term="Activity Result API">
+  registerForActivityResult + ActivityResultContract，类型安全地启动 Activity 并接收结果。
+</GlossaryItem>
+
+<GlossaryItem term="返回栈">
+  后进先出的 Activity 栈。按 Back 弹出当前 Activity，显示前一个。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

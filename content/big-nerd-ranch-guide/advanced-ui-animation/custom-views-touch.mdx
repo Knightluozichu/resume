@@ -1,0 +1,363 @@
+---
+title: 定制视图与触摸事件
+type: C
+section: 高级UI与动画
+order: 30
+description: 从零实现自定义 View——掌握 onMeasure/onDraw/onTouchEvent 三大核心、Canvas 绘图 API、触摸手势处理与自定义属性。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第30章改编）：自定义 View 的测量、绘制与触摸处理。 */}
+
+<Objectives>
+
+- 能继承 View 类并覆写 `onMeasure()` 和 `onDraw()`，实现自定义的测量逻辑和绘制效果
+- 能处理触摸事件：区分 ACTION_DOWN/ACTION_MOVE/ACTION_UP，用 GestureDetector 识别常见手势
+- 能回答：`requestLayout()` 和 `invalidate()` 分别触发什么流程？什么时候该调用哪个？
+
+</Objectives>
+
+## 从零造轮子——为什么要写自定义 View
+
+Android 自带的控件（Button、TextView、ImageView）能覆盖 80% 的需求。但当你需要做一个圆形进度条、一个可拖拽的色温调节器、一个手写签名区域——这些都没有现成的控件。答案只有一个：**自己画**。
+
+自定义 View 是"造轮子"的技能。你不再依赖 XML 拼控件，而是直接跟 Canvas 打交道——想画什么就画什么，想怎么响应触摸就怎么响应。这是一个 Android 开发者从"组装工"变成"制造者"的分水岭。
+
+用**画布与画笔**的类比：Android 的 View 系统就像给了你一张画布（`Canvas`）和一套画笔（`Paint`），你决定在上面画什么——圆形、矩形、文字、路径——然后决定用户的手指碰到画布时发生什么。
+
+## 1. 自定义 View 的三板斧：测量、绘制、触摸
+
+每个自定义 View 都围绕三个核心方法：
+
+| 方法 | 职责 | 类比 |
+|---|---|---|
+| `onMeasure()` | 测量自己应该多大 | 决定画布尺寸 |
+| `onDraw()` | 把自己画出来 | 在画布上作画 |
+| `onTouchEvent()` | 响应用户触摸 | 处理手指在画布上的动作 |
+
+执行顺序：`onMeasure()` → `onLayout()` → `onDraw()`。父容器先 measure 孩子，再 layout 孩子，最后 draw 孩子。
+
+### onMeasure——决定自己有多大
+
+Android 用 `<Term def="父容器传递给子 View 的尺寸约束模式：精确值(EXACTLY)、上限(AT_MOST)、无限制(UNSPECIFIED)">MeasureSpec</Term>` 来描述父子之间的尺寸协商。每个 MeasureSpec 包含两个信息：**模式（mode）**和**尺寸（size）**。
+
+三种模式：
+
+```kotlin
+override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+    // 1. 解析父容器给的约束
+    val widthMode = MeasureSpec.getMode(widthMeasureSpec)
+    val widthSize = MeasureSpec.getSize(widthMeasureSpec)
+    val heightMode = MeasureSpec.getMode(heightMeasureSpec)
+    val heightSize = MeasureSpec.getSize(heightMeasureSpec)
+
+    // 2. 根据模式决定自己的尺寸
+    val desiredWidth = when (widthMode) {
+        MeasureSpec.EXACTLY -> widthSize         // 精确值：如 match_parent 或具体 dp
+        MeasureSpec.AT_MOST -> min(200, widthSize) // 上限：如 wrap_content
+        MeasureSpec.UNSPECIFIED -> 200            // 无限制：如 ScrollView 内的 View
+        else -> 200
+    }
+    val desiredHeight = 200  // 简化：固定高度
+
+    // 3. 必须调用 setMeasuredDimension
+    setMeasuredDimension(desiredWidth, desiredHeight)
+}
+```
+
+<Callout type="tip">
+  关键理解：`MeasureSpec.EXACTLY` 对应 `match_parent` 或具体 dp 值，`MeasureSpec.AT_MOST` 对应 `wrap_content`。自定义 View 如果不处理 `wrap_content`，它就跟 `match_parent` 一个效果——这是最常见的自定义 View bug。
+</Callout>
+
+### onDraw——在 Canvas 上画一切
+
+`onDraw(canvas: Canvas)` 是自定义 View 的灵魂。Canvas 提供了完整的 2D 绘图 API：
+
+```kotlin
+override fun onDraw(canvas: Canvas) {
+    super.onDraw(canvas)
+
+    val paint = Paint().apply {
+        isAntiAlias = true  // 抗锯齿，让边缘平滑
+    }
+
+    // 1. 画矩形
+    paint.color = Color.BLUE
+    paint.style = Paint.Style.FILL
+    canvas.drawRect(50f, 50f, 150f, 150f, paint)
+
+    // 2. 画圆形
+    paint.color = Color.RED
+    paint.style = Paint.Style.STROKE  // 空心
+    paint.strokeWidth = 8f
+    canvas.drawCircle(300f, 100f, 60f, paint)
+
+    // 3. 画文字
+    paint.color = Color.BLACK
+    paint.style = Paint.Style.FILL
+    paint.textSize = 48f
+    canvas.drawText("Hello View", 50f, 250f, paint)
+
+    // 4. 画路径（直线 + 圆弧）
+    paint.color = Color.GREEN
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 5f
+    val path = Path().apply {
+        moveTo(50f, 300f)
+        lineTo(200f, 300f)
+        lineTo(200f, 400f)
+    }
+    canvas.drawPath(path, paint)
+
+    // 5. 画图片
+    val bitmap = BitmapFactory.decodeResource(resources, R.drawable.ic_launcher)
+    canvas.drawBitmap(bitmap, 300f, 250f, paint)
+}
+```
+
+<Term def="Android 2D 绘图的核心类，提供 drawRect/drawCircle/drawText/drawPath/drawBitmap 等方法">Canvas</Term> 的方法全部"画在"View 的坐标系里——原点 (0, 0) 在 View 的左上角，x 轴向右，y 轴向下。
+
+<Term def="保存绘图属性的对象——颜色、样式(FILL/STROKE)、线宽、字号、抗锯齿等">Paint</Term> 对象控制"怎么画"。每次改变 Paint 属性后，后续的 draw 调用都使用新属性。
+
+### 坐标系变换
+
+Canvas 支持平移、旋转、缩放——这对于做图表、仪表盘非常有用：
+
+```kotlin
+// 把原点平移到 View 中心
+canvas.save()                       // 保存当前状态
+canvas.translate(width / 2f, height / 2f)
+canvas.rotate(45f)                  // 旋转 45 度
+paint.color = Color.BLUE
+canvas.drawRect(-50f, -50f, 50f, 50f, paint)  // 以新原点为中心画矩形
+canvas.restore()                    // 恢复之前的状态
+```
+
+`save()` / `restore()` 是一对——`save()` 把当前变换矩阵和裁剪区域压入栈，`restore()` 恢复到压栈时的状态。
+
+## 2. 触摸事件处理——让 View "活"起来
+
+### MotionEvent 基础
+
+当手指触碰到 View 时，Android 调用 `onTouchEvent(event: MotionEvent)`。每个事件包含：
+- **动作类型**：`event.action`——`ACTION_DOWN`（按下）、`ACTION_MOVE`（移动）、`ACTION_UP`（抬起）
+- **坐标**：`event.x` / `event.y`——相对于当前 View 左上角的坐标
+
+```kotlin
+override fun onTouchEvent(event: MotionEvent): Boolean {
+    val x = event.x
+    val y = event.y
+
+    when (event.action) {
+        MotionEvent.ACTION_DOWN -> {
+            // 手指按下：记录起始位置
+            startX = x
+            startY = y
+            return true  // 返回 true 表示"我要处理这个事件"，后续的事件也会发过来
+        }
+        MotionEvent.ACTION_MOVE -> {
+            // 手指移动：计算偏移量
+            dx = x - startX
+            dy = y - startY
+            invalidate()  // 触发重绘
+        }
+        MotionEvent.ACTION_UP -> {
+            // 手指抬起：处理点击或动作结束
+            performClick()
+        }
+    }
+    return super.onTouchEvent(event)
+}
+```
+
+<Callout type="trap">
+  关键细节：`onTouchEvent` 返回 `true` 表示"我消费了这次 DOWN 事件，后续的 MOVE 和 UP 也要发给我"。返回 `false` 表示"我不处理，不要再发给我了"。忘记返回 true 是最常见的 bug——你写了 MOVE 的处理逻辑，但是永远收不到 MOVE 事件。
+</Callout>
+
+### GestureDetector——识别常见手势
+
+自己从 MotionEvent 里识别双击、长按、快速滑动，太麻烦了。Android 提供了 `GestureDetector`：
+
+```kotlin
+class MyCustomView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
+
+    private val gestureDetector = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent): Boolean {
+            return true  // 必须返回 true，否则所有手势都不触发
+        }
+
+        override fun onSingleTapUp(e: MotionEvent): Boolean {
+            // 单击
+            showToast("单击了")
+            return true
+        }
+
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            // 双击
+            showToast("双击了")
+            return true
+        }
+
+        override fun onLongPress(e: MotionEvent) {
+            // 长按
+            showToast("长按了")
+        }
+
+        override fun onFling(
+            e1: MotionEvent?, e2: MotionEvent?,
+            velocityX: Float, velocityY: Float
+        ): Boolean {
+            // 快速滑动
+            if (abs(velocityX) > abs(velocityY)) {
+                showToast("水平快速滑动")
+            }
+            return true
+        }
+
+        override fun onScroll(
+            e1: MotionEvent?, e2: MotionEvent?,
+            distanceX: Float, distanceY: Float
+        ): Boolean {
+            // 拖动
+            scrollX += distanceX.toInt()
+            invalidate()
+            return true
+        }
+    })
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // 先把事件传给 GestureDetector，再处理自己的逻辑
+        val handled = gestureDetector.onTouchEvent(event)
+        return handled || super.onTouchEvent(event)
+    }
+}
+```
+
+## 3. 自定义属性——让 View 可以像原生控件一样在 XML 配置
+
+在 `res/values/attrs.xml` 中声明自定义属性：
+
+```xml
+<declare-styleable name="MyCustomView">
+    <attr name="circleColor" format="color" />
+    <attr name="circleRadius" format="dimension" />
+    <attr name="labelText" format="string" />
+</declare-styleable>
+```
+
+在 View 的构造方法中读取：
+
+```kotlin
+class MyCustomView(context: Context, attrs: AttributeSet?) : View(context, attrs) {
+    var circleColor: Int = Color.BLUE
+    var circleRadius: Float = 60f
+    var labelText: String = ""
+
+    init {
+        context.obtainStyledAttributes(attrs, R.styleable.MyCustomView).apply {
+            circleColor = getColor(R.styleable.MyCustomView_circleColor, Color.BLUE)
+            circleRadius = getDimension(R.styleable.MyCustomView_circleRadius, 60f)
+            labelText = getString(R.styleable.MyCustomView_labelText) ?: ""
+            recycle()  // 用完后记得 recycle，否则内存泄漏
+        }
+    }
+}
+```
+
+布局中这样使用：
+
+```xml
+<com.example.MyCustomView
+    android:layout_width="200dp"
+    android:layout_height="200dp"
+    app:circleColor="#FF0000"
+    app:circleRadius="40dp"
+    app:labelText="自定义" />
+```
+
+## 4. requestLayout vs invalidate——什么时候该调用哪个
+
+这是一个很容易搞混的问题：
+
+| 方法 | 触发流程 | 何时调用 |
+|---|---|---|
+| `requestLayout()` | `onMeasure() → onLayout() → onDraw()` | View 的**尺寸**或**位置**发生变化 |
+| `invalidate()` | 只触发 `onDraw()` | 只有**视觉内容**变化，尺寸没变 |
+
+<Callout type="tip">
+  简单判断法则：你改的内容如果会导致 View 变大或变小 → 调 `requestLayout()`。你只改了颜色、透明度、文本内容这些不影响尺寸的东西 → 调 `invalidate()`。不放心就用 `requestLayout()`——它能力更强但更费性能（因为它会触发整个 View 树的重新测量）。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：自定义 View 设置了 `wrap_content`，但实际效果跟 `match_parent` 一样。**原因**：`onMeasure` 里没有处理 `MeasureSpec.AT_MOST` 模式。默认 View 的 `onMeasure` 在 `AT_MOST` 下也会填满父容器。**修法**：在 `onMeasure` 中判断 `AT_MOST` 模式时，`setMeasuredDimension` 使用内容实际需要的尺寸。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`onDraw` 里画的东西突然消失了，或被裁掉了。**原因**：View 的尺寸（由 `onMeasure` 决定）比 Canvas 画的区域小——Canvas 不会自动裁剪，但如果 View 在 ViewGroup 中被 clip，超出部分就不可见。**修法**：确保 `onMeasure` 给出的 `measuredWidth/measuredHeight` 足够大，或调用 `setWillNotDraw(false)`（默认 View 不会调用 onDraw，除非它是 ViewGroup 且默认不画自己）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 `onTouchEvent` 中修改了数据并调了 `invalidate()`，但界面不更新。**原因**：`onTouchEvent` 返回了 `false`——后续 MOVE 事件没发过来。或者你忘记调用 `super.onTouchEvent()`。**修法**：在 `ACTION_DOWN` 时返回 `true`，确保后续事件能收到。
+</Callout>
+
+## 小结
+
+- 自定义 View 三大核心：`onMeasure`（测量尺寸）、`onDraw`（绘制内容）、`onTouchEvent`（处理触摸）
+- MeasureSpec 三种模式：EXACTLY（精确值）、AT_MOST（上限/wrap_content）、UNSPECIFIED（无限制）
+- Canvas API 提供 `drawRect`/`drawCircle`/`drawText`/`drawPath`/`drawBitmap`；Paint 控制颜色、样式、线宽等
+- GestureDetector 封装了单击、双击、长按、快速滑动等常见手势识别
+- 自定义属性通过 `declare-styleable` 声明，让 View 在 XML 里像原生控件一样配置
+- `requestLayout()` 触发布局重测（尺寸变了）→ 重；`invalidate()` 只触发重绘（视觉变了）→ 快
+
+<Exercises>
+
+**练习 1（改代码型）** 写一个自定义 View——在屏幕中央画一个可拖拽的红色圆球。按下拖动时圆球跟随手指移动，松手后留在最后位置。
+
+<Answer>
+`onTouchEvent` 中 `ACTION_MOVE` 时更新圆心坐标为 `(event.x, event.y)`，然后调 `invalidate()`。`onDraw` 中用 `canvas.drawCircle(centerX, centerY, radius, paint)` 绘制。ACTION_DOWN 返回 true。
+</Answer>
+
+**练习 2（问答型）** 自定义 View 的 `onMeasure` 里不调 `setMeasuredDimension` 会怎样？测量流程还能继续吗？
+
+<Answer>
+会直接抛 `IllegalStateException`。Android 要求每个 View 在 `onMeasure` 结束前必须调用 `setMeasuredDimension(w, h)`，告知系统本 View 测量后的尺寸。不调或漏调，View 的测量流程无法继续。
+</Answer>
+
+**练习 3（实现型）** 实现一个带自定义属性的圆形进度指示器：支持 `app:progressColor`、`app:progress`（0-100）、`app:strokeWidth`。在布局 XML 中尝试不同参数值。
+
+<Answer>
+在 attrs.xml 声明三个属性；构造方法中 `obtainStyledAttributes` 读取；`onDraw` 中用 `canvas.drawArc` 画圆环——`progress / 100f * 360f` 计算扫描角度。`invalidate` 在 setter 中调用以重绘。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="MeasureSpec">
+  父容器传给子 View 的尺寸约束。包含模式（EXACTLY/AT_MOST/UNSPECIFIED）和尺寸值。EXACTLY 对应 match_parent 或具体 dp；AT_MOST 对应 wrap_content。
+</GlossaryItem>
+
+<GlossaryItem term="Canvas">
+  Android 2D 绘图的画布。提供 drawRect、drawCircle、drawText、drawPath、drawBitmap 等方法。支持 save/restore 保存和恢复变换状态。
+</GlossaryItem>
+
+<GlossaryItem term="Paint">
+  画笔——保存绘制属性：颜色、样式（FILL/STROKE）、线宽、字号、抗锯齿开关等。每次修改 Paint 属性后，后续的 Canvas 绘制调用均使用新设置。
+</GlossaryItem>
+
+<GlossaryItem term="GestureDetector">
+  手势识别器。封装了常见的触摸手势判断——单击 (onSingleTapUp)、双击 (onDoubleTap)、长按 (onLongPress)、快速滑动 (onFling)、拖动 (onScroll)。简化了从原始 MotionEvent 中识别手势的工作。
+</GlossaryItem>
+
+<GlossaryItem term="MotionEvent">
+  描述一次触摸事件的对象。包含动作类型（ACTION_DOWN/MOVE/UP/CANCEL）和当前触摸点的坐标（x, y）。一次完整的点击序列从 DOWN 开始，中间可能经过若干 MOVE，最后以 UP 结束。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

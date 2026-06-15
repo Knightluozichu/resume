@@ -1,0 +1,430 @@
+---
+title: Android与MVC设计模式
+type: C
+section: 基础入门
+order: 2
+description: 理解 MVC 架构模式在 Android 中的映射关系，用 Kotlin data class 创建 Model，学会分离界面、数据和逻辑。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) MVC 三层架构 = 三层示意图
+   2) Android 中的 MVC 映射（Model=数据类, View=布局XML, Controller=Activity） = 对照图
+   3) 关注点分离的好处 = 对比代码示例
+   4) Kotlin data class 作为 Model = 代码示例
+   5) Activity 作为 Controller 的职责边界 = 代码示例
+*/}
+
+<Objectives>
+
+- 能画出 MVC 三层架构图，并在每一层旁边标注 Android 中对应的具体实现（Model→Kotlin data class, View→layout XML, Controller→Activity）
+- 能将一段"全写在 Activity 里"的代码重构为 MVC 三层分离的版本
+- 能回答：如果把所有代码都塞进 Activity 里的 `onCreate` 方法，当界面需求翻倍时，最多会出现哪三类问题？
+
+</Objectives>
+
+## 为什么代码全写在一起会爆炸
+
+想象你开了一家面包店。做面包、接单、收银、打扫卫生全都你一个人干——刚开始一天 10 个顾客还行。但当顾客涨到 200 个时，你做面包的间隙要去收款，收完款发现烤箱里的面包已经焦了。这就是把**所有代码塞进一个文件**的真实处境。
+
+<Term def="Model-View-Controller，一种把软件拆成三层的架构模式。Model 管数据，View 管显示，Controller 管协调二者。好处是改界面不影响数据逻辑，改数据逻辑不影响界面。">MVC</Term> 设计模式就是帮你**分工**：把面包师傅（数据逻辑）、收银员和大家看到的面包橱窗（界面）分成三个独立的角色。每个角色只管自己一摊事，换一个橱窗的灯光装饰不用惊动面包师傅。
+
+没有 MVC 会怎样？当你的应用从"一个按钮显示一句话"变成"三个界面、网络请求、数据库读写"时，所有代码纠缠在一个文件里——找一行代码要上下翻几百行，改一个颜色结果把登录逻辑也改坏了。这不是夸张，这是每个 Android 新手必然会踩进去的坑。MVC 就是帮你从一开始就把地盘划清楚。
+
+## 概念讲解
+
+### MVC 三层：每层管什么
+
+把应用想象成一个**餐厅**，MVC 就是餐厅里的三个角色：
+
+| 角色 | MVC 层 | 职责 | Android 中对应 |
+|------|--------|------|--------------|
+| 菜谱和大厨 | **Model** | 管数据——数据长什么样（类定义）、数据从哪来（网络/数据库）、数据怎么变（业务逻辑） | Kotlin `data class`、Repository 类 |
+| 摆盘和餐桌 | **View** | 管显示——按钮放哪、文字什么颜色、列表怎么排 | `res/layout/*.xml` 布局文件 |
+| 服务员 | **Controller** | 管协调——收到用户点击后找 Model 要数据，再把数据交给 View 显示 | `Activity`、`Fragment` |
+
+<Term def="应用程序里负责管理数据和业务逻辑的那一层。它不知道数据最终会显示在什么界面上——只管数据的结构、来源和变化规则。">Model</Term> 是最"干净"的一层——它不知道任何关于界面的事。一个 `User` 数据类不管自己最终是显示在登录页还是设置页，它只管定义"用户有 id、名字、头像 URL 这三个属性"。
+
+<Term def="应用程序里负责显示的那一层。在 Android 中特指 res/layout/ 下的 XML 布局文件。View 层只管"怎么显示"，不管"显示什么数据"——数据由 Controller 喂给它。">View</Term> 在 Android 里就是那些 XML 布局文件。它们定义了界面的骨架——有一个按钮、一个文本框、一个列表……但具体按钮上写什么字、列表里有哪些数据，View 不管，等着 Controller 来填。
+
+<Term def="MVC 中连接 Model 和 View 的协调者。根据用户操作从 Model 获取或更新数据，然后通知 View 刷新显示。在 Android 中，Activity 和 Fragment 承担 Controller 角色。">Controller</Term> 是最忙的角色——它不自己做面包也不自己摆盘，但知道"客人点了吐司，该叫面包师傅（Model）做什么"以及"做好了该放在哪个盘子（View）里端上去"。在 Android 里，Activity 和 Fragment 就是 Controller。
+
+### Kotlin data class：最轻量的 Model
+
+Kotlin 里最适合做 Model 的就是 <Term def="Kotlin 的一个特殊类声明，编译器会自动为你生成 equals、hashCode、toString、copy 等方法。专门用来承载数据，本身不含业务逻辑。">data class</Term>。定义一个最简单的"问题"模型：
+
+```kotlin
+data class Question(
+    val id: Int,
+    val text: String,
+    val answer: Boolean,  // true = 正确, false = 错误
+    val isAnswered: Boolean = false
+)
+```
+
+三行代码，就得到了一个完整的 Model：它知道每个问题有一个编号、一段文字、一个正确答案和一个"是否已回答"的状态。`val` 表示这些属性创建后**不可变**——这是 Kotlin 推荐的做法：数据模型本身不自己改自己，修改由 Controller 操作。注意 `isAnswered` 有默认值 `false`，创建新问题时不用写这个参数。
+
+Model 也可以是会"干活"的——不只是存数据。下面这个 Model 封装了一段判断逻辑：
+
+```kotlin
+data class QuizState(
+    val questions: List<Question>,
+    val currentIndex: Int = 0
+) {
+    val currentQuestion: Question
+        get() = questions[currentIndex]
+
+    val isLastQuestion: Boolean
+        get() = currentIndex == questions.lastIndex
+
+    fun moveToNext(): QuizState =
+        copy(currentIndex = currentIndex + 1)
+}
+```
+
+`copy()` 是 data class 自带的方法——它创建一个**新对象**，只修改你指定的属性，其他属性保持不变。这个模型只管"当前到第几题了"和"下一题怎么走"，**完全不关心界面怎么显示**——这才是干净的 Model。
+
+### 一个反例：全写在 Activity 里是什么灾难
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    // 所有东西全塞在一起——
+    private var currentIndex = 0
+    private val questions = listOf("1+1=?", "2+2=?")
+    private val answers = listOf(true, false)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val textView = findViewById<TextView>(R.id.questionText)
+        val trueButton = findViewById<Button>(R.id.trueButton)
+        val falseButton = findViewById<Button>(R.id.falseButton)
+
+        textView.text = questions[currentIndex]
+
+        trueButton.setOnClickListener {
+            if (answers[currentIndex]) { /* 答对了 */ }
+            currentIndex++
+            if (currentIndex < questions.size) {
+                textView.text = questions[currentIndex]
+            }
+        }
+        // ... falseButton 也要写几乎一样的逻辑
+    }
+}
+```
+
+这段代码的问题是：① 数据和逻辑混在 Activity 里——考题数据、答题判断、翻页全在同一个类。② 加一个新功能（比如显示分数）要在这一个文件里改多处。③ 加第二个界面时，整段逻辑没法复用——你只能复制粘贴。
+
+### 重构：拆出 QuizState Model
+
+```kotlin
+// Model — 纯粹的数据 + 逻辑，不碰 Android 任何 API
+data class QuizState(
+    val questions: List<Question>,
+    val currentIndex: Int = 0,
+    val score: Int = 0
+) {
+    val currentQuestion: Question get() = questions[currentIndex]
+
+    fun checkAnswer(userAnswer: Boolean): Boolean =
+        currentQuestion.answer == userAnswer
+
+    fun moveToNext(): QuizState =
+        copy(currentIndex = currentIndex + 1)
+}
+```
+
+```kotlin
+// Controller — Activity 只管"界面事件→调Model→更新View"
+class MainActivity : AppCompatActivity() {
+    private lateinit var quizState: QuizState
+    private lateinit var questionTextView: TextView
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        questionTextView = findViewById(R.id.questionText)
+
+        quizState = QuizState(
+            questions = listOf(
+                Question(1, "Android 用 Kotlin 开发", true),
+                Question(2, "Android 用 Swift 开发", false)
+            )
+        )
+        updateQuestion()
+    }
+
+    private fun updateQuestion() {
+        questionTextView.text = quizState.currentQuestion.text
+    }
+
+    private fun onAnswer(userAnswer: Boolean) {
+        quizState.checkAnswer(userAnswer)
+        quizState = quizState.moveToNext()
+        updateQuestion()
+    }
+}
+```
+
+对比重构前后：Model 里没有任何 `findViewById`、`setOnClickListener`——它不依赖 Android SDK，可以在单元测试里直接测。Activity 里只剩"找到控件 → 调 Model → 更新控件"这几步，逻辑清晰到能一眼看懂。
+
+## 动手：从零搭一个 MVC 答题应用
+
+下面一步步搭一个遵守 MVC 的应用，每步都标注你在写哪一层。
+
+> 猜一猜：MVC 三层中，哪一层的代码量应该最少？做完下面的练习再看答案。
+
+<Stepper>
+  <Step title="① 创建 Model（Question + QuizState）">
+    在 `java/` 下新建 `model/Question.kt`：
+
+    ```kotlin
+    package com.example.myapp.model
+
+    data class Question(
+        val id: Int,
+        val text: String,
+        val answer: Boolean
+    )
+    ```
+
+    再新建 `model/QuizState.kt`：
+
+    ```kotlin
+    package com.example.myapp.model
+
+    data class QuizState(
+        val questions: List<Question>,
+        val currentIndex: Int = 0
+    ) {
+        val currentQuestion: Question
+            get() = questions[currentIndex]
+
+        fun checkAnswer(userAnswer: Boolean): Boolean =
+            currentQuestion.answer == userAnswer
+
+        fun moveToNext(): QuizState =
+            copy(currentIndex = currentIndex + 1)
+    }
+    ```
+
+    这一步只建了数据结构和规则——不依赖任何 Android API。
+  </Step>
+  <Step title="② 创建 View（布局 XML）">
+    编辑 `res/layout/activity_main.xml`，换成以下内容：
+
+    ```xml
+    <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/questionText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="24sp"
+            android:padding="16dp" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/trueButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="正确" />
+
+            <Button
+                android:id="@+id/falseButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="错误" />
+        </LinearLayout>
+    </LinearLayout>
+    ```
+
+    View 只管"上面放文字、下面放两个按钮"——不管文字从哪来。
+  </Step>
+  <Step title="③ 创建 Controller（MainActivity）">
+    重写 `MainActivity.kt`：
+
+    ```kotlin
+    class MainActivity : AppCompatActivity() {
+        private lateinit var quizState: QuizState
+        private lateinit var questionText: TextView
+
+        override fun onCreate(savedInstanceState: Bundle?) {
+            super.onCreate(savedInstanceState)
+            setContentView(R.layout.activity_main)
+
+            questionText = findViewById(R.id.questionText)
+            val trueButton: Button = findViewById(R.id.trueButton)
+            val falseButton: Button = findViewById(R.id.falseButton)
+
+            quizState = QuizState(
+                questions = listOf(
+                    Question(1, "地球绕太阳转", true),
+                    Question(2, "Android 用 Swift 语言", false)
+                )
+            )
+            updateUI()
+
+            trueButton.setOnClickListener { checkAnswer(true) }
+            falseButton.setOnClickListener { checkAnswer(false) }
+        }
+
+        private fun checkAnswer(userAnswer: Boolean) {
+            val isCorrect = quizState.checkAnswer(userAnswer)
+            Toast.makeText(this,
+                if (isCorrect) "正确！" else "错误！",
+                Toast.LENGTH_SHORT).show()
+            quizState = quizState.moveToNext()
+            updateUI()
+        }
+
+        private fun updateUI() {
+            questionText.text = quizState.currentQuestion.text
+        }
+    }
+    ```
+
+    Controller 的职责清晰：① 从 Model 取数据 → ② 把数据填进 View → ③ 监听 View 事件 → ④ 调 Model 更新数据 → ⑤ 回到 ①。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  当 Activity 超过 **200 行**时，就该思考是不是有逻辑可以抽到独立的 Model 类里了。一个健康的小 Activity 不超过 150 行。记住一个判断标准：如果你写的某行代码**不包含任何 Android 类**（没有 `View`、`Context`、`Intent` 等），那它就应该呆在 Model 层，而不是 Activity 里。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Model 里写了 `findViewById` 或 `Toast.makeText`，编译器报错 `Unresolved reference`。
+  **原因**：Model 应该是纯 Kotlin 代码，不依赖 Android SDK。Model 里不能出现任何 `android.*` 包下的 API——因为 Model 不知道也不该知道"界面"的存在。
+  **修法**：把所有 Android API 调用（找控件、弹 Toast、跳转页面）全部移回 Activity。如果 Model 需要**通知**界面发生了某事（比如答题结束），用回调接口或 LiveData（后面章节会讲），而不是直接在 Model 里操作界面。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`quizState.moveToNext()` 调了之后界面没变化。
+  **原因**：Model 的 `copy()` 返回了一个**新的** QuizState 对象，但你忘了把 `quizState` 变量指向新对象（`quizState = quizState.moveToNext()`），导致旧对象没被替换，`currentQuestion` 还是第一题。
+  **修法**：每次调 Model 里返回新对象的方法后，**必须把返回值赋回给变量**——data class 是不可变的，改的是引用而不是内容。
+</Callout>
+
+## 小结
+
+- MVC 把应用拆为三层：Model（数据+逻辑）、View（布局XML）、Controller（Activity）——各管一层，互不越界
+- Kotlin `data class` 是 Model 的最佳载体——`copy()` 创建不可变对象，业务逻辑封装在 Model 内部
+- Controller 是协调者：事件来了→调 Model→拿结果→更新 View，本身不存状态
+- 判断标准：不含 `android.*` 的代码属于 Model 层，应移出 Activity
+- 好处：Model 可单元测试、View 可换布局不动代码、Controller 短小易读
+
+<Exercises>
+
+**练习 1（改代码型）** 在 `QuizState` 里加一个 `score` 属性（`val score: Int = 0`），每次答对加 1 分。改 `checkAnswer` 让它返回更新后的 `QuizState`（而不只是 Boolean）。在 Activity 里每次答题后用 Toast 显示当前分数。
+
+<Answer>
+
+```kotlin
+// Model
+data class QuizState(
+    val questions: List<Question>,
+    val currentIndex: Int = 0,
+    val score: Int = 0
+) {
+    val currentQuestion: Question get() = questions[currentIndex]
+
+    fun checkAnswer(userAnswer: Boolean): QuizState =
+        if (currentQuestion.answer == userAnswer) {
+            copy(score = score + 1)  // 答对，分数+1
+        } else {
+            this  // 答错，不变
+        }
+
+    fun moveToNext(): QuizState =
+        copy(currentIndex = currentIndex + 1)
+}
+
+// Controller 里：
+private fun checkAnswer(userAnswer: Boolean) {
+    quizState = quizState.checkAnswer(userAnswer)
+    Toast.makeText(this, "当前分数: ${quizState.score}", Toast.LENGTH_SHORT).show()
+    quizState = quizState.moveToNext()
+    updateUI()
+}
+```
+
+</Answer>
+
+**练习 2（问答型）** 在上面的 MVC 应用中，如果你想加一个"上一题"按钮，需要改哪几层？每层各改什么？不需要写代码，口头描述改动点。
+
+<Answer>
+
+① **Model 层**：给 `QuizState` 加一个 `moveToPrevious()` 方法，用 `copy(currentIndex = currentIndex - 1)`，再加个 `isFirstQuestion` 属性判断是否到第一题。② **View 层**：在 `activity_main.xml` 里加一个 `<Button android:id="@+id/prevButton" android:text="上一题"/>`。③ **Controller 层**：在 Activity 里 `findViewById` 找到这个按钮，`setOnClickListener` 里调 `quizState.moveToPrevious()` 然后 `updateUI()`。
+
+Model 只管"怎么回到上一步"的规则，View 只管"多一个按钮"，Controller 只做"连起来"。三层各改各的，互不干扰。
+
+</Answer>
+
+**练习 3（实现型）** 设计一个新的 `ScoreTracker` Model，要求：① 记录每次答题的时间戳和是否正确；② 能计算出最近 5 次答题的正确率。写出 data class 和核心方法的 Kotlin 代码。
+
+<Answer>
+
+```kotlin
+data class AnswerRecord(
+    val timestamp: Long = System.currentTimeMillis(),
+    val isCorrect: Boolean
+)
+
+data class ScoreTracker(
+    val history: List<AnswerRecord> = emptyList()
+) {
+    fun record(isCorrect: Boolean): ScoreTracker =
+        copy(history = history + AnswerRecord(isCorrect = isCorrect))
+
+    fun recentAccuracy(lastN: Int = 5): Float {
+        val recent = history.takeLast(lastN)
+        if (recent.isEmpty()) return 0f
+        return recent.count { it.isCorrect }.toFloat() / recent.size
+    }
+}
+```
+
+每个 `record()` 返回新对象（data class 不可变），`recentAccuracy` 计算最近 N 条的正确率。完全是纯 Kotlin，可以在测试里验证。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="MVC">
+  Model-View-Controller，将应用拆成三层：Model 管数据与业务逻辑，View 管界面显示，Controller 协调二者。在 Android 中，Model 对应 Kotlin data class，View 对应 layout XML，Controller 对应 Activity/Fragment。详见本章"MVC 三层"一节。
+</GlossaryItem>
+
+<GlossaryItem term="Model">
+  MVC 中负责数据结构和业务逻辑的层。在 Android 里用 Kotlin data class 实现，不依赖任何 Android SDK API（无 `View`、`Context` 等引用）。可以被单元测试直接测试——这是 MVC 分层最大的好处。详见本章"Kotlin data class：最轻量的 Model"一节。
+</GlossaryItem>
+
+<GlossaryItem term="View（MVC中的）">
+  MVC 中负责界面显示的层。在 Android 里特指 `res/layout/` 下的 XML 布局文件，定义控件的位置、尺寸、样式。View 层**只管怎么显示，不管显示什么**——数据由 Controller 填入。详见本章"MVC 三层"一节。
+</GlossaryItem>
+
+<GlossaryItem term="Controller">
+  MVC 中连接 Model 和 View 的协调者。在 Android 里 Activity 和 Fragment 承担此角色。Controller 接收用户操作 → 调用 Model 更新数据 → 将新数据写入 View。Controller 本身不应存业务状态。详见本章"重构：拆出 QuizState Model"一节。
+</GlossaryItem>
+
+<GlossaryItem term="data class">
+  Kotlin 的一种特殊类，编译器自动生成 `equals()`、`hashCode()`、`toString()`、`copy()` 等方法。最适合做 Model——三行代码得到一个功能完整的数据容器。详见本章"Kotlin data class"一节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

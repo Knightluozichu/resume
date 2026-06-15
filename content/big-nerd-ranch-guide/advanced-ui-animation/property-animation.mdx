@@ -1,0 +1,333 @@
+---
+title: 属性动画
+type: C
+section: 高级UI与动画
+order: 31
+description: 掌握 Android 属性动画系统——ValueAnimator、ObjectAnimator、插值器、AnimatorSet 与 ViewPropertyAnimator，让界面动起来。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第31章改编）：属性动画——从 View 动画到真正的属性动画。 */}
+
+<Objectives>
+
+- 能使用 `ObjectAnimator` 和 `ValueAnimator` 创建流畅的属性动画，并结合 `AnimatorSet` 编排多动画
+- 能选择合适的插值器（Interpolator）让动画更有质感——加速、减速、弹跳、回弹
+- 能回答：属性动画和补间动画（View Animation）的本质区别是什么？为什么属性动画是"真正的动画"？
+
+</Objectives>
+
+## 让界面动起来——从僵硬的"闪现"到有质感的过渡
+
+早期的 Android 只有"补间动画"。它能让 View 看起来在移动、缩放、旋转——但实际上 View 的**真实位置和属性从未改变**。你看着按钮飘到了右边，但点左边它才响应——因为它的触摸区域还在原位。这就是"假动画"。
+
+Android 3.0 引入了 **属性动画**（Property Animation）。它直接修改对象的真实属性——`translationX`、`alpha`、`scaleX` 等——而不是"假装"改了。位置真的变了，点击区域也跟着走。这才是"真正的动画"。
+
+用**电影的帧率**来类比：属性动画就像在 1 秒内播 60 帧——每一帧都算出当前时间点属性应该是多少，然后直接改在对象上。插值器决定了 60 帧怎么分配（匀速？先快后慢？），估值器决定了中间值怎么算。
+
+## 1. ValueAnimator——动画的心脏
+
+`<Term def="属性动画的基础——在时长内从起始值过渡到结束值，通过 addUpdateListener 获取每一帧的当前值">ValueAnimator</Term>` 不直接作用于任何 View。它只是一个"值生成器"——在 `duration` 毫秒内，从 `0f` 平滑变到 `1f`，每帧回调告诉你当前值是多少。你拿到这个值后自己决定做什么。
+
+```kotlin
+// 从 0 到 1 的平滑过渡，持续 1000ms
+val animator = ValueAnimator.ofFloat(0f, 1f).apply {
+    duration = 1000
+    addUpdateListener { animation ->
+        val fraction = animation.animatedValue as Float
+        // 你可以用 fraction 做任何事——跟 View 解耦
+        customView.progress = fraction
+        customView.invalidate()
+    }
+    start()
+}
+```
+
+### 三种工厂方法
+
+```kotlin
+ValueAnimator.ofFloat(0f, 1f)       // float 值动画
+ValueAnimator.ofInt(0, 100)          // int 值动画
+ValueAnimator.ofObject(TypeEvaluator, start, end)  // 自定义类型动画（如 PointF）
+```
+
+### 自定义 TypeEvaluator——让动画处理任意类型
+
+当你想让 PointF、Color 甚至自定义数据类型参与动画：
+
+```kotlin
+// 让 PointF 支持动画
+ValueAnimator.ofObject(
+    object : TypeEvaluator<PointF> {
+        override fun evaluate(fraction: Float, startValue: PointF, endValue: PointF): PointF {
+            val x = startValue.x + (endValue.x - startValue.x) * fraction
+            val y = startValue.y + (endValue.y - startValue.y) * fraction
+            return PointF(x, y)
+        }
+    },
+    PointF(0f, 0f),   // 起点
+    PointF(100f, 200f) // 终点
+).apply {
+    duration = 1500
+    addUpdateListener { animation ->
+        val point = animation.animatedValue as PointF
+        customView.moveTo(point.x, point.y)
+    }
+    start()
+}
+```
+
+## 2. ObjectAnimator——直接作用于对象的属性
+
+`<Term def="ValueAnimator 的子类——通过反射直接修改目标对象指定属性的值，如 translationX、alpha、backgroundColor">ObjectAnimator</Term>` 是 `ValueAnimator` 的子类。它更进一步：直接通过**反射**调用目标对象的 setter 方法，自动更新属性值。
+
+```kotlin
+// alpha 从 1.0 变到 0.0（淡出）
+ObjectAnimator.ofFloat(view, "alpha", 1f, 0f).apply {
+    duration = 500
+    start()
+}
+
+// 从当前位置向右移动 200px
+ObjectAnimator.ofFloat(view, "translationX", 0f, 200f).apply {
+    duration = 800
+    start()
+}
+
+// 组合的 ObjectAnimator——同时变透明+缩小
+val fadeOut = ObjectAnimator.ofFloat(view, "alpha", 1f, 0f)
+val scaleDown = ObjectAnimator.ofFloat(view, "scaleX", 1f, 0.5f)
+scaleDown.setFloatValues(1f, 0.5f)  // scaleY 同理
+
+AnimatorSet().apply {
+    playTogether(fadeOut, scaleDown)
+    duration = 400
+    start()
+}
+```
+
+<Callout type="tip">
+  ObjectAnimator 依赖反射来查找和调用 setter——属性名 `"alpha"` 对应 `setAlpha()`、`"translationX"` 对应 `setTranslationX()`。如果你动画的对象没有对应的 setter（比如你写的自定义 View 缺少 `setProgress(float)`），动画会静默失败——不会崩溃，也不会有任何效果。
+</Callout>
+
+## 3. AnimatorSet——编排多动画
+
+单个动画往往不够——你需要"先淡入，再放大，最后弹一下"这种多步骤编排。`<Term def="将多个 Animator 组合在一起，支持同时播放(playTogether)和顺序播放(playSequentially)">AnimatorSet</Term>` 就是做这个的：
+
+```kotlin
+val fadeIn = ObjectAnimator.ofFloat(view, "alpha", 0f, 1f)
+val scaleUpX = ObjectAnimator.ofFloat(view, "scaleX", 0.5f, 1f)
+val scaleUpY = ObjectAnimator.ofFloat(view, "scaleY", 0.5f, 1f)
+val bounce = ObjectAnimator.ofFloat(view, "translationY", 0f, -30f, 0f)
+
+AnimatorSet().apply {
+    // 第一阶段：淡入+放大同时进行
+    play(fadeIn).with(scaleUpX)
+    play(scaleUpX).with(scaleUpY)
+    // 第二阶段：弹一下
+    play(bounce).after(fadeIn)
+    duration = 600
+    start()
+}
+```
+
+`play(a).with(b)` —— a 和 b 同时播放；`play(b).after(a)` —— b 在 a 结束后播放。可以链式组合出任意编排。
+
+## 4. Interpolator——让动画有"性格"
+
+`<Term def="控制动画随时间推进的速率曲线——匀速、加速、减速、弹跳、回弹等">Interpolator</Term>` 决定了动画的"节奏感"。同一段 500ms 的位移动画，不同插值器效果完全不同：
+
+```kotlin
+ObjectAnimator.ofFloat(view, "translationX", 0f, 300f).apply {
+    duration = 1000
+    interpolator = AccelerateDecelerateInterpolator()  // 先加速后减速（最自然）
+    start()
+}
+```
+
+常用插值器一览：
+
+| Interpolator | 效果 | 适用场景 |
+|---|---|---|
+| `LinearInterpolator` | 匀速 | 进度条、机械运动 |
+| `AccelerateInterpolator` | 慢 → 快 | 元素"飞出去" |
+| `DecelerateInterpolator` | 快 → 慢 | 元素"停稳" |
+| `AccelerateDecelerateInterpolator` | 慢 → 快 → 慢 | 最自然的过渡（默认） |
+| `OvershootInterpolator` | 冲过头再回来 | "弹性"效果，俏皮感 |
+| `BounceInterpolator` | 末尾弹跳 | 落下弹起的效果 |
+| `AnticipateInterpolator` | 先反向再正向 | 蓄力发射 |
+| `AnticipateOvershootInterpolator` | 蓄力→冲过头→回来 | 夸张的弹性效果 |
+
+<Callout type="tip">
+  `OvershootInterpolator` 和 `BounceInterpolator` 是快速出"弹性感"的秘密武器——列表项弹出、卡片入场、按钮按下反馈，加点弹性动画质感瞬间提升。但别滥用——过多弹性动画会让界面显得不专业。
+</Callout>
+
+## 5. 动画生命周期监听
+
+`Animator.AnimatorListener` 提供完整的生命周期回调：
+
+```kotlin
+ObjectAnimator.ofFloat(view, "alpha", 1f, 0f).apply {
+    duration = 500
+    addListener(object : Animator.AnimatorListener {
+        override fun onAnimationStart(animation: Animator) {
+            view.isEnabled = false  // 动画期间禁用点击
+        }
+        override fun onAnimationEnd(animation: Animator) {
+            view.visibility = View.GONE  // 动画结束后隐藏
+        }
+        override fun onAnimationCancel(animation: Animator) {}
+        override fun onAnimationRepeat(animation: Animator) {}
+    })
+    start()
+}
+```
+
+如果不需要所有回调，可以用 `AnimatorListenerAdapter` 只覆写需要的方法：
+
+```kotlin
+addListener(object : AnimatorListenerAdapter() {
+    override fun onAnimationEnd(animation: Animator) {
+        view.visibility = View.GONE
+    }
+})
+```
+
+## 6. ViewPropertyAnimator——View 动画的快捷方式
+
+如果只是做 View 的属性动画，不需要编排，不需要自定义估值器——`ViewPropertyAnimator` 是最简洁的方式：
+
+```kotlin
+// 链式调用：一行写完"向右移 200px + 半透明 + 旋转 360°"
+view.animate()
+    .translationX(200f)
+    .alpha(0.5f)
+    .rotation(360f)
+    .setDuration(800)
+    .setInterpolator(AccelerateDecelerateInterpolator())
+    .withEndAction {
+        // 动画结束后的操作
+        view.visibility = View.GONE
+    }
+    .start()
+```
+
+`view.animate()` 返回 `ViewPropertyAnimator`，支持 `translationX/Y/Z`、`alpha`、`scaleX/Y`、`rotation/X/Y`、`x`/`y`。比 `ObjectAnimator` 更简洁，但功能更受限——不能编排多个 View，不能自定义估值器。
+
+<Callout type="tip">
+  选择指南：单个 View 简单属性动画 → `view.animate()`；多个动画编排 → `AnimatorSet`；需要对非 View 对象做动画 → `ValueAnimator`；需要反射修改任意对象属性 → `ObjectAnimator`。
+</Callout>
+
+## 7. 属性动画 vs 补间动画——本质区别
+
+| 方面 | 补间动画（View Animation） | 属性动画（Property Animation） |
+|---|---|---|
+| **修改什么** | 只修改**显示位置**（Matrix 变换） | 修改对象的**真实属性** |
+| **点击区域** | 不跟随动画移动 | 跟随真实位置 |
+| **作用对象** | 只能是 View | 任意对象（包括非 View） |
+| **API 风格** | XML 定义为主 | 代码构建为主（也支持 XML） |
+| **引入版本** | API 1 | API 11（Android 3.0） |
+
+一句话总结：补间动画是"视觉上动了"，属性动画是"真的动了"。新项目应该全面使用属性动画。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：ObjectAnimator 没有任何效果——不报错，不动。**原因**：目标对象缺少对应属性的 setter。例如 `ofFloat(view, "progress", 0f, 1f)` 要求 view 有 `setProgress(Float)`。**修法**：确保目标属性有对应的 setter/getter，或改用 ValueAnimator 手动在 UpdateListener 中更新。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Activity 退出后动画还在后台运行——内存泄漏。**原因**：属性动画持有对 View 的强引用，View 持有 Activity 引用，链条不断。**修法**：Activity 的 `onDestroy()` 中调 `animator.cancel()`，CancelListener 中清空对 View 的引用。或用 `view.animate()`——它跟随 View 生命周期自动取消。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 AccelerateInterpolator 但动画结束得非常"硬"——突然停住。**原因**：加速插值器只在起点放慢，终点全速到站没有减速——视觉上像撞墙。**修法**：大部分入场动画用 DecelerateInterpolator（快到慢，优雅停稳）；出场动画用 AccelerateInterpolator（慢到快，迅速离场）。
+</Callout>
+
+## 小结
+
+- 属性动画直接修改对象真实属性——位置、透明度、缩放等真的变了；补间动画只改视觉显示
+- `ValueAnimator` 生成值，你在 UpdateListener 中决定怎么用；`ObjectAnimator` 通过反射自动改属性
+- `AnimatorSet` 编排多动画顺序：`playTogether` 同时播放、`playSequentially` 顺序播放
+- 插值器决定节奏：AccelerateDecelerate（最自然）、Overshoot（弹性）、Bounce（弹跳）、Linear（匀速）
+- `view.animate()` 是 View 动画的最简方式——链式调用、自动跟随生命周期
+- Activity 退出时记得 cancel 动画，防止内存泄漏
+
+<Exercises>
+
+**练习 1（改代码型）** 写一段代码：让一个 Button 点击后先放大到 1.3 倍，再缩小回 1.0 倍，同时淡出到 alpha=0，最后隐藏。用 AnimatorSet 实现。
+
+<Answer>
+```kotlin
+button.setOnClickListener {
+    val scaleUp = ObjectAnimator.ofFloat(it, "scaleX", 1f, 1.3f).apply { duration = 200 }
+    val scaleUpY = ObjectAnimator.ofFloat(it, "scaleY", 1f, 1.3f).apply { duration = 200 }
+    val scaleBack = ObjectAnimator.ofFloat(it, "scaleX", 1.3f, 1f).apply { duration = 200 }
+    val scaleBackY = ObjectAnimator.ofFloat(it, "scaleY", 1.3f, 1f).apply { duration = 200 }
+    val fadeOut = ObjectAnimator.ofFloat(it, "alpha", 1f, 0f).apply { duration = 400 }
+    AnimatorSet().apply {
+        play(scaleUp).with(scaleUpY)
+        play(scaleBack).with(scaleBackY).after(scaleUp)
+        play(fadeOut).after(scaleBack)
+        addListener(object : AnimatorListenerAdapter() {
+            override fun onAnimationEnd(a: Animator) { it.visibility = View.GONE }
+        })
+        start()
+    }
+}
+```
+</Answer>
+
+**练习 2（问答型）** 补间动画把 View 向右移了 200px 后，点击原位置有反应但点击新位置无反应——为什么？
+
+<Answer>
+补间动画只改变了 View 的绘制矩阵（视觉位置），真正的 View 对象位置（left/top/right/bottom）从未改变。Android 的触摸事件分发基于 View 的真实边界，所以点击新位置不会收到事件。属性动画直接修改 `translationX`，View 的实际点击区域会跟着走。
+</Answer>
+
+**练习 3（实现型）** 用 ValueAnimator 实现一个倒计时动画（从 10 倒数到 1），每秒变一次数字，显示在自定义 View 的 Canvas 上。
+
+<Answer>
+```kotlin
+ValueAnimator.ofInt(10, 1).apply {
+    duration = 10000  // 10 秒
+    interpolator = LinearInterpolator() // 每秒严格走一步
+    addUpdateListener { a ->
+        countdown = a.animatedValue as Int
+        invalidate()
+    }
+    start()
+}
+// onDraw 中用 canvas.drawText("$countdown", ...) 绘制当前数字
+```
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="ValueAnimator">
+  属性动画的基类——在 duration 毫秒内从起始值平滑过渡到结束值。不直接作用于任何对象，需要通过 addUpdateListener 获取每帧的当前值，手动决定如何使用。
+</GlossaryItem>
+
+<GlossaryItem term="ObjectAnimator">
+  ValueAnimator 的子类——通过反射自动调用目标对象的 setter 方法修改属性。如 `ofFloat(view, "alpha", 1f, 0f)` 会调用 `view.setAlpha()`。要求目标属性有对应的 setter 方法。
+</GlossaryItem>
+
+<GlossaryItem term="AnimatorSet">
+  多个动画的编排器。支持 `playTogether`（同时播放）和 `playSequentially`（顺序播放），以及 `play(a).with(b).after(c)` 的组合编排语法。
+</GlossaryItem>
+
+<GlossaryItem term="Interpolator">
+  动画的节奏控制器。决定动画值随时间变化的速率曲线。Linear（匀速）、AccelerateDecelerate（慢→快→慢）、Overshoot（冲过头再回来）、Bounce（末尾弹跳）。
+</GlossaryItem>
+
+<GlossaryItem term="补间动画 (View Animation)">
+  Android 早期的动画系统，只修改 View 的绘制矩阵（视觉效果），不改变 View 的真实位置和属性。点击区域不会跟随动画移动。API 1 引入，不推荐在新项目中使用。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

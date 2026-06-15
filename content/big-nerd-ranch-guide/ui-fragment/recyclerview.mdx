@@ -1,0 +1,229 @@
+---
+title: 使用RecyclerView显示列表
+type: C
+section: UI与Fragment
+order: 9
+description: 掌握 RecyclerView 的 Adapter-ViewHolder-LayoutManager 三元架构，能实现高效的列表展示、点击处理和条目更新。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：RecyclerView 完整用法。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单：
+   1) RecyclerView 三元架构（Adapter/ViewHolder/LayoutManager） = Stepper 流程图
+   2) ViewHolder 模式与废物利用 = 回收池示意图
+   3) Adapter 三个核心方法（onCreateViewHolder / onBindViewHolder / getItemCount） = 代码对照
+   4) LayoutManager（Linear/Grid/Staggered） = 效果对比图
+   5) 条目点击处理 = 代码对照（lambda vs 接口）
+   6) DiffUtil 高效更新 = 代码对照
+   7) ListAdapter 的现代替代方案 = 代码对照 */}
+
+{/* 1. 学习目标：C 型必含「能改出 ___ 效果」。 */}
+
+<Objectives>
+
+- 能解释 RecyclerView 的 Adapter-ViewHolder-LayoutManager 三元架构，以及为什么它比 ListView 高效
+- 能在项目中创建 RecyclerView、编写 Adapter，实现列表展示和条目点击
+- 能回答：假如列表数据变了，怎样用 DiffUtil 只刷新变化的条目而不是整屏重建？
+
+</Objectives>
+
+{/* 2. 直觉引入：≤3 段 × ≤120 字；零术语。 */}
+
+## 为什么需要一个"列表控件"？
+
+几乎每个 App 都有列表：微信的聊天列表、淘宝的商品列表、备忘录的任务列表……这些列表动辄几百条数据，如果一次性把所有 View 都创建出来，手机内存直接爆炸。
+
+Android 的解决方案可以这样理解：你坐在一辆高铁上，窗外能看到的座椅永远只有你所在车厢的那几十个。前面走过、后面还没走的车厢，虽然"存在"但并不占用你的视线。RecyclerView 就遵循同样的原则——它只创建刚好能填满屏幕的那几个列表条目 View，条目滚出屏幕后 View 会被回收复用，给新条目装上新数据。
+
+没有这种"复用"机制会怎样？ListView（Android 早期的列表控件）做了一部分回收，但把"创建 View"和"给 View 绑定数据"两件事揉在一起，导致你很难定制布局、也很难加入动画。RecyclerView 把"创建"、"绑定"、"摆放"拆成三个独立角色，灵活度提升了一个数量级。
+
+{/* 3. 概念讲解：一节一概念。 */}
+
+## RecyclerView 是怎么工作的
+
+### 三元架构：Adapter、ViewHolder、LayoutManager
+
+RecyclerView 不是一个大坨代码，而是三个零件精密配合的结果：
+
+- <Term def="RecyclerView.Adapter 负责两件事：在需要时创建 ViewHolder（工厂），在数据变化时给 ViewHolder 塞新数据（填表员）。它是 RecyclerView 和数据源之间的桥梁。">Adapter</Term> —— 数据源 → View 的桥梁。它知道有多少条数据，知道每条数据长什么样，负责"按需生产"ViewHolder
+- <Term def="RecyclerView.ViewHolder 是一个"座位"，里面放了一个条目的所有子 View 引用（findViewById 的结果），避免反复 findViewById。">ViewHolder</Term> —— 条目的"座位"。它缓存一个条目布局里各个子 View 的引用，让你不用每次都 `findViewById`
+- <Term def="RecyclerView.LayoutManager 决定列表怎么摆——是纵向线性列表还是网格，还是瀑布流。它只管"位置和排列"，不管数据。">LayoutManager</Term> —— 条目怎么排列。LinearLayoutManager 排成一列，GridLayoutManager 排成网格，StaggeredGridLayoutManager 排成瀑布流
+
+### ViewHolder 的"废物利用"机制
+
+当条目滚出屏幕时，RecyclerView 不销毁它的 View，而是把它扔进一个**回收池**。当新条目要滚进屏幕时，RecyclerView 先看回收池里有没有现成的 ViewHolder——有就拿过来复用，只需要换一下数据就行，不用重新创建 View 和 findViewById。这就是 RecyclerView 能丝滑滚动百条数据的核心秘密。
+
+{/* 5. 交互 Demo：Stepper 分步展示 RecyclerView 工作流程 */}
+
+> 猜一猜：RecyclerView 在屏幕上一次创建了几个条目？动手算一下：屏幕高度 ÷ 每个条目高度 = 实际创建的 ViewHolder 数量——正是你屏幕能塞下的条目数，不会多也不会少。
+
+### Adapter 的三个核心方法，逐一看
+
+每个 Adapter 必须实现三个方法：
+
+| 方法 | 调用时机 | 做什么 |
+|------|----------|--------|
+| `onCreateViewHolder()` | 需要新条目 View 时 | 创建 ViewHolder（inflate 布局 + 持有子 View 引用） |
+| `onBindViewHolder()` | 条目即将显示时 | 把第 position 条的数据塞给 ViewHolder |
+| `getItemCount()` | Adapter 初始化时 | 告诉 RecyclerView 总共多少条 |
+
+<Callout type="tip">
+  想象工厂流水线：`onCreateViewHolder` 是造一个新的"空壳座位"（这个不常调——只有在回收池没货时才造新座）；`onBindViewHolder` 是让数据"对号入座"（这个每条都调）。
+</Callout>
+
+{/* 6. 代码对照：C 型重心，逐段讲解 ≥80% 关键代码。 */}
+
+## 代码逐段拆解
+
+### 第一步：定义布局和 ViewHolder
+
+```kotlin
+class CrimeHolder(view: View) : RecyclerView.ViewHolder(view) {
+    val titleTextView: TextView = view.findViewById(R.id.crime_title)
+    val dateTextView: TextView = view.findViewById(R.id.crime_date)
+
+    fun bind(crime: Crime) {
+        titleTextView.text = crime.title
+        dateTextView.text = crime.date.toString()
+    }
+}
+```
+
+ViewHolder 构造器里传 `View`（由 `onCreateViewHolder` inflate 出来的那一行），然后它把各个子 View 的引用缓存起来——`val` 而非 `var`，因为引用本身不变，变的只是引用指向的 View 上的内容。
+
+### 第二步：编写 Adapter
+
+```kotlin
+class CrimeAdapter(
+    private val crimes: List<Crime>,
+    private val onItemClick: (Crime) -> Unit
+) : RecyclerView.Adapter<CrimeHolder>() {
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CrimeHolder {
+        val view = LayoutInflater.from(parent.context)
+            .inflate(R.layout.list_item_crime, parent, false)
+        return CrimeHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: CrimeHolder, position: Int) {
+        val crime = crimes[position]
+        holder.bind(crime)
+        holder.itemView.setOnClickListener { onItemClick(crime) }
+    }
+
+    override fun getItemCount(): Int = crimes.size
+}
+```
+
+`onCreateViewHolder` 只在需要新 View 时才调用（回收池空的时候）。`onBindViewHolder` 每显示一条就调一次，把 `crimes[position]` 的数据塞进 ViewHolder。点击处理用 lambda 传出去——比内部接口更简洁。
+
+### 第三步：绑定 RecyclerView 到 Activity
+
+```kotlin
+class CrimeListActivity : AppCompatActivity() {
+    private lateinit var recyclerView: RecyclerView
+    private val adapter = CrimeAdapter(emptyList()) { crime ->
+        // 处理点击：跳转详情页
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_crime_list)
+
+        recyclerView = findViewById(R.id.recycler_view)
+        recyclerView.layoutManager = LinearLayoutManager(this)
+        recyclerView.adapter = adapter
+    }
+
+    fun updateUI(crimes: List<Crime>) {
+        adapter.updateData(crimes)
+    }
+}
+```
+
+### 第四步：ListAdapter——更现代的选择
+
+如果你的列表数据经常变（增删改），建议用 `ListAdapter`（继承自 `RecyclerView.Adapter`），它内置了 `DiffUtil` 自动计算差异：
+
+```kotlin
+class CrimeListAdapter(
+    private val onItemClick: (Crime) -> Unit
+) : ListAdapter<Crime, CrimeHolder>(DiffCallback) {
+
+    companion object DiffCallback : DiffUtil.ItemCallback<Crime>() {
+        override fun areItemsTheSame(oldItem: Crime, newItem: Crime): Boolean =
+            oldItem.id == newItem.id
+
+        override fun areContentsTheSame(oldItem: Crime, newItem: Crime): Boolean =
+            oldItem == newItem
+    }
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CrimeHolder {
+        val view = LayoutInflater.from(parent.context)
+            .inflate(R.layout.list_item_crime, parent, false)
+        return CrimeHolder(view)
+    }
+
+    override fun onBindViewHolder(holder: CrimeHolder, position: Int) {
+        holder.bind(getItem(position))
+        holder.itemView.setOnClickListener { onItemClick(getItem(position)) }
+    }
+}
+```
+
+使用 `ListAdapter` 后，更新数据只需 `adapter.submitList(newList)`，它会自动计算新旧列表的差异，只刷新真正变化的条目——滚动位置不会跳，动画也更流畅。
+
+{/* 7. 常见误区：C 型 ≥3 个。 */}
+
+## 容易踩的坑
+
+- **现象 →** RecyclerView 什么都不显示，一片空白。**原因 →** 忘了设 LayoutManager。没有 LayoutManager，RecyclerView 不知道条目该怎么摆，就等于没布局。**修法 →** 加上 `recyclerView.layoutManager = LinearLayoutManager(this)`。
+
+- **现象 →** 点击条目时 `position` 对不上——点第三条，跳转到第二条的数据。**原因 →** 在 `onBindViewHolder` 里用 `holder.adapterPosition` 获取位置，但列表更新后 adapterPosition 可能变了。**修法 →** 点击时调 `holder.bindingAdapterPosition` 或直接在 bind 时把数据对象传给 lambda。
+
+- **现象 →** `submitList()` 后列表整屏闪烁/重建，动画也没了。**原因 →** `DiffUtil` 的 `areContentsTheSame()` 返回了 `false`（因为每次都是新 `Crime` 对象）或直接没实现 DiffUtil。**修法 →** 确保数据类是 `data class`（自动生成 `equals`），DiffUtil 的两个回调正确实现——`areItemsTheSame` 比 ID，`areContentsTheSame` 用 `==` 比较整个对象。
+
+{/* 8. 小结与练习：C 型含独立实现题。 */}
+
+## 小结
+
+- RecyclerView 把列表拆成三件独立的事情：Adapter（管数据）、ViewHolder（管 View 复用）、LayoutManager（管排列）
+- ViewHolder 缓存子 View 引用 + 回收池复用 = 流畅滚动上百条数据的核心
+- `onCreateViewHolder` 创建 ViewHolder（少调）；`onBindViewHolder` 绑定数据（每条调）
+- 简单场景用 `RecyclerView.Adapter`；频繁增删改的数据用 `ListAdapter` + `DiffUtil`
+
+<Exercises>
+
+1. （改代码）给 `CrimeHolder` 增加一个 `solvedCheckBox: CheckBox`，在 `bind()` 里根据 `crime.isSolved` 设置它的选中状态。点击 CheckBox 时切换 solved 状态并通知 ViewModel 更新。
+
+2. （实现题）把 `CrimeAdapter` 改成 `ListAdapter<Crime, CrimeHolder>`，实现 `DiffCallback`。然后在数据源更新时用 `submitList()` 提交新列表，观察条目动画是否生效。
+
+3. （问答）为什么 `onCreateViewHolder` 有的场景只调 2-3 次，而 `onBindViewHolder` 可能调几十次？回收池在中间起了什么作用？
+
+<Answer>
+
+2. `submitList()` 在后台线程计算差异，主线程收到差异后按条目级别的增/删/改分别执行动画——位移、淡入淡出。前提是 `DiffUtil` 的回调正确实现。
+
+3. `onCreateViewHolder` 只在回收池里没有现成的 ViewHolder 时才会调。如果回收池里有回收的 ViewHolder（条目滚出去了），直接拿出来用——跳过 `onCreateViewHolder`，只调 `onBindViewHolder`。这就是为什么一个屏幕显示 8 条的列表，即使有 100 条数据，`onCreateViewHolder` 也只调约 10 次（多创建 2 个缓冲），而 `onBindViewHolder` 每滑一条就调一次。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Adapter">数据到 View 的桥梁。它告诉 RecyclerView 有多少条数据、每条数据对应的 View 长什么样。类比餐厅：Adapter 是服务员——厨房（数据源）做好菜，服务员端到桌上（屏幕）。</GlossaryItem>
+  <GlossaryItem term="ViewHolder">一个条目的 View 引用仓库。它把条目布局里的各个子 View 缓存起来，避免每次都要全屏 `findViewById`。类比高铁座椅——人换了（数据变了），但座椅本身（ViewHolder）可以复用。</GlossaryItem>
+  <GlossaryItem term="LayoutManager">决定列表条目怎么排列的角色。LinearLayoutManager 是竖排或横排线性列表，GridLayoutManager 是网格，StaggeredGridLayoutManager 是不等高的瀑布流。三个可互换，不影响 Adapter 的代码。</GlossaryItem>
+  <GlossaryItem term="DiffUtil">比较新旧两个列表的"差异计算器"。算出哪些条目是新增的、哪些被删了、哪些内容变了，让 RecyclerView 只刷新真正变化的条目而不是整屏重建。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

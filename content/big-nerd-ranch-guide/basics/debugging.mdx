@@ -1,0 +1,125 @@
+---
+title: Android应用的调试
+type: C
+section: 基础入门
+order: 5
+description: 掌握 Android Studio 调试工具——Logcat 日志过滤、断点调试、变量监视和堆栈追踪分析。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) Logcat 过滤 level/tag/regex = Stepper
+   2) 断点类型（普通/条件/异常）= 概念表
+   3) 堆栈追踪读法 = 代码示例
+   4) 复现→定位→验证 = Callout
+   5) ANR 与主线程 = Callout
+*/}
+
+<Objectives>
+
+- 能用 Logcat 按 level 和 tag 过滤日志，快速定位报错信息
+- 能在 Android Studio 中设置条件断点——只在特定条件下暂停执行
+- 能回答：出现 ANR 或 Crash 时，第一步应该看什么？
+
+</Objectives>
+
+## Bug 来了——先看黑匣子
+
+用户说「闪退」，你的第一步不是改代码，而是打开 <Term def="Android Studio 中显示系统和应用运行时日志的窗口，按时间与级别输出调试信息。">Logcat</Term>。配合断点和堆栈追踪，大多数问题能在十分钟内定位到文件和行号。
+
+## Logcat 过滤
+
+典型崩溃行：
+
+```
+E/AndroidRuntime: FATAL EXCEPTION: main
+    java.lang.NullPointerException
+    at com.example.MainActivity.onCreate(MainActivity.kt:42)
+```
+
+读法：**异常类型 → 你的包名 → 行号**。
+
+### Stepper：从海量日志里找到崩溃
+
+1. Level 选 **Error**（或 Warn+Error）
+2. Package 过滤为你的 `applicationId`
+3. 搜索 `FATAL EXCEPTION` 或 `AndroidRuntime`
+4. 点开堆栈，跳转到 `MainActivity.kt:42`
+
+```kotlin
+Log.d("MyTag", "clicked id=$id")
+Log.e("MyTag", "save failed", exception)
+```
+
+<Callout type="tip">
+  调试黄金法则：**复现 → 定位 → 验证**。先稳定复现，再 Logcat/断点定位，改完必须回归复现路径。
+</Callout>
+
+## 断点调试
+
+| 类型 | 用途 |
+|---|---|
+| 普通断点 | 暂停查看变量 |
+| 条件断点 | 如 `index == 99`，循环里只停一次 |
+| 异常断点 | Run → View Breakpoints → Any exception，崩溃即停 |
+
+## 堆栈追踪
+
+从下往上读，**第一个你的包名**通常是根因：
+
+```
+at com.example.MainActivity.loadData(MainActivity.kt:42)  ← 根因
+at com.example.MainActivity.onCreate(MainActivity.kt:18)
+at android.app.Activity.performCreate(...)
+```
+
+<Callout type="trap">
+  **ANR** 时看 Logcat 的 `ANR in` 和主线程堆栈——几乎总是主线程做了网络/磁盘 IO 或死锁。
+</Callout>
+
+<Callout type="trap">
+  到处 `Log.d` 却不设 TAG 过滤 → 日志被淹没。统一 TAG 前缀（如 `CrimeApp`），Release 用 Timber 树关闭 Debug 日志。
+</Callout>
+
+<Callout type="trap">
+  只看 `result.data` 不看 `resultCode` → 用户取消选择也被当成功。Activity Result 必须检查 `RESULT_OK`。
+</Callout>
+
+## 小结
+
+- Crash → Logcat Error + 堆栈第一行自己的代码
+- ANR → 主线程堆栈找阻塞点
+- 断点：条件断点省时间，异常断点抓崩溃
+
+<Exercises>
+
+**练习 1（实操）** Logcat 里如何只看本 App 的 Error 日志？
+
+<Answer>
+Package 选当前 applicationId，Log level 选 Error，必要时 Regex 填 `com.example|AndroidRuntime`。
+</Answer>
+
+**练习 2（分析）** 堆栈最底是 `Activity.performCreate`，中间全是 `android.*`，顶部是 `MainActivity.onCreate:18` 调用了 `loadData:42` 的 NPE。改哪一行？
+
+<Answer>
+`MainActivity.kt` 第 42 行 `loadData` 内——对 null 对象调用了方法。onCreate:18 只是调用方。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="ANR">
+  Application Not Responding——主线程阻塞超约 5 秒，系统弹窗。常见原因：主线程 IO、死锁、过度布局。
+</GlossaryItem>
+
+<GlossaryItem term="堆栈追踪（Stack Trace）">
+  异常时的方法调用链。从下往上读，定位第一个业务代码帧。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

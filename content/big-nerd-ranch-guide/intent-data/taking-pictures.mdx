@@ -1,0 +1,483 @@
+---
+title: 使用intent拍照
+type: C
+section: Intent与数据
+order: 16
+description: 学会通过隐式intent调用系统相机拍照、用FileProvider共享文件、处理拍照结果、以及应对Android 10+分区存储的挑战。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) MediaStore.ACTION_IMAGE_CAPTURE = 代码 walkthrough
+   2) FileProvider 配置（manifest + file_paths.xml + authority）= XML + 代码
+   3) 创建临时文件（getExternalFilesDir / createTempFile）= 代码
+   4) ActivityResultContracts 处理返回 = 代码
+   5) 全分辨率 vs 缩略图（EXTRA_OUTPUT / BitmapFactory）= 代码对比
+   6) 相机权限（CAMERA / WRITE_EXTERNAL_STORAGE）= Manifest + 运行时
+   7) content:// vs file:// URI = 概念 + 代码
+   8) Android 10+ Scoped Storage = 说明 + MediaStore 替代
+   9) CameraX 简要提及
+*/}
+
+<Objectives>
+
+- 能写出调用系统相机拍照并获取全分辨率照片的完整 Kotlin/Java 代码，包括 FileProvider 配置和 ActivityResult 回调
+- 能改出"只显示缩略图"为"显示全分辨率照片"的效果，并解释 `EXTRA_OUTPUT` 的作用
+- 能回答：为什么 Android 7.0 起禁止用 `file://` URI 跨 App 传文件？FileProvider 解决了什么问题？
+
+</Objectives>
+
+## 为什么需要隐式intent拍照
+
+很多 App 需要"拍一张照片"——用户头像、商品图、打卡记录。自己实现一个相机？你要处理对焦、曝光、闪光灯、前后摄像头切换、预览帧渲染……工程量巨大，而且每个厂商的相机行为还不一样。
+
+Android 的标准做法是：**发出"我要拍照"的请求，让系统相机 App 帮你拍，拍完后把照片还给你**。就像**相机摄影**里的"借设备"——你不需要自己造一台相机，只需告诉专业摄影师"帮我拍一张"，他拍完把底片交给你。
+
+这个看似简单的流程涉及三个关键技术：隐式 intent 调起相机、<Term def="ContentProvider 的特殊子类，用于在 App 之间安全共享文件。生成受权限保护的 content:// URI 替代 file:// URI，Android 7.0+ 跨 App 传文件的标准方式。">FileProvider</Term> 安全共享文件路径、以及 Activity Result API 接收拍照结果。
+
+## 使用intent拍照是怎么工作的
+
+### 调用系统相机：ACTION_IMAGE_CAPTURE
+
+<Term def="Android 系统定义的标准拍照动作常量，值为 `android.media.action.IMAGE_CAPTURE`。发出带此 action 的隐式 intent，系统会调起已安装的相机 App 完成拍照。">MediaStore.ACTION_IMAGE_CAPTURE</Term> 是最经典的隐式 intent 之一。你发出"我要拍照"的请求，系统相机 App 响应并完成拍摄。
+
+基本流程分四步：
+
+```
+你的App                    系统相机App
+  │                            │
+  │── ① 创建临时文件 ──────────│
+  │── ② FileProvider 生成 URI ─│
+  │── ③ 发出 ACTION_IMAGE_CAPTURE ──→ 打开相机、拍照
+  │                            │
+  │←── ④ 照片写入你指定的 URI ──│
+  │── 显示照片                  │
+```
+
+### FileProvider：为什么不能直接用 file:// URI
+
+Android 7.0（API 24）起，禁止用 `file://` URI 在 App 之间传文件。如果你把 `Uri.fromFile(photoFile)` 传给相机 App，运行时会抛出 `FileUriExposedException`。
+
+原因很直观：别的 App 拿到你的文件系统绝对路径（如 `/data/data/com.myapp/cache/IMG_001.jpg`），就能直接读写你的私有目录——这是严重的安全漏洞。
+
+FileProvider 把文件路径包装成 `content://` URI，并附带临时读写权限。相机 App 只能访问你授权的那一个文件，拍完后权限自动失效。
+
+**Manifest 声明：**
+
+```xml
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.fileprovider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths" />
+</provider>
+```
+
+**res/xml/file_paths.xml（定义可共享的目录范围）：**
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="cache_photos" path="." />
+    <external-files-path name="external_photos" path="Pictures/" />
+</paths>
+```
+
+`cache-path` 对应 `context.cacheDir`，`external-files-path` 对应 `context.getExternalFilesDir(null)`——这两个都是 App 私有目录，其他 App 无法直接访问，但通过 FileProvider 可以临时授权。
+
+**代码中获取 Content URI：**
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val photoFile = File.createTempFile("IMG_", ".jpg", cacheDir)
+val photoUri = FileProvider.getUriForFile(
+    this,
+    "${packageName}.fileprovider",  // 与 manifest authorities 一致
+    photoFile
+)
+```
+  </Tab>
+  <Tab label="Java">
+```java
+File photoFile = File.createTempFile("IMG_", ".jpg", getCacheDir());
+Uri photoUri = FileProvider.getUriForFile(
+    this,
+    getPackageName() + ".fileprovider",
+    photoFile
+);
+```
+  </Tab>
+</CodeTabs>
+
+### 处理拍照结果：Activity Result API
+
+旧写法 `onActivityResult` 已废弃。现代写法用 `registerForActivityResult`：
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+private lateinit var photoUri: Uri
+
+private val takePictureLauncher = registerForActivityResult(
+    ActivityResultContracts.TakePicture()
+) { success ->
+    if (success) {
+        // 照片已写入 photoUri 指向的文件
+        binding.imageView.setImageURI(photoUri)
+    }
+}
+
+fun takePhoto() {
+    val photoFile = File.createTempFile("IMG_", ".jpg", cacheDir)
+    photoUri = FileProvider.getUriForFile(
+        this, "${packageName}.fileprovider", photoFile
+    )
+    takePictureLauncher.launch(photoUri)
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+private Uri photoUri;
+
+private final ActivityResultLauncher<Uri> takePictureLauncher =
+    registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+        if (success) {
+            imageView.setImageURI(photoUri);
+        }
+    });
+
+public void takePhoto() {
+    File photoFile = File.createTempFile("IMG_", ".jpg", getCacheDir());
+    photoUri = FileProvider.getUriForFile(
+        this, getPackageName() + ".fileprovider", photoFile
+    );
+    takePictureLauncher.launch(photoUri);
+}
+```
+  </Tab>
+</CodeTabs>
+
+`ActivityResultContracts.TakePicture()` 是 AndroidX 提供的专用 Contract——它自动处理 `ACTION_IMAGE_CAPTURE` intent 的发出和结果解析，比手动写 intent 更简洁。
+
+### 全分辨率 vs 缩略图
+
+不传 `MediaStore.EXTRA_OUTPUT` 时，相机返回 intent data 里的是一个压缩过的缩略图 `Bitmap`（通常只有几百像素）。传了 `EXTRA_OUTPUT` 并指定 FileProvider URI，相机 App 会把**原始全分辨率照片**写入你指定的文件。
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+// 方式 A：缩略图（不推荐用于展示大图）
+private val captureLauncher = registerForActivityResult(
+    ActivityResultContracts.StartActivityForResult()
+) { result ->
+    val thumbnail = result.data?.extras?.get("data") as? Bitmap
+    binding.imageView.setImageBitmap(thumbnail)  // 模糊的小图
+}
+
+// 方式 B：全分辨率（推荐）
+private val takePictureLauncher = registerForActivityResult(
+    ActivityResultContracts.TakePicture()
+) { success ->
+    if (success) {
+        // 用 BitmapFactory 加载并缩放显示
+        val bitmap = BitmapFactory.decodeFile(photoFile.absolutePath)
+        binding.imageView.setImageBitmap(bitmap)
+    }
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+// 方式 B：全分辨率（推荐）
+private final ActivityResultLauncher<Uri> takePictureLauncher =
+    registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+        if (success) {
+            Bitmap bitmap = BitmapFactory.decodeFile(photoFile.getAbsolutePath());
+            imageView.setImageBitmap(bitmap);
+        }
+    });
+```
+  </Tab>
+</CodeTabs>
+
+大图直接 `decodeFile` 可能 OOM。生产环境应加采样缩放：
+
+```kotlin
+fun decodeSampledBitmap(path: String, reqWidth: Int, reqHeight: Int): Bitmap {
+    return BitmapFactory.Options().run {
+        inJustDecodeBounds = true
+        BitmapFactory.decodeFile(path, this)
+        inSampleSize = calculateInSampleSize(this, reqWidth, reqHeight)
+        inJustDecodeBounds = false
+        BitmapFactory.decodeFile(path, this)
+    }!!
+}
+```
+
+### Android 10+ 分区存储（Scoped Storage）
+
+<Term def="Android 10（API 29）引入的存储隔离机制。App 默认只能访问自己的私有目录和公共媒体集合（通过 MediaStore），不能随意读写外部存储的任意路径。">Scoped Storage</Term> 进一步收紧了存储访问：App 不能随意读写 `/sdcard/` 下的任意路径。
+
+对拍照的影响：
+- **App 私有目录**（`cacheDir`、`getExternalFilesDir`）不受 Scoped Storage 限制——FileProvider 共享这些目录里的文件完全合规
+- 如果想把照片存到**公共相册**（让用户在系统图库里也能看到），需要用 `MediaStore.Images.Media` API 写入，而不是直接写文件路径
+- `WRITE_EXTERNAL_STORAGE` 权限在 Android 10+ 对 App 私有目录已不需要；Android 13+ 改用细粒度媒体权限 `READ_MEDIA_IMAGES`
+
+<Callout type="tip">
+  如果只是"拍照→在 App 内展示"，用 `cacheDir` + FileProvider 就够了，不需要任何存储权限。只有要把照片存到公共相册时才需要 MediaStore API。
+</Callout>
+
+### CameraX：现代替代方案
+
+如果需要**自定义相机界面**（实时滤镜、扫码框、连续拍摄），隐式 intent 就不够用了。Google 推荐的现代方案是 **CameraX** 库——基于 Camera2 API 封装，自动处理设备兼容性、生命周期绑定、权限管理。但学习曲线比隐式 intent 陡得多，适合有定制需求的场景。
+
+## 动手：完成一个"拍照并显示"功能
+
+> 猜一猜：如果忘了配置 FileProvider，在 Android 7.0 以上的设备上点"拍照"会发生什么？Logcat 里会出现什么异常类名？
+
+<Stepper>
+  <Step title="① 配置 FileProvider">
+    在 `AndroidManifest.xml` 的 `<application>` 内添加 `<provider>` 标签，`authorities` 设为 `"${applicationId}.fileprovider"`。
+    创建 `res/xml/file_paths.xml`，声明 `<cache-path name="cache_photos" path="." />`。
+    效果：Gradle Sync 后，你的 App 具备了安全共享 cache 目录文件的能力。
+  </Step>
+  <Step title="② 创建临时文件并生成 Content URI">
+    点击拍照按钮时，调用 `File.createTempFile("IMG_", ".jpg", cacheDir)` 在 App 私有缓存目录创建空文件。
+    再用 `FileProvider.getUriForFile(context, authority, photoFile)` 生成 `content://com.myapp.fileprovider/cache_photos/IMG_xxx.jpg` 形式的 URI。
+    把这个 URI 保存在成员变量 `photoUri` 里——后面显示照片要用。
+  </Step>
+  <Step title="③ 发出拍照 Intent">
+    用 `ActivityResultContracts.TakePicture()` 注册 launcher，调用 `takePictureLauncher.launch(photoUri)`。
+    系统弹出相机 App 界面，用户按下快门。
+    相机 App 收到 `content://` URI 和临时写权限，把全分辨率 JPEG 写入你指定的文件。
+  </Step>
+  <Step title="④ 显示全分辨率照片">
+    回调里 `success == true` 表示拍照成功。用 `binding.imageView.setImageURI(photoUri)` 快速预览，或用 `BitmapFactory.decodeFile` + 采样缩放加载高清图。
+    屏幕上 ImageView 从占位图变为用户刚拍的照片。
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+### 完整拍照 Activity 示例
+
+下面是一个可运行的最小实现，覆盖了 FileProvider 配置、权限声明、拍照启动和结果显示。
+
+**AndroidManifest.xml 权限声明：**
+
+```xml
+<!-- 只有直接拨出电话才需要；隐式 intent 调相机通常不需要 CAMERA 权限 -->
+<!-- Android 13+ 读取相册才需要 -->
+<uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+```
+
+**Activity 完整代码：**
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+class PhotoActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityPhotoBinding
+    private lateinit var photoFile: File
+    private lateinit var photoUri: Uri
+
+    private val takePictureLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success) {
+            binding.imageView.setImageURI(photoUri)
+        } else {
+            Toast.makeText(this, "拍照取消", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityPhotoBinding.inflate(layoutInflater)
+        setContentView(binding.root)
+        binding.btnTakePhoto.setOnClickListener { takePhoto() }
+    }
+
+    private fun takePhoto() {
+        photoFile = File.createTempFile("IMG_", ".jpg", cacheDir)
+        photoUri = FileProvider.getUriForFile(
+            this, "${packageName}.fileprovider", photoFile
+        )
+        takePictureLauncher.launch(photoUri)
+    }
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+public class PhotoActivity extends AppCompatActivity {
+    private ActivityPhotoBinding binding;
+    private File photoFile;
+    private Uri photoUri;
+
+    private final ActivityResultLauncher<Uri> takePictureLauncher =
+        registerForActivityResult(new ActivityResultContracts.TakePicture(), success -> {
+            if (success) {
+                binding.imageView.setImageURI(photoUri);
+            } else {
+                Toast.makeText(this, "拍照取消", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        binding = ActivityPhotoBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
+        binding.btnTakePhoto.setOnClickListener(v -> takePhoto());
+    }
+
+    private void takePhoto() {
+        try {
+            photoFile = File.createTempFile("IMG_", ".jpg", getCacheDir());
+            photoUri = FileProvider.getUriForFile(
+                this, getPackageName() + ".fileprovider", photoFile
+            );
+            takePictureLauncher.launch(photoUri);
+        } catch (IOException e) {
+            Toast.makeText(this, "无法创建临时文件", Toast.LENGTH_SHORT).show();
+        }
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+关键点：`photoUri` 必须是成员变量——回调触发时 intent 的 data 里通常没有照片（用了 `EXTRA_OUTPUT` 后相机直接写文件），你必须靠之前保存的 URI 引用来读取照片。
+
+### 手动 Intent 写法（理解原理用）
+
+`ActivityResultContracts.TakePicture()` 底层其实就是下面这段代码：
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val captureIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+    putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+    addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+}
+startActivityForResult(captureIntent, REQUEST_CODE)  // 旧 API，已废弃
+```
+  </Tab>
+  <Tab label="Java">
+```java
+Intent captureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+captureIntent.putExtra(MediaStore.EXTRA_OUTPUT, photoUri);
+captureIntent.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+startActivityForResult(captureIntent, REQUEST_CODE);  // 旧 API，已废弃
+```
+  </Tab>
+</CodeTabs>
+
+`FLAG_GRANT_WRITE_URI_PERMISSION` 告诉系统：把对这个 URI 的写权限临时授予相机 App。没有这个 flag，相机 App 无法写入你指定的文件。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Android 7.0 以上点"拍照"崩溃，Logcat 报 `FileUriExposedException`。**原因**：用了 `Uri.fromFile(photoFile)` 生成 `file://` URI 传给相机 App。Android 7.0+ 禁止跨 App 传递 file:// URI。**修法**：改用 `FileProvider.getUriForFile()` 生成 `content://` URI，并在 Manifest 中正确配置 FileProvider。
+</Callout>
+
+<Callout type="trap">
+  **现象**：拍照成功（`success == true`）但 ImageView 显示空白或旧图。**原因**：回调里从 `result.data` 取照片——用了 `EXTRA_OUTPUT` 后 intent data 里没有 Bitmap，照片写在你指定的文件里。**修法**：用成员变量 `photoUri` 或 `photoFile` 读取，不要依赖 `result.data?.extras?.get("data")`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：FileProvider 配置后仍然崩溃 `IllegalArgumentException: Failed to find configured root`。**原因**：`file_paths.xml` 里的 path 类型和实际文件所在目录不匹配——比如文件在 `cacheDir` 但 xml 里只声明了 `external-files-path`。**修法**：确认 `File.createTempFile` 的目录和 `file_paths.xml` 中的 `<cache-path>` / `<external-files-path>` 一致。
+</Callout>
+
+<Callout type="trap">
+  **现象**：加载全分辨率照片时 App 崩溃 OOM（OutOfMemoryError）。**原因**：现代手机照片动辄 4000×3000 像素，直接 `BitmapFactory.decodeFile` 会占用 ~48MB 内存。**修法**：用 `BitmapFactory.Options.inSampleSize` 先采样再解码，或限制 ImageView 的显示尺寸后再加载。
+</Callout>
+
+## 小结
+
+- 拍照三步：创建临时文件 → FileProvider 生成 content:// URI → 隐式 intent 调起相机
+- FileProvider 替代 file:// URI，Android 7.0+ 跨 App 传文件的强制要求
+- `EXTRA_OUTPUT` 拿全分辨率照片；不传只拿压缩缩略图
+- 用 `registerForActivityResult(TakePicture())` 替代废弃的 `onActivityResult`
+- Android 10+ Scoped Storage：App 私有目录不受限；存公共相册需 MediaStore API
+
+<Exercises>
+
+**练习 1（改代码型）** 当前代码用 `setImageURI(photoUri)` 显示照片，但在 4000 万像素手机上加载很慢且可能 OOM。请改为：用 `BitmapFactory.decodeFile` + `inSampleSize` 采样，把图片缩放到 ImageView 宽度后再显示。
+
+<Answer>
+
+```kotlin
+private fun loadSampledBitmap(path: String, targetWidth: Int): Bitmap {
+    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeFile(path, options)
+    options.inSampleSize = (options.outWidth / targetWidth).coerceAtLeast(1)
+    options.inJustDecodeBounds = false
+    return BitmapFactory.decodeFile(path, options)!!
+}
+
+// 在拍照成功回调里：
+if (success) {
+    val bitmap = loadSampledBitmap(photoFile.absolutePath, binding.imageView.width)
+    binding.imageView.setImageBitmap(bitmap)
+}
+```
+
+</Answer>
+
+**练习 2（实现型）** 为你的 App 新增"更换头像"功能：点击头像区域调起系统相机，拍完后把照片显示在圆形 ImageView 里。要求完整配置 FileProvider，并处理用户取消拍照的情况。
+
+<Answer>
+
+完整实现需三步：
+1. Manifest 加 FileProvider provider 标签 + `res/xml/file_paths.xml`
+2. Activity 里注册 `ActivityResultContracts.TakePicture()` launcher
+3. 点击头像 → `createTempFile` → `getUriForFile` → `launcher.launch(uri)`；回调里 `success` 为 false 时 Toast "已取消"
+
+Kotlin 核心：
+
+```kotlin
+binding.avatarImage.setOnClickListener {
+    val file = File.createTempFile("AVATAR_", ".jpg", cacheDir)
+    photoUri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
+    takePictureLauncher.launch(photoUri)
+}
+```
+
+</Answer>
+
+**练习 3（问答型）** 你的同事说："Android 10 加了 Scoped Storage，所以 FileProvider 不能用了，必须改用 MediaStore。" 这个说法对吗？为什么？
+
+<Answer>
+
+不对。Scoped Storage 限制的是 App 访问**公共外部存储**（如 `/sdcard/Download/`）的任意路径，并不限制 App 访问**自己的私有目录**（`cacheDir`、`getExternalFilesDir`）。FileProvider 共享的正是这些私有目录里的文件——完全不受 Scoped Storage 影响。只有当你要把照片写入**公共相册**（让用户在系统图库里也能看到）时，才需要用 MediaStore API。App 内拍照→展示的场景，FileProvider + 私有目录依然是标准做法。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="FileProvider">
+  ContentProvider 的特殊子类，用于在 App 之间安全共享文件。生成受权限保护的 content:// URI 替代 file:// URI，可设置临时读写权限。Android 7.0+ 跨 App 传文件的标准方式。详见本章"FileProvider"一节。
+</GlossaryItem>
+
+<GlossaryItem term="MediaStore.ACTION_IMAGE_CAPTURE">
+  Android 系统定义的标准拍照动作常量。发出带此 action 的隐式 intent，系统调起已安装的相机 App 完成拍照。配合 EXTRA_OUTPUT 可获取全分辨率照片。详见本章"调用系统相机"一节。
+</GlossaryItem>
+
+<GlossaryItem term="Scoped Storage">
+  Android 10（API 29）引入的存储隔离机制。App 默认只能访问自己的私有目录和公共媒体集合（通过 MediaStore），不能随意读写外部存储的任意路径。详见本章"Android 10+ 分区存储"一节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

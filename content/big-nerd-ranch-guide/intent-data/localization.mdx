@@ -1,0 +1,453 @@
+---
+title: 应用本地化
+type: C
+section: Intent与数据
+order: 17
+description: 学会将App界面翻译成多语言、用资源限定符适配不同语言环境、格式化数字和日期、以及支持从右到左的布局。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+<Objectives>
+
+- 能改出一份至少支持中文和英文两种语言的 App，通过添加 values-zh 和 values-en 资源目录实现界面语言自动切换
+- 能解释 Android 如何在多个匹配的资源限定符中选中最终资源——什么叫 "最具体匹配" 规则
+- 能回答：为什么永远不应该在 Java/Kotlin 代码或 XML 里直接写用户看到的字符串？
+
+</Objectives>
+
+## 为什么需要应用本地化
+
+想象你开发了一个记账 App，界面全是中文。一个巴西用户下载了它——他看不懂 "添加支出" 四个字，也不知道 "月收入" 是什么意思。他只给你打了一星差评，然后卸载。
+
+不做本地化，你的 App 就自动放弃了所有非母语用户。Android 设备遍布全球 190+ 个国家——Google Play 上排名靠前的 App 无一例外都支持多语言。好消息是 Android 的资源框架**从第一天开始就为多语言做了设计**——你不需要改一行代码，只需要把字符串翻译一份放到对应目录。
+
+用**工厂流水线**来类比：你的 Kotlin 代码是流水线机器本身——它只管逻辑（按钮点下去做什么）。而 `strings.xml` 是机器上可以随时替换的铭牌——中文铭牌装在中文产线，英文铭牌装在出口产线。机器不变，铭牌换一块就行。
+
+## 资源限定符是怎么工作的
+
+### 目录命名规则
+
+Android 通过资源目录名称的后缀来区分不同配置。语言限定符的格式是 `values-语言代码`，如果需要区分地区则是 `values-语言代码-r地区代码`：
+
+```
+res/
+  values/              ← 默认（fallback）资源
+    strings.xml
+  values-zh/           ← 中文（任何地区）
+    strings.xml
+  values-zh-rCN/       ← 中文（中国大陆）
+    strings.xml
+  values-zh-rTW/       ← 中文（台湾）
+    strings.xml
+  values-en/           ← 英文（任何地区）
+    strings.xml
+  values-en-rUS/       ← 英文（美国）
+    strings.xml
+  values-ja/           ← 日语
+    strings.xml
+  values-fr/           ← 法语
+    strings.xml
+```
+
+语言代码遵循 ISO 639-1（两字母，如 `zh`、`en`、`ja`、`fr`），地区代码遵循 ISO 3166-1（如 `CN`、`TW`、`US`），前面加 `r` 前缀。目录名必须严格小写。
+
+`<Term def="系统在所有匹配的资源限定符中选择最具体的一个——比如同时有 values-zh-rCN 和 values-zh，用户用中文（中国大陆）时会优先选前者，用户用中文（台湾）时因没有 zh-rTW 而退到 zh">资源匹配规则</Term>` 遵循 "最具体匹配" 原则：系统根据用户设备当前的 `<Term def="语言+地区的组合标识（如 zh-CN、en-US），决定了日期格式、数字格式、字符排序等文化相关行为">Locale</Term>` 设置，在所有可用的资源目录中选择最匹配的那个。优先级从高到低依次是：语言+地区完全匹配 → 仅语言匹配 → 默认值。
+
+### 在 Android Studio 中添加语言
+
+Android Studio 提供了 **Translations Editor**（翻译编辑器）——这是最高效的添加多语言方式。操作路径：
+
+1. 右键 `res/values/strings.xml` → **Open Translations Editor**
+2. 点击左上角的地球图标 → 选择要添加的语言（比如 Chinese (zh) 或 French (fr)）
+3. 编辑器中会出现新的一列——直接在表格里翻译每条字符串
+4. AS 自动在 `res/` 下创建 `values-zh/strings.xml`，只包含翻译过的条目
+
+Translations Editor 还会自动标记哪些字符串还没有翻译（显示为红色），以及哪些翻译与默认值完全相同（可能是忘了翻译）。
+
+### strings.xml 里的字符串应该怎么写
+
+把**所有**用户可见的文字都放进 `strings.xml`，永远不要在代码或布局 XML 里硬编码：
+
+```xml
+<!-- res/values/strings.xml（默认，通常是英文） -->
+<resources>
+    <string name="app_name">ExpenseTracker</string>
+    <string name="add_expense">Add Expense</string>
+    <string name="monthly_summary">Monthly Summary</string>
+    <string name="delete_confirm">Are you sure you want to delete this entry?</string>
+    <string name="total_amount">Total: ¥%1$s</string>
+</resources>
+```
+
+```xml
+<!-- res/values-zh/strings.xml（中文翻译） -->
+<resources>
+    <string name="app_name">记账助手</string>
+    <string name="add_expense">添加支出</string>
+    <string name="monthly_summary">月度汇总</string>
+    <string name="delete_confirm">确定要删除这条记录吗？</string>
+    <string name="total_amount">合计：¥%1$s</string>
+</resources>
+```
+
+注意 `%1$s` 这种带格式参数的字符串用法——`%1` 表示第一个参数，`$s` 表示字符串类型。不同语言的语序可能完全不同，用位置参数让翻译者可以自由调整顺序。比如中文 "合计：¥123" 和英文 "Total: ¥123" 语序一致，但日语可能是 "合計：123円"。
+
+## 动手：给一个 App 加上中英文支持
+
+> 猜一猜：如果你只加了 `values-zh/strings.xml` 但没有加 `values-en/strings.xml`，系统语言设为英文时 App 会显示什么？
+
+<Stepper>
+<Step title="1. 准备默认的 strings.xml">
+
+假设你有一个简单的 App，只有一个主页面显示问候语和按钮。先在 `res/values/strings.xml` 中写好默认（英文）字符串：
+
+```xml
+<resources>
+    <string name="app_name">My App</string>
+    <string name="greeting">Hello, welcome!</string>
+    <string name="btn_send">Send</string>
+    <string name="btn_cancel">Cancel</string>
+</resources>
+```
+
+布局文件 `activity_main.xml` 通过 `@string/greeting` 引用字符串——代码完全不碰文字内容：
+
+```xml
+<TextView
+    android:id="@+id/tvGreeting"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:text="@string/greeting"
+    android:textSize="18sp" />
+```
+
+</Step>
+<Step title="2. 用 Translations Editor 添加中文">
+
+右键 `values/strings.xml` → **Open Translations Editor** → 点击地球图标 → 选择 **Chinese (zh)**。在编辑器表格中逐条翻译：
+
+| Key | Default (English) | Chinese (zh) |
+|-----|-------------------|--------------|
+| app_name | My App | 我的应用 |
+| greeting | Hello, welcome! | 你好，欢迎！ |
+| btn_send | Send | 发送 |
+| btn_cancel | Cancel | 取消 |
+
+点击确定，AS 自动生成 `res/values-zh/strings.xml`，里面只有你翻译过的条目。
+</Step>
+<Step title="3. 验证语言切换效果">
+
+两种验证方式：
+
+**方式一（模拟器内手动切换）**：Settings → System → Languages & input → Languages → 添加 "中文（简体）" → 拖到最上面 → 回到桌面 → 重新打开 App。你会看到界面从英文变成了中文。
+
+**方式二（adb 命令行切换）**：直接通过 adb 设置系统语言，无需打开设置菜单：
+
+```bash
+# 切换到中文（中国大陆）
+adb shell settings put system system_locales zh-CN
+
+# 切换到英文（美国）
+adb shell settings put system system_locales en-US
+
+# 查看当前语言设置
+adb shell settings get system system_locales
+```
+
+切换后重新打开 App 即可看到效果。如果 App 没有刷新，说明需要处理 `<Term def="当设备配置（语言、屏幕方向等）发生变化时，系统重新创建 Activity 以加载新资源。默认行为会触发 onDestroy → onCreate 完整重建">Configuration 变化</Term>` ——通常你的 App 如果没有特殊处理，系统会自动重建 Activity 来加载新资源。
+</Step>
+</Stepper>
+
+## 代码逐段拆解
+
+下面拆解一个完整的支持多语言 + 本地化格式的 Activity。
+
+先定义好所有字符串资源：
+
+```xml
+<!-- res/values/strings.xml -->
+<resources>
+    <string name="label_price">Price: %1$s</string>
+    <string name="label_date">Date: %1$s</string>
+    <string name="title_main">My Expenses</string>
+    <string name="btn_add">Add</string>
+    <string name="item_count">You have %1$d items</string>
+</resources>
+<!-- res/values-zh/strings.xml -->
+<resources>
+    <string name="label_price">价格：%1$s</string>
+    <string name="label_date">日期：%1$s</string>
+    <string name="title_main">我的支出</string>
+    <string name="btn_add">添加</string>
+    <string name="item_count">你有 %1$d 笔记录</string>
+</resources>
+```
+
+然后是 Activity 的 Kotlin 代码——数字和日期都用 `Locale` 感知的方式格式化：
+
+<CodeTabs>
+<Tab label="Kotlin">
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        // 从 strings.xml 取文字——永远不硬编码
+        supportActionBar?.title = getString(R.string.title_main)
+
+        // 数字用 NumberFormat 按当前 Locale 格式化
+        val price = 1234567.89
+        val currencyFormat = NumberFormat.getCurrencyInstance()
+        val formattedPrice = currencyFormat.format(price)
+        // 中文环境：¥1,234,567.89  英文环境：$1,234,567.89
+        tvPrice.text = getString(R.string.label_price, formattedPrice)
+
+        // 日期用 DateFormat 按当前 Locale 格式化
+        val today = Date()
+        val dateFormat = DateFormat.getDateInstance(DateFormat.LONG)
+        val formattedDate = dateFormat.format(today)
+        // 中文环境：2024年3月15日  英文环境：March 15, 2024
+        tvDate.text = getString(R.string.label_date, formattedDate)
+
+        // 带参数的字符串
+        val itemCount = 5
+        tvCount.text = getString(R.string.item_count, itemCount)
+    }
+}
+```
+
+</Tab>
+<Tab label="Java">
+
+```java
+public class MainActivity extends AppCompatActivity {
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        // 从 strings.xml 取文字
+        if (getSupportActionBar() != null) {
+            getSupportActionBar().setTitle(getString(R.string.title_main));
+        }
+
+        // 数字格式化
+        double price = 1234567.89;
+        NumberFormat currencyFormat = NumberFormat.getCurrencyInstance();
+        String formattedPrice = currencyFormat.format(price);
+        tvPrice.setText(getString(R.string.label_price, formattedPrice));
+
+        // 日期格式化
+        Date today = new Date();
+        DateFormat dateFormat = DateFormat.getDateInstance(DateFormat.LONG);
+        String formattedDate = dateFormat.format(today);
+        tvDate.setText(getString(R.string.label_date, formattedDate));
+
+        // 带参数的字符串
+        int itemCount = 5;
+        tvCount.setText(getString(R.string.item_count, itemCount));
+    }
+}
+```
+
+</Tab>
+</CodeTabs>
+
+`NumberFormat.getCurrencyInstance()` 不带参数时自动使用用户设备的当前 Locale——中文设备显示 `¥`，美国设备显示 `$`，日本设备显示 `￥`。同理 `getNumberInstance()` 处理千位分隔符的差异。
+
+`DateFormat.getDateInstance(DateFormat.LONG)` 根据 Locale 决定日期格式——中文 "2024年3月15日"、英文 "March 15, 2024"、德语 "15. März 2024"。不需要你手动拼接字符串。
+
+**RTL 布局支持：** 阿拉伯语、希伯来语等语言是从右到左书写的。用 `start`/`end` 替代 `left`/`right`，系统自动根据语言方向翻转布局：
+
+```xml
+<!-- 所有支持 RTL 的 App 都应该这样写 -->
+<Button
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="16dp"
+    android:layout_marginEnd="16dp"
+    android:text="@string/btn_send" />
+
+<!-- 而不是这样 -->
+<!-- android:layout_marginLeft="16dp"  ← LTR 语言没问题，RTL 语言就反了 -->
+```
+
+**复数字符串（Quantity Strings）**：不同语言的复数规则完全不同。中文 "1张照片" 和 "5张照片" 说法一样；英文 "1 photo" 和 "5 photos" 不同；俄语甚至有四种形式。用 `<plurals>` 而非 if-else：
+
+```xml
+<!-- res/values/strings.xml（英文） -->
+<plurals name="photo_count">
+    <item quantity="one">%d photo</item>
+    <item quantity="other">%d photos</item>
+</plurals>
+
+<!-- res/values-zh/strings.xml（中文） -->
+<plurals name="photo_count">
+    <item quantity="other">%d 张照片</item>
+</plurals>
+
+<!-- res/values-ru/strings.xml（俄语，有四种形式） -->
+<plurals name="photo_count">
+    <item quantity="one">%d фотография</item>
+    <item quantity="few">%d фотографии</item>
+    <item quantity="many">%d фотографий</item>
+    <item quantity="other">%d фотографии</item>
+</plurals>
+```
+
+代码中通过 `resources.getQuantityString()` 使用复数字符串——系统自动根据数量选择正确的形式：
+
+<CodeTabs>
+<Tab label="Kotlin">
+
+```kotlin
+val count = 3
+val text = resources.getQuantityString(
+    R.plurals.photo_count, count, count
+)
+// 英文：3 photos  中文：3 张照片  俄语：3 фотографии
+tvPhoto.text = text
+```
+
+</Tab>
+<Tab label="Java">
+
+```java
+int count = 3;
+String text = getResources().getQuantityString(
+    R.plurals.photo_count, count, count
+);
+tvPhoto.setText(text);
+```
+
+</Tab>
+</CodeTabs>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：加了 `values-zh/strings.xml`，设备语言也设成了中文，但 App 仍然显示英文。**原因**：Android Studio 可能没有识别到新建的资源目录——需要 Clean Project 然后 Rebuild 让 R 类重新生成。**修法**：Build → Clean Project → Build → Rebuild Project。另外检查目录名是否严格为小写（`values-zh` 不是 `values-ZH`）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在代码里用 `String.format("你有 %d 笔记录", count)`，中文没问题，但翻译成英文后语序需要写成 `"You have %d items"` 结果格式字符串无法复用。**原因**：不同语言的占位符位置可能不同——直接用 `String.format` 写死位置限制了翻译灵活性。**修法**：用 `<string name="item_count">你有 %1$d 笔记录</string>` 配合 `getString(R.string.item_count, count)`，翻译者可以自由调整 `%1$d` 在句子中的位置。
+</Callout>
+
+<Callout type="trap">
+  **现象**：阿拉伯语用户的界面布局完全错乱——按钮跑到了屏幕边缘外。**原因**：布局文件中用了 `android:layout_marginLeft` 和 `android:layout_marginRight`，而不是 `marginStart`/`marginEnd`。RTL 语言下 `left` 始终是屏幕左边（物理方向），而 `start` 会根据语言方向自动翻转。**修法**：全局替换所有 `Left`/`Right` 属性为 `Start`/`End`——Android Studio 有快捷键 Refactor → Add RTL Support Where Possible。
+</Callout>
+
+<Callout type="trap">
+  **现象**：复数字符串在中文环境显示 "1 photos" 而不是 "1 张照片"。**原因**：中文的 `<plurals>` 只写了 `quantity="other"`，但 `getQuantityString` 传入 count=1 时系统试图找 `quantity="one"` 却找不到，于是 fallback 到默认语言。**修法**：中文的复数规则所有数量都用 `other`，只需要写 `<item quantity="other">%d 张照片</item>` 一条即可——不要试图把英文的 `one`/`other` 模式照搬到中文。
+</Callout>
+
+## 小结
+
+- 资源限定符 `values-语言代码` 让系统自动选择最匹配的字符串资源
+- Android Studio 的 Translations Editor 可视化管理和翻译所有字符串
+- `NumberFormat`/`DateFormat` 按当前 Locale 自动格式化数字和日期——不用手写格式串
+- 用 `start`/`end` 替代 `left`/`right`，一行代码不改就能兼容 RTL 语言
+- 复数字符串用 `<plurals>` 而非 if-else 拼接——不同语言有不同的复数规则
+
+<Exercises>
+
+**练习 1（代码修改型）** 有一个现有的 App，所有字符串都硬编码在 Java/Kotlin 代码和 layout XML 中（比如 `android:text="Hello"`）。请写出改造步骤：如何把所有用户可见文字迁移到 `strings.xml` 中，然后添加一份日语翻译。
+
+<Answer>
+
+1. 新建 `res/values/strings.xml`，把所有硬编码字符串提取为 `<string name="xxx">` 条目
+2. 把 layout XML 中的 `android:text="Hello"` 替换为 `android:text="@string/hello"`
+3. 把 Java/Kotlin 代码中的 `"Hello"` 替换为 `getString(R.string.hello)`
+4. 用 Translations Editor 或手动创建 `res/values-ja/strings.xml`，逐条翻译为日语
+5. 在模拟器中切换系统语言为日本語，验证所有界面文字都正确显示
+
+</Answer>
+
+**练习 2（独立实现型）** 从零写一个 "货币转换器" 小工具：一个 EditText 输入金额，一个 Spinner 选择目标货币，一个 Button 点击转换，一个 TextView 显示结果。要求：(1) 所有用户可见字符串都在 `strings.xml` 中定义；(2) 提供至少中文和英文两套翻译；(3) 用 `NumberFormat.getCurrencyInstance()` 格式化输出金额。
+
+<Answer>
+
+关键代码结构：
+
+```kotlin
+class CurrencyConverterActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_converter)
+
+        btnConvert.setOnClickListener {
+            val amount = etAmount.text.toString().toDoubleOrNull() ?: return@setOnClickListener
+            val converted = when (spinnerCurrency.selectedItemPosition) {
+                0 -> amount * 7.2  // USD → CNY
+                1 -> amount * 0.14 // CNY → USD
+                else -> amount
+            }
+
+            // 根据用户选择的货币设置 Locale 格式化
+            val locale = when (spinnerCurrency.selectedItemPosition) {
+                0 -> Locale.CHINA
+                1 -> Locale.US
+                else -> Locale.getDefault()
+            }
+            val formatter = NumberFormat.getCurrencyInstance(locale)
+            tvResult.text = formatter.format(converted)
+        }
+    }
+}
+```
+
+string resources:
+```xml
+<!-- values/strings.xml -->
+<string name="app_name">Currency Converter</string>
+<string name="hint_amount">Enter amount</string>
+<string name="btn_convert">Convert</string>
+<!-- values-zh/strings.xml -->
+<string name="app_name">货币转换器</string>
+<string name="hint_amount">输入金额</string>
+<string name="btn_convert">转换</string>
+```
+
+</Answer>
+
+**练习 3（自测型）** 如果你的 App 要同时支持阿拉伯语（RTL），除了把所有字符串翻译成阿拉伯语外，还需要对布局文件做什么修改？请列出至少三项。
+
+<Answer>
+1. 把所有 `android:layout_marginLeft`/`paddingLeft` 替换为 `Start`、`Right` 替换为 `End`
+2. 把所有 `android:gravity="left"`/`"right"` 替换为 `"start"`/`"end"`
+3. 在 `<LinearLayout>`、`<RelativeLayout>` 等容器中，把水平方向的 `left`/`right` 规则替换为 `start`/`end`
+4. 可选：启用 `android:supportsRtl="true"` 在 `<application>` 标签中，并在 `AndroidManifest.xml` 中声明为 `android:supportsRtl="true"`
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Locale">
+  语言+地区的组合标识（如 zh-CN、en-US）。决定了日期格式、数字格式、货币符号、字符排序规则等文化相关的行为。通过 Locale.getDefault() 获取当前系统设置。
+</GlossaryItem>
+
+<GlossaryItem term="资源匹配规则">
+  系统在所有匹配的资源限定符中选择最具体的一个——比如同时有 values-zh-rCN 和 values-zh，用户用中文（中国大陆）时会优先选前者，用户用中文（台湾）时因没有 zh-rTW 而退到 zh。原则是"越具体越优先"。
+</GlossaryItem>
+
+<GlossaryItem term="Configuration 变化">
+  当设备配置（语言、屏幕方向、屏幕尺寸等）发生变化时，Android 系统默认会销毁并重新创建 Activity，以便加载与新配置匹配的资源。可以通过重写 onConfigurationChanged 或使用 ViewModel 来优化处理。
+</GlossaryItem>
+
+<GlossaryItem term="资源限定符">
+  Android 资源目录名中的后缀（如 -zh 表示中文、-land 表示横屏、-xhdpi 表示超高密度屏幕），告诉系统在特定设备配置下使用对应目录里的资源。多个限定符可以用 - 连接，如 values-zh-rCN-land。
+</GlossaryItem>
+
+<GlossaryItem term="RTL（从右到左）">
+  Right-to-Left 的缩写。阿拉伯语、希伯来语、波斯语等语言的书写和阅读方向。Android 通过 start/end 属性和 android:supportsRtl 支持自动镜像布局。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

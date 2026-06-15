@@ -85,7 +85,39 @@ export type ReviewChapterSlug =
   | "hook-technology"
   | "plugin-principle"
   | "draw-optimization"
-  | "memory-optimization";
+  | "memory-optimization"
+  | "bnrg-first-app"
+  | "bnrg-mvc"
+  | "bnrg-lifecycle"
+  | "bnrg-ui-state"
+  | "bnrg-debugging"
+  | "bnrg-second-activity"
+  | "bnrg-sdk-compat"
+  | "bnrg-fragments"
+  | "bnrg-recyclerview"
+  | "bnrg-layouts"
+  | "bnrg-room"
+  | "bnrg-fragment-nav"
+  | "bnrg-dialogs"
+  | "bnrg-app-bar"
+  | "bnrg-implicit-intents"
+  | "bnrg-taking-pictures"
+  | "bnrg-localization"
+  | "bnrg-accessibility"
+  | "bnrg-data-binding"
+  | "bnrg-audio-testing"
+  | "bnrg-styles"
+  | "bnrg-xml-drawables"
+  | "bnrg-more-intents"
+  | "bnrg-http-background"
+  | "bnrg-looper-handler"
+  | "bnrg-search"
+  | "bnrg-workmanager"
+  | "bnrg-broadcast"
+  | "bnrg-webview"
+  | "bnrg-custom-views"
+  | "bnrg-property-animation"
+  | "bnrg-afterword";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -174,6 +206,38 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "plugin-principle": "插件化原理",
   "draw-optimization": "绘制优化",
   "memory-optimization": "内存优化",
+  "bnrg-first-app": "Android开发初体验",
+  "bnrg-mvc": "Android与MVC设计模式",
+  "bnrg-lifecycle": "activity的生命周期",
+  "bnrg-ui-state": "UI状态的保存与恢复",
+  "bnrg-debugging": "Android应用的调试",
+  "bnrg-second-activity": "第二个activity",
+  "bnrg-sdk-compat": "Android SDK版本与兼容",
+  "bnrg-fragments": "UI fragment与fragment管理器",
+  "bnrg-recyclerview": "使用RecyclerView显示列表",
+  "bnrg-layouts": "使用布局与部件创建用户界面",
+  "bnrg-room": "数据库与Room库",
+  "bnrg-fragment-nav": "Fragment Navigation",
+  "bnrg-dialogs": "对话框",
+  "bnrg-app-bar": "应用栏",
+  "bnrg-implicit-intents": "隐式intent",
+  "bnrg-taking-pictures": "使用intent拍照",
+  "bnrg-localization": "应用本地化",
+  "bnrg-accessibility": "Android辅助功能",
+  "bnrg-data-binding": "数据绑定与MVVM",
+  "bnrg-audio-testing": "音频播放与单元测试",
+  "bnrg-styles": "样式与主题",
+  "bnrg-xml-drawables": "XML drawable",
+  "bnrg-more-intents": "深入学习intent和任务",
+  "bnrg-http-background": "HTTP与后台任务",
+  "bnrg-looper-handler": "Looper、Handler和HandlerThread",
+  "bnrg-search": "搜索",
+  "bnrg-workmanager": "WorkManager",
+  "bnrg-broadcast": "broadcast intent",
+  "bnrg-webview": "网页浏览",
+  "bnrg-custom-views": "定制视图与触摸事件",
+  "bnrg-property-animation": "属性动画",
+  "bnrg-afterword": "编后语",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

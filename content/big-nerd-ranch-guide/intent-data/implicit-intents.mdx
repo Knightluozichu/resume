@@ -1,0 +1,456 @@
+---
+title: 隐式intent
+type: C
+section: Intent与数据
+order: 15
+description: 学会用隐式intent调用其他App完成打开网页、发送邮件、分享文字、拨号等常见操作，并能处理无匹配App的异常情况。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) 显式intent vs 隐式intent = 代码对照 + 表格对比
+   2) Intent actions（ACTION_VIEW/SEND/DIAL/SENDTO）= 代码示例
+   3) MIME类型在intent中的作用 = 代码示例
+   4) Intent Filter在AndroidManifest中的声明 = XML片段
+   5) resolveActivity安全检查 = 代码示例
+   6) createChooser选择器 = 代码示例 + 示意图
+   7) ActivityNotFoundException处理 = try-catch模式
+   8) Uri.parse构建URI = 代码示例
+*/}
+
+<Objectives>
+
+- 能区分显式intent和隐式intent，说出各适用于什么场景，并能改出显式翻页改为隐式"分享到"的效果
+- 能写出用隐式intent打开网页、发送邮件、分享文字、拨号的完整Kotlin/Java代码，包括前置的`resolveActivity`安全检查
+- 能回答：如果你的App在Manifest里声明了一个`intent-filter`但忘了加`category.DEFAULT`，其他App用隐式intent能调起你的App吗？为什么？
+
+</Objectives>
+
+## 为什么需要隐式intent
+
+你的App不是孤岛。用户想分享一段文字到微信、打开一个网页链接、拨一个电话号码——这些功能如果每个App都自己实现，那每个App都要内置一个浏览器引擎、一个邮件客户端、一个拨号器。不仅体积爆炸，体验也割裂。
+
+Android的设计哲学是"组装胜过重造"——就像一个**邮局分拣中心**：你不必自己送信，只需把信（intent）投进邮筒（系统），邮局（Android系统）根据信封上写的"要做什么"来自动分拣到正确的收件人（能处理这个操作的App）。没有这层机制，每个App之间就是信息孤岛——你想从自己的App打开一个网页？不好意思，自己写一个浏览器。
+
+隐式intent解决的是跨App协作问题：**你只管描述"我想做什么"，由系统负责找到"谁能帮我做"**。
+
+## 隐式intent是怎么工作的
+
+### 显式intent vs 隐式intent
+
+<Term def="直接指定目标组件类名（如 `DetailActivity::class.java`）的intent，用于App内部的页面跳转。需知道目标Activity的完整类名。">显式intent</Term>像直接快递——你知道收件人地址，直接寄过去。用于App内部跳转：从列表页跳到详情页，你知道目标Activity的类名。
+
+<Term def="不指定目标组件类名、只描述"要做什么"的intent。系统通过匹配Manifest中的intent-filter找到能处理的App。用于跨App调用——打开网页、分享、发邮件等。">隐式intent</Term>像贴在公告栏的寻人启事——你只描述需求（"谁能打开这个网址？"），Android系统广播给所有注册了相应能力的App，让它们来"应聘"。
+
+下面用代码直观对比两者：
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+// 显式：明确指定目标Activity类名 → App内部跳转
+val explicitIntent = Intent(this, DetailActivity::class.java)
+explicitIntent.putExtra("item_id", 42)
+startActivity(explicitIntent)
+
+// 隐式：只描述动作和数据 → 系统匹配合适的App
+val implicitIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.android.com"))
+startActivity(implicitIntent)
+```
+  </Tab>
+  <Tab label="Java">
+```java
+// 显式：明确指定目标Activity类名 → App内部跳转
+Intent explicitIntent = new Intent(this, DetailActivity.class);
+explicitIntent.putExtra("item_id", 42);
+startActivity(explicitIntent);
+
+// 隐式：只描述动作和数据 → 系统匹配合适的App
+Intent implicitIntent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.android.com"));
+startActivity(implicitIntent);
+```
+  </Tab>
+</CodeTabs>
+
+### 隐式intent的三要素：action、data、category
+
+系统匹配隐式intent靠三个维度，对应intent-filter中的三项：
+
+| 要素 | 作用 | 常见值 |
+|------|------|--------|
+| **action** | 描述"做什么" | `ACTION_VIEW`（查看）、`ACTION_SEND`（分享）、`ACTION_DIAL`（拨号） |
+| **data** | 描述"操作什么" | URI（如 `https://...`、`mailto:...`）和 MIME 类型（如 `text/plain`） |
+| **category** | 描述"在什么场景下可用" | `CATEGORY_DEFAULT`（标准入口）、`CATEGORY_BROWSABLE`（可从浏览器调起） |
+
+一个App通过AndroidManifest中的 `<Term def="Manifest XML中的一个标签块，声明本App的哪个组件能处理哪些类型的intent。包含action（动作）、category（类别）、data（数据格式/URI）三要素。系统在匹配隐式intent时遍历所有注册的intent-filter来决定谁能处理。">intent-filter</Term>` 来注册自己能处理什么：
+
+```xml
+<!-- 在 AndroidManifest.xml 的 Activity 标签内声明 -->
+<activity android:name=".ShareActivity" android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <category android:name="android.intent.category.DEFAULT" />
+        <data android:mimeType="text/plain" />
+    </intent-filter>
+</activity>
+```
+
+这段XML的意思是："我的ShareActivity能处理分享纯文本的操作，在标准启动模式下可用"。当你的App发出`ACTION_SEND` + `text/plain`的隐式intent，系统就会把这个Activity列在备选清单里。
+
+### 四大最常用的隐式intent模式
+
+**① 打开网页（ACTION_VIEW + http/https URI）**
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.android.com"))
+if (intent.resolveActivity(packageManager) != null) {
+    startActivity(intent)
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse("https://developer.android.com"));
+if (intent.resolveActivity(getPackageManager()) != null) {
+    startActivity(intent);
+}
+```
+  </Tab>
+</CodeTabs>
+
+**② 发送邮件（ACTION_SENDTO + mailto: URI）**
+
+`ACTION_SENDTO` 只调起邮件App，不会弹出微信、蓝牙等无关选项。
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val intent = Intent(Intent.ACTION_SENDTO).apply {
+    data = Uri.parse("mailto:")
+    putExtra(Intent.EXTRA_EMAIL, arrayOf("support@example.com"))
+    putExtra(Intent.EXTRA_SUBJECT, "反馈建议")
+    putExtra(Intent.EXTRA_TEXT, "你好，我想反馈...")
+}
+if (intent.resolveActivity(packageManager) != null) {
+    startActivity(intent)
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+Intent intent = new Intent(Intent.ACTION_SENDTO);
+intent.setData(Uri.parse("mailto:"));
+intent.putExtra(Intent.EXTRA_EMAIL, new String[]{"support@example.com"});
+intent.putExtra(Intent.EXTRA_SUBJECT, "反馈建议");
+intent.putExtra(Intent.EXTRA_TEXT, "你好，我想反馈...");
+if (intent.resolveActivity(getPackageManager()) != null) {
+    startActivity(intent);
+}
+```
+  </Tab>
+</CodeTabs>
+
+**③ 分享文字（ACTION_SEND + MIME类型）**
+
+MIME类型 `<Term def="Multipurpose Internet Mail Extensions，一种标准化的内容类型标记，如 text/plain 表示纯文本、image/jpeg 表示JPEG图片。在intent中用于告诉系统'我要分享什么类型的数据'，系统据此筛选能处理该数据类型的App。">MIME</Term>`（如 `text/plain`）告诉系统"我分享的是纯文本"——这样只会列出微信、短信、备忘录等能处理文字的App，不会弹出一个视频播放器。
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val shareIntent = Intent(Intent.ACTION_SEND).apply {
+    type = "text/plain"
+    putExtra(Intent.EXTRA_TEXT, "这篇文章写得真好！https://example.com/article")
+}
+startActivity(Intent.createChooser(shareIntent, "分享到"))
+```
+  </Tab>
+  <Tab label="Java">
+```java
+Intent shareIntent = new Intent(Intent.ACTION_SEND);
+shareIntent.setType("text/plain");
+shareIntent.putExtra(Intent.EXTRA_TEXT, "这篇文章写得真好！https://example.com/article");
+startActivity(Intent.createChooser(shareIntent, "分享到"));
+```
+  </Tab>
+</CodeTabs>
+
+<Term def="创建系统分享选择器弹窗——展示所有能处理该intent的App列表并允许用户选择，同时自定义弹窗标题。比直接 startActivity 更友好，且保证总是弹出选择界面而非静默使用默认App。">createChooser</Term> 弹出分享菜单——比直接 `startActivity(intent)` 更友好，总是展示选项列表而非静默用默认App。
+
+**④ 拨号（ACTION_DIAL + tel: URI）**
+
+`ACTION_DIAL` 打开拨号盘但不自动拨出（安全）。如需直接拨出用 `ACTION_CALL`（需 `CALL_PHONE` 权限）。
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:10086"))
+if (intent.resolveActivity(packageManager) != null) {
+    startActivity(intent)
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+Intent intent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:10086"));
+if (intent.resolveActivity(getPackageManager()) != null) {
+    startActivity(intent);
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 动手：完成一个"万能分享"功能
+
+下面带你从零实现一个能安全地分享文字到任何App的功能。每一步都配上代码和效果描述。
+
+> 猜一猜：如果用户的手机里只有微信和短信能处理"分享文字"，直接调 `startActivity` 和用 `createChooser` 有什么区别？
+
+<Stepper>
+  <Step title="① 创建分享intent并设置MIME类型">
+    首先创建一个 `ACTION_SEND` intent，设置 MIME 类型为 `text/plain`——这告诉系统"我分享的是纯文本"。
+    此时如果直接发出这个intent，系统可能会直接用上次用户选过的默认App（比如用户之前选过"始终用微信"），而不会弹出选择列表。
+  </Step>
+  <Step title="② 添加分享内容">
+    用 `Intent.EXTRA_TEXT` 附加要分享的文字。也可以附加 `Intent.EXTRA_SUBJECT` 作为主题（邮件类App会用到）。
+    你看到的代码：`shareIntent.putExtra(Intent.EXTRA_TEXT, "分享的文字内容")`
+    系统拿到这个intent后，遍历所有声明了 `ACTION_SEND` + `text/plain` intent-filter的App，形成备选列表。
+  </Step>
+  <Step title="③ 用 createChooser 弹出选择器">
+    `Intent.createChooser(intent, "分享到")` 强制弹出系统分享菜单——即使有默认App也会展开选择。第二个参数是弹窗标题。
+    效果：屏幕上弹出一个底部或居中列表，展示微信、短信、邮件、备忘录等所有能处理文字的App图标。
+  </Step>
+  <Step title="④ 加安全检查再启动">
+    虽然 `createChooser` 内的intent找不到处理者时会返回一个空intent（不会崩溃），但最佳实践仍然是在发出前检查：
+    `if (shareIntent.resolveActivity(packageManager) != null)` ——这样做可以让用户收到友好提示"没有可分享的应用"而非看到一个空白按钮。
+  </Step>
+</Stepper>
+
+<Callout type="tip">
+  如果想让用户**总是**看到分享菜单而不是静默使用默认App，一定要用 `Intent.createChooser()`。直接 `startActivity(intent)` 在用户之前选过"始终"的情况下不会再弹选择框。
+</Callout>
+
+## 代码逐段拆解
+
+### 安全的隐式intent启动模式
+
+下面的代码封装了一个通用的安全启动方法——覆盖了resolvedActivity检查、异常处理和降级策略这三个关键环节。
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+fun Context.openUrlSafely(url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+    // 关键：先检查有没有App能处理
+    if (intent.resolveActivity(packageManager) != null) {
+        startActivity(intent)
+    } else {
+        Toast.makeText(this, "没有能打开链接的应用", Toast.LENGTH_SHORT).show()
+    }
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+public static void openUrlSafely(Context context, String url) {
+    Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+    // 关键：先检查有没有App能处理
+    if (intent.resolveActivity(context.getPackageManager()) != null) {
+        context.startActivity(intent);
+    } else {
+        Toast.makeText(context, "没有能打开链接的应用", Toast.LENGTH_SHORT).show();
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+`resolveActivity(packageManager)` 向系统查询"有没有App能处理这个intent"。系统遍历所有已安装App的Manifest中的intent-filter，尝试匹配action + category + data三要素。返回 `null` 说明没有任何App能处理——此时调用 `startActivity` 会直接抛出 `ActivityNotFoundException` 崩溃。
+
+另一条安全路径是 `try-catch`：
+
+```kotlin
+try {
+    startActivity(intent)
+} catch (e: ActivityNotFoundException) {
+    // 降级：提示用户、或者在WebView里打开
+    Toast.makeText(this, "未找到可处理此操作的应用", Toast.LENGTH_SHORT).show()
+}
+```
+
+两者选一即可——`resolveActivity` 是防御式（先检查再行动），`try-catch` 是事后补救。推荐前者，意图更清晰。
+
+### Runtime权限检查（拨号场景）
+
+使用 `ACTION_DIAL` 打开拨号盘不需要权限。但如果产品需求是**直接拨出电话**（`ACTION_CALL`），就需要 `CALL_PHONE` 权限——这是一个运行时权限，必须先动态申请：
+
+<CodeTabs>
+  <Tab label="Kotlin">
+```kotlin
+// 注册权限请求处理器
+private val callPermissionLauncher = registerForActivityResult(
+    ActivityResultContracts.RequestPermission()
+) { granted ->
+    if (granted) {
+        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:10086"))
+        startActivity(intent)
+    }
+}
+
+// 拨号前检查权限
+fun makeCall() {
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+        == PackageManager.PERMISSION_GRANTED
+    ) {
+        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:10086"))
+        startActivity(intent)
+    } else {
+        callPermissionLauncher.launch(Manifest.permission.CALL_PHONE)
+    }
+}
+```
+  </Tab>
+  <Tab label="Java">
+```java
+private final ActivityResultLauncher<String> callPermissionLauncher =
+    registerForActivityResult(new ActivityResultContracts.RequestPermission(), granted -> {
+        if (granted) {
+            Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:10086"));
+            startActivity(intent);
+        }
+    });
+
+public void makeCall() {
+    if (ContextCompat.checkSelfPermission(this, Manifest.permission.CALL_PHONE)
+            == PackageManager.PERMISSION_GRANTED) {
+        Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:10086"));
+        startActivity(intent);
+    } else {
+        callPermissionLauncher.launch(Manifest.permission.CALL_PHONE);
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`startActivity(intent)` 直接崩溃，Logcat报 `ActivityNotFoundException`。**原因**：没有任何已安装App能处理你的隐式intent。最常见是忘了在intent-filter里加 `category.DEFAULT`，或者设备上确实没有匹配的App（比如模拟器通常没装邮件客户端）。**修法**：发出前用 `intent.resolveActivity(packageManager) != null` 做前置检查，找不到时给出Toast提示而非崩溃。
+</Callout>
+
+<Callout type="trap">
+  **现象**：分享功能只弹出了一个App（而且是上次选的那个），没有展示完整的选择列表。**原因**：用了 `startActivity(intent)` 而非 `startActivity(Intent.createChooser(intent, "标题"))`——用户之前选过"始终"后，系统直接调起默认App。**修法**：如果是分享/打开链接这类需要用户显式选择的场景，一律用 `createChooser`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在Manifest里给你的Activity加了 `intent-filter`，但其他App用隐式intent调不起来，系统说找不到。**原因**：忘了加 `<category android:name="android.intent.category.DEFAULT" />`——隐式intent默认携带 `CATEGORY_DEFAULT`，如果你的intent-filter里没有声明这个category，匹配就会失败。另外 Android 12+ 要求显式设置 `android:exported="true"`。**修法**：加上 `CATEGORY_DEFAULT` 并设置 `android:exported="true"`。
+</Callout>
+
+## 小结
+
+- 显式intent指定类名→App内部跳转；隐式intent描述需求（action+data+category）→跨App协作
+- 四大常用action：`ACTION_VIEW`（网页）、`ACTION_SEND`（分享）、`ACTION_DIAL`（拨号）、`ACTION_SENDTO`（邮件）
+- `Intent.createChooser()` 强制弹出选择列表，避免静默使用默认App
+- 安全铁律：发出隐式intent前，用 `resolveActivity(packageManager) != null` 检查是否有处理者
+- 在Manifest中声明intent-filter让你的App也能被其他App调起——别忘了加 `CATEGORY_DEFAULT` + `exported="true"`
+
+<Exercises>
+
+**练习 1（改代码型）** 当前你的详情页右下角有一个"分享"按钮，点击后用显式intent跳到了App内建的分享页面。请把它改为：点击后用隐式intent启动系统分享菜单（`ACTION_SEND` + `createChooser`），把当前文章的标题和链接分享出去。
+
+<Answer>
+
+```kotlin
+// 原代码（删掉）：
+// val intent = Intent(this, ShareActivity::class.java)
+// startActivity(intent)
+
+// 改为：
+binding.btnShare.setOnClickListener {
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, article.title)
+        putExtra(Intent.EXTRA_TEXT, "${article.title}\n${article.url}")
+    }
+    val chooser = Intent.createChooser(shareIntent, "分享文章")
+    if (shareIntent.resolveActivity(packageManager) != null) {
+        startActivity(chooser)
+    } else {
+        Toast.makeText(this, "没有可分享的应用", Toast.LENGTH_SHORT).show()
+    }
+}
+```
+
+</Answer>
+
+**练习 2（实现型）** 为你的App新增一个"客服邮箱"功能——点击按钮后打开用户手机上的邮件App，收件人自动填好、主题预设为"App反馈"。要求用 `ACTION_SENDTO`（只调起邮件App），并做安全检查。
+
+<Answer>
+
+```kotlin
+binding.btnContactSupport.setOnClickListener {
+    val intent = Intent(Intent.ACTION_SENDTO).apply {
+        data = Uri.parse("mailto:")
+        putExtra(Intent.EXTRA_EMAIL, arrayOf("support@myapp.com"))
+        putExtra(Intent.EXTRA_SUBJECT, "App反馈")
+    }
+    if (intent.resolveActivity(packageManager) != null) {
+        startActivity(intent)
+    } else {
+        Toast.makeText(this, "请先安装邮件应用", Toast.LENGTH_SHORT).show()
+    }
+}
+```
+
+Java版同理：`new Intent(Intent.ACTION_SENDTO)` → `setData(Uri.parse("mailto:"))` → `putExtra`。
+
+</Answer>
+
+**练习 3（问答型）** 你的App在Manifest里声明了以下intent-filter，但测试时发现从微信分享文字到你的App根本不会出现在选项里。哪里出错了？
+
+```xml
+<activity android:name=".ImportActivity">
+    <intent-filter>
+        <action android:name="android.intent.action.SEND" />
+        <data android:mimeType="text/plain" />
+    </intent-filter>
+</activity>
+```
+
+<Answer>
+缺少两个东西：
+① `<category android:name="android.intent.category.DEFAULT" />` —— 隐式intent默认携带该category，你的filter里没有，匹配失败。
+② 在Android 12（API 31）及以上版本，如果intent-filter里没显式写 `android:exported`，系统会强制要求你声明。加上 `android:exported="true"` 并通过lint检查。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="显式intent">
+  直接指定目标组件类名（如 `DetailActivity::class.java`）的intent，用于App内部的页面跳转。必须知道目标Activity的完整类名。详见本章"显式intent vs 隐式intent"一节。
+</GlossaryItem>
+
+<GlossaryItem term="隐式intent">
+  不指定目标组件类名、只描述"要做什么"的intent。系统通过匹配Manifest中的intent-filter找到能处理的App。用于跨App调用——打开网页、分享、发邮件等。详见本章"显式intent vs 隐式intent"一节。
+</GlossaryItem>
+
+<GlossaryItem term="intent-filter">
+  Manifest XML中的一个标签块，声明本App的哪个组件能处理哪些类型的intent。包含action（动作）、category（类别）、data（数据格式/URI）三要素。系统在匹配隐式intent时遍历所有注册的intent-filter来决定谁能处理。详见本章"隐式intent的三要素"一节。
+</GlossaryItem>
+
+<GlossaryItem term="MIME">
+  Multipurpose Internet Mail Extensions，一种标准化的内容类型标记。在intent中用 `setType("text/plain")` 或 `setType("image/jpeg")` 告诉系统"我要分享什么类型的数据"，系统据此筛选能处理该数据类型的App。详见本章"分享文字"一节。
+</GlossaryItem>
+
+<GlossaryItem term="createChooser">
+  创建系统分享选择器弹窗——展示所有能处理该intent的App列表并允许用户选择，同时自定义弹窗标题。比直接 `startActivity` 更友好，且保证总是弹出选择界面而非静默使用默认App。详见本章"分享文字"一节。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

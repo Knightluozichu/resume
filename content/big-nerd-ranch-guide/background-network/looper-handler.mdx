@@ -1,0 +1,261 @@
+---
+title: Looper、Handler和HandlerThread
+type: C
+section: 后台与网络
+order: 25
+description: 深入理解 Android 消息队列机制，学会用 Handler 在任意两个线程之间传递消息，并掌握 Handler 内存泄漏的经典解法。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第25章改编）：重心在代码对照(§6)与常见误区(§7)。
+   知识点清单：1)消息队列模型（Stepper动画掰碎）
+   2)Looper/MessageQueue/Handler三角色（图示+Stepper）
+   3)HandlerThread用法（完整代码）4)跨线程消息传递（代码对照）
+   5)Handler内存泄漏与解法（static+WeakReference，Callout trap） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+<Objectives>
+
+- 能用自己的话画出 Looper → MessageQueue → Handler 三者关系图，讲清楚一条消息从"发送"到"被处理"的完整路径
+- 能独立写出一个使用 HandlerThread 在后台线程排队执行任务的程序
+- 能回答：为什么 Handler 会造成内存泄漏？有哪些成熟的修复方案？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用工厂流水线 */}
+## 为什么 Android 需要一套"消息队列"？
+
+想象你是工厂的前台文员（主线程），忙得不可开交——接电话、接待客户、整理文件。每隔 30 秒还得去仓库跑一趟取货。你跑仓库的这 5 分钟里，电话没人接、客户干等着——整个前台停摆。老板让你改进：在仓库那边安排一个搬运工（后台线程），需要取货就把"取货申请单"塞进一个筐子。搬运工从筐子里一份份拿出来处理，货到了放回前台——前台照常运转，拿到货后才展示给客户。
+
+这，就是 Android **消息队列**机制的直觉模型。筐子（MessageQueue）是线程间通信的中转站，搬运工（Looper）不停地从筐子里取任务处理，发申请单的（Handler）负责往筐子里投递消息。
+
+没有这套机制，Android 的多线程通信会陷入混乱——你不知道该用什么方式安全地把数据从后台传到前台。
+
+{/* 3. 概念讲解（spec §三） */}
+## 消息队列三件套：Looper、MessageQueue、Handler
+
+### 一条消息的完整生命
+
+一条消息（Message）从发送到被处理，经历以下路径：
+
+```
+   Handler.sendMessage(msg)
+        │
+        ▼
+   MessageQueue.enqueueMessage()      ← 消息入队，按时间戳排序
+        │
+        ▼
+   Looper.loop()                      ← 无限循环，不停从队列取消息
+        │
+        ▼
+   msg.target.dispatchMessage(msg)    ← target 就是发送它的 Handler
+        │
+        ▼
+   Handler.handleMessage(msg)         ← 你在 handleMessage() 中写处理逻辑
+```
+
+每个角色各司其职：
+
+- <Term def="MessageQueue 是每个有 Looper 的线程内部的消息队列数据结构。它是一个按时间戳排序的优先队列——先到的不一定先处理，核心看时间戳。只负责存和取，不负责执行。">**MessageQueue（消息队列）**</Term>：一个按时间戳排序的优先队列。只有放消息和取消息两个操作，不负责执行。每个有 Looper 的线程自动带一个。
+
+- <Term def="Looper 是一个线程的消息循环引擎。它调用 Looper.prepare() 初始化自己和 MessageQueue，然后调用 Looper.loop() 进入无限循环——不停地从 MessageQueue 取消息，分发给目标 Handler 的 handleMessage()。没有 Looper 的线程不能处理消息。">**Looper（消息泵）**</Term>：线程的消息循环引擎。`Looper.prepare()` 初始化消息队列，`Looper.loop()` 进入无限循环——不停地从消息队列里取消息，分发给目标 Handler。
+
+- <Term def="Handler 是消息发送和处理的门面。它挂载在某个线程的 Looper 上——默认是创建它的那个线程的 Looper。通过它可以往关联线程的消息队列投递 Message 或 Runnable，消息处理回调 handleMessage() 也在关联线程上执行。">**Handler（消息收发器）**</Term>：消息发送和处理的门面。你通过它往关联线程的消息队列投递消息，消息到达时 `handleMessage()` 也在那个线程执行。
+
+### 主线程为什么天然支持消息队列
+
+你在主线程创建 Handler 不需要任何准备工作——因为 Android 在主线程启动时已经帮你调了 `Looper.prepareMainLooper()`。这也是为什么主线程永远不会退出：`Looper.loop()` 在无限循环，一旦退出，App 就死了。
+
+```kotlin
+// 主线程直接创建 Handler，不需要 prepare
+val mainHandler = Handler(Looper.getMainLooper()) { msg ->
+    when (msg.what) {
+        1 -> textView.text = msg.obj as String
+    }
+    true
+}
+```
+
+{/* 5. 交互 Demo（spec §五）：C 型用 Stepper 掰碎消息发送流程 */}
+## 动手看：一条消息从"发出"到"被执行"
+
+> 猜一猜：在后台线程创建一个不加 Looper 的 Handler，会怎么样？切到最后一步看答案。
+
+<Stepper>
+  <Step title="① 在后台线程准备消息循环">
+    ```kotlin
+    val backgroundThread = HandlerThread("BackgroundWorker").apply { start() }
+    ```
+    `HandlerThread` 是 Android 帮你封装好的——自带 Looper 和 MessageQueue 的后台线程。`start()` 后线程进入 `Looper.loop()` 循环，等待消息到来。
+  </Step>
+  <Step title="② 创建关联后台线程的 Handler">
+    ```kotlin
+    val backgroundHandler = Handler(backgroundThread.looper) { msg ->
+        // 这里跑在 BackgroundWorker 线程，不是主线程！
+        processData(msg.obj as ByteArray)
+        true
+    }
+    ```
+    Handler 构造时传入后台线程的 Looper，此后 `handleMessage()` 就在后台线程执行。
+  </Step>
+  <Step title="③ 从任意线程发送消息">
+    ```kotlin
+    // 主线程中发消息
+    val msg = backgroundHandler.obtainMessage(1, byteArray)
+    backgroundHandler.sendMessage(msg)
+
+    // 或者用 post 发 Runnable
+    backgroundHandler.post {
+        // 这段代码跑在后台线程
+    }
+    ```
+    `sendMessage()` 投递 Message，`post()` 投递 Runnable。两者最终都会被 `Looper.loop()` 取出并在后台线程执行。
+  </Step>
+  <Step title="④ 销毁消息循环">
+    ```kotlin
+    backgroundThread.quitSafely()
+    ```
+    跟普通 Thread 不同，HandlerThread 不会自己停止——`quitSafely()` 会处理完队列中剩余的消息再退出循环。
+  </Step>
+  <Step title="⑤ 常见错误：没有 Looper 就创建 Handler">
+    ```kotlin
+    Thread {
+        // 直接创建 Handler → 崩溃！
+        // RuntimeException: Can't create handler inside thread
+        //     that has not called Looper.prepare()
+        val handler = Handler()
+    }.start()
+    ```
+    普通 Thread 没有 MessageQueue，没法创建 Handler。HandlerThread 或手动 `Looper.prepare()` 是解决之道。
+  </Step>
+</Stepper>
+
+{/* 6. 代码对照（spec §六，C 型重心） */}
+## 代码逐段拆解：跨线程通信的完整案例
+
+### 场景：后台下载图片，主线程显示
+
+```kotlin
+class DownloadActivity : AppCompatActivity() {
+    private lateinit var imageView: ImageView
+    private lateinit var downloadThread: HandlerThread
+    private lateinit var downloadHandler: Handler
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_download)
+        imageView = findViewById(R.id.imageView)
+
+        // 1. 创建并启动带 Looper 的后台线程
+        downloadThread = HandlerThread("ImageDownloader").apply { start() }
+        downloadHandler = Handler(downloadThread.looper) { msg ->
+            if (msg.what == MSG_DOWNLOAD) {
+                val url = msg.obj as String
+                val bitmap = downloadImage(url)      // 后台线程下载
+                // 2. 下载完切回主线程更新 UI
+                mainHandler.post {
+                    imageView.setImageBitmap(bitmap)
+                }
+            }
+            true
+        }
+    }
+
+    private fun downloadImage(url: String): Bitmap {
+        val client = OkHttpClient()
+        val request = Request.Builder().url(url).build()
+        val bytes = client.newCall(request).execute().body?.bytes()
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes?.size ?: 0)
+    }
+
+    companion object {
+        private const val MSG_DOWNLOAD = 1
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        downloadThread.quitSafely()  // 3. 退出消息循环
+    }
+}
+```
+
+这段代码展示了经典的"双 Handler 模式"：
+- `downloadHandler` 挂载在 HandlerThread，负责后台下载
+- `mainHandler` 挂载在主线程，负责 UI 更新
+- 两个 Handler 通过消息投递完成线程切换——这就是 Android 多线程通信的基本范式
+
+{/* 7. 常见误区（spec §七，C 型 ≥3） */}
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`Handler` 作为内部类创建，LeakCanary 报 "This Handler class should be static or leaks might occur"。
+  **原因**：非静态内部类隐式持有外部 Activity 的引用。Handler 发送的延迟消息在到达前，Activity 已经销毁——但 Handler 还活着，Activity 的内存无法被 GC 回收。这就是经典的 Handler 内存泄漏。
+  **修法**：将 Handler 声明为 `static` 内部类，用 `WeakReference<Activity>` 持有 Activity 引用。每次使用前检查 `get()` 是否为 null——如果 Activity 已被回收，直接丢弃消息不做处理。或者使用 `Handler.Callback` 接口模式，让 Handler 的回调通过接口注入，避免隐式持有外部引用。
+</Callout>
+
+<Callout type="trap">
+  **现象**：HandlerThread 忘了 `quit()`，App 退出后进程仍然存活。
+  **原因**：HandlerThread 的 `Looper.loop()` 是无限循环。Thread 的 `run()` 方法永远不会返回，即使 Activity 已经 `onDestroy()`。这个线程会一直占据内存直到进程被系统杀掉。
+  **修法**：在 `onDestroy()` 或合适的生命周期回调中调用 `handlerThread.quitSafely()`。`quitSafely()` 跟 `quit()` 的区别：前者会等待队列中已存在的消息全部处理完再退出，后者直接丢弃所有待处理消息立即退出。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 `handleMessage()` 里做了耗时操作，发现后续消息都被卡住了。
+  **原因**：Looper 是单线程循环——同一时刻只处理一条消息。如果你在 `handleMessage()` 里睡 5 秒，那这 5 秒内队列里其他消息全在排队等待，包括主线程的 UI 绘制消息——界面直接卡死（老版 ANR ）。
+  **修法**：`handleMessage()` 必须快速返回（<16ms 最佳）。耗时任务应该投递到自己内部再起子线程处理，或使用 `WorkManager`（第 27 章）。不要把 Handler 的"线程切换"和"任务并行" 搞混了。
+</Callout>
+
+{/* 8. 小结与练习（spec §八） */}
+## 小结
+
+- Android 消息队列三件套：`Looper`（无限循环取消息）、`MessageQueue`（按时间排序存消息）、`Handler`（发送 + 处理消息）
+- 主线程自带 Looper（`prepareMainLooper`），通过 Handler 可以实现任意线程之间的消息传递
+- `HandlerThread` 是自带 Looper 的后台线程封装，适合需要排队执行的串行后台任务
+- `static Handler + WeakReference<Activity>` 是解决 Handler 内存泄漏的经典范式
+- 在 `handleMessage()` 里做耗时操作会阻塞整个消息队列——所有消息排队等，包括 UI 绘制
+
+<Exercises>
+
+**练习 1（改代码型）** 把前面"HTTP与后台任务"章节中的裸 Thread 网络请求改成 HandlerThread + Handler 模式。下载完成后通过主线程 Handler 更新 UI。
+
+<Answer>
+与裸 Thread 的核心区别：HandlerThread 可以复用——多次 `sendMessage()` 投递下载任务，它们在同一个后台线程中排队执行。裸 Thread 每次都得新建线程，频繁创建销毁开销大。实现要点：`downloadHandler.obtainMessage(MSG_DOWNLOAD, url).sendToTarget()` 投递任务，在 handleMessage 中下载完后 `mainHandler.post { updateUI(bitmap) }`。
+</Answer>
+
+**练习 2（改代码型）** 写一个简单的"秒表 App"——用主线程 Handler 每 100ms 更新一次 TextView 的计时数字。添加开始、暂停、重置按钮。注意在 Activity 销毁时移除消息防止内存泄漏。
+
+<Answer>
+核心代码：`handler.postDelayed(runnable, 100)` 实现循环计时；暂停通过 `handler.removeCallbacks(runnable)` 停止；重置清空计数并更新 UI。**关键**：`onDestroy()` 中必须调 `handler.removeCallbacksAndMessages(null)`——清除所有待执行的消息和回调，避免 Activity 销毁后 Handler 还试图更新已不存在的 View。
+</Answer>
+
+**练习 3（问答型）** 为什么 Android 不直接用 Java 的 `Thread` 消息传递（`wait/notify`），而要自己再造一套 Looper/Handler？
+
+<Answer>
+Java 的 wait/notify 只能做"同步等待"——线程 A 调 wait() 后挂起直到线程 B 调 notify() 唤醒。这在实际 UI 开发中太受限：①主线程不能 wait()（卡死界面）；②不支持延迟消息（"3 秒后执行"）；③不支持消息优先级。Looper/Handler 解决了这些问题：异步非阻塞（发完消息继续跑）、支持延迟和时间排序、基于 MessageQueue 的优先级队列。这是 Android 针对 UI 框架需求做的定制设计。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十） */}
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="MessageQueue（消息队列）">
+  每个有 Looper 的线程内部的消息存储结构。它是一个按时间戳排序的优先队列——一条消息什么时候该被执行，取决于它的 `when` 字段。只负责存和取，不负责执行。详见本章"消息队列三件套"一节。
+</GlossaryItem>
+<GlossaryItem term="Looper（消息泵）">
+  线程的消息循环引擎。`Looper.prepare()` 创建 MessageQueue 并绑定当前线程，`Looper.loop()` 进入无限循环——不停从队列取消息，交给目标 Handler 处理。主线程的 Looper 由系统创建且永不退出。详见本章"消息队列三件套"一节。
+</GlossaryItem>
+<GlossaryItem term="Handler（消息收发器）">
+  挂载在某个线程 Looper 上的消息发送和处理器。`sendMessage()` 往关联线程的消息队列投 Message，`handleMessage()` 在关联线程上执行。一个线程可以有多个 Handler。详见本章"消息队列三件套"一节。
+</GlossaryItem>
+<GlossaryItem term="HandlerThread">
+  Android 封装好的自带 Looper + MessageQueue 的后台线程。不用手动 `Looper.prepare()` / `Looper.loop()`——`start()` 即进入消息循环。适合需要串行排队执行的后台任务。详见本章"HandlerThread"一节。
+</GlossaryItem>
+</Glossary>
+
+<Attribution />

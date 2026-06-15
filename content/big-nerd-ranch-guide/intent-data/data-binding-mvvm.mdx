@@ -1,0 +1,125 @@
+---
+title: 数据绑定与MVVM
+type: C
+section: Intent与数据
+order: 19
+description: 理解 MVVM 架构模式，使用 Data Binding Library 消除样板代码，让 View 和 ViewModel 自动同步。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+<Objectives>
+
+- 能解释 MVVM 三层模型各自的职责——Model / View / ViewModel
+- 能用 Data Binding 实现一个 View 自动跟随 ViewModel 数据变化的界面
+- 能回答：Data Binding 和 findViewById/viewBinding 有什么区别？什么时候用哪个？
+
+</Objectives>
+
+## 你的 UI 代码为什么越来越臃肿？
+
+一个典型的 Activity：要在 `onCreate` 里 `findViewById` 拿几十个 View，要手动 `setText` 更新数据，要手动 `setOnClickListener`。数据一变更，要记住更新所有相关的 View。漏了一个——那就是 bug。
+
+MVVM + Data Binding 解决了这个痛点：**数据变，界面自动变**。你只管更新 ViewModel 里的字段，XML 布局自动反映最新数据。
+
+## MVVM 三层
+
+| 层 | 职责 | Kotlin 里是什么 |
+|---|---|---|
+| **Model** | 数据和业务逻辑 | Repository、Room Entity、网络请求 |
+| **View** | UI 展示（XML + Activity/Fragment） | layout XML、Activity/Fragment |
+| **ViewModel** | 为 View 准备数据、处理 UI 逻辑 | ViewModel 子类 + LiveData |
+
+**核心原则**：ViewModel 不知道 View 的存在——它只暴露数据。View 观察 ViewModel 的数据变化，自动更新界面。
+
+## Data Binding 实战
+
+启用 Data Binding（build.gradle 加 `dataBinding { enabled = true }`），然后用 `<layout>` 包裹布局：
+
+```xml
+<layout xmlns:android="...">
+    <data>
+        <variable name="viewModel" type="com.example.MainViewModel" />
+    </data>
+
+    <LinearLayout ...>
+        <TextView
+            android:text="@{viewModel.userName}" />
+        <Button
+            android:onClick="@{() -> viewModel.onSaveClick()}" />
+    </LinearLayout>
+</layout>
+```
+
+Activity 端只需一行绑定：
+
+```kotlin
+val binding: ActivityMainBinding = DataBindingUtil.setContentView(this, R.layout.activity_main)
+binding.lifecycleOwner = this  // 让 LiveData 自动感知生命周期
+binding.viewModel = viewModel
+```
+
+### ViewModel
+
+```kotlin
+class MainViewModel : ViewModel() {
+    private val _userName = MutableLiveData("张三")
+    val userName: LiveData<String> = _userName
+
+    fun onSaveClick() {
+        _userName.value = "李四"  // 改数据 → View 自动更新！
+    }
+}
+```
+
+`LiveData` + Data Binding = 数据驱动 UI。ViewModel 只管改数据，XML 绑定自动反映——不用手动 `findViewById` + `setText`。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Data Binding 的表达式里写了复杂逻辑，`@{viewModel.items.size > 0 ? View.VISIBLE : View.GONE}`——XML 变成了一堆三元表达式。**原因**：XML 只应该绑定数据，不应该写业务逻辑。**修法**：把逻辑放到 ViewModel 里——暴露 `val hasItems: LiveData<Boolean>`，XML 里只写 `@{viewModel.hasItems}`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：RecyclerView 的 Adapter 里也用 Data Binding——到处是 `binding.item = item`。**原因**：不是所有场景都适合 Data Binding。RecyclerView 的 item 更新频率高时，ViewBinding + ViewHolder 手动更新性能更好。**修法**：列表页面用 ViewBinding，单页面用 Data Binding——各取所长。
+</Callout>
+
+## 小结
+
+- MVVM：Model（数据）、View（UI）、ViewModel（为View准备数据）——解耦可测试
+- Data Binding 消除 findViewById 和手动 setText——数据变界面自动变
+- LiveData + Data Binding = 生命周期安全的数据驱动 UI
+- ViewBinding（轻量，只解决 findViewById）vs DataBinding（重量，支持表达式绑定）
+- 列表场景用 ViewBinding，详情页用 DataBinding
+
+<Exercises>
+
+**练习 1（代码型）** 把传统 `findViewById` + `setText` 的 Activity 改造成 ViewModel + Data Binding 写法。
+
+<Answer>
+原代码删掉所有 findViewById、setText、setOnClickListener。在 XML 里加 `<data>` 和 `@{}` 绑定。Activity 里只写 DataBindingUtil.setContentView + binding.viewModel = vm。ViewModel 里暴露 LiveData 字段。
+</Answer>
+
+**练习 2（问答型）** Data Binding 和 ViewBinding 有什么区别？什么时候用哪个？
+
+<Answer>
+ViewBinding：轻量，只生成 View 引用类（替代 findViewById），不解析 XML 表达式。DataBinding：重量，支持 `@{}` 表达式绑定、双向绑定、BindingAdapter。列表 item 用 ViewBinding（性能好），单页面表单/详情用 DataBinding（减少模板代码）。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="MVVM">
+  Model-View-ViewModel 架构模式。Model 管数据，View 管界面展示，ViewModel 为 View 准备数据并处理 UI 逻辑。View 观察 ViewModel 的数据变化，自动更新界面。
+</GlossaryItem>
+
+<GlossaryItem term="Data Binding">
+  Android Jetpack 组件库的一部分。在 XML 布局中用 `@{}` 表达式直接绑定 ViewModel 数据，运行时自动同步。消除 findViewById 和手动 UI 更新。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

@@ -1,0 +1,228 @@
+---
+title: HTTP与后台任务
+type: C
+section: 后台与网络
+order: 24
+description: 学会在 Android 上发起 HTTP 请求，掌握后台线程的基本模式，理解为什么 NetworkOnMainThreadException 是 Android 安全模型的保护机制。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第24章改编）：重心在代码对照(§6)与常见误区(§7)。
+   知识点清单：1)Android网络权限（代码）2)主线程限制（Callout）
+   3)OkHttp基础用法（逐段代码）4)JSON解析（代码对照Gson/Moshi）
+   5)Thread+Handler后台模式（完整代码示例）6)AsyncTask历史（Callout trap） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+<Objectives>
+
+- 能独立写出一个完整的"在后台线程下载数据 → 解析 JSON → 更新 UI"的程序
+- 能解释 Android 为什么不允许在主线程做网络请求，以及违反会有什么后果
+- 能回答：AsyncTask 为什么被官方废弃了？现在应该用什么替代？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用工厂流水线 */}
+## 为什么 Android 对网络请求管这么严？
+
+你的 App 想在主屏幕上显示天气——得先连网下载天气数据。如果你让主线程（负责渲染界面的那条流水线）去干这件事，会发生什么？网络可能很慢，甚至断掉——主线程卡在那里等数据，界面就会冻结。用户点什么都反应，几秒后系统弹出一个 "应用无响应（ANR）" 的对话框——你的 App 被用户卸载的日子就不远了。
+
+用**工厂流水线**类比：主线程是那条不停运转的前台流水线，负责不停地刷新界面、响应用户点击。网络请求是一条慢悠悠的后台流水线——它把货物（数据）从仓库（服务器）拉回来需要时间。把"后台流水线"跟"前台流水线"绑在一起 = 整条线停摆等货到。正确的做法：前台继续转，后台拉货，货到了通知前台来取。
+
+这章要解决的核心问题：**怎么在 Android 上安全地发起网络请求，同时保持界面流畅？**
+
+{/* 3. 概念讲解（spec §三） */}
+## Android 的网络请求基础设施
+
+### 第一步：声明网络权限
+
+在 Android 上连网，必须先在 `AndroidManifest.xml` 中声明权限：
+
+```xml
+<uses-permission android:name="android.permission.INTERNET" />
+```
+
+从 Android 6.0（API 23）开始，`INTERNET` 属于**普通权限**——在 Manifest 里声明即可，不需要运行时弹窗请求用户授权。但如果你忘了声明，程序不会崩溃——所有网络请求会静默失败，`IOException` 里写着 "Permission denied"。
+
+### 第二步：理解主线程红线
+
+Android 从 3.0（Honeycomb）开始，强制规定：**不允许在主线程（UI 线程）做任何网络操作**。违反 = 当场抛出 `NetworkOnMainThreadException`。这不是刁难你——这是保护机制：
+
+- 网络请求可能耗时 200ms，也可能耗时 20 秒（服务器挂了、用户在地铁里信号差）
+- 主线程每 16ms 就要刷新一次界面（60fps）
+- 主线程一旦被网络请求卡住超过 5 秒 → ANR（Application Not Responding）
+
+<Term def="ANR（Application Not Responding）是 Android 系统的一种保护机制。当主线程被阻塞超过 5 秒（前台广播 10 秒、后台 Service 更长）时，系统会弹出对话框提示用户等待或强制关闭该应用。">ANR</Term> 是用户最讨厌的东西之一——比你 App 长得丑严重 100 倍。
+
+### OkHttp：Android 世界的"HttpClient"
+
+Android 生态里最主流的网络请求库是 <Term def="OkHttp 是 Square 公司开发的 HTTP 客户端库，提供连接池复用、Gzip 压缩、响应缓存、拦截器等能力。它是 Android 网络层的基石——Retrofit 的底层就是 OkHttp。">OkHttp</Term>。它虽然不是 Android SDK 自带的，但几乎每个 Android 项目都在用。
+
+```kotlin
+// build.gradle.kts（模块级）
+dependencies {
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}
+```
+
+最基本的 OkHttp 请求三步走：
+
+```kotlin
+// 第 1 步：创建客户端（全局共享一个实例）
+val client = OkHttpClient()
+
+// 第 2 步：构建请求
+val request = Request.Builder()
+    .url("https://api.example.com/data")
+    .build()
+
+// 第 3 步：发起请求（这是同步调用，会阻塞当前线程！）
+val response = client.newCall(request).execute()
+val body = response.body?.string()
+```
+
+{/* 6. 代码对照（spec §六，C 型重心） */}
+## 代码逐段拆解：完整的后台网络请求
+
+### 方案 1：Thread + Handler（经典模式）
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    // 1. 创建与主线程 Looper 关联的 Handler
+    private val handler = Handler(Looper.getMainLooper())
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        // 2. 启动后台线程
+        thread {
+            val data = fetchDataFromNetwork()       // 在后台线程执行网络请求
+            val parsedResult = parseJson(data)      // 在后台线程解析 JSON
+
+            // 3. 切回主线程更新 UI
+            handler.post {
+                textView.text = parsedResult
+            }
+        }
+    }
+
+    private fun fetchDataFromNetwork(): String {
+        val client = OkHttpClient()
+        val request = Request.Builder()
+            .url("https://api.github.com/users/octocat")
+            .build()
+        val response = client.newCall(request).execute()
+        return response.body?.string() ?: ""
+    }
+
+    private fun parseJson(json: String): String {
+        val jsonObject = JSONObject(json)
+        return jsonObject.getString("login")  // 从 GitHub API 取用户名
+    }
+}
+```
+
+关键点分析：
+- `thread { }` 是 Kotlin 的扩展函数，等价于 `Thread { ... }.start()`
+- 网络请求和 JSON 解析都在后台线程——主线程完全不受影响
+- `handler.post { }` 把 UI 更新投递到主线程的消息队列——这是 Android 唯一的合法更新 UI 方式
+
+### 方案 2：用 Gson 替代 org.json 手动解析
+
+```kotlin
+// build.gradle.kts
+implementation("com.google.code.gson:gson:2.10.1")
+
+// 定义数据类
+data class GitHubUser(
+    val login: String,
+    val id: Long,
+    @SerializedName("avatar_url") val avatarUrl: String
+)
+
+// 一行解析
+val user = Gson().fromJson(json, GitHubUser::class.java)
+
+// 更新 UI
+handler.post {
+    textView.text = "用户名: ${user.login}"
+    // 加载头像...
+}
+```
+
+`@SerializedName` 注解解决了 JSON 键名 `avatar_url`（下划线）到 Kotlin 属性名 `avatarUrl`（驼峰）的映射问题——这是 Java/Android 世界里 JSON 解析最常见的需求之一。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3） */}
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：用 `Thread` + `Handler` 写网络请求，旋转屏幕后数据丢了，或者 Activity 销毁后 Handler 还在试图更新已销毁的 View，导致崩溃。
+  **原因**：`Thread` 不理解 Activity 的生命周期。线程在跑的时候，Activity 可能因为配置变更被销毁重建了。旧的 Handler 仍然引用着旧的 Activity——内存泄漏 + 崩溃。
+  **修法**：简单的办法是转移到 ViewModel 中管理数据 + LiveData 观察，这样配置变更时数据不丢失。正式项目应使用 Retrofit + Coroutines/Flow 等生命周期感知的方案，而不是裸写 Thread。下一章会讲 Handler 内存泄漏的专门解法。
+</Callout>
+
+<Callout type="trap">
+  **现象**：网络请求在模拟器上正常，在真机上静默失败。Logcat 里有 `Cleartext HTTP traffic to xxx not permitted`。
+  **原因**：Android 9（API 28）开始，默认禁止所有明文（HTTP，非 HTTPS）的网络流量。这是网络安全配置的保护机制——防止中间人窃听。
+  **修法**：生产环境必须用 HTTPS。如果开发测试阶段确实需要 HTTP，可以在 `res/xml/network_security_config.xml` 中声明允许特定域名的明文流量，并在 Manifest 中引用。**永远不要对整个 App 全局放行明文——这是安全红线。**
+</Callout>
+
+<Callout type="trap">
+  **现象**：面试时还在说"我用 AsyncTask 做后台任务"，被面试官追问"你知道它什么时候被标记为 deprecated 吗？"
+  **原因**：AsyncTask 从 API 3 开始存在，到 API 30（Android 11）被正式标记为 deprecated。它的设计缺陷是系统性的：不理解 Activity 生命周期、默认所有任务串行执行（API 13 后）、容易造成内存泄漏、配置变更时状态丢失。这些东西改不了——所以官方选择了彻底废弃。
+  **修法**：新项目永远不要碰 AsyncTask。替代方案按场景选：简单的后台线程 → `Thread` + `Handler`（本章），需要生命周期感知 → `Coroutines` + `lifecycleScope`，需要可靠的后台任务 → `WorkManager`（第 27 章）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八） */}
+## 小结
+
+- Android 禁止主线程网络请求——违反抛出 `NetworkOnMainThreadException`，主线程阻塞超 5 秒触发 ANR
+- 网络请求必须在 Manifest 声明 `INTERNET` 权限；Android 9+ 默认禁止明文 HTTP，只允许 HTTPS
+- OkHttp 是 Android 上最主流的 HTTP 客户端库：创建 Client → 构建 Request → 执行 Call
+- 经典后台模式：`Thread` 执行网络/解析 → `Handler.post` 切回主线程更新 UI
+- AsyncTask 已被废弃（Android 11），不要在新代码中使用——用 Coroutines 或 WorkManager 替代
+
+<Exercises>
+
+**练习 1（改代码型）** 写一个 App，点击按钮后用 OkHttp 从 `https://api.github.com/users/google` 拉取数据，用 Gson 解析出 `name` 和 `blog` 字段，显示在界面上。要求网络请求在后台线程，UI 更新在主线程。
+
+<Answer>
+核心代码框架：在按钮点击事件中 `thread { val json = OkHttpClient().newCall(Request.Builder().url("https://api.github.com/users/google").build()).execute().body?.string(); val user = Gson().fromJson(json, GitHubUser::class.java); handler.post { textView.text = "公司: ${user.name}, 博客: ${user.blog}" } }`。关键：`execute()` 是同步方法，必须在子线程调用。不要忘了给数据类加 `@SerializedName` 处理 `html_url` 这种下划线命名。
+</Answer>
+
+**练习 2（改代码型）** 在练习 1 的基础上，旋转屏幕。观察数据是否还在。如果不在了，解释为什么，并尝试用 ViewModel 修复。
+
+<Answer>
+旋转屏幕导致 Activity 重建，裸写的数据在重建后丢失。Thread 仍在运行但持有的是旧 Activity 的引用。解决方案：把网络请求移到 ViewModel 中，数据用 LiveData/StateFlow 暴露，Activity 重建后重新观察即可恢复数据。ViewModel 在配置变更时不销毁，天然解决这个问题。
+</Answer>
+
+**练习 3（问答型）** Android 9+ 默认禁止 HTTP 明文流量。如果你的 App 需要信任自签名证书进行开发测试，应该怎么做？生产环境能保留吗？
+
+<Answer>
+开发测试：在 `res/xml/network_security_config.xml` 中配置 `<domain-config>` 指定测试服务器域名并 `<trust-anchors>` 添加自签名证书。生产环境：**绝对不能保留**——自签名证书无法抵御中间人攻击，CDN 劫持等安全威胁。这是 Google Play 上架审查的常见驳回原因。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十） */}
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="OkHttp">
+  Square 公司开发的 HTTP 客户端库。它给 Android 提供连接池复用（不用每次请求重新建连）、Gzip 压缩（省流量）、拦截器（统一加认证头或日志）等功能。Retrofit 的底层就是 OkHttp。详见本章"OkHttp"一节。
+</GlossaryItem>
+<GlossaryItem term="ANR（Application Not Responding）">
+  当主线程被长时间阻塞（前台 Activity 5 秒、广播 10 秒、后台 Service 更长），系统弹出"应用无响应"对话框。这是用户最讨厌的东西——用 ANR 作为警钟，把耗时操作扔到后台线程。详见本章"主线程红线"一节。
+</GlossaryItem>
+<GlossaryItem term="NetworkOnMainThreadException">
+  Android 3.0 起强制抛出的异常。如果你在主线程发网络请求，系统直接 crash 你的 App——这是保护你远离 ANR 的"强制止损"。详见本章"主线程红线"一节。
+</GlossaryItem>
+<GlossaryItem term="Gson">
+  Google 开发的 JSON 解析库。一行代码就能把 JSON 字符串变成 Kotlin/Java 对象。`@SerializedName` 注解处理字段名不一致的问题（如下划线 vs 驼峰）。详见本章"用 Gson 替代 org.json"一节。
+</GlossaryItem>
+</Glossary>
+
+<Attribution />

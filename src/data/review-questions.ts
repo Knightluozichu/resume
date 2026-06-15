@@ -90,6 +90,38 @@ import { pluginPrincipleQuestions } from "./review/plugin-principle";
 import { drawOptimizationQuestions } from "./review/draw-optimization";
 import { memoryOptimizationQuestions } from "./review/memory-optimization";
 import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
+import { bnrgFirstAppQuestions } from "./review/bnrg-first-app";
+import { bnrgMvcQuestions } from "./review/bnrg-mvc";
+import { bnrgLifecycleQuestions } from "./review/bnrg-lifecycle";
+import { bnrgUiStateQuestions } from "./review/bnrg-ui-state";
+import { bnrgDebuggingQuestions } from "./review/bnrg-debugging";
+import { bnrgSecondActivityQuestions } from "./review/bnrg-second-activity";
+import { bnrgSdkCompatQuestions } from "./review/bnrg-sdk-compat";
+import { bnrgFragmentsQuestions } from "./review/bnrg-fragments";
+import { bnrgRecyclerviewQuestions } from "./review/bnrg-recyclerview";
+import { bnrgLayoutsQuestions } from "./review/bnrg-layouts";
+import { bnrgRoomQuestions } from "./review/bnrg-room";
+import { bnrgFragmentNavQuestions } from "./review/bnrg-fragment-nav";
+import { bnrgDialogsQuestions } from "./review/bnrg-dialogs";
+import { bnrgAppBarQuestions } from "./review/bnrg-app-bar";
+import { bnrgImplicitIntentsQuestions } from "./review/bnrg-implicit-intents";
+import { bnrgTakingPicturesQuestions } from "./review/bnrg-taking-pictures";
+import { bnrgLocalizationQuestions } from "./review/bnrg-localization";
+import { bnrgAccessibilityQuestions } from "./review/bnrg-accessibility";
+import { bnrgDataBindingQuestions } from "./review/bnrg-data-binding";
+import { bnrgAudioTestingQuestions } from "./review/bnrg-audio-testing";
+import { bnrgStylesQuestions } from "./review/bnrg-styles";
+import { bnrgXmlDrawablesQuestions } from "./review/bnrg-xml-drawables";
+import { bnrgMoreIntentsQuestions } from "./review/bnrg-more-intents";
+import { bnrgHttpBackgroundQuestions } from "./review/bnrg-http-background";
+import { bnrgLooperHandlerQuestions } from "./review/bnrg-looper-handler";
+import { bnrgSearchQuestions } from "./review/bnrg-search";
+import { bnrgWorkmanagerQuestions } from "./review/bnrg-workmanager";
+import { bnrgBroadcastQuestions } from "./review/bnrg-broadcast";
+import { bnrgWebviewQuestions } from "./review/bnrg-webview";
+import { bnrgCustomViewsQuestions } from "./review/bnrg-custom-views";
+import { bnrgPropertyAnimationQuestions } from "./review/bnrg-property-animation";
+import { bnrgAfterwordQuestions } from "./review/bnrg-afterword";
 
 export {
   CHAPTER_TITLES,
@@ -176,6 +208,38 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pluginPrincipleQuestions,
   ...drawOptimizationQuestions,
   ...memoryOptimizationQuestions,
+  ...bnrgFirstAppQuestions,
+  ...bnrgMvcQuestions,
+  ...bnrgLifecycleQuestions,
+  ...bnrgUiStateQuestions,
+  ...bnrgDebuggingQuestions,
+  ...bnrgSecondActivityQuestions,
+  ...bnrgSdkCompatQuestions,
+  ...bnrgFragmentsQuestions,
+  ...bnrgRecyclerviewQuestions,
+  ...bnrgLayoutsQuestions,
+  ...bnrgRoomQuestions,
+  ...bnrgFragmentNavQuestions,
+  ...bnrgDialogsQuestions,
+  ...bnrgAppBarQuestions,
+  ...bnrgImplicitIntentsQuestions,
+  ...bnrgTakingPicturesQuestions,
+  ...bnrgLocalizationQuestions,
+  ...bnrgAccessibilityQuestions,
+  ...bnrgDataBindingQuestions,
+  ...bnrgAudioTestingQuestions,
+  ...bnrgStylesQuestions,
+  ...bnrgXmlDrawablesQuestions,
+  ...bnrgMoreIntentsQuestions,
+  ...bnrgHttpBackgroundQuestions,
+  ...bnrgLooperHandlerQuestions,
+  ...bnrgSearchQuestions,
+  ...bnrgWorkmanagerQuestions,
+  ...bnrgBroadcastQuestions,
+  ...bnrgWebviewQuestions,
+  ...bnrgCustomViewsQuestions,
+  ...bnrgPropertyAnimationQuestions,
+  ...bnrgAfterwordQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

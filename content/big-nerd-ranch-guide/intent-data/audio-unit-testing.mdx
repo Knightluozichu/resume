@@ -1,0 +1,146 @@
+---
+title: 音频播放与单元测试
+type: C
+section: Intent与数据
+order: 20
+description: 掌握 MediaPlayer 音频播放和 JUnit 单元测试——用 Mockito 隔离依赖，写出可测试的代码。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+<Objectives>
+
+- 能写出一个完整的 MediaPlayer 播放本地音频文件的代码（包含 create/start/pause/stop/release）
+- 能用 JUnit + Mockito 为 ViewModel 写一个单元测试
+- 能回答：单元测试和 Instrumentation 测试有什么区别？各测什么？
+
+</Objectives>
+
+## 你改了 3 行代码，怎么确认没有破坏其他功能？
+
+每次发版前手动点一遍所有页面？App 有 100 个页面怎么办？**自动化测试**是你最好的 QA。这章教你两个关键技术：MediaPlayer（最常用的音频播放）和 JUnit 单元测试（保证代码质量）。
+
+## MediaPlayer 音频播放
+
+```kotlin
+class AudioPlayer(context: Context) {
+    private var mediaPlayer: MediaPlayer? = null
+
+    fun play(resId: Int) {
+        release()  // 先释放旧的
+        mediaPlayer = MediaPlayer.create(context, resId).apply {
+            setOnCompletionListener { release() }
+            start()
+        }
+    }
+
+    fun pause() = mediaPlayer?.pause()
+    fun stop() = mediaPlayer?.apply { stop(); prepareAsync() }
+
+    fun release() {
+        mediaPlayer?.release()
+        mediaPlayer = null
+    }
+}
+```
+
+关键规则：**用完必须 release()**——MediaPlayer 持有系统音频资源，不释放会导致资源泄漏甚至其他 App 无声音。
+
+对于短促音效（按钮点击声、通知铃声），用 **SoundPool** 替代 MediaPlayer：
+
+```kotlin
+val soundPool = SoundPool.Builder().setMaxStreams(3).build()
+val soundId = soundPool.load(context, R.raw.click, 1)
+soundPool.play(soundId, 1.0f, 1.0f, 1, 0, 1.0f)
+```
+
+SoundPool 预加载音频到内存，低延迟播放短音效——MediaPlayer 适合长音频（音乐/播客）。
+
+## 单元测试基础
+
+### JUnit 4 结构
+
+```kotlin
+class CalculatorTest {
+    private lateinit var calculator: Calculator
+
+    @Before
+    fun setUp() {
+        calculator = Calculator()
+    }
+
+    @Test
+    fun `addition should return sum of two numbers`() {
+        val result = calculator.add(2, 3)
+        assertEquals(5, result)
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun `division by zero should throw`() {
+        calculator.divide(10, 0)
+    }
+}
+```
+
+### Mockito 模拟依赖
+
+```kotlin
+@Test
+fun `loadData success should update LiveData`() {
+    // 模拟 Repository
+    val mockRepo = mock(Repository::class.java)
+    `when`(mockRepo.fetchData()).thenReturn(listOf("a", "b"))
+
+    val viewModel = MainViewModel(mockRepo)
+    viewModel.loadData()
+
+    // 验证 LiveData 结果
+    assertEquals(listOf("a", "b"), viewModel.data.getOrAwaitValue())
+}
+```
+
+Mockito 的 `mock()` 创建一个假对象，`when().thenReturn()` 控制它返回什么——让你在测试中隔离外部依赖（数据库、网络），只测 ViewModel 自身逻辑。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：MediaPlayer 播完一首歌再播下一首——无声或崩溃。**原因**：没有先 `release()` 旧的 MediaPlayer 就创建新的——系统音频资源耗尽。**修法**：每次 play 前先 `release()` 确保旧实例被清理。
+</Callout>
+
+<Callout type="trap">
+  **现象**：测试跑到 Room DAO 那一层要 5 秒——因为真的在写数据库。**原因**：单元测试应该隔离数据库依赖。**修法**：Room DAO 的测试用 `Room.inMemoryDatabaseBuilder`（内存数据库），或直接 mock DAO 接口。
+</Callout>
+
+## 小结
+
+- MediaPlayer 适合长音频（音乐/播客），SoundPool 适合短音效（点击声）
+- MediaPlayer 用完必须 release()，播放新音频前先释放旧实例
+- JUnit：@Test 标记测试方法，@Before 准备环境，assertEquals 验证结果
+- Mockito 模拟依赖 → 隔离外部因素，只测被测代码本身
+- 单元测试测纯逻辑（ViewModel/Repository），Instrumentation 测试测 UI 交互
+
+<Exercises>
+
+**练习 1（代码型）** 为一个播放音频的 ViewModel 写单元测试——mock MediaPlayer 依赖。
+
+<Answer>
+不直接 mock MediaPlayer（它太复杂）——抽象出 AudioPlayer 接口，mock 接口即可。ViewModel 依赖 AudioPlayer 接口而非具体实现 = 可测试性。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="SoundPool">
+  短音效播放器——预加载音频到内存，低延迟播放（<10ms）。适合按钮点击声、通知铃声、游戏音效。不适合长音频（音乐用 MediaPlayer）。
+</GlossaryItem>
+
+<GlossaryItem term="Mockito">
+  Java/Kotlin 的 mock 测试框架。`mock()` 创建假对象，`when().thenReturn()` 控制行为，`verify()` 验证方法是否被调用。隔离依赖、专注测试被测代码。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

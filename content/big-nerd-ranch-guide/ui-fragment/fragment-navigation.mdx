@@ -1,0 +1,242 @@
+---
+title: Fragment Navigation
+type: C
+section: UI与Fragment
+order: 12
+description: 掌握 Jetpack Navigation 组件的导航图、Safe Args 类型安全传参、以及底部导航栏和返回栈管理。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：Jetpack Navigation 组件完整用法。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单：
+   1) Navigation Graph XML（目的地/动作/参数） = 导航图可视化
+   2) NavHostFragment（Fragment 容器） = Stepper 步骤图
+   3) NavController.navigate() = 代码对照
+   4) Safe Args 插件（类型安全参数传递） = 代码对照
+   5) 深链接（Deep Link） = 代码对照
+   6) NavigationUI（底部导航/应用栏集成） = 代码对照
+   7) 返回栈管理（popUpTo / popUpToInclusive） = Stepper 示意图 */}
+
+{/* 1. 学习目标。 */}
+
+<Objectives>
+
+- 能解释 Navigation 组件的三个核心概念：Navigation Graph、NavHostFragment、NavController
+- 能在项目中使用 Safe Args 实现 Fragment 间的类型安全参数传递
+- 能回答：`popUpTo` 和 `popUpToInclusive` 有什么区别？为什么导航时要用它们清理返回栈？
+
+</Objectives>
+
+{/* 2. 直觉引入。 */}
+
+## 为什么导航需要专门的组件？
+
+传统的 Fragment 导航是这样的：你手动 `supportFragmentManager.beginTransaction().replace(...).addToBackStack(...).commit()`。看起来还算清晰——直到你需要：
+- 从 "列表页→详情页→编辑页" 三层跳转，按返回键要跳过编辑页直接回列表页
+- 底部导航栏四个 Tab，每个 Tab 有自己独立的返回栈
+- 从通知直接跳进"订单详情"这个深层页面（深链）
+
+手动写这些逻辑时，不同开发者的回退栈行为千奇百怪——点两次返回键就崩溃是家常便饭。
+
+Jetpack Navigation 组件把"从哪里来、到哪里去、怎么回"这件事统一管理。你画一张**导航图**（类似地铁线路图——每个站点是目的地，箭头是跳转动作），组件自动帮你处理 Fragment 切换和返回栈。Safe Args 插件还让你在页面间传参数时享受编译期类型检查——再也不会因为 key 拼错而运行时崩溃。
+
+{/* 3. 概念讲解。 */}
+
+## Navigation 是怎么工作的
+
+### 三个核心角色
+
+Navigation 组件由三个角色协同工作：
+
+- <Term def="Navigation Graph 是一个 XML 文件，里面定义了一张"导航地图"——有哪些目的地（Fragment/Activity）、目的地之间怎么跳转（动作）、每个目的地需要什么参数。类比地铁线路图——站就是目的地，箭头就是怎么走。">Navigation Graph</Term> —— 一张"地铁线路图"。用 XML 描述：有哪些"站"（destination）、站之间怎么跳（action）、每个站需要什么"票"（argument）
+- <Term def="NavHostFragment 是 Activity 布局里一个特殊的 Fragment 容器——它有"换站"的能力。你把 Navigation Graph 交给它，它就按图帮你切换 Fragment。">NavHostFragment</Term> —— 地铁的"站台"。它是 Activity 布局里一个特殊的 Fragment 容器，负责按导航图切换 Fragment
+- <Term def="NavController 是导航的执行者。你调 navigate() 让它执行跳转，popBackStack() 让它返回上一站。同一个 Activity 只有一个 NavController。">NavController</Term> —— 地铁的"调度员"。你告诉它"去这一站"（`navigate()`），它实际执行 Fragment 事务并管理返回栈
+
+### Safe Args：让传参在编译期就安全
+
+传统传参方式：`arguments?.putString("KEY", value)`——如果接收方写成 `arguments?.getString("KAY")`（拼错了一个字母），编译没报错，运行时才会炸。Safe Args 是编译期生成的代码——你在导航图里声明参数，插件自动生成 `Directions` 类，调用时 IDE 有补全、编译期有检查。
+
+{/* 5. 交互 Demo：Stepper 展示导航图到界面跳转 */}
+
+> 猜一猜：如果你用 `navigate()` 连续跳转 5 个 Fragment，按返回键会怎样？需要按几下才能回到第一个？
+
+### Stepper：搭建导航全流程
+
+1. **在 `res/navigation/` 下创建导航图 XML**：声明 `crimeListFragment` 和 `crimeDetailFragment`
+2. **在 Activity 布局中放置 NavHostFragment**：指定 `app:navGraph="@navigation/nav_graph"`
+3. **用 Safe Args 插件声明参数**：在 destination 里设 `<argument android:name="crimeId" app:argType="string" />`
+4. **在代码中导航**：`findNavController().navigate(CrimeListFragmentDirections.showCrimeDetail(crimeId))`
+
+{/* 6. 代码对照。 */}
+
+## 代码逐段拆解
+
+### 第一步：创建 Navigation Graph
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/crimeListFragment">
+
+    <fragment
+        android:id="@+id/crimeListFragment"
+        android:name="com.example.criminalintent.CrimeListFragment"
+        android:label="案件列表"
+        tools:layout="@layout/fragment_crime_list">
+        <action
+            android:id="@+id/showCrimeDetail"
+            app:destination="@id/crimeDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/crimeDetailFragment"
+        android:name="com.example.criminalintent.CrimeDetailFragment"
+        android:label="案件详情"
+        tools:layout="@layout/fragment_crime_detail">
+        <argument
+            android:name="crimeId"
+            app:argType="java.util.UUID" />
+    </fragment>
+</navigation>
+```
+
+`app:startDestination` 指定第一个显示的页面——相当于地铁图的"起点站"。
+
+### 第二步：在 Activity 布局中嵌入 NavHostFragment
+
+```xml
+<androidx.fragment.app.FragmentContainerView
+    android:id="@+id/nav_host_fragment"
+    android:name="androidx.navigation.fragment.NavHostFragment"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    app:defaultNavHost="true"
+    app:navGraph="@navigation/nav_graph" />
+```
+
+`app:defaultNavHost="true"` 表示这个 NavHostFragment 会拦截系统的返回键——让它走 Navigation 的返回栈，不会直接退到桌面。
+
+### 第三步：用 Safe Args 导航
+
+Safe Args 插件会在编译期自动生成 `CrimeListFragmentDirections` 类：
+
+```kotlin
+class CrimeListFragment : Fragment(R.layout.fragment_crime_list) {
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        // 点击条目 → 跳转详情页并传递 crimeId
+        val action = CrimeListFragmentDirections.showCrimeDetail(crimeId)
+        findNavController().navigate(action)
+    }
+}
+```
+
+接收方用 `navArgs()` 安全取出参数：
+
+```kotlin
+class CrimeDetailFragment : Fragment(R.layout.fragment_crime_detail) {
+
+    private val args: CrimeDetailFragmentArgs by navArgs()
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        val crimeId = args.crimeId // 编译期安全，IDE 自动补全
+    }
+}
+```
+
+<Callout type="tip">
+  Safe Args 支持的类型：基本类型、Parcelable（用 `app:argType="全限定类名"`）、Enum（用 `app:argType="包名.枚举类名"`）、数组类型。对于自定义复杂类型（如 data class），记得实现 `Parcelable` 接口。
+</Callout>
+
+### 第四步：管理返回栈
+
+```xml
+<action
+    android:id="@+id/showCrimeDetail"
+    app:destination="@id/crimeDetailFragment"
+    app:popUpTo="@id/crimeListFragment"
+    app:popUpToInclusive="false" />
+```
+
+`popUpTo="@id/crimeListFragment"` 的意思是：导航到详情页之前，把返回栈里**从当前页到 crimeListFragment 之间所有页面**都弹出。`popUpToInclusive="false"` 表示 crimeListFragment 本身保留（不弹）。当你从编辑页点保存回到列表页时，返回栈就干净了——按返回键不会回到编辑页。
+
+### 第五步：底部导航栏集成
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    private lateinit var navController: NavController
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        val navHostFragment = supportFragmentManager
+            .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
+        navController = navHostFragment.navController
+
+        val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_nav)
+        bottomNav.setupWithNavController(navController)
+    }
+}
+```
+
+`setupWithNavController` 自动处理 Tab 点击 → 导航 + 选中状态同步 + 返回栈管理——一行代码搞定底部导航所有逻辑。
+
+{/* 7. 常见误区：C 型 ≥3 个。 */}
+
+## 容易踩的坑
+
+- **现象 →** 按返回键直接退出 App 而不是回到上一个 Fragment。**原因 →** NavHostFragment 没设 `app:defaultNavHost="true"`，系统返回键被 Activity 直接拦截处理了。**修法 →** 在布局文件中的 FragmentContainerView 上加上 `app:defaultNavHost="true"`。
+
+- **现象 →** 导航后返回栈里全是重复的 Fragment——从 A 到 B 再回来再过去，返回要按好几次。**原因 →** `navigate()` 每次都会往返回栈上加一个新实例，重复跳同一目的地会导致重复堆积。**修法 →** 在 action 上设 `app:popUpTo="@id/上一级"` + `app:popUpToInclusive="false"`——导航前先清理多余栈帧。
+
+- **现象 →** Safe Args 生成的 Directions 类找不到了，IDE 标红。**原因 →** 改完导航图 XML 后没有重新构建项目（Build → Make Project）。Safe Args 插件需要 Gradle 构建才能生成代码。**修法 →** 执行 Build → Make Project 或在 Terminal 里跑 `./gradlew kaptDebugKotlin`。
+
+{/* 8. 小结与练习。 */}
+
+## 小结
+
+- Navigation Graph 用 XML 描述"目的地地图"——哪些页面、怎么跳、带什么参数
+- NavHostFragment 是容器，NavController 是调度员——navigate() 跳转，popBackStack() 返回
+- Safe Args 把参数从运行时字符串变成编译期生成的强类型 Directions 类
+- `popUpTo` 清理返回栈避免重复堆积；`defaultNavHost="true"` 拦截系统返回键
+
+<Exercises>
+
+1. （改代码）在导航图中新增一个"编辑页面"Fragment，从详情页导航过去。在 action 上设置 `popUpTo="@id/crimeDetailFragment"`，观察保存后返回时的行为。
+
+2. （实现题）用 NavigationUI 把 BottomNavigationView 集成到导航图中——创建三个顶层 Fragment（案件、统计、设置），每个 Tab 保持独立的返回栈。
+
+3. （问答）Safe Args 生成的 `Directions` 类内部实际上是怎么工作的？它和手写 `Bundle` 的本质区别在哪里？
+
+<Answer>
+
+3. Safe Args 在编译期生成一个 `CrimeListFragmentDirections` 类，内部把参数序列化成 Bundle（跟手写一模一样），区别在于：① 生成的 key 是编译期常量不会拼错；② 生成的 getter 有明确的返回类型（不会出现 ClassCastException）；③ 参数类型在导航图 `<argument>` 声明时就被固定，接收方不用做类型转换。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Navigation Graph">一张描述"页面地图"的 XML 文件。声明所有目的地、它们之间的跳转动作、以及每个目的地需要的参数。可视化为地铁线路图——站是 Fragment，箭头是导航动作。</GlossaryItem>
+  <GlossaryItem term="NavHostFragment">Activity 里的 Fragment 容器——但不是普通的容器。它持有 Navigation Graph，按图自动切换 Fragment。是整条地铁线的"站台"。</GlossaryItem>
+  <GlossaryItem term="NavController">导航的执行引擎。你告诉它"去某站"，它处理 Fragment 事务和返回栈。通过 `findNavController()` 拿到。</GlossaryItem>
+  <GlossaryItem term="Safe Args">Navigation 的编译期参数安全插件。你在导航图里声明参数类型，插件自动生成 Directions 类——类型检查从运行时提前到编译期，参数 key 永远不会拼错。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

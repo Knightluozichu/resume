@@ -1,0 +1,227 @@
+---
+title: 搜索
+type: C
+section: 后台与网络
+order: 26
+description: 在 App 中添加搜索功能：使用 SearchView 控件、搜索建议提供器和 SharedPreferences 持久化搜索历史。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第26章改编）：重心在代码对照(§6)与常见误区(§7)。
+   知识点清单：1)SearchView控件（XML+代码配置）2)searchable.xml配置
+   3)搜索查询处理（onQueryTextSubmit）4)搜索建议（ContentProvider/SearchRecentSuggestionsProvider）
+   5)SharedPreferences存储搜索历史（代码） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+<Objectives>
+
+- 能独立在一个 App 中集成 SearchView，让用户在应用栏中搜索并处理查询结果
+- 能用 SharedPreferences 保存用户最近的搜索记录并在 UI 中展示
+- 能回答：SearchView 和普通的 EditText 有什么区别？搜索建议的后台是谁提供的？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语 */}
+## 为什么搜索不只是"一个输入框"？
+
+你用手机 App 时几乎每天都在用它：微信搜聊天记录、设置里搜 Wi-Fi、地图搜地址。看起来只是一个输入框，但背后的用户期待远超一个普通的输入框——它应该在应用栏的位置、有语音输入按钮、输入时弹出历史建议、点击搜索后键盘自动收起且显示结果。
+
+如果不用专门为搜索设计的控件，这些效果你都得自己造轮子：监听输入变化、维护历史列表、弹出建议弹窗、处理键盘收起……这就是为什么 Android 提供了一个完整的搜索框架——SearchView、SearchManager、建议提供器三者配合，把上面这些需求包装成一套开箱即用的方案。
+
+这章要解决的核心问题：**怎么给你的 App 加一个专业级的搜索功能，而不是只扔一个 EditText 了事。**
+
+{/* 3. 概念讲解（spec §三） */}
+## SearchView 与搜索框架
+
+### SearchView：应用栏里的专业搜索框
+
+<Term def="SearchView 是 Android 提供的搜索专用输入控件。它不只是个带图标的输入框——它内建了搜索建议下拉列表、语音搜索按钮、自动收起键盘、以及跟 SearchManager 的深度集成。通常放在 Toolbar 或 ActionBar 中。">SearchView</Term> 是 Android 为搜索场景深度定制的一个控件。它比普通 EditText 多了这些能力：
+
+- 搜索建议下拉列表（自动弹出、自动消失）
+- 语音搜索按钮（如果你的设备支持）
+- 与键盘的自动配合（提交后收起，不影响返回栈）
+- 可配置的外观（图标化/展开、提示文字、搜索图标）
+
+### searchable.xml：搜索配置宣言
+
+Android 的搜索框架通过一个 XML 配置文件来声明搜索行为：
+
+```xml
+<!-- res/xml/searchable.xml -->
+<?xml version="1.0" encoding="utf-8"?>
+<searchable xmlns:android="http://schemas.android.com/apk/res/android"
+    android:label="@string/app_name"
+    android:hint="搜索联系人..."
+    android:searchSuggestAuthority="com.example.app.SearchSuggestionProvider"
+    android:searchSuggestSelection=" ?" />
+```
+
+这个文件告诉系统：这个 App 支持搜索、搜索建议由哪个 ContentProvider 提供、提示文字是什么。
+
+### 处理搜索查询：onQueryTextSubmit
+
+SearchView 通过 `OnQueryTextListener` 回调通知你搜索事件：
+
+```kotlin
+searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+    override fun onQueryTextSubmit(query: String?): Boolean {
+        // 用户按下"搜索"按钮（键盘上的回车或放大镜图标）
+        performSearch(query ?: "")
+        return true
+    }
+
+    override fun onQueryTextChange(newText: String?): Boolean {
+        // 用户每输入一个字符就回调一次——适合做即时过滤
+        filterData(newText ?: "")
+        return true
+    }
+})
+```
+
+`onQueryTextSubmit` 只在用户确认搜索时触发一次。`onQueryTextChange` 每次输入变化都触发——如果你的数据集很大，不要在这里做全量查询。
+
+{/* 6. 代码对照（spec §六，C 型重心——逐段讲解） */}
+## 代码逐段拆解：完整的搜索功能
+
+### 第一步：在菜单中放置 SearchView
+
+```xml
+<!-- res/menu/fragment_main.xml -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/menu_item_search"
+        android:title="搜索"
+        app:actionViewClass="android.widget.SearchView"
+        app:showAsAction="ifRoom|collapseActionView" />
+</menu>
+```
+
+`app:actionViewClass="android.widget.SearchView"` 是关键——它告诉系统这个菜单项不是一个普通按钮，而是展开为一个 SearchView 控件。
+
+### 第二步：在代码中获取并配置 SearchView
+
+```kotlin
+override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+    super.onCreateOptionsMenu(menu, inflater)
+    inflater.inflate(R.menu.fragment_main, menu)
+
+    val searchItem = menu.findItem(R.id.menu_item_search)
+    val searchView = searchItem.actionView as SearchView
+
+    searchView.apply {
+        queryHint = "搜索联系人..."
+        setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                query?.let { performSearch(it) }
+                return true
+            }
+            override fun onQueryTextChange(newText: String?): Boolean {
+                newText?.let { filterList(it) }
+                return true
+            }
+        })
+    }
+}
+```
+
+### 第三步：用 SharedPreferences 保存搜索历史
+
+```kotlin
+class SearchHistoryManager(context: Context) {
+    private val prefs = context.getSharedPreferences("search_history", Context.MODE_PRIVATE)
+    private val maxHistory = 10
+
+    fun addQuery(query: String) {
+        val currentList = getHistory().toMutableList()
+        currentList.remove(query)  // 去重：已存在的先删掉
+        currentList.add(0, query)  // 最新的放最前面
+        if (currentList.size > maxHistory) {
+            currentList.removeAt(currentList.lastIndex)
+        }
+        // 序列化为 JSON 字符串存入 SharedPreferences
+        prefs.edit().putString(KEY_HISTORY, Gson().toJson(currentList)).apply()
+    }
+
+    fun getHistory(): List<String> {
+        val json = prefs.getString(KEY_HISTORY, "[]") ?: "[]"
+        val type = object : TypeToken<List<String>>() {}.type
+        return Gson().fromJson(json, type)
+    }
+
+    companion object {
+        private const val KEY_HISTORY = "queries"
+    }
+}
+```
+
+搜索历史的本质：一个去重 + 限制条数 + 按时间排序的列表，用 SharedPreferences 持久化。Gson 做序列化比手动拼接分隔符更可靠——你不会被用户输入的逗号或换行符搞崩解析逻辑。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3） */}
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：SearchView 展开后，按返回键没有收起 SearchView，而是退出了当前页面。
+  **原因**：默认情况下 SearchView 展开不代表"进入了一个新界面"——按返回键会触发 Activity 的 `onBackPressed()`。如果你没有拦截处理，系统会按常规返回处理页面退出。
+  **修法**：在 `onBackPressed()` 中检查 SearchView 是否展开：`if (!searchView.isIconified) { searchView.isIconified = true } else { super.onBackPressed() }`——先收起搜索框，已经收起状态才退出页面。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 `onQueryTextChange()` 中做了耗时查询（如遍历大列表或数据库查询），输入时卡顿严重。
+  **原因**：`onQueryTextChange` 在用户每输入一个字符时都会被调用。如果你在回调里遍历一个 1000 条数据的列表或执行 SQL 查询，每次按键都会阻塞主线程几十到几百毫秒。
+  **修法**：用防抖（debounce）策略——将过滤操作延迟 300ms 执行，期间有新输入则重置计时器。或用 `RxJava / Flow.debounce()`。数据量大时应将查询移到后台线程（用上一章的 HandlerThread 模式）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：搜索历史用 SharedPreferences 直接频繁写入，旋转屏幕后历史丢失，或写入时 ANR。
+  **原因**：SharedPreferences 的 `apply()` 虽然是异步写入磁盘，但首次加载时 `getSharedPreferences()` 会从磁盘解析 XML ——如果在主线程加载一个巨大的偏好文件，也造成卡顿。此外，`commit()` 方法是同步写盘，绝不能在主线程调。
+  **修法**：始终用 `apply()` 而非 `commit()` 写入偏好。搜索历史这种"丢了无所谓、不影响核心业务"的数据，用 SharedPreferences 没问题。但如果是关键业务数据（如用户草稿），请用 Room 数据库。
+</Callout>
+
+{/* 8. 小结与练习（spec §八） */}
+## 小结
+
+- SearchView 是 Android 为搜索定制的控件，通过菜单配置 `app:actionViewClass` 集成到应用栏
+- `searchable.xml` 声明搜索元数据（提示文字、建议提供器），`OnQueryTextListener` 处理查询提交和输入变化
+- 搜索建议通过 ContentProvider 提供，`SearchRecentSuggestionsProvider` 可快速实现最近搜索记录
+- SharedPreferences + Gson 序列化是一种轻量级的搜索历史存储方案——去重 + 限制条数 + 时间排序
+- `onQueryTextChange` 回调频率极高，需要防抖或异步处理避免阻塞主线程
+
+<Exercises>
+
+**练习 1（改代码型）** 实现一个"城市搜索 App"：输入城市名，从本地预置的字符串数组中过滤匹配项，过滤结果显示在 RecyclerView 中。使用防抖策略（300ms 延迟），确保输入流畅。
+<Answer>
+核心防抖思路：在 `onQueryTextChange` 中 `handler.removeCallbacks(searchRunnable)` 再 `handler.postDelayed(searchRunnable, 300)`——如果用户在 300ms 内继续输入，前一次的过滤任务被取消。过滤用 `array.filter { it.contains(newText, ignoreCase = true) }`，结果通过 `adapter.submitList()` 更新 RecyclerView。
+</Answer>
+
+**练习 2（改代码型）** 在练习 1 的基础上，把用户的每次搜索提交（`onQueryTextSubmit`）存入 SharedPreferences 搜索历史。在 SearchView 获得焦点时，展示最近 5 条历史记录，点击可快速搜索。
+<Answer>
+历史展示方案：SearchView 获得焦点时（`setOnQueryTextFocusChangeListener`），在 SearchView 下方弹出一个 RecyclerView，列出 `SearchHistoryManager.getHistory().take(5)`。点击某条历史记录 → `searchView.setQuery(item, true)`（第二个参数 true 会触发 `onQueryTextSubmit`）。SearchView 失去焦点时隐藏历史列表。
+</Answer>
+
+**练习 3（探索型）** 阅读 `SearchRecentSuggestionsProvider` 的源码（在 Android SDK 中），看看它是如何利用 ContentProvider 的 `query()` 方法提供搜索建议的。试着在你的项目中用 `SearchRecentSuggestionsProvider` 替代自己的 SharedPreferences 方案。
+<Answer>
+`SearchRecentSuggestionsProvider` 内部使用一个 SQLite 数据库存储搜索记录（表名 `suggestions`）。`query()` 方法接收 URI 参数中的搜索关键词，返回一个 Cursor 包含 `_id`、`suggest_text_1`、`suggest_text_2`、`suggest_intent_data` 等列。SearchView 内部通过 ContentResolver 调用这个 Provider 的 `query()` 来获取建议列表。跟 SharedPreferences 方案比，它的优势是内建了重复检测和时间排序。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十） */}
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="SearchView">
+  Android 为搜索场景深度定制的输入控件，内建搜索建议下拉列表、语音搜索按钮、与键盘自动配合。通常放在 Toolbar 中，通过 `app:actionViewClass="android.widget.SearchView"` 配置。详见本章"SearchView"一节。
+</GlossaryItem>
+<GlossaryItem term="SharedPreferences">
+  Android 提供的一种轻量级键值对持久化存储方式。适合存储少量简单数据（如设置项、搜索历史），内部用 XML 文件存储。写入用 `apply()`（异步）或 `commit()`（同步，不推荐主线程）。详见本章"搜索历史"一节。
+</GlossaryItem>
+<GlossaryItem term="ContentProvider">
+  Android 四大组件之一，用于管理结构化数据并提供跨应用/跨进程的数据访问接口。搜索建议就是一种特殊的 ContentProvider 应用——SearchView 通过 ContentResolver 调用 ContentProvider.query() 来获取建议列表。详见本章"搜索建议"一节。
+</GlossaryItem>
+</Glossary>
+
+<Attribution />

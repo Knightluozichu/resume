@@ -1,0 +1,122 @@
+---
+title: SDK版本与兼容性
+type: C
+section: 基础入门
+order: 7
+description: 理解 minSdk、targetSdk、compileSdk 的含义——如何在支持新 API 的同时兼容旧设备。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) compile / min / target 三版本 = 对照表
+   2) Build.VERSION.SDK_INT 分支 = 代码
+   3) AndroidX 向后移植 = Term
+   4) targetSdk 行为变更 = Callout
+   5) 权限与 API 级别 = Stepper
+*/}
+
+<Objectives>
+
+- 能解释 compileSdk、minSdk、targetSdk 三个版本号的区别和各自作用
+- 能用 `Build.VERSION.SDK_INT` 做运行时 API 级别检查——在新旧设备上使用不同实现
+- 能回答：为什么 targetSdk 应该尽量设高？设低了会怎样？
+
+</Objectives>
+
+## 你的 App 要跑在十年跨度上的设备
+
+2015 年的手机和 2025 年的折叠屏，系统 API 差很多。<Term def="Gradle 中声明的最低可安装 Android 版本，低于此版本的设备无法从商店安装。">minSdk</Term> 决定「多老的机子能装」；<Term def="编译时使用的 SDK 版本，决定你能调用哪些 API 符号。">compileSdk</Term> 决定「你能写哪些新 API」；<Term def="向系统声明已适配的行为变更版本，影响权限、后台限制等策略。">targetSdk</Term> 告诉系统「请按哪一代规则管我」。
+
+## 三个版本号
+
+在 `build.gradle.kts`：
+
+```kotlin
+android {
+    compileSdk = 35
+    defaultConfig {
+        minSdk = 26
+        targetSdk = 35
+    }
+}
+```
+
+| 版本 | 含义 | 设低了会怎样 |
+|---|---|---|
+| compileSdk | 编译用 SDK | 无法用新 API / 编译警告 |
+| minSdk | 最低安装版本 | 老设备装不了 |
+| targetSdk | 行为兼容目标 | 系统用旧兼容模式，可能缺新安全特性 |
+
+## 运行时版本检查
+
+```kotlin
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+    registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) pickImage()
+    }.launch(Manifest.permission.READ_MEDIA_IMAGES)
+} else {
+    // API 32 及以下用 READ_EXTERNAL_STORAGE
+}
+```
+
+### Stepper：新权限在旧机上的决策
+
+1. 查文档：该权限从哪个 API 引入
+2. minSdk 若更低 → 必须分支或 AndroidX 兼容库
+3. targetSdk 升到要求新权限的级别 → Manifest + 运行时申请
+4. 在 minSdk 真机/模拟器上回归
+
+<Callout type="tip">
+  **AndroidX** 把新 API 行为 backport 到旧系统（如 `ContextCompat`、`ActivityCompat`）——优先用兼容 API，少写 if/else。
+</Callout>
+
+<Callout type="trap">
+  targetSdk 长期不升 → Google Play 要求过期、用户设备上行为与新版系统不一致（后台限制、分区存储等突然「像坏了」）。
+</Callout>
+
+<Callout type="trap">
+  compileSdk &lt; 使用的库要求 → 编译失败。升级 compileSdk 不等于必须升 minSdk，但需测 minSdk 设备。
+</Callout>
+
+## 小结
+
+- compileSdk ≥ 你用的 API；minSdk = 业务决定的最低设备；targetSdk 尽量跟最新稳定版
+- 新 API 用 SDK_INT 分支或 AndroidX
+- 升 targetSdk 前读「行为变更」文档并全量测试
+
+<Exercises>
+
+**练习 1（概念）** minSdk=24、targetSdk=35 的手机运行 API 28，系统按哪套规则限制后台？
+
+<Answer>
+按 targetSdk 35 声明的行为（若已适配），但只能调用 ≤ API 28 存在的平台 API；minSdk 只影响能否安装，不单独决定运行时策略。
+</Answer>
+
+**练习 2（实操）** 要用 NotificationChannel（API 26+），minSdk 21 怎么办？
+
+<Answer>
+在 SDK_INT >= 26 时创建 Channel；低版本用旧通知 API 或 AndroidX 封装。在 API 21–25 模拟器上验证通知仍能展示。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="minSdk">
+  应用支持的最低 Android 版本。低于此版本无法安装。
+</GlossaryItem>
+
+<GlossaryItem term="targetSdk">
+  声明已测试的行为变更版本。影响权限模型、后台执行、存储访问等系统策略。
+</GlossaryItem>
+
+<GlossaryItem term="compileSdk">
+  编译期 SDK 版本，决定可用的 API 与 lint 规则，不影响运行时「最低系统」。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

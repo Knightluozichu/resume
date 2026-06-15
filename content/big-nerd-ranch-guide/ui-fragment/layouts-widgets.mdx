@@ -1,0 +1,241 @@
+---
+title: 使用布局与部件创建用户界面
+type: C
+section: UI与Fragment
+order: 10
+description: 掌握 ConstraintLayout 约束布局、常用 UI 部件、输入类型与 IME 操作，能搭建复杂但高效的用户界面。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：布局与 UI 部件。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单：
+   1) ConstraintLayout 约束机制（约束/偏差/链） = 约束示意图（Stepper 分步演示创建约束）
+   2) 常用 UI 部件（Button/TextView/EditText/ImageView/CheckBox/RadioButton/Switch/SeekBar） = 效果截图集
+   3) 输入类型与 IME 操作（inputType / imeOptions） = 代码对照
+   4) ScrollView & FrameLayout 用途 = 布局层次图
+   5) Guidelines & Barriers = 约束辅助线示意图
+   6) Tools 命名空间预览 = 代码对照 */}
+
+{/* 1. 学习目标：C 型必含「能改出 ___ 效果」。 */}
+
+<Objectives>
+
+- 能解释 ConstraintLayout 的"约束"机制，说出为什么它是 Android 推荐的默认布局
+- 能在布局中搭配使用 ConstraintLayout、ScrollView 和至少 6 种 UI 部件，实现一个表单界面
+- 能回答：如果不设约束、只用 margin 来排控件，为什么在别的手机（不同尺寸/方向）上一定会乱？
+
+</Objectives>
+
+{/* 2. 直觉引入：≤3 段 × ≤120 字；零术语。 */}
+
+## 为什么排个按钮位置这么讲究？
+
+你写过一个登录界面：账号输入框、密码输入框、登录按钮。在你自己手机上看效果完美。然后你换了一台屏幕大一号的手机——三个控件全挤在左上角，底下大片空白。这就是直接写死坐标（绝对位置）的结果。
+
+Android 的布局系统不让你写"放在 x=200, y=300"——因为不同手机的屏幕大小、分辨率、方向都不一样。它让你写的是**关系**："登录按钮放在密码输入框的正下方"、"密码输入框的宽度和账号输入框保持一致"。关系不随屏幕变，所以布局在任何设备上都稳。
+
+布局的核心思想是：**不是告诉控件它该在哪，而是告诉控件它该和谁是邻居**。本章先用 ConstraintLayout 搭建这种"关系网"，然后带你过一遍常用的 UI 部件工具箱。
+
+{/* 3. 概念讲解：一节一概念。 */}
+
+## ConstraintLayout：用"关系"排布界面
+
+### 什么是约束
+
+<Term def="ConstraintLayout 需要你给每个子控件定义至少一条水平约束和一条垂直约束——告诉系统这个控件在水平和垂直方向上分别和谁对齐、离多远。否则布局引擎不知道把它放哪。">约束</Term> 就是一条规则，告诉控件："你的左边跟 A 的右边对齐"、"你的底部黏在父布局的底部"。每个控件至少需要一条水平约束和一条垂直约束——没有约束的控件会被"推到"左上角（坐标 0,0），这就是你常见的"控件全缩在角落里"的原因。
+
+<Callout type="warn">
+  **一条约束都不能少**。一个控件如果只有水平约束没有垂直约束——它在垂直方向是"自由的"，布局引擎不知道怎么放，最后推到左上角。反直觉，但这就是规则。
+</Callout>
+
+### 偏差：当你不想要"居中"的时候
+
+把控件左右两边都约束到父布局上，默认它就居中。但如果你想让它在中间偏左 30%，怎么办？
+
+<Term def="偏差值从 0（最左）到 1（最右），默认 0.5（居中）。它让你在不改变约束的前提下微调控件的相对位置。">偏差</Term> 就是控制这个"偏一点"的旋钮。水平偏差 0.3 的意思是"待在左边占 30%、右边占 70% 的位置"。偏差是一个 0 到 1 的小数，0.5 就是正中间。
+
+### 链：一组控件"手拉手"
+
+你有三个按钮，想让它们等间距一字排开——每个按钮左右互相约束首尾相连，这就形成了一条<Term def="两个以上控件双向约束串联起来就叫一条链。链可以设置整体对齐方式（spread/ spread_inside/ packed），省去手动算间距。">链</Term>。链的好处是一组控件可以像绑在一起一样整体移动——你改变链头的位置，全队一起动。
+
+### 辅助线：Guidelines 和 Barriers
+
+有些约束你不想绑在具体的控件上——比如"所有按钮的左边都对齐屏幕的 30% 位置"。这时候你可以在 ConstraintLayout 里放一条<Term def="Guideline 是一条不可见的垂直或水平辅助线，你可以把其他控件的约束绑在这条线上。它的位置可以用百分比（layout_constraintGuide_percent）或固定 dp 值定义。">Guideline</Term>——一条看不见的垂直/水平参考线，控件约束绑在这条线上而不是某个具体控件上。
+
+<Term def="Barrier 是一条动态辅助线——它自动定位在"参考控件组中最宽/最高的那个"的边缘。比如几个不同长度的输入框，Barrier 让下面的按钮始终对齐最长的那个输入框的右边。">Barrier</Term> 则更聪明——它会自动对齐"参考控件组里最宽/最高的那个"。如果你有几个长度不同的输入框，Barrier 能让下面的按钮始终对齐最长的那个输入框的右边。
+
+{/* 5. 交互 Demo：Stepper 分步演示从空白到完整约束 */}
+
+## 从零开始搭建一个表单界面
+
+> 猜一猜：只拖拽控件不设约束会发生什么？每个控件的实际位置由什么决定？
+
+下面用 Stepper 分步展示如何用 ConstraintLayout 搭一个嫌疑人录入表单（姓名、日期、是否已结案复选框、保存按钮）：
+
+1. **添加 EditText 输入框**：设置水平约束（左右绑父布局）、垂直约束（顶部绑父布局），宽度设为 0dp (match_constraint)
+2. **添加第二个 EditText**：垂直约束顶部绑第一个输入框底部，水平同上——这就是"关系"而非"位置"
+3. **添加 CheckBox 和保存 Button**：用水平链让它们在父布局里等分宽度
+4. **检查**：预览不同屏幕尺寸——所有控件自动适配，不会堆在一起
+
+{/* 6. 代码对照：C 型重心。 */}
+
+## 代码逐段拆解
+
+### ConstraintLayout 完整示例：嫌疑人录入表单
+
+```xml
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="16dp">
+
+    <EditText
+        android:id="@+id/crime_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="嫌疑人姓名"
+        android:inputType="textPersonName|textCapWords"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <EditText
+        android:id="@+id/crime_detail"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="作案细节"
+        android:inputType="textMultiLine"
+        android:gravity="top"
+        android:minLines="3"
+        android:imeOptions="actionDone"
+        app:layout_constraintTop_toBottomOf="@id/crime_title"
+        app:layout_constraintStart_toStartOf="@id/crime_title"
+        app:layout_constraintEnd_toEndOf="@id/crime_title" />
+
+    <CheckBox
+        android:id="@+id/crime_solved"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="已结案"
+        app:layout_constraintTop_toBottomOf="@id/crime_detail"
+        app:layout_constraintStart_toStartOf="@id/crime_title"
+        app:layout_constraintEnd_toStartOf="@id/save_button" />
+
+    <Button
+        android:id="@+id/save_button"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="保存"
+        app:layout_constraintTop_toBottomOf="@id/crime_detail"
+        app:layout_constraintEnd_toEndOf="@id/crime_title"
+        app:layout_constraintStart_toEndOf="@id/crime_solved" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+### 关键属性解读
+
+- `layout_width="0dp"` 在 ConstraintLayout 里不是 0 像素——而是 **"让约束来决定宽度"**（match_constraint）。前提是左右都有约束
+- `android:inputType` 控制键盘类型和输入行为：`textMultiLine` 允许多行、`textCapWords` 自动大写每个单词首字母
+- `android:imeOptions="actionDone"` 把键盘上的回车键变成"完成"按钮，比默认的换行符用户友好得多
+
+### 常用 UI 部件速查表
+
+| 部件 | 典型用途 | 关键属性 |
+|------|---------|---------|
+| `TextView` | 显示文字 | `text`, `textSize`, `textColor` |
+| `EditText` | 用户输入 | `hint`, `inputType`, `imeOptions` |
+| `Button` | 触发操作 | `text`, `onClick` |
+| `ImageView` | 显示图片 | `src`, `scaleType` |
+| `CheckBox` | 多选开关 | `text`, `checked` |
+| `RadioButton` | 单选（配 RadioGroup） | `text`, `checked` |
+| `Switch` | 开关控件 | `text`, `checked` |
+| `SeekBar` | 连续滑动取值 | `max`, `progress` |
+
+### ScrollView：内容超出屏幕时
+
+```xml
+<ScrollView
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+        <!-- 所有可以滚动的控件放这里 -->
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</ScrollView>
+```
+
+<Callout type="tip">
+  ScrollView 只能有一个直接子 View（上面的 ConstraintLayout 就是那个"唯一子 View"），所有可滚动的内容都放在这个唯一子 View 里面。
+</Callout>
+
+### Tools 命名空间：布局预览神器
+
+```xml
+<TextView
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    tools:text="张三（仅预览，运行时不可见）" />
+```
+
+`tools:text` 只在 Android Studio 预览窗口生效，运行时会被真实数据覆盖。同样的 `tools:src` 可以用来预览图片，`tools:listitem` 可以预览 RecyclerView 的条目——编译后全部消失，零性能开销。
+
+{/* 7. 常见误区：C 型 ≥3 个。 */}
+
+## 容易踩的坑
+
+- **现象 →** ConstraintLayout 里的控件全堆在左上角。**原因 →** 控件没有定义约束。当水平和垂直两条约束至少有其一缺失时，引擎不知道该把控件放哪，默认推到 (0,0)。**修法 →** 给每个控件至少一条水平约束 + 一条垂直约束。
+
+- **现象 →** EditText 键盘上回车键不是"完成"而是换行，多行文本输入框没法退出键盘。**原因 →** 多行 `EditText` 默认回车=换行，需要用 `imeOptions` 把回车键变成指定动作按钮。**修法 →** 设 `android:imeOptions="actionDone"`，并在代码里用 `setOnEditorActionListener` 响应点击。
+
+- **现象 →** ScrollView 里放了一个 ConstraintLayout，里面的内容没有正确滚动——滚动不了或者子 View 只显示了一小截。**原因 →** ScrollView 子 View 设为 `match_parent` 时，子 View 高度等于 ScrollView 高度——已经没有"超出的内容"需要滚动了。**修法 →** ScrollView 的直接子 View 设 `layout_height="wrap_content"`。
+
+{/* 8. 小结与练习。 */}
+
+## 小结
+
+- ConstraintLayout 通过"约束关系"排控件——写关系不写坐标，天然适配各种屏幕尺寸
+- `layout_width="0dp"` + 左右约束 = match_constraint（让约束决定宽度），是 ConstraintLayout 最高效的宽度策略
+- 部件属性决定交互体验：`inputType` 控制键盘类型、`imeOptions` 控制键盘上的回车动作
+- ScrollView 包裹超出屏幕的内容；Tools 命名空间提供零成本的预览数据
+
+<Exercises>
+
+1. （改代码）把保存按钮改为跟随 Barrier：在 CheckBox 右边加一条垂直 Barrier，让它对齐"crime_detail"和"crime_title"中最宽的那个的右侧。保存按钮约束到 Barrier 的右侧，观察效果。
+
+2. （实现题）用 ConstraintLayout 重新设计一个 Fragment 的布局：标题 TextView 在顶部居中、日期 Button 在标题下方 8dp 处且与标题左对齐、一个 ImageView 在日期下方、下面跟一个 ScrollView 包裹的犯罪详情 EditText。保证它在大屏手机上也不会散架。
+
+3. （问答）`android:imeOptions="actionSend"` 是做什么的？如果你要在代码里响应用户点了键盘上的"发送"按钮，该怎么写？
+
+<Answer>
+
+3. `actionSend` 把键盘上的回车/确认键变成"发送"图标按钮（类似短信 App 的发件按钮）。响应方式：在 EditText 上设 `setOnEditorActionListener { _, actionId, _ -> if (actionId == EditorInfo.IME_ACTION_SEND) { /* 发送逻辑 */; true } else false }`。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="约束">告诉一个控件"你应该在哪"的规则。在 ConstraintLayout 里，你描述的是控件之间的关系（"A 的左边跟 B 的右边对齐"）而非绝对坐标。</GlossaryItem>
+  <GlossaryItem term="偏差">控件在两个对向约束之间不是居中而是偏向某一侧的程度。值 0 到 1：0.5=居中，0.2=偏左，0.8=偏右。就像天平两边的砝码重量比。</GlossaryItem>
+  <GlossaryItem term="链">两个以上控件通过双向约束串联成一条"锁链"。链条作为整体可以设置排列方式：等分空间（spread）、等分但去头尾（spread_inside）、挤在一起（packed）。</GlossaryItem>
+  <GlossaryItem term="Guideline">一条只存在于设计阶段不可见的辅助线，可以按百分比或固定 dp 定位。其他控件把约束绑在它身上——就像画格子时用的隐形尺子。</GlossaryItem>
+  <GlossaryItem term="Barrier">一条动态辅助线——它会自动跑到"参考组里最宽或最高控件的边缘"。特别适合处理一排长短不一的输入框下面的按钮对齐问题。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

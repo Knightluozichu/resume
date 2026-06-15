@@ -1,0 +1,260 @@
+---
+title: broadcast intent
+type: C
+section: 后台与网络
+order: 28
+description: 理解 Android 的广播机制：系统广播、自定义广播、动态注册与静态注册的区别，以及 Android 8.0+ 对隐式广播的限制和现代替代方案。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第28章改编）：重心在代码对照(§6)与常见误区(§7)。
+   知识点清单：1)BroadcastReceiver基础（代码）2)系统广播一览（代码示例）
+   3)动态注册vs静态注册对比（Stepper）4)Android 8.0+隐式广播限制（Callout trap）
+   5)LocalBroadcastManager弃用与替代（Callout）6)有序广播（代码）
+   7)现代替代方案LiveData/Flow（代码对照） */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
+<Objectives>
+
+- 能独立创建一个 BroadcastReceiver，分别用动态注册和静态注册的方式监听系统广播
+- 能说出 Android 8.0+ 对隐式广播的三大限制，以及每条限制背后的设计意图
+- 能回答：LocalBroadcastManager 被弃用后，同一个 App 内的组件间通信用什么替代？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语 */}
+## 为什么需要"广播"？
+
+你手机里装的 App 互不认识，但它们需要在一些事情发生时知道该怎么做。比如：系统连上了 Wi-Fi——下载管理器要开始下载离线地图、音乐 App 可能要切换音质、你的 App 要触发一次数据同步。如果每个 App 都自己去轮询"Wi-Fi 连上了吗？"，整个系统会被轮询搞垮。
+
+Android 的广播机制就是为此设计的：系统是唯一的"大喇叭"，发生什么事它喊一声，谁需要听就自己来注册。喊的人不管有多少听众，听众也不关心还有谁在听。这种**发布-订阅**的松耦合模式，就是 Android 广播的核心思想。
+
+这章要解决的核心问题：**怎么让你的 App 感知到手机系统里正在发生的事（Wi-Fi 变化、电量低、开屏关屏），以及怎么用广播让 App 内部各组件解耦通信。**
+
+{/* 3. 概念讲解（spec §三） */}
+## 广播接收器的基本使用
+
+### 什么是 BroadcastReceiver
+
+<Term def="BroadcastReceiver 是 Android 四大组件之一，专门用来接收系统或其他 App 发出的广播消息。它像一个"订阅器"——你告诉系统你关心哪些事件，事件发生时系统会调用你的 onReceive() 方法。它是 Android 发布-订阅模式的核心实现。">BroadcastReceiver（广播接收器）</Term> 是 Android 四大组件中最轻量的一个。它的作用非常简单——**定义对某个事件感兴趣的"耳朵"**。
+
+一个 BroadcastReceiver 只需要实现一个方法：
+
+```kotlin
+class MyReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        // 收到广播时执行这里的代码
+        when (intent.action) {
+            Intent.ACTION_POWER_CONNECTED -> {
+                // 充电器插上了
+            }
+            Intent.ACTION_BATTERY_LOW -> {
+                // 电量低了
+            }
+        }
+    }
+}
+```
+
+### 两种注册方式：动态 vs 静态
+
+| | 动态注册（代码中） | 静态注册（Manifest 中） |
+|---|---|---|
+| **注册方式** | `registerReceiver(receiver, filter)` | `<receiver>` 标签声明 |
+| **生命周期** | 跟随 Activity/Service，必须手动 `unregisterReceiver` | 随应用安装生效，App 未启动也能接收 |
+| **Android 8.0+ 限制** | 大部分广播仍可用 | 绝大多数隐式广播不再发送给静态注册的 Receiver |
+| **典型场景** | App 在前台时感知事件 | 开机自动启动（仅少数豁免广播） |
+
+### 动态注册示例
+
+```kotlin
+class MainActivity : AppCompatActivity() {
+    private lateinit var receiver: BroadcastReceiver
+    private var isRegistered = false
+
+    override fun onResume() {
+        super.onResume()
+        receiver = MyReceiver()
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_BATTERY_LOW)
+            addAction(Intent.ACTION_BATTERY_OKAY)
+        }
+        registerReceiver(receiver, filter)
+        isRegistered = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (isRegistered) {
+            unregisterReceiver(receiver)
+            isRegistered = false
+        }
+    }
+}
+```
+
+**动态注册的金科玉律：在哪注册就在对称位置注销**——`onResume` 注册、`onPause` 注销是最常见的模式。忘了注销 = 泄漏 BroadcastReceiver，系统会在日志里警告你。
+
+### 静态注册示例（仅在少数场景有效）
+
+```xml
+<receiver
+    android:name=".BootReceiver"
+    android:exported="true">
+    <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+    </intent-filter>
+</receiver>
+```
+
+开机广播 `BOOT_COMPLETED` 是少数几个在 Android 8.0+ 仍能通过静态注册接收的广播之一。
+
+{/* 5. 交互 Demo（spec §五）：C 型用 Stepper 演示广播的完整流程 */}
+## 动手看：一条广播从"发出"到"被所有接收者处理"
+
+> 猜一猜：同一个 App 里注册了 3 个 Receiver 监听同一个广播，它们接收的顺序是什么？
+
+<Stepper>
+  <Step title="① 系统事件触发广播">
+    系统检测到电池电量低于 15%，`BatteryService` 构造一个 `Intent(Intent.ACTION_BATTERY_LOW)`，调用 `sendBroadcast(intent)`。这个 Intent 的 action 就是 `BATTERY_LOW`。
+  </Step>
+  <Step title="② AMS 查找匹配的 Receiver">
+    `ActivityManagerService` 检查所有已注册的 BroadcastReceiver（动态注册的 + 静态注册的且符合白名单的）。匹配 action 与 Receiver 注册时声明的 `IntentFilter`——动作匹配就加入接收者列表。
+  </Step>
+  <Step title="③ 广播分发给各个 Receiver">
+    AMS 将 Intent 逐个分发给匹配的 Receiver 的 `onReceive()`。**普通广播（非有序广播）是并行分发——多个 Receiver 同时执行。** 每个 Receiver 在 `onReceive()` 中处理完成后，Receiver 实例就结束生命周期。
+  </Step>
+  <Step title="④ 有序广播（Ordered Broadcast）">
+    如果用的是 `sendOrderedBroadcast(intent, null)` 而非普通 `sendBroadcast(intent)`：Receiver 按 `android:priority` 从高到低**串行**执行。每个 Receiver 可以调用 `setResultCode()` / `setResultData()` 修改结果传给下一个，或 `abortBroadcast()` 截断——后面的 Receiver 收不到。
+  </Step>
+  <Step title="⑤ 猜一猜的答案">
+    普通广播（`sendBroadcast`）：**无固定顺序**——AMS 内部无顺序保证，不依赖执行顺序。有序广播（`sendOrderedBroadcast`）：**按 priority 从高到低**——同优先级时随机。如果你需要保证执行顺序，用有序广播 + 显式设置 priority 值。
+  </Step>
+</Stepper>
+
+{/* 6. 代码对照（spec §六，C 型重心） */}
+## 代码逐段拆解：自定义广播与 App 内通信
+
+### 发送自定义广播
+
+```kotlin
+// 发送方
+val intent = Intent("com.example.app.DATA_LOADED").apply {
+    putExtra("record_count", 42)
+    `package` = packageName  // Android 8.0+ 推荐：限制广播只在本 App 内接收
+}
+sendBroadcast(intent)
+```
+
+### 接收自定义广播（动态注册）
+
+```kotlin
+// 接收方（在 Activity/Fragment 中）
+val filter = IntentFilter("com.example.app.DATA_LOADED")
+registerReceiver(object : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        val count = intent.getIntExtra("record_count", 0)
+        updateUI(count)
+    }
+}, filter)
+```
+
+### 有序广播的使用场景
+
+```kotlin
+// 发送有序广播
+sendOrderedBroadcast(
+    Intent("com.example.ACTION_CHECK"),
+    null,                               // 无需额外权限
+    null,                               // 结果接收者（可选）
+    null,                               // Handler（可选）
+    Activity.RESULT_OK,                 // 初始结果码
+    "OK",                               // 初始结果数据
+    null                                // 初始结果附加数据
+)
+
+// 在 Receiver 中处理并传递结果
+class CheckReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (checkFailed()) {
+            resultCode = Activity.RESULT_CANCELED
+            resultData = "Check failed at step 1"
+        }
+        // 如果没调 abortBroadcast()，下一个 Receiver 继续执行
+    }
+}
+```
+
+有序广播的经典场景：级联校验——Receiver A 检查权限 → Receiver B 检查网络 → Receiver C 才开始实际工作。任何一环失败可阻断后续。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3） */}
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 Manifest 中静态注册了 `CONNECTIVITY_CHANGE` 广播，Android 8.0+ 设备上永远收不到。
+  **原因**：Android 8.0（API 26）大幅限制了隐式广播——**绝大多数隐式广播不再传递给 Manifest 中静态注册的 Receiver**。这是 Google 为减少后台进程唤醒、提升续航做的系统性改变。系统源码中有两份白名单——"豁免广播列表"（如 `BOOT_COMPLETED`、`LOCALE_CHANGED`）和"拦截广播列表"。
+  **修法**：改用动态注册（在 Activity/Fragment 生命周期内注册）。如果确实需要"App 未启动也能接收"（如开机自启动），只能用仍在白名单的少数广播，或用 `JobScheduler` / `WorkManager` 替代部分场景。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Activity 中动态注册了 Receiver，忘了 `unregisterReceiver`，LeakCanary 报泄漏。
+  **原因**：`registerReceiver()` 把 Receiver 注册到系统服务（AMS）。如果不注销，系统继续持有 Receiver 和它的外部类（Activity）的引用——Activity 销毁后无法被 GC。日志中会出现 "Activity has leaked IntentReceiver" 的警告。
+  **修法**：永远在对称的生命周期回调中成对注册/注销。`onCreate` 注册 → `onDestroy` 注销；`onResume` 注册 → `onPause` 注销。用一个 `isRegistered` 布尔标记防止重复注销。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `LocalBroadcastManager` 做 App 内通信，编译时发现它已被标记为 deprecated。
+  **原因**：`LocalBroadcastManager` 从 AndroidX 1.1.0 开始被废弃。虽然它解决了"广播只在 App 内生效、不走跨进程"的问题，但它不能保证线程安全（`onReceive` 跑在主线程）、不支持有序广播、且在 Android 8.0+ 后它的存在价值被大幅削弱。
+  **修法**：在单个 App 内的组件间需要解耦通信时，使用 `LiveData`（ViewModel 间共享）、`Flow/SharedFlow`（Kotlin 协程）、`EventBus`（第三方库如 RxJava 的 Subject）等现代方案。这些方案比广播更轻量、有类型安全、生命周期感知、线程调度更灵活。
+</Callout>
+
+{/* 8. 小结与练习（spec §八） */}
+## 小结
+
+- `BroadcastReceiver` 是 Android 发布-订阅模式的核心实现：系统/App 发送广播，注册了匹配 IntentFilter 的 Receiver 接收处理
+- 动态注册（代码中 `registerReceiver`）灵活但需手动注销；静态注册（Manifest 中声明）Android 8.0+ 对隐式广播有严格限制
+- `sendBroadcast` 并行分发，顺序不保证；`sendOrderedBroadcast` 按 priority 串行执行，可逐级传递结果或中断
+- `LocalBroadcastManager` 已被废弃——App 内通信推荐用 LiveData / Flow / EventBus 等现代方案
+- App 进入 Standby 模式后，后台的广播接收和网络请求会被系统延迟批处理，这是 Android 6.0+ 的 Doze 机制
+
+<Exercises>
+
+**练习 1（改代码型）** 编写一个 App，监听设备电量变化：低于 15% 时显示 "电量低！" 的 Snackbar，高于 90% 且正在充电时显示 "电量充足" 的提示。用动态注册实现，注意注册/注销位置。
+<Answer>
+实现要点：① `IntentFilter` 添加 `ACTION_BATTERY_LOW`、`ACTION_BATTERY_OKAY`、`ACTION_POWER_CONNECTED`。② 在 Receiver 的 `onReceive` 中也可以获取到 `BatteryManager.EXTRA_LEVEL` 等额外数据（通过 `registerReceiver(null, filter)` 获取 sticky intent——注意 sticky 广播也已被废弃）。③ `onResume` 注册，`onPause` 注销。④ 展示 Snackbar 时需要确保 Activity 的 root view 有效。
+</Answer>
+
+**练习 2（改代码型）** 实现一个"自定义有序广播"的实验：创建三个 BroadcastReceiver（A、B、C），优先级分别为 100、50、0。A 检查一个条件，不通过则阻断广播；B 追加一段数据；C 打印最终结果。验证阻断和传递行为。
+<Answer>
+在 Manifest 中为三个 Receiver 分别设置 `android:priority="100"`、`"50"`、`"0"`。发送方用 `sendOrderedBroadcast(intent, null)`。接收方 A 中：`if (!checkPassed) abortBroadcast()`。接收方 B 中：`resultData = "Step B processed"`。接收方 C 中：在日志中打印 `resultData`。验证：当 A 的条件不通过时，B 和 C 均不执行；当 A 通过时，B 和 C 按顺序执行。
+</Answer>
+
+**练习 3（探索型）** 查阅 Android 官方文档中"Implicit Broadcast Exceptions"白名单。列出至少 5 个在 Android 8.0+ 仍能通过静态注册接收的广播，并说明它们为什么能被豁免。
+<Answer>
+豁免广播列表（部分）：① `ACTION_BOOT_COMPLETED`（开机完成——App 需要开机初始化）；② `ACTION_LOCALE_CHANGED`（语言切换——影响所有 App UI）；③ `ACTION_TIMEZONE_CHANGED`（时区变化——影响所有 App 时间显示）；④ `ACTION_MY_PACKAGE_REPLACED`（本 App 更新——需要迁移数据）；⑤ `ACTION_POWER_CONNECTED`（充电连接——需要调整行为）。豁免原则：广播的触发频率低、App 未启动也需要感知（如开机初始化），或影响所有 App 的系统级事件。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十） */}
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="BroadcastReceiver（广播接收器）">
+  Android 四大组件中最轻量的一个——它的唯一工作就是接收广播并处理。你可以把它理解成一个"事件订阅器"：声明你对哪些事件感兴趣，事件发生时系统调你的 `onReceive()` 来通知你。这是 Android 发布-订阅模式的核心实现。详见本章"什么是 BroadcastReceiver"一节。
+</GlossaryItem>
+<GlossaryItem term="IntentFilter">
+  一组过滤规则，声明 BroadcastReceiver 关心哪些广播。通过 `addAction()` 添加 action 字符串来匹配广播。系统通过对比广播的 action 与 IntentFilter 中声明的 action 来决定是否唤醒你的 Receiver。详见本章"动态注册示例"一节。
+</GlossaryItem>
+<GlossaryItem term="有序广播（Ordered Broadcast）">
+  一种按接收者优先级串行分发的广播模式。接收者通过 `android:priority` 从高到低一个接一个执行。每个接收者可以修改结果数据传递给下一个，也可以完全截断广播（`abortBroadcast()`）。适合"级联校验"等需要顺序控制的场景。详见本章"有序广播"一节。
+</GlossaryItem>
+<GlossaryItem term="隐式广播（Implicit Broadcast）">
+  不以特定包名为目标的广播——系统把 Intent 发给所有声明了匹配 IntentFilter 的 Receiver。Android 8.0+ 大幅限制隐式广播，绝大多数不再唤醒静态注册的 Receiver。这是为省电设计的举措。详见本章"容易踩的坑"一节。
+</GlossaryItem>
+</Glossary>
+
+<Attribution />

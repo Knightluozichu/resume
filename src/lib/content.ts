@@ -62,13 +62,14 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 侧边栏分书与全局上/下一章顺序均以此为准。未列入的书排在已知书之后，
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
-export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e", "android-advanced-decryption"] as const;
+export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e", "android-advanced-decryption", "big-nerd-ranch-guide"] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
   "cpp-primer-5e": "C++ Primer 第5版",
   "android-advanced-decryption": "Android进阶解密",
+  "big-nerd-ranch-guide": "Android 编程权威指南（第4版）",
 };
 
 /** 取某书在教学顺序中的位次；未知书返回一个大于所有已知位次的值 */
@@ -105,6 +106,12 @@ export const SECTION_ORDER = [
   "底层技术",
   "高级技术",
   "性能优化",
+  // Android 编程权威指南
+  "基础入门",
+  "UI与Fragment",
+  "Intent与数据",
+  "后台与网络",
+  "高级UI与动画",
 ] as const;
 
 /** 取某 section 在教学顺序中的位次；未知 section 返回一个大于所有已知位次的值 */

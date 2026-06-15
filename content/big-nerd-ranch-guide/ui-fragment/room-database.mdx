@@ -1,0 +1,265 @@
+---
+title: 数据库与Room库
+type: C
+section: UI与Fragment
+order: 11
+description: 掌握 Room 持久化库的 Entity-DAO-Database 三层架构，能用 LiveData 和 Flow 实现响应式数据查询与更新。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型：Room 数据库完整用法。
+   重心在概念讲解(§3)和代码对照(§6)，常见误区 ≥3 个，练习含实现题。 */}
+
+{/* 知识点清单：
+   1) Room 是什么（SQLite 之上的抽象层） = Googl e官方架构图
+   2) Entity 数据类（@Entity/@PrimaryKey/@ColumnInfo） = 代码对照
+   3) DAO 接口（@Insert/@Query/@Update/@Delete） = 代码对照
+   4) RoomDatabase 抽象类（@Database/singleton/companion） = 代码对照
+   5) 响应式查询（LiveData / Flow） = 代码对照
+   6) TypeConverters 处理非基本类型 = 代码对照
+   7) Repository 模式 = 代码对照
+   8) 数据库迁移策略 = Stepper 示意图 */}
+
+{/* 1. 学习目标：C 型必含「能改出 ___ 效果」。 */}
+
+<Objectives>
+
+- 能解释 Room 的 Entity-DAO-Database 三层架构，说出每一层的职责
+- 能在项目中创建 Room 数据库、编写 DAO 查询，用 LiveData/Flow 实现数据变更自动刷新 UI
+- 能回答：Room 在背后做了什么让我们不用手写 SQLite 的样板代码？
+
+</Objectives>
+
+{/* 2. 直觉引入。 */}
+
+## 为什么不能直接裸写 SQLite？
+
+Android 系统内置了一个叫 SQLite 的小型数据库。它能存数据、能查、能删——听起来够用了。但实际上裸写 SQLite 非常痛苦：
+
+你写一条 SQL 语句→传一堆问号参数→拿到一个 Cursor（一个"数据库查询结果遍历器"）→手动读每一列→手动类型转换→用完记得关 Cursor→等 App 被系统杀死时数据没了。
+
+整个过程全是胶水代码，而且没有编译期检查——你把列名写错了（`CrimTitle` vs `crimeTitle`），只有等 App 跑到那行崩溃时才知道。
+
+这就引出 Room。Room 不是重写一个数据库引擎——它只是在 SQLite 上面加了三层抽象，把你从胶水代码里解放出来。它自动把 Kotlin 数据类和 SQL 语句绑定、自动做类型检查、自动在后台线程执行、还能跟 LiveData/Flow 配合实现"数据一变，界面自动刷新"。
+
+{/* 3. 概念讲解。 */}
+
+## Room 三层架构，逐层拆开看
+
+### 第一层：Entity——数据库的"一行"长什么样
+
+<Term def="Room 的 Entity 就是把一个 Kotlin data class 标记为数据库里的"一张表"。类的每个属性默认对应表里的一列。@PrimaryKey 标记主键列。">Entity</Term> 就是数据库里的一张表在 Kotlin 世界里的"镜像"。一个 `@Entity` 注解的 data class 对应表里的一行——类的属性就是表的各列。
+
+### 第二层：DAO——"怎么查"和"怎么改"
+
+<Term def="DAO（Data Access Object，数据访问对象）是一个被 @Dao 注解的接口。它定义了对数据库能做哪些操作——插入、查询、更新、删除。Room 在编译期为这个接口自动生成实现类。">DAO</Term> 就是你对数据库可以做什么的"菜单"。增、删、改、查都定义在这里，Room 会在编译期自动帮你生成实现代码——你只用写接口，不用写实现。
+
+### 第三层：Database——把上面两层串起来
+
+<Term def="RoomDatabase 是一个被 @Database 注解的抽象类——它是进入数据库的"大门"。它告诉 Room 有哪些 Entity、用哪个 DAO，并提供获取 DAO 实例的方法。通常用单例模式确保全局只有一个数据库实例。">Database</Term> 就是通往数据库的大门。它告诉 Room"我的数据库里有哪些表（entities）、有哪些 DAO"。它用单例模式——全局只有一个数据库实例，避免重复打开文件。
+
+{/* 5. 交互 Demo：Stepper 从空项目到 Room 运行 */}
+
+> 猜一猜：如果在数据库已发布 App 后，你改了 Entity 的结构（比如加了一列），App 会怎样？继续猜——如果没写迁移策略又会怎样？
+
+### 全流程 Stepper：从零开始搭建 Room 数据库
+
+1. **定义 Entity**：创建 `@Entity` data class Crime，标好 `@PrimaryKey`
+2. **定义 DAO**：写接口，声明 `@Query("SELECT * FROM crime")` 等
+3. **定义 Database**：写继承 `RoomDatabase` 的抽象类，声明 entities 和 dao
+4. **实例化**：在 Application 或 Repository 里 `Room.databaseBuilder(...).build()`
+5. **使用**：通过 DAO 执行增删改查，订阅 LiveData/Flow 自动刷新 UI
+
+{/* 6. 代码对照：C 型重心。 */}
+
+## 代码逐段拆解
+
+### 第一步：定义 Crime 为 Entity
+
+```kotlin
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import java.util.Date
+import java.util.UUID
+
+@Entity
+data class Crime(
+    @PrimaryKey
+    val id: UUID = UUID.randomUUID(),
+    val title: String = "",
+    val date: Date = Date(),
+    val isSolved: Boolean = false,
+    val suspect: String = ""
+)
+```
+
+`@PrimaryKey` 标注 id 列是主键——Room 用它来唯一标识每一行。`UUID.randomUUID()` 作为默认值意味着每次 `Crime()` 自动生成全局唯一 ID。
+
+<Callout type="warn">
+  Room 默认只能存基本类型（Int, String, Boolean 等）和它们的装箱类型。`UUID` 和 `Date` 不是基本类型——需要用 TypeConverter 告诉 Room 怎么存、怎么取。
+</Callout>
+
+### 第二步：写 TypeConverter（非基本类型的"翻译官"）
+
+```kotlin
+import androidx.room.TypeConverter
+import java.util.Date
+import java.util.UUID
+
+class CrimeTypeConverters {
+    @TypeConverter
+    fun fromUUID(uuid: UUID): String = uuid.toString()
+
+    @TypeConverter
+    fun toUUID(uuid: String): UUID = UUID.fromString(uuid)
+
+    @TypeConverter
+    fun fromDate(date: Date): Long = date.time
+
+    @TypeConverter
+    fun toDate(timestamp: Long): Date = Date(timestamp)
+}
+```
+
+Room 在写数据时调用 `from` 方法（对象→可存类型），读数据时调用 `to` 方法（可存类型→对象）。对 UUID 来说：存的时候变成 String，取的时候从 String 重建 UUID。
+
+### 第三步：定义 DAO——对数据库能做哪些操作
+
+```kotlin
+import androidx.lifecycle.LiveData
+import androidx.room.*
+
+@Dao
+interface CrimeDao {
+    @Query("SELECT * FROM crime ORDER BY date DESC")
+    fun getCrimes(): LiveData<List<Crime>>
+
+    @Query("SELECT * FROM crime WHERE id = (:id)")
+    fun getCrime(id: UUID): LiveData<Crime?>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun addCrime(crime: Crime)
+
+    @Update
+    suspend fun updateCrime(crime: Crime)
+
+    @Delete
+    suspend fun deleteCrime(crime: Crime)
+}
+```
+
+注意三个细节：
+- `LiveData<List<Crime>>` 返回值——Room 会把查询结果包在 LiveData 里。底层数据一变，所有观察这个 LiveData 的地方自动收到新数据
+- `suspend` 关键字——增删改操作标记为挂起函数，Room 自动在后台线程执行，不阻塞主线程
+- `(꞉id)` 是命名参数占位符——比 `?` 更可读，IDE 也能自动补全
+
+<Callout type="tip">
+  如果你用 Kotlin Flow 而不是 LiveData，DAO 方法返回 `Flow<List<Crime>>` 即可。Flow 的优势是可以用 Kotlin 标准库的 map/filter/combine 等操作符。
+</Callout>
+
+### 第四步：定义 Database 抽象类
+
+```kotlin
+import androidx.room.Database
+import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
+
+@Database(entities = [Crime::class], version = 1, exportSchema = false)
+@TypeConverters(CrimeTypeConverters::class)
+abstract class CrimeDatabase : RoomDatabase() {
+    abstract fun crimeDao(): CrimeDao
+
+    companion object {
+        @Volatile
+        private var INSTANCE: CrimeDatabase? = null
+
+        fun getInstance(context: Context): CrimeDatabase =
+            INSTANCE ?: synchronized(this) {
+                INSTANCE ?: Room.databaseBuilder(
+                    context.applicationContext,
+                    CrimeDatabase::class.java,
+                    "crime-database"
+                ).build().also { INSTANCE = it }
+            }
+    }
+}
+```
+
+`@Volatile` + 双重检查锁 = 线程安全的单例。`databaseBuilder` 三个参数：上下文、Database 类、数据库文件名。
+
+### 第五步：Repository 模式——把数据访问封装一层
+
+直接在 ViewModel 里操作 DAO 会让 ViewModel 和 Room 紧耦合。加一个 Repository 中间层：
+
+```kotlin
+class CrimeRepository(private val crimeDao: CrimeDao) {
+    val crimes: LiveData<List<Crime>> = crimeDao.getCrimes()
+
+    suspend fun addCrime(crime: Crime) {
+        crimeDao.addCrime(crime)
+    }
+
+    suspend fun getCrime(id: UUID): Crime? {
+        return crimeDao.getCrime(id).value
+    }
+}
+```
+
+这样的话，ViewModel 只知道 Repository，不知道 Room 存在——将来换数据库引擎只需改 Repository。
+
+{/* 7. 常见误区：C 型 ≥3 个。 */}
+
+## 容易踩的坑
+
+- **现象 →** `java.lang.IllegalStateException: Cannot access database on the main thread`。**原因 →** Room 在主线程上执行数据库操作（增删改）。Room 默认不允许主线程数据库操作，因为 SQLite 的磁盘 IO 会卡 UI。**修法 →** 给 DAO 的增删改方法加 `suspend` 关键字，把调用放在协程里（如 `viewModelScope.launch`）。
+
+- **现象 →** 新增一列后 App 一打开就 Crash：`Room cannot verify the data integrity`。**原因 →** Entity 改了（加了列），但 `@Database` 的 `version` 没升级，也没提供 Migration 策略。Room 检测到表结构变了但版本号没变，直接报错。**修法 →** `version` 从 1 升到 2，添加 Migration 对象——或开发阶段用 `fallbackToDestructiveMigration()` 直接删库重建（数据全丢，仅开发环境可用！）。
+
+- **现象 →** `LiveData` 里的数据更新了，但 UI 没反应。**原因 →** 每次都 new 了一个新的 DAO 实例或新的 LiveData 对象，导致 ViewModel 观察的 LiveData 和实际更新的不是同一个实例。**修法 →** 确保 DAO 和 LiveData 在 Repository 初始化时创建且只创建一次，ViewModel 持有的是同一个 LiveData 引用。
+
+{/* 8. 小结与练习。 */}
+
+## 小结
+
+- Room 用三层封装 SQLite：Entity（表结构）→ DAO（操作接口）→ Database（大门+单例）
+- DAO 返回 LiveData/Flow 实现"数据变、UI 自动变"的响应式编程
+- 非基本类型必须提供 TypeConverter 告诉 Room 如何序列化/反序列化
+- Repository 层隔离数据源细节，让 ViewModel 与 Room 解耦
+- 修改 Entity 时必须同步升级 version 并提供 Migration——或开发期用 `fallbackToDestructiveMigration()`（慎用）
+
+<Exercises>
+
+1. （改代码）给 `Crime` Entity 添加一个 `suspect: String` 字段，升级数据库版本到 2，写一个简单的 Migration 来处理新列。
+
+2. （实现题）把 DAO 中 `getCrimes()` 的返回值改为 `Flow<List<Crime>>`，在 ViewModel 里用 `stateIn()` 转成 `StateFlow`，观察列表刷新行为是否有变化。
+
+3. （问答）`@Insert(onConflict = OnConflictStrategy.REPLACE)` 的 `REPLACE` 策略是做什么的？如果主键相同，Room 会怎样？
+
+<Answer>
+
+1. Migration 示例：`val MIGRATION_1_2 = object : Migration(1, 2) { override fun migrate(database: SupportSQLiteDatabase) { database.execSQL("ALTER TABLE crime ADD COLUMN suspect TEXT NOT NULL DEFAULT ''") } }`
+
+2. Flow 比 LiveData 更灵活——你可以用 `map`、`filter`、`combine` 在数据到达 UI 层之前做加工。`stateIn()` 把冷 Flow 转成热 StateFlow，UI 层可以在 Compose 里直接用 `collectAsState()` 收集。
+
+3. `REPLACE` = 如果插入时发现主键已存在，先删旧行再插新行（相当于全覆盖）。效果等同于 UPDATE，但实现上是 DELETE + INSERT。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释。 */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Entity">数据库里一张表的 Kotlin 镜像。一个 `@Entity` 注解的 data class 对应一行数据，类属性对应列。标记后 Room 就会自动生成建表 SQL。</GlossaryItem>
+  <GlossaryItem term="DAO">数据库操作菜单。一个 `@Dao` 注解的接口，里面声明增删改查方法，Room 在编译期自动生成实现。不用手写一行胶水代码。</GlossaryItem>
+  <GlossaryItem term="Database">通往数据库的大门。一个 `@Database` 注解的抽象类，声明有哪些 Entity 和 DAO。它管理数据库文件的打开和关闭。</GlossaryItem>
+  <GlossaryItem term="TypeConverter">非基本类型的"翻译官"。Room 默认只认 Int、String、Boolean。遇到 UUID、Date 等自定义类型时，TypeConverter 告诉 Room 存成什么格式、取出来怎么重建。</GlossaryItem>
+  <GlossaryItem term="Migration">数据库结构升级的"施工方案"。当你改了 Entity（加列、改类型），Room 需要一份指令告诉它怎么从旧表结构变成新表结构。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

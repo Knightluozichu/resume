@@ -1,0 +1,388 @@
+---
+title: 网页浏览
+type: C
+section: 高级UI与动画
+order: 29
+description: 掌握 WebView 的加载、JavaScript 交互、安全配置与性能优化——让 Android 应用内嵌完整的 Web 浏览能力。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型（《Android 编程权威指南》第29章改编）：WebView 的加载、交互、安全与性能。 */}
+
+<Objectives>
+
+- 能使用 WebView 加载网页（loadUrl）和 HTML 字符串（loadData），并配置 WebViewClient/WebChromeClient 处理页面事件
+- 能实现 Android 与 Web 页面的双向 JavaScript 通信——`addJavascriptInterface` 和 `evaluateJavascript`
+- 能回答：Android 的 WebView 如何处理 SSL 证书错误？`onReceivedSslError` 中应该直接 `proceed()` 吗？
+
+</Objectives>
+
+## 为什么需要 WebView——当原生 UI 不够用时
+
+一个成熟的 App 几乎不可能只靠原生控件。展示运营活动页、加载隐私协议、嵌入在线客服、甚至直接打开第三方网站——这些场景的共同答案是：**在 App 里放一个浏览器**。
+
+Android 把 Chromium 内核打包成了 `WebView` 控件：一个小巧但完整的浏览器引擎。你可以把它当成一个 `<iframe>` 用在 App 里，加载 URL、执行 JavaScript、跟原生代码双向通信。
+
+如果没有 WebView，这些需求只能用原生代码从头画——运营页每次改版都得发 App 新版本，隐私协议更新也得走应用商店审核。WebView 给 Android 开发者开了后门：**不改 App 代码就能更新界面**。
+
+本章从加载网页开始，一路讲到 JavaScript 双向通信和安全配置——这是所有商用 App 都绕不开的技能。
+
+## 1. WebView 基础——加载网页
+
+### 最简单的 WebView
+
+在布局里放一个 `<WebView>`，然后 `findViewById` 拿到它，调用 `loadUrl()`：
+
+```kotlin
+// activity_main.xml
+// <WebView android:id="@+id/webView" android:layout_width="match_parent"
+//          android:layout_height="match_parent" />
+
+class WebViewActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+        val webView = findViewById<WebView>(R.id.webView)
+        webView.loadUrl("https://www.example.com")
+    }
+}
+```
+
+就这么简单——但这样写出来的 WebView 的行为会让你抓狂：点击网页里的链接？跳出到系统浏览器。页面加载成功/失败？没有任何回调。网页标题？拿不到。进度条？没有。
+
+你需要两个 Client 来完成 WebView 的定制：`WebViewClient` 和 `WebChromeClient`。
+
+### WebViewClient——控制页面加载
+
+<Term def="拦截 URL 加载、处理页面请求和 SSL 错误的回调类">WebViewClient</Term> 负责页面导航相关的事件。最常用的三个回调：
+
+```kotlin
+webView.webViewClient = object : WebViewClient() {
+    // 1. 拦截 URL 加载——让链接在 WebView 内部跳转，而不是跳系统浏览器
+    override fun shouldOverrideUrlLoading(
+        view: WebView?, request: WebResourceRequest?
+    ): Boolean {
+        // 返回 false 让 WebView 自己处理；返回 true 拦截
+        return false
+    }
+
+    // 2. 页面开始加载
+    override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+        progressBar.visibility = View.VISIBLE
+    }
+
+    // 3. 页面加载完成
+    override fun onPageFinished(view: WebView?, url: String?) {
+        progressBar.visibility = View.GONE
+    }
+
+    // 4. 处理 SSL 错误——这里绝不能草率 proceed()
+    override fun onReceivedSslError(
+        view: WebView?, handler: SslErrorHandler?, error: SslError?
+    ) {
+        // 生产环境应该提示用户并取消，而不是直接 proceed()
+        handler?.cancel()
+        showSslErrorDialog()
+    }
+}
+```
+
+<Callout type="trap">
+  **关键安全红线的提醒**：`onReceivedSslError` 中的 `handler.proceed()` 会忽略证书错误继续加载——这在开发环境测试自签名证书时方便，但**生产环境绝对不能随意 `proceed()`**。否则等于把用户暴露在中间人攻击之下。正确做法：开发阶段仅在 BuildConfig.DEBUG 时 proceed，生产环境提示用户或拒绝加载。
+</Callout>
+
+### WebChromeClient——处理 UI 相关回调
+
+<Term def="处理 WebView 中与浏览器 UI 相关的回调（进度条、标题、JS 对话框、文件选择等）">WebChromeClient</Term> 负责进度、标题、JS 对话框等"浏览器 UI"相关的事件：
+
+```kotlin
+webView.webChromeClient = object : WebChromeClient() {
+    // 1. 获取加载进度（0-100）
+    override fun onProgressChanged(view: WebView?, newProgress: Int) {
+        progressBar.progress = newProgress
+        if (newProgress == 100) progressBar.visibility = View.GONE
+    }
+
+    // 2. 获取网页标题
+    override fun onReceivedTitle(view: WebView?, title: String?) {
+        supportActionBar?.title = title
+    }
+
+    // 3. 处理 JavaScript alert()
+    override fun onJsAlert(
+        view: WebView?, url: String?, message: String?,
+        result: JsResult?
+    ): Boolean {
+        AlertDialog.Builder(this@WebViewActivity)
+            .setMessage(message)
+            .setPositiveButton("OK") { _, _ -> result?.confirm() }
+            .show()
+        return true  // 返回 true 表示已处理，不要系统的默认弹窗
+    }
+}
+```
+
+### 加载本地 HTML 字符串
+
+除了 `loadUrl()`，还可以用 `loadData()` 或 `loadDataWithBaseURL()` 直接加载 HTML 字符串——这在显示富文本、隐私协议等场景非常实用：
+
+```kotlin
+val htmlContent = """
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body>
+        <h1>用户协议</h1>
+        <p>这是用 WebView 直接渲染的 HTML 内容。</p>
+    </body>
+    </html>
+""".trimIndent()
+
+// loadData 可能乱码；推荐用 loadDataWithBaseURL 指定编码
+webView.loadDataWithBaseURL(null, htmlContent, "text/html", "UTF-8", null)
+```
+
+## 2. JavaScript 交互——原生与 Web 的桥梁
+
+这是 WebView 最有价值的部分：让 Android 代码和网页里的 JavaScript 可以互相调用。
+
+### 方向一：Android 调用 JavaScript
+
+用 `<Term def="在 WebView 的 JS 环境中执行一段 JavaScript 代码字符串并获取返回值">evaluateJavascript</Term>` 在 WebView 里执行 JS：
+
+```kotlin
+// Android → JS：调 JS 函数，拿返回值
+webView.evaluateJavascript(
+    "(function() { return document.title; })();"
+) { result ->
+    // result 是 JSON 字符串，比如 "\"我的网页标题\""
+    val title = result.removeSurrounding("\"")
+    titleTextView.text = title
+}
+```
+
+`evaluateJavascript` 是异步的——它在 WebView 的渲染线程上执行 JS，结果通过回调返回。**不要在 `onPageFinished` 之前调用它**，否则 JS 环境还没准备好。
+
+### 方向二：JavaScript 调用 Android
+
+用 `<Term def="将 Java/Kotlin 对象暴露给 WebView 中的 JavaScript，使 JS 可以直接调用原生方法">addJavascriptInterface</Term>` 把 Kotlin 对象暴露给 JS：
+
+```kotlin
+// Kotlin 端：定义一个给 JS 调用的接口类
+class WebAppInterface(private val context: Context) {
+    @JavascriptInterface
+    fun showToast(message: String) {
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    @JavascriptInterface
+    fun getDeviceInfo(): String {
+        return "${Build.MANUFACTURER} ${Build.MODEL}"
+    }
+}
+
+// 注册：把对象以 "Android" 为名字暴露到 JS 全局作用域
+webView.addJavascriptInterface(WebAppInterface(this), "Android")
+```
+
+<Callout type="security">
+  **安全警告**：`@JavascriptInterface` 标记的方法会在 WebView 的线程池中执行（不在主线程），且只有 API 17+ 才需要该注解。API 16 及以下，**所有 public 方法**都能被 JS 调用——这是严重的安全漏洞。必须把 `targetSdkVersion` 设为 17 以上，且只暴露真正需要的方法。
+</Callout>
+
+JS 端这样调用：
+
+```javascript
+// Web 页面里的 JS 代码
+document.getElementById("btn").onclick = function() {
+    // Android 是 addJavascriptInterface 注册的名字
+    Android.showToast("按钮被点了！");
+    var info = Android.getDeviceInfo();
+    console.log(info);
+};
+```
+
+### WebView 设置——按需打开功能
+
+WebView 默认**禁用 JavaScript**、禁用缩放、不保存表单数据。需要显式配置：
+
+```kotlin
+webView.settings.apply {
+    javaScriptEnabled = true          // 开启 JavaScript（默认 false）
+    domStorageEnabled = true          // 开启 DOM Storage（HTML5 localStorage）
+    allowFileAccess = false           // 禁止访问文件系统（安全加固）
+    allowContentAccess = false        // 禁止访问 content:// URI
+    mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW // 禁止 HTTP/HTTPS 混用
+    cacheMode = WebSettings.LOAD_DEFAULT // 使用默认缓存策略
+    setSupportZoom(true)              // 允许缩放
+    builtInZoomControls = true        // 内置缩放控件
+    displayZoomControls = false       // 隐藏缩放按钮（手势缩放仍有效）
+    useWideViewPort = true            // 支持 viewport 标签
+    loadWithOverviewMode = true       // 缩放内容以适应屏幕
+}
+```
+
+<Callout type="tip">
+  性能关键：如果页面复杂，务必在 `AndroidManifest.xml` 中为 WebView 所在的 Activity 开启**硬件加速**：`android:hardwareAccelerated="true"`。大部分设备默认开启，但 Android 4.0 以下需要显式设置。没有硬件加速，大量 CSS 动画和 Canvas 绘制会卡到不能看。
+</Callout>
+
+## 3. 返回键处理——让 WebView 的返回先于 Activity
+
+WebView 里用户浏览了好几页后按返回键——默认行为是直接关闭 Activity。这体验很差。应该让 WebView 先消费返回事件：
+
+```kotlin
+override fun onBackPressed() {
+    if (webView.canGoBack()) {
+        webView.goBack()   // 回到上一页
+    } else {
+        super.onBackPressed()  // 没有历史了就退出 Activity
+    }
+}
+```
+
+`canGoBack()` 检查是否有可返回的页面历史；`goBack()` 返回上一页。对应的还有 `canGoForward()` 和 `goForward()`——和普通浏览器完全一样。
+
+## 代码完整示例
+
+下面是一个配置齐全的 WebView Activity 完整代码：
+
+```kotlin
+class WebViewActivity : AppCompatActivity() {
+    private lateinit var webView: WebView
+    private lateinit var progressBar: ProgressBar
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_webview)
+
+        webView = findViewById(R.id.webView)
+        progressBar = findViewById(R.id.progressBar)
+
+        configureWebView()
+        webView.loadUrl("https://www.example.com")
+    }
+
+    private fun configureWebView() {
+        // 基础设置
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            allowFileAccess = false
+            cacheMode = WebSettings.LOAD_DEFAULT
+        }
+
+        // 页面导航
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                progressBar.visibility = View.VISIBLE
+            }
+            override fun onPageFinished(view: WebView?, url: String?) {
+                progressBar.visibility = View.GONE
+            }
+            override fun onReceivedSslError(
+                view: WebView?, handler: SslErrorHandler?, error: SslError?
+            ) {
+                if (BuildConfig.DEBUG) handler?.proceed()
+                else handler?.cancel()
+            }
+        }
+
+        // UI 回调
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                progressBar.progress = newProgress
+            }
+            override fun onReceivedTitle(view: WebView?, title: String?) {
+                supportActionBar?.title = title
+            }
+        }
+
+        // JavaScript 接口
+        webView.addJavascriptInterface(
+            WebAppInterface(this), "Android"
+        )
+    }
+
+    override fun onBackPressed() {
+        if (webView.canGoBack()) webView.goBack()
+        else super.onBackPressed()
+    }
+
+    override fun onDestroy() {
+        // 销毁 WebView，释放资源
+        webView.destroy()
+        super.onDestroy()
+    }
+}
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：WebView 加载 HTTPS 页面时一片空白，也没有错误提示。**原因**：Android 5.0+ 的 WebView 默认阻止混合内容（HTTPS 页面里嵌 HTTP 资源）。**修法**：`webView.settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE`（仅非生产环境），或让后端把所有资源改成 HTTPS。
+</Callout>
+
+<Callout type="trap">
+  **现象**：内存泄漏——退出 WebView Activity 后内存不释放。**原因**：WebView 持有 Activity 的 Context 引用，且内部有独立的渲染线程和 JS 引擎。**修法**：①在 `onDestroy()` 中调用 `webView.destroy()`；②不要直接在布局 XML 中声明 WebView——用代码动态创建并传入 `applicationContext`（或用独立的进程）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`evaluateJavascript` 调用后无回调，或 JS 报 "Android is not defined"。**原因**：在 `onPageFinished` 之前调了 `evaluateJavascript`——此时 JS 环境未就绪。或 `addJavascriptInterface` 在 `loadUrl` 之后调用。**修法**：`addJavascriptInterface` 必须在 `loadUrl` 之前调用；`evaluateJavascript` 必须在 `onPageFinished` 之后调用。
+</Callout>
+
+## 小结
+
+- WebView 是 Android 内嵌的浏览器引擎——`loadUrl` 加载网页，`loadDataWithBaseURL` 加载 HTML 字符串
+- `WebViewClient` 控制页面加载行为（URL 拦截、SSL 错误处理）；`WebChromeClient` 处理 UI 回调（进度、标题、JS 弹窗）
+- Android→JS 用 `evaluateJavascript`；JS→Android 用 `addJavascriptInterface`（加 `@JavascriptInterface` 注解）
+- 安全铁律：生产环境绝不 `handler.proceed()` SSL 错误；`allowFileAccess` 设为 false；只暴露必要方法给 JS
+- 性能：开启硬件加速；`onDestroy` 中调 `webView.destroy()` 防止内存泄漏
+
+<Exercises>
+
+**练习 1（改代码型）** 改造上面的完整示例：让 WebView 加载一个本地 HTML 文件（放在 `assets/` 目录），HTML 里有一个按钮，点击后用 `Android.showToast()` 显示一段文字。
+
+<Answer>
+把 `webView.loadUrl("https://www.example.com")` 改为 `webView.loadUrl("file:///android_asset/sample.html")`。assets 下创建 `sample.html`，内容包含 `<button onclick="Android.showToast('Hello from Web！')">点我</button>`。`@JavascriptInterface` 的 `showToast` 方法中弹出 Toast。
+</Answer>
+
+**练习 2（问答型）** 为什么 WebView 的 SSL 错误处理要区分 Debug 和 Release？写出正确写法。
+
+<Answer>
+Debug 阶段常使用自签名证书来测试，`handler.proceed()` 可以继续加载；但 Release 中随意 proceed 会将用户暴露在中间人攻击之下。正确写法：`if (BuildConfig.DEBUG) handler.proceed() else { handler.cancel(); /* 提示用户 */ }`。
+</Answer>
+
+**练习 3（实现型）** 实现一个 WebView 页面，从 Kotlin 端调用 JS 函数获取页面标题，并显示在 Activity 的标题栏中。要求处理页面加载完成的时机。
+
+<Answer>
+在 `onPageFinished` 回调中调用 `webView.evaluateJavascript("document.title") { result -> supportActionBar?.title = result.removeSurrounding("\"") }`。不在 `onPageFinished` 之前调用，确保 JS 环境已初始化。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="WebViewClient">
+  WebView 的导航管家。拦截 URL 加载（`shouldOverrideUrlLoading`）、处理页面开始/结束事件、处理 SSL 证书错误等。类比：浏览器地址栏的"逻辑层"。
+</GlossaryItem>
+
+<GlossaryItem term="WebChromeClient">
+  WebView 的 UI 管家。负责进度条更新、标题获取、JavaScript alert/prompt 弹窗、文件选择器等跟"浏览器外观"相关的回调。类比：浏览器的标签页和弹窗控制。
+</GlossaryItem>
+
+<GlossaryItem term="evaluateJavascript">
+  在 WebView 的 JS 引擎里异步执行一段 JS 代码字符串，结果通过回调返回（JSON 格式）。必须在 `onPageFinished` 之后调用，否则 JS 环境未就绪。
+</GlossaryItem>
+
+<GlossaryItem term="addJavascriptInterface">
+  把一个 Kotlin/Java 对象绑定到 WebView 的 JS 全局作用域。JS 端通过绑定的名字（如 "Android"）直接调 Kotlin 方法。方法必须标记 `@JavascriptInterface`（API 17+ 的安全要求）。
+</GlossaryItem>
+
+<GlossaryItem term="混合内容 (Mixed Content)">
+  一个 HTTPS 页面内部加载了 HTTP 协议的资源（图片、CSS、JS）。Android 5.0+ 默认阻止混合内容，因为 HTTP 资源可能被篡改，破坏 HTTPS 的安全性。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

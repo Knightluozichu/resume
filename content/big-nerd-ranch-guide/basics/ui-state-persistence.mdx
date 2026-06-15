@@ -1,0 +1,135 @@
+---
+title: UI状态的保存与恢复
+type: C
+section: 基础入门
+order: 4
+description: 掌握 onSaveInstanceState 和 ViewModel——让用户在旋转屏幕或进程被杀死后回到原来的界面状态。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：
+   1) 配置变更导致重建 = 直觉引入
+   2) onSaveInstanceState / onCreate 恢复 = 代码对照
+   3) ViewModel 存活范围 = Term + 对比表
+   4) SavedStateHandle 结合 = Callout
+   5) ViewModel 禁止持有 View = Callout
+*/}
+
+<Objectives>
+
+- 能用 onSaveInstanceState 保存和恢复简单 UI 状态（如 EditText 的输入文字）
+- 能解释 ViewModel 为什么在屏幕旋转后存活——它的生命周期和 Activity 有什么区别
+- 能回答：进程被杀死和屏幕旋转，对状态保存有什么不同要求？
+
+</Objectives>
+
+## 转一下屏幕，表单全没了
+
+用户填到一半旋转手机——输入框被清空，体验等于白填。原因是 <Term def="屏幕旋转、语言切换等导致 Activity 实例销毁并按新 Configuration 重建的过程。">配置变更</Term> 会重建 Activity，除非你把状态存到系统能带过去的地方。
+
+两种主流方案：<Term def="把轻量 UI 状态写入 Bundle，随 Activity 实例一起保存与恢复。">onSaveInstanceState</Term>（轻量）和 <Term def="与 UI 控制器生命周期解耦、在配置变更时存活的组件，持有 UI 相关数据。">ViewModel</Term>（业务状态）。
+
+## onSaveInstanceState
+
+```kotlin
+override fun onSaveInstanceState(outState: Bundle) {
+    super.onSaveInstanceState(outState)
+    outState.putString("user_input", editText.text.toString())
+}
+
+override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    setContentView(R.layout.activity_main)
+    savedInstanceState?.getString("user_input")?.let { editText.setText(it) }
+}
+```
+
+Bundle 约 1MB 上限，只适合字符串、整型等可序列化小数据。
+
+### Stepper：旋转后恢复输入
+
+1. 用户输入 → 内存中的 EditText
+2. 旋转触发 onSaveInstanceState → 写入 Bundle
+3. 新 Activity onCreate → 从 savedInstanceState 读回 → setText
+
+## ViewModel
+
+```kotlin
+class FormViewModel : ViewModel() {
+    val userInput = MutableLiveData("")
+}
+
+class FormActivity : AppCompatActivity() {
+    private val viewModel: FormViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        editText.setText(viewModel.userInput.value)
+        editText.doAfterTextChanged { viewModel.userInput.value = it.toString() }
+    }
+}
+```
+
+旋转后仍是**同一个 ViewModel 实例**——不必手动 Bundle 也能保住数据。
+
+| | onSaveInstanceState | ViewModel |
+|---|---|---|
+| 旋转 | 支持 | 支持 |
+| 进程被杀 | 支持（Bundle 持久化） | 默认丢失 |
+| 数据量 | 小 | 大 |
+| 复杂对象 | 需序列化 | 直接持有 |
+
+<Callout type="tip">
+  推荐 **ViewModel + SavedStateHandle**：业务数据放 ViewModel，进程被杀也要恢复的 key 走 SavedStateHandle（底层仍是 Bundle）。
+</Callout>
+
+<Callout type="trap">
+  ViewModel **绝不能**持有 Activity、Fragment 或 View 引用——否则旋转后旧 Activity 无法回收，内存泄漏。
+</Callout>
+
+<Callout type="trap">
+  把 Bitmap 或大列表塞进 Bundle → `TransactionTooLargeException`。大对象放 Room/文件，Bundle 只存 ID。
+</Callout>
+
+## 小结
+
+- 旋转：ViewModel 或 onSaveInstanceState
+- 进程被杀：onSaveInstanceState / SavedStateHandle
+- ViewModel 不碰 View 层引用
+
+<Exercises>
+
+**练习 1（选型）** 保存 RecyclerView 滚动位置和 500 条列表数据，各用哪种机制？
+
+<Answer>
+滚动位置：onSaveInstanceState 存 layoutManager 的 firstVisiblePosition。列表数据：ViewModel 或 Room——不要塞 Bundle。
+</Answer>
+
+**练习 2（排错）** 旋转后 ViewModel 数据在，EditText 文字却空了，为什么？
+
+<Answer>
+数据在 ViewModel 但 onCreate 里没有把 LiveData/StateFlow 同步到 EditText。应观察 ViewModel 状态或在 onCreate 里 setText(viewModel.xxx.value)。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="onSaveInstanceState">
+  系统在 Activity 可能被销毁前调用的回调，用于把 UI 状态写入 Bundle。
+</GlossaryItem>
+
+<GlossaryItem term="ViewModel">
+  配置变更时存活的 UI 状态容器，由 ViewModelStore 管理，不持有 View 引用。
+</GlossaryItem>
+
+<GlossaryItem term="SavedStateHandle">
+  ViewModel 构造参数，提供与 onSaveInstanceState 相同的 Bundle 能力，便于进程恢复。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
