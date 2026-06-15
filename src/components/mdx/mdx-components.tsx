@@ -358,6 +358,7 @@ import { PointShadowsDemo } from "./point-shadows-demo";
 import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram";
 import { MvcDataFlowDiagram } from "./diagrams/mvc-data-flow-diagram";
 import { BackStackDiagram } from "./diagrams/back-stack-diagram";
+import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diagram";
 import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 import { LogcatLineAnatomyDiagram } from "./diagrams/logcat-line-anatomy-diagram";
 import { DebugLoopDiagram } from "./diagrams/debug-loop-diagram";
@@ -860,6 +861,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ActivityLifecycleDiagram,
   MvcDataFlowDiagram,
   BackStackDiagram,
+  FragmentTransactionDiagram,
   ConfigChangeViewModelDiagram,
   LogcatLineAnatomyDiagram,
   DebugLoopDiagram,
