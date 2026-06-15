@@ -1,0 +1,367 @@
+---
+title: PBR 理论
+type: B
+section: PBR
+order: 1
+description: 从微表面模型和能量守恒出发，看懂渲染方程和 Cook-Torrance BRDF 里的每一项（法线分布 D、几何遮蔽 G、菲涅尔 F）各自在算什么，以及金属/非金属的工作流差异——能手推简化版反射率方程，说清每个希腊字母代表什么物理量。
+demo: true
+math: true
+sourceUrl: https://learnopengl-cn.github.io/07%20PBR/01%20Theory/
+draft: true
+---
+
+{/* B 数学型章（HEL-162，PBR 篇第 1 篇·开篇）：原书「PBR 理论 Theory」。重心是数学推导（spec B 列）：从微表面模型和能量守恒两条物理约束出发，推出渲染方程→Cook-Torrance BRDF 的 D/G/F 三项，每项给出公式+几何直觉+图。承接高级光照篇（已学 Blinn-Phong·shadow·bloom·deferred），沿用「光与材质」类比库。B 型段式：概念讲解(§3 必) + 数学推导(§4 核心) + 代码对照(§6 必，GLSL D/G/F) + 误区(§7 必) + 小结含推导题(§8 必)。主 viz = 8 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单（动笔前先摊开，每条标 viz；难啃的用图掰碎；全部配 viz，无纯文字一笔带过；Term 首现高亮+章末 Glossary 一一对应）：1) 微表面理论（表面=无数微小镜面，粗糙度=朝向混乱程度）= MicrofacetSurfaceDiagram；2) 能量守恒（反射+折射≤入射，k_s+k_d=1）= EnergyConservationDiagram；3) 反射率方程（半球积分 Lo=∫fr·Li·cosθ）= ReflectanceEquationDiagram；4) Cook-Torrance BRDF（fr=k_d·c/π + k_s·DFG/4(ωo·n)(ωi·n)）= CookTorranceSplitDiagram；5) 法线分布函数 D GGX（alpha 低尖锐/高弥散）= NdfRoughnessDiagram；6) 几何函数 G Smith-Schlick-GGX（遮蔽+阴影）= GeometryOcclusionDiagram；7) 菲涅尔 F Schlick（掠射→全反射）= FresnelEffectDiagram；8) 金属/非金属工作流（metallic 参数）= MetallicWorkflowDiagram。Term 共 10 个。 */}
+
+{/* 1. 学习目标（spec §一）：B 型必含「能推导」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说出微表面模型的核心假设和**能量守恒**约束：表面由无数微小镜面组成，出去的光不超过进来的光（$k_s + k_d = 1$）
+- 能手推 Cook-Torrance BRDF 的**反射率方程**：说清 $D$（法线分布）、$G$（几何遮蔽）、$F$（菲涅尔）三项各自在算什么物理量，以及分母 $4(\omega_o \cdot n)(\omega_i \cdot n)$ 的归一化意义
+- 能回答：一块粗糙度 0.8 的红色塑料球和一块粗糙度 0.2 的金球，谁有漫反射、谁的 F0 是 albedo 颜色？两者的 NDF 峰形有什么区别？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库。 */}
+
+## 为什么同一个球换种材料，看起来就完全不同
+
+用手机拍一张塑料杯和一张不锈钢杯。塑料杯身上有一大片柔和的白色亮斑，杯面颜色是杯子本身的颜色；不锈钢杯上高光又小又亮，杯面反射的是周围环境的颜色而不是金属自己的颜色。两种杯子被同一束光照着，高光形状和颜色来源却完全不同。
+
+上一篇的冯氏/布林-冯氏光照只有一个「反光度」参数，金属和塑料的区别全靠手调，经验多了才大概像。工业界早就发现：**真实材质的反光行为是可以用几条物理规律写成公式的**——不用猜参数，只要告诉公式「它多粗糙、是不是金属」，高光形状和颜色就能自动算对。
+
+这一章要做的就是：把那几条物理规律拆开、每一项弄清楚它在算什么。读完后你就有了一把「物理尺子」，能度量任何材质的反光行为，而不再靠调反光度蒙。
+
+{/* 3. 概念讲解（spec §三，B 型必）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
+
+## 微表面模型：每块表面都是无数小镜子
+
+所有 PBR 的起点是一条假设：**任何表面，无论看起来多平整，放大到微观层面都是由无数朝向各异的微小镜面组成的**。每一面微镜只做一件事——把打到它身上的光按镜面反射定律弹出去。这就是<Term def="PBR 的核心几何假设：任何表面在微观层面由无数朝向各异的微小完美镜面（microfacet）组成。每个微面只做镜面反射。宏观看到的漫反射/模糊高光，是无数微面反射的统计叠加结果。">微表面模型</Term>。
+
+那宏观上为什么有的表面高光清晰、有的模糊？关键是这些微镜**朝向的一致性**。光滑表面的微面几乎都朝同一个方向——入射光被统一弹到同一侧，你看到一个小而亮的高光斑；粗糙表面的微面朝向杂乱——光被散射到四面八方，高光变得又大又淡。<Term def="描述微表面朝向有多混乱的参数（0~1）。0 = 完美光滑，所有微面对齐，镜面反射集中；1 = 极粗糙，微面朝向完全随机，反射分散到各方向。">粗糙度</Term>（roughness）就是度量这种「混乱程度」的参数：
+
+<MicrofacetSurfaceDiagram />
+
+## 能量守恒：出去的光不能比进来的多
+
+微表面模型还隐含一条硬约束：<Term def="一个物理定律在渲染中的约束：一个表面反射出去的光能量总和不超过打进来的光能量。在 PBR 中体现为镜面反射系数 k_s 与漫反射系数 k_d 之和等于 1（k_s + k_d = 1）。反射越强，漫反射必须越弱，反之亦然。">能量守恒</Term>——一束光打到表面，**反射出去的 + 折射进去的（被吸收或散射成漫反射）= 打进来的**，绝不能凭空多出光来。
+
+把这条约束翻译成系数：镜面反射占比 $k_s$、漫反射占比 $k_d$，则 $k_s + k_d = 1$。高光越强，漫反射就越弱——这就是你看到的「金属表面几乎全是反射、看不到自身颜色」的原因（$k_s$ 很大→ $k_d$ 很小→漫反射几乎没有）。
+
+<EnergyConservationDiagram />
+
+## 反射率方程：把半球上所有来光加起来
+
+现在要量化「一个点 $p$ 朝你的眼睛方向 $\omega_o$ 发出多少光」。直觉上：从表面上方半球 $\Omega$ 的每个方向 $\omega_i$ 都可能有光射过来，每一份入射光经过表面的 <Term def="双向反射分布函数（Bidirectional Reflective Distribution Function）。给定入射方向 omega_i 和出射方向 omega_o，BRDF 返回一个比例值——表示 omega_i 方向的入射光有多少份量沿 omega_o 方向反射出去。它是 PBR 的核心函数，Cook-Torrance BRDF 是其中一种具体实现。">BRDF</Term> $f_r$ 反射后，有一部分沿 $\omega_o$ 方向出去。把所有方向的贡献积分起来，就是<Term def="出射辐射度 Lo 的计算公式：对表面上方半球 omega 的所有入射方向 omega_i 求积分，每条入射光的贡献 = BRDF fr 乘以入射辐射度 Li 乘以余弦项 (n . omega_i)。描述了一个表面点最终朝观察方向发出多少光。">反射率方程</Term>：
+
+$$L_o(p,\omega_o) = \int_\Omega f_r(p,\omega_i,\omega_o) \; L_i(p,\omega_i) \; (n \cdot \omega_i) \; d\omega_i$$
+
+- $L_o$：点 $p$ 朝 $\omega_o$ 出射的<Term def="辐射度（Radiance）：沿某方向单位立体角、单位投影面积上的辐射功率。通俗说就是「这个方向上光有多亮」。">辐射度</Term>（就是「有多亮」）
+- $f_r$：BRDF——衡量 $\omega_i$ 方向的光有多少沿 $\omega_o$ 方向弹出去
+- $L_i$：从 $\omega_i$ 方向射来的入射辐射度
+- $n \cdot \omega_i$：余弦项——光线越正对表面（夹角小），有效照射面积越大
+
+<ReflectanceEquationDiagram />
+
+## Cook-Torrance BRDF：漫反射 + 镜面反射
+
+现在给 $f_r$ 一个具体的实现。Cook-Torrance 把 BRDF 拆成两部分相加——一份漫反射、一份镜面反射：
+
+$$f_r = k_d \frac{c}{\pi} + k_s \frac{DFG}{4(\omega_o \cdot n)(\omega_i \cdot n)}$$
+
+- 左半 $k_d \cdot c/\pi$：<Term def="最简单的漫反射 BRDF——假设光打进表面后被均匀散射到所有方向，反射率等于反照率颜色 c 除以 pi。除以 pi 是为了让半球积分归一化（各方向散射总量等于 c）。">Lambertian 漫反射</Term>。$c$ 是反照率颜色（albedo），除以 $\pi$ 是归一化（保证半球积分 = $c$）
+- 右半 $k_s \cdot DFG / 4(\omega_o \cdot n)(\omega_i \cdot n)$：Cook-Torrance 镜面项。$D$、$F$、$G$ 三个函数分别描述微表面的三种物理效应。分母 $4(\omega_o \cdot n)(\omega_i \cdot n)$ 是归一化校正
+
+下面三节逐一拆开 $D$、$G$、$F$。
+
+<CookTorranceSplitDiagram />
+
+## 法线分布函数 D：有多少微面对齐了半程向量
+
+$D$（<Term def="Normal Distribution Function：给定半程向量 h 和粗糙度 alpha，返回微表面中法线恰好对齐 h 方向的那些微面所占的统计密度。D 越大 = 越多微面能把光反射到你眼里 = 高光越亮。常用实现是 GGX/Trowbridge-Reitz。">NDF，法线分布函数</Term>）回答一个问题：**在所有微面中，法线恰好朝向半程向量 $h$ 的有多大比例？** 只有那些法线对齐 $h$ 的微面才能把入射光精确反射到你的眼睛方向——$D$ 越大，这种微面越多，高光越亮。
+
+> 猜一猜：下面三张图分别对应粗糙度 0.1、0.5、1.0。你觉得哪一张的 NDF 曲线最「尖」（集中在正中间）、哪一张最「平」（分散到两侧）？尖的对应什么样的高光？
+
+<NdfRoughnessDiagram />
+
+粗糙度低 → 微面朝向集中 → NDF 是窄而高的尖峰 → 高光小而亮。粗糙度高 → 微面朝向分散 → NDF 是宽而矮的丘 → 高光大而暗。
+
+## 几何函数 G：有多少微面被邻居挡住了
+
+光打到微面上反射出去，但这份反射光**未必能到你眼里**——因为邻近的微面可能挡在中间。<Term def="Geometry Function：估算微表面中有多少比例的微面既没被邻近微面遮住观察方向（masking），也没被遮住光线方向（shadowing）。G 越小 = 被遮挡越严重 = 高光越暗。Smith 方法把观察方向和光线方向的遮蔽分开算再相乘。">几何函数</Term> $G$ 就是估算这种自遮蔽有多严重。遮蔽来自两个方向：
+
+- **遮蔽（Masking）**：反射光朝你飞来，但被旁边凸起的微面挡住——你看不到
+- **阴影（Shadowing）**：入射光朝这块微面飞来，但被旁边凸起的微面挡住——光照不到
+
+<GeometryOcclusionDiagram />
+
+Smith 的做法很直觉：**两个方向各算一遍遮蔽比例，再乘起来**——$G(n,v,l,k) = G_{sub}(n,v,k) \cdot G_{sub}(n,l,k)$。表面越粗糙，微面凸起越多，遮蔽越严重，$G$ 越小。
+
+## 菲涅尔方程 F：角度越斜反射越强
+
+最后一项 $F$ 描述的是一个日常也能观察到的现象：**你从越斜的角度看一个表面，它反射越强**。站在湖边正下方看水，水是透明的（反射弱）；远眺湖面，水面像镜子一样反射天空（反射强）。这就是<Term def="菲涅尔效应：光线以越大的入射角（越掠射）打到表面，反射率越高。在 0 度（正看）时反射率为 F0（基础反射率），在 90 度（掠射）时所有材质的反射率都趋近 1（全反射）。Schlick 近似公式：F = F0 + (1-F0)(1-(h.v))^5。">菲涅尔效应</Term>。
+
+$F_0$ 是材质在**正看（0°）时的基础反射率**。电介质（非金属）的 $F_0$ 普遍很低（约 0.04），金属的 $F_0$ 很高且有颜色（等于 albedo）。但不管 $F_0$ 多低，掠射角时都会飙升到接近 1：
+
+<FresnelEffectDiagram />
+
+## 金属与非金属：一个 metallic 参数的两条路
+
+理论上 PBR 已经完整了，但实际使用时有个关键简化：**绝大多数材质要么是金属、要么是非金属，很少有「半金属」**。于是引入一个 <Term def="metallic 工作流参数（0~1）。0 = 电介质（非金属）：F0 固定约 0.04，有着色漫反射，镜面接近白色。1 = 金属：F0 等于 albedo 颜色（高且有色），漫反射为零（折射光全被吸收），镜面反射带颜色。中间值仅在过渡边缘短暂出现。">metallic</Term> 参数在两条路之间切换：
+
+<MetallicWorkflowDiagram />
+
+- **metallic = 0（非金属）**：$F_0$ 固定 ≈ 0.04，漫反射 = albedo 颜色（你看到球本身的红色/蓝色），镜面几乎白色
+- **metallic = 1（金属）**：$F_0$ = albedo 颜色，**漫反射 = 0**（折射光全被金属内部的自由电子吸收），镜面反射带颜色（金色金属反射金色光）
+
+{/* 4. 数学推导（spec §四，B 型核心段）：符号表开头；每个 display 公式后跟人话翻译；display 公式 ≤8；列主序明示。 */}
+
+## 数学推导：从方程到每一项
+
+### 符号表
+
+| 符号 | 含义 |
+|------|------|
+| $p$ | 表面上被着色的点 |
+| $n$ | 表面法线（单位向量） |
+| $\omega_i$ | 入射方向（单位向量，指向光源） |
+| $\omega_o$ | 出射方向（单位向量，指向观察者） |
+| $h$ | 半程向量 $= \text{normalize}(\omega_i + \omega_o)$ |
+| $L_i$ | 从 $\omega_i$ 方向射来的入射辐射度 |
+| $L_o$ | 朝 $\omega_o$ 方向出射的辐射度 |
+| $f_r$ | BRDF（双向反射分布函数） |
+| $c$ | 反照率颜色 (albedo) |
+| $\alpha$ | 粗糙度 (roughness) |
+| $k$ | 几何项的粗糙度重映射系数 |
+| $F_0$ | 0° 入射时的基础反射率 |
+
+### 反射率方程
+
+出发点：点 $p$ 朝 $\omega_o$ 的出射辐射度等于上半球所有入射方向的贡献之和：
+
+$$L_o(p,\omega_o) = \int_\Omega f_r(p,\omega_i,\omega_o) \; L_i(p,\omega_i) \; (n \cdot \omega_i) \; d\omega_i$$
+
+**人话翻译**：把半球每个方向飞来的光 $L_i$ 乘以「BRDF 说这个方向的光有多少会沿 $\omega_o$ 出去」再乘以「光线越正对表面有效面积越大」的余弦权重，全部加起来。
+
+### Cook-Torrance BRDF
+
+把 $f_r$ 拆成漫反射 + 镜面反射两部分：
+
+$$f_r = k_d \frac{c}{\pi} + k_s \frac{DFG}{4(\omega_o \cdot n)(\omega_i \cdot n)}$$
+
+**人话翻译**：左半是 Lambertian 漫反射——光均匀散射到所有方向，亮度只取决于颜色 $c$；右半是 Cook-Torrance 镜面——$D$ 说有多少微面对齐了 $h$，$F$ 说当前角度反射占多大比例，$G$ 说有多少微面没被挡住，分母做归一化。
+
+### GGX 法线分布函数 D
+
+$$D(n,h,\alpha) = \frac{\alpha^2}{\pi\big((n \cdot h)^2(\alpha^2 - 1) + 1\big)^2}$$
+
+**人话翻译**：$n \cdot h$ 是法线和半程向量的贴合度（1=完美对齐）。$\alpha$ 小时分母的平方项极大地压低了偏离对齐处的值→尖峰；$\alpha$ 大时分母变得平缓→宽丘。分子的 $\alpha^2$ 保证积分归一化。
+
+### Schlick-GGX 几何函数 G
+
+先定义单方向的 $G_{sub}$：
+
+$$G_{\text{SchlickGGX}}(n,v,k) = \frac{n \cdot v}{(n \cdot v)(1-k)+k}$$
+
+**人话翻译**：$n \cdot v$ 是表面法线与方向 $v$ 的余弦。$k$ 越大（粗糙度越高），分母比分子增长得更快→$G$ 越小→遮蔽越严重。当 $k=0$（完美光滑），$G=1$（无遮蔽）。
+
+Smith 方法把观察方向和光线方向各算一遍再乘：
+
+$$G(n,v,l,k) = G_{\text{sub}}(n,v,k) \cdot G_{\text{sub}}(n,l,k)$$
+
+其中 $k$ 的取法随场景不同：直接光照用 $k = (\alpha + 1)^2 / 8$，IBL 用 $k = \alpha^2 / 2$。
+
+### Fresnel-Schlick 近似
+
+$$F(h,v,F_0) = F_0 + (1 - F_0)(1 - (h \cdot v))^5$$
+
+**人话翻译**：$h \cdot v$ 是半程向量与观察方向的余弦——正看时 $h \cdot v \approx 1$，$(1-h \cdot v)^5 \approx 0$，反射率 ≈ $F_0$（基础值）；掠射时 $h \cdot v \to 0$，$(1-h \cdot v)^5 \to 1$，反射率 → $F_0 + (1-F_0) = 1$（全反射）。五次方决定了「从 $F_0$ 到 1 的爬升集中在最后那段掠射角」。
+
+### 合起来：代入积分
+
+把上面各项代回反射率方程的积分里：
+
+$$L_o(p,\omega_o) = \int_\Omega \bigg(k_d\frac{c}{\pi} + k_s\frac{DFG}{4(\omega_o \cdot n)(\omega_i \cdot n)}\bigg) L_i(p,\omega_i) \; (n \cdot \omega_i) \; d\omega_i$$
+
+**人话翻译**：这就是最终要在片段着色器里算的东西。对于直接光源（点光/方向光），积分退化成有限次求和——每盏灯一份贡献，循环累加即可。下一章（PBR 光照）就是把这个公式写成 GLSL。
+
+{/* 5. 交互 Demo（spec §五）：B 型主 viz 用图表，此章 8 张 diagram 已各配到对应概念节。此处补猜一猜引导。NDF 的猜一猜已在上面。 */}
+
+{/* 6. 代码对照（spec §六，B 型必）：GLSL 实现 D/G/F 三函数。用 CodeTabs GLSL tab。 */}
+
+## 代码对照：D / G / F 的 GLSL 实现
+
+下面是 Cook-Torrance 三个子函数的 GLSL 片段。下一章「PBR 光照」会把它们组合起来在真实场景中跑，这里先看每个函数怎么把公式翻译成代码：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// ======== D：GGX / Trowbridge-Reitz 法线分布函数 ========
+// 输入：法线 N、半程向量 H、粗糙度 roughness
+// 输出：D 值（微面对齐 H 的统计密度）
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a  = roughness * roughness;       // alpha = roughness^2（业界约定先平方一次，手感更线性）
+    float a2 = a * a;                       // alpha^2
+    float NdotH  = max(dot(N, H), 0.0);    // N . H，截到 0 防负
+    float NdotH2 = NdotH * NdotH;
+    // 公式分母：pi * ((NdotH^2)*(a2-1)+1)^2
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = 3.14159265 * denom * denom;
+    return a2 / denom;                      // alpha^2 / denom
+}
+// ======== G：Schlick-GGX 几何遮蔽（单方向） ========
+// 输入：N . 方向 的余弦 NdotV、重映射系数 k
+// 输出：G_sub 值（该方向未被遮挡的比例）
+float GeometrySchlickGGX(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+// Smith 方法：观察方向 + 光线方向各算一遍再相乘
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;               // 直接光照的 k 重映射
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return GeometrySchlickGGX(NdotV, k) * GeometrySchlickGGX(NdotL, k);
+}
+// ======== F：Fresnel-Schlick 近似 ========
+// 输入：半程向量与观察方向余弦 cosTheta、基础反射率 F0
+// 输出：当前角度的反射率（vec3，金属有色所以是三通道）
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+```
+</Tab>
+</CodeTabs>
+
+**逐函数对照**：
+
+1. `DistributionGGX` 直接翻译 $D = \alpha^2 / \pi((n \cdot h)^2(\alpha^2-1)+1)^2$。注意 `roughness` 先平方一次变成 $\alpha$（业界约定），再平方得 $\alpha^2$
+2. `GeometrySchlickGGX` 翻译 $G_{sub} = (n \cdot v) / ((n \cdot v)(1-k)+k)$。直接光照的 $k = (\text{roughness}+1)^2/8$
+3. `fresnelSchlick` 翻译 $F = F_0 + (1-F_0)(1-\cos\theta)^5$。输入是 `cosTheta = h . v`；返回 `vec3` 因为金属的 $F_0$ 有颜色
+
+{/* 7. 常见误区（spec §七，B 型 ≥2 条）。 */}
+
+## 常见误区
+
+<Callout type="warn">
+
+**把粗糙度和金属度搞混**
+
+粗糙度（roughness）控制的是高光的**形状**（锐利还是弥散）；金属度（metallic）控制的是**颜色来源和漫反射有无**。一块「粗糙的金属」有大而暗的有色高光但没有漫反射；一块「光滑的塑料」有小而亮的白色高光且有着色漫反射。两个参数正交——调一个不影响另一个。
+
+</Callout>
+
+<Callout type="warn">
+
+**以为菲涅尔只在掠射角才有用**
+
+菲涅尔 $F$ 并不是「只在 90° 附近才起作用」。它在**所有角度都参与计算**——正看时 $F = F_0$，不是 0。对金属来说 $F_0$ 本身就很大（0.5~1.0），正看时反射已经很强。Fresnel-Schlick 公式里的 $(1-h \cdot v)^5$ 只是在掠射角时额外加上那段急升；基底 $F_0$ 始终存在。
+
+</Callout>
+
+<Callout type="warn">
+
+**忘记能量守恒导致场景过亮**
+
+Cook-Torrance BRDF 的设计保证了 $k_s + k_d = 1$。如果你手写 PBR 时忘了用菲涅尔 $F$ 来推导 $k_s$（$k_s = F$），然后把 $k_d$ 写死成 1.0，相当于镜面反射和漫反射各自都按满量来——出去的光比进来的多，场景会过亮发白。正确做法：先算 $F$，然后 $k_s = F$，$k_d = 1 - k_s$。
+
+</Callout>
+
+{/* 8. 小结练习（spec §八，B 型必含推导题）。 */}
+
+## 小结与练习
+
+这一章从微表面模型出发，经过能量守恒约束，推导出了完整的 Cook-Torrance BRDF 反射率方程。三个核心函数 D/G/F 分别量化了「多少微面对齐半程向量」「多少微面没被遮挡」「当前角度反射占多大比例」。加上 metallic 工作流区分金属/非金属，就构成了 PBR 的完整理论基础。下一章将把这些公式写进 GLSL，在真实场景里点灯看效果。
+
+<Exercises>
+
+### 推导题
+
+1. 从 Fresnel-Schlick 公式 $F = F_0 + (1-F_0)(1-\cos\theta)^5$ 出发，验证：当 $\cos\theta = 1$（正看）时 $F = F_0$；当 $\cos\theta = 0$（掠射）时 $F = 1$。中间角度呢？$\cos\theta = 0.5$ 时 $F$ 约等于多少（取 $F_0 = 0.04$）？
+
+<Answer>
+$\cos\theta = 1$：$(1-1)^5 = 0$，所以 $F = F_0 + 0 = F_0$。
+
+$\cos\theta = 0$：$(1-0)^5 = 1$，所以 $F = F_0 + (1-F_0) = 1$。
+
+$\cos\theta = 0.5$，$F_0 = 0.04$：$(1-0.5)^5 = 0.03125$，所以 $F = 0.04 + 0.96 \times 0.03125 = 0.04 + 0.03 = 0.07$。正看时只有 4% 反射，45° 左右也才 7%——菲涅尔的急升集中在最后那段掠射角。
+</Answer>
+
+2. GGX NDF 公式 $D = \alpha^2 / \pi((n \cdot h)^2(\alpha^2-1)+1)^2$，当 $n \cdot h = 1$（微面法线完美对齐 $h$）时 $D$ 等于多少？写出化简过程，说明它只取决于 $\alpha$。
+
+<Answer>
+$n \cdot h = 1$ 代入：分母 $= \pi(1 \cdot (\alpha^2-1)+1)^2 = \pi(\alpha^2)^2 = \pi \alpha^4$。
+
+所以 $D = \alpha^2 / (\pi \alpha^4) = 1/(\pi \alpha^2)$。
+
+$\alpha$ 越小，$D$ 越大——光滑表面在完美对齐位置的密度极高（尖峰），符合直觉。
+</Answer>
+
+### 概念题
+
+3. 一块粗糙度 0.8 的红色塑料球（metallic=0）和一块粗糙度 0.2 的金球（metallic=1），分别回答：(a) 谁有漫反射？(b) 谁的 F0 是 albedo 颜色？(c) 谁的 NDF 更「尖」？
+
+<Answer>
+(a) 红色塑料球有漫反射（metallic=0，$k_d > 0$，你看到红色的漫反射）。金球没有漫反射（metallic=1，$k_d = 0$，折射光全被吸收）。
+
+(b) 金球的 $F_0$ = albedo 颜色（金色）。塑料球的 $F_0$ 固定约 0.04，不是 albedo。
+
+(c) 金球（粗糙度 0.2）的 NDF 更尖——$\alpha$ 低，微面集中对齐，高光小而亮。塑料球（粗糙度 0.8）的 NDF 宽而矮，高光大而暗。
+</Answer>
+
+4. 为什么 Cook-Torrance 分母里有 $4(\omega_o \cdot n)(\omega_i \cdot n)$？如果去掉会怎样？
+
+<Answer>
+分母的 $4(\omega_o \cdot n)(\omega_i \cdot n)$ 是微面 BRDF 推导过程中的归一化修正项——它确保整个 BRDF 在半球上积分后满足能量守恒（反射总量不超过入射总量）。如果去掉，镜面反射的能量会偏高，尤其在掠射角附近会过亮，破坏能量守恒约束。
+</Answer>
+
+</Exercises>
+
+{/* 9. 出处声明 */}
+
+<Attribution
+  title="PBR - 理论"
+  author="Joey de Vries"
+  url="https://learnopengl-cn.github.io/07%20PBR/01%20Theory/"
+  license="CC BY-NC 4.0"
+/>
+
+{/* 10. 名词解释 */}
+
+<Glossary>
+  <GlossaryItem term="微表面模型" id="微表面模型">
+    PBR 的核心几何假设：任何表面在微观层面由无数朝向各异的微小完美镜面（microfacet）组成。宏观看到的漫反射/模糊高光是无数微面反射的统计叠加。
+  </GlossaryItem>
+  <GlossaryItem term="粗糙度" id="粗糙度">
+    roughness（0~1），描述微表面朝向有多混乱。0 = 完美光滑（微面对齐，反射集中），1 = 极粗糙（微面随机，反射分散）。
+  </GlossaryItem>
+  <GlossaryItem term="能量守恒" id="能量守恒">
+    一个表面反射出去的光总量不超过照进来的光。PBR 中体现为 k_s + k_d = 1，反射越强漫反射越弱。
+  </GlossaryItem>
+  <GlossaryItem term="BRDF" id="BRDF">
+    双向反射分布函数（Bidirectional Reflective Distribution Function）。给定入射方向和出射方向，返回入射光沿出射方向反射出去的比例。Cook-Torrance 是一种具体实现。
+  </GlossaryItem>
+  <GlossaryItem term="反射率方程" id="反射率方程">
+    Lo(p, omega_o) = 对半球所有入射方向积分 fr . Li . cos(theta)。描述一个表面点最终朝观察方向发出多少光。
+  </GlossaryItem>
+  <GlossaryItem term="辐射度" id="辐射度">
+    Radiance：沿某方向单位立体角、单位投影面积上的辐射功率。通俗说就是「这个方向上光有多亮」。
+  </GlossaryItem>
+  <GlossaryItem term="NDF（法线分布函数）" id="NDF">
+    Normal Distribution Function：给定半程向量 h 和粗糙度 alpha，返回微面中法线对齐 h 方向的统计密度。常用实现是 GGX/Trowbridge-Reitz。
+  </GlossaryItem>
+  <GlossaryItem term="几何函数" id="几何函数">
+    Geometry Function：估算微面中有多少比例既没被遮住观察方向也没被遮住光线方向。Smith 方法把两个方向分开算再相乘。
+  </GlossaryItem>
+  <GlossaryItem term="菲涅尔效应" id="菲涅尔效应">
+    Fresnel Effect：光线以越大的入射角打到表面，反射率越高。正看时反射率为 F0，掠射时趋近 1。Schlick 近似：F = F0 + (1-F0)(1-(h.v))^5。
+  </GlossaryItem>
+  <GlossaryItem term="Lambertian 漫反射" id="Lambertian">
+    最简单的漫反射模型——假设光打进表面后被均匀散射到所有方向，f_lambert = c / pi。
+  </GlossaryItem>
+  <GlossaryItem term="metallic" id="metallic">
+    金属度参数（0~1）。0 = 电介质（低 F0，有色漫反射，白色镜面）；1 = 金属（高有色 F0，无漫反射，有色镜面）。
+  </GlossaryItem>
+</Glossary>

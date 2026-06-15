@@ -293,6 +293,14 @@ import { ForwardVsDeferredDiagram } from "./diagrams/forward-vs-deferred-diagram
 import { HemisphereKernelDiagram } from "./diagrams/hemisphere-kernel-diagram";
 import { DepthCompareDiagram } from "./diagrams/depth-compare-diagram";
 import { NoiseBlurDiagram } from "./diagrams/noise-blur-diagram";
+import { MicrofacetSurfaceDiagram } from "./diagrams/microfacet-surface-diagram";
+import { EnergyConservationDiagram } from "./diagrams/energy-conservation-diagram";
+import { ReflectanceEquationDiagram } from "./diagrams/reflectance-equation-diagram";
+import { CookTorranceSplitDiagram } from "./diagrams/cook-torrance-split-diagram";
+import { NdfRoughnessDiagram } from "./diagrams/ndf-roughness-diagram";
+import { GeometryOcclusionDiagram } from "./diagrams/geometry-occlusion-diagram";
+import { FresnelEffectDiagram } from "./diagrams/fresnel-effect-diagram";
+import { MetallicWorkflowDiagram } from "./diagrams/metallic-workflow-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
 import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
@@ -722,6 +730,14 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HemisphereKernelDiagram,
   DepthCompareDiagram,
   NoiseBlurDiagram,
+  MicrofacetSurfaceDiagram,
+  EnergyConservationDiagram,
+  ReflectanceEquationDiagram,
+  CookTorranceSplitDiagram,
+  NdfRoughnessDiagram,
+  GeometryOcclusionDiagram,
+  FresnelEffectDiagram,
+  MetallicWorkflowDiagram,
   CompilationPipelineDiagram,
   CHistoryTimelineDiagram,
   CCompilationDiagram,
