@@ -307,6 +307,9 @@ import { LinearHdrPipelineDiagram } from "./diagrams/linear-hdr-pipeline-diagram
 import { IblConceptDiagram } from "./diagrams/ibl-concept-diagram";
 import { EquirectToCubemapDiagram } from "./diagrams/equirect-to-cubemap-diagram";
 import { HemisphereConvolutionDiagram } from "./diagrams/hemisphere-convolution-diagram";
+import { SplitSumDiagram } from "./diagrams/split-sum-diagram";
+import { PrefilterMipDiagram } from "./diagrams/prefilter-mip-diagram";
+import { BrdfLutDiagram } from "./diagrams/brdf-lut-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
 import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
@@ -759,6 +762,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IblConceptDiagram,
   EquirectToCubemapDiagram,
   HemisphereConvolutionDiagram,
+  SplitSumDiagram,
+  PrefilterMipDiagram,
+  BrdfLutDiagram,
   CompilationPipelineDiagram,
   CHistoryTimelineDiagram,
   CCompilationDiagram,

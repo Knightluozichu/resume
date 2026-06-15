@@ -1,0 +1,531 @@
+---
+title: IBL 镜面反射
+type: C
+section: PBR
+order: 4
+description: PBR 拼图的最后一块——镜面 IBL。用 Split-Sum 近似把镜面积分拆成两张预计算贴图：预滤波环境贴图（roughness→mip level）和 BRDF 积分 LUT（NdotV×roughness→scale,bias），加上上一章的漫反射辐照度，组装出完整的 IBL 环境光照。
+demo: true
+math: false
+sourceUrl: https://learnopengl-cn.github.io/07%20PBR/03%20IBL/02%20Specular%20IBL/
+draft: true
+---
+
+{/* C 实战型章（HEL-165，PBR 篇第 4 篇）：原书「IBL - 镜面反射 Specular IBL」。重心是在上一章漫反射 IBL 的基础上加入镜面 IBL——用两张预计算贴图还原实时镜面积分（spec C 列）：Split-Sum 近似（把积分拆成预滤波环境贴图 × BRDF LUT）→ 预滤波卷积（重要性采样 Hammersley + GGX，roughness → mip level）→ BRDF LUT 预计算（IntegrateBRDF，IBL 版 k-remapping）→ 最终着色器合并（kD·diffuse + prefilteredColor·(F·A+B)）。主 viz = ShaderDemo（完整镜面 IBL，IBL 开关可切换）+ 3 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
+
+{/* 知识点清单：1) Split-Sum 近似（把镜面积分拆成预滤波环境颜色 × BRDF 积分）= SplitSumDiagram；2) 预滤波环境贴图（roughness 对应 mipmap level，越粗糙越模糊）= PrefilterMipDiagram + §6a/b/c 代码；3) 重要性采样 Hammersley + GGX（偏向镜面波瓣的低差异序列）= §6a/b 代码；4) BRDF 积分 LUT（2D 查找纹理，NdotV×roughness → scale,bias）= BrdfLutDiagram + §6d 代码；5) 完整 IBL 组合（diffuse IBL + specular IBL + direct lighting）= ShaderDemo + §6e 代码。Term 共 7 个。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出」一条；2-3 条可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能改出完整的 IBL 环境光照：在上一章漫反射 IBL 的基础上加入镜面 IBL——用预滤波环境贴图和 BRDF LUT 让球面上的高光也从环境中取光
+- 能说出 Split-Sum 近似的拆法：镜面积分 = 预滤波环境颜色(R, roughness) × BRDF 积分(NdotV, roughness)，以及为什么这样拆能让实时渲染变成两次贴图采样
+- 能回答：为什么预滤波环境贴图用 mipmap level 对应 roughness？如果 roughness=0 采 mip 0、roughness=1 采 mip 4，中间的 roughness 采样到的图像会有什么变化？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语、回答「解决什么问题 / 没有它会怎样」。 */}
+
+## 环境里的高光
+
+上一章给 PBR 球加上了漫反射 IBL——球的暗面不再死黑，从环境里收到了真实的漫反射光。但盯着光滑金属球看一眼你就会发现不对：一块光滑的金属应该像镜子一样，把整片蓝天或地面倒映在自己身上。现在却只有四盏灯的高光亮点，背景环境在球面上没有任何反射。
+
+没有镜面 IBL，光滑金属球就像一个只有四个白点的黑球，完全不像真实金属的感觉。把粗糙度调低，期待的是清晰的环境倒影，得到的却是没有内容的纯黑背景。
+
+这一章要做的就是：把环境贴图按不同模糊程度存成多级，光滑的查清晰版、粗糙的查模糊版，加上一张记录 Fresnel 积分的小贴图，实时渲染时只查两张表就能还原完整的镜面积分。
+
+{/* 3. 概念讲解（spec §三，C 型可压缩）：一节一概念；术语首现 <Term def> 高亮；每概念配图。 */}
+
+## Split-Sum 近似
+
+镜面 IBL 的核心挑战是：镜面 BRDF 里有两个未知量（入射方向 ωi 和观察方向 ωo），无法像漫反射那样只靠法线方向预计算。Epic Games 的 Brian Karis 提出了 <Term def="Split-Sum 近似：把镜面积分拆成两个只依赖单一变量的独立积分相乘——预滤波环境颜色（只依赖反射方向 R 和 roughness）× BRDF 积分（只依赖 NdotV 和 roughness）。两项可独立离线预计算成贴图，运行时各查一次即可还原积分。出自 Epic Games Karis 2013「Real Shading in Unreal Engine 4」。">Split-Sum 近似</Term>：把积分拆成两个独立部分相乘——一个只依赖反射方向和粗糙度，另一个只依赖视角与法线夹角和粗糙度。
+
+<SplitSumDiagram />
+
+这样每部分都可以独立预计算存成贴图，运行时用参数查表，把实时积分变成两次贴图采样。
+
+## 预滤波环境贴图
+
+<Term def="预滤波环境贴图（Pre-filtered Environment Map）：对原始环境贴图按不同粗糙度做卷积（重要性采样 GGX），把结果存成 cubemap mipmap 的各级。roughness=0 存 mip 0（清晰），roughness=1 存最高 mip（模糊）。运行时用反射方向 R 和 roughness 查对应层级。">预滤波环境贴图</Term>是 Split-Sum 的左乘项：把原始环境贴图按不同粗糙度做模糊卷积，每个粗糙度等级存成 cubemap 的一个 mipmap 层级。
+
+<PrefilterMipDiagram />
+
+卷积时不能用均匀采样（效率太低），改用对 GGX 法线分布函数做<Term def="重要性采样（Importance Sampling）：蒙特卡洛积分的一种优化：不均匀地在积分域上采样，而是集中在对结果贡献大的区域采样（这里是 GGX 波瓣的中心方向附近），用较少样本数就能收敛到准确结果。">重要性采样</Term>——让采样方向偏向 GGX 镜面波瓣的中心，用 1024 个样本就能获得高质量的预计算结果。
+
+## BRDF 积分 LUT
+
+Split-Sum 的右乘项是 <Term def="BRDF 积分 LUT：一张 2D 查找纹理（512×512），横轴是 NdotV（0~1），纵轴是 roughness（0~1）。R 通道存 F0 的缩放系数 A，G 通道存偏移量 B。运行时用 F0·A + B 重建镜面 Fresnel 积分，完全不依赖具体的 F0 值（与场景材质解耦）。">BRDF 积分 LUT</Term>：一张以 NdotV 和 roughness 为轴的 2D 贴图，R 通道存 F0 的缩放系数，G 通道存偏移量。
+
+<BrdfLutDiagram />
+
+预计算时对每个 (NdotV, roughness) 点做 1024 次 GGX 重要性采样，累加 G 和 Fresnel 贡献。最终公式：`specular = prefilteredColor × (F0 · scale + bias)`。
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo。 */}
+
+## 动手：开关镜面 IBL，看高光从哪里来
+
+> 猜一猜：金属度拉到最高（metallic=1），粗糙度调低（roughness≈0.1），关掉 IBL（拖到 0）和开启 IBL（拖到 1），球面的高光有什么本质差别？再把粗糙度慢慢拉高到 1.0，观察预滤波贴图的模糊效果。
+
+<ShaderDemo
+  aspect={1}
+  caption="完整 IBL 环境光照（漫反射 IBL + 镜面 IBL）。IBL=1：球面高光从环境中取光，光滑金属球有清晰的环境倒影；IBL=0：退回 0.03 常量环境光，高光只来自四盏点光源。默认 metallic=0.9、roughness=0.3 以展示镜面效果。"
+  frag={`#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform float uRoughness;
+uniform float uMetallic;
+uniform float uIBL;
+out vec4 FragColor;
+// --- constants ---
+const float PI = 3.14159265359;
+// --- D: GGX NDF ---
+float DistributionGGX(vec3 N, vec3 H, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH = max(dot(N, H), 0.0);
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    denom = PI * denom * denom;
+    return a2 / denom;
+}
+// --- G: Schlick-GGX (single) ---
+float GeometrySchlickGGX(float NdotV, float k) {
+    return NdotV / (NdotV * (1.0 - k) + k);
+}
+// --- G: Smith (both directions) ---
+float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotL = max(dot(N, L), 0.0);
+    return GeometrySchlickGGX(NdotV, k) * GeometrySchlickGGX(NdotL, k);
+}
+// --- F: Fresnel-Schlick (direct lighting) ---
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// --- F: Fresnel-Schlick with roughness (IBL) ---
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0)
+              * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+// --- ray-sphere intersection ---
+float hitSphere(vec3 ro, vec3 rd, float r) {
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - r * r;
+    float h = b * b - c;
+    if (h < 0.0) return -1.0;
+    return -b - sqrt(h);
+}
+// --- procedural irradiance: sky + ground blended by normal.y ---
+vec3 proceduralIrradiance(vec3 N) {
+    float skyFactor = N.y * 0.5 + 0.5;
+    vec3 skyColor = vec3(0.4, 0.6, 1.0);
+    vec3 groundColor = vec3(0.5, 0.35, 0.2);
+    vec3 equatorColor = vec3(0.6, 0.55, 0.5);
+    vec3 color = mix(groundColor, equatorColor, smoothstep(0.0, 0.5, skyFactor));
+    color = mix(color, skyColor, smoothstep(0.5, 1.0, skyFactor));
+    return color * 0.8;
+}
+// --- procedural sky background ---
+vec3 skyBackground(vec3 rd) {
+    float skyFactor = rd.y * 0.5 + 0.5;
+    vec3 skyColor = vec3(0.4, 0.6, 1.0);
+    vec3 groundColor = vec3(0.5, 0.35, 0.2);
+    vec3 equatorColor = vec3(0.6, 0.55, 0.5);
+    vec3 color = mix(groundColor, equatorColor, smoothstep(0.0, 0.5, skyFactor));
+    color = mix(color, skyColor, smoothstep(0.5, 1.0, skyFactor));
+    return mix(vec3(0.02, 0.02, 0.04), color, uIBL);
+}
+// --- procedural specular environment (simulates pre-filtered env map) ---
+vec3 proceduralSpecular(vec3 R, float roughness) {
+    float skyFactor = R.y * 0.5 + 0.5;
+    vec3 skyColor = vec3(0.5, 0.7, 1.2);
+    vec3 groundColor = vec3(0.5, 0.35, 0.2);
+    vec3 equatorColor = vec3(0.7, 0.6, 0.5);
+    vec3 sharp = mix(groundColor, equatorColor, smoothstep(0.0, 0.5, skyFactor));
+    sharp = mix(sharp, skyColor, smoothstep(0.5, 1.0, skyFactor));
+    vec3 avg = vec3(0.55, 0.5, 0.55);
+    return mix(sharp, avg, roughness * roughness);
+}
+// --- analytical BRDF LUT approximation (Karis 2014) ---
+vec2 approxBrdfLUT(float NdotV, float roughness) {
+    const vec4 c0 = vec4(-1.0, -0.0275, -0.572, 0.022);
+    const vec4 c1 = vec4(1.0, 0.0425, 1.04, -0.04);
+    vec4 r = roughness * c0 + c1;
+    float a004 = min(r.x * r.x, exp2(-9.28 * NdotV)) * r.x + r.y;
+    return vec2(-1.04, 1.04) * a004 + r.zw;
+}
+// --- main ---
+void main() {
+    vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+    vec3 ro = vec3(uv, 2.0);
+    vec3 rd = vec3(0.0, 0.0, -1.0);
+    float t = hitSphere(ro, rd, 0.85);
+    if (t < 0.0) { FragColor = vec4(skyBackground(rd), 1.0); return; }
+    vec3 P = ro + t * rd;
+    vec3 N = normalize(P);
+    vec3 V = normalize(ro - P);
+    vec3 albedo = vec3(0.8, 0.2, 0.2);
+    float roughness = uRoughness;
+    float metallic = uMetallic;
+    vec3 F0 = mix(vec3(0.04), albedo, metallic);
+    vec3 lightPositions[4] = vec3[](
+        vec3(-2.0, 2.0, 2.0),
+        vec3( 2.0, 2.0, 2.0),
+        vec3(-2.0,-2.0, 2.0),
+        vec3( 2.0,-2.0, 2.0)
+    );
+    vec3 lightColors[4] = vec3[](
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0),
+        vec3(150.0, 150.0, 150.0)
+    );
+    vec3 Lo = vec3(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec3 L = normalize(lightPositions[i] - P);
+        vec3 H = normalize(V + L);
+        float dist = length(lightPositions[i] - P);
+        float attenuation = 1.0 / (dist * dist);
+        vec3 radiance = lightColors[i] * attenuation;
+        float D = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+        vec3 numerator = D * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+        vec3 kS = F;
+        vec3 kD = (1.0 - kS) * (1.0 - metallic);
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+    vec3 F_ibl = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+    vec3 kS_ibl = F_ibl;
+    vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic);
+    vec3 irradiance = proceduralIrradiance(N);
+    vec3 diffuseIBL = irradiance * albedo;
+    vec3 R = reflect(-V, N);
+    vec3 prefilteredColor = proceduralSpecular(R, roughness);
+    vec2 envBRDF = approxBrdfLUT(max(dot(N, V), 0.0), roughness);
+    vec3 specularIBL = prefilteredColor * (F_ibl * envBRDF.x + envBRDF.y);
+    vec3 ambientIBL = kD_ibl * diffuseIBL + specularIBL;
+    vec3 ambientConst = vec3(0.03) * albedo;
+    vec3 ambient = mix(ambientConst, ambientIBL, uIBL);
+    vec3 color = ambient + Lo;
+    color = color / (color + vec3(1.0));
+    color = pow(color, vec3(1.0 / 2.2));
+    FragColor = vec4(color, 1.0);
+}`}
+  controls={[
+    {
+      name: "uRoughness",
+      label: "粗糙度",
+      type: "float",
+      min: 0.05,
+      max: 1,
+      step: 0.05,
+      default: 0.3,
+    },
+    {
+      name: "uMetallic",
+      label: "金属度",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 0.05,
+      default: 0.9,
+    },
+    {
+      name: "uIBL",
+      label: "IBL 环境光",
+      type: "float",
+      min: 0,
+      max: 1,
+      step: 1,
+      default: 1,
+    },
+  ]}
+/>
+
+拖完之后你应该看到：
+
+- **IBL=1 + metallic=0.9 + roughness=0.3**：球面出现蓝色天空和棕色地面的反射，光滑金属球面有清晰的环境倒影，高光不只是四个亮点
+- **IBL=0**：背景变暗，镜面 IBL 消失，球面退回只有四盏点光源的孤立高光，完全没有环境感
+- **roughness 从 0.05 慢慢拉到 1.0**：高光越来越扩散模糊，对应 `proceduralSpecular` 把环境贴图从清晰混合到平均色（模拟 mip 从 0 到 4 的模糊）
+- **metallic=0 时**：`kD_ibl` 不为零，漫反射 IBL 占主导；镜面 IBL 也存在（F0=0.04 的非金属也有菲涅尔反射）
+
+{/* 6. 代码逐段拆解（spec §六，C 型核心，≥80% 覆盖）。 */}
+
+## 代码逐段拆解
+
+以下把预计算和运行时着色器里镜面 IBL 相关的核心片段逐段拆解。预计算着色器（GPU 端离线运行）负责生成两张贴图；运行时着色器负责采样并合并。
+
+### a) Hammersley 序列：低差异采样点生成
+
+重要性采样需要一套「均匀但又不规则」的 2D 样本序列。<Term def="Hammersley 序列：Van der Corput 序列（二进制位翻转）× 均匀递增序列组合成的二维低差异序列。比伪随机采样收敛更快，在 1024 个点内就能获得高质量的积分估计。">Hammersley 序列</Term>基于二进制位翻转（Van der Corput 序列）：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 二进制位翻转，生成 Van der Corput 序列的第 i 项
+float RadicalInverse_VdC(uint bits) {
+    bits = (bits << 16u) | (bits >> 16u);
+    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);
+    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);
+    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);
+    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);
+    return float(bits) * 2.3283064365386963e-10; // / 0x100000000
+}
+// Hammersley 2D 样本点：(i/N, VdC(i))
+vec2 Hammersley(uint i, uint N) {
+    return vec2(float(i) / float(N), RadicalInverse_VdC(i));
+}
+```
+</Tab>
+</CodeTabs>
+
+`RadicalInverse_VdC` 把整数 `i` 的二进制表示左右翻转，再归一化到 (0,1)——这让相邻索引产生的值尽量分散，比随机数更均匀地覆盖 (0,1)。组合成 (i/N, VdC(i)) 的二维点，在 GGX 重要性采样里用作两个随机数 (u1, u2)。
+
+### b) ImportanceSampleGGX：GGX 重要性采样
+
+根据 Hammersley 样本点，用 GGX NDF 推导出偏向镜面波瓣的采样方向：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 输入: Xi = Hammersley 样本 (u1, u2)，roughness，N = 法线
+// 输出: H = 半程向量方向（世界空间），偏向 GGX 波瓣中心
+vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {
+    float a = roughness * roughness;
+    // 球坐标：phi 均匀，cosTheta 由 GGX CDF 逆变换得到
+    float phi      = 2.0 * PI * Xi.x;
+    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    // 切线空间 H 向量
+    vec3 H = vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
+    // 切线空间 → 世界空间
+    vec3 up   = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+    vec3 tangentX = normalize(cross(up, N));
+    vec3 tangentY = cross(N, tangentX);
+    return normalize(tangentX * H.x + tangentY * H.y + N * H.z);
+}
+```
+</Tab>
+</CodeTabs>
+
+关键公式是 `cosTheta = sqrt((1 - u2) / (1 + (a⁴ - 1) * u2))`——这是 GGX NDF 的累积分布函数（CDF）反函数，使采样方向概率密度与 GGX 波瓣形状匹配，集中在高 NDF 值的方向附近（specular lobe 中心），比均匀采样收敛快约 10 倍。
+
+### c) 预滤波卷积核心循环：V=R=N 近似
+
+预计算时对每个 roughness 等级做 1024 次重要性采样累加：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 预滤波卷积：对当前 roughness 生成预滤波环境颜色
+// R = normalize(localPos) 是当前立方体面的反射方向
+vec3 prefilteredColor = vec3(0.0);
+float totalWeight = 0.0;
+const uint SAMPLE_COUNT = 1024u;
+for (uint i = 0u; i < SAMPLE_COUNT; i++) {
+    vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+    // V=R=N：独立于视角的近似（Epic 工程近似，失去各向异性拉伸）
+    vec3 H  = ImportanceSampleGGX(Xi, R, roughness);
+    vec3 L  = normalize(2.0 * dot(V, H) * H - V); // V = R = N
+    float NdotL = max(dot(R, L), 0.0);
+    if (NdotL > 0.0) {
+        prefilteredColor += texture(environmentMap, L).rgb * NdotL;
+        totalWeight      += NdotL;
+    }
+}
+prefilteredColor = prefilteredColor / totalWeight;
+```
+</Tab>
+</CodeTabs>
+
+`V=R=N` 是一个工程近似：预计算时无法知道运行时实际的视角 V，所以假设 V=R=法线。这会在掠射角方向有误差，但对大多数材质在视觉上不明显。`NdotL` 权重给正对反射方向的采样赋更高贡献，减少接缝伪影。
+
+### d) IntegrateBRDF：BRDF LUT 预计算
+
+对每个 (NdotV, roughness) 点做重要性采样，分别累加 scale（A）和 bias（B）：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 输入: NdotV, roughness → 输出: (scale=A, bias=B)
+vec2 IntegrateBRDF(float NdotV, float roughness) {
+    vec3 V = vec3(sqrt(1.0 - NdotV*NdotV), 0.0, NdotV);
+    float A = 0.0, B = 0.0;
+    vec3 N = vec3(0.0, 0.0, 1.0);
+    const uint SAMPLE_COUNT = 1024u;
+    for (uint i = 0u; i < SAMPLE_COUNT; i++) {
+        vec2 Xi = Hammersley(i, SAMPLE_COUNT);
+        vec3 H  = ImportanceSampleGGX(Xi, N, roughness);
+        vec3 L  = normalize(2.0 * dot(V, H) * H - V);
+        float NdotL = max(L.z, 0.0);
+        float NdotH = max(H.z, 0.0);
+        float VdotH = max(dot(V, H), 0.0);
+        if (NdotL > 0.0) {
+            // IBL 版几何函数：k = alpha²/2（与直接光照 k=(r+1)²/8 不同！）
+            float a = roughness * roughness;
+            float k = a / 2.0;
+            float G_Vis = GeometrySchlickGGX(NdotV, k) * GeometrySchlickGGX(NdotL, k);
+            G_Vis *= VdotH / (NdotH * NdotV + 0.0001);
+            float Fc = pow(1.0 - VdotH, 5.0); // Fresnel 插值因子
+            A += (1.0 - Fc) * G_Vis;           // F0 的缩放系数
+            B += Fc * G_Vis;                   // 偏移量（不依赖 F0）
+        }
+    }
+    return vec2(A, B) / float(SAMPLE_COUNT);
+}
+```
+</Tab>
+</CodeTabs>
+
+注意 IBL 版几何函数用 `k = α²/2`（直接光照版是 `k = (r+1)²/8`，§7 第 1 条误区）。把 Fresnel 因子 Fc 拆开分别累加，就把 F0 的依赖分离到了 A 系数上——运行时用任意 F0 代入 `F0·A + B` 即可，LUT 与场景材质解耦。
+
+### e) 最终合并：diffuse IBL + specular IBL + direct lighting
+
+运行时着色器把三部分组装在一起：
+
+<CodeTabs>
+<Tab label="GLSL">
+```glsl
+// 1. IBL 版 Fresnel（粗糙度修正，用 dot(N,V) 而非 dot(H,V)）
+vec3 F_ibl = fresnelSchlickRoughness(max(dot(N, V), 0.0), F0, roughness);
+vec3 kS_ibl = F_ibl;
+vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - metallic);
+// 2. 漫反射 IBL（同上一章）
+vec3 irradiance = texture(irradianceMap, N).rgb;
+vec3 diffuseIBL = irradiance * albedo;
+// 3. 镜面 IBL：预滤波环境 × BRDF LUT
+vec3 R = reflect(-V, N);
+float lod = roughness * float(MAX_LOD);
+vec3 prefilteredColor = textureLod(prefilterMap, R, lod).rgb;
+vec2 envBRDF = texture(brdfLUT, vec2(max(dot(N,V), 0.0), roughness)).rg;
+vec3 specularIBL = prefilteredColor * (F_ibl * envBRDF.x + envBRDF.y);
+// 4. 合并（注意：specularIBL 不再额外乘 kS！已包含在 Fresnel 中）
+vec3 ambient = kD_ibl * diffuseIBL + specularIBL;
+// 5. 加上直接光照
+vec3 color = ambient + Lo;
+```
+</Tab>
+</CodeTabs>
+
+关键细节：`specularIBL` **不额外乘 kS**——镜面 Fresnel 已经在 BRDF LUT 里积分进去了，`F_ibl * envBRDF.x + envBRDF.y` 整体就是把 Fresnel 效果合并进去的系数。如果再乘 kS，会造成能量守恒破坏（§7 第 4 条误区）。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3 条）。 */}
+
+## 常见误区
+
+<Callout type="warn">
+
+**BRDF LUT 几何函数 k 值用了直接光照版 (r+1)²/8 而不是 IBL 版 α²/2**
+
+两个 k 值有不同物理意义：直接光照版在 roughness→0 时仍有几何衰减，防止高光奇点；IBL 版对整个半球积分，roughness=0 时几何 G 应趋近 1（完全没有自遮蔽）。把直接光照的 k 带进 `IntegrateBRDF`，BRDF LUT 严重偏亮，运行时镜面反射整体过亮，破坏能量守恒。修法：`k = α²/2`，其中 `α = roughness²`。
+
+</Callout>
+
+<Callout type="warn">
+
+**漏掉 GL_TEXTURE_CUBE_MAP_SEAMLESS 导致立方体接缝明显**
+
+预滤波环境贴图在高粗糙度时 mip 分辨率很低（如 mip 4 = 4×4），立方体贴图面与面之间的接缝在 GPU 默认采样时不做混合，粗糙球面上出现十字形接缝伪影。修法：在 OpenGL 端开启 `glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS)`（OpenGL 3.2+ 核心特性），让 GPU 在采样跨面边界时做线性混合。
+
+</Callout>
+
+<Callout type="warn">
+
+**预滤波环境贴图的源 cubemap 没开 mipmap 导致高 roughness 亮点噪点**
+
+预滤波卷积时，高 roughness 的 LOD 采样（`textureLod(environmentMap, L, mipLevel)`）如果源贴图没有 mip 链，采样到的是最大 mip（原始分辨率），但高亮点（太阳、强光源）会导致高方差——少数采样碰到极亮区域权重极大，多数采样是暗色，结果出现闪烁的亮点噪点。修法：源 cubemap 在离线转换时调用 `glGenerateMipmap`，卷积时用合适的 LOD bias 采样以减少方差。
+
+</Callout>
+
+<Callout type="warn">
+
+**specular 项重复乘了 kS，造成能量不守恒**
+
+错误写法：`ambient = kD_ibl * diffuseIBL + kS_ibl * specularIBL`。正确写法不应再乘 kS——BRDF LUT 里已经把 Fresnel 积分进了 (A, B) 系数，`prefilteredColor * (F_ibl * A + B)` 本身已经是经过 Fresnel 加权的镜面贡献。额外乘 kS 相当于把 Fresnel 效果施加了两次，整体镜面反射偏亮 10~30%，高光边缘出现物理上不存在的白边。
+
+</Callout>
+
+{/* 8. 小结练习（spec §八，C 型含实现题）。 */}
+
+## 小结与练习
+
+这一章完成了 PBR + IBL 的最后一块拼图：Split-Sum 近似把镜面积分拆成预滤波环境贴图（roughness → mip level）和 BRDF 积分 LUT（NdotV × roughness → scale, bias），两项分别离线预计算，运行时各查一次表，加上上一章的漫反射 IBL，组装出完整的 IBL 环境光照。
+
+- Split-Sum 拆法的关键：把双变量积分拆成两个单变量积分相乘，每项都可独立预计算
+- 预滤波卷积用 GGX 重要性采样（Hammersley + ImportanceSampleGGX），比均匀采样快得多
+- BRDF LUT 预计算时 k = α²/2（IBL 版），与直接光照的 k = (r+1)²/8 不同
+- 合并时 specular IBL 不额外乘 kS，避免能量守恒破坏
+- 完整 IBL：`ambient = kD·irradiance·albedo + prefilteredColor·(F·A + B) + Lo`
+
+<Exercises>
+
+### 实现题
+
+1. 在 Demo 的 `proceduralSpecular` 函数里，把天空颜色从 `vec3(0.5, 0.7, 1.2)` 改为橙红色日落 `vec3(1.2, 0.5, 0.2)`。观察 metallic=0.9、roughness=0.1 时球面倒影颜色的变化；再把 roughness 拉到 0.8，看倒影是否还保留橙色调（模拟粗糙面趋向平均色）。
+
+<Answer>
+roughness=0.1 时 proceduralSpecular 几乎不混入 avg 色（roughness²≈0.01），球面清晰地反射橙红色天空，高光倒影整体变橙。roughness=0.8 时 roughness²=0.64，颜色大幅混入 avg=vec3(0.55, 0.5, 0.55) 灰紫色，橙色调明显减弱——这正是高粗糙度采样 mip 4 趋向环境平均色的模拟效果。
+</Answer>
+
+2. 把 BRDF LUT 近似函数 `approxBrdfLUT` 的返回值改为 `vec2(1.0, 0.0)`（scale=1, bias=0，即假装 F0=1 的完美导体）。观察金属球（metallic=0.9）和非金属球（metallic=0）在 IBL=1 下的镜面反射各有什么异常——特别是掠射角边缘的 Fresnel 效果是否消失。
+
+<Answer>
+把 envBRDF=(1,0) 后，specularIBL = prefilteredColor * F_ibl（相当于只用 Fresnel 加权，没有 scale/bias 补偿）。金属球（F0≈0.56 铜色）在 NdotV 小的掠射角，F_ibl 已经很高，变化不大。非金属球（F0=0.04）在正对法线方向，F_ibl≈0.04，specularIBL 偏暗是正常的；但边缘掠射角 F_ibl→1，specularIBL 变亮是正常的 Fresnel 效果——实际上这个改动丢失了 bias(B) 的贡献，非金属在中等角度的镜面 IBL 偏低，整体镜面反射偏弱。
+</Answer>
+
+### 概念题
+
+3. 预滤波卷积时用了 V=R=N 近似，这意味着独立于视角方向预计算——失去了什么？在哪类材质或视角下这个误差最明显？
+
+<Answer>
+V=R=N 近似失去了视角相关的各向异性拉伸：真实情况下，当视角 V 与法线 N 夹角大（掠射角）时，镜面波瓣会在切线方向被拉伸，但预计算里一律假设正对，所以掠射角时高光形状偏圆（应该是拉伸椭圆）。误差在光滑金属球的边缘最明显——边缘是掠射角区域，真实镜面反射会把环境水平拉伸成一条亮带，而近似后这个拉伸消失，边缘看起来偏暗偏圆。这个误差对 roughness>0.4 的材质不明显，因为高粗糙度 mip 模糊后各向异性拉伸已经看不出来。
+</Answer>
+
+4. 为什么 BRDF LUT 与场景中 F0 的具体值无关？同一张 LUT 如何同时服务于 F0=0.04 的非金属和 F0=0.56 的铜金属？
+
+<Answer>
+IntegrateBRDF 在预计算时把 Fresnel 因子 Fc = (1 - VdotH)⁵ 和 (1-Fc) 分开累加进 A（scale）和 B（bias），两者都不含 F0——F0 被因式分解到积分外面了：原始 Fresnel F(cosθ, F0) = F0 + (1-F0)(1-cosθ)⁵ = F0·(1-Fc) + 1·Fc。积分后 ∫F dωi = F0 * ∫(1-Fc)G_Vis + ∫Fc·G_Vis = F0·A + B。所以 A 和 B 只依赖 NdotV 和 roughness，与 F0 无关。运行时用 F0·A + B 代入任意 F0，一张 LUT 服务所有材质。
+</Answer>
+
+</Exercises>
+
+{/* 9. 出处声明 */}
+
+<Attribution
+  title="PBR - IBL 镜面反射"
+  author="Joey de Vries"
+  url="https://learnopengl-cn.github.io/07%20PBR/03%20IBL/02%20Specular%20IBL/"
+  license="CC BY-NC 4.0"
+/>
+
+{/* 10. 名词解释 */}
+
+<Glossary>
+  <GlossaryItem term="Split-Sum 近似" id="Split-Sum近似">
+    把镜面积分拆成两个只依赖单一变量的独立积分相乘——预滤波环境颜色（反射方向 R + roughness）× BRDF 积分（NdotV + roughness）。两项可独立离线预计算成贴图，运行时各查一次表即可还原积分。出自 Epic Games Karis 2013「Real Shading in Unreal Engine 4」。
+  </GlossaryItem>
+  <GlossaryItem term="预滤波环境贴图" id="预滤波环境贴图">
+    Pre-filtered Environment Map：对原始环境贴图按不同粗糙度做 GGX 重要性采样卷积，把结果存成 cubemap mipmap 各级。roughness=0 存 mip 0（清晰高频），roughness=1 存最高 mip（接近环境平均色）。运行时用 textureLod(prefilterMap, R, roughness × MAX_LOD) 采样。
+  </GlossaryItem>
+  <GlossaryItem term="重要性采样" id="重要性采样">
+    Importance Sampling：蒙特卡洛积分的优化策略，集中在对结果贡献大的方向采样（这里是 GGX 波瓣中心附近），减少方差，用较少样本（1024）收敛到与数千次均匀采样相当的精度。Hammersley 序列 + GGX CDF 逆变换共同实现。
+  </GlossaryItem>
+  <GlossaryItem term="BRDF 积分 LUT" id="BRDF积分LUT">
+    一张以 NdotV（横轴）和 roughness（纵轴）为输入的 2D 查找纹理，R 通道存 F0 的缩放系数 A，G 通道存偏移量 B。与 F0 无关——任意材质用同一张 LUT，运行时用 F0·A + B 重建镜面 Fresnel 积分。
+  </GlossaryItem>
+  <GlossaryItem term="Hammersley 序列" id="Hammersley序列">
+    Van der Corput 序列（二进制位翻转归一化）× 均匀递增序列组合成的二维低差异序列。比伪随机采样在同样样本数下均匀覆盖积分域，蒙特卡洛积分收敛更快。常用于 GPU 端 1024 样本的预计算着色器。
+  </GlossaryItem>
+  <GlossaryItem term="fresnelSchlickRoughness" id="fresnelSchlickRoughness">
+    IBL 专用 Fresnel 变体：把普通 Fresnel-Schlick 的反射率上限 vec3(1.0) 替换成 max(vec3(1-roughness), F0)，用粗糙度压低掠射角时的最大反射率，防止粗糙面 kS 趋近 1 导致 kD 归零。IBL 里输入 dot(N,V) 而非 dot(H,V)。
+  </GlossaryItem>
+  <GlossaryItem term="V=R=N 近似" id="V=R=N近似">
+    预滤波环境贴图预计算时，因为无法知道运行时的实际视角 V，将 V 近似为反射方向 R，进而近似为法线 N。导致掠射角方向的镜面波瓣各向异性拉伸消失，光滑金属边缘高光形状偏圆。对 roughness>0.4 的材质视觉误差可接受。
+  </GlossaryItem>
+</Glossary>
