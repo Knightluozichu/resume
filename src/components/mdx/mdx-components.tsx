@@ -27,6 +27,10 @@ import { DynamicBatchingDiagram } from "./diagrams/dynamic-batching-diagram";
 import { StaticBatchingDiagram } from "./diagrams/static-batching-diagram";
 import { SrpBatcherDiagram } from "./diagrams/srp-batcher-diagram";
 import { FrameDebuggerBatchDiagram } from "./diagrams/frame-debugger-batch-diagram";
+import { MeshImportDiagram } from "./diagrams/mesh-import-diagram";
+import { TextureImportDiagram } from "./diagrams/texture-import-diagram";
+import { ResourcesAssetBundleDiagram } from "./diagrams/resources-assetbundle-diagram";
+import { AsyncLoadDiagram } from "./diagrams/async-load-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -599,6 +603,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   StaticBatchingDiagram,
   SrpBatcherDiagram,
   FrameDebuggerBatchDiagram,
+  MeshImportDiagram,
+  TextureImportDiagram,
+  ResourcesAssetBundleDiagram,
+  AsyncLoadDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,
