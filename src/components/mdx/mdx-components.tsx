@@ -63,6 +63,15 @@ import { JobSystemDiagram } from "./diagrams/job-system-diagram";
 import { EcsArchitectureDiagram } from "./diagrams/ecs-architecture-diagram";
 import { BurstCompilerDiagram } from "./diagrams/burst-compiler-diagram";
 import { BurstThreadDiagram } from "./diagrams/burst-thread-diagram";
+import { CPUUsageTimelineDiagram } from "./diagrams/cpu-usage-timeline-diagram";
+import { CPUHierarchyDiagram } from "./diagrams/cpu-hierarchy-diagram";
+import { GCAllocColorDiagram } from "./diagrams/gc-alloc-color-diagram";
+import { ScriptsVsEngineDiagram } from "./diagrams/scripts-vs-engine-diagram";
+import { GPUProfilerOverviewDiagram } from "./diagrams/gpu-profiler-overview-diagram";
+import { FillRateBandwidthDiagram } from "./diagrams/fill-rate-bandwidth-diagram";
+import { FrameDebuggerWorkflowDiagram } from "./diagrams/frame-debugger-workflow-diagram";
+import { MemorySnapshotWorkflowDiagram } from "./diagrams/memory-snapshot-workflow-diagram";
+import { ManagedVsNativeDiagram } from "./diagrams/managed-vs-native-diagram";
 import { DrawCallExplanationDiagram } from "./diagrams/draw-call-explanation-diagram";
 import { AssetBreakdownDiagram } from "./diagrams/asset-breakdown-diagram";
 import { GameObjectToEcsDiagram } from "./diagrams/gameobject-to-ecs-diagram";
@@ -674,6 +683,15 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EcsArchitectureDiagram,
   BurstCompilerDiagram,
   BurstThreadDiagram,
+  CPUUsageTimelineDiagram,
+  CPUHierarchyDiagram,
+  GCAllocColorDiagram,
+  ScriptsVsEngineDiagram,
+  GPUProfilerOverviewDiagram,
+  FillRateBandwidthDiagram,
+  FrameDebuggerWorkflowDiagram,
+  MemorySnapshotWorkflowDiagram,
+  ManagedVsNativeDiagram,
   DrawCallExplanationDiagram,
   AssetBreakdownDiagram,
   GameObjectToEcsDiagram,
