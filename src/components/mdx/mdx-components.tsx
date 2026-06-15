@@ -39,6 +39,10 @@ import { RenderingPipelineGpuDiagram } from "./diagrams/rendering-pipeline-gpu-d
 import { LodTransitionDiagram } from "./diagrams/lod-transition-diagram";
 import { OcclusionCullingDiagram } from "./diagrams/occlusion-culling-diagram";
 import { PostProcessStackDiagram } from "./diagrams/post-process-stack-diagram";
+import { XrPerformanceBudgetDiagram } from "./diagrams/xr-performance-budget-diagram";
+import { SinglePassStereoDiagram } from "./diagrams/single-pass-stereo-diagram";
+import { FoveatedRenderingDiagram } from "./diagrams/foveated-rendering-diagram";
+import { UrpXrSettingsDiagram } from "./diagrams/urp-xr-settings-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -623,6 +627,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LodTransitionDiagram,
   OcclusionCullingDiagram,
   PostProcessStackDiagram,
+  XrPerformanceBudgetDiagram,
+  SinglePassStereoDiagram,
+  FoveatedRenderingDiagram,
+  UrpXrSettingsDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,

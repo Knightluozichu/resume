@@ -1,0 +1,240 @@
+---
+title: XR 优化
+type: A
+section: 高级优化
+order: 1
+description: 理解 VR/AR 的性能预算与单 Pass Stereo、注视点渲染等 XR 特有优化手段。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型（Unity Game Optimization Ch7 改编）：XR/VR 性能优化。
+   重心是帧预算(§3)、Single Pass(§4)、Foveated(§5)、输入与 URP XR(§6)、Stepper(§7)。 */}
+
+{/* 知识点清单：
+   1) XR 性能预算 90/72 FPS — XrPerformanceBudgetDiagram
+   2) Single Pass Instanced — SinglePassStereoDiagram
+   3) Foveated Rendering — FoveatedRenderingDiagram
+   4) XR 输入开销 — UrpXrSettingsDiagram highlight input
+   5) URP XR 设置 — UrpXrSettingsDiagram highlight rendering + Stepper */}
+
+<Objectives>
+
+- 能解释 PC VR 90 FPS 与 Standalone 72 FPS 对应的毫秒级帧预算，以及双眼渲染对 GPU Fill 的放大效应
+- 能说出 Single Pass Instanced 相对 Multi-Pass 减少哪一类 CPU/GPU 成本，以及 URP Renderer 中应如何启用
+- 能回答：Standalone 头显 GPU ms 顶满但 CPU 有余量——你会先调 Render Scale、FFR 还是检查是否仍在 Multi-Pass？
+
+</Objectives>
+
+## 头显里多掉一帧，人就会晕
+
+桌面游戏掉帧只是卡顿；在 VR 里，**帧率不足或帧时间抖动** 会直接触发 **晕动症**——画面与内耳前庭不同步。Quest、Index 等设备要求 **72 甚至 90 FPS 稳定提交**，整帧预算只有 **约 11–14 ms**，比 60 FPS 桌面（16.6 ms）更紧。
+
+更麻烦的是 **双眼**：同一场景往往要 **画两遍**（或使用 Single Pass 一次提交双眼），像素量接近 **2× 分辨率 × 2 眼**。Ch6 的 GPU 优化在 XR 里全部 **乘上系数**——这章专门讲 **XR 特有的性能预算与渲染路径**。
+
+## 像双筒望远镜：两只眼睛各要一张清晰底片
+
+想象用 **双筒望远镜** 同时看 3D 场景：每只目镜都要 **独立对焦、独立曝光**。若摄影师（引擎）对左筒拍一张、再跑回原点给右筒拍一张（Multi-Pass），**快门与布景时间翻倍**；若一次按下双快门、镜头阵列同时曝光（Single Pass Instanced），**场地周转快一倍**。
+
+周边视觉其实 **看不清细节**——只在 **注视中心** 用高分辨率底片、外围用粗颗粒（Foveated Rendering），是 XR 里常用的 **「省胶片」** 手段。
+
+## XR 性能预算：90 FPS 与 72 FPS
+
+<Term def="扩展现实设备为维持沉浸与舒适所要求的最低稳定帧率及对应帧时间上限。">XR 性能预算</Term> 由头显刷新率决定，不是「能跑 60 就行」。
+
+<XrPerformanceBudgetDiagram target="90" />
+
+PC VR（Link、Index 等）常见 **90 FPS ≈ 11.1 ms/帧**。Standalone（Quest 2/3）基线 **72 FPS ≈ 13.9 ms**，热节流或省电档可能更低。
+
+<XrPerformanceBudgetDiagram target="72" />
+
+高刷头显（120 FPS）预算约 **8.3 ms**，留给后处理与 Overdraw 的空间更小。
+
+<XrPerformanceBudgetDiagram target="120" />
+
+除渲染外，预算还要分给 **姿态预测、合成、重投影（Asynchronous Spacewarp / Application SpaceWarp）**。Profiler 里 **GPU ms + XR 模块** 接近预算线时，任何 **全屏 Post、高 MSAA、未合批透明** 都会先爆。
+
+<Callout type="tip">
+  OVR / OpenXR 工具或 Meta XR Profiler 可看 **App GPU、Compositor、Stale frames**。Unity **Frame Timing Manager** 与 **XR Plug-in** 统计互补——别只看 Game 视图 FPS。
+</Callout>
+
+## Single Pass Instanced：一次 Draw 画双眼
+
+<Term def="GPU 实例化路径下一次 Draw Call 通过 SV_InstanceID / unity_StereoEyeIndex 同时为左右眼输出，避免场景遍历两遍。">Single Pass Instanced</Term> 是 URP/HDRP XR 的 **推荐立体渲染模式**。Legacy **Multi-Pass** 对每物体 **提交两次**，CPU 与驱动 **SetPass 接近翻倍**。
+
+<SinglePassStereoDiagram mode="multi" />
+
+<SinglePassStereoDiagram mode="single" />
+
+### 启用与 Shader 注意点
+
+- **Project Settings → XR Plug-in Management**：安装目标平台 Plug-in（OpenXR、Oculus 等）
+- **URP Renderer Data**：Stereo Rendering Mode 选 **Single Pass Instanced**（或 Multiview，视平台）
+- 自定义 Shader 必须用 **XR 兼容宏**（`UNITY_VERTEX_OUTPUT_STEREO`、`unity_StereoEyeIndex`），Post Processing 需验证 **双眼均正确**
+- **Fullscreen Pass、Grab Pass、部分后处理** 在 XR 下易踩坑——Frame Debugger 分别检查 **Left/Right eye**
+
+<Callout type="trap">
+  **现象**：Stats Batches 在 VR 里约为 Flat 模式两倍。**原因**：仍用 Multi-Pass 或未开 Instancing。**修法**：URP Renderer 改 Single Pass Instanced；材质启用 GPU Instancing；自定义 Pass 合并为 XR 兼容路径。
+</Callout>
+
+## Foveated Rendering：中心清晰、周边省像素
+
+<Term def="根据视线或固定视场中心，对视网膜周边区域降低 shading 分辨率或采样率，以换 Fill rate。">Foveated Rendering（注视点渲染）</Term> 利用 **人眼周边分辨率低**。Standalone 常用 **Fixed Foveated Rendering (FFR)**；带眼动追踪的设备可做 **Gaze-contingent** 动态注视点。
+
+<FoveatedRenderingDiagram level="off" />
+
+关闭 FFR 时 **全屏均匀采样**，Fill rate 最高，边缘最稳。
+
+<FoveatedRenderingDiagram level="medium" />
+
+中等 FFR：**中心 1×、中环降采样、外环更粗**——多数 Quest 项目的平衡点。
+
+<FoveatedRenderingDiagram level="high" />
+
+激进 FFR：**GPU 省最多**，但周边 **模糊/游泳（shimmer）** 明显，快速转头时更易察觉。
+
+<Callout type="tip">
+  FFR 与 **Render Scale、Dynamic Resolution、MSAA** 叠加会非线性影响清晰度——改一项就 **Profiler + 实机** 看 GPU ms 与边缘伪影，不要三项同时拉满。
+</Callout>
+
+## XR 输入开销与 URP XR 设置
+
+<Term def="XR Input Subsystem 每帧轮询 HMD、控制器与手部追踪姿态，以及射线/UI 交互产生的 CPU 成本。">XR 输入开销</Term> 与渲染 **共享同一帧 CPU 预算**。大量 **Physics.Raycast、XR Interaction Toolkit  hover/select、Hand 骨骼** 会在 **PlayerLoop 早期** 抬 CPU ms。
+
+<UrpXrSettingsDiagram highlight="input" />
+
+<Term def="Unity URP 与 XR Plug-in 在 Project Settings 与 Renderer Asset 中的立体渲染、MSAA、Render Scale 等成组配置。">URP XR 设置</Term> 决定 **GPU 路径是否正确、是否启用 Single Pass、MSAA 样本数** 等。
+
+<UrpXrSettingsDiagram highlight="rendering" />
+
+<UrpXrSettingsDiagram highlight="all" />
+
+常见配置清单：
+
+- **Edit → Project Settings → XR Plug-in Management**：勾选目标 Loader；Android 与 Standalone 分开配置
+- **URP Asset**：MSAA 与 **Render Scale**（如 0.9–1.1）；过高 MSAA 在 XR **×2 眼** 极贵
+- **Quality Level**：Standalone 单独一档，关 **多余 Post、阴影距离、像素灯数量**
+- **Input System**：用 **XR Input Actions** 替代每帧 `Input.GetButton` 散落调用；交互集中在一个 **Input Reader** 里更新
+
+<Callout type="trap">
+  **现象**：GPU 有余量但帧时间仍超预算。**原因**：CPU 侧 XR Input + 脚本 + Physics 射线占满 **11 ms**。**修法**：Profiler Timeline 看 **XR Input** 与 **Scripts**；合并 Raycast、降 Hand 更新频率、缓存 Device 引用。
+</Callout>
+
+## 动手：Standalone VR 性能排查
+
+下面五步针对 **Quest 类 Standalone** GPU/CPU 双紧场景。**每步示意图对应当前检查点**——建议 Link 或实机 + Meta XR Profiler 同步。
+
+> 猜一猜：把 FFR 从 Off 调到 High，GPU ms 下降但边缘发糊，该优先降 FFR 还是降 Render Scale？
+
+<Stepper>
+  <Step title="① 基线：确认目标 FPS 与帧预算">
+    <XrPerformanceBudgetDiagram target="72" />
+    确认 Quality 目标 **72/90 FPS**。Profiler 记录 **CPU ms、GPU ms、XR Wait/Get Pose**。超 13.9 ms（72 FPS）即需优化；记录是 GPU bound 还是 CPU bound。
+  </Step>
+  <Step title="② 渲染路径：Single Pass Instanced 是否生效">
+    <SinglePassStereoDiagram mode="single" />
+    URP Renderer → **Single Pass Instanced**。Frame Debugger 看 **Left/Right** 是否共享 Batch；若 Batches ≈ Flat×2，查 Multi-Pass 或自定义 Pass 未 XR 化。
+  </Step>
+  <Step title="③ Fill rate：Render Scale + FFR">
+    <FoveatedRenderingDiagram level="medium" />
+    降 **URP Render Scale**（0.85–0.95）或设备 **FFR 等级**，逐项对比 GPU ms 与边缘清晰度。避免与 Dynamic Resolution 盲目叠满。
+  </Step>
+  <Step title="④ URP XR：MSAA、Post、阴影">
+    <UrpXrSettingsDiagram highlight="rendering" />
+    降 MSAA（4→2）、关 Motion Blur/DOF、缩 **Shadow Distance** 与 **Cascade**。Volume 逐项禁用对比 GPU ms（同 Ch6 后处理思路，但预算更紧）。
+  </Step>
+  <Step title="⑤ CPU：XR 输入与交互射线">
+    <UrpXrSettingsDiagram highlight="input" />
+    Profiler 看 **XR Input、Scripts、Physics**。合并 UI 射线、缓存 Action 状态、减少每帧 `FindObjects`/Hand 全骨骼 Read。复测帧时间与 **Stale frames**。
+  </Step>
+</Stepper>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Editor Game 视图 FPS 正常，头显里仍晕。**原因**：Editor 未走真实 XR 合成与 **VSync/Refresh**；或未测 **Thermal throttling**。**修法**：Build 到设备；Meta/Oculus Profiler 看 **App GPU、合成、Motion-to-Photon**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Single Pass 开启后 Post 只影响一只眼。**原因**：Fullscreen Pass 未声明 XR 立体或用了 Grab 单眼 RT。**修法**：用 URP 内置 XR 兼容 Post；自定义 Blit 要处理 **Texture Array / 双眼索引**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：FFR 开很高仍 GPU bound。**原因**：瓶颈在 **Vertex（Skinned Mesh）或 CPU 等 GPU**（SpaceWarp 失败），不是 Fill。**修法**：回到 Frame Debugger 分阶段；LOD、合批、降 Draw；勿无限堆 FFR 牺牲可读性。
+</Callout>
+
+## 小结
+
+- **XR 预算**由刷新率决定：90 FPS ≈ 11.1 ms，72 FPS ≈ 13.9 ms，需留合成余量
+- **双眼**放大像素与 Draw；**Single Pass Instanced** 是 URP 默认高效立体路径
+- **Foveated Rendering** 用周边降采样换 GPU；等级与 Render Scale 需实机权衡伪影
+- **XR 输入**每帧 Poll + 射线交互占 CPU；与 **URP XR 设置**（MSAA、Render Scale、Post）同帧竞争
+- 排查顺序：**预算 → Single Pass → FFR/Scale → URP 画质档 → 输入 CPU**
+
+<Exercises>
+
+**练习 1（改 Demo 型）** 在 Standalone 或 Link 场景打开 Profiler，记录默认 **GPU ms** 与 **CPU ms**。只改一项：**URP Render Scale 0.9** 或 **FFR 提一档**，同场景复测——哪一项降 ms 更多？边缘画质能否接受？
+
+<Answer>
+
+Render Scale 通常线性降 **Fragment** 成本，全屏受益；FFR 主要降 **周边 Fill**，中心不变。若 GPU bound 在 Overdraw/Post，Scale 往往更明显；若已是 Vertex bound，两项收益都有限，需 LOD/合批。边缘伪影：FFR High 常比 Scale 0.9 更易见 shimmer，需主观验收。
+</Answer>
+
+**练习 2（问答型）** Single Pass Instanced 与 Multi-Pass Stereo 各适合什么场景？为何移动端几乎不用 Multi-Pass？
+
+<Answer>
+
+Single Pass：一次提交双眼，降 CPU/驱动与 SetPass，URP/OpenXR 现代路径。Multi-Pass：兼容老 Shader/Pass，但场景遍历×2，Batches 近似翻倍。Standalone 移动 SoC CPU/GPU 均紧，Multi-Pass 浪费大，故默认 Instanced/Multiview。
+</Answer>
+
+**练习 3（选型型）** GPU ms 顶满、CPU 有余量；已 Single Pass、LOD 正常。下一步优先 FFR、降 MSAA 还是降 Shadow Distance？
+
+<Answer>
+
+先看 Frame Debugger：**Fragment/Post 高** → FFR 或降 MSAA（XR 下 MSAA×双眼极贵）；**Shadow Pass 长** → 降 Shadow Distance/Cascade；**Opaque 几何多** → 继续 LOD/Occlusion。通常 Standalone 先 **FFR Medium + MSAA 2× + Render Scale 0.9** 组合试探，逐项 A/B。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="XR 性能预算">
+  头显刷新率对应的帧时间上限。详见 XrPerformanceBudgetDiagram target 90/72。
+</GlossaryItem>
+
+<GlossaryItem term="Single Pass Instanced">
+  一次 Draw 通过实例索引输出双眼。详见 SinglePassStereoDiagram mode single。
+</GlossaryItem>
+
+<GlossaryItem term="Multi-Pass Stereo">
+  左右眼各渲染一遍的 Legacy 路径。详见 SinglePassStereoDiagram mode multi。
+</GlossaryItem>
+
+<GlossaryItem term="Foveated Rendering（注视点渲染）">
+  注视区高分辨率、周边降采样。详见 FoveatedRenderingDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Fixed Foveated Rendering (FFR)">
+  固定视场中心的注视点渲染，Quest 等平台常用，无需眼动硬件。
+</GlossaryItem>
+
+<GlossaryItem term="Render Scale">
+  URP 渲染分辨率相对 eye buffer 的比例；XR 下直接缩放 Fill rate。
+</GlossaryItem>
+
+<GlossaryItem term="XR 输入开销">
+  HMD/控制器/手部每帧 Poll 与交互射线 CPU 成本。详见 UrpXrSettingsDiagram highlight input。
+</GlossaryItem>
+
+<GlossaryItem term="URP XR 设置">
+  XR Plug-in + URP Renderer 立体模式、MSAA、Quality 等成组配置。详见 UrpXrSettingsDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>
