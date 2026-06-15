@@ -43,7 +43,8 @@ export function PostProcessStackDiagram({
 
           {EFFECTS.map((fx, i) => {
             const y = 48 + i * 44;
-            const barW = (fx.cost / maxCost) * 320;
+            /* 条形图最大宽度限制到 260，避免条末与右侧注释文字重叠 */
+            const barW = (fx.cost / maxCost) * 260;
             const isOn = active(fx.key);
             return (
               <g key={fx.key}>
@@ -76,7 +77,7 @@ export function PostProcessStackDiagram({
                   opacity={isOn ? 0.85 : 0.45}
                 />
                 <text
-                  x="572"
+                  x="596"
                   y={y + 22}
                   textAnchor="end"
                   fontSize="10"

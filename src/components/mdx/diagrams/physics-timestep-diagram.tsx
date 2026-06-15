@@ -19,7 +19,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 260"
+          viewBox="0 0 640 280"
           role="img"
           aria-label="Update 渲染帧与 FixedUpdate 固定物理步时间线"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -49,14 +49,14 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
           ))}
 
           {/* Update 行 */}
-          <text x="16" y="88" fontSize="11" fontWeight="600" fill={active("update") ? "var(--accent)" : "var(--text-secondary)"}>
+          <text x="16" y="76" fontSize="11" fontWeight="600" fill={active("update") ? "var(--accent)" : "var(--text-secondary)"}>
             Update
           </text>
           {frames.map((f, i) => (
             <rect
               key={`u-${f}`}
               x={40 + i * frameW}
-              y="72"
+              y="80"
               width={frameW - 8}
               height="24"
               rx="4"
@@ -66,12 +66,12 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               strokeWidth={1.5}
             />
           ))}
-          <text x="320" y="88" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="118" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             每渲染帧 1 次 · 间隔随 FPS 变化
           </text>
 
           {/* FixedUpdate 行 — 0.02s = 50Hz，在 60FPS 下部分帧 0 次、部分 2 次 */}
-          <text x="16" y="138" fontSize="11" fontWeight="600" fill={active("fixed") ? "var(--accent)" : "var(--text-secondary)"}>
+          <text x="16" y="146" fontSize="11" fontWeight="600" fill={active("fixed") ? "var(--accent)" : "var(--text-secondary)"}>
             FixedUpdate
           </text>
           {[0, 1, 2, 3].map((step, i) => {
@@ -80,7 +80,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               <rect
                 key={`f-${step}`}
                 x={x}
-                y="122"
+                y="150"
                 width={frameW - 12}
                 height="24"
                 rx="4"
@@ -91,12 +91,12 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               />
             );
           })}
-          <text x="320" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="190" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             固定 0.02s（50Hz）· 与帧率解耦
           </text>
 
           {/* PhysX 模拟行 */}
-          <text x="16" y="188" fontSize="11" fontWeight="600" fill={active("physics") ? "var(--accent)" : "var(--text-secondary)"}>
+          <text x="16" y="218" fontSize="11" fontWeight="600" fill={active("physics") ? "var(--accent)" : "var(--text-secondary)"}>
             PhysX
           </text>
           {[0, 1, 2, 3].map((step, i) => {
@@ -105,7 +105,7 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
               <g key={`p-${step}`}>
                 <rect
                   x={x}
-                  y="172"
+                  y="222"
                   width={frameW - 12}
                   height="24"
                   rx="4"
@@ -114,17 +114,17 @@ export function PhysicsTimestepDiagram({ highlight = "all" }: Props) {
                   stroke={active("physics") ? "var(--accent)" : "var(--border)"}
                   strokeWidth={1.5}
                 />
-                <text x={x + (frameW - 12) / 2} y="188" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
+                <text x={x + (frameW - 12) / 2} y="238" textAnchor="middle" fontSize="9" fill="var(--text-primary)">
                   sim
                 </text>
               </g>
             );
           })}
-          <text x="320" y="188" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="320" y="262" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             碰撞检测 + 求解 · 成本随刚体/接触对数上升
           </text>
 
-          <text x="320" y="228" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
+          <text x="320" y="278" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             {highlight === "update" && "在 Update 里改 Rigidbody 速度会被下一物理步覆盖——用 FixedUpdate 或 ForceMode"}
             {highlight === "fixed" && "Fixed Timestep 越小，每秒物理步越多，CPU 物理 ms 线性上涨"}
             {highlight === "physics" && "Profiler → Physics 看 FixedUpdate 与 PhysX 是否顶满帧预算"}

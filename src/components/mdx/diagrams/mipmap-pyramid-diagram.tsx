@@ -14,11 +14,11 @@
  */
 
 const LEVELS: ReadonlyArray<{ size: number; label: string; cell: number }> = [
-  { size: 140, label: "Level 0（原图）", cell: 17.5 },
-  { size: 96, label: "Level 1", cell: 12 },
-  { size: 64, label: "Level 2", cell: 8 },
-  { size: 40, label: "Level 3", cell: 5 },
-  { size: 22, label: "…更小", cell: 11 },
+  { size: 120, label: "Level 0（原图）", cell: 15 },
+  { size: 80, label: "Level 1", cell: 10 },
+  { size: 52, label: "Level 2", cell: 6.5 },
+  { size: 34, label: "Level 3", cell: 4.25 },
+  { size: 20, label: "…更小", cell: 10 },
 ];
 
 export function MipmapPyramidDiagram() {
@@ -34,7 +34,7 @@ export function MipmapPyramidDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
         <svg
-          viewBox="0 0 640 360"
+          viewBox="0 0 640 420"
           role="img"
           aria-label="多级渐远纹理是一摞逐级减半的纹理副本：从原图 Level 0 往下，每一级边长砍半，越来越小。右侧轴显示物体离相机越近用越大越清晰的级别，离得越远、在屏幕上只占几个像素时用越小的级别。"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -120,22 +120,22 @@ export function MipmapPyramidDiagram() {
             x1="380"
             y1="60"
             x2="380"
-            y2="320"
+            y2="370"
             stroke="var(--accent)"
             strokeWidth="2"
           />
-          <path d="M380 320 l-5 -12 l10 0 z" fill="var(--accent)" />
+          <path d="M380 370 l-5 -12 l10 0 z" fill="var(--accent)" />
           <text x="392" y="70" fontSize="11" fill="var(--text-primary)">
             近（物体大）
           </text>
-          <text x="392" y="316" fontSize="11" fill="var(--text-primary)">
+          <text x="392" y="366" fontSize="11" fill="var(--text-primary)">
             远（屏幕上才几像素）
           </text>
 
           {/* 近用大级、远用小级（两条指示） */}
           <line
-            x1="200"
-            y1="120"
+            x1="180"
+            y1="110"
             x2="372"
             y2="100"
             stroke="var(--accent)"
@@ -146,22 +146,22 @@ export function MipmapPyramidDiagram() {
             近 → 用大的高清级
           </text>
           <line
-            x1="180"
-            y1="300"
+            x1="160"
+            y1="342"
             x2="372"
-            y2="290"
+            y2="340"
             stroke="var(--accent)"
             strokeWidth="1.5"
             strokeDasharray="5 4"
           />
-          <text x="410" y="296" fontSize="11" fill="var(--text-secondary)">
+          <text x="410" y="346" fontSize="11" fill="var(--text-secondary)">
             远 → 用小的低清级
           </text>
 
           {/* 底部一句话 */}
           <text
             x="320"
-            y="346"
+            y="404"
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"

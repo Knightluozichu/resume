@@ -51,8 +51,8 @@ export function GcAllocDiagram() {
             持续分配 → 堆逐渐填满
           </text>
 
-          {/* Arrow to GC trigger */}
-          <text x="290" y="80" textAnchor="middle" fontSize="9" fill="var(--accent)">
+          {/* Arrow to GC trigger — 水平居中于 managed-heap 和 GC三阶段之间 */}
+          <text x="238" y="52" textAnchor="middle" fontSize="9" fill="var(--accent)">
             堆满 →
           </text>
 

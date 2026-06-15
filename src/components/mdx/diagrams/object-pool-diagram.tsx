@@ -57,8 +57,8 @@ export function ObjectPoolDiagram() {
             每帧创建/销毁 — GC 压力大
           </text>
 
-          <path d="M 200 186 C 230 186, 230 86, 200 86" fill="none" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowDanger)" />
-          <text x="228" y="140" textAnchor="middle" fontSize="8" fill="var(--danger)">
+          <path d="M 200 186 C 238 186, 238 86, 200 86" fill="none" stroke="var(--danger)" strokeWidth="1.5" strokeDasharray="4,3" markerEnd="url(#arrowDanger)" />
+          <text x="248" y="140" textAnchor="middle" fontSize="8" fill="var(--danger)">
             重复
           </text>
 
@@ -83,7 +83,7 @@ export function ObjectPoolDiagram() {
             Get
           </text>
 
-          <text x="444" y="126" fontSize="9" fill="var(--text-secondary)">
+          <text x="441" y="126" textAnchor="end" fontSize="9" fill="var(--text-secondary)">
             →
           </text>
 
@@ -92,7 +92,7 @@ export function ObjectPoolDiagram() {
             使用
           </text>
 
-          <text x="506" y="126" fontSize="9" fill="var(--text-secondary)">
+          <text x="503" y="126" textAnchor="end" fontSize="9" fill="var(--text-secondary)">
             →
           </text>
 

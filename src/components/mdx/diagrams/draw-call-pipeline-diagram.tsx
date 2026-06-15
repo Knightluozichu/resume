@@ -234,14 +234,15 @@ export function DrawCallPipelineDiagram({ highlight = "all" }: Props) {
           <line
             x1="592"
             y1="84"
-            x2="616"
+            x2="608"
             y2="84"
             stroke="var(--border)"
             strokeWidth="2"
           />
           <text
-            x="628"
+            x="632"
             y="88"
+            textAnchor="end"
             fontSize="11"
             fontWeight="600"
             fill="var(--text-primary)"

@@ -10,11 +10,15 @@ interface Props {
 }
 
 export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
-  const budget = 80;
+  /* barTop = y=80, barBottom = y=180, total bar range = 100 */
+  const barTop = 80;
+  const barBottom = 180;
+  const barRange = barBottom - barTop; // 100
+
   const cpuH =
-    mode === "cpu" ? 72 : mode === "gpu" ? 28 : 40;
+    mode === "cpu" ? 90 : mode === "gpu" ? 35 : 50;
   const gpuH =
-    mode === "gpu" ? 74 : mode === "cpu" ? 22 : 38;
+    mode === "gpu" ? 92 : mode === "cpu" ? 27 : 47;
 
   const cpuActive = mode === "cpu" || mode === "balanced";
   const gpuActive = mode === "gpu" || mode === "balanced";
@@ -23,29 +27,39 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 400 220"
+          viewBox="0 0 400 240"
           role="img"
           aria-label="CPU bound 与 GPU bound 帧预算对比示意"
           className="mx-auto block h-auto w-full max-w-[400px]"
         >
-          {/* 帧预算线 */}
+          {/* 帧预算线 at y=80，标签在 y=72（8px 间距） */}
+          <text x="40" y="70" fontSize="10" fill="var(--accent)">
+            16.6ms 帧预算 (60 FPS)
+          </text>
           <line
             x1="40"
-            y1="40"
+            y1={barTop}
             x2="360"
-            y2="40"
+            y2={barTop}
             stroke="var(--accent)"
             strokeWidth="2"
             strokeDasharray="6 4"
           />
-          <text x="40" y="32" fontSize="10" fill="var(--accent)">
-            16.6ms 帧预算 (60 FPS)
-          </text>
 
-          {/* CPU 柱 */}
+          {/* CPU 柱 — 从底部 barBottom 向上画 */}
+          <text
+            x="130"
+            y={barBottom - cpuH - 8}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="600"
+            fill="var(--text-primary)"
+          >
+            CPU
+          </text>
           <rect
             x="80"
-            y={40 + budget - cpuH}
+            y={barBottom - cpuH}
             width="100"
             height={cpuH}
             rx="4"
@@ -54,17 +68,7 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
           />
           <text
             x="130"
-            y={30 + budget - cpuH}
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="600"
-            fill="var(--text-primary)"
-          >
-            CPU
-          </text>
-          <text
-            x="130"
-            y={55 + budget}
+            y={barBottom + 18}
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"
@@ -73,9 +77,19 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
           </text>
 
           {/* GPU 柱 */}
+          <text
+            x="270"
+            y={barBottom - gpuH - 8}
+            textAnchor="middle"
+            fontSize="12"
+            fontWeight="600"
+            fill="var(--text-primary)"
+          >
+            GPU
+          </text>
           <rect
             x="220"
-            y={40 + budget - gpuH}
+            y={barBottom - gpuH}
             width="100"
             height={gpuH}
             rx="4"
@@ -84,17 +98,7 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
           />
           <text
             x="270"
-            y={30 + budget - gpuH}
-            textAnchor="middle"
-            fontSize="12"
-            fontWeight="600"
-            fill="var(--text-primary)"
-          >
-            GPU
-          </text>
-          <text
-            x="270"
-            y={55 + budget}
+            y={barBottom + 18}
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"
@@ -104,7 +108,7 @@ export function CpuGpuBottleneckDiagram({ mode = "balanced" }: Props) {
 
           <text
             x="200"
-            y="175"
+            y="218"
             textAnchor="middle"
             fontSize="12"
             fill="var(--text-primary)"

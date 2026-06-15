@@ -25,7 +25,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 520 240"
+          viewBox="0 0 520 270"
           role="img"
           aria-label="Frame Debugger 事件列表：合批成功时多条 Draw 归入同一 Batch；未合批时每物体单独一行"
           className="mx-auto block h-auto w-full max-w-[520px]"
@@ -92,7 +92,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
 
           <text
             x="260"
-            y="210"
+            y="240"
             textAnchor="middle"
             fontSize="11"
             fill={batched ? "var(--success)" : "var(--danger)"}
@@ -103,7 +103,7 @@ export function FrameDebuggerBatchDiagram({ batched = true }: Props) {
           </text>
           <text
             x="260"
-            y="228"
+            y="258"
             textAnchor="middle"
             fontSize="10"
             fill="var(--text-secondary)"

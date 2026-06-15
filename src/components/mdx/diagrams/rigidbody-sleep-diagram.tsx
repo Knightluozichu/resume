@@ -20,13 +20,13 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 240"
+          viewBox="0 0 640 260"
           role="img"
           aria-label="Rigidbody 睡眠与唤醒示意"
           className="mx-auto block h-auto w-full max-w-[640px]"
         >
           {/* 地面 */}
-          <line x1="40" y1="160" x2="600" y2="160" stroke="var(--border)" strokeWidth="3" />
+          <line x1="40" y1="180" x2="600" y2="180" stroke="var(--border)" strokeWidth="3" />
 
           {boxes.map((b) => {
             const sleeping = !b.awake;
@@ -34,7 +34,7 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
               <g key={b.label}>
                 <rect
                   x={b.x}
-                  y={sleeping ? 128 : 112}
+                  y={sleeping ? 148 : 132}
                   width="80"
                   height="48"
                   rx="6"
@@ -44,10 +44,10 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
                   strokeWidth={2}
                   strokeDasharray={sleeping ? "6 4" : undefined}
                 />
-                <text x={b.x + 40} y={sleeping ? 154 : 138} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">
+                <text x={b.x + 40} y={sleeping ? 174 : 158} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">
                   {b.label}
                 </text>
-                <text x={b.x + 40} y="182" textAnchor="middle" fontSize="10" fill={sleeping ? "var(--text-secondary)" : "var(--accent)"}>
+                <text x={b.x + 40} y="208" textAnchor="middle" fontSize="10" fill={sleeping ? "var(--text-secondary)" : "var(--accent)"}>
                   {sleeping ? "Sleeping 💤" : "Awake · 每步积分"}
                 </text>
               </g>
@@ -56,14 +56,14 @@ export function RigidbodySleepDiagram({ state = "awake" }: Props) {
 
           {state === "wake" && (
             <>
-              <path d="M 520 100 L 540 80 L 560 100" fill="none" stroke="var(--accent)" strokeWidth="2" />
-              <text x="540" y="72" textAnchor="middle" fontSize="10" fill="var(--accent)">
+              <path d="M 520 120 L 540 100 L 560 120" fill="none" stroke="var(--accent)" strokeWidth="2" />
+              <text x="540" y="92" textAnchor="middle" fontSize="10" fill="var(--accent)">
                 玩家 bump
               </text>
             </>
           )}
 
-          <text x="320" y="220" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
+          <text x="320" y="238" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             {state === "awake" && "刚体运动或受力时保持 Awake，PhysX 每 FixedUpdate 都参与求解"}
             {state === "sleep" && "速度/角速度低于阈值且稳定 → Sleep，不再参与模拟直到被唤醒"}
             {state === "wake" && "碰撞、力、Kinematic 移动、脚本 WakeUp() 会把 Sleep 体拉回 Awake"}

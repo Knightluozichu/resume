@@ -23,13 +23,13 @@ const matrix: boolean[][] = [
 export function LayerCollisionDiagram({ highlight = "matrix" }: Props) {
   const cell = 44;
   const ox = 120;
-  const oy = 56;
+  const oy = 96;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 520 340"
+          viewBox="0 0 520 370"
           role="img"
           aria-label="Unity Layer Collision Matrix 碰撞层矩阵示意"
           className="mx-auto block h-auto w-full max-w-[520px]"
@@ -38,16 +38,16 @@ export function LayerCollisionDiagram({ highlight = "matrix" }: Props) {
             Edit → Project Settings → Physics → Layer Collision Matrix
           </text>
 
-          {/* 列标签 */}
+          {/* 列标签 — 旋转前 y 离矩阵顶 24px，旋转后底部落点约 y=oy-8，不与单元格重叠 */}
           {layers.map((name, j) => (
             <text
               key={`col-${name}`}
               x={ox + j * cell + cell / 2}
-              y={oy - 8}
+              y={oy - 24}
               textAnchor="middle"
               fontSize="9"
               fill="var(--text-secondary)"
-              transform={`rotate(-35, ${ox + j * cell + cell / 2}, ${oy - 8})`}
+              transform={`rotate(-35, ${ox + j * cell + cell / 2}, ${oy - 24})`}
             >
               {name}
             </text>
@@ -102,7 +102,7 @@ export function LayerCollisionDiagram({ highlight = "matrix" }: Props) {
             </g>
           ))}
 
-          <text x="260" y="310" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
+          <text x="260" y="352" textAnchor="middle" fontSize="11" fill="var(--text-primary)">
             {highlight === "matrix" && "每多一对「可碰撞」层，场景里跨层物体就可能产生接触检测"}
             {highlight === "pair" && "Player × Enemy 需要碰撞；Projectile × Projectile 可关以减少同层子弹互撞"}
             {highlight === "ignore" && "空白格 = 永不检测：敌人之间、装饰物之间常关，能砍掉大量 broadphase 对"}

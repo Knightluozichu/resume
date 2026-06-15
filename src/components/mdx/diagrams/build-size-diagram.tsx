@@ -33,7 +33,7 @@ export function BuildSizeDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 520 140"
+          viewBox="0 0 520 150"
           role="img"
           aria-label="Build 包体优化流程：打开 Build Report → 按类别定位 → 逐平台压缩 → 验证包体"
           className="mx-auto block h-auto w-full max-w-[520px]"
@@ -46,21 +46,22 @@ export function BuildSizeDiagram() {
                   x={x}
                   y="24"
                   width="110"
-                  height="74"
+                  height="90"
                   rx="6"
                   fill="var(--bg)"
                   stroke="var(--accent)"
                   strokeWidth="2"
                 />
+                {/* 序号圆圈放在左上角 */}
                 <circle
-                  cx={x + 16}
-                  cy="42"
+                  cx={x + 14}
+                  cy="36"
                   r="9"
                   fill="var(--accent)"
                 />
                 <text
-                  x={x + 16}
-                  y="46"
+                  x={x + 14}
+                  y="40"
                   textAnchor="middle"
                   fontSize="10"
                   fontWeight="700"
@@ -68,11 +69,12 @@ export function BuildSizeDiagram() {
                 >
                   {i + 1}
                 </text>
+                {/* 步骤标题居中，在圆圈正下方 */}
                 <text
                   x={x + 55}
-                  y="44"
+                  y="56"
                   textAnchor="middle"
-                  fontSize="12"
+                  fontSize="11"
                   fontWeight="600"
                   fill="var(--text-primary)"
                 >
@@ -80,7 +82,7 @@ export function BuildSizeDiagram() {
                 </text>
                 <text
                   x={x + 55}
-                  y="60"
+                  y="70"
                   textAnchor="middle"
                   fontSize="10"
                   fill="var(--text-secondary)"
@@ -91,7 +93,7 @@ export function BuildSizeDiagram() {
                   <text
                     key={j}
                     x={x + 55}
-                    y={76 + j * 12}
+                    y={84 + j * 12}
                     textAnchor="middle"
                     fontSize="9"
                     fill="var(--text-secondary)"
@@ -101,7 +103,7 @@ export function BuildSizeDiagram() {
                 ))}
                 {i < steps.length - 1 && (
                   <path
-                    d={`M${x + 112} 61 l10 0 l-4 -4 m4 4 l-4 4`}
+                    d={`M${x + 112} 66 l10 0 l-4 -4 m4 4 l-4 4`}
                     stroke="var(--accent)"
                     strokeWidth="1.5"
                     fill="none"
