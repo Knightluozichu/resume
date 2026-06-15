@@ -15,6 +15,9 @@ import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
 import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
 import { ProfilerWorkflowDiagram } from "./diagrams/profiler-workflow-diagram";
+import { EditorTipsDiagram } from "./diagrams/editor-tips-diagram";
+import { ProfilerSamplingDiagram } from "./diagrams/profiler-sampling-diagram";
+import { BuildSizeDiagram } from "./diagrams/build-size-diagram";
 import { UnityProfilerWindowDiagram } from "./diagrams/unity-profiler-window-diagram";
 import { CpuGpuBottleneckDiagram } from "./diagrams/cpu-gpu-bottleneck-diagram";
 import { ProfilingToolsDiagram } from "./diagrams/profiling-tools-diagram";
@@ -611,6 +614,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   NoiseBlurDiagram,
   CompilationPipelineDiagram,
   ProfilerWorkflowDiagram,
+  EditorTipsDiagram,
+  ProfilerSamplingDiagram,
+  BuildSizeDiagram,
   UnityProfilerWindowDiagram,
   CpuGpuBottleneckDiagram,
   ProfilingToolsDiagram,
