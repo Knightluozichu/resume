@@ -1,0 +1,290 @@
+---
+title: 内存管理
+type: A
+section: 高级优化
+order: 2
+description: 掌握 Mono/IL2CPP、GC 分配、对象池与纹理/网格内存，排查泄漏与峰值。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型（Unity Game Optimization Ch8 改编）：内存管理。
+   重心是运行时对比(§3)、GC 分配(§4)、对象池(§5)、纹理/网格内存(§6)、泄漏排查(§7 Stepper)。 */}
+
+{/* 知识点清单：
+   1) Mono vs IL2CPP 运行时 — MonoIl2cppRuntimeDiagram
+   2) GC 分配热点与 Memory Profiler — GcAllocDiagram
+   3) 对象池 (Object Pooling) — ObjectPoolDiagram
+   4) 纹理/网格 ReadWrite / MipMap 内存 — TextureImportDiagram（复用 Ch4）
+   5) 内存泄漏排查方法 — Stepper 配图 */}
+
+<Objectives>
+
+- 能解释 Mono 与 IL2CPP 运行时的内存模型差异，以及 IL2CPP 为何是移动端的默认选择
+- 能使用 Memory Profiler 定位 GC.Alloc 热点，并用对象池、结构体替代或缓存引用等手段消除
+- 能回答：场景切出后再切回，纹理内存翻了一倍——是 Read/Write 没关、AssetBundle 未 Unload、还是静态引用未清除？
+
+</Objectives>
+
+## 内存是隐形的天花板
+
+上一章你对 GPU 帧预算数着毫秒省，帧率稳住了。可玩家切了几个场景后——游戏闪退了。打开 Memory Profiler，纹理几十兆、Animation 也占了一大片，GC.Collect 每隔几秒就来一次，帧时间图上锯齿扎眼。
+
+渲染优化让你的画面跑得足够快，**内存管理让游戏跑得足够久**。没有它，再流畅的画面也会在「切关那一帧」卡死或被系统 OOM 杀掉。这章解决的核心问题：**每一帧 new 了谁、栈上还是堆上、什么时候回收、谁还拽着不放**。
+
+## 像图书馆：书只能借，不能撕
+
+想象一座**图书馆**。每次「要一本书」——你跑印刷厂排一本新的（= `new` / `Instantiate`），看完扔掉、次日又来排一本同名的——印刷厂排队的成本远超借书本身。
+
+Unity 托管堆就是图书馆书架：书（对象）有借有还（GC 回收），但还书前占据书架空间。**对象池**相当于「把热门书复印若干本锁在柜台」——借时取、用完还，不再进印刷厂。**内存泄漏**则是书被借走但永远不还——书架渐渐堆满旧书，新书无处置放。
+
+## Mono vs IL2CPP：托管内存跑在哪
+
+Unity 有两套脚本运行时，它们对**内存从哪里来、何时回收**有根本区别。
+
+<Term def="基于 Mono 的 .NET 运行时，运行时代码 JIT 编译为机器码，GC 使用 Boehm 保守式回收器。">Mono</Term> 曾是 Unity 的默认脚本后端。C# 编译为 IL、运行时由 **JIT** 即时翻译成机器码；GC 是经典的 <Term def="Boehm-Demers-Weiser 保守式垃圾回收器，Stop-The-World 扫描所有内存，不可预测暂停时间。">Boehm GC</Term>——每次回收**全线程暂停**（Stop-The-World），扫描所有托管对象，甚至因「保守式扫描」可能误判某些值为指针而**不回收它们**。
+
+<Term def="将 IL 中间码 AOT 编译为 C++ 再编译为原生代码，iOS 强制、移动端首选；GC 可选增量模式。">IL2CPP</Term> 是 Unity 当前的默认后端。构建时 **IL → C++ → 平台原生代码 AOT**，运行时不再有 JIT 开销；GC 可选 **增量模式**，分步执行而非一次性全暂停。
+
+<MonoIl2cppRuntimeDiagram />
+
+### 为什么移动端只用 IL2CPP
+
+iOS App Store **禁止 JIT**（代码段不可写），Mono 直接不可用。Android 上 IL2CPP 的 AOT 省去 JIT 预热与内存；增量 GC 比 Boehm 更可预测帧时间。桌面/编辑器仍可能用 Mono，但打包移动端和 Console 必须 IL2CPP。
+
+<Callout type="tip">
+  在 Player Settings → **Scripting Backend** 查看当前后端。切换到 IL2CPP 后首次 Build 约慢 2–3 倍（IL 转 C++ 编译），后续增量构建可接受。
+</Callout>
+
+## GC：分配、标记、清除
+
+无论 Mono 还是 IL2CPP，托管堆的 GC 逻辑大同小异：**对象在托管堆分配 → 堆满触发 GC → 标记存活对象 → 清除未引用的 → 整理碎片**。
+
+<GcAllocDiagram />
+
+### 为什么每帧 new 一个 List 是灾难
+
+```csharp
+// ❌ 每帧产生 GC.Alloc
+void Update() {
+    var hits = new List<RaycastHit>(Physics.RaycastAll(ray));
+    // ... 用完 hits 被丢弃 → 下次 GC 回收
+}
+```
+
+`RaycastAll` 返回的 `RaycastHit[]` 和 `new List<RaycastHit>` 都是托管堆分配。60 FPS 下每秒 120 次分配——GC.Collect 大约几百 KB 触发，几秒就一次全暂停。
+
+```csharp
+// ✅ 缓存 + NonAlloc API
+private RaycastHit[] m_Hits = new RaycastHit[32];
+
+void Update() {
+    int count = Physics.RaycastNonAlloc(ray, m_Hits);
+    for (int i = 0; i < count; i++) { /* 使用 m_Hits[i] */ }
+}
+```
+
+`RaycastNonAlloc` 写入预分配的 `m_Hits` 数组，**零托管分配**。`List<T>` 可用 `.Clear()` 复用而非重新 `new`；字符串拼接换 `StringBuilder`（缓存实例并每次 `Clear()`）。
+
+<Callout type="tip">
+  Profiler 窗口 **CPU Usage → Hierarchy** 搜 `GC.Alloc` 按帧排序——当前帧分配最多的函数一眼可见。Memory Profiler 点 **"Allocated Memory"** 看随时间累计曲线。
+</Callout>
+
+## 对象池：一次预热，零分配
+
+<Term def="预先创建固定数量的对象并放在池中，用 Get/Return 代替 Instantiate/Destroy，消除运行时托管堆分配。">对象池（Object Pooling）</Term> 是对「不停 new → GC 回收 → 再 new」的根本解法：**一次预热，此后 Get 与 Return 零分配**。
+
+<ObjectPoolDiagram />
+
+### 通用对象池骨架
+
+```csharp
+public class ObjectPool<T> where T : Component {
+    private Queue<T> m_Pool = new Queue<T>();
+    private T m_Prefab;
+
+    public ObjectPool(T prefab, int prewarm) {
+        m_Prefab = prefab;
+        for (int i = 0; i < prewarm; i++) AddToPool();
+    }
+
+    void AddToPool() {
+        var obj = Object.Instantiate(m_Prefab);
+        obj.gameObject.SetActive(false);
+        m_Pool.Enqueue(obj);
+    }
+
+    public T Get() {
+        T obj = m_Pool.Count > 0 ? m_Pool.Dequeue() : Object.Instantiate(m_Prefab);
+        obj.gameObject.SetActive(true);
+        return obj;
+    }
+
+    public void Return(T obj) {
+        obj.gameObject.SetActive(false);
+        m_Pool.Enqueue(obj);
+    }
+}
+```
+
+预热 N 个实例，`Get()` 取活跃、`Return()` 退回池——二者均为 O(1)。若池耗尽，自动 `Instantiate` 扩容；`Return` 过多按需缩容或设上限。
+
+### 什么应该进池
+
+**必须进池**：子弹/弹幕、粒子 (ParticleSystem)、敌人/NPC、UI 列表项。这些**每帧大量创建/销毁**，不进池 = 每帧几十次 GC.Alloc。
+
+**不需要进池**：场景唯一的主角、UI 主面板、背景音乐源——生命周期与关卡等长、创建一次用完即弃。
+
+<Callout type="trap">
+  **陷阱**：`Get()` 后忘调 `SetActive(true)`，对象取出来了但不可见。**修法**：`Get()` 里自动 `SetActive(true)`，`Return()` 里自动 `SetActive(false)` + `transform.SetParent(poolRoot)`。池中对象挂父节点统一管理，避免 `DontDestroyOnLoad` 乱放。
+</Callout>
+
+Unity 2021+ 内置 **`UnityEngine.Pool.ObjectPool<T>`**（`IObjectPool<T>` 接口），集成了 `Get`/`Release` 与自动扩容缩容，推荐优先使用。
+
+## 纹理与网格内存
+
+美术资源导入时的开关——Read/Write、MipMap、Max Size、Compression——直接决定运行时内存翻几倍。
+
+<Term def="导入时是否在内存保留 CPU 可写副本；开启后纹理内存约翻倍，仅运行时需改像素时开启。">Texture Read/Write Enabled</Term> 保留一份 CPU 可写像素副本，内存约为不开启时的两倍。纯渲染纹理应**关闭**——只有运行时 `Texture2D.SetPixels`、`ReadPixels` 或部分后处理才需要。
+
+<Term def="预生成逐级缩小的纹理副本供远处物体采样，约增加 33% 内存；3D 场景纹理常开启，UI 和 Sprite 常关闭。">Generate Mip Maps</Term> 对远处物体减少闪烁并降低显存带宽，但额外占用约 33% 内存。UI、Sprite Atlas 平面元素不需要 mipmap。
+
+<Term def="导入时 Mesh 数据在 CPU 侧的可读副本；运行时仅渲染的网格应关闭，内存约减半。">Mesh Read/Write Enabled</Term> 同样适用：**除运行时改 `mesh.vertices` 的网格外，一律关闭**。`MeshCollider` 烘焙完成后也应关闭。
+
+<TextureImportDiagram />
+
+<TextureImportDiagram highlight="mipmap" />
+
+<Callout type="tip">
+  在 Memory Profiler 中按 **Texture2D / Mesh / AnimationClip / AudioClip** 排序——前三名的内存大户通常就是未压纹理（4096 源图 + RGBA32）或未关 Read/Write 的网格。
+</Callout>
+
+## 动手：内存泄漏五步排查
+
+下面走通「内存持续增长 → 定位保留对象 → 找出谁拽着不放」的全流程。**每步配示意图示**——建议打开 Memory Profiler + 一个「切关后内存不降」的场景同步操作。
+
+> 猜一猜：切出 MainMenu、再切回 GameScene，纹理内存翻倍——是 AssetBundle 未 Unload、Read/Write 没关、还是静态事件未注销？
+
+<Stepper>
+  <Step title="① Memory Profiler 快照：找谁在涨">
+    <GcAllocDiagram />
+    在「离开关卡」前后各做一次 **Capture**（Memory Profiler → Take Snapshot），对比 **"New Objects"** 列表。按 **Managed Object Count** 排序——切关后仍存在的物体是泄漏嫌疑。
+  </Step>
+  <Step title="② 纹理/网格：Read/Write 与 mipmap">
+    <TextureImportDiagram />
+    搜 `Texture2D` 条目：同纹理出现两份 = Read/Write 副本之一；`Max Size 4096` 未限制 = 源图全尺寸。搜 `Mesh`：同网格两份 = CPU 可写副本未关。批量改导入设置 + Reimport。
+  </Step>
+  <Step title="③ 托管内存：静态引用与事件未注销">
+    <MonoIl2cppRuntimeDiagram />
+    在快照里点开嫌疑对象，看 **"Referenced By"** 引用链。常见元凶：`static` 字段引用了场景对象（该对象永不释放）、`event +=` 未 `-=`（发布者拽着订阅者）、`Singleton` 持有已销毁场景引用。
+  </Step>
+  <Step title="④ AssetBundle：未 Unload 的资源">
+    <ObjectPoolDiagram />
+    搜 `AssetBundle` 条目——切关后若仍有 Bundle 驻留，查是否调了 `Unload(false)`。Addressables 用 `Addressables.Release` 而非直接 `Destroy`。`Resources.UnloadUnusedAssets` 可兜底，但最好是根本不用 Resources。
+  </Step>
+  <Step title="⑤ 对象池：归还验证">
+    <ObjectPoolDiagram />
+    确认池中 `Return()` 调了对、`Get()` 出的实例没有在池外被引用。池对象 `SetActive(false)` 而非 `Destroy`——Profiler 看粒子、UI 列表项数量是否符合预置。
+  </Step>
+</Stepper>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：切关后纹理在 Memory Profiler 中出现两份，内存翻倍。**原因**：Read/Write Enabled 保留 CPU 副本；或 AssetBundle 未 `Unload`、Addressables 未 `Release`。**修法**：纯渲染纹理关 Read/Write；切关时 `Unload(false)` + `Resources.UnloadUnusedAssets`；Addressables 用 `Release` 配对。
+</Callout>
+
+<Callout type="trap">
+  **现象**：GC.Alloc 每帧几 KB 看起来不多，但帧时间图上锯齿扎眼。**原因**：`Update` 里 `new List`、字符串拼接、`FindObjectsOfType` 等隐性分配累积。**修法**：Profiler CPU Usage → GC.Alloc 排序定位热点函数；换 NonAlloc API、`Clear()` 复用、`StringBuilder` 缓存。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Memory Profiler 快照对比发现 "Objects not destroyed" 持续增长，但代码里都调了 `Destroy`。**原因**：`static` 事件 (`onSomeEvent += Handler`) 未注销；`Singleton` `Instance` 引用了已销毁对象；`DontDestroyOnLoad` 场景切换时被重复添加。**修法**：`OnDestroy`/`OnDisable` 中 `-=` 事件；单例判空后置 null；`DontDestroyOnLoad` 与 `FindObjectsOfType` 配合去重。
+</Callout>
+
+## 小结
+
+- **Mono** JIT + Boehm GC（全暂停）vs **IL2CPP** AOT + 增量 GC——移动端必须 IL2CPP
+- **GC 三阶段** Mark → Sweep → Compact；每帧 `new` 临时对象 = GC.Alloc 热点 → 帧时间抖动
+- **对象池** 预热后 Get/Return 零分配；子弹/粒子/敌人类必须进池，Unity 2021+ 内置 `ObjectPool<T>`
+- **纹理/网格**：Read/Write 默认关、3D 纹理开 mipmap/UI 关、Max Size 按用途设、平台选 ASTC/ETC2
+- **泄漏排查**：Memory Profiler 快照对比 → 静态引用/事件 → AssetBundle Unload → 对象池归还
+
+<Exercises>
+
+**练习 1（改代码型）** 在你的项目中找一个 `Update` 里 `new List` 或字符串拼接的脚本。用 Profiler 记录改前改后的 `GC.Alloc`——把 List 换字段复用 + `.Clear()`，字符串换 `StringBuilder` 缓存，看分配量下降多少。
+
+<Answer>
+
+通常 `Update` 中的 `new List` 可完全消除（换 `List.Clear()`），GC.Alloc 从每帧几十 B 降至 0。`StringBuilder` 缓存每次 `Clear()` 后在同函数里 Append，零分配。注意 `StringBuilder.ToString()` 自身产生分配——只在最终提交时才调用。
+
+</Answer>
+
+**练习 2（问答型）** IL2CPP 相比 Mono，除 AOT 编译外，在 GC 行为上有什么关键差异？为什么移动端帧率对 GC 暂停更敏感？
+
+<Answer>
+
+Boehm GC（Mono 默认）是保守式 Stop-The-World，暂停时间不可预测；增量 GC（IL2CPP 可选）分步执行、单步暂停短且可控。移动 SoC 主频和内存带宽均低于桌面，一次全暂停可能跨越 2–3 帧（72 FPS ≈ 13.9ms/帧），更易触发卡顿和热节流。
+
+</Answer>
+
+**练习 3（实战型）** 写一个简单的 `BulletPool`（单个 `Queue<Bullet>`，预热 20 枚）。`Get()` 激活子弹并发射，`Return()` 在子弹飞出屏幕或命中后回收。对比 `Instantiate/Destroy` 版本的 Profiler 差异。
+
+<Answer>
+
+`Instantiate/Destroy` 版每发子弹产生一次分配和一次 GC 追踪；`BulletPool` 预热后零分配。GC.Alloc 从几百 KB/s 降至接近零，GC.Collect 从几秒一次变为几乎不触发。注意 `Return()` 时 Reset 子弹状态（位置、速度、碰撞体）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Mono">
+  Unity 旧版 .NET 脚本后端：运行时 JIT 编译，Boehm GC 保守式回收。iOS 不可用，移动端已淘汰。详见 MonoIl2cppRuntimeDiagram 左侧。
+</GlossaryItem>
+
+<GlossaryItem term="IL2CPP">
+  Unity 当前默认脚本后端：构建时 IL→C++→AOT 编译，GC 可选增量模式。iOS 强制，移动端首选。详见 MonoIl2cppRuntimeDiagram 右侧。
+</GlossaryItem>
+
+<GlossaryItem term="Boehm GC">
+  Mono 默认的保守式 GC，Stop-The-World 全暂停扫描所有托管内存，暂停不可预测。
+</GlossaryItem>
+
+<GlossaryItem term="GC（垃圾回收，Garbage Collection）">
+  托管堆上不再被任何引用链到达的对象被标记为垃圾并回收。三阶段：Mark 标记存活、Sweep 清除不可达、Compact 整理碎片。
+</GlossaryItem>
+
+<GlossaryItem term="GC.Alloc">
+  Profiler 中记录托管堆分配总量的计数器。每帧 create new 对象 = GC.Alloc 上涨 → 累积触发 GC.Collect → 帧时间尖峰。
+</GlossaryItem>
+
+<GlossaryItem term="对象池（Object Pooling）">
+  预热创建 N 个对象，后续 Get/Return 替代 Instantiate/Destroy，消除运行时堆分配。详见 ObjectPoolDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Texture Read/Write Enabled">
+  纹理导入时保留 CPU 可写像素副本，内存约为不开启的 2 倍。纯渲染纹理应关闭。详见 TextureImportDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Generate Mip Maps">
+  预生成逐级缩小纹理副本供远处采样，约增 33% 内存。3D 场景纹理常开，UI/Sprite 常关。详见 TextureImportDiagram highlight mipmap。
+</GlossaryItem>
+
+<GlossaryItem term="Mesh Read/Write Enabled">
+  网格导入时保留 CPU 可写顶点副本，非运行时改顶点的网格一律关闭。详见 Ch4 美术资源优化。
+</GlossaryItem>
+
+<GlossaryItem term="Memory Profiler">
+  Unity 内存快照工具（Package Manager 安装），可对比两时刻的物体数、Managed/ Native 内存、看引用链定位谁拽着对象不放。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>

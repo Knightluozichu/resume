@@ -43,6 +43,9 @@ import { XrPerformanceBudgetDiagram } from "./diagrams/xr-performance-budget-dia
 import { SinglePassStereoDiagram } from "./diagrams/single-pass-stereo-diagram";
 import { FoveatedRenderingDiagram } from "./diagrams/foveated-rendering-diagram";
 import { UrpXrSettingsDiagram } from "./diagrams/urp-xr-settings-diagram";
+import { MonoIl2cppRuntimeDiagram } from "./diagrams/mono-il2cpp-runtime-diagram";
+import { GcAllocDiagram } from "./diagrams/gc-alloc-diagram";
+import { ObjectPoolDiagram } from "./diagrams/object-pool-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -631,6 +634,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SinglePassStereoDiagram,
   FoveatedRenderingDiagram,
   UrpXrSettingsDiagram,
+  MonoIl2cppRuntimeDiagram,
+  GcAllocDiagram,
+  ObjectPoolDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,
