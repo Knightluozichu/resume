@@ -2,14 +2,14 @@
  * <FunctionCallStackDiagram>：函数调用栈 frame 压入/弹出示意图。
  *
  * 展示调用方调用函数时，从传参 → 新栈帧分配 → 函数体内执行 → 返回值 → 栈帧销毁的全过程。
- * 支持 step prop（0-4），用于 Stepper 分步讲解：每一步高亮当前阶段、灰化其他。
+ * 支持 step prop（1-4），用于 Stepper 分步讲解：每一步高亮当前阶段、灰化其他。
  *
  * Server Component（纯展示，静态 SVG，无交互）。
  * token 色，无阴影。
  */
 
 interface FunctionCallStackDiagramProps {
-  step?: number; // 0=调用前, 1=传参, 2=执行中, 3=返回值, 4=栈帧销毁
+  step?: number; // 0=调用前, 1=传参, 2=执行中, 3=返回值, 4=栈帧销毁（也接受 1-4 仅展示对应阶段）
 }
 
 export function FunctionCallStackDiagram({
@@ -110,7 +110,6 @@ export function FunctionCallStackDiagram({
               (局部变量 a,b,c)
             </text>
 
-            {/* 左侧说明 */}
             <text x={labelX} y={labelY[0]} fontSize="16" fontWeight="700" fill={active(0) ? accent : border}>
               ① 调用前
             </text>
@@ -183,7 +182,7 @@ export function FunctionCallStackDiagram({
               ② 传参
             </text>
             <text x={labelX} y={labelY[1] + 22} fontSize="12" fill={active(1) ? primary : secondary}>
-              实参从右到左压入栈
+              实参压栈，保存返回地址
             </text>
             <text x={labelX} y={labelY[1] + 40} fontSize="12" fill={active(1) ? primary : secondary}>
               （或通过寄存器传递）

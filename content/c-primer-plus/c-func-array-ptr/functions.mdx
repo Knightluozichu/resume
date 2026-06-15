@@ -1,0 +1,475 @@
+---
+title: 函数
+type: C
+section: C函数数组指针
+order: 9
+description: 掌握函数定义/声明/调用、形参与实参、返回值、函数原型、局部变量与函数作用域，能编写模块化C程序
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 9 章（C Primer Plus §9 改编）：函数定义/原型/调用、形参与实参、值传递、局部变量与作用域、递归入门。
+   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 调用栈帧 caller/callee/返回地址 — FunctionCallStackDiagram（step 1-4）
+   2) C 值传递（形参副本 vs 实参）— ParameterPassingDiagram（step 1-4）
+   3) 原型声明 vs 定义 vs 调用 — FunctionPrototypeDiagram（step 1-4）
+   4) 递归调用栈 fact(n) — RecursionStackDiagram（step 1-4） */}
+
+<Objectives>
+
+- 能写出带返回类型的函数定义与函数原型，并解释声明、定义、调用三者在编译/链接阶段各自的作用
+- 能区分形参与实参，并说明 C 对 int/double 等类型采用值传递时，函数内修改形参为何不影响调用方的原变量
+- 能利用局部变量与函数作用域把程序拆成多个函数模块，并回答：fact(4) 递归时栈上同时存在几层 fact 栈帧？
+
+</Objectives>
+
+## 为什么要把代码装进「函数」？
+
+想象一家工厂把「切菜」「炒菜」「装盘」拆成三个工位：每个工位只做一件事，原料从上一个工位递过来，成品交给下一个。主程序如果把所有步骤写进 main，就像一个人包办全流程——代码越长越难改，改一处可能牵全身。
+
+**如果没有函数呢？** 重复逻辑只能复制粘贴，变量名容易冲突，团队协作也无法分工。函数把「一段可复用的加工步骤」打包命名：需要时调用，不需要时不用管内部细节。这一章教你 C 语言里函数怎么定义、怎么声明、怎么传参、怎么返回值，以及怎样用多个函数拼出模块化程序。
+
+## 函数的定义、原型与调用
+
+<Term def="由返回类型、函数名、形参列表和函数体组成的完整实现。告诉编译器函数做什么，并提供可执行的代码。">函数定义</Term> 是函数的「完整档案」：
+
+```c
+int sum(int a, int b)   /* 函数头 */
+{
+    return a + b;       /* 函数体 */
+}
+```
+
+`int` 是返回类型，`sum` 是名字，`(int a, int b)` 是形参列表，花括号里是函数体。`return` 把结果交回给调用方。
+
+若函数定义写在 `main` **之后**，调用点之前的编译器还不知道 `sum` 长什么样——需要 <Term def="在调用之前向编译器说明函数名、返回类型和形参类型的语句。也称函数声明。不含函数体。">函数原型（声明）</Term>：
+
+```c
+int sum(int a, int b);  /* 原型：分号结尾，无函数体 */
+
+int main(void) {
+    int x = sum(3, 5);  /* 调用 */
+    return 0;
+}
+
+int sum(int a, int b) { /* 定义 */
+    return a + b;
+}
+```
+
+原型是「名片」，定义是「车间」，调用是「下单」。编译器用原型检查 `sum(3, 5)` 类型是否匹配；链接器把调用绑到真正的定义上。
+
+<FunctionPrototypeDiagram />
+
+> 猜一猜：只有原型、没有定义，程序能通过链接吗？用 Stepper 看声明、定义、调用如何串起来。
+
+<Stepper>
+  <Step title="第一步：写函数原型">
+    <FunctionPrototypeDiagram step={1} />
+    `double cube(double x);` 告诉编译器：有个叫 cube 的函数，接受 double、返回 double。此时还没有实现。
+  </Step>
+  <Step title="第二步：写函数定义">
+    <FunctionPrototypeDiagram step={2} />
+    定义提供函数体 `return x * x * x;`。原型与定义的返回类型、形参类型必须一致。
+  </Step>
+  <Step title="第三步：在 main 里调用">
+    <FunctionPrototypeDiagram step={3} />
+    `cube(2.0)` 是调用：实参 2.0 传给形参 x，执行函数体，得到返回值 8.0。
+  </Step>
+  <Step title="第四步：编译与链接">
+    <FunctionPrototypeDiagram step={4} />
+    编译期靠原型验类型；链接期把每个调用点跳到对应定义的机器码。缺定义 = 链接错误 `undefined reference`。
+  </Step>
+</Stepper>
+
+`void` 作返回类型表示「无返回值」——函数体里用 `return;` 提前结束，或不写 return 落到函数末尾。
+
+## 形参、实参与值传递
+
+调用 `sum(3, 5)` 时，`3` 和 `5` 是 <Term def="调用函数时括号里提供的表达式或变量。其值按规则传给形参。">实参（actual argument）</Term>；定义里的 `a`、`b` 是 <Term def="函数定义或原型中列出的占位参数。调用时接收实参传来的值。">形参（formal parameter）</Term>。
+
+C 对 `int`、`double`、`char` 以及结构体等，默认采用 <Term def="把实参的值拷贝一份给形参。形参与实参占用不同内存，修改形参不影响实参。">值传递（pass by value）</Term>：
+
+```c
+void try_change(int n) {
+    n = 99;
+}
+
+int main(void) {
+    int num = 5;
+    try_change(num);
+    printf("%d\n", num);  /* 仍是 5 */
+    return 0;
+}
+```
+
+<ParameterPassingDiagram />
+
+函数内改 `n` 只改形参副本，main 里的 `num` 不动。要让函数改调用方的变量，需传指针（下一章）或把新值 `return` 回去。
+
+<Stepper>
+  <Step title="第一步：调用前">
+    <ParameterPassingDiagram step={1} />
+    `num` 在 main 的栈帧里，值为 5。
+  </Step>
+  <Step title="第二步：拷贝给形参">
+    <ParameterPassingDiagram step={2} />
+    调用 `try_change(num)` 时，把 `num` 的值 5 拷贝到形参 `n` 的新内存。
+  </Step>
+  <Step title="第三步：函数内修改形参">
+    <ParameterPassingDiagram step={3} />
+    `n = 99` 只改 0x200 处的副本，main 里的 `num` 仍是 5。
+  </Step>
+  <Step title="第四步：返回后">
+    <ParameterPassingDiagram step={4} />
+    函数返回，形参帧销毁。`num` 自始至终是 5——值传递不回写实参。
+  </Step>
+</Stepper>
+
+<Term def="函数执行完毕或通过 return 交还给调用方的结果。类型须与函数声明的返回类型兼容。">返回值</Term> 常用赋值或表达式接收：`int r = sum(3, 5);` 或 `printf("%d", sum(3, 5));`。
+
+## 调用栈：一次函数调用发生了什么
+
+每次调用函数，系统在栈上为这次调用分配一块 <Term def="一次函数调用在栈上占用的内存区域，保存返回地址、形参和局部变量。调用结束即销毁。">栈帧（stack frame）</Term>：压入实参、保存返回地址（调用结束后跳回哪里）、存放形参与局部变量；`return` 后整块回收。
+
+<FunctionCallStackDiagram />
+
+以 `int result = add(5, 3);` 为例：
+
+<Stepper>
+  <Step title="第一步：传参压栈">
+    <FunctionCallStackDiagram step={1} />
+    main 调用 add：实参 5、3 压栈，保存返回地址，main 暂停等待。
+  </Step>
+  <Step title="第二步：callee 执行">
+    <FunctionCallStackDiagram step={2} />
+    CPU 进入 add 栈帧：形参 x=5、y=3，局部变量 z 也在此帧。返回地址指明 add 结束后回 main 哪一行。
+  </Step>
+  <Step title="第三步：return 带回值">
+    <FunctionCallStackDiagram step={3} />
+    `return z` 把 8 写入返回值通道（通常寄存器），准备跳回 main。
+  </Step>
+  <Step title="第四步：销毁 callee 栈帧">
+    <FunctionCallStackDiagram step={4} />
+    add 的栈帧弹出，main 继续，`result` 收到 8。add 里的局部变量随之消失。
+  </Step>
+</Stepper>
+
+## 局部变量与函数作用域
+
+<Term def="在函数体或块内声明的变量。只在该函数（或块）内可见，函数返回后销毁。">局部变量</Term> 在函数体内声明，属于该函数的 <Term def="标识符在程序中可被引用的区域。函数形参和函数体内声明的变量属于该函数作用域。">函数作用域</Term>：
+
+```c
+int main(void) {
+    int x = 10;        /* main 的局部变量 */
+    printf("%d\n", twice(x));
+    return 0;
+}
+
+int twice(int n) {     /* n 是 twice 的局部变量 */
+    int tmp = n * 2;   /* tmp 也是 twice 的局部 */
+    return tmp;
+}
+```
+
+`main` 看不到 `tmp`，`twice` 也看不到 `x`——各自栈帧互不干扰。同名变量在不同函数里互不影响；同一函数内不同块可再嵌套块作用域（与第 7 章分支块相同规则）。
+
+函数级 static 局部变量（`static int count`）生命周期贯穿整个程序，但作用域仍限在本函数内——后续章节会展开。
+
+## 递归：函数调用自身
+
+<Term def="函数直接或间接调用自身的编程技巧。必须有基准情形终止递归，否则无限压栈导致栈溢出。">递归（recursion）</Term> 把大问题拆成「同样结构的小一号问题」：
+
+```c
+long fact(int n) {
+    if (n <= 1)
+        return 1;           /* 基准情形 */
+    return n * fact(n - 1); /* 递归情形 */
+}
+```
+
+`fact(4)` = 4 × `fact(3)` = 4 × 3 × `fact(2)` = … 直到 `fact(1)` 直接返回 1，再逐层乘回。
+
+<RecursionStackDiagram />
+
+<Stepper>
+  <Step title="第一步：fact(4) 入栈">
+    <RecursionStackDiagram step={1} />
+    第一次调用 n=4，尚未算完，需要 `fact(3)` 的结果。
+  </Step>
+  <Step title="第二步：递归加深">
+    <RecursionStackDiagram step={2} />
+    fact(3)、fact(2) 依次压栈——每层都「挂起」等待内层。
+  </Step>
+  <Step title="第三步：到达基准">
+    <RecursionStackDiagram step={3} />
+    n=1 时 return 1，不再继续递归。
+  </Step>
+  <Step title="第四步：逐层返回">
+    <RecursionStackDiagram step={4} />
+    1 → fact(2)=2 → fact(3)=6 → fact(4)=24。栈从深到浅依次弹出。
+  </Step>
+</Stepper>
+
+## 代码详解：模块化小工具
+
+### 场景一：函数原型 + 定义 + 调用
+
+```c
+#include <stdio.h>
+
+double cube(double x);   /* 原型 */
+
+int main(void) {
+    printf("2^3 = %.0f\n", cube(2.0));
+    return 0;
+}
+
+double cube(double x) {   /* 定义 */
+    return x * x * x;
+}
+```
+
+`main` 在前、定义在后时，原型不可省略。
+
+### 场景二：多函数分工
+
+```c
+#include <stdio.h>
+
+int get_int(void);
+int square(int n);
+void greet(void);
+
+int main(void) {
+    greet();
+    int x = get_int();
+    printf("平方 = %d\n", square(x));
+    return 0;
+}
+
+void greet(void) {
+    printf("输入一个整数：");
+}
+
+int get_int(void) {
+    int n;
+    scanf("%d", &n);
+    return n;
+}
+
+int square(int n) {
+    return n * n;
+}
+```
+
+每个函数一块职责：问候、读入、计算——main 只做调度。
+
+### 场景三：值传递与返回值
+
+```c
+#include <stdio.h>
+
+int max_of_two(int a, int b) {
+    if (a > b)
+        return a;
+    return b;
+}
+
+int main(void) {
+    int m = max_of_two(12, 7);
+    printf("较大者 %d\n", m);
+    return 0;
+}
+```
+
+形参 `a`、`b` 是实参的副本；`return` 把结果传回调用方，不修改 main 里原有变量。
+
+### 场景四：递归求阶乘
+
+```c
+#include <stdio.h>
+
+long fact(int n) {
+    if (n < 0)
+        return 0;       /* 错误输入，本示例简化处理 */
+    if (n <= 1)
+        return 1;
+    return n * fact(n - 1);
+}
+
+int main(void) {
+    printf("4! = %ld\n", fact(4));
+    return 0;
+}
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`void foo()` 无参调用能编译，但 `foo(42)` 在某些旧编译器下也不报错，运行却错乱。
+  **原因**：`void foo()` 在旧 C 中表示「参数未说明」，不是严格的「无参数」。与 `void foo(void)` 不同。
+  **修法**：无参函数一律写 `void foo(void)` 声明与定义。C 实战里坚持「空参 = void」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：函数里改了形参，main 里的变量却没变，初学者以为「传进去了就应该联动」。
+  **原因**：C 对基本类型是值传递——形参是副本。`void bump(int n) { n++; }` 不会让实参 +1。
+  **修法**：需要改调用方变量时传地址 `void bump(int *p) { (*p)++; }` 并调用 `bump(&x)`，或 return 新值由调用方赋值。
+</Callout>
+
+<Callout type="trap">
+  **现象**：调用函数前没写原型，编译器按旧规则假定返回 `int`，返回 `double` 时无警告，结果精度错乱。
+  **原因**：C99 起不允许隐式 `int` 返回；无原型时编译器只能猜，链接可能仍过但行为未定义。
+  **修法**：在调用前写完整原型，或把定义放在调用之前，或把头文件 `#include` 进来。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`fact(n)` 没有 `if (n<=1) return 1`，程序崩溃或「栈溢出」。
+  **原因**：递归无基准终止，每次调用再压一帧，栈空间有限，最终 stack overflow。
+  **修法**：每个递归函数必须有「不再递归」的基准路径；递归深度极大时考虑改写成循环。
+</Callout>
+
+## 小结
+
+- 函数 = 返回类型 + 名字 + 形参列表 + 体；原型供编译器检查，定义提供实现，链接器绑定调用
+- 实参是调用时的值，形参是定义里的占位；C 默认值传递，改形参不改实参
+- 每次调用压栈帧（返回地址、形参、局部变量），return 后帧销毁
+- 局部变量限函数作用域；多函数协作 = 模块化
+- 递归需基准情形；fact(n) 栈深为 n 层（到基准为止）
+
+<Exercises>
+
+**练习 1（改代码型）** 下面程序链接失败，缺少什么？补全后应输出 `面积 = 50`。
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    printf("面积 = %d\n", rect_area(5, 10));
+    return 0;
+}
+```
+
+<Answer>
+
+缺少 `rect_area` 的原型与定义。补全：
+
+```c
+#include <stdio.h>
+
+int rect_area(int w, int h);   /* 原型 */
+
+int main(void) {
+    printf("面积 = %d\n", rect_area(5, 10));
+    return 0;
+}
+
+int rect_area(int w, int h) {
+    return w * h;
+}
+```
+
+</Answer>
+
+**练习 2（问答型）** 调用 `try_change(num)` 后 `num` 仍是 5，用文字说明值传递下内存里发生了什么。
+
+<Answer>
+
+调用时把 `num` 的值 5 **拷贝**到形参 `n` 的独立内存。函数内 `n = 99` 只修改副本。返回后形参帧销毁，main 中 `num` 所在内存从未被写入 99，故仍为 5。
+
+</Answer>
+
+**练习 3（综合实现型）** 写程序：用函数 `int is_prime(int n)` 判断素数，`void print_primes(int limit)` 打印 2 到 limit 之间所有素数。main 只负责读 `limit` 并调用。
+
+<Answer>
+
+```c
+#include <stdio.h>
+
+int is_prime(int n);
+void print_primes(int limit);
+
+int main(void) {
+    int limit;
+    printf("上限 = ");
+    scanf("%d", &limit);
+    print_primes(limit);
+    return 0;
+}
+
+int is_prime(int n) {
+    int i;
+    if (n < 2)
+        return 0;
+    for (i = 2; i * i <= n; i++)
+        if (n % i == 0)
+            return 0;
+    return 1;
+}
+
+void print_primes(int limit) {
+    int i;
+    for (i = 2; i <= limit; i++)
+        if (is_prime(i))
+            printf("%d ", i);
+    printf("\n");
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="函数定义">
+  由返回类型、函数名、形参列表和函数体构成的完整实现。既声明接口又提供可执行代码。一个函数在整个程序中只能有一处定义（内联等特殊情况除外）。
+</GlossaryItem>
+
+<GlossaryItem term="函数原型（声明）">
+  在调用前向编译器说明函数名、返回类型和形参类型的语句，以分号结尾、无函数体。让编译器能检查调用是否类型匹配。详见 FunctionPrototypeDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="形参（formal parameter）">
+  函数定义或原型括号里列出的参数名，是实参值的接收占位。在函数栈帧中有自己的存储，值传递时是实参的副本。
+</GlossaryItem>
+
+<GlossaryItem term="实参（actual argument）">
+  调用函数时写在括号里的表达式或变量。其值按传递规则交给形参。如 `sum(3, 5)` 中 3 和 5 是实参。
+</GlossaryItem>
+
+<GlossaryItem term="值传递（pass by value）">
+  把实参的值拷贝给形参，形参与实参占用不同内存。修改形参不影响实参。C 对 int、double、结构体等默认采用值传递。详见 ParameterPassingDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="返回值">
+  函数通过 return 表达式交还给调用方的结果，类型须与函数声明的返回类型兼容。无返回值函数用 void，return 不带表达式。
+</GlossaryItem>
+
+<GlossaryItem term="栈帧（stack frame）">
+  一次函数调用在调用栈上占用的区域，保存返回地址、形参和局部变量。被调函数返回后该帧销毁。详见 FunctionCallStackDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="局部变量">
+  在函数体或块内声明的变量，只在该作用域可见，通常存放在当前栈帧，函数返回后失效（static 局部除外）。
+</GlossaryItem>
+
+<GlossaryItem term="函数作用域">
+  形参与函数体内声明的标识符只在该函数内可引用。不同函数的局部变量互不可见，支持模块化与命名隔离。
+</GlossaryItem>
+
+<GlossaryItem term="递归（recursion）">
+  函数调用自身解决问题。须有基准情形停止递归，否则栈溢出。fact(n) 是经典示例。详见 RecursionStackDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

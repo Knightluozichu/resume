@@ -1,0 +1,280 @@
+---
+title: 位操作
+type: A
+section: C高级主题
+order: 15
+description: 掌握二进制/八进制/十六进制表示、按位与或异或取反、位移运算、位字段 bit-field，能读写硬件寄存器和压缩标志位
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型第 15 章（C Primer Plus §15 改编）：进制、按位运算、位移、位字段。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单：
+   1) 十/二/八/十六进制对照 — BinaryHexDiagram
+   2) 按位 & | ^ ~ — BitwiseOperatorsDiagram
+   3) 左移右移 << >>（step 1-3）— ShiftOperatorsDiagram
+   4) struct bit-field 打包 — BitFieldDiagram
+   5) 掩码置位/清位/测试 — 正文代码 */}
+
+<Objectives>
+
+- 能写出同一整数的十/八/十六/二进制表示，并用 printf 的 %d/%o/%x 打印，说明硬件里存的是位模式
+- 能解释按位 & | ^ ~ 与逻辑 && || 的区别，并用掩码对 unsigned 标志位做置位、清位、翻转与测试
+- 能说明左移右移与乘除 2 的幂的关系，以及 bit-field 的打包用途与不可移植陷阱，并回答：对 signed 负数右移结果是否一定等于除以 2？
+
+</Objectives>
+
+## 为什么要在「位」这一层思考？
+
+程序里的 `int flags` 看起来是一个整数，但在 CPU 和硬件寄存器里，它是一串 **0/1 位**。嵌入式驱动要读「第 3 位是否为 1」、网络协议要把多个小标志塞进 2 字节、权限系统要用一个 `unsigned` 同时表示读/写/执行——这些都离不开**按位操作**。
+
+想象一排**开关面板**：每个开关只占一位，你可以单独拨动某个开关，而不必把整个面板换成新数字。C 的 <Term def={'在整数的二进制位上逐位进行的运算，如按位与、或、异或、取反以及左移、右移。'}>位操作（bit fiddling）</Term> 就是直接拨这些开关。
+
+没有位运算，你只能除法取余、多次比较——慢、难读，也写不出紧凑的寄存器映射。这一章还涉及 **bit-field**，让 struct 成员只占若干 bit。
+
+## 多种进制：同一数值的不同写法
+
+日常用**十进制**；硬件与调试更常用 **二进制**、**八进制**、**十六进制**——它们都是同一整数的不同**书写方式**，不是不同数值。
+
+```c
+int n = 42;
+printf("dec %d oct %o hex %x\n", n, n, n);
+/* dec 42 oct 52 hex 2a */
+```
+
+C 字面量：`052`（八进制）、`0x2A`（十六进制）；C23 起可用 `0b00101010`（二进制）。
+
+<BinaryHexDiagram />
+
+<Term def="以 2 为基数的计数；每一位只能是 0 或 1；左移一位相当于乘以 2。">二进制（binary）</Term> 与硬件位一一对应。**十六进制**每 4 bit 一组，便于读长位串（如 `0xFF` = 8 个 1）。
+
+## 按位运算符：& | ^ ~
+
+四个二元（逐 bit）与一个一元：
+
+| 运算符 | 名称 | 含义（每位） |
+|--------|------|--------------|
+| `&` | 按位与 | 两位都为 1 才 1 |
+| `\|` | 按位或 | 有 1 则 1 |
+| `^` | 按位异或 | 不同为 1 |
+| `~` | 按位取反 | 0↔1 |
+
+<BitwiseOperatorsDiagram />
+
+注意：**按位 `&` 与逻辑 `&&` 不同**。`a & b` 对每一位运算；`a && b` 只看「是否为 0」，且会短路。标志位操作几乎总是用 **unsigned** 配合按位运算符。
+
+### 掩码：置位、清位、翻转、测试
+
+```c
+#define FLAG_READ  (1u << 0)   /* 0b0001 */
+#define FLAG_WRITE (1u << 1)   /* 0b0010 */
+#define FLAG_EXEC  (1u << 2)   /* 0b0100 */
+
+unsigned flags = 0;
+flags |= FLAG_READ;              /* 置位 */
+flags &= ~FLAG_WRITE;            /* 清位 */
+flags ^= FLAG_EXEC;              /* 翻转 */
+if (flags & FLAG_READ) { ... }   /* 测试 */
+```
+
+<Term def="用特定位模式筛选或修改其他字的某些位；如 0xFF00 保留高 8 位。">掩码（mask）</Term> 通常是 `1u << n` 或若干位的组合。`~MASK` 在 unsigned 上才可靠——对 signed 取反宽度与符号扩展易踩坑。
+
+## 位移：<< 与 >>
+
+<Term def="把位模式向左或向右移动 n 位；左移补 0；右移补 0 或符号位依类型与实现。">位移（shift）</Term> 运算符：
+
+```c
+unsigned x = 5;      /* 0b...0101 */
+unsigned a = x << 2; /* 0b...010100 → 20 */
+unsigned b = x >> 1; /* 0b...0010  → 2  */
+```
+
+<ShiftOperatorsDiagram />
+
+<Stepper>
+  <Step title="第一步：左移 <<">
+    <ShiftOperatorsDiagram step={1} />
+    **`x << n`**：位向左移 n 位，右侧补 **0**。无溢出时等价 **× 2^n**。`1u << n` 常用来构造第 n 位掩码。
+  </Step>
+  <Step title="第二步：无符号右移 >>">
+    <ShiftOperatorsDiagram step={2} />
+    **unsigned** 右移：左侧补 **0**，等价整除 **2^n**。读硬件状态寄存器时，先 `>>` 再 `&` 掩码提取字段。
+  </Step>
+  <Step title="第三步：有符号右移 >>">
+    <ShiftOperatorsDiagram step={3} />
+    **signed** 右移：C 标准**实现定义**——多数平台为**算术右移**（负数左侧补 1）。**不要假设** `-1 >> 1` 等于数学上的 -0.5 或 0；生产代码对位模式用 **unsigned**。
+  </Step>
+</Stepper>
+
+## 位字段 bit-field：在 struct 里压缩位宽
+
+当多个成员各只需几位时，可用 <Term def="struct 成员后加 : 位宽，编译器将多个字段打包进整型存储单元；布局实现定义。">位字段（bit-field）</Term>：
+
+```c
+struct Status {
+    unsigned ready : 1;
+    unsigned mode  : 3;
+    unsigned error : 4;
+    unsigned flags : 8;
+};
+
+struct Status s;
+s.ready = 1;
+s.mode = 5;
+```
+
+<BitFieldDiagram />
+
+位字段**不能取地址**，不能 `&s.ready`。跨单元、对齐与 **padding** 由编译器决定——**不可用于可移植二进制协议**。可移植做法：手动 `value = (reg >> shift) & mask`。
+
+## 代码详解：寄存器风格标志与提取
+
+### 定义与读写 16 位「寄存器」
+
+```c
+#define REG_ENABLE  (1u << 0)
+#define REG_MODE_M  0xFu
+#define REG_MODE_S  1u
+
+unsigned read_reg(void);   /* 假设从硬件读 */
+void write_reg(unsigned v);
+
+void set_mode(unsigned m) {
+    unsigned r = read_reg();
+    r &= ~(REG_MODE_M << REG_MODE_S);
+    r |= (m & REG_MODE_M) << REG_MODE_S;
+    write_reg(r);
+}
+```
+
+### 不用 bit-field 的可移植解析
+
+```c
+unsigned reg = read_reg();
+unsigned mode = (reg >> REG_MODE_S) & REG_MODE_M;
+unsigned enabled = (reg & REG_ENABLE) != 0;
+```
+
+### bit-field 示例（仅本机/嵌入式）
+
+```c
+struct GPIO {
+    unsigned pin0 : 1;
+    unsigned pin1 : 1;
+    unsigned pad  : 6;   /* 显式保留 */
+};
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`if (flags & FLAG)` 永远为真，即使没置位。
+  **原因**：`FLAG` 未定义成掩码，或 **flags 是有符号** 且高位被符号扩展；也可能忘了 `flags` 初始化为 0。
+  **修法**：掩码用 **`1u << n`**；标志变量用 **unsigned**；测试写 `(flags & FLAG) != 0`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`flags &= ~FLAG` 清位后反而出现奇怪高位。
+  **原因**：对 **signed int** 做 `~` 会符号扩展；`~0u` 与 `~0` 宽度不同。
+  **修法**：标志与掩码统一 **unsigned**；字面量加 **`u`** 后缀。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`x << 32` 或移位 ≥ 类型位宽，结果未定义或仍为 x。
+  **原因**：移位量 **≥ 左操作数位宽** 是**未定义行为**（UB）。
+  **修法**：移位前检查 `n < sizeof(x)*8`；超大移位用乘除或分步。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把含 bit-field 的 struct `fwrite` 到文件，另一编译器读回错乱。
+  **原因**：位字段**布局、 endian、单元边界**均**实现定义**。
+  **修法**：线上格式用手动 **位移+掩码** 或明确字节协议；bit-field 仅本机嵌入式。
+</Callout>
+
+## 小结
+
+- 同一整数可用十/八/十六/二进制书写；**printf %o/%x** 按格式输出
+- **& | ^ ~** 逐 bit 运算；**掩码** 置位 `|=`、清位 `&= ~`、测试 `&`
+- **<< >>** 左移补 0 常等价 ×2^n；**unsigned** 右移补 0；**signed** 右移勿假设
+- **bit-field** 压缩 struct 成员；**不可移植**、不可取地址
+- 标志位与寄存器优先 **unsigned + 手动掩码**
+
+<Exercises>
+
+**练习 1（问答型）** 十六进制 `0xFF` 对应多少位全 1？用 `1u << n` 如何写出等价掩码？
+
+<Answer>
+
+**8 位**全 1（在 8 bit 范围内）。等价掩码 **`0xFFu`** 或 **`(1u << 8) - 1u`**（低 8 位为 1）。
+
+</Answer>
+
+**练习 2（改代码型）** 下面想清 `FLAG_WRITE (1<<1)`，哪里有问题？
+
+```c
+int flags = 3;
+flags &= ~FLAG_WRITE;
+```
+
+<Answer>
+
+`flags` 与 `FLAG_WRITE` 宜用 **unsigned**；`1<<1` 在 signed 下 `~` 可能扩展。改为 **`unsigned flags`**，**`#define FLAG_WRITE (1u << 1)`**，再 **`flags &= ~FLAG_WRITE`**。
+
+</Answer>
+
+**练习 3（综合实现型）** 用 unsigned 实现：`set_flag`、`clear_flag`、`toggle_flag`、`test_flag` 四个宏或 inline 函数，并演示置 READ、清 WRITE、测 READ。
+
+<Answer>
+
+```c
+#define FLAG_READ  (1u << 0)
+#define FLAG_WRITE (1u << 1)
+
+static inline void set_flag(unsigned *f, unsigned m) { *f |= m; }
+static inline void clear_flag(unsigned *f, unsigned m) { *f &= ~m; }
+static inline void toggle_flag(unsigned *f, unsigned m) { *f ^= m; }
+static inline int test_flag(unsigned f, unsigned m) { return (f & m) != 0; }
+
+int main(void) {
+    unsigned flags = 0;
+    set_flag(&flags, FLAG_READ);
+    clear_flag(&flags, FLAG_WRITE);
+    return test_flag(flags, FLAG_READ);  /* 1 */
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="位操作（bit fiddling）">
+  直接读写整数二进制位的技巧；含按位运算、位移、掩码与位字段。见 BitwiseOperatorsDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="二进制（binary）">
+  以 2 为基数，每位 0 或 1；与硬件存储一致。见 BinaryHexDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="掩码（mask）">
+  用于选中或修改特定位的位模式，如 0xFF、1u&lt;&lt;n；配合 &amp; | 做标志位操作。
+</GlossaryItem>
+
+<GlossaryItem term="位移（shift）">
+  &lt;&lt; 左移、&gt;&gt; 右移；左移补 0；unsigned 右移补 0。见 ShiftOperatorsDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="位字段（bit-field）">
+  struct 成员指定位宽，编译器打包进整型单元；不可取地址，布局实现定义。见 BitFieldDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

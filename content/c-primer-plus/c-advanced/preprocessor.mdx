@@ -1,0 +1,375 @@
+---
+title: C预处理器
+type: A
+section: C高级主题
+order: 16
+description: 掌握 #define 宏、#include、条件编译 #ifdef/#ifndef、宏函数与带参宏陷阱、预处理器工作阶段
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型第 16 章（C Primer Plus §16 改编）：预处理器、宏、条件编译。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单：
+   1) 预处理→编译→汇编→链接四阶段 — PreprocessorPipelineDiagram（step 1-4）
+   2) #define 文本替换与宏展开 — MacroExpansionDiagram
+   3) #include 与包含守卫 — 正文 + ConditionalCompileDiagram
+   4) #ifdef/#ifndef 条件编译分支 — ConditionalCompileDiagram
+   5) 带参宏缺少括号陷阱 — MacroPitfallDiagram */}
+
+<Objectives>
+
+- 能说明预处理器在编译流水线中的位置，并列举它处理的四类指令：#define、#include、条件编译、#undef
+- 能写出简单常量宏与带参宏，解释宏展开是「纯文本替换」而非函数调用，并给出带括号的安全写法
+- 能用 #ifdef/#ifndef 实现调试开关与头文件包含守卫，并回答：SQUARE(a+b) 在错误宏下为何不等于 (a+b)²？
+
+</Objectives>
+
+## 编译前还有一道「改写」工序
+
+你写的 `.c` 文件送进编译器之前，会先经过 <Term def="在真正编译 C 语法之前运行的程序；按 # 开头的指令对源码做文本级变换。">预处理器（preprocessor）</Term>。它不做类型检查，也不理解函数调用——只做**找词替换、粘贴文件、按条件删行**。
+
+想象出版社排版：作者交稿（源码）后，编辑先统一替换术语、插入标准版权页（`#include`）、按「精装版/平装版」删掉不同章节（条件编译），排完才交给印刷机（编译器）。若没有预处理器，每个 `.c` 都要手写一遍 `stdio.h` 里的声明，常量 `PI` 也要到处改数字。
+
+这一章掌握宏、头文件包含与条件编译——它们决定**编译器最终看到什么文本**。
+
+## 预处理器在流水线中的位置
+
+完整路径仍是：源码 → **预处理** → 编译 → 汇编 → 链接。本章聚焦第一道工位。
+
+<PreprocessorPipelineDiagram />
+
+<Stepper>
+  <Step title="第一步：预处理">
+    <PreprocessorPipelineDiagram step={1} />
+    展开 `#define`、执行 `#include`、处理 `#ifdef` 等；删除注释；产出 `.i`（仍 mostly 是 C 文本）。
+  </Step>
+  <Step title="第二步：编译">
+    <PreprocessorPipelineDiagram step={2} />
+    编译器读 `.i`，做语法/语义分析，生成汇编 `.s`。
+  </Step>
+  <Step title="第三步：汇编">
+    <PreprocessorPipelineDiagram step={3} />
+    汇编器把助记符变成机器码，生成 `.o` 目标文件。
+  </Step>
+  <Step title="第四步：链接">
+    <PreprocessorPipelineDiagram step={4} />
+    链接器合并 `.o` 与库，解析 `printf` 等符号，得到可执行文件。
+  </Step>
+</Stepper>
+
+可用 `gcc -E main.c` 只看预处理结果（常配合 `-o main.i` 保存）。
+
+## #define：常量与宏
+
+<Term def="以 #define 名字 替换文本 定义的标识符；预处理器把源码里出现的名字换成 replacement（纯文本）。">宏（macro）</Term> 分两类：
+
+**对象式宏**（无参数）——常用来起名：
+
+```c
+#define PI 3.14159265358979323846
+#define LIMIT 100
+#define NL '\n'
+```
+
+**函数式宏**（带参数）——形似函数调用：
+
+```c
+#define SQUARE(x) ((x) * (x))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+```
+
+<MacroExpansionDiagram />
+
+要点：
+
+- 宏名习惯**全大写**（与变量区分），但语言不强制
+- `#define` 行末尾不要加分号；replacement 是什么，就原样贴进去
+- 带参宏：`SQUARE(x)` 与 `SQUARE (x)` 不同——**宏名与左括号之间不能有空格**，否则当普通对象宏
+
+取消定义用 `#undef NAME`。
+
+## #include：把头文件「粘贴」进来
+
+<Term def="#include 指令在预处理阶段把指定头文件的内容插入当前位置，相当于复制粘贴。">#include</Term> 两种形式：
+
+```c
+#include <stdio.h>      /* 系统/标准库：按系统目录搜索 */
+#include "myheader.h"   /* 用户头文件：先当前目录，再系统路径 */
+```
+
+<Term def="存放声明、宏、typedef 的 .h 文件；通常不写函数定义（除 inline/static），供多个 .c 共享接口。">头文件（header）</Term> 里常见：函数原型、`extern` 变量声明、`#define` 常量、结构体定义。
+
+同一头文件被多个 `.c` include 时，声明会重复粘贴。用 <Term def="#ifndef GUARD / #define GUARD / ... / #endif 防止头文件被重复包含导致重复定义。">包含守卫（include guard）</Term>：
+
+```c
+#ifndef MYPROJECT_UTILS_H
+#define MYPROJECT_UTILS_H
+
+/* 声明与宏 ... */
+
+#endif
+```
+
+<ConditionalCompileDiagram />
+
+C 还可用 `#pragma once`（非标准但广泛支持）达到类似效果；可移植项目仍推荐 `#ifndef` 守卫。
+
+## 条件编译：按「开关」裁剪代码
+
+<Term def="根据宏是否定义，在预处理阶段保留或丢弃 #if/#ifdef/#ifndef ... #endif 之间的代码块。">条件编译（conditional compilation）</Term> 常见用途：
+
+- 调试版 vs 发布版（`DEBUG` 宏）
+- 跨平台差异（`WIN32` / `__linux__`）
+- 功能开关
+
+```c
+#define DEBUG 1
+
+#ifdef DEBUG
+    printf("进入函数 foo, x=%d\n", x);
+#else
+    /* 发布版：无输出 */
+#endif
+```
+
+相关指令：
+
+| 指令 | 含义 |
+|------|------|
+| `#ifdef NAME` | 若 NAME 已 `#define` 则保留 |
+| `#ifndef NAME` | 若 NAME **未**定义则保留 |
+| `#else` | 与 `#if`/`#ifdef` 配对的分支 |
+| `#elif` | 否则若… |
+| `#endif` | 结束条件块 |
+
+编译时加 `-DDEBUG` 等价于在文件开头写 `#define DEBUG`，`-U DEBUG` 取消定义。
+
+## 带参宏的经典陷阱
+
+宏是**文本替换**，不是函数：没有参数类型、实参可能被**求值多次**、运算符优先级由展开后的文本决定。
+
+<MacroPitfallDiagram />
+
+安全习惯：
+
+1. **replacement 整体加括号**：`((x) * (x))`
+2. **每个形参加括号**：`((a) > (b) ? (a) : (b))`
+3. 避免 `MAX(a++, b++)` 这类副作用实参
+4. 复杂逻辑用 `static inline` 函数（C99）或普通函数，让编译器做类型检查
+
+C 标准库也大量用宏：`getchar()` 往往是 `#define getchar() getc(stdin)` 的宏，所以别写 `getchar()` 当函数指针用。
+
+## 预定义宏与实用技巧
+
+编译器预定义若干宏，便于调试与可移植代码：
+
+```c
+printf("文件 %s 行 %u\n", __FILE__, __LINE__);
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
+    /* C99 及以上 */
+#endif
+```
+
+字符串化 `#` 与连接 `##`（进阶）：
+
+```c
+#define STR(x) #x          /* STR(hello) → "hello" */
+#define CONCAT(a, b) a##b  /* CONCAT(var, 1) → var1 */
+```
+
+多行宏用 `\` 续行：
+
+```c
+#define SWAP(type, a, b) do { \
+    type _tmp = (a);          \
+    (a) = (b);                \
+    (b) = _tmp;               \
+} while (0)
+```
+
+`do { ... } while (0)` 保证在 `if` 后当单语句使用时不踩语法坑。
+
+## 代码示例：调试宏与头文件守卫
+
+`config.h`：
+
+```c
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#ifdef DEBUG
+    #define LOG(msg) fprintf(stderr, "[dbg] %s\n", msg)
+#else
+    #define LOG(msg) ((void)0)
+#endif
+
+#endif
+```
+
+`main.c`：
+
+```c
+#include <stdio.h>
+#include "config.h"
+
+#define TWICE(x) ((x) + (x))
+
+int main(void) {
+    LOG("程序启动");
+    int v = TWICE(3 + 1);   /* ((3 + 1) + (3 + 1)) → 8 */
+    printf("v = %d\n", v);
+    return 0;
+}
+```
+
+发布编译：`gcc -O2 main.c -o app`；调试：`gcc -DDEBUG -g main.c -o app`。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`#define SQUARE(x) x*x` 下 `SQUARE(2+3)` 得到 11 而非 25。
+  **原因**：展开为 `2+3*2+3`，乘法优先于加法。
+  **修法**：写成 `#define SQUARE(x) ((x) * (x))`，形参与整体都加括号。见 MacroPitfallDiagram。
+</Callout>
+
+<Callout type="trap">
+  **现象**：头文件无 guard，两个 `.c` 都 include 同一 `.h`，链接报 `multiple definition` 或重复声明冲突。
+  **原因**：预处理把整份头文件粘贴两次，全局变量/函数定义重复。
+  **修法**：头文件用 `#ifndef ... #define ... #endif` 或 `#pragma once`；**定义只放一份 .c**，头文件只放声明。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`if (cond) SQUARE(x); else ...` 在宏展开后语法错误或逻辑错乱。
+  **原因**：多语句宏若不用 `do { ... } while (0)` 包裹，`else` 可能挂错 `if`。
+  **修法**：多语句宏用 `do { ... } while (0)`，或改写成 inline 函数。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为 `#define N 100` 与 `const int N = 100` 完全等价，在需要常量的地方（如 `int a[N]` VLA 或 `#if N > 10`）行为不一致。
+  **原因**：`#if` 只能测**预处理整数**；`const` 变量是编译期对象，不能用于 `#if`。
+  **修法**：需要参与 `#if` 的用 `#define`；需要类型与作用域的用 `enum` 或 `const`。
+</Callout>
+
+## 小结
+
+- 预处理器在编译前运行：宏展开、`#include` 粘贴、条件编译裁剪、删注释
+- `#define` 是纯文本替换；带参宏注意括号、副作用与优先级
+- `#include <>` 与 `""` 搜索路径不同；头文件需要包含守卫
+- `#ifdef`/`#ifndef`/`#elif`/`#else` 按宏是否定义选代码；`-D`/`-U` 在命令行控制
+- 复杂逻辑优先函数；库宏（`getchar` 等）勿当普通函数指针
+
+<Exercises>
+
+**练习 1（问答型）** 预处理器与编译器分工有何不同？`#define PI 3.14` 在哪一阶段生效？
+
+<Answer>
+
+**预处理器**做文本级变换（宏、include、条件编译），**不理解 C 类型**。**编译器**在预处理之后才做语法/语义分析。`#define PI 3.14` 在**预处理阶段**把源码里的 `PI` 替换成 `3.14`。
+
+</Answer>
+
+**练习 2（改代码型）** 下面宏有何问题？写出安全版本。
+
+```c
+#define DOUBLE(x) x + x
+int r = DOUBLE(3 * 2);
+```
+
+<Answer>
+
+展开为 `3 * 2 + 3 * 2`（缺少括号，且 `+` 两侧无整体保护）。若写成 `DOUBLE(1+2)` 会得到 `1+2+1+2=6`，而期望的两倍是 `(1+2)*2=6` 碰巧相同；但 `DOUBLE(a+b)` 类表达式在更复杂运算符下会出错。
+
+安全版：`#define DOUBLE(x) ((x) + (x))` 或 `#define DOUBLE(x) (2 * (x))`。
+
+</Answer>
+
+**练习 3（综合实现型）** 写头文件 `guard.h`：包含守卫 + `MAX(a,b)` 宏 + 仅在 `DEBUG` 定义时启用的 `TRACE(fmt)` 宏（调用 `printf`）。
+
+<Answer>
+
+```c
+#ifndef GUARD_H
+#define GUARD_H
+
+#include <stdio.h>
+
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+#ifdef DEBUG
+#define TRACE(fmt) printf("[trace] " fmt "\n")
+#else
+#define TRACE(fmt) ((void)0)
+#endif
+
+#endif
+```
+
+编译调试版：`gcc -DDEBUG main.c`。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="预处理器（preprocessor）">
+  编译前处理 # 指令的程序；宏展开、include、条件编译。见 PreprocessorPipelineDiagram step 1。
+</GlossaryItem>
+
+<GlossaryItem term="宏（macro）">
+  #define 定义的标识符，使用时被 replacement 文本替换；分对象式与函数式。见 MacroExpansionDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="宏展开（macro expansion）">
+  预处理器把宏名（及实参）替换成 #define 右侧文本的过程；无类型检查。
+</GlossaryItem>
+
+<GlossaryItem term="#include">
+  预处理阶段插入头文件内容；尖括号与双引号搜索路径不同。
+</GlossaryItem>
+
+<GlossaryItem term="头文件（header）">
+  .h 文件，通常放声明与宏；由多个 .c 共享接口。
+</GlossaryItem>
+
+<GlossaryItem term="包含守卫（include guard）">
+  #ifndef / #define / #endif 防止头文件重复包含。见 ConditionalCompileDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="条件编译（conditional compilation）">
+  按宏是否定义保留或丢弃代码块；用于 DEBUG、平台差异。见 ConditionalCompileDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="#ifdef">
+  若宏已定义则编译其后代码直到 #else/#endif。
+</GlossaryItem>
+
+<GlossaryItem term="#ifndef">
+  若宏未定义则编译其后代码；常用于 include guard。
+</GlossaryItem>
+
+<GlossaryItem term="带参宏（function-like macro）">
+  形如 #define SQUARE(x) ((x)*(x))；实参以文本代入形参。陷阱见 MacroPitfallDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="#undef">
+  取消先前 #define 的宏名，使之在后续源码中未定义。
+</GlossaryItem>
+
+<GlossaryItem term="__FILE__">
+  预定义宏，展开为当前源文件名字符串字面量。
+</GlossaryItem>
+
+<GlossaryItem term="__LINE__">
+  预定义宏，展开为当前行号的整数字面量。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

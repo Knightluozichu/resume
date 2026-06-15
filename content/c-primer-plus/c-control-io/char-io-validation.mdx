@@ -1,0 +1,455 @@
+---
+title: 字符I/O与输入验证
+type: C
+section: C控制与IO
+order: 8
+description: 掌握 getchar/putchar 字符I/O、缓冲I/O机制、输入验证与缓冲区清理，能编写健壮的交互式菜单程序
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 8 章（C Primer Plus §8 改编）：getchar/putchar、缓冲I/O、输入验证、stdin 残留、菜单驱动。
+   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) getchar/putchar 字符层 I/O — 代码对照 + Stepper
+   2) 行缓冲/全缓冲/无缓冲 — BufferedIODiagram（step 1-3）
+   3) stdin 缓冲区残留 — StdinBufferDiagram（step 1-3）
+   4) 输入验证读入→验证→重试 — InputValidationFlowDiagram（step 1-4）
+   5) 菜单驱动程序状态机 — MenuDriverDiagram（step 1-4） */}
+
+<Objectives>
+
+- 能用 getchar/putchar 实现逐字符读写，并解释为什么 getchar 的返回值应存到 int 而不是 char
+- 能区分行缓冲、全缓冲与无缓冲，并在 printf 提示后 scanf 读入前用 fflush(stdout) 保证提示及时显示
+- 能编写带「读入→验证→清缓冲区→重试」循环的健壮输入程序，并回答：scanf("%d", &n) 后立刻 getchar() 为什么常读到换行符？
+
+</Objectives>
+
+## 为什么 scanf 有时「不吃」你刚打的字？
+
+想象快递柜取件：你输入取件码 `42` 然后按确认，柜门只认数字部分，**确认键的「咔嗒」还留在槽里没清走**。下一次有人来取件，柜门先把上次残留的「咔嗒」当输入处理了——你以为程序在等你打字，其实它早就读到了一个看不见的换行符。
+
+程序和标准输入之间也有这样一个「快递槽」——<Term def="标准输入流 stdin 在程序和键盘之间暂存字符数据的区域。scanf 和 getchar 都从这里取数据。">输入缓冲区（input buffer）</Term>。上一章学了 scanf 和 switch 菜单；这一章降到**字符层**看清数据怎么一进一出，并学会**验证输入、清理残留**，写出不会「莫名其妙跳过等待」的交互程序。
+
+## getchar 与 putchar：一次只搬一个字符
+
+<Term def="从标准输入 stdin 读取下一个字符的标准库函数，返回该字符的 int 值或 EOF。声明在 stdio.h。">getchar()</Term> 和 <Term def="向标准输出 stdout 写一个字符的标准库函数，成功返回该字符，失败返回 EOF。声明在 stdio.h。">putchar()</Term> 是 C 里最「原始」的文本 I/O——不解析格式，一次处理一个字符：
+
+```c
+#include <stdio.h>
+int main(void) {
+    int ch;
+
+    printf("输入字符（Ctrl+D 结束）:\n");
+    while ((ch = getchar()) != EOF)
+        putchar(ch);    /* 原样回显 */
+    return 0;
+}
+```
+
+注意 `ch` 的类型是 **int** 而不是 char。因为 getchar 要能返回 <Term def="End Of File 的宏，通常为 -1，表示输入结束或错误，不是普通字符。">EOF</Term>（文件结束标记，通常是 -1）。若用 char 存储，EOF 可能与有效字节 0xFF 混淆，循环判断会出错。
+
+putchar 把单个字符送到 stdout；getchar 从 stdin 取单个字符。它们底下仍走标准 I/O 的缓冲机制——不是每个字符都立刻跟键盘硬件打交道。
+
+> 猜一猜：上面循环里用户按回车，putchar 会输出几个字符？换行符算不算「一个字符」？
+
+<BufferedIODiagram />
+
+<Term def="在程序和 I/O 设备之间暂存数据、批量读写的机制。分全缓冲、行缓冲、无缓冲三种。">缓冲 I/O（buffered I/O）</Term> 让系统不必每读一个字符就打扰键盘驱动。stdout 连终端时通常是 <Term def="遇到换行符或缓冲区满时才把内容刷新到设备的缓冲模式。终端上的 stdout 常用此模式。">行缓冲（line buffered）</Term>——所以 `printf("请输入: ")` 没有 `\n` 时，提示可能迟迟不显示，直到你输入换行或缓冲区满。写交互程序时，提示后加 `fflush(stdout);` 或末尾加 `\n` 是常见做法。
+
+<Stepper>
+  <Step title="第一步：行缓冲——终端上的 stdout">
+    <BufferedIODiagram step={1} />
+    连到屏幕时，printf 的内容先进入输出缓冲区。遇到 `\n` 或缓冲区满才「刷」到屏幕。没换行的提示可能让用户以为程序卡死了。
+  </Step>
+  <Step title="第二步：全缓冲——文件与重定向">
+    <BufferedIODiagram step={2} />
+    stdout 重定向到文件，或 fopen 打开的文件流，通常用**全缓冲**——攒满一大块才写盘。程序崩溃前可能看不到文件里有内容，需要 fflush 或 fclose。
+  </Step>
+  <Step title="第三步：无缓冲——stderr 立刻到达">
+    <BufferedIODiagram step={3} />
+    stderr 一般**无缓冲**，错误信息立刻显示。调试时有人故意用 fprintf(stderr, ...) 写提示，就是为了绕过 stdout 的行缓冲延迟。
+  </Step>
+</Stepper>
+
+## stdin 残留：scanf 挑食留下的「剩菜」
+
+上一章讲过 scanf 从缓冲区按格式「解码」数据。关键细节：**它只消费匹配成功的部分**，其余字符原封不动留在 stdin 缓冲区。
+
+<StdinBufferDiagram />
+
+用户输入 `42` 然后按回车，缓冲区里是 `'4' '2' '\n'`。`scanf("%d", &n)` 吃掉 `42`，**换行符 `\n` 还在**。紧接着 `getchar()` 读到的就是 `\n`（ASCII 10），不是你以为的「下一个按键」。
+
+<Term def="检查用户输入是否合法、在非法时提示并重试，同时清理输入缓冲区残留字符的编程模式。">输入验证（input validation）</Term> 要保证：读入失败时不仅打印错误，还要**把缓冲区吃到干净**，否则重试时读到的是垃圾。
+
+> 猜一猜：用户输入 `abc` 而程序期望整数，如果不清理缓冲区就 while 重试，会发生什么？
+
+<Stepper>
+  <Step title="第一步：整行进缓冲区">
+    <StdinBufferDiagram step={1} />
+    键盘驱动把用户敲的一行（含回车）送入 stdin 缓冲区。getchar 和 scanf 都从这里取数据，不是直接问键盘。
+  </Step>
+  <Step title="第二步：scanf 只取匹配部分">
+    <StdinBufferDiagram step={2} />
+    scanf("%d") 解析出整数后停止，**不匹配的字节留在缓冲区**。换行符、空格、字母都可能是残留。
+  </Step>
+  <Step title="第三步：下一次读取吃到残留">
+    <StdinBufferDiagram step={3} />
+    后续 getchar 或 scanf 优先消费残留。表现为「程序没等我输入就继续了」或「读到的总是换行」。修法：`while (getchar() != '\n');` 清到行尾。
+  </Step>
+</Stepper>
+
+## 输入验证：读入、检验、清理、重试
+
+健壮的数字输入不是「scanf 一次就信」，而是循环直到合法：
+
+<InputValidationFlowDiagram />
+
+```c
+int n, status;
+
+printf("请输入 1-10 的整数: ");
+fflush(stdout);
+while ((status = scanf("%d", &n)) != 1 || n < 1 || n > 10) {
+    if (status != 1)
+        printf("需要整数。\n");
+    else
+        printf("%d 不在 1-10 范围内。\n", n);
+    while (getchar() != '\n')   /* 清缓冲区 */
+        ;
+    printf("请重试: ");
+    fflush(stdout);
+}
+printf("你输入了 %d\n", n);
+```
+
+`scanf` 的返回值是成功赋值的项数——期望 1 个整数却读到字母时返回 0，此时必须清缓冲区再提示。范围检查（1-10）是第二层验证。
+
+> 猜一猜：去掉 `while (getchar() != '\n');` 这一行，用户输入 `hello` 时循环会停吗？
+
+<Stepper>
+  <Step title="第一步：提示并读入">
+    <InputValidationFlowDiagram step={1} />
+    printf 提示后 fflush，确保用户看见。scanf 或 getchar 从缓冲区取数据——此时还不知道是否合法。
+  </Step>
+  <Step title="第二步：验证是否合法">
+    <InputValidationFlowDiagram step={2} />
+    检查 scanf 返回值、数值范围、字符是否在允许集合内。合法则跳出循环使用数据；非法进入失败路径。
+  </Step>
+  <Step title="第三步：合法——使用数据">
+    <InputValidationFlowDiagram step={3} />
+    验证通过，变量里是可信赖的值，继续业务逻辑（计算、switch 分支等）。
+  </Step>
+  <Step title="第四步：非法——清缓冲区并重试">
+    <InputValidationFlowDiagram step={4} />
+    打印错误信息，用 getchar 循环吃掉本行剩余字符，回到第一步重新提示。这是交互程序不崩溃的关键习惯。
+  </Step>
+</Stepper>
+
+## 菜单驱动程序：把分支语句变成交互骨架
+
+上一章的 switch 菜单在本章加上**输入验证**和**字符层选项**，就是完整的 <Term def="通过循环显示选项、读入用户选择、用 switch 分发功能、直到用户选择退出的程序结构。">菜单驱动程序（menu-driven program）</Term>：
+
+<MenuDriverDiagram />
+
+```c
+#include <stdio.h>
+int main(void) {
+    int choice;
+
+    do {
+        printf("\n=== 计算器 ===\n");
+        printf("1. 加法  2. 减法  0. 退出\n");
+        printf("请选择: ");
+        fflush(stdout);
+
+        if (scanf("%d", &choice) != 1) {
+            printf("请输入数字选项\n");
+            while (getchar() != '\n')
+                ;
+            continue;
+        }
+
+        switch (choice) {
+            case 1:
+                printf("执行加法\n");
+                break;
+            case 2:
+                printf("执行减法\n");
+                break;
+            case 0:
+                printf("再见！\n");
+                break;
+            default:
+                printf("无效选项 %d\n", choice);
+        }
+    } while (choice != 0);
+
+    return 0;
+}
+```
+
+单字符菜单可以用 getchar 读 `'y'/'n'`，但记得前面若有 scanf 留残留，先清缓冲区。`toupper(getchar())` 可统一大小写（需 `#include <ctype.h>`）。
+
+<Stepper>
+  <Step title="第一步：显示菜单">
+    <MenuDriverDiagram step={1} />
+    每次循环开头用 printf 列出选项。do-while 保证至少显示一次；末尾加空行 `\n` 提升可读性。
+  </Step>
+  <Step title="第二步：读入并验证 choice">
+    <MenuDriverDiagram step={2} />
+    scanf 读整数选项，检查返回值。失败则清缓冲区并 continue 回菜单，不进入 switch。
+  </Step>
+  <Step title="第三步：switch 分发功能">
+    <MenuDriverDiagram step={3} />
+    各 case 执行对应功能，末尾 break 防 fall-through。default 捕获非法数字。case 0 打印告别信息。
+  </Step>
+  <Step title="第四步：循环或退出">
+    <MenuDriverDiagram step={4} />
+    while (choice != 0) 控制是否回到菜单。choice 为 0 时跳出 do-while，程序结束。break 只跳出 switch，退出靠循环条件。
+  </Step>
+</Stepper>
+
+## 代码详解：字符过滤与行读取
+
+### 场景一：统计一行中的字母个数
+
+```c
+#include <stdio.h>
+#include <ctype.h>
+int main(void) {
+    int ch, count = 0;
+
+    printf("输入一行文字:\n");
+    while ((ch = getchar()) != '\n' && ch != EOF) {
+        if (isalpha(ch))
+            count++;
+    }
+    printf("字母个数: %d\n", count);
+    return 0;
+}
+```
+
+循环读到换行或 EOF 为止；`isalpha` 判断字母。ch 用 int，EOF 安全。
+
+### 场景二：吃掉空白后读字符选项
+
+```c
+#include <stdio.h>
+int main(void) {
+    int ch;
+
+    printf("确认？(y/n): ");
+    fflush(stdout);
+    while ((ch = getchar()) == ' ' || ch == '\t' || ch == '\n')
+        ;   /* 跳过前导空白 */
+    if (ch == 'y' || ch == 'Y')
+        printf("已确认\n");
+    else
+        printf("已取消\n");
+    return 0;
+}
+```
+
+混合 scanf 后常需类似循环清掉 `\n` 再读 y/n。
+
+### 场景三：用 getchar 实现「读一行」
+
+```c
+#define MAX 80
+char line[MAX];
+int i = 0, ch;
+
+while (i < MAX - 1 && (ch = getchar()) != '\n' && ch != EOF)
+    line[i++] = (char)ch;
+line[i] = '\0';
+```
+
+留一位给 `\0`；比 gets 安全（可限制长度）。生产环境更推荐 `fgets`。
+
+### 场景四：验证后的菜单（完整骨架）
+
+```c
+#include <stdio.h>
+int main(void) {
+    int op, a, b, ok;
+
+    do {
+        printf("1.加 2.减 0.退出\n选: ");
+        fflush(stdout);
+        ok = scanf("%d", &op);
+        if (ok != 1) {
+            puts("需要整数");
+            while (getchar() != '\n')
+                ;
+            continue;
+        }
+        if (op == 0)
+            break;
+        if (op < 1 || op > 2) {
+            puts("选项 1 或 2");
+            continue;
+        }
+        printf("两整数: ");
+        if (scanf("%d %d", &a, &b) != 2) {
+            while (getchar() != '\n')
+                ;
+            continue;
+        }
+        printf("结果: %d\n", op == 1 ? a + b : a - b);
+    } while (1);
+    return 0;
+}
+```
+
+每次 scanf 后检查返回值；失败统一清缓冲区。内层 continue 回到菜单，不嵌套过深。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`scanf("%d", &n); ch = getchar();` 后 ch 总是 `'\n'`，确认菜单像「自动按了回车」。
+  **原因**：scanf 读整数后不消费行尾换行符，getchar 读到缓冲区残留。
+  **修法**：scanf 后 `while (getchar() != '\n');`，或 `scanf(" %c", &ch)` 格式串前加空格跳过空白（含换行）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`char ch; while ((ch = getchar()) != EOF)` 文件未到尾就结束，或死循环。
+  **原因**：char 可能是有符号类型，0xFF 字节被当成 -1 与 EOF 相等；或 unsigned char 与 EOF 比较隐式转换出错。
+  **修法**：**永远用 int 接 getchar 返回值**，再 `(char)ch` 存入字符串。
+</Callout>
+
+<Callout type="trap">
+  **现象**：提示「请输入:」不显示，程序像卡在 scanf。
+  **原因**：stdout 行缓冲，无 `\n` 的 printf 未刷新；用户看不到提示以为没响应。
+  **修法**：提示后 `fflush(stdout);` 或 `printf("请输入:\n");`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：输入 `abc` 期望数字，屏幕疯狂刷「无效输入」停不下来。
+  **原因**：scanf 失败返回 0 但不消费 `abc\n`，下次循环立即再次失败，没给用户重新输入的机会。
+  **修法**：失败分支里 `while (getchar() != '\n');` 吃到行尾，再重新提示。
+</Callout>
+
+## 小结
+
+- getchar/putchar 逐字符读写；返回值用 int 以正确区分 EOF 与普通字节
+- stdout 行缓冲、stderr 无缓冲；交互提示后 fflush(stdout) 避免「看不见提示」
+- scanf 只消费匹配部分，换行等残留留 stdin；混合 I/O 必须清缓冲区
+- 健壮输入 = 检查 scanf 返回值 + 范围验证 + 失败时清缓冲区重试
+- 菜单驱动 = do-while + 验证读入 + switch 分发 + default 兜底
+
+<Exercises>
+
+**练习 1（改代码型）** 下面程序想读整数再读 y/n 确认，但确认总像被跳过。找出问题并修正。
+
+```c
+int n;
+char c;
+scanf("%d", &n);
+c = getchar();
+if (c == 'y')
+    printf("确认 %d\n", n);
+```
+
+<Answer>
+
+问题：① `c` 应为 int；② getchar 读到 scanf 残留的 `\n` 而非 y。
+
+修正：
+
+```c
+int n, c;
+scanf("%d", &n);
+while (getchar() != '\n')
+    ;
+printf("确认 %d? (y/n): ", n);
+fflush(stdout);
+c = getchar();
+if (c == 'y' || c == 'Y')
+    printf("已确认\n");
+```
+
+</Answer>
+
+**练习 2（问答型）** `scanf("%d", &x)` 用户输入 `3.14` 时，scanf 返回值是多少？x 的值是多少？缓冲区里还剩什么？
+
+<Answer>
+
+返回值 **1**（成功读入整数 3）。x = 3。缓冲区残留 `.14\n`（或从 `.` 开始的未匹配部分）。若接着 `scanf("%d", &y)` 会失败，因为 `.` 不是数字开头。应清缓冲区再重读。
+
+</Answer>
+
+**练习 3（综合实现型）** 写程序：循环提示输入 1-5 的评分，用 scanf 读入并验证；非法输入提示并清缓冲区；合法输入打印「谢谢」后结束。
+
+<Answer>
+
+```c
+#include <stdio.h>
+int main(void) {
+    int score, st;
+
+    while (1) {
+        printf("评分 1-5: ");
+        fflush(stdout);
+        st = scanf("%d", &score);
+        if (st == 1 && score >= 1 && score <= 5)
+            break;
+        if (st != 1)
+            printf("请输入整数\n");
+        else
+            printf("%d 超出范围\n", score);
+        while (getchar() != '\n')
+            ;
+    }
+    printf("谢谢，你打了 %d 分\n", score);
+    return 0;
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="getchar()">
+  从标准输入读取下一个字符的标准库函数。返回 int（字符值或 EOF）。声明在 stdio.h。与 putchar 配对实现字符级 I/O。
+</GlossaryItem>
+
+<GlossaryItem term="putchar()">
+  向标准输出写一个字符。成功返回该字符，失败返回 EOF。声明在 stdio.h。常用于循环回显或配合 getchar 过滤字符。
+</GlossaryItem>
+
+<GlossaryItem term="EOF">
+  End Of File 宏，通常值为 -1，表示输入结束或读错误。不是普通字符。getchar 返回 EOF 时应结束循环。返回值须存 int。
+</GlossaryItem>
+
+<GlossaryItem term="输入缓冲区（input buffer）">
+  stdin 在程序和键盘之间的暂存区。用户按回车后整行先进缓冲区，scanf/getchar 再从中取。不匹配 scanf 格式的字符会残留。详见 StdinBufferDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="缓冲 I/O（buffered I/O）">
+  程序与设备之间用内存块批量读写，减少系统调用。分全缓冲、行缓冲、无缓冲。详见 BufferedIODiagram。
+</GlossaryItem>
+
+<GlossaryItem term="行缓冲（line buffered）">
+  遇到换行符或缓冲区满才刷新到设备。终端 stdout 常用此模式。无换行的 printf 可能延迟显示。
+</GlossaryItem>
+
+<GlossaryItem term="输入验证（input validation）">
+  读入后检查是否合法；非法则提示、清理 stdin 残留、重新读入。健壮交互程序必备。详见 InputValidationFlowDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="菜单驱动程序（menu-driven program）">
+  循环显示选项、读入选择、switch 分发、直到退出。结合 do-while、输入验证与 default。详见 MenuDriverDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

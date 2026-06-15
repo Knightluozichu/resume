@@ -1,0 +1,361 @@
+---
+title: 高级数据表示
+type: A
+section: C高级主题
+order: 17
+description: 掌握函数指针、抽象数据类型 ADT 思想、队列/栈/链表基本概念、C标准库 qsort/bsearch，理解C语言数据抽象能力边界
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型第 17 章（C Primer Plus §17 改编）：函数指针、ADT、链表、队列栈、qsort/bsearch。
+   全书终章。draft:true 待总监 review。 */}
+
+{/* 知识点清单：
+   1) 函数指针声明/赋值/调用 — FunctionPointerDiagram（step 1-3）
+   2) ADT 接口与实现分离 — 正文 + 队列/栈
+   3) 单向链表节点与遍历 — LinkedListDiagram（step 1-4）
+   4) 队列 FIFO vs 栈 LIFO — QueueStackDiagram
+   5) qsort/bsearch 比较回调 — QsortBsearchDiagram */}
+
+<Objectives>
+
+- 能声明函数指针、赋函数地址并通过指针间接调用，说明与数组名 decay 为指针的相似点
+- 能解释 ADT「接口与实现分离」思想，对比队列 FIFO 与栈 LIFO 的入出规则，并画出单向链表 head→node→NULL 结构
+- 能编写 qsort/bsearch 所需的比较函数，并回答：为何 bsearch 要求数组已排序？
+
+</Objectives>
+
+## 从「固定函数名」到「可替换的行为」
+
+前几章你已会用数组、struct、指针组织**数据**。但程序里还有另一类需求：同一套流程，**具体步骤可换**——排序按整数比还是按字符串比？菜单按编号执行不同操作？错误处理走默认分支还是自定义回调？
+
+想象餐厅**点菜系统**：前台只认「下单接口」（菜号 + 做法），后厨可以换厨师、换菜谱，前台流程不变。C 没有类与继承，但可以用 <Term def="保存函数入口地址的指针；通过它间接调用目标函数，实现运行时可换的行为。">函数指针（function pointer）</Term> 把「行为」像数据一样传来传去——再配合 struct 与动态内存，就能手写链表、队列、栈等 <Term def="Abstract Data Type；只暴露操作规则（接口），隐藏内部表示（实现）的数据类型思想。">抽象数据类型（ADT）</Term>。
+
+没有这层抽象，你只能为每种排序、每种菜单写死函数名；标准库的 `qsort`/`bsearch` 也无法对任意元素类型工作。本章是全书最后一章：把指针、结构体、动态内存串成**可扩展的数据结构能力**，并看清 C 在抽象上的边界。
+
+## 函数指针：声明、赋值与调用
+
+普通指针指向**数据**；函数指针指向**代码**（函数的入口地址）。声明语法最容易错在 `*` 与括号的优先级：
+
+```c
+int  sum(double a, double b);           /* 普通函数原型 */
+int (*pf)(double, double);              /* pf 是指针，指向这类函数 */
+```
+
+读法：`pf` 是一个指针，`(*pf)` 是被指向的函数。括号不可省——若写成 `int *pf(double, double)`，则 `pf` 是**返回 int* 的函数**，不是指针。
+
+<FunctionPointerDiagram />
+
+<Stepper>
+  <Step title="第一步：声明指针类型">
+    <FunctionPointerDiagram step={1} />
+    写出返回类型、`(*名字)`、参数列表。与函数原型对照，只多一对括号包住 `*`。
+  </Step>
+  <Step title="第二步：赋函数地址">
+    <FunctionPointerDiagram step={2} />
+    `pf = sum` 或 `pf = &sum` 均可（函数名在赋值给指针时 decay 为地址）。`pf` 里存的是 `sum` 的入口地址。
+  </Step>
+  <Step title="第三步：间接调用">
+    <FunctionPointerDiagram step={3} />
+    `(*pf)(3.0, 4.0)` 与 `pf(3.0, 4.0)` 等价。编译器根据指针跳转到对应代码执行。
+  </Step>
+</Stepper>
+
+ typedef 可简化冗长声明：
+
+```c
+typedef int (*Compare_fn)(const void *, const void *);
+Compare_fn cmp = my_compare;
+```
+
+函数指针常见用途：回调（`qsort`）、状态机分派、插件式接口、<Term def="函数内部调用通过指针传入的另一函数；调用方决定具体行为。">函数指针表</Term>（模拟虚函数）。
+
+## ADT：只承诺「能做什么」
+
+<Term def="把数据结构与操作规则打包成类型；调用方只通过公开接口使用，不依赖内部是数组还是链表。">抽象数据类型</Term> 的核心是**接口与实现分离**：
+
+| ADT | 核心操作 | 规则 |
+|-----|----------|------|
+| 栈 Stack | push / pop / top | **LIFO** 后进先出 |
+| 队列 Queue | enqueue / dequeue | **FIFO** 先进先出 |
+| 链表 List | insert / remove / traverse | 节点用 `next` 串联 |
+
+C 语言**没有**内置 `stack<T>` 或 `list<T>`（那是 C++ STL）。ADT 在 C 里通常体现为：
+
+1. 头文件 `.h`：只放结构体**不透明指针**或最小字段 + 函数原型（接口）
+2. 源文件 `.c`：内部用数组/链表实现，对外隐藏细节（实现）
+
+这样换实现（数组栈 → 链表栈）时，调用 `push`/`pop` 的代码不必改——只要接口语义不变。
+
+## 队列与栈：两种相反的「进出顺序」
+
+<QueueStackDiagram />
+
+**栈**像函数调用栈：最后 `push` 的帧最先 `pop`。表达式求值、括号匹配、深度优先搜索常用栈。
+
+**队列**像排队：新元素从 **rear** 入队，从 **front** 出队。广度优先搜索、打印任务、消息缓冲常用队列。
+
+用固定大小数组可实现简单版（栈顶下标 `top`、队头队尾下标 `front`/`rear`）；循环数组可复用空间。链式实现则在堆上分配节点，`push`/`enqueue` 改指针即可，无需预先知道最大容量。
+
+猜一猜：用**单个下标**只从数组一端插入删除，得到的是栈还是队列？
+
+## 单向链表：用 next 串起节点
+
+数组元素在内存中**连续**，随机访问 O(1)，但中间插入要搬移后续元素。链表每个 <Term def="含数据域与指向下一个节点的指针；末节点 next 为 NULL。">节点（node）</Term> 在堆上单独分配，通过 `struct Node *next` 连接：
+
+```c
+struct Node {
+    int data;
+    struct Node *next;
+};
+
+struct Node *head = NULL;   /* 空链表 */
+```
+
+<LinkedListDiagram />
+
+<Stepper>
+  <Step title="第一步：定义节点">
+    <LinkedListDiagram step={1} />
+    payload 可以是任意类型；`next` 类型必须是「指向同种节点的指针」。
+  </Step>
+  <Step title="第二步：头指针">
+    <LinkedListDiagram step={2} />
+    `head` 是唯一固定入口；空表 `head == NULL`。丢失 head 则整链泄漏且无法访问。
+  </Step>
+  <Step title="第三步：链接节点">
+    <LinkedListDiagram step={3} />
+    新节点 `malloc` 后，改前一节点的 `next` 或头指针。节点地址通常**不连续**。
+  </Step>
+  <Step title="第四步：遍历">
+    <LinkedListDiagram step={4} />
+    `for (struct Node *p = head; p != NULL; p = p->next)` 沿链访问每个 data。
+  </Step>
+</Stepper>
+
+链表优点：已知前驱时插入/删除 O(1)。缺点：无 O(1) 下标访问；每个节点多一个指针；缓存局部性不如数组。双向链表再多一个 `prev`，便于从尾部删除。
+
+释放链表需沿 `next` 逐个 `free`，或写 `destroy_list` 封装进 ADT 实现。
+
+## qsort 与 bsearch：标准库里的回调
+
+`<stdlib.h>` 提供两个依赖**比较函数**的泛型工具：
+
+```c
+void qsort(void *base, size_t nmemb, size_t size,
+           int (*compar)(const void *, const void *));
+
+void *bsearch(const void *key, const void *base,
+              size_t nmemb, size_t size,
+              int (*compar)(const void *, const void *));
+```
+
+<Term def="qsort 反复调用的比较函数；返回负/零/正表示两元素小于/等于/大于关系。">比较函数（comparison function）</Term> 接收 **`const void *`**（指向元素的指针），需 cast 成实际类型再比：
+
+```c
+int int_compare(const void *a, const void *b) {
+    int ia = *(const int *)a;
+    int ib = *(const int *)b;
+    return (ia > ib) - (ia < ib);   /* 安全的三值比较 */
+}
+```
+
+<QsortBsearchDiagram />
+
+`qsort` 对任意元素类型排序，只要提供 `size` 与比较逻辑；内部实现通常是快速排序的混合版本（实现定义，但 API 稳定）。
+
+`bsearch` 在**已按 compar 升序排好**的数组中二分查找 `key`；找到返回元素指针，否则 `NULL`。**未排序就 bsearch = 未定义行为**。
+
+## C 在数据抽象上的边界
+
+C 能做好：struct + 函数指针 + 动态内存 → 链表、表驱动状态机、简单 OOP 风格（`struct` 首成员 + 统一接口）。
+
+C **不**提供：泛型容器、异常安全、构造/析构自动调用、namespace 隔离、真正的信息隐藏（头文件仍可能暴露 struct 布局）。
+
+实践建议：
+
+- 小项目：固定数组栈/队列足够
+- 需要排序/查找：优先 `qsort`/`bsearch`，少手写排序
+- 大型 ADT：`.h` 用不透明指针 `typedef struct Queue Queue;`，`.c` 内定义真实 struct
+
+## 代码示例：菜单分派与整数排序
+
+**函数指针表**（简化菜单驱动）：
+
+```c
+typedef void (*Action_fn)(void);
+
+void cmd_new(void)  { puts("新建"); }
+void cmd_open(void) { puts("打开"); }
+
+int main(void) {
+    Action_fn table[] = { cmd_new, cmd_open };
+    int choice = 0;   /* 假设已验证 0..1 */
+    table[choice]();  /* 间接调用 */
+    return 0;
+}
+```
+
+**qsort + bsearch**：
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+
+int int_compare(const void *a, const void *b) {
+    int ia = *(const int *)a, ib = *(const int *)b;
+    return (ia > ib) - (ia < ib);
+}
+
+int main(void) {
+    int arr[] = { 42, 7, 19, 3, 88 };
+    size_t n = sizeof arr / sizeof arr[0];
+
+    qsort(arr, n, sizeof(int), int_compare);
+
+    int key = 19;
+    int *found = bsearch(&key, arr, n, sizeof(int), int_compare);
+    printf("%s\n", found ? "找到" : "未找到");
+    return 0;
+}
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`int *pf(double, double);` 编译通过，但 `pf = sum` 类型不匹配或调用结果异常。
+  **原因**：缺少括号时声明的是「返回 int* 的函数」，不是函数指针。
+  **修法**：写成 `int (*pf)(double, double);`。见 FunctionPointerDiagram step 1。
+</Callout>
+
+<Callout type="trap">
+  **现象**：链表插入后程序随机崩溃或 `free` 报错。
+  **原因**：`next` 未初始化、循环链表、或 `free` 后仍使用悬空指针（use-after-free）。
+  **修法**：`malloc` 后立刻 `node->next = NULL`；删除时先保存 `next` 再 `free`；头删记得更新 `head`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`bsearch` 有时找不到明明存在的元素。
+  **原因**：数组未排序，或与 `qsort` 使用了**不一致**的比较函数（如升序排却按降序 compar 查）。
+  **修法**：先 `qsort`，再同一 `compar` 调 `bsearch`；勿对未排序数据二分。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`qsort` 比较函数对相等元素返回非零，或减法比较溢出。
+  **原因**：`return *(int*)a - *(int*)b` 在差值超出 `int` 范围时未定义；相等应返回 0。
+  **修法**：用 `(ia > ib) - (ia < ib)` 或显式 if 分支返回 -1/0/1。
+</Callout>
+
+## 小结
+
+- 函数指针保存入口地址：`int (*pf)(...)`，赋值 `pf = func`，调用 `pf(...)` 或 `(*pf)(...)`
+- ADT 强调接口与实现分离；栈 LIFO、队列 FIFO，C 需手写或用库封装
+- 单向链表：`head` + `data` + `next`，遍历至 NULL；插入灵活，随机访问慢
+- `qsort`/`bsearch` 通过 `void *` 与比较回调处理任意元素类型；`bsearch` 前提是有序
+- C 的抽象靠约定与 discipline；全书 17 章从初识 C、控制流、函数、指针、字符串、内存、文件、struct、预处理器、位操作，到本章的数据结构能力——你已具备阅读与编写中等规模 C 程序的基础
+
+<Exercises>
+
+**练习 1（问答型）** 函数指针 `int (*pf)(double, double)` 与函数声明 `int *pf(double, double)` 有何区别？
+
+<Answer>
+
+前者 **`pf` 是指针**，指向「返回 int、接受两个 double 的函数」；后者 **`pf` 是函数名**，该函数返回 `int*`。括号决定 `*` 绑定对象，不可省略。
+
+</Answer>
+
+**练习 2（概念型）** 同样三个元素按 1→2→3 顺序入容器：栈 pop 的顺序是什么？队列 dequeue 的顺序是什么？
+
+<Answer>
+
+**栈 LIFO**：pop 顺序 **3 → 2 → 1**（最后进的最先出）。**队列 FIFO**：dequeue 顺序 **1 → 2 → 3**（先进先出）。见 QueueStackDiagram。
+
+</Answer>
+
+**练习 3（实现型）** 写比较函数，使 `qsort` 对 `double arr[]` 升序排序（提示：用 `(a>b)-(a<b)` 或 if 返回 ±1/0）。
+
+<Answer>
+
+```c
+int dbl_compare(const void *a, const void *b) {
+    double da = *(const double *)a;
+    double db = *(const double *)b;
+    return (da > db) - (da < db);
+}
+/* qsort(arr, n, sizeof(double), dbl_compare); */
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="函数指针（function pointer）">
+  保存函数入口地址的指针；声明时 (*名字) 必须加括号。见 FunctionPointerDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="间接调用">
+  通过函数指针而非固定函数名调用代码；(*pf)(args) 或 pf(args)。
+</GlossaryItem>
+
+<GlossaryItem term="函数指针表">
+  函数内部通过指针数组或函数指针调用不同实现，模拟面向对象的多态分派；调用方决定具体行为。
+</GlossaryItem>
+
+<GlossaryItem term="抽象数据类型">
+  只暴露操作规则（接口），隐藏内部表示（实现）的数据类型思想；与 ADT 同义，C 中用 struct + 函数指针模拟。
+</GlossaryItem>
+
+<GlossaryItem term="抽象数据类型（ADT）">
+  只暴露操作语义、隐藏内部表示的数据类型思想；C 中用 .h 接口 + .c 实现模拟。
+</GlossaryItem>
+
+<GlossaryItem term="栈（stack）">
+  LIFO 结构；push/pop 在同一端（栈顶）。见 QueueStackDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="队列（queue）">
+  FIFO 结构；rear 入队、front 出队。见 QueueStackDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="单向链表（singly linked list）">
+  节点含 data 与 next；head 指向首节点，末 next 为 NULL。见 LinkedListDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="节点（node）">
+  链表的基本单位；通常 malloc 分配，通过 next 连接。
+</GlossaryItem>
+
+<GlossaryItem term="头指针（head）">
+  指向链表第一个节点的指针；空链表为 NULL。
+</GlossaryItem>
+
+<GlossaryItem term="qsort">
+  stdlib 通用排序；参数含 base、元素个数、元素大小、比较函数指针。
+</GlossaryItem>
+
+<GlossaryItem term="bsearch">
+  stdlib 二分查找；要求数组已按 compar 排序，否则结果不可靠。
+</GlossaryItem>
+
+<GlossaryItem term="比较函数（comparison function）">
+  qsort/bsearch 的回调；const void * 需 cast 后比较，返回负/零/正。见 QsortBsearchDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="回调（callback）">
+  库函数通过函数指针「回叫」用户提供的逻辑，如 qsort 的 compar。
+</GlossaryItem>
+
+<GlossaryItem term="void *">
+  无类型指针；qsort 用其表示任意元素地址，比较前需 cast 成真实类型。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

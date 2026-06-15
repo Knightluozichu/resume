@@ -1,0 +1,352 @@
+---
+title: 文件输入/输出
+type: A
+section: C高级主题
+order: 13
+description: 掌握 fopen/fclose/fprintf/fscanf/fgets/fputs、文件模式、文本/二进制I/O、随机访问fseek/ftell，能读写持久化数据文件
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型第 13 章（C Primer Plus §13 改编）：标准 I/O、FILE* 流、模式、文本/二进制、随机访问。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单：
+   1) FILE* 与流的概念 — FilePointerDiagram
+   2) fopen 模式 r/w/a/r+/w+/a+ — FileOpenModesDiagram
+   3) fopen→读写→检查→fclose（step 1-4）— FileReadWriteFlowDiagram
+   4) 文本 vs 二进制存储 — BinaryVsTextIODiagram */}
+
+<Objectives>
+
+- 能说明 FILE* 是什么、stdio 缓冲起什么作用，并写出 fopen 检查 NULL、fclose 成对关闭的模板
+- 能根据场景选对 fopen 模式（读已有、覆盖写、追加、读写混合），并区分文本与二进制（`"rb"`/`"wb"`）
+- 能用 fprintf/fscanf、fgets/fputs 处理文本行，用 fread/fwrite 保存结构体或数组，并用 fseek/ftell 实现随机访问
+
+</Objectives>
+
+## 为什么程序需要「文件」？
+
+`printf` 把字打到屏幕，`scanf` 从键盘读——程序一结束，数据就没了。要把成绩表、配置、游戏存档留下来，就得写到**磁盘文件**，下次再读回来。
+
+C 不让你直接操作硬盘扇区，而是提供一套**标准 I/O（stdio）**：你把 `fopen` 打开的文件当成**流（stream）**——像水管一样，字节从程序流向文件，或从文件流进程序。指向流的指针类型是 <Term def="stdio 中表示一个已打开 I/O 流的不透明结构体指针；fopen 返回，fclose 释放。">FILE *</Term>。
+
+<FilePointerDiagram />
+
+这一章掌握：打开/关闭、读写函数、文本与二进制、以及用 `fseek`/`ftell` 在文件里「跳转」。
+
+## fopen 与 fclose：打开与关闭
+
+```c
+#include <stdio.h>
+
+FILE *fp = fopen("scores.txt", "w");
+if (fp == NULL) {
+    perror("scores.txt");
+    return 1;
+}
+/* 使用 fp ... */
+fclose(fp);
+```
+
+<Term def={'按 mode 关联程序与路径上的文件，成功返回 FILE*，失败 NULL。需包含 stdio.h 头文件。'}>fopen</Term> 的第二个参数是**模式字符串**。选错模式会截断文件、无法读取或只能追加。
+
+<FileOpenModesDiagram />
+
+常用记忆：
+
+- 只读已有文件 → `"r"`
+- 新建或**清空**后写 → `"w"`
+- 在末尾**追加** → `"a"`
+- 既要读又要写 → `"r+"`（须存在）或 `"w+"`（会清空）
+
+<Term def="关闭流，刷新输出缓冲，释放与文件关联的资源；之后不得再使用该 FILE*。">fclose</Term> 与 fopen 成对。`main` 返回前未 fclose，短程序往往还能工作，但缓冲可能未落盘；长跑服务会耗尽文件描述符。
+
+## 标准流程：打开 → 读写 → 检查 → 关闭
+
+<FileReadWriteFlowDiagram />
+
+<Stepper>
+  <Step title="第一步：fopen 打开">
+    <FileReadWriteFlowDiagram step={1} />
+    检查 `fp != NULL`。路径错误、权限不足、模式与文件状态不匹配都会失败。
+  </Step>
+  <Step title="第二步：读写数据">
+    <FileReadWriteFlowDiagram step={2} />
+    文本用 `fprintf`/`fscanf`、`fgets`/`fputs`；二进制块用 `fread`/`fwrite`。
+  </Step>
+  <Step title="第三步：检查状态">
+    <FileReadWriteFlowDiagram step={3} />
+    循环读时，`while (!feof(fp))` 常多循环一次——更稳妥是「先读再判返回值」。`ferror(fp)` 查硬件/介质错误。
+  </Step>
+  <Step title="第四步：fclose 关闭">
+    <FileReadWriteFlowDiagram step={4} />
+    刷新缓冲区，断开与 OS 文件句柄的关联。多个 return 路径都要 fclose，或集中用 `goto cleanup`。
+  </Step>
+</Stepper>
+
+## 格式化与行 I/O：fprintf / fscanf / fgets / fputs
+
+与终端上的 `printf`/`scanf` 类似，只是第一个参数换成 `FILE *`：
+
+```c
+fprintf(fp, "%s %d\n", name, score);
+fscanf(fp, "%63s %d", name, &score);   /* 注意 &score */
+```
+
+读一整行（保留或不含换行取决于实现，通常 `fgets` 会读入 `\n`）：
+
+```c
+char line[256];
+while (fgets(line, sizeof line, fp) != NULL) {
+    fputs(line, stdout);
+}
+```
+
+<Term def="从流读取至多 size-1 个字符到 buf，写入 '\\0' 结尾；遇换行或 EOF 停止；成功返回 buf，失败/EOF 返回 NULL。">fgets</Term> 比 `gets` 安全——**永远不要使用已废弃的 gets**。`fputs` 写字符串，**不**自动加换行（与 `puts` 不同）。
+
+## 块 I/O：fread 与 fwrite
+
+把内存中的字节块原样写入文件，适合数组、结构体快照：
+
+```c
+int data[] = {10, 20, 30};
+fwrite(data, sizeof data[0], 3, fp);
+
+int buf[3];
+size_t n = fread(buf, sizeof buf[0], 3, fp);
+/* n 为实际读到的元素个数 */
+```
+
+`fread`/`fwrite` 参数：`ptr` 内存地址、`size` 每个元素字节数、`count` 元素个数、`stream` 流。返回值是成功读/写的**元素个数**；小于 `count` 时检查 `feof`/`ferror`。
+
+## 文本 vs 二进制
+
+<BinaryVsTextIODiagram />
+
+在模式后加 **`b`** 即二进制：`fopen("game.sav", "wb")`。二进制下：
+
+- 无 `\n` ↔ `\r\n` 转换
+- `fread`/`fwrite` 按字节原样传输
+
+保存 `struct Player { int hp; char name[32]; }` 时常用：
+
+```c
+fwrite(&player, sizeof player, 1, fp);
+fread(&player, sizeof player, 1, fp);
+```
+
+注意：**不同编译器/平台的 struct 对齐与字节序可能不同**，二进制存档未必跨机器通用。纯文本 JSON/CSV 更便携。
+
+## 随机访问：fseek、ftell、rewind
+
+顺序读写时，内部有个**当前位置**指针。想改第 5 条记录而不读遍前面四条，用：
+
+```c
+fseek(fp, 5L * sizeof(int), SEEK_SET);  /* 从文件头偏移 */
+ftell(fp);   /* 返回当前字节偏移 */
+rewind(fp);  /* 等价 fseek(fp, 0, SEEK_SET) */
+```
+
+`fseek` 的 `whence`：`SEEK_SET`（头）、`SEEK_CUR`（当前）、`SEEK_END`（尾）。文本流上 `fseek`/`ftell` 在某些实现上有限制；需要精确字节定位时用**二进制模式**。
+
+## 代码详解：持久化成绩表
+
+### 场景一：文本写入多行
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    FILE *fp = fopen("grades.txt", "w");
+    if (fp == NULL) return 1;
+    fprintf(fp, "Alice 95\n");
+    fprintf(fp, "Bob 88\n");
+    fclose(fp);
+    return 0;
+}
+```
+
+### 场景二：逐行读回并打印
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    char line[128];
+    FILE *fp = fopen("grades.txt", "r");
+    if (fp == NULL) return 1;
+    while (fgets(line, sizeof line, fp) != NULL)
+        fputs(line, stdout);
+    fclose(fp);
+    return 0;
+}
+```
+
+### 场景三：二进制保存 int 数组
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int scores[] = {90, 85, 78};
+    FILE *fp = fopen("scores.bin", "wb");
+    if (fp == NULL) return 1;
+    fwrite(scores, sizeof scores[0], 3, fp);
+    fclose(fp);
+
+    fp = fopen("scores.bin", "rb");
+    if (fp == NULL) return 1;
+    int buf[3];
+    fread(buf, sizeof buf[0], 3, fp);
+    fclose(fp);
+    return 0;
+}
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`fopen` 后直接用 `fprintf`，偶尔崩溃或写不进磁盘。
+  **原因**：未检查 **NULL**；打开失败时解引用非法指针。
+  **修法**：`if (fp == NULL) { perror(...); return 1; }`
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `"w"` 打开已有日志，旧内容全没了。
+  **原因**：**`w` 会截断**（truncate）已存在文件。
+  **修法**：要保留旧内容并追加用 `"a"`；要读改写用 `"r+"` 且先确认文件存在。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`while (!feof(fp)) { fscanf(...); }` 多处理了一条垃圾数据。
+  **原因**：`feof` 在**读完仍失败的一次**之后才为真；循环体多跑一轮。
+  **修法**：以 `fscanf`/`fgets` **返回值**控制循环，例如 `while (fscanf(fp, "%d", &n) == 1)`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：文本模式 `fread` 读 Windows 生成的文件，字节数对不上。
+  **原因**：文本模式可能做 **换行转换**，字节与磁盘物理内容不一致。
+  **修法**：块/结构体 I/O 统一用 `"rb"`/`"wb"`。
+</Callout>
+
+## 小结
+
+- `FILE*` 代表已打开的流；stdio 经缓冲区与磁盘交换数据
+- `fopen`/`fclose` 成对；失败返回 NULL 必须检查
+- 模式：`r` 只读、`w` 清空写、`a` 追加；加 `b` 为二进制；`+` 允许读写
+- 文本：`fprintf`/`fscanf`、`fgets`/`fputs`；块：`fread`/`fwrite`
+- 随机访问：`fseek`/`ftell`/`rewind`；二进制存档注意对齐与可移植性
+
+<Exercises>
+
+**练习 1（问答型）** `"a"` 与 `"w"` 打开已存在文件时，行为有何关键区别？
+
+<Answer>
+
+**`w`** 会**截断**文件，原内容清空后从头发写。**`a`** **不截断**，所有写入发生在**文件末尾**追加。若需保留旧日志并继续写，应选 `"a"`。
+
+</Answer>
+
+**练习 2（改代码型）** 下面循环有什么问题？如何改？
+
+```c
+while (!feof(fp)) {
+    fscanf(fp, "%d", &n);
+    printf("%d\n", n);
+}
+```
+
+<Answer>
+
+`feof` 在最后一次失败的 `fscanf` **之后**才为真，会多打印一次。改为：
+
+```c
+while (fscanf(fp, "%d", &n) == 1)
+    printf("%d\n", n);
+```
+
+以 `fscanf` 返回值判断是否成功读到整数。
+
+</Answer>
+
+**练习 3（综合实现型）** 写程序：用 `"w"` 创建 `data.txt` 写入两行 `10` 和 `20`；再以 `"r"` 读回并打印两数之和。
+
+<Answer>
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    FILE *fp = fopen("data.txt", "w");
+    int a, b;
+    if (fp == NULL) return 1;
+    fprintf(fp, "%d\n%d\n", 10, 20);
+    fclose(fp);
+
+    fp = fopen("data.txt", "r");
+    if (fp == NULL) return 1;
+    if (fscanf(fp, "%d %d", &a, &b) == 2)
+        printf("sum = %d\n", a + b);
+    fclose(fp);
+    return 0;
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="流（stream）">
+  与 FILE 关联的字节流抽象；读写按顺序经过 stdio 缓冲区。stdin/stdout/stderr 也是流。详见 FilePointerDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="FILE *">
+  指向表示打开文件的状态结构；fopen 返回，传给各类 stdio 函数。
+</GlossaryItem>
+
+<GlossaryItem term="fopen">
+  打开文件并关联流；mode 决定读/写/追加/二进制。失败 NULL。
+</GlossaryItem>
+
+<GlossaryItem term="fclose">
+  关闭流、刷新缓冲、释放资源；之后 fp 不可再用。
+</GlossaryItem>
+
+<GlossaryItem term="文本模式">
+  默认 r/w/a；可能转换换行；适合人类可读文件。见 BinaryVsTextIODiagram。
+</GlossaryItem>
+
+<GlossaryItem term="二进制模式">
+  rb/wb/ab 等；字节原样传输；适合 fread/fwrite 与 struct。
+</GlossaryItem>
+
+<GlossaryItem term="fgets">
+  安全读行到缓冲区；指定最大长度防溢出。
+</GlossaryItem>
+
+<GlossaryItem term="fread / fwrite">
+  按元素大小与个数读写内存块；返回成功元素个数。
+</GlossaryItem>
+
+<GlossaryItem term="fseek">
+  设置流当前位置；whence 为 SEEK_SET/CUR/END。
+</GlossaryItem>
+
+<GlossaryItem term="ftell">
+  返回当前位置距文件开头的字节偏移（long）。
+</GlossaryItem>
+
+<GlossaryItem term="feof">
+  流是否在读到 EOF 后处于结束状态；不宜单独作为循环唯一条件。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

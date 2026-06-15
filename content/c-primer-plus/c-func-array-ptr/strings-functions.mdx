@@ -1,0 +1,362 @@
+---
+title: 字符串和字符串函数
+type: C
+section: C函数数组指针
+order: 11
+description: 掌握C字符串以'\0'结尾的内存布局、常用string.h函数（strlen/strcpy/strcat/strcmp）、字符串I/O与自定义字符串处理
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 11 章（C Primer Plus §11 改编）：\0 结尾、string.h 四函数、strcpy 溢出、char[] vs char*、fgets/puts、自定义字符串函数。
+   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 字符数组 + \0 终止符内存布局 — CStringNullTerminatorDiagram
+   2) strcpy 缓冲区溢出风险（step 1-3）— StrcpyBufferDiagram
+   3) strlen/strcpy/strcat/strcmp 速查 — StringFunctionTableDiagram
+   4) char s[] vs char *s 区别 — StringPointerVsArrayDiagram */}
+
+<Objectives>
+
+- 能解释 C 字符串为何必须以 `\0` 结尾，并说明 `strlen` 与 `sizeof` 对同一数组为何常差 1
+- 能正确使用 `strlen`、`strcpy`、`strcat`、`strcmp`，并说明 `strcpy` 的目标缓冲区必须足够大的原因
+- 能区分 `char ar[] = "..."` 与 `char *p = "..."` 在可修改性与 `sizeof` 上的差异，并用 `fgets` 安全读入一行文本
+
+</Objectives>
+
+## 为什么需要专门的「字符串函数」？
+
+上一章你已经知道：C 里没有 string 类型，文本就是 <Term def="元素类型为 char 的数组，通常以空字符 \0 标记结尾，表示一段可打印文本。">字符数组（character array）</Term>。但「知道地址从哪开始」还不够——你还得知道「到哪结束」。
+
+想象一排信箱：每个格子里一个字母，最后一格贴着「到此为止」的标签。如果没有这个标签，邮递员（`strlen`、`strcpy`）会一直往后走，直到误闯邻居家的信箱——那就是 **未定义行为**，轻则乱码，重则程序崩溃。
+
+这一章把 `\0` 铁律、`string.h` 四大函数、安全读写的 `fgets`，以及自己写字符串处理函数的方法讲清楚。搞懂这些，后面结构体、文件 I/O、动态内存都会轻松很多。
+
+## C 字符串的内存布局：可见字符 + 看不见的 \0
+
+<Term def="ASCII 值为 0 的特殊字符，写作 \0。C 用它标记字符串结束，本身不计入 strlen 返回的长度。">空字符（null character）</Term> 是 C 字符串的「终点站」。声明：
+
+```c
+char animal[10] = "Cat";
+```
+
+编译器放入 4 个字符：`C`、`a`、`t`、`\0`。数组总长 10，剩余 6 个字节自动填 `\0`（若未初始化则内容不确定，但字符串有效部分仍到第一个 `\0` 为止）。
+
+<CStringNullTerminatorDiagram />
+
+<Term def="定义在 string.h，从 s[0] 开始计数，遇到 \0 停止，返回字符个数（不含 \0）。">strlen()</Term> 从首字符数到 `\0` 之前；`sizeof animal` 则是整个数组 10 字节。二者差的那 1（或更多）字节，往往就是结尾的 `\0` 和未用空间。
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+int main(void) {
+    char animal[10] = "Cat";
+    printf("strlen = %zu, sizeof = %zu\n",
+           strlen(animal), sizeof(animal));
+    /* 输出：strlen = 3, sizeof = 10 */
+    return 0;
+}
+```
+
+手动逐字符赋值时，**你必须自己写上 `\0`**，否则不是合法字符串：
+
+```c
+char word[4];
+word[0] = 'B';
+word[1] = 'i';
+word[2] = 'g';
+word[3] = '\0';   /* 缺一不可 */
+```
+
+## string.h 四大基础函数
+
+`#include <string.h>` 后，最常用的四个函数如下。
+
+<StringFunctionTableDiagram />
+
+### strlen：测长度
+
+```c
+size_t len = strlen("Hello");  /* 5 */
+```
+
+参数必须是**以 `\0` 结尾**的有效字符串。若数组中间没有 `\0`，`strlen` 会一直往后读——危险。
+
+### strcpy 与 strcat：复制与拼接
+
+<Term def="把源字符串（含结尾 \0）复制到 dest，返回 dest。不检查 dest 是否够大。">strcpy()</Term> 把 `src` 逐字节拷到 `dest`，包括结尾的 `\0`：
+
+```c
+char dest[20];
+strcpy(dest, "Hello");
+/* dest 现在是 "Hello" */
+```
+
+<Term def="找到 dest 中第一个 \0，从该位置起把 src 接上（含 \0）。dest 必须有足够剩余空间。">strcat()</Term> 把 `src` 接到 `dest` **已有内容**的末尾：
+
+```c
+char buf[20] = "Hello";
+strcat(buf, ", world!");
+/* buf 现在是 "Hello, world!" */
+```
+
+> 猜一猜：若 `dest` 只有 8 字节，却 `strcpy(dest, "Hello, world!")`，会发生什么？用下面 Stepper 看溢出过程。
+
+<Stepper>
+  <Step title="第一步：目标缓冲区太小">
+    <StrcpyBufferDiagram step={1} />
+    `char dest[8]` 只能安全存 7 个可见字符 + `\0`。源串更长时，空间从设计上就不够。
+  </Step>
+  <Step title="第二步：strcpy 不检查边界">
+    <StrcpyBufferDiagram step={2} />
+    `strcpy` 只管从 `src` 复制到遇到 `\0`，**不会**问 `dest` 还剩多少字节——这是 C 的「信任程序员」哲学。
+  </Step>
+  <Step title="第三步：越界覆盖相邻内存">
+    <StrcpyBufferDiagram step={3} />
+    多出来的字节会写出 `dest` 边界，覆盖栈上其他变量甚至返回地址——经典缓冲区溢出漏洞来源。更安全：`strncpy`、`snprintf`，或 C11 的 `strlcpy`（若平台提供）。
+  </Step>
+</Stepper>
+
+### strcmp：字典序比较
+
+<Term def="按 unsigned char 字典序比较两个字符串。相等返回 0；s1 较小返回负值；s1 较大返回正值。">strcmp()</Term> 比较的是**内容**，不是指针地址：
+
+```c
+if (strcmp(s1, s2) == 0)
+    printf("相同\n");
+else if (strcmp(s1, s2) < 0)
+    printf("s1 在字典序中更靠前\n");
+```
+
+不要写 `if (s1 == s2)`——那比较的是两个指针是否指向**同一地址**，不是字符串内容是否相同。
+
+## char 数组 vs char 指针：能不能改？
+
+这是 C 字符串里最容易混淆的一点：
+
+```c
+char ar[] = "Hello";   /* 数组：栈上副本，可修改 */
+char *ptr = "Hello";   /* 指针：指向只读字面量 */
+```
+
+<StringPointerVsArrayDiagram />
+
+`ar[0] = 'h'` 合法；`ptr[0] = 'h'` 是**未定义行为**——<Term def="双引号中的文本，编译为带 \0 结尾的 char 序列，通常存放在只读数据段。">字符串字面量</Term>存放在只读数据段。要可改字符串，用 `char ar[]` 或 `malloc` 分配堆内存。
+
+`sizeof` 也不同：`sizeof(ar)` 是数组总字节（含 `\0`）；`sizeof(ptr)` 是**指针变量本身**的大小（通常 8 或 4），与字符串长度无关。
+
+函数形参 `char s[]` 与 `char *s` **完全等价**——都接收指向首字符的指针。但调用时若传入字符串字面量，函数内仍不能修改内容。
+
+## 字符串输入与输出
+
+### 输出：puts 与 fputs
+
+`puts(str)` 输出字符串并**自动换行**；`fputs(str, stdout)` 不自动换行，适合拼到已有输出流：
+
+```c
+puts("Hi");           /* Hi + 换行 */
+fputs("Hi", stdout);  /* 仅 Hi，无换行 */
+```
+
+### 输入：用 fgets，别用 gets
+
+<Term def="从流中读入一行到缓冲区，最多读 size-1 个字符，保留换行符（若有），并保证以 \0 结尾。比 gets 安全。">fgets()</Term> 接受**缓冲区大小**，最多读 `size-1` 个字符，并保证 `\0` 结尾：
+
+```c
+char line[80];
+if (fgets(line, sizeof line, stdin) != NULL) {
+    /* line 里可能有末尾 \n */
+    line[strcspn(line, "\n")] = '\0';  /* 可选：去掉换行 */
+    printf("你输入了：%s\n", line);
+}
+```
+
+`gets()` 已被 C11 移除——它不检查缓冲区大小，和 `strcpy` 一样危险。**永远用 `fgets`。**
+
+## 自定义字符串函数
+
+理解库函数原理后，可以自己实现简化版——逻辑都是「找 `\0`」或「逐字节复制直到 `\0`」。
+
+### 手写 my_strlen
+
+```c
+int my_strlen(const char *s) {
+    int count = 0;
+    while (s[count] != '\0')
+        count++;
+    return count;
+}
+```
+
+`const char *` 表示函数**只读**字符串，不修改内容——好习惯。
+
+### 手写 my_strcpy
+
+```c
+char *my_strcpy(char *dest, const char *src) {
+    char *save = dest;
+    while ((*dest++ = *src++) != '\0')
+        ;   /* 空循环体：拷贝含 \0 */
+    return save;
+}
+```
+
+`while ((*dest++ = *src++) != '\0')` 是经典 C 惯用法：赋值、比较、指针后移一步完成。
+
+### 场景：读一行并统计单词数（简化）
+
+```c
+#include <stdio.h>
+#include <ctype.h>
+
+int count_words(const char *s) {
+    int in_word = 0, count = 0;
+    while (*s) {
+        if (isspace((unsigned char)*s))
+            in_word = 0;
+        else if (!in_word) {
+            in_word = 1;
+            count++;
+        }
+        s++;
+    }
+    return count;
+}
+```
+
+用 `isspace` 判断空白，用状态机 `in_word` 检测「从非空白进入空白」的边界——这就是自定义字符串处理的典型模式。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`char msg[5] = "Hello";` 编译警告或运行异常。
+  **原因**：`"Hello"` 需要 6 字节（5 字母 + `\0`），数组只有 5 格，**没有空间放结尾 `\0`**。
+  **修法**：数组至少 `char msg[6]`，或缩短字面量。初始化时编译器会尽量塞 `\0`，但空间不够就是未定义行为。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`if (s1 == s2)` 明明内容相同却进不了分支。
+  **原因**：`==` 比较的是**指针地址**，不是字符串内容。两个内容相同的数组/字面量地址可以不同。
+  **修法**：内容比较用 **`strcmp(s1, s2) == 0`**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`strcat(dest, src)` 后程序崩溃或 dest 内容乱掉。
+  **原因**：`dest` 剩余空间不够放下 `src`（含 `\0`）。`strcat` 与 `strcpy` 一样**不检查边界**。
+  **修法**：确保 `strlen(dest) + strlen(src) + 1 <= dest 容量`；或先用 `strncat` / `snprintf` 限制长度。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`char *p = "Hi"; p[0] = 'h';` 在部分系统上崩溃。
+  **原因**：字符串字面量**只读**，通过 `char *` 修改是未定义行为。
+  **修法**：要可改用 `char ar[] = "Hi";`，或 `malloc` + `strcpy`。
+</Callout>
+
+## 小结
+
+- C 字符串 = 连续 `char` + 结尾 `\0`；`strlen` 数到 `\0` 前，`sizeof` 数整个数组
+- `strcpy` / `strcat` 不检查目标大小；`strcmp` 返回 0 表示相等
+- `char ar[]` 可修改；`char *p = "..."` 指向只读字面量，不可改
+- 读行用 **`fgets(buf, size, stdin)`**；输出可用 `puts` / `fputs`
+- 自定义函数核心：找 `\0`、逐字节复制、用 `const char *` 保护只读参数
+
+<Exercises>
+
+**练习 1（改代码型）** 下面程序想比较用户输入与 `"yes"` 是否相同，但有 bug。改正后输入 `yes` 应打印 `匹配`。
+
+```c
+char answer[10];
+fgets(answer, sizeof answer, stdin);
+if (answer == "yes")
+    printf("匹配\n");
+```
+
+<Answer>
+
+两处修改：用 `strcmp` 比较内容；`fgets` 可能保留换行，需去掉：
+
+```c
+answer[strcspn(answer, "\n")] = '\0';
+if (strcmp(answer, "yes") == 0)
+    printf("匹配\n");
+```
+
+</Answer>
+
+**练习 2（问答型）** `char a[] = "Hi";` 与 `char *b = "Hi";` 执行 `sizeof(a)` 和 `sizeof(b)` 通常各得多少（64 位系统）？为什么？
+
+<Answer>
+
+`sizeof(a)` 通常是 **3**（2 字符 + `\0`）。`sizeof(b)` 通常是 **8**（64 位下指针变量大小）。`a` 是数组，`b` 是指针变量——类型不同，`sizeof` 含义不同。
+
+</Answer>
+
+**练习 3（综合实现型）** 不用 `strlen`，写函数 `int str_len(const char *s)`，并在 `main` 里测试 `"Cat"` 与 `""`。
+
+<Answer>
+
+```c
+#include <stdio.h>
+
+int str_len(const char *s) {
+    int n = 0;
+    while (s[n] != '\0')
+        n++;
+    return n;
+}
+
+int main(void) {
+    printf("%d\n", str_len("Cat"));  /* 3 */
+    printf("%d\n", str_len(""));     /* 0 */
+    return 0;
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="字符数组（character array）">
+  元素类型为 char 的数组，用来存文本。C 字符串要求以 \0 结尾。声明如 char s[20] = "Hi";。详见 CStringNullTerminatorDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="空字符（null character）">
+  ASCII 0，写作 \0。标记 C 字符串结束。strlen 数到它之前停止；string.h 函数都依赖它判断边界。
+</GlossaryItem>
+
+<GlossaryItem term="strlen()">
+  string.h 函数，返回字符串中可见字符个数（不含 \0）。参数必须指向以 \0 结尾的有效字符串。
+</GlossaryItem>
+
+<GlossaryItem term="strcpy()">
+  把源串（含 \0）复制到 dest。不检查 dest 大小，目标必须足够大。详见 StrcpyBufferDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="strcat()">
+  把 src 接到 dest 已有字符串末尾。需保证 dest 剩余空间 ≥ strlen(src)+1。
+</GlossaryItem>
+
+<GlossaryItem term="strcmp()">
+  字典序比较两串。相等返回 0；不要用 == 比较字符串内容。详见 StringFunctionTableDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="fgets()">
+  从流读一行到缓冲区，最多 size-1 字符，保证 \0 结尾。比已废弃的 gets 安全，读 stdin 时常用。
+</GlossaryItem>
+
+<GlossaryItem term="字符串字面量">
+  双引号中的文本，如 "Hello"。编译为带 \0 的 char 序列。用 char *p = "..." 指向只读区，不可修改。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

@@ -50,6 +50,7 @@ export type ReviewChapterSlug =
   | "bloom"
   | "deferred-shading"
   | "ssao"
+  | "cpr-data-and-c"
   | "cpp-getting-started"
   | "cpp-variables-and-types"
   | "cpp-strings-vectors-arrays"
@@ -69,6 +70,22 @@ export type ReviewChapterSlug =
   | "cpp-specialized-library"
   | "cpp-specialized-tools"
   | "cpp-large-programs"
+  | "cpr-getting-ready"
+  | "cpr-introducing-c"
+  | "cpr-strings-io"
+  | "cpr-operators-expressions"
+  | "cpr-control-loops"
+  | "cpr-control-branching"
+  | "cpr-char-io-validation"
+  | "cpr-functions"
+  | "cpr-arrays-pointers"
+  | "cpr-strings-functions"
+  | "cpr-storage-linkage-memory"
+  | "cpr-file-io"
+  | "cpr-structures"
+  | "cpr-preprocessor"
+  | "cpr-bit-fiddling"
+  | "cpr-advanced-data"
   | "android-architecture"
   | "system-startup"
   | "app-process-startup"
@@ -170,6 +187,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   bloom: "泛光",
   "deferred-shading": "延迟着色",
   ssao: "SSAO",
+  "cpr-data-and-c": "数据和C",
   "cpp-getting-started": "快速入门",
   "cpp-variables-and-types": "变量和基本类型",
   "cpp-strings-vectors-arrays": "字符串、向量和数组",
@@ -189,6 +207,22 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-specialized-library": "标准库特殊设施",
   "cpp-specialized-tools": "特殊工具与技术",
   "cpp-large-programs": "用于大型程序的工具",
+  "cpr-getting-ready": "初识C语言",
+  "cpr-introducing-c": "C语言概述",
+  "cpr-strings-io": "字符串和格式化输入/输出",
+  "cpr-operators-expressions": "运算符、表达式和语句",
+  "cpr-control-loops": "C控制语句：循环",
+  "cpr-control-branching": "C控制语句：分支与跳转",
+  "cpr-char-io-validation": "字符I/O与输入验证",
+  "cpr-functions": "函数",
+  "cpr-arrays-pointers": "数组和指针",
+  "cpr-strings-functions": "字符串和字符串函数",
+  "cpr-storage-linkage-memory": "存储类、链接和内存管理",
+  "cpr-file-io": "文件输入/输出",
+  "cpr-structures": "结构和其他数据形式",
+  "cpr-preprocessor": "C预处理器",
+  "cpr-bit-fiddling": "位操作",
+  "cpr-advanced-data": "高级数据表示",
   "android-architecture": "Android 系统架构",
   "system-startup": "Android 系统启动",
   "app-process-startup": "应用程序进程启动",

@@ -1,0 +1,514 @@
+---
+title: C控制语句：分支与跳转
+type: C
+section: C控制与IO
+order: 7
+description: 掌握 if/else/else if 多路分支、switch-case 多路选择、break/continue/goto 跳转语句，能编写菜单驱动和状态机式程序
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 7 章（C Primer Plus §7 改编）：if/else、switch、break/continue、短路求值。
+   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) if/else/else if 分支链 — IfElseChainDiagram（step 1-3）
+   2) switch-case 与 fall-through — SwitchCaseDiagram（step 1-4，标注 break 缺失时穿透）
+   3) break vs continue 在循环中的作用 — BreakContinueDiagram（step 1-3）
+   4) 逻辑运算符短路求值 — ShortCircuitDiagram */}
+
+<Objectives>
+
+- 能区分 `if`/`else if`/`else` 分支链与 `switch-case` 多路选择，并选出适合区间判断、离散菜单选项的场景
+- 能改出带 `break`/`continue` 的循环筛选程序，并解释 `break` 跳出循环与 `continue` 跳过本轮的区别
+- 能利用 `&&`/`||` 的短路求值保护除零或空指针访问，并回答：在 `if (x != 0 && y / x > 2)` 中，当 x 为 0 时右侧表达式会被求值吗？
+
+</Objectives>
+
+## 为什么程序需要「岔路口」？
+
+想象你在工厂流水线的质检站：每块巧克力经过时，工人要判断——合格装箱、轻微瑕疵降级、严重不合格丢弃。同一条传送带，不同情况走不同处理路径。程序也一样：分数高低给不同等级、菜单选项触发不同功能、传感器读数决定报警还是正常——都需要「根据条件选一条路走」。
+
+**如果没有分支呢？** 所有代码只能从上到下顺序执行，无法响应不同输入。菜单程序无法区分「新建」和「退出」，成绩程序无法区分及格与不及格。分支语句就是 C 语言给你的「岔路口标志」——判断条件，选一条路径执行。
+
+这一章教你四类岔路口：`if` 链、`switch` 多路选择、循环内的 `break`/`continue` 跳转，以及逻辑运算符的短路求值。
+
+## if / else if / else：互斥分支链
+
+<Term def="根据条件真假选择执行路径的选择语句。条件为真执行 if 体，为假则跳过或走 else。">if 语句</Term> 是最基本的分支：条件为真执行花括号里的代码，为假则跳过。
+
+```c
+if (score >= 60) {
+    printf("及格\n");
+}
+```
+
+当只有「是 / 否」两条路时，加 <Term def="与 if 配对的 else 分支：if 条件为假时执行 else 体。if 和 else 二选一。">else</Term>：
+
+```c
+if (score >= 60) {
+    printf("及格\n");
+} else {
+    printf("不及格\n");
+}
+```
+
+超过两档？用 <Term def="在 if 之后、else 之前追加的条件分支：前面条件都为假时才检查当前条件。与 if、else 构成从上到下依次检查的分支链。">else if</Term> 串成链——从上到下依次检查，**第一个为真的分支执行后，其余全部跳过**：
+
+<IfElseChainDiagram />
+
+```c
+if (score >= 90) {
+    grade = 'A';
+} else if (score >= 80) {
+    grade = 'B';
+} else if (score >= 60) {
+    grade = 'P';
+} else {
+    grade = 'F';
+}
+```
+
+score = 75 时：第一个条件 `>= 90` 假，第二个 `>= 80` 假，第三个 `>= 60` 真——执行 `grade = 'P'`，后面的 else 不再检查。这就是 <Term def="if 与多个 else if 以及可选 else 组成的互斥选择结构：同一时刻最多执行其中一个代码块。">if / else if / else 分支链</Term>。
+
+> 猜一猜：score = 85 时，会执行几个赋值语句？用 Stepper 一步步走。
+
+<Stepper>
+  <Step title="第一步：检查 if (score >= 90)">
+    <IfElseChainDiagram step={1} />
+    85 &gt;= 90 为假——不执行 `grade = 'A'`，流程落到下一个 else if。
+  </Step>
+  <Step title="第二步：检查 else if (score >= 60)">
+    <IfElseChainDiagram step={2} />
+    注意：中间可能还有 `else if (score >= 80)` 等档位。85 &gt;= 80 为真——执行 `grade = 'B'`，**后面的 else if 和 else 全部跳过**。
+  </Step>
+  <Step title="第三步：分支链结束，汇合继续">
+    <IfElseChainDiagram step={3} />
+    无论走了哪个分支，执行完毕后都跳到链尾，继续执行后面的代码。分支链不会「嵌套执行」多个块——有且只有一个块被执行（或全假走 else）。
+  </Step>
+</Stepper>
+
+## switch-case：离散值的多路跳转
+
+当要根据一个整型、字符或枚举值在多个固定选项间跳转时，<Term def="根据整型/字符/枚举表达式的值跳转到匹配 case 标签的多路分支语句。语法：switch(expr) { case 值: ... break; default: ... }">switch 语句</Term> 比一长串 else if 更清晰：
+
+```c
+switch (choice) {
+    case 1:
+        printf("新建文件\n");
+        break;
+    case 2:
+        printf("打开文件\n");
+        break;
+    case 0:
+        printf("退出\n");
+        break;
+    default:
+        printf("无效选项\n");
+}
+```
+
+<SwitchCaseDiagram />
+
+执行流程：先求 `choice` 的值，与每个 `case` 标签比较，**命中则跳入该 case 处继续向下执行**，直到遇到 `break` 跳出 switch，或跑到右花括号。都不匹配时走 `default`（可选但菜单程序强烈建议写上）。
+
+<Term def="switch 中某个 case 缺少 break 时，代码会继续执行紧接着的下一个 case 的语句，称为贯穿或穿透。有时故意利用，多数情况是 bug。">fall-through（贯穿/穿透）</Term> 是 switch 最常见的坑——case 标签只做「跳转标记」，**不会自动隔离代码块**：
+
+```c
+switch (n) {
+    case 1:
+        printf("一\n");
+        /* 故意不写 break —— fall-through */
+    case 2:
+        printf("二\n");
+        break;
+}
+```
+
+n = 1 时输出「一」和「二」两行——因为 case 1 没有 break，执行完 printf("一") 后继续滑入 case 2。
+
+> 猜一猜：下面 switch 在 choice=2 时会打印几行？Stepper 带你看 break 与 fall-through 的差别。
+
+<Stepper>
+  <Step title="第一步：求值 switch(choice)">
+    <SwitchCaseDiagram step={1} />
+    先计算括号里表达式的值——这里是变量 choice。结果必须是整型、字符或枚举（C 不允许 float 做 case 标签）。
+  </Step>
+  <Step title="第二步：匹配 case 标签">
+    <SwitchCaseDiagram step={2} />
+    编译器通常用跳转表优化：把 choice 与各 case 常量比较，命中则直接跳到对应 case 行。没有匹配项则跳到 default（若有）。
+  </Step>
+  <Step title="第三步：执行 case 体 + break 跳出">
+    <SwitchCaseDiagram step={3} />
+    从命中的 case 开始顺序执行语句。遇到 break 立即跳出整个 switch，继续执行 switch 后面的代码。每个 case 末尾写 break 是默认好习惯。
+  </Step>
+  <Step title="第四步：缺 break 时的 fall-through">
+    <SwitchCaseDiagram step={4} />
+    若 case 2 忘了 break，执行完 case 2 的代码后会「穿透」到 case 3——连跑两个 case 的 printf。少数场景故意利用（如多个 case 共享同一段处理），但菜单程序里 99% 是笔误。
+  </Step>
+</Stepper>
+
+## break 与 continue：循环内的跳转
+
+上一章学了三种循环。循环体里有时需要「提前收工」或「跳过本轮剩余步骤」——靠 <Term def="立即终止所在的最内层 switch 或循环（for/while/do-while），跳到 switch/循环之后的语句。">break</Term> 和 <Term def="跳过当前循环迭代中 continue 之后的剩余语句，直接进入下一轮迭代（先执行 for 的 update 或 while 的条件判断）。">continue</Term>：
+
+<BreakContinueDiagram />
+
+```c
+/* break：找到目标就停 */
+for (int i = 0; i < 100; i++) {
+    if (arr[i] == target) {
+        found = i;
+        break;          /* 找到了，不必再扫 */
+    }
+}
+
+/* continue：跳过偶数，只处理奇数 */
+for (int i = 0; i < n; i++) {
+    if (i % 2 == 0)
+        continue;       /* 本轮剩余代码不执行 */
+    sum += arr[i];
+}
+```
+
+break 终止**整个**循环；continue 只跳过**当前这一轮**循环体里 continue 后面的语句，循环本身继续。在嵌套循环中，break/continue 只影响**最内层**的那一个循环或 switch。
+
+> 猜一猜：下面循环打印哪些 i 的值？
+
+<Stepper>
+  <Step title="第一步：正常迭代">
+    <BreakContinueDiagram step={1} />
+    循环按 usual 方式推进：i=0,1,2 时条件满足，循环体完整执行。
+  </Step>
+  <Step title="第二步：遇到 break">
+    <BreakContinueDiagram step={2} />
+    i=3 时触发 break——**整个 for 循环立即结束**，i=4..9 的迭代不会发生。程序跳到 for 后面的语句。
+  </Step>
+  <Step title="第三步：遇到 continue">
+    <BreakContinueDiagram step={3} />
+    continue 不同：i=3 时跳过本轮剩余代码，但 i 仍会自增到 4，循环继续。break 是「辞职」，continue 是「本轮请假」。
+  </Step>
+</Stepper>
+
+C 还有 `goto` 和带标签的跳转，能把控制流跳到同一函数内的标签处。现代风格里 **goto 几乎只用于集中错误清理**（跳出多层循环到统一 exit），日常逻辑优先用结构化分支。初学阶段知道存在即可，菜单和状态机用 if/switch 足够。
+
+## 逻辑运算符与短路求值
+
+分支条件常组合多个判断：`score >= 60 && score <= 100`（区间）、`ch == 'y' || ch == 'Y'`（大小写都算 yes）。<Term def="&& 两侧都为真结果才为真；|| 任一侧为真结果即为真。求值时若左侧已能决定最终结果，则不再计算右侧，称为短路求值。">逻辑与（&&）和逻辑或（||）</Term> 不仅做真假组合，还有 <Term def="表达式求值时，一旦结果已确定就不再计算后续操作数。&& 左假则右不算；|| 左真则右不算。可用于避免除零、空指针解引用等。">短路求值（short-circuit evaluation）</Term>：
+
+<ShortCircuitDiagram />
+
+```c
+/* 安全：x 为 0 时不会执行 y/x */
+if (x != 0 && y / x > 2) {
+    printf("比值足够大\n");
+}
+
+/* 菜单：y 或 Y 都算确认 */
+if (ch == 'y' || ch == 'Y') {
+    confirmed = 1;
+}
+```
+
+若写成 `y / x > 2 && x != 0`，x 为 0 时先算除法——**未定义行为**，可能崩溃。短路求值的顺序很重要：**把 cheap 且能保护后续的检查放左边**。
+
+## 代码详解：菜单驱动与状态筛选
+
+### 场景一：if 链——成绩分档
+
+```c
+#include <stdio.h>
+int main(void) {
+    int score;
+    char grade;
+
+    printf("分数 = ");
+    scanf("%d", &score);
+
+    if (score >= 90)
+        grade = 'A';
+    else if (score >= 80)
+        grade = 'B';
+    else if (score >= 60)
+        grade = 'P';
+    else
+        grade = 'F';
+
+    printf("等级 %c\n", grade);
+    return 0;
+}
+```
+
+单语句分支可以省略花括号，但**多行或嵌套时务必写花括号**——否则只有紧跟 if 的一行属于分支体。
+
+### 场景二：switch 菜单——离散选项
+
+```c
+#include <stdio.h>
+int main(void) {
+    int choice;
+
+    printf("1.加  2.减  0.退出\n");
+    scanf("%d", &choice);
+
+    switch (choice) {
+        case 1:
+            printf("执行加法\n");
+            break;
+        case 2:
+            printf("执行减法\n");
+            break;
+        case 0:
+            printf("再见\n");
+            break;
+        default:
+            printf("无效选项\n");
+    }
+    return 0;
+}
+```
+
+菜单选项是离散整数——switch 比 else if 链更易读。每个 case 末尾的 break 防止 fall-through 到下一个选项。
+
+### 场景三：break + continue——筛选数组
+
+```c
+#include <stdio.h>
+int main(void) {
+    int data[] = {3, -1, 7, 0, 5, -2, 8};
+    int n = 7, sum = 0, i;
+
+    for (i = 0; i < n; i++) {
+        if (data[i] < 0)
+            continue;       /* 跳过负数 */
+        if (data[i] == 0)
+            break;          /* 遇到 0 停止累加 */
+        sum += data[i];
+    }
+
+    printf("正数累加（遇 0 止）= %d\n", sum);  /* 3+7+5=15 */
+    return 0;
+}
+```
+
+continue 让负数不参与 sum；break 让 0 成为「哨兵式」的停止标记——两者配合实现「只加正数，遇零收工」。
+
+### 场景四：短路求值——安全除法
+
+```c
+#include <stdio.h>
+int main(void) {
+    int a, b;
+
+    printf("a b = ");
+    scanf("%d %d", &a, &b);
+
+    if (b != 0 && (double)a / b > 1.5) {
+        printf("商大于 1.5\n");
+    } else if (b == 0) {
+        printf("除数不能为 0\n");
+    } else {
+        printf("商不超过 1.5\n");
+    }
+    return 0;
+}
+```
+
+`b != 0` 放在 `&&` 左侧——b 为 0 时短路，右侧 `(double)a / b` 不会执行，避免除零。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`switch (choice) { case 1: foo(); case 2: bar(); }` 选 1 时 foo 和 bar 都执行了。
+  **原因**：case 1 末尾缺少 break，执行完 foo() 后 fall-through 滑入 case 2，bar() 也被调用。case 标签不提供自动隔离。
+  **修法**：每个 case 末尾加 break；若多个 case 故意共享代码，写注释 `/* fall through */` 标明意图，并确保后续 case 也有 break。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`if (x / y > 2 && x != 0)` 在 y 为 0 时程序崩溃或结果怪异。
+  **原因**：`&&` 从左到右求值，先算了 `x / y`，y 为 0 时除法未定义。短路保护没起作用，因为「保护条件」写在了危险运算后面。
+  **修法**：把 `x != 0 && y != 0` 或 `y != 0` 放在 `&&` 左侧：`y != 0 && x / y > 2`。先检查除数，再除。
+</Callout>
+
+<Callout type="trap">
+  **现象**：嵌套循环里 break 后外层循环也停了，或以为 break 只跳过一轮 continue 式地「略过」外层。
+  **原因**：break 只终止**最内层** enclosing 循环或 switch，不会一次跳出两层。continue 只影响当前循环的当前迭代。
+  **修法**：需要跳出多层循环时，用标志变量 `done = 1` 加外层判断，或重构为函数里 return。不要滥用 goto，但错误清理路径是 goto 的少数合理用途。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`if (score >= 60); { printf("及格"); }` 无论分数多少都打印「及格」，或从不打印。
+  **原因**：if 后面多了分号——空语句成为 if 的「分支体」，花括号块不属于 if，只是普通复合语句。
+  **修法**：去掉 if 后的分号：`if (score >= 60) { printf("及格"); }`。与 for/while 的分号陷阱同一类错误。
+</Callout>
+
+## 小结
+
+- if / else if / else 构成互斥分支链，从上到下第一个为真的块被执行
+- switch 适合离散整型/字符/枚举的多路选择；case 末尾 break 防 fall-through
+- break 终止最内层循环或 switch；continue 跳过本轮剩余、进入下一轮
+- `&&`/`||` 短路求值：把安全检查和廉价判断放左侧，保护除零与空指针
+- 菜单程序 = switch + break + default；区间分档 = if 链；循环筛选 = continue/break 组合
+
+<Exercises>
+
+**练习 1（改代码型）** 下面 switch 想实现 1=加、2=减、0=退出，但选 1 时会连打两行。找出问题并修正。
+
+```c
+switch (op) {
+    case 1:
+        printf("加\n");
+    case 2:
+        printf("减\n");
+        break;
+    case 0:
+        printf("退出\n");
+        break;
+}
+```
+
+<Answer>
+
+case 1 缺少 break，fall-through 到 case 2。修正：
+
+```c
+switch (op) {
+    case 1:
+        printf("加\n");
+        break;
+    case 2:
+        printf("减\n");
+        break;
+    case 0:
+        printf("退出\n");
+        break;
+    default:
+        printf("无效\n");
+}
+```
+
+</Answer>
+
+**练习 2（问答型）** 读程序，写出输出。说明 continue 跳过了哪些语句。
+
+```c
+#include <stdio.h>
+int main(void) {
+    int i;
+    for (i = 0; i < 5; i++) {
+        if (i == 2)
+            continue;
+        if (i == 4)
+            break;
+        printf("%d ", i);
+    }
+    return 0;
+}
+```
+
+<Answer>
+
+输出：`0 1 3 `（0、1、3 各后跟空格）。
+
+i=2 时 continue 跳过本轮 printf，直接进入 i=3 的迭代。i=4 时 break 终止整个循环，printf 不执行。i=0,1,3 正常打印。
+
+</Answer>
+
+**练习 3（综合实现型）** 用 switch 写简易计算器：读入两个 double 和操作符字符（+ - * /），输出结果；除数为 0 时提示错误。操作符不是四则之一时走 default。
+
+<Answer>
+
+```c
+#include <stdio.h>
+int main(void) {
+    double a, b, result;
+    char op;
+
+    printf("格式：数 运算符 数\n");
+    scanf("%lf %c %lf", &a, &op, &b);
+
+    switch (op) {
+        case '+':
+            result = a + b;
+            printf("= %.2f\n", result);
+            break;
+        case '-':
+            result = a - b;
+            printf("= %.2f\n", result);
+            break;
+        case '*':
+            result = a * b;
+            printf("= %.2f\n", result);
+            break;
+        case '/':
+            if (b == 0)
+                printf("除数不能为 0\n");
+            else {
+                result = a / b;
+                printf("= %.2f\n", result);
+            }
+            break;
+        default:
+            printf("未知运算符 %c\n", op);
+    }
+    return 0;
+}
+```
+
+字符 case 用 `'+'` 等单引号常量；除法分支内仍用 if 检查 b==0——switch 管操作符选型，if 管区间/边界。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="if 语句">
+  条件为真才执行其后语句或语句块的选择结构。可单独使用，也可与 else、else if 组合成多档分支。是 C 程序做决策的基本工具。
+</GlossaryItem>
+
+<GlossaryItem term="else">
+  与 if 配对的 else 分支：if 条件为假时执行 else 后面的语句或语句块。if 与 else 二选一，不能同时执行。
+</GlossaryItem>
+
+<GlossaryItem term="else if">
+  接在 if 之后、else 之前的附加条件分支。前面所有条件都为假时才检查当前 else if。与 if、else 一起构成从上到下依次匹配的分支链。
+</GlossaryItem>
+
+<GlossaryItem term="if / else if / else 分支链">
+  多个互斥条件依次检查，第一个为真的分支执行后其余全部跳过，最多执行一个代码块。适合成绩分档、区间判断等连续条件场景。详见 IfElseChainDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="switch 语句">
+  根据整型、字符或枚举表达式的值跳转到匹配的 case 标签执行。比长 else if 链更适合菜单、状态码等离散选项。语法：`switch(expr) { case 常量: ... break; default: ... }`。
+</GlossaryItem>
+
+<GlossaryItem term="fall-through（贯穿/穿透）">
+  switch 中某 case 缺少 break 时，执行完该 case 代码后继续执行下一个 case 的语句。多数情况是 bug；少数场景故意让多个 case 共享同一段代码。详见 SwitchCaseDiagram 第四步。
+</GlossaryItem>
+
+<GlossaryItem term="break">
+  立即跳出所在的最内层 switch 或循环（for/while/do-while），继续执行 switch/循环之后的代码。用于提前终止搜索、退出菜单循环等。详见 BreakContinueDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="continue">
+  跳过当前循环迭代中 continue 之后的语句，直接进入下一轮（for 会先执行 update 再判条件）。循环本身不结束，只跳过本轮剩余步骤。详见 BreakContinueDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="逻辑与（&&）和逻辑或（||）">
+  逻辑与 &&：两侧都为真结果才为真；逻辑或 ||：任一侧为真结果即为真。常用于组合多个条件。与短路求值配合时，左侧结果已能决定最终真假则不再求值右侧。
+</GlossaryItem>
+
+<GlossaryItem term="短路求值（short-circuit evaluation）">
+  逻辑与 && 左侧为假时整个表达式为假，不再求值右侧；逻辑或 || 左侧为真时整个表达式为真，同样跳过右侧。可用来避免除零、空指针解引用等危险操作。详见 ShortCircuitDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+
+<Attribution />

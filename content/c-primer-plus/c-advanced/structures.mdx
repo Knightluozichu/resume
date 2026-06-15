@@ -1,0 +1,334 @@
+---
+title: 结构和其他数据形式
+type: A
+section: C高级主题
+order: 14
+description: 掌握 struct 定义与成员访问、结构体数组、结构体指针、typedef、联合体 union 与枚举 enum 基础
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型第 14 章（C Primer Plus §14 改编）：struct、typedef、union、enum。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单：
+   1) struct 定义与内存对齐布局 — StructMemoryLayoutDiagram
+   2) 成员访问 . 与结构体数组 — 正文 + 布局图
+   3) 结构体指针 . vs ->（step 1-3）— StructPointerAccessDiagram
+   4) typedef 类型别名 — 正文代码
+   5) union 共享内存 — UnionMemoryDiagram
+   6) enum 命名常量 — EnumDiagram */}
+
+<Objectives>
+
+- 能定义 struct、用点号访问成员，并说明 sizeof 为何可能含 padding、结构体数组在内存中如何连续排布
+- 能声明结构体指针，区分 `.` 与 `->` 的适用场景，并用 typedef 为 struct/enum 起简短别名
+- 能解释 union 与 enum 的用途与陷阱，并回答：向 union 写入 int 后读 float 会发生什么？
+
+</Objectives>
+
+## 为什么要把多种数据「绑」在一起？
+
+程序里常要描述**一个整体**：一本书有书名、价格、页数；一名学生有学号、姓名、成绩。若用三个互不相关的变量，容易传参漏项、排序时对不齐。
+
+想象一张**表格的一行**：列与列属于同一条记录。C 的 <Term def="把多个不同类型的成员组合成一种用户自定义类型；成员按声明顺序存储（含对齐 padding）。">结构体（struct）</Term> 就是给「一行数据」起名字，让编译器把各列打包进一块连续内存。
+
+没有 struct，你只能传一长串参数或平行数组——维护成本高，也谈不上类型安全。这一章还介绍 **typedef**（起别名）、**union**（省内存的「多选一」存储）和 **enum**（可读常量）。
+
+## 定义 struct 与成员访问
+
+```c
+struct book {
+    char title[40];
+    float price;
+    int pages;
+};
+
+struct book novel;
+novel.price = 29.9;
+strcpy(novel.title, "C Primer Plus");
+```
+
+<Term def={'结构体实例内部的具名字段，通过 变量.成员 或 指针箭头成员 读写。'}>成员（member）</Term> 可以是任意类型，甚至嵌套另一个 struct。初始化可用 C99 指定初始化：
+
+```c
+struct book gift = { .title = "Demo", .price = 0.0f, .pages = 120 };
+```
+
+<StructMemoryLayoutDiagram />
+
+编译器为满足 <Term def="CPU 访问内存时要求的地址边界；可能导致 struct 成员之间插入 padding 字节。">对齐（alignment）</Term> 会在成员间插入 padding。`sizeof(struct book)` 可能大于各成员 `sizeof` 之和——写二进制文件或跨平台通信时要格外小心。
+
+## 结构体数组
+
+数组元素可以是 struct，元素在内存中**一个接一个**：
+
+```c
+struct book shelf[3];
+shelf[0].price = 19.9;
+shelf[1].pages = 400;
+```
+
+若 `sizeof(struct book)` 为 52，则 `shelf[1]` 的起始地址比 `shelf[0]` 大 52 字节。这与「数组元素等宽连续」的规则一致，只是元素类型变「宽」了。
+
+## 结构体指针：`.` 与 `->`
+
+函数若按值传递 struct，会**拷贝整份**——大结构体开销高。更常见的是传 <Term def={'指向 struct 实例的指针；通过箭头运算符或 (*p).member 访问成员。'}>结构体指针</Term>：
+
+```c
+void show_price(struct book *pb) {
+    printf("%.2f\n", pb->price);
+}
+
+struct book b = { "Demo", 25.0f, 200 };
+show_price(&b);
+```
+
+<StructPointerAccessDiagram />
+
+<Stepper>
+  <Step title="第一步：变量与点号">
+    <StructPointerAccessDiagram step={1} />
+    对**结构体变量**用 **`.`**：`b.price`。左操作数必须是 struct 类型，不是指针。
+  </Step>
+  <Step title="第二步：取地址">
+    <StructPointerAccessDiagram step={2} />
+    **`&b`** 得到指向 `b` 的指针 `struct book *pb`。`pb` 保存首成员所在地址。
+  </Step>
+  <Step title="第三步：箭头访问">
+    <StructPointerAccessDiagram step={3} />
+    对**指针**用 **`->`**：`pb->price` 等价于 `(*pb).price`。函数形参常用 `const struct book *` 避免修改且避免拷贝。
+  </Step>
+</Stepper>
+
+## typedef：给类型起别名
+
+`struct book` 每次都要写两个单词。可用 <Term def="为已有类型创建别名；不创建新类型，只是语法糖。如 typedef struct book Book;">typedef</Term> 简化：
+
+```c
+typedef struct book {
+    char title[40];
+    float price;
+    int pages;
+} Book;
+
+Book novel;           /* 等价 struct book novel; */
+Book *ptr = &novel;
+```
+
+C11 也允许：
+
+```c
+typedef struct book Book;
+struct book { ... };
+```
+
+对 enum 同样适用：`typedef enum { RED, GREEN } Color;`。别名不改变内存布局，只让声明更短、可读性更好。
+
+## 联合体 union：同一块内存，多种解释
+
+<Term def="所有成员共享同一起始地址；sizeof 等于最大成员；同一时刻只应有一种成员有效。">联合体（union）</Term> 与 struct 相反——成员**重叠**而非顺排：
+
+```c
+union hold {
+    int i;
+    float f;
+    char c;
+};
+
+union hold u;
+u.i = 65;
+printf("%d\n", u.i);   /* 65 */
+```
+
+<UnionMemoryDiagram />
+
+写入 `u.i` 后，若读 `u.f`，编译器会把**同一串字节**按 float 规则解释——通常得不到有意义的浮点数。程序员需自行记录「当前存的是哪种成员」（常见做法是配一个 enum 标签）。
+
+典型用途：嵌入式寄存器位域、网络协议里多种 payload 互斥、在 int/float 间复用 4 字节以省内存。
+
+## 枚举 enum：命名整数常量
+
+<Term def="一组命名整型常量；未赋值时从 0 递增；底层类型通常为 int。">枚举（enum）</Term> 替代魔法数字：
+
+```c
+enum color { RED, GREEN, BLUE, YELLOW };
+enum color c = GREEN;
+
+switch (c) {
+    case RED:   puts("红"); break;
+    case GREEN: puts("绿"); break;
+    default:    break;
+}
+```
+
+<EnumDiagram />
+
+可显式赋值：`enum { JAN = 1, FEB, MAR };` 则 FEB=2。C 里 enum 与 int 可隐式混用（C++ 更严格）；打印时用 `%d`。
+
+## 代码详解：图书管理小片段
+
+### 定义与 typedef
+
+```c
+typedef struct {
+    char isbn[14];
+    float price;
+    int stock;
+} Item;
+
+Item inv = { "978-013", 59.0f, 10 };
+```
+
+### 结构体数组与指针传参
+
+```c
+void restock(Item *p, int add) {
+    if (p != NULL)
+        p->stock += add;
+}
+
+Item warehouse[100];
+warehouse[0].stock = 5;
+restock(&warehouse[0], 20);
+```
+
+### union 与 enum 配合（ tagged union 思路）
+
+```c
+enum ValueKind { VK_INT, VK_FLOAT };
+
+struct Value {
+    enum ValueKind kind;
+    union {
+        int i;
+        float f;
+    } data;
+};
+
+struct Value v;
+v.kind = VK_INT;
+v.data.i = 42;
+/* 读 v.data.i 前应先检查 v.kind == VK_INT */
+```
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`scanf("%s", s.title)` 写 struct 里的 char 数组，超长书名溢出。
+  **原因**：`title` 只是定长数组，与单独 char 数组一样无边界保护。
+  **修法**：用宽度限制 `scanf("%39s", s.title)` 或改用 `fgets` + 解析。
+</Callout>
+
+<Callout type="trap">
+  **现象**：对 struct 指针 `pb` 写 `pb.price` 编译报错。
+  **原因**：**`.` 用于 struct 变量**，**`->` 用于 struct 指针**；混用是语法错误。
+  **修法**：改为 `pb->price`，或 `(*pb).price`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：union 写入 `u.i` 后读 `u.f`，得到奇怪的小数。
+  **原因**：成员**共享内存**，读 float 是把 int 的位模式当浮点解释，并非数值转换。
+  **修法**：只读与最后一次写入类型一致的成员；或用 enum 标签记录当前有效成员。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`fwrite(&s, sizeof s, 1, fp)` 在另一台机器 `fread` 后成员错乱。
+  **原因**：struct **padding、字节序** 因平台而异。
+  **修法**：跨平台用文本/JSON，或按字段逐字节序列化并约定 endian 与对齐。
+</Callout>
+
+## 小结
+
+- **struct** 把相关成员打包；**`.`** 访问变量成员；数组元素连续存放
+- **struct *** 传参避免大拷贝；**`->`** 访问指针成员
+- **typedef** 为 struct/enum 起别名，不新造类型
+- **union** 成员重叠，同一时刻只认一种有效解释
+- **enum** 提供可读整型常量，默认从 0 递增
+
+<Exercises>
+
+**练习 1（问答型）** `struct { char a; double b; }` 的 sizeof 为什么往往大于 9？
+
+<Answer>
+
+**char** 占 1 字节后，**double** 常要求 8 字节对齐，编译器在 `a` 后插入 **padding**；末尾也可能 padding 到 8 的倍数。故 sizeof 常为 **16**（依平台而异），而非 1+8。
+
+</Answer>
+
+**练习 2（改代码型）** 下面哪里错了？如何改？
+
+```c
+struct Point { int x; int y; };
+struct Point *pp;
+pp.x = 1;
+```
+
+<Answer>
+
+`pp` 是指针，不能用 **`.`**。应改为 **`pp->x = 1;`**，且之前需 `pp = &某个 Point` 或 `malloc` 分配。未指向有效对象就写入是未定义行为。
+
+</Answer>
+
+**练习 3（综合实现型）** 用 typedef 定义 `Student { char name[32]; int id; }`，声明含 3 个元素的数组，初始化第二名 id=1002，写函数 `void print_id(const Student *s)` 打印 id。
+
+<Answer>
+
+```c
+typedef struct {
+    char name[32];
+    int id;
+} Student;
+
+void print_id(const Student *s) {
+    if (s) printf("%d\n", s->id);
+}
+
+int main(void) {
+    Student class[3] = { {"Ann", 1001}, {"Bob", 1002}, {"Cy", 1003} };
+    print_id(&class[1]);  /* 1002 */
+    return 0;
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="结构体（struct）">
+  用户自定义类型，包含多个成员；成员顺序存储，可能有 padding。见 StructMemoryLayoutDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="成员（member）">
+  struct 或 union 内部的具名字段；用点号或箭头访问。
+</GlossaryItem>
+
+<GlossaryItem term="对齐（alignment）">
+  CPU 访问内存的地址边界要求；导致 struct 中插入 padding，sizeof 变大。
+</GlossaryItem>
+
+<GlossaryItem term="结构体指针">
+  指向 struct 的指针；函数传参避免拷贝；用 -> 访问成员。
+</GlossaryItem>
+
+<GlossaryItem term="typedef">
+  为已有类型创建别名，如 typedef struct book Book; 简化声明。
+</GlossaryItem>
+
+<GlossaryItem term="联合体（union）">
+  成员共享同一内存；sizeof 为最大成员；同时只一种有效。见 UnionMemoryDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="枚举（enum）">
+  命名整型常量集合，默认 0,1,2… 递增；用于 switch 与可读常量。见 EnumDiagram。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

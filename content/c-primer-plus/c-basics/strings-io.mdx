@@ -1,0 +1,447 @@
+---
+title: 字符串和格式化输入/输出
+type: C
+section: C基础
+order: 4
+description: 掌握C语言中字符串的本质——字符数组+空字符，以及scanf/printf的格式化输入输出，包含常用格式说明的完整用法
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 4 章（C Primer Plus §4 改编）：讲 C 字符串本质、printf 格式化、scanf 陷阱、字符串函数预览、gets 弃用。
+   重心是代码对照(§6) + 常见误区(§7)，数学省略(math:false)，概念讲解压缩(§3)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) C 字符串本质（char 数组 + \0 结尾、字符串字面量、strlen()）— CStringMemoryDiagram
+   2) printf 深度使用（%d/%f/%s/%c/%.2f/%10d/%-10d/%-#x 格式标志组合）— PrintfFormatFlagsDiagram
+   3) scanf 用法与陷阱（&取地址、格式匹配、缓冲区残留）— ScanfInputDiagram (step 1-3) + IOMemoryBufferDiagram
+   4) 常用字符串函数预览（strlen/strcmp/strcpy）— 代码示例
+   5) gets 的弃用与 fgets/puts — 代码示例 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；末条检验问题。 */}
+
+<Objectives>
+
+- 能正确声明、初始化和输出 C 字符串，解释 strlen() 和 sizeof() 对同一字符串为什么差 1
+- 能用 printf 的各种格式标志（宽度、精度、对齐、前缀）精确控制输出格式
+- 能回答：用 scanf("%d", &n) 读完一个整数后紧接着用 getchar()，为什么读到的不是下一个字符而是换行符？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用工厂流水线库——输入输出像材料进出仓库的"格式标签"。 */}
+
+## 为什么 C 的输入输出这么"啰嗦"？
+
+想象你要给一个自动化仓库发指令："把一个红色盒子放到 3 号架第 2 层"。这条指令必须精确到每个细节——什么颜色、哪个架子、哪一层，错一个仓库机器人就放不对。
+
+在 C 语言里，输入和输出就是这样的：电脑不会"猜"你想把数据存到哪、想用什么格式显示。你必须告诉它：**"这个数字是整数（%d）、存在变量 n 的内存地址（&n）"**。每个细节都得自己说清楚，少说一个就出问题。
+
+**如果没有这种精确控制呢？** 那 printf 输出 3.14159 时你不知道该显示 2 位还是 10 位小数，scanf 不知道把读到的 42 存到哪个变量——数据就在缓冲区里漂着，进不了你的程序，你也看不见正确的输出。这一章就教你掌握 C 输入输出的"格式标签"，把数据在程序和外部世界之间精确搬运。
+
+{/* 3. 概念讲解（spec §三，C 实战型压缩"是什么"）：一节一概念；术语首现 <Term def> 高亮；每概念配图或引用 Demo。 */}
+
+## C 字符串的本质——char 数组加一个看不见的尾巴
+
+在 C 语言里没有专门的"字符串类型"。<Term def="C 语言中表示文本的方式：连续排列的字符加上结尾的空字符 \0。">字符串（string）</Term> 就是一个字符数组，只不过最后多了一个看不见的 <Term def="ASCII 码为 0 的特殊字符，写作 \0。它的作用是告诉 C：字符串数据到这里就结束了。">空字符（null character）</Term>——写作 `\0`。
+
+<CStringMemoryDiagram />
+
+字符串字面值（双引号包围的文本，如 `"Hello"`）在编译时就被处理成带有 `\0` 的字符数组。你写 `char str[] = "Hello";`，编译器自动分配 6 个字节而不是 5 个——多出来的那一个就是末尾的 `\0`。
+
+<Term def={'C 标准库函数，返回字符串中字符的个数——注意它数到 \\0 就停止，所以返回的长度永远比 sizeof 少 1。需要包含 string.h 头文件。'}>strlen</Term> 函数（声明在 `<string.h>` 中）可以告诉你字符串"实际有多长"——它从第一个字符开始数，数到 `\0` 就停。所以 `strlen("Hello")` 返回 5，而 `sizeof("Hello")` 返回 6——差的那 1 个字节就是尾部的 `\0`。
+
+```c
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char str[] = "Hello";
+
+    printf("strlen(str) = %zu\n", strlen(str));  // 输出 5
+    printf("sizeof(str) = %zu\n", sizeof(str));  // 输出 6
+
+    // sizeof 算上了 C 自动给你加的那个 \0！
+    return 0;
+}
+```
+
+记住这条**铁律**：C 语言的字符串必须靠 `\0` 判断结束——没有 `\0` 的不是字符串，只是普通字符数组。
+
+### printf 的格式说明——百分号后面那短短几个字符的全套能力
+
+上一章我们已经用 `printf()` 输出过数据，但 `printf` 的能力远不止 `%d` 和 `%f`。<Term def="printf 格式串中以 % 开头的指令，如 %d、%f、%.2f。它告诉 printf：后面的参数是什么类型、要怎么显示。">格式说明符（format specifier）</Term> 的通式是 `%[标志][宽度][.精度]类型`，由三个可选的控制字段和一个必选的类型字段组成。
+
+<PrintfFormatFlagsDiagram />
+
+来逐一看每个字段的作用：
+
+* **类型（必选）：** 告诉 printf 参数是什么类型——`d`（有符号整数）、`u`（无符号整数）、`f`（浮点数）、`c`（字符）、`s`（字符串）、`x`（十六进制）。
+* **宽度（可选）：** `%10d` 表示总宽度至少 10 个字符——不够的用空格填满。数字默认右对齐，加 `-`（`%-10d`）变成左对齐。
+* **.精度（可选）：** `%.2f` 指浮点数保留 2 位小数；`%.5s` 指字符串最多打印前 5 个字符。
+* **标志（可选）：** `-` 左对齐、`+` 强制显示正号、`#` 给八/十六进制加前缀（如 `%#x` → `0xff`）、`0` 用 0 补足宽度而不是空格。
+
+下面这段代码把上面所有玩法串在一起：
+
+```c
+#include <stdio.h>
+int main(void) {
+    int  n = 42;
+    double pi = 3.1415926535;
+
+    printf("默认:    |%d|\n", n);      // |42|
+    printf("宽度10:  |%10d|\n", n);    // |        42|  ⟵ 右对齐
+    printf("左对齐:  |%-10d|\n", n);   // |42        |  ⟵ 左对齐
+    printf("补零:    |%010d|\n", n);   // |0000000042|  ⟵ 左边填0
+    printf("带符号:  |%+d|\n", n);     // |+42|        ⟵ 强制显示正号
+    printf("十六进制:|%#x|\n", 255);   // |0xff|       ⟵ 0x前缀
+    printf("浮点默认:|%f|\n", pi);     // |3.141593|   ⟵ 默认6位
+    printf("精确2位: |%.2f|\n", pi);   // |3.14|       ⟵ 保留2位
+    printf("宽10精2: |%10.2f|\n", pi); // |      3.14| ⟵ 宽度+精度组合
+    printf("左宽10精2:|%-10.2f|\n", pi);//|3.14      | ⟵ 组合标志
+
+    return 0;
+}
+```
+
+<Callout type="tip">
+  格式说明的组合顺序是固定的：`%` → 标志 → 宽度 → `.精度` → 类型。记住这个顺序就不会写错——`%-10.2f` 是对的，`%.2-10f` 是错的。
+</Callout>
+
+### scanf 的用法——每次输入都是一次"格式匹配"
+
+如果说 `printf` 是把数据按你指定的格式"编码"成文字输出，那 `scanf()` 就是反过来——从输入里按格式"解码"数据存入变量。<Term def={'C 标准库的格式化输入函数。与 printf 相反：它按格式说明从标准输入中读取数据，存到指定变量的地址里。需要包含 stdio.h 头文件。'}>scanf</Term> 的用法跟 `printf` 相似——也是用格式说明来告诉电脑"输入里的数据长什么样"。
+
+<Callout type="warn">
+  **scanf 最大的不同：你必须传递变量的地址，而不是变量的值！** 在变量名前加 <Term def="一元运算符 &，放在变量名前表示取该变量的内存地址。scanf 需要用地址来知道把读到的数据写到哪。">取地址运算符（&）</Term>——`scanf("%d", &n)` 中的 `&n` 就是变量 `n` 在内存中的地址。忘记写 `&` 是 scanf 的经典翻车现场——程序崩溃或输出乱七八糟。
+</Callout>
+
+下面用 Stepper 一步步看 scanf 到底怎么工作的——每一步都有对应的图示：
+
+## 动手：scanf 从键盘到变量的三步
+
+> 猜一猜：`scanf("%d %f", &n, &f);` 输入 `42 3.14` 回车后，`n` 是 42、`f` 是 3.14——但回车符去哪了？它留在输入缓冲区里了！通过下面 Stepper 一步步揭晓。
+
+<Stepper>
+  <Step title="第一步：键盘输入进入缓冲区">
+    <ScanfInputDiagram step={1} />
+    当你敲 `42 3.14↵`（↵ = 回车键），这些字符首先进入一个叫**输入缓冲区**（stdin buffer）的临时存储区。scanf 不是直接从键盘读的——它是从这个缓冲区里读。缓冲区是一个先到先取的队列：你按顺序输入的字符在这里排好队，等 scanf 来取。
+  </Step>
+  <Step title="第二步：scanf 按格式说明匹配">
+    <ScanfInputDiagram step={2} />
+    `scanf("%d %f", &n, &f)` 的格式串 `"%d %f"` 告诉 scanf：
+    - 先跳过空白字符（空格、回车、制表符）
+    - 读一个整数 → 存到 `&n` 指向的地址（n 变成 42）
+    - 再跳过空白
+    - 读一个浮点数 → 存到 `&f` 指向的地址（f 变成 3.14）
+    scanf 的关键规则：**格式说明 `%d` 遇到第一个不能识别为数字的字符就停**——这里读到空格就停止读整数，下一个 `%f` 从空格后面的 `3.14` 接着读。
+  </Step>
+  <Step title="第三步：缓冲区残留——经典 bug 来源">
+    <ScanfInputDiagram step={3} />
+    扫描完成后，scanf 留下了"剩菜"在缓冲区——格式串只匹配了 `42` 和 `3.14`，但后面的回车符 `\n` 还留在缓冲区。如果你紧接着再调用一次 `scanf` 或 `getchar()`，它会首先读到这个残留的 `\n`！
+    **这是 C 初学者最常见的"输入失灵"bug：** 你以为 getchar() 在等你输入，但它瞬间就读到了上一次 scanf 剩下的换行符。解决办法：在 scanf 后加一行 `getchar();` 或者用 `scanf(" %c", &ch)`（百分号前加一个空格）来跳过残留空白。
+  </Step>
+</Stepper>
+
+### printf / scanf 与缓冲区——不能只看表面
+
+<IOMemoryBufferDiagram />
+
+缓冲区的概念不仅仅影响 scanf——printf 也有输出缓冲区。如果你写 `printf("Hello")` 但没写 `\n`，程序结束时这段文字可能还没从缓冲区刷新到控制台——你根本看不到它。加 `\n` 通常能触发刷新；你也可以用 `fflush(stdout)` 强制刷新。
+
+**记忆口诀：printf 输出靠 \n 刷新；scanf 输入留 \n 惹祸。** 这两条规则帮你避过 90% 的输入输出困惑。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 实战型用 Stepper 展示 scanf 流程，已在概念讲解中内嵌。 */}
+
+{/* 6. 代码对照（spec §六，C 型 → 重！逐段讲解，覆盖 ≥80% 关键代码）：单块 ≤30 行；块间有解说。 */}
+
+## 代码详解：四个核心场景逐段拆解
+
+### 场景一：声明和输出字符串——字符串的三种"写法"
+
+```c
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    // 方式①：{} 逐字符初始化（C 会自动加 \0）
+    char s1[] = {'H', 'i', '\0'};   // "Hi"——手动写 \0
+
+    // 方式②："" 字符串字面值（编译器自动加 \0）
+    char s2[] = "World!";           // "World!"——自动加 \0
+
+    // 方式③：char 指针指向字面值
+    const char *s3 = "Hello";       // 指针指向只读的"Hello\0"
+
+    printf("%s %s %s\n", s1, s2, s3);   // 输出 Hi World! Hello
+    printf("strlen(s2) = %zu\n", strlen(s2));  // 6
+    return 0;
+}
+```
+
+三种方式有细微差别：方式②在栈上分配可变字符数组（字母可以改），方式③的指针指向的是**只读的字符串字面值**——试图 `s3[0] = 'h';` 在大多数平台上会崩溃。`%s` 格式说明让 printf 从给定地址开始、遇到 `\0` 就停——它不关心字符串是怎么声明的。
+
+### 场景二：printf 格式组合——宽度、精度、标志一起上
+
+```c
+#include <stdio.h>
+int main(void) {
+    double price = 12.50;
+    int    count = 3;
+
+    // 记账风格：左对齐标签 + 右对齐金额
+    printf("%-20s %8.2f\n", "单价:", price);       // 单价:            12.50
+    printf("%-20s %8d\n",   "数量:", count);       // 数量:                3
+    printf("%-20s %8.2f\n", "总价:", price * count);// 总价:            37.50
+
+    return 0;
+}
+```
+
+`%-20s` 中 `-` 表示左对齐，`20` 是宽度——标签左边贴着显示，右边用空格补齐到 20。`%8.2f` 中 `8` 是总宽度（含小数点和小数位），`.2` 是 2 位小数——金额 37.50 刚好占满 8 个字符宽度，右边对齐。这套格式化组合在打印表格时非常实用。
+
+### 场景三：scanf 读取混合类型——每一个百分号都在"扫描"
+
+```c
+#include <stdio.h>
+int main(void) {
+    int  age;
+    float height;
+    char name[20];
+
+    printf("请输入：姓名 年龄 身高\n");
+    scanf("%s %d %f", name, &age, &height);
+
+    printf("%s，%d 岁，身高 %.2f 米\n", name, age, height);
+    return 0;
+}
+```
+
+`name` 是数组名——**数组名本身就是地址**，所以不需要写 `&name`。但 `age` 和 `height` 是普通变量，**必须加 `&`**。%s 读取字符串时遇到空白字符（空格、回车）就停——所以这个程序读不到带空格的姓名（比如 "Li Hua" 只会读到 "Li"）。%d 读到空格或回车停止，%f 同理。
+
+### 场景四：gets 的危险与 fgets 的安全替代
+
+```c
+#include <stdio.h>
+int main(void) {
+    char line[20];
+
+    // ❌ gets(line)——已从 C11 标准删除，永不使用！
+    // gets 不知道数组有多大，用户输入 100 个字符会把栈冲垮
+
+    // ✅ 安全替代：fgets
+    printf("请输入一行文字：");
+    fgets(line, sizeof(line), stdin);   // 最多读 sizeof(line)-1 个字符
+    fputs(line, stdout);                // 输出读到的内容（fgets 会保留末尾 \n）
+
+    return 0;
+}
+```
+
+`gets()` 函数从 C11 标准起已被正式**删除**——它不知道目标数组有多长，用户输入超过数组大小的内容会覆盖栈上其他数据，这是著名的"缓冲区溢出"安全漏洞。`fgets()` 接受三个参数：目标数组、最大长度（含 `\0`）、输入源（`stdin` 就是标准输入）。`fgets` 会在遇到换行符时也把它读入数组（保留 `\n`），而 `puts` 的输出末尾自动换行。`fgets` + `fputs` 是 C 中安全的行输入输出组合。
+
+<Callout type="trap">
+  `fgets` 读入的字符串末尾会包含换行符 `\n`（除非一行刚好填满缓冲区）。如果你不需要这个换行符，可以用 `line[strcspn(line, "\n")] = '\0';` 把它去掉——`strcspn` 函数找到 `\n` 的位置，你在那个位置放一个 `\0` 就把换行符"截断"了。
+</Callout>
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`char str[5] = "Hello";` 编译通过，但 `printf("%s", str);` 输出 `Hello` 后面跟一串乱码。
+  **原因**：`"Hello"` 需要 6 个字节——5 个字符 + 1 个 `\0`。你只分配了 5 个字节，编译器把 `H` `e` `l` `l` `o` 塞进去，**没有空间放 `\0`**。printf 按 `%s` 输出时，读不到 `\0` 就一直往后读——把紧跟 str 的内存空间里的内容当字符串输出，直到偶然遇到一个值为 0 的字节才停。
+  **修法**：声明字符数组时永远给 `\0` 留一个位置——`char str[6] = "Hello";` 或者直接不写大小让编译器算：`char str[] = "Hello";`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`int n; scanf("%d", n);` 程序直接崩溃——段错误（Segmentation Fault）。
+  **原因**：scanf 的格式参数后面必须给出变量的**地址**，而不是变量本身。`scanf("%d", n)` 把 n 的**值**（未初始化，可能是随机的）当作内存地址去写——这是往一个随机的、不属于你的内存地址写数据，操作系统会立刻杀死你的程序。
+  **修法**：给 scanf 传地址——`scanf("%d", &n);`。唯一的例外是数组名和指针：`char name[20]; scanf("%s", name);` 不需要 `&`，因为数组名本身就是地址。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`scanf("%d", &n); char ch; scanf("%c", &ch);` ——第一次输完 `42` 回车后，`ch` 瞬间变成了 `\n`，根本不等你输入。
+  **原因**：scanf 在第一轮把 `42` 读走，但回车符 `\n` 留在缓冲区。第二轮 `scanf("%c", &ch)` 立刻从缓冲区读到了这个残留的 `\n`——%c 不跳过空白。这就是经典的"输入被跳过"现象。
+  **修法**：三种方案——① 在第二个 scanf 的 `%c` 前加一个空格（`" %c"`），这个空格告诉 scanf 跳过前面的空白；② 在两轮 scanf 之间加 `getchar()` 吃掉残留的 `\n`；③ 统一用 `fgets` 做所有输入，不用 scanf 读取字符。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`printf("进度 %d%", 80);` 输出 `进度 80%` 的后面跟了一堆乱码；或者 `printf("值: %d\n", 3.14159);` 输出 `1374389535` 而不是 `3`。
+  **原因**：第一条 `%` 在 printf 格式串里是特殊字符——`%%` 才是"输出一个百分号"。单独的 `%` 被 printf 当成了不完整的格式说明开头，吞掉了后面的逗号和参数，输出就乱了。第二条 `%d` 告诉 printf"下一个参数是 4 字节的 int"，但 3.14159 是 8 字节的 double——printf 只取了 double 二进制的前半截当 int 解读，当然不是你要的值。
+  **修法**：第一条把 `%d%` 改成 `%d%%`。第二条 `printf("值: %f\n", 3.14159);`——类型和格式说明必须一一对应：int 用 %d、double 用 %f、char* 用 %s。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标呼应；练习 2-3 题含 1 道改代码题；答案折叠。 */}
+
+## 小结
+
+- C 字符串 = char 数组 + 结尾 \0——strlen 不算 \0，sizeof 算上 \0，差 1 不是 bug
+- printf 的格式通式 %[标志][宽度][.精度]类型 —— 组合这些字段就能完成日常所有输出格式需求
+- scanf 必须传变量地址（&），从输入缓冲区按格式匹配读取——跟 printf 方向相反但格式体系相同
+- 输入缓冲区的残留（\n 等未匹配字符）是"输入失灵"的根源——%c 前加空格、加 getchar() 或改用 fgets 都能解决
+- 永远不用 gets——用 fgets(name, sizeof(name), stdin) 安全替代；puts/fputs 做行输出
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这段程序有六处错误或隐患。找出每一处并修正，写出完整的改正后代码。
+
+```c
+#include <stdio.h>
+int main(void) {
+    char name[5] = "Xiao";
+    int age;
+    float score;
+    char grade;
+
+    gets(name);
+    scanf("%f", score);
+    scanf("%c", &grade);
+    printf("姓名: %s 年龄: %c 成绩: %d\n", name, age, score);
+    return 0;
+}
+```
+
+<Answer>
+
+六处问题：
+① `char name[5]="Xiao"`——"Xiao" 需要 5 字节 + \0 = 6 字节，数组太小。改正为 `char name[20];` 或不写大小。
+② `gets(name)`——gets 已从 C11 删除且极度危险。改正为 `fgets(name, sizeof(name), stdin);`。
+③ `scanf("%f", score)`——漏了 `&`，scanf 需要变量地址。改正为 `scanf("%f", &score);`。
+④ `scanf("%c", &grade)` 前没有处理缓冲区残留——前面的 scanf 留下的 \n 会被 %c 立即读到。改正为 `scanf(" %c", &grade);`（%c 前加空格）。
+⑤ `printf` 里 `%c` 对应 `age`——但 age 是 int，应该用 `%d`。
+⑥ `printf` 里 `%d` 对应 `score`——但 score 是 float，应该用 `%f`。
+
+修正后：
+
+```c
+#include <stdio.h>
+int main(void) {
+    char name[20];
+    int age;
+    float score;
+    char grade;
+
+    printf("请输入姓名：");
+    fgets(name, sizeof(name), stdin);
+
+    printf("请输入年龄和成绩：");
+    scanf("%d %f", &age, &score);
+
+    printf("请输入等级：");
+    scanf(" %c", &grade);   // 注意 %c 前面的空格！
+
+    printf("姓名: %s年龄: %d 成绩: %.1f 等级: %c\n", name, age, score, grade);
+    return 0;
+}
+```
+
+</Answer>
+
+**练习 2（问答型）** 读下面的程序，写出每一行 printf 的输出结果（共 6 行），并逐一解释为什么。
+
+```c
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char str[] = "CPro";
+    printf("① strlen = %zu\n", strlen(str));
+    printf("② sizeof = %zu\n", sizeof(str));
+    printf("③ |%10s|\n", str);
+    printf("④ |%-10s|\n", str);
+    printf("⑤ str[4] = %d\n", str[4]);
+    printf("⑥ str[5] = %d\n", str[5]);
+    return 0;
+}
+```
+
+<Answer>
+
+① 输出 `strlen = 4`——"CPro" 有 4 个字符 C/P/r/o，\0 不计入 strlen。
+② 输出 `sizeof = 5`——数组 `str` 分配了 5 个字节（C/P/r/o/\0），sizeof 算上 \0。
+③ 输出 `|      CPro|`——%10s 总宽度 10，字符串只有 4 字符，默认右对齐，左边填 6 个空格。
+④ 输出 `|CPro      |`——%-10s 左对齐，右边填 6 个空格。
+⑤ 输出 `str[4] = 0`——数组第 5 个元素（下标 4）是 \0，它的 ASCII 码就是 0。
+⑥ 输出 `str[5] = ...`——**这句有 bug！** 数组只有 5 个元素（下标 0~4），`str[5]` 越界访问，行为未定义——可能输出随机值，也可能崩溃。
+
+</Answer>
+
+**练习 3（综合实现型）** 写一段程序：声明一个最多存 64 个字符的字符数组，用 `fgets` 读取用户输入的一整行文字，然后用 `strlen` 输出这一行文字的长度，用 `printf` 的 `%s` 和宽度标志分别以默认、右对齐（宽度 50）、左对齐（宽度 30）三种格式输出这行文字。
+
+<Answer>
+
+```c
+#include <stdio.h>
+#include <string.h>
+int main(void) {
+    char line[64];
+
+    printf("请输入一行文字（最多 63 字符）：");
+    fgets(line, sizeof(line), stdin);
+
+    printf("\n你输入了 %zu 个字符（含末尾 \\n）\n", strlen(line));
+
+    printf("默认输出:  %s", line);
+    printf("右对齐50:  %50s", line);
+    printf("左对齐30:  %-30s", line);
+
+    return 0;
+}
+```
+
+> 输入 `Hello C!` 后：
+> 默认输出:  `Hello C!\n`
+> 右对齐50:（前 40 个空格）`          Hello C!\n`
+> 左对齐30: `Hello C!`（后面填空格）`\n`
+
+`fgets` 读入的内容里包含用户敲的回车符（末尾的 `\n`），所以 strlen 比你以为的字符个数多 1。刚才的练习 1 中提到可以用 `line[strcspn(line, "\n")] = '\0'` 把它去掉。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（共 8 个，按首现顺序）；释义面向零基础。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="字符串（string）">
+  C 语言中存文本的方式——就是 char 类型的字符一个接一个在内存里排好队，然后队尾放一个空字符 \0 当"终点站"标记。C 没有专门的 string 类型，所谓的"字符串"本质上就是 char 数组——只是多了一个 \0 结尾。详见本章「C 字符串的本质」和 CStringMemoryDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="空字符（null character）">
+  ASCII 码为 0 的字符，写作 \0。它不像换行符 \n 那样有"可见效果"——它的唯一作用就是告诉 C："字符串到这里结束，后面不用再读"。strlen 数到它就停，printf 的 %s 读到它就不继续输出。详见本章「C 字符串的本质」一节。
+</GlossaryItem>
+
+<GlossaryItem term="strlen">
+  C 标准库 `<string.h>` 里的函数：接收一个字符串（char 数组），返回从第一个字符到 \0 之前的字符个数。\0 本身不计入。由于 \0 不算在内，sizeof 返回的结果永远比 strlen 大 1——这 1 个字节就是结尾的 \0。详见本章「C 字符串的本质」示例代码。
+</GlossaryItem>
+
+<GlossaryItem term="printf()">
+  C 标准库里最常用的输出函数（`<stdio.h>`）。它像一个填空题的模板引擎：格式串里的普通文字原样输出，百分号 % 开头的格式说明被替换成后面参数的值。百分号之后控制三个维度——宽度（占几位）、精度（留几位小数）、类型（int/float/char）——合起来就是 `%[标志][宽度][.精度]类型`。详见本章「printf 的格式说明」一节和 PrintfFormatFlagsDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="格式说明符（format specifier）">
+  printf 和 scanf 中以 % 开头、以类型字母结尾的指令。%d 表示"这里要填一个有符号整数"，%f 表示"这里要填一个浮点数"。不同函数对格式说明符的规则不同——比如 scanf 里 double 用 %lf，但 printf 里 double 和 float 都用 %f。详见本章「printf 的格式说明」和 PrintfFormatFlagsDiagram 图示。
+</GlossaryItem>
+
+<GlossaryItem term="scanf">
+  C 标准库的格式化输入函数（`<stdio.h>`）。和 printf 相反——它从输入缓冲区里按格式说明读数据，存到变量里。核心差异：储你给 scanf 的不是变量本身，而是变量的**地址**（写 `&n` 而不是 `n`）——只有数组名不需要加 &（因为数组名本身就是地址）。详见本章「scanf 的用法」一节和 ScanfInputDiagram Stepper 图示。
+</GlossaryItem>
+
+<GlossaryItem term="取地址运算符（&）">
+  一元运算符，放在变量名前面，返回变量在内存中的地址。`&n` 的意思不是"引用 n 的值"，而是"n 在内存里的门牌号"。scanf 需要用这个地址来知道"把读到的数据写到哪一块内存"。忘记写 & 会导致 scanf 往错误的地址写数据——程序崩溃。详见本章「scanf 的用法」一节。
+</GlossaryItem>
+
+<GlossaryItem term="输入缓冲区（input buffer）">
+  键盘和程序之间的中转站。用户敲的每个字符先到这里排队——scanf 或 getchar 从缓冲区读取，而不是直接从键盘读。scanf 按格式匹配时只取走自己需要的内容，不匹配的字符（如多余的换行符）留在缓冲区作为"剩菜"——下一次读取时会被意外读到，造成"输入被跳过"的经典 bug。详见 ScanfInputDiagram Stepper 和 IOMemoryBufferDiagram 图示。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
+
+<Attribution />

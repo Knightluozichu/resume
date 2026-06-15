@@ -1,0 +1,376 @@
+---
+title: 数组和指针
+type: C
+section: C函数数组指针
+order: 10
+description: 掌握一维/二维数组、指针基础、数组与指针关系、指针算术，能正确遍历数组并通过指针访问元素
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第 10 章（C Primer Plus §10 改编）：一维/二维数组、指针、数组名退化、指针算术、下标与 *(arr+i) 等价。
+   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
+   draft:true 待总监 review。 */}
+
+{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
+   1) 一维数组连续内存布局 — ArrayMemoryLayoutDiagram
+   2) 指针算术 p+1 移动 sizeof(type) — PointerArithmeticDiagram（step 1-3）
+   3) arr[i] 与 *(arr+i) 等价 — ArrayPointerEquivalenceDiagram
+   4) 二维数组行优先存储 — TwoDimArrayDiagram */}
+
+<Objectives>
+
+- 能声明并初始化一维、二维数组，解释元素在内存中如何连续排布，以及合法下标范围
+- 能说明指针存地址、`*` 解引用、`&` 取地址，并用指针算术 `p+n` 遍历数组
+- 能写出 `arr[i]` 与 `*(arr+i)` 的等价关系，并正确访问 `m[r][c]` 这样的二维元素
+
+</Objectives>
+
+## 为什么需要「数组」和「指针」？
+
+想象一排带编号的小抽屉：第 0 格放周一温度，第 1 格放周二……你要算一周平均，就得依次打开每一格。如果给每个温度单独起名 `mon`、`tue`……变量名会爆炸，代码也无法用循环处理「第 i 个」。
+
+**数组**就是 C 语言给你的「一整排编号抽屉」：一次声明 `double temps[7]`，用下标 `0` 到 `6` 访问。**指针**则是「写着某格门牌号的纸条」——知道地址，就能找到那格里的值，还能用 `p+1` 走到下一格。
+
+这一章把数组的排布、指针的含义、以及两者如何配合讲清楚。搞懂这些，后面字符串、动态内存、函数传数组都会顺很多。
+
+## 一维数组：连续内存里的一排元素
+
+<Term def="由相同类型元素组成、在内存中连续存放、用单个名字和下标访问的数据结构。下标从 0 开始。">数组（array）</Term> 声明写法：
+
+```c
+int scores[5];                    /* 5 个 int，未初始化 */
+double temps[7] = {20.1, 21.0};   /* 前 2 个有初值，其余为 0 */
+int primes[] = {2, 3, 5, 7};      /* 长度由初值个数推断为 4 */
+```
+
+`scores[5]` 表示 5 个 `int` 占一段**连续**内存。合法下标是 `0` 到 `4`——访问 `scores[5]` 已越界，行为未定义（可能崩溃、可能看似正常）。
+
+<ArrayMemoryLayoutDiagram />
+
+`sizeof scores` 是整个数组的字节数（通常 5×4=20），不是「指针大小」。用循环遍历是数组最经典的用法：
+
+```c
+int i, sum = 0;
+for (i = 0; i < 5; i++)
+    sum += scores[i];
+```
+
+## 指针基础：地址、解引用、取地址
+
+<Term def="保存另一个对象内存地址的变量。类型写为「指向 T 的指针」，如 int *p。">指针（pointer）</Term> 里存的是**地址**，不是普通数值：
+
+```c
+int num = 42;
+int *ptr;      /* ptr 将指向 int */
+ptr = &num;    /* & 取 num 的地址 */
+printf("%d\n", *ptr);  /* * 解引用：取该地址上的 int 值 → 42 */
+```
+
+- **`&x`**：<Term def="一元运算符，得到变量 x 在内存中的地址。">取地址</Term>
+- **`*p`**：<Term def="一元运算符，访问指针 p 所指向地址上的值。">解引用（dereference）</Term>
+
+指针也有类型：`int *p` 只能指向 `int`；`double *q` 指向 `double`。类型告诉编译器解引用时读几个字节、指针加 1 时跳过几个字节。
+
+## 数组与指针：名字、下标、等价式
+
+在大多数表达式里，<Term def="数组名在表达式中常转换为首元素地址的指针，类型为 T*。sizeof 数组名和 &数组名 是例外。">数组名会「退化」为指向首元素的指针</Term>：
+
+```c
+int ar[5] = {10, 20, 30, 40, 50};
+int *p = ar;       /* 等价于 p = &ar[0] */
+printf("%d\n", ar[2]);    /* 30 */
+printf("%d\n", *(ar + 2)); /* 同样 30 */
+```
+
+C 标准保证：
+
+<Term def="下标运算符与指针偏移再解引用等价：a[i] 与 *(a+i) 访问同一元素。">数组下标等价式</Term> **`ar[i]` ≡ `*(ar + i)`**。下标只是让代码好读的语法糖，底层仍是指针算术。
+
+<ArrayPointerEquivalenceDiagram />
+
+用指针遍历数组：
+
+```c
+int *p;
+for (p = ar; p < ar + 5; p++)
+    printf("%d ", *p);
+```
+
+`p < ar + 5` 表示指针尚未越过尾后位置（指向 `ar[5]` 的地址可比较，但不可解引用）。
+
+## 指针算术：p+1 不是加 1 字节
+
+<Term def="对指针加减整数，按所指向类型的大小移动地址。int* 的 p+1 通常加 4 字节。">指针算术（pointer arithmetic）</Term> 的步长是 **sizeof(指向的类型)**：
+
+```c
+int ar[] = {10, 20, 30, 40, 50};
+int *p = ar;       /* 指向 ar[0] */
+printf("%d\n", *p);       /* 10 */
+printf("%d\n", *(p + 1)); /* 20 — p+1 指向 ar[1] */
+printf("%d\n", p[2]);     /* 30 — 指针也可下标 */
+```
+
+<PointerArithmeticDiagram />
+
+<Stepper>
+  <Step title="第一步：p 指向首元素">
+    <PointerArithmeticDiagram step={1} />
+    `int *p = ar;` 让 p 保存 `ar[0]` 的地址。`*p` 得到 10。
+  </Step>
+  <Step title="第二步：p+1 指向 ar[1]">
+    <PointerArithmeticDiagram step={2} />
+    `p + 1` 不是地址 +1 字节，而是 +sizeof(int)。若 int 为 4 字节，则跳到下一个 int。
+  </Step>
+  <Step title="第三步：p+n 与 ar[n]">
+    <PointerArithmeticDiagram step={3} />
+    `*(p + n)` 与 `ar[n]`、`p[n]` 完全等价。循环里 `p++` 就是沿数组向前走一格。
+  </Step>
+</Stepper>
+
+指针相减（同数组内）：`p - q` 得到两指针之间相隔的**元素个数**（不是字节数）。
+
+## 二维数组：逻辑表格，物理一行接一行
+
+<Term def="元素本身也是数组的一维数组。如 int m[3][4] 可看作 3 行，每行 4 个 int。">二维数组</Term> 声明：
+
+```c
+int matrix[3][4];                           /* 3 行 4 列 */
+int grid[2][3] = {{1, 2, 3}, {4, 5, 6}};   /* 按行初始化 */
+```
+
+逻辑上你是「行 × 列」表格；物理内存里 C 按 <Term def="二维数组在内存中先存完第 0 行所有元素，再存第 1 行……的存储顺序。">行优先（row-major）</Term> 排成一条连续带：
+
+<TwoDimArrayDiagram />
+
+访问 `matrix[r][c]`：先找到第 `r` 行（每行 4 个 int），再取该行第 `c` 列。线性下标公式（从 0 计）：
+
+**index = r × 列数 + c**
+
+例如 `m[1][2]` 在 `int m[3][4]` 中是第 1×4+2 = 6 个元素（即第 7 个 int）。
+
+表达式 `m[1]` 是「第 1 行」——类型为「4 个 int 的数组」，在表达式中又退化为指向 `m[1][0]` 的指针，所以 `m[1] + 2` 指向 `m[1][2]`。
+
+## 代码详解：数组 + 指针实战
+
+### 场景一：一维数组求和与平均值
+
+```c
+#include <stdio.h>
+#define SIZE 5
+
+int main(void) {
+    int data[SIZE] = {10, 20, 30, 40, 50};
+    int i, sum = 0;
+
+    for (i = 0; i < SIZE; i++)
+        sum += data[i];
+
+    printf("总和 = %d，平均 = %.1f\n", sum, (double)sum / SIZE);
+    return 0;
+}
+```
+
+下标循环最直观；`i < SIZE` 防止越界。
+
+### 场景二：用指针遍历
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int ar[] = {3, 1, 4, 1, 5};
+    int n = sizeof ar / sizeof ar[0];  /* 元素个数 */
+    int *p;
+
+    for (p = ar; p < ar + n; p++)
+        printf("%d ", *p);
+    printf("\n");
+    return 0;
+}
+```
+
+`sizeof ar / sizeof ar[0]` 是经典「数组元素个数」写法（只对**数组对象**有效，不能用于已退化的指针）。
+
+### 场景三：二维数组遍历
+
+```c
+#include <stdio.h>
+
+int main(void) {
+    int m[2][3] = {{1, 2, 3}, {4, 5, 6}};
+    int r, c;
+
+    for (r = 0; r < 2; r++) {
+        for (c = 0; c < 3; c++)
+            printf("%d ", m[r][c]);
+        printf("\n");
+    }
+    return 0;
+}
+```
+
+外循环控行，内循环控列——与行优先存储一致。
+
+### 场景四：指针交换两元素（原地反转片段）
+
+```c
+void swap_int(int *a, int *b) {
+    int tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+/* 调用：swap_int(&ar[i], &ar[j]); 传地址才能改 ar 里的元素 */
+```
+
+这里已经用到「传指针改调用方数据」——与上一章值传递对比，是数组章节的自然延伸。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`for (i = 0; i <= n; i++)` 访问 `ar[i]`，有时多打一个数或崩溃。
+  **原因**：长度为 n 的数组下标是 **0 到 n-1**。`i <= n` 时 `i==n` 越界。
+  **修法**：循环条件写 **`i < n`**。养成「最后一个合法下标是 n-1」的肌肉记忆。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为 `p + 1` 让地址加 1 字节，手算地址全错。
+  **原因**：指针算术按 **sizeof(指向类型)** 步进。`int *` 的 +1 通常 +4，`double *` 的 +1 通常 +8。
+  **修法**：永远想「加 1 个**元素**」，不是加 1 字节。需要字节偏移时用 `char *` 或显式乘法。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`int ar[10];` 里写 `sizeof(p)` 当数组长度，其中 `p = ar`，得到 8 或 4（指针大小）而非 40。
+  **原因**：`ar` 赋给指针后，`p` 只是指针，**`sizeof p` 是指针本身大小**，不是数组。
+  **修法**：元素个数在**数组仍具数组类型时**算：`sizeof ar / sizeof ar[0]`，或 `#define N 10` 常量。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把二维数组当成「指针的指针」随便 `int **pp = matrix` 传给函数，编译警告或运行错乱。
+  **原因**：二维数组行优先连续存储，类型是「行的数组」，与 `int **` 内存布局不同（后续章节细讲）。
+  **修法**：初学阶段按 `m[r][c]` 或行指针正确声明；函数参数留到专门一节，不要强行 `int **`。
+</Callout>
+
+## 小结
+
+- 一维数组：同类型元素、连续内存、下标从 0 到 n-1
+- 指针存地址；`*p` 解引用，`&x` 取地址；类型决定步长
+- 表达式里数组名常退化为首元素指针；**`ar[i]` ≡ `*(ar+i)` ≡ `p[i]`**（p 指向 ar）
+- 指针算术：`p+n` 跳 n 个元素；可用 `for (p=ar; p<ar+n; p++)` 遍历
+- 二维数组逻辑是表格，物理行优先一行接一行；`m[r][c]` 线性下标 = r×列数+c
+
+<Exercises>
+
+**练习 1（改代码型）** 下面循环想打印 4 个元素，但有 off-by-one 错误。改正后应输出 `10 20 30 40`。
+
+```c
+int vals[4] = {10, 20, 30, 40};
+int i;
+for (i = 0; i <= 4; i++)
+    printf("%d ", vals[i]);
+```
+
+<Answer>
+
+将 `i <= 4` 改为 **`i < 4`**：
+
+```c
+for (i = 0; i < 4; i++)
+    printf("%d ", vals[i]);
+```
+
+合法下标为 0–3。
+
+</Answer>
+
+**练习 2（问答型）** 说明 `int ar[5]; int *p = ar;` 之后，`* (p + 3)` 访问的是哪个元素？与 `ar[3]` 什么关系？
+
+<Answer>
+
+`p` 指向 `ar[0]`。`p + 3` 指向 **`ar[3]`**（跳过 3 个 int）。`* (p + 3)` 的值等于 **`ar[3]`**，与下标写法完全等价。
+
+</Answer>
+
+**练习 3（综合实现型）** 写程序：读入 5 个整数到数组，用两个指针（一个从头、一个从尾）原地反转数组，再打印。不得用额外数组存副本。
+
+<Answer>
+
+```c
+#include <stdio.h>
+#define N 5
+
+int main(void) {
+    int ar[N];
+    int *left, *right, tmp, i;
+
+    printf("输入 %d 个整数：\n", N);
+    for (i = 0; i < N; i++)
+        scanf("%d", ar + i);
+
+    left = ar;
+    right = ar + N - 1;
+    while (left < right) {
+        tmp = *left;
+        *left = *right;
+        *right = tmp;
+        left++;
+        right--;
+    }
+
+    for (i = 0; i < N; i++)
+        printf("%d ", ar[i]);
+    printf("\n");
+    return 0;
+}
+```
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="数组（array）">
+  相同类型元素组成的连续内存块，用单个名字和下标访问。声明如 `int ar[n]`，下标从 0 到 n-1。详见 ArrayMemoryLayoutDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="指针（pointer）">
+  保存对象地址的变量。`int *p` 指向 int；`*p` 解引用读值，`&x` 取 x 的地址。
+</GlossaryItem>
+
+<GlossaryItem term="解引用（dereference）">
+  对指针使用一元 `*`，访问其指向地址上的值。如 `*ptr` 得到 ptr 所指 int。
+</GlossaryItem>
+
+<GlossaryItem term="取地址">
+  对对象使用一元 `&`，得到其在内存中的地址，类型为「指向该类型的指针」。
+</GlossaryItem>
+
+<GlossaryItem term="数组下标等价式">
+  `a[i]` 与 `*(a + i)` 访问同一元素。下标是指针写法的语法糖。详见 ArrayPointerEquivalenceDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="数组名会「退化」为指向首元素的指针">
+  在大多数表达式中，数组名转换为首元素指针（类型 T*），值等于 &a[0]。sizeof 数组名、&数组名 等场合除外。
+</GlossaryItem>
+
+<GlossaryItem term="指针算术（pointer arithmetic）">
+  对指针加减整数，按 sizeof(指向类型) 移动。`p+1` 指向下一个同类型元素。详见 PointerArithmeticDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="二维数组">
+  元素为「一行数组」的数组，如 `int m[3][4]`。逻辑为 3 行 4 列，物理行优先连续存储。详见 TwoDimArrayDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="行优先（row-major）">
+  二维数组在内存中先存第 0 行全部列，再存第 1 行……C 语言采用此布局。线性下标 = 行号×列数+列号。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

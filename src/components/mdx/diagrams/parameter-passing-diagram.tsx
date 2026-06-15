@@ -6,9 +6,20 @@
  *
  * Server Component（纯展示，静态 SVG，无交互）。
  * token 色，无阴影。
+ *
+ * 可选 step (1-4)：C 语言值传递分步示意（单栏）。无 step 时展示 C++ 值传递 vs 引用传递对比。
  */
 
-export function ParameterPassingDiagram() {
+import { CValuePassingDiagram } from "./c-value-passing-diagram";
+
+interface ParameterPassingDiagramProps {
+  step?: 1 | 2 | 3 | 4;
+}
+
+export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) {
+  if (step !== undefined) {
+    return <CValuePassingDiagram step={step} />;
+  }
   const marginL = 20;
   const midX = 320;
 
@@ -119,7 +130,7 @@ export function ParameterPassingDiagram() {
           {/* 值传递例子 */}
           <rect x={marginL + 10} y={memTop + memBlockH + 70} width={295} height={96} rx="8" fill={bg} stroke={border} strokeWidth="1" />
           <text x={marginL + 24} y={memTop + memBlockH + 94} fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">
-            void addOne(int x) {'{'} x = x + 1; {'}'}
+            void addOne(int x) {"{"} x = x + 1; {"}"}
           </text>
           <text x={marginL + 24} y={memTop + memBlockH + 118} fontSize="12" fill={secondary} fontFamily="monospace">
             int a = 5;
@@ -134,7 +145,7 @@ export function ParameterPassingDiagram() {
           {/* 引用传递例子 */}
           <rect x={midX + 10} y={memTop + memBlockH + 70} width={295} height={96} rx="8" fill={bg} stroke={border} strokeWidth="1" />
           <text x={midX + 24} y={memTop + memBlockH + 94} fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">
-            void addOne(int &x) {'{'} x = x + 1; {'}'}
+            void addOne(int &x) {"{"} x = x + 1; {"}"}
           </text>
           <text x={midX + 24} y={memTop + memBlockH + 118} fontSize="12" fill={secondary} fontFamily="monospace">
             int a = 5;

@@ -90,6 +90,23 @@ import { pluginPrincipleQuestions } from "./review/plugin-principle";
 import { drawOptimizationQuestions } from "./review/draw-optimization";
 import { memoryOptimizationQuestions } from "./review/memory-optimization";
 import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
+import { cprDataAndCQuestions } from "./review/cpr-data-and-c";
+import { cprGettingReadyQuestions } from "./review/cpr-getting-ready";
+import { cprIntroducingCQuestions } from "./review/cpr-introducing-c";
+import { cprStringsIOQuestions } from "./review/cpr-strings-io";
+import { cprOperatorsExpressionsQuestions } from "./review/cpr-operators-expressions";
+import { cprControlLoopsQuestions } from "./review/cpr-control-loops";
+import { cprControlBranchingQuestions } from "./review/cpr-control-branching";
+import { cprCharIoValidationQuestions } from "./review/cpr-char-io-validation";
+import { cprFunctionsQuestions } from "./review/cpr-functions";
+import { cprArraysPointersQuestions } from "./review/cpr-arrays-pointers";
+import { cprStringsFunctionsQuestions } from "./review/cpr-strings-functions";
+import { cprStorageLinkageMemoryQuestions } from "./review/cpr-storage-linkage-memory";
+import { cprFileIoQuestions } from "./review/cpr-file-io";
+import { cprStructuresQuestions } from "./review/cpr-structures";
+import { cprPreprocessorQuestions } from "./review/cpr-preprocessor";
+import { cprBitFiddlingQuestions } from "./review/cpr-bit-fiddling";
+import { cprAdvancedDataQuestions } from "./review/cpr-advanced-data";
 import { bnrgFirstAppQuestions } from "./review/bnrg-first-app";
 import { bnrgMvcQuestions } from "./review/bnrg-mvc";
 import { bnrgLifecycleQuestions } from "./review/bnrg-lifecycle";
@@ -172,6 +189,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bloomQuestions,
   ...deferredShadingQuestions,
   ...ssaoQuestions,
+  ...cprDataAndCQuestions,
   ...cppGettingStartedQuestions,
   ...cppVariablesAndTypesQuestions,
   ...cppStringsVectorsArraysQuestions,
@@ -191,6 +209,22 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppSpecializedLibraryQuestions,
   ...cppSpecializedToolsQuestions,
   ...cppLargeProgramsQuestions,
+  ...cprGettingReadyQuestions,
+  ...cprIntroducingCQuestions,
+  ...cprStringsIOQuestions,
+  ...cprOperatorsExpressionsQuestions,
+  ...cprControlLoopsQuestions,
+  ...cprControlBranchingQuestions,
+  ...cprCharIoValidationQuestions,
+  ...cprFunctionsQuestions,
+  ...cprArraysPointersQuestions,
+  ...cprStringsFunctionsQuestions,
+  ...cprStorageLinkageMemoryQuestions,
+  ...cprFileIoQuestions,
+  ...cprStructuresQuestions,
+  ...cprPreprocessorQuestions,
+  ...cprBitFiddlingQuestions,
+  ...cprAdvancedDataQuestions,
   ...androidArchitectureQuestions,
   ...systemStartupQuestions,
   ...appProcessStartupQuestions,

@@ -14,6 +14,18 @@ import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
 import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
+import { CHistoryTimelineDiagram } from "./diagrams/c-history-timeline-diagram";
+import { CProgramAnatomyDiagram } from "./diagrams/c-program-anatomy-diagram";
+import { VariableMemoryDiagram } from "./diagrams/variable-memory-diagram";
+import { PrintfFormatDiagram } from "./diagrams/printf-format-diagram";
+import { PrintfFormatFlagsDiagram } from "./diagrams/printf-format-flags-diagram";
+import { ScanfInputDiagram } from "./diagrams/scanf-input-diagram";
+import { IOMemoryBufferDiagram } from "./diagrams/io-memory-buffer-diagram";
+import { CStringMemoryDiagram } from "./diagrams/cstring-memory-diagram";
+import { MultiFileCompilationDiagram } from "./diagrams/multi-file-compilation-diagram";
+import { CCompilationDiagram } from "./diagrams/c-compilation-diagram";
+import { DevelopmentCycleDiagram } from "./diagrams/development-cycle-diagram";
+import { PortabilityDiagram } from "./diagrams/portability-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -95,6 +107,40 @@ import { ConstructorCallDiagram } from "./diagrams/constructor-call-diagram";
 import { ConstMemberDiagram } from "./diagrams/const-member-diagram";
 import { FunctionCallStackDiagram } from "./diagrams/function-call-stack-diagram";
 import { ParameterPassingDiagram } from "./diagrams/parameter-passing-diagram";
+import { FunctionPrototypeDiagram } from "./diagrams/function-prototype-diagram";
+import { RecursionStackDiagram } from "./diagrams/recursion-stack-diagram";
+import { ArrayMemoryLayoutDiagram } from "./diagrams/array-memory-layout-diagram";
+import { PointerArithmeticDiagram } from "./diagrams/pointer-arithmetic-diagram";
+import { ArrayPointerEquivalenceDiagram } from "./diagrams/array-pointer-equivalence-diagram";
+import { TwoDimArrayDiagram } from "./diagrams/two-dim-array-diagram";
+import { CStringNullTerminatorDiagram } from "./diagrams/cstring-null-terminator-diagram";
+import { StrcpyBufferDiagram } from "./diagrams/strcpy-buffer-diagram";
+import { StringFunctionTableDiagram } from "./diagrams/string-function-table-diagram";
+import { StringPointerVsArrayDiagram } from "./diagrams/string-pointer-vs-array-diagram";
+import { StorageClassDiagram } from "./diagrams/storage-class-diagram";
+import { MemoryRegionsDiagram } from "./diagrams/memory-regions-diagram";
+import { MallocFreeDiagram } from "./diagrams/malloc-free-diagram";
+import { LinkageDiagram } from "./diagrams/linkage-diagram";
+import { FilePointerDiagram } from "./diagrams/file-pointer-diagram";
+import { FileOpenModesDiagram } from "./diagrams/file-open-modes-diagram";
+import { FileReadWriteFlowDiagram } from "./diagrams/file-read-write-flow-diagram";
+import { BinaryVsTextIODiagram } from "./diagrams/binary-vs-text-io-diagram";
+import { StructMemoryLayoutDiagram } from "./diagrams/struct-memory-layout-diagram";
+import { StructPointerAccessDiagram } from "./diagrams/struct-pointer-access-diagram";
+import { UnionMemoryDiagram } from "./diagrams/union-memory-diagram";
+import { EnumDiagram } from "./diagrams/enum-diagram";
+import { PreprocessorPipelineDiagram } from "./diagrams/preprocessor-pipeline-diagram";
+import { MacroExpansionDiagram } from "./diagrams/macro-expansion-diagram";
+import { ConditionalCompileDiagram } from "./diagrams/conditional-compile-diagram";
+import { MacroPitfallDiagram } from "./diagrams/macro-pitfall-diagram";
+import { BinaryHexDiagram } from "./diagrams/binary-hex-diagram";
+import { BitwiseOperatorsDiagram } from "./diagrams/bitwise-operators-diagram";
+import { ShiftOperatorsDiagram } from "./diagrams/shift-operators-diagram";
+import { BitFieldDiagram } from "./diagrams/bit-field-diagram";
+import { FunctionPointerDiagram } from "./diagrams/function-pointer-diagram";
+import { LinkedListDiagram } from "./diagrams/linked-list-diagram";
+import { QueueStackDiagram } from "./diagrams/queue-stack-diagram";
+import { QsortBsearchDiagram } from "./diagrams/qsort-bsearch-diagram";
 import { ArrayParameterDiagram } from "./diagrams/array-parameter-diagram";
 import { OverloadResolutionDiagram } from "./diagrams/overload-resolution-diagram";
 import { OperatorOverloadTable } from "./diagrams/operator-overload-table";
@@ -166,6 +212,25 @@ import { DepthCompareDiagram } from "./diagrams/depth-compare-diagram";
 import { NoiseBlurDiagram } from "./diagrams/noise-blur-diagram";
 import { AndroidArchLayersDiagram } from "./diagrams/android-arch-layers-diagram";
 import { AndroidStartupSequenceDiagram } from "./diagrams/android-startup-sequence-diagram";
+import { CTypeSizeDiagram } from "./diagrams/c-type-size-diagram";
+import { IntegerRangeDiagram } from "./diagrams/integer-range-diagram";
+import { EscapeSequenceDiagram } from "./diagrams/escape-sequence-diagram";
+import { DataTypeMemoryLayout } from "./diagrams/data-type-memory-layout";
+import { COperatorTable } from "./diagrams/c-operator-table";
+import { IncrementTimelineDiagram } from "./diagrams/increment-timeline-diagram";
+import { TypePromotionDiagram } from "./diagrams/type-promotion-diagram";
+import { WhileLoopFlowDiagram } from "./diagrams/while-loop-flow-diagram";
+import { ForLoopFlowDiagram } from "./diagrams/for-loop-flow-diagram";
+import { DoWhileVsWhileDiagram } from "./diagrams/do-while-vs-while-diagram";
+import { NestedLoopDiagram } from "./diagrams/nested-loop-diagram";
+import { SentinelLoopDiagram } from "./diagrams/sentinel-loop-diagram";
+import { IfElseChainDiagram } from "./diagrams/if-else-chain-diagram";
+import { SwitchCaseDiagram } from "./diagrams/switch-case-diagram";
+import { ShortCircuitDiagram } from "./diagrams/short-circuit-diagram";
+import { BufferedIODiagram } from "./diagrams/buffered-io-diagram";
+import { InputValidationFlowDiagram } from "./diagrams/input-validation-flow-diagram";
+import { StdinBufferDiagram } from "./diagrams/stdin-buffer-diagram";
+import { MenuDriverDiagram } from "./diagrams/menu-driver-diagram";
 import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
@@ -575,6 +640,18 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DepthCompareDiagram,
   NoiseBlurDiagram,
   CompilationPipelineDiagram,
+  CHistoryTimelineDiagram,
+  CCompilationDiagram,
+  DevelopmentCycleDiagram,
+  PortabilityDiagram,
+  CProgramAnatomyDiagram,
+  VariableMemoryDiagram,
+  PrintfFormatDiagram,
+  PrintfFormatFlagsDiagram,
+  ScanfInputDiagram,
+  IOMemoryBufferDiagram,
+  CStringMemoryDiagram,
+  MultiFileCompilationDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   AndroidArchLayersDiagram,
@@ -601,6 +678,40 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ConstructorCallDiagram,
   FunctionCallStackDiagram,
   ParameterPassingDiagram,
+  FunctionPrototypeDiagram,
+  RecursionStackDiagram,
+  ArrayMemoryLayoutDiagram,
+  PointerArithmeticDiagram,
+  ArrayPointerEquivalenceDiagram,
+  TwoDimArrayDiagram,
+  CStringNullTerminatorDiagram,
+  StrcpyBufferDiagram,
+  StringFunctionTableDiagram,
+  StringPointerVsArrayDiagram,
+  StorageClassDiagram,
+  MemoryRegionsDiagram,
+  MallocFreeDiagram,
+  LinkageDiagram,
+  FilePointerDiagram,
+  FileOpenModesDiagram,
+  FileReadWriteFlowDiagram,
+  BinaryVsTextIODiagram,
+  StructMemoryLayoutDiagram,
+  StructPointerAccessDiagram,
+  UnionMemoryDiagram,
+  EnumDiagram,
+  PreprocessorPipelineDiagram,
+  MacroExpansionDiagram,
+  ConditionalCompileDiagram,
+  MacroPitfallDiagram,
+  BinaryHexDiagram,
+  BitwiseOperatorsDiagram,
+  ShiftOperatorsDiagram,
+  BitFieldDiagram,
+  FunctionPointerDiagram,
+  LinkedListDiagram,
+  QueueStackDiagram,
+  QsortBsearchDiagram,
   ArrayParameterDiagram,
   OverloadResolutionDiagram,
   OperatorOverloadTable,
@@ -652,6 +763,25 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RuleOfFiveDiagram,
   MoveSemanticsDiagram,
   ResourceLifetimeDiagram,
+  CTypeSizeDiagram,
+  IntegerRangeDiagram,
+  EscapeSequenceDiagram,
+  DataTypeMemoryLayout,
+  COperatorTable,
+  IncrementTimelineDiagram,
+  TypePromotionDiagram,
+  WhileLoopFlowDiagram,
+  ForLoopFlowDiagram,
+  DoWhileVsWhileDiagram,
+  NestedLoopDiagram,
+  SentinelLoopDiagram,
+  IfElseChainDiagram,
+  SwitchCaseDiagram,
+  ShortCircuitDiagram,
+  BufferedIODiagram,
+  InputValidationFlowDiagram,
+  StdinBufferDiagram,
+  MenuDriverDiagram,
   Stepper,
   Step,
   Slider,
