@@ -18,6 +18,10 @@ import { ProfilerWorkflowDiagram } from "./diagrams/profiler-workflow-diagram";
 import { UnityProfilerWindowDiagram } from "./diagrams/unity-profiler-window-diagram";
 import { CpuGpuBottleneckDiagram } from "./diagrams/cpu-gpu-bottleneck-diagram";
 import { ProfilingToolsDiagram } from "./diagrams/profiling-tools-diagram";
+import { GetComponentCacheDiagram } from "./diagrams/get-component-cache-diagram";
+import { EmptyCallbackDiagram } from "./diagrams/empty-callback-diagram";
+import { UpdateMechanismDiagram } from "./diagrams/update-mechanism-diagram";
+import { FindSendMessageDiagram } from "./diagrams/find-send-message-diagram";
 import { HelloWorldAnnotatedDiagram } from "./diagrams/hello-world-annotated-diagram";
 import { IOStreamDiagram } from "./diagrams/iostream-diagram";
 import { CoordinatePipelineDiagram } from "./diagrams/coordinate-pipeline-diagram";
@@ -581,6 +585,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   UnityProfilerWindowDiagram,
   CpuGpuBottleneckDiagram,
   ProfilingToolsDiagram,
+  GetComponentCacheDiagram,
+  EmptyCallbackDiagram,
+  UpdateMechanismDiagram,
+  FindSendMessageDiagram,
   HelloWorldAnnotatedDiagram,
   IOStreamDiagram,
   TypeSizeDiagram,

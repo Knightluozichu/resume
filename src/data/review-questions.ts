@@ -74,6 +74,7 @@ import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library
 import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
 import { cppSpecializedToolsQuestions } from "./review/cpp-specialized-tools";
 import { ugoEvaluatingPerformanceProblemsQuestions } from "./review/ugo-evaluating-performance-problems";
+import { ugoScriptingStrategiesQuestions } from "./review/ugo-scripting-strategies";
 
 export {
   CHAPTER_TITLES,
@@ -144,6 +145,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cppSpecializedToolsQuestions,
   ...cppLargeProgramsQuestions,
   ...ugoEvaluatingPerformanceProblemsQuestions,
+  ...ugoScriptingStrategiesQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -69,7 +69,8 @@ export type ReviewChapterSlug =
   | "cpp-specialized-library"
   | "cpp-specialized-tools"
   | "cpp-large-programs"
-  | "ugo-evaluating-performance-problems";
+  | "ugo-evaluating-performance-problems"
+  | "ugo-scripting-strategies";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -142,6 +143,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpp-specialized-tools": "特殊工具与技术",
   "cpp-large-programs": "用于大型程序的工具",
   "ugo-evaluating-performance-problems": "评估性能问题",
+  "ugo-scripting-strategies": "脚本优化策略",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

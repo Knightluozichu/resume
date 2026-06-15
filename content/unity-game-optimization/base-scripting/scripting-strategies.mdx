@@ -1,0 +1,398 @@
+---
+title: 脚本优化策略
+type: C
+section: 基础脚本优化
+order: 2
+description: 掌握 Unity C# 脚本层常见性能陷阱与写法——缓存组件、选对 Update 机制、避开 Find 与 GC。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型（Unity Game Optimization Ch2 改编）：脚本层 CPU 热点与写法取舍。
+   重心在代码对照(§6)慢 vs 快 CodeTabs，交互 Demo 用 Stepper + UpdateMechanismDiagram(§5)。 */}
+
+{/* 知识点清单：
+   1) GetComponent 缓存 — GetComponentCacheDiagram
+   2) 空 MonoBehaviour 回调 — EmptyCallbackDiagram
+   3) Update vs Coroutine vs InvokeRepeating — UpdateMechanismDiagram + Stepper
+   4) GameObject 空引用检查 — 代码对照 + Callout
+   5) 避免 Find / SendMessage — FindSendMessageDiagram
+   6) 数据结构 / sqrMagnitude — 代码对照
+   7) Additive/Async 场景加载 — 代码对照
+   8) 自定义 Update 层 — 代码对照 */}
+
+<Objectives>
+
+- 能把 Profiler 里常见的脚本热点（GetComponent、空 Update、Find）改写成缓存引用与集中调度写法
+- 能根据「多久跑一次」在 Update、Coroutine、InvokeRepeating 之间做出取舍，并解释各自的开销来源
+- 能回答：100 个挂着空 `Update()` 的脚本和 1 个管理器里循环 100 次自定义 `Tick()`，Profiler 上 CPU 分布会有什么差别？为什么？
+
+</Objectives>
+
+## 脚本写得不对，Profiler 也会红
+
+上一章你已经会用 Profiler 量出「主线程 18ms、某函数排第一」。打开层级一看，经常是密密麻麻的小条目：`GetComponent`、`Update.ScriptRunBehaviourUpdate`、偶尔还有 `GC.Alloc`。它们不像渲染那样直观，却能在场景变大、角色变多时悄悄吃掉帧预算。
+
+这章要解决的，是**脚本层最常见的写法陷阱**：明明逻辑没错，却因为每帧重复查找、空回调堆积、运行时搜场景而变慢。Profiler 已经告诉你「慢在脚本」——接下来需要的是**可落地的改法**，而不是再盲改一轮。
+
+没有这些策略会怎样？你会在 Update 里一遍遍问引擎「这个组件在哪」，挂着几十个什么都不干的空函数，还在运行时满场景找一个叫 `"Player"` 的对象——CPU 花在「找东西」和「被叫起来却什么都不做」上，真正玩法逻辑反而挤不进 16.6ms。
+
+## 组件引用：查一次，用很多遍
+
+<Term def="在 Awake/Start 或 Inspector 序列化字段里保存组件引用，避免在 Update 等热路径重复调用 GetComponent 的写法。">GetComponent 缓存</Term> 是脚本优化第一课。`GetComponent<T>()` 要从托管 C# 穿过引擎原生层查找组件——单次不贵，**每帧 × 对象数量**就贵了。
+
+<GetComponentCacheDiagram />
+
+两种推荐写法：**Inspector 拖引用**（零运行时查找）或 **Awake 里查一次存字段**。下面是对照——左边每帧查，右边只查一次。
+
+<CodeTabs>
+  <Tab label="❌ 慢">
+
+```csharp
+public class Mover : MonoBehaviour {
+    void Update() {
+        var rb = GetComponent<Rigidbody>();
+        rb.velocity = transform.forward * 5f;
+    }
+}
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+public class Mover : MonoBehaviour {
+    [SerializeField] Rigidbody _rb; // Inspector 拖引用
+    // 或 void Awake() => _rb = GetComponent<Rigidbody>();
+
+    void Update() {
+        _rb.velocity = transform.forward * 5f;
+    }
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="tip">
+  同 GameObject 上的组件：Awake 缓存即可。跨对象引用：优先在 prefab 上拖序列化字段；动态生成的对象用构造/工厂注入引用，而不是运行时 Find。
+</Callout>
+
+## 空回调：体量为零，成本不为零
+
+只要脚本启用且定义了 `Update` / `LateUpdate` / `FixedUpdate`，引擎的 PlayerLoop **每帧仍会调用**，哪怕函数体是空的。一百个空 `Update` 就是一百次调度开销。
+
+<EmptyCallbackDiagram />
+
+<Term def="MonoBehaviour 上定义了但函数体为空的 Update/LateUpdate/FixedUpdate；引擎仍按帧调度，造成无意义的 CPU 开销。">空 MonoBehaviour 回调</Term> 在合并场景、挂了大量 prefab 时特别常见——某个模板里留了空函数，复制几十份就放大成热点。
+
+修法：删掉不用的回调；需要「偶尔更新」的改用事件或集中调度（见后文自定义 Update 层）。
+
+## 选对更新机制：每帧、挂起还是定间隔
+
+不是每件事都值得放进 `Update`。三种内置机制各管一类节奏：
+
+<Term def="MonoBehaviour 每帧在主线程调用的回调，与帧率同步，适合输入与逐帧动画。">Update</Term> 跟帧率走；<Term def="用 yield return 把执行挂起、下一帧或延迟后再继续的协程，适合分步流程与等待。">Coroutine（协程）</Term> 可以「等 0.5 秒再继续」；<Term def="按固定秒数重复调用某方法的引擎 API，底层用字符串反射查找方法。">InvokeRepeating</Term> 适合低频轮询，但不如显式事件干净。
+
+<UpdateMechanismDiagram />
+
+## 已销毁对象：Unity 的「假 null」
+
+<Term def="Unity 重载 UnityEngine.Object 的 == 运算符，原生对象销毁后 C# 包装可能仍非 C# null，用 == null 才能判活。">Unity 空引用检查</Term> 和纯 C# 不一样：对象被 `Destroy` 后，引用有时在 C# 里还不是 `null`，但 Unity 的 `== null` 会返回 true。
+
+<CodeTabs>
+  <Tab label="❌ 慢 / 易错">
+
+```csharp
+// 纯 C# 判空 — 销毁后可能仍「有引用」
+if (target != null)
+    target.DoSomething(); // 可能对已销毁对象调用
+
+// Update 里每帧 Find
+var player = GameObject.Find("Player");
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+// Unity 重载的 == 能识别已销毁对象
+if (target == null) return;
+target.DoSomething();
+
+// Awake 缓存一次
+Transform _player;
+void Awake() => _player = GameObject.Find("Player").transform;
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="warn">
+  热路径里仍应避免 `Find`——上面 Awake 缓存只是比每帧 Find 好；最佳是序列化引用或启动时由管理器注册。
+</Callout>
+
+## 别在运行时搜场景：Find 与 SendMessage
+
+<Term def="按名称或标签从场景根遍历层级树查找 GameObject 的 API，节点越多开销越大。">GameObject.Find / FindWithTag</Term> 和 <Term def="按方法名字符串向对象发消息，依赖反射，慢且难维护。">SendMessage</Term> 都会触发场景遍历。
+
+<FindSendMessageDiagram />
+
+用**直接引用、事件、接口或消息总线**替代——启动时注册一次，运行时 O(1) 调用。
+
+{/* 5. 交互 Demo */}
+
+## 动手：三种更新机制怎么选
+
+> 猜一猜：把「每 2 秒刷新一次排行榜」写进 `Update` 里用 `Time.deltaTime` 累加，和用 `InvokeRepeating(..., 2f, 2f)`，Profiler 里哪条 GC Alloc 更高、哪条主线程更稳？
+
+<Stepper>
+  <Step title="① Update：每帧同步">
+    <UpdateMechanismDiagram step={0} />
+    角色移动、读输入、跟摄像机——**必须与帧率同步**的逻辑放 Update。检查项目里是否有空 Update 可删；Profiler 里 `ScriptRunBehaviourUpdate` 过高时数一下启用脚本数量。
+  </Step>
+  <Step title="② Coroutine：等时间/等帧">
+    <UpdateMechanismDiagram step={1} />
+    开场倒计时、`yield return new WaitForSeconds(0.5f)`、分步加载提示——用协程把流程拆开。注意 `new WaitForSeconds` 会分配，可缓存 yield 指令或改用 `WaitForSecondsRealtime` 池化。
+  </Step>
+  <Step title="③ InvokeRepeating：定间隔">
+    <UpdateMechanismDiagram step={2} />
+    AI 每 3 秒巡逻、低频拉取配置——可用 InvokeRepeating，但更推荐**计时器字段 + 单管理器 Update**，避免字符串方法名和分散调度。能事件驱动（玩家进门才刷新）就不要轮询。
+  </Step>
+</Stepper>
+
+## 代码对照：热路径写法全集
+
+下面按热点类型给出「慢 vs 快」对照——Unity 项目只有 C# 一侧，两栏都是同一逻辑的不同写法。
+
+### Find 与 SendMessage
+
+<CodeTabs>
+  <Tab label="❌ 慢">
+
+```csharp
+void Update() {
+    var go = GameObject.FindWithTag("Enemy");
+    go?.SendMessage("OnAlert", SendMessageOptions.DontRequireReceiver);
+}
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+public class EnemyRegistry : MonoBehaviour {
+    public static EnemyRegistry Instance { get; private set; }
+    readonly List<Enemy> _enemies = new();
+    void Awake() => Instance = this;
+    public void Register(Enemy e) => _enemies.Add(e);
+    public void AlertAll() { foreach (var e in _enemies) e.OnAlert(); }
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+### 距离比较与容器
+
+<Term def="Vector3 长度的平方，比较远近时避免 magnitude 内部的开方运算。">sqrMagnitude</Term> 在判断「进入范围」时比 `magnitude` 省一次 `sqrt`。热循环里优先数组或预分配容量的 `List`，减少 GC。
+
+<CodeTabs>
+  <Tab label="❌ 慢">
+
+```csharp
+foreach (var t in _targets) { // List 每帧 new 更糟
+    if ((t.position - transform.position).magnitude < 5f)
+        Hit(t);
+}
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+const float RangeSq = 5f * 5f;
+for (int i = 0; i < _targets.Length; i++) {
+    if (( _targets[i].position - transform.position).sqrMagnitude < RangeSq)
+        Hit(_targets[i]);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+### 场景加载：Additive 与 Async
+
+<Term def="在保留当前场景的同时叠加加载另一场景，适合分区大地图或 UI 层。">Additive 加载</Term> 不卸当前关；<Term def="异步加载场景，主线程可分帧推进进度，避免切换卡顿。">Async 加载</Term> 用 `LoadSceneAsync` 配合进度条。
+
+<CodeTabs>
+  <Tab label="❌ 慢">
+
+```csharp
+// 同步切换 — 大场景一帧卡死
+SceneManager.LoadScene("Level2");
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+IEnumerator LoadAdditiveAsync() {
+    var op = SceneManager.LoadSceneAsync("Level2", LoadSceneMode.Additive);
+    op.allowSceneActivation = false;
+    while (op.progress < 0.9f) { UpdateBar(op.progress); yield return null; }
+    op.allowSceneActivation = true;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+### 集中自定义 Update 层
+
+<Term def="由单一管理器在一条 Update 里遍历对象并调用自定义 Tick，替代大量 MonoBehaviour.Update 以减少引擎调度开销。">自定义 Update 层</Term> 适合大量 NPC、子弹、计时器——**一次引擎回调，内部循环 N 次逻辑**。
+
+<CodeTabs>
+  <Tab label="❌ 慢">
+
+```csharp
+// 100 个脚本各有一个 Update
+public class NpcA : MonoBehaviour {
+    void Update() { Tick(); }
+}
+```
+
+  </Tab>
+  <Tab label="✅ 快">
+
+```csharp
+public interface ITickable { void Tick(float dt); }
+
+public class TickManager : MonoBehaviour {
+    readonly List<ITickable> _items = new();
+    void Update() {
+        float dt = Time.deltaTime;
+        for (int i = 0; i < _items.Count; i++) _items[i].Tick(dt);
+    }
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+<Callout type="tip">
+  自定义层可加分帧（每帧只 Tick 一部分）、优先级桶、降频（远处 NPC 每 3 帧 Tick 一次）。代价是自己维护注册/注销，对象销毁时记得 `Unregister`。
+</Callout>
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：Profiler 里某个脚本 `GetComponent` Self 时间很高，改成缓存后 Total 几乎不变。**原因**：瓶颈其实在子函数或物理，GetComponent 只是表象；或仍在别的脚本里每帧查找。**修法**：展开调用栈看 Total；全项目搜 `GetComponent` 与 `Find`，一次性清干净。
+</Callout>
+
+<Callout type="trap">
+  **现象**：协程里每帧 `yield return new WaitForEndOfFrame()`，GC Alloc 每帧上涨。**原因**：部分 yield 指令会分配托管对象。**修法**：缓存 `WaitForEndOfFrame` 实例到字段复用，或改用非分配计时（`Time.time` 比较）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：场景里 200 个敌人 prefab 都带空 `Update`，合并后帧率骤降。**原因**：空回调仍被 PlayerLoop 调度，见 EmptyCallbackDiagram。**修法**：删掉空函数；大量同类逻辑合并到 TickManager；用 `[DefaultExecutionOrder]` 控制顺序而非多挂脚本。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`if (go != null)` 通过后仍报 MissingReferenceException。**原因**：用了 C# 引用判空而非 Unity 的 `== null`。**修法**：对 `UnityEngine.Object` 统一用 `== null` / `ReferenceEquals` 配合 Unity 语义，或 TryGet 模式。
+</Callout>
+
+## 小结
+
+- **GetComponent / Find**：Awake 或序列化缓存，禁止热路径重复查找
+- **空 Update**：删掉或合并到自定义 Update 层
+- **Update / Coroutine / Invoke**：按频率选机制，能事件驱动就别轮询
+- **距离判断**用 `sqrMagnitude`；热循环注意 List 分配与 GC
+- **场景**用 Additive + Async；改完用上一章基线在同场景复测
+
+<Exercises>
+
+**练习 1（改代码型）** 找一个在 `Update` 里调用 `GetComponent` 的脚本，改成 Awake 缓存或序列化字段。用 Profiler 对比改动前后该脚本的 Self/Total 时间，并记录 GC Alloc 是否变化。
+
+<Answer>
+
+预期 GetComponent 条目从每帧出现变为仅在 Awake 出现一次，Update 段 CPU 下降。若 Total 不变，说明热点在函数体内其他逻辑，继续展开 Profiler 调用栈。GC 通常不变，除非同时去掉协程或字符串分配。
+
+</Answer>
+
+**练习 2（问答型）** 为什么 100 个空 `Update` 通常比 1 个 `TickManager` 循环 100 次更慢？
+
+<Answer>
+
+每个 MonoBehaviour.Update 都是引擎 PlayerLoop 单独调度一次，有跨边界与脚本调度开销。TickManager 只有一次 Update 回调，内部 for 循环是纯托管调用，更紧凑。所以当对象数量很大时，集中调度往往更省 CPU，代价是架构复杂度上升。
+
+</Answer>
+
+**练习 3（问答型）** 比较 `magnitude` 与 `sqrMagnitude` 判断进入 5 米范围时的差异；若范围改为 `float range` 变量，快写法应如何写？
+
+<Answer>
+
+magnitude 内部计算 sqrt，sqrMagnitude 只比平方。快写法：`offset.sqrMagnitude < range * range`，避免每帧开方。range 变化时只需更新 `rangeSq = range * range` 缓存。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="GetComponent 缓存">
+  在 Awake/Start 或 Inspector 字段保存组件引用，避免 Update 里重复 GetComponent。详见「组件引用」一节。
+</GlossaryItem>
+
+<GlossaryItem term="空 MonoBehaviour 回调">
+  函数体为空的 Update 等仍被引擎每帧调度。详见 EmptyCallbackDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="Update">
+  每帧主线程回调，与帧率同步。详见 Stepper 第 ① 步。
+</GlossaryItem>
+
+<GlossaryItem term="Coroutine（协程）">
+  用 yield 挂起、延迟再继续的 IEnumerator 流程。详见 Stepper 第 ② 步。
+</GlossaryItem>
+
+<GlossaryItem term="InvokeRepeating">
+  按固定间隔重复调用方法名的引擎 API。详见 Stepper 第 ③ 步。
+</GlossaryItem>
+
+<GlossaryItem term="Unity 空引用检查">
+  Unity 重载 ==，销毁后对象用 == null 判活。详见「已销毁对象」一节。
+</GlossaryItem>
+
+<GlossaryItem term="GameObject.Find / FindWithTag">
+  运行时遍历场景层级按名/标签查找。应用缓存引用替代。详见 FindSendMessageDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="SendMessage">
+  按字符串方法名发消息，慢且难维护。用接口/事件替代。
+</GlossaryItem>
+
+<GlossaryItem term="sqrMagnitude">
+  向量长度平方，比较距离时省去 sqrt。详见距离比较代码对照。
+</GlossaryItem>
+
+<GlossaryItem term="Additive 加载">
+  叠加加载场景不卸载当前关。详见场景加载代码对照。
+</GlossaryItem>
+
+<GlossaryItem term="Async 加载">
+  LoadSceneAsync 分帧加载，避免同步卡顿。详见场景加载代码对照。
+</GlossaryItem>
+
+<GlossaryItem term="自定义 Update 层">
+  单管理器 Tick 多个对象，减少引擎回调次数。详见集中 Update 代码对照。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第3版"
+  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+/>
