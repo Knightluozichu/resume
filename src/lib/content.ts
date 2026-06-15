@@ -62,17 +62,18 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 侧边栏分书与全局上/下一章顺序均以此为准。未列入的书排在已知书之后，
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
-export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e", "android-advanced-decryption", "big-nerd-ranch-guide"] as const;
+export const BOOK_ORDER = ["learnopengl", "cpp-primer-5e", "c-primer-plus", "android-advanced-decryption", "big-nerd-ranch-guide"] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
   "cpp-primer-5e": "C++ Primer 第5版",
+  "c-primer-plus": "C Primer Plus（第6版）",
   "android-advanced-decryption": "Android进阶解密",
   "big-nerd-ranch-guide": "Android 编程权威指南（第4版）",
 };
 
-/** 取某书在教学顺序中的位次；未知书返回一个大于所有已知位次的值 */
+/** bookRank: index in BOOK_ORDER, or fallback past known books */
 function bookRank(bookSlug: string): number {
   const i = (BOOK_ORDER as readonly string[]).indexOf(bookSlug);
   return i === -1 ? BOOK_ORDER.length : i;
@@ -97,6 +98,11 @@ export const SECTION_ORDER = [
   "C++标准库",
   "类设计者工具",
   "高级主题",
+  // C Primer Plus（第6版）
+  "C基础",
+  "C控制与IO",
+  "C函数数组指针",
+  "C高级主题",
   // Android进阶解密
   "系统架构",
   "系统启动",
@@ -114,7 +120,7 @@ export const SECTION_ORDER = [
   "高级UI与动画",
 ] as const;
 
-/** 取某 section 在教学顺序中的位次；未知 section 返回一个大于所有已知位次的值 */
+/** sectionRank: index in SECTION_ORDER, or fallback past known sections */
 function sectionRank(section: string): number {
   const i = (SECTION_ORDER as readonly string[]).indexOf(section);
   return i === -1 ? SECTION_ORDER.length : i;
