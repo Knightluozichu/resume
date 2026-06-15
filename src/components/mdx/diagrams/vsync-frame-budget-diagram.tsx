@@ -69,7 +69,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 260"
+          viewBox="0 0 640 280"
           role="img"
           aria-label="VSync 帧预算：VSync Off 画面撕裂、VSync On 60FPS 流畅、VSync On 30FPS 省电"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -80,7 +80,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                 x={r.x}
                 y={r.y}
                 width={colW}
-                height="140"
+                height="150"
                 rx="8"
                 fill={boxBg(i)}
                 stroke={boxStroke(i)}
@@ -100,10 +100,10 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
                   {line}
                 </text>
               ))}
-              {/* Sub label */}
+              {/* Sub label — pushed down to avoid overlap with multi-line titles */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 48}
+                y={r.y + 56}
                 textAnchor="middle"
                 fontSize="11"
                 fill="var(--text-secondary)"
@@ -113,7 +113,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* FPS */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 76}
+                y={r.y + 84}
                 textAnchor="middle"
                 fontSize="22"
                 fontWeight="700"
@@ -124,7 +124,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* frameTime */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 100}
+                y={r.y + 106}
                 textAnchor="middle"
                 fontSize="10"
                 fill="var(--text-secondary)"
@@ -134,7 +134,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* Result */}
               <rect
                 x={r.x + 10}
-                y={r.y + 112}
+                y={r.y + 118}
                 width={colW - 20}
                 height="22"
                 rx="4"
@@ -142,7 +142,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               />
               <text
                 x={r.x + colW / 2}
-                y={r.y + 127}
+                y={r.y + 133}
                 textAnchor="middle"
                 fontSize="10"
                 fontWeight="600"
@@ -153,7 +153,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               {/* Detail */}
               <text
                 x={r.x + colW / 2}
-                y={r.y + 152}
+                y={r.y + 156}
                 textAnchor="middle"
                 fontSize="9"
                 fill="var(--text-secondary)"
@@ -182,23 +182,23 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
           {/* VSync timeline */}
           <line
             x1="20"
-            y1="215"
+            y1="225"
             x2="620"
-            y2="215"
+            y2="225"
             stroke="var(--border)"
             strokeWidth="1"
             strokeDasharray="8,4"
           />
-          <text x="20" y="230" fontSize="9" fill="var(--text-secondary)">
+          <text x="20" y="240" fontSize="9" fill="var(--text-secondary)">
             VSync 信号（每 16.67ms 一次）
           </text>
           {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((t) => (
             <g key={t}>
               <line
                 x1={20 + (t * 600) / 8}
-                y1="209"
+                y1="219"
                 x2={20 + (t * 600) / 8}
-                y2="221"
+                y2="231"
                 stroke={
                   isActive(0) || isActive(1) || isActive(2)
                     ? "var(--accent)"
@@ -208,7 +208,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
               />
               <circle
                 cx={20 + (t * 600) / 8}
-                cy="215"
+                cy="225"
                 r="3"
                 fill="var(--accent)"
                 opacity={
@@ -220,7 +220,7 @@ export function VsyncFrameBudgetDiagram({ step }: Props) {
           {/* Bottom hint */}
           <text
             x="320"
-            y="250"
+            y="265"
             textAnchor="middle"
             fontSize="11"
             fill={

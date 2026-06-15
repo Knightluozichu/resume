@@ -187,17 +187,17 @@ export function PowerFrameRateDiagram({ step }: Props) {
               )}
             </g>
           ))}
-          {/* Dynamic FPS arrow hint */}
+          {/* Dynamic FPS arrow hint — shifted right to avoid overlapping gpu text */}
           <path
-            d="M480 126 Q510 112 540 126"
+            d="M520 126 Q550 108 580 126"
             fill="none"
             stroke="var(--border)"
             strokeWidth="1.5"
             strokeDasharray="4,3"
           />
           <text
-            x="510"
-            y="112"
+            x="550"
+            y="104"
             textAnchor="middle"
             fontSize="9"
             fill="var(--text-secondary)"

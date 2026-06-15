@@ -16,14 +16,14 @@ export function CollisionDetectionDiagram({ mode = "discrete" }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 480 210"
+          viewBox="0 0 480 230"
           role="img"
           aria-label="离散与连续碰撞检测对比"
           className="mx-auto block h-auto w-full max-w-[480px]"
         >
           {/* 墙 */}
           <rect x="220" y="40" width="24" height="120" rx="2" fill="var(--border)" stroke="var(--text-secondary)" strokeWidth="1.5" />
-          <text x="232" y="178" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="232" y="176" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             墙
           </text>
 
@@ -40,7 +40,7 @@ export function CollisionDetectionDiagram({ mode = "discrete" }: Props) {
                 t+1 穿过
               </text>
               <line x1="134" y1="100" x2="266" y2="100" stroke="var(--text-secondary)" strokeWidth="1" strokeDasharray="4 3" />
-              <text x="200" y="178" textAnchor="middle" fontSize="11" fill="var(--accent)">
+              <text x="200" y="196" textAnchor="middle" fontSize="11" fill="var(--accent)">
                 Discrete：步间 tunneling
               </text>
             </>

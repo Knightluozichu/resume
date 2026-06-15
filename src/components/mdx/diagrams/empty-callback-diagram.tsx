@@ -13,10 +13,10 @@ export function EmptyCallbackDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 520 230"
+          viewBox="0 0 560 250"
           role="img"
           aria-label="空 MonoBehaviour 回调仍被引擎调度"
-          className="mx-auto block h-auto w-full max-w-[520px]"
+          className="mx-auto block h-auto w-full max-w-[560px]"
         >
           <rect x="20" y="20" width="160" height="192" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.5" />
           <text x="100" y="44" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">
@@ -44,23 +44,27 @@ export function EmptyCallbackDiagram() {
             </g>
           ))}
 
-          {/* 空函数注释放在右侧独立位置，不与 callback rects 重叠 */}
-          <text x="184" y="80" fontSize="9" fill="var(--text-secondary)">← 空函数仍注册</text>
-          <text x="184" y="120" fontSize="9" fill="var(--text-secondary)">← 空函数仍注册</text>
+          {/* 空函数注释：用短线引出，文字锚定在右侧 rect 外 */}
+          <line x1="164" y1="84" x2="172" y2="84" stroke="var(--text-secondary)" strokeWidth="1" />
+          <text x="175" y="80" fontSize="9" fill="var(--text-secondary)">空函数</text>
+          <text x="175" y="90" fontSize="9" fill="var(--text-secondary)">仍注册 ↓</text>
+          <line x1="164" y1="124" x2="172" y2="124" stroke="var(--text-secondary)" strokeWidth="1" />
+          <text x="175" y="118" fontSize="9" fill="var(--text-secondary)">空函数</text>
+          <text x="175" y="128" fontSize="9" fill="var(--text-secondary)">仍注册 ↓</text>
 
-          <path d="M180 120 h40" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#ecb-arrow)" />
-          <rect x="220" y="75" width="280" height="80" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2" />
-          <text x="360" y="103" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">
+          <path d="M180 120 h60" stroke="var(--accent)" strokeWidth="2" markerEnd="url(#ecb-arrow)" />
+          <rect x="250" y="75" width="290" height="80" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2" />
+          <text x="395" y="103" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">
             MonoBehaviour 脚本
           </text>
-          <text x="360" y="123" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="123" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             void Update() { }
           </text>
-          <text x="360" y="141" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
+          <text x="395" y="141" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
             void LateUpdate() { } — 体量为零，调度成本不为零
           </text>
 
-          <text x="260" y="200" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
+          <text x="280" y="230" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
             100 个空 Update ≈ 100 次跨边界调用；删掉脚本或改用集中调度
           </text>
           <defs>

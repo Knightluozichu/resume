@@ -47,13 +47,14 @@ export function GcAllocDiagram() {
               strokeWidth={i === 0 ? 1.5 : 0.5}
             />
           ))}
-          <text x="124" y="134" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
-            持续分配 → 堆逐渐填满
+          <text x="124" y="138" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
+            持续分配，堆逐渐填满
           </text>
 
           {/* Arrow to GC trigger — 水平居中于 managed-heap 和 GC三阶段之间 */}
-          <text x="238" y="52" textAnchor="middle" fontSize="9" fill="var(--accent)">
-            堆满 →
+          <line x1="224" y1="76" x2="254" y2="76" stroke="var(--accent)" strokeWidth="1.5" markerEnd="url(#gc-arrow)" />
+          <text x="239" y="68" textAnchor="middle" fontSize="9" fill="var(--accent)">
+            堆满
           </text>
 
           {/* GC Three-Phase Process */}
@@ -132,6 +133,11 @@ export function GcAllocDiagram() {
           <text x="320" y="316" textAnchor="middle" fontSize="10" fill="var(--accent)">
             解法：对象池 · 结构体替代类 · 缓存引用 · 拆大对象为值类型
           </text>
+          <defs>
+            <marker id="gc-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+              <path d="M0 0 L8 4 L0 8 z" fill="var(--accent)" />
+            </marker>
+          </defs>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
