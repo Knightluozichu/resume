@@ -84,6 +84,9 @@ import { ugoMemoryManagementQuestions } from "./review/ugo-memory-management";
 import { ugoDataOrientedTechnologyStackQuestions } from "./review/ugo-data-oriented-technology-stack";
 import { ugoTacticalTipsAndTricksQuestions } from "./review/ugo-tactical-tips-and-tricks";
 import { profProfilingWorkflowBaselineQuestions } from "./review/prof-profiling-workflow-baseline";
+import { profCpuProfilerDeepDiveQuestions } from "./review/prof-cpu-profiler-deep-dive";
+import { profGpuPerformanceAnalysisQuestions } from "./review/prof-gpu-performance-analysis";
+import { profMemoryProfilerQuestions } from "./review/prof-memory-profiler";
 
 export {
   CHAPTER_TITLES,
@@ -164,6 +167,9 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ugoDataOrientedTechnologyStackQuestions,
   ...ugoTacticalTipsAndTricksQuestions,
   ...profProfilingWorkflowBaselineQuestions,
+  ...profCpuProfilerDeepDiveQuestions,
+  ...profGpuPerformanceAnalysisQuestions,
+  ...profMemoryProfilerQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

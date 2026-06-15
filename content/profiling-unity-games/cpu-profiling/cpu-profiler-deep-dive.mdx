@@ -1,0 +1,455 @@
+---
+title: CPU Profiler 深度使用
+type: C
+section: CPU 性能分析
+order: 1
+description: 解剖 CPU Timeline、定位最热函数、解读 GC Alloc——把 CPU 侧的性能瓶颈一层层拆开。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型章：核心是代码实现与操作流程。主 viz = ShaderDemo 风格示意图 + 代码对照。
+按 chapter-spec §〇：代码对照为重心、无数学、主 Demo 形态示意图/Stepper。
+知识点清单（动笔先行、每项配 viz）：
+
+1. CPU Timeline 模块总览 → CPUUsageTimelineDiagram (SVG 示意图)
+2. Hierarchy 排序：Total vs Self time → CPUHierarchyDiagram + CodeTabs
+3. GC Alloc 颜色解读 → GCAllocColorDiagram (SVG 示意图)
+4. Scripts vs Engine 分类 → ScriptsVsEngineDiagram (对比图)
+5. Burst 线程标注 → BurstThreadDiagram (SVG 示意图)
+   Term 高亮术语：CPU Usage、Timeline、Hierarchy、Self time、Total time、
+   GC Alloc、Scripts、Engine、Burst、Job System → 均进章末 Glossary */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」；2–3 条，可检验动词开头；末条检验问题。 */}
+
+<Objectives>
+- 能解释 CPU Usage Profiler 中 Timeline 视图和 Hierarchy 视图各自的用途和用法
+- 能独立用 Hierarchy 视图按 Self time 排序定位到项目中 CPU 最热的函数，并区分 Scripts 与 Engine 开销
+- 能回答：GC Alloc 在 Timeline 上的颜色代表什么？如果你看到一大片红色 GC 标记，下一步该查什么？
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题」「没有它会怎样」；类比用工厂流水线。 */}
+
+## 为什么 CPU 分析需要深度使用
+
+你的游戏在跑，帧率掉得厉害——但你不知道是物理模拟太重、AI 寻路写劈叉了、还是某个 UI 每帧都在重建。打开性能分析工具一看，满屏花花绿绿的横条，根本不知道该看哪一条。
+
+没有 CPU 深度分析能力会怎样？你会把「渲染慢」误诊为「CPU 慢」——对着逻辑代码一顿改，到头来真正的瓶颈在 GPU 那边纹丝不动。或者反过来：CPU 上某个函数的每帧内存分配把垃圾回收器拖垮了，你却盯着渲染看半天。
+
+这一章就是教你「读报告」：CPU 侧的性能数据不是一堆难以理解的颜色条，而是一层层有规律可循的信息。读完你能像医生看化验单一样——一眼锁定病灶、分层定位根因、再用代码把问题修掉。
+
+{/* 3. 概念讲解（spec §三）：C 型把"是什么"压缩到一段，篇幅让给第六节。
+新概念：CPU Usage 模块 / Timeline 视图 / Hierarchy 视图 / Self time / Total time / GC Alloc / Scripts vs Engine / Burst 线程 */}
+
+## 第一个概念：CPU Timeline——一帧的时间地图
+
+<Term def="Unity Profiler 中记录每帧 CPU 各项任务耗时的核心模块：把每帧里所有 CPU 工作按时间顺序排成一条横带，不同颜色对应不同类型的任务。">
+  CPU Usage Profiler
+</Term>
+是你分析 CPU 性能的主阵地。它不像一个数字表盘那样只能告诉你「当前帧 CPU 花了 25ms」然后就无话可说——它把这一帧的 25ms 像切蛋糕一样切成几十条色带，每一条代表一类工作（脚本逻辑、物理模拟、动画更新、渲染准备……），你一眼就能看到谁是最大的那块蛋糕。
+
+<Term def="Profiler 中按时间顺序展开每帧 CPU 工作的视图：横轴是时间（微秒），纵轴是色带堆叠，每条色带代表一项 CPU 任务。">
+  Timeline 视图
+</Term>
+就是这张「时间地图」：横轴是从帧起点到终点的微秒数，纵轴堆叠着 Scripts、Physics、Animation、Rendering 等色条，鼠标悬停任意区域就能看到对应函数名称和精确耗时。
+
+<CPUUsageTimelineDiagram />
+
+Timeline 帮你回答「这一帧的时间都去哪了」这个问题。**Scripts**（脚本逻辑，如 `Update`、`LateUpdate`、自定义方法）、**Physics**（碰撞检测与刚体模拟）、**Animation**（骨骼动画与状态机）、**Rendering**（CPU 侧为 GPU 准备绘制命令的工作——注意这不是 GPU 绘制本身，而是"告诉 GPU 该画什么"的准备工作）……所有这些在你的代码背后同时或分时运行着。Timeline 用一个画面把它们的占比摊给你看。
+
+但在 Timeline 上你只能看到「脚本这块花了 10ms」——想知道「这 10ms 里面谁是元凶」？你需要下一节的主角：Hierarchy 视图。
+
+## 第二个概念：Hierarchy——从"哪类任务慢"到"哪个函数慢"
+
+<Term def="Profiler 中按函数调用树展开每帧 CPU 耗时数据的视图：展开每条入口可以看到子函数各自的耗时，支持按 Total time（含子调用）和 Self time（不含子调用）排序。">
+  Hierarchy 视图
+</Term>
+把你从「大类」带进「具体函数」——它是 CPU Profiler 里最常用、最重要的视图。
+
+当你展开 CPU Usage 的一帧数据后，默认看到的是按 Total time 排序的函数列表。但这里有一个新手最容易搞混的概念：
+
+<Term def="一个函数自身代码的执行耗时（不含它调用的其他函数；即把子函数耗时扣掉后剩下的自己的时间）。Self 时间高的函数 = 函数自己写得慢。">
+  Self time
+</Term>
+和
+<Term def="一个函数及其调用的所有子函数的总耗时（Self time + 所有子调用时间）。Total 时间高的函数 = 可能自己没问题，但子函数太慢。">
+  Total time
+</Term>
+是两个完全不同的概念。一个经典场景：你的 `Update()` 在 Hierarchy 里 Total time 排第一，120ms——你以为 `Update()` 写劈叉了？展开一看，里面调用了 `AIManager.FindPath()`，Self time 占了 115ms。`Update()` 自己只花了 5ms 做条件判断和调度——它只是顶包的。
+
+<CPUHierarchyDiagram />
+
+所以排查 CPU 热点的最标准流程是：
+
+1. 先看 Total time，找到耗时最大的顶层函数入口；
+2. 展开它，看子函数的 Self time，找到 Self 占比最高的那个——这才是真正的瓶颈；
+3. 重复 1-2，直到钻到不能再展开的方法体。
+
+Hierarchy 的排序栏有个下拉按钮：你可以**切到按 Self time 排序**，直接从全局找到「函数本事最慢」的那个——不管它被谁调用的。这比手动一层层展开快得多。日常排查时，先看 Total 找总体热点，再切 Self 找具体根因，两遍就定位。
+
+## 第三个概念：GC Alloc——Timeline 上那些红色标记
+
+GC Alloc 的全称是 <Term def="Garbage Collector Allocation：运行时在托管堆上分配托管内存的记录，Unity Profiler 在 Timeline 和 Hierarchy 里用红色或粉色标注。">
+  Garbage Collector 分配
+</Term>。简单说：你的 C# 代码在运行过程中临时分配了一些托管内存（比如 `new List<T>()`、`foreach` 的迭代器、LINQ 表达式、闭包捕获），这些分配积累到一定量后会触发 GC——垃圾回收器暂停你的所有线程来清理那些不再被引用、已经变成「垃圾」的对象。这个暂停可能只有几毫秒，看起来不多——但每十几帧就来一次、每次卡你 3-5ms，就是帧率反复抖动的元凶。
+
+在 CPU Usage 的 Timeline 上，GC Alloc 被标成**显眼的红色**——不是警告你「有内存泄漏」，而是**告诉你这一帧内有托管内存分配发生**。红色条的高度（数值）代表分配的字节数，不是 GC 本身的耗时——GC 的耗时要在 GC 专用的色带里另外看。
+
+<GCAllocColorDiagram />
+
+Hierarchy 视图里也有 GC Alloc 列：展开函数名后，最右侧的 GC Alloc 列会显示这个函数自身在本次采样里分配的托管内存字节数。排查 GC 的流程是：
+
+1. Timeline 上发现某帧有大块红色 → 展开那一帧；
+2. 切到 Hierarchy，按 GC Alloc 列降序排序；
+3. 找到 GC Alloc 最高的函数 → 这就是分配热点。
+
+常见 GC 热点来源：`foreach` 在值类型集合上产生装箱、`string` 拼接、闭包 / Lambda 捕获、`GetComponent<T>()` 每次调用都返回一个新引用、以及每帧 `new` 的任何东西。下一节会详细讲怎么用代码修掉它们。
+
+## 第四个概念：Scripts vs Engine——谁才是 CPU 杀手
+
+<Term def="Profiler 中将 CPU 耗时分为两大类的标注方式：Scripts（脚本侧：你自己写的 C# 代码，包括 Update、自定义方法、协程等）和 Engine（引擎侧：Unity 的 Native 代码，包括渲染准备、物理模拟、动画求值、粒子更新等）。">
+  Scripts vs Engine
+</Term>
+是 CPU Profiler 使用时最核心的分类逻辑。Timeline 上用不同颜色把两者区分开，你一看就能判断一个帧卡顿是自己写出来的还是引擎干的。
+
+<ScriptsVsEngineDiagram />
+
+- **Scripts 慢**（你的问题）：Hierarchy 展开看 Self time，找到自己的代码里的算法复杂度、循环、每帧分配等。问题是「你写的逻辑太重」。
+- **Engine 慢**（可能需要你配合改）：比如 Camera.Render 时间飙高——引擎在准备渲染命令。你没有直接写 Camera.Render 的代码，但你可以减少 Draw Call、合并材质、关掉不必要的摄像机——从侧面减轻引擎的负担。
+- **Physics 慢**：碰撞体太多或形状太复杂、关节约束过多、或者 FixedUpdate 里写了重逻辑。解法是减少碰撞体数量、用简单碰撞形状（球/盒/胶囊代替 MeshCollider）、调大 Fixed Timestep 降低物理更新频率。
+
+判断 Scripts 还是 Engine 占大头，决定你下一步是优化自己的代码，还是去改资源、配置、场景——方向错了等于白干。
+
+## 第五个概念：Burst 线程标注——多线程的身影
+
+<Term def="Unity 的高性能编译器技术：将 C# 子集编译为高度优化的原生代码，配合 Job System 在多线程上并行执行。Profiler 中 Burst 编译的 Job 会在其他线程上以独立色条出现。">
+  Burst
+</Term>
+和
+<Term def="Unity 的 C# 多线程任务系统：将数据密集的计算拆分成多个 Job，由 Unity 调度到 Worker Thread（工作线程）上并行执行。Profiler 中每个 Worker Thread 有独立的 Timeline 色条。">
+  Job System
+</Term>
+是最容易被忽视的性能信息来源。当你在 CPU Usage 模块里只盯着 Main Thread 那一行时，你可能漏掉了一个重要的事实：Unity 除了主线程，还有一组 Worker Thread（工作线程），上面跑着 Burst 编译的 Job。
+
+<BurstThreadDiagram />
+
+在 Profiler 的 CPU Usage 里展开「Job」或直接往下翻到主线程下方，就能看到工作线程上的 Burst Job 标注——每条 Job 的名字、执行时长、以及是否等待主线程完成，都清晰可见。
+
+为什么看这个重要？因为如果你的主线程并没有满（比如只花了 8ms），但帧率还是不够——查 Burst 线程：有些 Job 可能没跑完，主线程在 `Complete()` 上卡着等。或者反过来：你开了很多 Job 但每条都只有几微秒——Job 的启动和调度开销甚至比实际计算还大，大量的细碎 Job 反而拖累整体吞吐。Burst 线程视角让你看到「多线程真正的利用率」而不是「我觉得开了多线程」。
+
+{/* 4. 数学推导：math:false，整节删除。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型主 Demo 为 ShaderDemo/示意图；猜一猜引导；这里是 Profiler 分析流程的 Stepper 互动演示。 */}
+
+## 实战：从一帧数据找到 CPU 杀手
+
+前面学了五个概念——Timeline、Hierarchy、GC Alloc、Scripts vs Engine、Burst 线程。现在把这些串联成一次完整的排查演练。下面这个 Stepper 走完从「打开 Profiler」到「修复代码并验证」的全流程：
+
+<Stepper>
+  <Step title="① 打开 Profiler，找到最慢的一帧">
+    运行游戏到目标场景，打开 Window → Analysis → Profiler → 切换到 CPU Usage 模块。先跑 10 秒，然后暂停。在 Timeline 上找到 CPU 总耗时最高的那一帧（色条最宽的那一帧）——点击选中它。这就是你要分析的「问题帧」。
+
+
+  </Step>
+  <Step title="② 看 Timeline 主线程色带分布">
+    在选中的这一帧里，看主线程上 Scripts（一般是青色/绿色）、Physics（紫色）、Rendering（蓝色）的宽度比例。如果 Scripts 占了一半以上，问题在你自己的代码；如果 Rendering 最宽，问题在渲染侧（可能是资源或配置问题，需要结合 GPU Profiler 交叉验证）。
+
+
+  </Step>
+  <Step title="③ 切 Hierarchy，Self time 排序找热点">
+    不展开任何类，直接切排序模式到 Self time 降序——排名第一的那个函数就是你当前帧的 CPU 杀手。点开它，看它的调用路径（Calling/Allocated By），确认到底是谁在调它、数据从哪里来。
+
+
+  </Step>
+  <Step title="④ 看 GC Alloc 列——有没有暗中分配">
+    在 Hierarchy 里保持 Self time 排序的同时，注意右侧的 GC Alloc 列。如果某个函数的 GC Alloc 数值很大（比如几百 KB），这通常是导致 GC 频繁触发的根因。记录下来——你要在代码里把这些分配消灭掉。
+
+
+  </Step>
+  <Step title="⑤ 改代码 + 加 ProfilerMarker 标记">
+    定位到热点函数后，代码修复前先加自定义 Profiler 标记：`Profiler.BeginSample("MyFunc")` … `Profiler.EndSample()`——这样修复后重测时你能在 Timeline 上直接看到这段代码的耗时变化，不用再 Hierarchy 里找。这是专业开发者必做的一步。
+
+
+  </Step>
+  <Step title="⑥ 重新录制，对比验证">
+    在相同的场景、相同画质下重新跑 10 秒来录制。回到 Hierarchy，查看之前的那个热点函数 Self time 是否下降。用 Profile Analyzer 对比修复前后两份 .data 的 CPU ms 均值和 P95，确认改善稳定。
+
+
+  </Step>
+</Stepper>
+
+> 猜一猜：在步骤④中你发现一个函数 GC Alloc 了 2MB，但 Self time 只有 0.3ms——这说明这个函数「不慢」吗？答案在 §八练习里自测。
+
+{/* 6. 代码对照（spec §六）：C 实战型逐段讲解 ≥80% 关键代码；每块 ≤30 行；之间必须有解说。 */}
+
+## 代码逐段拆解
+
+上面讲的是「怎么看 Profiler 数据」，但怎么写出能被 Profiler 准确分析且本身低 GC 的代码？下面逐段拆解关键操作，包含 Profiler API 标记、GC 优化常见手段、以及 Burst 代码范例。
+
+### 用 ProfilerMarker 标记关键代码段
+
+`UnityEngine.Profiling.Profiler.BeginSample/EndSample` 是手写标记的经典 API。但你每写一个 `BeginSample` 就一定要配一个 `EndSample`——忘了或者异常路径下没配对就是 Profiler 标记泄漏。Unity 2021+ 提供了更安全的 `ProfilerMarker` 结构体——自动配对、零 GC、异常安全：
+
+<CodeTabs>
+  <Tab label="C# / Unity">
+
+```csharp
+using UnityEngine.Profiling;
+
+public class MovementController : MonoBehaviour
+{
+    static readonly ProfilerMarker s_MoveMarker =
+        new ProfilerMarker("Movement.Move");
+
+    void Update()
+    {
+        using var _ = s_MoveMarker.Auto();
+        // Auto() 返回一个 disposable 标记：
+        // 进入此代码块时 Begin，离开时 End
+        Move();
+    }
+
+    void Move()
+    {
+        Vector3 forward = transform.forward;
+        float speed = 5f * Time.deltaTime;
+        transform.position += forward * speed;
+    }
+}
+```
+  </Tab>
+  <Tab label="旧式 BeginSample/EndSample">
+
+```csharp
+using UnityEngine.Profiling;
+
+public class MovementController : MonoBehaviour
+{
+    void Update()
+    {
+        Profiler.BeginSample("Movement.Move");
+        Move();
+        Profiler.EndSample();
+    }
+
+    void Move()
+    {
+        Vector3 forward = transform.forward;
+        float speed = 5f * Time.deltaTime;
+        transform.position += forward * speed;
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+<Callout type="tip">
+  `ProfilerMarker` 是结构体且 `static readonly` 缓存实例——不自产 GC、不用 `new`、调用 `Auto()` 的开销几乎为零。每次需要标记热点代码时首选 `ProfilerMarker`，别再用 `BeginSample/EndSample` 字符串版本了（那个每次调用都会产生字符串分配）。
+</Callout>
+
+### 消除 GC Alloc：三种最常见的热点修复
+
+GC 热点中的战斗机——三个一改就能看到红色大幅减少的模式：
+
+**模式一：`foreach` 在值类型集合上产生装箱**
+
+```csharp
+// ✗ 错误：List<int> 的迭代器是值类型，foreach 强制装箱 → GC Alloc
+foreach (int id in entityIds) { }
+
+// ✓ 正确：for 循环无迭代器分配
+for (int i = 0; i < entityIds.Count; i++)
+{
+    int id = entityIds[i];
+}
+```
+
+**模式二：字符串拼接在热路径里**
+
+```csharp
+// ✗ 错误：每帧拼一个 Debug.Log 字符串，堆分配
+Debug.Log("Score: " + score + " | Time: " + Time.time);
+
+// ✓ 正确：只在调试时才拼接（生产环境关掉 Debug）
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+    Debug.Log($"Score: {score} | Time: {Time.time}");
+#endif
+```
+
+**模式三：Lambda 和闭包在 Update 里捕获**
+
+```csharp
+// ✗ 错误：Lambda 里捕获了 speed，每帧分配一个闭包对象
+void Update()
+{
+    float speed = 5f;
+    enemies.ForEach(e => e.Move(speed));  // 闭包：GC Alloc
+}
+
+// ✓ 正确：改成 for 循环，无闭包
+void Update()
+{
+    float speed = 5f * Time.deltaTime;
+    for (int i = 0; i < enemies.Count; i++)
+    {
+        enemies[i].Move(speed);
+    }
+}
+```
+
+### Burst 代码：把热点丢给多线程
+
+当你通过 Profiler 确定某个纯数据计算函数是 CPU 热点（比如网格顶点处理、大批量矩阵运算、寻路节点计算），而且它不依赖 Unity 主线程 API（没有 `transform`、`GameObject`、`Time` 等引用）——这个函数就可以用 Burst + Job System 扔到多线程上跑：
+
+```csharp
+using Unity.Burst;
+using Unity.Collections;
+using Unity.Jobs;
+using UnityEngine;
+
+// Burst 编译标记：把这个 Job 编译成高度优化的代码
+[BurstCompile]
+struct MoveJob : IJobParallelFor
+{
+    [ReadOnly] public NativeArray<Vector3> Directions;
+    public NativeArray<Vector3> Positions;
+    public float DeltaTime;
+    public float Speed;
+
+    public void Execute(int index)
+    {
+        Positions[index] += Directions[index] * Speed * DeltaTime;
+    }
+}
+
+public class BurstMovement : MonoBehaviour
+{
+    NativeArray<Vector3> m_Dirs;
+    NativeArray<Vector3> m_Positions;
+
+    void Update()
+    {
+        var job = new MoveJob
+        {
+            Directions = m_Dirs,
+            Positions = m_Positions,
+            DeltaTime = Time.deltaTime,
+            Speed = 5f
+        };
+
+        var handle = job.Schedule(m_Positions.Length, 64);
+        handle.Complete();  // 等待所有 Job 完成
+    }
+}
+```
+
+<Callout type="warn">
+  `JobHandle.Complete()` 会在主线程上等待所有工作线程跑完——如果你的 Job 特别慢而你又急着需要结果，主线程会被卡在这。对于可以滞后一帧使用的数据（如 UI 数据），用 `JobHandle.Schedule()` + 下一帧再 `Complete()` 来规避主线程等待。
+</Callout>
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3 个；固定 现象→原因→修法 三行格式。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 Hierarchy 里把 `Update()` 标记为 CPU 杀手（Total time 120ms），花了半天时间重构 `Update()` 里的逻辑，帧率纹丝不动。
+  **原因**：Total time 包含了所有子调用的耗时。`Update()` 自身可能只占 5ms，剩下的 115ms 是你调用的 `AIManager.FindPath()`——把外层优化到只剩一行代码，里面的 115ms 一分不少。
+  **修法**：展开 `Update()` 看子函数的 Self time，按 Self time 排序寻找真正的热点。别在 Total time 面前浪费时间。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Timeline 上 Scripts 色条很窄，但帧率还是低——以为不是代码问题。结果一看，Scripts 色条窄是因为 GC 被触发后 Unity 暂停了所有脚本线程，真正的 GC 暂停时间在 GC 专用的色带里。
+  **原因**：GC 暂停发生在托管堆，不属于 Scripts 类别——Timeline 里别只看 Scripts 宽度。**修法**：在 Hierarchy 里打开 GC Alloc 列，找到造成大量、频繁分配的函数；修复分配源头（取消不必要的 `new`、`foreach` 装箱、Lambda 捕获），GC 触发频率和暂停时长就会随之下降。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把一段代码用 `[BurstCompile]` 标记并跑在 Job System 上，Profiler 显示主线程果然快了很多——但在 Worker Thread 上看 Job 耗时并不起眼。过了一阵子发现 CPU 温度飙升、电池掉得飞快。
+  **原因**：Job 跑在工作线程上确实不占主线程时间——但 CPU 总功耗 = 所有核心的功耗之和。你把负载从主线程挪到四个工作线程，总计算量不变，多核全开导致 CPU 总功耗和发热反而上去了。**修法**：用 `new JobHandle()` + `IJobParallelFor` 的 `innerloopBatchCount` 参数控制批次粒度，以及根据目标平台的可用核心数决定 Job 数量（`SystemInfo.processorCount`）。移动端不一定要把 CPU 跑满——能降频维持稳定帧率才是王道。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条 bullet × ≤40 字，与 §一目标一一呼应；练习含 1 道实现题。 */}
+
+## 小结
+
+- **Timeline** 告诉你一帧的时间去哪了；**Hierarchy** 告诉你哪个函数最慢——Self time 找根因，Total time 找入口
+- **GC Alloc 红色标记**是每帧托管内存分配——分配频繁就触发 GC 暂停，帧率会反复抖动
+- **Scripts vs Engine** 分类决定优化方向：Scripts 慢改自己代码，Engine 慢改资源配置和场景
+- **Burst + Job System** 把纯数据计算挪到多线程：主线程做调度，工作线程做计算，但注意总功耗
+- 排查标准流程：Timeline 找最慢帧 → Hierarchy Self time 排序找热点 → GC Alloc 列查分配 → 改代码 → 对比验证
+
+<Exercises>
+
+**练习 1（改代码型）** 在你自己的 Unity 项目中，找到 `Update()` 或 `FixedUpdate()` 里最重的一个函数。用 `ProfilerMarker` 给它加标记（使用 `using var _ = marker.Auto()` 语法），然后跑一次 Profiler 录制，截图确认你的自定义标记出现在 CPU Usage 的 Timeline 上。
+
+<Answer>
+在文件顶部 `using UnityEngine.Profiling;`，类里声明 `static readonly ProfilerMarker s_MyMarker = new ProfilerMarker("MyFunction");`，在要标记的方法内部写 `using var _ = s_MyMarker.Auto();`——Profiler 录制后，Timeline 上会出现名为 "MyFunction" 的独立色条，Hierarchy 里也能搜到它。
+</Answer>
+
+**练习 2（独立实现型）** 写一个简单的 Benchmark 场景：循环 10000 次调用 `GetComponent<Renderer>()`，用 Profiler 观察 GC Alloc。然后将引用缓存到成员变量里（`Start()` 时 `m_Renderer = GetComponent<Renderer>()`），再跑一次循环对比 GC Alloc 变化。
+
+<Answer>
+第一版：每次循环 `GetComponent<Renderer>()` 产生一次托管分配，10000 次 = 大量 GC Alloc（Hierarchy 的 GC Alloc 列会飙高）。第二版：在 `Start()` 或 `Awake()` 里做一次 `m_Renderer = GetComponent<Renderer>()`，循环里直接拿 `m_Renderer`——零分配。这是缓存引用的经典模式：`GetComponent` 不是免费的，热路径里绝不要反复调用。
+</Answer>
+
+**练习 3（问答型）** 为什么不能只看 Total time 就说一个函数是瓶颈？如果一个 `GameManager.Update()` 的 Total time 是 80ms，但 Self time 只有 2ms——这意味着什么？
+
+<Answer>
+Total time = Self time + 所有子调用的时间。`GameManager.Update()` 的 Total time 80ms 但 Self time 只有 2ms，说明它自己只干了 2ms 的判断/调度，剩下的 78ms 全是子函数花的——可能其中一个子函数有双层嵌套循环或大量数学运算。优化应该去优化子函数，而不是盯着 `GameManager.Update()` 本身——就算把它优化到 Self time = 0ms，总分也只降 2ms。
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（10 个，按首现顺序）；释义面向零基础。 */}
+
+<Glossary>
+
+<GlossaryItem term="CPU Usage Profiler">
+  Unity Profiler 中专门记录 CPU 各项任务耗时的核心模块。把每帧的 CPU 时间按不同颜色切成色带——青色/绿色是脚本逻辑，紫色是物理，蓝色是渲染准备，黄色是动画。你分析 CPU 性能的主阵地。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Timeline 视图">
+  Profiler 中按时间先后顺序展开每帧 CPU 工作的视图——横轴是微秒，纵轴是不同颜色的任务色条。像一帧的「时间切片照片」，一眼就能看到哪类任务花了最多时间。详见本章「第一个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Hierarchy 视图">
+  Profiler 中按函数调用树展开耗时数据的视图——可以像文件夹一样一层层展开看子函数的耗时，支持按 Total time 和 Self time 排序。从「哪个模块慢」精确到「哪个函数慢」就靠它。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Self time">
+  一个函数**自身代码**的执行耗时——把子函数调用的耗时砍掉后，剩下的「自己写的那部分」有多慢。Self time 高 = 这个函数自己的代码烂；Self time 低但 Total time 高 = 问题在子函数。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Total time">
+  一个函数及其调用的**所有子函数**的总耗时。类似一个项目经理想报告整个项目的花费——他要负责，但真正花钱的可能是他手下的人。Total time 高不代表这个函数自己写得慢。详见本章「第二个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="GC Alloc">
+  垃圾回收器分配。C# 代码在运行时临时分配一些托管内存（如 new 对象、Lambda 闭包、foreach 迭代器），这些分配积累后会触发 GC 暂停整个程序来清理。Timeline 上红色标记让这些分配可见。详见本章「第三个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Scripts">
+  Profiler 中代表「你自己写的 C# 代码」的类别——Update、LateUpdate、自定义方法、协程等。占 CPU 大头 = 你的代码逻辑需要优化。和 Engine 类别对比，决定优化方向。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Engine">
+  Profiler 中代表「Unity 引擎自身 Native 代码」的类别——渲染准备、物理模拟、动画求值、粒子更新等。不是你直接写的代码，但可以通过资源配置（减少 Draw Call、合批、简化碰撞形状）来减轻它的负担。详见本章「第四个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Burst">
+  Unity 的高性能编译器技术——把一部分 C# 代码（纯数据计算、不涉及 Unity 对象引用）编译成接近手写汇编速度的原生代码。配合 Job System 在多核心上并行执行，Profiler 中在工作线程上以独立色条出现。详见本章「第五个概念」。
+</GlossaryItem>
+
+<GlossaryItem term="Job System">
+  Unity 的 C# 多线程任务系统。把计算密集的工作拆成多个 Job，由 Unity 调度到 Worker Thread 上并行执行。主线程不再做所有事情，只负责调度和聚合结果。详见本章「第五个概念」。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：固定 Attributon。 */}
+
+<Attribution
+  adaptedFrom="Unity《Ultimate Guide to Profiling Unity Games》Unity 6版"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>
