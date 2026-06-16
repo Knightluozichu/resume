@@ -409,6 +409,9 @@ import { HelloThreadsInterleaveDemo } from "./diagrams/hello-threads-interleave-
 import { ThreadLifecycleDiagram } from "./diagrams/thread-lifecycle-diagram";
 import { JoinVsDetachTimeline } from "./diagrams/join-vs-detach-timeline";
 import { DanglingRefDiagram } from "./diagrams/dangling-ref-diagram";
+import { RaceConditionExplorer } from "./diagrams/race-condition-explorer";
+import { MutexSerializeDiagram } from "./diagrams/mutex-serialize-diagram";
+import { DeadlockCycleDiagram } from "./diagrams/deadlock-cycle-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -936,6 +939,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ThreadLifecycleDiagram,
   JoinVsDetachTimeline,
   DanglingRefDiagram,
+  RaceConditionExplorer,
+  MutexSerializeDiagram,
+  DeadlockCycleDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
