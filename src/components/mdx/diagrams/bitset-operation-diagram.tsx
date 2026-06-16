@@ -61,7 +61,7 @@ export function BitsetOperationDiagram() {
           </text>
 
           {/* Initial bits display */}
-          <rect x={bitStartX - 12} y={bitY - 12} width={totalBitW + 24} height={bitH + 26} rx="8" fill="var(--code-bg)" stroke={border} />
+          <rect x={bitStartX - 12} y={bitY - 12} width={totalBitW + 48} height={bitH + 26} rx="8" fill="var(--code-bg)" stroke={border} />
 
           <text x={bitStartX - 8} y={bitY + bitH / 2 + 4} fontSize="11" fill={secondary} textAnchor="start" fontFamily="monospace">
             b =

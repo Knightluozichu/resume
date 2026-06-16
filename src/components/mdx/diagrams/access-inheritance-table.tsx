@@ -58,7 +58,7 @@ export function AccessInheritanceTable() {
             const y = 112 + ri * rowH;
             return (
               <g key={`row-${ri}`}>
-                <rect x={colX[0]} y={y} width={colW[0] + colW[1] + colW[2] + colW[3]} height={rowH} rx={4}
+                <rect x={colX[0]} y={y} width={colX[3] + colW[3] - colX[0]} height={rowH} rx={4}
                   fill={ri % 2 === 0 ? elevated : bg} stroke={border} strokeWidth={0.5} />
 
                 <text x={colX[0] + colW[0] / 2} y={y + 28} fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">

@@ -15,7 +15,7 @@ export function OperatorOverloadTable() {
   const purple = "rgb(124,92,255)";
 
   const w = 820;
-  const h = 520;
+  const h = 606;
   const cx = w / 2;
 
   const colW = [220, 170, 200, 210];
