@@ -394,6 +394,7 @@ import { ComponentWorkflowDiagram } from "./diagrams/component-workflow-diagram"
 import { JniBridgeDiagram } from "./diagrams/jni-bridge-diagram";
 import { LayerCallTraversalDiagram } from "./diagrams/layer-call-traversal-diagram";
 import { AmsStartActivityDiagram } from "./diagrams/ams-start-activity-diagram";
+import { ZygoteForkDiagram } from "./diagrams/zygote-fork-diagram";
 import { WindowManagerDiagram } from "./diagrams/window-manager-diagram";
 import { WmsArchitectureDiagram } from "./diagrams/wms-architecture-diagram";
 import { DalvikArtCompareDiagram } from "./diagrams/dalvik-art-compare-diagram";
@@ -914,6 +915,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JniBridgeDiagram,
   LayerCallTraversalDiagram,
   AmsStartActivityDiagram,
+  ZygoteForkDiagram,
   WindowManagerDiagram,
   WmsArchitectureDiagram,
   DalvikArtCompareDiagram,
