@@ -260,7 +260,8 @@ const PERF_TIERS: Record<
   }
 > = {
   // 满配（总监调校：关反射地面——大反射板在低机位把车反射拉伸到地平线，画面乱；改用干净接触阴影）
-  high: { dpr: [1, 2], windCount: WIND.count, bloom: true, reflector: false },
+  // HEL-16：DPR 上限 2→1.5 降 TBT/Lighthouse 主线程占用，视觉差异在大多数显示器肉眼难辨
+  high: { dpr: [1, 1.5], windCount: WIND.count, bloom: true, reflector: false },
   // 中档：降 DPR + 光屑减量 + 保留 Bloom（辉光是 Hero 灵魂）
   mid: { dpr: [1, 1.2], windCount: 380, bloom: true, reflector: false },
   // 低档：DPR 钉死 1 + 光屑大砍 + 关 Bloom + 关反射，保实时帧率
@@ -991,34 +992,65 @@ export default function FerrariScene({ onReady }: { onReady?: () => void }) {
     };
   }, []);
 
+  /*
+   * HEL-16：IntersectionObserver 离屏暂停 frameloop。
+   *   - 视口内 → "always"（正常 60fps）
+   *   - 完全离开视口 → "never"（停 RAF，主线程归还，TBT/Lighthouse 主线程占用↓）
+   *   - 滚回 → 恢复 "always"
+   * 与 PerformanceMonitor 的 tier 切换正交（tier 调 DPR/粒子/Bloom，loop 只决定渲不渲）。
+   * reduced-motion 行为保持不变：CarRotateGroup / WindParticles 各自已读 reducedMotion 静止，
+   *   loop 仍可为 always —— 静态画面 + 阻尼到位后逐帧 lerp 收敛极快、可忽略；不为此再叠
+   *   一层 loop 控制，避免与 PerformanceMonitor 互相干扰。
+   */
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [loop, setLoop] = useState<"always" | "never">("always");
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+        setLoop(entry.isIntersecting ? "always" : "never");
+      },
+      { threshold: 0 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   return (
-    <Canvas
-      // 透明背景，与页面 --bg 融合；不抢首页文字
-      gl={{ alpha: true, antialias: true }}
-      shadows
-      // DPR 由性能档位驱动（HEL-15）：掉帧降上限，正常设备维持满配 [1,2]
-      dpr={PERF_TIERS[tier].dpr}
-      // 初始机位按窗口宽高比算到响应式目标（第 0 帧即终态，无进场跳变）；
-      // CameraRig 之后维持并处理 resize。
-      camera={{ position: initialCam.position, fov: initialCam.fov }}
-    >
-      {/* 模型就绪后通知外层收起加载海报（与 FerrariRig 共享 useGLTF 缓存） */}
-      <ModelReady onReady={onReady} />
-      {/*
-       * 帧率监测（HEL-15）：掉帧 onDecline 降一档，回升 onIncline 升一档，
-       * onFallback（持续吃力）直接钉到 low。tier 驱动 DPR / 风粒子数 / Bloom / 反射。
-       */}
-      <PerformanceMonitor
-        ms={PERF_MONITOR.ms}
-        iterations={PERF_MONITOR.iterations}
-        bounds={PERF_MONITOR.bounds}
-        onDecline={() => setTier((t) => stepTier(t, -1))}
-        onIncline={() => setTier((t) => stepTier(t, 1))}
-        onFallback={() => setTier("low")}
+    <div ref={wrapperRef} className="h-full w-full">
+      <Canvas
+        // 透明背景，与页面 --bg 融合；不抢首页文字
+        gl={{ alpha: true, antialias: true }}
+        shadows
+        // DPR 由性能档位驱动（HEL-15）：掉帧降上限，正常设备维持满配 [1,1.5]（HEL-16）
+        dpr={PERF_TIERS[tier].dpr}
+        // 初始机位按窗口宽高比算到响应式目标（第 0 帧即终态，无进场跳变）；
+        // CameraRig 之后维持并处理 resize。
+        camera={{ position: initialCam.position, fov: initialCam.fov }}
+        // HEL-16：离屏切 never 停 RAF，回视口切 always 恢复（IntersectionObserver 驱动）
+        frameloop={loop}
       >
-        <FerrariRig reducedMotion={reducedMotion} tier={tier} />
-      </PerformanceMonitor>
-    </Canvas>
+        {/* 模型就绪后通知外层收起加载海报（与 FerrariRig 共享 useGLTF 缓存） */}
+        <ModelReady onReady={onReady} />
+        {/*
+         * 帧率监测（HEL-15）：掉帧 onDecline 降一档，回升 onIncline 升一档,
+         * onFallback（持续吃力）直接钉到 low。tier 驱动 DPR / 风粒子数 / Bloom / 反射。
+         */}
+        <PerformanceMonitor
+          ms={PERF_MONITOR.ms}
+          iterations={PERF_MONITOR.iterations}
+          bounds={PERF_MONITOR.bounds}
+          onDecline={() => setTier((t) => stepTier(t, -1))}
+          onIncline={() => setTier((t) => stepTier(t, 1))}
+          onFallback={() => setTier("low")}
+        >
+          <FerrariRig reducedMotion={reducedMotion} tier={tier} />
+        </PerformanceMonitor>
+      </Canvas>
+    </div>
   );
 }
 
