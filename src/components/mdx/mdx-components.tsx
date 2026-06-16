@@ -373,6 +373,7 @@ import { LaunchModeDiagram } from "./diagrams/launch-mode-diagram";
 import { TestPyramidDiagram } from "./diagrams/test-pyramid-diagram";
 import { ViewHierarchyDiagram } from "./diagrams/view-hierarchy-diagram";
 import { RoomArchitectureDiagram } from "./diagrams/room-architecture-diagram";
+import { ContextHierarchyDiagram } from "./diagrams/context-hierarchy-diagram";
 import { StyleThemeInheritanceDiagram } from "./diagrams/style-theme-inheritance-diagram";
 import { DialogFragmentDiagram } from "./diagrams/dialog-fragment-diagram";
 import { WebViewAnatomyDiagram } from "./diagrams/web-view-anatomy-diagram";
@@ -912,6 +913,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TestPyramidDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
+  ContextHierarchyDiagram,
   StyleThemeInheritanceDiagram,
   DialogFragmentDiagram,
   WebViewAnatomyDiagram,
