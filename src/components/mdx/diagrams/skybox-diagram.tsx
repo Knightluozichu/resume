@@ -61,9 +61,9 @@ export function SkyboxDiagram() {
 
           {/* 原位置盒壁（淡） */}
           <rect
-            x="60"
+            x="55"
             y="60"
-            width="170"
+            width="150"
             height="150"
             rx="6"
             fill="none"
@@ -73,7 +73,7 @@ export function SkyboxDiagram() {
           />
           {/* 相机起点（盒中心） */}
           <circle
-            cx="145"
+            cx="130"
             cy="135"
             r="9"
             fill="none"
@@ -82,9 +82,9 @@ export function SkyboxDiagram() {
           />
           {/* 移动后的盒壁（右移，实线） */}
           <rect
-            x="130"
+            x="165"
             y="60"
-            width="170"
+            width="150"
             height="150"
             rx="6"
             fill="none"
@@ -93,12 +93,12 @@ export function SkyboxDiagram() {
             strokeOpacity="0.85"
           />
           {/* 移动后的相机：靠到了右壁附近 */}
-          <circle cx="215" cy="135" r="9" fill="var(--danger)" />
+          <circle cx="298" cy="135" r="9" fill="var(--danger)" />
           {/* 相机移动箭头 */}
           <line
-            x1="156"
+            x1="141"
             y1="135"
-            x2="204"
+            x2="287"
             y2="135"
             stroke="var(--danger)"
             strokeWidth="2"

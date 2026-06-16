@@ -174,10 +174,10 @@ export function FrustumDiagram() {
             fov
           </text>
 
-          {/* 视锥体中的物体（一个简单方块） */}
+          {/* 视锥体中的物体（一个简单方块，落在 near 与 far 之间的可见区） */}
           <rect
-            x="200"
-            y="208"
+            x="238"
+            y="206"
             width="24"
             height="24"
             rx="3"
@@ -187,7 +187,7 @@ export function FrustumDiagram() {
             opacity="0.8"
           />
           <text
-            x="212"
+            x="250"
             y="262"
             textAnchor="middle"
             fontSize="9"

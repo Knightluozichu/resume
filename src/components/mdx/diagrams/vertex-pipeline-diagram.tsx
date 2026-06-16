@@ -301,9 +301,9 @@ export function VertexPipelineDiagram() {
             strokeWidth="2"
           />
           <text
-            x="119"
+            x="22"
             y="350"
-            textAnchor="middle"
+            textAnchor="start"
             fontSize="11"
             fill="var(--accent)"
           >

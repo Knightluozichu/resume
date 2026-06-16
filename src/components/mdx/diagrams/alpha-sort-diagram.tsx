@@ -79,7 +79,7 @@ export function AlphaSortDiagram() {
           </text>
           {/* 中玻璃 */}
           <rect
-            x="120"
+            x="140"
             y="104"
             width="120"
             height="100"
@@ -91,7 +91,7 @@ export function AlphaSortDiagram() {
           />
           {/* 近玻璃（先画，正常显示） */}
           <rect
-            x="164"
+            x="204"
             y="144"
             width="120"
             height="100"
@@ -102,7 +102,7 @@ export function AlphaSortDiagram() {
             strokeWidth="1.5"
           />
           <text
-            x="248"
+            x="264"
             y="262"
             textAnchor="middle"
             fontSize="10"
@@ -176,7 +176,7 @@ export function AlphaSortDiagram() {
           </text>
           {/* 中玻璃 */}
           <rect
-            x="480"
+            x="500"
             y="104"
             width="120"
             height="100"
@@ -188,7 +188,7 @@ export function AlphaSortDiagram() {
           />
           {/* 近玻璃（最后画，最前面） */}
           <rect
-            x="524"
+            x="564"
             y="144"
             width="120"
             height="100"
@@ -199,7 +199,7 @@ export function AlphaSortDiagram() {
             strokeWidth="1.5"
           />
           <text
-            x="608"
+            x="624"
             y="262"
             textAnchor="middle"
             fontSize="10"

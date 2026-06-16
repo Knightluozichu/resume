@@ -37,8 +37,8 @@ function CubeFaces({ step }: { step: CullStep }) {
     <g>
       {/* 背面方块（画在后上方，示意「立方体背对你的那一面」） */}
       <rect
-        x="96"
-        y="56"
+        x="104"
+        y="48"
         width="92"
         height="92"
         rx="3"
@@ -52,8 +52,8 @@ function CubeFaces({ step }: { step: CullStep }) {
       {/* 背面环绕箭头（顺时针，step>=2 显现）+ 背面标签 */}
       {step >= 2 && (
         <text
-          x="142"
-          y="78"
+          x="150"
+          y="70"
           textAnchor="middle"
           fontSize="10"
           fontWeight="600"
@@ -67,10 +67,10 @@ function CubeFaces({ step }: { step: CullStep }) {
       {/* step3：把背面划掉，示意被剔除 */}
       {step === 3 && (
         <line
-          x1="100"
-          y1="60"
-          x2="184"
-          y2="144"
+          x1="108"
+          y1="52"
+          x2="192"
+          y2="136"
           stroke="var(--danger)"
           strokeWidth="2.5"
         />
@@ -80,32 +80,32 @@ function CubeFaces({ step }: { step: CullStep }) {
       <line
         x1="60"
         y1="92"
-        x2="96"
-        y2="56"
+        x2="104"
+        y2="48"
         stroke="var(--border)"
         strokeWidth="1.5"
       />
       <line
         x1="152"
         y1="92"
-        x2="188"
-        y2="56"
+        x2="196"
+        y2="48"
         stroke="var(--border)"
         strokeWidth="1.5"
       />
       <line
         x1="60"
         y1="184"
-        x2="96"
-        y2="148"
+        x2="104"
+        y2="140"
         stroke="var(--border)"
         strokeWidth="1.5"
       />
       <line
         x1="152"
         y1="184"
-        x2="188"
-        y2="148"
+        x2="196"
+        y2="140"
         stroke="var(--border)"
         strokeWidth="1.5"
       />
