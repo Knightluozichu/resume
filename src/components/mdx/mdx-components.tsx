@@ -433,6 +433,9 @@ import { TaskDivisionDiagram } from "./diagrams/task-division-diagram";
 import { ThreadPoolDiagram } from "./diagrams/thread-pool-diagram";
 import { WorkStealingDiagram } from "./diagrams/work-stealing-diagram";
 import { InterruptibleThreadDiagram } from "./diagrams/interruptible-thread-diagram";
+import { ExecutionPolicyDiagram } from "./diagrams/execution-policy-diagram";
+import { ReduceTreeDiagram } from "./diagrams/reduce-tree-diagram";
+import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -984,6 +987,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ThreadPoolDiagram,
   WorkStealingDiagram,
   InterruptibleThreadDiagram,
+  ExecutionPolicyDiagram,
+  ReduceTreeDiagram,
+  WhenToParallelizeDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
