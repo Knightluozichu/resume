@@ -48,13 +48,15 @@ import {
 
 // —— 画布与层几何（全部 4 的倍数）。竖向层栈，自上而下。 ——
 const VIEW_W = 720;
-const VIEW_H = 560;
+const VIEW_H = 580;
 
 const LAYER_X = 160; // 层条左边（左侧给「下行 / 上行」纵向标注留白）
 const LAYER_W = 400; // 层条宽
 const LAYER_H = 64; // 单层高
 const LAYER_GAP = 16; // 层间隙
 const TOP = 40; // 第一层顶边
+// ② 与 ③ 之间额外撑开的纵向间距，给「Binder 跨进程边界」虚线 + 标签留独立行（不与任何层框叠压）。
+const BINDER_GAP_EXTRA = 20;
 
 // —— 层定义（自上而下；color 为该层点亮时的语义色 token）。 ——
 type Layer = {
@@ -108,9 +110,10 @@ const LAYER_INDEX: Record<string, number> = Object.fromEntries(
   LAYERS.map((l, i) => [l.id, i]),
 );
 
-// 第 i 层条的顶边 y。
+// 第 i 层条的顶边 y。索引 ≥ 2（③ 及以下）整体下推 BINDER_GAP_EXTRA，
+// 把 ② 与 ③ 之间撑出一行净空，专门给「Binder 跨进程边界」虚线 + 标签使用。
 function layerTop(i: number): number {
-  return TOP + i * (LAYER_H + LAYER_GAP);
+  return TOP + i * (LAYER_H + LAYER_GAP) + (i >= 2 ? BINDER_GAP_EXTRA : 0);
 }
 // 第 i 层条的竖向中心 y。
 function layerCenterY(i: number): number {
