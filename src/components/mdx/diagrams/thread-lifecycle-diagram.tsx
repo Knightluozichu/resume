@@ -52,7 +52,7 @@ const ROOT_X = 16;
 const ROOT_Y = 184;
 const COL2_X = 256; // 三分支第一级节点列
 const COL3_X = 488; // 三分支第二级（终态）节点列
-const ROW_TOP_Y = 24; // join 分支行
+const ROW_TOP_Y = 36; // join 分支行（标注落到 y30，距 viewBox 顶 ≥12px）
 const ROW_MID_Y = 184; // detach 分支行（与根同高）
 const ROW_BOT_Y = 344; // 忘了管分支行
 

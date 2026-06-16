@@ -29,7 +29,7 @@ import {
  * 无裸 hex；时长走 TEACHING_BEAT_MS 具名常量（硬规则 5）。
  */
 
-const VIEW_W = 620;
+const VIEW_W = 632;
 const VIEW_H = 440;
 
 // 时间轴几何：泳道内容区横向范围。
@@ -286,7 +286,7 @@ export function JoinVsDetachTimeline() {
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
           aria-label="join 与 detach 的双场景泳道对照动画。上半场景 join：主线程泳道先运行，到达 t.join() 处遇到一道屏障停下来等待，同时子线程泳道继续运行；子线程结束后主线程才恢复、继续跑到底——可视化「会合」，主线程被子线程拖住、必须等它。下半场景 detach：主线程泳道一路不停直接跑到终点就结束，根本不等；子线程泳道在后台独立延续，甚至比主线程活得更久——可视化「不等、各跑各的」。播放时先扫上场景再扫下场景，可播放、暂停、单步、拖动进度。"
-          className="mx-auto block h-auto w-full max-w-[620px]"
+          className="mx-auto block h-auto w-full max-w-[632px]"
         >
           <defs>
             <marker

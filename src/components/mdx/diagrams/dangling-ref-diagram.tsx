@@ -34,7 +34,7 @@ import {
  */
 
 const VIEW_W = 600;
-const VIEW_H = 360;
+const VIEW_H = 284;
 
 // —— 几何：左侧 oops() 栈帧，右侧后台子线程，中间一条引用箭头 ——
 const FRAME_X = 28;
@@ -386,25 +386,26 @@ export function DanglingRefDiagram() {
             </text>
           </g>
 
-          {/* 💥（步④出现，盖在引用箭头终点附近） */}
+          {/* 💥（步④出现）：放在栈帧与子线程框之间的空隙上方，
+              避开栈帧标题/副标题、std::ref(local) 箭头标注与子线程内文字。 */}
           <g ref={boomRef} style={{ opacity: 0 }}>
             <text
-              x={arrowEndX - LOCAL_W / 2}
-              y={LOCAL_Y - 16}
-              textAnchor="middle"
-              fontSize="26"
-            >
-              💥
-            </text>
-            <text
-              x={arrowEndX - LOCAL_W / 2}
-              y={LOCAL_Y - 40}
+              x={(FRAME_X + FRAME_W + CHILD_X) / 2}
+              y={100}
               textAnchor="middle"
               fontSize="11"
               fontWeight="700"
               fill="var(--danger)"
             >
               读已释放内存：未定义行为
+            </text>
+            <text
+              x={(FRAME_X + FRAME_W + CHILD_X) / 2}
+              y={136}
+              textAnchor="middle"
+              fontSize="26"
+            >
+              💥
             </text>
           </g>
         </svg>
