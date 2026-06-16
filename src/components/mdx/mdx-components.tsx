@@ -421,6 +421,9 @@ import { CASConceptDiagram } from "./diagrams/cas-concept-diagram";
 import { AcquireReleaseSyncDiagram } from "./diagrams/acquire-release-sync-diagram";
 import { HappensBeforeDAG } from "./diagrams/happens-before-dag-diagram";
 import { MemoryReorderDiagram } from "./diagrams/memory-reorder-diagram";
+import { CoarseVsFineLockDiagram } from "./diagrams/coarse-vs-fine-lock-diagram";
+import { HandOverHandDiagram } from "./diagrams/hand-over-hand-diagram";
+import { BucketLockDiagram } from "./diagrams/bucket-lock-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -960,6 +963,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AcquireReleaseSyncDiagram,
   HappensBeforeDAG,
   MemoryReorderDiagram,
+  CoarseVsFineLockDiagram,
+  HandOverHandDiagram,
+  BucketLockDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
