@@ -418,6 +418,9 @@ import { GetFutureWaysDiagram } from "./diagrams/get-future-ways-diagram";
 import { TornReadDiagram } from "./diagrams/torn-read-diagram";
 import { ModificationOrderDiagram } from "./diagrams/modification-order-diagram";
 import { CASConceptDiagram } from "./diagrams/cas-concept-diagram";
+import { AcquireReleaseSyncDiagram } from "./diagrams/acquire-release-sync-diagram";
+import { HappensBeforeDAG } from "./diagrams/happens-before-dag-diagram";
+import { MemoryReorderDiagram } from "./diagrams/memory-reorder-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -954,6 +957,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TornReadDiagram,
   ModificationOrderDiagram,
   CASConceptDiagram,
+  AcquireReleaseSyncDiagram,
+  HappensBeforeDAG,
+  MemoryReorderDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

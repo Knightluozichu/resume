@@ -1,0 +1,405 @@
+---
+title: 内存顺序与同步关系
+type: A
+section: 内存模型与原子操作
+order: 2
+description: 读完能用自己的话解释什么是重排序、为什么 relaxed 原子不保证跨变量顺序，能说清 acquire-release 配对如何在两个线程之间建立 happens-before，并知道 relaxed / acquire-release / seq_cst 三档内存序各保证什么、默认是哪一档。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型·内存模型篇第二章（《C++ 并发编程实战》第2版 §6 改编重写）：全书最硬的一章，内存序极抽象，三张动画是生命线，务必把「重排序 / synchronizes-with / happens-before」掰碎成看得见的东西。承接 ch5（已讲单变量原子性+单变量修改顺序），本章讲跨变量、跨线程的可见性与顺序。重心是概念讲解(§3)与 acquire-release 配对同步动画(§5 主 Demo)，math:false，代码 1-3 关键段且务必能编译。隐喻沿用「餐厅后厨」：对讲机=release按/acquire听（一按一听连出同步专线）；中央大屏=seq_cst 全局全序；动作清单被旁观者看乱=重排序。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz；type A 新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 为什么需要内存序：编译器/CPU 重排序；relaxed 只保证单变量原子性+单变量修改顺序，不保证跨变量顺序/可见性 = MemoryReorderDiagram（anime）；2) 三档内存序：relaxed / acquire-release（acq_rel、acquire、release，配对建同步）/ seq_cst（最强，全局单一全序，默认）= 文字 + seq_cst 引第三图；3) 关系三件套：sequenced-before（单线程内）/ synchronizes-with（release→读到它的 acquire）/ happens-before（传递闭包）= HappensBeforeDAG（anime）；4) acquire-release 配对：release store 与「读到该值的」acquire load 之间 synchronizes-with → 使 release 之前的所有写对 acquire 之后可见（标志位+数据经典模式）= AcquireReleaseSyncDiagram（anime·主）；5) seq_cst 全局全序 + fence（atomic_thread_fence 把序约束单独下）+ release sequence（一句带过）= 代码 + 文字。核心术语：重排序 / memory_order_relaxed / acquire-release / memory_order_seq_cst / sequenced-before / synchronizes-with / happens-before / 内存栅栏fence。 */}
+
+{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在流程中的位置」——此处落为「能解释 acquire-release 配对如何建立 happens-before」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话解释什么是**重排序**，以及为什么 `memory_order_relaxed` 的原子操作**不**保证跨变量的顺序与可见性
+- 能解释 **acquire-release 配对如何在两个线程之间建立 happens-before**——release 存与「读到它的」acquire 读之间的同步关系，怎么让前者之前的写对后者可见，并说清 relaxed / acquire-release / seq_cst 三档各保证什么
+- 能回答这个检验问题：一个线程用 relaxed 把数据写好后置位标志，另一个线程用 relaxed 读到标志为真——这能保证标志之前的数据对读到标志的线程可见吗？为什么必须改成 acquire-release？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
+
+## 对讲机与那块写乱了的清单
+
+后厨两个厨师各有一张「动作清单」，照着上面的先后顺序干活。甲的清单写着：先把菜备好，再喊一声「这桌齐了」。可清单只是**他自己**的先后；店里另一个人扭头去看时，看到的「实际发生顺序」未必和清单一致——为了省事，有人可能先听见「齐了」、再回头才看见菜其实还没摆全。照着这个错位的观察去端盘子，准出乱子。
+
+这一章要解决的，正是「**怎么让一个厨师做的事，按他想要的先后、可靠地被另一个厨师看到**」。光让每个动作本身「不可分割」（上一章的原子）还不够——多线程的麻烦常常在于**多件事之间的先后和可见**，而不是单独一件事。
+
+后厨的解法很朴素：装一台对讲机。甲把菜全摆好之后**按一下对讲机**，乙**听到对讲机才开工**。这一按一听之间连出一条「专线」：乙一旦听到，就保证甲按之前做的事全都摆好了、且乙看得见。没有这条专线会怎样？乙凭感觉抢跑，照着半成品干活——读到的全是没准备好的乱数据。这一章就教你怎么在代码里「按对讲机、听对讲机」，把可靠的先后建起来。
+
+{/* 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在流程中的位置。 */}
+
+## 重排序：你写的顺序，不是别人看到的顺序
+
+上一章讲过，每个变量都有自己的「修改顺序」——单个变量的写入排成唯一一条全序。但**多个变量之间**呢？这里藏着本章第一个反直觉的事实。
+
+你写下 `x = 1; y = 1;`，以为机器就老老实实先写 x 再写 y。其实不然：编译器和 CPU 为了跑得快，有权**调换**两条互不依赖的指令的实际执行顺序，也有权让一个线程的写**不及时**对另一个线程可见。这种「源码顺序 ≠ 实际被观察到的顺序」就是<Term def="编译器或 CPU 为了执行效率，让源码里写的先后顺序 A→B 在实际执行或被另一个线程观察时变成 B→A；也包括一个线程的写未必及时对另一个线程可见。单线程内重排不影响本线程结果，但多线程下另一个线程可能观察到反直觉的顺序。">重排序（reordering）</Term>。在单线程里它无害（本线程看到的结果不变）；可一旦另一个线程在旁边观察，麻烦就来了。
+
+这正是上一章那个原子类型的「弱档」——<Term def="C++ 最弱的一档内存序。它只保证：单个原子变量的操作是原子的（不撕裂），以及该变量自己的修改顺序（单变量全序）。它【不】保证跨多个变量之间的顺序，也【不】保证一个线程的写及时对另一个线程可见。所以用 relaxed 读到某标志为真，不能推断「标志之前写的别的数据」也对你可见。">memory_order_relaxed</Term>——的真面目：它只保证**单个变量**自己的原子性和修改顺序，对**跨变量**的顺序和可见性**一概不管**。下面这张动画把经典反直觉例子演给你看：
+
+> 猜一猜：x、y 初值都是 0，全用 relaxed。线程1 写 `x=1; y=1;`，线程2 读 `r1=y; r2=x;`。线程2 如果读到 `r1==1`（看到了 y 的新值），那它读 x 时还会读到 `r2==0`（旧值）吗？直觉觉得「y 都新了，x 肯定也新了」——先想，再单步看。
+
+<MemoryReorderDiagram />
+
+看清楚了：左栏是你写的源码顺序，右栏是线程2 在 relaxed 下**实际可能看到**的顺序——它看到 `y=1`（于是 `r1=1`），却还没看到 `x=1`（于是 `r2=0`）。直觉中「y 新了 x 必然也新」的推断，依赖的是「x 的写排在 y 的写之前、且对线程2 可见」，但 relaxed **根本不给这个保证**。这就是我们需要更强内存序的全部理由。
+
+## 三档内存序：从最弱到最强
+
+C++ 给原子操作提供了一档可选的<Term def="给原子操作附加的一个参数，规定这次操作在【跨变量的顺序与可见性】上要遵守多强的约束。C++ 把它分成几档，从最弱到最强：memory_order_relaxed、acquire-release 家族、memory_order_seq_cst。档位越强，能建立的顺序保证越多，但通常硬件开销越大。不指定时默认 seq_cst。">内存序（memory order）</Term>参数，大致分三档，理解它们的强弱是本章的骨架：
+
+- **最弱：relaxed**。只保证单变量原子性 + 单变量修改顺序，不管跨变量顺序与可见性（上面刚演过）。适合「只累加、不据此推断可见性」的场景，如纯计数器。
+- **中间：acquire-release 家族**。<Term def="C++ 内存序的中间一档，含 memory_order_acquire（用于读 / load）、memory_order_release（用于写 / store）、memory_order_acq_rel（用于既读又写的读改写操作）。它的核心能力是【配对建立同步】：一个 release 存与「真的读到它写的值」的 acquire 读之间建立 synchronizes-with，从而让 release 之前的写对 acquire 之后可见。比 seq_cst 弱、开销更小，是发布数据的常用档。">acquire-release</Term>——`memory_order_acquire`（给读用）、`memory_order_release`（给写用）、`memory_order_acq_rel`（给既读又写的操作用）。它能在两个线程之间「配对」建立同步专线，是「对讲机」的真身。下面两节专讲。
+- **最强：seq_cst**。<Term def="C++ 最强、也是默认的内存序。除了具备 acquire-release 的同步能力，它额外保证：所有用 seq_cst 的操作存在【唯一一个全局全序】，且所有线程看到的这个全序【完全一致】——像全店一块「中央大屏」，所有 seq_cst 操作按同一个顺序登记，谁看都一样。最不容易出错，代价是通常需要更强的硬件屏障、开销更大。原子操作不显式指定内存序时就用它。">memory_order_seq_cst</Term>——所有 seq_cst 操作有**唯一一个全局全序**，所有线程看法完全一致，像全店一块「中央大屏」。它是**默认档**（不写内存序就是它），也最不容易出错，本章最后一节细讲。
+
+记住一句口诀：**relaxed 只管单变量，acquire-release 管「配对的两个线程」，seq_cst 管「全店一致」**。
+
+## 关系三件套：sequenced-before、synchronizes-with、happens-before
+
+要精确说清「谁先于谁、谁对谁可见」，C++ 内存模型用三个关系搭起一套「能顺着走的路网」。它们是本章最抽象、也最关键的概念，务必对着下面的有向图理解。
+
+第一个是<Term def="单个线程内两个操作的源码先后关系：在同一线程里，源码上写在前面的操作 sequenced-before 写在后面的操作。它是 happens-before 的「同线程部分」，只管同一线程内部、不跨线程。">sequenced-before</Term>：**同一个线程内**，源码写在前面的操作就 sequenced-before 写在后面的。它只管线程**内部**的先后，是最直白的一件。
+
+第二个是真正的主角——<Term def="跨线程的同步关系：当一个线程对某原子变量做 release 存，另一个线程用 acquire 读、并且【真的读到了】那次 release 写进去的值时，这次 release 存与这次 acquire 读之间就 synchronizes-with。像厨师甲按一下对讲机（release），乙听到对讲机才开工（acquire）——这一按一听之间连出一条同步专线。注意必须【配对】且 acquire 真读到了 release 写的值才成立。">synchronizes-with</Term>：**跨线程**的同步。当一个线程 release 存某原子变量，另一个线程用 acquire 读、且**真的读到了**那次 release 写进的值，这两个操作之间就 synchronizes-with——就是「一按一听」连出的那条同步专线。它是唯一能把两个线程的「路网」接通的边。
+
+第三个是把前两者串起来的<Term def="sequenced-before（同线程内）与 synchronizes-with（跨线程 release→acquire）的传递闭包：只要顺着这些边能从操作 A 走到操作 B，A 就 happens-before B。核心后果是：若 A happens-before B，则 A 一定先于 B，且 A（及其之前）的写入成果对 B 可见。一句话——顺着边能走到，就是 happens-before。">happens-before</Term>：它是前两种边的**传递闭包**——只要顺着 sequenced-before 和 synchronizes-with 这些边，能从操作 A 一路走到 B，A 就 happens-before B。它的后果极重要：**A happens-before B，则 A 一定先于 B，且 A 之前的写对 B 可见**。下面这张有向图把「顺着边能走到 = happens-before」演给你看：
+
+> 猜一猜：图里线程1 的 A1（写 data）和线程2 的 B2（读 data）分属两个线程，中间隔着一条 release→acquire 的同步边。顺着 A1→A2⇢B1→B2 这条路，能不能从 A1「走到」B2？如果能，是不是就意味着 A1 一定先于 B2、且 data 对 B2 可见？先想，再单步看高亮路径。
+
+<HappensBeforeDAG />
+
+看明白这张「路网」：同线程内的实线（sequenced-before）+ 跨线程的彩色虚线（synchronizes-with）拼起来，只要能从 A1 一路走到 B2，A1 就 happens-before B2——于是 B2 读到的 data 一定是 A1 写的那个值。**happens-before 不是凭空的「先后感」，而是「这张图上有没有一条能走通的路」**。relaxed 之所以不保证可见性，正是因为它**不画那条跨线程的同步边**，路网断在两个线程之间。
+
+## acquire-release 配对：标志位 + 数据的经典模式
+
+现在把对讲机真正接上线。最经典、也最该背下来的，是「**标志位 + 数据**」发布模式：生产者把数据写好，再置一个「就绪」标志；消费者等标志变真，再去读数据。关键在于：**标志的写用 release、标志的读用 acquire**，靠这对配对建立同步专线，让数据对消费者可见。这就是本章的核心 Demo：
+
+> 猜一猜：如果把这套模式里的 `ready` 改成全程 relaxed（不用 acquire-release），消费者读到 `ready==true` 之后，去读 `data` 一定能拿到生产者写的 42 吗？还是可能读到半成品？先想，再播放看答案。
+
+<AcquireReleaseSyncDiagram />
+
+逐拍看懂这条专线：① 生产者普通写 `data=42`；② 用 **release** 存 `ready=true`（按对讲机，把 ① 的写一并「封口发布」）；③ 消费者用 **acquire** 读、**真的读到** `ready=true`（听到对讲机）——**正是这一拍**，② 与 ③ 之间接通 synchronizes-with；④ 消费者读 `data`，因为这条专线让 ① happens-before ④，所以读到的**一定是 42**。
+
+这里有三个**必须**记牢的要点：第一，必须**配对**——只 release 不 acquire、或反过来，都连不出专线。第二，acquire 必须**真的读到** release 写的那个值；如果读到的还是旧值（说明它跑在 release 之前），同步专线就不接通——所以消费者通常要**循环**等到 acquire 读到「就绪」才往下走。第三，可见性是**单向**的：release「往下封口」（它之前的写对外发布），acquire「往上开闸」（它之后的读能看见），方向正是「release 之前 → acquire 之后」，对发布模式刚好够用。
+
+## seq_cst 与内存栅栏：全店一块中央大屏
+
+acquire-release 只在「配对的那一对」之间建立局部顺序；不同线程对**没有配对关系**的操作，可能看到不一致的相对顺序。当你需要「全店对一组操作看到完全一致的先后」时，就上最强的 seq_cst。
+
+seq_cst 的额外保证是：所有 seq_cst 操作存在**唯一一个全局全序**，所有线程看到的这个全序完全一致——像全店装了一块「中央大屏」，每个 seq_cst 操作都按同一个全局顺序登记上屏，谁抬头看都是同一份顺序。它是 C++ 原子操作的**默认**内存序（不写就是它），代价是通常需要更强的硬件屏障、开销更大。拿不准时先用默认的 seq_cst，确有性能需求再谨慎降级。
+
+最后认识一个把内存序「抽出来单独下」的工具——<Term def="一种把内存序约束从「附在某个具体原子操作上」抽出来、单独下达的手段。C++ 里用 std::atomic_thread_fence(order) 在代码里立一道栏，约束它前后内存操作的可见性与顺序。例如一道 release 栅栏配一道 acquire 栅栏，可建立和 release 存 / acquire 读类似的同步效果，而不必把内存序绑死在具体某次 store / load 上。">内存栅栏（fence）</Term>。`std::atomic_thread_fence(order)` 在代码里立一道栏，把序约束从「绑在某次 store/load 上」改成「单独立一道栏」——比如一道 release 栅栏配一道 acquire 栅栏，能建立和 release 存/acquire 读类似的同步效果。它更灵活，适合一次发布多个变量等场景。（顺带一提，acquire-release 还有个加强规则叫「release sequence」：release 存之后，即便中间夹着同线程或读改写的链式修改，acquire 读到链上的值仍能与最初那次 release 同步——细节本章不展开，知道有这回事即可。）
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：主 Demo = AcquireReleaseSyncDiagram（已在 §3 作为带「猜一猜」的可控动画呈现，标志位+数据同步专线）；辅 Demo = HappensBeforeDAG + MemoryReorderDiagram（均已在 §3 引出并配「猜一猜」）。本节集中点玩法，不重复堆图。 */}
+
+## 上手玩一玩这三张图
+
+这三张图都是**可操作的教具**——单步、暂停、拖进度，配合下一节代码一起玩，比读十遍文字管用：
+
+- **acquire-release 同步专线** `<AcquireReleaseSyncDiagram />`（主图）：重点盯第 ③ 拍——消费者 acquire 真的读到 `ready=true` 的**那一瞬**，② 与 ③ 之间才弹出「同步专线」。再看第 ④ 拍，底部高亮「data=42 对线程2 可见」。把这条专线「何时出现、连接谁与谁」看透，acquire-release 就懂了。
+- **happens-before 路网** `<HappensBeforeDAG />`：单步走完节点和边，最后看高亮的整条路径 `A1→A2⇢B1→B2`。体会「happens-before = 顺着边能走到」这件事；并想清楚 relaxed 为什么就是**缺了那条彩色虚线**（跨线程同步边）。
+- **重排序对照** `<MemoryReorderDiagram />`：盯右栏——线程2 看到 `r1=1` 却 `r2=0` 的反直觉结果，正是 relaxed 不保证跨变量顺序/可见性的真身。
+
+玩熟这三张图，下一节每一句 `release` / `acquire` / `relaxed` / `atomic_thread_fence` 你都能对上图里某条边、某个动作。
+
+{/* 6. 代码对照（spec §六，A 型选，只贴最能说明概念的 1-3 段）：纯 cpp 块（本书无 WebGL 镜像，不用 CodeTabs）；单块 ≤30 行；两代码块间必有解说。每段务必能编译，内存序用法正确。 */}
+
+## 代码：把内存序一段段写出来
+
+### relaxed 重排：你以为的先后不成立
+
+先把上面那个反直觉例子写成可编译的代码。两端全用 relaxed，断言可能失败：
+
+```cpp
+#include <atomic>
+#include <thread>
+#include <cassert>
+
+std::atomic<int> x{0}, y{0};
+
+void writer() {
+    x.store(1, std::memory_order_relaxed); // 写 x
+    y.store(1, std::memory_order_relaxed); // 写 y
+}
+
+void reader() {
+    int r1 = y.load(std::memory_order_relaxed); // 先读 y
+    int r2 = x.load(std::memory_order_relaxed); // 再读 x
+    // relaxed 不保证跨变量顺序/可见性：r1==1 && r2==0 是【允许】发生的
+    assert(!(r1 == 1 && r2 == 0)); // 这个断言【可能】失败
+}
+```
+
+关键在那行断言：直觉以为「读到 `y==1` 就说明 `x` 也早写好了」，但 relaxed 不在 `x`、`y` 之间建立任何顺序，`r1==1 && r2==0` 是标准**允许**的结果。要排除它，得换更强的内存序——下面就是。
+
+### acquire-release：标志位 + 数据发布模式
+
+把对讲机接上。生产者写 `data` 后用 **release** 发布标志，消费者用 **acquire** 等到标志再读 `data`：
+
+```cpp
+#include <atomic>
+#include <thread>
+#include <cassert>
+
+int data = 0;             // 普通变量（非原子）
+std::atomic<bool> ready{false};
+
+void producer() {
+    data = 42;                                       // ① 普通写：把数据备好
+    ready.store(true, std::memory_order_release);    // ② release 发布：按对讲机
+}
+
+void consumer() {
+    while (!ready.load(std::memory_order_acquire)) { // ③ acquire 等到读到 true
+        // 自旋等待：必须循环到真的读到 true，同步专线才接通
+    }
+    assert(data == 42);                              // ④ 此时 data 一定可见、必为 42
+}
+```
+
+② 的 release 存与 ③「真的读到 true」的 acquire 读之间建立 synchronizes-with，于是 ① 的写 happens-before ④ 的读——`data` 保证可见，断言**永不**失败。把 `ready` 的两处内存序都改成 `relaxed`，这个保证立刻消失。
+
+### seq_cst：默认档，全局全序
+
+不显式写内存序时，原子操作默认就是 seq_cst——最强、最省心：
+
+```cpp
+#include <atomic>
+
+std::atomic<bool> ready{false};
+
+void producer_seqcst() {
+    ready.store(true); // 等价于 ready.store(true, std::memory_order_seq_cst)
+}
+
+bool consumer_seqcst() {
+    return ready.load(); // 同样默认 seq_cst：所有 seq_cst 操作共享唯一全局全序
+}
+```
+
+不带内存序参数的 `store` / `load` 就是 seq_cst：所有 seq_cst 操作排进**唯一一个**全局全序，所有线程看法一致。它比 acquire-release 多了「全店一致」的保证，代价是开销更大。拿不准就用它。
+
+### 内存栅栏：把序约束单独下
+
+`std::atomic_thread_fence` 把内存序从「绑在某次 store/load」抽出来，单独立一道栏：
+
+```cpp
+#include <atomic>
+
+int data = 0;
+std::atomic<bool> ready{false};
+
+void producer_fence() {
+    data = 42;
+    std::atomic_thread_fence(std::memory_order_release); // 立一道 release 栏
+    ready.store(true, std::memory_order_relaxed);        // 标志本身用 relaxed 即可
+}
+
+void consumer_fence() {
+    while (!ready.load(std::memory_order_relaxed)) {}
+    std::atomic_thread_fence(std::memory_order_acquire); // 立一道 acquire 栏
+    // 栏之后读 data 保证可见
+}
+```
+
+release 栏 + acquire 栏建立的同步效果，和把内存序绑在 `ready` 的 store/load 上类似——区别是约束「立在栏的位置」、不绑死在某次原子操作上，发布多个变量时更灵活。
+
+{/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。此处放 3 个。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：以为「relaxed 也能保证『我先写的，别人就先看到』」，于是用 relaxed
+  原子置位标志、relaxed
+  读标志，读端读到标志为真就去用前面写的数据。**原因**：relaxed
+  **只**保证单变量原子性 +
+  该变量自己的修改顺序，**不**保证跨变量的顺序与可见性——读到标志为真，标志之前写的别的数据完全可能还没对你可见（被重排或未及时传播）。**修法**：发布数据一律把标志的写改
+  `release`、读改 `acquire`，靠配对建立
+  happens-before；只想统计不做可见性推断（如纯计数）才用 relaxed。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为「写端用了 release，或读端用了
+  acquire，自己单方面就能建立同步」，结果还是读到半成品。**原因**：synchronizes-with
+  是**配对**关系——必须**两边凑齐**（一个 release 存 + 一个 acquire 读），而且
+  acquire **真的读到了**那次 release 写进的值；只写一边、或 acquire
+  读到的是别的旧值，都连不出同步专线。**修法**：release / acquire
+  必须成对出现在「同一个原子变量」上；消费者要**循环**等到 acquire
+  真的读到「就绪」标志，才往下读数据。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 relaxed「发布」一块数据（写好数据、relaxed 置标志），读端 relaxed
+  读到标志就用数据，偶发读到没初始化完的「半成品」。**原因**：relaxed
+  既不保证「数据的写排在标志的写之前对外暴露」，也不保证数据及时可见——这是误区一的具体翻车现场。**修法**：发布数据的标志，写用
+  `memory_order_release`、读用 `memory_order_acquire`（或干脆用默认
+  seq_cst）；只有这样数据的写才 happens-before
+  读端用数据，半成品才不可能被看到。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，A 型问答为主含 1 道「判断/解释」题，答案折叠。 */}
+
+## 小结
+
+- **重排序**：你写的源码顺序 ≠ 别人观察到的顺序；编译器/CPU 可重排、写也未必及时可见——单线程无害，多线程才暴雷
+- **relaxed** 只保证单变量原子性 + 单变量修改顺序，**不**保证跨变量的顺序与可见性（读到标志为真，推不出标志之前的数据已可见）
+- **三件套**：sequenced-before（同线程内）+ synchronizes-with（跨线程 release→读到它的 acquire）的传递闭包 = **happens-before**（顺着边能走到，就一定先于、且可见）
+- **acquire-release 配对**：release 存与「真的读到它」的 acquire 读之间建 synchronizes-with，让 release 之前的写对 acquire 之后可见——这就是「标志位 + 数据」发布模式，必须配对、acquire 必须真读到
+- **三档强弱**：relaxed（管单变量）< acquire-release（管配对的两线程）< **seq_cst**（管全店一致的全局全序，**默认档**，最省心）；fence 可把序约束单独下
+
+<Exercises>
+
+**练习 1（判断/解释型）** 同事写了个发布模式：生产者 `data = compute(); ready.store(true, std::memory_order_relaxed);`，消费者 `while(!ready.load(std::memory_order_relaxed)); use(data);`，并说「`ready` 是原子的，读到 true 就说明 `data` 早写好了，肯定能用」。这话对吗？用本章的「relaxed / synchronizes-with / happens-before」纠正他，并给出修法。
+
+<Answer>
+
+不对。`ready` 是原子的，只保证读 `ready` 这一个变量不会撕裂、且 `ready` 自己的修改顺序一致；但两端都用 `memory_order_relaxed`，**没有任何同步**，也就**没有 synchronizes-with 这条跨线程边**。于是「生产者写 `data`」和「消费者读 `data`」之间**建立不起 happens-before**：消费者读到 `ready==true`，完全可能还没看到 `data` 的新值（`data` 的写被重排或未及时传播），`use(data)` 用到的是半成品。「读到 true 就说明 data 早写好了」这个推断，靠的正是缺失的那条同步专线。
+
+修法：把标志的写改成 `release`、读改成 `acquire`——
+
+```cpp
+ready.store(true, std::memory_order_release);     // 生产者：release 发布
+while (!ready.load(std::memory_order_acquire)) {} // 消费者：acquire 等到读到 true
+use(data);                                         // 此时 data 保证可见
+```
+
+release 存与「真的读到它」的 acquire 读之间建立 synchronizes-with，于是「写 `data`」happens-before「读 `data`」，`data` 保证可见、必为新值。（或者干脆都不指定内存序，用默认的 seq_cst，也对。）
+
+</Answer>
+
+**练习 2（改代码型）** 下面这段代码想表达「线程2 看到 `flag==1` 时，`payload` 一定已是 100」，但用了 relaxed，保证不成立。指出为什么不成立，并改成能成立的版本。
+
+```cpp
+std::atomic<int> flag{0};
+int payload = 0;
+
+void t1() {
+    payload = 100;
+    flag.store(1, std::memory_order_relaxed); // ❌
+}
+
+void t2() {
+    while (flag.load(std::memory_order_relaxed) == 0) {} // ❌
+    // 这里读 payload，期望它是 100，但不保证
+    int p = payload;
+}
+```
+
+<Answer>
+
+不成立的原因：两处 `flag` 都用 `memory_order_relaxed`，所以 `t1` 写 `payload` 与 `t2` 读 `payload` 之间**没有 synchronizes-with、没有 happens-before**。relaxed 不保证 `t1` 对 `payload` 的写及时、按序对 `t2` 可见——`t2` 看到 `flag==1` 时，`payload` 可能还是 0（半成品）。
+
+修法：标志的写用 `release`、读用 `acquire`，建立同步专线：
+
+```cpp
+std::atomic<int> flag{0};
+int payload = 0;
+
+void t1() {
+    payload = 100;
+    flag.store(1, std::memory_order_release); // ✓ release 发布
+}
+
+void t2() {
+    while (flag.load(std::memory_order_acquire) == 0) {} // ✓ acquire 等到读到 1
+    int p = payload; // ✓ payload 一定是 100
+}
+```
+
+现在 `flag.store(release)` 与「真的读到 1」的 `flag.load(acquire)` 之间 synchronizes-with，于是 `payload = 100` happens-before `int p = payload`，`payload` 保证可见、必为 100。
+
+</Answer>
+
+**练习 3（问答型）** 用「对讲机 / 中央大屏」的比喻，分别解释：(a) 为什么单独一个 release（没有配对的 acquire）建立不了同步？(b) seq_cst 比 acquire-release 多保证了什么？
+
+<Answer>
+
+(a) synchronizes-with 是「**一按一听**」的配对关系：甲按对讲机（release 存）只是把信号发出去，**得有人听**（acquire 读）、而且**真的听到了那一声**（读到 release 写进的值），这条同步专线才接通。只有甲按、没人用 acquire 听（读端用 relaxed），或乙听到的是别的旧消息（acquire 没读到那次 release 的值），专线都连不起来——release 之前做的事就不保证对乙可见。所以 release / acquire 必须成对，且 acquire 要真读到，消费者通常得**循环**等到读到「就绪」为止。
+
+(b) acquire-release 只在「按了对讲机的甲」和「听到的乙」这**一对**之间建立局部先后；店里其他没参与这次「按—听」的人，对一组操作的相对先后可能看法不一。seq_cst 额外架了一块「**中央大屏**」：所有 seq_cst 操作都按**同一个全局顺序**登记上屏，**全店所有人**看到的这个顺序**完全一致**。这就是 seq_cst 比 acquire-release 多出来的「全局单一全序、人人看法一致」的保证——代价是开销更大。它是默认档，最不容易出错。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（重排序 / memory_order_relaxed / 内存序 / acquire-release / memory_order_seq_cst / sequenced-before / synchronizes-with / happens-before / 内存栅栏fence，共 9 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="重排序（reordering）">
+  你写的源码顺序是 A→B，但编译器或 CPU 为了跑得快，让它们实际以 B→A
+  的顺序执行，或让一个线程的写不及时对另一个线程可见。单线程内重排不影响本线程结果；多线程下，旁观的另一个线程可能观察到反直觉的顺序。像两个厨师各有「动作清单」，旁观者看到的实际发生顺序却被打乱。详见本章「重排序」一节。
+</GlossaryItem>
+
+<GlossaryItem term="内存序（memory order）">
+  给原子操作附加的参数，规定它在**跨变量的顺序与可见性**上要遵守多强的约束。从弱到强分三档：`memory_order_relaxed`、acquire-release
+  家族、`memory_order_seq_cst`。档越强、保证越多、通常开销越大；不写时默认
+  seq_cst。详见本章「三档内存序」一节。
+</GlossaryItem>
+
+<GlossaryItem term="memory_order_relaxed">
+  最弱的一档内存序。只保证单个原子变量的原子性（不撕裂）和该变量自己的修改顺序（单变量全序）；**不**保证跨多个变量的顺序，也**不**保证一个线程的写及时对另一个线程可见。所以用
+  relaxed
+  读到某标志为真，推不出「标志之前写的别的数据」也对你可见。详见本章「重排序」一节。
+</GlossaryItem>
+
+<GlossaryItem term="acquire-release">
+  中间一档内存序，含
+  `memory_order_acquire`（给读用）、`memory_order_release`（给写用）、`memory_order_acq_rel`（给既读又写的操作用）。核心能力是**配对建立同步**：一个
+  release 存与「真的读到它写的值」的 acquire 读之间建立 synchronizes-with，让
+  release 之前的写对 acquire 之后可见。像「按对讲机 /
+  听对讲机」。详见本章「acquire-release 配对」一节。
+</GlossaryItem>
+
+<GlossaryItem term="memory_order_seq_cst">
+  最强、也是**默认**的内存序。除了具备 acquire-release
+  的同步能力，还额外保证所有 seq_cst
+  操作存在**唯一一个全局全序**、且所有线程看法**完全一致**——像全店一块「中央大屏」，所有
+  seq_cst
+  操作按同一顺序登记上屏，谁看都一样。最不容易出错，代价是开销更大。详见本章「seq_cst
+  与内存栅栏」一节。
+</GlossaryItem>
+
+<GlossaryItem term="sequenced-before">
+  **单个线程内**两个操作的源码先后关系：同一线程里，源码写在前面的操作
+  sequenced-before 写在后面的。它只管线程内部、不跨线程，是 happens-before
+  的「同线程部分」。详见本章「关系三件套」一节。
+</GlossaryItem>
+
+<GlossaryItem term="synchronizes-with">
+  **跨线程**的同步关系：一个线程对某原子变量做 release 存，另一个线程用 acquire
+  读、且**真的读到了**那次 release 写进的值时，这两个操作之间就
+  synchronizes-with。像甲按一下对讲机（release）、乙听到才开工（acquire），一按一听连出一条「同步专线」。必须**配对**、且
+  acquire 真读到，才成立。详见本章「关系三件套」「acquire-release 配对」两节。
+</GlossaryItem>
+
+<GlossaryItem term="happens-before">
+  sequenced-before（同线程内）与 synchronizes-with（跨线程
+  release→acquire）的**传递闭包**：只要顺着这些边能从操作 A 一路走到 B，A 就
+  happens-before B。后果是：A happens-before B 则 A 一定先于 B、且 A 之前的写对
+  B 可见。一句话——「顺着边能走到，就是
+  happens-before」。详见本章「关系三件套」一节。
+</GlossaryItem>
+
+<GlossaryItem term="内存栅栏（fence）">
+  把内存序约束从「附在某次具体原子操作上」抽出来、单独下达的手段。C++ 用
+  `std::atomic_thread_fence(order)`
+  在代码里立一道栏，约束它前后内存操作的可见性与顺序。例如一道 release 栏配一道
+  acquire 栏，能建立和 release 存 / acquire
+  读类似的同步效果，而不必把内存序绑死在具体某次 store / load
+  上，发布多个变量时更灵活。详见本章「seq_cst 与内存栅栏」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+
+<Attribution />
