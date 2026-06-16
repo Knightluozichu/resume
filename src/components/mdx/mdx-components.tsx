@@ -399,6 +399,7 @@ import { DalvikArtCompareDiagram } from "./diagrams/dalvik-art-compare-diagram";
 import { JvmRuntimeAreasDiagram } from "./diagrams/jvm-runtime-areas-diagram";
 import { HookMechanismDiagram } from "./diagrams/hook-mechanism-diagram";
 import { PluginArchitectureDiagram } from "./diagrams/plugin-architecture-diagram";
+import { MemoryLeakDiagram } from "./diagrams/memory-leak-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -916,6 +917,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JvmRuntimeAreasDiagram,
   HookMechanismDiagram,
   PluginArchitectureDiagram,
+  MemoryLeakDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
