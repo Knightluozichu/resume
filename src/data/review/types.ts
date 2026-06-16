@@ -167,7 +167,20 @@ export type ReviewChapterSlug =
   | "pbr-theory"
   | "pbr-lighting"
   | "pbr-ibl-diffuse"
-  | "pbr-ibl-specular";
+  | "pbr-ibl-specular"
+  // C++ 并发编程实战（第2版）
+  | "cc-hello-concurrency"
+  | "cc-managing-threads"
+  | "cc-protecting-shared-data"
+  | "cc-synchronizing-operations"
+  | "cc-atomic-types"
+  | "cc-memory-ordering"
+  | "cc-lock-based"
+  | "cc-lock-free"
+  | "cc-designing-concurrent-code"
+  | "cc-thread-pools"
+  | "cc-parallel-algorithms"
+  | "cc-testing-debugging";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -338,6 +351,19 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pbr-lighting": "PBR 光照",
   "pbr-ibl-diffuse": "IBL 漫反射辐照",
   "pbr-ibl-specular": "IBL 镜面反射",
+  // C++ 并发编程实战（第2版）
+  "cc-hello-concurrency": "你好并发世界",
+  "cc-managing-threads": "管理线程",
+  "cc-protecting-shared-data": "线程间共享数据",
+  "cc-synchronizing-operations": "同步并发操作",
+  "cc-atomic-types": "原子类型与内存模型基础",
+  "cc-memory-ordering": "内存顺序与同步关系",
+  "cc-lock-based": "基于锁的并发数据结构",
+  "cc-lock-free": "无锁并发数据结构",
+  "cc-designing-concurrent-code": "设计并发代码",
+  "cc-thread-pools": "高级线程管理：线程池",
+  "cc-parallel-algorithms": "并行算法",
+  "cc-testing-debugging": "多线程应用的测试与调试",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
