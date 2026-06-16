@@ -436,6 +436,9 @@ import { InterruptibleThreadDiagram } from "./diagrams/interruptible-thread-diag
 import { ExecutionPolicyDiagram } from "./diagrams/execution-policy-diagram";
 import { ReduceTreeDiagram } from "./diagrams/reduce-tree-diagram";
 import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram";
+import { DeadlockVsLivelockDiagram } from "./diagrams/deadlock-vs-livelock-diagram";
+import { TsanDetectionDiagram } from "./diagrams/tsan-detection-diagram";
+import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxonomy-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -990,6 +993,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ExecutionPolicyDiagram,
   ReduceTreeDiagram,
   WhenToParallelizeDiagram,
+  DeadlockVsLivelockDiagram,
+  TsanDetectionDiagram,
+  ConcurrencyBugTaxonomyDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
