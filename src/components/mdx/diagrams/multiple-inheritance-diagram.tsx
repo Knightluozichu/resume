@@ -86,7 +86,7 @@ export function MultipleInheritanceDiagram({ step = 1 }: MultipleInheritanceDiag
               SmartPanel 内存布局（对象内部）
             </text>
 
-            <rect x={100} y={278} width={200} height={110} rx={6} fill={bg} stroke={border} strokeWidth={1} />
+            <rect x={100} y={278} width={200} height={126} rx={6} fill={bg} stroke={border} strokeWidth={1} />
 
             {step === 1 && (
               <>

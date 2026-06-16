@@ -33,7 +33,7 @@ export function OverloadResolutionDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 420"
+          viewBox="0 0 640 560"
           role="img"
           aria-label="函数重载匹配规则流程图：候选项→可行项→最佳匹配，三步筛选决定调用哪个重载版本"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -139,13 +139,27 @@ export function OverloadResolutionDiagram() {
           </text>
 
           {/* ── 图例 ── */}
-          <text x={marginL + 10} y={endY + 28} fontSize="12" fontWeight="700" fill={primary}>
+          <rect
+            x={marginL}
+            y={endY + 12}
+            width={640 - marginL * 2}
+            height={104}
+            rx="8"
+            fill={accent}
+            opacity={0.06}
+            stroke={border}
+            strokeWidth="1"
+          />
+          <text x={marginL + 14} y={endY + 34} fontSize="12" fontWeight="700" fill={primary}>
             匹配规则优先级（从高到低）
           </text>
-          <text x={marginL + 10} y={endY + 50} fontSize="11" fill={secondary} fontFamily="monospace">
-            ① 精确匹配（类型完全一样） &gt; ② const 转换 &gt; ③ 类型提升（int→long）&gt; ④ 算术/指针转换 &gt; ⑤ 类类型转换
+          <text x={marginL + 14} y={endY + 56} fontSize="11" fill={secondary} fontFamily="monospace">
+            ① 精确匹配（类型完全一样） &gt; ② const 转换 &gt; ③ 类型提升（int→long）
           </text>
-          <text x={marginL + 10} y={endY + 72} fontSize="11" fill={secondary} fontFamily="monospace">
+          <text x={marginL + 14} y={endY + 76} fontSize="11" fill={secondary} fontFamily="monospace">
+            &gt; ④ 算术/指针转换 &gt; ⑤ 类类型转换
+          </text>
+          <text x={marginL + 14} y={endY + 98} fontSize="11" fill={secondary} fontFamily="monospace">
             无法选出唯一最佳 → 二义性（ambiguous）→ 编译错误
           </text>
 

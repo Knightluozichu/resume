@@ -32,7 +32,7 @@ export function ArrayParameterDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 400"
+          viewBox="0 0 640 432"
           role="img"
           aria-label="数组形参退化示意图：数组在函数形参中自动退化为指针。int[10] 在调用方是一组连续的整数盒子，传进函数后变成只指向首元素的指针——函数不知道数组有多长。"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -170,16 +170,19 @@ export function ArrayParameterDiagram() {
           </text>
 
           {/* ═══════ 底部总结条 ═══════ */}
-          <rect x={marginL} y={topY + blockH + 32} width={640 - marginL * 2} height={36} rx="6" fill={accent} opacity={0.08} stroke={accent} strokeWidth="1" />
-          <text x={marginL + 14} y={topY + blockH + 56} fontSize="13" fontWeight="600" fill={accent} fontFamily="monospace">
-            数组形参 = 指针形参（完全等价）—— 编译器不管你在 [] 里写什么数，都当成 T* 处理。函数里永远不知道数组长度。
+          <rect x={marginL} y={topY + blockH + 28} width={640 - marginL * 2} height={52} rx="6" fill={accent} opacity={0.08} stroke={accent} strokeWidth="1" />
+          <text x={marginL + 14} y={topY + blockH + 48} fontSize="13" fontWeight="700" fill={accent} fontFamily="monospace">
+            数组形参 = 指针形参（完全等价）
+          </text>
+          <text x={marginL + 14} y={topY + blockH + 68} fontSize="11" fontWeight="600" fill={accent} fontFamily="monospace">
+            编译器不管你在 [] 里写什么数，都当成 T* 处理——函数里永远不知道数组长度。
           </text>
 
           {/* 底部注释 */}
-          <text x={marginL + 10} y={topY + blockH + 90} fontSize="11" fill={secondary} fontFamily="monospace">
+          <text x={marginL + 10} y={topY + blockH + 100} fontSize="11" fill={secondary} fontFamily="monospace">
             例外：void f(int (&arr)[10]); —— 带括号的引用可以保留数组长度信息，但极少用。
           </text>
-          <text x={marginL + 10} y={topY + blockH + 112} fontSize="11" fill={secondary} fontFamily="monospace">
+          <text x={marginL + 10} y={topY + blockH + 122} fontSize="11" fill={secondary} fontFamily="monospace">
             实践法则：凡是函数需要知道数组长度，一律把长度作为第二个参数传进去。
           </text>
 

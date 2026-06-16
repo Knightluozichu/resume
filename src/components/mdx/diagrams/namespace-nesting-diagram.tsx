@@ -27,13 +27,13 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
   const w = 820;
   const h = 520;
 
-  // Layout coordinates
-  const outerRt = { x: 480, y: 112, w: 320, h: 160 };
-  const midRt = { x: 520, y: 160, w: 260, h: 100 };
-  const innerRt = { x: 560, y: 200, w: 200, h: 48 };
+  // Layout coordinates —— 嵌套盒子逐层完全包含：outer ⊃ mid ⊃ inner
+  const outerRt = { x: 480, y: 112, w: 320, h: 184 };
+  const midRt = { x: 520, y: 158, w: 260, h: 124 };
+  const innerRt = { x: 560, y: 198, w: 200, h: 70 };
 
-  const mainRt = { x: 30, y: 112, w: 400, h: 160 };
-  const funcRt = { x: 70, y: 160, w: 340, h: 100 };
+  const mainRt = { x: 30, y: 112, w: 400, h: 184 };
+  const funcRt = { x: 70, y: 158, w: 340, h: 124 };
 
   // Step indicator
   const steps = [
@@ -77,24 +77,24 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
             namespace middle {'{'}
           </text>
 
-          <rect x={innerRt.x} y={innerRt.y} width={innerRt.w} height={64} rx={4} fill={elevated} stroke={orange} strokeWidth={1} />
+          <rect x={innerRt.x} y={innerRt.y} width={innerRt.w} height={innerRt.h} rx={4} fill={elevated} stroke={orange} strokeWidth={1} />
           <text x={innerRt.x + 16} y={innerRt.y + 18} fontSize={10} fill={orange} fontFamily="monospace">
             namespace inner {'{'}
           </text>
-          <text x={innerRt.x + 16} y={innerRt.y + 48} fontSize={10} fill={primary} fontFamily="monospace">
+          <text x={innerRt.x + 16} y={innerRt.y + 40} fontSize={10} fill={primary} fontFamily="monospace">
             int value = 42;
           </text>
 
           {/* Step 1: basic nesting explanation */}
           {step === 1 && (
             <>
-              <text x={outerRt.x + 16} y={outerRt.y + 148} fontSize={10} fill={secondary} fontFamily="monospace">
+              <text x={outerRt.x + 16} y={outerRt.y + 172} fontSize={10} fill={secondary} fontFamily="monospace">
                 {'}'}
               </text>
-              <text x={midRt.x + 16} y={midRt.y + 90} fontSize={10} fill={secondary} fontFamily="monospace">
+              <text x={midRt.x + 16} y={midRt.y + 112} fontSize={10} fill={secondary} fontFamily="monospace">
                 {'}'}
               </text>
-              <text x={innerRt.x + 16} y={innerRt.y + 60} fontSize={10} fill={secondary} fontFamily="monospace">
+              <text x={innerRt.x + 16} y={innerRt.y + 62} fontSize={10} fill={secondary} fontFamily="monospace">
                 {'}'}
               </text>
 
