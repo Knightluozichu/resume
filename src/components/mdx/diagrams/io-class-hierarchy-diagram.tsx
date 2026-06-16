@@ -16,13 +16,13 @@ export function IOClassHierarchyDiagram() {
   const bg = "var(--bg)";
   const elevated = "var(--bg-elevated)";
 
-  // 三层布局
+  // 画布尺寸
   const w = 760;
   const h = 520;
-  const cx = w / 2;
+  const cx = w / 2; // 380
 
   // 类框样式
-  const boxW = 120;
+  const boxW = 110;
   const boxH = 34;
   const boxRx = 6;
 
@@ -35,9 +35,28 @@ export function IOClassHierarchyDiagram() {
   // 层 Y 坐标
   const y0 = 30;  // ios_base
   const y1 = 110; // ios
-  const y2 = 200; // istream (左) / ostream (右) / streambuf (中)
-  const y3 = 300; // iostream(中) / ifstream(左) / ofstream(右) / istringstream(左2) / ostringstream(右2)
-  const y4 = 400; // fstream(左) / stringstream(右)
+  const y2 = 200; // istream(左) / ostream(右)
+  const y3 = 300; // 单行布局：istringstream / ifstream / iostream / ofstream / ostringstream
+  const y4 = 410; // fstream / stringstream
+
+  // Layer 2 中心
+  const xIstream = 160;
+  const xOstream = cx + 80; // 460
+
+  // Layer 3 五节点中心 x（间距 145，全部居中）
+  const xIstrStream = 90;
+  const xIfstream  = 235;
+  const xIostream  = cx;       // 380
+  const xOfstream  = 525;
+  const xOstrStream = 670;
+
+  // Layer 4 节点中心 x
+  const xFstream      = 300;
+  const xStringstream = 460;
+
+  // 关键中介横线
+  const yBus = y2 + boxH + 14; // 248：Layer 2 → Layer 3 汇聚总线
+  const yBus4 = y3 + boxH + 22; // 356：Layer 3 → Layer 4 汇聚总线
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -45,86 +64,102 @@ export function IOClassHierarchyDiagram() {
         <svg
           viewBox={`0 0 ${w} ${h}`}
           role="img"
-          aria-label="C++ iostream 家族继承树：ios_base 是基类，ios 继承它，istream 和 ostream 继承 ios，iostream 同时继承两者。fstream 和 sstream 从 istream/ostream 分支继承"
+          aria-label="C++ iostream 家族继承树：ios_base 是基类，ios 继承它，istream 和 ostream 继承 ios，iostream 同时继承两者。ifstream 和 istringstream 继承自 istream，ofstream 和 ostringstream 继承自 ostream，fstream 继承自 iostream，stringstream 由 istringstream 和 ostringstream 汇聚"
           className="mx-auto block h-auto w-full max-w-[760px]"
         >
           {/* ═══════════ Layer 0: ios_base ═══════════ */}
           <rect x={cx - boxW / 2} y={y0} width={boxW} height={boxH} rx={boxRx} fill={baseFill} stroke={baseStroke} strokeWidth="1.5" />
           <text x={cx} y={y0 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">ios_base</text>
 
-          {/* 垂直线 */}
+          {/* 垂直线 ios_base → ios */}
           <line x1={cx} y1={y0 + boxH} x2={cx} y2={y1} stroke={border} strokeWidth="1.5" />
 
           {/* ═══════════ Layer 1: ios ═══════════ */}
           <rect x={cx - boxW / 2} y={y1} width={boxW} height={boxH} rx={boxRx} fill={baseFill} stroke={baseStroke} strokeWidth="1.5" />
           <text x={cx} y={y1 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary} fontFamily="monospace">ios</text>
 
-          {/* 分叉线：ios → istream/ostream + streambuf */}
+          {/* 分叉线：ios → istream/ostream */}
           <line x1={cx} y1={y1 + boxH} x2={cx} y2={y1 + boxH + 22} stroke={border} strokeWidth="1.5" />
-          <line x1={160} y1={y1 + boxH + 22} x2={cx + 80} y2={y1 + boxH + 22} stroke={border} strokeWidth="1.5" />
+          <line x1={xIstream} y1={y1 + boxH + 22} x2={xOstream} y2={y1 + boxH + 22} stroke={border} strokeWidth="1.5" />
 
           {/* ── 左侧 istream ── */}
-          <line x1={160} y1={y1 + boxH + 22} x2={160} y2={y2} stroke={border} strokeWidth="1.5" />
-          <rect x={160 - boxW / 2 - 10} y={y2} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={160} y={y2 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">istream</text>
+          <line x1={xIstream} y1={y1 + boxH + 22} x2={xIstream} y2={y2} stroke={border} strokeWidth="1.5" />
+          <rect x={xIstream - boxW / 2} y={y2} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xIstream} y={y2 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">istream</text>
 
           {/* ── 右侧 ostream ── */}
-          <line x1={cx + 80} y1={y1 + boxH + 22} x2={cx + 80} y2={y2} stroke={border} strokeWidth="1.5" />
-          <rect x={cx + 80 - boxW / 2 - 10} y={y2} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={cx + 80} y={y2 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ostream</text>
+          <line x1={xOstream} y1={y1 + boxH + 22} x2={xOstream} y2={y2} stroke={border} strokeWidth="1.5" />
+          <rect x={xOstream - boxW / 2} y={y2} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xOstream} y={y2 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ostream</text>
 
-          {/* ═══════════ Layer 3: 中间 iostream = istream + ostream ═══════════ */}
-          {/* iostream 同时从 istream(左) 和 ostream(右) 汇聚 */}
-          <line x1={160} y1={y2 + boxH} x2={160} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={160} y1={y2 + boxH + 14} x2={cx} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={cx + 80} y1={y2 + boxH} x2={cx + 80} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={cx + 80} y1={y2 + boxH + 14} x2={cx} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={cx} y1={y2 + boxH + 14} x2={cx} y2={y3} stroke={border} strokeWidth="1.5" />
+          {/* ═══════════ Layer 2 → Layer 3 汇聚总线（y=yBus=248）═══════════ */}
+          {/* istream 下垂到总线 */}
+          <line x1={xIstream} y1={y2 + boxH} x2={xIstream} y2={yBus} stroke={border} strokeWidth="1.5" />
+          {/* ostream 下垂到总线 */}
+          <line x1={xOstream} y1={y2 + boxH} x2={xOstream} y2={yBus} stroke={border} strokeWidth="1.5" />
+          {/* 总线左段：istream → istringstream */}
+          <line x1={xIstrStream} y1={yBus} x2={xIstream} y2={yBus} stroke={border} strokeWidth="1.5" />
+          {/* 总线右段：ostream → ostringstream */}
+          <line x1={xOstream} y1={yBus} x2={xOstrStream} y2={yBus} stroke={border} strokeWidth="1.5" />
+          {/* 中段：istream → iostream 中介，ostream → iostream 中介（用于双继承汇聚） */}
+          <line x1={xIstream} y1={yBus} x2={xIostream} y2={yBus} stroke={border} strokeWidth="1.5" />
+          <line x1={xIostream} y1={yBus} x2={xOstream} y2={yBus} stroke={border} strokeWidth="1.5" />
 
-          <rect x={cx - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={accent} strokeWidth="2" />
-          <text x={cx} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">iostream</text>
-          <text x={cx} y={y3 + boxH + 16} textAnchor="middle" fontSize="9" fill={secondary}>istream + ostream</text>
+          {/* ═══════════ Layer 3 五节点垂直下接 ═══════════ */}
+          {/* istringstream ← istream */}
+          <line x1={xIstrStream} y1={yBus} x2={xIstrStream} y2={y3} stroke={border} strokeWidth="1.5" />
+          {/* ifstream ← istream（从总线 xIstream 拐到 xIfstream） */}
+          <line x1={xIfstream} y1={yBus} x2={xIfstream} y2={y3} stroke={border} strokeWidth="1.5" />
+          {/* iostream ← istream + ostream（中介） */}
+          <line x1={xIostream} y1={yBus} x2={xIostream} y2={y3} stroke={border} strokeWidth="2" />
+          {/* ofstream ← ostream */}
+          <line x1={xOfstream} y1={yBus} x2={xOfstream} y2={y3} stroke={border} strokeWidth="1.5" />
+          {/* ostringstream ← ostream */}
+          <line x1={xOstrStream} y1={yBus} x2={xOstrStream} y2={y3} stroke={border} strokeWidth="1.5" />
 
-          {/* ── 左侧 ifstream 继承 istream ── */}
-          <line x1={160} y1={y2 + boxH + 14} x2={160} y2={y3} stroke={border} strokeWidth="1.5" />
-          <rect x={160 - boxW / 2 - 10} y={y3} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={160} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ifstream</text>
+          {/* ── istringstream ── */}
+          <rect x={xIstrStream - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xIstrStream} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">istringstream</text>
 
-          {/* ── 右侧 ofstream 继承 ostream ── */}
-          <line x1={cx + 80} y1={y2 + boxH + 14} x2={cx + 80} y2={y3} stroke={border} strokeWidth="1.5" />
-          <rect x={cx + 80 - boxW / 2 - 10} y={y3} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={cx + 80} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ofstream</text>
+          {/* ── ifstream ── */}
+          <rect x={xIfstream - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xIfstream} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ifstream</text>
 
-          {/* ═══════════ Layer 4: fstream 继承 iostream ═══════════ */}
-          <line x1={cx} y1={y3 + boxH + 16} x2={cx} y2={y4} stroke={border} strokeWidth="1.5" />
+          {/* ── iostream（多重继承，高亮） ── */}
+          <rect x={xIostream - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={accent} strokeWidth="2" />
+          <text x={xIostream} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">iostream</text>
 
-          {/* fstream（双继承 iostream） */}
-          <rect x={cx - boxW / 2 - 80} y={y4} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={cx - 80} y={y4 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">fstream</text>
-          {/* 从 iostream 连过来 */}
-          <line x1={cx} y1={y4} x2={cx} y2={y4} stroke={border} strokeWidth="1.5" />
-          <line x1={cx} y1={y4} x2={cx - 80} y2={y4} stroke={border} strokeWidth="1.5" />
+          {/* ── ofstream ── */}
+          <rect x={xOfstream - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xOfstream} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">ofstream</text>
 
-          {/* ═══════════ sstream 分支 ═══════════ */}
-          {/* istringstream */}
-          <line x1={160} y1={y2 + boxH + 14} x2={160} y2={y3} stroke={border} strokeWidth="1.5" />
-          <rect x={90} y={y3} width={boxW + 20} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={100} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">istringstream</text>
+          {/* ── ostringstream ── */}
+          <rect x={xOstrStream - boxW / 2} y={y3} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xOstrStream} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">ostringstream</text>
 
-          {/* ostringstream */}
-          <rect x={cx + 80 + 120} y={y3} width={boxW + 30} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={cx + 80 + 135} y={y3 + boxH / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary} fontFamily="monospace">ostringstream</text>
+          {/* ═══════════ Layer 3 → Layer 4 汇聚总线（y=yBus4=356）═══════════ */}
+          {/* iostream 下垂到 yBus4（用于 fstream） */}
+          <line x1={xIostream} y1={y3 + boxH} x2={xIostream} y2={yBus4} stroke={border} strokeWidth="1.5" />
+          {/* istringstream 下垂到 yBus4 */}
+          <line x1={xIstrStream} y1={y3 + boxH} x2={xIstrStream} y2={yBus4} stroke={border} strokeWidth="1.5" />
+          {/* ostringstream 下垂到 yBus4 */}
+          <line x1={xOstrStream} y1={y3 + boxH} x2={xOstrStream} y2={yBus4} stroke={border} strokeWidth="1.5" />
+          {/* 总线（istringstream → stringstream ← ostringstream） */}
+          <line x1={xIstrStream} y1={yBus4} x2={xOstrStream} y2={yBus4} stroke={border} strokeWidth="1.5" />
 
-          {/* 连线 */}
-          <line x1={100} y1={y3} x2={100} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={160} y1={y2 + boxH + 14} x2={100} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
+          {/* fstream ← iostream */}
+          <line x1={xFstream} y1={yBus4} x2={xFstream} y2={y4} stroke={border} strokeWidth="1.5" />
+          <line x1={xIostream} y1={yBus4} x2={xFstream} y2={yBus4} stroke={border} strokeWidth="1.5" />
+          {/* stringstream ← 总线 */}
+          <line x1={xStringstream} y1={yBus4} x2={xStringstream} y2={y4} stroke={border} strokeWidth="1.5" />
 
-          <line x1={cx + 80 + 135} y1={y3} x2={cx + 80 + 135} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
-          <line x1={cx + 80} y1={y2 + boxH + 14} x2={cx + 80 + 135} y2={y2 + boxH + 14} stroke={border} strokeWidth="1.5" />
+          {/* ── fstream ── */}
+          <rect x={xFstream - boxW / 2} y={y4} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xFstream} y={y4 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">fstream</text>
 
-          {/* stringstream 从 istringstream + ostringstream 汇聚 */}
-          <rect x={cx + 40} y={y4} width={boxW + 30} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
-          <text x={cx + 55} y={y4 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">stringstream</text>
+          {/* ── stringstream ── */}
+          <rect x={xStringstream - boxW / 2} y={y4} width={boxW} height={boxH} rx={boxRx} fill={derivedFill} stroke={derivedStroke} strokeWidth="1.5" />
+          <text x={xStringstream} y={y4 + boxH / 2 + 4} textAnchor="middle" fontSize="12" fontWeight="600" fill={primary} fontFamily="monospace">stringstream</text>
 
           {/* 图例 */}
           <rect x={20} y={h - 36} width={14} height={14} rx={3} fill={baseFill} stroke={baseStroke} strokeWidth="1.5" />
