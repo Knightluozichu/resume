@@ -191,19 +191,32 @@ export function TextureImportDiagram({
               >
                 Generate Mip Maps
               </text>
-              {[0, 1, 2, 3].map((i) => (
-                <rect
-                  key={i}
-                  x={456 + i * 28}
-                  y={70 + i * 6}
-                  width={56 - i * 12}
-                  height={56 - i * 12}
-                  rx="4"
-                  fill="var(--bg-elevated)"
-                  stroke={i === 0 ? "var(--accent)" : "var(--border)"}
-                  strokeWidth="1"
-                />
-              ))}
+              {(() => {
+                // 逐级减半的 mipmap 各级方块：横向并排、底边对齐，级间留 6px 间隙
+                // （禁止互相重叠——硬规则 1）。尺寸 48/36/24/12 依次递减表示分辨率减半。
+                const sizes = [48, 36, 24, 12];
+                const gap = 6;
+                const baseLeft = 452;
+                const baseBottom = 128; // 各级底边对齐
+                let cursorX = baseLeft;
+                return sizes.map((s, i) => {
+                  const x = cursorX;
+                  cursorX += s + gap;
+                  return (
+                    <rect
+                      key={i}
+                      x={x}
+                      y={baseBottom - s}
+                      width={s}
+                      height={s}
+                      rx="4"
+                      fill="var(--bg-elevated)"
+                      stroke={i === 0 ? "var(--accent)" : "var(--border)"}
+                      strokeWidth="1"
+                    />
+                  );
+                });
+              })()}
               <text
                 x="520"
                 y="142"

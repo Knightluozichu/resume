@@ -74,9 +74,9 @@ export function FoveatedRenderingDiagram({ level = "medium" }: Props) {
           <text x={cx} y={cy + 4} textAnchor="middle" fontSize="8" fill="var(--bg)" fontWeight="600">
             ●
           </text>
-          {/* 注视方向标签 — 移至圆的左侧，避免与底部 rect cfg.label 重叠 */}
-          <text x={cx - 96} y={cy + 4} textAnchor="end" fontSize="9" fill="var(--text-secondary)">
-            注视方向 →
+          {/* 注视方向标签 — 移到圆右侧、左对齐，箭头指回圆心；避免文字超出 viewBox 左边界（硬规则 4） */}
+          <text x={cx + 100} y={cy + 4} textAnchor="start" fontSize="9" fill="var(--text-secondary)">
+            ← 注视方向
           </text>
 
           {/* 图例 */}
