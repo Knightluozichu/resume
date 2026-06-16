@@ -359,6 +359,7 @@ import { ActivityLifecycleDiagram } from "./diagrams/activity-lifecycle-diagram"
 import { MvcDataFlowDiagram } from "./diagrams/mvc-data-flow-diagram";
 import { MvvmDataFlowDiagram } from "./diagrams/mvvm-data-flow-diagram";
 import { BackStackDiagram } from "./diagrams/back-stack-diagram";
+import { ClassLoaderDelegationDiagram } from "./diagrams/class-loader-delegation-diagram";
 import { NavGraphDiagram } from "./diagrams/nav-graph-diagram";
 import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diagram";
 import { RecyclerViewRecyclingDiagram } from "./diagrams/recyclerview-recycling-diagram";
@@ -903,6 +904,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   WindowManagerDiagram,
   WmsArchitectureDiagram,
   BackStackDiagram,
+  ClassLoaderDelegationDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
   RecyclerViewRecyclingDiagram,
