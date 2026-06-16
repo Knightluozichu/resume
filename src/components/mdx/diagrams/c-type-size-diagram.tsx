@@ -31,10 +31,10 @@ export function CTypeSizeDiagram() {
     { type: "long double", bytes: "8/10/16", min: "依平台", max: "依平台", note: "≥ double" },
   ];
 
-  const colX = { type: 16, bytes: 172, signed: 310, min: 400, max: 535 };
+  const colX = { type: 20, bytes: 172, signed: 310, min: 400, max: 535 };
   const headerY = 44;
   const rowH = 34;
-  const startY = 60;
+  const startY = 76;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -46,7 +46,7 @@ export function CTypeSizeDiagram() {
           className="mx-auto block h-auto w-full max-w-[700px]"
         >
           {/* 表头背景 */}
-          <rect x="8" y={headerY - 12} width="684" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
+          <rect x="12" y={headerY - 12} width="676" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
           {/* 表头文字 */}
           <text x={colX.type} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">类型</text>
           <text x={colX.bytes} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">字节</text>
@@ -62,7 +62,7 @@ export function CTypeSizeDiagram() {
 
             return (
               <g key={r.type}>
-                <rect x="8" y={y - 10} width="684" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect x="12" y={y - 10} width="676" height={rowH - 4} rx="4" fill={rowBg} />
                 <text
                   x={colX.type}
                   y={y + 4}

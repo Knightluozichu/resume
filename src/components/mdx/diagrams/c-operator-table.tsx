@@ -50,7 +50,9 @@ export function COperatorTable() {
     },
   ];
 
-  const totalH = 68 + cats.reduce((s, c) => s + 2 * rowH + c.rows.length * rowH + 16, 0) + 40;
+  // 每个分类块高度：分类标题行 (rowH-2) + 表头行 (rowH+2) + 数据行 (n*rowH) + 分类间距 (rowH+8)
+  const catBlockH = (n: number) => rowH - 2 + (rowH + 2) + n * rowH + (rowH + 8);
+  const totalH = 68 + cats.reduce((s, c) => s + catBlockH(c.rows.length), 0) + 40;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -122,7 +124,7 @@ export function COperatorTable() {
                 );
               });
 
-              curY += cat.rows.length * rowH + 16;
+              curY += cat.rows.length * rowH + rowH + 8;
             });
 
             // 优先级总结

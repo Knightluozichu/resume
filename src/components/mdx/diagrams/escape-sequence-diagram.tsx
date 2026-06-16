@@ -31,19 +31,19 @@ export function EscapeSequenceDiagram() {
   const colX = { seq: 24, name: 128, desc: 268, ascii: 464 };
   const headerY = 40;
   const rowH = 34;
-  const startY = 56;
+  const startY = 72;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-x-auto overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 620 460"
+          viewBox="0 0 620 488"
           role="img"
           aria-label="C 常用转义序列速查表"
           className="mx-auto block h-auto w-full max-w-[620px]"
         >
           {/* 表头 */}
-          <rect x="8" y={headerY - 12} width="596" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
+          <rect x="12" y={headerY - 12} width="588" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
           <text x={colX.seq} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">转义序列</text>
           <text x={colX.name} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">名称</text>
           <text x={colX.desc} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">含义</text>
@@ -56,7 +56,7 @@ export function EscapeSequenceDiagram() {
 
             return (
               <g key={r.seq}>
-                <rect x="8" y={y - 10} width="596" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect x="12" y={y - 10} width="588" height={rowH - 4} rx="4" fill={rowBg} />
                 <text
                   x={colX.seq}
                   y={y + 4}

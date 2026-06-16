@@ -17,10 +17,10 @@ interface Props {
 
 export function CCompilationDiagram({ step = 0 }: Props) {
   const stages = [
-    { label: "预处理", sub: ["#include 展开", "注释删除"], detail: "把头文件粘贴进来\n宏替换·去注释\n生成 .i 文件", x: 20, w: 130 },
-    { label: "编译", sub: ["C→汇编", ""], detail: "语法检查\n语义分析\n生成 .s 文件", x: 170, w: 130 },
-    { label: "汇编", sub: ["汇编→机器码", ""], detail: "汇编→二进制\n生成 .o 文件\n目标文件（零件）", x: 320, w: 130 },
-    { label: "链接", sub: ["合并·解析符号", ""], detail: "多 .o + 库\n符号解析\n→ 可执行文件", x: 470, w: 130 },
+    { label: "预处理", sub: ["#include 展开", "注释删除"], detail: "把头文件粘贴进来\n宏替换·去注释\n生成 .i 文件", x: 120, w: 130 },
+    { label: "编译", sub: ["C→汇编", ""], detail: "语法检查\n语义分析\n生成 .s 文件", x: 270, w: 130 },
+    { label: "汇编", sub: ["汇编→机器码", ""], detail: "汇编→二进制\n生成 .o 文件\n目标文件（零件）", x: 420, w: 130 },
+    { label: "链接", sub: ["合并·解析符号", ""], detail: "多 .o + 库\n符号解析\n→ 可执行文件", x: 570, w: 130 },
   ];
 
   const isActive = (idx: number) => step === 0 || step === idx + 1;
@@ -37,10 +37,10 @@ export function CCompilationDiagram({ step = 0 }: Props) {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 220"
+          viewBox="0 0 752 220"
           role="img"
           aria-label="C 编译流水线：源码 .c → 预处理 .i → 编译 .s → 汇编 .o → 链接 → 可执行文件"
-          className="mx-auto block h-auto w-full max-w-[640px]"
+          className="mx-auto block h-auto w-full max-w-[752px]"
         >
           {/* 左侧：源码入口 */}
           <rect
@@ -73,6 +73,17 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           >
             源码
           </text>
+
+          {/* 箭头 源码→① */}
+          <line
+            x1="96"
+            y1="92"
+            x2="116"
+            y2="92"
+            stroke={arrowStroke(0)}
+            strokeWidth="2"
+          />
+          <path d="M116 92 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
 
           {/* 四个阶段 */}
           {stages.map((s, i) => (
@@ -162,47 +173,47 @@ export function CCompilationDiagram({ step = 0 }: Props) {
 
           {/* 箭头 ①→② */}
           <line
-            x1="150"
+            x1="250"
             y1="92"
-            x2="166"
-            y2="92"
-            stroke={arrowStroke(0)}
-            strokeWidth="2"
-          />
-          <path d="M166 92 l-8 -4 l0 8 z" fill={arrowStroke(0)} />
-
-          {/* 箭头 ②→③ */}
-          <line
-            x1="300"
-            y1="92"
-            x2="316"
+            x2="266"
             y2="92"
             stroke={arrowStroke(1)}
             strokeWidth="2"
           />
-          <path d="M316 92 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
+          <path d="M266 92 l-8 -4 l0 8 z" fill={arrowStroke(1)} />
 
-          {/* 箭头 ③→④ */}
+          {/* 箭头 ②→③ */}
           <line
-            x1="450"
+            x1="400"
             y1="92"
-            x2="466"
+            x2="416"
             y2="92"
             stroke={arrowStroke(2)}
             strokeWidth="2"
           />
-          <path d="M466 92 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
+          <path d="M416 92 l-8 -4 l0 8 z" fill={arrowStroke(2)} />
 
-          {/* ④→可执行文件 */}
+          {/* 箭头 ③→④ */}
           <line
-            x1="600"
+            x1="550"
             y1="92"
-            x2="612"
+            x2="566"
             y2="92"
             stroke={arrowStroke(3)}
             strokeWidth="2"
           />
-          <path d="M612 92 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
+          <path d="M566 92 l-8 -4 l0 8 z" fill={arrowStroke(3)} />
+
+          {/* ④→可执行文件 */}
+          <line
+            x1="700"
+            y1="92"
+            x2="712"
+            y2="92"
+            stroke={arrowStroke(3)}
+            strokeWidth="2"
+          />
+          <path d="M712 92 l-6 -3 l0 6 z" fill={arrowStroke(3)} />
 
           {/* 顶部阶段产出标注 */}
           <text
@@ -216,7 +227,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             .c
           </text>
           <text
-            x="235"
+            x="335"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -226,7 +237,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             .i
           </text>
           <text
-            x="385"
+            x="485"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -236,7 +247,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             .s
           </text>
           <text
-            x="535"
+            x="635"
             y="38"
             textAnchor="middle"
             fontSize="10"
@@ -246,8 +257,9 @@ export function CCompilationDiagram({ step = 0 }: Props) {
             .o
           </text>
           <text
-            x="618"
+            x="730"
             y="38"
+            textAnchor="middle"
             fontSize="10"
             fill="var(--accent)"
             fontFamily="monospace"
@@ -259,7 +271,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           {/* 底部说明 */}
           {step === 0 && (
             <text
-              x="320"
+              x="376"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -270,7 +282,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           )}
           {step === 1 && (
             <text
-              x="320"
+              x="376"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -281,7 +293,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           )}
           {step === 2 && (
             <text
-              x="320"
+              x="376"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -292,7 +304,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           )}
           {step === 3 && (
             <text
-              x="320"
+              x="376"
               y="175"
               textAnchor="middle"
               fontSize="12"
@@ -303,7 +315,7 @@ export function CCompilationDiagram({ step = 0 }: Props) {
           )}
           {step === 4 && (
             <text
-              x="320"
+              x="376"
               y="175"
               textAnchor="middle"
               fontSize="12"
