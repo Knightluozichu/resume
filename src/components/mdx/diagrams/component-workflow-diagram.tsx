@@ -60,7 +60,9 @@ const LANE_RIGHT_W = 304; // 右泳道宽
 
 // App 进程内两节点：上 = 发起者 Activity（调 startActivity），下 = ApplicationThread + H。
 const APP_X = 48; // App 进程节点左边
-const APP_START_Y = 96; // 发起者 Activity 顶边
+// 注：发起者 Activity 顶部 = 120；Intent 卡片在其上方 36px（y=84-112），不与 y=76 的
+// 「App 进程」泳道标签（基线 y=76、字号 12、视觉下沿约 y=80）冲突。
+const APP_START_Y = 120; // 发起者 Activity 顶边（给上方 Intent 卡片让出 36px，再避开泳道标签）
 const APP_THREAD_Y = 272; // ApplicationThread / ActivityThread 顶边
 
 // system_server 内 AMS 节点（居中偏上）。
