@@ -333,16 +333,17 @@ export function InterruptibleThreadDiagram() {
                   </text>
                 )}
 
-                {/* 退出态：在轨右端画收工块 */}
+                {/* 退出态：在轨右端、节点②之外的空隙画收工竖标（不压节点框） */}
                 {b.verdict === "exit" && (
                   <g>
                     <rect
-                      x={nodeX(NODE_COUNT - 1) + NODE_W - 4}
+                      x={nodeX(NODE_COUNT - 1) + NODE_W + 8}
                       y={TRACK_Y - 4}
                       width={4}
                       height={NODE_H + 8}
+                      rx="2"
                       fill={FLAG_ON}
-                      opacity="0.5"
+                      opacity="0.6"
                     />
                     <text
                       x={nodeX(NODE_COUNT - 1) + NODE_W / 2}
