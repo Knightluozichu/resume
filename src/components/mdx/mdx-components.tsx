@@ -389,6 +389,7 @@ import { BroadcastDispatchDiagram } from "./diagrams/broadcast-dispatch-diagram"
 import { TouchEventSequenceDiagram } from "./diagrams/touch-event-sequence-diagram";
 import { ComponentWorkflowDiagram } from "./diagrams/component-workflow-diagram";
 import { AmsStartActivityDiagram } from "./diagrams/ams-start-activity-diagram";
+import { WindowManagerDiagram } from "./diagrams/window-manager-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -898,6 +899,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TouchEventSequenceDiagram,
   ComponentWorkflowDiagram,
   AmsStartActivityDiagram,
+  WindowManagerDiagram,
   BackStackDiagram,
   NavGraphDiagram,
   FragmentTransactionDiagram,
