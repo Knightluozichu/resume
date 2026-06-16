@@ -131,8 +131,8 @@ export function CStringNullTerminatorDiagram() {
             strlen → 3（数到 \0 之前）
           </text>
 
-          <rect x={startX + 3 * cellW + 8} y={memY - 4} width={cellW - 4} height={60} rx="6" fill="none" stroke={nullColor} strokeWidth="2" strokeDasharray="5 3" />
-          <text x={startX + 3 * cellW + (cellW - 4) / 2 + 8} y={memY + 100} textAnchor="middle" fontSize="10" fontWeight="600" fill={nullColor}>
+          <rect x={startX + 3 * cellW - 6} y={memY - 8} width={cellW + 8} height={68} rx="8" fill="none" stroke={nullColor} strokeWidth="2" strokeDasharray="5 3" />
+          <text x={startX + 3 * cellW + (cellW - 4) / 2} y={memY + 100} textAnchor="middle" fontSize="10" fontWeight="600" fill={nullColor}>
             字符串结束标记
           </text>
 

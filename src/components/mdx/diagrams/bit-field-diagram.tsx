@@ -45,10 +45,10 @@ export function BitFieldDiagram() {
             struct Status {"{ unsigned ready : 1; unsigned mode : 3; unsigned error : 4; unsigned flags : 8; };"}
           </text>
 
-          <rect x={startX - 8} y={rowY - 24} width={bitPos * unitW + 16} height={56} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
-          <text x={startX - 4} y={rowY - 8} fontSize="9" fill={secondary}>
+          <text x={startX - 8} y={rowY - 14} fontSize="9" fill={secondary}>
             一个 unsigned int 存储单元（16 bit 示意）
           </text>
+          <rect x={startX - 8} y={rowY - 8} width={bitPos * unitW + 16} height={68} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
 
           {cells.map((c) => {
             const x = startX + c.start * unitW;

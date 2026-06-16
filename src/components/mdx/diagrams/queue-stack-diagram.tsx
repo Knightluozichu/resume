@@ -80,7 +80,7 @@ export function QueueStackDiagram() {
             <g key={`q-${n}`}>
               <rect
                 x={56 + i * 72}
-                y={104}
+                y={126}
                 width={56}
                 height={40}
                 rx="6"
@@ -88,16 +88,16 @@ export function QueueStackDiagram() {
                 stroke={i === 0 ? success : i === 2 ? warn : border}
                 strokeWidth={i === 0 || i === 2 ? 2 : 1.5}
               />
-              <text x={84 + i * 72} y={130} textAnchor="middle" fontSize="14" fontWeight="600" fill={primary}>
+              <text x={84 + i * 72} y={152} textAnchor="middle" fontSize="14" fontWeight="600" fill={primary}>
                 {n}
               </text>
             </g>
           ))}
 
-          <text x={56} y={168} fontSize="10" fill={success}>
+          <text x={56} y={184} fontSize="10" fill={success}>
             ← 出队取 1（最早进入）
           </text>
-          <text x={200} y={168} fontSize="10" fill={warn}>
+          <text x={200} y={184} fontSize="10" fill={warn}>
             入队 4 →
           </text>
 

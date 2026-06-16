@@ -16,7 +16,7 @@ export function UnionMemoryDiagram() {
   const memX = 200;
   const memY = 88;
   const memW = 240;
-  const memH = 120;
+  const memH = 148;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -86,17 +86,17 @@ export function UnionMemoryDiagram() {
             <line x1={468} y1={144} x2={memX + memW} y2={120} stroke={warn} strokeWidth="1.5" strokeDasharray="5 3" />
           </g>
 
-          <rect x={24} y={230} width={592} height={88} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
-          <text x={40} y={254} fontSize="11" fontWeight="600" fill={primary}>
+          <rect x={24} y={244} width={592} height={88} rx="8" fill={bg} stroke={border} strokeWidth="1.5" />
+          <text x={40} y={268} fontSize="11" fontWeight="600" fill={primary}>
             使用规则
           </text>
-          <text x={40} y={274} fontSize="10" fill={secondary}>
+          <text x={40} y={288} fontSize="10" fill={secondary}>
             · 同一时刻只应通过「最后写入的那种成员类型」来读
           </text>
-          <text x={40} y={292} fontSize="10" fill={secondary}>
+          <text x={40} y={306} fontSize="10" fill={secondary}>
             · 典型用途：节省内存（多种表示互斥）、协议字段复用、与硬件寄存器布局对应
           </text>
-          <text x={40} y={310} fontSize="10" fill={secondary}>
+          <text x={40} y={324} fontSize="10" fill={secondary}>
             · C11 起可用 tagged union 模式：另存 enum 标签记录当前有效成员（编译器不自动检查）
           </text>
 
