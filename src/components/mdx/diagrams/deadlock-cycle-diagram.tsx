@@ -34,8 +34,13 @@ import {
  * 无裸 hex；时长走 TEACHING_BEAT_MS 具名常量（硬规则 5）。
  */
 
+// 顶部留白：把标题往下推，让标题文字距 viewBox 顶 ≥12px（HEL-245）。
+// 整图垂直内容（标题/节点/锁行/边/骷髅框）统一加这个常量下移，VIEW_H 同步增大；
+// 底部说明锚定 VIEW_H - 14 自动跟到底边。
+const TOP_PAD = 12;
+
 const VIEW_W = 560;
-const VIEW_H = 360;
+const VIEW_H = 360 + TOP_PAD;
 
 // 四个节点（菱形/方形四角）：线程在上、锁在下。
 const NODE_W = 168;
@@ -43,8 +48,8 @@ const NODE_H = 60;
 
 const A_X = 36; // 线程 A：左上
 const B_X = VIEW_W - 36 - NODE_W; // 线程 B：右上
-const TOP_Y = 40;
-const BOT_Y = 234; // 锁行
+const TOP_Y = 40 + TOP_PAD;
+const BOT_Y = 234 + TOP_PAD; // 锁行
 const LOCK1_X = A_X; // lock1：左下
 const LOCK2_X = B_X; // lock2：右下
 
@@ -294,7 +299,7 @@ export function DeadlockCycleDiagram() {
           {/* 标题 */}
           <text
             x={VIEW_W / 2}
-            y="22"
+            y={TOP_PAD + 22}
             textAnchor="middle"
             fontSize="14"
             fontWeight="700"
