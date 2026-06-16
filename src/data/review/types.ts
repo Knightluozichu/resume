@@ -167,7 +167,22 @@ export type ReviewChapterSlug =
   | "pbr-theory"
   | "pbr-lighting"
   | "pbr-ibl-diffuse"
-  | "pbr-ibl-specular";
+  | "pbr-ibl-specular"
+  // AI Agent 开发实战
+  | "ai-what-is-agent"
+  | "ai-llm-brain"
+  | "ai-prompting-roles"
+  | "ai-react-loop"
+  | "ai-tool-calling"
+  | "ai-memory"
+  | "ai-planning"
+  | "ai-rag"
+  | "ai-context-engineering"
+  | "ai-multi-agent-patterns"
+  | "ai-orchestration"
+  | "ai-evaluation-observability"
+  | "ai-safety-guardrails"
+  | "ai-production-deployment";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -338,6 +353,21 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pbr-lighting": "PBR 光照",
   "pbr-ibl-diffuse": "IBL 漫反射辐照",
   "pbr-ibl-specular": "IBL 镜面反射",
+  // AI Agent 开发实战
+  "ai-what-is-agent": "什么是 AI Agent",
+  "ai-llm-brain": "LLM：Agent 的大脑",
+  "ai-prompting-roles": "提示工程与角色设定",
+  "ai-react-loop": "ReAct：推理与行动循环",
+  "ai-tool-calling": "工具调用 Tool Calling",
+  "ai-memory": "记忆系统 Memory",
+  "ai-planning": "规划与任务分解",
+  "ai-rag": "RAG 检索增强生成",
+  "ai-context-engineering": "上下文工程与压缩",
+  "ai-multi-agent-patterns": "多智能体协作模式",
+  "ai-orchestration": "编排·通信·终止",
+  "ai-evaluation-observability": "评估与可观测性",
+  "ai-safety-guardrails": "安全护栏与成本控制",
+  "ai-production-deployment": "生产化部署",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
