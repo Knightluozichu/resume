@@ -33,7 +33,7 @@ export function RecursionStackDiagram({ step = 4 }: RecursionStackDiagramProps) 
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 380"
+          viewBox="0 0 640 396"
           role="img"
           aria-label="阶乘递归 fact(4) 的调用栈压入与弹出过程"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -123,7 +123,7 @@ export function RecursionStackDiagram({ step = 4 }: RecursionStackDiagramProps) 
           </text>
 
           {step === 4 && (
-            <text x={stackX + stackW / 2} y={368} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">
+            <text x={stackX + stackW / 2} y={378} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent} fontFamily="monospace">
               main 收到返回值 24
             </text>
           )}

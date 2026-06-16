@@ -43,7 +43,7 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
         <svg
-          viewBox="0 0 640 440"
+          viewBox="0 0 640 472"
           role="img"
           aria-label="值传递（拷贝）与引用传递（别名）的内存布局对比图：左侧值传递中实参和形参是两块独立内存，右侧引用传递中形参和实参指向同一块内存"
           className="mx-auto block h-auto w-full max-w-[640px]"
@@ -157,9 +157,15 @@ export function ParameterPassingDiagram({ step }: ParameterPassingDiagramProps) 
             ✓ 能修改实参
           </text>
 
-          {/* 底部总结 */}
-          <text x={marginL + 10} y={432} fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">
-            const T& → "只读借阅，不拷贝"（传大对象必用） &nbsp;&nbsp; T& → "读写别名"（函数要改原值时用） &nbsp;&nbsp; T → "独立副本"（开销大）
+          {/* 底部总结：分三行避免溢出 viewBox 右边界 */}
+          <text x={marginL + 10} y={424} fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">
+            const T&amp; → 「只读借阅，不拷贝」（传大对象必用）
+          </text>
+          <text x={marginL + 10} y={444} fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">
+            T&amp;       → 「读写别名」（函数要改原值时用）
+          </text>
+          <text x={marginL + 10} y={464} fontSize="12" fontWeight="600" fill={accent} fontFamily="monospace">
+            T         → 「独立副本」（开销大）
           </text>
 
           <defs>
