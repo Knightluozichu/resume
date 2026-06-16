@@ -385,6 +385,7 @@ import { CameraIntentFlowDiagram } from "./diagrams/camera-intent-flow-diagram";
 import { ResourceQualifierDiagram } from "./diagrams/resource-qualifier-diagram";
 import { AccessibilityTreeDiagram } from "./diagrams/accessibility-tree-diagram";
 import { ThreadModelDiagram } from "./diagrams/thread-model-diagram";
+import { DrawPipelineDiagram } from "./diagrams/draw-pipeline-diagram";
 import { SearchFlowDiagram } from "./diagrams/search-flow-diagram";
 import { WorkManagerDiagram } from "./diagrams/work-manager-diagram";
 import { BroadcastDispatchDiagram } from "./diagrams/broadcast-dispatch-diagram";
@@ -901,6 +902,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ResourceQualifierDiagram,
   AccessibilityTreeDiagram,
   ThreadModelDiagram,
+  DrawPipelineDiagram,
   SearchFlowDiagram,
   WorkManagerDiagram,
   BroadcastDispatchDiagram,
