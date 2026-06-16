@@ -412,6 +412,9 @@ import { DanglingRefDiagram } from "./diagrams/dangling-ref-diagram";
 import { RaceConditionExplorer } from "./diagrams/race-condition-explorer";
 import { MutexSerializeDiagram } from "./diagrams/mutex-serialize-diagram";
 import { DeadlockCycleDiagram } from "./diagrams/deadlock-cycle-diagram";
+import { CondVarWaitNotifyDiagram } from "./diagrams/cond-var-wait-notify-diagram";
+import { FuturePromiseDiagram } from "./diagrams/future-promise-diagram";
+import { GetFutureWaysDiagram } from "./diagrams/get-future-ways-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -942,6 +945,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RaceConditionExplorer,
   MutexSerializeDiagram,
   DeadlockCycleDiagram,
+  CondVarWaitNotifyDiagram,
+  FuturePromiseDiagram,
+  GetFutureWaysDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

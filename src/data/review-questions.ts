@@ -168,6 +168,7 @@ import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
 import { ccHelloConcurrencyQuestions } from "./review/cc-hello-concurrency";
 import { ccManagingThreadsQuestions } from "./review/cc-managing-threads";
 import { ccProtectingSharedDataQuestions } from "./review/cc-protecting-shared-data";
+import { ccSynchronizingOperationsQuestions } from "./review/cc-synchronizing-operations";
 
 export {
   CHAPTER_TITLES,
@@ -333,6 +334,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ccHelloConcurrencyQuestions,
   ...ccManagingThreadsQuestions,
   ...ccProtectingSharedDataQuestions,
+  ...ccSynchronizingOperationsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
