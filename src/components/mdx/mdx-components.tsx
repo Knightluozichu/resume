@@ -392,6 +392,7 @@ import { BroadcastDispatchDiagram } from "./diagrams/broadcast-dispatch-diagram"
 import { TouchEventSequenceDiagram } from "./diagrams/touch-event-sequence-diagram";
 import { ComponentWorkflowDiagram } from "./diagrams/component-workflow-diagram";
 import { JniBridgeDiagram } from "./diagrams/jni-bridge-diagram";
+import { LayerCallTraversalDiagram } from "./diagrams/layer-call-traversal-diagram";
 import { AmsStartActivityDiagram } from "./diagrams/ams-start-activity-diagram";
 import { WindowManagerDiagram } from "./diagrams/window-manager-diagram";
 import { WmsArchitectureDiagram } from "./diagrams/wms-architecture-diagram";
@@ -910,6 +911,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TouchEventSequenceDiagram,
   ComponentWorkflowDiagram,
   JniBridgeDiagram,
+  LayerCallTraversalDiagram,
   AmsStartActivityDiagram,
   WindowManagerDiagram,
   WmsArchitectureDiagram,
