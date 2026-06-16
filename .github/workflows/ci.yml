@@ -1,0 +1,82 @@
+# .github/workflows/ci.yml — HEL-221
+#
+# PR 守门。两个 job 并行（任一 fail 阻塞 merge）：
+#   1) build-and-link-check：pnpm build + scripts/check-links.mjs
+#      （link-check 必须吃 build 产物，合进同一 job 复用 .next/，避免重复 build）
+#   2) mdx-validate：scripts/check-mdx.mjs（覆盖 draft:true 章节，
+#      抓 user-memory「draft 章 MDX 潜伏错」那类问题）
+#
+# 触发：pull_request → main + push → main。整体目标 < 5 min。
+# 无 secrets、无 deploy key、无 deploy 动作——只读、只校验。
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# 同分支并发的旧 run 自动取消，省 CI 时间。
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-link-check:
+    name: build + link-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # pnpm 必须先于 setup-node 安装，让 setup-node 的 cache:pnpm 能找到 pnpm 二进制。
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # frozen-lockfile：lockfile 与 package.json 漂移直接挂——
+        # 防止有人手改 package.json 但忘 commit pnpm-lock.yaml。
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (Next.js)
+        run: pnpm build
+
+      - name: Link check
+        run: pnpm link-check
+
+  mdx-validate:
+    name: mdx-validate (incl. draft)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # 需要 @mdx-js/mdx 等 plugin（已固定为 devDependency），故同样要 install。
+        # frozen-lockfile 同上。
+        run: pnpm install --frozen-lockfile
+
+      - name: MDX validate
+        run: pnpm mdx-check
