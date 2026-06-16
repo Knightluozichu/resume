@@ -34,7 +34,12 @@ import {
  */
 
 const VIEW_W = 660;
-const VIEW_H = 392;
+// 底部加高一条独立横带给「可结合/可交换」警示带（HEL-250）：最低节点是
+// 左区线性链末节点（i=4）底边 y=358，警示带需下移出该节点不再叠压。
+const VIEW_H = 420;
+// 警示带（独立横带）顶边：距上方线性链末节点底边（358）留 14px 间隙。
+const WARN_BAND_Y = 372;
+const WARN_BAND_H = 32;
 
 const LIN_COLOR = "var(--warning)"; // accumulate 线性（橙：必须顺序）
 const TREE_COLOR = "var(--success)"; // reduce 树形（绿：可并行）
@@ -190,12 +195,12 @@ export function ReduceTreeDiagram() {
             两两并行求和、再合并——可重排、可并行
           </text>
 
-          {/* 中缝分隔线 */}
+          {/* 中缝分隔线（止于节点区下沿，不伸入底部警示带） */}
           <line
             x1="340"
             y1="64"
             x2="340"
-            y2={VIEW_H - 64}
+            y2={WARN_BAND_Y - 12}
             stroke="var(--border)"
             strokeWidth="1"
             strokeDasharray="4 4"
@@ -431,13 +436,13 @@ export function ReduceTreeDiagram() {
             第一层：并行 ↑
           </text>
 
-          {/* ===== 警示带（最后一帧淡入）===== */}
+          {/* ===== 警示带（最后一帧淡入）：独立底部横带，不叠压任何节点框 ===== */}
           <g ref={warnRef} style={{ opacity: 0 }}>
             <rect
               x="16"
-              y={VIEW_H - 48}
+              y={WARN_BAND_Y}
               width={VIEW_W - 32}
-              height="32"
+              height={WARN_BAND_H}
               rx="6"
               fill="var(--warning)"
               fillOpacity="0.14"
@@ -446,7 +451,7 @@ export function ReduceTreeDiagram() {
             />
             <text
               x={VIEW_W / 2}
-              y={VIEW_H - 28}
+              y={WARN_BAND_Y + WARN_BAND_H / 2 + 4}
               textAnchor="middle"
               fontSize="10.5"
               fontWeight="700"
