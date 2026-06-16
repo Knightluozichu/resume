@@ -174,6 +174,7 @@ import { ccMemoryOrderingQuestions } from "./review/cc-memory-ordering";
 import { ccLockBasedQuestions } from "./review/cc-lock-based";
 import { ccLockFreeQuestions } from "./review/cc-lock-free";
 import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concurrent-code";
+import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
 
 export {
   CHAPTER_TITLES,
@@ -345,6 +346,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ccLockBasedQuestions,
   ...ccLockFreeQuestions,
   ...ccDesigningConcurrentCodeQuestions,
+  ...ccThreadPoolsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

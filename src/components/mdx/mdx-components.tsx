@@ -430,6 +430,9 @@ import { ABAProblemDiagram } from "./diagrams/aba-problem-diagram";
 import { HazardPointerDiagram } from "./diagrams/hazard-pointer-diagram";
 import { FalseSharingDiagram } from "./diagrams/false-sharing-diagram";
 import { TaskDivisionDiagram } from "./diagrams/task-division-diagram";
+import { ThreadPoolDiagram } from "./diagrams/thread-pool-diagram";
+import { WorkStealingDiagram } from "./diagrams/work-stealing-diagram";
+import { InterruptibleThreadDiagram } from "./diagrams/interruptible-thread-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -978,6 +981,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HazardPointerDiagram,
   FalseSharingDiagram,
   TaskDivisionDiagram,
+  ThreadPoolDiagram,
+  WorkStealingDiagram,
+  InterruptibleThreadDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
