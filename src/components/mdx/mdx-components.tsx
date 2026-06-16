@@ -363,6 +363,7 @@ import { ClassLoaderDelegationDiagram } from "./diagrams/class-loader-delegation
 import { NavGraphDiagram } from "./diagrams/nav-graph-diagram";
 import { FragmentTransactionDiagram } from "./diagrams/fragment-transaction-diagram";
 import { RecyclerViewRecyclingDiagram } from "./diagrams/recyclerview-recycling-diagram";
+import { HotfixDexInjectionDiagram } from "./diagrams/hotfix-dex-injection-diagram";
 import { MessageLoopDiagram } from "./diagrams/message-loop-diagram";
 import { ConfigChangeViewModelDiagram } from "./diagrams/config-change-viewmodel-diagram";
 import { PropertyAnimationDiagram } from "./diagrams/property-animation-diagram";
@@ -916,6 +917,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   NavGraphDiagram,
   FragmentTransactionDiagram,
   RecyclerViewRecyclingDiagram,
+  HotfixDexInjectionDiagram,
   MessageLoopDiagram,
   ConfigChangeViewModelDiagram,
   PropertyAnimationDiagram,
