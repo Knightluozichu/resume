@@ -34,7 +34,7 @@ import {
  */
 
 const VIEW_W = 660;
-const VIEW_H = 416;
+const VIEW_H = 428;
 
 const READ_COLOR = "var(--accent)"; // 读 / 准备
 const OK_COLOR = "var(--success)"; // CAS 成功
