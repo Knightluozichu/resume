@@ -169,6 +169,7 @@ import { ccHelloConcurrencyQuestions } from "./review/cc-hello-concurrency";
 import { ccManagingThreadsQuestions } from "./review/cc-managing-threads";
 import { ccProtectingSharedDataQuestions } from "./review/cc-protecting-shared-data";
 import { ccSynchronizingOperationsQuestions } from "./review/cc-synchronizing-operations";
+import { ccAtomicTypesQuestions } from "./review/cc-atomic-types";
 
 export {
   CHAPTER_TITLES,
@@ -335,6 +336,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ccManagingThreadsQuestions,
   ...ccProtectingSharedDataQuestions,
   ...ccSynchronizingOperationsQuestions,
+  ...ccAtomicTypesQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

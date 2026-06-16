@@ -415,6 +415,9 @@ import { DeadlockCycleDiagram } from "./diagrams/deadlock-cycle-diagram";
 import { CondVarWaitNotifyDiagram } from "./diagrams/cond-var-wait-notify-diagram";
 import { FuturePromiseDiagram } from "./diagrams/future-promise-diagram";
 import { GetFutureWaysDiagram } from "./diagrams/get-future-ways-diagram";
+import { TornReadDiagram } from "./diagrams/torn-read-diagram";
+import { ModificationOrderDiagram } from "./diagrams/modification-order-diagram";
+import { CASConceptDiagram } from "./diagrams/cas-concept-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -948,6 +951,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CondVarWaitNotifyDiagram,
   FuturePromiseDiagram,
   GetFutureWaysDiagram,
+  TornReadDiagram,
+  ModificationOrderDiagram,
+  CASConceptDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
