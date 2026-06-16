@@ -338,6 +338,7 @@ import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
 import { BrdfCurveExplorer } from "./brdf-curve-explorer";
+import { AmdahlCurveExplorer } from "./amdahl-curve-explorer";
 import { MathViz } from "./math-viz";
 import { Objectives } from "./objectives";
 import { PipelineViz } from "./pipeline-viz";
@@ -427,6 +428,8 @@ import { BucketLockDiagram } from "./diagrams/bucket-lock-diagram";
 import { CASRetryLoopDiagram } from "./diagrams/cas-retry-loop-diagram";
 import { ABAProblemDiagram } from "./diagrams/aba-problem-diagram";
 import { HazardPointerDiagram } from "./diagrams/hazard-pointer-diagram";
+import { FalseSharingDiagram } from "./diagrams/false-sharing-diagram";
+import { TaskDivisionDiagram } from "./diagrams/task-division-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -737,6 +740,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ShadowMappingDemo,
   PointShadowsDemo,
   BrdfCurveExplorer,
+  AmdahlCurveExplorer,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -972,6 +976,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CASRetryLoopDiagram,
   ABAProblemDiagram,
   HazardPointerDiagram,
+  FalseSharingDiagram,
+  TaskDivisionDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
