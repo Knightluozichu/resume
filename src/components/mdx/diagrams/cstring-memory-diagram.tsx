@@ -105,9 +105,9 @@ export function CStringMemoryDiagram() {
           <line x1={startX - 12} y1={138} x2={startX + 5 * (cellW + gap) - cellW / 2} y2={138} stroke="rgb(63,185,127)" strokeWidth="2" strokeDasharray="6 3" />
 
           <text
-            x={startX - 20}
+            x={startX - 12}
             y={170}
-            textAnchor="end"
+            textAnchor="start"
             fontSize="12"
             fontWeight="700"
             fill="rgb(63,185,127)"

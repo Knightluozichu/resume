@@ -67,36 +67,36 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
 
           {/* ===== 输入缓冲区 ===== */}
           <g opacity={showInput ? 1 : 0.3}>
-            <rect x="40" y="114" width="600" height={showAll ? 72 : 52} rx="6" fill={token.bg} stroke={token.border} />
-            <text x="60" y="134" fontSize="11" fill={token.textSecondary}>
+            <rect x="40" y="110" width="600" height={92} rx="6" fill={token.bg} stroke={token.border} />
+            <text x="60" y="128" fontSize="11" fill={token.textSecondary}>
               输入缓冲区（stdin buffer）
             </text>
 
             {/* 缓冲区里的数据 */}
             {showInput && (
               <>
-                <rect x="60" y="148" width={42} height={26} rx="4" fill={token.accent} opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? token.accent : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="81" y="165" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">4</text>
-                <rect x="104" y="148" width={42} height={26} rx="4" fill={token.accent} opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? token.accent : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="125" y="165" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">2</text>
-                <rect x="148" y="148" width={42} height={26} rx="4" fill={token.border} opacity={0.4} stroke={token.border} />
-                <text x="169" y="165" fontSize="12" fill={token.textSecondary} textAnchor="middle" fontFamily="monospace"> </text>
-                <rect x="192" y="148" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="213" y="165" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">3</text>
-                <rect x="236" y="148" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="257" y="165" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">.</text>
-                <rect x="280" y="148" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="301" y="165" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">1</text>
-                <rect x="324" y="148" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
-                <text x="345" y="165" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">4</text>
-                <rect x="368" y="148" width={42} height={26} rx="4" fill="rgb(229,181,103)" opacity={showAll ? 0.35 : 0.1} stroke={showAll ? "rgb(229,181,103)" : token.border} strokeWidth={showAll ? "2" : "1"} />
-                <text x="389" y="165" fontSize="12" fontWeight="700" fill={showAll ? "rgb(229,181,103)" : token.textSecondary} textAnchor="middle" fontFamily="monospace">↵</text>
+                <rect x="60" y="140" width={42} height={26} rx="4" fill={token.accent} opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? token.accent : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="81" y="158" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">4</text>
+                <rect x="104" y="140" width={42} height={26} rx="4" fill={token.accent} opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? token.accent : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="125" y="158" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">2</text>
+                <rect x="148" y="140" width={42} height={26} rx="4" fill={token.border} opacity={0.4} stroke={token.border} />
+                <text x="169" y="158" fontSize="12" fill={token.textSecondary} textAnchor="middle" fontFamily="monospace"> </text>
+                <rect x="192" y="140" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="213" y="158" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">3</text>
+                <rect x="236" y="140" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="257" y="158" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">.</text>
+                <rect x="280" y="140" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="301" y="158" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">1</text>
+                <rect x="324" y="140" width={42} height={26} rx="4" fill="rgb(99,179,237)" opacity={showMatch ? 0.18 : 0.25} stroke={showMatch ? "rgb(99,179,237)" : token.border} strokeWidth={showMatch ? "2" : "1"} />
+                <text x="345" y="158" fontSize="12" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">4</text>
+                <rect x="368" y="140" width={42} height={26} rx="4" fill="rgb(229,181,103)" opacity={showAll ? 0.35 : 0.1} stroke={showAll ? "rgb(229,181,103)" : token.border} strokeWidth={showAll ? "2" : "1"} />
+                <text x="389" y="158" fontSize="12" fontWeight="700" fill={showAll ? "rgb(229,181,103)" : token.textSecondary} textAnchor="middle" fontFamily="monospace">↵</text>
               </>
             )}
 
             {/* 残留警告 */}
             {showAll && (
-              <text x="418" y="165" fontSize="11" fill="rgb(229,181,103)">
+              <text x="430" y="184" fontSize="11" fill="rgb(229,181,103)">
                 ← \n 残留在缓冲区！
               </text>
             )}
@@ -104,10 +104,10 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
 
           {/* ===== Step 2: scanf 匹配 ===== */}
           <g opacity={showMatch ? 1 : 0.2}>
-            <text x="340" y="220" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">
+            <text x="340" y="230" fontSize="12" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">
               scanf("%d %f", &n, &f);
             </text>
-            <text x="340" y="238" fontSize="10" fill={showMatch ? token.textSecondary : token.border} textAnchor="middle">
+            <text x="340" y="248" fontSize="10" fill={showMatch ? token.textSecondary : token.border} textAnchor="middle">
               格式串告诉 scanf：先读一个整数 → 再读一个浮点数
             </text>
           </g>
@@ -115,37 +115,37 @@ export function ScanfInputDiagram({ step = 1 }: ScanfInputDiagramProps) {
           {/* ===== 变量接收 ===== */}
           <g opacity={showMatch ? 1 : 0.2}>
             {/* n 变量 */}
-            <rect x="80" y="268" width="200" height={showAll ? 60 : 50} rx="6" fill={token.bg} stroke={token.accent} strokeWidth="2" />
-            <text x="180" y="292" fontSize="13" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">
+            <rect x="80" y="276" width="200" height={60} rx="6" fill={token.bg} stroke={token.accent} strokeWidth="2" />
+            <text x="180" y="300" fontSize="13" fontWeight="700" fill={token.accent} textAnchor="middle" fontFamily="monospace">
               n = 42
             </text>
-            <text x="180" y={showAll ? 312 : undefined} fontSize="10" fill={token.textSecondary} textAnchor="middle">
+            <text x="180" y="320" fontSize="10" fill={token.textSecondary} textAnchor="middle">
               int n; &n = 0x...
             </text>
 
             {/* f 变量 */}
-            <rect x="360" y="268" width="200" height={showAll ? 60 : 50} rx="6" fill={token.bg} stroke="rgb(99,179,237)" strokeWidth="2" />
-            <text x="460" y="292" fontSize="13" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">
+            <rect x="360" y="276" width="200" height={60} rx="6" fill={token.bg} stroke="rgb(99,179,237)" strokeWidth="2" />
+            <text x="460" y="300" fontSize="13" fontWeight="700" fill="rgb(99,179,237)" textAnchor="middle" fontFamily="monospace">
               f = 3.14
             </text>
-            <text x="460" y={showAll ? 312 : undefined} fontSize="10" fill={token.textSecondary} textAnchor="middle">
+            <text x="460" y="320" fontSize="10" fill={token.textSecondary} textAnchor="middle">
               float f; &f = 0x...
             </text>
 
             {/* 箭头：缓冲区 → n */}
-            <line x1="220" y1={showAll ? 174 : 160} x2="220" y2="263" stroke={token.accent} strokeWidth="2" markerEnd="url(#arrowAc)" />
+            <line x1="220" y1="204" x2="220" y2="271" stroke={token.accent} strokeWidth="2" markerEnd="url(#arrowAc)" />
             {/* 箭头：缓冲区 → f */}
-            <line x1="420" y1={showAll ? 174 : 160} x2="420" y2="263" stroke="rgb(99,179,237)" strokeWidth="2" markerEnd="url(#arrowAc2)" />
+            <line x1="420" y1="204" x2="420" y2="271" stroke="rgb(99,179,237)" strokeWidth="2" markerEnd="url(#arrowAc2)" />
           </g>
 
           {/* ===== Step 3: 缓冲区残留 ===== */}
           {showAll && (
             <g>
-              <rect x="80" y="348" width="500" height={42} rx="6" fill="rgb(229,181,103)" opacity="0.08" stroke="rgb(229,181,103)" strokeWidth="1" strokeDasharray="4 3" />
-              <text x="330" y="368" fontSize="11" fill="rgb(229,181,103)" textAnchor="middle">
+              <rect x="80" y="354" width="500" height={48} rx="6" fill="rgb(229,181,103)" opacity="0.08" stroke="rgb(229,181,103)" strokeWidth="1" strokeDasharray="4 3" />
+              <text x="330" y="374" fontSize="11" fill="rgb(229,181,103)" textAnchor="middle">
                 ⚠ 残留的 \n 会喂给下一个 scanf / getchar，造成"输入被跳过"的经典 bug
               </text>
-              <text x="330" y="385" fontSize="10" fill={token.textSecondary} textAnchor="middle">
+              <text x="330" y="391" fontSize="10" fill={token.textSecondary} textAnchor="middle">
                 解决：scanf 后加 getchar() 吃掉换行，或用 fgets() 替代 scanf
               </text>
             </g>
