@@ -393,6 +393,7 @@ import { AmsStartActivityDiagram } from "./diagrams/ams-start-activity-diagram";
 import { WindowManagerDiagram } from "./diagrams/window-manager-diagram";
 import { WmsArchitectureDiagram } from "./diagrams/wms-architecture-diagram";
 import { DalvikArtCompareDiagram } from "./diagrams/dalvik-art-compare-diagram";
+import { JvmRuntimeAreasDiagram } from "./diagrams/jvm-runtime-areas-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -905,6 +906,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   WindowManagerDiagram,
   WmsArchitectureDiagram,
   DalvikArtCompareDiagram,
+  JvmRuntimeAreasDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
