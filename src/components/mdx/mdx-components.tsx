@@ -424,6 +424,9 @@ import { MemoryReorderDiagram } from "./diagrams/memory-reorder-diagram";
 import { CoarseVsFineLockDiagram } from "./diagrams/coarse-vs-fine-lock-diagram";
 import { HandOverHandDiagram } from "./diagrams/hand-over-hand-diagram";
 import { BucketLockDiagram } from "./diagrams/bucket-lock-diagram";
+import { CASRetryLoopDiagram } from "./diagrams/cas-retry-loop-diagram";
+import { ABAProblemDiagram } from "./diagrams/aba-problem-diagram";
+import { HazardPointerDiagram } from "./diagrams/hazard-pointer-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -966,6 +969,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CoarseVsFineLockDiagram,
   HandOverHandDiagram,
   BucketLockDiagram,
+  CASRetryLoopDiagram,
+  ABAProblemDiagram,
+  HazardPointerDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

@@ -172,6 +172,7 @@ import { ccSynchronizingOperationsQuestions } from "./review/cc-synchronizing-op
 import { ccAtomicTypesQuestions } from "./review/cc-atomic-types";
 import { ccMemoryOrderingQuestions } from "./review/cc-memory-ordering";
 import { ccLockBasedQuestions } from "./review/cc-lock-based";
+import { ccLockFreeQuestions } from "./review/cc-lock-free";
 
 export {
   CHAPTER_TITLES,
@@ -341,6 +342,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ccAtomicTypesQuestions,
   ...ccMemoryOrderingQuestions,
   ...ccLockBasedQuestions,
+  ...ccLockFreeQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
