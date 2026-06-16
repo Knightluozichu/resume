@@ -403,6 +403,9 @@ import { HookMechanismDiagram } from "./diagrams/hook-mechanism-diagram";
 import { PluginArchitectureDiagram } from "./diagrams/plugin-architecture-diagram";
 import { MemoryLeakDiagram } from "./diagrams/memory-leak-diagram";
 import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
+import { ConcurrencyVsParallelismDiagram } from "./diagrams/concurrency-vs-parallelism-diagram";
+import { ProcessVsThreadDiagram } from "./diagrams/process-vs-thread-diagram";
+import { HelloThreadsInterleaveDemo } from "./diagrams/hello-threads-interleave-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -924,6 +927,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PluginArchitectureDiagram,
   MemoryLeakDiagram,
   BootSequenceDiagram,
+  ConcurrencyVsParallelismDiagram,
+  ProcessVsThreadDiagram,
+  HelloThreadsInterleaveDemo,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

@@ -165,6 +165,7 @@ import { pbrTheoryQuestions } from "./review/pbr-theory";
 import { pbrLightingQuestions } from "./review/pbr-lighting";
 import { pbrIblDiffuseQuestions } from "./review/pbr-ibl-diffuse";
 import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
+import { ccHelloConcurrencyQuestions } from "./review/cc-hello-concurrency";
 
 export {
   CHAPTER_TITLES,
@@ -326,6 +327,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pbrLightingQuestions,
   ...pbrIblDiffuseQuestions,
   ...pbrIblSpecularQuestions,
+  // C++ 并发编程实战（第2版）
+  ...ccHelloConcurrencyQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
