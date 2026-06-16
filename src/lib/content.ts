@@ -71,6 +71,7 @@ export const BOOK_ORDER = [
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
+  "ai-agent-apps",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -83,6 +84,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
+  "ai-agent-apps": "AI 智能体应用开发",
 };
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -144,6 +146,14 @@ export const SECTION_ORDER = [
   "URP 专项优化",
   "XR 专项优化",
   "Web 专项优化",
+  // AI 智能体应用开发
+  "智能体基础",
+  "上下文工程",
+  "工具使用",
+  "智能体模式",
+  "记忆与检索",
+  "多智能体",
+  "生产化",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
