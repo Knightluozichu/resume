@@ -34,12 +34,12 @@ import {
  * 时长走 TEACHING_BEAT_MS 具名常量（硬规则 5）。
  */
 
-const VIEW_W = 648;
+const VIEW_W = 660; // TRACK 右缘 628、SWEEP_RIGHT 634，末格『取数据』+时间轴文字距右 ≥16px（HEL-246）
 const VIEW_H = 284; // 时间轴在 PROD_Y+LANE_H+26=266，留 ~18px 到底边（收紧死空白提利用率）
 
 // 泳道几何：内容区横向范围（左侧留给泳道标签）。
 const TRACK_X = 124;
-const TRACK_W = 504; // 到 viewBox 右缘留 ≥16px
+const TRACK_W = 504; // 末格右缘 628，到 viewBox 右缘 660 留 32px
 const LANE_H = 40;
 const SEG_GAP = 6;
 
@@ -224,7 +224,7 @@ export function CondVarWaitNotifyDiagram() {
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
           aria-label="条件变量等待与通知握手的双泳道动画。上泳道是消费者（服务员），中间是共享队列（取餐台），下泳道是生产者（厨师）。第一步消费者调用 cv.wait 并带谓词，发现队列空、谓词为假，于是释放锁并睡过去，不做忙等。第二步生产者把一份数据 push 进共享队列，队列变为非空。第三步共享队列里出现一格数据。第四步生产者调用 notify_one 按铃，叫醒正在睡的消费者。第五步消费者被唤醒后重新抢回那把锁。第六步消费者醒来必须再查一次谓词，发现队列非空、谓词为真，于是取走数据继续，握手完成。播放时 playhead 从左向右横扫，依次点亮各段，可播放、暂停、单步、拖动进度。"
-          className="mx-auto block h-auto w-full max-w-[648px]"
+          className="mx-auto block h-auto w-full max-w-[660px]"
         >
           <defs>
             <marker

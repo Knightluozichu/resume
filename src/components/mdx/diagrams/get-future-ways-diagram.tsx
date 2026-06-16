@@ -16,7 +16,7 @@
  */
 
 const VIEW_W = 660;
-const VIEW_H = 322; // 底注 baseline 在 VIEW_H-14，留足 ≥14px 到底边
+const VIEW_H = 336; // 顶部下移＋底注 baseline 在 VIEW_H-18：标题距顶、底注距底均 ≥14px（HEL-246）
 
 // 三列等距分布：列宽 + 列间距由单一公式给出。
 const PAD_X = 18; // 左右边距（>12px）
@@ -26,9 +26,9 @@ const COL_W = (VIEW_W - PAD_X * 2 - COL_GAP * (COLS - 1)) / COLS;
 const colX = (i: number) => PAD_X + i * (COL_W + COL_GAP);
 
 // 行 y：标题行、来源框、「谁来填」箭头标签、future 框、底注。
-const SRC_Y = 64;
+const SRC_Y = 70;
 const SRC_H = 78;
-const FUT_Y = 214;
+const FUT_Y = 220;
 const FUT_H = 56;
 
 const ACCENT = "var(--accent)";
@@ -97,7 +97,7 @@ export function GetFutureWaysDiagram() {
           {/* 标题 */}
           <text
             x={VIEW_W / 2}
-            y="26"
+            y="32"
             textAnchor="middle"
             fontSize="15"
             fontWeight="700"
@@ -107,7 +107,7 @@ export function GetFutureWaysDiagram() {
           </text>
           <text
             x={VIEW_W / 2}
-            y="46"
+            y="52"
             textAnchor="middle"
             fontSize="11"
             fill="var(--text-secondary)"
@@ -216,7 +216,7 @@ export function GetFutureWaysDiagram() {
           {/* 底注 */}
           <text
             x={VIEW_W / 2}
-            y={VIEW_H - 14}
+            y={VIEW_H - 18}
             textAnchor="middle"
             fontSize="10"
             fill="var(--text-secondary)"
