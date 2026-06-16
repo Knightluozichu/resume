@@ -15,7 +15,7 @@ export function ContainerOverviewDiagram() {
   const good = "rgb(63,185,127)";
 
   const w = 960;
-  const h = 640;
+  const h = 360;
 
   // 六种容器定义
   const containers = [
@@ -138,7 +138,7 @@ export function ContainerOverviewDiagram() {
                   <text x="88" y="66" fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
                   <text x="120" y="66" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">?</text>
                   {/* 三个指针 */}
-                  <text x={cardW / 2} y="98" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="98" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     begin/end/capacity
                   </text>
                   <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
@@ -161,13 +161,13 @@ export function ContainerOverviewDiagram() {
                   <rect x="28" y="82" width="14" height="16" rx="2" fill={accent} opacity="0.25" stroke={accent} />
                   <text x="19" y="93" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
                   <text x="35" y="93" fontSize="8" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
-                  <text x="88" y="60" fontSize="9" fill={secondary} fontFamily="monospace">
+                  <text x="80" y="60" fontSize="10" fill={secondary} fontFamily="monospace">
                     中控数组
                   </text>
-                  <text x="88" y="75" fontSize="9" fill={secondary} fontFamily="monospace">
+                  <text x="80" y="76" fontSize="10" fill={secondary} fontFamily="monospace">
                     → 块指针
                   </text>
-                  <text x="88" y="90" fontSize="9" fill={secondary} fontFamily="monospace">
+                  <text x="80" y="92" fontSize="10" fill={secondary} fontFamily="monospace">
                     → 块指针
                   </text>
                   <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
@@ -191,7 +191,7 @@ export function ContainerOverviewDiagram() {
                   <line x1="64" y1="50" x2="34" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
                   <line x1="84" y1="54" x2="114" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
                   <line x1="114" y1="50" x2="84" y2="50" stroke={accent} opacity="0.5" strokeWidth="1" />
-                  <text x={cardW / 2} y="82" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="82" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     每个节点存 prev + next
                   </text>
                   <text x={cardW / 2} y="98" fontSize="10" fill={warn} textAnchor="middle">
@@ -215,10 +215,10 @@ export function ContainerOverviewDiagram() {
                   {/* 单向箭头 */}
                   <line x1="34" y1="54" x2="64" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
                   <line x1="84" y1="54" x2="114" y2="54" stroke={accent} strokeWidth="1.5" markerEnd="url(#arrSmall)" />
-                  <text x={cardW / 2} y="82" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="82" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     只存 next 指针
                   </text>
-                  <text x={cardW / 2} y="96" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="96" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     不能反向遍历
                   </text>
                   <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
@@ -239,7 +239,7 @@ export function ContainerOverviewDiagram() {
                   <text x="60" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">b</text>
                   <text x="92" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">c</text>
                   <text x="122" y="61" fontSize="9" fill={accent} textAnchor="middle" fontFamily="monospace">d</text>
-                  <text x={cardW / 2} y="96" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="96" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     编译期固定大小
                   </text>
                   <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
@@ -259,7 +259,7 @@ export function ContainerOverviewDiagram() {
                   <text x="56" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">e</text>
                   <text x="88" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
                   <text x="120" y="66" fontSize="10" fill={accent} textAnchor="middle" fontFamily="monospace">l</text>
-                  <text x={cardW / 2} y="98" fontSize="9" fill={secondary} textAnchor="middle" fontFamily="monospace">
+                  <text x={cardW / 2} y="98" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
                     \0 结尾（C++11 后）
                   </text>
                   <text x={cardW / 2} y="112" fontSize="10" fill={good} textAnchor="middle">
@@ -272,19 +272,19 @@ export function ContainerOverviewDiagram() {
               <line x1="0" y1={structH} x2={cardW} y2={structH} stroke={border} />
 
               {/* 性能特征表 */}
-              <g transform={`translate(0, ${structH + 4})`}>
+              <g transform={`translate(0, ${structH + 8})`}>
                 {[
                   ["访问", c.access],
                   ["前插", c.insFront],
                   ["后插", c.insBack],
                   ["内存", c.memory],
                 ].map(([label, val], ri) => (
-                  <g key={ri} transform={`translate(0, ${ri * 14})`}>
-                    <text x="4" y="11" fontSize="9" fill={secondary}>{label}</text>
+                  <g key={ri} transform={`translate(0, ${ri * 18})`}>
+                    <text x="4" y="12" fontSize="11" fill={secondary}>{label}</text>
                     <text
                       x={cardW - 4}
-                      y="11"
-                      fontSize="9"
+                      y="12"
+                      fontSize="11"
                       fill={val === "N/A" ? secondary : (val.startsWith("O(n)") || val === "分散" ? warn : good)}
                       textAnchor="end"
                       fontFamily={val === "紧凑" || val === "块状" || val === "分散" || val === "栈上" ? undefined : "monospace"}
