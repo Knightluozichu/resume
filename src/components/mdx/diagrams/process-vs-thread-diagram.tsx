@@ -16,7 +16,9 @@
 export function ProcessVsThreadDiagram() {
   // —— 布局常量（viewBox 内坐标；间距均 4 的倍数）——
   const VIEW_W = 680;
-  const VIEW_H = 520;
+  // 内容最低点 = max(右框底366, 左墙标注底≈359) = 366；+22 下边距 → 388，
+  // 纵向利用率 ≈ 94%，无死空白。
+  const VIEW_H = 388;
 
   // 子块通用尺寸。
   const SEG_W = 132; // 子块宽
@@ -55,7 +57,10 @@ export function ProcessVsThreadDiagram() {
   const stack2X = stack1X + stackW + SEG_GAP;
   const sharedBottom = tProcInnerTop + 3 * (SEG_H + SEG_GAP);
   const stackY = sharedBottom + 20; // 共享区下方留白后放两栈
-  const tProcFrameH = 36 + 3 * (SEG_H + SEG_GAP) + 20 + SEG_H + 12;
+  // 框高显式含「栈下方标注行」：标题36 + 三共享块 + 共享/栈间距20 + 栈高
+  // + 标注行高16 + 标注余量8 + 底留白12 = 282 → 框底 procTop+282 = 366，
+  // 把「↑各自独立」标注（底≈349）整体包进框内（距框底约17px）。
+  const tProcFrameH = 36 + 3 * (SEG_H + SEG_GAP) + 20 + SEG_H + 16 + 8 + 12;
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -204,7 +209,7 @@ export function ProcessVsThreadDiagram() {
             x1="376"
             y1="72"
             x2="376"
-            y2={VIEW_H - 40}
+            y2={VIEW_H - 22}
             stroke="var(--border)"
             strokeWidth="1"
             strokeDasharray="3 5"
