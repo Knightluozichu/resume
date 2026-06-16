@@ -406,6 +406,9 @@ import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
 import { ConcurrencyVsParallelismDiagram } from "./diagrams/concurrency-vs-parallelism-diagram";
 import { ProcessVsThreadDiagram } from "./diagrams/process-vs-thread-diagram";
 import { HelloThreadsInterleaveDemo } from "./diagrams/hello-threads-interleave-demo";
+import { ThreadLifecycleDiagram } from "./diagrams/thread-lifecycle-diagram";
+import { JoinVsDetachTimeline } from "./diagrams/join-vs-detach-timeline";
+import { DanglingRefDiagram } from "./diagrams/dangling-ref-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -930,6 +933,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ConcurrencyVsParallelismDiagram,
   ProcessVsThreadDiagram,
   HelloThreadsInterleaveDemo,
+  ThreadLifecycleDiagram,
+  JoinVsDetachTimeline,
+  DanglingRefDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

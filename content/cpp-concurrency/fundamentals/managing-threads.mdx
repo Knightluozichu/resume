@@ -1,0 +1,454 @@
+---
+title: 管理线程
+type: C
+section: 并发基础
+order: 2
+description: 读完能用 std::thread 启动线程（函数/函数对象/lambda），正确地 join 或 detach、用 RAII 守卫做到异常安全，能安全地给线程传参（按值/std::ref/std::move），并能转移线程的所有权。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型第二章（《C++ 并发编程实战》第2版 §2 改编重写）：原书讲启动线程、join/detach、传参、转移所有权、运行时选线程数。重心是代码对照(§6 ≥80% 关键码)与 join/detach 状态机可控动画(§5)，math:false。全程沿用「餐厅后厨·多厨师」隐喻（线程=厨师，主线程=主厨，起线程=喊帮厨，join=等会合，detach=放养）。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz；type C 新核心概念 ≤5；术语首现 Term 高亮，章末 Glossary 一一对应）：1) 启动线程：std::thread 接函数/函数对象/lambda + most vexing parse 预警 = 代码块 + Callout warn；2) join/detach/joinable = ThreadLifecycleDiagram（anime.js 状态机）+ JoinVsDetachTimeline（双场景泳道）；3) thread_guard RAII 异常安全自动 join = 代码 + 文字；4) 传参（按值拷贝/std::ref/std::move）+ 悬空引用陷阱 = 代码 + DanglingRefDiagram（anime.js 翻车动画）；5) 所有权转移（move-only/返回/vector 存）+ hardware_concurrency + thread::id = 代码 + 文字。核心术语：std::thread/join/detach/joinable/分离线程/most vexing parse/std::ref/移动语义/thread::id。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___」——此处落为「能写出 join/detach 正确的多线程程序」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用 `std::thread` 启动线程，并在每个线程对象析构前**正确地二选一**：`join()`（等它结束）或 `detach()`（放它后台跑）——写出不会因漏管线程而崩溃的程序
+- 能安全地给线程函数传参：知道参数**默认按值拷贝**、要传引用得用 `std::ref`、不可拷贝对象得用 `std::move`，并能看出「detach + 局部变量引用」的悬空陷阱
+- 能回答：一个函数 `std::thread t(work); some_call_that_may_throw(); t.join();`，如果中间那句抛了异常会发生什么？该怎么改才稳？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」（工厂流水线类的具体化），与第1章一致。 */}
+
+## 喊来帮厨之后，你得管他
+
+上一章你雇了第二个厨师，让后厨同时开火。可雇人只是第一步——雇来的帮厨，你总得**管**：他那道菜做完了，你是站在旁边等他一起出餐（会合），还是让他自己慢慢收尾、你先去忙别的（放养）？这一章讲的就是「喊来帮厨之后怎么管他」。
+
+管不好会怎样？最常见的是：你喊了帮厨，转身就走，连「等他」还是「放养」都没交代——后厨直接乱套，程序当场崩溃。还有更隐蔽的：你把自己临时支起的一张小工作台借给帮厨用，结果你先收了台子，帮厨还埋头在那张已经没了的台子上切菜——这种「东西没了人还在用」的错，往往要等很久才暴雷。
+
+所以这一章的目标，就是把「喊帮厨、交代他、给他备料、必要时把他转交给别人」这套**管人**的活儿，一项一项做对、做稳。
+
+{/* 3. 概念讲解（spec §三，C 型可把「是什么」压缩，篇幅让给 §6）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；引用 §5 Demo。 */}
+
+## 启动线程：给帮厨派一件「能调用的活」
+
+启动一个线程，就是构造一个 <Term def="C++ 标准库里代表「一个线程」的类型，声明在头文件 <thread> 里。构造时给它一个可调用对象（函数/函数对象/lambda），新线程一诞生就去执行它。析构前必须 join 或 detach。它不可拷贝、只能移动。">std::thread</Term> 对象，并把「要它干的活」交给它。这件活可以是普通函数、<Term def="重载了 operator() 的类型的对象，可以像函数那样被「调用」。把它的实例交给 std::thread，新线程就执行它的 operator()。">函数对象</Term>，或者一个 lambda 表达式——只要是「能被调用」的东西就行。新线程一构造出来就立刻开跑，与主线程并发。
+
+这里有一个 C++ 老坑必须先打预防针：<Term def="C++ 的语法规则——凡是「能被解析成函数声明」的写法，编译器优先当成函数声明。比如 std::thread t(Task()); 会被当成「声明一个返回 std::thread 的函数 t」，而不是用临时 Task 对象启动线程。">最令人头疼的解析（most vexing parse）</Term>。用临时函数对象启动线程时，`std::thread t(Task());` 会被编译器理解成「声明一个函数」而不是「启动一个线程」。具体怎么躲，留到第六节代码里细说。
+
+## 管帮厨：join 还是 detach，必须选一个
+
+线程一旦启动，`std::thread` 对象就进入 <Term def="std::thread 的一种状态：它还「关联着一个尚未安顿的底层线程」——既没 join 也没 detach。joinable() 返回 true 即处于此态。析构时仍 joinable 会触发 std::terminate。">joinable（可会合）</Term> 状态——相当于「这个帮厨还没安顿」。接下来你**必须**在这个对象析构前明确表态，二选一：
+
+<Term def="std::thread 的成员函数。调用它的线程会停下来等这个 std::thread 代表的线程跑完，然后才继续。字面意思「会合」——主厨等帮厨做完那道菜，两人会合后再一起走。join 之后该 thread 变为 not joinable。">
+  join
+</Term>
+是「等会合」：主线程停下来，直到子线程跑完，才继续往下。
+<Term def="std::thread 的成员函数。调用它后，子线程脱离这个 std::thread 对象、在后台独立运行，主线程不再等它、也无法再 join 它。被 detach 的线程叫分离线程。detach 之后该 thread 变为 not joinable。">
+  detach
+</Term>
+是「放养」：让子线程脱离这个对象、在后台自己跑，主线程继续干别的、不等它。被
+detach 出去的线程，就叫
+<Term def="已经被 detach、在后台独立运行、不再受任何 std::thread 对象关联的线程。它的资源由运行时在它结束时自动回收，但主线程无法再等它或获取它的结果。">
+  分离线程（detached thread）
+</Term>
+。
+
+为什么非选不可？因为如果你两样都不做，`std::thread` 对象析构时发现自己还 joinable（帮厨没安顿），它的析构函数会直接调用 `std::terminate()` 把**整个程序**掐掉。下面这张状态机动画把「创建 → 三选一 → 各自下场」演给你看：
+
+> 猜一猜：`std::thread t(f);` 之后，如果你既不写 `t.join()` 也不写 `t.detach()`，程序会怎样？先想一下，再单步看第三条分支。
+
+<ThreadLifecycleDiagram />
+
+看清楚了：① join 和 ② detach 都通向「not joinable」的干净收场，只有 ③「忘了管」会撞上 `std::terminate` 💥。join 和 detach 到底差在哪？再看一张双场景泳道动画——同一条子线程，主线程的反应完全不同：
+
+<JoinVsDetachTimeline />
+
+上场景 join，主线程在 `join()` 处停下来空等子线程结束（被它拖住）；下场景 detach，主线程不等、直接跑到底，子线程在后台独立延续、甚至活得比主线程久。记住这个画面，后面所有判断都从它出发。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：主 Demo = ThreadLifecycleDiagram（已在 §3 作为带「猜一猜」的可控动画呈现）；辅 Demo = JoinVsDetachTimeline（已在 §3 引出）。两图均可暂停/单步/拖进度，reduced-motion 默认暂停。本节不再重复放图，避免认知过载（主+辅 Demo 已达上限）。 */}
+
+## 上手玩一玩这两张图
+
+上面两张图都是**可控教学动画**：点「播放」看全程，也可以用「上一步 / 下一步」一帧一帧抠，或拖进度条停在任意时刻。建议这样玩：
+
+- 在 `<ThreadLifecycleDiagram />` 里单步走到第三条分支（「忘了管」），盯住它怎么一步步走向 `std::terminate`——这就是下一节代码里第一个坑的可视化。
+- 在 `<JoinVsDetachTimeline />` 里对比两个场景的**主线程泳道**：join 场景它中间有一段「⏳ 等待」，detach 场景它一路畅通——这就是「等」与「不等」的全部区别。
+
+玩熟这两张图，再去读代码，你会发现每一行 `join`/`detach` 都对应着图里某个节点的点亮。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键码）：纯 cpp 块（本书无 WebGL 镜像，不用 CodeTabs）；单块 ≤30 行；两代码块间必有解说。API 差异/陷阱用 Callout 标注。 */}
+
+## 代码：把每件管人活儿做对
+
+### 启动：函数、lambda，与那个老坑
+
+最朴素的启动——把一个函数交给线程：
+
+```cpp
+#include <thread>
+
+void work() { /* 帮厨要做的活 */ }
+
+int main() {
+    std::thread t(work); // 喊来帮厨，立刻开干
+    t.join();            // 等他做完再继续
+}
+```
+
+如果想就地写逻辑、还能顺手带上几个变量，用 lambda 最省事——它还天然避开了下面要讲的解析坑：
+
+```cpp
+int batch = 42;
+std::thread t([batch] {       // 捕获 batch，就地写活
+    process(batch);
+});
+t.join();
+```
+
+现在说那个老坑。如果你想用一个**临时函数对象**启动线程，很容易这样写——但它是错的：
+
+```cpp
+struct Task {
+    void operator()() const { /* ... */ }
+};
+
+std::thread t(Task()); // ❌ 不是启动线程！
+```
+
+<Callout type="warn">
+  **最令人头疼的解析（most vexing parse）**：`std::thread t(Task());`
+  被编译器解析成「声明一个名叫 `t`、返回 `std::thread`、参数是一个返回 `Task`
+  的函数指针」的**函数声明**，线程压根没启动。两种修法：多套一层括号
+  `std::thread t((Task()));`，或干脆用花括号 `std::thread t{Task()};`，再或者用
+  lambda——都能让编译器明白你要的是「对象」而非「函数声明」。
+</Callout>
+
+### join / detach / joinable：先问能不能 join
+
+`join()` 和 `detach()` 对一个线程**只能各做一次、且二者只能选其一**。做完之后，`joinable()` 就变成 `false`。所以在不确定状态时，先用 `joinable()` 问一句再动手：
+
+```cpp
+std::thread t(work);
+// ... 中间可能有各种分支 ...
+if (t.joinable()) { // 还没安顿？那就 join
+    t.join();
+}
+```
+
+要放养就换成 `detach()`。但 detach 之前务必想清楚：放养出去的线程访问的数据，必须在它整个生命周期里都有效（这点第七节会用一张翻车图狠狠强调）：
+
+```cpp
+std::thread t(background_logger); // 后台日志，fire-and-forget
+t.detach();                       // 放养，主线程不再等它
+// 此后 t 不再关联任何线程，t.joinable() == false
+```
+
+### thread_guard：用 RAII 给「必须 join」上保险
+
+只在「正常路径」末尾写 `t.join()` 是不够的——万一中间抛了异常，`join()` 被跳过，`std::thread` 析构时仍 joinable，直接 `std::terminate`。经典做法是写一个 RAII 守卫，把 join 交给析构函数兜底：
+
+```cpp
+class thread_guard {
+    std::thread& t;
+public:
+    explicit thread_guard(std::thread& t_) : t(t_) {}
+    ~thread_guard() {
+        if (t.joinable()) // 析构时若还没 join，就补上
+            t.join();
+    }
+    thread_guard(const thread_guard&) = delete;            // 禁拷贝
+    thread_guard& operator=(const thread_guard&) = delete; // 禁赋值
+};
+```
+
+用它包住线程，异常安全就稳了——无论函数正常返回还是中途抛异常，栈展开都会析构 `guard`、自动把线程 join 掉：
+
+```cpp
+void f() {
+    std::thread t(work);
+    thread_guard guard(t);     // 一创建就上保险
+    some_call_that_may_throw(); // 哪怕这里抛异常……
+}                              // …guard 析构也会 join t，绝不漏
+```
+
+<Callout type="trap">
+  守卫禁用拷贝是关键：两个守卫引用同一个 `std::thread`、各自析构都去
+  `join()`，第二次 join 一个已 not joinable 的线程会抛 `std::system_error`。所以
+  `thread_guard` 一律标 `= delete` 拷贝构造与赋值。
+</Callout>
+
+### 传参：拷贝、引用、移动，三种姿势
+
+`std::thread` 的构造参数**默认全部按值拷贝**一份存进新线程，再用副本去调用线程函数。所以下面这种「想改原变量」的写法不灵：
+
+```cpp
+void update(int& n) { n = 100; }
+
+int x = 0;
+std::thread t(update, x); // ❌ 传进去的是 x 的副本（且常常直接编译失败）
+t.join();
+// x 仍是 0
+```
+
+要真正把引用传进去，必须用 `std::ref` 包一层——它告诉 `std::thread`「这个参数要按引用传，别拷」：
+
+```cpp
+std::thread t(update, std::ref(x)); // ✅ 真正传 x 的引用
+t.join();
+// x == 100
+```
+
+<Callout type="warn">
+  忘了 `std::ref`，编译器**不会**报「你想传引用却传了值」——多数情况它会因为
+  「右值副本不能绑定到非 const 引用形参」直接编译报错，少数情况悄悄拿到副本。
+  无论哪种，记住：**给线程传引用，必须 `std::ref`**。
+</Callout>
+
+不可拷贝、只能移动的对象（如 `std::unique_ptr`）既不能按值拷贝、也不该共享，得用 `std::move` 把所有权移动进线程：
+
+```cpp
+void consume(std::unique_ptr<Big> p);
+
+auto up = std::make_unique<Big>();
+std::thread t(consume, std::move(up)); // ✅ 移动所有权进线程
+t.join();
+// 此后 up 为空
+```
+
+### 转移所有权：std::thread 只能移动
+
+<Term def="C++11 引入的「把资源的所有权从一个对象转移给另一个对象、而不做深拷贝」的机制，用 std::move 触发。move-only 类型（如 std::thread、std::unique_ptr）只支持移动、禁止拷贝。">
+  移动语义（move semantics）
+</Term>
+在 `std::thread` 上体现得最纯粹：它**不可拷贝、只能移动**（move-only）。因为一个
+`std::thread`
+独占一个底层线程的**所有权**，拷贝会造成「两个对象都管同一个线程」的歧义。要交出线程，用
+`std::move`：
+
+```cpp
+std::thread t1(work);
+std::thread t2 = std::move(t1); // 所有权从 t1 转给 t2
+// 此后 t1 not joinable（空壳），t2 负责 join
+t2.join();
+```
+
+正因为能移动，线程可以从函数返回、可以存进容器。注意 `std::vector` 里存 `std::thread` 时必须用移动入容器：
+
+```cpp
+std::vector<std::thread> threads;
+for (int i = 0; i < 4; ++i)
+    threads.emplace_back(work, i); // 就地构造，无拷贝
+for (auto& t : threads)
+    t.join();                      // 逐个等会合
+```
+
+### 运行时选线程数 + 认线程身份
+
+开几个线程合适？问问硬件。`std::thread::hardware_concurrency()` 返回硬件支持的并发线程数提示（通常是逻辑核数）；它可能返回 0（信息不可用），用前要兜底。每个线程还有唯一的 `std::thread::id`，用 `get_id()` 取，可比较、可打印、可做 map 的 key：
+
+```cpp
+unsigned n = std::thread::hardware_concurrency();
+if (n == 0) n = 2; // 0 表示拿不到，给个合理默认
+
+std::thread t(work);
+std::thread::id main_id = std::this_thread::get_id(); // 主线程自己的 id
+std::thread::id work_id = t.get_id();                 // 子线程的 id
+t.join();
+```
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；至少 1 个配「错误模式」图（悬空引用引 DanglingRefDiagram）。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：程序一运行就崩，报 `terminate called without an active
+  exception`。**原因**：创建了 `std::thread` 却既没 `join()` 也没
+  `detach()`，对象析构时仍 `joinable()`，析构函数调用 `std::terminate`
+  掐掉程序。**修法**：每个 `std::thread` 在析构前明确二选一——`join()`
+  等它结束，或 `detach()` 放它后台跑；怕异常跳过 join，就用 `thread_guard` RAII
+  兜底。
+</Callout>
+
+下面这个坑最隐蔽，专门用一张翻车动画演给你看。`detach` 后子线程可能比创建它的函数活得更久，要是它还攥着指向那个函数局部变量的引用，函数一返回就翻车：
+
+<DanglingRefDiagram />
+
+<Callout type="trap">
+  **现象**：`std::thread t(func, std::ref(local));
+  t.detach();`，函数返回后程序偶发崩溃、或读到乱值。**原因**：detach
+  的子线程在后台独立跑，但 `local`
+  是局部变量，函数一返回它所在的栈帧就销毁，子线程再按引用去读就是**访问已释放内存**（悬空引用，未定义行为）。**修法**：要么改
+  `join` 保证函数等子线程结束，要么别给 detach
+  的线程传局部变量引用——改传值拷贝、或换成生命周期足够长的对象。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`std::thread t(Task());` 写了，编译能过，但线程根本没跑，`t.join()`
+  那行还报奇怪的类型错。**原因**：最令人头疼的解析——这句被当成**函数声明**而非启动线程。**修法**：多套一层括号
+  `std::thread t((Task()));`、用花括号 `std::thread t{Task()};`、或改用 lambda。
+</Callout>
+
+<Callout type="trap">
+  **现象**：想让线程修改你的变量，跑完却发现原变量没变。**原因**：`std::thread`
+  默认把参数**拷贝**一份，线程函数的引用形参绑定的是副本，改的是副本。**修法**：用
+  `std::ref(x)` 把真正的引用传进去（`std::thread t(f,
+  std::ref(x));`）；只读大对象想免拷贝同理用 `std::cref`。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + C 型 +1 道独立实现题，答案折叠。 */}
+
+## 小结
+
+- `std::thread t(可调用对象)` 启动线程，可调用对象可以是函数、函数对象或 lambda；用临时函数对象时当心「最令人头疼的解析」
+- 每个 `std::thread` 在析构前**必须** `join()`（等会合）或 `detach()`（放养）二选一，否则析构触发 `std::terminate` 崩溃；用 `joinable()` 判断当前状态
+- 怕异常跳过 `join`，用 `thread_guard` 这类 RAII 守卫，把 join 交给析构函数兜底，做到异常安全
+- 给线程传参默认**按值拷贝**：传引用要 `std::ref`、移动不可拷贝对象用 `std::move`；最忌给 detach 的线程传局部变量引用（悬空）
+- `std::thread` 只移动不拷贝（move-only）：用 `std::move` 转移所有权，可从函数返回、可存进 `std::vector`；`hardware_concurrency()` 提示开几个线程，`get_id()` 认线程身份
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这个函数有异常安全隐患：如果 `risky()` 抛异常，`t.join()` 会被跳过，导致 `std::terminate`。请用本章的 `thread_guard` 把它改成无论是否抛异常都能正确 join。
+
+```cpp
+void run() {
+    std::thread t(work);
+    risky();      // 可能抛异常
+    t.join();
+}
+```
+
+<Answer>
+
+```cpp
+class thread_guard {
+    std::thread& t;
+public:
+    explicit thread_guard(std::thread& t_) : t(t_) {}
+    ~thread_guard() { if (t.joinable()) t.join(); }
+    thread_guard(const thread_guard&) = delete;
+    thread_guard& operator=(const thread_guard&) = delete;
+};
+
+void run() {
+    std::thread t(work);
+    thread_guard guard(t); // 一创建就上保险
+    risky();               // 哪怕这里抛异常……
+}                          // …guard 析构也会 if(joinable) join，绝不漏
+```
+
+关键：守卫的析构函数 `if (t.joinable()) t.join();` 在栈展开时一定被调用，无论 `run()` 是正常返回还是因 `risky()` 抛异常而退出。改后再也不会因漏 join 而 `terminate`。
+
+</Answer>
+
+**练习 2（问答型）** 同事写了 `std::thread t(update, std::ref(local)); t.detach();`，其中 `local` 是当前函数的局部变量。他说「我用了 `std::ref`，引用传对了，没问题」。他对吗？请指出隐患并给一条修法。
+
+<Answer>
+
+不对。`std::ref` 确实把引用正确传进去了，但隐患在 `detach`：放养出去的子线程可能比当前函数活得更久，而 `local` 是局部变量，函数一返回它所在的栈帧就销毁，子线程再按引用去读 `local` 就是访问**已释放内存**的悬空引用（未定义行为）。修法任选其一：① 把 `detach()` 改成 `join()`，让函数等子线程结束、保证 `local` 在被读期间一直存活；② 不传局部变量的引用——改成按值拷贝传一份（去掉 `std::ref`），或换成生命周期足够长的对象。
+
+</Answer>
+
+**练习 3（独立实现型）** 实现一个函数 `parallel_print(int n)`：按 `std::thread::hardware_concurrency()` 决定开几个线程（拿不到时退化为 2），让每个线程打印自己的 `std::thread::id` 和一个从 0 开始的编号，最后等所有线程都结束。要求：线程存进 `std::vector<std::thread>`，全部 `join`。
+
+<Answer>
+
+```cpp
+#include <iostream>
+#include <thread>
+#include <vector>
+
+void worker(int idx) {
+    std::cout << "线程 " << idx
+              << " id=" << std::this_thread::get_id() << "\n";
+}
+
+void parallel_print() {
+    unsigned n = std::thread::hardware_concurrency();
+    if (n == 0) n = 2;                 // 0 表示拿不到，给默认
+
+    std::vector<std::thread> threads;
+    for (unsigned i = 0; i < n; ++i)
+        threads.emplace_back(worker, i); // 就地构造入 vector（移动，无拷贝）
+
+    for (auto& t : threads)
+        t.join();                        // 逐个等会合
+}
+```
+
+要点：① `hardware_concurrency()` 可能返回 0，必须兜底；② `std::thread` 不可拷贝，存进 `vector` 要靠 `emplace_back`（就地构造）或 `push_back(std::move(t))`；③ 循环 `join` 保证函数返回前所有线程都已结束，不漏管、不 terminate。线程间的打印顺序仍是不确定的（上一章的结论），但每个 id 都不同。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（std::thread / 函数对象 / most vexing parse / joinable / join / detach / 分离线程 / 移动语义，共 8 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="std::thread">
+  C++ 标准库里代表「一个线程」的类型，声明在头文件 `<thread>` 里。构造时给它一个可调用对象（函数、函数对象或
+  lambda），新线程一诞生就去执行它。用完前必须 `join()`（等它跑完）或
+  `detach()`（放它后台跑），否则程序会崩溃。它不可拷贝、只能移动。详见本章「启动线程」一节。
+</GlossaryItem>
+
+<GlossaryItem term="函数对象（functor）">
+  重载了 `operator()` 的类型的对象，可以像函数那样「被调用」。把它的实例交给
+  `std::thread`，新线程就执行它的
+  `operator()`。它能携带自己的状态（成员变量），比普通函数更灵活；不过就地写逻辑时
+  lambda 通常更省事。详见本章「启动线程」一节。
+</GlossaryItem>
+
+<GlossaryItem term="最令人头疼的解析（most vexing parse）">
+  C++
+  的一条语法规则：凡是「能被解析成函数声明」的写法，编译器就优先把它当函数声明。比如
+  `std::thread t(Task());` 本想用临时对象启动线程，却被当成「声明一个返回
+  `std::thread` 的函数 t」，线程根本没启动。多套一层括号、用花括号、或改用
+  lambda 即可躲开。详见本章「容易踩的坑」一节。
+</GlossaryItem>
+
+<GlossaryItem term="joinable（可会合）">
+  `std::thread` 的一种状态：它还「关联着一个尚未安顿的底层线程」——既没 `join`
+  也没 `detach`，`joinable()` 返回 true。处于此态的线程对象一旦析构，就会触发
+  `std::terminate` 把程序掐掉，所以必须先表态。详见本章「管帮厨」一节。
+</GlossaryItem>
+
+<GlossaryItem term="join">
+  `std::thread` 的成员函数。调用它的线程（通常是主线程）会**停下来等**这个
+  `std::thread`
+  代表的线程跑完，然后才继续。字面意思「会合」——主厨等帮厨做完那道菜，两人会合后再一起走。`join`
+  之后该线程对象变为 not joinable。详见本章「管帮厨」一节。
+</GlossaryItem>
+
+<GlossaryItem term="detach">
+  `std::thread` 的成员函数。调用它后，子线程**脱离**这个 `std::thread`
+  对象、在后台独立运行，主线程不再等它、也无法再 join
+  它。字面意思「分离」——主厨放养帮厨、自己先走。`detach` 之后该线程对象变为 not
+  joinable。详见本章「管帮厨」一节。
+</GlossaryItem>
+
+<GlossaryItem term="分离线程（detached thread）">
+  已经被 `detach`、在后台独立运行、不再受任何 `std::thread`
+  对象关联的线程。它的资源由运行时在它结束时自动回收，但主线程无法再等它、也拿不到它的结果。最大风险是它可能比创建它的作用域活得久——访问的数据必须保证一直有效，否则悬空。详见本章「管帮厨」一节。
+</GlossaryItem>
+
+<GlossaryItem term="移动语义（move semantics）">
+  C++11
+  引入的机制：把资源的所有权从一个对象**转移**给另一个对象，而不做深拷贝，用
+  `std::move` 触发。`std::thread`、`std::unique_ptr` 这类
+  move-only（只移动）类型只支持移动、禁止拷贝——因为它们独占某种资源的所有权，拷贝会产生「两个对象都管同一份资源」的歧义。详见本章「转移所有权」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+
+<Attribution />
