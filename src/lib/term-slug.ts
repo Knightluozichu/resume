@@ -20,3 +20,13 @@ export function termSlug(term: string): string {
     .replace(/^-|-$/g, "");
   return `term-${body}`;
 }
+
+/**
+ * 规范化锚点 id：让显式 id 与 termSlug(文本) 输出同构（同前缀、同大小写、同清洗规则），
+ * 修复作者手写 id 时漏 term- 前缀 / 大小写不一致导致 <Term> 与 <GlossaryItem> 锚点对不上。
+ * 幂等：已是 term-xxx 的不会被重复加前缀。
+ */
+export function normalizeTermId(id: string): string {
+  const slug = termSlug(id); // 必然得到 term-<清洗后小写>
+  return slug.replace(/^term-term-/, "term-"); // 若原 id 已含 term- 前缀，去掉重复
+}

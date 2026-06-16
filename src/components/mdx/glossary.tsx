@@ -1,4 +1,4 @@
-import { termSlug } from "@/lib/term-slug";
+import { normalizeTermId, termSlug } from "@/lib/term-slug";
 
 /**
  * <Glossary> + <GlossaryItem term="...">人话释义</GlossaryItem>：章末「人话词典」
@@ -44,7 +44,7 @@ export function GlossaryItem({
   /** 人话释义；可含 <Stepper>/<Figure> 把难懂名词掰碎 */
   children: React.ReactNode;
 }) {
-  const anchor = id ?? termSlug(term);
+  const anchor = id ? normalizeTermId(id) : termSlug(term);
   return (
     <div className="mdx-glossary-item" id={anchor}>
       <dt className="font-semibold text-accent">{term}</dt>

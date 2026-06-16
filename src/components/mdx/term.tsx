@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
-import { termSlug } from "@/lib/term-slug";
+import { normalizeTermId, termSlug } from "@/lib/term-slug";
 
 /**
  * 从 children 递归提取术语纯文本：拼接所有字符串/数字叶子并规整空白。
@@ -67,7 +67,7 @@ export function Term({
   // 锚点目标：显式 id 优先（GlossaryItem 同样接受 id 覆盖），否则按术语文本生成。
   // 术语文本从 children 递归提取——prettier 多行重排后 children 含空白，不能只判 string。
   const termText = extractText(children);
-  const anchor = id ?? termSlug(termText);
+  const anchor = id ? normalizeTermId(id) : termSlug(termText);
 
   return (
     <span className="mdx-term relative inline-block">
