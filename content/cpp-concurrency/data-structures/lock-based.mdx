@@ -107,6 +107,11 @@ draft: true
 承接第三章的 `SafeStack`，这里给一个更完整的版本。关键是把 `top` + `pop` 合并成一个加锁的 `pop()`，空栈返回 `std::nullopt`：
 
 ```cpp
+#include <mutex>
+#include <optional>
+#include <stack>
+#include <utility>
+
 template <typename T>
 class ThreadSafeStack {
     std::stack<T> data;
@@ -141,6 +146,11 @@ public:
 队列要支持「空了就睡、有了就醒」。用一个 `std::condition_variable` 配 `std::mutex`：`push` 后 `notify_one`，`wait_and_pop` 在条件不满足时挂起：
 
 ```cpp
+#include <condition_variable>
+#include <mutex>
+#include <queue>
+#include <utility>
+
 template <typename T>
 class ThreadSafeQueue {
     mutable std::mutex m;
@@ -176,6 +186,10 @@ public:
 同一个队列再加一个非阻塞的 `try_pop`：空就立刻返回 `nullopt`，不等待。这样调用方既能「等到有为止」，也能「拿不到就走」：
 
 ```cpp
+#include <mutex>
+#include <optional>
+#include <utility>
+
     std::optional<T> try_pop() {
         std::lock_guard<std::mutex> g(m);
         if (data.empty()) return std::nullopt;
@@ -190,6 +204,10 @@ public:
 链表每个节点带一把自己的锁。`push_front` 只需锁住头节点；遍历则用 hand-over-hand——先看 `push_front` 与「查找」：
 
 ```cpp
+#include <memory>
+#include <mutex>
+#include <utility>
+
 template <typename T>
 class ThreadSafeList {
     struct Node {
@@ -215,6 +233,10 @@ public:
 `push_front` 只锁头节点，不打扰链表其余部分——别的线程仍能在后面遍历。真正用到 hand-over-hand 的是遍历：**先持当前节点的锁，再获取下一个节点的锁，拿到后才释放当前**（对照上面那张攀爬动画）：
 
 ```cpp
+#include <memory>
+#include <mutex>
+#include <utility>
+
     template <typename Predicate>
     std::shared_ptr<T> find_first_if(Predicate p) {
         Node* current = &head;
@@ -241,6 +263,13 @@ public:
 查找表按 key 哈希分桶，每桶一把 `std::shared_mutex`。查找用共享锁（多读并行），增改用独占锁：
 
 ```cpp
+#include <functional>
+#include <list>
+#include <memory>
+#include <shared_mutex>
+#include <utility>
+#include <vector>
+
 template <typename Key, typename Value, typename Hash = std::hash<Key>>
 class ThreadSafeLookupTable {
     struct Bucket {
@@ -263,6 +292,9 @@ public:
 桶的数量固定（构造时定好、不再变），所以**桶数组本身不需要加锁**——只需锁单个桶。这是分桶的关键简化。读写两个操作分别用两种锁：
 
 ```cpp
+#include <mutex>
+#include <shared_mutex>
+
     // 读：共享锁，多个读线程可同时进同一个桶
     Value value_for(Key const& key, Value const& def = Value()) const {
         Bucket& b = get_bucket(key);
@@ -329,6 +361,10 @@ public:
 **练习 1（改代码型）** 下面这个「线程安全栈」用了 `std::stack` 的经典接口，把 `top` 和 `pop` 分开了，存在隐患。请把它改成**没有接口竞态**的版本（提示：合并 `top`+`pop`，空栈返回 `std::optional`）。
 
 ```cpp
+#include <mutex>
+#include <stack>
+#include <utility>
+
 template <typename T>
 class BadStack {
     std::stack<T> data;
@@ -356,6 +392,11 @@ public:
 <Answer>
 
 ```cpp
+#include <mutex>
+#include <optional>
+#include <stack>
+#include <utility>
+
 template <typename T>
 class SafeStack {
     std::stack<T> data;
@@ -393,6 +434,12 @@ public:
 <Answer>
 
 ```cpp
+#include <condition_variable>
+#include <cstddef>
+#include <mutex>
+#include <queue>
+#include <utility>
+
 template <typename T>
 class BoundedBuffer {
     std::mutex m;
