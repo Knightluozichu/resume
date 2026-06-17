@@ -407,6 +407,9 @@ import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
 import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
 import { AgentParadigmDiagram } from "./diagrams/agent-paradigm-diagram";
 import { AutonomySpectrumExplorer } from "./demos/autonomy-spectrum-explorer";
+import { TokenizationDiagram } from "./diagrams/tokenization-diagram";
+import { ContextWindowBudget } from "./demos/context-window-budget";
+import { TemperatureSamplingExplorer } from "./demos/temperature-sampling-explorer";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1103,6 +1106,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AgentLoopDiagram,
   AgentParadigmDiagram,
   AutonomySpectrumExplorer,
+  TokenizationDiagram,
+  ContextWindowBudget,
+  TemperatureSamplingExplorer,
   Term,
   Glossary,
   GlossaryItem,
