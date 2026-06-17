@@ -56,6 +56,7 @@ import { deferredShadingQuestions } from "./review/deferred-shading";
 import { ssaoQuestions } from "./review/ssao";
 import { aiWhatIsAgentQuestions } from "./review/ai-what-is-agent";
 import { aiLlmBrainQuestions } from "./review/ai-llm-brain";
+import { aiPromptingRolesQuestions } from "./review/ai-prompting-roles";
 import { cppGettingStartedQuestions } from "./review/cpp-getting-started";
 import { cppVariablesAndTypesQuestions } from "./review/cpp-variables-and-types";
 import { cppStringsVectorsArraysQuestions } from "./review/cpp-strings-vectors-arrays";
@@ -330,6 +331,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pbrIblSpecularQuestions,
   ...aiWhatIsAgentQuestions,
   ...aiLlmBrainQuestions,
+  ...aiPromptingRolesQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

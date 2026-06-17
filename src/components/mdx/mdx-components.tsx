@@ -410,6 +410,9 @@ import { AutonomySpectrumExplorer } from "./demos/autonomy-spectrum-explorer";
 import { TokenizationDiagram } from "./diagrams/tokenization-diagram";
 import { ContextWindowBudget } from "./demos/context-window-budget";
 import { TemperatureSamplingExplorer } from "./demos/temperature-sampling-explorer";
+import { PromptAssemblyDiagram } from "./diagrams/prompt-assembly-diagram";
+import { PromptRecipeDemo } from "./demos/prompt-recipe-demo";
+import { StructuredOutputDemo } from "./demos/structured-output-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1109,6 +1112,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TokenizationDiagram,
   ContextWindowBudget,
   TemperatureSamplingExplorer,
+  PromptAssemblyDiagram,
+  PromptRecipeDemo,
+  StructuredOutputDemo,
   Term,
   Glossary,
   GlossaryItem,
