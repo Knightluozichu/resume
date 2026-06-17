@@ -419,6 +419,9 @@ import { ReActVsCoTDiagram } from "./diagrams/react-vs-cot-diagram";
 import { ToolCallFlowDiagram } from "./diagrams/tool-call-flow-diagram";
 import { ToolSchemaAnatomy } from "./demos/tool-schema-anatomy";
 import { ToolCallStateMachine } from "./diagrams/tool-call-state-machine";
+import { MemoryArchitectureDiagram } from "./diagrams/memory-architecture-diagram";
+import { MemoryRetrievalDemo } from "./demos/memory-retrieval-demo";
+import { MemoryTypesDiagram } from "./demos/memory-types-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1127,6 +1130,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToolCallFlowDiagram,
   ToolSchemaAnatomy,
   ToolCallStateMachine,
+  MemoryArchitectureDiagram,
+  MemoryRetrievalDemo,
+  MemoryTypesDiagram,
   Term,
   Glossary,
   GlossaryItem,
