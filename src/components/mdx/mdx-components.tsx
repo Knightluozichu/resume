@@ -409,6 +409,9 @@ import { AaTaskFitExplorer } from "./ai-agent/task-fit-explorer";
 import { AaNextTokenDiagram } from "./ai-agent/next-token-diagram";
 import { AaContextWindowDiagram } from "./ai-agent/context-window-diagram";
 import { AaTokenizerPlayground } from "./ai-agent/tokenizer-playground";
+import { AaAgentAnatomyFlowDiagram } from "./ai-agent/agent-anatomy-flow-diagram";
+import { AaAgentFiveComponentsDiagram } from "./ai-agent/agent-five-components-diagram";
+import { AaAgentMapExplorer } from "./ai-agent/agent-map-explorer";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1107,6 +1110,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaNextTokenDiagram,
   AaContextWindowDiagram,
   AaTokenizerPlayground,
+  AaAgentAnatomyFlowDiagram,
+  AaAgentFiveComponentsDiagram,
+  AaAgentMapExplorer,
   Term,
   Glossary,
   GlossaryItem,

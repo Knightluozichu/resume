@@ -167,6 +167,7 @@ import { pbrIblDiffuseQuestions } from "./review/pbr-ibl-diffuse";
 import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
 import { agtChatbotToAgentQuestions } from "./review/agt-chatbot-to-agent";
 import { agtLlmAsBrainQuestions } from "./review/agt-llm-as-brain";
+import { agtAgentAnatomyQuestions } from "./review/agt-agent-anatomy";
 
 export {
   CHAPTER_TITLES,
@@ -330,6 +331,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pbrIblSpecularQuestions,
   ...agtChatbotToAgentQuestions,
   ...agtLlmAsBrainQuestions,
+  ...agtAgentAnatomyQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

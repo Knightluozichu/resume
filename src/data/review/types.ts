@@ -170,7 +170,8 @@ export type ReviewChapterSlug =
   | "pbr-ibl-specular"
   // 从零构建 AI Agent
   | "agt-chatbot-to-agent"
-  | "agt-llm-as-brain";
+  | "agt-llm-as-brain"
+  | "agt-agent-anatomy";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -344,6 +345,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   // 从零构建 AI Agent
   "agt-chatbot-to-agent": "从聊天机器人到智能体",
   "agt-llm-as-brain": "大模型：智能体的大脑",
+  "agt-agent-anatomy": "智能体解剖图",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
