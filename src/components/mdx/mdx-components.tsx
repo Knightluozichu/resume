@@ -445,6 +445,9 @@ import { EditPlayLoopDiagram } from "./diagrams/edit-play-loop-diagram";
 import { ComponentCompositionDiagram } from "./diagrams/component-composition-diagram";
 import { CompositionVsInheritanceDiagram } from "./diagrams/composition-vs-inheritance-diagram";
 import { GameObjectAnatomyDiagram } from "./diagrams/gameobject-anatomy-diagram";
+import { LocalVsWorldExplorer } from "./diagrams/local-vs-world-explorer";
+import { TransformHierarchyDiagram } from "./diagrams/transform-hierarchy-diagram";
+import { Vector3Diagram } from "./diagrams/vector3-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1008,6 +1011,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ComponentCompositionDiagram,
   CompositionVsInheritanceDiagram,
   GameObjectAnatomyDiagram,
+  LocalVsWorldExplorer,
+  TransformHierarchyDiagram,
+  Vector3Diagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

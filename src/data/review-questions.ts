@@ -179,6 +179,7 @@ import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
 import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
 import { u5EditorProjectQuestions } from "./review/u5-editor-project";
 import { u5GameobjectComponentQuestions } from "./review/u5-gameobject-component";
+import { u5TransformCoordinateQuestions } from "./review/u5-transform-coordinate";
 
 export {
   CHAPTER_TITLES,
@@ -356,6 +357,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   // Unity 5 权威讲解
   ...u5EditorProjectQuestions,
   ...u5GameobjectComponentQuestions,
+  ...u5TransformCoordinateQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
