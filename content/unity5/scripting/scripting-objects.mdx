@@ -1,0 +1,476 @@
+---
+title: 脚本控制对象与组件
+type: C
+section: Unity脚本
+order: 2
+description: 读完能用 C# 写出常见的脚本控制：用 GetComponent 拿同物体上的组件并调用它、用 transform 移动旋转对象、用 Instantiate/Destroy 增删对象、用 GameObject.Find 查找对象（并知道它为何慢）、用 [SerializeField] 在 Inspector 里拖拽赋引用。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·第5章（承接第4章生命周期 + 第2章 GetComponent/AddComponent）：把「脚本怎么操作场上的对象和组件」写成可落地的 C# 代码。重心是 §6 代码对照（≥80%），三个 viz 把难点掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) GetComponent<T>() 拿同物体上的组件并调用它（深入）+ GetComponentInChildren/InParent = GetComponentDiagram（anime）+ 代码。 */}
+{/* 2) transform 操作：transform.Translate / Rotate、改 position / rotation 移动旋转对象 = 代码 + 文字。 */}
+{/* 3) Instantiate 克隆对象 / 预制体、Destroy 销毁对象 = InstantiateDestroyDiagram（anime·主）+ 代码。 */}
+{/* 4) 查找对象：GameObject.Find / FindWithTag / FindObjectOfType（慢、慎用）= 代码 + Callout warn。 */}
+{/* 5) [SerializeField] / public 字段在 Inspector 暴露、拖拽赋引用（比 Find 更优）= InspectorBindingDiagram + 代码。 */}
+{/* 术语首现 Term：GetComponent / transform.Translate / Instantiate / 预制体Prefab / Destroy / GameObject.Find / Tag标签 / SerializeField。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能写出用 `GetComponent<T>()` 拿到同物体上某个组件、并调用它的代码，且知道取不到时会返回什么
+- 能写出用 `transform` 移动 / 旋转对象、用 `Instantiate` 克隆对象、用 `Destroy` 销毁对象的代码
+- 能说出查找对象的 `GameObject.Find` 为什么慢、为什么优先在 Inspector 里拖引用；并能回答：`Destroy(go)` 执行完后，紧接着的下一句还能访问 `go` 吗？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用片场体系（全书统一）。 */}
+
+## 导演手里的那本指令本
+
+前几章我们把场上的角色叫 GameObject，把它的本事拆成一张张技能卡（组件），还搞清了引擎在什么时刻会来调你的脚本。但你写的脚本到现在还只是「被叫到」——它**还没真正去指挥过任何人**。
+
+这一章，脚本要拿起导演手里的指令本，开始下命令：「**找到**这个演员身上的某件装备」「让他**走到**那边、**转个身**」「**复制**一个临时演员上场」「让那个演员**下场**」「开拍前先**把要用的道具指给**他」。每一条命令，都对应一行你马上要会写的 C# 代码。
+
+不会下这些命令，你的游戏就是一帧静止画面——角色不会动、子弹打不出去、敌人刷不出来。所以这一章是「让一切动起来」的起点，重心全在**怎么把命令写成代码**。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 5 个。 */}
+
+## 五条命令，先认个脸
+
+下面五件事就是本章要写的全部命令。这一节先各用一两句话认个脸、配上图，**怎么写代码留到第六节细讲**。
+
+**①「找装备」——取组件。** 你想用一个对象的某种能力（让它受力、播个声音），得先拿到对应的组件。这就是
+
+<Term def="在「同一个 GameObject」上按类型 T 查找已挂着的组件并返回它的引用；没挂这个类型就返回 null。是脚本访问其它组件能力的主要入口。">
+  GetComponent
+</Term>
+：按「类型」去这个对象的组件栈里找。下面这张动画演的就是「按类型取组件、取到是引用、取不到是
+null」：
+
+<GetComponentDiagram />
+
+**②「走位 / 转身」——动 transform。** 第 2 章说过，每个对象都自带一个 Transform 组件（位置 / 旋转 / 缩放）。脚本想让对象移动、旋转，本质就是改它的 Transform——比如调用
+
+<Term def="Transform 组件上的方法，让对象沿某个方向平移一段距离。配套的还有 transform.Rotate（旋转），以及直接读写 transform.position / transform.rotation。">
+  transform.Translate
+</Term>
+平移，或直接给 `transform.position` 赋一个新坐标。这是「让演员走到哪、朝哪」。
+
+**③「复制 / 下场」——增删对象。** 游戏里要不停地刷新对象：开一枪复制一颗子弹、刷一波敌人、捡到的金币消失。复制用
+
+<Term def="按一个「模板」（通常是预制体 Prefab）在运行时复制出一个新的对象实例放进场景。常用来在运行时生成子弹、敌人、特效等。">
+  Instantiate
+</Term>
+（照模板复制一个临时演员上场），销毁用
+
+<Term def="销毁一个 GameObject 或组件，让它从场景里消失。注意它不是立即生效——本帧结束时才真正销毁。">
+  Destroy
+</Term>
+（让演员下场）。下面这张动画是本章的主图，把「复制一个、再复制一个、销毁一个」演给你看：
+
+<InstantiateDestroyDiagram />
+
+那个被复制的「模板」，多数时候是一个
+
+<Term def="把一个配好组件、参数的 GameObject 存成的「可复用模板」资源。运行时用 Instantiate 照它复制出任意多个实例。本章先认识它，作为 Instantiate 的复制源。">
+  预制体（Prefab）
+</Term>
+——预制体本身怎么做、深入用法是后面章节的内容，这里只需知道：**它是 Instantiate
+的复制源**。
+
+**④「点名找人」——查找对象。** 有时你手里没有某个对象的引用，想现去场景里找。可以用
+
+<Term def="按对象「名字」在场景里搜索一个 GameObject 并返回它。配套的还有按标签找的 GameObject.FindWithTag、按类型找的 Object.FindObjectOfType。它们都要在运行时遍历搜索，较慢。">
+  GameObject.Find
+</Term>
+（按名字找）、`GameObject.FindWithTag`（按
+
+<Term def="给 GameObject 贴的一个分类「标签」字符串（如 Player、Enemy），用来成批地标记和查找同类对象，比按名字找更稳。">
+  标签（Tag）
+</Term>
+找）等。但它们都得在运行时**满场遍历**，慢——所以能不用就不用，下一节会专门提醒。
+
+**⑤「开拍前指好道具」——Inspector 拖引用。** 与其运行时满场去 Find，不如**开拍前就把要用的对象指给脚本**。办法是把脚本字段用
+
+<Term def="加在私有字段上的「特性」，让这个私有字段也显示到 Inspector 面板上，从而可以在编辑器里拖拽赋值。是「拖引用」的前提。">
+  [SerializeField]
+</Term>
+标注（或写成 `public`），它就会出现在 Inspector
+面板上，你把场景里的对象直接拖进那个槽即可。下面这张图把「拖引用」和「代码
+Find」摆在一起对比：
+
+<InspectorBindingDiagram />
+
+这五条命令就是本章的全部。**它们怎么写成代码，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要有「玩懂」；三个 viz 已嵌在 §3。主 Demo = InstantiateDestroyDiagram（含「猜一猜」），辅 = GetComponentDiagram + InspectorBindingDiagram。每个 anime viz 都带可暂停/单步/拖进度。 */}
+
+## 动手：把「复制 / 销毁」单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **Instantiate / Destroy 动画**——它就是本章的主 Demo。
+
+> 猜一猜：执行完 `Destroy(go)` 这一行，**紧接着的下一句还能访问 `go` 吗**？回到「五条命令，先认个脸」里那张 Instantiate / Destroy 动画，单步走到第 ④ 步——你会看到 `Destroy` 标红的那一刻，对象**没有当场消失**。这正是答案的关键：`Destroy` 不是立即生效，它只是「预约」在**本帧结束时**才真正销毁；所以下一句**确实还能访问 `go`**（它这一帧还活着），但你**应当把它视作已失效**，别再依赖它，否则下一帧就会拿到一个「已销毁」的空壳。
+
+单步走完主图后，再去玩另外两张：**GetComponent 动画**帮你钉牢「按类型取组件、取不到是 null」；**Inspector 拖引用图**帮你看清「拖引用 vs 代码 Find」的取舍。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖五条命令：GetComponent 拿组件并用 / transform 移动旋转 / Instantiate+Destroy / GameObject.Find（配 Callout）/ [SerializeField] 拖引用。 */}
+
+## 代码：五条命令逐个写出来
+
+这一节是本章的重心。每条命令都给一段可直接放进 `MonoBehaviour` 的代码，逐段讲清。
+
+### ① GetComponent：拿到组件，再调用它
+
+最常见的写法：在 `Start`（或 `Awake`）里把要用的组件**取一次、缓存到字段**，之后每帧直接用——不要每帧都 `GetComponent`（那很浪费）。
+
+```csharp
+using UnityEngine;
+
+public class Mover : MonoBehaviour
+{
+    // 缓存自身的 Rigidbody，避免每帧重复 GetComponent
+    private Rigidbody rb;
+
+    void Start()
+    {
+        // 在「自己这个 GameObject」上按类型取 Rigidbody 组件
+        rb = GetComponent<Rigidbody>();
+    }
+
+    void FixedUpdate()
+    {
+        // 拿到引用后，就能调用这个组件的方法 / 读写它的属性
+        rb.velocity = new Vector3(0f, 0f, 5f); // 持续向前
+    }
+}
+```
+
+`GetComponent<Rigidbody>()` 在「我」这个 GameObject 身上找 Rigidbody，找到就返回引用，缓存进 `rb`；之后在 `FixedUpdate` 里直接拿 `rb` 用。关键是它**找不到时返回 `null`**——上面假设这个对象确实挂了 Rigidbody。如果不确定，要先判空（见 §7 第一个坑）。
+
+有时你要找的组件不在自己身上，而在子物体或父物体上，换两个 API 即可：
+
+```csharp
+// 在「自己 + 所有子物体」里找第一个 AudioSource
+AudioSource audio = GetComponentInChildren<AudioSource>();
+
+// 在「自己 + 所有父物体」里向上找第一个 Rigidbody
+Rigidbody parentRb = GetComponentInParent<Rigidbody>();
+```
+
+`GetComponentInChildren` 会连**子物体**一起找，`GetComponentInParent` 则**向上**找父物体——它们和 `GetComponent` 一样，找不到都返回 `null`。
+
+### ② transform：移动与旋转对象
+
+让对象动起来，就是操作它的 `transform`。`MonoBehaviour` 里直接写 `transform` 就指自身的 Transform 组件，不用先 `GetComponent`：
+
+```csharp
+void Update()
+{
+    // 每帧沿自身「前方」平移：乘 Time.deltaTime 让速度与帧率无关
+    transform.Translate(Vector3.forward * 3f * Time.deltaTime);
+
+    // 每帧绕 Y 轴旋转：每秒转 90 度
+    transform.Rotate(0f, 90f * Time.deltaTime, 0f);
+}
+```
+
+`transform.Translate` 让对象平移，`transform.Rotate` 让它旋转。注意两处都乘了 `Time.deltaTime`——它是「上一帧到这一帧的间隔秒数」，乘上它，移动 / 旋转的速度就**与帧率无关**（不同设备上一样快）。你也可以不调方法、直接赋值坐标：
+
+```csharp
+// 直接「瞬移」到一个世界坐标（不是平滑移动，是一步到位）
+transform.position = new Vector3(0f, 1f, 0f);
+
+// 直接面向某个角度（用欧拉角构造旋转）
+transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+```
+
+`transform.position` 读写**世界坐标**，赋值即瞬移；`transform.rotation` 是朝向，用 `Quaternion.Euler` 从「绕 XYZ 各转多少度」构造。两种方式按需选：要连续运动用 `Translate/Rotate` + `deltaTime`，要直接定位就赋 `position/rotation`。
+
+### ③ Instantiate 与 Destroy：增删对象
+
+复制对象用 `Instantiate`，最常用的重载是「照模板、在某位置、某朝向」复制一个：
+
+```csharp
+public class Spawner : MonoBehaviour
+{
+    // 拖一个预制体进来当复制模板（见命令⑤）
+    [SerializeField] private GameObject bulletPrefab;
+
+    public void Fire()
+    {
+        // 照 bulletPrefab 复制一个新实例，放在本对象的位置、用本对象的朝向
+        GameObject bullet = Instantiate(bulletPrefab, transform.position, transform.rotation);
+
+        // 5 秒后自动销毁这颗子弹（第二个参数 = 延迟秒数），避免越积越多
+        Destroy(bullet, 5f);
+    }
+}
+```
+
+`Instantiate(模板, 位置, 旋转)` 返回**新复制出来的那个对象**的引用，你可以接着操作它（这里把引用接到 `bullet`）。`Destroy(对象)` 销毁它；带第二个参数 `Destroy(bullet, 5f)` 表示**延迟 5 秒**再销毁。
+
+<Callout type="warn">
+  **API 差异：销毁 GameObject 还是销毁组件？** `Destroy(gameObject)`
+  销毁的是「整个对象」（连同它身上所有组件）；`Destroy(this)` 或
+  `Destroy(GetComponent<Rigidbody>())` 销毁的只是「某一个组件」，对象本身还在。别把两者搞混——想让对象整个消失，传
+  `gameObject`；只想拆掉某个能力，才传那个组件。
+</Callout>
+
+### ④ GameObject.Find：能不用就不用
+
+运行时按名字 / 标签找对象：
+
+```csharp
+void Start()
+{
+    // 按「名字」在场景里搜一个叫 "Player" 的对象（满场遍历，慢）
+    GameObject player = GameObject.Find("Player");
+
+    // 按「标签」找——比按名字稳，但同样要遍历
+    GameObject enemy = GameObject.FindWithTag("Enemy");
+}
+```
+
+<Callout type="warn">
+  **`Find` 系列很慢，且只在 `Start`/`Awake` 里偶尔用，绝不要放进 `Update`。**
+  它们要在运行时**遍历整个场景**按字符串匹配，每帧调一次会明显拖慢；而且
+  `GameObject.Find` **找不到失活（未激活）的对象**，名字写错了也只是默默返回
+  `null`。优先用命令⑤的「拖引用」，把对象在编辑器里提前指好，从根上避开 Find。
+</Callout>
+
+### ⑤ [SerializeField]：在 Inspector 里拖引用
+
+比 `Find` 更好的做法：声明一个字段并暴露到 Inspector，运行前把对象**拖进去**赋好值。
+
+```csharp
+public class Chaser : MonoBehaviour
+{
+    // [SerializeField] 让「私有字段」也显示到 Inspector，可拖拽赋值
+    [SerializeField] private Transform target;
+
+    void Update()
+    {
+        // target 在编辑器里已拖好，这里直接用，无需运行时去 Find
+        transform.position = Vector3.MoveTowards(
+            transform.position, target.position, 2f * Time.deltaTime);
+    }
+}
+```
+
+加了 `[SerializeField]`，`target` 就会出现在这个脚本的 Inspector 面板上（一个名为 `Target` 的空槽）。你把场景里的目标对象拖进槽，**运行前** `target` 就已经指向它——`Update` 里直接用，零运行时查找开销。
+
+<Callout type="tip">
+  写成 `public Transform target;` 也会出现在
+  Inspector，但那样别的脚本也能随意改它，破坏封装。**推荐 `[SerializeField]
+  private`**：既能在 Inspector 拖，又保持字段私有。
+</Callout>
+
+至此五条命令都写过一遍了。回头看会发现：`GetComponent` 是「拿到能力」，`transform` 是「指挥移动」，`Instantiate`/`Destroy` 是「增删演员」，`Find` 与拖引用是「拿到别人的引用」——它们组合起来，就能写出绝大多数玩法逻辑。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。含 GetComponent 返回 null→NullReference / GameObject.Find 慢且找不到失活对象 / Destroy 非立即 / 忘了在 Inspector 赋引用→null。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：`GetComponent<Rigidbody>().velocity = ...` 报
+  `NullReferenceException`。**原因**：这个 GameObject **根本没挂
+  Rigidbody**，`GetComponent` 返回了 `null`，你却直接拿它的属性，于是空引用崩溃。**修法**：取完先判空再用，或确保对象确实挂了该组件——
+  `var rb = GetComponent<Rigidbody>(); if (rb != null) rb.velocity = ...;`。也可在
+  `Start` 里取一次缓存，省得每帧重取。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`GameObject.Find("Enemy")` 返回
+  `null`，或游戏运行明显变卡。**原因**：① 名字拼错 / 对象当前**失活**（`Find`
+  找不到未激活对象）；② 把 `Find` 放进了
+  `Update`，每帧满场遍历拖慢性能。**修法**：别在 `Update` 里 `Find`；优先用
+  `[SerializeField]` 拖引用，或在 `Start` 里找一次缓存；查找成败也要判空。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`Destroy(go);` 后紧接着 `go.transform.position =
+  ...`，本帧居然还「生效」，让人以为没销毁。**原因**：`Destroy`
+  **不是立即生效**——它只预约在**本帧结束**销毁，所以同一帧里 `go`
+  暂时还活着。**修法**：调用 `Destroy`
+  后就**把该对象视作已失效**，不要再依赖它；下一帧起它才真正消失，再访问会拿到「已销毁」的空壳。
+</Callout>
+
+<Callout type="trap">
+  **现象**：脚本里 `[SerializeField] private Transform target;`，运行时却
+  `NullReferenceException`。**原因**：你**忘了在 Inspector
+  里把对象拖进那个槽**——字段还是空的 `None`，运行时自然是
+  `null`。**修法**：选中挂了脚本的对象，在 Inspector 找到 `Target`
+  槽，把目标对象拖进去；养成「拖完引用再运行」的习惯。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含改/写代码题 + C 型独立实现题；答案折叠。 */}
+
+## 小结
+
+- **取组件**：`GetComponent<T>()` 在同物体上按类型找，**取不到返回 `null`**；子 / 父物体用 `GetComponentInChildren` / `GetComponentInParent`；取一次缓存，别每帧重取
+- **动 transform**：`transform.Translate` / `Rotate` 连续运动（乘 `Time.deltaTime`），或直接赋 `transform.position` / `rotation` 定位
+- **增删对象**：`Instantiate(模板, 位置, 旋转)` 照预制体复制实例并返回引用；`Destroy(obj)` 销毁，**本帧结束才生效、不是立即**
+- **查找对象**：`GameObject.Find` / `FindWithTag` 满场遍历、**慢且找不到失活对象**，别进 `Update`，能不用就不用
+- **拖引用优先**：`[SerializeField] private` 把字段暴露到 Inspector，运行前把对象拖进槽——比 `Find` 更快、更稳、更清晰
+
+<Exercises>
+
+**练习 1（问答 + 判断）** `Destroy(go)` 执行完，紧接着的**下一句**还能访问 `go` 吗？下一帧呢？为什么？另外，`GetComponent<Light>()` 在一个没挂 Light 的对象上返回什么，直接用会怎样？
+
+<Answer>
+
+`Destroy` **不是立即生效**——它只预约在**本帧结束**时销毁。所以：
+
+- **同一帧紧接着的下一句**：`go` 还活着，**仍能访问**（但你应当把它视作已失效，别再依赖）。
+- **下一帧起**：`go` 已被真正销毁，再访问会拿到一个「已销毁」的空壳，对它取属性 / 调方法会报错。
+
+`GetComponent<Light>()` 在没挂 Light 的对象上返回 **`null`**。直接 `GetComponent<Light>().intensity = ...` 会抛 `NullReferenceException`——必须先判空再用。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段代码想「每帧让对象向前飞」，但有两个问题：①移动速度会随帧率忽快忽慢；②每帧都 `GetComponent`，很浪费。请改正。
+
+```csharp
+void Update()
+{
+    Rigidbody rb = GetComponent<Rigidbody>();
+    transform.Translate(Vector3.forward * 3f);
+}
+```
+
+<Answer>
+
+①移动没乘 `Time.deltaTime`，所以速度跟着帧率变；②`rb` 每帧重取且根本没用到。改法：把组件取一次缓存（如确需用 `rb`），移动乘上 `deltaTime`：
+
+```csharp
+private Rigidbody rb;
+
+void Start()
+{
+    rb = GetComponent<Rigidbody>(); // 取一次，缓存
+}
+
+void Update()
+{
+    // 乘 Time.deltaTime，让速度与帧率无关
+    transform.Translate(Vector3.forward * 3f * Time.deltaTime);
+}
+```
+
+要点：`GetComponent` 放 `Start` 里缓存、不进 `Update`；连续移动一律乘 `Time.deltaTime`。（若移动其实想走物理，应改成在 `FixedUpdate` 里设 `rb.velocity`，见第 4 章。）
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：一个「发射器」对象，每按一次空格，就在它的位置、朝向**复制一颗子弹预制体**，并让子弹 3 秒后自动消失。请写出这个 `MonoBehaviour`（提示：子弹预制体用 `[SerializeField]` 拖进来；读空格用 `Input.GetKeyDown(KeyCode.Space)`，放 `Update`）。
+
+<Answer>
+
+```csharp
+using UnityEngine;
+
+public class Shooter : MonoBehaviour
+{
+    // 在 Inspector 里把子弹预制体拖进这个槽
+    [SerializeField] private GameObject bulletPrefab;
+
+    void Update()
+    {
+        // 每帧检测：这一帧是否「按下」了空格
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            // 照预制体复制一颗子弹，放在自己的位置、用自己的朝向
+            GameObject bullet = Instantiate(
+                bulletPrefab, transform.position, transform.rotation);
+
+            // 3 秒后自动销毁，避免子弹越积越多
+            Destroy(bullet, 3f);
+        }
+    }
+}
+```
+
+要点：①`bulletPrefab` 用 `[SerializeField]` 暴露、拖引用（别用 `Find`）；②`Instantiate(模板, 位置, 旋转)` 复制并返回新实例；③`Destroy(bullet, 3f)` 用延迟销毁做清理。记得在 Inspector 把子弹预制体拖进 `Bullet Prefab` 槽，否则运行时 `bulletPrefab` 为 `null`。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="GetComponent">
+  在「**同一个 GameObject**」上按类型 `T`
+  查找已挂着的组件、并返回它的引用的方法。找到就返回那个组件（你就能调它的方法、读写它的属性），**没挂这个类型就返回
+  `null`**——所以拿到结果习惯先判空再用。想连子物体一起找用
+  `GetComponentInChildren`，向上找父物体用 `GetComponentInParent`。详见本章「①
+  GetComponent」一节。
+</GlossaryItem>
+
+<GlossaryItem term="transform.Translate">
+  Transform 组件上让对象**平移**一段距离的方法；配套的 `transform.Rotate`
+  让对象**旋转**。连续运动时要乘
+  `Time.deltaTime`，使速度与帧率无关。也可以不调方法、直接给
+  `transform.position`（世界坐标）/
+  `transform.rotation`（朝向）赋值来「瞬移」/「瞬转」。详见本章「②
+  transform」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Instantiate">
+  按一个「模板」（通常是**预制体
+  Prefab**）在运行时**复制出一个新对象实例**放进场景的方法，并返回这个新实例的引用。常用来运行时生成子弹、敌人、特效等。常用重载是
+  `Instantiate(模板, 位置, 旋转)`。详见本章「③ Instantiate 与 Destroy」一节。
+</GlossaryItem>
+
+<GlossaryItem term="预制体（Prefab）">
+  把一个配好组件和参数的 GameObject 存成的**可复用模板**资源。运行时用
+  `Instantiate` 照它复制出任意多个实例。本章只需把它当作 `Instantiate`
+  的「复制源」；它的制作与深入用法是后续章节的内容。详见本章「③ Instantiate 与
+  Destroy」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Destroy">
+  销毁一个
+  GameObject（连同它所有组件）或某个单独组件、让它从场景里消失的方法。关键特点：**不是立即生效**——它只预约在**本帧结束**时销毁。所以调用后同一帧里对象还活着，但你应把它视作已失效；下一帧起才真正消失。`Destroy(obj,
+  秒数)` 可延迟销毁。详见本章「③ Instantiate 与 Destroy」一节。
+</GlossaryItem>
+
+<GlossaryItem term="GameObject.Find">
+  按对象**名字**在场景里搜索一个 GameObject 并返回它的方法；配套的有按标签找的
+  `GameObject.FindWithTag`、按类型找的
+  `Object.FindObjectOfType`。它们都要在运行时**遍历整个场景**，**慢**，而且
+  `Find` **找不到失活对象**、名字写错只会默默返回 `null`。能不用就不用，**别放进
+  `Update`**，优先改用「拖引用」。详见本章「④ GameObject.Find」一节。
+</GlossaryItem>
+
+<GlossaryItem term="标签（Tag）">
+  给 GameObject 贴的一个分类**标签字符串**（如 `Player`、`Enemy`），用来成批标记
+  /
+  查找同类对象。按标签找（`FindWithTag`）比按名字找更稳——名字常变，标签是固定分类。详见本章「④
+  GameObject.Find」一节。
+</GlossaryItem>
+
+<GlossaryItem term="[SerializeField]">
+  加在**私有字段**上的一个「特性」，作用是让这个私有字段也**显示到 Inspector
+  面板**上，从而能在编辑器里**拖拽赋值**。这是「拖引用」的前提——比运行时用
+  `Find` 去搜场景更快、更稳、更清晰。写成 `public` 也会出现在
+  Inspector，但会破坏封装，所以推荐 `[SerializeField] private`。详见本章「⑤
+  [SerializeField]」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

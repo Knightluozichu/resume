@@ -451,6 +451,9 @@ import { Vector3Diagram } from "./diagrams/vector3-diagram";
 import { LifecycleTimelineDiagram } from "./diagrams/lifecycle-timeline-diagram";
 import { UpdateVsFixedUpdateDiagram } from "./diagrams/update-vs-fixed-update-diagram";
 import { AwakeVsStartDiagram } from "./diagrams/awake-vs-start-diagram";
+import { InstantiateDestroyDiagram } from "./diagrams/instantiate-destroy-diagram";
+import { GetComponentDiagram } from "./diagrams/get-component-diagram";
+import { InspectorBindingDiagram } from "./diagrams/inspector-binding-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1020,6 +1023,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LifecycleTimelineDiagram,
   UpdateVsFixedUpdateDiagram,
   AwakeVsStartDiagram,
+  InstantiateDestroyDiagram,
+  GetComponentDiagram,
+  InspectorBindingDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

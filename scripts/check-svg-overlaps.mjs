@@ -152,6 +152,7 @@ const PAGES = [
   '/learn/unity5/getting-started/gameobject-component',
   '/learn/unity5/getting-started/transform-coordinate',
   '/learn/unity5/scripting/monobehaviour-lifecycle',
+  '/learn/unity5/scripting/scripting-objects',
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
