@@ -282,17 +282,7 @@ export function AaPromptAssemblyDiagram() {
             );
           })}
 
-          {/* ===== 右侧 messages 列表容器 ===== */}
-          <rect
-            x={LIST_LEFT - 8}
-            y={LIST_TOP}
-            width={LIST_W + 16}
-            height={LIST_H}
-            rx="12"
-            fill="var(--bg)"
-            stroke="var(--border)"
-            strokeWidth="1.4"
-          />
+          {/* ===== 右侧 messages 列表标题（无容器框：靠标题 + 纵向对齐分列，避免容器↔slot 重叠/串框）===== */}
           <text
             x={listCx}
             y={LIST_TOP + 22}
