@@ -425,6 +425,10 @@ import { ContextBudgetDiagram } from "./diagrams/context-budget-diagram";
 import { CompressionVsTruncationDiagram } from "./diagrams/compression-vs-truncation-diagram";
 import { ContextWindowFillDiagram } from "./diagrams/context-window-fill-diagram";
 import { LostInMiddleDiagram } from "./diagrams/lost-in-middle-diagram";
+import { StructuredVsFreeformDiagram } from "./diagrams/structured-vs-freeform-diagram";
+import { JsonSchemaDiagram } from "./diagrams/json-schema-diagram";
+import { ToolCallProtocolDiagram } from "./diagrams/tool-call-protocol-diagram";
+import { ValidationRetryDiagram } from "./diagrams/validation-retry-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1139,6 +1143,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CompressionVsTruncationDiagram,
   ContextWindowFillDiagram,
   LostInMiddleDiagram,
+  StructuredVsFreeformDiagram,
+  JsonSchemaDiagram,
+  ToolCallProtocolDiagram,
+  ValidationRetryDiagram,
   Term,
   Glossary,
   GlossaryItem,

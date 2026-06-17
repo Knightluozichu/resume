@@ -1,0 +1,379 @@
+---
+title: 结构化输出与工具调用协议
+type: C
+section: 上下文工程
+order: 3
+description: 让模型吐出机器能解析的结构化结果——JSON 模式、schema 约束、工具调用的线路协议与校验重试。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型章（第二篇「上下文工程」收官）：深入「怎么拿到可靠、机器可解析的结构化输出」。Ch4 用过工具 schema、Ch5 讲过输出格式，本章把「结构化输出 + 工具调用的线路协议」讲透。代码为重心（§6 ≥80% 覆盖），但仍少文字重图重动画。主 viz = ToolCallProtocolDiagram（animotor 6 步消息流：请求 → assistant 返回 tool_calls(content 空) → app 执行 → role:tool + tool_call_id 回填 → 再请求 → content 终答）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 为什么要结构化输出（下游靠正则抠自由文本又脆又错）→ <StructuredVsFreeformDiagram />（静态两栏：左自由文本→正则→易碎，右 JSON→parse→可靠）；2. JSON 模式 / schema 约束 → <JsonSchemaDiagram />（静态：一份 schema 约束出固定形状 JSON）；3. 工具调用协议【主 viz·核心】→ <ToolCallProtocolDiagram />（animotor 消息流，演一次完整 function-calling 往返）；4. 校验 + 重试 → <ValidationRetryDiagram />（静态流程图：输出→parse→校验，✓ 通过 / ✗ 带错误重试）。Term 高亮术语：结构化输出 / JSON 模式 json-mode / schema / 工具调用协议 / tool_calls / tool_call_id / 校验重试 → 均进章末 Glossary，id 对齐 */}
+
+{/* ===== 1. 学习目标｜spec §一：C 型含一条「能实现 / 能改出」；末条检验问题 ===== */}
+
+<Objectives>
+
+- 能说清 agent 为什么需要「结构化输出」，以及 JSON 模式和 schema 约束各管哪一层
+- 能动手实现 / 改出一个拿结构化输出并做「校验 + 一次重试」的调用，并照协议解析 tool_calls、按 tool_call_id 回填
+- 能回答：工具调用一次完整往返里，assistant 返回 tool_calls 那一步，它给用户看的 content 到底是有内容还是空的？
+
+</Objectives>
+
+{/* ===== 2. 直觉引入｜spec §二：≤3 段 × 零术语；类比「填固定表格 vs 写自由作文」 ===== */}
+
+## 先打个比方
+
+想象你让人帮你交一份资料。一种交法是写成**一段自由作文**：「这单我看可以退，因为还在七天内、东西也没拆」——读着挺顺，可你要把它录进系统，还得有个人一句句去抠出「能退吗」「理由是啥」，对方今天这么写、明天换个说法，你抠字段的规则就得跟着改，一不留神就抠错。
+
+另一种交法是**填一张固定表格**：能退（是）、理由（七天内未拆封）、剩余天数（4）。格子是死的、每格填什么一清二楚——机器拿过来照着格子直接录入，不用猜、不用抠，谁来填都一个样。
+
+模型的输出也是这两种。这一章要讲的，就是怎么让模型**别交作文、改交表格**：把输出做成机器能直接解析的结构化结果，并且——既然是机器在用，还得有一套办法保证它**真的填对了格子**。
+
+{/* ===== 3. 概念讲解｜spec §三：C 型「是什么」压缩一两段；术语首现 <Term def id> 写句中；配 StructuredVsFreeform / JsonSchema 图 ===== */}
+
+## 第一个概念：为什么非要结构化
+
+先看清「作文」错在哪。agent 的输出，绝大多数时候不是给人看的，而是**交给下游程序去用**——拿去查库、做判断、填表单、触发动作。这就要求模型给出 <Term def="结构化输出（Structured Output）：让模型吐出机器能直接解析的结果——通常是符合固定形状的 JSON，而不是一段给人读的自由文本。下游程序按字段名取值即可，无需靠正则去抠。" id="structured-output">结构化输出</Term>，而不是一段自由文本。下面这张图把两种拿法摆在一起：
+
+<StructuredVsFreeformDiagram />
+
+差别一眼可见：左边是自由文本，下游只能写正则、切字符串去**硬抠**字段——模型换个措辞、多写一句，正则就抠错或抠空，又脆又错；右边是结构化 JSON，一行 `json.loads` 解析后**照字段名直接取**，字段固定、类型明确，稳。**结论：凡是输出要喂给程序的，就让模型吐结构化结果，别让下游去抠自由文本。**
+
+## 第二个概念：JSON 模式与 schema，约束的是两层
+
+那怎么让模型乖乖吐 JSON、还吐成我要的形状？这里有两层约束，新手常混为一谈。
+
+第一层是 <Term def="JSON 模式（JSON mode）：请求里的一个开关，要求模型这一次的输出必须是一段合法的 JSON，而不是普通文本。它只保证「语法上是合法 JSON」，不保证里面是什么形状。" id="json-mode">JSON 模式</Term>——它只保证模型这次的输出**是一段合法 JSON**（语法层面），但管不着里面有哪些字段。第二层才管形状：给模型一份 <Term def="schema（形状约定）：一份对输出形状的结构化约定，规定输出该有哪些字段、各字段的类型、哪些必填。把 schema 交给模型，就把输出形状提前定死。" id="schema">schema</Term>，规定该有哪些字段、各是什么类型、哪些必填。下面这张图就是「一份 schema 约束出一个固定形状的 JSON」：
+
+<JsonSchemaDiagram />
+
+盯住中间那条「约束」箭头：左边的 schema 定死了形状（`can_return` 是布尔且必填、`reason` 是字符串且必填、`days_left` 是整数且可选），右边模型吐出的 JSON 就**每次都长这个样**。**记住这条分工：JSON 模式管「是不是 JSON」，schema 管「是不是我要的那个形状」——通常两者配合，才拿得到可直接消费的结果。**
+
+{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
+
+{/* ===== 5. 交互 Demo｜spec §五：主 viz = ToolCallProtocolDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
+
+## 动手看：一次工具调用，消息是怎么来回走的
+
+结构化输出最重要的一个用场，是 <Term def="工具调用协议（Tool-Calling Protocol，function calling）：模型调用外部工具时遵循的一套固定线路格式——assistant 用结构化的 tool_calls 表达「想调哪个函数、传什么参数」，app 执行后用 role 为 tool 的消息回填结果，再请求一次模型才给出终答。" id="tool-calling-protocol">工具调用协议</Term>（function calling）。它不是「模型一句话就把活干了」，而是一套有固定格式的**消息往返**。下面这个动画把这套线路一步步演给你看——左边是 `messages` 列表逐步累积，右边解释每一步发生了什么。
+
+> 猜一猜：动画第 ② 步，assistant 返回 `tool_calls`（说它想调 `check_order`）时，它给用户看的 `content`（那段文字答案）是**有内容**还是**空的**？先想一想——这时它拿到工具结果了吗？再单步播放到第 ② 步、第 ⑥ 步对比着看。
+
+<ToolCallProtocolDiagram />
+
+盯住这条往返链：① 把 `messages` 连同 tools 定义发出去 → ② assistant 返回结构化的 <Term def="tool_calls：assistant 回复里装「调用意图」的结构化字段——要调哪个函数（name）、传什么参数（arguments，通常是一段 JSON 字符串）。返回 tool_calls 这一步，assistant 的 content 往往是空的。" id="tool-calls">tool_calls</Term>（带 `name` 和 `arguments`，这时 `content` 是**空的**）→ ③ **我们的代码**解析参数、真去执行函数 → ④ 把结果作为 `role:"tool"` 的消息、带上 <Term def="tool_call_id：回填工具结果时必须带的字段，对应 assistant 那次 tool_calls 里的 id。模型靠它把「这条结果」和「刚才哪次调用」配对——一轮里发起多个调用时尤其关键。" id="tool-call-id">tool_call_id</Term> 回填进 `messages` → ⑤ 带着工具结果**再请求一次** → ⑥ assistant 这次才在 `content` 里给出终答。**模型从不自己执行工具，它只产出意图；执行永远是 app 的代码做的。**
+
+{/* ===== 6. 代码对照｜spec §六：C 型重心，≥80% 覆盖；逐步建构；单块≤30 行，块间有解说 ===== */}
+
+## 一段段把它写出来
+
+把上面这套协议落成代码。例子用 OpenAI 风格接口，但思路对任何支持 function calling 的模型都一样。我们分四块写：定义带 schema 的请求 → 解析 tool_calls → 执行并回填 → 校验加重试。
+
+### 第一段：定义一个带 schema 的结构化请求
+
+先看「我只想要一份结构化结果」的写法——用 `response_format` 走 `json_schema`，把输出形状直接约束死。schema 就是上面那张图里的形状约定：
+
+```python
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "can_return": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "days_left": {"type": "integer"},
+    },
+    "required": ["can_return", "reason"],  # days_left 可选
+    "additionalProperties": False,         # 不许多塞别的字段
+}
+
+resp = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=msgs,
+    # response_format 把输出约束成 SCHEMA 的形状（含 JSON 模式）
+    response_format={"type": "json_schema",
+                     "json_schema": {"name": "verdict", "schema": SCHEMA}},
+)
+```
+
+`response_format` 这一参数同时把两层约束都打开了：既要求输出是合法 JSON（JSON 模式），又要求它符合 `SCHEMA` 的形状。模型这次的回复，`content` 里就是一段严格对版的 JSON 字符串。
+
+如果你要的不是「一份结果」而是「让模型去**调一个函数**」，则改用 `tools=[...]` 把 schema 作为工具参数传进去——这就接到了工具调用协议：
+
+```python
+TOOL_SCHEMAS = [{
+    "type": "function",
+    "function": {
+        "name": "check_order",
+        "description": "查订单能否退货，问到退货 / 退款时调用",
+        "parameters": {
+            "type": "object",
+            "properties": {"order_id": {"type": "string", "description": "订单号"}},
+            "required": ["order_id"],
+        },
+    },
+}]
+# 请求时传 tools=TOOL_SCHEMAS，模型就可能用 tool_calls 带回结构化参数
+```
+
+一句话记住选型：**只想要结果 → `response_format`；想触发一个动作 → `tools`。** 两者都靠 schema 把「形状」说死。
+
+### 第二段：解析 assistant 返回的 tool_calls
+
+发了带 `tools` 的请求后，assistant 的回复有两种可能：要么直接给文字答案，要么返回 `tool_calls`。后者里的 `arguments` 是一段 **JSON 字符串**，必须先 `json.loads` 解析成 dict 才能用：
+
+```python
+import json
+
+def parse_tool_call(tc):
+    name = tc.function.name                      # 调哪个函数
+    args = json.loads(tc.function.arguments)     # 关键：arguments 是字符串，要 loads
+    return name, args
+```
+
+注意这一步最容易踩的坑：`tc.function.arguments` 是字符串、不是已经解析好的对象，直接当 dict 取值会报错——它就是模型按 schema 填好、再序列化成文本的那段结构化参数。
+
+### 第三段：执行函数，并按 tool_call_id 回填
+
+解析出 `name` 和 `args` 后，去工具表里找到真正的函数执行它，再把结果包成一条 `role:"tool"` 的消息——**务必带上 `tool_call_id`**，让模型知道这条结果回应的是哪次调用：
+
+```python
+TOOLS = {"check_order": check_order}  # 名字 → 真正执行的函数
+
+def run_and_feedback(reply, msgs):
+    msgs.append(reply)                    # 先把 assistant「要调工具」这步记进历史
+    for tc in reply.tool_calls:           # 一轮可能有多个调用，逐个处理
+        name, args = parse_tool_call(tc)
+        result = TOOLS[name](**args)       # 我们的代码真去执行
+        msgs.append({                      # 回填：role=tool + 对应的 tool_call_id
+            "role": "tool",
+            "tool_call_id": tc.id,         # 必须对上发起它的那次调用
+            "content": json.dumps(result, ensure_ascii=False),
+        })
+```
+
+两个要点：一是先把带 `tool_calls` 的 `reply` 也 append 进去，协议历史才完整；二是每个 `tc` 各回填一条、各自带 `tc.id`——一轮里有几个调用就回填几条，别合并、别张冠李戴。回填完，带着这份 `msgs` 再请求一次，assistant 才会给出 `content` 终答。
+
+### 第四段：校验 + 重试，把「偶发不合法」兜住
+
+最后这块是结构化输出能不能用在生产里的关键。哪怕开了 schema，模型仍可能偶发截断、缺字段、类型不对。所以拿到输出别直接信，要走一道 <Term def="校验 + 重试（Validate &amp; Retry）：拿到模型输出后先 parse 解析、再按 schema 校验；不合法时把具体错误信息塞回提示、让模型重出一次，直到合法或到达重试上限。是让结构化输出真正可靠的兜底机制。" id="validate-retry">校验 + 重试</Term>。先看这道流程：
+
+<ValidationRetryDiagram />
+
+把它写成代码——解析 + 校验，不合就**带着具体错误**重试一次（注意是带错误，不是原样重发）：
+
+```python
+def parse_with_retry(messages, max_retry=1):
+    for attempt in range(max_retry + 1):
+        raw = call_llm(messages)
+        try:
+            data = json.loads(raw)        # ① parse
+            validate(data, SCHEMA)        # ② 按 schema 校验，不合抛异常
+            return data                    # ③ 通过：用结果
+        except (ValueError, SchemaError) as e:
+            if attempt == max_retry:
+                raise                      # 到顶仍不合法：抛给上层兜底
+            # ④ 不合：把"哪里错了"塞回提示，让模型针对性重出
+            messages.append({"role": "user",
+                "content": f"上次输出不合法：{e}。请严格按 schema 重出，只回 JSON。"})
+```
+
+逐块对照流程图看：`json.loads` 是 **parse**；`validate(data, SCHEMA)` 是**按 schema 校验**；通过就 `return`（绿色出口）；不合就把异常 `e` 的内容塞回 `messages` 再循环一次（红色回流）。两个生产要点：一是**重试必须带具体错误**——原样重发模型很可能再犯同样的错；二是**重试要有上限**（`max_retry`），到顶仍不合法就抛错 / 降级兜底，绝不能无限重试空转——这和 agent 主循环要有 `max_steps` 刹车是同一种思路。
+
+{/* ===== 7. 常见误区｜spec §七：C 型 ≥3 个；固定 现象→原因→修法 三行格式 ===== */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：一直靠正则 /
+  字符串切割从模型的自由文本里抠字段，跑了一阵突然大面积抠错或抠空。
+  **原因**：自由文本是给人读的，模型换个措辞、多写一句、调下语序，写死的正则就匹配不上——你是在拿脆弱的规则去对付天然多变的自然语言。
+  **修法**：别抠自由文本。让模型走**结构化输出**（`response_format` / 工具
+  schema），下游 `json.loads` 后按字段名直接取值，不再依赖具体措辞。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具调用跑通了几步，突然接口报错，或者模型把工具结果安到了错误的调用上。
+  **原因**：回填工具结果时漏了 `tool_call_id`（或对错了）。一轮里 assistant
+  可能发起多个调用，每个有自己的 id；`role:"tool"` 的回填消息靠 `tool_call_id`
+  和对应调用配对，漏了它协议就错位。 **修法**：遍历 `reply.tool_calls`，对每个
+  `tc` 执行后 append 一条带 `tc.id` 的 tool
+  消息——一轮有几个调用就回填几条，各自对上各自的 id，别合并。
+</Callout>
+
+<Callout type="trap">
+  **现象**：开了 JSON 模式 / 给了
+  schema，平时都好好的，线上偶尔冒出一次解析崩溃。
+  **原因**：以为「模型说会返回合法 JSON 就一定合法」，于是 `json.loads`
+  后不校验直接用。可再强的模型也会偶发截断、缺字段、类型不对、混进解释文字——下游是程序，撞上一次不合法就崩。
+  **修法**：拿到输出先 `parse` 再按 schema
+  **校验**，不合就**带着具体错误重试一次**；到顶仍不合就降级 /
+  抛错兜底，别让偶发不合法直接打穿下游。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 assistant 返回 `tool_calls` 那一步，就去读它的 `content`
+  当最终答案，结果拿到的是空字符串。
+  **原因**：那一步模型还没拿到工具结果，它表达的是「我想调某个函数」的意图（装在
+  `tool_calls` 里），不是给用户的终答——所以 `content`
+  往往是空的。终答要等回填后**再请求一次**才在 `content` 里出现。
+  **修法**：每次回复先判断 `if reply.tool_calls`：有就走「执行 + 回填 +
+  再请求」，没有才把 `reply.content` 当终答返回。
+</Callout>
+
+{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；含 1 道独立实现题；答案折叠 ===== */}
+
+## 小结
+
+- agent 的输出多半给程序用，所以要**结构化输出**——别让下游去抠自由文本，又脆又错
+- JSON 模式管「是不是合法 JSON」，schema 管「是不是我要的那个形状」，通常两者配合
+- 工具调用协议是一套固定往返：assistant 用 `tool_calls` 表意图（content 此刻空）→ app 执行 → `role:"tool"` + `tool_call_id` 回填 → 再请求 → 才得 content 终答
+- 模型从不自己执行工具；解析 `arguments`（JSON 字符串要 `json.loads`）、执行、回填都是我们的代码做的
+- 拿到输出先 parse、再按 schema 校验，不合就带具体错误重试一次，且重试必须有上限
+
+<Exercises>
+
+**练习 1（独立实现题）** 你要做一个「发票信息抽取」调用：给一段报销说明（自由文本），让模型抽出 `amount`（金额，数字，必填）、`category`（类别，字符串，限定 `["餐饮","交通","住宿","其他"]`，必填）、`note`（备注，字符串，可选）。请写出：这份 schema 长什么样，以及一个「带 schema 校验 + 一次重试」的抽取函数骨架（解析失败或不合 schema 时，把错误塞回让模型重出一次）。
+
+<Answer>
+
+先定 schema（用枚举把 category 锁死）：
+
+```python
+INVOICE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "amount": {"type": "number"},
+        "category": {"type": "string", "enum": ["餐饮", "交通", "住宿", "其他"]},
+        "note": {"type": "string"},
+    },
+    "required": ["amount", "category"],
+    "additionalProperties": False,
+}
+```
+
+再写带校验 + 一次重试的抽取函数：
+
+```python
+def extract_invoice(text, max_retry=1):
+    msgs = [
+        {"role": "system", "content": "从报销说明里抽取发票信息，只回符合 schema 的 JSON。"},
+        {"role": "user", "content": text},
+    ]
+    for attempt in range(max_retry + 1):
+        raw = call_llm(msgs, response_format={
+            "type": "json_schema",
+            "json_schema": {"name": "invoice", "schema": INVOICE_SCHEMA},
+        })
+        try:
+            data = json.loads(raw)             # parse
+            validate(data, INVOICE_SCHEMA)     # 按 schema 校验（含 enum）
+            return data                         # 通过：用结果
+        except (ValueError, SchemaError) as e:
+            if attempt == max_retry:
+                raise                           # 到顶兜底
+            msgs.append({"role": "user",
+                "content": f"上次输出不合法：{e}，请严格按 schema 重出。"})
+```
+
+要点：① 用 `enum` 把 category 锁成四选一，校验时不在枚举内就算不合；② 重试**带着具体错误** `e`、而不是原样重发；③ `max_retry` 给重试上限，到顶 `raise` 兜底。
+
+</Answer>
+
+**练习 2（改协议 · 思考题）** 下面这段处理工具调用的代码，在「assistant 一轮里同时发起了 2 个工具调用」时会出问题。它错在哪？怎么改？
+
+```python
+tc = reply.tool_calls[0]                # 只取第一个
+name, args = parse_tool_call(tc)
+result = TOOLS[name](**args)
+msgs.append({"role": "tool", "content": json.dumps(result)})  # 没带 tool_call_id
+```
+
+<Answer>
+
+两处错：① **只处理了第一个调用** `tool_calls[0]`，第二个被丢了——模型等不到第二条结果，会卡住或再发一次。② **回填没带 `tool_call_id`**，模型对不上这条结果回应的是哪次调用，协议错位。
+
+改法：遍历全部 `tool_calls`，每个各执行、各回填一条带自己 `tc.id` 的消息：
+
+```python
+msgs.append(reply)                       # 先记下 assistant 这步
+for tc in reply.tool_calls:              # 遍历全部，而非只取第一个
+    name, args = parse_tool_call(tc)
+    result = TOOLS[name](**args)
+    msgs.append({
+        "role": "tool",
+        "tool_call_id": tc.id,           # 各自对上各自的 id
+        "content": json.dumps(result, ensure_ascii=False),
+    })
+```
+
+判别诀窍：一轮有几个 `tool_calls` 就回填几条 `role:"tool"` 消息，且每条的 `tool_call_id` 必须对上发起它的那次调用。
+
+</Answer>
+
+**练习 3（辨析题）** 下面三件事，分别该靠「JSON 模式」「schema 约束」还是「校验 + 重试」来解决？为什么？
+（A）模型有时把答案外面裹一段「好的，这是结果：…」的文字，导致 `json.loads` 失败。
+（B）模型返回的 JSON 字段名时对时错（一会儿 `can_return`、一会儿 `canReturn`）。
+（C）线上偶发一次模型把本该是整数的 `days_left` 填成了字符串 `"4"`。
+
+<Answer>
+
+（A）靠 **JSON 模式**——打开它，模型这次的输出就必须是纯合法 JSON，不会再裹解释性文字，`json.loads` 自然不崩。
+（B）靠 **schema 约束**——把字段名、类型在 schema 里定死（`required: ["can_return", ...]`、`additionalProperties: false`），模型被约束着用统一的字段名，不再飘。
+（C）靠 **校验 + 重试**——schema 能降低概率但挡不住「偶发」一次；校验时发现 `days_left` 不是 integer，就把这个错误反馈回去让模型重出一次，把偶发不合法兜住。
+判别诀窍：管「是不是 JSON」→ JSON 模式；管「是不是这个形状」→ schema；管「偶发还是出错了怎么办」→ 校验 + 重试。三者是层层加固，不是三选一。
+
+</Answer>
+
+</Exercises>
+
+{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
+
+{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，零基础大白话；id 与 Term 对齐 ===== */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="结构化输出（Structured Output）" id="structured-output">
+    让模型吐出机器能直接解析的结果——通常是符合固定形状的
+    JSON，而不是一段给人读的自由文本。agent
+    的下游全是程序在消费输出，结构化结果能被 `json.loads`
+    直接解析、按字段名取值，比靠正则去抠自由文本可靠得多。详见本章「第一个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="JSON 模式（JSON mode）" id="json-mode">
+    请求里的一个开关，要求模型这一次的输出必须是一段合法的
+    JSON、而不是普通文本。它只保证「语法上是合法
+    JSON」，不保证里面是什么形状——要约束形状还得配
+    schema。详见本章「第二个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="schema（形状约定）" id="schema">
+    一份对输出形状的结构化约定，规定输出该有哪些字段、各字段的类型、哪些必填。把
+    schema 交给模型（走 `response_format`
+    或作为工具参数），就把输出形状提前定死——模型被约束着吐出一个字段固定、类型明确的合法
+    JSON。详见本章「第二个概念」。
+  </GlossaryItem>
+  <GlossaryItem
+    term="工具调用协议（Tool-Calling Protocol）"
+    id="tool-calling-protocol"
+  >
+    模型调用外部工具时遵循的一套固定线路格式（function calling）：assistant
+    用结构化的 tool_calls 表达「想调哪个函数、传什么参数」，app 执行后用 role 为
+    tool 的消息回填结果，再请求一次模型才给出 content
+    终答。模型从不自己执行工具，执行永远是 app 的代码做的。详见本章「动手看」。
+  </GlossaryItem>
+  <GlossaryItem term="tool_calls" id="tool-calls">
+    assistant
+    回复里装「调用意图」的结构化字段——要调哪个函数（name）、传什么参数（arguments，通常是一段
+    JSON 字符串）。模型返回 tool_calls 这一步，它给用户看的 content
+    往往是空的：那时它还没拿到工具结果，表达的只是「想调某函数」。详见本章「动手看」与第六节第二段。
+  </GlossaryItem>
+  <GlossaryItem term="tool_call_id" id="tool-call-id">
+    回填工具结果时必须带的字段，对应 assistant 那次 tool_calls 里的
+    id。模型靠它把「这条结果」和「刚才哪次调用」配对——一轮里发起多个调用时尤其关键，漏了或对错就协议错位。详见本章第六节第三段。
+  </GlossaryItem>
+  <GlossaryItem term="校验 + 重试（Validate &amp; Retry）" id="validate-retry">
+    拿到模型输出后先 parse 解析、再按 schema 校验（字段 / 类型 /
+    必填）；不合法时把具体错误信息塞回提示、让模型重出一次，直到合法或到达重试上限。它是让结构化输出真正可靠的兜底机制——重试必须带具体错误，且必须有上限。详见本章第六节第四段。
+  </GlossaryItem>
+</Glossary>
