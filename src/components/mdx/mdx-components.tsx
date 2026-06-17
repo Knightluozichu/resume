@@ -403,9 +403,9 @@ import { HookMechanismDiagram } from "./diagrams/hook-mechanism-diagram";
 import { PluginArchitectureDiagram } from "./diagrams/plugin-architecture-diagram";
 import { MemoryLeakDiagram } from "./diagrams/memory-leak-diagram";
 import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
-import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
-import { ChatbotWorkflowAgentDiagram } from "./diagrams/chatbot-workflow-agent-diagram";
-import { TaskFitExplorer } from "./task-fit-explorer";
+import { AaAgentLoopDiagram } from "./ai-agent/agent-loop-diagram";
+import { AaChatbotWorkflowAgentDiagram } from "./ai-agent/chatbot-workflow-agent-diagram";
+import { AaTaskFitExplorer } from "./ai-agent/task-fit-explorer";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1098,9 +1098,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   XrFrameBudgetDiagram,
   XrInputOverheadDiagram,
   WebAssemblyFeatureDiagram,
-  AgentLoopDiagram,
-  ChatbotWorkflowAgentDiagram,
-  TaskFitExplorer,
+  AaAgentLoopDiagram,
+  AaChatbotWorkflowAgentDiagram,
+  AaTaskFitExplorer,
   Term,
   Glossary,
   GlossaryItem,

@@ -12,7 +12,7 @@ import {
 } from "../anim/use-teaching-timeline";
 
 /**
- * <AgentLoopDiagram>：智能体循环（Agent Loop）的「可控教学动画」旗舰图（HEL-271）。
+ * <AaAgentLoopDiagram>：智能体循环（Agent Loop）的「可控教学动画」旗舰图（HEL-271）。
  *
  * 失忆天才小屋隐喻：把「感知—决策—行动—观察」四个环节画成一个环，一个高亮脉冲
  * 沿环依次点亮每个节点，转完一圈再回到起点——这正是智能体「自主循环」的灵魂。
@@ -137,7 +137,7 @@ const LABEL_TEXT: Record<string, string> = Object.fromEntries(
   STEPS.map((s) => [s.label, s.caption ?? s.label]),
 );
 
-export function AgentLoopDiagram() {
+export function AaAgentLoopDiagram() {
   // 直线 3 段高亮层 + 环 4 节点高亮层 + 闭环回边高亮层的 DOM 引用。
   const lineRefs = useRef<Record<string, SVGRectElement | null>>({});
   const ringRefs = useRef<Record<string, SVGRectElement | null>>({});

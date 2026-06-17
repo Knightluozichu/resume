@@ -1,5 +1,5 @@
 /**
- * <ChatbotWorkflowAgentDiagram>：聊天机器人 / 工作流 / 智能体 三列对比解剖图（HEL-271）。
+ * <AaChatbotWorkflowAgentDiagram>：聊天机器人 / 工作流 / 智能体 三列对比解剖图（HEL-271）。
  *
  * 三列并排，单一 x 公式 xs[i]=LEFT+i*(colW+GAP)，列宽相等、绝不互压：
  *  - 列1 聊天机器人：一问一答的直线（用户问 ↓ 模型答），到此为止，无流程。
@@ -12,7 +12,7 @@
  * 遮挡红线：箭头不穿字、列标题不压列内元素、长中文标签预留宽度，列框互不重叠。
  */
 
-export function ChatbotWorkflowAgentDiagram() {
+export function AaChatbotWorkflowAgentDiagram() {
   // —— 布局常量（viewBox 内坐标；单一公式排三列）——
   const VIEW_W = 724;
   const VIEW_H = 384;

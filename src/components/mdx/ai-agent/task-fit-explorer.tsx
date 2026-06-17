@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 
-import { DemoStage, Toggle } from "./controls";
+import { DemoStage, Toggle } from "../controls";
 
 /**
- * <TaskFitExplorer>：「这个任务该用 聊天机器人 / 工作流 / 智能体？」选型交互件（HEL-271）。
+ * <AaTaskFitExplorer>：「这个任务该用 聊天机器人 / 工作流 / 智能体？」选型交互件（HEL-271）。
  *
  * 读者拨动三个任务属性开关，组件实时给出推荐方案 + 一句话解释为什么——把「自主性光谱」
  * 与「何时该用 Agent」从抽象判断变成动手试。也内置几个示例任务，一键填入对照。
@@ -95,7 +95,7 @@ const DEFAULT_TRAITS: TaskTraits = {
   tools: false,
 };
 
-export function TaskFitExplorer() {
+export function AaTaskFitExplorer() {
   const [traits, setTraits] = useState<TaskTraits>(DEFAULT_TRAITS);
   // 当前是否由某个示例填入（仅作高亮提示，不影响逻辑）。
   const [activeExample, setActiveExample] = useState<string | null>(null);

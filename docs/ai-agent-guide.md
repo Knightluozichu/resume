@@ -72,11 +72,12 @@
 2. **解剖 / 结构图**（≥1 个）：纯 Server SVG 静态图，把「构造 / 布局 / 分类」画清楚（如 Agent 五大件解剖、消息结构、向量空间、编排拓扑）。注意**遮挡 / 自适应**（见 §四几何硬规则）。
 3. **交互件**（≥1 个）：React 受控小部件，让读者**动手调参看变化**（如拖 temperature 看输出分布、滑相似度阈值看检索命中、开关「错误模式」看翻车）。范式见 `demos/rgb-mixer-demo.tsx`、`amdahl-curve-explorer.tsx`（Canvas 交互曲线）。
 
-**组件落位 & 注册**（与 cpp-concurrency 完全一致）：
-- 文件：静态 / 动画图放 `src/components/mdx/diagrams/<kebab-name>.tsx`；大型交互 / Canvas 放 `src/components/mdx/<kebab-name>.tsx`。本书组件文件名建议带 `agent-` 或语义前缀避免与既有 90+ 图重名。
-- 注册：在 `src/components/mdx/mdx-components.tsx` 顶部 `import`，并加进底部 components map 对象。**grep 现有 `ConcurrencyVsParallelismDiagram` 看 import 行 + map 行两处范式照抄。**
+**组件落位 & 注册**（本书命名空间化，防与并行 -dev/-apps 两本 AI-agent 书撞名，HEL-271）：
+- 文件：本书所有 bespoke 组件（静态图 / 动画图 / 交互件 / Canvas）一律放 **`src/components/mdx/ai-agent/<kebab-name>.tsx`** 子目录（不再混进公共 `diagrams/` 或 `mdx/` 根），用子目录隔离路径，避免与既有 90+ 图重名。文件名可保持语义清晰（子目录已隔路径，不强制加前缀）。
+- 命名：**组件名 / 导出名 / 在 mdx-components.tsx 的 map key（= `.mdx` 标签名）一律加 `Aa` 前缀**（AI-Agent 书），如 `AaAgentLoopDiagram` / `AaChatbotWorkflowAgentDiagram` / `AaTaskFitExplorer`——因 -dev / -apps 两本并行书会有同名同路径组件，合并 main 时靠 `Aa` 前缀 + `ai-agent/` 子目录避撞。
+- 注册：在 `src/components/mdx/mdx-components.tsx` 顶部 `import { AaXxx } from "./ai-agent/<kebab-name>"`，并加进底部 components map 对象（key 即 `.mdx` 标签名，必须带 `Aa` 前缀）。**grep 现有 `AaAgentLoopDiagram` 看 import 行 + map 行两处范式照抄。**
 - 客户端组件 `"use client"`；anime.js 必须 `import type { Timeline } from "animejs"` + 运行时 `await import("animejs")` 动态加载（硬规则 2/6，不进公共 bundle）。
-- `.mdx` 里直接 `<AgentReactLoopDiagram />` 这样用，不传一堆 props（复杂数据写死在组件内）。
+- `.mdx` 里直接 `<AaAgentReactLoopDiagram />` 这样用（标签名带 `Aa` 前缀），不传一堆 props（复杂数据写死在组件内）。
 
 **MDX 写作坑（必避，全是踩过的）**：
 - 复杂 SVG **一律做成组件**，禁止在 `.mdx` 里内联多行 `<svg>` + 紧邻松散文字（触发 hydration mismatch）。
