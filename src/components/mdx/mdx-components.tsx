@@ -429,6 +429,9 @@ import { StructuredVsFreeformDiagram } from "./diagrams/structured-vs-freeform-d
 import { JsonSchemaDiagram } from "./diagrams/json-schema-diagram";
 import { ToolCallProtocolDiagram } from "./diagrams/tool-call-protocol-diagram";
 import { ValidationRetryDiagram } from "./diagrams/validation-retry-diagram";
+import { ToolsAsMenuDiagram } from "./diagrams/tools-as-menu-diagram";
+import { ParallelVsSequentialDiagram } from "./diagrams/parallel-vs-sequential-diagram";
+import { FunctionCallingDecisionDiagram } from "./diagrams/function-calling-decision-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1147,6 +1150,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JsonSchemaDiagram,
   ToolCallProtocolDiagram,
   ValidationRetryDiagram,
+  ToolsAsMenuDiagram,
+  ParallelVsSequentialDiagram,
+  FunctionCallingDecisionDiagram,
   Term,
   Glossary,
   GlossaryItem,

@@ -172,6 +172,7 @@ import { agentFirstAgentQuestions } from "./review/agent-first-agent";
 import { agentPromptEngineeringQuestions } from "./review/agent-prompt-engineering";
 import { agentContextWindowQuestions } from "./review/agent-context-window";
 import { agentStructuredOutputQuestions } from "./review/agent-structured-output";
+import { agentFunctionCallingQuestions } from "./review/agent-function-calling";
 
 export {
   CHAPTER_TITLES,

@@ -175,7 +175,8 @@ export type ReviewChapterSlug =
   | "agent-first-agent"
   | "agent-prompt-engineering"
   | "agent-context-window"
-  | "agent-structured-output";
+  | "agent-structured-output"
+  | "agent-function-calling";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -354,6 +355,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-prompt-engineering": "提示工程精要",
   "agent-context-window": "上下文窗口",
   "agent-structured-output": "结构化输出与工具调用",
+  "agent-function-calling": "Function Calling 原理",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
