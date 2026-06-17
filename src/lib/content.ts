@@ -71,6 +71,7 @@ export const BOOK_ORDER = [
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
+  "cpp-concurrency",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -83,6 +84,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
+  "cpp-concurrency": "C++ 并发编程实战（第2版）",
 };
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -144,6 +146,12 @@ export const SECTION_ORDER = [
   "URP 专项优化",
   "XR 专项优化",
   "Web 专项优化",
+  // C++ 并发编程实战（第2版）
+  "并发基础",
+  "共享数据",
+  "内存模型与原子操作",
+  "并发数据结构",
+  "高级并发与工程",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

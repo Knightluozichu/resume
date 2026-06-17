@@ -1,0 +1,454 @@
+---
+title: 并行算法
+type: C
+section: 高级并发与工程
+order: 3
+description: 读完能给标准库算法加上 C++17 执行策略一键并行化（for_each / sort / reduce / transform_reduce），能说清 seq / par / par_unseq 三档各保证什么、强弱如何，能解释 reduce 为什么要求操作可结合而 accumulate 严格顺序，并能判断一段代码到底该不该并行——数据量小、每元素极轻、有争用时 par 反而比顺序更慢。
+demo: true
+math: false
+sourceUrl: ""
+draft: false
+---
+
+{/* C 实战型第十一章（HEL-239，《C++ 并发编程实战》第2版 §10「并行算法」改编重写，高级并发与工程篇第 3 章）：本章把前面学的并行能力收口到「标准库算法 + 一个执行策略实参」这个最省力的并行手段上。重心是代码对照（type C §6 ≥80% 关键码，每块带 #include；因 Apple libc++ 未实现并行 STL，块经「执行策略 shim」验证语法正确，正文用 Callout 标明需 C++17 + 支持并行执行的标准库/编译器，部分实现还需链 TBB）+ ExecutionPolicyDiagram 三档对照动画（§5 主 Demo）。math:false。沿用「餐厅后厨」隐喻：执行策略=给「把这批菜处理一遍」下指令时附带的并行档位——seq(一个厨师顺序做)、par(多个厨师分批同时做)、par_unseq(多厨师 + 每人一手颠两锅=向量化)；reduce vs accumulate=累加一摞账，accumulate 必须从头一张张顺着加，reduce 可分组并行求和再合并(但要求加法可任意结合/换序)。承接 ch9（数据并行/Amdahl/false sharing）。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz；type C 新核心概念 ≤5；术语首现 Term 高亮，章末 Glossary 一一对应）：1) C++17 执行策略 seq/par/par_unseq 各保证什么、各档强弱 = ExecutionPolicyDiagram(anime·主) + 文字；2) 并行 STL：给 for_each/sort/reduce/transform_reduce 传执行策略即并行 = 代码 + ExecutionPolicyDiagram；3) reduce vs accumulate：reduce 可并行(树形归约、可重排)，要求操作可结合/可交换；accumulate 严格顺序 = ReduceTreeDiagram(anime) + 代码；4) 何时该并行：数据量大 + 每元素处理够重 + 元素间无依赖无争用才划算(呼应 ch9 Amdahl/false sharing) = WhenToParallelizeDiagram + Callout；5) 注意事项：异常逸出并行算法→terminate；par 要求函子无数据竞争(par_unseq 更严，函子内不许加锁/同步)；迭代器要求 = 代码 + Callout。核心术语：执行策略 / seq / par / par_unseq / 并行算法 / 向量化 / reduce 归约 / 可结合性。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能改出 ___」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能**给标准库算法加执行策略一键并行化**：给 `std::for_each` / `std::sort` / `std::reduce` / `std::transform_reduce` 传入 `std::execution::par`，把原本串行的算法改成多线程并行，并说清 `seq` / `par` / `par_unseq` 三档各保证什么、强弱如何
+- 能**解释 reduce 为什么要求操作可结合 / 可交换、accumulate 为什么严格顺序**：看懂 `reduce` 靠树形归约并行求和、可重排，而把减法这类不可结合的操作交给 `reduce` 会算出不确定的错误结果
+- 能回答：一段「对几十个元素各做一次加法」的循环，无脑加上 `std::execution::par` 会更快还是更慢？为什么？（用「该不该并行」的判断清单当场分析）
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
+
+## 给后厨下指令时，顺手挑个「并行档位」
+
+前几章你学会了亲手招厨师、分活、排队取菜——那是把并行的每个零件都自己拧。可大多数时候你只想说一句：「把这一筐菜都处理一遍」。要是连「分给几个厨师、要不要同时上」都得自己排班，未免太累。
+
+更省心的办法是：下这句指令时，顺手挑一个**并行档位**。你可以说「一个厨师顺着做就行」，也可以说「多叫几个厨师分批同时做」，还可以说「多叫几个厨师，而且每人允许一手同时颠两个锅」。同一句「处理这筐菜」，挑的档位不同，快慢就天差地别——而排班的脏活，交给后厨总管去办。
+
+没有这套「挑档位」的本事会怎样？要么你为了让活儿快点，又得回去手搓那套招人、分活、合账的全套流程（白学了省力的工具）；要么图省事永远只用一个厨师顺序做，几百万份菜也一份份磨，明明有满厨房的人手却闲着。这一章就教你：怎么给「处理这一筐」这句指令，挑对那个并行档位。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压缩，篇幅让给 §6）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；引用 §5 Demo / §6 代码。 */}
+
+## 执行策略：算法的「并行档位」
+
+把「挑档位」翻译成 C++17 的话，就是给算法传一个 <Term def="C++17 给标准库算法新增的一个「并行档位」实参，放在算法的第一个参数位。它告诉算法允许用多大程度的并行/向量化来执行——而具体怎么分线程、怎么调度，由标准库实现去办。三档：std::execution::seq（顺序）、par（并行）、par_unseq（并行 + 向量化）。">执行策略</Term>。它是算法的**第一个实参**，告诉算法「允许你并行到什么程度」。C++17 给了三档，强弱递增：
+
+<ExecutionPolicyDiagram />
+
+第一档 <Term def="顺序执行策略。算法在调用线程上一个元素一个元素地顺序处理，不并行、不向量化——和不传策略的老版本行为基本一致。胜在结果顺序确定、对函子要求最松。像一个厨师顺着把菜一份份做完。">`std::execution::seq`</Term>（顺序）：一个线程顺着做，不并行也不向量化——和不传策略的老算法基本一样。它最朴素，但**结果顺序确定**、对你传的函子要求最松。
+
+第二档 <Term def="并行执行策略。允许算法把元素分给多个线程同时处理，但每个线程内部仍按顺序逐个处理元素（不强制向量化）。要求：你传的函子在多个线程并发调用时不能有数据竞争。像多个厨师分批同时做。">`std::execution::par`</Term>（并行）：允许把元素分给多个线程同时处理——这就是日常最常用的「一键并行」。代价是：你传进去的函子会被多个线程并发调用，所以它**绝不能有数据竞争**（两个线程同写一个变量而没保护）。
+
+第三档 <Term def="并行 + 未排序执行策略。在 par 的多线程并行之上，再允许同一个线程内对多个元素做向量化（SIMD：一条指令同时算多个数据）。因此函子内不仅不能有数据竞争，还不许有任何会阻塞/同步的操作（加锁、原子等待、分配内存），否则同一线程内交错执行多个元素会死锁或出错。像多个厨师、且每人一手同时颠两个锅。">`std::execution::par_unseq`</Term>（并行 + 向量化）：在多线程之上再允许同一线程内 <Term def="vectorization：用 CPU 的 SIMD 指令（单指令多数据）一条指令同时处理多个数据元素，相当于「一只手同时颠两个锅」。par_unseq 允许编译器把循环向量化，进一步压榨单线程的吞吐。">向量化</Term>（一条指令同时算多个数据）。它最猛，但对函子的要求也最苛刻：函子内**不许有任何加锁、原子等待、分配内存这类会阻塞或同步的操作**——因为同一线程会把多个元素的处理交错着跑，一加锁就可能自己把自己锁死。
+
+三档不是「越强越好」，而是「越强对你的函子要求越严、且只在活够大够独立时才真划算」（§4 的判断清单专门讲这个）。
+
+## 并行 STL：给算法传一个策略，它就并行了
+
+执行策略真正的妙处在于：**你几乎什么都不用改**。原来怎么调 `std::sort`、`std::for_each`、`std::reduce`，现在只是在它们的参数最前面塞一个执行策略，算法内部就自动帮你分线程、合并结果。这些「能接受执行策略、从而可并行执行」的算法重载，就叫 <Term def="parallel STL：C++17 给一批标准库算法（for_each、sort、reduce、transform、transform_reduce 等）新增的、接受「执行策略」作第一实参的重载。传 par 即并行执行，分线程/合并结果由标准库实现负责，调用方代码几乎不变。注意：需标准库实现了它（feature 宏 __cpp_lib_execution），部分实现还要链接 Intel TBB。">并行算法（并行 STL）</Term>。
+
+从「自己 new 线程、自己分块、自己合并」到「加一个 `par`」，省下的代码量是巨大的——这正是本章 §6 要带你一行行体会的。`for_each` 并行处理每个元素、`sort` 并行排序、`reduce` 并行求和……都只是多打了几个字符。
+
+## reduce vs accumulate：能并行的求和，凭什么能并行
+
+并行求和这件事，藏着一个微妙但关键的区别。老朋友 `std::accumulate` 你早就用过——它从左到右、一个一个累加：`((((0+a)+b)+c)+d)`，第 $i$ 步必须等第 $i-1$ 步算完。这是**严格顺序**的，天生无法并行，所以标准库**没给它执行策略重载**。
+
+C++17 新增的 `std::reduce` 长得几乎一样，却能并行。秘密在于它用 <Term def="一种并行求和的组织方式：不从头到尾顺着加，而是把元素两两分组并行求和得到一批部分和，再把部分和两两合并……一层层归约到最终结果。每一层内部的多组求和互不依赖、可同时进行，因此可并行。reduce 用的就是这种树形结构。">树形归约</Term>：先把 `(a+b)` 和 `(c+d)` **同时**算出来，再合并成 `((a+b)+(c+d))`。这棵树的每一层内部互不依赖，可以并行。下面这张动画把「线性链 vs 树形」并排演给你看——先猜一猜：
+
+> 猜一猜：`reduce` 既然能把 `(a+b)`、`(c+d)` 拆开并行算，那把它的加号换成减号、做 `a-b-c-d`，并行出来的结果还对吗？
+
+<ReduceTreeDiagram />
+
+盯住右半区：`reduce` 之所以敢把求和顺序重排成树形，**前提是操作可结合、可交换**——加法满足 `(a+b)+c == a+(b+c)`，怎么分组、谁先算结果都一样。可一旦操作不满足这个前提，重排就会算错。这就引出本章一个核心术语 <Term def="associativity：一个二元操作 op 满足 (a op b) op c == a op (b op c)，即「怎么加括号、谁先算」不影响结果。加法、乘法、取最大值都可结合；减法、除法不可结合。reduce 靠重排求和顺序来并行，所以只对可结合（通常还要求可交换）的操作才能给出正确结果。">可结合性</Term>：加法可结合，所以 `reduce(+)` 怎么并行都对；可减法 `a-b-c-d` 一旦重排成 `(a-b)-(c-d)`，结果就完全变了。所以 **`reduce` 只对可结合 / 可交换的操作才能保证结果正确**——这是它和 `accumulate` 最本质的分水岭（§6 有正反代码，§7 有踩坑）。
+
+## 何时该并行：并行不是免费的
+
+最后一个、也是最常被忽略的判断：**这段代码到底该不该并行？** 很多人以为「能并行就并行、能选 `par_unseq` 就选最强」，结果加上 `par` 反而更慢。原因是并行有它自己的开销——把活分给多个线程、调度它们、最后合并结果，这些都要花时间；还可能撞上第九章讲过的 false sharing、锁争用。当每个元素的活又少又轻、数据量又小时，这笔开销会**盖过**并行省下的时间。
+
+下面这张对比图给你一份「该不该 par」的判断清单：
+
+<WhenToParallelizeDiagram />
+
+一句话总则：**数据量大 + 每元素处理够重 + 元素间无依赖无争用**，三条都占，`par` 才划算；反之小数据、极轻处理、有共享写 / 有副作用，老老实实 `seq`，甚至并行还不如顺序快。这正好呼应第九章的 Amdahl 定律（串行部分卡住上限）和 false sharing（共享写拖垮并行）——并行算法只是把那些道理换了个更省力的接口，底层的账还是同一本。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：主 Demo = ExecutionPolicyDiagram（已在 §3「执行策略」作为带「猜一猜」的交互呈现）；辅 = ReduceTreeDiagram + WhenToParallelizeDiagram（已在 §3 引出）。本节集中点玩法，不重复堆图。 */}
+
+## 上手玩一玩这三张图
+
+本章三张图各管一件事，配合 §6 代码一起玩比读十遍管用：
+
+- **执行策略三档** `<ExecutionPolicyDiagram />`（主 Demo）：单步看同一个 `for_each` 在 seq / par / par_unseq 三档下的处理节奏——seq 8 拍逐个、par 2 拍分块、par_unseq 1 拍叠加向量化。先想「是不是无脑选最强的就好」，再看正文 §4 的反例。盯住「档位越强、用时越短，但对函子要求越严」这一点。
+- **reduce 树形归约** `<ReduceTreeDiagram />`：左边 `accumulate` 一个一个顺着加（4 步串行），右边 `reduce` 两两并行求和再合并（2 层）。重点体会末尾那条警示：`reduce` 重排的前提是操作**可结合 / 可交换**，减法一重排就错。
+- **该不该并行** `<WhenToParallelizeDiagram />`：两栏对照「值得并行」与「并行反而亏」的三条判据。做 §8 分析题前，先把这份清单记牢——并行不是免费的。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖 ≥80% 关键码）：纯 cpp 块（本书无 WebGL 镜像，不用 CodeTabs）；单块 ≤30 行；两代码块间必有解说。每块顶部带齐 #include，经执行策略 shim 验证 -std=c++17 语法正确（Apple libc++ 未实现并行 STL，故正文 Callout 标明工具链要求）。陷阱用 Callout 标注。 */}
+
+## 代码：给算法加一个执行策略
+
+### for_each 加 `std::execution::par` 一键并行
+
+最直接的并行化：原来怎么 `for_each`，现在只在最前面塞一个 `std::execution::par`，算法就自动把元素分给多个线程处理。比如把一张图片的所有像素并行调亮：
+
+```cpp
+#include <algorithm>
+#include <execution>
+#include <vector>
+
+// 给所有元素并行地乘 2：第一个实参传执行策略 std::execution::par
+void brighten(std::vector<int>& pixels) {
+    std::for_each(std::execution::par, pixels.begin(), pixels.end(),
+                  [](int& x) { x *= 2; });
+}
+```
+
+和老写法的唯一差别，就是多了 `std::execution::par,` 这一个实参。算法内部会把 `pixels` 切成若干块、分给多个线程各跑各的——而每个像素只是独立地乘 2，互不依赖，正是并行的理想场景。
+
+<Callout type="tip">
+  并行 STL 需要 **C++17 且标准库实现了它**（feature 宏 `__cpp_lib_execution`
+  有定义）。GCC（libstdc++）的并行算法**依赖 Intel TBB**，编译时常需加
+  `-ltbb`；MSVC 自带支持；而 Apple Clang 的 libc++ **至今未实现**
+  `std::execution` 策略（本章代码因此在 macOS
+  自带工具链上链接/调用不可用，但**语法是标准
+  C++17**）。落地前先确认你的标准库支持，否则 `std::execution::par` 会编译报错。
+</Callout>
+
+### std::sort 并行排序
+
+排序是并行收益最直观的算法之一。给 `std::sort` 传 `par`，它就用并行的归并 / 快排把大数组排好，无需你自己分治：
+
+```cpp
+#include <algorithm>
+#include <execution>
+#include <vector>
+
+// 并行排序：把 std::execution::par 作为第一个实参传给 std::sort
+void parallel_sort(std::vector<double>& data) {
+    std::sort(std::execution::par, data.begin(), data.end());
+}
+```
+
+对一千万元素的乱序数组，`std::sort(par, ...)` 在多核机器上常能比串行 `sort` 快好几倍——而你的代码只多了一个参数。排序天然可分治、元素间无共享写，是 `par` 的主场。
+
+### reduce vs accumulate：并排看「能并行的求和」
+
+并行求和是本章的灵魂对照。`accumulate` 严格顺序、没有执行策略重载；`reduce` 能传 `par` 并行——但要求二元操作可结合 / 可交换：
+
+```cpp
+#include <execution>
+#include <numeric>
+#include <vector>
+
+// accumulate：从左到右严格顺序累加，无执行策略重载——天生串行
+long sum_accumulate(const std::vector<long>& v) {
+    return std::accumulate(v.begin(), v.end(), 0L);
+}
+
+// reduce：可传执行策略并行；默认用加法，可结合可交换 → 重排安全
+long sum_reduce(const std::vector<long>& v) {
+    return std::reduce(std::execution::par, v.begin(), v.end(), 0L);
+}
+```
+
+两个函数算的都是「所有元素之和」，结果相同（加法可结合）。区别在于：`accumulate` 只能一个一个顺着加，而 `reduce` 可以把数组切块、各块并行求和、再合并——这就是 §5 那张树形归约图。
+
+<Callout type="trap">
+  **别给 `reduce` 传不可结合的操作。** 加法、乘法、取最大值都可结合，`reduce`
+  怎么并行都对；可一旦你把二元操作换成**减法 /
+  除法**，或对浮点数求和而**顺序敏感**（浮点加法不严格满足结合律，重排会让末位结果抖动），`reduce`
+  的并行重排就会给出**不确定**的结果——同一份数据，不同运行、不同核数可能算出不同的值。需要严格顺序语义时，老老实实用
+  `accumulate`。
+</Callout>
+
+### transform_reduce：先映射、再并行归约
+
+很多「先逐元素算一下、再把结果汇总」的活，可以用 `std::transform_reduce` 一步并行搞定。典型如点积：先把两个向量逐对相乘，再把乘积求和：
+
+```cpp
+#include <execution>
+#include <numeric>
+#include <vector>
+
+// 并行算两个等长向量的点积：先逐对相乘（transform），再并行求和（reduce）
+double dot_parallel(const std::vector<double>& a, const std::vector<double>& b) {
+    return std::transform_reduce(
+        std::execution::par,
+        a.begin(), a.end(), b.begin(),
+        0.0,                  // 归约初值
+        std::plus<>(),        // 归约：求和（可结合 / 可交换）
+        std::multiplies<>()); // 映射：逐对相乘
+}
+```
+
+`transform_reduce` 把「映射 + 归约」融成一个并行算法：映射（`multiplies`）逐对独立、可向量化，归约（`plus`）可结合、可树形并行。比起「先 `transform` 出一个临时数组、再 `reduce`」，它少了一趟中间存储，是数值并行的常用利器。
+
+### 注意事项：异常与数据竞争
+
+并行算法还有两条必须记牢的硬约束。第一条：**函子里的异常绝不能逸出并行算法**——一旦逸出，程序直接 `std::terminate`。正解是在函子内部 `try/catch` 自己消化：
+
+```cpp
+#include <algorithm>
+#include <execution>
+#include <stdexcept>
+#include <vector>
+
+void process(std::vector<int>& v) {
+    // 并行函子里若异常逸出 → 整个程序 std::terminate。
+    // 正解：在函子内部 try/catch 就地兜住，绝不让异常飞出算法。
+    std::for_each(std::execution::par, v.begin(), v.end(), [](int& x) {
+        try {
+            if (x < 0) throw std::runtime_error("bad");
+            x *= 2;
+        } catch (const std::exception&) {
+            x = 0; // 就地兜住，异常不逸出并行算法
+        }
+    });
+}
+```
+
+第二条：**`par` 要求函子无数据竞争**。多个线程会并发调用它，若函子里多个线程同写一个普通变量，就是 UB。要跨元素汇总，得用 `std::atomic`（或干脆用 `reduce` 让标准库替你安全合并）：
+
+```cpp
+#include <algorithm>
+#include <atomic>
+#include <execution>
+#include <vector>
+
+// par 要求函子无数据竞争：用 atomic 计数，避免多线程同写普通变量
+std::size_t count_positive(const std::vector<int>& v) {
+    std::atomic<std::size_t> n{0};
+    std::for_each(std::execution::par, v.begin(), v.end(), [&n](int x) {
+        if (x > 0) n.fetch_add(1, std::memory_order_relaxed);
+    });
+    return n.load();
+}
+```
+
+<Callout type="trap">
+  注意：上面用 `atomic` 在 `par` 下是合法的，但**换成 `par_unseq`
+  就不行**——`par_unseq` 允许同一线程把多个元素的处理**交错**执行，函子里任何
+  加锁 / 原子等待 /
+  分配内存这类**同步或阻塞操作**都可能让线程自己把自己卡死。`par_unseq`
+  的函子必须是「纯计算、无副作用、不同步」的。要在 `par_unseq` 下汇总，请改用
+  `reduce` / `transform_reduce`——把合并交给算法，而不是在函子里自己同步。
+</Callout>
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含异常逸出/数据竞争/par_unseq加锁/reduce非可结合/小数据无脑par。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：给并行算法传了个可能抛异常的函子，程序没进 `catch`
+  就直接崩了（`std::terminate`）。**原因**：**异常逸出并行算法**——标准规定，传给并行算法的函子若抛出异常并逸出，会直接调用
+  `std::terminate`，没有「把异常搬回调用线程重抛」这回事（不像 `std::async`
+  那样存进 future）。**修法**：在**函子内部** `try/catch`
+  就地处理掉，或预先保证函子不抛；绝不让异常飞出算法边界。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `par` 并行 `for_each`，多个线程往同一个普通计数器
+  `++count`，结果计数偏小、还时对时错。**原因**：**函子里有数据竞争**——`par`
+  会让多个线程并发调用函子，同写一个普通变量就是
+  UB。**修法**：跨元素的汇总要么用 `std::atomic`（如 `fetch_add`），要么干脆改用
+  `std::reduce` / `transform_reduce` 让标准库安全合并；别在 `par`
+  函子里裸写共享变量。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 `par_unseq` 的函子里加了把锁（或别的同步），程序偶发死锁 /
+  卡住。**原因**：**`par_unseq` 函子里有同步操作**——`par_unseq`
+  允许同一线程把多个元素的处理交错执行，此时一加锁，同一线程可能在还没解锁时又来锁第二次，自己把自己锁死（UB）。**修法**：`par_unseq`
+  的函子必须无锁、无原子等待、不分配内存、无任何阻塞/同步；要同步就降到
+  `par`，要汇总就用 `reduce`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把 `reduce` 的操作换成减法 /
+  除法（或对浮点求和很在意精度），并行跑出来的结果每次都不一样。**原因**：**`reduce`
+  用了不可结合的操作**——`reduce` 靠重排求和顺序来并行，只有**可结合 /
+  可交换**的操作（加、乘、max）才能保证重排后结果不变；减法、除法、顺序敏感的浮点求和都不满足，重排即错。**修法**：先确认操作可结合可交换再用
+  `reduce`；需要严格顺序语义（如减法链、确定的浮点累加）时改用 `accumulate`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：给一段「对几十个元素各做一次加法」的循环加上
+  `std::execution::par`，结果**比顺序还慢**。**原因**：**小数据 /
+  极轻处理无脑并行**——任务分发、线程调度、结果合并都有固定开销，当数据量小、每元素的活又极轻时，这笔开销**盖过**并行省下的时间（呼应
+  ch9 Amdahl / false sharing）。**修法**：按「数据量大 + 每元素够重 +
+  无依赖无争用」三条判断该不该 `par`（见本章判断清单）；小活直接 `seq`。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 3 题含 1 道改/分析题 + C 型分析题，答案折叠。 */}
+
+## 小结
+
+- **执行策略**是算法的「并行档位」，作第一个实参传入：`seq`（顺序、结果确定、对函子最松）、`par`（多线程并行、要求函子无数据竞争）、`par_unseq`（再叠加向量化、函子还不许任何同步/阻塞）
+- **并行 STL**：给 `for_each` / `sort` / `reduce` / `transform_reduce` 等算法传一个执行策略即并行，分线程 / 合并由标准库负责，调用方代码几乎不变（需标准库支持，GCC 还常需 `-ltbb`）
+- **reduce vs accumulate**：`reduce` 靠**树形归约**可并行、可重排，前提是操作**可结合 / 可交换**（加法满足）；`accumulate` 严格顺序、无执行策略重载——把减法 / 顺序敏感的浮点求和交给 `reduce` 会算错
+- **异常与竞争**：函子异常逸出并行算法 → `std::terminate`（函子内 `try/catch`）；`par` 要求函子无数据竞争，`par_unseq` 更严（函子内不许加锁 / 同步 / 分配内存）
+- **何时并行**：数据量大 + 每元素够重 + 无依赖无争用才划算；小数据、极轻处理、有争用时 `par` 反而更慢（呼应 ch9 Amdahl / false sharing）
+
+<Exercises>
+
+**练习 1（改代码型）** 下面这段代码想并行统计一个 `vector<int>` 里正数的个数，但它在 `par` 函子里裸写了共享变量 `count`，有数据竞争。请改对它，并说明为什么裸写会出错。
+
+```cpp
+#include <algorithm>
+#include <execution>
+#include <vector>
+
+std::size_t count_positive_buggy(const std::vector<int>& v) {
+    std::size_t count = 0;
+    std::for_each(std::execution::par, v.begin(), v.end(),
+                  [&count](int x) {
+                      if (x > 0) ++count; // ← 多线程同写 count：数据竞争 UB
+                  });
+    return count;
+}
+```
+
+<Answer>
+
+裸写为什么错：`par` 会让**多个线程并发调用**这个函子，它们同时对同一个普通变量 `count` 做 `++count`（读-改-写），这是数据竞争、未定义行为——典型表现是丢更新（计数偏小）、结果时对时错。
+
+修法一（用 `atomic`）：把 `count` 换成 `std::atomic`，用 `fetch_add` 原子地累加。
+
+```cpp
+#include <algorithm>
+#include <atomic>
+#include <execution>
+#include <vector>
+
+std::size_t count_positive_atomic(const std::vector<int>& v) {
+    std::atomic<std::size_t> count{0};
+    std::for_each(std::execution::par, v.begin(), v.end(), [&count](int x) {
+        if (x > 0) count.fetch_add(1, std::memory_order_relaxed);
+    });
+    return count.load();
+}
+```
+
+修法二（更推荐，用 `transform_reduce` 让标准库安全合并，且能在 `par_unseq` 下用）：把每个元素映射成 0/1，再并行求和——没有任何共享写，函子是纯计算。
+
+```cpp
+#include <execution>
+#include <functional>
+#include <numeric>
+#include <vector>
+
+std::size_t count_positive_reduce(const std::vector<int>& v) {
+    return std::transform_reduce(
+        std::execution::par, v.begin(), v.end(),
+        std::size_t{0}, std::plus<>(),
+        [](int x) -> std::size_t { return x > 0 ? 1 : 0; });
+}
+```
+
+</Answer>
+
+**练习 2（C 型分析题）** 同事把一段「对一个 `vector<double>` 用减法做累减」的代码从 `accumulate` 改成了 `reduce(par, ...)` 想加速，结果发现并行跑出来的结果每次都不一样。请分析根因，并说明这个需求到底该怎么写。
+
+<Answer>
+
+根因：**`reduce` 用了不可结合的操作（减法）**。`reduce` 之所以能并行，是因为它会把求和顺序**重排成树形**（先分组并行、再合并），这要求二元操作**可结合、可交换**——只有这样重排后结果才不变。可减法不满足：`a-b-c-d` 顺序算是 `((a-b)-c)-d`，而 `reduce` 重排成 `(a-b)-(c-d)` 后结果完全不同；不同运行、不同核数、不同分块方式会给出不同的值，所以「每次都不一样」。这是用错算法，不是 bug。
+
+该怎么写：**累减是严格顺序语义，本就无法（正确地）并行**，应当用 `std::accumulate`（它没有执行策略重载，正说明它天生串行）：
+
+```cpp
+#include <functional>
+#include <numeric>
+#include <vector>
+
+double subtract_chain(const std::vector<double>& v, double init) {
+    // accumulate 严格从左到右：init - v[0] - v[1] - ... 顺序确定
+    return std::accumulate(v.begin(), v.end(), init, std::minus<>());
+}
+```
+
+如果真正的需求其实是「求和」（只是误用了减法），那就用可结合的加法、再 `reduce(par)` 并行。判断要不要、能不能并行，第一步永远是先问「这个操作可结合 / 可交换吗」。
+
+</Answer>
+
+**练习 3（分析题）** 给定两段需求，各该选 `seq`、`par` 还是 `par_unseq`？说明理由（结合「该不该并行」清单与三档对函子的要求）。
+(a) 对一个**一千万元素**的 `vector<float>`，每个元素做一次**较重**的数学变换（多次三角函数 + 开方），元素间完全独立、无共享写、无副作用。
+(b) 对一个**只有 20 个元素**的小 `vector`，每个元素**查一张共享的缓存表并在未命中时加锁写入**。
+
+<Answer>
+
+(a) **选 `par_unseq`（或至少 `par`）**。数据量极大（千万）、每元素处理够重（多次三角 + 开方）、且元素间无依赖、无共享写、无副作用——三条「值得并行」的判据全占，分发开销被海量重活摊薄，加速明显。函子是纯计算、不加锁、不分配内存，满足 `par_unseq` 最严的要求，于是可以在多线程之上再叠加向量化，吃满 SIMD。退一步用 `par` 也很好，差别只是少了向量化那一层。
+
+(b) **选 `seq`**。两个理由叠加：① 数据量极小（20 个）、若每元素处理也轻，则并行的分发 / 调度 / 合并开销几乎必然盖过收益，并行反而更慢（「并行反而亏」清单）；② 函子里**有加锁写共享表**这种同步 + 副作用——这直接排除 `par_unseq`（函子不许同步），而即便用 `par`，那把锁也会成为争用瓶颈，把并行度吃光。对这种「小数据 + 有争用」的活，老实顺序执行最快也最简单。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（执行策略 / seq / par / par_unseq / 向量化 / 并行算法 / 树形归约 / 可结合性，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="执行策略（execution policy）">
+  C++17
+  给标准库算法新增的一个「并行档位」实参，放在算法的**第一个**参数位。它告诉算法「允许你并行
+  /
+  向量化到什么程度」，而具体怎么分线程、怎么调度，由标准库实现去办。三档：`std::execution::seq`（顺序）、`par`（并行）、`par_unseq`（并行
+  +
+  向量化）。像给后厨下「处理这筐菜」指令时顺手挑的并行档位。详见本章「执行策略」一节。
+</GlossaryItem>
+
+<GlossaryItem term="seq（顺序执行策略）">
+  `std::execution::seq`：算法在调用线程上一个元素一个元素地**顺序**处理，不并行、不向量化，行为和不传策略的老算法基本一致。胜在**结果顺序确定**、对你传的函子要求最松。像一个厨师顺着把菜一份份做完。详见本章「执行策略」一节。
+</GlossaryItem>
+
+<GlossaryItem term="par（并行执行策略）">
+  `std::execution::par`：允许算法把元素**分给多个线程同时**处理（每个线程内部仍逐个处理元素，不强制向量化）。这是日常最常用的「一键并行」。要求：你传的函子在被多个线程并发调用时**不能有数据竞争**（不能多个线程同写一个无保护的变量）。像多个厨师分批同时做。详见本章「执行策略」一节。
+</GlossaryItem>
+
+<GlossaryItem term="par_unseq（并行 + 向量化执行策略）">
+  `std::execution::par_unseq`：在 `par`
+  的多线程之上，再允许**同一线程内对多个元素做向量化**（SIMD）。最猛，但对函子要求最苛刻——函子内**不许有任何加锁、原子等待、分配内存这类会阻塞
+  /
+  同步的操作**，因为同一线程会把多个元素的处理交错着跑，一同步就可能自己卡死自己。像多个厨师、且每人一手同时颠两个锅。详见本章「执行策略」一节。
+</GlossaryItem>
+
+<GlossaryItem term="向量化（vectorization）">
+  用 CPU 的 SIMD 指令（单指令多数据，single instruction multiple
+  data）**一条指令同时处理多个数据元素**，相当于「一只手同时颠两个锅」。`par_unseq`
+  允许编译器把循环向量化，进一步压榨单线程的吞吐。详见本章「执行策略」一节。
+</GlossaryItem>
+
+<GlossaryItem term="并行算法（并行 STL）">
+  C++17
+  给一批标准库算法（`for_each`、`sort`、`reduce`、`transform`、`transform_reduce`
+  等）新增的、接受**执行策略**作第一实参的重载。传 `par`
+  即并行执行，分线程、合并结果都由标准库实现负责，调用方代码几乎不变。注意：需标准库实现了它（feature
+  宏 `__cpp_lib_execution` 有定义），GCC 的实现还常需链接 Intel
+  TBB（`-ltbb`），Apple Clang 的 libc++ 至今未实现。详见本章「并行 STL」一节。
+</GlossaryItem>
+
+<GlossaryItem term="树形归约（tree reduction）">
+  一种并行求和（归约）的组织方式：不从头到尾顺着加，而是把元素**两两分组并行求和**得到一批部分和，再把部分和两两合并……一层层归约到最终结果。每一层内部的多组求和互不依赖、可同时进行，所以可并行。`std::reduce`
+  用的就是这种树形结构——这也是它比严格顺序的 `accumulate`
+  能并行的原因。详见本章「reduce vs accumulate」一节。
+</GlossaryItem>
+
+<GlossaryItem term="可结合性（associativity）">
+  一个二元操作 `op` 满足 `(a op b) op c == a op (b op
+  c)`，即「怎么加括号、谁先算」不影响结果。加法、乘法、取最大值都**可结合**；减法、除法**不可结合**。`reduce`
+  靠**重排**求和顺序来并行，所以只有对可结合（通常还要求可交换）的操作才能给出正确结果——把减法这类不可结合的操作交给
+  `reduce`，并行重排后结果会乱。详见本章「reduce vs accumulate」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+
+<Attribution />

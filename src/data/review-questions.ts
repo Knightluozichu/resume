@@ -165,6 +165,18 @@ import { pbrTheoryQuestions } from "./review/pbr-theory";
 import { pbrLightingQuestions } from "./review/pbr-lighting";
 import { pbrIblDiffuseQuestions } from "./review/pbr-ibl-diffuse";
 import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
+import { ccHelloConcurrencyQuestions } from "./review/cc-hello-concurrency";
+import { ccManagingThreadsQuestions } from "./review/cc-managing-threads";
+import { ccProtectingSharedDataQuestions } from "./review/cc-protecting-shared-data";
+import { ccSynchronizingOperationsQuestions } from "./review/cc-synchronizing-operations";
+import { ccAtomicTypesQuestions } from "./review/cc-atomic-types";
+import { ccMemoryOrderingQuestions } from "./review/cc-memory-ordering";
+import { ccLockBasedQuestions } from "./review/cc-lock-based";
+import { ccLockFreeQuestions } from "./review/cc-lock-free";
+import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concurrent-code";
+import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
+import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
+import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
 
 export {
   CHAPTER_TITLES,
@@ -326,6 +338,19 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pbrLightingQuestions,
   ...pbrIblDiffuseQuestions,
   ...pbrIblSpecularQuestions,
+  // C++ 并发编程实战（第2版）
+  ...ccHelloConcurrencyQuestions,
+  ...ccManagingThreadsQuestions,
+  ...ccProtectingSharedDataQuestions,
+  ...ccSynchronizingOperationsQuestions,
+  ...ccAtomicTypesQuestions,
+  ...ccMemoryOrderingQuestions,
+  ...ccLockBasedQuestions,
+  ...ccLockFreeQuestions,
+  ...ccDesigningConcurrentCodeQuestions,
+  ...ccThreadPoolsQuestions,
+  ...ccParallelAlgorithmsQuestions,
+  ...ccTestingDebuggingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -338,6 +338,7 @@ import { Answer, Exercises } from "./exercises";
 import { Figure } from "./figure";
 import { Glossary, GlossaryItem } from "./glossary";
 import { BrdfCurveExplorer } from "./brdf-curve-explorer";
+import { AmdahlCurveExplorer } from "./amdahl-curve-explorer";
 import { MathViz } from "./math-viz";
 import { Objectives } from "./objectives";
 import { PipelineViz } from "./pipeline-viz";
@@ -403,6 +404,41 @@ import { HookMechanismDiagram } from "./diagrams/hook-mechanism-diagram";
 import { PluginArchitectureDiagram } from "./diagrams/plugin-architecture-diagram";
 import { MemoryLeakDiagram } from "./diagrams/memory-leak-diagram";
 import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
+import { ConcurrencyVsParallelismDiagram } from "./diagrams/concurrency-vs-parallelism-diagram";
+import { ProcessVsThreadDiagram } from "./diagrams/process-vs-thread-diagram";
+import { HelloThreadsInterleaveDemo } from "./diagrams/hello-threads-interleave-demo";
+import { ThreadLifecycleDiagram } from "./diagrams/thread-lifecycle-diagram";
+import { JoinVsDetachTimeline } from "./diagrams/join-vs-detach-timeline";
+import { DanglingRefDiagram } from "./diagrams/dangling-ref-diagram";
+import { RaceConditionExplorer } from "./diagrams/race-condition-explorer";
+import { MutexSerializeDiagram } from "./diagrams/mutex-serialize-diagram";
+import { DeadlockCycleDiagram } from "./diagrams/deadlock-cycle-diagram";
+import { CondVarWaitNotifyDiagram } from "./diagrams/cond-var-wait-notify-diagram";
+import { FuturePromiseDiagram } from "./diagrams/future-promise-diagram";
+import { GetFutureWaysDiagram } from "./diagrams/get-future-ways-diagram";
+import { TornReadDiagram } from "./diagrams/torn-read-diagram";
+import { ModificationOrderDiagram } from "./diagrams/modification-order-diagram";
+import { CASConceptDiagram } from "./diagrams/cas-concept-diagram";
+import { AcquireReleaseSyncDiagram } from "./diagrams/acquire-release-sync-diagram";
+import { HappensBeforeDAG } from "./diagrams/happens-before-dag-diagram";
+import { MemoryReorderDiagram } from "./diagrams/memory-reorder-diagram";
+import { CoarseVsFineLockDiagram } from "./diagrams/coarse-vs-fine-lock-diagram";
+import { HandOverHandDiagram } from "./diagrams/hand-over-hand-diagram";
+import { BucketLockDiagram } from "./diagrams/bucket-lock-diagram";
+import { CASRetryLoopDiagram } from "./diagrams/cas-retry-loop-diagram";
+import { ABAProblemDiagram } from "./diagrams/aba-problem-diagram";
+import { HazardPointerDiagram } from "./diagrams/hazard-pointer-diagram";
+import { FalseSharingDiagram } from "./diagrams/false-sharing-diagram";
+import { TaskDivisionDiagram } from "./diagrams/task-division-diagram";
+import { ThreadPoolDiagram } from "./diagrams/thread-pool-diagram";
+import { WorkStealingDiagram } from "./diagrams/work-stealing-diagram";
+import { InterruptibleThreadDiagram } from "./diagrams/interruptible-thread-diagram";
+import { ExecutionPolicyDiagram } from "./diagrams/execution-policy-diagram";
+import { ReduceTreeDiagram } from "./diagrams/reduce-tree-diagram";
+import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram";
+import { DeadlockVsLivelockDiagram } from "./diagrams/deadlock-vs-livelock-diagram";
+import { TsanDetectionDiagram } from "./diagrams/tsan-detection-diagram";
+import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxonomy-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -713,6 +749,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ShadowMappingDemo,
   PointShadowsDemo,
   BrdfCurveExplorer,
+  AmdahlCurveExplorer,
   PipelineViz,
   MathViz,
   CompareSlider,
@@ -924,6 +961,41 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PluginArchitectureDiagram,
   MemoryLeakDiagram,
   BootSequenceDiagram,
+  ConcurrencyVsParallelismDiagram,
+  ProcessVsThreadDiagram,
+  HelloThreadsInterleaveDemo,
+  ThreadLifecycleDiagram,
+  JoinVsDetachTimeline,
+  DanglingRefDiagram,
+  RaceConditionExplorer,
+  MutexSerializeDiagram,
+  DeadlockCycleDiagram,
+  CondVarWaitNotifyDiagram,
+  FuturePromiseDiagram,
+  GetFutureWaysDiagram,
+  TornReadDiagram,
+  ModificationOrderDiagram,
+  CASConceptDiagram,
+  AcquireReleaseSyncDiagram,
+  HappensBeforeDAG,
+  MemoryReorderDiagram,
+  CoarseVsFineLockDiagram,
+  HandOverHandDiagram,
+  BucketLockDiagram,
+  CASRetryLoopDiagram,
+  ABAProblemDiagram,
+  HazardPointerDiagram,
+  FalseSharingDiagram,
+  TaskDivisionDiagram,
+  ThreadPoolDiagram,
+  WorkStealingDiagram,
+  InterruptibleThreadDiagram,
+  ExecutionPolicyDiagram,
+  ReduceTreeDiagram,
+  WhenToParallelizeDiagram,
+  DeadlockVsLivelockDiagram,
+  TsanDetectionDiagram,
+  ConcurrencyBugTaxonomyDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
