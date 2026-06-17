@@ -134,6 +134,19 @@ const PAGES = [
   '/learn/mobile-xr-web-optimization/urp-optimization/urp-optimization',
   '/learn/mobile-xr-web-optimization/web-optimization/web-specific-optimization',
   '/learn/mobile-xr-web-optimization/xr-optimization/xr-specific-optimization',
+  // C++ 并发编程实战（第2版）
+  '/learn/cpp-concurrency/fundamentals/hello-concurrency',
+  '/learn/cpp-concurrency/fundamentals/managing-threads',
+  '/learn/cpp-concurrency/shared-data/protecting-shared-data',
+  '/learn/cpp-concurrency/shared-data/synchronizing-operations',
+  '/learn/cpp-concurrency/memory-model/atomic-types',
+  '/learn/cpp-concurrency/memory-model/memory-ordering',
+  '/learn/cpp-concurrency/data-structures/lock-based',
+  '/learn/cpp-concurrency/data-structures/lock-free',
+  '/learn/cpp-concurrency/advanced/designing-concurrent-code',
+  '/learn/cpp-concurrency/advanced/thread-pools',
+  '/learn/cpp-concurrency/advanced/parallel-algorithms',
+  '/learn/cpp-concurrency/advanced/testing-debugging',
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
