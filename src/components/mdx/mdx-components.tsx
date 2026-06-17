@@ -437,6 +437,9 @@ import { TerminationDemo } from "./demos/termination-demo";
 import { ContextBudgetDemo } from "./demos/context-budget-demo";
 import { LostInMiddleDemo } from "./demos/lost-in-middle-demo";
 import { CompressionCompare } from "./demos/compression-compare";
+import { TraceTimelineDiagram } from "./diagrams/trace-timeline-diagram";
+import { LLMJudgeDemo } from "./demos/llm-judge-demo";
+import { EvalRegressionDemo } from "./demos/eval-regression-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1163,6 +1166,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ContextBudgetDemo,
   LostInMiddleDemo,
   CompressionCompare,
+  TraceTimelineDiagram,
+  LLMJudgeDemo,
+  EvalRegressionDemo,
   Term,
   Glossary,
   GlossaryItem,
