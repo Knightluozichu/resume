@@ -431,6 +431,9 @@ import { VectorSpaceDemo } from "./demos/vector-space-demo";
 import { MultiAgentTopologyDiagram } from "./diagrams/multi-agent-topology-diagram";
 import { SupervisorDispatchDemo } from "./demos/supervisor-dispatch-demo";
 import { SingleVsMultiMatrix } from "./demos/single-vs-multi-matrix";
+import { MessageBusDiagram } from "./diagrams/message-bus-diagram";
+import { SharedBlackboardDemo } from "./demos/shared-blackboard-demo";
+import { TerminationDemo } from "./demos/termination-demo";
 import { ContextBudgetDemo } from "./demos/context-budget-demo";
 import { LostInMiddleDemo } from "./demos/lost-in-middle-demo";
 import { CompressionCompare } from "./demos/compression-compare";
@@ -1154,6 +1157,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MultiAgentTopologyDiagram,
   SupervisorDispatchDemo,
   SingleVsMultiMatrix,
+  MessageBusDiagram,
+  SharedBlackboardDemo,
+  TerminationDemo,
   ContextBudgetDemo,
   LostInMiddleDemo,
   CompressionCompare,
