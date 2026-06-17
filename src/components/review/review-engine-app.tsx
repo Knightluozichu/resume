@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -16,6 +17,8 @@ import {
   recordAnswer,
   saveState,
   wrongPileSize,
+  type ChapterScope,
+  type ReviewScopeTree,
   type ReviewState,
 } from "./engine";
 import { FlashCard } from "./flash-card";
@@ -28,34 +31,108 @@ import { FlashCard } from "./flash-card";
  *
  * 职责：
  *  - 两种模式切换：普通复习（全库智能抽 50）/ 错题练习（只抽错题集）
+ *  - 范围复习：全部 / 某本书 / 某本书某一章（两级原生 select），把会话限定到该范围
  *  - 智能间隔抽题（Leitner 盒，引擎在 ./engine）+「刷新」重新抽一组
  *  - 记录作答（✓ box+1 / ✗ box=0 进错题集）+ localStorage 持久化
  *  - 正确率：本组 + 累计；错题集大小
- *  - 可选：L1–L4 等级 chip 筛选
+ *  - 可选：L1–L4 等级 chip 筛选（与范围过滤叠加）
  *
  * SSR 安全（硬规则相关 / 任务约束）：首渲染绝不读 localStorage——
  * state 初值为 null，仅在 mount 后的 effect 里 loadState() 并抽第一组，
  * 避免 server / client 首帧 DOM 不一致（hydration mismatch）。
+ *
+ * 范围数据（scopeTree / initialChapter）由 server 的 page.tsx 算好下传（纯 JSON），
+ * 本组件只消费，不碰 content.ts（server-only/fs）。
  */
 
 type Mode = "review" | "wrong";
 
 const LEVELS: ReviewLevel[] = [1, 2, 3, 4];
 
-export default function ReviewEngineApp() {
+/** 全部范围（不限书/章）的哨兵值，用于 book-level select 的 value。 */
+const ALL = "__all__";
+/** 「整本书」（限定到书但不限章）的哨兵值，用于 chapter-level select 的 value。 */
+const WHOLE_BOOK = "__whole_book__";
+
+export default function ReviewEngineApp({
+  scopeTree,
+  initialChapter,
+}: {
+  scopeTree: ReviewScopeTree;
+  initialChapter: string | null;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+
+  // 复习 slug → 所属书（用于 initialChapter 反查、范围标签）。一次构建，恒定。
+  const chapterIndex = useMemo(() => {
+    const map = new Map<
+      string,
+      { bookSlug: string; bookTitle: string; title: string; count: number }
+    >();
+    for (const b of scopeTree) {
+      for (const c of b.chapters) {
+        map.set(c.slug, {
+          bookSlug: b.bookSlug,
+          bookTitle: b.bookTitle,
+          title: c.title,
+          count: c.count,
+        });
+      }
+    }
+    return map;
+  }, [scopeTree]);
+
+  // 初始章合法性兜底（page.tsx 已校验，这里再防一手）。
+  const safeInitialChapter =
+    initialChapter && chapterIndex.has(initialChapter) ? initialChapter : null;
+
+  /**
+   * 由（当前章 chapter, 当前书 bookScope）算出引擎抽题范围 ChapterScope：
+   *  - 选了具体章 → 单章 slug（最优先）
+   *  - 只选了书（整本书）→ 该书全部章 slug 数组
+   *  - 都没选（全部）→ null（全库，行为不变）
+   */
+  const computeScope = useCallback(
+    (chapterSlug: string | null, book: string | null): ChapterScope => {
+      if (chapterSlug) return chapterSlug;
+      if (book) {
+        const b = scopeTree.find((x) => x.bookSlug === book);
+        return b ? b.chapters.map((c) => c.slug) : null;
+      }
+      return null;
+    },
+    [scopeTree],
+  );
+
   // null = 尚未挂载（首渲染态，SSR 与 client 首帧一致，不读 localStorage）。
   const [state, setState] = useState<ReviewState | null>(null);
   const [mode, setMode] = useState<Mode>("review");
   const [levelFilter, setLevelFilter] = useState<ReviewLevel | null>(null);
+  // 当前范围 = 复习 slug 限定到某一章；null = 全部（书或全库，见 bookScope）。
+  const [chapter, setChapter] = useState<string | null>(safeInitialChapter);
+  // 选了「某本书」但还没选具体章时，bookScope 记住这本书；为 null 表示「全部」。
+  const [bookScope, setBookScope] = useState<string | null>(
+    safeInitialChapter ? (chapterIndex.get(safeInitialChapter)?.bookSlug ?? null) : null,
+  );
   const [session, setSession] = useState<ReviewQuestion[]>([]);
   const [cursor, setCursor] = useState(0);
   // 本组当前统计（不含历史；累计在 state.stats 里）。
   const [round, setRound] = useState({ correct: 0, answered: 0, wrong: 0 });
 
-  /** 按模式 + 等级筛选抽一组，并重置组内游标/统计。 */
+  /** 按模式 + 等级 + 范围抽一组，并重置组内游标/统计。 */
   const startSession = useCallback(
-    (s: ReviewState, m: Mode, level: ReviewLevel | null) => {
-      const base = m === "wrong" ? pickWrongSession(s) : pickSession(s);
+    (
+      s: ReviewState,
+      m: Mode,
+      level: ReviewLevel | null,
+      scope: ChapterScope,
+    ) => {
+      const base =
+        m === "wrong"
+          ? pickWrongSession(s, undefined, undefined, scope)
+          : pickSession(s, undefined, undefined, scope);
+      // 范围（scope）已在引擎抽题前限定子集；等级再叠加过滤，两者正交。
       setSession(filterByLevel(base, level));
       setCursor(0);
       setRound({ correct: 0, answered: 0, wrong: 0 });
@@ -73,31 +150,72 @@ export default function ReviewEngineApp() {
       initedRef.current = true;
       const loaded = loadState();
       setState(loaded);
-      startSession(loaded, "review", null);
+      // 初始范围取 URL 带来的章（已经过 page.tsx + 本组件兜底校验）。
+      const initBook = safeInitialChapter
+        ? (chapterIndex.get(safeInitialChapter)?.bookSlug ?? null)
+        : null;
+      startSession(
+        loaded,
+        "review",
+        null,
+        computeScope(safeInitialChapter, initBook),
+      );
     };
     init();
-  }, [startSession]);
+  }, [startSession, safeInitialChapter, chapterIndex, computeScope]);
 
   const wrongCount = useMemo(() => (state ? wrongPileSize(state) : 0), [state]);
 
-  /** 切模式：重新按新模式抽一组。 */
+  /** 把当前范围同步进 URL（?chapter=<slug> 或清空），方便刷新/分享复现。失败不致命。 */
+  const syncUrl = useCallback(
+    (chapterSlug: string | null) => {
+      const target = chapterSlug
+        ? `${pathname}?chapter=${encodeURIComponent(chapterSlug)}`
+        : pathname;
+      // replace + scroll:false：范围切换不入历史栈、不跳页顶。
+      router.replace(target, { scroll: false });
+    },
+    [pathname, router],
+  );
+
+  /** 切模式：重新按新模式抽一组（范围 / 等级保持）。 */
   const switchMode = (m: Mode) => {
     if (!state || m === mode) return;
     setMode(m);
-    startSession(state, m, levelFilter);
+    startSession(state, m, levelFilter, computeScope(chapter, bookScope));
   };
 
-  /** 切等级筛选：在当前模式下重抽一组。 */
+  /** 切等级筛选：在当前模式 + 当前范围下重抽一组。 */
   const switchLevel = (level: ReviewLevel | null) => {
     if (!state) return;
     setLevelFilter(level);
-    startSession(state, mode, level);
+    startSession(state, mode, level, computeScope(chapter, bookScope));
   };
 
-  /** 刷新：当前模式 + 当前筛选，重新随机抽一组 50。 */
+  /** 切「书」：选「全部」清空范围；选某书则限定到整本书（章未定）。 */
+  const switchBook = (bookSlug: string) => {
+    if (!state) return;
+    const nextBook = bookSlug === ALL ? null : bookSlug;
+    setBookScope(nextBook);
+    // 切书默认落到「整本书」（chapter=null）：scope = 该书全部章；全部 = null（全库）。
+    setChapter(null);
+    startSession(state, mode, levelFilter, computeScope(null, nextBook));
+    syncUrl(null);
+  };
+
+  /** 切「章」：WHOLE_BOOK = 该书但不限章；否则限定到具体章（复习 slug）。 */
+  const switchChapter = (value: string) => {
+    if (!state) return;
+    const next = value === WHOLE_BOOK ? null : value;
+    setChapter(next);
+    startSession(state, mode, levelFilter, computeScope(next, bookScope));
+    syncUrl(next);
+  };
+
+  /** 刷新：当前模式 + 当前等级 + 当前范围，重新随机抽一组。 */
   const refresh = () => {
     if (!state) return;
-    startSession(state, mode, levelFilter);
+    startSession(state, mode, levelFilter, computeScope(chapter, bookScope));
   };
 
   /** 记一次作答：更新进度 + 持久化 + 推进游标 + 累计本组统计。 */
@@ -135,6 +253,32 @@ export default function ReviewEngineApp() {
     state.stats.answered > 0
       ? Math.round((state.stats.correct / state.stats.answered) * 100)
       : 0;
+
+  // —— 范围 select 的当前值与可读标签 ——
+  const currentBook = chapter
+    ? (chapterIndex.get(chapter)?.bookSlug ?? bookScope)
+    : bookScope;
+  const bookSelectValue = currentBook ?? ALL;
+  const chapterSelectValue = chapter ?? WHOLE_BOOK;
+  const selectedBook = scopeTree.find((b) => b.bookSlug === currentBook) ?? null;
+
+  // 当前范围可读标签 + 题数（如「C++并发编程实战 · 管理线程（18 题）」）。
+  let scopeLabel: string;
+  let scopeCount: number;
+  if (chapter) {
+    const info = chapterIndex.get(chapter);
+    scopeLabel = info ? `${info.bookTitle} · ${info.title}` : "全部";
+    scopeCount = info?.count ?? 0;
+  } else if (selectedBook) {
+    scopeLabel = selectedBook.bookTitle;
+    scopeCount = selectedBook.count;
+  } else {
+    scopeLabel = "全部";
+    scopeCount = scopeTree.reduce((n, b) => n + b.count, 0);
+  }
+
+  const selectClass =
+    "rounded-control border border-border bg-elevated px-3 py-1 text-sm text-primary transition-colors duration-(--duration-hover) ease-standard hover:border-accent focus:border-accent focus:outline-none";
 
   return (
     <div className="flex flex-col gap-6">
@@ -181,7 +325,52 @@ export default function ReviewEngineApp() {
         </button>
       </div>
 
-      {/* —— 等级筛选 chip（可选） —— */}
+      {/* —— 范围选择器（两级 select：书 → 章）+ 当前范围标签 —— */}
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="text-xs text-secondary" htmlFor="review-book">
+            范围
+          </label>
+          <select
+            id="review-book"
+            aria-label="选择书"
+            value={bookSelectValue}
+            onChange={(e) => switchBook(e.target.value)}
+            className={selectClass}
+          >
+            <option value={ALL}>全部</option>
+            {scopeTree.map((b) => (
+              <option key={b.bookSlug} value={b.bookSlug}>
+                {b.bookTitle}
+              </option>
+            ))}
+          </select>
+
+          {selectedBook && (
+            <select
+              aria-label="选择章"
+              value={chapterSelectValue}
+              onChange={(e) => switchChapter(e.target.value)}
+              className={selectClass}
+            >
+              <option value={WHOLE_BOOK}>整本书</option>
+              {selectedBook.chapters.map((c) => (
+                <option key={c.slug} value={c.slug}>
+                  {c.title}（{c.count} 题）
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <p className="text-xs text-secondary">
+          范围：
+          <span className="text-primary">{scopeLabel}</span>
+          <span className="ml-1 font-mono tabular-nums">（{scopeCount} 题）</span>
+        </p>
+      </div>
+
+      {/* —— 等级筛选 chip（可选，与范围叠加） —— */}
       <div
         role="group"
         aria-label="按等级筛选"
@@ -248,7 +437,7 @@ export default function ReviewEngineApp() {
 
       {/* —— 卡片区 / 空集 / 小结 三态 —— */}
       {total === 0 ? (
-        <EmptyState mode={mode} />
+        <EmptyState mode={mode} scoped={chapter !== null || bookScope !== null} />
       ) : done ? (
         <RoundSummary
           round={round}
@@ -272,14 +461,16 @@ export default function ReviewEngineApp() {
   );
 }
 
-/** 空集态：错题练习无错题、或某等级筛完无题。 */
-function EmptyState({ mode }: { mode: Mode }) {
+/** 空集态：错题练习无错题、或某等级/范围筛完无题。 */
+function EmptyState({ mode, scoped }: { mode: Mode; scoped: boolean }) {
   return (
     <div className="rounded-card border border-border bg-elevated p-6 text-center">
       <p className="text-sm text-secondary">
         {mode === "wrong"
-          ? "错题集是空的——做几道普通复习、把没掌握的攒进来，再回来专攻。"
-          : "这个筛选下暂时没有题，换个等级或点「全部」试试。"}
+          ? "这个范围里还没有错题——做几道普通复习、把没掌握的攒进来，再回来专攻。"
+          : scoped
+            ? "这个范围 + 筛选下暂时没有题，换个等级、换本书 / 章，或点「全部」试试。"
+            : "这个筛选下暂时没有题，换个等级或点「全部」试试。"}
       </p>
     </div>
   );

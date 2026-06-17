@@ -20,6 +20,7 @@ import {
 
 import { ChapterPager } from "../_components/chapter-pager";
 import { ChapterShell } from "../_components/chapter-shell";
+import { ReviewChapterLink } from "../_components/review-chapter-link";
 
 /**
  * 章节动态路由（HEL-18，HEL-48 书化）
@@ -150,6 +151,11 @@ export default async function ChapterPage({
       <p className="mt-2 text-secondary">{chapter.frontmatter.description}</p>
       {/* 正文容器：max-w 72ch 由 ChapterShell 提供；prose 样式由 globals.css token 化 */}
       <div className="prose mt-8">{content}</div>
+      {/* 章末「复习本章」直达入口（仅当本章有复习题时渲染，HEL：按章复习） */}
+      <ReviewChapterLink
+        bookSlug={chapter.bookSlug}
+        chapterSlug={chapter.chapterSlug}
+      />
       <ChapterPager prev={prev} next={next} />
       {/* 章末讨论区（HEL-43）：giscus 评论，client 叶子壳 + IntersectionObserver 懒加载，
           不进首屏关键路径（硬规则 2）；page.tsx 仍为 Server Component。 */}

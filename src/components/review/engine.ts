@@ -17,6 +17,26 @@ import {
 /** 一组复习会话的题量上限。 */
 export const SESSION_SIZE = 50;
 
+/**
+ * 复习「范围树」的可序列化形状（按章/按书复习）。
+ *
+ * 由 server 侧 src/lib/review-scope.ts 构造、经 page.tsx 下传给客户端引擎；类型放在这里
+ * （引擎客户端 chunk 内）是为了让 client 组件能 import 这个纯类型而不触碰 server-only 的
+ * content.ts。slug = 复习 slug（= ?chapter= 取值、filterByChapter 过滤键）。
+ */
+export interface ReviewScopeChapter {
+  slug: string;
+  title: string;
+  count: number;
+}
+export interface ReviewScopeBook {
+  bookSlug: string;
+  bookTitle: string;
+  count: number;
+  chapters: ReviewScopeChapter[];
+}
+export type ReviewScopeTree = ReviewScopeBook[];
+
 /** Leitner 盒：0(最生)~4(最熟)。✓ 升一格(上限 4)，✗ 跌回 0。 */
 export type Box = 0 | 1 | 2 | 3 | 4;
 const MAX_BOX: Box = 4;
@@ -171,32 +191,59 @@ function priority(p: QuestionProgress): number {
 }
 
 /**
- * 普通复习：全库智能抽 SESSION_SIZE 题。
- * 先按可注入 rng 洗牌全集（实现「同级随机 + 刷新换一组」），
- * 再按优先级稳定排序，取前 N。题库不足 N 则取全部。
+ * 抽题范围：
+ *  - null         → 不限（全库，维持现状）
+ *  - "<slug>"     → 单章（复习 slug）
+ *  - ["a","b",…]  → 一组章（如「整本书」= 该书全部章 slug）
+ * 范围键 = 复习 slug（q.chapter），由 server 侧范围树下传，与下列过滤同源。
+ */
+export type ChapterScope = string | readonly string[] | null;
+
+/**
+ * 按范围限定题集；scope 为 null 表示不限（维持全库现状）。
+ * 传入空数组（[]）= 该范围内没有任何章 → 返回空集（调用方据此显示空集态）。
+ */
+export function filterByChapter(
+  list: readonly ReviewQuestion[],
+  scope: ChapterScope,
+): ReviewQuestion[] {
+  if (scope == null) return list.slice();
+  if (typeof scope === "string") return list.filter((q) => q.chapter === scope);
+  const set = new Set(scope);
+  return list.filter((q) => set.has(q.chapter));
+}
+
+/**
+ * 普通复习：智能抽 SESSION_SIZE 题。
+ * 先把全库限定到 scope 子集（默认 null = 全库，行为不变），
+ * 再按可注入 rng 洗牌（实现「同级随机 + 刷新换一组」），
+ * 按优先级稳定排序，取前 N。题不足 N 则取全部。
  */
 export function pickSession(
   state: ReviewState,
   size: number = SESSION_SIZE,
   rng: () => number = Math.random,
+  scope: ChapterScope = null,
 ): ReviewQuestion[] {
-  const shuffled = shuffle(REVIEW_QUESTIONS, rng);
+  const scoped = filterByChapter(REVIEW_QUESTIONS, scope);
+  const shuffled = shuffle(scoped, rng);
   const sorted = stableSortByPriority(state, shuffled);
   return sorted.slice(0, size);
 }
 
 /**
  * 错题练习：只抽错题集里的题（box=0 且 lastWrong），洗牌后取前 size。
+ * scope 非 null 时只在该范围内取错题（默认 null = 全库错题，行为不变）。
  * 答对后 lastWrong 变 false → 自动移出错题集（下次抽不到）。
  */
 export function pickWrongSession(
   state: ReviewState,
   size: number = SESSION_SIZE,
   rng: () => number = Math.random,
+  scope: ChapterScope = null,
 ): ReviewQuestion[] {
-  const wrong = REVIEW_QUESTIONS.filter((q) =>
-    isInWrongPile(getProgress(state, q.id)),
-  );
+  const scoped = filterByChapter(REVIEW_QUESTIONS, scope);
+  const wrong = scoped.filter((q) => isInWrongPile(getProgress(state, q.id)));
   return shuffle(wrong, rng).slice(0, size);
 }
 
