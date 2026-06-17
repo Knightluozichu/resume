@@ -170,7 +170,8 @@ export type ReviewChapterSlug =
   | "pbr-ibl-specular"
   // AI 智能体应用开发
   | "agent-what-is-an-agent"
-  | "agent-augmented-llm";
+  | "agent-augmented-llm"
+  | "agent-agentic-loop";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -265,14 +266,14 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "system-startup": "Android 系统启动",
   "app-process-startup": "应用程序进程启动",
   "component-workflow": "四大组件的工作过程",
-  "context": "理解上下文 Context",
-  "ams": "理解 AMS",
+  context: "理解上下文 Context",
+  ams: "理解 AMS",
   "window-manager": "理解 WindowManager",
-  "wms": "理解 WMS",
+  wms: "理解 WMS",
   "jni-principle": "JNI 原理",
   "java-vm": "Java 虚拟机",
   "dalvik-art": "Dalvik 和 ART",
-  "classloader": "理解 ClassLoader",
+  classloader: "理解 ClassLoader",
   "hotfix-principle": "热修复原理",
   "hook-technology": "Hook 技术",
   "plugin-principle": "插件化原理",
@@ -344,6 +345,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   // AI 智能体应用开发
   "agent-what-is-an-agent": "什么是智能体",
   "agent-augmented-llm": "增强型 LLM",
+  "agent-agentic-loop": "智能体循环",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
