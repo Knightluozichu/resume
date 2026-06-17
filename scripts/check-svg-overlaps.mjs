@@ -147,6 +147,11 @@ const PAGES = [
   '/learn/cpp-concurrency/advanced/thread-pools',
   '/learn/cpp-concurrency/advanced/parallel-algorithms',
   '/learn/cpp-concurrency/advanced/testing-debugging',
+  // Unity 5 权威讲解
+  '/learn/unity5/getting-started/editor-and-project',
+  '/learn/unity5/getting-started/gameobject-component',
+  '/learn/unity5/getting-started/transform-coordinate',
+  '/learn/unity5/scripting/monobehaviour-lifecycle',
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

@@ -448,6 +448,9 @@ import { GameObjectAnatomyDiagram } from "./diagrams/gameobject-anatomy-diagram"
 import { LocalVsWorldExplorer } from "./diagrams/local-vs-world-explorer";
 import { TransformHierarchyDiagram } from "./diagrams/transform-hierarchy-diagram";
 import { Vector3Diagram } from "./diagrams/vector3-diagram";
+import { LifecycleTimelineDiagram } from "./diagrams/lifecycle-timeline-diagram";
+import { UpdateVsFixedUpdateDiagram } from "./diagrams/update-vs-fixed-update-diagram";
+import { AwakeVsStartDiagram } from "./diagrams/awake-vs-start-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1014,6 +1017,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LocalVsWorldExplorer,
   TransformHierarchyDiagram,
   Vector3Diagram,
+  LifecycleTimelineDiagram,
+  UpdateVsFixedUpdateDiagram,
+  AwakeVsStartDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

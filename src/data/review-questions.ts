@@ -180,6 +180,7 @@ import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
 import { u5EditorProjectQuestions } from "./review/u5-editor-project";
 import { u5GameobjectComponentQuestions } from "./review/u5-gameobject-component";
 import { u5TransformCoordinateQuestions } from "./review/u5-transform-coordinate";
+import { u5MonobehaviourLifecycleQuestions } from "./review/u5-monobehaviour-lifecycle";
 
 export {
   CHAPTER_TITLES,
@@ -358,6 +359,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...u5EditorProjectQuestions,
   ...u5GameobjectComponentQuestions,
   ...u5TransformCoordinateQuestions,
+  ...u5MonobehaviourLifecycleQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
