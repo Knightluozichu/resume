@@ -463,6 +463,9 @@ import { BodyTypesDiagram } from "./diagrams/body-types-diagram";
 import { CollisionTriggerEventsDiagram } from "./diagrams/collision-trigger-events-diagram";
 import { RaycastDiagram } from "./diagrams/raycast-diagram";
 import { EventConditionDiagram } from "./diagrams/event-condition-diagram";
+import { MecanimStateMachineDiagram } from "./diagrams/mecanim-state-machine-diagram";
+import { ParamsToAnimatorDiagram } from "./diagrams/params-to-animator-diagram";
+import { BlendTreeDiagram } from "./diagrams/blend-tree-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1044,6 +1047,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CollisionTriggerEventsDiagram,
   RaycastDiagram,
   EventConditionDiagram,
+  MecanimStateMachineDiagram,
+  ParamsToAnimatorDiagram,
+  BlendTreeDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

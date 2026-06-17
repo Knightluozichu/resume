@@ -185,6 +185,7 @@ import { u5ScriptingObjectsQuestions } from "./review/u5-scripting-objects";
 import { u5CoroutinesTimeQuestions } from "./review/u5-coroutines-time";
 import { u5RigidbodyColliderQuestions } from "./review/u5-rigidbody-collider";
 import { u5CollisionRaycastQuestions } from "./review/u5-collision-raycast";
+import { u5MecanimQuestions } from "./review/u5-mecanim";
 
 export {
   CHAPTER_TITLES,
@@ -368,6 +369,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...u5CoroutinesTimeQuestions,
   ...u5RigidbodyColliderQuestions,
   ...u5CollisionRaycastQuestions,
+  ...u5MecanimQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
