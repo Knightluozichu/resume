@@ -173,7 +173,8 @@ export type ReviewChapterSlug =
   | "agt-llm-as-brain"
   | "agt-agent-anatomy"
   | "agt-prompt-engineering"
-  | "agt-sampling-decoding";
+  | "agt-sampling-decoding"
+  | "agt-structured-output";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -350,6 +351,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agt-agent-anatomy": "智能体解剖图",
   "agt-prompt-engineering": "提示工程基础",
   "agt-sampling-decoding": "采样与解码",
+  "agt-structured-output": "结构化输出",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

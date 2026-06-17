@@ -170,6 +170,7 @@ import { agtLlmAsBrainQuestions } from "./review/agt-llm-as-brain";
 import { agtAgentAnatomyQuestions } from "./review/agt-agent-anatomy";
 import { agtPromptEngineeringQuestions } from "./review/agt-prompt-engineering";
 import { agtSamplingDecodingQuestions } from "./review/agt-sampling-decoding";
+import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
 
 export {
   CHAPTER_TITLES,
@@ -336,6 +337,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agtAgentAnatomyQuestions,
   ...agtPromptEngineeringQuestions,
   ...agtSamplingDecodingQuestions,
+  ...agtStructuredOutputQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
