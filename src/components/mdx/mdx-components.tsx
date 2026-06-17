@@ -414,6 +414,9 @@ import { AugmentedCallDiagram } from "./diagrams/augmented-call-diagram";
 import { ReActStepDiagram } from "./diagrams/react-step-diagram";
 import { MultiTurnLoopDiagram } from "./diagrams/multi-turn-loop-diagram";
 import { LoopTerminationDiagram } from "./diagrams/loop-termination-diagram";
+import { AgentSkeletonDiagram } from "./diagrams/agent-skeleton-diagram";
+import { ToolDefAnatomyDiagram } from "./diagrams/tool-def-anatomy-diagram";
+import { AgentRunTraceDiagram } from "./diagrams/agent-run-trace-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1117,6 +1120,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ReActStepDiagram,
   MultiTurnLoopDiagram,
   LoopTerminationDiagram,
+  AgentSkeletonDiagram,
+  ToolDefAnatomyDiagram,
+  AgentRunTraceDiagram,
   Term,
   Glossary,
   GlossaryItem,

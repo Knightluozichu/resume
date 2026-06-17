@@ -138,6 +138,7 @@ const PAGES = [
   "/learn/ai-agent-apps/foundations/what-is-an-agent",
   "/learn/ai-agent-apps/foundations/augmented-llm",
   "/learn/ai-agent-apps/foundations/agentic-loop",
+  "/learn/ai-agent-apps/foundations/first-agent",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

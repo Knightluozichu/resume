@@ -168,6 +168,7 @@ import { pbrIblSpecularQuestions } from "./review/pbr-ibl-specular";
 import { agentWhatIsAnAgentQuestions } from "./review/agent-what-is-an-agent";
 import { agentAugmentedLlmQuestions } from "./review/agent-augmented-llm";
 import { agentAgenticLoopQuestions } from "./review/agent-agentic-loop";
+import { agentFirstAgentQuestions } from "./review/agent-first-agent";
 
 export {
   CHAPTER_TITLES,
@@ -332,6 +333,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agentWhatIsAnAgentQuestions,
   ...agentAugmentedLlmQuestions,
   ...agentAgenticLoopQuestions,
+  ...agentFirstAgentQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

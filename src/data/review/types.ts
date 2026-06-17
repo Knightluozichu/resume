@@ -171,7 +171,8 @@ export type ReviewChapterSlug =
   // AI 智能体应用开发
   | "agent-what-is-an-agent"
   | "agent-augmented-llm"
-  | "agent-agentic-loop";
+  | "agent-agentic-loop"
+  | "agent-first-agent";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -346,6 +347,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-what-is-an-agent": "什么是智能体",
   "agent-augmented-llm": "增强型 LLM",
   "agent-agentic-loop": "智能体循环",
+  "agent-first-agent": "第一个最小 Agent",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
