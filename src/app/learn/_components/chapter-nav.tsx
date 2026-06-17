@@ -76,7 +76,7 @@ export function ChapterNav({ books }: { books: NavBook[] }) {
               aria-expanded={isOpen}
               aria-controls={panelId}
               onClick={() => toggle(book.bookSlug)}
-              className={`flex w-full items-center gap-2 rounded-control px-2 py-1 text-left text-sm font-medium transition-colors duration-(--duration-hover) ease-standard ${
+              className={`flex w-full items-center gap-2 rounded-control px-2 py-1 text-left text-lg font-semibold transition-colors duration-(--duration-hover) ease-standard ${
                 isCurrentBook ? "text-accent" : "text-primary hover:text-accent"
               }`}
             >
@@ -143,7 +143,7 @@ export function ChapterNav({ books }: { books: NavBook[] }) {
                                 <Link
                                   href={chapter.href}
                                   aria-current={active ? "page" : undefined}
-                                  className={`flex items-center gap-2 rounded-control px-2 py-1 transition-colors duration-(--duration-hover) ease-standard ${
+                                  className={`flex items-center gap-2 rounded-control px-2 py-1 text-base transition-colors duration-(--duration-hover) ease-standard ${
                                     active
                                       ? "bg-elevated text-accent"
                                       : "text-secondary hover:text-primary"
