@@ -1,0 +1,353 @@
+---
+title: 材质、光照与渲染基础
+type: A
+section: Unity渲染与发布
+order: 1
+description: 读完能说清「一帧画面 = 网格 × 材质 × 光照，由渲染器算成像素」、能区分 Material 与 Shader（一个 Shader → 多个 Material）、能说出 Standard Shader 的 Albedo/Metallic/Smoothness/Normal Map 各控制表面什么、知道方向光等光源类型，以及在代码里 renderer.material（克隆副本）和 renderer.sharedMaterial（共享原材质）改起来的不同后果。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型·篇5「Unity渲染与发布」开篇章（承接前面：物体会动、会撞、有 UI，这章讲「它凭什么被画成这副样子」）：把「画面 = 网格 × 材质 × 光照 → 渲染器」掰碎，掰清 Material vs Shader、Standard Shader 通道、光照类型与 material/sharedMaterial 坑。重心是 §3 概念讲解与三张示意/解剖图，数学省略(math:false)，§6 代码对照篇幅较轻（碰材质改颜色 / material vs sharedMaterial / 改 Standard 参数 / 调光）。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用图掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type A 新核心概念 ≤5）。 */}
+{/* 1) 一帧画面怎么来：Mesh（形状）+ Material（外观）+ Light（照明）→ Renderer 算像素 = RenderingInputsDiagram（主·轻 anime）。 */}
+{/* 2) Material vs Shader：Shader=怎么画的程序/模板，Material=填好参数的实例，一个 Shader → 多个 Material = MaterialVsShaderDiagram（示意）。 */}
+{/* 3) Standard Shader（PBR）关键输入 Albedo/Metallic/Smoothness/Normal Map 各控制什么 = StandardShaderChannelsDiagram（解剖）。 */}
+{/* 4) MeshRenderer 把网格用材质画出来；代码 renderer.material（克隆）vs sharedMaterial（共享）= 文字 + 代码 + trap。 */}
+{/* 5) 光照基础：Directional（太阳·最常用）/Point/Spot/Area；realtime vs baked；ambient = 文字 + 引主图。 */}
+{/* 术语首现 Term（5 个核心 = Glossary 5 条）：Material / Shader / Standard Shader / MeshRenderer / 方向光（Directional Light）。 */}
+
+{/* ===== 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在渲染管线/流程中的位置」；可检验动词；末条为可当场自测的检验问题。 ===== */}
+
+<Objectives>
+
+- 能用自己的话解释「一帧画面 = 网格（形状） × 材质（外观） × 光照（照明），由**渲染器**算成屏幕像素」，并说出少了其中任一样画面会怎样
+- 能**区分** `Material`（材质）和 `Shader`（着色器）——谁是模板、谁是填好参数的实例，以及为什么「一个 Shader 能被多个 Material 复用」；并能说出 `Standard Shader` 的 Albedo / Metallic / Smoothness / Normal Map 各控制表面的什么
+- 能回答：在代码里 `renderer.material` 和 `renderer.sharedMaterial` 改起来有什么不同后果？想让「单个对象变红、别影响其它同材质对象」该用哪个？
+
+</Objectives>
+
+{/* ===== 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 ===== */}
+
+## 同一把椅子，怎么一会儿是木头、一会儿是金属？
+
+到这一章，你片场里的角色已经会动、会撞、还能在屏幕上显血条了。但有个根子上的问题一直没碰：屏幕上那一帧画面，到底是**怎么被画出来**的？为什么同一个形状，能一会儿看着像木头、一会儿像锃亮的金属？
+
+想想真实片场：一件道具摆上台，得有三样东西它才「成形」。第一，它本身的**形状**——是椅子还是箱子。第二，给它刷的**漆 / 质感**——同一把椅子，刷木纹漆还是金属漆，看起来完全两样。第三，片场打的**灯**——再好的质感，没灯也是黑乎乎一团。最后摄影机一拍，把「形状 + 质感 + 灯光」定格成一帧画面。
+
+没有这套拆分，你就只能对着「物体怎么不见了 / 怎么全黑了 / 怎么改个颜色全场都变了」一脸懵。这一章就把这帧画面拆开：形状、质感、灯光各归谁管，谁负责把它们合成像素，以及最容易搞混的「质感」那一层——材质和着色器到底什么关系。
+
+{/* ===== 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引 Demo；新核心概念 ≤5。三图嵌此节。 ===== */}
+
+## 一帧画面 = 形状 × 质感 × 灯光
+
+先把全章的主心骨立起来：你在屏幕上看到的**一帧画面**，是三样输入交给一个「计算器」算出来的。
+
+- **形状**：物体的几何骨架——一团点连成的网格轮廓，决定它「长什么样」。
+- **质感（外观）**：这就是
+
+  <Term def="一份描述「物体表面长什么样」的资产——内部用一个 Shader，再给它填好一组具体参数（贴图、颜色、金属度、光滑度…）。用片场的话说，就是给道具刷的「漆 / 质感」：同一把椅子刷木纹漆还是金属漆完全两样。它只管外观，不管形状。">
+    Material（材质）
+  </Term>
+  ——给表面「刷什么漆」：什么颜色、什么贴图、是不是金属、光不光滑。
+
+- **灯光**：场景里打的灯——决定明暗，**没灯再好的质感也是黑的**。
+
+把这三者合起来、算出屏幕上每个像素颜色的，是**渲染器（Renderer）**。下面这张主图就把「形状 × 材质 × 光照 → 渲染器 → 一帧画面」演给你看，单步走一遍，本章的骨架就立住了：
+
+<RenderingInputsDiagram />
+
+记牢这一句：**画面 = 网格 × 材质 × 光照**，三者缺一画面就不对——少形状画不出东西、少材质不知刷什么、少灯一片漆黑。下面三节，就分别把「质感」和「灯光」这两层讲透（形状即网格，前面建模 / 模型章已打过照面）。
+
+## 材质 vs 着色器：填空题的「卷子」和「答好的卷子」
+
+「质感」这一层，最该掰清的是两个常被搅混的词：材质和着色器。
+
+<Term def="一段决定「一个表面怎么被画出来」的程序 / 模板。它本身留着一组待填的参数槽（基础色、金属度、光滑度、贴图…），不绑定具体数值。一个 Shader 可被多个 Material 复用。">
+  Shader（着色器）
+</Term>
+是一段**程序 /
+模板**——它规定「一个表面该怎么被画」，但留着一堆**待填的参数槽**：基础色填什么、金属度多少、贴哪张图……它本身不绑具体数值。
+
+而 `Material`（材质）就是**给这个 Shader 把参数槽填上具体值的一份实例**。一句话：**Material = Shader + 一组参数值**。所以关键来了——**一个 Shader 可以被多个 Material 复用**：同一个着色器，填「木纹图 + 不金属」得到木纹材质，填「灰 + 金属度1 + 很光滑」得到金属材质，填「纯红」得到红塑料。下面这张图把这层关系点清：
+
+<MaterialVsShaderDiagram />
+
+用考试打比方：**Shader 是一张「填空题的卷子」，Material 是「填好了答案的一份卷子」**——一张卷子能印出无数份、各填不同答案。反过来，一份 Material 必须先选定一个 Shader（才知道有哪些空可填）。把这层关系理顺，后面「改材质」「换 Shader」就不会再绕。
+
+## Standard Shader：一个着色器，调出绝大多数表面
+
+那具体填哪些参数？Unity 5 给了一个万金油着色器——
+
+<Term def="Unity 5 引入的、基于物理（PBR）的标准着色器。一个 Shader 就能调出从塑料到金属、从磨砂到镜面的绝大多数表面。关键输入：Albedo（基础色，可贴图）、Metallic（金属度）、Smoothness（光滑度）、Normal Map（法线贴图）。">
+  Standard Shader
+</Term>
+。它**基于物理（PBR）**，意思是用一套贴近真实世界的参数来描述表面，几个滑块 +
+贴图就能从塑料调到金属、从磨砂调到镜面。它最关键的几个输入是：
+
+- **Albedo（基础色 / 反照率）**：表面的**基础颜色**，可以直接给个颜色，也可以贴一张图。
+- **Metallic（金属度）**：**像不像金属**——0 是塑料 / 木头等非金属，1 是金属。
+- **Smoothness（光滑度）**：**多光滑、反光多锐**——高的像镜面 / 抛光，低的像磨砂。
+- **Normal Map（法线贴图）**：给平面**伪造凹凸细节**（砖缝、划痕、颗粒），但**不改真实几何形状**，代价极低。
+
+下面这张解剖图把四个通道各列一行、标清各自控制表面的什么，右侧示意合成后的球体外观：
+
+<StandardShaderChannelsDiagram />
+
+记住这几格的分工就够了：**Albedo 管颜色、Metallic 管「是不是金属」、Smoothness 管「多光滑反光」、Normal Map 管「表面凹凸细节」**。它们互相独立，可组合出光滑金属（镜面铬）、磨砂金属（拉丝铝）、光滑塑料等各种表面。
+
+## 谁把网格「画出来」：MeshRenderer
+
+材质有了，可它得有个组件真正去「画」。这个组件就是
+
+<Term def="把网格（由 MeshFilter 提供）用材质真正绘制到屏幕的组件。它引用一份或多份材质。没有它（或被禁用 / 没指定材质），物体在画面里就看不见。">
+  MeshRenderer（网格渲染器）
+</Term>
+：它拿 MeshFilter 提供的网格 +
+自己引用的材质，交给渲染管线，最终画到屏幕上。**没有它，物体就是隐形的**——这正是「新建空对象看不到」的常见原因。
+
+这里藏着一个写代码必踩的分叉：从代码访问一个 Renderer 的材质有两条路。`renderer.material` 会在你第一次访问时**克隆出一份独立的材质副本**，改它**只影响当前这个对象**；而 `renderer.sharedMaterial` 拿到的是**所有用这份材质的对象共享的那份原材质**，改它会**影响全部共用者**（包括项目里的资产）。这条岔路是经典坑，第六节和常见误区会专门讲。
+
+## 光照：方向光、点光源、聚光灯，以及实时 vs 烘焙
+
+最后一层是灯。再好的材质，场景里没灯也是黑的——**光 + 材质共同决定表面最终明暗**。Unity 里常见的光源有几类，最常用的是
+
+<Term def="像太阳一样的光源：只有方向、没有位置，平行地照亮整个场景、不随距离衰减。是最常用的光源，几乎每个场景都有一盏当主光。">
+  方向光（Directional Light）
+</Term>
+。其它还有：**点光源（Point）**
+像灯泡，从一个点向四周发光、有距离衰减；**聚光灯（Spot）** 像手电 /
+舞台灯，从一点沿锥形方向打；**面光源（Area）**
+从一块面发光（仅用于烘焙）。此外还有**环境光（ambient）**，给整个场景一个底色亮度，让背光面不至于死黑。
+
+光还分**实时（realtime）**和**烘焙（baked）**两种：实时光每帧实时算、光和物体都能动但开销大；烘焙光把光照 / 阴影**预先「烤」进贴图**，运行时几乎不花计算，适合不动的静态场景。这里点到为止——本章只需建立「有几类光、各是什么感觉、实时 vs 烘焙的取舍」这个概念地图；具体怎么布光、怎么烘焙留到后续章节。
+
+{/* ===== 4. 数学推导（spec §四）：math:false，整节省略。 ===== */}
+
+{/* ===== 5. 交互 Demo（spec §五）：A 型用示意/解剖图把概念走一遍，强度低于 C；三张图作为「看懂」入口，主图含「猜一猜」。 ===== */}
+
+## 动手：把「形状 × 材质 × 光照」单步走一遍
+
+本章的三张图都是给你「玩」的，核心是上面那张 **渲染三输入主图**——它就是本章的主 Demo。
+
+> 猜一猜：同一个网格（**形状不变**），只把它的材质从「木纹」换成「金属」、再把场景的灯关掉——屏幕上那帧画面会变吗？回到「一帧画面 = 形状 × 质感 × 灯光」一节，单步播放那张主图——你会看到三个输入（Mesh → Material → Light）依次点亮、再一起汇进 Renderer 算出成品画面。你会亲眼确认：换材质，画面的「质感」变；关灯，画面直接变黑——**形状、材质、光照各管一块，缺一画面就不对**。
+
+单步走完主图，再去看另外两张：**Material vs Shader 图**帮你钉牢「一个 Shader → 多个 Material」「Material = Shader + 一组参数」；**Standard Shader 通道解剖图**让你记住 Albedo / Metallic / Smoothness / Normal Map 各控制表面的什么。看懂这三张，下面的代码就好读了。
+
+{/* ===== 6. 代码对照（spec §六，A 型选，篇幅较轻）：纯 csharp 块，每块 ≤30 行、块间有解说。覆盖：①拿 Renderer 改材质颜色；②material vs sharedMaterial（配 Callout warn）；③改 Standard 参数 SetFloat/_Metallic + mainTexture；④调光 light.intensity/color。 ===== */}
+
+## 代码里怎么碰材质和光
+
+概念懂了，看几段「从代码碰材质 / 光」的常见操作就够了——这一节 A 型篇幅不重，记住几个最常用的 API 即可。
+
+### ① 拿到 Renderer，改材质颜色
+
+操作材质，第一步是拿到对象的 `Renderer`，再改它材质的属性。最常见的是改颜色：
+
+```csharp
+using UnityEngine;
+
+public class FlashRed : MonoBehaviour
+{
+    void Start()
+    {
+        // 拿到自身的 Renderer（MeshRenderer 也是一种 Renderer）
+        Renderer rend = GetComponent<Renderer>();
+
+        // 改材质颜色 —— 注意：renderer.material 会克隆出独立副本（见下）
+        rend.material.color = Color.red;
+    }
+}
+```
+
+`GetComponent<Renderer>()` 取到渲染器，`rend.material.color = Color.red` 把它的材质染红。看起来一行就搞定，但 `rend.material` 这一下其实悄悄做了件大事——下一段就是关键。
+
+### ② `material` 克隆副本 vs `sharedMaterial` 共享原材质
+
+这是本章最该记牢的代码分叉。两条路改材质，后果完全不同：
+
+```csharp
+// A：renderer.material —— 第一次访问会「克隆」出一份独立副本，只给这个对象用
+rend.material.color = Color.red;        // 只有这一个对象变红
+
+// B：renderer.sharedMaterial —— 拿到「共享的原材质」，所有用它的对象都受影响
+rend.sharedMaterial.color = Color.red;  // 全场用这份材质的对象一起变红（含资产）
+```
+
+`material` 适合「只想改**这一个**对象」（接受克隆出一份新材质的代价）；`sharedMaterial` 改的是**原始资产 / 所有共用者**，牵连一片。用错了就是下面 Callout 里的经典翻车。
+
+<Callout type="warn">
+  **`renderer.material` 会克隆，`renderer.sharedMaterial` 会共享——别记反。**
+  想做「单个怪物受伤变红」这种**单体效果**，必须用
+  `renderer.material`（克隆出独立副本，只改自己）；若图省事写成
+  `sharedMaterial.color =
+  ...`，会改到**所有用这份材质的对象**（甚至项目里的材质资产，且改动会带进编辑器）。反过来，确实想**统一改原始材质资产**时才用
+  `sharedMaterial`。另外：每次访问 `material` 都会留下一份克隆实例，海量对象逐个
+  `material` 改会**多内存、打断批处理**——批量同效果应共享材质或用
+  MaterialPropertyBlock。
+</Callout>
+
+### ③ 改 Standard Shader 参数、换主贴图
+
+Standard Shader 的参数（金属度、光滑度等）在代码里按**属性名**改，主贴图用 `mainTexture`：
+
+```csharp
+Material mat = rend.material;        // 克隆副本，只改这一个对象
+
+mat.SetFloat("_Metallic", 1f);       // 金属度调满（属性名带下划线）
+mat.SetFloat("_Glossiness", 0.85f);  // Smoothness（光滑度）
+mat.mainTexture = woodTexture;       // 换主贴图（等价于 _MainTex）
+```
+
+Standard Shader 的属性名都带下划线：金属度是 `_Metallic`、光滑度是 `_Glossiness`、基础色是 `_Color`。用 `SetFloat` / `SetColor` / `SetTexture` 按名字改即可；`mainTexture` 是「主贴图」的便捷入口（即 `_MainTex`）。注意这里用的是 `rend.material`（克隆），改的只是当前对象。
+
+### ④ 用代码调一盏灯
+
+灯是 `Light` 组件，改它的 `intensity`（强度）和 `color`（颜色）就能调明暗 / 氛围：
+
+```csharp
+Light light = GetComponent<Light>();
+
+light.intensity = 2f;        // 调亮（默认约 1）
+light.color = Color.red;     // 灯光染红，整个场景泛红
+```
+
+`light.intensity` 控制这盏灯多亮、`light.color` 控制它什么颜色——调一盏方向光的强度，就像调片场主灯的亮度。材质决定「表面本身什么样」，光决定「它被照成什么样」，两者一起算出你最终看到的明暗。
+
+{/* ===== 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。①改 material 以为改了原材质其实克隆了一份（材质泄漏/批处理失效），想改原始资产该用 sharedMaterial；②物体全黑/看不见——没光/没指定材质/不受光 shader。 ===== */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：写 `renderer.sharedMaterial.color = Color.red`
+  想让「这一个对象变红」，结果**场上所有同材质对象全变红了**（还连带改了项目资产）。**原因**：`sharedMaterial`
+  是**所有用这份材质的对象共享的那份原材质**，改它人人受影响。**修法**：单体效果改用
+  `renderer.material`——它第一次访问就**克隆一份独立副本**只给当前对象，改它只影响这一个。口诀：**单个用
+  `material`（克隆），原始资产 / 全体才用 `sharedMaterial`。**
+</Callout>
+
+<Callout type="trap">
+  **现象**：物体在场景里**全黑 /
+  几乎看不见**（不是彻底消失，是黑乎乎一团）。**原因**：多半是**场景没光 /
+  光太弱**——受光材质在无光照时基本是黑的；也可能法线朝反、材质 Albedo
+  本身接近黑。**修法**：先**加 /
+  调亮一盏方向光**（最常见），并检查环境光（Ambient）；再看材质 Albedo
+  和法线朝向。记住：**光 + 材质共同决定明暗，没灯再好的材质也黑。**
+</Callout>
+
+<Callout type="trap">
+  **现象**：物体**彻底没画出来**（不是变黑，是压根不见）。**原因**：没有
+  `MeshRenderer`（空对象只带 Transform）、或它被禁用 / **没指定材质** /
+  用了不合适的 Shader（常显示成洋红「错误材质」）。**修法**：确认对象有**启用的
+  MeshRenderer + MeshFilter（提供网格）+ 指定了材质**；用内置 Cube / Sphere
+  自带这些。口诀：**全黑先查光，全不见先查 Renderer 和材质。**
+</Callout>
+
+{/* ===== 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，A 型以概念辨析为主 + 1 道小代码/操作题，答案折叠。 ===== */}
+
+## 小结
+
+- **一帧画面 = 网格（形状） × 材质（外观） × 光照（照明）**，由 **Renderer** 算成屏幕像素；三者缺一画面就不对
+- **Material = Shader + 一组参数值**：Shader 是「怎么画」的程序模板（留参数槽），Material 是「填好参数」的实例——**一个 Shader 可被多个 Material 复用**
+- **Standard Shader（PBR）** 的关键输入：**Albedo**（基础色）、**Metallic**（金属度）、**Smoothness**（光滑度）、**Normal Map**（法线贴图，伪造凹凸不改形状）
+- **MeshRenderer** 才把网格用材质画出来；代码里 `renderer.material` **克隆独立副本**（改单个）、`renderer.sharedMaterial` **共享原材质**（改全体）
+- **光决定明暗**：方向光（太阳，最常用）/ 点光源 / 聚光灯 / 面光源；分实时（realtime）与烘焙（baked）；光 + 材质共同决定表面最终明暗
+
+<Exercises>
+
+**练习 1（概念辨析）** 用「填空题的卷子」这个比喻，解释 `Shader` 和 `Material` 的关系，并说明为什么「一个 Shader 能对应多个 Material，而一个 Material 只基于一个 Shader」。
+
+<Answer>
+
+**Shader 是一张「填空题的卷子」，Material 是「填好答案的一份卷子」。** Shader 规定「一个表面怎么被画」，但留着一堆待填的参数槽（基础色、金属度、光滑度、贴图……），本身不绑具体数值；Material 则是把这些空填上具体值的一份实例——所以 **Material = Shader + 一组参数值**。
+
+- **一个 Shader → 多个 Material**：同一张卷子能印无数份、各填不同答案。同一个 Standard Shader，填「木纹图 + 不金属」是木纹材质，填「灰 + 金属1 + 很光滑」是金属材质，填「纯红」是红塑料——它们复用同一个 Shader，只是参数不同。
+- **一个 Material → 一个 Shader**：一份 Material 必须先选定一个 Shader，才知道「有哪些空可填」；脱离 Shader，参数无从谈起。
+
+</Answer>
+
+**练习 2（概念辨析）** 一个物体在场景里「全黑、看不太清」，另一个物体「压根没画出来」。这两种现象的排查方向有什么不同？分别该先查什么？
+
+<Answer>
+
+两者根因不同，排查方向也不同：
+
+- **「全黑 / 看不太清」**（物体在、但黑）：多半是**光照问题**——受光材质在无光 / 光太弱时基本是黑的。**先查场景有没有光**（加 / 调亮方向光、看环境光 Ambient），再看材质 Albedo 是否太暗、法线是否朝反。
+- **「压根没画出来」**（彻底不见）：多半是**渲染器 / 材质问题**——没有 `MeshRenderer`（空对象只带 Transform）、Renderer 被禁用、没指定材质、或用了不合适的 Shader（常显示成洋红错误材质）。**先查有没有启用的 MeshRenderer + MeshFilter + 指定材质**。
+
+口诀：**全黑先查光，全不见先查 Renderer 和材质。** 根上是因为「画面 = 网格 × 材质 × 光照」——黑是光那一层不对，不见是网格 / 渲染器那一层不对。
+
+</Answer>
+
+**练习 3（小代码 / 操作题）** 你想让「被攻击的那一个怪物」闪红一下，但**不能影响**场上其它用同一材质的怪物。下面这行哪里错了？怎么改？并说明 `material` 和 `sharedMaterial` 改起来的不同后果。
+
+```csharp
+GetComponent<Renderer>().sharedMaterial.color = Color.red;
+```
+
+<Answer>
+
+错在用了 **`sharedMaterial`**——它是**所有用这份材质的对象共享的那份原材质**，改它的颜色，**场上每个用这份材质的怪物都会跟着变红**（还会连带改项目里的材质资产）。这做不出「单个怪物闪红」。
+
+改用 **`renderer.material`**：
+
+```csharp
+GetComponent<Renderer>().material.color = Color.red; // 克隆独立副本，只改这一个
+```
+
+**不同后果：** `renderer.material` 第一次访问会**克隆出一份独立的材质副本**只给当前对象，改它**只影响这一个**（代价是多一份材质实例、可能打断批处理）；`renderer.sharedMaterial` 拿到的是**共享的原材质**，改它**影响所有共用者 / 原始资产**。口诀：**单体效果用 `material`（克隆），统一改原始资产才用 `sharedMaterial`。**
+
+</Answer>
+
+</Exercises>
+
+{/* ===== 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 ===== */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Material（材质）">
+  一份描述「物体表面长什么样」的资产——内部用一个
+  **Shader**，再给它填好一组具体参数（贴图、颜色、金属度、光滑度…）。用片场的话说，就是给道具刷的「**漆
+  /
+  质感**」：同一把椅子刷木纹漆还是金属漆完全两样。它**只管外观**，不管形状（形状归网格
+  Mesh 管）。一句话：**Material = Shader + 一组参数值**。详见本章「材质 vs
+  着色器」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Shader（着色器）">
+  一段决定「**一个表面怎么被画出来**」的程序 /
+  模板。它本身留着一组**待填的参数槽**（基础色、金属度、光滑度、贴图…），不绑定具体数值——好比一张「填空题的卷子」。给它填上具体值就成了一份
+  Material。关键：**一个 Shader 可被多个 Material
+  复用**（同一张卷子印无数份、各填不同答案）。详见本章「材质 vs 着色器」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Standard Shader">
+  Unity 5 引入的、**基于物理（PBR）的标准着色器**——一个 Shader
+  就能调出从塑料到金属、从磨砂到镜面的绝大多数表面。关键输入：**Albedo**（基础色
+  /
+  反照率，可贴图，管颜色）、**Metallic**（金属度，管「像不像金属」）、**Smoothness**（光滑度，管「多光滑反光」）、**Normal
+  Map**（法线贴图，给平面伪造凹凸细节、不改真实形状）。详见本章「Standard
+  Shader」一节。
+</GlossaryItem>
+
+<GlossaryItem term="MeshRenderer（网格渲染器）">
+  真正**把网格用材质「画出来」**的组件——它拿 MeshFilter 提供的网格 +
+  自己引用的材质，交给渲染管线绘制到屏幕。**没有它（或被禁用 /
+  没指定材质），物体就看不见**（这是「新建空对象看不到」的常见原因）。代码访问它的材质有两条路：`material`（克隆独立副本、改单个）和
+  `sharedMaterial`（共享原材质、改全体）。详见本章「谁把网格画出来」一节。
+</GlossaryItem>
+
+<GlossaryItem term="方向光（Directional Light）">
+  像**太阳**一样的光源：只有**方向**、没有位置，平行地照亮整个场景、**不随距离衰减**。是**最常用**的光源，几乎每个场景都会放一盏当主光。相比之下，点光源（Point）像灯泡从一点四散并衰减、聚光灯（Spot）像手电沿锥形打、面光源（Area）从一块面发光（仅烘焙）。详见本章「光照」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* ===== 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 空标签自动渲染「原创声明」。 ===== */}
+
+<Attribution />

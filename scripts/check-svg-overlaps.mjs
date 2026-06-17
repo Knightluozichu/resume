@@ -158,6 +158,7 @@ const PAGES = [
   "/learn/unity5/physics/collision-raycast",
   "/learn/unity5/animation-ui/mecanim",
   "/learn/unity5/animation-ui/ugui",
+  "/learn/unity5/rendering/materials-lighting",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

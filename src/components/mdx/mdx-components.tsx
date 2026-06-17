@@ -469,6 +469,9 @@ import { BlendTreeDiagram } from "./diagrams/blend-tree-diagram";
 import { RectTransformAnchorsDiagram } from "./diagrams/rect-transform-anchors-diagram";
 import { UIHierarchyDiagram } from "./diagrams/ui-hierarchy-diagram";
 import { ButtonClickFlowDiagram } from "./diagrams/button-click-flow-diagram";
+import { RenderingInputsDiagram } from "./diagrams/rendering-inputs-diagram";
+import { MaterialVsShaderDiagram } from "./diagrams/material-vs-shader-diagram";
+import { StandardShaderChannelsDiagram } from "./diagrams/standard-shader-channels-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1056,6 +1059,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RectTransformAnchorsDiagram,
   UIHierarchyDiagram,
   ButtonClickFlowDiagram,
+  RenderingInputsDiagram,
+  MaterialVsShaderDiagram,
+  StandardShaderChannelsDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
