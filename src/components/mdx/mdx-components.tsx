@@ -435,6 +435,10 @@ import { FunctionCallingDecisionDiagram } from "./diagrams/function-calling-deci
 import { ToolDesignDimensionsDiagram } from "./diagrams/tool-design-dimensions-diagram";
 import { ToolGranularityDiagram } from "./diagrams/tool-granularity-diagram";
 import { ToolErrorRecoveryDiagram } from "./diagrams/tool-error-recovery-diagram";
+import { McpMxnDiagram } from "./diagrams/mcp-mxn-diagram";
+import { McpArchitectureDiagram } from "./diagrams/mcp-architecture-diagram";
+import { McpCapabilitiesDiagram } from "./diagrams/mcp-capabilities-diagram";
+import { McpCallFlowDiagram } from "./diagrams/mcp-call-flow-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1159,6 +1163,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToolDesignDimensionsDiagram,
   ToolGranularityDiagram,
   ToolErrorRecoveryDiagram,
+  McpMxnDiagram,
+  McpArchitectureDiagram,
+  McpCapabilitiesDiagram,
+  McpCallFlowDiagram,
   Term,
   Glossary,
   GlossaryItem,
