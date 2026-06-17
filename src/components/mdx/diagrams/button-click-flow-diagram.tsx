@@ -27,8 +27,8 @@ import {
  */
 
 const VIEW_W = 736;
-// VIEW_H=300：最低内容是底部说明 ~280，下留 20px。纵向利用率 ~87%。
-const VIEW_H = 300;
+// VIEW_H=308：底部说明基线 286、bbox 底 ~289，距底边 ~19px（≥14）。纵向利用率 ~85%。
+const VIEW_H = 308;
 
 // 四个节点（横向链），整数坐标。
 const NODE_W = 150;
@@ -408,7 +408,7 @@ export function ButtonClickFlowDiagram() {
           {/* ===== 底部一句话点题 ===== */}
           <text
             x={VIEW_W / 2}
-            y={VIEW_H - 14}
+            y={VIEW_H - 22}
             textAnchor="middle"
             fontSize="10.5"
             fill="var(--text-secondary)"

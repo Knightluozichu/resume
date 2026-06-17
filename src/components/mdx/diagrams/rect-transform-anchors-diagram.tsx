@@ -30,8 +30,8 @@ import {
  */
 
 const VIEW_W = 736;
-// VIEW_H=400：最低内容是底部说明文字 ~378，下留 22px。纵向利用率 ~85%。
-const VIEW_H = 400;
+// VIEW_H=408：底部说明文字基线 386、bbox 底 ~389，距底边 ~19px（≥14）。纵向利用率 ~84%。
+const VIEW_H = 408;
 
 // ── 左场景：单点锚（父框初始） ──
 const LP_X = 40; // 左父框 x
@@ -431,7 +431,7 @@ export function RectTransformAnchorsDiagram() {
           {/* ===== 底部一句话点题 ===== */}
           <text
             x={VIEW_W / 2}
-            y={VIEW_H - 14}
+            y={VIEW_H - 22}
             textAnchor="middle"
             fontSize="10.5"
             fill="var(--text-secondary)"
