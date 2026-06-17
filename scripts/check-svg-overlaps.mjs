@@ -140,6 +140,7 @@ const PAGES = [
   "/learn/ai-agent-apps/foundations/agentic-loop",
   "/learn/ai-agent-apps/foundations/first-agent",
   "/learn/ai-agent-apps/context-engineering/prompt-engineering",
+  "/learn/ai-agent-apps/context-engineering/context-window",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

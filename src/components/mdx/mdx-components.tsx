@@ -421,6 +421,10 @@ import { PromptAnatomyDiagram } from "./diagrams/prompt-anatomy-diagram";
 import { FewShotDiagram } from "./diagrams/few-shot-diagram";
 import { CotDiagram } from "./diagrams/cot-diagram";
 import { PromptRefinementDiagram } from "./diagrams/prompt-refinement-diagram";
+import { ContextBudgetDiagram } from "./diagrams/context-budget-diagram";
+import { CompressionVsTruncationDiagram } from "./diagrams/compression-vs-truncation-diagram";
+import { ContextWindowFillDiagram } from "./diagrams/context-window-fill-diagram";
+import { LostInMiddleDiagram } from "./diagrams/lost-in-middle-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1131,6 +1135,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FewShotDiagram,
   CotDiagram,
   PromptRefinementDiagram,
+  ContextBudgetDiagram,
+  CompressionVsTruncationDiagram,
+  ContextWindowFillDiagram,
+  LostInMiddleDiagram,
   Term,
   Glossary,
   GlossaryItem,

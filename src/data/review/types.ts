@@ -173,7 +173,8 @@ export type ReviewChapterSlug =
   | "agent-augmented-llm"
   | "agent-agentic-loop"
   | "agent-first-agent"
-  | "agent-prompt-engineering";
+  | "agent-prompt-engineering"
+  | "agent-context-window";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -350,6 +351,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-agentic-loop": "智能体循环",
   "agent-first-agent": "第一个最小 Agent",
   "agent-prompt-engineering": "提示工程精要",
+  "agent-context-window": "上下文窗口",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
