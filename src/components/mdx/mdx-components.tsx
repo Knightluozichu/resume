@@ -442,6 +442,9 @@ import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxono
 import { EditorLayoutDiagram } from "./diagrams/editor-layout-diagram";
 import { SceneHierarchyDiagram } from "./diagrams/scene-hierarchy-diagram";
 import { EditPlayLoopDiagram } from "./diagrams/edit-play-loop-diagram";
+import { ComponentCompositionDiagram } from "./diagrams/component-composition-diagram";
+import { CompositionVsInheritanceDiagram } from "./diagrams/composition-vs-inheritance-diagram";
+import { GameObjectAnatomyDiagram } from "./diagrams/gameobject-anatomy-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1002,6 +1005,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EditorLayoutDiagram,
   SceneHierarchyDiagram,
   EditPlayLoopDiagram,
+  ComponentCompositionDiagram,
+  CompositionVsInheritanceDiagram,
+  GameObjectAnatomyDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
