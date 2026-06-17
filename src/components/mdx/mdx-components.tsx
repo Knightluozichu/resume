@@ -417,6 +417,10 @@ import { LoopTerminationDiagram } from "./diagrams/loop-termination-diagram";
 import { AgentSkeletonDiagram } from "./diagrams/agent-skeleton-diagram";
 import { ToolDefAnatomyDiagram } from "./diagrams/tool-def-anatomy-diagram";
 import { AgentRunTraceDiagram } from "./diagrams/agent-run-trace-diagram";
+import { PromptAnatomyDiagram } from "./diagrams/prompt-anatomy-diagram";
+import { FewShotDiagram } from "./diagrams/few-shot-diagram";
+import { CotDiagram } from "./diagrams/cot-diagram";
+import { PromptRefinementDiagram } from "./diagrams/prompt-refinement-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1123,6 +1127,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AgentSkeletonDiagram,
   ToolDefAnatomyDiagram,
   AgentRunTraceDiagram,
+  PromptAnatomyDiagram,
+  FewShotDiagram,
+  CotDiagram,
+  PromptRefinementDiagram,
   Term,
   Glossary,
   GlossaryItem,

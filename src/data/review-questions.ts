@@ -169,6 +169,7 @@ import { agentWhatIsAnAgentQuestions } from "./review/agent-what-is-an-agent";
 import { agentAugmentedLlmQuestions } from "./review/agent-augmented-llm";
 import { agentAgenticLoopQuestions } from "./review/agent-agentic-loop";
 import { agentFirstAgentQuestions } from "./review/agent-first-agent";
+import { agentPromptEngineeringQuestions } from "./review/agent-prompt-engineering";
 
 export {
   CHAPTER_TITLES,
@@ -334,6 +335,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agentAugmentedLlmQuestions,
   ...agentAgenticLoopQuestions,
   ...agentFirstAgentQuestions,
+  ...agentPromptEngineeringQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
