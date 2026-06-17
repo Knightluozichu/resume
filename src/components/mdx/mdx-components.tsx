@@ -407,6 +407,10 @@ import { AgentAnatomyDiagram } from "./diagrams/agent-anatomy-diagram";
 import { AgentVsWorkflowDiagram } from "./diagrams/agent-vs-workflow-diagram";
 import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
 import { AutonomySpectrumDiagram } from "./diagrams/autonomy-spectrum-diagram";
+import { AugmentedLlmDiagram } from "./diagrams/augmented-llm-diagram";
+import { RetrievalFlowDiagram } from "./diagrams/retrieval-flow-diagram";
+import { MemoryTypesDiagram } from "./diagrams/memory-types-diagram";
+import { AugmentedCallDiagram } from "./diagrams/augmented-call-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1103,6 +1107,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AgentVsWorkflowDiagram,
   AgentLoopDiagram,
   AutonomySpectrumDiagram,
+  AugmentedLlmDiagram,
+  RetrievalFlowDiagram,
+  MemoryTypesDiagram,
+  AugmentedCallDiagram,
   Term,
   Glossary,
   GlossaryItem,
