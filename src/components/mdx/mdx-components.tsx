@@ -432,6 +432,9 @@ import { ValidationRetryDiagram } from "./diagrams/validation-retry-diagram";
 import { ToolsAsMenuDiagram } from "./diagrams/tools-as-menu-diagram";
 import { ParallelVsSequentialDiagram } from "./diagrams/parallel-vs-sequential-diagram";
 import { FunctionCallingDecisionDiagram } from "./diagrams/function-calling-decision-diagram";
+import { ToolDesignDimensionsDiagram } from "./diagrams/tool-design-dimensions-diagram";
+import { ToolGranularityDiagram } from "./diagrams/tool-granularity-diagram";
+import { ToolErrorRecoveryDiagram } from "./diagrams/tool-error-recovery-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1153,6 +1156,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToolsAsMenuDiagram,
   ParallelVsSequentialDiagram,
   FunctionCallingDecisionDiagram,
+  ToolDesignDimensionsDiagram,
+  ToolGranularityDiagram,
+  ToolErrorRecoveryDiagram,
   Term,
   Glossary,
   GlossaryItem,

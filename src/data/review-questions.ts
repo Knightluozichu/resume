@@ -173,6 +173,7 @@ import { agentPromptEngineeringQuestions } from "./review/agent-prompt-engineeri
 import { agentContextWindowQuestions } from "./review/agent-context-window";
 import { agentStructuredOutputQuestions } from "./review/agent-structured-output";
 import { agentFunctionCallingQuestions } from "./review/agent-function-calling";
+import { agentToolDesignQuestions } from "./review/agent-tool-design";
 
 export {
   CHAPTER_TITLES,
@@ -341,6 +342,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agentPromptEngineeringQuestions,
   ...agentContextWindowQuestions,
   ...agentStructuredOutputQuestions,
+  ...agentFunctionCallingQuestions,
+  ...agentToolDesignQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

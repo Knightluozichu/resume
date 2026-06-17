@@ -143,6 +143,7 @@ const PAGES = [
   "/learn/ai-agent-apps/context-engineering/context-window",
   "/learn/ai-agent-apps/context-engineering/structured-output",
   "/learn/ai-agent-apps/tool-use/function-calling",
+  "/learn/ai-agent-apps/tool-use/tool-design",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
