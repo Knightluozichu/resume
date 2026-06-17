@@ -180,7 +180,21 @@ export type ReviewChapterSlug =
   | "cc-designing-concurrent-code"
   | "cc-thread-pools"
   | "cc-parallel-algorithms"
-  | "cc-testing-debugging";
+  | "cc-testing-debugging"
+  // Unity 5 权威讲解
+  | "u5-editor-project"
+  | "u5-gameobject-component"
+  | "u5-transform-coordinate"
+  | "u5-monobehaviour-lifecycle"
+  | "u5-scripting-objects"
+  | "u5-coroutines-time"
+  | "u5-rigidbody-collider"
+  | "u5-collision-raycast"
+  | "u5-mecanim"
+  | "u5-ugui"
+  | "u5-materials-lighting"
+  | "u5-prefabs-assets"
+  | "u5-build-deploy";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -364,6 +378,20 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cc-thread-pools": "高级线程管理：线程池",
   "cc-parallel-algorithms": "并行算法",
   "cc-testing-debugging": "多线程应用的测试与调试",
+  // Unity 5 权威讲解
+  "u5-editor-project": "编辑器与项目结构",
+  "u5-gameobject-component": "GameObject 与组件模型",
+  "u5-transform-coordinate": "场景、Transform 与坐标空间",
+  "u5-monobehaviour-lifecycle": "MonoBehaviour 生命周期",
+  "u5-scripting-objects": "脚本控制对象与组件",
+  "u5-coroutines-time": "协程与时间",
+  "u5-rigidbody-collider": "刚体与碰撞器",
+  "u5-collision-raycast": "碰撞触发事件与射线检测",
+  "u5-mecanim": "Mecanim 动画状态机",
+  "u5-ugui": "uGUI 界面系统",
+  "u5-materials-lighting": "材质、光照与渲染基础",
+  "u5-prefabs-assets": "预制体与资源管线",
+  "u5-build-deploy": "构建与发布",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

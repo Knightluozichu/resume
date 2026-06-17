@@ -72,6 +72,7 @@ export const BOOK_ORDER = [
   "profiling-unity-games",
   "mobile-xr-web-optimization",
   "cpp-concurrency",
+  "unity5",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -85,6 +86,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
+  unity5: "Unity 5 权威讲解",
 };
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -152,6 +154,12 @@ export const SECTION_ORDER = [
   "内存模型与原子操作",
   "并发数据结构",
   "高级并发与工程",
+  // Unity 5 权威讲解
+  "Unity入门",
+  "Unity脚本",
+  "Unity物理",
+  "Unity动画与UI",
+  "Unity渲染与发布",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
