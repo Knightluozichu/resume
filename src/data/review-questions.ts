@@ -177,6 +177,7 @@ import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concur
 import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
 import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
 import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
+import { u5EditorProjectQuestions } from "./review/u5-editor-project";
 
 export {
   CHAPTER_TITLES,
@@ -351,6 +352,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ccThreadPoolsQuestions,
   ...ccParallelAlgorithmsQuestions,
   ...ccTestingDebuggingQuestions,
+  // Unity 5 权威讲解
+  ...u5EditorProjectQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

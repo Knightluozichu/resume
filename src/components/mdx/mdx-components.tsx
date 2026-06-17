@@ -439,6 +439,9 @@ import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram
 import { DeadlockVsLivelockDiagram } from "./diagrams/deadlock-vs-livelock-diagram";
 import { TsanDetectionDiagram } from "./diagrams/tsan-detection-diagram";
 import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxonomy-diagram";
+import { EditorLayoutDiagram } from "./diagrams/editor-layout-diagram";
+import { SceneHierarchyDiagram } from "./diagrams/scene-hierarchy-diagram";
+import { EditPlayLoopDiagram } from "./diagrams/edit-play-loop-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -996,6 +999,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DeadlockVsLivelockDiagram,
   TsanDetectionDiagram,
   ConcurrencyBugTaxonomyDiagram,
+  EditorLayoutDiagram,
+  SceneHierarchyDiagram,
+  EditPlayLoopDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
