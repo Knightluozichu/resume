@@ -66,6 +66,7 @@ import { aiContextEngineeringQuestions } from "./review/ai-context-engineering";
 import { aiMultiAgentPatternsQuestions } from "./review/ai-multi-agent-patterns";
 import { aiOrchestrationQuestions } from "./review/ai-orchestration";
 import { aiEvaluationObservabilityQuestions } from "./review/ai-evaluation-observability";
+import { aiSafetyGuardrailsQuestions } from "./review/ai-safety-guardrails";
 import { cppGettingStartedQuestions } from "./review/cpp-getting-started";
 import { cppVariablesAndTypesQuestions } from "./review/cpp-variables-and-types";
 import { cppStringsVectorsArraysQuestions } from "./review/cpp-strings-vectors-arrays";
@@ -350,6 +351,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aiMultiAgentPatternsQuestions,
   ...aiOrchestrationQuestions,
   ...aiEvaluationObservabilityQuestions,
+  ...aiSafetyGuardrailsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
