@@ -403,6 +403,10 @@ import { HookMechanismDiagram } from "./diagrams/hook-mechanism-diagram";
 import { PluginArchitectureDiagram } from "./diagrams/plugin-architecture-diagram";
 import { MemoryLeakDiagram } from "./diagrams/memory-leak-diagram";
 import { BootSequenceDiagram } from "./diagrams/boot-sequence-diagram";
+// AI Agent 开发实战
+import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
+import { AgentParadigmDiagram } from "./diagrams/agent-paradigm-diagram";
+import { AutonomySpectrumExplorer } from "./demos/autonomy-spectrum-explorer";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1095,6 +1099,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   XrFrameBudgetDiagram,
   XrInputOverheadDiagram,
   WebAssemblyFeatureDiagram,
+  // AI Agent 开发实战
+  AgentLoopDiagram,
+  AgentParadigmDiagram,
+  AutonomySpectrumExplorer,
   Term,
   Glossary,
   GlossaryItem,
