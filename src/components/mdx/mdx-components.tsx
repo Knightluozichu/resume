@@ -412,6 +412,9 @@ import { AaTokenizerPlayground } from "./ai-agent/tokenizer-playground";
 import { AaAgentAnatomyFlowDiagram } from "./ai-agent/agent-anatomy-flow-diagram";
 import { AaAgentFiveComponentsDiagram } from "./ai-agent/agent-five-components-diagram";
 import { AaAgentMapExplorer } from "./ai-agent/agent-map-explorer";
+import { AaPromptAssemblyDiagram } from "./ai-agent/prompt-assembly-diagram";
+import { AaPromptAnatomyDiagram } from "./ai-agent/prompt-anatomy-diagram";
+import { AaPromptComparePlayground } from "./ai-agent/prompt-compare-playground";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1113,6 +1116,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaAgentAnatomyFlowDiagram,
   AaAgentFiveComponentsDiagram,
   AaAgentMapExplorer,
+  AaPromptAssemblyDiagram,
+  AaPromptAnatomyDiagram,
+  AaPromptComparePlayground,
   Term,
   Glossary,
   GlossaryItem,
