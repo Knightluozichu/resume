@@ -466,6 +466,9 @@ import { EventConditionDiagram } from "./diagrams/event-condition-diagram";
 import { MecanimStateMachineDiagram } from "./diagrams/mecanim-state-machine-diagram";
 import { ParamsToAnimatorDiagram } from "./diagrams/params-to-animator-diagram";
 import { BlendTreeDiagram } from "./diagrams/blend-tree-diagram";
+import { RectTransformAnchorsDiagram } from "./diagrams/rect-transform-anchors-diagram";
+import { UIHierarchyDiagram } from "./diagrams/ui-hierarchy-diagram";
+import { ButtonClickFlowDiagram } from "./diagrams/button-click-flow-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1050,6 +1053,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MecanimStateMachineDiagram,
   ParamsToAnimatorDiagram,
   BlendTreeDiagram,
+  RectTransformAnchorsDiagram,
+  UIHierarchyDiagram,
+  ButtonClickFlowDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
