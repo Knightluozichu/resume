@@ -22,144 +22,145 @@
  * Usage: pnpm svg-check
  * Requires: dev server 在 http://localhost:3000
  */
-import puppeteer from 'puppeteer';
-import fs from 'fs';
-import path from 'path';
+import puppeteer from "puppeteer";
+import fs from "fs";
+import path from "path";
 
-const BASE = 'http://localhost:3000';
-const REPORT_TXT = path.resolve('scripts/svg-overlap-report.txt');
-const REPORT_JSON = path.resolve('scripts/svg-quality-report.json');
+const BASE = "http://localhost:3000";
+const REPORT_TXT = path.resolve("scripts/svg-overlap-report.txt");
+const REPORT_JSON = path.resolve("scripts/svg-quality-report.json");
 
 // All pages that contain diagrams
 const PAGES = [
   // LearnOpenGL
-  '/learn/learnopengl/getting-started/hello-window',
-  '/learn/learnopengl/getting-started/hello-triangle',
-  '/learn/learnopengl/getting-started/shaders',
-  '/learn/learnopengl/getting-started/textures',
-  '/learn/learnopengl/getting-started/transformations',
-  '/learn/learnopengl/getting-started/coordinate-systems',
-  '/learn/learnopengl/getting-started/camera',
-  '/learn/learnopengl/lighting/basic-lighting',
-  '/learn/learnopengl/lighting/light-casters',
-  '/learn/learnopengl/lighting/lighting-maps',
-  '/learn/learnopengl/lighting/multiple-lights',
-  '/learn/learnopengl/model-loading/assimp',
-  '/learn/learnopengl/model-loading/mesh',
-  '/learn/learnopengl/model-loading/model',
-  '/learn/learnopengl/advanced-opengl/depth-testing',
-  '/learn/learnopengl/advanced-opengl/stencil-testing',
-  '/learn/learnopengl/advanced-opengl/blending',
-  '/learn/learnopengl/advanced-opengl/face-culling',
-  '/learn/learnopengl/advanced-opengl/framebuffers',
-  '/learn/learnopengl/advanced-opengl/cubemaps',
-  '/learn/learnopengl/advanced-opengl/advanced-data',
-  '/learn/learnopengl/advanced-opengl/advanced-glsl',
-  '/learn/learnopengl/advanced-opengl/geometry-shader',
-  '/learn/learnopengl/advanced-opengl/instancing',
-  '/learn/learnopengl/advanced-opengl/anti-aliasing',
-  '/learn/learnopengl/advanced-lighting/blinn-phong',
-  '/learn/learnopengl/advanced-lighting/gamma-correction',
-  '/learn/learnopengl/advanced-lighting/shadow-mapping',
-  '/learn/learnopengl/advanced-lighting/point-shadows',
-  '/learn/learnopengl/advanced-lighting/normal-mapping',
-  '/learn/learnopengl/advanced-lighting/parallax-mapping',
-  '/learn/learnopengl/advanced-lighting/hdr',
-  '/learn/learnopengl/advanced-lighting/bloom',
-  '/learn/learnopengl/advanced-lighting/deferred-shading',
-  '/learn/learnopengl/advanced-lighting/ssao',
+  "/learn/learnopengl/getting-started/hello-window",
+  "/learn/learnopengl/getting-started/hello-triangle",
+  "/learn/learnopengl/getting-started/shaders",
+  "/learn/learnopengl/getting-started/textures",
+  "/learn/learnopengl/getting-started/transformations",
+  "/learn/learnopengl/getting-started/coordinate-systems",
+  "/learn/learnopengl/getting-started/camera",
+  "/learn/learnopengl/lighting/basic-lighting",
+  "/learn/learnopengl/lighting/light-casters",
+  "/learn/learnopengl/lighting/lighting-maps",
+  "/learn/learnopengl/lighting/multiple-lights",
+  "/learn/learnopengl/model-loading/assimp",
+  "/learn/learnopengl/model-loading/mesh",
+  "/learn/learnopengl/model-loading/model",
+  "/learn/learnopengl/advanced-opengl/depth-testing",
+  "/learn/learnopengl/advanced-opengl/stencil-testing",
+  "/learn/learnopengl/advanced-opengl/blending",
+  "/learn/learnopengl/advanced-opengl/face-culling",
+  "/learn/learnopengl/advanced-opengl/framebuffers",
+  "/learn/learnopengl/advanced-opengl/cubemaps",
+  "/learn/learnopengl/advanced-opengl/advanced-data",
+  "/learn/learnopengl/advanced-opengl/advanced-glsl",
+  "/learn/learnopengl/advanced-opengl/geometry-shader",
+  "/learn/learnopengl/advanced-opengl/instancing",
+  "/learn/learnopengl/advanced-opengl/anti-aliasing",
+  "/learn/learnopengl/advanced-lighting/blinn-phong",
+  "/learn/learnopengl/advanced-lighting/gamma-correction",
+  "/learn/learnopengl/advanced-lighting/shadow-mapping",
+  "/learn/learnopengl/advanced-lighting/point-shadows",
+  "/learn/learnopengl/advanced-lighting/normal-mapping",
+  "/learn/learnopengl/advanced-lighting/parallax-mapping",
+  "/learn/learnopengl/advanced-lighting/hdr",
+  "/learn/learnopengl/advanced-lighting/bloom",
+  "/learn/learnopengl/advanced-lighting/deferred-shading",
+  "/learn/learnopengl/advanced-lighting/ssao",
   // C++ Primer
-  '/learn/cpp-primer-5e/cpp-basics/getting-started',
-  '/learn/cpp-primer-5e/cpp-basics/variables-and-types',
-  '/learn/cpp-primer-5e/cpp-basics/strings-vectors-and-arrays',
-  '/learn/cpp-primer-5e/cpp-basics/expressions',
-  '/learn/cpp-primer-5e/cpp-basics/statements',
-  '/learn/cpp-primer-5e/cpp-basics/functions',
-  '/learn/cpp-primer-5e/cpp-basics/classes',
-  '/learn/cpp-primer-5e/cpp-library/sequential-containers',
-  '/learn/cpp-primer-5e/cpp-library/generic-algorithms',
-  '/learn/cpp-primer-5e/cpp-library/associative-containers',
-  '/learn/cpp-primer-5e/cpp-library/dynamic-memory',
-  '/learn/cpp-primer-5e/cpp-library/io-library',
-  '/learn/cpp-primer-5e/cpp-class-design/copy-control',
-  '/learn/cpp-primer-5e/cpp-class-design/overloaded-operations',
-  '/learn/cpp-primer-5e/cpp-class-design/oop',
-  '/learn/cpp-primer-5e/cpp-class-design/templates',
-  '/learn/cpp-primer-5e/cpp-advanced/large-programs',
-  '/learn/cpp-primer-5e/cpp-advanced/specialized-library',
-  '/learn/cpp-primer-5e/cpp-advanced/specialized-tools',
+  "/learn/cpp-primer-5e/cpp-basics/getting-started",
+  "/learn/cpp-primer-5e/cpp-basics/variables-and-types",
+  "/learn/cpp-primer-5e/cpp-basics/strings-vectors-and-arrays",
+  "/learn/cpp-primer-5e/cpp-basics/expressions",
+  "/learn/cpp-primer-5e/cpp-basics/statements",
+  "/learn/cpp-primer-5e/cpp-basics/functions",
+  "/learn/cpp-primer-5e/cpp-basics/classes",
+  "/learn/cpp-primer-5e/cpp-library/sequential-containers",
+  "/learn/cpp-primer-5e/cpp-library/generic-algorithms",
+  "/learn/cpp-primer-5e/cpp-library/associative-containers",
+  "/learn/cpp-primer-5e/cpp-library/dynamic-memory",
+  "/learn/cpp-primer-5e/cpp-library/io-library",
+  "/learn/cpp-primer-5e/cpp-class-design/copy-control",
+  "/learn/cpp-primer-5e/cpp-class-design/overloaded-operations",
+  "/learn/cpp-primer-5e/cpp-class-design/oop",
+  "/learn/cpp-primer-5e/cpp-class-design/templates",
+  "/learn/cpp-primer-5e/cpp-advanced/large-programs",
+  "/learn/cpp-primer-5e/cpp-advanced/specialized-library",
+  "/learn/cpp-primer-5e/cpp-advanced/specialized-tools",
   // C Primer Plus
-  '/learn/c-primer-plus/c-basics/getting-ready',
-  '/learn/c-primer-plus/c-basics/introducing-c',
-  '/learn/c-primer-plus/c-basics/data-and-c',
-  '/learn/c-primer-plus/c-basics/strings-io',
-  '/learn/c-primer-plus/c-basics/operators-expressions',
-  '/learn/c-primer-plus/c-control-io/control-loops',
-  '/learn/c-primer-plus/c-control-io/control-branching',
-  '/learn/c-primer-plus/c-control-io/char-io-validation',
-  '/learn/c-primer-plus/c-func-array-ptr/functions',
-  '/learn/c-primer-plus/c-func-array-ptr/arrays-pointers',
-  '/learn/c-primer-plus/c-func-array-ptr/strings-functions',
-  '/learn/c-primer-plus/c-advanced/storage-linkage-memory',
-  '/learn/c-primer-plus/c-advanced/file-io',
-  '/learn/c-primer-plus/c-advanced/structures',
-  '/learn/c-primer-plus/c-advanced/bit-fiddling',
-  '/learn/c-primer-plus/c-advanced/preprocessor',
-  '/learn/c-primer-plus/c-advanced/advanced-data',
+  "/learn/c-primer-plus/c-basics/getting-ready",
+  "/learn/c-primer-plus/c-basics/introducing-c",
+  "/learn/c-primer-plus/c-basics/data-and-c",
+  "/learn/c-primer-plus/c-basics/strings-io",
+  "/learn/c-primer-plus/c-basics/operators-expressions",
+  "/learn/c-primer-plus/c-control-io/control-loops",
+  "/learn/c-primer-plus/c-control-io/control-branching",
+  "/learn/c-primer-plus/c-control-io/char-io-validation",
+  "/learn/c-primer-plus/c-func-array-ptr/functions",
+  "/learn/c-primer-plus/c-func-array-ptr/arrays-pointers",
+  "/learn/c-primer-plus/c-func-array-ptr/strings-functions",
+  "/learn/c-primer-plus/c-advanced/storage-linkage-memory",
+  "/learn/c-primer-plus/c-advanced/file-io",
+  "/learn/c-primer-plus/c-advanced/structures",
+  "/learn/c-primer-plus/c-advanced/bit-fiddling",
+  "/learn/c-primer-plus/c-advanced/preprocessor",
+  "/learn/c-primer-plus/c-advanced/advanced-data",
   // Android
-  '/learn/android-advanced-decryption/system-architecture/android-architecture',
-  '/learn/android-advanced-decryption/system-boot/system-startup',
-  '/learn/android-advanced-decryption/process-management/app-process-startup',
+  "/learn/android-advanced-decryption/system-architecture/android-architecture",
+  "/learn/android-advanced-decryption/system-boot/system-startup",
+  "/learn/android-advanced-decryption/process-management/app-process-startup",
   // Unity Game Optimization
-  '/learn/unity-game-optimization/base-scripting/evaluating-performance-problems',
-  '/learn/unity-game-optimization/base-scripting/scripting-strategies',
-  '/learn/unity-game-optimization/graphical-optimizations/benefits-of-batching',
-  '/learn/unity-game-optimization/graphical-optimizations/optimizing-art-assets',
-  '/learn/unity-game-optimization/graphical-optimizations/faster-physics',
-  '/learn/unity-game-optimization/graphical-optimizations/dynamic-graphics',
-  '/learn/unity-game-optimization/advanced-optimizations/xr-optimizations',
-  '/learn/unity-game-optimization/advanced-optimizations/memory-management',
-  '/learn/unity-game-optimization/advanced-optimizations/data-oriented-technology-stack',
-  '/learn/unity-game-optimization/advanced-optimizations/tactical-tips-and-tricks',
+  "/learn/unity-game-optimization/base-scripting/evaluating-performance-problems",
+  "/learn/unity-game-optimization/base-scripting/scripting-strategies",
+  "/learn/unity-game-optimization/graphical-optimizations/benefits-of-batching",
+  "/learn/unity-game-optimization/graphical-optimizations/optimizing-art-assets",
+  "/learn/unity-game-optimization/graphical-optimizations/faster-physics",
+  "/learn/unity-game-optimization/graphical-optimizations/dynamic-graphics",
+  "/learn/unity-game-optimization/advanced-optimizations/xr-optimizations",
+  "/learn/unity-game-optimization/advanced-optimizations/memory-management",
+  "/learn/unity-game-optimization/advanced-optimizations/data-oriented-technology-stack",
+  "/learn/unity-game-optimization/advanced-optimizations/tactical-tips-and-tricks",
   // Profiling Unity Games
-  '/learn/profiling-unity-games/profiling-workflow/profiling-workflow-baseline',
-  '/learn/profiling-unity-games/profiling-workflow/profile-analyzer-regression',
-  '/learn/profiling-unity-games/cpu-profiling/cpu-profiler-deep-dive',
-  '/learn/profiling-unity-games/gpu-profiling/gpu-performance-analysis',
-  '/learn/profiling-unity-games/memory-and-power/memory-profiler',
-  '/learn/profiling-unity-games/memory-and-power/power-optimization',
-  '/learn/profiling-unity-games/platform-specific/platform-specific-profiling',
+  "/learn/profiling-unity-games/profiling-workflow/profiling-workflow-baseline",
+  "/learn/profiling-unity-games/profiling-workflow/profile-analyzer-regression",
+  "/learn/profiling-unity-games/cpu-profiling/cpu-profiler-deep-dive",
+  "/learn/profiling-unity-games/gpu-profiling/gpu-performance-analysis",
+  "/learn/profiling-unity-games/memory-and-power/memory-profiler",
+  "/learn/profiling-unity-games/memory-and-power/power-optimization",
+  "/learn/profiling-unity-games/platform-specific/platform-specific-profiling",
   // Mobile/XR/Web
-  '/learn/mobile-xr-web-optimization/urp-optimization/mobile-optimization',
-  '/learn/mobile-xr-web-optimization/urp-optimization/urp-optimization',
-  '/learn/mobile-xr-web-optimization/web-optimization/web-specific-optimization',
-  '/learn/mobile-xr-web-optimization/xr-optimization/xr-specific-optimization',
+  "/learn/mobile-xr-web-optimization/urp-optimization/mobile-optimization",
+  "/learn/mobile-xr-web-optimization/urp-optimization/urp-optimization",
+  "/learn/mobile-xr-web-optimization/web-optimization/web-specific-optimization",
+  "/learn/mobile-xr-web-optimization/xr-optimization/xr-specific-optimization",
   // C++ 并发编程实战（第2版）
-  '/learn/cpp-concurrency/fundamentals/hello-concurrency',
-  '/learn/cpp-concurrency/fundamentals/managing-threads',
-  '/learn/cpp-concurrency/shared-data/protecting-shared-data',
-  '/learn/cpp-concurrency/shared-data/synchronizing-operations',
-  '/learn/cpp-concurrency/memory-model/atomic-types',
-  '/learn/cpp-concurrency/memory-model/memory-ordering',
-  '/learn/cpp-concurrency/data-structures/lock-based',
-  '/learn/cpp-concurrency/data-structures/lock-free',
-  '/learn/cpp-concurrency/advanced/designing-concurrent-code',
-  '/learn/cpp-concurrency/advanced/thread-pools',
-  '/learn/cpp-concurrency/advanced/parallel-algorithms',
-  '/learn/cpp-concurrency/advanced/testing-debugging',
+  "/learn/cpp-concurrency/fundamentals/hello-concurrency",
+  "/learn/cpp-concurrency/fundamentals/managing-threads",
+  "/learn/cpp-concurrency/shared-data/protecting-shared-data",
+  "/learn/cpp-concurrency/shared-data/synchronizing-operations",
+  "/learn/cpp-concurrency/memory-model/atomic-types",
+  "/learn/cpp-concurrency/memory-model/memory-ordering",
+  "/learn/cpp-concurrency/data-structures/lock-based",
+  "/learn/cpp-concurrency/data-structures/lock-free",
+  "/learn/cpp-concurrency/advanced/designing-concurrent-code",
+  "/learn/cpp-concurrency/advanced/thread-pools",
+  "/learn/cpp-concurrency/advanced/parallel-algorithms",
+  "/learn/cpp-concurrency/advanced/testing-debugging",
   // Unity 5 权威讲解
-  '/learn/unity5/getting-started/editor-and-project',
-  '/learn/unity5/getting-started/gameobject-component',
-  '/learn/unity5/getting-started/transform-coordinate',
-  '/learn/unity5/scripting/monobehaviour-lifecycle',
-  '/learn/unity5/scripting/scripting-objects',
+  "/learn/unity5/getting-started/editor-and-project",
+  "/learn/unity5/getting-started/gameobject-component",
+  "/learn/unity5/getting-started/transform-coordinate",
+  "/learn/unity5/scripting/monobehaviour-lifecycle",
+  "/learn/unity5/scripting/scripting-objects",
+  "/learn/unity5/scripting/coroutines-time",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
 
 async function checkPage(page, url) {
   try {
-    await page.goto(BASE + url, { waitUntil: 'networkidle0', timeout: 20000 });
+    await page.goto(BASE + url, { waitUntil: "networkidle0", timeout: 20000 });
   } catch {
     return []; // timeout = skip
   }
@@ -171,7 +172,7 @@ async function checkPage(page, url) {
   try {
     const hasInteractive = await page.evaluate(() => {
       return !!document.querySelector(
-        '[aria-label*="可交互"], [aria-label="下一步"], [aria-label="上一步"]'
+        '[aria-label*="可交互"], [aria-label="下一步"], [aria-label="上一步"]',
       );
     });
     if (hasInteractive) {
@@ -185,7 +186,7 @@ async function checkPage(page, url) {
   try {
     issues = await page.evaluate(() => {
       const out = [];
-      const svgs = document.querySelectorAll('.mdx-figure svg, figure svg');
+      const svgs = document.querySelectorAll(".mdx-figure svg, figure svg");
 
       svgs.forEach((svg, svgIdx) => {
         const svgRect = svg.getBoundingClientRect();
@@ -193,8 +194,8 @@ async function checkPage(page, url) {
         const svgH = svgRect.height;
         if (svgW === 0 || svgH === 0) return;
 
-        const texts = [...svg.querySelectorAll('text')];
-        const rects = [...svg.querySelectorAll('rect')];
+        const texts = [...svg.querySelectorAll("text")];
+        const rects = [...svg.querySelectorAll("rect")];
 
         function relBox(el) {
           const r = el.getBoundingClientRect();
@@ -205,7 +206,7 @@ async function checkPage(page, url) {
             bottom: r.bottom - svgRect.top,
             width: r.width,
             height: r.height,
-            text: el.textContent?.trim().slice(0, 40) || '',
+            text: el.textContent?.trim().slice(0, 40) || "",
             tag: el.tagName.toLowerCase(),
           };
         }
@@ -218,8 +219,14 @@ async function checkPage(page, url) {
           );
         }
         function overlapArea(a, b) {
-          const x = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
-          const y = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+          const x = Math.max(
+            0,
+            Math.min(a.right, b.right) - Math.max(a.left, b.left),
+          );
+          const y = Math.max(
+            0,
+            Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top),
+          );
           return x * y;
         }
         function contains(outer, inner, tol = 0.5) {
@@ -231,8 +238,12 @@ async function checkPage(page, url) {
           );
         }
 
-        const textBoxes = texts.filter((t) => t.textContent?.trim()).map((t) => relBox(t));
-        const rectBoxes = rects.map((r) => relBox(r)).filter((r) => r.width > 0 && r.height > 0);
+        const textBoxes = texts
+          .filter((t) => t.textContent?.trim())
+          .map((t) => relBox(t));
+        const rectBoxes = rects
+          .map((r) => relBox(r))
+          .filter((r) => r.width > 0 && r.height > 0);
 
         // ───────── 1. HIGH · rect-rect 重叠 >30%（滤父子+同位叠加） ─────────
         for (let i = 0; i < rectBoxes.length; i++) {
@@ -265,8 +276,8 @@ async function checkPage(page, url) {
             }
 
             out.push({
-              level: 'HIGH',
-              type: 'rect-rect-overlap',
+              level: "HIGH",
+              type: "rect-rect-overlap",
               svg: svgIdx,
               detail: `rect#${i} (${Math.round(a.width)}x${Math.round(a.height)}) ↔ rect#${j} (${Math.round(b.width)}x${Math.round(b.height)}) overlap ${Math.round(ratio * 100)}%`,
             });
@@ -281,8 +292,14 @@ async function checkPage(page, url) {
           // 找 text 中心所在的 rect（最小者，更可能是直接归属）
           let host = null;
           for (const rb of rectBoxes) {
-            if (cx >= rb.left && cx <= rb.right && cy >= rb.top && cy <= rb.bottom) {
-              if (!host || rb.width * rb.height < host.width * host.height) host = rb;
+            if (
+              cx >= rb.left &&
+              cx <= rb.right &&
+              cy >= rb.top &&
+              cy <= rb.bottom
+            ) {
+              if (!host || rb.width * rb.height < host.width * host.height)
+                host = rb;
             }
           }
           if (!host) return;
@@ -299,8 +316,8 @@ async function checkPage(page, url) {
             const tArea = tb.width * tb.height;
             if (tArea > 0 && area / tArea > 0.2) {
               out.push({
-                level: 'HIGH',
-                type: 'text-wrong-rect',
+                level: "HIGH",
+                type: "text-wrong-rect",
                 svg: svgIdx,
                 detail: `text "${tb.text}" 中心在某 rect 但 ${Math.round((area / tArea) * 100)}% 伸进另一 rect`,
               });
@@ -314,32 +331,32 @@ async function checkPage(page, url) {
           if (tb.width === 0) return;
           if (tb.left < -2) {
             out.push({
-              level: 'HIGH',
-              type: 'text-clip-left',
+              level: "HIGH",
+              type: "text-clip-left",
               svg: svgIdx,
               detail: `text "${tb.text}" 左侧溢出 ${Math.round(-tb.left)}px`,
             });
           }
           if (tb.top < -2) {
             out.push({
-              level: 'HIGH',
-              type: 'text-clip-top',
+              level: "HIGH",
+              type: "text-clip-top",
               svg: svgIdx,
               detail: `text "${tb.text}" 顶部溢出 ${Math.round(-tb.top)}px`,
             });
           }
           if (tb.right > svgW + 2) {
             out.push({
-              level: 'HIGH',
-              type: 'text-clip-right',
+              level: "HIGH",
+              type: "text-clip-right",
               svg: svgIdx,
               detail: `text "${tb.text}" 右侧溢出 ${Math.round(tb.right - svgW)}px`,
             });
           }
           if (tb.bottom > svgH + 2) {
             out.push({
-              level: 'HIGH',
-              type: 'text-clip-bottom',
+              level: "HIGH",
+              type: "text-clip-bottom",
               svg: svgIdx,
               detail: `text "${tb.text}" 底部溢出 ${Math.round(tb.bottom - svgH)}px`,
             });
@@ -347,7 +364,10 @@ async function checkPage(page, url) {
         });
 
         // ───────── 4/5/6 需要 content union bbox ─────────
-        const allNodes = [...rectBoxes, ...textBoxes.filter((t) => t.width > 0)];
+        const allNodes = [
+          ...rectBoxes,
+          ...textBoxes.filter((t) => t.width > 0),
+        ];
         if (allNodes.length > 0) {
           let minL = Infinity,
             minT = Infinity,
@@ -368,15 +388,15 @@ async function checkPage(page, url) {
           // 4. MID · viewBox 利用率
           if (ratio < 0.5) {
             out.push({
-              level: 'MID',
-              type: 'viewbox-underused',
+              level: "MID",
+              type: "viewbox-underused",
               svg: svgIdx,
               detail: `content 仅占 viewBox ${Math.round(ratio * 100)}%（建议 ≥50%）`,
             });
           } else if (ratio > 1.05) {
             out.push({
-              level: 'MID',
-              type: 'viewbox-overflow',
+              level: "MID",
+              type: "viewbox-overflow",
               svg: svgIdx,
               detail: `content 超出 viewBox ${Math.round(ratio * 100)}%（应 ≤105%）`,
             });
@@ -389,7 +409,7 @@ async function checkPage(page, url) {
           for (const n of allNodes) {
             // 跳过几乎填满 svg 的背景 rect（n.tag === 'rect' && area > 85%）
             const nArea = n.width * n.height;
-            if (n.tag === 'rect' && nArea > svgArea * 0.85) continue;
+            if (n.tag === "rect" && nArea > svgArea * 0.85) continue;
             const dL = n.left;
             const dT = n.top;
             const dR = svgW - n.right;
@@ -399,26 +419,27 @@ async function checkPage(page, url) {
               edgeCount++;
               if (edgeSamples.length < 3) {
                 edgeSamples.push(
-                  `${n.tag}${n.text ? ` "${n.text}"` : ''} d=${Math.round(minD)}px`
+                  `${n.tag}${n.text ? ` "${n.text}"` : ""} d=${Math.round(minD)}px`,
                 );
               }
             }
           }
           if (edgeCount > 0) {
             out.push({
-              level: 'MID',
-              type: 'node-near-edge',
+              level: "MID",
+              type: "node-near-edge",
               svg: svgIdx,
-              detail: `${edgeCount} 个节点距 viewBox 边 <${EDGE}px (e.g. ${edgeSamples.join('; ')})`,
+              detail: `${edgeCount} 个节点距 viewBox 边 <${EDGE}px (e.g. ${edgeSamples.join("; ")})`,
             });
           }
 
           // 6. LOW · 节点密度（rect 数 / (svgArea/10000) > 8）
-          const density = svgArea > 0 ? rectBoxes.length / (svgArea / 10000) : 0;
+          const density =
+            svgArea > 0 ? rectBoxes.length / (svgArea / 10000) : 0;
           if (density > 8) {
             out.push({
-              level: 'LOW',
-              type: 'node-density-high',
+              level: "LOW",
+              type: "node-density-high",
               svg: svgIdx,
               detail: `rect 密度 ${density.toFixed(1)} / 100×100px（建议 ≤8）`,
             });
@@ -438,8 +459,9 @@ async function checkPage(page, url) {
 async function main() {
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    executablePath:
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
   await page.setViewport({ width: 1280, height: 900 });
@@ -451,20 +473,22 @@ async function main() {
 
   for (let i = 0; i < PAGES.length; i++) {
     const url = PAGES[i];
-    process.stdout.write(`[${i + 1}/${PAGES.length}] ${url.split('/').pop()} ... `);
+    process.stdout.write(
+      `[${i + 1}/${PAGES.length}] ${url.split("/").pop()} ... `,
+    );
     const issues = await checkPage(page, url);
     if (issues.length > 0) {
       issues.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
       byPageMap.set(url, issues);
-      const h = issues.filter((x) => x.level === 'HIGH').length;
-      const m = issues.filter((x) => x.level === 'MID').length;
-      const l = issues.filter((x) => x.level === 'LOW').length;
+      const h = issues.filter((x) => x.level === "HIGH").length;
+      const m = issues.filter((x) => x.level === "MID").length;
+      const l = issues.filter((x) => x.level === "LOW").length;
       totalHigh += h;
       totalMid += m;
       totalLow += l;
       console.log(`H=${h} M=${m} L=${l}`);
     } else {
-      console.log('OK');
+      console.log("OK");
     }
   }
 
@@ -482,8 +506,8 @@ async function main() {
       })),
     }))
     .sort((a, b) => {
-      const ah = a.issues.filter((i) => i.level === 'HIGH').length;
-      const bh = b.issues.filter((i) => i.level === 'HIGH').length;
+      const ah = a.issues.filter((i) => i.level === "HIGH").length;
+      const bh = b.issues.filter((i) => i.level === "HIGH").length;
       if (ah !== bh) return bh - ah;
       return b.issues.length - a.issues.length;
     });
@@ -501,32 +525,36 @@ async function main() {
 
   // ── 人读 TXT 报告 ──
   const lines = [];
-  lines.push('SVG 质量验收报告');
-  lines.push('='.repeat(60));
+  lines.push("SVG 质量验收报告");
+  lines.push("=".repeat(60));
   lines.push(
-    `总页 ${summary.totalPages} · 有问题 ${summary.pagesWithIssues} · HIGH ${summary.high} · MID ${summary.mid} · LOW ${summary.low}`
+    `总页 ${summary.totalPages} · 有问题 ${summary.pagesWithIssues} · HIGH ${summary.high} · MID ${summary.mid} · LOW ${summary.low}`,
   );
-  lines.push('');
+  lines.push("");
   for (const p of byPage) {
     lines.push(`▸ ${p.url}`);
     for (const iss of p.issues) {
-      lines.push(`  [${iss.level}] ${iss.type} (svg#${iss.svg}): ${iss.detail}`);
+      lines.push(
+        `  [${iss.level}] ${iss.type} (svg#${iss.svg}): ${iss.detail}`,
+      );
     }
-    lines.push('');
+    lines.push("");
   }
-  fs.writeFileSync(REPORT_TXT, lines.join('\n'));
+  fs.writeFileSync(REPORT_TXT, lines.join("\n"));
 
   // ── 控制台终结 ──
-  console.log('');
-  console.log('='.repeat(60));
+  console.log("");
+  console.log("=".repeat(60));
   console.log(
-    `summary: 总页 ${summary.totalPages} · 有问题 ${summary.pagesWithIssues} · HIGH ${summary.high} · MID ${summary.mid} · LOW ${summary.low}`
+    `summary: 总页 ${summary.totalPages} · 有问题 ${summary.pagesWithIssues} · HIGH ${summary.high} · MID ${summary.mid} · LOW ${summary.low}`,
   );
   console.log(`报告: ${REPORT_TXT}`);
   console.log(`JSON: ${REPORT_JSON}`);
 
   if (totalHigh > 0) {
-    console.log(`\n✗ HIGH 级问题 ${totalHigh} 处，deploy 门禁不通过。详见报告。`);
+    console.log(
+      `\n✗ HIGH 级问题 ${totalHigh} 处，deploy 门禁不通过。详见报告。`,
+    );
     process.exitCode = 1;
   } else if (totalMid > 0 || totalLow > 0) {
     console.log(`\n△ 无 HIGH 问题，但有 MID/LOW，可参考报告优化。`);

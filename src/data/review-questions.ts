@@ -182,6 +182,7 @@ import { u5GameobjectComponentQuestions } from "./review/u5-gameobject-component
 import { u5TransformCoordinateQuestions } from "./review/u5-transform-coordinate";
 import { u5MonobehaviourLifecycleQuestions } from "./review/u5-monobehaviour-lifecycle";
 import { u5ScriptingObjectsQuestions } from "./review/u5-scripting-objects";
+import { u5CoroutinesTimeQuestions } from "./review/u5-coroutines-time";
 
 export {
   CHAPTER_TITLES,
@@ -362,6 +363,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...u5TransformCoordinateQuestions,
   ...u5MonobehaviourLifecycleQuestions,
   ...u5ScriptingObjectsQuestions,
+  ...u5CoroutinesTimeQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
