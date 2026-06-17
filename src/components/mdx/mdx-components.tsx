@@ -457,6 +457,9 @@ import { InspectorBindingDiagram } from "./diagrams/inspector-binding-diagram";
 import { CoroutineFrameTimeline } from "./diagrams/coroutine-frame-timeline";
 import { YieldKindsDiagram } from "./diagrams/yield-kinds-diagram";
 import { TimeScaleDiagram } from "./diagrams/time-scale-diagram";
+import { RigidbodyGravityDiagram } from "./diagrams/rigidbody-gravity-diagram";
+import { ColliderShapesDiagram } from "./diagrams/collider-shapes-diagram";
+import { BodyTypesDiagram } from "./diagrams/body-types-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1032,6 +1035,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CoroutineFrameTimeline,
   YieldKindsDiagram,
   TimeScaleDiagram,
+  RigidbodyGravityDiagram,
+  ColliderShapesDiagram,
+  BodyTypesDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

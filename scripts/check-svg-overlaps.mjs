@@ -154,6 +154,7 @@ const PAGES = [
   "/learn/unity5/scripting/monobehaviour-lifecycle",
   "/learn/unity5/scripting/scripting-objects",
   "/learn/unity5/scripting/coroutines-time",
+  "/learn/unity5/physics/rigidbody-collider",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
