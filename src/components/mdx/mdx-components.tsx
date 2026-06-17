@@ -422,6 +422,9 @@ import { ToolCallStateMachine } from "./diagrams/tool-call-state-machine";
 import { MemoryArchitectureDiagram } from "./diagrams/memory-architecture-diagram";
 import { MemoryRetrievalDemo } from "./demos/memory-retrieval-demo";
 import { MemoryTypesDiagram } from "./demos/memory-types-diagram";
+import { TaskDecompositionTree } from "./diagrams/task-decomposition-tree";
+import { PlanningStrategiesCompare } from "./demos/planning-strategies-compare";
+import { ReflectReplanLoop } from "./demos/reflect-replan-loop";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1133,6 +1136,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MemoryArchitectureDiagram,
   MemoryRetrievalDemo,
   MemoryTypesDiagram,
+  TaskDecompositionTree,
+  PlanningStrategiesCompare,
+  ReflectReplanLoop,
   Term,
   Glossary,
   GlossaryItem,
