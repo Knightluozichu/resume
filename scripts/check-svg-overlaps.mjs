@@ -159,6 +159,7 @@ const PAGES = [
   "/learn/unity5/animation-ui/mecanim",
   "/learn/unity5/animation-ui/ugui",
   "/learn/unity5/rendering/materials-lighting",
+  "/learn/unity5/rendering/prefabs-assets",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

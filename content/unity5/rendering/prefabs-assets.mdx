@@ -1,0 +1,330 @@
+---
+title: 预制体与资源管线
+type: A
+section: Unity渲染与发布
+order: 2
+description: 读完能说清预制体（Prefab）是「配好的可复用模板」、资产与实例如何联动、改一个实例属性算「覆盖（override）」而非改资产、Apply 把实例改动推回资产影响全体；能解释资源管线靠 .meta 里的 GUID 而非路径来引用资源（所以改名移动不丢引用），以及拿到资源的三条路（Inspector 拖引用 / Instantiate / Resources.Load，Resources 慎用）。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型·篇5「Unity渲染与发布」第2章（承接第5章已把预制体作为 Instantiate 的复制源初步介绍）：把预制体讲透——资产↔实例联动 / override / Apply、资源管线 GUID 引用、拿资源三方式。重心是 §3 概念与三张示意/解剖图，数学省略(math:false)，§6 代码对照较轻，§7 trap ≥2。明确点出 Unity 5 是扁平预制体、无嵌套。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用图掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type A 新核心概念 ≤5）。 */}
+{/* 1) 预制体 Prefab：配好组件/参数的 GameObject 存成的可复用模板资产；改模板→所有实例同步 = PrefabInstanceLinkDiagram（主·轻 anime）。 */}
+{/* 2) 资产 vs 实例 + 覆盖 override + Apply/Revert（Unity 5 扁平、无嵌套）= 同主图掰碎。 */}
+{/* 3) 资源管线：Assets/ + 同名 .meta（GUID + 导入设置）；引用靠 GUID 不靠路径 = AssetPipelineGuidDiagram（示意/流程）。 */}
+{/* 4) 拿资源三条路：Inspector 拖引用（最推荐）/ Instantiate 预制体 / Resources.Load(慎用) = LoadAssetWaysDiagram（对照）。 */}
+{/* 5) 特殊文件夹点到（Resources/StreamingAssets/Editor/Plugins）+ AssetBundle 一句话 = 文字。 */}
+{/* 术语首现 Term（5 个核心 = Glossary 5 条）：预制体（Prefab）/ 覆盖（Override）/ Apply / GUID / Resources.Load。 */}
+
+{/* ===== 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在流程中的位置」；可检验动词；末条为可当场自测的检验问题。 ===== */}
+
+<Objectives>
+
+- 能用自己的话解释**预制体（Prefab）是什么**——一个「配好组件 / 参数的可复用模板」，并说出它最大的价值（改模板，所有实例同步更新）
+- 能**区分**「改预制体资产」和「改一个实例属性（覆盖 override）」的不同影响范围，并说出 **Apply** 把实例改动推回资产、会连带影响全体；还能解释资源管线为什么**靠 GUID 而非路径**引用资源
+- 能回答：**改了一个预制体实例的属性，预制体资产会跟着变吗？怎样才会？**
+
+</Objectives>
+
+{/* ===== 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 ===== */}
+
+## 一百个一模一样的群演，难道要一个个配？
+
+到这一章，你片场里的角色已经会动、会撞、有材质、被灯照亮了。第 5 章你还学过用「复制一个临时演员上场」的办法刷出子弹和敌人。但有个更根上的问题没碰：那个被复制的「模板」，到底是什么东西、怎么管理？
+
+想想真实片场要拍一场「一百个群演同款铠甲」的戏。笨办法是把一百个群演拉来、一件件量身定做铠甲——累死人，而且导演临时说「铠甲改成红色」，你得改一百遍。聪明办法是先做一张**标准定妆卡 / 道具图纸**：照着量产一百套一样的；要改，只改图纸，所有照它造的全跟着变。再说道具仓库：成千上万件道具，靠「第几排第几格」记位置太脆——挪一次库位全乱了；不如给每件道具一个**唯一编号**，挪到哪都凭编号找得到。
+
+这一章就讲 Unity 怎么用这两招：用**预制体**当那张「定妆卡 / 图纸」，量产并统一管理一致的对象；用资源管线那本「靠唯一编号登记的仓库册」，让你改名 / 挪位置都不丢引用。没有它们，你就只能对着「改一处要改几百个」「移动个文件引用全断」一脸懵。
+
+{/* ===== 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引 Demo；新核心概念 ≤5。三图嵌此节。 ===== */}
+
+## 预制体：一张能量产的「角色定妆卡」
+
+先把本章的主角立起来。第 5 章你已经打过照面——那个被 `Instantiate` 复制的「模板」，就是
+
+<Term def="把一个配好组件 / 参数的 GameObject 存成的「可复用模板」资产。用它能在场景里造出任意多个一致的实例（敌人、子弹、道具）。它最大的价值：改模板，所有照它造的实例都同步更新。用片场的话，就是一张「角色定妆卡 / 标准道具图纸」。">
+  预制体（Prefab）
+</Term>
+。它就是一张「角色定妆卡」：你把一个角色 /
+道具的**形状、材质、组件、参数**都配好，存成一个**模板资产**放进
+Project；之后照它在场景里造出**任意多个一模一样的实例**——一百个群演、满屏的子弹、一地的金币。
+
+它最大的价值，在于**改一次模板，所有实例同步更新**。导演说「铠甲改红色」？你只改预制体资产，场上每个照它造的实例立刻全变红，不用挨个改。这正是上一节那笔「改一处要改几百个」的账，被预制体一笔勾销。
+
+## 资产 ↔ 实例：联动、覆盖、Apply
+
+预制体的关键，是分清两样东西：**资产**和**实例**。
+
+- **预制体资产**在 **Project 里**，是那张「图纸 / 模板」。
+- **实例**在**场景的 Hierarchy 里**，是照图纸造出来的「克隆体」，而且**默认跟随资产**——改资产，它跟着变。
+
+可有时你想让**某一个**实例与众不同——比如这一个敌人血量调高、这一个箱子换个颜色。在那个实例上单独改属性，就产生了一个
+
+<Term def="单独修改某一个预制体实例的某个属性（如把这一个敌人血量调高）。被覆盖的那个属性会脱开资产、不再跟随——以后资产再改这个属性，这个实例也不跟着变（其它没被覆盖的属性仍跟随资产）。用片场的话：某个群演单独改了发型。">
+  覆盖（Override）
+</Term>
+：被改的那个属性**脱开资产、不再跟随**，但它**只影响这一个实例**，别的实例照旧跟资产走。
+
+那如果你改完这个实例，觉得「干脆所有实例都这样」呢？就在这个实例上点
+
+<Term def="在某个预制体实例上的操作：把这个实例的改动「推回」预制体资产——相当于「以这个实例为准更新模板」，会影响所有跟随该资产的实例。它的反操作是 Revert（撤销实例改动、回到资产当前状态）。">
+  Apply
+</Term>
+——把这个实例的改动**推回资产**，资产一更新，其它跟随的实例也跟着变了。它的反操作是
+**Revert**：丢弃这个实例的改动、回到资产当前的样子。下面这张主图，把「资产 ↔
+实例联动 → override 脱钩 → Apply 推回」整条线单步演给你看：
+
+<PrefabInstanceLinkDiagram />
+
+<Callout type="tip">
+  **Unity 5 是「扁平」预制体——没有嵌套预制体 / 预制体变体。** 你这一版 Unity
+  里，一个预制体**不能再嵌套另一个预制体**当作可独立维护的预制体；预制体的工作流就是上面这套：实例
+  + 覆盖（override）+ Apply / Revert。嵌套预制体（Nested
+  Prefab）和预制体变体（Prefab Variant）是 Unity **2018.3**
+  才引入的，本章不展开——记住「Unity 5 = 扁平预制体」即可。
+</Callout>
+
+## 资源管线：每个资源都有个「唯一编号」
+
+讲完预制体，把镜头拉远到**所有资源**怎么被管理。规矩很简单：项目里的一切资源（图片、模型、预制体、脚本、声音……）都放在 **Assets/** 文件夹下。但 Unity 还为**每个资源**悄悄生成一个**同名的 .meta 文件**（如 `slime.png` 旁边有个 `slime.png.meta`），里面装着两样东西：该资源的**导入设置**（压缩、过滤、格式……），以及一个
+
+<Term def="Globally Unique IDentifier，全局唯一 ID。Unity 给每个资源分配的唯一标识符，存在该资源的同名 .meta 文件里。Unity 内部靠 GUID 来引用资源，而不是靠文件路径——所以改名 / 移动资源不会丢引用（前提是 .meta 跟着走）。">
+  GUID
+</Term>
+（全局唯一 ID）。
+
+关键来了：**Unity 引用资源靠的是 GUID，不是文件路径**。这就像仓库给每件道具发个唯一编号——你把道具挪到哪个货架，凭编号都找得到。所以在 Unity 里**改名 / 移动一个资源，引用它的地方不会断**（路径变了，但 GUID 没变）。反过来，**如果 .meta 丢了**，GUID 就没了，引用就断——这也是为什么 .meta 必须跟资源一起走。下面这张图把这条「.meta + GUID 引用」链点清：
+
+<AssetPipelineGuidDiagram />
+
+记牢这一句：**引用靠 GUID 不靠路径**，而 GUID 在 .meta 里——所以**改名、移动随便，但 .meta 必须跟着，还必须进版本控制**（团队协作的坑就在这，见常见误区）。
+
+## 运行时怎么「拿到」一个资源 / 对象
+
+最后一块：脚本运行时想用某个预制体 / 资源，怎么拿到它？有三条路，按推荐程度排：
+
+1. **Inspector 拖引用**（最推荐）：用 `[SerializeField]` 声明字段，**在编辑期就把对象拖进槽里绑好**（第 5 章学过）。编译期绑定、零运行时查找，最快最稳。
+2. **Instantiate 预制体**：拿到预制体后，**运行时照它复制出新实例**（子弹、敌人、特效）。复制源通常就是用上面「拖引用」绑好的预制体。
+3. **`Resources.Load("路径")`**：
+
+   <Term def="在运行时按路径字符串加载资源的方法，只能加载放在名为 Resources/ 的文件夹下的资源（路径相对 Resources、不写扩展名）。它要慎用：Resources 下的资源会全部进包、不能被裁剪、拖慢启动。官方建议少用，按需下载 / 分发的大资源应改用 AssetBundle。">
+     Resources.Load
+   </Term>
+
+   **运行时按路径字符串加载**放在 `Resources/` 文件夹下的资源——但它**要慎用**（下面会专门讲为什么）。
+
+下面这张对照图把三条路并排摆开，标清各自的场景和取舍：
+
+<LoadAssetWaysDiagram />
+
+顺带认几个**特殊文件夹**（点到为止）：**Resources/**（可运行时按路径 Load）、**StreamingAssets/**（原样打包、按文件路径读，如配置 / 视频）、**Editor/**（只在编辑器里跑的代码，不进包）、**Plugins/**（原生 / 第三方插件）。还有一个 **AssetBundle**——它不是文件夹，而是**按需下载 / 分发的资源包**，用来做 DLC、热更新，细节留待后续，这里只需知道「大资源、要按需下发的，用它，不要堆进 Resources」。
+
+{/* ===== 4. 数学推导（spec §四）：math:false，整节省略。 ===== */}
+
+{/* ===== 5. 交互 Demo（spec §五）：A 型用示意/解剖图把概念走一遍，强度低于 C；三张图作为「看懂」入口，主图含「猜一猜」。 ===== */}
+
+## 动手：把「资产 ↔ 实例 → override → Apply」单步走一遍
+
+本章的三张图都是给你「玩」的，核心是上面那张 **预制体资产 ↔ 实例联动主图**——它就是本章的主 Demo。
+
+> 猜一猜：你单独把「实例 2」的颜色改了（override），这时再去改**预制体资产**的颜色，实例 2 会跟着变吗？回到「资产 ↔ 实例」一节，单步播放那张主图——你会看到：第 ② 步改资产，三个实例**一起变**（联动）；第 ③ 步把实例 2 单独 override，它**脱钩**、连资产再改也不跟随；第 ④ 步在实例 2 上 **Apply**，它的改动被**推回资产**；第 ⑤ 步资产一更新，实例 1、3 也**跟着变成它的样子**。你会亲眼确认那个检验问题的答案：**改实例属性默认不影响资产；想影响全体，要么改资产、要么对实例 Apply。**
+
+单步走完主图，再看另外两张：**资源管线 GUID 图**帮你钉牢「引用靠 GUID 不靠路径、.meta 不能丢」；**拿资源三条路图**让你记住「优先拖引用、Resources.Load 慎用」。看懂这三张，下面的代码就好读了。
+
+{/* ===== 6. 代码对照（spec §六，A 型选，篇幅较轻）：纯 csharp 块，每块 ≤30 行、块间有解说。覆盖：① SerializeField 拖引用 + Instantiate；② Resources.Load<GameObject> + Instantiate（配 Callout warn）；③ Resources.Load 其它类型一句。 ===== */}
+
+## 代码里怎么造实例、怎么加载资源
+
+概念懂了，看几段「从代码拿预制体 / 资源」的常见操作——这一节 A 型篇幅不重，记住几个最常用的写法即可。
+
+### ① 拖引用 + Instantiate：造一个实例（最推荐）
+
+第 5 章学过：用 `[SerializeField]` 把预制体在 **Inspector 里拖好**，运行时 `Instantiate` 照它复制实例。这是首选——编译期绑定、零运行时查找：
+
+```csharp
+using UnityEngine;
+
+public class Spawner : MonoBehaviour
+{
+    // 在 Inspector 里把敌人预制体拖进这个槽（编辑期绑定，不靠路径字符串）
+    [SerializeField] private GameObject enemyPrefab;
+
+    public void Spawn()
+    {
+        // 照 enemyPrefab 复制一个新实例，放在本对象的位置、用本对象的朝向
+        Instantiate(enemyPrefab, transform.position, transform.rotation);
+    }
+}
+```
+
+`[SerializeField]` 让私有字段出现在 Inspector，你把预制体拖进 `Enemy Prefab` 槽；运行时 `Instantiate(模板, 位置, 朝向)` 照它造实例。预制体当模板、`Instantiate` 当「复制」动作——这就是量产一致对象的标准姿势。
+
+### ② Resources.Load：运行时按路径加载（慎用）
+
+如果编译期不知道要哪个、运行时才决定，可以把资源放进 `Resources/` 文件夹，用 `Resources.Load` 按路径加载再 Instantiate：
+
+```csharp
+// 路径相对 Resources/ 文件夹、不写扩展名；泛型版直接返回 GameObject
+GameObject prefab = Resources.Load<GameObject>("Enemies/Slime");
+
+if (prefab != null)                       // 路径错 / 不在 Resources 下会返回 null
+{
+    Instantiate(prefab, transform.position, Quaternion.identity);
+}
+```
+
+`Resources.Load<GameObject>("Enemies/Slime")` 加载的是 `Assets/Resources/Enemies/Slime.prefab`——路径**相对 Resources、不带扩展名**，加载失败返回 `null`（要判空）。它也能加载别的资源类型，换个泛型参数即可，比如 `Resources.Load<Texture2D>("UI/icon")` 加载一张贴图、`Resources.Load<AudioClip>("Sfx/hit")` 加载一段音效。
+
+<Callout type="warn">
+  **`Resources` 要慎用——能在编辑期拖引用就别用 `Resources.Load`。** `Resources/`
+  下的资源会**全部被打进最终包**（不管运行时用不用得到），**无法被构建裁剪**，而且会**拖慢启动、增大内存**（Resources
+  索引在启动时构建）。官方明确建议**少用 Resources**：优先用 `[SerializeField]`
+  **拖引用**（编译期绑定、可裁剪）；需要按需下载 / 分发的大资源用
+  **AssetBundle**，而不是往 Resources 里堆。
+</Callout>
+
+{/* ===== 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。①改实例以为改了预制体（其实只覆盖了那个实例）；②.meta 没进版本控制致团队引用断；③滥用 Resources 包体膨胀。 ===== */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：改了场景里某个预制体实例的属性，以为「预制体改好了」，结果**预制体资产没变、其它实例也没变**。**原因**：改实例属性只产生了一个
+  **override（覆盖）**——它**只影响这一个实例**，默认**不会**回写资产。**修法**：想影响**全体**，要么**直接改预制体资产**，要么在这个实例上点
+  **Apply**（把改动推回资产）；想让**一个**与众不同、别影响别人，就**保持实例
+  override、别 Apply**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：团队协作时，别人拉下你的提交，发现**预制体上拖好的引用全断了 /
+  资源被重新导入**。**原因**：**.meta 文件没纳入版本控制**（被 ignore
+  或没一起提交）——引用靠 GUID、GUID 存在 .meta 里，没有 .meta，Unity
+  重新导入会分配**新 GUID**，旧引用全部对不上。**修法**：把**所有 .meta
+  一起提交**（Project Settings → Editor 设 Visible Meta Files），移动 /
+  改名资源在 Unity 里做，让 .meta 跟着一起处理。
+</Callout>
+
+<Callout type="trap">
+  **现象**：项目越做越大，**包体异常膨胀、启动越来越慢**，明明很多资源根本没在用。**原因**：**滥用了
+  `Resources/`**——里面的资源**不管用不用都全进包、无法被裁剪**，且启动时要建
+  Resources 索引、拖慢启动。**修法**：把不必按路径加载的资源**移出
+  Resources**、改用 **`[SerializeField]`
+  拖引用**（可被裁剪）；需要按需下发的大资源用 **AssetBundle**。Resources
+  只留极少量「运行时才决定、且小」的资源。
+</Callout>
+
+{/* ===== 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，A 型以概念辨析为主 + 1 道小代码/操作题，答案折叠。 ===== */}
+
+## 小结
+
+- **预制体（Prefab）= 配好组件 / 参数的可复用模板资产**：照它在场景里造任意多个一致的实例；**改模板，所有实例同步更新**——这是它最大的价值
+- **资产在 Project、实例在场景且默认跟随资产**；单独改一个实例属性 = **覆盖（override）**（只影响这一个、脱开资产）；**Apply** 把实例改动**推回资产**、影响全体，**Revert** 撤销实例改动。**Unity 5 是扁平预制体，无嵌套**
+- **资源放 Assets/，每个资源有同名 .meta（含 GUID + 导入设置）**；**引用靠 GUID 不靠路径**——改名 / 移动不丢引用，但 **.meta 丢了 = 引用断**
+- **拿资源三条路**：① Inspector **拖引用**（编辑期绑好，**最推荐**）② **Instantiate** 预制体（运行时造实例）③ **`Resources.Load("路径")`**（运行时按路径，**慎用**）
+- **Resources 慎用**：全进包、不能裁剪、拖慢启动；大资源 / 按需下发用 **AssetBundle**
+
+<Exercises>
+
+**练习 1（概念辨析）** 改了一个预制体**实例**的属性，预制体**资产**会跟着变吗？其它实例呢？如果你想让「所有实例都按这个改动生效」，又或者想让「只有这一个与众不同」，分别该怎么做？
+
+<Answer>
+
+**默认不会。** 改一个实例的属性只产生一个 **override（覆盖）**——它**只影响这一个实例**，被改的属性还会**脱开资产、不再跟随**；资产和其它实例都不变。
+
+- **想让所有实例都生效**：要么**直接改预制体资产**（在 Project 里选中资产 / 双击进预制体改），要么在这个实例上点 **Apply**——把改动**推回资产**，资产一更新，其它跟随的实例就都跟着变。
+- **想让只有这一个与众不同**：就**保持这个实例的 override、别 Apply**。比如「这一个 Boss 更大更红」，单独改它即可；一旦 Apply，所有同种敌人都会变大变红。
+
+口诀：**override 只改自己；Apply 推回资产、影响全体。**
+
+</Answer>
+
+**练习 2（概念辨析）** 你在系统的文件管理器里把 `Assets/Art/slime.png` 重命名成了 `goblin.png`，但**忘了**把旁边的 `slime.png.meta` 一起改名 / 一起带上。重新打开 Unity 后，原先引用这张图的地方很可能**断了**。为什么？正确的做法是什么？
+
+<Answer>
+
+因为 Unity **引用资源靠 GUID，不靠路径**，而 GUID 存在那个**同名 .meta 文件**里。你在 Unity 外面只改了图片名、把 `slime.png.meta` 落下了——Unity 找不到对应的 .meta，就会**把 `goblin.png` 当成一个新资源重新导入、分配一个新的 GUID**。于是所有原先按旧 GUID 引用这张图的地方，都对不上新 GUID，引用就断了（显示成 Missing）。
+
+**正确做法**：① 改名 / 移动资源**在 Unity 编辑器里做**（它会自动连 .meta 一起处理，GUID 不变、引用不丢）；② 如果一定要在外部动，**务必让 .meta 跟着资源一起改名 / 移动**；③ 团队里把 .meta **纳入版本控制**（Visible Meta Files），保证每个人拿到的 GUID 一致。
+
+</Answer>
+
+**练习 3（小代码 / 操作题）** 写一个 `MonoBehaviour`：在 `Start` 里用 `Resources.Load` 加载放在 `Assets/Resources/Enemies/Slime.prefab` 的预制体，并 `Instantiate` 一个出来。写完后说说：这里为什么更推荐改用 `[SerializeField]` 拖引用？
+
+<Answer>
+
+```csharp
+using UnityEngine;
+
+public class SlimeSpawner : MonoBehaviour
+{
+    void Start()
+    {
+        // 路径相对 Resources/ 文件夹、不写扩展名
+        GameObject prefab = Resources.Load<GameObject>("Enemies/Slime");
+
+        if (prefab != null) // 加载失败（路径错 / 不在 Resources 下）会返回 null
+        {
+            Instantiate(prefab, transform.position, Quaternion.identity);
+        }
+    }
+}
+```
+
+要点：① 路径相对 **Resources/**、**不带扩展名**（`"Enemies/Slime"` 对应 `Assets/Resources/Enemies/Slime.prefab`）；② 加载结果**要判空**；③ `Instantiate(模板, 位置, 朝向)` 照它造实例。
+
+**为什么更推荐拖引用**：`Resources.Load` 用的资源会**全部进包、无法被裁剪、拖慢启动**，而且路径是个**易写错的字符串**（错了只默默返回 `null`）。改用 `[SerializeField] private GameObject slimePrefab;` 在 Inspector 把预制体拖进去，是**编译期绑定**——零运行时查找、可被构建裁剪、引用不会因为路径写错而断。能拖引用就别 `Resources.Load`。
+
+</Answer>
+
+</Exercises>
+
+{/* ===== 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 ===== */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="预制体（Prefab）">
+  把一个**配好组件 / 参数的 GameObject
+  存成的「可复用模板」资产**。用它能在场景里造出任意多个一致的**实例**（敌人、子弹、道具）。最大的价值：**改模板，所有照它造的实例都同步更新**——不用挨个改。用片场的话，就是一张「角色定妆卡
+  / 标准道具图纸」，照着量产一模一样的群演 /
+  道具。详见本章「预制体：一张能量产的角色定妆卡」一节。
+</GlossaryItem>
+
+<GlossaryItem term="覆盖（Override）">
+  **单独修改某一个预制体实例的某个属性**（如把这一个敌人血量调高）。被覆盖的那个属性会**脱开资产、不再跟随**——以后资产再改这个属性，这个实例也不跟着变（其它没被覆盖的属性仍跟随资产）。它**只影响这一个实例**。用片场的话：某个群演单独改了发型。详见本章「资产
+  ↔ 实例」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Apply">
+  在某个预制体实例上的操作：把这个**实例的改动「推回」预制体资产**——相当于「以这个实例为准更新模板」，会**影响所有跟随该资产的实例**。它的反操作是
+  **Revert**（撤销实例改动、回到资产当前状态）。一句话：**Apply = 实例 →
+  资产（影响全体），Revert = 资产 → 实例（丢弃本实例改动）**。详见本章「资产 ↔
+  实例」一节。
+</GlossaryItem>
+
+<GlossaryItem term="GUID">
+  **Globally Unique IDentifier，全局唯一 ID**。Unity
+  给每个资源分配的唯一标识符，存在该资源的**同名 .meta
+  文件**里（连同导入设置）。Unity 内部**靠 GUID
+  来引用资源，而不是靠文件路径**——所以在 Unity 里改名 /
+  移动资源不会丢引用（前提是 .meta 跟着走）；.meta 一旦丢了，GUID
+  没了，引用就断。详见本章「资源管线」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Resources.Load">
+  在**运行时按路径字符串加载资源**的方法，**只能加载放在名为 `Resources/`
+  的文件夹下**的资源（路径相对 Resources、不写扩展名，如
+  `Resources.Load<GameObject>("Enemies/Slime")`）。它**要慎用**：Resources
+  下的资源会**全部进包、不能被裁剪、拖慢启动**。官方建议少用——优先 Inspector
+  拖引用，按需下发的大资源用 AssetBundle。详见本章「运行时怎么拿到一个资源」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* ===== 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 空标签自动渲染「原创声明」。 ===== */}
+
+<Attribution />

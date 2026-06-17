@@ -472,6 +472,9 @@ import { ButtonClickFlowDiagram } from "./diagrams/button-click-flow-diagram";
 import { RenderingInputsDiagram } from "./diagrams/rendering-inputs-diagram";
 import { MaterialVsShaderDiagram } from "./diagrams/material-vs-shader-diagram";
 import { StandardShaderChannelsDiagram } from "./diagrams/standard-shader-channels-diagram";
+import { PrefabInstanceLinkDiagram } from "./diagrams/prefab-instance-link-diagram";
+import { AssetPipelineGuidDiagram } from "./diagrams/asset-pipeline-guid-diagram";
+import { LoadAssetWaysDiagram } from "./diagrams/load-asset-ways-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1062,6 +1065,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RenderingInputsDiagram,
   MaterialVsShaderDiagram,
   StandardShaderChannelsDiagram,
+  PrefabInstanceLinkDiagram,
+  AssetPipelineGuidDiagram,
+  LoadAssetWaysDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
