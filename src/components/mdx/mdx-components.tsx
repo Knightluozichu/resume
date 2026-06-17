@@ -425,6 +425,9 @@ import { MemoryTypesDiagram } from "./demos/memory-types-diagram";
 import { TaskDecompositionTree } from "./diagrams/task-decomposition-tree";
 import { PlanningStrategiesCompare } from "./demos/planning-strategies-compare";
 import { ReflectReplanLoop } from "./demos/reflect-replan-loop";
+import { RAGPipelineDiagram } from "./diagrams/rag-pipeline-diagram";
+import { ChunkingDemo } from "./demos/chunking-demo";
+import { VectorSpaceDemo } from "./demos/vector-space-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1139,6 +1142,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TaskDecompositionTree,
   PlanningStrategiesCompare,
   ReflectReplanLoop,
+  RAGPipelineDiagram,
+  ChunkingDemo,
+  VectorSpaceDemo,
   Term,
   Glossary,
   GlossaryItem,
