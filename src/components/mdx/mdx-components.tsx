@@ -416,6 +416,9 @@ import { StructuredOutputDemo } from "./demos/structured-output-demo";
 import { ReActTraceDiagram } from "./diagrams/react-trace-diagram";
 import { ReActStepAnatomy } from "./demos/react-step-anatomy";
 import { ReActVsCoTDiagram } from "./diagrams/react-vs-cot-diagram";
+import { ToolCallFlowDiagram } from "./diagrams/tool-call-flow-diagram";
+import { ToolSchemaAnatomy } from "./demos/tool-schema-anatomy";
+import { ToolCallStateMachine } from "./diagrams/tool-call-state-machine";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1121,6 +1124,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ReActTraceDiagram,
   ReActStepAnatomy,
   ReActVsCoTDiagram,
+  ToolCallFlowDiagram,
+  ToolSchemaAnatomy,
+  ToolCallStateMachine,
   Term,
   Glossary,
   GlossaryItem,
