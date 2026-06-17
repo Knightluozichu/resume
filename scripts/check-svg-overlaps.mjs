@@ -155,6 +155,7 @@ const PAGES = [
   "/learn/unity5/scripting/scripting-objects",
   "/learn/unity5/scripting/coroutines-time",
   "/learn/unity5/physics/rigidbody-collider",
+  "/learn/unity5/physics/collision-raycast",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

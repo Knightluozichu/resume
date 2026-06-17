@@ -460,6 +460,9 @@ import { TimeScaleDiagram } from "./diagrams/time-scale-diagram";
 import { RigidbodyGravityDiagram } from "./diagrams/rigidbody-gravity-diagram";
 import { ColliderShapesDiagram } from "./diagrams/collider-shapes-diagram";
 import { BodyTypesDiagram } from "./diagrams/body-types-diagram";
+import { CollisionTriggerEventsDiagram } from "./diagrams/collision-trigger-events-diagram";
+import { RaycastDiagram } from "./diagrams/raycast-diagram";
+import { EventConditionDiagram } from "./diagrams/event-condition-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1038,6 +1041,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RigidbodyGravityDiagram,
   ColliderShapesDiagram,
   BodyTypesDiagram,
+  CollisionTriggerEventsDiagram,
+  RaycastDiagram,
+  EventConditionDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,
