@@ -428,6 +428,9 @@ import { ReflectReplanLoop } from "./demos/reflect-replan-loop";
 import { RAGPipelineDiagram } from "./diagrams/rag-pipeline-diagram";
 import { ChunkingDemo } from "./demos/chunking-demo";
 import { VectorSpaceDemo } from "./demos/vector-space-demo";
+import { MultiAgentTopologyDiagram } from "./diagrams/multi-agent-topology-diagram";
+import { SupervisorDispatchDemo } from "./demos/supervisor-dispatch-demo";
+import { SingleVsMultiMatrix } from "./demos/single-vs-multi-matrix";
 import { ContextBudgetDemo } from "./demos/context-budget-demo";
 import { LostInMiddleDemo } from "./demos/lost-in-middle-demo";
 import { CompressionCompare } from "./demos/compression-compare";
@@ -1148,6 +1151,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RAGPipelineDiagram,
   ChunkingDemo,
   VectorSpaceDemo,
+  MultiAgentTopologyDiagram,
+  SupervisorDispatchDemo,
+  SingleVsMultiMatrix,
   ContextBudgetDemo,
   LostInMiddleDemo,
   CompressionCompare,
