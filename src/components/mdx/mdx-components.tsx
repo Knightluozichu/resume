@@ -428,6 +428,9 @@ import { ReflectReplanLoop } from "./demos/reflect-replan-loop";
 import { RAGPipelineDiagram } from "./diagrams/rag-pipeline-diagram";
 import { ChunkingDemo } from "./demos/chunking-demo";
 import { VectorSpaceDemo } from "./demos/vector-space-demo";
+import { ContextBudgetDemo } from "./demos/context-budget-demo";
+import { LostInMiddleDemo } from "./demos/lost-in-middle-demo";
+import { CompressionCompare } from "./demos/compression-compare";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1145,6 +1148,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RAGPipelineDiagram,
   ChunkingDemo,
   VectorSpaceDemo,
+  ContextBudgetDemo,
+  LostInMiddleDemo,
+  CompressionCompare,
   Term,
   Glossary,
   GlossaryItem,
