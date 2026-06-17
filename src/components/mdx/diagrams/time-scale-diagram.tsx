@@ -55,6 +55,9 @@ function Stopwatch({
   color: string;
 }) {
   // 静态表盘 + 12 点刻度（指针的「冻/走」靠各步的覆层标注表达，避免连续旋转动画带来魔法数字）。
+  // 定点取整：Math.cos/sin 在 SSR(Node V8) 与浏览器 V8 末位可差 1 ULP，导致 hydration 属性不匹配；
+  // 对所有由 Math 算出的坐标统一取 2 位小数，使两端序列化出完全相同的字符串（半径 54px 尺度下视觉无损）。
+  const r2 = (n: number) => Math.round(n * 100) / 100;
   return (
     <g>
       <circle
@@ -67,10 +70,10 @@ function Stopwatch({
       />
       {Array.from({ length: 12 }, (_, i) => {
         const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-        const x1 = cx + Math.cos(a) * (CLOCK_R - 8);
-        const y1 = cy + Math.sin(a) * (CLOCK_R - 8);
-        const x2 = cx + Math.cos(a) * (CLOCK_R - 3);
-        const y2 = cy + Math.sin(a) * (CLOCK_R - 3);
+        const x1 = r2(cx + Math.cos(a) * (CLOCK_R - 8));
+        const y1 = r2(cy + Math.sin(a) * (CLOCK_R - 8));
+        const x2 = r2(cx + Math.cos(a) * (CLOCK_R - 3));
+        const y2 = r2(cy + Math.sin(a) * (CLOCK_R - 3));
         return (
           <line
             key={i}
@@ -87,8 +90,8 @@ function Stopwatch({
       <line
         x1={cx}
         y1={cy}
-        x2={cx + Math.cos(-Math.PI / 6) * (CLOCK_R - 16)}
-        y2={cy + Math.sin(-Math.PI / 6) * (CLOCK_R - 16)}
+        x2={r2(cx + Math.cos(-Math.PI / 6) * (CLOCK_R - 16))}
+        y2={r2(cy + Math.sin(-Math.PI / 6) * (CLOCK_R - 16))}
         stroke={color}
         strokeWidth="2.4"
         strokeLinecap="round"
