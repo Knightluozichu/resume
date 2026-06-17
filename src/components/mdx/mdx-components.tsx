@@ -413,6 +413,9 @@ import { TemperatureSamplingExplorer } from "./demos/temperature-sampling-explor
 import { PromptAssemblyDiagram } from "./diagrams/prompt-assembly-diagram";
 import { PromptRecipeDemo } from "./demos/prompt-recipe-demo";
 import { StructuredOutputDemo } from "./demos/structured-output-demo";
+import { ReActTraceDiagram } from "./diagrams/react-trace-diagram";
+import { ReActStepAnatomy } from "./demos/react-step-anatomy";
+import { ReActVsCoTDiagram } from "./diagrams/react-vs-cot-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1115,6 +1118,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PromptAssemblyDiagram,
   PromptRecipeDemo,
   StructuredOutputDemo,
+  ReActTraceDiagram,
+  ReActStepAnatomy,
+  ReActVsCoTDiagram,
   Term,
   Glossary,
   GlossaryItem,
