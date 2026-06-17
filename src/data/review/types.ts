@@ -167,7 +167,9 @@ export type ReviewChapterSlug =
   | "pbr-theory"
   | "pbr-lighting"
   | "pbr-ibl-diffuse"
-  | "pbr-ibl-specular";
+  | "pbr-ibl-specular"
+  // AI 智能体应用开发
+  | "agent-what-is-an-agent";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -338,6 +340,8 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pbr-lighting": "PBR 光照",
   "pbr-ibl-diffuse": "IBL 漫反射辐照",
   "pbr-ibl-specular": "IBL 镜面反射",
+  // AI 智能体应用开发
+  "agent-what-is-an-agent": "什么是智能体",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

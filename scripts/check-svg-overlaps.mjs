@@ -134,6 +134,8 @@ const PAGES = [
   '/learn/mobile-xr-web-optimization/urp-optimization/urp-optimization',
   '/learn/mobile-xr-web-optimization/web-optimization/web-specific-optimization',
   '/learn/mobile-xr-web-optimization/xr-optimization/xr-specific-optimization',
+  // AI 智能体应用开发
+  '/learn/ai-agent-apps/foundations/what-is-an-agent',
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
