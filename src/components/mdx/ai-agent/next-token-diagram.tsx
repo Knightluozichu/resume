@@ -55,7 +55,7 @@ const seqX = (i: number) => SEQ_LEFT + i * (SEQ_BOX_W + SEQ_GAP);
 const BAR_TOP = 232; // 第一条顶 y
 const BAR_H = 34;
 const BAR_GAP = 16;
-const BAR_LEFT = 56; // 条起点 x（label 区右缘，左侧约 56px 留给候选 token 文字）
+const BAR_LEFT = 84; // 条起点 x（label 区右缘，左侧 84px 留给候选 token 文字：最宽候选「（结束）」4 全角字 ≈52px，左缘距 viewBox 边 ≥14px 不裁切）
 const BAR_MAX_W = 380; // 概率 1.0 对应的最大条长
 const PROB_VAL_X = BAR_LEFT + BAR_MAX_W + 12; // 概率数值文字 x
 const barY = (i: number) => BAR_TOP + i * (BAR_H + BAR_GAP);
