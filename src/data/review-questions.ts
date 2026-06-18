@@ -171,6 +171,7 @@ import { agtAgentAnatomyQuestions } from "./review/agt-agent-anatomy";
 import { agtPromptEngineeringQuestions } from "./review/agt-prompt-engineering";
 import { agtSamplingDecodingQuestions } from "./review/agt-sampling-decoding";
 import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
+import { agtFunctionCallingQuestions } from "./review/agt-function-calling";
 
 export {
   CHAPTER_TITLES,
@@ -338,6 +339,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agtPromptEngineeringQuestions,
   ...agtSamplingDecodingQuestions,
   ...agtStructuredOutputQuestions,
+  ...agtFunctionCallingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

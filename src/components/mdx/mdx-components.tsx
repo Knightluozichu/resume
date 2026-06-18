@@ -421,6 +421,9 @@ import { AaTemperatureCompareDiagram } from "./ai-agent/temperature-compare-diag
 import { AaStructuredOutputFlowDiagram } from "./ai-agent/structured-output-flow-diagram";
 import { AaJsonSchemaDiagram } from "./ai-agent/json-schema-diagram";
 import { AaSchemaParsePlayground } from "./ai-agent/schema-parse-playground";
+import { AaFunctionCallTurnDiagram } from "./ai-agent/function-call-turn-diagram";
+import { AaToolSchemaDiagram } from "./ai-agent/tool-schema-diagram";
+import { AaToolPickerPlayground } from "./ai-agent/tool-picker-playground";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1131,6 +1134,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaStructuredOutputFlowDiagram,
   AaJsonSchemaDiagram,
   AaSchemaParsePlayground,
+  AaFunctionCallTurnDiagram,
+  AaToolSchemaDiagram,
+  AaToolPickerPlayground,
   Term,
   Glossary,
   GlossaryItem,
