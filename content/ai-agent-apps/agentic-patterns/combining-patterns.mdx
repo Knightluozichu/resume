@@ -1,0 +1,288 @@
+---
+title: 组合与定制模式：把简单积木拼成合适系统
+type: D
+section: 智能体模式
+order: 6
+description: 把前面几种智能体模式收束成一套工程判断：先从简单方案开始，只在指标证明有效时组合更多模式，并始终保留透明度和回退路径。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 组合模式（Composable pattern）（图：<PatternCompositionBlueprintDiagram />；进 Glossary）2. 可度量指标（Evaluation metric）（动画：<PatternComplexityLadderDiagram />；进 Glossary）3. 透明组合（Transparent workflow）（代码对照：mega-agent vs transparent workflow；进 Glossary）4. 复杂度预算（Complexity budget）（动画：<PatternComplexityLadderDiagram />；进 Glossary）5. 回退路径（Rollback path）（图：<PatternRollbackTraceDiagram />；进 Glossary）。Term↔Glossary：组合模式（Composable pattern） / 可度量指标（Evaluation metric） / 透明组合（Transparent workflow） / 复杂度预算（Complexity budget） / 回退路径（Rollback path）。 */}
+
+<Objectives>
+
+- 能解释为什么 Anthropic 说这些模式不是处方，而是可以按任务形状组合的积木
+- 能说出什么场景该停在透明工作流，什么场景才值得继续叠加复杂模式
+- 能回答：如果一个团队把所有需求塞进一个 mega-agent，你会用哪些指标和回退设计把它拆回可测、可控的系统？
+
+</Objectives>
+
+## 先打个比方
+
+搭一条夜间值班流程，不是把所有人都塞进一个房间，让一个人临场指挥到底。更稳的做法，是先把固定检查写成清单，把需要专人判断的地方标出来，再给高风险动作留确认口。
+
+如果一开始就把所有情况混进一个“大总管”，它看似万能，实际很难知道哪一步错了、该从哪退回、为什么这次变慢了。
+
+这一章解决的就是“模式怎么组合”的问题：不是背一套标准答案，而是从最简单的流程开始，一点点加组件，并用结果证明每一层复杂度真的值。
+
+## 这些模式是积木，不是处方
+
+前面几章讲过链式、路由、并行、编排-工作者、评估-优化和自主智能体。把它们记成一张药方很危险：看到复杂任务就照单全上，系统会很快变成不可调试的黑盒。
+
+更好的心法是 <Term def="组合模式（Composable pattern）：把链式、路由、并行、编排、评估-优化、agent loop 等简单结构当成积木，按任务需要拼接，而不是照固定模板全量套用。">组合模式（Composable pattern）</Term>。它的重点不是“用了几个模式”，而是每块积木是否解决一个清楚的问题：链式负责把步骤拆开，路由负责分流，并行负责提速或投票，评估-优化负责返工，自主智能体负责开放探索。
+
+<PatternCompositionBlueprintDiagram />
+
+看图时抓住一句话：**先问任务需要哪块积木，再问这块积木能不能单独验证。** Anthropic 在《Building Effective Agents》里提醒，这些 building blocks 并不是 prescriptive；开发者可以按场景 shaping and combining。也就是说，组合是手段，不是目标。
+
+## 加复杂度之前，先让指标说话
+
+真正决定“要不要再叠一层”的，不是系统图看起来够不够高级，而是 <Term def="可度量指标（Evaluation metric）：用来证明系统结果是否变好的可观察信号，例如正确率、通过率、人工返工率、成本、延迟、失败原因分布。">可度量指标（Evaluation metric）</Term>。没有指标，复杂度只是在买安心；有指标，才知道新加的路由、评估器或 agent loop 到底有没有提升结果。
+
+这也引出 <Term def="复杂度预算（Complexity budget）：团队愿意为一次质量提升支付的额外成本，包括更多调用、更长延迟、更多状态、更多调试点和更难回滚的代价。">复杂度预算（Complexity budget）</Term>：每加一层模式，都要支付调用次数、延迟、状态管理、日志追踪和调试成本。只有当指标改善大于这笔预算时，复杂度才算买得值。
+
+<PatternComplexityLadderDiagram />
+
+把上面这张阶梯当成工程顺序：
+
+- 单次调用加好 prompt、样例和检索，先做基线
+- 基线不够，再拆成链式、路由、并行等透明工作流
+- 只有固定骨架确实不够，才进入编排或自主 agent
+- 每上一层，都要重新量通过率、延迟、成本和失败类型
+
+## 透明组合比复杂框架更可靠
+
+Anthropic 对框架的态度很务实：框架能帮你快速开始，但抽象层太厚时，会遮住底下真正决定效果的东西：prompt、tool definition、model response、tool result。生产系统里，遮住这些就等于遮住调试入口。
+
+所以本章更推荐 <Term def="透明组合（Transparent workflow）：把每个 prompt、工具、模型响应、评估结果和状态转移都显式暴露出来的工作流，让人能看见系统为什么走到当前结果。">透明组合（Transparent workflow）</Term>：你可以用框架，但不能让框架替你隐藏控制流。每一块都应该能单独看日志、单独跑评估、单独替换。
+
+<div className="not-prose my-6 grid gap-4 md:grid-cols-2">
+  <div className="rounded-card border border-border bg-elevated p-5">
+    <p className="mb-3 text-sm font-bold text-primary">
+      一锅端 mega-agent / 复杂框架堆叠
+    </p>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>一个大 prompt 负责分类、检索、写作、质检和收尾</li>
+      <li>框架内部自动调工具，日志只剩“run failed”</li>
+      <li>失败后很难知道该改 prompt、工具还是路由</li>
+    </ul>
+  </div>
+  <div className="rounded-card border border-accent bg-elevated p-5">
+    <p className="mb-3 text-sm font-bold text-accent">透明组合 workflow</p>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>先路由，再检索，再生成，再评估，每步有输入输出</li>
+      <li>prompt / tool / response / score 都可见、可测、可替换</li>
+      <li>哪一步拖慢或出错，就只改那一步</li>
+    </ul>
+  </div>
+</div>
+
+这不是反框架，而是反“看不见”。只要你能清楚回答“这轮模型看到了什么 prompt、能用哪些 tool、返回了什么 response、下一步为什么这么走”，框架就是脚手架；回答不出来，框架就开始变成迷雾。
+
+## 组合可以大胆，回退必须保守
+
+组合模式最容易忽略的是 <Term def="回退路径（Rollback path）：当新模式没有带来指标收益或触发风险时，系统能退回到更简单版本的明确路线，例如关闭评估循环、绕过 agent loop、回到单次调用。">回退路径（Rollback path）</Term>。如果新加的评估器让延迟翻倍、路由误分流、agent loop 经常卡住，系统必须能退回上一层，而不是继续在复杂结构里硬调。
+
+<PatternRollbackTraceDiagram />
+
+一个健康的组合系统，应该像可拆的值班流程：先上线简单版，有基线；新模式只接一部分流量；指标不好就关闭那一层；必要时回到上一版。可组合不是“越拼越多”，而是“拼得上，也拆得下”。
+
+## 动手看：从简单工作流爬到组合系统
+
+> 猜一猜：如果你的客户支持机器人已经能用单次检索回答 80% 问题，你会直接加一个全自主 agent 吗？还是先量一下剩下 20% 失败在哪里？
+
+<PatternCompositionBlueprintDiagram />
+
+把一项“客户支持回答”拆开，通常可以这样走：
+
+- 如果失败集中在“问题类型混杂”，先加路由，把退款、技术支持、账号问题分开
+- 如果失败集中在“资料太长”，先加检索和摘要链式，而不是让 agent 自由翻资料
+- 如果失败集中在“回答质量不稳”，再加评估-优化或投票
+- 如果失败集中在“下一步必须操作系统并看结果”，才考虑 agent loop
+
+这就是本章的主判断：**模式可以组合，但每次组合都要有假设、有指标、有回退。**
+
+## 代码对照：mega-agent vs 透明组合 workflow
+
+下面用同一个任务：处理客户来信，判断类型，查资料，写回复，必要时升级人工。左边把所有事情塞进一个大 agent；右边把控制流拆成可观察步骤。
+
+<CodeTabs>
+  <Tab label="一锅端 mega-agent：难测、难退">
+
+```ts
+export async function handleTicketMegaAgent(ticket: Ticket) {
+  return runFrameworkAgent({
+    goal: "处理客户来信，必要时升级人工",
+    tools: allSupportTools,
+    prompt: `
+你要分类、查知识库、判断退款政策、写回复、
+评估回复质量，并决定是否升级人工。
+客户来信：${ticket.body}
+`,
+  });
+}
+```
+
+  </Tab>
+  <Tab label="透明组合 workflow：每步可见">
+
+```ts
+export async function handleTicketWorkflow(ticket: Ticket) {
+  const route = await classifyTicket(ticket.body);
+  const sources = await retrievePolicy(route, ticket.body);
+  const draft = await writeReply({ ticket, sources });
+  const review = await evaluateReply({ draft, sources });
+
+  if (!review.pass) return escalateToHuman({ ticket, review });
+  return sendReply({ ticket, draft, evidence: sources });
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+左边的问题不是“用了 agent”本身，而是所有责任都混在一起：分类错了、资料错了、回复错了、评估错了，你只看到最终失败。右边把每个中间结果都摊开：`route`、`sources`、`draft`、`review` 都能记录、评估、替换，也能在失败时退回上一层。
+
+再看一段更贴近上线的写法：组合不是一次性拉满，而是带开关、指标和回退。
+
+<CodeTabs>
+  <Tab label="复杂度无闸门：直接全量开启">
+
+```ts
+export async function answerWithEverything(input: string) {
+  return runAgentLoop({
+    input,
+    route: true,
+    parallelSearch: true,
+    evaluator: true,
+    autonomousTools: true,
+  });
+}
+```
+
+  </Tab>
+  <Tab label="复杂度有指标：逐层放量">
+
+```ts
+export async function answerWithGates(input: string) {
+  const base = await answerOnce(input);
+  if (base.score >= 0.86) return base;
+
+  const routed = await routeAndRetrieve(input);
+  const refined = await maybeEvaluate(routed);
+  if (refined.latencyMs > 6000) return base;
+
+  return refined.score > base.score ? refined : base;
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+这段代码里的 `score`、`latencyMs` 和回退到 `base`，就是“可测可退”的最小形态。真实项目里还会加成本、人工返工率、失败原因分布、用户满意度等指标；但原则不变：复杂度必须赢过基线，否则退回简单版。
+
+<Callout type="warn">
+  组合模式不是为了把所有模式都用上，而是为了让系统刚好复杂到能解决问题。先有基线，再加一层；先量改善，再决定是否保留；先保证能看见 prompt、tool、response，再谈框架带来的便利。
+</Callout>
+
+## 容易踩的坑
+
+<PatternCompositionTrapDiagram />
+
+<Callout type="trap">
+  **现象**：团队觉得“系统更复杂，所以应该更强”，但没有通过率、成本、延迟、人工返工率等指标，最后只能凭感觉争论。
+  **原因**：复杂度没有指标，无法证明新模式真的改善结果。
+  **修法**：先跑简单基线，再为每一层新增模式绑定指标；没有稳定提升，就退回上一层。
+</Callout>
+
+<Callout type="trap">
+  **现象**：框架自动调了很多工具，但出错时没人知道模型看到了哪个 prompt、选了哪个 tool、拿回什么 response。
+  **原因**：框架抽象遮住了 prompt / tool / response，调试入口被藏起来。
+  **修法**：保留框架可以，但必须暴露底层日志、工具定义、模型响应和状态转移；生产前能手动复现关键路径。
+</Callout>
+
+<Callout type="trap">
+  **现象**：退款、技术支持、资料检索、写回复、质检、升级人工，全都塞进一个 mega-agent，结果慢、贵、偶发走偏。
+  **原因**：把所有任务当成一个开放问题，忽略了很多步骤其实可以写成透明 workflow。
+  **修法**：先把稳定步骤拆出来：路由归路由，检索归检索，写作归写作，评估归评估；只有真正需要动态行动的部分才交给 agent loop。
+</Callout>
+
+## 小结
+
+- 模式是积木，不是处方；按任务形状组合
+- 每加一层复杂度，都要用指标证明值回成本
+- 透明组合要看得见 prompt、tool、response 和状态
+- mega-agent 不是默认答案，能拆成 workflow 就先拆
+- 好组合必须可测、可回退、可替换
+
+<Exercises>
+
+**练习 1（选型题）** 一个客服系统单次检索回答已经能解决大部分 FAQ，但退款类问题经常答错。你会直接加自主 agent，还是先加别的模式？为什么？
+
+<Answer>
+
+先不要直接加自主 agent。退款类问题“经常答错”说明失败可能集中在分类和政策检索上，更稳的第一步是加路由：先识别退款类，再走专门的退款政策检索和回复模板；必要时再加评估-优化检查是否引用了正确政策。只有当系统必须进入后台操作、读取结果、动态决定下一步时，才考虑 agent loop。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么“用了复杂框架”不等于“系统更可靠”？
+
+<Answer>
+
+复杂框架可能让搭建更快，但可靠性来自可观察、可测试和可回退。如果框架遮住 prompt、tool definition、model response、tool result 和状态转移，出错时反而更难定位。生产系统可以用框架，但必须理解底层代码，并能把关键步骤单独拿出来复现和评估。
+
+</Answer>
+
+**练习 3（改代码题）** 本章 `answerWithGates` 只按 `score` 和 `latencyMs` 回退。请再补一个“人工返工率过高就回退”的条件，你会放在哪里？
+
+<Answer>
+
+可以放在评估完成后、返回 `refined` 前，因为这时已经知道新组合版本的质量和运营代价：
+
+```ts
+export async function answerWithGates(input: string) {
+  const base = await answerOnce(input);
+  if (base.score >= 0.86) return base;
+
+  const routed = await routeAndRetrieve(input);
+  const refined = await maybeEvaluate(routed);
+  if (refined.latencyMs > 6000) return base;
+  if (refined.humanReworkRate > base.humanReworkRate) return base;
+
+  return refined.score > base.score ? refined : base;
+}
+```
+
+这样做的意思是：新模式不只要分数更高，还不能把更多工作甩给人工。如果人工返工率变差，说明复杂度没有真正改善交付结果，应该回退到基线或重新分析失败原因。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="组合模式（Composable pattern）">
+    把链式、路由、并行、评估-优化、agent loop 等当成可拆可拼的积木，而不是固定处方。需要哪块就拼哪块，每块都要能解释它解决什么问题。详见本章「这些模式是积木」。
+  </GlossaryItem>
+  <GlossaryItem term="可度量指标（Evaluation metric）">
+    用来判断系统是否真的变好的数字或信号，比如通过率、成本、延迟、人工返工率、失败原因分布。没有它，复杂度只是在凭感觉加码。详见本章「加复杂度之前」。
+  </GlossaryItem>
+  <GlossaryItem term="透明组合（Transparent workflow）">
+    每个 prompt、工具、模型响应、评估结果和状态转移都能被看见、记录和单独测试的组合工作流。它让调试有入口，也让替换某一步变得容易。详见本章「透明组合」。
+  </GlossaryItem>
+  <GlossaryItem term="复杂度预算（Complexity budget）">
+    团队愿意为质量提升支付的额外代价，包括更多模型调用、更长延迟、更复杂状态、更多日志和更难回滚。只有指标收益超过这笔预算，复杂度才值得留下。详见本章「加复杂度之前」。
+  </GlossaryItem>
+  <GlossaryItem term="回退路径（Rollback path）">
+    新模式效果不好或风险变高时，系统退回简单版本的明确路线。比如关闭评估循环、绕过 agent loop、回到单次调用或上一版 workflow。详见本章「组合可以大胆」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Anthropic《Building Effective Agents》"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

@@ -183,7 +183,8 @@ export type ReviewChapterSlug =
   | "agent-chaining-and-routing"
   | "agent-parallelization-and-orchestrator-workers"
   | "agent-evaluator-optimizer"
-  | "agent-autonomous-agents";
+  | "agent-autonomous-agents"
+  | "agent-combining-patterns";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -370,6 +371,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-parallelization-and-orchestrator-workers": "并行与编排-工作者",
   "agent-evaluator-optimizer": "评估-优化",
   "agent-autonomous-agents": "自主智能体",
+  "agent-combining-patterns": "组合与定制模式",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
