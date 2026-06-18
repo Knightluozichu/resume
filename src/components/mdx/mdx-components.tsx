@@ -473,6 +473,10 @@ import { PatternCompositionBlueprintDiagram } from "./diagrams/pattern-compositi
 import { PatternComplexityLadderDiagram } from "./diagrams/pattern-complexity-ladder-diagram";
 import { PatternRollbackTraceDiagram } from "./diagrams/pattern-rollback-trace-diagram";
 import { PatternCompositionTrapDiagram } from "./diagrams/pattern-composition-trap-diagram";
+import { SupportAgentLoopDiagram } from "./diagrams/support-agent-loop-diagram";
+import { CodingAgentPracticeDiagram } from "./diagrams/coding-agent-practice-diagram";
+import { AgentPracticeFitMatrixDiagram } from "./diagrams/agent-practice-fit-matrix-diagram";
+import { AgentPracticeRiskDiagram } from "./diagrams/agent-practice-risk-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1229,6 +1233,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PatternComplexityLadderDiagram,
   PatternRollbackTraceDiagram,
   PatternCompositionTrapDiagram,
+  SupportAgentLoopDiagram,
+  CodingAgentPracticeDiagram,
+  AgentPracticeFitMatrixDiagram,
+  AgentPracticeRiskDiagram,
   Term,
   Glossary,
   GlossaryItem,
