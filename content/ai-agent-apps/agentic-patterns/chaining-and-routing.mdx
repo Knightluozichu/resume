@@ -26,7 +26,7 @@ sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 
 第二种像医院分诊台：病人先到前台，被判断是外伤、发烧还是眼科问题，然后分别送去不同科室。每个人不需要走同一条线，但一旦分到某一类，后面走的还是固定流程。
 
-这一章讲的就是这两种拆法。它们都比「直接上自主 agent」更省、更稳，但前提是你要用对地方。选错了，要么把简单事做得又慢又贵，要么把复杂事硬塞进写死流程里，最后哪条路都走不通。
+接下来要讲的，就是遇到一堆进来的事时，到底该让它们都排同一条线，还是先分到不同窗口再分别处理。选错了，要么把本来简单的事拖得很长，要么把差别很大的事硬塞进同一套做法里，最后谁也处理不好。
 
 ## 第一种拆法：同一批活都走同一串固定工序
 
@@ -74,9 +74,9 @@ sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 
 ## 代码对照：同一个入口，串起来写 vs 分流写
 
-把区别落到代码里最好记。下面左边是链式写法，右边是路由写法。两边都还是工作流，但一边是「所有输入都过同一串步骤」，另一边是「先分流，再走各自支线」。
+把区别落到代码里最好记。下面左右两边处理的是**同一个客服总入口任务**：用户发来一条消息，我们都要把它处理掉。区别只在编排方式上: 左边让所有请求都走同一串步骤，右边先分类型，再走对应支线。
 
-> 猜一猜：如果把“退款、查物流、登录失败”三类请求都硬塞进左边那条链里，会发生什么？拖动看两边，再想想为什么右边更适合这种入口。
+> 猜一猜：同样是处理一个客服总入口，如果退款、查物流、登录失败都硬排左边这条统一流水线，哪一类请求最容易觉得“前面几步不太相关”？先想一想，再拖动对比。
 
 <CompareSlider
   leftLabel="链式：所有输入同一路"
@@ -84,21 +84,21 @@ sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
   initial={50}
   left={
     <div className="not-prose flex h-full flex-col justify-center gap-2 rounded-card border border-border bg-bg p-5">
-      <p className="text-sm font-bold text-primary">🪜 链式：每个输入都过同样四步</p>
+      <p className="text-sm font-bold text-primary">🪜 链式：客服入口统一走四步</p>
       <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-primary">
-        {`def handle_invoice(image):
-    text = ocr(image)
-    fields = extract_fields(text)
-    checked = validate(fields)
-    return fill_form(checked)
+        {`def handle_ticket(message):
+    clean = normalize(message)
+    intent = extract_intent(clean)
+    facts = gather_context(intent, clean)
+    return compose_reply(intent, facts)
 
-# 每张发票都走：
+# 所有请求都走：
 
-# OCR -> 抽字段 -> 校验 -> 填表`}
+# 清洗 -> 抽意图 -> 补上下文 -> 写回复`}
 
       </pre>
       <p className="text-xs text-secondary">
-        适合「每份输入都要过同一串固定工序」的任务。每一步更简单，还能在中途加 gate。
+        同一个入口里的每条消息，都先后过同样四步；适合大家都共享同一处理骨架的场景。
       </p>
     </div>
 
@@ -106,28 +106,30 @@ sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 right={
 
 <div className="not-prose flex h-full flex-col justify-center gap-2 rounded-card border border-accent bg-bg p-5">
-<p className="text-sm font-bold text-accent">🧭 路由：先分诊，再走专线</p>
+<p className="text-sm font-bold text-accent">🧭 路由：同一入口先分类型</p>
 <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-primary">
 {`def handle_ticket(message):
 kind = classify(message)
 if kind == "refund":
 return refund_flow(message)
+if kind == "logistics":
+return logistics_flow(message)
 if kind == "tech":
 return tech_flow(message)
 return faq_flow(message)
 
-# 先分成类别，再进对应流程`}
+# 同一入口先分类，再进各自支线`}
 
       </pre>
       <p className="text-xs text-secondary">
-        适合「类别不同、后续处理逻辑差很多」的入口。每个请求只走最适合自己的那条线。
+        入口还是同一个，但不同类型不再共享整条长线，而是各走最适合自己的那条支线。
       </p>
     </div>
 
 }
 />
 
-对照着看差异就很直白：左边没有分类，所有输入都先后过 `ocr → extract → validate → fill_form` 这一串固定工序；右边先做一次 `classify`，再把请求送进退款、技术或 FAQ 各自的固定支线。前者优化的是**把一件固定任务拆细**，后者优化的是**把不同类别交给不同专长**。如果你明知入口里有风格完全不同的请求，还让它们全排同一条长队，链式就会变得又慢又笨；反过来，如果其实每份输入都必须过同样四步，你却先去分流，那就是白白多加一道分类成本。
+对照着看差异就很直白：两边函数名都叫 `handle_ticket(message)`，处理的是同一个客服入口。左边没有分流，所有请求都走 `normalize → extract_intent → gather_context → compose_reply` 这条统一流水线；右边先做一次 `classify`，再把同一个入口里的消息送进退款、物流、技术或 FAQ 各自的固定支线。前者优化的是**把同一类入口活拆成共用骨架**，后者优化的是**把类别差异大的请求交给不同专长**。如果你明知入口里混着风格完全不同的请求，还让它们全排一条长队，左边就会显得又长又笨；反过来，如果其实每条消息都该走同样四步，你却先去分类，那就是白白多加一道成本。
 
 ## 容易踩的坑
 
@@ -158,11 +160,11 @@ return faq_flow(message)
 
 ## 小结
 
-- 链式适合「每份输入都走同一串固定工序」：重点是把一件固定任务拆成更容易做对的几步
-- 路由适合「先能分清类别，再让每类走不同固定流程」：重点是分工隔离，而不是让所有请求排同一条队
-- 两者都还是工作流，因为路径是人预先设计好的；真正越界到 agent，是你已经写不出固定路线图的时候
-- 选型时先问两句：是不是同一路？如果不是，能不能先稳定分流？答完通常就知道该用链式还是路由
-- 选错方案的典型症状：该链式却先分类、该路由却硬串、根本超出工作流边界却还继续写死
+- 链式：同一路，固定顺序拆步骤
+- 路由：先分清类别，再走专线
+- 两者都属预先设计好的固定路线
+- 先问同不同路，再问能否稳定分流
+- 两问都不成立，就别再硬写死
 
 <Exercises>
 
