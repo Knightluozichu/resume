@@ -435,6 +435,10 @@ import { FunctionCallingDecisionDiagram } from "./diagrams/function-calling-deci
 import { ToolDesignDimensionsDiagram } from "./diagrams/tool-design-dimensions-diagram";
 import { ToolGranularityDiagram } from "./diagrams/tool-granularity-diagram";
 import { ToolErrorRecoveryDiagram } from "./diagrams/tool-error-recovery-diagram";
+import { ToolPromptAnatomyDiagram } from "./diagrams/tool-prompt-anatomy-diagram";
+import { ToolContractCompareDiagram } from "./diagrams/tool-contract-compare-diagram";
+import { ToolSelectionFeedbackDiagram } from "./diagrams/tool-selection-feedback-diagram";
+import { ToolErrorFeedbackDiagram } from "./diagrams/tool-error-feedback-diagram";
 import { McpMxnDiagram } from "./diagrams/mcp-mxn-diagram";
 import { McpArchitectureDiagram } from "./diagrams/mcp-architecture-diagram";
 import { McpCapabilitiesDiagram } from "./diagrams/mcp-capabilities-diagram";
@@ -1201,6 +1205,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToolDesignDimensionsDiagram,
   ToolGranularityDiagram,
   ToolErrorRecoveryDiagram,
+  ToolPromptAnatomyDiagram,
+  ToolContractCompareDiagram,
+  ToolSelectionFeedbackDiagram,
+  ToolErrorFeedbackDiagram,
   McpMxnDiagram,
   McpArchitectureDiagram,
   McpCapabilitiesDiagram,
