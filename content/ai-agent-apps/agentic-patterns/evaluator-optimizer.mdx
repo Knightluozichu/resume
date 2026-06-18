@@ -1,0 +1,350 @@
+---
+title: 评估-优化：什么时候该先出稿，再迭代打磨
+type: D
+section: 智能体模式
+order: 4
+description: 看懂一种“先写一版，再按标准返工”的工作流：什么时候单次出稿就够，什么时候值得加一轮评估-优化。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 评估-优化（图：<EvaluatorOptimizerWorkflowDiagram />）2. 评估标准 rubric（图：<EvaluatorOptimizerDecisionDiagram />）3. 评估器 evaluator（图：<EvaluatorOptimizerTraceDiagram />）4. 优化器 optimizer（代码对照：英文产品更新说明 -> 中文发布稿）5. 常见误区：标准太虚 / 不可改善任务硬上循环 / 只改文风不校事实（图：<EvaluatorOptimizerTrapDiagram />）。Term↔Glossary：评估-优化 / 评估标准 / 评估器 / 优化器。 */}
+
+<Objectives>
+
+- 能解释评估-优化在做什么，并说清它和“一次出稿直接交付”最大的结构差别
+- 能判断一个任务是否值得加评估-优化循环，并用“标准清楚 + 返工真能变好”两条理由说明判断
+- 能回答：把一段英文产品更新说明改写成中文发布稿时，什么时候一轮生成就够了，什么时候更适合先出稿再迭代打磨？
+
+</Objectives>
+
+## 先打个比方
+
+写一封对外发布的通知，有时像聊天回个消息：意思讲明白就行，一遍写完直接发，不值得来回推敲。
+
+但也有些稿子不是这样。比如要发给客户、媒体或全公司，第一版往往只是“东西都在”，还没到“拿得出手”。这时最稳的做法不是重头再想一遍，而是先按几个明确标准挑毛病，再针对这些毛病返工。
+
+这一章讲的，就是这种“先交第一版，再按清单打磨”的做法。它解决的问题不是“怎么从零想出来”，而是“第一版已经有了，怎样更稳地把它修到达标”。如果少了这一步，你常会得到一个大体对、细节却不够发布的半成品。
+
+## 这种模式在做什么：先出一版，再按标准返工
+
+当任务不是“有没有答案”，而是“这份答案够不够好”时，就很适合上 <Term def="评估-优化（Evaluator-optimizer）：先让模型产出一个初稿，再按预先写清的标准检查这版输出，指出问题并返工，直到达标或到达次数上限的工作流。">评估-优化（Evaluator-optimizer）</Term>。
+
+它的最小骨架只有三步：先产出初稿，再拿一把清楚的尺子去检查，最后按检查结果返工。这里最关键的不是“多跑几轮”，而是中间那把尺子，也就是 <Term def="评估标准（Rubric）：一组预先写清的检查项，用来判断当前输出差在哪里、是否通过，以及下一轮该往哪改。">评估标准（Rubric）</Term>。没有它，返工就会变成“感觉不太好，再来一版看看”，很容易越改越漂。
+
+<EvaluatorOptimizerWorkflowDiagram />
+
+看图时抓住一句话：**先有草稿，再按标准返工。** 它不要求第一轮就完美，而是把“写得更好”拆成一个可重复的动作：先暴露问题，再定向修补。Anthropic 在《Building Effective Agents》里把它放在工作流光谱中偏右的位置，因为它比普通链式更会利用反馈，但仍然不是开放式自主 agent。
+
+## 它仍是工作流，不是自主 agent
+
+这一步很容易误判。评估-优化看起来像“会自己反思”，但它本质上还是工作流，因为循环骨架是人预先写死的：
+
+- 先写初稿
+- 再按固定标准评估
+- 再按评估意见返工
+- 通过就停，不通过就最多再来几轮
+
+其中真正新出现的是 <Term def="评估器（Evaluator）：负责按统一标准检查当前草稿，指出问题、解释为什么不过，并给出下一轮修改方向的角色或步骤。">评估器（Evaluator）</Term> 和 <Term def="优化器（Optimizer）：负责根据评估反馈重写当前草稿，让输出更接近目标结果的角色或步骤。">优化器（Optimizer）</Term> 这两个槽位；但“先谁后谁、何时停止、最多几轮”都还是你在代码里提前规定好的。模型没有在开放环境里自己改目标、自己找工具、自己决定任务边界，所以它仍属于工作流，而不是自主 agent。
+
+<EvaluatorOptimizerTraceDiagram />
+
+把它和自主 agent 区分开，最简单的问法是：**系统是在固定骨架里返工，还是在开放世界里自己决定下一步要做什么？** 前者是评估-优化，后者才更像 agent。别因为它带循环，就自动把它判成“已经自主”。
+
+## 两个适配信号：标准清楚 + 返工真能变好
+
+不是每个任务都值得加这一轮。评估-优化最适合的，是下面两个信号同时成立的时候。
+
+### 信号一：标准清楚，能说出“好稿子长什么样”
+
+第一条是：你能把“好”和“不好”的差别写成相对稳定的检查项。比如中文发布稿是否保留关键更新点、语气是否像正式公告、术语是否统一、是否避免夸大承诺，这些都能写进 rubric。标准越清楚，评估器越像在打样稿，而不是在猜老板心情。
+
+如果你自己都说不清“到底怎样算更好”，评估器就只能给出含糊反馈，比如“再自然一点”“更高级一点”。这种反馈很难驱动稳定返工，循环通常只会增加调用次数，不会稳定提质。
+
+### 信号二：返工真的能让结果变好，而不是只会重写
+
+第二条是：任务本身允许“看完点评再改一版”带来实质提升。文案润色、摘要打磨、代码补注释、报告压结构，这类任务都常见“第一版够了七成，第二版更能打”的情况。
+
+但如果任务主要瓶颈不在表达，而在“根本没拿到正确事实”“缺关键输入”“答案对错一翻两瞪眼”，那多跑几轮润色往往没用。评估器可以指出“这个数字没依据”，可如果系统没有新数据源，优化器也只能围着旧错误打转。**评估-优化擅长的是迭代表达和结构，不是凭空补真相。**
+
+## 动手看：这个任务该不该上评估-优化？
+
+上面两条记住后，真正难的是遇到具体任务时怎么判断。下面这张图把选择过程压成了两个判断：先看标准清不清，再看返工是否真能提高质量。两问都答“是”，才值得把任务送进评估-优化循环。
+
+> 猜一猜：如果任务是“把英文产品更新说明改成可直接发给中国用户的正式发布稿”，你会怎样回答这两问？那如果任务只是“从数据库里取最新版本号并拼成一句通知”呢？
+
+<EvaluatorOptimizerDecisionDiagram />
+
+把这张图记成一句工程判断：**不是输出重要就上评估-优化，而是“有明确尺子，而且改一轮真的会更好”才上。** 如果标准本来就很模糊，或者任务本质上只是查对事实、拼对字段，那一轮生成加程序校验通常更省、更稳。
+
+## 代码对照：一次出稿写法 vs 评估-优化循环
+
+下面都用同一个题材：把一段英文产品更新说明改写成中文发布稿。我们关心的不是翻译 API 怎么调，而是结构有没有多出“评估”和“返工”这两步。
+
+先看输入任务长什么样：
+
+> 英文原稿：`We redesigned the dashboard, added CSV export, and reduced report generation time by 40%. The rollout starts next Monday for Pro users.`
+
+目标输出不是逐字直译，而是一段能发给中国用户的正式发布稿：信息完整、语气稳、术语统一，不夸大承诺。
+
+### 第一步：一次出稿写法，最短也最便宜
+
+最直接的写法，就是把要求一次性写进 prompt，让模型直接交付终稿。如果这类稿子本来就短、标准也不严，一轮往往已经够用。
+
+<CodeTabs>
+  <Tab label="单次出稿：一轮直接交付">
+
+```ts
+const ENGLISH_UPDATE = `
+We redesigned the dashboard, added CSV export,
+and reduced report generation time by 40%.
+The rollout starts next Monday for Pro users.
+`;
+
+async function writeReleaseOnce() {
+  return callModel(`
+把这段英文产品更新说明改写成正式中文发布稿。
+要求：保留关键事实，语气稳重，适合发给用户。
+原文：${ENGLISH_UPDATE}
+`);
+}
+```
+
+  </Tab>
+  <Tab label="评估-优化：先允许有一版初稿">
+
+```ts
+const ENGLISH_UPDATE = `
+We redesigned the dashboard, added CSV export,
+and reduced report generation time by 40%.
+The rollout starts next Monday for Pro users.
+`;
+
+async function draftRelease() {
+  return callModel(`
+先写中文发布稿初稿，优先把事实说全。
+原文：${ENGLISH_UPDATE}
+`);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+左边的核心是假设“这一轮就该交终稿”；右边则刻意把第一轮降格成“先有一版能评的草稿”。这一步的心态差别很重要：评估-优化不是一开始就要求模型一次命中，而是接受初稿不完美，但要求后面有清楚的打磨路径。
+
+### 第二步：加评估器，让“哪里不好”有统一说法
+
+一旦进入循环，最值钱的就是统一标准。评估器不是简单说“再自然一点”，而是按 rubric 拆解：事实是否完整、受众语气是否合适、术语是否一致、是否把上线范围说清楚。
+
+<CodeTabs>
+  <Tab label="单次出稿：没有显式评估环节">
+
+```ts
+async function publishDirectly() {
+  const release = await writeReleaseOnce();
+  return release;
+}
+```
+
+  </Tab>
+  <Tab label="评估-优化：先评，再决定是否返工">
+
+```ts
+async function evaluateRelease(draft: string) {
+  return callModel(`
+按 rubric 评估这版中文发布稿：
+1. 关键事实是否都保留
+2. 语气是否像正式发布公告
+3. 术语是否统一，不夸大承诺
+4. 是否明确上线时间与适用用户
+输出：pass/fail、问题列表、修改建议
+待评估文本：${draft}
+`);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+这一步把“好不好”从主观感觉，变成了相对稳定的检查清单。没有显式评估时，你只能指望首轮 prompt 足够强；有了评估器，你就能知道这版稿子到底差在漏事实、文风不稳，还是发布范围没说清。
+
+<Callout type="warn">
+  评估器能稳定工作，前提是 rubric
+  足够具体。像“更高级一点”“更有感染力”这类标准太虚，通常只会让每一轮反馈都换个说法，却不给优化器可执行的修改方向。
+</Callout>
+
+### 第三步：把评语喂给优化器，再加一道停机条件
+
+最后才是返工。优化器不是重新从零写一篇，而是拿着“这版哪里没过”去定向修正；同时你要给循环一条明确的停止线，比如通过即停，或最多改两轮。
+
+<CodeTabs>
+  <Tab label="单次出稿：没有返工闭环">
+
+```ts
+async function shipOnce() {
+  const release = await writeReleaseOnce();
+  return { status: "done", release };
+}
+```
+
+  </Tab>
+  <Tab label="评估-优化：评语驱动的返工循环">
+
+```ts
+async function writeReleaseWithLoop(maxRounds = 2) {
+  let draft = await draftRelease();
+  for (let round = 0; round < maxRounds; round += 1) {
+    const review = await evaluateRelease(draft);
+    if (review.pass) return { status: "pass", release: draft };
+    draft = await callModel(`
+按这些反馈重写中文发布稿：
+${review.feedback}
+当前稿：${draft}
+`);
+  }
+  return { status: "max-rounds", release: draft };
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+左边的结束条件很简单：模型一写完就交付。右边则多了一个明确闭环：先评、再改、通过就停、超轮次也得停。这样做的收益是，你不必把所有要求都压到首轮 prompt 里，而是允许系统边检查边收敛；代价是调用次数、时延和控制逻辑都会增加。
+
+把三段代码看完后，再用一眼图压缩记忆，会更容易把差别记牢：
+
+<CompareSlider
+  leftLabel="单次出稿"
+  rightLabel="评估-优化循环"
+  initial={48}
+  left={
+    <div className="not-prose flex h-full flex-col justify-center gap-3 rounded-card border border-border bg-bg p-5">
+      <p className="text-sm font-bold text-primary">⚡ 一次出稿的关键特征</p>
+      <ul className="m-0 list-disc pl-5 text-xs leading-relaxed text-primary">
+        <li>首轮 prompt 直接瞄准终稿</li>
+        <li>没有显式评估和返工步骤</li>
+        <li>更便宜、更快，适合标准不严的短任务</li>
+      </ul>
+      <p className="text-xs text-secondary">
+        适合“写出来就能用”的任务，不适合高要求外发稿件的细修。
+      </p>
+    </div>
+  }
+  right={
+    <div className="not-prose flex h-full flex-col justify-center gap-3 rounded-card border border-accent bg-bg p-5">
+      <p className="text-sm font-bold text-accent">🛠️ 评估-优化的关键特征</p>
+      <ul className="m-0 list-disc pl-5 text-xs leading-relaxed text-primary">
+        <li>允许先产出一版能评的初稿</li>
+        <li>用 rubric 找问题，再定向返工</li>
+        <li>必须有停机条件，避免无限打磨</li>
+      </ul>
+      <p className="text-xs text-secondary">
+        适合“第一版常常只够七成，但改一轮会明显更好”的任务。
+      </p>
+    </div>
+  }
+/>
+
+## 容易踩的坑
+
+<EvaluatorOptimizerTrapDiagram />
+
+<Callout type="trap">
+  **现象**：评估器每轮都只会说“再自然一点”“再高级一点”，优化器改了两轮还是不知道该往哪调。
+  **原因**：rubric
+  太虚，没有把“什么叫好”写成可检查项，反馈听起来像审美评价，不像可执行指令。
+  **修法**：把标准改写成具体检查点，例如“是否保留上线时间”“是否统一用‘专业版用户’这个称呼”“是否避免使用‘革命性’这类夸张词”。
+</Callout>
+
+<Callout type="trap">
+  **现象**：明明任务的主要问题是缺事实、缺数据源，却硬上评估-优化，结果系统只会围着同一份错误信息反复重写。
+  **原因**：这类任务的瓶颈不在表达，而在信息不足；评估器能指出问题，却没有新事实喂给优化器。
+  **修法**：先补检索、工具调用或程序校验，再考虑要不要进入评估-优化。别拿“多改几轮”去替代“先拿到正确输入”。
+</Callout>
+
+<Callout type="trap">
+  **现象**：循环写得太开放，没有通过条件也没有轮次上限，一份外发稿可以一直“再润一下”，越跑越慢。
+  **原因**：把“持续打磨”误当成“质量保证”，却没给系统停机线。工作流一旦没有明确停止条件，就会把成本失控的问题引进来。
+  **修法**：明确写死 pass 条件和
+  `maxRounds`，并约定“到上限后交当前最好版本或转人工复核”，不要无限追求完美稿。
+</Callout>
+
+## 小结
+
+- 评估-优化 = 先出稿，再按 rubric 返工
+- 它仍是工作流，骨架和停机条件都由人写死
+- 值得上它，要同时满足“标准清楚 + 返工真能变好”
+- 它擅长打磨表达与结构，不擅长凭空补事实
+- 一定要写明通过条件和轮次上限
+
+<Exercises>
+
+**练习 1（选型题）** 下面两个任务，哪个更适合一次出稿，哪个更适合评估-优化？请分别说明理由。  
+（A）把“系统将于今晚 23:00 维护”改写成一条站内短通知。  
+（B）把一份英文产品更新说明改写成可直接发给中国用户和媒体的正式发布稿。
+
+<Answer>
+
+（A）更适合**一次出稿**。因为信息量小、格式简单，程序校验时间字段后，一轮生成通常就够，不值得再为它增加评估和返工成本。  
+（B）更适合**评估-优化**。因为外发稿要求更高，既要保留关键事实，又要稳住语气、统一术语、说明上线范围，第一版常常还差一点，而这些差距可以通过明确 rubric 和返工显著改善。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么说评估-优化虽然带循环，但仍然不是自主 agent？
+
+<Answer>
+
+因为它的控制骨架还是人提前写死的：先产出草稿，再按固定 rubric 评估，再按反馈返工，通过就停或达到轮次上限就停。模型没有在开放环境里自己改目标、自己探索下一步任务，也没有脱离既定脚手架去临场规划，所以它仍是工作流，只是比单次出稿多了一道反馈闭环。
+
+</Answer>
+
+**练习 3（改代码题）** 看本章最后一段 `writeReleaseWithLoop`。现在它只在 `review.pass` 时停止。请再补一条保护：如果评估器连续两轮都指出同一类问题，说明系统卡住了，就提前停下并转人工复核。你会在什么位置加这个判断？为什么？
+
+<Answer>
+
+可以在循环里保存上一轮的问题类别，并在本轮评估后比较：
+
+```ts
+async function writeReleaseWithLoop(maxRounds = 2) {
+  let draft = await draftRelease();
+  let lastIssueType = "";
+  for (let round = 0; round < maxRounds; round += 1) {
+    const review = await evaluateRelease(draft);
+    if (review.pass) return { status: "pass", release: draft };
+    if (review.issueType === lastIssueType) {
+      return { status: "human-review", release: draft };
+    }
+    lastIssueType = review.issueType;
+    draft = await rewriteWithFeedback(draft, review.feedback);
+  }
+  return { status: "max-rounds", release: draft };
+}
+```
+
+这个判断要加在“拿到评估结果之后、决定是否返工之前”，因为只有先看见这轮问题类型，才能判断系统是不是卡在同一处打转。这样做的目的不是追求更聪明，而是给循环加一道现实的止损线：连续两轮都没跨过同一类问题，就别再白烧 token 了，交给人工更稳。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="评估-优化（Evaluator-optimizer）">
+    先让模型产出一个初稿，再按预先写清的标准检查这版输出、指出问题并返工，直到达标或到达次数上限的工作流。重点不是“多跑几轮”，而是“每一轮都围着同一把尺子改”。详见本章「这种模式在做什么」。
+  </GlossaryItem>
+  <GlossaryItem term="评估标准（Rubric）">
+    一组预先写清的检查项，用来判断当前输出差在哪里、是否通过，以及下一轮该往哪改。它像审稿清单，越具体，评估器给出的反馈越稳定；太虚的标准只会让返工失去方向。详见本章「两个适配信号」与「代码对照」。
+  </GlossaryItem>
+  <GlossaryItem term="评估器（Evaluator）">
+    负责按统一标准检查当前草稿、指出问题并解释为什么不过的角色或步骤。它不负责重写，只负责把“哪里没过、怎么改”说清楚，让后面的返工有依据。详见本章「它仍是工作流」与「代码对照」。
+  </GlossaryItem>
+  <GlossaryItem term="优化器（Optimizer）">
+    负责根据评估反馈重写当前草稿，让输出更接近目标结果的角色或步骤。它不是从零再想一篇，而是带着具体问题去定向修正。详见本章「它仍是工作流」与「代码对照」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution />

@@ -181,7 +181,8 @@ export type ReviewChapterSlug =
   | "agent-mcp"
   | "agent-workflow-vs-agent"
   | "agent-chaining-and-routing"
-  | "agent-parallelization-and-orchestrator-workers";
+  | "agent-parallelization-and-orchestrator-workers"
+  | "agent-evaluator-optimizer";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -366,6 +367,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-workflow-vs-agent": "工作流 vs 智能体",
   "agent-chaining-and-routing": "链式与路由",
   "agent-parallelization-and-orchestrator-workers": "并行与编排-工作者",
+  "agent-evaluator-optimizer": "评估-优化",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
