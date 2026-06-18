@@ -178,7 +178,8 @@ export type ReviewChapterSlug =
   | "agent-structured-output"
   | "agent-function-calling"
   | "agent-tool-design"
-  | "agent-mcp";
+  | "agent-mcp"
+  | "agent-workflow-vs-agent";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -360,6 +361,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-function-calling": "Function Calling 原理",
   "agent-tool-design": "设计好用的工具",
   "agent-mcp": "MCP 模型上下文协议",
+  "agent-workflow-vs-agent": "工作流 vs 智能体",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

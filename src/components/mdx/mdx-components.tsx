@@ -439,6 +439,10 @@ import { McpMxnDiagram } from "./diagrams/mcp-mxn-diagram";
 import { McpArchitectureDiagram } from "./diagrams/mcp-architecture-diagram";
 import { McpCapabilitiesDiagram } from "./diagrams/mcp-capabilities-diagram";
 import { McpCallFlowDiagram } from "./diagrams/mcp-call-flow-diagram";
+import { WorkflowVsAgentDiagram } from "./diagrams/workflow-vs-agent-diagram";
+import { PatternDecisionDiagram } from "./diagrams/pattern-decision-diagram";
+import { PatternSpectrumDiagram } from "./diagrams/pattern-spectrum-diagram";
+import { PatternChoiceTrapDiagram } from "./diagrams/pattern-choice-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1167,6 +1171,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   McpArchitectureDiagram,
   McpCapabilitiesDiagram,
   McpCallFlowDiagram,
+  WorkflowVsAgentDiagram,
+  PatternDecisionDiagram,
+  PatternSpectrumDiagram,
+  PatternChoiceTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
