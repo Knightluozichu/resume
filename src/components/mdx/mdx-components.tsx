@@ -443,6 +443,9 @@ import { EvalRegressionDemo } from "./demos/eval-regression-demo";
 import { PromptInjectionDiagram } from "./diagrams/prompt-injection-diagram";
 import { GuardrailDemo } from "./demos/guardrail-demo";
 import { CostBudgetDemo } from "./demos/cost-budget-demo";
+import { ProductionArchDiagram } from "./diagrams/production-arch-diagram";
+import { DegradationDemo } from "./demos/degradation-demo";
+import { CanaryRolloutDemo } from "./demos/canary-rollout-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1175,6 +1178,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PromptInjectionDiagram,
   GuardrailDemo,
   CostBudgetDemo,
+  ProductionArchDiagram,
+  DegradationDemo,
+  CanaryRolloutDemo,
   Term,
   Glossary,
   GlossaryItem,
