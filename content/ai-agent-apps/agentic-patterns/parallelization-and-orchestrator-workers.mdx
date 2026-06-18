@@ -1,0 +1,252 @@
+---
+title: 并行与编排-工作者：什么时候同时做，什么时候先拆再派
+type: D
+section: 智能体模式
+order: 3
+description: 看懂两种“多人协作”工作流：什么时候把固定块同时跑，什么时候先让编排者读任务再临场拆活。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 并行化 parallelization（图：<ParallelizationWorkflowDiagram />）2. 分片 sectioning 与投票 voting（图：<SectioningVsVotingDiagram />）3. 编排-工作者 orchestrator-workers（图：<OrchestratorWorkersWorkflowDiagram />）4. 并行 vs 编排-工作者 vs 链式/路由/自主智能体边界（动画：<ParallelOrchestratorDecisionDiagram />）5. 常见误区：依赖步骤硬并行 / 固定三块活硬上编排者 / worker 重复查同样内容（图：<ParallelOrchestrationTrapDiagram />）。Term↔Glossary：并行化 / 分片 / 投票 / 编排者 / 编排-工作者。 */}
+
+<Objectives>
+
+- 能解释并行化和编排-工作者各自是什么，并说出它们最大的结构差别
+- 能判断一项任务该“预先分块同时做”还是该“先看输入再临场拆活”，并说明理由
+- 能回答：同样是做一份竞品调研简报，什么时候三路固定并行就够了，什么时候必须让编排者先决定这次要拆哪些部分？
+
+</Objectives>
+
+## 先打个比方
+
+做一份竞品调研，有时像分工明确的小组作业：A 查价格，B 查功能，C 查用户反馈，三个人同时开工，最后把三份材料拼成一页简报。这种做法快，因为谁查什么在开工前就定好了。
+
+但也有些任务不是这样。老板可能只说一句：“帮我看清这个竞品到底值不值得跟。” 这时你没法一开始就把活固定成三块，因为有的产品要重点查定价，有的要重点查生态合作，有的甚至先要补背景。通常得先有个人读题、想想这次该拆成哪几块，再派人去查。
+
+这一章讲的，就是这两种“多人一起干”的程序结构：一种是**先分好固定几块，再同时做**；另一种是**先看任务内容，再决定这次该拆哪些活**。它们都比单线程顺着做更强，但适用场景完全不同。
+
+## 并行：同一批活，预先分块后一起做
+
+<Term def="并行化（Parallelization）：把一项任务拆成几个彼此独立的子任务，让它们同时运行，最后再把结果汇总。关键不是“多人”，而是这些子任务在开工前就已经预先写死。">
+  并行化（Parallelization）
+</Term>
+最适合这样的活：你已经知道要拆哪几块，而且这些块彼此基本独立，不用前一个结果出来后，后一个才能动。
+
+<ParallelizationWorkflowDiagram />
+
+看图时盯住两个关键词：**预先写死**、**同时开工**。比如做一份竞品调研简报，你已经确定每次都要查“价格 / 功能 / 用户反馈”三块，那么这三件事完全可以三路同时跑，最后把结果合并成报告。Anthropic 在《Building effective agents》里把这种模式归为工作流：结构是人先设计好的，只是把几路 LLM 调用并排展开。
+
+什么时候该想到它？当你主要想解决的是两类问题：
+
+- **提速**：同样三块活，串着做要等三轮，并行能把等待压到最长那一轮。
+- **分焦点**：复杂任务里有多个独立考量时，让每一轮只盯一个维度，往往比一轮里让模型同时兼顾所有维度更稳。
+
+## 并行不只一种：分片（sectioning）和投票（voting）
+
+Anthropic 把并行再拆成两种常见变体：<Term def="分片（Sectioning）：把一个任务切成几个不同但彼此独立的固定部分，让每一路各做一块，最后合并。">
+  分片（Sectioning）
+</Term>
+和 <Term def="投票（Voting）：把同一个任务同时跑多次，收集多个答案，再用投票或聚合规则提高稳定性。">投票（Voting）</Term>。
+
+<SectioningVsVotingDiagram />
+
+它们都叫并行，但目的不一样：
+
+- **分片**：大家做的是不同块。像竞品简报里的价格、功能、口碑三块，各查各的，最后拼起来。
+- **投票**：大家做的是同一题。比如让三个 reviewer 同时审一段代码、分别给风险判断，再汇总成最终结论。
+
+一句话记忆：**分片是在分工，投票是在求稳。** 如果你是“这活本来就有几块”，更像分片；如果你是“同一题想多看几眼、降低漏判”，更像投票。
+
+## 编排-工作者：先看任务，再临场拆活
+
+<Term def="编排者（Orchestrator）：先读任务要求，再决定这次该拆成哪些子任务、派给谁做、最后怎么汇总结果的中心调度者。">
+  编排者（Orchestrator）
+</Term>
+出现时，说明问题已经不是“固定三块一起跑”这么简单了。你需要先判断：这次到底该拆几块、拆成什么、哪些值得查。
+
+<Term def="编排-工作者（Orchestrator-workers）：由一个编排者先根据这次具体输入动态拆任务，再把子任务派给若干工作者处理，最后回收并综合结果的工作流模式。">
+  编排-工作者（Orchestrator-workers）
+</Term>
+就是为这种情况准备的。
+
+<OrchestratorWorkersWorkflowDiagram />
+
+和并行最像的地方，是它最后也会出现“一路派给多个工作者同时做”；但真正的分界线在前面那一步：**子任务不是你写代码时就列好的，而是编排者先看了这次输入，再临场决定。**
+
+这很适合复杂但仍可控的任务。Anthropic 给的典型例子是复杂编码和多源搜索：你事先不知道这次会改 2 个文件还是 7 个文件，也不知道该查 3 个来源还是 8 个来源，所以不能把子任务写死；但你仍然希望整个结构是“先规划、再派工、再收敛”，而不是完全放飞成开放式 agent。
+
+## 它们都像“多人一起干”，但差别在子任务是不是预先写死
+
+把前面几章一起放进脑子里，最好记成一条从“更固定”到“更灵活”的线：
+
+- **链式**：固定顺序，一步接一步。后一步依赖前一步输出，所以不适合同时跑。
+- **路由**：先分到某一类，再走那一条预先写死的支线。重点是“选哪条固定路”。
+- **并行**：不是选一条路，而是把几条**预先写死**的独立支线同时跑起来。
+- **编排-工作者**：支线数量和内容不再预先写死，而是先由编排者看输入后再决定这次怎么拆。
+
+它和自主智能体的边界也要分清：如果你的系统不只是“先拆活再派工”，而是开始进入一个开放循环，自己反复决定下一步目标、要不要继续搜、要不要改计划、什么时候停，而且这些路径大都没被框在固定脚手架里，那就已经更接近自主智能体了。**编排-工作者还是工作流；自主智能体才是开放式自驱循环。**
+
+## 动手看：该预先并行，还是让编排者临场拆活？
+
+> 猜一猜：如果每次竞品简报都固定要查“价格 / 功能 / 用户反馈”三块，你会把决策停在“预先并行”还是继续往“编排者拆活”走？那如果这次老板只说“帮我判断这个竞品的威胁在哪”，但没说该查哪些维度呢？
+
+<ParallelOrchestratorDecisionDiagram />
+
+这张图可以浓缩成两个判断：
+
+1. **子任务能不能提前列清楚？** 能，而且彼此独立，就优先并行。
+2. **如果不能提前列清楚，是否仍能用“先规划、再分发、再汇总”的固定骨架承接？** 能，就用编排-工作者。
+
+再往右一步才是自主智能体：当连“先规划、再派工、再收敛”这个骨架都不够，你需要模型自己反复探索、改目标、调工具、设停点时，才值得进入 agent 区域。不要把“需要一点动态拆活”误判成“必须全自主”。
+
+## 代码对照：同一任务，并行写法 vs 编排-工作者写法
+
+同样都是“做一份竞品调研简报”，左边把三块活预先写死后同时跑；右边先让编排者读需求，再决定这次该拆哪些部分，再派给 worker。**任务没变，变的只有 orchestration。**
+
+> 猜一猜：如果这次需求写的是“重点看它和我们相比最大的威胁点”，左边固定三块并行和右边先规划再派工，哪边更可能把精力放到真正重要的点上？
+
+<CompareSlider
+  leftLabel="并行：固定三块预先写死"
+  rightLabel="编排-工作者：先读需求再拆活"
+  initial={50}
+  left={
+    <div className="not-prose flex h-full flex-col justify-center gap-2 rounded-card border border-border bg-bg p-5">
+      <p className="text-sm font-bold text-primary">⚡ 并行：价格 / 功能 / 反馈三路同时跑</p>
+      <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-primary">
+        {`async def competitor_brief(company):
+    jobs = [
+        research_price(company),
+        research_features(company),
+        research_user_feedback(company),
+    ]  # 三块在写代码时就定死
+    price, features, feedback = await gather(*jobs)
+    return merge_report(price, features, feedback)`}
+      </pre>
+      <p className="text-xs text-secondary">
+        快、直白、好测；前提是每次都固定查这三块，而且三块彼此独立。
+      </p>
+    </div>
+  }
+  right={
+    <div className="not-prose flex h-full flex-col justify-center gap-2 rounded-card border border-accent bg-bg p-5">
+      <p className="text-sm font-bold text-accent">🧠 编排-工作者：先决定这次该查什么</p>
+      <pre className="overflow-x-auto font-mono text-xs leading-relaxed text-primary">
+        {`async def competitor_brief(request):
+    plan = await orchestrator(request)
+    jobs = [worker(task) for task in plan.subtasks]
+    findings = await gather(*jobs)
+    return await synthesize(plan, findings)
+
+# 这次可能拆成：
+# 定价策略 / 渠道合作 / 留存信号 / 用户吐槽`}
+      </pre>
+      <p className="text-xs text-secondary">
+        更灵活；代价是多了一轮规划，也更依赖编排者把活拆得清楚、不重叠。
+      </p>
+    </div>
+  }
+/>
+
+对照看差别很集中：左边的三路 `research_price / research_features / research_user_feedback` 在写代码时就写死了，所以它属于并行；右边先有一轮 `orchestrator(request)`，这次到底拆“定价 / 渠道 / 留存”，还是拆“功能差异 / 护城河 / 风险信号”，取决于输入内容，所以它属于编排-工作者。**两边都可能最后并发跑多个 worker，但是否“先临场拆活”决定了它们不是同一种模式。**
+
+## 容易踩的坑
+
+<ParallelOrchestrationTrapDiagram />
+
+<Callout type="trap">
+  **现象**：把有依赖的步骤硬并行，比如“先抽取用户评论里的抱怨点，再据此筛重点功能，再写结论”也想三路一起跑。 **原因**：这些步骤不是彼此独立，而是后一步要吃前一步结果；它们更像链式，不像并行。 **修法**：先问依赖关系。只把真正独立的部分并行；有前后依赖的部分就老老实实串起来，必要时做成“链式里某一步再并行”。
+</Callout>
+
+<Callout type="trap">
+  **现象**：明明每次都固定查三块活，却还硬上编排者，先让它“想想这次该怎么拆”，结果更慢也更难测。 **原因**：这是把固定问题误做成动态拆活。子任务明明早就能写死，却平白多加一轮规划，让系统承担额外成本和不确定性。 **修法**：如果每次拆法都一样，就直接并行，别为了“看起来更智能”硬塞一个编排者。
+</Callout>
+
+<Callout type="trap">
+  **现象**：worker 分工太含糊，三个 worker 都在查差不多的内容，最后一半时间花在重复搜集，汇总时还互相打架。 **原因**：编排者没有把子任务边界切清，导致“多人一起干”变成“多人重复干”。 **修法**：给每个 worker 明确的目标、输出格式和不查范围；拆活时优先做到互补而非重叠，必要时要求编排者先写一行“每个 worker 负责什么、不负责什么”。
+</Callout>
+
+## 小结
+
+- 并行：固定独立子任务，预先写死后一起跑
+- 分片求分工，投票求稳健
+- 编排-工作者：先看输入，再决定这次拆哪些活
+- 和并行的分界线：子任务是不是能提前列清
+- 再往右才是自主智能体：进入开放式自驱循环
+
+<Exercises>
+
+**练习 1（选型题）** 下面两个任务，更适合并行还是编排-工作者？为什么？  
+（A）每次都固定写一页竞品卡：价格、功能、用户评分三栏。  
+（B）老板只说“帮我判断这个新产品是不是我们明年的主要威胁”，但没规定要查哪些维度。
+
+<Answer>
+
+（A）更适合**并行**。因为三块子任务是固定且独立的，完全可以在写代码时就预先列清，然后同时跑三路，最后合并。  
+（B）更适合**编排-工作者**。因为“该查哪些维度”取决于这次输入，可能是定价、生态合作、增长速度，也可能是渠道或留存，子任务没法一开始写死，需要先由编排者读题后再拆活。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么“链式、路由、并行、编排-工作者”都还是工作流，但编排-工作者已经比并行更靠近自主智能体？
+
+<Answer>
+
+因为它们四个的整体骨架都还是人预先设计好的：链式是固定顺序，路由是固定类别和支线，并行是固定并发支线，编排-工作者是固定“先规划、再派工、再汇总”的脚手架，所以都属于工作流。  
+编排-工作者更靠近自主智能体，是因为它把“本次拆哪些子任务”这件事交给模型在运行时决定，动态性比并行更高；但它仍没有进入开放式自驱循环，所以还没跨到真正的 autonomous agent。
+
+</Answer>
+
+**练习 3（改代码题）** 下面这段并行伪代码默认每次都查三块固定内容。请把它改成编排-工作者写法：先让 `orchestrator` 读需求，再决定这次要派几个 worker、各查什么，最后再汇总。至少补出“规划、分发、汇总”三步。
+
+```python
+async def competitor_brief(company):
+    jobs = [
+        research_price(company),
+        research_features(company),
+        research_user_feedback(company),
+    ]
+    parts = await gather(*jobs)
+    return merge_report(*parts)
+```
+
+<Answer>
+
+可以改成这样：
+
+```python
+async def competitor_brief(request):
+    plan = await orchestrator(request)           # 先读需求，决定拆哪些活
+    jobs = [worker(task) for task in plan.subtasks]
+    findings = await gather(*jobs)               # 再把这次的子任务并发跑完
+    return await synthesize(plan, findings)      # 最后按计划收拢成简报
+```
+
+关键变化不在“有没有并发”，而在最前面多了 `orchestrator(request)`：它先决定这次子任务是什么，而不是像原版那样在写代码时就把 `价格 / 功能 / 反馈` 三块永久写死。也就是说，**并行关心的是“固定块一起跑”，编排-工作者关心的是“先决定这次有哪些块，再一起跑”。**
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="并行化（Parallelization）">
+    把一项任务拆成几个彼此独立的子任务，让它们同时运行，最后再把结果汇总。重点不是“多人”本身，而是这些子任务在开工前就已经预先写死。适合想提速，或想把多个独立考量拆开分别处理的任务。详见本章「并行：同一批活，预先分块后一起做」。
+  </GlossaryItem>
+  <GlossaryItem term="分片（Sectioning）">
+    并行的一种：把任务切成几个不同但彼此独立的固定部分，让每一路各做一块，最后拼起来。像“价格 / 功能 / 用户反馈”三块分头查，就是典型分片。详见本章「并行不只一种」。
+  </GlossaryItem>
+  <GlossaryItem term="投票（Voting）">
+    并行的另一种：把同一个任务同时跑多次，收集多个答案，再用投票或聚合规则提高稳定性。它不是分工，而是“同题多看几眼”，常用来求稳、降漏判。详见本章「并行不只一种」。
+  </GlossaryItem>
+  <GlossaryItem term="编排者（Orchestrator）">
+    先读任务要求，再决定这次该拆成哪些子任务、派给谁做、最后怎么汇总结果的调度者。它的核心价值不是“亲自做活”，而是把活拆得清楚、不重叠。详见本章「编排-工作者：先看任务，再临场拆活」。
+  </GlossaryItem>
+  <GlossaryItem term="编排-工作者（Orchestrator-workers）">
+    一个编排者先根据这次具体输入动态拆任务，再把子任务派给若干工作者处理，最后回收并综合结果的工作流模式。它和并行都可能出现“多路同时跑”，但分界线在于：并行的子任务预先写死，编排-工作者的子任务是临场决定的。详见本章「代码对照」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution />
