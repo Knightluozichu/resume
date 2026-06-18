@@ -461,6 +461,10 @@ import {
   ParallelOrchestrationTrapDiagram,
   ParallelOrchestratorTrapDiagram,
 } from "./diagrams/parallel-orchestration-trap-diagram";
+import { EvaluatorOptimizerWorkflowDiagram } from "./diagrams/evaluator-optimizer-workflow-diagram";
+import { EvaluatorOptimizerDecisionDiagram } from "./diagrams/evaluator-optimizer-decision-diagram";
+import { EvaluatorOptimizerTraceDiagram } from "./diagrams/evaluator-optimizer-trace-diagram";
+import { EvaluatorOptimizerTrapDiagram } from "./diagrams/evaluator-optimizer-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1205,6 +1209,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ParallelOrchestratorDecisionDiagram,
   ParallelOrchestrationTrapDiagram,
   ParallelOrchestratorTrapDiagram,
+  EvaluatorOptimizerWorkflowDiagram,
+  EvaluatorOptimizerDecisionDiagram,
+  EvaluatorOptimizerTraceDiagram,
+  EvaluatorOptimizerTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
