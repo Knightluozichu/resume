@@ -465,6 +465,10 @@ import { EvaluatorOptimizerWorkflowDiagram } from "./diagrams/evaluator-optimize
 import { EvaluatorOptimizerDecisionDiagram } from "./diagrams/evaluator-optimizer-decision-diagram";
 import { EvaluatorOptimizerTraceDiagram } from "./diagrams/evaluator-optimizer-trace-diagram";
 import { EvaluatorOptimizerTrapDiagram } from "./diagrams/evaluator-optimizer-trap-diagram";
+import { AutonomousAgentLoopDiagram } from "./diagrams/autonomous-agent-loop-diagram";
+import { AutonomousAgentDecisionDiagram } from "./diagrams/autonomous-agent-decision-diagram";
+import { AutonomousAgentTraceDiagram } from "./diagrams/autonomous-agent-trace-diagram";
+import { AutonomousAgentTrapDiagram } from "./diagrams/autonomous-agent-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1213,6 +1217,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EvaluatorOptimizerDecisionDiagram,
   EvaluatorOptimizerTraceDiagram,
   EvaluatorOptimizerTrapDiagram,
+  AutonomousAgentLoopDiagram,
+  AutonomousAgentDecisionDiagram,
+  AutonomousAgentTraceDiagram,
+  AutonomousAgentTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
