@@ -179,7 +179,8 @@ export type ReviewChapterSlug =
   | "agent-function-calling"
   | "agent-tool-design"
   | "agent-mcp"
-  | "agent-workflow-vs-agent";
+  | "agent-workflow-vs-agent"
+  | "agent-chaining-and-routing";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -362,6 +363,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-tool-design": "设计好用的工具",
   "agent-mcp": "MCP 模型上下文协议",
   "agent-workflow-vs-agent": "工作流 vs 智能体",
+  "agent-chaining-and-routing": "链式与路由",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

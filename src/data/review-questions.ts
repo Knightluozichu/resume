@@ -176,6 +176,7 @@ import { agentFunctionCallingQuestions } from "./review/agent-function-calling";
 import { agentToolDesignQuestions } from "./review/agent-tool-design";
 import { agentMcpQuestions } from "./review/agent-mcp";
 import { agentWorkflowVsAgentQuestions } from "./review/agent-workflow-vs-agent";
+import { agentChainingAndRoutingQuestions } from "./review/agent-chaining-and-routing";
 
 export {
   CHAPTER_TITLES,
@@ -348,6 +349,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agentToolDesignQuestions,
   ...agentMcpQuestions,
   ...agentWorkflowVsAgentQuestions,
+  ...agentChainingAndRoutingQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

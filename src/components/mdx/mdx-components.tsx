@@ -443,6 +443,10 @@ import { WorkflowVsAgentDiagram } from "./diagrams/workflow-vs-agent-diagram";
 import { PatternDecisionDiagram } from "./diagrams/pattern-decision-diagram";
 import { PatternSpectrumDiagram } from "./diagrams/pattern-spectrum-diagram";
 import { PatternChoiceTrapDiagram } from "./diagrams/pattern-choice-trap-diagram";
+import { ChainingWorkflowDiagram } from "./diagrams/chaining-workflow-diagram";
+import { RoutingWorkflowDiagram } from "./diagrams/routing-workflow-diagram";
+import { ChainRoutingDecisionDiagram } from "./diagrams/chain-routing-decision-diagram";
+import { ChainRoutingTrapDiagram } from "./diagrams/chain-routing-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1175,6 +1179,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PatternDecisionDiagram,
   PatternSpectrumDiagram,
   PatternChoiceTrapDiagram,
+  ChainingWorkflowDiagram,
+  RoutingWorkflowDiagram,
+  ChainRoutingDecisionDiagram,
+  ChainRoutingTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
