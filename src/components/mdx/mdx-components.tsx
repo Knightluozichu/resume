@@ -481,6 +481,10 @@ import { SupportAgentLoopDiagram } from "./diagrams/support-agent-loop-diagram";
 import { CodingAgentPracticeDiagram } from "./diagrams/coding-agent-practice-diagram";
 import { AgentPracticeFitMatrixDiagram } from "./diagrams/agent-practice-fit-matrix-diagram";
 import { AgentPracticeRiskDiagram } from "./diagrams/agent-practice-risk-diagram";
+import { AgentProductionPrinciplesDiagram } from "./diagrams/agent-production-principles-diagram";
+import { AgentComplexityGateDiagram } from "./diagrams/agent-complexity-gate-diagram";
+import { AgentTransparencyReviewDiagram } from "./diagrams/agent-transparency-review-diagram";
+import { AgentAciReadinessDiagram } from "./diagrams/agent-aci-readiness-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1245,6 +1249,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CodingAgentPracticeDiagram,
   AgentPracticeFitMatrixDiagram,
   AgentPracticeRiskDiagram,
+  AgentProductionPrinciplesDiagram,
+  AgentComplexityGateDiagram,
+  AgentTransparencyReviewDiagram,
+  AgentAciReadinessDiagram,
   Term,
   Glossary,
   GlossaryItem,
