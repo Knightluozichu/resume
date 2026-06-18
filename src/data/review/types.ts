@@ -186,7 +186,8 @@ export type ReviewChapterSlug =
   | "agent-autonomous-agents"
   | "agent-combining-patterns"
   | "agent-agents-in-practice"
-  | "agent-tool-prompt-engineering";
+  | "agent-tool-prompt-engineering"
+  | "agent-production-readiness-checklist";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -378,6 +379,8 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
     "真实场景解剖：客服智能体与编码智能体为什么适合 agent",
   "agent-tool-prompt-engineering":
     "工具提示工程：让 agent 会用工具而不是猜工具",
+  "agent-production-readiness-checklist":
+    "生产化收官：简单、透明与 ACI 上线检查清单",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

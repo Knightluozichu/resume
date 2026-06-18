@@ -1,0 +1,329 @@
+---
+title: 生产化收官：简单、透明与 ACI 上线检查清单
+type: D
+section: 生产化
+order: 3
+description: 把前面所有 agent 工程原则收束成上线前的最后检查：先简单、再透明、工具像给 agent 用的界面，并留好停机、回滚和人工接管。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 简单性原则（Simplicity principle）（图：<AgentProductionPrinciplesDiagram />；进 Glossary）2. 复杂度升级门槛（Complexity gate）（交互/图：<AgentComplexityGateDiagram /> + 代码对照；进 Glossary）3. 透明规划（Transparent planning）（图：<AgentTransparencyReviewDiagram />；进 Glossary）4. 透明审查（Transparent review）（图：<AgentTransparencyReviewDiagram />；进 Glossary）5. Agent-Computer Interface（ACI）（图：<AgentAciReadinessDiagram />；进 Glossary）6. 上线检查清单（Production readiness checklist）（图：<AgentProductionPrinciplesDiagram />；进 Glossary）7. 停机条件（Stopping condition）（代码对照 + 检查清单；进 Glossary）8. 回滚路径（Rollback path）（代码对照 + 检查清单；进 Glossary）9. 人工接管（Human handoff）（图：<AgentTransparencyReviewDiagram />；进 Glossary）。Term↔Glossary：简单性原则（Simplicity principle） / 复杂度升级门槛（Complexity gate） / 透明规划（Transparent planning） / 透明审查（Transparent review） / Agent-Computer Interface（ACI） / 上线检查清单（Production readiness checklist） / 停机条件（Stopping condition） / 回滚路径（Rollback path） / 人工接管（Human handoff）。 */}
+
+<Objectives>
+
+- 能解释为什么生产 agent 的默认策略是先简单、可测、可回退，而不是一步到位全自主
+- 能说出什么场景继续停在 workflow，什么场景才通过复杂度门槛升级到 agent
+- 能回答：一个黑盒 agent 已经能跑通 demo，但没有计划、工具日志、检查点、回滚和人工接管，为什么还不能上线？
+
+</Objectives>
+
+## 先打个比方
+
+夜班工厂上线新流程，不会一开始就把所有闸门拆掉，让机器自己决定每条流水线怎么跑。更稳的做法，是先保留最短路线，再把每个闸口、记录表、暂停按钮和主管确认口摆清楚。
+
+如果新流程只是演示时跑通，但现场没人知道它为什么这么做、什么时候该停、坏了怎么退回旧线，那它还不是生产流程，只是一个漂亮试车。
+
+这一章解决的就是“上线前最后一关”。没有这关，系统可能在 demo 里很聪明，在真实用户、真实权限和真实故障里却变成黑盒。
+
+## 三条生产原则：先简单、再透明、最后打磨接口
+
+Anthropic 在《Building Effective Agents》的 Summary 里把 agent 生产化收束成三条原则：设计保持简单、显式展示规划步骤、认真打磨 agent 和计算机之间的接口。本章把它们改写成上线检查方式。
+
+<AgentProductionPrinciplesDiagram />
+
+第一条是 <Term def="简单性原则（Simplicity principle）：先用最简单、最可测、最容易回退的方案解决问题；只有证据证明不够时，才增加 workflow 或 agent 的复杂度。">简单性原则（Simplicity principle）</Term>。它承接 Ch11「workflow vs agent」：能用单次调用、检索、固定 workflow 或工具设计解决，就不要为了“像 agent”而加循环。
+
+第二条是看得见。生产系统不能只返回最终答案，还要展示它的计划、工具调用、证据和检查点。这会串回 Ch14 的 eval、Ch15 的 autonomous agent 和 Ch17 的真实场景：反馈循环必须有可观察痕迹，否则无法审查。
+
+第三条是接口要像给 agent 用的工作台，而不是把后端 API 原样丢进去。Ch18 讲过 tool prompt engineering；这一章把它升级成上线前的 ACI 检查。
+
+## 复杂度升级门槛：不是能做，而是值得做
+
+<Term def="复杂度升级门槛（Complexity gate）：在系统升级到更复杂 workflow 或 agent 之前必须通过的一组证据条件，例如基线不足、指标改善、成本可接受、失败可回退。">
+  复杂度升级门槛（Complexity gate）
+</Term>
+负责问一个朴素问题：**我们为什么不继续用更简单的方案？**
+
+<AgentComplexityGateDiagram />
+
+过门槛前，先把前面章节的判断串起来：
+
+- Ch11：任务路径是否真的无法预写？如果能预写，停在 workflow。
+- Ch13 / Ch14：能不能用并行、编排或 evaluator-optimizer 解决？如果能，就不急着上 autonomous agent。
+- Ch16：复杂度是否有指标收益？没有 eval 证据，就别保留新层。
+- Ch18：工具误用能否通过 tool design 修掉？能修工具，就别把锅交给更大的 agent。
+
+升级不是因为 demo 更酷，而是因为简单基线已经清楚失败，并且新复杂度在质量、解决率、测试通过率或人工返工率上证明值得。
+
+<Callout type="tip">
+  一个好门槛通常长这样：先跑简单基线，记录失败样本；只针对失败类型加一层复杂度；小流量验证；如果指标没有赢过成本、延迟和风险，就回退。
+</Callout>
+
+## 透明 planning / review：让人能看见它为什么这么做
+
+自主 agent 的问题不是“它会多走几步”，而是每一步如果不可见，人就没法信任、复现和纠偏。
+
+<Term def="透明规划（Transparent planning）：agent 在执行前或每轮执行时显式写出目标、下一步、可用工具、风险和停止条件，让人能检查它准备怎么做。">
+  透明规划（Transparent planning）
+</Term>
+要求系统把下一步摊开，而不是直接 `runAgent()`。
+
+<AgentTransparencyReviewDiagram />
+
+规划之后还要有 <Term def="透明审查（Transparent review）：把计划、工具日志、证据、eval 结果、检查点和最终差异交给人或规则审核，确认能继续、要暂停还是要回退。">透明审查（Transparent review）</Term>。它不是只看最终回答，而是看完整轨迹：模型看了什么、选了哪个工具、工具回了什么、它如何吸收反馈、为什么认为完成。
+
+这会把 Ch15 的 autonomous agent 拉回可控边界：agent 可以自己决定下一步，但生产系统必须能展示下一步、记录每步证据，并在检查点暂停。编码场景尤其明显：diff、测试结果和 review comment 都是透明审查的一部分。
+
+## ACI：把工具当成 agent 的操作界面
+
+<Term def="Agent-Computer Interface（ACI）：agent 面向计算机系统行动时看到和使用的界面，包括工具名称、参数、返回结果、错误、权限和文档。">
+  Agent-Computer Interface（ACI）
+</Term>
+可以理解成给 agent
+用的人机界面。人类需要按钮标签、禁用态、确认弹窗和错误提示；agent
+同样需要清楚工具名、参数 schema、返回语义、可恢复错误和权限边界。
+
+<AgentAciReadinessDiagram />
+
+ACI 检查至少问四件事：
+
+- 工具是否贴近模型自然写作习惯，而不是要求它填难写的 diff header 或转义复杂 JSON？
+- 参数是否 poka-yoke，能把危险动作前置条件写进 schema？
+- 错误是否可恢复，能告诉下一轮该补字段、换工具还是转人工？
+- 工具是否经过 eval，确认模型真的选得准、填得对、读得懂？
+
+这正是 Ch18 的延伸：工具不是 SDK 附件，而是 agent 的操作台。操作台越清楚，agent 越少猜；操作台越像黑盒，agent 越容易把小错放大成生产事故。
+
+## 上线检查清单：能跑通，不等于能上线
+
+到了这里，可以把前面原则压成 <Term def="上线检查清单（Production readiness checklist）：agent 上线前必须逐项确认的条件，覆盖简单基线、指标、透明日志、ACI、权限、停机、回滚和人工接管。">上线检查清单（Production readiness checklist）</Term>。
+
+<AgentProductionPrinciplesDiagram />
+
+生产前至少逐项打勾：
+
+- 选型：为什么不是单次调用、固定 workflow、路由、并行或 evaluator-optimizer？
+- 指标：eval、解决率、测试通过率、人工返工率、成本和延迟是否有基线对照？
+- 透明度：计划、工具日志、证据、状态转移、检查点和最终结果是否可追踪？
+- ACI：工具定义、schema、返回语义、可恢复错误和权限是否经过测试？
+- 风险：高风险动作是否默认暂停？是否有 sandbox、小流量、灰度和审计日志？
+- 退出：是否有明确停机、回滚和人工接管路径？
+
+最后一项经常被漏掉。<Term def="停机条件（Stopping condition）：agent 必须停止或暂停的明确规则，例如最大步数、预算耗尽、重复失败、低信心、越权动作或外部系统异常。">停机条件（Stopping condition）</Term>
+决定它什么时候不能再自己转下去；<Term def="回滚路径（Rollback path）：新版本或新复杂度出问题时，系统退回安全版本、简单 workflow 或人工处理的明确路线。">回滚路径（Rollback path）</Term>
+决定出事后怎么退；<Term def="人工接管（Human handoff）：当风险、低信心、用户不满或系统异常超过自动处理边界时，把完整上下文交给人继续处理。">人工接管（Human handoff）</Term>
+决定机器不能扛时谁来接。
+
+## 动手看：四道闸门如何拦住黑盒 agent
+
+> 猜一猜：如果一个 agent 已经能在测试账号里自动查资料、改状态、发消息，它是不是就能全量上线？先在图里找四个必须补上的闸门。
+
+<AgentComplexityGateDiagram />
+
+这张图可以当成上线演练：先问简单方案是否足够；再问计划和日志是否透明；再问 ACI 是否经过 eval；最后问停机、回滚和人工接管是否真的能触发。任何一关答不上来，都不是“小优化”，而是上线红线。
+
+## 代码对照：危险的一步到位 vs 可上线的 gated rollout
+
+先看最危险的版本。它把高自主性、全工具、全流量和自动写入一起打开，没有门槛，也没有退出路线。
+
+<CodeTabs>
+  <Tab label="危险配置：一步到位全自主">
+
+```ts
+export const productionAgent = {
+  mode: "autonomous",
+  traffic: 1.0,
+  tools: ["search", "refund", "updateTicket", "sendEmail"],
+  maxSteps: Infinity,
+  requireHumanApproval: false,
+  logLevel: "final-answer-only",
+  rollback: null,
+};
+```
+
+  </Tab>
+  <Tab label="上线配置：灰度、检查点、可回退">
+
+```ts
+export const rolloutAgent = {
+  mode: "gated-agent",
+  traffic: 0.05,
+  tools: ["search", "readOrder", "draftTicketUpdate"],
+  maxSteps: 8,
+  checkpoints: ["refund", "closeTicket", "sendExternalEmail"],
+  logs: ["plan", "toolCall", "toolResult", "eval", "decision"],
+  rollbackTo: "support-workflow-v18",
+  handoffOn: ["lowConfidence", "repeatFailure", "policyMismatch"],
+};
+```
+
+  </Tab>
+</CodeTabs>
+
+左边不是“更智能”，而是没有刹车：无限循环、全量流量、高风险工具直通、只留最终答案。右边把复杂度关进笼子：5% 灰度、只读和草稿工具优先、步数上限、危险动作检查点、完整日志、明确回滚版本和接管触发器。
+
+再看实现层。黑盒写法把所有责任塞给 `runAgent`，上线后很难审查；可上线写法把计划、工具日志、检查点和回滚显式化。
+
+<CodeTabs>
+  <Tab label="黑盒 runAgent：难审查">
+
+```ts
+export async function handleCase(input: CaseInput) {
+  return runAgent({
+    goal: input.userRequest,
+    tools: allTools,
+    autonomy: "full",
+  });
+}
+```
+
+  </Tab>
+  <Tab label="可审查执行：计划、日志、检查点">
+
+```ts
+export async function handleCase(input: CaseInput) {
+  const plan = await createPlan(input);
+  await logEvent("plan", plan);
+  if (plan.risk === "high") return requestHumanReview(plan);
+
+  for (const step of plan.steps.slice(0, 8)) {
+    const result = await runAllowedTool(step);
+    await logEvent("toolResult", { step, result });
+    if (requiresCheckpoint(step, result)) return pauseForReview(step, result);
+  }
+
+  return finalizeOrRollback(input.caseId);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+这里的差别正是本章主题：不是“不准 agent 自主”，而是自主必须有边界、有记录、有检查点。否则一旦错了，你连该改 prompt、tool、eval、权限还是业务流程都不知道。
+
+<Callout type="warn">
+  生产化不是给 demo
+  加一层监控面板。它要求系统在设计上就能解释、暂停、回退和交接。透明
+  planning、ACI、eval 和人工接管必须从第一版上线配置里存在。
+</Callout>
+
+## 容易踩的坑
+
+<AgentTransparencyReviewDiagram />
+
+<Callout type="trap">
+  **现象**：团队说“我们的 agent demo 已经跑通”，但没有简单基线和 eval 对照。
+  **原因**：把能跑通当成值得上线，没有证明复杂度比 workflow 更好。
+  **修法**：先建立单次调用或透明 workflow
+  基线；只针对失败样本加复杂度，并用指标证明收益。
+</Callout>
+
+<Callout type="trap">
+  **现象**：线上事故后只能看到最终回答，看不到模型计划、工具输入、工具结果和状态变化。
+  **原因**：缺少透明 planning / review，框架或黑盒 `runAgent` 遮住了调试入口。
+  **修法**：上线前记录 plan、toolCall、toolResult、eval、checkpoint、final
+  decision；能按 run id 复现关键路径。
+</Callout>
+
+<Callout type="trap">
+  **现象**：agent 在退款、关闭工单、发邮件这类动作上偶发误触发。 **原因**：ACI
+  没把只读/写入边界、前置条件和风险动作写进工具契约。
+  **修法**：拆清只读和写入工具；高风险工具要求资格检查、用户确认和人工检查点；用
+  tool eval 覆盖误用样本。
+</Callout>
+
+<Callout type="trap">
+  **现象**：agent 重复失败后仍继续尝试，或者新版本出问题只能临时停服务。
+  **原因**：没有停机条件、回滚路径和人工接管。
+  **修法**：设置最大步数、预算、重复失败、低信心和外部异常触发器；准备一键退回
+  workflow 或旧版本，并把完整上下文交给人。
+</Callout>
+
+## 小结
+
+- 简单性原则要求先证明简单方案不够，再升级复杂度
+- 复杂度升级门槛用 eval、成本、延迟和失败样本说话
+- 透明 planning / review 让计划、工具日志和证据可审查
+- ACI 是 agent 的操作台，工具契约必须按模型使用方式设计
+- 上线前必须准备停机、回滚和人工接管
+
+<Exercises>
+
+**练习 1（选型题）** 一个客服任务只是回答“退货政策是什么”，另一个需要查订单、判断退款资格、更新工单并在高风险时转人工。哪个更应该通过复杂度门槛升级到 agent？为什么？
+
+<Answer>
+
+第二个更应该升级。第一个只需要检索和解释，普通聊天框或固定 workflow 通常足够；第二个的下一步取决于业务系统状态和工具结果，还涉及写入动作、检查点和人工接管，更符合 agent 的适用条件。但即使升级，也要从灰度、只读工具、检查点和回滚开始。
+
+</Answer>
+
+**练习 2（改代码题）** 本章危险配置里 `maxSteps: Infinity` 和 `rollback: null` 最危险在哪里？请写出两行更安全的替代配置。
+
+<Answer>
+
+`maxSteps: Infinity` 会让 agent 在重复失败时一直烧成本并放大错误；`rollback: null` 让新版本出问题时没有明确退路。可以改成：
+
+```ts
+maxSteps: 8,
+rollbackTo: "support-workflow-v18",
+```
+
+真实系统还应加 `handoffOn: ["repeatFailure", "lowConfidence"]`，把停不下来的任务交给人处理。
+
+</Answer>
+
+**练习 3（综合题）** 你要审查一个“黑盒 runAgent” PR。请列出上线前必须补齐的五类证据。
+
+<Answer>
+
+至少补齐：1. 简单基线和 eval 对照，证明为什么需要 agent；2. 透明计划和工具日志，能看见每步输入输出；3. ACI 检查，确认工具边界、schema、返回和错误可恢复；4. 风险控制，包括权限、检查点、灰度和审计；5. 停机、回滚和人工接管，确保重复失败、低信心或高风险动作不会继续自动执行。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="简单性原则（Simplicity principle）">
+    先用最简单、最容易测试和回退的办法解决问题；只有简单方案被指标证明不够时，才加更复杂的
+    workflow 或 agent。详见本章「三条生产原则」。
+  </GlossaryItem>
+  <GlossaryItem term="复杂度升级门槛（Complexity gate）">
+    系统变复杂前必须跨过的检查门：基线是否失败、失败是否清楚、新方案是否改善指标、成本和风险是否可接受、能否回退。详见本章「复杂度升级门槛」。
+  </GlossaryItem>
+  <GlossaryItem term="透明规划（Transparent planning）">
+    agent
+    在执行前或每轮执行时，把目标、计划、下一步、可用工具、风险和停止条件写出来，让人能提前检查。详见本章「透明
+    planning / review」。
+  </GlossaryItem>
+  <GlossaryItem term="透明审查（Transparent review）">
+    不只审最终答案，还审计划、工具日志、证据、eval、检查点和最终决策。它让生产问题可以复现和定位。详见本章「透明
+    planning / review」。
+  </GlossaryItem>
+  <GlossaryItem term="Agent-Computer Interface（ACI）">
+    agent
+    操作计算机系统时看到的界面，包括工具名、参数、返回结果、错误、权限和文档。它像给
+    agent 用的按钮和说明书。详见本章「ACI」。
+  </GlossaryItem>
+  <GlossaryItem term="上线检查清单（Production readiness checklist）">
+    agent
+    上线前逐项确认的清单，覆盖选型、指标、透明度、ACI、权限、风险动作、停机、回滚和接管。详见本章「上线检查清单」。
+  </GlossaryItem>
+  <GlossaryItem term="停机条件（Stopping condition）">
+    agent
+    必须停止、暂停或转人工的明确规则，例如最大步数、重复失败、预算耗尽、低信心、越权动作或外部系统异常。详见本章「上线检查清单」。
+  </GlossaryItem>
+  <GlossaryItem term="回滚路径（Rollback path）">
+    新版本、新模型或新 agent 策略出问题时，退回旧版本、简单 workflow
+    或人工处理的明确路线。详见本章「上线检查清单」。
+  </GlossaryItem>
+  <GlossaryItem term="人工接管（Human handoff）">
+    当自动系统不该继续时，把完整上下文交给人处理。它是安全出口，不是失败羞耻。详见本章「上线检查清单」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution />
