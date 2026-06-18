@@ -469,6 +469,10 @@ import { AutonomousAgentLoopDiagram } from "./diagrams/autonomous-agent-loop-dia
 import { AutonomousAgentDecisionDiagram } from "./diagrams/autonomous-agent-decision-diagram";
 import { AutonomousAgentTraceDiagram } from "./diagrams/autonomous-agent-trace-diagram";
 import { AutonomousAgentTrapDiagram } from "./diagrams/autonomous-agent-trap-diagram";
+import { PatternCompositionBlueprintDiagram } from "./diagrams/pattern-composition-blueprint-diagram";
+import { PatternComplexityLadderDiagram } from "./diagrams/pattern-complexity-ladder-diagram";
+import { PatternRollbackTraceDiagram } from "./diagrams/pattern-rollback-trace-diagram";
+import { PatternCompositionTrapDiagram } from "./diagrams/pattern-composition-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1221,6 +1225,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AutonomousAgentDecisionDiagram,
   AutonomousAgentTraceDiagram,
   AutonomousAgentTrapDiagram,
+  PatternCompositionBlueprintDiagram,
+  PatternComplexityLadderDiagram,
+  PatternRollbackTraceDiagram,
+  PatternCompositionTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
