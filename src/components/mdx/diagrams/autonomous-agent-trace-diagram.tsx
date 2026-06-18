@@ -60,42 +60,42 @@ type TraceEvent = {
 const EVENTS: readonly TraceEvent[] = [
   {
     lane: 0,
-    x: 88,
+    x: 320,
     title: "任务",
     sub: "修 failing test",
     tone: "var(--warning)",
   },
   {
     lane: 1,
-    x: 188,
+    x: 294,
     title: "计划",
     sub: "读错 + 定假设",
     tone: "var(--accent)",
   },
   {
     lane: 1,
-    x: 300,
+    x: 406,
     title: "改动",
     sub: "补边界处理",
     tone: "var(--accent)",
   },
   {
     lane: 2,
-    x: 412,
+    x: 518,
     title: "测试",
     sub: "仍失败",
     tone: "var(--danger)",
   },
   {
     lane: 1,
-    x: 524,
+    x: 614,
     title: "修正",
     sub: "按 stderr 调整",
     tone: "var(--accent)",
   },
   {
     lane: 2,
-    x: 636,
+    x: 632,
     title: "通过",
     sub: "build + tests",
     tone: "var(--success)",
@@ -111,7 +111,7 @@ type Checkpoint = {
 
 const CHECKPOINTS: readonly Checkpoint[] = [
   {
-    x: 420,
+    x: 430,
     title: "环境否决",
     sub: "失败结果回到计划",
     tone: "var(--danger)",
@@ -213,28 +213,28 @@ export function AutonomousAgentTraceDiagram() {
             ))}
 
             <path
-              d="M 150 114 C 180 114, 178 160, 188 172"
+              d="M 374 114 C 354 128, 318 156, 294 172"
               fill="none"
               stroke="var(--text-secondary)"
               strokeWidth="2"
               markerEnd="url(#aatd-arrow)"
             />
             <path
-              d="M 250 172 C 284 172, 286 172, 300 172"
+              d="M 356 172 C 388 172, 392 172, 406 172"
               fill="none"
               stroke="var(--text-secondary)"
               strokeWidth="2"
               markerEnd="url(#aatd-arrow)"
             />
             <path
-              d="M 356 194 C 392 214, 394 262, 412 272"
+              d="M 462 194 C 498 214, 500 262, 518 272"
               fill="none"
               stroke="var(--text-secondary)"
               strokeWidth="2"
               markerEnd="url(#aatd-arrow)"
             />
             <path
-              d="M 456 272 C 492 242, 506 198, 524 194"
+              d="M 548 272 C 582 244, 596 202, 614 194"
               fill="none"
               stroke="var(--danger)"
               strokeWidth="2"
@@ -242,7 +242,7 @@ export function AutonomousAgentTraceDiagram() {
               markerEnd="url(#aatd-feedback)"
             />
             <path
-              d="M 580 194 C 616 214, 620 262, 636 272"
+              d="M 650 194 C 666 214, 656 252, 632 272"
               fill="none"
               stroke="var(--text-secondary)"
               strokeWidth="2"

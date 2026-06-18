@@ -23,6 +23,7 @@ const CARD_RADIUS = PATTERN_RADIUS_CARD;
 
 const SHOWN = 1;
 const HIDDEN = 0;
+const PREVIEW = 0.16;
 
 const START_X = 196;
 const START_Y = 48;
@@ -258,7 +259,7 @@ export function AutonomousAgentDecisionDiagram() {
               先问能否写死路径，再问是否值得放权
             </text>
 
-            <g ref={startRef} opacity={HIDDEN}>
+            <g ref={startRef} opacity={SHOWN}>
               <rect
                 x={START_X}
                 y={START_Y}
@@ -289,7 +290,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={q1Ref} opacity={HIDDEN}>
+            <g ref={q1Ref} opacity={PREVIEW}>
               <line
                 x1={VIEW_W / 2}
                 y1={START_Y + START_H}
@@ -325,7 +326,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={workflowRef} opacity={HIDDEN}>
+            <g ref={workflowRef} opacity={PREVIEW}>
               <line
                 x1={Q1_CX - Q1_HW}
                 y1={Q1_CY}
@@ -384,7 +385,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={q2Ref} opacity={HIDDEN}>
+            <g ref={q2Ref} opacity={PREVIEW}>
               <line
                 x1={Q1_CX}
                 y1={Q1_CY + Q1_HH}
@@ -430,7 +431,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={safetyRef} opacity={HIDDEN}>
+            <g ref={safetyRef} opacity={PREVIEW}>
               <line
                 x1={Q2_CX - Q2_HW}
                 y1={Q2_CY}
@@ -481,7 +482,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={agentRef} opacity={HIDDEN}>
+            <g ref={agentRef} opacity={PREVIEW}>
               <line
                 x1={Q2_CX + Q2_HW}
                 y1={Q2_CY}
@@ -540,7 +541,7 @@ export function AutonomousAgentDecisionDiagram() {
               </text>
             </g>
 
-            <g ref={conclusionRef} opacity={HIDDEN}>
+            <g ref={conclusionRef} opacity={PREVIEW}>
               <rect
                 x={CONC_X}
                 y={CONC_Y}
