@@ -28,11 +28,11 @@ const HIDDEN = 0;
 const PREVIEW = 0.18;
 
 const TOP_Y = 56;
-const CARD_W = 112;
+const CARD_W = 100;
 const CARD_H = 72;
-const SMALL_CARD_W = 104;
-const STAGE_GAP = 20;
-const FIRST_X = 32;
+const SMALL_CARD_W = 96;
+const STAGE_GAP = 12;
+const FIRST_X = 24;
 const stageX = (index: number) => FIRST_X + index * (CARD_W + STAGE_GAP);
 
 const LEDGER_X = 68;

@@ -8,14 +8,14 @@ import {
 } from "./agentic-pattern-diagram-shell";
 
 const VIEW_W = PATTERN_DIAGRAM_VIEW_W;
-const VIEW_H = 420;
+const VIEW_H = 452;
 const TITLE_SIZE = PATTERN_FONT_TITLE;
 const TEXT_SIZE = PATTERN_FONT_TEXT;
 const CARD_RADIUS = PATTERN_RADIUS_CARD;
 const CHIP_RADIUS = PATTERN_RADIUS_CONTROL;
 
 const PANEL_W = 208;
-const PANEL_H = 260;
+const PANEL_H = 292;
 const PANEL_Y = 80;
 const PANEL_XS = [28, 256, 484] as const;
 
@@ -250,7 +250,7 @@ export function PatternCompositionTrapDiagram() {
 
                   <text
                     x={cx}
-                    y={PANEL_Y + 214}
+                    y={PANEL_Y + 210}
                     textAnchor="middle"
                     fontSize={TEXT_SIZE}
                     fill="var(--text-primary)"
@@ -259,7 +259,7 @@ export function PatternCompositionTrapDiagram() {
                   </text>
                   <text
                     x={cx}
-                    y={PANEL_Y + 234}
+                    y={PANEL_Y + 230}
                     textAnchor="middle"
                     fontSize={TEXT_SIZE}
                     fill="var(--text-secondary)"
@@ -268,7 +268,7 @@ export function PatternCompositionTrapDiagram() {
                   </text>
                   <rect
                     x={x + 20}
-                    y={PANEL_Y + PANEL_H - 34}
+                    y={PANEL_Y + PANEL_H - 42}
                     width={PANEL_W - 40}
                     height={24}
                     rx={CHIP_RADIUS}
@@ -278,7 +278,7 @@ export function PatternCompositionTrapDiagram() {
                   />
                   <text
                     x={cx}
-                    y={PANEL_Y + PANEL_H - 17}
+                    y={PANEL_Y + PANEL_H - 25}
                     textAnchor="middle"
                     fontSize={TEXT_SIZE}
                     fontWeight="700"
@@ -292,7 +292,7 @@ export function PatternCompositionTrapDiagram() {
 
             <rect
               x={88}
-              y={364}
+              y={396}
               width={544}
               height={32}
               rx={CHIP_RADIUS}
@@ -301,7 +301,7 @@ export function PatternCompositionTrapDiagram() {
             />
             <text
               x={VIEW_W / 2}
-              y={385}
+              y={417}
               textAnchor="middle"
               fontSize={TEXT_SIZE}
               fill="var(--text-secondary)"

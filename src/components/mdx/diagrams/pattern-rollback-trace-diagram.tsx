@@ -18,7 +18,7 @@ const CARD_W = 148;
 const CARD_H = 104;
 const CARD_Y = 112;
 const CARD_XS = [44, 286, 528] as const;
-const METRIC_Y = 264;
+const METRIC_Y = 276;
 
 type TraceCard = {
   title: string;
@@ -144,25 +144,6 @@ export function PatternRollbackTraceDiagram() {
               strokeDasharray="7 5"
               markerEnd="url(#prtd-rollback)"
             />
-            <line
-              x1={CARD_XS[0] + CARD_W}
-              y1={METRIC_Y + 42}
-              x2={CARD_XS[2] - 8}
-              y2={METRIC_Y + 42}
-              stroke="var(--success)"
-              strokeWidth="2"
-              markerEnd="url(#prtd-arrow)"
-            />
-            <text
-              x={VIEW_W / 2}
-              y={METRIC_Y + 34}
-              textAnchor="middle"
-              fontSize={TEXT_SIZE}
-              fill="var(--success)"
-            >
-              回退后只修最窄瓶颈
-            </text>
-
             {TRACE.map((item, index) => {
               const x = CARD_XS[index];
               const cx = x + CARD_W / 2;

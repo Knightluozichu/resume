@@ -14,11 +14,11 @@ const TEXT_SIZE = PATTERN_FONT_TEXT;
 const CARD_RADIUS = PATTERN_RADIUS_CARD;
 const CHIP_RADIUS = PATTERN_RADIUS_CONTROL;
 
-const STEP_W = 104;
+const STEP_W = 96;
 const STEP_H = 76;
-const STEP_START_X = 28;
+const STEP_START_X = 20;
 const STEP_START_Y = 268;
-const STEP_GAP_X = 116;
+const STEP_GAP_X = 106;
 const STEP_RISE_Y = 34;
 const GATE_Y = 352;
 
