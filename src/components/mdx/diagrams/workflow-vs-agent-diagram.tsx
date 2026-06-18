@@ -15,9 +15,22 @@
  * 几何自检：两栏零重叠、文字中心落自己框内、四周留白 ≥ 14px、字号 ≥ 10px、单一行/列公式。
  */
 
+import {
+  PATTERN_DIAGRAM_VIEW_W,
+  PatternDiagramViewport,
+  PATTERN_FONT_TEXT,
+  PATTERN_FONT_TITLE,
+  PATTERN_RADIUS_CARD,
+  PATTERN_RADIUS_CONTROL,
+} from "./agentic-pattern-diagram-shell";
+
 // —— 整体画布。 ——
-const VIEW_W = 720;
+const VIEW_W = PATTERN_DIAGRAM_VIEW_W;
 const VIEW_H = 412;
+const TITLE_SIZE = PATTERN_FONT_TITLE;
+const TEXT_SIZE = PATTERN_FONT_TEXT;
+const PANEL_RADIUS = PATTERN_RADIUS_CARD;
+const NODE_RADIUS = PATTERN_RADIUS_CONTROL;
 
 // —— 标题区。 ——
 const TITLE_Y = 30;
@@ -61,13 +74,14 @@ export function WorkflowVsAgentDiagram() {
   const rightCx = colX(1) + COL_W / 2;
   return (
     <figure className="mdx-figure mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="工作流和智能体的路径对比图，左右两栏并排，主题是同一件「订高铁票」的事，两种做法的路有什么不一样。左栏是工作流：一条固定流水线，步骤一查车次、步骤二下单、步骤三发确认，三步都是人预先写死的，箭头是直的、单向、没有分叉；路径在写代码时就定死了，每次执行都走同一条，所以可预测、便宜、可靠。右栏是智能体：一个 LLM 站在循环里，每转一圈就自己「想——下一步该干啥，做——当场选一条路，看——行不行，不行就回到想这一步再来一圈」；这次调工具 A、下次可能调工具 B 或者直接收尾，路径是运行时才生成的、随情况动态变化。核心区别不是步数多少，而是路是谁定的、什么时候定的：工作流的路是人写代码时定死的，智能体的路是 LLM 边跑边选的。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
+      <div className="rounded-card border border-border bg-elevated p-4">
+        <PatternDiagramViewport>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            role="img"
+            aria-label="工作流和智能体的路径对比图，左右两栏并排，主题是同一件「订高铁票」的事，两种做法的路有什么不一样。左栏是工作流：一条固定流水线，步骤一查车次、步骤二下单、步骤三发确认，三步都是人预先写死的，箭头是直的、单向、没有分叉；路径在写代码时就定死了，每次执行都走同一条，所以可预测、便宜、可靠。右栏是智能体：一个 LLM 站在循环里，每转一圈就自己「想——下一步该干啥，做——当场选一条路，看——行不行，不行就回到想这一步再来一圈」；这次调工具 A、下次可能调工具 B 或者直接收尾，路径是运行时才生成的、随情况动态变化。核心区别不是步数多少，而是路是谁定的、什么时候定的：工作流的路是人写代码时定死的，智能体的路是 LLM 边跑边选的。"
+            className="block h-auto w-[720px]"
+          >
           <defs>
             <marker
               id="wva-arrow"
@@ -98,7 +112,7 @@ export function WorkflowVsAgentDiagram() {
             x={VIEW_W / 2}
             y={TITLE_Y}
             textAnchor="middle"
-            fontSize="15"
+            fontSize={TITLE_SIZE}
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -111,7 +125,7 @@ export function WorkflowVsAgentDiagram() {
             y={COL_Y}
             width={COL_W}
             height={COL_H}
-            rx="12"
+            rx={PANEL_RADIUS}
             fill="var(--bg)"
             stroke="var(--border)"
             strokeWidth="1.6"
@@ -120,7 +134,7 @@ export function WorkflowVsAgentDiagram() {
             x={leftCx}
             y={COL_Y + 30}
             textAnchor="middle"
-            fontSize="14"
+            fontSize={TEXT_SIZE}
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -130,7 +144,7 @@ export function WorkflowVsAgentDiagram() {
             x={leftCx}
             y={COL_Y + 52}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fill="var(--text-secondary)"
           >
             写代码时就定死，每次都走同一条
@@ -142,7 +156,7 @@ export function WorkflowVsAgentDiagram() {
                 y={nodeY(ri)}
                 width={NODE_W}
                 height={NODE_H}
-                rx="8"
+                rx={NODE_RADIUS}
                 fill="var(--bg-elevated)"
                 stroke="var(--border)"
                 strokeWidth="1.2"
@@ -151,7 +165,7 @@ export function WorkflowVsAgentDiagram() {
                 x={leftCx}
                 y={nodeY(ri) + NODE_H / 2 + 4}
                 textAnchor="middle"
-                fontSize="12"
+                fontSize={TEXT_SIZE}
                 fill="var(--text-primary)"
               >
                 {label}
@@ -173,7 +187,7 @@ export function WorkflowVsAgentDiagram() {
             x={leftCx}
             y={COL_Y + COL_H - 16}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -186,7 +200,7 @@ export function WorkflowVsAgentDiagram() {
             y={COL_Y}
             width={COL_W}
             height={COL_H}
-            rx="12"
+            rx={PANEL_RADIUS}
             fill="var(--bg)"
             stroke="var(--accent)"
             strokeWidth="2"
@@ -195,7 +209,7 @@ export function WorkflowVsAgentDiagram() {
             x={rightCx}
             y={COL_Y + 30}
             textAnchor="middle"
-            fontSize="14"
+            fontSize={TEXT_SIZE}
             fontWeight="700"
             fill="var(--accent)"
           >
@@ -205,7 +219,7 @@ export function WorkflowVsAgentDiagram() {
             x={rightCx}
             y={COL_Y + 52}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fill="var(--text-secondary)"
           >
             LLM 在循环里边跑边自己选路
@@ -217,7 +231,7 @@ export function WorkflowVsAgentDiagram() {
                 y={nodeY(ri)}
                 width={NODE_W}
                 height={NODE_H}
-                rx="8"
+                rx={NODE_RADIUS}
                 fill="var(--accent-glow)"
                 stroke="var(--accent)"
                 strokeWidth="1.4"
@@ -226,7 +240,7 @@ export function WorkflowVsAgentDiagram() {
                 x={rightCx}
                 y={nodeY(ri) + NODE_H / 2 + 4}
                 textAnchor="middle"
-                fontSize="12"
+                fontSize={TEXT_SIZE}
                 fontWeight="600"
                 fill="var(--text-primary)"
               >
@@ -261,13 +275,14 @@ export function WorkflowVsAgentDiagram() {
             x={rightCx}
             y={COL_Y + COL_H - 16}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fontWeight="600"
             fill="var(--accent)"
           >
             灵活 · 能随机应变 · 但更贵更不定
           </text>
-        </svg>
+          </svg>
+        </PatternDiagramViewport>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         工作流的路是人写代码时定死的（左），智能体的路是 LLM

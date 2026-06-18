@@ -14,9 +14,18 @@
  * 几何自检：节点零重叠、文字中心落自己框内、四周留白 ≥ 14px、字号 ≥ 10px、单一节点 x 公式。
  */
 
+import {
+  PatternDiagramViewport,
+  PATTERN_DIAGRAM_VIEW_W,
+  PATTERN_FONT_TEXT,
+  PATTERN_FONT_TITLE,
+} from "./agentic-pattern-diagram-shell";
+
 // —— 整体画布。 ——
-const VIEW_W = 720;
+const VIEW_W = PATTERN_DIAGRAM_VIEW_W;
 const VIEW_H = 360;
+const TITLE_SIZE = PATTERN_FONT_TITLE;
+const TEXT_SIZE = PATTERN_FONT_TEXT;
 
 // —— 标题区。 ——
 const TITLE_Y = 30;
@@ -68,13 +77,14 @@ const AXIS_RIGHT = nodeCX(N - 1);
 export function PatternSpectrumDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="智能体模式光谱图，也是第四篇的路线图。一条横向的「自主性递增」光谱，从左到右排开七种模式：单次调用、链式、路由、并行、编排-工作者、评估-优化、自主 agent。越往右，自主性越高，路径越由 LLM 自己决定，但也越灵活越贵越不可预测；越往左越是路径写死的工作流，越可预测越便宜。图上还标出了每种模式将在第四篇哪一章展开：链式和路由在第 12 章，并行和编排-工作者在第 13 章，评估-优化在第 14 章，最右端的自主 agent 在第 15 章及以后。核心结论：本篇讲的不是「上不上 agent」的二选一，而是一道连续的光谱——多数实用系统落在中间这些路径相对固定的工作流模式上，自主 agent 只是光谱最右端、最灵活也最贵的那一档。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
+      <div className="rounded-card border border-border bg-elevated p-4">
+        <PatternDiagramViewport>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            role="img"
+            aria-label="智能体模式光谱图，也是第四篇的路线图。一条横向的「自主性递增」光谱，从左到右排开七种模式：单次调用、链式、路由、并行、编排-工作者、评估-优化、自主 agent。越往右，自主性越高，路径越由 LLM 自己决定，但也越灵活越贵越不可预测；越往左越是路径写死的工作流，越可预测越便宜。图上还标出了每种模式将在第四篇哪一章展开：链式和路由在第 12 章，并行和编排-工作者在第 13 章，评估-优化在第 14 章，最右端的自主 agent 在第 15 章及以后。核心结论：本篇讲的不是「上不上 agent」的二选一，而是一道连续的光谱——多数实用系统落在中间这些路径相对固定的工作流模式上，自主 agent 只是光谱最右端、最灵活也最贵的那一档。"
+            className="block h-auto w-[720px]"
+          >
           <defs>
             <marker
               id="psd-arrow"
@@ -98,7 +108,7 @@ export function PatternSpectrumDiagram() {
             x={VIEW_W / 2}
             y={TITLE_Y}
             textAnchor="middle"
-            fontSize="15"
+            fontSize={TITLE_SIZE}
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -110,7 +120,7 @@ export function PatternSpectrumDiagram() {
             x={AXIS_LEFT}
             y={TITLE_Y + 28}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fontWeight="600"
             fill="var(--text-secondary)"
           >
@@ -120,7 +130,7 @@ export function PatternSpectrumDiagram() {
             x={AXIS_LEFT}
             y={TITLE_Y + 44}
             textAnchor="middle"
-            fontSize="10"
+            fontSize={TEXT_SIZE}
             fill="var(--text-secondary)"
           >
             可预测 · 便宜
@@ -129,7 +139,7 @@ export function PatternSpectrumDiagram() {
             x={AXIS_RIGHT}
             y={TITLE_Y + 28}
             textAnchor="middle"
-            fontSize="11"
+            fontSize={TEXT_SIZE}
             fontWeight="600"
             fill="var(--accent)"
           >
@@ -139,7 +149,7 @@ export function PatternSpectrumDiagram() {
             x={AXIS_RIGHT}
             y={TITLE_Y + 44}
             textAnchor="middle"
-            fontSize="10"
+            fontSize={TEXT_SIZE}
             fill="var(--text-secondary)"
           >
             灵活 · 但贵且不定
@@ -178,7 +188,7 @@ export function PatternSpectrumDiagram() {
                   x={cx}
                   y={AXIS_Y + 4}
                   textAnchor="middle"
-                  fontSize="11"
+                  fontSize={TEXT_SIZE}
                   fontWeight="700"
                   fill={node.highlight ? "var(--bg)" : "var(--text-secondary)"}
                 >
@@ -190,7 +200,7 @@ export function PatternSpectrumDiagram() {
                   x={cx}
                   y={AXIS_Y + labelDy}
                   textAnchor="middle"
-                  fontSize="12"
+                  fontSize={TEXT_SIZE}
                   fontWeight={node.highlight ? "700" : "600"}
                   fill={node.highlight ? "var(--accent)" : "var(--text-primary)"}
                 >
@@ -201,7 +211,7 @@ export function PatternSpectrumDiagram() {
                     x={cx}
                     y={AXIS_Y + labelDy + (node.up ? -14 : 14)}
                     textAnchor="middle"
-                    fontSize="12"
+                    fontSize={TEXT_SIZE}
                     fontWeight={node.highlight ? "700" : "600"}
                     fill={node.highlight ? "var(--accent)" : "var(--text-primary)"}
                   >
@@ -215,7 +225,7 @@ export function PatternSpectrumDiagram() {
                     x={cx}
                     y={AXIS_Y + chapDy + (node.name2 ? (node.up ? -14 : 14) : 0)}
                     textAnchor="middle"
-                    fontSize="10"
+                    fontSize={TEXT_SIZE}
                     fill="var(--text-secondary)"
                   >
                     {node.chapter}
@@ -224,7 +234,8 @@ export function PatternSpectrumDiagram() {
               </g>
             );
           })}
-        </svg>
+          </svg>
+        </PatternDiagramViewport>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         本篇讲的不是「上不上 agent」的二选一，而是一道光谱：多数实用系统落在中间这些路径相对固定的工作流模式上，自主

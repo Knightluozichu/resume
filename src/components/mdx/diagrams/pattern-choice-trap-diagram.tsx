@@ -8,8 +8,21 @@
  * 纯展示 Server 组件。全部配色走 DESIGN token，无裸 hex；几何常量具名且为 4 的倍数。
  */
 
-const VIEW_W = 720;
+import {
+  PatternDiagramViewport,
+  PATTERN_DIAGRAM_VIEW_W,
+  PATTERN_FONT_TEXT,
+  PATTERN_FONT_TITLE,
+  PATTERN_RADIUS_CARD,
+  PATTERN_RADIUS_CONTROL,
+} from "./agentic-pattern-diagram-shell";
+
+const VIEW_W = PATTERN_DIAGRAM_VIEW_W;
 const VIEW_H = 424;
+const TITLE_SIZE = PATTERN_FONT_TITLE;
+const TEXT_SIZE = PATTERN_FONT_TEXT;
+const CARD_RADIUS = PATTERN_RADIUS_CARD;
+const CONTROL_RADIUS = PATTERN_RADIUS_CONTROL;
 
 const TITLE_Y = 28;
 const COL_W = 328;
@@ -70,13 +83,14 @@ const PANELS: readonly TrapPanel[] = [
 export function PatternChoiceTrapDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="两种场景选错方案的翻车图。左栏是固定规则审核报销，本来只要按规则判断，却硬做成自主循环，结果出现更慢、更贵、会误判三个后果，正确做法是写死规则就收工。右栏是任意运维修复诉求，本来需要临场判断，却硬塞进固定步骤，结果出现卡死、分支列不全、遇到新情况就停的后果，正确做法是交给能临场拿主意的方案。整张图强调：选错方案时，错误不是抽象的，而会直接表现成延迟、成本和卡死。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
+      <div className="rounded-card border border-border bg-elevated p-4">
+        <PatternDiagramViewport>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            role="img"
+            aria-label="两种场景选错方案的翻车图。左栏是固定规则审核报销，本来只要按规则判断，却硬做成自主循环，结果出现更慢、更贵、会误判三个后果，正确做法是写死规则就收工。右栏是任意运维修复诉求，本来需要临场判断，却硬塞进固定步骤，结果出现卡死、分支列不全、遇到新情况就停的后果，正确做法是交给能临场拿主意的方案。整张图强调：选错方案时，错误不是抽象的，而会直接表现成延迟、成本和卡死。"
+            className="block h-auto w-[720px]"
+          >
           <defs>
             <marker
               id="pctd-arrow"
@@ -95,7 +109,7 @@ export function PatternChoiceTrapDiagram() {
             x={VIEW_W / 2}
             y={TITLE_Y}
             textAnchor="middle"
-            fontSize="15"
+            fontSize={TITLE_SIZE}
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -112,7 +126,7 @@ export function PatternChoiceTrapDiagram() {
                   y={COL_Y}
                   width={COL_W}
                   height={COL_H}
-                  rx="12"
+                  rx={CARD_RADIUS}
                   fill="var(--bg)"
                   stroke="var(--border)"
                   strokeWidth="1.4"
@@ -121,7 +135,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={COL_Y + 26}
                   textAnchor="middle"
-                  fontSize="13"
+                  fontSize={TEXT_SIZE}
                   fontWeight="700"
                   fill="var(--text-primary)"
                 >
@@ -133,7 +147,7 @@ export function PatternChoiceTrapDiagram() {
                   y={TASK_Y}
                   width={TASK_W}
                   height={TASK_H}
-                  rx="10"
+                  rx={CARD_RADIUS}
                   fill="var(--bg-elevated)"
                   stroke="var(--accent)"
                   strokeWidth="1.4"
@@ -142,7 +156,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={TASK_Y + 23}
                   textAnchor="middle"
-                  fontSize="12"
+                  fontSize={TEXT_SIZE}
                   fontWeight="700"
                   fill="var(--accent)"
                 >
@@ -152,7 +166,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={TASK_Y + 41}
                   textAnchor="middle"
-                  fontSize="12"
+                  fontSize={TEXT_SIZE}
                   fill="var(--text-primary)"
                 >
                   {panel.scenario}
@@ -173,7 +187,7 @@ export function PatternChoiceTrapDiagram() {
                   y={WRONG_Y}
                   width={WRONG_W}
                   height={WRONG_H}
-                  rx="12"
+                  rx={CARD_RADIUS}
                   fill="var(--danger)"
                   opacity="0.12"
                 />
@@ -182,7 +196,7 @@ export function PatternChoiceTrapDiagram() {
                   y={WRONG_Y}
                   width={WRONG_W}
                   height={WRONG_H}
-                  rx="12"
+                  rx={CARD_RADIUS}
                   fill="none"
                   stroke="var(--danger)"
                   strokeWidth="1.6"
@@ -192,7 +206,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={WRONG_Y + 24}
                   textAnchor="middle"
-                  fontSize="13"
+                  fontSize={TEXT_SIZE}
                   fontWeight="700"
                   fill="var(--danger)"
                 >
@@ -202,7 +216,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={WRONG_Y + 46}
                   textAnchor="middle"
-                  fontSize="11"
+                  fontSize={TEXT_SIZE}
                   fill="var(--text-primary)"
                 >
                   {panel.wrongSub}
@@ -215,7 +229,7 @@ export function PatternChoiceTrapDiagram() {
                       y={CHIP_Y}
                       width={CHIP_W}
                       height={CHIP_H}
-                      rx="8"
+                      rx={CONTROL_RADIUS}
                       fill="var(--bg-elevated)"
                       stroke="var(--danger)"
                       strokeWidth="1.2"
@@ -224,7 +238,7 @@ export function PatternChoiceTrapDiagram() {
                       x={left + 52 + chipX[chipIndex] + CHIP_W / 2}
                       y={CHIP_Y + 18}
                       textAnchor="middle"
-                      fontSize="11"
+                      fontSize={TEXT_SIZE}
                       fontWeight="600"
                       fill="var(--danger)"
                     >
@@ -238,7 +252,7 @@ export function PatternChoiceTrapDiagram() {
                   y={FIX_Y}
                   width={FIX_W}
                   height={FIX_H}
-                  rx="10"
+                  rx={CARD_RADIUS}
                   fill="var(--success)"
                   opacity="0.12"
                 />
@@ -247,7 +261,7 @@ export function PatternChoiceTrapDiagram() {
                   y={FIX_Y}
                   width={FIX_W}
                   height={FIX_H}
-                  rx="10"
+                  rx={CARD_RADIUS}
                   fill="none"
                   stroke="var(--success)"
                   strokeWidth="1.4"
@@ -256,7 +270,7 @@ export function PatternChoiceTrapDiagram() {
                   x={center}
                   y={FIX_Y + 25}
                   textAnchor="middle"
-                  fontSize="12"
+                  fontSize={TEXT_SIZE}
                   fontWeight="700"
                   fill="var(--success)"
                 >
@@ -265,7 +279,8 @@ export function PatternChoiceTrapDiagram() {
               </g>
             );
           })}
-        </svg>
+          </svg>
+        </PatternDiagramViewport>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         两种错配都不是“概念上不优雅”而已，而是会直接变成肉眼可见的后果：固定任务硬上自主方案，会白白多出延迟、成本和误判；开放任务硬塞死流程，会当场卡死。

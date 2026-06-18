@@ -7,6 +7,12 @@ import {
   useTeachingTimeline,
   type TeachingStep,
 } from "../anim/use-teaching-timeline";
+import {
+  PatternDiagramViewport,
+  PATTERN_DIAGRAM_VIEW_W,
+  PATTERN_FONT_TEXT,
+  PATTERN_RADIUS_CARD,
+} from "./agentic-pattern-diagram-shell";
 
 /**
  * <PatternDecisionDiagram>：决策框架——先问几个问题，只在需要时才加自主性（HEL-321，第 11 章主 viz）。
@@ -34,8 +40,10 @@ import {
  */
 
 // —— 整体画布。 ——
-const VIEW_W = 720;
+const VIEW_W = PATTERN_DIAGRAM_VIEW_W;
 const VIEW_H = 472;
+const TEXT_SIZE = PATTERN_FONT_TEXT;
+const CARD_RADIUS = PATTERN_RADIUS_CARD;
 
 // 透明度常量（具名，禁魔法数字）。
 const SHOWN = 1;
@@ -193,12 +201,13 @@ export function PatternDecisionDiagram() {
           </span>
         </div>
 
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="决策框架动画：拿到一个任务，先问几个问题、只在需要时才加自主性，共五步。第一步，来了一个任务，别急着上 agent，先问自己几个问题再决定用哪种方案。第二步，第一问也是最关键的一问：这个任务「可预测、步数固定」吗？每次要做的步骤、走的路，是不是写代码时就能定死？第三步，如果回答「是」，就走左边分支：用工作流就够了，路径写死最稳；很多时候连 LLM 都不用，纯代码更省更可靠——能不上 agent 就别上。第四步，如果回答「否」，也就是任务开放、步数不定、要随机应变、没法预先把路写死，就走右边分支：这才值得上自主 agent，让 LLM 在循环里自己决定下一步。第五步，一句话收口：先用最简单的方案，只在确实需要时才加自主性，能用代码或工作流解决就别硬上 agent。核心结论：选方案的正确姿势是从最简单的方案起步、按任务回答几个问题，只有当任务确实开放、不可预测时才往上加自主性，能简单别复杂。可以播放、暂停、单步、拖动进度逐帧观察。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
+        <PatternDiagramViewport>
+          <svg
+            viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+            role="img"
+            aria-label="决策框架动画：拿到一个任务，先问几个问题、只在需要时才加自主性，共五步。第一步，来了一个任务，别急着上 agent，先问自己几个问题再决定用哪种方案。第二步，第一问也是最关键的一问：这个任务「可预测、步数固定」吗？每次要做的步骤、走的路，是不是写代码时就能定死？第三步，如果回答「是」，就走左边分支：用工作流就够了，路径写死最稳；很多时候连 LLM 都不用，纯代码更省更可靠——能不上 agent 就别上。第四步，如果回答「否」，也就是任务开放、步数不定、要随机应变、没法预先把路写死，就走右边分支：这才值得上自主 agent，让 LLM 在循环里自己决定下一步。第五步，一句话收口：先用最简单的方案，只在确实需要时才加自主性，能用代码或工作流解决就别硬上 agent。核心结论：选方案的正确姿势是从最简单的方案起步、按任务回答几个问题，只有当任务确实开放、不可预测时才往上加自主性，能简单别复杂。可以播放、暂停、单步、拖动进度逐帧观察。"
+            className="block h-auto w-[720px]"
+          >
           <defs>
             <marker
               id="pdd-arrow"
@@ -240,7 +249,7 @@ export function PatternDecisionDiagram() {
             x={VIEW_W / 2}
             y={28}
             textAnchor="middle"
-            fontSize="13"
+            fontSize={TEXT_SIZE}
             fontWeight="700"
             fill="var(--text-primary)"
           >
@@ -259,7 +268,7 @@ export function PatternDecisionDiagram() {
               y={START_Y}
               width={START_W}
               height={START_H}
-              rx="10"
+              rx={CARD_RADIUS}
               fill="var(--bg)"
               stroke="var(--border)"
               strokeWidth="1.6"
@@ -268,7 +277,7 @@ export function PatternDecisionDiagram() {
               x={START_CX}
               y={START_Y + START_H / 2 + 5}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--text-primary)"
             >
@@ -305,7 +314,7 @@ export function PatternDecisionDiagram() {
               x={DIA_CX}
               y={DIA_CY - 6}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--text-primary)"
             >
@@ -315,7 +324,7 @@ export function PatternDecisionDiagram() {
               x={DIA_CX}
               y={DIA_CY + 14}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--text-primary)"
             >
@@ -343,7 +352,7 @@ export function PatternDecisionDiagram() {
               x={(DIA_LEFT + END_LEFT_CX) / 2 - 16}
               y={(DIA_CY + END_Y) / 2}
               textAnchor="middle"
-              fontSize="12"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--success)"
             >
@@ -354,7 +363,7 @@ export function PatternDecisionDiagram() {
               y={END_Y}
               width={END_W}
               height={END_H}
-              rx="10"
+              rx={CARD_RADIUS}
               fill="var(--bg)"
               stroke="var(--success)"
               strokeWidth="1.8"
@@ -363,7 +372,7 @@ export function PatternDecisionDiagram() {
               x={END_LEFT_CX}
               y={END_Y + 26}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--success)"
             >
@@ -373,7 +382,7 @@ export function PatternDecisionDiagram() {
               x={END_LEFT_CX}
               y={END_Y + 48}
               textAnchor="middle"
-              fontSize="11"
+              fontSize={TEXT_SIZE}
               fill="var(--text-primary)"
             >
               路径写死最稳、最便宜、最可靠
@@ -382,7 +391,7 @@ export function PatternDecisionDiagram() {
               x={END_LEFT_CX}
               y={END_Y + 68}
               textAnchor="middle"
-              fontSize="11"
+              fontSize={TEXT_SIZE}
               fill="var(--text-secondary)"
             >
               能不上 agent，就别上
@@ -409,7 +418,7 @@ export function PatternDecisionDiagram() {
               x={(DIA_RIGHT + END_RIGHT_CX) / 2 + 16}
               y={(DIA_CY + END_Y) / 2}
               textAnchor="middle"
-              fontSize="12"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -420,7 +429,7 @@ export function PatternDecisionDiagram() {
               y={END_Y}
               width={END_W}
               height={END_H}
-              rx="10"
+              rx={CARD_RADIUS}
               fill="var(--accent-glow)"
               stroke="var(--accent)"
               strokeWidth="1.8"
@@ -429,7 +438,7 @@ export function PatternDecisionDiagram() {
               x={END_RIGHT_CX}
               y={END_Y + 26}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--accent)"
             >
@@ -439,7 +448,7 @@ export function PatternDecisionDiagram() {
               x={END_RIGHT_CX}
               y={END_Y + 48}
               textAnchor="middle"
-              fontSize="11"
+              fontSize={TEXT_SIZE}
               fill="var(--text-primary)"
             >
               开放 / 步数不定 / 要随机应变
@@ -448,7 +457,7 @@ export function PatternDecisionDiagram() {
               x={END_RIGHT_CX}
               y={END_Y + 68}
               textAnchor="middle"
-              fontSize="11"
+              fontSize={TEXT_SIZE}
               fill="var(--text-secondary)"
             >
               让 LLM 在循环里自己决定下一步
@@ -467,7 +476,7 @@ export function PatternDecisionDiagram() {
               y={CONC_Y}
               width={CONC_W}
               height={CONC_H}
-              rx="10"
+              rx={CARD_RADIUS}
               fill="var(--accent)"
               opacity="0.14"
             />
@@ -475,14 +484,15 @@ export function PatternDecisionDiagram() {
               x={VIEW_W / 2}
               y={CONC_Y + CONC_H / 2 + 5}
               textAnchor="middle"
-              fontSize="13"
+              fontSize={TEXT_SIZE}
               fontWeight="700"
               fill="var(--accent)"
             >
               💡 先用最简单的方案，只在确实需要时才加自主性——能简单别复杂
             </text>
           </g>
-        </svg>
+          </svg>
+        </PatternDiagramViewport>
 
         {/* 控制条原语：播放/暂停/单步/拖进度 + 当前步文案 */}
         <TimelineControls
