@@ -1,0 +1,355 @@
+---
+title: 真实场景解剖：客服智能体与编码智能体为什么适合 agent
+type: D
+section: 生产化
+order: 1
+description: 用客服和编码两个真实场景拆开看：什么时候普通聊天框够用，什么时候需要带工具、反馈和检查点的 agent。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 普通聊天框（Plain chatbot）（图：<AgentPracticeFitMatrixDiagram />；进 Glossary）2. 固定脚本（Fixed script）（代码对照：脚本分支 vs agent loop；进 Glossary）3. Agent 闭环（Agent loop）（动画：<SupportAgentLoopDiagram /> / <CodingAgentPracticeDiagram />；进 Glossary）4. 工具动作闭环（Tool-action loop）（图：<SupportAgentLoopDiagram />；进 Glossary）5. 解决率（Resolution rate）（图：<AgentPracticeFitMatrixDiagram />；进 Glossary）6. 自动化测试（Automated test）（图：<CodingAgentPracticeDiagram />；进 Glossary）7. 检查点（Checkpoint）（图：<AgentPracticeRiskDiagram />；进 Glossary）8. 人工接管（Human handoff）（图：<AgentPracticeRiskDiagram />；进 Glossary）。Term↔Glossary：普通聊天框（Plain chatbot） / 固定脚本（Fixed script） / Agent 闭环（Agent loop） / 工具动作闭环（Tool-action loop） / 解决率（Resolution rate） / 自动化测试（Automated test） / 检查点（Checkpoint） / 人工接管（Human handoff）。 */}
+
+<Objectives>
+
+- 能解释为什么客服和编码这两类任务，比普通问答更适合做成带工具、反馈和检查点的 agent
+- 能说出什么场景停在普通聊天框或固定脚本，什么场景才需要进入 agent 闭环
+- 能回答：一个客服机器人只会回复政策文本，另一个能查订单、改工单、退款并在高风险时转人工，为什么后者才更像生产可用的 agent？
+
+</Objectives>
+
+## 先打个比方
+
+值班台有两种工作方式。一种是前台只负责回答“营业时间”“退货政策”这类固定问题；问到订单状态，它只能说“请联系客服”。
+
+另一种是值班员能打开系统查订单、核对规则、更新记录，遇到拿不准的退款还会叫主管确认。它不是说得更多，而是能把事情往前推。
+
+这章解决的就是“为什么有些场景值得让系统行动”。没有行动和检查，聊天框只是在解释；有了受控行动、反馈和接管口，它才可能真正把问题办完。
+
+## 先看一张适配矩阵：为什么是客服和编码
+
+Anthropic 在《Building Effective Agents》的 Appendix 1 里把客服和编码列成两个特别有价值的落地场景。它们的共同点不是“看起来高科技”，而是任务天然同时需要对话、工具动作、反馈循环和人工监督。
+
+<AgentPracticeFitMatrixDiagram />
+
+可以把它们放进同一个判断框：
+
+<div className="not-prose my-6 overflow-hidden rounded-card border border-border bg-elevated">
+  <div className="grid border-b border-border text-xs font-bold text-secondary md:grid-cols-3">
+    <div className="p-4">场景</div>
+    <div className="border-t border-border p-4 md:border-l md:border-t-0">
+      普通聊天框 / 固定脚本够用
+    </div>
+    <div className="border-t border-border p-4 md:border-l md:border-t-0">
+      更适合 agent 的信号
+    </div>
+  </div>
+  <div className="grid text-sm leading-relaxed text-primary md:grid-cols-3">
+    <div className="border-b border-border p-4 font-bold md:border-b-0">
+      客服
+    </div>
+    <div className="border-b border-border p-4 text-secondary md:border-b-0 md:border-l">
+      只解释政策、回答 FAQ、给固定话术
+    </div>
+    <div className="p-4 md:border-l">
+      要查订单、读知识库、改工单、发起退款，并以是否解决来衡量
+    </div>
+  </div>
+  <div className="grid border-t border-border text-sm leading-relaxed text-primary md:grid-cols-3">
+    <div className="border-b border-border p-4 font-bold md:border-b-0">
+      编码
+    </div>
+    <div className="border-b border-border p-4 text-secondary md:border-b-0 md:border-l">
+      只补全代码、解释报错、生成片段
+    </div>
+    <div className="p-4 md:border-l">
+      要读仓库、改多文件、跑测试、根据失败继续迭代，并经过人工 review
+    </div>
+  </div>
+</div>
+
+这里先出现两个基础对照：<Term def="普通聊天框（Plain chatbot）：只根据上下文生成回复，不直接读取业务系统、修改状态或验证结果的对话界面。">普通聊天框（Plain chatbot）</Term>
+主要负责“说清楚”；<Term def="固定脚本（Fixed script）：由人提前写好分支和动作顺序，系统按规则走完，不让模型在运行中自由决定下一步。">固定脚本（Fixed script）</Term>
+主要负责“照清单办”。它们都很有用，但一旦任务需要边查边做、边做边验，就会碰到边界。
+
+## 客服案例：从回答问题到解决问题
+
+客服最容易被误解成“装一个会聊天的入口”。真正适合 agent 的客服任务，是对话后面连着业务系统：查客户资料、查订单、检索知识库、更新工单、必要时发起退款。
+
+<Term def="Agent 闭环（Agent loop）：模型在目标、工具结果和当前状态之间反复循环，决定下一步动作、读取反馈、判断是否完成。">
+  Agent 闭环（Agent loop）
+</Term>
+让客服不再只输出一段话，而是把“问清楚 → 查资料 → 执行动作 → 看结果 →
+判断是否解决”连起来。这里的核心是
+<Term def="工具动作闭环（Tool-action loop）：工具不仅返回信息，还能触发受控动作；动作结果再回到下一轮判断里。">
+  工具动作闭环（Tool-action loop）
+</Term>
+：工具调用必须带回结果，否则系统不知道刚才那步有没有推进。
+
+<SupportAgentLoopDiagram />
+
+客服 agent 的成功也比较好定义。Anthropic 提到，客服场景可以用用户定义的 resolved outcome 来衡量；在产品里我们可以把它落成 <Term def="解决率（Resolution rate）：用户问题被系统真正办完的比例，不只是回复了多少条消息。">解决率（Resolution rate）</Term>、转人工率、退款误触发率、平均处理时长和用户满意度。这样系统不是“聊得像人”就算好，而是要证明问题真的被解决。
+
+<div className="not-prose my-6 grid gap-4 md:grid-cols-2">
+  <div className="rounded-card border border-border bg-elevated p-5">
+    <p className="mb-3 text-sm font-bold text-primary">普通客服聊天框</p>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>回答政策、解释流程、安抚用户</li>
+      <li>拿不到实时订单和账号状态</li>
+      <li>不能直接更新工单或发起退款</li>
+      <li>指标容易停在“回复是否像样”</li>
+    </ul>
+  </div>
+  <div className="rounded-card border border-accent bg-elevated p-5">
+    <p className="mb-3 text-sm font-bold text-accent">客服 agent</p>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>先对话澄清目标，再选择工具</li>
+      <li>查订单、知识库、历史工单和规则</li>
+      <li>低风险动作自动执行，高风险动作暂停确认</li>
+      <li>用解决率、转人工率和误操作率验收</li>
+    </ul>
+  </div>
+</div>
+
+## 编码案例：为什么代码特别适合反馈循环
+
+编码智能体的优势不在“它会写代码”，而在代码世界有很多可验证信号。报错、类型检查、单元测试、端到端测试、diff、review comment 都能告诉系统：刚才的修改是否更接近目标。
+
+<CodingAgentPracticeDiagram />
+
+这就是为什么 <Term def="自动化测试（Automated test）：用命令自动验证代码行为是否符合预期，例如单元测试、类型检查、lint 或端到端测试。">自动化测试（Automated test）</Term>
+对编码 agent 这么关键。一个只会生成补丁的助手，可能写完就结束；一个能跑测试并读取失败信息的 agent，可以根据反馈继续定位、修改、再验证。Anthropic 也提醒，测试能验证功能，但仍然需要人检查它是否符合更大的系统要求。
+
+把编码任务拆开看，agent 适合的是这种流程：
+
+- 读 issue 或需求，形成可执行计划
+- 检索相关文件，而不是靠猜文件名
+- 修改一小步，保留清晰 diff
+- 跑测试或检查命令，把失败结果带回下一轮
+- 通过后停在 review 点，交给人看边界、风格和产品意图
+
+## 风险图：能行动，也要能停下
+
+客服和编码之所以适合 agent，并不等于可以全自动放飞。它们只是更容易形成“行动 + 反馈 + 评价”的闭环；生产化还必须把风险节点标出来。
+
+<AgentPracticeRiskDiagram />
+
+<Term def="检查点（Checkpoint）：在关键节点暂停，记录当前证据、计划或 diff，并要求人或规则确认后再继续。">
+  检查点（Checkpoint）
+</Term>
+负责让系统在高风险动作前停住：客服侧可能是退款、改地址、关工单；编码侧可能是大范围重构、删除文件、触碰安全配置或准备提交。
+<Term def="人工接管（Human handoff）：当系统信心不足、超出权限、用户不满意或风险变高时，把上下文交给人继续处理。">
+  人工接管（Human handoff）
+</Term>
+则是最后的安全出口：不是失败的标志，而是生产系统对风险的诚实表达。
+
+<Callout type="warn">
+  客服和编码适合
+  agent，不是因为它们“复杂”，而是因为它们有可操作的工具、有可观察反馈、有相对清晰的成功标准，并且能安排人工监督。缺其中任一项，都应该先退回普通聊天框、固定脚本或透明
+  workflow。
+</Callout>
+
+## 动手看：普通回答、固定脚本、agent loop 差在哪
+
+> 猜一猜：如果用户说“我的包裹没到，能帮我处理吗？”，只回复一段物流政策够吗？如果系统能查订单、判断延误、改工单、必要时补偿，它还只是聊天框吗？
+
+<SupportAgentLoopDiagram />
+
+### 客服：只回答 vs 能行动
+
+<CodeTabs>
+  <Tab label="普通聊天框：只生成回复">
+
+```ts
+export async function answerSupportMessage(message: string) {
+  const policy = await retrievePolicy(message);
+  return callModel({
+    task: "根据政策回复用户",
+    input: message,
+    context: policy,
+  });
+}
+```
+
+  </Tab>
+  <Tab label="客服 agent：行动后再判断">
+
+```ts
+export async function resolveSupportCase(caseId: string) {
+  let state = await loadCase(caseId);
+  for (let step = 0; step < 6; step += 1) {
+    const action = await chooseSupportAction(state);
+    if (action.type === "finish") return action.summary;
+    if (action.risk === "high") return handoffToHuman(state);
+    const result = await runSupportTool(action);
+    state = await updateCaseState(state, result);
+  }
+  return handoffToHuman(state);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+左边只把问题和政策交给模型，输出再像样也没有改变业务状态。右边每轮会选择工具、执行动作、读取结果，并且在高风险或步数耗尽时转人工。差别不在“有没有聊天”，而在“有没有受控行动闭环”。
+
+### 编码：固定脚本 vs 测试反馈循环
+
+<CodeTabs>
+  <Tab label="固定脚本：每次同一条路">
+
+```ts
+export async function patchByScript(issue: Issue) {
+  const files = await grep(issue.keyword);
+  const patch = await callModel({ issue, files });
+  await applyPatch(patch);
+  return runCommand("pnpm test");
+}
+```
+
+  </Tab>
+  <Tab label="编码 agent：按反馈改下一步">
+
+```ts
+export async function solveIssue(issue: Issue) {
+  let state = await inspectRepo(issue);
+  for (let step = 0; step < 8; step += 1) {
+    const action = await chooseCodeAction(state);
+    if (action.type === "submit") return state.diff;
+    const result = await runCodeTool(action);
+    state = await absorbFeedback(state, result);
+    if (state.testsPass) return requestReview(state.diff);
+  }
+  return requestReview(state.diff);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+固定脚本适合“找关键词、改模板、跑一次测试”的稳定任务。编码 agent 适合问题跨文件、下一步取决于测试失败或新线索的任务；但它最后仍然应该停在 review，而不是直接把代码当成生产真理。
+
+## 容易踩的坑
+
+<AgentPracticeRiskDiagram />
+
+<Callout type="trap">
+  **现象**：产品页面写着“AI agent”，实际只是在聊天框里根据 FAQ 生成回复。
+  **原因**：把会对话误当成会行动，没有工具、状态更新和结果验证。
+  **修法**：先标清系统能读什么、能改什么、如何确认完成；不能行动时就诚实叫聊天助手。
+</Callout>
+
+<Callout type="trap">
+  **现象**：客服系统调用了查订单工具，但工具结果没有进入下一轮判断，回复仍然像模板话术。
+  **原因**：缺少工具动作闭环，工具只是装饰，不是决策依据。 **修法**：把每个 tool
+  result 写回状态，并要求下一步必须引用新证据或结束。
+</Callout>
+
+<Callout type="trap">
+  **现象**：编码 agent
+  写完补丁就声称任务完成，没有跑测试，也没有记录未覆盖风险。
+  **原因**：把“生成了解法”当成“验证了解法”，跳过了真实反馈。
+  **修法**：至少跑相关测试、类型检查或最小复现；跑不了也要说明缺口并转 review。
+</Callout>
+
+<Callout type="trap">
+  **现象**：退款、删除文件、提交代码这类高风险动作都自动执行，出错后才补人工流程。
+  **原因**：把人工接管当失败兜底，而不是设计时就存在的检查点。
+  **修法**：上线前列出高风险动作，默认要求检查点；低信心、超权限、重复失败时自动转人工。
+</Callout>
+
+## 小结
+
+- 客服和编码适合 agent，因为都有行动、反馈和验收信号
+- 普通聊天框负责解释，固定脚本负责稳定清单
+- Agent 的价值在工具动作闭环，不在多聊几轮
+- 客服看解决率，编码看测试与 review
+- 检查点和人工接管是生产能力，不是补丁
+
+<Exercises>
+
+**练习 1（选型题）** 一个客服机器人只回答“退货政策是什么”，另一个需要查订单、判断是否可退款、更新工单。哪个更适合 agent？为什么？
+
+<Answer>
+
+第二个更适合 agent。第一个只需要检索政策并生成解释，普通聊天框或固定 workflow 就够；第二个需要读取业务状态、选择工具、执行动作、根据结果判断是否解决，还要在退款等高风险动作前设置检查点。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么“编码 agent 跑过测试”仍然不等于“可以自动合并”？
+
+<Answer>
+
+测试只能证明一部分可执行行为符合预期，不能完全证明架构方向、边界条件、安全影响、代码风格和产品意图都正确。编码 agent 适合用测试反馈迭代补丁，但最终仍需要人工 review 来检查更大的系统要求。
+
+</Answer>
+
+**练习 3（改代码题）** 本章 `resolveSupportCase` 已经在高风险动作时转人工。请再补一条“解决率评估未通过就不自动结束”的保护，你会放在哪里？
+
+<Answer>
+
+应该放在 `action.type === "finish"` 分支里，结束前先验证是否真的解决，而不是模型说完成就完成：
+
+```ts
+export async function resolveSupportCase(caseId: string) {
+  let state = await loadCase(caseId);
+  for (let step = 0; step < 6; step += 1) {
+    const action = await chooseSupportAction(state);
+    if (action.type === "finish") {
+      const ok = await verifyResolution(state);
+      return ok ? action.summary : handoffToHuman(state);
+    }
+    if (action.risk === "high") return handoffToHuman(state);
+    const result = await runSupportTool(action);
+    state = await updateCaseState(state, result);
+  }
+  return handoffToHuman(state);
+}
+```
+
+这样能避免“话术上完成、业务上没完成”。客服 agent 的验收点应该是用户问题是否被解决，而不是模型是否生成了结束语。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="普通聊天框（Plain chatbot）">
+    只负责根据上下文生成回复的对话界面。它可以解释政策和回答
+    FAQ，但不会直接查订单、改工单或验证事情是否办完。详见本章「适配矩阵」。
+  </GlossaryItem>
+  <GlossaryItem term="固定脚本（Fixed script）">
+    人提前写好分支、动作顺序和停点，系统按规则执行。它适合路线稳定的任务，例如固定
+    FAQ、固定巡检或固定格式处理。详见本章「适配矩阵」。
+  </GlossaryItem>
+  <GlossaryItem term="Agent 闭环（Agent loop）">
+    模型围绕目标、当前状态和工具结果反复循环，自己决定下一步动作，并在完成、卡住或风险变高时停下。详见本章「客服案例」。
+  </GlossaryItem>
+  <GlossaryItem term="工具动作闭环（Tool-action loop）">
+    工具调用不只是取信息，还能触发受控动作；动作结果会回到下一轮判断里。比如查订单后更新工单，再根据更新结果决定是否结束。详见本章「客服案例」。
+  </GlossaryItem>
+  <GlossaryItem term="解决率（Resolution rate）">
+    用户问题被真正办完的比例。它比“回复了多少条消息”更接近客服 agent
+    的价值，因为用户要的是问题被解决。详见本章「客服案例」。
+  </GlossaryItem>
+  <GlossaryItem term="自动化测试（Automated test）">
+    用命令自动检查代码是否符合预期的机制，例如单元测试、类型检查、lint
+    或端到端测试。它给编码 agent 提供可验证反馈。详见本章「编码案例」。
+  </GlossaryItem>
+  <GlossaryItem term="检查点（Checkpoint）">
+    在关键节点先停一下，把证据、计划、diff
+    或动作展示出来，等规则或人确认后再继续。它用来挡住退款、删除、部署这类高风险动作。详见本章「风险图」。
+  </GlossaryItem>
+  <GlossaryItem term="人工接管（Human handoff）">
+    当系统信心不足、超出权限、用户不满意或风险变高时，把上下文交给人继续处理。它是生产系统的安全出口，不是失败羞耻。详见本章「风险图」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Anthropic《Building Effective Agents》"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>
