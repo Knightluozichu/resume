@@ -447,6 +447,20 @@ import { ChainingWorkflowDiagram } from "./diagrams/chaining-workflow-diagram";
 import { RoutingWorkflowDiagram } from "./diagrams/routing-workflow-diagram";
 import { ChainRoutingDecisionDiagram } from "./diagrams/chain-routing-decision-diagram";
 import { ChainRoutingTrapDiagram } from "./diagrams/chain-routing-trap-diagram";
+import {
+  ParallelizationWorkflowDiagram,
+  ParallelWorkflowDiagram,
+} from "./diagrams/parallelization-workflow-diagram";
+import { SectioningVsVotingDiagram } from "./diagrams/sectioning-vs-voting-diagram";
+import {
+  OrchestratorWorkersWorkflowDiagram,
+  OrchestratorWorkersDiagram,
+} from "./diagrams/orchestrator-workers-workflow-diagram";
+import { ParallelOrchestratorDecisionDiagram } from "./diagrams/parallel-orchestrator-decision-diagram";
+import {
+  ParallelOrchestrationTrapDiagram,
+  ParallelOrchestratorTrapDiagram,
+} from "./diagrams/parallel-orchestration-trap-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1183,6 +1197,14 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RoutingWorkflowDiagram,
   ChainRoutingDecisionDiagram,
   ChainRoutingTrapDiagram,
+  ParallelizationWorkflowDiagram,
+  ParallelWorkflowDiagram,
+  SectioningVsVotingDiagram,
+  OrchestratorWorkersWorkflowDiagram,
+  OrchestratorWorkersDiagram,
+  ParallelOrchestratorDecisionDiagram,
+  ParallelOrchestrationTrapDiagram,
+  ParallelOrchestratorTrapDiagram,
   Term,
   Glossary,
   GlossaryItem,
