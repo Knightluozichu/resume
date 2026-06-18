@@ -25,7 +25,9 @@ export function PatternDiagramViewport({
         tabIndex={0}
         aria-label="图解可横向滚动"
       >
-        <div className="mx-auto w-[720px] min-w-[720px]">{children}</div>
+        <div className="mx-auto w-[720px] max-w-full min-w-[720px] sm:min-w-0">
+          {children}
+        </div>
       </div>
       <p className="mt-2 text-center text-[12.8px] text-secondary sm:hidden">
         手机可左右滑动查看全图

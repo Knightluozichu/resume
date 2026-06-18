@@ -268,7 +268,7 @@ export function ToolSelectionFeedbackDiagram() {
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             role="img"
             aria-label="工具选择反馈闭环动画。用户目标进入模型，模型读取工具说明，再选择工具、拒绝工具或追问。随后观察工具真实结果，用 eval 收集误选和误拒样本，回头迭代工具说明，再进入下一轮用户目标。"
-            className="block h-auto w-[720px]"
+            className="block h-auto w-full"
           >
             <defs>
               <marker

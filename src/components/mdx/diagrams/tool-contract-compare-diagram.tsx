@@ -193,7 +193,7 @@ export function ToolContractCompareDiagram() {
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             role="img"
             aria-label="含糊工具定义和 agent-ready 工具契约的对比动画。左边只有模糊名字，模型只能猜用途和参数，错误后卡住。右边把用途、参数、示例、错误和结果语义写成合同条款，模型沿着条款选择工具、填写参数、处理错误并解释结果。"
-            className="block h-auto w-[720px]"
+            className="block h-auto w-full"
           >
             <defs>
               <marker

@@ -296,7 +296,7 @@ export function ToolPromptAnatomyDiagram() {
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             role="img"
             aria-label="工具提示词解剖动画。六个部件围绕中间的工具标签：name、description、schema、examples、errors、result semantics。每一步点亮一个部件，说明它如何帮助模型点名工具、判断是否使用、传对参数、参考示例、从错误中恢复，并读懂返回结果。"
-            className="block h-auto w-[720px]"
+            className="block h-auto w-full"
           >
             <defs>
               <marker

@@ -185,7 +185,7 @@ export function ToolErrorFeedbackDiagram() {
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             role="img"
             aria-label="工具错误反馈路线图动画。左侧展示裸崩溃文本只能让模型卡住；中间展示结构化错误结果，包含错误码、是否可重试、修复提示和部分数据；右侧把这些字段变成恢复路线图，让 agent 改参数、重试并最终读懂成功结果。"
-            className="block h-auto w-[720px]"
+            className="block h-auto w-full"
           >
             <defs>
               <marker
