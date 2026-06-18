@@ -315,7 +315,7 @@ export function CodingAgentPracticeDiagram() {
             />
 
             <NodeCard
-              x={188}
+              x={252}
               lane={0}
               title="issue"
               body="目标 + 验收"
@@ -324,7 +324,7 @@ export function CodingAgentPracticeDiagram() {
 
             <g ref={readRef} opacity={PREVIEW}>
               <path
-                d="M 216 134 C 238 154, 252 166, 274 182"
+                d="M 274 134 C 282 154, 282 166, 274 182"
                 fill="none"
                 stroke="var(--text-secondary)"
                 strokeWidth="2"
