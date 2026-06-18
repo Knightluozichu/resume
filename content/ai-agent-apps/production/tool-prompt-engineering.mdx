@@ -1,0 +1,353 @@
+---
+title: 工具提示工程：让 agent 会用工具而不是猜工具
+type: D
+section: 生产化
+order: 2
+description: 把工具定义当成写给模型看的提示：用清楚边界、typed schema、示例结果和可恢复错误，让 agent 选得准、传得对、错了能改。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/research/building-effective-agents"
+---
+
+{/* 知识点清单：1. 工具定义（Tool definition）（图：<ToolPromptAnatomyDiagram />；进 Glossary）2. 参数 schema（Parameter schema）（代码对照 + <ToolContractCompareDiagram />；进 Glossary）3. 何时用/不用的边界（图：<ToolPromptAnatomyDiagram /> + 代码对照；不单独进 Glossary）4. 工具结果语义（Tool result semantics）（动画：<ToolSelectionFeedbackDiagram />；进 Glossary）5. 可恢复错误（Recoverable error）（动画：<ToolErrorFeedbackDiagram />；进 Glossary）6. 工具 eval（Tool eval）（动画：<ToolSelectionFeedbackDiagram />；进 Glossary）。Term↔Glossary：工具定义（Tool definition） / 参数 schema（Parameter schema） / 工具结果语义（Tool result semantics） / 可恢复错误（Recoverable error） / 工具 eval（Tool eval）。 */}
+
+<Objectives>
+
+- 能解释为什么工具定义也是提示工程：它不是给人看的接口文档，而是模型选择和填写工具时会读的上下文
+- 能说出什么场景要用订单查询、退款、知识库查询，什么场景明确不要用它们
+- 能回答：一个客服 agent 总把退款工具当查询工具用，你会先改工具描述、参数 schema、返回结果还是错误信息？为什么？
+
+</Objectives>
+
+## 先打个比方
+
+想象夜班前台面前有一排按钮。按钮名字像“处理一下”“查东西”，旁边没有说明，也不写什么时候不能按。新人当然会犹豫，甚至按错。
+
+更稳的做法，是把每个按钮贴上清楚标签：什么情况按、什么情况别按、要先填哪些信息、按完会看到什么回执，出错时还告诉他该补哪张表。
+
+这一章解决的就是“按钮说明怎么写”。没有好说明，系统不是不会行动，而是靠猜；一旦猜错，就会查错、退错、重复调用，甚至把小问题办成事故。
+
+## 工具定义就是给模型看的提示
+
+在 agent 系统里，<Term def="工具定义（Tool definition）：模型在选择工具前会看到的工具名称、描述、参数 schema 和返回约定，它决定模型怎么理解这个工具。">工具定义（Tool definition）</Term>
+不是 SDK 注释，也不是只给后端同事看的接口文档。它会被放进模型上下文，直接影响模型“要不要用、用哪个、参数怎么填、拿到结果后怎么继续”。
+
+<ToolPromptAnatomyDiagram />
+
+Anthropic 在 Appendix 2 里提醒，工具规格要投入和整体 prompt 一样多的提示工程注意力。原因很简单：如果描述只写“查询数据”，模型要猜它查订单、查退款、查知识库还是查用户；如果描述写清“仅用于查询已存在订单状态，不会发起退款”，模型就少走很多岔路。
+
+把工具说明写给模型看时，优先回答四个问题：
+
+- 什么时候应该用它
+- 什么时候不要用它
+- 参数必须长什么样
+- 返回结果代表什么，下一步该怎么读
+
+## 描述要写边界，而不只写功能
+
+工具描述最常见的问题，是只说“能做什么”，不说“何时用/不用”。对人类来说，团队知识能补齐空白；对模型来说，空白就是猜测空间。
+
+下面这张对照图把同一组客服工具拆成两种写法。左边像内部接口清单，右边才像 agent-ready contract：工具之间边界互斥，风险动作有条件，查询和执行不会混在一起。
+
+<ToolContractCompareDiagram />
+
+一个好描述通常包含：
+
+- 触发条件：用户意图或状态满足什么才用
+- 排除条件：哪些相似需求不要用
+- 风险边界：是否会修改状态、扣款、退款、通知用户
+- 证据要求：调用前必须已有的字段或上一步结果
+
+## 参数 schema 要替模型消歧
+
+这里的 <Term def="参数 schema：用字段名、类型、必填项、枚举和格式限制模型怎么填参数。">参数 schema（Parameter schema）</Term>
+不是“把后端入参暴露出去”这么简单。它应该像给新同事写
+docstring：字段名越具体，枚举越明确，模型越不容易把 `query`、`id`、`payload`
+这类空洞字段填错。
+
+好的 schema 会做三件事：
+
+- 用具体字段名替代万能字段，例如 `order_id`、`refund_reason`
+- 用枚举压住开放文本，例如 `status | eligibility | timeline`
+- 把格式写进说明，例如订单号前缀、日期格式、金额单位
+
+## 返回结果语义会改变下一次选择
+
+工具调用不是终点。模型会读返回结果，再决定下一步是继续查询、执行动作、向用户解释，还是转人工。所以 <Term def="工具结果语义（Tool result semantics）：工具返回字段背后的业务含义，以及模型读到结果后应该如何继续行动。">工具结果语义（Tool result semantics）</Term>
+必须明确。
+
+<ToolSelectionFeedbackDiagram />
+
+比如知识库工具返回 `confidence: "low"`，不是让模型硬答，而是提示它扩大检索、换关键词或请求人工；退款资格工具返回 `eligible: false`，应该带上原因和可选替代方案，而不是只返回 `false`。
+
+## 错误要帮助模型恢复
+
+失败不可怕，裸失败才可怕。<Term def="可恢复错误（Recoverable error）：工具失败时返回给模型的结构化提示，说明错在哪、能不能重试、该怎么改参数或换流程。">可恢复错误（Recoverable error）</Term>
+的目标不是安慰用户，而是让 agent 下一轮能修正自己。
+
+<ToolErrorFeedbackDiagram />
+
+把 `500`、`KeyError`、`invalid input` 直接丢给模型，它只能原样重试或乱猜。更好的错误返回要包含：
+
+- `code`：稳定错误码，便于路由和统计
+- `message`：人话说明哪里错
+- `retryable`：是否值得改参数后重试
+- `fix`：下一步应该补什么、改什么、换哪个工具
+
+<Callout type="tip">
+  工具错误也是 prompt 的一部分。它不是日志尾巴，而是下一轮模型决策的输入。
+</Callout>
+
+## 工具定义要靠 eval 迭代
+
+最后一个关键点是 <Term def="工具 eval（Tool eval）：用一组代表性任务检查模型是否选对工具、填对参数、读懂结果和错误，并据此迭代工具定义。">工具 eval（Tool eval）</Term>。不要凭感觉改描述；要拿真实或合成任务跑一批，看模型在哪些地方选错、漏填、重复调用、遇错不会恢复。
+
+一次工具 eval 至少记录四类结果：
+
+- 工具选择是否正确
+- 参数是否完整、格式是否正确
+- 返回结果是否被正确引用
+- 错误返回是否引导出正确恢复动作
+
+如果某类错误反复出现，优先改工具定义本身：描述加边界、schema 加枚举、返回值加语义字段、错误信息加修复建议。Anthropic 的建议也很接近这个思路：把自己放到模型视角里测试工具，并根据模型犯错方式迭代。
+
+## 动手看：从猜工具到会用工具
+
+> 猜一猜：如果用户说“我想知道这单还能不能退”，一个工具描述只写“处理订单”，模型更可能查状态、发起退款，还是先判断资格？
+
+<ToolSelectionFeedbackDiagram />
+
+这张反馈图的重点是：工具定义写得越像“按钮说明书”，模型越能先选查询类工具，读到资格结果后再决定是否需要退款动作；不是一上来就按最危险的按钮。
+
+## 代码对照：含糊工具 vs agent-ready typed contract
+
+先看一个容易误用的版本。它把查询、退款、知识库都藏在一个 `action` 字段里，模型要同时猜 intent、参数和风险。
+
+<CodeTabs>
+  <Tab label="含糊工具定义：让模型猜">
+
+```ts
+export const supportTool = {
+  name: "handle_order",
+  description: "处理订单相关问题",
+  input_schema: {
+    type: "object",
+    properties: {
+      action: { type: "string" },
+      id: { type: "string" },
+      reason: { type: "string" },
+    },
+  },
+};
+```
+
+  </Tab>
+  <Tab label="Agent-ready：查询和动作分开">
+
+```ts
+export const getOrderStatus = {
+  name: "get_order_status",
+  description:
+    "查询已存在订单的物流、支付和退款状态。只读工具；不要用它发起退款或修改订单。",
+  input_schema: {
+    type: "object",
+    required: ["order_id"],
+    properties: {
+      order_id: {
+        type: "string",
+        description: "订单号，如 ORD-2026-00042。",
+      },
+    },
+  },
+};
+```
+
+  </Tab>
+</CodeTabs>
+
+左边的问题不是字段少，而是边界空。右边明确“只读”“不要退款”“订单号格式”，模型更容易在用户只想查状态时选它，而不是误触发动作。
+
+再看退款工具。这里的目标不是让退款变简单，而是把高风险动作写成有前置条件的契约。
+
+<CodeTabs>
+  <Tab label="含糊退款：风险藏在描述里">
+
+```ts
+export const refund = {
+  name: "refund",
+  description: "给用户退款",
+  input_schema: {
+    type: "object",
+    properties: {
+      order: { type: "string" },
+      amount: { type: "number" },
+    },
+  },
+};
+```
+
+  </Tab>
+  <Tab label="Agent-ready：先验资格再动作">
+
+```ts
+export const createRefundRequest = {
+  name: "create_refund_request",
+  description:
+    "在 check_refund_eligibility 返回 eligible=true 后，为订单创建退款申请。不要用于查询退款政策。",
+  input_schema: {
+    type: "object",
+    required: ["order_id", "refund_reason", "eligibility_check_id"],
+    properties: {
+      order_id: { type: "string" },
+      refund_reason: { enum: ["damaged", "late", "duplicate", "other"] },
+      eligibility_check_id: { type: "string" },
+    },
+  },
+};
+```
+
+  </Tab>
+</CodeTabs>
+
+注意 `eligibility_check_id`：它把“先查资格”变成参数要求，而不是靠模型记住流程。这就是 Anthropic 提到的 poka-yoke 思路：把参数改到更难犯错。
+
+最后看返回值和错误。它们会成为下一轮输入，所以也要写成模型可读的信号。
+
+<CodeTabs>
+  <Tab label="难恢复：只有失败">
+
+```ts
+return {
+  ok: false,
+  error: "INVALID_ORDER",
+};
+```
+
+  </Tab>
+  <Tab label="可恢复：告诉下一步">
+
+```ts
+return {
+  ok: false,
+  code: "ORDER_ID_FORMAT_INVALID",
+  message: "order_id 必须形如 ORD-2026-00042。",
+  retryable: true,
+  fix: "请向用户确认订单号，或先调用 search_orders_by_email。",
+};
+```
+
+  </Tab>
+</CodeTabs>
+
+右边多出的不是废话，而是 agent 的下一步路线图：能不能重试、该补什么、可替代工具是什么。
+
+<Callout type="warn">
+  不要把工具 schema 当后端接口裸拷贝。后端 API 追求内部复用，agent
+  工具追求模型选得准、参数填得稳、失败能恢复；这两者经常需要一层专门的工具契约。
+</Callout>
+
+## 容易踩的坑
+
+<ToolErrorFeedbackDiagram />
+
+<Callout type="trap">
+  **现象**：模型在“查订单状态”和“退款”之间乱选，偶尔直接发起高风险动作。
+  **原因**：工具描述只写功能，没有写何时用、何时不用，也没有把查询和动作拆开。
+  **修法**：描述里明确只读/写入边界；退款工具要求先有资格检查结果，高风险动作进检查点。
+</Callout>
+
+<Callout type="trap">
+  **现象**：模型经常把邮箱、订单号、工单号塞进同一个 `id` 字段。 **原因**：参数
+  schema 没有消歧，字段名和格式说明都太泛。 **修法**：改成
+  `order_id`、`ticket_id`、`customer_email` 等具体字段；写格式、枚举和必填项。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具返回 `eligible:false` 后，模型仍然向用户承诺退款。
+  **原因**：返回结果缺少语义和下一步建议，模型只看到一个布尔值。 **修法**：返回
+  `reason`、`policy_reference`、`next_options`，并在描述中说明 `eligible=false`
+  时不得创建退款。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具失败后，agent 原样重试三次，然后转人工。
+  **原因**：错误返回只有裸错误码，没有告诉模型是否可重试、该补哪个参数、可换哪个工具。
+  **修法**：把错误改成可恢复结构，至少包含
+  `code`、`message`、`retryable`、`fix`。
+</Callout>
+
+## 小结
+
+- 工具定义会进入模型上下文，本质上是提示
+- 描述要同时写“用”和“不用”的边界
+- 参数 schema 要用字段、枚举和格式消歧
+- 返回结果与错误会决定下一轮选择
+- 工具定义要靠 eval 发现误用再迭代
+
+<Exercises>
+
+**练习 1（选型题）** 用户问“这单现在在哪里？”和“这单能不能退？”分别应该优先用什么工具？为什么？
+
+<Answer>
+
+“这单现在在哪里？”优先用只读的 `get_order_status`，因为目标是查物流/订单状态，不需要改状态。“这单能不能退？”优先用 `check_refund_eligibility`，因为目标是判断资格；只有资格结果允许，并且用户确认要退款时，才进入 `create_refund_request`。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么“工具描述越短越好”是危险说法？
+
+<Answer>
+
+短不等于清楚。工具描述至少要写清用途、触发条件、排除条件和风险边界；如果省掉“不要用于退款”“只读”“必须已有资格检查”这类信息，模型就会在相似工具之间猜。真正好的描述是足够短，但不省掉决策边界。
+
+</Answer>
+
+**练习 3（改代码题）** 把下面错误返回改成可恢复错误：`{ ok:false, error:"BAD_REQUEST" }`。
+
+<Answer>
+
+可以改成这样，让模型知道错在哪、能否重试和下一步怎么做：
+
+```ts
+return {
+  ok: false,
+  code: "MISSING_ORDER_ID",
+  message: "缺少必填参数 order_id。",
+  retryable: true,
+  fix: "请先向用户确认订单号，或调用 search_orders_by_email。",
+};
+```
+
+关键是让错误成为下一轮决策输入，而不是只留下一个后端错误码。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="工具定义（Tool definition）">
+    模型在决定是否调用工具前会看到的说明书，包括名称、描述、参数和返回约定。它写得清楚，模型才少猜。详见本章「工具定义就是给模型看的提示」。
+  </GlossaryItem>
+  <GlossaryItem term="参数 schema（Parameter schema）">
+    工具参数的形状说明，例如字段名、类型、必填项、枚举和格式。它像表单规则，负责让模型少填错。详见本章「参数
+    schema 要替模型消歧」。
+  </GlossaryItem>
+  <GlossaryItem term="工具结果语义（Tool result semantics）">
+    工具返回字段代表什么业务含义，以及模型下一步该如何使用这些结果。比如低置信度意味着继续查，而不是硬答。详见本章「返回结果语义」。
+  </GlossaryItem>
+  <GlossaryItem term="可恢复错误（Recoverable error）">
+    失败时返回一段模型能照着修的错误信息：错在哪、能不能重试、该补什么或换哪个工具。详见本章「错误要帮助模型恢复」。
+  </GlossaryItem>
+  <GlossaryItem term="工具 eval（Tool eval）">
+    用一批代表性任务测试模型是否选对工具、填对参数、读懂结果和错误，再根据失败样本迭代工具定义。详见本章「工具定义要靠
+    eval 迭代」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Anthropic《Building Effective Agents》Appendix 2: Prompt engineering your tools"
+  adaptedUrl="https://www.anthropic.com/research/building-effective-agents"
+/>

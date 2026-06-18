@@ -182,6 +182,7 @@ import { agentEvaluatorOptimizerQuestions } from "./review/agent-evaluator-optim
 import { agentAutonomousAgentsQuestions } from "./review/agent-autonomous-agents";
 import { agentCombiningPatternsQuestions } from "./review/agent-combining-patterns";
 import { agentAgentsInPracticeQuestions } from "./review/agent-agents-in-practice";
+import { agentToolPromptEngineeringQuestions } from "./review/agent-tool-prompt-engineering";
 
 export {
   CHAPTER_TITLES,
@@ -360,6 +361,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agentAutonomousAgentsQuestions,
   ...agentCombiningPatternsQuestions,
   ...agentAgentsInPracticeQuestions,
+  ...agentToolPromptEngineeringQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
