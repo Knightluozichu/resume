@@ -56,9 +56,11 @@ const WHOLE_BOOK = "__whole_book__";
 
 export default function ReviewEngineApp({
   scopeTree,
+  initialBook,
   initialChapter,
 }: {
   scopeTree: ReviewScopeTree;
+  initialBook: string | null;
   initialChapter: string | null;
 }) {
   const router = useRouter();
@@ -113,7 +115,9 @@ export default function ReviewEngineApp({
   const [chapter, setChapter] = useState<string | null>(safeInitialChapter);
   // 选了「某本书」但还没选具体章时，bookScope 记住这本书；为 null 表示「全部」。
   const [bookScope, setBookScope] = useState<string | null>(
-    safeInitialChapter ? (chapterIndex.get(safeInitialChapter)?.bookSlug ?? null) : null,
+    safeInitialChapter
+      ? (chapterIndex.get(safeInitialChapter)?.bookSlug ?? null)
+      : initialBook,
   );
   const [session, setSession] = useState<ReviewQuestion[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -153,7 +157,7 @@ export default function ReviewEngineApp({
       // 初始范围取 URL 带来的章（已经过 page.tsx + 本组件兜底校验）。
       const initBook = safeInitialChapter
         ? (chapterIndex.get(safeInitialChapter)?.bookSlug ?? null)
-        : null;
+        : initialBook;
       startSession(
         loaded,
         "review",
@@ -162,16 +166,18 @@ export default function ReviewEngineApp({
       );
     };
     init();
-  }, [startSession, safeInitialChapter, chapterIndex, computeScope]);
+  }, [startSession, safeInitialChapter, initialBook, chapterIndex, computeScope]);
 
   const wrongCount = useMemo(() => (state ? wrongPileSize(state) : 0), [state]);
 
-  /** 把当前范围同步进 URL（?chapter=<slug> 或清空），方便刷新/分享复现。失败不致命。 */
+  /** 把当前范围同步进 URL（?book / ?chapter），方便刷新/分享复现。失败不致命。 */
   const syncUrl = useCallback(
-    (chapterSlug: string | null) => {
-      const target = chapterSlug
-        ? `${pathname}?chapter=${encodeURIComponent(chapterSlug)}`
-        : pathname;
+    (bookSlug: string | null, chapterSlug: string | null) => {
+      const params = new URLSearchParams();
+      if (bookSlug) params.set("book", bookSlug);
+      if (chapterSlug) params.set("chapter", chapterSlug);
+      const query = params.toString();
+      const target = query ? `${pathname}?${query}` : pathname;
       // replace + scroll:false：范围切换不入历史栈、不跳页顶。
       router.replace(target, { scroll: false });
     },
@@ -200,7 +206,7 @@ export default function ReviewEngineApp({
     // 切书默认落到「整本书」（chapter=null）：scope = 该书全部章；全部 = null（全库）。
     setChapter(null);
     startSession(state, mode, levelFilter, computeScope(null, nextBook));
-    syncUrl(null);
+    syncUrl(nextBook, null);
   };
 
   /** 切「章」：WHOLE_BOOK = 该书但不限章；否则限定到具体章（复习 slug）。 */
@@ -209,7 +215,7 @@ export default function ReviewEngineApp({
     const next = value === WHOLE_BOOK ? null : value;
     setChapter(next);
     startSession(state, mode, levelFilter, computeScope(next, bookScope));
-    syncUrl(next);
+    syncUrl(bookScope, next);
   };
 
   /** 刷新：当前模式 + 当前等级 + 当前范围，重新随机抽一组。 */
@@ -279,9 +285,143 @@ export default function ReviewEngineApp({
 
   const selectClass =
     "rounded-control border border-border bg-elevated px-3 py-1 text-sm text-primary transition-colors duration-(--duration-hover) ease-standard hover:border-accent focus:border-accent focus:outline-none";
+  const shelfButtonClass =
+    "rounded-control border px-3 py-1 text-xs transition-colors duration-(--duration-hover) ease-standard";
 
   return (
     <div className="flex flex-col gap-6">
+      <section className="rounded-card border border-border bg-elevated p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-primary">复习书架</p>
+            <p className="mt-1 text-sm text-secondary">
+              先选整本书，再细到章节；如果你是从正文页跳过来的，也会自动落到对应范围。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => switchBook(ALL)}
+            className={`rounded-control border px-3 py-1 text-sm transition-colors duration-(--duration-hover) ease-standard ${
+              !currentBook
+                ? "border-accent text-accent"
+                : "border-border text-secondary hover:border-accent hover:text-primary"
+            }`}
+          >
+            全库混刷
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {scopeTree.map((book) => {
+            const active = currentBook === book.bookSlug;
+
+            return (
+              <div
+                key={book.bookSlug}
+                className={`rounded-card border p-4 transition-colors duration-(--duration-hover) ease-standard ${
+                  active
+                    ? "border-accent bg-accent-glow"
+                    : "border-border bg-bg/60"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-primary">{book.bookTitle}</p>
+                    <p className="mt-1 text-xs text-secondary">
+                      {book.chapters.length} 章 · {book.count} 题
+                    </p>
+                  </div>
+                  {active && (
+                    <span className="rounded-control border border-accent px-2 py-1 text-[11px] text-accent">
+                      当前范围
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => switchBook(book.bookSlug)}
+                    className={`${shelfButtonClass} ${
+                      active && !chapter
+                        ? "border-accent text-accent"
+                        : "border-border text-secondary hover:border-accent hover:text-primary"
+                    }`}
+                  >
+                    整本开刷
+                  </button>
+                  {book.chapters.slice(0, 3).map((item) => (
+                    <button
+                      key={item.slug}
+                      type="button"
+                      onClick={() => {
+                        setBookScope(book.bookSlug);
+                        setChapter(item.slug);
+                        startSession(
+                          state,
+                          mode,
+                          levelFilter,
+                          computeScope(item.slug, book.bookSlug),
+                        );
+                        syncUrl(book.bookSlug, item.slug);
+                      }}
+                      className={`${shelfButtonClass} ${
+                        chapter === item.slug
+                          ? "border-accent text-accent"
+                          : "border-border text-secondary hover:border-accent hover:text-primary"
+                      }`}
+                    >
+                      {item.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {selectedBook && (
+          <div className="mt-5 border-t border-border pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-secondary">
+                章节抽题：
+                <span className="ml-1 text-primary">{selectedBook.bookTitle}</span>
+              </p>
+              <p className="text-xs text-secondary">
+                当前支持分享 URL，方便把某本书或某一章直接发给自己继续刷。
+              </p>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => switchChapter(WHOLE_BOOK)}
+                className={`${shelfButtonClass} ${
+                  chapter === null
+                    ? "border-accent text-accent"
+                    : "border-border text-secondary hover:border-accent hover:text-primary"
+                }`}
+              >
+                整本书
+              </button>
+              {selectedBook.chapters.map((item) => (
+                <button
+                  key={item.slug}
+                  type="button"
+                  onClick={() => switchChapter(item.slug)}
+                  className={`${shelfButtonClass} ${
+                    chapter === item.slug
+                      ? "border-accent text-accent"
+                      : "border-border text-secondary hover:border-accent hover:text-primary"
+                  }`}
+                >
+                  {item.title}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </section>
+
       {/* —— 控制条：模式切换 + 刷新 —— */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div

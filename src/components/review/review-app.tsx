@@ -35,12 +35,18 @@ const ReviewEngineApp = dynamic(() => import("./review-engine-app"), {
 
 export function ReviewApp({
   scopeTree,
+  initialBook,
   initialChapter,
 }: {
   scopeTree: ReviewScopeTree;
+  initialBook: string | null;
   initialChapter: string | null;
 }) {
   return (
-    <ReviewEngineApp scopeTree={scopeTree} initialChapter={initialChapter} />
+    <ReviewEngineApp
+      scopeTree={scopeTree}
+      initialBook={initialBook}
+      initialChapter={initialChapter}
+    />
   );
 }

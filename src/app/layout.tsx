@@ -18,8 +18,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "remuse — Shader 教学",
-  description: "现代化 Shader 教学网站：每个图形概念都配一块可交互的画布。",
+  title: "remuse — 程序员自学图书馆",
+  description:
+    "把教程、章节复习和错题回炉放进同一套学习流里的程序员自学图书馆。",
 };
 
 export default function RootLayout({

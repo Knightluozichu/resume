@@ -31,24 +31,40 @@ export default async function ReviewPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const tree = buildReviewScopeTree();
-
-  // ?chapter=<复习slug>：仅当确实是树里存在的章才采纳为初始范围，否则当作全库。
-  const raw = (await searchParams).chapter;
-  const wanted = Array.isArray(raw) ? raw[0] : raw;
-  const validChapters = new Set(
-    tree.flatMap((b) => b.chapters.map((c) => c.slug)),
+  const bookByChapter = new Map(
+    tree.flatMap((book) =>
+      book.chapters.map((chapter) => [chapter.slug, book.bookSlug] as const),
+    ),
   );
-  const initialChapter = wanted && validChapters.has(wanted) ? wanted : null;
+  const validBooks = new Set(tree.map((book) => book.bookSlug));
+
+  const params = await searchParams;
+  const rawBook = params.book;
+  const rawChapter = params.chapter;
+  const wantedBook = Array.isArray(rawBook) ? rawBook[0] : rawBook;
+  const wantedChapter = Array.isArray(rawChapter) ? rawChapter[0] : rawChapter;
+
+  const initialChapter =
+    wantedChapter && bookByChapter.has(wantedChapter) ? wantedChapter : null;
+  const initialBook = initialChapter
+    ? (bookByChapter.get(initialChapter) ?? null)
+    : wantedBook && validBooks.has(wantedBook)
+      ? wantedBook
+      : null;
 
   return (
     <main data-pagefind-ignore className="min-w-0 flex-1 px-4 py-12 lg:px-8">
       <div className="mx-auto w-full max-w-[72ch]">
         <h1 className="text-2xl font-semibold">复习</h1>
         <p className="mt-2 text-secondary">
-          翻卡片自测，答对的题间隔变长、答错的进错题集优先重来——把每一章刷成肌肉记忆。进度只存在你这台设备的浏览器里。
+          先选整本书，再细到章节开刷。答对的题间隔变长、答错的题会回到错题集，进度只存在你这台设备的浏览器里。
         </p>
         <div className="mt-8">
-          <ReviewApp scopeTree={tree} initialChapter={initialChapter} />
+          <ReviewApp
+            scopeTree={tree}
+            initialBook={initialBook}
+            initialChapter={initialChapter}
+          />
         </div>
       </div>
     </main>
