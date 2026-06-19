@@ -1,10 +1,11 @@
 import Link from "next/link";
 
 import { buildReviewScopeTree } from "@/lib/review-scope";
-import { getChapterTree } from "@/lib/content";
+import { getChapterTree, getLearningPathTree } from "@/lib/content";
 
 export default function Home() {
   const books = getChapterTree();
+  const paths = getLearningPathTree();
   const reviewTree = buildReviewScopeTree();
   const reviewByBook = new Map(
     reviewTree.map((book) => [book.bookSlug, book] as const),
@@ -93,6 +94,87 @@ export default function Home() {
         <div>
           <div className="flex items-end justify-between gap-4">
             <div>
+              <h2 className="text-2xl font-semibold">学习路径</h2>
+              <p className="mt-2 text-secondary">
+                先按方向选路线，再进入初级、中级、高级的主线书和补充材料。
+              </p>
+            </div>
+            <Link
+              href="/learn"
+              className="hidden text-sm text-secondary transition-colors duration-(--duration-hover) ease-standard hover:text-accent md:inline"
+            >
+              查看路线图 →
+            </Link>
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {paths.map((path) => {
+              const firstBook = path.stages
+                .flatMap((stage) => stage.items)
+                .find((item) => item.kind === "book");
+              const bookCount = path.stages.reduce(
+                (sum, stage) =>
+                  sum +
+                  stage.items.filter((item) => item.kind === "book").length,
+                0,
+              );
+              const missingCount = path.stages.reduce(
+                (sum, stage) =>
+                  sum +
+                  stage.items.filter((item) => item.kind === "missing").length,
+                0,
+              );
+
+              return (
+                <article
+                  key={path.slug}
+                  className="rounded-card border border-border bg-elevated p-5"
+                >
+                  <h3 className="text-lg font-medium text-primary">
+                    {path.title}
+                  </h3>
+                  <p className="mt-2 text-sm text-secondary">
+                    {path.description}
+                  </p>
+                  <p className="mt-4 text-xs text-secondary">
+                    {bookCount} 本已上架
+                    {missingCount > 0 ? ` · ${missingCount} 个待补能力` : ""}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {path.stages.map((stage) => (
+                      <span
+                        key={stage.level}
+                        className="rounded-control border border-border px-2 py-1 text-xs text-secondary"
+                      >
+                        {stage.label}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    {firstBook?.kind === "book" && firstBook.firstHref && (
+                      <Link
+                        href={firstBook.firstHref}
+                        className="rounded-control border border-border px-3 py-1 text-sm text-primary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-accent"
+                      >
+                        从第一本开始
+                      </Link>
+                    )}
+                    <Link
+                      href={`/review?path=${encodeURIComponent(path.slug)}`}
+                      className="rounded-control border border-border px-3 py-1 text-sm text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+                    >
+                      复习整条路径
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="flex items-end justify-between gap-4">
+            <div>
               <h2 className="text-2xl font-semibold">书架</h2>
               <p className="mt-2 text-secondary">
                 每本书都给出“开始阅读”和“整本复习”两个入口，把内容区和题库区真正连起来。
@@ -127,8 +209,7 @@ export default function Home() {
                           (sum, section) => sum + section.chapters.length,
                           0,
                         )}{" "}
-                        章
-                        {review ? ` · ${review.count} 道复习题` : ""}
+                        章{review ? ` · ${review.count} 道复习题` : ""}
                       </p>
                     </div>
                     <span className="rounded-control border border-border px-2 py-1 text-xs text-secondary">
@@ -161,7 +242,8 @@ export default function Home() {
                         href={`/review?book=${encodeURIComponent(book.bookSlug)}`}
                         className="rounded-control border border-border bg-bg/75 px-4 py-2 text-sm text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
                       >
-                        整本复习：{review.chapters.length} 章 / {review.count} 题
+                        整本复习：{review.chapters.length} 章 / {review.count}{" "}
+                        题
                       </Link>
                     ) : (
                       <p className="text-sm text-secondary">
@@ -199,13 +281,7 @@ function StatCard({
   );
 }
 
-function WorkflowStep({
-  title,
-  body,
-}: {
-  title: string;
-  body: string;
-}) {
+function WorkflowStep({ title, body }: { title: string; body: string }) {
   return (
     <div className="rounded-card border border-border bg-bg/70 p-4">
       <p className="text-sm font-medium text-primary">{title}</p>

@@ -28,12 +28,23 @@ import {
 import type {
   ReviewScopeBook,
   ReviewScopeChapter,
+  ReviewScopePathTree,
   ReviewScopeTree,
 } from "@/components/review/engine";
 
-import { BOOK_ORDER, BOOK_TITLES, getAllChapters } from "./content";
+import {
+  BOOK_ORDER,
+  BOOK_TITLES,
+  getAllChapters,
+  getLearningPathTree,
+} from "./content";
 
-export type { ReviewScopeBook, ReviewScopeChapter, ReviewScopeTree };
+export type {
+  ReviewScopeBook,
+  ReviewScopeChapter,
+  ReviewScopePathTree,
+  ReviewScopeTree,
+};
 
 /** 复习侧章节 slug 的「书前缀 → bookSlug」表（命名规则，稳定）。 */
 const PREFIX_TO_BOOK: Array<[string, string]> = [
@@ -136,6 +147,42 @@ export function buildReviewScopeTree(): ReviewScopeTree {
   return tree;
 }
 
+export function buildReviewPathScopeTree(
+  scopeTree = buildReviewScopeTree(),
+): ReviewScopePathTree {
+  const reviewByBook = new Map(scopeTree.map((book) => [book.bookSlug, book]));
+
+  return getLearningPathTree()
+    .map((path) => {
+      const stages = path.stages
+        .map((stage) => {
+          let count = 0;
+          const chapterSlugs = stage.items.flatMap((item) => {
+            if (item.kind !== "book") return [];
+            const reviewBook = reviewByBook.get(item.book.bookSlug);
+            count += reviewBook?.count ?? 0;
+            return reviewBook?.chapters.map((c) => c.slug) ?? [];
+          });
+
+          return {
+            level: stage.level,
+            label: stage.label,
+            count,
+            chapterSlugs,
+          };
+        })
+        .filter((stage) => stage.count > 0);
+
+      return {
+        slug: path.slug,
+        title: path.title,
+        count: stages.reduce((sum, stage) => sum + stage.count, 0),
+        stages,
+      };
+    })
+    .filter((path) => path.count > 0);
+}
+
 /**
  * 内容侧章节（bookSlug + 内容文件名 slug）→ 复习 slug 的桥接（供章节页「复习本章」入口）。
  *
@@ -151,7 +198,9 @@ export function reviewChapterSlugFor(
   bookSlug: string,
   contentChapterSlug: string,
 ): string | null {
-  return buildContentToReviewMap().get(`${bookSlug}/${contentChapterSlug}`) ?? null;
+  return (
+    buildContentToReviewMap().get(`${bookSlug}/${contentChapterSlug}`) ?? null
+  );
 }
 
 /** 缓存：同一构建期内桥接表只算一次（章节页每页都会调一次）。 */

@@ -95,6 +95,244 @@ export const BOOK_TITLES: Record<string, string> = {
   "ai-agent-apps": "AI 智能体应用开发",
 };
 
+export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
+
+export const LEARNING_STAGE_LABELS: Record<LearningStageLevel, string> = {
+  beginner: "初级",
+  intermediate: "中级",
+  advanced: "高级",
+};
+
+type LearningPathBookConfig = {
+  bookSlug: string;
+  note: string;
+  optional?: boolean;
+};
+
+type LearningPathMissingConfig = {
+  title: string;
+  note: string;
+  missing: true;
+};
+
+type LearningPathItemConfig =
+  | LearningPathBookConfig
+  | LearningPathMissingConfig;
+
+type LearningPathStageConfig = {
+  level: LearningStageLevel;
+  summary: string;
+  items: LearningPathItemConfig[];
+};
+
+type LearningPathConfig = {
+  slug: string;
+  title: string;
+  description: string;
+  stages: LearningPathStageConfig[];
+};
+
+/**
+ * 学习路径是书籍之上的产品层：用户先选方向，再按初/中/高级推进。
+ * 这里保留缺口项，用来在首页和 /learn 明确提示“下一本该补什么”。
+ */
+const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
+  {
+    slug: "android",
+    title: "Android",
+    description: "从应用开发入门，到工程架构，再到系统源码与性能机制。",
+    stages: [
+      {
+        level: "beginner",
+        summary:
+          "先把 Activity、Fragment、Intent、后台任务这些应用层手感练稳。",
+        items: [
+          {
+            bookSlug: "big-nerd-ranch-guide",
+            note: "主线入门书，适合从零建立 Android 应用开发心智。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "需要一座从应用层到源码层的桥。",
+        items: [
+          {
+            title: "Jetpack / Compose / 架构工程实践",
+            note: "待补：建议覆盖 ViewModel、Room、Navigation、Compose、架构分层与测试。",
+            missing: true,
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "再进入系统服务、进程、ClassLoader、插件化与性能优化。",
+        items: [
+          {
+            bookSlug: "android-advanced-decryption",
+            note: "源码与系统机制主线，适合进阶读者。",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "cpp",
+    title: "C / C++",
+    description: "从 C 语言基本功，到现代 C++，再到并发与工程化。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "补齐指针、内存、I/O 与 C 语言底层语感。",
+        items: [
+          {
+            bookSlug: "c-primer-plus",
+            note: "可选基础：不是所有 C++ 学习者必读，但能补强底层概念。",
+            optional: true,
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "建立 C++ 类型、容器、类设计和标准库主干。",
+        items: [
+          {
+            bookSlug: "cpp-primer-5e",
+            note: "C++ 主线书，适合作为长期学习骨架。",
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "把语言能力推进到并发、内存模型和工程级同步。",
+        items: [
+          {
+            bookSlug: "cpp-concurrency",
+            note: "并发专项，适合掌握 C++ 基础后进入高阶。",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "unity",
+    title: "Unity",
+    description: "先会做，再会优化，最后按平台和 Profiler 体系化定位问题。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "先熟悉编辑器、脚本、物理、动画、UI 与发布流程。",
+        items: [
+          {
+            bookSlug: "unity5",
+            note: "Unity 开发基础主线，补齐常用模块。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "进入脚本、图形、资源、物理和内存优化。",
+        items: [
+          {
+            bookSlug: "unity-game-optimization",
+            note: "性能优化主线，先学如何减少浪费。",
+          },
+          {
+            bookSlug: "profiling-unity-games",
+            note: "Profiler 诊断主线，学会量化和定位。",
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "按移动端、XR、Web、URP 等平台约束做专项优化。",
+        items: [
+          {
+            bookSlug: "mobile-xr-web-optimization",
+            note: "高级平台专项，更像优化分支而不是入门主线。",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "graphics",
+    title: "图形渲染",
+    description: "从数学和图形学基础，到 OpenGL 实作，再到实时渲染架构。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "LearnOpenGL 之前最好补一点线性代数和图形学基础。",
+        items: [
+          {
+            title: "图形学数学基础",
+            note: "待补：建议覆盖向量、矩阵、坐标变换、光照模型和采样直觉。",
+            missing: true,
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "用 OpenGL 把渲染管线、光照、模型、PBR 跑起来。",
+        items: [
+          {
+            bookSlug: "learnopengl",
+            note: "当前图形主线书，内容很长，适合作为中级实作主轴。",
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "继续补实时渲染、引擎渲染架构和现代图形 API。",
+        items: [
+          {
+            title: "实时渲染 / 引擎渲染架构",
+            note: "待补：建议覆盖渲染图、GPU 驱动成本、现代管线与引擎架构。",
+            missing: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
+    slug: "ai-agent",
+    title: "AI Agent",
+    description: "从概念心智，到开发实践，再到应用模式与生产化。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "先理解什么是 Agent、工具调用和基础循环。",
+        items: [
+          {
+            bookSlug: "ai-agent",
+            note: "概念入门，解决“Agent 到底是什么”。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "进入 RAG、规划、记忆、多智能体与评估。",
+        items: [
+          {
+            bookSlug: "ai-agent-dev",
+            note: "开发实践主线，适合开始搭系统。",
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "把模式组合、工具边界和生产化检查清单串起来。",
+        items: [
+          {
+            bookSlug: "ai-agent-apps",
+            note: "应用与生产化主线，适合做真实项目。",
+          },
+        ],
+      },
+    ],
+  },
+];
+
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
 function bookRank(bookSlug: string): number {
   const i = (BOOK_ORDER as readonly string[]).indexOf(bookSlug);
@@ -348,6 +586,39 @@ export interface NavBook {
   sections: NavSection[];
 }
 
+export type LearningPathBookItem = {
+  kind: "book";
+  book: NavBook;
+  note: string;
+  optional: boolean;
+  firstHref: string | null;
+  chapterCount: number;
+};
+
+export type LearningPathMissingItem = {
+  kind: "missing";
+  title: string;
+  note: string;
+};
+
+export type LearningPathItem = LearningPathBookItem | LearningPathMissingItem;
+
+export interface LearningPathStage {
+  level: LearningStageLevel;
+  label: string;
+  summary: string;
+  items: LearningPathItem[];
+}
+
+export interface LearningPath {
+  slug: string;
+  title: string;
+  description: string;
+  stages: LearningPathStage[];
+}
+
+export type LearningPathTree = LearningPath[];
+
 /**
  * 生成侧边栏章节树：按 BOOK_ORDER 分书、书内按 SECTION_ORDER 分 section、
  * section 内按 order（HEL-48）。只产出有已发布章节的书 / section，
@@ -386,6 +657,57 @@ export function getChapterTree(): NavBook[] {
   }
 
   return books;
+}
+
+export function getLearningPathTree(): LearningPathTree {
+  const books = getChapterTree();
+  const bookBySlug = new Map(books.map((book) => [book.bookSlug, book]));
+
+  return LEARNING_PATH_CONFIGS.map((path) => ({
+    slug: path.slug,
+    title: path.title,
+    description: path.description,
+    stages: path.stages.map((stage) => ({
+      level: stage.level,
+      label: LEARNING_STAGE_LABELS[stage.level],
+      summary: stage.summary,
+      items: stage.items
+        .map((item): LearningPathItem | null => {
+          if ("missing" in item) {
+            return { kind: "missing", title: item.title, note: item.note };
+          }
+
+          const book = bookBySlug.get(item.bookSlug);
+          if (!book) return null;
+          const chapters = book.sections.flatMap((section) => section.chapters);
+
+          return {
+            kind: "book",
+            book,
+            note: item.note,
+            optional: item.optional ?? false,
+            firstHref: chapters[0]?.href ?? null,
+            chapterCount: chapters.length,
+          };
+        })
+        .filter((item): item is LearningPathItem => item !== null),
+    })),
+  }));
+}
+
+export function learningPathSlugForBook(bookSlug: string): string | null {
+  for (const path of LEARNING_PATH_CONFIGS) {
+    for (const stage of path.stages) {
+      if (
+        stage.items.some(
+          (item) => "bookSlug" in item && item.bookSlug === bookSlug,
+        )
+      ) {
+        return path.slug;
+      }
+    }
+  }
+  return null;
 }
 
 /** 上/下一章（按全局教学顺序）；首/末章对应侧为 null。 */

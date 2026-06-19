@@ -37,6 +37,20 @@ export interface ReviewScopeBook {
 }
 export type ReviewScopeTree = ReviewScopeBook[];
 
+export interface ReviewScopeStage {
+  level: string;
+  label: string;
+  count: number;
+  chapterSlugs: string[];
+}
+export interface ReviewScopePath {
+  slug: string;
+  title: string;
+  count: number;
+  stages: ReviewScopeStage[];
+}
+export type ReviewScopePathTree = ReviewScopePath[];
+
 /** Leitner 盒：0(最生)~4(最熟)。✓ 升一格(上限 4)，✗ 跌回 0。 */
 export type Box = 0 | 1 | 2 | 3 | 4;
 const MAX_BOX: Box = 4;

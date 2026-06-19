@@ -1,68 +1,116 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getChapterTree } from "@/lib/content";
+import { getLearningPathTree, type LearningPathStage } from "@/lib/content";
 
 import { ChapterShell } from "./_components/chapter-shell";
 
 export const metadata: Metadata = {
-  title: "教程 — remuse",
-  description: "可交互的 Shader / OpenGL 教学章节目录。",
+  title: "学习路径 — remuse",
+  description:
+    "按 Android、C/C++、Unity、图形渲染、AI Agent 组织的体系化学习路线。",
 };
 
-/**
- * /learn 列表页（HEL-48 书化）：列出「书 → section → 章」三层目录，
- * 章节链接走三段式新路径 /learn/<book>/<section>/<chapter>。
- * 目录树与侧边栏同源（getChapterTree），开发期含草稿（标注）、生产隐藏。
- */
 export default function LearnPage() {
-  const books = getChapterTree();
+  const paths = getLearningPathTree();
 
   return (
     <ChapterShell>
-      <h1 className="text-2xl font-semibold">欢迎来到教程区</h1>
+      <h1 className="text-2xl font-semibold">学习路径</h1>
       <p className="mt-4 text-secondary">
-        这里是 remuse 的章节正文区。教程内容改编自
-        LearnOpenGL，每个图形概念都会配一块可以亲手拨弄的画布。选择一章开始——更多书籍与章节将随后续里程碑陆续上线。
+        先选方向，再按初级、中级、高级推进。每条路径都标出主线书、可选补充和当前缺口，避免在书单里来回猜下一步。
       </p>
 
-      <div className="mt-10 flex flex-col gap-10">
-        {books.map((book) => (
-          <section key={book.bookSlug}>
-            <h2 className="text-lg font-medium text-primary">
-              {book.bookTitle}
-            </h2>
-            <div className="mt-4 flex flex-col gap-6">
-              {book.sections.map((group) => (
-                <div key={group.section}>
-                  <h3 className="text-xs font-medium text-secondary">
-                    {group.section}
-                  </h3>
-                  <ul className="mt-2 flex flex-col gap-1">
-                    {group.chapters.map((chapter) => (
-                      <li key={chapter.href}>
-                        <Link
-                          href={chapter.href}
-                          className="flex items-center gap-2 rounded-control px-2 py-1 text-secondary transition-colors duration-(--duration-hover) ease-standard hover:text-accent"
-                        >
-                          <span className="min-w-0 truncate">
-                            {chapter.title}
-                          </span>
-                          {chapter.draft && (
-                            <span className="shrink-0 rounded-control border border-border px-1 text-[10px] leading-4 text-secondary">
-                              草稿
-                            </span>
-                          )}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+      <div className="mt-10 flex flex-col gap-12">
+        {paths.map((path) => (
+          <section key={path.slug}>
+            <div className="flex flex-col gap-2">
+              <h2 className="text-xl font-semibold text-primary">
+                {path.title}
+              </h2>
+              <p className="text-secondary">{path.description}</p>
+            </div>
+
+            <div className="mt-5 flex flex-col gap-4">
+              {path.stages.map((stage) => (
+                <StageBlock key={stage.level} stage={stage} />
               ))}
             </div>
           </section>
         ))}
       </div>
     </ChapterShell>
+  );
+}
+
+function StageBlock({ stage }: { stage: LearningPathStage }) {
+  return (
+    <section className="border-l border-border pl-4">
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h3 className="text-lg font-semibold text-primary">{stage.label}</h3>
+        <p className="text-sm text-secondary">{stage.summary}</p>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-3">
+        {stage.items.map((item) => {
+          if (item.kind === "missing") {
+            return (
+              <div
+                key={item.title}
+                className="rounded-control border border-warning px-4 py-3"
+              >
+                <p className="text-sm font-medium text-warning">
+                  待补：{item.title}
+                </p>
+                <p className="mt-1 text-sm text-secondary">{item.note}</p>
+              </div>
+            );
+          }
+
+          return (
+            <article
+              key={item.book.bookSlug}
+              className="rounded-control border border-border px-4 py-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-base font-medium text-primary">
+                    {item.book.bookTitle}
+                    {item.optional && (
+                      <span className="ml-2 rounded-control border border-border px-1.5 py-0.5 text-xs text-secondary">
+                        可选
+                      </span>
+                    )}
+                  </h4>
+                  <p className="mt-1 text-sm text-secondary">
+                    {item.chapterCount} 章 · {item.note}
+                  </p>
+                </div>
+
+                {item.firstHref && (
+                  <Link
+                    href={item.firstHref}
+                    className="rounded-control border border-border px-3 py-1 text-sm text-secondary transition-colors duration-(--duration-hover) ease-standard hover:border-accent hover:text-primary"
+                  >
+                    开始阅读
+                  </Link>
+                )}
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {item.book.sections.slice(0, 5).map((section) => (
+                  <span
+                    key={section.section}
+                    className="rounded-control border border-border px-2 py-1 text-xs text-secondary"
+                  >
+                    {section.section}
+                  </span>
+                ))}
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }

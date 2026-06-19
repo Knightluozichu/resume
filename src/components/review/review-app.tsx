@@ -18,7 +18,7 @@
 
 import dynamic from "next/dynamic";
 
-import type { ReviewScopeTree } from "./engine";
+import type { ReviewScopePathTree, ReviewScopeTree } from "./engine";
 
 function LoadingCard() {
   return (
@@ -35,16 +35,25 @@ const ReviewEngineApp = dynamic(() => import("./review-engine-app"), {
 
 export function ReviewApp({
   scopeTree,
+  pathTree,
+  initialPath,
+  initialStage,
   initialBook,
   initialChapter,
 }: {
   scopeTree: ReviewScopeTree;
+  pathTree: ReviewScopePathTree;
+  initialPath: string | null;
+  initialStage: string | null;
   initialBook: string | null;
   initialChapter: string | null;
 }) {
   return (
     <ReviewEngineApp
       scopeTree={scopeTree}
+      pathTree={pathTree}
+      initialPath={initialPath}
+      initialStage={initialStage}
       initialBook={initialBook}
       initialChapter={initialChapter}
     />

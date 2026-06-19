@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
 import { ReviewApp } from "@/components/review/review-app";
-import { buildReviewScopeTree } from "@/lib/review-scope";
+import {
+  buildReviewPathScopeTree,
+  buildReviewScopeTree,
+} from "@/lib/review-scope";
 
 /**
  * /review 复习页（Server Component，复习系统 Phase A + 范围复习）。
@@ -31,6 +34,7 @@ export default async function ReviewPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const tree = buildReviewScopeTree();
+  const pathTree = buildReviewPathScopeTree(tree);
   const bookByChapter = new Map(
     tree.flatMap((book) =>
       book.chapters.map((chapter) => [chapter.slug, book.bookSlug] as const),
@@ -39,8 +43,12 @@ export default async function ReviewPage({
   const validBooks = new Set(tree.map((book) => book.bookSlug));
 
   const params = await searchParams;
+  const rawPath = params.path;
+  const rawStage = params.stage;
   const rawBook = params.book;
   const rawChapter = params.chapter;
+  const wantedPath = Array.isArray(rawPath) ? rawPath[0] : rawPath;
+  const wantedStage = Array.isArray(rawStage) ? rawStage[0] : rawStage;
   const wantedBook = Array.isArray(rawBook) ? rawBook[0] : rawBook;
   const wantedChapter = Array.isArray(rawChapter) ? rawChapter[0] : rawChapter;
 
@@ -51,17 +59,30 @@ export default async function ReviewPage({
     : wantedBook && validBooks.has(wantedBook)
       ? wantedBook
       : null;
+  const selectedPath =
+    !initialChapter && !initialBook && wantedPath
+      ? (pathTree.find((path) => path.slug === wantedPath) ?? null)
+      : null;
+  const initialPath = selectedPath?.slug ?? null;
+  const initialStage =
+    selectedPath && wantedStage
+      ? (selectedPath.stages.find((stage) => stage.level === wantedStage)
+          ?.level ?? null)
+      : null;
 
   return (
     <main data-pagefind-ignore className="min-w-0 flex-1 px-4 py-12 lg:px-8">
       <div className="mx-auto w-full max-w-[72ch]">
         <h1 className="text-2xl font-semibold">复习</h1>
         <p className="mt-2 text-secondary">
-          先选整本书，再细到章节开刷。答对的题间隔变长、答错的题会回到错题集，进度只存在你这台设备的浏览器里。
+          可以按学习路径、整本书或具体章节开刷。答对的题间隔变长、答错的题会回到错题集，进度只存在你这台设备的浏览器里。
         </p>
         <div className="mt-8">
           <ReviewApp
             scopeTree={tree}
+            pathTree={pathTree}
+            initialPath={initialPath}
+            initialStage={initialStage}
             initialBook={initialBook}
             initialChapter={initialChapter}
           />

@@ -68,7 +68,7 @@ export function ChapterDrawer({ children }: { children: React.ReactNode }) {
           // 点中章节链接后自动收起
           if ((e.target as HTMLElement).closest("a")) setOpen(false);
         }}
-        className={`fixed inset-y-0 left-0 z-30 w-60 overflow-y-auto border-r border-border bg-elevated px-4 py-8 transition-transform duration-(--duration-expand) ease-standard lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] overflow-y-auto border-r border-border bg-elevated px-4 py-8 transition-transform duration-(--duration-expand) ease-standard lg:hidden ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

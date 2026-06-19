@@ -18,6 +18,7 @@ import {
   saveState,
   wrongPileSize,
   type ChapterScope,
+  type ReviewScopePathTree,
   type ReviewScopeTree,
   type ReviewState,
 } from "./engine";
@@ -56,10 +57,16 @@ const WHOLE_BOOK = "__whole_book__";
 
 export default function ReviewEngineApp({
   scopeTree,
+  pathTree,
+  initialPath,
+  initialStage,
   initialBook,
   initialChapter,
 }: {
   scopeTree: ReviewScopeTree;
+  pathTree: ReviewScopePathTree;
+  initialPath: string | null;
+  initialStage: string | null;
   initialBook: string | null;
   initialChapter: string | null;
 }) {
@@ -88,6 +95,18 @@ export default function ReviewEngineApp({
   // 初始章合法性兜底（page.tsx 已校验，这里再防一手）。
   const safeInitialChapter =
     initialChapter && chapterIndex.has(initialChapter) ? initialChapter : null;
+  const safeInitialPath =
+    initialPath && pathTree.some((path) => path.slug === initialPath)
+      ? initialPath
+      : null;
+  const safeInitialStage =
+    safeInitialPath &&
+    initialStage &&
+    pathTree
+      .find((path) => path.slug === safeInitialPath)
+      ?.stages.some((stage) => stage.level === initialStage)
+      ? initialStage
+      : null;
 
   /**
    * 由（当前章 chapter, 当前书 bookScope）算出引擎抽题范围 ChapterScope：
@@ -96,21 +115,43 @@ export default function ReviewEngineApp({
    *  - 都没选（全部）→ null（全库，行为不变）
    */
   const computeScope = useCallback(
-    (chapterSlug: string | null, book: string | null): ChapterScope => {
+    (
+      chapterSlug: string | null,
+      book: string | null,
+      pathSlug: string | null,
+      stageLevel: string | null,
+    ): ChapterScope => {
       if (chapterSlug) return chapterSlug;
       if (book) {
         const b = scopeTree.find((x) => x.bookSlug === book);
         return b ? b.chapters.map((c) => c.slug) : null;
       }
+      if (pathSlug) {
+        const path = pathTree.find((x) => x.slug === pathSlug);
+        if (!path) return null;
+        if (stageLevel) {
+          return (
+            path.stages.find((stage) => stage.level === stageLevel)
+              ?.chapterSlugs ?? []
+          );
+        }
+        return path.stages.flatMap((stage) => stage.chapterSlugs);
+      }
       return null;
     },
-    [scopeTree],
+    [scopeTree, pathTree],
   );
 
   // null = 尚未挂载（首渲染态，SSR 与 client 首帧一致，不读 localStorage）。
   const [state, setState] = useState<ReviewState | null>(null);
   const [mode, setMode] = useState<Mode>("review");
   const [levelFilter, setLevelFilter] = useState<ReviewLevel | null>(null);
+  const [pathScope, setPathScope] = useState<string | null>(
+    safeInitialChapter || initialBook ? null : safeInitialPath,
+  );
+  const [stageScope, setStageScope] = useState<string | null>(
+    safeInitialChapter || initialBook ? null : safeInitialStage,
+  );
   // 当前范围 = 复习 slug 限定到某一章；null = 全部（书或全库，见 bookScope）。
   const [chapter, setChapter] = useState<string | null>(safeInitialChapter);
   // 选了「某本书」但还没选具体章时，bookScope 记住这本书；为 null 表示「全部」。
@@ -162,18 +203,38 @@ export default function ReviewEngineApp({
         loaded,
         "review",
         null,
-        computeScope(safeInitialChapter, initBook),
+        computeScope(
+          safeInitialChapter,
+          initBook,
+          safeInitialChapter || initBook ? null : safeInitialPath,
+          safeInitialChapter || initBook ? null : safeInitialStage,
+        ),
       );
     };
     init();
-  }, [startSession, safeInitialChapter, initialBook, chapterIndex, computeScope]);
+  }, [
+    startSession,
+    safeInitialChapter,
+    safeInitialPath,
+    safeInitialStage,
+    initialBook,
+    chapterIndex,
+    computeScope,
+  ]);
 
   const wrongCount = useMemo(() => (state ? wrongPileSize(state) : 0), [state]);
 
   /** 把当前范围同步进 URL（?book / ?chapter），方便刷新/分享复现。失败不致命。 */
   const syncUrl = useCallback(
-    (bookSlug: string | null, chapterSlug: string | null) => {
+    (
+      pathSlug: string | null,
+      stageLevel: string | null,
+      bookSlug: string | null,
+      chapterSlug: string | null,
+    ) => {
       const params = new URLSearchParams();
+      if (pathSlug) params.set("path", pathSlug);
+      if (stageLevel) params.set("stage", stageLevel);
       if (bookSlug) params.set("book", bookSlug);
       if (chapterSlug) params.set("chapter", chapterSlug);
       const query = params.toString();
@@ -188,40 +249,84 @@ export default function ReviewEngineApp({
   const switchMode = (m: Mode) => {
     if (!state || m === mode) return;
     setMode(m);
-    startSession(state, m, levelFilter, computeScope(chapter, bookScope));
+    startSession(
+      state,
+      m,
+      levelFilter,
+      computeScope(chapter, bookScope, pathScope, stageScope),
+    );
   };
 
   /** 切等级筛选：在当前模式 + 当前范围下重抽一组。 */
   const switchLevel = (level: ReviewLevel | null) => {
     if (!state) return;
     setLevelFilter(level);
-    startSession(state, mode, level, computeScope(chapter, bookScope));
+    startSession(
+      state,
+      mode,
+      level,
+      computeScope(chapter, bookScope, pathScope, stageScope),
+    );
   };
 
   /** 切「书」：选「全部」清空范围；选某书则限定到整本书（章未定）。 */
   const switchBook = (bookSlug: string) => {
     if (!state) return;
     const nextBook = bookSlug === ALL ? null : bookSlug;
+    setPathScope(null);
+    setStageScope(null);
     setBookScope(nextBook);
     // 切书默认落到「整本书」（chapter=null）：scope = 该书全部章；全部 = null（全库）。
     setChapter(null);
-    startSession(state, mode, levelFilter, computeScope(null, nextBook));
-    syncUrl(nextBook, null);
+    startSession(
+      state,
+      mode,
+      levelFilter,
+      computeScope(null, nextBook, null, null),
+    );
+    syncUrl(null, null, nextBook, null);
   };
 
   /** 切「章」：WHOLE_BOOK = 该书但不限章；否则限定到具体章（复习 slug）。 */
   const switchChapter = (value: string) => {
     if (!state) return;
     const next = value === WHOLE_BOOK ? null : value;
+    setPathScope(null);
+    setStageScope(null);
     setChapter(next);
-    startSession(state, mode, levelFilter, computeScope(next, bookScope));
-    syncUrl(bookScope, next);
+    startSession(
+      state,
+      mode,
+      levelFilter,
+      computeScope(next, bookScope, null, null),
+    );
+    syncUrl(null, null, bookScope, next);
+  };
+
+  const switchPath = (pathSlug: string | null, stageLevel: string | null) => {
+    if (!state) return;
+    setPathScope(pathSlug);
+    setStageScope(stageLevel);
+    setBookScope(null);
+    setChapter(null);
+    startSession(
+      state,
+      mode,
+      levelFilter,
+      computeScope(null, null, pathSlug, stageLevel),
+    );
+    syncUrl(pathSlug, stageLevel, null, null);
   };
 
   /** 刷新：当前模式 + 当前等级 + 当前范围，重新随机抽一组。 */
   const refresh = () => {
     if (!state) return;
-    startSession(state, mode, levelFilter, computeScope(chapter, bookScope));
+    startSession(
+      state,
+      mode,
+      levelFilter,
+      computeScope(chapter, bookScope, pathScope, stageScope),
+    );
   };
 
   /** 记一次作答：更新进度 + 持久化 + 推进游标 + 累计本组统计。 */
@@ -266,7 +371,11 @@ export default function ReviewEngineApp({
     : bookScope;
   const bookSelectValue = currentBook ?? ALL;
   const chapterSelectValue = chapter ?? WHOLE_BOOK;
-  const selectedBook = scopeTree.find((b) => b.bookSlug === currentBook) ?? null;
+  const selectedBook =
+    scopeTree.find((b) => b.bookSlug === currentBook) ?? null;
+  const selectedPath = pathTree.find((path) => path.slug === pathScope) ?? null;
+  const selectedStage =
+    selectedPath?.stages.find((stage) => stage.level === stageScope) ?? null;
 
   // 当前范围可读标签 + 题数（如「C++并发编程实战 · 管理线程（18 题）」）。
   let scopeLabel: string;
@@ -278,6 +387,11 @@ export default function ReviewEngineApp({
   } else if (selectedBook) {
     scopeLabel = selectedBook.bookTitle;
     scopeCount = selectedBook.count;
+  } else if (selectedPath) {
+    scopeLabel = selectedStage
+      ? `${selectedPath.title} · ${selectedStage.label}`
+      : selectedPath.title;
+    scopeCount = selectedStage?.count ?? selectedPath.count;
   } else {
     scopeLabel = "全部";
     scopeCount = scopeTree.reduce((n, b) => n + b.count, 0);
@@ -293,6 +407,87 @@ export default function ReviewEngineApp({
       <section className="rounded-card border border-border bg-elevated p-5">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
+            <p className="text-sm font-medium text-primary">按学习路径复习</p>
+            <p className="mt-1 text-sm text-secondary">
+              先选方向，再选初级、中级或高级阶段；也可以直接刷完整条路径。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => switchPath(null, null)}
+            className={`rounded-control border px-3 py-1 text-sm transition-colors duration-(--duration-hover) ease-standard ${
+              !pathScope && !currentBook && !chapter
+                ? "border-accent text-accent"
+                : "border-border text-secondary hover:border-accent hover:text-primary"
+            }`}
+          >
+            全库混刷
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          {pathTree.map((path) => {
+            const active = pathScope === path.slug;
+
+            return (
+              <div
+                key={path.slug}
+                className={`rounded-card border p-4 transition-colors duration-(--duration-hover) ease-standard ${
+                  active
+                    ? "border-accent bg-accent-glow"
+                    : "border-border bg-bg/60"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="font-medium text-primary">{path.title}</p>
+                    <p className="mt-1 text-xs text-secondary">
+                      {path.stages.length} 个阶段 · {path.count} 题
+                    </p>
+                  </div>
+                  {active && (
+                    <span className="rounded-control border border-accent px-2 py-1 text-[11px] text-accent">
+                      当前路径
+                    </span>
+                  )}
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => switchPath(path.slug, null)}
+                    className={`${shelfButtonClass} ${
+                      active && !stageScope
+                        ? "border-accent text-accent"
+                        : "border-border text-secondary hover:border-accent hover:text-primary"
+                    }`}
+                  >
+                    整条路径
+                  </button>
+                  {path.stages.map((stage) => (
+                    <button
+                      key={stage.level}
+                      type="button"
+                      onClick={() => switchPath(path.slug, stage.level)}
+                      className={`${shelfButtonClass} ${
+                        active && stageScope === stage.level
+                          ? "border-accent text-accent"
+                          : "border-border text-secondary hover:border-accent hover:text-primary"
+                      }`}
+                    >
+                      {stage.label} · {stage.count} 题
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-card border border-border bg-elevated p-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
             <p className="text-sm font-medium text-primary">复习书架</p>
             <p className="mt-1 text-sm text-secondary">
               先选整本书，再细到章节；如果你是从正文页跳过来的，也会自动落到对应范围。
@@ -302,7 +497,7 @@ export default function ReviewEngineApp({
             type="button"
             onClick={() => switchBook(ALL)}
             className={`rounded-control border px-3 py-1 text-sm transition-colors duration-(--duration-hover) ease-standard ${
-              !currentBook
+              !pathScope && !currentBook && !chapter
                 ? "border-accent text-accent"
                 : "border-border text-secondary hover:border-accent hover:text-primary"
             }`}
@@ -355,15 +550,17 @@ export default function ReviewEngineApp({
                       key={item.slug}
                       type="button"
                       onClick={() => {
+                        setPathScope(null);
+                        setStageScope(null);
                         setBookScope(book.bookSlug);
                         setChapter(item.slug);
                         startSession(
                           state,
                           mode,
                           levelFilter,
-                          computeScope(item.slug, book.bookSlug),
+                          computeScope(item.slug, book.bookSlug, null, null),
                         );
-                        syncUrl(book.bookSlug, item.slug);
+                        syncUrl(null, null, book.bookSlug, item.slug);
                       }}
                       className={`${shelfButtonClass} ${
                         chapter === item.slug
@@ -385,7 +582,9 @@ export default function ReviewEngineApp({
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-secondary">
                 章节抽题：
-                <span className="ml-1 text-primary">{selectedBook.bookTitle}</span>
+                <span className="ml-1 text-primary">
+                  {selectedBook.bookTitle}
+                </span>
               </p>
               <p className="text-xs text-secondary">
                 当前支持分享 URL，方便把某本书或某一章直接发给自己继续刷。
@@ -506,7 +705,9 @@ export default function ReviewEngineApp({
         <p className="text-xs text-secondary">
           范围：
           <span className="text-primary">{scopeLabel}</span>
-          <span className="ml-1 font-mono tabular-nums">（{scopeCount} 题）</span>
+          <span className="ml-1 font-mono tabular-nums">
+            （{scopeCount} 题）
+          </span>
         </p>
       </div>
 
@@ -577,7 +778,10 @@ export default function ReviewEngineApp({
 
       {/* —— 卡片区 / 空集 / 小结 三态 —— */}
       {total === 0 ? (
-        <EmptyState mode={mode} scoped={chapter !== null || bookScope !== null} />
+        <EmptyState
+          mode={mode}
+          scoped={chapter !== null || bookScope !== null || pathScope !== null}
+        />
       ) : done ? (
         <RoundSummary
           round={round}
