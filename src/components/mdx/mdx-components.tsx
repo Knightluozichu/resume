@@ -427,6 +427,9 @@ import { AaToolPickerPlayground } from "./ai-agent/tool-picker-playground";
 import { AaReactLoopDiagram } from "./ai-agent/react-loop-diagram";
 import { AaReactTraceDiagram } from "./ai-agent/react-trace-diagram";
 import { AaReactStepThrough } from "./ai-agent/react-step-through";
+import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-diagram";
+import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
+import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1143,6 +1146,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaReactLoopDiagram,
   AaReactTraceDiagram,
   AaReactStepThrough,
+  AaToolDesignContrastDiagram,
+  AaToolInvokeSafetyDiagram,
+  AaToolSafetyPlayground,
   Term,
   Glossary,
   GlossaryItem,

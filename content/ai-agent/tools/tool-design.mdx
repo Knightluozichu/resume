@@ -1,0 +1,324 @@
+---
+title: 工具设计与安全执行
+type: C
+section: 让智能体行动
+order: 3
+description: 读完能给 tinyagent 的工具系统补上参数校验、沙箱权限、结构化错误回灌，让 ReAct 循环安全地行动。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：工具设计=§3 AaToolDesignContrastDiagram+Glossary；参数校验=§3/§6 代码对照+Glossary；结构化返回=§5 AaToolInvokeSafetyDiagram+Glossary；错误回灌=§5 AaToolSafetyPlayground+Glossary；沙箱与权限边界=§3/§5 图示+Glossary；Tool.invoke()=§6 代码重心+Glossary。 */}
+
+{/* 1. 学习目标（spec §一）：C 实战型；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能**解释**一个好工具为什么要写清 name / description / parameters / 粒度，而不是把万能函数丢给模型
+- 能**实现** tinyagent 的 `Tool.invoke()`：校验参数 → try 执行 → 捕获异常 → 返回结构化结果或错误
+- 能回答：模型请求 `read_note({"path":"../local.env"})` 时，运行时应该在哪一层拦下，并把什么回灌给 ReAct？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；延续小屋电话隐喻。 */}
+
+## 给电话装防呆和保险丝
+
+上一章里，小屋里的失忆天才已经会边想边打电话了。但如果电话簿上写着「万能号码：什么都能办」，他可能会把一张含糊纸条递出去，屋外的人也不知道该不该照做。
+
+更糟的是，纸条可能少写地址、写了超大数量，甚至要求翻进不该看的抽屉。天才不是坏人，但他会误会、会漏填，也会被别人诱导。
+
+这一章要做的，是给每个号码贴清楚标签，再给电话线加防呆和保险丝：纸条先检查，不合格就退回；真要行动也只能在划好的范围内行动。没有这层保护，这套电话系统越能干，出错时越危险。
+
+{/* 3. 概念讲解（spec §三）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary。 */}
+
+## 工具设计：先让模型选得准
+
+<Term def="把一个外部能力包装成模型容易选择、运行时容易校验的接口，包括名字、描述、参数和粒度。">
+  工具设计
+</Term>
+不是把现成函数随手注册进去，而是给失忆天才写一条不会误拨的电话簿词条。`name`
+要稳定短小，`description` 要说明何时用、何时不用，`parameters`
+要把必填、类型、范围写清楚。
+
+工具的粒度也很关键。`do_anything(payload)` 看似省事，其实把所有判断都丢给模型；运行时也很难知道该校验什么、该限制哪些权限。更好的做法是把能力拆成边界清楚的小工具，例如 `search_docs` 只搜公开文档，`read_note` 只读白名单目录，`send_email` 必须经过确认。
+
+<AaToolDesignContrastDiagram />
+
+## 参数校验：第一道防呆
+
+<Term def="在真正执行工具前，检查模型传来的参数是否完整、类型正确、范围安全。">
+  参数校验
+</Term>
+是 Tool.invoke()
+的第一道门。模型写来的参数只是输入，不是事实；它可能漏字段、把数字写成字符串、把
+`limit` 写成十万，或把路径写到允许范围之外。
+
+参数校验的位置必须在真实函数之前。它不依赖模型“自觉”，而依赖程序里确定的规则：必填字段是否存在、类型是否匹配、枚举值是否在白名单、数值是否越界。校验失败时，工具不执行，只返回一条清楚的错误。
+
+## 结构化返回：让主循环不用猜
+
+<Term def="工具无论成功或失败，都用固定形状返回，例如 ok / value / error，而不是随口拼一段不可解析文本。">结构化返回</Term>是运行时和 ReAct 循环之间的契约。成功时返回 `{ok: true, value: ...}`；失败时返回 `{ok: false, error: {code, message}}`。这样 `Agent.run` 不用靠字符串猜“这算成功还是失败”。
+
+固定形状还有一个好处：错误也能进入同一条管线。缺参数、越权、超时、真实函数异常，都可以包装成同一种结果对象，然后作为 Observation 回到模型上下文里。
+
+## 错误回灌：失败也要变成回执
+
+<Term def="把参数错误、权限拒绝、工具异常等失败原因作为 Observation 放回 messages，让模型下一轮能修正或说明失败。">
+  错误回灌
+</Term>
+不是纵容模型继续乱试，而是让失败变成可处理的外部事实。比如模型漏了
+`path`，下一轮它可以补；比如路径越权，下一轮它应该换成允许范围，或向用户说明做不到。
+
+如果直接抛异常让程序退出，ReAct 循环会断在半路；如果只返回“失败了”，模型又不知道该怎么修。好的错误要短、明确、可行动：`VALIDATION_ERROR`、`PERMISSION_DENIED`、`TIMEOUT` 这类 code 比一大段堆栈更适合回灌。
+
+## 沙箱与权限边界：保险丝只让安全电流通过
+
+<Term def="运行时给工具划出的行动范围：能访问哪些路径、能调用哪些网络、能否写入或产生副作用。">
+  沙箱与权限边界
+</Term>
+负责回答“就算参数长得合法，这件事也允许做吗”。`read_note(path="../local.env")`
+的类型是字符串，但它越过了允许目录；`send_email`
+的参数都齐，也仍然需要用户确认。
+
+这层边界属于运行时，不属于模型。模型可以提出请求，但运行时必须按最小权限执行：默认只读、路径白名单、网络域名白名单、危险动作二次确认、超时和结果截断。下一节的交互会把这些门按顺序跑一遍。
+
+{/* 5. 交互 Demo：三件套图示/交互，含猜一猜、可单步、可重置。 */}
+
+## 三件套：看管线，也看翻车样本
+
+先看 Tool.invoke() 的完整安全管线。注意“不合格拦下”和“真实执行失败”都会进入同一个结构化回灌出口。
+
+> 猜一猜：如果模型漏了必填参数，哪一步应该拦下？它会不会进入沙箱执行？
+
+<AaToolInvokeSafetyDiagram />
+
+再亲手切换四种调用样本。正常调用会读到结果；参数缺失、参数越界和危险路径都会变成可读的 Observation。
+
+> 猜一猜：`../local.env` 的类型没有错，为什么仍然不能执行？切到“危险操作”看是哪层拒绝。
+
+<AaToolSafetyPlayground />
+
+{/* 6. 代码对照（spec §六）：C 型重心；tinyagent 增量；单代码块 ≤30 行。 */}
+
+## 动手：给 tinyagent 加 Tool.invoke()
+
+上一章的 `Agent.run` 已经会查 `registry` 并执行工具。这一章只补一个增量：让每个工具自己拥有安全执行入口 <Term def="tinyagent 里工具对象的安全执行方法；它先校验参数，再按权限执行真实函数，并把成功或失败包装成统一结果。">Tool.invoke()</Term>。先定义统一返回形状，再把校验、执行和异常捕获收进去：
+
+```python
+from dataclasses import dataclass
+from typing import Any, Callable
+
+
+@dataclass
+class ToolResult:
+    ok: bool
+    value: Any | None = None
+    error: dict[str, str] | None = None
+
+
+@dataclass
+class Tool:
+    name: str
+    schema: dict[str, Any]
+    func: Callable[..., Any]
+
+    def invoke(self, args: dict[str, Any]) -> ToolResult:
+        error = validate_args(self.schema, args)
+        if error:
+            return ToolResult(ok=False, error=error)
+        try:
+            return ToolResult(ok=True, value=self.func(**args))
+        except Exception as err:
+            return ToolResult(
+                ok=False,
+                error={"code": "TOOL_ERROR", "message": str(err)},
+            )
+```
+
+`invoke()` 的关键是：模型传来的参数永远先走 `validate_args`。只有校验通过，才会进入 `try` 执行真实函数；真实函数即使抛错，也会被包装成 `ToolResult`，而不是炸掉主循环。
+
+下面写一个最小校验器。它不是完整 JSON Schema，只覆盖 tinyagent 现在最需要的三类规则：必填、类型、范围。
+
+```python
+def validate_args(schema, args):
+    fields = schema["parameters"]
+    required = schema.get("required", [])
+
+    for name in required:
+        if name not in args:
+            return {"code": "VALIDATION_ERROR", "message": f"缺少 {name}"}
+
+    for name, rule in fields.items():
+        if name not in args:
+            continue
+        value = args[name]
+        if rule["type"] == "string" and not isinstance(value, str):
+            return {"code": "TYPE_ERROR", "message": f"{name} 必须是字符串"}
+        if rule["type"] == "integer" and not isinstance(value, int):
+            return {"code": "TYPE_ERROR", "message": f"{name} 必须是整数"}
+        if "min" in rule and value < rule["min"]:
+            return {"code": "RANGE_ERROR", "message": f"{name} 太小"}
+        if "max" in rule and value > rule["max"]:
+            return {"code": "RANGE_ERROR", "message": f"{name} 太大"}
+    return None
+```
+
+校验器故意返回短错误，而不是抛异常。因为“参数不合格”是模型经常会遇到的可修正状态，应该变成 Observation，让下一轮模型能补参数或缩小范围。
+
+只做参数校验还不够。像读取文件这类工具，还要把路径关进沙箱：参数类型对，不代表它有权访问任何路径。
+
+```python
+from pathlib import Path
+
+ROOT = Path("notes").resolve()
+
+
+def read_note(path: str, max_chars: int = 1000) -> str:
+    target = (ROOT / path).resolve()
+    if not target.is_relative_to(ROOT):
+        raise PermissionError("只能读取 notes/ 目录内的文件")
+    text = target.read_text(encoding="utf-8")
+    return text[:max_chars]
+
+
+read_note_tool = Tool(
+    name="read_note",
+    schema={
+        "parameters": {
+            "path": {"type": "string"},
+            "max_chars": {"type": "integer", "min": 1, "max": 2000},
+        },
+        "required": ["path"],
+    },
+    func=read_note,
+)
+```
+
+这里的 `Path.resolve()` 和 `is_relative_to()` 是保险丝：`../local.env` 即使是合法字符串，也会被挡在 `notes/` 之外。最后，把 `Agent.run` 里的直接函数调用替换成 `tool.invoke()`，并把结果回灌：
+
+```python
+class Agent:
+    def call_tool(self, name, args):
+        if name not in self.registry:
+            return {
+                "ok": False,
+                "error": {"code": "UNKNOWN_TOOL", "message": name},
+            }
+        result = self.registry[name].invoke(args)
+        return {"ok": result.ok, "value": result.value, "error": result.error}
+
+    def append_observation(self, messages, name, result):
+        messages.append({
+            "role": "tool",
+            "name": name,
+            "content": f"Observation: {result}",
+        })
+```
+
+这样 tinyagent 的安全边界就清楚了：模型负责提出 Action，`Agent.run` 负责查注册表，`Tool.invoke()` 负责校验、执行、捕获、结构化返回，Observation 负责把结果或错误带回下一轮 ReAct。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3；固定格式 现象→原因→修法。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：工具 description
+  写成“执行用户任务”，模型什么都往它塞。**原因**：模型没有读函数源码，只能靠说明判断能力边界。**修法**：description
+  写清“何时用、何时不用”，把大而全工具拆成边界明确的小工具。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`read_note({"path":"../local.env"})`
+  通过了字符串类型检查。**原因**：类型合法不等于权限合法，路径仍可能越过白名单。**修法**：参数校验后再做沙箱检查：resolve
+  路径、限制根目录、默认只读，并把拒绝原因回灌。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具内部超时或抛异常，整个 Agent.run
+  退出。**原因**：真实函数被直接调用，没有包在 `try/except`
+  和结构化返回里。**修法**：统一从 `Tool.invoke()` 调工具；异常转成 `TOOL_ERROR`
+  / `TIMEOUT` Observation，让模型修正或说明失败。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把完整堆栈、密钥路径或内部错误细节直接塞回模型。**原因**：错误回灌没有做信息分级，把调试日志当用户可见回执。**修法**：Observation
+  给短 code + 安全文案；完整堆栈只进服务器日志，不进模型上下文。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结呼应目标；C 型含改 Demo 题和独立实现题。 */}
+
+## 小结
+
+- 好工具设计让模型选得准，也让运行时守得住边界
+- `Tool.invoke()` 统一校验、执行、捕获和结构化返回
+- 参数错误、权限拒绝和异常都应作为 Observation 回灌
+- 沙箱与最小权限负责拦住“类型合法但越权”的请求
+
+<Exercises>
+
+**练习 1（改 Demo 题）** 把 `<AaToolSafetyPlayground />` 里的 `read_note` 想象成 `send_email`。请设计“正常调用 / 参数缺失 / 危险操作”三种样本，危险操作应该由哪层拦下？
+
+<Answer>
+
+正常调用可以传 `to`、`subject`、`body` 三个字段，例如发给白名单同事、主题是「会议」、正文写「明天 10 点」。参数缺失可以漏 `to` 或 `body`，由参数校验拦下；危险操作可以是发给外部陌生域名或没有用户确认，应由权限边界拦下。副作用工具最好要求白名单收件人和显式确认。
+
+</Answer>
+
+**练习 2（独立实现题）** 给 §6 的 `validate_args` 增加 `enum` 校验，让 `source` 只能是 `"docs"` 或 `"notes"`。
+
+<Answer>
+
+可以在字段循环里加：如果 `rule` 有 `enum`，并且 `value not in rule["enum"]`，就返回 `{"code":"ENUM_ERROR","message":f"{name} 不在允许值内"}`。这样模型传 `source="all_files"` 时不会进入真实工具。
+
+</Answer>
+
+**练习 3（排错题）** 模型看到 `PERMISSION_DENIED` 后反复请求同一路径。你会先检查哪两处？
+
+<Answer>
+
+先检查 Observation 文案是否足够可行动，例如是否说明“只能读取 notes/ 目录内文件”；再检查系统提示是否要求模型遇到权限拒绝时换用允许路径或向用户说明做不到。如果错误太含糊，模型可能不知道下一轮该怎么修。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应，按首现顺序。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="工具设计">
+  把外部能力包装成模型能选、运行时能管的接口。它不只是函数名，还包括用途说明、参数规则、能力粒度和安全边界。
+</GlossaryItem>
+
+<GlossaryItem term="参数校验">
+  在执行前检查模型传来的参数：有没有缺字段、类型对不对、数值是否越界、枚举是否在白名单里。不合格就不执行。
+</GlossaryItem>
+
+<GlossaryItem term="结构化返回">
+  工具用固定形状交结果，例如
+  `ok`、`value`、`error`。这样成功和失败都能被程序稳定解析，不靠猜字符串。
+</GlossaryItem>
+
+<GlossaryItem term="错误回灌">
+  把失败原因作为 Observation
+  放回对话，让模型下一轮能补参数、缩小范围、换工具，或向用户说明为什么不能做。
+</GlossaryItem>
+
+<GlossaryItem term="沙箱与权限边界">
+  运行时给工具划出的安全范围，比如只能读某个目录、只能访问白名单域名、危险操作必须确认。它是工具行动的保险丝。
+</GlossaryItem>
+
+<GlossaryItem term="Tool.invoke()">
+  tinyagent
+  里每个工具的安全执行入口。它把“先检查、再执行、出错也包装返回”固定下来，避免
+  Agent.run 直接裸调真实函数。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />
