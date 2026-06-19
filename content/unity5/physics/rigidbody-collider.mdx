@@ -1,0 +1,445 @@
+---
+title: 刚体与碰撞器
+type: C
+section: Unity物理
+order: 1
+description: 读完能给对象加 Rigidbody 让它受物理支配（重力 / 力 / 碰撞），用 Collider 套碰撞外壳、分清静态 / 动态 / 运动学三态，并在 FixedUpdate 里用 AddForce / velocity 施力、用 MovePosition 移动而不直接改 transform。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇3 物理 开篇章（承接第4章生命周期 FixedUpdate）：把「让一个对象交给物理引擎管——自动受重力、受力、与别人碰撞」写成代码。重心是 §6 代码对照（≥80%），三张图把「加不加 Rigidbody 的差别 / collider 形状 / 三态身体」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) Rigidbody：把对象交给物理引擎管（自动受重力 / 力 / 碰撞）；属性 mass/drag/angularDrag/useGravity/isKinematic/constraints = RigidbodyGravityDiagram（anime·主）+ 代码。 */}
+{/* 2) 施力：rb.AddForce(向量, ForceMode) / rb.velocity / rb.AddTorque；物理操作放 FixedUpdate = 代码 + Callout warn。 */}
+{/* 3) Collider：给对象套物理形状轮廓；Box/Sphere/Capsule（primitive 便宜）/Mesh（贵·动态需 Convex）；可脱离 Rigidbody 单独存在（静态碰撞器）= ColliderShapesDiagram（静态）+ 代码。 */}
+{/* 4) 三态：静态（Collider 无 rb）/ 动态（rb）/ 运动学（rb + isKinematic）= BodyTypesDiagram（anime）+ 代码。 */}
+{/* 5) isTrigger：勾上后只感应穿过、不物理阻挡（事件回调指第8章）；PhysicMaterial 调摩擦 / 弹性 = 代码（点到）。 */}
+{/* 陷阱：①有 rb 别用 transform.position 瞬移（穿墙 / 抖动）→ MovePosition / 施力；②物理代码写在 Update（应 FixedUpdate）；③两个碰撞物都没 rb → 事件不触发；④两个非 Convex MeshCollider 碰不了。 */}
+{/* 术语首现 Term：Rigidbody / Collider / AddForce / isKinematic / isTrigger（5 个 = Glossary 5 条）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能给一个对象加上 `Rigidbody` 让它受物理支配（自动下落 / 被力推飞），并说出 `mass` / `useGravity` / `isKinematic` / `constraints` 各管什么
+- 能写出在 `FixedUpdate` 里用 `rb.AddForce(...)` 施力、用 `rb.velocity` 设速度的代码，并能分清静态 / 动态 / 运动学三种「身体类型」该怎么搭
+- 能回答：给一个挂了 `Rigidbody` 的物体直接改 `transform.position` 来移动，会有什么问题？该怎么动它？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 */}
+
+## 让道具「认真演物理」
+
+拍戏时，大多数道具其实是「假的」——靠威亚吊着、靠手摆着，松手也不会掉，因为它们根本没接通真实的物理。可有些镜头需要道具「**来真的**」：一个箱子从桌上推下去会摔、一个球扔出去会飞会滚、撞到墙会停。这时你就得给这件道具接上「物理」，让它听重力、听碰撞的话。
+
+这一章要做的，就是给游戏里的对象装上这个「认真演物理」的开关：装上之后，松手它会掉、推一把它会动、撞上别人会被挡住或弹开——这一切由引擎替你算，你不用自己写。同时还要给每个演员套一层「**碰撞外壳**」，决定它多大块头、什么形状会撞到东西。
+
+没有这套东西，你想做「物体掉落」「角色推箱子」「子弹打中墙就停」，就得在每帧里**自己用代码模拟重力、自己判断两个物体有没有重叠、自己算撞上之后往哪弹**——这是一整套又难又容易错的活儿。这一章让你把它交给引擎，自己只管下指令。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：刚体、碰撞器、施力、三态、触发器
+
+本章五件事先各认个脸，**怎么写成代码留到第六节细讲**。
+
+**① 刚体。** 给一个对象加上
+
+<Term def="把一个 GameObject「交给物理引擎管」的组件。加上它，对象就自动受重力下落、能被力（AddForce）推、能与别的碰撞体碰撞反弹——这一切由引擎每个物理帧替你算。常用属性：mass（质量）、drag（线性阻力）、useGravity（是否受重力）、isKinematic（是否只听脚本不受力）、constraints（冻结某些轴）。">
+  Rigidbody（刚体）
+</Term>
+，它就从一个「呆着不动的对象」变成「**受物理支配的对象**」：松手会掉、推一把会动、撞上别人会被挡或弹开。下面这张主图把「加不加
+Rigidbody 的天壤之别」掰碎演给你：
+
+<RigidbodyGravityDiagram />
+
+**② 碰撞器。** 光受重力还不够，引擎还得知道「这个对象**多大块头、什么形状**会撞到东西」。这就要给它一个
+
+<Term def="给对象一个「物理形状轮廓」用于碰撞检测的组件。引擎拿这层轮廓（不是你看到的精细网格）判断两个对象有没有撞上。常见 primitive：BoxCollider / SphereCollider / CapsuleCollider（便宜）；MeshCollider 贴网格本身（贵，动态物体需勾 Convex）。Collider 可以脱离 Rigidbody 单独存在 = 静态碰撞器，挡得住但自己不动。">
+  Collider（碰撞器）
+</Term>
+。它就像给演员套了一层「碰撞外壳」——盒形、球形、胶囊形，或干脆贴着模型本身。下面这张图把四种形状的取舍摆清楚：
+
+<ColliderShapesDiagram />
+
+**③ 三种身体类型。** Rigidbody 和 Collider 怎么搭，决定一个对象是哪种「身体」：**静态**（只有 Collider、没 Rigidbody，挡得住但自己不动，如墙、地面）、**动态**（有 Rigidbody，受力受撞会动，如可推的箱子）、**运动学**（Rigidbody 且勾了下面要说的 isKinematic，不受力、只听脚本，但移动时能顶开动态体，如电梯、移动平台）。下面这张图给同样来一个力，演三者各自怎样：
+
+<BodyTypesDiagram />
+
+**④ 施力与运动学。** 让动态体动起来有两条路：直接给它一个力，或直接设它的速度。给力用
+
+<Term def="给刚体施加一个力的方法，写成 rb.AddForce(力向量, 模式)。力会按「力 = 质量 × 加速度」影响速度，所以同样的力推质量大的对象动得慢。第二个参数 ForceMode 选「持续推力 / 瞬间冲量 / 直接改速度」等模式。物理操作（包括 AddForce）应写在 FixedUpdate 里。">
+  AddForce
+</Term>
+。而如果你希望某个对象「**不被物理推动、只听你的脚本或动画摆布**」（比如做一个匀速来回的电梯），就把它的
+Rigidbody 勾上
+
+<Term def="Rigidbody 上的一个开关。勾上后，这个刚体变成「运动学体」：不再受重力和力的影响（AddForce 对它无效），只能由脚本 / 动画用 MovePosition 之类去移动；但它移动时仍能推开（顶开）别的动态刚体。用于电梯、移动平台、被动画驱动的角色等。">
+  isKinematic
+</Term>
+，它就成了「运动学体」。
+
+**⑤ 触发器。** 最后，Collider 上还有个
+
+<Term def="Collider 上的一个开关。勾上后，这个碰撞器不再「物理阻挡」别人（别人会直接穿过去），只「感应到有东西穿过」并发出触发事件，常用于「踩到某区域就触发机关」这类感应区。注意：要让碰撞 / 触发事件真正触发，参与的两个对象里至少一个得有 Rigidbody。具体的事件回调和射线检测留到下一章。">
+  isTrigger
+</Term>
+开关：勾上后它不再挡人，只「**感应**」有东西穿过——像一道看不见的感应门。本章只点到它是什么，**具体的碰撞
+/ 触发事件回调留给下一章**。
+
+这五件事就是本章全部。**它们怎么写成代码、有哪些坑，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = RigidbodyGravityDiagram（含「猜一猜」），辅 = ColliderShapesDiagram + BodyTypesDiagram。 */}
+
+## 动手：把「加 Rigidbody 的差别」单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **加不加 Rigidbody 对照动画**——它就是本章的主 Demo。
+
+> 猜一猜：把一个悬在半空的方块「加上 Rigidbody」、松开手，它会**继续悬着**，还是**往下掉**？回到「先认个脸」里那张主图，单步走到第②步——你会看到加了 Rigidbody 的方块在重力下自动落到地面；再走第③步，给它一个 `AddForce`，它被推飞了。这正是 Rigidbody 的意义：**把这个对象交给物理引擎管**，重力、力、碰撞全自动算，你只管下指令。
+
+单步走完主图，再去看另外两张：**Collider 形状对照图**帮你分清「盒 / 球 / 胶囊便宜、MeshCollider 贵且动态需 Convex」；**三态对照图**帮你看清「静态挡得住、动态被撞飞、运动学只听脚本但能顶开别人」。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：①加 Rigidbody 自动下落 + 属性；②FixedUpdate 里 AddForce/velocity + ForceMode；③Collider 形状选择 + 静态碰撞器；④isKinematic + MovePosition；⑤isTrigger + PhysicMaterial。 */}
+
+## 代码：从加刚体到施力、移动与触发
+
+这一节是本章的重心。每段都给一块可直接放进 `MonoBehaviour` 的代码，逐段讲清。
+
+### ① 加上 Rigidbody，它就自动下落
+
+给对象加 `Rigidbody`（编辑器里 Add Component，或 `gameObject.AddComponent`）后，它**立刻开始受重力下落**，你一行物理代码都不用写。常调的属性是这几个：
+
+```csharp
+using UnityEngine;
+
+public class FallingCrate : MonoBehaviour
+{
+    void Start()
+    {
+        // 拿到刚体（这里假设已在 Inspector 加好 Rigidbody）
+        Rigidbody rb = GetComponent<Rigidbody>();
+
+        rb.mass = 2f;          // 质量：越大越「重」，同样的力推它动得越慢
+        rb.drag = 0.1f;        // 线性阻力：越大越「像在水里」，速度衰减越快
+        rb.angularDrag = 0.5f; // 旋转阻力：抑制自转的衰减
+        rb.useGravity = true;  // 是否受重力（关掉它就不会自动下落）
+
+        // 冻结某些轴：这里冻结所有旋转，让箱子只平移、不打转
+        rb.constraints = RigidbodyConstraints.FreezeRotation;
+    }
+}
+```
+
+加上 `Rigidbody` 的那一刻，重力就接管了它。`mass` 是质量（影响「同样的力推它多快」）、`drag` 是线性阻力（让速度逐渐衰减）、`useGravity` 控制要不要受重力、`constraints` 能冻结某些轴的位置或旋转（常用 `FreezeRotation` 防止物体乱翻滚）。
+
+<Callout type="warn">
+  **`mass`（质量）不等于「下落快慢」。** 真空里所有质量的物体下落一样快—— Unity
+  的重力也一样，`mass` 只影响「**受力 /
+  碰撞时的反应**」（越重越难推动），不影响自由下落的速度。想让某物体「不下落」，关
+  `useGravity` 或用 `constraints` 冻结 Y 轴，而不是调 `mass`。
+</Callout>
+
+### ② 在 FixedUpdate 里施力：AddForce 与 velocity
+
+让动态刚体动起来有两条路：用 `rb.AddForce(...)` 给一个力，或直接设 `rb.velocity`。**物理操作要写在 `FixedUpdate` 里**（呼应第4章生命周期：`FixedUpdate` 与物理引擎同节拍）：
+
+```csharp
+public class Mover : MonoBehaviour
+{
+    private Rigidbody rb;
+    void Awake() => rb = GetComponent<Rigidbody>();
+
+    void FixedUpdate()
+    {
+        // 持续推力：每个物理帧推一下，像火箭尾焰（受 mass 影响）
+        rb.AddForce(Vector3.forward * 10f, ForceMode.Force);
+    }
+
+    public void Jump()
+    {
+        // 瞬间冲量：一次性给个「猛地一推」，做跳跃 / 击飞
+        rb.AddForce(Vector3.up * 5f, ForceMode.Impulse);
+    }
+
+    public void Stop() => rb.velocity = Vector3.zero; // 直接清零速度，立刻停住
+}
+```
+
+`AddForce` 的第二个参数 `ForceMode` 选「怎么施力」：`Force`（持续推力，受质量影响，适合发动机 / 风）、`Impulse`（瞬间冲量，受质量影响，适合跳跃 / 爆炸击飞）、`VelocityChange`（直接改速度，**忽略质量**）、`Acceleration`（持续加速度，忽略质量）。直接写 `rb.velocity = ...` 则是**强行设定速度**——简单粗暴，但会打断物理的自然累积，慎用于需要真实手感的场合。
+
+<Callout type="trap">
+  **现象**：在 `Update` 里
+  `AddForce`，物体的运动在不同帧率的机器上**快慢不一**、还时而抽搐。**原因**：`Update`
+  每帧调一次、帧率不固定，而物理引擎按**固定步长**跑；在 `Update`
+  里施力等于「按帧率乱给力」。**修法**：所有 `AddForce` / `velocity` /
+  `MovePosition` 等物理操作一律写进
+  **`FixedUpdate`**（固定步长、与物理同拍）；只有「读输入」可以放
+  `Update`，把输入存下来到 `FixedUpdate` 里用。
+</Callout>
+
+### ③ 选 Collider 形状 + 静态碰撞器
+
+`Collider` 决定碰撞用的形状。**能用 primitive（盒 / 球 / 胶囊）就别用 MeshCollider**——前者便宜，后者贴网格、很贵：
+
+```csharp
+// 给对象加合适形状的碰撞器（通常在 Inspector 里加，这里演示代码加法）
+BoxCollider box = gameObject.AddComponent<BoxCollider>();     // 方正物体：箱子、墙
+SphereCollider ball = gameObject.AddComponent<SphereCollider>(); // 球形物体
+
+// MeshCollider 贴网格本身——贵；用在「会动的」对象上必须勾 Convex（凸包）
+MeshCollider mc = gameObject.AddComponent<MeshCollider>();
+mc.convex = true; // 动态物体的 MeshCollider 必须 convex，否则无法参与碰撞
+```
+
+地面、墙这类「挡得住、但自己不会动」的东西，**只加 Collider、不加 Rigidbody** 就行——这就是「静态碰撞器」。它能挡住别的动态物体，但自己不受任何物理影响、纹丝不动（就是三态图里的第①栏）。给一面墙加 Rigidbody 反而会让它自己塌下去，是常见误用。
+
+<Callout type="warn">
+  **静态碰撞器（无 Rigidbody）别在运行时频繁移动。**
+  引擎为「静止的碰撞体」建了一套静态碰撞缓存；用 `transform`
+  反复挪动一个静态碰撞器会让引擎不停重建缓存、产生开销。需要会动又要挡人的对象，给它
+  `Rigidbody` 并勾 `isKinematic`，做成「运动学体」（见下一段）。
+</Callout>
+
+### ④ 运动学体：用 MovePosition 移动，别直接改 transform
+
+如果一个对象要「**会动、但不被物理推动**」（电梯、移动平台、被脚本控制的门），就给它 `Rigidbody` 并勾 `isKinematic`，再用 `rb.MovePosition` 移动它：
+
+```csharp
+public class MovingPlatform : MonoBehaviour
+{
+    private Rigidbody rb;
+
+    void Awake()
+    {
+        rb = GetComponent<Rigidbody>();
+        rb.isKinematic = true; // 运动学体：不受重力 / 力，只听脚本
+    }
+
+    void FixedUpdate()
+    {
+        // 用 MovePosition 平滑移动——引擎会正确处理它与动态体的碰撞（能顶开箱子）
+        Vector3 target = rb.position + Vector3.right * 2f * Time.fixedDeltaTime;
+        rb.MovePosition(target);
+    }
+}
+```
+
+勾了 `isKinematic` 后，`AddForce` 对它**无效**（它不受力），但它移动时仍能**顶开**站在它上面或挡在前面的动态刚体——这正是电梯托着角色上升的原理（三态图第③栏）。关键是用 `rb.MovePosition` 而不是直接改 `transform.position`：
+
+<Callout type="trap">
+  **现象**：有 `Rigidbody` 的物体用 `transform.position = ...`
+  直接瞬移，结果**穿墙而过**、或位置剧烈抖动、碰撞乱套。**原因**：`transform`
+  瞬移是「无视物理的传送」，它跳过了引擎的碰撞检测与速度积分，让物理状态和实际位置打架。**修法**：动态体靠**施力
+  / 设 velocity** 移动；运动学体 / 需要精确位移的，用
+  **`rb.MovePosition(目标)`**（它在物理步里平滑移动并参与碰撞）。给了 Rigidbody
+  的物体，原则上别再碰它的 `transform`。
+</Callout>
+
+### ⑤ isTrigger 是什么 + Physic Material 调摩擦与弹性
+
+把 Collider 的 `isTrigger` 勾上，它就不再物理阻挡、只「感应穿过」——做「踩到此处触发机关」这类感应区。另外，`Physic Material`（物理材质）能调一个表面的摩擦力和弹性：
+
+```csharp
+// 触发器：勾上后不挡人，只感应「有东西进 / 出 / 待在范围内」
+BoxCollider trigger = gameObject.AddComponent<BoxCollider>();
+trigger.isTrigger = true; // 碰撞 / 触发的「事件回调」是下一章的内容
+
+// Physic Material：调摩擦与弹性（如做一个超弹的「弹力球」地面）
+PhysicMaterial bouncy = new PhysicMaterial("Bouncy");
+bouncy.bounciness = 0.9f;       // 弹性：0 不弹、1 几乎全弹回
+bouncy.dynamicFriction = 0.2f;  // 滑动摩擦：越小越滑（像冰面）
+GetComponent<Collider>().material = bouncy;
+```
+
+`isTrigger` 把「实心墙」变成「感应门」——别人会穿过去，引擎只发出「进 / 出」事件。`Physic Material` 则让你调表面手感：`bounciness` 控弹跳、`dynamicFriction` 控滑不滑。这两个一个管「碰不碰得到」、一个管「碰上之后的手感」。
+
+<Callout type="trap">
+  **现象**：两个该相撞的物体**直接穿过对方**，碰撞 /
+  触发事件一个都不触发。**原因**：碰撞 /
+  触发要被引擎处理，参与的**两个对象里至少要有一个带 `Rigidbody`**（且都得有
+  Collider）。两个都是「静态碰撞器」（都没
+  Rigidbody）时，引擎根本不为它俩做碰撞计算。**修法**：给其中一个该动的物体加上
+  `Rigidbody`（动态或运动学均可）；另外确认两边都挂了 `Collider`、且 Collider
+  的形状真的罩住了物体。
+</Callout>
+
+至此刚体、碰撞器、施力、三态身体、触发器都过了一遍。回头看会发现：装上 Rigidbody + Collider，就是把「这个对象该怎么动、怎么撞」交给引擎——你只在 `FixedUpdate` 里下指令（施力 / 设速度 / MovePosition），剩下的重力、碰撞、反弹都由它替你算。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。除上面已嵌的 3 个 trap，再补一个 MeshCollider 互碰的坑。 */}
+
+## 容易踩的坑
+
+前面几段已嵌了三个高频坑：**有 Rigidbody 还用 `transform.position` 瞬移导致穿墙 / 抖动**（见 §④）、**物理代码写在 `Update`**（应 `FixedUpdate`，见 §②）、**两个碰撞物都没 Rigidbody 导致事件不触发**（见 §⑤）。再补一个 MeshCollider 的坑：
+
+<Callout type="trap">
+  **现象**：两个用 `MeshCollider`
+  的物体明明贴在一起，却**怎么都碰不到**、直接穿插。**原因**：两个 **都没勾
+  Convex** 的
+  MeshCollider，引擎默认**不为它俩做碰撞**（凹网格对凹网格的碰撞太贵，被禁掉了）。**修法**：把会动的那个
+  MeshCollider 勾上 `convex = true`（它会被简化成凸包）；或更省的办法——用
+  primitive collider（盒 / 球 / 胶囊）拼出大致形状代替
+  MeshCollider，既便宜又稳。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含 1 改代码题 + 1 独立实现题；答案折叠。 */}
+
+## 小结
+
+- **Rigidbody**：给对象装上它，就「交给物理引擎管」——自动受重力、能被力推、与别人碰撞；属性 `mass` / `drag` / `useGravity` / `isKinematic` / `constraints` 各管一摊
+- **Collider**：给对象套「碰撞外壳」决定形状与块头；盒 / 球 / 胶囊便宜优先用，`MeshCollider` 贵、动态需勾 `Convex`；无 Rigidbody 的 Collider = 静态碰撞器（挡得住但不动）
+- **三态身体**：静态（只 Collider）挡得住、动态（Rigidbody）被撞飞、运动学（Rigidbody + `isKinematic`）不受力但能顶开别人
+- **施力与移动**：`AddForce(向量, ForceMode)` 给力、`rb.velocity` 设速度、`rb.MovePosition` 平移——**全写在 `FixedUpdate` 里**，别在 `Update` 里改物理
+- **三条铁律**：有 Rigidbody 别用 `transform.position` 瞬移（穿墙）；两个碰撞物至少一个要有 Rigidbody 否则事件不触发；`isTrigger` 只感应不阻挡（事件回调见下一章）
+
+<Exercises>
+
+**练习 1（问答）** 给一个挂了 `Rigidbody` 的物体，直接用 `transform.position = newPos` 来移动它，会出什么问题？正确的移动方式分别是什么（动态体 / 运动学体）？
+
+<Answer>
+
+直接改 `transform.position` 是「无视物理的瞬间传送」，它跳过引擎的碰撞检测和速度积分，会导致：**穿墙**（高速瞬移直接跨过墙体）、**位置剧烈抖动**（物理状态和你强设的位置打架）、碰撞反弹乱套。
+
+正确移动方式：
+
+- **动态体**（受力的）：靠 `rb.AddForce(...)` 施力 或 `rb.velocity = ...` 设速度，让引擎按物理把它移动到位；
+- **运动学体 / 需要精确位移的**：用 `rb.MovePosition(目标位置)`——它在物理步里平滑移动并正确参与碰撞（能顶开动态体）。
+
+一句话：给了 Rigidbody 的物体，原则上别再碰它的 `transform`，改用「施力 / 设 velocity / MovePosition」。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想让物体往前走，但写法有两处问题：① 物理操作放在了 `Update`；② 用 `transform` 直接移动一个有 Rigidbody 的对象。请改写成「在 `FixedUpdate` 里施力」的正确版本。
+
+```csharp
+public class BadMover : MonoBehaviour
+{
+    void Update()
+    {
+        transform.position += Vector3.forward * 5f * Time.deltaTime;
+    }
+}
+```
+
+<Answer>
+
+把物理移动改到 `FixedUpdate`，并用 `AddForce`（或设 `velocity`）而不是直接改 `transform`：
+
+```csharp
+using UnityEngine;
+
+public class GoodMover : MonoBehaviour
+{
+    private Rigidbody rb;
+    void Awake() => rb = GetComponent<Rigidbody>();
+
+    void FixedUpdate()
+    {
+        // 持续推力让它往前（受 mass 影响）；要匀速也可用 rb.velocity = Vector3.forward * 5f;
+        rb.AddForce(Vector3.forward * 10f, ForceMode.Force);
+    }
+}
+```
+
+要点：①所有物理操作（`AddForce` / `velocity`）放 `FixedUpdate`，与物理引擎同节拍，不受帧率影响；②不再碰 `transform.position`——让引擎按物理把它推动；③若要严格匀速、不在意真实手感，可用 `rb.velocity = Vector3.forward * 5f;` 直接设速度。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：一个挂了 `Rigidbody` 的球，玩家**按空格让它起跳**。请写出这个 `MonoBehaviour`（提示：在 `Update` 里读空格输入、存个标记，在 `FixedUpdate` 里用 `AddForce(..., ForceMode.Impulse)` 给一个向上的瞬间冲量）。
+
+<Answer>
+
+读输入放 `Update`、施力放 `FixedUpdate`（这是处理「输入驱动物理」的标准拆分）：
+
+```csharp
+using UnityEngine;
+
+public class Jumper : MonoBehaviour
+{
+    private Rigidbody rb;
+    private bool jumpQueued;   // Update 里收到的「要跳」标记
+
+    void Awake() => rb = GetComponent<Rigidbody>();
+
+    void Update()
+    {
+        // 输入在 Update 里读（每帧响应最灵敏），存下标记
+        if (Input.GetKeyDown(KeyCode.Space)) jumpQueued = true;
+    }
+
+    void FixedUpdate()
+    {
+        if (jumpQueued)
+        {
+            // Impulse：一次性向上的瞬间冲量 = 起跳（受 mass 影响）
+            rb.AddForce(Vector3.up * 5f, ForceMode.Impulse);
+            jumpQueued = false;
+        }
+    }
+}
+```
+
+要点：①**输入读在 `Update`**（帧率内最及时地捕捉按键），用一个 `bool` 标记把「要跳」传给物理；②**施力在 `FixedUpdate`**，用 `ForceMode.Impulse` 给向上的瞬间冲量做起跳；③用完把标记清掉，避免连续多帧重复施力。（进阶可加「落地才能再跳」的判定，靠碰撞检测——那是下一章的内容。）
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Rigidbody（刚体）">
+  把一个
+  GameObject「**交给物理引擎管**」的组件。加上它，对象就从「呆着不动」变成「**受物理支配**」：自动受重力下落、能被力（`AddForce`）推、能与别的碰撞体碰撞反弹——这些都由引擎每个物理帧替你算，你只管下指令。常调属性：`mass`（质量，越重越难推）、`drag`（线性阻力，让速度衰减）、`useGravity`（要不要受重力）、`isKinematic`（是否只听脚本、不受力）、`constraints`（冻结某些轴的位置
+  / 旋转）。详见本章「① 加上 Rigidbody」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Collider（碰撞器）">
+  给对象套的一层「**碰撞外壳**」——一个用于碰撞检测的物理形状轮廓。引擎拿这层轮廓（**不是**你看到的精细网格）判断两个对象有没有撞上、撞上往哪弹。常见
+  primitive：`BoxCollider`（盒）/ `SphereCollider`（球）/
+  `CapsuleCollider`（胶囊），都很便宜；`MeshCollider`
+  贴着网格本身，最精确但**很贵**，用在会动的对象上还必须勾
+  Convex（凸包）。Collider 可以**脱离 Rigidbody
+  单独存在**——那就是「静态碰撞器」，挡得住别人但自己不动（墙、地面）。详见本章「③
+  选 Collider 形状」一节。
+</GlossaryItem>
+
+<GlossaryItem term="AddForce">
+  给刚体**施加一个力**的方法，写成 `rb.AddForce(力向量, 模式)`。力按「力 = 质量
+  × 加速度」影响速度，所以同样的力推质量大的对象动得慢。第二个参数 `ForceMode`
+  选施力方式：`Force`（持续推力，受质量影响）/ `Impulse`（瞬间冲量，做跳跃 /
+  击飞）/ `VelocityChange`（直接改速度，忽略质量）/
+  `Acceleration`（持续加速度，忽略质量）。所有物理操作（含 `AddForce`）都应写在
+  **`FixedUpdate`** 里。详见本章「② 在 FixedUpdate 里施力」一节。
+</GlossaryItem>
+
+<GlossaryItem term="isKinematic">
+  Rigidbody
+  上的一个开关。勾上后，这个刚体变成「**运动学体**」：**不再受重力和力**（`AddForce`
+  对它无效），只能由脚本 / 动画用 `MovePosition`
+  之类去移动；但它移动时仍能**顶开**别的动态刚体。用于电梯、移动平台、被动画驱动的角色——这些东西要「会动，但不被物理推来推去」。它与「静态体（无
+  Rigidbody）」「动态体（受力的 Rigidbody）」并称三态身体。详见本章「④
+  运动学体」一节。
+</GlossaryItem>
+
+<GlossaryItem term="isTrigger">
+  Collider
+  上的一个开关。勾上后，这个碰撞器**不再物理阻挡**别人（别人会直接穿过去），只「**感应**到有东西穿过」并发出触发事件——像一道看不见的感应门，常用于「踩到某区域就触发机关」这类感应区。注意：要让碰撞
+  / 触发事件真正触发，参与的两个对象里**至少一个得有
+  Rigidbody**。具体的事件回调（`OnTriggerEnter`
+  等）和射线检测留到下一章。详见本章「⑤ isTrigger 是什么」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

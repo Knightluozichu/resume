@@ -182,6 +182,20 @@ const PAGES = [
   "/learn/cpp-concurrency/advanced/thread-pools",
   "/learn/cpp-concurrency/advanced/parallel-algorithms",
   "/learn/cpp-concurrency/advanced/testing-debugging",
+  // Unity 5 权威讲解
+  "/learn/unity5/getting-started/editor-and-project",
+  "/learn/unity5/getting-started/gameobject-component",
+  "/learn/unity5/getting-started/transform-coordinate",
+  "/learn/unity5/scripting/monobehaviour-lifecycle",
+  "/learn/unity5/scripting/scripting-objects",
+  "/learn/unity5/scripting/coroutines-time",
+  "/learn/unity5/physics/rigidbody-collider",
+  "/learn/unity5/physics/collision-raycast",
+  "/learn/unity5/animation-ui/mecanim",
+  "/learn/unity5/animation-ui/ugui",
+  "/learn/unity5/rendering/materials-lighting",
+  "/learn/unity5/rendering/prefabs-assets",
+  "/learn/unity5/rendering/build-deploy",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

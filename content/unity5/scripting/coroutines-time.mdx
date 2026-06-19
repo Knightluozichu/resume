@@ -1,0 +1,473 @@
+---
+title: 协程与时间
+type: C
+section: Unity脚本
+order: 3
+description: 读完能用 C# 写出协程：返回 IEnumerator、用 yield return 把一件事分散到多帧或按时间排成一串、用 StartCoroutine/StopCoroutine 启停，并能用 Time.deltaTime / timeScale 控制时间、用 WaitForSecondsRealtime 在暂停下正确计时。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·第6章（承接第4章生命周期 + 第5章脚本控制对象）：把「让一件事分散到多帧做 / 按时间顺序排一串动作」写成不阻塞、不在 Update 手搓计时器的协程代码。重心是 §6 代码对照（≥80%），三个 viz 把「跨帧暂停恢复 / 各种 yield / timeScale 陷阱」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) 什么是协程：能中途暂停、之后从断点继续的函数；解决「分散到多帧 / 按时间排一串」而不阻塞、不在 Update 手搓计时器 = CoroutineFrameTimeline（anime·主）+ 文字。 */}
+{/* 2) 写法：返回 IEnumerator、函数体 yield return；StartCoroutine 启动、StopCoroutine/StopAllCoroutines 停 = 代码。 */}
+{/* 3) yield 几种「等待」：null/WaitForSeconds/WaitForSecondsRealtime/WaitForFixedUpdate/WaitForEndOfFrame/嵌套 StartCoroutine/WaitUntil/WaitWhile = YieldKindsDiagram（anime）+ 代码。 */}
+{/* 4) Time 家族：deltaTime / time / fixedDeltaTime / timeScale / unscaledDeltaTime = 代码 + 文字。 */}
+{/* 5) 陷阱：协程不是线程；GameObject 失活/销毁停协程；WaitForSeconds 受 timeScale 影响→Realtime；按引用启动要按引用停 = TimeScaleDiagram（anime）+ Callout trap。 */}
+{/* 术语首现 Term：协程Coroutine / yield return / WaitForSeconds / Time.deltaTime / Time.timeScale。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能写出一个最小协程：返回 `IEnumerator`、函数体里 `yield return new WaitForSeconds(t)`、并用 `StartCoroutine` 启动它
+- 能写出「把一件事分散到多帧 / 按时间排成一串动作」的协程，替代「在 `Update` 里手搓计时器」的笨办法，并能用 `StopCoroutine` 把它停掉
+- 能回答：`WaitForSeconds` 在 `Time.timeScale = 0`（游戏暂停）时会发生什么？该改用什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 */}
+
+## 导演不用站着干等
+
+拍戏时导演常要排一串「分了时间的动作」：开灯 → 等 3 秒 → 演员入场 → 再等 2 秒 → 喊卡。如果导演必须**站在原地一直盯着秒表数**，那这 5 秒里他什么别的都干不了，整个片场跟着卡住——这显然很蠢。
+
+聪明的做法是给场记一张**分镜脚本**：「做这一点 → 等 3 秒 → 做下一点」。场记照着脚本走，到点了自己接着做下一步；这期间导演该忙别的忙别的，片场照常运转。我们这章要写的，就是这样一张能「中途停下、到点再从停下处接着走」的脚本。
+
+没有它，你想做「3 秒后爆炸」「淡入淡出」「每隔 1 秒刷一个敌人」这类**带时间节奏**的事，就只能在每帧都跑的逻辑里**自己攒一个计时器变量**，加加减减、判来判去——又啰嗦又容易错。这一章让你把这些写得既短又顺。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：协程、yield、等待与时间
+
+本章四件事先各认个脸，**怎么写成代码留到第六节细讲**。
+
+**① 什么是协程。** 普通函数一旦进去就一口气跑到底；而
+
+<Term def="一个能「中途暂停、之后从断点那一行继续」的特殊函数。用它把一件事分散到多帧做、或按时间顺序排成一串动作，既不阻塞主线程，也不用在 Update 里手搓计时器。它在 Unity 里靠返回 IEnumerator + yield return 实现。">
+  协程（Coroutine）
+</Term>
+能在中途**就地暂停**，把控制权交还引擎，等到该它的时候再**从断点的下一行**继续——而不是从头重来。它就是上面那张「分镜脚本」。这件「跨帧暂停、再从断点恢复」是本章最难的概念，下面这张主图把它一步步演出来：
+
+<CoroutineFrameTimeline />
+
+**② 怎么写、怎么启停。** 协程函数的返回类型是 `IEnumerator`，函数体里靠
+
+<Term def="协程函数体里的暂停语句。yield return 后面跟一个「等待条件」（如 null、WaitForSeconds(t)），协程就在这一行挂起，等条件满足后从下一行继续。它是协程能「分步、按时间走」的关键。">
+  yield return
+</Term>
+这一句来「暂停 + 说明等多久」。写好的协程不会自己跑，要用
+`StartCoroutine(协程())` 启动，用 `StopCoroutine` / `StopAllCoroutines` 停。
+
+**③ yield 的几种「等待」。** `yield return` 后面跟什么，决定「**下一次什么时候轮到我接着跑**」。最常用的两个：`yield return null`（等到**下一帧**）、
+
+<Term def="一个让协程「等待 t 秒后再继续」的等待对象，写成 yield return new WaitForSeconds(t)。注意它用的是「游戏时间」，会被 Time.timeScale 缩放——timeScale=0 暂停时它永远等不到。">
+  WaitForSeconds(t)
+</Term>
+（等 **t 秒**）。此外还有
+`WaitForFixedUpdate`（等下次物理节拍）、`WaitForEndOfFrame`（等本帧渲染完）等。下面这张图把四种
+yield 的「恢复点」并排画在同一条帧轴上，帮你分清它们：
+
+<YieldKindsDiagram />
+
+**④ 时间家族与一个大坑。** 写带时间的逻辑离不开 `Time` 这一族量，最常用的是
+
+<Term def="上一帧到这一帧的间隔秒数。在每帧逻辑里把速度乘上它，移动 / 旋转 / 计时就与帧率无关（不同设备一样快）。它本身受 Time.timeScale 缩放。">
+  Time.deltaTime
+</Term>
+（每帧间隔秒数），以及
+
+<Term def="「游戏世界的时间倍率」：1 = 正常、0.5 = 慢动作、0 = 整个游戏暂停。它会缩放 deltaTime 和 WaitForSeconds 等「游戏时间」，但不影响 Realtime 系列与 unscaled 系列。">
+  Time.timeScale
+</Term>
+（游戏时间倍率，设 0 即暂停游戏）。这里藏着本章最大的坑：把游戏暂停（`timeScale
+= 0`）时，`WaitForSeconds`
+会**跟着冻住、永远等不到**。下面这张图把两只秒表摆一起，点清这个陷阱：
+
+<TimeScaleDiagram />
+
+这四件事就是本章的全部。**它们怎么写成代码，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = CoroutineFrameTimeline（含「猜一猜」），辅 = YieldKindsDiagram + TimeScaleDiagram。每个 anime viz 都带可暂停/单步/拖进度。 */}
+
+## 动手：把「暂停 / 恢复」单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **协程跨帧暂停 / 恢复动画**——它就是本章的主 Demo。
+
+> 猜一猜：协程跑到 `yield return new WaitForSeconds(1)` 暂停的那 1 秒里，引擎是**站着干等这 1 秒**，还是**照常去画别的帧**？回到「先认个脸」里那张主图，单步走到第③步——你会看到协程挂起的这几帧里，函数体一行都没跑，而帧轴照样一帧帧往前走。这正是协程的精髓：它**不阻塞**，等待期间引擎照常运转；等条件满足，它**从断点的下一行**（不是从头）继续。
+
+单步走完主图，再去玩另外两张：**四种 yield 对照图**帮你钉牢「null 等下一帧、WaitForSeconds 等几帧、FixedUpdate 等物理节拍、EndOfFrame 等本帧末尾」；**timeScale 双秒表图**帮你看清「为什么暂停游戏 WaitForSeconds 会卡死」。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：最小协程 / 对比手搓计时器 vs 协程 / yield 几种返回值 / 嵌套协程 / StopCoroutine 引用vs字符串 / timeScale 暂停 + Realtime。 */}
+
+## 代码：协程从最小写法到时间控制
+
+这一节是本章的重心。每段都给一块可直接放进 `MonoBehaviour` 的代码，逐段讲清。
+
+### ① 一个最小协程
+
+协程函数返回 `IEnumerator`，函数体里用 `yield return` 暂停，再用 `StartCoroutine` 启动它：
+
+```csharp
+using System.Collections; // IEnumerator 在这个命名空间
+using UnityEngine;
+
+public class Bomb : MonoBehaviour
+{
+    void Start()
+    {
+        // 启动协程——注意要「调用它」拿到 IEnumerator 再传进去
+        StartCoroutine(Explode());
+    }
+
+    // 协程函数：返回类型必须是 IEnumerator
+    IEnumerator Explode()
+    {
+        Debug.Log("引线点燃…");
+        yield return new WaitForSeconds(3f); // 在这一行就地暂停 3 秒
+        Debug.Log("砰！3 秒后爆炸");          // 3 秒到了从这里继续
+    }
+}
+```
+
+`Explode()` 跑到 `yield return new WaitForSeconds(3f)` 就**挂起 3 秒**，把控制权交还引擎；3 秒后从下一行继续打印「砰」。`StartCoroutine(Explode())` 里要先**调用** `Explode()` 拿到 `IEnumerator` 再传进去——这是协程启动的固定写法。
+
+<Callout type="warn">
+  **协程函数必须返回 `IEnumerator`，且函数体里至少有一个 `yield`。** 漏写
+  `yield`，编译器就不把它当协程（普通方法里写 `yield`
+  反而会编译错）；返回类型写成 `void` 也无法被 `StartCoroutine` 启动。记得
+  `using System.Collections;`，否则 `IEnumerator` 找不到。
+</Callout>
+
+### ② 对比：手搓计时器 vs 协程
+
+做同一件「3 秒后开门」的事，先看**不用协程**的笨办法——在 `Update` 里自己攒计时器：
+
+```csharp
+public class Door : MonoBehaviour
+{
+    private bool counting;
+    private float timer;       // 自己维护的计时器变量
+    private bool opened;
+
+    public void StartCountdown()
+    {
+        counting = true;
+        timer = 0f;
+    }
+
+    void Update()
+    {
+        if (!counting || opened) return;     // 一堆状态判断
+        timer += Time.deltaTime;             // 每帧手动累加
+        if (timer >= 3f) { Open(); opened = true; counting = false; }
+    }
+
+    void Open() => Debug.Log("门开了");
+}
+```
+
+为了一句「3 秒后开门」，要养三个字段、每帧判一堆状态——又啰嗦又容易漏。换成协程，同一件事**一目了然**：
+
+```csharp
+public class Door2 : MonoBehaviour
+{
+    public void StartCountdown() => StartCoroutine(OpenAfter(3f));
+
+    IEnumerator OpenAfter(float delay)
+    {
+        yield return new WaitForSeconds(delay); // 等 delay 秒
+        Debug.Log("门开了");                     // 到点就开
+    }
+}
+```
+
+协程版没有计时器字段、没有 `Update` 里的状态判断——「等多久、做什么」顺着读下来就是。**凡是「等一会儿再做 / 把一串动作按时间排开」的逻辑，优先用协程，别在 `Update` 里手搓计时器。**
+
+### ③ yield 的几种返回值
+
+`yield return` 后面跟不同的东西，决定「下一次何时恢复」。常用的几种：
+
+```csharp
+IEnumerator YieldKinds()
+{
+    yield return null;                          // 等到「下一帧」（逐帧推进）
+    yield return new WaitForSeconds(2f);        // 等 2 秒（游戏时间，受 timeScale 影响）
+    yield return new WaitForSecondsRealtime(2f); // 等 2 秒（真实时间，不受 timeScale）
+    yield return new WaitForFixedUpdate();      // 等到下一次 FixedUpdate（物理节拍）
+    yield return new WaitForEndOfFrame();       // 等到本帧渲染完、画面提交前
+    yield return new WaitUntil(() => isReady);  // 一直等，直到条件为 true
+    yield return new WaitWhile(() => isPaused); // 一直等，趁条件为 true 时挂着
+}
+```
+
+`null` 是最常用的「下一帧再继续」，做逐帧动画（每帧推进一点）就靠它。`WaitForSeconds` 与 `WaitForSecondsRealtime` 的区别是本章重点（见命令⑥）。`WaitUntil` / `WaitWhile` 让你「等到某个条件成立 / 不成立」再走，比自己每帧判断条件干净。
+
+### ④ 嵌套协程：等另一个协程跑完
+
+`yield return StartCoroutine(...)` 可以让一个协程「**等另一个协程整段跑完**再继续」，从而把动作串起来：
+
+```csharp
+IEnumerator PlayCutscene()
+{
+    yield return StartCoroutine(FadeIn());   // 先把淡入这段协程整段跑完
+    Debug.Log("淡入完成，开始播台词");
+    yield return StartCoroutine(FadeOut());  // 再把淡出整段跑完
+    Debug.Log("过场结束");
+}
+
+IEnumerator FadeIn()  { /* …若干帧把画面变亮… */ yield return null; }
+IEnumerator FadeOut() { /* …若干帧把画面变暗… */ yield return null; }
+```
+
+`yield return StartCoroutine(FadeIn())` 会**挂起 `PlayCutscene`，直到 `FadeIn` 这个子协程彻底结束**，才继续往下。这样「淡入 → 台词 → 淡出」就被顺序地排成了一条时间线，读起来就是流程本身。
+
+### ⑤ 停止协程：按引用停 vs 按名字停
+
+停协程有两种配对方式，**怎么启动就得怎么停**，不能混：
+
+```csharp
+private Coroutine running;
+
+void StartIt()
+{
+    // 方式 A：按「引用」启动——StartCoroutine 返回一个 Coroutine 句柄，存起来
+    running = StartCoroutine(Loop());
+}
+
+void StopIt()
+{
+    if (running != null) StopCoroutine(running); // 按引用停：传那个句柄
+    StopAllCoroutines();                          // 或一把停掉本脚本所有协程
+}
+
+IEnumerator Loop() { while (true) { yield return new WaitForSeconds(1f); } }
+```
+
+`StartCoroutine` 返回一个 `Coroutine` 句柄，存进字段，停的时候把这个**句柄**传给 `StopCoroutine`——这是最稳的方式。另一种是**按字符串名字**：`StartCoroutine("Loop")` 启动、`StopCoroutine("Loop")` 停。
+
+<Callout type="warn">
+  **按引用启动就按引用停，按名字启动就按名字停——两者不能交叉。** 你用
+  `StartCoroutine(Loop())`（按引用）启动，却用
+  `StopCoroutine("Loop")`（按名字）去停，是**停不掉**的；反之亦然。按字符串名还有个限制：只能启动**无参或单个参数**的协程。新手最好统一用「存句柄、按引用停」这一套。
+</Callout>
+
+### ⑥ timeScale 暂停与 WaitForSecondsRealtime
+
+把 `Time.timeScale` 设成 0 就能**暂停整个游戏**（物理、动画、`WaitForSeconds` 全冻住）。但这会带出本章最大的坑——暂停时 `WaitForSeconds` 永远等不到：
+
+```csharp
+public void Pause()  => Time.timeScale = 0f; // 暂停游戏
+public void Resume() => Time.timeScale = 1f; // 恢复
+
+// 暂停菜单里的「3 秒后自动隐藏提示」——必须用 Realtime，否则暂停时永远不隐藏
+IEnumerator HideTipAfter(float seconds)
+{
+    // 用 Realtime：走真实时间，不受 timeScale=0 影响
+    yield return new WaitForSecondsRealtime(seconds);
+    Debug.Log("提示自动隐藏");
+}
+```
+
+`WaitForSeconds` 用的是「游戏时间」，`timeScale = 0` 时游戏时间不再前进，它的倒计时就**冻在那里、永远等不到**，协程卡死在那一行。`WaitForSecondsRealtime` 用「真实墙上时间」，**不受 timeScale 影响**，所以暂停界面里的计时、倒计时一律用它。
+
+<Callout type="tip">
+  顺带认全 `Time`
+  家族：`Time.time`（游戏开局至今的秒数）、`Time.deltaTime`（上一帧间隔，受
+  timeScale 缩放）、`Time.unscaledDeltaTime`（上一帧间隔，**不受**
+  timeScale，暂停时仍前进）、`Time.fixedDeltaTime`（FixedUpdate 的固定步长，默认
+  0.02s）。规律：**带 `unscaled` / `Realtime` 的不受 timeScale
+  影响，其余的都受。**
+</Callout>
+
+至此协程的写法、各种 yield、嵌套、启停、时间控制都过了一遍。回头看会发现：协程就是把「带时间节奏的一串动作」**顺着写下来**，引擎替你管「什么时候接着跑」——这比在 `Update` 里手搓状态机清爽得多。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。含 协程不是线程 / GameObject 失活销毁停协程 / WaitForSeconds 在 timeScale=0 等不到 / 按引用启动却按字符串停。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：以为协程是「新开一条线程并行跑」，于是往里塞了一个超耗时的死循环（一帧内
+  `while`
+  算几百万次），结果**整个游戏照样卡死**。**原因**：协程**不是线程**——它仍在**主线程**上逐帧推进，只是能在
+  `yield` 处暂停。两个 `yield`
+  之间的代码是在「同一帧内一口气跑完」的，不会真正并行。**修法**：把重活**用
+  `yield` 切成多帧**（每处理一批就 `yield return null`
+  让出这一帧），别指望协程帮你做后台并行计算（那是 `Thread` / `Job` 的事）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：协程跑到一半「凭空停了」，后半段日志再没出现。**原因**：协程**绑在启动它的那个
+  GameObject /
+  脚本组件上**——当这个对象被**禁用（SetActive(false)）或销毁（Destroy）**时，它身上的协程会**被一起停掉**（注意：仅禁用脚本组件的
+  `enabled = false` 不会停已在跑的协程，但禁用整个 GameObject
+  会）。**修法**：需要跨对象存活的计时逻辑，挂到一个**不会被销毁 /
+  失活**的管理者对象上；或改用别的机制。别把长命协程挂在朝生暮死的临时对象上。
+</Callout>
+
+<Callout type="trap">
+  **现象**：做了个暂停菜单，`Time.timeScale = 0` 暂停后，里头一个 `yield return
+  new WaitForSeconds(3f)` 的协程**再也不往下走**。**原因**：`WaitForSeconds`
+  走「游戏时间」，`timeScale = 0`
+  时游戏时间停止，它的倒计时**永远到不了点**，协程卡死在那一行。**修法**：暂停状态下还需计时的协程，把
+  `WaitForSeconds` 换成 **`WaitForSecondsRealtime`**（走真实时间，不受 timeScale
+  影响）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：`StartCoroutine(Loop())` 启动了协程，之后 `StopCoroutine("Loop")`
+  却**怎么都停不掉**。**原因**：你**按引用启动、却按字符串名去停**——两套机制不通用，按引用启的协程引擎没按名字登记，自然找不到。**修法**：统一一套：要么
+  `running = StartCoroutine(Loop());` 配 `StopCoroutine(running);`（推荐），要么
+  `StartCoroutine("Loop")` 配
+  `StopCoroutine("Loop")`。别交叉，也别忘了想停就得先把句柄存下来。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含改/写代码题 + C 型独立实现题；答案折叠。 */}
+
+## 小结
+
+- **协程**：返回 `IEnumerator`、函数体里 `yield return ...` 的特殊函数；能**中途暂停、从断点继续**，把一件事分散到多帧 / 按时间排成一串，**不阻塞**主线程
+- **启停**：`StartCoroutine(Foo())` 启动（要先调用拿 `IEnumerator`）；`StopCoroutine` / `StopAllCoroutines` 停——**按引用启就按引用停，按名字启就按名字停**
+- **yield 几种等待**：`null`（下一帧）、`WaitForSeconds`（等几秒·游戏时间）、`WaitForSecondsRealtime`（真实时间）、`WaitForFixedUpdate` / `WaitForEndOfFrame`、`yield return StartCoroutine(...)`（等子协程跑完）
+- **Time 家族**：`deltaTime`（每帧间隔，乘它使速度与帧率无关）、`timeScale`（=0 暂停 / =0.5 慢动作）；带 `unscaled` / `Realtime` 的不受 timeScale 影响
+- **三个大坑**：协程不是线程（仍在主线程，重活要 `yield` 切多帧）；对象失活 / 销毁会停协程；`timeScale = 0` 时 `WaitForSeconds` 等不到，改用 `WaitForSecondsRealtime`
+
+<Exercises>
+
+**练习 1（问答 + 判断）** `Time.timeScale = 0` 暂停游戏时，一个正在 `yield return new WaitForSeconds(3f)` 等待的协程会怎样？为什么？该怎么改才能让它在暂停下也正常计时？另外，协程是「新开一条线程并行跑」吗？
+
+<Answer>
+
+它会**卡死在那一行、永远等不到**。因为 `WaitForSeconds` 用的是「游戏时间」，会被 `Time.timeScale` 缩放；`timeScale = 0` 时游戏时间停止前进，那 3 秒的倒计时永远到不了点。
+
+修法：把 `WaitForSeconds` 换成 **`WaitForSecondsRealtime`**——它走「真实墙上时间」，不受 `timeScale` 影响，暂停下照样计时。
+
+协程**不是**新开线程并行跑。它仍在**主线程**上逐帧推进，只是能在 `yield` 处暂停、让出当前帧；两个 `yield` 之间的代码是在同一帧内一口气跑完的，不会真正并行。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想做「3 秒后销毁自己」，但写法很笨（在 `Update` 里手搓计时器），还有一处会让暂停游戏时永远销毁不掉。请用协程改写，并修掉暂停时的问题。
+
+```csharp
+private float timer;
+
+void Update()
+{
+    timer += Time.deltaTime;
+    if (timer >= 3f) Destroy(gameObject);
+}
+```
+
+<Answer>
+
+用协程改写，省掉计时器字段和每帧判断；并把等待换成 `WaitForSecondsRealtime`，使暂停（timeScale=0）时也能正常计时销毁：
+
+```csharp
+using System.Collections;
+using UnityEngine;
+
+public class SelfDestruct : MonoBehaviour
+{
+    void Start() => StartCoroutine(DestroyAfter(3f));
+
+    IEnumerator DestroyAfter(float delay)
+    {
+        // Realtime：即便游戏暂停（timeScale=0）也照常计时
+        yield return new WaitForSecondsRealtime(delay);
+        Destroy(gameObject);
+    }
+}
+```
+
+要点：①协程把「等 3 秒再销毁」顺着写下来，无需 `Update` 里的 `timer` 字段；②原 `Time.deltaTime` 受 `timeScale` 缩放，暂停时 `timer` 不再累加、永远到不了 3 秒，换 `WaitForSecondsRealtime` 即可（若本就不需要在暂停下计时，用 `WaitForSeconds` 也行，但要清楚二者区别）。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：游戏开局后，每隔 1 秒在控制台打印一次倒计时——`3` → `2` → `1` → `GO`，然后协程结束。请写出这个 `MonoBehaviour`（提示：用一个循环 + `yield return new WaitForSeconds(1f)`；想想循环和最后那句 `GO` 怎么排）。
+
+<Answer>
+
+```csharp
+using System.Collections;
+using UnityEngine;
+
+public class Countdown : MonoBehaviour
+{
+    void Start() => StartCoroutine(Run());
+
+    IEnumerator Run()
+    {
+        // 从 3 数到 1，每打印一个就等 1 秒
+        for (int n = 3; n >= 1; n--)
+        {
+            Debug.Log(n);
+            yield return new WaitForSeconds(1f);
+        }
+        Debug.Log("GO");   // 倒计时结束，喊 GO；函数到底，协程结束
+    }
+}
+```
+
+要点：①用 `for (int n = 3; n >= 1; n--)` 循环打印 `3 2 1`，每次循环末尾 `yield return new WaitForSeconds(1f)` 等 1 秒——靠协程把这「分了时间的一串动作」顺着写下来，不用 `Update` 攒计时器；②循环结束后再 `Debug.Log("GO")`，函数体跑完协程自然结束。（若希望暂停游戏时倒计时也走，把 `WaitForSeconds` 换成 `WaitForSecondsRealtime`。）
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="协程（Coroutine）">
+  一个能「**中途暂停、之后从断点那一行继续**」的特殊函数。普通函数进去就一口气跑完，协程却能在
+  `yield return`
+  处停下、把控制权交还引擎，到点了再从停下处接着走。用它把一件事**分散到多帧**做、或把一串动作**按时间排开**，既**不阻塞**主线程，也不用在
+  `Update` 里手搓计时器。在 Unity 里靠「返回 `IEnumerator` + 函数体里 `yield
+  return`」实现，用 `StartCoroutine`
+  启动。注意它**不是线程**——仍在主线程上逐帧推进。详见本章「①
+  一个最小协程」一节。
+</GlossaryItem>
+
+<GlossaryItem term="yield return">
+  协程函数体里的**暂停语句**。`yield return` 后面跟一个「等待条件」——比如
+  `null`（等下一帧）、`new WaitForSeconds(t)`（等 t
+  秒）——协程就在这一行**挂起**，等条件满足后**从下一行继续**。它是协程能「分步走、按时间走」的关键；一个协程函数体里至少要有一个
+  `yield`，否则不被当作协程。详见本章「③ yield 的几种返回值」一节。
+</GlossaryItem>
+
+<GlossaryItem term="WaitForSeconds(t)">
+  一个让协程「**等 t 秒后再继续**」的等待对象，写成 `yield return new
+  WaitForSeconds(t)`。关键点：它用的是「**游戏时间**」，会被 `Time.timeScale`
+  缩放——所以 `timeScale =
+  0`（暂停游戏）时它的倒计时会冻住、**永远等不到**。要在暂停下也正常计时，请改用走真实时间的
+  `WaitForSecondsRealtime`。详见本章「⑥ timeScale 暂停」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Time.deltaTime">
+  「**上一帧到这一帧的间隔秒数**」。在每帧逻辑里把移动 / 旋转 /
+  计时的量乘上它，结果就**与帧率无关**——高帧率每帧动得少、低帧率每帧动得多，叠起来一样快，不同设备表现一致。它本身**受
+  `Time.timeScale` 缩放**（暂停时为 0）；想要不受暂停影响的版本是
+  `Time.unscaledDeltaTime`。详见本章「⑥ timeScale 暂停」一节的 Time 家族。
+</GlossaryItem>
+
+<GlossaryItem term="Time.timeScale">
+  「**游戏世界的时间倍率**」：`1` = 正常速度、`0.5` = 慢动作、`0` =
+  整个游戏暂停（物理、动画、`WaitForSeconds` 全冻住）。它会缩放 `Time.deltaTime`
+  和 `WaitForSeconds` 这类「游戏时间」，但**不影响**带 `Realtime` / `unscaled`
+  的那些（它们走真实时间）。做暂停 / 慢镜头就靠改它。详见本章「⑥ timeScale
+  暂停」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

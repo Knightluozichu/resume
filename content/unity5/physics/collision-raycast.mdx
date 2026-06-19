@@ -1,0 +1,453 @@
+---
+title: 碰撞触发事件与射线检测
+type: C
+section: Unity物理
+order: 2
+description: 读完能写出 OnCollisionEnter / OnTriggerEnter / Exit 事件回调让对象「撞上 / 穿入就做事」，分清实心碰撞走 OnCollision*、触发器走 OnTrigger*、以及事件触发的几个必备条件，并用 Physics.Raycast 射一条线检测命中、从 RaycastHit 读命中点 / 法线 / 距离 / 命中对象、用 LayerMask 过滤层。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇3 物理 第2章（承接第7章末尾埋的 isTrigger 伏笔：「事件回调留到下一章」）：把「撞上 / 穿入就做事」与「射一条线检测命中」写成代码。重心是 §6 代码对照（≥80%），三个 viz 把「实心 vs 触发两套回调 / 射线命中读 RaycastHit / 事件触发条件决策流」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) 碰撞事件 OnCollisionEnter/Stay/Exit（实心，参数 Collision c：c.gameObject / c.relativeVelocity / c.contacts）= CollisionTriggerEventsDiagram（anime·主左栏）+ 代码。 */}
+{/* 2) 触发事件 OnTriggerEnter/Stay/Exit（isTrigger，参数 Collider other + CompareTag）= CollisionTriggerEventsDiagram（anime·主右栏）+ 代码。 */}
+{/* 3) 事件触发条件（最易错）：两边都有 Collider + 至少一个有 Rigidbody + 任一 isTrigger 走 Trigger 否则 Collision；两个静态碰撞器啥都不触发 = EventConditionDiagram（静态决策流）+ Callout warn。 */}
+{/* 4) 射线检测 Physics.Raycast(origin, dir, out hit, maxDistance, layerMask)：射一条线命中第一个碰撞体 = RaycastDiagram（anime）+ 代码。 */}
+{/* 5) RaycastHit（point/normal/distance/collider/transform）+ LayerMask 过滤；变体 RaycastAll/Linecast/Debug.DrawRay；鼠标 ScreenPointToRay = 代码。 */}
+{/* 陷阱：①OnTriggerEnter 不触发（漏 Rigidbody/isTrigger/Collider）；②实心写成 OnTriggerEnter 或回调名拼错（静默不调）；③Raycast 从碰撞体内部发出漏检/命中自己（起点偏移 + layerMask）。 */}
+{/* 术语首现 Term：OnCollisionEnter / OnTriggerEnter / Physics.Raycast / RaycastHit / LayerMask（5 个 = Glossary 5 条）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能写出 `OnCollisionEnter` / `OnTriggerEnter` 等事件回调，让对象「撞上别人 / 有东西穿入感应区」时自动做事，并分清实心碰撞走 `OnCollision*`、触发器走 `OnTrigger*`
+- 能写出 `Physics.Raycast(...)` 射一条线做命中检测（射击 / 脚下着地 / 鼠标点选），并从 `RaycastHit` 读出命中点、法线、距离、命中对象，用 `LayerMask` 过滤层
+- 能回答：写了 `OnTriggerEnter` 却一直不触发，可能漏了哪几个条件？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 */}
+
+## 让演员「撞到东西就喊一声」
+
+上一章我们给道具接上了物理，能撞、能挡、能弹。可光会撞还不够——你常常想在「撞上的那一刻」**做点什么**：捡到金币就加分、踩到尖刺就掉血、走进房间就亮灯。这就像给演员一句提示：「**你一撞到那个箱子，就喊一声，让我知道**。」引擎替你盯着，撞上了就回头调你写的那段代码。
+
+还有一种更轻的「碰」：不真撞、只感应。像在地上画一道看不见的线，演员一脚踏进去你就知道——做触发机关、感应门全靠它。另外导演还有个常用招式：拿一支**激光笔往前一指**，看那个红点打在谁身上——子弹打中了谁、脚下有没有地面、鼠标点到了哪个物体，都是这么问出来的。
+
+没有这两样，你想做「撞到才扣血」「走进区域才触发」「枪口往前看打中谁」，就得**自己每帧去比对所有物体的位置、自己算有没有重叠、自己算那条线穿过了谁**——又慢又错漏百出。这一章让你把这些交给引擎，自己只管写「撞上了 / 命中了，然后做什么」。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：碰撞事件、触发事件、触发条件、射线、命中信息
+
+本章五件事先各认个脸，**怎么写成代码留到第六节细讲**。
+
+**① 碰撞事件。** 两个**实心**碰撞器撞上时，引擎会自动回头调你脚本里的
+
+<Term def="实心碰撞（两个都没勾 isTrigger 的碰撞器）发生时，引擎自动调用的事件回调方法，写在挂了碰撞器的脚本里。它一族三个：OnCollisionEnter（撞上的那一刻调一次）、OnCollisionStay（接触持续期间每帧调）、OnCollisionExit（分开的那一刻调一次）。参数是 Collision c，能拿到撞到谁（c.gameObject）、撞击相对速度（c.relativeVelocity）、接触点（c.contacts）。">
+  OnCollisionEnter
+</Term>
+这一族方法——`Enter`（撞上瞬间）、`Stay`（接触持续）、`Exit`（分开瞬间）。它们的参数是一个
+`Collision`，里面装着「撞到了谁、撞得多猛、在哪儿撞的」。
+
+**② 触发事件。** 如果碰撞器勾了上一章说的 `isTrigger`，它就不挡人、只感应——这时走的是另一族回调
+
+<Term def="触发器（勾了 isTrigger 的碰撞器）被穿过时，引擎自动调用的事件回调方法。它一族三个：OnTriggerEnter（有东西穿入的那一刻调一次）、OnTriggerStay（停留在范围内每帧调）、OnTriggerExit（穿出的那一刻调一次）。参数是 Collider other —— 穿过来的那个碰撞器，常用 other.CompareTag(「标签」) 判断穿进来的是谁。">
+  OnTriggerEnter
+</Term>
+（`Enter` / `Stay` / `Exit`），参数是穿过来的那个
+`Collider`。下面这张主图把「实心走 Collision、触发走
+Trigger」和「Enter→Stay→Exit 三时机」左右对照演给你看：
+
+<CollisionTriggerEventsDiagram />
+
+**③ 事件触发的条件（最容易踩）。** 不是写了回调就会被调——事件能否触发有几个**必备条件**：两个对象都得有 Collider、**至少一个**得有 Rigidbody、任一勾了 isTrigger 就走 Trigger 那套（否则走 Collision），两个都是静态碰撞器（都没 Rigidbody）则**啥都不触发**。这套判定，与其背 9×9 的碰撞矩阵，不如顺着下面这张决策流走一遍：
+
+<EventConditionDiagram />
+
+**④ 射线检测。** 另一条主线是「拿激光笔往前一指、看打中谁」——这就是
+
+<Term def="从一个起点 origin 沿一个方向 direction 射出一条看不见的线，检测它命中的第一个碰撞体。写成 Physics.Raycast(origin, direction, out RaycastHit hit, maxDistance, layerMask)：命中返回 true，并把命中信息写进 hit。用于射击判定、脚下是否着地、鼠标点选（配 Camera.main.ScreenPointToRay）、视线遮挡等。">
+  Physics.Raycast
+</Term>
+。给它一个起点和方向，它沿线找出**第一个**挡路的碰撞体，命中就返回
+`true`。下面这张图把「射线延展 → 穿过被忽略的层 → 命中目标 →
+弹出命中信息」演一遍：
+
+<RaycastDiagram />
+
+**⑤ 命中信息与层过滤。** 射线命中后，所有细节都写进一个
+
+<Term def="一个结构体，装着射线命中的所有信息：hit.point（命中点的世界坐标）、hit.normal（命中面的法线方向）、hit.distance（从起点到命中点的距离）、hit.collider / hit.transform（命中的那个对象）。Physics.Raycast 通过 out 参数把它填好交给你。">
+  RaycastHit
+</Term>
+里——命中点、法线、距离、命中的是谁，一应俱全。而要让射线「只看某些层、跳过其余」，就传一个
+
+<Term def="一个用「位」表示「要检测哪些层」的过滤器。Unity 的对象可以分到 32 个 Layer（层）里；给 Raycast 传一个 LayerMask，射线就只检测被选中的那些层、忽略其余。常写成 LayerMask.GetMask(「Enemy」, 「Wall」) 或在 Inspector 里勾选。用它避免射线命中自己、命中不该命中的层。">
+  LayerMask
+</Term>
+。这两个一个管「命中后能问到什么」、一个管「只对哪些层射」。
+
+这五件事就是本章全部。**它们怎么写成代码、有哪些坑，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = CollisionTriggerEventsDiagram（含「猜一猜」），辅 = RaycastDiagram + EventConditionDiagram。 */}
+
+## 动手：把「实心碰撞 vs 触发」两套回调单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **实心碰撞 vs 触发器对照动画**——它就是本章的主 Demo。
+
+> 猜一猜：把右栏方块的碰撞器**勾上 isTrigger** 后，它撞到对方会**被挡住**、还是**直接穿过去**？回到「先认个脸」里那张主图，单步走到第④步——你会看到勾了 isTrigger 的绿方块**直接穿进**感应区（不被阻挡），引擎调用的是 `OnTriggerEnter`；而左栏没勾 isTrigger 的紫方块撞墙**被挡住**，引擎调用的是 `OnCollisionEnter`。这正是两套事件的分水岭：**实心走 Collision（会挡）、触发走 Trigger（只感应）**。
+
+单步走完主图，再去看另外两张：**射线检测图**帮你看清「`Physics.Raycast` 射一条线、被 layerMask 过滤的层穿过去、命中目标后从 `RaycastHit` 读 point / normal / distance」；**事件触发条件决策图**帮你钉牢「两边都要 Collider、至少一个要 Rigidbody、勾没勾 isTrigger 决定走哪套回调」。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：①OnCollisionEnter/Stay/Exit + Collision 参数；②OnTriggerEnter/Stay/Exit + Collider other + CompareTag；③触发条件（呼应决策图）+ warn；④Physics.Raycast 基本 + 读 hit；⑤鼠标 ScreenPointToRay + Debug.DrawRay + 点到 RaycastAll/Linecast。 */}
+
+## 代码：从碰撞 / 触发回调到射线检测
+
+这一节是本章的重心。每段都给一块可直接放进 `MonoBehaviour` 的代码，逐段讲清。
+
+### ① 碰撞事件：OnCollisionEnter / Stay / Exit
+
+两个**实心**碰撞器（都没勾 isTrigger）撞上时，引擎按名字自动调用你脚本里的这三个方法——你只要把它们写出来就行：
+
+```csharp
+using UnityEngine;
+
+public class CrateHitReport : MonoBehaviour
+{
+    // 撞上的那一刻调一次。参数 Collision 里装着这次碰撞的细节
+    void OnCollisionEnter(Collision c)
+    {
+        Debug.Log($"撞到了 {c.gameObject.name}");        // 撞到谁
+        Debug.Log($"撞击相对速度 {c.relativeVelocity}");  // 撞得多猛（可拿来算伤害）
+        Debug.Log($"接触点数 {c.contacts.Length}");        // 在哪些点接触
+    }
+
+    void OnCollisionStay(Collision c) { } // 接触持续期间，每个物理帧调一次
+
+    void OnCollisionExit(Collision c)
+    {
+        Debug.Log($"和 {c.gameObject.name} 分开了"); // 分开的那一刻调一次
+    }
+}
+```
+
+`OnCollisionEnter` 在撞上的**那一帧**调一次，`OnCollisionStay` 在两者**持续顶着**的每个物理帧都调，`OnCollisionExit` 在**分开**时调一次。参数 `Collision c` 是这次碰撞的「档案」：`c.gameObject` 是撞到的对象、`c.relativeVelocity` 是撞击相对速度（做撞击伤害很有用）、`c.contacts` 是接触点数组（要在撞击处冒火花就用它的位置）。
+
+<Callout type="warn">
+  **`OnCollision*` 系列只在「实心碰撞」时触发**（两个碰撞器**都没勾**
+  `isTrigger`）。只要任意一方勾了 `isTrigger`，这次接触就走 `OnTrigger*`
+  那套、**不会**进
+  `OnCollision*`。另外这些方法名是引擎**按名字反射调用**的——拼错一个字母（如
+  `OnColisionEnter`）就静默不被调用、也不报错，排错时第一件事是检查方法名拼写。
+</Callout>
+
+### ② 触发事件：OnTriggerEnter / Stay / Exit + CompareTag
+
+把碰撞器勾上 `isTrigger` 后，它不再阻挡、只感应穿过——这时走另一族回调，参数是穿过来的那个 `Collider`：
+
+```csharp
+public class DamageZone : MonoBehaviour // 挂在一个勾了 isTrigger 的碰撞器上
+{
+    // 有东西穿入感应区的那一刻调一次
+    void OnTriggerEnter(Collider other)
+    {
+        // 用 CompareTag 按标签区分穿进来的是谁（比 other.tag == "Player" 快）
+        if (other.CompareTag("Player"))
+            Debug.Log("玩家进入了危险区");
+    }
+
+    void OnTriggerStay(Collider other) { } // 停留范围内，每个物理帧调一次（可持续扣血）
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("Player"))
+            Debug.Log("玩家离开了危险区");
+    }
+}
+```
+
+注意触发回调的参数是 `Collider other`（穿过来的那个碰撞器），**不是** `Collision`——因为没有真实碰撞、没有撞击速度和接触点可拿。`OnTriggerEnter` / `Stay` / `Exit` 对应「穿入 / 停留 / 穿出」三时机。回调里常用 `other.CompareTag("标签")` 判断「进来的是不是玩家 / 敌人」。
+
+<Callout type="warn">
+  **用 `other.CompareTag("Player")`，别写 `other.tag == "Player"`。** `==`
+  比较字符串会产生**字符串内存分配**（在每帧可能多次触发的回调里，是垃圾回收的常见来源），而
+  `CompareTag` 是引擎优化过的整数比较，又快又不产生垃圾。标签名拼错时
+  `CompareTag` 还会在编辑器里报「未定义标签」，比 `==` 静默失败更易排错。
+</Callout>
+
+### ③ 事件触发的必备条件（呼应决策图）
+
+写了回调却一个都不触发？多半是**条件没满足**。把决策图的三关用代码语言说清——这是本章最容易卡住的地方：
+
+```csharp
+// 要让「碰撞 / 触发事件」真正触发，必须同时满足：
+// 1) 两个对象都挂了 Collider（碰撞器）；
+// 2) 这俩里「至少一个」有 Rigidbody（动态或运动学都行）；
+// 3) 谁勾了 isTrigger？任一勾了 → 走 OnTrigger*；都没勾 → 走 OnCollision*。
+//
+// 反例：墙和地面都是「静态碰撞器」（都没 Rigidbody）→ 引擎不为它俩算 → 啥都不触发。
+
+// 典型可触发搭配：玩家（Rigidbody + Collider）走进一个勾了 isTrigger 的感应区（只 Collider）
+// → 玩家这边带 rb，满足「至少一个有 rb」；感应区勾了 isTrigger → 走 OnTrigger* 回调。
+```
+
+记牢这条链：**两边都要 Collider → 至少一个要 Rigidbody → 看 isTrigger 决定走哪套**。两个都没 Rigidbody，引擎根本不为这对静态碰撞器做碰撞计算，你写的回调当然永远不被调。
+
+<Callout type="trap">
+  **现象**：写了
+  `OnTriggerEnter`，玩家明明走进了区域却**一点反应都没有**。**原因**：触发事件没满足必备条件——最常见的三种漏法：①感应区的碰撞器**没勾**
+  `isTrigger`（那它走的是 `OnCollision*`，不是 `OnTrigger*`）；②**两个对象都没有
+  Rigidbody**（引擎不为两个静态碰撞器算）；③某一方**漏挂了
+  Collider**。**修法**：确认感应区勾了 `isTrigger`、给该动的一方（如玩家）加上
+  `Rigidbody`、两边都挂上 `Collider`。三者缺一不可。
+</Callout>
+
+### ④ 射线检测：Physics.Raycast + 读 RaycastHit
+
+`Physics.Raycast` 从一点沿一个方向射一条看不见的线，命中第一个碰撞体就返回 `true`，并把命中信息填进 `out RaycastHit hit`：
+
+```csharp
+public class GroundChecker : MonoBehaviour
+{
+    public LayerMask groundMask; // 在 Inspector 里勾选「哪些层算地面」
+
+    bool IsGrounded()
+    {
+        RaycastHit hit;
+        // 从脚下沿 -Y 射 0.2m，只检测 groundMask 选中的层
+        bool hitSomething = Physics.Raycast(
+            transform.position, Vector3.down, out hit, 0.2f, groundMask);
+
+        if (hitSomething)
+        {
+            Debug.Log($"踩在 {hit.collider.name} 上");   // 命中谁
+            Debug.Log($"命中点 {hit.point}，距离 {hit.distance}"); // 命中点 / 距离
+            Debug.Log($"地面法线 {hit.normal}");          // 命中面法线
+        }
+        return hitSomething;
+    }
+}
+```
+
+`Physics.Raycast(起点, 方向, out hit, 最大距离, layerMask)`：命中返回 `true`，`hit` 里装着 `hit.point`（命中点世界坐标）、`hit.normal`（命中面法线，做「贴墙 / 斜坡对齐」用）、`hit.distance`（起点到命中点的距离）、`hit.collider` / `hit.transform`（命中的对象）。`layerMask` 让射线只检测某些层——这里只把「地面层」算作地面，避免脚下的小石子也被当成地面。
+
+<Callout type="trap">
+  **现象**：从角色身上发射的射线，**第一个命中的竟是自己**，或明明前方有目标却漏检。**原因**：①起点在角色的碰撞体**内部**，射线一出生就「命中」了自己的
+  collider；②没传
+  `layerMask`，射线命中了不该命中的层（包括自己所在的层）。**修法**：把起点**抬离自身碰撞体**（如
+  `transform.position + Vector3.up * 0.1f`），并传一个 `layerMask`
+  **排除自己所在的层**、只检测目标层；必要时给本对象单独分一个层来过滤。
+</Callout>
+
+### ⑤ 鼠标点选 + Debug 画线 + 几个变体
+
+「点哪个物体」靠摄像机把屏幕坐标转成一条射线（`ScreenPointToRay`），再 Raycast；调试时用 `Debug.DrawRay` 把射线**画在编辑器里**看个明白：
+
+```csharp
+void Update()
+{
+    if (Input.GetMouseButtonDown(0)) // 鼠标左键
+    {
+        // 从摄像机经过鼠标位置射一条射线（屏幕点 → 世界射线）
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+
+        if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+            Debug.Log($"点中了 {hit.collider.name}");
+
+        // 在 Scene 视图里画出这条射线，红色保留 1 秒——纯调试用
+        Debug.DrawRay(ray.origin, ray.direction * 100f, Color.red, 1f);
+    }
+}
+```
+
+`Camera.main.ScreenPointToRay(鼠标位置)` 把屏幕上的点变成一条从摄像机射向场景的射线，传给 `Physics.Raycast` 就知道点中了谁。`Debug.DrawRay` 只在编辑器 Scene 视图画线、不影响游戏，是排查「射线到底射到哪了」的利器。几个常用变体：`Physics.RaycastAll`（返回**沿途所有**命中，不止第一个，用于穿透型武器）、`Physics.Linecast(a, b)`（检测**两点之间**有没有遮挡，做视线判断）。
+
+至此碰撞事件、触发事件、触发条件、射线检测、命中信息都过了一遍。回头看会发现：碰撞 / 触发是「**被动等引擎通知你**——撞上了 / 穿入了就回调你」，射线检测是「**主动去问引擎**——这条线打中了谁」。一被动一主动，覆盖了游戏里绝大多数「判断碰没碰到 / 打没打中」的需求。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。除上面已嵌的 3 个 trap（OnTriggerEnter 不触发 / Raycast 命中自己），再补「实心写成 OnTriggerEnter / 回调名拼错」与「不传 layerMask」。 */}
+
+## 容易踩的坑
+
+前面几段已嵌了高频坑：**`OnTriggerEnter` 不触发**（漏 isTrigger / Rigidbody / Collider，见 §③）、**Raycast 从碰撞体内部发出命中自己 / 漏检**（起点偏移 + layerMask，见 §④）。再补两个最常静默翻车的：
+
+<Callout type="trap">
+  **现象**：两个**实心**物体撞上了，却跑去写
+  `OnTriggerEnter`——结果**永远不进**；或方法名拼成了 `OnCollisonEnter`（少个
+  i），同样**静默不调用**。**原因**：实心碰撞只走 `OnCollision*`、触发器才走
+  `OnTrigger*`，**写错那一套当然不被调**；而 Unity
+  是**按方法名反射调用**这些回调的，名字差一个字母引擎就找不到、也不报错。**修法**：实心碰撞写
+  `OnCollisionEnter(Collision c)`、触发器写 `OnTriggerEnter(Collider
+  other)`，**别写反**；逐字母核对方法名和参数类型（`Collision` vs `Collider`
+  也别混）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Raycast **不传
+  layerMask**，结果射线命中了一堆不该命中的东西——触发器、特效、UI
+  碰撞体、甚至自己。**原因**：缺省的 Raycast 会检测**所有层**的碰撞体（含勾了
+  isTrigger 的，取决于全局设置）。**修法**：几乎总是该传一个 `layerMask`
+  明确「只检测哪些层」（如 `LayerMask.GetMask("Enemy")`）；要不要命中触发器另由
+  `QueryTriggerInteraction` 参数控制。一句话：**Raycast 默认范围太大，养成传
+  layerMask 的习惯。**
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含 1 改代码题 + 1 独立实现题；答案折叠。 */}
+
+## 小结
+
+- **碰撞事件**：实心碰撞走 `OnCollisionEnter` / `Stay` / `Exit`，参数 `Collision c`——能拿 `c.gameObject`（撞到谁）/ `c.relativeVelocity`（多猛）/ `c.contacts`（在哪撞）
+- **触发事件**：勾了 `isTrigger` 走 `OnTriggerEnter` / `Stay` / `Exit`，参数 `Collider other`（穿过来的碰撞器）；按谁用 `other.CompareTag("...")`，别用 `== 字符串`
+- **触发条件（最易错）**：两边都要 Collider、**至少一个**要 Rigidbody、任一勾 isTrigger → 走 Trigger 否则 Collision；两个静态碰撞器 → 啥都不触发；方法名拼错 = 静默不调
+- **射线检测**：`Physics.Raycast(起点, 方向, out hit, maxDistance, layerMask)` 命中第一个碰撞体返回 `true`，从 `RaycastHit` 读 `point` / `normal` / `distance` / `collider`；鼠标点选用 `Camera.main.ScreenPointToRay`
+- **两条铁律**：Raycast 起点别埋在自身碰撞体里（会命中自己）、几乎总要传 `layerMask` 过滤；变体有 `RaycastAll`（沿途全命中）/ `Linecast`（两点间）/ `Debug.DrawRay`（编辑器画线调试）
+
+<Exercises>
+
+**练习 1（问答）** 你给一个区域挂了碰撞器、写了 `OnTriggerEnter(Collider other)`，让玩家走进去就打印一句话，但运行时**一点反应都没有**。请列出至少三个可能漏掉的条件，以及怎么逐一排查。
+
+<Answer>
+
+`OnTriggerEnter` 不触发，最常见的三个漏法（逐一排查）：
+
+1. **感应区的碰撞器没勾 `isTrigger`**——没勾的话它走的是 `OnCollision*`，不是 `OnTrigger*`，你的 `OnTriggerEnter` 永远不进。去 Inspector 把那个 Collider 的 **Is Trigger 勾上**。
+2. **两个对象都没有 Rigidbody**——碰撞 / 触发要被引擎处理，参与的两边**至少一个**得有 `Rigidbody`（动态或运动学均可）。给该动的一方（通常是玩家）**加上 Rigidbody**。
+3. **某一方漏挂了 Collider**——两边都得有碰撞器，且形状真的罩住了物体。确认玩家和感应区**都挂了 Collider**。
+
+补充排查：方法名 / 参数类型有没有拼错（应是 `OnTriggerEnter(Collider other)`，`Collider` 不是 `Collision`，引擎按名字反射调用，拼错静默失败）；脚本有没有挂在带那个碰撞器的对象上。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想做「子弹打中谁就打印谁」，但有两处问题：① 射线**没传 layerMask**，会命中包括自己在内的所有层；② 起点用 `transform.position`，**埋在枪自己的碰撞体里**会先命中自己。请改写成「从枪口前方一点发出、只检测 `enemyMask` 层」的正确版本。
+
+```csharp
+public class Gun : MonoBehaviour
+{
+    void Fire()
+    {
+        if (Physics.Raycast(transform.position, transform.forward, out RaycastHit hit))
+            Debug.Log($"打中了 {hit.collider.name}");
+    }
+}
+```
+
+<Answer>
+
+把起点抬到枪口前方（离开自身碰撞体），并传一个 `layerMask` 只检测敌人层：
+
+```csharp
+public class Gun : MonoBehaviour
+{
+    public LayerMask enemyMask;     // Inspector 里勾选「敌人」层
+    public float range = 100f;
+
+    void Fire()
+    {
+        // 起点抬到枪口前方一点，避免射线从自身碰撞体内部发出而命中自己
+        Vector3 origin = transform.position + transform.forward * 0.5f;
+
+        if (Physics.Raycast(origin, transform.forward, out RaycastHit hit, range, enemyMask))
+            Debug.Log($"打中了 {hit.collider.name}，距离 {hit.distance}");
+    }
+}
+```
+
+要点：①**起点偏移**到 `transform.position + transform.forward * 0.5f`，让射线起点在枪自己的碰撞体外，不会一出生就命中自己；②传 **`enemyMask`** 作 layerMask，射线只检测敌人层、跳过自己和其它无关层；③顺手传了 `range` 限制最大距离，避免无意义的超长射线。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：写一个挂在「门口感应区」（一个勾了 `isTrigger` 的碰撞器）上的脚本——**玩家走进**时打印「进入区域」、**走出**时打印「离开区域」（只对 Tag 为 `Player` 的对象响应）。请写出这个 `MonoBehaviour`，并说明玩家那边需要哪些组件才能让它真的触发。
+
+<Answer>
+
+```csharp
+using UnityEngine;
+
+public class AreaDetector : MonoBehaviour // 挂在勾了 isTrigger 的感应区碰撞器上
+{
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Player"))   // 只对玩家响应
+            Debug.Log("进入区域");
+    }
+
+    void OnTriggerExit(Collider other)
+    {
+        if (other.CompareTag("Player"))
+            Debug.Log("离开区域");
+    }
+}
+```
+
+要点：①用 `OnTriggerEnter` / `OnTriggerExit`（不是 `OnCollision*`，因为感应区勾了 isTrigger）；②参数是 `Collider other`，用 `other.CompareTag("Player")` 按标签筛出玩家、忽略别的东西。
+
+**让它真的触发，需要满足：** ①感应区的碰撞器**勾上 `isTrigger`**；②**玩家**身上有 `Collider` 且 Tag 设为 `Player`，并且**玩家带 `Rigidbody`**（满足「两边至少一个有 Rigidbody」这条必备条件）；③感应区本身也挂着 `Collider`（就是那个勾了 isTrigger 的）。三者齐了，玩家穿过时 `OnTriggerEnter` / `Exit` 才会被调用。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="OnCollisionEnter">
+  **实心碰撞**（两个碰撞器**都没勾**
+  `isTrigger`）发生时，引擎**自动回头调用**的事件回调方法——你只要在脚本里把它写出来，撞上的那一刻它就被调一次。它一族三个：`OnCollisionEnter`（撞上瞬间，调一次）、`OnCollisionStay`（接触持续期间，每个物理帧都调）、`OnCollisionExit`（分开瞬间，调一次）。参数是
+  `Collision
+  c`，里面装着这次碰撞的档案：`c.gameObject`（撞到了谁）、`c.relativeVelocity`（撞击相对速度，可拿来算伤害）、`c.contacts`（接触点）。注意方法名是引擎按名字反射调用的，**拼错就静默不被调用**。详见本章「①
+  碰撞事件」一节。
+</GlossaryItem>
+
+<GlossaryItem term="OnTriggerEnter">
+  **触发器**（勾了 `isTrigger`
+  的碰撞器，只感应、不阻挡）被穿过时，引擎**自动调用**的事件回调方法。它一族三个：`OnTriggerEnter`（有东西穿入的那一刻，调一次）、`OnTriggerStay`（停留在范围内，每个物理帧都调）、`OnTriggerExit`（穿出的那一刻，调一次）。参数是
+  `Collider other`——**穿过来的那个碰撞器**（注意不是
+  `Collision`，因为没有真实撞击）。回调里常用 `other.CompareTag("Player")`
+  按标签判断「进来的是谁」（比 `== 字符串`
+  又快又不产生垃圾）。常用来做「踩到区域就触发机关」这类感应。详见本章「②
+  触发事件」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Physics.Raycast">
+  **射线检测**：从一个起点 `origin` 沿一个方向 `direction`
+  射出一条**看不见的线**，检测它命中的**第一个**碰撞体——像导演拿激光笔往前一指、看光点打在谁身上。写成
+  `Physics.Raycast(origin, direction, out RaycastHit hit, maxDistance,
+  layerMask)`：命中就返回 `true`，并把命中信息写进
+  `hit`。用途极广：射击判定、脚下是否着地、鼠标点选（配
+  `Camera.main.ScreenPointToRay`）、视线遮挡。变体有
+  `RaycastAll`（命中沿途所有）、`Linecast`（检测两点之间）。详见本章「④
+  射线检测」一节。
+</GlossaryItem>
+
+<GlossaryItem term="RaycastHit">
+  一个**结构体**，装着射线命中的**所有信息**，由 `Physics.Raycast` 通过 `out`
+  参数填好交给你：`hit.point`（命中点的世界坐标）、`hit.normal`（命中面的法线方向，做「贴墙
+  / 斜坡对齐」用）、`hit.distance`（从起点到命中点的距离）、`hit.collider` /
+  `hit.transform`（命中的那个对象）。简单说——射线打中后，「打中了哪儿、那个面朝哪、多远、打中了谁」全在这里面读。详见本章「④
+  射线检测」一节。
+</GlossaryItem>
+
+<GlossaryItem term="LayerMask">
+  一个用「位」表示「**要检测哪些层**」的过滤器。Unity 里每个对象可以分到 32 个
+  **Layer（层）** 之一；给 `Physics.Raycast` 传一个
+  LayerMask，射线就**只检测被选中的那些层、忽略其余**——常写成
+  `LayerMask.GetMask("Enemy", "Wall")` 或在 Inspector
+  里勾选。它的核心作用是**避免射线命中自己、命中不该命中的层**（比如让脚下检测只看「地面层」、让子弹只打「敌人层」）。不传它，射线默认检测所有层、范围太大。详见本章「④
+  射线检测」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

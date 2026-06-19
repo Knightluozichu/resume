@@ -191,6 +191,19 @@ import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concur
 import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
 import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
 import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
+import { u5EditorProjectQuestions } from "./review/u5-editor-project";
+import { u5GameobjectComponentQuestions } from "./review/u5-gameobject-component";
+import { u5TransformCoordinateQuestions } from "./review/u5-transform-coordinate";
+import { u5MonobehaviourLifecycleQuestions } from "./review/u5-monobehaviour-lifecycle";
+import { u5ScriptingObjectsQuestions } from "./review/u5-scripting-objects";
+import { u5CoroutinesTimeQuestions } from "./review/u5-coroutines-time";
+import { u5RigidbodyColliderQuestions } from "./review/u5-rigidbody-collider";
+import { u5CollisionRaycastQuestions } from "./review/u5-collision-raycast";
+import { u5MecanimQuestions } from "./review/u5-mecanim";
+import { u5UguiQuestions } from "./review/u5-ugui";
+import { u5MaterialsLightingQuestions } from "./review/u5-materials-lighting";
+import { u5PrefabsAssetsQuestions } from "./review/u5-prefabs-assets";
+import { u5BuildDeployQuestions } from "./review/u5-build-deploy";
 import { agentWhatIsAnAgentQuestions } from "./review/agent-what-is-an-agent";
 import { agentAugmentedLlmQuestions } from "./review/agent-augmented-llm";
 import { agentAgenticLoopQuestions } from "./review/agent-agentic-loop";
@@ -408,6 +421,20 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aiEvaluationObservabilityQuestions,
   ...aiSafetyGuardrailsQuestions,
   ...aiProductionDeploymentQuestions,
+  // Unity 5 权威讲解
+  ...u5EditorProjectQuestions,
+  ...u5GameobjectComponentQuestions,
+  ...u5TransformCoordinateQuestions,
+  ...u5MonobehaviourLifecycleQuestions,
+  ...u5ScriptingObjectsQuestions,
+  ...u5CoroutinesTimeQuestions,
+  ...u5RigidbodyColliderQuestions,
+  ...u5CollisionRaycastQuestions,
+  ...u5MecanimQuestions,
+  ...u5UguiQuestions,
+  ...u5MaterialsLightingQuestions,
+  ...u5PrefabsAssetsQuestions,
+  ...u5BuildDeployQuestions,
   // AI 智能体应用开发
   ...agentWhatIsAnAgentQuestions,
   ...agentAugmentedLlmQuestions,

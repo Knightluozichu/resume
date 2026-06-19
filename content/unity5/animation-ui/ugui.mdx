@@ -1,0 +1,466 @@
+---
+title: uGUI 界面系统
+type: C
+section: Unity动画与UI
+order: 2
+description: 读完能搭出「Canvas + 元素 + EventSystem」这套 UI 起手式，能用 RectTransform 的锚点做不跑位的自适应布局，能写脚本拿 UI 组件引用、用 button.onClick.AddListener 注册点击、用 text.text / image.fillAmount / slider.value 等代码改 UI（做计数、血条、面板显隐），并能排查「场景没 EventSystem 按钮不响应 / 锚点没设对换分辨率 UI 跑位 / UI 用 transform.position 定位失效」这几类坑。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇4「Unity动画与UI」第2章（承接第9章 Mecanim：角色会动了，这章给屏幕加血条/分数/按钮）：把「在屏幕上摆 UI、点按钮做事、用代码改 UI」写成脚本。重心是 §6 代码对照（≥80%），三张 viz 把「锚点决定父级缩放时 UI 怎么响应 / Canvas+EventSystem 必备结构 / 点击事件到代码改 UI 的因果链」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) Canvas（画布）：所有 UI 的根容器；render mode Screen Space-Overlay（铺屏幕最上层，最常用）/ Camera / World Space = UIHierarchyDiagram（静态）。 */}
+{/* 2) EventSystem：场景里必须有的对象，处理 UI 输入；没它按钮一概不响应 = UIHierarchyDiagram 右栏醒目标注 + 代码无 + Callout trap。 */}
+{/* 3) RectTransform（UI 版 Transform）：anchors（锚点）+ pivot（轴心）做自适应布局；anchoredPosition/sizeDelta = RectTransformAnchorsDiagram（anime·主图）+ 代码⑤。 */}
+{/* 4) 常用元素 Text/Image/Button/Slider/Toggle/InputField = UIHierarchyDiagram 列举 + 代码①③④。 */}
+{/* 5) 事件 onClick + AddListener + 代码改 UI（text.text / image.fillAmount / slider.value / CanvasGroup）= ButtonClickFlowDiagram（anime）+ 代码②③④⑤。 */}
+{/* 陷阱：①场景没 EventSystem→按钮全不响应；②anchor/pivot 没设对→换分辨率 UI 跑位/拉伸错；③UI 用 transform.position 定位（应 anchoredPosition）；④忘 using UnityEngine.UI。 */}
+{/* 术语首现 Term：Canvas / EventSystem / RectTransform / 锚点（Anchors）/ onClick（5 个 = Glossary 5 条）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能搭出「`Canvas` + UI 元素 + `EventSystem`」这套起手式，并用 `RectTransform` 的**锚点**做出「换分辨率也不跑位、不拉伸错乱」的自适应布局
+- 能写脚本拿到 UI 组件引用、用 `button.onClick.AddListener(方法)` 注册点击，并用 `text.text = …` / `image.fillAmount = …` / `slider.value` 等代码改 UI（做点击计数、血条、面板显隐）
+- 能回答：按钮点了一点反应都没有，第一件该检查的「场景里必备对象」是什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 */}
+
+## 给镜头前贴一块「仪表玻璃板」
+
+到这一章，你的角色已经会动、会撞、会按表切动作了。但玩家还看不到血量、分数，也没法点按钮操作——游戏少了那层「界面」。
+
+想象在摄影机镜头前贴一块**透明玻璃板**：血条、分数、按钮都画在这块板上，永远浮在画面最上层，不管镜头怎么动它都稳稳贴在那儿。这块板就是这一章的主角。再想：板换大小（屏幕从手机变成宽屏）时，板上的元素该怎么待？你得提前把每个元素「**钉**」在板的某个角或某条边上，告诉它「板变大时你往哪靠、要不要跟着变宽」——钉对了，换屏幕也不乱。
+
+没有这套机制，你就得**自己按每种分辨率手动摆每个 UI**：手机一套坐标、平板一套、宽屏又一套，改个按钮位置要改十几处，换个机型全乱。这一章教你把这件苦差交给引擎：摆一次、钉好锚点，到处都对；再教你写代码让按钮点了有反应、让血条随血量涨落。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：Canvas、EventSystem、RectTransform、锚点、onClick
+
+本章五件事先各认个脸，**怎么写成代码留到第六节细讲**。
+
+**① 那块玻璃板：Canvas。** 所有 UI 都画在一个
+
+<Term def="所有 UI 元素的根容器（一个挂了 Canvas 组件的 GameObject）——就是「贴在镜头前的那块玻璃板」。UI 元素必须是它的子节点才会被画出来。它有三种渲染模式：Screen Space - Overlay（铺在屏幕最上层、永远盖在 3D 画面之上，最常用，做血条分数按钮）、Screen Space - Camera（交给某个摄像机渲染，可被 3D 物体遮挡）、World Space（把整块 UI 放进 3D 世界当成一个物体，做场景里的操作面板 / VR 菜单）。">
+  Canvas
+</Term>
+里。它是所有 UI
+的**根容器**——血条、分数、按钮都是它的子节点。它有三种**渲染模式**，最常用的是
+Screen Space - Overlay（铺在屏幕最上层，永远盖在 3D 画面之上）；另外还有 Screen
+Space - Camera（能被 3D 物体遮挡）和 World Space（把 UI 整块放进 3D
+世界，做场景里的操作面板）。
+
+**② 处理点击的那个人：EventSystem。** 光有玻璃板和按钮还不够——得有人「盯着」玩家点了哪儿、拖了什么。这个人就是场景里一个独立的
+
+<Term def="场景里一个独立的 GameObject（建第一个 UI 元素时 Unity 通常会自动一并创建）。它专门负责处理 UI 输入——把鼠标点击 / 触摸 / 键盘等输入派发给被点到的 UI 元素，从而触发按钮的 onClick、Slider 的拖动等。它和 Canvas 各司其职：Canvas 管「画什么、画在哪」，EventSystem 管「点了谁、拖了谁」。关键红线：场景里没有它，按钮、拖拽等一切 UI 交互都不会响应（且不报错）。">
+  EventSystem
+</Term>
+对象。Canvas 管「画什么、画在哪」，EventSystem
+管「点了谁、拖了谁」。下面这张图把这套必备结构画清——Canvas
+做根、下挂元素，旁边并列一个 EventSystem：
+
+<UIHierarchyDiagram />
+
+**③ UI 版的 Transform：RectTransform。** 普通 3D 物体用 Transform 定位，UI 元素用的是它的「矩形版」——
+
+<Term def="UI 元素专用的定位组件，是普通 Transform 的「矩形版」（UI 元素自动带它、不带普通 Transform）。普通 Transform 只有 position/rotation/scale；RectTransform 多了一套适配 2D 矩形布局的属性，核心是 anchors（锚点）+ pivot（轴心）：anchors 决定「相对父级的哪个参照点定位、如何随父级缩放」，pivot 决定「这个元素自己绕哪个点旋转 / 缩放、anchoredPosition 量的是哪个点」。常用属性：anchoredPosition（相对锚点的位置，UI 定位用它而不是 position）、sizeDelta（尺寸）。">
+  RectTransform
+</Term>
+。它多了一套适配矩形布局的属性，核心就是**锚点和轴心**。
+
+**④ 自适应布局的关键：锚点（Anchors）。** RectTransform 里最该吃透的是
+
+<Term def="RectTransform 上的一组参照点（在父级矩形上，用 0~1 表示相对位置）。它决定一个 UI 元素「相对父级的哪个参照点来定位、以及父级缩放时它怎么变」。两种典型用法：单点锚（四个锚收成一个点，钉在父级某个角 / 中心 → 元素大小不变、只跟着那个点移动，适合按钮 / 图标）；拉伸锚（把左右或上下锚分开 → 元素跟着父级一起伸缩，适合标题栏 / 进度条 / 满屏背景）。设对锚点，换分辨率 / 父级缩放时 UI 才不跑位、不拉伸错乱——这是做自适应布局的关键。">
+  锚点（Anchors）
+</Term>
+。它决定「这个元素相对父级的哪个参照点定位、父级变大变小时它怎么跟着变」。下面这张主图把锚点掰碎——左边**单点锚**（钉在右上角，父变大时元素贴着角走、大小不变），右边**拉伸锚**（左右锚分开，父变宽时元素跟着变宽）：
+
+<RectTransformAnchorsDiagram />
+
+**⑤ 按钮的点击事件：onClick。** 玻璃板摆好了，怎么让按钮「点了有反应」？靠按钮自带的
+
+<Term def="Button 组件自带的点击事件（一个 UnityEvent）。点击按钮时它被触发，会自动调用所有「注册」到它上面的方法。注册方式两种：① 代码 button.onClick.AddListener(方法) —— 把一个方法「接」到这个事件上；② 在 Inspector 的 On Click() 列表里把目标对象 + 方法拖上去。一旦接好线，之后每次点击都会自动跑你的方法。常在方法里用代码更新 UI（如计数 +1 写进 Text）。">
+  onClick
+</Term>
+事件。你提前用 `button.onClick.AddListener(你的方法)`
+把方法「接」到按钮上，之后每次点击就自动跑你的方法。下面这张因果图把「点击 →
+onClick → 注册的方法被调用 → 代码改 UI」串成一条链：
+
+<ButtonClickFlowDiagram />
+
+这五件事就是本章全部。**它们怎么写成代码、有哪些坑，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = RectTransformAnchorsDiagram（含「猜一猜」），辅 = UIHierarchyDiagram + ButtonClickFlowDiagram。 */}
+
+## 动手：把「锚点怎么响应父级缩放」单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **锚点行为对照动画**——它就是本章的主 Demo。
+
+> 猜一猜：父框（玻璃板）变宽以后，左边「单点锚」的按钮会**跟着变宽**吗？右边「拉伸锚」的横条又会怎样？回到「先认个脸」里那张主图，单步走到第②步——你会看到：左边钉在右上角的**按钮**只是**贴着右上角平移、自身大小一点没变**（适合按钮、图标这种「大小固定、靠某个角」的元素）；右边左右锚分开的**横条**则**跟着父框一起变宽**、左右边距保持不变（适合标题栏、进度条这种「该铺满一行」的元素）。同一次缩放、两种锚点设定、两种结果——这就是 anchors 存在的全部理由：**你提前钉好锚点，换分辨率时 UI 自己知道该怎么待，不用你按每种屏幕手摆。**
+
+单步走完主图，再去看另外两张：**UI 层级树图**帮你钉牢「搭 UI 的起手式 = Canvas（根）+ 各种元素 + 一个 EventSystem」——尤其右边那句「没 EventSystem 按钮一概不响应」；**按钮点击事件流图**把「点击 → `onClick` → 你用 `AddListener` 注册的方法被调用 → 方法里 `text.text = …` 改 UI（计数 0 变 1）」这条因果链单步演给你看。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：①拿组件引用 [SerializeField]/GetComponent + using UnityEngine.UI；②onClick.AddListener + OnClick 方法；③改 UI text.text/image.fillAmount 血条；④Slider/Toggle 值 + onValueChanged；⑤RectTransform.anchoredPosition（别用 transform.position）+ CanvasGroup 控面板显隐。 */}
+
+## 代码：从拿 UI 组件到点击改 UI、控面板
+
+这一节是本章的重心。每段都给一块可直接放进 `MonoBehaviour` 的代码，逐段讲清。先记一条贯穿全章的规矩：**要操作 Text / Button / Slider 等 UI 组件，脚本顶部必须 `using UnityEngine.UI;`**——忘了它，编译器会说「找不到 Text / Button」。
+
+### ① 先拿到 UI 组件引用（用 [SerializeField] 在 Inspector 拖）
+
+操作任何 UI，第一步是拿到它的组件引用。最稳的方式是声明 `[SerializeField]` 字段、在 Inspector 里把对象拖上去（比 `GetComponent` 更直观、也不怕拿错）：
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI; // ← 关键！Text / Button / Slider / Image 都在这个命名空间
+
+public class HUD : MonoBehaviour
+{
+    [SerializeField] Text scoreText;   // Inspector 里把分数 Text 拖进来
+    [SerializeField] Button addButton;  // 把按钮拖进来
+    [SerializeField] Image hpBar;       // 血条用的 Image（Image Type 设 Filled）
+    [SerializeField] Slider volume;     // 音量滑条
+}
+```
+
+`[SerializeField]` 让私有字段也能在 Inspector 里被拖赋值——拖一次、永久绑定，比每帧 `GetComponent` 又快又不会拿错对象。`Text` / `Button` / `Image` / `Slider` 这些类型全都来自 `UnityEngine.UI`，所以第一行 `using UnityEngine.UI;` 不能漏。
+
+<Callout type="warn">
+  **`Text` / `Button` / `Slider` / `Image` 等 uGUI 组件都在 `UnityEngine.UI`
+  命名空间里。** 脚本顶部漏写 `using
+  UnityEngine.UI;`，编译器会直接报「找不到类型或命名空间名称
+  `Text`」——这不是静默失败，是**编译错**，整个脚本都跑不起来。看到这类报错，第一反应就是补上这行
+  `using`。（注意：`RectTransform` / `Canvas` 在 `UnityEngine`
+  里，不需要这行；但 `Text` / `Button` 等需要。）
+</Callout>
+
+### ② 注册点击：button.onClick.AddListener(你的方法)
+
+按钮要「点了有反应」，得把你的方法**接**到它的 `onClick` 事件上。通常在 `Start` 里用 `AddListener` 注册一次：
+
+```csharp
+int score = 0;
+
+void Start()
+{
+    // 把 OnAddClicked 方法「接」到按钮的 onClick 事件上（注册一次即可）
+    addButton.onClick.AddListener(OnAddClicked);
+    scoreText.text = "分数：0"; // 初始化显示
+}
+
+// 点击按钮时，这个方法会被自动调用
+void OnAddClicked()
+{
+    score++;
+    scoreText.text = $"分数：{score}"; // 用代码更新 Text（见下一段）
+}
+```
+
+`addButton.onClick.AddListener(OnAddClicked)` 把 `OnAddClicked` 这个方法「接」到按钮上——之后每次点击，引擎就自动调用它。注意传的是**方法名**（不加括号），不是 `OnAddClicked()`（那是「立刻调用一次」、不是「注册」）。你也可以不写代码、直接在 Inspector 的 On Click() 列表里把对象和方法拖上去，效果一样。
+
+### ③ 用代码改 UI：text.text 改文字、image.fillAmount 做血条
+
+拿到引用、接好事件后，「改 UI」就是给组件的属性赋值。最常用的两个：改文字 `text.text`、做血条 `image.fillAmount`：
+
+```csharp
+public void SetScore(int score)
+{
+    scoreText.text = $"分数：{score}"; // 改 Text 显示的文字
+}
+
+public void SetHp(float hp, float maxHp)
+{
+    // fillAmount 取 0~1：0=空、1=满。Image 的 Image Type 要设成 Filled
+    hpBar.fillAmount = hp / maxHp; // 血量 75/100 → 血条填充到 0.75（四分之三）
+}
+```
+
+`scoreText.text = "..."` 直接改文字，配 `$"..."` 字符串插值很方便。`hpBar.fillAmount` 取 `0~1`：把它设成 `hp / maxHp`，血条就随血量涨落——这是做血条 / 充能条 / 进度条最常用的招（前提是那个 Image 的 **Image Type 设为 Filled**，否则 `fillAmount` 不起作用）。
+
+<Callout type="warn">
+  **`image.fillAmount` 只在 Image 的 **Image Type = Filled** 时才有效。** 默认的
+  Simple 类型下，给 `fillAmount`
+  赋值**不会有任何视觉变化**——你会以为代码没生效，其实是 Image
+  类型没设对。做血条、充能条前，先去 Inspector 把那个 Image 的 **Image Type 改成
+  Filled**，再选 Fill Method（水平 / 垂直 / 径向）。另外别把血条做成「改
+  RectTransform 宽度」——那要处理锚点和轴心，远不如 `fillAmount` 省事。
+</Callout>
+
+### ④ 读 Slider / Toggle 的值 + 监听它们变化
+
+`Slider`（滑条）和 `Toggle`（开关）这类输入控件，既可以**主动读值**，也可以**监听变化**（值一变就回调你）。监听用它们的 `onValueChanged.AddListener`：
+
+```csharp
+void Start()
+{
+    // 监听滑条：每次拖动改变了 value，就回调（参数 v 是新值 0~1）
+    volume.onValueChanged.AddListener(OnVolumeChanged);
+}
+
+void OnVolumeChanged(float v)
+{
+    AudioListener.volume = v; // 滑条值直接当音量（0~1）
+}
+
+// 也可以在需要时主动读当前值，而不监听
+float Current() => volume.value;
+```
+
+`slider.onValueChanged.AddListener(方法)` 和按钮的 `onClick.AddListener` 是一个套路——只是滑条的回调带一个 `float` 参数（新值）。`Toggle`（开关）同理，用 `toggle.onValueChanged.AddListener`，回调参数是 `bool`（开 / 关）。不想监听、只想某一刻读值，直接读 `slider.value` / `toggle.isOn` 即可。
+
+### ⑤ 代码定位 UI：用 anchoredPosition，别用 transform.position；CanvasGroup 控面板显隐
+
+要用代码挪动一个 UI 元素，**别用普通物体的 `transform.position`**——UI 元素该用 `RectTransform` 的 `anchoredPosition`（相对锚点的位置）。另外，要统一控制「一整组 UI 的淡入淡出 / 能否点击」，用 `CanvasGroup`：
+
+```csharp
+public RectTransform panel;     // 要挪的 UI 元素
+public CanvasGroup pausePanel;  // 暂停面板（挂了 CanvasGroup 组件）
+
+void MovePanel()
+{
+    // UI 定位用 anchoredPosition（相对锚点），不是 transform.position！
+    panel.anchoredPosition = new Vector2(0, 120); // 相对锚点上移 120
+}
+
+void ShowPause(bool show)
+{
+    pausePanel.alpha = show ? 1 : 0;          // 整组淡入 / 淡出
+    pausePanel.interactable = show;            // 能否交互（点击 / 拖动）
+    pausePanel.blocksRaycasts = show;          // 是否拦截点击（false 时点击穿透到下层）
+}
+```
+
+UI 元素用 `RectTransform.anchoredPosition` 定位——它量的是「相对锚点的偏移」，换分辨率时配合锚点自动适配。用 `transform.position`（世界坐标）去摆 UI 多半会「看起来位置乱跳」（见常见误区）。最后 `CanvasGroup`：给一组 UI 的父对象挂上它，就能用 `alpha` / `interactable` / `blocksRaycasts` 三个字段**一次性**控制这一整组的透明度、可交互、可点击——做暂停面板、弹窗的淡入淡出和禁用，比逐个改元素省事得多。
+
+至此从「拿 UI 引用」到「注册点击」「代码改文字 / 血条」「读 Slider / Toggle」「用 anchoredPosition 定位 + CanvasGroup 控面板」都过了一遍。回头看会发现一条主线：**UI 操作 = 拿引用（记得 `using UnityEngine.UI;`）→ 接事件（`AddListener`）→ 改属性（`text.text` / `fillAmount` / `anchoredPosition`）。**
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。除上面已嵌的 2 个 warn（漏 using / fillAmount 要 Filled），这里再独立排 3 个 trap：①场景没 EventSystem→按钮全不响应；②anchor 没设对→换分辨率跑位/拉伸错；③UI 用 transform.position 定位失效（应 anchoredPosition）。 */}
+
+## 容易踩的坑
+
+前面几段已嵌了两个高频坑（操作 UI 组件要 `using UnityEngine.UI;`、做血条要把 Image Type 设 Filled）。下面把本章最常静默翻车的三类再独立钉一遍——它们都「不报错、UI 却不对」，最折磨人：
+
+<Callout type="trap">
+  **现象**：按钮做好了、`onClick`
+  也接了线，运行时点按钮却**一点反应都没有**，拖滑条也没用。**原因**：场景里**没有
+  `EventSystem` 对象**——它才是把鼠标 / 触摸输入派发给 UI 的那个人，少了它**所有
+  UI 交互都不会触发**（且不报错）。常见于手动删掉了它、或从代码 / 极简场景搭 UI
+  时没创建。**修法**：在 Hierarchy 里 **右键 → UI → Event System**
+  补一个（或随便新建一个 UI 元素 Unity
+  会自动一并创建）。排查按钮没反应，**第一件事就是看场景里有没有 EventSystem**。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在编辑器里 UI 摆得好好的，一**换分辨率 /
+  换机型**，按钮就跑到屏幕外、或者满屏背景没铺满、文字框被拉变形。**原因**：**锚点（anchors）没设对**——比如该用「拉伸锚」铺满的背景却用了「单点锚」（于是它只钉在一个角、不跟着屏幕变宽），或该靠右上角的按钮锚在了中心。**修法**：按元素用途设锚点——靠角的按钮
+  / 图标用**单点锚**钉在对应角；该铺满一行 /
+  一列的标题栏、进度条、背景用**拉伸锚**（把左右或上下锚拉开）。设对锚点后，换分辨率元素会自己适配（见本章主图）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：想用代码挪一个 UI 元素，写了 `panel.transform.position =
+  ...`，结果元素**跳到莫名其妙的位置**、或换分辨率后全乱。**原因**：`transform.position`
+  是**世界坐标**，对 Screen Space 的 UI 并不直观（受 Canvas
+  缩放、锚点影响），拿它摆 UI 几乎必乱。**修法**：UI 定位改用 `RectTransform` 的
+  **`anchoredPosition`**（相对锚点的偏移）—— `rt.anchoredPosition = new
+  Vector2(x, y)`；它会配合锚点在各分辨率下自动适配。一句话：**UI 挪位用
+  anchoredPosition，别用 transform.position。**
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含 1 改代码题 + 1 独立实现题；答案折叠。 */}
+
+## 小结
+
+- **UI 起手式**：所有 UI 挂在 `Canvas`（根容器，render mode 最常用 Screen Space - Overlay）下；常用元素 `Text` / `Image` / `Button` / `Slider` / `Toggle` / `InputField`；场景里**必须有 `EventSystem`**，否则点击 / 拖拽一概不响应
+- **自适应靠锚点**：UI 用 `RectTransform` 定位，核心是**锚点（anchors）**——单点锚钉某个角（大小不变、跟角走，适合按钮）、拉伸锚分开左右 / 上下（跟父级伸缩，适合标题栏 / 进度条 / 背景）；设对锚点换分辨率不跑位
+- **改 UI 三步**：拿引用（`[SerializeField]` 拖，记得 `using UnityEngine.UI;`）→ 接事件（`button.onClick.AddListener(方法)`）→ 改属性（`text.text` / `image.fillAmount` 做血条 / `slider.value`）
+- **代码定位与显隐**：UI 挪位用 `RectTransform.anchoredPosition`（**别用 `transform.position`**）；一组 UI 的淡入淡出 / 禁用统一用 `CanvasGroup` 的 `alpha` / `interactable` / `blocksRaycasts`
+- **三类静默坑**：场景没 EventSystem → 按钮全不响应；锚点没设对 → 换分辨率跑位 / 拉伸错；`fillAmount` 没把 Image Type 设 Filled → 血条不动；外加编译坑：忘 `using UnityEngine.UI;` 找不到 Text / Button
+
+<Exercises>
+
+**练习 1（问答）** 你做好了一个按钮、在 `Start` 里 `button.onClick.AddListener(OnClick)` 也接了线，运行后点按钮**一点反应都没有**，控制台也不报错。请按「场景对象 / 引用 / 事件接线」几个方向，列出最可能的原因和排查办法。
+
+<Answer>
+
+按钮点了没反应，按这几条排查：
+
+1. **场景里有没有 `EventSystem`？** 这是**最常见**的原因——没有它，所有 UI 点击 / 拖拽都不会触发（且不报错）。去 Hierarchy 看有没有一个 EventSystem 对象；没有就**右键 → UI → Event System** 补一个。排查按钮没反应，先看这个。
+2. **`button` 引用拿到了吗？** 确认 `[SerializeField] Button button` 字段在 Inspector 里**真的把按钮拖上去了**（不是 `None`），否则 `AddListener` 调在 `null` 上会报空引用（也可能你拿错了对象）。
+3. **事件接线对不对？** 确认 `AddListener(OnClick)` 传的是**方法名不加括号**（写成 `OnClick()` 是「立刻调一次」而非注册）；`Start` 真的执行了（脚本挂在激活的对象上）。
+4. **按钮本身能点吗？** 确认按钮的 `Button` 组件 **Interactable 勾着**、它上面没有别的 UI（如一张透明大 Image）**挡住**了点击射线。
+
+一句话口诀：**先看 EventSystem，再看引用，再看接线。**
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想做「点按钮让分数 +1 并显示到 Text」，但有三处问题：① **漏了 `using UnityEngine.UI;`**（`Text` / `Button` 会找不到）；② 在 `Update` 里**每帧都 `AddListener`**（会重复注册，点一下加很多分）；③ 用 `transform.position` 想挪 UI（应该用 `anchoredPosition`）。请改写成正确版本。
+
+```csharp
+using UnityEngine;
+
+public class ScoreUI : MonoBehaviour
+{
+    public Text scoreText;
+    public Button addButton;
+    int score = 0;
+
+    void Update()
+    {
+        addButton.onClick.AddListener(() => { score++; });   // 每帧重复注册
+        scoreText.text = "分数：" + score;
+        scoreText.transform.position = new Vector3(100, 50);  // 用了 transform.position
+    }
+}
+```
+
+<Answer>
+
+补 `using`、把注册移到 `Start`（只接一次线）、改用 `anchoredPosition`：
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI; // ① 补上，否则 Text / Button 找不到
+
+public class ScoreUI : MonoBehaviour
+{
+    [SerializeField] Text scoreText;
+    [SerializeField] Button addButton;
+    int score = 0;
+
+    void Start()
+    {
+        // ② 注册一次即可，放 Start 别放 Update
+        addButton.onClick.AddListener(OnAdd);
+        scoreText.text = "分数：0";
+
+        // ③ UI 定位用 RectTransform.anchoredPosition，不是 transform.position
+        scoreText.rectTransform.anchoredPosition = new Vector2(100, 50);
+    }
+
+    void OnAdd()
+    {
+        score++;
+        scoreText.text = $"分数：{score}";
+    }
+}
+```
+
+要点：①顶部 `using UnityEngine.UI;` 不能漏；②`AddListener` 放 `Start` **接一次线**，放 `Update` 会每帧重复注册导致点一下加很多分；③挪 UI 用 `anchoredPosition`（`Text` 有现成的 `rectTransform` 属性），别用 `transform.position`。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：写一个挂在角色上的 `MonoBehaviour`——用一个 `Image`（血条，Image Type 设 Filled）显示当前血量，提供一个 `TakeDamage(float dmg)` 方法扣血并**让血条随之缩短**；血量为 0 时把血条填到 0。请写出这个脚本，并说明那个血条 Image 在 Inspector 里要怎么设置才能让 `fillAmount` 生效。
+
+<Answer>
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI;
+
+public class Health : MonoBehaviour
+{
+    [SerializeField] Image hpBar; // Inspector 拖入血条 Image
+    [SerializeField] float maxHp = 100f;
+    float hp;
+
+    void Start()
+    {
+        hp = maxHp;
+        UpdateBar();
+    }
+
+    public void TakeDamage(float dmg)
+    {
+        hp = Mathf.Max(0f, hp - dmg); // 扣血，夹紧到不小于 0
+        UpdateBar();
+    }
+
+    void UpdateBar()
+    {
+        hpBar.fillAmount = hp / maxHp; // 0~1：满血 1、空血 0，血条随之涨落
+    }
+}
+```
+
+要点：①用 `image.fillAmount = hp / maxHp` 把血量映射到 `0~1`，血条就随血量缩短；②`Mathf.Max(0f, ...)` 防止扣成负数（`fillAmount` 也只认 0~1）；③记得 `using UnityEngine.UI;`。
+
+**血条 Image 在 Inspector 里要这样设：** 选中那个血条 Image，把 **Image Type 改成 Filled**（默认 Simple 下 `fillAmount` 不起作用）；再选 **Fill Method**（血条一般选 Horizontal，从左到右）和 **Fill Origin**（如 Left）。设好后代码改 `fillAmount` 才会有视觉变化。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Canvas">
+  所有 UI 元素的**根容器**——就是「贴在镜头前的那块玻璃板」。UI 元素（Text /
+  Image / Button
+  等）必须是它的**子节点**才会被画出来。它有三种**渲染模式**：**Screen Space -
+  Overlay**（铺在屏幕最上层、永远盖在 3D 画面之上，最常用，做血条 / 分数 /
+  按钮）、**Screen Space - Camera**（交给某摄像机渲染，可被 3D
+  物体遮挡）、**World Space**（把整块 UI 放进 3D
+  世界当成一个物体，做场景里的操作面板 / VR 菜单）。详见本章「①
+  那块玻璃板」一节。
+</GlossaryItem>
+
+<GlossaryItem term="EventSystem">
+  场景里一个**独立的 GameObject**（建第一个 UI 元素时 Unity
+  通常会自动一并创建），专门负责**处理 UI 输入**——把鼠标点击 / 触摸 /
+  键盘等输入派发给被点到的 UI 元素，从而触发按钮的 `onClick`、Slider
+  的拖动等。它和 Canvas 各司其职：**Canvas 管「画什么、画在哪」，EventSystem
+  管「点了谁、拖了谁」**。关键红线：**场景里没有它，按钮、拖拽等一切 UI
+  交互都不会响应（且不报错）**——按钮点了没反应，第一件事就是查它在不在。详见本章「②
+  处理点击的那个人」一节。
+</GlossaryItem>
+
+<GlossaryItem term="RectTransform">
+  UI 元素专用的**定位组件**，是普通 `Transform` 的「**矩形版**」（UI
+  元素自动带它）。普通 Transform 只有 position / rotation / scale；RectTransform
+  多了一套适配 2D 矩形布局的属性，核心是 **anchors（锚点）+
+  pivot（轴心）**：锚点决定「相对父级的哪个参照点定位、如何随父级缩放」，轴心决定「绕哪个点旋转
+  / 缩放、`anchoredPosition`
+  量的是哪个点」。常用属性：**`anchoredPosition`**（相对锚点的位置，UI
+  定位用它而不是 `position`）、**`sizeDelta`**（尺寸）。详见本章「③ UI 版的
+  Transform」一节。
+</GlossaryItem>
+
+<GlossaryItem term="锚点（Anchors）">
+  RectTransform 上的一组**参照点**（在父级矩形上，用 0~1
+  表示相对位置）。它决定一个 UI
+  元素「**相对父级的哪个参照点定位、父级缩放时它怎么变**」。两种典型用法：**单点锚**（四个锚收成一个点，钉在父级某个角
+  / 中心 → 元素**大小不变、只跟着那个点移动**，适合按钮 /
+  图标）；**拉伸锚**（把左右或上下锚分开 → 元素**跟着父级一起伸缩**，适合标题栏
+  / 进度条 / 满屏背景）。**设对锚点，换分辨率 / 父级缩放时 UI
+  才不跑位、不拉伸错乱**——这是做自适应布局的关键。详见本章「④
+  自适应布局的关键」一节。
+</GlossaryItem>
+
+<GlossaryItem term="onClick">
+  `Button`
+  组件自带的**点击事件**。点击按钮时它被触发，会自动调用所有「**注册**」到它上面的方法。注册方式两种：①**代码**
+  `button.onClick.AddListener(方法)`——把一个方法「**接**」到这个事件上（传方法名、不加括号）；②**在
+  Inspector** 的 On Click() 列表里把目标对象 +
+  方法拖上去。一旦接好线，**之后每次点击都会自动跑你的方法**——常在方法里用代码更新
+  UI（如计数 +1 写进 Text）。详见本章「⑤ 按钮的点击事件」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

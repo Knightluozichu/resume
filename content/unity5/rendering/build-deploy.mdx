@@ -1,0 +1,461 @@
+---
+title: 构建与发布
+type: C
+section: Unity渲染与发布
+order: 3
+description: 读完能说出把游戏从工程打成某平台成品包的步骤（File → Build Settings → 选平台 → 勾 Scenes In Build → Build），分清 Player Settings 里 Mono 与 IL2CPP 两种脚本后端、发布前要取消 Development Build；能用 SceneManager.LoadScene 在多个场景间跳转（并知道场景必须先进 Scenes In Build 列表）、用 LoadSceneAsync 做带进度条的异步加载、用 Application.Quit 退出、用 Application.persistentDataPath 做跨平台安全的存档路径。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇5「Unity渲染与发布」第3章（全书收官章）：把「从工程打成各平台成品包 + 多场景跳转 + 运行时发布相关 API」串成一条龙。构建偏流程/编辑器、代码量天然少些，但 §6 仍是重心（覆盖 SceneManager / LoadSceneAsync / Application.Quit / persistentDataPath / isDebugBuild）。三张 viz 把「工程→产物流水线 / 多场景跳转+Scenes In Build 约束 / Mono vs IL2CPP」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) 构建流程：File→Build Settings→选目标平台→勾 Scenes In Build（索引0=启动先加载）→Build/Build And Run→平台产物(.exe/.app/.apk/WebGL) = BuildPipelineDiagram（anime·主）+ 流程文字。 */}
+{/* 2) Player Settings：公司名/产品名/图标/分辨率/启动画面/Bundle ID；Scripting Backend Mono vs IL2CPP = ScriptingBackendDiagram（静态对照）+ 文字。 */}
+{/* 3) Development Build：勾上带调试符号/可接 Profiler 看日志，但更慢更大，发布正式版要取消勾 = 文字 + Callout trap + 代码④ Debug.isDebugBuild。 */}
+{/* 4) 多场景跳转：SceneManager.LoadScene(名字/索引) 切换（using UnityEngine.SceneManagement），场景必须先进 Scenes In Build；LoadSceneAsync 异步+进度条 = SceneFlowDiagram（anime）+ 代码①②。 */}
+{/* 5) 跨平台：存档/写文件用 Application.persistentDataPath（别写死绝对路径）；Application.Quit() 退出（编辑器无效）；平台差异点到 = 代码③④ + Callout trap。 */}
+{/* 陷阱：①LoadScene 报 scene not in build settings（场景没进列表）；②发布版仍勾 Development Build；③存档写死绝对路径跨机/跨平台失败；④（可选）还在用已弃用的 Application.LoadLevel。 */}
+{/* 术语首现 Term：Build Settings / Scenes In Build / SceneManager.LoadScene / IL2CPP / Development Build（5 个 = Glossary 5 条）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能写出 / 能完成 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说出把游戏从工程**打成某平台成品包**的步骤（File → Build Settings → 选目标平台 → 勾 `Scenes In Build` → Build），并能讲清 Player Settings 里 `IL2CPP` 与 Mono 的区别、发布正式版前为什么要取消勾 `Development Build`
+- 能写出 `SceneManager.LoadScene(...)` 在多个场景间跳转（主菜单 / 关卡 / 结算），并知道要切的场景**必须先进 `Scenes In Build` 列表**；能用 `LoadSceneAsync` 做带进度条的异步加载、用 `Application.persistentDataPath` 做跨平台安全的存档路径
+- 能回答：运行时 `LoadScene("X")` 报「scene not in build settings」，最先该检查什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它玩家就玩不到」。 */}
+
+## 拍完了，怎么把片子送到观众手里
+
+到这一章，你的戏全拍完了：角色会动、会撞、场景也布置好、灯也打亮了。可这堆素材还散在剪辑室里——观众看不到。你得**把所有镜头剪成一部完整的片子，再按发行渠道压成不同格式的拷贝**：进影院的一套、上流媒体的一套、压蓝光的又一套。同一部片，格式各异。
+
+游戏也一样。你要先决定**最终成片收录哪几场戏、按什么顺序放**（先放片头，还是先放正片），再按发行平台各压一个包：PC 上一个、手机上一个、网页上一个——同一个工程，打成几种不同平台的成品。
+
+没有这一步，你做的一切都只能在自己的剪辑室（编辑器）里自娱自乐，**玩家根本拿不到、玩不到**。这一章就讲怎么把工程「出片」成各平台能跑的成品包，再讲几个让多个场景串起来、让游戏能存档、能退出的运行时招式。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：Build Settings、Scenes In Build、LoadScene、IL2CPP、Development Build
+
+本章五件事先各认个脸，**具体怎么操作 / 写成代码留到后面细讲**。
+
+**① 出片的总台：Build Settings。** 打包从一个面板开始——
+
+<Term def="Unity 的构建总控面板（菜单 File → Build Settings）。在这里你做三件事：选目标平台（PC/Mac/Linux Standalone、WebGL、Android、iOS… 即把游戏打成哪种成品）、管理 Scenes In Build 列表（哪些场景进包、按什么顺序）、点 Build 或 Build And Run 真正出包。它是「同一工程按平台各打一个成品」的入口。">
+  Build Settings
+</Term>
+。在这里选**目标平台**（PC / Mac / Linux
+Standalone、WebGL、Android、iOS……）、管理要进包的场景列表，最后点
+**Build**（出包）或 **Build And Run**（出包并立刻运行）。下面这张主图把「工程 →
+选平台 + 勾场景 → 构建 → 各平台产物」整条流水线演给你看：
+
+<BuildPipelineDiagram />
+
+**② 成片收录哪几场戏：Scenes In Build。** Build Settings 顶上那个列表就是
+
+<Term def="Build Settings 顶部的场景清单——决定「哪些场景会被打进最终包、按什么顺序」。每个场景有一个从 0 开始的构建索引（build index）；索引 0 的场景就是游戏启动时第一个被加载的场景（通常是主菜单或启动画面）。关键红线：只有进了这个列表的场景，运行时才能被 SceneManager.LoadScene 加载到；没进列表就 Load 会报「scene not in build settings」。">
+  Scenes In Build
+</Term>
+。它决定**哪些场景进包、按什么顺序**——每个场景有一个从 0
+开始的**构建索引**，**索引 0 就是启动时第一个加载的场景**（通常是主菜单 /
+启动画面）。没进这个列表的场景，打包后**根本加载不到**。
+
+**③ 多场景之间怎么跳：SceneManager.LoadScene。** 游戏往往分好几个场景（主菜单、关卡、结算），切换靠
+
+<Term def="切换场景的现代 API（命名空间 UnityEngine.SceneManagement，Unity 5.3+）。写成 SceneManager.LoadScene(名字 或 构建索引)：按名字或 Scenes In Build 里的索引加载一个场景、替换掉当前场景。它的异步版本 SceneManager.LoadSceneAsync 可在后台加载并读取进度做加载条。注意：老代码里的 Application.LoadLevel 已被弃用，一律改用 SceneManager.LoadScene。要加载的场景必须先在 Scenes In Build 列表里。">
+  SceneManager.LoadScene
+</Term>
+（需要 `using
+UnityEngine.SceneManagement;`）。给它场景名或构建索引，它就切过去。下面这张图把「主菜单
+→ 关卡 → 结算」的跳转，以及「场景必须在 Scenes In Build 列表里才能被
+Load」这条约束演一遍：
+
+<SceneFlowDiagram />
+
+**④ 脚本怎么落地成原生码：IL2CPP。** Player Settings 里有个**脚本后端**选项，决定你的 C# 最终怎么变成机器能跑的东西。一种是 Mono（C# → IL → 运行时执行），另一种是
+
+<Term def="Unity 的一种脚本后端（在 Player Settings 的 Scripting Backend 里选）。它把 C# 先编成 IL（中间语言），再把 IL 转成 C++ 源码、最后编成平台原生机器码。相比 Mono（C# → IL → 靠运行时执行），IL2CPP 构建更慢，但运行性能和平台兼容更好；iOS、WebGL 等平台必须用 IL2CPP。开发期常用 Mono 图快，发布时（尤其是必需平台）用 IL2CPP。">
+  IL2CPP
+</Term>
+（C# → IL → C++ → 原生机器码）。下面这张对照图把两条路线和各自的取舍摆清楚：
+
+<ScriptingBackendDiagram />
+
+**⑤ 给玩家的包别带调试拐杖：Development Build。** Build Settings 里有个勾选项
+
+<Term def="Build Settings 里的一个勾选项。勾上后构建出的包会带调试符号、能连 Profiler 做性能分析、能在设备上看 Debug.Log 日志，方便测试期排错；代价是包更大、运行更慢，并可能暴露调试信息。关键红线：发布给玩家的正式版必须取消勾选 Development Build，它只在开发 / 测试期勾上。">
+  Development Build
+</Term>
+。开发测试时勾上它，能接
+Profiler、看日志，方便排错；但它让包更大、更慢，**发布正式版前一定要取消勾选**。
+
+这五件事就是本章全部。**怎么操作、怎么写成代码、有哪些坑，是后面几节的主场**。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = BuildPipelineDiagram（含「猜一猜」），辅 = SceneFlowDiagram + ScriptingBackendDiagram。 */}
+
+## 动手：把「从工程到平台产物」这条流水线单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **构建流水线动画**——它就是本章的主 Demo。
+
+> 猜一猜：如果在 Build Settings 里**只勾了一个场景**（比如只有主菜单）就构建，打出来的包还能进到游戏的第二关吗？回到「先认个脸」里那张主图，单步走到第②步——你会看到 `Scenes In Build` 这个列表管的就是「成片收录哪几场戏」：**没被勾进列表的场景不会进包，运行时也加载不到**。所以只勾主菜单就构建，玩家点「开始」时想 `LoadScene("Game")` 会直接报错。
+
+单步走完主图，再去看另外两张：**多场景跳转图**帮你看清「`SceneManager.LoadScene` 怎么在主菜单 / 关卡 / 结算间切，以及为什么要切的场景必须先进 `Scenes In Build` 列表」；**脚本后端对照图**帮你钉牢「Mono 构建快、部分平台不支持；IL2CPP 构建慢但性能 / 兼容好、iOS / WebGL 必需」。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：①LoadScene 名字/索引 + using + warn（场景要在 Build Settings + Application.LoadLevel 已弃用）；②LoadSceneAsync + 进度条；③Application.Quit + 重开当前场景；④persistentDataPath 存档 + Debug.isDebugBuild。 */}
+
+## 代码：场景跳转、异步加载、退出与存档
+
+构建本身主要在编辑器面板里点（上面三张图已讲清流程），这一节聚焦**运行时**与发布相关的几段代码——每段都能直接放进 `MonoBehaviour`，逐段讲清。
+
+### ① 场景跳转：SceneManager.LoadScene（按名字 / 按索引）
+
+切换场景用 `SceneManager.LoadScene`，记得引命名空间。可以按**场景名**，也可以按 `Scenes In Build` 里的**构建索引**：
+
+```csharp
+using UnityEngine;
+using UnityEngine.SceneManagement; // 场景管理 API 都在这个命名空间
+
+public class MenuButtons : MonoBehaviour
+{
+    // 点「开始游戏」：按场景名加载关卡场景
+    public void OnStartClicked()
+    {
+        SceneManager.LoadScene("Game");
+    }
+
+    // 也可以按 Scenes In Build 里的构建索引加载（0 = 启动那个场景）
+    public void LoadByIndex()
+    {
+        SceneManager.LoadScene(1);
+    }
+}
+```
+
+`SceneManager.LoadScene("Game")` 会卸掉当前场景、加载名为 `Game` 的场景。按索引的 `LoadScene(1)` 加载 `Scenes In Build` 列表里**第 2 个**（索引从 0 起）。把这两个方法挂到按钮的 `onClick` 上（上一章 uGUI 讲过），就能做主菜单导航了。
+
+<Callout type="warn">
+  **要 `LoadScene` 的场景，必须先加进 File → Build Settings 的 `Scenes In Build`
+  列表**——否则运行时报「scene not in build
+  settings」加载不到（这是头号坑，见下面误区）。另外：老代码 / 旧教程里的
+  `Application.LoadLevel("Game")` **在 Unity 5 已被弃用**，一律改用
+  `SceneManager.LoadScene`（功能更全、还有异步版本）。
+</Callout>
+
+### ② 异步加载：LoadSceneAsync + 进度条
+
+关卡大时同步 `LoadScene` 会卡住一下。用 `LoadSceneAsync` 在后台加载，并读它的 `progress` 做加载条：
+
+```csharp
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using System.Collections;
+
+public class LoadingScreen : MonoBehaviour
+{
+    public UnityEngine.UI.Slider progressBar; // 拖一个 Slider 进来当进度条
+
+    public void LoadGameAsync() => StartCoroutine(LoadRoutine("Game"));
+
+    IEnumerator LoadRoutine(string sceneName)
+    {
+        AsyncOperation op = SceneManager.LoadSceneAsync(sceneName);
+        while (!op.isDone)
+        {
+            // op.progress 在加载中是 0~0.9，更新进度条
+            progressBar.value = Mathf.Clamp01(op.progress / 0.9f);
+            yield return null; // 等下一帧再查（用到上一章的协程）
+        }
+    }
+}
+```
+
+`LoadSceneAsync` 返回一个 `AsyncOperation`，用协程每帧查它的 `op.progress`（实际加载会停在约 `0.9`，最后那段是切换帧）更新进度条，加载完 `op.isDone` 变 `true`。这样玩家看到的是平滑的加载进度，而不是黑屏卡死。
+
+### ③ 退出游戏 + 重开当前场景
+
+退出用 `Application.Quit()`；想做「重新开始本关」就重新加载当前场景：
+
+```csharp
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class GameOverMenu : MonoBehaviour
+{
+    // 点「重新开始」：重新加载当前场景（满血复活）
+    public void Restart()
+    {
+        Scene cur = SceneManager.GetActiveScene();
+        SceneManager.LoadScene(cur.name); // 也可用 cur.buildIndex
+    }
+
+    // 点「退出游戏」
+    public void QuitGame()
+    {
+        Application.Quit();
+    }
+}
+```
+
+`SceneManager.GetActiveScene()` 拿到当前场景，再 `LoadScene(cur.name)` 就把这一关从头重来。
+
+<Callout type="warn">
+  **`Application.Quit()` 在编辑器里不会真退出**（编辑器要保持运行），所以你在
+  Play
+  模式点「退出」看着没反应是正常的——它只在**打包后的成品**里才真正关掉程序。要在编辑器里也验证退出逻辑，可包一段
+  `#if UNITY_EDITOR ... UnityEditor.EditorApplication.isPlaying = false;
+  #endif`。另外在 WebGL 上 `Quit()` 通常也无意义（网页不能自己关）。
+</Callout>
+
+### ④ 跨平台存档路径 + 区分开发版
+
+要存档 / 写文件，**别写死绝对路径**——各平台的可写目录天差地别。统一用 `Application.persistentDataPath`（引擎保证各平台都指向一个合法可写目录）：
+
+```csharp
+using UnityEngine;
+using System.IO;
+
+public class SaveSystem : MonoBehaviour
+{
+    public void Save(string json)
+    {
+        // 跨平台安全的可写路径，绝不要写死 "C:/save.txt" 这种绝对路径
+        string path = Path.Combine(Application.persistentDataPath, "save.json");
+        File.WriteAllText(path, json);
+
+        // Debug.isDebugBuild：勾了 Development Build 时为 true，可只在开发版打日志
+        if (Debug.isDebugBuild)
+            Debug.Log($"已存档到 {path}");
+    }
+}
+```
+
+`Application.persistentDataPath` 在 Windows 指向用户目录下的某处、在 Android 指向应用私有目录、在 iOS 指向沙盒——你不用管细节，写它就对。`Debug.isDebugBuild` 在勾了 `Development Build` 的包里是 `true`、正式版是 `false`，可用来让某些调试日志 / 作弊菜单只在开发版生效。
+
+至此场景跳转、异步加载、退出 / 重开、跨平台存档都过了一遍。回头看会发现：**构建**是「在编辑器面板里选平台、勾场景、点 Build 出包」这条一次性流程，而上面这些**代码**是让打出来的包真正能跑起来、能串场景、能存档退出的运行时配套。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。①LoadScene 报 scene not in build settings；②发布版仍勾 Development Build；③存档写死绝对路径；④（可选）还用已弃用 Application.LoadLevel。 */}
+
+## 容易踩的坑
+
+发布相关的坑往往「在编辑器里好好的、一打包就翻车」，挑最高频的几个：
+
+<Callout type="trap">
+  **现象**：运行时 `SceneManager.LoadScene("Game")` 报错「**Scene 'Game'
+  couldn't be loaded ... not been added to the build
+  settings**」，场景切不过去。**原因**：要加载的 `Game` 场景**没被加进 File →
+  Build Settings 的 `Scenes In Build` 列表**——只在 Project
+  里有这个场景文件是不够的，它必须在那个列表里才会进包、才能被
+  Load。**修法**：打开 File → Build Settings，把 `Game` 场景**拖进 `Scenes In
+  Build` 列表**（或点 Add Open Scenes），确认它前面的勾选是打开的，再运行。
+</Callout>
+
+<Callout type="trap">
+  **现象**：发布给玩家的正式包**又大又慢**，甚至被人扒出调试日志 /
+  作弊入口。**原因**：构建时**还勾着 `Development
+  Build`**——它会带上调试符号、可连 Profiler、暴露
+  `Debug.Log`，本是给开发测试用的，误带进发布版就成了负担和风险。**修法**：发布正式版前，去
+  File → Build Settings **取消勾选 `Development Build`**（以及 Autoconnect
+  Profiler / Script Debugging），再 Build。开发期想要这些就单独打一个开发版。
+</Callout>
+
+<Callout type="trap">
+  **现象**：存档功能在你自己机器上好好的，**换台电脑 / 换到手机就读不到 /
+  报无权限**。**原因**：存档路径**写死成了绝对路径**（如 `C:/save.txt` 或
+  `/Users/me/...`）——这条路径在别的机器 /
+  平台根本不存在或不可写。**修法**：一律用 **`Application.persistentDataPath`**
+  做根目录，再用 `Path.Combine` 拼上
+  `"save.json"`，它在各平台都指向合法可写目录；StreamingAssets /
+  只读资源另用对应 API。**绝不**在代码里写死设备相关的绝对路径。
+</Callout>
+
+<Callout type="trap">
+  **现象**：照着老教程写
+  `Application.LoadLevel("Game")`，编译器**警告已弃用**，新功能（异步加载、场景管理）也用不上。**原因**：`Application.LoadLevel`
+  是 Unity 5.3 之前的老 API，**已被弃用**。**修法**：改用
+  `SceneManager.LoadScene("Game")`（记得 `using
+  UnityEngine.SceneManagement;`）——它是现役 API，还配套 `LoadSceneAsync` /
+  `GetActiveScene` 等。看到老代码里的 `Application.LoadLevel` 一律替换掉。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含 1 改代码题 + 1 独立实现题；答案折叠；末尾一句收束全书。 */}
+
+## 小结
+
+- **构建流程**：File → Build Settings → 选**目标平台**（PC / WebGL / Android…）→ 勾 `Scenes In Build`（哪些场景进包 + 顺序，**索引 0 = 启动先加载**）→ Build / Build And Run → 得平台产物（`.exe` / `.app` / `.apk` / WebGL 文件夹）
+- **Player Settings**：填公司名 / 产品名 / 图标 / 分辨率等；**脚本后端** Mono（C# → IL → 运行时，快、部分平台不支持）vs `IL2CPP`（C# → IL → C++ → 原生码，慢但性能 / 兼容好，iOS / WebGL 必需）
+- **Development Build**：勾上带调试符号 / 可接 Profiler，但更大更慢——**发布正式版必须取消勾选**
+- **多场景跳转**：`SceneManager.LoadScene(名字 / 索引)` 切场景（`using UnityEngine.SceneManagement;`），要切的场景**必须先进 `Scenes In Build`**；`LoadSceneAsync` 做带进度条的异步加载
+- **跨平台**：存档 / 写文件用 `Application.persistentDataPath`（别写死绝对路径）；`Application.Quit()` 退出（编辑器里不退、打包后才生效）；老 API `Application.LoadLevel` 已弃用
+
+到这里，从第 1 章打开编辑器认识界面，到这一章把工程打成各平台的成品包，整本《Unity 5 权威讲解》就走完了一条龙——你已经能把一个想法做成、并真正交到玩家手里。
+
+<Exercises>
+
+**练习 1（问答）** 你在场景 `MainMenu` 里给「开始」按钮挂了 `SceneManager.LoadScene("Game")`，运行时点按钮报「scene 'Game' couldn't be loaded ... not been added to the build settings」。最先该检查什么？怎么修？
+
+<Answer>
+
+最先检查的是 **File → Build Settings 的 `Scenes In Build` 列表里有没有 `Game` 场景**。这个报错几乎总是因为：`Game` 场景文件虽然存在于 Project 里，但**没被加进构建列表**——而 `SceneManager.LoadScene` 只能加载进了列表的场景。
+
+修法：
+
+1. 打开 **File → Build Settings**；
+2. 把 `Game` 场景**拖进 `Scenes In Build` 列表**（或先在编辑器里打开它，再点 **Add Open Scenes**）；
+3. 确认它前面的**勾选是打开的**（取消勾选的场景不进包）；
+4. 顺手看一眼名字是否拼对、`MainMenu` 在不在索引 0（启动场景）。
+
+补充：如果用的是按索引加载（`LoadScene(1)`），还要确认索引 1 对应的就是你想要的 `Game`——索引由列表里的排列顺序决定。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想做「点退出存个档、再退出游戏」，但有两处问题：① 存档**写死了绝对路径** `C:/mygame/save.json`，换平台就失败；② 用了**已弃用的 `Application.LoadLevel`** 回主菜单。请改写成跨平台安全、且用现役 API 的版本。
+
+```csharp
+using UnityEngine;
+using System.IO;
+
+public class ExitFlow : MonoBehaviour
+{
+    public void SaveAndExit(string json)
+    {
+        File.WriteAllText("C:/mygame/save.json", json);
+        Application.LoadLevel("MainMenu"); // 回主菜单
+    }
+}
+```
+
+<Answer>
+
+把绝对路径换成 `Application.persistentDataPath`，把 `Application.LoadLevel` 换成 `SceneManager.LoadScene`（并引命名空间）：
+
+```csharp
+using UnityEngine;
+using UnityEngine.SceneManagement; // 现役场景 API
+using System.IO;
+
+public class ExitFlow : MonoBehaviour
+{
+    public void SaveAndExit(string json)
+    {
+        // 跨平台安全的可写路径，别写死设备相关的绝对路径
+        string path = Path.Combine(Application.persistentDataPath, "save.json");
+        File.WriteAllText(path, json);
+
+        SceneManager.LoadScene("MainMenu"); // 用现役 API 回主菜单
+    }
+}
+```
+
+要点：①用 **`Application.persistentDataPath` + `"save.json"`** 拼出存档路径，在 Windows / Android / iOS 都指向合法可写目录，不再依赖 `C:/` 这种只在你机器上存在的路径；②`Application.LoadLevel` 已弃用，改用 **`SceneManager.LoadScene`**（记得 `using UnityEngine.SceneManagement;`），并确保 `MainMenu` 已在 `Scenes In Build` 列表里。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：写一个挂在加载界面上的 `MonoBehaviour`——点一个方法就**异步加载** `Game` 场景，并把加载进度（0~1）反映到一个 `Slider` 上，加载完自动进入 `Game`。请写出这个脚本，并说明 `Game` 场景需要满足什么前提才能被加载到。
+
+<Answer>
+
+用 `SceneManager.LoadSceneAsync` + 协程读 `op.progress` 更新进度条：
+
+```csharp
+using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using System.Collections;
+
+public class AsyncLoader : MonoBehaviour
+{
+    public Slider progressBar; // Inspector 里拖一个 Slider 进来
+
+    // 点「进入游戏」调它，开始异步加载 Game 场景
+    public void EnterGame() => StartCoroutine(LoadRoutine("Game"));
+
+    IEnumerator LoadRoutine(string sceneName)
+    {
+        AsyncOperation op = SceneManager.LoadSceneAsync(sceneName);
+        while (!op.isDone)
+        {
+            // 加载进度停在约 0.9，归一化到 0~1 喂给进度条
+            progressBar.value = Mathf.Clamp01(op.progress / 0.9f);
+            yield return null; // 等下一帧再查
+        }
+        // 循环退出时 op.isDone == true，引擎已自动切到 Game 场景
+    }
+}
+```
+
+要点：①`LoadSceneAsync` 返回 `AsyncOperation`，在协程里每帧（`yield return null`）查 `op.progress` 更新 `Slider`；②实际加载进度会停在约 `0.9`，所以用 `op.progress / 0.9f` 归一化、再 `Clamp01`；③`op.isDone` 变 `true` 后引擎自动激活新场景，循环结束。
+
+**`Game` 场景能被加载到的前提**：它**必须已加进 File → Build Settings 的 `Scenes In Build` 列表**（且勾选打开）。否则 `LoadSceneAsync("Game")` 同样会报「scene not in build settings」。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Build Settings">
+  Unity 的**构建总控面板**（菜单 **File → Build
+  Settings**）——把游戏「出片」成成品包的入口。在这里你做三件事：**选目标平台**（PC/Mac/Linux
+  Standalone、WebGL、Android、iOS… 即把游戏打成哪种成品）、**管理 `Scenes In
+  Build` 列表**（哪些场景进包、按什么顺序）、点 **Build**（出包）或 **Build And
+  Run**（出包并立刻运行）。一句话：同一个工程，按平台各打一个成品，都从这个面板开始。详见本章「①
+  那块出片的总台」与构建流水线图。
+</GlossaryItem>
+
+<GlossaryItem term="Scenes In Build">
+  Build Settings
+  顶部的**场景清单**，决定「**哪些场景会被打进最终包、按什么顺序**」。每个场景有一个从
+  0 开始的**构建索引（build index）**；**索引 0
+  的场景就是游戏启动时第一个被加载的场景**（通常是主菜单 /
+  启动画面）。关键红线：**只有进了这个列表的场景，运行时才能被加载到**——没进列表就
+  `LoadScene` 会报「scene not in build settings」。光在 Project
+  里有场景文件不算数，必须把它拖进这个列表。详见本章多场景跳转图与误区第一条。
+</GlossaryItem>
+
+<GlossaryItem term="SceneManager.LoadScene">
+  **切换场景的现代 API**（命名空间 `UnityEngine.SceneManagement`，Unity
+  5.3+）。写成 `SceneManager.LoadScene(名字 或 构建索引)`：按场景名或 `Scenes In
+  Build` 里的索引加载一个场景、替换掉当前场景——做「主菜单 → 关卡 →
+  结算」这类跳转全靠它。它还有异步版本
+  `SceneManager.LoadSceneAsync`，可在后台加载并读 `progress`
+  做加载条。注意：老代码里的 `Application.LoadLevel` **已被弃用**，一律改用
+  `SceneManager.LoadScene`；且要切的场景必须先在 `Scenes In Build`
+  列表里。详见本章「① 场景跳转」一节。
+</GlossaryItem>
+
+<GlossaryItem term="IL2CPP">
+  Unity 的一种**脚本后端**（在 Player Settings 的 **Scripting Backend**
+  里选）。它把你的 C# 先编成 **IL（中间语言）**，再把 IL **转成 C++
+  源码、最后编成平台原生机器码**。相比 Mono（C# → IL → 靠运行时执行），IL2CPP
+  **构建更慢，但运行性能和平台兼容更好**；**iOS、WebGL 等平台必须用
+  IL2CPP**。一句话取舍：开发期常用 Mono 图构建快，发布时（尤其是必需平台）用
+  IL2CPP。详见本章脚本后端对照图。
+</GlossaryItem>
+
+<GlossaryItem term="Development Build">
+  Build Settings 里的一个**勾选项**。**勾上**后构建出的包会带**调试符号**、能连
+  **Profiler** 做性能分析、能在设备上看 **`Debug.Log`**
+  日志，方便测试期排错；**代价**是包更大、运行更慢，并可能暴露调试信息。关键红线：**发布给玩家的正式版必须取消勾选
+  `Development Build`**，它只在开发 / 测试期勾上。代码里可用
+  `Debug.isDebugBuild` 判断当前是不是开发版。详见本章误区第二条。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

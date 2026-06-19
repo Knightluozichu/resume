@@ -1,0 +1,354 @@
+---
+title: MonoBehaviour 生命周期
+type: A
+section: Unity脚本
+order: 1
+description: 读完能说清 MonoBehaviour 生命周期回调的触发顺序、Awake 与 Start 的先后与分工、以及 Update / FixedUpdate / LateUpdate 各自在什么时机调、分别该放什么代码。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* A 概念型·第4章（承接第1-3章「数字片场」+ MonoBehaviour 脚本组件概念）：讲清脚本继承 MonoBehaviour 才有生命周期回调、回调触发顺序、Awake vs Start、Update vs FixedUpdate vs LateUpdate、启用/禁用/销毁。重心是概念讲解(§3)与三个 anime viz(§5)，数学省略(math:false)，代码对照只放一个写全各回调的 MonoBehaviour。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type A 新核心概念 ≤5）。 */}
+{/* 1) MonoBehaviour 基类：脚本继承它才能当组件、才有生命周期回调（承接 ch1/2）= 文字。 */}
+{/* 2) 生命周期回调顺序：Awake→OnEnable→Start→(每帧 Update/LateUpdate, 物理 FixedUpdate)→OnDisable→OnDestroy = LifecycleTimelineDiagram（anime·主）。 */}
+{/* 3) Awake vs Start：Awake 创建时最早(做自身初始化)、Start 首帧前(做跨对象引用) = AwakeVsStartDiagram + 文字。 */}
+{/* 4) Update vs FixedUpdate vs LateUpdate：Update 每帧(随帧率变)、FixedUpdate 固定步长(物理)、LateUpdate 所有 Update 后(相机跟随) = UpdateVsFixedUpdateDiagram（anime 对照）。 */}
+{/* 5) 启用/禁用/销毁：OnEnable / OnDisable / OnDestroy 何时触发 = 引 viz A。 */}
+{/* 术语首现 Term：MonoBehaviour / 生命周期 / 回调 / Awake / OnEnable / Start / Update / FixedUpdate / LateUpdate / OnDisable / OnDestroy。 */}
+
+{/* 1. 学习目标（spec §一）：A 型必含「能解释 ___ 在工作流/模型中的位置」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能按正确顺序说出 MonoBehaviour 的主要生命周期回调（Awake → OnEnable → Start → 每帧的 Update / LateUpdate → OnDisable → OnDestroy），并解释每个在什么时机被调用
+- 能说清 Awake 和 Start 的先后与分工，以及 Update、FixedUpdate、LateUpdate 三者各放什么代码
+- 能回答：让物体「受力移动」的物理代码，该写在 Update 还是 FixedUpdate 里？为什么？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用片场体系（全书统一）。 */}
+
+## 一个演员，从进场到谢幕
+
+前几章我们把场上的角色叫 GameObject，把你写的玩法逻辑挂成它身上的一张「技能卡」。但有个问题没回答：这张卡上的代码，**到底什么时候会被执行**？是物体一出现就跑？还是等游戏开演才跑？跑一次还是每一刻都在跑？
+
+想想一个演员的一晚：他先到后台**做准备**（换装、记词），再**登台亮相**，然后在台上**每一刻都在表演**，最后**谢幕退场**。引擎对待你的脚本也是这套流程——它会在不同的时刻，替你调用脚本里**约好名字**的几个方法：进场时调一个、开演前调一个、每一帧调一个、退场时再调一个。
+
+这一章就讲清这套「进场 → 登台 → 每帧表演 → 退场」的时刻表：每个时刻引擎会喊哪个方法、你该把哪种代码写进去。搞不清它，你会遇到一堆怪事——「为什么我在这里拿另一个物体，结果是空的」「为什么物体移动一卡顿就发飘」，根子全在没踩准时刻。
+
+{/* 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么→为什么→在模型中的位置。新核心概念 5 个：MonoBehaviour基类 / 生命周期回调顺序 / Awake vs Start / 三种Update / 启用禁用销毁。 */}
+
+## 先决条件：脚本得继承 MonoBehaviour
+
+第 2 章说过，你写的脚本要能当组件挂到 GameObject 上，得继承一个特殊的基类——
+
+<Term def="Unity 所有「能挂到 GameObject 上当组件」的脚本都要继承的基类。继承它，脚本才能被引擎识别为组件，并获得 Awake、Start、Update 等一系列「生命周期回调」。">
+  MonoBehaviour
+</Term>
+。这件事的意义不止是「能挂上去」：**只有继承了 MonoBehaviour
+的脚本，引擎才会在特定时刻替你调用那些约好名字的方法**。一个普通的 C# 类（没继承
+MonoBehaviour）就算你写了名叫 `Update` 的方法，引擎也根本不认、不会去调它。
+
+所以这一章讲的一切，前提都是「这是一个继承 MonoBehaviour 的脚本组件」。下面这些被引擎按时刻自动调用的方法，就是它的——
+
+## 生命周期：引擎按时刻表替你调的那些方法
+
+<Term def="一个脚本组件从「被创建」到「被销毁」之间，引擎会在若干固定时刻自动调用它的一组方法——这些时刻连起来就是它的「一生」，故称生命周期。">
+  生命周期（Lifecycle）
+</Term>
+说的是：你的脚本组件从出生到消亡，引擎会在几个**固定时刻**主动来敲门，调用你写好的对应方法。这些「被引擎在特定时刻主动调用」的方法，叫
+
+<Term def="由引擎在特定时刻「反过来调用」你的方法（而不是你主动调它），如 Awake、Update。你只管按约定的名字把方法写好，何时调由引擎决定。">
+  回调（Callback）
+</Term>
+——名字是约定好的（`Awake`、`Start`、`Update`……），你只负责往里填代码，**何时调、调几次，全由引擎按时刻表决定**。
+
+这套时刻表的顺序是固定的，也是本章最该钉牢的难点。下面这条竖直时间线把它从头到尾演了一遍——单步播放，看每个回调在「演员一生」的哪个环节被点亮：
+
+<LifecycleTimelineDiagram />
+
+记住这条主干顺序（也是上图自上而下的顺序）：
+
+1. <Term def="对象一被创建就立刻调用的回调，是生命周期里最早的一个，且整个一生只调一次。即使对象当前处于禁用状态也会调。适合做「自己内部」的初始化。">
+     Awake
+   </Term>
+   —— 进场前准备，最早、只一次。
+2. <Term def="对象或组件每次被「启用」时调用的回调（包括刚创建时若是启用状态）。每启用一次就调一次，适合注册事件、开启监听。">
+     OnEnable
+   </Term>
+   —— 登台亮相，每次被启用都调。
+3. <Term def="在该脚本的第一帧 Update 之前调用、且只调一次的回调。此时全场对象的 Awake 都已执行完，适合做「依赖别的对象」的初始化。">
+     Start
+   </Term>
+   —— 正式开演前，只一次。
+4. <Term def="每一渲染帧调用一次的回调，是写常规每帧逻辑（读输入、计时、非物理移动）的主场。调用次数随帧率变化。">
+     Update
+   </Term>
+   与
+   <Term def="在同一帧里所有对象的 Update 都执行完之后，才调用的每帧回调。适合「要等别人都动完我再动」的逻辑，如相机跟随。">
+     LateUpdate
+   </Term>
+   —— 每帧表演，反复重复。
+5. <Term def="对象或组件被「禁用」时调用的回调，与 OnEnable 成对。适合注销事件、停止监听。">
+     OnDisable
+   </Term>
+   与
+   <Term def="对象被销毁（Destroy）时调用的回调，是生命周期的最后一站。适合做收尾清理、释放手动申请的资源。">
+     OnDestroy
+   </Term>
+   —— 谢幕退场。
+
+其中**进场（Awake/OnEnable/Start）和退场（OnDisable/OnDestroy）通常只在一生里发生一次**，而**中间的每帧回调（Update/LateUpdate）会随每一帧反复执行**——图里那个「每帧循环」的回环框，标的就是这段反复。
+
+## Awake 与 Start：都在「开演前」，差别在哪
+
+进场阶段有两个最容易混的回调：`Awake` 和 `Start`。它们都在游戏正式跑起来（第一帧 Update）之前执行、且各自只调一次，但有两个关键区别。
+
+第一，**先后**：`Awake` 比 `Start` 早。第二，也是更要命的一点——**当场上有多个对象时，引擎会先把所有对象的 `Awake` 全部跑完，才回头依次跑各自的 `Start`**。下面这张对照图把三个对象 A/B/C 一起进场的时序演给你看：
+
+<AwakeVsStartDiagram />
+
+看明白这个两阶段时序，分工就清楚了：
+
+- **`Awake` 做「自己的」初始化**——比如缓存自身组件的引用（`GetComponent` 拿自己身上的东西）、给自己的字段赋初值。因为这一刻**别的对象可能还没 `Awake` 完**，你去引用它们是不安全的。
+- **`Start` 做「依赖别人」的初始化**——比如去找场景里另一个对象、读取另一个脚本已经准备好的数据。因为进 `Start` 时，**全场所有对象的 `Awake` 都已经结束**，大家都初始化好了，跨对象引用这时才稳妥。
+
+一句话记牢：**自己的事放 Awake，牵扯别人的事放 Start。**
+
+## 三种「Update」：每帧、固定步长、收尾
+
+进场之后就进入「每帧表演」阶段。这里有三个长得很像的回调，时机却完全不同，是本章第二个难点：
+
+- **`Update`**：每一**渲染帧**调一次。屏幕画一帧它就跑一次——所以它的调用频率**跟着帧率走**，帧率高（如 120fps）一秒跑得多，帧率低（如 30fps）一秒跑得少。读输入、计时、做不涉及物理的移动，都放这。
+- **`FixedUpdate`**：按**固定步长**调（默认每 0.02 秒一次，即一秒 50 次），**与帧率脱钩**。
+- **`LateUpdate`**：在同一帧里**所有对象的 `Update` 都跑完之后**才调，专门收尾。
+
+`Update` 和 `FixedUpdate` 的区别最值得掰碎。下面这张对照图把同一段时间里两者的触发节拍并排画出来：
+
+<UpdateVsFixedUpdateDiagram />
+
+注意上轨 `Update` 的刻度**疏密不均**（帧率在波动），而下轨 `FixedUpdate` 的刻度**间隔完全相等**。关键在那个高亮的「慢帧」：当某一帧卡了很久，引擎会在这一帧里**补跑好几次** `FixedUpdate`，把固定的物理节拍追回来。换句话说，**一个渲染帧里 `FixedUpdate` 可能跑 0 次、1 次或多次**。
+
+这正是
+
+<Term def="按固定时间步长（默认 0.02s）调用、与帧率脱钩的每帧回调。物理引擎按它的节拍推进，所以涉及物理（刚体受力、施加速度）的代码要放这里，才不会因帧率波动而失真。">
+  FixedUpdate
+</Term>
+存在的理由：**物理模拟必须用恒定的时间步长**，否则帧率一抖，受力、积分就会出错（物体移动忽快忽慢、甚至穿墙）。所以——**给刚体施力、设速度这类物理代码，一律放
+FixedUpdate；读输入、非物理移动放 Update**。
+
+至于 `LateUpdate`，它的典型用途是**相机跟随**：你希望相机在角色这一帧已经移动到位**之后**再去对准它。如果把相机跟随写在 `Update` 里，可能相机先跑、角色后跑，画面就会抖。放进 `LateUpdate`，等所有 `Update` 收工再动相机，就稳了——这就是「等别人都动完我再动」。
+
+## 启用、禁用与销毁：进场与退场的开关
+
+最后看进场两端的几个回调，它们对应对象的**启用 / 禁用 / 销毁**状态变化：
+
+- 对象（或它的脚本组件）被**启用**时，引擎调 `OnEnable`；被**禁用**时（在 Inspector 取消勾选，或代码里 `enabled = false`），调 `OnDisable`。这一对是**可以反复发生**的——你禁用再启用，`OnDisable`、`OnEnable` 就会再各调一次。它们适合**成对地注册 / 注销**：在 `OnEnable` 里开始监听某个事件，在 `OnDisable` 里把监听撤掉。
+- 对象被**销毁**（调 `Destroy`，或场景卸载）时，引擎调一次 `OnDestroy`，这是它生命的最后一站，适合做收尾清理。
+
+把这几个回调摆回上面那张生命周期时间线就一目了然：`OnEnable` 紧跟在 `Awake` 之后（进场登台），`OnDisable`、`OnDestroy` 在最末尾（谢幕退场）。整张时刻表至此闭环。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：A 型用动画把概念掰碎；三个 anime viz 已分别嵌在 §3。主 Demo = LifecycleTimelineDiagram（含「猜一猜」），辅 = UpdateVsFixedUpdate 对照 + AwakeVsStart 对照。每个 viz 都带可暂停/单步/拖进度。 */}
+
+## 动手：把时刻表单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那条**生命周期时间线动画**——它就是本章的主 Demo。
+
+> 猜一猜：`Awake` 和 `Start`，哪个先执行？`Update` 一秒大概执行几次（它取决于什么）？回到「生命周期：引擎按时刻表替你调的那些方法」一节，单步播放那条竖直时间线——你会看到 `Awake` 排在 `Start` 前面（且全场 Awake 先跑完再跑 Start，见 Awake/Start 对照图），而 `Update` 的次数跟着帧率走、没有固定值（与之相对，`FixedUpdate` 才是固定的一秒 50 次）。
+
+单步走完主时间线后，再去玩另外两张对照图：**Awake vs Start** 那张帮你钉牢「先全 Awake，后全 Start」的两阶段时序；**Update vs FixedUpdate** 那张帮你看清「物理为什么必须放 FixedUpdate」。
+
+{/* 6. 代码对照（spec §六，A 型选，只放最能说明概念的 1 段）：一个 MonoBehaviour 写全 Awake/OnEnable/Start/Update/FixedUpdate/LateUpdate/OnDestroy + Debug.Log，演示触发顺序。纯 csharp 块，≤30 行，语法正确。 */}
+
+## 代码：一个脚本写全各回调，亲眼看触发顺序
+
+把这些回调写进同一个脚本，挂到任意 GameObject 上运行，看 Console 打印的顺序，就能把上面那张时刻表「跑」出来：
+
+```csharp
+using UnityEngine;
+
+// 继承 MonoBehaviour，才有下面这些生命周期回调
+public class LifecycleProbe : MonoBehaviour
+{
+    // ① 对象创建即调，最早，只一次 —— 做自身初始化
+    void Awake() => Debug.Log("Awake");
+
+    // ② 每次被启用时调（刚创建若启用也算一次）
+    void OnEnable() => Debug.Log("OnEnable");
+
+    // ③ 首帧 Update 之前调，只一次 —— 全场 Awake 已完，放跨对象引用
+    void Start() => Debug.Log("Start");
+
+    // ④ 每渲染帧调一次（次数随帧率变）—— 读输入、非物理移动
+    void Update() => Debug.Log("Update（每帧）");
+
+    // ⑤ 固定步长调（默认每 0.02s）—— 物理代码放这里
+    void FixedUpdate() => Debug.Log("FixedUpdate（固定节拍）");
+
+    // ⑥ 同帧所有 Update 后才调 —— 相机跟随放这里
+    void LateUpdate() => Debug.Log("LateUpdate（每帧收尾）");
+
+    // ⑦ 被禁用时调，与 OnEnable 成对
+    void OnDisable() => Debug.Log("OnDisable");
+
+    // ⑧ 被销毁时调，最后一站 —— 收尾清理
+    void OnDestroy() => Debug.Log("OnDestroy");
+}
+```
+
+运行后，Console 里先打印一次 `Awake` → `OnEnable` → `Start`（进场，各一次），随后 `Update`、`FixedUpdate`、`LateUpdate` **反复滚动刷屏**（每帧表演），等你停止运行或销毁对象，才看到末尾的 `OnDisable` → `OnDestroy`（退场，各一次）。这一串打印就是本章那张时刻表的「实跑版」。注意这些方法都没写 `public` 也能被引擎调到——引擎是靠**方法名约定**找到它们的，可见性不影响。
+
+{/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。含「Awake 里 GetComponent 别的对象可能没初始化好→放 Start」「物理写 Update→应 FixedUpdate」「禁用对象 Start 不跑」。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：在 A 的 `Awake` 里去拿 B 身上的某个数据 / 组件，结果拿到的是
+  `null`，或者数据还是初始值。**原因**：`Awake` 阶段引擎可能**还没轮到给 B 调
+  `Awake`**——全场的 `Awake`
+  并非一齐完成，你引用的对象可能尚未初始化好。**修法**：把**跨对象的引用**从
+  `Awake` 挪到 `Start`。进 `Start` 时全场 `Awake` 必定都已结束，B
+  的东西早准备好了。`Awake` 只留给「自己的」初始化。
+</Callout>
+
+<Callout type="trap">
+  **现象**：给刚体施力 / 设速度写在了 `Update`
+  里，物体移动忽快忽慢、帧率一掉就发飘，甚至高速时穿过墙。**原因**：`Update`
+  跟着帧率走、步长不固定，而**物理引擎要求恒定时间步长**；用变化的步长喂物理，积分就会失真。**修法**：把
+  `Rigidbody.AddForce`、`rb.velocity = ...` 这类**物理代码移到
+  `FixedUpdate`**（步长固定 0.02s，与帧率脱钩）。读输入仍放
+  `Update`，把输入存起来给 `FixedUpdate` 用。
+</Callout>
+
+<Callout type="trap">
+  **现象**：一个对象**初始就是禁用状态**（Inspector 里没勾选
+  active），运行后发现它的 `Start`
+  一直没跑，里面的初始化没生效。**原因**：`Start`
+  只在对象**首次变为启用、即将进入第一帧 Update
+  前**才调；对象一直禁用，就一直轮不到
+  `Start`。**修法**：要么让它出生时就启用；要么把「无论如何都要先做」的初始化放
+  `Awake`（创建即调，禁用也会调），`Start` 留给「启用后才需要」的部分。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，A 型以问答为主含 1 道改 Demo / 判顺序题，答案折叠。 */}
+
+## 小结
+
+- **得先继承 MonoBehaviour**，脚本才被引擎认作组件、才有这些生命周期回调
+- **主干顺序固定**：Awake → OnEnable → Start →（每帧 Update / LateUpdate，物理走 FixedUpdate）→ OnDisable → OnDestroy
+- **Awake vs Start**：Awake 最早、做自己的初始化；Start 在首帧前、全场 Awake 已完，做跨对象引用
+- **三种 Update**：Update 每帧（随帧率变）放常规逻辑；FixedUpdate 固定步长放**物理**；LateUpdate 所有 Update 后放相机跟随
+- **进退场开关**：OnEnable / OnDisable 成对（启用/禁用，可反复）；OnDestroy 在销毁时调一次（收尾）
+
+<Exercises>
+
+**练习 1（判执行顺序）** 一个继承 MonoBehaviour 的脚本里写了这些方法：`LateUpdate`、`Awake`、`OnEnable`、`OnDestroy`、`Start`、`Update`、`FixedUpdate`。对象出生即启用、跑几帧后被销毁。请按**首次被调用的时间先后**给它们排序，并指出哪些会反复执行。
+
+<Answer>
+
+首次调用顺序：**Awake → OnEnable → Start →（FixedUpdate / Update / LateUpdate 进入每帧循环）→ OnDestroy**。
+
+- 进场只一次：`Awake`（最早）、`OnEnable`、`Start`（首帧 Update 前）。
+- 每帧反复执行：`FixedUpdate`（固定步长，与帧率脱钩）、`Update`（每渲染帧）、`LateUpdate`（同帧所有 Update 之后）。同一帧里它们的相对次序是 FixedUpdate（可能 0/1/多次）→ Update → LateUpdate。
+- 退场只一次：对象被销毁时 `OnDestroy`（本题没写 `OnDisable`，但实际销毁前引擎也会调 OnDisable）。
+
+</Answer>
+
+**练习 2（问答型）** 物理代码（如给刚体施力、设速度）该写在 `Update` 还是 `FixedUpdate`？为什么？如果误写在 `Update` 会出现什么现象？
+
+<Answer>
+
+应写在 **`FixedUpdate`**。因为 `FixedUpdate` 按**固定时间步长**（默认 0.02s）调用、与帧率脱钩，而物理引擎要求**恒定的时间步长**才能正确积分。`Update` 跟着帧率走、步长不固定，用它喂物理会失真。
+
+误写在 `Update` 的现象：物体移动速度随帧率忽快忽慢；帧率掉时物体「发飘」或运动不稳；高速运动时还可能因单帧位移过大而**穿过碰撞体**（穿墙）。修法是把 `AddForce`、`velocity = ...` 移到 `FixedUpdate`；输入仍在 `Update` 读取后存起来，交给 `FixedUpdate` 使用。
+
+</Answer>
+
+**练习 3（改 Demo / 代码型）** 本章「生命周期时间线」把 `Update` 与 `LateUpdate` 圈进了「每帧循环」。如果要给这个动画**再标一个 `FixedUpdate`**，你会把它标在哪个位置、配什么说明文案？另外，用一句话说明：为什么相机跟随适合放 `LateUpdate` 而不是 `Update`？
+
+<Answer>
+
+`FixedUpdate` 应标在「每帧循环」这一段的**旁边/附近**，但要单独画一条**与帧率脱钩的固定节拍**轨（本章动画正是用一个虚线旁标把它挂在 Update 节点旁，注明「后台固定节拍 · 物理排练」）。它不该和 Update 画成同一条频率，因为一个渲染帧里它可能跑 0/1/多次。说明文案可写：「固定步长 0.02s，物理在这里推进」。
+
+相机跟随放 `LateUpdate` 而非 `Update`：因为 `LateUpdate` 在同一帧**所有对象的 Update 都执行完之后**才调，能保证角色这一帧已经移动到位，相机再去对准它，画面不会抖；放 `Update` 则可能相机先于角色更新，导致跟随滞后或抖动。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="MonoBehaviour">
+  Unity 里所有「能挂到 GameObject
+  上当组件」的脚本都要继承的**基类**。继承它，脚本才被引擎认作组件，并自动获得
+  `Awake`、`Start`、`Update` 等一整套**生命周期回调**。一个没继承它的普通 C#
+  类，就算写了 `Update` 方法引擎也不会调。详见本章「先决条件：脚本得继承
+  MonoBehaviour」一节。
+</GlossaryItem>
+
+<GlossaryItem term="生命周期（Lifecycle）">
+  一个脚本组件从「被创建」到「被销毁」之间，引擎会在若干**固定时刻**主动调用它的一组方法——这些时刻连起来就是它的「一生」，故称生命周期。把它想成一个演员从进场、登台、每帧表演到谢幕退场的完整流程。详见本章「生命周期：引擎按时刻表替你调的那些方法」一节。
+</GlossaryItem>
+
+<GlossaryItem term="回调（Callback）">
+  由引擎在特定时刻「**反过来调用**」你的方法（而不是你主动去调它）。你只管按约定的名字（`Awake`、`Update`……）把方法写好，**何时调、调几次由引擎决定**。生命周期里那一串方法都是回调。详见本章「生命周期」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Awake">
+  对象一**被创建就立刻**调用的回调，是生命周期里**最早**的一个，且整个一生**只调一次**（即使对象当前禁用也会调）。适合做「**自己内部**」的初始化，如缓存自身组件引用。注意此刻别的对象可能还没初始化好。详见本章「Awake
+  与 Start」一节。
+</GlossaryItem>
+
+<GlossaryItem term="OnEnable">
+  对象或组件**每次被「启用」时**调用的回调（刚创建若是启用状态也算一次）。它**可以反复发生**——禁用再启用就会再调。常与
+  `OnDisable` 成对，用来注册 / 开启监听。详见本章「启用、禁用与销毁」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Start">
+  在该脚本的**第一帧 Update 之前**调用、且**只调一次**的回调。此刻**全场对象的
+  Awake
+  都已执行完**，所以适合做「**依赖别的对象**」的初始化（去引用、读取别的对象）。对象一直禁用就轮不到它。详见本章「Awake
+  与 Start」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Update">
+  **每一渲染帧**调用一次的回调，是写常规每帧逻辑（读输入、计时、非物理移动）的主场。它的调用频率**跟着帧率走**——帧率高一秒跑得多，帧率低一秒跑得少，没有固定值。详见本章「三种『Update』」一节。
+</GlossaryItem>
+
+<GlossaryItem term="FixedUpdate">
+  按**固定时间步长**（默认 0.02s，一秒 50
+  次）调用、**与帧率脱钩**的每帧回调。物理引擎按它的节拍推进，所以**涉及物理**（给刚体施力、设速度）的代码要放这里，才不会因帧率波动而失真。一个渲染帧里它可能跑
+  0 / 1 / 多次。详见本章「三种『Update』」一节。
+</GlossaryItem>
+
+<GlossaryItem term="LateUpdate">
+  在同一帧里**所有对象的 Update
+  都执行完之后**才调用的每帧回调。适合「**要等别人都动完我再动**」的逻辑——最典型的是**相机跟随**，等角色这一帧移动到位后再对准它，画面才不抖。详见本章「三种『Update』」一节。
+</GlossaryItem>
+
+<GlossaryItem term="OnDisable">
+  对象或组件**被「禁用」时**调用的回调（Inspector 取消勾选或代码 `enabled =
+  false`）。与 `OnEnable` 成对、可反复发生，适合**注销事件、停止监听**，把
+  OnEnable 里开启的东西撤掉。详见本章「启用、禁用与销毁」一节。
+</GlossaryItem>
+
+<GlossaryItem term="OnDestroy">
+  对象**被销毁**（调 `Destroy`
+  或场景卸载）时调用的回调，是生命周期的**最后一站**。适合做**收尾清理**——释放手动申请的资源、解除引用等。详见本章「启用、禁用与销毁」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

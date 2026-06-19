@@ -1,0 +1,439 @@
+---
+title: Mecanim 动画状态机
+type: C
+section: Unity动画与UI
+order: 1
+description: 读完能写出用 Animator 设参数（SetFloat / SetTrigger / SetBool）驱动 Idle / Walk / Run / Jump 在状态机里自动切换的脚本，分清「代码只设参数、动画怎么切由状态机按过渡条件决定」的解耦关系，并能排查「参数名拼错 / Has Exit Time / trigger 没被消费」这几类切不动的坑。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇4「Unity动画与UI」开篇章：把「角色该走就走、该跑就跑、按键就跳」写成「代码设参数 → 状态机按过渡条件自动切动画」的脚本。重心是 §6 代码对照（≥80%），三张 viz 把「参数驱动当前态迁移 / 代码设参数与状态机的解耦因果 / 一个状态内按参数混合多 clip」掰碎，数学省略(math:false)。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type C 新核心概念 ≤5）。 */}
+{/* 1) Animator（组件）：挂在角色上、播放状态机的播放器，缓存 GetComponent<Animator>() = ParamsToAnimatorDiagram 左栏 + 代码①。 */}
+{/* 2) Animator Controller（状态机资产）：画着 Idle/Walk/Run/Jump 状态 + 带条件的过渡 = MecanimStateMachineDiagram（anime·主图）。 */}
+{/* 3) 参数 Parameter（float/bool/trigger）：过渡条件读的就是它；代码用 SetFloat/SetBool/SetTrigger 设值 = ParamsToAnimatorDiagram（anime）+ 代码②④。 */}
+{/* 4) SetTrigger（一次性触发器）：拨一下、被过渡消费后自动复位；ResetTrigger 手动清 = 代码③ + Callout warn。 */}
+{/* 5) Blend Tree 混合树（一个状态内按参数混合多 clip，编辑器配不写代码）= BlendTreeDiagram（1D anime）+ 代码⑤一句带过。 */}
+{/* 陷阱：①参数名拼错/大小写不符 → SetFloat 静默无效动画不切；②该灵敏的过渡勾了 Has Exit Time → 按键不跟手；③trigger 没被消费卡住 / 忘 ResetTrigger。 */}
+{/* 术语首现 Term：Animator / Animator Controller / 参数Parameter / SetTrigger / Blend Tree（5 个 = Glossary 5 条）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___」可检验动词；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能写出用 `Animator` 设参数（`SetFloat` / `SetBool` / `SetTrigger`）的脚本，让角色随移动速度在 Idle / Walk / Run 间自动切换、按键触发一次性跳跃，并分清「代码只设参数、动画怎么切由状态机按过渡条件决定」
+- 能解释 `SetTrigger` 这种「拨一下就复位」的触发器与 `SetFloat` / `SetBool` 这种「持续保持值」的参数有何不同，以及 `Blend Tree` 在「一个状态内」按参数混合多个动画 clip 的作用
+- 能回答：角色明明该跑步却一直停在 Idle 动画，应该从「参数名 / 过渡条件 / 代码有没有设值」哪里查起？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；沿用全书统一的「片场/剧组」类比；回答「解决什么/没有它会怎样」。 */}
+
+## 给演员一本「动作切换表」
+
+到这一章，你的角色已经能被脚本操控、能受物理、能撞能弹了。但它现在多半还是「一根木头」——移动时不会迈腿，跳起来不会收腿。我们想让它**动起来**：站着就播站立、走起来就播走路、跑快了就播跑步、按键就播跳跃。
+
+最笨的办法，是你**自己每帧盯着速度去手动换播放哪段动画**：速度从 0 变大了，把站立换成走路；再大，换成跑步；按了跳，插一段跳跃，跳完还得记得换回来……动画一多，这堆 if-else 就乱成一团麻。
+
+更省心的办法，是给演员一本**「动作切换表」**：表上写好「站着 → 收到『速度 > 0』就改走 → 『速度更大』就改跑 → 收到『跳』的信号就跳一下、跳完回来」。你（代码）只管往一块小黑板上**喊数值**——「速度 = 6」「跳！」——演员照着表自己切，到底播哪段、什么时候切，全是表说了算，你不用碰。这一章就是教你写这本表、教你怎么往黑板上喊数值。
+
+{/* 3. 概念讲解（spec §三，C 型把「是什么」压一段，篇幅让给 §6）：一小节一概念；术语首现 Term 高亮且进 Glossary；每概念配图/引 Demo；新核心概念 ≤5。 */}
+
+## 先认个脸：Animator、状态机、参数、触发器、混合树
+
+本章五件事先各认个脸，**怎么写成代码留到第六节细讲**。
+
+**① 播放器：Animator 组件。** 角色身上挂一个
+
+<Term def="挂在角色 GameObject 上的组件，是「动作切换表」的播放器。它持有一个 Animator Controller（那张状态机表），每帧推进当前状态的动画、按过渡条件切状态。代码侧通过 GetComponent 拿到它，再调 SetFloat / SetBool / SetTrigger 往参数面板写值来驱动它。">
+  Animator
+</Term>
+组件，它就是那本「动作切换表」的**播放器**——负责播当前动画、按表上的规则切换。代码要操控动画，第一步就是拿到这个
+Animator（呼应第 5 章「拿组件先缓存」）。
+
+**② 那张表本身：Animator Controller（状态机）。** 表的内容画在一份
+
+<Term def="一份独立的资产文件（.controller），就是那张「动作切换表」。里面画着若干状态（每个状态播一个动画 clip，如 Idle / Walk / Run / Jump），状态之间用带『条件』的『过渡（Transition）』箭头连接。它和代码解耦：换动画、改过渡条件都在编辑器里改这份资产，不动脚本。一个 Animator 组件引用一份 Animator Controller。">
+  Animator Controller
+</Term>
+资产里：每个状态播一段动画，状态之间用带**条件**的**过渡**箭头连。下面这张主图把「设参数 → 满足过渡条件 → 当前态自动迁移」演给你看——四个状态 Idle / Walk / Run / Jump，过渡条件分别是 `Speed > 0.1`、`Speed > 4`、以及任意态都可走的 `Jump trigger`：
+
+<MecanimStateMachineDiagram />
+
+**③ 过渡条件读的东西：参数 Parameter。** 过渡箭头上挂的条件（`Speed > 0.1` 之类），读的是状态机的
+
+<Term def="状态机上声明的一组变量，是代码与状态机之间唯一的「小黑板」。过渡箭头上的条件读的就是它。四种类型：float（如 Speed，连续值）、int、bool（如 IsGrounded，开关）、trigger（如 Jump，拨一下就被过渡消费复位的一次性信号）。代码用 SetFloat / SetInteger / SetBool / SetTrigger 按名字写值，名字必须和编辑器里声明的逐字符一致（含大小写）。">
+  参数（Parameter）
+</Term>
+。它就是你和状态机之间那块**小黑板**：代码用 `SetFloat("Speed", v)`
+往黑板写值，状态机盯着黑板，谁的过渡条件满足了就由它切。这张因果图把「代码设参数
+→ 参数面板变化 →
+状态机据条件自己迁移」三栏拆开演——核心是**逻辑（设参数）与动画（怎么切）解耦**：
+
+<ParamsToAnimatorDiagram />
+
+**④ 一次性信号：SetTrigger。** 参数里有一种特别的 ——
+
+<Term def="trigger 类型参数对应的方法。trigger 像一个『拨一下就弹回』的开关：代码调 animator.SetTrigger(「Jump」) 把它拨起，状态机用它满足某条过渡后会自动把它『消费』复位（不像 bool 会一直保持 true）。适合『跳一下 / 攻击一次』这类一次性动作。若没有任何过渡消费它，它会卡在已触发状态，需要时可用 ResetTrigger 手动清掉。">
+  SetTrigger
+</Term>
+。`Speed` 这种 float、`IsGrounded` 这种 bool 设了值会**一直保持**；而 trigger
+像个「拨一下就弹回」的开关——代码 `SetTrigger("Jump")`
+拨起它、状态机一旦用它走完跳跃过渡就把它**消费复位**。它专门用来做「跳一下、攻击一次」这种一次性动作（上面主图第④⑤步就是
+trigger 触发 Jump、播完被消费落回 Run）。
+
+**⑤ 状态内部的平滑混合：Blend Tree。** 状态间是「**硬切**」（Idle 切到 Walk）；但「慢走 → 快走 → 小跑」这种**同质过渡**，硬切会很生硬。这时在**一个状态内部**用
+
+<Term def="一个状态『内部』的玩法（不是状态之间）：按一个或多个参数，在多个动画 clip 之间算『混合权重』、平滑插值，让动画无缝过渡而不是硬切。1D 混合树按一个参数（如 Speed）：Speed=0 全播 Idle、Speed=0.5 全播 Walk、中间按比例混合 Idle+Walk。2D 按两个参数（如方向+速度）。它在编辑器里配，不用写代码。">
+  Blend Tree
+</Term>
+：按一个参数（如 `Speed`）在 Idle / Walk / Run 几个 clip
+间算**混合权重**、平滑插值。下面这张 1D 混合树图，让你看清 Speed 滑动时三个 clip
+的权重怎么此消彼长：
+
+<BlendTreeDiagram />
+
+这五件事就是本章全部。**它们怎么写成代码、有哪些坑，是第六节的主场**——那一节才是这章的重心。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：C 型也要「玩懂」；三张图作为入口，主 Demo = MecanimStateMachineDiagram（含「猜一猜」），辅 = ParamsToAnimatorDiagram + BlendTreeDiagram。 */}
+
+## 动手：把「设参数 → 状态机自己切」单步走一遍
+
+本章三张图都是给你「玩」的，核心是上面那张 **状态机迁移动画**——它就是本章的主 Demo。
+
+> 猜一猜：你把 `Speed` 从 0 慢慢调大，当前激活态会怎么走？是**你写 if-else 一步步切**过去的，还是**状态机看到参数变了、按过渡条件自己迁**的？回到「先认个脸」里那张主图，单步走一遍——你会看到代码只往参数面板写了 `Speed = 2`（> 0.1），高亮的「当前激活态」就**自己**从 Idle 迁到了 Walk；再写 `Speed = 6`（> 4）就迁到 Run；调一次 `SetTrigger("Jump")`，它迁到 Jump 播一次性跳跃，跳完 trigger 被这条过渡**消费复位**、又落回 Run。从头到尾，代码**一次都没有「直接切动画」**，全是状态机按过渡条件自己决定的——这就是 Mecanim 的核心：**代码设参数，状态机切动画，二者解耦**。
+
+单步走完主图，再去看另外两张：**代码设参数因果图**把「你调 `SetFloat` / `SetTrigger` 只是往参数面板写值、切动画的决定权在状态机手里」三栏拆开演给你看；**1D 混合树图**帮你看清「一个状态内部按 `Speed` 在 Idle / Walk / Run 间算混合权重、平滑过渡」——Speed = 0.3 时不是「纯走」，而是 Idle 40% + Walk 60% 掺在一起。看懂这三张，下面的代码就好读了。
+
+{/* 6. 代码对照（spec §六，C 型重心 ≥80%）：纯 csharp 块，每块 ≤30 行、块间有解说、API 差异/陷阱 Callout。覆盖：①缓存 GetComponent<Animator>()；②SetFloat 驱动 Idle/Walk/Run；③SetTrigger 一次性 + 被消费/ResetTrigger；④SetBool 维持状态；⑤Animator.Play/CrossFade 点到 + Blend Tree 一句。 */}
+
+## 代码：从拿 Animator 到设参数驱动状态机
+
+这一节是本章的重心。记住一条贯穿全章的原则：**你的代码只做一件事——设参数；到底播哪个动画、怎么切，由状态机决定。** 下面每段都给一块可直接放进 `MonoBehaviour` 的代码。
+
+### ① 先拿到 Animator（缓存，别每帧 GetComponent）
+
+操控动画的第一步，是拿到角色身上的 `Animator` 组件。和第 5 章拿任何组件一样——在 `Awake` 里拿一次、**缓存进字段**，别每帧调 `GetComponent`：
+
+```csharp
+using UnityEngine;
+
+public class CharacterAnim : MonoBehaviour
+{
+    Animator animator; // 缓存，避免每帧 GetComponent 的开销
+
+    void Awake()
+    {
+        // 拿到挂在本对象（或子对象）上的 Animator —— 它是状态机的播放器
+        animator = GetComponent<Animator>();
+    }
+}
+```
+
+`GetComponent<Animator>()` 返回的就是那个「动作切换表的播放器」。把它存进 `animator` 字段后，后面所有 `SetFloat` / `SetBool` / `SetTrigger` 都通过它来调。这和第 5 章「拿组件先缓存」是同一条规矩——`GetComponent` 不便宜，别放进 `Update` 每帧调。
+
+### ② 用 SetFloat 驱动 Idle / Walk / Run 切换
+
+读玩家输入、算出当前移动速度，**只把这个速度写进参数 `Speed`**——剩下「该播 Idle 还是 Walk 还是 Run」交给状态机：
+
+```csharp
+void Update()
+{
+    // 读输入算出移动量（这里用水平+垂直输入的大小当速度）
+    float h = Input.GetAxis("Horizontal");
+    float v = Input.GetAxis("Vertical");
+    float speed = new Vector2(h, v).magnitude * 6f; // 0 ~ 6 左右
+
+    // 只做这一件事：把 speed 写进状态机的 Speed 参数
+    animator.SetFloat("Speed", speed);
+    // 注意：这里没有任何「播 Idle / 播 Walk」的代码！
+    // Speed>0.1 → 状态机自己切 Walk；Speed>4 → 自己切 Run。
+}
+```
+
+整段代码里**没有一句「播放某个动画」**——你只是把算好的 `speed` 写进 `Speed` 参数。状态机里那两条过渡（`Speed > 0.1` 切 Walk、`Speed > 4` 切 Run）会自己判断、自己切。想改触发速度阈值？去编辑器改过渡条件，**代码一个字都不用动**。
+
+<Callout type="warn">
+  **`SetFloat("Speed", ...)` 里的字符串名，必须和编辑器 Animator
+  参数列表里声明的名字逐字符一致（含大小写）。** 写成 `"speed"` / `"Spped"`
+  都会**静默失败**——Unity
+  不报错、不抛异常，只是这次设值没落到任何参数上，于是过渡条件永远读到默认值
+  `0`，动画死活不切。这是新手最常踩的坑（见本章常见误区）。能用
+  `Animator.StringToHash("Speed")` 把名字预先转成 int 缓存、再用 `SetFloat(hash,
+  ...)`，既快又避免到处写字符串。
+</Callout>
+
+### ③ 用 SetTrigger 触发一次性动作（跳跃）
+
+「跳一下」这种**一次性**动作不该用「持续保持值」的参数，而用 `trigger`——拨一下、被过渡消费后自动复位：
+
+```csharp
+void Update()
+{
+    // ……上面的 SetFloat("Speed", speed) ……
+
+    if (Input.GetKeyDown(KeyCode.Space))
+    {
+        // 拨一下 Jump 触发器；状态机走完「任意态 → Jump」过渡后会把它消费复位
+        animator.SetTrigger("Jump");
+    }
+}
+```
+
+`SetTrigger("Jump")` 把 `Jump` 这个触发器**拨起**。状态机里那条「任意态 → Jump」的过渡条件是「`Jump` 被触发」，一旦满足、切进 Jump 状态，这个 trigger 就被**消费、自动复位**——不像 bool 会一直停在 `true`。所以你只管在按键那一刻拨它一下，跳完它自己归位，无需手动清。
+
+<Callout type="warn">
+  **trigger
+  的「一次性」是靠『被某条过渡消费』来复位的——如果没有任何过渡用到它，它会卡在『已触发』状态。**
+  表现是「下一次本来不该跳，却莫名跳了一下」（卡着的 trigger
+  在条件偶然满足时又生效了）。排查：①确认确实有一条过渡的条件用到了这个
+  trigger；②需要在某些时机强制清掉时（如被打断、切场景），用
+  `animator.ResetTrigger("Jump")` 手动复位。**别用 `SetBool`
+  来做一次性动作**——bool 设 `true` 后不会自己变回去，会导致动作循环不停。
+</Callout>
+
+### ④ 用 SetBool 维持一个持续状态（是否着地）
+
+有些状态需要**持续保持**，比如「是否在地面上」——它会持续影响能不能进入跳跃、要不要播下落动画。这种用 `bool` 参数，设了 `true` 就一直是 `true`，直到你再设 `false`：
+
+```csharp
+void Update()
+{
+    // 用上一章学的射线做着地检测（脚下 0.2m 内有没有地面）
+    bool grounded = Physics.Raycast(transform.position, Vector3.down, 0.2f, groundMask);
+
+    // 把『是否着地』这个持续状态写进 bool 参数 —— 会一直保持，直到下次改它
+    animator.SetBool("IsGrounded", grounded);
+}
+```
+
+`SetBool("IsGrounded", grounded)` 写进的值会**一直保持**，状态机里凡是读 `IsGrounded` 的过渡（如「落地后从 Jump 回到 Idle/Run」「离地才允许进 Jump」）随时都能读到最新的真假。三种参数的分工记牢：**float**（`Speed`，连续量）、**bool**（`IsGrounded`，持续开关）、**trigger**（`Jump`，一次性信号）——选错类型是动画切不对的常见原因。
+
+### ⑤ 偶尔直接控制：Animator.Play / CrossFade，以及 Blend Tree 一句话
+
+绝大多数时候都该「设参数、让状态机切」。但偶尔你想**绕过过渡、直接强制播某个状态**（如过场、强制复位），可以用 `Play` / `CrossFade`：
+
+```csharp
+// 直接跳到名为 "Jump" 的状态，从头播（硬切，不走过渡）
+animator.Play("Jump");
+
+// 在 0.2 秒内淡入到 "Run" 状态（带过渡的平滑切换）
+animator.CrossFade("Run", 0.2f);
+```
+
+`Play` 是**硬切**（立即跳到目标状态从头播），`CrossFade` 是**带淡入的平滑切换**。这俩是「手动接管」的口子，**用得越少越好**——一旦到处用，就丢掉了状态机「设参数自动切」的解耦优势，又回到手写切换逻辑的老路。最后补一句 **Blend Tree**：它是「一个状态**内部**」按参数（如 `Speed`）在多个 clip 间算混合权重、平滑过渡的玩法（见上面那张 1D 混合树图），**在编辑器里配、不写代码**——代码这边还是只设 `Speed`，混合的事交给混合树。
+
+至此，从「拿 Animator」到「设 float / bool / trigger 驱动状态机」「点到 Play / CrossFade 与 Blend Tree」都过了一遍。回头看会发现一条主线贯穿始终：**你的脚本永远只在『设参数』，从不直接『切动画』**——这正是 Mecanim 把游戏逻辑和动画播放彻底解耦的精髓。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。除上面已嵌的 2 个 warn（参数名拼错 / trigger 卡住），这里再独立排 3 个 trap：①参数名拼错/大小写；②Has Exit Time 致按键不跟手；③trigger 没被消费/忘 ResetTrigger。 */}
+
+## 容易踩的坑
+
+前面几段已经嵌了两个高频坑（`SetFloat` 参数名要逐字符一致、trigger 靠被过渡消费来复位）。下面把本章最常静默翻车的三类再独立钉一遍——它们的共同特点都是**不报错、动画却不对**，最折磨人：
+
+<Callout type="trap">
+  **现象**：角色明明在跑，动画却一直停在 Idle，`SetFloat`
+  像没生效一样。**原因**：参数名**拼错或大小写不符**——代码写 `SetFloat("speed",
+  v)` 但编辑器里参数叫 `Speed`。Unity
+  对此**静默失败**：不报错、设值落空，过渡条件永远读到默认值
+  `0`，于是死活不切。**修法**：逐字符核对代码里的字符串与 Animator
+  参数列表里的名字（含大小写）；推荐用 `Animator.StringToHash("Speed")` 预转成
+  int 缓存、用 hash 重载来设值，从源头杜绝写错字符串。
+</Callout>
+
+<Callout type="trap">
+  **现象**：按下移动键，角色要等当前动画**播完一整轮**才开始走，操作「不跟手」、有延迟感。**原因**：那条过渡在
+  Inspector 里勾了 **Has Exit
+  Time**——意思是「必须等当前动画播到指定退出时间点才允许切」，适合「攻击动作打完再切」，但**对要灵敏响应输入的过渡是灾难**。**修法**：选中这条过渡，**取消勾选
+  Has Exit Time**，让条件一满足就立刻切；同时把 Transition Duration 调小（甚至
+  0）减少过渡时长。移动 / 跳跃这类响应输入的过渡，几乎都要关掉 Has Exit Time。
+</Callout>
+
+<Callout type="trap">
+  **现象**：调了 `SetTrigger("Jump")`
+  角色却不跳；或者下一次莫名其妙自己跳了一下。**原因**：①**没有任何过渡的条件用到这个
+  trigger**，于是拨起后没人消费它，既不触发本次、又卡着影响下次；②或这个 trigger
+  在切场景 /
+  被打断时**没被清掉**，残留到了不该跳的时刻。**修法**：确认有一条过渡的条件确实是「`Jump`
+  被触发」；在需要强制清除的时机用 `animator.ResetTrigger("Jump")`
+  手动复位。记住 trigger 不像 bool 会自己保持，它的生命周期是「拨起 →
+  被某条过渡消费 → 自动复位」。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且呼应学习目标；练习 2-3 题含 1 改代码题 + 1 独立实现题；答案折叠。 */}
+
+## 小结
+
+- **Animator + Animator Controller**：角色挂 `Animator`（播放器，`Awake` 里 `GetComponent` 缓存一次），它引用一份 Animator Controller（那张「动作切换表」，画着 Idle / Walk / Run / Jump 状态和带条件的过渡）
+- **核心解耦**：代码**只设参数**（往小黑板写值），到底播哪个动画、怎么切，由状态机**按过渡条件自己决定**——换动画、改阈值都在编辑器改资产，不动脚本
+- **三种参数选对**：`SetFloat`（`Speed`，连续量，驱动 Idle/Walk/Run）、`SetBool`（`IsGrounded`，持续开关）、`SetTrigger`（`Jump`，一次性信号，被过渡消费后自动复位；别用 bool 替它）
+- **直接控制点到为止**：`Animator.Play`（硬切）/ `CrossFade`（平滑切）用于强制接管，用得越少越好；`Blend Tree` 是「一个状态内部」按参数混合多 clip 的玩法，编辑器配、不写代码
+- **三类静默坑**：参数名拼错 / 大小写不符 → 设值落空动画不切；该灵敏的过渡勾了 Has Exit Time → 按键不跟手；trigger 没被任何过渡消费会卡住，必要时 `ResetTrigger` 清
+
+<Exercises>
+
+**练习 1（问答）** 你的角色在场景里跑动，但动画**一直停在 Idle**，从不切换到 Walk / Run。请按「参数名 / 过渡条件 / 代码有没有设值」三个方向，列出最可能的原因和逐一排查的办法。
+
+<Answer>
+
+动画切不动，按这三条排查：
+
+1. **代码有没有真的设值？** 确认 `Update` 里确实调了 `animator.SetFloat("Speed", speed)`，且 `speed` 算出来真的 > 0（打印 `speed` 看一眼；`Input.GetAxis` 没接好的话可能一直是 0）。`animator` 字段也要确认在 `Awake` 里 `GetComponent<Animator>()` 拿到了、不是 `null`。
+2. **参数名对不对？** 代码里的字符串 `"Speed"` 必须和 Animator 参数列表里声明的名字**逐字符一致（含大小写）**。写成 `"speed"` / `"Spped"` 会**静默失败**——设值落空，过渡条件永远读到 `0`。逐字母核对，或改用 `Animator.StringToHash` 缓存。
+3. **过渡条件 / 状态机配置对不对？** 检查 Idle → Walk 的过渡条件是不是 `Speed > 0.1`（阈值别设成比实际速度还大）；也确认 Animator Controller 真的挂到了这个 Animator 上、且参数类型是 float。
+
+一句话口诀：**先确认代码设了值、再确认名字没拼错、最后查过渡条件 / 配置**。
+
+</Answer>
+
+**练习 2（改代码题）** 下面这段想做「按速度切走 / 跑、按空格跳」，但有两处问题：① **每帧都在 `Update` 里 `GetComponent<Animator>()`**（开销浪费）；② 跳跃**用 `SetBool("Jump", true)` 来做一次性动作**（bool 设 true 后不会自己复位，会导致跳跃循环不停）。请改写成「`Awake` 缓存 Animator + 用 `SetTrigger` 做跳跃」的正确版本。
+
+```csharp
+public class PlayerAnim : MonoBehaviour
+{
+    void Update()
+    {
+        Animator anim = GetComponent<Animator>();          // 问题①：每帧拿组件
+        anim.SetFloat("Speed", new Vector2(
+            Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")).magnitude * 6f);
+
+        if (Input.GetKeyDown(KeyCode.Space))
+            anim.SetBool("Jump", true);                     // 问题②：一次性动作用了 bool
+    }
+}
+```
+
+<Answer>
+
+把 Animator 在 `Awake` 缓存一次，跳跃改用 `SetTrigger`：
+
+```csharp
+public class PlayerAnim : MonoBehaviour
+{
+    Animator anim; // 缓存
+
+    void Awake()
+    {
+        anim = GetComponent<Animator>(); // 只拿一次
+    }
+
+    void Update()
+    {
+        float speed = new Vector2(
+            Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")).magnitude * 6f;
+        anim.SetFloat("Speed", speed);
+
+        if (Input.GetKeyDown(KeyCode.Space))
+            anim.SetTrigger("Jump"); // 一次性动作用 trigger，被过渡消费后自动复位
+    }
+}
+```
+
+要点：①`GetComponent` 移到 `Awake` 只调一次、存进 `anim` 字段，`Update` 直接用——避免每帧拿组件的开销；②跳跃从 `SetBool` 改成 `SetTrigger`：trigger 拨一下、状态机走完跳跃过渡就把它**消费复位**，不会像 bool 那样卡在 `true` 导致一直跳；同时记得把 Animator 里 `Jump` 参数的类型也改成 Trigger，并让那条过渡的条件用到它。
+
+</Answer>
+
+**练习 3（独立实现题）** 目标效果：写一个挂在角色上的 `MonoBehaviour`——**根据移动速度**设 Animator 的 `Speed` 参数，让角色在 Idle / Walk / Run 间**自动切换**；**按空格** `SetTrigger("Jump")` 触发一次跳跃。请写出这个脚本，并说明状态机那边需要哪些参数和过渡条件才能配合它工作。
+
+<Answer>
+
+```csharp
+using UnityEngine;
+
+public class CharacterAnimController : MonoBehaviour
+{
+    Animator anim;
+
+    void Awake()
+    {
+        anim = GetComponent<Animator>(); // 缓存播放器
+    }
+
+    void Update()
+    {
+        // 1) 按输入算速度，写进 Speed 参数 —— 不写任何「切动画」的逻辑
+        float speed = new Vector2(
+            Input.GetAxis("Horizontal"), Input.GetAxis("Vertical")).magnitude * 6f;
+        anim.SetFloat("Speed", speed);
+
+        // 2) 按空格拨一下 Jump 触发器
+        if (Input.GetKeyDown(KeyCode.Space))
+            anim.SetTrigger("Jump");
+    }
+}
+```
+
+要点：脚本**只设参数**（`SetFloat` 写 `Speed`、`SetTrigger` 拨 `Jump`），不直接播任何动画。
+
+**状态机（Animator Controller）那边要配好：** ①声明两个参数——`Speed`（float）、`Jump`（trigger）；②四个状态各播对应 clip：Idle / Walk / Run / Jump；③过渡条件：Idle → Walk 设 `Speed > 0.1`、Walk → Run 设 `Speed > 4`（以及反向的 `Speed < 4`、`Speed < 0.1` 回切），任意态 → Jump 设「`Jump` 被触发」，Jump 播完 → 回 Idle/Run；④要灵敏响应的过渡（移动、跳跃）记得**取消勾选 Has Exit Time**，否则按键会不跟手。参数和过渡都配齐了，脚本一设值，状态机就自己切。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个）；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Animator">
+  挂在角色 GameObject 上的**组件**，是那本「动作切换表」的**播放器**。它持有一份
+  Animator
+  Controller（状态机），每帧负责播放当前状态的动画、并按表上的过渡条件切换状态。代码侧先用
+  `GetComponent<Animator>()` 拿到它（`Awake`
+  里拿一次、缓存进字段，别每帧拿），再调 `SetFloat` / `SetBool` / `SetTrigger`
+  往它的参数面板写值来驱动动画——你设参数，它切动画。详见本章「① 先拿到
+  Animator」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Animator Controller">
+  一份独立的**资产文件**（`.controller`），就是那张「**动作切换表**」本身。里面画着若干**状态**（每个状态播一个动画
+  clip，如 Idle / Walk / Run / Jump），状态之间用带**条件**的**过渡（Transition）**
+  箭头连接（如「`Speed > 0.1` 就从 Idle 切到
+  Walk」）。它和代码**解耦**：想换动画、改触发阈值，都在编辑器里改这份资产，**脚本一个字都不用动**。一个
+  Animator 组件引用一份 Animator Controller。详见本章「② 那张表本身」一节。
+</GlossaryItem>
+
+<GlossaryItem term="参数（Parameter）">
+  状态机上声明的一组**变量**，是代码和状态机之间唯一的「**小黑板**」——过渡箭头上的条件读的就是它。有四种类型：**float**（如
+  `Speed`，连续值）、**int**、**bool**（如
+  `IsGrounded`，开关，设了一直保持）、**trigger**（如
+  `Jump`，拨一下就被过渡消费复位的一次性信号）。代码用 `SetFloat` / `SetInteger`
+  / `SetBool` / `SetTrigger`
+  按名字写值，**名字必须和编辑器里声明的逐字符一致（含大小写）**，否则静默失败、动画不切。详见本章「③
+  过渡条件读的东西」一节。
+</GlossaryItem>
+
+<GlossaryItem term="SetTrigger">
+  操作 **trigger 类型参数**的方法。trigger
+  像一个「**拨一下就弹回**」的开关：代码调 `animator.SetTrigger("Jump")`
+  把它拨起，状态机一旦用它满足某条过渡（如「任意态 →
+  Jump」）就会自动把它「**消费**」复位——不像 bool 设 `true`
+  后会一直保持。所以它专门用来做「**跳一下 /
+  攻击一次**」这类**一次性**动作。若没有任何过渡用到它，它会卡在「已触发」状态，需要时可用
+  `animator.ResetTrigger("Jump")` 手动清掉。详见本章「③ 用 SetTrigger
+  触发一次性动作」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Blend Tree">
+  「混合树」，是**一个状态内部**的玩法（注意不是状态之间的硬切）：按一个或多个参数，在多个动画
+  clip
+  之间算「**混合权重**」、平滑插值，让动画**无缝过渡**而不是生硬切换。**1D**
+  混合树按一个参数（如 `Speed`）：`Speed=0` 全播 Idle、`Speed=0.5` 全播
+  Walk、中间按比例把 Idle 和 Walk **掺**在一起；**2D** 按两个参数（如方向 +
+  速度）。它在编辑器里配、**不用写代码**——代码这边照旧只设
+  `Speed`，混合的事交给它。详见本章「⑤ Blend Tree 一句话」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染「原创声明」。 */}
+
+<Attribution />

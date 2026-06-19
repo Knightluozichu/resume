@@ -439,6 +439,45 @@ import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram
 import { DeadlockVsLivelockDiagram } from "./diagrams/deadlock-vs-livelock-diagram";
 import { TsanDetectionDiagram } from "./diagrams/tsan-detection-diagram";
 import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxonomy-diagram";
+import { EditorLayoutDiagram } from "./diagrams/editor-layout-diagram";
+import { SceneHierarchyDiagram } from "./diagrams/scene-hierarchy-diagram";
+import { EditPlayLoopDiagram } from "./diagrams/edit-play-loop-diagram";
+import { ComponentCompositionDiagram } from "./diagrams/component-composition-diagram";
+import { CompositionVsInheritanceDiagram } from "./diagrams/composition-vs-inheritance-diagram";
+import { GameObjectAnatomyDiagram } from "./diagrams/gameobject-anatomy-diagram";
+import { LocalVsWorldExplorer } from "./diagrams/local-vs-world-explorer";
+import { TransformHierarchyDiagram } from "./diagrams/transform-hierarchy-diagram";
+import { Vector3Diagram } from "./diagrams/vector3-diagram";
+import { LifecycleTimelineDiagram } from "./diagrams/lifecycle-timeline-diagram";
+import { UpdateVsFixedUpdateDiagram } from "./diagrams/update-vs-fixed-update-diagram";
+import { AwakeVsStartDiagram } from "./diagrams/awake-vs-start-diagram";
+import { InstantiateDestroyDiagram } from "./diagrams/instantiate-destroy-diagram";
+import { GetComponentDiagram } from "./diagrams/get-component-diagram";
+import { InspectorBindingDiagram } from "./diagrams/inspector-binding-diagram";
+import { CoroutineFrameTimeline } from "./diagrams/coroutine-frame-timeline";
+import { YieldKindsDiagram } from "./diagrams/yield-kinds-diagram";
+import { TimeScaleDiagram } from "./diagrams/time-scale-diagram";
+import { RigidbodyGravityDiagram } from "./diagrams/rigidbody-gravity-diagram";
+import { ColliderShapesDiagram } from "./diagrams/collider-shapes-diagram";
+import { BodyTypesDiagram } from "./diagrams/body-types-diagram";
+import { CollisionTriggerEventsDiagram } from "./diagrams/collision-trigger-events-diagram";
+import { RaycastDiagram } from "./diagrams/raycast-diagram";
+import { EventConditionDiagram } from "./diagrams/event-condition-diagram";
+import { MecanimStateMachineDiagram } from "./diagrams/mecanim-state-machine-diagram";
+import { ParamsToAnimatorDiagram } from "./diagrams/params-to-animator-diagram";
+import { BlendTreeDiagram } from "./diagrams/blend-tree-diagram";
+import { RectTransformAnchorsDiagram } from "./diagrams/rect-transform-anchors-diagram";
+import { UIHierarchyDiagram } from "./diagrams/ui-hierarchy-diagram";
+import { ButtonClickFlowDiagram } from "./diagrams/button-click-flow-diagram";
+import { RenderingInputsDiagram } from "./diagrams/rendering-inputs-diagram";
+import { MaterialVsShaderDiagram } from "./diagrams/material-vs-shader-diagram";
+import { StandardShaderChannelsDiagram } from "./diagrams/standard-shader-channels-diagram";
+import { PrefabInstanceLinkDiagram } from "./diagrams/prefab-instance-link-diagram";
+import { AssetPipelineGuidDiagram } from "./diagrams/asset-pipeline-guid-diagram";
+import { LoadAssetWaysDiagram } from "./diagrams/load-asset-ways-diagram";
+import { BuildPipelineDiagram } from "./diagrams/build-pipeline-diagram";
+import { SceneFlowDiagram } from "./diagrams/scene-flow-diagram";
+import { ScriptingBackendDiagram } from "./diagrams/scripting-backend-diagram";
 // AI Agent 开发实战
 import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
 import { AgentParadigmDiagram } from "./diagrams/agent-paradigm-diagram";
@@ -1311,6 +1350,45 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   XrFrameBudgetDiagram,
   XrInputOverheadDiagram,
   WebAssemblyFeatureDiagram,
+  EditorLayoutDiagram,
+  SceneHierarchyDiagram,
+  EditPlayLoopDiagram,
+  ComponentCompositionDiagram,
+  CompositionVsInheritanceDiagram,
+  GameObjectAnatomyDiagram,
+  LocalVsWorldExplorer,
+  TransformHierarchyDiagram,
+  Vector3Diagram,
+  LifecycleTimelineDiagram,
+  UpdateVsFixedUpdateDiagram,
+  AwakeVsStartDiagram,
+  InstantiateDestroyDiagram,
+  GetComponentDiagram,
+  InspectorBindingDiagram,
+  CoroutineFrameTimeline,
+  YieldKindsDiagram,
+  TimeScaleDiagram,
+  RigidbodyGravityDiagram,
+  ColliderShapesDiagram,
+  BodyTypesDiagram,
+  CollisionTriggerEventsDiagram,
+  RaycastDiagram,
+  EventConditionDiagram,
+  MecanimStateMachineDiagram,
+  ParamsToAnimatorDiagram,
+  BlendTreeDiagram,
+  RectTransformAnchorsDiagram,
+  UIHierarchyDiagram,
+  ButtonClickFlowDiagram,
+  RenderingInputsDiagram,
+  MaterialVsShaderDiagram,
+  StandardShaderChannelsDiagram,
+  PrefabInstanceLinkDiagram,
+  AssetPipelineGuidDiagram,
+  LoadAssetWaysDiagram,
+  BuildPipelineDiagram,
+  SceneFlowDiagram,
+  ScriptingBackendDiagram,
   // AI Agent 开发实战
   AgentLoopDiagram,
   AgentParadigmDiagram,

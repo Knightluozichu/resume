@@ -1,0 +1,322 @@
+---
+title: 场景、Transform 与坐标空间
+type: B
+section: Unity入门
+order: 3
+description: 读完能区分子物体的「局部坐标 localPosition」和「世界坐标 position」、理解父子层级里「父动子跟」的变换、能手算给定父位置下子的世界坐标，并看懂 Vector3 既表位置也表方向。
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+{/* B 数学型·第3章（承接第1、2章「数字片场」）：核心是局部坐标 vs 世界坐标的几何直觉。重心 §3 概念 + §4 数学（位置合成公式 + 人话翻译，不跳步，KaTeX，math:true 不删）；§5 配主交互 LocalVsWorldExplorer。代码对照只放 transform.position/localPosition/SetParent/TransformPoint 一段。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前摊开，逐条配 viz，难啃的用动画/交互掰碎；术语首现 Term 高亮，章末 Glossary 一一对应；type B 新核心概念 ≤5）。 */}
+{/* 1) Transform 三件套 position/rotation/scale（承接 ch2）= 文字 + 引 Vector3Diagram 坐标轴。 */}
+{/* 2) 父子层级：子 transform 相对父，父动子跟 = TransformHierarchyDiagram（anime·辅）。 */}
+{/* 3) 局部坐标 localPosition vs 世界坐标 position（本章核心）= LocalVsWorldExplorer（交互·主）。 */}
+{/* 4) 坐标转换：childWorld = parentWorld + R·childLocal、TransformPoint = §4 数学 + 代码。 */}
+{/* 5) Vector3 既表位置也表方向，magnitude/normalized = 文字 + Vector3Diagram。 */}
+{/* 术语首现 Term：Transform / 局部坐标 localPosition / 世界坐标 position / 父子层级 parent-child / Vector3 / 向量 / TransformPoint。 */}
+
+{/* 1. 学习目标（spec §一）：B 型必含一条「能推导/能手算 ___」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话区分子物体的「局部坐标（localPosition，相对父）」和「世界坐标（position，绝对）」，并说出拖动父物体时这两套坐标各自会不会变
+- 能手算：给定父物体的世界位置和子物体的局部坐标（纯平移情形），算出子物体的世界坐标
+- 能回答：把一个父物体往右移 3 米，挂在它身上的子物体的 `localPosition` 变不变？它的世界 `position` 变不变？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用①空间与地图/片场体系（全书统一）。 */}
+
+## 演员走两步，他手里的道具去哪了？
+
+上一章我们说，每个演员（GameObject）出生就自带一块「站位牌」，写着他站哪、朝哪、个头多大。这一章就专门讲这块牌子，以及一个更要紧的问题：**位置到底是相对谁说的？**
+
+设想一个演员手里举着一把剑。这把剑的位置怎么描述？你可以说「在演员右手」——这是相对演员说的，演员走到哪它都「在右手」；你也可以说「在片场东南角第三块地砖上」——这是相对整个片场说的，演员一走，这个说法立刻就过时了。同一把剑，两种说法都对，只是参照物不同。
+
+这章要解决的就是这件事：在 Unity 里，一个挂在别人身上的物体，它的位置有「相对爸爸」和「在整个世界里」两套说法，分别叫局部坐标和世界坐标。分不清它俩，你会一直被「我明明没动这个子物体，它的坐标怎么变了 / 怎么没变」搞到崩溃。
+
+{/* 3. 概念讲解（spec §三，B 型必）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么→为什么→在模型中的位置。新核心概念 5 个：Transform 三件套 / 父子层级 / 局部vs世界 / 坐标转换 / Vector3。 */}
+
+## Transform 三件套：位置、旋转、缩放
+
+先把上一章的 <Term def="记录并控制 GameObject 位置（Position）、旋转（Rotation）、缩放（Scale）的组件，相当于它在世界里的「站位牌」。每个 GameObject 必有且不可移除。">Transform</Term> 看仔细。它其实记录了三样东西，合称「三件套」：
+
+- **位置（Position）**：物体在空间里站在哪——用三个数 (x, y, z) 表示。
+- **旋转（Rotation）**：物体朝哪个方向、转了多少角度。
+- **缩放（Scale）**：物体被放大或缩小了多少倍。
+
+这三样里，**位置**是本章的主角。Unity 用一个 <Term def="由三个浮点数 (x, y, z) 组成的值，既能表示一个空间里的「位置」（从原点出发的位移），也能表示一个「方向」（带大小）。Unity 里位置、方向、速度、缩放都用 Vector3 装。">Vector3</Term>（三个数 x、y、z）来装位置。后面会专门讲 Vector3 是什么，这里先记住：**一个位置 = 三个数**。
+
+## 父子层级：道具挂在演员身上
+
+Unity 允许把一个物体「挂」到另一个物体下面，形成 <Term def="GameObject 之间的从属关系：一个物体可以是另一个物体的「子物体」，挂在「父物体」下面。子物体的 Transform 是相对父物体来表达的；父物体一移动 / 旋转 / 缩放，所有子物体跟着一起变换。">父子层级（parent-child）</Term>。被挂上去的叫**子物体**，被挂靠的叫**父物体**——就像把剑和帽子挂到演员身上：剑、帽子是子，演员是父。
+
+父子层级最关键的一条规矩是：**父物体一动，所有子物体跟着一起动**。演员往前走两步，他手里的剑、头上的帽子自动跟着走；演员转个身，剑和帽子也跟着绕他转。你只管移动父，子物体的「跟随」由引擎自动算。下面这个动画把「父动子跟」演给你看：
+
+<TransformHierarchyDiagram />
+
+请特别留意动画第③步强调的那句话：**子物体相对父物体的位置，自始至终没变**——剑一直在右手，帽子一直在头顶。变的只是它们「在整个片场里」的绝对位置。这就引出了本章最核心的一对概念。
+
+## 局部坐标 vs 世界坐标：本章的灵魂
+
+同一个子物体，它的位置有两种读法：
+
+<Term def="子物体相对它父物体的位置，即「相对爸爸在哪」。在 Unity 里通过 transform.localPosition 读写。只要你不改子物体本身、只移动父物体，它的 localPosition 不变。">
+  局部坐标（localPosition）
+</Term>
+——读作「相对爸爸的位置」。剑的 localPosition
+就是「在演员右手前方一点点」，这个值跟演员站在片场哪个角落毫无关系：演员走到天涯海角，只要你没去单独挪那把剑，它的
+localPosition 永远是那个值。
+
+<Term def="物体在整个场景（世界）里的绝对位置，即「在整个片场里的哪个坐标」。在 Unity 里通过 transform.position 读写。父物体一移动，子物体的世界 position 就跟着变。">
+  世界坐标（position）
+</Term>
+——读作「在整个世界里的绝对位置」。剑的世界 position
+是「片场东南角第三块地砖」这种绝对说法。演员一走，剑的世界 position
+立刻跟着变，哪怕你压根没碰那把剑。
+
+一句话对照：**localPosition 是「相对爸爸」，position 是「在整个片场里」**。下面这个交互器就是本章的主角——你亲手拖父物体，盯着两套坐标各自怎么变：
+
+<LocalVsWorldExplorer />
+
+拖几下你就会发现那条铁律：**移动父物体时，子的 localPosition 纹丝不动，子的世界 position 却一直在变**。想不通这点，下一节的公式就是来给你「算账」的。
+
+## Vector3：既是位置，也是方向
+
+前面一直说「位置 = 三个数」，这三个数装在 Vector3 里。但 Vector3 不只用来装位置——它本质是一个 <Term def="一个既有「大小」又有「方向」的量。一根从某点指向另一点的箭头就是向量：箭头的长短是大小、箭头的朝向是方向。位置、位移、速度都可以用向量表示。">向量</Term>：一根有长度、有朝向的箭头。
+
+<Vector3Diagram />
+
+看这张图：同一个 Vector3 = (2, 3, 4)，你既可以把它当成一个**位置**（从原点出发，箭头终点就是那个点），也可以当成一个**方向 + 大小**（箭头指向哪、有多长）。一个 Vector3 有两个常用属性：`magnitude`（这根箭头的长度，即大小）和 `normalized`（把长度归一化成 1、只保留方向的版本）。Unity 里位置、位移、速度、朝向，统统用 Vector3 来装——记住它「三个数，既表位置也表方向」就够了。
+
+{/* 4. 数学推导（spec §四，B 型重心，math:true 不删）：节首符号表；位置合成简化式 P_world = P_parent + P_local（纯平移），再点到旋转/缩放也作用于子；每公式后人话翻译、不跳步、KaTeX；引 viz A 交互验证。 */}
+
+## 坐标怎么换算：从局部到世界
+
+到这里你已经有了直觉，现在把它变成能动手算的公式。先约定本节的符号：
+
+| 符号         | 含义                                               |
+| ------------ | -------------------------------------------------- |
+| $P_{world}$  | 子物体的**世界坐标**（要求的绝对位置）             |
+| $P_{local}$  | 子物体的**局部坐标**（相对父，恒定那一份）         |
+| $P_{parent}$ | 父物体的**世界坐标**                               |
+| $R$          | 父物体旋转对应的旋转作用（把局部方向转到世界方向） |
+
+### 最简单的情形：父物体不旋转、不缩放（纯平移）
+
+如果父物体只是被平移（没有旋转、没有缩放），那么子的世界坐标就是「父在哪，再加上子相对父的偏移」：
+
+$$
+P_{world} = P_{parent} + P_{local}
+$$
+
+这个式子在说：**子物体的绝对位置，等于父物体的绝对位置，加上子物体相对父物体的那段固定偏移。** 父往右挪了多少，子就跟着往右挪多少——因为 $P_{local}$ 是常数，等式右边只有 $P_{parent}$ 在变。
+
+这正好解释了上一节交互器里看到的现象。举个能心算的例子：父在世界坐标 $P_{parent} = (1, 0, 0)$，子相对父的偏移 $P_{local} = (2, 0, 1)$，那么
+
+$$
+P_{world} = (1, 0, 0) + (2, 0, 1) = (3, 0, 1)
+$$
+
+向量相加就是**对应分量各自相加**：x 分量 $1+2=3$，y 分量 $0+0=0$，z 分量 $0+1=1$。现在把父往右（+x 方向）移 3 米，$P_{parent}$ 变成 $(4, 0, 0)$：
+
+$$
+P_{world} = (4, 0, 0) + (2, 0, 1) = (6, 0, 1)
+$$
+
+子的世界坐标从 $(3,0,1)$ 变成了 $(6,0,1)$——**跟着父往右移了整整 3 米，而 $P_{local}$ 全程还是 $(2,0,1)$ 没动**。这就是「父动子跟、localPosition 不变」那条铁律的算账版。
+
+### 父物体还会旋转、缩放时
+
+如果父物体除了平移还**旋转**（甚至缩放），子物体相对父的那段偏移就不能直接加了——得先让父的旋转「作用」到这段偏移上，再加到父的位置：
+
+$$
+P_{world} = P_{parent} + R \cdot P_{local}
+$$
+
+这个式子在说：**先把子相对父的局部偏移按父当前的朝向转一下（$R \cdot P_{local}$），再接到父的世界位置后面。** 直觉上很好懂：父转身时，挂在它右手的剑会绕着父一起转到新方向，所以「右手前方」这个偏移本身也得跟着父的朝向旋转。这里不展开旋转的矩阵写法（后续「变换」章节会专门讲），你只要记住一句话：**父的旋转、缩放也会一并作用到子物体身上**。回到上一节的交互器，把「父 旋转角」滑块拖一下，你会看到子物体绕着父一起转——那就是 $R \cdot P_{local}$ 这一项在起作用。
+
+{/* 5. 交互 Demo（spec §五）：主 = LocalVsWorldExplorer（已嵌 §3，含「猜一猜」）；辅 = TransformHierarchyDiagram（§3）+ Vector3Diagram（§3）。此处回指主 Demo 的玩法引导。 */}
+
+## 动手：拖父物体，亲眼盯住两套坐标
+
+本章的主 Demo 就是上面那个**局部坐标 vs 世界坐标交互器**。别只看公式——回到它，亲手玩一遍：
+
+> 猜一猜：把父物体往右移 3 米，子物体的 `localPosition` 会变吗？它的世界 `position` 呢？先在脑子里答一遍，再拖「父 世界 X」滑块验证。
+
+玩的时候盯紧右侧两个数字面板：绿色的 `localPosition` 那一行，无论你怎么拖父、怎么转父，**它一个数都不动**；橙色的世界 `position` 那一行，父一动它**立刻跟着重算**。再把「父 旋转角」拖起来，看子物体绕着父一起转——这就是上一节 $R \cdot P_{local}$ 那一项的几何样子。配合上面的「父子层级动画」和「Vector3 坐标图」一起看：动画给你「父动子跟」的过程，交互器给你「两套坐标各自的数」，坐标图给你「Vector3 到底是个啥」。
+
+{/* 6. 代码对照（spec §六，B 型选，只放最能说明概念的 1 段）：transform.position vs localPosition、SetParent、TransformPoint。纯 csharp 块，≤30 行，语法正确。 */}
+
+## 代码里怎么读写这两套坐标
+
+概念落到代码上，就是 `transform` 上的几个成员。`transform.position` 读写**世界坐标**，`transform.localPosition` 读写**局部坐标**；`transform.SetParent()` 给物体设置父物体；<Term def="Transform 上的方法，把一个「局部坐标点」换算成它的「世界坐标点」，等价于 P_world = P_parent + R·P_local 这套合成。常用于已知某物体本地空间里的一个点、想知道它在世界里的位置。">TransformPoint</Term> 则把一个局部空间里的点直接换算成世界坐标：
+
+```csharp
+using UnityEngine;
+
+public class CoordinateDemo : MonoBehaviour
+{
+    public Transform parent; // 在 Inspector 里拖入父物体
+
+    void Start()
+    {
+        // 把「我」设为 parent 的子物体；true = 保持当前世界位置不变
+        transform.SetParent(parent, true);
+
+        // 世界坐标：我在整个场景里的绝对位置
+        Vector3 world = transform.position;
+
+        // 局部坐标：我相对父物体的位置（拖父物体时它不变）
+        Vector3 local = transform.localPosition;
+
+        // 把父本地空间里的点 (2,0,1) 换算成世界坐标 —— 等价 parent.position + R·(2,0,1)
+        Vector3 p = parent.TransformPoint(new Vector3(2f, 0f, 1f));
+
+        Debug.Log($"world={world}  local={local}  point={p}");
+    }
+}
+```
+
+三处对照：① `transform.position` 给的是**绝对位置**，`transform.localPosition` 给的是**相对父的位置**——这正是本章那对核心概念的代码入口。② `SetParent(parent, true)` 的第二个参数 `worldPositionStays` 为 `true` 时，物体**保持世界位置不动**、只是重新计算它相对新父的 localPosition；为 `false` 时则保持 localPosition、让世界位置「瞬移」。③ `parent.TransformPoint(...)` 把一个父本地坐标点换算成世界坐标，干的就是 $P_{world} = P_{parent} + R \cdot P_{local}$ 这套合成。
+
+{/* 7. 常见误区（spec §七，B 型 ≥2）：固定格式 现象→原因→修法；每个 ≤150 字。含 position/localPosition 弄混、父非均匀缩放拉斜、SetParent worldPositionStays 误以为瞬移。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：把物体挂成子物体后，代码里读 `transform.position` 得到的值，和你在
+  Inspector 里看到的 Position 数字对不上。**原因**：挂了父之后，Inspector 显示的
+  Position 其实是**局部坐标（相对父）**，而 `transform.position`
+  读的是**世界坐标（绝对）**——你把两套坐标弄混了。**修法**：想要相对父的那套，用
+  `transform.localPosition`（对应 Inspector 显示值）；想要绝对位置，用
+  `transform.position`。先想清楚「我要的是相对谁的位置」。
+</Callout>
+
+<Callout type="trap">
+  **现象**：给父物体做了非均匀缩放（比如 Scale = (2, 1, 1)，只拉长
+  x），结果挂在它身上的子物体被拉得歪歪扭扭、斜了。**原因**：父的缩放（连同旋转）会一并作用到子物体上——非均匀缩放叠加子物体自身的旋转，会产生**剪切（skew）**，把子物体拉斜。**修法**：尽量只对父物体做**均匀缩放**（三个分量相等）；需要单独拉长某个轴时，把缩放放在不带旋转的子物体上，或重新组织层级，避免「旋转
+  + 非均匀缩放」叠在父子链上。
+</Callout>
+
+<Callout type="trap">
+  **现象**：用 `SetParent(newParent)`
+  把物体换到新父下面，物体却「瞬移」到了别处（或反过来，你以为会瞬移结果没动）。**原因**：`SetParent`
+  的行为取决于 `worldPositionStays` 参数——默认/传 `true`
+  时**保持世界位置不动**（重算 localPosition），传 `false` 时**保持
+  localPosition**（世界位置会跳）。误判了这个参数就会觉得「莫名其妙瞬移」。**修法**：想让物体视觉上不动，用
+  `SetParent(newParent, true)`；想让它对齐新父的本地坐标，用
+  `SetParent(newParent, false)`。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，B 型 +1 道手算题（给父位置求子世界坐标）+ 问答，答案折叠。 */}
+
+## 小结
+
+- **Transform 三件套**：位置（Position）、旋转（Rotation）、缩放（Scale）；位置用 Vector3（三个数）装
+- **父子层级「父动子跟」**：父物体一移动 / 旋转，所有子物体跟着一起变换
+- **localPosition 是「相对爸爸」、position 是「在整个片场里」**：拖父时 localPosition 不变、世界 position 跟着变
+- **坐标合成**：纯平移时 $P_{world} = P_{parent} + P_{local}$，父还会旋转 / 缩放时为 $P_{world} = P_{parent} + R \cdot P_{local}$
+- **Vector3** 是三个数 (x, y, z)，既能表位置（从原点的位移），也能表方向 + 大小（magnitude / normalized）
+
+<Exercises>
+
+**练习 1（问答型）** 一个子物体挂在父物体下。你只拖动了父物体、完全没碰子物体本身。请回答：子物体的 `localPosition` 会变吗？它的世界 `position` 会变吗？分别说出为什么。
+
+<Answer>
+
+`localPosition` **不变**，世界 `position` **会变**。原因：`localPosition` 是「子相对父的偏移」——你没动子物体本身，这段相对偏移就是常数，所以不变；而世界 `position` 是「子在整个场景里的绝对位置」，由 $P_{world} = P_{parent} + R \cdot P_{local}$ 决定，父的世界位置 $P_{parent}$ 一变，等式右边就变，子的世界坐标自然跟着变。这正是「父动子跟、局部位置恒定」那条铁律。
+
+</Answer>
+
+**练习 2（手算 / 推导型）** 父物体在世界坐标 $P_{parent} = (3, 0, 2)$，子物体相对父的局部坐标 $P_{local} = (1, 0, -4)$，父物体**没有旋转、没有缩放**。
+(a) 算出子物体的世界坐标 $P_{world}$。
+(b) 现在把父物体沿 +x 方向再移动 5 米（其它不变），子物体新的世界坐标是多少？它的 `localPosition` 变了吗？
+
+<Answer>
+
+(a) 纯平移情形用 $P_{world} = P_{parent} + P_{local}$，向量按分量相加：
+$$P_{world} = (3, 0, 2) + (1, 0, -4) = (4, 0, -2)$$
+所以子的世界坐标是 $(4, 0, -2)$。
+
+(b) 父往 +x 移 5 米，$P_{parent}$ 变成 $(8, 0, 2)$，$P_{local}$ 仍是 $(1, 0, -4)$（没碰子物体）：
+$$P_{world} = (8, 0, 2) + (1, 0, -4) = (9, 0, -2)$$
+子的世界坐标变为 $(9, 0, -2)$（x 跟着 +5）。它的 `localPosition` **没变**，依旧是 $(1, 0, -4)$——只有父在动，相对偏移是常数。
+
+</Answer>
+
+**练习 3（改 Demo / 代码型）** 本章的「局部坐标 vs 世界坐标交互器」里，子物体的局部坐标固定为 `(2, 0, 1)`。如果让你把它改成 `(0, 0, 3)`（正前方更远），并且想再加一个「父 缩放」滑块，你预计拖动缩放滑块时，子物体的世界 `position` 会怎样变化？另外，用 `transform` 的成员写一行：读取自身相对父的局部位置。
+
+<Answer>
+
+把局部坐标改成 `(0, 0, 3)` 后，子物体会出现在父「正前方 3 米」处。加上「父 缩放」滑块后，缩放也会作用到子的局部偏移上（合成式里 $R$ 推广为「旋转 + 缩放」的复合作用），所以拖大父的缩放时，子物体相对父的那段偏移会被**等比拉长**，世界 `position` 会离父越来越远；缩小则越来越近——而 `localPosition` 这个「相对父的原始偏移」仍然不变。读取自身局部位置的一行：
+
+```csharp
+Vector3 local = transform.localPosition; // 子相对父的局部坐标
+```
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应；释义面向零基础；位置章末、出处声明之前。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="Transform">
+  记录并控制 GameObject
+  **位置、旋转、缩放**的组件，相当于每个演员自带的「站位牌」。每个 GameObject
+  都必有、且不可移除。本章重点讲它的「位置」这一项，以及位置「相对谁」的问题。详见本章「Transform
+  三件套」一节。
+</GlossaryItem>
+
+<GlossaryItem term="父子层级（parent-child）">
+  GameObject
+  之间的从属关系：一个物体可以挂在另一个物体下面，成为它的「子物体」。规矩是**父动子跟**——父物体一移动
+  / 旋转 /
+  缩放，所有子物体跟着一起变换，而子相对父的「局部位置」不变。像把道具挂在演员身上。详见本章「父子层级」一节。
+</GlossaryItem>
+
+<GlossaryItem term="局部坐标（localPosition）">
+  子物体**相对它父物体**的位置——「相对爸爸在哪」。代码里用
+  `transform.localPosition`。只要你不单独挪子物体、只移动父物体，它**不变**。它对应挂了父之后
+  Inspector 里显示的 Position 值。详见本章「局部坐标 vs 世界坐标」一节。
+</GlossaryItem>
+
+<GlossaryItem term="世界坐标（position）">
+  物体在整个场景（世界）里的**绝对位置**——「在整个片场里的哪个坐标」。代码里用
+  `transform.position`。父物体一移动，子物体的世界 position
+  就**跟着变**。详见本章「局部坐标 vs 世界坐标」一节。
+</GlossaryItem>
+
+<GlossaryItem term="Vector3">
+  由三个浮点数 (x, y, z)
+  组成的值，**既能表位置**（从原点出发的位移，终点就是那个点），**也能表方向 +
+  大小**（箭头指向哪、有多长）。常用属性：`magnitude`（长度 /
+  大小）、`normalized`（只留方向的单位版本）。Unity
+  里位置、位移、速度、缩放都用它装。详见本章「Vector3」一节。
+</GlossaryItem>
+
+<GlossaryItem term="向量">
+  一个**既有大小又有方向**的量，画出来就是一根箭头：箭头的长短是大小、朝向是方向。位置、位移、速度都能用向量表示。Vector3
+  就是三维空间里的向量。详见本章「Vector3」一节。
+</GlossaryItem>
+
+<GlossaryItem term="TransformPoint">
+  Transform 上的方法，把一个**局部坐标点换算成世界坐标点**，干的就是 $P_{world}{" "}
+  = P_{parent} + R \cdot P_{local}$
+  这套合成。已知某物体本地空间里的一个点、想知道它在世界里的位置时用它。详见本章「代码里怎么读写这两套坐标」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创改编，不基于单一外部源），Attribution 标签空参自动渲染原创声明。 */}
+
+<Attribution />

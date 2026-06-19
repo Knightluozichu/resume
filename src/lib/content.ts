@@ -72,6 +72,7 @@ export const BOOK_ORDER = [
   "profiling-unity-games",
   "mobile-xr-web-optimization",
   "cpp-concurrency",
+  "unity5",
   "ai-agent-dev",
   "ai-agent",
   "ai-agent-apps",
@@ -88,6 +89,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
+  unity5: "Unity 5 权威讲解",
   "ai-agent-dev": "AI Agent 开发实战",
   "ai-agent": "从零构建 AI Agent",
   "ai-agent-apps": "AI 智能体应用开发",
@@ -158,6 +160,12 @@ export const SECTION_ORDER = [
   "内存模型与原子操作",
   "并发数据结构",
   "高级并发与工程",
+  // Unity 5 权威讲解
+  "Unity入门",
+  "Unity脚本",
+  "Unity物理",
+  "Unity动画与UI",
+  "Unity渲染与发布",
   // AI Agent 开发实战
   "基础原理",
   "核心机制",
