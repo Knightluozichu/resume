@@ -475,6 +475,9 @@ import { StandardShaderChannelsDiagram } from "./diagrams/standard-shader-channe
 import { PrefabInstanceLinkDiagram } from "./diagrams/prefab-instance-link-diagram";
 import { AssetPipelineGuidDiagram } from "./diagrams/asset-pipeline-guid-diagram";
 import { LoadAssetWaysDiagram } from "./diagrams/load-asset-ways-diagram";
+import { BuildPipelineDiagram } from "./diagrams/build-pipeline-diagram";
+import { SceneFlowDiagram } from "./diagrams/scene-flow-diagram";
+import { ScriptingBackendDiagram } from "./diagrams/scripting-backend-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1068,6 +1071,9 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PrefabInstanceLinkDiagram,
   AssetPipelineGuidDiagram,
   LoadAssetWaysDiagram,
+  BuildPipelineDiagram,
+  SceneFlowDiagram,
+  ScriptingBackendDiagram,
   BackStackDiagram,
   ClassLoaderDelegationDiagram,
   NavGraphDiagram,

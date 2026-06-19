@@ -189,6 +189,7 @@ import { u5MecanimQuestions } from "./review/u5-mecanim";
 import { u5UguiQuestions } from "./review/u5-ugui";
 import { u5MaterialsLightingQuestions } from "./review/u5-materials-lighting";
 import { u5PrefabsAssetsQuestions } from "./review/u5-prefabs-assets";
+import { u5BuildDeployQuestions } from "./review/u5-build-deploy";
 
 export {
   CHAPTER_TITLES,
@@ -376,6 +377,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...u5UguiQuestions,
   ...u5MaterialsLightingQuestions,
   ...u5PrefabsAssetsQuestions,
+  ...u5BuildDeployQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
