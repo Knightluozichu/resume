@@ -1,0 +1,222 @@
+---
+title: MCP：模型上下文协议
+type: A
+section: 工具使用
+order: 3
+description: 用一套开放标准把工具和数据源即插即用地接给 agent——MCP 怎么把 M×N 的集成噩梦变成 M+N。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* A 概念型章（第三篇「工具使用」收官第 3 章）：讲 MCP（Model Context Protocol）——用标准协议把工具/数据源「即插即用」接给 agent。承接：前两章讲单工具的「模型怎么挑」（Ch8 function calling）和「怎么设计好工具」（Ch9 tool design），本章往上一层讲「怎么把工具标准化接进来」，别重复。主 viz = McpMxnDiagram（animotor 4 步：N×M 乱麻 → 引入标准 → 收成 client/server → M+N 清爽）。math:false 整节省略。原创、无 Attribution。知识点 → viz 清单（动笔先行，每项至少配一种 viz）：1. 为什么要 MCP（M×N → M+N）【主 viz·核心】→ <McpMxnDiagram />（animotor）；2. MCP 架构 Host/Client/Server → <McpArchitectureDiagram />（静态）；3. server 三类能力 Tools/Resources/Prompts → <McpCapabilitiesDiagram />（静态三栏）；4. 一次 MCP 工具调用流程 → <McpCallFlowDiagram />（静态四步，点出 MCP 接工具 / function calling 调工具的分层）。Term 高亮术语：MCP / Host / MCP Client / MCP Server / 三类能力（Tools-Resources-Prompts）/ M×N 问题 → 均进章末 Glossary，id 对齐 */}
+
+{/* ===== 1. 学习目标｜spec §一：A 型必含「能解释 ___ 在智能体里的位置」；末条检验问题 ===== */}
+
+<Objectives>
+
+- 能解释 MCP 的 Host / Client / Server 各是什么、以及 MCP 到底解决了什么问题
+- 能说清 MCP 为什么把工具集成从 N×M 降成 M+N，并算出具体场景省了多少
+- 能回答：接了 MCP 的工具，最终还是靠什么机制被模型调用？MCP 和 function calling 是替代关系还是分层关系？
+
+</Objectives>
+
+{/* ===== 2. 直觉引入｜spec §二：≤3 段 × 零术语；类比统一（USB-C 通用插头）===== */}
+
+## 先打个比方
+
+想想以前买电子产品的烦恼：手机一种插头、相机一种插头、耳机又一种，每换一个设备就得配一根专用线，抽屉里塞满了对不上号的充电线。后来有了 **USB-C**——一根线、一个口，手机能充、笔记本能充、显示器也能插，谁都认得谁。设备厂商不用再为每个别家产品单独设计接口，照着这一个标准做就行。
+
+「让 AI 应用接外部工具」一直也是这副乱样子：每个 AI 应用想用某个工具（查文件、连数据库、调某个服务），都得为这一对组合单独写一遍对接代码。应用多、工具多，要写的对接就成倍爆炸，谁也复用不了谁。
+
+这一章讲的 MCP，就是「AI 接工具」的那根 USB-C：定一套通用标准，让任何 AI 应用都能用同一种方式即插即用地接上任何按这套标准做出来的工具。没有它，你每接一个新工具都得从头焊一遍线；有了它，插上就能用。
+
+{/* ===== 3. 概念讲解｜spec §三：一节一概念；术语首现 <Term def id> 写句中；每概念配图；新核心概念 ≤5 ===== */}
+
+## 第一个概念：MCP 是什么——「AI 接工具」的通用标准
+
+我们要讲的这套标准，全称叫 <Term def="MCP（Model Context Protocol，模型上下文协议）：Anthropic 开放的一套客户端—服务器协议（底层基于 JSON-RPC），用来统一「AI 应用 ↔ 外部工具 / 数据源」的接法。它是开放协议，任何应用方、任何模型方都能实现，不是只能连某一家的东西。" id="mcp">MCP（模型上下文协议）</Term>。它是 Anthropic 开放出来的一套**客户端—服务器协议**——你可以先不管底层细节（它基于 JSON-RPC 这种通用的远程调用格式），只记住它干的事：**统一「AI 应用怎么接外部工具和数据源」这件事的接法**。
+
+这里有个最容易记反的点要先钉死：MCP 是一套**开放**协议，不是某家的私有接口。任何人都能照着它做 AI 应用，也任何人都能照着它把自己的工具包出来——就像 USB-C 不归某一个厂商独占。它解决的不是「模型怎么调工具」（那是上一章的 function calling），而是上一层的**「工具怎么被标准化地接进来」**。这两层的关系，本章最后一节会专门讲清。
+
+## 第二个概念：MCP 的三层架构——Host / Client / Server
+
+要看懂 MCP 怎么接工具，先认清三个角色。第一个是 <Term def="Host（宿主）：你实际安装、使用的那个 AI 应用本身，比如 Claude 桌面端、某个 IDE。它是 MCP Client 的容器——client 都内嵌在 Host 里。" id="mcp-host">Host</Term>——就是你装在电脑上、实际在用的那个 AI 应用（比如 Claude 桌面端，或某个 IDE）。Host 自己不直接连工具，它内部装着一个或多个连接器。
+
+这个连接器就是 <Term def="MCP Client（客户端）：内嵌在 Host 里的连接器，一个 client 负责连一个 MCP Server。Host 想用几个外部能力，就内嵌几个 client。" id="mcp-client">MCP Client</Term>：它内嵌在 Host 里，**一个 client 专门连一个 server**。Host 想用几样外部能力，就内嵌几个 client。而每个 client 连过去的那头，就是 <Term def="MCP Server（服务端）：在外部、把某个工具或数据源的能力按 MCP 标准暴露出来的程序。一个 server 通常对应一类能力（如「文件系统」「数据库」），任何实现了 MCP 的应用都能连它、复用它。" id="mcp-server">MCP Server</Term>——它在外部，负责把某个具体工具或数据源（文件系统、数据库、第三方 API……）的能力**按 MCP 标准暴露出来**。一张图把这三层摆清楚：
+
+<McpArchitectureDiagram />
+
+照着图记这条链：**Host（你用的 AI 应用）→ 内嵌若干 MCP Client → 每个 client 连一个外部 MCP Server → server 把某个工具/数据源的能力暴露出来**。要多接一样能力，不用改 Host 的核心，只要多挂一对 client–server。正因为「连法」是标准的，同一个文件系统 server，Claude 桌面端能连、别的 IDE 也能连——这就是复用。
+
+认清这三个角色后，把它们「串起来」看一遍最直观：一次真实的工具调用，是怎么在这三层之间走一遭的？client 先向 server 要清单、问它暴露了哪些 tool → 模型像第 8 章那样靠 description 挑中一个 → client 把这次调用按 MCP 协议转发给 server 执行 → 结果再按标准回到模型继续。注意中间「模型挑哪个、怎么发起」这一步底层仍是 **function calling** 在调；MCP 只负责把工具标准化地发现、转发、回传。
+
+<McpCallFlowDiagram />
+
+## 第三个概念：一个 Server 能暴露什么——三类能力
+
+一个 MCP Server 暴露的，并不只是「可调用的工具」。它能向应用提供 <Term def="MCP Server 的三类能力：Tools（可被模型调用的动作，如发邮件、改文件）、Resources（可被应用读取的数据 / 上下文，如某个文件的内容、一张表）、Prompts（预设好的提示模板，供用户直接挑用）。三者分工不同，共同构成 server 暴露给 AI 应用的能力面。" id="mcp-capabilities">三类能力</Term>，各管一摊：
+
+<McpCapabilitiesDiagram />
+
+逐栏看：**Tools** 是「可调用的动作」——发邮件、改文件、查库存这类会**动手**的操作，由模型决定什么时候调；**Resources** 是「可读取的数据 / 上下文」——某个文件的内容、一张表、一段日志，由应用按需读进上下文给模型当资料；**Prompts** 是「预设的提示模板」——比如一个现成的「帮我审查这段代码」模板，供用户直接挑用。所以记住：MCP Server 不止能给「工具」，还能给「数据」和「提示套路」。本章为了聚焦，重点谈 Tools 这一类，但你心里要有这三类的全貌。
+
+{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
+
+{/* ===== 5. 交互 Demo｜spec §五：主 viz = McpMxnDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
+
+## 动手看：MCP 怎么把 N×M 的乱麻收成 M+N
+
+前面说 MCP「解决集成难题」，到底解决的是哪个难题？这就是本章的核心—— <Term def="M×N 问题（M×N 集成难题）：N 个 AI 应用要各自接入 M 个外部工具时，若没有统一标准，每一对「应用 × 工具」都得单写一遍对接胶水，总量是 N×M，且谁也复用不了谁。有了 MCP 这种标准协议后，每个应用只写一个 client、每个工具只写一个 server，总量降为 M+N，且互相可复用。" id="mxn-problem">M×N 问题</Term>。下面这个动画把它一步步演出来：左边 3 个 AI 应用、右边 3 个外部工具，看没有标准、和有了 MCP，连线分别是什么光景。
+
+> 猜一猜：假设有 **5 个 AI 应用**要接 **4 个外部工具**。没有标准时，每一对组合都得各写一套对接，总共要写多少套？换成 MCP 之后呢（每个应用一个 client、每个工具一个 server）？先把两个数算出来，再单步播放对照着看。
+
+<McpMxnDiagram />
+
+盯住这条收口的过程：① 没有标准时，3 个应用 × 3 个工具，每一对都要单写一遍对接胶水——**3×3 = 9 条乱麻线**，应用和工具一多，线就成倍爆炸（这就是 N×M）→ ② 中间立起一根 **MCP 标准协议总线**，大家不再各连各的 → ③ 每个应用收成 1 个 MCP Client、每个工具收成 1 个 MCP Server，各写一次、互不耦合 → ④ 每个 client 一条线接总线、每个 server 一条线接总线——**3 + 3 = 6 条（M+N）**，而且任一应用都能即插即用地复用任一工具。一句话记住：**MCP 把集成从「乘法」降成「加法」**。回到上面的猜一猜：没有标准是 5×4 = 20 套，有了 MCP 是 5 + 4 = 9 套——应用和工具越多，省得越狠。
+
+{/* ===== 6. 代码对照｜spec §六：A 型只贴最能说明概念的 1 段；单块 ≤30 行；不展开 SDK 细节 ===== */}
+
+## 用代码看一眼：一个 server 怎么声明一个 tool
+
+A 型章不展开 SDK 细节，这里只贴最能说明概念的一段——一个 MCP Server 怎么声明它暴露的一个 tool（伪代码，抓住「声明了什么」即可）：
+
+```python
+# 一个 MCP Server：把「查订单状态」这个能力按标准暴露出来
+server = MCPServer("order-service")
+
+@server.tool()  # 声明一个 tool：名字 + 描述 + 参数，都按 MCP 标准写
+def check_order_status(order_id: str) -> dict:
+    """查某一笔订单的实时状态；order_id 形如 A0123"""
+    o = db.get(order_id)
+    return {"status": o.status, "can_refund": o.can_refund}
+
+server.run()  # 跑起来，等任何 MCP 应用来连
+```
+
+关键不在语法，而在这句话：**你只把这个 server 写一次**，它就声明好了「有个 `check_order_status` 工具、干嘛的、要什么参数」。之后 Claude 桌面端能连它用、别的 IDE 也能连它用——**写一次 server，任何 MCP 应用都能即插即用**，这正是上面那张图里「M+N 可复用」落到代码上的样子。注意工具里那句 docstring（description）和参数格式，仍然要遵守上一章「设计好用的工具」的规矩——MCP 帮你把工具标准化接进来，但工具本身好不好用，还得靠你设计。
+
+{/* ===== 7. 常见误区｜spec §七：A 型 ≥2 个；固定 现象→原因→修法 三行格式 ===== */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：以为「MCP 是 function calling 的替代品」，学了 MCP 就觉得不用懂
+  function calling 了。 **原因**：把两个不同层级的东西看成了竞争关系。function
+  calling 是**模型侧**调工具的底层机制（模型怎么挑、怎么发起调用）；MCP
+  是**上层**「工具怎么被标准化接进来」的协议。 **修法**：记住分层——MCP Server
+  暴露的 tool，最终**还是经 function calling 被模型调用**。MCP
+  负责「接工具」，function calling 负责「调工具」，两者叠在一起用，不是二选一。
+</Callout>
+
+<Callout type="trap">
+  **现象**：接了一堆 MCP 工具后，agent 还是经常挑错工具、用错参数，便怪 MCP
+  没用。 **原因**：以为「接了 MCP 工具就不用管工具设计」。MCP
+  只解决「怎么把工具标准化接进来」， 接进来的那个 tool
+  的名字、描述、粒度、返回值好不好，它一概不管。 **修法**：MCP Server
+  里声明的每个 tool，仍要遵守第 9 章「设计好用的工具」那五个维度（命名 / 描述 /
+  粒度 / 错误信息 / 返回值）。标准协议负责「接」，工具质量还得自己保证。
+</Callout>
+
+<Callout type="trap">
+  **现象**：以为 MCP 是「只能连 Anthropic / Claude
+  的东西」，别家模型或应用用不了。
+  **原因**：把开放协议误当成了某一家的私有接口。 **修法**：MCP
+  是**开放**协议——任何应用方都能把自己做成 MCP Host、任何工具方都能把自己包成
+  MCP Server、任何模型方都能实现它。就像 USB-C
+  不归某一家独占。它是「公共标准」，不是「Anthropic 专用插头」。
+</Callout>
+
+{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；含 1 道计算题；Answer 折叠 ===== */}
+
+## 小结
+
+- MCP 是 Anthropic 开放的客户端—服务器协议，统一「AI 应用 ↔ 外部工具 / 数据源」的接法——「AI 接工具」的通用插头
+- 三层架构：Host（你用的 AI 应用）内嵌若干 MCP Client，每个 client 连一个外部 MCP Server，由 server 暴露能力
+- 一个 server 能暴露三类能力：Tools（可调动作）、Resources（可读数据）、Prompts（预设模板）
+- 核心价值：把集成从 N×M 降成 M+N——每应用一个 client、每工具一个 server，互相即插即用、可复用
+- MCP 不替代 function calling：MCP 负责「接工具」，function calling 负责「调工具」，分层叠用；接进来的 tool 仍要按第 9 章好好设计
+
+<Exercises>
+
+**练习 1（计算题 · M×N 省了多少）** 一个团队有 **6 个 AI 应用**，想各自都能用上 **5 个外部工具**。（甲）没有任何标准协议时，总共要写多少套「应用 × 工具」的对接？（乙）全部改用 MCP 后（每个应用一个 client、每个工具一个 server），总共要写多少个组件？（丙）用一句话说清为什么差距会这么大。
+
+<Answer>
+
+（甲）**6 × 5 = 30 套**。没有标准时，每一对「某应用 + 某工具」都得单独写一遍对接胶水，是乘法关系（N×M）。
+（乙）**6 + 5 = 11 个**：6 个 client（每个应用一个）+ 5 个 server（每个工具一个），是加法关系（M+N）。
+（丙）因为标准协议把「每一对都要单写」变成了「每个应用只写一个 client、每个工具只写一个 server，然后大家通过同一套标准互通」。组件之间可复用，所以总量从「乘」降到「加」；应用和工具越多，省得越多。
+
+</Answer>
+
+**练习 2（辨析题）** 下面三句关于 MCP 的说法，哪些对、哪些错？说明理由。
+（A）「学会 MCP 之后，function calling 就用不上了，MCP 把它替代了。」
+（B）「MCP Server 只能暴露可调用的工具（Tools），不能提供别的。」
+（C）「MCP 是开放协议，不是只能连 Claude，别家应用和模型也能实现它。」
+
+<Answer>
+
+（A）**错**。这是最常见的误解。function calling 是模型侧「怎么挑工具、怎么发起调用」的底层机制；MCP 是上层「工具怎么被标准化接进来」的协议。MCP Server 暴露的 tool，最终还是经 function calling 被模型调用。两者分层叠用，不是替代。
+（B）**错**。MCP Server 能暴露三类能力：Tools（可调动作）、Resources（可读数据 / 上下文）、Prompts（预设提示模板）。工具只是其中一类。
+（C）**对**。MCP 是 Anthropic 开放出来的协议，任何应用方、工具方、模型方都能实现，像 USB-C 一样是公共标准，不是某一家的私有接口。
+
+</Answer>
+
+**练习 3（设计题）** 你们公司内部有个「员工信息查询」服务，希望让 Claude 桌面端、自研的客服后台、以及一个 IDE 插件三个 AI 应用都能用上它。按本章思路，你会怎么接？接进来之后，要保证 agent 用得准，还得额外做什么（提示：想想第 9 章）？
+
+<Answer>
+
+把「员工信息查询」服务**包成一个 MCP Server** 写一次，按标准声明它暴露的 tool（如 `get_employee_profile(employee_id)`）。然后三个 AI 应用各自作为 Host、各内嵌一个 MCP Client 连上这个 server 即可——一次开发、三处复用，这正是 M+N（3 个 client + 1 个 server = 4 个组件，而不是 3×1 各写一遍）。
+接进来之后还要做的：MCP 只管「接」，不管「好不好用」。这个 tool 的命名、description、粒度、错误信息、返回值仍要遵守第 9 章五个维度——比如 description 写清「查某员工的档案；employee_id 为 6 位数字」、失败时返回可恢复的错误、只返回结构化精简字段。否则就算接上了，agent 照样可能挑错、传错。
+
+</Answer>
+
+</Exercises>
+
+{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
+
+{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，id 对齐，零基础大白话 ===== */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="MCP（模型上下文协议）" id="mcp">
+    全称 Model Context Protocol，Anthropic 开放的一套客户端—服务器协议（底层基于
+    JSON-RPC 这种通用的远程调用格式）。它统一了「AI 应用 ↔ 外部工具 /
+    数据源」的接法，相当于「AI
+    接工具」的通用插头（USB-C）。它是**开放**协议，任何应用方、工具方、模型方都能实现，不是只能连某一家的东西。详见本章「第一个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="Host（宿主）" id="mcp-host">
+    你实际安装、使用的那个 AI 应用本身，比如 Claude 桌面端、某个 IDE。它是 MCP
+    Client 的容器——所有 client 都内嵌在 Host 里。Host
+    自己不直接连工具，而是通过内嵌的 client 去连。详见本章「第二个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="MCP Client（客户端）" id="mcp-client">
+    内嵌在 Host 里的连接器，**一个 client 负责连一个 MCP Server**。Host
+    想用几样外部能力，就内嵌几个 client。它是 Host 和外部 server
+    之间的桥。详见本章「第二个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="MCP Server（服务端）" id="mcp-server">
+    在外部、把某个工具或数据源的能力按 MCP 标准暴露出来的程序。一个 server
+    通常对应一类能力（如「文件系统」「数据库」）。因为接法是标准的，任何实现了
+    MCP 的应用都能连它、复用它——写一次
+    server，处处能用。详见本章「第二个概念」。
+  </GlossaryItem>
+  <GlossaryItem
+    term="三类能力（Tools / Resources / Prompts）"
+    id="mcp-capabilities"
+  >
+    一个 MCP Server
+    能向应用暴露的三种东西：**Tools**（可被模型调用的动作，如发邮件、改文件，由模型决定何时调）、**Resources**（可被应用读取的数据
+    /
+    上下文，如某文件内容、一张表，由应用按需读进上下文）、**Prompts**（预设好的提示模板，供用户直接挑用）。三者分工不同，共同构成
+    server 的能力面。详见本章「第三个概念」。
+  </GlossaryItem>
+  <GlossaryItem term="M×N 问题（M×N 集成难题）" id="mxn-problem">
+    N 个 AI 应用要各自接入 M 个外部工具时，若没有统一标准，每一对「应用 ×
+    工具」都得单写一遍对接胶水，总量是 N×M，且谁也复用不了谁。有了 MCP
+    这种标准协议后，每个应用只写一个 client、每个工具只写一个 server，总量降为
+    M+N，且互相可复用——把集成从「乘法」降成「加法」。详见本章「动手看」。
+  </GlossaryItem>
+</Glossary>

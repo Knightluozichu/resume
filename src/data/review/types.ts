@@ -205,7 +205,27 @@ export type ReviewChapterSlug =
   | "agt-structured-output"
   | "agt-function-calling"
   | "agt-react-loop"
-  | "agt-tool-design";
+  | "agt-tool-design"
+  // AI 智能体应用开发
+  | "agent-what-is-an-agent"
+  | "agent-augmented-llm"
+  | "agent-agentic-loop"
+  | "agent-first-agent"
+  | "agent-prompt-engineering"
+  | "agent-context-window"
+  | "agent-structured-output"
+  | "agent-function-calling"
+  | "agent-tool-design"
+  | "agent-mcp"
+  | "agent-workflow-vs-agent"
+  | "agent-chaining-and-routing"
+  | "agent-parallelization-and-orchestrator-workers"
+  | "agent-evaluator-optimizer"
+  | "agent-autonomous-agents"
+  | "agent-combining-patterns"
+  | "agent-agents-in-practice"
+  | "agent-tool-prompt-engineering"
+  | "agent-production-readiness-checklist";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -414,6 +434,26 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agt-function-calling": "函数调用原理",
   "agt-react-loop": "ReAct 循环",
   "agt-tool-design": "工具设计与安全执行",
+  // AI 智能体应用开发
+  "agent-what-is-an-agent": "什么是 AI Agent：从会聊天到会做事",
+  "agent-augmented-llm": "增强型 LLM：工具、检索与记忆",
+  "agent-agentic-loop": "智能体循环：Reason → Act → Observe",
+  "agent-first-agent": "第一个 Agent：从脚本到闭环",
+  "agent-prompt-engineering": "提示工程：把意图写进上下文",
+  "agent-context-window": "上下文窗口：预算、压缩与遗忘",
+  "agent-structured-output": "结构化输出：让回答可解析",
+  "agent-function-calling": "函数调用：模型如何选择工具",
+  "agent-tool-design": "工具设计：边界、粒度与错误恢复",
+  "agent-mcp": "MCP：把工具连接成生态",
+  "agent-workflow-vs-agent": "工作流 vs 智能体：什么时候该让它自己决定",
+  "agent-chaining-and-routing": "链式与路由：把任务拆成稳定路径",
+  "agent-parallelization-and-orchestrator-workers": "并行化与编排者-工人模式",
+  "agent-evaluator-optimizer": "评估器-优化器：让模型审自己",
+  "agent-autonomous-agents": "自主智能体：开放循环与风险边界",
+  "agent-combining-patterns": "组合模式：把多个 agentic pattern 拼成系统",
+  "agent-agents-in-practice": "实践中的 Agent：从客服到代码助手",
+  "agent-tool-prompt-engineering": "工具提示工程：让 agent 会用工具而不是猜工具",
+  "agent-production-readiness-checklist": "生产化收官：简单、透明与 ACI 上线检查清单",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

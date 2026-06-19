@@ -74,6 +74,7 @@ export const BOOK_ORDER = [
   "cpp-concurrency",
   "ai-agent-dev",
   "ai-agent",
+  "ai-agent-apps",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -89,6 +90,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
   "ai-agent-dev": "AI Agent 开发实战",
   "ai-agent": "从零构建 AI Agent",
+  "ai-agent-apps": "AI 智能体应用开发",
 };
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -170,6 +172,13 @@ export const SECTION_ORDER = [
   "规划与反思",
   "多智能体协作",
   "走向生产",
+  // AI 智能体应用开发
+  "智能体基础",
+  "上下文工程",
+  "工具使用",
+  "智能体模式",
+  "记忆与检索",
+  "生产化",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

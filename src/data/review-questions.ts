@@ -191,6 +191,25 @@ import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concur
 import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
 import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
 import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
+import { agentWhatIsAnAgentQuestions } from "./review/agent-what-is-an-agent";
+import { agentAugmentedLlmQuestions } from "./review/agent-augmented-llm";
+import { agentAgenticLoopQuestions } from "./review/agent-agentic-loop";
+import { agentFirstAgentQuestions } from "./review/agent-first-agent";
+import { agentPromptEngineeringQuestions } from "./review/agent-prompt-engineering";
+import { agentContextWindowQuestions } from "./review/agent-context-window";
+import { agentStructuredOutputQuestions } from "./review/agent-structured-output";
+import { agentFunctionCallingQuestions } from "./review/agent-function-calling";
+import { agentToolDesignQuestions } from "./review/agent-tool-design";
+import { agentMcpQuestions } from "./review/agent-mcp";
+import { agentWorkflowVsAgentQuestions } from "./review/agent-workflow-vs-agent";
+import { agentChainingAndRoutingQuestions } from "./review/agent-chaining-and-routing";
+import { agentParallelizationAndOrchestratorWorkersQuestions } from "./review/agent-parallelization-and-orchestrator-workers";
+import { agentEvaluatorOptimizerQuestions } from "./review/agent-evaluator-optimizer";
+import { agentAutonomousAgentsQuestions } from "./review/agent-autonomous-agents";
+import { agentCombiningPatternsQuestions } from "./review/agent-combining-patterns";
+import { agentAgentsInPracticeQuestions } from "./review/agent-agents-in-practice";
+import { agentToolPromptEngineeringQuestions } from "./review/agent-tool-prompt-engineering";
+import { agentProductionReadinessChecklistQuestions } from "./review/agent-production-readiness-checklist";
 import { agtChatbotToAgentQuestions } from "./review/agt-chatbot-to-agent";
 import { agtLlmAsBrainQuestions } from "./review/agt-llm-as-brain";
 import { agtAgentAnatomyQuestions } from "./review/agt-agent-anatomy";
@@ -389,6 +408,26 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aiEvaluationObservabilityQuestions,
   ...aiSafetyGuardrailsQuestions,
   ...aiProductionDeploymentQuestions,
+  // AI 智能体应用开发
+  ...agentWhatIsAnAgentQuestions,
+  ...agentAugmentedLlmQuestions,
+  ...agentAgenticLoopQuestions,
+  ...agentFirstAgentQuestions,
+  ...agentPromptEngineeringQuestions,
+  ...agentContextWindowQuestions,
+  ...agentStructuredOutputQuestions,
+  ...agentFunctionCallingQuestions,
+  ...agentToolDesignQuestions,
+  ...agentMcpQuestions,
+  ...agentWorkflowVsAgentQuestions,
+  ...agentChainingAndRoutingQuestions,
+  ...agentParallelizationAndOrchestratorWorkersQuestions,
+  ...agentEvaluatorOptimizerQuestions,
+  ...agentAutonomousAgentsQuestions,
+  ...agentCombiningPatternsQuestions,
+  ...agentAgentsInPracticeQuestions,
+  ...agentToolPromptEngineeringQuestions,
+  ...agentProductionReadinessChecklistQuestions,
   // 从零构建 AI Agent
   ...agtChatbotToAgentQuestions,
   ...agtLlmAsBrainQuestions,

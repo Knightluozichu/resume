@@ -1,0 +1,349 @@
+---
+title: 自主智能体：让模型在环境反馈里自己推进任务
+type: D
+section: 智能体模式
+order: 5
+description: 看懂什么时候该用固定工作流，什么时候才值得让模型在工具结果和环境反馈里自己推进多步任务。
+demo: true
+math: false
+draft: true
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
+---
+
+{/* 知识点清单：1. 固定工作流（Fixed workflow）（图：<AutonomousAgentDecisionDiagram />；进 Glossary）2. 自主智能体（Autonomous agent）（动画：<AutonomousAgentLoopDiagram />；进 Glossary）3. 环境反馈（Environment feedback）（动画：<AutonomousAgentLoopDiagram />；进 Glossary）4. 工具使用（Tool use）（代码对照：固定步骤 vs agent loop；进 Glossary）5. 真实标准（Ground truth）（图：<AutonomousAgentDecisionDiagram />；进 Glossary）6. 人工检查点（Human checkpoint）（图：<AutonomousAgentTraceDiagram />；进 Glossary）7. 停机条件（Stop condition）（图：<AutonomousAgentTraceDiagram />；进 Glossary）8. 沙盒（Sandbox）（图：<AutonomousAgentTrapDiagram />；进 Glossary）9. 护栏（Guardrail）（图：<AutonomousAgentTrapDiagram />；进 Glossary）。Term↔Glossary：固定工作流（Fixed workflow） / 自主智能体（Autonomous agent） / 环境反馈（Environment feedback） / 工具使用（Tool use） / 真实标准（Ground truth） / 人工检查点（Human checkpoint） / 停机条件（Stop condition） / 沙盒（Sandbox） / 护栏（Guardrail）。 */}
+
+<Objectives>
+
+- 能解释自主智能体和固定工作流最大的结构差别，并说出什么场景该用哪个
+- 能判断一项开放、多步、路径难预写的任务，是否已经具备放权给自主智能体的基本条件
+- 能回答：让系统帮你修一个陌生仓库里的线上 bug 时，什么时候固定步骤够用，什么时候才值得进入自主智能体循环？
+
+</Objectives>
+
+## 先打个比方
+
+做一次紧急排障，有时像按检查表巡检：先看告警，再查日志，再重启某个服务。步骤清楚、顺序稳定，照着清单走就行。
+
+但也有些问题不是这样。你只知道“支付偶尔失败”，却不知道该先查网络、数据库、配置，还是最近改过的代码。每查一步都会改变下一步该怎么走。
+
+这一章解决的就是这种“路线无法提前写死”的任务。没有这样的安排，系统要么只能按死板清单走到黑，要么在看见新线索后仍不知道该改查哪里，最后把复杂问题做成机械流程。
+
+## 先分清：固定工作流和自主智能体不是同一件事
+
+<Term def="固定工作流（Fixed workflow）：由人提前写好步骤、分支和停点，模型只是在这些预设槽位里完成局部判断或生成的系统。">
+  固定工作流（Fixed workflow）
+</Term>
+适合路线清楚的任务：你能提前列出步骤、分支和输出格式。链式、路由、并行、编排-工作者、评估-优化都属于这一侧。它们可以很强，但强在“结构稳定、易测、可控”。
+
+<Term def="自主智能体（Autonomous agent）：让模型在一个循环里根据当前目标、工具结果和环境反馈，自己决定下一步做什么、何时继续、何时停下的系统。">
+  自主智能体（Autonomous agent）
+</Term>
+则更适合开放任务。Anthropic 在《Building Effective Agents》里强调，agents
+通常用于开放、多步、难以预写固定路径的问题：模型会观察当前状态，选择下一步，调用工具，读取结果，再继续判断。
+
+<AutonomousAgentLoopDiagram />
+
+看图时抓住一句话：**固定工作流是“按你写好的路走”，自主智能体是“边看路况边决定下一步”。** 这不是哪边更高级的问题，而是任务形状不同。路线能提前写清，就优先固定工作流；路线要靠运行中的线索逐步显现，才考虑自主智能体。
+
+## 自主智能体靠什么往前走：反馈，而不是自言自语
+
+真正让 agent 往前推进的，不是“多想几轮”，而是 <Term def="环境反馈（Environment feedback）：系统从外部环境拿回来的新信息，例如工具返回值、测试结果、网页内容、文件 diff 或错误日志。">环境反馈（Environment feedback）</Term>。
+没有反馈，模型只是把同一份上下文反复改写；有反馈，它才知道刚才那步有没有缩小问题范围。
+
+<Term def="工具使用（Tool use）：模型通过受控接口读取文件、运行测试、检索资料、调用 API 或修改状态，并把结果带回下一轮判断。">
+  工具使用（Tool use）
+</Term>
+就是 agent 接触环境的手。比如修 bug
+时，它可以先读报错，再查相关文件，再跑测试，再根据失败信息改下一步。每个工具结果都像一张新的路况照片。
+
+<AutonomousAgentTraceDiagram />
+
+这也是它和“评估-优化”的边界：评估-优化通常在同一个稿子上按 rubric 返工；自主智能体会把每次外部结果纳入下一步决策。一个是在固定环里打磨输出，一个是在开放环境里推进任务。
+
+## 什么时候才值得放权给它
+
+不要因为“任务复杂”就立刻上 agent。更稳的判断是先问两件事。
+
+第一，任务路径是否真的难以预写？如果你已经知道每次都要查三张表、跑两个校验、按固定模板汇总，那写成固定工作流更便宜、更可测。只有当下一步高度依赖刚刚拿到的线索，固定脚手架开始束手束脚时，自主智能体才有价值。
+
+第二，系统能不能得到可靠的 <Term def="真实标准（Ground truth）：用来判断当前行动是否更接近目标的外部依据，例如测试是否通过、事实来源、人工确认或可验证的业务规则。">真实标准（Ground truth）</Term>？
+如果没有可验证信号，agent 很容易把“看起来合理”误当成“已经解决”。测试、日志、检索来源、人工确认，都可以成为它判断方向的依据。
+
+<AutonomousAgentDecisionDiagram />
+
+把这张图记成一个选型顺序：**能固定就固定；必须开放探索时，先确认有反馈、有标准、有边界，再放权。** Agent 的价值来自适配不确定路径，不来自让系统看起来更像人在思考。
+
+## 放权之前要先装刹车
+
+自主智能体的代价也来自它的自由度：它可能多查很多轮，调用很多工具，走错一步又把错误带到下一步。Anthropic 特别提醒，agent 带来的成本、延迟和错误累积都更高，所以工程上必须先把刹车装好。
+
+<Term def="人工检查点（Human checkpoint）：在高风险节点暂停，让人确认计划、权限、结果或下一步动作是否可以继续。">
+  人工检查点（Human checkpoint）
+</Term>
+用于卡住高风险动作，例如“准备写入生产数据”“准备发送外部邮件”“准备删除文件”。低风险读取可以自动，高风险写入要停下来让人看一眼。
+
+<Term def="停机条件（Stop condition）：明确规定 agent 什么时候必须结束，例如目标达成、达到轮次上限、重复失败、预算耗尽或需要人工接管。">
+  停机条件（Stop condition）
+</Term>
+用来防止系统无限探索。没有它，agent
+可以一直“再查一下”“再试一次”，成本和延迟会一起失控。
+
+<Term def="沙盒（Sandbox）：把 agent 的读写、网络、命令和文件范围限制在安全区域里，让它即使犯错也难以破坏真实环境。">
+  沙盒（Sandbox）
+</Term>
+和
+<Term def="护栏（Guardrail）：围绕 agent 的规则、权限、校验和拦截机制，用来限制危险动作、敏感数据泄露和越权操作。">
+  护栏（Guardrail）
+</Term>
+则负责把错误困在可承受范围内。它们不是上线后的装饰，而是 agent
+能不能安全运行的前提。
+
+## 动手看：什么时候固定步骤够用，什么时候进入 agent loop？
+
+> 猜一猜：如果任务是“每晚检查固定五个服务是否健康”，你会让系统自由探索吗？那如果任务是“用户偶发支付失败，找出根因并给出修复建议”，固定五步还够吗？
+
+<AutonomousAgentDecisionDiagram />
+
+判断可以压成三问：
+
+- 路线能否提前写清？能，就先用固定工作流。
+- 下一步是否强依赖刚拿到的新线索？是，才考虑自主智能体。
+- 是否已有真实标准、人工检查点、停机条件、沙盒和护栏？没有，就先补安全边界。
+
+## 代码对照：固定工作流 vs agent loop
+
+下面都用“排查支付偶发失败”这个任务。左边假设每次都按固定清单走；右边允许系统根据工具结果决定下一步。对照重点不是 API 名字，而是控制权放在哪里。
+
+### 第一步：固定工作流把路线写死
+
+<CodeTabs>
+  <Tab label="固定工作流：预先写好步骤">
+
+```ts
+export async function diagnosePaymentFixed(orderId: string) {
+  const logs = await readPaymentLogs(orderId);
+  const config = await readPaymentConfig();
+  const recentDeploys = await listRecentDeploys();
+
+  return callModel({
+    task: "按固定检查表给出结论",
+    checklist: ["logs", "config", "recentDeploys"],
+    evidence: { logs, config, recentDeploys },
+  });
+}
+```
+
+  </Tab>
+  <Tab label="Agent loop：下一步由反馈决定">
+
+```ts
+export async function diagnosePaymentAgent(goal: string) {
+  let state = await startRun(goal);
+  for (let step = 0; step < 8; step += 1) {
+    const action = await decideNextAction(state);
+    if (action.type === "finish") return action.report;
+    const result = await runTool(action.tool, action.input);
+    state = await updateState(state, { action, result });
+  }
+  return escalateToHuman(state);
+}
+```
+
+  </Tab>
+</CodeTabs>
+
+左边的 `logs / config / recentDeploys` 在开工前就写好了，系统只是在固定材料上总结。右边每轮都先看当前状态，再决定下一步工具；工具结果回来后，才进入下一轮判断。这就是固定工作流和 agent loop 的分界。
+
+### 第二步：固定流程容易测，agent loop 必须限权
+
+固定流程的好处是稳定：它查什么、最多查几步、输出长什么样，都容易预测。Agent loop 的好处是灵活：如果日志指向数据库，它可以转去查连接池；如果测试复现失败，它可以换一条假设。但灵活也意味着必须限制权限和预算。
+
+<CodeTabs>
+  <Tab label="固定工作流：权限很窄">
+
+```ts
+const fixedTools = {
+  readPaymentLogs,
+  readPaymentConfig,
+  listRecentDeploys,
+};
+
+await diagnosePaymentFixed("ord_123");
+```
+
+  </Tab>
+  <Tab label="Agent loop：显式声明边界">
+
+```ts
+const agentPolicy = {
+  allowedTools: ["readFile", "runTest", "searchLogs"],
+  blockedPaths: ["/prod/secrets", "/billing/write"],
+  maxSteps: 8,
+  requireHumanFor: ["writeFile", "deploy", "sendEmail"],
+};
+
+await runAgent({ goal: "排查支付失败", policy: agentPolicy });
+```
+
+  </Tab>
+</CodeTabs>
+
+这段对照里，右边多出来的 `allowedTools / maxSteps / requireHumanFor` 不是细节，而是生命线。Agent 不是因为“更自主”就应该拿更多权限；恰恰相反，越自主，越要把可用工具、危险动作和停机线写清。
+
+<Callout type="warn">
+  自主智能体常常更贵、更慢，也更容易把前一步的误判带到后一步。除非任务确实需要开放探索，并且有可验证反馈与安全边界，否则固定工作流通常是更好的工程默认值。
+</Callout>
+
+<div className="not-prose my-6 grid gap-4 md:grid-cols-2">
+  <div className="rounded-card border border-border bg-elevated p-5">
+    <div className="mb-3 text-sm font-bold text-primary">
+      固定工作流的关键特征
+    </div>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>步骤、分支、停点由人提前写好</li>
+      <li>更便宜、更快、更容易测试</li>
+      <li>适合路径稳定、输入类型可预测的任务</li>
+    </ul>
+    <div className="mt-4 text-xs leading-relaxed text-secondary">
+      默认先选它。能写成清单，就不要为了“智能感”硬放权。
+    </div>
+  </div>
+  <div className="rounded-card border border-accent bg-elevated p-5">
+    <div className="mb-3 text-sm font-bold text-accent">
+      自主智能体的关键特征
+    </div>
+    <ul className="m-0 list-disc space-y-2 pl-5 text-xs leading-relaxed text-primary">
+      <li>每轮根据工具结果和环境反馈选下一步</li>
+      <li>适合开放、多步、路径难预写的任务</li>
+      <li>必须配真实标准、停机条件、沙盒和护栏</li>
+    </ul>
+    <div className="mt-4 text-xs leading-relaxed text-secondary">
+      只在不确定路径真的带来价值时使用，并把风险先框住。
+    </div>
+  </div>
+</div>
+
+## 容易踩的坑
+
+<AutonomousAgentTrapDiagram />
+
+<Callout type="trap">
+  **现象**：系统一轮轮“反思”，看起来很努力，但没有读新日志、跑新测试、查新资料，结论只是换一种说法。
+  **原因**：缺少环境反馈，agent loop 退化成自嗨循环。
+  **修法**：要求每轮必须消费一个外部结果，或明确说明为什么可以结束；没有新证据时不要允许继续“想一想”。
+</Callout>
+
+<Callout type="trap">
+  **现象**：还没设沙盒、停机条件和人工检查点，就让 agent
+  读写文件、发请求、改配置，结果一次误判放大成真实损失。
+  **原因**：把“能自己推进任务”误当成“可以直接放权”。
+  **修法**：先限制工具、目录、网络和危险动作；写明最大步数、预算上限和人工接管条件，再逐步扩大权限。
+</Callout>
+
+<Callout type="trap">
+  **现象**：本来固定五步就能完成的巡检任务，被改成自主智能体后更慢、更贵，还偶尔走偏。
+  **原因**：把稳定任务误做成开放探索。D
+  型对比的关键是选型：能预写路径时，固定工作流更合适。
+  **修法**：先尝试链式、路由、并行或评估-优化；只有固定骨架明显不够时，再进入
+  agent loop。
+</Callout>
+
+## 小结
+
+- 固定工作流：路线预写，便宜、稳定、易测
+- 自主智能体：边看反馈边决定下一步
+- 适合开放、多步、路径难预写的任务
+- 没有真实标准和安全边界，不要放权
+- 成本、延迟、错误累积是 agent 的主要代价
+
+<Exercises>
+
+**练习 1（选型题）** 下面两个任务，哪个更适合固定工作流，哪个更适合自主智能体？为什么？
+（A）每天凌晨检查五个固定服务的健康状态并发一条报告。
+（B）排查“部分用户偶发支付失败”，需要根据每次发现的新线索继续查。
+
+<Answer>
+
+（A）更适合**固定工作流**。因为检查项固定、顺序稳定、输出格式也能提前写清，用链式或并行都能稳定完成。
+（B）更适合考虑**自主智能体**。因为下一步要查日志、配置、数据库、近期发布还是测试复现，取决于刚刚拿到的新线索，路径很难提前写死。但前提是要有测试、日志、人工检查点、停机条件、沙盒和护栏。
+
+</Answer>
+
+**练习 2（辨析题）** 为什么“循环调用模型”不等于自主智能体？
+
+<Answer>
+
+因为自主智能体的关键不是“循环”本身，而是循环里有没有根据环境反馈决定下一步。评估-优化也有循环，但它通常是在固定 rubric 下改同一份输出；如果一个系统只是反复让模型自我反思，没有读取工具结果、测试结果或外部证据，那它只是自嗨循环，不是能推进任务的 agent。
+
+</Answer>
+
+**练习 3（改代码题）** 本章的 `diagnosePaymentAgent` 最多只靠 `step < 8` 停止。请再补两条停机保护：重复失败时转人工、预算耗尽时停止。你会放在哪里？
+
+<Answer>
+
+可以放在每轮工具结果返回后、进入下一轮 `decideNextAction` 之前，因为这时已经知道本轮是否失败、预算还剩多少：
+
+```ts
+export async function diagnosePaymentAgent(goal: string) {
+  let state = await startRun(goal);
+  for (let step = 0; step < 8; step += 1) {
+    const action = await decideNextAction(state);
+    if (action.type === "finish") return action.report;
+    const result = await runTool(action.tool, action.input);
+    state = await updateState(state, { action, result });
+    if (state.repeatedFailures >= 2) return escalateToHuman(state);
+    if (state.remainingBudget <= 0) return stopWithBestEffort(state);
+  }
+  return escalateToHuman(state);
+}
+```
+
+这样做的目的，是把“多试几步”限制在可控范围内。重复失败说明系统可能卡住，预算耗尽说明继续探索已经不划算，两者都应该成为明确停机条件。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="固定工作流（Fixed workflow）">
+    由人提前写好步骤、分支和停点，模型只在这些预设槽位里工作。它像排障检查表：路线清楚时很稳、便宜、容易测试。详见本章「先分清」。
+  </GlossaryItem>
+  <GlossaryItem term="自主智能体（Autonomous agent）">
+    让模型在循环里看当前目标和外部结果，自己决定下一步做什么、要不要继续、什么时候结束的系统。它适合路线很难提前写死的开放任务。详见本章「先分清」。
+  </GlossaryItem>
+  <GlossaryItem term="环境反馈（Environment feedback）">
+    系统从外部拿回来的新信息，比如日志、测试结果、文件
+    diff、网页内容或工具返回值。它告诉 agent
+    刚才那步是否有用，下一步该往哪走。详见本章「靠什么往前走」。
+  </GlossaryItem>
+  <GlossaryItem term="工具使用（Tool use）">
+    模型通过受控接口读取、查询、运行或修改东西，并把结果带回下一轮判断。工具像
+    agent
+    的手和眼睛，没有工具结果，循环很容易只是在空想。详见本章「靠什么往前走」。
+  </GlossaryItem>
+  <GlossaryItem term="真实标准（Ground truth）">
+    判断当前行动是否真的更接近目标的外部依据，例如测试通过、事实来源、业务规则或人工确认。没有它，系统容易把“听起来对”误当成“已经解决”。详见本章「什么时候才值得放权」。
+  </GlossaryItem>
+  <GlossaryItem term="人工检查点（Human checkpoint）">
+    在高风险节点暂停，让人确认计划、权限或结果后再继续。比如准备写生产数据、发外部邮件或部署时，就应该先停下来给人看。详见本章「放权之前要先装刹车」。
+  </GlossaryItem>
+  <GlossaryItem term="停机条件（Stop condition）">
+    明确规定 agent
+    必须结束的规则，例如目标达成、达到最大步数、重复失败、预算耗尽或转人工。它防止系统无限“再试一次”。详见本章「放权之前要先装刹车」。
+  </GlossaryItem>
+  <GlossaryItem term="沙盒（Sandbox）">
+    把 agent
+    的读写、网络、命令和文件范围限制在安全区域里。它像实验室隔离间，让系统犯错时也难以破坏真实环境。详见本章「放权之前要先装刹车」。
+  </GlossaryItem>
+  <GlossaryItem term="护栏（Guardrail）">
+    围绕 agent
+    的权限、规则、校验和拦截机制，用来阻止危险动作、越权访问或敏感信息泄露。它不是装饰，而是安全运行的基本条件。详见本章「放权之前要先装刹车」。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Anthropic《Building Effective Agents》"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>

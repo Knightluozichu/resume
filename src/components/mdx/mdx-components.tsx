@@ -482,6 +482,80 @@ import { CostBudgetDemo } from "./demos/cost-budget-demo";
 import { ProductionArchDiagram } from "./diagrams/production-arch-diagram";
 import { DegradationDemo } from "./demos/degradation-demo";
 import { CanaryRolloutDemo } from "./demos/canary-rollout-demo";
+// AI 智能体应用开发
+import { AgentAnatomyDiagram } from "./diagrams/agent-anatomy-diagram";
+import { AgentVsWorkflowDiagram } from "./diagrams/agent-vs-workflow-diagram";
+import { AppAgentLoopDiagram } from "./diagrams/app-agent-loop-diagram";
+import { AutonomySpectrumDiagram } from "./diagrams/autonomy-spectrum-diagram";
+import { AugmentedLlmDiagram } from "./diagrams/augmented-llm-diagram";
+import { RetrievalFlowDiagram } from "./diagrams/retrieval-flow-diagram";
+import { MemoryTypesDiagram as AgentAppsMemoryTypesDiagram } from "./diagrams/memory-types-diagram";
+import { AugmentedCallDiagram } from "./diagrams/augmented-call-diagram";
+import { ReActStepDiagram } from "./diagrams/react-step-diagram";
+import { MultiTurnLoopDiagram } from "./diagrams/multi-turn-loop-diagram";
+import { LoopTerminationDiagram } from "./diagrams/loop-termination-diagram";
+import { AgentSkeletonDiagram } from "./diagrams/agent-skeleton-diagram";
+import { ToolDefAnatomyDiagram } from "./diagrams/tool-def-anatomy-diagram";
+import { AgentRunTraceDiagram } from "./diagrams/agent-run-trace-diagram";
+import { PromptAnatomyDiagram } from "./diagrams/prompt-anatomy-diagram";
+import { FewShotDiagram } from "./diagrams/few-shot-diagram";
+import { CotDiagram } from "./diagrams/cot-diagram";
+import { PromptRefinementDiagram } from "./diagrams/prompt-refinement-diagram";
+import { ContextBudgetDiagram } from "./diagrams/context-budget-diagram";
+import { CompressionVsTruncationDiagram } from "./diagrams/compression-vs-truncation-diagram";
+import { ContextWindowFillDiagram } from "./diagrams/context-window-fill-diagram";
+import { LostInMiddleDiagram } from "./diagrams/lost-in-middle-diagram";
+import { StructuredVsFreeformDiagram } from "./diagrams/structured-vs-freeform-diagram";
+import { JsonSchemaDiagram } from "./diagrams/json-schema-diagram";
+import { ToolCallProtocolDiagram } from "./diagrams/tool-call-protocol-diagram";
+import { ValidationRetryDiagram } from "./diagrams/validation-retry-diagram";
+import { ToolsAsMenuDiagram } from "./diagrams/tools-as-menu-diagram";
+import { ParallelVsSequentialDiagram } from "./diagrams/parallel-vs-sequential-diagram";
+import { FunctionCallingDecisionDiagram } from "./diagrams/function-calling-decision-diagram";
+import { ToolDesignDimensionsDiagram } from "./diagrams/tool-design-dimensions-diagram";
+import { ToolGranularityDiagram } from "./diagrams/tool-granularity-diagram";
+import { ToolErrorRecoveryDiagram } from "./diagrams/tool-error-recovery-diagram";
+import { ToolPromptAnatomyDiagram } from "./diagrams/tool-prompt-anatomy-diagram";
+import { ToolContractCompareDiagram } from "./diagrams/tool-contract-compare-diagram";
+import { ToolSelectionFeedbackDiagram } from "./diagrams/tool-selection-feedback-diagram";
+import { ToolErrorFeedbackDiagram } from "./diagrams/tool-error-feedback-diagram";
+import { McpMxnDiagram } from "./diagrams/mcp-mxn-diagram";
+import { McpArchitectureDiagram } from "./diagrams/mcp-architecture-diagram";
+import { McpCapabilitiesDiagram } from "./diagrams/mcp-capabilities-diagram";
+import { McpCallFlowDiagram } from "./diagrams/mcp-call-flow-diagram";
+import { WorkflowVsAgentDiagram } from "./diagrams/workflow-vs-agent-diagram";
+import { PatternDecisionDiagram } from "./diagrams/pattern-decision-diagram";
+import { PatternSpectrumDiagram } from "./diagrams/pattern-spectrum-diagram";
+import { PatternChoiceTrapDiagram } from "./diagrams/pattern-choice-trap-diagram";
+import { ChainingWorkflowDiagram } from "./diagrams/chaining-workflow-diagram";
+import { RoutingWorkflowDiagram } from "./diagrams/routing-workflow-diagram";
+import { ChainRoutingDecisionDiagram } from "./diagrams/chain-routing-decision-diagram";
+import { ChainRoutingTrapDiagram } from "./diagrams/chain-routing-trap-diagram";
+import { ParallelizationWorkflowDiagram, ParallelWorkflowDiagram } from "./diagrams/parallelization-workflow-diagram";
+import { SectioningVsVotingDiagram } from "./diagrams/sectioning-vs-voting-diagram";
+import { OrchestratorWorkersWorkflowDiagram, OrchestratorWorkersDiagram } from "./diagrams/orchestrator-workers-workflow-diagram";
+import { ParallelOrchestratorDecisionDiagram } from "./diagrams/parallel-orchestrator-decision-diagram";
+import { ParallelOrchestrationTrapDiagram, ParallelOrchestratorTrapDiagram } from "./diagrams/parallel-orchestration-trap-diagram";
+import { EvaluatorOptimizerWorkflowDiagram } from "./diagrams/evaluator-optimizer-workflow-diagram";
+import { EvaluatorOptimizerDecisionDiagram } from "./diagrams/evaluator-optimizer-decision-diagram";
+import { EvaluatorOptimizerTraceDiagram } from "./diagrams/evaluator-optimizer-trace-diagram";
+import { EvaluatorOptimizerTrapDiagram } from "./diagrams/evaluator-optimizer-trap-diagram";
+import { AutonomousAgentLoopDiagram } from "./diagrams/autonomous-agent-loop-diagram";
+import { AutonomousAgentDecisionDiagram } from "./diagrams/autonomous-agent-decision-diagram";
+import { AutonomousAgentTraceDiagram } from "./diagrams/autonomous-agent-trace-diagram";
+import { AutonomousAgentTrapDiagram } from "./diagrams/autonomous-agent-trap-diagram";
+import { PatternCompositionBlueprintDiagram } from "./diagrams/pattern-composition-blueprint-diagram";
+import { PatternComplexityLadderDiagram } from "./diagrams/pattern-complexity-ladder-diagram";
+import { PatternRollbackTraceDiagram } from "./diagrams/pattern-rollback-trace-diagram";
+import { PatternCompositionTrapDiagram } from "./diagrams/pattern-composition-trap-diagram";
+import { SupportAgentLoopDiagram } from "./diagrams/support-agent-loop-diagram";
+import { CodingAgentPracticeDiagram } from "./diagrams/coding-agent-practice-diagram";
+import { AgentPracticeFitMatrixDiagram } from "./diagrams/agent-practice-fit-matrix-diagram";
+import { AgentPracticeRiskDiagram } from "./diagrams/agent-practice-risk-diagram";
+import { AgentProductionPrinciplesDiagram } from "./diagrams/agent-production-principles-diagram";
+import { AgentComplexityGateDiagram } from "./diagrams/agent-complexity-gate-diagram";
+import { AgentTransparencyReviewDiagram } from "./diagrams/agent-transparency-review-diagram";
+import { AgentAciReadinessDiagram } from "./diagrams/agent-aci-readiness-diagram";
 import { AaAgentLoopDiagram } from "./ai-agent/agent-loop-diagram";
 import { AaChatbotWorkflowAgentDiagram } from "./ai-agent/chatbot-workflow-agent-diagram";
 import { AaTaskFitExplorer } from "./ai-agent/task-fit-explorer";
@@ -1280,6 +1354,83 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ProductionArchDiagram,
   DegradationDemo,
   CanaryRolloutDemo,
+  // AI 智能体应用开发
+  AgentAnatomyDiagram,
+  AgentVsWorkflowDiagram,
+  AppAgentLoopDiagram,
+  AutonomySpectrumDiagram,
+  AugmentedLlmDiagram,
+  RetrievalFlowDiagram,
+  AgentAppsMemoryTypesDiagram,
+  AugmentedCallDiagram,
+  ReActStepDiagram,
+  MultiTurnLoopDiagram,
+  LoopTerminationDiagram,
+  AgentSkeletonDiagram,
+  ToolDefAnatomyDiagram,
+  AgentRunTraceDiagram,
+  PromptAnatomyDiagram,
+  FewShotDiagram,
+  CotDiagram,
+  PromptRefinementDiagram,
+  ContextBudgetDiagram,
+  CompressionVsTruncationDiagram,
+  ContextWindowFillDiagram,
+  LostInMiddleDiagram,
+  StructuredVsFreeformDiagram,
+  JsonSchemaDiagram,
+  ToolCallProtocolDiagram,
+  ValidationRetryDiagram,
+  ToolsAsMenuDiagram,
+  ParallelVsSequentialDiagram,
+  FunctionCallingDecisionDiagram,
+  ToolDesignDimensionsDiagram,
+  ToolGranularityDiagram,
+  ToolErrorRecoveryDiagram,
+  ToolPromptAnatomyDiagram,
+  ToolContractCompareDiagram,
+  ToolSelectionFeedbackDiagram,
+  ToolErrorFeedbackDiagram,
+  McpMxnDiagram,
+  McpArchitectureDiagram,
+  McpCapabilitiesDiagram,
+  McpCallFlowDiagram,
+  WorkflowVsAgentDiagram,
+  PatternDecisionDiagram,
+  PatternSpectrumDiagram,
+  PatternChoiceTrapDiagram,
+  ChainingWorkflowDiagram,
+  RoutingWorkflowDiagram,
+  ChainRoutingDecisionDiagram,
+  ChainRoutingTrapDiagram,
+  ParallelizationWorkflowDiagram,
+  ParallelWorkflowDiagram,
+  SectioningVsVotingDiagram,
+  OrchestratorWorkersWorkflowDiagram,
+  OrchestratorWorkersDiagram,
+  ParallelOrchestratorDecisionDiagram,
+  ParallelOrchestrationTrapDiagram,
+  ParallelOrchestratorTrapDiagram,
+  EvaluatorOptimizerWorkflowDiagram,
+  EvaluatorOptimizerDecisionDiagram,
+  EvaluatorOptimizerTraceDiagram,
+  EvaluatorOptimizerTrapDiagram,
+  AutonomousAgentLoopDiagram,
+  AutonomousAgentDecisionDiagram,
+  AutonomousAgentTraceDiagram,
+  AutonomousAgentTrapDiagram,
+  PatternCompositionBlueprintDiagram,
+  PatternComplexityLadderDiagram,
+  PatternRollbackTraceDiagram,
+  PatternCompositionTrapDiagram,
+  SupportAgentLoopDiagram,
+  CodingAgentPracticeDiagram,
+  AgentPracticeFitMatrixDiagram,
+  AgentPracticeRiskDiagram,
+  AgentProductionPrinciplesDiagram,
+  AgentComplexityGateDiagram,
+  AgentTransparencyReviewDiagram,
+  AgentAciReadinessDiagram,
   // 从零构建 AI Agent
   AaAgentLoopDiagram,
   AaChatbotWorkflowAgentDiagram,

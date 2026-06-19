@@ -1,0 +1,343 @@
+---
+title: 你的第一个最小 Agent
+type: C
+section: 智能体基础
+order: 4
+description: 把前三章拼起来——用几十行 Python 亲手搭一个能调工具、会循环、自己收尾的最小智能体。
+demo: true
+math: false
+draft: true
+sourceUrl: ""
+---
+
+{/* C 实战型章（第一篇收官）：把前三章的零件（裸 LLM → 增强型 LLM → 循环）亲手拼成一个能跑的最小 Agent（Python，~40-60 行）。代码为重心（§6 ≥80% 覆盖），但仍少文字重图重动画：用「代码↔运行轨迹」同步动画把代码和行为对起来。主 viz = AgentRunTraceDiagram（animotor 6 步，「北京今天穿什么」1 轮驱动，左侧高亮当前代码块、右侧逐条追加运行轨迹）。math:false 整节省略。原创、无 Attribution。知识点清单（动笔先行，每项至少配一种 viz）：1. 最小 Agent 四块骨架（系统提示/工具表/LLM调用/带刹车的循环）→ <AgentSkeletonDiagram />（静态，四块拼成一个 agent + 各块对应代码角色）；2. 定义一个工具（函数 + schema：名字/描述/参数/实现）→ <ToolDefAnatomyDiagram />（静态拆解四部分）+ 代码；3. 解析 LLM 工具调用 → 执行 → 回填 → §6 代码对照；4. 组装循环 + 终止（呼应 Ch3 for+max_steps）→ §6 代码；5. 跑一次完整执行【主 viz】→ <AgentRunTraceDiagram />（animotor，代码↔轨迹同步）。Term 高亮术语：最小 Agent、系统提示、工具 schema、工具调用解析、回填、max_steps → 均进章末 Glossary */}
+
+{/* ===== 1. 学习目标｜spec §一：C 型含一条「能实现 / 能改出」；末条检验问题 ===== */}
+
+<Objectives>
+
+- 能说清一个能跑的最小 Agent 由哪四块骨架拼成，以及每块对应代码里的哪一段
+- 能动手实现 / 改出一个能调工具并循环、自己收尾的最小 agent（几十行 Python）
+- 能回答：把一个工具「定义」给 agent，到底要给它哪几样东西？少了「描述」会怎样？
+
+</Objectives>
+
+{/* ===== 2. 直觉引入｜spec §二：≤3 段 × ≤120 字；零术语；承接前三章「零件→机器」 ===== */}
+
+## 先说说这一章干嘛
+
+前三章我们把零件一个个认全了：第 1 章看清了「会自己干活的 AI」长什么样，第 2 章给它配齐了资料柜、电话、笔记本，第 3 章弄懂了它怎么一圈圈转着把活办成。
+
+可零件摊了一桌子，它们到底怎么拧成一台能转的机器？这一章就干这件事——**亲手把零件拼起来**，用几十行代码搭一个真能跑的最小智能体：你给它一句话，它自己想该查什么、去调工具、看结果、再决定收不收尾。
+
+没有这一步，前面学的全是纸上谈兵。拼过一次，你就再不会觉得「智能体」是个玄乎的黑盒——它不过是几十行你能从头读懂的代码。
+
+{/* ===== 3. 概念讲解｜spec §三：C 型「是什么」压缩一两段；术语首现 <Term def id> 写句中；配 AgentSkeletonDiagram ===== */}
+
+## 最小 Agent，就是这四块拼起来
+
+先把要拼的东西看清楚。我们要搭的 <Term def="最小 Agent（Minimal Agent）：用最少的代码拼成、却五脏俱全的智能体——有系统提示、有工具、能循环、会自己收尾。它把前三章的概念落成几十行可运行的程序，是理解一切复杂 agent 的起点。" id="minimal-agent">最小 Agent</Term> 不神秘，它就是四块骨架拼到一起：
+
+<AgentSkeletonDiagram />
+
+四块各管一摊，正好对上前三章学的东西：
+
+- **系统提示**：开头一段话，定下它的身份、目标和规矩——这是第 1 章说的「指令」外挂。
+- **工具表**：声明它能调哪些工具——这是第 2 章的「工具」增强。
+- **LLM 调用**：每一圈让模型看着上下文、决定下一步——这是那颗不变的「大脑」。
+- **带刹车的循环**：用 `for` + 步数上限把前三块反复转起来——这正是第 3 章的循环骨架。
+
+C 型章的「是什么」就压缩到这里。剩下的篇幅，全留给「怎么把这四块写成代码、拼起来跑通」——这才是本章的重头戏。
+
+{/* ===== 4. 数学推导｜math:false：整节删除 ===== */}
+
+{/* ===== 5. 交互 Demo｜spec §五：主 viz = AgentRunTraceDiagram；猜一猜引导；可暂停/单步/拖进度 ===== */}
+
+## 动手看：最小 agent 跑一次长什么样
+
+写代码之前，先亲眼看它跑起来的样子。下面这个动画把「代码」和「它跑起来的行为」一行行对起来——左边是最小 agent 的代码骨架，右边是它真跑一次产生的运行轨迹。任务很简单：「北京今天适合穿什么」。
+
+> 猜一猜：动画第 ③ 步 agent 调了 `get_weather("北京")` 拿到天气。如果把循环的 `max_steps` 设成 `1`（最多只转一圈），它还能在第 ⑥ 步给出「建议穿外套」这个答案吗？先想一想——查天气和「拿着天气作答」是不是同一圈干的？再单步播放，数一数它一共转了几圈。
+
+<AgentRunTraceDiagram />
+
+盯住一件事：**左边每执行一块代码，右边就追加一条对应的行为轨迹**。LLM 调用产出「该查天气」（Thought），工具执行块跑出 `get_weather`（Action），回填块把「15°C」喂回去（Observation），下一圈 LLM 看到天气就收尾。代码和行为一一对上，这台机器就不再是黑盒了。接下来我们就把左边这些代码块，一段段亲手写出来。
+
+{/* ===== 6. 代码对照｜spec §六：C 型重心，≥80% 覆盖；逐步建构；单块≤30 行，块间有解说 ===== */}
+
+## 一段段把它拼出来
+
+下面我们用五段代码，从零拼出上面那个 agent。每一段都接着前一段往下写，读完你手里就有一个完整、能跑的最小 agent。例子用 OpenAI 风格的接口，但思路对任何能「调工具（function calling）」的模型都一样。
+
+### 第一段：定义一个工具
+
+先给 agent 一样能力。一个工具 = **一个真去干活的 Python 函数** + **一份给 LLM 看的说明书**。我们先写函数本身——它就是普通 Python，这里用一个写死的假天气，方便你不接真 API 也能跑通：
+
+```python
+def get_weather(city: str) -> str:
+    # 真实项目里这里会调天气 API；先用假数据，方便直接跑通
+    fake = {"北京": "15°C · 晴", "上海": "22°C · 多云"}
+    return fake.get(city, f"查不到「{city}」的天气")
+```
+
+函数有了，但 LLM 看不见它的函数体——它只能看到我们另外写的一份**说明书**。这份说明书就是下一步要讲的 <Term def="工具 schema（Tool Schema）：一份用结构化格式（通常是 JSON）写给 LLM 看的工具说明书，包含工具的名字、描述、参数三样。LLM 不读函数体，全靠这份 schema 判断「有没有这个工具、什么时候该调、要传什么参数」。" id="tool-schema">工具 schema</Term>。
+
+### 第二段：给工具写一份 schema
+
+LLM 凭什么知道该调 `get_weather`、又该传什么进去？全靠这份 schema。把一个工具定义拆开看，它由四部分构成：
+
+<ToolDefAnatomyDiagram />
+
+前三部分（名字、描述、参数）就是写给 LLM 看的 schema，第四部分（实现）是上一段那个函数。我们把名字到函数的对应关系存进一张表，再把 schema 单独列出来：
+
+```python
+# 工具表：名字 → 真正执行的函数（给我们的代码用）
+TOOLS = {"get_weather": get_weather}
+
+# schema：写给 LLM 看的说明书（名字 / 描述 / 参数）
+TOOL_SCHEMAS = [{
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "查某个城市今天的天气，问到穿衣、出行、天气时调用",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string", "description": "城市名"}},
+            "required": ["city"],
+        },
+    },
+}]
+```
+
+<Callout type="warn">
+  **description 是 LLM 的「使用说明」，不是给人看的注释。** 它直接决定 LLM
+  会不会在该用的时候用这个工具、会不会乱传参。写得含糊（比如只写「天气工具」），LLM
+  很可能该调时不调、或把参数填错。把它当成你对一个新同事交代「这个工具是干嘛的、啥时候用」——越具体越好。
+</Callout>
+
+### 第三段：解析 LLM 的工具调用，并执行
+
+调一次 LLM，它的回复有两种可能：要么**直接给文字答案**，要么**要求调一个工具**。后者就是一次需要我们处理的 <Term def="工具调用解析（Tool Call Parsing）：从 LLM 的回复里读出「它想调哪个工具、传什么参数」，再用这些信息去真正执行对应函数的过程。LLM 只产出「调用意图」，执行这一步永远是我们自己的代码完成的。" id="tool-call-parsing">工具调用解析</Term>。我们写一个小函数：从回复里解析出工具名和参数，去工具表里找到对应函数、真去执行，再把结果包成一条消息：
+
+```python
+import json
+
+def run_tool_call(tool_call) -> dict:
+    name = tool_call.function.name              # 解析：调哪个
+    args = json.loads(tool_call.function.arguments)  # 解析：传什么
+    result = TOOLS[name](**args)                # 执行：真去跑那个函数
+    # 包成一条 "tool" 角色的消息，准备回填给 LLM
+    return {"role": "tool", "tool_call_id": tool_call.id, "content": result}
+```
+
+注意这条铁律：**LLM 自己不执行任何工具**——它只产出「我想调 `get_weather`，参数 `city=北京`」这个意图，真正去跑那个函数的，永远是 `TOOLS[name](**args)` 这一行我们自己的代码。
+
+### 第四段：组装带刹车的主循环
+
+零件齐了，现在把它们装进第 3 章学过的那个**带 <Term def="max_steps（步数上限）：主循环最多转几圈的硬性上限。转够这么多圈还没收尾就强制停下，返回兜底回答。它是防止 LLM 始终判不出「完成」而无限转圈、烧钱卡死的刹车。" id="max-steps">max_steps</Term> 刹车的 `for` 循环**。每一圈：调 LLM → 看它要不要调工具 → 要就执行并 <Term def="回填（Feed-back / Append）：把工具执行的结果作为一条新消息追加回上下文（消息列表），让下一圈的 LLM 调用能看见它。漏了回填，agent 就「失忆」——下一圈看不到刚才的结果，会原地打转。" id="feedback">回填</Term>、不要就说明它答完了，收尾退出：
+
+```python
+def run_agent(user_input: str, max_steps: int = 5) -> str:
+    msgs = [
+        {"role": "system", "content": "你是贴心的生活助手，必要时调用工具再回答。"},
+        {"role": "user", "content": user_input},
+    ]
+    for _ in range(max_steps):                  # 刹车：最多转 max_steps 圈
+        reply = call_llm(msgs)                   # ① LLM 调用（思考）
+        if not reply.tool_calls:                 # ② 它没调工具 → 已经能直接答了
+            return reply.content                  #    正常出口：返回最终答案
+        msgs.append(reply)                        # 先把「它要调工具」这步记进上下文
+        for tc in reply.tool_calls:              # ③ 解析 + 执行每个工具调用
+            msgs.append(run_tool_call(tc))        # ④ 回填：结果 append 回 msgs
+    return "抱歉，我转了几圈仍没能完成。"          # 出口二：转满 max_steps 的兜底
+```
+
+先看开头的 `msgs`：第一条就是 <Term def="系统提示（System Prompt）：放在对话最前面的一段话，定下 agent 的身份、目标和规矩，比如「你是贴心的生活助手，必要时调用工具再回答」。它是第 1 章「指令」外挂在代码里的落点——消息列表里 role 为 system 的那条。" id="system-prompt">系统提示</Term>（role 为 `system` 的那条），定下 agent 的身份和规矩，第二条才是用户的问题。再逐句对照主 viz 看：`for _ in range(max_steps)` 是那个会转多圈、但最多转 `max_steps` 圈的环（左侧「主循环」块）；`call_llm(msgs)` 是每圈的思考（「LLM 调用」块）；`if not reply.tool_calls: return` 是 agent **自己**判断答完了、正常收尾（呼应第 3 章的 `is_done` 出口）；`run_tool_call(tc)` 是解析 + 执行（「工具执行」块）；`msgs.append(...)` 就是**回填**（「结果回填」块）——下一圈 `call_llm(msgs)` 才能看见刚查到的天气。
+
+### 第五段：补上 call_llm，跑一次
+
+最后补上调模型的 `call_llm`（这里用 OpenAI SDK 风格），再 `main` 里跑一次，整个最小 agent 就齐活了：
+
+```python
+from openai import OpenAI
+client = OpenAI()  # 读环境变量里的 API key
+
+def call_llm(msgs):
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini", messages=msgs, tools=TOOL_SCHEMAS,
+    )
+    return resp.choices[0].message
+
+if __name__ == "__main__":
+    print(run_agent("北京今天适合穿什么？"))
+    # 它会：思考 → 调 get_weather("北京") → 看到 15°C·晴 → 收尾答「偏凉，穿件外套」
+```
+
+加上前四段，这就是一个**完整、能跑**的最小 agent——总共不到 50 行。它有系统提示、有工具、会循环、自己收尾，前三章的概念全在这几十行里落了地。把 `call_llm` 换成任意能 function calling 的模型接口，整套逻辑原封不动。
+
+{/* ===== 7. 常见误区｜spec §七：C 型 ≥3 个；固定 现象→原因→修法 三行格式 ===== */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：agent 像「失忆」一样——查到了天气，下一圈却又要再查一遍，原地打转转满
+  max_steps 才停。 **原因**：忘了把工具结果**回填**进上下文（漏了
+  `msgs.append(run_tool_call(tc))`）。下一圈的 `call_llm(msgs)`
+  看不到上一圈的结果，自然以为还没查、又调一次。
+  **修法**：每执行完一个工具，必须把结果 append 回 `msgs`；同时别忘了把
+  `reply`（它「要调工具」这一步）也 append 进去——少了任一条，对话历史就断了。
+</Callout>
+
+<Callout type="trap">
+  **现象**：某次任务卡死、程序半天不返回，控制台疯狂打 LLM 请求、烧 token。
+  **原因**：循环没设 `max_steps`（写成了 `while True`），LLM
+  又始终判不出「完成」（任务办不到、或工具反复返回它不满意的结果），于是无限转下去。
+  **修法**：循环一定用 `for _ in range(max_steps)` 而非 `while
+  True`，转满给个兜底回答强制退出。自主性可以交给
+  LLM，但「最多转几圈」这道刹车必须由你留着（回看第 3 章）。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具明明定义了，agent 却该用时不用、或调用时把参数传得乱七八糟。
+  **原因**：工具 schema 的 `description` 写得太含糊（如只写「天气」），LLM
+  读不懂这工具干啥、啥时候该调、参数是什么意思——它**全靠 schema
+  判断**，看不到函数体。 **修法**：把 description 写清楚「这工具干嘛 +
+  什么场景调」，给每个参数也写上 description；像对新同事交代一样具体。schema 是
+  LLM 用工具的唯一依据。
+</Callout>
+
+<Callout type="trap">
+  **现象**：代码默认「LLM
+  一定会先调工具」，结果它有时直接给了文字答案，程序却去读 `reply.tool_calls`
+  报错或拿不到答案。 **原因**：没处理「LLM
+  不调工具、直接作答」这条路径——它**并不总是**调工具，简单问题它会直接答。
+  **修法**：每圈都先判断 `if not
+  reply.tool_calls`：没有工具调用就说明它答完了，直接返回
+  `reply.content`；有才去解析执行。两条路径都要兜住。
+</Callout>
+
+{/* ===== 8. 小结与练习｜spec §八：小结 ≤5 条与目标呼应；含 1 道独立实现题；答案折叠 ===== */}
+
+## 小结
+
+- 最小 Agent = 四块骨架：系统提示 + 工具表 + LLM 调用 + 带刹车的循环
+- 一个工具 = 真去干活的函数 + 给 LLM 看的 schema（名字 / 描述 / 参数）
+- LLM 自己不执行工具，只产出「调哪个、传什么」，由我们的代码解析后去跑
+- 每圈：调 LLM → 没调工具就收尾返回 → 调了就执行并把结果回填，进下一圈
+- 漏回填 → 失忆原地打转；漏 max_steps → 死循环；schema 含糊 → 工具不会用
+
+<Exercises>
+
+**练习 1（独立实现题）** 给这个最小 agent 再加一个新工具 `get_time(city)`，返回某城市的当前时间（用假数据即可）。目标效果：你问「现在北京几点、适合出门吗」，agent 能自己调 `get_time` 拿到时间、再综合作答。请写出新工具的函数、它的 schema，并说明要在哪几处接进现有代码。
+
+<Answer>
+
+只需照 `get_weather` 的样子加一个工具，**主循环一行都不用改**——这正是这套骨架的好处：
+
+```python
+# ① 新工具的函数
+def get_time(city: str) -> str:
+    fake = {"北京": "上午 9:30", "上海": "上午 9:30"}
+    return fake.get(city, f"查不到「{city}」的时间")
+
+# ② 接进工具表（名字 → 函数）
+TOOLS = {"get_weather": get_weather, "get_time": get_time}
+
+# ③ 把它的 schema 追加进 TOOL_SCHEMAS
+TOOL_SCHEMAS.append({
+    "type": "function",
+    "function": {
+        "name": "get_time",
+        "description": "查某个城市的当前时间，问到几点、时间、出门时机时调用",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string", "description": "城市名"}},
+            "required": ["city"],
+        },
+    },
+})
+```
+
+要点：加工具只动三处——写函数、登记进 `TOOLS`、把 schema 加进 `TOOL_SCHEMAS`。`run_tool_call` 和 `run_agent` 完全不用改，因为它们都是按「表」通用处理的。这就是「定义清楚工具，循环自动会用」的威力。
+
+</Answer>
+
+**练习 2（改循环 · 思考题）** 现在的 agent 转满 `max_steps` 只会返回一句死板的「抱歉，我转了几圈仍没能完成」。如果想让它在转满之前的最后一圈「尽力给个基于已有信息的回答」，而不是直接放弃，你会怎么改循环？
+
+<Answer>
+
+思路：循环转到最后一圈时，**不再允许它调工具**，强制它用手头已有的上下文直接作答。一个简单改法是在最后一圈把 `tools` 去掉再调一次：
+
+```python
+def run_agent(user_input, max_steps=5):
+    msgs = [...]
+    for step in range(max_steps):
+        is_last = step == max_steps - 1
+        reply = call_llm(msgs, allow_tools=not is_last)  # 最后一圈不给工具
+        if not reply.tool_calls:
+            return reply.content
+        msgs.append(reply)
+        for tc in reply.tool_calls:
+            msgs.append(run_tool_call(tc))
+    return reply.content  # 最后一圈没工具可调，必然产出文字答案
+```
+
+关键改动：用 `is_last` 标记最后一圈、那一圈不传 `tools` 给模型，逼它基于已查到的信息直接作答。这样兜底回答就从「死板道歉」变成「尽力而为的真答案」——比硬性放弃体验好得多。（这也是真实 agent 框架常见的「最后一圈强制收尾」策略。）
+
+</Answer>
+
+**练习 3（辨析题）** 下面两段循环各漏了一样东西，分别会出什么问题？
+（A）每圈调完工具，**没有** `msgs.append(run_tool_call(tc))`，只是把结果打印出来。
+（B）循环写成 `while True:`，里面有解析、执行、回填，但**没有** `max_steps`。
+
+<Answer>
+
+（A）会**失忆原地打转**——工具结果没回填进 `msgs`，下一圈 `call_llm(msgs)` 看不到刚查的天气，于是又判断「还得查天气」、再调一次同样的工具，永远走不到收尾。修法：把结果 `append` 回 `msgs`，让下一圈看得见。
+
+（B）会**死循环**——`while True` 没有步数上限，万一 LLM 始终判不出「完成」（任务办不到、或反复对结果不满意），它就无限地调 LLM、烧 token、永不返回。修法：换成 `for _ in range(max_steps)`，转满强制停。
+
+判别诀窍：结果不回填 → 失忆空转；没有 max_steps → 停不下来。这俩是最小 agent 最容易同时踩的两个坑，缺一不可补。
+
+</Answer>
+
+</Exercises>
+
+{/* ===== 9. 出处声明｜原创内容，不写 Attribution ===== */}
+
+{/* ===== 10. 名词解释｜spec §十：与正文 Term 高亮一一对应，零基础大白话；id 与 Term 对齐 ===== */}
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="最小 Agent（Minimal Agent）" id="minimal-agent">
+    用最少的代码拼成、却五脏俱全的智能体——有系统提示、有工具、能循环、会自己收尾。它把前三章的概念落成几十行可运行的程序，是理解一切复杂
+    agent 的起点。本章亲手搭的就是它。详见本章「最小 Agent，就是这四块拼起来」。
+  </GlossaryItem>
+  <GlossaryItem term="系统提示（System Prompt）" id="system-prompt">
+    放在对话最前面的一段话，定下 agent
+    的身份、目标和规矩，比如「你是贴心的生活助手，必要时调用工具再回答」。它是第
+    1 章「指令」外挂在代码里的落点——消息列表里 role 为 system
+    的那条。详见本章第六节第四段。
+  </GlossaryItem>
+  <GlossaryItem term="工具 schema（Tool Schema）" id="tool-schema">
+    一份用结构化格式（通常是 JSON）写给 LLM
+    看的工具说明书，包含工具的名字、描述、参数三样。LLM 不读函数体，全靠这份
+    schema 判断「有没有这个工具、什么时候该调、要传什么参数」——所以 description
+    必须写清楚。详见本章第六节第二段。
+  </GlossaryItem>
+  <GlossaryItem term="工具调用解析（Tool Call Parsing）" id="tool-call-parsing">
+    从 LLM
+    的回复里读出「它想调哪个工具、传什么参数」，再用这些信息去真正执行对应函数的过程。要记住：LLM
+    只产出「调用意图」，真正去跑那个函数的，永远是我们自己的代码。详见本章第六节第三段。
+  </GlossaryItem>
+  <GlossaryItem term="回填（Feed-back / Append）" id="feedback">
+    把工具执行的结果作为一条新消息追加回上下文（消息列表），让下一圈的 LLM
+    调用能看见它。漏了回填，agent
+    就「失忆」——下一圈看不到刚才的结果，会原地打转。是循环能往前走的关键一步。详见本章第六节第四段。
+  </GlossaryItem>
+  <GlossaryItem term="max_steps（步数上限）" id="max-steps">
+    主循环最多转几圈的硬性上限。转够这么多圈还没收尾，就强制停下、返回兜底回答。它是防止
+    LLM 始终判不出「完成」而无限转圈、烧钱卡死的刹车——务必用 `for _ in
+    range(max_steps)` 而非 `while True`。详见本章第六节第四段。
+  </GlossaryItem>
+</Glossary>
