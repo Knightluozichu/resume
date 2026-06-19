@@ -180,7 +180,22 @@ export type ReviewChapterSlug =
   | "cc-designing-concurrent-code"
   | "cc-thread-pools"
   | "cc-parallel-algorithms"
-  | "cc-testing-debugging";
+  | "cc-testing-debugging"
+  // AI Agent 开发实战
+  | "ai-what-is-agent"
+  | "ai-llm-brain"
+  | "ai-prompting-roles"
+  | "ai-react-loop"
+  | "ai-tool-calling"
+  | "ai-memory"
+  | "ai-planning"
+  | "ai-rag"
+  | "ai-context-engineering"
+  | "ai-multi-agent-patterns"
+  | "ai-orchestration"
+  | "ai-evaluation-observability"
+  | "ai-safety-guardrails"
+  | "ai-production-deployment";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -275,14 +290,14 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "system-startup": "Android 系统启动",
   "app-process-startup": "应用程序进程启动",
   "component-workflow": "四大组件的工作过程",
-  "context": "理解上下文 Context",
-  "ams": "理解 AMS",
+  context: "理解上下文 Context",
+  ams: "理解 AMS",
   "window-manager": "理解 WindowManager",
-  "wms": "理解 WMS",
+  wms: "理解 WMS",
   "jni-principle": "JNI 原理",
   "java-vm": "Java 虚拟机",
   "dalvik-art": "Dalvik 和 ART",
-  "classloader": "理解 ClassLoader",
+  classloader: "理解 ClassLoader",
   "hotfix-principle": "热修复原理",
   "hook-technology": "Hook 技术",
   "plugin-principle": "插件化原理",
@@ -364,6 +379,21 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cc-thread-pools": "高级线程管理：线程池",
   "cc-parallel-algorithms": "并行算法",
   "cc-testing-debugging": "多线程应用的测试与调试",
+  // AI Agent 开发实战
+  "ai-what-is-agent": "什么是 AI Agent",
+  "ai-llm-brain": "LLM：Agent 的大脑",
+  "ai-prompting-roles": "提示工程与角色设定",
+  "ai-react-loop": "ReAct：推理与行动循环",
+  "ai-tool-calling": "工具调用 Tool Calling",
+  "ai-memory": "记忆系统 Memory",
+  "ai-planning": "规划与任务分解",
+  "ai-rag": "RAG 检索增强生成",
+  "ai-context-engineering": "上下文工程与压缩",
+  "ai-multi-agent-patterns": "多智能体协作模式",
+  "ai-orchestration": "编排·通信·终止",
+  "ai-evaluation-observability": "评估与可观测性",
+  "ai-safety-guardrails": "安全护栏与成本控制",
+  "ai-production-deployment": "生产化部署",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

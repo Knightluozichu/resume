@@ -1,0 +1,385 @@
+---
+title: 工具调用 Tool Calling
+type: C
+section: 核心机制
+order: 2
+description: 读完能定义一个带 JSON Schema 的工具、看懂 LLM 产出的结构化 tool_call、写出解析→执行→把结果回填给模型的完整一轮，并处理工具出错的情况。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·核心机制篇第 2 章：承接上一章 ReAct——上一章的 Action（小特写出 weather("上海")）只是「写出要调啥」，本章把它真正落到工程上：给小特一份工具「说明书」(schema)，它产出结构化 tool_call，程序解析→按名找函数→真去执行→把结果回填，模型续答；工具出错也要回填让它自纠。重心在代码对照(§6，真实 Python 覆盖≥80%)与三个 viz；数学整节删(math:false)。知识点清单：① 工具定义/Schema = <ToolSchemaAnatomy /> 交互拆解 + 代码 §6(a) + Glossary；② LLM 产出结构化 tool_call = <ToolCallFlowDiagram /> anime.js 旗舰第②阶段 + 代码 §6(b) + Glossary；③ 解析与执行 = <ToolCallFlowDiagram /> 第③④阶段 + 代码 §6(c) + Glossary；④ 结果回填+多轮+错误处理 = <ToolCallFlowDiagram /> 第⑤⑥阶段 + <ToolCallStateMachine /> 成功/失败路径 + 代码 §6(d)(e) + Glossary。承接：ReAct 的 Action/Observation，本章是它的工程实现。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含「能写出一个带 JSON Schema 的工具 + 解析执行回填的完整一轮」；末条是可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能用自己的话说清一轮工具调用的完整数据流：定义 schema（工具说明书）→ LLM 产出结构化 tool_call → 程序解析并按名找函数 → 真去执行 → 结果回填 → 模型续答，并指出关键一点：LLM 只「产出」调用，「执行」始终是你的代码
+- 能写出一个带 JSON Schema 的工具，并写出解析 `tool_call`、执行真实函数、把结果作为 `tool` 消息回填给模型的完整一轮 Python 代码，还能用 `try/except` 处理工具出错的情况
+- 能回答：模型回了一个 `tool_call`，是不是说明它已经把工具执行完、把结果算出来了？如果不是，那「执行」这一步是谁做的、结果怎么回到模型手里？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；光让小特说"我要查天气"没用，得真给它一部能打的电话 + 怎么用的说明。 */}
+
+## 光说「我要查天气」没用，得真给它一部能打的电话
+
+上一章小特学会了边想边干：想到「该查天气」，就写下「我要查天气」。可问题来了——他写下这句话，天气就自己飞过来了吗？当然不会。**说要查，和真查到，是两码事。**
+
+这一章就补上中间那一截：你得真给小特一部「能打的电话」（一个查天气的工具），还得给他一张**怎么用这部电话的说明书**——拨哪个号、要报哪些信息。他照说明书写下「拨 weather，报上海」，然后**你**替他真把电话打出去，再把对面的回话递回他手里，他才接着往下办。
+
+没有这一截会怎样？小特永远停在「我要查天气」那一步——光喊不动手，天气查不到，差事自然办不成。
+
+{/* 3. 概念讲解（spec §三，C 型可压缩，各概念简讲 + Term + 引用 viz）：核心新概念 4 个：工具定义/Schema、结构化 tool_call、解析与执行、结果回填+错误处理。 */}
+
+## 第一步：给小特一份「工具说明书」——工具定义 / Schema
+
+要让小特会用一个工具，先得告诉他：**有哪些工具、每个工具叫啥、什么时候用、要报哪些信息。** 这份说明书有标准格式，叫 <Term def="用 JSON Schema 描述一个工具的「说明书」：告诉 LLM 有这个工具、它叫什么(name)、什么时候该用它(description)、要传哪些参数及类型(parameters)、哪些必填(required)。模型靠这份 schema 决定要不要调、怎么调。">工具定义（JSON Schema）</Term>：用一段结构化的 JSON 写清四件事——`name`（叫啥）、`description`（啥时候用）、`parameters`（要传哪些参数）、`required`（哪些必填）。
+
+四个字段里 `description` 最关键：**模型全靠这句话判断「要不要调、什么时候调」。** 写得清楚，它该调时才会调；写得含糊或干脆不写，它就会漏调、错调。下面这个 Demo 把一份 weather 工具的 schema 摊开，点字段看每个字段到底告诉了 LLM 什么：
+
+<ToolSchemaAnatomy />
+
+## 第二步：LLM 看完说明书，产出一个「结构化调用」
+
+把这份 schema 连同你的问题一起发给小特的大脑，它看完不会回你一段自然语言「好的我去查上海天气哈」，而是吐出一个 <Term def="LLM 读懂工具 schema 后产出的结构化调用，不是自然语言，而是「要调的函数名 + 一段 JSON 格式的参数(arguments)」，比如函数名是 weather、参数里 city 是上海。它只表示模型「想调这个工具、传这些参数」，工具本身还没被执行。">结构化 tool_call</Term>：一个机器能直接读的结构——**要调的函数名**（`weather`）加**一段 JSON 参数**（`arguments` 里写着 city 是上海）。
+
+这里有本章最容易搞混的一点：**模型产出 `tool_call`，不等于工具被执行了。** 它只是「写出要调啥、传啥」，就像小特写下「拨 weather，报上海」——电话还没拨呢。真去拨，是下一步你的代码的事。下面这张图把一整轮六个阶段都点亮给你看，注意哪些是 LLM 侧、哪些是程序侧：
+
+<ToolCallFlowDiagram />
+
+## 第三步：程序解析 + 按名字找到函数 + 真去执行
+
+拿到 `tool_call` 之后，轮到**你的代码**上场。这一步叫 <Term def="拿到 LLM 产出的 tool_call 后，你的程序做的两件事：① 解析——把 arguments 那段 JSON 文本用 json.loads 变成真正的参数字典；② 按 name 字符串找到对应的真实函数（一张「名字→函数」的表/字典），把参数传进去真把它跑一遍，拿到返回值。">解析与执行</Term>：先把 `arguments` 那段 JSON 文本解析成参数字典，再按 `name` 这个字符串**找到对应的真实函数**（你维护一张「名字 → 函数」的表），把参数传进去，**真把它跑一遍**，拿到返回值。
+
+这就是「电话真被拨出去」的一刻——而且是你的代码拨的，不是模型。模型给的只是「拨号指令」，照着指令真去拨、真去拿回话的，是你写的那几行 Python。
+
+## 第四步：把结果回填给模型，它接着办；出错了也要回填
+
+工具跑完拿到结果（比如「小雨，18℃」），还差最后一步：把这个结果**递回给模型**。做法是往对话里追加一条特殊的 <Term def="把工具执行结果递回给模型的那条对话消息，role 是 tool（而不是 user/assistant），content 是工具返回值，还带一个 tool_call_id 对应是哪一次调用。模型读到它，就「看见」了这次工具调用的结果，于是能接着往下答或再调下一个工具。">结果回填（tool 消息）</Term>——`role` 是 `tool`，内容就是工具返回值。模型读到它，就「看见」了结果，于是接着办：要么给最终答案，要么再产出一个 `tool_call` 调下一个工具，**转下一轮**。
+
+但工具不总是顺的——参数非法、网络超时、对面报错都可能发生。这时关键的一条直觉是：<Term def="工具调用出错时的兜底处理：用 try/except 捕获异常别让程序崩，然后把「错误信息」也作为一条 tool 消息回填给模型，让它自我纠正——改参数重试，或换条路降级。最忌讳把异常吞掉什么都不回填，那样模型既没结果也没错误，会原地卡死。">错误也要回填</Term>——别把异常吞掉。用 `try/except` 兜住，把**错误信息**也回填成一条 `tool` 消息，模型看到错误，才能自己改参重试或降级。下面这个状态机把「执行」之后的两条分叉摆出来，拨开关看成功路径和失败路径：
+
+<ToolCallStateMachine />
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：放 <ToolSchemaAnatomy /> 与 <ToolCallStateMachine />（已在 §3 引用，这里给「猜一猜」引导深入玩），各带「猜一猜」。 */}
+
+## 动手一：拆开一份工具说明书，看每个字段管什么
+
+光读不如自己点。下面这个 Demo 把那份 weather 工具的 JSON Schema 摊开，点上方四个字段标签（`name` / `description` / `parameters` / `required`），对应那段高亮，旁注告诉你这个字段到底告诉了 LLM 什么。
+
+> 猜一猜：四个字段里，哪一个写得好不好会**直接决定模型会不会、会不会正确地调用这个工具**？是那个看起来最像「注释」、最容易被人随便糊弄的字段吗？先猜一个，再点 `description` 验证。
+
+<ToolSchemaAnatomy />
+
+你会发现：`description` 根本不是注释，而是**模型唯一的判断依据**。它写「查某城市当天天气，用户问到天气/带伞/穿衣建议时调用」，模型才知道该在什么场景下拨这个号。糊一句「天气工具」上去，模型就常常该调不调、或该问 A 城市却传了 B。
+
+## 动手二：执行成功 vs 出错，两条路怎么走
+
+第二个 Demo 把焦点放在「执行」之后的分叉。两条路都先走共享的前三步（产出 `tool_call` → 解析 → 执行），到「执行」这里分岔：拨开关在「成功路径」和「失败路径」之间切换，看每条路怎么收尾。
+
+> 猜一猜：失败路径上，工具报了个错（比如城市名为空）。如果你的代码把这个错误**吞掉、什么都不回填**给模型，模型接下来会怎样？它能自己发现「刚才那次调用失败了、我得改改」吗？关掉开关切到「失败路径」看看。
+
+<ToolCallStateMachine />
+
+切到失败路径你会看到：正确的做法不是把错误藏起来，而是把**错误信息也回填**成一条 `tool` 消息。模型读到「出错了：城市名为空」，才能自我纠正——改参数重试，或换条路降级。要是把异常吞掉、什么都不回填，模型既看不到结果也看不到错误，就会原地卡死，傻等一个永远不来的回话。
+
+{/* 6. 代码对照（spec §六，C 型重心，覆盖≥80%）：多段真实 Python——(a) 定义工具函数 + JSON schema；(b) 调 LLM 传 tools，拿回 tool_calls；(c) 解析 + 按 name dispatch 执行；(d) 结果回填再调 LLM 拿最终答；(e) 错误处理。每段≤30 行、块间有解说、两块不相邻、API 关键点用 Callout。 */}
+
+## 代码逐段拆解：把一整轮工具调用写成真实的 Python
+
+讲了这么多，落到代码里到底长什么样？我们一步步把「帮我查上海天气」这一轮用 Python 写出来。先是第一步——**定义工具**：写一个真实的 Python 函数，再为它配一份 JSON Schema（就是动手一里拆解的那份）。函数是真去干活的，schema 是给模型看的说明书：
+
+```python
+def get_weather(city: str) -> str:
+    """真去查天气的函数（这里用假数据示意）。"""
+    fake = {"上海": "小雨，18℃", "北京": "晴，22℃"}
+    return fake.get(city, f"查不到 {city} 的天气")
+
+# 这份 schema 会随请求一起发给模型，告诉它「有这个工具、怎么用」
+WEATHER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "get_weather",
+        "description": "查询某城市当天天气。用户问天气/要不要带伞/穿衣建议时调用。",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city": {"type": "string", "description": "城市名，如「上海」"},
+            },
+            "required": ["city"],
+        },
+    },
+}
+```
+
+注意 `name` 字段的值 `get_weather` 必须和真实函数名能对得上——后面解析时就靠这个字符串找到函数。`description` 是模型判断「何时调」的唯一依据，要写清场景。
+
+<Callout type="tip">
+  **关键点**：schema 里的 `name` 是一个字符串，它和真实 Python
+  函数之间没有自动关联——是你待会儿手动维护一张「名字 →
+  函数」的表把它们对起来。所以 `name` 要唯一、稳定，改了 schema 的 `name`
+  就得同步改那张表。
+</Callout>
+
+第二步，把工具连同问题一起发给模型，拿回它产出的 `tool_call`。关键是给 `create` 多传一个 `tools` 参数（一个 schema 列表），模型才知道有哪些工具可用。模型如果决定调工具，回复里 `message.content` 往往是空的，真正的内容在 `message.tool_calls` 里：
+
+```python
+messages = [
+    {"role": "user", "content": "上海今天要不要带伞？"},
+]
+
+resp = client.chat.completions.create(
+    model="gpt-4o-mini",
+    messages=messages,
+    tools=[WEATHER_TOOL],   # ← 把工具说明书一起发过去
+)
+
+msg = resp.choices[0].message
+tool_calls = msg.tool_calls    # ← 模型产出的结构化调用（可能不止一个）
+messages.append(msg)           # 把模型这条带 tool_calls 的回复也存进对话
+```
+
+`msg.tool_calls` 是一个列表——模型一次可能想调好几个工具。每个元素里有 `id`（这次调用的唯一编号）、`function.name`（要调哪个）、`function.arguments`（一段 **JSON 字符串**形式的参数）。
+
+<Callout type="warn">
+  **关键点**：`function.arguments` 是**一段 JSON 字符串**，不是 Python
+  字典——必须 `json.loads` 之后才能用。还有 `tool_call.id`
+  千万别丢，回填结果时要靠它告诉模型「这是哪一次调用的结果」。
+</Callout>
+
+第三步是解析 + 执行。我们维护一张 `TOOLS` 表把 `name` 映射到真实函数；然后遍历 `tool_calls`，对每个：`json.loads` 解析参数，按 `name` 从表里取出函数，真把它跑一遍：
+
+```python
+import json
+
+# 一张「名字 → 真实函数」的表，把 schema 的 name 和函数对起来
+TOOLS = {"get_weather": get_weather}
+
+for call in tool_calls:
+    name = call.function.name
+    args = json.loads(call.function.arguments)   # JSON 字符串 → 参数字典
+    func = TOOLS[name]                            # 按名字找到真实函数
+    result = func(**args)                         # 真去执行，拿到返回值
+    print(name, args, "→", result)               # get_weather {'city': '上海'} → 小雨，18℃
+```
+
+`func(**args)` 这一行就是「电话真被拨出去」的一刻——**由你的代码拨，不是模型**。模型只给了「拨 get_weather、报 city=上海」的指令，照着真去执行的是这几行 Python。
+
+执行拿到结果后，第四步——**回填结果，再调一次模型拿最终答案**。把每个工具的结果作为一条 `role:"tool"` 消息追加进对话（带上对应的 `tool_call_id`），然后再调一次 `create`，模型读到结果就给出最终回答：
+
+```python
+for call in tool_calls:
+    name = call.function.name
+    args = json.loads(call.function.arguments)
+    result = TOOLS[name](**args)
+    # 把结果作为 tool 消息回填，tool_call_id 对应是哪一次调用
+    messages.append({
+        "role": "tool",
+        "tool_call_id": call.id,
+        "content": result,
+    })
+
+# 带着回填的结果再调一次，模型这次给最终答案
+final = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+print(final.choices[0].message.content)   # 「上海今天小雨、18℃，记得带伞」
+```
+
+这就是完整的一轮：发问题+工具 → 模型产出 `tool_call` → 解析执行 → 回填 → 模型给最终答。如果模型这次回复里**又**带了 `tool_calls`，就再走一遍解析-执行-回填，这就是**多轮**——把它包进 `while` 循环，直到模型不再要调工具、给出纯文本答案为止。
+
+<Callout type="tip">
+  **关键点**：回填的 `tool` 消息必须带正确的
+  `tool_call_id`，模型才能把「结果」和「哪一次调用」对上。一次产出多个
+  `tool_call` 时，要为**每一个**都回填一条 `tool` 消息，少一条模型就会困惑。
+</Callout>
+
+最后一步——**错误处理**。工具可能抛异常（参数非法、网络超时……）。绝不能让它把整个程序搞崩，更不能默默吞掉。用 `try/except` 兜住，把**错误信息也回填**成一条 `tool` 消息，模型看到错误就能自纠：
+
+```python
+for call in tool_calls:
+    name = call.function.name
+    try:
+        args = json.loads(call.function.arguments)
+        result = TOOLS[name](**args)        # 正常执行
+    except Exception as e:
+        result = f"调用 {name} 出错：{e}"    # 把错误变成文本，准备回填
+    messages.append({
+        "role": "tool",
+        "tool_call_id": call.id,
+        "content": result,                  # 成功填结果，失败填错误——都要回填
+    })
+```
+
+关键就在 `except` 那行：错误没被吞掉，而是变成一条 `content` 回填给模型。模型下一轮看到「调用 get_weather 出错：city 不能为空」，就会自己改参数重试，或换个工具降级。**回填错误，是让模型自我纠正的前提**——这正是动手二失败路径讲的那条直觉的代码版本。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：「`description`
+  不就是个注释嘛，写不写、写多糊都无所谓。」结果模型该调工具时不调、或调错工具。**原因**：把
+  `description`
+  当成给人看的注释，忘了它是**模型唯一的判断依据**——模型靠它决定「要不要调、什么时候调」。**修法**：把
+  `description`
+  当成「触发说明」来写：讲清这工具干嘛、**在什么场景下该调**（「用户问到天气/带伞时」），参数也各配一句
+  `description`。说明书越准，模型调得越对。
+</Callout>
+
+<Callout type="trap">
+  **现象**：「模型回了个
+  `tool_call`，那它已经把工具执行完、结果算出来了吧？」于是直接拿 `tool_call`
+  当答案用。**原因**：以为 **LLM
+  真的执行了工具**——其实它只「产出」了调用（写出要调啥、传啥），**执行是你的代码**干的。**修法**：记住红线——模型产出
+  `tool_call`
+  只是「拨号指令」，你必须自己解析、按名找函数、真去跑一遍，再把结果回填，模型才拿得到结果。
+</Callout>
+
+<Callout type="trap">
+  **现象**：「`arguments` 拿来就
+  `func(**args)`，跑得挺好啊。」直到模型某次传了个不存在的城市、或漏了必填参数，程序直接崩。**原因**：**不校验
+  arguments
+  就直接执行**——模型产出的参数不保证合法（可能漏字段、类型不对、值越界）。**修法**：执行前先校验——必填字段在不在、类型对不对、值合不合理；
+  `json.loads` 也要 `try/except`（模型可能产出非法
+  JSON）。校验不过就当出错回填，让模型改。
+</Callout>
+
+<Callout type="trap">
+  **现象**：「工具报错了，我 `try/except` 兜住、打个日志就
+  `continue`，不回填省事。」结果模型原地卡死，傻等一个永远不来的结果。**原因**：**工具报错不回填**——模型这一轮既没拿到结果、也没拿到错误，不知道发生了什么，只能干等。**修法**：成功填结果、失败填错误，**两种情况都必须回填**一条
+  `tool` 消息。把错误信息回填给模型，它才能看到、才能自纠（改参重试或降级）。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 3 题含 1 道独立实现题 + 1 道改 Demo 题，答案折叠。 */}
+
+## 小结
+
+- **一轮工具调用 = 六个阶段**：定义 schema（工具说明书）→ LLM 产出结构化 `tool_call` → 程序解析+按名找函数 → 真去执行 → 结果回填（`tool` 消息）→ 模型续答；模型回复又带 `tool_call` 就再转一轮（多轮）
+- 关键红线：**LLM 只「产出」调用，「执行」始终是你的代码**——`tool_call` 是拨号指令，不是已经拨完的电话
+- **工具定义靠 JSON Schema**（`name`/`description`/`parameters`/`required`）；`description` 是模型判断「何时调」的唯一依据，最该写清
+- **解析与执行**：`json.loads` 解析 `arguments`，按 `name` 从「名字→函数」表里取函数 `func(**args)` 真去跑；执行前要校验参数
+- **结果回填 + 错误处理**：成功把结果、失败把错误，**都**作为带 `tool_call_id` 的 `tool` 消息回填——回填错误是让模型自我纠正的前提，吞掉错误 = 模型卡死
+
+<Exercises>
+
+**练习 1（独立实现题）** 仿照本章，给一个「查股价」需求写出完整的一轮 Python 代码。要求：① 定义一个真实函数 `get_stock_price(symbol)` 和它的 JSON Schema（`name`/`description`/`parameters` 含 `symbol` 字符串/`required`）；② 调模型传 `tools` 拿回 `tool_calls`；③ 解析 `arguments`、按 `name` 找函数、真去执行；④ 把结果作为 `tool` 消息（带 `tool_call_id`）回填，再调一次模型拿最终答；⑤ 用 `try/except` 处理工具出错也回填。给定用户问「苹果现在股价多少？」。
+
+<Answer>
+
+```python
+import json
+from openai import OpenAI
+
+client = OpenAI()
+
+def get_stock_price(symbol: str) -> str:
+    fake = {"AAPL": "$195.3", "TSLA": "$248.1"}
+    return fake.get(symbol.upper(), f"查不到 {symbol} 的股价")
+
+STOCK_TOOL = {"type": "function", "function": {
+    "name": "get_stock_price",
+    "description": "查询某股票的当前价格。用户问到股价/某公司股票多少钱时调用。",
+    "parameters": {"type": "object", "properties": {
+        "symbol": {"type": "string", "description": "股票代码，如 AAPL"},
+    }, "required": ["symbol"]},
+}}
+TOOLS = {"get_stock_price": get_stock_price}
+messages = [{"role": "user", "content": "苹果现在股价多少？"}]
+
+resp = client.chat.completions.create(
+    model="gpt-4o-mini", messages=messages, tools=[STOCK_TOOL],
+)
+msg = resp.choices[0].message
+messages.append(msg)
+
+for call in msg.tool_calls:
+    try:
+        args = json.loads(call.function.arguments)
+        result = TOOLS[call.function.name](**args)
+    except Exception as e:
+        result = f"调用 {call.function.name} 出错：{e}"
+    messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
+
+final = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+print(final.choices[0].message.content)   # 「苹果（AAPL）现在股价 $195.3」
+```
+
+要点回收：`name`（`get_stock_price`）和 `TOOLS` 表对得上、`description` 写清触发场景、`arguments` 用 `json.loads` 解析、`func(**args)` 真去执行、结果带 `tool_call_id` 回填、`try/except` 把错误也回填。这正是本章六阶段 + 错误处理的完整落地。
+
+</Answer>
+
+**练习 2（改 Demo 题）** 打开「动手二」的状态机 Demo，停在「失败路径」。现在设想把代码里 `except` 那一支改成「打个日志就 `continue`、不往 `messages` 里回填任何 `tool` 消息」。模型下一轮会拿到什么？它能正常给出答案吗？为什么？用本章「结果回填」和「错误也要回填」两个概念解释。
+
+<Answer>
+
+模型下一轮**什么都拿不到**——既没有结果消息、也没有错误消息。它会**原地卡死**，傻等一个永远不来的工具结果，没法正常给答案。
+
+原因：模型靠 **结果回填（`tool` 消息）** 才能「看见」工具调用发生了什么。正常情况下，成功就回填结果、失败就回填错误（**错误也要回填**），模型读到后才能往下走。一旦失败路径不回填任何 `tool` 消息，模型这一轮就处在「我产出了一个 `tool_call`，但对应的 `tool` 结果消息却不存在」的悬空状态——它既不知道成功了（拿不到结果）、也不知道失败了（拿不到错误），自然无法自纠、也无法收尾。所以失败路径**必须**回填一条带错误信息的 `tool` 消息，模型才能看到错误、改参重试或降级。
+
+</Answer>
+
+**练习 3（问答题）** 有人说：「模型既然能产出 `tool_call(get_weather, {city:上海})`，说明它已经知道上海天气了，我直接信它的回答就行，干嘛还要解析、执行、回填这么麻烦？」请用本章概念反驳。
+
+<Answer>
+
+这话错在把「产出调用」当成了「拿到结果」。模型产出 `tool_call` 只是**写出一条拨号指令**——「我想调 `get_weather`、传 city=上海」，它本身**并不知道**上海今天的真实天气（那正是它要查的东西）。`tool_call` 里没有任何天气数据，只有「要调谁、传什么」。
+
+真正去查、把真实数据拿回来的，是**你的代码**：解析 `arguments`、按 `name` 找到 `get_weather`、`func(**args)` 真去执行、再把返回值作为 `tool` 消息回填。少了这三步，模型手里永远只有「我想查」的意图、没有「查到了什么」的结果——它要么卡住，要么只能凭记忆瞎编一个（回到上一章纯 CoT 的幻觉老路）。所以解析-执行-回填不是麻烦，而是**让「想调」变成「真调到」的唯一通路**：LLM 只产出调用，执行始终是你的代码。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="工具定义（JSON Schema）">
+  给 LLM 的一份「工具说明书」，用 JSON Schema
+  写清四件事：`name`（这工具叫啥）、`description`（什么时候该用它）、`parameters`（要传哪些参数、各是什么类型）、`required`（哪些参数必填）。模型靠这份
+  schema 决定「要不要调、怎么调」。其中 `description`
+  最关键——它是模型判断「何时调」的**唯一依据**，写得好不好直接决定模型会不会、会不会正确地调用。详见本章「给小特一份工具说明书」一节与拆解
+  Demo。
+</GlossaryItem>
+
+<GlossaryItem term="结构化 tool_call">
+  LLM 读懂工具 schema
+  后产出的**结构化调用**——不是自然语言，而是「要调的函数名（`name`）+ 一段 JSON
+  格式的参数（`arguments`）」，比如 name=get_weather、arguments 里写着
+  city=上海。最关键的一点：它只表示模型「**想**调这个工具、传这些参数」，工具本身**还没被执行**——产出
+  `tool_call` ≠ 工具已运行。真去执行是你的代码的事。详见本章「LLM
+  产出一个结构化调用」一节与数据流动画。
+</GlossaryItem>
+
+<GlossaryItem term="解析与执行">
+  拿到 LLM 产出的 `tool_call` 后，**你的程序**做的两件事：① **解析**——把
+  `arguments` 那段 JSON 文本用 `json.loads` 变成真正的参数字典；② **执行**——按
+  `name`
+  字符串从一张「名字→函数」的表里找到对应的真实函数，把参数传进去（`func(**args)`）真把它跑一遍，拿到返回值。这一步才是「电话真被拨出去」的一刻，由你的代码做，不是
+  LLM 做。详见本章「程序解析+按名找函数+真去执行」一节与代码。
+</GlossaryItem>
+
+<GlossaryItem term="结果回填（tool 消息）">
+  把工具执行结果递回给模型的那条对话消息：`role` 是 `tool`（不是
+  user/assistant），`content` 是工具返回值，还带一个 `tool_call_id`
+  说明对应哪一次调用。模型读到它就「看见」了这次调用的结果，于是能接着往下答，或再产出一个
+  `tool_call`
+  调下一个工具（多轮）。一次产出多个调用时要为每一个都回填一条。详见本章「把结果回填给模型」一节。
+</GlossaryItem>
+
+<GlossaryItem term="错误也要回填">
+  工具调用出错（参数非法、网络超时、对面报错）时的兜底处理：用 `try/except`
+  捕获异常别让程序崩，然后把**错误信息**也作为一条 `tool`
+  消息回填给模型，让它**自我纠正**——改参数重试，或换条路降级。最忌讳把异常吞掉、什么都不回填——那样模型既没结果也没错误，会原地卡死。所以成功填结果、失败填错误，**两种都要回填**。详见本章「出错了也要回填」一节与状态机
+  Demo。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：原创改编，sourceUrl 为空字符串，Attribution 空标签自动处理。 */}
+
+<Attribution />

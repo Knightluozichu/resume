@@ -439,6 +439,49 @@ import { WhenToParallelizeDiagram } from "./diagrams/when-to-parallelize-diagram
 import { DeadlockVsLivelockDiagram } from "./diagrams/deadlock-vs-livelock-diagram";
 import { TsanDetectionDiagram } from "./diagrams/tsan-detection-diagram";
 import { ConcurrencyBugTaxonomyDiagram } from "./diagrams/concurrency-bug-taxonomy-diagram";
+// AI Agent 开发实战
+import { AgentLoopDiagram } from "./diagrams/agent-loop-diagram";
+import { AgentParadigmDiagram } from "./diagrams/agent-paradigm-diagram";
+import { AutonomySpectrumExplorer } from "./demos/autonomy-spectrum-explorer";
+import { TokenizationDiagram } from "./diagrams/tokenization-diagram";
+import { ContextWindowBudget } from "./demos/context-window-budget";
+import { TemperatureSamplingExplorer } from "./demos/temperature-sampling-explorer";
+import { PromptAssemblyDiagram } from "./diagrams/prompt-assembly-diagram";
+import { PromptRecipeDemo } from "./demos/prompt-recipe-demo";
+import { StructuredOutputDemo } from "./demos/structured-output-demo";
+import { ReActTraceDiagram } from "./diagrams/react-trace-diagram";
+import { ReActStepAnatomy } from "./demos/react-step-anatomy";
+import { ReActVsCoTDiagram } from "./diagrams/react-vs-cot-diagram";
+import { ToolCallFlowDiagram } from "./diagrams/tool-call-flow-diagram";
+import { ToolSchemaAnatomy } from "./demos/tool-schema-anatomy";
+import { ToolCallStateMachine } from "./diagrams/tool-call-state-machine";
+import { MemoryArchitectureDiagram } from "./diagrams/memory-architecture-diagram";
+import { MemoryRetrievalDemo } from "./demos/memory-retrieval-demo";
+import { MemoryTypesDiagram } from "./demos/memory-types-diagram";
+import { TaskDecompositionTree } from "./diagrams/task-decomposition-tree";
+import { PlanningStrategiesCompare } from "./demos/planning-strategies-compare";
+import { ReflectReplanLoop } from "./demos/reflect-replan-loop";
+import { RAGPipelineDiagram } from "./diagrams/rag-pipeline-diagram";
+import { ChunkingDemo } from "./demos/chunking-demo";
+import { VectorSpaceDemo } from "./demos/vector-space-demo";
+import { MultiAgentTopologyDiagram } from "./diagrams/multi-agent-topology-diagram";
+import { SupervisorDispatchDemo } from "./demos/supervisor-dispatch-demo";
+import { SingleVsMultiMatrix } from "./demos/single-vs-multi-matrix";
+import { MessageBusDiagram } from "./diagrams/message-bus-diagram";
+import { SharedBlackboardDemo } from "./demos/shared-blackboard-demo";
+import { TerminationDemo } from "./demos/termination-demo";
+import { ContextBudgetDemo } from "./demos/context-budget-demo";
+import { LostInMiddleDemo } from "./demos/lost-in-middle-demo";
+import { CompressionCompare } from "./demos/compression-compare";
+import { TraceTimelineDiagram } from "./diagrams/trace-timeline-diagram";
+import { LLMJudgeDemo } from "./demos/llm-judge-demo";
+import { EvalRegressionDemo } from "./demos/eval-regression-demo";
+import { PromptInjectionDiagram } from "./diagrams/prompt-injection-diagram";
+import { GuardrailDemo } from "./demos/guardrail-demo";
+import { CostBudgetDemo } from "./demos/cost-budget-demo";
+import { ProductionArchDiagram } from "./diagrams/production-arch-diagram";
+import { DegradationDemo } from "./demos/degradation-demo";
+import { CanaryRolloutDemo } from "./demos/canary-rollout-demo";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1167,6 +1210,49 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   XrFrameBudgetDiagram,
   XrInputOverheadDiagram,
   WebAssemblyFeatureDiagram,
+  // AI Agent 开发实战
+  AgentLoopDiagram,
+  AgentParadigmDiagram,
+  AutonomySpectrumExplorer,
+  TokenizationDiagram,
+  ContextWindowBudget,
+  TemperatureSamplingExplorer,
+  PromptAssemblyDiagram,
+  PromptRecipeDemo,
+  StructuredOutputDemo,
+  ReActTraceDiagram,
+  ReActStepAnatomy,
+  ReActVsCoTDiagram,
+  ToolCallFlowDiagram,
+  ToolSchemaAnatomy,
+  ToolCallStateMachine,
+  MemoryArchitectureDiagram,
+  MemoryRetrievalDemo,
+  MemoryTypesDiagram,
+  TaskDecompositionTree,
+  PlanningStrategiesCompare,
+  ReflectReplanLoop,
+  RAGPipelineDiagram,
+  ChunkingDemo,
+  VectorSpaceDemo,
+  MultiAgentTopologyDiagram,
+  SupervisorDispatchDemo,
+  SingleVsMultiMatrix,
+  MessageBusDiagram,
+  SharedBlackboardDemo,
+  TerminationDemo,
+  ContextBudgetDemo,
+  LostInMiddleDemo,
+  CompressionCompare,
+  TraceTimelineDiagram,
+  LLMJudgeDemo,
+  EvalRegressionDemo,
+  PromptInjectionDiagram,
+  GuardrailDemo,
+  CostBudgetDemo,
+  ProductionArchDiagram,
+  DegradationDemo,
+  CanaryRolloutDemo,
   Term,
   Glossary,
   GlossaryItem,
