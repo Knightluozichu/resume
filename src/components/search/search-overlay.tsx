@@ -30,6 +30,16 @@ interface SearchHit {
   title: string;
   /** 含 <mark> 的摘录 HTML（pagefind 已转义文本、仅注入 <mark> 标签） */
   excerpt: string;
+  kind: "book" | "page";
+}
+
+export interface BookSearchEntry {
+  slug: string;
+  title: string;
+  url: string;
+  chapterCount: number;
+  sections: string[];
+  keywords: string[];
 }
 
 /**
@@ -52,7 +62,7 @@ async function loadPagefind(): Promise<PagefindApi> {
   return mod;
 }
 
-export function SearchOverlay() {
+export function SearchOverlay({ books }: { books: BookSearchEntry[] }) {
   const router = useRouter();
   const listboxId = useId();
 
@@ -61,6 +71,7 @@ export function SearchOverlay() {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [active, setActive] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [pagefindReady, setPagefindReady] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const pagefindRef = useRef<PagefindApi | null>(null);
@@ -104,6 +115,7 @@ export function SearchOverlay() {
       loadPagefind()
         .then((pf) => {
           pagefindRef.current = pf;
+          setPagefindReady(true);
         })
         .catch((err) => {
           // 索引缺失（如 dev 未跑 build:search）时静默降级为「无结果」，不崩 UI
@@ -119,18 +131,45 @@ export function SearchOverlay() {
     };
   }, [open]);
 
-  // —— 查询：防抖 + 惰性拉每条结果详情 ——
+  const searchBooks = useCallback(
+    (term: string): SearchHit[] => {
+      const trimmed = term.trim().toLowerCase();
+      if (trimmed === "") return [];
+
+      const out: SearchHit[] = [];
+      for (const book of books) {
+        const haystack = [book.title, book.slug, ...book.keywords]
+          .join(" ")
+          .toLowerCase();
+        if (!haystack.includes(trimmed)) continue;
+
+        const sections = book.sections.slice(0, 4).join(" / ");
+        out.push({
+          url: book.url,
+          title: book.title,
+          excerpt: `${book.chapterCount} 章 · ${sections}`,
+          kind: "book",
+        });
+        if (out.length >= 4) break;
+      }
+      return out;
+    },
+    [books],
+  );
+
+  // —— 查询：先给出书籍直达，再防抖 + 惰性拉每条 pagefind 结果详情 ——
   const runSearch = useCallback(async (term: string) => {
     const pf = pagefindRef.current;
     const trimmed = term.trim();
+    const bookHits = searchBooks(trimmed);
     if (!pf || trimmed === "") {
-      setHits([]);
+      setHits(bookHits);
       setActive(0);
       return;
     }
     const { results } = await pf.search(trimmed);
-    // 取前 8 条，逐条拉详情；命中小节优先（带锚点），否则回退页面 url
-    const top = results.slice(0, 8);
+    // 书籍结果排在前面，正文结果补足到 8 条；命中小节优先（带锚点），否则回退页面 url。
+    const top = results.slice(0, Math.max(0, 8 - bookHits.length));
     const data: PagefindResultData[] = await Promise.all(
       top.map((r) => r.data()),
     );
@@ -140,11 +179,12 @@ export function SearchOverlay() {
         url: sub?.url ?? d.url,
         title: d.meta.title ?? "（无标题）",
         excerpt: sub?.excerpt ?? d.excerpt,
+        kind: "page",
       };
     });
-    setHits(mapped);
+    setHits([...bookHits, ...mapped]);
     setActive(0);
-  }, []);
+  }, [searchBooks]);
 
   useEffect(() => {
     if (!open) return;
@@ -152,7 +192,7 @@ export function SearchOverlay() {
       void runSearch(query);
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(handle);
-  }, [query, open, runSearch]);
+  }, [query, open, runSearch, pagefindReady]);
 
   // —— 跳转：Next router 规整尾斜杠/锚点；关闭浮层 ——
   const go = useCallback(
@@ -252,7 +292,7 @@ export function SearchOverlay() {
                   hits.length > 0 ? `${listboxId}-opt-${active}` : undefined
                 }
                 aria-autocomplete="list"
-                placeholder="搜索章节、术语、代码…"
+                placeholder="搜索书籍、章节、术语、代码…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={onInputKeyDown}
@@ -279,7 +319,7 @@ export function SearchOverlay() {
 
               {!loading && query.trim() === "" && (
                 <p className="px-4 py-6 text-sm text-secondary">
-                  输入关键词开始搜索。↑↓ 选择，回车跳转，Esc 关闭。
+                  输入书名、章节或术语开始搜索。↑↓ 选择，回车跳转，Esc 关闭。
                 </p>
               )}
 
@@ -301,13 +341,20 @@ export function SearchOverlay() {
                             : "border-transparent hover:bg-bg"
                         }`}
                       >
-                        <p
-                          className={`text-sm font-medium ${
-                            selected ? "text-accent" : "text-primary"
-                          }`}
-                        >
-                          {hit.title}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          {hit.kind === "book" && (
+                            <span className="rounded-control border border-border px-1.5 py-0.5 text-[10px] text-secondary">
+                              书籍
+                            </span>
+                          )}
+                          <p
+                            className={`min-w-0 truncate text-sm font-medium ${
+                              selected ? "text-accent" : "text-primary"
+                            }`}
+                          >
+                            {hit.title}
+                          </p>
+                        </div>
                         {/* 摘录：pagefind 给的是已转义文本 + <mark> 高亮标记。
                             mark 用 accent 文字呈现命中词（DESIGN：accent 仅小面积）。 */}
                         <p

@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { SearchOverlay } from "@/components/search/search-overlay";
+import { getChapterTree } from "@/lib/content";
 
 /**
  * 全站顶部导航（Server Component）
@@ -10,6 +11,25 @@ import { SearchOverlay } from "@/components/search/search-overlay";
  * pagefind 运行时按需懒加载，不进首屏（HEL-42）。
  */
 export function SiteHeader() {
+  const books = getChapterTree();
+  const bookSearchEntries = books.map((book) => {
+    const chapters = book.sections.flatMap((section) => section.chapters);
+    const firstChapter = chapters[0];
+
+    return {
+      slug: book.bookSlug,
+      title: book.bookTitle,
+      url: firstChapter?.href ?? "/learn",
+      chapterCount: chapters.length,
+      sections: book.sections.map((section) => section.section),
+      keywords: [
+        book.bookSlug,
+        book.bookTitle,
+        ...book.sections.map((section) => section.section),
+      ],
+    };
+  });
+
   return (
     <header
       // data-pagefind-ignore：顶部导航是全站重复 chrome，排除出搜索索引（HEL-42）
@@ -39,7 +59,7 @@ export function SiteHeader() {
           >
             复习
           </Link>
-          <SearchOverlay />
+          <SearchOverlay books={bookSearchEntries} />
           <a
             href="https://github.com/Knightluozichu/resume"
             target="_blank"
