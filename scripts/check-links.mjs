@@ -14,11 +14,12 @@
  * 前置：本脚本只读 .next/server/app/；调用方必须先 `pnpm build`。
  */
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 const ROOT = process.cwd();
 const APP_DIR = join(ROOT, ".next", "server", "app");
+const DYNAMIC_APP_ROUTE = Symbol("dynamic-app-route");
 
 // Next.js redirects（手动同步自 next.config.ts；当前只有 HEL-48 的一条旧链兜底）
 // 形态：[正则, 目标路径模板]——只用于「来源路径若被重定向到的目标存在则视为命中」。
@@ -100,6 +101,10 @@ function pathToHtml(urlPath, urlPathToHtml) {
       if (urlPathToHtml.has(dest)) return urlPathToHtml.get(dest);
     }
   }
+  // App Router 动态路由（例如 /review）不会产出 .html，但会有
+  // .next/server/app/<path>/page.js；这类路由仍然是有效内链。
+  const dynamicPage = join(APP_DIR, ...urlPath.slice(1).split("/"), "page.js");
+  if (existsSync(dynamicPage)) return DYNAMIC_APP_ROUTE;
   return null;
 }
 
@@ -186,6 +191,8 @@ function main() {
       }
 
       if (hash) {
+        // 动态路由没有可读 HTML，无法在构建产物中静态校验锚点。
+        if (targetHtml === DYNAMIC_APP_ROUTE) continue;
         const anchors = anchorsOf(targetHtml);
         if (!anchors.has(hash) && !anchors.has(decodeURIComponent(hash))) {
           failures.push({
