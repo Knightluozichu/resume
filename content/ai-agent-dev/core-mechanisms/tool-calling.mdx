@@ -277,48 +277,33 @@ from openai import OpenAI
 client = OpenAI()
 
 def get_stock_price(symbol: str) -> str:
-    """① 真去查股价的函数（假数据示意）。"""
     fake = {"AAPL": "$195.3", "TSLA": "$248.1"}
     return fake.get(symbol.upper(), f"查不到 {symbol} 的股价")
 
-STOCK_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "get_stock_price",
-        "description": "查询某股票的当前价格。用户问到股价/某公司股票多少钱时调用。",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "symbol": {"type": "string", "description": "股票代码，如 AAPL"},
-            },
-            "required": ["symbol"],
-        },
-    },
-}
-
+STOCK_TOOL = {"type": "function", "function": {
+    "name": "get_stock_price",
+    "description": "查询某股票的当前价格。用户问到股价/某公司股票多少钱时调用。",
+    "parameters": {"type": "object", "properties": {
+        "symbol": {"type": "string", "description": "股票代码，如 AAPL"},
+    }, "required": ["symbol"]},
+}}
 TOOLS = {"get_stock_price": get_stock_price}
-
 messages = [{"role": "user", "content": "苹果现在股价多少？"}]
 
-# ② 传 tools，拿回 tool_calls
 resp = client.chat.completions.create(
     model="gpt-4o-mini", messages=messages, tools=[STOCK_TOOL],
 )
 msg = resp.choices[0].message
 messages.append(msg)
 
-# ③ 解析 + 按名找函数 + 执行；④⑤ 回填（成功填结果，出错填错误）
 for call in msg.tool_calls:
     try:
         args = json.loads(call.function.arguments)
         result = TOOLS[call.function.name](**args)
     except Exception as e:
         result = f"调用 {call.function.name} 出错：{e}"
-    messages.append({
-        "role": "tool", "tool_call_id": call.id, "content": result,
-    })
+    messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
-# ④ 带回填结果再调一次，拿最终答
 final = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
 print(final.choices[0].message.content)   # 「苹果（AAPL）现在股价 $195.3」
 ```
