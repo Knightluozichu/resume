@@ -145,6 +145,7 @@ const PAGES = [
   "/learn/ai-agent-apps/tool-use/function-calling",
   "/learn/ai-agent-apps/tool-use/tool-design",
   "/learn/ai-agent-apps/tool-use/mcp",
+  "/learn/ai-agent-apps/agentic-patterns/workflow-vs-agent",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
