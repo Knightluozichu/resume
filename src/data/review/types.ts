@@ -175,7 +175,8 @@ export type ReviewChapterSlug =
   | "agt-prompt-engineering"
   | "agt-sampling-decoding"
   | "agt-structured-output"
-  | "agt-function-calling";
+  | "agt-function-calling"
+  | "agt-react-loop";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -354,6 +355,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agt-sampling-decoding": "采样与解码",
   "agt-structured-output": "结构化输出",
   "agt-function-calling": "函数调用原理",
+  "agt-react-loop": "ReAct 循环",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
