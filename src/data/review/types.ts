@@ -195,7 +195,17 @@ export type ReviewChapterSlug =
   | "ai-orchestration"
   | "ai-evaluation-observability"
   | "ai-safety-guardrails"
-  | "ai-production-deployment";
+  | "ai-production-deployment"
+  // 从零构建 AI Agent
+  | "agt-chatbot-to-agent"
+  | "agt-llm-as-brain"
+  | "agt-agent-anatomy"
+  | "agt-prompt-engineering"
+  | "agt-sampling-decoding"
+  | "agt-structured-output"
+  | "agt-function-calling"
+  | "agt-react-loop"
+  | "agt-tool-design";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -394,6 +404,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ai-evaluation-observability": "评估与可观测性",
   "ai-safety-guardrails": "安全护栏与成本控制",
   "ai-production-deployment": "生产化部署",
+  // 从零构建 AI Agent
+  "agt-chatbot-to-agent": "从聊天机器人到智能体",
+  "agt-llm-as-brain": "大模型：智能体的大脑",
+  "agt-agent-anatomy": "智能体解剖图",
+  "agt-prompt-engineering": "提示工程基础",
+  "agt-sampling-decoding": "采样与解码",
+  "agt-structured-output": "结构化输出",
+  "agt-function-calling": "函数调用原理",
+  "agt-react-loop": "ReAct 循环",
+  "agt-tool-design": "工具设计与安全执行",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -482,6 +482,33 @@ import { CostBudgetDemo } from "./demos/cost-budget-demo";
 import { ProductionArchDiagram } from "./diagrams/production-arch-diagram";
 import { DegradationDemo } from "./demos/degradation-demo";
 import { CanaryRolloutDemo } from "./demos/canary-rollout-demo";
+import { AaAgentLoopDiagram } from "./ai-agent/agent-loop-diagram";
+import { AaChatbotWorkflowAgentDiagram } from "./ai-agent/chatbot-workflow-agent-diagram";
+import { AaTaskFitExplorer } from "./ai-agent/task-fit-explorer";
+import { AaNextTokenDiagram } from "./ai-agent/next-token-diagram";
+import { AaContextWindowDiagram } from "./ai-agent/context-window-diagram";
+import { AaTokenizerPlayground } from "./ai-agent/tokenizer-playground";
+import { AaAgentAnatomyFlowDiagram } from "./ai-agent/agent-anatomy-flow-diagram";
+import { AaAgentFiveComponentsDiagram } from "./ai-agent/agent-five-components-diagram";
+import { AaAgentMapExplorer } from "./ai-agent/agent-map-explorer";
+import { AaPromptAssemblyDiagram } from "./ai-agent/prompt-assembly-diagram";
+import { AaPromptAnatomyDiagram } from "./ai-agent/prompt-anatomy-diagram";
+import { AaPromptComparePlayground } from "./ai-agent/prompt-compare-playground";
+import { AaSamplingExplorer } from "./ai-agent/sampling-explorer";
+import { AaSamplingStepsDiagram } from "./ai-agent/sampling-steps-diagram";
+import { AaTemperatureCompareDiagram } from "./ai-agent/temperature-compare-diagram";
+import { AaStructuredOutputFlowDiagram } from "./ai-agent/structured-output-flow-diagram";
+import { AaJsonSchemaDiagram } from "./ai-agent/json-schema-diagram";
+import { AaSchemaParsePlayground } from "./ai-agent/schema-parse-playground";
+import { AaFunctionCallTurnDiagram } from "./ai-agent/function-call-turn-diagram";
+import { AaToolSchemaDiagram } from "./ai-agent/tool-schema-diagram";
+import { AaToolPickerPlayground } from "./ai-agent/tool-picker-playground";
+import { AaReactLoopDiagram } from "./ai-agent/react-loop-diagram";
+import { AaReactTraceDiagram } from "./ai-agent/react-trace-diagram";
+import { AaReactStepThrough } from "./ai-agent/react-step-through";
+import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-diagram";
+import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
+import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1253,6 +1280,34 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ProductionArchDiagram,
   DegradationDemo,
   CanaryRolloutDemo,
+  // 从零构建 AI Agent
+  AaAgentLoopDiagram,
+  AaChatbotWorkflowAgentDiagram,
+  AaTaskFitExplorer,
+  AaNextTokenDiagram,
+  AaContextWindowDiagram,
+  AaTokenizerPlayground,
+  AaAgentAnatomyFlowDiagram,
+  AaAgentFiveComponentsDiagram,
+  AaAgentMapExplorer,
+  AaPromptAssemblyDiagram,
+  AaPromptAnatomyDiagram,
+  AaPromptComparePlayground,
+  AaSamplingExplorer,
+  AaSamplingStepsDiagram,
+  AaTemperatureCompareDiagram,
+  AaStructuredOutputFlowDiagram,
+  AaJsonSchemaDiagram,
+  AaSchemaParsePlayground,
+  AaFunctionCallTurnDiagram,
+  AaToolSchemaDiagram,
+  AaToolPickerPlayground,
+  AaReactLoopDiagram,
+  AaReactTraceDiagram,
+  AaReactStepThrough,
+  AaToolDesignContrastDiagram,
+  AaToolInvokeSafetyDiagram,
+  AaToolSafetyPlayground,
   Term,
   Glossary,
   GlossaryItem,

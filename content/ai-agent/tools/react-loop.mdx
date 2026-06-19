@@ -1,0 +1,309 @@
+---
+title: ReAct 循环
+type: C
+section: 让智能体行动
+order: 2
+description: 读完能用 tinyagent 写出会「想一步、调工具、读回执、继续想」的 Agent.run 主循环，并靠 Final Answer 正确停机。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：ReAct（Reasoning+Acting）=§3 AaReactLoopDiagram+Glossary；Thought/Action/Observation=§3 AaReactTraceDiagram+Glossary；为什么要循环=§2/§3 小屋电话隐喻+旗舰动画；与函数调用关系=§3/§6 代码对照；停止条件 Final Answer=§3 AaReactStepThrough+Glossary；tinyagent Agent.run=§6 代码重心+Glossary。 */}
+
+{/* 1. 学习目标（spec §一）：C 实战型；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能**解释**为什么一次工具调用不够：智能体要拿到回执后再决定下一步，而不是一口气猜完整计划
+- 能**实现** tinyagent 的 `Agent.run` 主循环：组装 `messages`、读取模型的 `Thought/Action` 或 `Final Answer`、执行 `registry` 工具、把 `Observation` 回灌并继续循环
+- 能回答：模型已经输出 `Action: search(...)`，为什么还不能直接给用户最终答案？`Agent.run` 什么时候该停？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；延续失忆天才小屋/电话隐喻。 */}
+
+## 小屋里的天才终于会「边办边问」
+
+上一章我们给失忆天才装了电话：他不会亲自出门，但能写纸条让屋外的人去查、去算、去办事。可是新问题来了：很多事不是打一通电话就能完成，查到一半还得看回执，再决定下一通该打给谁。
+
+比如「帮我订明早会议室」。他不能凭空说订好了，也不能一次写十个猜测步骤。他应该先想一步：查空闲；打电话；看回执；再想下一步：可用就预订，不可用就换时间。
+
+这一章要写的，就是屋外人的值班流程：反复把纸条递进去、拨电话、把回执塞回去，直到事情办成。没有这个循环，天才只会提出一次请求；遇到多步任务，就会卡在半路或开始编。
+
+{/* 3. 概念讲解（spec §三）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或 Demo。 */}
+
+## ReAct 循环：想和做交替出现
+
+先给本章主词定清楚：<Term def="Reasoning + Acting 的缩写；让模型先写出当前思考，再请求一次外部行动，拿到结果后继续下一轮。">ReAct 循环</Term>不是「模型一次性列完整计划」，而是「每轮只决定下一步」。Reasoning 是小屋里的天才在纸上想：现在缺什么信息？Acting 是他把要办的事写成工具请求：请拨哪通电话、带什么参数。
+
+为什么要循环？因为外部结果会改变下一步。查到会议室有空，下一步是预订；查到没空，下一步是换时间；工具报错，下一步可能是改参数或向用户澄清。下面这张动画把整条链路跑一遍：
+
+> 猜一猜：如果第三步回来的不是「10:00 有空」，而是「无空房」，下一轮应该继续做同一件事吗？
+
+<AaReactLoopDiagram />
+
+## Thought：先想「下一通电话该打给谁」
+
+第一个 trace 字段是 <Term def="模型在本轮写出的中间思考，用来决定下一步该查什么、调什么工具或是否已经可以回答。">Thought</Term>。它像天才在纸条背面写的自言自语：我现在缺哪个事实？上一轮回执说明了什么？下一步该不该继续行动？
+
+Thought 的价值不是让它长篇大论，而是把「为什么要调这个工具」说清。对实现者来说，它也是排错线索：如果模型选错工具，先看 Thought 有没有误解任务。它在管线中属于模型输出的一部分，但不会直接执行任何外部动作。
+
+<AaReactTraceDiagram />
+
+## Action：写出一次工具请求
+
+第二个字段是 <Term def="模型本轮提出的外部行动请求，通常包含工具名和参数；运行时读到后才会真正执行工具。">Action</Term>。它和上一章的函数调用是一回事：模型写出 `calendar_search({"room":"A"})` 这样的结构化请求，运行时接住请求，查 `registry`，执行对应函数。
+
+所以 ReAct 和函数调用不是两套系统。函数调用解决「一次请求怎么结构化、怎么执行」；ReAct 解决「什么时候请求、请求后怎么把结果带回下一轮」。Action 仍然只是纸条，不是执行结果。
+
+## Observation：把电话那头的回执塞回去
+
+第三个字段是 <Term def="运行时执行 Action 后得到的工具结果，并作为新消息回灌给模型，供下一轮 Thought 使用。">Observation</Term>。这是屋外人打完电话后塞回门缝的回执：查到什么、算出什么、失败原因是什么。它不是模型凭空生成的，而应该来自真实工具返回值。
+
+Observation 一旦回到 `messages`，下一轮模型就能读到它，并改变后续行动。没有 Observation，模型只能靠旧上下文继续猜；有了 Observation，智能体才真的形成「办一步、看结果、再办下一步」的闭环。
+
+## Final Answer：循环的刹车
+
+最后一个字段是 <Term def="模型判断任务已经完成后给用户的最终回答；运行时看到它就停止循环，不再执行工具。">Final Answer</Term>。它是停机信号：一旦模型输出 Final Answer，`Agent.run` 应该返回这段内容，而不是继续找 Action。
+
+这条刹车很重要。没有它，Agent 可能在工具调用里空转；太早触发它，又会把只办到一半的任务说成办完。下面的交互件让你逐步看一段 trace 如何增长，最后在哪里停：
+
+> 猜一猜：在哪一步之前，Agent 都不能把结果返回给用户？拖到最后看停止条件。
+
+<AaReactStepThrough />
+
+## Agent.run：把循环收进一个入口
+
+把上面四个字段落进 tinyagent，核心入口就是 <Term def="tinyagent 中负责驱动整段智能体运行的主循环：每轮调用 llm、解析 Action 或 Final Answer、执行工具、回灌 Observation，直到停机或达到上限。">Agent.run</Term>。它不是某个工具，也不是模型本身，而是模型外面的调度器：负责拼消息、调模型、执行工具、加刹车。
+
+这一层是安全边界。模型可以请求工具，但 `Agent.run` 决定是否执行、最多循环几轮、工具不存在怎么办、参数错怎么办、结果怎么回灌。接下来 §6 就逐段把它写出来。
+
+{/* 5. 交互 Demo：本章三件套已嵌入 §3：AaReactLoopDiagram 旗舰动画、AaReactTraceDiagram 解剖图、AaReactStepThrough 单步 trace。 */}
+
+{/* 6. 代码对照（spec §六）：C 实战型重心；Python tinyagent，单块≤30行；覆盖 Agent.run 主循环、假 llm、假 tool 多轮演示。 */}
+
+## 动手：写 tinyagent 的 Agent.run 主循环
+
+下面这些片段按顺序放进 `react_loop_demo.py` 就能跑通。我们先准备最小数据结构：`Tool` 保存真实函数，`registry` 保存工具名到函数的映射，`Agent` 持有 `llm` 和工具表。
+
+```python
+from dataclasses import dataclass
+import json
+
+
+@dataclass
+class Tool:
+    name: str
+    func: object
+
+
+class Agent:
+    def __init__(self, llm, registry):
+        self.llm = llm
+        self.registry = registry
+```
+
+`Agent` 不直接知道会议室怎么查、怎么预订；它只知道「当模型请求某个工具名时，我能不能在 registry 里找到它」。接着写 `run` 的外壳：先把用户任务和系统规则组装成 `messages`，再按 `max_steps` 开循环。
+
+```python
+SYSTEM = """你是一个 ReAct Agent。
+每轮只输出两种格式之一：
+Thought: 你的下一步判断
+Action: tool_name({"arg": "value"})
+或
+Final Answer: 给用户的最终结果
+"""
+
+
+class Agent(Agent):
+    def run(self, user_task, max_steps=6):
+        messages = [
+            {"role": "system", "content": SYSTEM},
+            {"role": "user", "content": user_task},
+        ]
+        for _ in range(max_steps):
+            reply = self.llm(messages)
+            messages.append({"role": "assistant", "content": reply})
+            if reply.startswith("Final Answer:"):
+                return reply.removeprefix("Final Answer:").strip()
+            name, args = parse_action(reply)
+            observation = self.call_tool(name, args)
+            messages.append({"role": "tool", "content": f"Observation: {observation}"})
+        raise RuntimeError("达到 max_steps 仍未得到 Final Answer")
+```
+
+这就是主循环骨架：每轮调一次模型；如果是 Final Answer，就返回；否则解析 Action、执行工具、把 Observation 回灌。注意循环上限是硬刹车，防止模型一直请求工具。`parse_action` 负责把模型文本里的工具名和 JSON 参数抠出来：
+
+```python
+def parse_action(text):
+    action_line = next(
+        line for line in text.splitlines() if line.startswith("Action:")
+    )
+    call = action_line.removeprefix("Action:").strip()
+    left = call.index("(")
+    right = call.rindex(")")
+    name = call[:left].strip()
+    args = json.loads(call[left + 1 : right])
+    return name, args
+```
+
+这里我们只支持一种简单格式：`Action: tool_name({...})`。真实项目可以换成上一章的结构化 JSON 输出，但思想不变：模型写请求，运行时解析请求。解析完以后，`Agent.run` 还需要真正执行工具：
+
+```python
+class Agent(Agent):
+    def call_tool(self, name, args):
+        if name not in self.registry:
+            return f"工具不存在：{name}"
+        try:
+            result = self.registry[name].func(**args)
+            return str(result)
+        except TypeError as err:
+            return f"参数错误：{err}"
+```
+
+故意把错误也转成 Observation，而不是直接崩掉：模型下一轮能读到「工具不存在」或「参数错误」，再决定修正 Action 还是向用户说明失败。现在注册两个假工具：一个查空闲时间，一个完成预订。
+
+```python
+def calendar_search(room, date, time):
+    return f"{room} 室 {date} {time} 可用"
+
+
+def calendar_book(room, date, time):
+    return f"预订成功：{room} 室 {date} {time}，确认号 R-1024"
+
+
+registry = {
+    "calendar_search": Tool("calendar_search", calendar_search),
+    "calendar_book": Tool("calendar_book", calendar_book),
+}
+```
+
+最后用一个假 `llm` 演示多轮：第一轮先 Thought + Action 查空闲，第二轮读到 Observation 后再 Thought + Action 预订，第三轮读到预订成功后输出 Final Answer。
+
+```python
+def fake_llm(messages):
+    tool_messages = [m for m in messages if m["role"] == "tool"]
+    if not tool_messages:
+        return """Thought: 我需要先查会议室是否可用。
+Action: calendar_search({"room": "A", "date": "明天", "time": "10:00"})"""
+    if "可用" in tool_messages[-1]["content"]:
+        return """Thought: 会议室可用，现在可以预订。
+Action: calendar_book({"room": "A", "date": "明天", "time": "10:00"})"""
+    return "Final Answer: 已帮你订好明天 10 点 A 会议室，确认号 R-1024。"
+
+
+agent = Agent(fake_llm, registry)
+print(agent.run("帮我订明天 10 点的 A 会议室"))
+```
+
+跑起来以后，`Agent.run` 的数据流是完整的：组装 prompt/messages → `llm` 输出 Thought + Action → 运行时执行 registry 工具 → Observation 回灌 → 下一轮 `llm` 再决定下一步 → 最后输出 Final Answer 停止。这里的 `fake_llm` 没有真正理解语言，它只是按 messages 里有没有工具回执来演示循环结构；换成真实 LLM 时，`Agent.run` 的职责仍然一样。
+
+{/* 7. 常见误区（spec §七）：C 型 ≥3；固定格式 现象→原因→修法。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：模型输出 `Action: calendar_search(...)`
+  后，程序立刻把这行当作用户答案返回。**原因**：Action
+  只是工具请求，还没有执行，也没有 Observation。**修法**：`Agent.run` 看到
+  Action 必须查 registry、执行工具、把 Observation 回灌；只有看到 Final Answer
+  才返回给用户。
+</Callout>
+
+<Callout type="trap">
+  **现象**：Agent
+  一直调工具，迟迟不结束。**原因**：没有明确停止条件，或提示里没要求模型在任务完成后输出
+  Final Answer。**修法**：在系统提示里规定两种输出格式；代码里检测 Final Answer
+  前缀，并设置 `max_steps` 硬上限。
+</Callout>
+
+<Callout type="trap">
+  **现象**：工具结果明明返回了，下一轮模型却像没看见一样继续乱猜。**原因**：Observation
+  没有追加进 `messages`，或 role/content
+  格式和系统提示不一致。**修法**：把工具返回值作为新消息回灌，并用清晰前缀
+  `Observation: ...` 让模型在下一轮可读。
+</Callout>
+
+<Callout type="trap">
+  **现象**：模型请求了不存在的工具，程序直接抛异常退出。**原因**：把模型输出当可信代码执行，缺少
+  registry
+  白名单和错误回灌。**修法**：执行前检查工具名是否存在；不存在时把错误变成
+  Observation，让模型修正或礼貌失败。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结呼应目标；C 型含独立实现题/改 Demo 题。 */}
+
+## 小结
+
+- ReAct 解决多步行动：拿到回执后再决定下一步
+- Action 仍是函数调用请求，真正执行发生在运行时
+- Observation 必须回灌进 messages，下一轮 Thought 才有新事实
+- Final Answer 是停止条件，`max_steps` 是防空转硬刹车
+- `Agent.run` 把调模型、执行工具、回灌、停机收成一个入口
+
+<Exercises>
+
+**练习 1（改 Demo 题）** 把 `<AaReactStepThrough />` 里的任务改成「查天气后决定要不要带伞」。你会设计哪两个 Action？每个 Observation 应该包含什么信息？
+
+<Answer>
+
+可以第一轮用 `get_weather({"city":"上海","date":"今天"})`，Observation 返回温度、降雨概率、天气描述；第二轮如果降雨概率高，再用 `make_advice({"weather":"rain"})` 或直接 Final Answer。更简单的版本只需要一个 Action：查天气；拿到 Observation 后输出 Final Answer「今天有雨，建议带伞」。关键是不要在查天气之前就给建议。
+
+</Answer>
+
+**练习 2（独立实现题）** 在 §6 的 `Agent.run` 里加一个 `trace` 列表，记录每轮的 `reply` 和 `observation`，最后返回 `(final_answer, trace)`。要求：Final Answer 也要被记录，达到 `max_steps` 抛错时也能看到已发生的 trace。
+
+<Answer>
+
+做法是在循环前 `trace = []`；每次拿到 `reply` 后先 `trace.append({"assistant": reply})`；如果是 Final Answer，就 `return answer, trace`；执行工具后再把 `observation` 写进同一个 step 或追加 `{"observation": observation}`。如果达到上限，可以在异常信息里带 `trace`，或定义自定义异常保存它。重点是记录发生在返回/抛错之前。
+
+</Answer>
+
+**练习 3（排错题）** 运行后发现第二轮模型还是继续 `calendar_search`，没有 `calendar_book`。最可能是哪两类问题？你会先打印什么？
+
+<Answer>
+
+一类是 Observation 没有正确回灌进 `messages`，模型看不到「可用」这个事实；另一类是假 llm 或真实提示没有说明「查到可用后应该预订」。先打印每轮传给 `llm(messages)` 的最后几条消息，看 tool 消息是否存在、content 是否包含预期文本；再打印模型原始 reply，确认它为什么继续查。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应，按首现顺序。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="ReAct 循环">
+  Reasoning + Acting
+  的缩写。你可以把它想成「想一步、办一步、看回执、再想一步」：模型不一次性猜完整计划，而是每轮根据最新结果决定下一步。
+</GlossaryItem>
+
+<GlossaryItem term="Thought">
+  模型本轮写出的中间思考，说明它为什么要查某个信息、调某个工具，或为什么已经可以回答。它帮助下一步决策，也帮助人排错。
+</GlossaryItem>
+
+<GlossaryItem term="Action">
+  模型写出的工具请求，包含工具名和参数。它像一张「请拨这通电话」的纸条，本身不是执行结果；真正执行要靠运行时。
+</GlossaryItem>
+
+<GlossaryItem term="Observation">
+  工具执行后的回执，被运行时塞回对话里。下一轮模型读到它，才知道外部世界刚刚发生了什么、查到了什么。
+</GlossaryItem>
+
+<GlossaryItem term="Final Answer">
+  模型给用户的最终回答，也是循环的停止信号。`Agent.run`
+  看到它就返回结果，不再继续执行工具。
+</GlossaryItem>
+
+<GlossaryItem term="Agent.run">
+  tinyagent 里驱动整段智能体运行的主循环：调模型、解析 Action、执行工具、回灌
+  Observation，并在 Final Answer 或步数上限处停机。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

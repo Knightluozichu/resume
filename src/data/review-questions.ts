@@ -191,6 +191,15 @@ import { ccDesigningConcurrentCodeQuestions } from "./review/cc-designing-concur
 import { ccThreadPoolsQuestions } from "./review/cc-thread-pools";
 import { ccParallelAlgorithmsQuestions } from "./review/cc-parallel-algorithms";
 import { ccTestingDebuggingQuestions } from "./review/cc-testing-debugging";
+import { agtChatbotToAgentQuestions } from "./review/agt-chatbot-to-agent";
+import { agtLlmAsBrainQuestions } from "./review/agt-llm-as-brain";
+import { agtAgentAnatomyQuestions } from "./review/agt-agent-anatomy";
+import { agtPromptEngineeringQuestions } from "./review/agt-prompt-engineering";
+import { agtSamplingDecodingQuestions } from "./review/agt-sampling-decoding";
+import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
+import { agtFunctionCallingQuestions } from "./review/agt-function-calling";
+import { agtReactLoopQuestions } from "./review/agt-react-loop";
+import { agtToolDesignQuestions } from "./review/agt-tool-design";
 
 export {
   CHAPTER_TITLES,
@@ -380,6 +389,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aiEvaluationObservabilityQuestions,
   ...aiSafetyGuardrailsQuestions,
   ...aiProductionDeploymentQuestions,
+  // 从零构建 AI Agent
+  ...agtChatbotToAgentQuestions,
+  ...agtLlmAsBrainQuestions,
+  ...agtAgentAnatomyQuestions,
+  ...agtPromptEngineeringQuestions,
+  ...agtSamplingDecodingQuestions,
+  ...agtStructuredOutputQuestions,
+  ...agtFunctionCallingQuestions,
+  ...agtReactLoopQuestions,
+  ...agtToolDesignQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

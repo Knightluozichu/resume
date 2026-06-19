@@ -1,0 +1,291 @@
+---
+title: 提示工程基础
+type: C
+section: 驾驭大模型
+order: 1
+description: 读完能写出带角色、指令清晰、配 few-shot 示例的提示，并能用 tinyagent 的 Message/messages 把一张'纸条'组装出来喂给模型。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇 2「驾驭大模型」开篇（《从零构建 AI Agent》第2篇第1章·原创改编）：重心是 §6 代码对照——用 tinyagent 的 Message/messages 把一份提示组装出来（系列首段真实主线代码）。§3 概念压缩到位即可，math:false。延续全书隐喻「失忆天才小屋」：提示 = 塞进门缝的纸条，system = 给失忆天才的「岗位说明书」。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz；新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 消息角色 system/user/assistant（三种纸条：岗位说明书 / 本次任务 / 它的回话与历史）= AaPromptAssemblyDiagram + AaPromptAnatomyDiagram → Glossary：消息角色；2) 一条提示由什么组成（角色 + 清晰指令 + 输入）= AaPromptAnatomyDiagram（解剖图）→ Glossary：提示工程；3) few-shot 示例（给几个范例照做，对比 zero-shot）= AaPromptComparePlayground（交互件）+ AaPromptAssemblyDiagram → Glossary：few-shot 示例、zero-shot；4) 提示模板（变量填进固定骨架）= §6 build_messages 代码对照 → Glossary：提示模板。旗舰动画 AaPromptAssemblyDiagram 演「三段消息块叠成一份 messages 喂给模型」。tinyagent 本章增量：Message(role, content) + messages 列表 + build_messages 组装函数（§二地图 2.1）。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能写出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能说清一条提示里 **system / user / assistant** 三种消息角色各代表哪种「纸条」、分别在什么时候用
+- 能**写出**一条带角色、指令清晰、配 few-shot 示例的好提示，并说出它比「随手一句话」强在哪
+- 能回答：给你 tinyagent 的 `Message` 和 `messages`，你怎么把 system + few-shot + user 组装成一份完整的提示喂给模型？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；延续失忆天才小屋隐喻。专业名词最早 §3 才出现。 */}
+
+## 同一个问题，凭什么纸条写法不同答案天差地别
+
+还是那位关在小屋里的失忆天才。你从门缝塞一张纸条进去，他读完写一段回复再塞出来。可你很快发现：同样想让他帮忙，纸条写「退货吗」和写清「你是客服、请按政策、用两行回答、这是我的订单」，得到的回话质量差着十万八千里。
+
+这一章要解决的就是：**怎么把这张纸条写好**。天才严重失忆——他不记得你上次交代过他是谁、该守什么规矩，每一次都得在纸条上从头说清。纸条写糊了，再聪明的脑袋也只能瞎猜、跑题、口气随机。
+
+弄清一张好纸条由哪几块拼成、每块管什么、怎么用代码一砖一瓦把它组装出来，本章的目的就达到了——而这，也是我们动手搭 `tinyagent` 写下的第一段真代码。
+
+{/* 3. 概念讲解（spec §三）：C 型把「是什么」压缩到位即可，篇幅让给 §6。一小节一概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo。新核心概念 ≤5。 */}
+
+## 三种纸条：system、user、assistant
+
+跟失忆天才打交道，<Term def="一条提示里区分「这段话是谁说的」的标记，共三种：system（系统/岗位说明书，定身份与规矩）、user（用户/本次任务）、assistant（助手/模型自己的回话，也用来塞历史与范例）。模型靠角色分清哪句是规矩、哪句是任务、哪句是示范。">消息角色（Message Role）</Term> 是绕不开的第一件事。一份提示不是一整块文字，而是一串带「身份标签」的纸条，每张标明「这话是谁说的」。常用的就三种：
+
+- **system（系统）**：给失忆天才的「**岗位说明书**」——你是谁、守什么规矩、用什么口气。它最该放在最前面、整轮都生效。
+- **user（用户）**：**本次任务**——这一轮你真正要它干的活，比如「我的订单还能退吗」。
+- **assistant（助手）**：模型**自己的回话**。它既是模型答出来的内容，也用来回填**历史**（把上一轮的问答塞回去，治失忆）和**范例**（给它看「该这么答」的样子）。
+
+记住这三张纸条的分工：**system 定身份、user 给任务、assistant 是回话与示范**。下面这张解剖图，把一条好提示拆成区块摊给你看：
+
+<AaPromptAnatomyDiagram />
+
+## 一条提示由什么组成：角色 + 清晰指令 + 输入
+
+把纸条写好，这门手艺有个正式名字叫 <Term def="把提示写好的方法与技巧：用合适的角色定身份、给清晰可执行的指令、配上必要的示例与输入，让模型稳定、准确地按你要的方式回话。本书第一段动手写的真代码，就是把提示组装出来。">提示工程（Prompt Engineering）</Term>。一条够用的提示，拆开看就三块：
+
+1. **角色**：用 system 告诉它「扮谁、守什么规矩」（解剖图第①区）。
+2. **清晰指令**：说清这次具体要做什么、有什么要求——别含糊（第②区）。
+3. **输入**：本次真正待处理的内容，用 user 给出（第④区）。
+
+这三块为什么缺一不可？失忆天才每次都是「白纸一张」：不给角色，他不知道该端着客服的谱还是随便聊；指令含糊，他只能猜你想要什么；没有输入，他无米下炊。三块齐了，他才扮对角色、做对事、答在点上。
+
+## few-shot：与其讲一堆要求，不如给它几个范例
+
+光靠文字描述要求，有时说不清。更省力的一招，是直接给它看几个「该这么答」的样本——这叫 <Term def="在提示里塞进几组「输入→输出」的范例，让模型照着范例的样子回答（few = 少量）。比起干讲要求，给范例往往更省力、更稳。对应章末的 zero-shot（一个范例都不给）。">few-shot 示例</Term>。比如想让它「条款翻大白话」，与其啰嗦解释，不如先给两三组「条款 → 大白话」的样板，它一看就懂照着学。
+
+与之相对的是 <Term def="一个范例都不给、只靠指令直接让模型答的做法（zero = 零样例）。够清楚的简单任务用它就行；任务有特定格式或风格时，几个范例（few-shot）往往比纯文字描述更管用。">zero-shot</Term>：一个范例都不给，光靠指令硬答。简单任务 zero-shot 够用；但凡有特定格式、特定口气的活，塞几个 few-shot 范例几乎总能让输出更稳。
+
+> 猜一猜：把「给 few-shot 示例」这个开关打开，模型回话的稳定程度会怎么变？三个开关全关时，同一个问题问两遍，回答会一样吗？
+
+下面这个小工具，让你拨开关对比「随手写的差提示」和「带角色 + 清晰指令 + few-shot 的好提示」分别拼出什么 messages、输出大概会怎样：
+
+<AaPromptComparePlayground />
+
+多拨几次你会摸到规律：**角色、范例、格式每补一样，输出就更稳一分**。三样全关，模型不知扮谁、按什么标准答，同一问题问两遍可能南辕北辙；三样齐了，回话稳定规整、可直接拿来用。
+
+## 提示模板：把变量填进固定骨架
+
+真实场景里，你不会每来一个用户问题就手写一整套提示。聪明的做法是搭一个 <Term def="把提示里固定不变的部分（角色、指令、few-shot 范例）写成骨架，只把会变的部分（如本次的用户输入）留成「空格」，每次把变量填进去就生成一份完整提示。省得每次从头手写。">提示模板（Prompt Template）</Term>：固定的角色、指令、范例写死成骨架，只留「本次用户输入」这个空格，每次把变量一填，就生成一份完整提示。
+
+这正是下一节要用代码做的事——`tinyagent` 的 `build_messages` 函数，就是一个最朴素的提示模板。
+
+{/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
+
+{/* 5. 交互 Demo（spec §五）：旗舰动画 AaPromptAssemblyDiagram（本节）演「三段消息块叠成一份 messages 喂给模型」；交互件 AaPromptComparePlayground（§3 few-shot 节）；解剖图 AaPromptAnatomyDiagram（§3 三种纸条节）。 */}
+
+## 动手前先看一遍：一张纸条是怎么拼出来的
+
+代码之前，先把「组装」这件事在脑子里过一遍。下面这张可控动画，演的就是 `tinyagent` 待会儿要干的活：把 **system（岗位说明书）→ few-shot（范例）→ user（本次任务）** 三段消息块依次落位、叠成一份完整的 `messages`，再喂给模型，模型按规矩回话。
+
+> 猜一猜：三段消息块按什么顺序叠？哪一段该放在最前面、整轮都生效？
+
+<AaPromptAssemblyDiagram />
+
+播完你会看清：一份提示不是一句话，而是几段带角色的纸条**按序叠起来**的一摞——这摞东西，在代码里就是一个 `messages` 列表。下一节我们就亲手把它搭出来。
+
+{/* 6. 代码对照（spec §六，C 型重心）：逐段讲 tinyagent 的 Message/messages/build_messages，单块 ≤30 行、块间有解说、覆盖 ≥80% 关键。Python 单语言、不用 CodeTabs。代码已 python3 跑通：len=4、roles=[system,user,assistant,user]。 */}
+
+## 动手：tinyagent 的第一块砖——Message 与 messages
+
+前三章都是认知铺垫，没写一行代码。从这里开始，我们一砖一瓦搭那个贯穿全书的 `tinyagent`。第一块砖，就是把「一张带角色的纸条」用代码表示出来。
+
+一条提示是一串纸条，那「一张纸条」自然就是一个对象：它只需两个字段——这话是**谁说的**（`role`）、**说了什么**（`content`）。我们用一个 `dataclass` 把它定下来：
+
+```python
+from dataclasses import dataclass
+
+
+@dataclass
+class Message:
+    role: str  # "system" | "user" | "assistant"，这话是谁说的
+    content: str  # 这张纸条上的内容
+```
+
+`Message` 就是 tinyagent 里最小的积木，整本书后面所有跟模型的对话都用它表示。`role` 取三个值之一，对应上一节的三种纸条；`content` 是这张纸条上的文字。简单到不能再简单——但全书的提示、历史、工具结果，最后都会被装进一个个 `Message` 里。
+
+## 一份提示 = 一串 Message
+
+有了单张纸条，「一份完整提示」就是把若干 `Message` 按顺序排成一个列表，习惯上就叫它 `messages`。最朴素的一份，是「system 定身份 + user 给任务」两张纸条：
+
+```python
+# 一份提示 = 一串 Message（按顺序排好）
+messages = [
+    Message(role="system", content="你是一位严谨的客服助理，只依据公司政策回答。"),
+    Message(role="user", content="我的订单还能退吗？"),
+]
+```
+
+这个 `messages` 列表，就是我们要塞给失忆天才的那摞纸条：第一张 system 说清他是谁、守什么规矩，第二张 user 给出这一轮的任务。顺序很重要——system 放最前、整轮生效，user 紧随其后。把这个列表交给模型（下一章才接真模型，本章只到「组装好」这一步），它就会读完整摞、按规矩回话。
+
+## 把组装写成模板：build_messages
+
+每来一个问题就手写一整个列表太笨。我们把固定部分（角色、范例）和变化部分（本次输入）分开，写成一个**提示模板**函数——这就是上一节说的 `build_messages`：
+
+```python
+def build_messages(system, examples, user):
+    # ① 先放 system「岗位说明书」（整轮生效）
+    msgs = [Message(role="system", content=system)]
+    # ② 再把 few-shot 范例逐组塞进去（user 问 → assistant 示范答）
+    for q, a in examples:
+        msgs.append(Message(role="user", content=q))
+        msgs.append(Message(role="assistant", content=a))
+    # ③ 最后写上本次真正的 user 任务
+    msgs.append(Message(role="user", content=user))
+    return msgs
+```
+
+这 9 行，正是旗舰动画里「三段依次落位」的代码版：先塞 system（第①步），再把每组 few-shot 范例拆成「user 问 + assistant 示范答」两张纸条塞进去（第②步，这就是用 `assistant` 角色给范例的用法），最后压上本次 user 任务（第③步）。固定的角色和范例由参数传入、只有 `user` 每次变——这就是一个最朴素的**提示模板**。
+
+## 跑一遍，看组装出的结构
+
+把模板用起来：给它一份 `system`、一组 few-shot 范例、一句本次问题，它就吐出一份完整的 `messages`：
+
+```python
+few_shot = [
+    ("能退货吗？", "可在签收 7 天内无理由退货。"),
+]
+prompt = build_messages(
+    system="你是一位严谨的客服助理，只依据公司政策回答。",
+    examples=few_shot,
+    user="我的订单还能退吗？",
+)
+
+for m in prompt:
+    print(f"{m.role}: {m.content}")
+```
+
+运行它，打印出的正是依次叠好的四张纸条：
+
+```text
+system: 你是一位严谨的客服助理，只依据公司政策回答。
+user: 能退货吗？
+assistant: 可在签收 7 天内无理由退货。
+user: 我的订单还能退吗？
+```
+
+四张纸条、角色依次是 `system → user → assistant → user`：岗位说明书打头，中间夹着一组 few-shot 范例（一问一答），本次任务收尾。这一摞 `messages`，就是我们组装好、准备喂给模型的完整提示——`tinyagent` 的第一块砖，到此就砌好了。下一章接上真正的 `llm()`，把这摞纸条塞进去拿回话。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；用 Callout type=trap。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：把所有内容（角色、要求、输入）一股脑塞进一张 user 纸条，不用 system。**原因**：以为「写一段长文字」就够了，没意识到角色该用 system 单独立、整轮生效——混在 user 里，模型分不清哪句是「永远要守的规矩」、哪句是「这次的临时任务」。**修法**：身份与规矩放 system，本次要处理的输入放 user，各归各位，模型才稳定扮对角色。
+</Callout>
+
+<Callout type="trap">
+  **现象**：few-shot 范例给得乱七八糟，格式、口气每条都不一样。**原因**：模型是「照着范例学」的——范例本身不统一，它学到的就是「可以乱来」，输出反而更飘。**修法**：few-shot 的几组范例必须**自己先规整、彼此一致**（同样的格式、同样的口气），范例就是你给模型立的标杆，标杆歪了输出必歪。
+</Callout>
+
+<Callout type="trap">
+  **现象**：在 `build_messages` 里把本次 `user` 任务放到了 system 或 few-shot 前面，顺序乱了。**原因**：忽略了 `messages` 是**有序**的——system 必须最前、本次 user 任务必须最后，中间才是范例；顺序一错，模型可能把任务当成范例、或把规矩当成任务。**修法**：严格按「system → few-shot（user/assistant 交替）→ 本次 user」的顺序 append，就像旗舰动画里三段依次落位那样。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，C 型含 1 道改 Demo/改代码题，答案折叠。 */}
+
+## 小结
+
+- 一条提示是一串带角色的纸条：**system**（岗位说明书·定身份）、**user**（本次任务）、**assistant**（模型回话，也用来塞历史与范例）
+- 一条好提示 = **角色 + 清晰指令 + 输入**三块齐全，缺一块失忆天才就容易跑偏
+- **few-shot**（给几个范例照做）常比纯文字讲要求更稳；一个范例都不给的叫 **zero-shot**
+- **提示模板**把固定的角色 / 范例写成骨架、只留变量空格，每次填一下就生成完整提示
+- tinyagent 第一块砖：`Message(role, content)` + `messages` 列表 + `build_messages` 组装函数——把 system + few-shot + user 按序叠成一份提示
+
+<Exercises>
+
+**练习 1（角色辨析）** 下面三句话，分别该用 system、user 还是 assistant 角色装进 `messages`？
+（a）「你是一位只说中文、回答控制在 50 字内的导游。」
+（b）「故宫几点开门？」
+（c）（作为 few-shot 范例的示范回答）「故宫每天 8:30 开门。」
+
+<Answer>
+
+（a）**system**：这是「岗位说明书」——定身份（导游）、定规矩（只说中文、50 字内），整轮生效，放最前面。
+（b）**user**：这是本次任务，用户真正要问的问题。
+（c）**assistant**：这是给模型看的「示范回答」，用 assistant 角色塞进 few-shot，让它照着这个样子答。
+
+</Answer>
+
+**练习 2（改代码题）** 现在的 `build_messages` 把 few-shot 的每组范例拆成「user 问 + assistant 答」两张纸条。请改写它，新增一个参数 `developer_note`（一句给开发者备注的额外规矩），把它作为**第二张 system 纸条**接在第一张 system 之后、few-shot 之前。写出改后的函数。
+
+<Answer>
+
+```python
+def build_messages(system, developer_note, examples, user):
+    msgs = [Message(role="system", content=system)]
+    # 新增：第二张 system 纸条，接在第一张之后
+    msgs.append(Message(role="system", content=developer_note))
+    for q, a in examples:
+        msgs.append(Message(role="user", content=q))
+        msgs.append(Message(role="assistant", content=a))
+    msgs.append(Message(role="user", content=user))
+    return msgs
+```
+
+要点：`messages` 是有序列表，两张 system 都放在 few-shot 之前、本次 user 之后仍是最后一张——顺序「system → system → few-shot → user」不能乱。多张 system 纸条都属于「整轮生效的规矩」，模型会一起读。
+
+</Answer>
+
+**练习 3（写提示题）** 你要让模型把英文邮件翻成中文，并且**只输出译文、不要任何解释**。用本章「角色 + 清晰指令 + few-shot + 输入」的结构，写出你会怎么组织这份提示（用文字描述每个角色放什么即可，不必写代码）。
+
+<Answer>
+
+- **system（角色 + 规矩）**：「你是一位专业翻译，只把英文翻成地道中文。只输出译文，不要任何解释、不要原文。」
+- **few-shot（一组范例，assistant 示范）**：user 放一句英文样例，assistant 放它对应的纯中文译文（且确实没有多余解释，给模型立标杆）。
+- **user（本次输入）**：把要翻译的那封英文邮件正文放进来。
+
+关键点：把「只输出译文」这条规矩放进 system，再用一条「干干净净只有译文」的 few-shot 范例把它示范一遍——文字要求 + 范例双管齐下，模型才不会画蛇添足加解释。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（消息角色 / 提示工程 / few-shot 示例 / zero-shot / 提示模板，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="消息角色（Message Role）">
+  一条提示里区分「这段话是谁说的」的标记，常用三种：**system**（系统 /
+  岗位说明书，定身份与规矩，整轮生效）、**user**（用户 /
+  本次任务）、**assistant**（助手 /
+  模型自己的回话，也用来回填历史和给 few-shot
+  范例）。模型靠角色分清哪句是规矩、哪句是任务、哪句是示范。详见本章「三种纸条」一节。
+</GlossaryItem>
+
+<GlossaryItem term="提示工程（Prompt Engineering）">
+  把提示（塞给失忆天才的纸条）写好的方法与技巧：用合适的角色定身份、给清晰可执行的指令、配上必要的示例与输入，让模型稳定、准确地按你要的方式回话。本书动手写的第一段真代码，就是把一份提示组装出来。详见本章「一条提示由什么组成」一节。
+</GlossaryItem>
+
+<GlossaryItem term="few-shot 示例">
+  在提示里塞进几组「输入 →
+  输出」的范例，让模型照着范例的样子回答（few =
+  少量）。比起干讲要求，给几个规整一致的范例往往更省力、更稳。范例用
+  user（放示例输入）+ assistant（放示范输出）两张纸条表示。详见本章「few-shot」一节。
+</GlossaryItem>
+
+<GlossaryItem term="zero-shot">
+  一个范例都不给、只靠指令直接让模型回答的做法（zero =
+  零样例）。足够清楚的简单任务用它就行；一旦任务有特定格式或口气，几个 few-shot
+  范例通常比纯文字描述更管用。详见本章「few-shot」一节。
+</GlossaryItem>
+
+<GlossaryItem term="提示模板（Prompt Template）">
+  把提示里固定不变的部分（角色、指令、few-shot
+  范例）写成骨架，只把会变的部分（如本次的用户输入）留成「空格」，每次把变量填进去就生成一份完整提示——省得每来一个问题就从头手写。本章
+  tinyagent 的 `build_messages` 函数就是一个最朴素的提示模板。详见本章「提示模板」一节。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本书为原创改编，sourceUrl 为空，Attribution 空参自动渲染。缺失 = 必打回。 */}
+
+<Attribution />

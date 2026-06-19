@@ -1,0 +1,260 @@
+---
+title: 函数调用原理
+type: A
+section: 让智能体行动
+order: 1
+description: 读完能解释模型如何通过 tool schema 选择工具、发起函数调用，并用 tinyagent 的 @tool / Tool / registry 搭出最小工具系统。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* 知识点清单：工具=§3 图示+Glossary；函数调用=§3 AaFunctionCallTurnDiagram+Glossary；tool schema=§3 AaToolSchemaDiagram+Glossary；模型如何选工具=§5 AaToolPickerPlayground；tinyagent @tool/Tool/registry=§6 代码对照；工具注册表=§3/§6+Glossary；运行时=§3 图示+Glossary。 */}
+
+{/* 1. 学习目标（spec §一）：A 概念型必含「能解释 ___ 在管线中的位置」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能**解释**函数调用在 Agent 管线中的位置：模型只负责提出结构化调用请求，外部运行时才真正执行工具
+- 能**说出**一份 tool schema 里 name / description / parameters 各自帮模型完成什么判断
+- 能回答：当用户问「上海今天热不热」时，模型为什么会选 `get_weather`，它输出的调用请求和最终答案之间还差哪一步？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比使用工厂流水线/电话簿。专业名词最早 §3 才出现。 */}
+
+## 给小屋装一部「电话」
+
+上一章我们已经让屋里的天才能按表格填空了。但他还是有个致命短板：他看不到外面的实时世界，也不能亲手去查天气、搜网页、算精确数字。你问「上海今天热不热」，他只能凭旧记忆猜。
+
+解决办法不是把他放出小屋，而是在门边放一本电话簿。每个号码后面写清楚「能办什么事、要说哪些信息」。他看到问题后，在纸条上写「请拨这个号码，并告诉对方城市是上海」。
+
+真正拨电话的是屋外的人。屋外人拿到结果，再把「上海 26 度」塞回门缝；天才读到结果后，才组织成给你的自然语言答案。没有这套接力，智能体就只能聊天，不能行动。
+
+{/* 3. 概念讲解（spec §三）：A 型重心；一个小节一个概念；术语首现 Term def 高亮且进章末 Glossary；每概念配图或引用 Demo；新核心概念 5 个。 */}
+
+## 工具：模型能「请求外界代办」的能力
+
+先给本章第一个词定清楚：<Term def="被 Agent 暴露给模型的一段外部能力，比如查天气、搜网页、算表达式。模型不会亲自运行它，只会请求运行时去调它。">工具</Term>不是模型脑子里自带的知识，而是我们在模型外面准备好的一段能力：一个 Python 函数、一条搜索 API、一个数据库查询、一个计算器。它解决的问题是「模型动不了手」：模型只会读写文本，工具把它接到真实世界。
+
+在 Agent 管线里，工具位于模型外侧。用户问题先进模型，模型如果发现「仅靠回答不够」，就写出一条调用请求；外部程序接住请求，执行对应工具，再把结果作为新消息送回模型。下面的一回合动画先把整条接力跑一遍：
+
+> 猜一猜：动画里哪一步是模型做的？哪一步必须由外部程序做？
+
+<AaFunctionCallTurnDiagram />
+
+## 函数调用：模型写请求，运行时真执行
+
+第二个概念是 <Term def="模型写出要调哪个工具和参数的结构化请求，外部程序再执行对应函数。">函数调用</Term>。听起来像「模型在调用函数」，但更准确地说，是模型**提议**调用函数。它输出的是一条结构化请求，例如
+`get_weather(city="上海")`。这条请求还不是执行结果，只是一个「请帮我拨这个号码」的纸条。
+
+为什么要多绕这一圈？因为模型本身不能访问网络、不能读取本地文件、也不能运行 Python。函数调用把职责拆开：模型负责理解任务、选择合适的能力、填参数；外部程序负责安全地执行、捕获结果、决定要不要继续下一轮。它在管线中的位置正好接在「结构化输出」之后：上一章保证请求能被程序解析，这一章让解析出的请求变成真实动作。
+
+## tool schema：给模型看的工具说明书
+
+模型要会选工具，必须先看懂每个工具能干什么。这份说明书就是 <Term def="描述一个工具给模型看的结构化说明，通常包含工具名、用途说明、参数名、参数类型和必填信息。">tool schema</Term>。它不是给 Python 解释器看的函数签名，而是给模型看的「电话簿词条」：`name` 告诉模型请求里该写哪个名字，`description` 告诉模型这个工具适合什么任务，`parameters` 告诉模型要填哪些参数。
+
+下面这张解剖图把一份 schema 拆成三块。读的时候特别盯住 `description`：模型选工具时，最依赖的往往不是函数名，而是这句自然语言说明。
+
+<AaToolSchemaDiagram />
+
+## 工具注册表：运行时用它找得到函数
+
+模型看的是 schema，外部程序还得知道「这个名字对应哪段可执行代码」。这就是 <Term def="运行时保存工具名到真实函数的映射表；模型请求 name 后，程序从这里找到并执行对应函数。">工具注册表</Term>。你可以把它想成屋外人的电话簿背面：正面给模型看说明，背面给程序查「号码实际连到哪个函数」。
+
+为什么不能只把函数丢给模型？因为模型不会真的持有函数指针；它只会写文本。注册表把文本名字和真实代码接起来：模型请求 `calculator`，运行时从 `registry["calculator"]` 找到那个 Python 函数，检查参数后再调用。它在管线中的位置属于外部运行时，不属于模型内部。
+
+## 运行时：负责执行、兜底和守门
+
+最后一个边界要分清：<Term def="模型外面的程序环境，负责读取调用请求、查注册表、执行工具、处理错误，并把工具结果回灌给模型。">运行时</Term>才是执行者。模型输出 `get_weather(city="上海")` 不会自动让天气 API 被访问；运行时要先确认工具存在、参数合法、调用被允许，然后才执行。
+
+这个边界非常重要：它让工具调用可控。你可以在运行时限制哪些工具能被调用、哪些参数要拒绝、调用失败时怎么重试、工具结果要不要截断。换句话说，模型是「会写请求的脑」，运行时是「有手、有规则、有刹车的身体」。
+
+{/* 5. 交互 Demo（spec §五）：A 概念型主 Demo 为流程/选择交互；已含猜一猜、重置由组件提供。 */}
+
+## 交互：模型怎么选工具
+
+现在把注意力放到「模型如何选工具」。给模型三个工具：查天气、搜网页、计算器。用户问题一换，最匹配的 `description` 也会换。
+
+> 猜一猜：如果任务是「3 的 17 次方是多少」，模型应该选搜索、天气，还是计算器？切换任务看它为什么这么选。
+
+<AaToolPickerPlayground />
+
+这里的关键不是「模型背过工具名」，而是它把用户任务和每个工具的 `description` 做语义匹配，再照 `parameters` 填参数。description 写得含糊，模型就容易选错；参数说明写得含糊，模型就容易传错。
+
+{/* 6. 代码对照（spec §六）：A 型轻代码；Python 单语言，三块均 ≤30 行；覆盖 @tool 装饰器、Tool 类、registry。 */}
+
+## 代码对照：tinyagent 的最小工具系统
+
+把概念落到 tinyagent 里，我们只需要三件小零件：一个 `Tool` 类保存「给模型看的 schema + 给运行时执行的函数」，一个 `registry` 保存名字到工具的映射，一个 `@tool` 装饰器把普通函数登记进去。先写数据结构：
+
+```python
+from dataclasses import dataclass
+from typing import Any, Callable
+
+
+@dataclass
+class Tool:
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    func: Callable[..., Any]
+
+    def schema(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "parameters": self.parameters,
+        }
+```
+
+`Tool.schema()` 返回的是给模型看的说明书，不包含 `func`；`func` 留在运行时手里，避免把「能执行什么」和「给模型看什么」混在一起。接着写注册表和装饰器：
+
+```python
+registry: dict[str, Tool] = {}
+
+
+def tool(name: str, description: str, parameters: dict[str, Any]):
+    def deco(func: Callable[..., Any]):
+        registry[name] = Tool(
+            name=name,
+            description=description,
+            parameters=parameters,
+            func=func,
+        )
+        return func
+
+    return deco
+```
+
+`@tool(...)` 的作用是登记，而不是改变原函数怎么工作。函数仍然可以像普通 Python 函数一样调用；同时，运行时也能从 `registry` 找到它。下面注册两个工具：
+
+```python
+@tool(
+    name="get_weather",
+    description="查询某城市当前天气",
+    parameters={"city": {"type": "string", "description": "城市名"}},
+)
+def get_weather(city: str) -> str:
+    return f"{city} 今天 26℃，多云"
+
+
+@tool(
+    name="calculator",
+    description="做精确的数值计算",
+    parameters={"expression": {"type": "string", "description": "算式"}},
+)
+def calculator(expression: str) -> int:
+    return safe_eval_arithmetic(expression)  # 只允许四则运算的安全解析器
+```
+
+这两段注册完后，`registry` 里已经有 `get_weather` 和 `calculator`。这里把计算器实现压成 `safe_eval_arithmetic` 占位，是刻意的：真实项目里**不要**直接 `eval` 模型传来的字符串，哪怕它看起来只是算式。模型只会看到 `schema()` 列表；当它输出调用请求时，运行时按名字查表并执行：
+
+```python
+tool_schemas = [t.schema() for t in registry.values()]
+
+call = {"name": "get_weather", "arguments": {"city": "上海"}}
+picked = registry[call["name"]]
+result = picked.func(**call["arguments"])
+
+messages.append({
+    "role": "tool",
+    "name": picked.name,
+    "content": str(result),
+})
+```
+
+这就是函数调用一回合的代码骨架：把 `tool_schemas` 发给模型，让模型产生 `call`；运行时从 `registry` 找到工具、执行函数、把结果作为 `tool` 消息回灌。真实项目里还要加参数校验、权限控制、超时和错误处理，但主链路已经齐了。
+
+{/* 7. 常见误区（spec §七）：A 型 ≥2；固定格式 现象→原因→修法；至少一项指向 Demo/图示错误模式。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：以为模型输出 `get_weather(city="上海")`
+  后，天气查询已经发生了。**原因**：模型只是在文本里写出调用请求，它没有执行
+  Python、没有访问
+  API。**修法**：按上面的一回合流程图，把「模型出请求」和「运行时执行」拆开；只有运行时查
+  `registry` 并调用函数后，才有真实结果。
+</Callout>
+
+<Callout type="trap">
+  **现象**：模型经常选错工具，比如问实时新闻却选了计算器。**原因**：工具
+  `description`
+  写得太短、太泛，模型无法区分能力边界。**修法**：在上面的选工具交互里切任务观察匹配逻辑；把
+  description 写成「何时用、何时不用」，必要时加参数说明和反例。
+</Callout>
+
+<Callout type="trap">
+  **现象**：把所有内部函数都注册成工具，结果模型能请求危险操作。**原因**：注册表是运行时的能力边界，注册进去就等于允许模型提出调用。**修法**：只注册白名单工具；执行前做参数校验、权限判断、超时限制，工具结果也要截断后再回灌。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题，含改 Demo/设计题。 */}
+
+## 小结
+
+- 函数调用在 Agent 管线里连接「结构化请求」和「真实执行」
+- tool schema 是给模型看的电话簿词条，description 决定选工具质量
+- tinyagent 用 `@tool` / `Tool` / `registry` 把工具说明和真实函数接起来
+- 运行时才负责执行、守门、回灌结果，模型不能越过它直接行动
+
+<Exercises>
+
+**练习 1（改 Demo 题）** 把 `<AaToolPickerPlayground />` 里的「查新闻」任务想象成「查今天某公司股价」。你会新增什么工具？它的 `description` 和参数应该怎么写，才能不和 `search_web` 混淆？
+
+<Answer>
+
+可以新增 `get_stock_price`，description 写成「查询某只股票的实时价格、涨跌幅和交易时间信息」，参数用 `symbol: string` 或 `company: string`。为了不和 `search_web` 混淆，要强调它返回的是结构化行情数据，而不是泛泛搜索网页；如果用户只是问「相关新闻」，仍应选 `search_web`。
+
+</Answer>
+
+**练习 2（设计题）** 设计一个 `send_email` 工具的 schema：请写出 `name`、`description` 和至少 3 个参数，并指出哪个参数最需要运行时守门。
+
+<Answer>
+
+示例：`name="send_email"`；`description="在用户明确确认后发送邮件给指定收件人"`；参数包含 `to: string`、`subject: string`、`body: string`、`confirm: boolean`。最需要守门的是 `to` 和 `confirm`：运行时要检查收件人是否允许、是否真的经过用户确认，不能让模型自己决定直接发送。
+
+</Answer>
+
+**练习 3（排错题）** 模型请求 `calculator(expression="3 ** 17")`，但运行时报 `KeyError: 'calculator'`。最可能是哪一层出问题？怎么查？
+
+<Answer>
+
+最可能是工具注册表没有登记 `calculator`，或登记的名字和 schema 里的名字不一致。先打印 `registry.keys()`，确认有没有 `"calculator"`；再检查 `@tool(name="calculator", ...)` 和发给模型的 schema 是否来自同一个 `Tool.schema()`。名字必须完全一致，运行时才能按请求查到函数。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（工具 / 函数调用 / tool schema / 工具注册表 / 运行时，按首现顺序）。 */}
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="工具">
+  被 Agent
+  暴露给模型的一段外部能力，比如查天气、搜网页、算表达式。模型只会请求调用它，真正执行发生在模型外部。
+</GlossaryItem>
+
+<GlossaryItem term="函数调用">
+  模型用结构化格式写出「要调哪个工具、传哪些参数」的请求；外部程序读懂请求后，才真正执行对应函数并拿回结果。
+</GlossaryItem>
+
+<GlossaryItem term="tool schema">
+  给模型看的工具说明书，通常包含工具名、用途说明和参数表。它像电话簿词条，帮助模型决定调谁、传什么。
+</GlossaryItem>
+
+<GlossaryItem term="工具注册表">
+  运行时保存「工具名 →
+  真实函数」的映射表。模型请求某个名字后，程序从这里找到对应函数并执行。
+</GlossaryItem>
+
+<GlossaryItem term="运行时">
+  模型外面的程序环境，负责读调用请求、查注册表、执行工具、处理错误和回灌结果。它是工具调用的执行者和守门员。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution />

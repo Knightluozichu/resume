@@ -1,0 +1,282 @@
+---
+title: 结构化输出
+type: C
+section: 驾驭大模型
+order: 3
+description: 读完能让模型稳定吐出可被程序解析的 JSON，并用 tinyagent 的 llm_json 做 schema 校验 + 解析失败自动重试。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+{/* C 实战型·篇 2「驾驭大模型」第 3 章（《从零构建 AI Agent》原创改编）：重心是 §6 代码（tinyagent 的 extract_json/validate/llm_json + 假 llm 演示重试，覆盖≥80%，单块≤30 行）。§3 概念压缩到位即可，篇幅让给代码。延续全书隐喻「失忆天才小屋」：让天才不仅回话，还得「按固定表格填空」，机器才好接着用。draft:true 待总监 review。 */}
+
+{/* 知识点清单（动笔前先摊开，逐条标 viz；新核心概念 ≤5；术语首现用 Term 高亮，章末 Glossary 一一对应）：1) 为什么要结构化输出——下游程序/Agent 要机器可解析的结果而非一段散文（尤其后面工具调用全靠它）= §2 直觉 + AaStructuredOutputFlowDiagram → Glossary：结构化输出；2) JSON 模式 / 让模型输出 JSON = §3 文字 + AaJsonSchemaDiagram → Glossary：JSON 模式；3) 用 schema 约束输出形状（字段/类型/必填）= AaJsonSchemaDiagram 解剖 + §6 validate → Glossary：schema 模式；4) 解析容错 + 失败重试（剥 ```json 围栏/废话 + 校验 + 不合规回灌错误重试）= AaStructuredOutputFlowDiagram 旗舰动画 + AaSchemaParsePlayground 交互 + §6 → Glossary：解析容错、回灌重试。旗舰动画 AaStructuredOutputFlowDiagram 演「剥壳→校验→不合规回灌重试」流程；解剖图 AaJsonSchemaDiagram 把 schema 与合法 JSON 并排对照；交互 AaSchemaParsePlayground 切换脏输出样本看剥壳/校验/重试。tinyagent 本章增量：extract_json + validate + llm_json(messages, schema, max_retries)（§二地图 2.3），建在上一章 llm() 之上。 */}
+
+{/* 1. 学习目标（spec §一）：C 型必含一条「能改出 ___ 效果」；末条为可当场自测的检验问题。 */}
+
+<Objectives>
+
+- 能**解释**为什么 Agent 要的是机器可解析的结构化结果，而不是一段人话散文
+- 能**改出**「模型稳定吐出合法 JSON、解析失败自动重试」的效果：给 tinyagent 写出 `extract_json` / `validate` / `llm_json`，并能处理带围栏、夹废话、缺字段、类型错四种脏输出
+- 能回答：模型把 JSON 包在 ` ```json ` 围栏里、或回话前后多说了一句废话，你的代码该怎么把那段 JSON 干净地抠出来、再确认它合不合格式？
+
+</Objectives>
+
+{/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；延续失忆天才小屋隐喻。专业名词最早 §3 才出现。 */}
+
+## 让天才不光会回话，还得「照表格填空」
+
+还是那位关在小屋里的失忆天才。前两章你已经会写纸条、会控制他下笔的松紧了。可新麻烦来了：你想让程序接着用他的回答——比如把「天气如何」的回话喂给下一段代码——他却总爱写成一段散文：「上海今天挺暖和的，大概二十六度，记得带伞哦」。
+
+人读着舒服，机器却懵了：温度是多少？要写成数字几？这段话里没有程序能稳稳抠出来的格子。你要的不是一篇小作文，而是一张**填好的表格**：城市、温度、是否下雨，各占一格、各是固定类型。
+
+这一章就教你递给他一张空表格，逼他照着填；再写一段「验收员」代码，他填歪了（漏格、填错类型、还把表格裹在一堆客套话里）就退回去让他重填。搞定这步，他的回答才能真正接进后面的程序——尤其下一篇的「工具调用」，全靠它。
+
+{/* 3. 概念讲解（spec §三）：C 型「是什么」压缩到一段，篇幅让给 §6。一小节一概念；术语首现 Term def 高亮且进章末 Glossary；配图或引用 viz。新核心概念 ≤5。 */}
+
+## 散文 vs 表格：先看整条「容错」流程
+
+先把本章要做的事整体过一遍。模型的回话常常不干净，我们要把它**剥成干净 JSON、按格式校验、不合格就退回重试**——下面这张可控动画把这条流程拆开演给你看，后面几节再逐块写代码：
+
+> 猜一猜：模型回话里夹了一句废话，是哪一步把废话剥掉的？校验没过会发生什么？
+
+<AaStructuredOutputFlowDiagram />
+
+播完你会看清：① 模型回话（可能脏）→ ② 剥壳抠 JSON → ③ 按格式校验 →（不合规就把错误回灌、绕回 ① 重问 / 合规就 ⑤ 产出干净对象）。下面逐个概念说清。
+
+## 为什么非要结构化：程序接不住散文
+
+第一个概念是 <Term def="让模型的回答是机器能稳定解析的固定形状（最常用 JSON），而不是一段人话散文。下游程序、Agent 拿到后能直接按字段取值、做判断，不用再去猜、去正则乱抠。">结构化输出（structured output）</Term>。为什么重要？因为 Agent 的回答几乎从不是「给人看完就完了」——它要喂给下一段代码：取出 `temp` 去比较、读出 `rain` 去决定带不带伞。散文里这些值的位置、写法每次都飘，程序根本接不稳。尤其下一篇的工具调用，靠的就是模型吐出「调哪个工具、传什么参数」的结构化指令——结构化输出是整个 Agent 能「行动」的地基。
+
+## 怎么让它输出 JSON：递一张空表格
+
+最常用的结构化格式是 JSON，于是有了 <Term def="在提示里明确要求模型「只输出 JSON、不要任何多余文字」，并最好给出字段示例。许多模型还提供专门的 JSON 模式开关，强制输出合法 JSON。本质是把「写散文」的任务改成「照格式填空」。">JSON 模式（让模型输出 JSON）</Term>：在提示里直接要求「只回 JSON、不要多余的话」，并给出字段样例。这就像递给天才一张画好格子的空表格，比让他自由发挥靠谱得多。但光要求还不够——他可能照填了，却把表格裹进 ` ```json ` 代码围栏，或前后还是忍不住寒暄两句。所以我们还得有「验收」环节。
+
+## 用 schema 约束形状：表格的表头
+
+要能验收，先得说清「合格长什么样」。这就是 <Term def="一份描述「输出该长什么形状」的约定：有哪些字段、每个字段是什么类型（字符串/整数/布尔…）、哪些必填。像表格的表头，规定每一格要填什么、必不必填。代码据它逐条核对模型的输出合不合格。">schema（模式约束）</Term>——它规定字段名、每个字段的类型、哪些必填。下面这张图把一份极简 schema 和按它填出的合法 JSON 并排放，连线一一对照，看清「schema 是表头、JSON 是照表头填好的表」：
+
+<AaJsonSchemaDiagram />
+
+有了 schema，「验收」就有了标尺：逐字段核对模型的输出——字段齐不齐、类型对不对。这一步叫校验，正是 §6 `validate` 要做的事。
+
+## 脏输出怎么救：剥壳容错 + 回灌重试
+
+模型不会每次都乖乖只回 JSON。常见的脏法有四种：把 JSON 包进代码围栏、前后夹一句废话、漏掉某个必填字段、某字段填错了类型。对付前两种，靠 <Term def="从模型可能不干净的回话里，把那段真正的 JSON 抠出来再解析：先剥掉代码围栏、切掉前后的寒暄废话，定位到第一段花括号再做 json.loads。让代码不会因为模型多说一句话就崩。">解析容错（extract_json）</Term>——先剥围栏、切废话，定位到那段 JSON 文本再解析。对付后两种，靠校验抓出来，再用 <Term def="当剥壳或校验失败时，不是直接放弃，而是把「错在哪」连同上次回话一起塞回 messages，让模型自己改、重答一遍；重试到设定上限仍不合规才抛错。给失忆天才一次「填错了退回重填」的机会。">回灌重试（feed-back retry）</Term>：把「错在哪」塞回对话，让模型自己改、重答，到上限才放弃。下面这个工具让你切换四种脏输出，亲眼看剥壳和校验怎么处理：
+
+> 猜一猜：「带围栏」和「夹废话」两种样本，剥壳后的 JSON 一样吗？哪几种会触发重试？
+
+<AaSchemaParsePlayground />
+
+切几次你会摸到规律：**围栏和废话都会被 `extract_json` 剥掉**，剥完是同一段干净 JSON、校验都能过；而**缺字段、类型错**剥壳没问题、却卡在校验，于是触发回灌重试。下一节就把这套逻辑写成 tinyagent 的代码。
+
+{/* 5. 交互 Demo：已在 §3 内嵌三件套（AaStructuredOutputFlowDiagram 旗舰动画 + AaJsonSchemaDiagram 解剖 + AaSchemaParsePlayground 交互），每个都带「猜一猜」前置。C 型 Demo 即对照脏输出处理。 */}
+
+{/* 6. 代码对照（spec §六，C 实战型重心，覆盖≥80%）：tinyagent 本章增量——extract_json（剥围栏/废话+json.loads）/ validate（按极简 schema 校验）/ llm_json（调 llm→剥壳→校验→不合规回灌重试，到上限抛错）+ 假 llm stub 演示重试。Python 单语言、不用 CodeTabs；单块 ≤30 行、块间有解说。已 python3 跑通：合规直接过、带围栏剥壳、缺字段触发重试、到上限抛错。 */}
+
+## 动手：给 tinyagent 加上 llm_json
+
+上一章我们有了 `llm(messages, ...)`——能把组装好的纸条喂给模型、拿回一段**文本**。但文本不是程序能用的对象。这一章就在 `llm()` 之上加一层 `llm_json`：让它返回**校验过的结构化对象**。先写最底层的剥壳函数 `extract_json`，把脏文本里的 JSON 抠出来：
+
+```python
+import json
+import re
+
+
+def extract_json(text):
+    # ① 先剥 ```json ... ``` 围栏（抠出里层内容），剥不到就用整段
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    body = fenced.group(1) if fenced else text
+    # ② 再从里面定位第一段 {...}（前后废话被切掉），最后 json.loads 解析
+    brace = re.search(r"\{.*\}", body, re.DOTALL)
+    if not brace:
+        raise ValueError("回话里找不到 JSON")
+    return json.loads(brace.group(0))
+```
+
+两步剥壳：①一个正则把 ` ```json ... ``` ` 围栏剥掉、抠出里层；②再用 `{.*}` 定位到第一段花括号，把前后的寒暄废话切干净，最后 `json.loads`。抠不到就抛 `ValueError`——这个错后面会被 `llm_json` 接住去触发重试。接着写「验收员」`validate`，按一份极简 schema 逐字段核对：
+
+```python
+# 极简 schema：字段名 → 期望的 Python 类型；约定列出的字段都必填
+SCHEMA = {"city": str, "temp": int, "rain": bool}
+
+
+def validate(obj, schema):
+    for name, typ in schema.items():
+        if name not in obj:  # 缺必填字段
+            raise ValueError(f"缺少必填字段 {name}")
+        # bool 是 int 的子类，单独挡掉「该 int 却给了 bool」
+        if typ is int and isinstance(obj[name], bool):
+            raise ValueError(f"字段 {name} 类型错：要 int，却是 bool")
+        if not isinstance(obj[name], typ):
+            got = type(obj[name]).__name__
+            raise ValueError(f"字段 {name} 类型错：要 {typ.__name__}，却是 {got}")
+    return obj
+```
+
+`validate` 把 schema 当表头，逐字段核对模型填的表：字段缺了、或类型不对，就抛 `ValueError` 说清错在哪（这句错误信息待会要回灌给模型）。`bool` 在 Python 里是 `int` 的子类，所以特意单独挡一道，免得 `True` 被当成合法的 `int` 蒙混过关。最后把剥壳、校验、重试串成主函数 `llm_json`：
+
+```python
+def llm_json(messages, schema, max_retries=2):
+    for attempt in range(max_retries + 1):  # 首次 + 重试若干次
+        text = llm(messages)  # 调上一章的薄封装，拿回一段文本
+        try:
+            obj = extract_json(text)  # 剥壳
+            return validate(obj, schema)  # 校验，过了就返回结构化对象
+        except ValueError as err:  # 剥壳或校验失败
+            if attempt == max_retries:
+                raise  # 到上限，放弃
+            # 把「错在哪 + 上次回话」回灌进 messages，让模型自己改
+            messages = messages + [
+                {"role": "assistant", "content": text},
+                {"role": "user", "content": f"输出不合规：{err}。请只回严格 JSON，重来。"},
+            ]
+```
+
+这就是整章的主菜：`llm_json` 循环最多 `max_retries+1` 次——每次调 `llm()` 拿文本、`extract_json` 剥壳、`validate` 校验，过了就返回干净对象；任一步抛 `ValueError`，到上限就放弃，否则把「错在哪」连同上次回话一起回灌进 `messages`，让模型照着改、再答一遍。为了不依赖真模型就能验证它，用一个**假 `llm`**（stub）按轮次返回写死的回话来演示重试：
+
+```python
+def make_fake_llm(replies):  # 按被问的轮次依次返回写死的回话
+    state = {"i": 0}
+
+    def fake(messages):
+        r = replies[min(state["i"], len(replies) - 1)]
+        state["i"] += 1
+        return r
+
+    return fake
+
+
+# 第 1 轮缺 rain（校验不过）→ 回灌重试 → 第 2 轮补齐、合规
+llm = make_fake_llm([
+    '```json\n{"city": "上海", "temp": 26}\n```',       # 缺字段
+    '{"city": "上海", "temp": 26, "rain": false}',       # 重试后合规
+])
+print(llm_json([{"role": "user", "content": "上海天气"}], SCHEMA))
+# → {'city': '上海', 'temp': 26, 'rain': False}
+```
+
+跑这段你会看到完整的「填错→退回→重填→通过」：第一轮模型把 JSON 裹在围栏里**且漏了 `rain`**——`extract_json` 顺利剥壳，但 `validate` 抓出缺字段、抛错；`llm_json` 没放弃，把错误回灌后再问，第二轮模型补齐字段、校验通过，返回干净对象。把假 `llm` 换成第一轮就合规的回话，会一次过；换成「永远缺字段」，则重试到 `max_retries` 上限后抛错。至此 tinyagent 的「拿回机器可用的结构化结果」这块砖就补齐了——下一篇的工具调用正是建在它之上。
+
+{/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；用 Callout type=trap。 */}
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象**：直接对模型回话 `json.loads`，结果时不时抛 `JSONDecodeError` 崩掉。**原因**：模型爱把 JSON 裹进 ` ```json ` 代码围栏，或前后多说一句「好的，结果如下」——这些都不是合法 JSON，`json.loads` 自然解析失败。**修法**：先用 `extract_json` 剥壳（剥围栏、切废话、定位 `{...}`）再 `json.loads`，别把模型的原始回话当干净 JSON 直接喂。
+</Callout>
+
+<Callout type="trap">
+  **现象**：只 `json.loads` 成功就当数据可用，结果下游代码取 `obj["rain"]` 时 `KeyError`，或拿 `temp` 做数值比较时报类型错。**原因**：`json.loads` 只保证「是合法 JSON」，**不保证字段齐、类型对**——模型可能漏字段、把数字填成字符串。**修法**：解析后必须再过一道 `validate`，按 schema 核对必填字段和类型，缺了 / 错了当场拦下。
+</Callout>
+
+<Callout type="trap">
+  **现象**：校验失败就直接 `raise` 报错给用户，或干脆 `max_retries` 设得很大、不合规就无限重试。**原因**：模型偶尔填歪很正常，一失败就放弃太脆；但无上限重试又可能在它持续犯错时空转、烧 token。**修法**：用 `llm_json` 的回灌重试——把错误回灌让它改，但**设一个小上限**（如 2~3 次），到顶仍不合规才抛错，兼顾健壮与可控。
+</Callout>
+
+{/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；C 型练习含 1 道改代码题 + 1 道独立实现题；答案折叠。 */}
+
+## 小结
+
+- Agent 要的是**机器可解析**的结构化结果（JSON），不是一段人话散文——下一篇的工具调用全靠它
+- 让模型输出 JSON：提示里要求「只回 JSON」+ 给字段样例（**JSON 模式**），递给它一张空表格
+- 用 **schema** 规定字段名、类型、必填——它是表头，校验就是按表头逐格核对模型填的表
+- 脏输出靠两招救：`extract_json` **剥壳容错**（剥围栏、切废话）+ `validate` 抓不合规
+- tinyagent 的 `llm_json(messages, schema, max_retries)` 把「调 llm → 剥壳 → 校验 → 不合规**回灌重试**」收成一个入口，到上限才放弃
+
+<Exercises>
+
+**练习 1（改代码题）** 现在的 `SCHEMA` 把列出的字段都当必填。请改造 `validate`，让它支持「可选字段」：schema 写成 `{"city": (str, True), "tip": (str, False)}`（元组里第二项 `True/False` 表示必填与否），可选字段缺了不报错、但只要出现就仍校验类型。
+
+<Answer>
+
+把 schema 的值从「类型」改成「(类型, 必填)」元组，循环里据 `required` 决定缺字段是否报错：
+
+```python
+SCHEMA = {"city": (str, True), "temp": (int, True), "tip": (str, False)}
+
+
+def validate(obj, schema):
+    for name, (typ, required) in schema.items():
+        if name not in obj:
+            if required:
+                raise ValueError(f"缺少必填字段 {name}")
+            continue  # 可选字段缺了，跳过
+        if typ is int and isinstance(obj[name], bool):
+            raise ValueError(f"字段 {name} 类型错：要 int，却是 bool")
+        if not isinstance(obj[name], typ):
+            raise ValueError(f"字段 {name} 类型错：要 {typ.__name__}")
+    return obj
+```
+
+关键两点：解包成 `(typ, required)`；字段缺失时只有 `required` 为真才抛错，否则 `continue` 放过。字段**出现了**就照常校验类型——可选不等于不校验。
+
+</Answer>
+
+**练习 2（独立实现题）** 目标效果：写一个 `extract_json` 的增强版 `extract_json_safe(text)`，在原来「剥围栏 + 切废话」的基础上，**多兜一层**——如果 `json.loads` 仍失败（比如模型把英文逗号写成了中文逗号「，」），就把中文逗号替换成英文逗号再试一次，仍失败才抛错。
+
+<Answer>
+
+在原 `extract_json` 抠出 `{...}` 文本后，先直接 `json.loads`，失败则做一次「中文标点→英文」的清洗再试：
+
+```python
+def extract_json_safe(text):
+    fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
+    body = fenced.group(1) if fenced else text
+    brace = re.search(r"\{.*\}", body, re.DOTALL)
+    if not brace:
+        raise ValueError("回话里找不到 JSON")
+    raw = brace.group(0)
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        # 兜底：中文逗号/冒号 → 英文，再试一次
+        fixed = raw.replace("，", ",").replace("：", ":")
+        return json.loads(fixed)  # 仍失败则抛 JSONDecodeError
+```
+
+思路是「先按正常路径解析，失败再启动清洗兜底」——别一上来就无脑替换（可能误伤字符串值里本该是中文逗号的内容）。这也呼应了 §6 的容错精神：尽量把模型的小毛病在代码侧消化掉，而不是一失败就退回重试、白烧一轮 token。
+
+</Answer>
+
+</Exercises>
+
+{/* 10. 名词解释（spec §十）：与正文 Term 高亮一一对应（结构化输出 / JSON 模式 / schema 模式约束 / 解析容错 / 回灌重试，按首现顺序）；释义面向零基础；位置章末、出处声明之前。 */}
+
+<Glossary>
+
+<GlossaryItem term="结构化输出（structured output）">
+  让模型的回答是机器能稳定解析的固定形状（最常用
+  JSON），而不是一段人话散文。下游程序、Agent
+  拿到后能直接按字段取值、做判断，不用再猜、再正则乱抠。详见本章「为什么非要结构化」一节。
+</GlossaryItem>
+
+<GlossaryItem term="JSON 模式（让模型输出 JSON）">
+  在提示里明确要求模型「只输出 JSON、不要任何多余文字」，并给出字段示例；许多模型还提供专门的 JSON
+  模式开关强制输出合法 JSON。本质是把「写散文」改成「照格式填空」。详见本章「怎么让它输出 JSON」一节。
+</GlossaryItem>
+
+<GlossaryItem term="schema（模式约束）">
+  一份描述「输出该长什么形状」的约定：有哪些字段、每个字段是什么类型（字符串/整数/布尔…）、哪些必填。像表格的表头，规定每一格要填什么、必不必填，代码据它逐条核对模型的输出。详见本章「用
+  schema 约束形状」一节。
+</GlossaryItem>
+
+<GlossaryItem term="解析容错（extract_json）">
+  从模型可能不干净的回话里把那段真正的 JSON
+  抠出来再解析：先剥掉代码围栏、切掉前后寒暄废话，定位到第一段花括号再
+  json.loads。让代码不会因为模型多说一句话就崩。详见本章「脏输出怎么救」与 §6 代码。
+</GlossaryItem>
+
+<GlossaryItem term="回灌重试（feed-back retry）">
+  当剥壳或校验失败时不直接放弃，而是把「错在哪」连同上次回话一起塞回
+  messages，让模型自己改、重答一遍；重试到设定上限仍不合规才抛错。给失忆天才一次「填错了退回重填」的机会。详见本章「脏输出怎么救」与
+  §6 的 llm_json。
+</GlossaryItem>
+
+</Glossary>
+
+{/* 9. 出处声明（spec §九）：本书为原创改编，sourceUrl 为空，Attribution 空参自动渲染。缺失 = 必打回。 */}
+
+<Attribution />
