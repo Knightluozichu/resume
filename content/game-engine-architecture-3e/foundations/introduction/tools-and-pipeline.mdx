@@ -1,0 +1,153 @@
+---
+title: 工具链与内容管线：引擎的另一半
+type: A
+section: Foundations
+order: 3
+description: 游戏引擎不只是运行时——编辑器、资产管线、构建系统让团队能持续交付可玩的游戏。
+demo: true
+math: false
+sourceUrl: https://www.gameenginebook.com/toc.html
+draft: true
+---
+
+{/*
+  知识点清单（chapter-spec §〇）：
+  - 资产管线：AssetPipelineDiagram/Stepper/Glossary
+  - 编辑器与工具链：GameEngineAnatomyDiagram(tools)/Stepper/Glossary
+  - 构建系统：GameEngineAnatomyDiagram(tools)/Stepper/Glossary
+  - CI/CD：GameEngineAnatomyDiagram(tools)/Stepper/Glossary
+  - 版本控制与资产：Figure/Glossary
+
+  原书章节：Introduction §1.4–§1.5, Tools of the Trade 章
+  类型：A 概念型
+*/}
+
+<Objectives>
+- 能画出资产管线从源文件到运行时消费的完整流程
+- 能区分引擎的工具链和运行时各自的职责边界
+- 能回答：为什么资产管线比运行时代码更容易成为团队瓶颈？
+</Objectives>
+
+## 你写好了渲染器，但美术做好的模型跑不起来
+
+把时间倒回两三个月。程序员花了八个星期把渲染器写得闪闪发光——PBR 材质、实时阴影、屏幕空间反射，Demo 场景里的球体和立方体跑 120fps。主管觉得稳了，让美术组把真正的角色模型丢进去试跑一发。
+
+然后就炸了：FPS 从 120 掉到 11。原因不是渲染代码慢，而是引擎**没有资产管线**——美术的 FBX 文件直接被拿来当运行时资源。那个文件里包含了制作时用的高精度细分曲面、每根手指的独立骨骼、八层高分辨率贴图……这些是给美术看的，不是给 GPU 实时渲的。
+
+这就是<Term def="把创作工具产出的源文件（FBX/PSD/WAV）经过校验、转换、优化、打包变成运行时格式的自动化加工链。">资产管线</Term>的职责：在游戏运行之前，把美术的内容"压缩翻译"成运行时能高效消费的格式。没有管线，运行时就得自己去理解一百种文件格式、自己去压缩贴图——运行时不该干这些事。
+
+<AssetPipelineDiagram />
+
+## 编辑器不是"代码编辑器"
+
+这里的"编辑器"不是 Visual Studio Code 或者 Vim。引擎编辑器是关卡编辑器、材质编辑器、动画控制器——**专门用来编辑游戏内容的工具**。打开 Unreal Editor 或 Unity Editor，你面对的是一个完整的可视化工作台：拖拽模型到场景、调材质参数实时预览、用状态机连出角色的动画逻辑。
+
+<GameEngineAnatomyDiagram chapter="tools" />
+
+再切三步来看工具链的完整工作流。
+
+<Stepper>
+  <Step title="创作物进入版本化入口">
+    美术在 Maya/Blender 里做模型，在 Substance 里画贴图，在 Audacity 里剪音效。这些"源资产"通过版本控制系统（Git/Perforce）进入仓库——但**运行时不会直接读这些文件**。导入器先接手：校验文件完整性、提取元数据（这个模型有几个 LOD？贴图要不要 sRGB？音效是不是 Mono？）、建立资产 GUID 唯一标识。
+    <GameEngineAnatomyDiagram chapter="tools" step={1} />
+  </Step>
+  <Step title="Cook：把美术格式变成 GPU 格式">
+    Cook（烘焙/转换）是资产管线最重要的阶段。PNG 贴图被转换成 DXT/ASTC 压缩格式（直接能喂给 GPU 的块压缩纹理）；FBX 网格的顶点布局被重排成 GPU 友好的交错格式；动画数据被压缩、冗余关键帧被移除。Cook 的结果是"平台专用格式"——PC、PS5、Switch 可能用不同的压缩方案和精度。
+    <GameEngineAnatomyDiagram chapter="tools" step={2} />
+  </Step>
+  <Step title="构建部署与调试回环">
+    Cook 后的资产和编译好的代码一起被打成可执行包。在目标设备上跑起来后，调试工具（Profiler、帧调试器）把运行数据传回开发机——哪里卡了、哪个资源加载太慢、谁在产生 GC 分配——形成"改代码→构建→测试→看数据→再改"的闭合回路。
+    <GameEngineAnatomyDiagram chapter="tools" step={3} />
+  </Step>
+</Stepper>
+
+## 构建系统：本地能跑不代表 CI 能过
+
+一个真实游戏项目会用到至少五种构建产物：编辑器版本（美术用）、开发版（Debug 加日志）、测试版（跑自动化测试）、QA 版（功能测试用）、发布版（送到玩家手里）。如果每次都要手动配参数、手动点按钮、手动等半小时……团队会在构建上浪费的时间足以再写一个子系统。
+
+所以现代引擎都有自动化构建系统：Jenkins/TeamCity/GitHub Actions 在每次提交后自动触发构建 → 跑测试 → 生成可运行的包 → 上传到分发平台。这个流程叫持续集成（CI），它和资产管线的 Cook 阶段是绑在一起的——Cook 的耗时直接决定了 CI 的反馈速度。
+
+<CodeTabs>
+  <Tab label="C++ 构建配置示意">
+
+```cpp
+// 构建配置决定"打什么版本的包"
+// 这不是引擎运行时代码——是构建工具使用的配置
+enum class BuildConfiguration {
+    Debug,       // 全量日志 + 断言 + 慢但好调
+    Development, // 保留部分调试信息 + 部分优化
+    Test,        // 运行自动化测试套件
+    Release,     // 最终发布：全量优化 + 去符号
+};
+
+// 平台 Cook 配置：同一资产在不同平台不同格式
+struct CookConfig {
+    TextureFormat   textureFormat;  // PC: DXT, Mobile: ASTC
+    float           meshLODBias;    // Switch 可能缩小网格
+    bool            stripDebugSymbols;
+};
+```
+  </Tab>
+  <Tab label="TypeScript 配置示意">
+
+```typescript
+// 构建系统配置的类型定义
+// 强调"配置驱动"的设计思想
+enum BuildConfiguration {
+  Debug = 'debug',
+  Development = 'development',
+  Test = 'test',
+  Release = 'release',
+}
+
+interface CookConfig {
+  textureFormat: 'dxt' | 'astc' | 'etc2';
+  meshLODBias: number;      // Switch 可能 > 0 缩小网格
+  stripDebugSymbols: boolean;
+}
+
+// CI 脚本调用：cook --platform=Switch --config=Release
+```
+  </Tab>
+</CodeTabs>
+
+## 容易踩的坑
+
+- **现象 ->** 美术改了贴图，程序说"为什么我的构建没生效"。**原因 ->** Cook 阶段的依赖追踪没做好——贴图源文件变了，但 Cook 系统不知道它需要重新烘焙。**修法 ->** 建立"源资产 → Cook 产物"的哈希依赖图，源文件变了自动触发重新 Cook。
+
+- **现象 ->** 本地构建 20 秒，CI 构建 20 分钟。**原因 ->** CI 机器没有缓存中间产物，每次从头 Cook 所有资产。**修法 ->** 给 CI 配置缓存目录，只 Cook 变化了的资产（增量构建），而非全量重来。
+
+- **现象 ->** 发布包里有调试用的纹理和测试关卡。**原因 ->** 没有在构建配置里做"发布版剔除"——所有资产不管用不用都被打了进去。**修法 ->** 给每个资产加"发布包含"标签，构建时按配置排除 Debug 专用资源。
+
+## 小结
+
+- 资产管线是内容的翻译器：源格式 → 校验 → Cook 转换 → 打包 → 运行时消费
+- 引擎编辑器不只是代码编辑器，是关卡、材质、动画的可视化工作台
+- Cook 阶段决定运行时性能——贴图压缩格式、顶点布局优化、动画压缩都在这里发生
+- 构建系统把代码+资产+配置打包成目标平台可执行文件
+- CI/CD 自动化构建-测试-分发流程，让每次提交都能在目标设备上验证
+- 工具链的质量 = 团队每天改动能多快看到结果
+
+<Exercises>
+  <Answer question="如果动画师改了一个角色动画，从改完到在引擎里看到效果，资产管线要走哪几步？">
+    ①动画师在 Maya/Blender 里导出 FBX → ②引擎导入器检测到源文件变化，读取并校验 → ③Cook 阶段：提取骨骼、压缩关键帧、移除冗余数据、生成运行时动画资源 → ④更新资源包的增量部分 → ⑤编辑器或运行时重新加载这个资产句柄 → 动画师看到更新后的效果。如果管线设计得好，整个过程在几秒内自动完成。
+  </Answer>
+  <Answer question="为什么不同平台（PC vs Switch）的 Cook 产物不一样？不能用同一份吗？">
+    硬件能力不同。PC 的 GPU 支持 DXT/BC 贴图压缩，Switch 支持 ASTC；PC 有 8GB+ 显存放高精度网格，Switch 需要缩小网格、降低贴图分辨率才能跑得动。如果"一份通用"，要么在强平台上浪费能力，要么在弱平台跑不动。针对每个平台 Cook 就是让每个玩家都得到最适合自己设备的体验。
+  </Answer>
+  <Answer question="找一个你用过的工具（图片处理、视频编辑、3D 建模都行），想想它的"源文件"和"输出文件"是什么关系。这和资产管线的 Cook 阶段有什么相似之处？">
+    以 Photoshop 为例：PSD 源文件包含所有图层、蒙版、调整参数（完整可编辑信息）→ "导出为 PNG"是 Cook 的一个类比：合并图层、应用色彩空间转换、压缩成特定格式。PNG 丢掉了图层信息但换来更小的文件体积和更快的加载速度——这正是 Cook 的理念：牺牲可编辑性换取运行时效率。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="资产管线">把创作工具产出的源文件（FBX/PSD/WAV）经过校验、转换、优化、打包变成运行时格式的自动化加工链。类比：把菜市场买来的食材（源资产）洗净切好腌制分装（Cook）成半成品，厨房（运行时）直接下锅炒就行。</GlossaryItem>
+  <GlossaryItem term="Cook">资产管线中的转换阶段——把通用格式的源资产变成目标平台专用的运行时格式。贴图被压缩成 GPU 原生格式、网格顶点被重排、动画曲线被压缩。有时也叫"烘焙"。</GlossaryItem>
+  <GlossaryItem term="构建系统">将源代码编译链接、将 Cook 后的资产打包、按配置生成目标平台可执行文件的自动化系统。典型工具：FASTBuild、Incredibuild、Unreal Build Tool。</GlossaryItem>
+  <GlossaryItem term="CI/CD">持续集成/持续交付。每次代码提交自动触发构建→测试→打包→部署的流水线。保证"主干永远可发布"。</GlossaryItem>
+  <GlossaryItem term="GUID">全局唯一标识符。引擎给每个资产分配的永不重复的 ID，用于资源引用、依赖追踪和序列化。即使文件改名，GUID 不变。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />
