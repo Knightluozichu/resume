@@ -48,6 +48,7 @@ export type {
 
 /** 复习侧章节 slug 的「书前缀 → bookSlug」表（命名规则，稳定）。 */
 const PREFIX_TO_BOOK: Array<[string, string]> = [
+  ["ga2-", "grokking-algorithms-2e"],
   ["gea3-", "game-engine-architecture-3e"],
   ["gm3d-", "game-math-3d"],
   ["cc-", "cpp-concurrency"],

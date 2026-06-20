@@ -21,6 +21,7 @@ import { basicLightingQuestions } from "./review/basic-lighting";
 import { cameraQuestions } from "./review/camera";
 import { colorsQuestions } from "./review/colors";
 import { coordinateSystemsQuestions } from "./review/coordinate-systems";
+import { grokkingAlgorithmsQuestions } from "./review/grokking-algorithms";
 import { helloTriangleQuestions } from "./review/hello-triangle";
 import { helloWindowQuestions } from "./review/hello-window";
 import { gameEngineArchitecture3eQuestions } from "./review/game-engine-architecture-3e";
@@ -247,6 +248,7 @@ import type { ReviewQuestion } from "./review/types";
 
 /** 全库（按入门 7 章 + 光照 6 章顺序拼接）。各章数组顺序即卡片自检/小结里的默认章序。 */
 export const REVIEW_QUESTIONS: ReviewQuestion[] = [
+  ...grokkingAlgorithmsQuestions,
   ...gameMath3dQuestions,
   ...helloWindowQuestions,
   ...helloTriangleQuestions,

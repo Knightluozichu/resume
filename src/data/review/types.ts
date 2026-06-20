@@ -13,6 +13,19 @@
 
 /** 章节 slug：与 content/learnopengl/getting-started/<slug>.mdx 一一对应。 */
 export type ReviewChapterSlug =
+  | "ga2-introduction-to-algorithms"
+  | "ga2-selection-sort"
+  | "ga2-recursion"
+  | "ga2-quicksort"
+  | "ga2-hash-tables"
+  | "ga2-breadth-first-search"
+  | "ga2-trees"
+  | "ga2-balanced-trees"
+  | "ga2-dijkstras-algorithm"
+  | "ga2-greedy-algorithms"
+  | "ga2-dynamic-programming"
+  | "ga2-k-nearest-neighbors"
+  | "ga2-where-to-go-next"
   | "gea3-introduction"
   | "gea3-tools-of-the-trade"
   | "gea3-software-engineering-for-games"
@@ -286,6 +299,19 @@ export type ReviewQuestion = {
 
 /** 章节 slug → 中文章名（卡片上展示，复习页无 MDX frontmatter 可读，故就近内置）。 */
 export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
+  "ga2-introduction-to-algorithms": "算法简介",
+  "ga2-selection-sort": "选择排序",
+  "ga2-recursion": "递归",
+  "ga2-quicksort": "快速排序",
+  "ga2-hash-tables": "散列表",
+  "ga2-breadth-first-search": "广度优先搜索",
+  "ga2-trees": "树",
+  "ga2-balanced-trees": "平衡树",
+  "ga2-dijkstras-algorithm": "狄克斯特拉算法",
+  "ga2-greedy-algorithms": "贪心算法",
+  "ga2-dynamic-programming": "动态规划",
+  "ga2-k-nearest-neighbors": "K 近邻算法",
+  "ga2-where-to-go-next": "下一步学什么",
   "gea3-introduction": "引言：游戏引擎到底是什么",
   "gea3-tools-of-the-trade": "工具与工作流",
   "gea3-software-engineering-for-games": "游戏软件工程基础",
@@ -542,8 +568,10 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "agent-autonomous-agents": "自主智能体：开放循环与风险边界",
   "agent-combining-patterns": "组合模式：把多个 agentic pattern 拼成系统",
   "agent-agents-in-practice": "实践中的 Agent：从客服到代码助手",
-  "agent-tool-prompt-engineering": "工具提示工程：让 agent 会用工具而不是猜工具",
-  "agent-production-readiness-checklist": "生产化收官：简单、透明与 ACI 上线检查清单",
+  "agent-tool-prompt-engineering":
+    "工具提示工程：让 agent 会用工具而不是猜工具",
+  "agent-production-readiness-checklist":
+    "生产化收官：简单、透明与 ACI 上线检查清单",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

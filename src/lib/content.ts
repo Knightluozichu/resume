@@ -63,6 +63,7 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
 export const BOOK_ORDER = [
+  "grokking-algorithms-2e",
   "game-math-3d",
   "learnopengl",
   "game-engine-architecture-3e",
@@ -82,6 +83,7 @@ export const BOOK_ORDER = [
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
+  "grokking-algorithms-2e": "算法图解（第2版）",
   "game-math-3d": "游戏和图形学的 3D 数学",
   learnopengl: "LearnOpenGL",
   "game-engine-architecture-3e": "游戏引擎架构（第三版）",
@@ -141,6 +143,46 @@ type LearningPathConfig = {
  * 这里保留缺口项，用来在首页和 /learn 明确提示“下一本该补什么”。
  */
 const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
+  {
+    slug: "algorithms",
+    title: "算法",
+    description:
+      "从图解直觉开始，逐步进入数据结构、图算法、优化策略和机器学习入门。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "先用动画建立搜索、排序、递归、图、树和动态规划的第一直觉。",
+        items: [
+          {
+            bookSlug: "grokking-algorithms-2e",
+            note: "算法入门主线，适合先建立可视化心智，再进入更系统的算法训练。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "进入更完整的数据结构、复杂度证明和题型训练。",
+        items: [
+          {
+            title: "算法设计与分析进阶",
+            note: "待补：建议覆盖 CLRS/竞赛题型/工程常见数据结构。",
+            missing: true,
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "进一步学习图优化、随机算法、近似算法和系统级算法工程。",
+        items: [
+          {
+            title: "高级算法与算法工程",
+            note: "待补：建议覆盖大规模图、索引、调度、分布式算法和性能工程。",
+            missing: true,
+          },
+        ],
+      },
+    ],
+  },
   {
     slug: "android",
     title: "Android",
@@ -349,6 +391,10 @@ function bookRank(bookSlug: string): number {
  * 组内再按各自 section 名做稳定回退，保证新增 section 也有确定顺序。
  */
 export const SECTION_ORDER = [
+  "算法核心直觉",
+  "树与图",
+  "策略与规划",
+  "继续前进",
   "入门",
   "数学基础",
   "空间与变换",
