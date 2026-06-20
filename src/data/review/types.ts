@@ -13,6 +13,20 @@
 
 /** 章节 slug：与 content/learnopengl/getting-started/<slug>.mdx 一一对应。 */
 export type ReviewChapterSlug =
+  | "gm3d-cartesian-coordinate-systems"
+  | "gm3d-vectors"
+  | "gm3d-multiple-coordinate-spaces"
+  | "gm3d-matrices"
+  | "gm3d-linear-transformations"
+  | "gm3d-homogeneous-and-projection"
+  | "gm3d-polar-coordinate-systems"
+  | "gm3d-rotations-in-three-dimensions"
+  | "gm3d-quaternions"
+  | "gm3d-geometric-primitives"
+  | "gm3d-mathematical-topics-in-3d-graphics"
+  | "gm3d-mechanics"
+  | "gm3d-curves-in-3d"
+  | "gm3d-afterword-and-review"
   | "hello-window"
   | "hello-triangle"
   | "shaders"
@@ -255,6 +269,20 @@ export type ReviewQuestion = {
 
 /** 章节 slug → 中文章名（卡片上展示，复习页无 MDX frontmatter 可读，故就近内置）。 */
 export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
+  "gm3d-cartesian-coordinate-systems": "笛卡尔坐标系统",
+  "gm3d-vectors": "向量",
+  "gm3d-multiple-coordinate-spaces": "多个坐标空间",
+  "gm3d-matrices": "矩阵",
+  "gm3d-linear-transformations": "线性变换",
+  "gm3d-homogeneous-and-projection": "齐次坐标与投影矩阵",
+  "gm3d-polar-coordinate-systems": "极坐标系统",
+  "gm3d-rotations-in-three-dimensions": "三维旋转",
+  "gm3d-quaternions": "四元数",
+  "gm3d-geometric-primitives": "几何图元",
+  "gm3d-mathematical-topics-in-3d-graphics": "3D 图形学数学主题",
+  "gm3d-mechanics": "力学",
+  "gm3d-curves-in-3d": "3D 曲线",
+  "gm3d-afterword-and-review": "后记与全书复习",
   "hello-window": "你好，窗口",
   "hello-triangle": "你好，三角形",
   shaders: "着色器",
