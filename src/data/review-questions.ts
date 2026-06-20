@@ -89,6 +89,7 @@ import { cppOopQuestions } from "./review/cpp-oop";
 import { cppTemplatesQuestions } from "./review/cpp-templates";
 import { cppSpecializedLibraryQuestions } from "./review/cpp-specialized-library";
 import { cppLargeProgramsQuestions } from "./review/cpp-large-programs";
+import { androidDesignPatternsQuestions } from "./review/android-design-patterns";
 import { androidArchitectureQuestions } from "./review/android-architecture";
 import { systemStartupQuestions } from "./review/system-startup";
 import { appProcessStartupQuestions } from "./review/app-process-startup";
@@ -372,6 +373,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bnrgCustomViewsQuestions,
   ...bnrgPropertyAnimationQuestions,
   ...bnrgAfterwordQuestions,
+  ...androidDesignPatternsQuestions,
   ...ugoEvaluatingPerformanceProblemsQuestions,
   ...ugoScriptingStrategiesQuestions,
   ...ugoBenefitsOfBatchingQuestions,

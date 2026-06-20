@@ -69,8 +69,9 @@ export const BOOK_ORDER = [
   "game-engine-architecture-3e",
   "cpp-primer-5e",
   "c-primer-plus",
-  "android-advanced-decryption",
   "big-nerd-ranch-guide",
+  "android-design-patterns",
+  "android-advanced-decryption",
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
@@ -89,8 +90,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "game-engine-architecture-3e": "游戏引擎架构（第三版）",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
-  "android-advanced-decryption": "Android进阶解密",
   "big-nerd-ranch-guide": "Android 编程权威指南（第4版）",
+  "android-design-patterns": "Android アプリ設計パターン入門",
+  "android-advanced-decryption": "Android进阶解密",
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
@@ -201,12 +203,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       },
       {
         level: "intermediate",
-        summary: "需要一座从应用层到源码层的桥。",
+        summary: "把应用层经验推进到团队协作、架构模式、测试与现代化迁移。",
         items: [
           {
-            title: "Jetpack / Compose / 架构工程实践",
-            note: "待补：建议覆盖 ViewModel、Room、Navigation、Compose、架构分层与测试。",
-            missing: true,
+            bookSlug: "android-design-patterns",
+            note: "Android 中级架构桥梁：从 Fat Activity 走向 MVP、MVVM、Flux、AAC、Kotlin 与团队协作规则。",
           },
         ],
       },
@@ -419,6 +420,16 @@ export const SECTION_ORDER = [
   "C控制与IO",
   "C函数数组指针",
   "C高级主题",
+  // Android 编程权威指南
+  "基础入门",
+  "UI与Fragment",
+  "Intent与数据",
+  "后台与网络",
+  "高级UI与动画",
+  // 团队协作中的 Android 应用设计模式入门
+  "团队协作与设计基础",
+  "Android 架构与设计模式",
+  "测试重构与现代化",
   // Android进阶解密
   "系统架构",
   "系统启动",
@@ -428,12 +439,6 @@ export const SECTION_ORDER = [
   "底层技术",
   "高级技术",
   "性能优化",
-  // Android 编程权威指南
-  "基础入门",
-  "UI与Fragment",
-  "Intent与数据",
-  "后台与网络",
-  "高级UI与动画",
   // Unity Game Optimization
   "基础脚本优化",
   "图形优化",

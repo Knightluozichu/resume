@@ -26,6 +26,16 @@ export type ReviewChapterSlug =
   | "ga2-dynamic-programming"
   | "ga2-k-nearest-neighbors"
   | "ga2-where-to-go-next"
+  | "adp-android-app-basic-structure"
+  | "adp-mvp-application-structure"
+  | "adp-mvvm-application-structure"
+  | "adp-differential-development-design"
+  | "adp-designer-role-in-oss"
+  | "adp-flux-architecture"
+  | "adp-team-and-architecture"
+  | "adp-android-architecture-components"
+  | "adp-kotlin-impact-on-design"
+  | "adp-design-question-square"
   | "gea3-introduction"
   | "gea3-tools-of-the-trade"
   | "gea3-software-engineering-for-games"
@@ -312,6 +322,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ga2-dynamic-programming": "动态规划",
   "ga2-k-nearest-neighbors": "K 近邻算法",
   "ga2-where-to-go-next": "下一步学什么",
+  "adp-android-app-basic-structure": "Android 应用的基本构成",
+  "adp-mvp-application-structure": "MVP 模式应用构成",
+  "adp-mvvm-application-structure": "MVVM 模式应用构成",
+  "adp-differential-development-design": "差分开发中的设计方法",
+  "adp-designer-role-in-oss": "OSS 中设计者的角色",
+  "adp-flux-architecture": "Flux 架构",
+  "adp-team-and-architecture": "团队与架构",
+  "adp-android-architecture-components": "Android Architecture Components",
+  "adp-kotlin-impact-on-design": "Kotlin 对设计的影响",
+  "adp-design-question-square": "设计问答广场",
   "gea3-introduction": "引言：游戏引擎到底是什么",
   "gea3-tools-of-the-trade": "工具与工作流",
   "gea3-software-engineering-for-games": "游戏软件工程基础",
