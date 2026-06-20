@@ -633,6 +633,7 @@ import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 import { EngineArchLab } from "./enginearch/engine-arch-lab";
 import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
+import { AndroidDesignLab } from "./android-patterns/android-design-lab";
 import { GameMathLab } from "./gamemath/game-math-lab";
 
 /**
@@ -1551,6 +1552,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolSafetyPlayground,
   EngineArchLab,
   AlgorithmPlayground,
+  AndroidDesignLab,
   GameMathLab,
   Term,
   Glossary,
