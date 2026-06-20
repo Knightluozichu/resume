@@ -1,85 +1,94 @@
 ---
-title: 人机输入设备
+title: 输入系统：从硬件到玩家意图
 type: A
 section: Low-Level Engine Systems
-order: 4
-description: 把键鼠、手柄、触屏等设备统一成可配置的游戏动作。
+order: 5
+description: 键盘、鼠标、手柄、触屏——输入系统把物理设备的差异藏起来，只暴露"玩家想做什么"。
 demo: true
 math: false
 sourceUrl: https://www.gameenginebook.com/toc.html
-draft: false
+draft: true
 ---
 
-{/* 知识点清单：HID=EngineArchLab/Stepper/Glossary；事件=EngineArchLab/Stepper/Glossary；动作映射=EngineArchLab/Stepper/Glossary；死区=EngineArchLab/Stepper/Glossary；反馈=EngineArchLab/Stepper/Glossary。原书章节：Human Interface Devices。 */}
+{/*
+  知识点清单（chapter-spec §〇）：
+  - 输入抽象：GameEngineAnatomyDiagram(hid)/Stepper/Glossary
+  - 动作映射：Figure/Stepper/Glossary
+  - 输入采样与去抖：Figure/Glossary
+  - 死区与归一化：Figure/Glossary
+  - 输入延迟：Figure/Glossary
+
+  原书章节：Human Interface Devices
+  类型：A 概念型
+*/}
 
 <Objectives>
-
-- 能解释 HID 在游戏引擎整体架构里的位置。
-- 能通过交互图观察 事件 与其他模块之间的数据或控制流。
-- 能回答：输入系统要把硬件差异藏起来，把玩家意图暴露出来。
-
+- 能解释输入系统为什么把"设备"和"动作"分开
+- 能说出死区、归一化、去抖各自解决什么问题
+- 能回答：为什么播放感觉到的输入延迟来源比"显示延迟"更多？
 </Objectives>
 
-## 先看系统怎么协作
+## 手柄摇杆在中心位置，角色还在自动走
 
-把键鼠、手柄、触屏等设备统一成可配置的游戏动作。 这章不从大段定义开始，而是先把模块摊在图上：谁生产数据、谁消费数据、谁卡住帧预算，一眼看清。
+这是一个经典手柄 Bug：玩家把手柄放桌上，摇杆在物理中立位置，但角色还在微微往前蹭。原因是摇杆的模拟量不是完美的 0——它在 0.002 到 0.008 之间微小漂移。如果输入系统不加<Term def="摇杆中心附近一定范围内的微小输入被视为零。防止摇杆物理漂移导致角色自动移动。">死区</Term>，这个噪音就会变成持续输入。
 
-<EngineArchLab mode="hid" title="人机输入设备 · 交互式架构图" />
+<Term def="把不同设备（键盘的 W、手柄的左摇杆 Y+、触屏的向上滑）映射到同一个抽象动作（MoveForward），玩法代码只关心动作不关心设备。">动作映射</Term>是输入系统最核心的一层抽象。它的逻辑很简单：玩法代码不应该知道玩家用的是键盘还是手柄。键盘 W = MoveForward、手柄左摇杆上 = MoveForward、触屏上滑 = MoveForward——玩法只调 `GetActionValue("MoveForward")`。
 
-## 分步动画：一帧里发生什么
+<GameEngineAnatomyDiagram chapter="hid" />
+
+输入系统的四层流水线：
+
+1. **设备驱动层**：从操作系统收原始事件（按键码、摇杆原始值、触摸坐标、鼠标位移）
+2. **采样/去抖层**：把原始事件按帧时间戳收集，去抖动——同一帧内多次按键当成一次处理
+3. **归一化层**：把不同设备的原始值归一化到统一范围（如 -1 到 1）。摇杆加死区，鼠标加灵敏度
+4. **动作映射层**：把归一化后的设备值映射到"动作"——`MoveForward`、`Jump`、`Aim`、`Fire`
 
 <Stepper>
-  <Step title="输入进入系统">
-    <EngineArchLab mode="hid" title="第 1 步：输入/资产/状态进入模块" />
+  <Step title="设备事件先留时间证据">
+    输入 Bug 常常是时间问题——按键在两个物理 step 之间被按下了但没被采样到。保留原始设备事件的时间戳，而不是立刻丢掉，是定位输入延迟的关键。
+    <GameEngineAnatomyDiagram chapter="hid" step={1} />
   </Step>
-  <Step title="模块协同处理">
-    <EngineArchLab mode="hid" title="第 2 步：模块开始协作，压力逐渐升高" />
+  <Step title="归一化——抹平设备差异">
+    不同手柄的摇杆量程不同（35000-50000），不同鼠标的 DPI 不同。归一化把所有人的输入变成统一的 -1 到 1。死区去掉摇杆漂移，曲线映射让手感"线性"or"指数"。
+    <GameEngineAnatomyDiagram chapter="hid" step={2} />
   </Step>
-  <Step title="输出回到游戏">
-    <EngineArchLab mode="hid" title="第 3 步：结果回写到帧、资源或玩法状态" />
+  <Step title="动作驱动玩法并触发反馈">
+    归一化后的值映射到动作 → 玩法逻辑消费动作改变世界状态 → 渲染、音效、震动把结果反馈给玩家。输入链路在这一步闭合。
+    <GameEngineAnatomyDiagram chapter="hid" step={3} />
   </Step>
 </Stepper>
 
-## 核心概念
+**输入延迟**不只是"按钮到画面"的时间。从物理按下按键到屏幕上角色起跳，中间经过了：USB 轮询周期(1-8ms) → OS 输入栈(1-2ms) → 引擎采样(0-16ms，取决于在哪一帧采到) → 逻辑运算(0-3ms) → 渲染(0-16ms) → 显示扫描(0-16ms)。总和可以超过 50ms——在格斗游戏里这个延迟已经影响胜负。
 
-<Term def="输入系统要把硬件差异藏起来，把玩家意图暴露出来。">HID</Term> 是本章的入口。它不是孤立类名，而是引擎里某条数据流或控制流上的节点。输入系统要把硬件差异藏起来，把玩家意图暴露出来。
+## 容易踩的坑
 
-本章还会碰到 <Term def="和本章入口一起构成系统协作关系的关键节点。">事件</Term>。看架构时，不要只问“它是什么”，更要问“它被谁调用、产出什么、失败时谁能观察到”。
+- **现象 ->** PC 版支持手柄和键盘，但两个设备的按键配置各自一套，维护成本翻倍。**原因 ->** 没有统一的动作映射层。**修法 ->** 所有设备映射到同一套"动作"，改键 → 只改映射表。键盘的 Space 和手柄的 A 都映射到 Jump。
 
+- **现象 ->** 触屏设备上虚拟摇杆比物理手柄延迟高很多。**原因 ->** 触控的"滑动"需要在 OS 层判断滑动手势（不是点击），这本身就比物理按键多一层滤波延迟。**修法 ->** 用低延迟触控 API（如 Apple Pencil 的预测触摸），或接受触控输入比物理按键多 20-40ms 延迟的现实。
 
+## 小结
 
-## 常见误区
-
-- **现象 ->** 架构图看起来很整齐。**原因 ->** 图省略了等待、同步和失败路径。**修法 ->** 给每条箭头补上“谁等谁、失败谁知道”。
-- **现象 ->** 单个模块性能很好，整帧仍然卡。**原因 ->** 瓶颈在模块之间的交接。**修法 ->** 看帧边界、资源加载点和同步点。
-- **现象 ->** 玩法代码越来越像脚本泥潭。**原因 ->** 底层系统没有提供清晰边界。**修法 ->** 把数据、事件、生命周期分开画出来。
-
-## 小结与练习
-
-- 人机输入设备 的核心是：输入系统要把硬件差异藏起来，把玩家意图暴露出来。
-- 先画模块关系，再决定代码边界。
-- 调试优先找数据入口、同步点和输出回写。
+- 动作映射 = 把具体设备抽象为统一动作，玩法代码一劳永逸
+- 死区 = 滤掉摇杆的物理漂移噪音
+- 归一化 = 不同设备的量程映射到统一的 -1 到 1
+- 输入延迟 = USB + OS + 采样 + 逻辑 + 渲染 + 显示 = 可达 50ms+
+- 低延迟输入和物理准确性一样重要——在竞技游戏里延迟决定胜负
+- 震动/音效反馈是"闭合输入回路"的最后一步
 
 <Exercises>
-  <Answer question="把流程滑块拖到 100%，最后被激活的节点说明了什么？">
-    它通常代表本章链路的输出端。回答时要指出输出回到哪一层：帧、资源、玩法状态、GPU 命令或玩家反馈。
-  </Answer>
-  <Answer question="把压力滑块拉高，哪类问题最容易先暴露？">
-    资源等待、线程同步、帧预算超时和模块边界不清会最先暴露。不要只看单个函数耗时，要看系统之间的等待。
-  </Answer>
-  <Answer question="给本章画一条调试线，应该从哪里画到哪里？">
-    从输入源画到最终输出，中间标出每个模块的责任、数据结构和失败可观测点。
+  <Answer question="你有一个赛车游戏，用键盘 WASD 开车。为什么键盘开车感觉是"0 或 1"而不能像手柄一样慢慢打方向？怎么改善？">
+    键盘是数字输入——按或不按，没有中间值。手柄摇杆是模拟输入——从 0 到 1 平滑过渡。改善键盘手感：给键盘输入加"虚拟模拟"——例如检测到 A 键按住后，转向值从 0 在 0.3 秒内渐进达到 1（曲线加速），松开后渐进归零。这样键盘也能有类似摇杆的"轻打"和"重打"手感。
   </Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="HID">HID 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="事件">事件 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="动作映射">动作映射 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="死区">死区 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="反馈">反馈 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
+  <GlossaryItem term="动作映射">把不同物理设备（键盘/手柄/触屏）的输入事件映射到统一的抽象动作（Jump/Fire/Move）。玩法代码只关心动作名，不关心设备类型。</GlossaryItem>
+  <GlossaryItem term="死区">摇杆中心附近一小区间内的模拟值被当做 0 处理。防止摇杆物理漂移（0.002 微偏）导致角色自动移动。</GlossaryItem>
+  <GlossaryItem term="归一化">把不同设备的原始输入范围（手柄摇杆 -32768~32767、鼠标 0~DPI）映射到统一范围（-1~1），让动作映射层能统一处理。</GlossaryItem>
+  <GlossaryItem term="去抖">一帧内有多次同一按键事件时只报告一次。防止操作系统或设备驱动的重复事件导致一帧内多次触发。</GlossaryItem>
+  <GlossaryItem term="输入延迟">从物理按下到画面响应的时间。来源：USB 轮询 → OS 输入栈 → 引擎采样 → 逻辑 → 渲染 → 显示扫描。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

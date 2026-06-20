@@ -1,85 +1,93 @@
 ---
-title: 调试与开发工具
+title: 调试与开发工具：看见系统内部
 type: A
 section: Low-Level Engine Systems
-order: 5
-description: 用可观察性工具把引擎黑盒拆成能定位问题的仪表盘。
+order: 6
+description: Profiler、断点、可视化调试、回放系统——让藏在帧里的 bug 浮出水面。
 demo: true
 math: false
 sourceUrl: https://www.gameenginebook.com/toc.html
-draft: false
+draft: true
 ---
 
-{/* 知识点清单：断点=EngineArchLab/Stepper/Glossary；Profiler=EngineArchLab/Stepper/Glossary；可视化调试=EngineArchLab/Stepper/Glossary；回放=EngineArchLab/Stepper/Glossary；自动化=EngineArchLab/Stepper/Glossary。原书章节：Tools for Debugging and Development。 */}
+{/*
+  知识点清单（chapter-spec §〇）：
+  - Profiler 分层：GameEngineAnatomyDiagram(debug)/Stepper/Glossary
+  - 可视化调试：Figure/Stepper/Glossary
+  - 回放系统：Figure/Stepper/Glossary
+  - 自动化测试与回归：Figure/Glossary
+  - 崩溃报告：Figure/Glossary
+
+  原书章节：Debugging and Development Tools
+  类型：A 概念型
+*/}
 
 <Objectives>
-
-- 能解释 断点 在游戏引擎整体架构里的位置。
-- 能通过交互图观察 Profiler 与其他模块之间的数据或控制流。
-- 能回答：没有工具的架构，只会把问题藏到更深的地方。
-
+- 能说出三种"看不见状态"的调试手段
+- 能解释回放系统如何让"不可复现 bug"变得可复现
+- 能回答：为什么 Profiler 数据不能全信？
 </Objectives>
 
-## 先看系统怎么协作
+## "在我机器上能跑"
 
-用可观察性工具把引擎黑盒拆成能定位问题的仪表盘。 这章不从大段定义开始，而是先把模块摊在图上：谁生产数据、谁消费数据、谁卡住帧预算，一眼看清。
+这句话可能是世界上被说最多的程序员免责声明。但游戏不是在"开发者机器"上跑的——它在玩家的千奇百怪的硬件配置、操作系统版本、驱动组合上跑。你不能把所有玩家的设备都搬进办公室调试。你需要工具看到远端发生了什么。
 
-<EngineArchLab mode="debug" title="调试与开发工具 · 交互式架构图" />
+<Term def="运行性能采样工具。以采样或插桩方式记录每一帧每个函数的 CPU/GPU 耗时，把隐藏的性能数据变成可见的时间线。">Profiler</Term>是第一道防线。但它有盲点——采样频率不够高可能漏掉短命的 spikes，插桩方式本身可能扭曲被测代码的性能。所以"全信 Profiler"和"不信 Profiler"都不可取——要交叉验证。
 
-## 分步动画：一帧里发生什么
+<GameEngineAnatomyDiagram chapter="debug" />
 
 <Stepper>
-  <Step title="输入进入系统">
-    <EngineArchLab mode="debug" title="第 1 步：输入/资产/状态进入模块" />
+  <Step title="先捕获现场和局部状态">
+    Bug 的第一现场不是"现象"而是"状态"。崩溃时的调用栈、变量值、内存布局——这些是证据。断点和日志只能回答"此刻发生了什么"，但不能回答"几帧前是什么造成了这一刻"。
+    <GameEngineAnatomyDiagram chapter="debug" step={1} />
   </Step>
-  <Step title="模块协同处理">
-    <EngineArchLab mode="debug" title="第 2 步：模块开始协作，压力逐渐升高" />
+  <Step title="用 Profile 和可视化解释系统全貌">
+    单独看一个变量看不出"这个物理模拟为什么不稳定"。但把所有碰撞体画成线框、把所有速度画成箭头、把所有帧时间画成时间线——全貌自己就浮出来了。可视化调试让"看不懂的数据"变成"一眼能懂的图"。
+    <GameEngineAnatomyDiagram chapter="debug" step={2} />
   </Step>
-  <Step title="输出回到游戏">
-    <EngineArchLab mode="debug" title="第 3 步：结果回写到帧、资源或玩法状态" />
+  <Step title="回放后固化为自动化验证">
+    修复只是第一步。能复现、能验证"修好了"、能防止同样问题再回归——这才是闭环。回放系统在这步是神器：记录了所有输入和游戏状态的日志，重新播放就能精确复现那一刻的 bug。
+    <GameEngineAnatomyDiagram chapter="debug" step={3} />
   </Step>
 </Stepper>
 
-## 核心概念
+## 回放系统：时间机器的实现
 
-<Term def="没有工具的架构，只会把问题藏到更深的地方。">断点</Term> 是本章的入口。它不是孤立类名，而是引擎里某条数据流或控制流上的节点。没有工具的架构，只会把问题藏到更深的地方。
+<Term def="记录每一帧的输入（按键、网络消息、随机种子），之后可以精确重放整个游戏过程，让任何 bug 都可复现。">回放系统</Term>需要做的只有三件事：记录每帧的输入、用相同的随机种子、在相同的引擎版本上运行。回放时游戏循环换成"从日志读输入"而非"从设备采样输入"，其余逻辑照常——因为输入决定一切，相同输入 = 相同世界状态。
 
-本章还会碰到 <Term def="和本章入口一起构成系统协作关系的关键节点。">Profiler</Term>。看架构时，不要只问“它是什么”，更要问“它被谁调用、产出什么、失败时谁能观察到”。
+但回放不是免费的：存储——几千帧的输入数据可以达几 MB；版本锁定——引擎更新后旧的回放日志可能失效。所以回放系统通常只在 QA 和调试阶段使用，正式发布版不开启。
 
+## 容易踩的坑
 
+- **现象 ->** Profiler 说 CPU 用了 50%，但游戏就是卡。**原因 ->** CPU 没用满不代表没瓶颈——可能是 GPU 在等 CPU 提交命令（CPU-bound），或 CPU 在等 GPU 完成某个同步点（GPU-bound），或 IO。单一工具给不出全貌。**修法 ->** GPU Profiler + CPU Profiler + IO Profiler 三个同时跑。
 
-## 常见误区
+- **现象 ->** 回放日志在 CI 机器上跑不通，但在开发机上正常。**原因 ->** 日志里记录的随机种子在另一台机器的 OS 版本上生成了不同的结果。**修法 ->** 使用确定性的伪随机引擎，不依赖 `std::rand()`（其实现因编译器而异）。
 
-- **现象 ->** 架构图看起来很整齐。**原因 ->** 图省略了等待、同步和失败路径。**修法 ->** 给每条箭头补上“谁等谁、失败谁知道”。
-- **现象 ->** 单个模块性能很好，整帧仍然卡。**原因 ->** 瓶颈在模块之间的交接。**修法 ->** 看帧边界、资源加载点和同步点。
-- **现象 ->** 玩法代码越来越像脚本泥潭。**原因 ->** 底层系统没有提供清晰边界。**修法 ->** 把数据、事件、生命周期分开画出来。
+## 小结
 
-## 小结与练习
-
-- 调试与开发工具 的核心是：没有工具的架构，只会把问题藏到更深的地方。
-- 先画模块关系，再决定代码边界。
-- 调试优先找数据入口、同步点和输出回写。
+- Profiler 让你看见"时间花在哪"——CPU、GPU、内存都有专属 Profiler
+- 可视化调试 = 把数据画出来：碰撞体线框、骨骼姿态、帧时间线——肉眼比数值更善于发现异常
+- 回放系统 = 录输入 + 相同种子 + 相同版本 = 任何 bug 都能精确复现
+- 崩溃报告 + 调用栈 dump = 让远端用户的问题有迹可循
+- 自动化验证防止修好的 bug 再回归
+- "修好了"不是终点——能复现、能验证、能防回归才闭环
 
 <Exercises>
-  <Answer question="把流程滑块拖到 100%，最后被激活的节点说明了什么？">
-    它通常代表本章链路的输出端。回答时要指出输出回到哪一层：帧、资源、玩法状态、GPU 命令或玩家反馈。
-  </Answer>
-  <Answer question="把压力滑块拉高，哪类问题最容易先暴露？">
-    资源等待、线程同步、帧预算超时和模块边界不清会最先暴露。不要只看单个函数耗时，要看系统之间的等待。
-  </Answer>
-  <Answer question="给本章画一条调试线，应该从哪里画到哪里？">
-    从输入源画到最终输出，中间标出每个模块的责任、数据结构和失败可观测点。
+  <Answer question="一个 Bug 只在某位玩家的特定显卡上出现，你手里没有这个显卡。你有哪些工具和手段来定位和修复？">
+    1. 崩溃报告系统：远端崩溃时自动上传调用栈 + 最小 dump + GPU/驱动版本信息
+    2. GPU Profiler 在线服务：让那位玩家在游戏里开启远程 Profiler（如 RenderDoc 远程抓帧），传一帧给你分析
+    3. 回放系统（如果开启了）：让玩家上传回放日志，你在本地用相同显卡驱动版本跑回放
+    4. 如果以上都没有：用玩家反馈的现象反推——"只有这个显卡"暗示可能是该驱动版本的 GPU timer query 或特定纹理格式支持有问题
   </Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="断点">断点 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="Profiler">Profiler 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="可视化调试">可视化调试 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="回放">回放 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="自动化">自动化 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
+  <GlossaryItem term="Profiler">分析程序在每帧每个函数的 CPU/GPU 耗时分布的性能工具。按采样或插桩方式工作。游戏专用 Profiler：Tracy、PIX、RenderDoc。</GlossaryItem>
+  <GlossaryItem term="可视化调试">把抽象数据（碰撞体、骨骼、物理力）画成线框、箭头、颜色——用视觉直觉捕捉异常。比看着内存地址和数字高效得多。</GlossaryItem>
+  <GlossaryItem term="回放系统">记录每一帧的输入和随机种子，允许之后完整重放整个游戏过程。能让"不可复现"的 bug 变得可复现。</GlossaryItem>
+  <GlossaryItem term="崩溃 dump">程序崩溃时自动保存的调用栈、寄存器、内存快照。开发者可以事后加载 dump 文件看到崩溃那一刻的程序状态。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

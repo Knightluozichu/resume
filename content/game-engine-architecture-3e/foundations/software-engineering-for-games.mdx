@@ -1,85 +1,161 @@
 ---
-title: 游戏软件工程基础
+title: 软件工程：引擎架构的纪律
 type: A
 section: Foundations
-order: 3
-description: 把大型游戏代码拆成可维护、可调试、可演进的模块。
+order: 5
+description: 分层架构、接口契约、数据驱动——游戏引擎的软件工程原则，决定项目能活多久。
 demo: true
 math: false
 sourceUrl: https://www.gameenginebook.com/toc.html
-draft: false
+draft: true
 ---
 
-{/* 知识点清单：模块=EngineArchLab/Stepper/Glossary；接口=EngineArchLab/Stepper/Glossary；内存=EngineArchLab/Stepper/Glossary；错误处理=EngineArchLab/Stepper/Glossary；测试=EngineArchLab/Stepper/Glossary。原书章节：Fundamentals of Software Engineering for Games。 */}
+{/*
+  知识点清单（chapter-spec §〇）：
+  - 分层架构：SoftwareLayersDiagram/Stepper/Glossary
+  - 接口与依赖方向：GameEngineAnatomyDiagram(software)/Stepper/Glossary
+  - 数据驱动设计：Figure/Glossary
+  - 测试策略：SoftwareLayersDiagram/Stepper/Glossary
+  - 编码标准与代码审查：Figure/Glossary
+
+  原书章节：Software Engineering for Games
+  类型：A 概念型
+*/}
 
 <Objectives>
-
-- 能解释 模块 在游戏引擎整体架构里的位置。
-- 能通过交互图观察 接口 与其他模块之间的数据或控制流。
-- 能回答：架构的第一责任是控制复杂度，而不是显得高级。
-
+- 能画出引擎的经典四层架构，解释每层的职责和因何稳定
+- 能判断一段代码应该放在哪一层
+- 能回答：为什么玩法层的改动不应该引起渲染层的崩溃？
 </Objectives>
 
-## 先看系统怎么协作
+## 一万行类是怎么长出来的
 
-把大型游戏代码拆成可维护、可调试、可演进的模块。 这章不从大段定义开始，而是先把模块摊在图上：谁生产数据、谁消费数据、谁卡住帧预算，一眼看清。
+翻看任何一个存活超过三年的游戏项目，你大概率能找到一个叫 `GameManager` 或 `Engine` 的类，它有两万行，管着渲染、物理、输入、UI、存档、网络——什么都能干，什么事都通过一个巨大的 `Update()` 方法。这不是哪个程序员故意写的乱码。它是一个接一个的功能需求、一层接一层的"先这样吧"、一次次绕过模块边界往里塞代码的自然结果。
 
-<EngineArchLab mode="software" title="游戏软件工程基础 · 交互式架构图" />
+<Term def="把代码按抽象程度和变化频率分成层级，上层只依赖下层、下层不知道上层的存在。典型的游戏引擎四层：玩法层→子系统层→核心层→平台层。">分层架构</Term>就是为了对抗这种"自然熵增"而存在的。它的核心纪律只有一条：**上层依赖下层，下层不依赖上层**。
 
-## 分步动画：一帧里发生什么
+<SoftwareLayersDiagram />
+
+四层各自的职责和稳定性：
+
+- **平台层（最稳）**：操作系统 API 封装、文件系统、OpenGL/Vulkan/DirectX 抽象。这层只在"要支持一个新平台"时才改动。
+- **核心层**：内存分配器、容器（Array、HashMap、String）、数学库、时间系统。没有这层，上面三层连对象都 new 不出来。接口几乎永远不变。
+- **子系统层**：渲染管线、物理引擎、动画系统、音频混音。这层有明确的"输入→处理→输出"数据流，各子系统通过核心层提供的容器和数学库相互传递数据。
+- **玩法层（最易变）**：脚本、状态机、关卡逻辑。这是唯一"每局游戏都不同"的代码。好的架构让玩法层的崩溃不会带垮下面的渲染和物理。
+
+<GameEngineAnatomyDiagram chapter="software" />
+
+再来看"依赖方向"的解剖。
 
 <Stepper>
-  <Step title="输入进入系统">
-    <EngineArchLab mode="software" title="第 1 步：输入/资产/状态进入模块" />
+  <Step title="先把需求变成接口契约">
+    画类图之前，先画接口。接口不是 C++ 的关键字 `interface`——它是"这个模块对外承诺的输入是什么、输出是什么、失败时什么形态"。清晰的接口让两个模块可以独立开发和测试。
+    <GameEngineAnatomyDiagram chapter="software" step={1} />
   </Step>
-  <Step title="模块协同处理">
-    <EngineArchLab mode="software" title="第 2 步：模块开始协作，压力逐渐升高" />
+  <Step title="实现内部守住数据所有权">
+    接口下面的实现可以很复杂——缓存策略、算法选择、多线程细节——但有一个铁律：**数据的写入者必须唯一**。如果渲染系统和物理系统同时修改 Transform，崩溃只是时间问题。
+    <GameEngineAnatomyDiagram chapter="software" step={2} />
   </Step>
-  <Step title="输出回到游戏">
-    <EngineArchLab mode="software" title="第 3 步：结果回写到帧、资源或玩法状态" />
+  <Step title="错误和测试从边界穿出来">
+    模块出错了，错误信息必须是调用方能解读的（"纹理加载失败：路径 X，格式不支持的 DDS 变体"），而不是内部无上下文的空指针。同时，接口边界必须可替换——物理引擎上方是测试桩时，玩法代码应该完全无感知。
+    <GameEngineAnatomyDiagram chapter="software" step={3} />
   </Step>
 </Stepper>
 
-## 核心概念
+## 数据驱动：别硬编码，让数据说话
 
-<Term def="架构的第一责任是控制复杂度，而不是显得高级。">模块</Term> 是本章的入口。它不是孤立类名，而是引擎里某条数据流或控制流上的节点。架构的第一责任是控制复杂度，而不是显得高级。
+一个关卡里有多少个敌人？敌人的血量是多少？触发器的范围多大？这些不是代码该回答的问题——是数据该回答的。**数据驱动**就是把"游戏怎么玩"从 C++ 源码里抽出来，放进 JSON/XML/自定义格式的数据文件中，让设计师和非程序员能改，而不用重新编译。
 
-本章还会碰到 <Term def="和本章入口一起构成系统协作关系的关键节点。">接口</Term>。看架构时，不要只问“它是什么”，更要问“它被谁调用、产出什么、失败时谁能观察到”。
+最极端的数据驱动案例是"引擎=通用运行时，游戏=纯数据包"——引擎完全不知道自己上面跑的是什么游戏。但实际上大多数引擎介于"硬编码"和"完全数据驱动"之间。一个合理的判断标准：**如果需要改代码来调一个敌人的血量，那这个项目就不够数据驱动**。
 
+<CodeTabs>
+  <Tab label="C++ 加载数据示例">
 
+```cpp
+// 数据驱动: 角色属性从 JSON/数据表加载
+// 而不是 hardcode 在 constructor 里
+struct CharacterData {
+    float health;
+    float speed;
+    const char* modelPath;
+};
 
-## 常见误区
+// 玩法代码不写死数值，只消费数据
+class Character {
+    CharacterData m_data; // 从数据文件加载
+public:
+    Character(const CharacterData& data)
+        : m_data(data) {}
+    float GetHealth() const { return m_data.health; }
+};
 
-- **现象 ->** 架构图看起来很整齐。**原因 ->** 图省略了等待、同步和失败路径。**修法 ->** 给每条箭头补上“谁等谁、失败谁知道”。
-- **现象 ->** 单个模块性能很好，整帧仍然卡。**原因 ->** 瓶颈在模块之间的交接。**修法 ->** 看帧边界、资源加载点和同步点。
-- **现象 ->** 玩法代码越来越像脚本泥潭。**原因 ->** 底层系统没有提供清晰边界。**修法 ->** 把数据、事件、生命周期分开画出来。
+// 设计师改 data.json: { "health": 150 }
+// 就生效了, 不用重新编译 C++
+```
+  </Tab>
+  <Tab label="TypeScript 结构示意">
 
-## 小结与练习
+```typescript
+// 同样的数据驱动理念
+interface CharacterData {
+  health: number;
+  speed: number;
+  modelPath: string;
+}
 
-- 游戏软件工程基础 的核心是：架构的第一责任是控制复杂度，而不是显得高级。
-- 先画模块关系，再决定代码边界。
-- 调试优先找数据入口、同步点和输出回写。
+class Character {
+  private data: CharacterData;
+
+  constructor(data: CharacterData) {
+    this.data = data;
+  }
+
+  get health(): number {
+    return this.data.health;
+  }
+}
+
+// 数据文件 characters/hero.json:
+// { "health": 150, "speed": 5.5, "modelPath": "hero.glb" }
+// 改数据 = 改游戏，不用碰代码
+```
+  </Tab>
+</CodeTabs>
+
+## 容易踩的坑
+
+- **现象 ->** 玩法程序员直接调渲染 API 的底层方法，三个月后渲染重构时玩法全崩。**原因 ->** 两层之间缺乏稳定的接口抽象，上层直接依赖下层的内部实现细节。**修法 ->** 在层与层之间建立"接口层"或"Facade"——玩法只调 `PlayEffect("explosion")`，不知道也不需要知道渲染是用粒子系统还是 GPU Compute 实现的。
+
+- **现象 ->** 所有代码都能读写全局变量，没人知道一个值是谁改的。**原因 ->** 没有控制数据所有权——全局状态是并发 bug 和隐式依赖的温床。**修法 ->** 每个数据必须有一个明确的"所有者"模块。其他模块只能通过所有者的公共接口读取或请求修改。禁止绕过所有者直接改内存。
+
+- **现象 ->** "这个类有 200 个 public 方法"。**原因 ->** 接口太宽——类对外暴露了所有内部工具方法，外面的人随意调用。**修法 ->** 把 public 方法缩减到"真接口"的 5-10 个——只保留其他模块必须知道的入口。其余的放进 private/protected。
+
+## 小结
+
+- 分层架构：平台层→核心层→子系统层→玩法层，上层依赖下层，反方向禁止
+- 接口是模块之间的契约——定义了输入、输出和错误形态
+- 数据所有权必须唯一：每个数据只有一个写入者，其他人只读
+- 数据驱动 = 用数据文件而非硬编码定义游戏参数，让设计师不写代码就能调游戏
+- 好的测试从接口边界做——替换底层实现，上层无感知
+- 构建上的纪律比性能的数字更决定项目的长期健康
 
 <Exercises>
-  <Answer question="把流程滑块拖到 100%，最后被激活的节点说明了什么？">
-    它通常代表本章链路的输出端。回答时要指出输出回到哪一层：帧、资源、玩法状态、GPU 命令或玩家反馈。
+  <Answer question="如果你的项目里，渲染模块崩溃导致整个编辑器闪退，根据分层架构原则，问题出在哪一层？">
+    问题出在玩法层（或编辑器层）没有隔离下层错误。渲染模块的崩溃不应该能"带崩"上层——原因通常是①上层直接持有渲染对象的裸指针而非句柄/弱引用，渲染崩溃后上层访问野指针；②或异常处理缺失，渲染的异常被往上抛到上层。修复：给渲染子系统加错误边界——渲染失败返回"后备渲染模式"（比如线框或不渲染），而不是直接崩。
   </Answer>
-  <Answer question="把压力滑块拉高，哪类问题最容易先暴露？">
-    资源等待、线程同步、帧预算超时和模块边界不清会最先暴露。不要只看单个函数耗时，要看系统之间的等待。
-  </Answer>
-  <Answer question="给本章画一条调试线，应该从哪里画到哪里？">
-    从输入源画到最终输出，中间标出每个模块的责任、数据结构和失败可观测点。
+  <Answer question="现在有一块功能——'角色的脚印贴花'，根据地面材质不同显示不同的脚印图。它应该放在架构的哪一层？为什么？">
+    脚印贴花属于视觉效果，应该放在**子系统层的渲染模块**。它需要以下信息：角色当前位置（来自玩法层→Transform）、地面材质类型（来自物理层的碰撞信息）、贴花纹理资源（来自资源系统）。渲染模块接管这些数据后决定"现在要在地面上画什么脚印"。如果玩法层直接调渲染底层 API 画贴花，就是违反分层的典型反例。
   </Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="模块">模块 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="接口">接口 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="内存">内存 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="错误处理">错误处理 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="测试">测试 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
+  <GlossaryItem term="分层架构">把代码按抽象程度和变化频率组织成垂直层级，上层只依赖下层。游戏引擎典型分层：平台→核心→子系统→玩法。类比：房子地基（平台）→承重墙（核心）→水电管路（子系统）→家具装修（玩法）——换沙发不需要动承重墙。</GlossaryItem>
+  <GlossaryItem term="接口契约">模块对外承诺的"输入、输出、错误形态"三要素。接口稳定 = 上层代码不用因为底层换实现而改动。</GlossaryItem>
+  <GlossaryItem term="数据驱动">把游戏参数（血量、速度、关卡布局）从代码中分离到数据文件中。设计师改数据就能调游戏，不用改 C++ 重新编译。</GlossaryItem>
+  <GlossaryItem term="数据所有权">每个数据有且只有一个模块是"写入者"。其他模块只读或通过所有者接口请求修改。这防止了两处代码同时改同一个值导致的竞争和歧义。</GlossaryItem>
+  <GlossaryItem term="Facade 模式">在两层之间加一个简化接口，把底层复杂的 API 封装成上层容易使用的"门面"。玩法层只调 Facade，不直接接触底层实现。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

@@ -1,0 +1,179 @@
+---
+title: 运行时架构：引擎的心跳与神经网络
+type: A
+section: Foundations
+order: 2
+description: 理解游戏循环如何调度所有子系统、帧预算如何分配、数据如何在模块间流动。
+demo: true
+math: true
+sourceUrl: https://www.gameenginebook.com/toc.html
+draft: true
+---
+
+{/*
+  知识点清单（chapter-spec §〇）：
+  - 游戏循环结构：GameEngineAnatomyDiagram(loop)/Stepper/Glossary
+  - 子系统分类：RuntimeSubsystemsDiagram/Stepper/Glossary
+  - 帧内数据流：GameEngineAnatomyDiagram(loop)/Stepper/Glossary
+  - 帧预算：公式/Stepper/Glossary
+  - 模块间依赖方向：GameEngineAnatomyDiagram(loop)/Stepper/Glossary
+
+  原书章节：Introduction §1.4–§1.7, Game Loop 章
+  类型：A 概念型（含少量数学公式做预算估算）
+*/}
+
+<Objectives>
+- 能画出引擎运行时的主要子系统及其依赖关系
+- 能估算一帧的时间预算，判断哪些子系统最可能成为瓶颈
+- 能回答：为什么模块之间的接口设计比单个模块的性能更重要？
+</Objectives>
+
+## 你写了一万行渲染代码，然后发现忘了加声音
+
+如果你玩过用早期游戏引擎制作的游戏，可能会遇到过这种情况：画面很漂亮，但音效延迟半秒；或者角色明明站在墙后面，子弹却穿墙而过；或者按下跳跃键后，角色像踩在棉花上一样慢半拍才响应。这些问题的根源都一样——**子系统没有在同一拍里协作**。
+
+<Term def="引擎以固定频率（30/60/120Hz）重复执行的一轮处理周期，包含输入采样→逻辑更新→物理步进→渲染提交→缓冲区交换。">游戏循环</Term>就是解决这个问题的机制。它像交响乐的指挥棒，每一拍落下，所有乐手（子系统）同时演奏各自的声部。如果大提琴慢了半拍，整场演奏就乱套——游戏里也一样，如果物理比渲染慢一帧，画面和碰撞就不一致。
+
+下面这张图展示了引擎运行时有哪些声部。外圈的是"每拍必奏"的高频系统（渲染、物理、动画、输入），内圈的是"按需发声"的辅助系统（资源加载、网络同步、脚本、AI）。
+
+<RuntimeSubsystemsDiagram />
+
+## 帧的节奏：游戏循环解剖
+
+这些子系统不是随机乱跑的。游戏循环以一帧为周期，按照固定顺序调度它们。为什么顺序重要？因为数据有流向——动画系统需要物理系统算出来的位置，渲染系统需要动画系统算出来的姿态。如果你让渲染先跑，就只能用"上上帧"的动画结果，画面就会延迟。
+
+来看一帧的具体时间线：
+
+<GameEngineAnatomyDiagram chapter="loop" />
+
+把上面的交互图切成三步来看，每一步都对应帧内一个关键阶段。
+
+<Stepper>
+  <Step title="帧开头：采样输入与推进固定步">
+    一帧开始时，引擎先读取这帧的输入（键盘、鼠标、手柄的状态），然后推进固定步长模拟——物理系统用固定的 dt（如 1/60 秒）多次步进，保证物理行为稳定可复现，不受帧率波动影响。这是"确定性的根基"。
+    <GameEngineAnatomyDiagram chapter="loop" step={1} />
+  </Step>
+  <Step title="帧中段：玩法、动画与状态更新">
+    固定步模拟完成后，玩法逻辑更新（脚本状态机、AI 决策），动画系统根据物理结果和输入意图生成骨骼姿态。这个阶段产出的数据——角色位置、动画姿态、碰撞事件——是要交给渲染画的"素材"。
+    <GameEngineAnatomyDiagram chapter="loop" step={2} />
+  </Step>
+  <Step title="帧末尾：渲染提交与缓冲区交换">
+    所有"素材"齐了之后，渲染系统做可见性剔除、构建 GPU 命令缓冲、提交到硬件队列。然后 CPU 和 GPU 各自忙各自的——CPU 开始下一帧的输入采样，GPU 执行刚才提交的渲染命令。帧末尾的 SwapBuffers 把 GPU 画好的画面显示到屏幕上。
+    <GameEngineAnatomyDiagram chapter="loop" step={3} />
+  </Step>
+</Stepper>
+
+## 帧预算：16 毫秒里能装多少东西
+
+一章只有一个公式，但它管到本书的每一个性能讨论：
+
+$$
+frame\ time = work + sync + wait
+$$
+
+这个式子在说：一帧消耗的时间不只是所有子系统执行时间的总和。你还得加上**同步**（线程之间等待对方完成）和**等待**（CPU 等 GPU 完成、资源加载等待 IO）的时间。这三项的博弈，就是引擎性能优化的全部。
+
+一个具体的例子：假设你跑在 60fps，每帧预算 16.67ms。渲染画图花了 8ms、物理模拟花了 5ms、动画花了 2ms——看起来还能剩 1.67ms。但如果 CPU 提交渲染命令后 GPU 卡了 4ms、CPU 闲着等它，总帧时间就变成 19ms——掉帧了。那句"我优化了所有模块为什么还卡"的经典困惑，通常答案就在这里：**不是哪个模块慢了，是等待吃掉了预算**。
+
+> 猜一猜：把 EngineArchLab 的「压力」滑块拖到 85%，在 loop 模式下观察哪些模块间的连线变红了？
+
+<EngineArchLab mode="loop" title="游戏循环" />
+
+## 模块之间的契约：比模块本身更重要
+
+引擎运行时不是"把所有功能写进一个 giant class"——那叫意大利面条。好的架构把不同职责分到不同模块，模块之间通过**接口**通信。
+
+举个例子：输入模块不直接告诉渲染模块"玩家向前走了 0.3 米"。它只负责把输入设备的状态转成引擎内部通用的"动作"（MoveForward、Jump、Fire）。玩法模块消费这些动作去更新角色位置。渲染模块从玩法模块拿角色位置去画。这里每一段都是一个接口：输入 → 动作映射，玩法 → Transform 数据，渲染 ← Transform 数据。
+
+这种分层的好处是：如果你想把游戏从 PC 移植到 Switch，你只需要换输入模块，其他所有模块都不用动——因为它们只关心"动作"，不关心手柄还是键盘。
+
+<CodeTabs>
+  <Tab label="C++ 接口示意">
+
+```cpp
+// 输入系统只暴露"动作"，不暴露设备细节
+// 玩法代码只依赖这个抽象接口
+class IInputManager {
+public:
+    // 返回本帧指定动作的值（-1 到 1 或 0 到 1）
+    virtual float GetActionValue(const char* actionName) = 0;
+    virtual bool  IsActionPressed(const char* actionName) = 0;
+    virtual bool  IsActionJustPressed(const char* actionName) = 0;
+};
+
+// 玩法代码：完全不关心设备
+void Character::Update(float dt) {
+    float moveX = m_input->GetActionValue("MoveHorizontal");
+    if (m_input->IsActionJustPressed("Jump")) {
+        Jump();
+    }
+    m_position.x += moveX * m_speed * dt;
+}
+```
+  </Tab>
+  <Tab label="TypeScript 结构示意">
+
+```typescript
+// 同样的接口设计思路，TypeScript 版本
+// 强调"抽象决定边界，实现藏在后面"
+interface IInputManager {
+  getActionValue(actionName: string): number;
+  isActionPressed(actionName: string): boolean;
+  isActionJustPressed(actionName: string): boolean;
+}
+
+// 玩法代码完全不依赖具体输入设备
+class Character {
+  update(dt: number): void {
+    const moveX = this.input.getActionValue('MoveHorizontal');
+    if (this.input.isActionJustPressed('Jump')) {
+      this.jump();
+    }
+    this.position.x += moveX * this.speed * dt;
+  }
+}
+```
+  </Tab>
+</CodeTabs>
+
+这条"依赖方向从具体到抽象"的原则，贯穿本书所有子系统的设计讨论。
+
+## 容易踩的坑
+
+- **现象 ->** 把游戏循环写成一个大 while 里面按顺序调所有子系统，调参全靠改代码。**原因 ->** 漏掉了"子系统可能互相等待"和"固定步长 vs 变步长"的区分。**修法 ->** 把循环拆成明确阶段，用 EngineArchLab 或类似的工具可视化每个阶段的耗时占比。
+
+- **现象 ->** 物理模拟不稳定，同样的输入在不同帧率下结果不同。**原因 ->** 物理 step 的 dt 用的是实际帧间隔（变步长），而帧间隔本身在抖动。**修法 ->** 用固定步长做物理——无论实际帧率多少，物理始终用 1/60 秒的 dt，不够就多步进几次，多了就累积等待。详见"游戏循环与实时模拟"章。
+
+- **现象 ->** 开发中总是往"引擎核心"塞新功能，两年后核心类有两万行。**原因 ->** 违反了模块边界的抽象原则——新功能没有找到合适的子系统归属，直接塞进最方便的地方。**修法 ->** 每次加新功能前问三个问题：这是谁的职责？它和其他模块用什么接口通信？它的数据生命周期由谁管理？
+
+## 小结
+
+- 游戏循环以固定频率驱动所有子系统，顺序由数据依赖决定（输入→逻辑→物理→动画→渲染）
+- 帧预算 = 计算 + 同步 + 等待；瓶颈常在同步和等待，不在单个模块
+- 物理推荐固定步长（避免输入抖动导致不确定性），渲染用变步长（追求流畅度）
+- 好的模块边界 = 清晰的接口契约 + 单一的数据所有权 + 明确的依赖方向
+- 理解数据流向 = 知道哪个模块是"产出者"、哪个是"消费者"、失败时谁先察觉
+
+<Exercises>
+  <Answer question="如果渲染花 10ms、物理花 6ms、其余花 2ms，60fps 能不能稳住？如果稳不住，问题出在哪？">
+    不稳定。10+6+2=18ms > 16.67ms。即使看起来只看计算超了 1.33ms，如果 CPU 和 GPU 之间有等待（比如 CPU 在 SwapBuffers 时等 GPU 完成上一帧），实际帧时间可能超过 20ms。解决方向：降低渲染分辨率或 LOD、物理降低迭代次数、或用多线程让物理不和渲染抢同一个核心。
+  </Answer>
+  <Answer question="书里的输入模块接口 IInputManager 是纯虚类。如果让你给这个接口加一个"手柄震动"能力，你应该加在哪里？为什么？">
+    震动属于输出/反馈，不是输入范畴。应该在"反馈管理器"（HapticFeedbackManager 或类似）中提供 PlayRumble(intensity, duration) 接口，由玩法代码在合适的时机调用——比如角色受伤时触发短震动。如果硬塞进 IInputManager，会破坏"输入只读"的语义，让接口职责模糊。
+  </Answer>
+  <Answer question="打开 EngineArchLab 的 loop 模式，把流程从 0% 拖到 100%。描述你看到的激活顺序，并解释为什么渲染提交总在最后一步。">
+    激活顺序：输入采样 → 固定步模拟 → 玩法更新 → 动画/物理回写 → 渲染提交 → Present。渲染在最后是因为它需要前面所有系统的输出——角色位置（来自玩法）、动画姿态（来自动画）、物理状态（来自模拟）——作为"素材"。渲染是最下游的"消费者"，前面全是"生产者"。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="游戏循环">引擎的"心跳"，每帧按固定顺序调度所有子系统的执行。类比：交响乐指挥棒，每一拍落下，所有乐手协调演奏。详细拆解见「游戏循环与实时模拟」章。</GlossaryItem>
+  <GlossaryItem term="帧预算">一帧可用的总时间预算。60fps = 16.67ms/frame, 30fps = 33.33ms/frame。超预算即掉帧。</GlossaryItem>
+  <GlossaryItem term="固定步长">物理模拟每步使用固定时间间隔（如 1/60s），不随实际帧率波动。好处是物理行为稳定可复现；代价是帧率低时可能需要多步进。</GlossaryItem>
+  <GlossaryItem term="接口">两个模块之间的契约：定义输入、输出和错误形态，不暴露实现细节。好的接口让模块可以独立替换而不影响其他模块。</GlossaryItem>
+  <GlossaryItem term="SwapBuffers">把 GPU 画好的下一帧画面交换到显示器上。在此之前，所有渲染都在"后台缓冲区"中进行，用户看不到中间过程。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

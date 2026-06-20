@@ -632,7 +632,40 @@ import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-dia
 import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 import { EngineArchLab } from "./enginearch/engine-arch-lab";
+import { GameEngineAnatomyDiagram } from "./enginearch/game-engine-anatomy-diagram";
+import { EngineArchitectureLayersDiagram } from "./diagrams/engine-architecture-layers-diagram";
+import { EngineVsRawCodeDiagram } from "./diagrams/engine-vs-raw-code-diagram";
+import { RuntimeSubsystemsDiagram } from "./diagrams/runtime-subsystems-diagram";
+import { AssetPipelineDiagram } from "./diagrams/asset-pipeline-diagram";
+import { ToolEcosystemDiagram } from "./diagrams/tool-ecosystem-diagram";
+import { SoftwareLayersDiagram } from "./diagrams/software-layers-diagram";
+import { TaskGraphViz } from "./diagrams/task-graph-viz";
+import { MemoryAllocationViz } from "./diagrams/memory-allocation-viz";
+import { GameLoopTimingViz } from "./diagrams/game-loop-timing-viz";
+import { VisibilityViz } from "./diagrams/visibility-viz";
+import { AndroidDesignLab } from "./android-patterns/android-design-lab";
+import { FluxUnidirectionalDiagram } from "./diagrams/FluxUnidirectionalDiagram";
+import { TeamArchitectureMappingDiagram } from "./diagrams/TeamArchitectureMappingDiagram";
+import { AacLifecycleDiagram } from "./diagrams/AacLifecycleDiagram";
+import { SealedStateDiagram } from "./diagrams/SealedStateDiagram";
+import { DecisionMatrixDiagram } from "./diagrams/DecisionMatrixDiagram";
+import { AppBasicStructureDiagram } from "./diagrams/app-basic-structure-diagram";
+import { MvpFlowDiagram } from "./diagrams/mvp-flow-diagram";
+import { MvvmFlowDiagram } from "./diagrams/mvvm-flow-diagram";
 import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
+import { BinarySearchDiagram } from "./diagrams/BinarySearchDiagram";
+import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
+import { RecursionDiagram } from "./diagrams/RecursionDiagram";
+import { QuickSortDiagram } from "./diagrams/QuickSortDiagram";
+import { HashTableDiagram } from "./diagrams/HashTableDiagram";
+import { BfsDiagram } from "./diagrams/BfsDiagram";
+import { DijkstraDiagram } from "./diagrams/DijkstraDiagram";
+import { GreedyAlgorithmDiagram } from "./diagrams/GreedyAlgorithmDiagram";
+import { DynamicProgrammingDiagram } from "./diagrams/DynamicProgrammingDiagram";
+import { KnnDiagram } from "./diagrams/KnnDiagram";
+import { TreeDiagram } from "./diagrams/TreeDiagram";
+import { BalancedTreeDiagram } from "./diagrams/BalancedTreeDiagram";
+import { AlgorithmNextStepsDiagram } from "./diagrams/AlgorithmNextStepsDiagram";
 import {
   AacLifecycleStateMachine,
   AndroidScreenAnatomyDiagram,
@@ -1561,7 +1594,31 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolInvokeSafetyDiagram,
   AaToolSafetyPlayground,
   EngineArchLab,
+  GameEngineAnatomyDiagram,
+  EngineArchitectureLayersDiagram,
+  EngineVsRawCodeDiagram,
+  RuntimeSubsystemsDiagram,
+  AssetPipelineDiagram,
+  ToolEcosystemDiagram,
+  SoftwareLayersDiagram,
+  TaskGraphViz,
+  MemoryAllocationViz,
+  GameLoopTimingViz,
+  VisibilityViz,
   AlgorithmPlayground,
+  BinarySearchDiagram,
+  SelectionSortDiagram,
+  RecursionDiagram,
+  QuickSortDiagram,
+  HashTableDiagram,
+  BfsDiagram,
+  DijkstraDiagram,
+  GreedyAlgorithmDiagram,
+  DynamicProgrammingDiagram,
+  KnnDiagram,
+  TreeDiagram,
+  BalancedTreeDiagram,
+  AlgorithmNextStepsDiagram,
   AacLifecycleStateMachine,
   AndroidScreenAnatomyDiagram,
   ArchitectureDecisionMatrixDiagram,
@@ -1571,6 +1628,15 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   OssContributionMapDiagram,
   RefactorStranglerDiagram,
   TeamArchitectureBoardDiagram,
+  AndroidDesignLab,
+  FluxUnidirectionalDiagram,
+  TeamArchitectureMappingDiagram,
+  AacLifecycleDiagram,
+  SealedStateDiagram,
+  DecisionMatrixDiagram,
+  AppBasicStructureDiagram,
+  MvpFlowDiagram,
+  MvvmFlowDiagram,
   GameMathLab,
   Term,
   Glossary,
