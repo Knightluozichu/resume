@@ -23,6 +23,7 @@ import { colorsQuestions } from "./review/colors";
 import { coordinateSystemsQuestions } from "./review/coordinate-systems";
 import { helloTriangleQuestions } from "./review/hello-triangle";
 import { helloWindowQuestions } from "./review/hello-window";
+import { gameEngineArchitecture3eQuestions } from "./review/game-engine-architecture-3e";
 import { gameMath3dQuestions } from "./review/game-math-3d";
 import { lightCastersQuestions } from "./review/light-casters";
 import { lightingMapsQuestions } from "./review/lighting-maps";
@@ -395,6 +396,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pbrLightingQuestions,
   ...pbrIblDiffuseQuestions,
   ...pbrIblSpecularQuestions,
+  ...gameEngineArchitecture3eQuestions,
   // C++ 并发编程实战（第2版）
   ...ccHelloConcurrencyQuestions,
   ...ccManagingThreadsQuestions,

@@ -622,6 +622,7 @@ import { AaReactStepThrough } from "./ai-agent/react-step-through";
 import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-diagram";
 import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
+import { EngineArchLab } from "./enginearch/engine-arch-lab";
 import { GameMathLab } from "./gamemath/game-math-lab";
 
 /**
@@ -1538,6 +1539,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolDesignContrastDiagram,
   AaToolInvokeSafetyDiagram,
   AaToolSafetyPlayground,
+  EngineArchLab,
   GameMathLab,
   Term,
   Glossary,
