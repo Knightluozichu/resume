@@ -1,85 +1,96 @@
 ---
-title: 资源与文件系统
+title: 资源与文件系统：数据的来龙去脉
 type: C
 section: Low-Level Engine Systems
-order: 2
-description: 看懂资源从 DCC 源文件到运行时缓存对象的完整管线。
+order: 3
+description: 异步 IO、资源 GUID、引用计数、流式加载——让海量数据在需要时准时出现。
 demo: true
 math: false
 sourceUrl: https://www.gameenginebook.com/toc.html
-draft: false
+draft: true
 ---
 
-{/* 知识点清单：资源=EngineArchLab/Stepper/Glossary；Cook=EngineArchLab/Stepper/Glossary；包=EngineArchLab/Stepper/Glossary；异步加载=EngineArchLab/Stepper/Glossary；缓存=EngineArchLab/Stepper/Glossary。原书章节：Resources and the File System。 */}
+{/*
+  知识点清单（chapter-spec §〇）：
+  - 资源 GUID 与引用计数：GameEngineAnatomyDiagram(resources)/Stepper/Glossary
+  - 异步 IO：Figure/Stepper/Glossary
+  - 流式加载：Figure/Glossary
+  - 资源生命周期：AssetPipelineDiagram/Stepper/Glossary
+  - 文件系统抽象：GameEngineAnatomyDiagram(resources)/Stepper/Glossary
+
+  原书章节：Resources and the File System
+  类型：C 实战型
+*/}
 
 <Objectives>
-
-- 能解释 资源 在游戏引擎整体架构里的位置。
-- 能通过交互图观察 Cook 与其他模块之间的数据或控制流。
-- 能回答：资源系统的核心是把慢 IO 变成可预测的数据供应。
-
+- 能画出资源从磁盘到运行时缓存的完整加载路径
+- 能解释 GUID、句柄和引用计数分别解决什么问题
+- 能回答：为什么不能在渲染线程里直接读文件？
 </Objectives>
 
-## 先看系统怎么协作
+## 你打开了新场景，游戏卡了三秒
 
-看懂资源从 DCC 源文件到运行时缓存对象的完整管线。 这章不从大段定义开始，而是先把模块摊在图上：谁生产数据、谁消费数据、谁卡住帧预算，一眼看清。
+"加载中……"——这可能是游戏玩家最讨厌的三个字。但开发者其实也不喜欢：因为加载背后是大量 IO 操作——从硬盘/SSD 读贴图、网格、音频、关卡数据。如果全部在主线程上同步读，帧就卡死了。所以<Term def="在后台线程执行文件读写操作，主线程继续跑渲染和逻辑。数据到齐后通过回调或标志通知主线程使用。">异步 IO</Term>是游戏引擎的资源系统必须支持的能力。
 
-<EngineArchLab mode="resources" title="资源与文件系统 · 交互式架构图" />
+<GameEngineAnatomyDiagram chapter="resources" />
 
-## 分步动画：一帧里发生什么
+资源系统管理的不是文件路径，而是<Term def="全局唯一标识符，引擎给每个资源分配的永不重复的 ID。文件改名了 GUID 不变，引用了这个资源的所有地方都不用改。">GUID</Term>。通过 GUID 引用资源，而不是通过路径字符串。好处是文件可以随意移动和重命名，只要 GUID 不变，所有引用自动解析。坏处是需要一个"GUID → 文件路径"的映射表，在 Cook 阶段生成。
+
+资源被加载到内存后，通过<Term def="指向资源的轻量级引用。游戏对象不持有裸指针，而是持有句柄。引擎可以换掉句柄背后的实际数据（比如从低 LOD 换到高 LOD），使用者无感知。">句柄</Term>访问。游戏代码拿到的是 `ResourceHandle<Texture>`，而不是 `Texture*`。引擎可以在后台把句柄指向的纹理从低清版本偷偷切换成高清版本——因为加载完成后 LOD 切换自动发生——你连代码都不用改。
+
+<Term def="当多个对象（多个敌人模型、UI 元素）同时引用同一个资源（如贴图）时，记录有多少个使用者。引用计数归零时资源可以被安全卸载。">引用计数</Term>保证资源不会被过早释放。但有一个经典陷阱：A 引用 B、B 也引用 A——两个的引用计数都永不为零，形成泄露环。解决方案是用`弱引用`打破循环，或用明确的资源生命周期分层（关卡级资源在关卡卸载时强制释放）。
 
 <Stepper>
-  <Step title="输入进入系统">
-    <EngineArchLab mode="resources" title="第 1 步：输入/资产/状态进入模块" />
+  <Step title="源资产先被导入和校验">
+    资产管线把 FBX、PSD 等源文件导入引擎，分配 GUID，生成元数据（贴图格式、网格 LOD 数量、音频采样率）。这一步决定了"这个资源在引擎里是谁、长什么样"。
+    <GameEngineAnatomyDiagram chapter="resources" step={1} />
   </Step>
-  <Step title="模块协同处理">
-    <EngineArchLab mode="resources" title="第 2 步：模块开始协作，压力逐渐升高" />
+  <Step title="Cook 与包体：运行时友好的格式">
+    Cook 把源格式转成平台专用格式。贴图被压缩成 DXT/ASTC（直接能喂 GPU），网格顶点被重排。Cook 完的资源打进包体，按 GUID 索引——运行时通过 GUID 直接定位，不需要扫描文件系统。
+    <GameEngineAnatomyDiagram chapter="resources" step={2} />
   </Step>
-  <Step title="输出回到游戏">
-    <EngineArchLab mode="resources" title="第 3 步：结果回写到帧、资源或玩法状态" />
+  <Step title="异步加载与缓存：句柄背后的魔术">
+    运行时请求 `LoadAsync(guid)` → 后台 IO 线程从包体读数据 → 解压 → 上传 GPU → 通知主线程"资源就绪"。主线程一直拿着 `<Term def="指向资源的轻量级引用，背后可以自动换数据。">句柄</Term>`，资源到齐后句柄自动生效。整个过程不打断帧。
+    <GameEngineAnatomyDiagram chapter="resources" step={3} />
   </Step>
 </Stepper>
 
-## 核心概念
+## 容易踩的坑
 
-<Term def="资源系统的核心是把慢 IO 变成可预测的数据供应。">资源</Term> 是本章的入口。它不是孤立类名，而是引擎里某条数据流或控制流上的节点。资源系统的核心是把慢 IO 变成可预测的数据供应。
+- **现象 ->** 加载一个关卡要 40 秒，看 IO 统计发现只读了 500MB，SSD 明明能读 1GB/s。**原因 ->** 串行加载——每个资源加载完才开始下一个。**修法 ->** 并发加载——同时发 N 个异步 IO 请求，SSD 的队列深度填满才能跑满带宽。
 
-本章还会碰到 <Term def="和本章入口一起构成系统协作关系的关键节点。">Cook</Term>。看架构时，不要只问“它是什么”，更要问“它被谁调用、产出什么、失败时谁能观察到”。
+- **现象 ->** 资源加载时显示"找不到文件"，但文件明明在那里。**原因 ->** GUID 映射表过期了——源文件被重命名，但 Cook 产物里还引用旧的 GUID。**修法 ->** 重新 Cook，让 GUID 映射表更新。建立"源文件变化 → 自动重新 Cook"的 CI 检查。
 
+- **现象 ->** 场景切换时旧场景的资源没释放，内存涨到 12GB。**原因 ->** 关卡级资源用了全局引用计数，没有关卡级卸载机制。**修法 ->** 给资源分"生存域"——"全局永驻"、"关卡级"、"按需加载"——卸载关卡时把"关卡级"域的全部资源回收。
 
+## 小结
 
-## 常见误区
-
-- **现象 ->** 架构图看起来很整齐。**原因 ->** 图省略了等待、同步和失败路径。**修法 ->** 给每条箭头补上“谁等谁、失败谁知道”。
-- **现象 ->** 单个模块性能很好，整帧仍然卡。**原因 ->** 瓶颈在模块之间的交接。**修法 ->** 看帧边界、资源加载点和同步点。
-- **现象 ->** 玩法代码越来越像脚本泥潭。**原因 ->** 底层系统没有提供清晰边界。**修法 ->** 把数据、事件、生命周期分开画出来。
-
-## 小结与练习
-
-- 资源与文件系统 的核心是：资源系统的核心是把慢 IO 变成可预测的数据供应。
-- 先画模块关系，再决定代码边界。
-- 调试优先找数据入口、同步点和输出回写。
+- 异步 IO = 后台线程读文件，主线程不卡帧
+- GUID 替代文件路径做资源标识——文件改名字不影响引用
+- 句柄 = 轻量级资源引用，背后可以偷偷切换数据（LOD 切换、流式加载）
+- 引用计数防过早释放，但需要注意循环引用导致泄露
+- 并发加载 = 利用 SSD 高队列深度，同时读多个资源
+- 资源分域管理 = 关卡级资源随关卡卸载，全局资源活全程
 
 <Exercises>
-  <Answer question="把流程滑块拖到 100%，最后被激活的节点说明了什么？">
-    它通常代表本章链路的输出端。回答时要指出输出回到哪一层：帧、资源、玩法状态、GPU 命令或玩家反馈。
+  <Answer question="你的游戏有一个主角模型 hero.glb，被 150 个场景引用。如果某天你想把模型改成 hero_v2.glb，GUID 方案和路径方案各怎么处理？">
+    路径方案：需要去 150 个场景文件里逐个改引用路径。很容易漏掉某处，上线后发现某个场景还在加载旧模型。
+    GUID 方案：只改 GUID 映射表里一条记录——把 hero_v1 的 GUID 指向 hero_v2.glb。所有场景自动引用新版，零文件改动。要保留旧版本只需要新建一个 GUID。
   </Answer>
-  <Answer question="把压力滑块拉高，哪类问题最容易先暴露？">
-    资源等待、线程同步、帧预算超时和模块边界不清会最先暴露。不要只看单个函数耗时，要看系统之间的等待。
-  </Answer>
-  <Answer question="给本章画一条调试线，应该从哪里画到哪里？">
-    从输入源画到最终输出，中间标出每个模块的责任、数据结构和失败可观测点。
+  <Answer question="世界流式加载（像 GTA 的无缝大世界）的核心挑战是什么？资源系统要做什么？">
+    核心挑战：玩家高速移动时，视野前方的区域来不及加载（pop-in 突然冒出一栋楼），视野后方的区域没及时释放（内存别爆）。
+    资源系统需要：①分块管理世界，每块有独立的资源清单；②预判加载——根据玩家移动方向和速度提前加载前方 N 个块的资源；③LOD 流式切换——远处用低精度资源、近处用高精度，在后台无感切换句柄指向的数据。
   </Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-<GlossaryItem term="资源">资源 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="Cook">Cook 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="包">包 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="异步加载">异步加载 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="缓存">缓存 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
+  <GlossaryItem term="GUID">全局唯一标识符（128 位或类似长度），永不重复。引擎用它代替文件路径做资源身份标识。文件改名不影响引用。</GlossaryItem>
+  <GlossaryItem term="句柄">指向资源的轻量级引用。背后可自动切换数据，使用者无感知。比裸指针安全——引擎可以在不通知使用者的情况下更新句柄指向的资源。</GlossaryItem>
+  <GlossaryItem term="异步 IO">文件读写操作在后台线程执行，主线程继续跑渲染和逻辑。数据就绪后通过回调/标志通知主线程。</GlossaryItem>
+  <GlossaryItem term="引用计数">记录一个资源被多少个对象同时使用。归零时可以安全释放。需注意循环引用导致泄露。</GlossaryItem>
+  <GlossaryItem term="流式加载">把大世界分块，只加载玩家视野范围内的块。预判玩家移动方向提前加载前方，释放后方。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

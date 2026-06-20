@@ -640,6 +640,8 @@ import { AssetPipelineDiagram } from "./diagrams/asset-pipeline-diagram";
 import { ToolEcosystemDiagram } from "./diagrams/tool-ecosystem-diagram";
 import { SoftwareLayersDiagram } from "./diagrams/software-layers-diagram";
 import { TaskGraphViz } from "./diagrams/task-graph-viz";
+import { MemoryAllocationViz } from "./diagrams/memory-allocation-viz";
+import { GameLoopTimingViz } from "./diagrams/game-loop-timing-viz";
 import { AndroidDesignLab } from "./android-patterns/android-design-lab";
 import { FluxUnidirectionalDiagram } from "./diagrams/FluxUnidirectionalDiagram";
 import { TeamArchitectureMappingDiagram } from "./diagrams/TeamArchitectureMappingDiagram";
@@ -1599,6 +1601,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ToolEcosystemDiagram,
   SoftwareLayersDiagram,
   TaskGraphViz,
+  MemoryAllocationViz,
+  GameLoopTimingViz,
   AlgorithmPlayground,
   BinarySearchDiagram,
   SelectionSortDiagram,
