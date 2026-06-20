@@ -570,11 +570,20 @@ import { ChainingWorkflowDiagram } from "./diagrams/chaining-workflow-diagram";
 import { RoutingWorkflowDiagram } from "./diagrams/routing-workflow-diagram";
 import { ChainRoutingDecisionDiagram } from "./diagrams/chain-routing-decision-diagram";
 import { ChainRoutingTrapDiagram } from "./diagrams/chain-routing-trap-diagram";
-import { ParallelizationWorkflowDiagram, ParallelWorkflowDiagram } from "./diagrams/parallelization-workflow-diagram";
+import {
+  ParallelizationWorkflowDiagram,
+  ParallelWorkflowDiagram,
+} from "./diagrams/parallelization-workflow-diagram";
 import { SectioningVsVotingDiagram } from "./diagrams/sectioning-vs-voting-diagram";
-import { OrchestratorWorkersWorkflowDiagram, OrchestratorWorkersDiagram } from "./diagrams/orchestrator-workers-workflow-diagram";
+import {
+  OrchestratorWorkersWorkflowDiagram,
+  OrchestratorWorkersDiagram,
+} from "./diagrams/orchestrator-workers-workflow-diagram";
 import { ParallelOrchestratorDecisionDiagram } from "./diagrams/parallel-orchestrator-decision-diagram";
-import { ParallelOrchestrationTrapDiagram, ParallelOrchestratorTrapDiagram } from "./diagrams/parallel-orchestration-trap-diagram";
+import {
+  ParallelOrchestrationTrapDiagram,
+  ParallelOrchestratorTrapDiagram,
+} from "./diagrams/parallel-orchestration-trap-diagram";
 import { EvaluatorOptimizerWorkflowDiagram } from "./diagrams/evaluator-optimizer-workflow-diagram";
 import { EvaluatorOptimizerDecisionDiagram } from "./diagrams/evaluator-optimizer-decision-diagram";
 import { EvaluatorOptimizerTraceDiagram } from "./diagrams/evaluator-optimizer-trace-diagram";
@@ -623,6 +632,7 @@ import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-dia
 import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 import { EngineArchLab } from "./enginearch/engine-arch-lab";
+import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
 import { GameMathLab } from "./gamemath/game-math-lab";
 
 /**
@@ -1540,6 +1550,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolInvokeSafetyDiagram,
   AaToolSafetyPlayground,
   EngineArchLab,
+  AlgorithmPlayground,
   GameMathLab,
   Term,
   Glossary,
