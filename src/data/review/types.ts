@@ -13,6 +13,23 @@
 
 /** 章节 slug：与 content/learnopengl/getting-started/<slug>.mdx 一一对应。 */
 export type ReviewChapterSlug =
+  | "gea3-introduction"
+  | "gea3-tools-of-the-trade"
+  | "gea3-software-engineering-for-games"
+  | "gea3-parallelism-and-concurrency"
+  | "gea3-3d-math-for-games"
+  | "gea3-engine-support-systems"
+  | "gea3-resources-and-file-system"
+  | "gea3-game-loop-real-time-simulation"
+  | "gea3-human-interface-devices"
+  | "gea3-debugging-and-development-tools"
+  | "gea3-rendering-engine"
+  | "gea3-animation-systems"
+  | "gea3-collision-and-rigid-body-dynamics"
+  | "gea3-audio"
+  | "gea3-gameplay-systems-introduction"
+  | "gea3-runtime-gameplay-foundation-systems"
+  | "gea3-you-mean-theres-more"
   | "gm3d-cartesian-coordinate-systems"
   | "gm3d-vectors"
   | "gm3d-multiple-coordinate-spaces"
@@ -269,6 +286,23 @@ export type ReviewQuestion = {
 
 /** 章节 slug → 中文章名（卡片上展示，复习页无 MDX frontmatter 可读，故就近内置）。 */
 export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
+  "gea3-introduction": "引言：游戏引擎到底是什么",
+  "gea3-tools-of-the-trade": "工具与工作流",
+  "gea3-software-engineering-for-games": "游戏软件工程基础",
+  "gea3-parallelism-and-concurrency": "并行与并发编程",
+  "gea3-3d-math-for-games": "游戏中的 3D 数学",
+  "gea3-engine-support-systems": "引擎支撑系统",
+  "gea3-resources-and-file-system": "资源与文件系统",
+  "gea3-game-loop-real-time-simulation": "游戏循环与实时模拟",
+  "gea3-human-interface-devices": "人机输入设备",
+  "gea3-debugging-and-development-tools": "调试与开发工具",
+  "gea3-rendering-engine": "渲染引擎",
+  "gea3-animation-systems": "动画系统",
+  "gea3-collision-and-rigid-body-dynamics": "碰撞与刚体动力学",
+  "gea3-audio": "音频",
+  "gea3-gameplay-systems-introduction": "玩法系统导论",
+  "gea3-runtime-gameplay-foundation-systems": "运行时玩法基础系统",
+  "gea3-you-mean-theres-more": "远不止这些：引擎架构地图",
   "gm3d-cartesian-coordinate-systems": "笛卡尔坐标系统",
   "gm3d-vectors": "向量",
   "gm3d-multiple-coordinate-spaces": "多个坐标空间",

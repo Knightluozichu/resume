@@ -65,6 +65,7 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
 export const BOOK_ORDER = [
   "game-math-3d",
   "learnopengl",
+  "game-engine-architecture-3e",
   "cpp-primer-5e",
   "c-primer-plus",
   "android-advanced-decryption",
@@ -83,6 +84,7 @@ export const BOOK_ORDER = [
 export const BOOK_TITLES: Record<string, string> = {
   "game-math-3d": "游戏和图形学的 3D 数学",
   learnopengl: "LearnOpenGL",
+  "game-engine-architecture-3e": "游戏引擎架构（第三版）",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
   "android-advanced-decryption": "Android进阶解密",
@@ -284,12 +286,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       },
       {
         level: "advanced",
-        summary: "继续补实时渲染、引擎渲染架构和现代图形 API。",
+        summary: "进入实时渲染、引擎架构、工具链和生产级运行时系统。",
         items: [
           {
-            title: "实时渲染 / 引擎渲染架构",
-            note: "待补：建议覆盖渲染图、GPU 驱动成本、现代管线与引擎架构。",
-            missing: true,
+            bookSlug: "game-engine-architecture-3e",
+            note: "高级架构主线，串起渲染、动画、物理、音频、资源、工具和玩法系统。",
           },
         ],
       },
@@ -352,6 +353,11 @@ export const SECTION_ORDER = [
   "数学基础",
   "空间与变换",
   "图形与运动",
+  "Foundations",
+  "Low-Level Engine Systems",
+  "Graphics, Motion, and Sound",
+  "Gameplay",
+  "Conclusion",
   "光照",
   "模型加载",
   "高级OpenGL",
