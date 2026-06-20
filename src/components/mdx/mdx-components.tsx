@@ -622,6 +622,7 @@ import { AaReactStepThrough } from "./ai-agent/react-step-through";
 import { AaToolDesignContrastDiagram } from "./ai-agent/tool-design-contrast-diagram";
 import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram";
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
+import { GameMathLab } from "./gamemath/game-math-lab";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1537,6 +1538,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolDesignContrastDiagram,
   AaToolInvokeSafetyDiagram,
   AaToolSafetyPlayground,
+  GameMathLab,
   Term,
   Glossary,
   GlossaryItem,

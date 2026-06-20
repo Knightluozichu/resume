@@ -63,6 +63,7 @@ const CONTENT_DIR = path.join(process.cwd(), "content");
  * 组内再按 bookSlug 稳定回退，保证新增书也有确定顺序。
  */
 export const BOOK_ORDER = [
+  "game-math-3d",
   "learnopengl",
   "cpp-primer-5e",
   "c-primer-plus",
@@ -80,6 +81,7 @@ export const BOOK_ORDER = [
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
 export const BOOK_TITLES: Record<string, string> = {
+  "game-math-3d": "游戏和图形学的 3D 数学",
   learnopengl: "LearnOpenGL",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
@@ -262,12 +264,11 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
     stages: [
       {
         level: "beginner",
-        summary: "LearnOpenGL 之前最好补一点线性代数和图形学基础。",
+        summary: "先用可视化补齐线性代数、空间变换和运动直觉。",
         items: [
           {
-            title: "图形学数学基础",
-            note: "待补：建议覆盖向量、矩阵、坐标变换、光照模型和采样直觉。",
-            missing: true,
+            bookSlug: "game-math-3d",
+            note: "图形与游戏数学地基，建议在 LearnOpenGL 之前先读。",
           },
         ],
       },
@@ -348,6 +349,9 @@ function bookRank(bookSlug: string): number {
  */
 export const SECTION_ORDER = [
   "入门",
+  "数学基础",
+  "空间与变换",
+  "图形与运动",
   "光照",
   "模型加载",
   "高级OpenGL",

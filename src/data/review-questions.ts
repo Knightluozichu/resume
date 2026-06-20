@@ -23,6 +23,7 @@ import { colorsQuestions } from "./review/colors";
 import { coordinateSystemsQuestions } from "./review/coordinate-systems";
 import { helloTriangleQuestions } from "./review/hello-triangle";
 import { helloWindowQuestions } from "./review/hello-window";
+import { gameMath3dQuestions } from "./review/game-math-3d";
 import { lightCastersQuestions } from "./review/light-casters";
 import { lightingMapsQuestions } from "./review/lighting-maps";
 import { materialsQuestions } from "./review/materials";
@@ -245,6 +246,7 @@ import type { ReviewQuestion } from "./review/types";
 
 /** 全库（按入门 7 章 + 光照 6 章顺序拼接）。各章数组顺序即卡片自检/小结里的默认章序。 */
 export const REVIEW_QUESTIONS: ReviewQuestion[] = [
+  ...gameMath3dQuestions,
   ...helloWindowQuestions,
   ...helloTriangleQuestions,
   ...shadersQuestions,
