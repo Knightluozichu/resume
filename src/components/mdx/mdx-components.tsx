@@ -642,6 +642,7 @@ import { SoftwareLayersDiagram } from "./diagrams/software-layers-diagram";
 import { TaskGraphViz } from "./diagrams/task-graph-viz";
 import { MemoryAllocationViz } from "./diagrams/memory-allocation-viz";
 import { GameLoopTimingViz } from "./diagrams/game-loop-timing-viz";
+import { VisibilityViz } from "./diagrams/visibility-viz";
 import { AndroidDesignLab } from "./android-patterns/android-design-lab";
 import { FluxUnidirectionalDiagram } from "./diagrams/FluxUnidirectionalDiagram";
 import { TeamArchitectureMappingDiagram } from "./diagrams/TeamArchitectureMappingDiagram";
@@ -1603,6 +1604,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TaskGraphViz,
   MemoryAllocationViz,
   GameLoopTimingViz,
+  VisibilityViz,
   AlgorithmPlayground,
   BinarySearchDiagram,
   SelectionSortDiagram,

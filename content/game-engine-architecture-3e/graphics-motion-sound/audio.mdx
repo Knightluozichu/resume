@@ -1,85 +1,58 @@
 ---
-title: 音频
-type: A
+title: 音频系统：让世界有声
+type: C
 section: Graphics, Motion, and Sound
-order: 4
-description: 把音频资源、声源、空间化和混音组织成实时声音场景。
+order: 6
+description: 声源、3D 空间化、混音总线、DSP 缓冲——让游戏声音有方位感和层次。
 demo: true
 math: false
 sourceUrl: https://www.gameenginebook.com/toc.html
-draft: false
+draft: true
 ---
 
-{/* 知识点清单：声源=EngineArchLab/Stepper/Glossary；混音=EngineArchLab/Stepper/Glossary；空间化=EngineArchLab/Stepper/Glossary；DSP=EngineArchLab/Stepper/Glossary；输出设备=EngineArchLab/Stepper/Glossary。原书章节：Audio。 */}
+{/*
+  知识点清单：声源/GameEngineAnatomyDiagram(audio)/Stepper/Glossary；空间化/Figure/Stepper/Glossary；混音总线/Figure/Stepper/Glossary；DSP Buffer/Figure/Glossary；音频线程/Figure/Glossary
+  原书章节：Audio
+  类型：C 实战型
+*/}
 
 <Objectives>
-
-- 能解释 声源 在游戏引擎整体架构里的位置。
-- 能通过交互图观察 混音 与其他模块之间的数据或控制流。
-- 能回答：好音频架构要让声音跟着世界和玩法一起变化。
-
+- 能画出音频数据从资源到扬声器的处理链路
+- 能解释空间化音频如何让玩家判断方向
+- 能回答：为什么音频不能和渲染共用同一线程？
 </Objectives>
 
-## 先看系统怎么协作
+## 开枪后音效延迟了 50 毫秒
 
-把音频资源、声源、空间化和混音组织成实时声音场景。 这章不从大段定义开始，而是先把模块摊在图上：谁生产数据、谁消费数据、谁卡住帧预算，一眼看清。
+玩家按下扳机 → 看到枪口火焰 → 半秒后才听到"砰"。这个延迟不是网络问题，是音频系统在排队。声音和画面必须同步——但它们的处理管线完全不同。渲染走 GPU，音频有自己的 DSP（数字信号处理）管线。
 
-<EngineArchLab mode="audio" title="音频 · 交互式架构图" />
+**为什么音频需要专门的低延迟线程？** 因为扬声器需要"恒定不断"的数据流。如果音频线程被其他任务打断，哪怕只缺了 2ms 的数据，玩家就会听到"爆音"（buffer underrun）。所以游戏引擎通常有一个高优先级音频线程，专门跑混音和 DSP，不和渲染/逻辑抢时间。
 
-## 分步动画：一帧里发生什么
+<GameEngineAnatomyDiagram chapter="audio" />
 
-<Stepper>
-  <Step title="输入进入系统">
-    <EngineArchLab mode="audio" title="第 1 步：输入/资产/状态进入模块" />
-  </Step>
-  <Step title="模块协同处理">
-    <EngineArchLab mode="audio" title="第 2 步：模块开始协作，压力逐渐升高" />
-  </Step>
-  <Step title="输出回到游戏">
-    <EngineArchLab mode="audio" title="第 3 步：结果回写到帧、资源或玩法状态" />
-  </Step>
-</Stepper>
+音频管线的四步：
 
-## 核心概念
+1. **声源**：场景里有位置、音量、衰减曲线的一个"发声体"。枪声、脚步声、环境音都叫声源实例。
+2. **空间化**：根据声源位置和听者位置计算左右声道音量差（Pan）、延迟差（ITD）、频率衰减（HRTF）。玩家的右耳离声源更近 → 右声道先听到且更响 → 大脑判断声音来自右边。
+3. **混音总线**：把场景里所有活跃声源的音频按分组混到一起——环境音一组、音效一组、对话一组。每组有自己的音量、Ducking（对话时压低背景音）、效果器（混响、EQ）。
+4. **DSP Buffer**：混音完的音频数据按固定大小（如 256 samples）填进输出缓冲。这个缓冲必须永不欠载——否则爆音。
 
-<Term def="好音频架构要让声音跟着世界和玩法一起变化。">声源</Term> 是本章的入口。它不是孤立类名，而是引擎里某条数据流或控制流上的节点。好音频架构要让声音跟着世界和玩法一起变化。
+## 容易踩的坑
+- **现象 ->** 很多声源一起响时出现爆音。**原因 ->** 声音数量超过 DSP 处理能力——混音来不及填满缓冲。**修法 ->** 限制同时发声数量（Voice Limit），最远的/最轻的自动静音。
+- **现象 ->** 玩家站着不动，但脚步声一直在响。**原因 ->** 声源创建了没销毁/没有生命周期管理。**修法 ->** 声源加"自动停止"逻辑——如果音效播完了且没有循环标记，自动回收。
 
-本章还会碰到 <Term def="和本章入口一起构成系统协作关系的关键节点。">混音</Term>。看架构时，不要只问“它是什么”，更要问“它被谁调用、产出什么、失败时谁能观察到”。
-
-
-
-## 常见误区
-
-- **现象 ->** 架构图看起来很整齐。**原因 ->** 图省略了等待、同步和失败路径。**修法 ->** 给每条箭头补上“谁等谁、失败谁知道”。
-- **现象 ->** 单个模块性能很好，整帧仍然卡。**原因 ->** 瓶颈在模块之间的交接。**修法 ->** 看帧边界、资源加载点和同步点。
-- **现象 ->** 玩法代码越来越像脚本泥潭。**原因 ->** 底层系统没有提供清晰边界。**修法 ->** 把数据、事件、生命周期分开画出来。
-
-## 小结与练习
-
-- 音频 的核心是：好音频架构要让声音跟着世界和玩法一起变化。
-- 先画模块关系，再决定代码边界。
-- 调试优先找数据入口、同步点和输出回写。
-
-<Exercises>
-  <Answer question="把流程滑块拖到 100%，最后被激活的节点说明了什么？">
-    它通常代表本章链路的输出端。回答时要指出输出回到哪一层：帧、资源、玩法状态、GPU 命令或玩家反馈。
-  </Answer>
-  <Answer question="把压力滑块拉高，哪类问题最容易先暴露？">
-    资源等待、线程同步、帧预算超时和模块边界不清会最先暴露。不要只看单个函数耗时，要看系统之间的等待。
-  </Answer>
-  <Answer question="给本章画一条调试线，应该从哪里画到哪里？">
-    从输入源画到最终输出，中间标出每个模块的责任、数据结构和失败可观测点。
-  </Answer>
-</Exercises>
-
-## 名词解释
+## 小结
+- 音频线程 = 低延迟高优先级，不能和渲染共用线程
+- 空间化 = 让玩家用耳朵判断方向：Pan + ITD + HRTF
+- 混音总线 = 分组、Ducking、效果器——控制音频层次
+- Voice Limit = 限制同时发声数，防止 DSP 过载爆音
+- 声源生命周期 = 播放→完成→回收，防止无声源占用资源
 
 <Glossary>
-<GlossaryItem term="声源">声源 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="混音">混音 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="空间化">空间化 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="DSP">DSP 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
-<GlossaryItem term="输出设备">输出设备 是本章的引擎架构节点；先在图里看它和其他系统的关系，再回到实际代码或工具链定位。</GlossaryItem>
+<GlossaryItem term="空间化音频">根据声源和听者 3D 位置关系，计算双耳听到的音量差、时间差和频率变化。让玩家感觉声音从具体方向传来。</GlossaryItem>
+<GlossaryItem term="混音总线">把多路音频按分组混成最终输出的"汇流排"。每组可独立控制音量、Ducking（压低其他组）、效果器。</GlossaryItem>
+<GlossaryItem term="Buffer Underrun">音频输出缓冲区的数据被扬声器读光了但新数据还没到——表现为"爆音/咔啦声"。低延迟音频线程的目的就是消灭这个问题。</GlossaryItem>
+<GlossaryItem term="Voice Limit">限制同时发声的最大数量。超过上限时把最不重要（最远/最轻）的声源自动静音，防止 DSP 过载。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />

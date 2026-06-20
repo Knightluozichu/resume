@@ -1,0 +1,77 @@
+---
+title: 渲染管线：从场景到像素
+type: C
+section: Graphics, Motion, and Sound
+order: 1
+description: CPU 端场景组织、可见性判断、GPU 命令构建——渲染之前到底发生了什么。
+demo: true
+math: false
+sourceUrl: https://www.gameenginebook.com/toc.html
+draft: true
+---
+
+{/*
+  知识点清单：场景图/GameEngineAnatomyDiagram(rendering)/Stepper/Glossary；Render Graph/Figure/Stepper/Glossary；Command Buffer/Figure/Glossary；可见性剔除/VisibilityViz/Stepper/Glossary
+
+  原书章节：The Rendering Engine
+  类型：C 实战型
+*/}
+
+<Objectives>
+- 能画出一帧渲染从场景组织到 GPU 执行的完整路径
+- 能解释为什么 Render Graph 比顺序渲染更高效
+- 能回答：CPU 已经提交了渲染命令，但 GPU 还没开始画——这中间 CPU 在等什么？
+</Objectives>
+
+## 你有一万个物体，但屏幕只看到 300 个
+
+渲染引擎的第一个任务不是"画"，而是"决定不画什么"。场景里有 10000 个物体，但玩家的摄像机只能看到其中部分方向、一定距离内的物体。如果你把 10000 个都提交给 GPU 画，9970 个会被 GPU 画完再被深度缓冲丢弃——等于白干活还交了"画费"。
+
+<Term def="一个按依赖关系组织的渲染步骤 DAG（有向无环图）。每个 Pass 是一个渲染步骤，消费前驱 Pass 的输出（纹理/缓冲），产出自己的结果。引擎根据依赖自动化执行和资源管理。">Render Graph</Term>是现代引擎的标准范式。它把渲染拆成一个个 Pass——Shadow Pass → G-Buffer Pass → Lighting Pass → Post Process Pass——每个 Pass 定义自己的输入和输出。引擎分析依赖关系后自动决定 Pass 执行顺序、资源的内存管理和 GPU 状态转换。
+
+<GameEngineAnatomyDiagram chapter="rendering" />
+
+<Stepper>
+  <Step title="场景先被筛成可见集合">
+    视锥体剔除 + 遮挡剔除 + LOD 选择——把 10000 个物体减到几百个。每个物体被筛选时只做几次矩阵乘法和包围盒判断，成本极低。这步省下来的就是后面所有 Pass 的 GPU 负担。
+    <GameEngineAnatomyDiagram chapter="rendering" step={1} />
+  </Step>
+  <Step title="材质与 Render Graph 组织 GPU 工作">
+    剩余可见物体按材质分组（所有用"金属"材质的画完 → 所有用"皮肤"材质的画完），减少状态切换。Render Graph 把这一堆 Pass 排成依赖图，分析哪些中间纹理可以临时分配/复用。
+    <GameEngineAnatomyDiagram chapter="rendering" step={2} />
+  </Step>
+  <Step title="命令提交后才进入硬件边界">
+    Command Buffer 把所有"画哪个 Mesh、用什么 Shader、绑什么纹理"的命令打包发给 GPU 队列。CPU 提交完就完事了——继续跑下一帧的输入和逻辑。GPU 自己按队列顺序执行。
+    <GameEngineAnatomyDiagram chapter="rendering" step={3} />
+  </Step>
+</Stepper>
+
+**CPU/GPU 边界**是渲染引擎最容易忽视的瓶颈。CPU 提交完命令后，GPU 在它的时间线里执行。如果 CPU 下一帧需要 GPU 产出的某个纹理（例如拿 Shadow Map 做分析），它就得等 GPU 完成当前帧——这个"互等"会吃掉大量帧时间。现代引擎用"多缓冲"技巧——CPU 提交到队列 A、GPU 执行队列 B——让两者不互相等。
+
+## 容易踩的坑
+
+- **现象 ->** 场景不复杂但 Draw Call 数上千。**原因 ->** 每个物体单独提交，没有按材质/Shader 分组。**修法 ->** Render Graph 按 Pass 分组：所有不透明物体在一个 Pass、半透明在另一个 Pass、后处理在最后一个 Pass。
+
+- **现象 ->** GPU Profiler 显示"空泡"——GPU 一段时间没活干。**原因 ->** CPU 提交慢了，GPU 把上一批命令执行完了在等下一批。**修法 ->** CPU 预提交——这帧刚开始就把命令准备好，不要等到这帧中段才提交。
+
+## 小结
+
+- 渲染引擎第一责任不是画——是决定不画什么（剔除）
+- Render Graph = Pass 依赖图，自动排序、资源管理、状态优化
+- CPU/GPU 异步 = CPU 提交完就跑下一帧，GPU 自己执行队列
+- 多缓冲打破 CPU/GPU 互等——不让双方空转
+- Command Buffer 是 CPU 给 GPU 的"待办清单"
+
+<Exercises>
+  <Answer question="为什么可见性判断必须在 CPU 端做？不能全交给 GPU 吗？">
+    因为 GPU 不知道"这个物体要不要画"——GPU 只会照 Command Buffer 里的指令执行。如果 CPU 不发画某个物体的命令，GPU 根本不知道它的存在。CPU 做剔除 → 减少提交给 GPU 的命令数量 → GPU 省下时间去画真正可见的东西。现代有 GPU-Driven Rendering（GPU 做剔除），但需要 Compute Shader 在 GPU 上跑剔除逻辑，这是进阶话题。
+  </Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Render Graph">渲染步骤的有向无环图。每个 Pass 是一步渲染（Shadow/G-Buffer/Lighting/Post），消费输入、产出输出。引擎自动分析依赖、排序、管理内存。</GlossaryItem>
+<GlossaryItem term="Command Buffer">CPU 构建的 GPU 命令序列。"画 Mesh A、用 Shader B、绑纹理 C、设渲染状态 D"。提交后 GPU 自己按队列执行。</GlossaryItem>
+<GlossaryItem term="Draw Call">CPU 向 GPU 发出的一次"画这个"的指令。Draw Call 多 ⇒ CPU 开销大。减少 Draw Call 的手段：合批 (Batching)、实例化 (Instancing)。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Game Engine Architecture, Third Edition" adaptedUrl="https://www.gameenginebook.com/toc.html" />
