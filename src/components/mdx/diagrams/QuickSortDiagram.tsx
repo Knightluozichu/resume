@@ -4,7 +4,7 @@
  * Server Component。
  */
 export function QuickSortDiagram() {
-  const VW = 960, VH = 340, PW = 280, PH = 120, PTOP = 90, P1 = 24, P2 = 340, P3 = 656;
+  const VW = 960, VH = 340, PW = 260, PH = 120, PTOP = 90, P1 = 32, P2 = 336, P3 = 668;
   const BW = 28, BH = 28, BG = 8;
   const rx = (n: number, total: number, px: number) => px + (PW - (total * BW + (total - 1) * BG)) / 2 + n * (BW + BG);
   const ac = "var(--accent)";
@@ -32,7 +32,7 @@ export function QuickSortDiagram() {
           {/* Panel 1 */}
           <rect x={P1} y={PTOP} width={PW} height={PH} rx="10" fill={bg} stroke={bo} strokeWidth="1.5" />
           <rect x={P1+8} y={PTOP+12} width={PW-16} height="26" rx="6" fill={ac} fillOpacity="0.12" />
-          <text x={P1+PW/2} y={PTOP+30} textAnchor="middle" fontSize="12" fontWeight="700" fill={ac}>选 Pivot</text>
+          <text x={P1+PW/2} y={PTOP+30} textAnchor="middle" fontSize="13" fontWeight="700" fill={ac}>选 Pivot</text>
           {[33,12,48,7,25,41,16].map((v,i) => (
             <g key={`p1-${v}`}>
               <rect x={rx(i,7,P1)} y={PTOP+58} width={BW} height={BH} rx="5" fill={v===25 ? ac : be} fillOpacity={v===25 ? 1 : 0} stroke={v===25 ? ac : bo} strokeWidth={v===25 ? 2 : 1.5} />
@@ -45,7 +45,7 @@ export function QuickSortDiagram() {
           <text x={(P1+PW+P2)/2} y={PTOP+50} textAnchor="middle" fontSize="11" fontWeight="600" fill={ac}>分区</text>
           <rect x={P2} y={PTOP} width={PW} height={PH} rx="10" fill={bg} stroke={bo} strokeWidth="1.5" />
           <rect x={P2+8} y={PTOP+12} width={PW-16} height="26" rx="6" fill={wa} fillOpacity="0.12" />
-          <text x={P2+PW/2} y={PTOP+30} textAnchor="middle" fontSize="12" fontWeight="700" fill={wa}>分区</text>
+          <text x={P2+PW/2} y={PTOP+30} textAnchor="middle" fontSize="13" fontWeight="700" fill={wa}>分区</text>
           {[12,7,16,25,33,48,41].map((v,i) => (
             <g key={`p2-${v}`}>
               <rect x={rx(i,7,P2)} y={PTOP+58} width={BW} height={BH} rx="5" fill={v===25 ? wa : be} fillOpacity={v===25 ? 1 : 0} stroke={v===25 ? wa : bo} strokeWidth={v===25 ? 2 : 1.5} />
@@ -58,7 +58,7 @@ export function QuickSortDiagram() {
           <text x={(P2+PW+P3)/2} y={PTOP+50} textAnchor="middle" fontSize="11" fontWeight="600" fill={ac}>递归+拼接</text>
           <rect x={P3} y={PTOP} width={PW} height={PH} rx="10" fill={bg} stroke={bo} strokeWidth="1.5" />
           <rect x={P3+8} y={PTOP+12} width={PW-16} height="26" rx="6" fill={su} fillOpacity="0.12" />
-          <text x={P3+PW/2} y={PTOP+30} textAnchor="middle" fontSize="12" fontWeight="700" fill={su}>最终结果</text>
+          <text x={P3+PW/2} y={PTOP+30} textAnchor="middle" fontSize="13" fontWeight="700" fill={su}>最终结果</text>
           {[7,12,16,25,33,41,48].map((v,i) => (
             <g key={`p3-${v}`}>
               <rect x={rx(i,7,P3)} y={PTOP+58} width={BW} height={BH} rx="5" fill={v===25 ? su : be} fillOpacity={v===25 ? 1 : 0} stroke={v===25 ? su : bo} strokeWidth={v===25 ? 2 : 1.5} />
