@@ -3,127 +3,140 @@ title: Flux 架构
 type: D
 section: Android 架构与设计模式
 order: 6
-description: Flux 把 Action、Reducer、Store、View 排成单向路线，防止状态被多处偷偷改写。
+description: Flux 用单向数据流把状态变更压缩进一条不可逆转的管道，谁改、谁看、谁通知都有固定路线。
 demo: true
 math: false
 sourceUrl: https://peaks.cc/architecture_patterns
 draft: false
 ---
 
-{/* 知识点清单：Flux/Action/Reducer/Store；原书章节：第6章 Fluxアーキテクチャ。每个知识点必须落到本章专属图或 Stepper。 */}
+{/* 知识点清单：Action/Dispatcher/Store/View 单向循环、Reducer 纯函数、单向数据流 vs MVP 双向对比。每个知识点必须落到本章专属图或 Stepper。 */}
 
 <Objectives>
 
-- Flux 把 Action、Reducer、Store、View 排成单向路线，防止状态被多处偷偷改写。
-- 能用本章图示复述：用户收藏生成 Action → Reducer 计算新 State → Store 发布状态 → UI 根据状态重绘。
-- 能判断：Flux 被当成事件总线，所有人都能到处发和改，单向流被破坏。
+- 能用自己的话画出 Action → Dispatcher → Store → View 的完整单向循环，并标出每段的数据形态。
+- 能对比 Flux 与 MVP 的区别：在 Flux 里谁能改 Store、在 MVP 里谁能改 Model，并说出为什么这个差异影响团队协作。
+- 能回答：如果收藏按钮点了两次才生效，在 Flux 链路中应该排查哪一段？
 
 </Objectives>
 
-## 本章专属图
+## 为什么需要单向数据流
 
-Flux 把 Action、Reducer、Store、View 排成单向路线，防止状态被多处偷偷改写。 先看图，再谈模式名。图里最重要的不是节点颜色，而是谁负责输入、判断、状态和输出。
+想象一条工厂流水线：原料从一端进去，经过固定工位加工，成品从另一端出来。如果有人在流水线中途伸手从旁边塞原料、或者从后面把半成品拽回去改，整条线的产出就谁也无法保证了。
 
-<FluxUnidirectionalFlowDiagram />
+App 的状态也面临同样的问题。当用户点一个按钮，如果 View 可以直接改 Model、Model 又去通知另一个 View、另一个 View 再改回来——状态就变成了一团谁也不敢碰的线团。新人不敢改、老人改了怕出 bug、review 全靠猜。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把图里的步骤拖到最后，本章哪条边界最应该写进 review
-  规则？
-</Callout>
+Flux 把这条流水线的方向锁死：一切状态变更必须从 Action 出发，经过 Dispatcher 排队，Store 计算新状态，最后 View 根据状态重绘。没有旁路、没有回头箭。团队只需要守住这条单向路线，状态再复杂也能逐段排查。
 
-## 分步动画：Flux 架构
+## 核心概念
+
+<FluxUnidirectionalDiagram />
+
+上图是 Flux 的四站单向循环，箭头方向就是数据流向。下面逐一拆解每一站的角色。
+
+<Term def="描述「发生了什么」的不可变消息对象，例如 { type: TOGGLE_FAVORITE, id: 42 }。Action 只携带意图和数据，不执行业务逻辑。">Action</Term>
+是整个 Flux 循环的起点。用户点击收藏按钮，View 不直接改状态，而是创建一个 Action 对象丢进 Dispatcher。这就像你在餐厅写了一张点菜单——菜单上只写了你要什么，不会替你炒菜。Action 的不可变性意味着任何人都可以检查它、记录它、回放它，这对调试和测试是巨大的便利。
+
+<Term def="中央调度器，按顺序把每个 Action 分发给所有注册过的 Store。Dispatcher 保证一次只处理一个 Action，避免并发状态冲突。">Dispatcher</Term>
+是 Flux 的中枢神经。它不判断 Action 的含义，只做一件事：把每个 Action 按顺序广播给所有 Store。这个「排队广播」机制是 Flux 单向流的核心保障——如果 Store A 在处理 Action 1 时产生了副作用想让 Store B 立即响应，Dispatcher 会等 Action 1 处理完再处理下一个。这杜绝了连锁更新导致的不可预测状态。
+
+<Term def="持有应用状态并响应 Action 的唯一容器。Store 内的 Reducer 根据旧状态和 Action 计算出新状态，Store 再通知订阅者。Store 是状态的唯一写入入口。">Store</Term>
+是状态的家。Flux 最硬的一条规则是：只有 Store 能改自己的状态。View 不能、Presenter 不能、网络回调也不能绕过 Store 直接篡改。Store 内部的 Reducer 是一个纯函数——输入旧状态和 Action，输出新状态。纯函数意味着同样的输入永远得出同样的输出，这让你可以给 Store 写单元测试，而不需要启动整个 App。
+
+<Term def="根据 Store 的最新状态渲染 UI 的层。View 只读状态，永远不直接写入。当用户交互时，View 创建 Action 而非修改状态。">View</Term>
+在 Flux 里被降权了——它只负责两件事：把状态画出来，把用户操作转成 Action。View 没有「保存」按钮的点击逻辑，它只有一个「创建 SAVE_CLICKED Action」的职责。这听起来像是让 View 变笨了，但正是这种「笨」让 View 变得可替换——换一套 UI 框架、换一个布局，只要它依然读同样的 Store、发同样的 Action，业务逻辑纹丝不动。
+
+### Flux 与 MVP 的关键差异
+
+Flux 和 MVP 都试图解决「状态乱改」的问题，但路径完全不同。在 MVP 里，Presenter 是双向的——它从 View 收事件、调 Model 取数据、再推回 View 更新。这意味着 Presenter 可以同时接触 View 和 Model，边界靠约定维护。在 Flux 里，数据只有一条路：View → Action → Dispatcher → Store → View。Store 不依赖 View，View 不直接碰 Store 的写入。这条单向管道是结构性的约束，不靠代码规范、不靠 review 记忆——路线跑错了编译不过去或测试直接炸。
+
+这就是 D 型对比章节的核心问题：当团队从 3 人变成 12 人，双向 MVP 需要每个人记住「Presenter 只能通过接口改 View」的约定，而单向 Flux 把这个约定变成了物理路线——你想改状态？先发 Action，没别的路。
+
+## 交互演示
+
+<AndroidDesignLab
+  mode="patterns"
+  title="Flux 单向流演示"
+  story="收藏节目单向循环"
+  currentStep={1}
+/>
 
 <Stepper>
-  <Step title="1. 用户收藏生成 Action">
-    <FluxUnidirectionalFlowDiagram />
+  <Step title="1. 用户点击收藏，View 创建 ToggleFavorite Action">
+    <FluxUnidirectionalDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    用户在节目详情页点击收藏星标。View 不修改任何状态，只创建一个不可变的 Action 对象：`{ type: 「TOGGLE_FAVORITE」, episodeId: 42 }`，并交给 Dispatcher。此时 UI 还没有变化——View 在等待 Store 的通知。
 
-  </Step>
-  <Step title="2. Reducer 计算新 State">
-    <FluxUnidirectionalFlowDiagram />
-
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    验收问题：谁拥有创建 Action 格式的决定权？如果另一个 View 也发 TOGGLE_FAVORITE，Action 格式是否一致？
 
   </Step>
-  <Step title="3. Store 发布状态">
-    <FluxUnidirectionalFlowDiagram />
+  <Step title="2. Dispatcher 排队广播，Store 的 Reducer 处理 Action">
+    <FluxUnidirectionalDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    Dispatcher 将 Action 按顺序发给 FavoriteStore。Store 内的 Reducer 收到旧状态 `{ favorites: [7, 15] }` 和 Action `TOGGLE_FAVORITE(42)`，计算出新状态：如果 42 不在列表则添加，否则移除。计算过程是纯函数——同一输入永远同一输出。
+
+    验收问题：如果 Reducer 在处理 Action 时调了网络请求，Store 还是纯函数吗？违反了 Flux 的哪条规则？
 
   </Step>
-  <Step title="4. UI 根据状态重绘">
-    <FluxUnidirectionalFlowDiagram />
+  <Step title="3. Store 发布新状态，通知所有订阅的 View">
+    <FluxUnidirectionalDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    FavoriteStore 把新状态 `{ favorites: [7, 15, 42] }` 发布出去。所有订阅了 FavoriteStore 的 View 都会收到通知，但 Store 不关心谁在听——它只管发布，不管消费。收藏列表页、节目详情页、首页的收藏计数，三个 View 各自决定自己需要新状态的哪一部分。
+
+    验收问题：如果有 View A 和 View B 都订阅了同一个 Store，A 在收到通知后发了一个新的 Action，B 会看到几次状态变化？
+
+  </Step>
+  <Step title="4. View 根据新状态重绘 UI，星标变亮">
+    <FluxUnidirectionalDiagram />
+
+    节目详情页的 View 收到通知后，读取新状态发现 `favorites` 包含了 episodeId=42，于是把收藏星标从空心变为实心。首页的收藏计数 View 也收到通知，把数字从 2 更新为 3。两个 View 独立渲染，互不知晓对方的存在——这是单向流带来的解耦红利。
+
+    验收问题：节目详情页的星标亮了，但首页的收藏计数还是 2，在 Flux 链路里问题出在哪一段？
 
   </Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="一种单向数据流架构。所有变化从 Action 开始，经过 Reducer/Store，最后回到 View。">
-  Flux
-</Term>
-是本章入口。它必须能解释团队协作成本，而不是只解释类图形状。
-
-<Term def="一条能被 review、测试和文档共同保护的代码分界线。">责任边界</Term>
-是共同验收线：边界画不清，模式名再漂亮也没用。
-
 ## 常见误区
 
 <Callout type="trap">
-  <strong>现象 →</strong> Flux
-  被当成事件总线，所有人都能到处发和改，单向流被破坏。 <strong>原因 →</strong>{" "}
-  只讨论实现，没有讨论职责边界。 <strong>修法 →</strong>{" "}
-  回到本章图，把事件、状态、结果和失败路径都标出来。
+  <strong>现象 →</strong> Store 在处理 Action 时直接操作数据库或发起网络请求，Reducer 不再是纯函数。<strong>原因 →</strong> 把 Reducer 当成了 Presenter，把副作用塞进了状态计算。<strong>修法 →</strong> 所有副作用（网络、数据库、SharedPreferences）放在 Action Creator 或 Middleware 层，Store 的 Reducer 只做纯计算。执行顺序：Action Creator 完成副作用 → 产出 Action → Dispatcher → Reducer（纯）。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象 →</strong> 图能播放，但讲不出本章故事。 <strong>原因 →</strong>{" "}
-  只看节点，没有看数据和责任如何移动。 <strong>修法 →</strong>{" "}
-  用“谁做决定、谁能测试、谁负责展示”重讲一遍。
+  <strong>现象 →</strong> View 在用户交互时直接修改了 Store 中的某个字段，Dispatcher 被绕过。<strong>原因 →</strong> 因为「就改一个小字段，走完整流程太重了」——这是 Flux 最常见的破窗。<strong>修法 →</strong> 任何绕过 Dispatcher 的写入都是单向流的天敌。在代码审查规则里加入：View 层代码中禁止出现 Store 的 setter 调用。如果发现绕路，回到本章图，确认每一步的入口和出口。
 </Callout>
 
 ## 小结与练习
 
-- 本章核心：Flux 把 Action、Reducer、Store、View 排成单向路线，防止状态被多处偷偷改写。
-- 本章故事：用户收藏生成 Action → Reducer 计算新 State → Store 发布状态 → UI 根据状态重绘。
-- 本章练习：为“收藏节目”写 Action/Reducer/State 变化表，区分局部状态和全局状态。
+- 本章核心：Flux 用 Action → Dispatcher → Store → View 的单向循环替代双向通信，状态变更路径唯一、可回放、可分步测试。
+- 本章故事：用户点击收藏 → Action 进入 Dispatcher 排队 → Store 纯函数计算新状态 → 所有订阅 View 同步更新。
+- 本章练习：为「批量删除收藏」设计 Action 和 Reducer，区分乐观更新和确认更新两种策略。
 
 <Exercises>
-  <Answer question="本章图示解决了什么团队问题？">
-    它把隐藏在代码里的职责边界外显出来，让 review、测试和新人接手都有共同参照。
+  <Answer question="Flux 的单向流和 MVP 的双向通信，各自在什么团队规模下更合适？">
+    MVP 适合 3-5 人团队——Presenter 作为中间人可灵活协调 View 和 Model，双向通信省代码但依赖约定。
+    Flux 适合 8 人以上团队或状态复杂度高的场景——单向流把约定变成物理路线，新人没法走错路，但多了 Action/Dispatcher/Store 的样板代码开销。
+    不是 Flux 比 MVP 「更好」，而是 Flux 用结构成本换约定风险。
   </Answer>
-  <Answer question="本章最危险的误用是什么？">
-    Flux 被当成事件总线，所有人都能到处发和改，单向流被破坏。
-    修法是先画边界，再决定类、接口、状态和测试替身。
+  <Answer question="如果收藏按钮点了两次才生效，在 Flux 链路中应该排查哪一段？">
+    按顺序排查：(1) View 是否创建了 Action？加日志确认 Action 对象被创建。(2) Dispatcher 是否收到了 Action？检查 dispatch 调用是否被条件分支吞掉。(3) Store 的 Reducer 是否处理了这个 Action type？确认 Reducer 的 when/switch 分支覆盖了 TOGGLE_FAVORITE。(4) Store 是否发出了变更通知？检查 emit/post 调用。(5) View 是否订阅了 Store 且收到了通知？检查 observe 绑定的生命周期。每一步都可以独立验证——这就是单向流给排查带来的确定性。
   </Answer>
-  <Answer question="为“收藏节目”写 Action/Reducer/State 变化表，区分局部状态和全局状态。">
-    画出输入、判断、状态、输出和失败路径；再写一句 review 规则保护这条边界。
+  <Answer question="为「批量删除收藏」设计 Action 和 Reducer，区分乐观更新和确认更新两种策略。">
+    乐观更新策略：View 发 BATCH_DELETE_FAVORITES Action → Reducer 立即从列表中移除指定 id → Store 通知 View 刷新（此时 UI 立刻显式删除）→ Action Creator 后台调 API → API 失败时发 BATCH_DELETE_FAILED Action → Reducer 回滚状态。
+    确认更新策略：View 发 BATCH_DELETE_REQUEST Action → Action Creator 调 API → API 成功发 BATCH_DELETE_SUCCESS（Reducer 移除）→ API 失败发 BATCH_DELETE_ERROR（Reducer 记录错误信息不删数据）。两种策略选哪个取决于用户体验和 API 可靠性——但无论是哪种，流程都走同一根单向管道。
   </Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="Flux">
-    一种单向数据流架构。所有变化从 Action 开始，经过 Reducer/Store，最后回到
-    View。
-  </GlossaryItem>
-  <GlossaryItem term="Action">
-    描述发生了什么的不可变消息，例如 ToggleFavoriteClicked。它不是业务执行器。
-  </GlossaryItem>
-  <GlossaryItem term="Reducer">
-    根据旧状态和 Action 计算新状态的纯函数。它不应该直接访问网络或 Android API。
-  </GlossaryItem>
-  <GlossaryItem term="Store">
-    保存当前状态并通知观察者的地方。它让状态来源唯一，避免多处同时写。
-  </GlossaryItem>
-  <GlossaryItem term="责任边界">
-    代码中可以被讨论、测试、review
-    和文档共同保护的分界线。它决定“谁该改、谁不该改”。
-  </GlossaryItem>
+  <GlossaryItem term="Action">描述「发生了什么」的不可变消息对象。它只携带意图和数据（type + payload），不执行业务逻辑。类比餐厅点菜单——写了要什么，不会替你炒菜。</GlossaryItem>
+  <GlossaryItem term="Dispatcher">中央调度器，按顺序把每个 Action 广播给所有注册过的 Store。它是单向流的交通警察，保证一次只处理一个 Action，避免并发冲突。</GlossaryItem>
+  <GlossaryItem term="Store">持有应用状态并响应 Action 的唯一容器。Store 内的 Reducer 根据旧状态和 Action 计算新状态。Flux 的硬规则：只有 Store 能改自己的状态。</GlossaryItem>
+  <GlossaryItem term="Reducer">根据旧状态和 Action 计算新状态的纯函数。纯函数 = 同样输入永远同样输出、没有任何副作用（不调网络、不写数据库、不改外部变量）。</GlossaryItem>
+  <GlossaryItem term="View">根据 Store 状态渲染 UI 的层。View 只读状态、不直接写入。用户交互时 View 创建 Action 而非修改状态。View 变笨了，但变得可替换了。</GlossaryItem>
+  <GlossaryItem term="单向数据流">数据变更只有一条路：View → Action → Dispatcher → Store → View。没有旁路、没有回头箭。这是 Flux 区别于 MVP 双向通信的核心特征。</GlossaryItem>
+  <GlossaryItem term="责任边界">代码中可以被讨论、测试、review 和文档共同保护的分界线。在 Flux 中，边界是 Dispatcher → Store 的接口和 Store → View 的订阅协议。</GlossaryItem>
 </Glossary>
 
 <Attribution
