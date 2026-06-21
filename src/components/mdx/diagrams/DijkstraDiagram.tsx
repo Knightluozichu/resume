@@ -101,7 +101,7 @@ export function DijkstraDiagram() {
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
         <svg
-          viewBox={`0 0 ${VIEW_W} ${VH}`}
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
           aria-label="狄克斯特拉算法示意图。带权有向图中从源点 S 到终点的最短路径计算。"
           className="mx-auto block h-auto w-full max-w-[720px]"
