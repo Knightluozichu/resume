@@ -1,21 +1,8 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
 import Script from "next/script";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
 import "./globals.css";
-
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-  display: "swap",
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  variable: "--font-jetbrains-mono",
-  subsets: ["latin"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "remuse — 程序员自学图书馆",
@@ -31,9 +18,9 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
+      className=""
       // 内联深色底：CSS 包加载完成前的首帧防白闪（FOUC）。此处只能用字面值
-      // 而非 var(--bg)——token 定义在尚未加载的 CSS 包里；值等同 DESIGN --bg #0A0A0F。
+      // 而非 var(--bg)——token 定义在尚未加载 of CSS 包里；值等同 DESIGN --bg #0A0A0F。
       style={{ backgroundColor: "#0a0a0f" }}
     >
       {/* min-h-dvh + flex-col：页面主体（各路由根元素 flex-1）把页脚推到视口底部 */}
