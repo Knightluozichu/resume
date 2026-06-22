@@ -659,6 +659,7 @@ import { FindInMatrixDiagram } from "./diagrams/find-in-matrix-diagram";
 import { QueueWithTwoStacksDiagram } from "./diagrams/queue-with-two-stacks-diagram";
 import { ReplaceSpacesDiagram } from "./diagrams/replace-spaces-diagram";
 import { PrintListReverseDiagram } from "./diagrams/print-list-reverse-diagram";
+import { DeleteNodeDiagram } from "./diagrams/delete-node-diagram";
 import { RebuildBinaryTreeDiagram } from "./diagrams/rebuild-binary-tree-diagram";
 import { BigNumberPrintDiagram } from "./diagrams/big-number-print-diagram";
 import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
@@ -1617,6 +1618,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   QueueWithTwoStacksDiagram,
   ReplaceSpacesDiagram,
   PrintListReverseDiagram,
+  DeleteNodeDiagram,
   RebuildBinaryTreeDiagram,
   BigNumberPrintDiagram,
   SelectionSortDiagram,

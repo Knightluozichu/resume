@@ -243,6 +243,7 @@ import { coiRebuildBinaryTreeQuestions } from "./review/coi-rebuild-binary-tree"
 import { coiQueueWithTwoStacksQuestions } from "./review/coi-queue-with-two-stacks";
 import { coiPowerQuestions } from "./review/coi-power";
 import { coiPrintNumbersQuestions } from "./review/coi-print-numbers";
+import { coiDeleteNodeQuestions } from "./review/coi-delete-node";
 
 export {
   CHAPTER_TITLES,
@@ -349,6 +350,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiQueueWithTwoStacksQuestions,
   ...coiPowerQuestions,
   ...coiPrintNumbersQuestions,
+  ...coiDeleteNodeQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,
