@@ -655,6 +655,7 @@ import { MvpFlowDiagram } from "./diagrams/mvp-flow-diagram";
 import { MvvmFlowDiagram } from "./diagrams/mvvm-flow-diagram";
 import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
 import { BinarySearchDiagram } from "./diagrams/BinarySearchDiagram";
+import { FindInMatrixDiagram } from "./diagrams/find-in-matrix-diagram";
 import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
 import { RecursionDiagram } from "./diagrams/RecursionDiagram";
 import { QuickSortDiagram } from "./diagrams/QuickSortDiagram";
@@ -1607,6 +1608,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VisibilityViz,
   AlgorithmPlayground,
   BinarySearchDiagram,
+  FindInMatrixDiagram,
   SelectionSortDiagram,
   RecursionDiagram,
   QuickSortDiagram,

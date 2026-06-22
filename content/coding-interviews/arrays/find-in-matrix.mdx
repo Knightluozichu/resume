@@ -1,0 +1,183 @@
+---
+title: 二维数组中的查找
+type: C
+section: 数组
+order: 2
+description: 在行列均为有序的二维数组中，利用边界元素的排他性，实现 O(m+n) 的高效查找。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：二维数组查找 / 双指针 / 行列排他性 / 边界缩减 / 鞍点查找；原书章节：面试题4：二维数组中的查找。 */}
+
+<Objectives>
+
+- 能解释为何不能从矩阵的中心或任意角（如左上角、右下角）开始查找。
+- 能描述并画出利用右上角（或左下角）元素进行行/列排除的逻辑路径。
+- 能正确实现 C++（使用 `std::vector`）和 TypeScript 的 `find-in-matrix` 算法，并能防范越界与空数组等边界坑点。
+
+</Objectives>
+
+## 直觉引入
+
+假设你站在一个奇特的梯田景区前，这片梯田由网格状的石板路组成。这里的规矩很特别：从西往东走，海拔会越来越高；从北往南走，海拔同样越来越高。现在，有人告诉你梯田中藏着一个特定的高度，让你去寻找它。
+
+如果景区漫无边际，你却只能一个石板一个石板去测，那得测到什么时候？更糟糕的是，如果目标高度根本不存在，盲目搜寻只会让你精疲力竭。这章要解决的核心问题是：在这样一个双向递增的网格世界中，如何以最快的速度精准定位目标，或者确定它根本不在这个网格中？
+
+如果我们毫无策略地搜索，就只能像扫地一样测遍每一个角落。而利用网格中蕴含的特定方向规律，我们每测一次就能排除掉一整片区域，让搜索范围以惊人的速度缩小。
+
+## 概念讲解
+
+### 为什么不能从左上角或右下角开始？
+
+当我们想要在这个网格中查找一个目标值（Target）时，一个自然的直觉是：能不能从最边缘的角开始看？
+
+假设我们从左上角开始。左上角是整个网格的最小值。如果我们要找的 Target 比左上角大（这很常见），接下来该往右走还是往下走？因为向右和向下都是变大，我们无法做出唯一选择，查找路径就会产生分叉，这就失去了单向排除的优势。同理，右下角是最大值，如果 Target 比它小，向左和向上都是变小，同样无法选择。
+
+### 鞍点：右上角与左下角的排他妙处
+
+要实现无分叉的单向排除，关键在于选择一个「一侧变大、另一侧变小」的特殊位置。在数学和算法中，这种点类似于<Term def="在两个维度上表现相反单调性的位置：在一个轴向上是最大值，而在另一个轴向上是最小值。">鞍点</Term>。
+
+网格的**右上角**就是一个完美的鞍点：
+- 它是当前行的**最大值**（因为往左走会变小）。
+- 它是当前列的**最小值**（因为往下走会变大）。
+
+同样，**左下角**也是一个完美的鞍点（是当前行的最小值、当前列的最大值）。下面我们以右上角为例，看看它是如何工作的。
+
+### 边界消去法的运行机制
+
+假设我们从右上角出发，将当前格子的值与 Target 进行对比：
+1. **若当前值 > Target**：因为当前列下方的元素都比当前值还要大，所以 Target 绝对不可能在当前列中。我们可以直接排除当前列。这相当于指针**向左移动一格**（列索引减一）。
+2. **若当前值 < Target**：因为当前行左侧的元素都比当前值还要小，所以 Target 绝对不可能在当前行中。我们可以直接排除当前行。这相当于指针**向下移动一格**（行索引加一）。
+3. **若当前值 == Target**：直接找到目标！
+
+通过这套规则，每次比较都能至少排除一行或一列，搜索边界像拉链一样迅速收紧，查找效率极其高效。
+
+## 交互 Demo
+
+猜一猜：如果把查找目标 Target 从 7 调大到 16（大于网格最大值），指针会沿着什么路径移动？需要比较多少次才能确定 16 不在网格中？
+
+下面我们以在 $4 \times 4$ 网格中查找目标值 `7` 为例，点击下方控制按钮，一步步体验行/列逐步排除的动态过程：
+
+<FindInMatrixDiagram />
+
+## 代码对照
+
+为了确保代码能够安全运行在各种面试或线上评测系统中，我们在设计核心的双指针逻辑之外，必须严格保证对<Term def="程序在极端或特殊输入（如空指针、零维数组）下的保护屏障，防止代码因越界而崩溃。">边界条件</Term>的有效防护。
+
+以下是 C++ 与 TypeScript 的具体实现对比：
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <vector>
+
+class Solution {
+public:
+    bool findNumberIn2DArray(std::vector<std::vector<int>>& matrix, int target) {
+        // 边界情况防护：防止空矩阵导致越界崩溃
+        if (matrix.empty() || matrix[0].empty()) {
+            return false;
+        }
+
+        int rows = matrix.size();
+        int cols = matrix[0].size();
+        
+        // 从右上角 (0, cols - 1) 开始查找
+        int row = 0;
+        int col = cols - 1;
+        
+        // 保证指针在有效矩阵区域内移动
+        while (row < rows && col >= 0) {
+            int num = matrix[row][col];
+            if (num == target) {
+                return true;  // 命中目标
+            } else if (num > target) {
+                col--;  // 排除当前列，向左移动
+            } else {
+                row++;  // 排除当前行，向下移动
+            }
+        }
+        return false;  // 越界仍未找到，说明目标不存在
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+function findNumberIn2DArray(matrix: number[][], target: number): boolean {
+    // 边界情况防护：确保输入不为空且拥有合法的行和列
+    if (!matrix || matrix.length === 0 || matrix[0].length === 0) {
+        return false;
+    }
+
+    const rows = matrix.length;
+    const cols = matrix[0].length;
+
+    // 从右上角 (0, cols - 1) 开始查找
+    let row = 0;
+    let col = cols - 1;
+
+    // 指针边界控制：行递增上限 rows，列递减下限 0
+    while (row < rows && col >= 0) {
+        const num = matrix[row][col];
+        if (num === target) {
+            return true; // 命中目标
+        } else if (num > target) {
+            col--; // 排除当前列，向左移动
+        } else {
+            row++; // 排除当前行，向下移动
+        }
+    }
+    return false; // 越界仍未找到，说明目标不存在
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 运行程序直接崩溃，抛出空指针或数组下标越界异常。<strong>原因 →</strong> 未对输入进行边界检查，直接通过 `matrix[0]` 读取列数，或者当矩阵为空时尝试访问元素。<strong>修法 →</strong> 在函数开头增加 `matrix.empty() || matrix[0].empty()`（TS 中为 `!matrix || matrix.length === 0 || matrix[0].length === 0`）的安全保护，确认矩阵不为空且有列再做后续操作。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 查找某些特定目标值时程序死循环，或者越界访问。<strong>原因 →</strong> 循环终止条件写错（如写成 `row <= rows` 导致行越界，或者 `col > 0` 导致漏掉第 0 列）。<strong>修法 →</strong> 严格控制指针边界：`row < rows` 且 `col >= 0`。注意网格的索引从 `0` 到 `N-1`，递增越界上限是 `rows`，递减越界下限是 `0`。
+</Callout>
+
+## 小结与练习
+
+- 鞍点查找选择右上角或左下角，利用单向单调性避免搜索路径分叉。
+- 每次对比必定可以排除一行或一列，因此最多移动 $m+n$ 步。
+- <Term def="评估算法运行效率的度量。本算法由于每次比较最少排除一行或一列，移动路径长度不超过行数加上列数，因此时间复杂度为 O(m+n)。">时间复杂度</Term>为 $O(m+n)$，空间复杂度为 $O(1)$，不需要额外辅助空间。
+- 必须先做空矩阵边界检查，防止 `matrix[0]` 崩溃或空指针访问。
+
+<Exercises>
+  <Answer question="如果不从右上角或左下角出发，而是从矩阵的中心点开始查找，会遇到什么问题？">
+    中心点的值虽然是这一行/列的中间值，但对于剩下的四个象限（左上、右上、左下、右下），如果 Target 大于中心点，我们只能排除左上象限（都是比中心点更小的），而右上和左下象限可能包含 Target。此时无法进行单一方向的行/列消去，会演变成复杂的分治或递归查找，无法保证 $O(m+n)$ 效率。
+  </Answer>
+  <Answer question="如果本题的矩阵改用一维数组存储，行长度为 col_count，应该如何处理指针移动的映射？">
+    当一维数组逻辑上表示为 $rows \times cols$ 的矩阵时，可以用逻辑坐标 `(r, c)` 来表示右上角位置 `(0, cols - 1)`。每次将一维索引映射为 `index = r * cols + c`。向左移时 `c--`，向下移时 `r++`，逻辑完全一致。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="鞍点">
+    在一个方向上是最大值，在另一个方向上是最小值的网格交叉点。在本题中，右上角 and 左下角都扮演了这一角色，允许我们无二义性地进行单向排除。详见「概念讲解」节。
+  </GlossaryItem>
+  <GlossaryItem term="边界条件">
+    程序在极端或特殊输入（如空输入、无效长度）下的运行状态。本题的空矩阵检查是预防崩溃的关键边界。详见「常见误区」与「代码对照」节。
+  </GlossaryItem>
+  <GlossaryItem term="时间复杂度">
+    评估算法运行效率的度量。本算法由于每次比较最少排除一行或一列，移动路径长度不超过行数加上列数，因此时间复杂度为 $O(m+n)$。详见「小结与练习」与「概念讲解」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>

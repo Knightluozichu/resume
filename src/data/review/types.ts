@@ -159,6 +159,8 @@ export type ReviewChapterSlug =
   | "plugin-principle"
   | "draw-optimization"
   | "memory-optimization"
+  // 剑指 Offer
+  | "coi-find-in-matrix"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -592,6 +594,8 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
     "工具提示工程：让 agent 会用工具而不是猜工具",
   "agent-production-readiness-checklist":
     "生产化收官：简单、透明与 ACI 上线检查清单",
+  // 剑指 Offer
+  "coi-find-in-matrix": "二维数组中的查找",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

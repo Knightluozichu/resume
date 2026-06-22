@@ -236,6 +236,7 @@ import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
 import { agtFunctionCallingQuestions } from "./review/agt-function-calling";
 import { agtReactLoopQuestions } from "./review/agt-react-loop";
 import { agtToolDesignQuestions } from "./review/agt-tool-design";
+import { coiFindInMatrixQuestions } from "./review/coi-find-in-matrix";
 
 export {
   CHAPTER_TITLES,
@@ -335,6 +336,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jniPrincipleQuestions,
   ...javaVmQuestions,
   ...dalvikArtQuestions,
+  ...coiFindInMatrixQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,
