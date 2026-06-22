@@ -493,6 +493,8 @@ export const SECTION_ORDER = [
   "链表",
   "树",
   "栈和队列",
+  "数学",
+  "回溯与递归",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
