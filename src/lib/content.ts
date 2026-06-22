@@ -487,6 +487,12 @@ export const SECTION_ORDER = [
   "智能体模式",
   "记忆与检索",
   "生产化",
+  // 剑指Offer 章节
+  "数组",
+  "字符串",
+  "链表",
+  "树",
+  "栈和队列",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
