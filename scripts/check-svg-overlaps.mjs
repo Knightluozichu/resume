@@ -218,6 +218,9 @@ const PAGES = [
   "/learn/coding-interviews/linked-lists/print-list-reverse",
   "/learn/coding-interviews/trees/rebuild-binary-tree",
   "/learn/coding-interviews/stacks-queues/queue-with-two-stacks",
+  "/learn/coding-interviews/math/power",
+  "/learn/coding-interviews/recursion/print-numbers",
+  "/learn/coding-interviews/linked-lists/delete-node",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

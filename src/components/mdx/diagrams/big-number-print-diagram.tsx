@@ -19,8 +19,9 @@ const STEPS: Step[] = [
     activeIdx: 0,
     stack: ["dfs(0)"],
     console: ["(等待输出...)"],
-    description: "算法启动，从最高位开始确定。调用 `dfs(0)`，当前字符数组槽位全空为 `[_, _, _]`。",
-    action: "在索引 0 处分配字符"
+    description:
+      "算法启动，从最高位开始确定。调用 `dfs(0)`，当前字符数组槽位全空为 `[_, _, _]`。",
+    action: "在索引 0 处分配字符",
   },
   {
     title: "步骤 1：第一层分配 (Assign 0)",
@@ -28,8 +29,9 @@ const STEPS: Step[] = [
     activeIdx: 1,
     stack: ["dfs(0)", "dfs(1)"],
     console: ["(等待输出...)"],
-    description: "在索引 0 处填入 `'0'`，调用下一层 `dfs(1)` 确定十位数。当前字符数组状态为 `[0, _, _]`。",
-    action: "在索引 1 处分配字符"
+    description:
+      "在索引 0 处填入 `'0'`，调用下一层 `dfs(1)` 确定十位数。当前字符数组状态为 `[0, _, _]`。",
+    action: "在索引 1 处分配字符",
   },
   {
     title: "步骤 2：第二层分配 (Assign 1)",
@@ -37,8 +39,9 @@ const STEPS: Step[] = [
     activeIdx: 2,
     stack: ["dfs(0)", "dfs(1)", "dfs(2)"],
     console: ["(等待输出...)"],
-    description: "在索引 1 处填入 `'1'`，继续调用下一层 `dfs(2)` 确定个位数。当前状态为 `[0, 1, _]`。",
-    action: "在索引 2 处分配字符"
+    description:
+      "在索引 1 处填入 `'1'`，继续调用下一层 `dfs(2)` 确定个位数。当前状态为 `[0, 1, _]`。",
+    action: "在索引 2 处分配字符",
   },
   {
     title: "步骤 3：触底基线条件 & 去前导零输出",
@@ -46,8 +49,9 @@ const STEPS: Step[] = [
     activeIdx: null,
     stack: ["dfs(0)", "dfs(1)", "dfs(2)", "dfs(3) (Base)"],
     console: ["...", "18", "19 (新输出)"],
-    description: "在最低位填入 `'9'`，进入 `dfs(3)`。由于达到递归深度 3（$n=3$），触发基线条件。定位首个非零字符，去除前导零 `'0'`，输出 `'19'`。",
-    action: "触发回溯，返回上一层 dfs(2)"
+    description:
+      "在最低位填入 `'9'`，进入 `dfs(3)`。由于达到递归深度 3（$n=3$），触发基线条件。定位首个非零字符，去除前导零 `'0'`，输出 `'19'`。",
+    action: "触发回溯，返回上一层 dfs(2)",
   },
   {
     title: "步骤 4：回溯并分配新值 (Assign 2)",
@@ -55,8 +59,9 @@ const STEPS: Step[] = [
     activeIdx: 2,
     stack: ["dfs(0)", "dfs(1)", "dfs(2)"],
     console: ["...", "18", "19"],
-    description: "低位回溯，清除 `'9'`。在 `dfs(1)` 层中将索引 1 更新为 `'2'`。随后重新调用 `dfs(2)` 填入低位字符。当前状态 `[0, 2, _]`。",
-    action: "向下递归填入最低位"
+    description:
+      "低位回溯，清除 `'9'`。在 `dfs(1)` 层中将索引 1 更新为 `'2'`。随后重新调用 `dfs(2)` 填入低位字符。当前状态 `[0, 2, _]`。",
+    action: "向下递归填入最低位",
   },
   {
     title: "步骤 5：无前导零满位生成",
@@ -64,9 +69,10 @@ const STEPS: Step[] = [
     activeIdx: null,
     stack: ["dfs(0)", "dfs(1)", "dfs(2)", "dfs(3) (Base)"],
     console: ["...", "99", "100 (新输出)"],
-    description: "当最高位递增至 `'1'`，后续位依次填入 `'0'`、`'0'` 并进入 `dfs(3)` 基线条件时，无前导零，首位即有效位，直接输出 `'100'`。",
-    action: "回溯并继续搜索，直到所有全排列结束"
-  }
+    description:
+      "当最高位递增至 `'1'`，后续位依次填入 `'0'`、`'0'` 并进入 `dfs(3)` 基线条件时，无前导零，首位即有效位，直接输出 `'100'`。",
+    action: "回溯并继续搜索，直到所有全排列结束",
+  },
 ];
 
 export function BigNumberPrintDiagram() {
@@ -163,7 +169,11 @@ export function BigNumberPrintDiagram() {
                     textAnchor="middle"
                     fontSize="16px"
                     fontWeight="700"
-                    fill={val !== null ? "var(--text-primary)" : "var(--text-secondary)"}
+                    fill={
+                      val !== null
+                        ? "var(--text-primary)"
+                        : "var(--text-secondary)"
+                    }
                   >
                     {val !== null ? val : "_"}
                   </text>
@@ -284,9 +294,27 @@ export function BigNumberPrintDiagram() {
               fill="var(--border)"
               fillOpacity="0.3"
             />
-            <circle cx="28" cy="221.5" r="2.5" fill="var(--danger)" fillOpacity="0.7" />
-            <circle cx="35" cy="221.5" r="2.5" fill="var(--warning)" fillOpacity="0.7" />
-            <circle cx="42" cy="221.5" r="2.5" fill="var(--success)" fillOpacity="0.7" />
+            <circle
+              cx="28"
+              cy="221.5"
+              r="2.5"
+              fill="var(--danger)"
+              fillOpacity="0.7"
+            />
+            <circle
+              cx="35"
+              cy="221.5"
+              r="2.5"
+              fill="var(--warning)"
+              fillOpacity="0.7"
+            />
+            <circle
+              cx="42"
+              cy="221.5"
+              r="2.5"
+              fill="var(--success)"
+              fillOpacity="0.7"
+            />
             <text
               x="175"
               y="225"
@@ -310,7 +338,9 @@ export function BigNumberPrintDiagram() {
                     fontFamily="monospace"
                     fontSize="9.5px"
                     fontWeight={isHighlight ? "700" : "500"}
-                    fill={isHighlight ? "var(--success)" : "var(--text-primary)"}
+                    fill={
+                      isHighlight ? "var(--success)" : "var(--text-primary)"
+                    }
                   >
                     {line}
                   </text>
@@ -397,7 +427,11 @@ export function BigNumberPrintDiagram() {
               textAnchor="end"
               fontSize="9.5px"
               fontWeight="700"
-              fill={step.activeIdx !== null ? "var(--accent)" : "var(--text-secondary)"}
+              fill={
+                step.activeIdx !== null
+                  ? "var(--accent)"
+                  : "var(--text-secondary)"
+              }
             >
               {step.activeIdx !== null ? `idx ${step.activeIdx}` : "无 (触底)"}
             </text>
@@ -495,7 +529,8 @@ export function BigNumberPrintDiagram() {
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        {step.title}：在 $n=3$ 的情况下，通过递归回溯全排列，逐位拼接并处理大数。
+        {step.title}：在 $n=3$
+        的情况下，通过递归回溯全排列，逐位拼接并处理大数。
       </figcaption>
     </figure>
   );
