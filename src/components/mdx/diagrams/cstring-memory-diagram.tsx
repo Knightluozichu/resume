@@ -40,8 +40,16 @@ export function CStringMemoryDiagram() {
           className="mx-auto block h-auto w-full max-w-[620px]"
         >
           {/* 标题 */}
-          <text x="310" y="28" fontSize="14" fontWeight="700" fill={token.textPrimary} textAnchor="middle" fontFamily="monospace">
-            char str[] = "Hello";
+          <text
+            x="310"
+            y="28"
+            fontSize="14"
+            fontWeight="700"
+            fill={token.textPrimary}
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
+            char str[] = &quot;Hello&quot;;
           </text>
 
           {/* 内存格子 */}
@@ -99,13 +107,20 @@ export function CStringMemoryDiagram() {
             );
           })}
 
-          {/* strlen 标注（前5个字符） */}
-          <line x1={startX - 12} y1={60} x2={startX - 12} y2={138} stroke="rgb(63,185,127)" strokeWidth="2" />
-          <line x1={startX - 12} y1={60} x2={startX + 5 * (cellW + gap) - cellW / 2} y2={60} stroke="rgb(63,185,127)" strokeWidth="2" strokeDasharray="6 3" />
-          <line x1={startX - 12} y1={138} x2={startX + 5 * (cellW + gap) - cellW / 2} y2={138} stroke="rgb(63,185,127)" strokeWidth="2" strokeDasharray="6 3" />
-
+          {/* strlen 标注（前5个字符，X=35..333, Y=46..102） */}
+          <rect
+            x={35}
+            y={46}
+            width={298}
+            height={56}
+            fill="none"
+            stroke="rgb(63,185,127)"
+            strokeWidth="1.5"
+            strokeDasharray="6 3"
+            rx="4"
+          />
           <text
-            x={startX - 12}
+            x={35}
             y={170}
             textAnchor="start"
             fontSize="12"
@@ -116,15 +131,22 @@ export function CStringMemoryDiagram() {
             strlen(str) = 5
           </text>
 
-          {/* sizeof 标注（全部6个字节） */}
-          <line x1={startX + 6 * (cellW + gap) + 12} y1={60} x2={startX + 6 * (cellW + gap) + 12} y2={138} stroke="rgb(99,179,237)" strokeWidth="2" />
-          <line x1={startX + cellW / 2} y1={60} x2={startX + 6 * (cellW + gap) + 12} y2={60} stroke="rgb(99,179,237)" strokeWidth="2" strokeDasharray="6 3" />
-          <line x1={startX + cellW / 2} y1={138} x2={startX + 6 * (cellW + gap) + 12} y2={138} stroke="rgb(99,179,237)" strokeWidth="2" strokeDasharray="6 3" />
-
+          {/* sizeof 标注（全部6个字节，X=30..396, Y=42..146） */}
+          <rect
+            x={30}
+            y={42}
+            width={366}
+            height={104}
+            fill="none"
+            stroke="rgb(99,179,237)"
+            strokeWidth="1.5"
+            strokeDasharray="6 3"
+            rx="4"
+          />
           <text
-            x={startX + 6 * (cellW + gap) + 22}
+            x={396}
             y={170}
-            textAnchor="start"
+            textAnchor="end"
             fontSize="12"
             fontWeight="700"
             fill="rgb(99,179,237)"
@@ -146,24 +168,42 @@ export function CStringMemoryDiagram() {
           </text>
 
           {/* 底部解释 */}
-          <rect x="20" y="200" width="580" height="110" rx="6" fill={token.bg} stroke={token.border} />
-          <text x="36" y="226" fontSize="12" fontWeight="700" fill={token.textPrimary}>
+          <rect
+            x="20"
+            y="200"
+            width="580"
+            height="110"
+            rx="6"
+            fill={token.bg}
+            stroke={token.border}
+          />
+          <text
+            x="36"
+            y="226"
+            fontSize="12"
+            fontWeight="700"
+            fill={token.textPrimary}
+          >
             C 字符串的两条铁律：
           </text>
 
           <text x="36" y="252" fontSize="11" fill={token.textSecondary}>
-            ① 字符串就是 char 数组——字符一个接一个连续放在内存里，每个字符占 1 字节。
+            ① 字符串就是 char 数组——字符一个接一个连续放在内存里，每个字符占 1
+            字节。
           </text>
           <text x="36" y="272" fontSize="11" fill={token.textSecondary}>
-            ② 结尾一定是空字符 \0（ASCII 0）——C 靠它来知道"字符串到这儿结束"，没有它就是普通字符数组而不是字符串。
+            ② 结尾一定是空字符 \0（ASCII 0）——C
+            靠它来知道&quot;字符串到这儿结束&quot;，没有它就是普通字符数组而不是字符串。
           </text>
           <text x="36" y="296" fontSize="11" fill={token.textSecondary}>
-            ③ strlen() 数到 \0 之前就停了（得 5）；sizeof() 数数组的全部字节（得 6）——差的那 1 个字节就是结尾的 \0。
+            ③ strlen() 数到 \0 之前就停了（得 5）；sizeof() 数数组的全部字节（得
+            6）——差的那 1 个字节就是结尾的 \0。
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C 字符串 = 连续字符 + \0 结尾。strlen 不算 \0，sizeof 算上 \0——两者差 1 不是 bug，是 C 的底层设计。
+        C 字符串 = 连续字符 + \0 结尾。strlen 不算 \0，sizeof 算上 \0——两者差 1
+        不是 bug，是 C 的底层设计。
       </figcaption>
     </figure>
   );

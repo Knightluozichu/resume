@@ -20,18 +20,77 @@ interface TypeRow {
 
 export function TypeSizeDiagram() {
   const rows: TypeRow[] = [
-    { type: "bool", bytes: 1, min: "false", max: "true", signed: false, note: "true/false 不可做算术" },
+    {
+      type: "bool",
+      bytes: 1,
+      min: "false",
+      max: "true",
+      signed: false,
+      note: "true/false 不可做算术",
+    },
     { type: "char", bytes: 1, min: "-128", max: "127", signed: true },
     { type: "unsigned char", bytes: 1, min: "0", max: "255", signed: false },
-    { type: "wchar_t", bytes: "2/4", min: "0", max: "依平台", signed: false, note: "宽字符" },
+    {
+      type: "wchar_t",
+      bytes: "2/4",
+      min: "0",
+      max: "依平台",
+      signed: false,
+      note: "宽字符",
+    },
     { type: "short", bytes: 2, min: "-32,768", max: "32,767", signed: true },
-    { type: "unsigned short", bytes: 2, min: "0", max: "65,535", signed: false },
-    { type: "int", bytes: 4, min: "≈ -2.1×10⁹", max: "≈ 2.1×10⁹", signed: true },
-    { type: "unsigned int", bytes: 4, min: "0", max: "≈ 4.3×10⁹", signed: false },
-    { type: "long", bytes: "4/8", min: "依平台", max: "依平台", signed: true, note: "≥ int" },
-    { type: "long long", bytes: 8, min: "≈ -9.2×10¹⁸", max: "≈ 9.2×10¹⁸", signed: true },
-    { type: "float", bytes: 4, min: "~1.2×10⁻³⁸", max: "~3.4×10³⁸", signed: true, note: "7位有效数字" },
-    { type: "double", bytes: 8, min: "~2.2×10⁻³⁰⁸", max: "~1.8×10³⁰⁸", signed: true, note: "15位有效数字" },
+    {
+      type: "unsigned short",
+      bytes: 2,
+      min: "0",
+      max: "65,535",
+      signed: false,
+    },
+    {
+      type: "int",
+      bytes: 4,
+      min: "≈ -2.1×10⁹",
+      max: "≈ 2.1×10⁹",
+      signed: true,
+    },
+    {
+      type: "unsigned int",
+      bytes: 4,
+      min: "0",
+      max: "≈ 4.3×10⁹",
+      signed: false,
+    },
+    {
+      type: "long",
+      bytes: "4/8",
+      min: "依平台",
+      max: "依平台",
+      signed: true,
+      note: "≥ int",
+    },
+    {
+      type: "long long",
+      bytes: 8,
+      min: "≈ -9.2×10¹⁸",
+      max: "≈ 9.2×10¹⁸",
+      signed: true,
+    },
+    {
+      type: "float",
+      bytes: 4,
+      min: "~1.2×10⁻³⁸",
+      max: "~3.4×10³⁸",
+      signed: true,
+      note: "7位有效数字",
+    },
+    {
+      type: "double",
+      bytes: 8,
+      min: "~2.2×10⁻³⁰⁸",
+      max: "~1.8×10³⁰⁸",
+      signed: true,
+      note: "15位有效数字",
+    },
   ];
 
   const colX = { type: 16, bytes: 160, signed: 250, min: 380, max: 410 };
@@ -49,13 +108,66 @@ export function TypeSizeDiagram() {
           className="mx-auto block h-auto w-full max-w-[640px]"
         >
           {/* 表头背景 */}
-          <rect x="8" y={headerY - 12} width="624" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
+          <rect
+            x="8"
+            y={headerY - 12}
+            width="624"
+            height="28"
+            rx="4"
+            fill="var(--accent)"
+            opacity="0.15"
+          />
           {/* 表头文字 */}
-          <text x={colX.type} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">类型</text>
-          <text x={colX.bytes} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">字节</text>
-          <text x={colX.signed} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">符号</text>
-          <text x={colX.min} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">最小值</text>
-          <text x={colX.max} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">最大值</text>
+          <text
+            x={colX.type}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            fontFamily="monospace"
+          >
+            类型
+          </text>
+          <text
+            x={colX.bytes}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="middle"
+          >
+            字节
+          </text>
+          <text
+            x={colX.signed}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="middle"
+          >
+            符号
+          </text>
+          <text
+            x={colX.min}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="end"
+          >
+            最小值
+          </text>
+          <text
+            x={colX.max}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="start"
+          >
+            最大值
+          </text>
 
           {/* 数据行 */}
           {rows.map((r, i) => {
@@ -66,7 +178,14 @@ export function TypeSizeDiagram() {
             return (
               <g key={r.type}>
                 {/* 行背景 */}
-                <rect x="8" y={y - 10} width="624" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect
+                  x="8"
+                  y={y - 10}
+                  width="624"
+                  height={rowH - 4}
+                  rx="4"
+                  fill={rowBg}
+                />
                 {/* 类型名 */}
                 <text
                   x={colX.type}
@@ -152,7 +271,8 @@ export function TypeSizeDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            注：字节数为常见平台典型值。long 在 64-bit Windows 为 4 字节，Linux/macOS 为 8 字节。
+            注：字节数为常见平台典型值。long 在 64-bit Windows 为 4
+            字节，Linux/macOS 为 8 字节。
           </text>
           <text
             x="24"
@@ -160,7 +280,8 @@ export function TypeSizeDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            float 约 7 位有效数字，double 约 15 位。wchar_t 在 Windows 为 2 字节，Linux/macOS 为 4 字节。
+            float 约 7 位有效数字，double 约 15 位。wchar_t 在 Windows 为 2
+            字节，Linux/macOS 为 4 字节。
           </text>
         </svg>
       </div>

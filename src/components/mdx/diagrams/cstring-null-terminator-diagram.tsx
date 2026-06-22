@@ -31,11 +31,19 @@ export function CStringNullTerminatorDiagram() {
           aria-label="C 字符串以空字符 \0 结尾的内存布局"
           className="mx-auto block h-auto w-full max-w-[640px]"
         >
-          <text x={24} y={28} fontSize="14" fontWeight="700" fill={primary} fontFamily="monospace">
-            char animal[10] = "Cat";
+          <text
+            x={24}
+            y={28}
+            fontSize="14"
+            fontWeight="700"
+            fill={primary}
+            fontFamily="monospace"
+          >
+            char animal[10] = &quot;Cat&quot;;
           </text>
           <text x={24} y={48} fontSize="11" fill={secondary}>
-            字面量 "Cat" 带来 4 个字符：C、a、t、\0；数组总长 10，其余字节为 0
+            字面量 &quot;Cat&quot; 带来 4 个字符：C、a、t、\0；数组总长
+            10，其余字节为 0
           </text>
 
           {chars.map(({ ch, idx, isNull }) => {
@@ -119,20 +127,44 @@ export function CStringNullTerminatorDiagram() {
           })}
 
           <line
-            x1={startX - 4}
-            y1={memY + 80}
-            x2={startX + 4 * cellW - 4}
-            y2={memY + 80}
+            x1={startX}
+            y1={memY + 76}
+            x2={startX + 3 * cellW - 4}
+            y2={memY + 76}
             stroke="rgb(63,185,127)"
             strokeWidth="2"
             markerEnd="url(#nullTermArrow)"
           />
-          <text x={startX + 2 * cellW} y={memY + 96} textAnchor="middle" fontSize="11" fontWeight="700" fill="rgb(63,185,127)">
+          <text
+            x={startX + 1.5 * cellW - 2}
+            y={memY + 92}
+            textAnchor="middle"
+            fontSize="11"
+            fontWeight="700"
+            fill="rgb(63,185,127)"
+          >
             strlen → 3（数到 \0 之前）
           </text>
 
-          <rect x={startX + 3 * cellW - 6} y={memY - 8} width={cellW + 8} height={68} rx="8" fill="none" stroke={nullColor} strokeWidth="2" strokeDasharray="5 3" />
-          <text x={startX + 3 * cellW + (cellW - 4) / 2} y={memY + 100} textAnchor="middle" fontSize="10" fontWeight="600" fill={nullColor}>
+          <rect
+            x={startX + 3 * cellW - 6}
+            y={memY - 8}
+            width={cellW + 8}
+            height={68}
+            rx="8"
+            fill="none"
+            stroke={nullColor}
+            strokeWidth="2"
+            strokeDasharray="5 3"
+          />
+          <text
+            x={startX + 3.5 * cellW - 2}
+            y={memY + 114}
+            textAnchor="middle"
+            fontSize="10"
+            fontWeight="600"
+            fill={nullColor}
+          >
             字符串结束标记
           </text>
 
@@ -140,21 +172,31 @@ export function CStringNullTerminatorDiagram() {
             铁律：所有 string.h 函数都靠 \0 判断「字符串到哪结束」
           </text>
           <text x={24} y={234} fontSize="11" fill={secondary}>
-            没有 \0 → strlen/strcpy 会一直往后读，直到撞上别的内存（未定义行为）。
+            没有 \0 → strlen/strcpy
+            会一直往后读，直到撞上别的内存（未定义行为）。
           </text>
           <text x={24} y={256} fontSize="11" fill={secondary}>
-            char ar[n] 初始化不足时，剩余元素自动填 \0；手动逐字赋值时你必须自己写上结尾 \0。
+            char ar[n] 初始化不足时，剩余元素自动填
+            \0；手动逐字赋值时你必须自己写上结尾 \0。
           </text>
 
           <defs>
-            <marker id="nullTermArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+            <marker
+              id="nullTermArrow"
+              markerWidth="8"
+              markerHeight="8"
+              refX="6"
+              refY="4"
+              orient="auto"
+            >
               <polygon points="0,1 6,4 0,7" fill="rgb(63,185,127)" />
             </marker>
           </defs>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C 字符串 = 连续 char + 结尾 \0。strlen 只数可见字符；sizeof 数整个数组占用的字节。
+        C 字符串 = 连续 char + 结尾 \0。strlen 只数可见字符；sizeof
+        数整个数组占用的字节。
       </figcaption>
     </figure>
   );
