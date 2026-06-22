@@ -163,6 +163,7 @@ export type ReviewChapterSlug =
   | "coi-find-in-matrix"
   | "coi-replace-spaces"
   | "coi-print-list-reverse"
+  | "coi-rebuild-binary-tree"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -600,6 +601,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",
   "coi-print-list-reverse": "从尾到头打印链表",
+  "coi-rebuild-binary-tree": "重建二叉树",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
