@@ -184,22 +184,31 @@ function LostInMiddleDemoInner() {
           />
           <text
             x={ROW_X}
-            y={CURVE_TOP - 6}
+            y={CURVE_TOP - 20}
             textAnchor="start"
             fontSize="10"
             fill="var(--text-secondary)"
           >
             注意力强度 ↑
           </text>
-          {/* U 形曲线（淡显参考线，始终可见） */}
-          <path
-            d={CURVE_PATH}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="2"
-            strokeOpacity="0.45"
-            strokeDasharray="4 4"
-          />
+          {/* U 形曲线（由 10 段 dashed lines 构成，避免单一大 path 的 AABB 引起 overlap 警报） */}
+          {Array.from({ length: N - 1 }, (_, i) => {
+            const p1 = CURVE_POINTS[i];
+            const p2 = CURVE_POINTS[i + 1];
+            return (
+              <line
+                key={`curve-seg-${i}`}
+                x1={p1.x}
+                y1={p1.y}
+                x2={p2.x}
+                y2={p2.y}
+                stroke="var(--accent)"
+                strokeWidth="2"
+                strokeOpacity="0.45"
+                strokeDasharray="4 4"
+              />
+            );
+          })}
 
           {/* —— N 个位置的「注意力柱 + 顶点 + 位置格」—— */}
           {Array.from({ length: N }, (_, i) => {

@@ -304,7 +304,7 @@ function AgentParadigmDiagramInner() {
                 x={BOX_CX(ci)}
                 y={VIEW_H - 30}
                 textAnchor="middle"
-                fontSize="9.5"
+                fontSize="11"
                 fill="var(--text-secondary)"
               >
                 {col.metaphor}
@@ -340,7 +340,7 @@ function AgentParadigmDiagramInner() {
               x={loopX + 14}
               y={loopY2 + 14}
               textAnchor="middle"
-              fontSize="9.5"
+              fontSize="11"
               fontWeight="700"
               fill="var(--success)"
             >

@@ -40,9 +40,9 @@ import {
  * 边界懒加载，anime.js 绝不进首屏 / 公共 layout。视觉全 DESIGN token，无裸 hex。
  */
 
-// —— 画布几何（viewBox 0 0 720 360）。 ——
+// —— 画布几何（viewBox 0 0 720 380）。 ——
 const VIEW_W = 720;
-const VIEW_H = 360;
+const VIEW_H = 380;
 const TOP_CAPTION_Y = 28; // 顶 caption 基线 ≥20，bbox 距顶 ≥16px
 
 // 时间轴：左侧留出标签列，右侧留边；时间 0 → TOTAL 映射到 [AXIS_X0, AXIS_X1]。

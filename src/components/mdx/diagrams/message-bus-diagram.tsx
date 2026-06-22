@@ -216,6 +216,56 @@ function NodeBox({ cx, cy, w, h, label, sub, filled }: NodeBoxProps) {
 }
 
 function MessageBusDiagramInner() {
+  const renderMessageLine = (m: Msg, color: string, marker: string) => {
+    if (Math.abs(m.x1 - m.x2) < 5) {
+      return (
+        <line
+          x1={m.x1}
+          y1={m.y1}
+          x2={m.x2}
+          y2={m.y2}
+          stroke={color}
+          strokeWidth={m.down ? 1.8 : 1.5}
+          strokeDasharray={m.down ? undefined : "5 3"}
+          markerEnd={marker}
+        />
+      );
+    }
+    const midY = m.down ? 130 : 205;
+    return (
+      <g>
+        <line
+          x1={m.x1}
+          y1={m.y1}
+          x2={m.x1}
+          y2={midY}
+          stroke={color}
+          strokeWidth={m.down ? 1.8 : 1.5}
+          strokeDasharray={m.down ? undefined : "5 3"}
+        />
+        <line
+          x1={m.x1}
+          y1={midY}
+          x2={m.x2}
+          y2={midY}
+          stroke={color}
+          strokeWidth={m.down ? 1.8 : 1.5}
+          strokeDasharray={m.down ? undefined : "5 3"}
+        />
+        <line
+          x1={m.x2}
+          y1={midY}
+          x2={m.x2}
+          y2={m.y2}
+          stroke={color}
+          strokeWidth={m.down ? 1.8 : 1.5}
+          strokeDasharray={m.down ? undefined : "5 3"}
+          markerEnd={marker}
+        />
+      </g>
+    );
+  };
+
   // 每条消息的「边 + 消息卡」一个 group，按 label 挂 ref。
   const groupRefs = useRef<Record<string, SVGGElement | null>>({});
 
@@ -332,16 +382,7 @@ function MessageBusDiagramInner() {
                 opacity="0.2"
               >
                 {/* 传输边 */}
-                <line
-                  x1={m.x1}
-                  y1={m.y1}
-                  x2={m.x2}
-                  y2={m.y2}
-                  stroke={color}
-                  strokeWidth={m.down ? 1.8 : 1.5}
-                  strokeDasharray={m.down ? undefined : "5 3"}
-                  markerEnd={marker}
-                />
+                {renderMessageLine(m, color, marker)}
                 {/* 消息卡：结构化的「from → to: 内容」 */}
                 <rect
                   x={m.cardX}
