@@ -242,7 +242,7 @@ import { coiPrintListReverseQuestions } from "./review/coi-print-list-reverse";
 import { coiRebuildBinaryTreeQuestions } from "./review/coi-rebuild-binary-tree";
 import { coiQueueWithTwoStacksQuestions } from "./review/coi-queue-with-two-stacks";
 import { coiPowerQuestions } from "./review/coi-power";
-
+import { coiPrintNumbersQuestions } from "./review/coi-print-numbers";
 
 export {
   CHAPTER_TITLES,
@@ -348,6 +348,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiRebuildBinaryTreeQuestions,
   ...coiQueueWithTwoStacksQuestions,
   ...coiPowerQuestions,
+  ...coiPrintNumbersQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

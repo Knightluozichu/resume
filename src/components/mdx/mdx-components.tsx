@@ -660,6 +660,7 @@ import { QueueWithTwoStacksDiagram } from "./diagrams/queue-with-two-stacks-diag
 import { ReplaceSpacesDiagram } from "./diagrams/replace-spaces-diagram";
 import { PrintListReverseDiagram } from "./diagrams/print-list-reverse-diagram";
 import { RebuildBinaryTreeDiagram } from "./diagrams/rebuild-binary-tree-diagram";
+import { BigNumberPrintDiagram } from "./diagrams/big-number-print-diagram";
 import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
 import { RecursionDiagram } from "./diagrams/RecursionDiagram";
 import { QuickSortDiagram } from "./diagrams/QuickSortDiagram";
@@ -1617,6 +1618,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ReplaceSpacesDiagram,
   PrintListReverseDiagram,
   RebuildBinaryTreeDiagram,
+  BigNumberPrintDiagram,
   SelectionSortDiagram,
   RecursionDiagram,
   QuickSortDiagram,

@@ -166,6 +166,7 @@ export type ReviewChapterSlug =
   | "coi-rebuild-binary-tree"
   | "coi-queue-with-two-stacks"
   | "coi-power"
+  | "coi-print-numbers"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -606,6 +607,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-rebuild-binary-tree": "重建二叉树",
   "coi-queue-with-two-stacks": "用两个栈实现队列",
   "coi-power": "数值的整数次方",
+  "coi-print-numbers": "打印从 1 到最大的 n 位数",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
