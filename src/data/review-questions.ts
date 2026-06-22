@@ -244,6 +244,7 @@ import { coiQueueWithTwoStacksQuestions } from "./review/coi-queue-with-two-stac
 import { coiPowerQuestions } from "./review/coi-power";
 import { coiPrintNumbersQuestions } from "./review/coi-print-numbers";
 import { coiDeleteNodeQuestions } from "./review/coi-delete-node";
+import { coiRegularExpressionsMatchingQuestions } from "./review/coi-regular-expressions-matching";
 
 export {
   CHAPTER_TITLES,
@@ -351,6 +352,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiPowerQuestions,
   ...coiPrintNumbersQuestions,
   ...coiDeleteNodeQuestions,
+  ...coiRegularExpressionsMatchingQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

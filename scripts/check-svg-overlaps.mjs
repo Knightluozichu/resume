@@ -221,6 +221,7 @@ const PAGES = [
   "/learn/coding-interviews/math/power",
   "/learn/coding-interviews/recursion/print-numbers",
   "/learn/coding-interviews/linked-lists/delete-node",
+  "/learn/coding-interviews/strings/regular-expressions-matching",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
