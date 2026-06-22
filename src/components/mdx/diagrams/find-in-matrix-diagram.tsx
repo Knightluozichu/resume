@@ -15,10 +15,10 @@ interface StepInfo {
 }
 
 const MATRIX = [
-  [1,  2,  8,  9],
-  [2,  4,  9, 12],
-  [4,  7, 10, 13],
-  [6,  8, 11, 15]
+  [1, 2, 8, 9],
+  [2, 4, 9, 12],
+  [4, 7, 10, 13],
+  [6, 8, 11, 15],
 ];
 
 const TARGET = 7;
@@ -33,7 +33,7 @@ const STEPS: StepInfo[] = [
     rowStart: 0,
     rowEnd: 3,
     colStart: 0,
-    colEnd: 3
+    colEnd: 3,
   },
   {
     row: 0,
@@ -44,7 +44,7 @@ const STEPS: StepInfo[] = [
     rowStart: 0,
     rowEnd: 3,
     colStart: 0,
-    colEnd: 2
+    colEnd: 2,
   },
   {
     row: 0,
@@ -55,7 +55,7 @@ const STEPS: StepInfo[] = [
     rowStart: 0,
     rowEnd: 3,
     colStart: 0,
-    colEnd: 1
+    colEnd: 1,
   },
   {
     row: 1,
@@ -66,7 +66,7 @@ const STEPS: StepInfo[] = [
     rowStart: 1,
     rowEnd: 3,
     colStart: 0,
-    colEnd: 1
+    colEnd: 1,
   },
   {
     row: 2,
@@ -77,8 +77,8 @@ const STEPS: StepInfo[] = [
     rowStart: 2,
     rowEnd: 3,
     colStart: 0,
-    colEnd: 1
-  }
+    colEnd: 1,
+  },
 ];
 
 export function FindInMatrixDiagram() {
@@ -132,7 +132,14 @@ export function FindInMatrixDiagram() {
           </defs>
 
           {/* Title */}
-          <text x="270" y="25" textAnchor="middle" fontSize="15px" fontWeight="700" fill="var(--text-primary)">
+          <text
+            x="270"
+            y="25"
+            textAnchor="middle"
+            fontSize="15px"
+            fontWeight="700"
+            fill="var(--text-primary)"
+          >
             二维数组中的查找 (Target = 7)
           </text>
 
@@ -140,7 +147,15 @@ export function FindInMatrixDiagram() {
           {[0, 1, 2, 3].map((c) => {
             const pos = getCellCenter(0, c);
             return (
-              <text key={`col-idx-${c}`} x={pos.x} y="44" textAnchor="middle" fontSize="10px" fontWeight="600" fill="var(--text-secondary)">
+              <text
+                key={`col-idx-${c}`}
+                x={pos.x}
+                y="44"
+                textAnchor="middle"
+                fontSize="10px"
+                fontWeight="600"
+                fill="var(--text-secondary)"
+              >
                 c={c}
               </text>
             );
@@ -150,7 +165,15 @@ export function FindInMatrixDiagram() {
           {[0, 1, 2, 3].map((r) => {
             const pos = getCellCenter(r, 0);
             return (
-              <text key={`row-idx-${r}`} x="22" y={pos.y + 3.5} textAnchor="middle" fontSize="10px" fontWeight="600" fill="var(--text-secondary)">
+              <text
+                key={`row-idx-${r}`}
+                x="22"
+                y={pos.y + 3.5}
+                textAnchor="middle"
+                fontSize="10px"
+                fontWeight="600"
+                fill="var(--text-secondary)"
+              >
                 r={r}
               </text>
             );
@@ -187,7 +210,10 @@ export function FindInMatrixDiagram() {
               }
 
               return (
-                <g key={`cell-${r}-${c}`} opacity={isEliminated && !isActive ? 0.25 : 1}>
+                <g
+                  key={`cell-${r}-${c}`}
+                  opacity={isEliminated && !isActive ? 0.25 : 1}
+                >
                   <rect
                     x={x}
                     y={y}
@@ -206,14 +232,20 @@ export function FindInMatrixDiagram() {
                     textAnchor="middle"
                     fontSize="13px"
                     fontWeight={isActive ? "700" : "500"}
-                    fill={isActive ? (isFound ? "var(--success)" : "var(--accent)") : textColor}
+                    fill={
+                      isActive
+                        ? isFound
+                          ? "var(--success)"
+                          : "var(--accent)"
+                        : textColor
+                    }
                     className="transition-colors duration-300"
                   >
                     {v}
                   </text>
                 </g>
               );
-            })
+            }),
           )}
 
           {/* Paths / Arrows */}
@@ -224,7 +256,10 @@ export function FindInMatrixDiagram() {
             const p1 = getCellCenter(prev.row, prev.col);
             const p2 = getCellCenter(curr.row, curr.col);
 
-            let sx = p1.x, sy = p1.y, ex = p2.x, ey = p2.y;
+            let sx = p1.x,
+              sy = p1.y,
+              ex = p2.x,
+              ey = p2.y;
             // Shorten the arrow line segment so it doesn't overlap text inside cells
             if (p1.x === p2.x) {
               sy = p1.y + 15;
@@ -264,49 +299,135 @@ export function FindInMatrixDiagram() {
             />
 
             {/* Header */}
-            <text x="305" y="80" fontSize="13px" fontWeight="700" fill="var(--text-primary)">
+            <text
+              x="305"
+              y="80"
+              fontSize="13px"
+              fontWeight="700"
+              fill="var(--text-primary)"
+            >
               查找进度 (Step {currentStep})
             </text>
-            <line x1="305" y1="90" x2="500" y2="90" stroke="var(--border)" strokeWidth="1" />
+            <line
+              x1="305"
+              y1="90"
+              x2="500"
+              y2="90"
+              stroke="var(--border)"
+              strokeWidth="1"
+            />
 
             {/* Details */}
-            <text x="305" y="112" fontSize="11px" fontWeight="600" fill="var(--text-secondary)">
+            <text
+              x="305"
+              y="112"
+              fontSize="11px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
               当前坐标:
             </text>
-            <text x="365" y="112" fontSize="11px" fontWeight="700" fill="var(--text-primary)">
+            <text
+              x="365"
+              y="112"
+              fontSize="11px"
+              fontWeight="700"
+              fill="var(--text-primary)"
+            >
               r={step.row}, c={step.col}
             </text>
 
-            <text x="305" y="132" fontSize="11px" fontWeight="600" fill="var(--text-secondary)">
+            <text
+              x="305"
+              y="132"
+              fontSize="11px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
               当前数值:
             </text>
-            <text x="365" y="132" fontSize="11px" fontWeight="700" fill={step.val === TARGET ? "var(--success)" : "var(--text-primary)"}>
+            <text
+              x="365"
+              y="132"
+              fontSize="11px"
+              fontWeight="700"
+              fill={
+                step.val === TARGET ? "var(--success)" : "var(--text-primary)"
+              }
+            >
               {step.val}
             </text>
 
-            <text x="305" y="152" fontSize="11px" fontWeight="600" fill="var(--text-secondary)">
+            <text
+              x="305"
+              y="152"
+              fontSize="11px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
               对比式子:
             </text>
-            <text x="365" y="152" fontSize="11px" fontWeight="700" fill="var(--accent)">
+            <text
+              x="365"
+              y="152"
+              fontSize="11px"
+              fontWeight="700"
+              fill="var(--accent)"
+            >
               {step.comparison}
             </text>
 
             {/* Range Bounds */}
-            <text x="305" y="180" fontSize="11px" fontWeight="600" fill="var(--text-secondary)">
+            <text
+              x="305"
+              y="180"
+              fontSize="11px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
               搜索范围:
             </text>
-            <text x="305" y="196" fontSize="10px" fontWeight="600" fill="var(--text-secondary)">
-              行: [{step.rowStart}, {step.rowEnd}] | 列: [{step.colStart}, {step.colEnd}]
+            <text
+              x="305"
+              y="196"
+              fontSize="10px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
+              行: [{step.rowStart}, {step.rowEnd}] | 列: [{step.colStart},{" "}
+              {step.colEnd}]
             </text>
 
             {/* Divider */}
-            <line x1="305" y1="210" x2="500" y2="210" stroke="var(--border)" strokeWidth="1" strokeDasharray="2 2" />
+            <line
+              x1="305"
+              y1="210"
+              x2="500"
+              y2="210"
+              stroke="var(--border)"
+              strokeWidth="1"
+              strokeDasharray="2 2"
+            />
 
             {/* Action / Conclusion */}
-            <text x="305" y="232" fontSize="11px" fontWeight="600" fill="var(--text-secondary)">
+            <text
+              x="305"
+              y="232"
+              fontSize="11px"
+              fontWeight="600"
+              fill="var(--text-secondary)"
+            >
               执行决策:
             </text>
-            <text x="305" y="248" fontSize="11px" fontWeight="700" fill={step.val === TARGET ? "var(--success)" : "var(--text-primary)"}>
+            <text
+              x="305"
+              y="248"
+              fontSize="11px"
+              fontWeight="700"
+              fill={
+                step.val === TARGET ? "var(--success)" : "var(--text-primary)"
+              }
+            >
               {step.conclusion}
             </text>
           </g>
@@ -321,7 +442,7 @@ export function FindInMatrixDiagram() {
           >
             上一步 (Prev)
           </button>
-          
+
           {/* Progress Indicators */}
           <div className="flex gap-1.5">
             {STEPS.map((_, i) => (
@@ -332,8 +453,8 @@ export function FindInMatrixDiagram() {
                   i === currentStep
                     ? "w-6 bg-accent"
                     : i < currentStep
-                    ? "w-2 bg-success"
-                    : "w-2 bg-border"
+                      ? "w-2 bg-success"
+                      : "w-2 bg-border"
                 }`}
                 aria-label={`跳转到步骤 ${i}`}
               />
@@ -350,7 +471,8 @@ export function FindInMatrixDiagram() {
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        指针初始在右上角 (0,3)=9。由于 9 &gt; 7，排除最后一列。指针逐步向左或向下逼近，直到在 (2,1) 找到 7。
+        指针初始在右上角 (0,3)=9。由于 9 &gt;
+        7，排除最后一列。指针逐步向左或向下逼近，直到在 (2,1) 找到 7。
       </figcaption>
     </figure>
   );
