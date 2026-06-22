@@ -5,8 +5,282 @@ section: 字符串
 order: 3
 description: 掌握确定性有限状态自动机 (DFA) 匹配合法数值的严密边界判定。
 demo: true
-math: false
+math: true
 sourceUrl: https://github.com/zhedahht/CodingInterviews
 draft: false
 ---
-Stub
+
+<Objectives>
+- 能用自己的话解释 <Term def="确定性有限状态自动机 (DFA)">DFA</Term> 的基本原理与 10 个核心状态
+- 能正确推导和设计数值字符串的各种状态转移路径
+- 能熟练处理诸如空串、连续符号、带点指数等各种恶劣边界条件
+- 能回答：基于 DFA 的校验方法与常规分治扫描法在实现上有何本质差异？
+</Objectives>
+
+## 为什么需要状态自动机
+
+在许多系统和语言标准中，对“合法数值”的定义非常宽泛且精细。除了像 `123` 这样简单的整数外，我们还要支持科学计数法 `+1.2e-3`、省略前导数字的浮点数 `.5`，甚至连末尾跟了小数点的 `1.` 在 C++ 等标准里也是合法的。
+
+如果不使用工具，直接用常规的 `if-else` 条件分支去扫描字符串，代码会变得极其臃肿。由于各种边界条件纵横交错（如正负号必须出现在首位或紧随 `e/E` 后面；小数点不能与指数同时出现；指数必须是一个整数且前面要有数值基础等），人工拼凑的分支逻辑极易漏判。这就好比在一座复杂的迷宫里游走，在每一个分岔口都通过拼凑的标志做判断，最终必然迷失。
+
+为了解决这种**词法分析中的多状态依赖判定**问题，<Term def="根据当前输入字符和当前状态唯一确定下一个状态的数学模型">DFA (确定有限状态自动机)</Term> 便是最优雅的“图纸”。我们只需定义出所有合法的内部状态以及相应的转移规则，状态机就会像精密仪器一样，按照字符驱动，在有向图上自动流转。一旦走入无路可通的节点便立即拒绝，而走到终点时若处于“可接收状态”即为合法。
+
+---
+
+## DFA 是怎么工作的
+
+表示数值的字符串 DFA 一共包含 **10 个状态**。这些状态定义了状态机从空串出发，到处理各个符号、数字、小数点，再到完成指数校验和尾随空格处理的全流程：
+
+| 状态 ID | 状态名称 (Label) | 状态物理意义 | 是否为合法结束态 (Accept)? |
+| :--- | :--- | :--- | :---: |
+| **S0** | `Start` | 起始空格或初始未读状态 | 否 |
+| **S1** | `Sign` | 数字前的主正负号（如 `+`、`-`） | 否 |
+| **S2** | `Integer` | 小数点前的整数部分（如 `123`） | **是** |
+| **S3** | `DotWithoutInt` | 前面没有数字的小数点（如 `.5` 中的小数点） | 否 |
+| **S4** | `DotWithInt` | 前面有数字的小数点（如 `1.` 中的小数点） | **是** |
+| **S5** | `Decimal` | 小数点后的分数部分（如 `0.12` 中的 `12`） | **是** |
+| **S6** | `Exponent` | 指数符号（如 `e` 或 `E`） | 否 |
+| **S7** | `ExpSign` | 指数部分的正负号 | 否 |
+| **S8** | `ExpInteger` | 指数部分的整数值 | **是** |
+| **S9** | `EndSpace` | 数值结束后的尾随空格 | **是** |
+
+我们把字符分为六类：空格 `space`、正负号 `sign`、数字 `digit`、小数点 `dot`、指数符号 `exponent` 以及其他非法字符 `other`。状态机的转移表可以形式化表示如下：
+
+$$
+\delta(\text{State}, \text{CharType}) = \text{NextState}
+$$
+
+例如，如果在 `Integer` (S2) 状态读入一个小数点 `dot`，它将转移至 `DotWithInt` (S4)，因为此时已经具备了左侧整数；而在 `Start` (S0) 状态读入 `dot`，则必须转移至 `DotWithoutInt` (S3)，代表这是一个没有前导整数的小数。
+
+---
+
+## 交互演示
+
+> 猜一猜：如果向状态机输入 `.`，它将停留在哪一步？它是如何拒绝这个非数值的？动手操作下方的 DFA 模拟器，在输入框中输入不同的字符，观察状态转移的轨迹。
+
+<StringDfaDiagram />
+
+---
+
+## 代码对照
+
+下面分别给出 C++ 与 TypeScript 使用转移表（查表法）实现的 DFA 校验代码。查表法将“图转移关系”固化在哈希表或邻接矩阵中，使核心判定循环保持为极简的 $O(1)$ 步进，从而使逻辑极为清晰。
+
+<CodeTabs>
+  <Tab label="C++ 实现">
+```cpp
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
+class Solution {
+public:
+    enum State {
+        STATE_START,
+        STATE_SIGN,
+        STATE_INTEGER,
+        STATE_DOT_WITHOUT_INT,
+        STATE_DOT_WITH_INT,
+        STATE_DECIMAL,
+        STATE_EXPONENT,
+        STATE_EXP_SIGN,
+        STATE_EXP_INTEGER,
+        STATE_END_SPACE
+    };
+
+    enum CharType {
+        CHAR_SPACE,
+        CHAR_SIGN,
+        CHAR_DIGIT,
+        CHAR_DOT,
+        CHAR_EXPONENT,
+        CHAR_OTHER
+    };
+
+    CharType toCharType(char ch) {
+        if (ch == ' ') return CHAR_SPACE;
+        if (ch == '+' || ch == '-') return CHAR_SIGN;
+        if (ch >= '0' && ch <= '9') return CHAR_DIGIT;
+        if (ch == '.') return CHAR_DOT;
+        if (ch == 'e' || ch == 'E') return CHAR_EXPONENT;
+        return CHAR_OTHER;
+    }
+
+    bool isNumber(std::string s) {
+        // 定义 DFA 转移表
+        std::unordered_map<State, std::unordered_map<CharType, State>> transferTable = {
+            {STATE_START, {{CHAR_SPACE, STATE_START}, {CHAR_SIGN, STATE_SIGN}, {CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITHOUT_INT}}},
+            {STATE_SIGN, {{CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITHOUT_INT}}},
+            {STATE_INTEGER, {{CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITH_INT}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
+            {STATE_DOT_WITHOUT_INT, {{CHAR_DIGIT, STATE_DECIMAL}}},
+            {STATE_DOT_WITH_INT, {{CHAR_DIGIT, STATE_DECIMAL}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
+            {STATE_DECIMAL, {{CHAR_DIGIT, STATE_DECIMAL}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
+            {STATE_EXPONENT, {{CHAR_SIGN, STATE_EXP_SIGN}, {CHAR_DIGIT, STATE_EXP_INTEGER}}},
+            {STATE_EXP_SIGN, {{CHAR_DIGIT, STATE_EXP_INTEGER}}},
+            {STATE_EXP_INTEGER, {{CHAR_DIGIT, STATE_EXP_INTEGER}, {CHAR_SPACE, STATE_END_SPACE}}},
+            {STATE_END_SPACE, {{CHAR_SPACE, STATE_END_SPACE}}}
+        };
+
+        // 允许接收的合法终点状态
+        std::unordered_set<State> validEndStates = {
+            STATE_INTEGER,
+            STATE_DOT_WITH_INT,
+            STATE_DECIMAL,
+            STATE_EXP_INTEGER,
+            STATE_END_SPACE
+        };
+
+        State state = STATE_START;
+        for (char ch : s) {
+            CharType type = toCharType(ch);
+            if (transferTable[state].find(type) == transferTable[state].end()) {
+                return false; // 出现无法识别的路径转移，立即拒绝
+            }
+            state = transferTable[state][type];
+        }
+
+        return validEndStates.count(state) > 0;
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript 实现">
+```typescript
+function isNumber(s: string): boolean {
+  type State = 
+    | "START"
+    | "SIGN"
+    | "INTEGER"
+    | "DOT_WITHOUT_INT"
+    | "DOT_WITH_INT"
+    | "DECIMAL"
+    | "EXPONENT"
+    | "EXP_SIGN"
+    | "EXP_INTEGER"
+    | "END_SPACE";
+
+  type CharType = "space" | "sign" | "digit" | "dot" | "exponent" | "other";
+
+  function toCharType(ch: string): CharType {
+    if (ch === " ") return "space";
+    if (ch === "+" || ch === "-") return "sign";
+    if (ch >= "0" && ch <= "9") return "digit";
+    if (ch === ".") return "dot";
+    if (ch === "e" || ch === "E") return "exponent";
+    return "other";
+  }
+
+  // 转移矩阵
+  const transferTable: Record<State, Partial<Record<CharType, State>>> = {
+    START: { space: "START", sign: "SIGN", digit: "INTEGER", dot: "DOT_WITHOUT_INT" },
+    SIGN: { digit: "INTEGER", dot: "DOT_WITHOUT_INT" },
+    INTEGER: { digit: "INTEGER", dot: "DOT_WITH_INT", exponent: "EXPONENT", space: "END_SPACE" },
+    DOT_WITHOUT_INT: { digit: "DECIMAL" },
+    DOT_WITH_INT: { digit: "DECIMAL", exponent: "EXPONENT", space: "END_SPACE" },
+    DECIMAL: { digit: "DECIMAL", exponent: "EXPONENT", space: "END_SPACE" },
+    EXPONENT: { sign: "EXP_SIGN", digit: "EXP_INTEGER" },
+    EXP_SIGN: { digit: "EXP_INTEGER" },
+    EXP_INTEGER: { digit: "EXP_INTEGER", space: "END_SPACE" },
+    END_SPACE: { space: "END_SPACE" },
+  };
+
+  const validEndStates = new Set<State>([
+    "INTEGER",
+    "DOT_WITH_INT",
+    "DECIMAL",
+    "EXP_INTEGER",
+    "END_SPACE",
+  ]);
+
+  let state: State = "START";
+  for (let i = 0; i < s.length; i++) {
+    const type = toCharType(s[i]);
+    const nextState = transferTable[state][type];
+    if (!nextState) {
+      return false; // 无转移路径
+    }
+    state = nextState;
+  }
+
+  return validEndStates.has(state);
+}
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## 容易踩的坑
+
+> [!WARNING]
+> **坑 1：未拦截中间空格**
+>
+> **现象**：向状态机输入 `"123  45"` 却被误判为合法。
+>
+> **原因**：如果简单设计一个统一的 `Space` 状态并且不管它在哪都自环，就会把中间的空格也全部吞掉。
+>
+> **修法**：必须明确区分前导空格和尾随空格两个不同的状态。只允许在 `Start` (S0) 状态自环，一旦进入数值区，便不能再走空格；直到最右侧的有效结束状态，才可以因空格转移至 `EndSpace` 并在其自环。在 `EndSpace` 下如果再出现任何非空格，则会因查无转移路径而直接拒绝。
+
+> [!IMPORTANT]
+> **坑 2：基数或指数部分缺少数字**
+>
+> **现象**：验证 `"1.2e"`、`"e9"` 判定为合法。
+>
+> **原因**：在读入 `'e'` / `'E'` 时判定逻辑提前宣告结束，或者没有检查指数符号前方是否具备有效数值。
+>
+> **修法**：必须保证 `Exponent` 状态 (S6) 为非合法接收态。也就是说，指数部分必须“至少包含一个数字”作为结尾，才会转移到 `ExpInteger` (S8) 这一合法接收状态。同理，基数部分缺失（如 `e9`）由于在 `Start` 时只能靠 `dot` / `sign` / `digit` 转移，无法直接由 `exponent` 启动。
+
+> [!NOTE]
+> **坑 3：语言标准的差异 (如 `"1.e2"`)**
+>
+> **现象**：有些语言下，浮点数写法 `"1.e2"` 是不合法的，但是在 C++ / Python 等标准中它能被正确识别为 $1.0 \times 10^2$。
+>
+> **原因**：状态机是否允许从 `DotWithInt` (S4) 直接转移到 `Exponent` (S6)。
+>
+> **修法**：若想支持 `"1.e2"` 这种省掉小数位而直接跟指数的语法规则，转移表中应包含：`DotWithInt: { exponent: Exponent }`；如果是不允许（如 C# 或 Java 中可能不支持此格式），则需将该转移项移除，强制要求小数点后必须出现数字才被允许跟指数。
+
+---
+
+## 小结
+
+- DFA 拥有 10 个状态，通过状态的单向转移和不可逆路径来限制符号、小数点和空格的位置。
+- 采用查表法（DFA）可以将复杂的语法分支扁平化为一个状态机的步进判定，消除嵌套的 if-else 判定。
+- 空格通过非对称的 `Start` 与 `EndSpace` 隔离，中间出现空格因缺少转移而直接失败。
+- 数值验证算法的性能是极为优异的：时间复杂度为 $O(N)$（一次扫描，每次查表常数耗时），空间复杂度为 $O(1)$（只需有限的状态变量）。
+
+---
+
+## 练习
+
+<Exercises>
+1. **（分析推导）** 如果需要状态机额外支持十六进制数（如 `0x1A`，`0Xef` 等），我们需要在现有的 10 个状态之上增加哪些新状态？转移条件是什么？
+   - **答案**：
+     需要增加 2 个新状态：
+     - `HexIndicator` (十六进制标志，如读入 `0` 转移后遇到 `x` 或 `X`)；
+     - `HexInteger` (十六进制有效整数部分，接受数字与 `a-f` / `A-F` 字符)。
+     
+     具体转移设计为：
+     - 在 `Start` 或 `Sign` 遇到 `'0'` 时，进入 `Integer` 状态；
+     - 在 `Integer` 状态且只含有单个前导 `'0'` 时，若遇到 `'x'` 或 `'X'`，转移至新状态 `HexIndicator`；
+     - 在 `HexIndicator` 遇到 `[0-9a-fA-F]`，转移至 `HexInteger` 并可以自环接收同类字符；
+     - `HexInteger` 应设置为合法接收态，同时允许从它转移至 `EndSpace`。
+2. **（问答型）** 为什么在转移表中没有从 `DotWithoutInt` (S3) 状态转移至 `Exponent` (S6) 的路径？如果是字符串 `".e3"` 会发生什么？
+   - **答案**：
+     因为 `DotWithoutInt` 代表前面没有数字的小数点（例如单独的 `.`），此时它还不构成一个有效的实数。根据数学规范，科学计数法的基数必须是一个有效的数值（整数或小数），单独的 `.` 不是数值，因此后面不能跟指数。
+     对于字符串 `".e3"`：
+     1. 从 `Start` 读入 `.` 转移至 `DotWithoutInt` 状态；
+     2. 下一步读入 `e`，但在 `DotWithoutInt` 状态对应的转移中，`exponent`（即 `e`）是未定义的（`transferTable[3]` 只包含 `{ digit: 5 }`）；
+     3. 状态转移中断，函数立即返回 `false`，判定为非法。
+</Exercises>
+
+---
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="DFA">确定性有限状态自动机 (Deterministic Finite Automaton)。是一种数学计算模型，它包含一组有限状态、一个起始状态、一组接收（合法结束）状态，以及一套确定性的转移函数。对于每一个状态与输入的组合，都有且仅有一个确定的下一个状态。</GlossaryItem>
+  <GlossaryItem term="Accept State">接收状态（或称有效结束状态）。指的是状态自动机在处理完整个字符串后，能被判定为“匹配成功”的合法状态集合。在数值校验中，整数、带小数点实数、分数、指数整数状态都是合法的接收态，代表数值是完整且规范的。</GlossaryItem>
+  <GlossaryItem term="词法分析">Lexical Analysis。编译程序的第一阶段，其核心任务是将输入的字符流（Source Code）读入，识别并归类为具有语法物理意义的最小单词序列（Token），如数值、标识符、运算符等。DFA 是实现词法分析最核心的技术。</GlossaryItem>
+</Glossary>
+
+<Attribution sourceUrl={frontmatter.sourceUrl} />

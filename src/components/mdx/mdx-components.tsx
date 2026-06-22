@@ -2,6 +2,7 @@ import type { MDXRemoteProps } from "next-mdx-remote/rsc";
 
 import { Attribution } from "./attribution";
 import { Callout } from "./callout";
+import { StringDfaDiagram } from "./diagrams/string-dfa-diagram";
 import { CodeTabs, Tab } from "./code-tabs";
 import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
@@ -983,6 +984,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Answer,
   Attribution,
   Callout,
+  StringDfaDiagram,
   ShaderDemo,
   TextureDemo,
   CameraDemo,
