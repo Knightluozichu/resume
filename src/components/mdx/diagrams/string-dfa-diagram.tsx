@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 
 // 定义状态类型与字符类型
 type CharType = "space" | "sign" | "digit" | "dot" | "exponent" | "other";
@@ -134,7 +134,6 @@ export function StringDfaDiagram() {
   const [inputVal, setInputVal] = useState("+1.2e-3");
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // 动态生成状态机的每一个步骤
   const generateSteps = (str: string): Step[] => {
