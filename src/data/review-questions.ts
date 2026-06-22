@@ -240,6 +240,7 @@ import { coiFindInMatrixQuestions } from "./review/coi-find-in-matrix";
 import { coiReplaceSpacesQuestions } from "./review/coi-replace-spaces";
 import { coiPrintListReverseQuestions } from "./review/coi-print-list-reverse";
 import { coiRebuildBinaryTreeQuestions } from "./review/coi-rebuild-binary-tree";
+import { coiQueueWithTwoStacksQuestions } from "./review/coi-queue-with-two-stacks";
 
 export {
   CHAPTER_TITLES,
@@ -343,6 +344,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiReplaceSpacesQuestions,
   ...coiPrintListReverseQuestions,
   ...coiRebuildBinaryTreeQuestions,
+  ...coiQueueWithTwoStacksQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

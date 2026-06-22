@@ -656,6 +656,7 @@ import { MvvmFlowDiagram } from "./diagrams/mvvm-flow-diagram";
 import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
 import { BinarySearchDiagram } from "./diagrams/BinarySearchDiagram";
 import { FindInMatrixDiagram } from "./diagrams/find-in-matrix-diagram";
+import { QueueWithTwoStacksDiagram } from "./diagrams/queue-with-two-stacks-diagram";
 import { ReplaceSpacesDiagram } from "./diagrams/replace-spaces-diagram";
 import { PrintListReverseDiagram } from "./diagrams/print-list-reverse-diagram";
 import { RebuildBinaryTreeDiagram } from "./diagrams/rebuild-binary-tree-diagram";
@@ -1612,6 +1613,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AlgorithmPlayground,
   BinarySearchDiagram,
   FindInMatrixDiagram,
+  QueueWithTwoStacksDiagram,
   ReplaceSpacesDiagram,
   PrintListReverseDiagram,
   RebuildBinaryTreeDiagram,

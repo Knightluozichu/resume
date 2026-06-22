@@ -164,6 +164,7 @@ export type ReviewChapterSlug =
   | "coi-replace-spaces"
   | "coi-print-list-reverse"
   | "coi-rebuild-binary-tree"
+  | "coi-queue-with-two-stacks"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -602,6 +603,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-replace-spaces": "替换空格",
   "coi-print-list-reverse": "从尾到头打印链表",
   "coi-rebuild-binary-tree": "重建二叉树",
+  "coi-queue-with-two-stacks": "用两个栈实现队列",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

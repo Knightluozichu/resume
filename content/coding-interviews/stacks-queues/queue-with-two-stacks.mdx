@@ -1,0 +1,214 @@
+---
+title: 用两个栈实现队列
+type: C
+section: 栈和队列
+order: 6
+description: 利用两个后进先出（LIFO）的栈，巧妙实现一个先进先出（FIFO）的队列，并探讨摊还时间复杂度分析。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：栈（LIFO）/ 队列（FIFO） / 双栈模拟 / 摊还分析 / 状态转移；原书章节：面试题9：用两个栈实现队列。 */}
+
+<Objectives>
+
+- 能解释栈（LIFO）与队列（FIFO）的本质区别与行为差异。
+- 能描述如何利用双栈的状态转移机制，在 LIFO 的基础上模拟出符合 FIFO 的出队操作。
+- 能准确分析双栈队列在入队和出队操作中的摊还（Amortized）时间复杂度，并理解其为 $O(1)$ 的原因。
+- 能使用 C++ 和 TypeScript 实现完整的双栈队列，并正确处理队列为空等异常边界。
+
+</Objectives>
+
+## 直觉引入
+
+假设你的办公桌上有两个公文盒，分别标着“待处理（Inbox）”和“已分类（Outbox）”。这天，秘书送来一叠文件，他总是顺手把新文件堆在“待处理”盒的最上面。这就像在叠罗汉，最晚送来的文件压在最上面，而最早送来的文件被压在了最底下。
+
+如果现在你想处理那份“最早送来”的文件，该怎么办？因为文件堆在“待处理”盒里，你直接伸手拿只能拿到最上面那份最新的。此时，你把“待处理”盒里的文件整叠搬起来，一张张拿出来放到“已分类”盒中——由于你是从上面开始拿的，原本在最上面的最新文件就被放到了“已分类”盒的最底下，而原本被压在最底下的“最早送来”的文件，现在神奇地跑到了“已分类”盒的最上面！
+
+从此以后，每当你想处理最老的文件，只需直接从“已分类”盒的最上面拿取。如果“已分类”盒空了，就再次把“待处理”盒里的文件整叠翻转过去。这样，我们仅仅通过两个“只能从顶部拿取”的盒子，就完美实现了“先来先办”的流转规则。
+
+## 概念讲解
+
+### 栈与队列的本质区别
+
+在计算机科学中，<Term def="后进先出（Last-In-First-Out, LIFO）的数据结构，只能在栈顶进行插入（Push）和删除（Pop）操作。">栈（Stack）</Term>与<Term def="先进先出（First-In-First-Out, FIFO）的数据结构，在一端插入元素（入队），在另一端删除元素（出队）。">队列（Queue）</Term>是两种最基本的线性数据结构：
+
+- **栈**：遵循后进先出（LIFO）原则，就像一摞盘子，最后放上去的盘子最先被拿走。
+- **队列**：遵循先进先出（FIFO）原则，就像排队买票，排在最前面的人最先买票离开。
+
+本章的任务是：使用两个栈模拟一个队列，使其支持入队（Enqueue）与出队（Dequeue）操作。
+
+### 双栈模拟的运行机制
+
+我们准备两个栈：`Stack 1` 用作**输入栈**，`Stack 2` 用作**输出栈**。
+
+#### 1. 入队（Enqueue）操作
+当有新元素需要入队时，我们**无脑压入 `Stack 1`**。
+- **时间复杂度**：只执行了一次基本的 push 操作，时间复杂度为 $O(1)$。
+- **空间复杂度**：为存储元素，需要消耗相应的内存，空间复杂度为 $O(1)$。
+
+#### 2. 出队（Dequeue）操作
+出队需要返回队列中最先进入的元素。我们优先从 `Stack 2` 中获取：
+- **若 `Stack 2` 不为空**：直接弹出 `Stack 2` 的栈顶元素。
+- **若 `Stack 2` 为空**：将 `Stack 1` 中的**所有**元素依次弹出并压入 `Stack 2`。此时，`Stack 1` 中原本处于栈底的最老元素便来到了 `Stack 2` 的栈顶。接着弹出 `Stack 2` 栈顶元素。
+- **若两个栈均为空**：队列无元素，抛出异常或返回特定标记。
+
+### 为什么均摊时间复杂度是 $O(1)$？
+
+虽然在 `Stack 2` 为空时，单次出队操作需要将 `Stack 1` 的所有元素转移过去，最坏情况时间复杂度为 $O(N)$。但如果我们使用<Term def="分析算法在一系列连续操作中的平均代价，而不是单次最坏情况。">摊还分析（Amortized Analysis）</Term>，会发现每个元素在整个生命周期中：
+1. 入队时压入 `Stack 1`（$1$ 次 push）
+2. 转移时从 `Stack 1` 弹出（$1$ 次 pop）
+3. 转移时压入 `Stack 2`（$1$ 次 push）
+4. 出队时从 `Stack 2` 弹出（$1$ 次 pop）
+
+每个元素在进入和离开队列的整个生命周期中，**最多只经历了 2 次 push 和 2 次 pop**，操作总数是恒定的常数 4。因此，将这些操作均摊到每个元素上，**每次入队 and 出队操作的均摊时间复杂度为 $O(1)$**。
+
+## 交互 Demo
+
+猜一猜：如果我们在 Stack 1 中积攒了 'A', 'B', 'C'，此时进行一次 Dequeue，元素是如何在两个栈之间转移的？
+
+下面我们一步步运行双栈队列的操作，点击下方控制按钮，体验数据在 Stack 1 与 Stack 2 之间的流转与状态转移：
+
+<QueueWithTwoStacksDiagram />
+
+## 代码对照
+
+在具体代码落地时，我们需要注意对空队列进行防御性编程。以下是 C++ 与 TypeScript 的具体实现对比：
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <stack>
+#include <stdexcept>
+
+template <typename T>
+class CQueue {
+private:
+    std::stack<T> s1; // 输入栈
+    std::stack<T> s2; // 输出栈
+
+    // 将 s1 中的元素全部转移到 s2 中
+    void transfer() {
+        if (s2.empty()) {
+            while (!s1.empty()) {
+                s2.push(s1.top());
+                s1.pop();
+            }
+        }
+    }
+
+public:
+    CQueue() {}
+
+    // 入队操作，直接压入输入栈
+    void appendTail(T value) {
+        s1.push(value);
+    }
+
+    // 出队操作，从输出栈弹出
+    T deleteHead() {
+        transfer(); // 保证输出栈非空（如果有元素的话）
+        
+        if (s2.empty()) {
+            throw std::runtime_error("Queue is empty");
+        }
+        
+        T head = s2.top();
+        s2.pop();
+        return head;
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+class CQueue<T> {
+    private s1: T[] = []; // 输入栈（使用数组模拟）
+    private s2: T[] = []; // 输出栈（使用数组模拟）
+
+    // 将 s1 中的元素全部转移 to s2 中
+    private transfer(): void {
+        if (this.s2.length === 0) {
+            while (this.s1.length > 0) {
+                // array.pop() 对应栈的 pop 操作
+                const val = this.s1.pop();
+                if (val !== undefined) {
+                    this.s2.push(val);
+                }
+            }
+        }
+    }
+
+    // 入队操作
+    public appendTail(value: T): void {
+        this.s1.push(value);
+    }
+
+    // 出队操作
+    public deleteHead(): T {
+        this.transfer();
+
+        if (this.s2.length === 0) {
+            throw new Error("Queue is empty");
+        }
+
+        // 强行非空断言，因为上面已进行过判空检查
+        return this.s2.pop()!;
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 连续出队时，输出数据的顺序错乱，新入队的元素抢占了老元素的位置。
+  <strong>原因 →</strong> 在 `Stack 2` 还不为空时，就又把 `Stack 1` 的元素转移了过去，导致最新压入 `Stack 2` 的元素覆盖在原本该出队的老元素之上。
+  <strong>修法 →</strong> 严格执行限制条件：**只有当 `Stack 2` 为空时**，才可以从 `Stack 1` 转移数据。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 当队列为空时调用出队，程序崩溃，报空指针或越界错误。
+  <strong>原因 →</strong> 没有对两个栈同时为空的“空队列”情况做检查防护，直接调用了 `stack.top()` 或 `stack.pop()`。
+  <strong>修法 →</strong> 在出队逻辑中，先调用 `transfer()`，随后必须判断 `Stack 2` 是否依然为空。若为空，则说明整个队列确实无数据，此时应合理抛出异常或返回特定默认值。
+</Callout>
+
+## 小结与练习
+
+- 栈（LIFO）与队列（FIFO）的相反特性可以通过“双栈反转”来实现互相模拟。
+- 入队直接 push 到 Stack 1，出队从 Stack 2 弹出。当 Stack 2 为空时，将 Stack 1 全部元素转移至 Stack 2。
+- 摊还分析表明，虽然单次转移最坏需要 $O(N)$，但整体均摊时间复杂度为 $O(1)$。
+- 空间复杂度为 $O(N)$，需要完整的空间来存放队列元素。
+
+<Exercises>
+  <Answer question="如何使用两个队列（FIFO）来实现一个栈（LIFO）？请简述其 Push 和 Pop 操作思路。">
+    使用两个队列 `Queue 1` 和 `Queue 2`：
+    - **方法一（Push 慢，Pop 快）**：每次入栈（Push）时，先将元素放入空队列（如 `Queue 2`），再将另一个队列中的所有元素依次移入 `Queue 2`，最后交换两队列的引用。这样可以使最新元素总是位于队列头部，出栈（Pop）只需直接出队，时间复杂度为 $O(N)$ 入栈，$O(1)$ 出栈。
+    - **方法二（Push 快，Pop 慢）**：入栈直接加入非空队列，出栈时把队列中的 $N-1$ 个元素转移到另一个空队列中，只留下最后一个元素用于返回，时间复杂度为 $O(1)$ 入栈，$O(N)$ 出栈。
+  </Answer>
+  <Answer question="双栈队列在大规模并发的多线程环境下，相比传统的单链表队列有什么优势？">
+    双栈队列的结构将入队操作和出队操作解耦到了不同的实体（Stack 1 和 Stack 2）。在没有发生数据转移的绝大多数时刻，入队线程锁 Stack 1，出队线程锁 Stack 2，互不干扰。这比必须同时锁住头尾指针的传统单链表队列具有更低的锁竞争，提升了并发吞吐量。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="栈">
+    后进先出（LIFO）的线性数据结构。只允许在栈顶一端进行插入和删除。
+  </GlossaryItem>
+  <GlossaryItem term="队列">
+    先进先出（FIFO）的线性数据结构。只允许在队尾插入，在队头删除。
+  </GlossaryItem>
+  <GlossaryItem term="摊还分析">
+    一种算法分析方法，用来评估在连续的一系列操作中，平均每步操作所花费的时间或资源，从而能够更合理地估算包含偶发性高耗时操作的算法效率。详见「概念讲解」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>
