@@ -161,6 +161,7 @@ export type ReviewChapterSlug =
   | "memory-optimization"
   // 剑指 Offer
   | "coi-find-in-matrix"
+  | "coi-replace-spaces"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -596,6 +597,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
     "生产化收官：简单、透明与 ACI 上线检查清单",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
+  "coi-replace-spaces": "替换空格",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

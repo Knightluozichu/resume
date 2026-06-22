@@ -1,0 +1,211 @@
+---
+title: 替换空格
+type: C
+section: 字符串
+order: 3
+description: 逆序双指针原地替换空格，将 O(n^2) 的前向移动优化为 O(n) 的后向复制，避免内存重叠冲突。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：原地修改 / 逆序复制 / 双指针 / 内存重叠 / 复杂度优化；原书章节：面试题5：替换空格。 */}
+
+<Objectives>
+
+- 能解释在原地替换扩容数组中，从后往前复制比从前往后复制效率更高的原因。
+- 能描述双指针 P1（源指针）和 P2（目标指针）在遇到空格时的协作机制。
+- 能实现 C++（在原字符串上 resize 并修改）和 TypeScript（通过字符数组模拟原地修改）的 `replace-spaces` 算法，并防范边界越界及空间不足等坑点。
+
+</Objectives>
+
+## 直觉引入
+
+想象一下，你在一条狭窄的走廊里排了一整排课桌，现在需要在某些课桌之间塞入更大的置物架（置物架比课桌之间的原间距更宽）。
+
+如果你从走廊的第一张课桌开始，把它们往后推来腾出空间，那么当你移动第一张桌子时，它会撞到后面的桌子。为了挪开后面的桌子，你得把后面所有的桌子都往后挪一次。每放一个置物架，你都要把后面所有的桌子整体挪动一遍，累得气喘吁吁。
+
+但如果你先走到走廊的最末端，计算好所有置物架塞入后，最后一张桌子应该在的新位置，然后直接从最后一张桌子开始，一步到位地把它们移到最终的目标位置。由于你是从后往前挪，每次移动桌子时，后面的空间都是已经腾好的，绝对不会发生任何碰撞。这章我们要解决的核心问题就是：如何在计算机内存的紧凑队列中，以最优雅、不打架的方式完成这种 <Term def="向数组或紧凑内存结构中插入比原元素更宽的新数据时，需要为新数据腾出空间的扩容填充操作。">带扩容的元素替换</Term>。
+
+## 概念讲解
+
+在很多编程语言中，字符串的空格替换（例如将 `" "` 替换为 `"%20"`）是一个非常经典的问题。在网络编程中，如果 URL 中包含空格等特殊字符，可能导致服务器端解析错误，因此需要将其转换为 URL 安全的转义字符。
+
+### 传统前向移位：$O(n^2)$ 的碰撞代价
+
+如果我们从前往后遍历字符串，每当遇到一个空格：
+1. 我们需要将空格后面的所有字符都向后移动 2 个位置（因为 `" "` 占 1 字符，而 `"%20"` 占 3 字符，净增 2 字符）。
+2. 然后在空出的位置写入 `"%"`、`"2"`、`"0"`。
+
+假设字符串长度为 $n$，其中包含 $k$ 个空格。每次遇到空格，都需要移动剩余的字符。在最坏情况下（例如空格都在前面），总的时间复杂度会退化为 $O(n^2)$。频繁的内存复制会导致极大的性能浪费。
+
+### 逆序双指针：$O(n)$ 零碰撞的艺术
+
+为了避免前向移动时的重复搬运与 <Term def="指在同一个数组/内存空间中，读写指针操作的内存块有交叉，导致先写入的数据覆盖了尚未读取的源数据。">内存重叠</Term>，我们可以采用**逆序双指针（Backward Copying）**策略。其核心步骤如下：
+
+1. **统计空格数**：扫描一遍原字符串，计算空格总数 `space_count`。
+2. **计算新长度**：新长度为 `original_length + 2 * space_count`。
+3. **分配/扩容空间**：在 C++ 中，直接调用 `s.resize(new_length)` 扩容；在 JavaScript/TypeScript 中，由于字符串是不可变的，我们可以初始化一个新字符数组。
+4. **设置双指针**：
+   - 指针 `P1` 指向原字符串的末尾。
+   - 指针 `P2` 指向新字符串的末尾。
+5. **从后往前填充**：
+   - 若 `s[P1]` 不是空格：直接复制 `s[P2] = s[P1]`，然后 `P1` 和 `P2` 各向前移动 1 步。
+   - 若 `s[P1]` 是空格：在 `P2` 处逆序写入 `'0'`、`'2'`、`'%'`，即 `s[P2] = '0'`, `s[P2-1] = '2'`, `s[P2-2] = '%'`。随后 `P1` 向前移动 1 步，`P2` 向前移动 3 步。
+6. **循环终止条件**：当 `P1` 减小到 0 以下，或者 `P1` 与 `P2` 重合时，说明所有的空格都已被完美替换，算法提前结束。
+
+由于每个字符在整个过程中最多只被读取 1 次，写入 1 次，因此时间复杂度被大幅优化为 $O(n)$。
+
+## 交互 Demo
+
+猜一猜：如果原字符串中没有空格（如 `"WeAreHappy."`），双指针的移动会有什么不同？`P1` 和 `P2` 会不会重合？
+
+点击下方控制按钮，一步步体验逆序双指针原位替换空格的动态过程：
+
+<ReplaceSpacesDiagram />
+
+## 代码对照
+
+原地替换算法的难点在于严格控制指针的递减和边界判断，尤其是在 C++ 的原地修改中，避免访问超出 resize 后的安全内存。
+
+以下是 C++ 与 TypeScript 的具体实现对比：
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <string>
+
+class Solution {
+public:
+    void replaceSpace(std::string& s) {
+        if (s.empty()) {
+            return;
+        }
+
+        int originalLength = s.length();
+        int spaceCount = 0;
+        for (char c : s) {
+            if (c == ' ') {
+                spaceCount++;
+            }
+        }
+
+        // 扩容原字符串以容纳 "%20"（每个空格新增 2 个额外字符位置）
+        s.resize(originalLength + spaceCount * 2);
+        int newLength = s.length();
+
+        // 设置双指针分别指向原末尾和新末尾
+        int p1 = originalLength - 1;
+        int p2 = newLength - 1;
+
+        // 从后往前复制并替换，当 p1 与 p2 重合时可以提前结束
+        while (p1 >= 0 && p2 > p1) {
+            if (s[p1] == ' ') {
+                s[p2--] = '0';
+                s[p2--] = '2';
+                s[p2--] = '%';
+            } else {
+                s[p2--] = s[p1];
+            }
+            p1--;
+        }
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+function replaceSpace(s: string): string {
+    if (!s) {
+        return "";
+    }
+
+    const originalChars = s.split("");
+    let spaceCount = 0;
+    for (const char of originalChars) {
+        if (char === " ") {
+            spaceCount++;
+        }
+    }
+
+    const originalLength = originalChars.length;
+    const newLength = originalLength + spaceCount * 2;
+    
+    // JS/TS 字符串是不可变的，使用字符数组模拟原地扩容修改
+    const resultChars = new Array<string>(newLength);
+
+    let p1 = originalLength - 1;
+    let p2 = newLength - 1;
+
+    // 从后往前复制
+    while (p1 >= 0) {
+        if (originalChars[p1] === " ") {
+            resultChars[p2--] = "0";
+            resultChars[p2--] = "2";
+            resultChars[p2--] = "%";
+        } else {
+            resultChars[p2--] = originalChars[p1];
+        }
+        p1--;
+    }
+
+    return resultChars.join("");
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 在 C++ 中执行替换时，直接报段错误（Segment Fault）或未定义行为。
+  <strong>原因 →</strong> 忘记调用 `s.resize()` 对原字符串进行扩容，导致双指针 P2 指向了一个超出原字符串范围的内存空间，产生了越界写操作。
+  <strong>修法 →</strong> 在扫描空格数后，务必调用 `s.resize(originalLength + spaceCount * 2)` 进行物理扩容，然后再进行双指针回退复制。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 替换后的字符串末尾多出乱码或空字符，或者替换位置错乱。
+  <strong>原因 →</strong> 扩容长度计算公式写错，例如误写成 `originalLength + spaceCount * 3`。因为 `"%20"` 长度是 3，很多人会乘以 3，但实际上空格本身已经占了 1 个字符，因此每个空格只需额外增加 2 个字符位置。
+  <strong>修法 →</strong> 严格使用新长度公式：`newLength = originalLength + spaceCount * 2`。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 程序陷入死循环，或者双指针未正常终止。
+  <strong>原因 →</strong> 在 `s[p1] == ' '` 分支中，只修改了字符，忘记对 `p2` 进行 3 次自减，或者在循环中漏掉了 `p1--` 导致无限循环。
+  <strong>修法 →</strong> 在填充 `"%20"` 时，每一次写入必须配合 `p2--`（共 3 次），且在每次循环的末尾必须无条件进行 `p1--` 递减操作。
+</Callout>
+
+## 小结与练习
+
+- 原地替换带扩容元素时，前向移动会产生 $O(n^2)$ 的时间复杂度，而**逆序双指针后向复制**可将其优化为 $O(n)$。
+- 在不需要额外空间的情况下，双指针协作从后往前填充可以实现 <Term def="算法执行不需要额外辅助空间（或者只依赖 O(1) 的常数级别辅助变量），直接在输入数据的内存上进行修改。">原地修改</Term>，时间复杂度为 $O(n)$，空间复杂度为 $O(1)$。
+- 循环终止的最佳条件是 `p1 >= 0 && p2 > p1`，当两指针重合时可提前收工。
+
+<Exercises>
+  <Answer question="如果本题要求将空格替换为 '%20'，且不允许使用任何额外数组（即便在 JS/TS 中），你应该如何实现？">
+    在 JavaScript/TypeScript 中，字符串是只读的，无法在底层内存上进行原地修改。如果必须在原字符串上操作且不能在 JS 层使用辅助数组，通常需要通过 C++ 编写 WebAssembly 模块来导出内存，或者只能接受使用数组带来的额外空间开销。
+  </Answer>
+  <Answer question="如果我们将双指针回退的终止条件写成 `p1 >= 0`，与 `p1 >= 0 && p2 > p1` 相比，有什么性能上的细微差别？">
+    `p2 > p1` 是一种剪枝优化。如果 P1 和 P2 重合，说明当前及前面的字符都已经不需要移动（因为前面已经没有空格需要替换了）。使用 `p2 > p1` 作为条件，可以避免做无意义的原位复制，能小幅提升算法的运行效率。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="带扩容的元素替换">
+    向数组或紧凑内存结构中插入比原元素更宽的新数据时，需要为新数据腾出空间的扩容填充操作。详见「直觉引入」节。
+  </GlossaryItem>
+  <GlossaryItem term="内存重叠">
+    指在同一个数组/内存空间中，读写指针操作的内存块有交叉，导致先写入的数据覆盖了尚未读取的源数据。详见「概念讲解」节。
+  </GlossaryItem>
+  <GlossaryItem term="原地修改">
+    算法执行不需要额外辅助空间（或者只依赖 $O(1)$ 的常数级别辅助变量），直接在输入数据的内存上进行修改。详见「小结与练习」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>
