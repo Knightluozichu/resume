@@ -1,18 +1,23 @@
 # Checkpoint Progress
 
-- **Status**: Completed AI Agent Dev Book
+- **Status**: Completed audit and repair of C Primer Plus and C++ Primer diagrams.
 - **Completed**:
-  - Task 1 - Refactor ArchitectureDecisionMatrixDiagram as Standalone and Fix Overlaps
-  - Task 2 - Split PM Paths in TeamArchitectureMappingDiagram to Eliminate Bounding Box Overlaps
-  - Task 3 - Enlarge and Integrate OssContributionFlowDiagram
-  - Task 4 - Split LiveData to Observer Diagonal Line in AacLifecycleDiagram
-  - Task 5 - Fix all diagram issues in "AI Agent 开发实战" (what-is-agent, context-engineering, orchestration, evaluation-observability)
+  - Audit and fix type size table header text overlap in `type-size-diagram.tsx`.
+  - Audit and fix else-if true branch routing and line crossing in `if-else-flow-diagram.tsx`.
+  - Audit and fix sentinel loop diagram condition text and exit branch line alignment in `sentinel-loop-diagram.tsx`.
+  - Audit and fix while loop flowchart loop-back path and exit branch intersections in `while-loop-flow-diagram.tsx`.
+  - Audit and fix CString memory selection box overlapping dashed lines in `cstring-memory-diagram.tsx`.
+  - Audit and fix CString null terminator label vertical layout overlap in `cstring-null-terminator-diagram.tsx`.
+  - Audit and verify function-prototype layout is correct and free of crossings.
 - **Active Task**: None
 - **Next Steps**:
-  1. Commit AI Agent Dev Book changes.
-  2. Choose the next book to audit and fix.
+  - Run git commit for the changes.
+  - Execute deploy.sh to release updates.
 - **Modified Files**:
-  - `src/components/mdx/diagrams/agent-paradigm-diagram.tsx`
-  - `src/components/mdx/diagrams/message-bus-diagram.tsx`
-  - `src/components/mdx/demos/lost-in-middle-demo.tsx`
-  - `src/components/mdx/diagrams/trace-timeline-diagram.tsx`
+  - `src/components/mdx/diagrams/cstring-memory-diagram.tsx`
+  - `src/components/mdx/diagrams/cstring-null-terminator-diagram.tsx`
+  - `src/components/mdx/diagrams/function-prototype-diagram.tsx`
+  - `src/components/mdx/diagrams/if-else-flow-diagram.tsx`
+  - `src/components/mdx/diagrams/sentinel-loop-diagram.tsx`
+  - `src/components/mdx/diagrams/type-size-diagram.tsx`
+  - `src/components/mdx/diagrams/while-loop-flow-diagram.tsx`

@@ -55,6 +55,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["cc-", "cpp-concurrency"],
   ["cpp-", "cpp-primer-5e"],
   ["cpr-", "c-primer-plus"],
+  ["coi-", "coding-interviews"],
   ["bnrg-", "big-nerd-ranch-guide"],
   ["ugo-", "unity-game-optimization"],
   ["prof-", "profiling-unity-games"],
