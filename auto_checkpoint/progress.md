@@ -1,23 +1,19 @@
 # Checkpoint Progress
 
-- **Status**: Completed Task 2: 二维数组中的查找 (find-in-matrix) for 《剑指Offer》.
+- **Status**: Completed Task 3: 替换空格 (replace-spaces) for 《剑指Offer》.
 - **Completed**:
   - Book routing and configuration (Task 1).
-  - Implementation of content/coding-interviews/arrays/find-in-matrix.mdx.
-  - Implementation of interactive diagram src/components/mdx/diagrams/find-in-matrix-diagram.tsx.
-  - Registration in mdx-components.tsx.
-  - Review questions in src/data/review/coi-find-in-matrix.ts and src/data/review-questions.ts.
-  - Spec compliance review (approved).
-  - Code quality review & styling format check (approved).
-- **Active Task**: Task 3: 替换空格 (replace-spaces)
+  - Task 2: 二维数组中的查找 (find-in-matrix) MDX, diagram, questions.
+  - Task 3: 替换空格 (replace-spaces) MDX, diagram, questions, registered in metadata.
+- **Active Task**: Task 4: 从尾到头打印链表 (print-list-reverse)
 - **Next Steps**:
-  - Create string replacement chapter content/coding-interviews/strings/replace-spaces.mdx.
-  - Create interactive pointer visualization component src/components/mdx/diagrams/replace-spaces-diagram.tsx.
-  - Create review questions file src/data/review/coi-replace-spaces.ts.
+  - Create linked list chapter content/coding-interviews/linked-lists/print-list-reverse.mdx.
+  - Create interactive pointer visualization component src/components/mdx/diagrams/print-list-reverse-diagram.tsx.
+  - Create review questions file src/data/review/coi-print-list-reverse.ts.
 - **Modified Files**:
-  - `content/coding-interviews/arrays/find-in-matrix.mdx`
-  - `src/components/mdx/diagrams/find-in-matrix-diagram.tsx`
+  - `content/coding-interviews/strings/replace-spaces.mdx`
+  - `src/components/mdx/diagrams/replace-spaces-diagram.tsx`
   - `src/components/mdx/mdx-components.tsx`
-  - `src/data/review/coi-find-in-matrix.ts`
+  - `src/data/review/coi-replace-spaces.ts`
   - `src/data/review/types.ts`
   - `src/data/review-questions.ts`
