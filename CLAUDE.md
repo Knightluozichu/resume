@@ -41,6 +41,7 @@ Shader 教学网站（blog.luozichu.ink）。总计划见 PLAN.md，视觉/动�
 6. three.js 相关 import 必须可被 code-split，禁止在公共 layout 中静态 import
 7. 章节 frontmatter `draft: false` 必须经总监 review 通过后才能设置
 8. 章节内容必须逐节满足 docs/chapter-spec.md 的约束（按章节类型调强度矩阵），任一节 fail = 打回
+9. 任何 SVG 配图新增或重修前必须先读 `docs/diagram-layout-rules.md`，并跑对应范围的 `pnpm svg-check*`；HIGH 级问题清零前禁止部署
 
 ## 技术栈
 

@@ -26,9 +26,25 @@ import puppeteer from "puppeteer";
 import fs from "fs";
 import path from "path";
 
-const BASE = "http://localhost:3000";
+const BASE = process.env.SVG_CHECK_BASE_URL ?? "http://localhost:3000";
 const REPORT_TXT = path.resolve("scripts/svg-overlap-report.txt");
 const REPORT_JSON = path.resolve("scripts/svg-quality-report.json");
+
+function loadPages() {
+  if (!process.env.SVG_CHECK_PAGES_FILE) return PAGES;
+
+  const pagesFile = path.resolve(process.env.SVG_CHECK_PAGES_FILE);
+  const pages = fs
+    .readFileSync(pagesFile, "utf8")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+
+  if (pages.length === 0) {
+    throw new Error(`SVG_CHECK_PAGES_FILE is empty: ${pagesFile}`);
+  }
+  return pages;
+}
 
 // All pages that contain diagrams
 const PAGES = [
@@ -238,9 +254,11 @@ async function checkPage(page, url) {
 
         const texts = [...svg.querySelectorAll("text")];
         const rects = [...svg.querySelectorAll("rect")];
+        const paths = [...svg.querySelectorAll("path,line,polyline,polygon")];
 
         function relBox(el) {
           const r = el.getBoundingClientRect();
+          const style = getComputedStyle(el);
           return {
             left: r.left - svgRect.left,
             top: r.top - svgRect.top,
@@ -250,6 +268,10 @@ async function checkPage(page, url) {
             height: r.height,
             text: el.textContent?.trim().slice(0, 40) || "",
             tag: el.tagName.toLowerCase(),
+            fontSize: Number.parseFloat(style.fontSize || "0"),
+            opacity: Number.parseFloat(style.opacity || "1"),
+            stroke: style.stroke,
+            fill: style.fill,
           };
         }
         function overlaps2D(a, b) {
@@ -285,7 +307,31 @@ async function checkPage(page, url) {
           .map((t) => relBox(t));
         const rectBoxes = rects
           .map((r) => relBox(r))
-          .filter((r) => r.width > 0 && r.height > 0);
+          .filter((r) => {
+            if (r.width <= 0 || r.height <= 0) return false;
+            // Wide lane/panel backgrounds are layout containers, not nodes.
+            if (r.width > svgW * 0.55 && r.height > 30) return false;
+            return true;
+          });
+        const pathBoxes = paths
+          .map((p) => relBox(p))
+          .filter((p) => {
+            if (p.width <= 0 || p.height <= 0) return false;
+            if (p.opacity <= 0.02) return false;
+            return p.stroke !== "none" || p.fill !== "none";
+          });
+
+        // ───────── 0. HIGH · 字号低于 SVG 布局铁律 ─────────
+        textBoxes.forEach((tb) => {
+          if (tb.fontSize > 0 && tb.fontSize < 10) {
+            out.push({
+              level: "HIGH",
+              type: "font-size-too-small",
+              svg: svgIdx,
+              detail: `text "${tb.text}" fontSize=${tb.fontSize.toFixed(1)}px < 10px`,
+            });
+          }
+        });
 
         // ───────── 1. HIGH · rect-rect 重叠 >30%（滤父子+同位叠加） ─────────
         for (let i = 0; i < rectBoxes.length; i++) {
@@ -365,6 +411,44 @@ async function checkPage(page, url) {
               });
               break;
             }
+          }
+        });
+
+        // ───────── 3b. HIGH · 文本互压 / 线条箭头压文字 ─────────
+        for (let i = 0; i < textBoxes.length; i++) {
+          for (let j = i + 1; j < textBoxes.length; j++) {
+            const a = textBoxes[i],
+              b = textBoxes[j];
+            if (!overlaps2D(a, b)) continue;
+            const area = overlapArea(a, b);
+            const minArea = Math.min(a.width * a.height, b.width * b.height);
+            if (minArea <= 0 || area / minArea <= 0.18) continue;
+
+            out.push({
+              level: "HIGH",
+              type: "text-text-overlap",
+              svg: svgIdx,
+              detail: `text "${a.text}" ↔ "${b.text}" overlap ${Math.round((area / minArea) * 100)}%`,
+            });
+          }
+        }
+
+        textBoxes.forEach((tb) => {
+          if (tb.width === 0) return;
+          const tArea = tb.width * tb.height;
+          if (tArea <= 0) return;
+          for (let i = 0; i < pathBoxes.length; i++) {
+            const pb = pathBoxes[i];
+            if (!overlaps2D(tb, pb)) continue;
+            const area = overlapArea(tb, pb);
+            if (area / tArea <= 0.35) continue;
+            out.push({
+              level: "HIGH",
+              type: "path-text-overlap",
+              svg: svgIdx,
+              detail: `${pb.tag}#${i} overlaps text "${tb.text}" by ${Math.round((area / tArea) * 100)}%`,
+            });
+            break;
           }
         });
 
@@ -499,6 +583,7 @@ async function checkPage(page, url) {
 }
 
 async function main() {
+  const pages = loadPages();
   const browser = await puppeteer.launch({
     headless: true,
     executablePath:
@@ -513,10 +598,10 @@ async function main() {
     totalMid = 0,
     totalLow = 0;
 
-  for (let i = 0; i < PAGES.length; i++) {
-    const url = PAGES[i];
+  for (let i = 0; i < pages.length; i++) {
+    const url = pages[i];
     process.stdout.write(
-      `[${i + 1}/${PAGES.length}] ${url.split("/").pop()} ... `,
+      `[${i + 1}/${pages.length}] ${url.split("/").pop()} ... `,
     );
     const issues = await checkPage(page, url);
     if (issues.length > 0) {
@@ -555,7 +640,7 @@ async function main() {
     });
 
   const summary = {
-    totalPages: PAGES.length,
+    totalPages: pages.length,
     pagesWithIssues: byPage.length,
     high: totalHigh,
     mid: totalMid,
