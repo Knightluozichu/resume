@@ -3,10 +3,330 @@ title: 调整数组顺序使奇数位于偶数前面
 type: C
 section: 数组
 order: 2
-description: 掌握双指针首尾相向扫描进行就地元素交换的划分思想。
+description: 掌握双指针首尾相向扫描进行就地元素交换的划分思想，深入理解稳定性与时空复杂度折中。
 demo: true
-math: false
+math: true
 sourceUrl: https://github.com/zhedahht/CodingInterviews
 draft: false
 ---
-Stub
+
+{/* 知识点清单：双指针相向扫描 / 快慢双指针 / 稳定划分与空间折中 / 位运算优化 / 边界溢出防御 / 泛型谓词设计；原书章节：面试题21：调整数组顺序使奇数位于偶数前面。 */}
+
+<Objectives>
+
+- 掌握并能灵活运用**相向双指针**在 $O(N)$ 时间和 $O(1)$ 空间内对数组进行就地奇偶划分。
+- 阐明划分算法中**稳定性（Stability）**的内涵，并对比分析原位非稳定分区与空间换时间稳定分区的时空复杂度折中。
+- 辨析并防御双指针扫描中的**两个关键陷阱**：内部循环索引越界与交换后的指针死循环。
+- 理解泛型和解耦思想，能使用**函数指针/回调函数（谓词）**重构代码，使算法可灵活扩展至任意划分规则（如正负数、大小写、整除等）。
+
+</Objectives>
+
+## 直觉引入
+
+在开始严谨的算法设计之前，我们可以用生活中的日常场景来理解这一思想：
+
+*   **扑克牌花色分类**：想象你手握一叠扑克牌，想要把所有红桃（奇数代表物）移到左边，所有黑桃（偶数代表物）移到右边。你并不关心红桃内部或黑桃内部的大小顺序。
+    
+    你很自然会这样做：左手从最左边开始往右找第一张黑桃，右手从最右边开始往左找第一张红桃。当两只手都找到了目标（左手找到黑桃，右手找到红桃），就对调这两张牌的位置。接着，两手继续往中间摸索，重复此过程，直到两手相遇。这就是**『相向双指针』**的直观体现。
+    
+*   **文件夹归档（稳定分类）**：假设你有一叠按时间先后排序的员工档案。你必须把在职员工（奇数）排到离任员工（偶数）前面，**且要保持原有的时间先后顺序不变**。
+    
+    此时你不能再用前面的“对调”方法了，因为一旦把最左边的离任档案与最右边的在职档案对调，它们与中间档案的相对时间顺序就被打乱了。为了保持稳定性，你通常需要搬来两个空箱子（**辅助缓冲区**），一个装在职的，一个装离任的，依次把档案放入对应的箱子中，最后把两个箱子合并。这就是以空间换时间的**『稳定分区』**过程。
+
+---
+
+## 概念讲解
+
+### 1. 相向双指针就地划分 (Unstable Partition)
+
+如果面试官不要求保留元素间的原始相对顺序，我们的目标就是用最少的时间与空间完成分类。通过在数组两端设置 `left` 和 `right` 指针，向中间扫描：
+
+- `left` 指针负责寻找偶数。如果是奇数则跳过（`left++`），遇到偶数时停下。
+- `right` 指针负责寻找奇数。如果是偶数则跳过（`right--`），遇到奇数时停下。
+- 当 `left < right` 且两个指针都停下时，说明定位到了一个“左边的偶数”和一个“右边的奇数”，直接交换它们的值，然后继续向中间扫描。
+- 当 `left >= right` 时，说明所有奇数已成功划分到偶数左侧，扫描结束。
+
+```
+初始状态：[2, 4, 5, 7, 8, 1, 3]
+         ^ left           ^ right (2为偶停止, 3为奇停止 -> 交换)
+
+交换后：  [3, 4, 5, 7, 8, 1, 2]
+         ^ left           ^ right
+
+收缩扫描：[3, 4, 5, 7, 8, 1, 2]
+            ^ left     ^ right    (4为偶停止, 1为奇停止 -> 交换)
+
+交换后：  [3, 1, 5, 7, 8, 4, 2]
+            ^ left     ^ right
+
+收缩扫描：[3, 1, 5, 7, 8, 4, 2]
+                     ^   ^
+                   right left     (指针交错 left >= right -> 终止)
+```
+
+**复杂度分析**：
+- **时间复杂度**：$O(N)$。尽管有嵌套循环，但 `left` 和 `right` 两个指针一共只把数组从头到尾扫过一遍，每个元素最多被访问一次。
+- **空间复杂度**：$O(1)$。仅需常数个指针变量，完成就地（In-place）交换。
+
+---
+
+### 2. 稳定性 (Stability) 与空间换时间
+
+上述相向双指针算法是**不稳定**的。在上面的例子中，奇数 `3` 原本在 `5` 和 `7` 的右边，经过第一次交换后直接飞到了数组最左端，超越了 `5` 和 `7`。
+
+若要求**稳定划分**，常用的解法有：
+
+1.  **辅助空间法**：
+    创建两个临时数组（或队列）`odds` 和 `evens`。遍历原数组，遇到奇数放入 `odds`，遇到偶数放入 `evens`。最后将 `evens` 拼接到 `odds` 后面，写回原数组。
+    - **时间复杂度**：$O(N)$。
+    - **空间复杂度**：$O(N)$，需要分配同等大小的辅助存储。
+2.  **原地稳定划分（分治法）**：
+    利用类似归并排序的分治策略。将数组分成左右两部分，递归进行奇偶划分。合并时，需要将左半部分的偶数段与右半部分的奇数段进行旋转拼接（类似于数组旋转）。
+    - **时间复杂度**：$O(N \log N)$。
+    - **空间复杂度**：$O(1)$（或递归栈的 $O(\log N)$）。
+
+---
+
+### 3. 解耦与可扩展性设计
+
+在实际工程中，今天需求是“奇数在偶数前”，明天可能是“负数在正数前”或“小写字母在大写字母前”。
+如果把“判断是否为奇数”的逻辑硬编码在划分算法中，会导致代码复用性极差。
+
+更好的设计是**将划分逻辑与判定规则解耦**。在 C++ 中可以通过**函数指针**、`std::function` 或 **Lambda 表达式**作为参数；在 TypeScript 中可以使用**谓词回调函数** `(val: number) => boolean`。
+
+---
+
+## 交互 Demo
+
+点击下方控制按钮，逐步观察双指针在移动、定位不合规项以及进行就地对调时的行为轨迹：
+
+<PartitionArrayDiagram />
+
+---
+
+## 代码对照
+
+### 核心实现 A：就地非稳定双指针划分（C++ & TS）
+
+注意在内部 `while` 扫描中防范越界。在 C++ 实现中，我们进一步使用了函数指针将判断条件解耦。
+
+<CodeTabs>
+  <Tab label="C++ (谓词解耦原位划分)">
+```cpp
+#include <iostream>
+#include <vector>
+
+// 谓词函数：判断是否为奇数
+bool isOdd(int n) {
+    return (n & 1) != 0; // 位运算优化，等价于 n % 2 != 0
+}
+
+class Solution {
+public:
+    // 接受一个函数指针作为判定条件，实现逻辑解耦
+    void ReorderArray(std::vector<int>& nums, bool (*predicate)(int)) {
+        if (nums.size() <= 1) return;
+
+        int left = 0;
+        int right = nums.size() - 1;
+
+        while (left < right) {
+            // 向右移动 left，直到指向不满足谓词的元素（如偶数）
+            // 必须限制 left < right 防止全奇数数组导致越界
+            while (left < right && predicate(nums[left])) {
+                left++;
+            }
+
+            // 向左移动 right，直到指向满足谓词的元素（如奇数）
+            while (left < right && !predicate(nums[right])) {
+                right--;
+            }
+
+            if (left < right) {
+                // 交换错位元素
+                int temp = nums[left];
+                nums[left] = nums[right];
+                nums[right] = temp;
+                
+                // 交换后必须更新指针，否则若 nums[left] 和 nums[right] 
+                // 的判定没有改变会导致死循环
+                left++;
+                right--;
+            }
+        }
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript (TypeScript版)">
+```typescript
+/**
+ * 调整数组顺序，使满足 predicate 条件的元素位于前面
+ * @param nums 待调整数组
+ * @param predicate 划分谓词，返回 true 的排在前面，false 的排在后面
+ */
+function reorderArray(nums: number[], predicate: (x: number) => boolean): number[] {
+  if (!nums || nums.length <= 1) return nums;
+
+  let left = 0;
+  let right = nums.length - 1;
+
+  while (left < right) {
+    // 寻找前半部分的“非目标项”（例如偶数）
+    while (left < right && predicate(nums[left])) {
+      left++;
+    }
+    // 寻找后半部分的“目标项”（例如奇数）
+    while (left < right && !predicate(nums[right])) {
+      right--;
+    }
+
+    if (left < right) {
+      // 交换位置
+      const temp = nums[left];
+      nums[left] = nums[right];
+      nums[right] = temp;
+      
+      left++;
+      right--;
+    }
+  }
+
+  return nums;
+}
+
+// 示例调用：
+// const arr = [2, 4, 5, 7, 8, 1, 3];
+// reorderArray(arr, (val) => (val & 1) !== 0); // [3, 1, 5, 7, 8, 4, 2]
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+### 核心实现 B：保证相对顺序的稳定划分（C++ & TS）
+
+如果面试要求“稳定分区”，我们需要牺牲空间来换取 $O(N)$ 的高效划分。
+
+<CodeTabs>
+  <Tab label="C++ (稳定划分)">
+```cpp
+#include <vector>
+
+class Solution {
+public:
+    std::vector<int> ReorderArrayStable(const std::vector<int>& nums) {
+        if (nums.size() <= 1) return nums;
+
+        std::vector<int> odds;
+        std::vector<int> evens;
+        odds.reserve(nums.size()); // 预分配内存优化性能
+
+        // 顺序扫描，保证相对顺序不变
+        for (int num : nums) {
+            if ((num & 1) != 0) {
+                odds.push_back(num);
+            } else {
+                evens.push_back(num);
+            }
+        }
+
+        // 将偶数集合拼接到奇数集合后面
+        odds.insert(odds.end(), evens.begin(), evens.end());
+        return odds;
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript (稳定划分)">
+```typescript
+function reorderArrayStable(nums: number[]): number[] {
+  if (!nums || nums.length <= 1) return nums;
+
+  const odds: number[] = [];
+  const evens: number[] = [];
+
+  // 单次遍历顺序分流
+  for (const num of nums) {
+    if ((num & 1) !== 0) {
+      odds.push(num);
+    } else {
+      evens.push(num);
+    }
+  }
+
+  // 拼接写回
+  return odds.concat(evens);
+}
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 输入数组全部是奇数（例如 <code>[1, 3, 5, 7]</code>）或全部是偶数时，程序报空指针或数组索引越界错误。
+  <strong>原因 →</strong> 在内部 <code>while</code> 扫描递增 <code>left</code> 或递减 <code>right</code> 时，忘记增加越界保护条件 <code>left < right</code>。若数组全是奇数，<code>left</code> 判定成立会不停自增，最终越过最大索引导致内存非法访问。
+  <strong>修复 →</strong> 每一个内部移动指针的 <code>while</code> 语句中，必须首要写明 <code>left < right && ...</code> 检查。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 代码陷入死循环，CPU 占用率达到 100%。
+  <strong>原因 →</strong> 在找到不合规元素并执行交换后，忘记将 <code>left</code> 指针右移和 <code>right</code> 指针左移。这会导致下一轮外层循环中，左右指针仍停在刚才的值上，再次判定并无限重复交换同一组数据。
+  <strong>修复 →</strong> 确保交换分支执行后紧跟 <code>left++; right--;</code> 语句以突破当前匹配项。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 误以为可以使用重写自定义比较器的普通 `sort`（如 C++ 的 `std::sort`）来低成本实现划分。
+  <strong>原因 →</strong> 排序的开销是 $O(N \log N)$，而本题最坏也应当在 $O(N)$ 内解决。此外，非稳定的普通排序会彻底打乱原本的奇偶内部相对位置。
+  <strong>修复 →</strong> 如需用标准库，应使用针对单向可分性优化的 <code>std::stable_partition</code>，其内部如果能申请到临时内存则为 $O(N)$，否则退化为 $O(N \log N)$ 且保序。
+</Callout>
+
+---
+
+## 小结与练习
+
+- **相向双指针** 是在线性时间内对两路属性进行就地分类的标准思想，类似快速排序的核心划分（Partition）策略。
+- **稳定性** 要求通常对应着空间或时间的牺牲。在实际开发中，需要根据具体场景选择 $O(1)$ 空间的不稳定原地算法还是 $O(N)$ 空间的稳定算法。
+- **高内聚低耦合** 的设计要求我们将“判定规则”（谓词）通过回调函数或 Lambda 传入，从而使排序/划分模块不依赖具体的业务实体。
+
+<Exercises>
+  <Answer question="除了相向双指针，我们也可以用『快慢双指针』来完成就地奇偶划分吗？它有什么特点？">
+    可以。设置慢指针 `slow` 始终指向“已排好奇数段”的下一个位置（初始为 0），快指针 `fast` 从头到尾扫描。如果 `fast` 扫到奇数，就交换 `array[fast]` 和 `array[slow]`，然后 `slow` 递增。
+    
+    其特点是：
+    1. 它是**单向移动**的，因此特别适用于**单向链表**的分类（链表无法从后往前扫描，无法用相向双指针）。
+    2. 其交换次数通常比相向指针多，且同样是**不稳定**的。
+  </Answer>
+  <Answer question="如果在 TS 中要求就地（In-place）且稳定（Stable）地完成奇偶排序，且时间复杂度只允许 O(N)，能实现吗？">
+    在严格的理论上，存在在线性时间 $O(N)$ 和常数辅助空间 $O(1)$ 下进行稳定分区的算法（例如基于 Block-Sort 的稳定划分算法，如 Stable-Partition-In-Place）。但这类算法**极其复杂**，常数因子非常大，内部涉及大量的局部反转和复杂的指针数学计算，实用价值较低。
+    
+    因此，工业界在遇到“稳定且 $O(N)$”的要求时，几乎无一例外会选择分配 $O(N)$ 辅助空间进行分流拷贝；或者在空间受限时妥协为 $O(N \log N)$ 的稳定归并划分。
+  </Answer>
+</Exercises>
+
+---
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="相向双指针 (Bidirectional Two-Pointer)">
+    一种双指针技巧，将两个指针分别初始化在数组的两端（头和尾），并在循环中使它们相向移动（左指针右移，右指针左移）以逐步逼近相遇，常用于原位划分、二分逼近或回文判定。
+  </GlossaryItem>
+  <GlossaryItem term="稳定划分 (Stable Partition)">
+    在根据某种属性（如奇偶性）将数组分割成前后两部分时，保持具有相同属性的元素在重排前后的相对位置先后顺序不发生变化。
+  </GlossaryItem>
+  <GlossaryItem term="谓词 (Predicate)">
+    一个接收元素并返回布尔值（true/false）的函数。在划分和排序算法中，通常作为参数传入以定义分类规则，起到控制逻辑解耦的作用。
+  </GlossaryItem>
+  <GlossaryItem term="位运算优化 (Bitwise Optimization)">
+    利用底层的按位与（&）、按位或（|）等二进制操作代替算术除法/取余运算。例如用 `(n & 1) !== 0` 代替 `n % 2 !== 0`，由于规避了昂贵的除法器计算，可以微幅提升 CPU 周期效率。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>

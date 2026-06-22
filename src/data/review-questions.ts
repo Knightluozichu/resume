@@ -246,6 +246,7 @@ import { coiPrintNumbersQuestions } from "./review/coi-print-numbers";
 import { coiDeleteNodeQuestions } from "./review/coi-delete-node";
 import { coiRegularExpressionsMatchingQuestions } from "./review/coi-regular-expressions-matching";
 import { coiNumericStringsQuestions } from "./review/coi-numeric-strings";
+import { coiReorderArrayQuestions } from "./review/coi-reorder-array";
 
 export {
   CHAPTER_TITLES,
@@ -355,6 +356,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiDeleteNodeQuestions,
   ...coiRegularExpressionsMatchingQuestions,
   ...coiNumericStringsQuestions,
+  ...coiReorderArrayQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

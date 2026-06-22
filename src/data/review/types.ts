@@ -170,6 +170,7 @@ export type ReviewChapterSlug =
   | "coi-delete-node"
   | "coi-regular-expressions-matching"
   | "coi-numeric-strings"
+  | "coi-reorder-array"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -614,6 +615,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-delete-node": "删除链表节点",
   "coi-regular-expressions-matching": "正则表达式匹配",
   "coi-numeric-strings": "表示数值的字符串",
+  "coi-reorder-array": "调整数组顺序使奇数位于偶数前面",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
