@@ -1,23 +1,23 @@
 # Checkpoint Progress
 
-- **Status**: Completed audit and repair of C Primer Plus and C++ Primer diagrams.
+- **Status**: Completed Task 2: 二维数组中的查找 (find-in-matrix) for 《剑指Offer》.
 - **Completed**:
-  - Audit and fix type size table header text overlap in `type-size-diagram.tsx`.
-  - Audit and fix else-if true branch routing and line crossing in `if-else-flow-diagram.tsx`.
-  - Audit and fix sentinel loop diagram condition text and exit branch line alignment in `sentinel-loop-diagram.tsx`.
-  - Audit and fix while loop flowchart loop-back path and exit branch intersections in `while-loop-flow-diagram.tsx`.
-  - Audit and fix CString memory selection box overlapping dashed lines in `cstring-memory-diagram.tsx`.
-  - Audit and fix CString null terminator label vertical layout overlap in `cstring-null-terminator-diagram.tsx`.
-  - Audit and verify function-prototype layout is correct and free of crossings.
-- **Active Task**: None
+  - Book routing and configuration (Task 1).
+  - Implementation of content/coding-interviews/arrays/find-in-matrix.mdx.
+  - Implementation of interactive diagram src/components/mdx/diagrams/find-in-matrix-diagram.tsx.
+  - Registration in mdx-components.tsx.
+  - Review questions in src/data/review/coi-find-in-matrix.ts and src/data/review-questions.ts.
+  - Spec compliance review (approved).
+  - Code quality review & styling format check (approved).
+- **Active Task**: Task 3: 替换空格 (replace-spaces)
 - **Next Steps**:
-  - Run git commit for the changes.
-  - Execute deploy.sh to release updates.
+  - Create string replacement chapter content/coding-interviews/strings/replace-spaces.mdx.
+  - Create interactive pointer visualization component src/components/mdx/diagrams/replace-spaces-diagram.tsx.
+  - Create review questions file src/data/review/coi-replace-spaces.ts.
 - **Modified Files**:
-  - `src/components/mdx/diagrams/cstring-memory-diagram.tsx`
-  - `src/components/mdx/diagrams/cstring-null-terminator-diagram.tsx`
-  - `src/components/mdx/diagrams/function-prototype-diagram.tsx`
-  - `src/components/mdx/diagrams/if-else-flow-diagram.tsx`
-  - `src/components/mdx/diagrams/sentinel-loop-diagram.tsx`
-  - `src/components/mdx/diagrams/type-size-diagram.tsx`
-  - `src/components/mdx/diagrams/while-loop-flow-diagram.tsx`
+  - `content/coding-interviews/arrays/find-in-matrix.mdx`
+  - `src/components/mdx/diagrams/find-in-matrix-diagram.tsx`
+  - `src/components/mdx/mdx-components.tsx`
+  - `src/data/review/coi-find-in-matrix.ts`
+  - `src/data/review/types.ts`
+  - `src/data/review-questions.ts`
