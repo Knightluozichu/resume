@@ -3,104 +3,238 @@ title: MVVM 模式应用构成
 type: C
 section: Android 架构与设计模式
 order: 3
-description: MVVM 用可观察状态替代手动回调，让 UI 随状态渲染而不是被命令驱动。
+description: 用可观察状态流替代手动回调——ViewModel 持有 StateFlow，UI 根据状态自驱渲染，旋转屏幕不丢数据。
 demo: true
 math: false
 sourceUrl: https://peaks.cc/architecture_patterns
 draft: false
 ---
 
-{/* 知识点清单：MVVM/ViewModel/Observable State/DataBinding；原书章节：第3章 MVVMパターンのアプリ構成。每个知识点必须落到本章专属图或 Stepper。 */}
+{/* 知识点清单：MVVM / ViewModel / 可观察状态 StateFlow / 配置变更存活 / AAC ViewModel 生命周期 / sealed UiState。
+   viz 形态：MvvmFlowDiagram 主图 + AacLifecycleStateMachine 生命周期状态机 + AndroidDesignLab(mode="aac") 交互分步 + Stepper 动画拆解。
+   Term 进 Glossary：MVVM、ViewModel、StateFlow、可观察状态、AAC ViewModel、UiState 密封类、配置变更存活。 */}
 
 <Objectives>
-
-- MVVM 用可观察状态替代手动回调，让 UI 随状态渲染而不是被命令驱动。
-- 能用本章图示复述：用户输入标题 → ViewModel 更新 UiState → 状态流发出错误或成功 → View 根据状态自动渲染。
-- 能判断：ViewModel 拿 Context 或 Fragment，导致生命周期和测试边界重新纠缠。
-
+- 能把 MVP 的 Presenter + `view.showLoading(true)` 调用改造为 ViewModel + `stateFlow.emit(Loading)` 的声明式状态驱动
+- 能解释：ViewModel 为什么能在屏幕旋转后存活——以及它的生命周期终点不在用户退页、而在 `onCleared`
+- 能回答：当 `StateFlow` 发出 `Error` 状态后立即再发出 `prevContent` 状态时，UI 层应该快速连续变更两次还是合并处理
 </Objectives>
 
-## 本章专属图
+## 为什么需要 MVVM
 
-MVVM 用可观察状态替代手动回调，让 UI 随状态渲染而不是被命令驱动。 先看图，再谈模式名。图里最重要的不是节点颜色，而是谁负责输入、判断、状态和输出。
+你想知道一辆车还剩下多少油。在 MVP 的「主动通知」模式里，车的仪表盘不会自己显示油量——你需要一个坐在副驾驶的人每隔 5 分钟看一眼油箱、然后大声告诉你：还剩 23 升。这个人就是 Presenter。如果副驾驶的人累了、走了，或者你换到了另一辆车，这套提示系统就失效了——它依赖于一个人（或一段代码）不断把手动检查的结果播报给你。
 
-<MvpVsMvvmCompareDiagram />
+MVVM 的方案是：把油量表直接连到油箱传感器上。你不需要任何人告诉你油量——你看仪表盘，它自动显示油箱里的实际情况。你踩油门，油量自然下降，仪表盘自己跟着变。这就是 **可观察状态**的理念：UI 不是被命令驱动的（「现在显示 23 升」），而是订阅了一份数据源，数据源怎么变，UI 自己跟到哪。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把图里的步骤拖到最后，本章哪条边界最应该写进 review
-  规则？
-</Callout>
+在 Android 里，这个「传感器」就是 <Term def="AAC 架构组件的核心——一个能在屏幕旋转、语言切换等配置变更中存活的类，持有 UI 状态并暴露给 View 观察。它不持有 Context/View 引用，不知道自己在哪个 Activity 里展示。">ViewModel</Term>。这个「仪表盘」就是 Jetpack Compose 的 `collectAsState()` 或传统 View 系统的 `observe()`。它们之间通过 <Term def="Kotlin 协程的冷/热流中的热流，每个新的订阅者都能拿到当前值，上游值变化时自动推送给所有订阅者。在 MVVM 中用于承载 UiState——UI 观察它，任何变化都会立即反映到界面上。">StateFlow</Term> 来连接：ViewModel 只管往流里 emit 新状态，UI 只管从流里 collect 新状态来渲染——中间不需要任何「人」来传话。
 
-## 分步动画：MVVM 模式应用构成
+MVVM 解决的不仅是 MVP 里 Presenter 要逐一调用 View 接口方法的问题。它解决的是一个更根本的问题——**Android 会杀死你的 Activity 然后重建它**。设备旋转、语言切换、深色模式开关，甚至内存不足时系统回收后台 Activity——这些情况下，如果你的 Presenter 存在 Activity 里，进度条、错误消息、正在加载的数据——全部消失。ViewModel 因为不依赖 Activity，在这些配置变更中**存活下来**，继续保留着你正在执行的状态。
+
+### MVVM 数据流：从事件到状态的全貌
+
+<MvvmFlowDiagram />
+
+MVVM 的数据流也遵循单向原则，但比 MVP 少了一个「Presenter 调用 View 接口」的步骤——取而代之的是 ViewModel 更新 StateFlow，View 自动收到通知。这张图展示了核心闭环：事件（Event/Intent）从 View 流向 ViewModel，State 从 ViewModel 流向 View。View 和 ViewModel 之间没有双向调用——只有数据流的订阅和事件的发出。
+
+## 核心概念：MVVM 三要素
+
+### ViewModel：活过旋转，死在页面离开时
+
+ViewModel 在 Android 里具有一个 MVP Presenter 永远不会有的能力——**跨配置变更存活**。设备从竖屏转横屏，Activity 被 `destroy` 然后重新 `create`，但 ViewModel 实例保持不变。这是什么原理？
+
+<AacLifecycleStateMachine />
+
+`ViewModelProvider` 在创建 ViewModel 时，把实例存到了一处独立于 Activity 的 scope 里——`ViewModelStoreOwner`。Activity 旋转时虽然 Activity 实例被销毁，但 `ViewModelStoreOwner` 还在（它由系统管理，直到 Activity 真正 finish 才释放）。新的 Activity 实例重建后，`ViewModelProvider` 发现 scope 里已经有这个 ViewModel 了——直接返回它，而不再 new 一个新的。
+
+这意味着：
+
+```kotlin
+class TodoDetailViewModel(
+    private val repository: TodoRepository
+) : ViewModel() {
+    // 这个 sealed class 在屏幕旋转后会保持原样
+    private val _state = MutableStateFlow<TodoDetailUiState>(TodoDetailUiState.Loading)
+    val state: StateFlow<TodoDetailUiState> = _state.asStateFlow()
+
+    fun onIntent(intent: TodoDetailIntent) {
+        when (intent) {
+            is TodoDetailIntent.Load -> loadTodo(intent.todoId)
+            is TodoDetailIntent.Save -> saveTodo(intent.title, intent.description)
+        }
+    }
+
+    private fun saveTodo(title: String, description: String) {
+        if (title.isBlank()) {
+            _state.value = TodoDetailUiState.Error("标题不能为空")
+            return
+        }
+        _state.value = TodoDetailUiState.Content(
+            title = title,
+            description = description,
+            isSaving = true
+        )
+        viewModelScope.launch {
+            repository.saveTodo(Todo(title = title, description = description))
+                .onSuccess { todo ->
+                    _state.value = TodoDetailUiState.Saved(todo.id)
+                }
+                .onFailure { error ->
+                    _state.value = TodoDetailUiState.Content(
+                        title = title,
+                        description = description,
+                        isSaving = false,
+                        errorMessage = error.message
+                    )
+                }
+        }
+    }
+}
+```
+
+在用户旋转屏幕的瞬间，如果正在 `loadTodo` 的协程里等待网络响应，那个协程会因为 `viewModelScope` 而继续运行——它不会因为 Activity destroy 而被取消。响应回来后，`_state.value` 更新为 `Loaded(...)`，UI 重建后自动从 `state` 这个 StateFlow 里 collect 到最新值——无缝恢复。
+
+### UiState 密封类：一个页面只需要一个状态
+
+如果你用过 MVP 里的 `LiveData<Boolean> isLoading` + `LiveData<String> errorMessage` + `LiveData<List<Todo>> list`，你遇到过这个问题：同时更新三个 LiveData 时，UI 可能会看到 `isLoading=false` 但 `list` 还是旧的——短暂的不一致导致闪烁。更严重的是，测试时需要三个断言来验证一次状态变更，但三个断言之间无法保证原子性。
+
+MVVM 的解决方案是 **sealed UiState**：一个页面只需要**一个**状态对象，它一次性描述这个页面**全部**的视觉样貌：
+
+```kotlin
+sealed class TodoDetailUiState {
+    object Loading : TodoDetailUiState()
+    data class Content(
+        val title: String,
+        val description: String,
+        val isSaving: Boolean = false,
+        val errorMessage: String? = null
+    ) : TodoDetailUiState()
+    data class Error(val message: String) : TodoDetailUiState()
+    data class Saved(val todoId: String) : TodoDetailUiState()
+}
+```
+
+UI 层只认这一个 StateFlow：
+
+```kotlin
+// Compose 版
+@Composable
+fun TodoDetailScreen(viewModel: TodoDetailViewModel) {
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    when (state) {
+        is TodoDetailUiState.Loading -> LoadingScreen()
+        is TodoDetailUiState.Content -> ContentScreen(state)
+        is TodoDetailUiState.Error -> ErrorScreen(state.message)
+        is TodoDetailUiState.Saved -> LaunchedEffect(state.todoId) {
+            // 保存成功后触发导航
+            navController.navigate("todo/${state.todoId}")
+        }
+    }
+}
+```
+
+一行 `when (state)` 就能完整描述这个页面所有可能的状态。ViewController（Activity/Fragment/Compose Screen）不再需要对每种 UI 控件逐一操作——它只需「**给我一个状态，我照着画**」。
+
+### 与 MVP 的关键对比
+
+| 维度 | MVP | MVVM |
+|------|-----|------|
+| View 和逻辑层的通信方式 | Presenter 主动调用 View 接口方法 | View 观察 StateFlow 自动响应 |
+| 配置变更存活 | Presenter 在 Activity 上——旋转后重建 | ViewModel 独立于 Activity——旋转后存活 |
+| 状态一致性 | 多个 LiveData 字段间存在不一致窗口 | 单个 StateFlow 原子更新整个 State |
+| 测试代码量 | 需 mock View 接口验证每次调用 | 只需断言 `state.value` 等于期望值 |
+
+## 交互演示：状态观察全流程
+
+<AndroidDesignLab mode="aac" title="AAC ViewModel 状态实验室" story="从用户输入到状态更新再到 UI 订阅渲染的完整链路" currentStep={1} />
+
+## 分步动画：MVVM 状态观察的 4 个阶段
 
 <Stepper>
-  <Step title="1. 用户输入标题">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第一阶段：ViewModel 初始化——状态还没被任何 UI 观察">
+    <MvvmFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    ViewModel 被创建，`_state` 的初始值是 `TodoDetailUiState.Loading`。
 
-  </Step>
-  <Step title="2. ViewModel 更新 UiState">
-    <MvpVsMvvmCompareDiagram />
+    此时还没有任何 View 订阅 `state` 这个 StateFlow。StateFlow 是**热流**——它从创建那一刻起就有一个当前值，不像冷流那样等到有订阅者才开始生产数据。这意味着 View 绑定上来时，**能立刻拿到当前最新的状态**——即使这个状态是在 View 还不存在时就被 emit 的。
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    ViewModel 随后开始首次加载：`onIntent(TodoDetailIntent.Load(todoId = "abc123"))`。内部协程调用 `repository.getTodoById("abc123")`，成功拿到返回后，`_state.value = TodoDetailUiState.Content(title = "买牛奶", ...)`。此时 View 还没绑上来，但状态已经存在了——这就是热流的优势：View 绑上来不会看到一顿转的 Loading，而是直接看到「买牛奶」的 Content 状态。
 
   </Step>
-  <Step title="3. 状态流发出错误或成功">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第二阶段：UI 订阅——Compile 或 Fragment 收集状态">
+    <MvvmFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    Activity 执行 `onCreate`。Compose 调用 `val state by viewModel.state.collectAsStateWithLifecycle()`，传统 View 系统调用 `viewModel.state.flowWithLifecycle(lifecycle).onEach { render(it) }.launchIn(lifecycleScope)`。
+
+    第一个 emit 收到的就是 Content 状态——标题是「买牛奶」，可以编辑，没有错误提示。UI 跟着就把这个状态画了出来。
+
+    接下来用户修改标题为「买全脂牛奶」——每次键盘敲击都生成一个新的 String。UI 层可以直接观察这个变化吗？**不应该**。UI 层不应该持有编辑中的临时字符串——这个临时字符串属于 ViewModel 的 state。所以 Compose 里文本框的 `onValueChange` 会调 `viewModel.onIntent(TodoDetailIntent.TitleChanged("买全脂牛奶"))`，ViewModel 内部只更新 `_state.value` 而不调 API——这是在本地状态中的一次瞬时更新。
 
   </Step>
-  <Step title="4. View 根据状态自动渲染">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第三阶段：用户触发操作——ViewModel 更新状态，UI 自动响应">
+    <MvvmFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    用户点击保存。UI 层转发意图 `onIntent(TodoDetailIntent.Save(title = "买全脂牛奶", description = "..."))`。
+
+    ViewModel 里的 `saveTodo` 方法执行：
+    1. 先 emit `Content(..., isSaving = true)` —— UI 立刻看到保存按钮变灰 + 进度条
+    2. 调 `repository.saveTodo(...)` —— 这是一个 suspend 方法，可能耗时任意长
+    3. 成功 → emit `Saved(todoId)` —— UI 收到 Saved 状态后执行导航
+    4. 失败 → emit `Content(..., isSaving = false, errorMessage = "网络不可用")` —— UI 收到后恢复按钮 + 显示错误
+
+    **关键**：步骤 1 到 4 之间的 UI 变化全部由 StateFlow 值变化自动驱动。ViewModel 不需要知道「谁在观察我」，也不需要关心「现在 UI 长什么样」。它只管做自己的判断、更新 StateFlow——剩下的交给 Kotlin Flow 和 Compose 的自动重组机制。
+
+  </Step>
+  <Step title="第四阶段：旋转屏幕——ViewModel 存活，状态无损恢复">
+    <MvvmFlowDiagram />
+
+    用户正在编辑标题到一半，突然把手机横过来——或者系统内存不足把这个 Activity 回收后又重建。
+
+    Activity 经历了 `onPause → onStop → onDestroy`，然后又 `onCreate → onStart → onResume`。但 ViewModel 一直活着——它被 `ViewModelStoreOwner` 持有，Activity 重建后通过同一个 `viewModel()` 调用拿回了**完全一样的实例**。
+
+    重建后的 Activity 重新订阅 `viewModel.state`。StateFlow 的热流特性确保**第一个 emit 就是当前值**——假设用户旋转前刚输入了「买全脂牛奶」，旋转后 UI 收集到的第一个 state 还是 `Content(title = "买全脂牛奶", ...)`，不会丢掉已经输好的文字。
+
+    如果用户在旋转前刚点过保存按钮、协程正在网络请求中，`viewModelScope` 中的协程也不会被取消——它继续运行。等网络返回，ViewModel 照样更新 `_state.value`，UI 照样能收到并渲染。这就是「构造信息不丢、进行中的操作不断」——MVP Presenter 靠手动保存 `onSaveInstanceState` 永远做不到这一点。
 
   </Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="Model-View-ViewModel。View 观察状态，ViewModel 暴露状态并处理意图，不直接调用 View。">
-  MVVM
-</Term>
-是本章入口。它必须能解释团队协作成本，而不是只解释类图形状。
-
-<Term def="一条能被 review、测试和文档共同保护的代码分界线。">责任边界</Term>
-是共同验收线：边界画不清，模式名再漂亮也没用。
-
 ## 常见误区
 
 <Callout type="trap">
-  <strong>现象 →</strong> ViewModel 拿 Context 或
-  Fragment，导致生命周期和测试边界重新纠缠。 <strong>原因 →</strong>{" "}
-  只讨论实现，没有讨论职责边界。 <strong>修法 →</strong>{" "}
-  回到本章图，把事件、状态、结果和失败路径都标出来。
+  **现象 →** ViewModel 在 `init{}` 块中调了 `viewModelScope.launch { repository.load() }`。屏幕旋转后，ViewModel 被复用，但由于 `init{}` 只执行一次，第二次 `load()` 不会发生——用户看到的是旋转前加载成功的数据，不是最新的。但如果 `init{}` 每次都执行 `load()`，每次旋转就又触发一次重复请求。**原因 →** 没有理解 ViewModel 的生命周期语义：ViewModel 的 `init{}` 是在 ViewModel 实例创建时执行**一次**的，而不是每次 View 绑定时执行。**修法 →** `init{}` 只做「首次安装」（如创建 CoroutineScope 和 MutableStateFlow），真正的数据加载由 UI 层在订阅时主动触发：通过 `LaunchedEffect(Unit)` 调 `viewModel.load()`，或声明式的一过性事件如 `SharedFlow<LoadEvent>` 驱动。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象 →</strong> 图能播放，但讲不出本章故事。 <strong>原因 →</strong>{" "}
-  只看节点，没有看数据和责任如何移动。 <strong>修法 →</strong>{" "}
-  用“谁做决定、谁能测试、谁负责展示”重讲一遍。
+  **现象 →** ViewModel 里同时有 `_loading: MutableStateFlow<Boolean>`、`_error: MutableStateFlow<String?>`、`_title: MutableStateFlow<String>` 三个独立的 StateFlow。UI 在快速更新时短暂看到「loading=false 且 error=null 且 title=旧值」的中间状态——短暂的闪烁或错位。**原因 →** 多个独立的 MutableStateFlow 无法保证原子更新——更新第一个和更新第二个之间，UI 会看到一个中间态。这个中间态在 MVP 的多个 LiveData 字段里也存在（在 LiveData 之间不保证原子性），MVVM 的 sealed UiState 就是专门解决这个的。**修法 →** 用一个 sealed class 包裹全部状态为一个对象，ViewModel 只暴露一个 `_state: MutableStateFlow<UiState>`。每次状态变更先构造完整的 UiState 对象，再一次性 `_state.value = newState`——这是原子操作（StateFlow 的 `value` 设置是线程安全的），UI 收不到中间态。
 </Callout>
 
 ## 小结与练习
 
-- 本章核心：MVVM 用可观察状态替代手动回调，让 UI 随状态渲染而不是被命令驱动。
-- 本章故事：用户输入标题 → ViewModel 更新 UiState → 状态流发出错误或成功 → View 根据状态自动渲染。
-- 本章练习：把 MVP 的保存流程改成 ViewModel + StateFlow，并写状态断言测试。
+- MVVM 的核心差异不是用 ViewModel 替代 Presenter，而是把「主动命令 UI」改为「声明式更新 State 并由 UI 自动订阅响应」
+- 一个 sealed UiState 类替代七八个独立的 LiveData/MutableLiveData——消除了多状态字段间的原子性不一致窗口
+- ViewModel 通过 `ViewModelStoreOwner` 独立于 Activity 生命周期存活——旋转后不丢数据、不中断协程
+- 热 StateFlow 保证 View 绑定时立刻拿到最新状态——没有「等 Presenter 转发」的延迟
 
 <Exercises>
-  <Answer question="本章图示解决了什么团队问题？">
-    它把隐藏在代码里的职责边界外显出来，让 review、测试和新人接手都有共同参照。
-  </Answer>
-  <Answer question="本章最危险的误用是什么？">
-    ViewModel 拿 Context 或 Fragment，导致生命周期和测试边界重新纠缠。
-    修法是先画边界，再决定类、接口、状态和测试替身。
-  </Answer>
   <Answer question="把 MVP 的保存流程改成 ViewModel + StateFlow，并写状态断言测试。">
-    画出输入、判断、状态、输出和失败路径；再写一句 review 规则保护这条边界。
+    1. 假设你的项目里有一个 MVP 的保存功能（Presenter 里有 `view.showLoading(true)` 和 `view.showError(msg)` 这样的调用）
+    2. 创建 UiState sealed class：`Loading / Content(title, desc, isSaving, error) / Saved(id) / Error(msg)`
+    3. 写 ViewModel：用 `MutableStateFlow<UiState>` 承载状态，`onIntent` 接收保存事件，`viewModelScope.launch` 调 Repository，成功 emit Saved/失败 emit Error
+    4. 写测试：创建一个 ViewModel（用 `MainDispatcherRule` 处理协程），设置 Fake Repository 返回成功，调用 `viewModel.onIntent(Save(...))`，断言 `state.value is Saved`
+    5. 再测失败路径：Fake Repository 抛异常，断言 `state.value` 是 Error 且 message 匹配
+    6. 测「标题为空拒绝保存」：onIntent 前 state=Content(title="")→onIntent Save→断言 state.value 仍是 Error 且 repository 没有被调 saveTodo
+
+    验收标准：三个测试全在 JVM 上 `./gradlew test` 通过，不需要启动 Activity。
+  </Answer>
+  <Answer question="屏幕旋转后 ViewModel 为什么没丢？它的数据存在哪里？">
+    ViewModel 数据存在 `ViewModelStore` 里，这个 store 被 `ViewModelStoreOwner`（通常是 `ComponentActivity` 或 `Fragment`）持有。Activity 旋转时 Activity 实例被销毁，但 `ViewModelStoreOwner` 的引用被系统保留（和 Activity 的 `onRetainNonConfigurationInstance` 机制相关），所以 `ViewModelStore` 还在。新的 Activity 实例调用 `ViewModelProvider(this).get(MyViewModel::class)` 时，provider 发现 store 里已经有这个 ViewModel——直接返回它。
+
+    ViewModel 的 `onCleared()` 只在 Activity 真正 finish（用户返回上级页面或被系统彻底杀死）时才被调用——不是每次旋转时就被清空。
+  </Answer>
+  <Answer question="多个独立的 LiveData/StateFlow 字段会带来什么 bug？如何修复？">
+    会带来「中间态不一致」bug。例如同时更新 isLoading=false 和 errorMessage="保存失败"，UI 在 `isLoading` 变 false 之后但 `errorMessage` 还没更新的短暂瞬间，会看到 loading 消失但错误提示没有出现的闪烁。
+
+    修复：用一个 UiState sealed class 包装全部状态。`_state.value = UiState.Content(isSaving = false, errorMessage = "网络不可用")` 是一次原子设置——UI collect 到这个新值时，isSaving 和 errorMessage 同时是最终值，中间态不存在。
   </Answer>
 </Exercises>
 
@@ -108,23 +242,25 @@ MVVM 用可观察状态替代手动回调，让 UI 随状态渲染而不是被�
 
 <Glossary>
   <GlossaryItem term="MVVM">
-    Model-View-ViewModel。View 观察状态，ViewModel
-    暴露状态并处理意图，不直接调用 View。
+    Model-View-ViewModel。View 层观察状态流自动渲染，不做任何业务判断。ViewModel 持有并使用协程编排业务逻辑，通过更新 UiState sealed 对象来驱动 UI 变化——ViewModel 不持有 View 引用，不知道 UI 如何渲染。Model 层（Repository/DataSource）负责数据存取，对 ViewModel 暴露抽象接口。
   </GlossaryItem>
   <GlossaryItem term="ViewModel">
-    跨配置变化保留界面状态的对象。它应该依赖抽象的数据能力，而不是持有 Fragment
-    或 View。
+    AAC 架构组件的核心类——能在配置变更（旋转、语言切换、深色模式）中存活。ViewModel 实例被 `ViewModelStoreOwner` 持有，独立于 Activity/Fragment 的生命周期。它的 `onCleared()` 仅在页面真正离开时才被调用。ViewModel 内使用 `viewModelScope` 管理协程——当 ViewModel 被清除时，scope 中所有协程自动取消，防止内存泄漏。详情见本章「ViewModel」小节。
   </GlossaryItem>
-  <GlossaryItem term="Observable State">
-    可被 UI 观察的一份状态，例如 LiveData 或 StateFlow。UI
-    根据它重绘，而不是被逐个命令驱动。
+  <GlossaryItem term="StateFlow">
+    Kotlin 协程热流——始终持有一个当前值（`value` 属性），新订阅者立即收到当前值。每次上游 emit 新值，所有活跃的订阅者立即收到。StateFlow 的 `value` 设置是线程安全的原子操作，这使得一个 sealed UiState 对象的更新天然原子——不会出现字段间的中间态不一致。
   </GlossaryItem>
-  <GlossaryItem term="DataBinding">
-    把 View 和可观察状态绑定起来的机制。好处是减少胶水代码，风险是隐藏过多逻辑。
+  <GlossaryItem term="可观察状态">
+    可被 UI 订阅观察的一份状态数据。MVVM 中 ViewModel 对外暴露 `StateFlow<UiState>`（或 `LiveData<UiState>`），View 层用 `collectAsState()`（Compose）或 `observe()`（传统 View）来订阅。状态每次变化，UI 自动根据新的 UiState 对象重绘整个页面。和 MVP 的「Present 主动调 View 方法」相比，可观察状态消除了「漏通知某个 UI 控件」的风险——因为所有控件都是从同一个 State 对象派生出来的。
   </GlossaryItem>
-  <GlossaryItem term="责任边界">
-    代码中可以被讨论、测试、review
-    和文档共同保护的分界线。它决定“谁该改、谁不该改”。
+  <GlossaryItem term="AAC ViewModel">
+    Android Architecture Components 中的 ViewModel 实现，提供基于 `ViewModelProvider` 的实例管理。它是 MVVM 在 Android 上最常用的 ViewModel 实现，也能搭配 Hilt/Koin 实现构造函数注入。和 Jetpack Compose 的 `viewModel()` compose function 一起使用时，Compose 能自动感知 ViewModel 的生命周期。
+  </GlossaryItem>
+  <GlossaryItem term="UiState 密封类">
+    用 Kotlin sealed class 完整描述一个页面所有可能状态的模式。每个子类代表一种页面状态（Loading/Content/Error/Saved 等），每个子类都携带该状态下所需的完整数据（Content 状态携带 title/description/isSaving/errorMessage）。UI 层通过 `when(state)` 对照子类分支渲染对应界面，编译器在漏写分支时会报错（exhaustive when），消除「忘处理某种状态」的 bug。
+  </GlossaryItem>
+  <GlossaryItem term="配置变更存活">
+    Activity 在设备旋转、语言切换等配置变更时被系统 destroy 后重新 create——但 ViewModel 不会被销毁。ViewModel 内部的所有数据保持不变，进行中的协程（在 `viewModelScope` 中的）不会被取消。这个能力让 Android 应用在配置变更时保持了完整的 UX 连续性：用户旋转屏幕、回来看到的状态和旋转前一模一样，不需要手动 `onSaveInstanceState` 序列化/反序列化。
   </GlossaryItem>
 </Glossary>
 

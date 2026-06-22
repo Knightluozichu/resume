@@ -3,103 +3,265 @@ title: OSS 中设计者的角色
 type: A
 section: 团队协作与设计基础
 order: 5
-description: OSS 里的设计者不是只画图，而是让陌生贡献者也能找到入口、遵守边界、通过 review。
+description: 开源世界里，设计者的职责不是画最漂亮的架构图，而是用模块边界、命名约定和审查清单让陌生贡献者不需要画图就能遵守设计。
 demo: true
 math: false
 sourceUrl: https://peaks.cc/architecture_patterns
 draft: false
 ---
 
-{/* 知识点清单：OSS/贡献路径/模块边界/Review Guide；原书章节：第5章 OSSにおける設計者の役割。每个知识点必须落到本章专属图或 Stepper。 */}
+{/* 知识点清单：OSS / 贡献路径 / 模块边界 / Review Guide / 示例代码执行规则 / 约定驱动一致性。
+   viz 形态：OssContributionMapDiagram 主图 + AndroidDesignLab(mode="team-map") 交互分步 + Stepper 动画拆解。
+   Term 进 Glossary：OSS、贡献路径、模块边界、Review Guide、示例代码执行规则。 */}
 
 <Objectives>
-
-- OSS 里的设计者不是只画图，而是让陌生贡献者也能找到入口、遵守边界、通过 review。
-- 能用本章图示复述：新人看到 issue → 文档指向入口模块 → 示例和命名约定约束实现 → review 用设计原则反馈。
-- 能判断：规则越多越专业，结果新人根本不知道从哪里开始。
-
+- 能画出从 issue 到第一个 PR merge 的贡献者全路径，并在路径上标出架构文档应该在哪些节点为陌生人提供指引
+- 能解释：为什么「在 800 行的代码规范文件中堆砌规则」不如「在代码入口包放一个写给人看的 README + 一份示例」
+- 能回答：当贡献者的 PR review 未通过时，设计者的正确做法是「在 PR comment 里详细解释约束理由」还是「补充模块文档到仓库里」
 </Objectives>
 
-## 本章专属图
+## 为什么 OSS 里的设计者不是「画图的」
 
-OSS 里的设计者不是只画图，而是让陌生贡献者也能找到入口、遵守边界、通过 review。 先看图，再谈模式名。图里最重要的不是节点颜色，而是谁负责输入、判断、状态和输出。
+你在一个陌生的城市下了火车，手机没电了。你看不到地图、打不了导航、也联系不到任何人。唯一能依赖的，是站台上的出口指示牌——它可能只有一句话：「中央广场方向 → 3 号出口」。
 
-<OssContributionMapDiagram />
+这个指示牌设计得好不好，取决于一件事：它能不能让一个第一次来到这个城市、没有任何本地知识的人，看着它就能走到目的地。它不需要解释这个城市的城市建设历史、不列出每个街道的命名缘由——它只需要在最关键的分叉口，放一个箭头、写两个字。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把图里的步骤拖到最后，本章哪条边界最应该写进 review
-  规则？
-</Callout>
+<Term def="Open Source Software 开放源码软件——贡献者来自世界各地，背景、时区、母语都不同。他们不会通读整个项目文档，也没有产品经理向他们解释业务背景。设计在这种场景中的任务不是「画最全的架构图」，而是「在最长项中陌生人最可能迷路的岔口，各放一个箭头」。">OSS</Term> 中的设计者，就是那个在站台上放箭头的人。你的架构图再漂亮，如果贡献者打开代码后不知道「这个 issue 对应的代码在哪个文件」——那这份设计就是在发挥 0 作用。
 
-## 分步动画：OSS 中设计者的角色
+这也是为什么本章不讲 UML 图画法、不讲设计模式的名称选择。本章讲的是三个最实际的东西：贡献路径、模块边界、审查指南。
+
+## 核心概念：三个让陌生人也能写代码的设计工具
+
+### 贡献路径：从 issue 到 PR merge 的完整导航
+
+<Term def="从贡献者看见一个 issue 开始，到他们找到对应代码、本地构建、修改、提交 PR、通过 review 直到 merge 的整条路线。好的贡献路径让这条路短而清楚——每一步都有明确的文档抬头、文件名、验证命令。">贡献路径</Term> 是一个写给人看的东西，不是写机器的。它放在仓库根目录的 `CONTRIBUTING.md` 里，或者 `packages/` 目录下的每个子包入口 `README.md` 里。
+
+好的贡献路径长什么样？它不说废话，直接告诉贡献者：
+
+```
+# CONTRIBUTING.md —— 贡献路径（节选）
+
+## 你看到了一个 issue「修复 Todo 列表的空数据闪烁」
+
+### 第一步：找到对应代码
+这个 issue 涉及的代码在 `packages/todo/src/main/java/com/example/todo/`。
+
+核心入口：`TodoListFragment.kt`（列表页面）和 `TodoRepository.kt`（数据层）。
+
+### 第二步：本地构建
+```bash
+./gradlew :packages:todo:assembleDebug
+```
+
+### 第三步：找到要改的方法
+空数据闪烁问题是由数据拉取速度慢造成的——在数据到达之前，UI 已经渲染了空列表。
+
+需要改的方法是 `TodoListFragment.kt` 里的 `observeList()`——在数据达到前插入一个 shimmer 加载占位。
+
+### 第四步：提交 PR 前自检
+- [ ] 在 `:packages:todo` 下运行 `./gradlew test`
+- [ ] 确认用 `./gradlew lint` 没有新的 Lint 警告
+- [ ] PR 标题前缀用 `fix(todo): 消息体`
+```
+
+注意：每一个路径节点都说清楚了下一步是什么——文件路径、方法名、验证命令——没有模棱两可的「可以参考 XXX 模块」。这就是贡献路径的力量：它把「找到一个能改的地方」从 30 分钟的不确定探险变成了 3 分钟的按图索骥。
+
+### 模块边界：不是「封代码」的，是「保协作」的
+
+<Term def="代码中可以安全修改的区域分界线。在 OSS 中模块边界的第一重意义不是技术上的封装，而是协作上的保护——边界告诉陌生人「这个区域你可以自由改动」，以及「这个区域的约定请遵守」。">模块边界</Term> 在 OSS 中的意义和在公司内部项目里完全不同。
+
+公司团队里，一个 Platform 模块改了接口签名，团队里有 8 个人在下午 3 点钟群聊里就能对好。但在 OSS 里，改 Platform 模块的一个接口签名，可能意味着拉脱维亚的一位贡献者在这一年来写的所有 PR 全部编译失败——而且他 7 天后才看到代码。
+
+所以 OSS 中的模块边界必须做到两点：
+1. **对外暴露的接口签名变更必须 backward-compatible**。不是「好像不会破坏什么」，而是「在 CI 里通过检测确认所有下游模块的编译测试全 Green」
+2. **内部实现可以自由重构**——因为内部实现被模块边界保护，外面的贡献者不依赖内部实现，所以设计者可以放心改动
+
+在代码里，这意味着：
+
+- **稳定接口**（Contributor API）用 `sealed` 类或 `@RestrictTo` 保护——不允许贡献者直接继承/扩展，只能在具体方法里用明确的参数组合调用
+- **内部实现**（Internal）明确标注为「贡献者不需要看这里」——用 `@VisibleForTesting` 申明其可见性的范围，用 `internal` 可见性修饰符替代 `public`
+- **边界测试**是强制性的，不在贡献者 PR 的责任范围内——边界测试由核心维护者写，并作为 CI 的一部分每次改上游模块时必跑
+
+### Review Guide：不要说「你怎么这么想」，说「这个仓库里这么做」
+
+<Term def="审查者和贡献者共享的规则清单——说明什么改动是允许的、什么边界不允许跨越、什么约定必须遵守。它不用解释「为什么会有这个约定」，只用告诉贡献者怎么改能通过审查。">Review Guide</Term> 是 OSS 设计者最重要的产出物之一，而它必须满足一条铁律——**规则的前提不是「你理解了这个设计原则」，而是「你按这个格式改了就能通过」**。
+
+这意味着一份 Review Guide 不应该写成：
+
+> ❌「请遵循 Clean Architecture 的依赖反转原则」
+
+而应该写成：
+
+> ✅「这个仓库的依赖方向是 Fragment → ViewModel → Repository。如果你发现自己的改动需要 Fragment 直接 import Retrofit，把它改成 Fragment →（通过 ViewModel 提供的回调）→ ViewModel → Repository。具体做法见 CONTRIBUTING.md 第三步。」
+
+第一行对陌生贡献者来说是白噪——他不认识 Clean Architecture 那本书，不会理解依赖反转。第二行告诉他：如果 X 方向错了，应该怎么修——关键词是「改为……」这样的行动计划，不是「请遵循……」这样的哲学语录。
+
+### 示例代码就是执行规则
+
+和 Review Guide 同等重要（甚至更重要）的是 **示例代码**——一个被标注好注释的、真实可运行的完整示例，放在 `samples/` 目录里。
+
+这份示例的目的不是展示「这个库的所有功能」——那是 API 文档的职责。示例的目的非常具体：**贡献者的第一份 PR 把这份示例 copy 了一个结构、改了具体的业务内容——交上来就能通过**。
+
+```kotlin
+// samples/todo-list/TodoListViewModel.kt —— 贡献者入门示例（节选）
+
+/**
+ * # 贡献者入口示例：如何用本仓库的架构写一个列表页 ViewModel
+ *
+ * 你只需要：
+ * 1. 复制这个文件的命名和目录结构（packages/你的功能名/...）
+ * 2. 改成你的业务数据类名
+ * 3. 改 loadData() 方法里的 Repository 调用
+ *
+ * 不用改：
+ * - state/sealed class 的结构（我们要求所有 ViewModel 输出 UiState）
+ * - viewModelScope 的使用方式（不要 import GlobalScope）
+ * - 异常捕获的模式（用 Result<T> 包装，统一错误处理）
+ */
+class TodoListViewModel(
+    private val repository: TodoRepository
+) : ViewModel() {
+
+    // [约定] 所有 ViewModel 的状态流命名规则：{domain}UiState
+    private val _state = MutableStateFlow<TodoListUiState>(TodoListUiState.Loading)
+    val state: StateFlow<TodoListUiState> = _state.asStateFlow()
+
+    // ...
+}
+```
+
+这个文件的注释里每一行都是在告诉陌生人「你只需要改这里——剩下的不用动」。当贡献者读完这份示例、打开自己的 PR 时，Review Guide 写的「你必须使用 sealed UiState 模式」不再是抽象要求——他已经在示例里看到了自己应该怎么实现。
+
+## 交互演示：从 issue 到 PR merge 的贡献者全路径
+
+<AndroidDesignLab mode="team-map" title="OSS 团队地图实验室" story="一个外部贡献者从看到 issue 到 PR merge 的完整旅程——在哪一步需要架构文档帮助" currentStep={1} />
+
+## 分步动画：贡献者旅程中的 4 个关键岔口
 
 <Stepper>
-  <Step title="1. 新人看到 issue">
+  <Step title="第一个岔口：看到 issue——决定要不要做、有没有能力做">
     <OssContributionMapDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    贡献者打开 GitLab/GitHub Issues，翻到一个 tag 为 `good-first-issue` 的条：Todo 列表页面在 400 行以上，需要拆分成 Fragment + ViewModel + Repository。
+
+    假设没有架构文档：
+    - 贡献者不知道 `ViewModel` 在这个仓库里有什么特殊要求（必须 sealed UiState？可以用 LiveData 吗？）
+    - 贡献者不知道 400 行的 Activity 能不能改——担心触碰了别人已经在改的模块
+    - 贡献者不知道提交 PR 前要跑什么测试命令
+
+    贡献者可能打开 `build.gradle` 看看依赖、扫一下目录结构——然后关闭 tab。这个 issue 就沉了。不是因为贡献者能力不行，而是陌生代码库的「信息黑洞」淹没了他。
+
+    现在假设 **贡献路径文档** 到位：
+    - issue 模板里直接链接到 `CONTRIBUTING.md#todo-module` 段落：「这个 issue 的改动涉及 `packages/todo/`，请先看这一节的架构说明」
+    - 架构说明的第一行是模块边界图——用颜色标注了「你可以自由修改的代码（TodoListFragment.kt）」和「请提交核心维护者 review 后才能改的代码（TodoRepository.kt）」
+    - 最后一行是可拷贝的 bash 命令：「如果只想验证你的改动是否破坏现有功能，跑：`./gradlew :packages:todo:test`——这是在 CI 上也会跑的命令」
+
+    贡献者用 3 分钟读完了这条路径，5 分钟后 fork 了仓库——因为他知道了「这是一个我能做的事」。
 
   </Step>
-  <Step title="2. 文档指向入口模块">
+  <Step title="第二个岔口：本地开发——不知道怎么跑项目、不知道入口方法在哪">
     <OssContributionMapDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    贡献者 fork 完、clone 到本地了。执行 `./gradlew assembleDebug`——一次成功。这是运气好。打开 AS 看 `packages/todo/src/main/java/` 目录，里面有 50 个文件。哪个是入口？哪个是自己等下要改的？
+
+    如果 README 里有一行「入口是 `TodoListFragment.kt`，负责加载列表。拆分列表的核心方法就在这个文件里的 `setupRecyclerView()` 旁边」——贡献者就有方向了。
+
+    但如果 README 说「本项目采用 Clean Architecture + MVVM 模式」——贡献者什么也没得到。模式名给他提供了零指引——他不知道 Clean Architecture 在这里长什么样、MVVM 在这里怎么写。
+
+    这时**示例代码**就是救命稻草：贡献者打开 `samples/todo-list/` 目录，发现里面有一个完整的、跑着成功的 ViewModel + Fragment 的示例。他花了 10 分钟看完示例的注释，弄清了：ViewModel 必须用 `sealed UiState`、Fragment 必须用 `viewModel.state.collectAsStateWithLifecycle()`、Repository 必须用 `suspend fun` 返回 `Result<T>`——这三件事是本仓库里看不见的规则。现在他知道了，就可以开始改代码。
 
   </Step>
-  <Step title="3. 示例和命名约定约束实现">
+  <Step title="第三个岔口：提交 PR——不知道 PR 格式、不清楚 review 预期">
     <OssContributionMapDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    贡献者改好了 TodoListFragment，逻辑调通了。提交 PR 的那一刻，他打开 GitHub Create PR 页面——空白文本域。
+
+    如果 `PR_TEMPLATE.md` 里有要求：标题必须加前缀（`fix(todo):` 或 `refactor(todo):`），Body 必须包含：
+    - 改了什么文件、什么方法（一行）
+    - 自检项目（测试通过 ✅ / Lint 通过 ✅ / 本地 compiles ✅）
+    - 附一张截图（如果是 UI 改动）
+
+    贡献者照着填了。10 分钟后 bot 自动跑 CI，15 分钟后 review 开始。
+
+    假设没有 PR 模板——贡献者的 PR 标题是 `fixed bug`，body 为空。Reviewer 花了 10 分钟才判断出「这个改动是把一个 400 行的 Fragment 拆成了 Fragment + ViewModel + Repository」——这 10 分钟纯属浪费。更糟的是，可能 Reviewer 因为 body 为空直接关掉了 PR。贡献者从此不会再给这个仓库贡献。不是因为代码不好，而是因为「PR 格式」这个小岔口没有指示牌。
 
   </Step>
-  <Step title="4. review 用设计原则反馈">
+  <Step title="第四个岔口：Review comment——被要求修改但不知道为什么">
     <OssContributionMapDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    Reviewer 留了 3 条 comment：
+    1. 「请用 `sealed UiState` 替代单独的几个 `LiveData<Boolean>`」
+    2. 「这里不能用 `GlobalScope.launch`，请用 `viewModelScope`」
+    3. 「文件的包名要改成 `packages.todo.feature_detail`，不要放在根包下」
+
+    现在 reviewer 面临一个选择——每个 comment 后面要解释原因吗？
+
+    Review Guide 的存在就是为了解决这个问题。在 Review Guide 里，config 1 和 2 的规则是：
+
+    - `LiveData<Boolean>` 禁止用于承载 UI 状态 → **应改为** `sealed UiState` → **示例** 见 `samples/todo-list/TodoListUiState.kt` 的第 3-20 行
+    - `GlobalScope.launch` 禁止在 ViewModel 中出现 → **应改为** `viewModelScope.launch` → **原因** 见 `docs/threading-guide.md` 的协程范围选择部分
+
+    在 PR comment 里，reviewer 只需要留一行文字：
+    > 请改 `sealed UiState` 并用 `viewModelScope`。具体做法见 samples/todo-list/ TodoListUiState.kt 第 3-20 行和文档 threading-guide.md。
+    > 这两个是本仓库的硬约定——如果看到其他 PR 用 LiveData/GlobalScope 也请提醒我们。
+
+    贡献者看到这条 comment——他理解了：这不是个人偏好，而是整个仓库的规则；而且有人告诉他在哪学、看什么示例。他花了 5 分钟改了代码，push 了一个新 commit。第三次 review 直接通过。
+
+    这就是 OSS 设计者的闭环：**不是把知识塞进贡献者的脑袋，而是在每个岔口放一个足够清楚的指示牌**。
 
   </Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="开放源码协作场景。参与者背景不同，所以入口、命名和 review 规则必须更明确。">
-  OSS
-</Term>
-是本章入口。它必须能解释团队协作成本，而不是只解释类图形状。
-
-<Term def="一条能被 review、测试和文档共同保护的代码分界线。">责任边界</Term>
-是共同验收线：边界画不清，模式名再漂亮也没用。
-
 ## 常见误区
 
 <Callout type="trap">
-  <strong>现象 →</strong> 规则越多越专业，结果新人根本不知道从哪里开始。{" "}
-  <strong>原因 →</strong> 只讨论实现，没有讨论职责边界。 <strong>修法 →</strong>{" "}
-  回到本章图，把事件、状态、结果和失败路径都标出来。
+  **现象 →** 代码规范文件有 800 行——类命名、包命名、方法行数、参数数量、异常处理风格、注释格式、数据库查询规范、网络请求重试策略……每条规则都有理由，每句都很正确。但打开 `CONTRIBUTING.md` 只有一行「请遵守我们的代码规范」。结果：陌生的贡献者翻开这个规范文件，800 行规则意味着他有 800 件可能做错的、会被打回的事。他选择不贡献。**原因 →** 混淆了「规范」和「导航」。规范是给已经在这个仓库 commit 过 10 次的常驻贡献者看的（他们需要精确的边界条件）。导航是给从来没碰过这个仓库的陌生人看的（他们需要的是「第一步做什么、第二步做什么」的动词序列，不是规则表）。**修法 →** 规则越少，贡献越多。贡献路径（CONTRIBUTING.md 的导航部分）最多 300 字。不提供「什么不能做」——提供「怎么做能过」的路径。把规则分为两层：入口层（贡献路径的导航）+ 深化层（Review Guide + 示例代码，在后续 PR 中逐渐暴露）。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象 →</strong> 图能播放，但讲不出本章故事。 <strong>原因 →</strong>{" "}
-  只看节点，没有看数据和责任如何移动。 <strong>修法 →</strong>{" "}
-  用“谁做决定、谁能测试、谁负责展示”重讲一遍。
+  **现象 →** 一个贡献者的 PR 反复改了 5 遍还没通过——每次 review 都指出新的约束。到第 5 条时，贡献者默默没再给仓库发新 PR。Reviewer 觉得「我在保护代码质量」——但本质是在把所有的学习负担推到贡献者一个人身上。**原因 →** 设计者没有在贡献路径的起点就提供足够清楚的约束——这些约束存在 reviewer 的脑袋里，却没有写进 CONTRIBUTING.md、没有示例代码、也没有可被机器检查的 CI 规则（如 lint rule）。贡献者靠「试错」来学习规则——而 OSS 贡献者没有 tolerance for 5 轮 review 回改。**修法 →** 规则应该在 CI 上可执行。如 lint check 捕获 `GlobalScope.launch` 用法、detekt 检查 UiState sealed class 规范、spotless 自动格式化为统一代码风格。机器发现的规则不需要贡献者试错。剩下的、只能 reviewer 发现的规则——写到 Review Guide 里，详细到「给一段改前的代码 + 改后的代码对照」的程度。不是用语言讲「应该怎么做」，而是让人对照看差异，在 diff 里逐行看变化。
 </Callout>
 
 ## 小结与练习
 
-- 本章核心：OSS 里的设计者不是只画图，而是让陌生贡献者也能找到入口、遵守边界、通过 review。
-- 本章故事：新人看到 issue → 文档指向入口模块 → 示例和命名约定约束实现 → review 用设计原则反馈。
-- 本章练习：写一个贡献者从 issue 到 PR 的路径，并标出哪里需要架构文档帮忙。
+- OSS 中设计者的第一职责不是画架构图，而是在每个陌生人可能迷路的岔口提供一个导航指示——贡献路径 / 模块边界 / 审查指南三件套
+- 贡献路径是一张按图索骥的地图：issue → 对应代码 → 本地构建 → 有哪些约定 → 怎么提交 PR。每一步有明确的文件路径、方法名和验证命令
+- 模块边界的核心价值是保护协作——接口签名变更 backward-compatible、内部实现可自由重构
+- Review Guide 和示例代码共同工作：Review Guide 说「改这个」，示例代码说「改成这样」
 
 <Exercises>
-  <Answer question="本章图示解决了什么团队问题？">
-    它把隐藏在代码里的职责边界外显出来，让 review、测试和新人接手都有共同参照。
-  </Answer>
-  <Answer question="本章最危险的误用是什么？">
-    规则越多越专业，结果新人根本不知道从哪里开始。
-    修法是先画边界，再决定类、接口、状态和测试替身。
-  </Answer>
   <Answer question="写一个贡献者从 issue 到 PR 的路径，并标出哪里需要架构文档帮忙。">
-    画出输入、判断、状态、输出和失败路径；再写一句 review 规则保护这条边界。
+    1. Issue 看到「修复 400+ 行 TodoListFragment 的可读性」
+       → 需要：issue 模板内嵌链接到 CONTRIBUTING.md 对应段落，说明这个 issue 涉及的文件和方法
+
+    2. Fork + Clone 到本地、尝试构建
+       → 需要：README 里的「构建命令」部分——写在第一屏，贡献者复制粘贴就能跑（别藏在 README 底部）
+
+    3. 在几百个文件里找到要改的方法
+       → 需要：贡献路径文档明确告知「要改的是 `TodoListFragment.kt` 的第 N-N+N 行」，以及「注意不要动旁边的 `TodoRepository.kt`——它归核心维护者管辖」
+
+    4. 看到约束（UiState 模式、viewModelScope、Result 包装）
+       → 需要：示例代码（samples/todo-list/ 目录）——贡献者可以直接复制这部分的目录结构和模式，换成自己的业务内容
+
+    5. 提交 PR
+       → 需要：PR 模板自动预填格式（标题前缀、body 提示词），消除「不知道怎么写 PR body」的 uncertainty
+
+    6. Review 收到 comment 要求修改
+       → 需要：Review Guide 里每个常见 comment 格式化为「改前 → 改后 + 示例文件行号」，reviewer 直接粘贴 review guide 中的 template
+  </Answer>
+  <Answer question="为什么「规范文件越长越好」是 OSS 设计里的一个陷阱？">
+    OSS 贡献者不是读完了全部规范才开始写代码的——他们把代码拉下来、在 fork 里试着改，被 reviewer 打回来才知道自己做错了。如果规范有 800 行，贡献者第一次试错就是一个巨大的心理负担：他会觉得「我做 800 件事里可能错了 400 件」。这种 uncertainty 让人退缩。
+
+    好的 OSS 设计正好相反：在贡献路径层面，只给出最必要的 3-4 条「怎么做能过」的行动指南（不是规则），让贡献者有一个快速成功的体验。随着贡献者在这个仓库活跃度提升（连续 3 次 PR），再逐渐暴露更深层的规则（通过 Review Guide 的深化版本）。这叫渐进暴露——不是一次性抛全部的约束，而是随着贡献者对这个仓库越来越熟练，逐步把更细的规则「解锁」出来。
+  </Answer>
+  <Answer question="当贡献者的 PR review 未通过时，设计者的正确做法是？">
+    不是单纯在 PR comment 里解释为什么这个约束存在——这会让 PR thread 变成一次一对一「教育 session」，十几个 PR 下来 reviewerburnout 必然发生。正确做法是三步走：
+
+    ① 在 PR comment 里留一条简洁的指示——链接到 Review Guide 的对应段落 + 示例代码的行号，告诉贡献者「做法是这样，这是仓库里的硬约定」
+
+    ② 判断这个「约束」在 CI 里能不能自动化。如果能（如 GlobalScope → viewModelScope 检测），给仓库加一条 lint rule；如果不能，确认它在 CONTRIBUTING.md 的「约定」部分有清晰描述
+
+    ③ 如果同一个约束在 5 个以上 PR 里都被 reviewer 指出——那就是 CONTRIBUTING.md 没说清楚，或者 Review Guide 写得太模糊。修正文档，而不是继续靠 reviewer 的人力去逐个教
   </Answer>
 </Exercises>
 
@@ -107,21 +269,19 @@ OSS 里的设计者不是只画图，而是让陌生贡献者也能找到入口�
 
 <Glossary>
   <GlossaryItem term="OSS">
-    开放源码协作场景。参与者背景不同，所以入口、命名和 review 规则必须更明确。
+    开源软件协作——贡献者来自全球，背景、时区、母语各不相同。贡献者不会通读项目文档，没有产品经理解释业务背景。对于 OSS 设计者来说，最要紧的设计产出不是 UML 图，而是在贡献路径上为陌生人提供的导航指示。
   </GlossaryItem>
   <GlossaryItem term="贡献路径">
-    从 issue 到本地运行、修改、测试、提交 PR
-    的路线。好的架构会让这条路短而清楚。
+    从贡献者看到一个 issue 开始，到他们找到对应代码、构建、修改、测试、提交 PR、通过 review、被 merge 的完整导航链。一条好的贡献路径：每步都有明确的「去哪个文件、跑哪条命令、遵守什么约定」。详见本章「贡献路径」小节。
   </GlossaryItem>
   <GlossaryItem term="模块边界">
-    贡献者可以安全修改的范围。边界清晰时，review 不需要重新解释整套系统。
+    代码中可以让贡献者安全修改的区域的边界标识。在 OSS 中，模块边界的首要任务不是技术上的封装，而是保护协作——它告诉陌生人哪些代码区域可以自由改、哪些约定必须遵守、哪些区域的改动需要核心维护者的 review。好的边界对外部接口保证 backward-compatible，对内部实现允许自由重构。详见本章「模块边界」小节。
   </GlossaryItem>
   <GlossaryItem term="Review Guide">
-    审查者和贡献者共享的规则清单，说明什么改动可接受、什么边界不能越过。
+    审查者和贡献者共享的规则清单——不说哲学只说行动。Contributor 该怎么做能通过 review。每一条规则都格式化为：规则 → 应如何改为 → 示例在哪个文件哪一行。Review Guide 是所有 reviewer 复用 comment 的单个来源——避免「每个 reviewer 用自己的语言重新解释」造成不一致。详见本章「Review Guide」小节。
   </GlossaryItem>
-  <GlossaryItem term="责任边界">
-    代码中可以被讨论、测试、review
-    和文档共同保护的分界线。它决定“谁该改、谁不该改”。
+  <GlossaryItem term="示例代码执行规则">
+    用真实可运行的代码示例来执行约定（不是文档里说的规定）。贡献者复制示例、改成自己的业务内容——只要保持相同的结构和抽象模式，PR 就能通过。示例代码的关键在于：注释不但解释「这里为什么这么写」，还写「不用改哪些部分」和「哪些部分要换成你的业务内容」。详见本章「示例代码就是执行规则」小节。
   </GlossaryItem>
 </Glossary>
 

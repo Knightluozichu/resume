@@ -649,6 +649,7 @@ import { TeamArchitectureMappingDiagram } from "./diagrams/TeamArchitectureMappi
 import { AacLifecycleDiagram } from "./diagrams/AacLifecycleDiagram";
 import { SealedStateDiagram } from "./diagrams/SealedStateDiagram";
 import { DecisionMatrixDiagram } from "./diagrams/DecisionMatrixDiagram";
+import { ArchitectureDecisionMatrixDiagram } from "./diagrams/ArchitectureDecisionMatrixDiagram";
 import { AppBasicStructureDiagram } from "./diagrams/app-basic-structure-diagram";
 import { MvpFlowDiagram } from "./diagrams/mvp-flow-diagram";
 import { MvvmFlowDiagram } from "./diagrams/mvvm-flow-diagram";
@@ -666,14 +667,13 @@ import { KnnDiagram } from "./diagrams/KnnDiagram";
 import { TreeDiagram } from "./diagrams/TreeDiagram";
 import { BalancedTreeDiagram } from "./diagrams/BalancedTreeDiagram";
 import { AlgorithmNextStepsDiagram } from "./diagrams/AlgorithmNextStepsDiagram";
+import { OssContributionFlowDiagram as OssContributionMapDiagram } from "./diagrams/OssContributionFlowDiagram";
 import {
   AacLifecycleStateMachine,
   AndroidScreenAnatomyDiagram,
-  ArchitectureDecisionMatrixDiagram,
   FluxUnidirectionalFlowDiagram,
   KotlinUiStateDiagram,
   MvpVsMvvmCompareDiagram,
-  OssContributionMapDiagram,
   RefactorStranglerDiagram,
   TeamArchitectureBoardDiagram,
 } from "./android-patterns/design-pattern-diagrams";

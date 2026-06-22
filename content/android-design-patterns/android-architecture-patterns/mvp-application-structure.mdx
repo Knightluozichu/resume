@@ -3,103 +3,284 @@ title: MVP 模式应用构成
 type: C
 section: Android 架构与设计模式
 order: 2
-description: MVP 让 Activity 退成被动显示器，把判断和编排放到可测试的 Presenter。
+description: 把 Activity 退成被动显示器，让 Presenter 通过 View Interface 接收事件、编排业务、返回结果——全程不碰 Android 控件。
 demo: true
 math: false
 sourceUrl: https://peaks.cc/architecture_patterns
 draft: false
 ---
 
-{/* 知识点清单：MVP/View Interface/Presenter/Model；原书章节：第2章 MVPパターンのアプリ構成。每个知识点必须落到本章专属图或 Stepper。 */}
+{/* 知识点清单：MVP / View Interface / Presenter / Contract 模式 / 可测试性。
+   viz 形态：MvpFlowDiagram 主图 + AndroidDesignLab(mode="mvp") 交互分步 + Stepper 动画拆解。
+   Term 进 Glossary：MVP、View Interface、Presenter、Contract 模式、Model。 */}
 
 <Objectives>
-
-- MVP 让 Activity 退成被动显示器，把判断和编排放到可测试的 Presenter。
-- 能用本章图示复述：用户点击保存 → View 把事件转给 Presenter → Presenter 校验并调用 Repository → View 显示成功或错误。
-- 能判断：Presenter 只是换名字的 Activity，继续持有 Android UI 细节。
-
+- 能从一个 Activity 中抽出 `TodoDetailContract`，写出 View 接口和 Presenter 类
+- 能解释：为什么 Presenter 不能持有 Activity 引用——它看到的应该只是一份接口合约
+- 能回答：当用户点击「保存」后网络请求失败，整个错误重试流程在 Presenter 里该长什么样、由谁测试
 </Objectives>
 
-## 本章专属图
+## 为什么需要 MVP
 
-MVP 让 Activity 退成被动显示器，把判断和编排放到可测试的 Presenter。 先看图，再谈模式名。图里最重要的不是节点颜色，而是谁负责输入、判断、状态和输出。
+你在遥控器上按下「下一集」按钮。遥控器不需要知道电视机的电路板是怎么工作的——它只说「用户按了下一集」。电视收到这个信号，自己去决定要不要切频道、切之前要不要保存观看进度、如果网络断了要不要弹出重试提示。遥控器的职责只有一个：把用户的物理动作翻译成一条意图，然后交给另一边的逻辑去执行。
 
-<MvpVsMvvmCompareDiagram />
+现在想象把遥控器和电视的所有电路堆在同一个黑盒子里——按钮底下直接焊着解码芯片，解码芯片边上连着网络模块，网络模块旁边绑着扬声器。一个部件坏了，你换不了，也测不了。这就是 Fat Activity 的根本问题。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把图里的步骤拖到最后，本章哪条边界最应该写进 review
-  规则？
-</Callout>
+MVP 做的事，就是在这两者之间插入一个 Translator——名叫 <Term def="Model-View-Presenter。View 被动显示，不做判断；Presenter 接收所有用户事件，编排业务逻辑，通过 View 接口把结果写回 UI。Presenter 不持有任何 Android 控件引用，因此可以纯 JVM 测试。">Presenter</Term>。View 是遥控器，Presenter 是电视的决策中心。它们之间通过一份 <Term def="Presenter 看到的 View 合约——一组意义明确的方法名（如 showError、showProgress、navigateToDetail），隐藏了所有 Android 具体实现细节。因为它是接口，测试时可以用 Fake 实现替代真 Activity。">View Interface</Term> 来通信——View 保证「我会实现这几个方法」，Presenter 保证「我只通过这几个方法让你更新画面」。
 
-## 分步动画：MVP 模式应用构成
+## 核心概念：MVP 三要素
+
+### View Interface：Presenter 看到的「遥控器面板」
+
+MVP 和 Fat Activity 之间最本质的区别，在于 Presenter **不认识 Activity**。它只认识一份接口：
+
+```kotlin
+// 这份接口就是 Presenter 看到的全部 View 能力
+interface TodoDetailView {
+    fun showTitle(title: String)
+    fun showSaveEnabled(enabled: Boolean)
+    fun showLoading(isLoading: Boolean)
+    fun showError(message: String)
+    fun navigateToDetail(todoId: String)
+}
+```
+
+为什么这是一个巨大的质变？因为一旦 Presenter 只知道接口而不知道 Activity，你就可以做一件在 Fat Activity 里根本做不到的事——**在 JVM 上直接测试业务逻辑，不启动设备、不 mock Android 框架**：
+
+```kotlin
+@Test
+fun `点击保存后标题为空时不应调用 save，应展示错误`() {
+    // 用一个假 View，它什么也不画，只记录「Present 让我做了什么」
+    val fakeView = FakeTodoDetailView()
+    val presenter = TodoDetailPresenter(fakeView, fakeRepository)
+
+    presenter.onSaveButtonClicked(title = "", description = "some desc")
+
+    // Presenter 没有调 Repository 的 save 方法（因为标题为空）
+    verify(fakeRepository, never()).saveTodo(any())
+    // View 收到了展示错误消息的指令
+    assertTrue(fakeView.lastErrorMessage.contains("标题不能为空"))
+}
+```
+
+这个测试代码运行时不需要任何 Android 设备。它在 JVM 上跑，毫秒级完成。而 Fat Activity 里相同的逻辑测试，需要启动整个 Activity、等待生命周期、mock 所有 Android 系统服务——往往需要几十秒。
+
+### Presenter：不做 UI，只做「决策调度」
+
+Presenter 的三条核心使命：
+
+1. **收事件**：View 层把「用户做了什么」以语义化方法调用的方式传进来（`onSaveButtonClicked`、`onDeleteConfirmed`）
+2. **做编排**：Presenter 决定先校验再保存还是先保存再校验、失败要不要重试、重试几次
+3. **回结果**：通过 View Interface 把「屏幕现在该是什么样」写回去（`showLoading(true)`、`showError("网络不可用")`）
+
+```kotlin
+class TodoDetailPresenter(
+    private val view: TodoDetailView,
+    private val repository: TodoRepository
+) {
+    fun onSaveButtonClicked(title: String, description: String) {
+        // ① Presenter 自己决定「能不能保存」——不依赖 View 的判断
+        if (title.isBlank()) {
+            view.showError("标题不能为空")
+            return
+        }
+
+        // ② 通知 View「现在要做保存了」
+        view.showLoading(true)
+        view.showSaveEnabled(false)
+
+        // ③ 调 Repository 做数据操作（主线程安全由协程处理）
+        // 注意：这里不调 runOnUiThread、不调 Handler——Presenter 不自知在哪个线程上
+        coroutineScope.launch {
+            repository.saveTodo(Todo(title = title, description = description))
+                .onSuccess { todo ->
+                    view.showLoading(false)
+                    view.navigateToDetail(todo.id)
+                }
+                .onFailure { error ->
+                    view.showLoading(false)
+                    view.showSaveEnabled(true)
+                    view.showError(error.message ?: "保存失败，请重试")
+                }
+        }
+    }
+}
+```
+
+Presenter 代码的每一行都可以在单元测试中验证。`title.isBlank()` → `showError` 是一条路径，`repository.saveTodo().onSuccess` → `navigateToDetail` 是另一条路径——测试需要覆盖全部路径，这在 MVP 里只要写不同条件的 mock 就能轻松做到。
+
+### Contract 模式：VP 之间的宪法
+
+当项目里有十几个 Presenter 和 View 时，问题出现了：「这个 View 接口里到底有哪些方法？Presenter 的 `onXxx` 方法签名应该是什么？」如果没有统一的约定，每个开发者按自己的风格来——有的叫 `showErrorMessage`、有的叫 `displayError`、有的叫 `toastError`。在 review 时，这就变成了无穷无尽的命名争论。
+
+<Term def="MVP 中的接口聚合模式——将 View 接口和 Presenter 方法签名放在一个统一的 Contract 接口中，让团队在 review 和重构时有唯一权威参照。Contract 本身就是一份关于「这个页面谁负责什么」的协议。">Contract 模式</Term> 解决的就是这个问题：
+
+```kotlin
+interface TodoDetailContract {
+    // ① View 能做的事（被 Presenter 调用）
+    interface View {
+        fun showTitle(title: String)
+        fun showSaveEnabled(enabled: Boolean)
+        fun showLoading(isLoading: Boolean)
+        fun showError(message: String)
+        fun navigateToDetail(todoId: String)
+    }
+
+    // ② Presenter 能做的事（被 View 调用）
+    interface Presenter {
+        fun onViewCreated(todoId: String)
+        fun onSaveButtonClicked(title: String, description: String)
+        fun onDeleteConfirmed()
+    }
+}
+```
+
+Contract 的价值在于：**它是一个页面在代码层面的「宪法」**。Review 时检查的点非常明确：「这个方法写在了 Contract 里吗？如果不在，它本应属于 View 还是 Presenter？」一个不在 Contract 里的方法，意味着它越过了 VP 之间的职责边界。
+
+### 数据流：一条保存操作的完整旅程
+
+> 猜一猜：在 MVP 模式下，用户点击保存按钮后，`setText("保存成功")` 这行代码是谁写的？是 View 自己写的还是 Presenter 让它写的？看下面的图再动手试试。
+
+现将用户一次「编辑标题 → 点击保存 → 看到结果」的完整流程可视化如下：
+
+<MvpFlowDiagram />
+
+这条数据流的核心特征是**单向**：用户触摸 → View 转成 Intent → Presenter 编排 → Repository 执行 → Presenter 收到结果 → Presenter 调用 View 接口更新画面。箭头永远从 View 到 Presenter（事件方向）和从 Presenter 到 View（结果方向），不存在 View 自己判断该不该保存、也不存在 Presenter 直接操作 `TextView.text`。理解了这个单向循环，就理解了 MVP 为什么可以让「业务逻辑」和「Android 框架」彻底分家。
+
+## 交互演示：MVP 保存流程
+
+<AndroidDesignLab mode="mvp" title="MVP 保存流程实验室" story="一个 TODO 编辑页的完整保存链路：从按钮点击到 Presenter 编排再到 View 更新" currentStep={1} />
+
+## 分步动画：MVP 保存的 4 个关键决定
 
 <Stepper>
-  <Step title="1. 用户点击保存">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第一步：用户点击保存——View 不判断，只转发">
+    <MvpFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    用户填好了标题「买牛奶」和描述「记得选脱脂的」，点下了保存按钮。
+
+    在 Fat Activity 的世界里，这个 `onClick` 监听器会做很多事情：校验标题长度、调 Room 插入、切换 `startActivity`、更新 loading 状态——全部挤在同一个匿名内部类里。而在 MVP 的世界里，`onClick` 监听器只做一件事：
+
+    ```kotlin
+    saveButton.setOnClickListener {
+        presenter.onSaveButtonClicked(
+            title = titleEditText.text.toString(),
+            description = descEditText.text.toString()
+        )
+    }
+    ```
+
+    **View 在这里的判断为零**。它不知道标题多长才合法，不知道保存要花多少时间，也不知道保存成功后该跳到哪个页面。它只是一个中继器：把字符序列从输入框搬到 Presenter 的入口。这就是 View Interface 作为「遥控器」的角色。
 
   </Step>
-  <Step title="2. View 把事件转给 Presenter">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第二步：Presenter 编排——先本地校验，再异步保存">
+    <MvpFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    Presenter 收到 `onSaveButtonClicked("买牛奶", "记得选脱脂的")`。现在轮到它做判断：
+
+    1. **本地检验**：标题「买牛奶」不为空、长度 ≥ 1 → 通过。如果标题为空，Presenter 直接调 `view.showError("标题不能为空")` 并返回——网络请求永远不会发起。
+    2. **状态切换**：Presenter 调 `view.showLoading(true)` + `view.showSaveEnabled(false)`。保存按钮变灰、进度条出现——这是 View 必须做的界面维护，但**要不要做这个切换是 Presenter 决定的**。
+    3. **异步保存**：Presenter 调 `repository.saveTodo(...)`。这个方法可能耗时 200ms 或 3000ms——Presenter 不知道也不在乎。它只等 Repository 回结果。
+
+    关键洞察：**Presenter 不知道 saveTodo 是走的 SQLite 还是 OkHttp**。Repository 把实现细节全藏起来了。你在测试 Presenter 时注入一个 Fake Repository，它能立刻返回成功或失败——这就是 MVP 可测试性的根基。
 
   </Step>
-  <Step title="3. Presenter 校验并调用 Repository">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第三步：成功或失败——Presenter 逐条处理结果">
+    <MvpFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    保存完成，Repository 返回 `Result.success(todo)` 或 `Result.failure(NetworkException)`。Presenter 接管：
+
+    **成功路径**：
+    - 调 `view.showLoading(false)` —— 关掉进度条
+    - 调 `view.navigateToDetail(todo.id)` —— 告诉 View 跳转到详情页
+    - **不调** `view.showError(...)` —— 成功时不展示任何错误
+
+    **失败路径**：
+    - 调 `view.showLoading(false)` —— 关掉进度条
+    - 调 `view.showSaveEnabled(true)` —— 恢复保存按钮（用户可以重试）
+    - 调 `view.showError("保存失败，请检查网络后重试")` —— 弹出错误提示
+
+    注意两件事：
+
+    1. **Presenter 没有调用 `Toast.makeText()`**。Error 消息是一个字符串，View 用它去显示 Toast、Snackbar 还是 Dialog——Presenter 管不着也不想管。这是 MVP 最关键的抽象：Presenter 只说「什么错了」，不说「怎么展示错」。
+    2. **失败时 Presenter 恢复了保存按钮**。如果不恢复，用户只能退出页面再进来重试——这是糟糕的 UX。但这个「要不要恢复」的判断仍然在 Presenter 里，因为它是一个业务决策（也许某些场景应该禁用直到网络恢复？），而不是 UI 美化问题。
 
   </Step>
-  <Step title="4. View 显示成功或错误">
-    <MvpVsMvvmCompareDiagram />
+  <Step title="第四步：View 执行渲染——界面自动跟随 Presenter 的指令">
+    <MvpFlowDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    现在 Presenter 已经把对 View 的每一次指令都发出去了。View 的最后一个责任是**忠实执行这些指令，不加任何自己的判断**。
+
+    在 Activity 里，这意味着 View Interface 的每一个方法都由 Activity 直接实现：
+
+    ```kotlin
+    class TodoDetailActivity : AppCompatActivity(), TodoDetailContract.View {
+        override fun showLoading(isLoading: Boolean) {
+            progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        }
+
+        override fun showError(message: String) {
+            Snackbar.make(binding.root, message, Snackbar.LENGTH_LONG).show()
+        }
+
+        override fun navigateToDetail(todoId: String) {
+            startActivity(TodoDetailActivity.newIntent(this, todoId))
+        }
+
+        override fun showTitle(title: String) {
+            titleTextView.text = title
+        }
+
+        override fun showSaveEnabled(enabled: Boolean) {
+            saveButton.isEnabled = enabled
+        }
+    }
+    ```
+
+    在每个方法里，Activity 只做 Android 框架级别的操作——把 `String` 设到 `TextView`、把 `Boolean` 映射成 `VISIBLE/GONE`。这里不出现任何 `if (title.isEmpty())` 这样的业务判断代码。判断已经由 Presenter 在第 2 步和第 3 步里做过了——Activity 只是 Presenter 的「画笔」，不是「画家」。
+
+    这就是 MVP 的完整闭环：用户点击 → View 转发 → Presenter 编排 → Repository 执行 → Presenter 回结果 → View 渲染。每一步的职责清晰到可以逐个被单元测试覆盖。
 
   </Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="Model-View-Presenter。View 被动显示，Presenter 接收事件、编排业务并调用 View 接口输出结果。">
-  MVP
-</Term>
-是本章入口。它必须能解释团队协作成本，而不是只解释类图形状。
-
-<Term def="一条能被 review、测试和文档共同保护的代码分界线。">责任边界</Term>
-是共同验收线：边界画不清，模式名再漂亮也没用。
-
 ## 常见误区
 
 <Callout type="trap">
-  <strong>现象 →</strong> Presenter 只是换名字的 Activity，继续持有 Android UI
-  细节。 <strong>原因 →</strong> 只讨论实现，没有讨论职责边界。{" "}
-  <strong>修法 →</strong> 回到本章图，把事件、状态、结果和失败路径都标出来。
+  **现象 →** Presenter 的构造函数里传了一个 `Context`，理由是「我要在这里格式化日期字符串，需要 `DateFormat.getDateInstance()`」。结果 Presenter 在单元测试里跑不起来——`Context` 必须 mock 整个 Android 框架才能创建。**原因 →** 把「我需要某些能力」等同于「我需要 Android 框架」。日期格式化是纯 Java 逻辑，`java.time.format.DateTimeFormatter` 可以在 JVM 上直接用。真实的误解是开发者对 Android 框架的惯性依赖：一遇到需要工具方法的场景，第一直觉是传 Context。**修法 →** Presenter 的依赖列表里但凡出现 Android 框架类（Context、Activity、Fragment、View、Resources、SharedPreferences），一律打回。需要系统能力时通过接口抽象注入（如 `interface DateTimeProvider`），实现方在 Android 端提供具体实现，测试时用 Fake 替代。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象 →</strong> 图能播放，但讲不出本章故事。 <strong>原因 →</strong>{" "}
-  只看节点，没有看数据和责任如何移动。 <strong>修法 →</strong>{" "}
-  用“谁做决定、谁能测试、谁负责展示”重讲一遍。
+  **现象 →** View 接口里有三十多个方法——`showTitle`、`hideTitle`、`showTitleError`、`hideTitleError`、`showTitleLoading`、`hideTitleLoading`……Presenter 事无巨细地指挥 View 的每一像素变化。结果是：View 接口膨胀到不可维护，Presenter 变成了一个对 UI 控件逐一下令的「遥控器操作员」而非「决策者」。**原因 →** 没有区分「业务状态」和「UI 表现」。标题为空是业务状态，标题的 TextView 左边要不要额外展示一个红色感叹号是 UI 表现。Presenter 应该告诉 View「当前状态是标题验证失败」，让 View 自己决定怎么展示这个状态。**修法 →** 把 View 接口的方法从「控件级别的更新指令」提升为「状态级别的渲染指令」——合并 `showTitleError` 和 `hideTitleError` 为一个 `renderTitleValidation(valid: Boolean, message: String?)`，让 View 自己处理这个状态的 UI 映射。
 </Callout>
 
 ## 小结与练习
 
-- 本章核心：MVP 让 Activity 退成被动显示器，把判断和编排放到可测试的 Presenter。
-- 本章故事：用户点击保存 → View 把事件转给 Presenter → Presenter 校验并调用 Repository → View 显示成功或错误。
-- 本章练习：从 Activity 抽出 `TodoDetailContract.View` 和 `Presenter`，写一个 fake View 测试。
+- MVP 的本质是把 Activity 从「导演」降级为「演员」：它不需要知道剧本（业务逻辑），只需要按照 Presenter 的指令演好每一场戏（渲染界面）
+- View Interface 是 MVP 可测试性的核心——因为 Presenter 只认接口不认 Activity，测试时提供 Fake 实现即可在 JVM 上秒级验证所有业务逻辑
+- Contract 模式把 VP 之间的职责边界固化成接口——不在 Contract 里的方法就是越界，在 review 中有统一判断标准
+- 成功路径和失败路径必须在 Presenter 里各自覆盖——「保存失败后能不能重试」是业务决策，不是 UI 细节
 
 <Exercises>
-  <Answer question="本章图示解决了什么团队问题？">
-    它把隐藏在代码里的职责边界外显出来，让 review、测试和新人接手都有共同参照。
+  <Answer question="从一个现有 Activity 中抽出 TodoDetailContract.View 接口和 Presenter 类，写一个 fake View 测试。">
+    1. 打开你的 Android 项目中任意一个 Activity
+    2. 找到「用户点击某个按钮后触发数据操作」的那个 onClick 方法
+    3. 列出这个方法里做的所有事情（UI 更新、数据操作、页面跳转）
+    4. 把「展示相关」的操作（setText、visibility 切换）抽进 View 接口
+    5. 把「判断和编排」的逻辑（if/else、try/catch、API 调用）搬进 Presenter
+    6. 用 Fake View（一个只记录方法调用次数的简单实现）代替真 Activity，写至少 3 个测试：成功保存、保存失败、标题为空时拒绝保存
+
+    验收标准：测试完全不需要启动 Android 设备，在 JVM 上 `./gradlew test` 即可通过。
   </Answer>
-  <Answer question="本章最危险的误用是什么？">
-    Presenter 只是换名字的 Activity，继续持有 Android UI 细节。
-    修法是先画边界，再决定类、接口、状态和测试替身。
+  <Answer question="Presenter 里可以持有 Context 吗？如果不能，为什么？需要系统能力时怎么办？">
+    不能。Presenter 持有 Context 意味着：第一，单元测试必须引入 Android 框架依赖（Robolectric 或 Instrumented Test）；第二，Presenter 的生命周期和市场环境绑死——Context 被销毁时 Presenter 也可能意外收到空引用。
+
+    需要系统能力时（如获取当前语言、读写 SharedPreferences、格式化数字），用接口抽象注入：定义 `interface LocaleProvider { fun getCurrentLocale(): Locale }`，Android 端实现为 `LocaleProviderImpl` 读 `Resources.getConfiguration().locale`，测试时用 Fake 返回固定值。原则：Presenter 依赖的一切，都必须能被 Fake 替代。
   </Answer>
-  <Answer question="从 Activity 抽出 `TodoDetailContract.View` 和 `Presenter`，写一个 fake View 测试。">
-    画出输入、判断、状态、输出和失败路径；再写一句 review 规则保护这条边界。
+  <Answer question="View 接口膨胀到 30+ 方法时怎么办？你如何判断哪些方法应该合并？">
+    合并标准：如果一组方法操作的始终是同一个「概念区域」（如标题的展示/校验/加载状态），合并它们为一个以「状态」为粒度的方法。例如 `showTitleError(msg)` + `hideTitleError()` → `renderTitleValidation(valid: Boolean, message: String?)`。
+
+    更根本的方法是回到 MVVM 的思路——一个 State 密封类就能消除 View 接口膨胀的全部 root cause。但如果你选择继续用 MVP，至少要在 Contract 里按概念区域分组方法，并限制每组的暴露方法数 ≤ 4。
   </Answer>
 </Exercises>
 
@@ -107,22 +288,19 @@ MVP 让 Activity 退成被动显示器，把判断和编排放到可测试的 Pr
 
 <Glossary>
   <GlossaryItem term="MVP">
-    Model-View-Presenter。View 被动显示，Presenter 接收事件、编排业务并调用 View
-    接口输出结果。
+    Model-View-Presenter。View 层被动显示，不做任何业务判断——它只把用户事件转发给 Presenter，并按 Presenter 的指令更新界面。Presenter 接收事件、编排业务逻辑、调用 Model 访问数据，最后通过 View Interface 把结果写回 UI。Presenter 不持有任何 Android 控件引用，因此可以在纯 JVM 上单元测试。Model 层负责数据持久化和网络访问，对 Presenter 暴露 Repository 等抽象接口。
   </GlossaryItem>
   <GlossaryItem term="View Interface">
-    Presenter 看到的 View 合约。它让 Presenter 可以用 fake view
-    测试，而不依赖真实 Activity。
+    Presenter 看到的 View 契约——一组意义明确、以业务语义命名的方法（如 showError、navigateToDetail），隐藏了所有 Android 实现细节。因为它是接口，测试时可以注入 Fake View 替代真 Activity。View Interface 的方法应该以「状态描述」为粒度（如 renderTitleValidation），而非「控件操控」为粒度（如 hideTitleError）。详见本章「View Interface」小节。
   </GlossaryItem>
   <GlossaryItem term="Presenter">
-    画面逻辑的调度员。它不持有 Android 控件，只调用 View 接口和业务接口。
+    画面逻辑的调度员，MVP 三要素的决策中心。它接收 View 转发来的事件（不关心是点击还是长按），做编排（先校验还是先保存、失败重试几次），通过 View Interface 把结果写回 View（不关心是用 Toast 还是 Snackbar 展示）。Presenter 的构造参数只能包含纯 Java/Kotlin 接口——绝不能出现 Context、Activity、Fragment、View 或任何 Android 框架类。
+  </GlossaryItem>
+  <GlossaryItem term="Contract 模式">
+    MVP 中的接口聚合模式——将 View Interface 和 Presenter 的方法签名统一放在一个 Contract 接口中，作为页面级别的「代码宪法」。Contract 解决了两个问题：① 避免 VP 之间方法命名混乱；② 为 review 提供统一的边界检查标准（不在 Contract 里的方法 = 越界）。详见本章「Contract 模式」小节。
   </GlossaryItem>
   <GlossaryItem term="Model">
-    数据和业务能力的提供方，可以是 Repository、UseCase 或领域对象。
-  </GlossaryItem>
-  <GlossaryItem term="责任边界">
-    代码中可以被讨论、测试、review
-    和文档共同保护的分界线。它决定“谁该改、谁不该改”。
+    MVP 中负责数据持久化和网络访问的部分。对外暴露抽象的 Repository 接口（如 TodoRepository），让 Presenter 只依赖接口而非具体实现。Model 层的实现可以是 Room + Retrofit + SharedPreferences，但 Presenter 只知道「我能通过这个接口完成数据的增删改查」。
   </GlossaryItem>
 </Glossary>
 

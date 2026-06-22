@@ -3,103 +3,193 @@ title: 差分开发中的设计方法
 type: C
 section: 测试重构与现代化
 order: 4
-description: 差分开发要先保护现有行为，再用适配层和小 PR 逐步替换内部结构。
+description: 不停止业务迭代的同时重构——先用回归测试保护旧行为，再用适配层包裹旧接口，最后用小 PR 切片替换。每一步都是可回退的。
 demo: true
 math: false
 sourceUrl: https://peaks.cc/architecture_patterns
 draft: false
 ---
 
-{/* 知识点清单：差分开发/Strangler Fig/适配层/回归保护；原书章节：第4章 差分開発における設計。每个知识点必须落到本章专属图或 Stepper。 */}
+{/* 知识点清单：差分开发 / Strangler Fig 绞杀榕模式 / 适配层 Facade / 回归测试先行 / 小切片迁移。
+   viz 形态：RefactorStranglerDiagram 主图 + AndroidDesignLab(mode="refactoring") 交互分步 + Stepper 动画拆解。
+   Term 进 Glossary：差分开发、Strangler Fig、适配层、回归保护、小切片迁移。 */}
 
 <Objectives>
-
-- 差分开发要先保护现有行为，再用适配层和小 PR 逐步替换内部结构。
-- 能用本章图示复述：线上 bug 暴露旧边界 → 先加回归测试 → 包一层接口或 Facade → 小切片替换并删除旧分支。
-- 能判断：新架构必须全量替换旧架构，导致 PR 巨大且无法 review。
-
+- 能为一个现有功能画出「旧代码→适配层→新代码」的迁移路线图，标注每一步的测试保护点
+- 能解释：为什么「全量替换旧架构」的新 PR 必然被 review 打回——以及如何切成 3 个可 review 的小 PR
+- 能回答：线上发现旧逻辑的 bug 时，应该先在旧代码上修、在适配层内修、还是在新代码里修——以及为什么
 </Objectives>
 
-## 本章专属图
+## 为什么需要差分开发
 
-差分开发要先保护现有行为，再用适配层和小 PR 逐步替换内部结构。 先看图，再谈模式名。图里最重要的不是节点颜色，而是谁负责输入、判断、状态和输出。
+你家的水管老化了，水压不稳定，偶尔会漏水。你叫来一个施工队，他们说：整栋楼的水管全部拆掉，重新铺一遍全新的——为期 3 个月，期间全楼停水。
 
-<RefactorStranglerDiagram />
+这不是笑话，而是大多数「重构项目」的真实状况。团队下决心「我们要把这个模块改成 MVVM」，然后开一个 feature branch，拉了 2000 行 diff，写了 40 个新文件。3 周后，当这个分支终于准备好合并时——主分支上已经又改了 30 个文件，和这个重构分支冲突得不可开交。PM 问这几天为什么没交付需求？团队低着头说：在重构。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把图里的步骤拖到最后，本章哪条边界最应该写进 review
-  规则？
-</Callout>
+<Term def="在不停止业务迭代的前提下，采用小增量方式逐步改造旧代码架构。核心要求：每一步都是可发布、可回退的独立版本，不能出现「大爆炸重构」式的全量替换。">差分开发</Term> 的思想正好相反：永远不停水。先把旧的水管接口包一个适配器（让新接口和旧接口形状一样），然后一段一段地换每户人家的水管——今天换 3 楼的，明天换 5 楼的。万一 5 楼换完发现水压还是不稳，就把它再改回用旧水管接上。整个楼从来没停过水，谁都没察觉到在修水管。
 
-## 分步动画：差分开发中的设计方法
+在 Android 开发中，旧水管 = 你现在的代码（可能是 Fat Activity 或 MVP 里的一坨混合逻辑）。新水管 = 你要迁移到的新模式（ViewModel + sealed UiState + Repository）。适配器 = <Term def="夹在新旧代码之间的翻译层，用于隔离旧接口的形状。它对外提供新接口（如 ViewModel 的 StateFlow），对内仍调用旧逻辑（如旧 Presenter 的 view.showXxx 方法）。代码新旧两端互不感知。">适配层</Term>（Facade）。一段一段地换 = 小 PR 切片。
+
+## 核心概念：Strangler Fig 绞杀榕
+
+### 自然界中的绞杀榕——以及它教给软件工程的事
+
+绞杀榕是一种热带雨林中的植物。它的种子被鸟带到一棵大树的主干上，生根发芽后开始向下长——根沿着大树的主干一直向地面延伸，同时叶子向上抢占光照。
+
+这个过程的关键在于**时间的非对称性**：绞杀榕每长出一根新茎，就分担一部分旧树干的负荷。旧树干依然活着、依然在传输养分。但渐渐地，绞杀榕的根系越来越发达，最终完全包裹了旧树干——到了这个阶段，旧树干早已被替换，绞杀榕接手了全部的养分输送。旧树干枯死腐烂，而绞杀榕已经长成了一棵完整的新树。
+
+软件工程中的 <Term def="绞杀榕式架构迁移——新系统（绞杀榕）逐步包围旧系统（旧树），逐块接管流量，直到旧系统可被完全移除。不中断服务，每步可回退。">Strangler Fig 模式</Term> 和这个过程的每一步都完美对应：
+
+| 自然过程 | 软件工程中的对应 |
+|----------|-----------------|
+| 榕树种子落在树干上 | 在旧代码上接入一个适配层——不动旧逻辑 |
+| 第一根茎向下延伸，接管养分 | 选择一条功能路径（如「加载详情页」），在新架构中实现 |
+| 榕树根系壮大，养分全换成新路线 | 逐一迁移每个子功能，旧代码逐渐变为空壳 |
+| 旧树干枯死倒掉 | 旧代码完全无引用后，安全删除 |
+
+### 适配层：新旧之间唯一的翻译器
+
+适配层是整个 Strangler Fig 模式的核心——它应该是一段**非常短的、不包含任何业务逻辑的代码**。它的唯一工作是：用旧的输入类型 + 旧的方法签名把请求转发给旧实现（或新实现），再用新的输出类型把返回结果转换成新格式。
+
+```kotlin
+// 适配层——翻译，不判断
+class TodoDetailAdapter(
+    private val oldPresenter: OldTodoDetailPresenter,   // 旧代码
+    private val newViewModel: TodoDetailViewModel?,     // 新代码（可能为 null，表示还没迁移这条功能）
+    private val featureFlag: FeatureFlag                 // 控制切换
+) {
+    // 对外暴露新接口（ViewModel 的 StateFlow），对内决定调旧还是新
+    val state: StateFlow<TodoDetailUiState> = if (featureFlag.isNewArchitectureEnabled) {
+        newViewModel!!.state
+    } else {
+        // 把旧 Presenter 的 LiveData 桥接到 StateFlow
+        oldPresenter.liveData.asStateFlow()
+            .map { translateToUiState(it) }
+            .stateIn(...)
+    }
+}
+```
+
+适配层的第二条关键规则：**不能有 if/else 分支在适配层里做业务决策**。适配层只有一种 if：`if (featureFlag.enabled) useNew else useOld`。任何超过这个范围的判断——如「如果用户已登录走新路径，否则走旧路径」——都是业务判断，必须下移到底层的 ViewModel 或 Presenter 里。
+
+### 回归测试先行：任何时候都不能缺少的安全网
+
+在 Strangler Fig 的任何一次迁移中，唯一能证明「新代码没有破坏旧行为」的手段就是 <Term def="使用自动化测试证明旧功能行为在代码变更后仍然保持一致。在差分开发中，回归测试先行是第一铁律：先有测试保护旧行为，再做迁移改代码。缺少回归测试的迁移 = 生产环境的风险赌博。">回归保护</Term>。规则很明确：
+
+1. **迁移前**：给要被替换的旧功能补上至少一个 Happy Path 测试 + 一个 Error Path 测试——不管旧代码多难测试，至少用 ActivityScenario 或 Robolectric 覆盖关键路径
+2. **迁移中**：每次小 PR merge 后立即跑全量回归套件。如果有任何旧功能的测试破坏了，说明迁移逻辑有问题——停下来 debug（不要继续迁下一条功能）
+3. **迁移后**：旧代码在完全移除时，同时把旧测试升级为新的（新测试应在同样的行为上跑，但断言对象从「旧 LiveData 里的字段」变为「新 StateFlow 里的 sealed UiState」）
+
+## 交互演示：Strangler Fig 迁移全流程
+
+> 猜一猜：一次典型的 Strangler Fig 迁移中，适配层存在的天数有多长？它应该在什么时候被删除？
+
+<AndroidDesignLab mode="refactoring" title="绞杀榕迁移实验室" story="一个旧 Todo 列表功能在三轮 PR 中逐步迁移到 AAC ViewModel 的全过程" currentStep={1} />
+
+## 分步动画：差分迁移的 4 个关键切片
 
 <Stepper>
-  <Step title="1. 线上 bug 暴露旧边界">
+  <Step title="第一片：加适配层 + 补回归测试——只动测试和接口，不动业务代码">
     <RefactorStranglerDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    假设当前代码是一个旧 `TodoListPresenter`，它直接从 Activity 里拿到 `getString()` 和 `SharedPreferences`，调用 Retrofit，然后调 `view.setList(items)`。
+
+    **第一片 PR 做的事**：
+    1. 先补回归测试。哪怕用 `ActivityScenario` 必须启动 Activity 才能测旧 Presenter——也至少覆盖「数据加载成功时 View 收到正确的列表项」和「网络错误时 View 收到错误回调」。这两条测试会跟随着整个迁移过程，每次 PR 都跑——它们是这个功能的「安全网」。
+    2. 创建 `TodoDetailAdapter` 类。它目前的逻辑简单得不能再简单——`if (featureFlag.enabled) → newViewModel.state else → translate(oldPresenter.state)`。因为 feature flag 默认关闭，生产环境依旧走旧 Presenter 路径。Adapter 自己对外暴露 `StateFlow<TodoListUiState>`。
+    3. 创建空的 `TodoListViewModel`，里面只有构造函数依赖和 `state` 字段的声明——还没有具体实现。
+
+    这个 PR 只有 100 行以内的增加，review 时没有争议——旧行为完全没变（feature flag 关闭），新东西只是一个不出现在生产路径上的空壳。
 
   </Step>
-  <Step title="2. 先加回归测试">
+  <Step title="第二片：迁移一条功能——新架构接管第一条业务链路">
     <RefactorStranglerDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    选择一条**独立、低风险、易验证**的功能作为第一个迁移目标。建议选择：数据加载的「成功路径」——这是最容易被测试验证的路径。
+
+    **第二片 PR 做的事**：
+    1. 在 `TodoListViewModel` 里完整实现「加载 Todo 列表」的全部逻辑：创建 `loadList()` 方法，调 `repository.getTodos()`，把结果映射为 `ListUiState.Content(items = ...)`，注入 `_state.value`。同时实现错误路径——网络失败时 `_state.value = ListUiState.Error(msg)`。
+    2. 写 ViewModel 单元测试：注入 Fake Repository，设置「成功返回 3 条 Todo」→ call `loadList()` → 断言 `state.value` 是 `Content` 且 `items.size == 3`。再测失败：Fake Repository 抛 HttpException → 断言 `state.value` 是 `Error` 且 `message` 包含「网络」。
+    3. 把 `FeatureFlag.isNewArchitectureEnabled` 在开发环境设为 true，用调试版本亲自走一遍列表加载——确保看到的数据和旧版一样。
+    4. **不要**在 PR 里删除旧的 Presenter 代码。旧代码和新代码在这个阶段同时存在——只是旧代码在生产环境的 feature flag 下仍然被调用。
+
+    Review 重点：新 ViewModel 的测试覆盖率是否 100% 覆盖了旧 Presenter 的已知行为。任何未测试到的旧行为路径都是一个潜在的「以后才发现但 blame 到新架构的回归 bug」。
 
   </Step>
-  <Step title="3. 包一层接口或 Facade">
+  <Step title="第三片：逐步切换流量——用 feature flag 或路由控制新旧比例">
     <RefactorStranglerDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    第二片验证完成后，团队获得了「新架构能跑的证明」。现在是逐步切流量的阶段。
+
+    **做法**：
+    1. 把 `featureFlag.isNewArchitectureEnabled` 改为阶段性开启——先在 5% 的 QA 测试设备上开启（通过 Firebase Remote Config 或后端配置控制）。监控 Crashlytics 的崩溃率和网络请求失败率——如果新架构引入的异常量超过旧架构，立即回退。
+    2. 如果 5% 阶段稳定一周，提升到 50%，再稳定一周，提升到 100%。
+    3. 在 100% 阶段稳定运行一个 sprint 后——此时的旧 Presenter 已经没有任何调用者。确认方法：在旧 Presenter 的所有方法里加入 `Firebase.logEvent("old_presenter_called")` 埋点，如果一周内没有事件出现，安全可删除。
+
+    注意：第三片不是一个「代码 PR」，甚至不是必须在代码仓库里体现的变化——它是部署和监控的工作。但它和代码同等重要，决定了 Strangler Fig 的最终成败：如果不能确认旧代码已经没有调用者就删除，留下的故障不会是人类能快速追溯的。
 
   </Step>
-  <Step title="4. 小切片替换并删除旧分支">
+  <Step title="第四片：删除旧代码——安全裁掉枯死的旧树干">
     <RefactorStranglerDiagram />
 
-    这一步的验收问题：谁拥有这个决定？谁能写测试证明它没有越界？
+    100% 流量稳定且旧代码埋点一周无事件→现在可以安全删除了。
+
+    **第四片 PR 做的事**：
+    1. 删除 `TodoListPresenter` 的 .kt 文件
+    2. 删除 `TodoDetailAdapter`——它现在只是一个恒定的 `return newViewModel.state`，适配层的使命已经完成
+    3. 把旧的 `ActivityScenario` 回归测试升级为只依赖 ViewModel 的纯 JVM 测试（删掉 Robolectric 依赖）
+    4. 如果旧 Presenter 有相关的 DI 模块（Dagger/Koin module），一并删除对应绑定
+
+    **非常重要**：删除旧代码的 PR 是迁移过程中的最后一个 PR。这意味着第四片和第一片之间至少隔了 1 到 2 个 sprint。在这个间隔里，旧代码一直没有被真正「动过」——只是在适配层背后一直运行着。任何人在任何时候说「我觉得新架构有问题」，立刻把 feature flag 降到 0，生产环境回到旧代码——这就是「可回退」的定义。
 
   </Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="在不停止业务迭代的情况下，一小片一小片改造旧代码。重点是可回退、可 review。">
-  差分开发
-</Term>
-是本章入口。它必须能解释团队协作成本，而不是只解释类图形状。
-
-<Term def="一条能被 review、测试和文档共同保护的代码分界线。">责任边界</Term>
-是共同验收线：边界画不清，模式名再漂亮也没用。
-
 ## 常见误区
 
 <Callout type="trap">
-  <strong>现象 →</strong> 新架构必须全量替换旧架构，导致 PR 巨大且无法 review。{" "}
-  <strong>原因 →</strong> 只讨论实现，没有讨论职责边界。 <strong>修法 →</strong>{" "}
-  回到本章图，把事件、状态、结果和失败路径都标出来。
+  **现象 →** 团队开了个分支叫 `feature/refactor-to-mvvm`，过了三周拉了一个 2000 行 diff 的 PR。Reviewer 看了 10 分钟就放弃了——变更量太大、涉及文件太多、无法判断任何一处改动是否破坏了旧行为。**原因 →** 混淆了「重构」和「迁移」。重构是在任何时间点都成立的那种小改动（重命名、提取方法、改参数顺序）——它不影响外部行为。而「架构迁移」是改变责任归属——它破坏了旧代码的外部行为签名。大规模迁移的一发 PR 意味着 reviewer 既要检查「有没有 bug」，又要检查「有没有破坏旧行为」——两件事都是脑力密集型，合并在一起就是不可 review 的。**修法 →** 遵守 4 片分步策略。每片 PR diff ≤ 300 行。Reviewer 每次只需要验证一件事：第一片检查回归测试覆盖，第二片检查新 ViewModel 实现，第三片是配置变更/非代码，第四片是删除。
 </Callout>
 
 <Callout type="trap">
-  <strong>现象 →</strong> 图能播放，但讲不出本章故事。 <strong>原因 →</strong>{" "}
-  只看节点，没有看数据和责任如何移动。 <strong>修法 →</strong>{" "}
-  用“谁做决定、谁能测试、谁负责展示”重讲一遍。
+  **现象 →** 适配层里写的不是 `if (flag) new else old`，而是 `if (user.isPremium) new else old`——把「用新架构」和「用户是 Premium」两个条件混在一起。结果线上报了一个 crash：用户从 Free 升级到 Premium 的瞬间，适配层同时切换代码路径，旧路径上的 LiveData 被新逻辑替换——UI 因为状态不对崩了。**原因 →** 适配层的职责是「根据 feature flag 选择路径」，不是「根据业务条件选择路径」。应该用两个独立的条件来判断：feature flag 控制「这次应该调用新对象还是旧对象」，业务条件在新对象内部判断（ViewModel 或 Repository 里处理 Premium 逻辑）。**修法 →** 适配层永远只判断 feature flag。业务条件必须在底层（新 ViewModel、新 Repository）里判断。适配层如果写业务条件 = 单点故障：一旦对这个业务条件的假设错误，新旧两边的路径同时受影响。
 </Callout>
 
 ## 小结与练习
 
-- 本章核心：差分开发要先保护现有行为，再用适配层和小 PR 逐步替换内部结构。
-- 本章故事：线上 bug 暴露旧边界 → 先加回归测试 → 包一层接口或 Facade → 小切片替换并删除旧分支。
-- 本章练习：给一个旧列表页设计 3 个 PR 的迁移计划：先加测试，再抽 Repository，再换 ViewModel。
+- 差分开发的核心不是「不要重构」，而是「不要在一次 PR 中做全量替换」。每一步都是独立可发版的增量，每一步都有回归测试保护
+- Strangler Fig 四阶段：适配层→迁移单功能→灰度切换→安全删除。适配层是翻译器不是决策器，feature flag 是开关不是业务条件
+- 回归测试先行是第一铁律——在迁移任何代码之前，旧行为必须被自动化测试覆盖
+- 旧代码埋点确认无调用者后才可以删除——「可能性删除」永远是事后追溯的灾难
 
 <Exercises>
-  <Answer question="本章图示解决了什么团队问题？">
-    它把隐藏在代码里的职责边界外显出来，让 review、测试和新人接手都有共同参照。
+  <Answer question="给一个旧列表页设计 4 个 PR 的迁移计划：从 Fat Activity 逐步迁移到 ViewModel + sealed UiState。">
+    PR1（≤150 行）：
+    - 给旧 Activity 列表加载功能补 2 个 Espresso/ActivityScenario 测试（成功加载 + 网络错误）
+    - 创建空的 TodoListViewModel（仅有构造函数依赖）
+    - 创建 FeatureFlag 接口（默认返回 false）
+
+    PR2（≤250 行）：
+    - 在 TodoListViewModel 里实现 loadList()：调 Repository.getTodos() → 映射为 sealed UiState
+    - 写 3 个 ViewModel 测试：成功返回列表、空列表、网络失败
+    - 创建 TodoListAdapter 暴露 `StateFlow<UiState>`，feature flag 关闭时走旧路径
+
+    PR3（非代码面向部署）：
+    - 配置 Firebase Remote Config 控制 feature flag 比例
+    - 5%→50%→100% 阶段性开启，每阶段监控 Crashlytics 数据
+
+    PR4（删除）：
+    - 删除旧 Presenter（确认埋点一周无事件）
+    - 删除适配层
+    - 把 Espresso/ActivityScenario 测试升级为纯 JVM ViewModel 测试
   </Answer>
-  <Answer question="本章最危险的误用是什么？">
-    新架构必须全量替换旧架构，导致 PR 巨大且无法 review。
-    修法是先画边界，再决定类、接口、状态和测试替身。
+  <Answer question="为什么不能在一次大 PR 里完成重构？为什么必须切小？">
+    一次大 PR 的问题有三重：① Reviewer 无法有效验证每个改动——2000 行 diff 意味着 reviewer 必须同时判断「有没有引入新 bug」和「有没有破坏旧行为」，两件脑力密集型工作在合并检查时互相干扰。② 一旦 merge，如果线上出问题，定位原因是新代码还是旧代码还是介于两者之间的部分——回溯代价极高。③ 大 PR 在 review 阶段停留数天甚至数周，这期间主分支继续往前迭代——当大 PR 最终 merge 时，冲突量可能超过了原始 diff。小 PR 每次 ≤300 行，reviewer 可以逐条检查归因，merge 后出问题立即可定位，冲突量忽略不计。
   </Answer>
-  <Answer question="给一个旧列表页设计 3 个 PR 的迁移计划：先加测试，再抽 Repository，再换 ViewModel。">
-    画出输入、判断、状态、输出和失败路径；再写一句 review 规则保护这条边界。
+  <Answer question="线上发现旧 Presenter 有 bug（已在适配层和新 ViewModel 同时存在的阶段），应该在旧代码修还是在适配层修还是在新的 ViewModel 修？">
+    在**新的 ViewModel 里修**，同时在适配层的翻译逻辑里加上相同的修正（如果适配层仍在使用旧路径的话）。原则是：只在新代码里产生净增量改动，旧代码保持冻结状态——它已经被标记为「将要删除」，此时在旧代码上修 bug 意味着你必须在删除旧代码时同时验证这个 bug 的修复有没有被遗漏在新路径里。
+
+    如果这个 bug 影响生产环境必须立即修（等不及新 ViewModel 的开发），先在旧代码上修作为 hotfix 紧急发布，然后**下一个 sprint 把相同的修复同步到新 ViewModel 的测试里**——确保删除旧代码时，这个 bug 修复不会丢失。
   </Answer>
 </Exercises>
 
@@ -107,20 +197,19 @@ draft: false
 
 <Glossary>
   <GlossaryItem term="差分开发">
-    在不停止业务迭代的情况下，一小片一小片改造旧代码。重点是可回退、可 review。
+    在不停止业务迭代的条件下，采用小增量方式逐步改造旧代码架构的开发方法论。核心理念：每一改造步骤都是一个可发布的独立版本（不出现「大爆炸重构」），每一步都有回归测试保护（先补安全网再改代码），每一步都有一个一键回退的开关（feature flag / 适配层）。详见本章「为什么需要差分开发」小节。
   </GlossaryItem>
   <GlossaryItem term="Strangler Fig">
-    绞杀榕式迁移：新实现包围旧实现，逐步接管流量，最后移除旧分支。
+    绞杀榕式架构迁移——新系统逐条功能包围旧系统，逐步接管流量，直到底层旧系统可被完全移除。四阶段：适配层→逐功能迁移→灰度切换→安全删除。模型源于自然界绞杀榕逐步包裹旧树干直至完全替换的生物学现象。Strangler Fig 的关键在于每步都是可观测的独立阶段。详见本章「核心概念」小节及分步动画。
   </GlossaryItem>
   <GlossaryItem term="适配层">
-    夹在新旧代码之间的翻译层，用来隔离旧接口形状，让迁移可以分批发生。
+    夹在新旧代码之间的翻译层，对外提供新接口（如 ViewModel 的 StateFlow），对内根据 feature flag 选择调用旧逻辑（如旧 Presenter）还是新逻辑（如新 ViewModel）。适配层的核心约束：不能包含业务判断（适配层里唯一的 if 是 feature flag 开关），不应存在超过几天以上（一旦旧代码被完全删除，适配层也应随之删除）。详见本章「适配层」小节。
   </GlossaryItem>
   <GlossaryItem term="回归保护">
-    用测试或监控证明旧行为没有被改坏，是重构前必须补上的安全网。
+    使用自动化测试证明旧功能行为在代码变更后仍然保持一致的手段。在差分开发中，回归测试先行是铁律：先编写覆盖旧行为的测试，再做代码迁移。缺少回归测试的迁移是在系统可用性上赌博——没人知道新代码是否破坏了任何旧功能。详见本章「回归测试先行」小节。
   </GlossaryItem>
-  <GlossaryItem term="责任边界">
-    代码中可以被讨论、测试、review
-    和文档共同保护的分界线。它决定“谁该改、谁不该改”。
+  <GlossaryItem term="小切片迁移">
+    将一次大规模架构迁移拆分为多个 ≤300 行 diff 的独立 PR 的策略。每片 PR 只改变一两件事（补测试/迁移单一功能/删旧代码），每片有独立验收标准，每片 merge 后整个系统仍然处于可发布状态。小切片迁移解决了「大 PR 无法 review」的协作瓶颈。详见本章分步动画的 4 个切片。
   </GlossaryItem>
 </Glossary>
 
