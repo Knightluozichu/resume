@@ -1,16 +1,16 @@
 # Checkpoint Progress
 
-- **Status**: Active on Phase 2A of 《剑指Offer》: Math & Recursion & List Node Deletion.
+- **Status**: Completed Phase 2A of 《剑指Offer》: Math & Recursion & List Node Deletion.
 - **Completed**:
   - Phase 1: Book Setup & Core 5 Chapters.
   - Task 1: Setup & SECTION_ORDER Configuration.
   - Task 2: 数值的整数次方 (power) Chapter & Review Questions.
   - Task 3: 打印从 1 到最大的 n 位数 (print-numbers) Chapter, Diagram & Review Questions.
   - Task 4: 删除链表节点 (delete-node) Chapter, Diagram & Review Questions.
-- **Active Task**: Task 5: Review Database Integration & Global Checks.
+  - Task 5: Review Database Integration & Global Checks. All checks (mdx-check, link-check, lint, svg-check, build) passed.
+- **Active Task**: None. Phase 2A is fully complete.
 - **Next Steps**:
-  - Run comprehensive verification scripts (mdx-check, link-check, lint, svg-check, build) on the worktree.
-  - Deploy to production using `./deploy.sh` and perform health checks.
+  - Merge the `coding-interviews-phase2a` branch into `main` and deploy.
 - **Modified Files**:
   - `src/lib/content.ts`
   - `content/coding-interviews/math/power.mdx`
