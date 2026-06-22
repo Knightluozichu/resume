@@ -1,0 +1,233 @@
+---
+title: 从尾到头打印链表
+type: C
+section: 链表
+order: 4
+description: 探索链表的逆序输出。对比利用系统调用栈的递归实现与利用 std::stack 或数组的显式栈实现，权衡其时空限制与栈溢出风险。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：单向链表遍历 / 递归回溯 / 系统栈帧 / 显式辅助栈 / 栈溢出风险 / 只读打印约束；原书章节：面试题6：从尾到头打印链表。 */}
+
+<Objectives>
+
+- 能解释单向链表单向遍历特性与逆序打印（后进先出）对栈结构的依赖关系。
+- 能描述递归回溯（利用系统栈）与显式辅助栈（利用堆内存）在处理超长链表时的空间安全性差异。
+- 能实现 C++（递归与 std::stack）和 TypeScript（数组模拟栈）的 `print-list-reverse` 算法，并在实现中严禁修改链表节点指针。
+
+</Objectives>
+
+## 直觉引入
+
+想象一下，你正沿着一条单向的、极其狭窄的地下溶洞小路往前探险。这条小路非常窄，你只能沿着前人的脚印一直往前走，无法在中途转身回头看。
+
+在向前走的过程中，如果你想在走出溶洞后，按照“从终点到起点”的相反顺序依次回忆并记录你经过的所有景点，你会怎么做？
+
+一种方法是，你在走进去的时候，每经过一个景点就在脚下放置一颗特殊的面包屑，并且在面包屑上写下序号。当走到溶洞的尽头（死胡同）时，你无法再前进了。这时你开始往回走，每往回走一步就捡起一颗面包屑，并把面包屑上的景点记录下来。因为你是从终点往回走，所以捡起面包屑的顺序正好与你走进去的顺序相反，实现了“从尾到头”的回溯。
+
+在计算机科学中，这个溶洞小路就是单向链表，而放置并回收面包屑的过程，就是利用栈或者递归来实现的逆序回溯。这章我们要解决的核心问题就是：如何在不破坏链表结构的前提下，优雅地逆序打印链表的所有元素。
+
+## 概念讲解
+
+在单向链表中，每个节点只保留了指向下一个节点的 `next` 指针。这意味着我们只能从头到尾进行单向遍历。如果我们想要“从尾到头”打印链表，面临的挑战是：**我们只有走到最后，才能知道尾节点的值；但此时我们已经越过了前面的所有节点。**
+
+由于“先遍历的后打印，后遍历的先打印”，这在逻辑上呈现出一种典型的 **先进后出（LIFO, Last In First Out）** 特征。因此，解决本题的核心工具就是**栈（Stack）**。
+
+### 方法 1：递归调用（系统调用栈）
+
+递归在本质上就是一种隐式的栈结构。当我们调用一个函数时，系统会在内存中压入一个 <Term def="存放当前活动子程序/函数调用状态的系统内存区域，每次函数调用都会压入一个栈帧，用于保存局部变量、返回地址和寄存器状态。">系统调用栈</Term>帧。
+
+对于逆序打印，我们可以设计如下的递归逻辑：
+1. **基准情况 (Base Case)**：如果当前节点为 `nullptr`，说明已经越过尾节点，直接返回。
+2. **递归阶段 (Recursive Step)**：先递归调用自己处理 `node->next`，让它去解决“后面所有节点的逆序打印”。
+3. **回溯阶段 (Backtracking Step)**：当下一层的递归调用返回后，再打印当前节点 `node->val`。
+
+$$
+\text{printReverse}(N_1) \to \text{printReverse}(N_2) \to \text{printReverse}(N_3) \to \text{Base Case} \to \text{print } 3 \to \text{print } 2 \to \text{print } 1
+$$
+
+- **时间复杂度**：$O(n)$，每个节点被访问一次。
+- **空间复杂度**：$O(n)$，递归深度为 $n$，系统栈中同时存在 $n$ 个栈帧。
+- **致命缺陷**：对于非常长的链表（例如含有几万个节点），函数嵌套层数过深，极易导致系统栈耗尽，触发编译或运行时的 <Term def="由于函数嵌套层数过深，导致系统调用栈空间耗尽，程序被迫异常中止的错误。">栈溢出</Term>（Stack Overflow）错误。
+
+### 方法 2：显式栈（辅助数组）
+
+为了消除递归带来的栈溢出风险，我们可以使用一个手动创建的 <Term def="在程序中手动创建并管理的数据结构（如 std::stack 或数组），用以模拟先进后出（LIFO）的执行流程，不占用系统调用栈空间。">显式栈</Term>（如 C++ 中的 `std::stack` 或 TS 中的数组）来模拟这个过程：
+
+1. **第一阶段（入栈）**：从头到尾遍历链表，每经过一个节点，就把它的值（或节点指针）压入栈中。
+2. **第二阶段（出栈）**：当遍历到链表末尾后，开始循环判断栈是否为空。只要栈不为空，就弹出栈顶的值并打印。
+
+- **时间复杂度**：$O(n)$，我们进行了一次正向遍历（入栈）和一次反向打印（出栈）。
+- **空间复杂度**：$O(n)$，需要一个大小为 $n$ 的辅助栈。
+- **核心优势**：显式栈使用的是堆内存（Heap），其容量上限远大于系统调用栈（通常只有几 MB），因此在面对超长链表时具有极佳的鲁棒性，不会导致程序崩溃。
+
+## 交互 Demo
+
+猜一猜：当链表长度非常大时，为什么显式辅助栈不会像递归那样导致系统崩溃？
+
+点击下方选项切换两种方案，通过单步调试理解递归系统栈帧与显式辅助栈的运行过程：
+
+<PrintListReverseDiagram />
+
+## 代码对照
+
+在面试中，除非面试官明确要求使用递归，否则推荐使用显式栈来规避栈溢出的风险。另外，**严禁修改链表指针**是本题的隐藏红线——通过反转链表再顺序打印虽然也能解决，但这是一个含有副作用的“破坏性只读”操作。
+
+以下是 C++（递归与显式栈）和 TypeScript（数组模拟栈）的具体实现对照：
+
+<CodeTabs>
+  <Tab label="C++ (递归实现)">
+```cpp
+#include <iostream>
+#include <vector>
+
+struct ListNode {
+    int val;
+    ListNode* next;
+    ListNode(int x) : val(x), next(nullptr) {}
+};
+
+class Solution {
+public:
+    // 递归版本：代码简洁，但存在系统栈溢出风险
+    void printListFromTailToHeadRecursive(ListNode* head) {
+        if (head == nullptr) {
+            return;
+        }
+        
+        // 先处理后继节点
+        printListFromTailToHeadRecursive(head->next);
+        
+        // 回溯时打印当前节点值
+        std::cout << head->val << " ";
+    }
+};
+```
+  </Tab>
+  <Tab label="C++ (显式栈实现)">
+```cpp
+#include <iostream>
+#include <stack>
+
+struct ListNode {
+    int val;
+    ListNode* next;
+    ListNode(int x) : val(x), next(nullptr) {}
+};
+
+class Solution {
+public:
+    // 显式栈版本：使用堆内存的 std::stack，防范超长链表下的栈溢出
+    void printListFromTailToHeadStack(ListNode* head) {
+        std::stack<int> nodes;
+        
+        // 第一步：正向遍历，将节点值依次入栈
+        ListNode* curr = head;
+        while (curr != nullptr) {
+            nodes.push(curr->val);
+            curr = curr->next;
+        }
+        
+        // 第二步：循环出栈并打印
+        while (!nodes.empty()) {
+            std::cout << nodes.top() << " ";
+            nodes.pop();
+        }
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript (数组模拟)">
+```typescript
+class ListNode {
+    val: number;
+    next: ListNode | null;
+    constructor(val: number) {
+        this.val = val;
+        this.next = null;
+    }
+}
+
+// 在 TS/JS 中，数组天然具备 push/pop 功能，可直接作为高效栈使用
+function printListFromTailToHead(head: ListNode | null): number[] {
+    const stack: number[] = [];
+    
+    // 正向遍历，将节点值压入栈
+    let curr = head;
+    while (curr !== null) {
+        stack.push(curr.val);
+        curr = curr.next;
+    }
+    
+    // 反向弹出，构建逆序输出结果
+    const result: number[] = [];
+    while (stack.length > 0) {
+        result.push(stack.pop()!);
+    }
+    
+    return result;
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 输入空链表（`nullptr`）时，程序直接崩溃或发生段错误（Segmentation Fault）。
+  <strong>原因 →</strong> 在递归基准判定中忽略了对空链表的首层校验，或者在显式栈遍历中，直接使用了 `curr->val` 而没有事先判定 `curr` 是否为空。
+  <strong>修法 →</strong> 在函数开头以及循环条件中，无条件增加 `if (head == nullptr)` 或 `while (curr != nullptr)` 的防护边界检查。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 面试官给出“只读打印”的限制后，考生为了省去 $O(n)$ 的辅助空间，直接原地反转链表（修改 `next` 指针），打印完毕后再试图反转回来。
+  <strong>原因 →</strong> 违反了<Term def="在遍历或输出数据结构的内容时，严禁修改任何指针或节点数据，保持数据结构原始状态不被破坏的操作约束。">只读打印</Term>的副作用限制。如果多线程并发访问链表，或者在逆序打印期间程序被中断，链表的物理结构将被永久破坏。
+  <strong>修法 →</strong> 严禁修改节点的 `next` 指针。应采用递归或辅助栈等非破坏性手段进行纯读取操作。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 在递归实现中，递归调用和打印语句的顺序写反了（先打印当前值，再递归）。
+  <strong>原因 →</strong> 混淆了前序遍历与后序遍历。先打印当前值会导致“顺序打印”而非“逆序打印”。
+  <strong>修法 →</strong> 确保 `printList(head->next)` 必须位于 `std::cout << head->val` 之前。
+</Callout>
+
+## 小结与练习
+
+- 单向链表逆序打印具有 **后进先出 (LIFO)** 特性，核心实现依赖于 **栈 (Stack)** 结构。
+- 递归方法调用系统栈实现最为简洁，但因栈大小受限，面对超长链表容易遭遇 **栈溢出 (Stack Overflow)**。
+- 显式栈方法在堆上开辟空间，容量大且安全，是工业级代码首选。
+- 在打印时应严格遵守 **只读打印** 原则，不可改变链表本身的结构。
+
+<Exercises>
+  <Answer question="如果面试官允许修改链表结构，且空间复杂度要求为 O(1)，应当如何实现逆序打印？">
+    如果允许修改链表结构，可以先通过“原地反转链表”算法，依次翻转所有节点的 `next` 指针。翻转完毕后，链表头部变成了原尾部，直接顺序遍历并打印即可。打印完成后，如果需要恢复链表，可以再次执行反转操作。这种方法的时间复杂度为 $O(n)$，空间复杂度为 $O(1)$。
+  </Answer>
+  <Answer question="除了显式栈和递归，还有其他不修改链表的逆序输出方案吗？">
+    有，例如“多重遍历法”。先正向遍历一遍链表，统计节点总数 $N$。然后使用双重循环，外层循环 $i$ 从 $N-1$ 递减到 0，内层循环每次从头节点向后走 $i$ 步并输出当前节点。此方法不需要额外存储空间，空间复杂度为 $O(1)$，但代价是时间复杂度退化为 $O(n^2)$。在实际开发中很少被采纳。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="系统调用栈">
+    存放当前活动子程序/函数调用状态的系统内存区域，每次函数调用都会压入一个栈帧，用于保存局部变量、返回地址 and 寄存器状态。详见「方法 1」节。
+  </GlossaryItem>
+  <GlossaryItem term="显式栈">
+    在程序中手动创建并管理的数据结构（如 std::stack 或数组），用以模拟先进后出（LIFO）的执行流程，不占用系统调用栈空间。详见「方法 2」节。
+  </GlossaryItem>
+  <GlossaryItem term="栈溢出">
+    由于函数嵌套层数过深，导致系统调用栈空间耗尽，程序被迫异常中止的错误。详见「常见误区」节。
+  </GlossaryItem>
+  <GlossaryItem term="只读打印">
+    在遍历或输出数据结构的内容时，严禁修改任何指针或节点数据，保持数据结构原始状态不被破坏的操作约束。详见「常见误区」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>

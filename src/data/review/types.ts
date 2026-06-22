@@ -162,6 +162,7 @@ export type ReviewChapterSlug =
   // 剑指 Offer
   | "coi-find-in-matrix"
   | "coi-replace-spaces"
+  | "coi-print-list-reverse"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -598,6 +599,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",
+  "coi-print-list-reverse": "从尾到头打印链表",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

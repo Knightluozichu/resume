@@ -238,6 +238,7 @@ import { agtReactLoopQuestions } from "./review/agt-react-loop";
 import { agtToolDesignQuestions } from "./review/agt-tool-design";
 import { coiFindInMatrixQuestions } from "./review/coi-find-in-matrix";
 import { coiReplaceSpacesQuestions } from "./review/coi-replace-spaces";
+import { coiPrintListReverseQuestions } from "./review/coi-print-list-reverse";
 
 export {
   CHAPTER_TITLES,
@@ -339,6 +340,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dalvikArtQuestions,
   ...coiFindInMatrixQuestions,
   ...coiReplaceSpacesQuestions,
+  ...coiPrintListReverseQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,
