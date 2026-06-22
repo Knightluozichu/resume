@@ -212,6 +212,12 @@ const PAGES = [
   "/learn/unity5/rendering/materials-lighting",
   "/learn/unity5/rendering/prefabs-assets",
   "/learn/unity5/rendering/build-deploy",
+  // 剑指Offer
+  "/learn/coding-interviews/arrays/find-in-matrix",
+  "/learn/coding-interviews/strings/replace-spaces",
+  "/learn/coding-interviews/linked-lists/print-list-reverse",
+  "/learn/coding-interviews/trees/rebuild-binary-tree",
+  "/learn/coding-interviews/stacks-queues/queue-with-two-stacks",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
