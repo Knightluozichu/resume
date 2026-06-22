@@ -241,6 +241,8 @@ import { coiReplaceSpacesQuestions } from "./review/coi-replace-spaces";
 import { coiPrintListReverseQuestions } from "./review/coi-print-list-reverse";
 import { coiRebuildBinaryTreeQuestions } from "./review/coi-rebuild-binary-tree";
 import { coiQueueWithTwoStacksQuestions } from "./review/coi-queue-with-two-stacks";
+import { coiPowerQuestions } from "./review/coi-power";
+
 
 export {
   CHAPTER_TITLES,
@@ -345,6 +347,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiPrintListReverseQuestions,
   ...coiRebuildBinaryTreeQuestions,
   ...coiQueueWithTwoStacksQuestions,
+  ...coiPowerQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,
