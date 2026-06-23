@@ -333,7 +333,7 @@ export function ReverseListDiagram() {
 
             let borderStroke = "var(--border)";
             let borderWeight = 1.5;
-            let valColor = "var(--text-primary)";
+            const valColor = "var(--text-primary)";
 
             if (isCurr) {
               borderStroke = "var(--accent)";
