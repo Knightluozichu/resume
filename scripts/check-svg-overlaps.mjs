@@ -225,6 +225,10 @@ const PAGES = [
   "/learn/coding-interviews/strings/numeric-strings",
   "/learn/coding-interviews/arrays/reorder-array",
   "/learn/coding-interviews/linked-lists/kth-node-from-end",
+  "/learn/coding-interviews/linked-lists/entry-node-of-loop",
+  "/learn/coding-interviews/linked-lists/reverse-list",
+  "/learn/coding-interviews/linked-lists/merge-sorted-lists",
+  "/learn/coding-interviews/trees/subtree-structure",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };
