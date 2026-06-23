@@ -251,6 +251,7 @@ import { coiKthNodeFromEndQuestions } from "./review/coi-kth-node-from-end";
 import { coiEntryNodeOfLoopQuestions } from "./review/coi-entry-node-of-loop";
 import { coiReverseListQuestions } from "./review/coi-reverse-list";
 import { coiMergeSortedListsQuestions } from "./review/coi-merge-sorted-lists";
+import { coiSubtreeStructureQuestions } from "./review/coi-subtree-structure";
 
 
 export {
@@ -366,6 +367,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiEntryNodeOfLoopQuestions,
   ...coiReverseListQuestions,
   ...coiMergeSortedListsQuestions,
+  ...coiSubtreeStructureQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

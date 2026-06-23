@@ -175,6 +175,7 @@ export type ReviewChapterSlug =
   | "coi-entry-node-of-loop"
   | "coi-reverse-list"
   | "coi-merge-sorted-lists"
+  | "coi-subtree-structure"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -624,6 +625,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-entry-node-of-loop": "链表中环的入口节点",
   "coi-reverse-list": "反转链表",
   "coi-merge-sorted-lists": "合并两个排序的链表",
+  "coi-subtree-structure": "树的子结构",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
