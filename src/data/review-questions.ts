@@ -249,6 +249,7 @@ import { coiNumericStringsQuestions } from "./review/coi-numeric-strings";
 import { coiReorderArrayQuestions } from "./review/coi-reorder-array";
 import { coiKthNodeFromEndQuestions } from "./review/coi-kth-node-from-end";
 import { coiEntryNodeOfLoopQuestions } from "./review/coi-entry-node-of-loop";
+import { coiReverseListQuestions } from "./review/coi-reverse-list";
 
 export {
   CHAPTER_TITLES,
@@ -361,6 +362,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiReorderArrayQuestions,
   ...coiKthNodeFromEndQuestions,
   ...coiEntryNodeOfLoopQuestions,
+  ...coiReverseListQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

@@ -173,6 +173,7 @@ export type ReviewChapterSlug =
   | "coi-reorder-array"
   | "coi-kth-node-from-end"
   | "coi-entry-node-of-loop"
+  | "coi-reverse-list"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -620,6 +621,7 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-reorder-array": "调整数组顺序使奇数位于偶数前面",
   "coi-kth-node-from-end": "链表中倒数第 k 个节点",
   "coi-entry-node-of-loop": "链表中环的入口节点",
+  "coi-reverse-list": "反转链表",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
