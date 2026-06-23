@@ -250,6 +250,8 @@ import { coiReorderArrayQuestions } from "./review/coi-reorder-array";
 import { coiKthNodeFromEndQuestions } from "./review/coi-kth-node-from-end";
 import { coiEntryNodeOfLoopQuestions } from "./review/coi-entry-node-of-loop";
 import { coiReverseListQuestions } from "./review/coi-reverse-list";
+import { coiMergeSortedListsQuestions } from "./review/coi-merge-sorted-lists";
+
 
 export {
   CHAPTER_TITLES,
@@ -363,6 +365,7 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...coiKthNodeFromEndQuestions,
   ...coiEntryNodeOfLoopQuestions,
   ...coiReverseListQuestions,
+  ...coiMergeSortedListsQuestions,
   ...classloaderQuestions,
   ...hotfixPrincipleQuestions,
   ...hookTechnologyQuestions,

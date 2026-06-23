@@ -6,6 +6,7 @@ import { StringDfaDiagram } from "./diagrams/string-dfa-diagram";
 import { KthFromEndDiagram } from "./diagrams/kth-from-end-diagram";
 import { ListCycleEntranceDiagram } from "./diagrams/list-cycle-entrance-diagram";
 import { ReverseListDiagram } from "./diagrams/reverse-list-diagram";
+import { MergeSortedListsDiagram } from "./diagrams/merge-sorted-lists-diagram";
 import { CodeTabs, Tab } from "./code-tabs";
 import { CompareSlider } from "./compare-slider";
 import { DemoStage, Slider, Toggle } from "./controls";
@@ -992,6 +993,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   KthFromEndDiagram,
   ListCycleEntranceDiagram,
   ReverseListDiagram,
+  MergeSortedListsDiagram,
   ShaderDemo,
   TextureDemo,
   CameraDemo,
