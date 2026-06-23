@@ -213,18 +213,15 @@ export function ListCycleEntranceDiagram() {
             const isFast = node.id === currentStepData.fastPos;
             
             // Highlight nodes dynamically based on step
-            let isHighlighted = false;
             let borderStroke = "var(--border)";
             let borderWeight = 1.5;
             let valColor = "var(--text-primary)";
 
             if (node.isEntrance && currentStepData.phase === "done") {
-              isHighlighted = true;
               borderStroke = "var(--success)";
               borderWeight = 2.5;
               valColor = "var(--success)";
             } else if (node.isMeeting && currentStepData.phase === "meet") {
-              isHighlighted = true;
               borderStroke = "var(--info)";
               borderWeight = 2.5;
               valColor = "var(--info)";
