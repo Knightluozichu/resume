@@ -2,11 +2,248 @@
 title: 链表中倒数第 k 个节点
 type: C
 section: 链表
-order: 3
-description: 掌握快慢双指针以固定间距滑动，单次遍历精确定位链表节点。
+order: 6
+description: 掌握快慢双指针的滑尺算法，在单次遍历（Single Pass）内高效定位链表中倒数第 k 个节点。深入分析边界容错处理与指针的安全性校验。
 demo: true
-math: false
+math: true
 sourceUrl: https://github.com/zhedahht/CodingInterviews
 draft: false
 ---
-Stub
+
+{/* 知识点清单：单向链表遍历 / 快慢双指针 / 滑尺间距 / 指针越界保护 / 防御性编程；原书章节：面试题22：链表中倒数第 k 个节点。 */}
+
+<Objectives>
+
+- 能理解并应用快慢双指针的“滑尺法”，以单次遍历（Single Pass）与 $O(1)$ 空间复杂度定位链表倒数第 $k$ 个节点。
+- 能阐明滑尺间距的数理逻辑，说明为何先行 $k-1$ 步能使快慢指针在快指针指向尾节点时完美契合倒数第 $k$ 的物理位置。
+- 能识别并修复算法中的防御性检查漏洞，包括头指针为空、参数 $k=0$、以及 $k$ 大于链表实际长度等导致空指针崩溃的边界情况。
+- 能推广双指针思路，独立设计并实现寻找链表中间节点（步长差法）以及链表是否有环检测（Floyd 判圈算法）的解决方案。
+
+</Objectives>
+
+## 直觉引入
+
+在常规思维中，要寻找链表中倒数第 $k$ 个节点，最直接的想法是：先遍历一遍链表，数出链表总节点数 $n$；第二遍遍历时，走 $n-k+1$ 步，就能找到目标节点。但这需要对链表进行**两次遍历**。
+
+如果面试官要求**只能遍历一遍（Single Pass）**，我们该如何达成？
+
+这里我们可以借用生活中的**『滑尺（Sliding Ruler）』**概念来建立直觉：
+
+> **滑尺模型**：想象你在一条铁轨轨道上测量。你手里有一把固定跨度为 $k$ 个单位的滑尺。我们先把滑尺的右端（快指针 `fast`）往前推，使得右端和左端（慢指针 `slow`）之间隔开 $k-1$ 个节点。
+> 
+> 此时，滑尺的长度刚好覆盖了 $k$ 个节点。接着，我们保持这把滑尺的跨度不变，将整把尺子顺着轨道以相同的速度向右推移。当滑尺的右端到达铁轨的终点（尾节点）时，滑尺的左端所指的位置，就自然而然卡在倒数第 $k$ 个节点上了。
+
+利用这个模型，我们只需要定义两个辅助指针（相当于滑尺的左右两端），就能在仅走一遍链表的前提下，极其精准地定位到目标节点。
+
+---
+
+## 概念讲解
+
+### 1. 滑尺双指针的数学证明
+
+设链表总长度为 $n$（1-based 索引）。根据定义，倒数第 $k$ 个节点即为正数第 $n - k + 1$ 个节点。
+
+- 我们的 `slow` 指针从头节点（第 1 个节点）出发，要走到第 $n - k + 1$ 个节点，需要向前移动：
+  
+  $$(n - k + 1) - 1 = n - k \text{ 步}$$
+
+- 我们的 `fast` 指针同样从头节点出发。第一阶段，它先独自向前走 $k - 1$ 步，到达第 $k$ 个节点。
+- 第二阶段，`fast` 和 `slow` 开始同步以 1 步/次的速度滑动。要让 `fast` 到达尾节点（第 $n$ 个节点），`fast` 还需要走：
+  
+  $$n - k \text{ 步}$$
+
+- 因为是同步移动，当 `fast` 走了 $n - k$ 步到达尾节点时，`slow` 也刚好走了 $n - k$ 步。此时 `slow` 的位置就是：
+  
+  $$1 + (n - k) = n - k + 1 \text{（即正数第 } n-k+1 \text{ 个节点）}$$
+
+两者的步数逻辑在数学上完美契合，仅凭常数个指针变量，即实现了 $O(n)$ 时间和 $O(1)$ 空间的最优解。
+
+```
+链表: 1 -> 2 -> 3 -> 4 -> 5 -> null (k=2)
+
+初始状态 (Step 0):
+[1] -> 2 -> 3 -> 4 -> 5 -> null
+sf (fast, slow 同在头节点)
+
+拉开间距 (Step 1): fast 先走 k-1 = 1 步
+1  -> [2] -> 3 -> 4 -> 5 -> null
+s      f   (此时 fast 领先 slow 1 步)
+
+同步滑动 (Step 4): 快指针到达尾节点停止
+1  -> 2 -> 3 -> [4] -> [5] -> null
+                 s      f  (slow 指向的 Node 4 即为倒数第 2 个节点)
+```
+
+---
+
+### 2. 三大边界陷阱与防御性检查
+
+链表类面试题是空指针解引用崩溃（`Null Pointer Dereference`）的重灾区。本题看似简单，但在实际面试中，有超过半数的候选人会因为以下三个细节漏洞而被扣分：
+
+1. **头指针为空指针 (`head == nullptr`)**：
+   如果链表是空的，试图用 `fast.next` 进行遍历或初始化会直接导致程序崩溃。因此，在函数入口处必须有防御性拦截：`if (head == null) return null;`。
+2. **倒数节点步数 $k \le 0$**：
+   由于链表位置是 1-based 的，倒数第 0 个或负数个节点是无物理语义的非法输入。如果不加校验，`k - 1` 将会得到一个负数，导致循环逻辑错乱或死循环。因此入口处必须限制 `if (k <= 0) return null;`。
+3. **参数 $k$ 大于链表实际长度 $n$**：
+   这是最容易遗漏的漏洞。如果 $k > n$，在快指针先行 $k - 1$ 步的过程中，`fast` 会在没有走完循环之前就提前变成了 `null`（越过了尾节点）。如果不对 `fast` 的状态进行实时空检查，下一步 `fast = fast.next` 就会发生崩溃。
+
+---
+
+## 交互 Demo
+
+在下方交互视口中，点击运行控制按钮，观察 `fast` 和 `slow` 双指针如何在每个执行时刻建立滑尺跨度、同步向前平移并在尾节点定位出倒数第 2 个节点的调试轨迹：
+
+<KthFromEndDiagram />
+
+---
+
+## 代码对照
+
+### 核心实现：定位链表倒数第 k 个节点
+
+在 C++ 中，为了防止传入无符号数造成负值溢出（例如传入 `unsigned int k`，若 $k=0$，执行减法则会变成极大正数），应在第一步就做好边界检查。TypeScript 版则注意使用非空断言（`!`）或空检查来确保类型安全。
+
+<CodeTabs>
+  <Tab label="C++ 实现">
+```cpp
+struct ListNode {
+    int m_nValue;
+    ListNode* m_pNext;
+    ListNode(int val) : m_nValue(val), m_pNext(nullptr) {}
+};
+
+class Solution {
+public:
+    ListNode* FindKthToTail(ListNode* pListHead, unsigned int k) {
+        // 1. 防御性检查：头指针为空，或 k 非法
+        if (pListHead == nullptr || k == 0) {
+            return nullptr;
+        }
+
+        ListNode* pFast = pListHead;
+        ListNode* pSlow = pListHead;
+
+        // 2. 快指针先向前走 k - 1 步
+        for (unsigned int i = 0; i < k - 1; ++i) {
+            // 实时防范：在未走完 k-1 步前，快指针不能指向空，否则说明链表长度小于 k
+            if (pFast->m_pNext != nullptr) {
+                pFast = pFast->m_pNext;
+            } else {
+                return nullptr;
+            }
+        }
+
+        // 3. 快慢指针同步前移，直到快指针到达尾节点（fast->next 为空）
+        while (pFast->m_pNext != nullptr) {
+            pFast = pFast->m_pNext;
+            pSlow = pSlow->m_pNext;
+        }
+
+        // 此时 slow 刚好停在倒数第 k 个节点上
+        return pSlow;
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript 实现">
+```typescript
+class ListNode {
+    val: number;
+    next: ListNode | null = null;
+    constructor(val: number) {
+        this.val = val;
+    }
+}
+
+function getKthFromEnd(head: ListNode | null, k: number): ListNode | null {
+    // 1. 防御性检查：头指针为空或 k 不合法
+    if (head === null || k <= 0) {
+        return null;
+    }
+
+    let fast: ListNode | null = head;
+    let slow: ListNode | null = head;
+
+    // 2. 快指针先向前移动 k - 1 步
+    for (let i = 0; i < k - 1; i++) {
+        if (fast !== null) {
+            fast = fast.next;
+        }
+        // 如果未移动完 k-1 步快指针就已变为空，说明 k 大于链表实际长度
+        if (fast === null) {
+            return null;
+        }
+    }
+
+    // 3. 双指针同步向前平移，以 fast 指向尾节点（fast.next === null）为终止信号
+    while (fast.next !== null) {
+        fast = fast.next;
+        slow = slow!.next; // slow 必然不为空，因为其相对 fast 滞后
+    }
+
+    return slow;
+}
+```
+  </Tab>
+</CodeTabs>
+
+---
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 试图以 <code>fast !== null</code> 作为同步滑动停止的条件，结果找出的节点是倒数第 $k-1$ 个节点。
+  <strong>原因 →</strong> 我们的滑尺模型是当 <code>fast</code> 停在<strong>最后一个节点（尾节点）</strong>时，<code>slow</code> 落在倒数第 $k$ 个节点上。尾节点的标志是 <code>fast.next === null</code>。如果将循环条件误写为 <code>fast !== null</code>，快指针会越过尾节点走到 <code>null</code>，这会导致慢指针也多走了一步，停在倒数第 $k-1$ 个节点处。
+  <strong>修复 →</strong> 必须以 <code>fast.next !== null</code> 作为同步循环的终止条件，保证快指针停留在尾节点处。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 传入 $k$ 的数值大于链表的节点总数，程序在先行阶段抛出 <code>Cannot read properties of null (reading 'next')</code>。
+  <strong>原因 →</strong> 在快指针先向前移动 $k-1$ 步的 <code>for</code> 循环中，由于链表太短，<code>fast</code> 指针已经变成了 <code>null</code>，但循环并未停止，下一次迭代继续对 <code>fast</code> 解引用读取 <code>next</code>，导致内存非法访问崩溃。
+  <strong>修复 →</strong> 在先行循环内，移动 <code>fast</code> 指针后要立即做 <code>fast === null</code> 的越界校验，一旦为空则说明 $k$ 大于链表长度，应直接触发保护拦截并返回 <code>null</code>。
+</Callout>
+
+---
+
+## 小结与练习
+
+- **滑尺法** 通过建立固定相对跨度（先行 $k-1$ 步），将多次遍历优化为单次遍历，空间复杂度仅为 $O(1)$。
+- 链表题型的核心是**写好边界的卫语句（Guard Clause）**。对于 $head$ 为空、$k$ 为 0 或负值、以及越界情况，必须在函数入口和滑动循环中执行实时空指针防护。
+
+<Exercises>
+  <Answer question="快慢双指针思路非常经典，请问如何用它在单次遍历内寻找链表的中间节点？">
+    这属于双指针的**『步长差法』**应用：
+    1. 初始化快指针 `fast` 和慢指针 `slow` 均在头节点 `head` 处。
+    2. 在循环中，`fast` 每次前移 2 步，而 `slow` 每次前移 1 步。即快指针速度是慢指针的两倍。
+    3. 当快指针 `fast` 到达尾部（对于奇数长度，`fast.next === null`；对于偶数长度，`fast === null`）时，慢指针 `slow` 因为速度只有一半，刚好落在链表的中间节点位置。
+  </Answer>
+  <Answer question="如果单链表中可能存在环，如何用快慢指针判定是否有环？如果有环，如何找出环的入口节点？">
+    这是著名的 **Floyd 判圈算法（双指针追击）**：
+    1. **判定是否有环**：快指针 `fast` 每次移动 2 步，慢指针 `slow` 每次移动 1 步。如果有环，快指针先入环并会与慢指针在环内追及相遇（`fast === slow`）；如果无环，快指针会最终指向 `null`。
+    2. **查找环入口**：两指针相遇后，将 `fast` 指针重新指向链表的头节点 `head`，而 `slow` 保持在原相遇点。随后，两个指针以相同的速度（每次 1 步）同步向前移动。当它们再次相遇时，所指向的节点即为环的入口节点。
+  </Answer>
+</Exercises>
+
+---
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="滑尺法">
+    通过定义两个相对距离固定的快慢双指针，将空间区域的倒数计算转化为两个指针沿链表滑动至终点时左侧指针自然卡位的经典算法。详见「直觉引入」节。
+  </GlossaryItem>
+  <GlossaryItem term="防御性编程">
+    在编写算法时，前置性地对各种可能导致程序异常、崩溃或死循环的非典型边界输入（如空指针、负数值、越界长度）进行截断拦截的一种稳健编程思想。详见「概念讲解 2」节。
+  </GlossaryItem>
+  <GlossaryItem term="步长差法">
+    使快慢双指针在遍历中保持 2 倍的速度差异（慢指针走 1 步，快指针走 2 步），从而以相对比例快速定位出中点位置的技巧。详见「小结与练习」节。
+  </GlossaryItem>
+  <GlossaryItem term="Floyd 判圈算法">
+    又称龟兔赛跑算法，利用相对速度不为零的快慢双指针在闭环中必然重合相遇的特征，来进行链表是否存在环的判定与入口定位的方案。详见「小结与练习」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>
