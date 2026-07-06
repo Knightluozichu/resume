@@ -229,6 +229,13 @@ const PAGES = [
   "/learn/coding-interviews/linked-lists/reverse-list",
   "/learn/coding-interviews/linked-lists/merge-sorted-lists",
   "/learn/coding-interviews/trees/subtree-structure",
+  "/learn/coding-interviews/trees/mirror-binary-tree",
+  "/learn/coding-interviews/trees/symmetric-binary-tree",
+  "/learn/coding-interviews/arrays/spiral-matrix",
+  "/learn/coding-interviews/stacks-queues/stack-push-pop-order",
+  "/learn/coding-interviews/trees/print-tree-from-top-to-bottom",
+  "/learn/coding-interviews/trees/print-trees-in-lines",
+  "/learn/coding-interviews/stacks-queues/min-stack",
 ];
 
 const LEVEL_ORDER = { HIGH: 0, MID: 1, LOW: 2 };

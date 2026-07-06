@@ -1,0 +1,168 @@
+---
+title: 序列化和反序列化二叉树
+type: C
+section: 树
+order: 2
+description: 设计字符串与二叉树的互转方案，支持空节点恢复。
+demo: true
+math: false
+sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+draft: false
+---
+
+{/* 知识点清单：先序遍历编码、空节点占位、反序列化递归恢复；原书章节：面试题37。 */}
+
+<Objectives>
+
+- 能解释为何序列化必须保留空节点边界。
+- 能给出确定性解码流程，保证一一对应。
+- 能处理空树与单节点树。
+
+</Objectives>
+
+## 直觉引入
+
+二叉树是有结构的“含空洞”对象。
+若不记录空子节点，就只能重建拓扑结构的一半。最稳定的是前序 + `#` 占位。
+
+## 算法思路
+
+1. 序列化：前序遍历。
+   - 非空节点写值。
+   - 空节点写 `#`。
+   - 以逗号分隔。
+2. 反序列化：按同样顺序消费 token。
+   - 遇到 `#` 返回空。
+   - 遇到数字新建节点，递归恢复左、右。
+
+<TreeDiagram />
+
+## 思考引导
+
+### 1) 先问问题，不先序列化
+序列化本质是结构可恢复。你要先定义编码规则是否可唯一逆推，不是看起来像原样即可。
+
+### 2) 识别不变式
+遍历顺序 + 空节点标记必须共同确定树的拓扑。仅有值序列无法表达空位。
+
+### 3) 为什么它一定成立
+使用前序并显式表示空子节点，反序列化可逐步消费输入并恢复每一个分支。
+
+### 4) 常见误区
+省略空标记会导致重建歧义，多路分支无法恢复到唯一树。
+
+### 5) 你能找到一个反例吗
+不同结构但值序列相同的树是反例源。若无法区分，序列化即失败。
+
+### 6) 迁移到下一题
+RPC、持久化、快照传输都要求可逆；优先定义“可恢复格式”再谈压缩或美化。
+## 代码对照
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <string>
+#include <sstream>
+#include <vector>
+
+struct TreeNode {
+    int val;
+    TreeNode* left;
+    TreeNode* right;
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+};
+
+class Codec {
+public:
+    std::string serialize(TreeNode* root) {
+        std::string out;
+        pre(root, out);
+        return out;
+    }
+
+    TreeNode* deserialize(const std::string& data) {
+        std::stringstream ss(data);
+        std::string token;
+        std::vector<std::string> items;
+        while (std::getline(ss, token, ',')) items.push_back(token);
+        int idx = 0;
+        return rebuild(items, idx);
+    }
+
+private:
+    void pre(TreeNode* node, std::string& out) {
+        if (!node) {
+            out += "#,";
+            return;
+        }
+        out += std::to_string(node->val) + ',';
+        pre(node->left, out);
+        pre(node->right, out);
+    }
+
+    TreeNode* rebuild(const std::vector<std::string>& items, int& idx) {
+        if (idx >= (int)items.size() || items[idx] == "#") {
+            ++idx;
+            return nullptr;
+        }
+        auto* node = new TreeNode(std::stoi(items[idx++]));
+        node->left = rebuild(items, idx);
+        node->right = rebuild(items, idx);
+        return node;
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+class TreeNode {
+    val: number;
+    left: TreeNode | null;
+    right: TreeNode | null;
+    constructor(val: number) {
+        this.val = val;
+        this.left = null;
+        this.right = null;
+    }
+}
+
+function serialize(root: TreeNode | null): string {
+    const items: string[] = [];
+    const dfs = (node: TreeNode | null): void => {
+        if (!node) {
+            items.push('#');
+            return;
+        }
+        items.push(String(node.val));
+        dfs(node.left);
+        dfs(node.right);
+    };
+    dfs(root);
+    return items.join(',');
+}
+
+function deserialize(data: string): TreeNode | null {
+    const tokens = data.split(',');
+    let idx = 0;
+
+    const build = (): TreeNode | null => {
+        if (idx >= tokens.length || tokens[idx] === '#') {
+            idx++;
+            return null;
+        }
+        const node = new TreeNode(Number(tokens[idx++]));
+        node.left = build();
+        node.right = build();
+        return node;
+    };
+
+    return build();
+}
+```
+  </Tab>
+</CodeTabs>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+/>

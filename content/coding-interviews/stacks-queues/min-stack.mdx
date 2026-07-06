@@ -1,0 +1,230 @@
+---
+title: 包含 min 函数的栈
+type: C
+section: 栈和队列
+order: 2
+description: 掌握使用辅助最小栈同步保存当前状态最小值，以 O(1) 时间完成 push、pop、top 和 min 操作。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：辅助栈 / 单调最小值快照 / 重复最小值 / 空栈防御 / O(1) 查询；原书章节：面试题30：包含 min 函数的栈。 */}
+
+<Objectives>
+
+- 理解为什么普通栈无法在不扫描的情况下直接得到当前最小值。
+- 掌握“数据栈 + 最小栈”的同步设计：每个数据位置都对应一个当时的最小值快照。
+- 能解释重复最小值为什么必须被保留，而不是只保存一个去重后的最小集合。
+- 能用 C++ 和 TypeScript 实现 `push`、`pop`、`top`、`min`，并处理空栈边界。
+
+</Objectives>
+
+## 直觉引入
+
+普通栈只暴露栈顶。你可以很快知道“最后进来的是谁”，但如果产品经理突然问“当前所有元素里最小的是谁”，普通栈没有额外信息，只能从头扫一遍。
+
+这道题的关键不是让栈变成排序结构，而是给每一次入栈都拍一张“当前最小值快照”：
+
+- 数据栈保存真实元素，比如依次压入 `3, 4, 2, 1`。
+- 最小栈在相同位置保存“压入这个元素后，当前栈内最小值是多少”，得到 `3, 3, 2, 1`。
+- 查询 `min()` 时只看最小栈栈顶，时间就是 $O(1)$。
+
+## 核心设计
+
+我们维护两个栈：
+
+| 栈 | 职责 |
+|---|---|
+| `dataStack` | 保存真实入栈元素，支持正常的 `push` / `pop` / `top` |
+| `minStack` | 与 `dataStack` 等长，栈顶永远保存当前全部元素的最小值 |
+
+### `push(x)`
+
+先把 `x` 压入 `dataStack`。再计算新的最小值：
+
+- 如果 `minStack` 为空，新的最小值就是 `x`。
+- 否则新的最小值是 `min(x, minStack.top())`。
+
+然后把这个最小值也压入 `minStack`。
+
+### `pop()`
+
+两个栈必须同步弹出。因为 `minStack` 的每一层是对同一时刻 `dataStack` 的快照，数据少一层，快照也必须少一层。
+
+### `min()`
+
+直接返回 `minStack.top()`。它不是“可能的最小值”，而是当前栈状态下已经同步维护好的最小值。
+
+<MinStackDiagram />
+
+## 为什么不能只在变小的时候压最小栈？
+
+有一种常见写法是：只有当新元素 `x <= 当前最小值` 时，才把 `x` 压入最小栈；弹出时如果弹出的元素等于最小栈栈顶，再同步弹出最小栈。这个写法也能成立，但更容易漏掉“重复最小值”的处理。
+
+本章采用“最小栈与数据栈等长”的版本，优势是更直观：
+
+- 每个位置都有快照，不需要在 `pop()` 时比较值。
+- 重复最小值自然保留。
+- 代码更适合面试现场解释和手写。
+
+## 代码对照
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <stack>
+#include <stdexcept>
+#include <algorithm>
+
+class MinStack {
+private:
+    std::stack<int> dataStack;
+    std::stack<int> minStack;
+
+public:
+    void push(int value) {
+        dataStack.push(value);
+
+        if (minStack.empty()) {
+            minStack.push(value);
+        } else {
+            minStack.push(std::min(value, minStack.top()));
+        }
+    }
+
+    void pop() {
+        if (dataStack.empty()) {
+            throw std::runtime_error("stack is empty");
+        }
+
+        dataStack.pop();
+        minStack.pop();
+    }
+
+    int top() const {
+        if (dataStack.empty()) {
+            throw std::runtime_error("stack is empty");
+        }
+
+        return dataStack.top();
+    }
+
+    int min() const {
+        if (minStack.empty()) {
+            throw std::runtime_error("stack is empty");
+        }
+
+        return minStack.top();
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+class MinStack {
+  private dataStack: number[] = [];
+  private minStack: number[] = [];
+
+  push(value: number): void {
+    this.dataStack.push(value);
+
+    const currentMin =
+      this.minStack.length === 0
+        ? value
+        : Math.min(value, this.minStack[this.minStack.length - 1]);
+
+    this.minStack.push(currentMin);
+  }
+
+  pop(): number {
+    if (this.dataStack.length === 0) {
+      throw new Error("stack is empty");
+    }
+
+    this.minStack.pop();
+    return this.dataStack.pop()!;
+  }
+
+  top(): number {
+    if (this.dataStack.length === 0) {
+      throw new Error("stack is empty");
+    }
+
+    return this.dataStack[this.dataStack.length - 1];
+  }
+
+  min(): number {
+    if (this.minStack.length === 0) {
+      throw new Error("stack is empty");
+    }
+
+    return this.minStack[this.minStack.length - 1];
+  }
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 正确性证明
+
+用不变式来证明最清楚：
+
+<Callout type="tip">
+  任意时刻，`minStack[i]` 都等于 `dataStack[0..i]` 中的最小值。
+</Callout>
+
+- 初始时两个栈都为空，不变式成立。
+- `push(x)` 时，新栈顶的最小值只能是“旧最小值”和 `x` 之间较小的一个，所以压入 `min(x, oldMin)` 后不变式继续成立。
+- `pop()` 时两个栈同步弹出，同一层的数据与最小值快照同时离开，不会破坏剩余层的历史最小值。
+- 因此 `min()` 返回 `minStack.top()`，就是当前全栈最小值。
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 弹出一个最小值后，`min()` 返回了更小但已经不存在的旧值。
+  <strong>原因 →</strong> `pop()` 只弹出了数据栈，没有同步弹出最小栈。
+  <strong>修法 →</strong> 两个栈必须保持同样的高度，每次 `push` 和 `pop` 都同步更新。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 栈里有两个相同最小值，弹出一个后 `min()` 错误地变大。
+  <strong>原因 →</strong> 使用压缩版最小栈时没有处理重复最小值。
+  <strong>修法 →</strong> 要么在 `x <= currentMin` 时压入最小栈，要么直接使用本章的等长快照方案。
+</Callout>
+
+## 小结与练习
+
+- 普通栈的 `min()` 如果不加辅助信息，需要 $O(N)$ 扫描。
+- 等长 `minStack` 让每一层都保存当前最小值快照，因此 `min()` 是 $O(1)$。
+- `push`、`pop`、`top`、`min` 的时间复杂度都是 $O(1)$，空间复杂度是 $O(N)$。
+- 重复最小值是这题最容易漏的边界。
+
+<Exercises>
+  <Answer question="如果要把辅助栈从等长快照改成压缩版，push 和 pop 分别怎么改？">
+    `push(x)` 时，只有当最小栈为空或 `x <= minStack.top()` 时才把 `x` 压入最小栈；`pop()` 时先看数据栈栈顶，如果它等于最小栈栈顶，则两个栈都弹出，否则只弹出数据栈。注意这里必须使用 `<=`，否则重复最小值会丢失计数。
+  </Answer>
+  <Answer question="为什么不能用一个变量 minValue 代替 minStack？">
+    只用一个变量能处理入栈时变小的情况，但弹出当前最小值后，无法在 $O(1)$ 时间知道“上一个最小值”是谁。`minStack` 保存的是每一层历史快照，正好解决这个回退问题。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="辅助栈">
+    为主栈额外维护的一份栈结构，用来保存查询所需的派生状态。本题中它保存每一层的当前最小值。
+  </GlossaryItem>
+  <GlossaryItem term="最小值快照">
+    某个入栈时刻的全栈最小值。只要快照和数据层级同步，弹出时就可以自然回退到上一层状态。
+  </GlossaryItem>
+  <GlossaryItem term="不变式">
+    在算法执行过程中始终保持为真的条件。本题的不变式是：最小栈栈顶始终等于当前数据栈的最小值。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>

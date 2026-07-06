@@ -663,6 +663,7 @@ import { AlgorithmPlayground } from "./algorithms/algorithm-playground";
 import { BinarySearchDiagram } from "./diagrams/BinarySearchDiagram";
 import { FindInMatrixDiagram } from "./diagrams/find-in-matrix-diagram";
 import { QueueWithTwoStacksDiagram } from "./diagrams/queue-with-two-stacks-diagram";
+import { StackPushPopOrderDiagram } from "./diagrams/stack-push-pop-order-diagram";
 import { ReplaceSpacesDiagram } from "./diagrams/replace-spaces-diagram";
 import { PrintListReverseDiagram } from "./diagrams/print-list-reverse-diagram";
 import { DeleteNodeDiagram } from "./diagrams/delete-node-diagram";
@@ -670,6 +671,10 @@ import { PartitionArrayDiagram } from "./diagrams/partition-array-diagram";
 import { RegexDpDiagram } from "./diagrams/regex-dp-diagram";
 import { RebuildBinaryTreeDiagram } from "./diagrams/rebuild-binary-tree-diagram";
 import { BigNumberPrintDiagram } from "./diagrams/big-number-print-diagram";
+import { MirrorBinaryTreeDiagram } from "./diagrams/mirror-binary-tree-diagram";
+import { SymmetricBinaryTreeDiagram } from "./diagrams/symmetric-binary-tree-diagram";
+import { SpiralMatrixDiagram } from "./diagrams/spiral-matrix-diagram";
+import { MinStackDiagram } from "./diagrams/min-stack-diagram";
 import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
 import { RecursionDiagram } from "./diagrams/RecursionDiagram";
 import { QuickSortDiagram } from "./diagrams/QuickSortDiagram";
@@ -1630,6 +1635,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   BinarySearchDiagram,
   FindInMatrixDiagram,
   QueueWithTwoStacksDiagram,
+  StackPushPopOrderDiagram,
   ReplaceSpacesDiagram,
   PrintListReverseDiagram,
   DeleteNodeDiagram,
@@ -1637,6 +1643,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RegexDpDiagram,
   RebuildBinaryTreeDiagram,
   BigNumberPrintDiagram,
+  MirrorBinaryTreeDiagram,
+  SymmetricBinaryTreeDiagram,
+  SpiralMatrixDiagram,
+  MinStackDiagram,
   SelectionSortDiagram,
   RecursionDiagram,
   QuickSortDiagram,

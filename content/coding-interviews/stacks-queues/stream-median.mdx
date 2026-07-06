@@ -1,0 +1,255 @@
+---
+title: 数据流中的中位数
+type: C
+section: 栈和队列
+order: 3
+description: 流式插入数据并随时查询中位数。
+demo: true
+math: false
+sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+draft: false
+---
+
+{/* 知识点清单：上半区最大堆、下半区最小堆、分治平衡；原书章节：面试题41。 */}
+
+<Objectives>
+
+- 能描述“左大右小”堆划分的核心不变量。
+- 能保持两个堆大小差不超过 1。
+- 能写 C++ 与 TypeScript 的数据流中位数结构。
+
+</Objectives>
+
+## 直觉引入
+
+中位数要在有序序列中间附近。可以不维护完整排序，只维持一个分界：
+
+- 左边（`maxHeap`）放较小的一半，根是最大元素；
+- 右边（`minHeap`）放较大的一半，根是最小元素。
+
+## 算法思路
+
+1. 新值 `x`：若 `x <= maxHeap.top()`，放入 `maxHeap`，否则放入 `minHeap`。
+2. 平衡两个堆大小：`maxHeap.size()` 与 `minHeap.size()` 相差最多 1。
+3. 偶数总数时中位数是两个根平均；奇数时是 `maxHeap` 根。
+
+<StreamStateDiagram />
+
+## 思考引导
+
+### 1) 先问问题，不先找平均
+中位数是秩统计，不是平均值。先定义 “左边有多少数”“右边有多少数”，再考虑取值。
+
+### 2) 识别不变式
+`左堆最大值 <= 右堆最小值`，且堆大小差不超过 1。这是每次插入后需要恢复的结构不变式。
+
+### 3) 为什么它一定成立
+中位数定义由顺序决定。两堆把全体划分为“低半边”和“高半边”，可在平衡后直接读出中位。
+
+### 4) 常见误区
+插入后不平衡会使中位数偏移；有些实现忽略了奇偶长度差，读值规则乱掉。
+
+### 5) 你能找到一个反例吗
+插入序列 1,2,3,4 后若每次都把新值入左堆再简单交换，可能破坏堆序。
+
+### 6) 迁移到下一题
+在线监控分位数、本地流指标估计都先建“上下分桶/堆”模型，再决定是否近似优化。
+## 代码对照
+
+<CodeTabs>
+  <Tab label="C++">
+```cpp
+#include <queue>
+#include <vector>
+#include <functional>
+
+class MedianFinder {
+public:
+    void addNum(int num) {
+        if (maxHeap.empty() || num <= maxHeap.top()) {
+            maxHeap.push(num);
+        } else {
+            minHeap.push(num);
+        }
+
+        if ((int)maxHeap.size() > (int)minHeap.size() + 1) {
+            minHeap.push(maxHeap.top());
+            maxHeap.pop();
+        } else if ((int)minHeap.size() > (int)maxHeap.size()) {
+            maxHeap.push(minHeap.top());
+            minHeap.pop();
+        }
+    }
+
+    double findMedian() const {
+        if (maxHeap.size() == minHeap.size()) {
+            return (maxHeap.top() + minHeap.top()) / 2.0;
+        }
+        return maxHeap.top();
+    }
+
+private:
+    std::priority_queue<int> maxHeap;
+    std::priority_queue<int, std::vector<int>, std::greater<int>> minHeap;
+};
+```
+  </Tab>
+  <Tab label="TypeScript">
+```typescript
+class MaxHeap {
+    private data: number[] = [];
+
+    get size(): number {
+        return this.data.length;
+    }
+
+    peek(): number {
+        return this.data[0];
+    }
+
+    push(v: number): void {
+        this.data.push(v);
+        this.siftUp(this.data.length - 1);
+    }
+
+    pop(): number {
+        const top = this.data[0];
+        const last = this.data.pop() as number;
+
+        if (this.data.length > 0) {
+            this.data[0] = last;
+            this.siftDown(0);
+        }
+
+        return top;
+    }
+
+    private siftUp(idx: number): void {
+        let i = idx;
+        while (i > 0) {
+            const parent = (i - 1) >> 1;
+            if (this.data[parent] >= this.data[i]) {
+                break;
+            }
+            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
+            i = parent;
+        }
+    }
+
+    private siftDown(idx: number): void {
+        let i = idx;
+        while (true) {
+            let largest = i;
+            const left = i * 2 + 1;
+            const right = left + 1;
+
+            if (left < this.data.length && this.data[left] > this.data[largest]) {
+                largest = left;
+            }
+            if (right < this.data.length && this.data[right] > this.data[largest]) {
+                largest = right;
+            }
+            if (largest === i) break;
+            [this.data[i], this.data[largest]] = [this.data[largest], this.data[i]];
+            i = largest;
+        }
+    }
+}
+
+class MedianFinder {
+    private maxHeap = new MaxHeap();
+    private minHeap = new MinHeap();
+
+    addNum(num: number): void {
+        if (this.maxHeap.size === 0 || num <= this.maxHeap.peek()) {
+            this.maxHeap.push(num);
+        } else {
+            this.minHeap.push(num);
+        }
+
+        if (this.maxHeap.size > this.minHeap.size + 1) {
+            this.minHeap.push(this.maxHeap.pop());
+        } else if (this.minHeap.size > this.maxHeap.size) {
+            this.maxHeap.push(this.minHeap.pop());
+        }
+    }
+
+    findMedian(): number {
+        if (this.maxHeap.size === this.minHeap.size) {
+            return (this.maxHeap.peek() + this.minHeap.peek()) / 2;
+        }
+        return this.maxHeap.peek();
+    }
+}
+
+class MinHeap {
+    private data: number[] = [];
+
+    get size(): number {
+        return this.data.length;
+    }
+
+    peek(): number {
+        return this.data[0];
+    }
+
+    push(v: number): void {
+        this.data.push(v);
+        this.siftUp(this.data.length - 1);
+    }
+
+    pop(): number {
+        const top = this.data[0];
+        const last = this.data.pop() as number;
+
+        if (this.data.length > 0) {
+            this.data[0] = last;
+            this.siftDown(0);
+        }
+
+        return top;
+    }
+
+    private siftUp(idx: number): void {
+        let i = idx;
+        while (i > 0) {
+            const parent = (i - 1) >> 1;
+            if (this.data[parent] <= this.data[i]) {
+                break;
+            }
+            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
+            i = parent;
+        }
+    }
+
+    private siftDown(idx: number): void {
+        let i = idx;
+        while (true) {
+            let smallest = i;
+            const left = i * 2 + 1;
+            const right = left + 1;
+
+            if (left < this.data.length && this.data[left] < this.data[smallest]) {
+                smallest = left;
+            }
+            if (right < this.data.length && this.data[right] < this.data[smallest]) {
+                smallest = right;
+            }
+            if (smallest === i) break;
+            [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
+            i = smallest;
+        }
+    }
+}
+```
+  </Tab>
+</CodeTabs>
+
+<Callout type="tip">
+  <strong>备注：</strong> 示例里为了突出流程，TypeScript 的堆实现可复用通用二叉堆实现；上生产环境建议直接复用已验证的堆组件而不是重复手写。
+</Callout>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+/>

@@ -1,0 +1,289 @@
+---
+title: 对称的二叉树
+type: C
+section: 树
+order: 4
+description: 掌握如何通过前序遍历与对称前序遍历的双指针协同，检查二叉树是否关于根节点镜像对称。
+demo: true
+math: true
+sourceUrl: https://github.com/zhedahht/CodingInterviews
+draft: false
+---
+
+{/* 知识点清单：双指针递归、对称前序遍历、BFS队列迭代、局部对称性误区、值同形异陷阱；原书章节：面试题28：对称的二叉树。 */}
+
+<Objectives>
+
+- 深刻理解对称二叉树的物理结构特征：不仅左右子节点值相等，且下层子树须呈轴对称。
+- 掌握『前序遍历』与『对称前序遍历』（即根-右-左）相结合的双指针镜像判定原理。
+- 能够熟练使用递归法（DFS）以及借助辅助队列的迭代法（BFS）实现对称性比对。
+- 熟知局部判断误区、空指针解引用以及结构值同形异（值相同但结构不同）等典型算法陷阱并掌握其规避方法。
+- 能够编写包含空树、单节点树等特殊边界场景在内的健壮（防御性）代码。
+
+</Objectives>
+
+## 直觉引入
+
+在日常生活中，我们经常能见到镜像对称的物体，比如振翅的蝴蝶、展开的书本，或是完美的折纸。如果我们沿着它们的中线将它们对折，左右两边能够完全重合。
+
+在计算机科学中，如果一棵二叉树沿着它的根节点轴线“对折”后，左半部分的结构和节点值能与右半部分完全重合，这棵树就是一棵**对称的二叉树**：
+
+```
+       对称二叉树 (Symmetric)：           非对称二叉树 (Asymmetric)：
+               8                                    8
+             /   \                                /   \
+            6     6                              6     6
+           / \   / \                            / \   / \
+          5   7 7   5                          5   7 5   7
+```
+
+仔细观察对称二叉树，我们会发现：
+1. 它的根节点的值是唯一的，无需比较。
+2. 左子树根节点（左侧的 `6`）和右子树根节点（右侧的 `6`）必须相等。
+3. 左子树根节点的**左孩子**（值为 `5`）应当与右子树根节点的**右孩子**（值为 `5`）对称相合（外侧节点匹配）。
+4. 左子树根节点的**右孩子**（值为 `7`）应当与右子树根节点的**左孩子**（值为 `7`）对称相合（内侧节点匹配）。
+
+这种“外侧对准外侧，内侧对准内侧”的交叉配对特性，构成了检测对称二叉树的算法基石。
+
+## 概念讲解
+
+为了高效检测二叉树的对称性，我们通常采用**双指针协同遍历**的思路。
+
+### 1. 对称前序遍历（Symmetric Preorder Traversal）
+
+我们知道，常规的前序遍历（Preorder Traversal）访问顺序是：**根节点 $\rightarrow$ 左子树 $\rightarrow$ 右子树**。
+如果我们定义一种相反的、专门用来做镜像匹配的遍历方式，称为**对称前序遍历**，其访问顺序则是：**根节点 $\rightarrow$ 右子树 $\rightarrow$ 左子树**。
+
+当一棵二叉树是对称的，那么**对它进行前序遍历和对称前序遍历，所得到的节点访问序列必须是完全一样的**（包括其中空节点的位置）。
+
+### 2. 双指针递归比对 (DFS)
+
+递归是最直接的实现方式。我们可以构造一个辅助函数 `check(p, q)`，其中指针 `p` 在左子树里进行常规前序遍历，指针 `q` 在右子树里进行对称前序遍历。
+
+#### 递归的判定原则：
+1. **递归基（两个节点都为空）**：若 `!p && !q`，说明已经越过叶子节点，返回 `true`。
+2. **结构不对称**：若 `!p || !q`（一个空，一个非空），说明左右子树在此处的拓扑结构不一致，返回 `false`。
+3. **数值不对称**：若 `p->val != q->val`，说明节点值不同，返回 `false`。
+4. **深入递归**：若当前对称，则必须同时满足两个条件：
+   - 比较外侧节点：`check(p->left, q->right)`
+   - 比较内侧节点：`check(p->right, q->left)`
+   - 返回它们的逻辑与（AND）结果。
+
+### 3. 迭代法：BFS 双向队列比对
+
+除了使用递归栈，我们同样可以借助辅助队列（或双栈）来移除递归深度限制，用迭代法（BFS）来进行逐层成对比对。
+
+#### 迭代步骤：
+1. 初始化一个队列。如果根节点为空，直接返回 `true`。
+2. 将根节点的左、右孩子（即使可能为 `null`）成对压入队列中：`q.push(root->left)`，`q.push(root->right)`。
+3. 当队列不为空时，每次**连续取出两个节点** `u` 和 `v`：
+   - 如果 `u` 和 `v` 都为空，说明这对节点对称，继续进行下一对节点的比对。
+   - 如果只有一个为空，或者它们的值不相等，立即判定该树不对称，返回 `false`。
+   - 按照镜像配对原则将下一层节点成对入队：
+     - 先入队外侧对：`u->left` 和 `v->right`
+     - 再入队内侧对：`u->right` 和 `v->left`
+4. 遍历完成若未发生冲突，返回 `true`。
+
+## 交互 Demo
+
+在下方的交互面板中切换“对称二叉树”与“非对称二叉树”，并使用单步控制观察算法如何进行指针比较和结果判定：
+
+<SymmetricBinaryTreeDiagram />
+
+## 代码对照
+
+对称二叉树判定在 C++ 和 TypeScript 中的具体实现代码如下：
+
+<CodeTabs>
+  <Tab label="C++ (递归与迭代)">
+```cpp
+#include <queue>
+
+struct TreeNode {
+    int val;
+    TreeNode *left;
+    TreeNode *right;
+    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+};
+
+class Solution {
+public:
+    // 1. 递归版本 (DFS)
+    bool isSymmetric(TreeNode* root) {
+        if (root == nullptr) {
+            return true;
+        }
+        return check(root->left, root->right);
+    }
+
+    // 2. 迭代版本 (BFS 队列)
+    bool isSymmetricIterative(TreeNode* root) {
+        if (root == nullptr) {
+            return true;
+        }
+
+        std::queue<TreeNode*> q;
+        q.push(root->left);
+        q.push(root->right);
+
+        while (!q.empty()) {
+            // 每次成对取出两个节点
+            TreeNode* u = q.front(); q.pop();
+            TreeNode* v = q.front(); q.pop();
+
+            // 两者均为空，对称
+            if (u == nullptr && v == nullptr) {
+                continue;
+            }
+            // 结构不匹配或值不匹配，不对称
+            if (u == nullptr || v == nullptr || u->val != v->val) {
+                return false;
+            }
+
+            // 成对地将镜像节点入队
+            q.push(u->left);   // 左的左孩子
+            q.push(v->right);  // 右的右孩子（外侧对）
+
+            q.push(u->right);  // 左的右孩子
+            q.push(v->left);   // 右的左孩子（内侧对）
+        }
+
+        return true;
+    }
+
+private:
+    // 辅助递归函数，比较两棵树是否互为镜像
+    bool check(TreeNode* p, TreeNode* q) {
+        // 递归基：皆为空
+        if (p == nullptr && q == nullptr) {
+            return true;
+        }
+        // 结构错位
+        if (p == nullptr || q == nullptr) {
+            return false;
+        }
+        // 值不相等
+        if (p->val != q->val) {
+            return false;
+        }
+        // 递归检查外侧与内侧
+        return check(p->left, q->right) && check(p->right, q->left);
+    }
+};
+```
+  </Tab>
+  <Tab label="TypeScript (递归与迭代)">
+```typescript
+class TreeNode {
+  val: number;
+  left: TreeNode | null = null;
+  right: TreeNode | null = null;
+  constructor(val: number) { this.val = val; }
+}
+
+/**
+ * 1. 递归版本
+ */
+function isSymmetric(root: TreeNode | null): boolean {
+  if (root === null) return true;
+  return check(root.left, root.right);
+}
+
+function check(p: TreeNode | null, q: TreeNode | null): boolean {
+  if (p === null && q === null) return true;
+  if (p === null || q === null) return false;
+  return (
+    p.val === q.val &&
+    check(p.left, q.right) &&
+    check(p.right, q.left)
+  );
+}
+
+/**
+ * 2. 迭代版本 (使用辅助数组作为双端队列)
+ */
+function isSymmetricIterative(root: TreeNode | null): boolean {
+  if (root === null) return true;
+
+  const queue: (TreeNode | null)[] = [root.left, root.right];
+
+  while (queue.length > 0) {
+    // 成对弹出
+    const u = queue.shift()!;
+    const v = queue.shift()!;
+
+    if (u === null && v === null) continue;
+    if (u === null || v === null || u.val !== v.val) return false;
+
+    // 成对放入镜像节点
+    queue.push(u.left, v.right);  // 外侧对
+    queue.push(u.right, v.left);  // 内侧对
+  }
+
+  return true;
+}
+```
+  </Tab>
+</CodeTabs>
+
+## 常见误区
+
+<Callout type="trap">
+  <strong>现象 →</strong> 误认为只要每个节点的左孩子值等于右孩子值（<code>node->left->val == node->right->val</code>），这棵树就是对称的。
+  <strong>原因 →</strong> 混淆了局部对称与全局镜像对称。局部对称只检查了单一父节点下的邻近孩子，而真正的对称二叉树是一个全局镜像关系。左子树的深层结构（如左下角）必须与右子树的深层结构（如右下角）跨子树匹配。
+  <strong>修法 →</strong> 坚决使用双指针协同遍历，确保递归或入队路径始终在 <code>p->left</code> 与 <code>q->right</code> 之间建立镜像关联。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 在读取 <code>p.left</code> 或 <code>p.val</code> 时，代码由于空指针解引用抛出 Crash。
+  <strong>原因 →</strong> 缺少足够的边界防护。在对二叉树指针进行各种向下取值的操作之前，没有拦截并判断该指针是否为空。
+  <strong>修法 →</strong> 在访问任何成员属性前，必须设置完整的递归基拦截条件，即：<code>if (!p || !q) return p == q;</code>（如果两者至少有一个为 <code>null</code>，那么只有在两者都为 <code>null</code> 的情况下才成立）。
+</Callout>
+
+<Callout type="trap">
+  <strong>现象 →</strong> 忽略了空节点的位置（即只将非空节点连线），导致形状不同的偏斜二叉树被错误判定为对称。
+  <strong>原因 →</strong> 值同形异陷阱。例如一棵树的所有节点值均为 <code>1</code>，左子树只有左节点，右子树也只有左节点。如果遍历时跳过或漏掉了 <code>null</code> 节点的显式比对，纯节点值序列的比对可能返回真，但实际结构并不对称。
+  <strong>修法 →</strong> 在迭代法的队列里，必须同时将 <code>null</code> 节点压入并参与比较；或者在递归法中直接利用 <code>!p || !q</code> 的结构差异拦截。
+</Callout>
+
+## 小结与练习
+
+- 判断对称二叉树的时间复杂度为 **$O(N)$**（$N$ 为树的节点总数），因为整个过程中每个节点最多被访问一次。
+- 空间复杂度在递归法下为 **$O(H)$**（$H$ 为树的高度），在退化树上退化为 **$O(N)$**；在迭代法下为 **$O(N)$**（主要是由于队列需存储最宽一层的节点数）。
+
+<Exercises>
+  <Answer question="二叉树的对称性（Symmetric Tree）判定，与判断两棵树是否是镜像关系（Is Mirror）在算法本质上有何联系？">
+    **本质完全相同**。判断二叉树是否对称，其物理定义就是**判断其左子树与右子树是否互为镜像**。也就是说，`isSymmetric(root)` 在根节点有效时，实质上就是在求解 `isMirror(root->left, root->right)`。这两个问题的核心逻辑和比对方向在双指针层面上完全重合。
+  </Answer>
+  <Answer question="除了使用队列（BFS）实现迭代判定，我们能否使用辅助栈（DFS）来实现对称树迭代？如果能，压栈的顺序是怎样的？">
+    **能**。使用辅助栈可以实现迭代的深度优先搜索（DFS）镜像判定。基本思想依然是“成对弹出，成对压入”。
+    - 每次从栈中弹出两个节点 `u` 和 `v` 进行比对。
+    - 比对成功后，将子节点成对压入栈中：压入 `(u->left, v->right)` 以及 `(u->right, v->left)`。
+    虽然栈的弹出顺序（DFS）与队列（BFS）不同，但这完全不影响对称性判定的正确性，因为每个对称节点的镜像比对只取决于其本身及对应镜像节点的值与拓扑，与它们的遍历次序无关。
+  </Answer>
+  <Answer question="给定一棵二叉树：根节点为 1，左孩子为 2，右孩子为 2。左孩子 2 的左侧无节点、右孩子为 3；右孩子 2 的左侧无节点、右孩子为 3。这棵树是对称的吗？为什么？">
+    **不对称**。
+    - 左子树的右孩子（值为 `3`）应当与右子树的**左孩子**（此处为空 `null`）进行对称匹配，然而两者一个为 `3`，一个为空。
+    - 同样，左子树的左孩子（此处为空 `null`）应当与右子树的**右孩子**（值为 `3`）比对。
+    - 结构和数值均不匹配。这棵树虽然左右子树结构类似且数值相同（都长在右侧），但它是非对称的（发生了顺移，而非镜像）。
+  </Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="对称前序遍历">
+    指先访问根节点，再访问右子树，最后访问左子树的遍历方法，专门用于与常规前序遍历（根-左-右）结合来检测二叉树的对称镜像关系。详见「概念讲解」节。
+  </GlossaryItem>
+  <GlossaryItem term="双指针比对">
+    指使用两个相互独立的遍历指针同步在一棵或多棵树的不同部分移动，交叉进行节点存在性与数值匹配的控制流设计。详见「概念讲解」节。
+  </GlossaryItem>
+  <GlossaryItem term="值同形异">
+    指不同子树中的节点值虽然恰好相等，但因为空节点（null）的排布不同而导致二叉树的几何空间拓扑结构完全不对称的现象。详见「常见误区」节。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+/>

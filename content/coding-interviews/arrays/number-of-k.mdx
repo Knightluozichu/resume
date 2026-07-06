@@ -1,0 +1,133 @@
+---
+title: 数组中出现次数超过 K 次的数字
+type: C
+section: 数组
+order: 9
+description: 用 k-1 个候选计数器模拟广义 Boyer-Moore，找出出现频率 > n/k 的值。
+demo: true
+math: false
+sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+draft: false
+---
+
+{/* 知识点清单：投票扩展、哈希降维、最终计数校验；原书章节：数组中出现次数超过 K 次的数字。 */}
+
+<Objectives>
+
+- 能说明单步抵消机制为何最多保留 k-1 个候选。
+- 能实现候选字典的增删与统一递减逻辑。
+- 能在候选上做最终频次验证并过滤。
+
+</Objectives>
+
+## 直觉引入
+
+凡是“出现频次超过 n/k”最多只会有 `k-1` 个候选值。  
+当候选池满且遇到新元素未匹配时，所有候选计数统一减一，模拟互相抵消。
+
+## 概念讲解
+
+该算法本质是“配对削减”。最终候选池再做一次全量计数，是保证正确性的关键步骤。
+
+## 思考引导
+
+### 1) 先问问题，不先默认阈值
+出现次数超过 K 的数字是“高频候选筛选”题。必须先判断 K 的大小与数据规模，决定是否能压缩状态。
+
+### 2) 识别不变式
+候选映射长度最多为 K，若超过就做抵消缩减。每次抵消对应“互相抵消一组非主导项”的语义。
+
+### 3) 为什么它一定成立
+任何非候选在足够多轮抵消后无法持续保持超过阈值贡献，剩下候选才值得继续追踪。
+
+### 4) 常见误区
+直接把摩尔方法套成无限候选，或把阈值校验写死为 K=2。方法和参数必须绑定。
+
+### 5) 你能找到一个反例吗
+K 比较大时若仍坚持严格 K-1 个计数桶，空间和更新逻辑可能复杂化。要通过小样本反证空间是否合理。
+
+### 6) 迁移到下一题
+异常检测、轻量 TopK 候选都可先采用受限候选+精确验证，而非立即全量统计。
+## 交互 Demo
+
+可视化地看见候选与计数在流式输入下反复衰减，最终留下高频元素。
+
+<HashTableDiagram />
+
+```cpp
+#include <vector>
+#include <unordered_map>
+
+class Solution {
+public:
+    std::vector<int> topKFrequent(const std::vector<int>& nums, int k) {
+        if (k <= 1 || nums.empty()) return {};
+        std::unordered_map<int, int> cnt;
+
+        for (int x : nums) {
+            if (cnt.find(x) != cnt.end()) {
+                ++cnt[x];
+                continue;
+            }
+            if ((int)cnt.size() < k - 1) {
+                cnt[x] = 1;
+                continue;
+            }
+
+            for (auto it = cnt.begin(); it != cnt.end();) {
+                if (--(it->second) == 0) it = cnt.erase(it);
+                else ++it;
+            }
+        }
+
+        std::vector<int> candidates;
+        for (auto& p : cnt) candidates.push_back(p.first);
+        std::vector<int> ans;
+        for (int c : candidates) {
+            int freq = 0;
+            for (int x : nums) if (x == c) ++freq;
+            if (freq * k > (int)nums.size()) ans.push_back(c);
+        }
+        return ans;
+    }
+};
+```
+
+```typescript
+function moreThanKTimes(nums: number[], k: number): number[] {
+  if (k <= 1 || nums.length === 0) return [];
+  const cnt = new Map<number, number>();
+
+  for (const x of nums) {
+    if (cnt.has(x)) {
+      cnt.set(x, (cnt.get(x) || 0) + 1);
+    } else if (cnt.size < k - 1) {
+      cnt.set(x, 1);
+    } else {
+      for (const [key, value] of cnt) {
+        if (value <= 1) cnt.delete(key);
+        else cnt.set(key, value - 1);
+      }
+    }
+  }
+
+  const ans: number[] = [];
+  for (const [key] of cnt) {
+    let freq = 0;
+    for (const x of nums) if (x === key) freq++;
+    if (freq * k > nums.length) ans.push(key);
+  }
+  return ans;
+}
+```
+
+<Callout type="trap">
+  <strong>现象 →</strong> 输出不稳定甚至重复。  
+  <strong>原因 →</strong> 未做最终验证，直接返回候选。  
+  <strong>修复 →</strong> 二次统计候选频次，按 `> n/k` 过滤。
+</Callout>
+
+<Attribution
+  adaptedFrom="Coding Interviews, Second Edition"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+/>

@@ -164,7 +164,9 @@ export type ReviewChapterSlug =
   | "coi-replace-spaces"
   | "coi-print-list-reverse"
   | "coi-rebuild-binary-tree"
+  | "coi-print-tree-from-top-to-bottom"
   | "coi-queue-with-two-stacks"
+  | "coi-stack-push-pop-order"
   | "coi-power"
   | "coi-print-numbers"
   | "coi-delete-node"
@@ -176,6 +178,54 @@ export type ReviewChapterSlug =
   | "coi-reverse-list"
   | "coi-merge-sorted-lists"
   | "coi-subtree-structure"
+  | "coi-mirror-binary-tree"
+  | "coi-symmetric-binary-tree"
+  | "coi-print-trees-in-lines"
+  | "coi-spiral-matrix"
+  | "coi-min-stack"
+  | "coi-print-trees-in-zigzag"
+  | "coi-squence-of-bst"
+  | "coi-path-in-tree"
+  | "coi-copy-complex-list"
+  | "coi-convert-binary-search-tree"
+  | "coi-serialize-binary-trees"
+  | "coi-string-permutation"
+  | "coi-more-than-half-number"
+  | "coi-k-least-numbers"
+  | "coi-stream-median"
+  | "coi-greatest-sum-of-subarrays"
+  | "coi-number-of-1"
+  | "coi-digits-in-sequence"
+  | "coi-sort-array-for-min-number"
+  | "coi-translate-numbers-to-strings"
+  | "coi-max-value-of-gifts"
+  | "coi-longest-substring-without-dup"
+  | "coi-ugly-number"
+  | "coi-first-not-repeating-char"
+  | "coi-first-character-in-stream"
+  | "coi-inverse-pairs"
+  | "coi-first-common-nodes-in-lists"
+  | "coi-number-of-k"
+  | "coi-missing-number"
+  | "coi-integer-identical-to-index"
+  | "coi-kth-node-in-bst"
+  | "coi-tree-depth"
+  | "coi-balanced-binary-tree"
+  | "coi-numbers-appear-once"
+  | "coi-number-appearing-once"
+  | "coi-two-numbers-with-sum"
+  | "coi-continuous-sequence-with-sum"
+  | "coi-max-in-sliding-window"
+  | "coi-queue-with-max"
+  | "coi-dices-probability"
+  | "coi-continous-cards"
+  | "coi-last-number-in-circle"
+  | "coi-maximal-profit"
+  | "coi-accumulate"
+  | "coi-add-two-numbers"
+  | "coi-constuct-array"
+  | "coi-string-to-int"
+  | "coi-common-parent-in-tree"
   // BNRG
   | "bnrg-first-app"
   | "bnrg-mvc"
@@ -614,7 +664,10 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-replace-spaces": "替换空格",
   "coi-print-list-reverse": "从尾到头打印链表",
   "coi-rebuild-binary-tree": "重建二叉树",
+  "coi-print-trees-in-lines": "从上到下打印二叉树 II",
+  "coi-print-tree-from-top-to-bottom": "从上到下打印二叉树",
   "coi-queue-with-two-stacks": "用两个栈实现队列",
+  "coi-stack-push-pop-order": "栈的压入、弹出序列",
   "coi-power": "数值的整数次方",
   "coi-print-numbers": "打印从 1 到最大的 n 位数",
   "coi-delete-node": "删除链表节点",
@@ -626,6 +679,53 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-reverse-list": "反转链表",
   "coi-merge-sorted-lists": "合并两个排序的链表",
   "coi-subtree-structure": "树的子结构",
+  "coi-mirror-binary-tree": "二叉树的镜像",
+  "coi-symmetric-binary-tree": "对称的二叉树",
+  "coi-spiral-matrix": "顺时针打印矩阵",
+  "coi-min-stack": "包含 min 函数的栈",
+  "coi-print-trees-in-zigzag": "二叉树的按层打印（之字形）",
+  "coi-squence-of-bst": "二叉搜索树的后序遍历序列",
+  "coi-path-in-tree": "二叉树中和为某一值的路径",
+  "coi-copy-complex-list": "复杂链表的复制",
+  "coi-convert-binary-search-tree": "二叉搜索树与双向链表",
+  "coi-serialize-binary-trees": "序列化二叉树",
+  "coi-string-permutation": "字符串的排列",
+  "coi-more-than-half-number": "数组中出现次数超过一半的数字",
+  "coi-k-least-numbers": "最小的 K 个数",
+  "coi-stream-median": "数据流中的中位数",
+  "coi-greatest-sum-of-subarrays": "连续子数组的最大和",
+  "coi-number-of-1": "数字中 1 出现的次数",
+  "coi-digits-in-sequence": "数字序列中的某位数字",
+  "coi-sort-array-for-min-number": "把数组排成最小的数",
+  "coi-translate-numbers-to-strings": "把数字翻译成字符串",
+  "coi-max-value-of-gifts": "礼物的最大价值",
+  "coi-longest-substring-without-dup": "最长不含重复字符的子字符串",
+  "coi-ugly-number": "丑数",
+  "coi-first-not-repeating-char": "字符串中第一个只出现一次的字符",
+  "coi-first-character-in-stream": "字符流中第一个不重复的字符",
+  "coi-inverse-pairs": "数组中的逆序对",
+  "coi-first-common-nodes-in-lists": "两个链表的第一个公共节点",
+  "coi-number-of-k": "数组中出现次数超过 K 次的数字",
+  "coi-missing-number": "缺失的数字",
+  "coi-integer-identical-to-index": "数组中数值和下标相等的元素",
+  "coi-kth-node-in-bst": "二叉搜索树中第 K 小的节点",
+  "coi-tree-depth": "树的深度",
+  "coi-balanced-binary-tree": "平衡二叉树",
+  "coi-numbers-appear-once": "数组中只出现一次的两个数字",
+  "coi-number-appearing-once": "数组中只出现一次的数字",
+  "coi-two-numbers-with-sum": "和为 S 的两个数字",
+  "coi-continuous-sequence-with-sum": "和为 S 的连续正数序列",
+  "coi-max-in-sliding-window": "滑动窗口的最大值",
+  "coi-queue-with-max": "队列的最大值",
+  "coi-dices-probability": "n 个骰子的点数",
+  "coi-continous-cards": "扑克牌中的顺子",
+  "coi-last-number-in-circle": "圆圈中最后剩下的数",
+  "coi-maximal-profit": "股票的最大利润",
+  "coi-accumulate": "累加",
+  "coi-add-two-numbers": "两数相加",
+  "coi-constuct-array": "构建乘积数组",
+  "coi-string-to-int": "把字符串转换成整数",
+  "coi-common-parent-in-tree": "二叉树的公共祖先",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
