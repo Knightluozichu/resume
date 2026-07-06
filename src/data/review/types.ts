@@ -360,7 +360,22 @@ export type ReviewChapterSlug =
   | "agent-combining-patterns"
   | "agent-agents-in-practice"
   | "agent-tool-prompt-engineering"
-  | "agent-production-readiness-checklist";
+  | "agent-production-readiness-checklist"
+  // 汽车为什么会跑：图解汽车构造与原理
+  | "auto-learning-map"
+  | "auto-whole-car-system"
+  | "auto-body-structure"
+  | "auto-engine-principles"
+  | "auto-transmission-principles"
+  | "auto-drivetrain-system"
+  | "auto-suspension-system"
+  | "auto-steering-system"
+  | "auto-brake-system"
+  | "auto-electronics-system"
+  | "auto-tire-wheel-system"
+  | "auto-electric-drive-system"
+  | "auto-design-manufacturing"
+  | "auto-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -659,6 +674,20 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
     "工具提示工程：让 agent 会用工具而不是猜工具",
   "agent-production-readiness-checklist":
     "生产化收官：简单、透明与 ACI 上线检查清单",
+  "auto-learning-map": "汽车为什么会跑：全书学习地图",
+  "auto-whole-car-system": "整车系统",
+  "auto-body-structure": "车身结构",
+  "auto-engine-principles": "发动机原理",
+  "auto-transmission-principles": "变速器原理",
+  "auto-drivetrain-system": "传动系统",
+  "auto-suspension-system": "悬架系统",
+  "auto-steering-system": "转向系统",
+  "auto-brake-system": "制动系统",
+  "auto-electronics-system": "电气电子",
+  "auto-tire-wheel-system": "车轮轮胎",
+  "auto-electric-drive-system": "电力驱动",
+  "auto-design-manufacturing": "设计制造",
+  "auto-final-review": "汽车为什么会跑总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

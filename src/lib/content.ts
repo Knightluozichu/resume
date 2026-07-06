@@ -76,6 +76,7 @@ export const BOOK_ORDER = [
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
+  "auto-why-car-runs",
   "cpp-concurrency",
   "unity5",
   "ai-agent-dev",
@@ -98,6 +99,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
+  "auto-why-car-runs": "汽车为什么会跑：图解汽车构造与原理",
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
   unity5: "Unity 5 权威讲解",
   "ai-agent-dev": "AI Agent 开发实战",
@@ -304,6 +306,45 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
     ],
   },
   {
+    slug: "automotive",
+    title: "汽车体系",
+    description: "从整车构造入门，逐步进入底盘、动力、电气电子、新能源和车载软件。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "先看懂汽车为什么能跑、能转、能停、能稳。",
+        items: [
+          {
+            bookSlug: "auto-why-car-runs",
+            note: "汽车体系第一本：用图解、动画和交互建立整车系统认知。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "进入发动机、传动、底盘、电气电子和新能源三电专项。",
+        items: [
+          {
+            title: "汽车系统专项",
+            note: "待补：发动机、变速器、底盘、汽车电子与新能源三电。",
+            missing: true,
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "继续进入智能座舱、ADAS、自动驾驶基础和车载软件工程。",
+        items: [
+          {
+            title: "车载软件与智能化",
+            note: "待补：座舱、车载中间件、感知融合、规控基础和整车系统工程。",
+            missing: true,
+          },
+        ],
+      },
+    ],
+  },
+  {
     slug: "graphics",
     title: "图形渲染",
     description: "从数学和图形学基础，到 OpenGL 实作，再到实时渲染架构。",
@@ -466,6 +507,15 @@ export const SECTION_ORDER = [
   "Unity物理",
   "Unity动画与UI",
   "Unity渲染与发布",
+  // 汽车为什么会跑：图解汽车构造与原理
+  "全书地图",
+  "整车系统",
+  "车身结构",
+  "动力系统",
+  "传动与底盘",
+  "安全与电子",
+  "新能源与制造",
+  "总复习",
   // AI Agent 开发实战
   "基础原理",
   "核心机制",

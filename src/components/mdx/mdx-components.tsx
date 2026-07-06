@@ -698,6 +698,22 @@ import {
   TeamArchitectureBoardDiagram,
 } from "./android-patterns/design-pattern-diagrams";
 import { GameMathLab } from "./gamemath/game-math-lab";
+import {
+  AutoBookLearningMap,
+  AutoFinalReviewLab,
+  BodyStructureLab,
+  BrakeLab,
+  DrivetrainLab,
+  ElectronicsLab,
+  EnginePrinciplesLab,
+  ElectricDriveLab,
+  ManufacturingLab,
+  SteeringLab,
+  SuspensionLab,
+  TireLab,
+  TransmissionLab,
+  WholeCarSystemsLab,
+} from "./auto/why-car-runs-lab";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1678,6 +1694,20 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MvpFlowDiagram,
   MvvmFlowDiagram,
   GameMathLab,
+  AutoBookLearningMap,
+  AutoFinalReviewLab,
+  BodyStructureLab,
+  BrakeLab,
+  DrivetrainLab,
+  ElectronicsLab,
+  EnginePrinciplesLab,
+  ElectricDriveLab,
+  ManufacturingLab,
+  SteeringLab,
+  SuspensionLab,
+  TireLab,
+  TransmissionLab,
+  WholeCarSystemsLab,
   Term,
   Glossary,
   GlossaryItem,

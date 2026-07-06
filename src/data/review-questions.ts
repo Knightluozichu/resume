@@ -236,6 +236,7 @@ import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
 import { agtFunctionCallingQuestions } from "./review/agt-function-calling";
 import { agtReactLoopQuestions } from "./review/agt-react-loop";
 import { agtToolDesignQuestions } from "./review/agt-tool-design";
+import { autoWhyCarRunsQuestions } from "./review/auto-why-car-runs";
 import { coiFindInMatrixQuestions } from "./review/coi-find-in-matrix";
 import { coiReplaceSpacesQuestions } from "./review/coi-replace-spaces";
 import { coiPrintListReverseQuestions } from "./review/coi-print-list-reverse";
@@ -605,6 +606,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agtFunctionCallingQuestions,
   ...agtReactLoopQuestions,
   ...agtToolDesignQuestions,
+  // 汽车为什么会跑：图解汽车构造与原理
+  ...autoWhyCarRunsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
