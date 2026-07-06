@@ -3,130 +3,175 @@
 import { useMemo, useState } from "react";
 
 interface StepData {
-  title: string;
-  array: number[];
-  leftIndex: number;
-  rightIndex: number;
+  index: number;
+  value: number;
+  current: number;
+  best: number;
+  start: number;
+  bestStart: number;
+  bestEnd: number;
   compare: string;
   decision: string;
   proof: string;
   action: string;
-  leftSafeEnd: number;
-  rightSafeStart: number;
-  focusIndices: number[];
   codeLine: number;
 }
 
+const NUMS = [-2, 1, -3, 4, -1, 2, 1, -5, 4];
+
 const STEPS: StepData[] = [
   {
-    title: "初始化",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "left=0, right=6",
-    decision: "从两端夹逼",
-    proof: "左侧负责找偶数，右侧负责找奇数；两边都找到错位项后才交换。",
-    action: "设置两个指针",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
+    index: 0,
+    value: -2,
+    current: -2,
+    best: -2,
+    start: 0,
+    bestStart: 0,
+    bestEnd: 0,
+    compare: "init with nums[0]",
+    decision: "首元初始化",
+    proof: "题目要求非空子数组，全负数组也必须返回某个元素，不能初始化为 0。",
+    action: "current = best = -2",
     codeLine: 1,
   },
   {
-    title: "定位第一组错位",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "2 偶数，3 奇数",
-    decision: "两端都错位",
-    proof: "2 应该去右侧偶数区，3 应该去左侧奇数区，满足 left < right。",
-    action: "交换 nums[0] 和 nums[6]",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
-    codeLine: 6,
+    index: 1,
+    value: 1,
+    current: 1,
+    best: 1,
+    start: 1,
+    bestStart: 1,
+    bestEnd: 1,
+    compare: "max(1, -2 + 1)",
+    decision: "从当前重启",
+    proof: "前缀 current=-2 是负债，接上它只会让 1 变差。",
+    action: "current = 1, best = 1",
+    codeLine: 3,
   },
   {
-    title: "完成第一次交换",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "3 已归位，2 已归位",
-    decision: "收缩边界",
-    proof: "索引 0 已经是奇数区，索引 6 已经是偶数区，下一轮只看中间候选区。",
-    action: "left++，right--",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [0, 6],
-    codeLine: 7,
+    index: 2,
+    value: -3,
+    current: -2,
+    best: 1,
+    start: 1,
+    bestStart: 1,
+    bestEnd: 1,
+    compare: "max(-3, 1 + -3)",
+    decision: "延续但不刷新 best",
+    proof: "接上当前段得到 -2，虽然变差，但仍比单独 -3 更好。",
+    action: "current = -2, best = 1",
+    codeLine: 3,
   },
   {
-    title: "定位第二组错位",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "4 偶数，1 奇数",
-    decision: "再次交换",
-    proof: "4 是左侧发现的第一个偶数，1 是右侧发现的第一个奇数。",
-    action: "交换 nums[1] 和 nums[5]",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [1, 5],
-    codeLine: 6,
+    index: 3,
+    value: 4,
+    current: 4,
+    best: 4,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 3,
+    compare: "max(4, -2 + 4)",
+    decision: "从当前重启",
+    proof: "负前缀不值得延续，直接从 4 开新段。",
+    action: "current = 4, best = 4",
+    codeLine: 3,
   },
   {
-    title: "完成第二次交换",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 2,
-    rightIndex: 4,
-    compare: "1 已归位，4 已归位",
-    decision: "继续扫描",
-    proof: "左侧安全区扩大到索引 1，右侧安全区扩大到索引 5。",
-    action: "left++，right--",
-    leftSafeEnd: 1,
-    rightSafeStart: 5,
-    focusIndices: [1, 5],
-    codeLine: 7,
+    index: 4,
+    value: -1,
+    current: 3,
+    best: 4,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 3,
+    compare: "max(-1, 4 + -1)",
+    decision: "延续当前段",
+    proof: "4 + -1 = 3，虽然下降，但仍比重启成 -1 更好。",
+    action: "current = 3, best = 4",
+    codeLine: 3,
   },
   {
-    title: "跳过已合规元素",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 4,
-    rightIndex: 3,
-    compare: "left=4, right=3",
-    decision: "指针交错，结束",
-    proof: "left 依次跳过 5、7 两个奇数；right 跳过 8 这个偶数，最终 left >= right。",
-    action: "返回当前数组",
-    leftSafeEnd: 3,
-    rightSafeStart: 4,
-    focusIndices: [2, 3, 4],
-    codeLine: 2,
+    index: 5,
+    value: 2,
+    current: 5,
+    best: 5,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 5,
+    compare: "max(2, 3 + 2)",
+    decision: "延续并刷新 best",
+    proof: "当前段 [4,-1,2] 的和达到 5，超过历史最优。",
+    action: "current = 5, best = 5",
+    codeLine: 4,
+  },
+  {
+    index: 6,
+    value: 1,
+    current: 6,
+    best: 6,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 6,
+    compare: "max(1, 5 + 1)",
+    decision: "继续刷新 best",
+    proof: "当前段 [4,-1,2,1] 的和达到 6。",
+    action: "current = 6, best = 6",
+    codeLine: 4,
+  },
+  {
+    index: 7,
+    value: -5,
+    current: 1,
+    best: 6,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 6,
+    compare: "max(-5, 6 + -5)",
+    decision: "延续但 best 不变",
+    proof: "接上 -5 后 current 只剩 1，不足以刷新 best。",
+    action: "current = 1, best = 6",
+    codeLine: 3,
+  },
+  {
+    index: 8,
+    value: 4,
+    current: 5,
+    best: 6,
+    start: 3,
+    bestStart: 3,
+    bestEnd: 6,
+    compare: "max(4, 1 + 4)",
+    decision: "延续但 best 不变",
+    proof: "最后得到 current=5，仍低于历史最优 6。",
+    action: "return 6",
+    codeLine: 5,
   },
 ];
 
 const CODE_LINES = [
-  "left = 0, right = n - 1",
-  "while left < right:",
-  "  while left < right && isOdd(nums[left]): left++",
-  "  while left < right && !isOdd(nums[right]): right--",
-  "  if left < right:",
-  "    swap(nums[left], nums[right])",
-  "    left++, right--",
+  "current = nums[0], best = nums[0]",
+  "for i from 1 to n - 1:",
+  "  extend = current + nums[i]",
+  "  current = max(nums[i], extend)",
+  "  best = max(best, current)",
+  "return best",
 ];
 
-const isOdd = (value: number) => (value & 1) !== 0;
-
-export function PartitionArrayDiagram() {
+export function MaxSubarrayDiagram() {
   const [currentStep, setCurrentStep] = useState(0);
   const step = STEPS[currentStep];
 
-  const zones = useMemo(() => {
-    return step.array.map((_, index) => {
-      if (index <= step.leftSafeEnd) return "odd-safe";
-      if (index >= step.rightSafeStart) return "even-safe";
-      return "candidate";
-    });
-  }, [step]);
+  const bestIndices = useMemo(() => {
+    const set = new Set<number>();
+    for (let i = step.bestStart; i <= step.bestEnd; i += 1) set.add(i);
+    return set;
+  }, [step.bestStart, step.bestEnd]);
+
+  const currentIndices = useMemo(() => {
+    const set = new Set<number>();
+    for (let i = step.start; i <= step.index; i += 1) set.add(i);
+    return set;
+  }, [step.start, step.index]);
 
   const prevStep = () => setCurrentStep((value) => Math.max(0, value - 1));
   const nextStep = () =>
@@ -142,24 +187,24 @@ export function PartitionArrayDiagram() {
                 interview whiteboard
               </p>
               <h3 className="mt-1 text-base font-semibold text-primary">
-                奇偶重排：相向双指针原地划分
+                连续子数组最大和：延续还是重启
               </h3>
             </div>
             <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
-              <span>predicate</span>
+              <span>best</span>
               <span className="rounded-control border border-accent px-2 py-1 font-mono text-accent">
-                x &amp; 1
+                {step.best}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
           <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-4 flex flex-wrap items-center gap-1 sm:gap-2">
               {STEPS.map((item, index) => (
                 <button
-                  key={item.title}
+                  key={`${item.index}-${index}`}
                   type="button"
                   onClick={() => setCurrentStep(index)}
                   className={`h-8 min-w-8 rounded-control border px-2 font-mono text-xs font-semibold transition-colors ${
@@ -177,84 +222,72 @@ export function PartitionArrayDiagram() {
             </div>
 
             <div className="rounded-card border border-border bg-elevated p-3 sm:p-4">
-              <div className="mb-3 grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
-                {step.array.map((_, index) => (
+              <div className="mb-3 grid grid-cols-[repeat(9,minmax(28px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
+                {NUMS.map((_, index) => (
                   <div key={index}>[{index}]</div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2">
-                {step.array.map((value, index) => {
-                  const isLeft = index === step.leftIndex;
-                  const isRight = index === step.rightIndex;
-                  const focused = step.focusIndices.includes(index);
-                  const zone = zones[index];
-                  const parity = isOdd(value) ? "奇" : "偶";
+              <div className="grid grid-cols-[repeat(9,minmax(28px,1fr))] gap-2">
+                {NUMS.map((value, index) => {
+                  const isScan = index === step.index;
+                  const isBest = bestIndices.has(index);
+                  const isCurrent = currentIndices.has(index);
 
                   return (
                     <div
                       key={`${index}-${value}`}
                       className={`relative flex min-h-14 flex-col items-center justify-center rounded-control border font-mono transition-all ${
-                        isLeft || isRight
+                        isScan
                           ? "border-accent bg-accent/10 text-accent"
-                          : focused
-                            ? "border-success bg-success/10 text-success"
-                            : zone === "odd-safe"
-                              ? "border-success/60 bg-success/10 text-success"
-                              : zone === "even-safe"
-                                ? "border-border bg-bg text-secondary"
-                                : "border-border bg-bg text-primary"
+                          : isBest
+                            ? "border-success/70 bg-success/10 text-success"
+                            : isCurrent
+                              ? "border-border bg-bg text-primary"
+                              : "border-border bg-bg text-secondary opacity-55"
                       }`}
                     >
                       <span className="text-lg font-bold">{value}</span>
-                      <span className="text-[10px] font-semibold text-secondary">
-                        {parity}
-                      </span>
-                      {isLeft ? (
-                        <span className="absolute -bottom-5 text-[10px] font-bold text-accent">
-                          left
-                        </span>
-                      ) : null}
-                      {isRight ? (
+                      {isScan ? (
                         <span className="absolute -top-5 text-[10px] font-bold text-accent">
-                          right
+                          scan
                         </span>
                       ) : null}
+                      <span className="text-[10px] font-semibold text-secondary">
+                        {isBest ? "best" : isCurrent ? "current" : "历史"}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-8 grid gap-2 text-xs font-semibold sm:grid-cols-3">
-                <div className="rounded-control border border-success/60 px-3 py-2 text-success">
-                  左安全区：奇数
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  中间候选区：继续扫描
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  右安全区：偶数
-                </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <StateCard label="current" value={String(step.current)} />
+                <StateCard label="best" value={String(step.best)} />
+                <StateCard
+                  label="best range"
+                  value={`[${step.bestStart}, ${step.bestEnd}]`}
+                />
               </div>
             </div>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">不变量</p>
+                <p className="text-xs font-semibold text-secondary">状态定义</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  左边只放奇数，右边只放偶数
+                  current 是必须包含当前位置的最大和
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">指针职责</p>
+                <p className="text-xs font-semibold text-secondary">转移选择</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  left 找偶数，right 找奇数
+                  接上前段，或从当前重启
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">稳定性</p>
+                <p className="text-xs font-semibold text-secondary">边界陷阱</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  原地交换不保证相对顺序
+                  全负数组不能用 0 初始化
                 </p>
               </div>
             </div>
@@ -266,12 +299,12 @@ export function PartitionArrayDiagram() {
                 current judgment
               </p>
               <div className="mt-3 flex items-baseline justify-between gap-3">
-                <p className="font-mono text-xl font-bold text-accent sm:text-2xl">
+                <p className="font-mono text-lg font-bold text-accent sm:text-xl">
                   {step.compare}
                 </p>
                 <p
                   className={`rounded-control border px-2 py-1 text-xs font-semibold ${
-                    currentStep === STEPS.length - 1
+                    step.best === step.current
                       ? "border-success text-success"
                       : "border-border text-secondary"
                   }`}
@@ -310,14 +343,14 @@ export function PartitionArrayDiagram() {
 
             <section className="rounded-card border border-border bg-elevated p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
-                interview boundary
+                interview trap
               </p>
               <div className="mt-3 grid gap-2 text-sm leading-6">
                 <p className="text-primary">
-                  每个内部 while 都必须先判断 left &lt; right。
+                  只有 current 为负债时，后续元素才应该摆脱它。
                 </p>
                 <p className="text-secondary">
-                  交换后必须移动两个指针，否则可能重复交换同一组元素。
+                  若把 best/current 初始化为 0，全负数组会错误返回 0。
                 </p>
               </div>
             </section>
@@ -347,8 +380,17 @@ export function PartitionArrayDiagram() {
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        面试白板法：先说明指针职责，再用安全区不变量证明每次交换和收缩都不会破坏最终划分。
+        面试白板法：每到一个新元素，只比较“接上前段”和“从这里重启”，用 current 压缩局部状态，用 best 保存全局答案。
       </figcaption>
     </figure>
+  );
+}
+
+function StateCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-card border border-border bg-bg p-3 text-center">
+      <p className="text-xs font-semibold text-secondary">{label}</p>
+      <p className="mt-1 font-mono text-lg font-bold text-primary">{value}</p>
+    </div>
   );
 }

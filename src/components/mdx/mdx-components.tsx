@@ -674,6 +674,22 @@ import { BigNumberPrintDiagram } from "./diagrams/big-number-print-diagram";
 import { MirrorBinaryTreeDiagram } from "./diagrams/mirror-binary-tree-diagram";
 import { SymmetricBinaryTreeDiagram } from "./diagrams/symmetric-binary-tree-diagram";
 import { SpiralMatrixDiagram } from "./diagrams/spiral-matrix-diagram";
+import { MajorityVoteDiagram } from "./diagrams/majority-vote-diagram";
+import { KLeastNumbersDiagram } from "./diagrams/k-least-numbers-diagram";
+import { MaxSubarrayDiagram } from "./diagrams/max-subarray-diagram";
+import { MaxValueOfGiftsDiagram } from "./diagrams/max-value-of-gifts-diagram";
+import { InversePairsDiagram } from "./diagrams/inverse-pairs-diagram";
+import { MoreThanKTimesDiagram } from "./diagrams/more-than-k-times-diagram";
+import { MissingNumberDiagram } from "./diagrams/missing-number-diagram";
+import { ValueEqualIndexDiagram } from "./diagrams/value-equal-index-diagram";
+import { TwoSingleNumbersDiagram } from "./diagrams/two-single-numbers-diagram";
+import { SingleNumberXorDiagram } from "./diagrams/single-number-xor-diagram";
+import { TwoNumbersWithSumDiagram } from "./diagrams/two-numbers-with-sum-diagram";
+import { ContinuousSequenceSumDiagram } from "./diagrams/continuous-sequence-sum-diagram";
+import { StraightCardsDiagram } from "./diagrams/straight-cards-diagram";
+import { MaxStockProfitDiagram } from "./diagrams/max-stock-profit-diagram";
+import { PrefixSumDiagram } from "./diagrams/prefix-sum-diagram";
+import { ProductArrayDiagram } from "./diagrams/product-array-diagram";
 import { MinStackDiagram } from "./diagrams/min-stack-diagram";
 import { SelectionSortDiagram } from "./diagrams/SelectionSortDiagram";
 import { RecursionDiagram } from "./diagrams/RecursionDiagram";
@@ -1662,6 +1678,22 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MirrorBinaryTreeDiagram,
   SymmetricBinaryTreeDiagram,
   SpiralMatrixDiagram,
+  MajorityVoteDiagram,
+  KLeastNumbersDiagram,
+  MaxSubarrayDiagram,
+  MaxValueOfGiftsDiagram,
+  InversePairsDiagram,
+  MoreThanKTimesDiagram,
+  MissingNumberDiagram,
+  ValueEqualIndexDiagram,
+  TwoSingleNumbersDiagram,
+  SingleNumberXorDiagram,
+  TwoNumbersWithSumDiagram,
+  ContinuousSequenceSumDiagram,
+  StraightCardsDiagram,
+  MaxStockProfitDiagram,
+  PrefixSumDiagram,
+  ProductArrayDiagram,
   MinStackDiagram,
   SelectionSortDiagram,
   RecursionDiagram,

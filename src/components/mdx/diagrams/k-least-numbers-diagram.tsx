@@ -3,130 +3,148 @@
 import { useMemo, useState } from "react";
 
 interface StepData {
-  title: string;
-  array: number[];
-  leftIndex: number;
-  rightIndex: number;
+  index: number;
+  value: number | null;
+  heap: number[];
+  rejected: number[];
+  selected: number[];
   compare: string;
   decision: string;
   proof: string;
   action: string;
-  leftSafeEnd: number;
-  rightSafeStart: number;
-  focusIndices: number[];
   codeLine: number;
 }
 
+const NUMS = [4, 5, 1, 6, 2, 7, 3, 8];
+const K = 4;
+
 const STEPS: StepData[] = [
   {
-    title: "初始化",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "left=0, right=6",
-    decision: "从两端夹逼",
-    proof: "左侧负责找偶数，右侧负责找奇数；两边都找到错位项后才交换。",
-    action: "设置两个指针",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
-    codeLine: 1,
-  },
-  {
-    title: "定位第一组错位",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "2 偶数，3 奇数",
-    decision: "两端都错位",
-    proof: "2 应该去右侧偶数区，3 应该去左侧奇数区，满足 left < right。",
-    action: "交换 nums[0] 和 nums[6]",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
-    codeLine: 6,
-  },
-  {
-    title: "完成第一次交换",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "3 已归位，2 已归位",
-    decision: "收缩边界",
-    proof: "索引 0 已经是奇数区，索引 6 已经是偶数区，下一轮只看中间候选区。",
-    action: "left++，right--",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [0, 6],
-    codeLine: 7,
-  },
-  {
-    title: "定位第二组错位",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "4 偶数，1 奇数",
-    decision: "再次交换",
-    proof: "4 是左侧发现的第一个偶数，1 是右侧发现的第一个奇数。",
-    action: "交换 nums[1] 和 nums[5]",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [1, 5],
-    codeLine: 6,
-  },
-  {
-    title: "完成第二次交换",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 2,
-    rightIndex: 4,
-    compare: "1 已归位，4 已归位",
-    decision: "继续扫描",
-    proof: "左侧安全区扩大到索引 1，右侧安全区扩大到索引 5。",
-    action: "left++，right--",
-    leftSafeEnd: 1,
-    rightSafeStart: 5,
-    focusIndices: [1, 5],
-    codeLine: 7,
-  },
-  {
-    title: "跳过已合规元素",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 4,
-    rightIndex: 3,
-    compare: "left=4, right=3",
-    decision: "指针交错，结束",
-    proof: "left 依次跳过 5、7 两个奇数；right 跳过 8 这个偶数，最终 left >= right。",
-    action: "返回当前数组",
-    leftSafeEnd: 3,
-    rightSafeStart: 4,
-    focusIndices: [2, 3, 4],
+    index: 0,
+    value: 4,
+    heap: [4],
+    rejected: [],
+    selected: [0],
+    compare: "heap.size < k",
+    decision: "直接入堆",
+    proof: "候选池还没满，先把 4 放进去。",
+    action: "push(4)",
     codeLine: 2,
+  },
+  {
+    index: 1,
+    value: 5,
+    heap: [5, 4],
+    rejected: [],
+    selected: [0, 1],
+    compare: "heap.size < k",
+    decision: "直接入堆",
+    proof: "候选池大小为 2，小于 k=4，继续收集。",
+    action: "push(5)",
+    codeLine: 2,
+  },
+  {
+    index: 2,
+    value: 1,
+    heap: [5, 4, 1],
+    rejected: [],
+    selected: [0, 1, 2],
+    compare: "heap.size < k",
+    decision: "直接入堆",
+    proof: "候选池仍未满，不需要淘汰。",
+    action: "push(1)",
+    codeLine: 2,
+  },
+  {
+    index: 3,
+    value: 6,
+    heap: [6, 5, 1, 4],
+    rejected: [],
+    selected: [0, 1, 2, 3],
+    compare: "heap.size < k",
+    decision: "填满候选池",
+    proof: "前 4 个数先构成临时 Top-K，堆顶 6 是候选里最大的。",
+    action: "push(6)",
+    codeLine: 2,
+  },
+  {
+    index: 4,
+    value: 2,
+    heap: [5, 4, 1, 2],
+    rejected: [3],
+    selected: [0, 1, 2, 4],
+    compare: "2 < heap.top(6)",
+    decision: "替换堆顶",
+    proof: "2 比当前候选中最大的 6 更小，所以 6 不可能属于最小 4 个。",
+    action: "pop(6), push(2)",
+    codeLine: 4,
+  },
+  {
+    index: 5,
+    value: 7,
+    heap: [5, 4, 1, 2],
+    rejected: [3, 5],
+    selected: [0, 1, 2, 4],
+    compare: "7 >= heap.top(5)",
+    decision: "直接淘汰",
+    proof: "7 比候选池最大的 5 还大，不可能进入最小 4 个。",
+    action: "skip(7)",
+    codeLine: 5,
+  },
+  {
+    index: 6,
+    value: 3,
+    heap: [4, 3, 1, 2],
+    rejected: [1, 3, 5],
+    selected: [0, 2, 4, 6],
+    compare: "3 < heap.top(5)",
+    decision: "替换堆顶",
+    proof: "3 挤掉候选池里最大的 5，候选池变成 1、2、3、4。",
+    action: "pop(5), push(3)",
+    codeLine: 4,
+  },
+  {
+    index: 7,
+    value: 8,
+    heap: [4, 3, 1, 2],
+    rejected: [1, 3, 5, 7],
+    selected: [0, 2, 4, 6],
+    compare: "8 >= heap.top(4)",
+    decision: "直接淘汰",
+    proof: "8 不比候选池最大值 4 小，不能改变前 4 小集合。",
+    action: "skip(8)",
+    codeLine: 5,
+  },
+  {
+    index: 7,
+    value: null,
+    heap: [4, 3, 1, 2],
+    rejected: [1, 3, 5, 7],
+    selected: [0, 2, 4, 6],
+    compare: "heap = {1,2,3,4}",
+    decision: "得到答案集合",
+    proof: "最大堆只保证集合正确，不保证输出有序；若题目要求有序，再额外排序这 k 个数。",
+    action: "return heap items",
+    codeLine: 6,
   },
 ];
 
 const CODE_LINES = [
-  "left = 0, right = n - 1",
-  "while left < right:",
-  "  while left < right && isOdd(nums[left]): left++",
-  "  while left < right && !isOdd(nums[right]): right--",
-  "  if left < right:",
-  "    swap(nums[left], nums[right])",
-  "    left++, right--",
+  "if k <= 0: return []",
+  "for x in nums:",
+  "  if heap.size < k: push(x)",
+  "  else if x < heap.top():",
+  "    popTop(); push(x)",
+  "  else: skip(x)",
+  "return heap items",
 ];
 
-const isOdd = (value: number) => (value & 1) !== 0;
-
-export function PartitionArrayDiagram() {
+export function KLeastNumbersDiagram() {
   const [currentStep, setCurrentStep] = useState(0);
   const step = STEPS[currentStep];
 
-  const zones = useMemo(() => {
-    return step.array.map((_, index) => {
-      if (index <= step.leftSafeEnd) return "odd-safe";
-      if (index >= step.rightSafeStart) return "even-safe";
-      return "candidate";
-    });
-  }, [step]);
+  const selectedSet = useMemo(() => new Set(step.selected), [step.selected]);
+  const rejectedSet = useMemo(() => new Set(step.rejected), [step.rejected]);
 
   const prevStep = () => setCurrentStep((value) => Math.max(0, value - 1));
   const nextStep = () =>
@@ -142,24 +160,24 @@ export function PartitionArrayDiagram() {
                 interview whiteboard
               </p>
               <h3 className="mt-1 text-base font-semibold text-primary">
-                奇偶重排：相向双指针原地划分
+                最小的 K 个数：最大堆维护候选池
               </h3>
             </div>
             <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
-              <span>predicate</span>
+              <span>k</span>
               <span className="rounded-control border border-accent px-2 py-1 font-mono text-accent">
-                x &amp; 1
+                {K}
               </span>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
           <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
-            <div className="mb-4 flex flex-wrap items-center gap-2">
+            <div className="mb-4 flex flex-wrap items-center gap-1 sm:gap-2">
               {STEPS.map((item, index) => (
                 <button
-                  key={item.title}
+                  key={`${item.index}-${index}`}
                   type="button"
                   onClick={() => setCurrentStep(index)}
                   className={`h-8 min-w-8 rounded-control border px-2 font-mono text-xs font-semibold transition-colors ${
@@ -177,64 +195,78 @@ export function PartitionArrayDiagram() {
             </div>
 
             <div className="rounded-card border border-border bg-elevated p-3 sm:p-4">
-              <div className="mb-3 grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
-                {step.array.map((_, index) => (
+              <div className="mb-3 grid grid-cols-[repeat(8,minmax(34px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
+                {NUMS.map((_, index) => (
                   <div key={index}>[{index}]</div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2">
-                {step.array.map((value, index) => {
-                  const isLeft = index === step.leftIndex;
-                  const isRight = index === step.rightIndex;
-                  const focused = step.focusIndices.includes(index);
-                  const zone = zones[index];
-                  const parity = isOdd(value) ? "奇" : "偶";
+              <div className="grid grid-cols-[repeat(8,minmax(34px,1fr))] gap-2">
+                {NUMS.map((value, index) => {
+                  const isCurrent = index === step.index && step.value !== null;
+                  const isSelected = selectedSet.has(index);
+                  const isRejected = rejectedSet.has(index);
 
                   return (
                     <div
                       key={`${index}-${value}`}
                       className={`relative flex min-h-14 flex-col items-center justify-center rounded-control border font-mono transition-all ${
-                        isLeft || isRight
+                        isCurrent
                           ? "border-accent bg-accent/10 text-accent"
-                          : focused
-                            ? "border-success bg-success/10 text-success"
-                            : zone === "odd-safe"
-                              ? "border-success/60 bg-success/10 text-success"
-                              : zone === "even-safe"
-                                ? "border-border bg-bg text-secondary"
-                                : "border-border bg-bg text-primary"
+                          : isSelected
+                            ? "border-success/70 bg-success/10 text-success"
+                            : isRejected
+                              ? "border-border bg-bg text-secondary opacity-35"
+                              : "border-border bg-bg text-primary"
                       }`}
                     >
                       <span className="text-lg font-bold">{value}</span>
-                      <span className="text-[10px] font-semibold text-secondary">
-                        {parity}
-                      </span>
-                      {isLeft ? (
-                        <span className="absolute -bottom-5 text-[10px] font-bold text-accent">
-                          left
-                        </span>
-                      ) : null}
-                      {isRight ? (
+                      {isCurrent ? (
                         <span className="absolute -top-5 text-[10px] font-bold text-accent">
-                          right
+                          scan
                         </span>
                       ) : null}
+                      <span className="text-[10px] font-semibold text-secondary">
+                        {isRejected ? "淘汰" : isSelected ? "候选" : "未扫"}
+                      </span>
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-8 grid gap-2 text-xs font-semibold sm:grid-cols-3">
-                <div className="rounded-control border border-success/60 px-3 py-2 text-success">
-                  左安全区：奇数
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  中间候选区：继续扫描
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  右安全区：偶数
-                </div>
+              <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.8fr)]">
+                <section className="rounded-card border border-border bg-bg p-3">
+                  <p className="text-xs font-semibold text-secondary">
+                    max heap candidates
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {step.heap.map((value, index) => (
+                      <span
+                        key={`${value}-${index}`}
+                        className={`rounded-control border px-3 py-2 font-mono text-sm font-bold ${
+                          index === 0
+                            ? "border-accent text-accent"
+                            : "border-border text-primary"
+                        }`}
+                      >
+                        {value}
+                        {index === 0 ? " top" : ""}
+                      </span>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-card border border-border bg-bg p-3">
+                  <p className="text-xs font-semibold text-secondary">
+                    complexity
+                  </p>
+                  <p className="mt-2 font-mono text-sm font-bold text-primary">
+                    O(n log k)
+                  </p>
+                  <p className="mt-1 text-xs text-secondary">
+                    空间 O(k)，适合 k 小或数据流。
+                  </p>
+                </section>
               </div>
             </div>
 
@@ -242,19 +274,19 @@ export function PartitionArrayDiagram() {
               <div className="rounded-card border border-border bg-elevated p-3">
                 <p className="text-xs font-semibold text-secondary">不变量</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  左边只放奇数，右边只放偶数
+                  堆里始终保留当前最小 k 个候选
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">指针职责</p>
+                <p className="text-xs font-semibold text-secondary">堆顶含义</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  left 找偶数，right 找奇数
+                  候选池中最大的数，最容易被淘汰
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">稳定性</p>
+                <p className="text-xs font-semibold text-secondary">方法取舍</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  原地交换不保证相对顺序
+                  快选平均 O(n)，但会改动输入
                 </p>
               </div>
             </div>
@@ -266,7 +298,7 @@ export function PartitionArrayDiagram() {
                 current judgment
               </p>
               <div className="mt-3 flex items-baseline justify-between gap-3">
-                <p className="font-mono text-xl font-bold text-accent sm:text-2xl">
+                <p className="font-mono text-lg font-bold text-accent sm:text-xl">
                   {step.compare}
                 </p>
                 <p
@@ -310,14 +342,14 @@ export function PartitionArrayDiagram() {
 
             <section className="rounded-card border border-border bg-elevated p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
-                interview boundary
+                interview choice
               </p>
               <div className="mt-3 grid gap-2 text-sm leading-6">
                 <p className="text-primary">
-                  每个内部 while 都必须先判断 left &lt; right。
+                  数据量大、k 小、输入流式更新：优先最大堆。
                 </p>
                 <p className="text-secondary">
-                  交换后必须移动两个指针，否则可能重复交换同一组元素。
+                  可改动数组且只要无序前 k 个：可讲快速选择，平均 O(n)。
                 </p>
               </div>
             </section>
@@ -347,7 +379,7 @@ export function PartitionArrayDiagram() {
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        面试白板法：先说明指针职责，再用安全区不变量证明每次交换和收缩都不会破坏最终划分。
+        面试白板法：用大小为 k 的最大堆保留候选池，堆顶代表当前候选里最大的数，遇到更小值才替换。
       </figcaption>
     </figure>
   );

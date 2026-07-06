@@ -1,17 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 interface StepInfo {
   row: number;
   col: number;
   val: number;
-  comparison: string;
-  conclusion: string;
-  rowStart: number;
-  rowEnd: number;
-  colStart: number;
-  colEnd: number;
+  compare: string;
+  decision: string;
+  proof: string;
+  action: string;
+  activeRows: [number, number];
+  activeCols: [number, number];
+  codeLine: number;
 }
 
 const MATRIX = [
@@ -28,451 +29,305 @@ const STEPS: StepInfo[] = [
     row: 0,
     col: 3,
     val: 9,
-    comparison: "9 > 7",
-    conclusion: "9 > 7，目标值较小，排除第 3 列",
-    rowStart: 0,
-    rowEnd: 3,
-    colStart: 0,
-    colEnd: 3,
+    compare: "9 > 7",
+    decision: "目标更小",
+    proof: "当前列向下只会更大，所以整列都不可能是 7。",
+    action: "删除第 3 列，col--",
+    activeRows: [0, 3],
+    activeCols: [0, 3],
+    codeLine: 5,
   },
   {
     row: 0,
     col: 2,
     val: 8,
-    comparison: "8 > 7",
-    conclusion: "8 > 7，目标值较小，排除第 2 列",
-    rowStart: 0,
-    rowEnd: 3,
-    colStart: 0,
-    colEnd: 2,
+    compare: "8 > 7",
+    decision: "目标更小",
+    proof: "第 2 列从 8 往下递增，9、10、11 都比 7 大。",
+    action: "删除第 2 列，col--",
+    activeRows: [0, 3],
+    activeCols: [0, 2],
+    codeLine: 5,
   },
   {
     row: 0,
     col: 1,
     val: 2,
-    comparison: "2 < 7",
-    conclusion: "2 < 7，目标值较大，排除第 0 行",
-    rowStart: 0,
-    rowEnd: 3,
-    colStart: 0,
-    colEnd: 1,
+    compare: "2 < 7",
+    decision: "目标更大",
+    proof: "当前行左侧不会超过 2，所以第 0 行剩余部分都太小。",
+    action: "删除第 0 行，row++",
+    activeRows: [0, 3],
+    activeCols: [0, 1],
+    codeLine: 6,
   },
   {
     row: 1,
     col: 1,
     val: 4,
-    comparison: "4 < 7",
-    conclusion: "4 < 7，目标值较大，排除第 1 行",
-    rowStart: 1,
-    rowEnd: 3,
-    colStart: 0,
-    colEnd: 1,
+    compare: "4 < 7",
+    decision: "目标更大",
+    proof: "第 1 行剩余候选是 2、4，都比 7 小。",
+    action: "删除第 1 行，row++",
+    activeRows: [1, 3],
+    activeCols: [0, 1],
+    codeLine: 6,
   },
   {
     row: 2,
     col: 1,
     val: 7,
-    comparison: "7 == 7",
-    conclusion: "7 == 7，找到目标值，查找成功！",
-    rowStart: 2,
-    rowEnd: 3,
-    colStart: 0,
-    colEnd: 1,
+    compare: "7 == 7",
+    decision: "命中目标",
+    proof: "当前格正好等于 target，算法立即返回 true。",
+    action: "返回 true",
+    activeRows: [2, 3],
+    activeCols: [0, 1],
+    codeLine: 4,
   },
 ];
 
+const CODE_LINES = [
+  "row = 0, col = cols - 1",
+  "while row < rows && col >= 0:",
+  "  cur = matrix[row][col]",
+  "  if cur == target: return true",
+  "  if cur > target: col--",
+  "  else: row++",
+  "return false",
+];
+
+const cellKey = (row: number, col: number) => `${row}-${col}`;
+
 export function FindInMatrixDiagram() {
   const [currentStep, setCurrentStep] = useState(0);
-
-  const GRID_X = 40;
-  const GRID_Y = 55;
-  const CELL_W = 46;
-  const CELL_H = 46;
-  const GAP = 8;
-
   const step = STEPS[currentStep];
 
-  const prevStep = () => {
-    if (currentStep > 0) setCurrentStep(currentStep - 1);
-  };
+  const visitedCells = useMemo(() => {
+    const cells = new Set<string>();
+    for (let i = 0; i < currentStep; i += 1) {
+      cells.add(cellKey(STEPS[i].row, STEPS[i].col));
+    }
+    return cells;
+  }, [currentStep]);
 
-  const nextStep = () => {
-    if (currentStep < STEPS.length - 1) setCurrentStep(currentStep + 1);
-  };
-
-  // Helper to determine center coordinate of a cell
-  const getCellCenter = (r: number, c: number) => {
-    const x = GRID_X + c * (CELL_W + GAP) + CELL_W / 2;
-    const y = GRID_Y + r * (CELL_H + GAP) + CELL_H / 2;
-    return { x, y };
-  };
+  const prevStep = () => setCurrentStep((value) => Math.max(0, value - 1));
+  const nextStep = () =>
+    setCurrentStep((value) => Math.min(STEPS.length - 1, value + 1));
 
   return (
-    <figure className="mdx-figure mx-auto my-6 max-w-[580px]">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox="0 0 540 320"
-          role="img"
-          aria-label="二维数组中的查找步骤可视化。在行列递增矩阵中查找 7。从右上角开始比较，根据大小排除行或列。"
-          className="mx-auto block h-auto w-full"
-        >
-          {/* SVG Arrow Marker Definition */}
-          <defs>
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="6"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="var(--accent)" />
-            </marker>
-          </defs>
+    <figure className="mdx-figure mx-auto my-6 max-w-5xl">
+      <div className="overflow-hidden rounded-card border border-border bg-bg">
+        <div className="border-b border-border bg-elevated px-4 py-3 sm:px-5">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-secondary">
+                interview whiteboard
+              </p>
+              <h3 className="mt-1 text-base font-semibold text-primary">
+                二维数组中的查找：从右上角做排除
+              </h3>
+            </div>
+            <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
+              <span>target</span>
+              <span className="rounded-control border border-accent px-2 py-1 font-mono text-accent">
+                {TARGET}
+              </span>
+            </div>
+          </div>
+        </div>
 
-          {/* Title */}
-          <text
-            x="270"
-            y="25"
-            textAnchor="middle"
-            fontSize="15px"
-            fontWeight="700"
-            fill="var(--text-primary)"
-          >
-            二维数组中的查找 (Target = 7)
-          </text>
-
-          {/* Column Indices */}
-          {[0, 1, 2, 3].map((c) => {
-            const pos = getCellCenter(0, c);
-            return (
-              <text
-                key={`col-idx-${c}`}
-                x={pos.x}
-                y="44"
-                textAnchor="middle"
-                fontSize="10px"
-                fontWeight="600"
-                fill="var(--text-secondary)"
-              >
-                c={c}
-              </text>
-            );
-          })}
-
-          {/* Row Indices */}
-          {[0, 1, 2, 3].map((r) => {
-            const pos = getCellCenter(r, 0);
-            return (
-              <text
-                key={`row-idx-${r}`}
-                x="22"
-                y={pos.y + 3.5}
-                textAnchor="middle"
-                fontSize="10px"
-                fontWeight="600"
-                fill="var(--text-secondary)"
-              >
-                r={r}
-              </text>
-            );
-          })}
-
-          {/* Cells Grid */}
-          {MATRIX.map((rowArr, r) =>
-            rowArr.map((v, c) => {
-              const isActive = r === step.row && c === step.col;
-              // A cell is eliminated if it is outside the active boundaries of the current step
-              const isEliminated =
-                r < step.rowStart ||
-                r > step.rowEnd ||
-                c < step.colStart ||
-                c > step.colEnd;
-
-              const isFound = isActive && v === TARGET;
-
-              const x = GRID_X + c * (CELL_W + GAP);
-              const y = GRID_Y + r * (CELL_H + GAP);
-
-              let strokeColor = "var(--border)";
-              let fillColor = "var(--bg-elevated)";
-              let textColor = "var(--text-primary)";
-              let strokeWidth = 1.5;
-
-              if (isActive) {
-                strokeColor = isFound ? "var(--success)" : "var(--accent)";
-                fillColor = isFound ? "var(--success)" : "var(--accent)";
-                textColor = "var(--bg)"; // high contrast text color
-                strokeWidth = 2;
-              } else if (isEliminated) {
-                textColor = "var(--text-secondary)";
-              }
-
-              return (
-                <g
-                  key={`cell-${r}-${c}`}
-                  opacity={isEliminated && !isActive ? 0.25 : 1}
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
+          <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              {STEPS.map((item, index) => (
+                <button
+                  key={`${item.row}-${item.col}`}
+                  type="button"
+                  onClick={() => setCurrentStep(index)}
+                  className={`h-8 min-w-8 rounded-control border px-2 font-mono text-xs font-semibold transition-colors ${
+                    index === currentStep
+                      ? "border-accent bg-accent text-bg"
+                      : index < currentStep
+                        ? "border-success text-success hover:border-accent"
+                        : "border-border text-secondary hover:border-accent hover:text-primary"
+                  }`}
+                  aria-label={`跳到第 ${index + 1} 步`}
                 >
-                  <rect
-                    x={x}
-                    y={y}
-                    width={CELL_W}
-                    height={CELL_H}
-                    rx="6"
-                    fill={fillColor}
-                    fillOpacity={isActive ? 0.15 : 1}
-                    stroke={strokeColor}
-                    strokeWidth={strokeWidth}
-                    className="transition-all duration-300"
-                  />
-                  <text
-                    x={x + CELL_W / 2}
-                    y={y + CELL_H / 2 + 4.5}
-                    textAnchor="middle"
-                    fontSize="13px"
-                    fontWeight={isActive ? "700" : "500"}
-                    fill={
-                      isActive
-                        ? isFound
-                          ? "var(--success)"
-                          : "var(--accent)"
-                        : textColor
-                    }
-                    className="transition-colors duration-300"
-                  >
-                    {v}
-                  </text>
-                </g>
-              );
-            }),
-          )}
+                  {index + 1}
+                </button>
+              ))}
+            </div>
 
-          {/* Paths / Arrows */}
-          {Array.from({ length: currentStep }).map((_, i) => {
-            const idx = i + 1;
-            const prev = STEPS[idx - 1];
-            const curr = STEPS[idx];
-            const p1 = getCellCenter(prev.row, prev.col);
-            const p2 = getCellCenter(curr.row, curr.col);
+            <div className="rounded-card border border-border bg-elevated p-3 sm:p-4">
+              <div className="mb-3 grid grid-cols-[36px_repeat(4,minmax(44px,1fr))] gap-2 text-center text-xs font-semibold text-secondary">
+                <div />
+                {[0, 1, 2, 3].map((col) => (
+                  <div key={col} className="font-mono">
+                    c{col}
+                  </div>
+                ))}
+              </div>
 
-            let sx = p1.x,
-              sy = p1.y,
-              ex = p2.x,
-              ey = p2.y;
-            // Shorten the arrow line segment so it doesn't overlap text inside cells
-            if (p1.x === p2.x) {
-              sy = p1.y + 15;
-              ey = p2.y - 15;
-            } else {
-              sx = p1.x - 15;
-              ex = p2.x + 15;
-            }
+              <div className="grid grid-cols-[36px_repeat(4,minmax(44px,1fr))] gap-2">
+                {MATRIX.map((rowValues, row) => (
+                  <Fragment key={`matrix-row-${row}`}>
+                    <div
+                      key={`row-${row}`}
+                      className="flex min-h-12 items-center justify-center font-mono text-xs font-semibold text-secondary"
+                    >
+                      r{row}
+                    </div>
+                    {rowValues.map((value, col) => {
+                      const isCurrent = row === step.row && col === step.col;
+                      const isVisited = visitedCells.has(cellKey(row, col));
+                      const isActive =
+                        row >= step.activeRows[0] &&
+                        row <= step.activeRows[1] &&
+                        col >= step.activeCols[0] &&
+                        col <= step.activeCols[1];
+                      const isTarget = isCurrent && value === TARGET;
 
-            return (
-              <line
-                key={`arrow-${idx}`}
-                x1={sx}
-                y1={sy}
-                x2={ex}
-                y2={ey}
-                stroke="var(--accent)"
-                strokeWidth="2"
-                strokeDasharray="1 1"
-                markerEnd="url(#arrow)"
-              />
-            );
-          })}
+                      return (
+                        <div
+                          key={cellKey(row, col)}
+                          className={`relative flex min-h-12 items-center justify-center rounded-control border font-mono text-base font-bold transition-all ${
+                            isCurrent
+                              ? isTarget
+                                ? "border-success bg-success/10 text-success"
+                                : "border-accent bg-accent/10 text-accent"
+                              : isVisited
+                                ? "border-border bg-bg text-secondary opacity-45"
+                                : isActive
+                                  ? "border-border bg-bg text-primary"
+                                  : "border-border bg-bg text-secondary opacity-25"
+                          }`}
+                        >
+                          {value}
+                          {isCurrent ? (
+                            <span className="absolute -right-1.5 -top-1.5 rounded-control border border-border bg-bg px-1 py-0.5 text-[10px] font-semibold text-primary">
+                              cur
+                            </span>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+              </div>
+            </div>
 
-          {/* Right Info Panel */}
-          <g>
-            {/* Background Card */}
-            <rect
-              x="290"
-              y="55"
-              width="225"
-              height="210"
-              rx="8"
-              fill="var(--bg-elevated)"
-              stroke="var(--border)"
-              strokeWidth="1.5"
-            />
-
-            {/* Header */}
-            <text
-              x="305"
-              y="80"
-              fontSize="13px"
-              fontWeight="700"
-              fill="var(--text-primary)"
-            >
-              查找进度 (Step {currentStep})
-            </text>
-            <line
-              x1="305"
-              y1="90"
-              x2="500"
-              y2="90"
-              stroke="var(--border)"
-              strokeWidth="1"
-            />
-
-            {/* Details */}
-            <text
-              x="305"
-              y="112"
-              fontSize="11px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              当前坐标:
-            </text>
-            <text
-              x="365"
-              y="112"
-              fontSize="11px"
-              fontWeight="700"
-              fill="var(--text-primary)"
-            >
-              r={step.row}, c={step.col}
-            </text>
-
-            <text
-              x="305"
-              y="132"
-              fontSize="11px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              当前数值:
-            </text>
-            <text
-              x="365"
-              y="132"
-              fontSize="11px"
-              fontWeight="700"
-              fill={
-                step.val === TARGET ? "var(--success)" : "var(--text-primary)"
-              }
-            >
-              {step.val}
-            </text>
-
-            <text
-              x="305"
-              y="152"
-              fontSize="11px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              对比式子:
-            </text>
-            <text
-              x="365"
-              y="152"
-              fontSize="11px"
-              fontWeight="700"
-              fill="var(--accent)"
-            >
-              {step.comparison}
-            </text>
-
-            {/* Range Bounds */}
-            <text
-              x="305"
-              y="180"
-              fontSize="11px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              搜索范围:
-            </text>
-            <text
-              x="305"
-              y="196"
-              fontSize="10px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              行: [{step.rowStart}, {step.rowEnd}] | 列: [{step.colStart},{" "}
-              {step.colEnd}]
-            </text>
-
-            {/* Divider */}
-            <line
-              x1="305"
-              y1="210"
-              x2="500"
-              y2="210"
-              stroke="var(--border)"
-              strokeWidth="1"
-              strokeDasharray="2 2"
-            />
-
-            {/* Action / Conclusion */}
-            <text
-              x="305"
-              y="232"
-              fontSize="11px"
-              fontWeight="600"
-              fill="var(--text-secondary)"
-            >
-              执行决策:
-            </text>
-            <text
-              x="305"
-              y="248"
-              fontSize="11px"
-              fontWeight="700"
-              fill={
-                step.val === TARGET ? "var(--success)" : "var(--text-primary)"
-              }
-            >
-              {step.conclusion}
-            </text>
-          </g>
-        </svg>
-
-        {/* Buttons Controls */}
-        <div className="mt-4 flex items-center justify-between px-1">
-          <button
-            onClick={prevStep}
-            disabled={currentStep === 0}
-            className="rounded-control border border-border bg-bg px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-hover disabled:opacity-30 disabled:pointer-events-none"
-          >
-            上一步 (Prev)
-          </button>
-
-          {/* Progress Indicators */}
-          <div className="flex gap-1.5">
-            {STEPS.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setCurrentStep(i)}
-                className={`h-2 rounded-full transition-all duration-300 ${
-                  i === currentStep
-                    ? "w-6 bg-accent"
-                    : i < currentStep
-                      ? "w-2 bg-success"
-                      : "w-2 bg-border"
-                }`}
-                aria-label={`跳转到步骤 ${i}`}
-              />
-            ))}
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-card border border-border bg-elevated p-3">
+                <p className="text-xs font-semibold text-secondary">不变量</p>
+                <p className="mt-1 text-sm font-medium text-primary">
+                  候选区只会向左或向下收缩
+                </p>
+              </div>
+              <div className="rounded-card border border-border bg-elevated p-3">
+                <p className="text-xs font-semibold text-secondary">当前位置</p>
+                <p className="mt-1 font-mono text-sm font-semibold text-primary">
+                  row={step.row}, col={step.col}
+                </p>
+              </div>
+              <div className="rounded-card border border-border bg-elevated p-3">
+                <p className="text-xs font-semibold text-secondary">候选边界</p>
+                <p className="mt-1 font-mono text-sm font-semibold text-primary">
+                  r[{step.activeRows.join("..")}] c[
+                  {step.activeCols.join("..")}]
+                </p>
+              </div>
+            </div>
           </div>
 
-          <button
-            onClick={nextStep}
-            disabled={currentStep === STEPS.length - 1}
-            className="rounded-control border border-border bg-bg px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-hover disabled:opacity-30 disabled:pointer-events-none"
-          >
-            下一步 (Next)
-          </button>
+          <div className="space-y-4 p-4 sm:p-5">
+            <section className="rounded-card border border-border bg-elevated p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                current judgment
+              </p>
+              <div className="mt-3 flex items-baseline justify-between gap-3">
+                <p className="font-mono text-2xl font-bold text-accent">
+                  {step.compare}
+                </p>
+                <p
+                  className={`rounded-control border px-2 py-1 text-xs font-semibold ${
+                    step.val === TARGET
+                      ? "border-success text-success"
+                      : "border-border text-secondary"
+                  }`}
+                >
+                  {step.decision}
+                </p>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-primary">
+                {step.proof}
+              </p>
+              <p className="mt-2 text-sm font-semibold text-accent">
+                {step.action}
+              </p>
+            </section>
+
+            <section className="rounded-card border border-border bg-elevated p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                pseudo code cursor
+              </p>
+              <ol className="mt-3 space-y-1 font-mono text-xs leading-6">
+                {CODE_LINES.map((line, index) => (
+                  <li
+                    key={line}
+                    className={`grid grid-cols-[24px_minmax(0,1fr)] rounded-control px-2 ${
+                      index === step.codeLine
+                        ? "bg-accent/10 text-accent"
+                        : "text-secondary"
+                    }`}
+                  >
+                    <span>{index + 1}</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ol>
+            </section>
+
+            <section className="rounded-card border border-border bg-elevated p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
+                why this corner
+              </p>
+              <div className="mt-3 grid gap-2 text-sm leading-6">
+                <p className="text-primary">
+                  右上角同时具备两个方向：向左变小，向下变大。
+                </p>
+                <p className="text-secondary">
+                  所以每次比较都有唯一决策：大了删列，小了删行。
+                </p>
+              </div>
+            </section>
+
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={prevStep}
+                disabled={currentStep === 0}
+                className="rounded-control border border-border bg-bg px-3 py-2 text-sm font-semibold text-primary transition-colors hover:border-accent disabled:pointer-events-none disabled:opacity-35"
+              >
+                上一步
+              </button>
+              <span className="font-mono text-xs text-secondary">
+                {currentStep + 1} / {STEPS.length}
+              </span>
+              <button
+                type="button"
+                onClick={nextStep}
+                disabled={currentStep === STEPS.length - 1}
+                className="rounded-control border border-border bg-bg px-3 py-2 text-sm font-semibold text-primary transition-colors hover:border-accent disabled:pointer-events-none disabled:opacity-35"
+              >
+                下一步
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        指针初始在右上角 (0,3)=9。由于 9 &gt;
-        7，排除最后一列。指针逐步向左或向下逼近，直到在 (2,1) 找到 7。
+        面试白板法：先锁定右上角，再用“当前列全大”或“当前行全小”证明每一步删除都是安全的。
       </figcaption>
     </figure>
   );

@@ -3,130 +3,185 @@
 import { useMemo, useState } from "react";
 
 interface StepData {
-  title: string;
-  array: number[];
-  leftIndex: number;
-  rightIndex: number;
+  index: number;
+  value: number | null;
+  candidate: number | null;
+  count: number;
   compare: string;
   decision: string;
   proof: string;
   action: string;
-  leftSafeEnd: number;
-  rightSafeStart: number;
-  focusIndices: number[];
+  eliminated: number[];
+  active: number[];
+  verifiedCount: number | null;
   codeLine: number;
 }
 
+const NUMS = [1, 2, 3, 2, 2, 2, 5, 4, 2];
+const MAJORITY = 2;
+
 const STEPS: StepData[] = [
   {
-    title: "初始化",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "left=0, right=6",
-    decision: "从两端夹逼",
-    proof: "左侧负责找偶数，右侧负责找奇数；两边都找到错位项后才交换。",
-    action: "设置两个指针",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
-    codeLine: 1,
+    index: 0,
+    value: 1,
+    candidate: 1,
+    count: 1,
+    compare: "count == 0",
+    decision: "换候选",
+    proof: "没有未抵消票时，当前数字先成为候选。",
+    action: "candidate = 1, count = 1",
+    eliminated: [],
+    active: [0],
+    verifiedCount: null,
+    codeLine: 3,
   },
   {
-    title: "定位第一组错位",
-    array: [2, 4, 5, 7, 8, 1, 3],
-    leftIndex: 0,
-    rightIndex: 6,
-    compare: "2 偶数，3 奇数",
-    decision: "两端都错位",
-    proof: "2 应该去右侧偶数区，3 应该去左侧奇数区，满足 left < right。",
-    action: "交换 nums[0] 和 nums[6]",
-    leftSafeEnd: -1,
-    rightSafeStart: 7,
-    focusIndices: [0, 6],
+    index: 1,
+    value: 2,
+    candidate: 1,
+    count: 0,
+    compare: "2 != candidate(1)",
+    decision: "异号抵消",
+    proof: "一个候选票和一个反对票成对删除，不改变真正多数元素的净优势。",
+    action: "count--，1 与 2 抵消",
+    eliminated: [0, 1],
+    active: [],
+    verifiedCount: null,
+    codeLine: 5,
+  },
+  {
+    index: 2,
+    value: 3,
+    candidate: 3,
+    count: 1,
+    compare: "count == 0",
+    decision: "换候选",
+    proof: "上一组已抵消干净，新的未抵消段从 3 开始。",
+    action: "candidate = 3, count = 1",
+    eliminated: [0, 1],
+    active: [2],
+    verifiedCount: null,
+    codeLine: 3,
+  },
+  {
+    index: 3,
+    value: 2,
+    candidate: 3,
+    count: 0,
+    compare: "2 != candidate(3)",
+    decision: "异号抵消",
+    proof: "3 与 2 配对删除，候选库存再次归零。",
+    action: "count--，3 与 2 抵消",
+    eliminated: [0, 1, 2, 3],
+    active: [],
+    verifiedCount: null,
+    codeLine: 5,
+  },
+  {
+    index: 4,
+    value: 2,
+    candidate: 2,
+    count: 1,
+    compare: "count == 0",
+    decision: "换候选",
+    proof: "抵消后剩下的新段从 2 开始，2 暂时成为候选。",
+    action: "candidate = 2, count = 1",
+    eliminated: [0, 1, 2, 3],
+    active: [4],
+    verifiedCount: null,
+    codeLine: 3,
+  },
+  {
+    index: 5,
+    value: 2,
+    candidate: 2,
+    count: 2,
+    compare: "2 == candidate(2)",
+    decision: "同号加票",
+    proof: "同候选值增加候选库存，抵消能力变强。",
+    action: "count++",
+    eliminated: [0, 1, 2, 3],
+    active: [4, 5],
+    verifiedCount: null,
+    codeLine: 4,
+  },
+  {
+    index: 6,
+    value: 5,
+    candidate: 2,
+    count: 1,
+    compare: "5 != candidate(2)",
+    decision: "异号抵消",
+    proof: "用一个 5 抵消一个未抵消的 2，2 的净优势仍然存在。",
+    action: "count--",
+    eliminated: [0, 1, 2, 3, 5, 6],
+    active: [4],
+    verifiedCount: null,
+    codeLine: 5,
+  },
+  {
+    index: 7,
+    value: 4,
+    candidate: 2,
+    count: 0,
+    compare: "4 != candidate(2)",
+    decision: "异号抵消",
+    proof: "4 再抵消一个 2，库存归零，但前面被删除的配对不影响多数结论。",
+    action: "count--",
+    eliminated: [0, 1, 2, 3, 4, 5, 6, 7],
+    active: [],
+    verifiedCount: null,
+    codeLine: 5,
+  },
+  {
+    index: 8,
+    value: 2,
+    candidate: 2,
+    count: 1,
+    compare: "count == 0",
+    decision: "留下最终候选",
+    proof: "最后未抵消的候选是 2，但第一遍只证明它可能是多数。",
+    action: "candidate = 2, count = 1",
+    eliminated: [0, 1, 2, 3, 4, 5, 6, 7],
+    active: [8],
+    verifiedCount: null,
+    codeLine: 3,
+  },
+  {
+    index: 8,
+    value: null,
+    candidate: 2,
+    count: 1,
+    compare: "verify(2) = 5 > 9 / 2",
+    decision: "校验通过",
+    proof: "输入可能没有多数元素，所以必须第二遍完整计数；这里 2 出现 5 次，超过一半。",
+    action: "return 2",
+    eliminated: [0, 1, 2, 3, 4, 5, 6, 7],
+    active: [8],
+    verifiedCount: 5,
     codeLine: 6,
-  },
-  {
-    title: "完成第一次交换",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "3 已归位，2 已归位",
-    decision: "收缩边界",
-    proof: "索引 0 已经是奇数区，索引 6 已经是偶数区，下一轮只看中间候选区。",
-    action: "left++，right--",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [0, 6],
-    codeLine: 7,
-  },
-  {
-    title: "定位第二组错位",
-    array: [3, 4, 5, 7, 8, 1, 2],
-    leftIndex: 1,
-    rightIndex: 5,
-    compare: "4 偶数，1 奇数",
-    decision: "再次交换",
-    proof: "4 是左侧发现的第一个偶数，1 是右侧发现的第一个奇数。",
-    action: "交换 nums[1] 和 nums[5]",
-    leftSafeEnd: 0,
-    rightSafeStart: 6,
-    focusIndices: [1, 5],
-    codeLine: 6,
-  },
-  {
-    title: "完成第二次交换",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 2,
-    rightIndex: 4,
-    compare: "1 已归位，4 已归位",
-    decision: "继续扫描",
-    proof: "左侧安全区扩大到索引 1，右侧安全区扩大到索引 5。",
-    action: "left++，right--",
-    leftSafeEnd: 1,
-    rightSafeStart: 5,
-    focusIndices: [1, 5],
-    codeLine: 7,
-  },
-  {
-    title: "跳过已合规元素",
-    array: [3, 1, 5, 7, 8, 4, 2],
-    leftIndex: 4,
-    rightIndex: 3,
-    compare: "left=4, right=3",
-    decision: "指针交错，结束",
-    proof: "left 依次跳过 5、7 两个奇数；right 跳过 8 这个偶数，最终 left >= right。",
-    action: "返回当前数组",
-    leftSafeEnd: 3,
-    rightSafeStart: 4,
-    focusIndices: [2, 3, 4],
-    codeLine: 2,
   },
 ];
 
 const CODE_LINES = [
-  "left = 0, right = n - 1",
-  "while left < right:",
-  "  while left < right && isOdd(nums[left]): left++",
-  "  while left < right && !isOdd(nums[right]): right--",
-  "  if left < right:",
-  "    swap(nums[left], nums[right])",
-  "    left++, right--",
+  "candidate = 0, count = 0",
+  "for x in nums:",
+  "  if count == 0: candidate = x; count = 1",
+  "  else if x == candidate: count++",
+  "  else: count--",
+  "verify = count(candidate)",
+  "return verify * 2 > n ? candidate : -1",
 ];
 
-const isOdd = (value: number) => (value & 1) !== 0;
-
-export function PartitionArrayDiagram() {
+export function MajorityVoteDiagram() {
   const [currentStep, setCurrentStep] = useState(0);
   const step = STEPS[currentStep];
 
-  const zones = useMemo(() => {
-    return step.array.map((_, index) => {
-      if (index <= step.leftSafeEnd) return "odd-safe";
-      if (index >= step.rightSafeStart) return "even-safe";
-      return "candidate";
-    });
-  }, [step]);
+  const eliminatedSet = useMemo(
+    () => new Set(step.eliminated),
+    [step.eliminated],
+  );
+  const activeSet = useMemo(() => new Set(step.active), [step.active]);
 
   const prevStep = () => setCurrentStep((value) => Math.max(0, value - 1));
   const nextStep = () =>
@@ -142,24 +197,24 @@ export function PartitionArrayDiagram() {
                 interview whiteboard
               </p>
               <h3 className="mt-1 text-base font-semibold text-primary">
-                奇偶重排：相向双指针原地划分
+                超过一半的数字：摩尔投票抵消
               </h3>
             </div>
             <div className="flex items-center gap-2 text-sm font-semibold text-secondary">
-              <span>predicate</span>
+              <span>majority</span>
               <span className="rounded-control border border-accent px-2 py-1 font-mono text-accent">
-                x &amp; 1
+                &gt; n/2
               </span>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)]">
           <div className="border-b border-border p-4 sm:p-5 lg:border-b-0 lg:border-r">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               {STEPS.map((item, index) => (
                 <button
-                  key={item.title}
+                  key={`${item.index}-${index}`}
                   type="button"
                   onClick={() => setCurrentStep(index)}
                   className={`h-8 min-w-8 rounded-control border px-2 font-mono text-xs font-semibold transition-colors ${
@@ -177,64 +232,66 @@ export function PartitionArrayDiagram() {
             </div>
 
             <div className="rounded-card border border-border bg-elevated p-3 sm:p-4">
-              <div className="mb-3 grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
-                {step.array.map((_, index) => (
+              <div className="mb-3 grid grid-cols-[repeat(9,minmax(28px,1fr))] gap-2 text-center font-mono text-xs font-semibold text-secondary">
+                {NUMS.map((_, index) => (
                   <div key={index}>[{index}]</div>
                 ))}
               </div>
 
-              <div className="grid grid-cols-[repeat(7,minmax(38px,1fr))] gap-2">
-                {step.array.map((value, index) => {
-                  const isLeft = index === step.leftIndex;
-                  const isRight = index === step.rightIndex;
-                  const focused = step.focusIndices.includes(index);
-                  const zone = zones[index];
-                  const parity = isOdd(value) ? "奇" : "偶";
+              <div className="grid grid-cols-[repeat(9,minmax(28px,1fr))] gap-2">
+                {NUMS.map((value, index) => {
+                  const isCurrent = index === step.index && step.value !== null;
+                  const isEliminated = eliminatedSet.has(index);
+                  const isActive = activeSet.has(index);
+                  const isMajority = value === MAJORITY;
 
                   return (
                     <div
                       key={`${index}-${value}`}
                       className={`relative flex min-h-14 flex-col items-center justify-center rounded-control border font-mono transition-all ${
-                        isLeft || isRight
+                        isCurrent
                           ? "border-accent bg-accent/10 text-accent"
-                          : focused
-                            ? "border-success bg-success/10 text-success"
-                            : zone === "odd-safe"
-                              ? "border-success/60 bg-success/10 text-success"
-                              : zone === "even-safe"
-                                ? "border-border bg-bg text-secondary"
+                          : isActive
+                            ? "border-success/70 bg-success/10 text-success"
+                            : isEliminated
+                              ? "border-border bg-bg text-secondary opacity-35"
+                              : isMajority
+                                ? "border-success/50 bg-success/5 text-primary"
                                 : "border-border bg-bg text-primary"
                       }`}
                     >
                       <span className="text-lg font-bold">{value}</span>
-                      <span className="text-[10px] font-semibold text-secondary">
-                        {parity}
-                      </span>
-                      {isLeft ? (
-                        <span className="absolute -bottom-5 text-[10px] font-bold text-accent">
-                          left
-                        </span>
-                      ) : null}
-                      {isRight ? (
+                      {isCurrent ? (
                         <span className="absolute -top-5 text-[10px] font-bold text-accent">
-                          right
+                          scan
                         </span>
                       ) : null}
+                      {isEliminated ? (
+                        <span className="text-[10px] font-semibold text-secondary">
+                          抵消
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-secondary">
+                          {value === step.candidate ? "候选" : "其他"}
+                        </span>
+                      )}
                     </div>
                   );
                 })}
               </div>
 
-              <div className="mt-8 grid gap-2 text-xs font-semibold sm:grid-cols-3">
-                <div className="rounded-control border border-success/60 px-3 py-2 text-success">
-                  左安全区：奇数
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  中间候选区：继续扫描
-                </div>
-                <div className="rounded-control border border-border px-3 py-2 text-secondary">
-                  右安全区：偶数
-                </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <StateCard
+                  label="candidate"
+                  value={step.candidate === null ? "-" : String(step.candidate)}
+                />
+                <StateCard label="count" value={String(step.count)} />
+                <StateCard
+                  label="verify"
+                  value={
+                    step.verifiedCount === null ? "待校验" : `${step.verifiedCount}/9`
+                  }
+                />
               </div>
             </div>
 
@@ -242,19 +299,19 @@ export function PartitionArrayDiagram() {
               <div className="rounded-card border border-border bg-elevated p-3">
                 <p className="text-xs font-semibold text-secondary">不变量</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  左边只放奇数，右边只放偶数
+                  不同数字成对删除，不改多数优势
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">指针职责</p>
+                <p className="text-xs font-semibold text-secondary">第一遍</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  left 找偶数，right 找奇数
+                  只找可能候选，不保证存在
                 </p>
               </div>
               <div className="rounded-card border border-border bg-elevated p-3">
-                <p className="text-xs font-semibold text-secondary">稳定性</p>
+                <p className="text-xs font-semibold text-secondary">第二遍</p>
                 <p className="mt-1 text-sm font-medium text-primary">
-                  原地交换不保证相对顺序
+                  完整计数，确认是否超过一半
                 </p>
               </div>
             </div>
@@ -266,12 +323,12 @@ export function PartitionArrayDiagram() {
                 current judgment
               </p>
               <div className="mt-3 flex items-baseline justify-between gap-3">
-                <p className="font-mono text-xl font-bold text-accent sm:text-2xl">
+                <p className="font-mono text-lg font-bold text-accent sm:text-xl">
                   {step.compare}
                 </p>
                 <p
                   className={`rounded-control border px-2 py-1 text-xs font-semibold ${
-                    currentStep === STEPS.length - 1
+                    step.verifiedCount !== null
                       ? "border-success text-success"
                       : "border-border text-secondary"
                   }`}
@@ -310,14 +367,14 @@ export function PartitionArrayDiagram() {
 
             <section className="rounded-card border border-border bg-elevated p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">
-                interview boundary
+                verification trap
               </p>
               <div className="mt-3 grid gap-2 text-sm leading-6">
                 <p className="text-primary">
-                  每个内部 while 都必须先判断 left &lt; right。
+                  第一遍结束的 candidate 只是“可能多数”。
                 </p>
                 <p className="text-secondary">
-                  交换后必须移动两个指针，否则可能重复交换同一组元素。
+                  像 [1,2,3,4] 这种输入也会留下候选，所以必须第二遍计数。
                 </p>
               </div>
             </section>
@@ -347,8 +404,17 @@ export function PartitionArrayDiagram() {
         </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        面试白板法：先说明指针职责，再用安全区不变量证明每次交换和收缩都不会破坏最终划分。
+        面试白板法：用 candidate/count 模拟成对抵消，第一遍压缩候选，第二遍验证是否真的超过一半。
       </figcaption>
     </figure>
+  );
+}
+
+function StateCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-card border border-border bg-bg p-3 text-center">
+      <p className="text-xs font-semibold text-secondary">{label}</p>
+      <p className="mt-1 font-mono text-lg font-bold text-primary">{value}</p>
+    </div>
   );
 }
