@@ -1,0 +1,77 @@
+---
+title: UNIX 系统接口
+type: A
+section: 结构体与IO
+order: 8
+description: 文件描述符、低级 I/O 系统调用 open/read/write/close、fd 与 FILE* 对比、进程控制。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcUnixFileIoDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-unix-fileio";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出文件描述符的概念，以及标准流对应的 fd 编号
+- 能用 open/read/write/close 实现文件复制，并正确处理返回值
+- 能回答：fd 和 FILE* 有什么区别？标准 I/O 封装在低级 I/O 之上的核心机制是什么？
+
+</Objectives>
+
+## 标准库之下：系统调用
+
+K&R 前 7 章用的都是标准 I/O（printf、fopen、fread）。第 8 章揭开这层封装，展示底层：UNIX 系统调用。标准 I/O 不是魔法——它就是在系统调用之上加了一层缓冲和格式化。理解了系统调用，才能理解 FILE* 的底层行为。
+
+<KrcUnixFileIoDiagram />
+
+## 核心概念
+
+<Term def="内核为每个进程维护的打开文件表的索引，是一个非负整数。open 返回 fd，read/write/close 通过 fd 操作文件。">文件描述符（fd）</Term>是 UNIX I/O 的核心抽象。每个进程有一张文件描述符表，fd 就是这张表的索引。程序启动时默认打开三个：fd 0（stdin）、fd 1（stdout）、fd 2（stderr）。第一次 open 返回 fd 3。fd 是进程级资源，默认上限 1024。
+
+系统调用的四个基本操作：`open(path, flags, mode)` 打开文件返回 fd；`read(fd, buf, n)` 从 fd 读最多 n 字节到 buf，返回实际读取数；`write(fd, buf, n)` 把 buf 的 n 字节写入 fd，返回实际写入数；`close(fd)` 关闭文件释放 fd。这四个构成了所有文件 I/O 的基础——标准 I/O 的 fopen/fread/fwrite/fclose 内部调用的就是它们。
+
+`read` 的返回值需要特别注意：返回 > 0 是实际读取字节数（可能小于 n，因为可能到文件末尾或从终端读到换行符就返回），返回 0 是到达 EOF，返回 -1 是出错。不能假设一次 read 就读满 n 字节——循环读取直到 EOF 才是正确做法。`write` 也可能只写一部分（磁盘满等），严谨写法需要循环写。
+
+fd 和 FILE* 的关系：fd 是内核级的小整数，无缓冲，每次 read/write 都是一次系统调用（用户态↔内核态切换）。FILE* 是用户态的结构体指针，内部包含 fd 加上缓冲区——数据先攒在缓冲区，满了才调用底层 read/write。所以 FILE* 用少量系统调用完成了大量数据传输，性能远高于逐字节的 fd I/O。`fileno(fp)` 可以从 FILE* 取出底层 fd，`fdopen(fd)` 可以把 fd 包装成 FILE*。
+
+进程控制也是 UNIX 接口的一部分。`fork()` 创建当前进程的副本（返回两次：父进程返回子进程 PID，子进程返回 0），`exec()` 替换当前进程的代码和数据（不返回），`wait()` 等待子进程结束。这套 fork+exec 模型是 UNIX 创建新进程的标准方式——shell 执行命令时就是 fork 出子进程再 exec 程序。
+
+<Callout type="tip">
+<strong>建议 →</strong> 用低级 I/O 时，养成检查每个系统调用返回值的习惯。open 返回 -1 表示失败，read 返回 0 表示 EOF、-1 表示出错，write 返回值不等于请求字节数表示部分写入。忽略返回值是低级 I/O 最常见的 bug 来源。用 perror打印错误信息。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 `read(fd, buf, 100)` 读取文件，只读到了部分数据就返回了。<strong>原因 →</strong> read 不保证一次读满请求的字节数——到达文件末尾、从终端读到换行符、管道只有部分数据可读时都会提前返回。返回值是实际读取数。<strong>修法 →</strong> 用循环读取直到返回 0（EOF）或 -1（错误），累加已读字节数。标准 I/O 的 fread 内部已经做了这个循环，所以 fread 能保证读满（除非 EOF 或出错）。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 程序打开很多文件后，open 返回 -1，提示 "Too many open files"。<strong>原因 →</strong> 文件描述符是有限资源（默认 1024），每个打开的文件占一个 fd。忘记 close 已用完的文件会导致 fd 泄漏，最终耗尽。<strong>修法 →</strong> 每个用完的 fd 都要及时 close。用 `ulimit -n` 查看当前上限，或用 `setrlimit` 在程序中调整。排查泄漏可用 lsof 命令查看进程打开的 fd 列表。
+</Callout>
+
+## 小结与练习
+
+- 文件描述符（fd）是内核文件表索引，非负整数；fd 0/1/2 预留给标准流，open 从 fd 3 开始
+- open/read/write/close 是四大基本系统调用；read 返回 0 = EOF、-1 = 出错、>0 = 实际字节数
+- FILE* = fd + 用户态缓冲区，少量系统调用完成大量传输；fileno(fp) 取 fd，fdopen(fd) 包装成 FILE*
+- fork 创建子进程（返回两次），exec 替换进程映像，wait 等待子进程——shell 执行命令的底层机制
+
+<Exercises>
+  <Answer question="用低级 I/O 实现文件复制（src.txt → dst.txt），需要检查哪些返回值？">① open(src, O_RDONLY) 返回 < 0 失败 ② open(dst, O_WRONLY|O_CREAT|O_TRUNC, 0644) 返回 < 0 失败 ③ read(in, buf, N) 返回 0 = EOF 退出循环，< 0 = 出错 ④ write(out, buf, n) 返回值 != n = 部分写入需处理 ⑤ 循环 read 直到 EOF ⑥ 最后 close 两个 fd。read 返回值小于请求字节数不一定是错误（可能到文件末尾），只有 -1 才是错误。</Answer>
+  <Answer question="fd 和 FILE* 的核心区别是什么？为什么标准 I/O 比低级 I/O 快？">fd 是内核级小整数，无缓冲，每次 read/write 都是一次系统调用（用户态↔内核态切换开销大）。FILE* 是用户态结构体指针，内部含 fd 加缓冲区——数据先攒在缓冲区，满了才调用底层 read/write。标准 I/O 把系统调用从「逐字节」降为「批量」，系统调用次数减少百倍，性能大幅提升。代价是需要手动 fflush 刷写缓冲区，且缓冲区占用内存。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="文件描述符（fd）">内核为每个进程维护的打开文件表的索引，是非负整数。open 返回 fd，read/write/close 通过 fd 操作文件。fd 0/1/2 预留给标准流。fd 是有限资源（默认 1024），泄漏会导致打不开新文件。</GlossaryItem>
+  <GlossaryItem term="系统调用">用户态程序请求内核服务的接口，如 open/read/write/close/fork/exec。每次系统调用有用户态↔内核态切换开销，所以标准 I/O 用缓冲区批量调用以减少次数。</GlossaryItem>
+  <GlossaryItem term="EOF">End Of File，文件末尾标志。read 返回 0 表示到达文件末尾，不是错误。feof(fp) 可检测 FILE* 是否到末尾。EOF 常量值为 -1，是 getchar/getc 返回的「无数据」标志。</GlossaryItem>
+  <GlossaryItem term="fork / exec">fork 创建当前进程的完整副本（返回两次：父进程得到子进程 PID，子进程得到 0）。exec 替换当前进程的代码和数据为新程序（成功不返回）。shell 执行命令 = fork 子进程 + exec 程序。wait 等待子进程结束回收资源。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

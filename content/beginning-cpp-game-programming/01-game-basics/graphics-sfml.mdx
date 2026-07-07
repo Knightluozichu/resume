@@ -1,0 +1,127 @@
+---
+title: 图形与 SFML
+type: A
+section: 游戏编程入门
+order: 6
+description: SFML 图形模块——窗口、事件、纹理、精灵与每帧渲染流水线，让 C++ 逻辑变成可见画面。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { BcgSfmlGraphicsDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-sfml-graphics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 SFML 创建窗口并写出每帧的 clear/draw/display 三件套
+- 能说明 Texture 与 Sprite 的关系及为何不直接画 Texture
+- 能区分事件与实时输入，并分别用于菜单与移动
+</Objectives>
+
+## 从控制台到画面
+
+前面几章的程序输出是控制台文字。游戏需要画图——窗口、精灵、画面刷新。SFML 的图形模块把这些封装成面向对象的类，让你用 C++ 直接驱动画面。
+
+<BcgSfmlGraphicsDiagram />
+
+## 每帧三件套
+
+SFML 每帧渲染的固定骨架：
+
+```cpp
+window.clear();              // 1. 清屏
+window.draw(sprite);         // 2. 画精灵
+window.display();            // 3. 显示
+```
+
+为什么必须成对？SFML 默认双缓冲：`draw` 画到后台缓冲，`display` 才把它交换到前台显示。漏 `display` 窗口保持黑屏；漏 `clear` 上一帧残留产生拖影。顺序也得对——clear 在 draw 之后等于把刚画的擦了。
+
+<Callout type="tip">
+把这三步当成游戏循环里 render() 阶段的固定仪式。clear → draw（所有要画的东西）→ display，缺一不可、顺序不能乱。
+</Callout>
+
+## 窗口与事件
+
+创建窗口并处理事件：
+
+```cpp
+RenderWindow window(VideoMode(800, 600), "My Game");
+Event event;
+while (window.pollEvent(event)) {
+  if (event.type == Event::Closed) window.close();
+}
+```
+
+事件是**离散瞬时**的——按一次键产生一个事件。适合「单次触发」动作：按 ESC 暂停、按空格开火、点关闭按钮。
+
+## 事件 vs 实时输入
+
+实时输入查键盘**当前**状态：
+
+```cpp
+if (Keyboard::isKeyPressed(Keyboard::Right)) {
+  player.move(dt);
+}
+```
+
+按住期间每帧都返回 true。适合「持续按住」动作：按住方向键移动、按住加速键加速。
+
+<Callout type="trap">
+别用事件做移动：按键事件只在按下/松开那一刻触发一次，按住不会持续产生，角色会「顿一下走一步」。移动这类持续动作要用 `Keyboard::isKeyPressed` 每帧查状态。窗口关闭、菜单确认这类点按才用事件。
+</Callout>
+
+## Texture 与 Sprite
+
+Texture 是图片数据本身（加载到显存的像素阵列），Sprite 是「引用某张纹理 + 位置/旋转/缩放」的可绘制实例。
+
+```cpp
+Texture tex; tex.loadFromFile("player.png");
+Sprite spr; spr.setTexture(tex); spr.setPosition(100, 200);
+window.draw(spr);
+```
+
+为什么不直接画 Texture？因为复用：一张纹理可被多个 Sprite 共享。100 个相同敌人共用 1 张贴图省显存；每个 Sprite 各自有独立位置，移动敌人只改对应 Sprite，不动纹理。
+
+<Callout type="trap">
+Texture 必须在 Sprite 使用期间保持存活——Sprite 不拥有纹理，只引用它。纹理先于 Sprite 销毁会画出错乱。游戏里应让资源管理器统一持有纹理，Sprite 只引用不拥有。
+</Callout>
+
+## 资源绑定流程
+
+纹理 → 精灵 → 窗口：纹理加载图片到显存，精灵绑定纹理并设位置，窗口 draw 提交绘制。这条链是 SFML 图形的核心。
+
+## 小结
+
+- 每帧 clear/draw/display 三件套必须成对、顺序正确
+- 事件管瞬时点按（菜单、关窗），实时输入管持续按住（移动）
+- Texture 是数据，Sprite 是引用数据的可绘制实例，一张纹理多 Sprite 共享
+- 资源绑定链：纹理 → 精灵 → 窗口
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="RenderWindow">
+SFML 中代表图形窗口的类，负责创建窗口、处理事件、接收 draw 调用并显示画面。
+</GlossaryItem>
+<GlossaryItem term="双缓冲">
+SFML 默认的渲染机制，draw 画到后台缓冲，display 时交换到前台，避免玩家看到半成品画面。
+</GlossaryItem>
+<GlossaryItem term="Texture">
+SFML 中加载到显存的图片数据类，是像素阵列本身，可被多个 Sprite 共享以节省显存。
+</GlossaryItem>
+<GlossaryItem term="Sprite">
+引用某张 Texture 并附带位置/旋转/缩放变换的可绘制实例，不拥有纹理只引用它。
+</GlossaryItem>
+<GlossaryItem term="Event">
+SFML 中表示离散输入事件（按键、关窗等）的类型，通过 pollEvent 从队列取出，适合单次触发动作。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="SFML 每帧渲染的三件套是什么？为什么必须成对出现？">三件套：window.clear() 清屏 → window.draw(sprite) 绘制 → window.display() 显示。必须成对因为 SFML 默认双缓冲：draw 画到后台缓冲，display 才交换到前台。漏 display 窗口黑屏，漏 clear 会残留上一帧产生拖影，顺序错了（clear 在 draw 后）等于擦掉刚画的。这三步是 render 阶段的固定骨架。</Answer>
+  <Answer question="Texture 和 Sprite 是什么关系？为什么不直接画 Texture？">Texture 是图片数据本身（显存里的像素阵列），Sprite 是引用某张纹理并带位置/旋转/缩放的可绘制实例。不直接画 Texture 因为复用：一张纹理可被多个 Sprite 共享，100 个相同敌人共用 1 张贴图省显存，每个 Sprite 各有独立位置，移动只改 Sprite 不动纹理。注意 Texture 必须在 Sprite 使用期间存活，Sprite 只引用不拥有。</Answer>
+</Exercises>

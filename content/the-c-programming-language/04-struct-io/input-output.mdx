@@ -1,0 +1,77 @@
+---
+title: 输入与输出
+type: A
+section: 结构体与IO
+order: 7
+description: 标准流、格式化 I/O、文件访问、行 I/O 与缓冲机制。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcIoStreamsDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-io-streams";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出三个标准流及各自的特点（缓冲模式、文件描述符）
+- 能解释 printf/scanf 格式化 I/O 的工作原理，以及变参函数为什么不做类型检查
+- 能回答：为什么 `printf("hello"); while(1);` 重定向到文件后看不到输出？如何解决？
+
+</Objectives>
+
+## 程序与外界的通道
+
+没有 I/O，程序只能在内存里自说自话。C 语言的标准 I/O 库（`<stdio.h>`）提供了从简单的 printf/scanf 到复杂的文件操作的完整工具链。K&R 第 7 章系统讲解了标准 I/O，核心抽象是 `FILE *`——一个封装了文件描述符和缓冲区的结构体指针。
+
+<KrcIoStreamsDiagram />
+
+## 核心概念
+
+程序启动时自动打开三个标准流：<Term def="标准输入流，文件描述符 0，默认连接终端键盘，行缓冲。">stdin</Term>（fd 0，标准输入）、<Term def="标准输出流，文件描述符 1，默认连接终端屏幕，终端模式下行缓冲、管道/文件模式下全缓冲。">stdout</Term>（fd 1，标准输出）、<Term def="标准错误流，文件描述符 2，默认连接终端屏幕，无缓冲（保证错误信息立即输出）。">stderr</Term>（fd 2，标准错误）。它们都是 `FILE *` 类型，由标准库自动打开和关闭。
+
+<Term def="标准库对文件描述符的封装，内部维护缓冲区和文件位置，减少系统调用次数。FILE* 是指向该结构体的指针。">FILE*</Term>是标准 I/O 的核心抽象。它封装了底层文件描述符（fd），加上一块用户态缓冲区。每次 fread/fwrite 不一定触发系统调用——数据先攒在缓冲区，满了或主动 fflush 时才调用底层 read/write。这把昂贵的系统调用从「逐字节」降为「批量」，性能提升可达百倍。
+
+缓冲机制有三种：<Term def="缓冲区满才触发刷写，适合磁盘文件等块设备。">全缓冲</Term>（缓冲区满才刷写，磁盘文件默认）、<Term def="遇到换行符就触发刷写，适合终端交互。">行缓冲</Term>（遇换行符刷写，终端 stdout 默认）、<Term def="每次操作立即刷写，不缓冲，适合错误输出。">无缓冲</Term>（立即刷写，stderr 默认）。缓冲模式决定了「数据什么时候真正写到内核」——这是 I/O 行为差异的根源。
+
+格式化 I/O 是标准库最常用的功能。`printf` 把数据按格式串转换成文本写入 stdout，`scanf` 从 stdin 按格式串读取并解析。`fprintf/fscanf` 可指定目标流，`sprintf/sscanf` 操作字符串而非流。格式串中的占位符（`%d`、`%f`、`%s` 等）必须与参数类型严格匹配——但 printf 是<Term def="参数个数和类型可变的函数，如 printf。编译器无法检查变参部分的类型匹配，需调用方自行保证。">变参函数</Term>，编译器无法检查，错了不报错但输出乱码。
+
+行 I/O 用 `fgets` 和 `fputs`。`fgets(buf, n, fp)` 最多读 n-1 个字符，遇到换行符或 EOF 停止，保留换行符在 buf 中。它比危险的 `gets`（已从 C11 移除）安全得多——gets 不限长度，必然缓冲区溢出。
+
+<Callout type="tip">
+<strong>建议 →</strong> 调试时如果 printf 输出看不到，在 printf 后加 `fflush(stdout);` 主动刷写缓冲区。或者在格式串末尾加 `\n`（终端行缓冲模式下触发刷写）。程序崩溃时输出丢失，几乎都是缓冲区没刷写导致的。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> `printf("hello"); while(1);` 在终端能看到 hello，但 `./a.out > file.txt` 重定向后文件里没有。<strong>原因 →</strong> 终端模式 stdout 是行缓冲，程序阻塞时某些实现会刷写。重定向到文件后 stdout 变成全缓冲，hello 存在用户态缓冲区还没满，while(1) 死循环让程序永不退出，缓冲区永远不刷写。<strong>修法 →</strong> 加 `fflush(stdout);` 主动刷写，或 `setbuf(stdout, NULL)` 关闭缓冲。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> `printf("%d", 3.14);` 输出乱码大整数而非 3。<strong>原因 →</strong> printf 是变参函数，编译器不检查格式串与参数类型匹配。`%d` 让 printf 把下一个参数当 int（4 字节）读，但实际传的是 double（8 字节）——只读了 double 二进制表示的前 4 字节当 int 解读。<strong>修法 →</strong> 格式串占位符必须与参数类型严格匹配：`%d` 对应 int、`%f` 对应 double、`%s` 对应 char*。编译时开 `-Wformat` 警告可检测大部分不匹配。
+</Callout>
+
+## 小结与练习
+
+- 三个标准流：stdin（fd 0）、stdout（fd 1）、stderr（fd 2），自动打开关闭
+- FILE* 封装 fd + 缓冲区，三种缓冲模式：全缓冲（文件）、行缓冲（终端 stdout）、无缓冲（stderr）
+- printf/scanf 是变参函数，格式串占位符必须与参数类型严格匹配，否则输出乱码且不报错
+- fgets 比 gets 安全（有长度限制），gets 已从 C11 移除；调试时 fflush(stdout) 防止输出丢失
+
+<Exercises>
+  <Answer question='为什么 `printf("%d", 3.14);` 输出乱码而不是 3？编译器为什么不报错？'>因为 printf 是变参函数，编译器无法在编译期检查格式串与参数类型的匹配。%d 让 printf 把参数当 int（4 字节）读，但实际传的是 double（8 字节）——printf 只取了 double 二进制表示的前 4 字节当 int 解读，得到无关的整数。gcc/clang 可通过 -Wformat 警告检测，但标准不强制。</Answer>
+  <Answer question='`printf("hello"); while(1);` 重定向到文件后看不到输出，为什么？如何解决？'>重定向到文件后 stdout 从行缓冲变成全缓冲，hello 存在用户态缓冲区还没满，while(1) 让程序永不退出，缓冲区永远不刷写到文件。解决：① `fflush(stdout)` 主动刷写 ② 格式串加 `\n`（行缓冲模式下触发，全缓冲不保证） ③ `setbuf(stdout, NULL)` 关闭缓冲。最可靠的是 fflush。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="FILE*">标准库对文件描述符的封装结构体指针。内部维护 fd、用户态缓冲区、文件位置、错误标志。fopen 返回 FILE*，所有标准 I/O 函数都通过它操作。fileno(fp) 可取出底层 fd。</GlossaryItem>
+  <GlossaryItem term="全缓冲 / 行缓冲 / 无缓冲">全缓冲：缓冲区满才刷写（磁盘文件默认）。行缓冲：遇换行符刷写（终端 stdout 默认）。无缓冲：每次操作立即刷写（stderr 默认）。缓冲模式决定数据何时真正写入内核。</GlossaryItem>
+  <GlossaryItem term="变参函数">参数个数和类型可变的函数，如 printf/scanf。通过 `...` 和 `<stdarg.h>` 实现。编译器无法检查变参部分的类型匹配，调用方需自行保证格式串与参数一致。</GlossaryItem>
+  <GlossaryItem term="fflush">主动将 FILE* 的输出缓冲区刷写到内核（底层 write 系统调用）。程序崩溃前如果不 fflush，缓冲区中的数据会丢失。fclose 会自动 fflush。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

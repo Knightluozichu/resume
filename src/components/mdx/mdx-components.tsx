@@ -813,6 +813,36 @@ import { VsiVehicleControlDiagram } from "./vehicle-software/diagrams/vsi-vehicl
 import { VsiFunctionalSafetyDiagram } from "./vehicle-software/diagrams/vsi-functional-safety";
 import { VsiCybersecurityDiagram } from "./vehicle-software/diagrams/vsi-cybersecurity";
 import { VsiFinalReviewMindMap } from "./vehicle-software/diagrams/vsi-final-review-mindmap";
+import { KrcBookMap } from "./kr-c-language/diagrams/krc-book-map";
+import { KrcTypesMemoryDiagram } from "./kr-c-language/diagrams/krc-types-memory";
+import { KrcControlFlowChart } from "./kr-c-language/diagrams/krc-control-flow-chart";
+import { KrcFunctionStackDiagram } from "./kr-c-language/diagrams/krc-function-stack";
+import { KrcPointerRelationshipDiagram } from "./kr-c-language/diagrams/krc-pointer-relationship";
+import { KrcStringPointerDiagram } from "./kr-c-language/diagrams/krc-string-pointer";
+import { KrcStructMemoryDiagram } from "./kr-c-language/diagrams/krc-struct-memory";
+import { KrcIoStreamsDiagram } from "./kr-c-language/diagrams/krc-io-streams";
+import { KrcUnixFileIoDiagram } from "./kr-c-language/diagrams/krc-unix-fileio";
+import { KrcFinalMindMap } from "./kr-c-language/diagrams/krc-final-mindmap";
+import { BcgBookMap } from "./beginning-cpp-game/diagrams/bcg-book-map";
+import { BcgTypeSystemDiagram } from "./beginning-cpp-game/diagrams/bcg-type-system";
+import { BcgFlowDiagram } from "./beginning-cpp-game/diagrams/bcg-flow-diagram";
+import { BcgFunctionMechanismDiagram } from "./beginning-cpp-game/diagrams/bcg-function-mechanism";
+import { BcgOopClassDiagram } from "./beginning-cpp-game/diagrams/bcg-oop-class";
+import { BcgGameLoopArchDiagram } from "./beginning-cpp-game/diagrams/bcg-game-loop-arch";
+import { BcgSfmlGraphicsDiagram } from "./beginning-cpp-game/diagrams/bcg-sfml-graphics";
+import { BcgCollisionTypesDiagram } from "./beginning-cpp-game/diagrams/bcg-collision-types";
+import { BcgGameArchitectureDiagram } from "./beginning-cpp-game/diagrams/bcg-game-architecture";
+import { BcgFinalMindMap } from "./beginning-cpp-game/diagrams/bcg-final-mindmap";
+import { EfcBookMap } from "./effective-cpp/diagrams/efc-book-map";
+import { EfcResourceLifecycleDiagram } from "./effective-cpp/diagrams/efc-resource-lifecycle";
+import { EfcConstructorOrderDiagram } from "./effective-cpp/diagrams/efc-constructor-order";
+import { EfcClassEncapsulationDiagram } from "./effective-cpp/diagrams/efc-class-encapsulation";
+import { EfcInheritanceModelDiagram } from "./effective-cpp/diagrams/efc-inheritance-model";
+import { EfcTemplateDesignDiagram } from "./effective-cpp/diagrams/efc-template-design";
+import { EfcTmpConceptsDiagram } from "./effective-cpp/diagrams/efc-tmp-concepts";
+import { EfcNewDeleteDiagram } from "./effective-cpp/diagrams/efc-new-delete";
+import { EfcConventionsDiagram } from "./effective-cpp/diagrams/efc-conventions";
+import { EfcFinalMindMap } from "./effective-cpp/diagrams/efc-final-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1906,6 +1936,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VsiFunctionalSafetyDiagram,
   VsiCybersecurityDiagram,
   VsiFinalReviewMindMap,
+  KrcBookMap,
+  KrcTypesMemoryDiagram,
+  KrcControlFlowChart,
+  KrcFunctionStackDiagram,
+  KrcPointerRelationshipDiagram,
+  KrcStringPointerDiagram,
+  KrcStructMemoryDiagram,
+  KrcIoStreamsDiagram,
+  KrcUnixFileIoDiagram,
+  KrcFinalMindMap,
+  BcgBookMap,
+  BcgTypeSystemDiagram,
+  BcgFlowDiagram,
+  BcgFunctionMechanismDiagram,
+  BcgOopClassDiagram,
+  BcgGameLoopArchDiagram,
+  BcgSfmlGraphicsDiagram,
+  BcgCollisionTypesDiagram,
+  BcgGameArchitectureDiagram,
+  BcgFinalMindMap,
+  EfcBookMap,
+  EfcResourceLifecycleDiagram,
+  EfcConstructorOrderDiagram,
+  EfcClassEncapsulationDiagram,
+  EfcInheritanceModelDiagram,
+  EfcTemplateDesignDiagram,
+  EfcTmpConceptsDiagram,
+  EfcNewDeleteDiagram,
+  EfcConventionsDiagram,
+  EfcFinalMindMap,
   Term,
   Glossary,
   GlossaryItem,

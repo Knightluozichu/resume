@@ -1,0 +1,76 @@
+---
+title: 结构体与联合
+type: A
+section: 结构体与IO
+order: 6
+description: 结构体内存布局、对齐与 padding、联合、位域与 typedef。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcStructMemoryDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-struct-memory";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出结构体成员对齐规则，以及 padding 产生的原因和影响
+- 能解释 struct 与 union 的区别，以及位域的用途和限制
+- 能回答：`struct { char c; int i; char d; }` 的 sizeof 是多少？如何减少 padding？
+
+</Objectives>
+
+## 聚合数据的容器
+
+基本类型只能表示单个数据。当需要把多个相关数据打包在一起——比如一个点有 x 和 y 坐标、一个学生有姓名和成绩——就需要结构体。`struct` 让你自定义一个由多个不同类型成员组成的复合类型，这是 C 语言数据建模的基础。
+
+<KrcStructMemoryDiagram />
+
+## 核心概念
+
+<Term def="结构体每个成员的偏移量必须是其自身大小的整数倍，编译器在成员间插入空白字节（padding）来满足这一要求。">内存对齐</Term>是结构体最需要注意的特性。CPU 访问对齐的数据比未对齐的数据快得多——某些架构上未对齐访问直接导致硬件异常。所以编译器自动在结构体成员间插入 padding 字节，让每个成员落在自身对齐边界的整数倍地址上。
+
+`struct { char c; int i; char d; }` 在 64 位平台上 sizeof 通常是 12 字节：char c 占 1 字节（偏移 0），然后插 3 字节 padding 让 int i 对齐到偏移 4，i 占 4 字节（偏移 4-7），char d 占 1 字节（偏移 8），尾部再插 3 字节 padding 让总大小是 4（最大成员对齐值）的整数倍。实际有效数据只有 6 字节，6 字节是 padding 浪费。
+
+减少 padding 的方法很简单：按成员大小从大到小排列。`struct { int i; char c; char d; }` 只需 8 字节——i 在偏移 0，c 在偏移 4，d 在偏移 5，尾部 2 字节 padding 让总大小为 4 的倍数。从 12 降到 8，省了 33%。
+
+<Term def="多个成员共享同一块内存的复合类型，同一时刻只能存一个成员的值。">联合（union）</Term>与 struct 的区别在于内存共享：union 的所有成员共用同一块内存，大小等于最大成员。同一时刻只能安全地存一个成员的值。union 常用于类型标签（tagged union）或需要以不同方式解读同一段二进制数据的场景。
+
+<Term def="结构体成员可以指定占用的二进制位数，让多个小范围变量紧凑存放在一个存储单元中。">位域（bit field）</Term>让结构体成员指定占用的 bit 数：`unsigned int a : 3` 让 a 只占 3 个 bit（可存 0-7）。多个位域成员可以共享同一个存储单元，极大节省空间。位域常用于硬件寄存器映射和协议头解析。但位域的内存排列顺序（高位还是低位优先）是实现定义的，跨平台不可移植。
+
+<Term def="给已有类型起一个新名字的声明，简化复杂类型的书写。">typedef</Term>给类型起别名。`typedef struct Point Point;` 之后可直接写 `Point p;` 而不用写 `struct Point p;`。typedef 不创建新类型，只是现有类型的另一个名字。在头文件中用 typedef 暴露类型名是 C 的标准实践。
+
+<Callout type="tip">
+<strong>建议 →</strong> 定义结构体时养成按成员大小降序排列的习惯：先 double/long long（8 字节），再 int/float（4 字节），再 short（2 字节），最后 char（1 字节）。这样编译器几乎不需要插 padding，内存最紧凑。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 结构体 sizeof 比预想大很多，网络传输时对面解析出错。<strong>原因 →</strong> 编译器在成员间和尾部插入了 padding，但你按 sizeof 的值传输了包含 padding 的内存块。对面的编译器可能用不同的对齐规则，padding 位置不一致。<strong>修法 →</strong> 跨网络/文件传输结构体时，不要直接 memcpy 整个结构体。要么逐成员序列化，要么用 `#pragma pack(1)` 取消对齐（但可能降低性能，且不是所有平台都支持）。
+</Callout>
+
+## 小结与练习
+
+- 结构体成员按自身大小对齐，编译器自动在成员间和尾部插入 padding
+- 按成员大小降序排列可消除大部分 padding：`{char c; int i; char d;}` = 12 字节 → `{int i; char c; char d;}` = 8 字节
+- union 成员共享内存，同一时刻只存一个值；位域让成员只占指定 bit 数，紧凑但不可移植
+- typedef 给类型起别名，不创建新类型；结构体跨平台传输需逐成员序列化，不能直接 memcpy
+
+<Exercises>
+  <Answer question="`struct { char c; int i; char d; }` 在 64 位平台上 sizeof 是多少？为什么不是 6？如何优化到 8 字节？">sizeof = 12。因为 int i 需要对齐到 4 字节边界：c 在偏移 0（1 字节），padding 3 字节，i 在偏移 4（4 字节），d 在偏移 8（1 字节），尾部 padding 3 字节让总大小为 4 的倍数。优化：按大小降序排列 `struct { int i; char c; char d; }`，i 在偏移 0，c 在偏移 4，d 在偏移 5，尾部 padding 2 字节，sizeof = 8。</Answer>
+  <Answer question="struct 和 union 的核心区别是什么？union 适合什么场景？">struct 的每个成员有独立内存，所有成员同时有效，总大小约等于各成员大小之和（加 padding）。union 的所有成员共享同一块内存，同一时刻只有一个成员有效，总大小等于最大成员。union 适合：① 类型标签（配合 enum 实现可变类型）② 以不同视角解读同一段二进制数据（如查看浮点数的位模式）③ 节省内存（多个互斥字段共用空间）。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="内存对齐">结构体每个成员的偏移量必须是其自身大小的整数倍的规则。编译器自动在成员间插入 padding（空白字节）满足对齐。目的是让 CPU 高效访问数据。结构体总大小也是最大成员对齐值的整数倍。</GlossaryItem>
+  <GlossaryItem term="padding">编译器为满足内存对齐要求而在结构体成员间或尾部插入的空白字节。不存储有效数据，只占空间。按成员大小降序排列可减少 padding。</GlossaryItem>
+  <GlossaryItem term="联合（union）">多个成员共享同一块内存的复合类型。同一时刻只能安全存一个成员的值。大小等于最大成员。适合类型标签、多视角解读二进制、节省互斥字段空间。</GlossaryItem>
+  <GlossaryItem term="位域">结构体成员可指定占用的二进制位数（如 `unsigned a : 3` 占 3 bit）。多个位域共享一个存储单元，极大节省空间。常用于硬件寄存器映射。排列顺序是实现定义的，跨平台不可移植。</GlossaryItem>
+  <GlossaryItem term="typedef">给已有类型起新名字的声明。如 `typedef struct Point Point;` 简化书写。不创建新类型，只是别名。头文件中常用 typedef 暴露简洁的类型名。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

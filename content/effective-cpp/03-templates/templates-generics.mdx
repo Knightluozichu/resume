@@ -1,0 +1,84 @@
+---
+title: 模板与泛型
+type: A
+section: 模板与泛型
+order: 5
+description: 条款 41-45，模板隐式接口 vs 显式接口、typename 双重含义、模板化基类名称、参数无关代码抽离、成员函数模板。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { EfcTemplateDesignDiagram } from "@/components/mdx/effective-cpp/diagrams/efc-template-design";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分模板的隐式接口和面向对象的显式接口
+- 能说出 typename 的双重含义和使用场景
+- 能回答：模板化基类中的名称为什么在派生类中不可见？如何解决？
+
+</Objectives>
+
+## 隐式接口 vs 显式接口
+
+条款 41 揭示了模板与面向对象的一个根本区别：模板使用 <Term def="由模板代码中对类型参数的有效表达式定义的接口，不集中声明而是分散在函数体中。">隐式接口</Term>，面向对象使用 <Term def="由函数签名明确声明的接口，在类定义中可以看到完整的接口列表。">显式接口</Term>。
+
+显式接口由函数签名明确声明——返回类型、函数名、参数类型、const 性。编译器检查对象是否实现了接口。隐式接口由模板函数体中对类型参数的所有有效表达式定义——不集中声明，而是分散在代码中。编译器在实例化时检查类型是否支持所有表达式。
+
+隐式接口更灵活：只要表达式合法即可，不管函数怎么来的。显式接口更严格：必须通过继承或接口实现来满足。
+
+<EfcTemplateDesignDiagram />
+
+## typename 的双重含义
+
+条款 42 说「了解 typename 的双重含义」。第一种用法是声明模板参数（与 `class` 等价）：`template<typename T> class Widget`。第二种用法是声明嵌套从属类型名——这是关键用法。
+
+问题在于 `T::iterator` 有二义性：可能是嵌套类型，也可能是静态成员变量。C++ 默认假设它不是类型（因为解析时 T 还不确定）。必须在前面加 `typename` 显式声明：`typename T::iterator iter;`。
+
+规则：任何依赖模板参数的嵌套类型名前必须加 `typename`。例外：基类列表和成员初始化列表中不需要（编译器知道那里只能是类型）。
+
+## 模板化基类的名称查找
+
+条款 43 提出一个陷阱：派生类模板中调用基类模板的成员函数，编译器报「找不到名称」。原因是编译器在解析派生类模板时，不知道 T 是什么，因此不知道 `Base<T>` 长什么样（可能被特化成没有该成员的版本）。C++ 选择保守策略：不查找模板化基类中的名称。
+
+三种解决方案：用 `this->f()` 告诉编译器 f 是依赖类型的成员；用 `using Base<T>::f;` 声明基类名称；用 `Base<T>::f()` 显式限定（但会关闭虚函数多态）。推荐 `this->`——最简洁且保留多态。
+
+## 参数无关代码抽离与成员函数模板
+
+条款 44 说「将与参数无关的代码抽离 templates」。模板代码膨胀是实际问题——每种类型实例化都生成一份完整代码。如果有些逻辑不依赖类型参数 T（如 vector 的容量管理），应该抽到非模板基类中共享，减少二进制体积。
+
+条款 45 说「运用成员函数模板接受所有兼容类型」。`SmartPtr<Derived>` 和 `SmartPtr<Base>` 是不同类型，没有继承关系。需要用成员函数模板实现广义拷贝构造：`template<typename U> SmartPtr(const SmartPtr<U>& other)`，接受所有兼容类型的智能指针。
+
+<Callout type="tip">
+<strong>建议 →</strong> 在模板化继承中，遇到「找不到基类名称」的编译错误，首先尝试加 `this->`。这是最简洁且保留虚函数多态的解决方案。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 在派生类模板中调用基类模板的函数，编译器报「undeclared identifier」。<strong>原因 →</strong> 编译器解析派生类模板时不知道 T 是什么，无法确定 `Base<T>` 的结构，选择不查找基类名称。<strong>修法 →</strong> 用 `this->f()` 显式告诉编译器 f 是成员函数，延迟到实例化时查找。
+</Callout>
+
+## 小结与练习
+
+- 模板用隐式接口（有效表达式），面向对象用显式接口（函数签名）
+- typename 两种用法：声明模板参数（等同 class）、声明嵌套从属类型名（不可省略）
+- 模板化基类的名称在派生类中不可见——用 `this->` 解决
+- 参数无关代码抽离模板减少膨胀，成员函数模板接受兼容类型
+
+<Exercises>
+  <Answer question="模板的隐式接口和面向对象的显式接口有什么本质区别？">显式接口由函数签名声明，编译器通过签名检查类型是否实现了接口——必须通过继承或接口实现来满足。隐式接口由模板函数体中对类型参数的所有有效表达式定义，不集中声明——只要表达式能编译通过就满足。隐式接口更灵活（只要表达式合法即可），显式接口更严格（必须继承或实现接口）。</Answer>
+  <Answer question="typename 在模板中有哪两种用法？什么时候必须用 typename？">第一种：声明模板参数（`template<typename T>`），与 class 等价。第二种：声明嵌套从属类型名（`typename T::iterator`），告诉编译器 T::iterator 是个类型而非变量。第二种用法必须用——任何依赖模板参数的嵌套类型名前都必须加 typename，否则编译器默认它不是类型。例外：基类列表和初始化列表中不需要。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="隐式接口">模板代码中对类型参数的所有有效表达式构成的接口约束。不集中声明而是分散在模板函数体中，编译器在实例化时检查类型是否支持所有表达式。</GlossaryItem>
+  <GlossaryItem term="显式接口">由函数签名明确声明的接口，在类定义中可以看到完整列表。编译器通过签名检查类型是否实现了接口，通常通过继承或接口实现来满足。</GlossaryItem>
+  <GlossaryItem term="typename">在模板中有两种用法：①声明模板参数（等同 class）；②声明嵌套从属类型名，告诉编译器某个依赖模板参数的嵌套名称是类型而非变量。第二种用法不可省略。</GlossaryItem>
+  <GlossaryItem term="模板化基类">本身是模板的基类，如 `Base<T>`。在派生类模板中，基类的成员名称默认不可见，需要用 `this->`、`using` 声明或显式限定来访问。</GlossaryItem>
+  <GlossaryItem term="成员函数模板">类内部的模板成员函数，用于接受所有兼容类型。如智能指针的广义拷贝构造 `template<typename U> SmartPtr(const SmartPtr<U>&)`，让 `SmartPtr<Derived>` 能从 `SmartPtr<Base>` 构造。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C++ (Scott Meyers)" adaptedUrl="https://www.oreilly.com/" />

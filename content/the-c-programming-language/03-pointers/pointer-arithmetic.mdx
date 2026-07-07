@@ -1,0 +1,79 @@
+---
+title: 指针运算与字符串
+type: A
+section: 指针与数组
+order: 5
+description: 指针算术步长、字符数组与字符指针、指针数组、命令行参数 argv。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcStringPointerDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-string-pointer";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分字符数组（可改）和字符指针（指向只读常量）的内存模型与行为差异
+- 能解释指针算术 `p+n` 的实际偏移字节数，以及同一数组内指针相减的含义
+- 能回答：`main(int argc, char *argv[])` 中 argv 是什么类型？如何遍历所有命令行参数？
+
+</Objectives>
+
+## 指针算术的步长
+
+指针加减一个整数 n，实际偏移的字节数是 `n * sizeof(*p)`，而不是 n 个字节。这是 C 指针最核心的设计：指针不仅存储地址，还携带了类型信息，使得指针算术自动按类型大小缩放。`int *p` 加 1 跳过 1 个 int（4 字节），`char *p` 加 1 跳过 1 个 char（1 字节），`double *p` 加 1 跳过 8 字节。
+
+<KrcStringPointerDiagram />
+
+## 核心概念
+
+字符串在 C 中没有独立类型——它是以 `'\0'`（空字符）结尾的字符数组。这带来两种存储方式：<Term def="在栈上分配的字符数组，内容可修改，如 char s[] = &quot;hello&quot;;。">字符数组</Term>和<Term def="指向字符串常量的字符指针，常量通常在只读内存段，不可修改，如 char *s = &quot;hello&quot;;。">字符指针</Term>。
+
+`char s[] = "hello";` 在栈上分配 6 字节，把 "hello\0" 复制进去。s 是数组名，元素可任意修改（`s[0] = 'H'` 合法）。
+
+`char *s = "hello";` 中 s 是指针，指向字符串常量。字符串常量通常存储在只读内存段，尝试修改（`s[0] = 'H'`）行为未定义——可能段错误。s 本身可以重新指向其他地址。
+
+指针运算遍历字符串是 K&R 的经典写法：`while (*p) p++;`。每次循环检查 p 指向的字符是否为 `'\0'`（值为 0，即假），不是就 p 前进一步。`*p++` 先取 p 指向的字符，再把 p 加 1——后缀自增的巧妙运用。遇到 `'\0'` 时条件为假，循环终止。
+
+<Term def="指向指针的指针，即存储另一个指针地址的变量。命令行参数 char **argv 就是指针数组。">指针数组</Term>是 C 处理多个字符串的标准方式。`char *lines[100]` 是一个数组，每个元素是 `char *`，指向一个字符串。排序时只需交换指针（8 字节），不需要搬移整个字符串——这是 K&R 用指针数组实现高效文本排序的核心思路。
+
+命令行参数通过 `main(int argc, char *argv[])` 传入。`argv` 是 `char **` 类型（指针数组的退化），`argv[0]` 是程序名，`argv[1]` 到 `argv[argc-1]` 是用户传入的参数，`argv[argc]` 是 NULL（哨兵）。遍历可以用下标，也可以用指针：`for (char **p = argv; *p; p++) printf("%s\n", *p);`。
+
+<Callout type="tip">
+<strong>建议 →</strong> K&R 实现的简化版 strlen 用了三行代码完美展示指针运算：`char *p = s; while (*p) p++; return p - s;`。同一数组内两个指针相减的结果是元素个数（自动除以 sizeof），不是字节数。读懂这段代码，就懂了 C 指针的精髓。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> `char *s = "hello"; s[0] = 'H';` 运行时崩溃（段错误）。<strong>原因 →</strong> 字符串常量 "hello" 通常存储在只读内存段（.rodata），尝试写入触发内存保护异常。<strong>修法 →</strong> 如果需要修改字符串，用字符数组：`char s[] = "hello"; s[0] = 'H';`。数组在栈上有一份副本，可安全修改。或者用 malloc 分配可写内存再 strcpy。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 指向不同数组的两个指针相减或比较，得到无意义的结果。<strong>原因 →</strong> C 标准规定指针算术（相减、比较大小）只在同一数组内（或越过末尾一个位置）有定义。跨数组的指针运算行为未定义。<strong>修法 →</strong> 确保指针运算的两个操作数指向同一块连续内存。如果需要跨缓冲区操作，用整数索引而非指针差值。
+</Callout>
+
+## 小结与练习
+
+- 指针算术步长 = sizeof(指向类型)：int* 加 1 跳 4 字节，char* 加 1 跳 1 字节
+- 字符数组在栈上可改，字符指针指向只读常量不可改；C 字符串以 '\0' 结尾
+- 指针数组排序只需交换指针（O(1)），无需搬移字符串内容——K&R 文本排序的核心思路
+- argv 是 char** 类型，argv[0] 是程序名，argv[argc] 是 NULL 哨兵
+
+<Exercises>
+  <Answer question='`char *s = "hello";` 和 `char s[] = "hello";` 有什么本质区别？哪种可以修改字符？'>前者是指针，指向只读字符串常量（通常在 .rodata 段），尝试修改字符行为未定义（可能段错误）。后者是字符数组，在栈上分配 6 字节并把 "hello\0" 复制进去，元素可任意修改。需要修改字符串内容时必须用字符数组（或 malloc 分配的可写内存）。</Answer>
+  <Answer question="K&R 的 strlen 实现 `char *p = s; while (*p) p++; return p - s;` 中，`p - s` 返回的是字节数还是字符数？为什么？">返回的是字符数（元素个数），不是字节数。C 标准规定：指向同一数组内两个元素的指针相减，结果是它们之间的元素个数（ptrdiff_t 类型），自动除以 sizeof(元素类型)。这里元素是 char（1 字节），所以元素数 = 字节数，但对 int 数组则不同。这个设计让指针相减天然以「元素」为单位，无需手动除以 sizeof。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="字符数组">在栈上分配的字符数组，内容是字符串的副本，可修改。如 `char s[] = "hello";` 在栈上分配 6 字节。适合需要修改字符串内容的场景。</GlossaryItem>
+  <GlossaryItem term="字符指针">指向字符串常量的字符指针。如 `char *s = "hello";` 中 s 指向只读内存中的常量，尝试修改字符行为未定义。s 本身可重新指向其他地址。</GlossaryItem>
+  <GlossaryItem term="指针数组">元素为指针的数组，如 `char *lines[100]` 是 100 个 char* 指针的数组。常用于管理多个字符串，排序时只需交换指针而非搬移字符串内容。</GlossaryItem>
+  <GlossaryItem term="argv">main 函数的第二个参数，类型为 char**，是指向字符串的指针数组。argv[0] 是程序名，argv[1] 到 argv[argc-1] 是用户参数，argv[argc] 是 NULL 哨兵。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

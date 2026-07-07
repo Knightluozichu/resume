@@ -1,0 +1,102 @@
+---
+title: 游戏循环
+type: A
+section: 游戏编程入门
+order: 5
+description: 游戏循环的五阶段架构、更新与渲染分离、帧率与 delta time——实时游戏的心跳。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { BcgGameLoopArchDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-game-loop-arch";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出游戏循环的五个阶段及其顺序
+- 能解释更新与渲染为何要分离，以及分离带来的好处
+- 能用 delta time 实现帧率无关的移动
+</Objectives>
+
+## 游戏的心跳
+
+之前写的 C++ 程序跑完就结束。但游戏不同——它要持续运行、实时响应：画面每帧重画、玩家输入随时响应、世界状态不断推进。实现这种「持续运行」的结构就是游戏循环。没有循环就没有实时游戏。
+
+<BcgGameLoopArchDiagram />
+
+## 五个阶段
+
+游戏循环标准五步：
+
+1. **初始化**：建窗口、加载资源、设置初始状态。只在循环开始前做一次。
+2. **处理输入**：读键盘、鼠标、窗口事件。
+3. **更新状态**：推进物理、AI、计时器，移动所有实体。
+4. **渲染**：把当前世界状态画到屏幕。
+5. **检测退出**：玩家关窗口了？没退出就回到第 2 步，退出则结束循环。
+
+第 2-5 步每帧重复，这就是「心跳」。一帧约 16ms（60fps），意味着每秒这套流程跑 60 次。
+
+## 更新与渲染为何分离
+
+关键设计：先**统一更新完所有实体**，再**统一渲染**，而不是边更新边画。
+
+```cpp
+while (window.isOpen()) {
+  processInput();
+  update(dt);    // 所有实体先统一算完新状态
+  render();      // 再统一画出来
+}
+```
+
+分离的好处：一帧内画出来的是「同一时刻」的世界快照。若边更新边画，先更新的实体已移动、后更新的还在旧位置，画面撕裂、状态不一致。另外职责单一——逻辑错了查 update，画面错了查 render，调试容易。
+
+<Callout type="tip">
+更新算「世界是什么样」，渲染算「怎么画出来」。分开后还能让更新频率和渲染频率不同（固定步长更新 + 自由帧率渲染），这是进阶优化的基础。
+</Callout>
+
+## 帧率与 delta time
+
+FPS（每秒帧数）因机器而异。若每帧移动固定量（`x += 5`），快机器 FPS 高、每秒移动多，慢机器移动少——游戏速度随机器变化，不可接受。
+
+用 delta time（dt，上一帧到本帧的实际耗时秒数）解决：移动改成 `x += speed * dt`，speed 是「每秒移动多少」。这样无论 FPS 多少，每秒移动量恒定。60fps 时 dt≈0.0167 每帧移 1.67 像素，30fps 时 dt≈0.0333 每帧移 3.33 像素，一秒都移 100 像素。
+
+SFML 取 dt：`float dt = clock.restart().asSeconds();`
+
+## 掉帧的连锁反应
+
+<Callout type="trap">
+若更新耗时过长导致掉帧，dt 会变大，物体单帧位移变大，可能穿透碰撞体（tunneling），碰撞检测失效；下一帧做更多修正，dt 更大，陷入「死亡螺旋」。对策：dt 封顶（`dt = min(dt, 0.05)`）或用固定时间步长更新，宁可慢放也不爆炸。
+</Callout>
+
+## 小结
+
+- 游戏循环五阶段：初始化 → 处理输入 → 更新 → 渲染 → 检测退出
+- 更新与渲染分离，保证画面是同一时刻的世界快照
+- 用 delta time 让移动帧率无关，速度不随机器变化
+- 掉帧会通过 dt 放大破坏逻辑，需封顶或固定步长
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="游戏循环">
+游戏程序反复执行「处理输入 → 更新状态 → 渲染 → 检测退出」的核心结构，是实时游戏的心跳，没有循环就没有持续运行的游戏。
+</GlossaryItem>
+<GlossaryItem term="帧">
+游戏循环的一次完整执行，60fps 意味着每秒执行 60 帧，每帧约 16ms 预算。
+</GlossaryItem>
+<GlossaryItem term="delta time">
+上一帧到本帧的实际耗时（秒），用 `speed * dt` 缩放移动可实现帧率无关的速度，让游戏在不同 FPS 下速度一致。
+</GlossaryItem>
+<GlossaryItem term="死亡螺旋">
+掉帧使 dt 变大导致物体单帧位移过大、穿透碰撞体，触发更多修正使耗时更长、dt 更大的恶性循环，需用 dt 封顶或固定步长缓解。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="游戏循环的五个阶段是什么？为什么游戏要循环而不是顺序执行到底？">五阶段：初始化 → 处理输入 → 更新状态 → 渲染 → 检测退出（未退出则回到处理输入）。游戏要循环因为它是持续运行、实时响应的程序：画面要每帧重画、输入要随时响应、世界状态要不断推进。顺序执行只能跑一次就结束，无法实现持续变化的世界。循环是游戏的心跳。</Answer>
+  <Answer question="为什么用 delta time 能让游戏速度不随帧率变化？举例说明。">移动写成 `x += speed * dt`，speed 是每秒移动量，dt 是上一帧到本帧的实际耗时秒数。这样无论 FPS 多少，每秒移动量恒定等于 speed。例如 speed=100 像素/秒，60fps 时 dt≈0.0167 每帧移 1.67 像素，30fps 时 dt≈0.0333 每帧移 3.33 像素，一秒都移 100 像素。若用固定量 `x += 5`，快机器每秒移动多、慢机器少，速度就不一致。</Answer>
+</Exercises>

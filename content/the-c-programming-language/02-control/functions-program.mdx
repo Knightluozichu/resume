@@ -1,0 +1,77 @@
+---
+title: 函数与程序结构
+type: A
+section: 控制流与函数
+order: 3
+description: 函数定义、参数值传递、外部变量、作用域规则与预处理器。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcFunctionStackDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-function-stack";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 C 函数的值传递机制，以及为什么通过指针可以间接修改外部变量
+- 能说出 extern、static、作用域规则的作用，以及头文件的组织方式
+- 能回答：`#define` 宏和 `static inline` 函数各有什么优缺点？现代 C 推荐哪种？
+
+</Objectives>
+
+## 函数：程序的积木
+
+函数让程序从「一长串平铺的语句」变成「有层次的模块化结构」。一个好的函数只做一件事，有清晰的输入（参数）和输出（返回值），可以被反复调用。K&R 全书的例子几乎都以函数为组织单元——从最简单的 `strlen` 到复杂的排序器，每个功能都封装成独立函数。
+
+<KrcFunctionStackDiagram />
+
+## 核心概念
+
+C 语言所有参数都是<Term def="调用函数时把实参的值复制一份给形参，函数内修改的是副本，不影响原始变量。C 没有引用传递。">值传递</Term>。调用函数时，实参的值被复制一份给形参，函数内部修改的是这份副本，外部的原始变量不受影响。传 int 时复制 int 的值，传指针时复制指针的值（地址）。
+
+那为什么传指针能修改外部变量？因为指针的副本指向同一块内存——通过副本间接读写那块内存，效果等同于修改了外部变量。本质上 C 只有值传递，没有引用传递。「传指针」只是传了一个地址值的副本，但这个副本指向的数据是共享的。
+
+<Term def="声明一个变量或函数在别处（通常是另一个文件）定义，此处只是引用其声明。">extern</Term>关键字用于跨文件共享全局变量。如果一个全局变量在文件 A 中定义（`int count = 0;`），文件 B 想使用它，必须在 B 中写 `extern int count;` 声明。不写 extern 会在 B 中创建一个新的独立定义。头文件中通常放 extern 声明，定义放在 .c 文件中——这是多文件 C 程序的标准组织方式。
+
+<Term def="决定变量名在哪些代码区域可见的规则，C 分为块作用域、文件作用域和原型作用域。">作用域</Term>规则决定变量名在哪里可见。函数内定义的局部变量是块作用域（只在该函数或花括号块内可见）。函数外定义的全局变量是文件作用域（从定义处到文件末尾可见，其他文件用 extern 引用）。`static` 修饰局部变量时延长其生命周期到程序结束但保持块作用域；修饰全局变量/函数时限制其链接范围为当前文件（文件私有）。
+
+预处理器是 C 编译流程的第一步。`#include` 把头文件内容插入当前文件，`#define` 定义宏（文本替换），`#ifdef`/`#endif` 做条件编译。函数式宏（`#define MAX(a,b) ((a)>(b)?(a):(b))`）看起来像函数，但没有类型检查、参数可能被多次求值（`MAX(i++, j++)` 会让 i++ 执行两次）。现代 C 推荐用 `static inline` 函数替代函数式宏——有类型检查、参数只求值一次、调试器可见，编译器能优化掉调用开销。
+
+<Callout type="tip">
+<strong>建议 →</strong> 多文件 C 程序的标准组织：每个模块一个 .c 文件（定义）+ 一个 .h 文件（声明）。.h 文件里放函数原型和 extern 变量声明，.c 文件里放定义。其他文件通过 `#include` 头文件获取声明。永远不要在 .h 文件中放定义（会导致重复定义链接错误）。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 函数内修改了参数值，但外部变量没变。<strong>原因 →</strong> C 是值传递——函数内修改的是实参的副本，不是原始变量。`void add(int x) { x++; }` 调用 `add(n)` 后 n 不变。<strong>修法 →</strong> 如果需要修改外部变量，传指针：`void add(int *x) { (*x)++; }`，调用 `add(&n)`。通过指针间接修改才是 C 中让函数影响外部数据的唯一方式。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> `int x = 1;` 全局变量，函数内写 `int x = x + 1;` 结果是不确定的随机值而非 2。<strong>原因 →</strong> 局部变量 x 从声明处就遮蔽了全局 x，等号右侧的 x 引用的是尚未初始化的局部 x（内存残留值），不是全局的 1。这叫变量遮蔽（shadowing）。<strong>修法 →</strong> 避免内层变量与外层同名，或改用不同的变量名。编译时加 `-Wshadow` 警告可检测此类问题。
+</Callout>
+
+## 小结与练习
+
+- C 所有参数都是值传递——传指针本质是传地址值的副本，通过副本间接修改才能影响外部
+- extern 声明跨文件引用全局变量；static 延长局部变量生命周期或限制全局符号的链接范围
+- 作用域决定可见性：块作用域（局部）、文件作用域（全局）、extern 扩展到其他文件
+- 函数式宏无类型检查且可能多次求值，现代 C 推荐用 static inline 函数替代
+
+<Exercises>
+  <Answer question="为什么说 C 只有值传递没有引用传递？传指针修改外部变量算不算引用传递？">不算。传指针时，传递的是指针（地址）的值的副本——函数内拿到的是地址副本，但副本指向同一块内存。通过副本间接读写内存确实能影响外部数据，但机制仍是「复制一份值给形参」。真正的引用传递（如 C++ 的 `int &x`）不复制，直接绑定到原始变量。C 没有这个机制。</Answer>
+  <Answer question="`#define SQUARE(x) x*x` 调用 `SQUARE(3+1)` 结果是多少？为什么？如何修正？">结果是 7（不是 16）。因为宏是文本替换：`SQUARE(3+1)` 展开为 `3+1*3+1`，乘法优先于加法，得 3+3+1=7。修正：给每个参数和整体都加括号 `#define SQUARE(x) ((x)*(x))`，展开为 `((3+1)*(3+1))` = 16。或者直接用 `static inline int square(int x) { return x*x; }`，彻底避免宏的陷阱。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="值传递">调用函数时把实参的值复制一份给形参的参数传递方式。函数内修改的是副本，不影响原始变量。C 语言所有参数都是值传递，包括传指针时传的也是指针值的副本。</GlossaryItem>
+  <GlossaryItem term="extern">声明一个变量或函数在别处（通常是另一个 .c 文件）定义，此处只是引用。用于跨文件共享全局变量。头文件中放 extern 声明，.c 文件中放定义。</GlossaryItem>
+  <GlossaryItem term="作用域">决定变量名在哪些代码区域可见的规则。C 分为块作用域（函数/花括号内）、文件作用域（全局变量从定义到文件末尾）。static 可限制全局符号到文件私有。</GlossaryItem>
+  <GlossaryItem term="static">两个用途：修饰局部变量时延长生命周期到程序结束（但作用域不变）；修饰全局变量/函数时限制链接范围为当前文件（文件私有，其他文件 extern 也不可见）。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

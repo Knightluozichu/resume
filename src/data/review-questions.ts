@@ -405,6 +405,36 @@ import { vsiVehicleControlQuestions } from "./review/vsi-vehicle-control";
 import { vsiFunctionalSafetyQuestions } from "./review/vsi-functional-safety";
 import { vsiCybersecurityQuestions } from "./review/vsi-cybersecurity";
 import { vsiFinalReviewQuestions } from "./review/vsi-final-review";
+import { krcLearningMapQuestions } from "./review/krc-learning-map";
+import { krcTypesOperatorsQuestions } from "./review/krc-types-operators";
+import { krcControlFlowQuestions } from "./review/krc-control-flow";
+import { krcFunctionsProgramQuestions } from "./review/krc-functions-program";
+import { krcPointersArraysQuestions } from "./review/krc-pointers-arrays";
+import { krcPointerArithmeticQuestions } from "./review/krc-pointer-arithmetic";
+import { krcStructuresQuestions } from "./review/krc-structures";
+import { krcInputOutputQuestions } from "./review/krc-input-output";
+import { krcUnixInterfaceQuestions } from "./review/krc-unix-interface";
+import { krcFinalReviewQuestions } from "./review/krc-final-review";
+import { bcgLearningMapQuestions } from "./review/bcg-learning-map";
+import { bcgTypesVariablesQuestions } from "./review/bcg-types-variables";
+import { bcgFlowControlQuestions } from "./review/bcg-flow-control";
+import { bcgFunctionsQuestions } from "./review/bcg-functions";
+import { bcgClassesOopQuestions } from "./review/bcg-classes-oop";
+import { bcgGameLoopQuestions } from "./review/bcg-game-loop";
+import { bcgGraphicsSfmlQuestions } from "./review/bcg-graphics-sfml";
+import { bcgCollisionDetectionQuestions } from "./review/bcg-collision-detection";
+import { bcgGameProjectQuestions } from "./review/bcg-game-project";
+import { bcgFinalReviewQuestions } from "./review/bcg-final-review";
+import { efcLearningMapQuestions } from "./review/efc-learning-map";
+import { efcResourceManagementQuestions } from "./review/efc-resource-management";
+import { efcConstructorsDestructorsQuestions } from "./review/efc-constructors-destructors";
+import { efcClassDesignQuestions } from "./review/efc-class-design";
+import { efcInheritancePolymorphismQuestions } from "./review/efc-inheritance-polymorphism";
+import { efcTemplatesGenericsQuestions } from "./review/efc-templates-generics";
+import { efcTemplateMetaprogrammingQuestions } from "./review/efc-template-metaprogramming";
+import { efcNewExceptionsQuestions } from "./review/efc-new-exceptions";
+import { efcCodingConventionsQuestions } from "./review/efc-coding-conventions";
+import { efcFinalReviewQuestions } from "./review/efc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -817,6 +847,36 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...vsiFunctionalSafetyQuestions,
   ...vsiCybersecurityQuestions,
   ...vsiFinalReviewQuestions,
+  ...krcLearningMapQuestions,
+  ...krcTypesOperatorsQuestions,
+  ...krcControlFlowQuestions,
+  ...krcFunctionsProgramQuestions,
+  ...krcPointersArraysQuestions,
+  ...krcPointerArithmeticQuestions,
+  ...krcStructuresQuestions,
+  ...krcInputOutputQuestions,
+  ...krcUnixInterfaceQuestions,
+  ...krcFinalReviewQuestions,
+  ...bcgLearningMapQuestions,
+  ...bcgTypesVariablesQuestions,
+  ...bcgFlowControlQuestions,
+  ...bcgFunctionsQuestions,
+  ...bcgClassesOopQuestions,
+  ...bcgGameLoopQuestions,
+  ...bcgGraphicsSfmlQuestions,
+  ...bcgCollisionDetectionQuestions,
+  ...bcgGameProjectQuestions,
+  ...bcgFinalReviewQuestions,
+  ...efcLearningMapQuestions,
+  ...efcResourceManagementQuestions,
+  ...efcConstructorsDestructorsQuestions,
+  ...efcClassDesignQuestions,
+  ...efcInheritancePolymorphismQuestions,
+  ...efcTemplatesGenericsQuestions,
+  ...efcTemplateMetaprogrammingQuestions,
+  ...efcNewExceptionsQuestions,
+  ...efcCodingConventionsQuestions,
+  ...efcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

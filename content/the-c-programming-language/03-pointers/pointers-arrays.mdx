@@ -1,0 +1,76 @@
+---
+title: 指针与数组
+type: A
+section: 指针与数组
+order: 4
+description: 指针与数组的等价关系、指针作为函数参数、多维数组的行主序布局。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { KrcPointerRelationshipDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-pointer-relationship";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释数组名退化为指针的机制，以及 `a[i] = *(a+i)` 这条等价关系
+- 能说出数组作为函数参数时退化为什么，以及为什么函数内 sizeof 得不到数组大小
+- 能回答：`int a[3][4]` 中 `a+1` 跳过多少字节？`a[i][j]` 等价于什么指针表达式？
+
+</Objectives>
+
+## 指针：C 语言的灵魂
+
+指针是 C 语言最强大也最容易出错的特性。它让程序能直接操作内存地址——这是系统编程的基础，也是 C 贴近硬件的体现。K&R 用了整整一章（第 5 章）讲指针和数组，因为它们的关系是 C 语言最核心的抽象之一。
+
+<KrcPointerRelationshipDiagram />
+
+## 核心概念
+
+<Term def="数组名在表达式中自动转换为指向首元素的指针的现象，例外是 sizeof 和取地址 & 运算符。">数组名退化</Term>是理解指针与数组关系的关键。`int a[10];` 中，`a` 的类型是 `int[10]`（数组类型），但在大多数表达式中它会自动退化为 `int *`（指向首元素的指针）。所以 `int *p = a;` 合法——p 和 a 都指向 `a[0]`。
+
+退化的结果是 `a[i]` 和 `*(a+i)` 完全等价。加 i 不是加 i 个字节，而是加 i 个 `sizeof(int)`——C 的指针算术以元素为单位，自动按类型大小缩放。这条等价关系是 C 数组操作的基础：所有数组访问在编译后都变成指针算术。
+
+退化有两个例外：`sizeof(a)` 得到整个数组的大小（40 字节），`&a` 的类型是「指向数组的指针」而非「指向元素的指针」。除此之外，数组名就是指向首元素的指针。
+
+数组作为函数参数时会退化。形参写成 `int arr[]` 或 `int *arr` 完全等价——编译器都当 `int *` 处理。整个数组不会被复制，只传了首元素地址。副作用是：函数内 `sizeof(arr)` 得到的是指针大小（8 字节），不是数组大小。所以无法在函数内用 sizeof 计算数组长度，必须额外传一个长度参数。
+
+多维数组在内存中按<Term def="二维数组在内存中先存完第一行所有元素，再存第二行，以此类推的存储方式。C 采用行主序。">行主序</Term>连续存放。`int a[3][4]` 是 3 行 4 列，内存中先存 a[0][0] 到 a[0][3]，再存 a[1][0] 到 a[1][3]。`a` 退化为 `int (*)[4]`（指向含 4 个 int 的数组的指针），`a+1` 跳过一整行（16 字节）。`a[i][j]` 等价于 `*(*(a+i)+j)`：先跳 i 行，再跳 j 列。
+
+<Callout type="tip">
+<strong>建议 →</strong> 画图是理解指针和数组最有效的工具。每次遇到指针表达式，画一排内存格子，标出每个指针指向哪个格子，指针算术就一目了然。K&R 全书的指针讲解都配合了内存示意图。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 函数内 `sizeof(arr)` 返回 8 而不是数组实际大小，导致计算长度出错。<strong>原因 →</strong> 数组作为函数参数时退化为指针，sizeof 得到的是指针大小（8 字节 on 64 位），不是数组大小。<strong>修法 →</strong> 永远不要在函数内用 sizeof 计算数组长度。要么额外传一个长度参数 `void func(int arr[], int n)`，要么用哨兵值（如字符串的 '\0'）标记结尾。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 返回局部数组的指针，调用方使用时得到垃圾数据。<strong>原因 →</strong> 局部数组在栈上分配，函数返回时栈帧被释放，那块内存被后续调用覆盖。<strong>修法 →</strong> 不要返回局部数组的地址。改用：① 传入调用方分配的缓冲区 ② 用 static 局部数组（生命周期延长到程序结束）③ 用 malloc 在堆上分配（调用方负责 free）。
+</Callout>
+
+## 小结与练习
+
+- 数组名在表达式中退化为指向首元素的指针，`a[i]` 等价于 `*(a+i)`，指针算术以元素为单位
+- 数组作为函数参数时退化为指针，函数内 sizeof 得到指针大小而非数组大小
+- 多维数组按行主序连续存放，`a[i][j] = *(*(a+i)+j)`，`a+1` 跳过一行
+- 指针和数组的区别：sizeof 和 & 是仅有的两个不发生退化的场景
+
+<Exercises>
+  <Answer question="`int a[5]; int *p = a;` 中 `a`、`&a[0]`、`p` 三者有什么关系？`sizeof(a)` 和 `sizeof(p)` 分别是多少？">三者值相同（都指向首元素地址），但类型不同：a 是 int[5] 退化为 int*，&a[0] 是 int*，p 是 int*。sizeof(a) = 20（整个数组 5×4 字节，sizeof 不退化），sizeof(p) = 8（指针大小 on 64 位）。</Answer>
+  <Answer question="`int a[3][4];` 中 `a+1` 跳过多少字节？`a[1][2]` 等价于什么指针表达式？">a+1 跳过 16 字节（一整行 4 个 int）。因为 a 退化为 int(*)[4]，指向含 4 个 int 的行，加 1 跳一整行。`a[1][2]` 等价于 `*(*(a+1)+2)`：a+1 跳到第 1 行，*(a+1) 得到第 1 行首元素指针，+2 跳 2 个 int，最后解引用得到元素值。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数组名退化">数组名在表达式中自动转换为指向首元素的指针的现象。退化后数组名等价于 int*，可做指针算术。例外：sizeof（得到整个数组大小）和 &amp;（得到指向数组的指针）不退化。</GlossaryItem>
+  <GlossaryItem term="行主序">二维数组在内存中先存完第一行所有元素，再存第二行的存储方式。C 语言采用行主序。a[i][j] 的地址 = 基址 + (i * 列数 + j) * sizeof(元素)。</GlossaryItem>
+  <GlossaryItem term="指针算术">对指针做加减运算，步长自动按指向类型的大小缩放。int* 加 1 跳 4 字节，char* 加 1 跳 1 字节。这是 a[i] = *(a+i) 等价关系的物理基础。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />

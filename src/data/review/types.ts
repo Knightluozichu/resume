@@ -484,7 +484,40 @@ export type ReviewChapterSlug =
   | "vsi-vehicle-control"
   | "vsi-functional-safety"
   | "vsi-cybersecurity"
-  | "vsi-final-review";
+  | "vsi-final-review"
+  // C 程序设计语言（K&R）
+  | "krc-learning-map"
+  | "krc-types-operators"
+  | "krc-control-flow"
+  | "krc-functions-program"
+  | "krc-pointers-arrays"
+  | "krc-pointer-arithmetic"
+  | "krc-structures"
+  | "krc-input-output"
+  | "krc-unix-interface"
+  | "krc-final-review"
+  // C++ 游戏编程入门
+  | "bcg-learning-map"
+  | "bcg-types-variables"
+  | "bcg-flow-control"
+  | "bcg-functions"
+  | "bcg-classes-oop"
+  | "bcg-game-loop"
+  | "bcg-graphics-sfml"
+  | "bcg-collision-detection"
+  | "bcg-game-project"
+  | "bcg-final-review"
+  // Effective C++
+  | "efc-learning-map"
+  | "efc-resource-management"
+  | "efc-constructors-destructors"
+  | "efc-class-design"
+  | "efc-inheritance-polymorphism"
+  | "efc-templates-generics"
+  | "efc-template-metaprogramming"
+  | "efc-new-exceptions"
+  | "efc-coding-conventions"
+  | "efc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -906,6 +939,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "vsi-functional-safety": "功能安全 ISO 26262",
   "vsi-cybersecurity": "车载信息安全",
   "vsi-final-review": "车载软件与智能化总复习",
+  // C 程序设计语言（K&R）
+  "krc-learning-map": "C 程序设计语言全书学习地图",
+  "krc-types-operators": "类型、运算符与表达式",
+  "krc-control-flow": "控制流",
+  "krc-functions-program": "函数与程序结构",
+  "krc-pointers-arrays": "指针与数组",
+  "krc-pointer-arithmetic": "指针运算与字符串",
+  "krc-structures": "结构体与联合",
+  "krc-input-output": "输入与输出",
+  "krc-unix-interface": "UNIX 系统接口",
+  "krc-final-review": "C 程序设计语言总复习",
+  // C++ 游戏编程入门
+  "bcg-learning-map": "C++ 游戏编程入门学习地图",
+  "bcg-types-variables": "类型、变量与运算",
+  "bcg-flow-control": "流程控制",
+  "bcg-functions": "函数与引用",
+  "bcg-classes-oop": "类与面向对象",
+  "bcg-game-loop": "游戏循环与状态",
+  "bcg-graphics-sfml": "图形与 SFML",
+  "bcg-collision-detection": "碰撞检测",
+  "bcg-game-project": "综合游戏项目",
+  "bcg-final-review": "C++ 游戏编程入门总复习",
+  // Effective C++
+  "efc-learning-map": "Effective C++ 学习地图",
+  "efc-resource-management": "资源管理",
+  "efc-constructors-destructors": "构造与析构",
+  "efc-class-design": "类与设计",
+  "efc-inheritance-polymorphism": "继承与多态",
+  "efc-templates-generics": "模板与泛型",
+  "efc-template-metaprogramming": "模板元编程",
+  "efc-new-exceptions": "new、delete 与异常",
+  "efc-coding-conventions": "编码约定",
+  "efc-final-review": "Effective C++ 总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

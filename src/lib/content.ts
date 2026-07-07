@@ -89,6 +89,9 @@ export const BOOK_ORDER = [
   "advanced-algorithm-engineering",
   "automotive-systems-specialization",
   "vehicle-software-intelligence",
+  "the-c-programming-language",
+  "beginning-cpp-game-programming",
+  "effective-cpp",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -119,6 +122,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "advanced-algorithm-engineering": "高级算法与算法工程",
   "automotive-systems-specialization": "汽车系统专项",
   "vehicle-software-intelligence": "车载软件与智能化",
+  "the-c-programming-language": "C 程序设计语言（K&R）",
+  "beginning-cpp-game-programming": "C++ 游戏编程入门",
+  "effective-cpp": "Effective C++",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -633,6 +639,21 @@ export const SECTION_ORDER = [
   "车载中间件",
   "感知融合",
   "规控与系统工程",
+  // C 程序设计语言（K&R）
+  "C语言概览",
+  "类型与运算符",
+  "控制流与函数",
+  "指针与数组",
+  "结构体与IO",
+  // C++ 游戏编程入门
+  "C++基础",
+  "游戏编程入门",
+  "游戏开发实战",
+  // Effective C++
+  "资源管理",
+  "类与继承",
+  "模板与泛型",
+  "Effective杂项",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

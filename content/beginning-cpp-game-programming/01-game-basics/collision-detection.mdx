@@ -1,0 +1,108 @@
+---
+title: 碰撞检测
+type: A
+section: 游戏编程入门
+order: 7
+description: AABB 包围盒、圆形碰撞与像素级碰撞的原理对比，以及粗筛定候选、精判定真碰的两阶段策略。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { BcgCollisionTypesDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-collision-types";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出 AABB 矩形重叠的判断条件并理解其局限
+- 能说明圆形碰撞的原理及相比 AABB 的适用场景
+- 能用「粗筛定候选、精判定真碰」的两阶段策略兼顾精度与性能
+</Objectives>
+
+## 让物体能相互作用
+
+画面能动起来了，但子弹打中敌人要扣血、玩家撞墙要停下——这些需要碰撞检测。碰撞检测回答一个问题：两个物体此刻是否接触/重叠？答案驱动游戏响应。
+
+<BcgCollisionTypesDiagram />
+
+## AABB 包围盒
+
+AABB（Axis-Aligned Bounding Box，轴对齐包围盒）用不旋转的矩形包围物体，判两矩形是否重叠。重叠条件：
+
+```cpp
+A.left < B.right && A.right > B.left
+  && A.top < B.bottom && A.bottom > B.top
+```
+
+SFML 用 `sprite.getGlobalBounds()` 取 `FloatRect`，两个 rect 调 `intersects()` 即可判断。AABB 最快，但物体非矩形或旋转时会有「视觉没碰但盒子碰了」的误差。
+
+## 圆形碰撞
+
+每个物体用一个圆（圆心 + 半径）包围。两圆碰撞当且仅当**圆心距离 < 半径之和**：
+
+```cpp
+float dx = a.x - b.x, dy = a.y - b.y;
+float r = a.radius + b.radius;
+bool hit = (dx*dx + dy*dy) < r*r;  // 比平方避免开方
+```
+
+相比 AABB，圆形更适合球类、圆形物体，且物体旋转时圆不变、判断稳定。缺点是长条形物体（剑、墙）用圆包围误差大。
+
+## 像素级碰撞
+
+取两精灵在重叠区域内的像素，逐个检查是否**双方都非透明**（alpha > 0）。若有任一像素双方都不透明，则真碰撞。这忽略透明边角，最精确。
+
+<Callout type="trap">
+像素级碰撞极慢——每个候选对要在重叠区逐像素比对，物体多时开销爆炸。绝不能对所有物体都用它。正确做法是先粗筛（AABB/圆形）淘汰绝大多数，只对少数候选做像素精判。
+</Callout>
+
+## 两阶段策略
+
+实战标准做法：粗筛定候选、精判定真碰。
+
+1. **粗筛**：用 AABB/圆形快速淘汰不相交的对，只留包围盒重叠的少数候选。
+2. **精判**：仅对候选对做像素级检测（必要时）。
+
+1000 个物体里可能只有 5 对进入像素检测，性能可接受。子弹、方块敌人用 AABB 已足够，不必像素；只有不规则角色需要精确时才上像素级。
+
+## 选型决策
+
+- **AABB**：方块状物体、最快，首选粗筛。
+- **圆形**：球/圆形物体、会旋转的物体。
+- **像素**：不规则精灵、需最精确，只用于精判少数候选。
+
+<Callout type="tip">
+碰撞检测的工程智慧不是「选最精确的」，而是「在正确的地方用刚好够用的」。粗筛用快的，精判才用精确的，二者配合兼顾速度与精度。
+</Callout>
+
+## 小结
+
+- AABB 最快但最粗，适合方块物体和粗筛
+- 圆形碰撞适合球类和旋转物体
+- 像素级最精确但最慢，只对少数候选精判
+- 两阶段：粗筛定候选、精判定真碰
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="AABB">
+Axis-Aligned Bounding Box，轴对齐包围盒，用不旋转的矩形包围物体检测重叠，最快但最粗，适合方块物体和粗筛。
+</GlossaryItem>
+<GlossaryItem term="圆形碰撞">
+用圆心距离与半径和比较判断碰撞的方法，适合球类和会旋转的物体，旋转时判断不变。
+</GlossaryItem>
+<GlossaryItem term="像素级碰撞">
+逐像素比对两物体重叠区是否都非透明的检测方法，最精确但最慢，只用于精判少数候选。
+</GlossaryItem>
+<GlossaryItem term="两阶段碰撞">
+先用粗筛（AABB/圆形）淘汰不相交的对定候选，再对候选做精判（像素级）的策略，兼顾精度与性能。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="写出 AABB 两矩形重叠的判断条件。SFML 里怎么实现？">重叠条件：A.left &lt; B.right && A.right &gt; B.left && A.top &lt; B.bottom && A.bottom &gt; B.top（即两矩形在 x 和 y 方向都相互跨越）。SFML 用 sprite.getGlobalBounds() 取 FloatRect，两个 rect 调 rectA.intersects(rectB) 返回 bool 即可判断。AABB 最快，但非矩形或旋转物体会有误差。</Answer>
+  <Answer question="为什么不能对所有物体都用像素级碰撞？正确做法是什么？">像素级碰撞要在重叠区逐像素比对，每个候选对开销大，物体多时复杂度爆炸、帧率崩塌。正确做法是两阶段：先用 AABB/圆形粗筛淘汰绝大多数不相交的对，只留少数候选；再仅对候选做像素精判。这样 1000 个物体里可能只有 5 对进入像素检测，性能可接受。粗筛定候选、精判定真碰。</Answer>
+</Exercises>

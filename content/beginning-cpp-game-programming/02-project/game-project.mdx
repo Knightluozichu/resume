@@ -1,0 +1,109 @@
+---
+title: 综合游戏项目
+type: A
+section: 游戏开发实战
+order: 8
+description: 游戏项目分层架构——Game 主类统管实体管理、状态机、资源管理、输入渲染四大模块，把全书知识组装成可扩展游戏。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { BcgGameArchitectureDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-game-architecture";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能画出游戏项目的分层架构，说明 Game 主类与四大模块的职责
+- 能用状态机管理游戏阶段，说明它优于布尔标志的理由
+- 能用资源管理器按 id 缓存复用资源，避免重复加载
+</Objectives>
+
+## 把知识组装成游戏
+
+前面学了 C++ 基础、游戏循环、SFML 图形、碰撞检测。单独看都会，但组装成一个完整游戏时容易乱：实体怎么管、阶段怎么切、资源怎么加载。答案是用分层架构把它们组织起来。
+
+<BcgGameArchitectureDiagram />
+
+## Game 主类与四大模块
+
+Game 主类是「骨架」，持有并调度四大模块，自己不写具体游戏逻辑：
+
+- **实体管理**：管所有游戏对象（玩家、敌人、子弹）的集合与生命周期，通常用 `vector<Entity*>` 多态管理。
+- **状态机**：管游戏阶段切换（菜单/游玩/暂停/结束），每个状态有独立的 update/draw/handleInput。
+- **资源管理**：加载、缓存、复用纹理/字体/音效，避免重复加载。
+- **输入与渲染**：读玩家输入、把画面画到窗口。
+
+每帧 Game 主循环依次让输入模块读输入、状态机决定当前阶段、实体管理更新所有对象、渲染模块画出结果。分工后新增关卡/敌人只动对应模块，不动主循环。
+
+## 状态机管理阶段
+
+为什么不用一堆布尔标志（`isMenu`/`isPlaying`/`isGameOver`）？因为状态机能保证互斥、转移明确、扩展容易。
+
+```cpp
+class State { virtual void update()=0; virtual void draw()=0; };
+class MenuState : public State { ... };
+class PlayState : public State { ... };
+```
+
+任一时刻只有一个状态，不会出现「同时是菜单又是游戏」的矛盾。加新阶段（如设置界面）只需新增一个 State 子类。状态转移时还能执行进入/退出动作（如退出 PlayState 时清空实体）。
+
+<Callout type="tip">
+状态机的核心收益是「互斥 + 隔离」：每个阶段逻辑分开写，菜单代码不与战斗代码搅在一起，可读性和可维护性远超布尔标志。
+</Callout>
+
+## 资源管理器缓存复用
+
+```cpp
+class TextureHolder {
+  map<string, Texture> m_Textures;
+public:
+  void load(string id, string path);  // 加载并存入
+  Texture& get(string id);            // 取已加载的
+};
+```
+
+首次请求时加载并存入 map，后续同 id 直接返回已加载的，全程只加载一次。如果每次用纹理都 `loadFromFile`，会慢（磁盘 IO + 解码）、浪费内存（同图多份）、句柄失控（纹理先销毁精灵画错乱）。缓存复用解决全部。
+
+<Callout type="trap">
+资源管理器必须持有资源的所有权，生命周期与游戏一致；Sprite/使用者只引用不拥有。若让使用者各自加载资源，纹理先于 Sprite 销毁会画出错乱——这正是资源管理器存在的核心理由。
+</Callout>
+
+## 整合时的常见坑
+
+- **指针与生命周期**：`new` 了忘 `delete` 泄漏。用智能指针或统一在实体管理器集中管理。
+- **循环依赖**：Entity 引用 Game，Game 引用 Entity，编译不过。用前向声明 + 指针成员解耦。
+- **上帝对象**：Game 类塞满逻辑变臃肿。Game 只做调度，逻辑下沉到模块/实体。
+- **状态转移遗漏清理**：切到菜单时残留子弹。状态机设退出钩子清空实体。
+
+## 小结
+
+- Game 主类是骨架，四大模块（实体/状态/资源/IO）是肌肉
+- 状态机管阶段，互斥 + 隔离，优于布尔标志
+- 资源管理器按 id 缓存复用，加载一次、共享一份
+- 整合时警惕指针生命周期、循环依赖、上帝对象
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="分层架构">
+把游戏分成 Game 主类统管 + 实体管理/状态机/资源管理/输入渲染四大模块的结构，分工后新增内容只动对应模块不动主循环。
+</GlossaryItem>
+<GlossaryItem term="状态机">
+用单一状态变量 + 每状态独立逻辑管理游戏阶段切换的机制，保证互斥、转移明确、扩展容易，优于布尔标志组合。
+</GlossaryItem>
+<GlossaryItem term="资源管理器">
+按 id 缓存复用资源（纹理/字体/音效）的模块，首次加载后存入 map，后续同 id 直接返回，避免重复加载的慢与内存浪费。
+</GlossaryItem>
+<GlossaryItem term="上帝对象">
+一个类塞满几乎所有逻辑的坏味道设计，Game 类易堕落成上帝对象，应只做调度、把逻辑下沉到模块/实体。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="游戏项目的四大模块是什么？Game 主类在其中扮演什么角色？">四大模块：实体管理（管游戏对象集合与生命周期）、状态机（管阶段切换）、资源管理（加载缓存复用资源）、输入与渲染（读输入画画面）。Game 主类是骨架，持有四模块实例并在主循环里调度它们，自己不写具体游戏逻辑，只负责串起来。这样分工后新增关卡/敌人只动对应模块，不动主循环。</Answer>
+  <Answer question="用状态机管理游戏阶段相比布尔标志（isMenu/isPlaying）有什么好处？">三点：一互斥保证，任一时刻只有一个状态，不会出现「同时是菜单又是游戏」的矛盾组合；二转移明确，状态间转移写清楚且可执行进入/退出动作（如退出游玩时清空实体）；三扩展容易，加新阶段只需新增一个 State 子类，不动其他状态逻辑，布尔标志法要在每个 if 分支塞新条件越加越乱。状态多、转移复杂时状态机远胜。</Answer>
+</Exercises>
