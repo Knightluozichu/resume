@@ -530,6 +530,36 @@ import { ctrDesignTestQuestions } from "./review/ctr-design-test";
 import { ctrAlgorithmTestQuestions } from "./review/ctr-algorithm-test";
 import { ctrDebuggingTestQuestions } from "./review/ctr-debugging-test";
 import { ctrFinalReviewQuestions } from "./review/ctr-final-review";
+import { cseLearningMapQuestions } from "./review/cse-learning-map";
+import { cseIoModelQuestions } from "./review/cse-io-model";
+import { cseEventDrivenQuestions } from "./review/cse-event-driven";
+import { cseThreadPoolQuestions } from "./review/cse-thread-pool";
+import { cseConnectionMgmtQuestions } from "./review/cse-connection-mgmt";
+import { cseBufferDesignQuestions } from "./review/cse-buffer-design";
+import { cseProtocolDesignQuestions } from "./review/cse-protocol-design";
+import { cseTimerWheelQuestions } from "./review/cse-timer-wheel";
+import { csePerformanceTuningQuestions } from "./review/cse-performance-tuning";
+import { cseFinalReviewQuestions } from "./review/cse-final-review";
+import { hfdLearningMapQuestions } from "./review/hfd-learning-map";
+import { hfdStrategyQuestions } from "./review/hfd-strategy";
+import { hfdObserverQuestions } from "./review/hfd-observer";
+import { hfdDecoratorQuestions } from "./review/hfd-decorator";
+import { hfdFactoryQuestions } from "./review/hfd-factory";
+import { hfdSingletonQuestions } from "./review/hfd-singleton";
+import { hfdCommandQuestions } from "./review/hfd-command";
+import { hfdAdapterFacadeQuestions } from "./review/hfd-adapter-facade";
+import { hfdTemplateMethodQuestions } from "./review/hfd-template-method";
+import { hfdFinalReviewQuestions } from "./review/hfd-final-review";
+import { ec7LearningMapQuestions } from "./review/ec7-learning-map";
+import { ec7TypesVariablesQuestions } from "./review/ec7-types-variables";
+import { ec7OperatorsControlQuestions } from "./review/ec7-operators-control";
+import { ec7ClassesObjectsQuestions } from "./review/ec7-classes-objects";
+import { ec7InheritanceInterfacesQuestions } from "./review/ec7-inheritance-interfaces";
+import { ec7GenericsQuestions } from "./review/ec7-generics";
+import { ec7DelegatesEventsQuestions } from "./review/ec7-delegates-events";
+import { ec7LinqQuestions } from "./review/ec7-linq";
+import { ec7AsyncAwaitQuestions } from "./review/ec7-async-await";
+import { ec7FinalReviewQuestions } from "./review/ec7-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1067,6 +1097,36 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ctrAlgorithmTestQuestions,
   ...ctrDebuggingTestQuestions,
   ...ctrFinalReviewQuestions,
+  ...cseLearningMapQuestions,
+  ...cseIoModelQuestions,
+  ...cseEventDrivenQuestions,
+  ...cseThreadPoolQuestions,
+  ...cseConnectionMgmtQuestions,
+  ...cseBufferDesignQuestions,
+  ...cseProtocolDesignQuestions,
+  ...cseTimerWheelQuestions,
+  ...csePerformanceTuningQuestions,
+  ...cseFinalReviewQuestions,
+  ...hfdLearningMapQuestions,
+  ...hfdStrategyQuestions,
+  ...hfdObserverQuestions,
+  ...hfdDecoratorQuestions,
+  ...hfdFactoryQuestions,
+  ...hfdSingletonQuestions,
+  ...hfdCommandQuestions,
+  ...hfdAdapterFacadeQuestions,
+  ...hfdTemplateMethodQuestions,
+  ...hfdFinalReviewQuestions,
+  ...ec7LearningMapQuestions,
+  ...ec7TypesVariablesQuestions,
+  ...ec7OperatorsControlQuestions,
+  ...ec7ClassesObjectsQuestions,
+  ...ec7InheritanceInterfacesQuestions,
+  ...ec7GenericsQuestions,
+  ...ec7DelegatesEventsQuestions,
+  ...ec7LinqQuestions,
+  ...ec7AsyncAwaitQuestions,
+  ...ec7FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

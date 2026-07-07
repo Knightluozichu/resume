@@ -101,6 +101,9 @@ export const BOOK_ORDER = [
   "easy-cpp-5e",
   "cpp-primer-plus",
   "cpp-testing-recipes",
+  "cpp-server-essence",
+  "head-first-design-patterns",
+  "essential-csharp-7",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -143,6 +146,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "easy-cpp-5e": "Easy C++（第5版）",
   "cpp-primer-plus": "C++ Primer Plus",
   "cpp-testing-recipes": "C++ 编程测试秘籍",
+  "cpp-server-essence": "C++ 服务器开发精髓",
+  "head-first-design-patterns": "Head First 设计模式",
+  "essential-csharp-7": "C# 7.0 本质论",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -712,6 +718,22 @@ export const SECTION_ORDER = [
   "基础测试",
   "进阶测试",
   "面试实战",
+  // C++ 服务器开发精髓
+  "服务器基础",
+  "网络与IO",
+  "并发架构",
+  "工程实践",
+  // Head First 设计模式
+  "模式入门",
+  "封装变化",
+  "对象组合",
+  "状态变化",
+  "模式总结",
+  // C# 7.0 本质论
+  "C#基础",
+  "面向对象",
+  "泛型与委托",
+  "高级特性",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

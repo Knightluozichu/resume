@@ -1,0 +1,184 @@
+---
+title: 连接管理
+type: C
+section: 并发架构
+order: 1
+description: TCP 连接从 accept 到 close 的完整生命周期——状态机正确流转、fd 映射、对象池复用，以及半关闭与超时处理。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseConnectionMgmtDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-connection-mgmt";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 TCP 连接在服务器端的完整生命周期
+- 能看懂并独立实现 Connection 类和 fd 映射表的管理代码
+- 能回答：连接管理中半关闭、超时、fd 泄漏分别怎么处理？
+</Objectives>
+
+## 为什么连接管理是个大问题
+
+accept 一个连接很容易，但管好它的整个生命周期很难。连接建立后你可能忘记设超时，空闲连接慢慢堆积 fd 耗尽；对端突然断开你可能没处理 CLOSE_WAIT，连接卡在半关闭状态；高频创建销毁 Connection 对象可能产生内存碎片。
+
+一个生产级服务器要管理数万个连接，每个连接都有自己的状态、缓冲区、定时器。没有系统化的管理方案，迟早会在这三个坑里翻车。
+
+<CseConnectionMgmtDiagram />
+
+## 连接管理的三个支柱
+
+### Connection 对象
+
+每个连接封装成一个对象，持有 fd、对端地址、读写缓冲区、最后活跃时间等状态。所有操作都通过这个对象进行。
+
+### fd 映射表
+
+epoll 返回的是 fd，你需要根据 fd 找到对应的 Connection 对象。用一个 `unordered_map<int, Connection*>` 做映射，fd 为键。
+
+### <Term def="预先分配一组对象，用完后归还而不是销毁，避免频繁 new/delete">对象池</Term>
+
+高频创建销毁 Connection 对象会产生内存碎片。预先分配一批 Connection 对象，新连接从池取，关闭时归还，避免频繁 new/delete。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="新连接到达：accept 并创建 Connection">
+    ```cpp
+    int connfd = accept(listenfd, NULL, NULL);
+    set_nonblock(connfd);
+    Connection* conn = conn_pool_.acquire();  // 从对象池取
+    conn->init(connfd, peer_addr);
+    connections_[connfd] = conn;              // 加入映射表
+    reactor_->add_handler(connfd, conn, EPOLLIN);
+    ```
+  </Step>
+  <Step title="读写循环：事件到达时读写数据">
+    ```cpp
+    void Connection::handle_read() {
+      int n = read(fd_, read_buf_.data(), read_buf_.size());
+      if (n <= 0) { close(); return; }  // 对端关闭
+      last_active_ = now();  // 更新活跃时间
+      process(read_buf_, n); // 解析协议
+    }
+    ```
+  </Step>
+  <Step title="超时检测：定期扫描踢除空闲连接">
+    ```cpp
+    // 定时器每 10 秒触发一次
+    void Server::check_timeout() {
+      time_t now = ::time(NULL);
+      for (auto& [fd, conn] : connections_) {
+        if (now - conn->last_active() > 60) {
+          conn->close();  // 空闲超过 60 秒，踢
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="连接关闭：清理资源并归还对象池">
+    ```cpp
+    void Connection::close() {
+      reactor_->remove_handler(fd_);  // 先从 epoll 移除
+      ::close(fd_);                   // 再关 fd
+      connections_.erase(fd_);        // 从映射表移除
+      conn_pool_.release(this);       // 归还到对象池
+    }
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+class Connection {
+  int fd_;
+  std::string peer_addr_;
+  Buffer read_buf_;
+  Buffer write_buf_;
+  time_t last_active_;
+public:
+  void init(int fd, const std::string& addr) {
+    fd_ = fd;
+    peer_addr_ = addr;
+    read_buf_.clear();
+    write_buf_.clear();
+    last_active_ = ::time(nullptr);
+  }
+```
+
+Connection 持有连接的所有状态。`init` 而不是构造函数，因为对象池复用对象时不重新构造，只重新初始化。`last_active_` 记录最后活跃时间，用于超时检测。
+
+```cpp
+  void handle_event(uint32_t events) {
+    if (events & EPOLLIN) handle_read();
+    if (events & EPOLLOUT) handle_write();
+    if (events & (EPOLLERR | EPOLLHUP)) close();
+  }
+
+  void handle_read() {
+    last_active_ = ::time(nullptr);  // 更新活跃时间
+    int n = read(fd_, read_buf_.end(), read_buf_.writable());
+    if (n > 0) {
+      read_buf_.has_written(n);
+      on_message(read_buf_);  // 交给协议层处理
+    } else {
+      close();  // n==0 对端关闭, n<0 出错
+    }
+  }
+```
+
+`handle_event` 是 Reactor 分发器的入口，根据事件类型分发到 read/write。每次读到数据都更新 `last_active_`，这样定时器扫到时就不会误踢活跃连接。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 服务器 fd 持续增长直到 "Too many open files"。
+**原因：** 连接关闭时忘记从 epoll 移除 fd，或忘记 `close(fd)`，fd 泄漏。
+**修法：** close 方法里严格按顺序：先 `epoll_ctl(DEL)`，再 `close(fd)`，再清理 map，最后归还对象池。
+</Callout>
+
+<Callout type="trap">
+**现象：** 大量连接处于 CLOSE_WAIT 状态，服务器不释放。
+**原因：** 对端关闭后，服务器没有检测到（read 返回 0）或检测到但没处理，连接卡在半关闭。
+**修法：** read 返回 0 必须主动 close，不能忽略。EPOLLRDHUP 事件也要处理。
+</Callout>
+
+<Callout type="trap">
+**现象：** 空闲连接堆积，内存和 fd 持续上涨。
+**原因：** 没有超时机制，恶意客户端连上不发数据也不断开，白白占用资源。
+**修法：** 每个连接设超时时间（如 60 秒），定时器定期扫描，超时连接直接踢除。
+</Callout>
+
+## 小结
+
+- 连接管理 = Connection 对象 + fd 映射表 + 对象池，三管齐下
+- 连接关闭顺序：先从 epoll 移除，再 close fd，再清理 map，最后归还对象池
+- read 返回 0 是对端关闭信号，必须主动 close，否则 fd 泄漏
+- 空闲连接必须设超时踢除，否则恶意连接会耗尽资源
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="Connection 对象">
+封装一个 TCP 连接所有状态的对象：fd、对端地址、读写缓冲区、最后活跃时间。所有连接操作通过它进行。
+</GlossaryItem>
+<GlossaryItem term="fd 映射表">
+以 fd 为键、Connection 指针为值的哈希表。epoll 返回 fd 后，通过它找到对应的 Connection 对象。
+</GlossaryItem>
+<GlossaryItem term="对象池">
+预先分配一组对象，使用时从池取，用完归还。避免高频 new/delete 造成的内存碎片和分配开销。
+</GlossaryItem>
+<GlossaryItem term="CLOSE_WAIT">
+TCP 状态：对端已关闭（发了 FIN），但本端还没 close。read 返回 0 是检测到此状态的信号，必须主动 close。
+</GlossaryItem>
+<GlossaryItem term="半关闭">
+TCP 一端关闭了写方向但还能读。服务器要读完对端残余数据再关闭，不能立刻 close。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="连接管理中半关闭、超时、fd 泄漏分别怎么处理？">半关闭：对端关闭后 read 返回 0，服务器必须主动 close fd 并清理资源。超时：每个连接记录最后活跃时间，定时器定期扫描，超过阈值（如 60 秒）的空闲连接直接踢除。fd 泄漏：close 方法严格按顺序操作——先从 epoll 移除（EPOLL_CTL_DEL），再 close(fd)，再从映射表 erase，最后归还对象池，任何一步遗漏都会泄漏。</Answer>
+  <Answer question="为什么用对象池而不是每次 new Connection？">高频连接场景下，每秒可能创建销毁成百上千个 Connection 对象。频繁 new/delete 会造成内存碎片，降低分配效率。对象池预先分配一批对象，复用已有内存，避免碎片，且 acquire/release 比 new/delete 快得多（只是标记可用，不涉及系统调用）。</Answer>
+</Exercises>

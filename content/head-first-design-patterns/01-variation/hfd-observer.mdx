@@ -1,0 +1,143 @@
+---
+title: 观察者模式
+type: B
+section: 封装变化
+order: 1
+description: 定义一对多依赖——Subject 状态变化时自动通知所有 Observer，松耦合的数据广播机制。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { HfdObserverDiagram } from "@/components/mdx/head-first-design-patterns/diagrams/hfd-observer";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能用自己的话解释观察者模式是什么、为什么需要它
+- 能看懂并独立修改观察者模式的 Java 代码
+- 能回答：推模式和拉模式有什么区别？各自适合什么场景？
+
+</Objectives>
+
+## 为什么需要观察者模式
+
+你在开发一个气象站系统。WeatherData 对象从传感器获取温度、湿度、气压数据。有三个显示面板需要展示这些数据：当前条件板、统计板、预报板。每当传感器数据更新，三个面板都要刷新。
+
+最直觉的写法：在 WeatherData 的 `measurementsChanged()` 里直接调三个面板的 `update()`。但这意味着 WeatherData 必须知道三个具体面板类——每加一个面板就要改 WeatherData 代码。更糟的是，面板可能动态增减（用户关闭某个面板），但你没法在运行时增减。
+
+问题的根源是：**数据拥有者和数据消费者紧耦合**。WeatherData 直接依赖具体面板，无法动态扩展。
+
+## 概念讲解
+
+观察者模式的思路是：**让消费者注册订阅，数据变化时统一通知**。
+
+<Term def="维护观察者列表，提供注册、移除、通知方法；状态变化时遍历通知所有观察者">Subject（主题）</Term>是数据拥有者。它维护一个 Observer 列表，`registerObserver()` 添加订阅者，`removeObserver()` 移除订阅者，`notifyObservers()` 遍历列表调用每个 Observer 的 `update()`。
+
+<Term def="定义统一的更新接口，注册到 Subject 后自动接收状态更新通知">Observer（观察者）</Term>是数据消费者。它实现 `update()` 方法，由 Subject 在状态变化时调用。Observer 不需要主动轮询数据——被动接收通知。
+
+<HfdObserverDiagram />
+
+关键解耦：Subject 只依赖 Observer 接口，不依赖任何具体观察者。新增观察者只需实现接口并注册，Subject 一行不改。观察者可以随时注册和注销——运行时动态增减。
+
+<Term def="Subject 在通知时把所有数据作为参数传给 Observer">推模式（Push）</Term>简单直接，但 Observer 被迫接收不需要的字段。<Term def="Subject 只传自身引用，Observer 按需调用 getter 拉取数据">拉模式（Pull）</Term>更灵活，Subject 加字段不改 `update()` 签名。
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：问题——紧耦合方案">
+    WeatherData 的 `measurementsChanged()` 里直接调 `currentDisplay.update()`、`statsDisplay.update()`、`forecastDisplay.update()`。每加一个面板要改 WeatherData，面板无法动态增减。
+  </Step>
+  <Step title="第二步：定义 Subject 接口">
+    声明 `registerObserver(o)`、`removeObserver(o)`、`notifyObservers()` 三个方法。WeatherData 实现这个接口，内部维护 `List<Observer>` 列表。
+  </Step>
+  <Step title="第三步：定义 Observer 接口">
+    声明 `update(temp, humidity, pressure)` 方法。三个显示面板实现这个接口，在 `update()` 里更新自己的显示。
+  </Step>
+  <Step title="第四步：注册订阅">
+    每个面板在构造函数中调 `weatherData.registerObserver(this)` 注册自己。WeatherData 把面板加入观察者列表——松耦合达成。
+  </Step>
+  <Step title="第五步：数据变化自动通知">
+    传感器数据更新 → `setMeasurements()` → `measurementsChanged()` → `notifyObservers()` → 遍历列表调用每个面板的 `update()`。面板自动刷新，WeatherData 不关心面板是谁。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```java
+// 1. Subject 接口
+public interface Subject {
+    void registerObserver(Observer o);
+    void removeObserver(Observer o);
+    void notifyObservers();
+}
+
+// 2. Observer 接口
+public interface Observer {
+    void update(float temp, float humidity, float pressure);
+}
+
+// 3. WeatherData 实现 Subject
+public class WeatherData implements Subject {
+    private List<Observer> observers = new ArrayList<>();
+    private float temperature;
+
+    public void registerObserver(Observer o) { observers.add(o); }
+    public void removeObserver(Observer o) { observers.remove(o); }
+    public void notifyObservers() {
+        for (Observer o : observers)
+            o.update(temperature, humidity, pressure);
+    }
+    public void measurementsChanged() { notifyObservers(); }
+}
+
+// 4. 显示面板实现 Observer
+public class CurrentConditionsDisplay implements Observer {
+    public CurrentConditionsDisplay(Subject weatherData) {
+        weatherData.registerObserver(this);  // 注册订阅
+    }
+    public void update(float t, float h, float p) {
+        // 更新显示
+    }
+}
+```
+
+WeatherData 只依赖 Observer 接口，新增面板只需实现接口并注册——松耦合达成。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> Observer A 的 `update()` 修改了 Subject 状态，导致再次触发 `notifyObservers()`，无限递归栈溢出。 <strong>原因 →</strong> 链式通知——Observer 不应该修改 Subject 状态。 <strong>修法 →</strong> Observer 的 `update()` 只读不写。如果必须改状态，用事件队列缓冲通知，延迟到当前通知周期结束后再发；或用 isNotifying 标志防重入。
+</Callout>
+
+## 小结与练习
+
+- 观察者模式定义一对多依赖：Subject 状态变化时自动通知所有 Observer
+- Subject 维护订阅列表，Observer 通过注册获得更新——松耦合
+- 推模式简单但不灵活，拉模式让 Observer 按需取数据
+- 核心原则：为交互对象之间的松耦合设计——Subject 不需要知道 Observer 的具体类型
+
+<Exercises>
+  <Answer question="推模式和拉模式有什么区别？各自适合什么场景？">推模式：Subject 把所有数据作为参数推给 Observer（`update(temp, hum, pres)`），简单直接但 Observer 被迫接收不需要的字段，加字段要改签名。拉模式：Subject 只传自身引用，Observer 按需调 getter 拉取，更灵活且加字段不改签名。数据字段少且稳定用推模式，字段多或会变化用拉模式。</Answer>
+  <Answer question="为什么说观察者模式实现了「松耦合」？">Subject 只依赖 Observer 接口而非具体类——不知道也不关心有哪些观察者。观察者可以随时注册和注销，运行时动态增减。新增观察者只需实现接口并注册，Subject 代码一行不改。Subject 和 Observer 之间通过接口交互，互不感知对方的具体实现——松耦合达成。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="Subject">
+观察者模式中的数据拥有者，维护观察者列表，提供注册、移除、通知方法。状态变化时遍历列表通知所有观察者。
+</GlossaryItem>
+<GlossaryItem term="Observer">
+观察者模式中的数据消费者，定义统一的更新接口。注册到 Subject 后自动接收状态更新通知，不需要主动轮询。
+</GlossaryItem>
+<GlossaryItem term="推模式（Push）">
+Subject 在通知时把所有数据作为参数推给 Observer。简单直接，但 Observer 被迫接收不需要的字段，Subject 加字段要改 update 签名。
+</GlossaryItem>
+<GlossaryItem term="拉模式（Pull）">
+Subject 在通知时只传自身引用，Observer 按需调用 getter 拉取数据。更灵活，Subject 加字段不改 update 签名，但 Observer 需要知道 Subject 类型。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Head First Design Patterns (Eric Freeman & Elisabeth Robson)" adaptedUrl="https://www.oreilly.com/library/view/head-first-design/0596007124/" />

@@ -1,0 +1,195 @@
+---
+title: 定时器
+type: B
+section: 工程实践
+order: 1
+description: 时间轮定时器——用环形数组加链表实现 O(1) 添加、删除、到期检测，海量短连接超时管理的最优解。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseTimerWheelDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-timer-wheel";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释时间轮的工作原理：环形数组 + 槽位链表 + 指针旋转
+- 能看懂并独立实现一个简单时间轮定时器的核心代码
+- 能回答：为什么时间轮的添加和删除是 O(1)，而红黑树是 O(log n)？
+</Objectives>
+
+## 为什么需要定时器
+
+服务器里到处是定时任务：连接超时踢除（60 秒不活跃就断开）、心跳检测（30 秒没心跳就认为掉线）、重传超时（100ms 没收到 ACK 就重发）、延迟任务（5 秒后执行清理）。一个高并发服务器可能有几十万个定时器同时存在。
+
+如果用 <Term def="自平衡二叉搜索树，按到期时间排序，最近到期的在左下角">红黑树</Term> 管理定时器，每次添加/删除都是 O(log n)，几十万个定时器时 log(n) 约 18，每秒上万次操作就很吃力。时间轮把这些操作降到 O(1)。
+
+<CseTimerWheelDiagram />
+
+## 时间轮的工作原理
+
+想象一个钟面，有 N 个格子，指针每 tick（如 100ms）转一格。要添加一个 3 秒后到期的定时器，就放在当前指针往前 30 格（3s / 100ms = 30）的位置。指针转到那个格子时，定时器自然到期。
+
+### 环形数组
+
+一个大小为 N 的数组，每个元素是一个链表头。数组的索引就是槽位编号。
+
+### 槽位链表
+
+同一个槽位上的所有定时器到期时间相同（或差 N 的整数倍），用双向链表串起来。添加是头插法 O(1)，删除是从链表摘除 O(1)。
+
+### 指针旋转
+
+每 tick 指针前进一格，遍历当前槽位的所有定时器执行到期回调。如果定时器的「轮次」大于 0，说明还要转几圈，轮次减 1 不执行。
+
+### 多级时间轮
+
+一层时间轮的容量是 N x tick。要支持更长时间，用多级（类似时钟的秒针、分针、时针）：第一层 N1 格，第二层 N2 格，第三层 N3 格。第一层转完一圈，第二层前进一格。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="创建时间轮：8 个槽位，每 tick 100ms">
+    ```cpp
+    TimerWheel wheel(8, 100);  // 8 槽, 100ms/tick
+    // 容量 = 8 * 100ms = 800ms
+    // 指针初始在槽 0
+    ```
+  </Step>
+  <Step title="添加定时器：计算槽位">
+    ```cpp
+    // 添加一个 300ms 后到期的定时器
+    // 300ms / 100ms = 3 格
+    // 当前指针在槽 0，放到槽 (0+3) % 8 = 槽 3
+    Timer* t = new Timer(callback);
+    wheel.add(t, 300);  // 300ms 后执行
+    ```
+  </Step>
+  <Step title="Tick 到来：指针前进，执行到期回调">
+    ```cpp
+    // 100ms 后，tick 到来
+    wheel.tick();  // 指针从槽 0 转到槽 1
+    // 槽 1 没有定时器，无事发生
+
+    // 又过 200ms，2 次 tick
+    wheel.tick();  // 指针到槽 2
+    wheel.tick();  // 指针到槽 3
+    // 槽 3 有定时器 t！执行回调
+    t->callback();
+    ```
+  </Step>
+  <Step title="删除定时器：从链表摘除">
+    ```cpp
+    // 如果在到期前取消
+    wheel.remove(t);  // O(1)，从链表摘除
+    // 用双向链表，直接 t->prev->next = t->next
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+struct Timer {
+  std::function<void()> callback;
+  Timer* prev = nullptr;
+  Timer* next = nullptr;
+  int rotation = 0;  // 还要转几圈
+  int slot = 0;      // 所在槽位
+};
+
+class TimerWheel {
+  std::vector<Timer*> slots_;  // 环形数组
+  int current_ = 0;             // 当前指针
+  int tick_ms_;                 // 每 tick 毫秒数
+  int slot_count_;              // 槽位数
+```
+
+每个 Timer 是双向链表节点，持有回调函数、轮次和槽位号。`slots_` 是数组，每个元素是链表头。
+
+```cpp
+public:
+  void add(Timer* t, int timeout_ms) {
+    int ticks = timeout_ms / tick_ms_;
+    int rotation = ticks / slot_count_;
+    int slot = (current_ + ticks) % slot_count_;
+    t->rotation = rotation;
+    t->slot = slot;
+    // 头插法 O(1)
+    t->next = slots_[slot];
+    if (slots_[slot]) slots_[slot]->prev = t;
+    slots_[slot] = t;
+  }
+```
+
+`add` 计算要转几格（ticks）、转几圈（rotation）、落在哪个槽（slot）。然后头插到对应链表。全程没有遍历，O(1)。
+
+```cpp
+  void tick() {
+    current_ = (current_ + 1) % slot_count_;
+    Timer* t = slots_[current_];
+    while (t) {
+      Timer* next = t->next;
+      if (t->rotation > 0) {
+        t->rotation--;  // 还没到，轮次减 1
+      } else {
+        // 到期了，执行回调并删除
+        t->callback();
+        remove(t);
+      }
+      t = next;
+    }
+  }
+```
+
+`tick` 指针前进一格，遍历当前槽的链表。轮次大于 0 的减 1（还要再转），轮次等于 0 的执行回调并删除。遍历的总量是均摊 O(1)——因为每个定时器只在到期时被遍历一次。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 定时器到期时间不准，偏差很大。
+**原因：** tick 间隔太大，或超时时间不是 tick 的整数倍导致取整误差。
+**修法：** tick 设为最小精度（如 1ms 或 10ms），超时时间向上取整为 tick 的整数倍。接受毫秒级误差。
+</Callout>
+
+<Callout type="trap">
+**现象：** 定时器回调里阻塞了，后续 tick 全部延迟。
+**原因：** 回调在 tick 线程同步执行，一个回调慢就拖住整个时间轮。
+**修法：** 回调里只做轻量操作（标记/投递任务），耗时任务丢给线程池。或者用惰性删除：到期只标记，不立即执行。
+</Callout>
+
+<Callout type="trap">
+**现象：** 超过时间轮容量的定时器丢失或不生效。
+**原因：** 单级时间轮容量有限（N x tick），超时时间超过容量时计算溢出。
+**修法：** 用多级时间轮（类似时钟的秒/分/针），或者对超长定时器用单独的辅助结构（如最小堆）管理。
+</Callout>
+
+## 小结
+
+- 时间轮 = 环形数组 + 槽位链表 + 旋转指针，添加/删除/到期都是 O(1)
+- 添加：算槽位和轮次，头插链表；删除：双向链表摘除
+- tick：指针前进一格，遍历链表，轮次减 1 或执行回调
+- 多级时间轮扩展容量，回调不能阻塞 tick 线程
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="时间轮">
+用环形数组管理定时器的数据结构。每个槽位挂一个链表，指针每 tick 旋转一格。添加/删除/到期都是 O(1)，适合海量定时器。
+</GlossaryItem>
+<GlossaryItem term="tick">
+时间轮的基本时间单位。指针每 tick 旋转一格，tick 间隔决定了定时器的精度。常见为 1ms 到 100ms。
+</GlossaryItem>
+<GlossaryItem term="轮次（rotation）">
+定时器还要转几圈才到期。单级时间轮容量有限，超时时间超过一圈时用轮次记录。每次指针经过，轮次减 1，到 0 才执行。
+</GlossaryItem>
+<GlossaryItem term="红黑树">
+自平衡二叉搜索树，可以按到期时间排序管理定时器。添加/删除是 O(log n)，最近到期的在树的最左节点。适合定时器数量不多的场景。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么时间轮的添加和删除是 O(1)，而红黑树是 O(log n)？">时间轮添加定时器只需要算出槽位号（除法取模）和轮次，然后头插到链表，没有比较和搜索，O(1)。删除时因为用双向链表，只要知道节点指针就能 O(1) 摘除（prev->next = next, next->prev = prev），不需要从头查找。红黑树添加需要从根开始比较找到插入位置并重平衡，删除也需要重平衡，都是 O(log n)。当定时器数量达到几十万时，O(1) 和 O(log n) 差距显著。</Answer>
+  <Answer question="多级时间轮是怎么工作的？为什么要多级？">单级时间轮容量 = 槽位数 x tick。8 槽 100ms 只能管 800ms 以内的定时器。多级时间轮类似时钟：第一层管秒（细粒度），第二层管分（中粒度），第三层管时（粗粒度）。第一层转完一圈，第二层前进一格，并把第二层当前格的定时器降级迁移到第一层。这样三层时间轮就能覆盖很大范围而槽位数不多。不用多级的话，要管 1 小时的定时器，100ms tick 需要36000 个槽，内存和遍历效率都不划算。</Answer>
+</Exercises>

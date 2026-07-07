@@ -1,0 +1,148 @@
+---
+title: 适配器与外观
+type: B
+section: 状态变化
+order: 2
+description: 适配器转换接口让不兼容的类协作；外观提供简化入口屏蔽子系统复杂度。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { HfdAdapterFacadeDiagram } from "@/components/mdx/head-first-design-patterns/diagrams/hfd-adapter-facade";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能用自己的话解释适配器模式和外观模式分别是什么
+- 能看懂并独立修改适配器和外观的 Java 代码
+- 能回答：适配器和外观的本质区别是什么？各自适合什么场景？
+
+</Objectives>
+
+## 为什么需要适配器和外观
+
+场景一：你有一个 Turkey 类，有 `gobble()` 和 `fly()` 方法。但现在系统需要 Duck 接口（`quack()` 和 `fly()`）。Turkey 不是 Duck，不能直接替换。你不能修改 Turkey 的代码（第三方库）。
+
+场景二：你要用家庭影院看电影，需要依次操作：调暗灯光、放下屏幕、打开投影仪、设置投影仪输入源、打开功放、设置音量、打开播放器、播放电影——8 步操作。每次看电影都要重复一遍，烦琐且容易遗漏。
+
+两个问题的共同点是：**现有接口和需要的接口不匹配**。适配器解决「一个接口转成另一个接口」，外观解决「多个接口简化成一个入口」。
+
+## 概念讲解
+
+<Term def="将一个类的接口转换成客户期望的另一个接口，让不兼容的类协作">适配器模式</Term>在中间做接口转换。Client 面向 Target 接口编程，Adapter 实现 Target 接口同时持有 Adaptee 引用——Target 方法内部委托给 Adaptee 的方法。
+
+<Term def="为子系统中的一组接口提供一个统一的高层接口，屏蔽内部复杂度">外观模式</Term>定义一个 Facade 类，持有子系统各组件引用，提供 `watchMovie()` 等简化方法。Facade 内部协调多个组件，客户端只调一个方法。
+
+<HfdAdapterFacadeDiagram />
+
+关键区别：适配器是「接口转换器」（1 对 1），外观是「复杂度屏蔽层」（多对 1）。适配器让不兼容的类协作，外观让复杂的子系统简单易用。两者都让客户端更简单，但机制不同。
+
+<Term def="只和直接朋友交谈，不调用方法返回值的方法">最少知识原则</Term>（Law of Demeter）是外观模式的理论基础——客户端只和 Facade 交谈，不需要知道子系统内部结构。
+
+## 交互Demo
+
+<Stepper>
+  <Step title="适配器第一步：定义 Target 接口">
+    系统需要 Duck 接口：`quack()` 和 `fly()`。Client 面向 Duck 编程。但手头只有 Turkey 类（`gobble()` 和 `fly()`），无法直接替换。
+  </Step>
+  <Step title="适配器第二步：创建 Adapter">
+    TurkeyAdapter 实现 Duck 接口，持有 Turkey 引用。`quack()` 内部调 `turkey.gobble()`——接口转换。`fly()` 调 `turkey.fly()` 五次（火鸡飞不远，多调几次模拟鸭子飞行）。
+  </Step>
+  <Step title="适配器第三步：Client 无感知">
+    Client 面向 Duck 接口调用 `duck.quack()`，实际执行的是 Turkey 的 `gobble()`。适配器让 Turkey「看起来像」Duck——不兼容的类成功协作。
+  </Step>
+  <Step title="外观第一步：分析子系统">
+    家庭影院有 Amplifier、Projector、Screen、Light、Player 五个组件。看电影需要依次调 8 个方法。客户端需要知道每个组件的接口和正确调用顺序——复杂度高。
+  </Step>
+  <Step title="外观第二步：创建 Facade">
+    HomeTheaterFacade 持有五个组件引用。`watchMovie(movie)` 内部依次调：light.dim(10) → screen.down() → projector.on() → amp.on() → player.play(movie)。`endMovie()` 逆序关闭。客户端只需调一个方法。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```java
+// 适配器——Turkey 适配成 Duck
+public interface Duck {
+    void quack();
+    void fly();
+}
+
+public class TurkeyAdapter implements Duck {
+    Turkey turkey;  // 持有被适配对象
+    public TurkeyAdapter(Turkey t) { turkey = t; }
+    public void quack() { turkey.gobble(); }  // 接口转换
+    public void fly() {
+        for (int i = 0; i < 5; i++) turkey.fly();  // 火鸡飞不远
+    }
+}
+
+// 外观——简化家庭影院操作
+public class HomeTheaterFacade {
+    Amplifier amp;
+    Projector projector;
+    Light light;
+    Player player;
+
+    public HomeTheaterFacade(Amplifier a, Projector p,
+            Light l, Player pl) {
+        amp = a; projector = p; light = l; player = pl;
+    }
+    public void watchMovie(String movie) {
+        light.dim(10);
+        projector.on();
+        amp.on();
+        player.play(movie);
+    }
+    public void endMovie() {
+        player.stop();
+        amp.off();
+        projector.off();
+        light.on();
+    }
+}
+
+// 客户端——一行搞定
+facade.watchMovie("盗梦空间");
+```
+
+适配器转换接口让 Turkey 当 Duck 用；外观把 4 步操作简化成 1 步。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 把外观当「封装子系统」用——Facade 外部完全无法访问子系统组件。 <strong>原因 →</strong> 误解外观的职责。外观提供简化入口，但不限制直接访问子系统。 <strong>修法 →</strong> 外观是「可选的简化层」，不是「强制封装层」。子系统组件仍然可以公开访问，客户端可以选择用 Facade 简化调用，也可以直接操作子系统。外观降低耦合但不限制灵活性。
+</Callout>
+
+## 小结与练习
+
+- 适配器转换接口（1 对 1），让不兼容的类协作；外观简化入口（多对 1），屏蔽子系统复杂度
+- 适配器实现 Target 接口同时持有 Adaptee 引用——Target 方法委托给 Adaptee
+- 外观持有子系统组件引用，提供简化方法——不封装子系统，仍可直接访问
+- 最少知识原则是外观的理论基础：客户端只和 Facade 交谈
+
+<Exercises>
+  <Answer question="适配器模式和外观模式的本质区别是什么？">适配器是「接口转换器」（1 对 1），把一个已有类的接口转换成目标接口，让不兼容的类协作——主要解决接口不匹配问题。外观是「复杂度屏蔽层」（多对 1），为子系统的多个接口提供一个统一简化入口——主要解决使用复杂度问题。适配器改变接口让类能协作，外观不改变接口只提供更简单的入口。适配器通常适配一个对象，外观协调多个组件。</Answer>
+  <Answer question="外观模式如何体现「最少知识原则」？">最少知识原则要求一个对象只调用直接朋友（自身、参数、组件）的方法，不调用方法返回值的方法。没有外观时客户端要调 amp.getPlayer().getMovie().getTitle()——链式调用经过间接对象，违反原则。外观把所有子系统组件作为自己的直接组件（字段），客户端只调 facade.watchMovie()——只和 Facade 这一个直接朋友交谈。Facade 内部协调子系统是合法的（子系统是它的直接组件）。外观本质是最少知识原则的建筑级实现。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="适配器模式">
+将一个类的接口转换成客户期望的另一个接口。适配器让原本接口不兼容的类可以协作，是接口转换器。
+</GlossaryItem>
+<GlossaryItem term="外观模式">
+为子系统中的一组接口提供一个统一的高层接口。外观定义简化入口屏蔽子系统复杂度，但不封装子系统——仍可直接访问。
+</GlossaryItem>
+<GlossaryItem term="对象适配器">
+通过组合（持有 Adaptee 引用）实现接口转换的适配器。比类适配器（通过继承）更灵活，Java 通常用对象适配器。
+</GlossaryItem>
+<GlossaryItem term="最少知识原则">
+一个对象只和直接朋友交谈（自身、参数、组件），不调用方法返回值的方法。外观模式是此原则的建筑级实现。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Head First Design Patterns (Eric Freeman & Elisabeth Robson)" adaptedUrl="https://www.oreilly.com/library/view/head-first-design/0596007124/" />

@@ -933,6 +933,36 @@ import { CtrDesignTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-design-
 import { CtrAlgorithmTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-algorithm-test";
 import { CtrDebuggingTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-debugging-test";
 import { CtrFinalMindMap } from "./cpp-testing-recipes/diagrams/ctr-final-review";
+import { CseLearningMapDiagram } from "./cpp-server-essence/diagrams/cse-learning-map";
+import { CseIoModelDiagram } from "./cpp-server-essence/diagrams/cse-io-model";
+import { CseEventDrivenDiagram } from "./cpp-server-essence/diagrams/cse-event-driven";
+import { CseThreadPoolDiagram } from "./cpp-server-essence/diagrams/cse-thread-pool";
+import { CseConnectionMgmtDiagram } from "./cpp-server-essence/diagrams/cse-connection-mgmt";
+import { CseBufferDesignDiagram } from "./cpp-server-essence/diagrams/cse-buffer-design";
+import { CseProtocolDesignDiagram } from "./cpp-server-essence/diagrams/cse-protocol-design";
+import { CseTimerWheelDiagram } from "./cpp-server-essence/diagrams/cse-timer-wheel";
+import { CsePerformanceTuningDiagram } from "./cpp-server-essence/diagrams/cse-performance-tuning";
+import { CseFinalReviewDiagram } from "./cpp-server-essence/diagrams/cse-final-review";
+import { HfdLearningMapDiagram } from "./head-first-design-patterns/diagrams/hfd-learning-map";
+import { HfdStrategyDiagram } from "./head-first-design-patterns/diagrams/hfd-strategy";
+import { HfdObserverDiagram } from "./head-first-design-patterns/diagrams/hfd-observer";
+import { HfdDecoratorDiagram } from "./head-first-design-patterns/diagrams/hfd-decorator";
+import { HfdFactoryDiagram } from "./head-first-design-patterns/diagrams/hfd-factory";
+import { HfdSingletonDiagram } from "./head-first-design-patterns/diagrams/hfd-singleton";
+import { HfdCommandDiagram } from "./head-first-design-patterns/diagrams/hfd-command";
+import { HfdAdapterFacadeDiagram } from "./head-first-design-patterns/diagrams/hfd-adapter-facade";
+import { HfdTemplateMethodDiagram } from "./head-first-design-patterns/diagrams/hfd-template-method";
+import { HfdFinalReviewDiagram } from "./head-first-design-patterns/diagrams/hfd-final-review";
+import { Ec7LearningMapDiagram } from "./essential-csharp-7/diagrams/ec7-learning-map";
+import { Ec7TypesVariablesDiagram } from "./essential-csharp-7/diagrams/ec7-types-variables";
+import { Ec7OperatorsControlDiagram } from "./essential-csharp-7/diagrams/ec7-operators-control";
+import { Ec7ClassesObjectsDiagram } from "./essential-csharp-7/diagrams/ec7-classes-objects";
+import { Ec7InheritanceInterfacesDiagram } from "./essential-csharp-7/diagrams/ec7-inheritance-interfaces";
+import { Ec7GenericsDiagram } from "./essential-csharp-7/diagrams/ec7-generics";
+import { Ec7DelegatesEventsDiagram } from "./essential-csharp-7/diagrams/ec7-delegates-events";
+import { Ec7LinqDiagram } from "./essential-csharp-7/diagrams/ec7-linq";
+import { Ec7AsyncAwaitDiagram } from "./essential-csharp-7/diagrams/ec7-async-await";
+import { Ec7FinalReviewDiagram } from "./essential-csharp-7/diagrams/ec7-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -2146,6 +2176,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CtrAlgorithmTestDiagram,
   CtrDebuggingTestDiagram,
   CtrFinalMindMap,
+  CseLearningMapDiagram,
+  CseIoModelDiagram,
+  CseEventDrivenDiagram,
+  CseThreadPoolDiagram,
+  CseConnectionMgmtDiagram,
+  CseBufferDesignDiagram,
+  CseProtocolDesignDiagram,
+  CseTimerWheelDiagram,
+  CsePerformanceTuningDiagram,
+  CseFinalReviewDiagram,
+  HfdLearningMapDiagram,
+  HfdStrategyDiagram,
+  HfdObserverDiagram,
+  HfdDecoratorDiagram,
+  HfdFactoryDiagram,
+  HfdSingletonDiagram,
+  HfdCommandDiagram,
+  HfdAdapterFacadeDiagram,
+  HfdTemplateMethodDiagram,
+  HfdFinalReviewDiagram,
+  Ec7LearningMapDiagram,
+  Ec7TypesVariablesDiagram,
+  Ec7OperatorsControlDiagram,
+  Ec7ClassesObjectsDiagram,
+  Ec7InheritanceInterfacesDiagram,
+  Ec7GenericsDiagram,
+  Ec7DelegatesEventsDiagram,
+  Ec7LinqDiagram,
+  Ec7AsyncAwaitDiagram,
+  Ec7FinalReviewDiagram,
   Term,
   Glossary,
   GlossaryItem,

@@ -1,0 +1,188 @@
+---
+title: 线程池
+type: C
+section: 网络与IO
+order: 2
+description: 线程池复用线程避免频繁创建销毁，配合 Reactor 把耗时任务分发到工作线程，兼顾高并发与 CPU 密集任务。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseThreadPoolDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-thread-pool";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释线程池的工作原理：任务队列 + 工作线程 + 同步机制
+- 能看懂并独立实现一个固定大小线程池的核心代码
+- 能回答：线程池的核心线程数和最大线程数怎么设定？
+</Objectives>
+
+## 为什么需要线程池
+
+Reactor 解决了「一个线程管多个连接」的问题，但有些操作就是耗时的——比如数据库查询、文件读写、复杂计算。如果在 Reactor 线程里做这些事，整个事件循环就卡住了。
+
+最简单的办法是每次遇到耗时操作就 `new thread`，但频繁创建销毁线程开销巨大（Linux 下创建一个线程约几十微秒）。而且线程数不可控，高并发下可能创建几千个线程把系统拖垮。
+
+<Term def="预先创建一组线程，通过任务队列复用，避免频繁创建销毁">线程池</Term> 就是解药：提前建好一组线程等着，有任务就丢进队列，空闲线程自动取走执行。
+
+<CseThreadPoolDiagram />
+
+## 线程池的工作原理
+
+线程池有三个核心组件：
+
+### 任务队列
+
+生产者（Reactor 线程）把任务投递到队列，消费者（工作线程）从队列取任务执行。队列需要有界，否则内存会爆。
+
+### 工作线程
+
+预先创建的一组线程，每个线程在 `while(true)` 循环里从队列取任务。队列空时阻塞等待，有任务时被唤醒。
+
+### 同步机制
+
+用互斥锁保护队列，用条件变量在「队列空时阻塞工作线程」「队列非空时唤醒工作线程」。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="初始化：创建 N 个工作线程">
+    ```cpp
+    ThreadPool pool(4);  // 4 个工作线程
+    // 构造函数里启动 4 个线程，每个都在等任务
+    ```
+  </Step>
+  <Step title="提交任务：生产者投递到队列">
+    ```cpp
+    pool.submit([]() {
+      // 耗时操作，比如数据库查询
+      query_database();
+    });
+    // submit 立刻返回，不等任务执行完
+    ```
+  </Step>
+  <Step title="取任务：工作线程竞争消费">
+    ```cpp
+    // 工作线程内部循环
+    while (true) {
+      std::unique_lock<std::mutex> lock(mtx);
+      cv.wait(lock, []{ return !queue.empty(); });
+      auto task = queue.front();
+      queue.pop();
+      lock.unlock();
+      task();  // 执行任务
+    }
+    ```
+  </Step>
+  <Step title="完成：结果通过回调返回">
+    ```cpp
+    // 任务执行完后，如果需要通知 Reactor
+    pool.submit([&result]() {
+      result = query_db();
+      // 通过 eventfd 通知 Reactor 线程
+      notify_reactor();
+    });
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+class ThreadPool {
+  std::vector<std::thread> workers_;
+  std::queue<std::function<void()>> tasks_;
+  std::mutex mtx_;
+  std::condition_variable cv_;
+  bool stop_ = false;
+```
+
+成员变量很直观：工作线程数组、任务队列、互斥锁、条件变量、停止标志。`tasks_` 存的是 `std::function<void()>`——任何无参无返回值的可调用对象都能投递。
+
+```cpp
+public:
+  ThreadPool(int n) {
+    for (int i = 0; i < n; i++) {
+      workers_.emplace_back([this] {
+        while (true) {
+          std::function<void()> task;
+          {
+            std::unique_lock<std::mutex> lock(mtx_);
+            cv_.wait(lock, [this] {
+              return stop_ || !tasks_.empty();
+            });
+            if (stop_ && tasks_.empty()) return;
+            task = std::move(tasks_.front());
+            tasks_.pop();
+          }
+          task();  // 在锁外执行，不阻塞其他线程
+        }
+      });
+    }
+  }
+```
+
+构造函数创建 n 个线程，每个线程在循环里：加锁、等条件变量（队列空或 stop 时等待）、取任务、解锁、执行。注意 `task()` 在锁外执行——如果持有锁执行任务，其他线程就全卡住了。
+
+```cpp
+  void submit(std::function<void()> task) {
+    {
+      std::unique_lock<std::mutex> lock(mtx_);
+      tasks_.emplace(std::move(task));
+    }
+    cv_.notify_one();  // 唤醒一个等待的工作线程
+  }
+```
+
+`submit` 加锁、入队、解锁、唤醒一个线程。用 `notify_one` 而不是 `notify_all`，因为只需要一个线程来取这个任务。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 线程池里任务越积越多，内存持续增长直到 OOM。
+**原因：** 任务队列无界，生产速度远超消费速度时任务无限堆积。
+**修法：** 给队列设上限，满了时 submit 阻塞或拒绝（丢弃/报错），做背压控制。
+</Callout>
+
+<Callout type="trap">
+**现象：** 析构时程序卡住或崩溃。
+**原因：** 线程池销毁时工作线程还在阻塞等待，或者任务持有引用了已销毁的对象。
+**修法：** 析构时先设 `stop_=true`，`notify_all` 唤醒所有线程，`join` 等待所有线程退出。
+</Callout>
+
+<Callout type="trap">
+**现象：** 线程数设太多反而变慢。
+**原因：** 线程数远超 CPU 核数时，上下文切换开销超过并行收益。尤其 CPU 密集型任务，线程数等于核数最优。
+**修法：** CPU 密集型任务线程数 = 核数；IO 密集型可适当多设（2-4 倍核数），因为线程大部分时间在等 IO。
+</Callout>
+
+## 小结
+
+- 线程池 = 任务队列 + 工作线程 + 互斥锁 + 条件变量，复用线程避免频繁创建销毁
+- submit 投递任务到队列，工作线程竞争取任务执行，task 必须在锁外执行
+- 线程数设定：CPU 密集型 = 核数，IO 密集型 = 2-4 倍核数
+- 队列必须有界做背压，析构时 stop + notify_all + join
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="线程池">
+预先创建一组线程，通过任务队列复用。生产者投递任务，消费者线程取任务执行。避免频繁创建销毁线程的开销。
+</GlossaryItem>
+<GlossaryItem term="条件变量">
+线程同步原语：一个线程等待某个条件成立，另一个线程改变条件后唤醒等待者。线程池中工作线程用它等待「队列非空」。
+</GlossaryItem>
+<GlossaryItem term="背压">
+当生产速度超过消费速度时，给生产者施加「压力」让它减速的机制。在线程池中体现为队列满时阻塞 submit 或拒绝任务。
+</GlossaryItem>
+<GlossaryItem term="std::function">
+C++ 的通用可调用对象包装器，可以存 lambda、函数指针、仿函数等。线程池的任务队列通常用它做类型擦除。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="线程池的核心线程数和最大线程数怎么设定？">CPU 密集型任务（计算、压缩）线程数设为 CPU 核数，因为线程数超过核数后上下文切换开销超过并行收益。IO 密集型任务（网络、磁盘）线程数可设为 2-4 倍核数，因为线程大部分时间在等 IO 不占 CPU，多设一些可以提高并发度。核心线程数常驻不销毁，最大线程数是峰值扩容上限，空闲超时后回收到核心数。</Answer>
+  <Answer question="为什么 task() 必须在锁外执行？">如果持有互斥锁执行 task，其他工作线程在取任务时也要加同一个锁，全部被阻塞。线程池就退化成串行执行，失去了并行的意义。把 task 移到锁外，工作线程取到任务后立刻解锁，其他线程可以继续取任务并行执行。</Answer>
+</Exercises>

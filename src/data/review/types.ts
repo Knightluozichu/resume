@@ -616,7 +616,40 @@ export type ReviewChapterSlug =
   | "ctr-design-test"
   | "ctr-algorithm-test"
   | "ctr-debugging-test"
-  | "ctr-final-review";
+  | "ctr-final-review"
+  // C++ 服务器开发精髓
+  | "cse-learning-map"
+  | "cse-io-model"
+  | "cse-event-driven"
+  | "cse-thread-pool"
+  | "cse-connection-mgmt"
+  | "cse-buffer-design"
+  | "cse-protocol-design"
+  | "cse-timer-wheel"
+  | "cse-performance-tuning"
+  | "cse-final-review"
+  // Head First 设计模式
+  | "hfd-learning-map"
+  | "hfd-strategy"
+  | "hfd-observer"
+  | "hfd-decorator"
+  | "hfd-factory"
+  | "hfd-singleton"
+  | "hfd-command"
+  | "hfd-adapter-facade"
+  | "hfd-template-method"
+  | "hfd-final-review"
+  // C# 7.0 本质论
+  | "ec7-learning-map"
+  | "ec7-types-variables"
+  | "ec7-operators-control"
+  | "ec7-classes-objects"
+  | "ec7-inheritance-interfaces"
+  | "ec7-generics"
+  | "ec7-delegates-events"
+  | "ec7-linq"
+  | "ec7-async-await"
+  | "ec7-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1237,6 +1270,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "coi-constuct-array": "构建乘积数组",
   "coi-string-to-int": "把字符串转换成整数",
   "coi-common-parent-in-tree": "二叉树的公共祖先",
+  // C++ 服务器开发精髓
+  "cse-learning-map": "学习地图",
+  "cse-io-model": "IO 模型",
+  "cse-event-driven": "事件驱动",
+  "cse-thread-pool": "线程池",
+  "cse-connection-mgmt": "连接管理",
+  "cse-buffer-design": "缓冲区设计",
+  "cse-protocol-design": "协议设计",
+  "cse-timer-wheel": "定时器",
+  "cse-performance-tuning": "性能调优",
+  "cse-final-review": "总复习",
+  // Head First 设计模式
+  "hfd-learning-map": "学习地图",
+  "hfd-strategy": "策略模式",
+  "hfd-observer": "观察者模式",
+  "hfd-decorator": "装饰器模式",
+  "hfd-factory": "工厂模式",
+  "hfd-singleton": "单例模式",
+  "hfd-command": "命令模式",
+  "hfd-adapter-facade": "适配器与外观",
+  "hfd-template-method": "模板方法",
+  "hfd-final-review": "总复习",
+  // C# 7.0 本质论
+  "ec7-learning-map": "学习地图",
+  "ec7-types-variables": "类型与变量",
+  "ec7-operators-control": "运算符与控制流",
+  "ec7-classes-objects": "类与对象",
+  "ec7-inheritance-interfaces": "继承与接口",
+  "ec7-generics": "泛型",
+  "ec7-delegates-events": "委托与事件",
+  "ec7-linq": "LINQ",
+  "ec7-async-await": "异步编程",
+  "ec7-final-review": "总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

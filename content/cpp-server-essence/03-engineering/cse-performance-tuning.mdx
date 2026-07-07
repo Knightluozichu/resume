@@ -1,0 +1,186 @@
+---
+title: 性能调优
+type: C
+section: 工程实践
+order: 2
+description: 测量驱动的性能调优循环——从硬件到应用四层定位瓶颈，用 perf、火焰图、ss 等工具定位热点并优化。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CsePerformanceTuningDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-performance-tuning";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释性能调优的循环流程：测量 → 分析 → 优化 → 验证
+- 能说出从硬件到应用四层瓶颈的典型现象和对应排查工具
+- 能回答：为什么不能凭直觉优化，必须先测量再动手？
+</Objectives>
+
+## 为什么性能调优必须有纪律
+
+「我觉得这里慢，改一下应该能快」——这是性能优化最大的陷阱。现代服务器从硬件到应用有四五层，你的直觉猜中的概率极低。一个看起来慢的函数可能只占 1% 的时间，一个你没注意的系统调用可能占 50%。
+
+性能调优的核心纪律是 <Term def="先建基线、定位热点、针对性优化、回归验证的循环流程">测量驱动</Term>：先测量知道哪里慢，再分析为什么慢，然后针对性优化，最后回到测量验证效果。每一步都拿数据说话。
+
+<CsePerformanceTuningDiagram />
+
+## 四层瓶颈定位
+
+### 硬件层
+
+CPU 跑满、网卡中断打满一个核、内存带宽不够。工具：`top` 看 CPU，`mpstat` 看各核负载，`sar` 看历史趋势。
+
+### 系统调用层
+
+read/write 调用次数过多、上下文切换频繁。工具：`strace` 跟踪系统调用，`perf stat` 看上下文切换次数。
+
+### 协议栈层
+
+SYN 队列满、TIME_WAIT 堆积、端口耗尽。工具：`ss -s` 看连接统计，`netstat` 看各状态数量，`/proc/sys/net/` 看内核参数。
+
+### 应用逻辑层
+
+锁竞争、算法复杂度高、内存分配频繁。工具：`perf record` 采样，生成 <Term def="把 CPU 采样按调用栈聚合的可视化图，宽的函数是热点">火焰图</Term>，一眼看出哪个函数占 CPU 最多。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="测量：建立基线">
+    ```bash
+    # 用 wrk 压测，建立吞吐量和延迟基线
+    wrk -t4 -c1000 -d30s http://localhost:8080/
+    # 记录基线：QPS 5000, P99 50ms
+    # 用 perf 采样 CPU 热点
+    perf record -g -p $(pgrep server) -- sleep 30
+    ```
+  </Step>
+  <Step title="分析：定位热点">
+    ```bash
+    # 生成火焰图
+    perf script | stackcollapse-perf.pl | flamegraph.pl > perf.svg
+    # 打开 SVG，发现 40% CPU 花在 mutex_lock
+    # 进一步看：是连接管理 map 的锁竞争
+    ```
+  </Step>
+  <Step title="优化：针对性修改">
+    ```cpp
+    // 原来：全局一把锁管所有连接
+    std::mutex global_mtx_;
+    std::unordered_map<int, Connection*> conns_;
+    // 优化：分段锁，减少竞争
+    static const int N_SHARDS = 16;
+    struct Shard { std::mutex mtx; std::unordered_map<int, Connection*> conns; };
+    Shard shards_[N_SHARDS];
+    Shard& get_shard(int fd) { return shards_[fd % N_SHARDS]; }
+    ```
+  </Step>
+  <Step title="验证：回归测试">
+    ```bash
+    # 同样参数压测，对比基线
+    wrk -t4 -c1000 -d30s http://localhost:8080/
+    # 优化后：QPS 8000 (+60%), P99 30ms (-40%)
+    # 确认没有回归：跑功能测试 + 长时间稳定性测试
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+// 优化前：全局锁，所有线程竞争一把锁
+class ConnectionManager {
+  std::mutex mtx_;
+  std::unordered_map<int, Connection*> conns_;
+public:
+  void add(int fd, Connection* c) {
+    std::lock_guard<std::mutex> lock(mtx_);  // 所有线程在这排队
+    conns_[fd] = c;
+  }
+  Connection* get(int fd) {
+    std::lock_guard<std::mutex> lock(mtx_);  // 读也要锁
+    auto it = conns_.find(fd);
+    return it != conns_.end() ? it->second : nullptr;
+  }
+};
+```
+
+火焰图显示 `mutex_lock` 占 40% CPU——所有工作线程在抢同一把锁。
+
+```cpp
+// 优化后：分段锁，把连接分散到 16 个 shard
+class ConnectionManager {
+  static constexpr int N = 16;
+  struct Shard {
+    std::mutex mtx;
+    std::unordered_map<int, Connection*> conns;
+  };
+  std::array<Shard, N> shards_;
+  Shard& shard(int fd) { return shards_[fd % N]; }
+public:
+  void add(int fd, Connection* c) {
+    auto& s = shard(fd);           // 只锁一个 shard
+    std::lock_guard<std::mutex> lock(s.mtx);
+    s.conns[fd] = c;
+  }
+  Connection* get(int fd) {
+    auto& s = shard(fd);
+    std::lock_guard<std::mutex> lock(s.mtx);
+    auto it = s.conns.find(fd);
+    return it != s.conns.end() ? it->second : nullptr;
+  }
+};
+```
+
+分段锁把竞争分散到 16 把锁，每把锁的竞争概率降到 1/16。压测验证 QPS 从 5000 提升到 8000，P99 从 50ms 降到 30ms。这是「测量 → 分析 → 优化 → 验证」的一个完整循环。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 优化了一周，QPS 没变。
+**原因：** 凭直觉优化了非热点代码。80% 时间花在 20% 代码上，你改的那段不在 20% 里。
+**修法：** 先 perf 采样出火焰图，只优化最宽的那个函数。改完重新测量确认提升。
+</Callout>
+
+<Callout type="trap">
+**现象：** 优化后 QPS 提升了，但延迟反而变高。
+**原因：** 优化了吞吐量（批处理、缓存）但引入了排队延迟，或改变了线程调度行为。
+**修法：** 同时监控 QPS 和 P99/P999 延迟。延迟和吞吐量不总是正相关，需要找平衡点。
+</Callout>
+
+<Callout type="trap">
+**现象：** 上线后优化效果消失了，甚至更慢。
+**原因：** 测试环境与生产环境数据量、连接模式不同，优化只在特定条件下有效。
+**修法：** 在生产环境做 A/B 测试或灰度发布，用真实流量验证。建立持续性能监控。
+</Callout>
+
+## 小结
+
+- 性能调优是循环：测量建基线 → 分析定位热点 → 优化改代码 → 验证回归测试
+- 四层瓶颈：硬件（top）、系统调用（strace）、协议栈（ss）、应用（perf + 火焰图）
+- 只优化火焰图最宽的函数，不优化非热点
+- 每次只改一个变量，前后对比；同时监控 QPS 和 P99 延迟
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="测量驱动">
+性能调优的核心纪律：先用压测工具建立基线，用 profiler 定位热点，针对性优化后回到测量验证效果。禁止凭直觉改代码。
+</GlossaryItem>
+<GlossaryItem term="火焰图">
+把 CPU 采样按调用栈聚合的可视化图。横轴是函数占 CPU 的比例（越宽越热），纵轴是调用深度。一眼看出热点在哪个函数。
+</GlossaryItem>
+<GlossaryItem term="分段锁">
+把一个全局锁拆成 N 个 shard，每个 shard 一把锁，按 key 的哈希分散到不同 shard。把锁竞争分散到 N 份，大幅减少争用。
+</GlossaryItem>
+<GlossaryItem term="P99 延迟">
+99% 的请求的响应时间不超过这个值。比平均值更能反映用户体验，因为长尾请求（慢的那 1%）对平均值影响小但对用户体验影响大。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么不能凭直觉优化，必须先测量再动手？">现代服务器从硬件到应用有四五层，CPU 有多级缓存、分支预测、乱序执行，纸面复杂度与真实耗时经常背离。一个看起来慢的函数可能只占 1% 时间，一个没注意的系统调用可能占 50%。80% 时间花在 20% 代码上，凭感觉改的地方往往不在热点。先测量（perf 火焰图）定位真正的热点，再针对性优化，才能确保有效。不测量就优化 = 瞎猜，可能浪费一周换来 0% 提升。</Answer>
+  <Answer question="四层瓶颈分别用什么工具排查？典型问题是什么？">硬件层用 top/mpstat/sar，典型问题是 CPU 跑满或网卡中断打满一个核（IRQ 亲和性没调好）。系统调用层用 strace/perf stat，典型问题是 read/write 次数过多或上下文切换频繁。协议栈层用 ss/netstat/proc，典型问题是 SYN 队列满（backlog 太小）或 TIME_WAIT 堆积（没开复用）。应用层用 perf record + 火焰图，典型问题是锁竞争、算法差或内存分配频繁。排查从底向上：先排硬件和系统，再排应用。</Answer>
+</Exercises>

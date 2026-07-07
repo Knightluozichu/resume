@@ -1,0 +1,186 @@
+---
+title: 缓冲区设计
+type: C
+section: 并发架构
+order: 2
+description: 环形缓冲区、vector 缓冲区、链表分块——三种方案各有取舍，高性能服务器需要在零拷贝与缓存友好之间选型。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseBufferDesignDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-buffer-design";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释三种缓冲区方案的工作原理与优缺点
+- 能看懂并独立实现一个自动扩容的 Buffer 类
+- 能回答：为什么 readv 配合缓冲区可以避免数据搬运？
+</Objectives>
+
+## 为什么缓冲区设计很关键
+
+网络数据是流式的：一次 read 可能收到半条消息，也可能收到三条半。你必须把收到的数据先存起来，凑够一条完整消息再处理。这个存储的地方就是缓冲区。
+
+缓冲区看似简单，但设计不好会处处掣肘：固定大小的不够用，自动扩容的有拷贝开销，链表分块的缓存不友好。而且 read/write 的位置在缓冲区里不断移动，怎么管理读写指针是个精细活。
+
+<CseBufferDesignDiagram />
+
+## 三种缓冲区方案
+
+### 环形缓冲区（Ring Buffer）
+
+固定大小的数组，读指针和写指针循环前进。写满了就不能再写，读空了就不能再读。零内存分配、缓存友好，但大小固定，不适合变长数据。
+
+### vector 缓冲区
+
+用 `std::vector<char>` 自动扩容。读写指针用下标表示。实现简单，自动扩容，但扩容时需要拷贝旧数据到新内存。muduo 网络库的 Buffer 就是这种方案的变体。
+
+### 链表分块缓冲区
+
+用链表串起多个固定大小的块（如 4KB 一块）。需要更多空间就再加一块，不需要拷贝。但内存不连续，缓存不友好，遍历慢。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="初始状态：空缓冲区">
+    ```cpp
+    // vector 方案：readIndex_ 和 writeIndex_ 都在 0
+    // [____|____|____|____|____|____|____|____]
+    //  ^read ^write
+    Buffer buf(8);  // 初始 8 字节
+    ```
+  </Step>
+  <Step title="写入数据：write 指针前进">
+    ```cpp
+    buf.append("HELLO", 5);  // 写入 5 字节
+    // [H|E|L|L|O|____|____|____]
+    //  ^read      ^write
+    ```
+  </Step>
+  <Step title="读取数据：read 指针前进">
+    ```cpp
+    buf.retrieve(3);  // 读出 3 字节 "HEL"
+    // [__|__|__|L|O|____|____|____]
+    //           ^read  ^write
+    // 前面 3 字节空间空闲了
+    ```
+  </Step>
+  <Step title="整理空间：把数据移到前面">
+    ```cpp
+    buf.compact();  // 把 "LO" 移到开头
+    // [L|O|____|____|____|____|____|____]
+    //  ^read ^write
+    // 后面空间变大了，不用扩容
+    ```
+  </Step>
+  <Step title="空间不够：自动扩容">
+    ```cpp
+    buf.append("WORLD!", 6);  // 还需要 6 字节但只剩 6
+    // 如果 compact 后仍不够，vector 扩容 2 倍
+    // [L|O|W|O|R|L|D|!|____|____|____|____|____|____|____|____]
+    //  ^read             ^write
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+class Buffer {
+  std::vector<char> buf_;
+  size_t readIndex_ = 0;
+  size_t writeIndex_ = 0;
+```
+
+三个成员：底层数组、读位置、写位置。`readIndex_` 到 `writeIndex_` 之间是已写入但未读取的数据，`writeIndex_` 到末尾是可写空间。
+
+```cpp
+public:
+  void append(const char* data, size_t len) {
+    ensure_writable(len);  // 确保有足够空间
+    std::copy(data, data + len, begin_write());
+    writeIndex_ += len;
+  }
+
+  void ensure_writable(size_t len) {
+    if (writable() < len) {
+      // 空间不够：先尝试整理，不够再扩容
+      if (writable() + readIndex_ >= len) {
+        compact();  // 把数据移到前面，腾出读过的空间
+      } else {
+        buf_.resize(buf_.size() * 2);  // 扩容 2 倍
+      }
+    }
+  }
+```
+
+`append` 写入数据前先 `ensure_writable`。空间不够时先 `compact`（把数据移到前面，回收读过的空间），不够再扩容。这是 muduo Buffer 的核心思路：优先复用已有空间，避免不必要的扩容拷贝。
+
+```cpp
+  void retrieve(size_t len) {
+    readIndex_ += len;
+    if (readIndex_ == writeIndex_) {
+      // 全部读完了，归零
+      readIndex_ = writeIndex_ = 0;
+    }
+  }
+
+  void compact() {
+    std::copy(begin() + readIndex_, begin() + writeIndex_, begin());
+    writeIndex_ -= readIndex_;
+    readIndex_ = 0;
+  }
+```
+
+`retrieve` 只是移动读指针，不真正删除数据。`compact` 把未读数据搬到数组开头，回收读过的空间。全读完后归零，避免指针一直增长。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 缓冲区越来越长，内存只增不减。
+**原因：** read 指针一直前进，readIndex_ 前面的空间一直不回收。
+**修法：** 定期 compact，或者 readIndex_ 超过阈值时自动整理。全读完归零。
+</Callout>
+
+<Callout type="trap">
+**现象：** read 一次只读到少量数据，要多次 read 才凑够一条消息，性能差。
+**原因：** 缓冲区可写空间太小，每次 read 只能读一小块。
+**修法：** 用 `readv` 一次性读到多块内存（栈上预备一块 + 缓冲区尾部），减少系统调用次数。muduo 的 `readFd` 就是这么做的。
+</Callout>
+
+<Callout type="trap">
+**现象：** 扩容频繁，CPU profile 里 `memcpy` 占比很高。
+**原因：** 每次不够就扩容，扩容后很快又不够，反复拷贝。
+**修法：** 扩容策略用 2 倍而不是固定增量；优先 compact 复用已有空间；初始大小设为常见消息大小的 2 倍。
+</Callout>
+
+## 小结
+
+- 三种方案：环形（零分配但固定大小）、vector（简单但扩容拷贝）、链表（无拷贝但缓存不友好）
+- vector 方案的核心：append 前确保空间，先 compact 再扩容，优先复用已有空间
+- read 指针前进不删除数据，compact 时才真正搬运
+- readv 配合缓冲区可以减少系统调用次数，是高性能服务器的常见技巧
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="环形缓冲区（Ring Buffer）">
+固定大小的数组，读写指针循环前进。写满不能再写，读空不能再读。零内存分配、缓存友好，适合固定大小数据如音视频流。
+</GlossaryItem>
+<GlossaryItem term="compact（整理）">
+把未读数据搬到缓冲区开头，回收已读空间。避免 readIndex_ 前面的空间浪费，减少不必要的扩容。
+</GlossaryItem>
+<GlossaryItem term="readv">
+系统调用，一次 read 读到多块不连续的内存。配合缓冲区使用可以在一次系统调用中读更多数据，减少系统调用开销。
+</GlossaryItem>
+<GlossaryItem term="缓存友好">
+数据访问模式符合 CPU 缓存行预取规律。连续内存访问（如数组）比跳跃访问（如链表）缓存命中率高，速度快。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么 readv 配合缓冲区可以避免数据搬运？">普通 read 如果缓冲区剩余空间不够，要么扩容拷贝要么多次 read。readv 可以一次读到多块内存：第一块是缓冲区尾部剩余空间，第二块是栈上临时空间。如果读到的数据不超过缓冲区+临时空间，就只需一次系统调用。之后把临时空间的数据 append 到缓冲区。这样减少了系统调用次数，也避免了为了凑空间而提前扩容。</Answer>
+  <Answer question="三种缓冲区方案各适合什么场景？">环形缓冲区适合固定大小的流式数据（音视频帧、串口数据），零分配零拷贝。vector 缓冲区适合通用场景（HTTP 服务、聊天服务器），实现简单自动扩容，配合 compact 可以复用空间。链表分块适合大数据量传输（文件上传下载），不需要拷贝就能扩容，但遍历不如连续内存快。实际服务器常组合使用：小数据用 vector，大数据用链表。</Answer>
+</Exercises>

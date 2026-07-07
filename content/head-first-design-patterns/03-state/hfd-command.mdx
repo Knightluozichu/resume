@@ -1,0 +1,154 @@
+---
+title: 命令模式
+type: B
+section: 状态变化
+order: 1
+description: 将请求封装成对象——支持排队、撤销、日志和宏操作，让请求脱离调用栈。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { HfdCommandDiagram } from "@/components/mdx/head-first-design-patterns/diagrams/hfd-command";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能用自己的话解释命令模式是什么、为什么需要它
+- 能看懂并独立修改命令模式的 Java 代码
+- 能回答：命令模式如何实现撤销？宏命令怎么组合？
+
+</Objectives>
+
+## 为什么需要命令模式
+
+你在开发一个遥控器。遥控器有 7 个插槽，每个插槽有开/关按钮。插槽可以控制灯、音响、空调、车库门等不同设备。用户按下「开」按钮时，遥控器需要调用对应设备的 `on()` 方法。
+
+最直觉的写法：在遥控器的 `onButtonPressed(slot)` 里用 if-else 判断插槽控制的是什么设备，调对应方法。但每换一种设备就要改遥控器代码。更糟的是，你还需要支持撤销操作（按 undo 回到之前状态）、宏操作（一键执行一组操作）、定时任务。
+
+问题的根源是：**请求者和执行者紧耦合**。遥控器直接调设备方法，请求无法被存储、传递、排队或撤销。
+
+## 概念讲解
+
+命令模式的思路是：**把请求封装成对象，请求者通过命令对象间接操作执行者**。
+
+<Term def="声明 execute() 和 undo() 方法，是请求的抽象封装">Command（命令接口）</Term>把「做什么」抽象成统一接口。每个命令对象记录了足够的上下文（接收者引用、之前状态），可以独立执行和撤销。
+
+<Term def="实现 Command 接口，持有 Receiver 引用，execute() 调用 Receiver 的方法">ConcreteCommand（具体命令）</Term>如 LightOnCommand 持有 Light 引用，`execute()` 调 `light.on()`，`undo()` 调 `light.off()`。
+
+<Term def="真正执行工作的对象，被命令对象委托调用">Receiver（接收者）</Term>是 Light、GarageDoor 等设备。它不知道自己被命令模式包装了。
+
+<Term def="持有 Command 引用，在某个时机调用 command.execute()，不关心 Receiver 是谁">Invoker（调用者）</Term>是 RemoteControl。它只和 Command 接口对话——按键时调 `command.execute()`，不知道命令背后操作的是什么设备。
+
+<HfdCommandDiagram />
+
+关键解耦：Invoker 不直接操作 Receiver，通过 Command 对象间接调用。命令对象可以被存储、传递、排队、撤销和组合——请求脱离了调用栈的生命周期。
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：问题——紧耦合方案">
+    遥控器 onButtonPressed(slot) 里 if-else 判断插槽对应设备，直接调 light.on()、garageDoor.up()。换设备要改遥控器，无法撤销、无法宏操作。
+  </Step>
+  <Step title="第二步：定义 Command 接口">
+    声明 `execute()` 和 `undo()` 方法。execute 执行操作，undo 执行相反操作。命令对象记录接收者引用，可独立执行。
+  </Step>
+  <Step title="第三步：具体命令封装接收者">
+    LightOnCommand 持有 Light 引用。execute() 调 light.on()，undo() 调 light.off()。命令把「开灯」这个请求封装成对象——可以存储在遥控器插槽里。
+  </Step>
+  <Step title="第四步：遥控器持有命令">
+    RemoteControl 持有 onCommands 和 offCommands 数组。setCommand(slot, onCmd, offCmd) 设置插槽。onButtonPressed(slot) 调 onCommands[slot].execute()。遥控器不关心命令背后操作什么设备。
+  </Step>
+  <Step title="第五步：撤销和宏命令">
+    撤销：Invoker 维护命令历史栈，每次 execute 后压栈。undo 调栈顶命令的 undo()。宏命令：MacroCommand 持有 Command 数组，execute() 遍历逐个执行，undo() 逆序撤销——一键执行一组操作。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```java
+// 1. Command 接口
+public interface Command {
+    void execute();
+    void undo();
+}
+
+// 2. 具体命令——封装接收者
+public class LightOnCommand implements Command {
+    Light light;
+    public LightOnCommand(Light light) { this.light = light; }
+    public void execute() { light.on(); }
+    public void undo() { light.off(); }  // 相反操作
+}
+
+// 3. Invoker——持有命令，不关心接收者
+public class RemoteControl {
+    Command[] onCommands;
+    Command undoCommand;  // 撤销栈
+
+    public void setCommand(int slot, Command on) {
+        onCommands[slot] = on;
+    }
+    public void onButtonPressed(int slot) {
+        onCommands[slot].execute();
+        undoCommand = onCommands[slot];  // 记录历史
+    }
+    public void undoButtonPressed() {
+        undoCommand.undo();  // 撤销上一次操作
+    }
+}
+
+// 4. 宏命令——组合多个命令
+public class MacroCommand implements Command {
+    Command[] commands;
+    public MacroCommand(Command[] cmds) { commands = cmds; }
+    public void execute() {
+        for (Command c : commands) c.execute();
+    }
+    public void undo() {
+        for (int i = commands.length-1; i >= 0; i--)
+            commands[i].undo();  // 逆序撤销
+    }
+}
+```
+
+命令对象可存储、可撤销、可组合——请求脱离调用栈，生命周期独立管理。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 每个设备操作都建一个命令类，类数量爆炸——LightOnCommand、LightOffCommand、ACOnCommand、ACOffCommand…… <strong>原因 →</strong> 简单设备的开关命令高度相似，逐一建类是冗余。 <strong>修法 →</strong> 用 Lambda 简化（Java 8+）：`Command lightOn = () -> light.on()`。或用泛型命令类封装通用的「调用某方法」逻辑。只在需要撤销、宏操作等复杂场景才建独立命令类。
+</Callout>
+
+## 小结与练习
+
+- 命令模式把请求封装成对象：Command 接口 + ConcreteCommand + Receiver + Invoker
+- Invoker 通过 Command 间接操作 Receiver——请求者与执行者解耦
+- 撤销：命令记录状态，undo() 执行相反操作，Invoker 维护历史栈
+- 宏命令：组合多个命令，execute() 逐个执行，undo() 逆序撤销
+- 核心价值：请求可存储、传递、排队、撤销、组合——脱离调用栈
+
+<Exercises>
+  <Answer question="命令模式如何实现撤销功能？">Command 接口增加 undo() 方法，与 execute() 对应——execute 做什么 undo 就做相反操作。ConcreteCommand 在 execute 时记录之前状态（如灯光之前的亮度），undo 时恢复到之前状态。Invoker 维护命令历史栈，每次 execute 后把命令压栈。撤销时弹栈调用 undo()。多步撤销依次弹栈，redo 则把 undo 的命令压入另一个栈。命令对象记录了足够的状态信息来恢复——这是请求对象化的核心价值。</Answer>
+  <Answer question="命令模式和策略模式结构相似，本质区别是什么？">意图不同：命令模式封装「请求」让请求可存储、排队、撤销——关注请求的生命周期管理；策略模式封装「算法」让算法可替换——关注算法的选择和切换。角色关系不同：命令的 ConcreteCommand 持有 Receiver 引用委托执行，Invoker 不知道 Receiver；策略的 Context 直接持有 Strategy 委托执行，没有独立 Receiver。能力不同：命令可撤销可排队可宏组合，策略可替换可选择。判断：需要 undo/redo、任务队列、宏操作用命令；需要运行时切换算法用策略。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="Command 接口">
+声明 execute() 和 undo() 方法，是请求的抽象封装。命令对象记录接收者引用和状态，可独立执行和撤销。
+</GlossaryItem>
+<GlossaryItem term="Receiver">
+真正执行工作的对象（如 Light、GarageDoor），被命令对象委托调用。Receiver 不知道自己被命令模式包装。
+</GlossaryItem>
+<GlossaryItem term="Invoker">
+持有 Command 引用的调用者（如 RemoteControl），在某个时机调 command.execute()。不关心 Receiver 是谁，只和 Command 接口对话。
+</GlossaryItem>
+<GlossaryItem term="宏命令">
+组合多个命令的命令对象。execute() 遍历逐个执行，undo() 逆序撤销。宏命令本身也是 Command，可以嵌套。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Head First Design Patterns (Eric Freeman & Elisabeth Robson)" adaptedUrl="https://www.oreilly.com/library/view/head-first-design/0596007124/" />

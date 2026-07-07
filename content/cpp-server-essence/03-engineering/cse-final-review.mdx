@@ -1,0 +1,156 @@
+---
+title: 总复习
+type: A
+section: 工程实践
+order: 3
+description: 全书知识体系总览——IO 模型是地基，事件架构是骨架，并发数据是血肉，工程实践是体检，四者构成高性能 C++ 服务器完整图景。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseFinalReviewDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话串联全书四大板块的知识脉络
+- 能画出高性能 C++ 服务器的整体架构图，标注各组件的位置
+- 能回答：如果要从零搭建一个高性能 C++ 服务器，你会怎么分步实现？
+</Objectives>
+
+## 为什么要总复习
+
+前面九章你学了很多组件：epoll、Reactor、线程池、Connection、Buffer、协议帧、时间轮、性能调优。但组件学完了不等于会造服务器——你需要把它们串起来，看清它们在一个完整系统里各自的位置和协作关系。
+
+<CseFinalReviewDiagram />
+
+这张图就是全书的知识骨架。中心是「C++ 服务器」，四大分支对应四大板块，每个分支列出核心知识点。接下来我们沿着「数据怎么进来 → 怎么处理 → 怎么管理 → 怎么调优」这条线把它们串起来。
+
+## 一条数据从进来到处理完
+
+### 第 1 步：数据到达网卡（IO 模型层）
+
+网卡收到数据，通过中断通知内核，内核把数据放到 socket 的接收队列。你的程序通过 epoll 感知到「有数据可读」。这一步用到第 2 章的 IO 模型知识——epoll 让一个线程管多个 fd。
+
+### 第 2 步：事件分发（事件架构层）
+
+epoll_wait 返回就绪 fd，Reactor 根据 fd 找到对应的 Connection 对象，调用 `handle_read`。这一步用到第 3 章的 Reactor 模式——事件源到处理器的分发。
+
+### 第 3 步：读取数据到缓冲区（并发管理层）
+
+`handle_read` 调用 `read` 把数据读到 Connection 的 Buffer 里。Buffer 自动扩容、compact，管理读写指针。这一步用到第 6 章的缓冲区设计。
+
+### 第 4 步：协议解码（并发管理层）
+
+Buffer 里可能有半条消息或多条消息。用 TLV 协议的 decode 循环切割出完整帧，不够就等下次。这一步用到第 7 章的协议设计。
+
+### 第 5 步：业务处理（事件架构层）
+
+完整消息根据 Type 分发到业务处理器。如果是耗时操作（DB 查询），丢给第 4 章的线程池异步执行，结果通过 eventfd 回调到 Reactor。
+
+### 第 6 步：超时管理（工程实践层）
+
+每个连接都有超时定时器。如果 60 秒没活跃，第 8 章的时间轮定时器到期，踢除连接。防止空闲连接堆积。
+
+### 第 7 步：性能监控（工程实践层）
+
+全程用 perf 采样、火焰图分析、P99 延迟监控。发现瓶颈就按第 9 章的循环流程优化。
+
+## 从零搭建一个高性能服务器
+
+<Stepper>
+  <Step title="第一步：搭 IO 骨架">
+    ```cpp
+    // 创建 listenfd + epoll
+    int listenfd = socket(...);
+    bind(listenfd, ...);
+    listen(listenfd, backlog);
+    int epfd = epoll_create1(0);
+    // 加入 epoll，写事件循环
+    ```
+    这一步用第 2 章的知识：epoll 基本用法、非阻塞 fd、事件循环。
+  </Step>
+  <Step title="第二步：封装 Reactor">
+    ```cpp
+    // 把 epoll 循环封装成 Reactor
+    Reactor reactor;
+    reactor.add_handler(listenfd, new AcceptHandler, EPOLLIN);
+    reactor.run();  // 事件循环
+    ```
+    用第 3 章的知识：事件源、多路分离器、分发器、处理器的四角色架构。
+  </Step>
+  <Step title="第三步：连接管理 + 缓冲区">
+    ```cpp
+    // 每个连接封装成 Connection，带读写 Buffer
+    class ConnHandler : public Handler {
+      Buffer read_buf_;
+      Buffer write_buf_;
+      void handle_read() { read_buf_.append(...); }
+    };
+    ```
+    用第 5 章和第 6 章的知识：Connection 生命周期、fd 映射、对象池、Buffer 的 append/retrieve/compact。
+  </Step>
+  <Step title="第四步：协议编解码">
+    ```cpp
+    // 在 Buffer 之上加协议层
+    void ConnHandler::on_message(Buffer& buf) {
+      while (decode(buf, msg)) {  // 循环切帧
+        dispatch(msg);
+      }
+    }
+    ```
+    用第 7 章的知识：TLV 帧格式、粘包处理、字节序、Magic 对齐。
+  </Step>
+  <Step title="第五步：线程池 + 定时器">
+    ```cpp
+    // 耗时任务丢线程池，超时用时间轮
+    ThreadPool pool(4);
+    TimerWheel timer(1024, 10);
+    // 业务处理
+    void on_login(Msg& m) {
+      pool.submit([m]{ db_query(m); });  // 异步
+    }
+    timer.add(conn->timer, 60000);  // 60 秒超时
+    ```
+    用第 4 章和第 8 章的知识：线程池 submit/acquire、时间轮 add/tick。
+  </Step>
+  <Step title="第六步：性能调优">
+    ```bash
+    # 压测 + 火焰图 + 优化
+    wrk -t4 -c10000 http://localhost:8080/
+    perf record -g -p $(pgrep server)
+    # 发现锁竞争 → 分段锁；发现 read 太多 → readv
+    ```
+    用第 9 章的知识：测量驱动循环、四层瓶颈定位、火焰图。
+  </Step>
+</Stepper>
+
+## 小结
+
+- 全书四大板块串成一条线：IO 模型（怎么等数据）→ 事件架构（怎么处理）→ 并发数据（怎么管理）→ 工程实践（怎么调优）
+- 一条数据从进来到处理完经过七步：epoll 感知 → Reactor 分发 → Buffer 读取 → 协议解码 → 业务处理 → 超时管理 → 性能监控
+- 从零搭建服务器分六步：IO 骨架 → Reactor → 连接+缓冲 → 协议 → 线程池+定时器 → 调优
+- 每个组件都不是孤立的，它们协作构成一个完整的高性能服务器
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="高性能服务器">
+能同时处理数万到数十万并发连接，且延迟低、吞吐量高的服务器程序。核心要素：事件驱动 IO、连接管理、缓冲区设计、协议解析、定时器、性能调优。
+</GlossaryItem>
+<GlossaryItem term="事件循环">
+服务器的主循环：epoll_wait 等待事件 → 分发到 handler → handler 处理 → 回到 epoll_wait。所有连接的事件都在这一个循环里处理。
+</GlossaryItem>
+<GlossaryItem term="Reactor 模式">
+事件驱动架构的标准模式：多路分离器（epoll）监听事件，分发器路由到处理器。单线程 Reactor 可管理数万连接，多线程 Reactor（主从 Reactor）可利用多核。
+</GlossaryItem>
+<GlossaryItem term="TLV 协议">
+Type-Length-Value 帧格式，固定头加变长负载。Length 字段解决粘包，Magic 防误判，Checksum 保完整。是自定义二进制协议的标准设计。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="如果要从零搭建一个高性能 C++ 服务器，你会怎么分步实现？">分六步递进实现：第一步搭 IO 骨架，创建 listenfd 和 epoll，写基本事件循环；第二步封装 Reactor，把 epoll 循环抽象成事件源-多路分离器-分发器-处理器的四角色架构；第三步实现 Connection 类和 Buffer，管理连接生命周期和读写缓冲，用 fd 映射表和对象池；第四步加协议层，实现 TLV 帧的编解码和粘包处理；第五步加线程池处理耗时任务、时间轮管理超时连接；第六步压测调优，用火焰图定位瓶颈，按测量驱动的循环优化。每一步都建立在前一步的基础上，缺一环就跑不起来。</Answer>
+  <Answer question="全书四大板块是什么关系？能跳着学吗？">四大板块是递进依赖关系：IO 模型是地基（不学就不知道 epoll 为什么需要非阻塞 fd），事件架构是骨架（不学就无法组织多连接处理），并发数据是血肉（不学就无法管理连接和数据的细节），工程实践是体检（不学就无法应对生产环境）。不能跳着学，因为后一板块依赖前一板块的概念和代码。比如协议设计需要缓冲区知识，性能调优需要理解前面所有组件才能定位瓶颈。唯一可以并行学的是线程池和连接管理（都属于管理层面），但都必须在 IO 模型和事件驱动之后。</Answer>
+</Exercises>

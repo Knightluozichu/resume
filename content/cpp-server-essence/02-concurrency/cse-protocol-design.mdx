@@ -1,0 +1,205 @@
+---
+title: 协议设计
+type: B
+section: 并发架构
+order: 3
+description: TLV 帧格式与粘包处理——在 TCP 字节流中切出完整消息，用 Magic 防误判、Length 定边界、Checksum 保完整。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CseProtocolDesignDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-protocol-design";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 TCP 粘包问题的本质和解决方案
+- 能看懂并独立实现一个 TLV 协议的编解码代码
+- 能回答：为什么协议帧必须有 Length 字段？没有它会怎样？
+</Objectives>
+
+## 为什么需要协议设计
+
+TCP 是字节流协议，不保证消息边界。你发送了 `{"msg":"hello"}` 和 `{"msg":"world"}` 两条消息，对端可能一次收到 `{"msg":"hello"}{"msg":"wor`，也可能一次收到 `ld"}{"msg":"world"}`。这叫 <Term def="TCP 字节流没有消息边界，一次 read 可能收到半条或多条消息">粘包</Term>。
+
+没有协议，你根本不知道收到的字节流里哪到哪是一条完整消息。协议设计就是定一套规则，让接收方能在字节流中正确切分消息。
+
+<CseProtocolDesignDiagram />
+
+## TLV 帧格式
+
+最经典的协议格式是 TLV（Type-Length-Value），也就是固定头 + 变长负载：
+
+### Magic（魔数，4 字节）
+
+固定值（如 `0xCAFEBABE`），用来快速判断「这大概是一个合法的帧」。如果第一个 4 字节不是魔数，直接丢弃，防止垃圾数据注入。
+
+### Length（负载长度，4 字节）
+
+这是粘包的解药。告诉你后面 Payload 有多少字节。不够就等下次 read，够就精确读取这么多。
+
+### Type（消息类型，2 字节）
+
+区分这是登录请求、聊天消息还是心跳包。收到完整帧后根据 Type 分发到不同的处理器。
+
+### Payload（负载，N 字节）
+
+业务数据，格式由具体协议定义（JSON、Protobuf、自定义二进制）。
+
+### Checksum（校验和，4 字节）
+
+对整个帧做 CRC32 或类似校验，防止网络传输中的比特翻转。
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="发送方编码：结构体序列化为字节流">
+    ```cpp
+    struct Message { int type; std::string body; };
+    std::string encode(const Message& msg) {
+      // 计算总长度
+      uint32_t payload_len = sizeof(int) + msg.body.size();
+      std::string frame;
+      frame.append(MAGIC, 4);                    // Magic
+      frame.append((char*)&payload_len, 4);      // Length
+      frame.append((char*)&msg.type, 2);         // Type
+      frame.append(msg.body);                    // Payload
+      uint32_t crc = crc32(frame);
+      frame.append((char*)&crc, 4);              // Checksum
+      return frame;
+    }
+    ```
+  </Step>
+  <Step title="接收方读头部：先读固定 10 字节">
+    ```cpp
+    // 缓冲区不够 10 字节（头部），等下次 read
+    if (buf.readable() < HEADER_SIZE) return;
+    // 读出 Magic 和 Length
+    uint32_t magic = read_uint32(buf);
+    if (magic != MAGIC) { buf.retrieve(1); return; } // 丢弃并重新对齐
+    uint32_t payload_len = read_uint32(buf);
+    ```
+  </Step>
+  <Step title="接收方读负载：等够 Length 字节再处理">
+    ```cpp
+    // 头部有了，但负载不完整，等下次 read
+    if (buf.readable() < HEADER_SIZE + payload_len) return;
+    // 够了！读 Type 和 Payload
+    uint16_t type = read_uint16(buf);
+    std::string payload = buf.retrieve_as_string(payload_len);
+    uint32_t crc = read_uint32(buf);
+    // 校验 CRC...
+    dispatch(type, payload);  // 分发处理
+    ```
+  </Step>
+  <Step title="粘包处理：循环切割多条消息">
+    ```cpp
+    // 一次 read 可能收到多条消息
+    while (true) {
+      if (buf.readable() < HEADER_SIZE) break;
+      uint32_t len = peek_length(buf);
+      if (buf.readable() < HEADER_SIZE + len + 4) break;
+      // 够一条完整帧，解码并处理
+      Message msg = decode(buf);
+      handle(msg);
+    }
+    // 不够就留在缓冲区等下次
+    ```
+  </Step>
+</Stepper>
+
+## 代码逐段拆解
+
+```cpp
+// 解码一条消息，返回是否成功
+bool decode(Buffer& buf, Message& out) {
+  // 1. 检查是否有完整头部
+  if (buf.readable() < HEADER_SIZE) return false;
+
+  // 2. 预读 Length（不从缓冲区移除）
+  uint32_t payload_len;
+  memcpy(&payload_len, buf.peek() + 4, 4);
+  payload_len = ntohl(payload_len);  // 网络字节序转主机序
+
+  // 3. 检查是否有完整帧
+  size_t frame_size = HEADER_SIZE + payload_len + CHECKSUM_SIZE;
+  if (buf.readable() < frame_size) return false;
+```
+
+`peek` 只看不取——如果帧不完整就返回 false，数据留在缓冲区等下次。这是粘包处理的核心：**不够一条完整帧就不取，够了一整条才取**。
+
+```cpp
+  // 4. 验证 Magic
+  uint32_t magic;
+  memcpy(&magic, buf.peek(), 4);
+  if (ntohl(magic) != MAGIC) {
+    buf.retrieve(1);  // 丢弃 1 字节，重新对齐
+    return false;
+  }
+
+  // 5. 读取完整帧
+  buf.retrieve(4);  // 跳过 Magic
+  uint16_t type = read_uint16(buf);
+  std::string payload = buf.retrieve_as_string(payload_len);
+  uint32_t crc = read_uint32(buf);
+
+  // 6. 校验
+  if (crc32(/* ... */) != crc) return false;
+
+  out.type = type;
+  out.body = std::move(payload);
+  return true;
+}
+```
+
+Magic 不匹配时只丢 1 字节再重试，这是「字节对齐」策略——垃圾数据中间可能有合法帧，逐字节滑动直到找到 Magic。
+
+## 容易踩的坑
+
+<Callout type="trap">
+**现象：** 服务器解析消息时偶尔崩溃，提示 payload_len 是天文数字。
+**原因：** 没有验证 Length 的合法性，恶意或损坏的数据给了超大值，导致分配巨大内存。
+**修法：** 读出 Length 后检查是否超过最大帧限制（如 1MB），超过直接丢弃连接。
+</Callout>
+
+<Callout type="trap">
+**现象：** 两条消息粘在一起，第二条消息解析失败。
+**原因：** 处理完第一条消息后没有循环继续处理，剩余数据留在缓冲区等下次 read。
+**修法：** 读循环用 while 不停尝试解码，直到缓冲区不够一条完整帧才 break。
+</Callout>
+
+<Callout type="trap">
+**现象：** 换了平台后消息解析全错。
+**原因：** 没有统一字节序。x86 是小端，网络协议通常用大端。
+**修法：** 发送前用 `htonl/htons` 转网络字节序，接收后用 `ntohl/ntohs` 转回主机序。
+</Callout>
+
+## 小结
+
+- TCP 是字节流没有消息边界，粘包是必然现象，必须用协议解决
+- TLV 格式：Magic 防误判，Length 定边界，Type 区分类型，Checksum 保完整
+- 粘包处理核心：不够一条完整帧就不取，够了一整条才取，循环处理
+- Length 必须做合法性检查（上限），字节序必须统一（大端网络序）
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="粘包">
+TCP 是字节流协议，没有消息边界。发送方发两条消息，接收方可能一次收到一条半，也可能一次收到两条半。需要在应用层用协议切割。
+</GlossaryItem>
+<GlossaryItem term="TLV 协议">
+Type-Length-Value 格式，固定头加变长负载。Length 字段是粘包的解药，告诉接收方一条消息有多大。
+</GlossaryItem>
+<GlossaryItem term="魔数（Magic）">
+协议帧开头的固定值，用于快速判断数据是否合法。不匹配时逐字节滑动重新对齐，从垃圾数据中找到合法帧。
+</GlossaryItem>
+<GlossaryItem term="字节序">
+多字节数据在内存中的排列顺序。x86 是小端（低位在前），网络协议通常用大端（高位在前）。跨平台通信必须统一用网络字节序。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么协议帧必须有 Length 字段？没有它会怎样？">没有 Length 字段，接收方不知道一条消息到哪里结束，无法在字节流中切分消息。可以改用特殊分隔符（如 HTTP 的 `\r\n`），但分隔符可能出现在数据中需要转义，效率低。Length 字段直接告诉接收方负载有多大，精确读取，不需要扫描分隔符，效率最高。没有 Length 也无法做完整性检查——不知道期望多少数据就无法判断是否收全了。</Answer>
+  <Answer question="粘包处理的核心逻辑是什么？">核心是「不够不取，够了才取」：先检查缓冲区是否有完整头部（固定长度），没有就 break 等下次 read；有头部则读出 Length，检查缓冲区是否有完整帧（头部+负载+校验和），没有就 break 等下次。够了一条完整帧就解码处理，然后 while 循环继续尝试下一条，直到不够才停。这样一次 read 收到的多条消息能被循环处理完，半条消息留在缓冲区等下次。</Answer>
+</Exercises>
