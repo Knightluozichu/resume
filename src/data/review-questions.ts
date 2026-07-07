@@ -392,6 +392,19 @@ import { assBodyElectronicsQuestions } from "./review/ass-body-electronics";
 import { assEvMotorControllerQuestions } from "./review/ass-ev-motor-controller";
 import { assBatteryManagementQuestions } from "./review/ass-battery-management";
 import { assFinalReviewQuestions } from "./review/ass-final-review";
+import { vsiLearningMapQuestions } from "./review/vsi-learning-map";
+import { vsiSmartCockpitQuestions } from "./review/vsi-smart-cockpit";
+import { vsiIviPlatformQuestions } from "./review/vsi-ivi-platform";
+import { vsiMiddlewareQuestions } from "./review/vsi-middleware";
+import { vsiOtaUpdatesQuestions } from "./review/vsi-ota-updates";
+import { vsiPerceptionSensorsQuestions } from "./review/vsi-perception-sensors";
+import { vsiSensorFusionQuestions } from "./review/vsi-sensor-fusion";
+import { vsiPerceptionAlgorithmsQuestions } from "./review/vsi-perception-algorithms";
+import { vsiPathPlanningQuestions } from "./review/vsi-path-planning";
+import { vsiVehicleControlQuestions } from "./review/vsi-vehicle-control";
+import { vsiFunctionalSafetyQuestions } from "./review/vsi-functional-safety";
+import { vsiCybersecurityQuestions } from "./review/vsi-cybersecurity";
+import { vsiFinalReviewQuestions } from "./review/vsi-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -790,6 +803,20 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...assEvMotorControllerQuestions,
   ...assBatteryManagementQuestions,
   ...assFinalReviewQuestions,
+  // 车载软件与智能化
+  ...vsiLearningMapQuestions,
+  ...vsiSmartCockpitQuestions,
+  ...vsiIviPlatformQuestions,
+  ...vsiMiddlewareQuestions,
+  ...vsiOtaUpdatesQuestions,
+  ...vsiPerceptionSensorsQuestions,
+  ...vsiSensorFusionQuestions,
+  ...vsiPerceptionAlgorithmsQuestions,
+  ...vsiPathPlanningQuestions,
+  ...vsiVehicleControlQuestions,
+  ...vsiFunctionalSafetyQuestions,
+  ...vsiCybersecurityQuestions,
+  ...vsiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

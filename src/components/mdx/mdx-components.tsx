@@ -800,6 +800,19 @@ import { AssBodyElectronicsDiagram } from "./automotive-systems/diagrams/ass-bod
 import { AssEvMotorControllerDiagram } from "./automotive-systems/diagrams/ass-ev-motor-controller";
 import { AssBatteryManagementDiagram } from "./automotive-systems/diagrams/ass-battery-management";
 import { AssFinalReviewMindMap } from "./automotive-systems/diagrams/ass-final-review-mindmap";
+import { VsiIntelligenceMap } from "./vehicle-software/diagrams/vsi-intelligence-map";
+import { VsiCockpitArchitectureDiagram } from "./vehicle-software/diagrams/vsi-cockpit-architecture";
+import { VsiIviPlatformDiagram } from "./vehicle-software/diagrams/vsi-ivi-platform";
+import { VsiMiddlewareDiagram } from "./vehicle-software/diagrams/vsi-middleware";
+import { VsiOtaUpdatesDiagram } from "./vehicle-software/diagrams/vsi-ota-updates";
+import { VsiPerceptionSensorsDiagram } from "./vehicle-software/diagrams/vsi-perception-sensors";
+import { VsiSensorFusionDiagram } from "./vehicle-software/diagrams/vsi-sensor-fusion";
+import { VsiPerceptionAlgorithmsDiagram } from "./vehicle-software/diagrams/vsi-perception-algorithms";
+import { VsiPathPlanningDiagram } from "./vehicle-software/diagrams/vsi-path-planning";
+import { VsiVehicleControlDiagram } from "./vehicle-software/diagrams/vsi-vehicle-control";
+import { VsiFunctionalSafetyDiagram } from "./vehicle-software/diagrams/vsi-functional-safety";
+import { VsiCybersecurityDiagram } from "./vehicle-software/diagrams/vsi-cybersecurity";
+import { VsiFinalReviewMindMap } from "./vehicle-software/diagrams/vsi-final-review-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1880,6 +1893,19 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AssEvMotorControllerDiagram,
   AssBatteryManagementDiagram,
   AssFinalReviewMindMap,
+  VsiIntelligenceMap,
+  VsiCockpitArchitectureDiagram,
+  VsiIviPlatformDiagram,
+  VsiMiddlewareDiagram,
+  VsiOtaUpdatesDiagram,
+  VsiPerceptionSensorsDiagram,
+  VsiSensorFusionDiagram,
+  VsiPerceptionAlgorithmsDiagram,
+  VsiPathPlanningDiagram,
+  VsiVehicleControlDiagram,
+  VsiFunctionalSafetyDiagram,
+  VsiCybersecurityDiagram,
+  VsiFinalReviewMindMap,
   Term,
   Glossary,
   GlossaryItem,

@@ -470,7 +470,21 @@ export type ReviewChapterSlug =
   | "ass-body-electronics"
   | "ass-ev-motor-controller"
   | "ass-battery-management"
-  | "ass-final-review";
+  | "ass-final-review"
+  // 车载软件与智能化
+  | "vsi-learning-map"
+  | "vsi-smart-cockpit"
+  | "vsi-ivi-platform"
+  | "vsi-middleware"
+  | "vsi-ota-updates"
+  | "vsi-perception-sensors"
+  | "vsi-sensor-fusion"
+  | "vsi-perception-algorithms"
+  | "vsi-path-planning"
+  | "vsi-vehicle-control"
+  | "vsi-functional-safety"
+  | "vsi-cybersecurity"
+  | "vsi-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -878,6 +892,20 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ass-ev-motor-controller": "电驱系统：电机与电控",
   "ass-battery-management": "动力电池与BMS",
   "ass-final-review": "汽车系统专项总复习",
+  // 车载软件与智能化
+  "vsi-learning-map": "车载软件与智能化全书学习地图",
+  "vsi-smart-cockpit": "智能座舱架构",
+  "vsi-ivi-platform": "车载信息娱乐系统平台",
+  "vsi-middleware": "车载中间件",
+  "vsi-ota-updates": "OTA升级与软件管理",
+  "vsi-perception-sensors": "感知传感器体系",
+  "vsi-sensor-fusion": "多传感器融合",
+  "vsi-perception-algorithms": "感知算法基础",
+  "vsi-path-planning": "路径规划",
+  "vsi-vehicle-control": "车辆控制与执行",
+  "vsi-functional-safety": "功能安全 ISO 26262",
+  "vsi-cybersecurity": "车载信息安全",
+  "vsi-final-review": "车载软件与智能化总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

@@ -88,6 +88,7 @@ export const BOOK_ORDER = [
   "architecture-domain-design",
   "advanced-algorithm-engineering",
   "automotive-systems-specialization",
+  "vehicle-software-intelligence",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -117,6 +118,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "architecture-domain-design": "架构与领域设计",
   "advanced-algorithm-engineering": "高级算法与算法工程",
   "automotive-systems-specialization": "汽车系统专项",
+  "vehicle-software-intelligence": "车载软件与智能化",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -346,9 +348,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "继续进入智能座舱、ADAS、自动驾驶基础和车载软件工程。",
         items: [
           {
-            title: "车载软件与智能化",
-            note: "待补：座舱、车载中间件、感知融合、规控基础和整车系统工程。",
-            missing: true,
+            bookSlug: "vehicle-software-intelligence",
+            note: "车载软件与智能化：座舱、车载中间件、感知融合、规控基础和整车系统工程，从传统汽车到智能汽车的软件进阶。",
           },
         ],
       },
@@ -627,6 +628,11 @@ export const SECTION_ORDER = [
   "底盘与控制",
   "汽车电子",
   "新能源三电",
+  // 车载软件与智能化
+  "智能座舱",
+  "车载中间件",
+  "感知融合",
+  "规控与系统工程",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
