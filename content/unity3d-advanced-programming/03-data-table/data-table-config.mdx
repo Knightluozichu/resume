@@ -1,0 +1,300 @@
+---
+title: 数据表与程序
+type: C
+section: 基础架构
+order: 2
+description: 掌握数据驱动开发模式，学会使用ScriptableObject和配置表构建灵活的数据系统。
+tags: ["数据驱动", "ScriptableObject", "配置表", "导表工具", "热更新", "多语言"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解数据驱动开发的核心思想，能区分哪些数值应该配表、哪些逻辑应该写死",
+    "掌握Excel→CSV/JSON→ScriptableObject的完整导表流水线设计",
+    "能设计类型安全的配置读取API（泛型+缓存+ID索引）",
+    "理解导表工具中的校验机制（类型检查、ID唯一、外键引用、范围校验）",
+    "掌握配置热加载方案：开发期实时重载与运行期CDN热更",
+    "理解多语言文本的配置与切换方案",
+  ]}
+/>
+
+## 为什么游戏必须用数据驱动？
+
+游戏和普通软件最大的区别之一：**游戏里有海量的数值和内容需要调整**。一个RPG里可能有几千个道具、几百个技能、几十张地图、上百个NPC对话。这些东西如果全写在代码里，改一个数值就要改代码、编译、打包、送审——策划会疯，程序也会疯。
+
+<Term def="一种开发范式：程序只编写固定的逻辑框架（规则引擎），具体的数值、内容、规则参数全部存放在外部数据文件（配置表/JSON/ScriptableObject）中，修改数据不需要修改代码。">数据驱动</Term>解决的核心问题就是：**让内容变化不引起代码变化**。
+
+<DataDrivenVsHardCode />
+
+### 什么该配表，什么不该配表？
+
+这是新主程最常纠结的问题。原则很简单：
+
+| 应该配表 | 应该写死在代码里 |
+|---|---|
+| 道具名称/图标/价格/描述 | 购买逻辑（扣钱+加物品+广播事件） |
+| 技能伤害值/CD/范围/特效ID | 伤害计算公式 |
+| NPC对话文本/任务条件 | 任务系统的状态流转逻辑 |
+| AI参数（视野/攻击距离/巡逻速度） | AI状态机的结构和转换逻辑 |
+| 关卡敌人波次/刷新位置 | 波次管理的状态机 |
+| UI文本/多语言翻译 | UI框架的打开关闭逻辑 |
+
+<Callout type="tip">
+  **主程心法**：频繁变化的东西必须数据驱动，稳定不变的东西应该写在代码里。如果你发现自己在写 `if (itemId == 1001) { ... } else if (itemId == 1002) { ... }`，说明你应该把这部分逻辑改成数据驱动了。
+</Callout>
+
+## 配置数据流流水线
+
+一个成熟项目的配置数据从策划填表到游戏运行时读取，会经历一条完整的流水线：
+
+<DataFlowPipeline />
+
+### 阶段一：策划填表（Excel）
+
+策划用Excel填表是行业标准——Excel对策划友好，支持公式、条件格式、数据验证、多Sheet、注释。主程需要和策划约定：
+
+1. **表头规范**：第一行字段名，第二行字段类型（int/float/string/bool/数组），第三行注释说明，第四行起为数据
+2. **ID规范**：每张表的第一列必须是唯一ID，建议分段（如10000-19999是道具，20000-29999是技能）
+3. **字段类型**：不允许合并单元格，数组用`|`分隔（如`"1001|1002|1003"`），嵌套结构用JSON子串或多表关联
+
+<Callout type="warn">
+  **禁止策划在Excel里写复杂公式**：导表工具只认导出的CSV，公式在CSV里不存在。公式应该在导表工具里用C#计算，或者在策划校验环节完成。
+</Callout>
+
+### 阶段二：导表工具（核心）
+
+导表工具是程序维护的核心工具，负责把CSV/JSON转换成游戏能用的格式。它至少要做四件事：
+
+1. **解析**：读取CSV，按表头定义的类型转换每一列
+2. **校验**：类型检查、ID唯一性、外键引用完整性、数值范围、必填字段非空
+3. **生成**：输出为ScriptableObject（开发期）或二进制/JSON（热更期）
+4. **生成代码**：自动生成对应的C#数据类（避免手写字段和表结构不一致）
+
+```csharp
+// 导表工具自动生成的数据类——不要手改！
+[System.Serializable]
+public class WeaponConfig {
+    public int id;
+    public string name;
+    public int damage;
+    public float fireRate;
+    public string iconPath;
+    public int[] bulletIds;  // 数组
+}
+
+// 导表工具核心逻辑示意
+public class ExcelExporter {
+    public void Export(string csvPath, Type configType, string outputPath) {
+        var rows = ParseCSV(csvPath);
+        foreach (var row in rows) {
+            var errors = ValidateRow(row, configType);
+            if (errors.Count > 0) {
+                // 校验失败：打印错误行号和原因，终止导出
+                throw new Exception($"导表失败: {string.Join("\\n", errors)}");
+            }
+        }
+        var configs = ConvertToObjects(rows, configType);
+        WriteScriptableObject(configs, outputPath);
+        WriteBinary(configs, outputPath + ".bytes");  // 热更格式
+    }
+}
+```
+
+<Callout type="trap">
+  **导表校验一定要严格，失败就终止导出**。不要让脏数据进游戏——一个空字符串的道具名、一个为负数的价格、一个引用了不存在道具ID的合成配方，在运行时会以各种奇怪的方式崩溃。导表阶段发现问题成本最低，运行时发现问题成本最高。
+</Callout>
+
+### 阶段三：ScriptableObject vs 二进制 vs JSON
+
+| 格式 | 优点 | 缺点 | 适用场景 |
+|---|---|---|---|
+| **ScriptableObject** | Unity原生支持、Inspector可查看、可引用其他资产、零解析开销 | 只能在Unity内用、不可热更（随包体） | 开发期调试、不需要热更的固定配置 |
+| **二进制（自定义）** | 读取快、体积小、不易被篡改 | 需要自定义序列化/反序列化、不可读 | 发布期热更配置、对加载速度敏感 |
+| **JSON** | 可读性强、跨平台、调试方便 | 解析慢、体积大、容易被篡改 | 开发期热更、后台下发的远程配置 |
+| **FlatBuffers/ProtoBuf** | 体积小、零拷贝反序列化、Schema校验 | 工具链复杂、调试不便 | 大型项目对性能敏感的配置 |
+
+<Callout type="tip">
+  **实战方案**：开发期用ScriptableObject（方便调试），发布期用ScriptableObject打包进AB做基础配置，热更配置走CDN下载JSON/二进制覆盖。ConfigManager自动合并——先加载SO基础数据，再用热更数据覆盖同ID条目。
+</Callout>
+
+### 阶段四：ConfigManager运行时读取
+
+ConfigManager是数据层的核心，提供类型安全的配置访问接口：
+
+```csharp
+// 主程级别的ConfigManager设计
+public static class ConfigManager {
+    // 按类型缓存每张表，避免重复加载
+    private static readonly Dictionary<Type, object> _tables = new();
+
+    // 初始化：加载所有配置（AB+热更合并）
+    public static void Initialize() {
+        LoadTable<WeaponConfig>("weapon");
+        LoadTable<ItemConfig>("item");
+        LoadTable<SkillConfig>("skill");
+        // ...
+    }
+
+    // 获取单条配置（按ID）
+    public static T Get<T>(int id) where T : class, IConfig, new() {
+        var table = GetTable<T>();
+        if (table.TryGetValue(id, out var cfg)) return cfg;
+        Debug.LogError($"Config {typeof(T).Name} id={id} not found!");
+        return null;
+    }
+
+    // 获取整张表（遍历用）
+    public static IReadOnlyDictionary<int, T> GetTable<T>() where T : class, IConfig, new() {
+        if (!_tables.TryGetValue(typeof(T), out var table)) {
+            throw new Exception($"Table {typeof(T).Name} not loaded!");
+        }
+        return (IReadOnlyDictionary<int, T>)table;
+    }
+
+    // 热加载：运行时下载新配置替换
+    public static void HotReload<T>(string json) where T : class, IConfig, new() {
+        var newData = JsonUtility.FromJson<Dictionary<int, T>>(json);
+        var table = (Dictionary<int, T>)_tables[typeof(T)];
+        foreach (var kv in newData) {
+            table[kv.Key] = kv.Value;  // 覆盖同ID条目
+        }
+        // 派发配置变更事件
+        EventBus.Publish(new ConfigChangedEvent(typeof(T)));
+    }
+}
+```
+
+## 类型安全与代码生成
+
+新手最容易犯的错误是：把配置表读成`Dictionary<string, object>`或者`DataRow`，然后到处硬编码字符串列名取值。这等于**放弃了C#的类型系统**，字段名拼错、类型转换错误全是运行时bug。
+
+正确做法是**导表工具自动生成C#数据类**——Excel表结构变了，重新导表时自动生成对应C#类，编译期就能发现字段名错误。
+
+```csharp
+// ❌ 弱类型：字段名是字符串，拼错了运行时才报错
+var name = row["item_nam"].ToString();  // "item_nam"拼错→运行时KeyNotFoundException
+var price = int.Parse(row["price"]);    // price列有空字符串→FormatException
+
+// ✅ 强类型：编译期检查，IDE自动补全
+var cfg = ConfigManager.Get<ItemConfig>(1001);
+var name = cfg.name;   // 字段名不存在直接编译报错
+var price = cfg.price; // int类型，不可能为字符串
+
+```
+
+## 多语言支持
+
+多语言（i18n）本质上也是一种配置表——Key到不同语言文本的映射：
+
+```csharp
+// 多语言表结构（lang.csv）
+// key,zh-CN,en-US,ja-JP,ko-KR
+// ui.ok,确认,OK,確認,확인
+// ui.cancel,取消,Cancel,キャンセル,취소
+// item.1001.name,铁剑,Iron Sword,鉄の剣,철검
+
+public static class I18n {
+    private static Dictionary<string, Dictionary<string, string>> _langs;
+    private static string _currentLang = "zh-CN";
+
+    public static string T(string key, params object[] args) {
+        if (_langs[_currentLang].TryGetValue(key, out var text)) {
+            return args.Length > 0 ? string.Format(text, args) : text;
+        }
+        return $"[{key}]";  // 未找到时返回key本身，方便定位
+    }
+}
+
+// 用法
+string okText = I18n.T("ui.ok");
+string welcome = I18n.T("ui.welcome", playerName);
+```
+
+<Callout type="warn">
+  **多语言文本绝对不能硬编码在代码和UI预制体里**。所有面向玩家的文本必须走`I18n.T(key)`，切换语言时广播事件让所有Text组件刷新。如果发现代码里有中文/英文字符串直接给Text赋值，Code Review直接打回。
+</Callout>
+
+## 配置热加载
+
+热加载分两种场景：
+
+1. **开发期热加载**：改了Excel→导表→Unity编辑器里不重启Play Mode就能看到新数据。用`AssetDatabase.FindAssets`监听文件变化，自动重新读取ScriptableObject。
+2. **运行期热更**：上线后不改包体，通过CDN下发新配置覆盖旧配置。下载JSON/二进制→校验MD5→反序列化→覆盖ConfigManager中的缓存→派发变更事件。
+
+<Callout type="trap">
+  **热加载的坑**：配置引用了其他配置（如道具A的合成材料引用道具B），热更时如果B被删除了但A还引用它，会出现悬挂引用。解决：热更后必须跑一遍外键校验；业务系统监听`ConfigChangedEvent`，清理基于旧配置创建的运行时对象。
+</Callout>
+
+## 策划-程序协作规范
+
+主程需要建立的协作约定：
+
+1. **Excel表在SVN/Git管理**：策划提交Excel后CI自动跑导表，失败发邮件通知
+2. **新增字段走流程**：策划提需求→程序加字段→导表工具更新→策划填表
+3. **废弃字段不要删**：标记为`[Obsolete]`保留一个版本，避免旧代码引用崩溃
+4. **ID分段管理**：每个策划负责自己ID段，避免ID冲突
+5. **导表错误必须修**：CI导表失败=构建失败，不允许跳过错误
+
+<Exercises
+  items={[
+    {
+      prompt: "代码审查：下面这段代码有什么问题？从数据驱动和架构角度指出至少3个问题，并给出改进方案。",
+      code: `public class ItemDatabase : MonoBehaviour {
+    public static ItemDatabase Instance;
+    public Dictionary<int, ItemData> items = new Dictionary<int, ItemData>();
+
+    void Awake() {
+        Instance = this;
+        items[1001] = new ItemData { name="铁剑", price=100, damage=10 };
+        items[1002] = new ItemData { name="钢剑", price=300, damage=25 };
+        items[1003] = new ItemData { name="魔杖", price=500, damage=50 };
+    }
+
+    public string GetItemName(int id) {
+        if (id == 1001) return "铁剑";
+        if (id == 1002) return "钢剑";
+        return "未知物品";
+    }
+}`,
+      answer: "问题：①数据硬编码在Awake里，改一个道具要改代码→应该走配置表；②用if(id==1001)判断名称，新增道具要加if→应该从配置表读取；③单例持有数据且没有类型安全的Get接口→应该用ConfigManager统一管理；④没有多语言支持，name直接写中文→应该走I18n；⑤MonoBehaviour做数据库不合适，应该是纯C#静态类或通过DI注入。改进：定义ItemConfig配置类→Excel填表→导表生成ScriptableObject→ConfigManager.LoadTable<ItemConfig>()→GetItemName内部调ConfigManager.Get<ItemConfig>(id)?.name→UI显示时走I18n.T。",
+    },
+    {
+      prompt: "设计题：设计一个支持热更的配置加载方案。要求：(1) 包内自带ScriptableObject作为基础配置；(2) 启动时检查CDN是否有新版本配置；(3) 下载后覆盖基础配置；(4) 业务层无感知，始终通过ConfigManager.Get<T>(id)访问。请写出ConfigManager的初始化流程和热更流程伪代码。",
+      answer: "初始化流程：①LoadFromResources/AB：加载包内ScriptableObject作为baseData；②CheckHotUpdate：向CDN请求配置版本号（config_ver.json），与本地记录版本比对；③如果CDN版本更新→下载对应配置JSON/二进制到persistentDataPath；④LoadHotUpdate：从persistentDataPath加载热更配置，遍历同类型数据按ID覆盖baseData；⑤派发ConfigReadyEvent。热更流程（运行时）：①后台轮询/推送触发→下载新配置；②写入临时文件→MD5校验→替换旧热更文件；③反序列化→调用ConfigManager.HotReload<T>覆盖内存数据；④派发ConfigChangedEvent→UI/业务系统刷新。业务层始终只调用ConfigManager.Get<T>(id)，不关心数据来自SO还是热更。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="数据驱动 Data-Driven" zh="程序编写逻辑框架，具体数值和内容放在外部配置文件中，修改数据不需要修改代码和重新编译。">
+    游戏开发的核心范式，解耦内容变化与代码变化。
+  </Term>
+  <Term name="ScriptableObject" zh="Unity原生的数据资产类（.asset文件），可以序列化存储数据、在Inspector中编辑、通过Addressables/AB打包加载。">
+    Unity项目中配置表最常用的载体，开发期调试方便。
+  </Term>
+  <Term name="导表工具" zh="将策划填写的Excel/CSV转换为程序可用格式（SO/JSON/二进制）并进行数据校验的自动化工具。">
+    数据流水线的核心环节，负责类型转换、校验、代码生成。
+  </Term>
+  <Term name="外键校验 Foreign Key Check" zh="导表时检查字段引用的ID在另一张表中是否存在，避免运行时找不到引用数据。">
+    导表校验的关键项，防止配置间引用断裂。
+  </Term>
+  <Term name="热加载 Hot Reload" zh="游戏运行时替换配置数据而不需要重启游戏或重新打包。分为开发期编辑器内热重载和运行期CDN热更新。">
+    提高开发效率和运营灵活性的重要能力。
+  </Term>
+  <Term name="热更新 Hot Update" zh="游戏上线后通过网络下载新资源/配置/代码来修复bug或更新内容，不需要重新下载安装包。">
+    手机游戏必备能力，配置热更是其中最安全的部分。
+  </Term>
+  <Term name="多语言 i18n" zh="Internationalization（国际化缩写i18n），游戏支持多种语言文本切换。通过Key-Value映射表实现。">
+    出海游戏必备，所有玩家可见文本必须走多语言系统。
+  </Term>
+  <Term name="ID分段" zh="为不同类型的配置数据划分不同的ID数值范围（如道具10000-19999、技能20000-29999），避免ID冲突。">
+    多人协作时的ID管理规范。
+  </Term>
+</Glossary>
+
+<Attribution />

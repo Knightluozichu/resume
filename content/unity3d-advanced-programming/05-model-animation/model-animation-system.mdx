@@ -1,0 +1,387 @@
+---
+title: 3D模型与动画
+type: C
+section: 核心系统
+order: 4
+description: 掌握3D模型导入管线、SkinnedMeshRenderer和Animator状态机，理解Root Motion与骨骼重定向等动画核心技术。
+tags: ["模型导入", "SkinnedMeshRenderer", "Animator", "状态机", "Root Motion", "动画事件", "骨骼重定向", "优化"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "掌握Unity模型导入设置的关键优化项（压缩、读写、Mesh Compression、Read/Write）",
+    "理解SkinnedMeshRenderer的蒙皮原理：骨骼层级、顶点权重、BlendShape",
+    "掌握Animator状态机设计：States、Transitions、Parameters、Layers、Avatar Mask",
+    "理解Root Motion的工作原理和控制策略（Apply Root Mode的选择）",
+    "掌握Animator优化：Culling Mode、Update Mode、Animator.StringToHash缓存",
+    "掌握Animation Events动画事件系统的用法和注意事项",
+    "理解骨骼动画重定向（Humanoid Retargeting）的原理和应用场景",
+  ]}
+/>
+
+## 模型与动画是3D游戏的脸面
+
+玩家对游戏画面的第一印象就是模型和动画。角色走路是否自然、攻击是否流畅、换装是否正确、表情是否生动——这些直接决定了游戏的"品质感"。主程在模型和动画系统上的职责不是做美术，而是：
+
+1. **定规范**：模型导入设置、骨骼命名、动画切片标准
+2. **搭框架**：AnimatorController设计、动画状态管理、Root Motion控制
+3. **做优化**：SkinnedMeshRenderer合批、Animator Culling、骨骼数量控制
+4. **解决疑难**：动画漂移、穿模、切换卡顿、动画事件丢失
+
+## 模型导入设置优化
+
+模型从3D软件（Maya/Blender/3ds Max）导出FBX后导入Unity，导入设置直接决定了运行时性能和内存占用。以下是必须审查的关键设置：
+
+### 模型（Model）选项卡
+
+| 设置项 | 推荐值 | 原因 |
+|---|---|---|
+| **Mesh Compression** | High | 压缩网格数据，减少显存和包体（顶点位置用16位精度存储） |
+| **Read/Write Enabled** | 关闭 | 开启会在CPU保留一份网格副本，内存翻倍；只有需要运行时修改网格才开 |
+| **Optimize Mesh** | 开启 | 重新排列顶点顺序提升GPU缓存命中率 |
+| **Import BlendShapes** | 按需开启 | 不需要表情/变形的模型关闭，省内存 |
+| **Generate Colliders** | 关闭 | 不要自动生成MeshCollider，碰撞用简化碰撞体 |
+
+### 骨骼（Rig）选项卡
+
+<Term def="Unity的人类oid骨骼重定向系统，将不同角色的骨骼映射到一套标准的人体骨骼（Avatar），实现同一套动画在不同模型上复用。">Humanoid</Term>是Unity最强大的动画功能之一：
+
+- **Humanoid**：人形角色，支持动画重定向（一套动画给所有角色用），推荐用于玩家、NPC、怪物
+- **Generic**：非人形（四足动物、龙、武器等），不支持重定向
+- **Legacy**：旧版动画系统，新项目禁用
+
+<Callout type="warn">
+  **Humanoid的坑**：不同模型的骨骼结构必须能映射到Unity的标准人体骨骼（至少要有头、脊柱、两臂两腿）。手指和面部骨骼是可选的。如果美术给的骨骼命名不规范，Avatar配置会失败，需要手动映射。
+</Callout>
+
+### 动画（Animation）选项卡
+
+| 设置项 | 推荐值 | 原因 |
+|---|---|---|
+| **Anim. Compression** | Optimal | 动画曲线压缩，减少内存占用 |
+| **Rotation Error** | 0.5-1.0 | 旋转压缩误差，太大会抖动，太小占内存 |
+| **Resample Curves** | 开启 | 对euler动画重新采样为四元数，避免万向节死锁 |
+| **Loop Time/Pose** | 循环动画开启 | Idle/Run/Walk等循环动画必须勾上 |
+
+<Callout type="tip">
+  **主程规范**：项目应该有一份《美术资源导入规范》文档，明确每个平台（PC/移动端/主机）的模型面数、骨骼数、贴图尺寸、动画压缩参数。用AssetPostprocessor写一个自动化导入脚本，新模型导入时自动应用这些设置，避免美术手动配置出错。
+</Callout>
+
+## SkinnedMeshRenderer与蒙皮原理
+
+<Term def="蒙皮网格渲染器，Unity中用于渲染绑定了骨骼的角色模型的组件。通过骨骼变换和顶点权重，将网格顶点“蒙”在骨骼上随骨骼运动。">SkinnedMeshRenderer</Term>是角色渲染的核心组件。理解它的工作原理对优化至关重要。
+
+<SkinnedMeshBones />
+
+### 蒙皮计算原理
+
+每个顶点最多绑定4根骨骼（boneIndex[4] + weight[4]），顶点的世界位置通过加权变换计算：
+
+```
+V_world = weight[0]*Matrix[boneIndex[0]]*V_bind + weight[1]*Matrix[boneIndex[1]]*V_bind + ...
+```
+
+其中`V_bind`是顶点在绑定姿势（T-Pose）下的位置，`Matrix[i]`是当前骨骼的世界变换矩阵乘以Bindpose逆矩阵。
+
+<Callout type="warn">
+  **骨骼数量不是越多越好**。每根骨骼在动画更新时都要计算矩阵，每多一根骨骼就多一次矩阵运算。移动端建议：主角色≤60根骨骼，NPC≤30根，怪物≤20根。面部骨骼如果不用表情动画就不要导入。
+</Callout>
+
+### BlendShape（变形目标）
+
+BlendShape用于面部表情、口型、眨眼等细微变形。原理是在基础网格上存储多组"变形后"的顶点位置，运行时按权重（0-100%）混合。BlendShape的代价：
+
+- 每个BlendShape帧存储完整顶点位置偏移，内存开销大
+- 运行时混合BlendShape权重会增加顶点处理开销
+- 移动端角色建议BlendShape数量≤30个
+
+### SkinnedMeshRenderer优化
+
+1. **减少Material数量**：每个材质一个DrawCall，角色尽量用1个材质（贴图合并到一张图集）
+2. **合理设置Quality**：SkinnedMeshRenderer.quality设为Auto，移动端可降为2 Bones/1 Bone减少蒙皮计算
+3. **共享Mesh**：同类怪物共享同一个Mesh和Material，只是换贴图
+4. **LOD**：远距离角色用低面数模型或Billboard替代
+
+```csharp
+// 动态设置蒙皮质量（根据平台/距离）
+void OptimizeForDistance(SkinnedMeshRenderer smr, float distance) {
+    if (distance > 30f) {
+        smr.quality = SkinQuality.Bone1;  // 远距离只用1根骨骼
+    } else if (distance > 15f) {
+        smr.quality = SkinQuality.Bone2;  // 中距离用2根骨骼
+    } else {
+        smr.quality = SkinQuality.Auto;   // 近距离自动（最多4根）
+    }
+}
+```
+
+## Animator状态机
+
+<Term def="Unity的动画状态机组件，管理动画状态（States）、状态转换（Transitions）、参数（Parameters）和动画层（Layers），控制动画的切换和混合。">Animator</Term>是Unity动画系统的核心。
+
+<AnimatorStateMachine />
+
+### 状态机核心概念
+
+**States（状态）**：每个State对应一个AnimationClip。三个特殊状态：
+- <Term def="状态机入口状态，当Animator组件启用时进入的第一个状态。">Entry</Term>：状态机入口，决定默认状态
+- <Term def="状态机出口状态，转换到Exit意味着当前状态机/层结束，控制权回到上一层状态机。">Exit</Term>：状态机出口，用于子状态机和层之间的转移
+- <Term def="特殊状态：任意状态都可以转换到Any State的目标状态。用于受击、死亡等任何时候都可能触发的动画。">Any State</Term>：从任意状态都能转换过去（用于受击/死亡等全局触发）
+
+**Transitions（转换）**：状态之间的过渡，关键参数：
+- **Has Exit Time**：是否等当前动画播放完一定比例才能转换（false=立即转换）
+- **Fixed Duration**：过渡时间是秒数还是动画归一化时间百分比
+- **Transition Duration**：两个动画交叉淡入淡出的时间
+- **Interruption Source**：转换是否可以被其他转换打断
+- **Conditions**：触发转换的参数条件
+
+<Callout type="trap">
+  **Has Exit Time的坑**：如果勾选了Has Exit Time但想通过参数立即切换动画（如按空格跳跃），你会发现角色"等了一下才跳起来"——因为必须等Exit Time到达才能转换。响应输入的转换（移动/跳跃/攻击）必须关闭Has Exit Time。
+</Callout>
+
+**Parameters（参数）**：四种类型：
+- **Float**：连续值（速度、方向），用于Blend Tree混合
+- **Int**：整数值（状态编号）
+- **Bool**：布尔值（是否在攻击/是否在地面）
+- **Trigger**：一次性触发器（跳跃/受击），触发后自动重置为false
+
+<Callout type="warn">
+  **性能优化：用Animator.StringToHash缓存参数ID**。每次调用`SetFloat("Speed")`、`SetBool("IsJump")`内部都会做字符串哈希。热路径中（如Update里）应该缓存ID。
+</Callout>
+
+```csharp
+// ❌ 每帧字符串哈希
+void Update() {
+    animator.SetFloat("Speed", agent.velocity.magnitude);  // 每次都哈希"Speed"
+    animator.SetBool("IsGrounded", isGrounded);
+}
+
+// ✅ 缓存哈希ID（只计算一次）
+private static readonly int SpeedHash = Animator.StringToHash("Speed");
+private static readonly int IsGroundedHash = Animator.StringToHash("IsGrounded");
+private static readonly int IsJumpHash = Animator.StringToHash("IsJump");
+
+void Update() {
+    animator.SetFloat(SpeedHash, agent.velocity.magnitude);  // 直接用int，零GC
+    animator.SetBool(IsGroundedHash, isGrounded);
+}
+
+// Trigger同理
+void Jump() {
+    animator.SetTrigger(IsJumpHash);
+}
+```
+
+### Layers（动画层）与Avatar Mask
+
+动画层允许在同一角色上叠加多套动画：
+
+- **Base Layer**：基础层，控制全身动画（Idle/Run/Jump）
+- **Upper Body Layer**：上半身层，用上半身Avatar Mask，实现边跑边射击
+- **Face Layer**：面部层，控制表情和口型
+- **IK Layer**：IK层，手脚IK（手抓武器、脚踩地面）
+
+<Term def="Avatar遮罩，定义哪些骨骼受动画层影响。例如设置下半身遮罩，上半身层动画只影响胸部以上骨骼，下半身保持Base Layer的跑步动画。">Avatar Mask</Term>是实现"上半身攻击+下半身移动"的关键：创建Avatar Mask→关闭下半身骨骼→赋给Upper Body Layer的Mask属性→设置Weight=1，Blending=Override或Additive。
+
+### Blend Tree（混合树）
+
+Blend Tree用于根据连续参数（如速度、方向）平滑混合多个动画：
+- **1D Blend Tree**：根据一个参数混合（如Speed: Idle→Walk→Run）
+- **2D Blend Tree**：根据两个参数混合（如VelocityX+VelocityY: 8方向移动）
+- **Direct Blend Tree**：直接控制每个子节点的权重
+
+## Root Motion：让动画驱动角色移动
+
+<Term def="根运动。动画剪辑中包含根节点（Root）的位移/旋转信息，启用后Animator会将动画中的位移应用到Transform上，让角色移动距离和动画完全匹配。">Root Motion</Term>是让角色移动"自然"的关键——角色的移动距离完全由动画决定，而不是代码里写`transform.Translate`。
+
+### Apply Root Motion的三种选择
+
+| 模式 | 效果 | 适用场景 |
+|---|---|---|
+| **Apply Root Motion = true** | Animator直接移动Transform | 单机游戏、过场动画、NPC巡逻 |
+| **Apply Root Motion = false** | 代码控制移动（CharacterController/Rigidbody） | 网游（服务端权威）、需要精确控制移动 |
+| **OnAnimatorMove回调** | 手动控制Animator的deltaPosition | 半控制：动画提供方向，代码控制速度（推荐） |
+
+```csharp
+// 推荐方案：OnAnimatorMove中控制移动
+// 动画提供移动方向和速度比例，代码控制实际速度（方便网游同步）
+private void OnAnimatorMove() {
+    if (isGrounded) {
+        // 动画给出的位移方向，但速度由代码/网络同步控制
+        Vector3 delta = animator.deltaPosition;
+        Vector3 desiredMove = moveDirection * moveSpeed * Time.deltaTime;
+        // 混合：用动画的方向，代码的速度
+        controller.Move(desiredMove + Vector3.up * gravity * Time.deltaTime);
+    }
+}
+
+// 如果不需要Root Motion，直接关闭
+// animator.applyRootMotion = false;
+// 用代码控制：cc.Move(inputDir * speed * Time.deltaTime);
+```
+
+<Callout type="trap">
+  **Root Motion网络同步的坑**：网游中如果客户端启用Root Motion，角色位置由动画驱动，服务端需要同步动画状态和参数后在服务端也播放同样动画才能得到一致位置，非常复杂。大多数MMO选择关闭Root Motion，用代码/寻路控制移动，动画只做表现不驱动位移。
+</Callout>
+
+## Animator优化
+
+Animator是动画系统的性能大头，以下是关键优化点：
+
+### 1. Culling Mode（剔除模式）
+
+| 模式 | 效果 | 推荐 |
+|---|---|---|
+| **Always Animate** | 始终更新动画，即使看不见 | 主角、重要NPC |
+| **Cull Update Transforms** | 看不见时不更新Transform（IK/骨骼不更新），但动画状态继续 | 普通怪物、远处NPC |
+| **Cull Completely** | 看不见时完全停止更新 | 远处背景角色、装饰NPC |
+
+<Callout type="tip">
+  **绝大多数NPC和怪物应该设为Cull Update Transforms或Cull Completely**。看不见的角色不需要动画更新，这能省下大量CPU蒙皮计算。主角必须Always Animate（因为即使摄像机转走，玩家仍在操作）。
+</Callout>
+
+### 2. Update Mode
+
+- **Normal**：Update中更新，与渲染帧率同步（默认，推荐）
+- **Animate Physics**：FixedUpdate中更新，用于物理交互对象
+- **Unscaled Time**：不受Time.timeScale影响，用于暂停菜单UI动画
+
+### 3. Optimize Game Objects
+
+Animator组件的"Optimize Game Objects"选项：开启后Unity会在运行时将骨骼Transform从层级中移除，直接在Native层更新骨骼矩阵，大幅减少Transform层级的C#遍历开销。强烈推荐开启（但需要暴露需要代码访问的骨骼，如武器挂点）。
+
+```csharp
+// 开启Optimize Game Objects后，
+// 需要代码访问的骨骼要在"Extra Transforms to Expose"中添加
+// 否则不能通过transform.Find查找骨骼
+
+// 暴露的骨骼可以通过Animator.GetBoneTransform获取
+Transform rightHand = animator.GetBoneTransform(HumanBodyBones.RightHand);
+rightHand.GetComponent<WeaponSlot>().Equip(weaponPrefab);
+```
+
+## Animation Events（动画事件）
+
+<Term def="动画事件。在AnimationClip的特定时间点挂载回调函数，动画播放到该时间点时自动调用对应MonoBehaviour上的方法。用于脚踩地面时播放音效、攻击判定帧触发伤害、动画结束回调等。">Animation Events</Term>让动画在特定时间点通知代码：
+
+```csharp
+// 在动画帧上添加Event → 调用以下方法
+public class CharacterAnimationEvents : MonoBehaviour {
+    [SerializeField] private AudioClip footstepSound;
+    [SerializeField] private ParticleSystem footstepVFX;
+
+    // 脚着地帧：播放脚步声和特效
+    void OnFootstep() {
+        AudioSource.PlayClipAtPoint(footstepSound, transform.position);
+        footstepVFX.Play();
+    }
+
+    // 攻击判定帧：在这个帧才检测命中
+    void OnAttackHit() {
+        // 启用碰撞器/检测敌人/应用伤害
+        hitbox.SetActive(true);
+        StartCoroutine(DisableHitboxNextFrame());
+    }
+
+    // 动画结束帧
+    void OnAnimationEnd(string eventName) {
+        // Animation Event可以传string参数
+        if (eventName == "Attack") {
+            animator.SetBool(IsAttackHash, false);
+        }
+    }
+}
+```
+
+<Callout type="warn">
+  **Animation Event的坑**：①事件回调的GameObject必须和Animator在同一个GameObject上（或用根节点广播），否则找不到方法；②如果动画在Event触发前被打断（如Transition到其他状态），Event不会触发——所以"攻击结束回Idle"不能依赖Event，应该用StateMachineBehaviour；③Event方法名不能重载（同名不同参数会导致调用失败）。
+</Callout>
+
+### StateMachineBehaviour：状态级回调
+
+对于"进入某状态时做什么"、"退出某状态时做什么"，用<Term def="挂载在Animator State上的脚本，可以接收OnStateEnter/OnStateUpdate/OnStateExit回调，用于状态进入/更新/退出时的逻辑处理，比Animation Event更可靠。">StateMachineBehaviour</Term>比Animation Event更可靠：
+
+```csharp
+// 挂在Attack状态上的StateMachineBehaviour
+public class AttackStateBehaviour : StateMachineBehaviour {
+    override public void OnStateEnter(Animator animator, AnimatorStateInfo stateInfo, int layerIndex) {
+        // 进入攻击状态：启用hitbox、播放音效
+        animator.GetComponent<Character>().OnAttackStart();
+    }
+
+    override public void OnStateExit(Animator animator, AnimatorStateInfo stateInfo, int layerIndex) {
+        // 退出攻击状态：禁用hitbox、重置攻击标记
+        animator.GetComponent<Character>().OnAttackEnd();
+        animator.SetBool("IsAttack", false);  // 可靠重置，不会因为动画被打断而漏掉
+    }
+}
+```
+
+## 骨骼动画重定向（Retargeting）
+
+Humanoid的动画重定向是Unity最强大的功能之一：美术只需要做一套标准动画（如标准人形的Idle/Run/Jump/Attack），所有导入为Humanoid并配置好Avatar的角色都能复用这套动画。
+
+重定向的关键是<Term def="Unity的人体骨骼映射资产，将FBX中的骨骼映射到标准的HumanBodyBones枚举（如Head/Spine/LeftUpperArm/RightUpperLeg等）。Avatar是Humanoid重定向的基础。">Avatar</Term>：每个Humanoid模型在导入时会生成Avatar，Avatar定义了模型骨骼到Unity标准人体骨骼的映射关系。运行时Animator将标准人体骨骼的动画重定向到具体角色的骨骼上。
+
+<Callout type="tip">
+  **重定向的限制**：Humanoid只重定向人体骨骼，不重定向附加骨骼（如尾巴、翅膀、披风、头发挂点）。这些额外骨骼的动画需要在Generic模式下制作，或通过额外的动画层单独控制。武器挂点通过`Animator.GetBoneTransform(HumanBodyBones.RightHand)`获取，不需要额外骨骼。
+</Callout>
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一个3D动作游戏中，场景里同时有1个主角+30个怪物，手机上运行时Profiler显示Animator.Update耗时8ms，导致帧率只有40fps。检查发现：①所有怪物Animator的Culling Mode都是Always Animate；②每个怪物Animator有4个Layer（Base/UpperBody/Face/IK）；③所有角色的SkinnedMeshRenderer Quality都是Auto；④Optimize Game Objects未开启。请给出优化方案，预期能降到2ms以下。",
+      answer: "优化方案：①将远离摄像机的怪物（如距离>20m）Culling Mode改为Cull Update Transforms，距离>40m改为Cull Completely——预计省40%以上；②怪物不需要Face层和IK层（只有主角需要面部表情和IK），删除怪物的多余Layer——每层都有更新开销，删除2层省30%；③远距离怪物的SkinnedMeshRenderer Quality降为Bone2或Bone1——减少蒙皮计算；④开启Optimize Game Objects——骨骼Transform更新从C#层移到Native层，减少Overhead；⑤怪物Animator的Update Mode设为Normal（如果不需要物理交互不要设Animate Physics）；⑥考虑用GPU Instancing或Animation Instancing（如Unity Animation Instancing插件）对远处怪物做GPU蒙皮。综合以上优化，Animator.Update从8ms降到1-2ms是可行的。",
+    },
+    {
+      prompt: "代码题：设计一个动画状态管理组件（AnimationController），要求：①用StateMachineBehaviour而非Animation Event做状态切换；②所有Animator参数用StringToHash缓存；③提供PlayAttack()/PlayHurt()/PlayDeath()/SetMoveSpeed(float)接口；④攻击/受击/死亡通过Any State转换，可以打断当前动画；⑤死亡动画播完后触发回调。写出核心代码。",
+      answer: "核心代码：(1) 定义参数哈希ID；(2) 提供公开方法封装SetTrigger/SetBool/SetFloat；(3) 死亡动画用StateMachineBehaviour的OnStateExit触发回调或用StateInfo.NormalizedTime>=1判断；(4) Any State到Hurt/Death的Transition设为Has Exit Time=false、Can Transition to Self=false（Hurt不能被Hurt打断避免重复触发）。关键设计：用Enum标记当前状态（Idle/Move/Attack/Hurt/Death），外部通过接口查询状态；死亡状态是终点（退出后不再响应任何输入）；攻击/受击用Trigger参数，设置Transition的Interruption Source=Current State Then Next State允许被更高级状态（如Death）打断。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="SkinnedMeshRenderer" zh="蒙皮网格渲染器，Unity中渲染骨骼动画角色的核心组件，根据骨骼变换矩阵和顶点权重计算顶点最终位置。">
+    角色渲染的核心组件，性能优化重点关注对象。
+  </Term>
+  <Term name="骨骼绑定 Rigging" zh="将3D模型网格顶点绑定到骨骼的过程。每个顶点绑定最多4根骨骼并分配权重，骨骼运动时顶点按权重加权跟随。">
+    蒙皮动画的基础，由美术在DCC工具中完成。
+  </Term>
+  <Term name="Bind Pose 绑定姿势" zh="角色的T-Pose或A-Pose，是骨骼蒙皮的参考姿势。所有骨骼动画都是相对于Bind Pose的偏移。">
+    模型导入时的默认姿势，必须一致否则动画会错位。
+  </Term>
+  <Term name="Animator Controller" zh="Animator的状态机资产，包含States/Transitions/Parameters/Layers定义，控制动画切换逻辑。">
+    动画逻辑的核心资产，在Animator组件中引用。
+  </Term>
+  <Term name="Blend Tree 混合树" zh="Animator中根据连续参数（Float）平滑混合多个动画剪辑的节点，用于根据速度/方向混合Idle/Run、Strafe/Turn等动画。">
+    移动动画混合的标准方案，比Bool切换更平滑。
+  </Term>
+  <Term name="Root Motion 根运动" zh="动画剪辑中包含根骨骼位移信息，启用后Animator将位移应用到Transform，让移动距离与动画匹配。">
+    单机游戏让移动自然的方案，网游通常关闭用代码控制。
+  </Term>
+  <Term name="Avatar Mask" zh="骨骼遮罩资产，定义动画层影响哪些骨骼。用于实现上半身/下半身动画分离（边跑边攻击）。">
+    多层动画的必备工具，配合Layers使用。
+  </Term>
+  <Term name="Culling Mode 剔除模式" zh="Animator在不可见时的更新策略：Always Animate/Cull Update Transforms/Cull Completely。">
+    动画性能优化的关键设置，非主角必须设为剔除模式。
+  </Term>
+  <Term name="Humanoid Retargeting 人形重定向" zh="Unity的Humanoid rig类型允许不同人形角色复用同一套动画，通过Avatar骨骼映射实现重定向。">
+    Unity动画系统最强大的功能，大幅减少动画制作成本。
+  </Term>
+  <Term name="Animation Event 动画事件" zh="在动画剪辑特定时间点插入的回调，播放到该帧时调用MonoBehaviour方法。用于脚步声、攻击判定、特效触发。">
+    动画与代码同步的机制，但注意被打断时Event不触发。
+  </Term>
+  <Term name="StateMachineBehaviour" zh="挂载在Animator State上的脚本，接收OnStateEnter/OnStateUpdate/OnStateExit回调，比Animation Event更可靠。">
+    状态进入/退出逻辑的推荐实现方式。
+  </Term>
+  <Term name="BlendShape 变形目标" zh="存储顶点位置偏移实现面部表情/口型/变形的技术，多个BlendShape按权重混合。">
+    表情和口型动画的实现方式，内存开销较大需要控制数量。
+  </Term>
+</Glossary>
+
+<Attribution />

@@ -1,0 +1,370 @@
+---
+title: 游戏中的AI
+type: C
+section: 核心系统
+order: 6
+description: 掌握游戏AI核心技术，包括有限状态机、行为树、感知系统、黑板模型与群体行为等AI架构设计。
+tags: ["FSM", "行为树", "Behavior Tree", "感知系统", "黑板", "Utility AI", "GOAP", "AI LOD", "群体行为"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解游戏AI系统的三层架构：感知层、决策层、行为层，掌握黑板/记忆系统的设计",
+    "掌握有限状态机（FSM）的实现和状态爆炸问题，了解其适用边界",
+    "掌握行为树（BT）的核心节点类型：Selector/Sequence/Decorator/Leaf，理解组合性优势",
+    "了解Utility AI和GOAP的原理和适用场景，能根据AI复杂度选择合适的决策方案",
+    "理解感知系统的设计：视觉、听觉、伤害感知的实现和性能优化",
+    "掌握AI LOD策略：远处AI的简化方案，控制AI性能开销",
+    "理解AI与游戏性的平衡：AI不能太聪明也不能太笨，要让玩家觉得\"有意思\"",
+  ]}
+/>
+
+## AI不是真的智能，是精心设计的幻觉
+
+游戏里的NPC看起来会巡逻、会追击、会躲避、会放技能——但这背后不是机器学习，而是一套确定性的规则系统。玩家觉得AI"聪明"，本质是<Term def="游戏AI设计的核心原则：AI的目标不是做出最优决策，而是让玩家获得有趣、有挑战、有成就感的游戏体验。">游戏性优先</Term>：AI要让玩家觉得有挑战但能赢、聪明但有破绽、真实但不无聊。
+
+主程在AI系统上的职责：搭框架、控性能、调行为。
+
+<AIArchitecture />
+
+## AI系统三层架构
+
+### 感知层（Perception）
+
+<Term def="AI的“感官系统”，负责收集环境信息：看到敌人、听到声音、受到伤害、感知队友位置。感知结果写入黑板供决策层使用。">感知层</Term>是AI的"眼睛和耳朵"。没有感知，AI就是一个按固定脚本循环的机器人。
+
+常见的感知类型：
+
+- **视觉感知（Sight）**：扇形/圆形视野检测，判断敌人是否在视野范围内、是否被遮挡
+- **听觉感知（Hearing）**：事件驱动——玩家开枪/跑步发出噪音事件，附近AI接收
+- **伤害感知（Damage）**：被攻击时立即知道伤害来源方向
+- **触达感知（Touch/Proximity）**：进入触发器范围（如玩家靠近5米内触发警觉）
+
+```csharp
+// 视觉感知简化实现
+public class AISight : AIModule {
+    public float viewDistance = 15f;
+    public float viewAngle = 120f;  // 视野角度
+    public LayerMask obstacleMask;
+
+    public override void Tick(float dt) {
+        var enemies = Physics.OverlapSphere(transform.position, viewDistance, enemyLayer);
+        foreach (var e in enemies) {
+            var dir = (e.transform.position - transform.position).normalized;
+            float angle = Vector3.Angle(transform.forward, dir);
+            if (angle < viewAngle / 2) {
+                // 在视野角度内，检测是否被遮挡
+                if (!Physics.Linecast(eyePosition, e.transform.position + Vector3.up, obstacleMask)) {
+                    // 看到敌人！更新黑板
+                    blackboard.Set("target", e.transform);
+                    blackboard.Set("lastKnownPos", e.transform.position);
+                    blackboard.Set("lastSeenTime", Time.time);
+                }
+            }
+        }
+    }
+}
+```
+
+<Callout type="warn">
+  **感知性能优化**：不要每帧对所有AI做OverlapSphere检测。用事件驱动（听觉靠事件触发）、降低Tick频率（远距离AI 0.5-1秒检测一次）、空间分区（只检测附近分区的对象）。场景里有50个AI每个都每帧OverlapSphere，物理开销会爆炸。
+</Callout>
+
+### 黑板系统（Blackboard）
+
+<Term def="AI系统的共享数据存储，感知层写入、决策层读取、行为层回写。存储目标对象、位置、HP、状态、时间戳等运行时数据。">黑板（Blackboard）</Term>是各层之间的数据交换中枢，本质是一个键值存储：
+
+- **Key→Value**：`"target" → Transform`、`"lastKnownPos" → Vector3`、`"hp" → float`
+- **支持层级**：全局黑板（所有AI共享）、小组黑板（队伍共享）、个体黑板（每个AI私有）
+- **带时间戳**：记忆会过期（如"最后看到玩家"超过10秒就认为丢失目标）
+
+### 决策层（Decision）
+
+决策层是AI的"大脑"，读取黑板数据选择要执行的行为。决策方案从简单到复杂：FSM→BT→Utility AI→GOAP→HTN。
+
+### 行为层（Action）
+
+<Term def="AI的“执行系统”，接收决策层下发的行为指令，调用移动/动画/技能等具体接口执行。行为执行完成或失败后回写结果给黑板。">行为层</Term>执行具体动作：移动到目标点、播放攻击动画、释放技能、转向目标。行为应该是可中断的（追击途中如果敌人更近了要切换目标）。
+
+## FSM：有限状态机
+
+<Term def="Finite State Machine，有限状态机。AI在有限个状态之间转换，每个时刻处于且仅处于一个状态，转换由条件触发。最简单直观的AI决策模型。">FSM</Term>是最基础的AI决策模型：每个状态对应一种行为（Idle/Patrol/Chase/Attack/Flee），状态之间通过条件连线转换。
+
+<FSMvsBT />
+
+### FSM的优点和局限
+
+**优点**：
+- 简单直观，画个图就能看懂
+- 性能开销极小（就是switch-case或字典查找）
+- 调试方便——当前状态一目了然
+
+**问题：状态爆炸**。当状态数量增加，转换线数量呈N²增长。5个状态需要10+条转换；10个状态可能需要40+条转换。新增一个状态需要检查是否能从所有其他状态转换过来，维护成本极高。
+
+<Callout type="trap">
+  **FSM的另一个坑：状态组合困难**。你想做"边跑边打"，就需要新增一个RunAndAttack状态；想做"边跑边打边吃药"，又要加RunAndAttackAndHeal状态。FSM无法自然表达行为的组合，这是它被行为树取代的根本原因。
+</Callout>
+
+```csharp
+// 简单FSM实现
+public enum AIState { Idle, Patrol, Chase, Attack, Flee }
+
+public class SimpleFSM : MonoBehaviour {
+    private AIState _currentState;
+    private Blackboard _bb;
+
+    void Update() {
+        switch (_currentState) {
+            case AIState.Idle:   UpdateIdle();   break;
+            case AIState.Patrol: UpdatePatrol(); break;
+            case AIState.Chase:  UpdateChase();  break;
+            case AIState.Attack: UpdateAttack(); break;
+            case AIState.Flee:   UpdateFlee();   break;
+        }
+    }
+
+    void ChangeState(AIState newState) {
+        // 退出旧状态
+        OnStateExit(_currentState);
+        _currentState = newState;
+        // 进入新状态
+        OnStateEnter(newState);
+    }
+
+    void UpdateChase() {
+        // 转换条件
+        if (_bb.Get<float>("hp") < 20f) { ChangeState(AIState.Flee); return; }
+        if (_bb.Get<Transform>("target") == null) { ChangeState(AIState.Idle); return; }
+        float dist = Vector3.Distance(transform.position, _bb.Get<Vector3>("lastKnownPos"));
+        if (dist < attackRange) { ChangeState(AIState.Attack); return; }
+        // 执行追击
+        MoveTo(_bb.Get<Vector3>("lastKnownPos"));
+    }
+}
+```
+
+## 行为树（Behavior Tree）
+
+<Term def="Behavior Tree，行为树。用树状结构组织AI决策逻辑，通过组合节点（Selector/Sequence/Decorator）和叶子节点（Action/Condition）的嵌套组合表达复杂行为。组合性好、可复用、易扩展，是现代游戏AI的主流方案。">行为树</Term>是现代游戏AI的工业标准。核心思想：用树的层级组合取代FSM的网状转换，新增行为只需增加子树，不影响已有逻辑。
+
+### 核心节点类型
+
+| 节点类型 | 符号 | 返回值规则 | 用途 |
+|---|---|---|---|
+| **Selector（选择）** | ? | 子节点一个成功则Success，全失败才Failure | 优先级选择：先做最高优先级的行为 |
+| **Sequence（顺序）** | → | 子节点一个失败则Failure，全成功才Success | 顺序执行：先靠近→再攻击 |
+| **Decorator（装饰器）** | D | 修饰子节点的返回值（取反/重复/超时/冷却） | 条件判断、循环、冷却控制 |
+| **Action/Condition（叶子）** | ● | 执行具体行为或判断条件 | 移动、攻击、判断HP&lt;20% |
+
+<Callout type="tip">
+  **行为树的执行规则**：每帧从Root开始Tick整棵树，Selector和Sequence按顺序Tick子节点。子节点返回Success/Failure/Running三种状态。Running表示行为还在执行（如移动中），下一帧继续Tick该节点。
+</Callout>
+
+### 行为树示例：怪物AI
+
+```
+Root
+└─ ? Selector（优先级从高到低）
+   ├─ D Inverter(HP<20%) → Flee（逃跑，最高优先级）
+   ├─ → Sequence（战斗序列）
+   │  ├─ ● HasTarget?（有目标？）
+   │  ├─ ? Selector
+   │  │  ├─ → Sequence
+   │  │  │  ├─ ● InAttackRange?（在攻击范围？）
+   │  │  │  └─ ● Attack（攻击）
+   │  │  └─ ● Chase（追击）
+   ├─ → Sequence（巡逻序列）
+   │  ├─ ● HasPatrolPoint?
+   │  └─ ● MoveToPatrolPoint
+   └─ ● Idle（待机）
+```
+
+```csharp
+// 行为树节点基类
+public abstract class BTNode {
+    public enum Status { Success, Failure, Running }
+    public abstract Status Tick(float dt);
+}
+
+// Selector：一个成功即成功，否则返回Running或Failure
+public class Selector : BTNode {
+    private readonly BTNode[] _children;
+    private int _currentIdx;
+    public Selector(params BTNode[] children) { _children = children; }
+
+    public override Status Tick(float dt) {
+        for (int i = _currentIdx; i < _children.Length; i++) {
+            var status = _children[i].Tick(dt);
+            if (status == Status.Running) { _currentIdx = i; return Status.Running; }
+            if (status == Status.Success) { _currentIdx = 0; return Status.Success; }
+        }
+        _currentIdx = 0;
+        return Status.Failure;
+    }
+}
+
+// Sequence：全部成功才成功
+public class Sequence : BTNode {
+    private readonly BTNode[] _children;
+    private int _currentIdx;
+    public Sequence(params BTNode[] children) { _children = children; }
+
+    public override Status Tick(float dt) {
+        for (int i = _currentIdx; i < _children.Length; i++) {
+            var status = _children[i].Tick(dt);
+            if (status == Status.Running) { _currentIdx = i; return Status.Running; }
+            if (status == Status.Failure) { _currentIdx = 0; return Status.Failure; }
+        }
+        _currentIdx = 0;
+        return Status.Success;
+    }
+}
+
+// Decorator示例：冷却装饰器
+public class Cooldown : BTNode {
+    private readonly BTNode _child;
+    private readonly float _cd;
+    private float _lastTime;
+    public Cooldown(BTNode child, float cd) { _child = child; _cd = cd; }
+
+    public override Status Tick(float dt) {
+        if (Time.time - _lastTime < _cd) return Status.Failure;
+        var status = _child.Tick(dt);
+        if (status == Status.Success) _lastTime = Time.time;
+        return status;
+    }
+}
+```
+
+## 更高级的决策方案
+
+### Utility AI
+
+<Term def="效用AI，一种基于评分的决策系统。每个行为计算一个“效用分数”（0-1），选择分数最高的行为执行。比行为树更灵活，适合表达“权衡”类决策。">Utility AI</Term>的思想：不是硬编码优先级，而是每个行为根据当前情况算一个分数（Utility Score），选分数最高的执行。
+
+- 适合：NPC在多个需求之间权衡（饿了去吃饭、累了去睡觉、看到敌人去战斗，哪个需求最迫切？）
+- 优点：行为切换自然，不会出现行为树的"僵硬优先级"
+- 缺点：调参困难——分数曲线设计不好会导致AI行为不稳定
+
+### GOAP
+
+<Term def="Goal-Oriented Action Planning，目标导向行动规划。AI根据当前世界状态和目标状态，通过规划算法（如A*）自动选择一系列行动来达成目标。比行为树更灵活，但计算开销更大。">GOAP</Term>是规划类AI：给AI一个目标（如"击杀玩家"），AI自动规划行动序列（接近→攻击→躲避→再攻击）。
+
+- 适合：NPC行为复杂、行为组合爆炸的开放世界游戏
+- 缺点：规划开销大、调试困难、行为可能不按设计者预期
+
+<Callout type="tip">
+  **选择建议**：大多数游戏用行为树就够了。Utility AI适合模拟经营/Sims类需要"自主需求"的NPC。GOAP适合开放世界RPG中需要灵活应变的NPC。不要过度设计——简单的FSM或BT能解决80%的AI需求。
+</Callout>
+
+## AI与游戏性的平衡
+
+AI设计的核心矛盾：**太蠢→玩家无聊，太聪明→玩家受挫**。
+
+### 让AI"有趣"而非"最优"
+
+- **故意犯错**：怪物攻击前有明显前摇（给玩家反应时间），射击AI偶尔打偏
+- **个性差异**：不同NPC有不同行为参数（激进/保守/胆小），不要所有AI行为一样
+- **节奏控制**：攻击有冷却有间隔，不要无限连招压着玩家打
+- **可读性**：AI的意图要通过动画/音效清晰传达给玩家（举起武器=要攻击、后退=要逃跑）
+
+### AI LOD：控制AI性能
+
+场景里有50+NPC时，不可能所有AI都跑完整的行为树和感知系统。<Term def="AI的细节级别系统，根据距离/重要性分级简化AI计算。近距离完整AI，中距离简化，远距离关闭或仅播动画。类似渲染的LOD。">AI LOD</Term>策略：
+
+| 距离 | 更新频率 | 感知 | 决策 | 行为 |
+|---|---|---|---|---|
+| **近距离（&lt;15m）** | 每帧 | 完整感知 | 完整BT | 完整动画+IK |
+| **中距离（15-40m）** | 0.2-0.5秒 | 简化感知（仅伤害+近距离） | 简化BT（无复杂决策） | 基础动画，无IK |
+| **远距离（>40m）** | 1-2秒 | 无感知 | 仅Idle/Patrol循环 | 降低帧率播放动画或禁用 |
+| **屏幕外** | 3-5秒 | 无 | 无（或纯数据模拟） | 不可见，不渲染 |
+
+```csharp
+// AI Tick频率控制
+public class AILODManager : MonoBehaviour {
+    public float tickIntervalNear = 0f;      // 每帧
+    public float tickIntervalMid = 0.3f;     // ~3fps
+    public float tickIntervalFar = 1f;       // 1fps
+    public float nearDistance = 15f;
+    public float farDistance = 40f;
+
+    void Update() {
+        float dist = DistanceToCamera(transform);
+        float interval = tickIntervalNear;
+        if (dist > farDistance) interval = tickIntervalFar;
+        else if (dist > nearDistance) interval = tickIntervalMid;
+
+        _tickTimer += Time.deltaTime;
+        if (_tickTimer >= interval) {
+            _tickTimer = 0;
+            brain.Tick(interval);  // 传入delta时间
+        }
+    }
+}
+```
+
+## 群体行为（Flocking）
+
+多个AI一起行动（如鸟群、兽群、小兵）需要群体行为控制。Craig Reynolds提出的<Term def="群体行为算法，由三个基本规则组成：分离（避免碰撞）、对齐（方向一致）、聚合（向中心靠拢）。通过简单规则涌现出自然的群体运动效果。">Boids算法</Term>：
+
+1. **分离（Separation）**：避免和附近个体太近
+2. **对齐（Alignment）**：朝向附近个体的平均方向
+3. **聚合（Cohesion）**：向附近个体的中心靠拢
+
+加上目标追随和障碍规避，就能产生非常自然的群体运动效果。
+
+<Exercises
+  items={[
+    {
+      prompt: "设计题：设计一个通用行为树框架，要求：①支持Selector/Sequence/Parallel/Decorator/Action/Condition节点；②支持行为树中断（高优先级行为打断低优先级行为，如逃跑打断追击）；③黑板数据绑定（条件节点直接绑定黑板Key）；④支持行为树可视化调试（在Scene视图显示当前执行路径）。写出核心类设计和关键伪代码。",
+      answer: "核心类设计：(1) BTNode基类：Status Tick(float dt) + void Abort()方法，Abort()中断Running子节点；(2) Blackboard：Dictionary<string, object> + OnValueChanged事件，支持泛型Get<T>/Set<T>；(3) Composite节点（Selector/Sequence/Parallel）：维护children列表和currentChild索引，Abort时递归中断所有Running子节点；(4) Decorator节点：持有一个child，常见子类Inverter/Repeater/Cooldown/UntilFail；(5) Conditional节点：绑定黑板Key和比较条件（如FloatGreaterThan(\"hp\", 20f)），监听黑板变化可快速返回；(6) Action节点：具体行为（MoveTo/Attack/PlayAnim），持有行为协程，Abort时停协程；中断机制：Selector的Tick中，高优先级子节点（前面的子节点）如果从Failure变成Success/Running（如HP突然<20%），需要中断当前正在执行的低优先级子节点——实现方式是每帧Tick时先重新评估高优先级节点的前置条件，如果条件满足且当前执行的是低优先级节点，则Abort当前节点切到高优先级；调试可视化：在BTNode上记录lastStatus和lastTickTime，OnDrawGizmos中遍历树，当前Running节点画绿色高亮，LastFrame Success画蓝色，Failure画红色连线，显示在Scene视图中。",
+    },
+    {
+      prompt: "诊断题：一个开放世界RPG场景中有100个NPC（村民、守卫、怪物），运行时Profiler显示AI更新耗时12ms/帧，目标是降到3ms以下。检查发现：①所有100个NPC每帧执行完整行为树Tick；②感知系统每帧对每个NPC做OverlapSphere检测（视野15米）；③每个NPC的行为树有20+节点；④场景中没有任何AI LOD机制；⑤50个远距离NPC（>50米）在运行完整的寻路计算。请给出优化方案。",
+      answer: "优化方案：①AI LOD分级是最大优化点——100个NPC中近距离（<15m）可能只有5-10个，中距离（15-50m）20-30个，远距离（>50m）60+个。近距离每帧Tick，中距离0.3秒Tick一次（降70%频率），远距离1秒Tick一次或仅用简单状态机——预计省60%+；②感知系统优化：视觉检测不是每帧，近距离0.2秒一次，中距离0.5秒一次，远距离关闭感知（只响应全局事件如被攻击）；OverlapSphere改用物理层过滤+距离平方比较先粗筛；引入事件驱动听觉（枪声/脚步声通过事件系统通知附近NPC，不需要轮询检测）；③远距离NPC关闭寻路——>50米外的NPC不需要精细寻路，用简单的方向移动或NavMeshAgent的isStopped=true+只更新目标点，或用NavMeshAgent.avoidancePriority降低；④行为树优化：使用BT的\"事件驱动重评估\"而非每帧全树Tick——黑板值没变化时不重新Tick已判定失败的分支（如HP没变化就不重复检查HP<20%条件）；合并冗余节点，减少树深度；⑤NPC池化+离屏AI：屏幕外的NPC（摄像机视锥外）降为最低LOD（3-5秒更新一次，只做数据模拟不做动画/物理）；⑥并行化：将远距离AI的Tick分散到多帧（分帧处理，如每帧只处理1/N的远距离NPC），避免单帧集中计算。综合以上优化，从12ms降到2-3ms是合理的。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="FSM 有限状态机" zh="Finite State Machine，AI在有限状态间转换的决策模型。简单直观但存在状态爆炸问题，适合简单AI。">
+    最简单的AI决策方案，状态转换用switch-case实现，性能极高但扩展性差。
+  </Term>
+  <Term name="行为树 Behavior Tree" zh="树状结构的AI决策模型，通过Selector/Sequence/Decorator/Leaf节点组合表达复杂行为。组合性好、易扩展、可复用，是现代游戏AI主流方案。">
+    中大型游戏AI的标准方案，Unreal Engine内置Behavior Tree资产。
+  </Term>
+  <Term name="Selector 选择节点" zh="行为树组合节点，按优先级顺序Tick子节点，一个成功则返回Success，全部失败才返回Failure。用于表达“优先做A，做不了做B”。">
+    行为树的核心组合节点之一，用于优先级选择。
+  </Term>
+  <Term name="Sequence 顺序节点" zh="行为树组合节点，按顺序Tick子节点，一个失败则返回Failure，全部成功才返回Success。用于表达“先做A再做B再做C”。">
+    行为树的核心组合节点之一，用于顺序执行行为链。
+  </Term>
+  <Term name="Decorator 装饰器节点" zh="行为树节点类型，修饰单个子节点的行为（如取反、重复执行、冷却、超时、条件守卫）。不直接执行行为，只改变子节点的结果或执行规则。">
+    行为树灵活性的关键，用于条件判断、循环、冷却控制。
+  </Term>
+  <Term name="Blackboard 黑板" zh="AI系统的共享键值存储，感知层写入环境信息，决策层读取做决策，行为层回写执行结果。支持全局/小组/个体三级。">
+    AI各层间数据交换的中枢，类似人类的"工作记忆"。
+  </Term>
+  <Term name="感知系统 Perception" zh="AI的感官系统，包括视觉、听觉、伤害感知、触达等，负责收集环境信息写入黑板。">
+    AI获取环境信息的入口，性能开销大需要优化更新频率。
+  </Term>
+  <Term name="Utility AI 效用AI" zh="基于评分的决策系统，每个行为计算效用分数（0-1），选择分数最高的执行。适合表达多需求权衡的场景。">
+    Sims类、模拟经营类NPC决策的常用方案。
+  </Term>
+  <Term name="GOAP 目标导向行动规划" zh="Goal-Oriented Action Planning，AI根据目标状态用规划算法自动选择行动序列。灵活但计算开销大，调试困难。">
+    开放世界RPG复杂NPC的可选方案，F.E.A.R.首次使用。
+  </Term>
+  <Term name="AI LOD" zh="AI细节级别系统，根据NPC与摄像机的距离/重要性分级简化AI更新频率和计算复杂度，控制AI性能开销。">
+    大世界AI性能优化的必备策略，类似渲染LOD思想。
+  </Term>
+  <Term name="Flocking/Boids 群体行为" zh="Craig Reynolds提出的群体运动算法：分离+对齐+聚合三规则涌现自然的群体运动效果，用于鸟群/兽群/小兵群体移动。">
+    群体模拟的经典算法，规则简单效果逼真。
+  </Term>
+</Glossary>
+
+<Attribution />

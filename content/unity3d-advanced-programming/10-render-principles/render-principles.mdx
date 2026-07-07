@@ -1,0 +1,350 @@
+---
+title: 渲染原理与知识
+type: C
+section: 进阶专题
+order: 9
+description: 掌握光照模型（Lambert/Phong/PBR/BRDF）、阴影映射、纹理过滤、后处理与颜色空间等渲染核心原理。
+tags: ["光照模型", "Lambert", "Phong", "Blinn-Phong", "PBR", "BRDF", "阴影", "ShadowMap", "PCF", "PCSS", "Shadow Acne", "Peter Panning", "Mipmap", "三线性过滤", "各向异性过滤", "后处理", "Bloom", "SSAO", "Tonemapping", "Color Grading", "LOD", "Occlusion Culling", "Linear颜色空间", "Gamma"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解光照模型的演进：Lambert漫反射→Phong高光→Blinn-Phong半角向量→PBR基于物理，掌握每种模型的核心公式和适用场景",
+    "掌握PBR核心参数（Albedo/Metallic/Roughness/Normal/AO/Emission）的物理含义和正确用法",
+    "理解ShadowMap阴影原理（两阶段渲染）、Shadow Acne和Peter Panning的成因与解法",
+    "掌握软阴影技术（PCF/PCSS/VSM）的原理和性能差异",
+    "理解Mipmap原理、层级选择、三线性过滤和各向异性过滤，能解决纹理闪烁/远处模糊问题",
+    "掌握后处理栈常用效果：Bloom/SSAO/Tonemapping/Color Grading的作用和性能开销",
+    "理解LOD和Occlusion Culling的原理和设置方法，理解Linear颜色空间为什么比Gamma更正确",
+  ]}
+/>
+
+## 渲染原理：知其然更要知其所以然
+
+第9章讲了渲染管线的"流水线"，本章讲流水线上加工的"原材料"：光怎么照到物体上、阴影怎么产生、纹理怎么采样、远处的物体怎么优化、颜色为什么会偏。这些是写Shader、调画质、排渲染问题的基础知识。
+
+## 光照模型
+
+<Term def="计算表面某点在光照下最终颜色的数学模型。从简单的Lambert漫反射到基于物理的PBR，核心是回答“这个像素应该是什么颜色”。">光照模型</Term>回答了渲染最本质的问题：给定光源、表面法线、视线方向，像素是什么颜色？
+
+<LightingModels />
+
+### Lambert（漫反射）
+
+最简单的光照模型，只计算漫反射：
+
+```
+Cd = C_albedo * (N · L) * Al * Attenuation
+```
+
+- `N·L`：法线和光线方向的点积，越正对光源越亮
+- 没有高光，适合粗糙表面（墙壁、布料、地面）
+- 所有方向看到的亮度一样（漫反射是各向同性的）
+
+### Phong（冯氏光照）
+
+加入高光项：
+
+```
+C = C_ambient + C_diffuse(N·L) + C_specular * (R·V)^n
+```
+
+- `R`：反射向量（光线关于法线的反射方向）
+- `R·V`：反射方向和视线方向的点积，越对齐高光越强
+- `n（Shininess）`：高光指数，越大高光越集中（金属n大，塑料n小）
+- 问题：R计算较贵，当V·R&lt;0时高光直接截断（背面看不到高光）
+
+### Blinn-Phong（半角向量优化）
+
+Phong的优化版本，用半角向量H替代反射向量R：
+
+```
+H = normalize(L + V)
+C_specular = (N·H)^n
+```
+
+- `H`是光线方向和视线方向的中间向量
+- 计算比R快（不需要反射计算）
+- 高光更柔和自然，是Fixed-Function时代的默认模型
+- Unity内置Legacy Shaders（Diffuse/Specular/Bumped Specular）使用Blinn-Phong
+
+<Callout type="tip">
+  **Blinn-Phong比Phong快**。Phong需要计算反射向量R（`reflect(-L, N)`），Blinn-Phong只需要L+V归一化，少几个ALU指令。在Mobile上差距明显。Phong的(R·V)在V和R夹角>90度时为负需要clamp，Blinn-Phong的(N·H)没有这个问题，高光过渡更自然。
+</Callout>
+
+### PBR（基于物理的渲染）
+
+<Term def="Physically Based Rendering，基于物理的渲染。核心是微表面理论和BRDF，满足能量守恒（反射光不超过入射光）。Unity URP Lit/HDRP Lit、Unreal默认都是PBR。">PBR</Term>是现代游戏的标准光照模型：
+
+**核心：BRDF（双向反射分布函数）**
+
+```
+f(l,v) = D(h) * F(v,h) * G(l,v,h) / (4 * (n·l) * (n·v))
+```
+
+- **D（GGX/Trowbridge-Reitz）**：法线分布函数，粗糙度控制高光范围（Roughness=0是镜面，=1是完全漫反射）
+- **F（Fresnel-Schlick）**：菲涅尔反射，掠射角反射增强（边缘发亮）
+- **G（Smith）**：几何遮蔽函数，微表面互相遮挡的阴影效果
+- 分母是能量守恒的归一化因子
+
+**PBR核心参数：**
+
+| 参数 | 物理含义 | 取值范围 | 常见错误 |
+|---|---|---|---|
+| **Albedo** | 基础色（非金属F0≈0.04） | sRGB颜色 | 不要把AO/阴影烘焙进Albedo |
+| **Metallic** | 金属度（金属反射率高，无漫反射色） | 0~1 | 通常只能是0或1，极少中间值 |
+| **Roughness/Smoothness** | 表面粗糙度（控制高光大小） | 0~1 | 非金属不要给0（完全光滑不真实） |
+| **Normal Map** | 法线贴图（表面细节凹凸） | 切线空间法线 | 纹理类型标记为Normal Map |
+| **AO** | 环境光遮蔽（缝隙变暗） | 0~1 | 只影响间接光，不影响直接光 |
+| **Emission** | 自发光（不受光照影响） | HDR颜色 | 配合Bloom才有辉光效果 |
+
+<Callout type="warn">
+  **Metallic工作流 vs Specular工作流**：Unity URP默认是Metallic工作流（Metallic+Smoothness，Albedo同时包含漫反射颜色和金属反射率），Specular工作流用Specular颜色+Smoothness。不要混用两套贴图。Metallic值通常是0（非金属）或1（金属），0.5左右的中间值极少使用（只用于腐蚀/混合材质）。
+</Callout>
+
+## 阴影原理
+
+<ShadowMapPipeline />
+
+### ShadowMap 两阶段渲染
+
+<Term def="阴影映射技术，目前实时阴影的主流方案。第一Pass从光源视角渲染深度图（ShadowMap），第二Pass正常渲染时将片元位置变换到光源空间比较深度判断是否在阴影中。">ShadowMap</Term>的核心是"深度比较"：
+
+1. **Pass 1（Light视角）**：将相机放置在光源位置（方向光用正交投影，点光源用Cubemap），渲染整个场景的深度信息到ShadowMap纹理
+2. **Pass 2（Camera视角）**：正常渲染场景，对于每个片元：
+   - 将片元世界坐标变换到光源的裁剪空间
+   - 从ShadowMap中采样对应位置的深度值Z_map
+   - 比较当前片元深度Z_frag和Z_map：如果Z_frag > Z_map，说明该片元离光源更远→在阴影中
+
+### Shadow Acne（阴影痤疮）
+
+**现象**：阴影区域出现条纹/摩尔纹/自阴影Aliasing。
+
+**原因**：ShadowMap分辨率有限，多个像素对应同一个ShadowMap纹素，深度比较时由于精度问题导致表面自身产生"自阴影"。
+
+**解法**：
+- **Depth Bias（深度偏移）**：比较时给Z_map加上一个偏移量，避免自阴影
+- **Normal Bias（法线偏移）**：沿法线方向偏移采样位置，而不是简单加深度值
+- 两者结合使用效果最好
+
+### Peter Panning（彼得潘/阴影分离）
+
+**现象**：阴影和物体之间有间隙，物体像"飞起来"了。
+
+**原因**：Bias设得太大，导致物体本该投射阴影的片元也被"推远"了，阴影投不下来。
+
+**解法**：
+- 减小Depth Bias
+- 使用Normal Bias替代部分Depth Bias
+- 开启Shadow Caster的两面渲染（Cull Off）减少缝隙
+
+<Callout type="trap">
+  **Bias是个权衡值**：Bias太小→Acne，Bias太大→Peter Panning。调Bias要在场景中实际观察，没有万能值。另外ShadowMap分辨率越高，需要的Bias越小，所以不同分辨率/平台的Bias值可能需要不同设置。
+</Callout>
+
+### 软阴影技术
+
+硬阴影（1次采样）的边缘是锯齿状的，真实世界中阴影边缘是柔和的（因为光源不是点光源）。
+
+- **PCF（Percentage-Closer Filtering）**：在ShadowMap上采样周围N个纹素（2x2/3x3/5x5/7x7），统计有多少个纹素在阴影中，取平均值作为阴影系数。采样越多阴影越柔和但越慢。
+- **PCSS（Percentage-Closer Soft Shadows）**：自适应软阴影。先Blocker Search找到遮挡物平均距离，根据遮挡物距离动态调整PCF核大小（近硬远软），效果最真实但最贵。
+- **VSM/ESM（方差/指数阴影）**：将深度分布编码为均值和方差，用高斯模糊预过滤ShadowMap，一次采样就能得到软阴影。速度快但有漏光（Light Bleeding）问题。
+- **Ray Traced Hard/Soft Shadow**：光线追踪阴影，最真实但硬件要求高（DXR）。
+
+<Callout type="tip">
+  **移动端阴影建议**：使用Hard Shadow或PCF 2x2，Shadow Distance控制在30-50m以内，阴影分辨率Medium。远距离物体不投射阴影。如果需要软阴影，考虑用Blob Shadow（脚底一个圆形半透明贴图）代替实时阴影，性能开销极低。
+</Callout>
+
+## 纹理采样与Mipmap
+
+<Term def="多级渐远纹理。预生成纹理的多级降采样版本（1x1, 2x2, 4x4, ..., 原始尺寸），远处物体使用更小的Mip级别，避免远处纹理闪烁（Aliasing）和缓存未命中。">Mipmap</Term>是纹理优化的必选项：
+
+### 为什么需要Mipmap？
+
+当纹理被缩小显示时（一个屏幕像素对应多个纹素），如果不做特殊处理会产生严重的Aliasing（远处闪烁、摩尔纹）。Mipmap预先将纹理降采样为多个层级，远处使用低分辨率Mip级别，天然避免Aliasing。
+
+### Mip层级选择
+
+GPU根据屏幕像素覆盖的纹素数量自动选择Mip级别：
+
+```
+d = sqrt( max((du/dx)^2 + (dv/dx)^2, (du/dy)^2 + (dv/dy)^2) )
+mip_level = log2(d)
+```
+
+- 当d=1时（1像素对应1纹素），使用Mip0（原始分辨率）
+- 当d=2时，使用Mip1（一半分辨率）
+- 当d=4时，使用Mip2...以此类推
+
+### 过滤方式
+
+| 过滤方式 | 说明 | 性能 | 效果 |
+|---|---|---|---|
+| **Point（点采样）** | 取最近的纹素 | 最快 | 马赛克感 |
+| **Bilinear（双线性）** | 同一Mip层内4纹素插值 | 快 | 基本平滑 |
+| **Trilinear（三线性）** | 两个Mip层间双线性+层间插值 | 中 | Mip过渡平滑 |
+| **Anisotropic（各向异性）** | 沿纹理拉伸方向采样更多样本 | 慢（2x-16x） | 斜面/地面纹理清晰 |
+
+<Callout type="warn">
+  **地面/斜面一定要开各向异性过滤**。当视线和表面夹角很小（看向远处地面），一个像素覆盖的纹素区域是拉长的椭圆形，各向同性过滤（双/三线性）只采样正方形区域导致远处模糊。各向异性过滤（2x/4x/8x/16x）沿椭圆长轴方向多次采样，地面纹理清晰度显著提升。UI纹理和大多数模型纹理用三线性即可。
+</Callout>
+
+## 后处理（Post Processing）
+
+<Term def="渲染完场景后对整个图像做的屏幕空间处理。类似相机滤镜——先拍完照再调颜色/加特效。">后处理</Term>是提升画面质感的关键，URP通过Volume系统管理后处理栈：
+
+### 核心后处理效果
+
+| 效果 | 作用 | 性能开销 |
+|---|---|---|
+| **Bloom（辉光）** | 高亮区域扩散出光晕（模拟HDR相机溢出） | 中（多次高斯模糊） |
+| **SSAO（屏幕空间环境光遮蔽）** | 角落/缝隙变暗（模拟全局光照的暗部） | 中高（深度/法线采样） |
+| **Tonemapping（色调映射）** | 将HDR颜色映射到LDR显示范围（ACES/Neutral/Reinhard） | 低 |
+| **Color Grading（颜色分级）** | 调整色调/对比度/饱和度/LUT（类似PS调色） | 低 |
+| **Vignette（暗角）** | 屏幕边缘变暗（电影感） | 低 |
+| **Motion Blur（运动模糊）** | 快速移动时的拖影 | 中（需要运动矢量） |
+| **Depth of Field（景深）** | 焦点外模糊（模拟相机光圈） | 高（Bokeh散射） |
+| **Anti-Aliasing（抗锯齿）** | FXAA/SMAA/TAA，消除锯齿 | 低-中 |
+| **SSR（屏幕空间反射）** | 光滑表面的反射 | 高 |
+
+<Callout type="tip">
+  **Tonemapping必须开**。如果使用HDR颜色（Emission/Bloom/明亮天空盒），不做Tonemapping直接输出到LDR会导致亮部过曝（所有>1的颜色clamp到1），画面白茫茫一片。ACES是电影工业标准，对比度好且颜色自然，推荐默认使用。
+</Callout>
+
+### Bloom + Emission = 发光效果
+
+自发光材质（Emission）本身只是画一个亮色，配合Bloom后处理才会产生辉光溢出效果：
+- Emission值超过1（HDR）才会被Bloom拾取
+- Bloom Threshold控制亮度阈值（超过此值才产生辉光）
+- Bloom Intensity控制辉光强度
+- Bloom Scatter控制扩散范围
+
+## LOD（Level of Detail）
+
+<Term def="细节层级。同一个物体准备多套不同面数的模型（LOD0近距离/LOD1中距离/LOD2远距离/LOD3=Culled），根据摄像机距离自动切换，远处用低模减少三角形数量。">LOD</Term>是控制三角形数量的核心手段：
+
+```csharp
+// LODGroup组件管理LOD
+// 在Inspector中设置LOD级别和切换距离
+// 通常3个级别：
+// LOD0: 100%三角面，0-20m
+// LOD1: 25-50%三角面，20-50m
+// LOD2: 5-10%三角面，50-100m（或Impostor公告板）
+// LOD3 (Culled): >100m不渲染
+```
+
+<Callout type="warn">
+  **LOD切换会有"Pop"（突变）问题**。解决方案：①增加LOD级别数量（3-4级过渡更平滑）；②使用Cross-Fade（Dither交叉淡入淡出）；③使用Impostor（公告板）作为最远级（2D贴图渲染，极快）。角色/重要物体做3级LOD，场景道具做2级即可。
+</Callout>
+
+## Occlusion Culling（遮挡剔除）
+
+<Term def="遮挡剔除。被其他物体完全挡住的物体不发送到渲染管线。与视锥剔除（Frustum Culling）不同——视锥剔除只处理相机视野外的物体，遮挡剔除处理视野内但被挡住的物体。">Occlusion Culling</Term>在室内场景/城市街景中效果显著——墙后面的房间、楼后面的物体都不需要渲染。
+
+使用方法：
+1. 场景中标记Occluder Static（大的遮挡物，如墙、建筑）
+2. 标记Occludee Static（被遮挡的小物体）
+3. Window → Occlusion Culling → Bake烘焙遮挡数据
+4. 运行时Camera自动执行遮挡剔除
+
+<Callout type="trap">
+  **遮挡剔除不是免费的**：①需要烘焙数据（场景修改后重新Bake）；②运行时CPU做遮挡查询有开销（通常&lt;1ms）；③开放世界/室外场景效果有限（大部分物体可见），室内/城区效果最好；④不要把小物体标记为Occluder（它们阻挡不了什么，反而增加计算）；⑤透明物体不能做Occluder。
+</Callout>
+
+## 颜色空间：Linear vs Gamma
+
+<Term def="颜色空间决定了颜色值如何编码/解码。sRGB(Gamma)空间是显示器非线性编码的结果（暗部精度高、亮部精度低），Linear空间是物理线性空间（光照计算必须在线性空间进行）。">颜色空间</Term>选择错误会导致整个画面"发灰"或"发飘"。
+
+**为什么必须用Linear？**
+- 光照计算（N·L、加法混合、Mipmap插值、后处理）本质是线性物理过程，必须在线性空间计算
+- 在Gamma空间做光照计算会导致：颜色偏暗、高光不正确、Mipmap颜色错误、Bloom/SSAO等后处理效果异常
+- 人眼对暗部更敏感，sRGB用非线性编码给暗部分配更多精度（Gamma≈2.2）
+
+```csharp
+// Gamma到Linear的转换
+linearColor = gammaColor / 2.2;  // 近似
+linearColor = Math.Pow(gammaColor, 2.2);  // 精确
+
+// Linear到Gamma（输出到显示器）
+gammaColor = Math.Pow(linearColor, 1.0/2.2);
+```
+
+<Callout type="warn">
+  **项目创建时就选Linear！** Edit → Project Settings → Player → Color Space = Linear。Gamma→Linear切换需要：①所有纹理sRGB标记正确（默认Albedo/Diffuse是sRGB，Normal/Mask/Roughness/AO是Linear）；②光照可能需要重新调；③自定义Shader中的采样可能需要调整。移动端OpenGL ES 2.0不支持Linear（ES 3.0/Vulkan/Metal支持）。
+</Callout>
+
+<Callout type="trap">
+  **纹理的sRGB设置**：Albedo/BaseColor/Diffuse/Emissive是sRGB纹理（人眼看到的颜色照片），必须勾选sRGB（Color Texture）；Normal Map/Roughness/Metallic/AO/Mask贴图是数据纹理（物理数据），必须关闭sRGB（勾选"Create from Grayscale"或标记为Normal Map）。标记反了会导致法线方向错误、粗糙度数值不对。
+</Callout>
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一个URP手游项目存在以下渲染问题：①远处地面/道路纹理闪烁、模糊，尤其是斜着看过去道路标线\"糊成一片\"；②室内场景帧率低，Profiler显示Render Opaques有1500个DrawCall，但摄像机明明只能看到1个房间；③角色身上的金属盔甲看起来像塑料（高光太大、没有菲涅尔边缘光），检查发现Albedo贴图里包含了AO和阴影信息，Metallic贴图全是灰色0.5，Roughness贴图是反的（光滑区域是黑色）；④阴影有明显的条纹和锯齿，且阴影和角色脚之间有1-2cm间隙；⑤Bloom效果不明显，即使把Intensity调到5也只有很淡的光，检查发现相机HDR没开。请逐一诊断并给出修复方案。",
+      answer: "①地面纹理问题：a) 确认纹理开启了Mipmap（Advanced→Generate Mip Maps），b) 过滤模式改为Trilinear（Mip间插值平滑过渡），c) 关键是开启Anisotropic Filter = 4x或8x（地面/道路/斜坡纹理必须开各向异性，解决斜看模糊问题），d) 如果是道路标线这种细长纹理，可以考虑用Mipmap Streaming或增加纹理分辨率；②室内DrawCall高：没有做Occlusion Culling——a) 将墙壁/地板/天花板标记为Occluder Static，b) 家具/道具标记为Occludee Static，c) Window→Occlusion Culling→Bake烘焙遮挡数据，d) 确认相机开启Occlusion Culling，预计室内场景DrawCall从1500降到200-400；③盔甲像塑料：a) Albedo贴图不能包含AO和阴影信息——Albedo应该是纯颜色（金属的Albedo应该控制反射率颜色，金属色如金色Albedo偏金色，但不要烘焙AO/阴影进去），AO应该放在单独的AO Map或Mixed Mask中，b) Metallic值错误——金属应该是1.0（白色），非金属是0.0（黑色），中间值0.5用于混合材质（锈迹/磨损），盔甲金属部分Metallic=1，皮革/布料部分=0，c) Roughness贴图反了——Roughness=0（黑色）是完全光滑（镜子），=1（白色）是完全粗糙，确认工作流是Metallic+Roughness还是Metallic+Smoothness（URP默认Smoothness，和Roughness是1-x的关系），光滑金属Roughness≈0.1-0.3，d) 确保Shader是URP/Lit（Simple Lit没有GGX反射），检查Source选择Metallic工作流；④阴影条纹+间隙：a) Shadow Acne（条纹）→增加Depth Bias和Normal Bias，从Depth Bias=0.5、Normal Bias=0.2开始调试，b) Peter Panning（间隙）→说明Bias太大，减小Depth Bias，优先用Normal Bias（沿法线偏移不会产生分离），c) 增加Shadow Resolution或减小Shadow Distance，d) Shadow Caster Pass确保Cull Off（两面都渲染）；⑤Bloom不明显：a) 相机必须开启HDR（Camera→Rendering→HDR=On），b) URP Pipeline Asset中Quality→HDR=On，c) Emission颜色值必须>1（HDR值，如Color(2,2,2)或Intensity=2），d) Bloom Threshold调低（默认1，可降到0.8-0.9让更多区域产生辉光），e) 确认Tonemapping=ACES（没有Tonemapping的HDR会clamp到1，Bloom看不到效果）。",
+    },
+    {
+      prompt: "实践题：对比Phong和Blinn-Phong高光模型的视觉差异和性能差异，在URP中写一个极简的Shader分别实现两种高光模型，在相同参数下渲染一个球体对比效果。要求：①Properties包含_MainColor、_SpecColor、_Shininess；②实现Lambert漫反射+Phong高光；③实现Lambert漫反射+Blinn-Phong高光（用Shader Feature或Keyword切换）；④用[Toggle]或Enum在Inspector切换两种模式；⑤分析两种模式的ALU指令数差异（通过Compile and Show Code查看）。写出Shader代码框架和分析结论。",
+      answer: "Shader框架：Shader \"Custom/PhongVsBlinnPhong\" { Properties { _MainColor(\"Color\", Color) = (1,1,1,1) _SpecColor(\"Specular\", Color) = (1,1,1,1) _Shininess(\"Shininess\", Range(1,128)) = 32 [KeywordEnum(Phong, BlinnPhong)] _Mode(\"Specular Mode\", Float) = 1 } SubPass { Tags { \"RenderPipeline\"=\"UniversalPipeline\" } Pass { HLSLPROGRAM #pragma multi_compile _MODE_PHONG _MODE_BLINNPHONG ... // 顶点Shader：计算worldPos/worldNormal/viewDir // 片元Shader： float3 N = normalize(i.worldNormal); float3 L = normalize(_WorldSpaceLightPos0.xyz); float3 V = normalize(_WorldSpaceCameraPos - i.worldPos); float3 H = normalize(L + V); float3 R = reflect(-L, N); float diff = saturate(dot(N, L)); // 漫反射相同 #if _MODE_PHONG float spec = pow(saturate(dot(R, V)), _Shininess); #else float spec = pow(saturate(dot(N, H)), _Shininess); #endif float3 color = _MainColor * diff + _SpecColor * spec; return float4(color, 1); ENDHLSL } } } 分析结论：(1) 视觉差异：Phong的(R·V)在V和R夹角>90°时为0（硬切），高光区域是圆形的\"光斑\"；Blinn-Phong的(N·H)在半角向量和法线对齐时最大，高光形状随视角变化，在掠射角高光会被拉长（更物理正确）。Shininess相同时Blinn-Phong高光范围看起来比Phong大一点，需要调高约2-4倍达到相似效果。(2) 性能差异：reflect(-L, N)需要大约3-5条ALU指令（R = L - 2*dot(N,L)*N），Blinn-Phong的H = normalize(L+V)需要add+normalize（约4条指令），两者ALU数接近但Blinn-Phong不需要处理dot(R,V)<0的clamp问题，且Blinn-Phong在环境光/半球光照下表现更好。实际在移动端通过Frame Debugger/Compile查看指令数差异通常在2-5条ALU内，现代GPU上差异可忽略，但Blinn-Phong的视觉质量更好，没有理由在新Shader中使用Phong。(3) 历史原因：Phong是1975年提出，Blinn-Phong是1977年Blinn改进，固定管线时代硬件实现了Blinn-Phong（D3D/OpenGL固定光照），Phong需要逐像素计算所以早期用Vertex光照（高光不对），现代Shader都是逐像素两者差别很小。结论：所有新Shader直接用Blinn-Phong或直接上PBR，Phong只用于学习目的理解高光原理。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="Lambert 漫反射模型" zh="最简单的光照模型，只计算漫反射Cd = C_albedo * saturate(N·L)。没有高光，各向同性。适合粗糙表面。">
+    光照模型的基础，所有其他模型都包含Lambert漫反射项。
+  </Term>
+  <Term name="Phong 光照模型" zh="冯氏光照模型，Ambient+Diffuse(N·L)+Specular(R·V)^n。R是反射向量，V是视线方向。高光在反射方向集中。">
+    经典光照模型，Blinn-Phong出现后逐渐被取代。
+  </Term>
+  <Term name="Blinn-Phong 光照模型" zh="用半角向量H=normalize(L+V)替代反射向量R，Specular=(N·H)^n。计算更快，高光更自然，固定管线默认模型。">
+    Phong的优化版本，现代非PBR Shader的推荐选择。
+  </Term>
+  <Term name="PBR 基于物理的渲染" zh="Physically Based Rendering，基于微表面理论和BRDF的光照模型。D（法线分布）+F（菲涅尔）+G（几何遮蔽），满足能量守恒。">
+    现代游戏引擎默认光照模型，URP Lit/HDRP Lit/Unreal默认使用。
+  </Term>
+  <Term name="BRDF 双向反射分布函数" zh="Bidirectional Reflectance Distribution Function，描述给定入射方向l和出射方向v时表面反射率比例的函数。PBR的Cook-Torrance BRDF = DFG/(4(N·L)(N·V))。">
+    PBR的数学核心，描述光如何在表面反射。
+  </Term>
+  <Term name="ShadowMap 阴影映射" zh="实时阴影主流方案。第一Pass从光源视角渲染深度图，第二Pass比较片元深度判断是否在阴影中。">
+    两阶段渲染，所有实时阴影技术的基础。
+  </Term>
+  <Term name="PCF 软阴影" zh="Percentage-Closer Filtering，ShadowMap上多次采样取平均实现软阴影。2x2/3x3/5x5采样核，核越大阴影越柔和但越慢。">
+    最常用的软阴影方案，性能和效果的平衡点。
+  </Term>
+  <Term name="Shadow Acne 阴影痤疮" zh="ShadowMap精度不足导致的自阴影条纹/摩尔纹。用Depth Bias和Normal Bias解决。">
+    阴影最常见的瑕疵，Bias是Acne和Peter Panning之间的权衡。
+  </Term>
+  <Term name="Peter Panning 彼得潘" zh="Bias过大导致阴影与物体分离，物体像“飞起来”。减小Bias或使用Normal Bias解决。">
+    和Shadow Acne是一对矛盾，需要调参找到平衡点。
+  </Term>
+  <Term name="Mipmap 多级渐远纹理" zh="预生成的多级降采样纹理金字塔。远处自动使用低分辨率Mip级别，避免Aliasing（闪烁/摩尔纹），提升纹理缓存命中率。">
+    所有3D场景纹理都应该开启Mipmap（UI纹理除外）。
+  </Term>
+  <Term name="各向异性过滤 Anisotropic Filtering" zh="沿纹理拉伸方向（视线与表面夹角很小时）多次采样，解决地面/道路/斜面纹理远处模糊的问题。2x/4x/8x/16x倍率。">
+    地面/道路/斜面纹理必须开启（4x-8x），UI和普通模型纹理双/三线性即可。
+  </Term>
+  <Term name="Bloom 辉光" zh="高亮区域扩散出光晕的后处理效果，模拟相机传感器溢出和人眼散射。HDR+Emission>Bloom Threshold才生效。">
+    提升画面质感最明显的后处理之一，但需要HDR和Tonemapping配合。
+  </Term>
+  <Term name="SSAO 屏幕空间环境光遮蔽" zh="Screen Space Ambient Occlusion，根据深度/法线信息在角落/缝隙处添加暗部，模拟间接光遮蔽。不影响直接光。">
+    增加场景层次感的性价比最高的后处理，但中高端GPU才能跑。
+  </Term>
+  <Term name="Tonemapping 色调映射" zh="将HDR（高动态范围，颜色可以>1）颜色映射到LDR（0-1范围，显示器能显示的范围）。ACES是电影工业标准。">
+    使用HDR/Bloom/Emission时必须开启，否则亮部clamp到白色。
+  </Term>
+  <Term name="LOD 细节层级" zh="Level of Detail，同一个物体准备多套不同面数模型，根据摄像机距离自动切换。远距低模减少三角形数量。">
+    控制渲染三角形数量的核心手段，大场景/开放世界必备。
+  </Term>
+  <Term name="Occlusion Culling 遮挡剔除" zh="被其他物体完全挡住的物体不渲染。需要烘焙遮挡数据，室内/城市场景效果显著。">
+    室内场景必备优化，开放世界效果有限。不要把小物体/透明物体标记为Occluder。
+  </Term>
+  <Term name="Linear 颜色空间" zh="物理线性颜色空间，光照计算必须在此空间进行。Gamma(sRGB)是显示器非线性编码空间，暗部精度高。项目必须设置Linear。">
+    项目创建时就选Linear，Gamma→Linear切换成本高。注意sRGB纹理标记。
+  </Term>
+</Glossary>

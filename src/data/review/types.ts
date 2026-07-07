@@ -361,6 +361,18 @@ export type ReviewChapterSlug =
   | "agent-agents-in-practice"
   | "agent-tool-prompt-engineering"
   | "agent-production-readiness-checklist"
+  // Unity3D高级编程：主程手记
+  | "unity-advanced-software-architecture"
+  | "unity-advanced-csharp"
+  | "unity-advanced-data-table"
+  | "unity-advanced-ui"
+  | "unity-advanced-model-animation"
+  | "unity-advanced-network"
+  | "unity-advanced-ai"
+  | "unity-advanced-navigation"
+  | "unity-advanced-render-pipeline"
+  | "unity-advanced-render-principles"
+  | "unity-advanced-learning-map"
   // 汽车为什么会跑：图解汽车构造与原理
   | "auto-learning-map"
   | "auto-whole-car-system"
@@ -674,6 +686,18 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
     "工具提示工程：让 agent 会用工具而不是猜工具",
   "agent-production-readiness-checklist":
     "生产化收官：简单、透明与 ACI 上线检查清单",
+  // Unity3D高级编程：主程手记
+  "unity-advanced-software-architecture": "软件架构",
+  "unity-advanced-csharp": "C#技术要点",
+  "unity-advanced-data-table": "数据表与程序",
+  "unity-advanced-ui": "用户界面",
+  "unity-advanced-model-animation": "3D模型与动画",
+  "unity-advanced-network": "网络通信",
+  "unity-advanced-ai": "游戏中的AI",
+  "unity-advanced-navigation": "地图与寻路",
+  "unity-advanced-render-pipeline": "渲染管线与图形学",
+  "unity-advanced-render-principles": "渲染原理与知识",
+  "unity-advanced-learning-map": "全书学习地图",
   "auto-learning-map": "汽车为什么会跑：全书学习地图",
   "auto-whole-car-system": "整车系统",
   "auto-body-structure": "车身结构",

@@ -1,0 +1,336 @@
+---
+title: 网络通信
+type: C
+section: 核心系统
+order: 5
+description: 理解TCP/UDP网络通信原理，掌握Protobuf序列化、粘包拆包、心跳机制与状态同步/帧同步等网络游戏核心技术。
+tags: ["TCP", "UDP", "Socket", "Protobuf", "粘包拆包", "心跳", "状态同步", "帧同步", "KCP", "断线重连"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解TCP/UDP的核心差异，能根据游戏类型选择合适的传输协议",
+    "掌握Socket编程基础：连接管理、收发循环、字节流处理",
+    "理解粘包/拆包问题的成因和解决方案（长度前缀法、固定包长、分隔符）",
+    "掌握Protobuf序列化方案和消息协议设计（消息ID+序列号+包体）",
+    "理解心跳机制、断线重连、消息队列的设计与实现",
+    "掌握状态同步与帧同步的核心差异、优缺点和适用场景",
+    "了解可靠UDP（KCP/ENet）的原理和应用场景，理解网络抖动处理策略",
+  ]}
+/>
+
+## 网络是多人游戏的生命线
+
+单机游戏不需要网络，但网游的网络模块出问题就是P0事故——玩家掉线、延迟飘红、技能打不中、位置不同步、回档，每一个都是致命体验问题。主程在网络模块上的核心职责：
+
+1. **选协议**：TCP还是UDP？可靠UDP要不要上？
+2. **定协议格式**：消息怎么编码？包头包体怎么设计？
+3. **搭框架**：连接管理、消息分发、心跳、重连、队列
+4. **做同步**：状态同步还是帧同步？客户端预测怎么做？
+5. **处理异常**：粘包、丢包、乱序、抖动、断线
+
+<NetworkProtocolStack />
+
+## TCP vs UDP：传输层的选择
+
+<Term def="传输控制协议，面向连接、可靠、有序的字节流协议。通过三次握手建立连接，四次挥手断开，内置重传、拥塞控制、流量控制。">TCP</Term>和<Term def="用户数据报协议，无连接、不可靠的数据报协议。不保证到达、不保证顺序、没有拥塞控制，但延迟低、头部开销小。">UDP</Term>是传输层的两个核心协议。游戏选哪个取决于玩法对延迟和可靠性的要求。
+
+### TCP的问题：Nagle算法与粘包
+
+TCP是**字节流协议**，不是消息协议。它只保证字节按序到达，不保证消息边界。这意味着：
+
+- 发送方连续Send两条消息，接收方可能一次Receive就收到两条（粘包）
+- 发送方Send一条大消息，接收方可能分多次Receive才收完（拆包）
+- TCP默认开启<Term def="TCP的Nagle算法：将小数据包缓存合并发送以减少网络小包数量，但会引入延迟。游戏网络通常需要关闭（设置NoDelay=true）。">Nagle算法</Term>，小包会被缓存等一等再发，增加延迟
+
+<Callout type="warn">
+  **游戏TCP必须关闭Nagle算法**。设置`socket.NoDelay = true`，否则每次发小包都会等待最多40ms（等ACK或更多数据合并），对实时游戏是致命延迟。
+</Callout>
+
+### UDP的问题：不可靠
+
+UDP发出去就不管了——可能丢、可能乱序、可能重复。但UDP的优势是：
+
+- 无连接开销，不需要握手
+- 没有拥塞控制，网络差时不会主动减速
+- 包头只有8字节（TCP头部20+字节）
+- 可以自己实现"选择性可靠"：重要消息可靠传输，不重要消息不重传
+
+### 可靠UDP：KCP/ENet
+
+纯TCP延迟太高（重传等待+拥塞退避），纯UDP要自己处理可靠性太麻烦。于是有了<Term def="在UDP之上实现的可靠传输协议，提供类似TCP的可靠性但延迟更低。KCP通过快速重传、选择性重传、非退让流控等策略降低延迟。">可靠UDP</Term>方案：
+
+| 方案 | 特点 | 适用 |
+|---|---|---|
+| **KCP** | 快速重传(ACK跳过等待)、选择重传(只重传丢失的包)、可配置窗口、无拥塞控制(或可选) | MOBA/FPS/动作游戏，开源C实现，接入简单 |
+| **ENet** | 可靠+不可靠通道、连接管理、拥塞控制、带宽统计 | 通用游戏网络，Unity官方Netcode for GameObjects支持 |
+| **自研RUDP** | 完全自主控制重传策略、冗余策略 | 大厂自研引擎/特殊需求 |
+
+```csharp
+// C# Socket基础：TCP连接与收发框架
+public class TcpConnection {
+    private Socket _socket;
+    private byte[] _recvBuffer = new byte[65536];
+    private MemoryStream _receiveStream = new MemoryStream();
+    private Queue<byte[]> _sendQueue = new Queue<byte[]>();
+    private bool _sending;
+
+    // 连接服务器
+    public void Connect(string ip, int port) {
+        _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        _socket.NoDelay = true;  // 关闭Nagle算法！
+        _socket.BeginConnect(ip, port, OnConnect, null);
+    }
+
+    // 接收循环
+    private void BeginReceive() {
+        _socket.BeginReceive(_recvBuffer, 0, _recvBuffer.Length,
+            SocketFlags.None, OnReceive, null);
+    }
+
+    private void OnReceive(IAsyncResult ar) {
+        int len = _socket.EndReceive(ar);
+        if (len <= 0) { OnDisconnected(); return; }
+
+        // 写入缓冲区
+        _receiveStream.Write(_recvBuffer, 0, len);
+        ProcessReceivedData();  // 处理粘包拆包
+        BeginReceive();
+    }
+
+    // 发送：入队+串行发送（避免多线程同时Send）
+    public void Send(byte[] data) {
+        lock (_sendQueue) {
+            _sendQueue.Enqueue(data);
+            if (!_sending) { BeginSend(); }
+        }
+    }
+}
+```
+
+## 消息协议设计
+
+游戏消息需要序列化后在网络上传输。<Term def="Google Protocol Buffers，一种语言无关、平台无关的序列化结构化数据的协议。二进制编码，体积小、序列化/反序列化速度快，是游戏网络协议的首选。">Protobuf</Term>是游戏行业的事实标准。
+
+### 消息包格式
+
+一个标准的游戏消息包结构：
+
+```
+[2B 包长度][2B 消息ID][4B 序列号][4B 时间戳][N字节 Protobuf包体][4B CRC32校验]
+```
+
+- **包长度**：解决粘包拆包的关键——接收方先读2字节知道整包长度，再读对应字节
+- **消息ID**：标识这是什么消息（如1001=登录请求，1002=登录响应），用于分发到对应Handler
+- **序列号**：用于匹配请求-响应、检测丢包、乱序重排
+- **时间戳**：用于心跳超时判断、消息过期丢弃
+- **包体**：Protobuf序列化的业务数据
+- **校验**：CRC32校验包完整性（可选，UDP场景更需要）
+
+### 粘包拆包解决方案
+
+<Term def="TCP字节流中多个消息粘连在一起或一个消息被拆分到多次接收中的现象。原因是TCP不维护消息边界，只保证字节有序到达。">粘包/拆包</Term>是TCP网络编程必须处理的问题。三种解决方案：
+
+| 方案 | 做法 | 优缺点 |
+|---|---|---|
+| **长度前缀法**（推荐） | 包头固定2-4字节存包长度 | 灵活高效，游戏首选 |
+| **固定包长** | 每条消息固定长度 | 浪费带宽，只适合简单场景 |
+| **分隔符** | 消息间用特殊字符分隔（如\\r\\n） | 需要转义，效率低，HTTP用 |
+
+```csharp
+// 粘包拆包处理：长度前缀法
+private void ProcessReceivedData() {
+    _receiveStream.Position = 0;
+    var reader = new BinaryReader(_receiveStream);
+
+    // 循环：缓冲区里可能有多条完整消息
+    while (_receiveStream.Length - _receiveStream.Position >= 2) {
+        // 先读包长度（2字节，ushort）
+        long posBeforeLen = _receiveStream.Position;
+        ushort packetLen = reader.ReadUInt16();
+
+        // 检查是否收够了一整条消息
+        if (_receiveStream.Length - _receiveStream.Position < packetLen - 2) {
+            // 数据不够，回退位置，等下次接收
+            _receiveStream.Position = posBeforeLen;
+            break;
+        }
+
+        // 读完整条消息
+        ushort msgId = reader.ReadUInt16();
+        uint seq = reader.ReadUInt32();
+        uint timestamp = reader.ReadUInt32();
+        byte[] body = reader.ReadBytes(packetLen - 12); // 2+2+4+4=12字节头
+        uint crc = reader.ReadUInt32();
+
+        // 分发消息
+        MessageDispatcher.Dispatch(msgId, seq, body);
+    }
+
+    // 将未处理完的数据移到缓冲区头部
+    // （实现：将Position到End的bytes复制到开头，SetLength截断）
+    CompactStream();
+}
+```
+
+### Protobuf vs JSON
+
+| 维度 | Protobuf | JSON |
+|---|---|---|
+| **体积** | 极小（二进制+Varint编码） | 大（文本+字段名重复） |
+| **速度** | 极快（代码生成+二进制读写） | 慢（文本解析+反射） |
+| **可读性** | 不可读（需反序列化工具） | 直接可读 |
+| **Schema** | 强类型（.proto文件定义） | 弱类型（无强制Schema） |
+| **适用** | 游戏客户端↔服务端通信 | HTTP接口、配置、调试 |
+
+<Callout type="tip">
+  **主程规范**：客户端和服务端共享同一份`.proto`文件，通过Protobuf编译器生成各语言代码。不要手写序列化/反序列化，用生成的代码保证一致性。协议变更时新增字段号（不删除、不复用旧字段号），保证新旧版本兼容。
+</Callout>
+
+## 心跳、断线重连与消息队列
+
+### 心跳机制
+
+<Term def="客户端定期向服务器发送的小数据包（心跳包），用于告知服务器“我还在线”，同时检测连接是否存活。服务器在超时时间内没收到心跳则判定客户端断线。">心跳机制</Term>是长连接的必需品：
+
+- 客户端每隔N秒（通常3-5秒）发一个心跳包
+- 服务器收到心跳后回复（或直接记录最后活跃时间）
+- 如果客户端M秒（通常15-30秒）没收到任何消息，判定断线，触发重连
+- 如果服务器M秒没收到心跳，清理该连接资源
+
+<Callout type="trap">
+  **心跳包不能太频繁**。如果所有玩家每1秒发一次心跳，万人在线的服务器每秒要处理上万次心跳，纯粹浪费带宽和CPU。3-5秒间隔足够，超时阈值设为3-5个心跳周期。
+</Callout>
+
+### 断线重连
+
+移动网络切换（Wi-Fi→4G）、隧道、电梯等场景都会导致断线。重连策略：
+
+1. **自动重连**：检测到断线后自动重连，不弹提示（前1-3次）
+2. **指数退避**：重连间隔递增（1s→2s→4s→8s→上限30s），避免服务器压力
+3. **重连后状态恢复**：
+   - 状态同步：请求一次完整状态快照（简单）
+   - 帧同步：从断线帧开始追帧，补发期间所有指令（复杂）
+4. **重连上限**：超过N次重连失败，弹出网络错误提示
+
+### 消息队列与串行处理
+
+网络消息是在Socket回调线程中接收的，但游戏逻辑必须在主线程执行。解决方案：
+
+- 收消息→反序列化→入**主线程消息队列**
+- 主线程Update中从队列取消息→分发到Handler
+- 发消息同理：主线程入发送队列→网络线程串行Send
+
+```csharp
+// 主线程消息队列（线程安全）
+public class MainThreadDispatcher : MonoBehaviour {
+    private static MainThreadDispatcher _instance;
+    private readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
+
+    public static void Enqueue(Action action) {
+        _instance._queue.Enqueue(action);
+    }
+
+    void Update() {
+        // 每帧处理队列中的消息
+        while (_queue.TryDequeue(out var action)) {
+            action?.Invoke();
+        }
+    }
+
+    // 网络线程收到消息后，切回主线程处理
+    // NetworkThread: MainThreadDispatcher.Enqueue(() => HandleMessage(msgId, body));
+}
+```
+
+## 状态同步 vs 帧同步
+
+<StateSyncVsFrameSync />
+
+<Term def="一种网络同步方式：服务器计算所有游戏逻辑，定期将各对象的状态（位置、旋转、HP、状态等）快照广播给客户端，客户端根据快照插值/直接设置表现。MMO和RPG的主流方案。">状态同步</Term>和<Term def="又称Lockstep（帧锁定同步），一种网络同步方式：服务器不计算游戏逻辑，只以固定帧率（如15fps=每66ms一帧）收集并广播所有玩家的操作指令，各客户端收到同一帧的所有指令后本地计算结果，保证所有客户端状态一致。MOBA/RTS的主流方案。">帧同步</Term>是多人游戏同步的两大流派。
+
+### 状态同步的关键技术
+
+- **快照插值（Snapshot Interpolation）**：收到状态快照时不直接跳到目标位置，而是在两个快照之间插值平滑过渡，掩盖网络延迟
+- **客户端预测（Client-side Prediction）**：客户端本地立即响应玩家输入移动，等服务器状态回来后校正。位置偏差大时做<Term def="客户端预测后发现本地状态与服务器不一致，将本地状态修正为服务器状态的过程。直接瞬移会抖动，通常用平滑纠偏。"> reconciliation（回滚校正）</Term>
+- **带宽优化**：只同步变化的字段（Delta Compression）、兴趣管理（AOI，只同步玩家附近的对象）、视距裁剪
+- **同步频率**：位置同步通常10-20Hz（每秒10-20次），不需要每帧同步
+
+### 帧同步的关键技术
+
+- **确定性计算（Determinism）**：<Term def="帧同步的核心要求：所有客户端在相同输入下必须产生完全相同的计算结果。浮点数精度、字典遍历顺序、随机数种子、物理引擎都必须严格一致。">帧同步的生命线</Term>。不同客户端同样的输入必须得到完全一致的结果
+- **浮点数问题**：不同CPU/编译器的浮点数运算结果可能有微小差异，帧同步游戏通常使用定点数（Fixed Point）替代float/double
+- **Lockstep帧锁定**：等所有玩家的第N帧指令都到齐了，才能推进到第N帧。有人延迟就全员等（卡顿）
+- **乐观帧同步**：不等慢玩家，先预测执行，迟到的指令通过回滚（Rollback）重新计算（GGPO方案，格斗游戏常用）
+
+<Callout type="warn">
+  **帧同步的确定性陷阱**：Unity的`Physics`、`Random`、`float`运算、`Dictionary`遍历顺序、多线程执行顺序都可能导致不同客户端结果不一致。帧同步项目必须自己实现确定性物理、确定性随机数、定点数运算库，禁止在同步逻辑中使用任何不确定API。
+</Callout>
+
+## 网络抖动处理
+
+<Term def="网络延迟的波动现象。即使平均延迟50ms，也可能出现某几帧延迟突然变成200ms然后又恢复，导致游戏表现卡顿。">网络抖动（Jitter）</Term>是实时游戏的大敌。处理策略：
+
+1. **缓冲队列（Jitter Buffer）**：收到消息不立即处理，先缓存一小段时间（如1-2帧），以固定间隔取出处理，用延迟换取平滑
+2. **插值/外推**：位置同步在两个快照间插值；如果新快照延迟未到，沿当前速度外推（Dead Reckoning）
+3. **冗余发送**：关键消息（如技能命中）连续多发几次（冗余包），降低丢包影响
+4. **消息优先级**：移动包优先级低可丢弃，技能/伤害包优先级高必须可靠到达
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一款MOBA手游使用TCP做网络通信，在Wi-Fi环境下延迟30ms手感良好，但玩家在4G网络下（延迟80-150ms抖动）普遍反映技能释放有明显延迟感——按技能键后0.2-0.5秒才出效果，有时技能放不出来。抓包分析发现：①TCP_NoDelay未设置；②每个技能包只有20字节但每次Send都等待；③丢包时TCP重传等待200ms+；④消息处理在网络线程直接操作GameObject（偶发崩溃）。请给出完整优化方案。",
+      answer: "优化方案：①立即设置socket.NoDelay=true，关闭Nagle算法——小包不再等待合并发送，减少40ms+延迟；②MOBA场景TCP重传太慢，建议迁移到KCP（可靠UDP），KCP的快速重传策略将重传等待从200ms降到30-60ms，且可配置非退让流控（网络差时不主动减速）；③消息处理必须通过主线程队列分发——网络线程不能直接操作Unity API（Unity API非线程安全），用ConcurrentQueue将消息切到Update中处理，同时解决偶发崩溃问题；④增加Jitter Buffer缓冲（如2帧≈133ms@15fps同步率），以少量延迟换取平滑；⑤技能指令采用冗余发送：发送时连续发2-3个相同包（间隔1帧），接收方去重，降低单包丢失影响；⑥客户端预测：按下技能立即本地播放技能前摇动画，等服务器确认后结算伤害，如果服务器拒绝（如CD中/蓝不够）再回滚表现——玩家感知到的延迟从RTT降到0。综合以上，技能释放感知延迟从200-500ms降到接近0（本地预测），网络差时也不会明显卡顿。",
+    },
+    {
+      prompt: "设计题：设计一个帧同步战斗框架的核心组件，要求：①固定帧率（15fps=每66ms一帧）推进逻辑；②每帧收集所有玩家输入→广播→等齐所有玩家输入后推进；③支持断线追帧（重连后补发缺失帧的输入）；④使用定点数保证确定性；⑤逻辑帧与渲染帧分离（渲染帧率60fps独立于逻辑帧率）。写出核心类的接口和关键逻辑伪代码。",
+      answer: "核心组件：(1) FixedPoint定点数结构体（用long存储，如乘以1000表示3位小数），实现加减乘除和比较运算，替代float用于所有战斗计算；(2) FrameInput结构体：每帧的玩家输入（如移动方向、技能ID、目标位置），序列化为byte[]；(3) FrameSyncCore核心类：int currentFrame; Dictionary<int, FrameInput[]> frameInputs; 维护每帧所有玩家的输入；(4) 固定帧率推进：用协程或定时器每66ms触发一次LogicTick()——①收集本地输入发送给服务器；②检查当前帧所有玩家输入是否到齐；③到齐则调用AdvanceFrame()推进逻辑帧；④未到齐则等待（超时可触发掉线检测）；(5) AdvanceFrame()：遍历所有系统（移动系统、技能系统、碰撞系统），用定点数计算这一帧的结果，更新所有单位状态；(6) 渲染插值：RenderUpdate中根据逻辑帧进度做插值——renderProgress = (Time.time - lastFrameTime) / frameInterval; 位置=Vector3.Lerp(prevPos, currPos, renderProgress)，实现逻辑15fps但渲染60fps平滑；(7) 断线追帧：重连后发送SyncRequest(currentFrame)，服务器返回从currentFrame到latestFrame的所有FrameInput[]，客户端循环调用AdvanceFrame()快速追帧（不渲染或加速渲染），追上后回到正常节奏；(8) 确定性保障：战斗逻辑禁止使用float/Random/Time.deltaTime/Physics/Dictionary遍历，统一用FixedPoint、自定义确定性随机（种子由房间号+帧号生成）、固定帧步长、List按索引遍历。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="TCP 传输控制协议" zh="面向连接、可靠有序的字节流协议。三次握手建连、重传保证到达、拥塞控制防网络拥塞，但延迟较高。适合登录/聊天/回合制等对可靠性要求高但延迟不敏感的场景。">
+    可靠但延迟高，Nagle算法会导致小包延迟，游戏必须关闭NoDelay。
+  </Term>
+  <Term name="UDP 用户数据报协议" zh="无连接、不可靠的数据报协议。不保证到达和顺序，无拥塞控制，延迟低头部小。适合MOBA/FPS/动作游戏等对延迟敏感的场景，通常配合可靠UDP层使用。">
+    低延迟但不可靠，游戏使用时需在上层实现可靠性机制。
+  </Term>
+  <Term name="KCP 快速可靠协议" zh="在UDP之上实现的快速可靠ARQ协议。通过快速重传、选择重传、非退让流控等策略，比TCP延迟降低30%-50%，带宽浪费10%-20%，是实时游戏的主流可靠传输方案。">
+    开源C实现，接入简单，MOBA/动作游戏首选可靠UDP方案。
+  </Term>
+  <Term name="Protobuf Protocol Buffers" zh="Google开发的二进制序列化协议，体积小、速度快、强类型Schema。通过.proto文件定义消息结构，编译器生成各语言代码，是游戏网络协议序列化的首选。">
+    游戏客户端↔服务端通信的标准序列化方案。
+  </Term>
+  <Term name="粘包拆包" zh="TCP字节流中多条消息粘连或一条消息被拆分的现象。TCP不维护消息边界，接收方需自行按协议格式（如长度前缀）切分消息。">
+    TCP网络编程必须处理的问题，长度前缀法是最常用方案。
+  </Term>
+  <Term name="心跳 Heartbeat" zh="客户端定期发送的小数据包，用于检测连接存活状态。超时未收到心跳则判定断线触发重连或清理资源。">
+    长连接的必要机制，间隔3-5秒，超时阈值3-5个周期。
+  </Term>
+  <Term name="状态同步 State Sync" zh="服务器权威计算游戏逻辑，定期向客户端广播对象状态快照（位置/HP/状态等），客户端插值/预测呈现。MMO/RPG/射击游戏主流方案。">
+    服务器压力大、流量大、防作弊强、断线重连简单。
+  </Term>
+  <Term name="帧同步 Frame Sync / Lockstep" zh="服务器只转发玩家操作指令，所有客户端本地确定性计算游戏结果，以固定帧率（如15fps）逐帧推进。MOBA/RTS/格斗游戏主流方案。">
+    流量小、回放天然支持、对延迟极敏感、需严格确定性计算。
+  </Term>
+  <Term name="客户端预测 Client-side Prediction" zh="客户端立即响应玩家输入本地执行（如移动），不等服务器确认，服务器状态返回后校正偏差。减少玩家感知延迟。">
+    状态同步游戏降低操作延迟感的核心技术。
+  </Term>
+  <Term name="Jitter Buffer 抖动缓冲" zh="接收端缓冲网络消息一小段时间，以固定间隔取出处理，用少量延迟换取平滑播放。对抗网络延迟抖动。">
+    实时音视频和游戏网络的标准抗抖动手段。
+  </Term>
+  <Term name="AOI Area of Interest" zh="兴趣区域/视野管理。服务器只向客户端同步其周围一定范围内的对象状态，大幅减少带宽和处理量。MMO大世界同步必备技术。">
+    MMO大世界同步的带宽优化核心，九宫格/十字链表等实现。
+  </Term>
+  <Term name="确定性 Determinism" zh="帧同步的核心要求：相同输入+相同初始状态→所有客户端产生完全相同的结果。要求定点数、确定性随机、确定性物理、禁止非确定性API。">
+    帧同步的生命线，浮点数不一致是最常见的确定性bug来源。
+  </Term>
+</Glossary>
+
+<Attribution />

@@ -76,6 +76,7 @@ export const BOOK_ORDER = [
   "unity-game-optimization",
   "profiling-unity-games",
   "mobile-xr-web-optimization",
+  "unity3d-advanced-programming",
   "auto-why-car-runs",
   "cpp-concurrency",
   "unity5",
@@ -99,6 +100,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-game-optimization": "Unity 游戏优化",
   "profiling-unity-games": "Unity Profiling 指南",
   "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
+  "unity3d-advanced-programming": "Unity3D高级编程：主程手记",
   "auto-why-car-runs": "汽车为什么会跑：图解汽车构造与原理",
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
   unity5: "Unity 5 权威讲解",
@@ -267,7 +269,7 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "unity",
     title: "Unity",
-    description: "先会做，再会优化，最后按平台和 Profiler 体系化定位问题。",
+    description: "先会做，再会优化，最后站在主程视角做架构决策与工程化。",
     stages: [
       {
         level: "beginner",
@@ -295,11 +297,15 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       },
       {
         level: "advanced",
-        summary: "按移动端、XR、Web、URP 等平台约束做专项优化。",
+        summary: "从主程视角掌握架构、模块设计、网络、AI、渲染管线与工程化。",
         items: [
           {
             bookSlug: "mobile-xr-web-optimization",
-            note: "高级平台专项，更像优化分支而不是入门主线。",
+            note: "平台专项优化，按移动端/XR/Web约束调优。",
+          },
+          {
+            bookSlug: "unity3d-advanced-programming",
+            note: "主程主线：架构、C#底层、UI框架、网络、AI、寻路、渲染管线——从写功能到做架构。",
           },
         ],
       },
@@ -507,6 +513,10 @@ export const SECTION_ORDER = [
   "Unity物理",
   "Unity动画与UI",
   "Unity渲染与发布",
+  // Unity3D高级编程：主程手记
+  "基础架构",
+  "核心系统",
+  "进阶专题",
   // 汽车为什么会跑：图解汽车构造与原理
   "全书地图",
   "整车系统",

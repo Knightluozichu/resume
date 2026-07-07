@@ -714,6 +714,27 @@ import {
   TeamArchitectureBoardDiagram,
 } from "./android-patterns/design-pattern-diagrams";
 import { GameMathLab } from "./gamemath/game-math-lab";
+// Unity3D高级编程：主程手记
+import { BookLearningMap } from "./unity-advanced/diagrams/book-learning-map";
+import { SoftwareArchitectureLayers } from "./unity-advanced/diagrams/software-architecture-layers";
+import { ListMemoryLayout } from "./unity-advanced/diagrams/list-memory-layout";
+import { BoxingUnboxingDiagram } from "./unity-advanced/diagrams/boxing-unboxing";
+import { DataFlowPipeline } from "./unity-advanced/diagrams/data-flow-pipeline";
+import { DataDrivenVsHardCode } from "./unity-advanced/diagrams/data-driven-vs-hardcode";
+import { UIStackDiagram } from "./unity-advanced/diagrams/ui-stack-diagram";
+import { CanvasRebuildFlow } from "./unity-advanced/diagrams/canvas-rebuild-flow";
+import { AnimatorStateMachine } from "./unity-advanced/diagrams/animator-state-machine";
+import { SkinnedMeshBones } from "./unity-advanced/diagrams/skinned-mesh-bones";
+import { NetworkProtocolStack } from "./unity-advanced/diagrams/network-protocol-stack";
+import { StateSyncVsFrameSync } from "./unity-advanced/diagrams/state-sync-vs-frame-sync";
+import { FSMvsBT } from "./unity-advanced/diagrams/fsm-vs-bt";
+import { AIArchitecture } from "./unity-advanced/diagrams/ai-architecture";
+import { AStarPathfinding } from "./unity-advanced/diagrams/a-star-pathfinding";
+import { NavMeshPipeline } from "./unity-advanced/diagrams/navmesh-pipeline";
+import { RenderPipelineFlow } from "./unity-advanced/diagrams/render-pipeline-flow";
+import { BatchingComparison } from "./unity-advanced/diagrams/batching-comparison";
+import { LightingModels } from "./unity-advanced/diagrams/lighting-models";
+import { ShadowMapPipeline } from "./unity-advanced/diagrams/shadow-map-pipeline";
 import {
   AutoBookLearningMap,
   AutoFinalReviewLab,
@@ -1725,6 +1746,27 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AppBasicStructureDiagram,
   MvpFlowDiagram,
   MvvmFlowDiagram,
+  // Unity3D高级编程：主程手记
+  BookLearningMap,
+  SoftwareArchitectureLayers,
+  ListMemoryLayout,
+  BoxingUnboxingDiagram,
+  DataFlowPipeline,
+  DataDrivenVsHardCode,
+  UIStackDiagram,
+  CanvasRebuildFlow,
+  AnimatorStateMachine,
+  SkinnedMeshBones,
+  NetworkProtocolStack,
+  StateSyncVsFrameSync,
+  FSMvsBT,
+  AIArchitecture,
+  AStarPathfinding,
+  NavMeshPipeline,
+  RenderPipelineFlow,
+  BatchingComparison,
+  LightingModels,
+  ShadowMapPipeline,
   GameMathLab,
   AutoBookLearningMap,
   AutoFinalReviewLab,

@@ -1,0 +1,228 @@
+---
+title: C#技术要点
+type: C
+section: 基础架构
+order: 1
+description: 深入理解C#核心技术要点，包括集合底层、装箱拆箱、GC与内存管理等机制。
+tags: ["C#", "集合", "装箱拆箱", "GC", "内存"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解 List<T> 内部数组与动态扩容的内存代价",
+    "理解装箱/拆箱的本质及其GC影响",
+    "掌握 Dictionary<TKey,TValue> 的哈希表实现原理",
+    "理解 C# 排序算法的选择策略",
+    "掌握避免GC分配的常用C#编码技巧",
+  ]}
+/>
+
+## 为什么主程必须懂C#底层？
+
+Unity用C#写逻辑，但C#不是"写完就完了"。你在Update里new一个List、在循环里做字符串拼接、把值类型当object传——这些在小Demo里没问题，在百万DAU的项目里就是卡顿、闪退、差评的根源。
+
+主程看代码的方式和初中级工程师不一样：初中级看"功能能不能跑"，主程看"这行代码有没有堆分配、会不会触发GC、在手机上能不能60帧"。本章就是训练你用主程的眼睛看C#代码。
+
+## List&lt;T&gt;：你以为是动态数组，其实是定时炸弹
+
+`List<T>`是C#里最常用的集合，但很多人不知道它内部是一个**固定大小的数组**。当元素数量超过当前容量时，List会：
+
+<ListMemoryLayout />
+
+### 主程视角：什么时候用List？什么时候用数组？
+
+| 场景 | 推荐 | 原因 |
+|---|---|---|
+| 元素数量固定/已知 | `T[]` 数组 | 零扩容开销，内存连续，访问最快 |
+| 元素数量可变但能预判 | `new List<T>(capacity)` | 一次分配到位，避免扩容GC |
+| 元素数量不可预测 | `List<T>` | 方便，但注意TrimExcess |
+| 频繁Add/Remove头部 | ❌ List | 用LinkedList或更合适的结构 |
+| 频繁Add/Remove尾部 | ✅ List | 均摊O(1)，最适合 |
+
+<Callout type="trap">
+  **误区：List.Clear()不会释放内存！** `List.Clear()`只是把元素设为default(T)，把Count归零，但内部数组容量不变。如果你Clear后不再Add，这部分内存就白占着。释放内存要调用`TrimExcess()`。
+</Callout>
+
+```csharp
+// ❌ 典型错误：每帧创建List → 每帧GC分配
+void Update() {
+    var enemies = new List<Enemy>();  // 每帧new！每帧堆分配！
+    FindEnemies(enemies);
+    foreach (var e in enemies) { e.Update(); }
+}
+
+// ✅ 主程写法：复用List，避免GC
+private readonly List<Enemy> _enemies = new List<Enemy>(64);  // 预分配容量
+void Update() {
+    _enemies.Clear();  // 不清容量，只清计数
+    FindEnemies(_enemies);
+    foreach (var e in _enemies) { e.Update(); }
+}
+```
+
+## 装箱与拆箱：看不见的GC杀手
+
+装箱（Boxing）是把**值类型**转成`object`或接口类型时发生的隐式操作：C#会在堆上分配一个新对象，把值拷贝进去。拆箱（Unboxing）是反过来：从堆上对象把值拷贝回栈。
+
+<BoxingUnboxingDiagram />
+
+<Callout type="warn">
+  **在Unity中，装箱无处不在且极易被忽略**：`Debug.Log("HP:" + hp)`（字符串拼接会装箱）、`enum.ToString()`（装箱）、`SendMessage`（参数是object）、`List.Add(object)`、非泛型集合（ArrayList、Hashtable）、协程的`yield return 0`（装箱）——这些都是隐藏的装箱点。
+</Callout>
+
+### 高频装箱场景与规避
+
+```csharp
+// ❌ 每帧触发装箱的写法
+void Update() {
+    Debug.Log("Frame:" + Time.frameCount);  // frameCount是int，+string触发装箱
+    object o = transform.position.x;       // float→object，装箱
+    string s = LayerMask.LayerToName(8);   // 8作为参数可能装箱
+}
+
+// ✅ 主程写法：用字符串插值/泛型/缓存避免
+void Update() {
+    Debug.Log($"Frame:{Time.frameCount}"); // C# 6插值，编译器优化，减少装箱
+    // 或者缓存频繁ToString的结果
+}
+
+// ❌ 非泛型集合 = 装箱地狱
+var list = new ArrayList();  // 每个int都被装箱！
+list.Add(1);  // int→object装箱
+list.Add(2);  // int→object装箱
+
+// ✅ 用泛型集合 = 零装箱
+var list = new List<int>();   // 直接存int，无堆分配
+list.Add(1);
+list.Add(2);
+```
+
+## Dictionary&lt;TKey,TValue&gt;：哈希表的工作原理
+
+Dictionary内部是一个**哈希表+桶（bucket）数组**，通过key的GetHashCode()计算桶索引，冲突用链地址法解决。理解它的关键在于：
+
+1. **初始容量**：默认0，Add第一个元素时分配，后续翻倍扩容（和List类似）
+2. **负载因子**：当元素数/桶数超过阈值时扩容重哈希
+3. **GetHashCode质量**：差的哈希函数导致大量冲突→O(n)退化为链表
+4. **值类型key**：自定义struct作为key时，一定要重写GetHashCode和Equals，否则默认实现会装箱
+
+<Callout type="tip">
+  **主程技巧**：用枚举作为Dictionary的key时，Enum的GetHashCode在旧版.NET中会装箱。解决方案是写一个`EnumComparer<T>`传入Dictionary构造函数，或者使用`CollectionsMarshal`直接访问底层数组。
+</Callout>
+
+## 排序与查找：算法选择很重要
+
+C#内置排序算法：
+- `Array.Sort`/`List.Sort`：**内省排序（Introsort）**，先快排，递归深度过大时转堆排，小数组用插入排序
+- `OrderBy().ThenBy()`：LINQ排序，**产生新集合**，有GC分配，不要在热路径用
+- `BinarySearch`：二分查找，前提是数组已排序，O(log n)
+
+<Callout type="trap">
+  **误区：LINQ很方便，但不要在Update里用！** LINQ的`Where`、`Select`、`OrderBy`每次调用都会分配迭代器对象和新集合。在每帧执行的代码中禁用LINQ，改用for循环+List复用。
+</Callout>
+
+## C#字符串：不可变的代价
+
+string在C#中是**不可变**的——每次拼接、裁剪、替换都会产生新字符串对象，旧字符串变成垃圾。
+
+```csharp
+// ❌ 循环拼接字符串 → N次堆分配
+string s = "";
+for (int i = 0; i < 1000; i++) {
+    s += i;  // 每次循环都new一个新string！
+}
+
+// ✅ 用StringBuilder → 一次分配（可扩容但可控）
+var sb = new StringBuilder(4096);  // 预分配
+for (int i = 0; i < 1000; i++) {
+    sb.Append(i);
+}
+string s = sb.ToString();  // 最后只转一次
+
+// ✅ 更优：在Unity中用StringBuilder缓存，每帧Clear复用
+private StringBuilder _sb = new StringBuilder(256);
+void UpdateScore(int score) {
+    _sb.Clear();
+    _sb.Append("Score: ").Append(score);
+    scoreText.text = _sb.ToString();
+}
+```
+
+## 主程C#编码戒律
+
+<Callout type="warn">
+  **Unity热路径（Update/LateUpdate/FixedUpdate/OnGUI/动画回调）戒律**：
+  1. **禁止new引用类型**（class对象、数组、List、string、Lambda闭包、协程返回值）
+  2. **禁止装箱**（不用非泛型集合、不把值类型当object传、避免enum.ToString()在热路径）
+  3. **禁止LINQ**（All/Any/Where/Select/OrderBy/FirstOrDefault全部禁）
+  4. **禁止字符串拼接**（用StringBuilder或TextMeshPro的SetText格式化）
+  5. **禁止GetComponent/FindObjectOfType**（缓存到字段，Awake/Start中获取）
+  6. **禁止foreach遍历List以外的集合**（Unity旧版本中foreach会产生GC，现在大部分已修复，但Dictionary/Queue/Stack仍需注意）
+</Callout>
+
+## 总结：用主程的眼睛看C#代码
+
+- **`List<T>`不是免费的**：预分配容量、复用实例、记得Clear/TrimExcess
+- **装箱是隐藏杀手**：识别热路径中的隐式object转换，用泛型消灭装箱
+- **Dictionary是哈希表**：注意初始容量、自定义struct必须重写GetHashCode
+- **字符串不可变**：热路径用StringBuilder，避免循环拼接
+- **LINQ禁入热路径**：开发时可以用（编辑器工具、初始化），运行时每帧执行的代码禁用
+
+<Exercises
+  items={[
+    {
+      prompt: "代码审查：找出下面Update函数中所有会产生GC分配的地方，并改写为零GC版本。",
+      code: `void Update() {
+    var list = new List<GameObject>();
+    var objs = GameObject.FindGameObjectsWithTag("Enemy");
+    foreach (var o in objs) {
+        if (o.activeInHierarchy) {
+            list.Add(o);
+        }
+    }
+    Debug.Log("Found " + list.Count + " enemies");
+    var sorted = list.OrderBy(g => g.transform.position.z).ToList();
+    for (int i = 0; i < sorted.Count; i++) {
+        sorted[i].transform.LookAt(Camera.main.transform);
+    }
+}`,
+      answer: "GC分配点：① new List<GameObject> ② FindGameObjectsWithTag返回新数组 ③ foreach对数组（旧Unity有GC，新版本无）④ \"Found\" + list.Count装箱和字符串拼接 ⑤ OrderBy+ToList产生新List ⑥ Camera.main每次调用内部会FindObjectWithTag（非GC但极慢）。改写：在类字段中预分配List、缓存Camera.main引用、用List.Sort(Comparison)替代OrderBy、用Debug.Log($\"Found {list.Count}\")或StringBuilder、避免FindGameObjectsWithTag用对象池或注册机制。",
+    },
+    {
+      prompt: "设计题：你需要一个Dictionary<ResourceType, List<ResourceLoader>>，其中ResourceType是你自定义的enum。写出ResourceType的定义，使其作为Dictionary的key时不产生装箱。",
+      answer: "enum本身作为key不会直接装箱，但Dictionary的默认EqualityComparer<ResourceType>内部会调用Enum.Equals/Enum.GetHashCode，这在某些.NET版本中会导致装箱。解决方案：实现一个无装箱的IEqualityComparer<T>，通过强制转换为int/byte来比较和计算哈希值：sealed class ResourceTypeComparer : IEqualityComparer<ResourceType> { public bool Equals(ResourceType x, ResourceType y) => x == y; public int GetHashCode(ResourceType obj) => (int)obj; } 然后传入Dictionary构造函数：new Dictionary<ResourceType, List<ResourceLoader>>(new ResourceTypeComparer())。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="值类型 vs 引用类型" zh="值类型（struct/enum/int/float等）在栈上或内联存储，拷贝整个值；引用类型（class/数组/string等）在堆上分配，变量持有的是引用（地址）。">
+    C#类型系统的基础区分，决定了内存分配位置、拷贝语义和GC行为。
+  </Term>
+  <Term name="装箱/拆箱" zh="装箱是值类型→object/接口的隐式转换（堆分配+拷贝）；拆箱是反向转换（类型检查+拷贝回栈）。">
+    Unity热路径中最需要警惕的隐式GC来源。
+  </Term>
+  <Term name="动态扩容" zh="List/Dictionary等集合在容量不足时申请更大数组并复制旧数据的过程，会产生临时内存和GC压力。">
+    预判容量可以消除扩容开销。
+  </Term>
+  <Term name="哈希表" zh="Dictionary<TKey,TValue>的底层数据结构，通过哈希函数将key映射到桶（bucket）实现O(1)查找。">
+    哈希函数质量决定了性能，冲突处理采用链地址法。
+  </Term>
+  <Term name="内省排序 Introsort" zh="Array.Sort/List.Sort使用的混合排序算法：先快速排序，递归过深时切换为堆排序，小数组用插入排序。">
+    兼顾快排的平均速度和堆排的最坏情况保证。
+  </Term>
+  <Term name="不可变字符串 Immutable String" zh="C# string一旦创建就不能修改，所有“修改”操作都返回新字符串，旧字符串等待GC。">
+    循环拼接字符串会产生大量临时对象，必须用StringBuilder。
+  </Term>
+  <Term name="热路径 Hot Path" zh="每帧执行或极高频率调用的代码路径（Update/LateUpdate/FixedUpdate等），对GC分配和性能极度敏感。">
+    主程代码审查的重点区域，零GC是核心要求。
+  </Term>
+  <Term name="对象池 Object Pool" zh="预先创建一组对象并重复使用，避免频繁new和销毁导致的GC碎片。">
+    Unity性能优化的基础模式，适用于子弹、敌人、特效等频繁创建销毁的对象。
+  </Term>
+</Glossary>

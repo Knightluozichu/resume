@@ -1,0 +1,354 @@
+---
+title: 地图与寻路
+type: C
+section: 核心系统
+order: 7
+description: 理解NavMesh导航网格生成原理与A*寻路算法，掌握动态避障、Off-Mesh Link与路径平滑等实战寻路技术。
+tags: ["NavMesh", "A*", "寻路", "JPS", "导航网格", "动态避障", "Off-Mesh Link", "HPA*", "路径平滑", "NavMeshAgent"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解A*寻路算法的核心原理：f=g+h、Open/Close列表、路径回溯，能手动推导A*搜索过程",
+    "掌握启发函数h(n)的设计原则（可采纳性/一致性），理解曼哈顿/对角/欧几里得距离的选择",
+    "理解NavMesh导航网格的原理和生成流程（体素化→区域→轮廓→多边形），掌握烘焙参数调优",
+    "掌握NavMeshAgent的使用和避障原理，理解NavMeshObstacle和Off-Mesh Link",
+    "理解网格寻路vs导航网格的差异和适用场景",
+    "掌握寻路优化策略：JPS跳点搜索、分层寻路HPA*、寻路请求队列、路径缓存、异步寻路",
+    "了解动态避障（ORCA/RVO）和局部避障与全局寻路的结合",
+  ]}
+/>
+
+## 寻路是游戏AI的"腿脚"
+
+AI决策层决定了"去哪里"，寻路系统负责"怎么去"。没有好的寻路系统，再聪明的AI也会被墙卡住、在原地打转、走弯路或者直接穿模。Unity提供了NavMesh系统开箱即用，但理解其原理和优化手段是主程的必修课。
+
+## A*寻路算法
+
+<Term def="A*（A-Star）是最广泛使用的启发式寻路算法，结合了Dijkstra（保证最短路径）和贪心搜索（快速朝目标前进）的优点。通过f(n)=g(n)+h(n)评估节点优先级，在网格/图上搜索最优路径。">A*</Term>是寻路算法的基石。几乎所有游戏寻路（包括NavMesh底层）都使用A*或其变体。
+
+<AStarPathfinding />
+
+### 核心公式
+
+```
+f(n) = g(n) + h(n)
+```
+
+- **g(n)**：从起点到当前节点n的**实际代价**（已走的路程）
+- **h(n)**：从当前节点n到终点的**估算代价**（启发函数，直线距离）
+- **f(n)**：总代价评估，A*每次从Open表中选f最小的节点扩展
+
+### 算法流程
+
+1. 将起点放入**Open列表**（待探索的节点，按f值排序）
+2. **Close列表**为空（已探索的节点）
+3. 循环：
+   - 从Open中取**f最小**的节点n
+   - 如果n是终点，沿parent指针回溯→找到路径
+   - 将n移入Close
+   - 遍历n的邻居：
+     - 邻居在Close中→跳过
+     - 计算到邻居的新g值
+     - 邻居不在Open中→加入Open，设置parent
+     - 邻居已在Open中但新g更小→更新g和parent
+4. Open为空→无路径
+
+### 启发函数的选择
+
+<Term def="启发函数的可采纳性（Admissibility）：h(n)不高估实际最短距离。满足可采纳性的A*保证找到最优解。">h(n)的设计</Term>直接决定A*的效率和正确性：
+
+| h函数 | 公式 | 适用场景 | 性质 |
+|---|---|---|---|
+| **曼哈顿距离** | `|dx| + |dy|` | 四方向移动（上下左右） | 可采纳 |
+| **对角距离（Chebyshev）** | `max(|dx|, |dy|)` | 八方向移动（含对角线） | 可采纳 |
+| **欧几里得距离** | `√(dx²+dy²)` | 任意方向移动 | 可采纳但慢 |
+| **h=0** | 0 | 退化为Dijkstra | 保证最优但搜索范围大 |
+| **h>实际距离** | 高估 | 贪心搜索 | 快但不保证最优 |
+
+<Callout type="tip">
+  **经验法则**：h(n)越接近实际最短距离，A*搜索的节点越少、越快。但h(n)不能高估（否则可能找不到最优路径）。对于网格四方向移动用曼哈顿距离，八方向用对角距离，NavMesh上用欧几里得距离。
+</Callout>
+
+```csharp
+// A* 简化实现（网格）
+public List<Vector2Int> FindPath(Vector2Int start, Vector2Int end, bool[,] grid) {
+    var open = new PriorityQueue<Node, float>();  // 按f值排序
+    var cameFrom = new Dictionary<Vector2Int, Vector2Int>();
+    var gScore = new Dictionary<Vector2Int, float>();
+    var closed = new HashSet<Vector2Int>();
+
+    gScore[start] = 0;
+    open.Enqueue(new Node(start, H(start, end)), 0 + H(start, end));
+
+    while (open.Count > 0) {
+        var current = open.Dequeue();
+        if (current.pos == end) return ReconstructPath(cameFrom, end);
+        closed.Add(current.pos);
+
+        foreach (var neighbor in GetNeighbors(current.pos, grid)) {
+            if (closed.Contains(neighbor)) continue;
+            float tentativeG = gScore[current.pos] + MoveCost(current.pos, neighbor);
+            if (!gScore.ContainsKey(neighbor) || tentativeG < gScore[neighbor]) {
+                cameFrom[neighbor] = current.pos;
+                gScore[neighbor] = tentativeG;
+                float f = tentativeG + H(neighbor, end);
+                open.Enqueue(new Node(neighbor, f), f);
+            }
+        }
+    }
+    return null;  // 无路径
+}
+
+// 曼哈顿距离（四方向）
+float H(Vector2Int a, Vector2Int b) => Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y);
+```
+
+## NavMesh：导航网格
+
+<Term def="Navigation Mesh，导航网格。将场景可行走区域烘焙为凸多边形网格，AI在多边形上寻路而非在网格格子上。多边形数量远少于网格格子，寻路速度快且路径自然。">NavMesh</Term>是Unity内置的寻路方案。与网格寻路（每个格子一个节点）不同，NavMesh把可行走区域表示为**凸多边形**，一个大房间可能只有几个多边形，节点数量大幅减少。
+
+<NavMeshPipeline />
+
+### NavMesh生成流程（Recast Navigation）
+
+Unity的NavMesh烘焙使用开源的Recast Navigation库，流程如下：
+
+1. **体素化（Voxelization）**：将场景三角网格光栅化为体素（3D像素），标记哪些体素是可行走表面（考虑Agent Radius/Height/Max Slope）
+2. **高度场→紧凑高度场**：过滤掉不可行走的体素，生成可行走表面
+3. **区域划分（Region）**：将连通的可行走体素划分为区域（类似洪水填充），剔除过小的孤岛区域
+4. **轮廓提取（Contour）**：沿着区域边界生成多边形轮廓
+5. **凸多边形网格（Convex Poly Mesh）**：将轮廓三角化/多边形化为凸多边形（凸多边形内任意两点直线可达）
+6. **运行时查询**：在多边形图上执行A*搜索，再用Funnel算法平滑路径
+
+<Callout type="warn">
+  **NavMesh烘焙参数必须和Agent尺寸匹配**。Agent Radius设太大，狭窄通道会被认为不可通过；设太小，AI会贴墙走。Agent Height不匹配可能导致AI穿过矮天花板。一套场景可以烘焙多份NavMesh（不同Agent尺寸），但内存开销翻倍。
+</Callout>
+
+### NavMeshAgent
+
+<Term def="Unity导航网格代理组件，挂载在需要寻路的AI上。设置destination后自动沿NavMesh路径移动，内置避障和分离逻辑。">NavMeshAgent</Term>是运行时寻路的核心组件：
+
+```csharp
+// NavMeshAgent基本使用
+public class AIController : MonoBehaviour {
+    private NavMeshAgent _agent;
+
+    void Awake() {
+        _agent = GetComponent<NavMeshAgent>();
+        _agent.speed = moveSpeed;
+        _agent.angularSpeed = 120f;   // 转向速度
+        _agent.acceleration = 8f;
+        _agent.stoppingDistance = 1.5f; // 停止距离（攻击范围）
+        _agent.obstacleAvoidanceType = ObstacleAvoidanceType.HighQualityAvoidance;
+    }
+
+    // 移动到目标点
+    public void MoveTo(Vector3 target) {
+        _agent.SetDestination(target);
+        _agent.isStopped = false;
+    }
+
+    // 停止
+    public void Stop() {
+        _agent.isStopped = true;
+    }
+
+    // 检查是否到达
+    public bool HasArrived() {
+        return !_agent.pathPending && _agent.remainingDistance <= _agent.stoppingDistance;
+    }
+}
+```
+
+<Callout type="trap">
+  **NavMeshAgent和动画/物理的冲突**：NavMeshAgent通过直接修改transform.position来移动，如果同时启用Animator的Root Motion或Rigidbody物理，会产生"抖动"或"拉扯"。方案：①关闭Root Motion，用Agent移动+动画表现（推荐）；②用Agent计算路径但不自动移动（updatePosition=false），手动沿路径移动；③Rigidbody和Agent不能同时控制移动。
+</Callout>
+
+### NavMeshObstacle：动态障碍
+
+场景中不移动的障碍（墙壁、柱子）在烘焙时就刻入NavMesh了，但可移动的障碍（门、可推动的箱子、其他AI）需要运行时处理。<Term def="NavMesh动态障碍组件。挂载在可移动物体上，AI寻路时会避开它。有两种模式：Carve（在NavMesh上挖洞，精确但开销大）和不Carve（仅做局部避障）。">NavMeshObstacle</Term>就是干这个的：
+
+- **Carve模式**：障碍物在NavMesh上"挖洞"，AI路径规划时绕开。适合门开关、停着的车等静止或慢速移动的障碍
+- **不Carve模式**：障碍物不影响NavMesh，只在局部避障（RVO/ORCA）中起作用。适合快速移动的障碍
+- **Carve的坑**：Carve是异步操作，频繁移动的Obstacle会导致NavMesh不断重建，性能开销大。快速移动的物体不要开Carve
+
+### Off-Mesh Link：非行走连接
+
+<Term def="NavMesh外部连接，用于标记不能直接走到但可以通过其他方式到达的连接点：跳跃跨越、爬梯子、传送门、跳下平台等。">Off-Mesh Link</Term>解决"走不过去但能跳/爬/传送"的问题：
+
+- 在两个不连通的NavMesh区域之间手动放置Off-Mesh Link组件
+- AI寻路时会自动考虑这些Link，走到起点→执行跳跃/攀爬动画→到达终点
+- 可以标记Link的双向/单向、成本（让AI优先走平路，少跳）
+
+```csharp
+// Off-Mesh Link 处理：检测AI正在通过Link，播放对应动画
+void Update() {
+    if (_agent.isOnOffMeshLink) {
+        var link = _agent.currentOffMeshLinkData;
+        var linkType = link.offMeshLink as OffMeshLinkData; // 获取自定义Link类型
+
+        if (IsJumpLink(link)) {
+            StartCoroutine(JumpAcross(link));
+        }
+    }
+}
+
+IEnumerator JumpAcross(OffMeshLinkData link) {
+    _agent.isStopped = true;
+    Vector3 start = transform.position;
+    Vector3 end = link.endPos + Vector3.up * transform.position.y;
+    float duration = 0.5f;
+    float t = 0;
+    while (t < duration) {
+        t += Time.deltaTime;
+        float p = t / duration;
+        // 抛物线跳跃
+        transform.position = Vector3.Lerp(start, end, p) + Vector3.up * Mathf.Sin(p * Mathf.PI) * jumpHeight;
+        yield return null;
+    }
+    _agent.CompleteOffMeshLink();  // 通知Agent完成Link穿越
+    _agent.isStopped = false;
+}
+```
+
+## 网格寻路 vs NavMesh
+
+| 维度 | 网格寻路（Grid） | NavMesh（导航网格） |
+|---|---|---|
+| **表示方式** | 规则格子（每个格子是节点） | 凸多边形（每个多边形是节点） |
+| **节点数量** | 多（大地图百万级格子） | 少（同等精度下几十到几百个多边形） |
+| **内存占用** | 大 | 小 |
+| **寻路速度** | 慢（节点多） | 快（节点少） |
+| **路径自然度** | 锯齿状（贴格子），需平滑 | 自然（沿多边形中心连线） |
+| **动态修改** | 容易（改格子状态即可） | 困难（需要动态烘焙/Obstacle Carve） |
+| **烘焙/生成** | 无需烘焙（直接用网格数据） | 需要预烘焙（或运行时NavMeshSurface） |
+| **适用** | RTS/战棋/网格地图、程序化生成地图 | 3D动作/MMO/MOBA、复杂3D场景 |
+
+<Callout type="tip">
+  **大多数3D Unity游戏用NavMesh**。网格寻路适合2D游戏、RTS（方格地图）、完全程序化生成的地图。如果你的场景是3D的且障碍不频繁变化，NavMesh是不二之选。
+</Callout>
+
+## 寻路优化
+
+### 1. JPS跳点搜索
+
+<Term def="Jump Point Search，A*的优化算法。在网格上通过识别“跳点”（必须转弯的关键点）大幅减少扩展节点数量，比A*快10倍以上，且保证最优路径。仅适用于网格。">JPS</Term>是网格寻路的利器——它观察到A*在网格上扩展的大量节点其实是"无用"的（对称路径），通过跳点规则跳过中间节点直接跳到转折点，搜索节点数减少10-30倍。局限性：只适用于均匀代价网格（不能有地形代价变化）。
+
+### 2. 分层寻路（HPA*）
+
+<Term def="Hierarchical Pathfinding A*，分层A*寻路。将地图划分为大区域（Cluster），先在高层（区域级别）找到粗路径，再在低层区域内做精细寻路。大地图寻路从秒级降到毫秒级。">HPA*</Term>解决大地图寻路慢的问题：
+
+1. 将地图分成大区块（如每10x10格子一个区块）
+2. 预计算区块之间的入口/出口连接点
+3. 寻路时先在高层图（区块级别）找到粗路径（区块A→区块B→区块C）
+4. 再在每个区块内部做精细A*寻路
+5. 适合MMO/开放世界大地图
+
+### 3. 寻路请求队列与异步寻路
+
+寻路计算（尤其是长路径）可能需要数毫秒，如果多个AI同时请求寻路会导致帧卡顿。解决方案：
+
+- **请求队列**：每帧只处理N个寻路请求（如每帧最多处理3个），其余排队等待
+- **时间切片**：单个寻路如果太长，分多帧执行（A*每帧扩展固定数量节点）
+- **异步线程**：在非主线程做A*搜索，完成后回主线程设置路径（注意NavMesh的计算在Unity中是主线程的，但可以用Coroutine分帧）
+- **路径缓存**：相同起点终点区域的路径可以缓存，短时间内重复请求直接返回缓存
+
+```csharp
+// 寻路请求队列（分帧处理）
+public class PathRequestManager : MonoBehaviour {
+    private static PathRequestManager _instance;
+    private Queue<PathRequest> _queue = new Queue<PathRequest>();
+    private const int MAX_REQUESTS_PER_FRAME = 3;
+    private bool _isProcessing;
+
+    public static void RequestPath(Vector3 start, Vector3 end, Action<Vector3[], bool> callback) {
+        _instance._queue.Enqueue(new PathRequest(start, end, callback));
+        if (!_instance._isProcessing) _instance.StartCoroutine(_instance.ProcessQueue());
+    }
+
+    IEnumerator ProcessQueue() {
+        _isProcessing = true;
+        while (_queue.Count > 0) {
+            int processedThisFrame = 0;
+            while (processedThisFrame < MAX_REQUESTS_PER_FRAME && _queue.Count > 0) {
+                var req = _queue.Dequeue();
+                // 执行寻路（实际项目中可以放到线程池）
+                var path = CalculatePath(req.start, req.end);
+                req.callback(path, path != null);
+                processedThisFrame++;
+            }
+            yield return null;  // 下一帧继续
+        }
+        _isProcessing = false;
+    }
+}
+```
+
+### 4. 路径平滑与"拉绳子"（Funnel算法）
+
+A*在多边形/网格上找到的路径是折线（经过节点中心），实际移动时需要平滑。<Term def="Funnel Algorithm（漏斗算法），NavMesh路径平滑的标准算法。从起点到终点维护一个“漏斗”（左边界和右边界），收紧漏斗直到找到拐点，输出比原始多边形路径更短更平滑的路径。">Funnel算法</Term>是NavMesh的标准路径平滑方法，效果像"拉绳子"——拉紧后绳子贴紧障碍物转角，得到最短路径。
+
+### 5. 动态避障（RVO/ORCA）
+
+全局寻路（A*/NavMesh）解决"怎么走大方向"，但多个AI在移动中互相避让需要<Term def="Reciprocal Velocity Obstacles / Optimal Reciprocal Collision Avoidance，互惠速度障碍/最优互惠避障。多个Agent根据彼此速度计算安全速度，实现局部无碰撞运动。NavMeshAgent的避障底层使用ORCA算法。">局部避障</Term>：
+
+- NavMeshAgent内置了ORCA避障（obstacleAvoidanceType参数控制质量）
+- 多个NavMeshAgent互相会自动避让，但大量Agent（>50个）在一起时避障开销很大
+- RTS/军团类游戏需要自己实现群体避障和编队移动
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一个MMO城市场景中，200个NPC同时寻路，Profiler显示NavMesh.UpdatePosition和NavMesh.AIUpdate每帧耗时8ms，在低端手机上导致帧率从60降到30。检查发现：①所有NPC的NavMeshAgent.avoidanceType都是HighQualityAvoidance；②每个NPC每0.5秒调用一次SetDestination（即使目标没变）；③50个远处NPC（距离摄像机>80米）也在跑完整避障；④所有NPC的寻路是同步的，在同一帧集中请求；⑤NPC的Radius都是0.5m但很多NPC挤在一起。请给出优化方案。",
+      answer: "优化方案：①AI LOD + 寻路分级——近距离NPC（<20m）完整NavMeshAgent+高避障，中距离（20-50m）降低避障质量（LowQualityAvoidance）或关闭避障仅跟随路径点，远距离（>50m）关闭NavMeshAgent（enabled=false），用简单的目标点直线移动或直接播放循环动画，预计省50%+；②SetDestination去重——目标点没变化（距离上次目标<0.5m）就不调用SetDestination，SetDestination会重新触发路径计算；③寻路请求分帧——用PathRequestManager每帧最多处理5-10个寻路请求，避免一帧内200个NPC同时计算路径导致尖峰；④避障降配——NPC聚集时大量时间花在ORCA避障计算上，降低avoidanceType，或给NPC设置不同的避障优先级（重要NPC高避障，普通NPC低避障），非战斗场景下关闭避障只用NavMesh路径跟随；⑤远处NPC简化——距离>50m的NPC不需要避障，不需要每帧更新位置，可以用NavMeshAgent.autoBraking=false+降低更新频率（如每0.2秒Update），或者完全用代码控制沿NavMesh.CalculatePath结果点做线性移动（不挂载NavMeshAgent）；⑥NavMesh分区——大城市分多个NavMeshSurface，远处的NPC不在同一个NavMesh上可以直接Disable；⑦考虑用NavMesh.CalculatePath异步计算+手动沿路径移动，替代NavMeshAgent自动移动，更灵活控制更新频率。综合以上优化，NavMesh更新从8ms降到2ms以下是可行的。",
+    },
+    {
+      prompt: "实现题：在网格上实现JPS（Jump Point Search）跳点搜索算法，要求：①支持四方向和八方向移动；②识别跳点规则（强迫邻居+终点+父方向剪枝）；③在100x100网格上对比A*和JPS的扩展节点数和搜索时间；④实现路径平滑（将折线路径转为更自然的曲线或直线拉绳）。写出核心跳点识别和搜索伪代码。",
+      answer: "JPS核心思想：A*的Open列表中大量节点是\"对称\"的（可以沿同一方向直线走到头），JPS直接跳到必须转弯的点（跳点），大幅减少入队节点数。核心伪代码：(1) 跳点识别IdentifyJump：从节点x沿方向d前进，遇到以下情况返回x作为跳点：①x是终点；②x有强迫邻居（斜向走时旁边有障碍，导致必须转弯）；③沿斜向移动时，水平/垂直方向递归发现了跳点；如果沿直线走到边界/障碍都没遇到跳点，返回null；(2) 强迫邻居规则：四方向移动时，如果当前方向d的左右两侧有障碍，则障碍对角方向的格子是强迫邻居（必须考虑）；八方向同理；(3) 搜索主循环JumpSearch：和A*类似，但扩展节点时不是把所有邻居加入Open，而是对每个方向d调用Jump(x,d,end)找到跳点j，然后把j加入Open（设置parent=x，g值为x到j的实际距离），其他同A*按f最小扩展；(4) 剪枝：从父方向来的节点，不需要搜索\"回去\"方向的邻居——例如从左边来的节点，右方向是自然方向，右上右下是对角方向，左边不需要搜索（父方向剪枝）；(5) 性能对比：在开阔地形100x100网格上从一端寻到另一端，A*可能扩展数千节点，JPS可能只扩展几十到几百个跳点，速度快10-30倍；在迷宫/狭窄通道地形优势不明显；(6) 路径平滑：JPS输出的路径是跳点序列（拐点），直接连接拐点即可得到比A*网格路径更简洁的折线，如果需要更平滑可以对拐点做Catmull-Rom样条或Funnel拉绳处理。JPS的限制：要求网格移动代价均匀（所有平地格子代价相同），不适合有地形代价（如草地/沙地/水域代价不同）的地图。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="A* 寻路算法" zh="A-Star，基于启发函数的最短路径搜索算法。f(n)=g(n)+h(n)，每次扩展f最小的节点。保证找到最优路径（当h可采纳时），是游戏寻路的基础算法。">
+    游戏寻路的基石算法，NavMesh底层也使用A*在多边形图上搜索。
+  </Term>
+  <Term name="启发函数 Heuristic" zh="A*中从当前节点到终点的代价估算函数h(n)。可采纳性要求h(n)不高估实际距离，保证A*找到最优路径。">
+    h越接近实际距离A*搜索越快，曼哈顿/对角/欧几里得距离是常用选择。
+  </Term>
+  <Term name="NavMesh 导航网格" zh="Navigation Mesh，将场景可行走区域烘焙为凸多边形网格，AI在多边形上寻路。节点数远少于网格格子，路径自然，是Unity 3D寻路的标准方案。">
+    Unity内置的寻路方案，通过NavMeshSurface烘焙，NavMeshAgent执行。
+  </Term>
+  <Term name="NavMeshAgent" zh="Unity导航代理组件，设置destination后自动沿NavMesh路径移动，内置避障和分离逻辑。">
+    AI移动的核心组件，注意不要和Root Motion/Rigidbody同时控制位移。
+  </Term>
+  <Term name="NavMeshObstacle" zh="NavMesh动态障碍组件，Carve模式在NavMesh上挖洞让AI绕开，不Carve模式仅做局部避障。">
+    动态障碍的解决方案，但Carve开销大，快速移动物体不要开Carve。
+  </Term>
+  <Term name="Off-Mesh Link" zh="NavMesh外部连接，标记跳跃/攀爬/传送等非行走可达的连接点，让AI可以跨越断开的NavMesh区域。">
+    解决3D场景中"走不到但能跳/爬"的连接问题，需要自定义处理穿越动画。
+  </Term>
+  <Term name="JPS 跳点搜索" zh="Jump Point Search，A*的网格优化算法，通过跳点规则跳过对称路径节点，搜索速度比A*快10-30倍。仅适用于均匀代价网格。">
+    网格寻路的首选优化算法，RTS/2D游戏大地图必备。
+  </Term>
+  <Term name="HPA* 分层寻路" zh="Hierarchical Pathfinding A*，将地图分区后先高层粗寻路再低层精细寻路，大地图寻路速度提升显著。">
+    MMO/开放世界大地图寻路优化方案。
+  </Term>
+  <Term name="Funnel Algorithm 漏斗算法" zh="NavMesh路径平滑算法，维护左右边界收紧漏斗找到拐点，将多边形路径优化为最短折线路径。效果如同“拉紧绳子”。">
+    NavMesh路径后处理的标准算法，输出自然平滑的路径。
+  </Term>
+  <Term name="ORCA/RVO 局部避障" zh="Optimal Reciprocal Collision Avoidance，最优互惠避障算法。多个移动Agent根据彼此速度计算安全速度，实现无碰撞群体运动。">
+    NavMeshAgent避障的底层算法，大量Agent同时避障开销大需要LOD。
+  </Term>
+  <Term name="Recast Navigation" zh="开源的导航网格生成库，Unity的NavMesh烘焙底层使用Recast。流程：体素化→高度场→区域→轮廓→凸多边形网格。">
+    业界标准的NavMesh生成方案，Unity/Unreal/RecastDemo都使用它。
+  </Term>
+</Glossary>
+
+<Attribution />

@@ -1,0 +1,325 @@
+---
+title: 用户界面
+type: C
+section: 核心系统
+order: 3
+description: 理解UGUI框架原理与UI架构设计，掌握UI栈管理、DrawCall合批优化和MVC/MVP模式。
+tags: ["UGUI", "UIManager", "UI栈", "Canvas", "DrawCall", "合批", "对象池", "MVC", "MVP"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解UI架构设计原则，能设计分层的UIManager管理方案",
+    "掌握UI栈（Push/Pop）和层级管理（Sorting Order/Canvas分层）",
+    "理解Canvas重建（Rebuild）机制，知道为什么一个UI变化会导致整个Canvas重建",
+    "掌握UGUI合批原理和优化手段（图集合批、Raycast Target关闭、Canvas拆分）",
+    "理解MVC/MVP/MVVM在Unity UI中的应用和取舍",
+    "掌握UI与3D场景交互、UI对象池、UI与业务逻辑解耦的方法",
+  ]}
+/>
+
+## UI是游戏客户端最复杂的表现层
+
+在中大型游戏项目里，UI代码量往往占整个客户端代码的30%-50%。登录、主界面、背包、商店、任务、聊天、设置、弹窗、Tips、Loading……一个MMO可能有上百个UI面板。如果UI框架设计不好，会出现：
+
+- 打开一个弹窗，底层UI还在响应输入
+- 多个弹窗叠加，排序错乱，前面的弹窗被后面挡住
+- 一个血条每帧更新，导致整个Canvas重建，手机掉帧
+- UI预制体里直接引用业务单例，UI和业务逻辑死死耦合
+- 关闭UI直接Destroy，下次打开又要Instantiate，卡顿
+
+主程要做的就是设计一套**不让这些问题发生的UI框架**。
+
+## UIManager与UI栈
+
+UI框架的核心是<Term def="UI管理器，负责所有UI面板的创建、销毁、显示、隐藏、层级排序、输入控制。是UI框架的中枢。">UIManager</Term>和<Term def="一种后进先出（LIFO）的数据结构，用于管理弹窗/页面的打开顺序。打开弹窗=Push压栈，关闭=Pop出栈，自动处理返回键逻辑。">UI栈</Term>。
+
+<UIStackDiagram />
+
+### UI层级设计
+
+UI必须分层管理，不同层级的UI有不同的Sorting Order，高层永远盖在低层上面：
+
+| 层级 | Order范围 | 用途 | 关闭策略 |
+|---|---|---|---|
+| **Background** | 0-99 | 主界面背景、场景UI装饰 | 常驻不关闭 |
+| **HUD** | 100-199 | 血条、小地图、摇杆、飘字 | 常驻，跟随场景 |
+| **Panel** | 200-299 | 全屏/大半屏功能面板（背包/商店/任务） | 打开新Panel关闭旧Panel |
+| **Popup** | 300-399 | 模态弹窗（确认框/奖励/设置） | 栈管理，Push/Pop |
+| **System** | 400-499 | Loading、Toast、网络错误提示、断网重连 | 系统级，不被其他UI覆盖 |
+
+<Callout type="warn">
+  **每个层级应该是独立的Canvas**。不要把所有UI放在同一个Canvas下——原因见下文Canvas重建。不同Canvas的Sorting Order独立计算，不会互相干扰。
+</Callout>
+
+### UI栈操作
+
+弹窗必须用栈管理：
+
+```csharp
+public enum UILayer { Background, HUD, Panel, Popup, System }
+
+public interface IUIPanel {
+    UILayer Layer { get; }
+    void OnOpen(object param);    // 打开时传入参数
+    void OnShow();                 // 显示（从隐藏恢复）
+    void OnHide();                 // 隐藏
+    void OnClose();                // 关闭销毁前
+}
+
+public static class UIManager {
+    // 各层的Transform根节点
+    private static readonly Dictionary<UILayer, Transform> _layerRoots = new();
+    // 弹窗栈
+    private static readonly Stack<IUIPanel> _popupStack = new();
+    // 缓存所有已打开的面板
+    private static readonly Dictionary<Type, IUIPanel> _openedPanels = new();
+
+    // 打开面板（非弹窗）
+    public static T Open<T>(object param = null) where T : MonoBehaviour, IUIPanel {
+        var panel = GetOrCreatePanel<T>();
+        panel.OnOpen(param);
+        panel.gameObject.SetActive(true);
+        return (T)panel;
+    }
+
+    // 压入弹窗（Push）
+    public static T PushPopup<T>(object param = null) where T : MonoBehaviour, IUIPanel {
+        if (_popupStack.Count > 0) {
+            _popupStack.Peek().OnHide();  // 之前的弹窗暂停交互
+        }
+        var panel = GetOrCreatePanel<T>();
+        panel.OnOpen(param);
+        _popupStack.Push(panel);
+        UpdateSortingOrder();  // 重新计算栈中弹窗的Order
+        ShowMask(panel);       // 弹窗外区域加半透明遮罩
+        return (T)panel;
+    }
+
+    // 弹出栈顶（Pop）
+    public static void PopPopup() {
+        if (_popupStack.Count == 0) return;
+        var top = _popupStack.Pop();
+        top.OnClose();
+        DestroyPanel(top);
+        HideMask();
+        if (_popupStack.Count > 0) {
+            _popupStack.Peek().OnShow();  // 恢复下一个弹窗
+        }
+    }
+
+    // 安卓返回键/ESC键处理
+    public static void OnBackPressed() {
+        if (_popupStack.Count > 0) {
+            PopPopup();  // 优先关弹窗
+        } else {
+            // 打开退出确认框，或根据当前Panel决定行为
+        }
+    }
+}
+```
+
+<Callout type="tip">
+  **主程设计要点**：UIManager必须保证同一类型的面板在同一时刻只有一个实例；打开弹窗时自动添加遮罩、屏蔽底层输入；关闭弹窗时自动恢复底层输入；面板参数用`object`传递，打开时解析，不依赖构造函数。
+</Callout>
+
+## Canvas重建：UGUI第一大性能坑
+
+Unity UGUI的性能问题，80%都和Canvas重建有关。理解重建机制是做UI优化的前提。
+
+<CanvasRebuildFlow />
+
+### 为什么重建这么贵？
+
+Canvas重建的核心问题是：**一个Canvas下任何一个UI元素变化（位置、颜色、文本内容、图片），都会导致整个Canvas下所有UI元素参与重新计算和重新合批**。如果你的Canvas下有100个UI元素，其中只有一个血条在变，那剩下99个不变的元素也要跟着重建——这是巨大的浪费。
+
+<Callout type="trap">
+  **新手常犯的错误**：把HUD血条（每帧变化）和主界面按钮（几乎不变）放在同一个Canvas下。结果是血条每帧变化→整个Canvas每帧重建→手机发烫掉帧。解决方案是**拆分Canvas**。
+</Callout>
+
+### 拆分Canvas的原则
+
+| 变化频率 | 所在Canvas | 例子 |
+|---|---|---|
+| **每帧变化** | 独立Canvas | 血条、倒计时、飘字、滚动列表 |
+| **频繁变化（秒级）** | 独立Canvas或子Canvas | 聊天消息、红点提示、技能CD |
+| **偶尔变化** | 共享Canvas | 背包格子、任务列表、商店物品 |
+| **几乎不变** | 共享Canvas | 主界面按钮、菜单、背景装饰 |
+
+<Callout type="warn">
+  **Canvas拆分不是越多越好**。每个Canvas是一个独立的DrawCall批次起点，过多的Canvas会打断合批、增加DrawCall。拆分的粒度要平衡——变化频率差异大的拆开，变化频率相同的放一起。
+</Callout>
+
+## UGUI优化手段
+
+### 1. 图集合批（Sprite Atlas）
+
+UGUI合批的条件很苛刻：必须同Canvas、同材质、同贴图、同Shader、Z坐标相同、中间没有被其他不同图集的元素打断。<Term def="将多个小图打包成一张大图（图集/Sprite Atlas），UGUI渲染时可以在一个DrawCall内完成，大幅减少DrawCall数量。">图集合批</Term>是最有效的UI优化手段之一。
+
+- 同一面板的UI图片尽量打在同一个图集里
+- 公共图集（按钮、框架、图标通用元素）和面板私有图集分离
+- 文字和图片分开（Text/TextMeshPro用不同材质，不能和图片合批）
+
+### 2. 关闭不必要的Raycast Target
+
+每个开启`Raycast Target`的UI元素都会参与GraphicRaycaster的射线检测。一个面板里如果有几十个装饰性Image开着Raycast Target，每次点击都会遍历所有这些元素做射线检测。
+
+<Callout type="tip">
+  **原则：只有需要响应输入的元素才开Raycast Target**。纯装饰的背景图、图标、分隔线、文字全部关闭。可以写一个编辑器工具，一键检查场景中所有不必要的Raycast Target。
+</Callout>
+
+### 3. 避免SetActive，用CanvasGroup替代
+
+`SetActive(false/true)`会触发Canvas重建（因为UI元素的启用/禁用影响合批顺序）。频繁显示/隐藏UI应该用<Term def="UGUI组件，可以控制子物体的alpha透明度、interactable是否可交互、blocksRaycasts是否阻挡射线。设置alpha=0比SetActive更轻量，不触发Canvas重建。">CanvasGroup</Term>：
+
+```csharp
+// ❌ SetActive触发重建
+panel.gameObject.SetActive(false);
+panel.gameObject.SetActive(true);
+
+// ✅ 用CanvasGroup，不触发重建
+var cg = panel.GetComponent<CanvasGroup>();
+cg.alpha = 0;           // 透明
+cg.interactable = false; // 不可交互
+cg.blocksRaycasts = false; // 不阻挡射线
+// 相当于隐藏，但不触发Canvas重建
+
+```
+
+### 4. UI对象池
+
+列表项（背包格子、聊天条目、排行榜行）频繁创建销毁会导致Instantiate卡顿和GC。用<Term def="预先创建一组对象并重复使用，需要时从池里取，不用时回池，避免频繁Instantiate/Destroy。">对象池</Term>管理列表项：
+
+- 打开列表时，根据数据量从池中取/创建足够的项
+- 滚动列表复用移出可视区域的项（ListView/ScrollRect嵌套）
+- 关闭面板时，列表项回池而不是Destroy
+
+### 5. 关闭遮罩组件的Overdraw
+
+Mask组件的实现是用Stencil Buffer，不会导致Overdraw但会打断合批。RectMask2D是更好的选择（不打断合批，只裁剪矩形区域）。能用RectMask2D就不用Mask。
+
+## UI与业务逻辑解耦：MVC/MVP/MVVM
+
+UI和业务逻辑的关系是架构设计的关键问题。三种经典模式在Unity中的应用：
+
+| 模式 | 核心思想 | Unity中的实现 | 适用场景 |
+|---|---|---|---|
+| **MVC** | Model数据-View显示-Controller控制 | Controller是MonoBehaviour直接操作View和Model | 小项目、简单UI |
+| **MVP** | View和Model不直接通信，通过Presenter中介 | Presenter是纯C#类，View暴露接口给Presenter调用 | 中大型项目（推荐） |
+| **MVVM** | View通过数据绑定自动响应ViewModel变化 | 需要数据绑定框架（如UniRx、BindingsRx） | 复杂UI、表单类界面 |
+
+<Callout type="tip">
+  **Unity主程推荐MVP**。MVC在Unity中容易变成View和Controller互相引用（MonoBehaviour天然把View和Controller混在一起）；MVVM需要数据绑定框架，接入成本高且调试困难；MVP最实用——View只负责显示和转发输入，Presenter处理逻辑，Model提供数据。
+</Callout>
+
+```csharp
+// MVP模式示例
+// View层：只处理显示和输入转发
+public class ShopPanel : MonoBehaviour, IUIPanel {
+    [SerializeField] private Text titleText;
+    [SerializeField] private Transform itemContainer;
+    [SerializeField] private Button closeBtn;
+
+    private ShopPresenter _presenter;
+
+    void Awake() {
+        _presenter = new ShopPresenter(this);
+        closeBtn.onClick.AddListener(() => _presenter.OnCloseClicked());
+    }
+
+    public void OnOpen(object param) => _presenter.OnOpen((int)param);
+    public void OnClose() => _presenter.OnClose();
+
+    // View只暴露显示方法，不包含业务逻辑
+    public void SetTitle(string title) => titleText.text = title;
+    public void RefreshItems(List<ShopItemVM> items) { /* 刷新列表 */ }
+    public event Action OnItemClicked;  // 点击事件转发给Presenter
+}
+
+// Presenter层：纯C#类，处理业务逻辑，不直接操作Unity组件
+public class ShopPresenter {
+    private readonly IShopView _view;
+    private readonly ShopModel _model;
+
+    public ShopPresenter(IShopView view) {
+        _view = view;
+        _model = new ShopModel();
+    }
+
+    public void OnOpen(int shopId) {
+        var data = ConfigManager.Get<ShopConfig>(shopId);
+        _view.SetTitle(I18n.T(data.nameKey));
+        var items = ShopSystem.GetShopItems(shopId);
+        _view.RefreshItems(items.Select(MapToVM).ToList());
+    }
+
+    public void OnCloseClicked() {
+        UIManager.PopPopup();
+    }
+}
+```
+
+## UI与3D场景交互
+
+UI和3D场景的交互常见需求：点3D物体出名字/血条、3D模型在UI中展示（角色预览）、UI跟随3D物体（头顶血条）。
+
+- **世界坐标转UI坐标**：`Camera.WorldToScreenPoint()`获取3D物体屏幕坐标→转换为UGUI局部坐标→UI元素跟随
+- **3D模型在UI中显示**：用一个独立Camera渲染到RenderTexture，RawImage显示RT
+- **点击3D物体**：用Physics.Raycast从UI点击位置发射射线（不要用GraphicRaycaster检测3D物体）
+
+<Callout type="trap">
+  **世界坐标转UI坐标的坑**：一定要注意Canvas的Render Mode。Screen Space-Overlay模式下直接用屏幕坐标；Screen Space-Camera模式下要`RectTransformUtility.ScreenPointToLocalPointInRectangle()`转换；World Space模式下用世界坐标。
+</Callout>
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一个Unity UI场景有以下现象——场景中有60个UI元素（按钮、图片、文字），其中一个倒计时Text每帧更新数字（每秒变一次），用Profiler观察发现Canvas.BuildBatch每帧执行耗时2.3ms，导致低端手机帧率从60降到45。请分析原因并给出优化方案。",
+      answer: "原因：所有60个UI元素在同一个Canvas下，倒计时Text每秒变化一次→触发Canvas.SendWillRenderCanvases→整个Canvas的Layout和Graphic重建→所有60个元素参与重新合批。虽然只是一个Text变化，但整个Canvas都要重建。优化方案：①将倒计时Text单独放到一个独立的子Canvas上（挂Canvas+CanvasRaycaster组件，overrideSorting=true），这样它变化时只重建自己的小Canvas；②检查其他频繁变化的UI（如红点、飘字）是否也应该拆分到独立Canvas；③确保不变的元素（按钮、背景、框架）留在主Canvas上，利用合批减少DrawCall；④确认倒计时Text没有不必要的Raycast Target、没有Best Fit（动态字体大小变化会触发重建）。",
+    },
+    {
+      prompt: "设计题：设计一个通用的UI列表组件（UIList），支持：①数据驱动（传入IList数据自动生成/复用列表项）；②对象池复用项，避免频繁Instantiate/Destroy；③滚动时自动复用可视区域外的项（虚拟列表）；④项的点击事件转发。请写出核心接口和关键逻辑伪代码。",
+      answer: "核心接口：public class UIList<TItem, TView> where TView : MonoBehaviour, IUIListItem<TItem> { public void SetData(IList<TItem> data); public void Refresh(); public event Action<int, TItem> OnItemClicked; } 关键逻辑：①对象池：Queue<TView> _pool，GetItem()从池取或Instantiate，Recycle()回池；②虚拟列表：监听ScrollRect.OnValueChanged，计算可视区域范围(startIdx~endIdx)，只创建可见数量+缓冲区(如上下各2个)的项；③复用：滚动时将滑出可视区域的项回池，将进入可视区域的新数据项从池中取出并绑定数据(BindData)；④布局：根据itemSize和padding计算每个item的位置，用ContentSizeFitter或手动设置anchoredPosition。虚拟列表核心公式：visibleCount = Mathf.CeilToInt(viewportSize / itemSize) + buffer*2; startIdx = Mathf.FloorToInt(scrollPos / itemSize) - buffer。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="UIManager" zh="UI管理器，负责所有UI面板的创建/销毁/显示/隐藏/层级排序/输入控制的单例入口。">
+    UI框架的中枢，统一管理UI生命周期。
+  </Term>
+  <Term name="UI栈 UI Stack" zh="用栈结构（LIFO）管理弹窗的打开顺序，Push压入新弹窗、Pop弹出栈顶，自动处理返回键和遮罩。">
+    弹窗管理的标准模式。
+  </Term>
+  <Term name="Sorting Order" zh="Canvas/CanvasGroup的排序数值，数值越大渲染越靠前。用于控制UI层级显示顺序。">
+    UI层级管理的核心属性，高层Order必须大于低层。
+  </Term>
+  <Term name="Canvas Rebuild" zh="UGUI中Canvas下UI元素变化时触发的重建流程，包括Layout重建（重新计算位置大小）和Graphic重建（重新生成顶点/合批）。">
+    UGUI性能问题的主要来源，一个元素变化会导致整个Canvas重建。
+  </Term>
+  <Term name="合批 Batching" zh="将多个使用相同材质/贴图的UI元素合并到一个DrawCall中渲染，减少CPU到GPU的调用次数。">
+    UI性能优化的核心目标，图集合批是最有效手段。
+  </Term>
+  <Term name="DrawCall" zh="CPU调用GPU渲染一次的指令。每个不同材质/贴图/Shader的物体至少产生一个DrawCall，过多DrawCall导致CPU瓶颈。">
+    衡量UI性能的关键指标，UGUI优化的目标之一是减少DrawCall。
+  </Term>
+  <Term name="Sprite Atlas 图集" zh="将多个小Sprite打包成一张大纹理的Unity资产，用于UGUI合批减少DrawCall。">
+    UGUI合批的前提条件，同一图集的图片可以在一个DrawCall中渲染。
+  </Term>
+  <Term name="Raycast Target" zh="UGUI组件的属性，标记该元素是否参与GraphicRaycaster的射线检测。不必要的Raycast Target增加点击检测开销。">
+    纯装饰元素必须关闭Raycast Target，优化输入响应性能。
+  </Term>
+  <Term name="CanvasGroup" zh="UGUI组件，可以批量控制子元素的alpha透明度、interactable交互、blocksRaycasts射线阻挡。alpha=0比SetActive更轻量。">
+    UI显示/隐藏优化的推荐方式，避免SetActive触发Canvas重建。
+  </Term>
+  <Term name="MVP（Model-View-Presenter）" zh="UI架构模式：View负责显示和输入，Presenter纯C#类处理逻辑，Model提供数据，View和Model通过Presenter解耦。">
+    Unity UI推荐的架构模式，避免View和业务逻辑紧耦合。
+  </Term>
+</Glossary>
+
+<Attribution />

@@ -236,6 +236,16 @@ import { agtStructuredOutputQuestions } from "./review/agt-structured-output";
 import { agtFunctionCallingQuestions } from "./review/agt-function-calling";
 import { agtReactLoopQuestions } from "./review/agt-react-loop";
 import { agtToolDesignQuestions } from "./review/agt-tool-design";
+import { unityAdvancedSoftwareArchitectureQuestions } from "./review/unity-advanced-software-architecture";
+import { unityAdvancedCsharpQuestions } from "./review/unity-advanced-csharp";
+import { unityAdvancedDataTableQuestions } from "./review/unity-advanced-data-table";
+import { unityAdvancedUiQuestions } from "./review/unity-advanced-ui";
+import { unityAdvancedModelAnimationQuestions } from "./review/unity-advanced-model-animation";
+import { unityAdvancedNetworkQuestions } from "./review/unity-advanced-network";
+import { unityAdvancedAiQuestions } from "./review/unity-advanced-ai";
+import { unityAdvancedNavigationQuestions } from "./review/unity-advanced-navigation";
+import { unityAdvancedRenderPipelineQuestions } from "./review/unity-advanced-render-pipeline";
+import { unityAdvancedRenderPrinciplesQuestions } from "./review/unity-advanced-render-principles";
 import { autoWhyCarRunsQuestions } from "./review/auto-why-car-runs";
 import { coiFindInMatrixQuestions } from "./review/coi-find-in-matrix";
 import { coiReplaceSpacesQuestions } from "./review/coi-replace-spaces";
@@ -606,6 +616,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agtFunctionCallingQuestions,
   ...agtReactLoopQuestions,
   ...agtToolDesignQuestions,
+  // Unity3D高级编程：主程手记
+  ...unityAdvancedSoftwareArchitectureQuestions,
+  ...unityAdvancedCsharpQuestions,
+  ...unityAdvancedDataTableQuestions,
+  ...unityAdvancedUiQuestions,
+  ...unityAdvancedModelAnimationQuestions,
+  ...unityAdvancedNetworkQuestions,
+  ...unityAdvancedAiQuestions,
+  ...unityAdvancedNavigationQuestions,
+  ...unityAdvancedRenderPipelineQuestions,
+  ...unityAdvancedRenderPrinciplesQuestions,
   // 汽车为什么会跑：图解汽车构造与原理
   ...autoWhyCarRunsQuestions,
 ];

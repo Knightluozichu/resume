@@ -1,0 +1,278 @@
+---
+title: 渲染管线与图形学
+type: C
+section: 进阶专题
+order: 8
+description: 深入理解Unity渲染管线全流程，掌握DrawCall合批技术（静态/动态/GPU Instancing/SRP Batcher）与URP/HDRP定制。
+tags: ["渲染管线", "DrawCall", "SetPass Call", "合批", "静态合批", "动态合批", "GPU Instancing", "SRP Batcher", "Built-in", "URP", "HDRP", "CommandBuffer", "Camera.Render", "Culling", "MaterialPropertyBlock"]
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+wip: true
+---
+
+<Objectives
+  items={[
+    "理解渲染管线的完整流程：CPU端Culling→Sorting→DrawCall提交到GPU端Vertex→Tessellation→Geometry→Rasterization→Fragment→Output Merger",
+    "区分SetPass Call和DrawCall的概念，理解为什么DrawCall多了会卡（CPU-GPU通信开销而非GPU算力瓶颈）",
+    "掌握5种合批方式（不合并/静态合批/动态合批/GPU Instancing/SRP Batcher）的原理、适用条件和限制，能根据场景选择合批策略",
+    "理解Built-in/URP/HDRP三条渲染管线的定位和选型依据，掌握SRP Batcher的工作原理",
+    "掌握Camera.Render一帧的完整流程，理解Culling、Sorting、Build、Submit各阶段做了什么",
+    "掌握MaterialPropertyBlock的使用场景——在合批的同时修改单个物体的材质属性",
+    "了解CommandBuffer的原理和用法，能用CommandBuffer扩展渲染管线实现自定义渲染效果",
+  ]}
+/>
+
+## 渲染管线：主程必须跨过的门槛
+
+渲染是游戏引擎最复杂的子系统。不理解渲染管线，做性能优化只能靠猜，做自定义效果只能靠抄Shader。主程不一定非要写Shader，但必须理解管线每一步在做什么、瓶颈在哪里、怎么和GPU协作。
+
+<RenderPipelineFlow />
+
+## 渲染管线全流程
+
+### CPU端：准备渲染数据
+
+渲染从`Camera.Render()`开始。CPU每帧要做三件事：
+
+1. **Culling（剔除）**：视锥剔除（Frustum Culling）丢掉摄像机看不到的物体，遮挡剔除（Occlusion Culling）丢掉被其他物体挡住的物体。Layer Mask和Camera.cullingMask决定哪些层参与渲染。
+
+2. **Sorting（排序）**：不透明物体从前到后排序（减少Overdraw，配合Early-Z），透明物体从后到前排序（保证正确混合）。同材质的物体排在一起方便合批。
+
+3. **DrawCall提交**：将渲染命令翻译成GPU能理解的指令，通过图形API（OpenGL/DirectX/Metal/Vulkan）提交到GPU驱动的命令缓冲区。
+
+### GPU端：执行着色器流水线
+
+GPU收到命令后按固定流水线执行：
+
+| 阶段 | 做什么 | 可编程？ |
+|---|---|---|
+| **Vertex Shader** | 顶点坐标变换（MVP矩阵）、顶点动画 | 是 |
+| **Tessellation** | 曲面细分（将低模三角面细分） | 是（可选） |
+| **Geometry Shader** | 几何着色（增删图元，如生成草叶） | 是（可选） |
+| **Rasterization** | 光栅化（三角面→片元/Fragment） | 固定 |
+| **Fragment Shader** | 片元着色（计算每个像素颜色） | 是 |
+| **Output Merger** | 输出合并（深度测试+模板测试+混合） | 固定（可配置混合/测试状态） |
+
+<Callout type="tip">
+  **Vertex Shader和Fragment Shader是必有的**，Tessellation和Geometry Shader是可选阶段。移动端和大部分游戏不使用Tess/GS（性能开销大），它们主要用在地形细分、毛发渲染等高端效果中。
+</Callout>
+
+## SetPass Call vs DrawCall
+
+这两个概念经常被混淆，Profiler里两个数都有，必须分清：
+
+- **SetPass Call**：切换渲染状态（Shader Pass、材质、纹理、渲染状态）的调用。每次SetPass后GPU要重新绑定资源，开销大。
+- **DrawCall**：提交一次图元绘制（DrawIndexed/DrawArrays）。同一个Pass内连续提交多个相同材质的DrawCall，开销比SetPass小很多。
+
+<Callout type="warn">
+  **真正昂贵的是SetPass Call而不是DrawCall本身**。如果100个物体使用完全相同的材质和Pass，在合批后可能只需要1个SetPass + 1个（或少量）DrawCall。Profiler里"SetPass Call"数量才是CPU渲染开销的核心指标，而"DrawCall"数字在合批后看起来可能仍然很大但实际开销很小。
+</Callout>
+
+### 为什么DrawCall多了会卡？
+
+不是GPU算不过来，而是**CPU提交DrawCall太慢**。每个DrawCall都需要CPU做：
+- 检查渲染状态
+- 将顶点/索引数据从CPU内存拷贝到GPU（或者确认已经在GPU上）
+- 发送命令到驱动缓冲区
+- 驱动做合法性检查和命令翻译
+
+单次DrawCall的CPU开销约0.01~0.1ms（取决于API和驱动），1000个DrawCall就是10~100ms的CPU时间——60帧的话每帧只有16.6ms，光提交DrawCall就用完了。GPU可能大部分时间在等CPU发命令（GPU Bound vs CPU Bound的问题）。
+
+## 合批：减少DrawCall的核心手段
+
+<BatchingComparison />
+
+合批的核心思路：**让CPU一次性提交更多的渲染工作，减少状态切换次数**。
+
+### 1. 静态合批（Static Batching）
+
+原理：标记为`Static`的物体，在Build时或运行时将它们的Mesh合并成一个大的VBO/IBO，运行时一次DrawCall绘制整个合并后的Mesh。
+
+```csharp
+// 标记静态合批：Inspector中勾选Static Batching
+// 或代码中标记：
+GameObjectUtility.SetStaticEditorFlags(gameObject, StaticEditorFlags.BatchingStatic);
+
+// 运行时静态合批API（需要在Start时调用，会合并标记Static的物体）
+StaticBatchingUtility.Combine(parentGameObject);
+```
+
+<Callout type="trap">
+  **静态合批的代价是内存**。100个相同的石头Mesh，不合并时只存1份Mesh数据；静态合批后变成1个大Mesh，包含100份石头的顶点数据（位置不同），内存翻100倍。场景中大量重复的小物体用静态合批会导致内存暴涨。解决办法：重复物体用GPU Instancing，不同的静态物体用静态合批。
+</Callout>
+
+**限制**：运行时不能移动/旋转/缩放Static标记的物体（合批后顶点位置已经烘焙到大Mesh中）。
+
+### 2. 动态合批（Dynamic Batching）
+
+原理：CPU每帧将使用相同材质的小Mesh（&lt;300顶点）动态合并到一个顶点缓冲区，一次DrawCall提交。
+
+**限制**：
+- 顶点属性限制：&lt;300顶点，&lt;900顶点属性（Vertex Attributes）
+- 所有物体使用同一材质实例（不能用MaterialPropertyBlock以外的方式修改属性）
+- 不支持多Pass Shader
+- CPU每帧做顶点变换和拷贝，顶点数多了CPU开销反而更大
+
+<Callout type="warn">
+  **动态合批在URP/HDRP中默认是关闭的**，因为SRP Batcher效果更好。动态合批仅在低端设备+大量小物体（粒子、小道具）场景下才有价值，且Profiler确认CPU有富余时间才开启。
+</Callout>
+
+### 3. GPU Instancing
+
+原理：同一Mesh+同一材质的多个物体，通过一个DrawCall提交，利用GPU的`gl_InstanceID`区分每个实例，每个实例的位置/颜色/缩放等属性通过数组传递。
+
+```csharp
+// Shader中启用Instancing
+// #pragma multi_compile_instancing
+// 材质Inspector勾选"Enable GPU Instancing"
+
+// 用Graphics.DrawMeshInstanced直接绘制
+Matrix4x4[] matrices = new Matrix4x4[1000];
+for (int i = 0; i < 1000; i++) {
+    matrices[i] = Matrix4x4.TRS(positions[i], rotations[i], Vector3.one);
+}
+Graphics.DrawMeshInstanced(mesh, 0, material, matrices, 1000);
+```
+
+**适合场景**：大量重复物体（草、树、石头、子弹、敌人）。不同Mesh不能合批，必须同一Mesh同一材质。
+
+### 4. MaterialPropertyBlock：合批中修改个别属性
+
+<Term def="Unity提供的逐渲染器材质属性覆盖机制。在不创建新Material实例的前提下，修改单个Renderer的材质属性（如颜色），避免破坏合批。直接修改renderer.material.color会创建新Material实例导致合批断裂。">MaterialPropertyBlock</Term>是合批的好搭档：
+
+```csharp
+// 错误做法：直接修改material会创建实例→合批断裂！
+renderer.material.color = Color.red;  // 每个物体一个Material实例
+
+// 正确做法：使用MaterialPropertyBlock
+var props = new MaterialPropertyBlock();
+renderer.GetPropertyBlock(props);
+props.SetColor("_BaseColor", teamColor);  // 修改单个属性
+renderer.SetPropertyBlock(props);  // 不创建新Material，保持合批
+```
+
+<Callout type="trap">
+  **`renderer.material` vs `renderer.sharedMaterial`**：访问`.material`会Instantiate一个新的Material实例（导致合批断裂+内存泄漏），访问`.sharedMaterial`是共享引用。运行时修改材质属性必须用MaterialPropertyBlock，不要直接改material。
+</Callout>
+
+### 5. SRP Batcher（推荐）
+
+<Term def="Scriptable Render Pipeline Batcher，URP/HDRP内置的合批机制。不合并Mesh，而是将材质参数常驻GPU的Constant Buffer（CBUFFER），DrawCall之间只更新变换矩阵等逐物体数据，材质参数不切换→大幅减少SetPass开销。">SRP Batcher</Term>是目前最推荐的合批方式：
+
+- **不合并Mesh**（无内存翻倍问题）
+- **不限制顶点数**（大模型也能合）
+- **支持MaterialPropertyBlock**（逐物体属性不破坏合批）
+- **支持不同Mesh**（只要Shader兼容）
+- **CPU开销极低**（不需要每帧拷贝顶点）
+
+**工作原理**：
+1. Shader中材质属性统一放在`CBUFFER_START(UnityPerMaterial)`中
+2. 材质参数上传到GPU后常驻CBUFFER，不随DrawCall切换
+3. 每个DrawCall只更新逐物体数据（MVP矩阵、Light Probe等）
+4. 相同Shader Variant的DrawCall之间不需要SetPass
+
+<Callout type="tip">
+  **SRP Batcher兼容性要求**：Shader必须使用`CBUFFER_START(UnityPerMaterial)`包裹材质属性。URP/Lit Shader默认兼容。自定义Shader如果不写CBUFFER，SRP Batcher不会生效。在Frame Debugger中可以看到"SRP Batch"标记表示合批成功。
+</Callout>
+
+## Built-in / URP / HDRP 选型
+
+| 管线 | 定位 | 适用项目 | 自定义难度 | 性能 |
+|---|---|---|---|---|
+| **Built-in** | 传统固定管线 | 老项目维护、快速原型 | 中（CommandBuffer扩展） | 一般 |
+| **URP** | 通用可编程渲染管线 | 移动端、中端PC/主机、大多数游戏 | 低（Renderer Feature扩展） | 好（SRP Batcher+） |
+| **HDRP** | 高端画质管线 | 3A级别PC/主机、影视渲染 | 高（自定义Pass） | 需要强GPU |
+
+<Callout type="warn">
+  **新项目不要选Built-in**。URP是Unity的未来，Asset Store资源、官方示例、新功能都优先支持URP。HDRP适合追求极致画质且目标平台是高端PC/PS5/Xbox的项目。**Built-in→URP迁移成本很高**（Shader几乎全部重写），项目初期就要选对。
+</Callout>
+
+## CommandBuffer：扩展渲染管线
+
+<Term def="命令缓冲区，允许在渲染管线的特定时机（CameraEvent）插入自定义绘制指令。可以在不修改底层管线的前提下实现自定义后处理、选区高亮、透明阴影、体积光等效果。">CommandBuffer</Term>是URP之前扩展Built-in管线的主要手段，在URP中被Renderer Feature取代但仍然有用：
+
+```csharp
+// CommandBuffer示例：在AfterForwardOpaque后绘制自定义效果
+var cmd = new CommandBuffer { name = "CustomOutline" };
+cmd.DrawRenderers(renderers, ref drawSettings, ref filterSettings);
+camera.AddCommandBuffer(CameraEvent.AfterForwardOpaque, cmd);
+
+// URP中用ScriptableRendererFeature更优雅
+// 但CommandBuffer在Graphics.Blit、ComputeShader调度等场景仍然常用
+```
+
+```csharp
+// URP Renderer Feature 模板
+public class CustomRenderPass : ScriptableRenderPass {
+    public override void Execute(ScriptableRenderContext context, ref RenderingData data) {
+        var cmd = CommandBufferPool.Get("CustomPass");
+        // ... 执行自定义渲染指令 ...
+        context.ExecuteCommandBuffer(cmd);
+        CommandBufferPool.Release(cmd);
+    }
+}
+```
+
+## 性能优化要点
+
+1. **优先使用SRP Batcher**（URP/HDRP默认开启），确保自定义Shader兼容
+2. **静态物体标记Static Batching**，但注意内存，大量重复物体用GPU Instancing
+3. **大量重复Mesh用GPU Instancing**（草、树、道具）
+4. **运行时修改材质属性用MaterialPropertyBlock**，不要创建Material实例
+5. **减少透明物体**（无法利用Early-Z，Overdraw严重）
+6. **用Frame Debugger**查看每个DrawCall在画什么、为什么没合批
+7. **用Profiler的Rendering面板**分析SetPass Call数量和CPU渲染耗时
+
+<Exercises
+  items={[
+    {
+      prompt: "诊断题：一个开放世界场景使用URP，场景中有5000棵树（同一种Mesh+同一种材质）、200栋不同的建筑（标记了Batching Static）、100个NPC角色（带动画SkinnedMeshRenderer）、大量UI粒子效果。Profiler显示：SetPass Calls=2500、CPU Render Thread=12ms、GPU=8ms（目标30fps即33ms/帧，看似有富余但中低端机上掉帧严重）。Frame Debugger发现：①树木没有合批（材质未勾选Enable GPU Instancing）；②建筑虽然标记了Static但运行时加载AssetBundle后未调用StaticBatchingUtility.Combine；③NPC每个角色用了3个Material（身体/头发/武器）；④UI粒子用了多个不同材质；⑤阴影设置为Very High Resolution导致Cascade开销大。请给出系统的优化方案。",
+      answer: "优化方案：①树木开启GPU Instancing——材质勾选Enable GPU Instancing，确认Shader有#pragma multi_compile_instancing，用DrawMeshInstanced或Burst/Entities Graphics批量绘制，5000棵树从~5000 DC降到~5-10个Instanced DrawCall；②建筑静态合批——运行时加载后调用StaticBatchingUtility.Combine(root)，但注意：如果不同建筑使用不同材质，静态合批只能合批同材质的子网格，建议按材质分组；同时确认静态合批内存增量可接受（200栋不同建筑合并后VBO增大但每栋只1份，内存增加可控）；③NPC合批——SkinnedMeshRenderer无法静态合批/动态合批/常规Instancing，但可以：a) 合并SkinnedMeshRenderer（身体+头发+武器如果是同一骨骼可以合并到一个Mesh，减少到1个Material），b) 每个角色尽量用1个Material（通过纹理图集把身体/头发/武器贴图合并到一张Atlas），c) 远处NPC用GPU Instancing的Impostor（公告板）替代；④UI粒子合批——所有粒子特效使用同一材质（同一ParticleShader），通过纹理图集合并贴图，粒子系统勾选\"Resimulate\"和\"Batch\"，减少粒子材质种类到2-3种；⑤阴影优化——a) 树木关闭阴影（Cast Shadows=Off或TwoSided）或使用Billboard Shadow，b) 阴影分辨率降到Medium或High（Very High对移动端代价太大），c) 阴影距离Shadow Distance从默认150m降到50-80m，d) NPC只有主角和近距离NPC投射阴影，远处NPC关闭Cast Shadows，e) 使用Soft Shadow（PCF 2x2）而非PCF 5x5或PCSS；⑥额外优化：a) 使用LOD Group——树木和建筑都设置LOD，远处降面数或切换为Impostor，b) Occlusion Culling——城区/建筑密集区烘焙遮挡剔除，c) Camera Layer Mask——远处不渲染小物体层，d) 开启Dynamic Batching（URP默认关闭但粒子/小物体可以在Pipeline Asset中开启）。综合后SetPass Call目标降到500以下，CPU Render Thread降到4ms以下。",
+    },
+    {
+      prompt: "实现题：用CommandBuffer或URP Renderer Feature实现一个\"选中物体高亮\"效果。要求：①当点击物体时，在物体周围绘制一圈纯色轮廓（Outline）；②不修改物体原本的材质/Shader；③可以同时高亮多个物体；④高亮颜色可配置。写出核心实现思路和关键代码。",
+      answer: "实现思路（URP Renderer Feature方案）：(1) 创建CustomRenderPass继承ScriptableRenderPass，注入到AfterRenderingOpaques时机；(2) 维护一个静态HashSet<Renderer>存储当前需要高亮的Renderer列表；(3) Execute中：a) 用CommandBuffer.SetRenderTarget设置到一个临时RT（或直接画到Camera Target），b) 设置一个纯色的Unlit Override Material，c) 调用DrawRenderers对选中的Renderer列表执行绘制（用OverrideMaterial替换为高亮Shader），d) 对绘制结果做轮廓检测——更简单的做法是：先把选中物体沿法线方向外扩一点点（Vertex Shader中沿Normal方向offset），绘制纯色；再正常绘制选中物体覆盖中间部分，留下外轮廓边；(4) 关键代码：Shader中顶点Shader沿法线外扩：v.vertex.xyz += v.normal * _OutlineWidth * 0.01，用ZTest Always确保轮廓可见；(5) Renderer Feature：在Configure中申请临时RT，在Execute中用DrawingSettings overrideMaterial = new DrawingSettings(new ShaderTagId(\"UniversalForward\"), ...) { overrideMaterial = outlineMat }，FilteringSettings filter = new FilteringSettings(RenderQueueRange.opaque, -1, selectedRenderers)，然后context.DrawRenderers(cullingResults, ref drawSettings, ref filterSettings)；(6) 管理接口：public static class HighlightManager { public static void Add(Renderer r) / Remove(Renderer r) / Clear() }，点击时Raycast拿到Renderer调用Add/Remove；(7) 注意：外扩法线方法在边缘/尖锐处会有断裂，可以选择\"沿View空间法线外扩\"或\"后处理边缘检测\"方案（Blit到临时RT→Sobel算子检测边缘→合成到屏幕）更稳定但多一次全屏Blit开销。对于不需要太粗的轮廓线，法线外扩方案最简单高效。",
+    },
+  ]}
+/>
+
+<Glossary>
+  <Term name="渲染管线 Render Pipeline" zh="CPU准备数据→提交DrawCall→GPU执行着色器流水线→输出帧缓冲的完整流程。分为CPU端（Culling/Sorting/Submit）和GPU端（Vertex→Rasterization→Fragment→Output）两大阶段。">
+    理解管线每个阶段是做渲染优化和自定义效果的基础。
+  </Term>
+  <Term name="DrawCall" zh="CPU向GPU提交一次图元绘制命令（DrawIndexed/DrawArrays）。真正昂贵的是DrawCall前的状态切换（SetPass Call），而非DrawCall本身。">
+    合批就是为了减少DrawCall/SetPass Call数量，Profiler重点关注SetPass Call。
+  </Term>
+  <Term name="SetPass Call" zh="切换Shader Pass/材质/纹理/渲染状态的调用。每次SetPass需要GPU重新绑定资源，开销远大于普通DrawCall。是CPU渲染性能的核心瓶颈指标。">
+    合批的本质就是减少SetPass Call次数，让同一Pass下尽量多DrawCall连续提交。
+  </Term>
+  <Term name="静态合批 Static Batching" zh="将标记Static的物体Mesh在Build/运行时合并为大Mesh，一次DrawCall绘制。不可移动，内存翻倍。">
+    适合不同Mesh的静态物体（场景建筑），不适合大量重复小物体（内存浪费）。
+  </Term>
+  <Term name="动态合批 Dynamic Batching" zh="CPU每帧自动将&lt;300顶点的小Mesh动态合并提交。顶点限制严格，CPU拷贝开销大。">
+    URP/HDRP默认关闭，仅适合大量小顶点物体+CPU富余的场景。
+  </Term>
+  <Term name="GPU Instancing" zh="同一Mesh+同一材质的多个物体通过一次DrawCall提交，gl_InstanceID区分实例。适合草/树/弹丸等大量重复物体。">
+    需要Shader支持（#pragma multi_compile_instancing），材质勾选Enable GPU Instancing。
+  </Term>
+  <Term name="SRP Batcher" zh="Scriptable Render Pipeline Batcher，URP/HDRP内置合批机制。材质参数常驻GPU CBUFFER，DrawCall间只更新逐物体数据，不切换材质状态。">
+    目前最优合批方案：不合并Mesh（无内存代价）、不限顶点数、支持不同Mesh、支持MaterialPropertyBlock。
+  </Term>
+  <Term name="MaterialPropertyBlock" zh="逐Renderer材质属性覆盖机制。在不创建新Material实例的前提下修改单个物体的材质属性，避免合批断裂。">
+    运行时修改颜色/参数的正确方式，不要直接访问renderer.material（会创建实例破坏合批）。
+  </Term>
+  <Term name="CommandBuffer" zh="命令缓冲区，可在渲染管线特定时机插入自定义绘制指令。实现自定义效果（后处理/轮廓/阴影）的基础工具。">
+    Built-in管线下扩展渲染的主要手段，URP中被Renderer Feature取代但仍广泛使用。
+  </Term>
+  <Term name="URP / HDRP / Built-in" zh="Unity的三条渲染管线。URP（通用可编程管线，移动端/中端推荐）、HDRP（高端画质管线）、Built-in（传统管线，新项目不推荐）。">
+    新项目选URP，3A画质选HDRP，老项目维护用Built-in。迁移成本极高，初期选型要慎重。
+  </Term>
+  <Term name="光栅化 Rasterization" zh="GPU固定功能阶段，将投影后的三角形转化为片元（Fragment，候选像素），包含顶点到像素的插值和Scissor测试。">
+    连接几何阶段和像素阶段的桥梁，不可编程但可配置。
+  </Term>
+  <Term name="Early-Z" zh="光栅化阶段提前执行深度测试，被挡住的片元直接丢弃不进入Fragment Shader，减少Overdraw。不透明物体从前到后排序可以最大化Early-Z效果。">
+    不透明物体从前到后排序的根本原因，透明物体需要关闭ZWrite从后到前排序。
+  </Term>
+</Glossary>
