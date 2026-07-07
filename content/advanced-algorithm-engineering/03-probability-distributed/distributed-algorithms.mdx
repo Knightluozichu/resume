@@ -1,0 +1,75 @@
+---
+title: 分布式算法
+type: A
+section: 概率与分布式算法
+order: 9
+description: 共识与 Paxos/Raft、Gossip 协议、向量时钟与 CAP 定理的取舍。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { AaeDistributedAlgorithmsDiagram } from "@/components/mdx/advanced-algorithm/diagrams/aae-distributed-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释共识问题为何在故障下非平凡，Paxos/Raft 如何解决
+- 能说出向量时钟如何刻画分布式事件的因果关系
+- 能回答：CAP 定理中「三选二」为何实际是「分区时在 C 与 A 间取舍」？
+
+</Objectives>
+
+## 分布式算法
+
+分布式系统的本质难题不是「计算」，而是「不一致」——多台机器各自有状态，消息会延迟、丢失、乱序，机器还会宕机。在这样的环境里，连「让所有节点就同一个值达成一致」这种单机里 trivial 的事都极难。分布式算法研究的，就是在这种不确定下依然给出正确性保证的协议。
+
+<AaeDistributedAlgorithmsDiagram />
+
+<Term def="让一组可能故障的节点对单个值达成一致决策的分布式问题，是复制状态机与分布式锁的基础。">共识问题</Term>看似简单——大家投票取多数即可——但在故障下非平凡：提议者可能同时提议不同值，节点可能宕机重启，消息可能延迟到投票早已结束。FLP 不可能性定理甚至证明：在异步网络里，只要有一个节点可能故障，就不存在确定性算法同时保证安全性与终止性。现实中靠放宽假设解决：Paxos 与 Raft 引入「多数派」与「租约/心跳超时」绕过 FLP——只要多数节点活着且网络最终恢复，就能达成一致。Raft 把 Paxos 的难以理解拆成 leader 选举、日志复制、安全性三个清晰子问题，成为工程首选。
+
+## 核心概念
+
+<Term def="为每个事件附加各节点本地计数的向量、通过分量两两比较判定 happened-before 因果关系的逻辑时钟。">向量时钟</Term>解决的是「谁先谁后」的因果刻画。单机里用物理时间戳，但分布式里各机时钟不同步，物理时间戳不可靠。向量时钟给每个事件附加一个「各节点本地计数」的向量，比较两个事件的向量：若前者各分量都 ≤ 后者，则前者先于后者；若互不 ≤，则两者并发（无因果关系）。这让系统区分「因果先后」与「并发冲突」——冲突才需要合并，因果先后直接覆盖旧值。Dynamo、Riak 用它做冲突检测。
+
+<Term def="节点定期与少量随机邻居交换状态信息、信息以指数级扩散到全网的流行病式传播协议。">Gossip 协议</Term>是分布式里传播信息的低成本方式。每个节点定期挑几个随机邻居，把已知状态告诉对方，对方再告诉它的邻居——像传染病一样，信息在 O(log n) 轮内以高概率覆盖全网。它牺牲了强一致与低延迟，换来极强容错：任一节点故障不影响整体，扩展性近乎完美。Cassandra 用 Gossip 同步集群成员与故障检测。
+
+<Term def="分布式系统在一致性、可用性、分区容忍三者中分区发生时只能取其一的定理，核心是分区时的 C/A 取舍。">CAP 定理</Term>常被误读为「三选二」，但它的真实含义是：网络分区（P）不是可选项而是现实，分区发生时你只能在一致性（C）与可用性（A）之间二选一。选 C 则分区期间拒绝写入以保证不分裂（如 ZooKeeper、Spanner 强一致）；选 A 则分区期间继续接受写入、允许各分区分歧、事后合并（如 Dynamo、Cassandra 最终一致）。不存在「同时满足 CAP 三者」的系统，因为分区时 C 与 A 物理上冲突。这个取舍决定了数据库的根本定位。
+
+<Callout type="tip">
+<strong>建议 →</strong> 选型先定一致性需求：金融与库存要强一致（CP），社交与缓存可最终一致（AP）。CAP 不是选择题而是分区时的应急策略——想清楚分区期间是拒写保一致，还是继续写事后合并，整个系统的复杂度都围绕这个决定展开。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 分布式系统用物理时间戳排序事件，偶发因果错乱（旧操作覆盖了新操作）。<strong>原因 →</strong> 各机时钟不同步，物理时间戳无法可靠刻画因果关系，时钟漂移导致先后颠倒。<strong>修法 →</strong> 用向量时钟等逻辑时钟刻画因果关系，区分「因果先后」与「并发冲突」；并发冲突才合并，因果先后直接覆盖旧值。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 误以为系统「同时满足 CAP 三者」，分区时既想强一致又想不中断服务。<strong>原因 →</strong> 误读 CAP 为静态三选二，没认识到分区时 C 与 A 物理上冲突。<strong>修法 →</strong> 明确定位：强一致系统分区时拒写保 C，最终一致系统分区时继续写事后合并保 A；不存在分区时同时满足 C 与 A 的设计，按业务取舍二选一。
+</Callout>
+
+## 小结与练习
+
+- 共识让故障节点就单值达成一致；FLP 证明异步网络无确定性解，Paxos/Raft 靠多数派与超时绕过
+- 向量时钟用各节点计数向量判定因果关系，区分因果先后与并发冲突；Gossip 以 O(log n) 轮流行病式扩散信息
+- CAP 真实含义是分区时在 C 与 A 间二选一，分区是现实而非可选项；不存在同时满足三者
+- 选型按一致性需求：强一致（CP）拒写保一致，最终一致（AP）继续写事后合并
+
+<Exercises>
+  <Answer question="共识问题为何在故障下非平凡？Paxos/Raft 如何解决？">单机投票取多数 trivial，但分布式里提议者同时提议不同值、节点宕机重启、消息延迟丢失乱序，使「所有节点就单值一致」极难；FLP 还证明异步网络有故障时无确定性算法同时保证安全与终止。Paxos/Raft 靠多数派（只要多数活着就能定值）与租约/心跳超时绕过 FLP，Raft 进一步拆成 leader 选举、日志复制、安全性三子问题，成为工程首选。</Answer>
+  <Answer question="CAP 定理中「三选二」为何实际是「分区时在 C 与 A 间取舍」？">网络分区不是可选项而是现实（P 一定存在），分区发生时一致性与可用性物理上冲突：保 C 就得拒写防分裂，保 A 就得继续写允许分歧。故不存在「同时满足三者」，真正选择是分区时的 C/A 取舍。CP 系统分区时拒写保一致，AP 系统分区时继续写事后合并。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="共识问题">让一组可能故障的节点对单个值达成一致决策的分布式问题，是复制状态机与分布式锁的基础，故障下非平凡。</GlossaryItem>
+  <GlossaryItem term="向量时钟">为每个事件附加各节点本地计数的向量、通过分量比较判定 happened-before 因果关系的逻辑时钟，区分因果先后与并发冲突。</GlossaryItem>
+  <GlossaryItem term="Gossip 协议">节点定期与少量随机邻居交换状态、信息以流行病式 O(log n) 轮扩散到全网的协议，牺牲强一致换极强容错与扩展性。</GlossaryItem>
+  <GlossaryItem term="CAP 定理">分布式系统在一致性、可用性、分区容忍三者中，分区发生时只能在 C 与 A 间二选一的定理，分区是现实而非可选项。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Designing Data-Intensive Applications (Kleppmann) & Distributed Systems (Tanenbaum & Van Steen)" adaptedUrl="https://www.oreilly.com/" />

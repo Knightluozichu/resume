@@ -443,7 +443,20 @@ export type ReviewChapterSlug =
   | "add-strategic-patterns"
   | "add-cqrs-event-sourcing"
   | "add-hexagonal-architecture"
-  | "add-final-review";
+  | "add-final-review"
+  // 高级算法与算法工程
+  | "aae-learning-map"
+  | "aae-complexity-analysis"
+  | "aae-advanced-data-structures"
+  | "aae-graph-algorithms"
+  | "aae-string-algorithms"
+  | "aae-approximation-algorithms"
+  | "aae-randomized-algorithms"
+  | "aae-parallel-algorithms"
+  | "aae-distributed-algorithms"
+  | "aae-indexing-search"
+  | "aae-algorithm-engineering"
+  | "aae-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -824,6 +837,19 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "add-cqrs-event-sourcing": "CQRS 与事件溯源",
   "add-hexagonal-architecture": "六边形架构",
   "add-final-review": "架构与领域设计总复习",
+  // 高级算法与算法工程
+  "aae-learning-map": "高级算法与算法工程全书学习地图",
+  "aae-complexity-analysis": "复杂度分析与工程权衡",
+  "aae-advanced-data-structures": "高级数据结构",
+  "aae-graph-algorithms": "高级图算法",
+  "aae-string-algorithms": "字符串算法",
+  "aae-approximation-algorithms": "近似算法",
+  "aae-randomized-algorithms": "随机算法",
+  "aae-parallel-algorithms": "并行算法",
+  "aae-distributed-algorithms": "分布式算法",
+  "aae-indexing-search": "索引与搜索引擎",
+  "aae-algorithm-engineering": "算法工程化实践",
+  "aae-final-review": "高级算法与算法工程总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

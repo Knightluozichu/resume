@@ -1,0 +1,75 @@
+---
+title: 并行算法
+type: A
+section: 概率与分布式算法
+order: 8
+description: MapReduce、BSP、PRAM 模型与 Work-Span 并行度分析及并行排序归约。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { AaeParallelAlgorithmsDiagram } from "@/components/mdx/advanced-algorithm/diagrams/aae-parallel-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能用 Work-Span 模型估算算法的并行度上限
+- 能说出 BSP 的 Superstep 同步模型如何抽象通信代价
+- 能回答：MapReduce 为何天然适合可结合的归约操作？
+
+</Objectives>
+
+## 并行算法
+
+单机算力见顶后，提升靠「同时用更多核」。但把一个串行算法直接丢到多核并不会自动变快——并行有它自己的代价模型：能拆成多少独立子任务、子任务间要多少通信、同步点在哪。并行算法研究的，就是如何在「计算」与「通信/同步」之间找到最优切分。
+
+<AaeParallelAlgorithmsDiagram />
+
+不同的硬件抽象对应不同的模型。<Term def="把并行算法代价拆为总工作量与关键路径长度、并行度为其比值的抽象模型，刻画算法理论上能用多少处理器。">Work-Span 模型</Term>是分析并行度的基本工具。总工作量 T₁ 是串行总操作数，关键路径长度 T∞（Span）是沿依赖链最长的那条路径——无论你有多少处理器，都不可能比 T∞ 更快完成。理论并行度 T₁/T∞ 给出「最多能用多少处理器不闲置」。这个模型把「能并行多少」从硬件细节中抽象出来：一个算法若 Span 很大，再多的核也救不了；若 Work 与 Span 接近，则并行度接近 1，几乎串行。
+
+## 核心概念
+
+<Term def="把并行计算拆为若干超级步、每步本地计算后全局同步通信的模型，用计算、通信、同步三代价刻画算法。">BSP 模型</Term>（Bulk Synchronous Parallel）给并行算法一个清晰的代价账本。它把执行切成若干 Superstep：每个 Superstep 先在各处理器本地计算，再发送消息，然后全局栅栏同步。一次算法的代价是 Superstep 数乘以每步最慢处理器的「计算 + 通信」之和。BSP 的价值在于把通信代价显式化——你不能假装通信免费，每条跨处理器消息都进账本。这让算法设计者被迫思考数据局部性，而不是盲目拆分。
+
+<Term def="假设所有处理器共享内存、可按同步步读写的理论并行模型，是并行算法复杂度分析的纸笔工具。">PRAM 模型</Term>（Parallel Random Access Machine）则更理想化：它假设一堆处理器共享内存，按同步时钟读写，忽略通信代价。PRAM 不反映真实硬件，却是分析算法内在并行度的「纸笔工具」——在它上面设计的算法，移植到真实机器时再处理通信与局部性。
+
+工程上最成功的是<Term def="把计算拆为 Map 本地处理与 Shuffle 按键聚合、Reduce 归约两阶段的分布式并行编程模型。">MapReduce</Term>。它把计算固定成两阶段：Map 对每条输入独立产出键值对（完全并行、无依赖），Shuffle 把同键数据汇聚到同一 reducer，Reduce 对每组同键数据归约。这个模型之所以流行，在于它把「并行 + 容错 + 数据分布」全部藏进框架，程序员只写两个无状态函数。它天然适合可结合的归约（求和、计数、求最大值）：因为可结合性允许把归约拆成任意子集先算再合并，Map 与 Reduce 各做一部分，结果与串行一致。并行排序则常用奇偶排序或采样分块：先采样确定分桶边界，各桶并行排序后拼接，把比较的依赖链压短。
+
+<Callout type="tip">
+<strong>建议 →</strong> 设计并行算法先算 Work-Span：若 Span 接近 Work，并行度低，加核无用，应先重构依赖关系压短关键路径；再评估通信——BSP 账本里通信占比高就重排数据提高局部性。先压 Span 再压通信，顺序不能反。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 把串行算法丢到多核，加到 16 核只快了 3 倍，再加核收益停滞。<strong>原因 →</strong> 算法 Span 过大、关键路径长，并行度 T₁/T∞ 低，多余核闲置；且通信同步开销随核数增长。<strong>修法 →</strong> 先用 Work-Span 分析，重构算法压短关键路径（如改依赖重的递归为分块并行），再考虑数据局部性减少通信，而不是盲目堆核。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 MapReduce 跑一个归约操作，结果与串行不一致、偶发错误。<strong>原因 →</strong> 归约操作不可结合或不可交换，拆成子集并行合并后顺序不同导致结果偏差（如浮点加法不满足结合律）。<strong>修法 →</strong> 确认归约操作可结合（必要时可交换）；对浮点等敏感运算用定点或规定合并顺序，或改用树形归约控制误差累积。
+</Callout>
+
+## 小结与练习
+
+- Work-Span：并行度 = T₁/T∞，Span 是关键路径长度决定加核上限；Span 接近 Work 则并行度低
+- BSP 把执行切成 Superstep，本地计算后全局同步，用计算/通信/同步三代价显式记账，逼算法考虑局部性
+- PRAM 是理想化的共享内存纸笔模型，用于分析算法内在并行度，移植时再处理通信
+- MapReduce 用 Map-Shuffle-Reduce 两阶段藏起并行与容错，天然适配可结合归约；并行排序靠采样分桶压短依赖链
+
+<Exercises>
+  <Answer question="如何用 Work-Span 模型估算一个算法的并行度上限？Span 过大时该怎么办？">并行度上限 = 总工作量 T₁ 除以关键路径长度 T∞（Span）。T∞ 是沿依赖链最长路径，无论多少处理器都不能比它更快。若 Span 过大、接近 T₁，则并行度低，加核无用；应重构算法压短关键路径，把依赖重的串行递归改成可并行的分块结构，先降 Span 再谈加核。</Answer>
+  <Answer question="MapReduce 为何天然适合可结合的归约操作？不可结合会怎样？">MapReduce 把归约拆成各 reducer 先算子集、再合并。若归约可结合（如求和、最大值），子集先算再合并与串行顺序无关，结果一致，故天然适配。若不可结合（如浮点加法不严格满足结合律，或操作依赖顺序），并行合并顺序不同会导致结果偏差；需改用定点、规定合并顺序或树形归约控制误差。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Work-Span 模型">把并行代价拆为总工作量 T₁ 与关键路径长度 T∞、并行度为其比值的抽象模型，刻画算法最多能用多少处理器不闲置。</GlossaryItem>
+  <GlossaryItem term="BSP 模型">把并行计算拆为若干超级步、每步本地计算后全局同步通信的模型，用计算、通信、同步三代价显式记账。</GlossaryItem>
+  <GlossaryItem term="PRAM 模型">假设所有处理器共享内存、按同步步读写的理想化理论并行模型，是并行算法复杂度分析的纸笔工具，忽略通信代价。</GlossaryItem>
+  <GlossaryItem term="MapReduce">把计算拆为 Map 本地处理、Shuffle 按键聚合、Reduce 归约两阶段的分布式并行编程模型，天然适配可结合归约，藏起并行与容错。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms (CLRS) & Data-Intensive Text Processing with MapReduce (Lin & Dyer)" adaptedUrl="https://mitpress.mit.edu/" />

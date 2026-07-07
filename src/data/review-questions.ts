@@ -367,6 +367,18 @@ import { addStrategicPatternsQuestions } from "./review/add-strategic-patterns";
 import { addCqrsEventSourcingQuestions } from "./review/add-cqrs-event-sourcing";
 import { addHexagonalArchitectureQuestions } from "./review/add-hexagonal-architecture";
 import { addFinalReviewQuestions } from "./review/add-final-review";
+import { aaeLearningMapQuestions } from "./review/aae-learning-map";
+import { aaeComplexityAnalysisQuestions } from "./review/aae-complexity-analysis";
+import { aaeAdvancedDataStructuresQuestions } from "./review/aae-advanced-data-structures";
+import { aaeIndexingSearchQuestions } from "./review/aae-indexing-search";
+import { aaeGraphAlgorithmsQuestions } from "./review/aae-graph-algorithms";
+import { aaeStringAlgorithmsQuestions } from "./review/aae-string-algorithms";
+import { aaeApproximationAlgorithmsQuestions } from "./review/aae-approximation-algorithms";
+import { aaeRandomizedAlgorithmsQuestions } from "./review/aae-randomized-algorithms";
+import { aaeParallelAlgorithmsQuestions } from "./review/aae-parallel-algorithms";
+import { aaeDistributedAlgorithmsQuestions } from "./review/aae-distributed-algorithms";
+import { aaeAlgorithmEngineeringQuestions } from "./review/aae-algorithm-engineering";
+import { aaeFinalReviewQuestions } from "./review/aae-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -739,6 +751,18 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...addCqrsEventSourcingQuestions,
   ...addHexagonalArchitectureQuestions,
   ...addFinalReviewQuestions,
+  ...aaeLearningMapQuestions,
+  ...aaeComplexityAnalysisQuestions,
+  ...aaeAdvancedDataStructuresQuestions,
+  ...aaeIndexingSearchQuestions,
+  ...aaeGraphAlgorithmsQuestions,
+  ...aaeStringAlgorithmsQuestions,
+  ...aaeApproximationAlgorithmsQuestions,
+  ...aaeRandomizedAlgorithmsQuestions,
+  ...aaeParallelAlgorithmsQuestions,
+  ...aaeDistributedAlgorithmsQuestions,
+  ...aaeAlgorithmEngineeringQuestions,
+  ...aaeFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

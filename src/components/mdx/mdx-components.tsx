@@ -775,6 +775,18 @@ import { AddContextMapDiagram } from "./architecture-domain/diagrams/add-context
 import { AddCqrsEventSourcingDiagram } from "./architecture-domain/diagrams/add-cqrs-event-sourcing";
 import { AddHexagonalArchitectureDiagram } from "./architecture-domain/diagrams/add-hexagonal-architecture";
 import { AddFinalReviewMindMap } from "./architecture-domain/diagrams/add-final-review-mindmap";
+import { AaeAlgorithmEngineeringMap } from "./advanced-algorithm/diagrams/aae-algorithm-engineering-map";
+import { AaeComplexityTradeoffDiagram } from "./advanced-algorithm/diagrams/aae-complexity-tradeoff";
+import { AaeDataStructuresComparisonDiagram } from "./advanced-algorithm/diagrams/aae-data-structures-comparison";
+import { AaeIndexingSearchDiagram } from "./advanced-algorithm/diagrams/aae-indexing-search";
+import { AaeGraphAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-graph-algorithms";
+import { AaeStringAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-string-algorithms";
+import { AaeApproximationDiagram } from "./advanced-algorithm/diagrams/aae-approximation";
+import { AaeRandomizedAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-randomized-algorithms";
+import { AaeParallelAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-parallel-algorithms";
+import { AaeDistributedAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-distributed-algorithms";
+import { AaeAlgorithmEngineeringDiagram } from "./advanced-algorithm/diagrams/aae-algorithm-engineering";
+import { AaeFinalReviewMindMap } from "./advanced-algorithm/diagrams/aae-final-review-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1830,6 +1842,18 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AddCqrsEventSourcingDiagram,
   AddHexagonalArchitectureDiagram,
   AddFinalReviewMindMap,
+  AaeAlgorithmEngineeringMap,
+  AaeComplexityTradeoffDiagram,
+  AaeDataStructuresComparisonDiagram,
+  AaeIndexingSearchDiagram,
+  AaeGraphAlgorithmsDiagram,
+  AaeStringAlgorithmsDiagram,
+  AaeApproximationDiagram,
+  AaeRandomizedAlgorithmsDiagram,
+  AaeParallelAlgorithmsDiagram,
+  AaeDistributedAlgorithmsDiagram,
+  AaeAlgorithmEngineeringDiagram,
+  AaeFinalReviewMindMap,
   Term,
   Glossary,
   GlossaryItem,

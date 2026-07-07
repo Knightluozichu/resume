@@ -86,6 +86,7 @@ export const BOOK_ORDER = [
   "game-programming-patterns",
   "code-quality-refactoring",
   "architecture-domain-design",
+  "advanced-algorithm-engineering",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -113,6 +114,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "game-programming-patterns": "游戏编程模式",
   "code-quality-refactoring": "代码质量与重构",
   "architecture-domain-design": "架构与领域设计",
+  "advanced-algorithm-engineering": "高级算法与算法工程",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -188,9 +190,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "进一步学习图优化、随机算法、近似算法和系统级算法工程。",
         items: [
           {
-            title: "高级算法与算法工程",
-            note: "待补：建议覆盖大规模图、索引、调度、分布式算法和性能工程。",
-            missing: true,
+            bookSlug: "advanced-algorithm-engineering",
+            note: "高级算法与算法工程：大规模图、索引、调度、分布式算法和性能工程，从理论到生产级实现。",
           },
         ],
       },
@@ -615,6 +616,11 @@ export const SECTION_ORDER = [
   "架构原则",
   "领域驱动设计",
   "架构实践",
+  // 高级算法与算法工程
+  "算法工程基础",
+  "高级数据结构",
+  "图与字符串算法",
+  "概率与分布式算法",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

@@ -1,0 +1,75 @@
+---
+title: 索引与搜索
+type: A
+section: 高级数据结构
+order: 3
+description: 倒排索引构建、BM25 排序、PageRank 原理与搜索引擎架构的串联。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { AaeIndexingSearchDiagram } from "@/components/mdx/advanced-algorithm/diagrams/aae-indexing-search";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能描述倒排索引从分词到倒排表合并的构建流程
+- 能解释 BM25 相比 TF-IDF 解决了词频饱和与文档长度归一化的问题
+- 能回答：PageRank 的随机游走如何体现「被重要网页链接则自身也重要」？
+
+</Objectives>
+
+## 索引与搜索
+
+搜索引擎的核心矛盾是：用户输入几个词，系统却要在数百亿网页里毫秒级返回最相关的几十条。暴力扫描不可能，靠的就是两件事——提前建好「词到文档」的倒排索引，再用排序模型给候选文档打分。索引解决「找得到」，排序解决「排得准」。
+
+<AaeIndexingSearchDiagram />
+
+<Term def="把文档集合转成「词项 → 出现该词的文档列表」的映射，是全文检索的基础结构。">倒排索引</Term>的构建分四步：先对文档分词、归一化（大小写、词干），得到词项；再为每个词项记录出现它的文档与位置，形成倒排表；接着把大量倒排表按词项字典序合并去重；最后压缩存储并附上跳表加速合并。查询时把查询词拆成词项，取出各自倒排表求交并，再按排序模型打分。整个架构是「离线建索引、在线查表」——离线把 O(n) 扫描的代价预付掉，在线只做 O(命中数) 的工作。
+
+## 核心概念
+
+拿到候选文档后，怎么排先后？<Term def="用词频与逆文档频率衡量词项对文档重要性的经典打分，词频越高越重要，但常见词权重被压低。">TF-IDF</Term>是最早的答案：词频 TF 越高越重要，但太常见的词（如「的」）几乎出现在所有文档，逆文档频率 IDF 把它压到接近零。可 TF-IDF 有两个硬伤：词频线性增长没有上限，一个词出现一百次的文档未必比出现十次的十倍相关；长文档天然词频高，被无脑偏向。
+
+<Term def="在 TF-IDF 基础上引入词频饱和函数与文档长度归一化的打分函数，是工业搜索引擎的事实标准。">BM25</Term>正是修这两个硬伤。它用一个饱和函数让词频在达到某阈值后增长放缓——出现十次和一百次的差距远小于十倍；再加文档长度归一项，把长文档的词频按长度打折，消除长度偏置。Elasticsearch、Lucene 默认打分都是 BM25，因为它在大量评测集上稳定优于朴素 TF-IDF，且参数可调、计算便宜。
+
+<Term def="把网页重要性建模为随机游走稳态分布的链接分析算法，核心是「被重要网页链接则自身也重要」。">PageRank</Term>则从另一个维度排序——不看内容相关，看网页本身的权威性。它把上网者想象成随机点链接跳转的游走者，偶尔随机跳到任意页（避免死循环与链接陷阱）。每个网页的 PageRank 是它被游走者访问的稳态概率：一个网页被高 PageRank 的网页指向，自身 PageRank 也高。这构成一个递推方程，迭代到收敛即得每页权重。它与 BM25 互补：BM25 管「这个词在这篇文档里重不重要」，PageRank 管「这篇文档本身可不可信」，二者加权融合才是完整排序。
+
+<Callout type="tip">
+<strong>建议 →</strong> 理解搜索引擎时把「召回」与「排序」分开看：倒排索引负责召回候选集，BM25/PageRank 负责排序。两个阶段优化目标不同——召回求全不漏，排序求准排好，混淆二者会导致索引膨胀或排序失真。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 直接用 TF-IDF 排序，长文档总是排在前面，短小精炼的相关文档被压在后面。<strong>原因 →</strong> TF-IDF 词频线性增长且不归一长度，长文档词频天然高被无脑偏向。<strong>修法 →</strong> 换用 BM25，其词频饱和函数与长度归一项正好抑制长文档偏置，参数按语调调整后稳定优于 TF-IDF。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 把 PageRank 当成排序的唯一依据，结果搜索「苹果」时权威但不相关的页面压过了真正相关的内容。<strong>原因 →</strong> PageRank 只衡量网页权威性，不含内容相关性，单独使用会把高权威但不相关页面顶到前列。<strong>修法 →</strong> 把 PageRank 与 BM25 这类内容相关性打分加权融合，权威性与相关性各司其职，缺一不可。
+</Callout>
+
+## 小结与练习
+
+- 倒排索引「词项→文档列表」把在线 O(n) 扫描预付成离线建索引，在线只做 O(命中数) 求交并
+- TF-IDF 有词频不饱和与长文档偏置两硬伤；BM25 用饱和函数与长度归一修复，是工业事实标准
+- PageRank 用随机游走稳态分布衡量权威性，「被重要网页链接则自身也重要」，与 BM25 互补融合
+- 搜索架构 = 离线建索引（召回）+ 在线打分排序，两阶段目标不同须分开优化
+
+<Exercises>
+  <Answer question="倒排索引的构建流程是怎样的？为什么搜索能做到毫秒级？">构建四步：文档分词归一化得词项→为每词项记录出现它的文档与位置形成倒排表→按词项字典序合并去重→压缩存储并附跳表加速。查询时拆词取倒排表求交并再打分。能做到毫秒级是因为把 O(n) 扫描代价在离线建索引时预付掉了，在线只做 O(命中数) 的工作，且跳表让大表合并也很快。</Answer>
+  <Answer question="BM25 相比 TF-IDF 解决了什么问题？PageRank 与它如何互补？">TF-IDF 词频线性增长无上限，且不归一文档长度，偏向长文档。BM25 用饱和函数让词频达阈值后增长放缓，加长度归一抑制长文档偏置。PageRank 从链接结构衡量网页权威性，不含内容相关性；BM25 衡量内容相关性，不含权威性。二者加权融合：BM25 管「相关不相关」，PageRank 管「可信不可信」，互补才是完整排序。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="倒排索引">把文档集合转成「词项→出现该词的文档列表」的映射结构，是全文检索基础，让在线查询避开全量扫描。</GlossaryItem>
+  <GlossaryItem term="BM25">在 TF-IDF 基础上引入词频饱和函数与文档长度归一化的打分函数，修复了词频不饱和与长文档偏置，是工业搜索引擎事实标准。</GlossaryItem>
+  <GlossaryItem term="PageRank">把网页重要性建模为随机游走稳态分布的链接分析算法，核心是「被重要网页链接则自身也重要」，衡量权威性而非内容相关性。</GlossaryItem>
+  <GlossaryItem term="TF-IDF">用词频与逆文档频率衡量词项对文档重要性的经典打分，词频越高越重要但常见词权重被压低，缺陷是无饱和与无长度归一。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Information Retrieval (Manning et al.) & The Page of PageRank (Brin & Page)" adaptedUrl="https://nlp.stanford.edu/IR-book/" />
