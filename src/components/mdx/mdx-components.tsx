@@ -728,6 +728,12 @@ import { FactoryMethodDiagram } from "./design-patterns/diagrams/factory-method-
 import { AbstractFactoryDiagram } from "./design-patterns/diagrams/abstract-factory-diagram";
 import { BuilderPatternDiagram } from "./design-patterns/diagrams/builder-pattern-diagram";
 import { PrototypePatternDiagram } from "./design-patterns/diagrams/prototype-pattern-diagram";
+import { AdapterPatternDiagram } from "./design-patterns/diagrams/adapter-pattern-diagram";
+import { BridgePatternDiagram } from "./design-patterns/diagrams/bridge-pattern-diagram";
+import { CompositePatternDiagram } from "./design-patterns/diagrams/composite-pattern-diagram";
+import { FacadePatternDiagram } from "./design-patterns/diagrams/facade-pattern-diagram";
+import { FlyweightPatternDiagram } from "./design-patterns/diagrams/flyweight-pattern-diagram";
+import { ProxyPatternDiagram } from "./design-patterns/diagrams/proxy-pattern-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1736,6 +1742,12 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AbstractFactoryDiagram,
   BuilderPatternDiagram,
   PrototypePatternDiagram,
+  AdapterPatternDiagram,
+  BridgePatternDiagram,
+  CompositePatternDiagram,
+  FacadePatternDiagram,
+  FlyweightPatternDiagram,
+  ProxyPatternDiagram,
   Term,
   Glossary,
   GlossaryItem,

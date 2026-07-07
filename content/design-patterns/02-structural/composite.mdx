@@ -1,0 +1,148 @@
+---
+title: 组合模式
+type: A
+section: 结构型模式
+order: 14
+description: 用树形结构统一处理单个对象和组合对象——客户端无需区分叶子与树枝。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CompositePatternDiagram } from "@/components/mdx/design-patterns/diagrams/composite-pattern-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解组合模式如何统一处理树形结构中的叶子与树枝
+- 掌握透明式与安全式组合模式的区别
+- 能用组合模式设计文件系统
+
+</Objectives>
+
+## 痛点场景：文件系统
+
+文件系统有文件和文件夹。文件夹可以包含文件和其他文件夹。如果要统计大小：
+
+```typescript
+function getSize(item: File | Folder): number {
+  if (item instanceof File) {
+    return item.size;
+  } else if (item instanceof Folder) {
+    let total = 0;
+    for (const child of item.children) {
+      if (child instanceof File) total += child.size;
+      else if (child instanceof Folder) {
+        // 递归...又 instanceof 判断
+      }
+    }
+    return total;
+  }
+}
+```
+
+**每层都要判断是文件还是文件夹**，代码重复且脆弱。
+
+## 解决方案：统一接口
+
+```typescript
+// 统一组件接口
+interface FileSystemComponent {
+  getSize(): number;
+  display(indent?: string): void;
+}
+
+// 叶子：文件
+class File implements FileSystemComponent {
+  constructor(private name: string, private size: number) {}
+  getSize() { return this.size }
+  display(indent = "") { console.log(`${indent}📄 ${this.name} (${this.size}KB)`) }
+}
+
+// 组合：文件夹
+class Folder implements FileSystemComponent {
+  private children: FileSystemComponent[] = [];
+  constructor(private name: string) {}
+
+  add(child: FileSystemComponent) { this.children.push(child) }
+  getSize() { return this.children.reduce((sum, c) => sum + c.getSize(), 0) }
+  display(indent = "") {
+    console.log(`${indent}📁 ${this.name}/`);
+    this.children.forEach(c => c.display(indent + "  "));
+  }
+}
+```
+
+使用：
+
+```typescript
+const root = new Folder("root");
+root.add(new File("readme.txt", 5));
+const docs = new Folder("docs");
+docs.add(new File("guide.md", 20));
+root.add(docs);
+
+root.getSize();  // 25，无需判断类型
+root.display();   // 树形输出
+```
+
+<CompositePatternDiagram />
+
+## 透明式 vs 安全式
+
+| 维度 | 透明式 | 安全式 |
+|------|--------|--------|
+| add/remove 在哪 | Component 接口 | 只有 Composite |
+| 叶子的 add/remove | 抛异常或空操作 | 编译时不允许 |
+| 客户端 | 不需区分类型（透明） | 需要判断是否 Composite |
+| 违反 LSP | 是（叶子抛异常） | 否 |
+
+<Callout type="info">
+GoF 原版是透明式（add/remove 在接口上，叶子抛异常）。现代实践倾向安全式（add/remove 只在 Composite 上），避免违反 LSP。
+</Callout>
+
+## 常见误区
+
+### 误区 1：叶子实现 add/remove
+
+叶子节点不应该有子节点。透明式中叶子实现 add() 抛异常，违反 LSP。安全式中叶子和树枝是不同接口，客户端需要 instanceof 判断。
+
+### 误区 2：组合模式 = 树
+
+组合模式是处理树形结构的一种方式，但不是所有树都用组合模式。组合模式的核心价值是**统一接口**——客户端无需区分叶子与树枝。
+
+### 误区 3：在 Component 接口放 parent 引用
+
+管理父引用会增加复杂性。如果需要双向遍历，考虑在外部维护关系，而不是在组件内部。
+
+## 小结
+
+- 组合 = 树形结构 + 统一接口，客户端不区分叶子与树枝
+- 核心价值：递归处理树形结构无需类型判断
+- 透明式（GoF 原版）vs 安全式（现代推荐）的权衡
+- 适合：文件系统、UI 组件树、组织架构
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="组合模式">
+
+将对象组合成树形结构以表示「部分-整体」的层次结构。组合模式使得用户对单个对象和组合对象的使用具有一致性。
+
+</GlossaryItem>
+
+<GlossaryItem term="透明式组合">
+
+add/remove 方法声明在 Component 接口上，叶子和树枝有相同接口。客户端不需区分类型，但叶子实现 add/remove 时违反 LSP。
+
+</GlossaryItem>
+
+<GlossaryItem term="安全式组合">
+
+add/remove 方法只在 Composite 类上，叶子没有这些方法。不违反 LSP，但客户端需要判断类型。
+
+</GlossaryItem>
+
+</Glossary>

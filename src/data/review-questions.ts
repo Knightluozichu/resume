@@ -314,6 +314,12 @@ import { dpFactoryMethodQuestions } from "./review/dp-factory-method";
 import { dpAbstractFactoryQuestions } from "./review/dp-abstract-factory";
 import { dpBuilderQuestions } from "./review/dp-builder";
 import { dpPrototypeQuestions } from "./review/dp-prototype";
+import { dpAdapterQuestions } from "./review/dp-adapter";
+import { dpBridgeQuestions } from "./review/dp-bridge";
+import { dpCompositeQuestions } from "./review/dp-composite";
+import { dpFacadeQuestions } from "./review/dp-facade";
+import { dpFlyweightQuestions } from "./review/dp-flyweight";
+import { dpProxyQuestions } from "./review/dp-proxy";
 
 export {
   CHAPTER_TITLES,
@@ -631,6 +637,12 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dpAbstractFactoryQuestions,
   ...dpBuilderQuestions,
   ...dpPrototypeQuestions,
+  ...dpAdapterQuestions,
+  ...dpBridgeQuestions,
+  ...dpCompositeQuestions,
+  ...dpFacadeQuestions,
+  ...dpFlyweightQuestions,
+  ...dpProxyQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
