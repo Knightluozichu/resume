@@ -32,7 +32,7 @@ const secondary = "var(--text-secondary)";
 const border = "var(--border)";
 const elevated = "var(--bg-elevated)";
 
-export function IteratorDiagram() {
+export function DpIteratorDiagram() {
   // 接口中心 x（实现箭头的落点）
   const iterableCx = ITERABLE.x + ITERABLE.w / 2; // 180
   const iteratorCx = ITERATOR.x + ITERATOR.w / 2; // 540

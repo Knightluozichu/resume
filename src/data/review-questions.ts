@@ -327,6 +327,8 @@ import { dpMementoQuestions } from "./review/dp-memento";
 import { dpTemplateMethodQuestions } from "./review/dp-template-method";
 import { dpVisitorQuestions } from "./review/dp-visitor";
 import { dpInterpreterQuestions } from "./review/dp-interpreter";
+import { dpCompoundPatternsQuestions } from "./review/dp-compound-patterns";
+import { dpFinalReviewQuestions } from "./review/dp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -657,6 +659,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dpTemplateMethodQuestions,
   ...dpVisitorQuestions,
   ...dpInterpreterQuestions,
+  ...dpCompoundPatternsQuestions,
+  ...dpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

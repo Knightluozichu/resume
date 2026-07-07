@@ -735,12 +735,14 @@ import { FacadePatternDiagram } from "./design-patterns/diagrams/facade-pattern-
 import { FlyweightPatternDiagram } from "./design-patterns/diagrams/flyweight-pattern-diagram";
 import { ProxyPatternDiagram } from "./design-patterns/diagrams/proxy-pattern-diagram";
 import { ChainOfResponsibilityDiagram } from "./design-patterns/diagrams/chain-of-responsibility-diagram";
-import { IteratorDiagram } from "./design-patterns/diagrams/iterator-diagram";
+import { DpIteratorDiagram } from "./design-patterns/diagrams/iterator-diagram";
 import { MediatorDiagram } from "./design-patterns/diagrams/mediator-diagram";
 import { MementoDiagram } from "./design-patterns/diagrams/memento-diagram";
 import { TemplateMethodDiagram } from "./design-patterns/diagrams/template-method-diagram";
 import { VisitorDiagram } from "./design-patterns/diagrams/visitor-diagram";
 import { InterpreterDiagram } from "./design-patterns/diagrams/interpreter-diagram";
+import { CompoundPatternDiagram } from "./design-patterns/diagrams/compound-pattern-diagram";
+import { DecisionTreeDiagram } from "./design-patterns/diagrams/decision-tree-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1756,12 +1758,14 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FlyweightPatternDiagram,
   ProxyPatternDiagram,
   ChainOfResponsibilityDiagram,
-  IteratorDiagram,
+  DpIteratorDiagram,
   MediatorDiagram,
   MementoDiagram,
   TemplateMethodDiagram,
   VisitorDiagram,
   InterpreterDiagram,
+  CompoundPatternDiagram,
+  DecisionTreeDiagram,
   Term,
   Glossary,
   GlossaryItem,
