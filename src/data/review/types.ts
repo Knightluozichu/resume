@@ -583,7 +583,40 @@ export type ReviewChapterSlug =
   | "cpc-inline"
   | "cpc-cache-friendly"
   | "cpc-compiler-optimization"
-  | "cpc-final-review";
+  | "cpc-final-review"
+  // Easy C++（第5版）
+  | "ecp-learning-map"
+  | "ecp-first-program"
+  | "ecp-variables-types"
+  | "ecp-control-flow"
+  | "ecp-functions"
+  | "ecp-classes"
+  | "ecp-inheritance"
+  | "ecp-templates"
+  | "ecp-stl"
+  | "ecp-final-review"
+  // C++ Primer Plus
+  | "epp-learning-map"
+  | "epp-cpp-basics"
+  | "epp-data-types"
+  | "epp-control-statements"
+  | "epp-functions-references"
+  | "epp-classes-objects"
+  | "epp-inheritance"
+  | "epp-templates-generics"
+  | "epp-stl-algorithms"
+  | "epp-final-review"
+  // C++ 编程测试秘籍
+  | "ctr-learning-map"
+  | "ctr-basics-test"
+  | "ctr-memory-test"
+  | "ctr-stl-test"
+  | "ctr-template-test"
+  | "ctr-concurrency-test"
+  | "ctr-design-test"
+  | "ctr-algorithm-test"
+  | "ctr-debugging-test"
+  | "ctr-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1104,6 +1137,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cpc-cache-friendly": "缓存友好编程",
   "cpc-compiler-optimization": "编译器优化",
   "cpc-final-review": "CPU 眼里的 C++ 总复习",
+  // Easy C++（第5版）
+  "ecp-learning-map": "学习路线图",
+  "ecp-first-program": "第一个 C++ 程序",
+  "ecp-variables-types": "变量与类型",
+  "ecp-control-flow": "控制流",
+  "ecp-functions": "函数",
+  "ecp-classes": "类与对象",
+  "ecp-inheritance": "继承与多态",
+  "ecp-templates": "模板入门",
+  "ecp-stl": "STL 入门",
+  "ecp-final-review": "Easy C++ 总复习",
+  // C++ Primer Plus
+  "epp-learning-map": "学习路线图",
+  "epp-cpp-basics": "C++ 基础语法",
+  "epp-data-types": "数据类型与变量",
+  "epp-control-statements": "控制语句",
+  "epp-functions-references": "函数与引用",
+  "epp-classes-objects": "类与对象",
+  "epp-inheritance": "继承与多态",
+  "epp-templates-generics": "模板与泛型",
+  "epp-stl-algorithms": "STL 与算法",
+  "epp-final-review": "C++ Primer Plus 总复习",
+  // C++ 编程测试秘籍
+  "ctr-learning-map": "学习路线图",
+  "ctr-basics-test": "基础语法测试",
+  "ctr-memory-test": "内存管理测试",
+  "ctr-stl-test": "STL 测试",
+  "ctr-template-test": "模板测试",
+  "ctr-concurrency-test": "并发测试",
+  "ctr-design-test": "设计模式测试",
+  "ctr-algorithm-test": "算法测试",
+  "ctr-debugging-test": "调试与优化测试",
+  "ctr-final-review": "C++ 编程测试秘籍总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

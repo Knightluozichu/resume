@@ -497,6 +497,39 @@ import { mcdSingletonQuestions } from "./review/mcd-singleton";
 import { mcdObjectFactoryQuestions } from "./review/mcd-object-factory";
 import { mcdAbstractFactoryQuestions } from "./review/mcd-abstract-factory";
 import { mcdFinalReviewQuestions } from "./review/mcd-final-review";
+// Easy C++（第5版）
+import { ecpLearningMapQuestions } from "./review/ecp-learning-map";
+import { ecpFirstProgramQuestions } from "./review/ecp-first-program";
+import { ecpVariablesTypesQuestions } from "./review/ecp-variables-types";
+import { ecpControlFlowQuestions } from "./review/ecp-control-flow";
+import { ecpFunctionsQuestions } from "./review/ecp-functions";
+import { ecpClassesQuestions } from "./review/ecp-classes";
+import { ecpInheritanceQuestions } from "./review/ecp-inheritance";
+import { ecpTemplatesQuestions } from "./review/ecp-templates";
+import { ecpStlQuestions } from "./review/ecp-stl";
+import { ecpFinalReviewQuestions } from "./review/ecp-final-review";
+// C++ Primer Plus（Stephen Prata）
+import { eppLearningMapQuestions } from "./review/epp-learning-map";
+import { eppCppBasicsQuestions } from "./review/epp-cpp-basics";
+import { eppDataTypesQuestions } from "./review/epp-data-types";
+import { eppControlStatementsQuestions } from "./review/epp-control-statements";
+import { eppFunctionsReferencesQuestions } from "./review/epp-functions-references";
+import { eppClassesObjectsQuestions } from "./review/epp-classes-objects";
+import { eppInheritanceQuestions } from "./review/epp-inheritance";
+import { eppTemplatesGenericsQuestions } from "./review/epp-templates-generics";
+import { eppStlAlgorithmsQuestions } from "./review/epp-stl-algorithms";
+import { eppFinalReviewQuestions } from "./review/epp-final-review";
+// C++ 编程测试秘籍
+import { ctrLearningMapQuestions } from "./review/ctr-learning-map";
+import { ctrBasicsTestQuestions } from "./review/ctr-basics-test";
+import { ctrMemoryTestQuestions } from "./review/ctr-memory-test";
+import { ctrStlTestQuestions } from "./review/ctr-stl-test";
+import { ctrTemplateTestQuestions } from "./review/ctr-template-test";
+import { ctrConcurrencyTestQuestions } from "./review/ctr-concurrency-test";
+import { ctrDesignTestQuestions } from "./review/ctr-design-test";
+import { ctrAlgorithmTestQuestions } from "./review/ctr-algorithm-test";
+import { ctrDebuggingTestQuestions } from "./review/ctr-debugging-test";
+import { ctrFinalReviewQuestions } from "./review/ctr-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1001,6 +1034,39 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mcdObjectFactoryQuestions,
   ...mcdAbstractFactoryQuestions,
   ...mcdFinalReviewQuestions,
+  // Easy C++（第5版）
+  ...ecpLearningMapQuestions,
+  ...ecpFirstProgramQuestions,
+  ...ecpVariablesTypesQuestions,
+  ...ecpControlFlowQuestions,
+  ...ecpFunctionsQuestions,
+  ...ecpClassesQuestions,
+  ...ecpInheritanceQuestions,
+  ...ecpTemplatesQuestions,
+  ...ecpStlQuestions,
+  ...ecpFinalReviewQuestions,
+  // C++ Primer Plus（Stephen Prata）
+  ...eppLearningMapQuestions,
+  ...eppCppBasicsQuestions,
+  ...eppDataTypesQuestions,
+  ...eppControlStatementsQuestions,
+  ...eppFunctionsReferencesQuestions,
+  ...eppClassesObjectsQuestions,
+  ...eppInheritanceQuestions,
+  ...eppTemplatesGenericsQuestions,
+  ...eppStlAlgorithmsQuestions,
+  ...eppFinalReviewQuestions,
+  // C++ 编程测试秘籍
+  ...ctrLearningMapQuestions,
+  ...ctrBasicsTestQuestions,
+  ...ctrMemoryTestQuestions,
+  ...ctrStlTestQuestions,
+  ...ctrTemplateTestQuestions,
+  ...ctrConcurrencyTestQuestions,
+  ...ctrDesignTestQuestions,
+  ...ctrAlgorithmTestQuestions,
+  ...ctrDebuggingTestQuestions,
+  ...ctrFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

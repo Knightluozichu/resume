@@ -98,6 +98,9 @@ export const BOOK_ORDER = [
   "optimized-cpp",
   "modern-cpp-design",
   "cpu-eye-cpp",
+  "easy-cpp-5e",
+  "cpp-primer-plus",
+  "cpp-testing-recipes",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -137,6 +140,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "optimized-cpp": "C++ 性能优化指南",
   "modern-cpp-design": "Modern C++ Design",
   "cpu-eye-cpp": "CPU 眼里的 C++",
+  "easy-cpp-5e": "Easy C++（第5版）",
+  "cpp-primer-plus": "C++ Primer Plus",
+  "cpp-testing-recipes": "C++ 编程测试秘籍",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -694,6 +700,18 @@ export const SECTION_ORDER = [
   "编译与链接",
   "CPU运行时机制",
   "CPU性能优化",
+  // Easy C++（第5版）
+  "C++入门",
+  "类与对象",
+  "STL与进阶",
+  // C++ Primer Plus
+  "C++基础语法",
+  "类与继承",
+  "模板与STL",
+  // C++ 编程测试秘籍
+  "基础测试",
+  "进阶测试",
+  "面试实战",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

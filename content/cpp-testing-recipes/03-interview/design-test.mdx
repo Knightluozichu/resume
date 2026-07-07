@@ -1,0 +1,115 @@
+---
+title: 设计模式测试
+type: A
+section: 面试实战
+order: 7
+description: 单例、工厂方法与观察者在 C++ 中的正确实现——面试实战第一站。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+import { CtrDesignTestDiagram } from "@/components/mdx/cpp-testing-recipes/diagrams/ctr-design-test";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 GoF 23 种模式的三分类与代表模式
+- 能用 C++ 正确实现线程安全单例（Meyers/call_once）
+- 区分工厂方法与抽象工厂，写出工厂方法骨架
+- 用 weak_ptr 实现观察者模式并防悬空
+</Objectives>
+
+## 设计模式测试
+
+设计模式是面试实战的第一站。面试官让你「写个单例」或「设计个观察者」，考的是你能否把抽象的设计意图落到正确的 C++ 代码上。本章聚焦三个高频模式：**单例**、**工厂方法**、**观察者**，重点放在 C++ 实现中的陷阱（线程安全、循环引用、悬空对象）。
+
+<CtrDesignTestDiagram />
+
+## 核心概念
+
+### GoF 三分类
+
+GoF 23 种模式分三类：
+
+1. **创建型**（5 种）：关注对象创建过程，把创建与使用解耦。单例、工厂方法、抽象工厂、建造者、原型。
+2. **结构型**（7 种）：关注类/对象组合成更大结构。适配器、装饰器、外观、代理等。
+3. **行为型**（11 种）：关注对象间职责分配与通信。观察者、策略、状态、模板方法等。
+
+本章三个模式的归属：单例（创建型，保证唯一实例）、工厂方法（创建型，子类决定产品类型）、观察者（行为型，一对多通知）。
+
+### 单例模式
+
+<Term def="保证一个类只有一个实例并提供全局访问点的模式。">单例模式</Term>
+
+C++ 线程安全单例的几种写法：
+
+1. **Meyers 单例**（函数内 static）：C++11 起标准保证局部 static 初始化线程安全，析构自动进行。最简洁，**现代 C++ 首选**。
+2. **std::call_once**：显式控制初始化时机，适合需传参的场景。
+3. **atomic + DCLP**：C++11 内存模型下可正确实现，但复杂易错，通常没必要。
+
+```cpp
+// Meyers 单例：C++11 起线程安全
+Singleton& instance() {
+  static Singleton s;
+  return s;
+}
+```
+
+注意：单例本质是全局状态，有测试难、隐藏依赖的批评，**能不用就不用，优先依赖注入**。
+
+### 工厂方法与抽象工厂
+
+工厂方法：定义创建产品的方法，由子类决定实例化哪个具体产品。一个工厂只创建一种产品，靠继承扩展。
+
+```cpp
+class Product { public: virtual ~Product()=default; virtual void use()=0; };
+class ConcreteProductA : public Product { public: void use() override {} };
+class Creator {
+public:
+  virtual std::unique_ptr<Product> create() const = 0;  // 工厂方法
+  void someOperation() { auto p = create(); p->use(); }
+};
+class ConcreteCreatorA : public Creator {
+public:
+  std::unique_ptr<Product> create() const override {
+    return std::make_unique<ConcreteProductA>();
+  }
+};
+```
+
+抽象工厂：提供接口创建**一系列相关产品（产品族）**，每个具体工厂创建一整族。区别要点：工厂方法创建一个产品靠子类化扩展；抽象工厂创建一族产品靠换工厂实例切换整族。当需要保证多个产品成套使用（如同一 UI 主题的按钮+滚动条+菜单）时升级为抽象工厂。
+
+### 观察者模式
+
+观察者定义对象间一对多依赖，一方状态变化时所有依赖者被通知。C++ 实现的关键是用 `weak_ptr` 而非 shared_ptr 持有观察者列表——让 Subject「观察但不拥有」，观察者可自由销毁，避免循环引用与延长生命周期。
+
+<Term def="Subject 持有 weak_ptr 观察者列表，notify 时用 lock() 提升检测存活，失效项惰性清理，避免调用悬空对象。">weak_ptr 观察者</Term>
+
+## 常见误区
+
+<Callout type="trap"><strong>现象 →</strong> Subject 持有 `vector<shared_ptr<Observer>>`，观察者窗口关闭后仍不析构，且若观察者又持 Subject 的 shared_ptr 则双方永不释放。 <strong>原因 →</strong> shared_ptr 阻止观察者析构（引用计数不归零）；互持 shared_ptr 形成循环引用泄漏。 <strong>修法 →</strong> Subject 改持 `vector<weak_ptr<Observer>>`，notify 时 lock() 提升检测存活，失效项 erase 清理，打破循环。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 用 C++03 风格 DCLP 实现单例，Release 下偶发使用未构造对象。 <strong>原因 →</strong> C++11 前无内存模型，`new` 的分配/构造/赋指针三步可能重排，锁外读到未构造对象是 UB。 <strong>修法 →</strong> C++11 后直接用 Meyers 单例（标准保证线程安全初始化）或 std::call_once，不要手写 DCLP。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 观察者先析构了，Subject 还在发 notify，回调访问悬空对象崩溃。 <strong>原因 →</strong> Subject 持裸指针或失效引用指向已销毁观察者。 <strong>修法 →</strong> 用 weak_ptr 持有观察者，lock() 失败说明已销毁则跳过并清理；多线程下 notify 与 subscribe 并发需加锁保护列表。</Callout>
+
+## 小结与练习
+
+<Exercises>
+<Answer question="GoF 23 种模式分哪三类？单例、工厂方法、观察者各属哪类？">创建型（单例、工厂方法）、结构型、行为型（观察者）。单例创建型保证唯一实例，工厂方法创建型子类决定产品，观察者行为型一对多通知。</Answer>
+<Answer question="C++ 线程安全单例有哪几种写法？为什么推荐 Meyers 单例？">Meyers 单例、call_once、atomic+DCLP。推荐 Meyers 因 C++11 标准保证局部 static 初始化线程安全、自动延迟初始化、析构由运行时处理、代码极简。</Answer>
+<Answer question="工厂方法与抽象工厂的区别？何时升级为抽象工厂？">工厂方法创建一个产品靠子类化扩展，抽象工厂创建一族产品靠换工厂切换整族。当需多个产品成套使用（如同一主题的按钮+滚动条+菜单）时升级为抽象工厂。</Answer>
+<Answer question="用 weak_ptr 实现观察者为什么更安全？Subject 析构时如何保证不调用悬空对象？">weak_ptr 不延长观察者寿命、避免循环引用、notify 时 lock() 检测存活防悬空。Subject 析构时列表随其销毁不再 notify，真正的悬空风险由 notify 中 lock 失败跳过惰性清理解决。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="单例模式">保证一个类只有一个实例并提供全局访问点的创建型模式，现代 C++ 用 Meyers 单例或 call_once 实现线程安全。</GlossaryItem>
+<GlossaryItem term="工厂方法">定义创建产品的方法由子类决定实例化哪个产品的创建型模式，靠继承扩展新产品。</GlossaryItem>
+<GlossaryItem term="抽象工厂">提供接口创建一系列相关产品族的创建型模式，换工厂实例切换整族，保证产品配套。</GlossaryItem>
+<GlossaryItem term="观察者模式">定义对象间一对多依赖的行为型模式，状态变化通知所有依赖者，C++ 用 weak_ptr 持列表防悬空。</GlossaryItem>
+<GlossaryItem term="weak_ptr 观察者">Subject 持 weak_ptr 列表，notify 用 lock() 提升检测存活，失效项惰性清理，打破循环引用。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="C++ 编程测试秘籍" adaptedUrl="" />

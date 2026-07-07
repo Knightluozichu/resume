@@ -1,0 +1,109 @@
+---
+title: 算法测试
+type: A
+section: 面试实战
+order: 8
+description: 排序复杂度、二分查找边界与图遍历——面试白板题的核心考点。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+import { CtrAlgorithmTestDiagram } from "@/components/mdx/cpp-testing-recipes/diagrams/ctr-algorithm-test";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握常见排序算法的时间/空间复杂度与稳定性
+- 写出无溢出 bug 的二分查找，区分 lower/upper_bound 边界
+- 区分 BFS 与 DFS 的数据结构与适用场景
+- 能用最小堆解决 Top-K 问题，用滑动窗口解决排列匹配
+</Objectives>
+
+## 算法测试
+
+算法是面试白板题的核心。一道「手写快排」「二分查找」「图的 BFS」就能测出你的基本功。本章聚焦三个高频考点：**排序复杂度**、**二分查找**、**图遍历**，并补充 Top-K 与滑动窗口两个面试套路。
+
+<CtrAlgorithmTestDiagram />
+
+## 核心概念
+
+### 排序复杂度与稳定性
+
+六种排序算法的复杂度：冒泡/选择/插入平均最坏都是 O(n²)，仅适合小规模或近乎有序（插入在近乎有序时接近 O(n)）；归并/快排/堆排平均 O(n log n)。关键区别：
+
+- **归并**稳定且最坏 O(n log n)，但需 O(n) 额外空间，适合外部排序、链表排序、需稳定的场景。
+- **快排**平均最快（常数小），但最坏 O(n²)（已排序输入 + 固定取首元素做 pivot），不稳定。工程上用**随机化 pivot 或三数取中**避免最坏。
+- **堆排**原地 O(1) 空间且最坏 O(n log n)，但常数大、缓存不友好，实际比快排慢。
+
+稳定性指相等元素排序后相对顺序不变。C++ 的 `std::sort` 不保证稳定（多为内省排序 introsort），需要稳定用 `std::stable_sort`（归并）。
+
+### 二分查找
+
+二分查找的前提：序列已有序且支持随机访问。`mid = (left + right) / 2` 有 bug——当 left、right 都是大整数时 `left + right` 可能溢出。正确写法 `mid = left + (right - left) / 2`，或 C++20 的 `std::midpoint`。
+
+「第一个 >= target」（lower_bound）与「第一个 > target」（upper_bound）的边界差一个等号：lower_bound 是「不小于」，upper_bound 是「大于」。在含重复元素的序列里，`[lower_bound, upper_bound)` 正好是等于 target 的区间。统一用「左闭右开」区间 [left, right) 最不易越界。
+
+```cpp
+// lower_bound：第一个 >= target
+int lower_bound(vector<int>& a, int t) {
+  int l = 0, r = a.size();        // 左闭右开
+  while (l < r) {
+    int m = l + (r - l) / 2;       // 防溢出
+    if (a[m] >= t) r = m;
+    else l = m + 1;
+  }
+  return l;
+}
+```
+
+### BFS 与 DFS
+
+<Term def="用队列逐层扩展的图遍历，先访问距起点近的节点，能保证无权图第一次到达即最短。">BFS</Term>
+
+- **BFS（广度优先）**：用队列（FIFO），逐层扩展。适合无权图最短路径/最少步数、层序遍历、判断二分图。时间 O(V+E)。
+- **DFS（深度优先）**：用栈或递归（LIFO），一条路走到底再回溯。适合连通性判断、拓扑排序、找环、回溯搜索全解。时间 O(V+E)。
+
+BFS 求无权图最短跳数的关键：用 dist 同时充当访问标记（-1 表未访问），入队时即设 dist，避免重复入队。
+
+```cpp
+vector<int> bfs(vector<vector<int>>& g, int s, int n) {
+  vector<int> dist(n, -1);
+  queue<int> q;
+  dist[s] = 0; q.push(s);
+  while (!q.empty()) {
+    int u = q.front(); q.pop();
+    for (int v : g[u])
+      if (dist[v] == -1) { dist[v] = dist[u] + 1; q.push(v); }
+  }
+  return dist;
+}
+```
+
+## 常见误区
+
+<Callout type="trap"><strong>现象 →</strong> 二分查找在大数组上偶发越界或死循环。 <strong>原因 →</strong> `mid = (left + right) / 2` 在 left、right 都大时 `left + right` 溢出成负数，导致 mid 错误。 <strong>修法 →</strong> 用 `mid = left + (right - left) / 2` 防溢出，或 C++20 的 std::midpoint；统一左闭右开区间避免边界 off-by-one。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 快排在已排序输入上退化到 O(n²) 甚至栈溢出。 <strong>原因 →</strong> 固定取首元素做 pivot，已排序输入每次 pivot 都是最值，分区极不均衡。 <strong>修法 →</strong> 随机化 pivot 或三数取中（取首/中/尾的中位数做 pivot），使最坏情况概率极低。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 需要稳定排序却用了 `std::sort`，相等元素的相对顺序被打乱。 <strong>原因 →</strong> `std::sort` 不保证稳定（多为内省排序）。 <strong>修法 →</strong> 需要稳定用 `std::stable_sort`（归并，O(n log n) 额外 O(n) 空间），或多关键字排序时先按次要关键字稳定排再按主关键字排。</Callout>
+
+## 小结与练习
+
+<Exercises>
+<Answer question="冒泡/选择/插入/归并/快排/堆排的平均最坏时间、空间、稳定性？">冒泡/选择/插入平均最坏均 O(n²) 空间 O(1)，冒泡/插入稳定选择不稳定；归并/快排/堆排平均 O(n log n)，归并堆排最坏 O(n log n) 快排最坏 O(n²)，归并稳定其余不稳定，归并空间 O(n) 快排 O(log n) 堆排 O(1)。</Answer>
+<Answer question="二分查找的前提？为什么 `mid = (left+right)/2` 有 bug？正确写法？">前提是序列有序且支持随机访问。left+right 可能溢出导致 mid 错误。正确用 `mid = left + (right-left)/2` 或 std::midpoint，左闭右开区间。</Answer>
+<Answer question="BFS 与 DFS 各用什么数据结构？分别适合什么问题？">BFS 用队列逐层扩展，适合无权最短路径、层序遍历、二分图判断；DFS 用栈/递归回溯，适合连通性、拓扑排序、找环、回溯搜索全解。均 O(V+E)。</Answer>
+<Answer question="「10 亿 int 找最大 100 个」用什么算法？STL 如何实现？">用大小 100 的最小堆，O(n log k)。STL 用 `priority_queue<int, vector<int>, greater<int>>` 最小堆，堆满后若当前数大于堆顶则 pop+push。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="排序稳定性">相等元素排序后相对顺序不变，稳定排序在多关键字排序时必需，C++ 用 std::stable_sort 保证稳定。</GlossaryItem>
+<GlossaryItem term="lower_bound">二分查找「第一个 >= target」的位置，即不小于 target 的最左元素，std::lower_bound 的语义。</GlossaryItem>
+<GlossaryItem term="BFS">广度优先搜索，用队列逐层扩展，保证无权图第一次到达即最短，O(V+E)。</GlossaryItem>
+<GlossaryItem term="DFS">深度优先搜索，用栈或递归一条路走到底再回溯，适合连通性与回溯搜索，O(V+E)。</GlossaryItem>
+<GlossaryItem term="Top-K 问题">从 n 个元素找最大/最小的 K 个，用大小 K 的最小/最大堆 O(n log k) 解决，STL 用 priority_queue。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="C++ 编程测试秘籍" adaptedUrl="" />

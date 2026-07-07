@@ -1,0 +1,87 @@
+---
+title: STL 测试
+type: A
+section: 进阶测试
+order: 4
+description: 容器分类、迭代器失效与算法复杂度——STL 是中高级面试的必考区。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+import { CtrStlTestDiagram } from "@/components/mdx/cpp-testing-recipes/diagrams/ctr-stl-test";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 STL 容器的四大分类及底层结构
+- 理解迭代器失效规则，能正确处理边遍历边增删
+- 根据需求选择合适容器并分析复杂度
+- 能用 remove-erase 惯用法安全批量删除
+</Objectives>
+
+## STL 测试
+
+STL 是 C++ 程序员的「标准武器库」。面试中一道「选什么容器」「为什么这里崩了」就能测出你对 STL 的理解深度。本章聚焦三个高频考点：**容器分类**、**迭代器失效**、**复杂度选型**。它们决定了你写的代码是高效还是低效、是正确还是藏着 UB。
+
+<CtrStlTestDiagram />
+
+## 核心概念
+
+### 容器四大分类
+
+STL 容器按存储与访问方式分四类：
+
+1. **顺序容器**：按线性顺序存元素，位置由插入顺序决定。包括 `vector`（动态数组）、`deque`（双端队列分块）、`list`（双向链表）、`forward_list`（单向链表）、`array`（定长数组）。
+2. **关联容器**：按键有序存储，靠键查找。包括 set/map/multiset/multimap，底层是**红黑树**。
+3. **无序关联容器**：哈希存储，按键哈希分桶。包括 unordered_set/map 等，底层是**哈希表**（链地址法）。
+4. **容器适配器**：基于顺序容器封装。stack、queue、priority_queue。
+
+四个代表容器的归属与底层：`vector`（顺序，连续动态数组）、`list`（顺序，双向链表）、`map`（有序关联，红黑树，O(log n)）、`unordered_map`（无序关联，哈希表，平均 O(1)）。
+
+### 迭代器失效
+
+<Term def="容器在增删元素后内部存储重排或节点释放，导致原先持有的迭代器/指针/引用指向无效位置或错误元素，继续使用是 UB。">迭代器失效</Term>
+
+不同容器、不同操作的失效规则不同，是 STL 最常见的 bug 源：
+
+- **vector 的 push_back**：若引发扩容（size 超过旧 capacity），所有迭代器、指针、引用**全部失效**（整块内存搬家）。若未扩容，仅 end() 失效。
+- **vector 的 erase**：被删元素及其后**所有元素**的迭代器失效（后面元素前移）。erase 返回指向下一个有效元素的新迭代器。
+- **list 的 erase**：**仅被删节点**的迭代器失效，其他迭代器仍有效（链表节点独立）。
+
+安全删除模式：循环删除时用 `it = v.erase(it);`（vector/list 通用），erase 返回下一个有效迭代器，避免用已失效的 `it++`。
+
+### 复杂度与容器选型
+
+- **频繁在头部插入删除**：选 `deque`（头尾 O(1) 摊还，支持随机访问）或 `list`（头部 O(1) 但无随机访问）。vector 头部插入是 O(n)。
+- **按键查找且需保持有序遍历**：选 `map`（红黑树，O(log n)，中序遍历有序）。不需有序选 `unordered_map`（平均 O(1)）。
+- **unordered_map 最坏 O(n)**：若所有键哈希冲突，退化成单链表遍历。延迟敏感或防 DoS 场景，有序 map 的稳定 O(log n) 更可控。
+
+<Term def="批量删除满足条件的元素用 `v.erase(std::remove_if(v.begin(), v.end(), pred), v.end());`，O(n) 一次搬移，避免循环 erase 的 O(n²)。">remove-erase 惯用法</Term>
+
+## 常见误区
+
+<Callout type="trap"><strong>现象 →</strong> 在范围 for 循环里对 vector 调用 push_back，程序崩溃或死循环。 <strong>原因 →</strong> 范围 for 缓存了 end()，push_back 一旦触发扩容，所有迭代器（含缓存的 end）全部失效，下一次 `*it`/`++it` 是 UB。即使不扩容，缓存的 end() 也是旧值，行为不符预期。 <strong>修法 →</strong> 遍历时不修改容器结构；要增加元素先存临时容器，遍历完再批量插入。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 循环里 `v.erase(it); it++;` 删除元素，跳过元素或崩溃。 <strong>原因 →</strong> erase 后 it 已失效（vector 中被删及之后失效），`it++` 操作失效迭代器是 UB。 <strong>修法 →</strong> 用 `it = v.erase(it);` 接收返回的下一个有效迭代器，不手动 `it++`；批量删用 remove-erase 惯用法。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 需要有序遍历却用了 unordered_map，遍历顺序乱跳。 <strong>原因 →</strong> unordered_map 按哈希分桶存储，遍历顺序无序（且可能随 rehash 改变）。 <strong>修法 →</strong> 需有序遍历选 map（红黑树中序有序）；只需快速查找才用 unordered_map。</Callout>
+
+## 小结与练习
+
+<Exercises>
+<Answer question="STL 容器按存储方式分哪几类？vector/list/map/unordered_map 各属哪类、底层是什么？">分顺序、关联、无序、适配器四类。vector（顺序，动态数组）、list（顺序，双向链表）、map（关联，红黑树）、unordered_map（无序，哈希表）。</Answer>
+<Answer question="vector 的 push_back 和 erase 分别使哪些迭代器失效？list 的 erase 呢？">vector push_back 扩容则全失效，不扩容仅 end 失效；erase 使被删及之后全失效。list erase 仅被删节点失效，其他有效。</Answer>
+<Answer question="「频繁在头部插入删除」和「按键查找且需有序遍历」各选哪个容器？">前者选 deque（头尾 O(1) 支持随机访问）或 list（无随机访问）；后者选 map（红黑树 O(log n) 中序有序），不需有序才用 unordered_map。</Answer>
+<Answer question="为什么「范围 for 里对 vector push_back」是 bug？正确写法是什么？">范围 for 缓存 end()，push_back 扩容后所有迭代器失效，用失效迭代器是 UB。正确做法：遍历不改结构，删除用 it = v.erase(it)，批量删用 remove-erase。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="迭代器失效">容器增删元素后内部存储重排或节点释放，原迭代器/指针/引用指向无效位置，继续使用是 UB。</GlossaryItem>
+<GlossaryItem term="remove-erase 惯用法">批量删除用 `erase(remove_if(begin, end, pred), end)`，O(n) 一次搬移，避免循环 erase 的 O(n²)。</GlossaryItem>
+<GlossaryItem term="顺序容器">按线性顺序存元素、位置由插入顺序决定的容器，如 vector/deque/list。</GlossaryItem>
+<GlossaryItem term="关联容器">按键有序存储、靠键查找的容器，底层红黑树，O(log n)，如 map/set。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="C++ 编程测试秘籍" adaptedUrl="" />

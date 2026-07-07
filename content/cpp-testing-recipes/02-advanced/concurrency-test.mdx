@@ -1,0 +1,88 @@
+---
+title: 并发测试
+type: A
+section: 进阶测试
+order: 6
+description: 线程安全、死锁四条件与原子内存序——并发是中高级面试的分水岭。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+import { CtrConcurrencyTestDiagram } from "@/components/mdx/cpp-testing-recipes/diagrams/ctr-concurrency-test";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解线程安全与 const 的关系，避免「const 即线程安全」误区
+- 掌握死锁四条件，能用 scoped_lock 原子多锁避免死锁
+- 区分原子内存序（relaxed/release-acquire/seq_cst）的强度与开销
+- 理解 DCLP 旧 bug 与 C++11 后 Meyers/call_once 的正确实现
+</Objectives>
+
+## 并发测试
+
+并发是 C++ 中高级面试的分水岭。一道「写个线程安全单例」或「解释这段代码为何死锁」就能区分出你是「会用 mutex」还是「理解内存模型」。本章聚焦三个核心：**线程安全**、**死锁**、**原子与内存序**。
+
+<CtrConcurrencyTestDiagram />
+
+## 核心概念
+
+### 线程安全与 const
+
+<Term def="某段代码在多线程并发调用时，不需调用方额外同步也能保持正确（不破坏数据、不出竞态）。">线程安全</Term>
+
+关键澄清：**const 成员函数不一定线程安全**。const 只保证「不修改对象的可观察状态」，不代表并发调用安全。若 const 成员函数内部读写 `mutable` 成员（如缓存、计数器）而无锁，多线程并发就是数据竞争。const 是「逻辑不变」契约，不是「并发安全」契约。
+
+`std::cout` 在多线程下：标准保证「字符交错但不数据竞争」——不会崩溃或损坏流对象，但不同线程输出的字符可能交错混在一行。要整行不交错，需用外部锁或 C++20 的 `std::osyncstream`。
+
+### 死锁四条件与 scoped_lock
+
+死锁的四个必要条件（Coffman 条件，同时满足才发生）：
+
+1. **互斥**：资源同一时刻只能被一个线程占用。
+2. **占有并等待**：线程持有至少一个资源，同时等待获取其他资源。
+3. **不可剥夺**：资源不能被强行夺走，只能由持有者主动释放。
+4. **循环等待**：存在线程的环形等待链。
+
+破坏任一条件即可避免死锁，最常用是破坏「循环等待」——给所有互斥量规定全局加锁顺序。当必须同时持有多个锁且难以保证顺序时，用 `std::scoped_lock lock(m1, m2, ...)`（C++17）一次性原子获取所有锁，它内部用「尝试-回退」算法避免循环等待。scoped_lock 是 RAII 封装，是同时锁多个锁的首选。
+
+### 原子与内存序
+
+`std::atomic` 的默认内存序是 `memory_order_seq_cst`（顺序一致），最强也最慢。内存序强度阶梯：
+
+- **relaxed**：只保证对该原子变量本身的读写原子，不建立 happens-before 关系，不阻止重排。仅适合计数器。
+- **release/acquire**：配对做「发布-消费」同步。生产者写数据后 store(release) 置标志，消费者 load(acquire) 读标志，acquire 与 release 建立 happens-before，release 之前的写入对消费者可见。比 seq_cst 开销小，适合单生产者-单消费者无锁队列。
+- **seq_cst**：全局一致最强，所有线程看到所有原子操作顺序一致。默认最安全。
+
+口诀：**relaxed 只保原子不保顺序（计数用）；release/acquire 配对做发布-消费同步；seq_cst 全局一致最稳最慢（默认）**。
+
+<Term def="生产者 store(release) 与消费者 load(acquire) 配对，建立 happens-before 关系，使 release 之前的写入对 acquire 之后可见。">release/acquire 同步</Term>
+
+## 常见误区
+
+<Callout type="trap"><strong>现象 →</strong> 双重检查锁定（DCLP）单例在 C++11 前偶发崩溃，Debug 下正常。 <strong>原因 →</strong> `inst = new Singleton` 分三步（分配、构造、赋指针），C++11 前无内存模型，编译器/CPU 可能重排成「分配→赋指针→构造」，另一线程第一次检查看到 inst 非空但对象未构造完，使用未构造对象是 UB。 <strong>修法 →</strong> C++11 后用 Meyers 单例（函数内 static，标准保证线程安全初始化）或 std::call_once。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 两个线程分别按 m1→m2 和 m2→m1 顺序加锁，程序卡死。 <strong>原因 →</strong> 满足死锁四条件，特别是循环等待：线程 A 持 m1 等 m2，线程 B 持 m2 等 m1。 <strong>修法 →</strong> 规定全局加锁顺序（都按 m1→m2）破坏循环等待；或用 std::scoped_lock(m1, m2) 原子获取所有锁。</Callout>
+
+<Callout type="trap"><strong>现象 →</strong> 用 `memory_order_relaxed` 做「flag 标记数据已就绪」，读者读到 flag 置位却读到未初始化数据。 <strong>原因 →</strong> relaxed 不建立 happens-before，flag 置位前的数据写入可能因重排还没对读者可见。 <strong>修法 →</strong> 发布-消费场景用 release（写 flag）/acquire（读 flag）配对，保证数据写入对读者可见。</Callout>
+
+## 小结与练习
+
+<Exercises>
+<Answer question="什么是线程安全？const 成员函数是否一定线程安全？">线程安全是多线程并发调用不需额外同步也保持正确。const 成员函数不一定线程安全——它可能修改 mutable 成员而无锁，const 是逻辑不变契约不是并发安全契约。</Answer>
+<Answer question="死锁的四个必要条件是什么？如何用 scoped_lock 同时锁多个互斥量避免死锁？">互斥、占有并等待、不可剥夺、循环等待。scoped_lock 用尝试-回退算法原子获取所有锁，破坏循环等待，RAII 析构解锁。</Answer>
+<Answer question="atomic 的默认内存序是什么？为什么 relaxed 不能用于同步？什么场景用 release/acquire？">默认 seq_cst 最强最慢。relaxed 不建立 happens-before 不阻止重排，只适合计数。release/acquire 配对做发布-消费同步，适合单生产者-单消费者无锁队列。</Answer>
+<Answer question="DCLP 单例在 C++11 前为何有 bug？C++11 后如何修复？">`new` 的三步可能重排成「分配→赋指针→构造」，另一线程用未构造对象是 UB，根因是无内存模型。C++11 后用 Meyers 单例或 call_once，标准保证线程安全初始化。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="线程安全">多线程并发调用不需额外同步也能保持正确，不破坏数据不出竞态。</GlossaryItem>
+<GlossaryItem term="死锁四条件">互斥、占有并等待、不可剥夺、循环等待，同时满足才发生死锁，破坏任一即可避免。</GlossaryItem>
+<GlossaryItem term="内存序">原子操作对读写重排的约束强度，从 relaxed（最弱）到 seq_cst（最强）逐级递增。</GlossaryItem>
+<GlossaryItem term="release/acquire 同步">生产者 store(release) 与消费者 load(acquire) 配对，建立 happens-before 使 release 前写入对消费者可见。</GlossaryItem>
+<GlossaryItem term="DCLP">双重检查锁定单例，C++11 前因无内存模型有 UB，C++11 后用 Meyers/call_once 正确实现。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="C++ 编程测试秘籍" adaptedUrl="" />

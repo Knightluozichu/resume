@@ -903,6 +903,36 @@ import { CpcInlineDiagram } from "./cpu-eye-cpp/diagrams/cpc-inline";
 import { CpcCacheFriendlyDiagram } from "./cpu-eye-cpp/diagrams/cpc-cache-friendly";
 import { CpcCompilerOptimizationDiagram } from "./cpu-eye-cpp/diagrams/cpc-compiler-optimization";
 import { CpcFinalMindMap } from "./cpu-eye-cpp/diagrams/cpc-final-review";
+import { EcpBookMap } from "./easy-cpp-5e/diagrams/ecp-learning-map";
+import { EcpFirstProgramDiagram } from "./easy-cpp-5e/diagrams/ecp-first-program";
+import { EcpVariablesTypesDiagram } from "./easy-cpp-5e/diagrams/ecp-variables-types";
+import { EcpControlFlowDiagram } from "./easy-cpp-5e/diagrams/ecp-control-flow";
+import { EcpFunctionsDiagram } from "./easy-cpp-5e/diagrams/ecp-functions";
+import { EcpClassesDiagram } from "./easy-cpp-5e/diagrams/ecp-classes";
+import { EcpInheritanceDiagram } from "./easy-cpp-5e/diagrams/ecp-inheritance";
+import { EcpTemplatesDiagram } from "./easy-cpp-5e/diagrams/ecp-templates";
+import { EcpStlDiagram } from "./easy-cpp-5e/diagrams/ecp-stl";
+import { EcpFinalMindMap } from "./easy-cpp-5e/diagrams/ecp-final-review";
+import { EppBookMap } from "./cpp-primer-plus/diagrams/epp-learning-map";
+import { EppCppBasicsDiagram } from "./cpp-primer-plus/diagrams/epp-cpp-basics";
+import { EppDataTypesDiagram } from "./cpp-primer-plus/diagrams/epp-data-types";
+import { EppControlStatementsDiagram } from "./cpp-primer-plus/diagrams/epp-control-statements";
+import { EppFunctionsRefDiagram } from "./cpp-primer-plus/diagrams/epp-functions-references";
+import { EppClassesObjectsDiagram } from "./cpp-primer-plus/diagrams/epp-classes-objects";
+import { EppInheritanceDiagram } from "./cpp-primer-plus/diagrams/epp-inheritance";
+import { EppTemplatesGenericsDiagram } from "./cpp-primer-plus/diagrams/epp-templates-generics";
+import { EppStlAlgorithmsDiagram } from "./cpp-primer-plus/diagrams/epp-stl-algorithms";
+import { EppFinalMindMap } from "./cpp-primer-plus/diagrams/epp-final-review";
+import { CtrBookMap } from "./cpp-testing-recipes/diagrams/ctr-learning-map";
+import { CtrBasicsTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-basics-test";
+import { CtrMemoryTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-memory-test";
+import { CtrStlTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-stl-test";
+import { CtrTemplateTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-template-test";
+import { CtrConcurrencyTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-concurrency-test";
+import { CtrDesignTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-design-test";
+import { CtrAlgorithmTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-algorithm-test";
+import { CtrDebuggingTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-debugging-test";
+import { CtrFinalMindMap } from "./cpp-testing-recipes/diagrams/ctr-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -2086,6 +2116,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CpcCacheFriendlyDiagram,
   CpcCompilerOptimizationDiagram,
   CpcFinalMindMap,
+  EcpBookMap,
+  EcpFirstProgramDiagram,
+  EcpVariablesTypesDiagram,
+  EcpControlFlowDiagram,
+  EcpFunctionsDiagram,
+  EcpClassesDiagram,
+  EcpInheritanceDiagram,
+  EcpTemplatesDiagram,
+  EcpStlDiagram,
+  EcpFinalMindMap,
+  EppBookMap,
+  EppCppBasicsDiagram,
+  EppDataTypesDiagram,
+  EppControlStatementsDiagram,
+  EppFunctionsRefDiagram,
+  EppClassesObjectsDiagram,
+  EppInheritanceDiagram,
+  EppTemplatesGenericsDiagram,
+  EppStlAlgorithmsDiagram,
+  EppFinalMindMap,
+  CtrBookMap,
+  CtrBasicsTestDiagram,
+  CtrMemoryTestDiagram,
+  CtrStlTestDiagram,
+  CtrTemplateTestDiagram,
+  CtrConcurrencyTestDiagram,
+  CtrDesignTestDiagram,
+  CtrAlgorithmTestDiagram,
+  CtrDebuggingTestDiagram,
+  CtrFinalMindMap,
   Term,
   Glossary,
   GlossaryItem,
