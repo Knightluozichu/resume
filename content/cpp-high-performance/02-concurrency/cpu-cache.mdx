@@ -1,0 +1,96 @@
+---
+title: CPU 缓存
+type: A
+section: 并发优化
+order: 6
+description: 缓存层级、缓存行、预取与局部性——让数据连续、让访问有序，把访存尽量留在 L1/L2，是高性能的第一性原理。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { ChpCacheHierarchyDiagram } from "@/components/mdx/cpp-high-performance/diagrams/chp-cache-hierarchy";
+import { ChpCacheFriendlyDiagram } from "@/components/mdx/cpp-high-performance/diagrams/chp-cache-friendly";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 L1/L2/L3/主存的典型容量与延迟，理解百倍差距的含义
+- 能解释缓存行与空间局部性，说明连续遍历为何快
+- 能从数据布局、访问顺序、缓存污染三方面让热点缓存友好
+</Objectives>
+
+## 缓存层级：百倍延迟差距
+
+CPU 与主存之间隔着几级缓存，这是理解一切 C++ 性能的硬件基础。典型值：L1 缓存 32–64 KB、每核私有、访问约 1ns；L2 256KB–1MB、每核私有、约 4ns；L3 几 MB 到几十 MB、多核共享、约 12–40ns；主存 GB 级、约 80–100ns。
+
+<ChpCacheHierarchyDiagram />
+
+主存比 L1 慢约 100 倍。一次 cache miss 等于白做上百次 L1 访问。这条数量级差距意味着：决定快慢的往往不是「算多少」而是「访存怎么访」。让数据连续、让访问有序、把访存尽量留在 L1/L2，是高性能的第一性原理。
+
+## 缓存行与空间局部性
+
+<Term def="CPU 与主存交换数据的最小单位，通常 64 字节，一次加载一整行而非单字节">缓存行</Term>（cache line）是缓存的工作单位。CPU 不按字节加载，而是一次把包含目标地址的整个 64 字节行搬进缓存。
+
+这催生了 <Term def="被访问地址附近的内存近期很可能也被访问，连续遍历时同缓存行内后续元素几乎免费">空间局部性</Term>。访问 `a[0]` 时，整行（含 `a[1]`、`a[2]`…）已被加载进 L1，访问 `a[1]` 直接命中缓存，几乎免费。连续遍历数组时一个缓存行能装 8 个 `int`，预取器还能提前拉数据，几乎全程命中 L1。
+
+与之相对的是 <Term def="刚访问过的地址近期很可能再被访问，循环变量与热点数据应留在缓存">时间局部性</Term>：刚访问过的数据近期很可能再用，应让它留在缓存。循环 tiling（分块）就是利用时间局部性——把大矩阵切成 fits in L1 的小块，让每块被复用前不 eviction。
+
+## 让热点缓存友好：三方面
+
+缓存友好是「免费的性能」，系统性从三方面入手：
+
+**数据布局**让数据本身利于缓存：连续存储（`vector`/`array` 代替 `list`/`map`）；SoA 替代 AoS 只访问少数字段时让缓存行全是有效数据；热点结构体 `alignas(64)` 对齐缓存行边界避免跨行；用更小类型让一个缓存行装更多元素。
+
+**访问顺序**让访问模式顺布局：按内存布局遍历（C++ 行优先矩阵外层行内层列）；顺序优于随机；循环 tiling 让每块 fits in L2；合并多次遍历成一次。
+
+**缓存污染**不让无用数据挤走热点：大块冷数据用非临时存储指令（`_mm_stream_*`）绕过缓存；隔离冷热数据；控制工作集 ≤ L2 大小。
+
+<ChpCacheFriendlyDiagram />
+
+## 预取：提前把数据搬进缓存
+
+<Term def="在数据真正被需要之前提前把它从主存搬到缓存以掩盖访存延迟的技术，分硬件预取与软件预取">预取</Term>（prefetch）能在数据被需要前提前搬进缓存。硬件预取器会自动识别顺序/步长访问模式并预取，所以连续遍历通常不用操心。
+
+软件预取（`__builtin_prefetch`/`_mm_prefetch`）在硬件预取无效时才用：链表遍历（下个地址在当前节点指针里，硬件无法预测）、图/树遍历、哈希跳转。提前预取下一个节点，能在处理当前节点时把下一个拉进缓存。
+
+但软件预取容易帮倒忙：预取太早数据被驱逐后又 miss；预取太多占满带宽挤掉有用预取；计算太少掩盖不了延迟。实践：先剖析确认是 cache miss 热点且硬件预取无效，再小范围试软件预取调距离，benchmark 验证收益。多数情况硬件预取已足够。
+
+<Callout type="tip">
+按内存布局的顺序遍历数据。C++ 多维数组行优先，外层循环行、内层循环列是连续访问；反过来「步长 N」的跳访会让每次访问落在新缓存行，miss 频繁。这是最廉价、最有效的缓存优化。
+</Callout>
+
+## 小结
+
+- 主存比 L1 慢约 100 倍，访存模式决定快慢
+- 缓存以 64 字节行为单位加载，连续遍历让同行后续元素「白捡」
+- 缓存友好三方面：数据布局（连续/SoA/对齐）、访问顺序（按布局/tiling）、缓存污染（隔离冷热/控工作集）
+- 软件预取仅在硬件预取无效的跳转场景（链表/图）用，且要调距离验证
+
+<Attribution
+  adaptedFrom="C++ High Performance (Björn Andrist, Viktor Sehr)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="缓存行">
+CPU 与主存交换数据的最小单位，通常 64 字节。一次加载一整行而非单字节，是空间局部性的硬件基础。
+</GlossaryItem>
+<GlossaryItem term="空间局部性">
+被访问地址附近的内存近期很可能也被访问。连续遍历时同一缓存行内后续元素已被顺带加载，访问几乎免费。
+</GlossaryItem>
+<GlossaryItem term="时间局部性">
+刚访问过的地址近期很可能再被访问。循环变量与热点数据应留在缓存；循环 tiling 利用它让小块被复用前不 eviction。
+</GlossaryItem>
+<GlossaryItem term="预取">
+在数据被需要前提前从主存搬到缓存以掩盖延迟。硬件预取自动识别顺序/步长模式；软件预取（`__builtin_prefetch`）仅在链表/图等硬件预取无效场景用。
+</GlossaryItem>
+<GlossaryItem term="tiling（分块）">
+把大矩阵运算切成 fits in L1/L2 的小块，每块复用后再换块，提升时间局部性，是矩阵乘等带宽受限运算的关键优化。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="L1/L2/L3/主存的典型容量与延迟各是多少？这个百倍差距对编程意味着什么？">L1：32–64KB、每核私有、约 1ns；L2：256KB–1MB、每核私有、约 4ns；L3：几 MB–几十 MB、多核共享、约 12–40ns；主存：GB 级、约 80–100ns。主存比 L1 慢约 100 倍，一次 cache miss 等于白做上百次 L1 访问。意味着决定快慢的不是「算多少」而是「访存怎么访」——让数据连续、访问有序、把访存留在 L1/L2 是高性能第一性原理，访问多少字节不如访问多少缓存行重要。</Answer>
+  <Answer question="什么是空间局部性？为什么访问 a[0] 后访问 a[1] 几乎免费？">空间局部性指被访问地址附近的内存近期很可能也被访问。CPU 以 64 字节缓存行为单位加载，访问 a[0] 时整行（含 a[1]、a[2]…）已被搬进 L1，访问 a[1] 直接命中缓存，从 ~100ns 降到 ~1ns，几乎免费。所以连续遍历数组（步长 1）最大化空间局部性，一个缓存行装 8 个 int 后续都白捡；而步长大或链表跳转会让每次访问落新缓存行，miss 频繁。</Answer>
+</Exercises>

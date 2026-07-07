@@ -1,0 +1,85 @@
+---
+title: 完美转发
+type: A
+section: 移动语义与转发
+order: 6
+description: 条款 24-30，通用引用、引用折叠、std::forward、不要对通用引用重载、完美转发的失败案例。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { EmcForwardingDiagram } from "@/components/mdx/effective-modern-cpp/diagrams/emc-forwarding";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分通用引用与右值引用，并说明通用引用的判定条件
+- 能复述引用折叠的四条规则与口诀
+- 能回答：std::move 与 std::forward 有何区别？各用在哪种引用上？
+
+</Objectives>
+
+## 为什么需要完美转发
+
+移动语义解决了「把资源从一个对象移到另一个对象」的问题，但很多场景需要「把实参原样转给内部函数」——既保留它的左值/右值性，又保留它的类型。这就是完美转发：一个转发函数对外接收任意实参，对内把它原样（含值类别）传给目标函数。C++11 用三块拼图实现它：通用引用、引用折叠、std::forward。
+
+<EmcForwardingDiagram />
+
+## 通用引用（条款 24）
+
+条款 24 区分<Term def="在类型推导上下文中出现的 T&&，既能绑左值也能绑右值。">通用引用</Term>与右值引用。通用引用是「在类型推导上下文中出现的 `T&&`」，能同时绑定左值与右值。形如 `template<typename T> void f(T&& param)` 或 `auto&& x = expr`。
+
+判定条件：必须有类型推导且形式是 `T&&`（T 是模板参数或 auto）。`void f(Widget&& w)` 没有 T 推导，是纯右值引用；`std::vector<T>&&` 这种 T 已确定的也不是。通用引用绑左值时 T 推为 `T&`，绑右值时 T 推为 `T`——这背后的机制就是引用折叠。
+
+## 引用折叠（条款 28）
+
+条款 28 的四条规则：`T& &` → `T&`、`T& &&` → `T&`、`T&& &` → `T&`、`T&& &&` → `T&&`。口诀：有左则左——只要其中有一个是左值引用（&），结果就是左值引用；两个都是右值引用（&&）才是右值引用。
+
+引用折叠在模板实例化、auto 推导、typedef/别名、decltype 中触发。正是它让通用引用绑左值时 `T& &&` 折叠为 `T&`，从而既能接左值也能接右值。
+
+## std::forward（条款 25）
+
+条款 25 是核心准则：对右值引用用 std::move，对通用引用用 std::forward。std::forward 是<Term def="按实参初始化的值类别有条件地转型为右值的机制，保持左值/右值性。">有条件右值 cast</Term>——只在实参被右值初始化时才 cast 为右值，否则保持左值。
+
+对比：std::move 是无条件右值 cast（用于确定右值），std::forward 是有条件右值 cast（用于保持通用引用的值类别）。在通用引用上误用 std::move 会把左值实参也强行移动，导致悬空。
+
+## 不要对通用引用重载（条款 26-27）
+
+通用引用是最贪婪的形参，能匹配几乎所有实参。与拷贝构造并存时，`Widget w2(w)`（w 是非 const 左值）会走通用引用模板而非拷贝构造，因为 `Widget&` 比 `const Widget&` 更匹配。替代方案：标签分发、enable_if 约束通用引用、或直接用 const 左值 + 右值两个重载。
+
+## 完美转发的失败（条款 30）
+
+完美转发并非万能。位域不能取地址无法被引用绑定；花括号初始化无类型无法推导 T；0/NULL 会被推导成 int 而非指针；重载函数名/模板名无法确定具体重载。应对思路：先复制到普通变量或具名变量再转发。
+
+<Callout type="tip">
+<strong>建议 →</strong> 牢记条款 25 口诀：右值引用用 move，通用引用用 forward。move 是确定右值无条件转，forward是不确定左右值按推导有条件转。这是写出正确转发代码的第一准则。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 转发函数对位域成员 `forwarder(obj.flags)` 编译失败。<strong>原因 →</strong> 位域不能取地址，引用形参无法绑定。<strong>修法 →</strong> 先复制到普通变量 `auto flagCopy = obj.flags;` 再转发 flagCopy。
+</Callout>
+
+## 小结与练习
+
+- 通用引用是类型推导上下文中的 T&&，能绑左值也能绑右值
+- 引用折叠口诀「有左则左」，让通用引用绑左值时折叠为 T&
+- std::move 无条件右值 cast（右值引用用），std::forward 有条件右值 cast（通用引用用）
+- 完美转发失败案例：位域、花括号、0/NULL、重载函数名，应对是先落脚再转发
+
+<Exercises>
+  <Answer question="通用引用与右值引用如何区分？给一个判定的例子。">通用引用是「在类型推导上下文中出现的 T&&」，能同时绑左值与右值；右值引用是无类型推导的 T&&，只绑右值。判定条件：必须有类型推导且形式是 T&&（T 是模板参数或 auto）。例如 `template<typename T> void f(T&& w)` 有推导是通用引用；`void f(Widget&& w)` 无推导是纯右值引用；`std::vector<T>&&` 中 T 已确定也不是通用引用。</Answer>
+  <Answer question="引用折叠的四条规则与口诀是什么？它在通用引用绑左值时如何起作用？">四条规则：T& & → T&、T& && → T&、T&& & → T&、T&& && → T&&。口诀「有左则左」——只要有一个是左值引用（&）结果就是左值引用，两个都是右值引用（&&）才是右值引用。通用引用绑左值时 T 推为 T&，代入 T&& 得到 T& &&，折叠为 T&，于是形参成为左值引用，正确绑定左值实参。这正是通用引用能接左值的底层机制。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="通用引用">在类型推导上下文中出现的 T&&，能同时绑定左值与右值，是完美转发的入口，由引用折叠机制实现。</GlossaryItem>
+  <GlossaryItem term="引用折叠">C++ 不允许直接写出嵌套引用，由编译器按「有左则左」规则折叠：只要有一个是左值引用结果就是左值引用，两个右值引用才是右值引用。</GlossaryItem>
+  <GlossaryItem term="std::forward">按实参初始化的值类别有条件地转型为右值的工具，保持左值/右值性，用于通用引用的完美转发。</GlossaryItem>
+  <GlossaryItem term="完美转发">把函数实参的值类别与类型原样传递给内部函数的能力，由通用引用 + 引用折叠 + std::forward 三者合奏实现。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective Modern C++ (Scott Meyers)" adaptedUrl="https://www.oreilly.com/" />

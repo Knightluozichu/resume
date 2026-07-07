@@ -435,6 +435,38 @@ import { efcTemplateMetaprogrammingQuestions } from "./review/efc-template-metap
 import { efcNewExceptionsQuestions } from "./review/efc-new-exceptions";
 import { efcCodingConventionsQuestions } from "./review/efc-coding-conventions";
 import { efcFinalReviewQuestions } from "./review/efc-final-review";
+// Effective Modern C++
+import { emcLearningMapQuestions } from "./review/emc-learning-map";
+import { emcTypeDeductionQuestions } from "./review/emc-type-deduction";
+import { emcAutoDecltypeQuestions } from "./review/emc-auto-decltype";
+import { emcSmartPointersQuestions } from "./review/emc-smart-pointers";
+import { emcUniqueSharedPtrQuestions } from "./review/emc-unique-shared-ptr";
+import { emcMoveSemanticsQuestions } from "./review/emc-move-semantics";
+import { emcPerfectForwardingQuestions } from "./review/emc-perfect-forwarding";
+import { emcLambdaExpressionsQuestions } from "./review/emc-lambda-expressions";
+import { emcConcurrencyApiQuestions } from "./review/emc-concurrency-api";
+import { emcFinalReviewQuestions } from "./review/emc-final-review";
+// 深度探索 C++ 对象模型
+import { icoLearningMapQuestions } from "./review/ico-learning-map";
+import { icoObjectModelQuestions } from "./review/ico-object-model";
+import { icoConstructionSemanticsQuestions } from "./review/ico-construction-semantics";
+import { icoDataMembersQuestions } from "./review/ico-data-members";
+import { icoFunctionsSemanticsQuestions } from "./review/ico-functions-semantics";
+import { icoVtableVirtualQuestions } from "./review/ico-vtable-virtual";
+import { icoRttiTypeidQuestions } from "./review/ico-rtti-typeid";
+import { icoMultipleInheritanceQuestions } from "./review/ico-multiple-inheritance";
+import { icoObjectLifetimeQuestions } from "./review/ico-object-lifetime";
+import { icoFinalReviewQuestions } from "./review/ico-final-review";
+import { chpLearningMapQuestions } from "./review/chp-learning-map";
+import { chpPerformanceFundamentalsQuestions } from "./review/chp-performance-fundamentals";
+import { chpMemoryManagementQuestions } from "./review/chp-memory-management";
+import { chpCpuCacheQuestions } from "./review/chp-cpu-cache";
+import { chpDataStructuresQuestions } from "./review/chp-data-structures";
+import { chpAlgorithmsComplexityQuestions } from "./review/chp-algorithms-complexity";
+import { chpConcurrencyQuestions } from "./review/chp-concurrency";
+import { chpProfilingBenchmarkingQuestions } from "./review/chp-profiling-benchmarking";
+import { chpTemplateMetaprogrammingQuestions } from "./review/chp-template-metaprogramming";
+import { chpFinalReviewQuestions } from "./review/chp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -877,6 +909,38 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...efcNewExceptionsQuestions,
   ...efcCodingConventionsQuestions,
   ...efcFinalReviewQuestions,
+  // Effective Modern C++
+  ...emcLearningMapQuestions,
+  ...emcTypeDeductionQuestions,
+  ...emcAutoDecltypeQuestions,
+  ...emcSmartPointersQuestions,
+  ...emcUniqueSharedPtrQuestions,
+  ...emcMoveSemanticsQuestions,
+  ...emcPerfectForwardingQuestions,
+  ...emcLambdaExpressionsQuestions,
+  ...emcConcurrencyApiQuestions,
+  ...emcFinalReviewQuestions,
+  // 深度探索 C++ 对象模型
+  ...icoLearningMapQuestions,
+  ...icoObjectModelQuestions,
+  ...icoConstructionSemanticsQuestions,
+  ...icoDataMembersQuestions,
+  ...icoFunctionsSemanticsQuestions,
+  ...icoVtableVirtualQuestions,
+  ...icoRttiTypeidQuestions,
+  ...icoMultipleInheritanceQuestions,
+  ...icoObjectLifetimeQuestions,
+  ...icoFinalReviewQuestions,
+  ...chpLearningMapQuestions,
+  ...chpPerformanceFundamentalsQuestions,
+  ...chpMemoryManagementQuestions,
+  ...chpCpuCacheQuestions,
+  ...chpDataStructuresQuestions,
+  ...chpAlgorithmsComplexityQuestions,
+  ...chpConcurrencyQuestions,
+  ...chpProfilingBenchmarkingQuestions,
+  ...chpTemplateMetaprogrammingQuestions,
+  ...chpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

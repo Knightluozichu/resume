@@ -843,6 +843,36 @@ import { EfcTmpConceptsDiagram } from "./effective-cpp/diagrams/efc-tmp-concepts
 import { EfcNewDeleteDiagram } from "./effective-cpp/diagrams/efc-new-delete";
 import { EfcConventionsDiagram } from "./effective-cpp/diagrams/efc-conventions";
 import { EfcFinalMindMap } from "./effective-cpp/diagrams/efc-final-mindmap";
+import { EmcBookMap } from "./effective-modern-cpp/diagrams/emc-book-map";
+import { EmcTypeDeductionChart } from "./effective-modern-cpp/diagrams/emc-type-deduction-chart";
+import { EmcAutoUsageDiagram } from "./effective-modern-cpp/diagrams/emc-auto-usage";
+import { EmcSmartPtrComparisonDiagram } from "./effective-modern-cpp/diagrams/emc-smart-ptr-comparison";
+import { EmcMakeUniqueSharedDiagram } from "./effective-modern-cpp/diagrams/emc-make-unique-shared";
+import { EmcMoveVsCopyDiagram } from "./effective-modern-cpp/diagrams/emc-move-vs-copy";
+import { EmcForwardingDiagram } from "./effective-modern-cpp/diagrams/emc-forwarding";
+import { EmcLambdaAnatomyDiagram } from "./effective-modern-cpp/diagrams/emc-lambda-anatomy";
+import { EmcConcurrencyModelDiagram } from "./effective-modern-cpp/diagrams/emc-concurrency-model";
+import { EmcFinalMindMap } from "./effective-modern-cpp/diagrams/emc-final-mindmap";
+import { ChpBookMap } from "./cpp-high-performance/diagrams/chp-book-map";
+import { ChpPerfPipelineDiagram } from "./cpp-high-performance/diagrams/chp-perf-pipeline";
+import { ChpCacheHierarchyDiagram } from "./cpp-high-performance/diagrams/chp-cache-hierarchy";
+import { ChpCacheFriendlyDiagram } from "./cpp-high-performance/diagrams/chp-cache-friendly";
+import { ChpMemoryLayoutDiagram } from "./cpp-high-performance/diagrams/chp-memory-layout";
+import { ChpDataStructurePerfDiagram } from "./cpp-high-performance/diagrams/chp-data-structure-perf";
+import { ChpAlgorithmComplexityDiagram } from "./cpp-high-performance/diagrams/chp-algorithm-complexity";
+import { ChpConcurrencyModelDiagram } from "./cpp-high-performance/diagrams/chp-concurrency-model";
+import { ChpProfilingToolsDiagram } from "./cpp-high-performance/diagrams/chp-profiling-tools";
+import { ChpFinalMindMap } from "./cpp-high-performance/diagrams/chp-final-mindmap";
+import { IcoBookMap } from "./inside-cpp-object-model/diagrams/ico-book-map";
+import { IcoObjectModelsDiagram } from "./inside-cpp-object-model/diagrams/ico-object-models";
+import { IcoConstructionSequenceDiagram } from "./inside-cpp-object-model/diagrams/ico-construction-sequence";
+import { IcoMemberLayoutDiagram } from "./inside-cpp-object-model/diagrams/ico-member-layout";
+import { IcoFunctionModelDiagram } from "./inside-cpp-object-model/diagrams/ico-function-model";
+import { IcoVtableLayoutDiagram } from "./inside-cpp-object-model/diagrams/ico-vtable-layout";
+import { IcoRttiMechanismDiagram } from "./inside-cpp-object-model/diagrams/ico-rtti-mechanism";
+import { IcoMultipleInheritanceDiagram } from "./inside-cpp-object-model/diagrams/ico-multiple-inheritance";
+import { IcoObjectLifecycleDiagram } from "./inside-cpp-object-model/diagrams/ico-object-lifecycle";
+import { IcoFinalMindMap } from "./inside-cpp-object-model/diagrams/ico-final-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1966,6 +1996,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EfcNewDeleteDiagram,
   EfcConventionsDiagram,
   EfcFinalMindMap,
+  EmcBookMap,
+  EmcTypeDeductionChart,
+  EmcAutoUsageDiagram,
+  EmcSmartPtrComparisonDiagram,
+  EmcMakeUniqueSharedDiagram,
+  EmcMoveVsCopyDiagram,
+  EmcForwardingDiagram,
+  EmcLambdaAnatomyDiagram,
+  EmcConcurrencyModelDiagram,
+  EmcFinalMindMap,
+  ChpBookMap,
+  ChpPerfPipelineDiagram,
+  ChpCacheHierarchyDiagram,
+  ChpCacheFriendlyDiagram,
+  ChpMemoryLayoutDiagram,
+  ChpDataStructurePerfDiagram,
+  ChpAlgorithmComplexityDiagram,
+  ChpConcurrencyModelDiagram,
+  ChpProfilingToolsDiagram,
+  ChpFinalMindMap,
+  IcoBookMap,
+  IcoObjectModelsDiagram,
+  IcoConstructionSequenceDiagram,
+  IcoMemberLayoutDiagram,
+  IcoFunctionModelDiagram,
+  IcoVtableLayoutDiagram,
+  IcoRttiMechanismDiagram,
+  IcoMultipleInheritanceDiagram,
+  IcoObjectLifecycleDiagram,
+  IcoFinalMindMap,
   Term,
   Glossary,
   GlossaryItem,

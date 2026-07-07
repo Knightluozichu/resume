@@ -1,0 +1,100 @@
+---
+title: unique_ptr 与 shared_ptr
+type: A
+section: 智能指针与资源管理
+order: 4
+description: 条款 18-22，unique_ptr/shared_ptr/weak_ptr 的所有权细节、make 函数的异常安全与性能优势、控制块与循环引用。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { EmcMakeUniqueSharedDiagram } from "@/components/mdx/effective-modern-cpp/diagrams/emc-make-unique-shared";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 make 函数相比直接 new 的异常安全与性能优势
+- 能说出 shared_ptr 控制块的创建时机及「同裸指针构造多 shared_ptr」的危害
+- 能回答：weak_ptr 如何安全访问资源？它解决什么核心问题？
+
+</Objectives>
+
+## 为什么需要 make 函数与控制块
+
+上一章介绍了三种智能指针的分工，本章深入它们的实现细节。核心有两件事：一是 make_unique/make_shared 相比直接 new 的优势（异常安全 + 性能），二是 shared_ptr 控制块的生命周期与循环引用问题。理解控制块是避免双重释放与内存泄漏的关键。
+
+<EmcMakeUniqueSharedDiagram />
+
+## make 函数的优势（条款 21）
+
+条款 21 优先用 make_unique/make_shared 而非直接 new，理由有二。
+
+第一是异常安全。直接 new 在参数求值顺序中可能产生泄漏窗口：
+
+```cpp
+func(std::shared_ptr<Widget>(new Widget), mayThrow());
+```
+
+编译器可能先 `new Widget`，再求值 `mayThrow()`，最后构造 shared_ptr。若 mayThrow 抛异常，new 出的 Widget 还没被 shared_ptr 接管，就泄漏了。用 `func(std::make_shared<Widget>(), mayThrow())` 则没有这个窗口。
+
+第二是性能（仅 make_shared）。make_shared 把对象与控制块合并为单次堆分配，而 `shared_ptr(new Widget)` 是两次分配。单次分配更省内存、缓存更友好。
+
+make 函数的例外：需要自定义删除器、需要 initializer_list 初始化、或对象大且 weak_ptr 长寿（控制块与对象同分配，weak_ptr 不让对象内存早释放）时，退回直接 new。
+
+## shared_ptr 的控制块（条款 19）
+
+shared_ptr 靠<Term def="shared_ptr 内部记录引用计数与弱计数的数据结构，决定资源的释放时机。">控制块</Term>管理引用计数。控制块在以下时机创建：make_shared 调用时、从 unique_ptr 构造时、用单独 new 表达式构造时。从已有 shared_ptr 拷贝时复用控制块（计数 +1）。
+
+致命错误：用同一个裸指针构造多个 shared_ptr，会创建多个独立控制块，导致双重释放：
+
+```cpp
+Widget* raw = new Widget;
+std::shared_ptr<Widget> sp1(raw);
+std::shared_ptr<Widget> sp2(raw);  // 致命！双重释放
+```
+
+避免方法：从 shared_ptr 拷贝，或用 make_shared，或用 `std::enable_shared_from_this` + `shared_from_this()`。
+
+## weak_ptr 打破循环引用（条款 20）
+
+两个对象互相用 shared_ptr 指向对方，引用计数永远不归零，资源永不释放。weak_ptr 不增引用计数，是打破循环的关键。它通过 `lock()` 原子地提升为 shared_ptr 安全访问：资源已存在则返回有效 shared_ptr，已释放则返回空。
+
+```cpp
+std::weak_ptr<Widget> wp = sp;
+if (auto p = wp.lock()) { /* 安全使用 p */ }
+```
+
+典型场景是观察者模式与缓存：观察者用 weak_ptr 引用被观察对象，不阻止其析构。
+
+<Callout type="tip">
+<strong>建议 →</strong> 默认用 make_shared/make_unique；shared_ptr 永远从另一个 shared_ptr 拷贝或从 make_shared 获得，绝不从同一裸指针构造两次。需要 self-shared 的类继承 enable_shared_from_this。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 两个对象互相 shared_ptr 指向对方，内存永不释放。<strong>原因 →</strong> 循环引用使引用计数永远不归零。<strong>修法 →</strong> 其中一方改用 weak_ptr，访问时用 `lock()` 提升为 shared_ptr。
+</Callout>
+
+## 小结与练习
+
+- make 函数异常安全（无裸 new 暴露窗口）+ make_shared 单次分配更省内存
+- shared_ptr 控制块在 make/unique_ptr 转换/单独 new 时创建，拷贝时复用
+- 同一裸指针构造多 shared_ptr 会双重释放；用 enable_shared_from_this 避免自引用
+- weak_ptr 不增计数，lock() 安全提升，用于打破循环引用
+
+<Exercises>
+  <Answer question="为什么用同一裸指针构造两个 shared_ptr 会双重释放？如何避免？">每个 shared_ptr 用裸指针构造时会创建各自独立的控制块，于是同一块内存被两个独立控制块管理，计数独立。任一计数归零就析构并释放对象，另一控制块仍以为有效，再析构一次即双重释放。避免：从 shared_ptr 拷贝（复用控制块）、用 make_shared、或继承 enable_shared_from_this 用 shared_from_this() 获取指向自身的 shared_ptr。</Answer>
+  <Answer question="make_shared 相比 shared_ptr(new T) 有哪两个优势？何时不能用 make？">异常安全：make 内部一次完成分配+构造+接管，无裸 new 暴露在参数求值顺序中，避免 mayThrow 抛异常时 new 结果泄漏。性能：make_shared 把对象与控制块合并为单次堆分配，而直接 new 是两次（对象 + 控制块），单次分配更省内存且缓存友好。不能用 make 的情况：需自定义删除器、需 initializer_list 初始化、或对象大且 weak_ptr 长寿（控制块与对象同分配，weak_ptr 存活时对象内存不能早释放）。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="make 函数">make_unique/make_shared，把分配+构造+接管合并为一次操作的工具函数，异常安全且 make_shared 单次分配。</GlossaryItem>
+  <GlossaryItem term="控制块">shared_ptr 内部记录强引用计数与弱引用计数的数据结构，决定对象与控制块自身的释放时机。</GlossaryItem>
+  <GlossaryItem term="循环引用">两个或多个对象互相用 shared_ptr 指向对方，导致引用计数永远不归零、资源永不释放，解法是其中一方改用 weak_ptr。</GlossaryItem>
+  <GlossaryItem term="enable_shared_from_this">继承此类后可通过 shared_from_this() 安全获取指向自身的 shared_ptr，复用同一控制块，避免自引用的双重释放。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective Modern C++ (Scott Meyers)" adaptedUrl="https://www.oreilly.com/" />

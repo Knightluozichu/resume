@@ -1,0 +1,76 @@
+---
+title: 对象生命周期
+type: A
+section: 运行时机制
+order: 8
+description: 对象从分配到释放的五阶段流程，构造析构的对称性与多态生效窗口。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { IcoObjectLifecycleDiagram } from "@/components/mdx/inside-cpp-object-model/diagrams/ico-object-lifecycle";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能按顺序说出对象生命周期的五个阶段及构造析构的对称关系
+- 能解释「构造完成到析构开始」为何是唯一的多态生效窗口
+- 能区分全局、栈、堆三类对象的构造析构时机，识别生命周期陷阱
+
+</Objectives>
+
+## 五个阶段
+
+一个对象从生到灭经历五个阶段。第一步分配内存：堆对象经 operator new 申请，栈对象在函数栈帧里预留空间。第二步构造：设 vptr 指向基类虚表、调基类构造、按声明顺序构造成员、执行构造体、再改 vptr 指向派生类虚表。第三步使用：成员访问、虚调用多态生效。第四步析构：执行析构体、成员逆序析构、基类析构——方向与构造严格相反。第五步释放内存：堆对象经 operator delete 回收，栈对象随栈帧回收。
+
+构造与析构的对称性是核心：构造自基向派，析构自派向基，成员始终比对象本体先构造、后析构。
+
+<IcoObjectLifecycleDiagram />
+
+## 多态生效窗口
+
+把构造析构的对称性和 vptr 行为合起来，会得到一个重要结论：多态只在「构造完成到析构开始」之间真正生效。构造期间 vptr 先指向基类虚表，派生覆写还没接上；析构期间 vptr 又被改回基类虚表再析构派生部分。这两段里虚调用都退化为基类版本。只有构造全部完成、vptr 已指向派生类虚表，到析构开始把 vptr 改回之前，对象才处于「真正自己是派生类型」的状态。这就是「别在构造析构里调虚函数」的根因。
+
+## 三类对象的生存期
+
+全局和静态对象在程序启动时构造、main 退出后析构，生存期等于整个程序。栈对象在声明处构造、离开作用域析构，生存期等于所在作用域。堆对象在 new 时构造、delete 时析构，生存期由程序员手动管控——忘了 delete 就内存泄漏。
+
+## RAII 与异常安全
+
+对象生命周期最强大的应用是 RAII：把资源的获取和释放绑定到对象的生命周期——构造函数获取资源，析构函数释放资源。栈对象「离开作用域自动析构」的特性，让资源释放时机交给类型系统而非人的记忆，这是 C++ 资源管理的基石。无论是文件句柄、锁、内存还是网络连接，只要用 RAII 包装，就不必担心忘了释放。
+
+RAII 在异常安全上尤其关键：当异常抛出、栈展开时，所有已构造的栈对象会按逆序析构，资源随之释放，不会因异常逃逸而泄漏。反过来这也意味着——裸 new/delete 在现代 C++ 里几乎不该出现，堆对象应交给智能指针（unique_ptr 独占、shared_ptr 共享）托管，让它们在生命周期结束时自动 delete。把生命周期管理从「手动配对」升级为「对象自管」，是从根本上消灭资源泄漏的路径。
+
+<Callout type="tip">
+<strong>建议 →</strong> 用 RAII 把资源生命周期绑定到对象生命周期——构造获取、析构释放。栈对象自动析构的特性是最强大的自动清理机制；需要堆对象时用智能指针（unique_ptr/shared_ptr）把它托管到栈上对象，让释放时机交给类型系统而非人的记忆。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 全局对象 A 的构造函数里用了另一个全局对象 B，结果行为时好时坏。<strong>原因 →</strong> 静态初始化顺序未定义——跨翻译单元的全局对象之间构造顺序标准未规定，若 B 还没构造 A 就用它，行为未定义。<strong>修法 →</strong> 全局对象间不要有构造期依赖；把 B 包成函数内 static（Meyers 单例），首次访问时才构造，顺序由依赖决定。
+</Callout>
+
+## 小结与练习
+
+- 五阶段：分配 → 构造 → 使用 → 析构 → 释放
+- 构造析构对称反向：构造自基向派，析构自派向基，成员先构造后析构
+- 多态只在构造完成到析构开始之间生效，构造析构期虚函数退化
+- 全局/栈/堆对象的构造析构时机不同，决定多态窗口与泄漏风险
+
+<Exercises>
+  <Answer question="为什么说「构造完成到析构开始之间」才是多态真正生效的窗口？">vptr 在构造期先指向基类虚表、最后才改指向派生类虚表，在析构期又先改回基类虚表再析构派生部分。所以构造期（基类构造函数运行时）和析构期虚函数都退化为基类版本，多态不生效。只有构造全部完成、vptr 已指向派生类虚表，到析构开始把 vptr 改回之前，对象才处于真正派生类型的状态，虚调用才走到派生覆写。</Answer>
+  <Answer question="全局对象、栈对象、堆对象的构造与析构分别发生在什么时候？new Foo 后忘了 delete 会怎样？">全局/静态对象程序启动时构造、main 退出后析构，生存期等于整个程序。栈对象声明处构造、离开作用域析构。堆对象 new 时构造、delete 时析构，生存期由程序员手动管控。new Foo 后忘了 delete，析构不触发、内存不回收——内存泄漏；若 Foo 持有资源还会资源泄漏。解法是 RAII，用智能指针把堆对象托管到栈对象自动释放。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="对象生命周期">对象从分配内存、构造、使用、析构到释放内存的五阶段全过程。</GlossaryItem>
+  <GlossaryItem term="构造析构对称">构造自基向派、析构自派向基，成员始终比对象本体先构造后析构。</GlossaryItem>
+  <GlossaryItem term="多态窗口">从构造全部完成到析构开始之间，vptr 指向派生类虚表，虚调用才走到派生覆写。</GlossaryItem>
+  <GlossaryItem term="RAII">把资源生命周期绑定到对象生命周期，构造获取、析构释放，借助栈对象自动析构保证不泄漏。</GlossaryItem>
+  <GlossaryItem term="静态初始化顺序">跨翻译单元全局/静态对象之间的构造顺序标准未规定，可能造成构造期依赖的未定义行为。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Inside the C++ Object Model (Stanley Lippman)" adaptedUrl="https://www.oreilly.com/" />

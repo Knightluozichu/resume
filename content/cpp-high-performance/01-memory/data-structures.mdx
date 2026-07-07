@@ -1,0 +1,93 @@
+---
+title: 数据结构性能
+type: A
+section: 内存与数据结构
+order: 3
+description: 连续与链式布局的取舍、AoS 与 SoA、容器选型——让数据布局利于缓存，大 O 选方向，缓存定胜负。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { ChpDataStructurePerfDiagram } from "@/components/mdx/cpp-high-performance/diagrams/chp-data-structure-perf";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释为什么 `vector` 在中间插入场景也常跑赢 `list`
+- 能说出 AoS 与 SoA 的取舍，知道何时该用 SoA
+- 能给出「按 key 查找 + 有序遍历」场景的容器选型决策
+</Objectives>
+
+## 大 O 选方向，缓存定胜负
+
+选数据结构时，大 O 复杂度是第一块筛选器：它告诉你谁会随 n 增大先撑不住。但大 O 只数操作次数，不看每次操作的耗时——而现代 CPU 上，访存才是性能主导因素。一次 cache miss 等于白做上百次 L1 访问。所以真正决定快慢的，往往是数据在内存里「怎么摆」。
+
+<ChpDataStructurePerfDiagram />
+
+## 连续 vs 链式：缓存的碾压
+
+`std::vector` 与 `std::list` 的对比最能说明问题。纸面上，`vector` 末尾插入均摊 O(1)、中间插入 O(n)；`list` 任意位置插入 O(1)（已知迭代器）。看起来 list 在插入删除上更优。
+
+但实测常常相反。`vector` 内存连续，遍历时一个 64 字节缓存行能装 8 个 `int`，预取器还能提前拉数据，几乎全程命中 L1。`list` 节点散落在堆各处，每跳一个节点就是一次 cache miss（约 100ns），指针追逐让流水线停顿。即便 `vector` 中间插入要移动几千个元素，那段连续 `memmove` 被 SIMD 加速，也常比 `list` 的几次指针跳转快。
+
+经验法则：除非元素极大（KB 级）且插删位置已知，否则默认 `vector`。
+
+## AoS 与 SoA：只遍历部分字段时拆开它
+
+<Term def="结构体数组，每个对象的所有字段连续存放；遍历单字段时无用字段也进缓存行">AoS</Term>（Array of Structs）与 <Term def="数组结构体，每个字段独立成连续数组；只遍历热字段时缓存行全是有效数据">SoA</Term>（Struct of Arrays）是另一组关键取舍。
+
+考虑粒子系统：`struct Particle { float x, y, z; bool active; }`。若常遍历 `active` 做过滤，AoS 里每个对象的 x/y/z 也被同一缓存行顺带加载，但用不上，缓存行有效载荷可能只有 1/4。SoA 把 `actives` 拆成独立数组，遍历时缓存行全是 active 数据，有效载荷接近 100%，同样数量的 cache miss 能处理四倍数据。
+
+取舍是：访问模式以「单字段批量」为主用 SoA，以「单对象全字段」为主用 AoS。游戏引擎的 ECS 普遍用 SoA，正因实体常按字段批量处理。
+
+<Callout type="tip">
+默认选 `vector`：连续内存加末尾 O(1) 插入，缓存命中让「纸面 O(n)」跑赢链表「O(1)」。只有剖析证明 vector 不够，再考虑 list/map/自定义布局。
+</Callout>
+
+## 容器选型：先 vector，再剖析
+
+需要「按 key 查找 + 有序遍历」时，`std::map`、`std::unordered_map`、排序后的 `std::vector` 各有取舍：
+
+- 数据几乎不变（一次性构建后只查）：`vector` + `std::lower_bound` 二分最快，缓存让 O(log n) 跑得比 `map` 的 O(log n) 快几倍。
+- 频繁查 + 偶尔插删 + 不需有序：`unordered_map`。
+- 需要有序遍历 + 频繁插删：`std::map`，但 n 大时未必比「vector + 周期性重排」快。
+- n 小（几百以内）：直接 `vector` 线性扫描，缓存红利碾压树/哈希的常数。
+
+工程默认：先 `vector`，剖析证明不够再换。`flat_map`（连续存储的有序 map）是 `map` 的缓存友好替代品。
+
+<Callout type="trap">
+不要只看大 O 选容器。`std::map` 的查找是 O(log n)，`std::vector` 排序后二分也是 O(log n)，但 vector 连续缓存友好、map 节点散落缓存差，实测 vector 常快几倍。脱离缓存谈大 O 是选型常见误区。
+</Callout>
+
+## 小结
+
+- `vector` 因缓存命中常在中间插删场景也跑赢 `list`，默认选 vector
+- 只遍历部分字段时用 SoA，让缓存行全是有用数据
+- 容器选型先 vector 再剖析，`flat_map` 是 map 的缓存友好替代
+- 「数据结构的选择应由访问模式决定，而非由大 O 决定」
+
+<Attribution
+  adaptedFrom="C++ High Performance (Björn Andrist, Viktor Sehr)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="AoS">
+Array of Structs，结构体数组：每个对象的所有字段连续存放，对象再排成数组。访问单对象全字段时缓存友好，但遍历单字段时无用字段也占缓存行。
+</GlossaryItem>
+<GlossaryItem term="SoA">
+Struct of Arrays，数组结构体：每个字段独立成连续数组。只遍历热字段时缓存行全是有效数据，吞吐成倍提升。游戏引擎 ECS 普遍采用。
+</GlossaryItem>
+<GlossaryItem term="flat_map">
+连续存储的有序 map（如 `boost::container::flat_map`），底层是排序数组。查找 O(log n) 但缓存友好，插入 O(n) 需移动。是 `std::map` 的缓存友好替代品。
+</GlossaryItem>
+<GlossaryItem term="swap-pop">
+删除连续容器中元素的技巧：把待删元素与末尾交换再 pop_back，O(1) 且不保序，常用于实体系统的「标记删除」。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么 vector 在中间插入（O(n)）场景也常跑赢 list（O(1)）？">缓存。vector 内存连续，中间插入要移动后续元素，但那段移动是连续 memmove、被 SIMD 加速、缓存命中；list 插入虽 O(1) 但节点散落堆各处，每跳一个节点就是一次 cache miss（约 100ns），指针追逐让流水线停顿。n 在几千内，vector 的 O(n) 移动常比 list 的 O(1) 跳转快。除非元素极大且插删位置已知，否则默认 vector。</Answer>
+  <Answer question="需要「按 key 查找 + 有序遍历」，map、unordered_map、排序 vector 怎么选？">数据几乎不变只查 → 排序 vector + lower_bound 二分（缓存友好，O(log n) 跑得比 map 快几倍）；频繁查偶插删不需有序 → unordered_map（均摊 O(1)）；需有序遍历且频繁插删 → map，但 n 大时未必比「vector + 周期重排」快；n 小（几百内）→ 直接 vector 线性扫描。工程默认先 vector，剖析不够再换，flat_map 是 map 的缓存友好替代。</Answer>
+</Exercises>

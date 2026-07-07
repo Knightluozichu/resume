@@ -1,0 +1,109 @@
+---
+title: 模板元编程性能
+type: A
+section: 模板与元编程性能
+order: 7
+description: 编译期计算、`if constexpr` 与代码膨胀——把计算挪到编译期拿零运行期开销，同时警惕二进制膨胀与指令缓存压力。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出模板元编程如何把计算挪到编译期及带来的零运行期开销
+- 能解释代码膨胀为何既是性能优势又是性能隐患
+- 能区分 `if constexpr`、`#if`、运行时 `if` 的适用场景
+</Objectives>
+
+## 把计算挪到编译期
+
+模板是 C++ 的图灵完备编译期语言：编译器在实例化模板时执行模板代码，结果直接编进二进制。利用这一点能把运行期计算挪到编译期——用模板递归算阶乘、用 `constexpr` 函数算常量、用 `if constexpr` 裁剪分支。
+
+带来的性能收益：
+
+- **零运行期开销**：编译期算好的常量直接内联为立即数，运行期不计算。`factorial<5>::value` 编译后就是字面量 120。
+- **消除分支**：`if constexpr` 在编译期裁剪不需要的分支，运行期无跳转、无分支预测失败。
+- **激进内联与特化**：模板为每个类型生成专门代码，编译器能针对具体类型内联、向量化，比运行期泛化（虚函数/类型标签）快。
+- **类型安全零成本抽象**：`std::array`、`std::span` 编译期已知大小/布局，无运行期开销却比 C 数组更安全。
+
+这是 C++ 「<Term def="C++ 设计目标：高层抽象在运行期不比手写低层代码慢，前提是编译期能完成分发与特化">零成本抽象</Term>」的来源：你为不同类型写一份泛型代码，编译器为每个类型生成等价于手写的特化代码，运行期不多花一分钱。
+
+## 代码膨胀：双刃剑
+
+<Term def="模板为每个不同的模板参数生成一份独立代码，导致二进制变大、指令缓存压力上升的现象">代码膨胀</Term>（code bloat）是模板的代价。`vector<int>`、`vector<float>`、`vector<string>` 会生成三份独立的 `push_back`/`operator[]`，二进制里有三段几乎相同的机器码。
+
+它既是优势又是隐患。优势面：每份特化都针对具体类型优化——编译器能看到确切类型，敢内联、向量化、消除虚调用。`vector<int>::push_back` 能用 SIMD `memmove`，而运行期类型分发版本做不到。
+
+隐患面：
+
+1. **指令缓存压力**：二进制膨胀后热路径代码可能塞不进 L1 指令缓存（L1i），icache miss 让 CPU 等取指。函数虽快，但取指慢，净亏。
+2. **编译时间**：N 个类型实例化 N 份，编译慢、占内存。
+3. **重复代码**：不同编译单元可能各自实例化同一份，链接期才去重，中间浪费。
+
+缓解办法：把与类型无关的部分抽到非模板基类或独立函数（`vector` 的内存管理用 `void*` 实现核心、模板外壳转发）；用 `extern template` 显式实例化减少重复；剖析确认 icache 不是瓶颈前别过度合并。
+
+## `if constexpr` vs `#if` vs 运行时 `if`
+
+三者都能做条件分支，区别在何时裁剪：
+
+- `#if`（预处理）：编译前文本裁剪，按宏条件决定哪些代码进入编译。零运行期开销，但无类型感知、无可调试性，适合跨平台/构建配置，不适合业务逻辑。
+- 运行时 `if`：条件运行期求值，两分支都编译，CPU 动态跳转。有分支预测失败开销，适合条件依赖运行期值。
+- `if constexpr`（C++17）：编译期按常量表达式裁剪，不成立分支根本不实例化。零运行期分支开销又类型安全，适合条件依赖编译期已知信息（类型、模板参数）。
+
+模板内优先 `if constexpr` 替代 SFINAE/标签分发，既零开销又比 `#if` 安全可调试。
+
+<Callout type="tip">
+热点优先模板化：剖析证实的运行期热点，用模板消多态/挪编译期收益最大。冷路径用运行期多态更省体积、更好维护。用 `extern template` 集中实例化、用 `if constexpr`/`concepts` 替代老式 TMP，能压住编译时间与膨胀。
+</Callout>
+
+## 拿捏模板化的度
+
+「模板是零成本抽象」在运行期成本意义上成立（不比手写慢），但在编译期与工程成本意义上不成立：编译时间、代码膨胀、可读性、调试难度都是隐性开销。拿捏的度：
+
+1. 热点优先模板化，冷路径用运行期多态省体积。
+2. 控制实例化种类：同义类型用 `using`/`static_cast` 而非新模板；与类型无关的逻辑抽到非模板基类。
+3. `extern template` 显式实例化集中编译。
+4. 优先现代轻量设施（`if constexpr`、`concepts`、`constexpr` 函数）比老式 TMP 编译更快更易读。
+5. 设编译时间预算，超标就回退部分模板。
+
+<Callout type="trap">
+不要为了「泛化」而过度模板化。每多一个模板参数，实例化种类指数增长，二进制膨胀、编译变慢、错误信息难懂。模板化是投资：热点值得投，冷路径与过度泛化是负债。判断标准是剖析数据加编译/维护成本，而非教条地「能模板就模板」。
+</Callout>
+
+## 小结
+
+- 模板把计算挪到编译期，带来零运行期开销与零成本抽象
+- 代码膨胀既是特化优化的优势，也是 icache 压力与编译时间的隐患
+- `if constexpr` 编译期裁剪，零开销又类型安全，模板内优先用它
+- 模板化按 ROI：热点投模板，冷路径用多态，`extern template` 控膨胀
+
+<Attribution
+  adaptedFrom="C++ High Performance (Björn Andrist, Viktor Sehr)"
+  adaptedUrl="https://www.packtpub.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="零成本抽象">
+C++ 设计目标：高层抽象（模板、`std::vector`）在运行期不比手写低层代码慢。前提是编译期能完成分发与特化，代价是编译时间与代码膨胀。
+</GlossaryItem>
+<GlossaryItem term="代码膨胀">
+模板为每个不同模板参数生成一份独立代码，导致二进制变大、L1 指令缓存压力上升、编译变慢。缓解靠抽非模板内核、`extern template`、控制实例化种类。
+</GlossaryItem>
+<GlossaryItem term="if constexpr">
+C++17 编译期条件：按常量表达式裁剪，不成立分支根本不实例化。零运行期分支开销又类型安全，模板内优先用它替代 SFINAE/标签分发。
+</GlossaryItem>
+<GlossaryItem term="extern template">
+显式实例化声明，告诉编译器某模板实例在别处已实例化、本编译单元不再生成，减少重复实例化与编译时间。
+</GlossaryItem>
+<GlossaryItem term="constexpr">
+标注函数或变量可在编译期求值。`constexpr` 函数既能在编译期算常量（结果内联为立即数），也能在运行期用，是零成本编译期计算的主力。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="模板元编程如何把计算挪到编译期？带来什么性能收益？">模板是图灵完备的编译期语言，编译器实例化模板时执行模板代码、结果编进二进制。用模板递归算阶乘、`constexpr` 算常量、`if constexpr` 裁剪分支。收益：零运行期开销（常量内联为立即数）；消除分支（`if constexpr` 编译期裁剪无跳转）；激进内联特化（每类型生成专门代码可向量化）；类型安全零成本抽象（`std::array`/`std::span` 编译期已知布局无运行期开销）。代价是编译时间与代码膨胀。</Answer>
+  <Answer question="什么是代码膨胀？它为什么既是性能优势又是性能隐患？">代码膨胀指模板为每个不同模板参数生成一份独立代码，二进制变大。优势：每份特化针对具体类型优化，编译器能内联、向量化、消除虚调用，是零成本抽象的来源（`vector<int>::push_back` 能用 SIMD memmove）。隐患：指令缓存压力（热路径塞不进 L1i，icache miss 让 CPU 等取指，函数虽快取指慢净亏）；编译时间变长；重复代码。缓解：抽非模板内核、`extern template`、控制实例化种类，剖析确认 icache 不是瓶颈前别过度合并。</Answer>
+</Exercises>

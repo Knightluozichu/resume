@@ -517,7 +517,40 @@ export type ReviewChapterSlug =
   | "efc-template-metaprogramming"
   | "efc-new-exceptions"
   | "efc-coding-conventions"
-  | "efc-final-review";
+  | "efc-final-review"
+  // Effective Modern C++
+  | "emc-learning-map"
+  | "emc-type-deduction"
+  | "emc-auto-decltype"
+  | "emc-smart-pointers"
+  | "emc-unique-shared-ptr"
+  | "emc-move-semantics"
+  | "emc-perfect-forwarding"
+  | "emc-lambda-expressions"
+  | "emc-concurrency-api"
+  | "emc-final-review"
+  // C++ 高性能编程
+  | "chp-learning-map"
+  | "chp-performance-fundamentals"
+  | "chp-memory-management"
+  | "chp-data-structures"
+  | "chp-algorithms-complexity"
+  | "chp-concurrency"
+  | "chp-cpu-cache"
+  | "chp-template-metaprogramming"
+  | "chp-profiling-benchmarking"
+  | "chp-final-review"
+  // 深度探索 C++ 对象模型
+  | "ico-learning-map"
+  | "ico-object-model"
+  | "ico-construction-semantics"
+  | "ico-data-members"
+  | "ico-functions-semantics"
+  | "ico-vtable-virtual"
+  | "ico-rtti-typeid"
+  | "ico-multiple-inheritance"
+  | "ico-object-lifetime"
+  | "ico-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -972,6 +1005,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "efc-new-exceptions": "new、delete 与异常",
   "efc-coding-conventions": "编码约定",
   "efc-final-review": "Effective C++ 总复习",
+  // Effective Modern C++
+  "emc-learning-map": "Effective Modern C++ 学习地图",
+  "emc-type-deduction": "类型推导",
+  "emc-auto-decltype": "auto 与 decltype",
+  "emc-smart-pointers": "智能指针",
+  "emc-unique-shared-ptr": "unique_ptr 与 shared_ptr",
+  "emc-move-semantics": "移动语义",
+  "emc-perfect-forwarding": "完美转发",
+  "emc-lambda-expressions": "Lambda 表达式",
+  "emc-concurrency-api": "并发 API",
+  "emc-final-review": "Effective Modern C++ 总复习",
+  // C++ 高性能编程
+  "chp-learning-map": "C++ 高性能编程学习地图",
+  "chp-performance-fundamentals": "性能基础",
+  "chp-memory-management": "内存管理",
+  "chp-data-structures": "数据结构性能",
+  "chp-algorithms-complexity": "算法与复杂度",
+  "chp-concurrency": "并发优化",
+  "chp-cpu-cache": "CPU 缓存优化",
+  "chp-template-metaprogramming": "模板元编程性能",
+  "chp-profiling-benchmarking": "性能分析与基准测试",
+  "chp-final-review": "C++ 高性能编程总复习",
+  // 深度探索 C++ 对象模型
+  "ico-learning-map": "深度探索 C++ 对象模型学习地图",
+  "ico-object-model": "对象模型基础",
+  "ico-construction-semantics": "构造语义",
+  "ico-data-members": "数据成员布局",
+  "ico-functions-semantics": "函数语义",
+  "ico-vtable-virtual": "虚函数与虚表",
+  "ico-rtti-typeid": "RTTI 与 typeid",
+  "ico-multiple-inheritance": "多重继承",
+  "ico-object-lifetime": "对象生命周期",
+  "ico-final-review": "深度探索 C++ 对象模型总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

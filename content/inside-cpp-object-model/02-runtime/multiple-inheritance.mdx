@@ -1,0 +1,77 @@
+---
+title: 多重继承
+type: A
+section: 运行时机制
+order: 7
+description: 多重继承的内存布局、this 指针调整与虚继承，回答「菱形继承为何二义、虚继承如何解」。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { IcoMultipleInheritanceDiagram } from "@/components/mdx/inside-cpp-object-model/diagrams/ico-multiple-inheritance";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能描述普通多重继承下派生对象的内存布局与 this 指针调整
+- 能解释菱形继承的二义性及虚继承如何用 vbptr 解决
+- 能据此评估多重继承带来的开销与设计取舍
+
+</Objectives>
+
+## 普通多重继承的布局
+
+当一个类 `D : B1, B2` 多重继承时，派生对象在内存里由多个基类子对象顺序拼接而成：先 B1 子对象，再 B2 子对象，最后 D 自己的成员。每个有虚函数的基类子对象各带自己的 vptr，各管该基类接口的虚函数槽——所以一个多重继承对象常有多个 vptr。
+
+把派生指针转成不同基类指针时，地址可能变：转成「主基类」指针通常不偏移；转成「次基类」指针时，指针要偏移到对应的基类子对象起始处。这就是 this 指针调整，让每个基类指针都指向自己那段子对象、vptr 才能正确查到属于该接口的虚表。
+
+<IcoMultipleInheritanceDiagram />
+
+## 菱形继承的二义性
+
+菱形继承——B1、B2 都继承自 Base，D 再继承 B1、B2——不虚继承时，D 里同时含 B1 带来的 Base 子对象和 B2 带来的 Base 子对象，Base 成员存了两份。访问 Base 成员时编译器不知道走 B1 还是 B2 那份，产生二义性，编译报错。
+
+## 虚继承的解法
+
+虚继承让 B1、B2 以 `virtual` 方式继承 Base，编译器把共享的 Base 子对象挪到对象末尾、只存一份。B1、B2 子对象里各放一个 vbptr（虚基指针），指向虚基表，虚基表记录「从这段子对象到共享 Base 的偏移」。访问 Base 成员时经 vbptr 间接定位到唯一的那份 Base，二义性消除。代价是访问共享基类成员多一次间接。
+
+## this 调整与虚继承的代价
+
+多重继承的复杂度，大多集中在 this 指针调整与虚基类的间接寻址上。普通多重继承下，把派生指针转成不同基类指针时，编译器在编译期就能算出固定偏移、加减指针——这是常量时间的调整，开销很小。虚继承则不同：因为共享基类被挪到了对象末尾、位置随继承层次变化，访问它要经 vbptr 间接查偏移，多一次内存读，而且虚继承的对象布局更复杂、体积更大。
+
+这些代价决定了多重继承不是「免费午餐」。一个常见的工程判断是：能用单继承加组合（has-a）表达的，就别上多重继承；确实需要「一个对象同时是多种东西」时（最典型的是实现多个纯抽象接口，类似 Java 的 interface），多重继承才物有所值，且应让接口尽量无数据成员、降低布局复杂度。至于菱形继承，能避就避，非用不可时才上虚继承——它的间接开销和心智负担都不小，往往是设计可以简化的信号。
+
+还有一个容易踩的细节：多重继承下，把派生指针转成不同基类指针得到的地址可能不同，反过来用基类指针 delete 派生对象时，编译器要先把指针调整回派生对象的真正起始处。若析构函数是虚的，这步调整由编译器自动完成、安全；若析构非虚，则只析构对应基类部分、派生部分被跳过，资源泄漏。这再次印证了那条铁律——任何打算被多态使用的基类，析构函数都必须是虚的，多重继承下尤为关键。
+
+<Callout type="tip">
+<strong>建议 →</strong> 多重继承最干净的用法是「一个对象实现多个纯抽象接口」——接口无数据成员、只有虚函数，布局复杂度低、二义风险小。尽量避免数据型多重继承与深层菱形，那种场景用组合（has-a）往往更清晰、开销更可控。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 菱形继承下访问共享基类成员报「二义」错误，于是手动用 `B1::member` 限定，结果还是存了两份、状态不一致。<strong>原因 →</strong> 普通菱形继承让 Base 存两份，限定访问只是选了一份、没解决数据冗余。<strong>修法 →</strong> 让 B1、B2 用 virtual 继承 Base，共享 Base 只存一份，经 vbptr 间接定位，彻底消除冗余与二义。
+</Callout>
+
+## 小结与练习
+
+- 普通多重继承：基类子对象拼接，各有 vptr，转基类指针时 this 要偏移
+- 菱形继承不虚继承：共享基类存两份，访问其成员二义
+- 虚继承：共享基类挪到末尾只存一份，经 vbptr 间接定位，代价是多一次间接
+- 多重继承带来更大对象、this 调整、虚继承间接，能用组合就别滥用
+
+<Exercises>
+  <Answer question="D : B1, B2 多重继承，把 D* 转 B2* 时地址会变吗？为什么？">可能变。派生对象由 B1、B2 子对象顺序拼接，转成「主基类」B1 指针通常不偏移；转成「次基类」B2 指针时，要把指针偏移到 B2 子对象的起始处，这样 B2 指针的 vptr 才能正确查到属于 B2 接口的虚表。这就是多重继承下 this 指针调整的来源。</Answer>
+  <Answer question="菱形继承（B1、B2 都继承 Base，D 继承 B1、B2）不虚继承会有什么问题？虚继承如何解决？">不虚继承时 D 里同时含 B1 的 Base 子对象和 B2 的 Base 子对象，Base 成员存两份，访问 Base 成员产生二义性。虚继承让 B1、B2 以 virtual 方式继承 Base，编译器把共享 Base 挪到对象末尾只存一份，B1/B2 各放一个 vbptr 指向虚基表，虚基表记录到共享 Base 的偏移。访问 Base 成员经 vbptr 间接定位到唯一那份，二义性消除，代价是多一次间接。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="多重继承布局">派生对象由多个基类子对象顺序拼接，每个有虚函数的基类子对象各带 vptr。</GlossaryItem>
+  <GlossaryItem term="this 指针调整">派生指针转不同基类指针时编译器自动加减偏移，使各基类指针指向自己那段子对象。</GlossaryItem>
+  <GlossaryItem term="菱形继承">B1、B2 共同继承 Base、D 再继承 B1 与 B2 的结构；不虚继承时共享基类存两份导致二义。</GlossaryItem>
+  <GlossaryItem term="虚继承">用 virtual 继承让共享基类只存一份，靠 vbptr 指向虚基表间接定位，消除菱形二义性。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Inside the C++ Object Model (Stanley Lippman)" adaptedUrl="https://www.oreilly.com/" />

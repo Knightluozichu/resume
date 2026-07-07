@@ -92,6 +92,9 @@ export const BOOK_ORDER = [
   "the-c-programming-language",
   "beginning-cpp-game-programming",
   "effective-cpp",
+  "effective-modern-cpp",
+  "cpp-high-performance",
+  "inside-cpp-object-model",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -125,6 +128,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "the-c-programming-language": "C 程序设计语言（K&R）",
   "beginning-cpp-game-programming": "C++ 游戏编程入门",
   "effective-cpp": "Effective C++",
+  "effective-modern-cpp": "Effective Modern C++",
+  "cpp-high-performance": "C++ 高性能编程",
+  "inside-cpp-object-model": "深度探索 C++ 对象模型",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -654,6 +660,20 @@ export const SECTION_ORDER = [
   "类与继承",
   "模板与泛型",
   "Effective杂项",
+  // Effective Modern C++
+  "类型推导与auto",
+  "智能指针与资源管理",
+  "移动语义与转发",
+  "并发与其他",
+  // C++ 高性能编程
+  "性能基础",
+  "内存与数据结构",
+  "并发优化",
+  "模板与元编程性能",
+  // 深度探索 C++ 对象模型
+  "对象模型基础",
+  "构造语义",
+  "运行时机制",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
