@@ -274,7 +274,7 @@ export function VisitorDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 针对元素的具体操作
+              {"// 针对元素的具体操作"}
             </text>
           </g>
 
@@ -410,7 +410,7 @@ export function VisitorDiagram() {
                 fill={secondary}
                 fontStyle="italic"
               >
-                // 双分派
+                {"// 双分派"}
               </text>
             </g>
           ))}

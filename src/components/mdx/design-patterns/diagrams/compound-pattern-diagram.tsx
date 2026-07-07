@@ -172,7 +172,7 @@ export function CompoundPatternDiagram() {
               fill={success}
               fontStyle="italic"
             >
-              // 被观察者（Subject）
+              {"// 被观察者（Subject）"}
             </text>
           </g>
 
@@ -243,7 +243,7 @@ export function CompoundPatternDiagram() {
               fill={success}
               fontStyle="italic"
             >
-              // 观察者
+              {"// 观察者"}
             </text>
 
             {/* 右半：Composite 树（warning 黄） */}
@@ -394,7 +394,7 @@ export function CompoundPatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // Strategy：View 持有引用，可替换
+              {"// Strategy：View 持有引用，可替换"}
             </text>
           </g>
 

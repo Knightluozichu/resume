@@ -380,7 +380,7 @@ export function AbstractFactoryDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 生产 A1 + B1
+              {"// 生产 A1 + B1"}
             </text>
           </g>
 
@@ -440,7 +440,7 @@ export function AbstractFactoryDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 生产 A2 + B2
+              {"// 生产 A2 + B2"}
             </text>
           </g>
 

@@ -131,7 +131,7 @@ export function FacadePatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 调用 Facade
+              {"// 调用 Facade"}
             </text>
           </g>
 
@@ -184,7 +184,7 @@ export function FacadePatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 委托子系统
+              {"// 委托子系统"}
             </text>
           </g>
 
@@ -308,7 +308,7 @@ export function FacadePatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 复杂逻辑
+              {"// 复杂逻辑"}
             </text>
           </g>
 
@@ -360,7 +360,7 @@ export function FacadePatternDiagram() {
               fill={success}
               fontStyle="italic"
             >
-              // 复杂逻辑
+              {"// 复杂逻辑"}
             </text>
           </g>
 
@@ -412,7 +412,7 @@ export function FacadePatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 复杂逻辑
+              {"// 复杂逻辑"}
             </text>
           </g>
 
@@ -464,7 +464,7 @@ export function FacadePatternDiagram() {
               fill={success}
               fontStyle="italic"
             >
-              // 复杂逻辑
+              {"// 复杂逻辑"}
             </text>
           </g>
 

@@ -238,7 +238,7 @@ export function FactoryMethodDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // if-else 判断 type
+              {"// if-else 判断 type"}
             </text>
           </g>
 

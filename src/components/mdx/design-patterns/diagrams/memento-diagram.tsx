@@ -169,7 +169,7 @@ export function MementoDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 写入 / 读出状态
+              {"// 写入 / 读出状态"}
             </text>
           </g>
 
@@ -251,7 +251,7 @@ export function MementoDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 不可变快照
+              {"// 不可变快照"}
             </text>
           </g>
 
@@ -328,7 +328,7 @@ export function MementoDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 只存不读内容
+              {"// 只存不读内容"}
             </text>
           </g>
 

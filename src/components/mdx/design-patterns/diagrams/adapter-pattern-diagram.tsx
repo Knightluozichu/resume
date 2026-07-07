@@ -143,7 +143,7 @@ export function AdapterPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 通过 Target 接口
+              {"// 通过 Target 接口"}
             </text>
             <text
               x={CLIENT.x + 12}
@@ -152,7 +152,7 @@ export function AdapterPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 调用 request()
+              {"// 调用 request()"}
             </text>
           </g>
 
@@ -269,7 +269,7 @@ export function AdapterPatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 转发 specificRequest()
+              {"// 转发 specificRequest()"}
             </text>
           </g>
 
@@ -321,7 +321,7 @@ export function AdapterPatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 接口不兼容
+              {"// 接口不兼容"}
             </text>
           </g>
 

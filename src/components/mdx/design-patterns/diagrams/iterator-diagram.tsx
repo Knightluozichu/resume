@@ -317,7 +317,7 @@ export function DpIteratorDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 返回 ConcreteIterator
+              {"// 返回 ConcreteIterator"}
             </text>
           </g>
 

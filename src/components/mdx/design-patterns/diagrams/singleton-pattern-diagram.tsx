@@ -119,7 +119,7 @@ export function SingletonPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // private static
+              {"// private static"}
             </text>
             <line
               x1={SINGLETON.x}
@@ -146,7 +146,7 @@ export function SingletonPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // private，禁止外部 new
+              {"// private，禁止外部 new"}
             </text>
             <text
               x={SINGLETON.x + 14}
@@ -165,7 +165,7 @@ export function SingletonPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 返回唯一实例
+              {"// 返回唯一实例"}
             </text>
           </g>
 

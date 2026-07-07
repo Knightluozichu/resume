@@ -143,7 +143,7 @@ export function ProxyPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 依赖 Subject 接口
+              {"// 依赖 Subject 接口"}
             </text>
           </g>
 
@@ -251,7 +251,7 @@ export function ProxyPatternDiagram() {
               fill={success}
               fontStyle="italic"
             >
-              // 真正干活
+              {"// 真正干活"}
             </text>
           </g>
 
@@ -312,7 +312,7 @@ export function ProxyPatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 前置处理 → 委托 → 后置处理
+              {"// 前置处理 → 委托 → 后置处理"}
             </text>
           </g>
 

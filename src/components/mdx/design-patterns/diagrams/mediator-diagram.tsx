@@ -30,7 +30,6 @@ const UP_RIGHT_CX = UP_RIGHT_X + UP_W / 2; // 530
 // 下段：Mediator 中心框 + 4 个 Colleague（带 receive 方法）
 const MEDIATOR = { x: 300, y: 288, w: 120, h: 60 };
 const MEDIATOR_CX = MEDIATOR.x + MEDIATOR.w / 2; // 360
-const MEDIATOR_CY = MEDIATOR.y + MEDIATOR.h / 2; // 318
 const LOW_W = 120;
 const LOW_H = 48;
 // 4 个 Colleague 中心坐标（左上 / 右上 / 左下 / 右下）
@@ -43,7 +42,6 @@ const LOW_CENTERS = [
 
 const accent = "var(--accent)";
 const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
 const border = "var(--border)";
 const elevated = "var(--bg-elevated)";
 const danger = "var(--danger)";

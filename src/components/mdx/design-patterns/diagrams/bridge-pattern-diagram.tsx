@@ -35,7 +35,6 @@ const CONC_IMPL_B = { x: 540, y: 220, w: 144, h: 84 };
 const accent = "var(--accent)";
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
-const border = "var(--border)";
 const elevated = "var(--bg-elevated)";
 const success = "var(--success)";
 const warning = "var(--warning)";
@@ -149,7 +148,7 @@ export function BridgePatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 委托 implementor
+              {"// 委托 implementor"}
             </text>
           </g>
 
@@ -300,7 +299,7 @@ export function BridgePatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 实现方式 A
+              {"// 实现方式 A"}
             </text>
           </g>
 
@@ -352,7 +351,7 @@ export function BridgePatternDiagram() {
               fill={warning}
               fontStyle="italic"
             >
-              // 实现方式 B
+              {"// 实现方式 B"}
             </text>
           </g>
 

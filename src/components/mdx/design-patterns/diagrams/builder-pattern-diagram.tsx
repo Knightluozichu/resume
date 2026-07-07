@@ -164,7 +164,7 @@ export function BuilderPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 编排构建步骤
+              {"// 编排构建步骤"}
             </text>
           </g>
 
@@ -277,7 +277,7 @@ export function BuilderPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 声明构建步骤
+              {"// 声明构建步骤"}
             </text>
           </g>
 

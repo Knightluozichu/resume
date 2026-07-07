@@ -217,7 +217,7 @@ export function ChainOfResponsibilityDiagram() {
                   fill={accent}
                   fontStyle="italic"
                 >
-                  // 处理或传递
+                  {"// 处理或传递"}
                 </text>
               </g>
             );

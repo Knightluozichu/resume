@@ -160,7 +160,7 @@ export function FlyweightPatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 命中缓存则共享
+              {"// 命中缓存则共享"}
             </text>
             <text
               x={FACTORY.x + 14}
@@ -169,7 +169,7 @@ export function FlyweightPatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 否则创建新实例
+              {"// 否则创建新实例"}
             </text>
           </g>
 
@@ -361,7 +361,7 @@ export function FlyweightPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 共享实例
+              {"// 共享实例"}
             </text>
           </g>
           <g>
@@ -401,7 +401,7 @@ export function FlyweightPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 共享实例
+              {"// 共享实例"}
             </text>
           </g>
           <g>
@@ -441,7 +441,7 @@ export function FlyweightPatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 共享实例
+              {"// 共享实例"}
             </text>
           </g>
 

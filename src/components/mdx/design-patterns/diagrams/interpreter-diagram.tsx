@@ -154,7 +154,7 @@ export function InterpreterDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 统一解释入口
+              {"// 统一解释入口"}
             </text>
           </g>
 

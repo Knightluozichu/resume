@@ -304,7 +304,7 @@ export function CommandPatternDiagram() {
               fontStyle="italic"
               fontFamily="monospace"
             >
-              // receiver.action()
+              {"// receiver.action()"}
             </text>
           </g>
 

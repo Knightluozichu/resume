@@ -262,7 +262,7 @@ export function PrototypePatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 构造时逐个初始化
+              {"// 构造时逐个初始化"}
             </text>
           </g>
 
@@ -370,7 +370,7 @@ export function PrototypePatternDiagram() {
               fill={secondary}
               fontStyle="italic"
             >
-              // 已有状态 a=1, b=2
+              {"// 已有状态 a=1, b=2"}
             </text>
           </g>
 

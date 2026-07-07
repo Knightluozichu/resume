@@ -41,7 +41,6 @@ const TREE_LEAF2B = { x: 520, y: 424 }; // Leaf
 const accent = "var(--accent)";
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
-const border = "var(--border)";
 const elevated = "var(--bg-elevated)";
 const success = "var(--success)";
 const warning = "var(--warning)";
@@ -239,7 +238,7 @@ export function CompositePatternDiagram() {
               fill={danger}
               fontStyle="italic"
             >
-              // 抛异常或空操作
+              {"// 抛异常或空操作"}
             </text>
           </g>
 
@@ -300,7 +299,7 @@ export function CompositePatternDiagram() {
               fill={accent}
               fontStyle="italic"
             >
-              // 遍历 children.operation()
+              {"// 遍历 children.operation()"}
             </text>
           </g>
 
