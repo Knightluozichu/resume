@@ -309,6 +309,11 @@ import { dpObserverQuestions } from "./review/dp-observer";
 import { dpDecoratorQuestions } from "./review/dp-decorator";
 import { dpCommandQuestions } from "./review/dp-command";
 import { dpStateQuestions } from "./review/dp-state";
+import { dpSingletonQuestions } from "./review/dp-singleton";
+import { dpFactoryMethodQuestions } from "./review/dp-factory-method";
+import { dpAbstractFactoryQuestions } from "./review/dp-abstract-factory";
+import { dpBuilderQuestions } from "./review/dp-builder";
+import { dpPrototypeQuestions } from "./review/dp-prototype";
 
 export {
   CHAPTER_TITLES,
@@ -621,6 +626,11 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dpDecoratorQuestions,
   ...dpCommandQuestions,
   ...dpStateQuestions,
+  ...dpSingletonQuestions,
+  ...dpFactoryMethodQuestions,
+  ...dpAbstractFactoryQuestions,
+  ...dpBuilderQuestions,
+  ...dpPrototypeQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

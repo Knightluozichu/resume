@@ -1,0 +1,165 @@
+---
+title: 单例模式
+type: A
+section: 创建型模式
+order: 7
+description: 保证一个类只有一个实例，并提供全局访问点——最简单也最被滥用的模式。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { SingletonPatternDiagram } from "@/components/mdx/design-patterns/diagrams/singleton-pattern-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解单例模式的三要素：私有构造、静态实例、全局访问点
+- 掌握饿汉式、懒汉式、双重检查锁的实现与线程安全性
+- 能判断单例模式的适用场景和滥用风险
+
+</Objectives>
+
+## 痛点场景：全局配置
+
+系统需要一个配置管理器，全局唯一。如果每次 `new Config()`，不同模块拿到的配置可能不一致。
+
+不用模式：
+
+```typescript
+// 每个模块各自 new，状态不共享
+const config1 = new Config();
+const config2 = new Config();
+config1.set("theme", "dark");
+console.log(config2.get("theme")); // null，不是 "dark"
+```
+
+## 解决方案：唯一实例
+
+```typescript
+class Config {
+  private static instance: Config;
+  private settings: Record<string, string> = {};
+
+  private constructor() {} // 外部不能 new
+
+  static getInstance(): Config {
+    if (!Config.instance) {
+      Config.instance = new Config();
+    }
+    return Config.instance;
+  }
+
+  set(key: string, value: string) { this.settings[key] = value }
+  get(key: string) { return this.settings[key] ?? null }
+}
+
+// 全局只有一份
+const c1 = Config.getInstance();
+const c2 = Config.getInstance();
+console.log(c1 === c2); // true
+```
+
+<SingletonPatternDiagram />
+
+## 三种实现
+
+### 饿汉式（线程安全）
+
+```typescript
+class Singleton {
+  private static instance = new Singleton(); // 类加载时就创建
+  private constructor() {}
+  static getInstance() { return Singleton.instance }
+}
+```
+
+优点：线程安全（JVM 类加载保证）。缺点：不管用不用都创建。
+
+### 懒汉式（线程不安全）
+
+```typescript
+class Singleton {
+  private static instance: Singleton;
+  private constructor() {}
+  static getInstance() {
+    if (!Singleton.instance) {  // 竞态条件！
+      Singleton.instance = new Singleton();
+    }
+    return Singleton.instance;
+  }
+}
+```
+
+优点：延迟创建。缺点：多线程下可能创建多个实例。
+
+### 双重检查锁（线程安全 + 延迟）
+
+```typescript
+class Singleton {
+  private static instance: Singleton;
+  private constructor() {}
+  static getInstance() {
+    if (!Singleton.instance) {              // 第一次检查（无锁）
+      synchronized(Singleton) {             // 加锁
+        if (!Singleton.instance) {          // 第二次检查
+          Singleton.instance = new Singleton();
+        }
+      }
+    }
+    return Singleton.instance;
+  }
+}
+```
+
+<Callout type="info">
+Java 中 DCL 需要用 `volatile` 修饰 instance 字段，防止「指令重排」导致返回未初始化的对象。TypeScript/JavaScript 单线程，不需要 DCL。
+</Callout>
+
+## 常见误区
+
+### 误区 1：什么都用单例
+
+单例是最容易被滥用的模式。日志、数据库连接、缓存……全做成单例。结果是全局状态泛滥，测试困难，代码耦合。
+
+**判断标准**：这个对象是否**必须**全局唯一？如果只是「恰好只需要一个」，用依赖注入更合适。
+
+### 误区 2：单例 = 全局变量
+
+单例模式封装了创建逻辑，比裸全局变量好。但它仍然是全局可变状态，带来了相同的问题：难以追踪谁修改了状态。
+
+### 误区 3：序列化破坏单例
+
+反序列化会创建新对象，绕过 `getInstance()`。Java 中需实现 `readResolve()` 返回单例实例。
+
+## 小结
+
+- 单例 = 私有构造 + 静态实例 + 全局访问点
+- 三种实现：饿汉（安全但急切）、懒汉（延迟但不安全）、DCL（安全且延迟）
+- 是最简单的模式，也是最容易被滥用的——谨慎使用
+- 现代实践：优先用依赖注入容器管理单例，而非手写
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="单例模式">
+
+确保一个类只有一个实例，并提供一个全局访问点。
+
+</GlossaryItem>
+
+<GlossaryItem term="饿汉式">
+
+在类加载时就创建实例的单例实现方式。线程安全但不支持延迟创建。
+
+</GlossaryItem>
+
+<GlossaryItem term="双重检查锁">
+
+DCL（Double-Checked Locking）。先无锁检查，不通过才加锁再检查一次。兼顾线程安全和性能。
+
+</GlossaryItem>
+
+</Glossary>
