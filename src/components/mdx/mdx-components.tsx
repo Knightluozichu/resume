@@ -649,7 +649,6 @@ import { TaskGraphViz } from "./diagrams/task-graph-viz";
 import { MemoryAllocationViz } from "./diagrams/memory-allocation-viz";
 import { GameLoopTimingViz } from "./diagrams/game-loop-timing-viz";
 import { VisibilityViz } from "./diagrams/visibility-viz";
-import { AndroidDesignLab } from "./android-patterns/android-design-lab";
 import { FluxUnidirectionalDiagram } from "./diagrams/FluxUnidirectionalDiagram";
 import { TeamArchitectureMappingDiagram } from "./diagrams/TeamArchitectureMappingDiagram";
 import { AacLifecycleDiagram } from "./diagrams/AacLifecycleDiagram";
@@ -688,15 +687,10 @@ import { TreeDiagram } from "./diagrams/TreeDiagram";
 import { BalancedTreeDiagram } from "./diagrams/BalancedTreeDiagram";
 import { AlgorithmNextStepsDiagram } from "./diagrams/AlgorithmNextStepsDiagram";
 import { OssContributionFlowDiagram as OssContributionMapDiagram } from "./diagrams/OssContributionFlowDiagram";
-import {
-  AacLifecycleStateMachine,
-  AndroidScreenAnatomyDiagram,
-  FluxUnidirectionalFlowDiagram,
-  KotlinUiStateDiagram,
-  MvpVsMvvmCompareDiagram,
-  RefactorStranglerDiagram,
-  TeamArchitectureBoardDiagram,
-} from "./android-patterns/design-pattern-diagrams";
+import { TeamArchitectureBoardDiagram } from "./diagrams/team-architecture-board-diagram";
+import { AacLifecycleStateDiagram } from "./diagrams/aac-lifecycle-state-diagram";
+import { RefactorStranglerDiagram } from "./diagrams/refactor-strangler-diagram";
+import { KotlinUiStateDiagram } from "./diagrams/kotlin-ui-state-diagram";
 import { GameMathLab } from "./gamemath/game-math-lab";
 import {
   AutoBookLearningMap,
@@ -1718,16 +1712,12 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TreeDiagram,
   BalancedTreeDiagram,
   AlgorithmNextStepsDiagram,
-  AacLifecycleStateMachine,
-  AndroidScreenAnatomyDiagram,
   ArchitectureDecisionMatrixDiagram,
-  FluxUnidirectionalFlowDiagram,
+  AacLifecycleStateDiagram,
   KotlinUiStateDiagram,
-  MvpVsMvvmCompareDiagram,
   OssContributionMapDiagram,
   RefactorStranglerDiagram,
   TeamArchitectureBoardDiagram,
-  AndroidDesignLab,
   FluxUnidirectionalDiagram,
   TeamArchitectureMappingDiagram,
   AacLifecycleDiagram,
