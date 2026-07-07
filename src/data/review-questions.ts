@@ -344,6 +344,16 @@ import { gppDataLocalityQuestions } from "./review/gpp-data-locality";
 import { gppDirtyFlagQuestions } from "./review/gpp-dirty-flag";
 import { gppObjectPoolQuestions } from "./review/gpp-object-pool";
 import { gppSpatialPartitionQuestions } from "./review/gpp-spatial-partition";
+import { cqrLearningMapQuestions } from "./review/cqr-learning-map";
+import { cqrIntroQuestions } from "./review/cqr-intro";
+import { cqrNamingQuestions } from "./review/cqr-naming";
+import { cqrFunctionsQuestions } from "./review/cqr-functions";
+import { cqrCommentsFormatQuestions } from "./review/cqr-comments-format";
+import { cqrErrorHandlingQuestions } from "./review/cqr-error-handling";
+import { cqrTestingQuestions } from "./review/cqr-testing";
+import { cqrClassesQuestions } from "./review/cqr-classes";
+import { cqrCodeSmellsQuestions } from "./review/cqr-code-smells";
+import { cqrFinalReviewQuestions } from "./review/cqr-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -692,6 +702,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gppDirtyFlagQuestions,
   ...gppObjectPoolQuestions,
   ...gppSpatialPartitionQuestions,
+  // 代码质量与重构
+  ...cqrLearningMapQuestions,
+  ...cqrIntroQuestions,
+  ...cqrNamingQuestions,
+  ...cqrFunctionsQuestions,
+  ...cqrCommentsFormatQuestions,
+  ...cqrErrorHandlingQuestions,
+  ...cqrTestingQuestions,
+  ...cqrClassesQuestions,
+  ...cqrCodeSmellsQuestions,
+  ...cqrFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -418,7 +418,18 @@ export type ReviewChapterSlug =
   | "gpp-data-locality"
   | "gpp-dirty-flag"
   | "gpp-object-pool"
-  | "gpp-spatial-partition";
+  | "gpp-spatial-partition"
+  | "cqr-learning-map"
+  | "cqr-intro"
+  | "cqr-naming"
+  | "cqr-functions"
+  | "cqr-comments-format"
+  | "cqr-error-handling"
+  | "cqr-testing"
+  | "cqr-classes"
+  | "cqr-code-smells"
+  | "cqr-refactoring-techniques"
+  | "cqr-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -774,6 +785,17 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gpp-dirty-flag": "脏标记",
   "gpp-object-pool": "对象池",
   "gpp-spatial-partition": "空间分区",
+  "cqr-learning-map": "代码质量与重构全书学习地图",
+  "cqr-intro": "整洁代码的意义",
+  "cqr-naming": "有意义的命名",
+  "cqr-functions": "函数",
+  "cqr-comments-format": "注释与格式",
+  "cqr-error-handling": "错误处理",
+  "cqr-testing": "单元测试",
+  "cqr-classes": "类与组织",
+  "cqr-code-smells": "代码异味",
+  "cqr-refactoring-techniques": "重构手法",
+  "cqr-final-review": "代码质量总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

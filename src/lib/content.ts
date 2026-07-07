@@ -84,6 +84,7 @@ export const BOOK_ORDER = [
   "ai-agent-apps",
   "design-patterns",
   "game-programming-patterns",
+  "code-quality-refactoring",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -109,6 +110,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "ai-agent-apps": "AI 智能体应用开发",
   "design-patterns": "设计模式：GoF 23 模式图解",
   "game-programming-patterns": "游戏编程模式",
+  "code-quality-refactoring": "代码质量与重构",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -446,9 +448,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "进入代码整洁、重构和工程实践。",
         items: [
           {
-            title: "代码质量与重构",
-            note: "待补：代码整洁之道 + 重构，把模式落地为日常工程习惯。",
-            missing: true,
+            bookSlug: "code-quality-refactoring",
+            note: "代码整洁之道 + 重构：把设计模式落地为日常工程习惯，学会识别和消除代码异味。",
           },
         ],
       },
@@ -604,6 +605,10 @@ export const SECTION_ORDER = [
   "游戏行为模式",
   "解耦模式",
   "优化模式",
+  // 代码质量与重构
+  "代码质量入门",
+  "整洁代码",
+  "重构手法",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

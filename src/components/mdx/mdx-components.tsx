@@ -751,6 +751,17 @@ import { DataLocalityDiagram } from "./game-programming-patterns/diagrams/data-l
 import { DirtyFlagDiagram } from "./game-programming-patterns/diagrams/dirty-flag-diagram";
 import { GppObjectPoolDiagram } from "./game-programming-patterns/diagrams/object-pool-diagram";
 import { SpatialPartitionDiagram } from "./game-programming-patterns/diagrams/spatial-partition-diagram";
+// 代码质量与重构
+import { CqrCategoryMap } from "./code-quality/diagrams/cqr-category-map";
+import { CleanCodeValueDiagram } from "./code-quality/diagrams/clean-code-value-diagram";
+import { NamingPrinciplesDiagram } from "./code-quality/diagrams/naming-principles-diagram";
+import { FunctionAnatomyDiagram } from "./code-quality/diagrams/function-anatomy-diagram";
+import { CommentsVsCodeDiagram } from "./code-quality/diagrams/comments-vs-code-diagram";
+import { ErrorHandlingDiagram } from "./code-quality/diagrams/error-handling-diagram";
+import { CqrTestPyramidDiagram } from "./code-quality/diagrams/test-pyramid-diagram";
+import { ClassDesignDiagram } from "./code-quality/diagrams/class-design-diagram";
+import { CodeSmellsMap } from "./code-quality/diagrams/code-smells-map";
+import { RefactoringFlowDiagram } from "./code-quality/diagrams/refactoring-flow-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1328,7 +1339,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DebugLoopDiagram,
   SdkVersionAxisDiagram,
   LaunchModeDiagram,
-  TestPyramidDiagram,
+  CqrTestPyramidDiagram,
   ViewHierarchyDiagram,
   RoomArchitectureDiagram,
   ContextHierarchyDiagram,
@@ -1783,6 +1794,16 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DirtyFlagDiagram,
   GppObjectPoolDiagram,
   SpatialPartitionDiagram,
+  CqrCategoryMap,
+  CleanCodeValueDiagram,
+  NamingPrinciplesDiagram,
+  FunctionAnatomyDiagram,
+  CommentsVsCodeDiagram,
+  ErrorHandlingDiagram,
+  TestPyramidDiagram,
+  ClassDesignDiagram,
+  CodeSmellsMap,
+  RefactoringFlowDiagram,
   Term,
   Glossary,
   GlossaryItem,
