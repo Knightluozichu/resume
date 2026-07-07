@@ -378,7 +378,32 @@ export type ReviewChapterSlug =
   | "auto-final-review"
   // 设计模式
   | "dp-learning-map"
-  | "dp-intro";
+  | "dp-intro"
+  | "dp-strategy"
+  | "dp-observer"
+  | "dp-decorator"
+  | "dp-command"
+  | "dp-state"
+  | "dp-singleton"
+  | "dp-factory-method"
+  | "dp-abstract-factory"
+  | "dp-builder"
+  | "dp-prototype"
+  | "dp-adapter"
+  | "dp-bridge"
+  | "dp-composite"
+  | "dp-facade"
+  | "dp-flyweight"
+  | "dp-proxy"
+  | "dp-chain-of-responsibility"
+  | "dp-iterator"
+  | "dp-mediator"
+  | "dp-memento"
+  | "dp-template-method"
+  | "dp-visitor"
+  | "dp-interpreter"
+  | "dp-compound-patterns"
+  | "dp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -694,6 +719,31 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   // 设计模式
   "dp-learning-map": "设计模式全书学习地图",
   "dp-intro": "什么是设计模式",
+  "dp-strategy": "策略模式",
+  "dp-observer": "观察者模式",
+  "dp-decorator": "装饰器模式",
+  "dp-command": "命令模式",
+  "dp-state": "状态模式",
+  "dp-singleton": "单例模式",
+  "dp-factory-method": "工厂方法模式",
+  "dp-abstract-factory": "抽象工厂模式",
+  "dp-builder": "建造者模式",
+  "dp-prototype": "原型模式",
+  "dp-adapter": "适配器模式",
+  "dp-bridge": "桥接模式",
+  "dp-composite": "组合模式",
+  "dp-facade": "外观模式",
+  "dp-flyweight": "享元模式",
+  "dp-proxy": "代理模式",
+  "dp-chain-of-responsibility": "责任链模式",
+  "dp-iterator": "迭代器模式",
+  "dp-mediator": "中介者模式",
+  "dp-memento": "备忘录模式",
+  "dp-template-method": "模板方法模式",
+  "dp-visitor": "访问者模式",
+  "dp-interpreter": "解释器模式",
+  "dp-compound-patterns": "复合模式",
+  "dp-final-review": "设计模式总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

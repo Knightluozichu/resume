@@ -304,6 +304,11 @@ import { constuctArrayQuestions } from "./review/coi-constuct-array";
 import { stringToIntQuestions } from "./review/coi-string-to-int";
 import { commonParentInTreeQuestions } from "./review/coi-common-parent-in-tree";
 import { designPatternsIntroQuestions } from "./review/design-patterns-intro";
+import { dpStrategyQuestions } from "./review/dp-strategy";
+import { dpObserverQuestions } from "./review/dp-observer";
+import { dpDecoratorQuestions } from "./review/dp-decorator";
+import { dpCommandQuestions } from "./review/dp-command";
+import { dpStateQuestions } from "./review/dp-state";
 
 export {
   CHAPTER_TITLES,
@@ -611,6 +616,11 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...autoWhyCarRunsQuestions,
   // 设计模式：GoF 23 模式图解
   ...designPatternsIntroQuestions,
+  ...dpStrategyQuestions,
+  ...dpObserverQuestions,
+  ...dpDecoratorQuestions,
+  ...dpCommandQuestions,
+  ...dpStateQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

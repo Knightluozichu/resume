@@ -1,0 +1,144 @@
+---
+title: 观察者模式
+type: A
+section: 行为型模式
+order: 3
+description: 一个对象状态变化时自动通知所有订阅者——最直观的「松耦合」。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ObserverPatternDiagram } from "@/components/mdx/design-patterns/diagrams/observer-pattern-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解观察者模式如何实现「一对多」依赖关系
+- 掌握推模式与拉模式的区别
+- 识别观察者模式在实际开发中的应用（事件监听、响应式）
+
+</Objectives>
+
+## 痛点场景：气象站
+
+气象站有温度、湿度、气压三个传感器。三个显示屏需要实时显示数据：当前条件屏、统计屏、预报屏。
+
+如果没有模式，气象站代码长这样：
+
+```typescript
+class WeatherStation {
+  private currentDisplay: CurrentDisplay;
+  private statsDisplay: StatsDisplay;
+  private forecastDisplay: ForecastDisplay;
+
+  update(temp: number, humidity: number, pressure: number) {
+    this.currentDisplay.update(temp, humidity, pressure);
+    this.statsDisplay.update(temp, humidity, pressure);
+    this.forecastDisplay.update(temp, humidity, pressure);
+  }
+}
+```
+
+问题：每加一个显示屏就要改 WeatherStation。气象站**知道了太多不该知道的细节**。
+
+## 解决方案：订阅-通知
+
+让气象站只维护一个「订阅者列表」，谁需要数据谁自己来订阅：
+
+```typescript
+// 观察者接口
+interface Observer {
+  update(temp: number, humidity: number, pressure: number): void;
+}
+
+// 被观察者
+class WeatherStation {
+  private observers: Observer[] = [];
+
+  attach(o: Observer) { this.observers.push(o) }
+  detach(o: Observer) { this.observers = this.observers.filter(x => x !== o) }
+
+  notify(temp: number, humidity: number, pressure: number) {
+    for (const o of this.observers) {
+      o.update(temp, humidity, pressure);
+    }
+  }
+}
+
+// 具体观察者
+class CurrentDisplay implements Observer {
+  update(temp: number, humidity: number) {
+    console.log(`当前：${temp}°C，湿度 ${humidity}%`);
+  }
+}
+```
+
+新增显示屏？实现 Observer 接口 + 调用 attach() 就行，气象站一行不用改。
+
+<ObserverPatternDiagram />
+
+## 推模式 vs 拉模式
+
+<Callout type="info">
+两种通知方式的核心区别：**谁主动**——推模式是 Subject 推全部数据，拉模式是 Observer 按需拉取。
+</Callout>
+
+| 维度 | 推模式 | 拉模式 |
+|------|--------|--------|
+| 数据流 | Subject 把数据**推**给 Observer | Observer 从 Subject **拉**取需要的数据 |
+| 接口签名 | `update(data)` | `update(subject)` |
+| 优点 | Observer 不需要知道 Subject | Observer 只取自己需要的数据 |
+| 缺点 | Observer 可能收到不需要的数据 | Observer 需要知道 Subject 的细节 |
+
+## 常见误区
+
+### 误区 1：忘记 detach 导致内存泄漏
+
+观察者注册后如果不再需要，必须 detach。否则 Subject 持有观察者引用，观察者无法被垃圾回收。这在前端开发中极其常见——组件卸载后忘了取消事件监听。
+
+### 误区 2：通知顺序依赖
+
+观察者模式不保证通知顺序。如果你的业务依赖「A 必须在 B 之前收到通知」，观察者模式不是正确的选择——考虑责任链模式或显式编排。
+
+### 误区 3：级联更新
+
+观察者 A 收到通知后修改了 Subject 状态，又触发 Subject 通知所有观察者，形成循环。解决方案：在通知过程中禁止 Subject 状态变更，或用版本号防止重复通知。
+
+## 小结
+
+- 观察者模式 = Subject 维护订阅列表 + 状态变化时自动通知
+- 核心价值：Subject 和 Observer 松耦合，互不关心对方实现
+- 注意内存泄漏（detach）和级联更新风险
+- 实际应用：事件监听、Promise、RxJS、Vue/React 响应式系统
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="观察者模式">
+
+定义对象间的一对多依赖关系，当一个对象状态发生改变时，所有依赖于它的对象都会得到通知并自动更新。
+
+</GlossaryItem>
+
+<GlossaryItem term="Subject">
+
+被观察的对象，维护观察者列表并在状态变化时发出通知。也叫 Observable 或 Publisher。
+
+</GlossaryItem>
+
+<GlossaryItem term="推模式">
+
+Subject 主动将数据推送给 Observer，Observer 被动接收。优点是 Observer 不需要了解 Subject。
+
+</GlossaryItem>
+
+<GlossaryItem term="拉模式">
+
+Subject 通知 Observer 后，Observer 主动从 Subject 拉取所需数据。优点是 Observer 只取自己需要的数据。
+
+</GlossaryItem>
+
+</Glossary>

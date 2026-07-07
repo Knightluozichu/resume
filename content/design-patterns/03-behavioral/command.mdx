@@ -1,0 +1,155 @@
+---
+title: 命令模式
+type: A
+section: 行为型模式
+order: 5
+description: 将请求封装为对象——调用者不需知道接收者是谁，也不需知道请求如何被执行。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CommandPatternDiagram } from "@/components/mdx/design-patterns/diagrams/command-pattern-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解「将请求封装为对象」的含义
+- 掌握命令模式四角色的协作关系
+- 能用命令模式实现撤销功能
+
+</Objectives>
+
+## 痛点场景：万能遥控器
+
+你做一个智能家居遥控器，有 7 个按钮，每个按钮可以控制不同的设备：开灯、关灯、开空调、关音响……
+
+不用模式的话：
+
+```typescript
+class RemoteControl {
+  buttonPressed(slot: number) {
+    if (slot === 0) { light.on() }
+    else if (slot === 1) { light.off() }
+    else if (slot === 2) { ac.on() }
+    // ...
+  }
+}
+```
+
+问题：遥控器**直接依赖**了 Light、AC、Stereo 等具体类。每换一种设备就要改遥控器代码。
+
+## 解决方案：把请求封装为对象
+
+```typescript
+// 命令接口
+interface Command {
+  execute(): void;
+  undo(): void;
+}
+
+// 具体命令
+class LightOnCommand implements Command {
+  constructor(private light: Light) {}
+  execute() { this.light.on() }
+  undo() { this.light.off() }
+}
+
+// 调用者
+class RemoteControl {
+  private slots: Command[] = [];
+  private history: Command[] = [];
+
+  setCommand(slot: number, cmd: Command) { this.slots[slot] = cmd }
+
+  pressButton(slot: number) {
+    this.slots[slot].execute();
+    this.history.push(this.slots[slot]);
+  }
+
+  pressUndo() {
+    const cmd = this.history.pop();
+    cmd?.undo();
+  }
+}
+```
+
+遥控器只知道 Command 接口，不关心背后是灯还是空调。配置按钮时注入具体命令即可。
+
+<CommandPatternDiagram />
+
+## 四角色
+
+| 角色 | 职责 | 示例 |
+|------|------|------|
+| Command | 声明 execute/undo 接口 | `Command` 接口 |
+| ConcreteCommand | 绑定 Receiver，实现 execute | `LightOnCommand` |
+| Invoker | 持有命令，触发执行 | `RemoteControl` |
+| Receiver | 知道如何执行实际工作 | `Light`、`AC` |
+
+<Callout type="info">
+命令模式的关键：Invoker 和 Receiver 之间**完全解耦**。Invoker 不知道 Receiver 是谁，也不知道命令做什么。
+</Callout>
+
+## 撤销功能的实现
+
+命令模式的杀手锏是**撤销**。每个命令除了 `execute()`，还实现 `undo()`：
+
+| 命令 | execute | undo |
+|------|---------|------|
+| LightOnCommand | `light.on()` | `light.off()` |
+| VolumeUpCommand | `stereo.vol(+5)` | `stereo.vol(-5)` |
+
+调用者维护一个命令历史栈，撤销时弹出最近的命令并调用其 `undo()`。
+
+## 常见误区
+
+### 误区 1：命令模式只是多一层封装
+
+看起来确实多了一层，但这层封装带来了三个能力：**排队**（命令可序列化）、**日志**（命令可记录）、**撤销**（命令可回滚）。直接调用方法做不到这些。
+
+### 误区 2：Receiver 可省略
+
+简单命令（如开关灯）可以直接在 execute() 里写逻辑，不需要 Receiver。但复杂命令（如「转账」涉及多步操作）应该有明确的 Receiver，保持命令对象本身轻量。
+
+### 误区 3：宏命令用错了方式
+
+宏命令应该用**组合**实现——一个 MacroCommand 内部持有一组子命令，execute() 依次调用，undo() 反序调用。不要在 MacroCommand 里写具体的业务逻辑。
+
+## 小结
+
+- 命令模式 = 请求封装为对象 + 调用者与接收者解耦
+- 核心价值：支持撤销、排队、日志、宏命令
+- 适合：GUI 操作、事务系统、任务队列、智能家居
+- Invoker 不接触 Receiver，只通过 Command 间接通信
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="命令模式">
+
+将一个请求封装为一个对象，从而使你可用不同的请求对客户进行参数化，对请求排队或记录请求日志，以及支持可撤销的操作。
+
+</GlossaryItem>
+
+<GlossaryItem term="Invoker">
+
+命令的调用者，持有命令对象并在适当时机触发执行。不关心命令的接收者和具体行为。
+
+</GlossaryItem>
+
+<GlossaryItem term="Receiver">
+
+命令的接收者，知道如何执行实际的工作。一个命令对象通常持有一个 Receiver 引用。
+
+</GlossaryItem>
+
+<GlossaryItem term="宏命令">
+
+一种组合式命令，内部持有一组子命令。执行时依次调用子命令的 execute()，撤销时反序调用子命令的 undo()。
+
+</GlossaryItem>
+
+</Glossary>

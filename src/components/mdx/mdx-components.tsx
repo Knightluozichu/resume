@@ -718,6 +718,11 @@ import {
 import { PatternCategoryMap } from "./design-patterns/diagrams/pattern-category-map";
 import { SolidPrinciplesDiagram } from "./design-patterns/diagrams/solid-principles-diagram";
 import { WhatIsPatternDiagram } from "./design-patterns/diagrams/what-is-pattern-diagram";
+import { StrategyPatternDiagram } from "./design-patterns/diagrams/strategy-pattern-diagram";
+import { ObserverPatternDiagram } from "./design-patterns/diagrams/observer-pattern-diagram";
+import { DecoratorPatternDiagram } from "./design-patterns/diagrams/decorator-pattern-diagram";
+import { CommandPatternDiagram } from "./design-patterns/diagrams/command-pattern-diagram";
+import { StatePatternDiagram } from "./design-patterns/diagrams/state-pattern-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1716,6 +1721,11 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PatternCategoryMap,
   SolidPrinciplesDiagram,
   WhatIsPatternDiagram,
+  StrategyPatternDiagram,
+  ObserverPatternDiagram,
+  DecoratorPatternDiagram,
+  CommandPatternDiagram,
+  StatePatternDiagram,
   Term,
   Glossary,
   GlossaryItem,
