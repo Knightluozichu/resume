@@ -303,6 +303,7 @@ import { addTwoNumbersQuestions } from "./review/coi-add-two-numbers";
 import { constuctArrayQuestions } from "./review/coi-constuct-array";
 import { stringToIntQuestions } from "./review/coi-string-to-int";
 import { commonParentInTreeQuestions } from "./review/coi-common-parent-in-tree";
+import { designPatternsIntroQuestions } from "./review/design-patterns-intro";
 
 export {
   CHAPTER_TITLES,
@@ -608,6 +609,8 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...agtToolDesignQuestions,
   // 汽车为什么会跑：图解汽车构造与原理
   ...autoWhyCarRunsQuestions,
+  // 设计模式：GoF 23 模式图解
+  ...designPatternsIntroQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -714,6 +714,10 @@ import {
   TransmissionLab,
   WholeCarSystemsLab,
 } from "./auto/why-car-runs-lab";
+// 设计模式
+import { PatternCategoryMap } from "./design-patterns/diagrams/pattern-category-map";
+import { SolidPrinciplesDiagram } from "./design-patterns/diagrams/solid-principles-diagram";
+import { WhatIsPatternDiagram } from "./design-patterns/diagrams/what-is-pattern-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1708,6 +1712,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   TireLab,
   TransmissionLab,
   WholeCarSystemsLab,
+  // 设计模式
+  PatternCategoryMap,
+  SolidPrinciplesDiagram,
+  WhatIsPatternDiagram,
   Term,
   Glossary,
   GlossaryItem,

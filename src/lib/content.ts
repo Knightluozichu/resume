@@ -82,6 +82,7 @@ export const BOOK_ORDER = [
   "ai-agent-dev",
   "ai-agent",
   "ai-agent-apps",
+  "design-patterns",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -105,6 +106,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "ai-agent-dev": "AI Agent 开发实战",
   "ai-agent": "从零构建 AI Agent",
   "ai-agent-apps": "AI 智能体应用开发",
+  "design-patterns": "设计模式：GoF 23 模式图解",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -418,6 +420,45 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       },
     ],
   },
+  {
+    slug: "software-engineering",
+    title: "软件工程",
+    description: "从设计模式入门，逐步掌握面向对象设计原则与工程最佳实践。",
+    stages: [
+      {
+        level: "beginner",
+        summary: "先用图解建立 23 种设计模式的直觉，理解「为什么需要模式」。",
+        items: [
+          {
+            bookSlug: "design-patterns",
+            note: "GoF 23 模式图解：从 Strategy、Observer、Decorator 等核心模式开始，建立面向对象设计心智。",
+          },
+        ],
+      },
+      {
+        level: "intermediate",
+        summary: "进入代码整洁、重构和工程实践。",
+        items: [
+          {
+            title: "代码质量与重构",
+            note: "待补：代码整洁之道 + 重构，把模式落地为日常工程习惯。",
+            missing: true,
+          },
+        ],
+      },
+      {
+        level: "advanced",
+        summary: "进入架构设计和领域驱动。",
+        items: [
+          {
+            title: "架构与领域设计",
+            note: "待补：架构整洁之道 + DDD，从模式到架构的进阶。",
+            missing: true,
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 /** bookRank: index in BOOK_ORDER, or fallback past known books */
@@ -545,6 +586,12 @@ export const SECTION_ORDER = [
   "栈和队列",
   "数学",
   "回溯与递归",
+  // 设计模式
+  "设计模式入门",
+  "创建型模式",
+  "结构型模式",
+  "行为型模式",
+  "复合与总复习",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

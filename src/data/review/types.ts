@@ -375,7 +375,10 @@ export type ReviewChapterSlug =
   | "auto-tire-wheel-system"
   | "auto-electric-drive-system"
   | "auto-design-manufacturing"
-  | "auto-final-review";
+  | "auto-final-review"
+  // 设计模式
+  | "dp-learning-map"
+  | "dp-intro";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -688,6 +691,9 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "auto-electric-drive-system": "电力驱动",
   "auto-design-manufacturing": "设计制造",
   "auto-final-review": "汽车为什么会跑总复习",
+  // 设计模式
+  "dp-learning-map": "设计模式全书学习地图",
+  "dp-intro": "什么是设计模式",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",
