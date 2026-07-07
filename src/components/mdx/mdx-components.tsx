@@ -743,6 +743,20 @@ import { VisitorDiagram } from "./design-patterns/diagrams/visitor-diagram";
 import { InterpreterDiagram } from "./design-patterns/diagrams/interpreter-diagram";
 import { CompoundPatternDiagram } from "./design-patterns/diagrams/compound-pattern-diagram";
 import { DecisionTreeDiagram } from "./design-patterns/diagrams/decision-tree-diagram";
+// 游戏编程模式
+import { GppCategoryMap } from "./game-programming-patterns/diagrams/gpp-category-map";
+import { GameLoopDiagram } from "./game-programming-patterns/diagrams/game-loop-diagram";
+import { UpdateMethodDiagram } from "./game-programming-patterns/diagrams/update-method-diagram";
+import { DoubleBufferDiagram } from "./game-programming-patterns/diagrams/double-buffer-diagram";
+import { SubclassSandboxDiagram } from "./game-programming-patterns/diagrams/subclass-sandbox-diagram";
+import { TypeObjectDiagram } from "./game-programming-patterns/diagrams/type-object-diagram";
+import { ComponentDiagram } from "./game-programming-patterns/diagrams/component-diagram";
+import { EventQueueDiagram } from "./game-programming-patterns/diagrams/event-queue-diagram";
+import { ServiceLocatorDiagram } from "./game-programming-patterns/diagrams/service-locator-diagram";
+import { DataLocalityDiagram } from "./game-programming-patterns/diagrams/data-locality-diagram";
+import { DirtyFlagDiagram } from "./game-programming-patterns/diagrams/dirty-flag-diagram";
+import { ObjectPoolDiagram } from "./game-programming-patterns/diagrams/object-pool-diagram";
+import { SpatialPartitionDiagram } from "./game-programming-patterns/diagrams/spatial-partition-diagram";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1766,6 +1780,19 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InterpreterDiagram,
   CompoundPatternDiagram,
   DecisionTreeDiagram,
+  GppCategoryMap,
+  GameLoopDiagram,
+  UpdateMethodDiagram,
+  DoubleBufferDiagram,
+  SubclassSandboxDiagram,
+  TypeObjectDiagram,
+  ComponentDiagram,
+  EventQueueDiagram,
+  ServiceLocatorDiagram,
+  DataLocalityDiagram,
+  DirtyFlagDiagram,
+  ObjectPoolDiagram,
+  SpatialPartitionDiagram,
   Term,
   Glossary,
   GlossaryItem,

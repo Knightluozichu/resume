@@ -329,6 +329,21 @@ import { dpVisitorQuestions } from "./review/dp-visitor";
 import { dpInterpreterQuestions } from "./review/dp-interpreter";
 import { dpCompoundPatternsQuestions } from "./review/dp-compound-patterns";
 import { dpFinalReviewQuestions } from "./review/dp-final-review";
+import { gppLearningMapQuestions } from "./review/gpp-learning-map";
+import { gppIntroQuestions } from "./review/gpp-intro";
+import { gppGofInGamesQuestions } from "./review/gpp-gof-in-games";
+import { gppGameLoopQuestions } from "./review/gpp-game-loop";
+import { gppUpdateMethodQuestions } from "./review/gpp-update-method";
+import { gppDoubleBufferQuestions } from "./review/gpp-double-buffer";
+import { gppSubclassSandboxQuestions } from "./review/gpp-subclass-sandbox";
+import { gppTypeObjectQuestions } from "./review/gpp-type-object";
+import { gppComponentQuestions } from "./review/gpp-component";
+import { gppEventQueueQuestions } from "./review/gpp-event-queue";
+import { gppServiceLocatorQuestions } from "./review/gpp-service-locator";
+import { gppDataLocalityQuestions } from "./review/gpp-data-locality";
+import { gppDirtyFlagQuestions } from "./review/gpp-dirty-flag";
+import { gppObjectPoolQuestions } from "./review/gpp-object-pool";
+import { gppSpatialPartitionQuestions } from "./review/gpp-spatial-partition";
 
 export {
   CHAPTER_TITLES,
@@ -661,6 +676,22 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dpInterpreterQuestions,
   ...dpCompoundPatternsQuestions,
   ...dpFinalReviewQuestions,
+  // 游戏编程模式
+  ...gppLearningMapQuestions,
+  ...gppIntroQuestions,
+  ...gppGofInGamesQuestions,
+  ...gppGameLoopQuestions,
+  ...gppUpdateMethodQuestions,
+  ...gppDoubleBufferQuestions,
+  ...gppSubclassSandboxQuestions,
+  ...gppTypeObjectQuestions,
+  ...gppComponentQuestions,
+  ...gppEventQueueQuestions,
+  ...gppServiceLocatorQuestions,
+  ...gppDataLocalityQuestions,
+  ...gppDirtyFlagQuestions,
+  ...gppObjectPoolQuestions,
+  ...gppSpatialPartitionQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

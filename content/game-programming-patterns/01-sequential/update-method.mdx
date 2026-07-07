@@ -1,0 +1,110 @@
+---
+title: 更新方法
+type: A
+section: 序列模式
+order: 4
+description: 每帧给世界里的每个实体一次更新机会——更新方法是游戏循环与海量实体之间的桥梁。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UpdateMethodDiagram } from "@/components/mdx/game-programming-patterns/diagrams/update-method-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释更新方法如何把游戏循环的「更新」分发给每个实体
+- 能说出遍历实体时增删实体的正确处理方式
+- 能回答：更新方法和游戏循环各自负责什么？
+</Objectives>
+
+## 痛点：几百个实体，谁来更新它们
+
+游戏循环每帧要 `update()`，但世界里有玩家、几十个怪物、几百颗子弹、一堆粒子。把所有更新逻辑堆进游戏循环的 `update()` 里？那会变成几千行的巨型函数，每加一种实体就改它一次。
+
+## 解决方案：每个实体自己管自己
+
+给每个实体一个 `update(dt)` 方法，游戏循环每帧遍历所有实体、依次调用。循环只负责「调度」，不关心实体具体做什么。
+
+<UpdateMethodDiagram />
+
+```typescript
+abstract class Entity {
+  abstract update(dt: number): void;
+}
+
+class GameWorld {
+  entities: Entity[] = [];
+
+  update(dt: number) {
+    for (const e of this.entities) e.update(dt);
+  }
+}
+
+class Skeleton extends Entity {
+  update(dt: number) {
+    this.x += this.speed * dt; // 骷髅自己知道怎么走
+    this.ai.think(dt);
+  }
+}
+```
+
+游戏循环调用 `world.update(dt)`，世界遍历实体，每个实体自己推进。新增实体类型只需加个子类，不动循环。
+
+## 实体增删：边遍历边改的陷阱
+
+实体会在更新中被创建（射手开枪生成子弹）或销毁（怪物死亡）。遍历数组时直接增删会踩坑：跳过元素、重复更新、越界访问。
+
+```typescript
+// 错误：边遍历边 splice，会跳过被删元素后面的那个
+for (let i = 0; i < list.length; i++) {
+  if (list[i].dead) list.splice(i, 1); // 下一个元素被顶到 i 位，循环却 i++ 跳过了
+}
+
+// 正确：先标记，遍历完再统一清理
+for (const e of this.entities) e.update(dt);
+this.entities = this.entities.filter((e) => !e.dead);
+```
+
+<Callout type="tip">
+新生成的实体通常**延迟到本帧结束**再加入列表，避免它在自己出生的那一帧就被更新一次。
+</Callout>
+
+## 常见误区
+
+### 误区 1：「更新顺序无所谓」
+
+顺序常常重要：玩家先动还是怪物先动，会影响碰撞结果。如果顺序影响玩法，要么固定一个明确顺序，要么用更高级的调度（如先更新所有 AI 再统一解算物理）。
+
+### 误区 2：「每帧都遍历全部实体」
+
+不可见的实体也在更新就是浪费。配合空间分区或休眠标记，让屏外的实体跳过更新，是常见的优化手段。
+
+### 误区 3：「在 update 里直接增删数组」
+
+如上所示，边遍历边改数组会跳过或越界。正确做法是先标记、后清理，或用双缓冲列表。
+
+## 小结
+
+- 更新方法给每个实体一个 `update(dt)`，游戏循环只负责遍历调度
+- 新增实体类型只需加子类，不动循环——这就是开闭原则在游戏里的体现
+- 遍历时增删实体要「先标记后清理」，避免跳过或越界
+- 更新顺序可能影响玩法，必要时显式固定
+
+<Attribution
+  adaptedFrom="Game Programming Patterns, Robert Nystrom"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="更新方法">
+每个实体类实现的 `update(dt)` 方法，封装自己每帧的行为。游戏循环遍历所有实体依次调用，把「更新」分发下去。
+</GlossaryItem>
+<GlossaryItem term="调度">
+游戏循环决定「何时更新谁、以什么顺序」的机制。更新方法模式下，调度就是遍历实体列表。
+</GlossaryItem>
+<GlossaryItem term="延迟加入">
+新生成的实体推迟到当前帧遍历结束后再加入更新列表，避免在出生帧被意外更新一次。
+</GlossaryItem>
+</Glossary>

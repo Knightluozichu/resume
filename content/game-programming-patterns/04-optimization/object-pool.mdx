@@ -1,0 +1,104 @@
+---
+title: 对象池
+type: A
+section: 优化模式
+order: 13
+description: 预分配一批对象反复复用——acquire 取出、release 归还，不再频繁分配回收，从根上掐断 GC 抖动。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ObjectPoolDiagram } from "@/components/mdx/game-programming-patterns/diagrams/object-pool-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释对象池如何通过复用避免频繁内存分配和 GC
+- 能说出 acquire 与 release 的工作机制
+- 能回答：池满了之后有哪些策略，各自的代价是什么？
+</Objectives>
+
+## 痛点：子弹一多就卡
+
+射击游戏每秒生成上百颗子弹，每颗都 `new Bullet()`，飞出去消失后又被 GC 回收。频繁分配触发 GC，GC 一停顿整帧就卡——画面规律性抽搐。问题根源：短生命周期对象在堆上反复创建销毁，GC 压力巨大。
+
+## 解决方案：造一批，反复用
+
+游戏启动时预分配一批子弹对象放进池里。要子弹时 `acquire()` 从池里取一个，用完 `release()` 还回去——不 new 不 delete，对象循环复用，GC 几乎不触发。
+
+<ObjectPoolDiagram />
+
+```typescript
+class BulletPool {
+  private pool: Bullet[] = [];
+  private active = new Set<Bullet>();
+
+  acquire(x: number, y: number): Bullet {
+    let b = this.pool.pop();        // 池里有就拿
+    if (!b) b = new Bullet();        // 池空才 new（极少发生）
+    b.reset(x, y);
+    this.active.add(b);
+    return b;
+  }
+
+  release(b: Bullet) {
+    this.active.delete(b);
+    this.pool.push(b);               // 还回去，下次复用
+  }
+}
+```
+
+子弹飞出屏幕就 `release`，下一颗子弹 `acquire` 时直接复用同一个对象——零分配、零回收。
+
+<Callout type="tip">
+对象池把「创建销毁」变成「取出归还」，让短生命周期对象不再冲击 GC。对子弹、粒子、特效这类「高频生灭」的对象效果最明显。
+</Callout>
+
+## 池满策略
+
+`acquire` 时池空了怎么办？三种策略各有取舍：
+
+- **不创建，放弃**：子弹到达上限就不再发射。简单可控，但玩家会感觉「打不出子弹」。
+- **复用最老的**：回收一颗正在飞的旧子弹给新子弹用。子弹看起来「凭空消失」，但保证总有子弹。
+- **扩容**：池满了就 new 新对象。灵活，但池会越长越大，失去上限保护。
+
+选哪种取决于游戏体验——是宁可少发子弹，还是宁可旧子弹消失。
+
+## 常见误区
+
+### 误区 1：「池越大越好」
+
+池太大占内存，而且大部分槽位可能长期闲置。池的容量应按「同时活跃对象峰值」来定——刚好够峰值用即可，多余的纯属浪费内存。
+
+### 误区 2：「release 时把对象设成 null 就够了」
+
+从池里取出的对象可能残留上一轮的状态（位置、速度、生命）。`acquire` 时必须调用 `reset()` 把所有字段重置为初始值，否则复用的对象会带着脏数据跑起来——子弹从上次消失的位置出现。
+
+### 误区 3：「所有对象都该进池」
+
+对象池适合「高频创建销毁」的短命对象。长期存活的对象（如角色、关卡）进池没有收益，反而增加管理复杂度。只对真正造成 GC 压力的对象建池。
+
+## 小结
+
+- 对象池预分配一批对象，acquire 取出、release 归还，避免频繁分配回收
+- 子弹、粒子、特效等高频生灭对象是典型场景，能从根本上消除 GC 抖动
+- 池满时有放弃、复用最老、扩容三种策略，按体验取舍
+- acquire 必须重置对象状态，容量按峰值定，只对 GC 热点对象建池
+
+<Attribution
+  adaptedFrom="Game Programming Patterns, Robert Nystrom"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="对象池">
+预分配一组对象并循环复用的模式。通过 acquire 取出、release 归还，避免频繁的内存分配和垃圾回收。
+</GlossaryItem>
+<GlossaryItem term="GC 抖动">
+频繁创建短生命周期对象导致垃圾回收器频繁触发，引起游戏帧率周期性卡顿的现象。对象池是缓解 GC 抖动的常用手段。
+</GlossaryItem>
+<GlossaryItem term="reset">
+从池中取出对象时将其所有字段重置为初始值的操作。复用对象若不 reset，会残留上一轮的脏状态。
+</GlossaryItem>
+</Glossary>

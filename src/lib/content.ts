@@ -83,6 +83,7 @@ export const BOOK_ORDER = [
   "ai-agent",
   "ai-agent-apps",
   "design-patterns",
+  "game-programming-patterns",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -107,6 +108,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "ai-agent": "从零构建 AI Agent",
   "ai-agent-apps": "AI 智能体应用开发",
   "design-patterns": "设计模式：GoF 23 模式图解",
+  "game-programming-patterns": "游戏编程模式",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -592,6 +594,12 @@ export const SECTION_ORDER = [
   "结构型模式",
   "行为型模式",
   "复合与总复习",
+  // 游戏编程模式
+  "游戏编程入门",
+  "序列模式",
+  "游戏行为模式",
+  "解耦模式",
+  "优化模式",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

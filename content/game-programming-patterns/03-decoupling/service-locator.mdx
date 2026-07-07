@@ -1,0 +1,98 @@
+---
+title: 服务定位器
+type: A
+section: 解耦模式
+order: 10
+description: 用一个全局入口按需获取服务实例——既有全局访问的便利，又不把具体依赖硬编码进调用方。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ServiceLocatorDiagram } from "@/components/mdx/game-programming-patterns/diagrams/service-locator-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释服务定位器如何在不硬编码依赖的前提下提供全局访问
+- 能说出服务定位器与单例模式的核心区别
+- 能回答：为什么服务定位器让单元测试更可行？
+</Objectives>
+
+## 痛点：全局系统要么硬编码要么变单例
+
+游戏到处要用音频、日志、配置这些全局系统。做法一：直接 `new AudioEngine()` 到处传——调用链上每一层都得透传，烦。做法二：做成单例 `AudioEngine.instance`——全局唯一不可替换，测试时没法换 mock，依赖也被硬编码进了调用方。
+
+## 解决方案：一个入口，按需取服务
+
+提供一个 `ServiceLocator`，代码通过它按类型获取服务实例。服务在启动时注册进去，运行时按需查询。调用方依赖的是「能拿到音频服务」这个能力，而不是某个具体类——换实现只需换个注册，调用方无感。
+
+<ServiceLocatorDiagram />
+
+```typescript
+class ServiceLocator {
+  private static services = new Map<string, unknown>();
+
+  static provide<T>(key: string, service: T) { this.services.set(key, service); }
+  static get<T>(key: string): T { return this.services.get(key) as T; }
+}
+
+// 启动时注册
+ServiceLocator.provide("audio", new AudioEngine());
+ServiceLocator.provide("logger", new ConsoleLogger());
+
+// 任意位置按需取
+const audio = ServiceLocator.get<AudioService>("audio");
+audio.play("hit");
+```
+
+音频、日志、配置这类「全局基础设施」注册一次，全游戏按需取用，既不透传也不硬绑单例。
+
+## 服务定位器 vs 单例
+
+- **单例**：类自己保证全局唯一，`instance` 是硬编码的——调用方写死了「就是这个类」，换不了。
+- **服务定位器**：服务是外部注册的，定位器只管「按 key 找」。同一个 key 可以注册不同实现，甚至运行时替换。
+
+这正是测试友好之处：测试时注册一个 mock 音频服务，生产代码一行不改就能跑起来。
+
+<Callout type="tip">
+单例把「唯一性」和「具体实现」绑死了。服务定位器把这两者拆开——唯一性由注册控制，具体实现可以替换。这就是它比单例灵活的根源。
+</Callout>
+
+## 常见误区
+
+### 误区 1：「服务定位器就是换个名字的单例」
+
+单例的实例是类自己 `static instance` 硬编码的，不可替换。服务定位器的实例是外部注册的，可以换、可以测、可以按环境注入不同实现。形态相似，但依赖的可替换性完全不同。
+
+### 误区 2：「拿不到服务返回 null 就行」
+
+调用方拿到 `null` 往往不知道该怎么办——是还没注册，还是注册顺序错了？更好的做法是：定位器在拿不到服务时抛异常或返回一个空实现（Null Object），让问题尽早暴露而不是埋成空指针炸弹。
+
+### 误区 3：「所有依赖都该走服务定位器」
+
+服务定位器是「服务定位」式的隐式依赖——调用方依赖了什么，光看签名看不出来，得翻实现才知道。核心业务依赖应优先用构造函数注入（显式依赖），只有全局基础设施才适合用定位器的隐式获取。
+
+## 小结
+
+- 服务定位器提供全局入口按需获取服务，启动时注册，运行时查询
+- 与单例区别：实例由外部注册可替换，而非类自身硬编码，测试时可注入 mock
+- 适合音频、日志、配置等全局基础设施，不适合核心业务的显式依赖
+- 拿不到服务应抛异常或返回空实现，别默默返回 null
+
+<Attribution
+  adaptedFrom="Game Programming Patterns, Robert Nystrom"
+  adaptedUrl="https://gameprogrammingpatterns.com/"
+/>
+
+<Glossary>
+<GlossaryItem term="服务定位器">
+提供一个全局入口，按标识符查询已注册的服务实例。调用方依赖「能获取服务」而非具体实现，从而解耦依赖。
+</GlossaryItem>
+<GlossaryItem term="单例模式">
+保证一个类全局只有一个实例的设计模式。实例由类自身硬编码保证唯一，不可替换，测试时难以注入替身。
+</GlossaryItem>
+<GlossaryItem term="空对象">
+当请求的服务不存在时，返回一个行为为空的占位对象而非 null，使调用方无需判空即可安全运行。
+</GlossaryItem>
+</Glossary>

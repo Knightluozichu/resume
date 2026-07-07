@@ -403,7 +403,22 @@ export type ReviewChapterSlug =
   | "dp-visitor"
   | "dp-interpreter"
   | "dp-compound-patterns"
-  | "dp-final-review";
+  | "dp-final-review"
+  | "gpp-learning-map"
+  | "gpp-intro"
+  | "gpp-gof-in-games"
+  | "gpp-game-loop"
+  | "gpp-update-method"
+  | "gpp-double-buffer"
+  | "gpp-subclass-sandbox"
+  | "gpp-type-object"
+  | "gpp-component"
+  | "gpp-event-queue"
+  | "gpp-service-locator"
+  | "gpp-data-locality"
+  | "gpp-dirty-flag"
+  | "gpp-object-pool"
+  | "gpp-spatial-partition";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -744,6 +759,21 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dp-interpreter": "解释器模式",
   "dp-compound-patterns": "复合模式",
   "dp-final-review": "设计模式总复习",
+  "gpp-learning-map": "游戏编程模式全书学习地图",
+  "gpp-intro": "架构、性能与游戏",
+  "gpp-gof-in-games": "GoF 模式游戏速览",
+  "gpp-game-loop": "游戏循环",
+  "gpp-update-method": "更新方法",
+  "gpp-double-buffer": "双缓冲",
+  "gpp-subclass-sandbox": "子类沙箱",
+  "gpp-type-object": "类型对象",
+  "gpp-component": "组件模式",
+  "gpp-event-queue": "事件队列",
+  "gpp-service-locator": "服务定位器",
+  "gpp-data-locality": "数据局部性",
+  "gpp-dirty-flag": "脏标记",
+  "gpp-object-pool": "对象池",
+  "gpp-spatial-partition": "空间分区",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",
