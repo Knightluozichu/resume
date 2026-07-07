@@ -1,0 +1,77 @@
+---
+title: 抽象工厂
+type: A
+section: 设计模式实现
+order: 9
+description: Loki AbstractFactory 用 typelist 自动生成 Make 接口，ConcreteFactory 自动实现，消除 M×N 样板代码。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdAbstractFactoryDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-abstract-factory";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出抽象工厂要解决的产品族问题及与对象工厂的区别
+- 能解释 AbstractFactory 如何用 typelist 自动生成 Make 接口
+- 能判断什么场景值得用 typelist 自动生成抽象工厂
+
+</Objectives>
+
+## 抽象工厂要解决什么
+
+当程序需要创建「一族风格统一但跨多个产品类型」的对象时，单独的对象工厂不够。例如 UI 主题：Motif 风格要有 MotifButton + MotifScrollBar + MotifMenu，Windows 风格要有对应三件。若用三个独立对象工厂，调用方要自己保证「三个工厂都选 Motif」——容易出错。
+
+<McdAbstractFactoryDiagram />
+
+抽象工厂把「创建一整族产品」封装成一个接口，保证族内风格一致。产品族是一组「在同一抽象层级上相关、需统一风格」的产品——族内每个产品是不同基类（Button、ScrollBar、Menu），但同族共享风格（Motif 或 Windows）。抽象工厂为每个产品类型提供一个 Make 方法，所有方法返回同一风格的具体产品。
+
+与对象工厂的区别：对象工厂造「一个类型的多个变体」（1:N），用 CreateObject(id) 选类型；抽象工厂造「多个类型的一族变体」（M:N），用多个 Make 方法各返回不同基类。对象工厂单产品无族概念，抽象工厂族内风格统一。
+
+## typelist 自动生成
+
+Loki AbstractFactory 用 typelist 自动生成接口。它接收一个列出所有产品基类的 typelist 参数，通过 GenScatterHierarchy 递归继承，为每个类型生成一个纯虚 Make 方法。最终 AbstractFactory 有 N 个纯虚 Make，每个返回对应基类指针——全部由 typelist 自动生成，无需手写。
+
+ConcreteFactory 接收抽象工厂类型加操作（new/clone）加具体产品 typelist，为每个具体产品重写对应 Make 方法。具体产品 typelist 与抽象基类 typelist 一一对应，编译时检查长度和顺序。一行模板实例化就生成完整具体工厂，实现所有 Make 方法。
+
+价值是把「手写 N 个 Make 方法加 N 个 override」压缩成「两个 typelist 参数」。新增一族风格只需换具体产品 typelist，抽象接口不变。这是 typelist 在设计模式自动化里的典型应用。
+
+## 消除样板与代价
+
+typelist 自动生成消除了大量样板：手写抽象工厂的 N 个纯虚 Make 方法、手写 M 个具体工厂的 M×N 个 override、新增产品类型时改接口加所有具体工厂。typelist 版本只需在两个 typelist 各加一项，所有工厂自动更新。
+
+代价是：产品类型和族必须编译时确定（typelist 是编译时结构）；模板膨胀（每个工厂组合生成独立代码）；可读性差（typelist 语法晦涩，调试栈难读）；编译错误冗长（typelist 长度不匹配报错难定位）；类型对应脆弱（两个 typelist 顺序必须严格一一对应）。
+
+<Callout type="tip">
+<strong>建议 →</strong> 产品族少（M、N 都是 2-3）手写更直观；产品族多且编译时确定用变参模板生成（参考 Loki 思路但用现代语法）；需运行时动态加产品用 DI 容器或 map + function。现代 C++ 用变参模板加概念替代 Loki typelist，语法更友好。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> typelist 顺序错位导致工厂造错类型。<strong>原因 →</strong> 抽象基类 typelist 和具体类 typelist 必须严格一一对应，错位编译可能不报错但行为错。<strong>修法 →</strong> 用 C++20 概念约束「ConcreteProducts 与 Products 一一对应」，编译时强检查。
+</Callout>
+
+## 小结与练习
+
+- 抽象工厂解决「创建一族风格统一的产品」，与对象工厂的 1:N 不同是 M:N
+- AbstractFactory 用 typelist 通过 GenScatterHierarchy 自动生成 N 个 Make 接口
+- ConcreteFactory 用具体产品 typelist 自动实现所有 Make，省 M×N 个 override
+- 代价是编译时确定、模板膨胀、可读性差，现代用变参模板加概念替代
+
+<Exercises>
+  <Answer question="抽象工厂与对象工厂有何区别？什么叫产品族？">对象工厂造「一个类型的多个变体」（1:N），用 CreateObject(id) 选类型；抽象工厂造「多个类型的一族变体」（M:N），用多个 Make 方法各返回不同基类，保证族内风格统一。产品族是一组在同一抽象层级上相关、需统一风格的产品，如 Motif 风格的 Button+ScrollBar+Menu。</Answer>
+  <Answer question="Loki AbstractFactory 如何用 typelist 自动生成接口？消除什么样板？">接收产品基类 typelist，通过 GenScatterHierarchy 递归继承为每个类型生成纯虚 Make 方法，N 个接口全自动生成。ConcreteFactory 用具体产品 typelist 自动实现所有 Make。消除了手写 N 个纯虚方法、M 个具体工厂的 M×N 个 override、新增产品时改所有工厂的样板。代价是编译时确定、模板膨胀、可读性差。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="产品族">一组在同一抽象层级上相关、需统一风格的产品，族内每个产品是不同基类但同族共享风格。</GlossaryItem>
+  <GlossaryItem term="AbstractFactory">Loki 的抽象工厂模板，接收产品基类 typelist，通过 GenScatterHierarchy 自动生成 N 个纯虚 Make 方法接口。</GlossaryItem>
+  <GlossaryItem term="ConcreteFactory">Loki 的具体工厂模板，接收抽象工厂类型加具体产品 typelist，自动重写所有 Make 方法实现。</GlossaryItem>
+  <GlossaryItem term="GenScatterHierarchy">Loki 工具模板，为 typelist 中每个类型生成一个独立的基类分支，用于自动生成抽象工厂的多个 Make 接口。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

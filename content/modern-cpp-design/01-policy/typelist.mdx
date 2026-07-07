@@ -1,0 +1,101 @@
+---
+title: Typelist
+type: A
+section: Policy 与 Typelist
+order: 3
+description: 编译时类型链表的递归模板实现，Loki 元编程的骨架，支撑工厂、仿函数等自动化。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdTypelistDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-typelist";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能写出 Typelist 的递归模板定义并解释为何不用 std::tuple
+- 能实现 Length、TypeAt 两个基础元函数
+- 能说出 Typelist 在 Loki 工厂与抽象工厂里的具体作用
+
+</Objectives>
+
+## Typelist 是什么
+
+Typelist 是编译时的类型链表。运行时链表存的是值，Typelist 存的是类型。它用递归模板结构表达：一个 Typelist 要么是空（`NullType`），要么是一个头类型加一个尾 Typelist。
+
+<McdTypelistDiagram />
+
+C++03 没有变参模板，Alexandrescu 用宏和递归模板手工实现 Typelist：
+
+```cpp
+struct NullType {};
+
+template <class T, class U>
+struct Typelist {
+  typedef T Head;
+  typedef U Tail;
+};
+
+#define TYPELIST_3(T1, T2, T3) \
+  Typelist<T1, Typelist<T2, Typelist<T3, NullType>>>
+```
+
+`TYPELIST_3(int, double, string)` 展开成 `Typelist<int, Typelist<double, Typelist<string, NullType>>>`，就是一个头为 int、尾为 double→string→NullType 的类型链表。C++11 的变参模板 `template<typename... Ts>` 是它的语言原生版本，但思想完全一致。
+
+## 基础元函数
+
+Typelist 上的操作叫元函数——编译时对类型做计算的模板。最基础的两个是 Length（求长度）和 TypeAt（按索引取类型）。
+
+Length 用模板递归：空 Typelist 长度为 0，否则长度等于「尾的长度 + 1」：
+
+```cpp
+template <class TList> struct Length;
+template <> struct Length<NullType> { enum { value = 0 }; };
+template <class T, class U>
+struct Length<Typelist<T, U>> {
+  enum { value = 1 + Length<U>::value };
+};
+```
+
+TypeAt 递归地「往下走 N 步」取头类型。这些元函数都是编译时计算，运行时不存在任何对象，只剩编译结果。
+
+<Callout type="tip">
+<strong>建议 →</strong> 把 Typelist 当运行时链表的编译时镜像来理解。运行时链表的操作（遍历、索引、追加、删除）在 Typelist 上都有对应元函数，只是用模板特化与递归实现。
+</Callout>
+
+## Typelist 在 Loki 里的作用
+
+Typelist 是 Loki 的骨架。它让组件能「对一组类型做批量操作」，全部在编译时完成。
+
+最典型的应用是工厂。对象工厂用 Typelist 列出所有派生类型，递归遍历自动生成「索引到创建函数」的映射，省去手写 Register 和 switch-case。抽象工厂用 Typelist 列出所有产品基类，通过 GenScatterHierarchy 自动生成 N 个 Make 虚函数接口。广义仿函数用 Typelist 表示函数签名的参数类型列表，支持任意参数数量的统一封装。
+
+没有 Typelist，这些自动化都做不到——工厂要手写、抽象工厂要手写、仿函数要为每个参数数量特化。Typelist 把「多个类型」变成一等公民，让 Loki 能写一次模板自动生成 N 个变体。
+
+<Callout type="trap">
+<strong>现象 →</strong> 误以为 Typelist 是运行时容器，试图在运行时「遍历」它。<strong>原因 →</strong> 没分清编译时与运行时的边界——Typelist 在运行时不存在任何对象。<strong>修法 →</strong> 记住 Typelist 是类型级计算，运行时只剩编译生成的代码。若需运行时遍历用 std::tuple + std::apply 或 std::variant。
+</Callout>
+
+## 小结与练习
+
+- Typelist 是编译时类型链表，用 `Typelist<Head, Tail>` + `NullType` 递归表达
+- C++03 用宏生成，C++11 后被变参模板 `template<typename... Ts>` 取代
+- 元函数（Length、TypeAt、Append、Erase）用模板特化与递归实现编译时计算
+- Typelist 是 Loki 骨架，支撑工厂、抽象工厂、仿函数的自动化生成
+
+<Exercises>
+  <Answer question="Typelist 与 std::tuple 有何异同？为什么 Alexandrescu 不用 std::tuple？">Typelist 是纯类型容器（只存类型，不存值），用于编译时类型计算；std::tuple 既存类型又存值，是运行时对象。Alexandrescu 写书时 C++ 还没有变参模板（C++03），std::tuple 也不存在，只能用宏 + 递归模板手工实现 Typelist。C++11 后变参模板是 Typelist 的语言原生版本。</Answer>
+  <Answer question="Typelist 在抽象工厂自动化里扮演什么角色？">抽象工厂用 Typelist 列出所有产品基类，通过 GenScatterHierarchy 递归继承为每个类型生成一个纯虚 Make 方法。这样 N 个产品的接口完全由 Typelist 自动生成，无需手写。ConcreteFactory 用对应具体类 Typelist 自动实现这些 Make 方法，省去 M×N 个 override。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Typelist">编译时类型链表，用 `Typelist<Head, Tail>` 递归结构加 `NullType` 终止符表达，存储的是类型而非值。</GlossaryItem>
+  <GlossaryItem term="元函数">编译时对类型做计算的模板，如 `Length<TList>::value` 求长度、`TypeAt<TList, N>::Result` 取第 N 个类型。</GlossaryItem>
+  <GlossaryItem term="NullType">Typelist 的终止符，表示空列表，是递归终止的边界条件。</GlossaryItem>
+  <GlossaryItem term="GenScatterHierarchy">Loki 的工具模板，为 Typelist 中每个类型生成一个独立的基类分支，用于自动生成抽象工厂的多个 Make 接口。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

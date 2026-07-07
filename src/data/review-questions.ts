@@ -467,6 +467,36 @@ import { chpConcurrencyQuestions } from "./review/chp-concurrency";
 import { chpProfilingBenchmarkingQuestions } from "./review/chp-profiling-benchmarking";
 import { chpTemplateMetaprogrammingQuestions } from "./review/chp-template-metaprogramming";
 import { chpFinalReviewQuestions } from "./review/chp-final-review";
+import { cpcLearningMapQuestions } from "./review/cpc-learning-map";
+import { cpcCompilationQuestions } from "./review/cpc-compilation";
+import { cpcMemoryModelQuestions } from "./review/cpc-memory-model";
+import { cpcFunctionCallsQuestions } from "./review/cpc-function-calls";
+import { cpcVirtualFunctionsQuestions } from "./review/cpc-virtual-functions";
+import { cpcExceptionHandlingQuestions } from "./review/cpc-exception-handling";
+import { cpcInlineQuestions } from "./review/cpc-inline";
+import { cpcCacheFriendlyQuestions } from "./review/cpc-cache-friendly";
+import { cpcCompilerOptimizationQuestions } from "./review/cpc-compiler-optimization";
+import { cpcFinalReviewQuestions } from "./review/cpc-final-review";
+import { opcLearningMapQuestions } from "./review/opc-learning-map";
+import { opcPerformanceMindsetQuestions } from "./review/opc-performance-mindset";
+import { opcStringOptimizationQuestions } from "./review/opc-string-optimization";
+import { opcAlgorithmSelectionQuestions } from "./review/opc-algorithm-selection";
+import { opcDynamicAllocationQuestions } from "./review/opc-dynamic-allocation";
+import { opcSmartPointersQuestions } from "./review/opc-smart-pointers";
+import { opcIoOptimizationQuestions } from "./review/opc-io-optimization";
+import { opcConcurrencyQuestions } from "./review/opc-concurrency";
+import { opcProfilingQuestions } from "./review/opc-profiling";
+import { opcFinalReviewQuestions } from "./review/opc-final-review";
+import { mcdLearningMapQuestions } from "./review/mcd-learning-map";
+import { mcdPolicyDesignQuestions } from "./review/mcd-policy-design";
+import { mcdTypelistQuestions } from "./review/mcd-typelist";
+import { mcdSmartPointersQuestions } from "./review/mcd-smart-pointers";
+import { mcdSmallObjectQuestions } from "./review/mcd-small-object";
+import { mcdGeneralizedFunctorQuestions } from "./review/mcd-generalized-functor";
+import { mcdSingletonQuestions } from "./review/mcd-singleton";
+import { mcdObjectFactoryQuestions } from "./review/mcd-object-factory";
+import { mcdAbstractFactoryQuestions } from "./review/mcd-abstract-factory";
+import { mcdFinalReviewQuestions } from "./review/mcd-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -941,6 +971,36 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...chpProfilingBenchmarkingQuestions,
   ...chpTemplateMetaprogrammingQuestions,
   ...chpFinalReviewQuestions,
+  ...cpcLearningMapQuestions,
+  ...cpcCompilationQuestions,
+  ...cpcMemoryModelQuestions,
+  ...cpcFunctionCallsQuestions,
+  ...cpcVirtualFunctionsQuestions,
+  ...cpcExceptionHandlingQuestions,
+  ...cpcInlineQuestions,
+  ...cpcCacheFriendlyQuestions,
+  ...cpcCompilerOptimizationQuestions,
+  ...cpcFinalReviewQuestions,
+  ...opcLearningMapQuestions,
+  ...opcPerformanceMindsetQuestions,
+  ...opcStringOptimizationQuestions,
+  ...opcAlgorithmSelectionQuestions,
+  ...opcDynamicAllocationQuestions,
+  ...opcSmartPointersQuestions,
+  ...opcIoOptimizationQuestions,
+  ...opcConcurrencyQuestions,
+  ...opcProfilingQuestions,
+  ...opcFinalReviewQuestions,
+  ...mcdLearningMapQuestions,
+  ...mcdPolicyDesignQuestions,
+  ...mcdTypelistQuestions,
+  ...mcdSmartPointersQuestions,
+  ...mcdSmallObjectQuestions,
+  ...mcdGeneralizedFunctorQuestions,
+  ...mcdSingletonQuestions,
+  ...mcdObjectFactoryQuestions,
+  ...mcdAbstractFactoryQuestions,
+  ...mcdFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

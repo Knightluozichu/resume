@@ -1,0 +1,86 @@
+---
+title: Policy 设计
+type: A
+section: Policy 与 Typelist
+order: 2
+description: 把正交设计维度拆成可独立替换的模板策略参数，编译时组合出定制化组件。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdPolicyDesignDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-policy-design";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出 Policy 与策略模式、继承层次的本质区别
+- 能解释 Policy 为何能实现零虚函数开销的多态组合
+- 能判断一个设计维度该用「富 Policy」还是「瘦 Policy」
+
+</Objectives>
+
+## Policy 是什么
+
+Policy 是 Alexandrescu 提出的编译时策略组合机制。核心想法：把一个类里「会变化的正交维度」拆成若干独立的模板参数，每个参数是一个策略类，提供特定的行为接口。Host 类通过继承或成员组合这些 Policy，编译时实例化出定制化组件，零虚函数开销。
+
+<McdPolicyDesignDiagram />
+
+一个经典例子是智能指针。智能指针有四个独立变化维度：所有权（独占/共享/转移）、检查（何时检查空指针）、转换（是否允许隐式转裸指针）、存储（如何持有底层指针）。经典做法是用继承层次表达这些变体，但四个维度交叉组合出大量类，继承爆炸。Policy 做法是把每个维度拆成一个 Policy 模板参数：
+
+```cpp
+template<
+  typename T,
+  class OwnershipPolicy,
+  class CheckingPolicy,
+  class ConversionPolicy,
+  class StoragePolicy
+>
+class SmartPtr : public OwnershipPolicy<T>, ... {};
+```
+
+使用者按需组合 Policy，得到 unique_ptr 风格、shared_ptr 风格、深拷贝指针等变体，无需新写类。
+
+## Policy 与策略模式、继承的区别
+
+Policy 与 GoF 策略模式都把「变化的部分」抽出来，但实现截然不同。策略模式在运行时注入策略对象，通过虚函数或函数指针分发，有运行时开销；Policy 在编译时通过模板参数组合，策略直接被编译进类，调用是静态绑定的内联调用，零开销。
+
+Policy 与继承层次相比，避免了「维度爆炸」。继承表达「独占或共享」要两条分支，再叠加「检查或不检查」变四条，四个维度就十六个类。Policy 把每个维度独立参数化，组合由模板实例化自动完成，N 个维度只需 N 个 Policy 参数。
+
+<Callout type="tip">
+<strong>建议 →</strong> 识别设计里的「正交维度」是 Policy 设计的关键。问自己：这个维度能独立替换吗？换它会影响其他维度吗？若能独立替换且互不影响，就是 Policy 候选。
+</Callout>
+
+## 富 Policy 与瘦 Policy
+
+Policy 设计有个权衡：Policy 该提供多少行为？「瘦 Policy」只提供最小接口（如一个 `Create` 函数），Host 类围绕它编排逻辑，Policy 之间正交性强但 Host 代码多。「富 Policy」提供较多行为（如整个生命周期管理），Host 类薄但 Policy 间可能耦合。
+
+实践中通常取中间：Policy 提供该维度的完整行为接口，Host 通过 Policy 的成员函数组合出最终行为。例如 `OwnershipPolicy` 提供 `Clone`、`Release`、`Swap`，Host 的拷贝构造调用 `OwnershipPolicy::Clone`，析构调用 `Release`。这样 Policy 内聚，Host 清晰。
+
+<Callout type="trap">
+<strong>现象 →</strong> Policy 之间出现隐含依赖，换一个 Policy 另一个就崩。<strong>原因 →</strong> 维度其实不正交——比如存储策略返回的指针类型与检查策略假设的不一致。<strong>修法 →</strong> 设计 Policy 前先验证维度正交性，用 concept 或 static_assert 在编译时约束 Policy 间的接口契约。
+</Callout>
+
+## 小结与练习
+
+- Policy 把正交设计维度拆成模板策略参数，编译时组合，零虚函数开销
+- 与策略模式比：编译时 vs 运行时，静态绑定 vs 动态分发
+- 与继承比：避免维度爆炸，N 维度只需 N 个 Policy 参数
+- 富瘦 Policy 权衡：瘦 Policy 正交性强，富 Policy 内聚性高
+
+<Exercises>
+  <Answer question="Policy 与 GoF 策略模式有何本质区别？为什么 Policy 能零开销？">策略模式在运行时注入策略对象，通过虚函数或函数指针分发，有间接调用开销。Policy 在编译时通过模板参数组合，策略类被直接编译进 Host，调用是静态绑定的，编译器可内联，运行时零开销。本质区别是「运行时多态 vs 编译时多态」。</Answer>
+  <Answer question="什么情况下 Policy 设计比继承层次更合适？">当设计有多个正交变化维度时。继承表达 N 个维度需要 M^N 个类（维度爆炸），而 Policy 只需 N 个参数。例如智能指针四维度，继承要 16 个类，Policy 只要 4 个参数。但若维度不独立（有耦合），Policy 反而难用，这时继承更自然。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Policy">一个封装单一设计维度的模板策略类，作为 Host 类的模板参数，编译时组合出定制行为。</GlossaryItem>
+  <GlossaryItem term="Host 类">接收若干 Policy 模板参数的主类，通过继承或成员组合 Policy，编译时实例化出定制组件。</GlossaryItem>
+  <GlossaryItem term="正交维度">可独立替换、互不影响的设计变化点，如智能指针的所有权与检查互不依赖，适合拆成独立 Policy。</GlossaryItem>
+  <GlossaryItem term="template template parameter">模板的模板参数，允许 Policy 本身也是模板（如 `template<class> class CreationPolicy`），是 Policy 化的常用手段。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

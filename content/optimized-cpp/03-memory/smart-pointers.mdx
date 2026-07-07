@@ -1,0 +1,99 @@
+---
+title: 智能指针性能
+type: A
+section: 内存管理
+order: 6
+description: unique_ptr 零开销等于裸指针；shared_ptr 的原子引用计数是隐藏成本——优先 unique_ptr，谨慎用 shared_ptr。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { OpcSmartPtrPerfDiagram } from "@/components/mdx/optimized-cpp/diagrams/opc-smart-pointers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出 `unique_ptr` 零开销和 `shared_ptr` 有开销的原因
+- 能解释 `make_shared` 相比直接 `new` 的性能优势
+- 能识别 `shared_ptr` 滥用导致的性能问题并修复
+
+</Objectives>
+
+## unique_ptr：零开销抽象
+
+`std::unique_ptr` 是 C++ 中「零成本抽象」的典范。它通过编译期所有权管理，在运行时不产生任何额外开销：
+
+- 构造：存储指针，无额外分配
+- 转移所有权：`move` 只是指针赋值
+- 析构：调用 `delete`，与手动释放完全一致
+
+生成的机器码与裸指针加手动 `delete` 完全相同。这意味着使用 `unique_ptr` 不牺牲任何性能，却获得了自动内存安全和明确的所有权语义。
+
+<OpcSmartPtrPerfDiagram />
+
+## shared_ptr：隐藏的原子开销
+
+`std::shared_ptr` 通过引用计数实现共享所有权，代价是运行时开销：
+
+1. **原子引用计数**：每次拷贝 `shared_ptr` 执行原子 `fetch_add`，每次析构执行原子 `fetch_sub`。原子操作比普通操作贵 10-100 倍，因为需要 CPU 缓存同步。
+
+2. **控制块**：额外分配一个控制块（存强引用计数、弱引用计数、deleter），通常是一次独立堆分配。
+
+3. **缓存行竞争**：多线程拷贝同一个 `shared_ptr` 时，引用计数所在的缓存行在核间反复 invalidate。
+
+<Term def="shared_ptr 内部维护的元数据结构，包含强引用计数、弱引用计数和 deleter，通常需要独立堆分配">控制块</Term>
+
+## make_shared：少一次分配
+
+`std::make_shared<T>(args...)` 把对象和控制块分配在同一块内存中（1 次 malloc），而 `std::shared_ptr<T>(new T(args...))` 是 2 次 malloc（1 次 new 对象，1 次分配控制块）。
+
+```cpp
+// 低效：2 次 malloc
+auto p = std::shared_ptr<Config>(new Config(args));
+
+// 高效：1 次 malloc，且对象和控制块在同一缓存行
+auto p = std::make_shared<Config>(args);
+```
+
+`make_shared` 不仅少一次分配，还让对象和控制块在内存上相邻，提高缓存命中率。缺点是只要还有 `weak_ptr` 存活，对象的内存就不会释放（控制块和对象绑定在一起）。
+
+## 选择原则
+
+- **默认用 `unique_ptr`**：零开销，独占所有权足够大多数场景
+- **需要共享所有权时用 `shared_ptr`**：但要确认真的需要共享，而非「以防万一」
+- **不拥有用裸指针/引用**：函数参数传 `const T&` 或 `const T*`，不持有 `shared_ptr`
+- **必须用 `shared_ptr` 时用 `make_shared`**：少一次分配
+
+<Callout type="trap">
+<strong>现象 →</strong> 团队把所有裸指针换成 `shared_ptr`「以防万一」，性能下降 40%。 <strong>原因 →</strong> 热路径中每次拷贝 `shared_ptr` 执行原子操作，多线程下缓存行竞争严重。滥用 `shared_ptr` 用原子开销换取「不用思考所有权」的便利。 <strong>修法 →</strong> 梳理所有权模型：独占用 `unique_ptr`（零开销），不拥有用引用/裸指针，仅共享所有权用 `shared_ptr`。函数参数传 `const T&` 不传 `shared_ptr`。
+</Callout>
+
+## 小结与练习
+
+- `unique_ptr` 零开销，等于裸指针加手动 `delete`——默认首选
+- `shared_ptr` 有原子引用计数开销——仅在共享所有权时用
+- `make_shared` 把对象和控制块合并为 1 次 malloc——必须用 `shared_ptr` 时首选
+- 函数参数传 `const T&` 不传 `shared_ptr`——函数不延长生命期就不需要持有
+
+<Exercises>
+  <Answer question="为什么 `unique_ptr` 是零开销的？">`unique_ptr` 编译期管理所有权：构造时存指针，move 时指针赋值，析构时调 delete。无引用计数、无控制块、无原子操作。生成的机器码与裸指针加手动 delete 完全一致。</Answer>
+  <Answer question="`make_shared` 比直接 `new` 构造 `shared_ptr` 快在哪里？">`make_shared` 把对象和控制块分配在同一块内存（1 次 malloc），直接 `new` 是 2 次 malloc（对象 1 次 + 控制块 1 次）。少一次分配 + 对象和控制块在同一缓存行提高命中率。注意：有 `weak_ptr` 时对象内存不会提前释放。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="unique_ptr">
+C++11 独占所有权智能指针。编译期所有权转移，运行时与裸指针无差异。默认首选。
+</GlossaryItem>
+<GlossaryItem term="shared_ptr">
+C++11 共享所有权智能指针。通过原子引用计数管理生命期，有运行时开销。仅在需要共享所有权时使用。
+</GlossaryItem>
+<GlossaryItem term="make_shared">
+`std::make_shared<T>(args...)` 把对象和控制块合并为一次分配，比 `shared_ptr(new T)` 少一次 malloc 且缓存友好。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Optimized C++ (Kurt Guntheroth)" adaptedUrl="https://www.oreilly.com/" />

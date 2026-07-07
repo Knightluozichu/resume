@@ -1,0 +1,108 @@
+---
+title: I/O 优化
+type: A
+section: I/O与并发
+order: 7
+description: I/O 的瓶颈是系统调用开销——缓冲减少调用次数、批量增大传输量、异步让 I/O 与计算重叠。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { OpcIoOptDiagram } from "@/components/mdx/optimized-cpp/diagrams/opc-io-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出系统调用的开销及缓冲如何减少开销
+- 能解释缓冲、批量、异步三种 I/O 优化手段各自解决的问题
+- 能用 mmap 和批量读取优化大文件处理
+
+</Objectives>
+
+## I/O 为什么慢
+
+I/O 操作的核心瓶颈是系统调用。每次 `read`/`write` 都触发用户态到内核态的上下文切换，开销约 1-10 微秒。如果逐字节读取 1MB 文件，就是 100 万次系统调用——仅上下文切换就耗数秒。
+
+问题不在于 I/O 本身（磁盘/网络硬件速度可以很快），而在于系统调用的粒度太细。优化的核心思路是减少系统调用次数、增大每次传输量、让 I/O 与计算重叠。
+
+<OpcIoOptDiagram />
+
+## 三板斧：缓冲、批量、异步
+
+### 缓冲：减少系统调用次数
+
+<Term def="在用户态攒够一块数据才触发一次系统调用，减少调用次数">缓冲 I/O</Term>
+
+`std::ifstream` 自带缓冲区（通常 4KB-8KB），攒够一块才调用 `read`。可以用 `setvbuf` 或 `rdbuf()->pubsetbuf` 调大缓冲区：
+
+```cpp
+// 增大缓冲区到 1MB
+std::ifstream f(path);
+char buf[1 << 20];
+f.rdbuf()->pubsetbuf(buf, sizeof(buf));
+```
+
+把 256 次系统调用（4KB 缓冲）降为 1 次（1MB 缓冲）。
+
+### 批量：增大单次传输量
+
+一次 `read(fd, buf, 1MB)` 而非 256 次 `read(fd, buf, 4KB)`。批量读取减少系统调用次数，同时提高单次吞吐。
+
+`readv`/`writev`（scatter/gather I/O）可以一次读写多个不连续的缓冲区，进一步减少系统调用：
+
+```cpp
+// writev：一次写出多个缓冲区
+struct iovec iov[2];
+iov[0] = {header_buf, header_len};
+iov[1] = {body_buf, body_len};
+writev(fd, iov, 2);  // 1 次系统调用
+```
+
+### 异步：I/O 与计算重叠
+
+异步 I/O 发起请求后不阻塞等待，继续做计算，I/O 完成后通知。让 I/O 等待时间不浪费 CPU：
+
+- Linux `io_uring`（现代异步 I/O，共享内存通信无系统调用）
+- `aio_read`/`aio_write`（传统异步 I/O）
+- `epoll` + 非阻塞 I/O（事件驱动，Reactor 模式）
+
+<Callout type="tip">
+mmap 是零拷贝读取的利器：`mmap` 把文件映射到内存，无 `read` 系统调用、无用户态-内核态数据拷贝。配合 `madvise(MADV_SEQUENTIAL)` 触发预读，大文件顺序读取比 `read` 快数倍。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 逐行读 1GB 日志文件，耗时 30 秒。 <strong>原因 →</strong> `std::getline` 每次只读一行，缓冲区太小，系统调用次数多。 <strong>修法 →</strong> 三步优化：增大缓冲区（1MB+）→ 批量读取 64MB 块在内存中分行 → 用 `mmap` + `MADV_SEQUENTIAL` 零拷贝。通常能降到 3-5 秒。
+</Callout>
+
+## 小结与练习
+
+- I/O 的瓶颈是系统调用开销（上下文切换 1-10 微秒/次）
+- 缓冲：攒够一块再调用，减少系统调用次数
+- 批量：一次传输大量数据，`readv`/`writev` 合并多次读写
+- 异步：`io_uring`/`epoll` 让 I/O 与计算重叠
+- `mmap` + `MADV_SEQUENTIAL`：零拷贝大文件读取
+
+<Exercises>
+  <Answer question="为什么逐字节 I/O 极慢？缓冲如何解决？">每次读 1 字节触发 1 次系统调用（上下文切换 1-10 微秒）。读 1MB 文件逐字节读 = 100 万次系统调用，仅切换就耗数秒。缓冲在用户态攒够一块（如 4KB）才触发 1 次系统调用，把 100 万次降为 256 次。</Answer>
+  <Answer question="缓冲、批量、异步分别解决什么问题？能组合吗？">缓冲解决「调用次数太多」，批量解决「单次传输量太小」，异步解决「I/O 等待浪费 CPU」。三者正交可组合：用大缓冲区攒数据（缓冲+批量），用 io_uring 异步提交（异步），I/O 完成后回调处理——三者叠加达到最高吞吐。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="系统调用">
+用户态程序请求内核服务的接口（如 read/write）。每次调用触发上下文切换，开销 1-10 微秒。
+</GlossaryItem>
+<GlossaryItem term="mmap">
+把文件映射到进程内存空间，访问内存即访问文件，无 read 系统调用和数据拷贝。配合 MADV_SEQUENTIAL 触发预读。
+</GlossaryItem>
+<GlossaryItem term="io_uring">
+Linux 5.1+ 的现代异步 I/O 接口，用共享内存环形队列通信，提交和完成都无系统调用开销。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Optimized C++ (Kurt Guntheroth)" adaptedUrl="https://www.oreilly.com/" />

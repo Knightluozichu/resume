@@ -550,7 +550,40 @@ export type ReviewChapterSlug =
   | "ico-rtti-typeid"
   | "ico-multiple-inheritance"
   | "ico-object-lifetime"
-  | "ico-final-review";
+  | "ico-final-review"
+  // C++ 性能优化指南
+  | "opc-learning-map"
+  | "opc-performance-mindset"
+  | "opc-string-optimization"
+  | "opc-algorithm-selection"
+  | "opc-dynamic-allocation"
+  | "opc-smart-pointers"
+  | "opc-io-optimization"
+  | "opc-concurrency"
+  | "opc-profiling"
+  | "opc-final-review"
+  // Modern C++ Design
+  | "mcd-learning-map"
+  | "mcd-policy-design"
+  | "mcd-typelist"
+  | "mcd-smart-pointers"
+  | "mcd-small-object"
+  | "mcd-generalized-functor"
+  | "mcd-singleton"
+  | "mcd-object-factory"
+  | "mcd-abstract-factory"
+  | "mcd-final-review"
+  // CPU 眼里的 C++
+  | "cpc-learning-map"
+  | "cpc-compilation"
+  | "cpc-memory-model"
+  | "cpc-function-calls"
+  | "cpc-virtual-functions"
+  | "cpc-exception-handling"
+  | "cpc-inline"
+  | "cpc-cache-friendly"
+  | "cpc-compiler-optimization"
+  | "cpc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1038,6 +1071,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ico-multiple-inheritance": "多重继承",
   "ico-object-lifetime": "对象生命周期",
   "ico-final-review": "深度探索 C++ 对象模型总复习",
+  // C++ 性能优化指南
+  "opc-learning-map": "学习路线图",
+  "opc-performance-mindset": "性能优化思维",
+  "opc-string-optimization": "字符串优化",
+  "opc-algorithm-selection": "算法选择",
+  "opc-dynamic-allocation": "动态分配优化",
+  "opc-smart-pointers": "智能指针性能",
+  "opc-io-optimization": "I/O 优化",
+  "opc-concurrency": "并发优化",
+  "opc-profiling": "性能分析工具",
+  "opc-final-review": "C++ 性能优化指南总复习",
+  // Modern C++ Design
+  "mcd-learning-map": "学习路线图",
+  "mcd-policy-design": "Policy 设计",
+  "mcd-typelist": "Typelist",
+  "mcd-smart-pointers": "智能指针设计",
+  "mcd-small-object": "小对象分配",
+  "mcd-generalized-functor": "广义仿函数",
+  "mcd-singleton": "Singleton 实现",
+  "mcd-object-factory": "对象工厂",
+  "mcd-abstract-factory": "抽象工厂",
+  "mcd-final-review": "Modern C++ Design 总复习",
+  // CPU 眼里的 C++
+  "cpc-learning-map": "学习路线图",
+  "cpc-compilation": "编译过程",
+  "cpc-memory-model": "内存模型",
+  "cpc-function-calls": "函数调用机制",
+  "cpc-virtual-functions": "虚函数实现",
+  "cpc-exception-handling": "异常处理机制",
+  "cpc-inline": "内联与优化",
+  "cpc-cache-friendly": "缓存友好编程",
+  "cpc-compiler-optimization": "编译器优化",
+  "cpc-final-review": "CPU 眼里的 C++ 总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

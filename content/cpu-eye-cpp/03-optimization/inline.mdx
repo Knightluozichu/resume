@@ -1,0 +1,75 @@
+---
+title: 内联与优化
+type: A
+section: CPU性能优化
+order: 7
+description: inline 关键字、编译器内联决策与内联触发的优化链
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { CpcInlineDiagram } from "@/components/mdx/cpu-eye-cpp/diagrams/cpc-inline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解 inline 关键字的真实作用与编译器内联决策
+- 认清递归、虚函数阻碍内联的原因
+- 掌握内联作为优化链入口的连锁收益与过度内联的代价
+
+</Objectives>
+
+## inline 关键字的作用
+
+`inline` 关键字有两个作用：一是允许函数定义在头文件中而不违反单一定义规则（ODR）——`inline` 函数可在多个翻译单元里被包含并定义，链接器会合并这些重复定义而不报错（COMDAT 折叠）；二是给编译器一个「这个函数适合内联」的建议。
+
+<Term def="把函数体复制到调用点、消除调用边界的优化，是编译器优化管道的入口">内联</Term>
+
+需要明确：`inline` 只是建议，编译器有权忽略。现代编译器在 `-O2` 等优化级别会主动内联适合的小函数，LTO 链接期优化甚至能跨翻译单元内联。反之，标了 `inline` 的函数若太大或递归，编译器照样不内联。所以 `inline` 主要解决「头文件定义」的链接问题，内联与否是编译器的决定。
+
+## 编译器的内联决策
+
+<CpcInlineDiagram />
+
+编译器决定是否内联时考虑：函数体大小（小函数优先）、调用频率（热路径优先）、优化收益（内联后能否暴露常量传播等机会）、代码膨胀代价（内联 N 处会让二进制变大、icache 压力增大）。
+
+递归难以内联：递归调用次数在编译期未知，无法静态展开到底，编译器最多内联有限几层，之后仍保留递归调用。尾递归可被优化为循环，那不是内联而是改写控制流。
+
+虚函数难以内联：虚调用在编译期无法确定实际目标，除非编译器能通过去虚化（devirtualization）证明对象类型确定（如 final 类、局部对象直接调），否则保留间接调用无法内联。内联的前提是「编译期能确定调用目标」。
+
+## 内联触发优化链
+
+内联的真正价值不在省掉 `call`/`ret` 的几条指令，而在于「打开后续优化的门」。内联后调用边界消失，编译器能看到调用点与函数体的完整上下文，触发连锁优化：常量传播（调用点常量参数内联后替换进函数体）、死代码消除（恒假分支被删）、循环展开与 SIMD 向量化（循环边界确定后可展开向量化）、寄存器分配全局化。
+
+典型案例：`std::accumulate` 内联迭代器与仿函数后，常量传播消除类型分发，循环展开加向量化，最终塌缩成几条向量指令——比手写循环还快。这就是内联作为「优化管道入口」的威力。
+
+## 过度内联的代价
+
+过度内联会带来代码膨胀、icache 压力、寄存器溢出、编译时间增长。编译器用启发式评分、PGO（运行 profile 精准指导热点）、LTO（全局调用图）来平衡。不要盲目 `always_inline`，让编译器自行决策，热路径用 PGO 精准指导。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 给大函数全标了 `inline`，二进制变大、性能反而下降。<strong>原因 →</strong> `inline` 只是建议，但若用 `always_inline` 强制内联大函数，代码膨胀导致 icache miss 上升，抵消了省下的调用开销。<strong>修法 →</strong> 让编译器在 `-O2`/`-O3` 自行决策，小而频繁的函数放头文件给内联机会，热路径用 PGO 精准指导。
+</Callout>
+
+## 小结与练习
+
+`inline` 主要解决头文件定义的链接问题，内联与否是编译器的决定。内联的真正价值是打开常量传播、DCE、向量化的优化链。递归与虚函数因目标不确定而难以内联。
+
+<Exercises>
+  <Answer question="inline 关键字的作用和编译器实际内联有什么关系？">inline 允许头文件定义（ODR）并给内联建议；实际内联由编译器按大小/频率/收益决定，可忽略 inline。</Answer>
+  <Answer question="为什么说内联的真正价值不在省一次调用？">内联消除调用边界后触发常量传播、死代码消除、循环展开、向量化等连锁优化，收益远超省下几条 call/ret 指令。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="内联">把函数体复制到调用点消除调用边界的优化，是编译器优化管道的入口。</GlossaryItem>
+  <GlossaryItem term="去虚化">编译器在编译期证明对象类型确定后，把虚函数间接调用转为直接调用以允许内联的优化。</GlossaryItem>
+  <GlossaryItem term="COMDAT 折叠">链接器合并多个翻译单元中重复的 inline 函数定义，保证 ODR 不被违反。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="CPU 眼里的 C++" adaptedUrl="" />

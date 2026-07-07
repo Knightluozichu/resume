@@ -1,0 +1,88 @@
+---
+title: 智能指针设计
+type: A
+section: Loki 组件
+order: 4
+description: Loki SmartPtr 用四个 Policy 维度参数化所有权、检查、转换、存储，编译时组合出各类智能指针。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdSmartPtrDesignDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-smart-pointers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出 SmartPtr 的四个 Policy 维度各自解决什么问题
+- 能解释 OwnershipPolicy 的几种选择（独占/共享/转移）的差异
+- 能回答：为什么 Loki SmartPtr 能做到零虚函数开销
+
+</Objectives>
+
+## SmartPtr 的设计
+
+Loki 的 SmartPtr 是 Policy 化设计的典范。它识别出智能指针有四个正交变化维度，每个维度拆成一个 Policy 模板参数，编译时组合出各种智能指针变体。
+
+<McdSmartPtrDesignDiagram />
+
+四个维度分别是：OwnershipPolicy（所有权）决定资源归谁所有、何时释放；CheckingPolicy（检查）决定何时检查空指针；ConversionPolicy（转换）决定是否允许隐式转裸指针；StoragePolicy（存储）决定底层指针怎么存。组合这四个 Policy，能得到独占所有权指针（类似 `unique_ptr`）、引用计数共享指针（类似 `shared_ptr`）、深拷贝指针、转移所有权指针等各种变体。
+
+```cpp
+template<
+  typename T,
+  class OwnershipPolicy = RefCounted,
+  class ConversionPolicy = DisallowConversion,
+  class CheckingPolicy = AssertCheck,
+  class StoragePolicy = DefaultSPStorage
+>
+class SmartPtr;
+```
+
+## 四个 Policy 维度
+
+OwnershipPolicy 是最核心的维度。它提供 `Clone`（拷贝时如何处理所有权）、`Release`（释放资源）、`Swap`（交换所有权）等操作。几种选择：`RefCounted` 引用计数共享；`DeepCopy` 深拷贝；`CopyOnWrite` 写时拷贝；`IntrusiveRefCounted` 侵入式引用计数；`NoCopy` 禁止拷贝。不同 Policy 让同一个 SmartPtr 框架支持完全不同的所有权语义。
+
+CheckingPolicy 决定空指针检查策略：`AssertCheck` 解引用前 assert；`RejectNull` 构造时就拒绝空；`NoCheck` 不检查（性能优先场景）。
+
+ConversionPolicy 决定是否允许 `SmartPtr<T>` 隐式转 `T*`：`DisallowConversion` 禁止（安全默认）；`AllowConversion` 允许（兼容老代码）。
+
+StoragePolicy 决定底层存储方式：默认存裸指针；可换成存「指针 + 析构器」支持自定义删除器；甚至存「间接指针」实现多级间接。
+
+## 零虚函数开销
+
+SmartPtr 的 Policy 组合是编译时的——Policy 类通过继承或成员组合进 SmartPtr，调用 Policy 方法是静态绑定的，编译器可内联。这意味着不同 Policy 组合的 SmartPtr 在运行时没有虚函数分发的开销，与手写的针对性智能指针一样高效。
+
+这是 Policy 化设计相对继承层次的关键优势：继承层次若用虚函数表达多态，每次调用有间接开销；Policy 用模板把多态烘焙进类型，零开销。
+
+<Callout type="tip">
+<strong>建议 →</strong> 现代 C++ 优先用 `std::unique_ptr` 和 `std::shared_ptr`，它们是 Loki SmartPtr 思想的标准化简化版。Loki SmartPtr 的价值在于学「如何用 Policy 设计可定制组件」。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 组合了不兼容的 Policy 导致编译错误或运行时 bug。<strong>原因 →</strong> 某些 Policy 组合语义冲突，比如 `NoCopy` 所有权配深拷贝检查。<strong>修法 →</strong> 用 concept 或 static_assert 约束 Policy 组合的合法性，在编译时拦截非法组合。
+</Callout>
+
+## 小结与练习
+
+- SmartPtr 用四个 Policy 维度参数化：所有权、检查、转换、存储
+- OwnershipPolicy 是核心：RefCounted/DeepCopy/CopyOnWrite/NoCopy 等
+- Policy 编译时组合，静态绑定可内联，零虚函数开销
+- 现代 C++ 的 unique_ptr/shared_ptr 是其思想的标准化简化版
+
+<Exercises>
+  <Answer question="SmartPtr 的四个 Policy 维度分别解决什么问题？为什么是正交的？">OwnershipPolicy 解决资源归谁所有、何时释放；CheckingPolicy 解决空指针检查时机；ConversionPolicy 解决是否允许隐式转裸指针；StoragePolicy 解决底层指针怎么存。它们正交是因为换任何一个不影响其他三个——所有权与检查、转换、存储互不依赖，可独立替换。</Answer>
+  <Answer question="为什么 Loki SmartPtr 能做到零虚函数开销？这与继承层次有何不同？">Policy 通过模板参数组合进 SmartPtr，调用 Policy 方法是静态绑定的，编译器可内联，运行时无虚函数分发。继承层次若用虚函数表达多态，每次调用有间接开销。本质区别是「编译时多态（静态绑定）vs 运行时多态（动态分发）」，Policy 把多态烘焙进类型，零开销。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="OwnershipPolicy">SmartPtr 的所有权策略，决定资源归谁所有、拷贝/析构时如何处理所有权，如 RefCounted（共享）、DeepCopy（深拷贝）、NoCopy（禁拷贝）。</GlossaryItem>
+  <GlossaryItem term="CheckingPolicy">空指针检查策略，决定何时检查指针非空，如 AssertCheck（解引用前检查）、RejectNull（构造时拒绝空）、NoCheck（不检查）。</GlossaryItem>
+  <GlossaryItem term="StoragePolicy">底层存储策略，决定指针如何存储，可支持自定义删除器、多级间接等非标准存储方式。</GlossaryItem>
+  <GlossaryItem term="零开销抽象">Policy 编译时组合使运行时无虚函数分发开销，与手写针对性代码一样高效，是 C++ 模板设计的核心追求。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

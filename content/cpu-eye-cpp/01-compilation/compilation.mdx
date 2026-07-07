@@ -1,0 +1,79 @@
+---
+title: 编译过程
+type: A
+section: 编译与链接
+order: 2
+description: 预处理、编译、汇编、链接四阶段如何把 C++ 源码变成可执行文件
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { CpcCompilationDiagram } from "@/components/mdx/cpu-eye-cpp/diagrams/cpc-compilation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 掌握预处理、编译、汇编、链接四阶段的输入输出与各自职责
+- 理解分别编译与链接的工程意义，能区分编译错误与链接错误
+- 了解 name mangling 如何让 C++ 重载落到底层符号机制
+
+</Objectives>
+
+## 四阶段流水线
+
+C++ 源码到可执行文件要经过四个阶段。每个阶段输入上一阶段的产物，输出下一阶段的输入。
+
+<CpcCompilationDiagram />
+
+**预处理**处理以 `#` 开头的指令：展开 `#include`（把头文件内容原样插入）、替换 `#define` 宏、处理 `#ifdef` 条件编译。输出是「展开后的纯 C++ 代码」。
+
+**编译**做词法、语法、语义分析，生成中间表示（IR），做优化，最后生成汇编代码。这一阶段是编译器最核心的工作——把人类可读的代码翻译成接近机器的汇编。
+
+**汇编**把汇编代码逐条翻译成机器码，输出目标文件，包含机器码与符号表。符号表记录了本文件定义了哪些符号、引用了哪些外部符号。
+
+**链接**把多个目标文件与库合并：解析符号引用（把未定义的引用绑定到定义）、重定位地址（把相对地址合并成最终地址）、合并段并折叠重复定义（COMDAT 折叠）。
+
+## 分别编译与链接的工程意义
+
+<Term def="大型项目只重编改动的文件再统一链接，不必整体重编">分别编译</Term>
+
+把编译和链接分成两个阶段，核心收益是支持分别编译。大型项目有成千上万个源文件，若改动一个文件就要全部重编，构建时间不可接受。分别编译让每个文件独立走前三阶段，只重编改动的文件，最后统一链接，大幅缩短构建时间。
+
+链接器的两大职责是**符号解析**与**重定位**。每个目标文件里有未定义的符号引用（比如调用了另一个文件里的函数），链接器把这些引用绑定到定义；再把每个文件里的相对地址合并成最终可执行文件的虚拟地址。
+
+## 编译错误与链接错误
+
+理解四阶段后，就能精准区分两类错误。编译错误是「语法/类型不过」，发生在编译阶段，提示你某行代码写错了。链接错误是「符号找不到定义」，发生在链接阶段，典型如 `undefined reference to foo`——头文件声明了 `foo` 只告诉编译器它存在，但链接阶段找不到它的定义。
+
+排查链接错误要看定义是否真的存在、是否参与了编译、命名空间与签名是否一致、库是否正确链接。C++ 的名称修饰（name mangling）会把函数签名编码进符号名，签名差异会生成不同符号导致链接失败。
+
+## name mangling 与重载
+
+C++ 编译器把函数签名（名字、参数类型、命名空间、const 修饰等）编码成一个唯一的内部符号名，这个过程叫 name mangling。这样重载函数 `foo(int)` 与 `foo(double)` 被修饰成不同符号，互不冲突。C 没有重载，函数名就是符号名，所以同名函数会冲突。`extern "C"` 可关闭修饰，让 C++ 函数用 C 链接约定以便跨语言调用。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 头文件明明声明了函数，却报 `undefined reference` 链接错误。<strong>原因 →</strong> 声明只过编译关，链接阶段找不到定义——可能定义没写、定义的 `.cpp` 没加入构建、签名不匹配、或库没链接。<strong>修法 →</strong> 检查定义是否存在并参与编译，核对命名空间与签名，确认库的链接顺序正确。
+</Callout>
+
+## 小结与练习
+
+C++ 源码经预处理（展开文本）、编译（生成汇编）、汇编（转机器码）、链接（符号解析与重定位）四阶段变为可执行文件。分别编译让大型项目不必整体重编。
+
+<Exercises>
+  <Answer question="四阶段各自的输出是什么？">预处理输出展开后代码、编译输出 `.s` 汇编、汇编输出 `.o` 目标文件、链接输出可执行文件。</Answer>
+  <Answer question="为什么 C++ 能重载同名函数而 C 不能？">C++ 的 name mangling 把函数签名编码进符号名，重载函数被修饰成不同符号；C 不修饰，函数名就是符号名，同名会冲突。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="分别编译">每个源文件独立走预处理/编译/汇编阶段生成目标文件，最后统一链接，支持增量构建。</GlossaryItem>
+  <GlossaryItem term="name mangling">编译器把函数签名编码成唯一内部符号名的过程，使重载函数在符号层不冲突。</GlossaryItem>
+  <GlossaryItem term="符号解析">链接器把目标文件中未定义的符号引用绑定到其定义的过程。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="CPU 眼里的 C++" adaptedUrl="" />

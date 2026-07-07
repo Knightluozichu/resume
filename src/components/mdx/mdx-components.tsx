@@ -873,6 +873,36 @@ import { IcoRttiMechanismDiagram } from "./inside-cpp-object-model/diagrams/ico-
 import { IcoMultipleInheritanceDiagram } from "./inside-cpp-object-model/diagrams/ico-multiple-inheritance";
 import { IcoObjectLifecycleDiagram } from "./inside-cpp-object-model/diagrams/ico-object-lifecycle";
 import { IcoFinalMindMap } from "./inside-cpp-object-model/diagrams/ico-final-mindmap";
+import { OpcBookMap } from "./optimized-cpp/diagrams/opc-learning-map";
+import { OpcPerfMindsetDiagram } from "./optimized-cpp/diagrams/opc-performance-mindset";
+import { OpcStringOptDiagram } from "./optimized-cpp/diagrams/opc-string-optimization";
+import { OpcAlgoSelectDiagram } from "./optimized-cpp/diagrams/opc-algorithm-selection";
+import { OpcDynAllocDiagram } from "./optimized-cpp/diagrams/opc-dynamic-allocation";
+import { OpcSmartPtrPerfDiagram } from "./optimized-cpp/diagrams/opc-smart-pointers";
+import { OpcIoOptDiagram } from "./optimized-cpp/diagrams/opc-io-optimization";
+import { OpcConcurrencyDiagram } from "./optimized-cpp/diagrams/opc-concurrency";
+import { OpcProfilingDiagram } from "./optimized-cpp/diagrams/opc-profiling";
+import { OpcFinalMindMap } from "./optimized-cpp/diagrams/opc-final-review";
+import { McdBookMap } from "./modern-cpp-design/diagrams/mcd-learning-map";
+import { McdPolicyDesignDiagram } from "./modern-cpp-design/diagrams/mcd-policy-design";
+import { McdTypelistDiagram } from "./modern-cpp-design/diagrams/mcd-typelist";
+import { McdSmartPtrDesignDiagram } from "./modern-cpp-design/diagrams/mcd-smart-pointers";
+import { McdSmallObjectDiagram } from "./modern-cpp-design/diagrams/mcd-small-object";
+import { McdGeneralizedFunctorDiagram } from "./modern-cpp-design/diagrams/mcd-generalized-functor";
+import { McdSingletonDiagram } from "./modern-cpp-design/diagrams/mcd-singleton";
+import { McdObjectFactoryDiagram } from "./modern-cpp-design/diagrams/mcd-object-factory";
+import { McdAbstractFactoryDiagram } from "./modern-cpp-design/diagrams/mcd-abstract-factory";
+import { McdFinalMindMap } from "./modern-cpp-design/diagrams/mcd-final-review";
+import { CpcBookMap } from "./cpu-eye-cpp/diagrams/cpc-learning-map";
+import { CpcCompilationDiagram } from "./cpu-eye-cpp/diagrams/cpc-compilation";
+import { CpcMemoryModelDiagram } from "./cpu-eye-cpp/diagrams/cpc-memory-model";
+import { CpcFunctionCallsDiagram } from "./cpu-eye-cpp/diagrams/cpc-function-calls";
+import { CpcVirtualFunctionsDiagram } from "./cpu-eye-cpp/diagrams/cpc-virtual-functions";
+import { CpcExceptionHandlingDiagram } from "./cpu-eye-cpp/diagrams/cpc-exception-handling";
+import { CpcInlineDiagram } from "./cpu-eye-cpp/diagrams/cpc-inline";
+import { CpcCacheFriendlyDiagram } from "./cpu-eye-cpp/diagrams/cpc-cache-friendly";
+import { CpcCompilerOptimizationDiagram } from "./cpu-eye-cpp/diagrams/cpc-compiler-optimization";
+import { CpcFinalMindMap } from "./cpu-eye-cpp/diagrams/cpc-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -2026,6 +2056,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IcoMultipleInheritanceDiagram,
   IcoObjectLifecycleDiagram,
   IcoFinalMindMap,
+  OpcBookMap,
+  OpcPerfMindsetDiagram,
+  OpcStringOptDiagram,
+  OpcAlgoSelectDiagram,
+  OpcDynAllocDiagram,
+  OpcSmartPtrPerfDiagram,
+  OpcIoOptDiagram,
+  OpcConcurrencyDiagram,
+  OpcProfilingDiagram,
+  OpcFinalMindMap,
+  McdBookMap,
+  McdPolicyDesignDiagram,
+  McdTypelistDiagram,
+  McdSmartPtrDesignDiagram,
+  McdSmallObjectDiagram,
+  McdGeneralizedFunctorDiagram,
+  McdSingletonDiagram,
+  McdObjectFactoryDiagram,
+  McdAbstractFactoryDiagram,
+  McdFinalMindMap,
+  CpcBookMap,
+  CpcCompilationDiagram,
+  CpcMemoryModelDiagram,
+  CpcFunctionCallsDiagram,
+  CpcVirtualFunctionsDiagram,
+  CpcExceptionHandlingDiagram,
+  CpcInlineDiagram,
+  CpcCacheFriendlyDiagram,
+  CpcCompilerOptimizationDiagram,
+  CpcFinalMindMap,
   Term,
   Glossary,
   GlossaryItem,

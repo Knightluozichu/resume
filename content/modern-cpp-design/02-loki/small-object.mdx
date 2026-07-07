@@ -1,0 +1,81 @@
+---
+title: 小对象分配
+type: A
+section: Loki 组件
+order: 5
+description: Loki SmallObjAllocator 用分桶 + 空闲链表实现 O(1) 小对象分配，降低 malloc 开销与碎片。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdSmallObjectDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-small-object";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出通用 malloc 对小对象不友好的原因
+- 能解释 FixedAllocator 与 Chunk 如何协作实现 O(1) 分配回收
+- 能判断什么场景该用、什么场景不该用小对象分配器
+
+</Objectives>
+
+## 小对象分配的问题
+
+程序里常有大量小对象——链表节点、迭代器、小策略对象、AST 节点——频繁 new/delete。通用 malloc 为每次分配付出固定开销：块头元数据、对齐、搜索空闲块、可能的系统调用。小对象本身只有几十字节，malloc 开销占比过高，且频繁分配产生内存碎片、缓存不友好。
+
+<McdSmallObjectDiagram />
+
+Loki 的 SmallObjAllocator 思路：按对象大小分桶，每桶一次 malloc 切成多个等大 block，用空闲链表 O(1) 分配回收，把通用 malloc 的「每次一次系统调用」摊薄成「一桶一次系统调用、之后纯链表操作」。
+
+## 分层结构
+
+Loki 小对象分配器分三层。最底层是 Chunk（大块）：一次向系统 malloc 一大块连续内存（如 255 个 block 大小），内部按固定 blockSize 切成 N 个等大 block，用空闲链表管理——每个空闲 block 的首字节存「下一个空闲 block 的偏移」。
+
+中间层是 FixedAllocator（固定大小分配器）：管理一组同 blockSize 的 Chunk，对外提供 Allocate/Deallocate。分配时找一个有空闲 block 的 Chunk，从其空闲链表摘一个；回收时把 block 还回对应 Chunk 的空闲链表。
+
+最上层是 SmallObjAllocator：按对象大小分桶，每桶对应一个 blockSize 的 FixedAllocator。请求 13 字节向上取整到最近的 blockSize（如 16），用 16 字节桶。超过阈值的大对象直接走通用 malloc。
+
+## O(1) 分配回收
+
+空闲链表实现 O(1) 的原理：分配时取链表头 block、链表头后移；回收时把 block 插回链表头。两步都是常数操作，与 Chunk 内 block 数无关。FixedAllocator 维护「最近可用 Chunk」提示加速定位。回收时根据指针地址算出所属 Chunk（地址落在 Chunk 区间内），把 block 压回该 Chunk 空闲链表。
+
+一次 Chunk malloc 服务多次小对象分配，把系统调用开销从「每对象一次」摊薄成「每 N 对象一次」，单次分配压到接近 O(1)。block 大小固定，所以无需搜索、无需合并空闲块，复杂度从通用 malloc 的搜索降为链表摘挂。
+
+<Callout type="trap">
+<strong>现象 →</strong> 多线程下小对象分配器崩溃或数据损坏。<strong>原因 →</strong> 默认 SmallObjAllocator 非线程安全，多线程同时分配踩坏空闲链表。<strong>修法 →</strong> 配 ThreadingModel 加锁，或用 thread-local 分配器避免锁竞争。现代替代可用 `std::pmr::synchronized_pool_resource`。
+</Callout>
+
+## 何时用何时不用
+
+小对象分配器适合：高频分配/释放、对象小且生命周期短（节点、迭代器、AST 节点）；分配模式可预测、能容忍内存不立即归还。
+
+不适合：对象大（超阈值直接 malloc 更简单）；长期持有极少释放（无收益）；内存受限且需精确归还（Chunk 不轻易还给系统）；多线程高竞争且无法用 thread-local（锁开销吃掉收益）。
+
+<Callout type="tip">
+<strong>建议 →</strong> 现代 C++ 可用 `std::pmr::synchronized_pool_resource` 或 jemalloc/tcmalloc 内置的线程缓存小对象优化，免自研。Loki SmallObject 的价值在学「分桶 + 空闲链表」的池化思想。
+</Callout>
+
+## 小结与练习
+
+- 小对象分配器解决 malloc 对小对象开销大、碎片多的问题
+- 三层结构：SmallObjAllocator 分桶 → FixedAllocator 管 Chunk 组 → Chunk 切 block + 空闲链表
+- 空闲链表 O(1) 摘挂，一次 Chunk malloc 摊薄系统调用开销
+- 适合高频小对象，不适合大对象或内存受限场景
+
+<Exercises>
+  <Answer question="通用 malloc 对小对象为什么不友好？SmallObjAllocator 如何解决？">malloc 每次分配带固定元数据开销、搜索空闲块、可能的系统调用，小对象本身几十字节，开销占比过高，且频繁分配产生碎片、缓存不友好。SmallObjAllocator 按大小分桶，每桶一次 malloc 切多 block，用空闲链表 O(1) 分配回收，把系统调用从「每对象一次」摊薄成「每 N 对象一次」。</Answer>
+  <Answer question="空闲链表如何实现 O(1) 分配回收？内部碎片如何产生？">每个空闲 block 首字节存下一个空闲 block 偏移，分配取链表头、回收插链表头，都是常数操作。内部碎片来自向上取整——请求 13 字节占 16 字节 block，浪费 3 字节。但换来 O(1) 分配与无外部碎片，是可控权衡。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Chunk">一次向系统 malloc 的大块连续内存，按固定 blockSize 切成 N 个等大 block，用空闲链表管理。</GlossaryItem>
+  <GlossaryItem term="FixedAllocator">管理一组同 blockSize 的 Chunk，对外提供 Allocate/Deallocate，是 SmallObjAllocator 的中间层。</GlossaryItem>
+  <GlossaryItem term="SmallObjAllocator">按对象大小分桶的最上层分配器，每桶对应一个 blockSize 的 FixedAllocator，超阈值对象走通用 malloc。</GlossaryItem>
+  <GlossaryItem term="内部碎片">向上取整到 blockSize 浪费的少量字节（如 13 字节占 16 字节块），与外部碎片相对，是池化分配的可控代价。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

@@ -1,0 +1,108 @@
+---
+title: 性能分析工具
+type: A
+section: 优化实践
+order: 9
+description: 性能分析工具的选择遵循「先粗后细」：google-benchmark 量化基线、perf 采样定位热点、Valgrind 精确深挖。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { OpcProfilingDiagram } from "@/components/mdx/optimized-cpp/diagrams/opc-profiling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分采样剖析和插桩剖析的优缺点
+- 能说出 google-benchmark 与剖析器如何配合使用
+- 能设计「benchmark 建基线 → perf 定位 → Valgrind 深挖」的工作流
+
+</Objectives>
+
+## 先量化再定位
+
+性能分析工具有两大类：量化工具和定位工具。前者回答「有多快」，后者回答「哪里慢」。两者缺一不可——没有 benchmark 你不知道优化是否有效，没有 profiler 你不知道该优化哪里。
+
+<OpcProfilingDiagram />
+
+## 采样剖析 vs 插桩剖析
+
+### 采样剖析（perf）
+
+<Term def="定期中断程序记录当前指令地址，统计各函数被采样到的次数。开销低但统计性有误差">采样剖析</Term>
+
+- 原理：定期中断程序（如每 1ms），记录调用栈
+- 优点：开销低（1-5%），可在生产运行；无需重新编译
+- 缺点：统计性结果有误差，可能漏掉短函数
+
+### 插桩剖析（gprof / Callgrind）
+
+- 原理：编译时在函数入口/出口插入计数代码
+- 优点：精确——知道调用次数和单次耗时
+- 缺点：开销高（10-100% 减速）；需重新编译
+
+## google-benchmark：量化基线
+
+google-benchmark 是 C++ 微基准测试框架，精确测量函数耗时（纳秒级）、吞吐量、缓存命中率：
+
+```cpp
+static void BM_StringAppend(benchmark::State& state) {
+    for (auto _ : state) {
+        std::string s;
+        for (int i = 0; i < state.range(0); ++i)
+            s += "x";
+        benchmark::DoNotOptimize(s);  // 防止编译器优化掉
+    }
+}
+BENCHMARK(BM_StringAppend)->Range(8, 8192);
+```
+
+<Callout type="tip">
+防编译器优化是关键：用 `benchmark::DoNotOptimize(x)` 防止变量被优化掉，用 `benchmark::ClobberMemory()` 防止写操作被合并。否则你可能测了一个空循环。
+</Callout>
+
+## 推荐工作流
+
+「先粗后细」的三步工作流：
+
+1. **建基线**：用 google-benchmark 量化当前性能，得到精确的耗时数字。
+2. **定位热点**：用 perf 采样（低开销），找出占用最多时间的函数。`perf record -g` 带调用栈，`perf report` 查看热点。
+3. **深挖细节**：用 Valgrind/Callgrind 精确分析热点内部的指令数和缓存行为。开销高但精度最高。
+
+每步优化后回到第 1 步重新 benchmark，确认提升且无回归。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> benchmark 显示函数快了 2 倍，但用户感觉不到改善。 <strong>原因 →</strong> 微基准测的是孤立函数，但该函数在真实场景中只占 1%（阿姆达尔定律）。快 2 倍 = 整体快 0.5%。 <strong>修法 →</strong> 先剖析真实场景确认热点占比，只优化占比大的函数。微基准 + 端到端基准结合验证。
+</Callout>
+
+## 小结与练习
+
+- 采样剖析（perf）开销低适合日常，插桩剖析（gprof）精度高适合深挖
+- google-benchmark 量化「有多快」，profiler 定位「哪里慢」——配合使用
+- 工作流：benchmark 建基线 → perf 定位热点 → Valgrind 深挖细节
+- 微基准不代表真实场景：用阿姆达尔定律判断优化价值，关注 P99 延迟
+
+<Exercises>
+  <Answer question="采样剖析和插桩剖析各自的优缺点是什么？">采样剖析（perf）定期中断记录调用栈，开销低（1-5%）可在生产运行、无需重编译，但统计性有误差可能漏短函数。插桩剖析（gprof）编译时插入计数代码，精确知道调用次数和单次耗时，但开销高（10-100%）需重新编译。日常用 perf，需精确数据用 gprof。</Answer>
+  <Answer question="为什么 benchmark 快 2 倍但用户无感？怎么避免？">微基准测孤立函数，但该函数在真实场景可能只占 1%（阿姆达尔定律），快 2 倍 = 整体快 0.5%。避免方法：先剖析真实场景确认热点占比，只优化占比大的函数；微基准 + 端到端基准结合验证；关注 P99 延迟而非平均值。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="perf">
+Linux 内置的性能分析工具，通过采样（定期中断）统计各函数的热点。开销低、无需重编译，适合日常定位。
+</GlossaryItem>
+<GlossaryItem term="Valgrind/Callgrind">
+高精度模拟器，精确统计指令数、缓存命中率、调用关系。开销高（10-50 倍减速），适合热点内部的精确深挖。
+</GlossaryItem>
+<GlossaryItem term="google-benchmark">
+Google 开源的 C++ 微基准测试框架，精确测量函数耗时和吞吐量。配合 `DoNotOptimize` 防止编译器优化掉测试代码。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Optimized C++ (Kurt Guntheroth)" adaptedUrl="https://www.oreilly.com/" />

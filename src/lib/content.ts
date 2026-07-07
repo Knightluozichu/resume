@@ -95,6 +95,9 @@ export const BOOK_ORDER = [
   "effective-modern-cpp",
   "cpp-high-performance",
   "inside-cpp-object-model",
+  "optimized-cpp",
+  "modern-cpp-design",
+  "cpu-eye-cpp",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -131,6 +134,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "effective-modern-cpp": "Effective Modern C++",
   "cpp-high-performance": "C++ 高性能编程",
   "inside-cpp-object-model": "深度探索 C++ 对象模型",
+  "optimized-cpp": "C++ 性能优化指南",
+  "modern-cpp-design": "Modern C++ Design",
+  "cpu-eye-cpp": "CPU 眼里的 C++",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -674,6 +680,20 @@ export const SECTION_ORDER = [
   "对象模型基础",
   "构造语义",
   "运行时机制",
+  // C++ 性能优化指南
+  "性能思维",
+  "字符串与算法",
+  "内存管理",
+  "I/O与并发",
+  "优化实践",
+  // Modern C++ Design
+  "Policy 与 Typelist",
+  "Loki 组件",
+  "设计模式实现",
+  // CPU 眼里的 C++
+  "编译与链接",
+  "CPU运行时机制",
+  "CPU性能优化",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

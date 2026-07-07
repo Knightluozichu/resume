@@ -1,0 +1,75 @@
+---
+title: 函数调用机制
+type: A
+section: CPU运行时机制
+order: 4
+description: 栈帧、调用约定、参数传递与返回值在 CPU 层面的真实成本
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { CpcFunctionCallsDiagram } from "@/components/mdx/cpu-eye-cpp/diagrams/cpc-function-calls";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解栈帧的构成与函数调用/返回时栈的压入弹出
+- 掌握调用约定如何规定参数传递、返回值与寄存器保存
+- 认清函数调用的真实 CPU 成本与递归爆栈的原因
+
+</Objectives>
+
+## 栈帧
+
+每次函数调用，会在调用栈上分配一块内存区域，称为栈帧，记录该次调用的上下文。
+
+<CpcFunctionCallsDiagram />
+
+栈帧通常包含：函数参数（或经寄存器传递后由被调方保存到栈上）、返回地址（函数执行完该跳回调用方的哪条指令）、保存的帧指针（上一个栈帧的基址）、局部变量、以及表达式计算的临时值。布局上，栈帧由帧指针（BP）和栈指针（SP）界定。函数返回时 SP 恢复到调用前位置，整块栈帧「弹出」。
+
+一句话：函数调用等于压入一个栈帧，函数返回等于弹出这个栈帧。
+
+## 调用约定
+
+<Term def="调用方与被调方关于参数怎么传、返回值怎么返、谁保存寄存器、栈谁清理的协议">调用约定</Term>
+
+调用约定是双方必须遵守的协议。以 x86-64 System V ABI 为例：前 6 个整数/指针参数用寄存器传递（rdi、rsi、rdx、rcx、r8、r9），浮点用 xmm0-xmm7，多余的参数压栈；返回值整数/指针走 rax，浮点走 xmm0；部分寄存器由调用方保存，部分由被调方保存；栈由调用方清理。
+
+不同 ABI 寄存器分配不同——MSVC ABI 只用 rcx/rdx/r8/r9 传前四个参数。所以 C++ 二进制不能跨 ABI 混链，跨编译器交互需统一用 C ABI（`extern "C"`）或重新编译。
+
+## 返回大对象
+
+寄存器只够返回小值。大结构体（通常 16 字节以上）通过「隐藏指针」机制返回：调用方在栈上预留空间，把该空间地址作为隐藏第一参数传给被调函数；被调函数返回前把结构体内容拷贝到该地址。RVO/NRVO 优化能让编译器直接把调用方预留空间作为局部对象的构造位置，省掉拷贝。
+
+## 调用成本与递归爆栈
+
+函数调用在 CPU 层面不是免费的：建立与拆除栈帧要多条指令；参数超出寄存器要溢出到栈；`call`/`ret` 是控制流跳转，分支预测失败会冲刷流水线；跨调用边界要遵守调用约定，编译器不能随意跨函数分配寄存器，也阻碍内联与后续优化。
+
+递归每层压一个栈帧，N 层递归占 N 个栈帧的栈空间。栈大小有限（Linux 默认 8MB），超出即段错误。迭代用循环始终一个栈帧，空间 O(1)。尾递归若满足条件可被编译器改成跳转复用当前栈帧，把 O(N) 降为 O(1)，但 C++ 标准不保证。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 深度递归跑着跑着段错误崩溃。<strong>原因 →</strong> 每层递归压一个栈帧，栈空间耗尽。<strong>修法 →</strong> 改迭代；若递归调用是函数最后一步且无后续操作，改写为尾递归让编译器优化；避免在递归里分配大局部数组。
+</Callout>
+
+## 小结与练习
+
+函数调用在栈上压入栈帧（参数、返回地址、寄存器、局部变量），返回时弹出。调用约定规定参数经寄存器传递、返回值走 rax，大对象走隐藏指针。调用有真实成本，深递归易爆栈。
+
+<Exercises>
+  <Answer question="栈帧里通常存放哪些内容？">函数参数、返回地址、保存的帧指针、局部变量、临时值。</Answer>
+  <Answer question="为什么深度递归会爆栈而迭代不会？">递归每层一个栈帧占 O(N) 栈空间，迭代始终一个栈帧占 O(1)；栈空间有限，递归过深即溢出。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="栈帧">每次函数调用在调用栈上分配的区域，记录参数、返回地址、寄存器与局部变量。</GlossaryItem>
+  <GlossaryItem term="调用约定">调用方与被调方关于参数传递、返回值、寄存器保存与栈清理的协议。</GlossaryItem>
+  <GlossaryItem term="隐藏指针">返回大对象时调用方预留空间的地址，作为隐藏参数传给被调方。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="CPU 眼里的 C++" adaptedUrl="" />

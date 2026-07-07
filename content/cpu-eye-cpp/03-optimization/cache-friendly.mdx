@@ -1,0 +1,69 @@
+---
+title: 缓存友好编程
+type: A
+section: CPU性能优化
+order: 8
+description: cache line、false sharing、AoS/SoA 与数据局部性
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { CpcCacheFriendlyDiagram } from "@/components/mdx/cpu-eye-cpp/diagrams/cpc-cache-friendly";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解缓存行作为 CPU 访存最小粒度的意义
+- 认清 false sharing 的成因与消除方法
+- 掌握 AoS 与 SoA 布局的缓存差异及适用场景
+
+</Objectives>
+
+## 缓存行
+
+CPU 缓存由固定大小的缓存行组成，通常 64 字节一行。当 CPU 需要读一个字节时，不会只取那 1 字节，而是把该字节所在的整行 64 字节都加载进缓存——这是「局部性原理」：访问了一个地址，很可能马上访问它附近的地址（空间局部性）。
+
+<CpcCacheFriendlyDiagram />
+
+一次 cache miss 的代价是整行 64 字节的加载延迟（L1 命中约 1-4 周期，主存约 200+ 周期）。若那 64 字节里其他数据也有用，相当于免费预取；若只有 1 字节有用，缓存利用率仅 1/64。所以「缓存友好」的核心就是：让每次加载的 64 字节尽量全是热数据。
+
+## false sharing
+
+<Term def="多线程变量虽逻辑独立但同处一个缓存行，缓存一致性协议反复互相失效导致性能骤降">false sharing</Term>
+
+多个线程各自修改位于同一缓存行的不同变量时，虽然逻辑上没有共享数据，物理上却共享了一个缓存行。缓存一致性协议（MESI）以缓存行为粒度维护一致性：A 修改变量 X 后该行在 B 处被标记失效，B 要修改变量 Y（同缓存行）时必须从 A 拉回整行，于是反复互相失效、互相拉取，缓存形同虚设，可能慢几十倍。
+
+消除方法：对齐填充（`struct alignas(64)` 或手动 padding）让不同线程的变量落不同缓存行；每线程独立数据（`thread_local`）；把只读共享与可写共享分开。
+
+## AoS 与 SoA
+
+遍历 `std::vector` 比遍历 `std::list` 快得多，因为 vector 元素连续存储，完美命中空间局部性，硬件预取器还能自动预取；list 节点散布在堆各处，每跳一个节点都是潜在 cache miss。算法复杂度相同时，常数因子由缓存命中率决定。
+
+AoS（Array of Structs）每个对象的所有字段连续存放；SoA（Struct of Arrays）每个字段独立成数组。遍历单字段时，AoS 每个缓存行混入冷字段，有效载荷约 25%；SoA 整行都是热数据，有效载荷 100%，且利于 SIMD 向量化。游戏与图形领域大量采用 SoA，ECS 架构本质就是 SoA 思想的体系化应用。权衡原则：按访问模式组织数据，批量处理同字段用 SoA，逐对象处理全字段用 AoS。
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 多线程计数器数组，每线程改自己的 counter，多核比单核还慢。<strong>原因 →</strong> 多个 counter 挤在一个缓存行，false sharing 让缓存反复失效。<strong>修法 →</strong> 给每个 counter 加对齐填充到 64 字节，让不同线程的 counter 落不同缓存行。
+</Callout>
+
+## 小结与练习
+
+缓存以 64 字节行为单位加载，连续访问命中率高。false sharing 让多线程变量同缓存行互相失效，需对齐填充隔离。AoS 遍历单字段有效率低，SoA 字段连续利于缓存与 SIMD。
+
+<Exercises>
+  <Answer question="什么是缓存行？为什么它是访存最小粒度？">缓存行是缓存与主存交换数据的最小单位（通常 64 字节），基于空间局部性，访问一个字节会加载整行。</Answer>
+  <Answer question="AoS 和 SoA 在遍历单字段时缓存效率有什么差异？">AoS 缓存行混入冷字段有效率约 25%；SoA 整行都是热数据有效率约 100%，且利于 SIMD 向量化。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="缓存行">CPU 缓存与主存交换数据的最小单位，通常 64 字节，是缓存友好的基本粒度。</GlossaryItem>
+  <GlossaryItem term="false sharing">多线程变量同处一个缓存行，缓存一致性协议反复互相失效，导致性能骤降。</GlossaryItem>
+  <GlossaryItem term="SoA">Struct of Arrays，每个字段独立成数组的布局，利于批量处理单字段的缓存命中与向量化。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="CPU 眼里的 C++" adaptedUrl="" />

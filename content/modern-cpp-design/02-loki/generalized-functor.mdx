@@ -1,0 +1,75 @@
+---
+title: 广义仿函数
+type: A
+section: Loki 组件
+order: 6
+description: Loki Functor 用类型擦除统一函数指针、仿函数、成员函数绑定，是 std::function 的前身。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { McdGeneralizedFunctorDiagram } from "@/components/mdx/modern-cpp-design/diagrams/mcd-generalized-functor";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出 Functor 要统一的三类可调用对象及统一的动机
+- 能解释 handle + impl 类型擦除结构为何能让异构可调用对象变同一类型
+- 能对比 Loki Functor 与 std::function 的异同
+
+</Objectives>
+
+## Functor 要统一什么
+
+C++ 里有三类可调用对象：普通函数指针、重载 `operator()` 的仿函数类对象、成员函数指针绑定。三者语法不同——函数指针 `f(x)`、仿函数 `obj(x)`、成员函数指针 `(obj.*mf)(x)`——把它们存进同一容器或作为同一回调参数很别扭。
+
+<McdGeneralizedFunctorDiagram />
+
+Functor 的目标：把任意可调用对象封装成「同一类型」的对象，对外暴露统一的 `operator()`，让回调、事件、命令模式能用统一接口处理三类来源。这正是 C++11 `std::function` 的前身思路——用类型擦除把异构可调用对象统一成一个值类型。
+
+## 类型擦除结构
+
+Functor 用经典的 handle + impl 类型擦除。Functor 本身是一个值类型 handle（外壳），内部持有一个抽象基类指针 `FunctorImpl*`。FunctorImpl 是抽象基类，声明纯虚 `operator()`。真正存储可调用对象的是 FunctorImpl 的派生模板类，构造时把函数指针或仿函数存进去，重写 `operator()` 转发到被封装对象。
+
+Functor 的构造函数是模板，根据传入的可调用对象类型实例化对应的 impl，存到指针。之后 Functor 对外只暴露固定类型 `Functor<R(Args...)>`，内部多态分发。所有签名相同的 Functor 是同一类型，能存进 `vector<Functor<void(int)>>`，跨函数、跨线程传递。
+
+代价是一次虚函数调用加一次堆分配。这是「用运行时多态换类型统一」的经典权衡——模板会让 Functor 类型随被封装对象变化，无法放进同一容器；类型擦除后类型统一但有多态开销。
+
+## 成员函数绑定与组合
+
+Functor 能封装成员函数指针：提供辅助函数把对象实例和成员函数指针绑成一个可调用对象，内部 `operator()` 转发为 `(obj.*mf)(args...)`。这样成员函数就被包装成统一的 Functor。
+
+Functor 还支持参数绑定（Bind）——把 N 元函数的前 K 个参数固定，剩下留给后续调用，是 `std::bind` 的前身。更强大的是链式组合：多个 Functor 串成管线，前一个的输出作为后一个的输入，让命令模式与数据处理管线能用统一接口拼装。
+
+<Callout type="tip">
+<strong>建议 →</strong> 现代 C++ 优先用 Lambda + std::function：Lambda 当场写可调用对象，std::function 存储/传递，比 Bind + Functor 更直观。Loki Functor 的价值在学类型擦除原理。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> Functor 拷贝大对象时性能差。<strong>原因 →</strong> Loki Functor 是 C++98 产物，只有拷贝无移动，被封装的大对象整份拷贝。<strong>修法 →</strong> 现代 C++ 用 std::function 支持移动，或用 std::ref 避免拷贝。Loki 时代无移动语义，这是固有局限。
+</Callout>
+
+## 小结与练习
+
+- Functor 统一函数指针、仿函数、成员函数绑定三类可调用对象
+- handle + impl 类型擦除：值类型外壳 + 抽象基类指针 + 模板派生 impl
+- 支持成员函数绑定、参数绑定（Bind）、链式组合
+- 是 std::function 的前身，现代 C++ 优先用 Lambda + std::function
+
+<Exercises>
+  <Answer question="Functor 为什么要用类型擦除？直接用模板有什么问题？">模板会让 Functor 类型随被封装对象类型变化——`Functor<FuncTypeA>` 与 `Functor<FuncTypeB>` 是不同类型，无法放进同一容器、无法作为同一回调签名。类型擦除后所有 `Functor<R(Args...)>` 是同一类型，能存进 vector、跨函数传递。代价是一次虚调用加一次堆分配。</Answer>
+  <Answer question="Loki Functor 与 std::function 有何异同？现代还该用 Loki Functor 吗？">相同点都是类型擦除的统一可调用对象封装。不同点：std::function 语法更好、支持移动、有 SBO（小对象优化免堆分配）、是标准库原生。Loki Functor 是 C++98 产物，裸指针、无移动、无 SBO。现代不该用 Loki Functor，该用 std::function + Lambda。Loki 的价值在学类型擦除原理。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Functor">Loki 的广义仿函数，用类型擦除把函数指针、仿函数、成员函数绑定统一成同一类型的可调用对象封装。</GlossaryItem>
+  <GlossaryItem term="类型擦除">用一个值类型外壳持有一个抽象基类指针，把不同具体类型的对象封装成同一外壳类型，代价是虚函数分发。</GlossaryItem>
+  <GlossaryItem term="FunctorImpl">Functor 内部的抽象基类，声明纯虚 operator()，派生模板类真正存储可调用对象并转发调用。</GlossaryItem>
+  <GlossaryItem term="SBO">Small Buffer Optimization，std::function 内置的小对象优化，小可调用对象直接存在 function 对象内免堆分配，Loki Functor 无此优化。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />

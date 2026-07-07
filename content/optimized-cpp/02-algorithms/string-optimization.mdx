@@ -1,0 +1,122 @@
+---
+title: 字符串优化
+type: A
+section: 字符串与算法
+order: 3
+description: std::string 的性能瓶颈几乎都在堆分配——用 string_view、reserve 和 move 语义消除不必要的分配与拷贝。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { OpcStringOptDiagram } from "@/components/mdx/optimized-cpp/diagrams/opc-string-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能说出 `std::string` 的性能瓶颈在堆分配
+- 能用 `string_view`、`reserve`、`move` 三招消除不必要的字符串分配
+- 能识别字符串拼接中的临时对象陷阱并优化
+
+</Objectives>
+
+## 字符串为什么慢
+
+`std::string` 是 C++ 中使用最频繁的类型之一，也是最常见的性能瓶颈。原因不在字符串操作本身，而在堆分配：每次构造、拷贝、扩容都可能触发 `malloc`，而 `malloc` 是系统调用级别的昂贵操作——数百纳秒，远比栈操作（一条指令）慢 100 倍以上。
+
+问题在于，C++ 的默认写法经常产生不必要的分配：按值传参会深拷贝、拼接时不 `reserve` 会反复扩容、返回值可能拷贝。这些「隐藏的分配」在热点路径上累积，成为性能杀手。
+
+<OpcStringOptDiagram />
+
+## 三板斧：string_view、reserve、move
+
+### string_view：零拷贝传参
+
+<Term def="C++17 引入的非拥有字符串引用，只存指针和长度，不分配内存">string_view</Term>
+
+函数参数从 `std::string` 改为 `std::string_view`，调用方无需拷贝。特别是当调用方传入 C 字符串字面量时，`const std::string&` 会隐式构造临时 `string` 触发分配，而 `string_view` 不会。
+
+```cpp
+// 低效：传字面量会隐式构造 string
+void process(const std::string& s);
+process("hello");  // 触发一次 malloc
+
+// 高效：string_view 不分配
+void process(std::string_view s);
+process("hello");  // 零分配
+```
+
+注意陷阱：`string_view` 不拥有数据，被引用的 `string` 销毁后 `string_view` 变成悬空引用。且不保证零终止，传给 `printf("%s")` 会越界。
+
+### reserve：预分配容量
+
+拼接字符串前先 `reserve` 预估容量，避免反复扩容：
+
+```cpp
+// 低效：每次 += 可能扩容
+std::string result;
+for (auto& item : items) {
+    result += item.name + ":" + item.value;
+}
+
+// 高效：一次分配到位
+std::string result;
+result.reserve(items.size() * 20);  // 预估每项 20 字符
+for (auto& item : items) {
+    result += item.name;
+    result += ":";
+    result += item.value;
+}
+```
+
+### move 与 RVO：消除返回值拷贝
+
+返回 `string` 时确保 move 语义或 RVO（返回值优化）生效：
+
+```cpp
+std::string make_name() {
+    std::string s = "prefix_";
+    s += suffix;
+    return s;  // RVO 或 move，零拷贝
+    // 注意：不要写 return std::move(s); 这反而禁止 RVO
+}
+```
+
+<Callout type="tip">
+拆分 `+=` 避免临时对象：`a + b + c` 会产生两个临时 `string`，而 `result += a; result += b; result += c;` 不产生任何临时对象。在循环中这个差异会被放大。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 `string_view` 后程序崩溃。 <strong>原因 →</strong> `string_view` 引用的 `string` 已销毁，悬空引用。 <strong>修法 →</strong> 如果 `string_view` 的生命期超出被引用对象，先拷贝到 `string`。`string_view` 只适合「即用即弃」的传参场景，不适合存储。
+</Callout>
+
+## 小结与练习
+
+- `std::string` 的性能瓶颈在堆分配，不在操作本身
+- 三板斧：`string_view` 零拷贝传参、`reserve` 预分配、`move`/RVO 转移所有权
+- 拆分 `+=` 避免 `+` 产生的临时对象
+- `string_view` 不拥有数据，注意悬空引用和零终止陷阱
+
+<Exercises>
+  <Answer question="为什么 `const string&` 传 C 字符串字面量会触发分配？string_view 如何解决？">`const string&` 要求参数是 `string`，传入 C 字符串字面量会隐式构造临时 `string`，触发一次 malloc。`string_view` 只存指针和长度，从 C 字符串构造不分配内存。</Answer>
+  <Answer question="循环中拼接字符串，为什么先 reserve 再拆 += 比用 + 快？">reserve 一次分配到位避免反复扩容（每次扩容重新分配 + 拷贝旧数据）。拆 += 避免每次 `a + b` 产生临时 string 对象（每个 + 触发一次分配）。组合后：1 次分配 + 0 个临时对象，vs N 次扩容 + N 个临时对象。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+<GlossaryItem term="string_view">
+C++17 引入的非拥有字符串引用，只存指针和长度，不分配内存。适合只读传参，注意悬空引用风险。
+</GlossaryItem>
+<GlossaryItem term="reserve">
+`std::string::reserve(n)` 预分配至少 n 字符的容量，避免后续操作反复扩容。
+</GlossaryItem>
+<GlossaryItem term="RVO">
+返回值优化：编译器直接在调用方的内存中构造返回值，省去拷贝。不要写 `return std::move(s)`，这反而禁止 RVO。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Optimized C++ (Kurt Guntheroth)" adaptedUrl="https://www.oreilly.com/" />
