@@ -1,0 +1,290 @@
+---
+title: "异步与CLR"
+type: C
+section: "高级CLR"
+order: 1
+description: "CLR 异步机制：async/await 的状态机编译转换、SynchronizationContext、Task 与线程池。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CvcAsyncClrDiagram } from "@/components/mdx/clr-via-csharp/diagrams/cvc-async-clr";
+
+<Objectives>
+
+- 能改出 async/await 方法，避免常见的死锁陷阱
+- 能解释编译器如何将 async 方法转换为状态机
+- 能回答：SynchronizationContext 在异步中起什么作用？
+
+</Objectives>
+
+## 直觉引入
+
+想象你在餐厅点了一份菜。同步模式下，你站在厨房门口等菜做好——什么也不做，干等到上菜。异步模式下，服务员给你一个取餐号（Task），你回到座位看手机，菜好了服务员叫你——你不需要一直等。
+
+`async/await` 就是这个机制。`await` 不是"阻塞等待"——它注册了一个回调（"菜好了叫我"），然后把控制权还给调用者。当异步操作完成时，回调被调度执行——从 `await` 点继续往下走。在等待期间，线程可以做其他事，不浪费 CPU。
+
+编译器在幕后做了大量工作——它把 `async` 方法拆成一个**状态机**。每个 `await` 是一个"暂停点"——状态机记住"执行到哪了"，异步完成后从暂停点恢复。这个转换是编译器自动完成的，你写的 `async` 代码看起来像同步代码，但底层是完全异步的。
+
+不理解状态机原理，你会写出死锁的异步代码——在 `async` 方法中调用 `.Result` 阻塞线程，而异步操作试图回到被阻塞的线程。
+
+## 概念讲解
+
+### Task：异步操作的抽象
+
+<Term def="Task 是 CLR 中表示异步操作的类型。Task 表示一个可能尚未完成的无返回值操作，Task&lt;T&gt; 表示有返回值的操作。await Task 会在操作完成时恢复执行。">
+
+`Task` 是异步操作的"取餐号"。`Task<T>` 携带结果类型 T。`await task` 挂起当前方法，将控制权还给调用者，在 task 完成后从 await 点恢复。`Task.CompletedTask` 表示已完成的空操作。`Task.FromResult(value)` 创建已完成的带值 Task。`Task.Run(action)` 将工作排队到线程池。
+
+</Term>
+
+### async/await 的状态机转换
+
+<Term def="状态机（State Machine）是编译器将 async 方法转换生成的数据结构。每个 await 是一个暂停点，状态机记录当前执行位置，异步完成后从暂停点恢复执行。">
+
+编译器将 `async` 方法转换为一个实现了 `IAsyncStateMachine` 接口的状态机类。每个 `await` 对应一个状态值。方法执行到 `await` 时，如果操作未完成，状态机保存当前状态（局部变量、await 点），返回一个未完成的 Task。操作完成后，状态机的 `MoveNext()` 被调用，从保存的状态恢复执行。这个转换是编译器自动完成的——你写的代码看起来是同步的，底层是完全异步的。
+
+### SynchronizationContext
+
+<Term def="SynchronizationContext（同步上下文）是 CLR 中管理异步回调调度的抽象。UI 框架（WPF/WinForms）的 SynchronizationContext 确保 await 后的代码回到 UI 线程执行。">
+
+`SynchronizationContext` 决定 `await` 之后的代码在哪个线程执行。UI 应用（WPF/WinForms）的 SynchronizationContext 会将回调 Post 到 UI 线程——所以 `await` 后可以安全更新 UI。控制台应用和 ASP.NET Core 没有 SynchronizationContext——`await` 后的代码在线程池任意线程执行。`ConfigureAwait(false)` 告诉状态机不需要回到原 SynchronizationContext——在库代码中应该使用以避免死锁。
+
+## 交互Demo
+
+<CvcAsyncClrDiagram />
+
+<Stepper>
+
+<Step title="同步 vs 异步：线程利用">
+
+同步方法 `string data = Download(url);` 阻塞调用线程——线程在等待网络响应时空转，浪费资源。异步方法 `string data = await DownloadAsync(url);` 不阻塞——`await` 将控制权还给调用者，线程可以处理其他请求。网络响应到达后，状态机从 `await` 点恢复。
+
+</Step>
+
+<Step title="状态机：编译器的魔法">
+
+编译器将 `async Task<string> GetData()` 转换为一个状态机类。状态机有 `state` 字段（当前执行到哪个 await）和所有局部变量。执行到 `await` 时，如果操作未完成，状态机保存状态并返回。操作完成后 `MoveNext()` 被调用，从保存的状态恢复。你写的代码是线性的，编译器把它变成回调链。
+
+</Step>
+
+<Step title="SynchronizationContext：回到原线程">
+
+UI 应用中，`await` 后的代码默认回到 UI 线程——通过 SynchronizationContext.Post。这让你可以安全更新 UI。但如果你在 UI 线程调用 `Task.Result` 阻塞等待，而异步操作试图回到 UI 线程——死锁。`ConfigureAwait(false)` 告诉状态机不需要回到原上下文，避免死锁。
+
+</Step>
+
+<Step title="线程池：异步的执行引擎">
+
+CLR 线程池管理一组可重用线程。`Task.Run` 将工作排队到线程池。异步 I/O 操作（如网络请求）不占用线程——由操作系统完成，完成后通过 I/O 完成端口通知线程池。线程池自动调整线程数量——IO 密集型用少量线程即可处理大量并发请求。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// async/await 的编译器转换
+
+// === 你写的 async 方法 ===
+public async Task<string> FetchDataAsync(string url)
+{
+    var client = new HttpClient();
+    string json = await client.GetStringAsync(url);  // 暂停点 1
+    var data = JsonSerializer.Deserialize<MyData>(json);
+    await File.WriteAllTextAsync("data.txt", json);   // 暂停点 2
+    return data.Name;
+}
+
+// === 编译器生成的状态机（简化示意）===
+struct FetchDataAsyncStateMachine : IAsyncStateMachine
+{
+    public int state;           // -1: 初始, 0: await 点1后, 1: await 点2后
+    public string url;          // 局部变量保存为字段
+    public HttpClient client;
+    public string json;
+    public TaskAwaiter<string> awaiter1;
+    public TaskAwaiter awaiter2;
+    public string result;
+
+    public void MoveNext()
+    {
+        try
+        {
+            switch (state)
+            {
+                case -1:  // 首次调用
+                    client = new HttpClient();
+                    awaiter1 = client.GetStringAsync(url).GetAwaiter();
+                    if (!awaiter1.IsCompleted)
+                    {
+                        state = 0;
+                        awaiter1.OnCompleted(MoveNext);  // 注册回调
+                        return;  // 返回未完成的 Task
+                    }
+                    goto case 0;
+
+                case 0:  // 从 await 点 1 恢复
+                    json = awaiter1.GetResult();  // 获取结果
+                    // ... 反序列化 ...
+                    awaiter2 = File.WriteAllTextAsync("data.txt", json).GetAwaiter();
+                    if (!awaiter2.IsCompleted)
+                    {
+                        state = 1;
+                        awaiter2.OnCompleted(MoveNext);
+                        return;
+                    }
+                    goto case 1;
+
+                case 1:  // 从 await 点 2 恢复
+                    awaiter2.GetResult();
+                    result = data.Name;
+                    SetResult(result);  // 完成 Task<string>
+                    return;
+            }
+        }
+        catch (Exception ex)
+        {
+            SetException(ex);
+        }
+    }
+}
+
+// === 死锁陷阱 ===
+// 在 UI 线程或旧版 ASP.NET 中：
+public string GetData()
+{
+    // 危险！阻塞 UI 线程等待 Task
+    // FetchDataAsync 的 await 后的代码试图回到 UI 线程
+    // 但 UI 线程被 Result 阻塞了 → 死锁
+    return FetchDataAsync("http://...").Result;
+}
+
+// 正确做法：一路 async
+public async Task<string> GetDataAsync()
+{
+    return await FetchDataAsync("http://...");
+}
+
+// 或在库中使用 ConfigureAwait(false)
+public async Task<string> FetchDataAsync(string url)
+{
+    var client = new HttpClient();
+    string json = await client.GetStringAsync(url).ConfigureAwait(false);
+    // await 后不回到原 SynchronizationContext，避免死锁
+    return json;
+}
+```
+
+编译器生成的状态机有 `state` 字段追踪执行位置，局部变量变成字段。`MoveNext()` 是核心方法——每次异步完成时调用，从保存的状态恢复。`ConfigureAwait(false)` 在库代码中是最佳实践——避免依赖调用者的 SynchronizationContext。
+
+## 常见误区
+
+<Callout type="trap">
+
+**现象：async 方法调用 .Result 死锁 → 原因：SynchronizationContext 死锁 → 修法：一路 async 到底**
+
+在 UI 线程或旧版 ASP.NET 中，`var result = asyncMethod().Result` 阻塞当前线程。异步操作完成后，状态机试图通过 SynchronizationContext.Post 回到原线程继续执行 `await` 后的代码。但原线程被 `.Result` 阻塞了，无法处理 Post 的回调——死锁。修法：将调用方法也改为 `async`，用 `await` 替代 `.Result`。或在库代码中加 `ConfigureAwait(false)`，使 `await` 后不需要回到原线程。
+
+</Callout>
+
+<Callout type="trap">
+
+**现象：async void 方法崩溃进程 → 原因：异常无法捕获 → 修法：用 async Task 替代**
+
+`async void` 方法的异常无法被调用者 catch——异常直接到 SynchronizationContext（如果有）或终止进程。`async Task` 方法的异常存储在返回的 Task 中，调用者可以 `await` 并 catch。`async void` 只允许用于事件处理器（如 `button_Click`），因为事件签名要求 void。其他场景必须用 `async Task`。
+
+</Callout>
+
+<Callout type="trap">
+
+**现象：大量 async 方法内存占用高 → 原因：状态机对象在堆上分配 → 修法：ValueTask 替代 Task**
+
+每个 `async Task` 方法调用都会在 GC 堆上分配一个状态机对象和一个 Task 对象。在高频调用的热路径上（如 RPC 框架每秒数万次调用），这些分配增加 GC 压力。`ValueTask` 是结构体（值类型），在常见情况（同步完成）下不需要堆分配。`public ValueTask<int> ReadAsync()` 比 `Task<int>` 更高效——但 ValueTask 只适合高频场景，不要无脑替换所有 Task。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码在 WPF 应用中会发生什么？如何修复？
+
+```csharp
+// 在 UI 线程的按钮点击事件中
+private void Button_Click(object sender, EventArgs e)
+{
+    string data = GetDataAsync().Result;
+    label.Text = data;
+}
+
+private async Task<string> GetDataAsync()
+{
+    string result = await httpClient.GetStringAsync(url);
+    return result.ToUpper();
+}
+```
+
+<Answer>
+
+这段代码会**死锁**。\n\n原因：\n1. `Button_Click` 在 UI 线程执行，调用 `.Result` 阻塞 UI 线程\n2. `GetDataAsync` 中的 `await httpClient.GetStringAsync(url)` 开始异步操作\n3. 异步操作完成后，状态机试图通过 SynchronizationContext.Post 回到 UI 线程执行 `result.ToUpper()`\n4. 但 UI 线程被 `.Result` 阻塞了，无法处理 Post 的回调\n5. 死锁——`.Result` 等 Task 完成，Task 等 UI 线程处理回调\n\n修复方法 1（推荐）：一路 async 到底\n```csharp\nprivate async void Button_Click(object sender, EventArgs e)\n{\n    string data = await GetDataAsync();\n    label.Text = data;\n}\n```\n\n修复方法 2：在 GetDataAsync 中加 ConfigureAwait(false)\n```csharp\nprivate async Task<string> GetDataAsync()\n{\n    string result = await httpClient.GetStringAsync(url).ConfigureAwait(false);\n    return result.ToUpper();  // 不需要回到 UI 线程\n}\n// 但 Button_Click 仍然死锁——因为 GetDataAsync 返回的 Task\n// 的 continuation（回到 Button_Click）仍然需要 UI 线程\n// 所以方法 1 才是真正的修复\n```\n\n最佳实践：UI 事件处理器用 `async void`，内部一路 `await`，永远不要在 UI 线程调用 `.Result` 或 `.Wait()`。
+
+</Answer>
+
+**问题 2**：编译器如何将 `async Task<string>` 方法转换为状态机？描述核心步骤。
+
+<Answer>
+
+编译器转换步骤：\n\n1. **生成状态机结构体**：\n   编译器为每个 async 方法生成一个实现了 `IAsyncStateMachine` 的结构体。结构体包含：\n   - `state` 字段（int）：记录当前执行到哪个 await 点。-1 表示初始，0 表示第一个 await 后，1 表示第二个 await 后...\n   - 所有局部变量变成结构体字段（`url`、`json`、`client` 等）\n   - `awaiter` 字段：保存当前 await 的 TaskAwaiter\n   - `builder` 字段：AsyncTaskMethodBuilder，负责创建和管理返回的 Task\n\n2. **MoveNext() 方法**：\n   核心方法，包含原 async 方法的全部逻辑，但用 switch-case 拆分：\n   - state=-1：执行到第一个 await\n   - 检查 awaiter.IsCompleted：如果已完成（如同步完成），直接继续\n   - 如果未完成：保存 state=0，注册 `awaiter.OnCompleted(MoveNext)`，return（交还控制权）\n   - state=0：从第一个 await 恢复，调用 `awaiter.GetResult()` 获取结果，继续执行到第二个 await...\n\n3. **异常处理**：\n   MoveNext() 用 try-catch 包裹。异常被捕获后通过 `builder.SetException(ex)` 存入返回的 Task——调用者 await 时重新抛出。\n\n4. **完成处理**：\n   方法正常结束时调用 `builder.SetResult(result)`，结果存入返回的 Task。\n\n关键：你写的线性代码被编译器拆成回调链——每个 await 点是回调注册+返回点，异步完成后 MoveNext 被重新调用从保存的状态恢复。局部变量的"存活"跨 await 通过结构体字段实现。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Task / Task&lt;T&gt;">
+
+CLR 中表示异步操作的类型。`Task` 表示无返回值操作，`Task<T>` 表示有返回值 T 的操作。`await task` 挂起当前方法，在 task 完成后恢复。Task 可以表示已完成的操作（`Task.CompletedTask`、`Task.FromResult`）、线程池工作（`Task.Run`）或 I/O 操作（`HttpClient.GetStringAsync`）。
+
+</GlossaryItem>
+
+<GlossaryItem term="async/await">
+
+C# 的异步语法。`async` 标记方法为异步方法，编译器将其转换为状态机。`await` 是暂停点——如果操作未完成，保存状态并交还控制权；操作完成后从暂停点恢复。`async` 方法返回 Task/Task<T>/ValueTask。
+
+</GlossaryItem>
+
+<GlossaryItem term="状态机（State Machine）">
+
+编译器为 async 方法生成的数据结构。实现 `IAsyncStateMachine` 接口，包含 `state` 字段（当前 await 点）、局部变量字段、awaiter 字段。`MoveNext()` 方法包含原方法的全部逻辑，用 switch-case 按 state 值跳转到对应的 await 恢复点。
+
+</GlossaryItem>
+
+<GlossaryItem term="SynchronizationContext">
+
+管理异步回调调度的抽象。UI 框架的 SynchronizationContext 将回调 Post 到 UI 线程——所以 `await` 后可以安全更新 UI。控制台和 ASP.NET Core 没有 SynchronizationContext——`await` 后在线程池任意线程执行。`ConfigureAwait(false)` 告诉状态机不需要回到原上下文。
+
+</GlossaryItem>
+
+<GlossaryItem term="ConfigureAwait(false)">
+
+告诉 async 状态机 `await` 后不需要回到原 SynchronizationContext。在库代码中应始终使用——避免依赖调用者的同步上下文，防止死锁。在应用层代码（UI、ASP.NET）中通常不需要——你需要回到原上下文更新 UI 或处理请求。
+
+</GlossaryItem>
+
+<GlossaryItem term="ValueTask">
+
+`Task` 的值类型替代品。在常见情况（同步完成）下不需要堆分配——避免 GC 压力。适合高频调用的热路径。缺点：不能多次 await、不能直接组合（WhenAll）。只对性能敏感的 API 使用 ValueTask，默认用 Task。
+
+</GlossaryItem>
+
+<GlossaryItem term="async void">
+
+返回 void 的异步方法。异常无法被调用者捕获——直接到 SynchronizationContext 或终止进程。只允许用于事件处理器（如 `button_Click`），因为事件签名要求 void。其他场景必须用 `async Task`。
+
+</GlossaryItem>
+
+</Glossary>

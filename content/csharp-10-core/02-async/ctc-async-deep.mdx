@@ -1,0 +1,261 @@
+---
+title: "异步深入"
+type: C
+section: "异步并发C10"
+order: 1
+description: "C# async/await 的状态机机制、Task 与 ValueTask、同步上下文与异步陷阱。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CtcAsyncDeepDiagram } from "@/components/mdx/csharp-10-core/diagrams/ctc-async-deep";
+
+<Objectives>
+
+- 理解 async/await 的编译器状态机转换机制
+- 掌握 Task 与 ValueTask 的区别及选择策略
+- 理解同步上下文（SynchronizationContext）与 ConfigureAwait
+- 掌握异步死锁的成因与避免方法
+
+</Objectives>
+
+## 直觉引入
+
+你在餐厅点了一份牛排。同步的方式是你站在厨房门口等牛排做好，期间什么都做不了。异步的方式是服务员给你一个呼叫器（`Task`），你回到座位上聊天，牛排好了呼叫器响了（`await` 完成），你再去取。
+
+`async/await` 的魔法在于：代码看起来是顺序写的（`await` 之后的代码像是在等待），但编译器把它转换成了状态机——`await` 处是「挂起点」，方法在此返回，后续代码被编译成回调（continuation）。当异步操作完成时，回调被调度执行，方法从挂起点恢复。
+
+这就是为什么 `async` 方法不阻塞线程——线程在 `await` 处被释放去做别的事，异步操作完成后再借（或新借）一个线程继续执行。
+
+## 概念讲解
+
+### async/await 的状态机转换
+
+<Term def="async/await 是 C# 5.0 引入的异步编程语法。编译器将 async 方法转换为状态机：每个 await 处是一个挂起点，方法在此返回 Task，后续代码被注册为 continuation。异步操作完成后 continuation 被调度执行，方法从挂起点恢复。">
+
+编译器对 `async` 方法做的事：
+
+1. 生成一个隐藏的状态机结构体，包含方法的所有局部变量作为字段。
+2. 将方法体拆分成多个状态段，每个 `await` 处是一个状态切换点。
+3. `await` 时调用 `GetAwaiter()`，如果未完成则注册 continuation 并返回。
+4. 异步操作完成后， continuation 被调度执行，状态机恢复到下一个状态。
+
+关键：`async` 方法在第一个 `await`（未完成的 await）处返回。返回的 `Task` 代表「这个异步操作的完成状态」。
+
+</Term>
+
+### Task 与 ValueTask
+
+<Term def="ValueTask 是 C# 7.0 引入的可值类型异步结果。Task 是引用类型，每次创建都堆分配。ValueTask 可以包装同步完成的结果（T 或 ValueTask<T>），避免堆分配。但 ValueTask 只能 await 一次，不能多次 await。">
+
+- `Task<T>`：引用类型，每次 `Task.FromResult(42)` 都在堆上分配一个对象。适合长时间运行或异步完成的操作。
+- `ValueTask<T>`：值类型，可以包装同步结果避免分配。适合「经常同步完成」的操作（如缓存命中）。
+
+选择策略：如果操作经常同步完成（>90%），用 `ValueTask` 省分配。否则用 `Task`——`ValueTask` 有使用限制（只能 await 一次），且异步完成时仍需分配。
+
+### 同步上下文与 ConfigureAwait
+
+在 UI 应用（WPF/WinForms）中，`SynchronizationContext` 确保 `await` 后的代码回到 UI 线程执行。在 ASP.NET Core 中没有同步上下文，`await` 后的代码在任意线程池线程执行。
+
+`ConfigureAwait(false)` 告诉编译器：不需要回到原始同步上下文，在当前线程池线程继续即可。库代码应始终使用 `ConfigureAwait(false)` 避免死锁。
+
+</Term>
+
+## 交互Demo
+
+<CtcAsyncDeepDiagram />
+
+<Stepper>
+
+<Step title="同步调用：线程阻塞">
+
+`var result = GetData();` 线程在 `GetData` 返回前什么都做不了。如果是 I/O 操作（如网络请求），线程被白白占用——它在等网卡，不在算东西。在高并发场景下，线程池耗尽，服务崩溃。
+
+</Step>
+
+<Step title="async/await：状态机挂起">
+
+`var result = await GetDataAsync();` 编译器生成状态机：`await` 处方法返回 `Task`，线程被释放回线程池。异步操作（网络响应）完成后，continuation 被调度到线程池线程执行，方法从 `await` 处恢复。线程不阻塞，可以做别的事。
+
+</Step>
+
+<Step title="Task vs ValueTask">
+
+`Task<int>` 是引用类型——`Task.FromResult(42)` 每次堆分配。`ValueTask<int>` 是值类型——如果同步完成，`ValueTask.FromResult(42)` 零分配。缓存命中率高时用 `ValueTask` 省分配；异步完成为主时用 `Task`（`ValueTask` 异步完成时仍需分配且只能 await 一次）。
+
+</Step>
+
+<Step title="死锁陷阱与 ConfigureAwait">
+
+UI 线程调用 `Task.Wait()` 会死锁：UI 线程阻塞等待 Task 完成，但 Task 的 continuation 需要 UI 线程执行——互相等。解法：库代码用 `ConfigureAwait(false)` 让 continuation 不回 UI 线程，或用 `await` 代替 `.Wait()`/.Result`。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 异步深入：状态机、Task/ValueTask、死锁
+
+// === 同步 vs 异步 ===
+// 同步：线程阻塞
+string GetData()
+{
+    Thread.Sleep(2000);  // 线程被占用 2 秒
+    return "data";
+}
+
+// 异步：线程释放
+async Task<string> GetDataAsync()
+{
+    await Task.Delay(2000);  // 线程被释放，2 秒后回来
+    return "data";
+}
+
+// === 编译器生成的状态机（简化伪代码）===
+// async Task<string> GetDataAsync() {
+//     await Task.Delay(2000);
+//     return "data";
+// }
+// 编译器生成：
+struct GetDataAsync_StateMachine : IAsyncStateMachine
+{
+    public int state;
+    public TaskAwaiter awaiter;
+    public string result;
+    public TaskCompletionSource<string> tcs;
+
+    public void MoveNext()
+    {
+        switch (state)
+        {
+            case 0: // 初始状态
+                awaiter = Task.Delay(2000).GetAwaiter();
+                if (!awaiter.IsCompleted)
+                {
+                    state = 1;
+                    awaiter.OnCompleted(MoveNext);  // 注册 continuation
+                    return;  // 方法返回！线程释放
+                }
+                goto case 1;
+            case 1: // 恢复
+                awaiter.GetResult();  // 检查异常
+                result = "data";
+                tcs.SetResult(result);
+                return;
+        }
+    }
+}
+
+// === ValueTask：省分配 ===
+// 缓存场景：经常同步完成
+private static readonly string _cached = ExpensiveCompute();
+
+Task<string> GetWithTask(bool useCache)
+{
+    if (useCache) return Task.FromResult(_cached);  // 堆分配
+    return GetFromNetworkAsync();
+}
+
+ValueTask<string> GetWithValueTask(bool useCache)
+{
+    if (useCache) return new ValueTask<string>(_cached);  // 零分配！
+    return new ValueTask<string>(GetFromNetworkAsync());
+}
+
+// === 死锁陷阱 ===
+// UI 线程中的死锁
+void Button_Click(object sender, EventArgs e)
+{
+    // 死锁！UI 线程阻塞等 Task，Task 的 continuation 需要 UI 线程
+    var data = GetDataAsync().Result;
+    Console.WriteLine(data);
+}
+
+// 正确写法 1：全链路 async
+async void Button_Click_Async(object sender, EventArgs e)
+{
+    var data = await GetDataAsync();
+    Console.WriteLine(data);
+}
+
+// 正确写法 2：库代码 ConfigureAwait(false)
+async Task<string> GetDataAsync()
+{
+    await Task.Delay(2000).ConfigureAwait(false);  // 不回原线程
+    return "data";
+}
+
+async Task<string> GetFromNetworkAsync() => await Task.FromResult("network data");
+static string ExpensiveCompute() => "computed";
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：async void 和 async Task 一样**
+
+`async Task` 是标准的异步方法——返回 Task 供调用者 await，异常被捕获到 Task 中。`async void` 只用于事件处理器（`event` 要求 `void` 返回）。`async void` 的异常无法被调用者捕获——它们直接在 `SynchronizationContext` 上抛出，可能导致进程崩溃。`async void` 方法也无法被 `await`，调用者不知道它何时完成。除了事件处理器，永远不要用 `async void`。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：用 .Result 或 .Wait() 代替 await**
+
+`.Result` 和 `.Wait()` 是同步阻塞——线程被挂起等待 Task 完成。在有 `SynchronizationContext` 的环境（WPF/WinForms/ASP.NET Classic）中，这会导致死锁：当前线程阻塞等待 Task，但 Task 的 continuation 需要当前线程执行。正确做法是「async 全链路」——从底层到顶层都用 `await`，不用 `.Result`/`.Wait()`。ASP.NET Core 没有 `SynchronizationContext`，不会死锁，但阻塞仍然浪费线程资源。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：编译器对 `async` 方法做了什么转换？为什么 `await` 不阻塞线程？
+
+<Answer>
+
+编译器将 `async` 方法转换为状态机：生成一个隐藏的结构体，包含方法的所有局部变量作为字段，将方法体拆分为多个状态段。每个 `await` 处是状态切换点——调用 `GetAwaiter()`，如果未完成则注册 continuation 并返回（方法返回 Task，控制权交还调用者）。线程不阻塞是因为 `await` 时方法已经返回了——线程被释放去做别的事。异步操作完成后，continuation 被调度到线程池线程（或原同步上下文），状态机从 `await` 处恢复执行。
+
+</Answer>
+
+**问题 2**：什么时候该用 `ValueTask` 代替 `Task`？有什么限制？
+
+<Answer>
+
+用 `ValueTask` 的场景：操作经常同步完成（如缓存命中率高的读取），此时 `ValueTask.FromResult` 零堆分配，而 `Task.FromResult` 每次分配。限制：`ValueTask` 只能 `await` 一次——多次 `await` 同一个 `ValueTask` 会抛 `InvalidOperationException`。`Task` 可以多次 `await`（返回相同结果）。此外，`ValueTask` 异步完成时仍需内部分配，且不能直接用于 `Task.WhenAll`（需先 `AsTask()`）。因此，如果操作以异步完成为主，`Task` 更简单安全。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="async/await">
+
+C# 5.0 引入的异步语法。编译器将 async 方法转换为状态机，`await` 处是挂起点。线程不阻塞——方法返回 Task，异步完成后 continuation 恢复执行。
+
+</GlossaryItem>
+
+<GlossaryItem term="Task / ValueTask">
+
+`Task<T>` 是引用类型的异步结果，每次创建堆分配。`ValueTask<T>` 是值类型，同步完成时零分配。`ValueTask` 只能 await 一次。
+
+</GlossaryItem>
+
+<GlossaryItem term="SynchronizationContext">
+
+确保 `await` 后代码回到特定线程（如 UI 线程）的机制。`ConfigureAwait(false)` 跳过同步上下文，在当前线程池线程继续。库代码应始终用 `ConfigureAwait(false)`。
+
+</GlossaryItem>
+
+<GlossaryItem term="async void">
+
+只用于事件处理器。异常无法被调用者捕获，直接在 SynchronizationContext 上抛出，可能导致崩溃。除事件处理器外禁用。
+
+</GlossaryItem>
+
+</Glossary>

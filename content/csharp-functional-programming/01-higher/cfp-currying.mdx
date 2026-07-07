@@ -1,0 +1,244 @@
+---
+title: "柯里化与偏应用"
+type: B
+section: "高阶函数"
+order: 2
+description: "柯里化把多参数函数拆成单参数链，偏应用固定部分参数生成可复用的新函数。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CfpCurryingDiagram } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-currying";
+
+<Objectives>
+
+- 理解柯里化的定义：把多参数函数拆成嵌套的单参数函数
+- 掌握偏应用：固定部分参数生成新函数
+- 能推导柯里化函数的类型签名 `Func<T1, Func<T2, TResult>>`
+- 能回答：柯里化和偏应用有什么区别？各自适合什么场景？
+
+</Objectives>
+
+## 直觉引入
+
+想象一台咖啡机。你可以一次性投入「咖啡粉 + 糖 + 奶」做出一杯拿铁，也可以把机器设计成三步：先放咖啡粉（得到一个「半成品」），再加糖（得到更接近成品的「半成品」），最后加奶（得到成品）。每一步只加一种原料，中间状态都是一个可复用的「半成品」。
+
+柯里化就是这个思路：把一个需要三个参数的函数，拆成三个只需要一个参数的函数，串成一条链。每传一个参数，就得到一个「更接近成品」的新函数。传完所有参数，才得到最终结果。
+
+偏应用则是另一种用法：提前固定部分参数，生成一个只需要剩余参数的新函数。就像你预设了「加两勺糖」的咖啡机，以后每次只需按一下就能出固定的半成品。
+
+## 概念讲解
+
+### 柯里化
+
+<Term def="柯里化（Currying）是把接受多个参数的函数转化为一系列接受单个参数的函数的过程。f(a, b, c) 转化为 f(a)(b)(c)——先接受 a 返回一个函数，该函数接受 b 返回另一个函数，最终接受 c 返回结果。">
+
+多参数函数 `Func<int, int, int> Add = (a, b) => a + b`，调用 `Add(3, 4)` 返回 7。柯里化后变成 `Func<int, Func<int, int>> CurriedAdd = a => b => a + b`，调用 `CurriedAdd(3)(4)` 返回 7。类型从 `Func<T1, T2, TResult>` 变成 `Func<T1, Func<T2, TResult>>`。
+
+C# 原生不支持自动柯里化（F# 原生支持），需要手写嵌套 Lambda 或用库函数实现。
+
+</Term>
+
+### 偏应用
+
+<Term def="偏应用（Partial Application）是固定一个函数的部分参数，生成一个只需要剩余参数的新函数。与柯里化不同，偏应用可以固定任意位置的参数，且不要求逐个固定。">
+
+```csharp
+Func<int, int, int> Add = (a, b) => a + b;
+Func<int, int> Add10 = b => Add(10, b);  // 固定 a=10，只需 b
+Console.WriteLine(Add10(5));  // 15
+```
+
+偏应用通过闭包实现：外层 Lambda 捕获了固定参数，内层 Lambda 接收剩余参数。
+
+</Term>
+
+### 柯里化 vs 偏应用
+
+两者都生成新函数，但机制不同：**柯里化**是把多参数函数拆成单参数链（结构变换），**偏应用**是固定部分参数（值绑定）。柯里化是偏应用的基础——柯里化后逐个传参，每传一个就是一次偏应用。
+
+## 交互Demo
+
+<CfpCurryingDiagram />
+
+<Stepper>
+
+<Step title="柯里化：拆参数链">
+
+`Add(a, b)` 柯里化为 `CurriedAdd(a)(b)`。类型从 `Func<int, int, int>` 变成 `Func<int, Func<int, int>>`——外层接受 a，返回一个接受 b 的函数。`CurriedAdd(3)` 返回 `b => 3 + b`，再传 `4` 得到 7。每次只传一个参数，中间状态是可复用的函数。
+
+</Step>
+
+<Step title="偏应用：固定参数">
+
+`Add(a, b)` 偏应用固定 `a=3`，生成 `Add3 = b => Add(3, b)`。`Add3` 只需一个参数，`Add3(4)` = 7。偏应用通过闭包实现——外层捕获固定值 3，内层接收剩余参数。偏应用可以固定任意参数位置，不限于从左到右。
+
+</Step>
+
+<Step title="函数复用">
+
+柯里化和偏应用的核心价值是**函数复用**。`Add10 = b => Add(10, b)` 生成一个「加 10」的函数，可以在多处复用。`Multiply = a => b => a * b` 柯里化后，`Double = Multiply(2)`、`Triple = Multiply(3)` 生成多个专用函数。把通用函数特化为专用函数，减少重复代码。
+
+</Step>
+
+<Step title="与高阶函数结合">
+
+柯里化函数可以与 LINQ 管道结合。`Func<int, Func<int, int>> Multiply = a => b => a * b`，`nums.Select(Multiply(2))` 把每个元素乘以 2。`Multiply(2)` 返回 `b => 2 * b`，作为 `Select` 的参数。柯里化让多参数函数能直接传入需要单参数函数的位置。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 柯里化与偏应用
+
+// === 多参数函数 ===
+Func<int, int, int> Add = (a, b) => a + b;
+Console.WriteLine(Add(3, 4));  // 7
+
+// === 柯里化：手写 ===
+Func<int, Func<int, int>> CurriedAdd = a => b => a + b;
+Console.WriteLine(CurriedAdd(3)(4));  // 7
+
+var add3 = CurriedAdd(3);  // 返回 b => 3 + b
+Console.WriteLine(add3(4));  // 7
+
+// === 偏应用：闭包实现 ===
+Func<int, int> Add10 = b => Add(10, b);
+Console.WriteLine(Add10(5));  // 15
+
+// 固定不同参数位置
+Func<int, int, string> Format = (prefix, num) => $"{prefix}-{num}";
+Func<int, string> FormatItem = num => Format("Item", num);  // 固定前缀
+Console.WriteLine(FormatItem(42));  // "Item-42"
+
+// === 柯里化三参数函数 ===
+Func<int, Func<int, Func<int, int>>> CurriedAdd3 =
+    a => b => c => a + b + c;
+Console.WriteLine(CurriedAdd3(1)(2)(3));  // 6
+
+var add1 = CurriedAdd3(1);
+var add1and2 = add1(2);
+Console.WriteLine(add1and2(3));  // 6
+
+// === 与 LINQ 结合 ===
+Func<int, Func<int, int>> Multiply = a => b => a * b;
+int[] nums = { 1, 2, 3, 4, 5 };
+
+var doubled = nums.Select(Multiply(2)).ToArray();    // { 2, 4, 6, 8, 10 }
+var tripled = nums.Select(Multiply(3)).ToArray();    // { 3, 6, 9, 12, 15 }
+
+// === 通用柯里化辅助函数 ===
+Func<T, Func<U, V>> Curry<T, U, V>(Func<T, U, V> f) => a => b => f(a, b);
+Func<T1, Func<T2, Func<T3, R>>> Curry3<T1, T2, T3, R>(Func<T1, T2, T3, R> f) =>
+    a => b => c => f(a, b, c);
+
+var curriedAdd = Curry(Add);
+Console.WriteLine(curriedAdd(3)(4));  // 7
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：柯里化和偏应用是同一个东西**
+
+柯里化是**结构变换**——把 `Func<T1, T2, R>` 变成 `Func<T1, Func<T2, R>>`，不固定任何参数值。偏应用是**值绑定**——固定 `T1` 的值为某个具体值，生成 `Func<T2, R>`。柯里化是偏应用的基础：柯里化后传第一个参数，就是一次偏应用。但偏应用不需要先柯里化——直接用闭包固定参数即可。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：C# 应该像 F# 一样自动柯里化**
+
+F# 原生支持柯里化——所有多参数函数自动是柯里化的。但 C# 的 `Func<T1, T2, R>` 是一个真正的多参数委托，不是嵌套单参数函数。C# 这样设计是因为：1) 多参数委托调用更高效（一次调用 vs 嵌套调用）；2) 与 .NET 类型系统兼容（CLR 方法是多参数的）；3) C# 是多范式语言，不强制函数式风格。在 C# 中柯里化是可选的工具，不是默认行为。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：偏应用只是为了少写参数**
+
+偏应用的核心价值是**函数复用和配置注入**。`var add10 = Partial(Add, 10)` 不是为了少写一个参数，而是生成一个语义明确的专用函数「加10」。这在函数式管道中尤其有用——`nums.Select(add10)` 比 `nums.Select(x => x + 10)` 更可读（有名字），且 `add10` 可以在多处复用。偏应用把「配置」和「执行」分离，先配置（固定参数），后执行（传剩余参数）。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：请把三参数函数 `Func<int, int, int, int> F = (a, b, c) => a * b + c` 柯里化，并用偏应用生成一个「先乘 2 再加 3」的函数。
+
+<Answer>
+
+```csharp
+// 原始函数
+Func<int, int, int, int> F = (a, b, c) => a * b + c;
+
+// 柯里化
+Func<int, Func<int, Func<int, int>>> CurriedF =
+    a => b => c => a * b + c;
+
+// 偏应用：固定 a=2, b=3 → 先乘 2 再加 3
+var mul2add3 = CurriedF(2)(3);  // c => 2 * 3 + c = 6 + c
+Console.WriteLine(mul2add3(10));  // 16：2*3+10 = 16
+
+// 也可以用闭包直接偏应用（不柯里化）
+Func<int, int> mul2add3Direct = c => F(2, 3, c);
+Console.WriteLine(mul2add3Direct(10));  // 16
+```
+
+柯里化后 `CurriedF(2)(3)` 返回 `c => 2*3+c`，这是一个只需要 c 的函数。偏应用把三参数函数特化为单参数函数。
+
+</Answer>
+
+**问题 2**：柯里化和偏应用有什么本质区别？在什么场景下你会选择偏应用而非柯里化？
+
+<Answer>
+
+本质区别：
+- **柯里化**是结构变换——把 `Func<T1,T2,R>` 变成 `Func<T1,Func<T2,R>>`，不涉及具体值。它是数学上的函数变换。
+- **偏应用**是值绑定——固定某些参数的值为具体值，生成需要剩余参数的新函数。它是工程上的函数复用。
+
+选择偏应用的场景：
+1. **只需固定部分参数**——不需要把整个函数柯里化，只需固定一两个参数生成专用函数。如 `Add10 = b => Add(10, b)`。
+2. **固定非首个参数**——柯里化通常从左到右逐个固定，偏应用可以固定任意位置。如 `Func<int,int> FromSecond = a => Add(a, 100)` 固定了第二个参数。
+3. **C# 工程实践**——C# 不原生支持柯里化，手写柯里化增加代码复杂度。偏应用用闭包一行搞定，更自然。
+4. **与现有 API 集成**——.NET 的 `Func<T1,T2,R>` 是多参数委托，偏应用直接在此基础上工作，不需要转换。
+
+柯里化更适合纯函数式语言（F#、Haskell），偏应用更适合 C# 的工程实践。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="柯里化（Currying）">
+
+把接受多个参数的函数转化为一系列接受单个参数的函数。`f(a, b, c)` 转化为 `f(a)(b)(c)`。类型从 `Func<T1, T2, T3, R>` 变成 `Func<T1, Func<T2, Func<T3, R>>>`。C# 原生不支持自动柯里化，需手写嵌套 Lambda。
+
+</GlossaryItem>
+
+<GlossaryItem term="偏应用（Partial Application）">
+
+固定函数的部分参数，生成需要剩余参数的新函数。通过闭包实现：外层捕获固定值，内层接收剩余参数。不需要先柯里化，可以固定任意位置的参数。
+
+</GlossaryItem>
+
+<GlossaryItem term="闭包（Closure）">
+
+携带了外部变量引用的函数。偏应用通过闭包实现——`b => Add(10, b)` 捕获了 `10`。C# 按引用捕获，闭包延长被捕获变量的生命周期。
+
+</GlossaryItem>
+
+<GlossaryItem term="函数复用">
+
+柯里化和偏应用的核心价值。通过固定部分参数，把通用函数特化为专用函数。如 `Multiply(2)` 生成「乘2」函数，`Multiply(3)` 生成「乘3」函数，减少重复代码。
+
+</GlossaryItem>
+
+</Glossary>

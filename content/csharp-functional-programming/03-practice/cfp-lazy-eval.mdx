@@ -1,0 +1,291 @@
+---
+title: "延迟求值"
+type: C
+section: "函数式实践"
+order: 1
+description: "yield 迭代器、IEnumerable 延迟执行与 LINQ 管道融合的实践应用。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CfpLazyEvalDiagram } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-lazy-eval";
+
+<Objectives>
+
+- 理解延迟求值的含义：构建管道时不执行，迭代时按需计算
+- 掌握 `yield return` 迭代器与 `IEnumerable<T>` 的延迟机制
+- 能推导 LINQ 管道融合的执行流程（无中间集合）
+- 能回答：延迟求值为什么能处理无限序列？有什么陷阱？
+
+</Objectives>
+
+## 直觉引入
+
+想象你在自助餐厅取餐。立即求值像你一次性把所有菜品端到桌上——不管吃不吃得完，先全部做好摆出来。延迟求值像你按需取餐——想吃牛排就让厨师现做，吃完再取下一道。厨师不需要一次做 100 份，每次只做一份。
+
+C# 的 LINQ 默认是延迟求值。`nums.Where(x => x > 2).Select(x => x * 2)` 构建管道时不会执行任何计算——它只是返回一个 `IEnumerable<int>` 迭代器。只有当你迭代它（foreach、ToList、Sum 等）时，数据才像流水一样穿过 Where 和 Select，一次一个元素地计算。
+
+这意味着：1）没有中间集合——Where 的输出直接喂给 Select，不生成临时数组；2）可以处理无限序列——`Enumerable.Range(1, int.MaxValue).Where(...).Take(10)` 只计算前 10 个；3）构建和执行分离——你可以先把管道存起来，稍后多次迭代。
+
+## 概念讲解
+
+### yield return 与迭代器
+
+<Term def="yield return 是 C# 的迭代器语法，让方法返回 IEnumerable<T> 但延迟执行。调用 yield return 的方法不会立即执行方法体——它返回一个迭代器对象，每次调用 MoveNext 才执行到下一个 yield return。这是延迟求值的底层机制。">
+
+```csharp
+IEnumerable<int> Naturals()
+{
+    int n = 1;
+    while (true)
+        yield return n++;  // 无限序列，按需产出
+}
+
+var first5 = Naturals().Take(5).ToArray();  // [1, 2, 3, 4, 5]
+```
+
+`yield return` 让方法变成状态机：编译器生成一个迭代器类，`MoveNext` 推进到下一个 yield。调用 `Naturals()` 不会执行方法体——它只是创建迭代器。`Take(5)` 也返回迭代器。只有 `ToArray()` 触发迭代，才真正执行。
+
+</Term>
+
+### IEnumerable 的延迟执行
+
+<Term def="IEnumerable<T> 是 C# 延迟求值的载体。LINQ 方法（Where、Select、OrderBy 等）返回 IEnumerable<T> 迭代器，不立即执行。只有「终端操作」（foreach、ToList、ToArray、Sum、Count 等）触发迭代时才真正计算。这叫做延迟执行（Deferred Execution）。">
+
+```csharp
+var query = nums.Where(x => x > 2).Select(x => x * 2);
+// query 是 IEnumerable<int> 迭代器，尚未执行
+var list = query.ToList();  // 触发迭代，执行计算
+```
+
+延迟执行的关键：`query` 是一个「配方」——描述如何过滤和映射，但不包含结果。每次迭代 `query` 都重新计算。如果源数据在两次迭代之间被修改，结果会不同。
+
+</Term>
+
+### 管道融合
+
+延迟执行让多个 LINQ 操作「融合」成一次迭代——没有中间集合。`Where(...).Select(...)` 不会先过滤生成临时数组再映射，而是在一次迭代中，每个元素先经过 Where 判断，通过后立即经过 Select 转换，直接产出。
+
+## 交互Demo
+
+<CfpLazyEvalDiagram />
+
+<Stepper>
+
+<Step title="立即求值：中间集合">
+
+`nums.Where(x => x > 2).ToList().Select(x => x * 2).ToList()` 是立即求值——每步 `ToList()` 触发执行，生成中间集合 `[3,4,5]`，再映射为 `[6,8,10]`。两步执行，两个临时集合，全量计算。如果源数据有 100 万元素，即使最终只需要前 10 个，也会全部计算。
+
+</Step>
+
+<Step title="延迟求值：管道融合">
+
+`nums.Where(x => x > 2).Select(x => x * 2)` 是延迟求值——构建管道时不执行。迭代时，取 1→Where 不满足→取 2→不满足→取 3→满足→Select 得 6→产出 6→取 4→满足→Select 得 8→产出 8...一次迭代，无中间集合，元素逐个流过管道。
+
+</Step>
+
+<Step title="无限序列">
+
+`Enumerable.Range(1, int.MaxValue).Where(x => x % 7 == 0).Take(3)` 处理无限序列。Range 是无限流，Where 过滤 7 的倍数，Take(3) 只取前 3 个。延迟执行保证只有需要的元素被计算——找到 3 个 7 的倍数（7, 14, 21）后停止，不会无限循环。
+
+</Step>
+
+<Step title="构建与执行分离">
+
+`var query = nums.Where(x => x > 2).Select(x => x * 2);` 构建管道，不执行。`query.ToList()` 第一次迭代执行。`query.Sum()` 第二次迭代重新执行。每次迭代都重新计算——如果 nums 被修改，不同迭代的结果可能不同。需要缓存结果时用 `ToList()` 或 `ToArray()`。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 延迟求值实践
+
+// === yield return：自定义延迟序列 ===
+IEnumerable<int> Fibonacci()
+{
+    int a = 0, b = 1;
+    while (true)
+    {
+        yield return a;
+        (a, b) = (b, a + b);
+    }
+}
+
+// 取前 10 个斐波那契数
+var fib10 = Fibonacci().Take(10).ToArray();
+// [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
+
+// === 延迟执行 vs 立即执行 ===
+int[] nums = { 1, 2, 3, 4, 5 };
+
+// 延迟：query 是迭代器，不执行
+var query = nums
+    .Where(x => { Console.WriteLine($"Where: {x}"); return x > 2; })
+    .Select(x => { Console.WriteLine($"Select: {x}"); return x * 2; });
+
+Console.WriteLine("管道已构建，尚未执行");
+// 输出：管道已构建，尚未执行（没有 Where/Select 输出）
+
+var result = query.ToList();
+// 输出：Where: 1, Where: 2, Where: 3, Select: 3, Where: 4, Select: 4, Where: 5, Select: 5
+// 注意：Where 和 Select 交替执行——管道融合
+
+// === 多次迭代重新计算 ===
+var sum = query.Sum();    // 重新迭代：Where+Select 再次执行
+var count = query.Count(); // 再次迭代
+
+// 缓存结果避免重复计算
+var cached = query.ToList();  // 迭代一次，缓存
+var sum2 = cached.Sum();      // 从缓存计算，不重新迭代
+var count2 = cached.Count();  // 从缓存计算
+
+// === 管道融合 vs 中间集合 ===
+// 融合（延迟）：一次迭代
+var fused = nums.Where(x => x > 2).Select(x => x * 2).Sum();
+
+// 中间集合（立即）：三次迭代 + 两个临时数组
+var intermediate1 = nums.Where(x => x > 2).ToArray();  // 第一次迭代
+var intermediate2 = intermediate1.Select(x => x * 2).ToArray();  // 第二次迭代
+var sum3 = intermediate2.Sum();  // 第三次迭代
+
+// === 无限序列 + 终止操作 ===
+var first10Squares = Enumerable.Range(1, int.MaxValue)
+    .Select(x => x * x)
+    .Take(10)
+    .ToArray();  // [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+
+// === 副作用陷阱 ===
+int counter = 0;
+var sideEffectQuery = nums.Select(x => { counter++; return x * 2; });
+// counter 此时是 0——未迭代
+var r = sideEffectQuery.ToList();
+// counter 此时是 5——迭代了 5 次
+var r2 = sideEffectQuery.ToList();
+// counter 此时是 10——又迭代了 5 次！
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：LINQ 方法都会立即执行**
+
+LINQ 方法分两类：**延迟方法**（Where、Select、OrderBy、Skip、Take、Distinct 等）返回 `IEnumerable<T>` 迭代器，不立即执行；**立即方法**（ToList、ToArray、Sum、Count、First、Any、All、Contains 等）触发迭代，立即执行。`Where` 返回迭代器是延迟的，`ToList()` 返回 List 是立即的。混淆两者会导致意外的执行时机——你以为没执行但已经执行了，或你以为执行了但还没执行。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：多次迭代同一个 query 不重新计算**
+
+延迟执行的 query 每次 foreach/ToList/Sum 都重新迭代源数据。如果源数据是数据库查询或复杂计算，多次迭代会重复执行，性能灾难。此外，如果源数据在两次迭代之间被修改，结果会不同——这是隐含的时序耦合。需要缓存结果时，用 `ToList()` 或 `ToArray()` 物化一次，后续操作在缓存上进行。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：延迟执行总能提升性能**
+
+延迟执行消除中间集合，在大多数场景下提升性能。但有例外：1）多次迭代的 query 比缓存 List 慢——每次重新计算；2）延迟执行无法利用 SIMD 等向量化优化——`List<T>` 的连续内存布局更友好；3）迭代器有方法调用开销——极热路径上手写循环可能更快。在 profiling 指导下选择——不要盲目假设延迟执行更快。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？解释延迟执行的执行顺序。
+
+```csharp
+var nums = new List<int> { 1, 2, 3 };
+var query = nums.Select(x => { Console.Write($"{x} "); return x * 2; });
+nums.Add(4);
+var result = query.ToList();
+```
+
+<Answer>
+
+输出：`1 2 3 4 `
+
+执行顺序：
+1. `nums.Select(...)` 构建延迟迭代器，不执行——此时没有输出
+2. `nums.Add(4)` 修改源列表——此时 nums 是 [1,2,3,4]
+3. `query.ToList()` 触发迭代——迭代的是**当前的** nums（[1,2,3,4]），不是构建时的 nums（[1,2,3]）
+4. 输出 `1 2 3 4`——4 个元素都经过 Select
+
+关键点：延迟执行捕获的是数据源的**引用**，不是快照。迭代时使用的是源数据的当前状态。如果源在构建后修改，迭代结果会反映修改。这是延迟执行的「陷阱」——query 不是不可变的快照，而是「活」的配方。
+
+</Answer>
+
+**问题 2**：请用 `yield return` 实现一个 `TakeWhile` 方法：从序列开头取元素，直到谓词返回 false 为止。
+
+<Answer>
+
+```csharp
+IEnumerable<T> MyTakeWhile<T>(IEnumerable<T> source, Func<T, bool> predicate)
+{
+    foreach (var item in source)
+    {
+        if (!predicate(item))
+            yield break;  // 谓词不满足，停止迭代
+        yield return item;  // 谓词满足，产出元素
+    }
+}
+
+// 使用
+int[] nums = { 1, 2, 3, 4, 1, 2 };
+var result = MyTakeWhile(nums, x => x < 4).ToArray();
+// [1, 2, 3]——遇到 4 时停止，后面的 1, 2 不取
+
+// 与 Where 的区别：
+// Where(nums, x => x < 4) = [1, 2, 3, 1, 2]——过滤所有不满足的
+// TakeWhile(nums, x => x < 4) = [1, 2, 3]——遇到第一个不满足就停止
+```
+
+关键点：
+1. `yield return item` 产出元素，迭代器暂停在此处
+2. `yield break` 终止迭代，后续元素不再处理
+3. `MyTakeWhile` 是延迟的——调用时不执行，迭代时才执行
+4. `yield break` 让无限序列可以提前终止——`Naturals().TakeWhile(x => x < 100)` 在 x >= 100 时停止
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="yield return">
+
+C# 迭代器语法，让方法返回 `IEnumerable<T>` 但延迟执行。编译器生成状态机，每次 `MoveNext` 推进到下一个 yield。`yield return` 产出值，`yield break` 终止迭代。是延迟求值的底层机制。
+
+</GlossaryItem>
+
+<GlossaryItem term="延迟执行（Deferred Execution）">
+
+LINQ 方法返回 `IEnumerable<T>` 迭代器时不立即执行，只有终端操作（foreach、ToList、Sum 等）触发迭代时才计算。构建和执行分离——query 是「配方」不是「结果」。
+
+</GlossaryItem>
+
+<GlossaryItem term="管道融合（Pipeline Fusion）">
+
+延迟执行让多个 LINQ 操作融合成一次迭代——无中间集合。`Where(...).Select(...)` 在一次迭代中，每个元素先过滤再映射，直接产出。消除了中间集合的内存分配和多次遍历。
+
+</GlossaryItem>
+
+<GlossaryItem term="终端操作">
+
+触发迭代并产生结果的操作：`ToList`、`ToArray`、`Sum`、`Count`、`First`、`Any`、`All`、`Contains` 等。与之相对的是延迟操作（Where、Select、OrderBy 等），它们只构建管道不执行。
+
+</GlossaryItem>
+
+<GlossaryItem term="物化（Materialization）">
+
+用 `ToList()` 或 `ToArray()` 把延迟迭代器转为具体集合，缓存结果。避免多次迭代重复计算，或防止源数据修改影响结果。物化后不再延迟——数据已经在内存中。
+
+</GlossaryItem>
+
+</Glossary>

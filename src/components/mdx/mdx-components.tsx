@@ -993,6 +993,36 @@ import { DcsAsyncInternalsDiagram } from "./deep-understanding-csharp/diagrams/d
 import { DcsPatternMatchingDiagram } from "./deep-understanding-csharp/diagrams/dcs-pattern-matching";
 import { DcsRecordsTuplesDiagram } from "./deep-understanding-csharp/diagrams/dcs-records-tuples";
 import { DcsFinalReviewDiagram } from "./deep-understanding-csharp/diagrams/dcs-final-review";
+import { CfpLearningMapDiagram } from "./csharp-functional-programming/diagrams/cfp-learning-map";
+import { CfpFunctionsFirstDiagram } from "./csharp-functional-programming/diagrams/cfp-functions-first";
+import { CfpHigherOrderDiagram } from "./csharp-functional-programming/diagrams/cfp-higher-order";
+import { CfpCurryingDiagram } from "./csharp-functional-programming/diagrams/cfp-currying";
+import { CfpImmutableDataDiagram } from "./csharp-functional-programming/diagrams/cfp-immutable-data";
+import { CfpPatternMatchingFpDiagram } from "./csharp-functional-programming/diagrams/cfp-pattern-matching-fp";
+import { CfpLazyEvalDiagram } from "./csharp-functional-programming/diagrams/cfp-lazy-eval";
+import { CfpMonadsDiagram } from "./csharp-functional-programming/diagrams/cfp-monads";
+import { CfpErrorHandlingFpDiagram } from "./csharp-functional-programming/diagrams/cfp-error-handling-fp";
+import { CfpFinalReviewDiagram } from "./csharp-functional-programming/diagrams/cfp-final-review";
+import { CtcLearningMapDiagram } from "./csharp-10-core/diagrams/ctc-learning-map";
+import { CtcTypesOverviewDiagram } from "./csharp-10-core/diagrams/ctc-types-overview";
+import { CtcGenericsDeepDiagram } from "./csharp-10-core/diagrams/ctc-generics-deep";
+import { CtcDelegatesEventsDiagram } from "./csharp-10-core/diagrams/ctc-delegates-events";
+import { CtcAsyncDeepDiagram } from "./csharp-10-core/diagrams/ctc-async-deep";
+import { CtcParallelTplDiagram } from "./csharp-10-core/diagrams/ctc-parallel-tpl";
+import { CtcPatternsDiagram } from "./csharp-10-core/diagrams/ctc-patterns";
+import { CtcRecordsStructsDiagram } from "./csharp-10-core/diagrams/ctc-records-structs";
+import { CtcSourceGeneratorsDiagram } from "./csharp-10-core/diagrams/ctc-source-generators";
+import { CtcFinalReviewDiagram } from "./csharp-10-core/diagrams/ctc-final-review";
+import { CvcLearningMapDiagram } from "./clr-via-csharp/diagrams/cvc-learning-map";
+import { CvcClrExecutionDiagram } from "./clr-via-csharp/diagrams/cvc-clr-execution";
+import { CvcTypeFundamentalsDiagram } from "./clr-via-csharp/diagrams/cvc-type-fundamentals";
+import { CvcInterfacesDesignDiagram } from "./clr-via-csharp/diagrams/cvc-interfaces-design";
+import { CvcValueReferenceDiagram } from "./clr-via-csharp/diagrams/cvc-value-reference";
+import { CvcGcMemoryDiagram } from "./clr-via-csharp/diagrams/cvc-gc-memory";
+import { CvcExceptionHandlingDiagram } from "./clr-via-csharp/diagrams/cvc-exception-handling";
+import { CvcAsyncClrDiagram } from "./clr-via-csharp/diagrams/cvc-async-clr";
+import { CvcReflectionAttributesDiagram } from "./clr-via-csharp/diagrams/cvc-reflection-attributes";
+import { CvcFinalReviewDiagram } from "./clr-via-csharp/diagrams/cvc-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -2266,6 +2296,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DcsPatternMatchingDiagram,
   DcsRecordsTuplesDiagram,
   DcsFinalReviewDiagram,
+  CfpLearningMapDiagram,
+  CfpFunctionsFirstDiagram,
+  CfpHigherOrderDiagram,
+  CfpCurryingDiagram,
+  CfpImmutableDataDiagram,
+  CfpPatternMatchingFpDiagram,
+  CfpLazyEvalDiagram,
+  CfpMonadsDiagram,
+  CfpErrorHandlingFpDiagram,
+  CfpFinalReviewDiagram,
+  CtcLearningMapDiagram,
+  CtcTypesOverviewDiagram,
+  CtcGenericsDeepDiagram,
+  CtcDelegatesEventsDiagram,
+  CtcAsyncDeepDiagram,
+  CtcParallelTplDiagram,
+  CtcPatternsDiagram,
+  CtcRecordsStructsDiagram,
+  CtcSourceGeneratorsDiagram,
+  CtcFinalReviewDiagram,
+  CvcLearningMapDiagram,
+  CvcClrExecutionDiagram,
+  CvcTypeFundamentalsDiagram,
+  CvcInterfacesDesignDiagram,
+  CvcValueReferenceDiagram,
+  CvcGcMemoryDiagram,
+  CvcExceptionHandlingDiagram,
+  CvcAsyncClrDiagram,
+  CvcReflectionAttributesDiagram,
+  CvcFinalReviewDiagram,
   Term,
   Glossary,
   GlossaryItem,

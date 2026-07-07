@@ -107,6 +107,9 @@ export const BOOK_ORDER = [
   "csharp-quality-code",
   "effective-csharp",
   "deep-understanding-csharp",
+  "csharp-functional-programming",
+  "csharp-10-core",
+  "clr-via-csharp",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -155,6 +158,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "csharp-quality-code": "编写高质量代码：改善 C# 程序的 157 个建议",
   "effective-csharp": "Effective C#",
   "deep-understanding-csharp": "深入理解 C#",
+  "csharp-functional-programming": "C# 函数式编程",
+  "csharp-10-core": "C# 10 核心技术指南",
+  "clr-via-csharp": "CLR via C#",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -755,6 +761,21 @@ export const SECTION_ORDER = [
   "语言核心",
   "动态并发",
   "现代特性",
+  // C# 函数式编程
+  "函数式基础",
+  "高阶函数",
+  "不可变性",
+  "函数式实践",
+  // C# 10 核心技术指南
+  "语言核心C10",
+  "类型系统C10",
+  "异步并发C10",
+  "现代C#",
+  // CLR via C#
+  "CLR基础",
+  "类型设计",
+  "内存GC",
+  "高级CLR",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

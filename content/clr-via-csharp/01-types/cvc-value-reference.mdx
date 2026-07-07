@@ -1,0 +1,237 @@
+---
+title: "值类型与引用类型"
+type: B
+section: "类型设计"
+order: 3
+description: "CLR 值类型与引用类型的内存布局差异、装箱拆箱机制与类型选择策略。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CvcValueReferenceDiagram } from "@/components/mdx/clr-via-csharp/diagrams/cvc-value-reference";
+
+<Objectives>
+
+- 能推导值类型与引用类型在内存布局上的差异（栈 vs 堆）
+- 能解释装箱（Boxing）的内存代价与触发条件
+- 能回答：什么时候该用 struct，什么时候该用 class？
+
+</Objectives>
+
+## 直觉引入
+
+想象你有一张名片。如果你把名片直接递给别人，别人拿到的就是名片本身——改了别人的也改不了你的。这是**值类型**：复制值，各自独立。
+
+如果你给别人一个保险箱的钥匙，别人用钥匙打开的是同一个保险箱——两边看到的是同一份内容。这是**引用类型**：共享引用，指向同一块内存。
+
+CLR 中 `int`、`struct` 是值类型——赋值时复制整个值。`class`、`string`、`数组` 是引用类型——赋值时只复制地址指针。这个差异决定了内存分配位置、GC 管理方式、方法传参行为。
+
+不理解这个差异，你会在热路径上意外装箱——把一个 `int` 塞进 `ArrayList`，每次都产生一个堆上的 `object` 包装，GC 压力暴增。
+
+## 概念讲解
+
+### 值类型：栈上分配
+
+<Term def="值类型（Value Type）是直接存储数据的类型，继承自 System.ValueType。赋值时复制整个值，通常分配在线程栈上（除非作为引用类型的字段或被装箱）。">
+
+值类型包括 `int`、`double`、`bool`、`enum`、`struct` 等。值类型的变量直接包含数据——赋值时复制整个值，两份独立。值类型通常分配在线程栈上，方法返回时自动释放，不经过 GC。例外情况：值类型作为引用类型的字段时分配在堆上；值类型被装箱时在堆上创建副本。
+
+</Term>
+
+### 引用类型：堆上分配
+
+<Term def="引用类型（Reference Type）存储对数据的引用（地址指针），数据本身在 GC 堆上。赋值时复制引用，两个变量指向同一份数据。">
+
+引用类型包括 `class`、`string`、`array`、`delegate`、`interface` 等。引用类型的变量存储的是地址指针，指向 GC 堆上的实际数据。赋值时只复制指针——两个变量指向同一份数据。引用类型由 GC 管理生命周期，GC 在适当时候回收不再被引用的对象。
+
+</Term>
+
+### 装箱与拆箱
+
+<Term def="装箱（Boxing）是将值类型转换为引用类型（object 或接口）的操作，在堆上创建一个包含值类型数据的对象。拆箱（Unboxing）是逆操作。">
+
+当值类型需要被当作引用类型使用时（如放入 `ArrayList`、传给 `object` 参数），CLR 执行装箱：在 GC 堆上分配内存，复制值类型数据，返回堆对象的引用。拆箱是逆操作——从堆对象中提取值类型数据。装箱和拆箱都有性能代价——装箱涉及堆分配（增加 GC 压力），拆箱涉及类型检查和复制。
+
+## 交互Demo
+
+<CvcValueReferenceDiagram />
+
+<Stepper>
+
+<Step title="值类型：栈上直接存储">
+
+`int a = 42; int b = a;` 后，栈上有两个独立的 42。修改 `b = 99` 不影响 `a`——它们是两份独立的拷贝。值类型不需要类型指针（编译期类型已知），不经过 GC，方法返回时栈帧弹出自动释放。`struct Point { int X, Y; }` 也是值类型——赋值时复制 X 和 Y。
+
+</Step>
+
+<Step title="引用类型：堆上存储，栈上存指针">
+
+`Dog d1 = new Dog(); Dog d2 = d1;` 后，栈上 d1 和 d2 各存一个指针，都指向 GC 堆上的同一个 Dog 对象。修改 `d2.Name = "Rex"` 后 `d1.Name` 也是 "Rex"——它们是同一个对象。引用类型由 GC 管理生命周期——当所有引用都消失后，GC 回收堆上的对象。
+
+</Step>
+
+<Step title="装箱：值类型 → 引用类型">
+
+`ArrayList list = new(); list.Add(42);` 中，`Add` 接受 `object` 参数。`int` 是值类型，不能直接赋给 `object`——CLR 执行装箱：在 GC 堆上分配一个 `object`，把 42 复制进去，返回堆引用。每次 `Add` 都装箱一次——产生大量临时堆对象，增加 GC 压力。泛型 `List<int>` 避免了装箱——`int` 直接存在数组中。
+
+</Step>
+
+<Step title="struct vs class：如何选择">
+
+选择 struct 的条件：1. 类型小（< 16 字节）。2. 不可变（readonly struct）。3. 值语义合理——赋值应该复制而非共享。4. 不会被频繁装箱。满足全部条件用 struct（如 `Point`、`DateTime`），否则用 class。错误的 struct 选择比 class 更危险——大 struct 的频繁复制和意外装箱会拖垮性能。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 值类型 vs 引用类型的内存差异
+
+// === 值类型：赋值复制值 ===
+struct Point  // struct = 值类型
+{
+    public int X, Y;
+    public Point(int x, int y) { X = x; Y = y; }
+}
+
+Point p1 = new Point(1, 2);
+Point p2 = p1;        // 复制整个值（X 和 Y 各复制一份）
+p2.X = 99;
+Console.WriteLine(p1.X);  // 1（p1 不受影响）
+
+// === 引用类型：赋值复制引用 ===
+class DogBox  // class = 引用类型
+{
+    public string Name;
+    public DogBox(string name) { Name = name; }
+}
+
+DogBox d1 = new DogBox("Rex");
+DogBox d2 = d1;        // 只复制引用（指针）
+d2.Name = "Max";
+Console.WriteLine(d1.Name);  // Max（d1 和 d2 指向同一个对象）
+
+// === 装箱的代价 ===
+ArrayList list = new ArrayList();
+for (int i = 0; i < 1000; i++)
+{
+    list.Add(i);  // 每次都装箱！1000 次堆分配
+}
+
+// 泛型避免装箱
+List<int> genericList = new List<int>();
+for (int i = 0; i < 1000; i++)
+{
+    genericList.Add(i);  // 无装箱，int 直接存在数组中
+}
+```
+
+`struct Point` 赋值后 `p2.X = 99` 不影响 `p1`——值类型复制独立。`class DogBox` 赋值后 `d2.Name = "Max"` 影响 `d1`——引用类型共享同一对象。`ArrayList.Add(i)` 每次装箱，`List<int>.Add(i)` 无装箱。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：struct 总比 class 快因为不经过 GC**
+
+struct 的"快"有前提条件。大 struct（> 16 字节）的频繁复制可能比 class 的引用复制更慢——复制 100 字节的 struct 比复制 8 字节的指针慢得多。struct 作为方法参数时按值传递，每次调用都复制——大 struct 在热路径上是性能杀手。只对小的、不可变的类型用 struct。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：string 是值类型因为不可变**
+
+`string` 是引用类型（`class String`），分配在 GC 堆上。它表现得像值类型是因为不可变——每次修改都创建新对象，所以"看起来"像值复制。但 `string a = "hello"; string b = a;` 后 `a` 和 `b` 指向同一个堆对象（引用赋值）。不可变性使得共享引用是安全的——没有人能修改它，所以共享不共享无所谓。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：泛型只是为了类型安全**
+
+泛型不仅提供编译时类型安全，更重要的是**消除装箱**。`ArrayList` 存 `object`，`int` 放进去要装箱（堆分配 + 复制）。`List<int>` 存 `int`，直接在内部数组中，零装箱。在循环中存 100 万个 int，`ArrayList` 产生 100 万个临时堆对象（GC 压力巨大），`List<int>` 一个都没有。泛型是性能优化，不只是语法糖。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？解释原因。
+
+```csharp
+struct Point { public int X; }
+Point p1 = new Point { X = 1 };
+Point p2 = p1;
+p2.X = 2;
+Console.WriteLine(p1.X);
+```
+
+<Answer>
+
+输出 `1`。`Point` 是 `struct`（值类型），`p2 = p1` 复制整个值——p1 和 p2 是两个独立的 Point，各自有自己的 X 字段。修改 `p2.X = 2` 只改了 p2 的 X，p1 的 X 不受影响。\n\n如果 `Point` 是 `class`（引用类型），`p2 = p1` 只复制引用——p1 和 p2 指向同一个堆对象。修改 `p2.X = 2` 会同时影响 p1，输出会是 `2`。\n\n这就是值类型和引用类型的核心差异：值类型赋值复制数据，引用类型赋值复制引用。
+
+</Answer>
+
+**问题 2**：以下代码发生了多少次装箱？
+
+```csharp
+ArrayList list = new ArrayList();
+list.Add(1);
+list.Add(2);
+list.Add(3);
+int sum = 0;
+foreach (int x in list) sum += x;
+```
+
+<Answer>
+
+发生 **6 次**装箱。\n\n3 次 `Add`：`ArrayList.Add` 接受 `object` 参数。`int` 是值类型，每次 `Add` 都装箱——1→box, 2→box, 3→box，共 3 次装箱。\n\n3 次 `foreach` 拆箱：`foreach (int x in list)` 从 `ArrayList` 中取出 `object`，再拆箱为 `int`。每次迭代拆箱一次——共 3 次拆箱。\n\n注意：拆箱不叫"装箱"，但它也是从引用类型到值类型的转换操作，有类型检查开销。\n\n使用 `List<int>` 可以完全消除这些装箱/拆箱——`List<int>` 内部用 `int[]` 存储，`Add` 和 `foreach` 都是直接的 `int` 操作，零装箱。\n\n这就是泛型的核心性能价值：不仅是类型安全，更是消除装箱。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="值类型（Value Type）">
+
+直接存储数据的类型，继承自 `System.ValueType`。包括 `int`、`double`、`bool`、`enum`、`struct`。赋值时复制整个值，通常分配在线程栈上，不经过 GC。例外：作为引用类型字段时在堆上，被装箱时在堆上创建副本。
+
+</GlossaryItem>
+
+<GlossaryItem term="引用类型（Reference Type）">
+
+存储对数据的引用（地址指针）的类型。包括 `class`、`string`、`array`、`delegate`、`interface`。赋值时只复制指针，两个变量指向同一份堆数据。由 GC 管理生命周期——所有引用消失后 GC 回收。
+
+</GlossaryItem>
+
+<GlossaryItem term="装箱（Boxing）">
+
+将值类型转换为引用类型（`object` 或接口）的操作。CLR 在 GC 堆上分配内存，复制值类型数据，返回堆对象引用。装箱有堆分配代价——增加 GC 压力。泛型（`List<int>`）是消除装箱的主要手段。
+
+</GlossaryItem>
+
+<GlossaryItem term="拆箱（Unboxing）">
+
+将引用类型中的值类型数据提取出来的操作。拆箱需要类型检查（确认堆对象包含正确类型）和内存复制。比装箱开销小（不需要堆分配），但有类型检查开销。
+
+</GlossaryItem>
+
+<GlossaryItem term="栈（Stack）">
+
+线程栈，用于存储方法调用的局部变量和参数。值类型通常分配在栈上，方法返回时栈帧弹出自动释放。栈分配不需要 GC，速度极快。但栈空间有限（通常 1-4 MB），大对象不能放栈上。
+
+</GlossaryItem>
+
+<GlossaryItem term="GC 堆（Managed Heap）">
+
+CLR 管理的堆内存，用于存储引用类型对象和装箱后的值类型。由 GC 自动管理——分配对象时从堆上分配，不再被引用时由 GC 回收。堆空间远大于栈，但 GC 回收有性能开销。
+
+</GlossaryItem>
+
+</Glossary>

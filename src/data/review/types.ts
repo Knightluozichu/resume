@@ -682,7 +682,40 @@ export type ReviewChapterSlug =
   | "dcs-async-internals"
   | "dcs-pattern-matching"
   | "dcs-records-tuples"
-  | "dcs-final-review";
+  | "dcs-final-review"
+  // C# 函数式编程
+  | "cfp-learning-map"
+  | "cfp-functions-first"
+  | "cfp-higher-order"
+  | "cfp-currying"
+  | "cfp-immutable-data"
+  | "cfp-pattern-matching-fp"
+  | "cfp-lazy-eval"
+  | "cfp-monads"
+  | "cfp-error-handling-fp"
+  | "cfp-final-review"
+  // C# 10 核心技术指南
+  | "ctc-learning-map"
+  | "ctc-types-overview"
+  | "ctc-generics-deep"
+  | "ctc-delegates-events"
+  | "ctc-async-deep"
+  | "ctc-parallel-tpl"
+  | "ctc-patterns"
+  | "ctc-records-structs"
+  | "ctc-source-generators"
+  | "ctc-final-review"
+  // CLR via C#
+  | "cvc-learning-map"
+  | "cvc-clr-execution"
+  | "cvc-type-fundamentals"
+  | "cvc-interfaces-design"
+  | "cvc-value-reference"
+  | "cvc-gc-memory"
+  | "cvc-exception-handling"
+  | "cvc-async-clr"
+  | "cvc-reflection-attributes"
+  | "cvc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1369,6 +1402,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dcs-pattern-matching": "模式匹配",
   "dcs-records-tuples": "Record 与元组",
   "dcs-final-review": "总复习",
+  // C# 函数式编程
+  "cfp-learning-map": "学习地图",
+  "cfp-functions-first": "函数优先",
+  "cfp-higher-order": "高阶函数",
+  "cfp-currying": "柯里化与偏应用",
+  "cfp-immutable-data": "不可变数据",
+  "cfp-pattern-matching-fp": "函数式模式匹配",
+  "cfp-lazy-eval": "延迟求值",
+  "cfp-monads": "Monad 与链式",
+  "cfp-error-handling-fp": "函数式错误处理",
+  "cfp-final-review": "总复习",
+  // C# 10 核心技术指南
+  "ctc-learning-map": "学习地图",
+  "ctc-types-overview": "类型系统总览",
+  "ctc-generics-deep": "泛型深入",
+  "ctc-delegates-events": "委托与事件",
+  "ctc-async-deep": "异步深入",
+  "ctc-parallel-tpl": "并行与 TPL",
+  "ctc-patterns": "模式匹配",
+  "ctc-records-structs": "Record 与结构体",
+  "ctc-source-generators": "源生成器",
+  "ctc-final-review": "总复习",
+  // CLR via C#
+  "cvc-learning-map": "学习地图",
+  "cvc-clr-execution": "CLR 执行模型",
+  "cvc-type-fundamentals": "类型基础",
+  "cvc-interfaces-design": "接口设计",
+  "cvc-value-reference": "值类型与引用类型",
+  "cvc-gc-memory": "GC 与内存",
+  "cvc-exception-handling": "异常处理",
+  "cvc-async-clr": "异步与 CLR",
+  "cvc-reflection-attributes": "反射与特性",
+  "cvc-final-review": "总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

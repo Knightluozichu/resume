@@ -1,0 +1,222 @@
+---
+title: "类型系统总览"
+type: A
+section: "语言核心C10"
+order: 1
+description: "C# 10 类型系统：值类型与引用类型、装箱拆箱、可空引用类型的内存模型与安全保证。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CtcTypesOverviewDiagram } from "@/components/mdx/csharp-10-core/diagrams/ctc-types-overview";
+
+<Objectives>
+
+- 理解值类型与引用类型的内存模型差异
+- 掌握装箱与拆箱的性能开销与触发条件
+- 理解 C# 8.0+ 可空引用类型的编译时安全保证
+- 掌握 C# 10 的 record struct 与 init only setter 对类型系统的影响
+
+</Objectives>
+
+## 直觉引入
+
+想象你有两种东西要存放：一张便利贴和一本书。便利贴很轻，你随手放口袋里（栈）；书很重，你放在书架上，口袋里只放一张写着书架位置的纸条（堆上的引用）。
+
+这就是值类型和引用类型的区别。`int`、`struct` 是便利贴——赋值时复制全部内容，存在栈上。`class`、`string` 是书——赋值时只复制地址（引用），实际内容在堆上。
+
+装箱就是你把便利贴临时贴到一本书上（从栈搬到堆），这很费时间。可空引用类型则像是给书架位置纸条加一个标记：「这个位置可能没书，用之前先检查」。
+
+## 概念讲解
+
+### 值类型与引用类型
+
+<Term def="值类型（value type）直接存储数据本身，赋值时复制全部内容，分配在栈上或内联在引用类型中。引用类型（reference type）存储数据的地址引用，赋值时复制引用而非数据，实际数据分配在堆上。">
+
+C# 的类型系统分为两大阵营：
+
+- **值类型**：`int`、`double`、`bool`、`enum`、`struct`、`record struct`（C# 10）。变量直接包含数据。赋值 `b = a` 后 a 和 b 是独立的副本，修改 b 不影响 a。
+- **引用类型**：`class`、`string`、`array`、`delegate`、`interface`、`record`。变量存储的是指向堆数据的引用。赋值 `b = a` 后 a 和 b 指向同一个对象，修改 b 的属性会影响 a。
+
+内存布局：值类型分配在栈上（局部变量）或内联在引用类型的堆内存中（字段）。引用类型的数据分配在堆上，引用本身（一个指针大小的值）存储在栈上或内联在对象中。
+
+</Term>
+
+### 装箱与拆箱
+
+当值类型需要被当作引用类型处理时（比如存入 `ArrayList` 或赋给 `object`），编译器会执行**装箱**：在堆上创建一个对象，把值类型的数据复制进去。拆箱是逆操作：从对象中提取值类型数据。
+
+装箱的开销包括：堆分配（GC 压力）、数据复制、类型检查。泛型（`List<T>` 代替 `ArrayList`）的最大价值就是消除装箱。
+
+### 可空引用类型
+
+<Term def="可空引用类型（nullable reference type, NRT）是 C# 8.0 引入的编译时安全特性。默认所有引用类型不可空，用 ? 标记可空引用。编译器对流分析追踪 null 状态，对可能的解引用发出警告。">
+
+C# 8.0 之前，所有引用类型都可以是 null，且编译器不做任何检查——这是 `NullReferenceException` 泛滥的根源。C# 8.0 引入可空上下文后：
+
+- `string` 不可空：编译器警告你可能赋 null。
+- `string?` 可空：解引用前必须检查 null，否则警告。
+- 编译器通过流分析追踪每个变量的 null 状态。
+
+C# 10 通过 `MemberNotNull` 特性和改进的流分析进一步增强了可空安全性。
+
+</Term>
+
+### init only setter 与 record struct
+
+C# 9.0 引入 `init` 访问器：属性只能在构造时赋值，之后不可变。C# 10 引入 `record struct`：值类型也能拥有 record 的值相等、`with` 表达式和解构能力。
+
+## 交互Demo
+
+<CtcTypesOverviewDiagram />
+
+<Stepper>
+
+<Step title="值类型：栈上直接存储">
+
+`int a = 42; int b = a;` 后 a 和 b 是独立的——修改 b 不影响 a。值类型分配在栈上，赋值就是内存复制。`struct Point { int X; int Y; }` 也是值类型，赋值复制整个结构体。
+
+</Step>
+
+<Step title="引用类型：堆上存储引用">
+
+`var p1 = new Person("Alice"); var p2 = p1;` 后 p1 和 p2 指向同一个对象——修改 p2.Name 会影响 p1。引用类型数据在堆上，变量存储的是指向堆的引用（指针）。
+
+</Step>
+
+<Step title="装箱：值类型→堆上的对象">
+
+`object o = 42;` 触发装箱——编译器在堆上创建一个 Int32 对象，把 42 复制进去。拆箱 `int x = (int)o;` 从对象中提取值并做类型检查。装箱的开销是堆分配+数据复制，频繁装箱会拖慢性能并增加 GC 压力。用 `List<int>` 代替 `ArrayList` 可消除装箱。
+
+</Step>
+
+<Step title="可空引用类型：编译时防 null">
+
+`string name = null;` 在可空上下文下会编译警告——string 不可空。`string? name = null;` 合法，但 `name.Length` 会警告「可能解引用 null」。编译器通过流分析追踪 null 状态，在解引用前检查了 null 就不再警告。C# 10 用 `MemberNotNull` 标注保证构造后字段非 null。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 值类型 vs 引用类型 vs 装箱 vs 可空
+
+// === 值类型：独立副本 ===
+struct Point
+{
+    public int X { get; init; }
+    public int Y { get; init; }
+}
+
+var p1 = new Point { X = 1, Y = 2 };
+var p2 = p1;           // 值复制：p2 是独立副本
+p2 = p2 with { X = 99 }; // C# 10: with 表达式创建副本并修改
+Console.WriteLine(p1.X); // 1 — p1 不受影响
+
+// === 引用类型：共享引用 ===
+class Person
+{
+    public string Name { get; set; }
+    public Person(string name) => Name = name;
+}
+
+var person1 = new Person("Alice");
+var person2 = person1;   // 引用复制：指向同一对象
+person2.Name = "Bob";
+Console.WriteLine(person1.Name); // Bob — person1 也变了
+
+// === 装箱开销 ===
+var list = new System.Collections.ArrayList();
+for (int i = 0; i < 1000; i++)
+    list.Add(i);  // 每次都装箱！1000 次堆分配
+
+var genericList = new List<int>();
+for (int i = 0; i < 1000; i++)
+    genericList.Add(i);  // 零装箱，int 直接存储在内部数组中
+
+// === 可空引用类型（C# 8+） ===
+#nullable enable
+string? FindName(int id)
+{
+    if (id < 0) return null;    // 合法：返回类型是 string?
+    return Database.GetName(id);
+}
+
+string? name = FindName(-1);
+// Console.WriteLine(name.Length);  // 警告：可能解引用 null
+if (name is not null)
+    Console.WriteLine(name.Length); // 安全：编译器知道已检查
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：string 是值类型**
+
+`string` 是引用类型——它分配在堆上，赋值是引用复制。但 `string` 是不可变的（immutable），看起来像值类型：修改 `s2` 不会影响 `s1`，因为「修改」实际上是创建新字符串。不可变不等于值类型。用 `==` 比较字符串是值相等（重载了 `==`），但 `object.ReferenceEquals(s1, s2)` 会告诉你它们可能是不同对象。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：struct 总比 class 快**
+
+`struct` 避免了堆分配，但不是所有场景都更快。结构体赋值是全量复制——大结构体频繁传参/赋值的复制开销可能超过堆分配+引用传递的开销。结构体装箱后变成堆上的对象，反而比 class 多一次分配。经验法则：结构体适合小型（≤16 字节）、不可变、密集存储的数据。大对象用 class。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：为什么 `List<int>` 比 `ArrayList` 快？装箱发生在哪里？
+
+<Answer>
+
+`ArrayList` 内部用 `object[]` 存储，`int` 是值类型，存入 `ArrayList` 时必须装箱——在堆上创建一个 `Int32` 对象并把值复制进去。1000 次 `Add` 就是 1000 次堆分配，给 GC 带来巨大压力。读取时还要拆箱（类型检查+数据复制）。
+
+`List<int>` 内部用 `int[]` 存储，`int` 直接存在数组中，零装箱、零拆箱、零堆分配（除了数组本身的扩容）。这就是泛型的核心价值：类型参数化消除了装箱。
+
+</Answer>
+
+**问题 2**：可空引用类型是运行时特性还是编译时特性？`string?` 和 `string` 在运行时有什么区别？
+
+<Answer>
+
+可空引用类型是**编译时特性**。`string?` 和 `string` 在运行时是完全相同的类型——都是 `System.String`，`?` 不产生任何运行时标记。区别只在编译期：编译器通过流分析追踪变量的 null 状态，对不可空类型赋 null 发出警告，对可空类型解引用前不检查 null 发出警告。运行时不会因为 `?` 而做任何额外检查——`NullReferenceException` 依然会在解引用 null 时抛出。可空引用类型的价值是编译时提前发现潜在的 null 解引用 bug。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="值类型（value type）">
+
+直接存储数据本身的类型。包括 `int`、`struct`、`enum`、`record struct`。赋值时复制全部内容，分配在栈上或内联在对象中。
+
+</GlossaryItem>
+
+<GlossaryItem term="引用类型（reference type）">
+
+存储数据地址引用的类型。包括 `class`、`string`、`array`、`delegate`。赋值时复制引用，数据分配在堆上。
+
+</GlossaryItem>
+
+<GlossaryItem term="装箱（boxing）">
+
+将值类型转换为引用类型（`object` 或接口）的操作。在堆上创建对象并复制值类型数据。频繁装箱导致 GC 压力，泛型可消除装箱。
+
+</GlossaryItem>
+
+<GlossaryItem term="可空引用类型（NRT）">
+
+C# 8.0 引入的编译时安全特性。`string` 不可空，`string?` 可空。编译器通过流分析追踪 null 状态并发出警告。运行时无区别。
+
+</GlossaryItem>
+
+</Glossary>

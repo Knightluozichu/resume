@@ -1,0 +1,362 @@
+---
+title: "函数式模式匹配"
+type: B
+section: "不可变性"
+order: 2
+description: "switch 表达式、类型/属性/关系/逻辑模式与穷尽性检查，把控制流变成值表达式。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CfpPatternMatchingFpDiagram } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-pattern-matching-fp";
+
+<Objectives>
+
+- 理解 switch 表达式与 switch 语句的区别：表达式返回值，语句执行动作
+- 掌握四种模式：类型模式、属性模式、关系模式、逻辑模式
+- 能推导 switch 表达式的穷尽性检查机制
+- 能回答：为什么说模式匹配是「用表达式替代语句」的体现？
+
+</Objectives>
+
+## 直觉引入
+
+想象你在火车站检票。传统方式（switch 语句）像检票员逐一检查车票类型，找到匹配后执行对应动作——进哪个候车室、上哪趟车。每个 case 是一个动作序列，用 break 跳出。
+
+函数式方式（switch 表达式）像自动售票机：你输入车票类型，机器直接输出对应的车次信息。没有「执行动作」的步骤，只有「匹配模式 → 返回值」。整个检票过程是一个表达式，可以赋值给变量、传给函数、嵌入管道。
+
+这个区别看似微妙，但影响深远：switch 表达式让控制流变成值——你可以把分支逻辑嵌入 LINQ 管道、嵌入变量赋值、嵌入函数组合。这是函数式编程「用表达式替代语句」的核心体现。
+
+## 概念讲解
+
+### switch 表达式
+
+<Term def="switch 表达式是 C# 8.0 引入的分支语法，返回值而非执行语句。用 `input switch { pattern => result, ... }` 语法，每个分支是一个模式匹配到结果的映射。支持穷尽性检查——编译器验证所有可能情况都被覆盖。">
+
+```csharp
+var grade = score switch
+{
+    >= 90 => "A",
+    >= 80 => "B",
+    >= 70 => "C",
+    _     => "F"  // 弃元，匹配剩余所有情况
+};
+```
+
+与 switch 语句的区别：1）返回值（表达式 vs 语句）；2）箭头语法（`=>` vs `case: break;`）；3）穷尽性检查（编译器验证覆盖）；4）支持复杂模式（类型/属性/关系/逻辑）。
+
+</Term>
+
+### 类型模式
+
+<Term def="类型模式匹配对象的运行时类型，并在匹配时提取类型变量。`shape is Circle c` 检查 shape 是否为 Circle 类型，如果是则绑定到变量 c。在 switch 表达式中写作 `Circle c => ...`。">
+
+```csharp
+abstract record Shape;
+record Circle(double Radius) : Shape;
+record Rectangle(double W, double H) : Shape;
+
+double Area(Shape shape) => shape switch
+{
+    Circle c      => Math.PI * c.Radius * c.Radius,
+    Rectangle r   => r.W * r.H,
+    _             => 0
+};
+```
+
+类型模式是函数式「数据 + 函数分离」的基础——数据用 record 层次定义，行为用模式匹配函数实现，而非 OOP 的虚方法分发。
+
+</Term>
+
+### 属性模式
+
+<Term def="属性模式匹配对象的属性值。`{ Age: >= 18 }` 检查对象的 Age 属性是否 >= 18。可以组合多个属性：`{ Age: >= 18, IsMember: true }`。可以嵌套：`{ Address: { City: "Beijing" } }`。">
+
+```csharp
+var category = user switch
+{
+    { Age: >= 65 }                    => "Senior",
+    { Age: >= 18, IsMember: true }   => "Adult Member",
+    { Age: >= 18 }                   => "Adult",
+    { Age: < 13 }                    => "Child",
+    _                                => "Teen"
+};
+```
+
+属性模式把 if-else 链变成声明式匹配——描述「匹配什么」而非「怎么跳转」。
+
+</Term>
+
+### 关系模式与逻辑模式
+
+<Term def="关系模式用比较运算符匹配值：`>= 90`、`< 13`、`is > 0 and < 100`。逻辑模式用 and/or/not 组合模式：`not null`、`>= 18 and < 65`、`"A" or "B"`。">
+
+```csharp
+var description = score switch
+{
+    >= 90 and <= 100  => "Excellent",
+    >= 60 and < 90    => "Pass",
+    >= 0 and < 60     => "Fail",
+    < 0 or > 100      => "Invalid",
+    not int           => "Not a number"
+};
+```
+
+关系和逻辑模式让复杂条件用声明式语法表达，替代嵌套 if-else。
+
+</Term>
+
+### 穷尽性检查
+
+switch 表达式要求覆盖所有可能情况。如果所有 case 没有覆盖全部可能（且没有 `_` 弃元），编译器会报错或警告。对于枚举和 record 层次，编译器能检查是否覆盖所有子类型——新增子类型但忘记在 switch 中处理时，编译器会提示。
+
+## 交互Demo
+
+<CfpPatternMatchingFpDiagram />
+
+<Stepper>
+
+<Step title="从语句到表达式">
+
+switch 语句是命令式——每个 case 执行动作（赋值、break），不返回值。switch 表达式是声明式——每个分支返回值，整个 switch 是一个表达式。`var grade = score switch { ... }` 把分支逻辑变成值赋值，可嵌入表达式上下文（如 LINQ 的 Select）。
+
+</Step>
+
+<Step title="类型模式：数据 + 函数分离">
+
+`shape switch { Circle c => ..., Rectangle r => ... }` 用类型模式匹配不同形状。数据（Circle/Rectangle record）与行为（Area 函数）分离——新增行为只需新增一个 switch 函数，不需要修改每个 record。这是函数式设计，对比 OOP 的虚方法（行为封装在数据内部）。
+
+</Step>
+
+<Step title="属性模式：声明式条件">
+
+`user switch { { Age: >= 65 } => "Senior", ... }` 用属性模式匹配对象属性。对比 if-else 链：`if (user.Age >= 65) ... else if (...)`——属性模式更简洁、声明式、可组合。多个属性可以同时匹配：`{ Age: >= 18, IsMember: true }`。
+
+</Step>
+
+<Step title="穷尽性：编译器把关">
+
+switch 表达式要求穷尽所有可能。如果 Shape 层次新增了 `Triangle` 但 Area 函数没有处理，编译器会警告。这比 switch 语句的「静默漏掉一个 case」安全得多。`_` 弃元匹配剩余所有情况，但会失去穷尽性检查的保护——尽量列出所有具体类型。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 模式匹配四种类型
+
+// === 类型模式 ===
+abstract record Shape;
+record Circle(double Radius) : Shape;
+record Rectangle(double Width, double Height) : Shape;
+record Triangle(double Base, double Height) : Shape;
+
+static double Area(Shape shape) => shape switch
+{
+    Circle c       => Math.PI * c.Radius * c.Radius,
+    Rectangle r    => r.Width * r.Height,
+    Triangle t     => 0.5 * t.Base * t.Height,
+    // 穷尽性：编译器知道所有 Shape 子类型已覆盖
+};
+
+// === 属性模式 ===
+record User(string Name, int Age, bool IsMember, string? City);
+
+static string Categorize(User u) => u switch
+{
+    { Age: >= 65 }                       => "Senior",
+    { Age: >= 18, IsMember: true }       => "Adult Member",
+    { Age: >= 18 }                       => "Adult",
+    { Age: < 13 }                        => "Child",
+    _                                    => "Teen"
+};
+
+// 嵌套属性模式
+static bool IsBeijingSenior(User u) => u switch
+{
+    { Age: >= 65, City: "Beijing" } => true,
+    _ => false
+};
+
+// === 关系模式 ===
+static string DescribeScore(int score) => score switch
+{
+    >= 90 and <= 100  => "Excellent",
+    >= 60 and < 90    => "Pass",
+    >= 0 and < 60     => "Fail",
+    < 0 or > 100      => "Invalid"
+};
+
+// === 逻辑模式 ===
+static string Describe(object obj) => obj switch
+{
+    null        => "null",
+    int i       => $"Integer: {i}",
+    string s    => $"String: {s}",
+    not null    => "Other type"  // not 逻辑模式
+};
+
+// === switch 表达式嵌入管道 ===
+var shapes = new Shape[] { new Circle(5), new Rectangle(3, 4), new Triangle(6, 8) };
+var areas = shapes.Select(Area).ToArray();  // { 78.54, 12, 24 }
+var totalArea = shapes.Select(Area).Sum();  // 114.54
+
+// === 元组模式 ===
+static string RockPaperScissors(string a, string b) => (a, b) switch
+{
+    ("rock", "scissors")    => "A wins",
+    ("scissors", "paper")   => "A wins",
+    ("paper", "rock")       => "A wins",
+    (x, y) when x == y      => "Draw",
+    _                       => "B wins"
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：switch 表达式必须有 `_` 弃元**
+
+`_` 弃元匹配剩余所有情况，但不是必须的。如果所有 case 已经穷尽了所有可能（如枚举的所有值、record 层次的所有子类型），不需要 `_`。不写 `_` 反而更好——新增枚举值或子类型时，编译器会提示遗漏。`_` 会吞掉「遗漏新类型」的警告，降低安全性。只在确实需要「通配剩余」时才用 `_`。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：模式匹配就是 switch 表达式**
+
+模式匹配不限于 switch 表达式。`is` 表达式也支持模式：`if (obj is string s)`（类型模式）、`if (x is > 0 and < 100)`（关系模式）、`if (user is { Age: >= 18 })`（属性模式）。模式匹配是一种通用的「匹配并提取」机制，switch 表达式只是它的一个应用场景。`is` 模式适合单一条件检查，`switch` 模式适合多分支选择。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：穷尽性检查会强制覆盖所有子类型**
+
+C# 的穷尽性检查不是强制的。对于 sealed record 层次（所有子类型密封），编译器能确定所有子类型并检查穷尽性。对于非密封的 record 或 class 层次，编译器无法知道所有子类型，需要 `_` 兜底。此外，如果所有 case 都是开放的（如 `>= 90`、`>= 80`），编译器也要求 `_` 兜底剩余可能。穷尽性是编译器辅助，不是数学证明——开发者仍需确保逻辑正确。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：请用 switch 表达式实现一个 `Describe` 函数，接受 `object` 参数，根据类型和值返回描述字符串。要求覆盖 null、int、string、bool、其他类型。
+
+<Answer>
+
+```csharp
+static string Describe(object? obj) => obj switch
+{
+    null           => "Nothing here",
+    int i when i > 0 => $"Positive integer: {i}",
+    int i when i < 0 => $"Negative integer: {i}",
+    int i          => "Zero",
+    string s       => $"Text: \"{s}\"",
+    true           => "Boolean true",
+    false          => "Boolean false",
+    _              => $"Unknown type: {obj.GetType().Name}"
+};
+```
+
+关键点：
+1. `null` 模式匹配 null 值
+2. `int i when i > 0` 是类型模式 + 守卫子句（when）
+3. `true`/`false` 是常量模式，匹配 bool 的具体值
+4. `_` 弃元兜底剩余所有类型
+5. 顺序很重要——先匹配更具体的（int > 0），后匹配更宽泛的（int i）
+
+</Answer>
+
+**问题 2**：请用元组模式 + switch 表达式实现一个简单的状态机：根据当前状态和输入事件，返回新状态。状态有 Idle、Running、Paused；事件有 Start、Pause、Resume、Stop。
+
+<Answer>
+
+```csharp
+enum State { Idle, Running, Paused }
+enum Event { Start, Pause, Resume, Stop }
+
+static State Transition(State current, Event evt) => (current, evt) switch
+{
+    (State.Idle, Event.Start)     => State.Running,
+    (State.Running, Event.Pause)  => State.Paused,
+    (State.Paused, Event.Resume)  => State.Running,
+    (State.Running, Event.Stop)   => State.Idle,
+    (State.Paused, Event.Stop)    => State.Idle,
+    // 非法转换保持原状态
+    (State.Idle, Event.Pause)     => State.Idle,
+    (State.Idle, Event.Resume)    => State.Idle,
+    (State.Idle, Event.Stop)      => State.Idle,
+    (State.Running, Event.Start)  => State.Running,
+    (State.Running, Event.Resume) => State.Running,
+    (State.Paused, Event.Start)   => State.Paused,
+    (State.Paused, Event.Pause)   => State.Paused,
+};
+
+// 使用
+var s = State.Idle;
+s = Transition(s, Event.Start);   // Running
+s = Transition(s, Event.Pause);   // Paused
+s = Transition(s, Event.Resume);  // Running
+s = Transition(s, Event.Stop);    // Idle
+```
+
+关键点：
+1. 元组模式 `(current, evt)` 同时匹配两个值
+2. 每个分支是「当前状态 + 事件 → 新状态」的映射
+3. 枚举的穷尽性：编译器知道所有 State 和 Event 的组合（3x4=12），如果遗漏某个组合会警告
+4. 这是函数式状态机——状态转换是纯函数，无副作用，给定输入永远相同输出
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="switch 表达式">
+
+C# 8.0 引入的分支语法，返回值而非执行语句。`input switch { pattern => result, ... }`。支持穷尽性检查，可嵌入表达式上下文（如 LINQ 管道）。是「用表达式替代语句」的函数式体现。
+
+</GlossaryItem>
+
+<GlossaryItem term="类型模式">
+
+匹配对象的运行时类型并提取类型变量。`Circle c =>` 匹配 Circle 类型并绑定到 c。是函数式「数据 + 函数分离」的基础——行为用模式匹配实现，而非 OOP 虚方法。
+
+</GlossaryItem>
+
+<GlossaryItem term="属性模式">
+
+匹配对象的属性值。`{ Age: >= 18 }` 检查属性。可组合多个属性：`{ Age: >= 18, IsMember: true }`。可嵌套：`{ Address: { City: "Beijing" } }`。
+
+</GlossaryItem>
+
+<GlossaryItem term="关系模式">
+
+用比较运算符匹配值：`>= 90`、`< 13`。与逻辑模式组合：`>= 18 and < 65`、`< 0 or > 100`。让复杂条件用声明式语法表达。
+
+</GlossaryItem>
+
+<GlossaryItem term="逻辑模式">
+
+用 and/or/not 组合模式。`not null`、`>= 18 and < 65`、`"A" or "B"`。C# 9 引入，让模式匹配支持布尔逻辑组合。
+
+</GlossaryItem>
+
+<GlossaryItem term="穷尽性检查">
+
+switch 表达式要求覆盖所有可能情况。编译器验证所有 case 是否穷尽——对于枚举和 sealed record 层次，能检查是否覆盖所有子类型。新增子类型但忘记处理时编译器会警告。
+
+</GlossaryItem>
+
+<GlossaryItem term="元组模式">
+
+匹配元组的各分量。`(a, b) switch { (1, 2) => ..., (x, y) when x == y => ... }`。适合多值匹配场景，如状态机的「当前状态 + 事件 → 新状态」。
+
+</GlossaryItem>
+
+</Glossary>

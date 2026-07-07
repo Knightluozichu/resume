@@ -590,6 +590,36 @@ import { dcsAsyncInternalsQuestions } from "./review/dcs-async-internals";
 import { dcsPatternMatchingQuestions } from "./review/dcs-pattern-matching";
 import { dcsRecordsTuplesQuestions } from "./review/dcs-records-tuples";
 import { dcsFinalReviewQuestions } from "./review/dcs-final-review";
+import { cfpLearningMapQuestions } from "./review/cfp-learning-map";
+import { cfpFunctionsFirstQuestions } from "./review/cfp-functions-first";
+import { cfpHigherOrderQuestions } from "./review/cfp-higher-order";
+import { cfpCurryingQuestions } from "./review/cfp-currying";
+import { cfpImmutableDataQuestions } from "./review/cfp-immutable-data";
+import { cfpPatternMatchingFpQuestions } from "./review/cfp-pattern-matching-fp";
+import { cfpLazyEvalQuestions } from "./review/cfp-lazy-eval";
+import { cfpMonadsQuestions } from "./review/cfp-monads";
+import { cfpErrorHandlingFpQuestions } from "./review/cfp-error-handling-fp";
+import { cfpFinalReviewQuestions } from "./review/cfp-final-review";
+import { ctcLearningMapQuestions } from "./review/ctc-learning-map";
+import { ctcTypesOverviewQuestions } from "./review/ctc-types-overview";
+import { ctcGenericsDeepQuestions } from "./review/ctc-generics-deep";
+import { ctcDelegatesEventsQuestions } from "./review/ctc-delegates-events";
+import { ctcAsyncDeepQuestions } from "./review/ctc-async-deep";
+import { ctcParallelTplQuestions } from "./review/ctc-parallel-tpl";
+import { ctcPatternsQuestions } from "./review/ctc-patterns";
+import { ctcRecordsStructsQuestions } from "./review/ctc-records-structs";
+import { ctcSourceGeneratorsQuestions } from "./review/ctc-source-generators";
+import { ctcFinalReviewQuestions } from "./review/ctc-final-review";
+import { cvcLearningMapQuestions } from "./review/cvc-learning-map";
+import { cvcClrExecutionQuestions } from "./review/cvc-clr-execution";
+import { cvcTypeFundamentalsQuestions } from "./review/cvc-type-fundamentals";
+import { cvcInterfacesDesignQuestions } from "./review/cvc-interfaces-design";
+import { cvcValueReferenceQuestions } from "./review/cvc-value-reference";
+import { cvcGcMemoryQuestions } from "./review/cvc-gc-memory";
+import { cvcExceptionHandlingQuestions } from "./review/cvc-exception-handling";
+import { cvcAsyncClrQuestions } from "./review/cvc-async-clr";
+import { cvcReflectionAttributesQuestions } from "./review/cvc-reflection-attributes";
+import { cvcFinalReviewQuestions } from "./review/cvc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1187,6 +1217,36 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dcsPatternMatchingQuestions,
   ...dcsRecordsTuplesQuestions,
   ...dcsFinalReviewQuestions,
+  ...cfpLearningMapQuestions,
+  ...cfpFunctionsFirstQuestions,
+  ...cfpHigherOrderQuestions,
+  ...cfpCurryingQuestions,
+  ...cfpImmutableDataQuestions,
+  ...cfpPatternMatchingFpQuestions,
+  ...cfpLazyEvalQuestions,
+  ...cfpMonadsQuestions,
+  ...cfpErrorHandlingFpQuestions,
+  ...cfpFinalReviewQuestions,
+  ...ctcLearningMapQuestions,
+  ...ctcTypesOverviewQuestions,
+  ...ctcGenericsDeepQuestions,
+  ...ctcDelegatesEventsQuestions,
+  ...ctcAsyncDeepQuestions,
+  ...ctcParallelTplQuestions,
+  ...ctcPatternsQuestions,
+  ...ctcRecordsStructsQuestions,
+  ...ctcSourceGeneratorsQuestions,
+  ...ctcFinalReviewQuestions,
+  ...cvcLearningMapQuestions,
+  ...cvcClrExecutionQuestions,
+  ...cvcTypeFundamentalsQuestions,
+  ...cvcInterfacesDesignQuestions,
+  ...cvcValueReferenceQuestions,
+  ...cvcGcMemoryQuestions,
+  ...cvcExceptionHandlingQuestions,
+  ...cvcAsyncClrQuestions,
+  ...cvcReflectionAttributesQuestions,
+  ...cvcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

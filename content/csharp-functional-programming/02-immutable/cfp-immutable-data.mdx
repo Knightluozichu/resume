@@ -1,0 +1,300 @@
+---
+title: "不可变数据"
+type: B
+section: "不可变性"
+order: 1
+description: "record 类型、with 表达式、init-only 属性与不可变数据的函数式建模。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { CfpImmutableDataDiagram } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-immutable-data";
+
+<Objectives>
+
+- 理解不可变数据的含义：创建后不可修改，变更通过创建新副本实现
+- 掌握 `record` 类型、`init` 访问器与 `with` 表达式
+- 能推导 with 表达式的编译机制（拷贝构造 + 字段覆盖）
+- 能回答：不可变性为什么能提升并发安全和可推演性？
+
+</Objectives>
+
+## 直觉引入
+
+想象你在写一份合同。如果用铅笔写，任何人都可以擦改——你永远不确定手上的版本是否被改过。如果用钢笔写，每次修改都要重新誊抄一份新合同，旧合同保持不变——你随时可以追溯历史版本。
+
+不可变数据就是「钢笔合同」。一旦创建，任何字段都不能修改。需要「修改」时，不是原地改值，而是用 `with` 表达式创建一份新副本，只改需要改的字段，其余保持原样。原对象永远不变，新对象是修改后的版本。
+
+这听起来效率低，但实际上：1）不可变对象可以安全共享，无需防御性拷贝；2）多线程读取不可变对象无需加锁；3）不可变对象的引用透明性使代码可推演、可缓存、可测试。C# 9.0 引入的 `record` 类型让不可变数据建模变得简洁。
+
+## 概念讲解
+
+### record 类型
+
+<Term def="record 是 C# 9.0 引入的引用类型，专为不可变数据建模设计。属性默认用 init 访问器（只能在构造时设置），支持 with 表达式创建修改后的副本，提供值语义相等（== 比较所有字段值而非引用地址），自动生成 Equals/GetHashCode/ToString/Deconstruct。">
+
+```csharp
+public record Person(string Name, int Age);
+var p = new Person("Alice", 30);
+// p.Name = "Bob";  // 编译错误：init-only 属性不可赋值
+var p2 = p with { Age = 31 };  // 创建副本，只改 Age
+```
+
+record 的主构造函数参数自动生成 init-only 属性。`with` 表达式调用编译器生成的拷贝构造函数，创建完整副本后修改指定字段。
+
+</Term>
+
+### init 访问器
+
+<Term def="init 访问器（init-only setter）是 C# 9.0 引入的属性访问器，只能在对象初始化时（构造函数或对象初始化器）赋值，之后不可修改。它是 record 不可变性的基础——比 set 安全（运行后不可改），比 readonly 灵活（支持对象初始化器和 with 表达式）。">
+
+```csharp
+public class Config
+{
+    public string Name { get; init; }  // init-only
+    public int Timeout { get; init; }
+}
+var c = new Config { Name = "Default", Timeout = 30 };
+// c.Name = "Other";  // 编译错误
+```
+
+init 与 set 的区别：set 可在任何时候赋值，init 只能在初始化时赋值。init 与 readonly 的区别：readonly 字段只能在构造函数中赋值，init 属性还支持对象初始化器和 with 表达式。
+
+</Term>
+
+### with 表达式
+
+<Term def="with 表达式是 C# 9.0 为 record 引入的语法，用于创建修改了部分字段的副本。`p with { Age = 31 }` 先调用拷贝构造函数创建 p 的完整副本，再修改 Age 为 31，返回新 record。原对象不变。">
+
+```csharp
+var p1 = new Person("Alice", 30);
+var p2 = p1 with { Age = 31 };  // p2: Person("Alice", 31)
+var p3 = p1 with { Name = "Bob", Age = 31 };  // 修改多个字段
+// p1 仍然是 Person("Alice", 30)，不变
+```
+
+with 的编译机制：1）调用 record 的拷贝构造函数创建完整副本；2）用指定字段值覆盖副本的对应属性（init 访问器在 with 上下文中允许赋值）；3）返回修改后的新实例。这是浅拷贝——引用类型字段只拷贝引用。
+
+</Term>
+
+### 值语义相等
+
+record 的 `==` 比较所有字段值，而非引用地址。`new Person("Alice", 30) == new Person("Alice", 30)` 返回 `true`。这使得 record 适合做字典键和集合元素——值相同的两个 record 实例被视为相等。
+
+## 交互Demo
+
+<CfpImmutableDataDiagram />
+
+<Stepper>
+
+<Step title="可变 class 的问题">
+
+`class Person { public string Name { get; set; } }` 的属性可随时修改。多个引用指向同一对象时，一处修改影响所有引用——`p1.Name = "Bob"` 后，所有指向同一 Person 的引用都看到 "Bob"。这是共享可变状态，在多线程中会导致竞态条件，在调试中难以追踪「谁改了数据」。
+
+</Step>
+
+<Step title="record 的不可变性">
+
+`record Person(string Name, int Age)` 的属性是 init-only，创建后不可修改。`p.Name = "Bob"` 编译报错。需要「修改」时用 `with`：`var p2 = p with { Name = "Bob" }`。p2 是新对象，p 不变。不可变性保证：一旦拿到 record 引用，它的值永远不会变——可安全共享、可缓存、可推演。
+
+</Step>
+
+<Step title="with 表达式创建副本">
+
+`p with { Age = 31 }` 的工作流程：1）拷贝构造函数创建 p 的完整副本（Name="Alice", Age=30）；2）覆盖 Age=31；3）返回新 record（Name="Alice", Age=31）。原 p 不变。with 是浅拷贝——如果 record 包含 List 字段，拷贝的是 List 引用，不是 List 内容。需要深度不可变时，用 `ImmutableList<T>`。
+
+</Step>
+
+<Step title="值语义相等">
+
+`new Person("Alice", 30) == new Person("Alice", 30)` 返回 `true`——record 比较所有字段值。`new Person("Alice", 30).Equals(new Person("Alice", 30))` 也是 `true`。这使得 record 适合做 Dictionary 键、HashSet 元素。class 的 `==` 比较引用地址，两个内容相同的 class 实例 `==` 返回 `false`。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 可变 class vs 不可变 record
+
+// === 可变 class ===
+public class MutablePerson
+{
+    public string Name { get; set; }
+    public int Age { get; set; }
+    public MutablePerson(string name, int age) { Name = name; Age = age; }
+}
+
+var mp1 = new MutablePerson("Alice", 30);
+mp1.Age = 31;                    // 原地修改
+var mp2 = mp1;                   // 同一引用
+mp2.Name = "Bob";                // mp1.Name 也变成 "Bob"——共享可变状态
+
+// === 不可变 record ===
+public record Person(string Name, int Age);
+
+var p1 = new Person("Alice", 30);
+// p1.Age = 31;                 // 编译错误：init-only
+var p2 = p1 with { Age = 31 };   // 创建副本，只改 Age
+// p1 仍然是 Person("Alice", 30)
+// p2 是 Person("Alice", 31)
+
+// 值语义相等
+var p3 = new Person("Alice", 30);
+Console.WriteLine(p1 == p3);     // True——值相等（class 会是 False）
+
+// 嵌套不可变数据
+public record Address(string City, string Street);
+public record Employee(string Name, int Age, Address Home);
+
+var emp = new Employee("Alice", 30, new Address("Beijing", "Main St"));
+var emp2 = emp with { Age = 31 };                    // 改基本类型
+var emp3 = emp with { Home = emp.Home with { City = "Shanghai" } };  // 改嵌套 record
+
+// 不可变集合
+using System.Collections.Immutable;
+var list = ImmutableList<int>.Empty.Add(1).Add(2).Add(3);
+var list2 = list.Add(4);  // list 不变，list2 是 [1,2,3,4]
+var list3 = list.Remove(2);  // list 不变，list3 是 [1,3]
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：record 是值类型（struct）**
+
+record 是引用类型（`record class`），不是值类型。`record struct` 是 C# 10 引入的值类型版本。引用类型的 record 在赋值和传递时拷贝引用（不拷贝内容），但 `==` 比较的是内容（值语义）。这看似矛盾——引用类型但值相等——但正是 record 的设计：享受引用类型的性能（不拷贝内容），同时拥有值类型的语义（内容相等即相等）。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：with 表达式是深拷贝**
+
+`with` 表达式是浅拷贝——基本类型字段拷贝值，引用类型字段拷贝引用。如果 record 包含 `List<T>` 字段，`with` 后的新 record 和原 record 共享同一个 List。修改 List（如 `Add`）会影响两个 record。需要深度不可变时，用 `ImmutableList<T>` 或 `IReadOnlyList<T>`，并确保所有嵌套类型都是不可变的。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：所有数据都应该用 record**
+
+record 适合「数据建模」——DTO、值对象、领域事件、配置。不适合「行为建模」——服务、控制器、状态机。record 的优势在不可变性和值相等，这些对行为类没有意义。此外，高频修改的场景不适合 record——每次 `with` 都创建新对象，GC 压力大。此时用可变 class + Builder 模式更实际。按场景选择：数据用 record，行为用 class，高频修改用 Builder。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？解释原因。
+
+```csharp
+record Point(int X, int Y);
+
+var p1 = new Point(1, 2);
+var p2 = p1 with { X = 10 };
+var p3 = p1;
+Console.WriteLine($"{p1 == p2} {p1 == p3} {p2 == p3}");
+Console.WriteLine($"{ReferenceEquals(p1, p2)} {ReferenceEquals(p1, p3)}");
+```
+
+<Answer>
+
+输出：
+```
+False True False
+False True
+```
+
+- `p1 == p2`：`False`——值相等比较，p1=(1,2) 和 p2=(10,2) 值不同
+- `p1 == p3`：`True`——p3=p1 是引用赋值，p3 和 p1 指向同一对象，值当然相同
+- `p2 == p3`：`False`——p2=(10,2) 和 p3=(1,2) 值不同
+- `ReferenceEquals(p1, p2)`：`False`——with 创建了新对象，p1 和 p2 是不同引用
+- `ReferenceEquals(p1, p3)`：`True`——p3=p1 是引用赋值，指向同一对象
+
+关键：record 的 `==` 比较值（值语义），`ReferenceEquals` 比较引用地址。`with` 创建新实例（不同引用），`=` 赋值是引用拷贝（同一引用）。
+
+</Answer>
+
+**问题 2**：请设计一个不可变的 `ShoppingCart` 类型，包含商品列表（`IReadOnlyList<Item>`），实现 `AddItem` 方法返回新的 ShoppingCart。
+
+<Answer>
+
+```csharp
+public record Item(string Name, decimal Price);
+
+public record ShoppingCart(IReadOnlyList<Item> Items)
+{
+    // 空购物车
+    public static ShoppingCart Empty => new(Array.Empty<Item>());
+
+    // 添加商品：返回新购物车
+    public ShoppingCart AddItem(Item item) =>
+        this with { Items = Items.Append(item).ToList().AsReadOnly() };
+
+    // 总价：纯函数
+    public decimal Total => Items.Sum(i => i.Price);
+
+    // 移除商品：返回新购物车
+    public ShoppingCart RemoveItem(string name) =>
+        this with { Items = Items.Where(i => i.Name != name).ToList().AsReadOnly() };
+}
+
+// 使用
+var cart = ShoppingCart.Empty;
+var cart2 = cart.AddItem(new Item("Book", 50m));
+var cart3 = cart2.AddItem(new Item("Pen", 10m));
+
+Console.WriteLine(cart.Total);    // 0——空购物车
+Console.WriteLine(cart2.Total);   // 50
+Console.WriteLine(cart3.Total);   // 60
+// cart 和 cart2 不变
+```
+
+关键点：
+1. `IReadOnlyList<Item>` 确保外部无法修改列表
+2. `AddItem` 用 `with` 创建新 ShoppingCart，Items 是新列表
+3. `Total` 是纯函数——只读不修改
+4. 原购物车不变——可追溯历史状态（时间旅行调试）
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="record">
+
+C# 9.0 引入的引用类型，专为不可变数据建模设计。属性默认 init-only，支持 with 表达式，值语义相等，自动生成 Equals/GetHashCode/ToString/Deconstruct。`record struct`（C# 10）是值类型版本。
+
+</GlossaryItem>
+
+<GlossaryItem term="init 访问器">
+
+C# 9.0 引入的属性访问器，只能在对象初始化时赋值（构造函数、对象初始化器、with 表达式），之后不可修改。比 set 安全（运行后不可改），比 readonly 灵活（支持初始化器和 with）。
+
+</GlossaryItem>
+
+<GlossaryItem term="with 表达式">
+
+C# 9.0 为 record 引入的语法，创建修改了部分字段的副本。先调用拷贝构造函数创建完整副本，再覆盖指定字段。原对象不变。是浅拷贝——引用类型字段只拷贝引用。
+
+</GlossaryItem>
+
+<GlossaryItem term="值语义相等">
+
+record 的 `==` 比较所有字段值而非引用地址。两个内容相同的 record 实例 `==` 返回 true。这使得 record 适合做字典键和集合元素。class 的 `==` 默认比较引用地址。
+
+</GlossaryItem>
+
+<GlossaryItem term="不可变集合">
+
+`System.Collections.Immutable` 命名空间下的集合（ImmutableList、ImmutableDictionary 等），所有「修改」操作返回新集合。用持久化数据结构（树）共享不可变节点，避免全量拷贝。
+
+</GlossaryItem>
+
+</Glossary>
