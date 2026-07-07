@@ -755,7 +755,7 @@ import { EventQueueDiagram } from "./game-programming-patterns/diagrams/event-qu
 import { ServiceLocatorDiagram } from "./game-programming-patterns/diagrams/service-locator-diagram";
 import { DataLocalityDiagram } from "./game-programming-patterns/diagrams/data-locality-diagram";
 import { DirtyFlagDiagram } from "./game-programming-patterns/diagrams/dirty-flag-diagram";
-import { ObjectPoolDiagram } from "./game-programming-patterns/diagrams/object-pool-diagram";
+import { GppObjectPoolDiagram } from "./game-programming-patterns/diagrams/object-pool-diagram";
 import { SpatialPartitionDiagram } from "./game-programming-patterns/diagrams/spatial-partition-diagram";
 
 /**
@@ -1791,7 +1791,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ServiceLocatorDiagram,
   DataLocalityDiagram,
   DirtyFlagDiagram,
-  ObjectPoolDiagram,
+  GppObjectPoolDiagram,
   SpatialPartitionDiagram,
   Term,
   Glossary,

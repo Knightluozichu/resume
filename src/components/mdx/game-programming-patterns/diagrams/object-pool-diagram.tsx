@@ -53,7 +53,7 @@ const COMPARE_H = 56;
 const NEW_BOX = { x: 80, y: COMPARE_Y, w: 260, h: COMPARE_H };
 const POOL_CMP_BOX = { x: 380, y: COMPARE_Y, w: 260, h: COMPARE_H };
 
-export function ObjectPoolDiagram() {
+export function GppObjectPoolDiagram() {
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
