@@ -1,0 +1,75 @@
+---
+title: 战术模式
+type: A
+section: 领域驱动设计
+order: 8
+description: 实体与值对象、聚合根、仓储、不变量与工厂等战术构造块。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { AddTacticalPatternsDiagram } from "@/components/mdx/architecture-domain/diagrams/add-tactical-patterns";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分实体与值对象，说出「身份」是分水岭
+- 能画出聚合的边界，标出聚合根
+- 能回答：为什么外部只能通过聚合根访问聚合内部对象？
+
+</Objectives>
+
+## 战术模式
+
+战略设计划好限界上下文，战术设计就进到每个上下文内部搭模型。这一章讲四个最核心的构造块：实体、值对象、聚合、仓储。它们是填进整洁架构 Entities 层和 Use Cases 层的「砖」。
+
+<AddTacticalPatternsDiagram />
+
+第一个分水岭是身份。<Term def="有唯一身份标识、生命周期内属性可变但身份不变的对象。">实体（Entity）</Term>有身份——两个 `Order` 哪怕所有字段都一样，只要 ID 不同就是两个订单，可以追踪、可以变。<Term def="没有身份、只由属性值定义的对象，属性相同即视为相等。">值对象（Value Object）</Term>没身份——「地址」只要省市区街道都一样就是同一个地址，换一个新实例和原来没区别。判断口诀：关心「是哪一个」的是实体，关心「是什么值」的是值对象。地址、金额、日期范围都该做成值对象，它们天生不可变、可替换。
+
+## 核心概念
+
+第二个构造块是聚合，它是战术设计的灵魂。<Term def="一组作为一致性整体被加载和修改的领域对象簇，由一个聚合根统一对外。">聚合（Aggregate）</Term>把一组必须一起变更的对象绑成一个整体：订单和它的订单项就是一个聚合，因为改订单项的金额必须同步更新订单总价。聚合里挑一个对象当<Term def="聚合的对外入口，外部只能通过它访问聚合内部，负责维护聚合的一致性边界。">聚合根（Aggregate Root）</Term>——订单聚合里，Order 是根，OrderItem 不是。
+
+为什么外部只能通过聚合根访问？因为一致性。聚合根是唯一守门人，所有修改都经它把关，它才能保证聚合内的<Term def="聚合在任何时刻都必须满足的业务规则，如订单总价等于所有订单项金额之和。">不变量（Invariant）</Term>不被破坏。若外部能直接 new 一个 OrderItem 挂到 Order 上，订单总价就可能漏更新。所以仓储（Repository）只给聚合根建——你只能 `orderRepository.findById(id)` 拿到 Order，再通过 `order.addItem(...)` 间接动 OrderItem。聚合根把一致性边界焊死了。
+
+<Term def="为聚合根提供类似集合的查询与持久化接口，把领域模型与存储技术隔开。">仓储（Repository）</Term>则把聚合根的存取抽象成「找一个 Order」「存一个 Order」，领域层不关心背后是 MySQL 还是内存。仓储接口定义在领域层（使用方），实现在基础设施层（细节），这正是上一章依赖倒置的落地。
+
+<Callout type="tip">
+<strong>建议 →</strong> 设计聚合时先问「哪些对象必须一起变更才能满足一个不变量」。必须一起变的才进同一个聚合，不必须的拆开。聚合越小越好——大聚合意味着每次改动要锁住一大片，并发冲突就多。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 外部直接 `order.getItems().add(new OrderItem(...))`，绕过聚合根往集合里塞对象，订单总价没更新。<strong>原因 →</strong> 暴露了聚合内部集合的可变引用，绕过了聚合根的守门，不变量被破坏。<strong>修法 →</strong> 只暴露只读视图，修改一律走聚合根方法 `order.addItem(...)`，由根负责更新总价、校验规则。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 把「订单 + 用户 + 商品 + 库存」全塞进一个巨型聚合，每次改个订单项都锁住用户和库存，并发全堵死。<strong>原因 →</strong> 把「有关联」误当成「必须在同一聚合」，聚合过大。<strong>修法 →</strong> 只把「必须一起变更以满足不变量」的对象放一个聚合。订单和订单项一起，用户和库存各自独立成聚合，跨聚合用 ID 引用而非对象持有。
+</Callout>
+
+## 小结与练习
+
+- 实体有身份（关心「是哪一个」），值对象没身份（关心「是什么值」、不可变）
+- 聚合是一组必须一起变更的对象簇，聚合根是唯一对外入口和守门人
+- 只通过聚合根访问，才能焊死一致性边界、保护聚合不变量不被绕过破坏
+- 仓储只为聚合根建，接口在领域层、实现在基础设施层，是依赖倒置的落地
+
+<Exercises>
+  <Answer question="实体和值对象的根本区别是什么？「金额」该做成哪个？">区别在身份。实体有唯一身份标识，属性可变但身份不变，关心「是哪一个」；值对象没有身份，只由属性值定义，属性相同即相等、不可变。「金额」该做成值对象——100 元就是 100 元，不关心是哪个 100 元，且金额不该被改（要改就换一个新实例），天生适合值对象。</Answer>
+  <Answer question="为什么外部只能通过聚合根访问聚合内部对象？">为了守住一致性。聚合根是唯一守门人，所有修改经它把关，它才能保证聚合的不变量（如订单总价等于各订单项之和）不被破坏。若外部能直接操作聚合内部对象，就可能绕过校验漏更新不变量。所以仓储只给聚合根建，外部拿到根后通过根的方法间接动内部对象。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="实体（Entity）">有唯一身份标识、生命周期内属性可变但身份不变的对象，关心「是哪一个」，如订单、用户。</GlossaryItem>
+  <GlossaryItem term="值对象（Value Object）">没有身份、只由属性值定义的对象，属性相同即视为相等且不可变，如地址、金额。</GlossaryItem>
+  <GlossaryItem term="聚合根（Aggregate Root）">聚合的对外入口，外部只能通过它访问聚合内部，负责维护聚合的一致性边界与不变量。</GlossaryItem>
+  <GlossaryItem term="不变量（Invariant）">聚合在任何时刻都必须满足的业务规则，如订单总价等于所有订单项金额之和，由聚合根守护。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Clean Architecture (Robert C. Martin) & Domain-Driven Design (Eric Evans)" adaptedUrl="https://www.oreilly.com/" />

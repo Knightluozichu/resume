@@ -85,6 +85,7 @@ export const BOOK_ORDER = [
   "design-patterns",
   "game-programming-patterns",
   "code-quality-refactoring",
+  "architecture-domain-design",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -111,6 +112,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "design-patterns": "设计模式：GoF 23 模式图解",
   "game-programming-patterns": "游戏编程模式",
   "code-quality-refactoring": "代码质量与重构",
+  "architecture-domain-design": "架构与领域设计",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -458,9 +460,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "进入架构设计和领域驱动。",
         items: [
           {
-            title: "架构与领域设计",
-            note: "待补：架构整洁之道 + DDD，从模式到架构的进阶。",
-            missing: true,
+            bookSlug: "architecture-domain-design",
+            note: "架构整洁之道 + DDD：从 SOLID 原则到整洁架构，从限界上下文到聚合设计，完成从模式到架构的进阶。",
           },
         ],
       },
@@ -609,6 +610,11 @@ export const SECTION_ORDER = [
   "代码质量入门",
   "整洁代码",
   "重构手法",
+  // 架构与领域设计
+  "架构入门",
+  "架构原则",
+  "领域驱动设计",
+  "架构实践",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

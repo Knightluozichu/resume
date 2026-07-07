@@ -429,7 +429,21 @@ export type ReviewChapterSlug =
   | "cqr-classes"
   | "cqr-code-smells"
   | "cqr-refactoring-techniques"
-  | "cqr-final-review";
+  | "cqr-final-review"
+  // 架构与领域设计
+  | "add-learning-map"
+  | "add-what-is-architecture"
+  | "add-solid-principles"
+  | "add-dependency-inversion"
+  | "add-layered-architecture"
+  | "add-clean-architecture"
+  | "add-ddd-fundamentals"
+  | "add-bounded-context"
+  | "add-tactical-patterns"
+  | "add-strategic-patterns"
+  | "add-cqrs-event-sourcing"
+  | "add-hexagonal-architecture"
+  | "add-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -796,6 +810,20 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cqr-code-smells": "代码异味",
   "cqr-refactoring-techniques": "重构手法",
   "cqr-final-review": "代码质量总复习",
+  // 架构与领域设计
+  "add-learning-map": "架构与领域设计全书学习地图",
+  "add-what-is-architecture": "什么是架构",
+  "add-solid-principles": "SOLID 原则",
+  "add-dependency-inversion": "依赖倒置与边界",
+  "add-layered-architecture": "分层架构",
+  "add-clean-architecture": "整洁架构",
+  "add-ddd-fundamentals": "DDD 核心概念",
+  "add-bounded-context": "限界上下文",
+  "add-tactical-patterns": "实体、值对象与聚合",
+  "add-strategic-patterns": "上下文映射",
+  "add-cqrs-event-sourcing": "CQRS 与事件溯源",
+  "add-hexagonal-architecture": "六边形架构",
+  "add-final-review": "架构与领域设计总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

@@ -354,6 +354,19 @@ import { cqrTestingQuestions } from "./review/cqr-testing";
 import { cqrClassesQuestions } from "./review/cqr-classes";
 import { cqrCodeSmellsQuestions } from "./review/cqr-code-smells";
 import { cqrFinalReviewQuestions } from "./review/cqr-final-review";
+import { addLearningMapQuestions } from "./review/add-learning-map";
+import { addWhatIsArchitectureQuestions } from "./review/add-what-is-architecture";
+import { addSolidPrinciplesQuestions } from "./review/add-solid-principles";
+import { addDependencyInversionQuestions } from "./review/add-dependency-inversion";
+import { addLayeredArchitectureQuestions } from "./review/add-layered-architecture";
+import { addCleanArchitectureQuestions } from "./review/add-clean-architecture";
+import { addDddFundamentalsQuestions } from "./review/add-ddd-fundamentals";
+import { addBoundedContextQuestions } from "./review/add-bounded-context";
+import { addTacticalPatternsQuestions } from "./review/add-tactical-patterns";
+import { addStrategicPatternsQuestions } from "./review/add-strategic-patterns";
+import { addCqrsEventSourcingQuestions } from "./review/add-cqrs-event-sourcing";
+import { addHexagonalArchitectureQuestions } from "./review/add-hexagonal-architecture";
+import { addFinalReviewQuestions } from "./review/add-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -713,6 +726,19 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cqrClassesQuestions,
   ...cqrCodeSmellsQuestions,
   ...cqrFinalReviewQuestions,
+  ...addLearningMapQuestions,
+  ...addWhatIsArchitectureQuestions,
+  ...addSolidPrinciplesQuestions,
+  ...addDependencyInversionQuestions,
+  ...addLayeredArchitectureQuestions,
+  ...addCleanArchitectureQuestions,
+  ...addDddFundamentalsQuestions,
+  ...addBoundedContextQuestions,
+  ...addTacticalPatternsQuestions,
+  ...addStrategicPatternsQuestions,
+  ...addCqrsEventSourcingQuestions,
+  ...addHexagonalArchitectureQuestions,
+  ...addFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

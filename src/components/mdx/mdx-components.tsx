@@ -762,6 +762,19 @@ import { CqrTestPyramidDiagram } from "./code-quality/diagrams/test-pyramid-diag
 import { ClassDesignDiagram } from "./code-quality/diagrams/class-design-diagram";
 import { CodeSmellsMap } from "./code-quality/diagrams/code-smells-map";
 import { RefactoringFlowDiagram } from "./code-quality/diagrams/refactoring-flow-diagram";
+import { AddArchitectureOverviewMap } from "./architecture-domain/diagrams/add-architecture-overview-map";
+import { AddArchitectureVsDesignDiagram } from "./architecture-domain/diagrams/add-architecture-vs-design";
+import { AddSolidPrinciplesDiagram } from "./architecture-domain/diagrams/add-solid-principles";
+import { AddDependencyRuleDiagram } from "./architecture-domain/diagrams/add-dependency-rule";
+import { AddLayeredArchitectureDiagram } from "./architecture-domain/diagrams/add-layered-architecture";
+import { AddCleanArchitectureDiagram } from "./architecture-domain/diagrams/add-clean-architecture";
+import { AddDddCoreConceptsDiagram } from "./architecture-domain/diagrams/add-ddd-core-concepts";
+import { AddBoundedContextDiagram } from "./architecture-domain/diagrams/add-bounded-context";
+import { AddTacticalPatternsDiagram } from "./architecture-domain/diagrams/add-tactical-patterns";
+import { AddContextMapDiagram } from "./architecture-domain/diagrams/add-context-map";
+import { AddCqrsEventSourcingDiagram } from "./architecture-domain/diagrams/add-cqrs-event-sourcing";
+import { AddHexagonalArchitectureDiagram } from "./architecture-domain/diagrams/add-hexagonal-architecture";
+import { AddFinalReviewMindMap } from "./architecture-domain/diagrams/add-final-review-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1804,6 +1817,19 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ClassDesignDiagram,
   CodeSmellsMap,
   RefactoringFlowDiagram,
+  AddArchitectureOverviewMap,
+  AddArchitectureVsDesignDiagram,
+  AddSolidPrinciplesDiagram,
+  AddDependencyRuleDiagram,
+  AddLayeredArchitectureDiagram,
+  AddCleanArchitectureDiagram,
+  AddDddCoreConceptsDiagram,
+  AddBoundedContextDiagram,
+  AddTacticalPatternsDiagram,
+  AddContextMapDiagram,
+  AddCqrsEventSourcingDiagram,
+  AddHexagonalArchitectureDiagram,
+  AddFinalReviewMindMap,
   Term,
   Glossary,
   GlossaryItem,
