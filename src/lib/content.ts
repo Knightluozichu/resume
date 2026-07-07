@@ -87,6 +87,7 @@ export const BOOK_ORDER = [
   "code-quality-refactoring",
   "architecture-domain-design",
   "advanced-algorithm-engineering",
+  "automotive-systems-specialization",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -115,6 +116,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "code-quality-refactoring": "代码质量与重构",
   "architecture-domain-design": "架构与领域设计",
   "advanced-algorithm-engineering": "高级算法与算法工程",
+  "automotive-systems-specialization": "汽车系统专项",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -334,9 +336,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
         summary: "进入发动机、传动、底盘、电气电子和新能源三电专项。",
         items: [
           {
-            title: "汽车系统专项",
-            note: "待补：发动机、变速器、底盘、汽车电子与新能源三电。",
-            missing: true,
+            bookSlug: "automotive-systems-specialization",
+            note: "汽车系统专项：发动机、变速器、底盘、汽车电子与新能源三电的深度技术解析。",
           },
         ],
       },
@@ -621,6 +622,11 @@ export const SECTION_ORDER = [
   "高级数据结构",
   "图与字符串算法",
   "概率与分布式算法",
+  // 汽车系统专项
+  "发动机与动力",
+  "底盘与控制",
+  "汽车电子",
+  "新能源三电",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

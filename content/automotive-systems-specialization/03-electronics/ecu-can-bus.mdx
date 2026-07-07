@@ -1,0 +1,80 @@
+---
+title: ECU 与 CAN 总线
+type: A
+section: 汽车电子
+order: 7
+description: CAN 总线协议、帧结构、ID 仲裁、差分信号与 ECU 网络架构，理解汽车如何变成分布式系统。
+demo: false
+math: false
+sourceUrl: ""
+draft: false
+---
+
+import { AssEcuCanBusDiagram } from "@/components/mdx/automotive-systems/diagrams/ass-ecu-can-bus";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 CAN 总线用差分信号与 ID 仲裁如何实现多节点无冲突通信
+- 能说出标准数据帧的各字段作用，以及 ACK 与 CRC 如何保证可靠性
+- 能回答：为什么 CAN 总线用「线与」逻辑能做到非破坏性仲裁？
+</Objectives>
+
+## 从点对点到总线
+
+一辆现代车有几十甚至上百个<Term def="汽车上负责单一功能域控制、带微处理器能独立运算并经总线通信的电子控制单元。">ECU</Term>：发动机控制、变速箱控制、ABS、仪表、车身……如果每两个需要通信的 ECU 之间都拉一对专线，线束会膨胀到不可收拾。CAN 总线就是为了解决这个问题：用一根共享的差分双绞线，把所有 ECU 挂在同一总线上，靠协议规则让它们有序「发言」。
+
+<AssEcuCanBusDiagram />
+
+## 差分信号与抗干扰
+
+CAN 用两根线（CAN_H、CAN_L）传一路信号，靠两者的电压差表示逻辑状态。<Term def="用两根信号线的电压差而非单线对地电压表示逻辑、抗共模干扰的传输方式。">差分信号</Term>的最大好处是抗干扰：汽车电磁环境恶劣，干扰会同时叠加在两根线上，做差后干扰被抵消。显性位（逻辑 0）时 CAN_H 约 3.5V、CAN_L 约 1.5V，差值约 2V；隐性位（逻辑 1）时两线都约 2.5V，差值近 0V。
+
+## ID 仲裁：非破坏性优先级
+
+多个 ECU 同时发送怎么办？CAN 用<Term def="多个节点同时发送时、按报文 ID 逐位比较、ID 数值越小优先级越高的冲突解决机制。">ID 仲裁</Term>解决。每发送一位，发送节点就回读总线电平。CAN 的设计是「显性覆盖隐性」（线与逻辑）：只要总线上有一个节点发显性 0，总线就是 0。当一个节点发隐性 1 却回读到显性 0，说明有更高优先级（ID 更小）的报文在抢线，它立刻退出，等总线空闲再重发。
+
+这种仲裁是「非破坏」的：赢家全程没被打断，输家无损退出稍后重试。优先级由报文 ID 决定——ID 越小优先级越高，所以刹车这种安全报文总是分配小 ID，保证紧急时最先抢到总线。
+
+## 帧结构与可靠性
+
+一个标准数据帧包含：帧起始（1 个显性位）→ 11 位仲裁段（ID + RTR）→ 控制段（含 DLC 数据长度）→ 数据段（0 到 8 字节）→ <Term def="循环冗余校验码与界定符，用于检测传输中的位错误。">CRC</Term> 段（15 位校验 + 界定）→ <Term def="接收节点正确收到报文后回发的确认位。">ACK</Term> 段→ 帧结束。CRC 由发送方计算填入，接收方重新算一遍比对，不一致就报错。ACK 段要求至少一个接收节点回发显性位，否则发送方认为没人收到。
+
+ECU 网络架构上，整车按功能域划分总线段：动力域、底盘域、车身域等，域之间用<Term def="连接不同速率或协议的总线段、转发并翻译报文的节点设备。">网关</Term>转发。高速 CAN（500 kbps）跑动力底盘等实时控制，低速 CAN（125 kbps）跑车窗门锁等车身舒适。现代架构正从「分布式 ECU」向「域控制器集中」演进，但底层仍是 CAN（或其演进 CAN FD）。
+
+<Callout type="tip">
+<strong>建议 →</strong> 理解 CAN 仲裁抓住一句话：「显性压隐性，输者让赢家」。把总线想象成会议室，ID 最小的人说话最权威，别人一开口发现自己说了不算就闭嘴等下一轮。这套机制天然保证了高优先级报文的实时性。
+</Callout>
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 以为 CAN 是「带地址的」、像以太网那样按地址投递。<strong>原因 →</strong> CAN 是广播总线，报文 ID 标识的是「内容」而非「收件人」，所有节点都收到、由各节点自己决定要不要用。<strong>修法 →</strong> 把 CAN 想象成广播电台：发送方只管按 ID 播报，接收方按 ID 过滤自己关心的节目，不存在「点对点寻址」。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 觉得 CAN 数据段只有 8 字节太寒酸，传不了大消息。<strong>原因 →</strong> 8 字节是经典 CAN 的限制，是可靠性与时延的折衷；大消息靠多帧分拆（ISO-TP）或升级到 CAN FD（64 字节）。<strong>修法 →</strong> 别用消费电子的带宽思维套 CAN，它的设计目标是「小包、实时、可靠」而非大文件传输；要传大诊断数据用 ISO-TP 分包或换 CAN FD / 车载以太网。
+</Callout>
+
+## 小结与练习
+
+- CAN 用差分双绞线抗干扰，显性 0 覆盖隐性 1，所有 ECU 共享一条总线
+- ID 仲裁非破坏性：ID 越小优先级越高，输者无损退出稍后重发
+- 标准帧含 ID、DLC、数据、CRC、ACK 等段；CRC 查错、ACK 确认，保证可靠
+- 整车按域分段，网关转发；高速 CAN 跑实时控制，低速 CAN 跑车身舒适
+
+<Exercises>
+  <Answer question="CAN 总线用「线与」逻辑如何实现非破坏性仲裁？为什么 ID 越小优先级越高？">CAN 设计成显性位（0）能覆盖隐性位（1）：只要总线上有节点发 0，总线就是 0。多个节点同时发送时逐位比较 ID，某节点发隐性 1 却回读到显性 0，说明有 ID 更小（更高优先级）的报文在抢线，它立刻退出。赢家全程没被打断（非破坏），输家无损退出等空闲重发。因为 ID 数值越小、其高位更早出现 0，越能在仲裁中压过对手，所以 ID 越小优先级越高。</Answer>
+  <Answer question="CAN 数据帧里的 CRC 和 ACK 各起什么作用？没有 ACK 会怎样？">CRC 是发送方根据数据计算填入的循环冗余校验码，接收方重新计算并比对，不一致就报错，用于检测传输中的位错误。ACK 段要求至少一个接收节点在 ACK 位回发显性位，表示「我正确收到了」。如果没有任何节点回 ACK，发送方会认为报文无人接收并触发错误重发，这是 CAN 确保报文被接收的机制。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="ECU">汽车上负责单一功能域控制、带微处理器能独立运算并经总线通信的电子控制单元，现代车有几十至上百个。</GlossaryItem>
+  <GlossaryItem term="差分信号">用两根信号线的电压差而非单线对地电压表示逻辑状态的传输方式，干扰叠加在两线上做差后抵消，抗共模干扰能力强。</GlossaryItem>
+  <GlossaryItem term="ID 仲裁">多个节点同时发送时按报文 ID 逐位比较、ID 数值越小优先级越高的非破坏性冲突解决机制，靠「显性压隐性」的线与逻辑实现。</GlossaryItem>
+  <GlossaryItem term="CRC">循环冗余校验码，CAN 帧中由发送方计算填入、接收方比对以检测传输位错误的校验字段。</GlossaryItem>
+  <GlossaryItem term="网关">连接不同速率或协议的总线段、按规则转发并翻译报文的节点设备，是整车域间通信的枢纽。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="汽车构造与原理专业教材" adaptedUrl="" />

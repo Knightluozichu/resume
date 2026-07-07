@@ -456,7 +456,21 @@ export type ReviewChapterSlug =
   | "aae-distributed-algorithms"
   | "aae-indexing-search"
   | "aae-algorithm-engineering"
-  | "aae-final-review";
+  | "aae-final-review"
+  // 汽车系统专项
+  | "ass-learning-map"
+  | "ass-engine-thermodynamics"
+  | "ass-engine-performance"
+  | "ass-transmission-types"
+  | "ass-drivetrain-components"
+  | "ass-suspension-systems"
+  | "ass-steering-brake-systems"
+  | "ass-ecu-can-bus"
+  | "ass-sensors-actuators"
+  | "ass-body-electronics"
+  | "ass-ev-motor-controller"
+  | "ass-battery-management"
+  | "ass-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -850,6 +864,20 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "aae-indexing-search": "索引与搜索引擎",
   "aae-algorithm-engineering": "算法工程化实践",
   "aae-final-review": "高级算法与算法工程总复习",
+  // 汽车系统专项
+  "ass-learning-map": "汽车系统专项全书学习地图",
+  "ass-engine-thermodynamics": "发动机热力学与工作循环",
+  "ass-engine-performance": "发动机性能与增压技术",
+  "ass-transmission-types": "变速器类型与对比",
+  "ass-drivetrain-components": "传动系统核心部件",
+  "ass-suspension-systems": "悬架系统深入",
+  "ass-steering-brake-systems": "转向与制动系统",
+  "ass-ecu-can-bus": "ECU与CAN总线",
+  "ass-sensors-actuators": "传感器与执行器",
+  "ass-body-electronics": "车身电子系统",
+  "ass-ev-motor-controller": "电驱系统：电机与电控",
+  "ass-battery-management": "动力电池与BMS",
+  "ass-final-review": "汽车系统专项总复习",
   // 剑指 Offer
   "coi-find-in-matrix": "二维数组中的查找",
   "coi-replace-spaces": "替换空格",

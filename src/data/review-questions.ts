@@ -379,6 +379,19 @@ import { aaeParallelAlgorithmsQuestions } from "./review/aae-parallel-algorithms
 import { aaeDistributedAlgorithmsQuestions } from "./review/aae-distributed-algorithms";
 import { aaeAlgorithmEngineeringQuestions } from "./review/aae-algorithm-engineering";
 import { aaeFinalReviewQuestions } from "./review/aae-final-review";
+import { assLearningMapQuestions } from "./review/ass-learning-map";
+import { assEngineThermodynamicsQuestions } from "./review/ass-engine-thermodynamics";
+import { assEnginePerformanceQuestions } from "./review/ass-engine-performance";
+import { assTransmissionTypesQuestions } from "./review/ass-transmission-types";
+import { assDrivetrainComponentsQuestions } from "./review/ass-drivetrain-components";
+import { assSuspensionSystemsQuestions } from "./review/ass-suspension-systems";
+import { assSteeringBrakeSystemsQuestions } from "./review/ass-steering-brake-systems";
+import { assEcuCanBusQuestions } from "./review/ass-ecu-can-bus";
+import { assSensorsActuatorsQuestions } from "./review/ass-sensors-actuators";
+import { assBodyElectronicsQuestions } from "./review/ass-body-electronics";
+import { assEvMotorControllerQuestions } from "./review/ass-ev-motor-controller";
+import { assBatteryManagementQuestions } from "./review/ass-battery-management";
+import { assFinalReviewQuestions } from "./review/ass-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -763,6 +776,20 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aaeDistributedAlgorithmsQuestions,
   ...aaeAlgorithmEngineeringQuestions,
   ...aaeFinalReviewQuestions,
+  // 汽车系统专项
+  ...assLearningMapQuestions,
+  ...assEngineThermodynamicsQuestions,
+  ...assEnginePerformanceQuestions,
+  ...assTransmissionTypesQuestions,
+  ...assDrivetrainComponentsQuestions,
+  ...assSuspensionSystemsQuestions,
+  ...assSteeringBrakeSystemsQuestions,
+  ...assEcuCanBusQuestions,
+  ...assSensorsActuatorsQuestions,
+  ...assBodyElectronicsQuestions,
+  ...assEvMotorControllerQuestions,
+  ...assBatteryManagementQuestions,
+  ...assFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

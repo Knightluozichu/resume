@@ -787,6 +787,19 @@ import { AaeParallelAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-
 import { AaeDistributedAlgorithmsDiagram } from "./advanced-algorithm/diagrams/aae-distributed-algorithms";
 import { AaeAlgorithmEngineeringDiagram } from "./advanced-algorithm/diagrams/aae-algorithm-engineering";
 import { AaeFinalReviewMindMap } from "./advanced-algorithm/diagrams/aae-final-review-mindmap";
+import { AssSystemsMap } from "./automotive-systems/diagrams/ass-systems-map";
+import { AssEngineThermodynamicsDiagram } from "./automotive-systems/diagrams/ass-engine-thermodynamics";
+import { AssEnginePerformanceDiagram } from "./automotive-systems/diagrams/ass-engine-performance";
+import { AssTransmissionTypesDiagram } from "./automotive-systems/diagrams/ass-transmission-types";
+import { AssDrivetrainComponentsDiagram } from "./automotive-systems/diagrams/ass-drivetrain-components";
+import { AssSuspensionSystemsDiagram } from "./automotive-systems/diagrams/ass-suspension-systems";
+import { AssSteeringBrakeDiagram } from "./automotive-systems/diagrams/ass-steering-brake";
+import { AssEcuCanBusDiagram } from "./automotive-systems/diagrams/ass-ecu-can-bus";
+import { AssSensorsActuatorsDiagram } from "./automotive-systems/diagrams/ass-sensors-actuators";
+import { AssBodyElectronicsDiagram } from "./automotive-systems/diagrams/ass-body-electronics";
+import { AssEvMotorControllerDiagram } from "./automotive-systems/diagrams/ass-ev-motor-controller";
+import { AssBatteryManagementDiagram } from "./automotive-systems/diagrams/ass-battery-management";
+import { AssFinalReviewMindMap } from "./automotive-systems/diagrams/ass-final-review-mindmap";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -1854,6 +1867,19 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaeDistributedAlgorithmsDiagram,
   AaeAlgorithmEngineeringDiagram,
   AaeFinalReviewMindMap,
+  AssSystemsMap,
+  AssEngineThermodynamicsDiagram,
+  AssEnginePerformanceDiagram,
+  AssTransmissionTypesDiagram,
+  AssDrivetrainComponentsDiagram,
+  AssSuspensionSystemsDiagram,
+  AssSteeringBrakeDiagram,
+  AssEcuCanBusDiagram,
+  AssSensorsActuatorsDiagram,
+  AssBodyElectronicsDiagram,
+  AssEvMotorControllerDiagram,
+  AssBatteryManagementDiagram,
+  AssFinalReviewMindMap,
   Term,
   Glossary,
   GlossaryItem,
