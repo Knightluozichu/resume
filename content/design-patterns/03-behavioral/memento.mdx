@@ -1,0 +1,152 @@
+---
+title: 备忘录模式
+type: A
+section: 行为型模式
+order: 21
+description: 保存对象状态的快照，以便日后恢复——撤销功能的核心模式。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MementoDiagram } from "@/components/mdx/design-patterns/diagrams/memento-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解备忘录模式如何保存和恢复对象状态
+- 掌握三角色的职责分离
+- 能用备忘录模式实现撤销功能
+
+</Objectives>
+
+## 痛点场景：文本编辑器撤销
+
+文本编辑器需要支持撤销（Ctrl+Z）。每次操作前要保存当前状态，撤销时恢复。
+
+不封装状态：
+
+```typescript
+class Editor {
+  text = "";
+  history: string[] = [];
+
+  type(text: string) {
+    this.history.push(this.text); // 保存
+    this.text += text;
+  }
+
+  undo() {
+    this.text = this.history.pop() ?? ""; // 恢复
+  }
+}
+```
+
+问题：Editor 自己管理历史，违反 SRP。而且历史栈暴露了内部状态，不安全。
+
+## 解决方案：封装状态快照
+
+```typescript
+// 备忘录（不可变的状态快照）
+class EditorMemento {
+  constructor(private readonly text: string) {}
+  getText(): string { return this.text }
+}
+
+// 发起人（创建和恢复备忘录）
+class Editor {
+  private text = "";
+
+  setText(text: string) { this.text = text }
+  getText() { return this.text }
+
+  save(): EditorMemento { return new EditorMemento(this.text) }
+  restore(m: EditorMemento) { this.text = m.getText() }
+}
+
+// 管理者（只存不读备忘录内容）
+class History {
+  private snapshots: EditorMemento[] = [];
+
+  push(m: EditorMemento) { this.snapshots.push(m) }
+  pop(): EditorMemento | undefined { return this.snapshots.pop() }
+}
+```
+
+使用：
+
+```typescript
+const editor = new Editor();
+const history = new History();
+
+editor.setText("Hello");
+history.push(editor.save()); // 快照 1
+
+editor.setText("Hello World");
+history.push(editor.save()); // 快照 2
+
+editor.setText("Hello World!");
+// 撤销
+editor.restore(history.pop()!); // 恢复到 "Hello World"
+editor.restore(history.pop()!); // 恢复到 "Hello"
+```
+
+<MementoDiagram />
+
+## 三角色
+
+| 角色 | 职责 | 示例 |
+|------|------|------|
+| Originator | 创建备忘录（保存状态）、从备忘录恢复 | Editor |
+| Memento | 封装状态快照，不可变 | EditorMemento |
+| Caretaker | 管理备忘录的生命周期，不读取内容 | History |
+
+<Callout type="info">
+关键约束：Caretaker 不能读取或修改 Memento 的内容。它只负责「存」和「还」。这保证了状态的封装性。
+</Callout>
+
+## 常见误区
+
+### 误区 1：备忘录太多消耗内存
+
+每次保存都是完整状态快照。如果对象大且操作频繁，内存消耗巨大。解决方案：① 增量快照（只存 diff）；② 限制历史长度；③ 序列化到磁盘。
+
+### 误区 2：备忘录可变
+
+备忘录应该是**不可变**的。如果 Caretaker 能修改备忘录内容，撤销后恢复的状态可能被篡改。用 `readonly` 或构造后不暴露 setter。
+
+### 误区 3：深拷贝问题
+
+如果状态包含引用类型（数组、对象），备忘录需要深拷贝。否则恢复时修改的是同一引用，快照会被意外修改。
+
+## 小结
+
+- 备忘录 = 状态快照 + 封装 + 可恢复
+- 三角色：Originator（创建/恢复）、Memento（快照）、Caretaker（管理）
+- 核心价值：在不破坏封装的前提下保存和恢复对象状态
+- 适合：撤销/重做、事务回滚、游戏存档、检查点
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="备忘录模式">
+
+在不破坏封装性的前提下，捕获一个对象的内部状态，并在该对象之外保存这个状态，以便以后当需要时能将该对象恢复到原先保存的状态。
+
+</GlossaryItem>
+
+<GlossaryItem term="发起人">
+
+创建备忘录并存储其内部状态的对象。也是从备忘录恢复状态的对象。
+
+</GlossaryItem>
+
+<GlossaryItem term="管理者">
+
+负责保存备忘录但不能修改或检查备忘录内容的对象。只负责备忘录的生命周期管理。
+
+</GlossaryItem>
+
+</Glossary>

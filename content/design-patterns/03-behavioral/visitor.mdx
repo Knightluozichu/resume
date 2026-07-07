@@ -1,0 +1,156 @@
+---
+title: 访问者模式
+type: A
+section: 行为型模式
+order: 23
+description: 在不修改元素类的前提下添加新操作——通过双重分派实现操作与结构的分离。
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VisitorDiagram } from "@/components/mdx/design-patterns/diagrams/visitor-diagram";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解访问者模式如何在不修改元素的前提下添加操作
+- 掌握双重分派的机制
+- 能用访问者模式实现 AST 遍历
+
+</Objectives>
+
+## 痛点场景：AST 处理
+
+编译器有 AST 节点（IfNode、WhileNode、AssignNode）。要对 AST 做多种操作：类型检查、代码生成、优化。
+
+如果把操作写在节点类里：
+
+```typescript
+class IfNode {
+  typeCheck() { /* 类型检查逻辑 */ }
+  generateCode() { /* 代码生成逻辑 */ }
+  optimize() { /* 优化逻辑 */ }
+  // 每加一个操作就要改所有节点类——违反 OCP
+}
+```
+
+## 解决方案：操作与结构分离
+
+```typescript
+// 元素接口
+interface ASTNode {
+  accept(visitor: ASTVisitor): void;
+}
+
+// 具体元素
+class IfNode implements ASTNode {
+  accept(visitor: ASTVisitor) { visitor.visitIf(this) }
+}
+class WhileNode implements ASTNode {
+  accept(visitor: ASTVisitor) { visitor.visitWhile(this) }
+}
+class AssignNode implements ASTNode {
+  accept(visitor: ASTVisitor) { visitor.visitAssign(this) }
+}
+
+// 访问者接口
+interface ASTVisitor {
+  visitIf(node: IfNode): void;
+  visitWhile(node: WhileNode): void;
+  visitAssign(node: AssignNode): void;
+}
+
+// 具体访问者：类型检查
+class TypeChecker implements ASTVisitor {
+  visitIf(node: IfNode) { console.log("检查 If 条件是否为布尔") }
+  visitWhile(node: WhileNode) { console.log("检查 While 条件") }
+  visitAssign(node: AssignNode) { console.log("检查赋值类型匹配") }
+}
+
+// 具体访问者：代码生成
+class CodeGenerator implements ASTVisitor {
+  visitIf(node: IfNode) { console.log("生成 if 汇编") }
+  visitWhile(node: WhileNode) { console.log("生成 while 汇编") }
+  visitAssign(node: AssignNode) { console.log("生成 mov 指令") }
+}
+```
+
+使用：
+
+```typescript
+const nodes: ASTNode[] = [new IfNode(), new AssignNode()];
+const checker = new TypeChecker();
+nodes.forEach(n => n.accept(checker));
+// 输出：检查 If 条件是否为布尔 / 检查赋值类型匹配
+
+const gen = new CodeGenerator();
+nodes.forEach(n => n.accept(gen));
+// 输出：生成 if 汇编 / 生成 mov 指令
+```
+
+<VisitorDiagram />
+
+## 双重分派
+
+访问者的核心机制是**双重分派**——分派两次才确定最终执行的方法：
+
+1. **第一次分派**：调用 `node.accept(visitor)` — 根据 node 的具体类型决定执行哪个类的 accept
+2. **第二次分派**：在 accept 内调用 `visitor.visitX(this)` — 根据 visitor 的具体类型决定执行哪个访问者的方法
+
+```
+node.accept(visitor)
+  → IfNode.accept(visitor)     // 第一次：根据 node 类型
+    → visitor.visitIf(this)     // 第二次：根据 visitor 类型
+      → TypeChecker.visitIf()   // 最终执行
+```
+
+<Callout type="info">
+没有双重分派，访问者模式不成立。正是双重分派让「元素类型 × 操作类型」的组合路由成为可能。
+</Callout>
+
+## 常见误区
+
+### 误区 1：访问者违反 OCP
+
+访问者对「添加新操作」开放（加新 Visitor 即可），但对「添加新元素类型」封闭（要改 Visitor 接口和所有 Visitor 实现）。这与抽象工厂的「开闭不对称」类似。
+
+### 误区 2：元素结构频繁变化时用访问者
+
+如果经常新增元素类型（如新 AST 节点），访问者模式维护成本极高——每个 Visitor 都要加新方法。访问者适合**结构稳定但操作频繁增加**的场景。
+
+### 误区 3：访问者 vs 迭代器
+
+迭代器只负责遍历，不关心对元素做什么操作。访问者定义对每种元素做什么操作，但不负责遍历。两者常配合使用：迭代器遍历 + 访问者处理。
+
+## 小结
+
+- 访问者 = 在不修改元素类的前提下添加新操作
+- 核心机制：双重分派（元素类型 × 访问者类型）
+- 适合：结构稳定但操作频繁增加（AST、文档对象模型、报表生成）
+- 代价：添加新元素类型需要改所有访问者——开闭不对称
+
+<Attribution source="GoF《设计模式》+ Head First Design Patterns" license="原创转述" />
+
+<Glossary>
+
+<GlossaryItem term="访问者模式">
+
+表示一个作用于某对象结构中的各元素的操作。它使你可以在不改变各元素的类的前提下定义作用于这些元素的新操作。
+
+</GlossaryItem>
+
+<GlossaryItem term="双重分派">
+
+访问者模式的核心机制。第一次分派根据元素类型调用对应的 accept 方法，第二次分派根据访问者类型调用对应的 visit 方法。两次分派组合确定最终执行的方法。
+
+</GlossaryItem>
+
+<GlossaryItem term="开闭不对称">
+
+访问者对「添加新操作」开放（加新 Visitor），但对「添加新元素类型」封闭（改接口+所有 Visitor）。这是访问者模式的固有权衡。
+
+</GlossaryItem>
+
+</Glossary>

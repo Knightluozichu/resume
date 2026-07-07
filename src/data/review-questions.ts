@@ -320,6 +320,13 @@ import { dpCompositeQuestions } from "./review/dp-composite";
 import { dpFacadeQuestions } from "./review/dp-facade";
 import { dpFlyweightQuestions } from "./review/dp-flyweight";
 import { dpProxyQuestions } from "./review/dp-proxy";
+import { dpChainOfResponsibilityQuestions } from "./review/dp-chain-of-responsibility";
+import { dpIteratorQuestions } from "./review/dp-iterator";
+import { dpMediatorQuestions } from "./review/dp-mediator";
+import { dpMementoQuestions } from "./review/dp-memento";
+import { dpTemplateMethodQuestions } from "./review/dp-template-method";
+import { dpVisitorQuestions } from "./review/dp-visitor";
+import { dpInterpreterQuestions } from "./review/dp-interpreter";
 
 export {
   CHAPTER_TITLES,
@@ -643,6 +650,13 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dpFacadeQuestions,
   ...dpFlyweightQuestions,
   ...dpProxyQuestions,
+  ...dpChainOfResponsibilityQuestions,
+  ...dpIteratorQuestions,
+  ...dpMediatorQuestions,
+  ...dpMementoQuestions,
+  ...dpTemplateMethodQuestions,
+  ...dpVisitorQuestions,
+  ...dpInterpreterQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
