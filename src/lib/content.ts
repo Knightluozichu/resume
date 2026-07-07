@@ -429,11 +429,15 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
     stages: [
       {
         level: "beginner",
-        summary: "先用图解建立 23 种设计模式的直觉，理解「为什么需要模式」。",
+        summary: "先用图解建立 23 种设计模式的直觉，理解「为什么需要模式」；再用游戏编程模式拓展视野。",
         items: [
           {
             bookSlug: "design-patterns",
             note: "GoF 23 模式图解：从 Strategy、Observer、Decorator 等核心模式开始，建立面向对象设计心智。",
+          },
+          {
+            bookSlug: "game-programming-patterns",
+            note: "游戏编程模式：在游戏场景中实践 GoF 模式，学习游戏特有的序列、行为、解耦与优化模式。",
           },
         ],
       },
