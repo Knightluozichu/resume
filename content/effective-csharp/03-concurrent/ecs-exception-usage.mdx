@@ -1,0 +1,151 @@
+---
+title: 异常使用
+type: B
+section: 并发设计
+order: 1
+description: 条款 45-47——重抛用裸 throw 保留栈、异常过滤器精确 catch、catch 顺序由具体到一般。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EcsExceptionUsageDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-exception-usage";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分 throw 与 throw ex 对调用栈的不同影响
+- 能用异常过滤器 when 替代「捕获-判断-重抛」模式
+- 能回答：catch 顺序为什么必须由具体异常到基类异常？
+
+</Objectives>
+
+## 直觉引入
+
+想象你向上级汇报一次故障。第一种方式（throw）是原样转述：「现场报告故障出在 A 设备」，上级能定位真正的问题点。第二种方式（throw ex）是改口：「我这里报告故障」，原始的 A 设备信息被抹掉了，上级只知道你这儿出了事，不知道根因在哪。
+
+异常重抛也是同理。裸 `throw` 保留原始抛出点的调用栈，调试器能直达真正出错的位置；`throw ex` 把栈重置到当前 catch 行，原始抛出点丢失，排查变成噩梦。Effective C# 的铁律：重抛永远用裸 throw。
+
+## 概念讲解
+
+<EcsExceptionUsageDiagram />
+
+### throw vs throw ex
+
+<Term def="重抛当前异常的裸 throw 语句，保留原始调用栈，让调试器直达真正抛出点。">裸 throw</Term> 在 catch 块中不指定异常对象，直接 `throw;`，保留原始抛出点的完整调用栈。`throw ex;` 则把 ex 当作新异常从当前行抛出，栈被重置到 catch 行，原始抛出点丢失。
+
+调试时，裸 throw 让你看到「异常最初在哪一行抛出」，throw ex 只让你看到「异常在哪个 catch 行被重抛」。前者直击根因，后者掩盖根因。
+
+### 异常过滤器 when
+
+<Term def="C# 6 的 catch 条件判定子句，when 表达式为 false 时不进入该 catch，异常继续传播且栈不丢失。">异常过滤器</Term> 用 `catch (Exception e) when (条件)` 在进入 catch 前做条件判定。条件为 false 时跳过此 catch，异常继续传播，调用栈不丢失——这比「捕获-判断-再 throw」更安全也更清晰。
+
+### catch 顺序
+
+catch 必须由具体到一般：具体的异常类型（如 IOException）在前，基类异常（如 Exception）在后。如果基类在前，具体异常永远无法被对应的 catch 捕获——基类 catch 会先匹配。编译器对某些情况会报错，但继承链上的顺序需要自己保证。
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 `throw ex` 重抛，调试时调用栈停在 catch 行，找不到原始出错位置。<strong>原因 →</strong> throw ex 把 ex 当新异常从当前行抛出，原始栈被重置。<strong>修法 →</strong> 重抛永远用裸 `throw;`，保留原始调用栈直达真正抛出点。
+</Callout>
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：throw 保留栈">
+    <EcsExceptionUsageDiagram />
+    `catch (Exception) { throw; }` 裸 throw 保留原始抛出点的完整调用栈。调试器能直达真正出错的代码行——比如某行除零或空引用。这是重抛的正确方式。
+  </Step>
+  <Step title="第二步：throw ex 重置栈">
+    `catch (Exception ex) { throw ex; }` 把 ex 当新异常从 catch 行抛出，原始抛出点被抹掉。调试时只看到 catch 行，无法定位根因。Effective C# 把这列为常见错误——重抛永远用裸 throw。
+  </Step>
+  <Step title="第三步：异常过滤器 when">
+    `catch (Exception e) when (e is IOException io && io.Code == 503)` 在进入 catch 前判定条件。条件 false 时不进入此 catch，异常继续向上传播，栈不丢失。这替代了「捕获后判断再 throw」的旧模式，既精确又不丢栈。
+  </Step>
+  <Step title="第四步：catch 顺序">
+    catch 必须由具体到一般：IOException 在前，SystemException 在后，Exception 最后。基类在前会让具体异常永远匹配不到对应的 catch。继承链上的顺序需开发者自行保证正确。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 反模式：throw ex 重置栈
+public void BadRetry(Action action)
+{
+    try { action(); }
+    catch (Exception ex)
+    {
+        Log(ex);
+        throw ex;   // 栈被重置到这行，原始抛出点丢失
+    }
+}
+
+// 推荐：裸 throw 保留栈
+public void GoodRetry(Action action)
+{
+    try { action(); }
+    catch (Exception)
+    {
+        // 重试逻辑...
+        throw;      // 保留原始调用栈
+    }
+}
+
+// 异常过滤器 when：精确 catch 不丢栈
+public void ReadFile(string path)
+{
+    try { File.ReadAllText(path); }
+    catch (IOException e) when (e.HResult == 0x80070020)  // 共享违例
+    {
+        // 仅处理共享违例，其他 IOException 继续传播
+        HandleSharingViolation(e);
+    }
+    catch (IOException e) when (LogFilter(e))             // 日志过滤器
+    {
+        // LogFilter 返回 false 时不进入，仅做日志
+        throw;  // 继续传播
+    }
+}
+
+private bool LogFilter(Exception e) { Log(e); return false; }
+
+// catch 顺序：具体在前
+try { /* ... */ }
+catch (FileNotFoundException ex) { /* 最具体 */ }
+catch (IOException ex)           { /* 较具体 */ }
+catch (Exception ex)             { /* 最一般，兜底 */ }
+```
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 `throw ex` 重抛，线上排查时调用栈只指向 catch 行，找不到根因。<strong>原因 →</strong> throw ex 把异常当新对象从当前行抛出，原始栈被重置。<strong>修法 →</strong> 重抛一律用裸 `throw;`，保留原始抛出点的完整调用栈。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 用「捕获 Exception、判断类型、不匹配再 throw」过滤异常，栈在重抛中丢失。<strong>原因 →</strong> 旧的 catch-判断-throw 模式即使裸 throw 也可能因中间逻辑引入副作用，且代码冗长。<strong>修法 →</strong> 用异常过滤器 `catch (Exception e) when (条件)`，条件 false 自动跳过，异常继续传播且栈完整。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> catch 顺序把 `Exception` 放最前，后面的具体异常 catch 永远不执行。<strong>原因 →</strong> Exception 是所有异常基类，放在前面会先匹配所有异常。<strong>修法 →</strong> catch 严格按继承链由具体到一般排列：最具体的异常在前，Exception 兜底放最后。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+  <Answer question="throw 和 throw ex 对调用栈有什么不同影响？重抛应该用哪个？">裸 `throw;` 保留原始抛出点的完整调用栈，调试器能直达真正出错的代码行。`throw ex;` 把 ex 当新异常从 catch 行抛出，原始栈被重置到当前行，原始抛出点丢失。重抛永远用裸 throw，这是 Effective C# 的铁律——丢栈会让线上排查变成噩梦。</Answer>
+  <Answer question="异常过滤器 when 相比「捕获-判断-重抛」有什么优势？">when 表达式为 false 时直接跳过该 catch，异常继续向上传播且调用栈完整不丢失。旧模式是先捕获 Exception、判断类型、不匹配再 throw，即使裸 throw 也代码冗长且可能引入副作用。过滤器在 catch 匹配前做判定，语义更清晰、栈更安全，还能用于纯日志（when 里返回 false）。</Answer>
+  <Answer question="catch 顺序为什么必须由具体异常到基类异常？">C# 按 catch 子句的出现顺序匹配，第一个类型匹配的 catch 生效。基类异常（如 Exception）能匹配所有异常，放在前面会让后面的具体异常 catch 永远无法执行。因此必须把最具体的异常（如 FileNotFoundException）放最前，较具体的（IOException）次之，Exception 兜底放最后。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="裸 throw">catch 块中不指定异常对象的 `throw;` 语句，保留原始抛出点的完整调用栈。是重抛异常的唯一正确方式。</GlossaryItem>
+  <GlossaryItem term="异常过滤器（when）">C# 6 的 catch 条件子句，when 表达式为 false 时不进入该 catch，异常继续传播且栈不丢失。替代「捕获-判断-重抛」模式。</GlossaryItem>
+  <GlossaryItem term="调用栈重置">`throw ex` 把 ex 当新异常从当前行抛出，原始抛出点的栈信息被抹掉，调试时只能看到 catch 行。是重抛的常见错误。</GlossaryItem>
+  <GlossaryItem term="catch 顺序">catch 子句按继承链由具体异常到基类异常排列，确保具体异常能被对应 catch 捕获，基类 Exception 兜底放最后。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />

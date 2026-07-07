@@ -1,0 +1,137 @@
+---
+title: 只读与常量
+type: B
+section: 资源管理
+order: 1
+description: 条款 2——优先用 readonly 而非 const，理解编译期烤入与运行期读取的版本兼容差异。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EcsReadonlyConstDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-readonly-const";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 const 与 readonly 在编译期和运行期的行为差异
+- 能推导跨程序集引用 const 时，库升级后调用方为何使用旧值
+- 能回答：什么场景才该用 const，默认为什么选 readonly？
+
+</Objectives>
+
+## 直觉引入
+
+想象你在两份合同上写「包邮门槛 99 元」。第一种是把 99 直接刻进每份合同的钢印里（const）——改门槛得重新印每份合同；第二种是在合同里写「以总部公告栏的数字为准」（readonly）——改公告栏，所有合同自动生效。
+
+const 把值在编译时烤进每个调用方的代码里，改值必须重编译所有引用方。readonly 把值存在定义处，运行时读取，改一处全部生效。跨程序集时，这个差异决定了你升级库后调用方是否能看到新值。
+
+## 概念讲解
+
+<EcsReadonlyConstDiagram />
+
+### const：编译期常量
+
+<Term def="编译期常量，值在编译时被字面量替换进调用方 IL，跨程序集不随库更新而变化。">const</Term> 在编译时被求值，引用处直接替换为字面量。这意味着 const 值被「烤」进了每个调用方的 IL 中，运行时不再查找定义处。它只能用内置数值类型、字符串和 null 赋值。
+
+const 的优势是性能——没有运行时字段查找，是真正的字面量。代价是版本脆弱：库升级 const 值后，所有引用方必须重新编译才能看到新值，否则静默使用旧值。
+
+### readonly：运行期常量
+
+<Term def="运行期常量，在构造函数执行后不可变，每次引用从字段定义处读取，跨程序集随库更新生效。">readonly</Term> 是实例或静态字段，在构造函数（或静态构造函数）执行后不可变。引用处在运行时从字段定义读取值，因此库升级后调用方无需重编译即可看到新值。
+
+readonly 可用任意类型赋值（不只是内置数值），可在构造函数中根据参数计算初值。它的代价是一次字段访问的开销，但 JIT 通常会内联常量字段，实际差异极小。
+
+### 版本演化场景
+
+当库 v2 把 `Max` 从 10 改成 20 时：const 调用方的 IL 里仍是 10，未重编译就静默用旧值（危险）；readonly 调用方运行时从字段读取，立即得到 20（安全）。Effective C# 的结论：跨程序集的常量一律用 readonly，const 只用于永不改变且需极致性能的局部常量。
+
+<Callout type="trap">
+<strong>现象 →</strong> 库升级把 const Max 从 10 改成 20，调用方运行时仍用 10。<strong>原因 →</strong> const 值在编译时烤进调用方 IL，库升级不会修改调用方的 IL。<strong>修法 →</strong> 跨程序集常量改用 readonly，运行时从定义处读取；const 只用于同一程序集内、永不改变的常量。
+</Callout>
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：const 编译期烤入">
+    <EcsReadonlyConstDiagram />
+    `public const int Max = 10;` 编译时，每处 `Max` 引用都被替换成字面量 10，烤进调用方 IL。没有运行时查找，快但脆弱——库改值后调用方 IL 不变。
+  </Step>
+  <Step title="第二步：readonly 运行期读取">
+    `public static readonly int Max = 10;` 是一个静态字段，引用处在运行时从字段定义读取。库升级把字段改成 20，调用方下次访问就得到 20，无需重编译。代价是一次字段访问，但 JIT 常内联。
+  </Step>
+  <Step title="第三步：版本演化——库 v2 升级">
+    库 v2 把 Max 从 10 改成 20。const 调用方 IL 内仍是 10，未重编译 = 静默用旧值，可能引发隐蔽 bug。readonly 调用方运行时读到 20，无需重编译即正确。这就是 Effective C# 推荐跨程序集用 readonly 的根本原因。
+  </Step>
+  <Step title="第四步：类型与初值灵活性">
+    const 只能用内置数值、字符串、null 赋值；readonly 可用任意类型（如 `static readonly DateTime Epoch`）。readonly 还能在构造函数中根据参数计算初值，const 只能用编译期常量表达式。需要运行时计算的常量只能用 readonly。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// const：编译期常量（跨程序集慎用）
+public class Config
+{
+    // 危险：库升级后调用方未重编译会用旧值
+    public const int MaxRetries = 3;
+
+    // 安全：运行期读取，单一数据源
+    public static readonly int TimeoutMs = 5000;
+
+    // readonly 可用任意类型 + 运行时计算
+    public static readonly DateTime Epoch =
+        new DateTime(1970, 1, 1, DateTimeKind.Utc);
+}
+
+// const 的合法场景：同程序集内、永不改变、需极致性能
+public class MathConsts
+{
+    public const double Pi = 3.14159265358979;
+    public const int BitsPerByte = 8;
+}
+
+// readonly 实例字段：构造后不可变
+public class Circle
+{
+    public readonly double Radius;
+    public Circle(double r) => Radius = r >= 0 ? r
+        : throw new ArgumentException();
+    public double Area => Math.PI * Radius * Radius;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 在库中用 `const` 定义版本号或配置阈值，发布补丁改值后用户反馈行为没变。<strong>原因 →</strong> const 烤进调用方 IL，补丁改库不影响已编译的调用方。<strong>修法 →</strong> 任何可能跨版本变化的值用 `static readonly`，const 只用于真正永不改变的数学/物理常数。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 用 `const` 定义 `DateTime` 常量，编译报错。<strong>原因 →</strong> const 只支持内置数值、字符串、null，`DateTime` 是结构体不能用 const。<strong>修法 →</strong> 改用 `static readonly DateTime`，在静态字段初始化器或静态构造函数中赋值。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> `const` 数组或对象引用，运行时被外部修改了内容。<strong>原因 →</strong> const 只保证引用不变，不保证引用对象内容不变；且 const 不能用于引用类型（除 string/null）。<strong>修法 →</strong> 不可变集合用 `static readonly` 加 `ImmutableArray`，而非 const。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+  <Answer question="const 和 readonly 在编译期和运行期的行为有何不同？">const 在编译期求值，引用处被字面量替换烤进调用方 IL，运行时无字段查找，仅限内置数值/字符串/null。readonly 是运行期字段，在构造函数执行后不可变，引用处在运行时从字段定义读取，可用任意类型且能在构造函数中计算初值。</Answer>
+  <Answer question="库升级 const 值后，调用方为何会用旧值？如何避免？">const 值在编译时被字面量替换进调用方 IL，库升级只改库的字段定义，不会修改已编译调用方的 IL。调用方不重新编译就静默使用旧值。避免方法：跨程序集的常量一律用 `static readonly`，运行时从定义处读取，库升级即生效。</Answer>
+  <Answer question="什么场景才该用 const？默认为什么选 readonly？">const 只用于永不改变、同程序集内、且需极致性能的常量（如数学常数 Pi、BitsPerByte）。默认选 readonly 是因为它版本安全——跨程序集升级时调用方无需重编译即看到新值，代价仅一次字段访问，JIT 常内联抵消。const 的版本脆弱性在跨程序集场景下是定时炸弹。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="const">编译期常量。值在编译时被字面量替换进调用方 IL，跨程序集不随库更新而变化。仅限内置数值、字符串、null。性能最佳但版本脆弱。</GlossaryItem>
+  <GlossaryItem term="readonly">运行期常量。字段在构造函数执行后不可变，引用处在运行时从定义处读取。跨程序集随库更新生效，可用任意类型。是跨程序集常量的安全默认选择。</GlossaryItem>
+  <GlossaryItem term="编译期烤入">const 的行为：编译时把常量引用替换为字面量，直接写进调用方 IL。改值必须重编译所有引用方，否则静默用旧值。</GlossaryItem>
+  <GlossaryItem term="单一数据源">readonly 保证常量值只在定义处存在一份，所有引用运行时读取同一来源，库升级即全局生效，避免多处副本不一致。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />

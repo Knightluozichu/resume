@@ -1,0 +1,129 @@
+---
+title: LINQ 延迟执行
+type: C
+section: 泛型LINQ
+order: 2
+description: 条款 33-36——LINQ 查询构造不执行、枚举才求值、重复枚举重复执行与物化策略。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EcsLinqDeferredDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-linq-deferred";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 LINQ 查询在构造和枚举两个阶段的不同行为
+- 能识别重复枚举导致的性能问题并用 ToList 物化修复
+- 能回答：为什么延迟执行既能反映最新数据又会重复执行？
+
+</Objectives>
+
+## 直觉引入
+
+想象你写了一份菜谱（LINQ 查询）。写菜谱时厨房没有动工——你只是记下了「取食材、切片、煎炒」的步骤。只有当你真去按菜谱做菜（枚举）时，食材才被处理。同一份菜谱做两次，食材被处理两次。
+
+LINQ 的 Where、Select 就像写菜谱——构造查询时不执行，只是记录操作链。foreach 枚举时才真正跑一遍。这意味着数据源后续变化会反映到结果（菜谱按最新食材做），但也意味着每次枚举都重新执行一遍（做两次菜处理两次食材）。
+
+## 概念讲解
+
+<EcsLinqDeferredDiagram />
+
+### 构造 vs 执行
+
+<Term def="LINQ 查询在构造时不求值，只在枚举（foreach/ToList 等）时才真正执行操作链。">延迟执行</Term> 是 LINQ 的核心特性。`var q = src.Where(x => x > 0).Select(x => x * 2);` 这行只构造了一个查询对象（菜谱），没有遍历 src。直到 `foreach (var x in q)` 时，Where 和 Select 才真正执行。
+
+### 延迟执行的双刃剑
+
+利：查询反映数据源的最新状态。构造查询后向 src 追加元素，下次枚举自动包含新元素，无需手动刷新。
+
+弊：重复枚举重复执行。两次 foreach 各跑一遍操作链；先 `q.Count()` 再 `foreach (var x in q)` 跑了两轮。如果 src 是远程查询或昂贵操作，重复执行的代价巨大。
+
+### 物化
+
+<Term def="用 ToList/ToArray 等立即求值方法把延迟查询转成已计算的集合，避免重复枚举。">物化</Term> 是解决重复执行的利器：`var list = q.ToList();` 立即执行查询并存入 List，后续多次读取 list 不再重复执行。需要多次访问同一查询结果时，先物化。
+
+<Callout type="trap">
+<strong>现象 →</strong> 先 `var count = q.Count();` 再 `foreach (var x in q)`，远程查询跑了两次。<strong>原因 →</strong> Count 和 foreach 各枚举一次，延迟执行导致重复求值。<strong>修法 →</strong> 先 `var list = q.ToList();`，再用 `list.Count` 和 `foreach (var x in list)`，只执行一次查询。
+</Callout>
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：构造查询不执行">
+    <EcsLinqDeferredDiagram />
+    `var q = src.Where(x => x > 0).Select(x => x * 2);` 只构造了查询对象——一个记录了「过滤大于 0、再乘 2」操作链的配方。此时 src 没有被遍历，Where 和 Select 都没跑。查询变量只是配方，不是结果。
+  </Step>
+  <Step title="第二步：枚举才求值">
+    `foreach (var x in q)` 触发枚举，此时 Where 和 Select 才真正执行——遍历 src，过滤大于 0 的元素，每个乘 2，逐个 yield 返回。这是延迟执行的「下锅」时刻。
+  </Step>
+  <Step title="第三步：利——反映最新数据">
+    构造查询后向 src 追加元素 `src.Add(99)`，下次 foreach 自动包含 99。因为查询是配方不是快照，每次枚举都按当前 src 重新求值。无需手动刷新，适合数据源持续变化的场景。
+  </Step>
+  <Step title="第四步：弊——重复枚举重复执行">
+    两次 foreach 各跑一遍操作链。若 src 是数据库查询，意味着两次网络往返。先 Count 再 foreach 也是两轮。修复：用 `var list = q.ToList();` 物化，立即求值存入 List，后续读取 list 不再重复执行。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+var src = new List<int> { 1, -2, 3, -4, 5 };
+
+// 构造查询：不执行（只是配方）
+var q = src.Where(x => x > 0).Select(x => x * 2);
+
+// 第一次枚举：执行，输出 2 6 10
+foreach (var x in q) Console.WriteLine(x);
+
+// 追加元素后，第二次枚举反映新数据，输出 2 6 10 12
+src.Add(6);
+foreach (var x in q) Console.WriteLine(x);
+
+// 重复枚举陷阱：Count + foreach = 两轮执行
+var count = q.Count();        // 第一轮
+foreach (var x in q) { }      // 第二轮（浪费）
+
+// 物化：一次执行，多次读取
+var list = q.ToList();        // 立即执行一次
+Console.WriteLine(list.Count); // 读 List，不再执行查询
+foreach (var x in list) { }    // 读 List，不再执行查询
+
+// 立即执行的方法：ToList/ToArray/Count/First/Sum 等
+// 延迟执行的方法：Where/Select/OrderBy/SelectMany/Take/Skip 等
+```
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 在循环里多次访问 `q.Count()` 和 `foreach (q)`，性能极差。<strong>原因 →</strong> 每次访问都触发一次完整枚举，延迟执行让查询反复求值。<strong>修法 →</strong> 需要多次访问时先 `var list = q.ToList();` 物化，后续读 List 零查询开销。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> LINQ 查询捕获了循环变量，所有结果都拿到最后一个值。<strong>原因 →</strong> lambda 捕获的是变量引用而非值，循环结束后所有闭包都指向同一变量（已是最后值）。<strong>修法 →</strong> 在循环内用局部变量拷贝 `var local = i;` 再捕获，或用 `Select((item, index) => ...)` 避免闭包陷阱。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 以为 `var q = src.Where(...)` 已经执行了过滤，后续修改 src 不影响 q。<strong>原因 →</strong> 延迟执行让 q 只是配方，src 修改后下次枚举反映新数据。<strong>修法 →</strong> 若需要快照，用 `ToList` 物化冻结当前结果；若需要实时性，保持延迟执行。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+  <Answer question="为什么 LINQ 查询在构造时不执行，枚举时才求值？">LINQ 的 Where/Select 等运算符返回的是 IEnumerable，内部用 yield return 实现迭代器。构造查询只是组装操作链（配方），没有触发 MoveNext。只有 foreach/ToList 等枚举操作调用 MoveNext 时，迭代器才逐步执行过滤和投影。这种设计让查询能反映数据源的最新状态，且能组合多步操作而不立即求值。</Answer>
+  <Answer question="延迟执行的双刃剑是什么？如何解决重复执行问题？">利：查询反映数据源最新状态，构造后追加的数据下次枚举自动包含，无需刷新。弊：重复枚举重复执行，Count 后再 foreach 跑两轮，远程查询代价翻倍。解决：需要多次访问时用 ToList/ToArray 物化，立即求值存入集合，后续读取零查询开销。</Answer>
+  <Answer question="lambda 捕获循环变量为什么会导致所有结果拿到最后一个值？如何修复？">lambda 捕获的是变量引用而非值的快照。循环变量在每次迭代是同一变量，循环结束后所有闭包都指向它（已是最后值）。修复：在循环内创建局部变量拷贝 `var local = i;` 再捕获 local，每次迭代是独立的局部变量；或用带索引的 Select 重载避免手动捕获。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="延迟执行">LINQ 查询在构造时不求值，只在枚举（foreach/ToList 等）时才真正执行操作链。让查询反映最新数据，但重复枚举会重复执行。</GlossaryItem>
+  <GlossaryItem term="物化">用 ToList/ToArray 等立即求值方法把延迟查询转成已计算的集合，避免重复枚举。需要多次访问同一查询结果时先物化。</GlossaryItem>
+  <GlossaryItem term="重复枚举">对同一延迟查询多次枚举，每次都重新执行操作链。远程或昂贵查询的重复枚举代价巨大，应用物化避免。</GlossaryItem>
+  <GlossaryItem term="闭包捕获">lambda 捕获外部变量时捕获的是引用而非值快照。捕获循环变量会导致所有闭包指向同一变量（循环结束后的最后值），需用局部变量拷贝修复。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />

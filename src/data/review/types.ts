@@ -649,7 +649,40 @@ export type ReviewChapterSlug =
   | "ec7-delegates-events"
   | "ec7-linq"
   | "ec7-async-await"
-  | "ec7-final-review";
+  | "ec7-final-review"
+  // 编写高质量代码
+  | "cqc-learning-map"
+  | "cqc-nullable-ref"
+  | "cqc-exception-practice"
+  | "cqc-async-pattern"
+  | "cqc-collection-choice"
+  | "cqc-linq-performance"
+  | "cqc-memory-allocation"
+  | "cqc-thread-safety"
+  | "cqc-api-design"
+  | "cqc-final-review"
+  // Effective C#
+  | "ecs-learning-map"
+  | "ecs-property-prefer"
+  | "ecs-readonly-const"
+  | "ecs-idisposable"
+  | "ecs-generic-constraints"
+  | "ecs-linq-deferred"
+  | "ecs-exception-usage"
+  | "ecs-parallel-async"
+  | "ecs-equality"
+  | "ecs-final-review"
+  // 深入理解 C#
+  | "dcs-learning-map"
+  | "dcs-csharp-history"
+  | "dcs-delegates-events"
+  | "dcs-iterator-yield"
+  | "dcs-lambda-closure"
+  | "dcs-dynamic-language"
+  | "dcs-async-internals"
+  | "dcs-pattern-matching"
+  | "dcs-records-tuples"
+  | "dcs-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1303,6 +1336,39 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ec7-linq": "LINQ",
   "ec7-async-await": "异步编程",
   "ec7-final-review": "总复习",
+  // 编写高质量代码
+  "cqc-learning-map": "学习地图",
+  "cqc-nullable-ref": "可空引用",
+  "cqc-exception-practice": "异常实践",
+  "cqc-async-pattern": "异步模式",
+  "cqc-collection-choice": "集合选择",
+  "cqc-linq-performance": "LINQ 性能",
+  "cqc-memory-allocation": "内存分配",
+  "cqc-thread-safety": "线程安全",
+  "cqc-api-design": "API 设计",
+  "cqc-final-review": "总复习",
+  // Effective C#
+  "ecs-learning-map": "学习地图",
+  "ecs-property-prefer": "属性优先",
+  "ecs-readonly-const": "只读与常量",
+  "ecs-idisposable": "IDisposable 模式",
+  "ecs-generic-constraints": "泛型约束",
+  "ecs-linq-deferred": "LINQ 延迟执行",
+  "ecs-exception-usage": "异常使用",
+  "ecs-parallel-async": "并行与异步",
+  "ecs-equality": "相等性",
+  "ecs-final-review": "总复习",
+  // 深入理解 C#
+  "dcs-learning-map": "学习地图",
+  "dcs-csharp-history": "C# 演进史",
+  "dcs-delegates-events": "委托与事件",
+  "dcs-iterator-yield": "迭代器与 yield",
+  "dcs-lambda-closure": "Lambda 与闭包",
+  "dcs-dynamic-language": "动态语言特性",
+  "dcs-async-internals": "异步内部机制",
+  "dcs-pattern-matching": "模式匹配",
+  "dcs-records-tuples": "Record 与元组",
+  "dcs-final-review": "总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

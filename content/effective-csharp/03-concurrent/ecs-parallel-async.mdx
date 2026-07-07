@@ -1,0 +1,157 @@
+---
+title: 并行与异步
+type: C
+section: 并发设计
+order: 2
+description: 条款 48-50——Task.WhenAll 并行独立任务、避免 async void、ConfigureAwait 与异常聚合。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EcsParallelAsyncDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-parallel-async";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能区分串行 await 与并行 Task.WhenAll 的性能差异
+- 能解释 async void 为何危险，以及何时该用 Task 替代
+- 能回答：库代码为什么应该 ConfigureAwait(false)？
+
+</Objectives>
+
+## 直觉引入
+
+想象你要打三个电话。如果一个个打（串行 await），每个 1 分钟，总共 3 分钟。如果三个电话同时打（Task.WhenAll），1 分钟全部完成——因为打电话的大部分时间在「等对方接听」，等的时候你可以打下一个。
+
+异步编程的核心就是利用「等待时间」。串行 await 浪费了等待——三个独立任务排队等，总耗时是之和。Task.WhenAll 让独立任务同时跑，总耗时取决于最慢的那个。Effective C# 的原则：独立的异步任务用 WhenAll 并行，别让它们排队等。
+
+## 概念讲解
+
+<EcsParallelAsyncDiagram />
+
+### 串行 vs 并行
+
+<Term def="等待所有任务完成的并行方法，让独立任务同时执行，总耗时取决于最慢的任务。">Task.WhenAll</Term> 接收一组 Task，同时启动它们，等全部完成。串行 `await GetA(); await GetB(); await GetC();` 让三个任务排队，总耗时是三者之和。`await Task.WhenAll(GetA(), GetB(), GetC())` 三者同时跑，总耗时是最长者。
+
+前提是任务独立——不互相依赖、不争抢同一资源。如果有依赖（B 需要 A 的结果），只能串行。
+
+### async void 的危险
+
+<Term def="返回 void 的异步方法，异常无法被调用方捕获，会直接崩溃进程，是 C# 并发的定时炸弹。">async void</Term> 是 C# 的定时炸弹。async Task 方法的异常会被存入 Task，调用方可以 await 捕获。async void 的异常直接抛到 SynchronizationContext，无法捕获，通常导致进程崩溃。
+
+async void 唯一合法场景是事件处理器（因为事件签名要求 void）。其他场景一律用 async Task。
+
+### ConfigureAwait
+
+<Term def="指示 await 后是否回到原同步上下文，库代码用 false 避免死锁并提升性能。">ConfigureAwait</Term> 控制 await 完成后是否回到原捕获上下文。UI 应用有 SynchronizationContext，默认 await 后回到 UI 线程。库代码不依赖 UI 线程，应 `ConfigureAwait(false)` 跳回线程池，避免死锁并减少上下文切换开销。
+
+<Callout type="trap">
+<strong>现象 →</strong> 库代码不加 ConfigureAwait(false)，在 UI 应用中调用导致死锁。<strong>原因 →</strong> 库 await 后试图回到 UI 线程，但 UI 线程正阻塞等待库的结果，互相等待。<strong>修法 →</strong> 库代码所有 await 加 ConfigureAwait(false)，不依赖调用方的同步上下文。
+</Callout>
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：串行 await——排队等待">
+    <EcsParallelAsyncDiagram />
+    `var a = await GetA(); var b = await GetB(); var c = await GetC();` 三个任务排队执行。GetA 跑完才启动 GetB，GetB 跑完才启动 GetC。每个 1 秒，总耗时 3 秒。等待 GetA 时 CPU 空闲，白白浪费了并行机会。
+  </Step>
+  <Step title="第二步：Task.WhenAll——并行执行">
+    `await Task.WhenAll(GetA(), GetB(), GetC());` 三个任务同时启动。GetA、GetB、GetC 并行跑，各自 1 秒，总耗时 1 秒（最长者）。前提是三者独立——不互相依赖、不争抢同一资源。
+  </Step>
+  <Step title="第三步：async void——定时炸弹">
+    async void 方法的异常不存入 Task，直接抛到 SynchronizationContext，调用方无法 try-catch 捕获，通常崩溃进程。唯一合法场景是事件处理器（签名要求 void）。其他场景一律 async Task，让异常可被 await 捕获。
+  </Step>
+  <Step title="第四步：ConfigureAwait(false)——库代码防死锁">
+    UI 应用有 SynchronizationContext，默认 await 后回到 UI 线程。库代码若同步阻塞等待（如 `.Result`）会死锁——库等 UI 线程，UI 线程等库结果。库中所有 await 加 ConfigureAwait(false)，跳回线程池执行，不依赖调用方上下文。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 串行：排队等待，总 3s（慢）
+public async Task<string> SequentialAsync()
+{
+    var a = await DownloadAsync("a");   // 1s
+    var b = await DownloadAsync("b");   // 1s
+    var c = await DownloadAsync("c");   // 1s
+    return a + b + c;                   // 总 3s
+}
+
+// 并行：同时执行，总 1s（快）
+public async Task<string> ParallelAsync()
+{
+    var tasks = new[]
+    {
+        DownloadAsync("a"),
+        DownloadAsync("b"),
+        DownloadAsync("c"),
+    };
+    await Task.WhenAll(tasks);          // 总 1s
+    return string.Concat(tasks.Select(t => t.Result));
+}
+
+// async void：炸弹（仅事件处理器合法）
+button.Click += async void (s, e) => { await DoAsync(); }; // 事件处理器 OK
+public async void BadMethod() { await DoAsync(); }        // 危险！
+
+// async Task：安全（异常可捕获）
+public async Task GoodMethod() { await DoAsync(); }
+
+// 库代码：ConfigureAwait(false) 防死锁
+public async Task<T> LibMethodAsync<T>()
+{
+    var data = await httpClient.GetAsync(url)
+        .ConfigureAwait(false);        // 不回到调用方上下文
+    return await data.Content.ReadAsAsync<T>()
+        .ConfigureAwait(false);
+}
+
+// 异常聚合：WhenAll 抛 AggregateException
+try
+{
+    await Task.WhenAll(task1, task2, task3);
+}
+catch (Exception ex) when (ex is AggregateException ae)
+{
+    foreach (var inner in ae.InnerExceptions)
+        Log(inner);                    // 逐个处理每个任务的异常
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 三个独立 IO 任务用串行 await，性能比预期慢 3 倍。<strong>原因 →</strong> 串行 await 让独立任务排队，总耗时是之和而非最长者。<strong>修法 →</strong> 独立任务用 `await Task.WhenAll(t1, t2, t3)` 并行，总耗时取决于最慢的任务。注意前提是任务互不依赖。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> async void 方法抛异常，进程直接崩溃，try-catch 捕获不到。<strong>原因 →</strong> async void 异常不存入 Task，直接抛到 SynchronizationContext，无法被调用方捕获。<strong>修法 →</strong> 除事件处理器外一律用 async Task，异常存入 Task 可被 await 捕获。事件处理器是 async void 的唯一合法场景。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 库代码在 UI 应用中调用 `.Result` 同步等待，界面卡死。<strong>原因 →</strong> 库 await 后试图回到 UI 线程，但 UI 线程正阻塞等 Result，互相等待死锁。<strong>修法 →</strong> 库中所有 await 加 `ConfigureAwait(false)` 不回 UI 线程；调用方用 await 而非 `.Result`，避免同步阻塞异步代码。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+  <Answer question="串行 await 和 Task.WhenAll 的总耗时有什么区别？前提条件是什么？">串行 await 让独立任务排队，总耗时是各任务之和（3 个 1 秒任务 = 3 秒）。Task.WhenAll 让任务同时执行，总耗时是最慢的任务（3 个 1 秒任务 = 1 秒）。前提是任务独立——不互相依赖、不争抢同一资源。有依赖关系的任务只能串行。</Answer>
+  <Answer question="async void 为什么危险？唯一合法场景是什么？">async void 的异常不存入 Task，直接抛到 SynchronizationContext，调用方无法 try-catch 捕获，通常导致进程崩溃。且调用方无法 await 它的完成。唯一合法场景是事件处理器——因为事件签名要求 void，框架会处理 SynchronizationContext。其他场景一律用 async Task。</Answer>
+  <Answer question="库代码为什么应该 ConfigureAwait(false)？不加会怎样？">UI 应用有 SynchronizationContext，默认 await 完成后回到原上下文（UI 线程）。库代码不依赖 UI 线程，回 UI 线程是浪费且危险——如果调用方用 `.Result` 同步阻塞，库等 UI 线程、UI 线程等库结果，死锁。ConfigureAwait(false) 让 await 完成后跳回线程池，不依赖调用方上下文，防死锁并减少上下文切换开销。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Task.WhenAll">等待一组 Task 全部完成的并行方法，让独立任务同时执行，总耗时取决于最慢的任务。前提是任务互不依赖。</GlossaryItem>
+  <GlossaryItem term="async void">返回 void 的异步方法，异常不存入 Task 直接抛到 SynchronizationContext 无法捕获。是 C# 并发的定时炸弹，仅事件处理器场景合法。</GlossaryItem>
+  <GlossaryItem term="ConfigureAwait(false)">指示 await 完成后不回到原同步上下文，跳回线程池执行。库代码必须加，避免依赖调用方上下文导致死锁和性能损耗。</GlossaryItem>
+  <GlossaryItem term="SynchronizationContext">同步上下文，UI 应用中代表 UI 线程。默认 await 完成后回到此上下文，库代码 ConfigureAwait(false) 可跳过。</GlossaryItem>
+  <GlossaryItem term="AggregateException">Task.WhenAll 中任一任务抛异常时聚合的异常类型，InnerExceptions 包含所有任务的异常。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />

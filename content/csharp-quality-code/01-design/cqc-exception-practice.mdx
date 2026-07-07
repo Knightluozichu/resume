@@ -1,0 +1,269 @@
+---
+title: 异常实践
+type: B
+section: 设计质量
+order: 1
+description: 异常处理四层模型——预防、捕获、恢复、记录。抛具体异常、捕获有意义异常、不吞异常、finally 释放资源。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CqcExceptionPracticeDiagram } from "@/components/mdx/csharp-quality-code/diagrams/cqc-exception-practice";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分业务异常与系统异常，知道何时抛自定义异常、何时用框架异常类型
+- 能用 try-catch-finally 正确处理异常，不吞异常、不捕获无意义异常
+- 能回答：为什么不建议 catch Exception 吞掉所有异常？
+</Objectives>
+
+## 直觉引入
+
+想象一栋大楼的消防系统。如果每个房间都装一个「万能灭火器」把所有警报都静音掉，你会觉得安全吗？不会——你只是听不到警报了，火还在烧。异常处理也一样：到处写 `catch (Exception ex) { }` 不是在处理异常，是在掩盖异常，让问题在暗处蔓延直到不可收拾。
+
+好的异常处理像分层的消防系统：首先预防（参数校验不让火苗起），然后捕获（只在能处理的楼层灭火），接着恢复（疏散降级），最后记录（留下日志供排查）。
+
+<CqcExceptionPracticeDiagram />
+
+## 概念讲解
+
+### 异常处理四层模型
+
+<Term def="用参数校验在入口拦住非法输入，避免后续逻辑产生异常">预防</Term> 是第一道防线。能用 `if` 判断解决的就不要用异常：
+
+```csharp
+// 坏代码：用异常做流程控制
+public int Divide(int a, int b)
+{
+    try { return a / b; }
+    catch (DivideByZeroException) { return 0; }
+}
+
+// 好代码：用参数校验预防
+public int Divide(int a, int b)
+{
+    if (b == 0)
+        throw new ArgumentException("除数不能为零", nameof(b));
+    return a / b;
+}
+```
+
+### 抛具体异常
+
+<Term def="抛出能精确描述问题的异常类型，而不是基类 Exception">抛具体异常</Term> 让调用方知道发生了什么、能否恢复：
+
+```csharp
+// 坏代码：抛 Exception，调用方不知道发生了什么
+throw new Exception("订单不存在");
+
+// 好代码：抛具体类型
+throw new InvalidOperationException("订单不存在");
+throw new ArgumentException("数量必须大于零", nameof(quantity));
+throw new KeyNotFoundException($"用户 {userId} 不存在");
+```
+
+### 业务异常 vs 系统异常
+
+<Term def="业务规则违反时抛出的自定义异常，携带错误码与业务上下文">业务异常</Term> 和 <Term def="框架已定义的异常类型，描述技术层面的错误">系统异常</Term> 的区分：
+
+- **业务异常**：自定义，继承 `Exception`，携带错误码。如 `OrderNotFoundException`、`InsufficientBalanceException`。
+- **系统异常**：用框架已有类型。如 `ArgumentNullException`、`InvalidOperationException`、`TimeoutException`。
+
+```csharp
+// 自定义业务异常
+public class OrderNotFoundException : Exception
+{
+    public string OrderId { get; }
+    public int ErrorCode { get; }
+
+    public OrderNotFoundException(string orderId)
+        : base($"订单 {orderId} 不存在")
+    {
+        OrderId = orderId;
+        ErrorCode = 4001;
+    }
+}
+```
+
+### 捕获有意义异常
+
+只在能处理的地方 catch，捕获后要么恢复、要么记录后重抛：
+
+```csharp
+// 好代码：捕获特定异常并恢复
+try
+{
+    var data = File.ReadAllText(path);
+    return Parse(data);
+}
+catch (FileNotFoundException)
+{
+    return defaultValue;  // 文件不存在时返回默认值
+}
+catch (IOException ex)
+{
+    logger.LogWarning(ex, "读取文件失败，重试");
+    throw;  // 重抛，让上层决定
+}
+```
+
+## 交互 Demo
+
+<Stepper>
+  <Step title="预防：参数校验先行">
+    ```csharp
+    public Order CreateOrder(string userId, List<Item> items)
+    {
+        // 预防：入口校验，不靠异常做流程控制
+        ArgumentNullException.ThrowIfNull(userId);
+        ArgumentNullException.ThrowIfNull(items);
+        if (items.Count == 0)
+            throw new ArgumentException("订单项不能为空", nameof(items));
+
+        return new Order(userId, items);
+    }
+    ```
+  </Step>
+  <Step title="抛具体异常：携带业务上下文">
+    ```csharp
+    public Order GetOrder(string orderId)
+    {
+        var order = _repository.Find(orderId);
+        if (order is null)
+            throw new OrderNotFoundException(orderId);
+        return order;
+    }
+    ```
+  </Step>
+  <Step title="捕获：只 catch 能处理的">
+    ```csharp
+    try
+    {
+        var order = GetOrder(orderId);
+        return Ok(order);
+    }
+    catch (OrderNotFoundException)
+    {
+        return NotFound();  // 恢复：返回 404
+    }
+    // 不 catch Exception：系统异常让它冒泡到全局处理器
+    ```
+  </Step>
+  <Step title="finally：确保资源释放">
+    ```csharp
+    FileStream? stream = null;
+    try
+    {
+        stream = File.OpenRead(path);
+        return Parse(stream);
+    }
+    finally
+    {
+        // 无论成功失败都释放
+        stream?.Dispose();
+    }
+    // 更好：用 using 自动释放
+    using var stream2 = File.OpenRead(path);
+    ```
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// ========== 坏代码：吞异常 ==========
+public User? GetUser(int id)
+{
+    try
+    {
+        return _db.Query<User>(id);
+    }
+    catch (Exception)
+    {
+        // 空 catch 块：问题被掩盖，排查时无从下手
+        return null;
+    }
+}
+
+// ========== 坏代码：catch 太宽 ==========
+public User? GetUser(int id)
+{
+    try
+    {
+        return _db.Query<User>(id);
+    }
+    catch (Exception ex)
+    {
+        // 捕获所有异常包括 OutOfMemoryException，不安全
+        _logger.Error(ex);
+        return null;
+    }
+}
+
+// ========== 好代码：捕获特定异常 ==========
+public User? GetUser(int id)
+{
+    try
+    {
+        return _db.Query<User>(id);
+    }
+    catch (SqlException ex) when (ex.Number == -2)
+    {
+        // 只捕获超时异常，记录后重抛
+        _logger.LogWarning(ex, "数据库超时");
+        throw;
+    }
+    // 其他异常自然冒泡到全局处理器
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：** 线上偶发问题排查不出来，日志里什么都没有。
+**原因：** 代码里 `catch (Exception) { }` 空块吞掉了所有异常，问题被静默掩盖。
+**修法：** 绝不写空 catch 块。至少记录日志，能恢复就恢复，不能恢复就 `throw` 重抛。用 `when` 子句过滤特定异常。
+</Callout>
+
+<Callout type="trap">
+**现象：** 用 `throw ex` 重抛后，原始堆栈丢失，看不到异常真正发生的位置。
+**原因：** `throw ex` 会重置调用栈，而 `throw`（不带 ex）保留原始堆栈。
+**修法：** 重抛一律用 `throw;`（不带异常变量），让原始堆栈信息完整传递给上层。
+</Callout>
+
+<Callout type="trap">
+**现象：** 用异常做流程控制，性能差且代码难读。
+**原因：** 把 try-catch 当 if-else 用，如 `int.Parse` 失败后 catch 返回 0。
+**修法：** 用 `TryParse` 模式替代。参数校验用 `if` 不用异常。异常用于「意外情况」而非「预期分支」。
+</Callout>
+
+## 小结
+
+- 异常处理四层：预防（参数校验）→ 捕获（try-catch）→ 恢复（降级重试）→ 记录（日志）
+- 抛具体异常类型，不用 `Exception` 基类；业务异常自定义携带错误码
+- 只捕获能处理的异常，绝不空 catch；重抛用 `throw;` 不用 `throw ex`
+- 用异常处理意外情况，不用异常做流程控制
+
+<Attribution />
+
+<Glossary>
+<GlossaryItem term="业务异常">
+业务规则违反时抛出的自定义异常，如订单不存在、余额不足。继承 Exception，携带错误码与业务上下文，让调用方区分不同业务失败。
+</GlossaryItem>
+<GlossaryItem term="throw 重抛">
+`throw;`（不带异常变量）重抛当前异常，保留原始调用栈。`throw ex;` 会重置调用栈，不要用。排查问题时堆栈完整性至关重要。
+</GlossaryItem>
+<GlossaryItem term="when 异常过滤器">
+`catch (Exception ex) when (条件)` 子句：在 catch 前检查条件，条件为 false 时不捕获，让异常继续冒泡。用于精确过滤特定异常。
+</GlossaryItem>
+<GlossaryItem term="TryParse 模式">
+用 `bool TryParse(string, out T)` 替代 `T Parse(string)` + catch。预期可能失败的转换用 TryParse 避免异常开销，不用于流程控制。
+</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  <Answer question="为什么不建议 `catch (Exception)` 吞掉所有异常？">三个原因：1) 掩盖问题——空 catch 或只记录不重抛，让本该冒泡到全局处理器的异常被静默吞掉，线上问题无从排查。2) 捕获过宽——`Exception` 包含 `OutOfMemoryException`、`StackOverflowException` 等不应被捕获的严重异常，catch 后继续运行可能造成数据损坏。3) 违反分层——底层代码捕获了本该由上层决策的异常，如数据层 catch 了业务异常返回 null，让业务层以为「没找到」而无法区分「不存在」和「查询失败」。正确做法是 catch 特定类型，不能处理的让它冒泡。</Answer>
+  <Answer question="什么情况下应该自定义业务异常，什么情况下用框架异常类型？">自定义业务异常的场景：业务规则违反，且调用方需要区分不同业务失败做不同处理。如 `OrderNotFoundException`、`InsufficientBalanceException`——携带错误码与业务上下文，让上层能精确 catch 并返回对应的 HTTP 状态码或错误提示。用框架异常类型的场景：技术层面的参数错误或状态错误。如参数为 null 用 `ArgumentNullException`，参数值非法用 `ArgumentException`，对象状态不允许操作用 `InvalidOperationException`。不要为技术错误造新异常类型，框架已有的语义更清晰。</Answer>
+</Exercises>

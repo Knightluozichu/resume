@@ -1,0 +1,235 @@
+---
+title: "Lambda 与闭包"
+type: B
+section: "语言核心"
+order: 3
+description: "Lambda 表达式、闭包的变量捕获机制与修改的闭包陷阱。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DcsLambdaClosureDiagram } from "@/components/mdx/deep-understanding-csharp/diagrams/dcs-lambda-closure";
+
+<Objectives>
+
+- 理解 Lambda 是委托的语法糖，简化了回调创建
+- 掌握闭包的变量捕获机制——按引用捕获
+- 理解修改的闭包陷阱（循环变量捕获）及修复方法
+- 区分 Lambda 编译为委托与编译为表达式树
+
+</Objectives>
+
+## 直觉引入
+
+Lambda 就像一个便签纸。C# 1.0 你要写一封正式信函（命名方法）再装进信封（`new Delegate(Method)`）才能寄出去。C# 3.0 的 Lambda 让你直接在便签上写 `x => x * 2`，随手就能用——不需要起名字、不需要定义方法、不需要显式创建委托实例。
+
+但便签有一个隐藏能力：它可以「捕获」周围的上下文。如果你在便签上写了 `x => x * factor`，这个 `factor` 变量会被便签「记住」——即使你离开了写便签的房间（原作用域结束），便签仍然记得 `factor` 的值。这就是**闭包**。
+
+闭包的捕获有一个陷阱：它记住的是变量本身（按引用），不是变量当时的值。如果你写完便签后改了 `factor`，便签用的是改后的新值。在循环中这会导致所有便签都指向同一个循环变量——循环结束后所有便签看到的都是最后一次的值。
+
+## 概念讲解
+
+### Lambda：委托的语法糖
+
+<Term def="Lambda 表达式是 C# 3.0 引入的匿名函数语法。`x => x * 2` 编译后生成一个委托实例，指向编译器生成的方法。Lambda 是委托的语法糖，简化了从 C# 1.0 的命名方法+显式实例化到 C# 3.0 的一行表达式的演进。">
+
+Lambda 编译后本质是委托实例。`(int x) => x * 2` 编译器生成一个静态方法，委托指向它。表达式 Lambda（`x => x * 2`）直接返回表达式的值；语句 Lambda（`x => { return x * 2; }`）用花括号和 return。
+
+Lambda 的参数类型可以从委托签名推断——`Func<int, int> f = x => x * 2` 中 `x` 的类型由 `Func<int, int>` 推断为 `int`。
+
+</Term>
+
+### 闭包：变量捕获
+
+<Term def="闭包（closure）是携带了外部变量引用的函数。当 Lambda 引用定义作用域中的局部变量时，编译器生成一个闭包类，把被捕获的变量提升为闭包类字段，Lambda 变成闭包类的方法。C# 的捕获是按引用的——Lambda 捕获的是变量本身，不是捕获时的值。">
+
+```csharp
+int factor = 10;
+Func<int, int> multiply = x => x * factor;  // 捕获 factor
+factor = 20;
+Console.WriteLine(multiply(5));  // 100，不是 50
+```
+
+C# 按引用捕获——Lambda 捕获的是变量本身（variable），不是变量在捕获时的值（value）。编译器把被捕获的局部变量提升到闭包类的字段中，Lambda 变成该类的方法。
+
+闭包使得局部变量的生命周期被延长——只要闭包对象活着，被捕获的变量就不会被 GC 回收。
+
+</Term>
+
+### 修改的闭包陷阱
+
+在 `for` 循环中捕获循环变量时，所有 Lambda 共享同一个变量（`i` 是同一个变量）。循环结束后 `i` 的值是最后一次迭代的值，所有 Lambda 看到的都是这个值。
+
+修复方法：在循环内创建局部副本 `int local = i;`，Lambda 捕获不同的 `local` 变量。
+
+注意 C# 5.0 起，`foreach` 的循环变量被改为每次迭代创建新变量，所以 `foreach` 捕获安全。但 `for` 循环的变量仍是同一个，仍有陷阱。
+
+### Lambda vs 表达达式树
+
+同一个 Lambda 语法 `x => x * 2`，赋值目标类型决定编译结果：
+- `Func<int, int> f = x => x * 2`：编译为可执行委托（IL 方法）。
+- `Expression<Func<int, int>> expr = x => x * 2`：编译为表达式树（数据结构），可遍历、分析、翻译成 SQL。
+
+## 交互Demo
+
+<DcsLambdaClosureDiagram />
+
+<Stepper>
+
+<Step title="闭包机制：变量捕获">
+
+Lambda 捕获外部变量时，编译器生成闭包类，把变量提升为字段。C# 按引用捕获——`factor` 后续被改为 20，Lambda 用的是最新的 20。底层：`int factor` 从栈上的局部变量变成堆上的闭包类字段，生命周期被延长。
+
+</Step>
+
+<Step title="修改的闭包陷阱">
+
+`for` 循环的 `i` 是同一个变量，三个 Lambda 捕获同一个 `i`。循环结束后 `i=3`，所有 Lambda 输出 3。注意：C# 5.0 起 `foreach` 的循环变量每次迭代是新变量，`foreach` 捕获安全。但 `for` 循环仍有陷阱。
+
+</Step>
+
+<Step title="修复：局部副本">
+
+在循环内 `int local = i;` 创建新变量，Lambda 捕获不同的 `local`。每个 `local` 独立持有当次迭代的值，输出 0、1、2。这是修复修改的闭包陷阱的标准做法。
+
+</Step>
+
+<Step title="Lambda vs 表达式树">
+
+`Func<int, int> f = x => x * 2` 编译为委托（可执行代码）。`Expression<Func<int, int>> expr = x => x * 2` 编译为表达式树（数据结构）。LINQ to Objects 用委托，LINQ to SQL/EF Core 用表达式树翻译成 SQL。同一个语法，类型驱动双关。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Lambda 与闭包的完整演进
+
+// === C# 1.0 → 3.0：委托创建的简化 ===
+// C# 1.0
+Func<int, int> f1 = delegate(int x) { return x * 2; };  // 匿名方法
+// C# 3.0
+Func<int, int> f2 = x => x * 2;  // Lambda
+
+// === 闭包：变量捕获 ===
+int multiplier = 10;
+Func<int, int> scale = x => x * multiplier;
+Console.WriteLine(scale(5));  // 50
+multiplier = 20;
+Console.WriteLine(scale(5));  // 100 —— 按引用，用的是新值
+
+// === 修改的闭包陷阱 ===
+var actions = new List<Action>();
+
+// 陷阱：for 循环变量捕获
+for (int i = 0; i < 3; i++)
+{
+    actions.Add(() => Console.WriteLine(i));
+}
+foreach (var a in actions) a();  // 输出: 3  3  3
+
+// 修复：局部副本
+actions.Clear();
+for (int i = 0; i < 3; i++)
+{
+    int local = i;  // 每次迭代创建新变量
+    actions.Add(() => Console.WriteLine(local));
+}
+foreach (var a in actions) a();  // 输出: 0  1  2
+
+// === foreach 安全（C# 5.0+）===
+var nums = new[] { 1, 2, 3 };
+actions.Clear();
+foreach (var n in nums)
+{
+    actions.Add(() => Console.WriteLine(n));  // C# 5.0+ 安全
+}
+foreach (var a in actions) a();  // 输出: 1  2  3
+
+// === 表达式树 vs 委托 ===
+Func<int, int> del = x => x * 2;  // 编译为委托
+Expression<Func<int, int>> expr = x => x * 2;  // 编译为表达式树
+// 表达式树可以被遍历和翻译
+Console.WriteLine(expr.Body);  // (x * 2)
+Console.WriteLine(expr.Parameters[0].Name);  // x
+var compiled = expr.Compile();  // 编译成委托
+Console.WriteLine(compiled(5));  // 10
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：闭包捕获的是变量在捕获时的值**
+
+C# 的变量捕获是**按引用**的——Lambda 捕获的是变量本身（variable），不是变量在捕获时的值（value）。`int factor = 10; Func<int,int> f = x => x * factor; factor = 20;` 后 `f(5)` 返回 100（用新值 20），不是 50（旧值 10）。编译器把变量提升到闭包类字段，Lambda 操作的是同一个字段。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：foreach 循环变量捕获也有陷阱**
+
+C# 5.0 起，`foreach` 的循环变量被改为每次迭代创建新变量（breaking change）。所以 `foreach (var n in nums) actions.Add(() => Console.WriteLine(n))` 是安全的——每个 Lambda 捕获不同的 `n`。但 `for` 循环的 `i` 仍是同一个变量，仍有修改的闭包陷阱。记住：foreach 安全（5.0+），for 需要局部副本。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？为什么？
+
+```csharp
+int x = 5;
+Action a = () => Console.WriteLine(x);
+x = 10;
+a();
+```
+
+<Answer>
+
+输出 10。C# 的闭包按引用捕获变量——Lambda 捕获的是变量 `x` 本身，不是捕获时的值 5。`x` 被改为 10 后，Lambda 用的是最新的 10。编译器把 `x` 提升到闭包类字段，Lambda 和原作用域操作同一个字段。
+
+</Answer>
+
+**问题 2**：`Func<int,int>` 和 `Expression<Func<int,int>>` 赋同一个 Lambda 有什么区别？
+
+<Answer>
+
+`Func<int, int> f = x => x * 2` 编译为委托（IL 方法 + 委托实例），`f(5)` 直接执行返回 10。`Expression<Func<int, int>> expr = x => x * 2` 编译为表达式树（数据结构），描述「参数 x 乘以 2」这个操作，不可直接执行。表达式树可被遍历、分析或翻译成 SQL（EF Core 的 IQueryable 用它）。需要 `expr.Compile()` 才能得到可执行委托。同一个 Lambda 语法，目标类型决定编译结果。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Lambda 表达式">
+
+C# 3.0 引入的匿名函数语法。`x => x * 2` 编译后生成委托实例。是委托的语法糖，从 C# 1.0 的命名方法+显式实例化简化到一行表达式。参数类型可从委托签名推断。
+
+</GlossaryItem>
+
+<GlossaryItem term="闭包（closure）">
+
+携带了外部变量引用的函数。Lambda 引用定义作用域的局部变量时，编译器生成闭包类把变量提升为字段。C# 按引用捕获——捕获变量本身而非值。闭包延长变量的生命周期。
+
+</GlossaryItem>
+
+<GlossaryItem term="修改的闭包陷阱">
+
+在 `for` 循环中捕获循环变量时，所有 Lambda 共享同一个变量，循环结束后都指向最终值。修复：循环内创建局部副本 `int local = i`。`foreach`（C# 5.0+）每次迭代是新变量，安全。
+
+</GlossaryItem>
+
+<GlossaryItem term="表达式树（Expression Tree）">
+
+Lambda 编译为数据结构而非可执行代码。`Expression<Func<T>>` 描述操作的结构，可被遍历、分析或翻译成 SQL。EF Core 的 `IQueryable` 用表达式树。需要 `Compile()` 才能得到委托。
+
+</GlossaryItem>
+
+</Glossary>

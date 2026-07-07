@@ -1,0 +1,207 @@
+---
+title: "迭代器与 yield"
+type: B
+section: "语言核心"
+order: 2
+description: "yield return 的延迟执行原理、编译器状态机转换与资源清理语义。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DcsIteratorYieldDiagram } from "@/components/mdx/deep-understanding-csharp/diagrams/dcs-iterator-yield";
+
+<Objectives>
+
+- 理解 yield return 的延迟执行本质与暂停-恢复机制
+- 掌握编译器把 yield 方法转换为状态机的原理
+- 理解延迟执行的性能优势与多次枚举陷阱
+- 掌握迭代器中 try-finally 的资源清理语义
+
+</Objectives>
+
+## 直觉引入
+
+想象你在看一部长篇电视剧。如果一次性把 100 集全部下载到硬盘再开始看，那是 `return`——你拿到完整的列表，代价是等待时间长、内存占用大。如果用流媒体一集一集看，看一集加载一集，那就是 `yield return`——每次只产出当前这一集，看完才加载下一集。
+
+`yield return` 的核心优势是**延迟执行**：方法被调用时不立即执行方法体，只返回一个「承诺将来产出数据」的迭代器。只有真正枚举（`foreach`/`MoveNext`）时才逐个产出元素。如果你只看前 10 集就弃剧了，后面 90 集永远不会被加载——节省了 90% 的计算。
+
+但延迟执行也有陷阱：每次重新看（`foreach`）都会从头加载，而不是从上次的位置继续。如果你需要反复看同一部剧，最好下载到本地（`.ToList()`）缓存。
+
+## 概念讲解
+
+### yield return 的暂停-恢复
+
+<Term def="yield return 是 C# 2.0 引入的迭代器语法。含 yield return 的方法被编译器转换为状态机：每次 MoveNext 执行到下一个 yield return 处暂停，局部变量保存在状态机字段中，下次 MoveNext 从暂停处恢复。">
+
+`yield return` 与 `return` 的本质区别在于执行模式：
+
+- `return`：方法体一次性执行完毕，返回结果，局部变量销毁。
+- `yield return`：方法体被拆成状态机。每次 `MoveNext()` 执行到下一个 `yield return` 处暂停，局部变量保留在状态机字段中。下次 `MoveNext()` 从暂停处继续。
+
+这意味着 `yield return` 可以产出无限序列——`while(true) yield return i++;` 每次只算一个元素，不会死循环。
+
+</Term>
+
+### 编译器状态机转换
+
+编译器把含 `yield return` 的方法编译成一个实现 `IEnumerable<T>` 和 `IEnumerator<T>` 的嵌套类：
+
+- `_state` 字段：记录执行到哪个 yield 位置（switch-case 跳转依据）。
+- `_current` 字段：保存当前 `yield return` 的值。
+- 局部变量提升为字段：保证暂停后恢复时值不丢失。
+- `MoveNext()` 方法：执行到下一个 `yield return`，设置 `_current` 并返回 `true`；执行完毕返回 `false`。
+
+这个状态机模式与 C# 5.0 的 async/await 状态机几乎相同——编译器复用了同一套基础设施。
+
+### 延迟执行的陷阱
+
+延迟执行省一次性的计算开销，但如果需要多次遍历，必须手动物化（`ToList`/`ToArray`）。否则每次 `foreach` 都从头枚举迭代器，谓词被重复执行。如果数据源是数据库查询，每次 `foreach` 都会重新查数据库。
+
+## 交互Demo
+
+<DcsIteratorYieldDiagram />
+
+<Stepper>
+
+<Step title="yield return 的延迟执行">
+
+调用含 `yield return` 的方法时，方法体不立即执行——只创建一个迭代器对象。只有 `MoveNext()` 才逐步执行，每次执行到 `yield return` 暂停。这意味着 `GetLargeData().Take(10)` 只触发 10 次 `MoveNext`，100 万元素的循环只跑到第 10 个就停了。
+
+</Step>
+
+<Step title="编译器状态机转换">
+
+编译器把方法体拆成 `MoveNext()` 中的 switch-case。每个 `yield return` 对应一个 state 编号。局部变量提升为状态机字段，保证暂停后恢复时值不丢失。`GetEnumerator()` 每次调用创建新的状态机实例，支持多次独立遍历。
+
+</Step>
+
+<Step title="延迟执行的陷阱">
+
+延迟执行下，每次 `foreach` 都从头枚举。`var data = source.Where(x => ExpensiveFilter(x));` 后多次 `foreach` 会导致 `ExpensiveFilter` 重复执行。修法：`var cached = data.ToList()` 物化后多次遍历 `cached` 不会重复执行。
+
+</Step>
+
+<Step title="资源清理：try-finally 依赖 Dispose">
+
+迭代器方法中 `try-finally` 的 finally 块不在每次 `yield return` 时执行——它在迭代器被 Dispose 或正常结束时执行。`foreach` 编译器自动 Dispose 迭代器，但手动 `MoveNext` 必须用 `using` 包裹。`yield break` 提前结束迭代器，也会触发 finally 执行。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 迭代器：延迟执行与状态机
+
+// 延迟执行的优势：只算需要的元素
+IEnumerable<int> CountTo(int n)
+{
+    for (int i = 1; i <= n; i++)
+    {
+        Console.WriteLine($"  产出 {i}");
+        yield return i;
+    }
+}
+
+// Take(3) 只触发 3 次 MoveNext
+var first3 = CountTo(100).Take(3).ToList();
+// 输出：产出 1, 产出 2, 产出 3 —— 只跑了 3 次，97 次被跳过
+
+// 延迟执行的陷阱：多次遍历重复执行
+var data = CountTo(5).Where(x => { Console.WriteLine($"过滤 {x}"); return true; });
+foreach (var x in data) { }  // 过滤 1-5
+foreach (var x in data) { }  // 又过滤 1-5！
+// 修法：var cached = data.ToList(); 然后遍历 cached
+
+// 无限序列：yield return 可以产出无限序列
+IEnumerable<int> Naturals()
+{
+    int i = 1;
+    while (true) yield return i++;
+}
+var first10Naturals = Naturals().Take(10).ToList();  // 安全，只取 10 个
+
+// 资源清理：try-finally 依赖 Dispose
+IEnumerable<string> ReadLines(string path)
+{
+    using var reader = new StreamReader(path);  // using 确保 Dispose
+    while (!reader.EndOfStream)
+        yield return reader.ReadLine()!;
+}
+// foreach 自动 Dispose 迭代器 -> reader 被 Dispose
+foreach (var line in ReadLines("data.txt"))
+{
+    if (line.StartsWith("#")) break;  // break 也触发 Dispose
+    Console.WriteLine(line);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：yield return 方法被调用时就开始执行**
+
+`yield return` 方法被调用时**不执行方法体**——只创建一个迭代器对象。方法体在第一次 `MoveNext()` 时才开始执行。这是延迟执行的核心：调用 `GetLargeData()` 是零开销的，真正的计算发生在枚举时。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：迭代器的 try-finally 与普通方法一样**
+
+迭代器方法中 `try-finally` 的 finally 块**不在每次 yield return 时执行**——它在迭代器被 Dispose 或正常结束时才执行。如果调用方 `foreach` 到一半就 `break`，`foreach` 编译器会自动 Dispose 迭代器（触发 finally）。但手动 `MoveNext` 不 Dispose 会导致资源泄漏——必须用 `using` 包裹迭代器。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：为什么说迭代器是「延迟执行」的？多次 foreach 同一个 LINQ 查询会有什么问题？
+
+<Answer>
+
+迭代器方法被调用时不执行方法体，只返回迭代器对象。只有 `MoveNext` 才逐步执行。多次 `foreach` 同一个 LINQ 查询会从头枚举，Where/Select 的谓词被重复执行。如果数据源是数据库查询，每次 `foreach` 都重新查数据库。修法：`.ToList()` 物化后多次遍历缓存。
+
+</Answer>
+
+**问题 2**：编译器如何把含 yield return 的方法转换成状态机？
+
+<Answer>
+
+编译器生成一个实现 `IEnumerable<T>`/`IEnumerator<T>` 的嵌套类：`_state` 字段记录执行位置，`_current` 保存当前值，局部变量提升为字段。`MoveNext()` 用 switch-case 跳转到对应 yield 位置执行，设置 `_current` 并返回 true；执行完返回 false。`GetEnumerator()` 每次创建新实例支持多次遍历。与 async/await 状态机技术同源。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="yield return">
+
+C# 2.0 引入的迭代器语法。使方法体被编译器转换为状态机，每次 `MoveNext` 执行到下一个 `yield return` 暂停，局部变量保存在状态机字段中。支持延迟执行和无限序列。
+
+</GlossaryItem>
+
+<GlossaryItem term="延迟执行（lazy evaluation）">
+
+迭代器方法被调用时不执行方法体，只返回迭代器对象。只有枚举（`MoveNext`）时才逐个产出元素。省一次性的计算开销，但多次遍历需手动物化（`ToList`）。
+
+</GlossaryItem>
+
+<GlossaryItem term="状态机">
+
+编译器为含 yield 的方法生成的类。`_state` 记录位置，`_current` 保存当前值，局部变量提升为字段。`MoveNext()` 用 switch-case 驱动暂停-恢复。与 async/await 状态机技术同源。
+
+</GlossaryItem>
+
+<GlossaryItem term="yield break">
+
+提前结束迭代器（相当于普通方法的 return）。会触发 try-finally 的 finally 块执行。编译器把它编译成设置 state=-2 并执行 finally。
+
+</GlossaryItem>
+
+</Glossary>

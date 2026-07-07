@@ -104,6 +104,9 @@ export const BOOK_ORDER = [
   "cpp-server-essence",
   "head-first-design-patterns",
   "essential-csharp-7",
+  "csharp-quality-code",
+  "effective-csharp",
+  "deep-understanding-csharp",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -149,6 +152,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "cpp-server-essence": "C++ 服务器开发精髓",
   "head-first-design-patterns": "Head First 设计模式",
   "essential-csharp-7": "C# 7.0 本质论",
+  "csharp-quality-code": "编写高质量代码：改善 C# 程序的 157 个建议",
+  "effective-csharp": "Effective C#",
+  "deep-understanding-csharp": "深入理解 C#",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -734,6 +740,21 @@ export const SECTION_ORDER = [
   "面向对象",
   "泛型与委托",
   "高级特性",
+  // 编写高质量代码
+  "语法质量",
+  "设计质量",
+  "性能质量",
+  "工程质量",
+  // Effective C#
+  "语言习惯",
+  "资源管理",
+  "泛型LINQ",
+  "并发设计",
+  // 深入理解 C#
+  "C#演进",
+  "语言核心",
+  "动态并发",
+  "现代特性",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

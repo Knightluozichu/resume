@@ -963,6 +963,36 @@ import { Ec7DelegatesEventsDiagram } from "./essential-csharp-7/diagrams/ec7-del
 import { Ec7LinqDiagram } from "./essential-csharp-7/diagrams/ec7-linq";
 import { Ec7AsyncAwaitDiagram } from "./essential-csharp-7/diagrams/ec7-async-await";
 import { Ec7FinalReviewDiagram } from "./essential-csharp-7/diagrams/ec7-final-review";
+import { CqcLearningMapDiagram } from "./csharp-quality-code/diagrams/cqc-learning-map";
+import { CqcNullableRefDiagram } from "./csharp-quality-code/diagrams/cqc-nullable-ref";
+import { CqcExceptionPracticeDiagram } from "./csharp-quality-code/diagrams/cqc-exception-practice";
+import { CqcAsyncPatternDiagram } from "./csharp-quality-code/diagrams/cqc-async-pattern";
+import { CqcCollectionChoiceDiagram } from "./csharp-quality-code/diagrams/cqc-collection-choice";
+import { CqcLinqPerformanceDiagram } from "./csharp-quality-code/diagrams/cqc-linq-performance";
+import { CqcMemoryAllocationDiagram } from "./csharp-quality-code/diagrams/cqc-memory-allocation";
+import { CqcThreadSafetyDiagram } from "./csharp-quality-code/diagrams/cqc-thread-safety";
+import { CqcApiDesignDiagram } from "./csharp-quality-code/diagrams/cqc-api-design";
+import { CqcFinalReviewDiagram } from "./csharp-quality-code/diagrams/cqc-final-review";
+import { EcsLearningMapDiagram } from "./effective-csharp/diagrams/ecs-learning-map";
+import { EcsPropertyPreferDiagram } from "./effective-csharp/diagrams/ecs-property-prefer";
+import { EcsReadonlyConstDiagram } from "./effective-csharp/diagrams/ecs-readonly-const";
+import { EcsIDisposableDiagram } from "./effective-csharp/diagrams/ecs-idisposable";
+import { EcsGenericConstraintsDiagram } from "./effective-csharp/diagrams/ecs-generic-constraints";
+import { EcsLinqDeferredDiagram } from "./effective-csharp/diagrams/ecs-linq-deferred";
+import { EcsExceptionUsageDiagram } from "./effective-csharp/diagrams/ecs-exception-usage";
+import { EcsParallelAsyncDiagram } from "./effective-csharp/diagrams/ecs-parallel-async";
+import { EcsEqualityDiagram } from "./effective-csharp/diagrams/ecs-equality";
+import { EcsFinalReviewDiagram } from "./effective-csharp/diagrams/ecs-final-review";
+import { DcsLearningMapDiagram } from "./deep-understanding-csharp/diagrams/dcs-learning-map";
+import { DcsCsharpHistoryDiagram } from "./deep-understanding-csharp/diagrams/dcs-csharp-history";
+import { DcsDelegatesEventsDiagram } from "./deep-understanding-csharp/diagrams/dcs-delegates-events";
+import { DcsIteratorYieldDiagram } from "./deep-understanding-csharp/diagrams/dcs-iterator-yield";
+import { DcsLambdaClosureDiagram } from "./deep-understanding-csharp/diagrams/dcs-lambda-closure";
+import { DcsDynamicLanguageDiagram } from "./deep-understanding-csharp/diagrams/dcs-dynamic-language";
+import { DcsAsyncInternalsDiagram } from "./deep-understanding-csharp/diagrams/dcs-async-internals";
+import { DcsPatternMatchingDiagram } from "./deep-understanding-csharp/diagrams/dcs-pattern-matching";
+import { DcsRecordsTuplesDiagram } from "./deep-understanding-csharp/diagrams/dcs-records-tuples";
+import { DcsFinalReviewDiagram } from "./deep-understanding-csharp/diagrams/dcs-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -2206,6 +2236,36 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Ec7LinqDiagram,
   Ec7AsyncAwaitDiagram,
   Ec7FinalReviewDiagram,
+  CqcLearningMapDiagram,
+  CqcNullableRefDiagram,
+  CqcExceptionPracticeDiagram,
+  CqcAsyncPatternDiagram,
+  CqcCollectionChoiceDiagram,
+  CqcLinqPerformanceDiagram,
+  CqcMemoryAllocationDiagram,
+  CqcThreadSafetyDiagram,
+  CqcApiDesignDiagram,
+  CqcFinalReviewDiagram,
+  EcsLearningMapDiagram,
+  EcsPropertyPreferDiagram,
+  EcsReadonlyConstDiagram,
+  EcsIDisposableDiagram,
+  EcsGenericConstraintsDiagram,
+  EcsLinqDeferredDiagram,
+  EcsExceptionUsageDiagram,
+  EcsParallelAsyncDiagram,
+  EcsEqualityDiagram,
+  EcsFinalReviewDiagram,
+  DcsLearningMapDiagram,
+  DcsCsharpHistoryDiagram,
+  DcsDelegatesEventsDiagram,
+  DcsIteratorYieldDiagram,
+  DcsLambdaClosureDiagram,
+  DcsDynamicLanguageDiagram,
+  DcsAsyncInternalsDiagram,
+  DcsPatternMatchingDiagram,
+  DcsRecordsTuplesDiagram,
+  DcsFinalReviewDiagram,
   Term,
   Glossary,
   GlossaryItem,

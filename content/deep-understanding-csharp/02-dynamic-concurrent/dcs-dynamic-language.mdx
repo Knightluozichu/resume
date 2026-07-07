@@ -1,0 +1,222 @@
+---
+title: "动态语言特性"
+type: B
+section: "动态并发"
+order: 1
+description: "C# dynamic 关键字、DLR 运行时绑定与 CallSite 缓存机制。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DcsDynamicLanguageDiagram } from "@/components/mdx/deep-understanding-csharp/diagrams/dcs-dynamic-language";
+
+<Objectives>
+
+- 理解 dynamic 与 object、var 的本质区别
+- 掌握 DLR 的 CallSite 缓存机制与性能特征
+- 理解 dynamic 在 COM 互操作和反射替代中的价值
+- 明确 dynamic 的适用场景与风险边界
+
+</Objectives>
+
+## 直觉引入
+
+`var`、`object`、`dynamic` 看起来都能装任何东西，但它们的「检查时机」完全不同。
+
+`var` 是一面透明的玻璃——编译器完全知道类型，只是帮你省了写类型名的功夫。`var x = 5` 和 `int x = 5` 完全等价，编译后 `var` 消失。
+
+`object` 是一个密封箱——你把东西放进去后编译器只知道「里面有个东西」，但要用的时候必须拆箱（强制转换）。拆错类型会运行时崩。
+
+`dynamic` 是一个魔法盒——你往里面放任何东西，调用任何方法，编译器都不检查。它说「我不知道你能不能这样做，但我不拦你，运行时再说」。运行时由 DLR（Dynamic Language Runtime）动态查找方法并绑定。
+
+`dynamic` 的核心动机不是让 C# 变成动态语言，而是让 C# 能与动态世界（COM、Python、JSON）交互。它是通往动态世界的桥梁。
+
+## 概念讲解
+
+### dynamic vs object vs var
+
+<Term def="dynamic 是 C# 4.0 引入的关键字，绕过编译时类型检查。所有方法调用、属性访问在运行时通过 DLR 动态绑定。不需要强制转换，但调用不存在的方法运行时抛 RuntimeBinderException。">
+
+三者对比：
+- `var`：编译时类型推断。`var x = 5` 等价于 `int x = 5`，编译后 `var` 消失。类型安全，有智能提示。
+- `object`：编译时类型检查。所有类型的基类，使用前必须强制转换 `(string)obj`，转换失败抛 `InvalidCastException`。
+- `dynamic`：运行时类型检查。绕过编译时检查，不需要强制转换，运行时由 DLR 绑定。调用不存在的方法抛 `RuntimeBinderException`。
+
+</Term>
+
+### DLR 与 CallSite 缓存
+
+<Term def="DLR（Dynamic Language Runtime）是 .NET 4.0 引入的动态语言运行时基础设施。它通过 CallSite 机制实现运行时方法绑定，并使用多级缓存（L0/L1/L2）优化性能——第一次调用走 Binder 反射绑定（慢），第二次起命中缓存接近直接调用速度。">
+
+编译器把每个 `dynamic` 调用编译成一个 `CallSite<T>` 对象。CallSite 持有一个委托，负责运行时绑定：
+
+1. **第一次调用（慢）**：CallSite 调用 Binder.Bind，通过反射检查实际类型，查找匹配方法，生成新委托并缓存到 L0。
+2. **第二次调用（快）**：同一类型的调用命中 L0 缓存，直接调用缓存委托，跳过 Binder 反射。接近直接调用速度。
+3. **多级缓存**：L0（CallSite 级别）缓存最近绑定；L1（RuleCache）缓存多个绑定规则；L2 跨 CallSite 全局缓存。
+
+性能取决于「类型稳定性」——同一 CallSite 总是调用同一类型的方法则缓存命中率高，性能接近直接调用。类型频繁变化则缓存频繁失效，退化到接近反射。
+
+</Term>
+
+### dynamic 的动机
+
+C# 4.0 引入 dynamic 的主要动机：
+1. **COM 互操作**：消除大量强制转换，如 Excel/Word 自动化。
+2. **与动态语言互操作**：直接调用 IronPython/IronRuby 对象。
+3. **替代反射**：`dynamic d = obj; d.Foo()` 比 `type.GetMethod("Foo").Invoke(obj, args)` 简洁，且 CallSite 缓存比反射快。
+4. **JSON/XML 处理**：结构不确定的数据快速访问。
+
+## 交互Demo
+
+<DcsDynamicLanguageDiagram />
+
+<Stepper>
+
+<Step title="dynamic vs object vs var">
+
+`var` 是编译时语法糖，编译后消失，完全类型安全。`object` 需要强制转换，编译时检查签名。`dynamic` 绕过编译时检查，运行时由 DLR 绑定。三者能装任何东西，但检查时机和安全性完全不同。
+
+</Step>
+
+<Step title="DLR CallSite 第一次调用（慢）">
+
+第一次调用 `dynamic` 变量的方法时，CallSite 调用 Binder 通过反射检查实际类型、查找匹配方法、生成委托并缓存。开销约等于反射。这个过程涉及类型检查 + IL 生成。
+
+</Step>
+
+<Step title="DLR CallSite 第二次调用（快）">
+
+同一类型第二次调用时，CallSite 的 L0 缓存命中——直接调用缓存的委托，跳过 Binder 反射和 IL 生成。接近直接调用速度，比反射快 10-100 倍。多级缓存（L0/L1/L2）应对类型交替变化。
+
+</Step>
+
+<Step title="适用场景与风险">
+
+dynamic 适合 COM 互操作、脚本互操作、JSON 处理、反射替代。风险：编译时安全丢失（拼错方法名运行时崩）、重构不安全（IDE 重命名不覆盖）、智能提示失效、重载解析延迟到运行时。核心原则：编译时知道类型永远用泛型/接口。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```csharp
+// dynamic 的各种用法
+
+// === dynamic vs object vs var ===
+object o = 10;
+// o.ToUpper();  // 编译报错：object 没有 ToUpper
+// ((string)o).ToUpper();  // 编译通过，运行时抛 InvalidCastException
+
+dynamic d = 10;
+// d.ToUpper();  // 编译通过，运行时抛 RuntimeBinderException（int 没有 ToUpper）
+d = "hello";
+d.ToUpper();  // 编译通过，运行时返回 "HELLO"
+
+var v = 10;  // 编译后等价于 int v = 10
+// v.ToUpper();  // 编译报错：int 没有 ToUpper
+
+// === COM 互操作（Excel）===
+// 没有 dynamic：大量强制转换
+// var range = (Excel.Range)((Excel.Worksheet)excel.ActiveSheet).get_Range("A1", "B2");
+// range.Value2 = 42;
+
+// 有 dynamic：无需强制转换
+// dynamic excel = new Application();
+// dynamic sheet = excel.ActiveSheet;
+// dynamic range = sheet.Range["A1", "B2"];
+// range.Value = 42;
+
+// === 替代反射 ===
+// 传统反射
+var type = obj.GetType();
+var method = type.GetMethod("DoSomething");
+var result = method?.Invoke(obj, new object[] { 42 });
+
+// 用 dynamic 替代
+dynamic dyn = obj;
+var result2 = dyn.DoSomething(42);  // 简洁，且有 CallSite 缓存
+
+// === JSON 处理 ===
+dynamic json = JsonConvert.DeserializeObject("{\"name\":\"Alice\",\"age\":30}");
+Console.WriteLine(json.name);  // Alice
+Console.WriteLine(json.age);   // 30
+// 注意：生产环境应改用强类型反序列化
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：dynamic 让 C# 变成了动态语言**
+
+dynamic 不是让 C# 变成动态语言，而是让 C# 能与动态世界交互。C# 本身仍是静态类型语言，dynamic 是通往 COM、脚本语言、动态 JSON 的桥梁。编译时知道类型时永远用泛型/接口/重载，只有编译时确实不知道类型时才用 dynamic。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：dynamic 性能与反射一样差**
+
+第一次调用 dynamic 确实约等于反射速度（Binder 走反射绑定）。但 DLR 的 CallSite 有多级缓存——第二次起同类型调用命中 L0 缓存，接近直接调用速度，比反射快 10-100 倍。性能取决于类型稳定性：同一 CallSite 总是调用同一类型则快，类型频繁变化则退化。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：用 dynamic 做公共 API 参数**
+
+API 参数用 dynamic 会让调用方困惑——传什么类型都行，但运行时可能崩。dynamic 调用不被 IDE 重构工具识别——重命名方法时 dynamic 调用不会更新。公共 API 应该用泛型约束（`where T : IInterface`）或方法重载，不用 dynamic。dynamic 适合内部实现和互操作场景。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：dynamic 和 object 的类型检查分别发生在什么时候？
+
+<Answer>
+
+object 是编译时类型检查——使用前必须强制转换，转换类型不匹配编译报错（若编译器能判断）或运行时抛 `InvalidCastException`。dynamic 是运行时类型检查——编译器不检查成员是否存在，运行时由 DLR 绑定，调用不存在的方法抛 `RuntimeBinderException`。同一个 dynamic 变量可以先后持有不同类型的值。
+
+</Answer>
+
+**问题 2**：DLR 的 CallSite 缓存如何工作？为什么第二次调用比第一次快？
+
+<Answer>
+
+每个 dynamic 调用编译成 CallSite 对象。第一次调用时 CallSite 通过 Binder 反射检查类型、查找方法、生成委托并缓存到 L0。第二次同类型调用时 L0 缓存命中，直接调用缓存委托，跳过 Binder 反射和 IL 生成，接近直接调用速度。多级缓存（L0/L1/L2）应对类型交替。类型稳定则快，频繁变化则退化。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="dynamic">
+
+C# 4.0 引入的关键字，绕过编译时类型检查。所有方法调用在运行时通过 DLR 动态绑定。适合 COM 互操作、脚本互操作、反射替代。风险：编译时安全丢失、重构不安全。
+
+</GlossaryItem>
+
+<GlossaryItem term="DLR（Dynamic Language Runtime）">
+
+.NET 4.0 引入的动态语言运行时基础设施。通过 CallSite 机制实现运行时方法绑定，多级缓存（L0/L1/L2）优化性能。IronPython/IronRuby 运行在 DLR 上。
+
+</GlossaryItem>
+
+<GlossaryItem term="CallSite">
+
+DLR 的调用点对象。每个 dynamic 调用编译成一个 CallSite。第一次调用走 Binder 反射绑定（慢），第二次起命中缓存接近直接调用（快）。类型稳定则缓存命中率高。
+
+</GlossaryItem>
+
+<GlossaryItem term="var">
+
+C# 3.0 引入的隐式类型。编译时类型推断，`var x = 5` 等价于 `int x = 5`，编译后 `var` 消失。完全类型安全，有智能提示。与 dynamic 无关——var 是编译时，dynamic 是运行时。
+
+</GlossaryItem>
+
+</Glossary>

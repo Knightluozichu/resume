@@ -560,6 +560,36 @@ import { ec7DelegatesEventsQuestions } from "./review/ec7-delegates-events";
 import { ec7LinqQuestions } from "./review/ec7-linq";
 import { ec7AsyncAwaitQuestions } from "./review/ec7-async-await";
 import { ec7FinalReviewQuestions } from "./review/ec7-final-review";
+import { cqcLearningMapQuestions } from "./review/cqc-learning-map";
+import { cqcNullableRefQuestions } from "./review/cqc-nullable-ref";
+import { cqcExceptionPracticeQuestions } from "./review/cqc-exception-practice";
+import { cqcAsyncPatternQuestions } from "./review/cqc-async-pattern";
+import { cqcCollectionChoiceQuestions } from "./review/cqc-collection-choice";
+import { cqcLinqPerformanceQuestions } from "./review/cqc-linq-performance";
+import { cqcMemoryAllocationQuestions } from "./review/cqc-memory-allocation";
+import { cqcThreadSafetyQuestions } from "./review/cqc-thread-safety";
+import { cqcApiDesignQuestions } from "./review/cqc-api-design";
+import { cqcFinalReviewQuestions } from "./review/cqc-final-review";
+import { ecsLearningMapQuestions } from "./review/ecs-learning-map";
+import { ecsPropertyPreferQuestions } from "./review/ecs-property-prefer";
+import { ecsReadonlyConstQuestions } from "./review/ecs-readonly-const";
+import { ecsIdisposableQuestions } from "./review/ecs-idisposable";
+import { ecsGenericConstraintsQuestions } from "./review/ecs-generic-constraints";
+import { ecsLinqDeferredQuestions } from "./review/ecs-linq-deferred";
+import { ecsExceptionUsageQuestions } from "./review/ecs-exception-usage";
+import { ecsParallelAsyncQuestions } from "./review/ecs-parallel-async";
+import { ecsEqualityQuestions } from "./review/ecs-equality";
+import { ecsFinalReviewQuestions } from "./review/ecs-final-review";
+import { dcsLearningMapQuestions } from "./review/dcs-learning-map";
+import { dcsCsharpHistoryQuestions } from "./review/dcs-csharp-history";
+import { dcsDelegatesEventsQuestions } from "./review/dcs-delegates-events";
+import { dcsIteratorYieldQuestions } from "./review/dcs-iterator-yield";
+import { dcsLambdaClosureQuestions } from "./review/dcs-lambda-closure";
+import { dcsDynamicLanguageQuestions } from "./review/dcs-dynamic-language";
+import { dcsAsyncInternalsQuestions } from "./review/dcs-async-internals";
+import { dcsPatternMatchingQuestions } from "./review/dcs-pattern-matching";
+import { dcsRecordsTuplesQuestions } from "./review/dcs-records-tuples";
+import { dcsFinalReviewQuestions } from "./review/dcs-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1127,6 +1157,36 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ec7LinqQuestions,
   ...ec7AsyncAwaitQuestions,
   ...ec7FinalReviewQuestions,
+  ...cqcLearningMapQuestions,
+  ...cqcNullableRefQuestions,
+  ...cqcExceptionPracticeQuestions,
+  ...cqcAsyncPatternQuestions,
+  ...cqcCollectionChoiceQuestions,
+  ...cqcLinqPerformanceQuestions,
+  ...cqcMemoryAllocationQuestions,
+  ...cqcThreadSafetyQuestions,
+  ...cqcApiDesignQuestions,
+  ...cqcFinalReviewQuestions,
+  ...ecsLearningMapQuestions,
+  ...ecsPropertyPreferQuestions,
+  ...ecsReadonlyConstQuestions,
+  ...ecsIdisposableQuestions,
+  ...ecsGenericConstraintsQuestions,
+  ...ecsLinqDeferredQuestions,
+  ...ecsExceptionUsageQuestions,
+  ...ecsParallelAsyncQuestions,
+  ...ecsEqualityQuestions,
+  ...ecsFinalReviewQuestions,
+  ...dcsLearningMapQuestions,
+  ...dcsCsharpHistoryQuestions,
+  ...dcsDelegatesEventsQuestions,
+  ...dcsIteratorYieldQuestions,
+  ...dcsLambdaClosureQuestions,
+  ...dcsDynamicLanguageQuestions,
+  ...dcsAsyncInternalsQuestions,
+  ...dcsPatternMatchingQuestions,
+  ...dcsRecordsTuplesQuestions,
+  ...dcsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

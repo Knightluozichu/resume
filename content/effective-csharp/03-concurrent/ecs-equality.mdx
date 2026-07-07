@@ -1,0 +1,137 @@
+---
+title: 相等性
+type: B
+section: 并发设计
+order: 3
+description: 条款 6、9——== 与 Equals 的差异、重写 Equals 必须重写 GetHashCode、IEquatable 接口避免装箱。
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EcsEqualityDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-equality";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 == 运算符与 Equals 方法在引用类型上的默认行为差异
+- 能说明重写 Equals 必须同时重写 GetHashCode 的原因
+- 能回答：值类型为什么应该实现 `IEquatable<T>`？
+
+</Objectives>
+
+## 直觉引入
+
+想象两个人拿着同一张设计图。你问「这两张图相等吗？」有两种理解：第一种是「它们是同一张纸吗」（引用相等，==）；第二种是「它们画的内容一样吗」（值相等，Equals）。同一张纸肯定内容一样，但内容一样的可能是两张不同的纸。
+
+C# 的 == 和 Equals 就对应这两种理解。引用类型默认 == 比的是「是不是同一张纸」，Equals 可被重写为「内容是否一样」。混淆两者会导致字典里明明有相等的键却找不到——因为哈希不一致。Effective C# 的铁律：三者（==、Equals、GetHashCode）必须协调一致。
+
+## 概念讲解
+
+<EcsEqualityDiagram />
+
+### == 与 Equals
+
+<Term def="引用类型默认比较引用是否指向同一对象的运算符；可重载但独立于 Equals。">== 运算符</Term> 在引用类型上默认比较引用——两个变量是否指向堆上同一对象。`string` 是例外，== 被重载为值比较。<Term def="Object 的虚方法，可被重写为值比较；重写后 == 不自动跟随。">Equals</Term> 是虚方法，可被重写为值比较，但重写 Equals 不会自动改变 == 的行为——两者需要分别处理。
+
+### GetHashCode 的一致性
+
+<Term def="返回对象哈希码的方法，字典和哈希表用它定位桶；相等的对象必须返回相同哈希码。">GetHashCode</Term> 是哈希表（Dictionary、HashSet）定位桶的依据。铁律：两个 Equals 相等的对象必须返回相同的哈希码。否则——两个「内容相等」的对象哈希不同，被放进不同的桶，字典按一个对象的哈希找桶，找不到另一个相等对象的桶，结果「明明相等却查不到」。
+
+### `IEquatable<T>`
+
+<Term def="提供类型安全 Equals(T) 方法的泛型接口，避免 object 参数的装箱，值类型应优先实现。">`IEquatable<T>`</Term> 提供类型安全的 `Equals(T other)`，参数是 T 而非 object。值类型用 object 版 Equals 会装箱（值类型 → object），有性能开销。实现 `IEquatable<T>` 让 `Dictionary<int, T>`、`List<T>.Contains` 等调用无装箱的类型安全版本。
+
+<Callout type="trap">
+<strong>现象 →</strong> 重写了 Equals 但没重写 GetHashCode，字典里查不到相等的键。<strong>原因 →</strong> Equals 相等的对象哈希不同，被分到不同的桶，字典按哈希找桶找不到。<strong>修法 →</strong> 重写 Equals 必须同时重写 GetHashCode，保证 Equals 相等的对象返回相同哈希码。
+</Callout>
+
+## 交互Demo
+
+<Stepper>
+  <Step title="第一步：== 比引用">
+    <EcsEqualityDiagram />
+    引用类型默认 == 比较引用——两个变量是否指向堆上同一对象。`a == b` 为 true 只有两者是同一对象。string 是例外：== 被重载为值比较，所以 `"abc" == "abc"` 为 true。
+  </Step>
+  <Step title="第二步：Equals 可重写为值比较">
+    Equals 是虚方法，可重写为值比较。重写后 `a.Equals(b)` 比的是内容而非引用。但重写 Equals 不会自动改变 ==——除非你也重载 == 运算符。两者需要分别处理，保持一致。
+  </Step>
+  <Step title="第三步：GetHashCode 一致性铁律">
+    字典和哈希表用 GetHashCode 定位桶。铁律：Equals 相等的对象必须返回相同哈希码。违反这条——两个内容相等的对象哈希不同，分到不同桶，字典按一个的哈希找桶，找不到另一个，结果「明明相等却查不到」。
+  </Step>
+  <Step title="第四步：IEquatable 避免装箱">
+    值类型用 object 版 Equals 会装箱（值类型 → object 堆分配）。实现 `IEquatable<T>` 提供类型安全 `Equals(T)`，`Dictionary<T>` 和 `List<T>.Contains` 等会优先调用无装箱的泛型版本。值类型应同时重写 Equals、重载 == 并实现 `IEquatable<T>`。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 引用类型：默认 == 比引用，重写 Equals 为值比较
+public class Point : IEquatable<Point>
+{
+    public int X { get; }
+    public int Y { get; }
+
+    public Point(int x, int y) { X = x; Y = y; }
+
+    // 类型安全 Equals（IEquatable<T>），无装箱
+    public bool Equals(Point other) =>
+        other is not null && X == other.X && Y == other.Y;
+
+    // object 版 Equals：转发到类型安全版
+    public override bool Equals(object obj) => Equals(obj as Point);
+
+    // 必须重写：相等的对象返回相同哈希
+    public override int GetHashCode() => HashCode.Combine(X, Y);
+
+    // 重载 == 与 Equals 保持一致
+    public static bool operator ==(Point a, Point b) =>
+        a is null ? b is null : a.Equals(b);
+    public static bool operator !=(Point a, Point b) => !(a == b);
+}
+
+// 使用
+var p1 = new Point(1, 2);
+var p2 = new Point(1, 2);
+Console.WriteLine(p1 == p2);          // true（重载后值比较）
+Console.WriteLine(p1.Equals(p2));     // true
+var dict = new Dictionary<Point, string>();
+dict[p1] = "A";
+Console.WriteLine(dict.ContainsKey(p2)); // true（哈希一致）
+```
+
+## 常见误区
+
+<Callout type="trap">
+<strong>现象 →</strong> 重写 Equals 没重写 GetHashCode，字典 ContainsKey 返回 false，明明有相等的键。<strong>原因 →</strong> Equals 相等的对象哈希不同，被分到不同桶，字典按哈希找桶找不到。<strong>修法 →</strong> 重写 Equals 必须同时重写 GetHashCode，保证 Equals 相等的对象返回相同哈希码（反之不必）。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 重写了 Equals 但 == 仍比引用，`a == b` 为 false 而 `a.Equals(b)` 为 true。<strong>原因 →</strong> 重写 Equals 不会自动改变 == 运算符，两者独立。<strong>修法 →</strong> 重写 Equals 后应同时重载 == 和 != 运算符，让两者语义一致。值类型尤其要重载 ==。
+</Callout>
+
+<Callout type="trap">
+<strong>现象 →</strong> 值类型用默认 Equals（object 版），大量调用时有性能问题。<strong>原因 →</strong> 默认 Equals 参数是 object，值类型调用会装箱，产生堆分配和 GC 压力。<strong>修法 →</strong> 值类型实现 `IEquatable<T>` 提供类型安全 `Equals(T)`，Dictionary 和 List.Contains 会优先调用无装箱版本。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+  <Answer question="引用类型上 == 和 Equals 的默认行为有什么不同？">引用类型默认 == 比较引用——两个变量是否指向堆上同一对象。Equals 默认行为与 == 相同（也是引用比较），但 Equals 是虚方法可被重写为值比较；== 是运算符需单独重载。string 是特例：== 被重载为值比较。重写 Equals 不会自动改变 ==，两者需分别处理保持一致。</Answer>
+  <Answer question="为什么重写 Equals 必须同时重写 GetHashCode？">字典和哈希表用 GetHashCode 定位桶，再用 Equals 判断桶内是否相等。如果 Equals 相等的对象哈希不同，它们被分到不同桶，字典按一个对象的哈希找桶，找不到另一个相等对象的桶，结果 ContainsKey 返回 false。铁律：Equals 相等的对象必须返回相同哈希码（反之不必——哈希相同不代表对象相等）。</Answer>
+  <Answer question="值类型为什么应该实现 IEquatable 接口？">值类型用默认 Equals（object 版）时参数是 object，每次调用都要装箱——值类型从栈拷贝到堆，产生堆分配和 GC 压力。实现 `IEquatable<T>` 提供类型安全 `Equals(T)`，参数是 T 无需装箱。`Dictionary<T>`、`List<T>.Contains` 等会优先调用 `IEquatable<T>` 版本，避免装箱开销。值类型应同时重写 Equals、重载 == 并实现 `IEquatable<T>`。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="== 运算符">引用类型默认比较引用是否指向同一对象，可重载但独立于 Equals。string 是例外，== 被重载为值比较。</GlossaryItem>
+  <GlossaryItem term="Equals">Object 的虚方法，可重写为值比较。重写后需同时重写 GetHashCode 并重载 == 以保持一致。</GlossaryItem>
+  <GlossaryItem term="GetHashCode">返回对象哈希码的方法，字典和哈希表用它定位桶。铁律：Equals 相等的对象必须返回相同哈希码。</GlossaryItem>
+  <GlossaryItem term="IEquatable<T>">提供类型安全 Equals(T) 方法的泛型接口，避免 object 参数的装箱。值类型应优先实现。</GlossaryItem>
+  <GlossaryItem term="装箱">值类型转 object 时的堆分配操作。值类型用 object 版 Equals 会装箱，产生 GC 压力，实现 `IEquatable<T>` 可避免。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />
