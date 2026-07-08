@@ -1,0 +1,96 @@
+---
+title: "驱动基础：WDM与WDF框架"
+type: A
+section: "系统与操作系统"
+order: 1
+description: "理解Windows驱动模型的核心架构——设备栈、DriverEntry、AddDevice、派遣函数与I/O模式选择"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpDriverFundamentalsDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-driver-fundamentals";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解设备栈的三层结构（过滤驱动/功能驱动/总线驱动）及 IRP 传递方向
+- 掌握 DriverEntry 与 AddDevice 的调用时机和职责分工
+- 区分 DO_BUFFERED_IO、DO_DIRECT_IO 和 Neither I/O 三种 I/O 模式
+- 理解设备扩展（DeviceExtension）在非分页池中的设计意义
+</Objectives>
+
+## 直觉引入
+
+把设备栈想象成一栋「办公大楼」的处理链。用户应用程序是「客户」（用户态），它把需求提交给「前台」（I/O 管理器）；前台把需求封装成标准「工单」（IRP），沿楼层向下传递。顶楼是「保安室」（过滤驱动），负责审查和记录；中间是「业务部门」（功能驱动 FDO），处理设备的核心逻辑；底楼是「物业管理」（总线驱动 PDO），直接和硬件打交道。每一层收到工单后可以自己处理、可以修改后继续向下传、也可以直接打回完成。整个大楼从客户到硬件，工单一路向下，完成后一路向上回调。
+
+<WkpDriverFundamentalsDiagram />
+
+## 设备栈与驱动角色
+
+<Term def="设备栈（Device Stack）是 Windows 为一个物理设备构建的分层驱动结构，自顶向下由过滤驱动、功能驱动和总线驱动组成，IRP 沿设备栈向下传递、完成例程向上回调。">设备栈</Term>是 WDM 的核心组织结构。**过滤驱动**（Filter Driver）是可选层，分上层和下层，负责拦截/监控/修改流经的 I/O 请求，不改变设备核心功能。**功能驱动**（FDO, Functional Device Object）是设备的核心逻辑所在，实现 `DriverEntry`、`AddDevice` 和所有派遣函数。**总线驱动**（PDO, Physical Device Object）由微软提供（如 PCI/USB），负责枚举设备和与硬件直接通信。
+
+```text
+// WDM 驱动的核心入口与设备栈构建
+NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath) {
+    // 1. 注册所有 MajorFunction 派遣函数
+    DriverObject->MajorFunction[IRP_MJ_CREATE]         = DispatchCreate;
+    DriverObject->MajorFunction[IRP_MJ_READ]           = DispatchRead;
+    DriverObject->MajorFunction[IRP_MJ_WRITE]          = DispatchWrite;
+    DriverObject->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchDeviceControl;
+    DriverObject->MajorFunction[IRP_MJ_PNP]            = DispatchPnp;
+    DriverObject->MajorFunction[IRP_MJ_POWER]          = DispatchPower;
+
+    // 2. 注册 AddDevice 回调和卸载回调
+    DriverObject->DriverExtension->AddDevice = AddDevice;
+    DriverObject->DriverUnload = DriverUnload;
+    return STATUS_SUCCESS;
+}
+
+NTSTATUS AddDevice(PDRIVER_OBJECT Driver, PDEVICE_OBJECT Pdo) {
+    // 3. 创建设备对象，指定 DeviceExtension 大小（非分页池）
+    PDEVICE_OBJECT fdo;
+    IoCreateDevice(Driver, sizeof(DEVICE_EXTENSION), NULL,
+                   FILE_DEVICE_UNKNOWN, 0, FALSE, &fdo);
+
+    // 4. 附加到设备栈，保存下层设备对象
+    PDEVICE_EXTENSION ext = fdo->DeviceExtension;
+    ext->LowerDevice = IoAttachDeviceToDeviceStack(fdo, Pdo);
+
+    // 5. 设置 I/O 模式标志
+    fdo->Flags |= DO_BUFFERED_IO;   // 或 DO_DIRECT_IO
+    fdo->Flags &= ~DO_DEVICE_INITIALIZING;
+    return STATUS_SUCCESS;
+}
+```
+
+## 三种 I/O 模式
+
+设备对象创建后需设置 `Flags` 中的 I/O 模式标志，决定 I/O 管理器如何处理用户缓冲区。**DO_BUFFERED_IO**（缓冲 I/O）让 I/O 管理器在非分页池分配内核副本，驱动通过 `Irp->AssociatedIrp.SystemBuffer` 访问——简单安全但多一次拷贝，适合小缓冲区。**DO_DIRECT_IO**（直接 I/O）让 I/O 管理器创建 MDL 锁定用户物理页，驱动通过 `MmGetSystemAddressForMdlSafe` 零拷贝访问——高效但复杂，适合大缓冲区和 DMA。两者都不设则为 **Neither I/O**，驱动自行用 `ProbeForRead`/`ProbeForWrite` 处理用户地址，需在调用线程上下文中操作。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：DriverEntry 里就创建设备对象。** `DriverEntry` 是驱动级初始化——注册派遣函数、读注册表配置，**不创建设备对象**。设备对象在 `AddDevice` 中创建，因为 PnP 管理器发现设备时才调用 `AddDevice`。一个驱动可能管理多个设备（如多口串口卡），`AddDevice` 会被调用多次。在 `DriverEntry` 中创建设备对象会导致 PnP 枚举时设备栈错乱。另一个误区是忘记 `IoAttachDeviceToDeviceStack`——不附加到设备栈，IRP 无法向下传递到总线驱动，设备永远无法启动。
+</Callout>
+
+<Exercises>
+**问题 1**：DriverEntry 和 AddDevice 分别何时调用？各做什么事？
+
+<Answer>
+DriverEntry 在驱动首次加载时由 SCM 调用一次，负责驱动级初始化：注册所有 MajorFunction 派遣函数、设置 AddDevice 和 DriverUnload 回调、读取注册表配置。AddDevice 在 PnP 管理器发现设备时调用，每次发现一个设备调用一次：创建设备对象（IoCreateDevice）、设置设备扩展、IoAttachDeviceToDeviceStack 附加到设备栈、设置 I/O 模式标志。DriverEntry 是驱动级，AddDevice 是设备级。
+</Answer>
+
+**问题 2**：DO_BUFFERED_IO 和 DO_DIRECT_IO 的区别是什么？如何选择？
+
+<Answer>
+Buffered IO：I/O 管理器在非分页池分配内核副本，驱动通过 SystemBuffer 访问，多一次拷贝，适合小缓冲区。Direct IO：I/O 管理器创建 MDL 锁定物理页，驱动通过 MmGetSystemAddressForMdlSafe 零拷贝访问，高效但复杂，适合大缓冲区和 DMA。选择依据：缓冲区小选 Buffered（简单安全），缓冲区大或性能敏感选 Direct（零拷贝高效）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="设备栈">Windows 为一个物理设备构建的分层驱动结构，自顶向下由过滤驱动、功能驱动（FDO）和总线驱动（PDO）组成。IRP 沿设备栈向下传递，完成例程自底向上回调。每层各司其职——过滤监控、功能处理、总线通信。</GlossaryItem>
+<GlossaryItem term="DriverEntry">驱动入口函数，在驱动首次加载时由 SCM 调用一次。负责注册 MajorFunction 派遣函数、设置 AddDevice/DriverUnload 回调、初始化全局资源。是驱动级初始化，不创建设备对象。</GlossaryItem>
+<GlossaryItem term="AddDevice">PnP 管理器发现设备时调用的回调，每次发现一个设备调用一次。负责创建设备对象、设置设备扩展、附加到设备栈、设置 I/O 模式标志。是设备级初始化。</GlossaryItem>
+<GlossaryItem term="设备扩展（DeviceExtension）">IoCreateDevice 时分配的非分页池私有数据区，存储设备级状态：硬件资源、同步对象、IRP 队列、DPC 对象等。高 IRQL（DPC/ISR）访问的数据必须在此，因为非分页池不会缺页。</GlossaryItem>
+</Glossary>

@@ -1648,7 +1648,17 @@ export type ReviewChapterSlug =
   | "mfc-persistence-serialization"
   | "mfc-template-method"
   | "mfc-com-interface"
-  | "mfc-final-review";
+  | "mfc-final-review"
+  | "wkp-learning-map"
+  | "wkp-driver-fundamentals"
+  | "wkp-irp-io-manager"
+  | "wkp-kernel-memory"
+  | "wkp-mdl-memory-descriptor"
+  | "wkp-interrupt-dpc"
+  | "wkp-synchronization-primitives"
+  | "wkp-pnp-power"
+  | "wkp-wdm-wdf"
+  | "wkp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3301,6 +3311,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mfc-template-method": "模板方法模式",
   "mfc-com-interface": "COM接口与MFC",
   "mfc-final-review": "全书总复习",
+  "wkp-learning-map": "全书学习地图",
+  "wkp-driver-fundamentals": "驱动基础",
+  "wkp-irp-io-manager": "IRP与I/O管理器",
+  "wkp-kernel-memory": "内核内存管理",
+  "wkp-mdl-memory-descriptor": "MDL内存描述符",
+  "wkp-interrupt-dpc": "中断与DPC",
+  "wkp-synchronization-primitives": "同步原语",
+  "wkp-pnp-power": "即插即用与电源管理",
+  "wkp-wdm-wdf": "WDM与WDF对比",
+  "wkp-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

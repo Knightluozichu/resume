@@ -1,0 +1,92 @@
+---
+title: "WDM与WDF对比"
+type: A
+section: "系统与操作系统"
+order: 8
+description: "对比WDM面向过程手动管理与WDF面向对象框架代管——对象模型、I/O队列、生命周期与选型场景"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpWdmWdfDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-wdm-wdf";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 WDM 面向过程与 WDF 面向对象的核心设计差异
+- 掌握 WDF 对象模型及父对象自动生命周期管理
+- 理解 WDF I/O 队列相比 WDM 手动 IRP 管理的优势
+- 明确仍应选择 WDM 而非 WDF 的特殊场景
+</Objectives>
+
+## 直觉引入
+
+把 WDM 和 WDF 的区别想象成「手动挡」和「自动挡」汽车。**WDM 是手动挡**——你要自己踩离合（手动处理 PnP/电源状态机）、自己换挡（手动注册派遣函数）、自己看路况（手动管理 IRP 队列和取消）、自己熄火（手动释放资源）。控制力最强，但操作繁琐、容易熄火（蓝屏）。**WDF 是自动挡**——框架帮你踩离合换挡（自动处理 PnP/电源状态机）、帮你管理档位（I/O 队列自动调度）、帮你熄火（父对象自动删除子对象）。你只需踩油门和打方向盘（写设备特定的事件回调）。新手上路首选自动挡（WDF），但赛车手（底层总线驱动/文件系统过滤）可能需要手动挡的精细控制力。
+
+<WkpWdmWdfDiagram />
+
+## WDM vs WDF 核心差异
+
+<Term def="WDM（Windows Driver Model）是面向过程的驱动模型，驱动直接操作 IRP 和设备对象，手动处理 PnP/电源状态机。">WDM</Term>是「自己造轮子」——驱动负责一切：手动处理 PnP/电源 IRP、手动注册所有派遣函数、手动管理 IRP 队列和取消、手动管理资源生命周期。灵活但代码量大（PnP/电源占 60%）、易出错。<Term def="WDF（Windows Driver Framework）是面向对象的驱动框架，用对象模型和事件回调封装 WDM 底层细节，自动管理 PnP/电源状态机和资源生命周期。">WDF</Term>是「用框架」——对象模型（WDFDRIVER/WDFDEVICE/WDFQUEUE）、事件回调取代 IRP 派遣、自动 PnP/电源状态机、自动引用计数和资源清理。代码量减少 50%+，bug 率显著降低。
+
+```text
+// WDM vs WDF 入口对比
+// === WDM（手动挡）===
+NTSTATUS DriverEntry(PDRIVER_OBJECT Driver, PUNICODE_STRING Reg) {
+    // 手动注册所有派遣函数（十几个）
+    Driver->MajorFunction[IRP_MJ_READ]    = DispatchRead;
+    Driver->MajorFunction[IRP_MJ_WRITE]   = DispatchWrite;
+    Driver->MajorFunction[IRP_MJ_PNP]     = DispatchPnp;    // 手动状态机
+    Driver->MajorFunction[IRP_MJ_POWER]   = DispatchPower;  // 手动电源
+    Driver->MajorFunction[IRP_MJ_DEVICE_CONTROL] = DispatchIoctl;
+    // ... 还有 CREATE/CLOSE/CLEANUP/...
+    Driver->DriverExtension->AddDevice = AddDevice;
+    return STATUS_SUCCESS;
+}
+// 手动实现 DispatchPnp 的状态机、手动 IRP 队列、手动取消...
+
+// === WDF（自动挡）===
+NTSTATUS DriverEntry(PDRIVER_OBJECT Driver, PUNICODE_STRING Reg) {
+    WDF_DRIVER_CONFIG config;
+    WDF_DRIVER_CONFIG_INIT(&config, EvtDeviceAdd);  // 只注册一个回调
+    WdfDriverCreate(Driver, Reg, WDF_NO_OBJECT_ATTRIBUTES, &config, WDF_NO_HANDLE);
+    return STATUS_SUCCESS;
+}
+// 框架自动处理 PnP/电源状态机、I/O 队列、取消...
+// 驱动只需实现事件回调：
+//   EvtDevicePrepareHardware  → 初始化硬件（替代 START_DEVICE）
+//   EvtDeviceReleaseHardware  → 释放硬件（替代 STOP/REMOVE）
+//   EvtIoRead/EvtIoWrite      → 处理 I/O（替代 DispatchRead/Write）
+```
+
+## WDF 对象模型与 I/O 队列
+
+**WDF 对象模型**：所有实体都是对象（WDFDRIVER/WDFDEVICE/WDFQUEUE/WDFINTERRUPT/WDFREQUEST），创建子对象时指定父对象，父对象删除时自动删除所有子对象——消除 WDM 中最常见的资源泄漏和双重释放。**WDF I/O 队列**（WDFQUEUE）封装了 WDM 中最复杂的 IRP 队列管理：自动取消处理、灵活调度模式（串行/并行/手动）、自动电源管理（设备低功耗时暂停队列）、请求转发。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：所有新驱动都用 WDF。** WDF 虽好但不万能。以下场景仍需 WDM：①底层总线驱动/控制器驱动——WDF 框架本身构建在 WDM 之上；②文件系统过滤驱动——文件系统栈有特殊 IRP 处理需求，WDF 的 I/O 模型不完全适配；③极低延迟/特殊硬件——需精细控制 IRP 传递时机和栈位置操作，WDF 抽象层引入额外开销；④NDIS 网络驱动——有独立的微型端口模型。WDF 的不可替代性在于「最大控制力」，但代价是全部责任由驱动承担。新项目除非特殊场景，首选 WDF。
+</Callout>
+
+<Exercises>
+**问题 1**：WDF 的对象模型如何工作？父对象生命周期管理是什么？
+
+<Answer>
+WDF 所有实体都是对象（WDFDRIVER/WDFDEVICE/WDFQUEUE 等）。创建子对象时指定父对象，父对象删除时自动删除所有子对象。例如删除 WDFDEVICE 时自动删除关联的 WDFQUEUE/WDFINTERRUPT 等子对象，无需手动逐个释放，消除资源泄漏和双重释放。对象上下文（WdfObjectAllocateContext）替代 WDM 的 DeviceExtension。
+</Answer>
+
+**问题 2**：什么场景下仍应选择 WDM 而非 WDF？
+
+<Answer>
+①底层总线/控制器驱动——WDF 构建于 WDM 之上；②文件系统过滤驱动——文件系统栈有特殊 IRP 需求；③极低延迟/特殊硬件——需精细控制 IRP 传递和栈位置；④NDIS 网络驱动——有独立微型端口模型；⑤遗留驱动维护——迁移成本高。WDM 不可替代性在于最大控制力，但代价是 PnP/电源/取消/同步全手动。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="WDM（Windows Driver Model）">面向过程的驱动模型，驱动直接操作 IRP 和设备对象，手动处理 PnP/电源状态机、手动注册派遣函数、手动管理 IRP 队列。灵活但代码量大、易出错。</GlossaryItem>
+<GlossaryItem term="WDF（Windows Driver Framework）">面向对象的驱动框架，用对象模型和事件回调封装 WDM 底层细节。自动处理 PnP/电源状态机、自动管理资源生命周期。分 KMDF（内核态）和 UMDF（用户态）。</GlossaryItem>
+<GlossaryItem term="WDF 对象模型">WDF 中所有实体都是对象（WDFDRIVER/WDFDEVICE/WDFQUEUE 等），创建子对象时指定父对象，父对象删除时自动删除子对象。消除资源泄漏和双重释放。</GlossaryItem>
+<GlossaryItem term="WDFQUEUE">WDF 的 I/O 队列对象，封装 WDM 中最复杂的 IRP 队列管理。自动取消处理、灵活调度模式（串行/并行/手动）、自动电源管理、请求转发。显著减少代码量和 bug 率。</GlossaryItem>
+</Glossary>

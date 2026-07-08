@@ -1,0 +1,96 @@
+---
+title: "全书学习地图"
+type: A
+section: "系统与操作系统"
+order: 0
+description: "俯瞰《Windows内核编程》十大主题——从驱动框架到IRP、从内存管理到同步中断、从PnP电源到WDM/WDF对比的完整进阶路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpLearningMapDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-learning-map";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解「驱动基础 → I/O与IRP → 内存管理 → 同步与中断 → 高级机制与总复习」的递进结构
+- 建立「Windows内核驱动的系统视角」：从设备栈到IRP流转、从内存池到IRQL约束、从中断分层到PnP/电源的完整链条
+- 明确十个章节之间的依赖关系与学习顺序，知道每章解决什么问题
+- 掌握用「一个驱动从加载到卸载」串联全书知识点的方法
+</Objectives>
+
+## 直觉引入
+
+把 Windows 内核想象成一座「交通指挥中心」。你写的一个驱动 `mydriver.sys` 加载后，它的一生要经过九道关卡：指挥中心先给它发一张「工作证」（DriverEntry，第 2 章），让它注册能处理哪些任务；当有新设备接入时，指挥中心通知它去「领设备」（AddDevice，第 2 章），它要把设备挂到「设备栈」上；用户程序要读写设备时，指挥中心把请求封装成「任务单」（IRP，第 3 章），沿设备栈向下派发；驱动要给数据找「仓库」（内核内存，第 4 章），还要按 IRQL 规则选择分页池或非分页池；大块数据搬运要用「专用通道」（MDL，第 5 章）零拷贝直达；设备产生中断时，驱动先「灭火」（ISR，第 6 章）再「善后」（DPC）；多个请求并发时要「排队挂号」（同步原语，第 7 章）防止数据混乱；设备热插拔和休眠要「弹性适应」（PnP/电源，第 8 章）；最后对比「手动挡」WDM 和「自动挡」WDF（第 9 章），用一个驱动的一生串起全部知识（总复习，第 10 章）。
+
+<WkpLearningMapDiagram />
+
+## 五阶段递进
+
+<Term def="WDM（Windows Driver Model）是微软为 Windows 操作系统提供的驱动程序模型，定义了驱动加载、设备栈、IRP 派发、PnP 和电源管理的标准框架。WDF（Windows Driver Framework）是其继任者，用面向对象模型封装 WDM 的底层细节。">WDM/WDF</Term>的学习可以拆成五个递进阶段。**驱动基础**包括设备栈、DriverEntry、AddDevice 和派遣函数——它们解决「怎么加载驱动」和「怎么接收请求」。**I/O与IRP**包括 IRP 结构、生命周期和完成机制——它们解决「请求怎么流转」和「怎么完成」。**内存管理**包括分页/非分页池和 MDL——它们解决「怎么分配内存」和「怎么安全访问用户缓冲区」。**同步与中断**包括 IRQL、ISR/DPC 和同步原语——它们解决「怎么处理中断」和「怎么并发安全」。**高级机制与总复习**包括 PnP/电源、WDM vs WDF 和总复习——它们解决「怎么管理设备生命周期」和「怎么贯通全书」。
+
+```text
+// 「一个驱动从加载到卸载」——Windows 内核全程参与的生命周期
+DriverEntry(DriverObject, RegistryPath)
+  // 1. 驱动基础（第 2 章）：初始化驱动级资源
+  //    WdfDriverCreate / 注册 EvtDeviceAdd
+  //    或 WDM: 注册 MajorFunction[IRP_MJ_READ/WRITE/...]
+
+EvtDeviceAdd(Driver, DeviceInit)  // PnP 管理器发现设备
+  // 2. 设备枚举（第 2/8 章）：创建设备对象
+  //    WdfDeviceCreate / IoCreateDevice
+  //    加入设备栈，IRP_MN_START_DEVICE 分配硬件资源
+
+  // 3. I/O 请求处理（第 3 章）：用户 ReadFile 触发
+  //    I/O 管理器创建 IRP → IoCallDriver 派发
+  //    DispatchRead 处理 → IoCompleteRequest 完成
+
+  // 4. 内存分配（第 4 章）：按 IRQL 选池
+  //    ExAllocatePool2(POOL_FLAG_NON_PAGED, Size, Tag)
+  //    DPC/ISR 中只能用非分页池
+
+  // 5. MDL 直接 I/O（第 5 章）：大缓冲区零拷贝
+  //    MmGetSystemAddressForMdlSafe(Irp->MdlAddress)
+
+  // 6. 中断处理（第 6 章）：硬件中断触发
+  //    ISR(DIRQL) → ACK 中断 → IoRequestDpc
+  //    DPC(DISPATCH_LEVEL) → 处理数据 → 完成IRP
+
+  // 7. 同步保护（第 7 章）：保护共享数据
+  //    KeAcquireSpinLock → 操作 → KeReleaseSpinLock
+
+  // 8. 电源管理（第 8 章）：系统休眠/恢复
+  //    IRP_MN_SET_POWER(D3) → 保存上下文断电
+  //    IRP_MN_SET_POWER(D0) → 恢复上下文上电
+
+  // 9. 卸载（第 9-10 章）：设备移除
+  //    IRP_MN_REMOVE_DEVICE → EvtDeviceReleaseHardware
+  //    DriverUnload → 释放全部资源
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：会调 WDK API 就等于懂内核编程。** 会写 `DriverEntry`、`IoCreateDevice` 注册个设备只是「会用 WDK」——照着样例抄就能做。真正懂内核编程的人能解释：为什么 IRP 要有 I/O 栈位置而非扁平结构（设备栈分层传递）、为什么非分页池要在 DISPATCH_LEVEL 可用（高 IRQL 不能缺页）、为什么自旋锁要提升 IRQL 而非仅原子操作（防止同核抢占死锁）、为什么 ISR 要极短而 DPC 做善后（减少高优先级中断屏蔽时间）、为什么 MDL 要锁定物理页（DMA 直接操作物理地址不能换出）。把内核当黑盒的人遇到蓝屏只能重启；懂机制的人能读懂 `!analyze -v`、用 Driver Verifier 定位泄漏、理解 IRQL 约束排查竞态。区分标志：能否解释「Windows 内核为什么这样设计」而非只是「能编译它」。
+</Callout>
+
+<Exercises>
+**问题 1**：全书五阶段递进是什么？为什么是这个顺序？
+
+<Answer>
+驱动基础（WDM/WDF框架）→ I/O与IRP（IRP生命周期）→ 内存管理（分页/非分页池 + MDL）→ 同步与中断（IRQL/自旋锁/ISR/DPC）→ 高级机制与总复习（PnP/电源 + WDM vs WDF）。顺序由依赖关系决定：先掌握驱动框架和设备栈才有「能加载、能派发」的基础；IRP 是内核 I/O 的统一货币，有了它才能理解请求如何流转；驱动要分配内存，于是进入内存管理；内核是多处理器并发环境，需要 IRQL 和自旋锁保护共享数据，于是进入同步与中断；最后 PnP/电源和框架对比是高级机制，总复习用生命周期串联。先「能加载」，再「能请求」，然后「能管理内存」，接着「能同步并发」，最后「能贯通」。
+</Answer>
+
+**问题 2**：用「一个驱动从加载到卸载」描述全书主线。
+
+<Answer>
+一个驱动从加载到卸载：①驱动加载（第2章）——DriverEntry 创建驱动对象并注册回调；②设备枚举（第2/8章）——AddDevice 创建设备对象加入设备栈，START_DEVICE 分配资源；③I/O请求（第3章）——用户 ReadFile 触发 IRP，IoCallDriver 派发，IoCompleteRequest 完成；④内存分配（第4章）——ExAllocatePool2 分配非分页池；⑤MDL直接I/O（第5章）——MmGetSystemAddressForMdlSafe 零拷贝；⑥中断处理（第6章）——ISR 灭火 + DPC 善后；⑦同步保护（第7章）——KeAcquireSpinLock 保护共享数据；⑧电源管理（第8章）——SET_POWER 切换 D0/D3；⑨卸载（第9-10章）——REMOVE_DEVICE 释放全部资源。一次生命周期，九大机制全部参与。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="WDM/WDF">WDM（Windows Driver Model）是面向过程的驱动模型，驱动直接操作 IRP 和设备对象。WDF（Windows Driver Framework）是面向对象的继任框架，用对象模型和事件回调封装 WDM 底层细节，自动管理 PnP/电源状态机和资源生命周期。全书从 WDM 基础出发，最终对比两者选型。</GlossaryItem>
+<GlossaryItem term="五阶段递进">驱动基础 → I/O与IRP → 内存管理 → 同步与中断 → 高级机制与总复习。每层解决前一层的遗留问题：框架解决「怎么加载」，IRP解决「怎么请求」，内存解决「怎么分配」，同步解决「怎么并发」，PnP/电源解决「怎么管理生命周期」。</GlossaryItem>
+<GlossaryItem term="一个驱动的一生">一个 `mydriver.sys` 从 DriverEntry 到 DriverUnload 的完整内核旅程：加载 → 设备枚举 → I/O请求 → 内存分配 → MDL映射 → 中断处理 → 同步保护 → 电源管理 → 卸载。全书以这条主线串联各章节。</GlossaryItem>
+</Glossary>

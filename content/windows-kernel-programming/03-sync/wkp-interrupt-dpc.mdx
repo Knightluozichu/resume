@@ -1,0 +1,99 @@
+---
+title: "中断与DPC"
+type: A
+section: "系统与操作系统"
+order: 5
+description: "理解IRQL中断请求级、ISR与DPC两层中断处理模型、消息信号中断MSI及中断延迟优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpInterruptDpcDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-interrupt-dpc";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 IRQL 的概念及其与线程优先级的区别
+- 掌握 ISR 与 DPC 的分工及 ISR 必须极短的原因
+- 理解 DPC 调度机制及其对系统实时性的影响
+- 了解消息信号中断（MSI）相比传统线中断的优势
+</Objectives>
+
+## 直觉引入
+
+把中断处理想象成医院的「急诊分级」。设备产生中断就像病人到达急诊——ISR 是「分诊台护士」（运行在 DIRQL 最高优先级），只做最紧迫的事：确认病人来了（ACK 中断）、阻止新病人涌入（禁止设备再次中断）、把病人基本信息记在病历上（数据存入设备扩展）、然后呼叫「主治医生」（IoRequestDpc 排队 DPC）。DPC 是「主治医生」（运行在 DISPATCH_LEVEL），负责大部分实际治疗：详细检查、处理数据、完成病历（完成 IRP）、重新开放急诊（重新启用设备中断）。分诊台护士必须极快——她占着最高优先级通道，时间越长，后面到达的其他急诊病人等待越久。
+
+<WkpInterruptDpcDiagram />
+
+## IRQL 与两层中断模型
+
+<Term def="IRQL（Interrupt Request Level，中断请求级）是 Windows 内核为每个 CPU 核维护的软件优先级机制，决定当前 CPU 可被哪些中断抢占，是内核编程的核心约束。">IRQL</Term>从低到高：PASSIVE_LEVEL(0) → APC_LEVEL(1) → DISPATCH_LEVEL(2) → 设备 DIRQL → HIGH_LEVEL(31)。**ISR**（中断服务例程）运行在设备 DIRQL，负责最紧迫的工作：读/清中断状态寄存器、禁止设备中断、收集数据、`IoRequestDpc` 排队 DPC。**DPC**（延迟过程调用）运行在 DISPATCH_LEVEL，负责大部分中断处理：处理数据、完成 IRP、重新启用设备中断。
+
+```text
+// ISR 与 DPC 的典型实现
+// 1. ISR（运行在 DIRQL，极短）
+BOOLEAN MyIsr(PKINTERRUPT Interrupt, PVOID Context) {
+    PDEVICE_EXTENSION ext = Context;
+    // 确认是自己的设备中断
+    if (!(READ_REGISTER(&ext->Regs->Status) & IRQ_PENDING))
+        return FALSE;  // 不是我的中断
+
+    // ACK 中断，防止重复触发
+    WRITE_REGISTER(&ext->Regs->Ack, 1);
+    // 禁止设备再次中断
+    WRITE_REGISTER(&ext->Regs->IntEnable, 0);
+    // 收集数据到设备扩展
+    ext->PendingData = READ_REGISTER(&ext->Regs->Data);
+    // 排队 DPC 做善后
+    IoRequestDpc(ext->DeviceObject, NULL, NULL);
+    return TRUE;
+}
+
+// 2. DPC（运行在 DISPATCH_LEVEL，做大部分工作）
+VOID MyDpc(PKDPC Dpc, PVOID Context, PVOID Arg1, PVOID Arg2) {
+    PDEVICE_EXTENSION ext = Context;
+    // 处理数据
+    ProcessData(ext->PendingData);
+    // 完成正在等待的 IRP
+    if (ext->CurrentIrp) {
+        ext->CurrentIrp->IoStatus.Status = STATUS_SUCCESS;
+        ext->CurrentIrp->IoStatus.Information = bytesRead;
+        IoCompleteRequest(ext->CurrentIrp, IO_NO_INCREMENT);
+        ext->CurrentIrp = NULL;
+    }
+    // 重新启用设备中断
+    WRITE_REGISTER(&ext->Regs->IntEnable, 1);
+}
+```
+
+## DPC 调度与 MSI
+
+**DPC 调度**：`IoRequestDpc` 将 DPC 加入当前 CPU 队列，当 IRQL 从 DIRQL 降至 DISPATCH_LEVEL 时自动执行。DPC 优先级（Low/Medium/High）影响排队位置。DPC 阻塞线程调度，过长会导致音频卡顿（DPC_WATCHDOG_VIOLATION 蓝屏）。**MSI（消息信号中断）**通过写内存触发中断，支持多向量（每个功能独立 ISR）、无需共享中断线、可配置中断亲和性分发到不同 CPU 核并行处理，新设备应优先支持 MSI-X。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：ISR 中分配内存处理数据。** ISR 运行在 DIRQL（高于 DISPATCH_LEVEL），不能分配任何池内存（分页池会蓝屏，非分页池分配函数本身也可能在低 IRQL 才安全），不能获取自旋锁（不同 IRQL 死锁风险），不能调用大多数内核 API。ISR 只能做：读/写硬件寄存器、操作设备扩展中的非分页数据、`IoRequestDpc`。所有内存分配、IRP 完成、复杂逻辑都放到 DPC 中。另一个误区是 DPC 中调用阻塞 API——DPC 在 DISPATCH_LEVEL 不可阻塞调度，`KeWaitForSingleObject` 非零超时会蓝屏。
+</Callout>
+
+<Exercises>
+**问题 1**：ISR 和 DPC 的分工是什么？为什么 ISR 必须极短？
+
+<Answer>
+ISR 运行在 DIRQL，只做最紧迫的事：ACK 中断、禁止设备中断、收集数据、IoRequestDpc 排队 DPC。DPC 运行在 DISPATCH_LEVEL，做大部分处理：处理数据、完成 IRP、重新启用中断。ISR 必须极短因为：①高 DIRQL 屏蔽同级和更低中断，越长延迟越大；②DIRQL 能力极受限，不能分配内存/获取锁/调用大多数 API；③持锁阻塞多核扩展。
+</Answer>
+
+**问题 2**：什么是 IRQL？它与线程优先级有什么区别？
+
+<Answer>
+IRQL 是 per-CPU 的软件中断屏蔽机制，决定 CPU 响应哪些中断（高于当前的被响应，低于的被屏蔽）。线程优先级是调度器概念，决定同 IRQL 内哪个线程获得 CPU 时间片。IRQL >= DISPATCH_LEVEL 时调度器停止工作。IRQL 是内核编程的「红绿灯」，几乎所有同步约束都源于 IRQL。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="IRQL">Interrupt Request Level，per-CPU 的软件中断优先级机制。PASSIVE_LEVEL(0)→APC_LEVEL(1)→DISPATCH_LEVEL(2)→DIRQL→HIGH_LEVEL(31)。决定 CPU 响应哪些中断，是内存选型、同步原语、中断处理的统一约束源。</GlossaryItem>
+<GlossaryItem term="ISR">Interrupt Service Routine，中断服务例程。运行在设备 DIRQL，只做最紧迫的：ACK 中断、禁止设备中断、收集数据、IoRequestDpc。必须极短以减少中断延迟。</GlossaryItem>
+<GlossaryItem term="DPC">Deferred Procedure Call，延迟过程调用。运行在 DISPATCH_LEVEL，做大部分中断处理：处理数据、完成 IRP、重新启用中断。IoRequestDpc 排队，IRQL 降至 DISPATCH_LEVEL 时自动执行。</GlossaryItem>
+<GlossaryItem term="MSI">Message Signaled Interrupt，消息信号中断。通过写内存触发中断，支持多向量、无需共享中断线、可配置亲和性分发到不同 CPU。MSI-X 最多 2048 个向量。新设备应优先支持。</GlossaryItem>
+</Glossary>

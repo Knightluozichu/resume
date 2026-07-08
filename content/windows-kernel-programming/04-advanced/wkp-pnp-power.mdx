@@ -1,0 +1,95 @@
+---
+title: "即插即用与电源管理"
+type: A
+section: "系统与操作系统"
+order: 7
+description: "理解PnP设备状态机、电源状态转换D0-D3/S0-S5、PnP/Power IRP处理与意外移除"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpPnpPowerDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-pnp-power";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 PnP 设备状态机（Added/Started/Stopped/Removed）及状态转换 IRP
+- 掌握设备电源状态 D0-D3 与系统电源状态 S0-S5 的映射关系
+- 理解 IRP_MN_START_DEVICE 的处理流程及资源翻译
+- 区分正常移除与意外移除（Surprise Removal）的处理差异
+</Objectives>
+
+## 直觉引入
+
+把 PnP 和电源管理想象成设备的「人事档案」和「作息管理」。**PnP** 是人事档案——管理设备「在不在」：新员工入职（Added）、分配工位开始工作（Started）、临时调岗停工（Stopped）、离职走人（Removed）。每次状态变化都由一份「调令」（PnP IRP）驱动。**电源管理**是作息管理——管理设备「醒不醒」：全勤工作（D0）、打盹低功耗（D1/D2）、下班断电（D3）。整个公司也有作息：全公司上班（S0）、午休（S1-S3）、放长假（S4）、关门（S5）。公司作息影响每个员工的作息——公司午休时，员工也得打盹或断电。两套系统通过 IRP 在设备栈中传递，驱动响应这些「调令」和「作息通知」。
+
+<WkpPnpPowerDiagram />
+
+## PnP 设备状态机
+
+<Term def="PnP（Plug and Play，即插即用）是 Windows 自动识别和配置硬件设备的机制，通过设备状态机和 PnP IRP 管理设备的添加、启动、停止和移除。">PnP</Term>设备状态机的核心状态：**Added**（已添加，AddDevice 已调用但未启动）→ **Started**（已启动，`IRP_MN_START_DEVICE` 完成，可正常 I/O）→ **Stopped**（已停止，资源已释放但设备仍存在）→ **Removed**（已移除，`IRP_MN_REMOVE_DEVICE` 完成，设备对象已从设备栈分离）。
+
+```text
+// PnP IRP 派遣函数核心逻辑
+NTSTATUS DispatchPnp(PDEVICE_OBJECT Device, PIRP Irp) {
+    PIO_STACK_LOCATION stack = IoGetCurrentIrpStackLocation(Irp);
+    switch (stack->MinorFunction) {
+    case IRP_MN_START_DEVICE:
+        // 必须先向下传递，等下层完成后再读翻译后的资源
+        return ForwardAndWait(Device, Irp);  // IoCallDriver + CompletionRoutine
+        // 下层完成后：解析 AllocatResourcesTranslated
+        // IoConnectInterruptEx 连接 ISR
+        // MmMapIoSpace 映射寄存器
+        // 初始化设备硬件
+
+    case IRP_MN_STOP_DEVICE:
+        // 释放硬件资源（断开中断、解除映射）
+        // 向下传递
+        return ForwardAndComplete(Device, Irp);
+
+    case IRP_MN_REMOVE_DEVICE:
+        // 释放全部资源
+        // IoDetachDevice 从设备栈分离
+        // IoDeleteDevice 删除设备对象
+        return ForwardAndComplete(Device, Irp);
+
+    case IRP_MN_SURPRISE_REMOVAL:
+        // 设备已被物理拔出！
+        // 完成所有挂起的 IRP 为 STATUS_DEVICE_REMOVED
+        // 不能访问硬件寄存器（已不存在）
+        return ForwardAndComplete(Device, Irp);
+    }
+}
+```
+
+## 电源状态与 IRP 处理
+
+设备电源状态 **D0**（全工作）→ **D1/D2**（低功耗）→ **D3**（关闭）。系统电源状态 **S0**（工作）→ **S1/S2/S3**（睡眠）→ **S4**（休眠）→ **S5**（关机）。系统进入 Sn 时，每个设备需映射到对应的 Dm 状态。驱动通过 `IRP_MN_SET_POWER` 响应电源转换：D0 时上电初始化恢复上下文，D3 时保存上下文断电。`IRP_MN_QUERY_POWER` 询问能否进入某状态，驱动可拒绝。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：IRP_MN_START_DEVICE 中直接读资源不向下传递。** `START_DEVICE` 的硬件资源（AllocatedResourcesTranslated）由总线驱动翻译，只有下层（总线驱动）完成后翻译后的资源才有效。若驱动先读资源再向下传递，读到的是未翻译的无效地址。正确流程：先 `IoCallDriver` 向下传递，在 `CompletionRoutine` 中等下层完成后再读资源、连接中断、映射寄存器。PnP 管理器保证 `START_DEVICE` 从设备栈底向上完成。另一个误区是意外移除后仍访问硬件寄存器——设备已物理消失，读写寄存器会导致总线错误蓝屏。必须设置设备存在标志，每次访问硬件前检查。
+</Callout>
+
+<Exercises>
+**问题 1**：PnP 设备状态机的核心状态有哪些？状态转换由什么 IRP 驱动？
+
+<Answer>
+核心状态：Added→Started→Stopped→Removed。转换 IRP：IRP_MN_START_DEVICE（Added→Started，分配资源初始化）、IRP_MN_STOP_DEVICE（→Stopped，释放资源保留对象）、IRP_MN_REMOVE_DEVICE（→Removed，释放全部并从设备栈分离）、IRP_MN_SURPRISE_REMOVAL（意外拔出，直接到Removed）。驱动通过派遣 IRP_MJ_PNP 响应。
+</Answer>
+
+**问题 2**：意外移除（Surprise Removal）与正常移除的区别是什么？
+
+<Answer>
+正常移除：用户「安全移除硬件」→QUERY_REMOVE（可拒绝）→REMOVE_DEVICE（释放资源）。意外移除：设备直接拔出→SURPRISE_REMOVAL（无查询、硬件已消失）。区别：正常移除可拒绝且硬件还在；意外移除不可拒绝且硬件已消失。驱动处理意外移除：完成所有 I/O 为 STATUS_DEVICE_REMOVED、不能访问寄存器、通知用户态、设置设备存在标志。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="PnP（Plug and Play）">即插即用，Windows 自动识别和配置硬件的机制。通过设备状态机（Added/Started/Stopped/Removed）和 PnP IRP 管理设备生命周期。PnP 管理器枚举设备、分配资源、发送状态转换 IRP。</GlossaryItem>
+<GlossaryItem term="设备电源状态 D0-D3">D0 全工作（最大功耗全功能）、D1/D2 低功耗（设备特定中间状态）、D3 关闭（最小或零功耗）。驱动通过 IRP_MN_SET_POWER 响应转换：D0 上电恢复上下文，D3 保存上下文断电。</GlossaryItem>
+<GlossaryItem term="系统电源状态 S0-S5">S0 全工作、S1/S2/S3 睡眠（CPU上下文不同级别保留）、S4 休眠（上下文写磁盘）、S5 关机。系统进入 Sn 时每个设备映射到对应 Dm 状态。</GlossaryItem>
+<GlossaryItem term="IRP_MN_SURPRISE_REMOVAL">意外移除 IRP，设备被直接拔出时发送。无查询阶段，硬件已消失。驱动必须完成所有挂起 I/O、不访问硬件、设置设备不存在标志、通知用户态。</GlossaryItem>
+</Glossary>

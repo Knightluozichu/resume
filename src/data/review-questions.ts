@@ -1525,6 +1525,16 @@ import { mfcPersistenceSerializationQuestions } from "./review/mfc-persistence-s
 import { mfcTemplateMethodQuestions } from "./review/mfc-template-method";
 import { mfcComInterfaceQuestions } from "./review/mfc-com-interface";
 import { mfcFinalReviewQuestions } from "./review/mfc-final-review";
+import { wkpLearningMapQuestions } from "./review/wkp-learning-map";
+import { wkpDriverFundamentalsQuestions } from "./review/wkp-driver-fundamentals";
+import { wkpIrpIoManagerQuestions } from "./review/wkp-irp-io-manager";
+import { wkpKernelMemoryQuestions } from "./review/wkp-kernel-memory";
+import { wkpMdlMemoryDescriptorQuestions } from "./review/wkp-mdl-memory-descriptor";
+import { wkpInterruptDpcQuestions } from "./review/wkp-interrupt-dpc";
+import { wkpSynchronizationPrimitivesQuestions } from "./review/wkp-synchronization-primitives";
+import { wkpPnpPowerQuestions } from "./review/wkp-pnp-power";
+import { wkpWdmWdfQuestions } from "./review/wkp-wdm-wdf";
+import { wkpFinalReviewQuestions } from "./review/wkp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3085,6 +3095,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mfcTemplateMethodQuestions,
   ...mfcComInterfaceQuestions,
   ...mfcFinalReviewQuestions,
+  ...wkpLearningMapQuestions,
+  ...wkpDriverFundamentalsQuestions,
+  ...wkpIrpIoManagerQuestions,
+  ...wkpKernelMemoryQuestions,
+  ...wkpMdlMemoryDescriptorQuestions,
+  ...wkpInterruptDpcQuestions,
+  ...wkpSynchronizationPrimitivesQuestions,
+  ...wkpPnpPowerQuestions,
+  ...wkpWdmWdfQuestions,
+  ...wkpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

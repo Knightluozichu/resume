@@ -1,0 +1,93 @@
+---
+title: "MDL内存描述符"
+type: A
+section: "系统与操作系统"
+order: 4
+description: "掌握MDL结构、ProbeAndLockPages物理页锁定、MmGetSystemAddressForMdlSafe零拷贝映射与DMA散列-聚集"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WkpMdlMemoryDescriptorDiagram } from "@/components/mdx/windows-kernel-programming/diagrams/wkp-mdl-memory-descriptor";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 MDL 结构（头部 + PFN 数组）及其在直接 I/O 中的角色
+- 掌握 ProbeAndLockPages 锁定物理页和 MmGetSystemAddressForMdlSafe 零拷贝映射
+- 区分缓冲 I/O 与直接 I/O 的数据路径和适用场景
+- 理解 DMA 传输必须锁定物理页的原因及 MDL 支持散列-聚集的原理
+</Objectives>
+
+## 直觉引入
+
+把 MDL 想象成一张「物理页地址清单」。用户程序给你一段连续的虚拟地址（比如一栋大楼里连续的门牌号），但这栋楼里的每个房间实际上散布在城市的不同位置（物理页不连续）。MDL 就是那张清单——它记录了每个门牌号对应的实际物理位置（PFN 数组）。当你要在大楼的「内部办公室」（内核地址空间）里也安排一条连续的走廊来访问这些散布的房间时，MDL 帮你建立映射：内核走廊的第 1 米对应物理页 A，第 2 米对应物理页 B……这样你在内核里就像走一条普通走廊一样访问数据，不用关心底层物理页的散布。而且这些物理页被「锁」住了（ProbeAndLockPages），不会被搬走，DMA 引擎也能安全地直接读写。
+
+<WkpMdlMemoryDescriptorDiagram />
+
+## MDL 与直接 I/O
+
+<Term def="MDL（Memory Descriptor List，内存描述符表）是 Windows 内核用于描述虚拟地址到物理页映射关系的结构体，包含头部和 PFN 数组，在直接 I/O 中将用户缓冲区锁定并映射为内核虚拟地址。">MDL</Term>是直接 I/O 的核心数据结构。当设备标志含 `DO_DIRECT_IO` 时，I/O 管理器为用户缓冲区创建 MDL，通过 `MmProbeAndLockPages` 验证地址有效性并锁定物理页（填充 PFN 数组），将 MDL 指针存入 `Irp->MdlAddress`。驱动通过 `MmGetSystemAddressForMdlSafe` 获取内核虚拟地址，零拷贝地访问用户数据。
+
+```text
+// MDL 直接 I/O 的完整流程
+// 1. I/O 管理器阶段（自动完成，驱动无需编码）
+//    IoAllocateMdl → 创建 MDL（头部 + PFN 数组空间）
+//    MmProbeAndLockPages → 验证用户地址 + 锁定物理页（填充 PFN）
+//    Irp->MdlAddress = mdl;  // 存入 IRP
+
+// 2. 驱动阶段（派遣函数中）
+PVOID systemAddr = MmGetSystemAddressForMdlSafe(Irp->MdlAddress, NormalPagePriority);
+if (!systemAddr) {
+    Irp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+    IoCompleteRequest(Irp, IO_NO_INCREMENT);
+    return STATUS_INSUFFICIENT_RESOURCES;
+}
+// systemAddr 指向连续的内核虚拟地址，对应锁定的用户物理页
+// 驱动直接通过 systemAddr 读写数据，零拷贝！
+
+// 3. 完成阶段（I/O 管理器自动完成）
+//    MmUnlockPages → 解锁物理页
+//    IoFreeMdl → 释放 MDL 结构体
+
+// 4. 手动创建 MDL（非 I/O 管理器场景）
+PMDL mdl = IoAllocateMdl(userAddr, size, FALSE, FALSE, NULL);
+MmProbeAndLockPages(mdl, UserMode, IoWriteAccess);  // 锁定
+PVOID kAddr = MmMapLockedPagesSpecifyCache(mdl, KernelMode, MmCached, NULL, FALSE, NormalPagePriority);
+// ... 使用 kAddr ...
+MmUnmapLockedPages(kAddr, mdl);  // 解除映射
+MmUnlockPages(mdl);              // 解锁
+IoFreeMdl(mdl);                  // 释放 MDL
+```
+
+## 缓冲 I/O vs 直接 I/O
+
+**缓冲 I/O**（`DO_BUFFERED_IO`）：I/O 管理器在非分页池分配内核副本，驱动通过 `Irp->AssociatedIrp.SystemBuffer` 访问。写入时拷贝用户数据到副本，读取时拷回。简单安全但多一次拷贝，适合小缓冲区。**直接 I/O**（`DO_DIRECT_IO`）：I/O 管理器创建 MDL 锁定物理页，驱动零拷贝访问。高效但复杂，适合大缓冲区和 DMA 场景。选择依据：缓冲区小且频率低选 Buffered，缓冲区大或性能敏感选 Direct。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：MmGetSystemAddressForMdlSafe 返回的地址和用户地址相同。** `MmGetSystemAddressForMdlSafe` 返回的是**内核虚拟地址空间**中的新地址，与用户虚拟地址完全不同。它将用户缓冲区锁定的物理页映射到内核地址空间的一段连续虚拟地址。驱动操作的是这个内核地址，不是用户地址。另一个误区是手动创建 MDL 后忘记 `MmUnlockPages`——只调用 `IoFreeMdl` 释放结构体但不解锁物理页，导致物理页永久锁定泄漏。清理顺序必须严格：`MmUnmapLockedPages` → `MmUnlockPages` → `IoFreeMdl`。
+</Callout>
+
+<Exercises>
+**问题 1**：MDL 是什么？它在直接 I/O 中扮演什么角色？
+
+<Answer>
+MDL 是描述虚拟地址到物理页映射关系的结构体，含头部（大小/标志/起始VA）和 PFN 数组。在直接 I/O 中，I/O 管理器为用户缓冲区创建 MDL，ProbeAndLockPages 锁定物理页，驱动通过 MmGetSystemAddressForMdlSafe 获取内核虚拟地址零拷贝访问。MDL 将散列的物理页映射为连续的内核虚拟地址。
+</Answer>
+
+**问题 2**：为什么 DMA 传输必须锁定物理页？MDL 如何支持散列-聚集 DMA？
+
+<Answer>
+DMA 引擎直接操作物理地址不走页表。若物理页在 DMA 期间被换出，DMA 会写入错误地址导致数据损坏。ProbeAndLockPages 锁定物理页防止换出。散列-聚集 DMA 需要每个物理页的地址和长度列表，MDL 的 PFN 数组正好提供此列表——驱动遍历 PFN 构建 DMA 传输描述符，Windows 的 GetScatterGatherList 封装了这一过程。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="MDL（Memory Descriptor List）">内存描述符表，描述虚拟地址到物理页的映射关系。含 MDL 头部（大小/标志/起始VA）和 PFN（物理页帧号）数组。在直接 I/O 中将用户缓冲区锁定并映射为内核虚拟地址。</GlossaryItem>
+<GlossaryItem term="ProbeAndLockPages">验证用户地址有效性并锁定物理页的函数。填充 MDL 的 PFN 数组，使物理页在 MmUnlockPages 之前不会被换出。DMA 和高 IRQL 访问用户数据的必要前提。</GlossaryItem>
+<GlossaryItem term="MmGetSystemAddressForMdlSafe">将 MDL 锁定的物理页映射到内核系统地址空间的函数。首次调用建立映射并缓存，后续直接返回缓存地址。返回的内核虚拟地址连续，驱动可像访问普通缓冲区一样零拷贝操作。</GlossaryItem>
+<GlossaryItem term="散列-聚集 DMA（Scatter-Gather DMA）">DMA 引擎按物理页地址列表传输数据的模式。用户虚拟地址连续但物理页散列，DMA 需要每个物理页的地址和长度。MDL 的 PFN 数组天然提供此列表，Windows 的 GetScatterGatherList 封装了构建过程。</GlossaryItem>
+</Glossary>
