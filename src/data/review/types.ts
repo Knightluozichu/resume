@@ -1678,7 +1678,17 @@ export type ReviewChapterSlug =
   | "lkd-kernel-sync"
   | "lkd-memory-management"
   | "lkd-virtual-filesystem"
-  | "lkd-final-review";
+  | "lkd-final-review"
+  | "uap-learning-map"
+  | "uap-file-io"
+  | "uap-files-directories"
+  | "uap-process-env"
+  | "uap-process-control"
+  | "uap-signals"
+  | "uap-process-ipc"
+  | "uap-threads"
+  | "uap-advanced-io"
+  | "uap-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3361,6 +3371,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lkd-memory-management": "内存管理",
   "lkd-virtual-filesystem": "虚拟文件系统",
   "lkd-final-review": "全书复习",
+  "uap-learning-map": "全书学习地图",
+  "uap-file-io": "文件I/O",
+  "uap-files-directories": "文件与目录",
+  "uap-process-env": "进程环境",
+  "uap-process-control": "进程控制",
+  "uap-signals": "信号",
+  "uap-process-ipc": "进程间通信",
+  "uap-threads": "线程",
+  "uap-advanced-io": "高级I/O",
+  "uap-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

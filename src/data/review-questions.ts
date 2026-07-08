@@ -1555,6 +1555,16 @@ import { lkdKernelSyncQuestions } from "./review/lkd-kernel-sync";
 import { lkdMemoryManagementQuestions } from "./review/lkd-memory-management";
 import { lkdVirtualFilesystemQuestions } from "./review/lkd-virtual-filesystem";
 import { lkdFinalReviewQuestions } from "./review/lkd-final-review";
+import { uapLearningMapQuestions } from "./review/uap-learning-map";
+import { uapFileIoQuestions } from "./review/uap-file-io";
+import { uapFilesDirectoriesQuestions } from "./review/uap-files-directories";
+import { uapProcessEnvQuestions } from "./review/uap-process-env";
+import { uapProcessControlQuestions } from "./review/uap-process-control";
+import { uapSignalsQuestions } from "./review/uap-signals";
+import { uapProcessIpcQuestions } from "./review/uap-process-ipc";
+import { uapThreadsQuestions } from "./review/uap-threads";
+import { uapAdvancedIoQuestions } from "./review/uap-advanced-io";
+import { uapFinalReviewQuestions } from "./review/uap-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3145,6 +3155,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lkdMemoryManagementQuestions,
   ...lkdVirtualFilesystemQuestions,
   ...lkdFinalReviewQuestions,
+  ...uapLearningMapQuestions,
+  ...uapFileIoQuestions,
+  ...uapFilesDirectoriesQuestions,
+  ...uapProcessEnvQuestions,
+  ...uapProcessControlQuestions,
+  ...uapSignalsQuestions,
+  ...uapProcessIpcQuestions,
+  ...uapThreadsQuestions,
+  ...uapAdvancedIoQuestions,
+  ...uapFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

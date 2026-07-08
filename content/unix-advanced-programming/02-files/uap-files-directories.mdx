@@ -1,0 +1,141 @@
+---
+title: "文件与目录"
+type: C
+section: "系统与操作系统"
+order: 2
+description: "stat结构、文件类型判断、目录遍历opendir/readdir、硬链接与符号链接、文件权限umask/chmod/chown"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapFilesDirectoriesDiagram } from "@/components/mdx/unix-advanced-programming/diagrams/uap-files-directories";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握stat/fstat/lstat获取文件元信息和struct stat结构
+- 理解UNIX七种文件类型及S_ISxxx宏判断
+- 掌握opendir/readdir/closedir目录遍历流程
+- 区分硬链接和符号链接的本质差异
+</Objectives>
+
+## stat结构与文件类型
+
+<Term def="stat结构体包含文件的元信息——类型、权限、大小、inode号、时间戳等，由stat/fstat/lstat函数填充。">stat结构</Term>是获取文件属性的核心数据结构。
+
+<UapFilesDirectoriesDiagram />
+
+## 核心函数
+
+```c
+// stat/fstat/lstat —— 获取文件信息
+int stat(const char *path, struct stat *buf);
+int fstat(int fd, struct stat *buf);
+int lstat(const char *path, struct stat *buf);
+// lstat对符号链接返回链接自身信息, 不跟随到目标
+// 返回: 0成功; -1出错
+
+// struct stat 关键成员:
+struct stat {
+    mode_t  st_mode;   // 文件类型 + 权限位
+    ino_t   st_ino;    // inode编号
+    dev_t   st_dev;    // 所在设备号
+    nlink_t st_nlink;  // 硬链接数
+    uid_t   st_uid;    // 属主ID
+    gid_t   st_gid;    // 属组ID
+    off_t   st_size;   // 文件字节数
+    time_t  st_atime;  // 最后访问时间
+    time_t  st_mtime;  // 最后修改时间(内容)
+    time_t  st_ctime;  // inode最后更改时间(属性)
+};
+
+// 文件类型判断宏 (操作st_mode):
+S_ISREG(st.st_mode)  // 普通文件
+S_ISDIR(st.st_mode)  // 目录
+S_ISCHR(st.st_mode)  // 字符特殊文件
+S_ISBLK(st.st_mode)  // 块特殊文件
+S_ISFIFO(st.st_mode) // 管道/FIFO
+S_ISLNK(st.st_mode)  // 符号链接(需用lstat获取)
+S_ISSOCK(st.st_mode) // 套接字
+```
+
+## 目录遍历
+
+```c
+// 目录遍历三步曲
+DIR *dp = opendir("/home/user");  // 1. 打开目录
+if (dp == NULL) { perror("opendir"); exit(1); }
+
+struct dirent *entry;
+while ((entry = readdir(dp)) != NULL) {  // 2. 循环读取
+    // entry->d_name: 文件名
+    // entry->d_ino:  inode编号
+
+    // 获取详细信息: 拼接路径 + stat
+    char fullpath[1024];
+    snprintf(fullpath, sizeof(fullpath),
+             "/home/user/%s", entry->d_name);
+    struct stat st;
+    lstat(fullpath, &st);  // lstat不跟随符号链接
+
+    printf("%s %ld %s\n",
+           entry->d_name,
+           (long)st.st_size,
+           S_ISDIR(st.st_mode) ? "[DIR]" :
+           S_ISLNK(st.st_mode) ? "[LINK]" : "[FILE]");
+}
+closedir(dp);  // 3. 关闭目录
+
+// 注意: readdir返回的条目顺序不确定
+// . 和 .. 也会被返回, 通常需要跳过
+```
+
+## 硬链接与符号链接
+
+```c
+// 硬链接 —— 多个目录项指向同一inode
+link("oldfile", "newfile");
+// st_nlink增加1
+// 不能跨文件系统(不同文件系统inode号不同)
+// 不能链接目录(防止环路)
+// 删除oldfile后newfile仍可访问(数据还在)
+
+// 符号链接 —— 独立文件, 存放目标路径
+symlink("targetfile", "linkfile");
+// linkfile有自己的inode, 存放"targetfile"字符串
+// 可跨文件系统, 可链接目录
+// 删除targetfile后linkfile变成悬空链接(访问报错)
+// readlink(linkfile, buf, bufsize) 读取链接目标
+
+// unlink —— 删除目录项(减少st_nlink)
+unlink("somefile");
+// st_nlink减1, 减到0时释放数据块
+// 如果有进程打开了该文件, 延迟到close后释放
+// 常用技巧: open后立即unlink创建临时文件
+```
+
+<Callout type="trap">
+**误区：硬链接和符号链接只是创建方式不同。** 本质区别：硬链接是同一个inode的多个名字（共享数据块，st_nlink计数），删除任一不影响其他；符号链接是独立文件（有自己的inode），只存放目标路径字符串，删除目标后变成悬空链接。硬链接不能跨文件系统（inode号是局部的），不能链接目录（防环路）；符号链接无此限制。判断当前文件是否是符号链接必须用lstat（stat会跟随到目标）。
+</Callout>
+
+<Exercises>
+**问题 1**：stat和lstat对符号链接的行为有什么不同？
+
+<Answer>
+stat遇到符号链接会跟随（follow）到目标文件，返回目标文件的stat信息（类型、大小、时间戳等都是目标的）。lstat不跟随，返回符号链接自身的stat信息——类型是S_ISLNK，大小是链接路径字符串的长度。因此检测一个文件是否是符号链接必须用lstat（用stat返回的永远是目标类型，不可能返回S_ISLNK）。readlink函数读取符号链接中存储的目标路径字符串。
+</Answer>
+
+**问题 2**：创建文件时实际权限为什么是 mode & ~umask？
+
+<Answer>
+umask是进程的文件模式创建屏蔽字，是一个安全保护机制。open的mode参数指定了「期望权限」，umask屏蔽掉某些位，实际权限 = mode & ~umask。例如open(path, O_CREAT, 0666)在umask=022下实际创建为0644（组和其他用户的写权限被屏蔽）。设计原因：防止程序意外创建过于宽松的文件——即使代码写0666，umask确保至少组和其他用户没有写权限。umask是进程级属性，fork后继承，shell用umask命令设置。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="stat结构">包含文件元信息的结构体。关键成员：st_mode(类型+权限)、st_ino(inode号)、st_size(大小)、st_nlink(硬链接数)、st_atime/mtime/ctime(三个时间戳)。由stat/fstat/lstat填充。</GlossaryItem>
+<GlossaryItem term="硬链接">多个目录项指向同一个inode。共享数据块，st_nlink计数。不能跨文件系统，不能链接目录。删除任一硬链接不影响其他。link()创建。</GlossaryItem>
+<GlossaryItem term="符号链接">独立文件，有自己的inode，存放目标路径字符串。可跨文件系统，可链接目录。删除目标后变悬空链接。symlink()创建，readlink()读取目标。</GlossaryItem>
+<GlossaryItem term="umask">进程的文件模式创建屏蔽字。创建文件时实际权限 = mode & ~umask。防止程序意外创建过于宽松的文件。shell用umask命令设置，fork后继承。</GlossaryItem>
+</Glossary>

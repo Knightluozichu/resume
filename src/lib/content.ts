@@ -203,6 +203,7 @@ export const BOOK_ORDER = [
   "windows-kernel-programming",
   "linux-kernel-essence",
   "linux-kernel-design",
+  "unix-advanced-programming",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -346,6 +347,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "windows-kernel-programming": "Windows内核编程",
   "linux-kernel-essence": "Linux内核精髓",
   "linux-kernel-design": "Linux内核设计与实现",
+  "unix-advanced-programming": "UNIX环境高级编程",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

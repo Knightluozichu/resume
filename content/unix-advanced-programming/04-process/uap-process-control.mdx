@@ -1,0 +1,169 @@
+---
+title: "进程控制"
+type: C
+section: "系统与操作系统"
+order: 4
+description: "fork/exec/wait进程生命周期、进程标识PID/PPID、竞态条件、僵尸进程回收、waitpid选项、system函数"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapProcessControlDiagram } from "@/components/mdx/unix-advanced-programming/diagrams/uap-process-control";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握fork/exec/wait三件套构成的进程生命周期管理
+- 理解fork的返回值机制和fork后的竞态条件
+- 掌握僵尸进程的产生原因和回收方法
+- 理解waitpid的options参数和非阻塞回收模式
+</Objectives>
+
+## fork/exec/wait 生命周期
+
+<Term def="fork创建当前进程的副本（子进程），exec替换进程的程序代码，wait等待子进程终止并回收资源。">进程控制三件套</Term>是UNIX进程管理的核心。
+
+<UapProcessControlDiagram />
+
+## fork 详解
+
+```c
+// fork —— 创建子进程
+pid_t pid = fork();
+// 返回值:
+//   > 0: 父进程, 值是子进程PID
+//   = 0: 子进程
+//   - 1: 出错(如达到进程上限)
+
+// fork后父子进程的关系:
+// 子进程是父进程的副本:
+//   - 代码段: 共享(只读)
+//   - 数据段/堆/栈: COW(写时复制, 实际共享直到修改)
+//   - 文件描述符表: 复制(指向同一个file对象, 共享f_pos)
+//   - 信号处理函数表: 复制
+//   - 环境变量: 复制
+// 子进程独有的:
+//   - PID和PPID(=父进程PID)
+//   - 父进程的锁不继承(子进程的锁状态清零)
+//   - 未决信号集清空
+//   - alarm定时器清零
+
+// fork后的竞态条件:
+pid_t pid = fork();
+if (pid < 0) {
+    perror("fork"); exit(1);
+} else if (pid == 0) {
+    // 子进程: 不知道自己先执行还是父进程先执行!
+    printf("child\n");
+} else {
+    // 父进程: 不知道自己先执行还是子进程先执行!
+    printf("parent\n");
+}
+// 输出顺序不确定: 可能child先, 也可能parent先
+// 解决: 用同步机制(信号/管道/信号量)保证顺序
+```
+
+## exec 详解
+
+```c
+// exec系列 —— 替换当前进程的代码和数据
+// PID不变, 代码全新
+
+// 五个exec函数 (最终都调用execve系统调用):
+int execl(const char *path, const char *arg0, ... /* NULL */);
+int execlp(const char *file, const char *arg0, ... /* NULL */);
+int execle(const char *path, const char *arg0, ... /* NULL, char *const envp[] */);
+int execv(const char *path, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+int execve(const char *path, char *const argv[], char *const envp[]);
+
+// 命名规则:
+// l vs v: l用列表传参(arg0,arg1,...,NULL), v用数组传参(argv[])
+// p: 搜索PATH环境变量(file可以是文件名如"ls")
+// e: 自定义环境变量(envp参数)
+
+// exec后保留的:
+//   PID, PPID, 进程优先级, 累计CPU时间
+//   打开的fd(除非设了FD_CLOEXEC)
+//   当前工作目录, 根目录
+//   信号屏蔽字(但handler重置为默认)
+// exec后替换的:
+//   代码段, 数据段, 堆, 栈 (全部替换)
+//   信号处理函数(重置为SIG_DFL, 被忽略的除外)
+//   atexit注册的函数(清空)
+
+// 典型模式: fork + exec (shell执行命令)
+pid_t pid = fork();
+if (pid == 0) {  // 子进程
+    execlp("ls", "ls", "-l", NULL);
+    perror("exec");  // 只有exec失败才会执行到这里!
+    _exit(127);
+}
+// 父进程继续...
+```
+
+## wait 与 waitpid
+
+```c
+// wait —— 阻塞等待任一子进程终止
+pid_t ret = wait(&status);
+// 等价于 waitpid(-1, &status, 0)
+
+// waitpid —— 更灵活的等待
+pid_t ret = waitpid(pid, &status, options);
+// pid > 0: 等待指定PID的子进程
+// pid == -1: 等待任一子进程
+// pid == 0: 等待同进程组的任一子进程
+// pid < -1: 等待进程组ID=|pid|的任一子进程
+
+// options:
+//   0: 阻塞等待
+//   WNOHANG: 非阻塞, 无子进程终止立即返回0
+//   WUNTRACED: 也报告暂停的子进程
+//   WCONTINUED: 也报告恢复的子进程
+
+// 检查status的宏:
+WIFEXITED(status)    // 正常exit终止?
+WEXITSTATUS(status)  // 获取exit返回值(需WIFEXITED为真)
+WIFSIGNALED(status)  // 被信号终止?
+WTERMSIG(status)     // 获取终止信号编号(需WIFSIGNALED为真)
+WIFSTOPPED(status)   // 被暂停?
+WSTOPSIG(status)     // 获取暂停信号编号
+
+// SIGCHLD信号处理函数中的标准回收模式:
+void sigchld_handler(int sig) {
+    int saved_errno = errno;  // 保存errno(信号安全)
+    pid_t pid;
+    // WNOHANG循环: 一次信号可能对应多个子进程终止
+    while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) {
+        // 回收了一个僵尸子进程
+    }
+    errno = saved_errno;  // 恢复errno
+}
+```
+
+<Callout type="trap">
+**误区：子进程exit后就会自动消失。** 子进程exit后不会完全消失——它的task_struct保留在内核中（状态为EXIT_ZOMBIE），退出状态等待父进程查询。如果父进程不调用wait/waitpid，僵尸进程会一直占用PID和少量内存。大量僵尸进程会耗尽PID资源。解决方案：①父进程调用wait/waitpid；②注册SIGCHLD handler用WNOHANG循环回收；③signal(SIGCHLD, SIG_IGN)让内核自动回收；④父进程先退出，子进程被init(PID 1)收养。
+</Callout>
+
+<Exercises>
+**问题 1**：fork的返回值在父进程和子进程中分别是什么？为什么这样设计？
+
+<Answer>
+父进程中fork返回子进程的PID（正整数），子进程中fork返回0。原因：父进程可能有多个子进程，需要PID来标识是哪个子进程；子进程可以通过getpid()知道自己的PID，通过getppid()知道父进程PID，不需要fork额外返回信息。fork出错返回-1（如达到进程数上限）。这种设计让一段代码可以同时区分父进程和子进程的执行路径：if (pid == 0) { 子进程代码 } else if (pid > 0) { 父进程代码 }。
+</Answer>
+
+**问题 2**：什么是僵尸进程？在SIGCHLD handler中为什么用WNOHANG循环？
+
+<Answer>
+僵尸进程：子进程已exit但父进程尚未调用wait回收，task_struct保留为EXIT_ZOMBIE状态。产生原因：子进程exit后内核保留退出状态供父进程查询，父进程不调用wait则僵尸一直存在。在SIGCHLD handler中用WNOHANG循环的原因：多个子进程同时终止时，UNIX可能只产生一个SIGCHLD信号（传统信号不排队），一次handler调用必须回收所有已终止的子进程，否则遗漏的子进程会变僵尸。模式：while ((pid = waitpid(-1, NULL, WNOHANG)) > 0) { 回收 }，返回0表示无更多已终止子进程。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="fork">创建当前进程的副本。子进程继承父进程的地址空间（COW）、文件描述符表、信号处理函数表。fork返回值区分父子：父进程返回子进程PID，子进程返回0。</GlossaryItem>
+<GlossaryItem term="exec">替换当前进程的代码和数据。PID不变但程序全新。exec后保留fd（除非FD_CLOEXEC）、当前工作目录；替换代码段/数据段/堆/栈，信号handler重置为默认。</GlossaryItem>
+<GlossaryItem term="僵尸进程">子进程exit后父进程未wait回收时，task_struct保留为EXIT_ZOMBIE。占用PID和少量内存。避免：wait/waitpid、SIGCHLD handler用WNOHANG循环、signal(SIGCHLD, SIG_IGN)、父进程先退出由init收养。</GlossaryItem>
+<GlossaryItem term="竞态条件">fork后父子进程的执行顺序不确定（由调度器决定）。不能假设谁先执行。需用同步机制（信号、管道、信号量）保证顺序。TELL_WAIT/TELL_PARENT/TELL_CHILD是APUE的同步原语模式。</GlossaryItem>
+</Glossary>
