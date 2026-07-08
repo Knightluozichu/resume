@@ -1485,6 +1485,16 @@ import { mosDiskSchedulingQuestions } from "./review/mos-disk-scheduling";
 import { mosDeadlockQuestions } from "./review/mos-deadlock";
 import { mosSecurityProtectionQuestions } from "./review/mos-security-protection";
 import { mosFinalReviewQuestions } from "./review/mos-final-review";
+import { oscLearningMapQuestions } from "./review/osc-learning-map";
+import { oscOsStructureQuestions } from "./review/osc-os-structure";
+import { oscProcessSchedulingQuestions } from "./review/osc-process-scheduling";
+import { oscThreadsSynchronizationQuestions } from "./review/osc-threads-synchronization";
+import { oscDeadlocksQuestions } from "./review/osc-deadlocks";
+import { oscMemoryStrategiesQuestions } from "./review/osc-memory-strategies";
+import { oscVirtualMemoryQuestions } from "./review/osc-virtual-memory";
+import { oscFileSystemImplQuestions } from "./review/osc-file-system-impl";
+import { oscMassStorageQuestions } from "./review/osc-mass-storage";
+import { oscFinalReviewQuestions } from "./review/osc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3004,6 +3014,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mosDeadlockQuestions,
   ...mosSecurityProtectionQuestions,
   ...mosFinalReviewQuestions,
+  // 操作系统概念（恐龙书，第10版）
+  ...oscLearningMapQuestions,
+  ...oscOsStructureQuestions,
+  ...oscProcessSchedulingQuestions,
+  ...oscThreadsSynchronizationQuestions,
+  ...oscDeadlocksQuestions,
+  ...oscMemoryStrategiesQuestions,
+  ...oscVirtualMemoryQuestions,
+  ...oscFileSystemImplQuestions,
+  ...oscMassStorageQuestions,
+  ...oscFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -196,6 +196,7 @@ export const BOOK_ORDER = [
   "how-programs-work",
   "csapp",
   "modern-os",
+  "os-concepts",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -332,6 +333,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "how-programs-work": "程序是怎么跑起来的",
   "csapp": "深入理解计算机系统（CSAPP）",
   "modern-os": "现代操作系统（第4版）",
+  "os-concepts": "操作系统概念（恐龙书）",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

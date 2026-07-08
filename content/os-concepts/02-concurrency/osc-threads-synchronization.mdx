@@ -1,0 +1,95 @@
+---
+title: "线程与同步"
+type: A
+section: "系统与操作系统"
+order: 3
+description: "线程模型、临界区问题、互斥锁/信号量/管程——理解并发编程的同步工具谱系与经典问题"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { OscThreadsSynchronizationDiagram } from "@/components/mdx/os-concepts/diagrams/osc-threads-synchronization";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解线程与进程的区别及线程模型
+- 掌握临界区问题的三准则与解决方案
+- 理解自旋锁、互斥锁、信号量、管程的演进与适用场景
+- 掌握有限缓冲、读者-写者、哲学家就餐三大经典同步问题
+</Objectives>
+
+## 直觉引入
+
+把共享数据想象成一间只有一个门的会议室（临界区）。两个人（线程）想同时进去就会撞到对方（竞态条件）——数据被损坏。解决办法是门口装一把锁：**自旋锁**像一个不停转门把手的人——等的时候不坐下，一直转把手，门一开就冲进去。适合等的时间极短（多核），因为坐下再起来的开销比多转几圈还大。**互斥锁**像一个领了号牌去休息区等候的人——坐下等，门开了广播叫号。适合等的时间长，不浪费 CPU。**信号量**像会议室容量限制——最多 N 个人同时进，超出就在门口排队。**管程**像一位会议室管理员——你只需说「我要用会议室」，管理员自动帮你拿锁、开门、排队，你不需要自己管锁——语言级别的封装。
+
+<OscThreadsSynchronizationDiagram />
+
+## 临界区问题
+
+<Term def="临界区是进程访问共享资源的代码段。临界区问题要求在临界区内至多一个进程执行（互斥），且空闲时必须有进程能进入（前进），且等待时间有限（有限等待）。">临界区</Term>问题有三准则：①**互斥**（mutual exclusion）——至多一个进程在临界区内；②**前进**（progress）——空闲时必须有资格进入的进程被选中，不能无限推迟；③**有限等待**（bounded waiting）——一个进程发出进入请求后，不能无限被其他进程插队。临界区的结构是：进入区（请求锁）→ 临界区（访问共享数据）→ 退出区（释放锁）→ 剩余区（其余代码）。Peterson 算法是软件互斥的经典解法，但现代系统用硬件指令（TSL、CAS）更高效。
+
+## 同步工具谱系
+
+```text
+// 同步工具从低级到高级的演进
+
+// 1. 自旋锁 Spinlock —— 忙等待，不释放 CPU
+//    适合：多核 + 临界区极短（几十条指令）
+//    acquire: while (!test_and_set(&lock));  // 忙等
+//    release: lock = false;
+//    单核无效：自旋时另一个线程没机会释放锁
+
+// 2. 互斥锁 Mutex —— 阻塞睡眠，释放 CPU
+//    适合：单核 或 临界区较长（I/O、复杂计算）
+//    acquire: if (test_and_set(&lock)) { 加入等待队列; sleep(); }
+//    release: lock = false; 唤醒等待队列头部;
+//    上下文切换开销约 1-10 微秒
+
+// 3. 信号量 Semaphore —— 计数器，可控制资源数量
+//    P(s): s--; if (s < 0) { 加入等待队列; sleep(); }  // 等待
+//    V(s): s++; if (s <= 0) { 唤醒等待队列头部; }       // 唤醒
+//    二值信号量（0/1）= 互斥锁；计数信号量 = 控制多实例资源
+
+// 4. 管程 Monitor —— 语言级封装，自动加锁解锁
+//    编译器在方法入口自动 acquire，出口自动 release
+//    条件变量（condition variable）配合 wait/signal 管理等待
+//    Java synchronized / Python threading.Condition 是管程实现
+```
+
+## 经典同步问题
+
+**有限缓冲问题**（生产者-消费者）：缓冲区大小 N，生产者放入数据，消费者取出数据。信号量方案：`empty=N`（空位数），`full=0`（数据数），`mutex=1`（互斥）。生产者 `P(empty); P(mutex); 放入; V(mutex); V(full)`，消费者 `P(full); P(mutex); 取出; V(mutex); V(empty)`。关键：P(empty/full) 必须在 P(mutex) 之前，否则缓冲区满/空时持有 mutex 等待 → 死锁。
+
+**读者-写者问题**：读者可并发读，写者必须独占。用 `readcount` 计读者数，`mutex` 保护 `readcount`，`rw_mutex` 保护数据。读者先获 `mutex` 增 `readcount`，首个读者获 `rw_mutex`；写者直接获 `rw_mutex`。
+
+**哲学家就餐问题**：5 个哲学家 5 根筷子，每人需两根才能吃饭。死锁场景：5 人同时拿起左筷子 → 都等右筷子 → 死锁。解法：限制人数（最多 4 人同时拿筷子）、非对称（奇数先左偶数先右）、号码牌（拿筷子前先取令牌）。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：信号量的 P 操作顺序无所谓。** 致命错误。在有限缓冲问题中，若生产者先 `P(mutex)` 再 `P(empty)`，当缓冲区满时 `P(empty)` 阻塞，但生产者持有 mutex，消费者无法 `P(mutex)` 去消费数据释放空位——死锁。同理消费者若先 `P(mutex)` 再 `P(full)`，缓冲区空时也会死锁。核心原则：先等资源信号量（empty/full），再等互斥信号量（mutex）。V 操作顺序无所谓——释放不会阻塞。这个「先资源后互斥」的原则是避免信号量死锁的关键模式。
+</Callout>
+
+<Exercises>
+**问题 1**：线程和进程的区别是什么？为什么多线程有时比多进程更高效？
+
+<Answer>
+进程是资源分配的单位（有独立地址空间、文件描述符表），线程是 CPU 调度的单位（共享进程的地址空间和资源，但有独立栈和寄存器）。同一进程内的线程切换不需切换地址空间（页表不变），而进程切换要换页表、flush TLB，开销大得多。线程间通信直接读写共享内存（快），进程间通信要走管道/消息队列/共享内存（慢）。所以多线程适合频繁协作的并发任务（如 Web 服务器），多进程适合需要强隔离的任务（如浏览器标签页）。但多线程的代价是共享数据需要同步保护，否则竞态条件导致数据损坏。
+</Answer>
+
+**问题 2**：用信号量解决「生产者-消费者」（有限缓冲问题），并解释为什么 P 操作顺序不能颠倒。
+
+<Answer>
+信号量定义：`empty = N`，`full = 0`，`mutex = 1`。生产者：`P(empty); P(mutex); 放入数据; V(mutex); V(full)`。消费者：`P(full); P(mutex); 取出数据; V(mutex); V(empty)`。P 操作顺序不能颠倒：若生产者先 `P(mutex)` 再 `P(empty)`，缓冲区满时 `P(empty)` 阻塞，但生产者持有 mutex，消费者无法 `P(mutex)` 去消费——死锁。核心原则：先等资源信号量（empty/full），再等互斥信号量（mutex）。V 操作顺序无所谓。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="线程">CPU 调度的基本单位。同一进程内的线程共享地址空间和资源，但有独立栈和寄存器。线程切换比进程切换快（不换页表）。线程间通信直接读写共享内存，但需同步保护。</GlossaryItem>
+<GlossaryItem term="临界区">进程访问共享资源的代码段。三准则：互斥（至多一个在临界区）、前进（空闲时必须决定谁进）、有限等待（不能无限被插队）。</GlossaryItem>
+<GlossaryItem term="自旋锁">获取不到锁时忙等待（while 循环），不释放 CPU。延迟低但浪费 CPU。适合多核+临界区极短。</GlossaryItem>
+<GlossaryItem term="信号量">Dijkstra 提出的计数器同步原语。P 操作等待（计数器减），V 操作唤醒（计数器加）。二值信号量=互斥锁，计数信号量=控制多实例资源。</GlossaryItem>
+<GlossaryItem term="管程">语言级封装的同步结构。编译器在方法入口自动加锁、出口自动解锁。条件变量配合 wait/signal 管理等待。Java synchronized 是管程实现。</GlossaryItem>
+</Glossary>

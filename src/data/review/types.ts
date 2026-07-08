@@ -1608,7 +1608,17 @@ export type ReviewChapterSlug =
   | "mos-disk-scheduling"
   | "mos-deadlock"
   | "mos-security-protection"
-  | "mos-final-review";
+  | "mos-final-review"
+  | "osc-learning-map"
+  | "osc-os-structure"
+  | "osc-process-scheduling"
+  | "osc-threads-synchronization"
+  | "osc-deadlocks"
+  | "osc-memory-strategies"
+  | "osc-virtual-memory"
+  | "osc-file-system-impl"
+  | "osc-mass-storage"
+  | "osc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3221,6 +3231,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mos-deadlock": "死锁",
   "mos-security-protection": "安全与保护",
   "mos-final-review": "全书总复习",
+  "osc-learning-map": "全书学习地图",
+  "osc-os-structure": "操作系统结构",
+  "osc-process-scheduling": "进程调度",
+  "osc-threads-synchronization": "线程与同步",
+  "osc-deadlocks": "死锁",
+  "osc-memory-strategies": "内存管理策略",
+  "osc-virtual-memory": "虚拟内存",
+  "osc-file-system-impl": "文件系统实现",
+  "osc-mass-storage": "大容量存储",
+  "osc-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
