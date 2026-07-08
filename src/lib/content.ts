@@ -206,6 +206,7 @@ export const BOOK_ORDER = [
   "unix-advanced-programming",
   "head-first-java",
   "java-core-tech",
+  "effective-java",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -352,6 +353,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unix-advanced-programming": "UNIX环境高级编程",
   "head-first-java": "Head First Java",
   "java-core-tech": "Java核心技术",
+  "effective-java": "Effective Java",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

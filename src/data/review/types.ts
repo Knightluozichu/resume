@@ -1708,7 +1708,17 @@ export type ReviewChapterSlug =
   | "jct-concurrency"
   | "jct-advanced-features"
   | "jct-xml-network"
-  | "jct-final-review";
+  | "jct-final-review"
+  | "ejv-learning-map"
+  | "ejv-creating-objects"
+  | "ejv-common-methods"
+  | "ejv-classes-interfaces"
+  | "ejv-generics"
+  | "ejv-enums-annotations"
+  | "ejv-lambdas-streams"
+  | "ejv-methods"
+  | "ejv-concurrency"
+  | "ejv-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3421,6 +3431,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jct-advanced-features": "高级特性（注解/反射/类加载）",
   "jct-xml-network": "XML与网络",
   "jct-final-review": "全书复习",
+  "ejv-learning-map": "全书学习地图",
+  "ejv-creating-objects": "创建与销毁对象",
+  "ejv-common-methods": "通用方法",
+  "ejv-classes-interfaces": "类与接口设计",
+  "ejv-generics": "泛型",
+  "ejv-enums-annotations": "枚举与注解",
+  "ejv-lambdas-streams": "Lambda与Stream",
+  "ejv-methods": "方法设计",
+  "ejv-concurrency": "并发",
+  "ejv-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

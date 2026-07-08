@@ -1245,6 +1245,16 @@ import { jctConcurrencyQuestions } from "./review/jct-concurrency";
 import { jctAdvancedFeaturesQuestions } from "./review/jct-advanced-features";
 import { jctXmlNetworkQuestions } from "./review/jct-xml-network";
 import { jctFinalReviewQuestions } from "./review/jct-final-review";
+import { ejvLearningMapQuestions } from "./review/ejv-learning-map";
+import { ejvCreatingObjectsQuestions } from "./review/ejv-creating-objects";
+import { ejvCommonMethodsQuestions } from "./review/ejv-common-methods";
+import { ejvClassesInterfacesQuestions } from "./review/ejv-classes-interfaces";
+import { ejvGenericsQuestions } from "./review/ejv-generics";
+import { ejvEnumsAnnotationsQuestions } from "./review/ejv-enums-annotations";
+import { ejvLambdasStreamsQuestions } from "./review/ejv-lambdas-streams";
+import { ejvMethodsQuestions } from "./review/ejv-methods";
+import { ejvConcurrencyQuestions } from "./review/ejv-concurrency";
+import { ejvFinalReviewQuestions } from "./review/ejv-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3205,6 +3215,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jctAdvancedFeaturesQuestions,
   ...jctXmlNetworkQuestions,
   ...jctFinalReviewQuestions,
+  ...ejvLearningMapQuestions,
+  ...ejvCreatingObjectsQuestions,
+  ...ejvCommonMethodsQuestions,
+  ...ejvClassesInterfacesQuestions,
+  ...ejvGenericsQuestions,
+  ...ejvEnumsAnnotationsQuestions,
+  ...ejvLambdasStreamsQuestions,
+  ...ejvMethodsQuestions,
+  ...ejvConcurrencyQuestions,
+  ...ejvFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

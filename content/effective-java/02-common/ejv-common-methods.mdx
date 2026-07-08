@@ -1,0 +1,113 @@
+---
+title: "通用方法"
+type: A
+section: "JVM与Java生态"
+order: 2
+description: "equals契约、hashCode算法、toString覆盖、compareTo实现、clone的替代方案"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { EjvCommonMethodsDiagram } from "@/components/mdx/effective-java/diagrams/ejv-common-methods";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 equals 方法的五条契约及重写步骤
+- 理解 hashCode 与 equals 的配合关系和经典算法
+- 掌握 toString 覆盖的最佳实践
+- 理解 compareTo 契约与 equals 一致性
+</Objectives>
+
+## equals 契约
+
+<Term def="equals 契约要求自反性、对称性、传递性、一致性和非空性五条性质。">equals 契约</Term>是 Java 对象比较的基础。
+
+<EjvCommonMethodsDiagram />
+
+```java
+// equals 重写标准模板
+public final class PhoneNumber {
+    private final short areaCode, prefix, lineNum;
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == this) return true;           // 1. 自反性优化
+        if (!(o instanceof PhoneNumber))       // 2. 类型检查（用 instanceof 不用 getClass）
+            return false;
+        PhoneNumber pn = (PhoneNumber) o;
+        return pn.areaCode == areaCode
+            && pn.prefix == prefix
+            && pn.lineNum == lineNum;          // 3. 逐字段比较
+    }
+}
+```
+
+<Callout type="trap">
+**陷阱：继承添加字段会破坏 equals 对称性。** Point 有 equals 比较坐标，ColorPoint 继承 Point 添加颜色字段并重写 equals。`point.equals(colorPoint)` 可能返回 true（不比颜色），而 `colorPoint.equals(point)` 返回 false（比颜色发现 Point 无颜色）。解决方案：用组合替代继承——ColorPoint 持有 Point 字段而非继承 Point。
+</Callout>
+
+## hashCode 契约
+
+重写了 equals 就必须重写 hashCode，否则 HashMap/HashSet 会出问题。
+
+```java
+// hashCode 经典算法
+@Override
+public int hashCode() {
+    int result = Integer.hashCode(areaCode);   // 17 是推荐初始值
+    result = 31 * result + Integer.hashCode(prefix);  // 31 = 奇质数
+    result = 31 * result + Integer.hashCode(lineNum); // 31 * i = (i << 5) - i
+    return result;
+}
+
+// 简洁写法（Java 7+）
+@Override
+public int hashCode() {
+    return Objects.hash(areaCode, prefix, lineNum);
+}
+```
+
+## toString 和 compareTo
+
+```java
+// toString：包含所有关键信息
+@Override
+public String toString() {
+    return String.format("%03d-%03d-%04d", areaCode, prefix, lineNum);
+}
+// 输出：022-123-4567
+
+// compareTo：实现 Comparable 接口
+public final class PhoneNumber implements Comparable<PhoneNumber> {
+    @Override
+    public int compareTo(PhoneNumber pn) {
+        int result = Short.compare(areaCode, pn.areaCode);  // 不要用减法（溢出风险）
+        if (result == 0) result = Short.compare(prefix, pn.prefix);
+        if (result == 0) result = Short.compare(lineNum, pn.lineNum);
+        return result;
+    }
+}
+```
+
+<Exercises>
+**问题 1**：equals 五条契约是什么？为什么继承添加字段会破坏对称性？
+
+<Answer>
+五条契约：自反性（x.equals(x)=true）、对称性（a.equals(b)则b.equals(a)）、传递性（a=b且b=c则a=c）、一致性（多次调用结果不变）、非空性（x.equals(null)=false）。继承添加字段破坏对称性：ColorPoint 继承 Point 添加颜色，如果 ColorPoint.equals(Point) 比较颜色返回 false，而 Point.equals(ColorPoint) 不比颜色返回 true，就破坏了对称性。结论：无法在继承可实例化类并添加值字段时保持 equals 契约，解决方案是组合替代继承。
+</Answer>
+
+**问题 2**：为什么重写 equals 必须重写 hashCode？hashCode 算法中为什么用 31？
+
+<Answer>
+hashCode 契约要求 equals 相等的对象 hashCode 必相等。不重写 hashCode 则两个 equals 相等的对象可能 hashCode 不同（默认基于地址），HashMap/HashSet 会把它们分到不同桶，导致查找失败。31 的原因：①奇质数——乘以奇数避免信息丢失（偶数会丢失最高位），质数在哈希理论中效果好；②性能优化——31*i 可被 JVM 优化为 (i<<5)-i 的位运算，比普通乘法快。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="equals契约">五条性质：自反性、对称性、传递性、一致性、非空性。违反任何一条会导致 HashMap/HashSet 等依赖 equals 的数据结构行为异常。</GlossaryItem>
+<GlossaryItem term="hashCode">equals 相等的对象必须 hashCode 相等。经典算法：result = 31 * result + field.hashCode()，31 是奇质数且可位运算优化。</GlossaryItem>
+<GlossaryItem term="compareTo">Comparable 接口的唯一方法，返回负/零/正表示小于/等于/大于。建议与 equals 保持一致（compareTo 返回 0 当且仅当 equals 返回 true）。</GlossaryItem>
+<GlossaryItem term="对称性">equals 契约之一：a.equals(b) 为 true 则 b.equals(a) 必须为 true。继承添加值字段时最容易破坏此性质。</GlossaryItem>
+</Glossary>
