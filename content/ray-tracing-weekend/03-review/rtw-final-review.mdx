@@ -1,0 +1,139 @@
+---
+title: "Ray Tracing in One Weekend 总复习"
+type: D
+section: "计算机图形学与渲染"
+order: 9
+description: "全书知识链串讲与综合应用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtwFinalReviewDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能把全书十章串成一条完整的数据流
+- 能诊断「画面发黑/发暗/有穿透」等典型 bug 的根因
+- 能说出三类材质散射的本质区别
+- 能回答：从零写一个光线追踪器，关键决策点有哪些？
+</Objectives>
+
+## 直觉引入
+
+把整本书浓缩成一句话：从相机发射射线，撞到物体后让材质决定往哪散射，递归若干层再平均——就是一张真实感图片。复习就是把这条链上每个环节的「为什么」和「怎么算」重新捋一遍，找出自己卡住的节点。
+
+这一章不再教新东西，而是把九章的知识点连成网，并训练「看到 bug 就能定位到链上哪一环」的诊断能力。
+
+## 概念讲解
+
+### 全书数据流
+相机 `get_ray` 产出射线 → `world.hit` 求交得 `hit_record` → `mat_ptr->scatter` 算衰减与散射方向 → `ray_color` 递归 → 多次采样平均 → `write_color` 伽马校正输出。
+
+### 三类材质对照
+| 材质 | 散射方向 | attenuation | 关键点 |
+|------|----------|-------------|--------|
+| 漫反射 | N + 随机单位向量 | albedo | 余弦加权，需伽马校正 |
+| 金属 | reflect(d,N) + fuzz | 金属色 | 校验方向朝外 |
+| 电介质 | Snell 折射 / 全内反射 | ≈白 | front_face 决定 ratio |
+
+### 常见 bug 速查
+- **全黑**：max_depth=0 或散射返回 false。
+- **偏暗**：漏伽马校正。
+- **穿透/选远点**：列表没收紧 t_max。
+- **玻璃发黑**：depth 太小或漏判全内反射。
+- **画面拉歪**：宽高比算反。
+
+## 交互Demo
+
+> 猜一猜：渲染出「玻璃球发黑、其余正常」，最可能是数据流哪一环出问题？
+
+<RtwFinalReviewDiagram />
+
+<Stepper>
+<Step title="第一步：定位数据流">
+按 get_ray → hit → scatter → ray_color → write_color 的链路，判断 bug 出在哪一环。
+</Step>
+<Step title="第二步：对照症状">
+全黑查 depth、偏暗查伽马、穿透查 t_max、玻璃黑查全内反射与 depth、拉歪查宽高比。
+</Step>
+<Step title="第三步：回归公式">
+定位到环节后，回到对应章节的公式与代码（如 reflect、Snell、tighten t_max）逐一核对，修复后重渲验证。
+</Step>
+</Stepper>
+
+## 代码对照
+
+全书最小可运行骨架（伪代码）：
+
+```cpp
+int main() {
+  hittable_list world = build_final_scene();          // 第9章场景
+  camera cam(20, 16.0/9.0, /*aperture*/0.1, /*focus*/10.0); // 第3、8章相机
+
+  for (int j = h-1; j >= 0; --j)
+    for (int i = 0; i < w; ++i) {
+      color c(0,0,0);
+      for (int s = 0; s < samples; ++s) {             // 第6章采样
+        auto u = (i + random_double()) / (w-1);
+        auto v = (j + random_double()) / (h-1);
+        c += ray_color(cam.get_ray(u,v), world, max_depth); // 第2、4、5、7章
+      }
+      write_color(std::cout, c, samples);             // 第6章伽马校正
+    }
+}
+
+color ray_color(const ray& r, const hittable& world, int depth) {
+  hit_record rec;
+  if (depth <= 0) return color(0,0,0);                // 递归上限
+  if (world.hit(r, interval(0.001, inf), rec)) {      // 第4章求交
+    ray sc; color att;
+    if (rec.mat_ptr->scatter(r, rec, att, sc))        // 第5、6、7章材质
+      return att * ray_color(sc, world, depth-1);
+    return color(0,0,0);
+  }
+  return background(r);                               // 第2章背景
+}
+```
+
+每个函数对应特定章节，bug 出现时可直接跳到对应章节核对。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 复习时只记公式，没建立「数据流」全局观，遇到 bug 无从下手。
+**原因 →** 把各章当孤立知识点，没串成 get_ray→hit→scatter→ray_color→write_color 的链。
+**修法 →** 用一张数据流图把十章串起来，每个 bug 先定位到链上哪一环，再回到对应公式核对。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 三种材质散射方向搞混，写金属时用了漫反射的随机方向。
+**原因 →** 没有对照表区分 reflect(d,N)+fuzz、N+随机向量、Snell 折射三者的本质差异。
+**修法 →** 记住金属=镜面反射+模糊、漫反射=法线+随机、电介质=折射/全内反射，每类对应一个公式，写代码前先归类。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：把全书十章串成一条数据流，并说明每个环节对应哪一章。
+
+<Answer>
+相机 get_ray 产射线（第3、8章）→ world.hit 求交得 hit_record（第2、4章）→ mat_ptr->scatter 算衰减与散射方向（第5、6、7章）→ ray_color 递归（第5章，深度上限防溢出）→ 多次采样平均（第6章）→ write_color 伽马校正输出（第6章）。第1章是全局地图，第9章是场景组装，第10章是串讲诊断。
+</Answer>
+
+**问题**：渲染出「玻璃球发黑、其余正常」，请给出诊断思路与可能的根因。
+
+<Answer>
+先定位数据流：只有玻璃（电介质）出问题，说明 get_ray、hit、采样、伽马都正常，问题在 scatter 或递归深度。可能根因：(1) max_depth 太小，光线进玻璃后没折射出来就被截断成黑——调大 depth；(2) 漏判全内反射，refract 产生非法向量——补 cannot_refract 判定走 reflect；(3) front_face 搞反导致 ratio 错误，折射方向失真。逐一核对电介质 scatter 代码即可定位。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="数据流">get_ray→hit→scatter→ray_color→write_color 的完整链路，是诊断 bug 的主线。</GlossaryItem>
+<GlossaryItem term="散射归类">金属=镜面反射+模糊、漫反射=法线+随机、电介质=折射/全内反射，写代码前先归类选公式。</GlossaryItem>
+<GlossaryItem term="bug 速查">全黑查 depth、偏暗查伽马、穿透查 t_max、玻璃黑查全内反射/depth、拉歪查宽高比。</GlossaryItem>
+<GlossaryItem term="递归上限">max_depth 截断无限弹射，过小导致玻璃/镜面发黑，是性能与画质的旋钮。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

@@ -1,0 +1,127 @@
+---
+title: "性能优化与调试"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "Draw Call/带宽/着色器/并行的系统优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlsPerformanceDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-performance";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握渲染瓶颈定位方法
+- 学会减少Draw Call的策略
+- 理解GPU带宽优化
+- 了解Compute Shader并行计算
+</Objectives>
+
+## 直觉引入
+
+性能优化就像医生看病——先诊断(定位瓶颈)再治疗(针对性优化)。瓶颈可能在CPU(Draw Call太多)、GPU着色(着色器太复杂)或GPU带宽(纹理/顶点数据太大)。盲目优化不解决问题反而增加复杂度。
+
+## 概念讲解
+
+<Term def="用GPU时间查询和简化法定位CPU/着色/带宽瓶颈">瓶颈定位</Term><Term def="减少绘制命令数量:实例化/合批/间接绘制">Draw Call</Term><Term def="减少GPU数据读取:纹理压缩/Mipmap/顶点压缩">带宽优化</Term><Term def="独立于管线的GPU通用计算，用于GPU剔除/粒子">Compute Shader</Term>
+
+### 瓶颈定位
+1)GPU时间查询(GL_TIME_ELAPPED) 2)简化法:去掉着色器看几何瓶颈，去掉几何看着色器瓶颈
+
+### 减少Draw Call
+实例化(相同网格一次Draw Call)、合批(合并网格)、间接绘制(参数在GPU)、Multi-Draw
+
+### 带宽优化
+纹理压缩(BC/ASTC)、顶点格式压缩(UNORM16)、Mipmap、Z-Prepass
+
+### Compute Shader
+独立于管线，用于GPU剔除(写入Indirect Draw参数)、粒子更新、图像处理。
+
+## 交互Demo
+
+> 猜一猜：渲染10000棵树，用实例化和不用实例化差多少帧率？
+
+<GlsPerformanceDiagram />
+
+<Stepper>
+<Step title="第一步：定位瓶颈">
+用GPU时间查询和简化法确定瓶颈在CPU(Draw Call)还是GPU(着色/带宽)。
+</Step>
+<Step title="第二步：CPU优化">
+减少Draw Call:实例化相同网格、合批同材质物体、间接绘制让GPU决定。
+</Step>
+<Step title="第三步：GPU优化">
+减少带宽:纹理压缩/Mipmap/Z-Prepass。简化着色器。Compute Shader做GPU剔除/粒子。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 性能优化组合
+// 1. 实例化渲染
+glDrawElementsInstanced(GL_TRIANGLES, indexCount,
+    GL_UNSIGNED_INT, 0, 10000); // 1次Draw Call
+
+// 2. GPU时间查询
+GLuint query;
+glGenQueries(1, &query);
+glBeginQuery(GL_TIME_ELAPPED, query);
+renderScene();
+glEndQuery(GL_TIME_ELAPPED);
+// 获取GPU时间
+GLuint64 time;
+glGetQueryObjectui64v(query, GL_QUERY_RESULT, &time);
+
+// 3. Compute Shader GPU剔除
+// dispatch compute shader -> writes visibleCount
+// to SSBO -> use as indirect draw parameter
+glDispatchCompute(numGroups, 1, 1);
+glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+glBindBuffer(GL_DRAW_INDIRECT_BUFFER, ssbo);
+glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0);
+```
+
+GPU时间查询测量渲染耗时。实例化将10000个Draw Call减为1个。Compute Shader做GPU剔除后间接绘制。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 不做瓶颈定位直接优化。
+**原因 →** 觉得哪里慢就优化哪里。
+**修法 →** 不定位瓶颈盲目优化可能白费力气。如果瓶颈在CPU(Draw Call)，优化着色器无效。先用Profiler/查询定位再针对性优化。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 过度优化简单场景。
+**原因 →** 追求最高性能。
+**修法 →** 简单场景瓶颈不在渲染(可能在逻辑/AI)。过度优化增加代码复杂度但帧率不提升。先测帧率再决定是否优化。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：如何定位渲染瓶颈？
+
+<Answer>
+1)GPU时间查询(GL_TIME_ELAPPED) 2)简化法:去掉着色器看几何瓶颈，去掉几何看着色器瓶颈 3)NVIDIA Nsight/AMD GPA分析。瓶颈在CPU还是GPU。
+</Answer>
+
+**问题**：渲染10000棵树用实例化和不用差多少？
+
+<Answer>
+不用实例化:10000个Draw Call，CPU瓶颈可能<10fps。用实例化:1个Draw Call，GPU瓶颈可能60fps。差距可达6-10倍。实例化是场景渲染的关键优化。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="瓶颈定位">用GPU时间查询和简化法定位CPU/着色/带宽瓶颈。</GlossaryItem>
+<GlossaryItem term="Draw Call">减少绘制命令数量:实例化/合批/间接绘制。</GlossaryItem>
+<GlossaryItem term="带宽优化">减少GPU数据读取:纹理压缩/Mipmap/顶点压缩。</GlossaryItem>
+<GlossaryItem term="Compute Shader">独立于管线的GPU通用计算，用于GPU剔除/粒子。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

@@ -1,0 +1,121 @@
+---
+title: "GPU 通用计算"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "从图形管线到通用并行计算——GPGPU 的编程模型与应用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgGpuComputingDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-gpu-computing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释图形管线与通用计算管线的区别
+- 能描述 SIMT 编程模型与线程组的组织方式
+- 能回答：GPU 为什么适合数据并行而非任务并行？
+- 能识别 GPGPU 的典型应用场景与分支发散问题
+</Objectives>
+
+## 直觉引入
+
+GPU 原本是「画三角形专用芯片」。但有人发现：画三角形时，每个像素的计算逻辑相同只是数据不同——这不就是并行计算的理想场景吗？于是人们开始「借用」图形管线做通用计算：把数据伪装成纹理，用像素着色器当计算内核。后来 GPU 厂商干脆开放了通用计算接口（CUDA、Compute Shader），GPU 正式从「画图芯片」变成「并行计算芯片」。
+
+## 概念讲解
+
+### 图形管线 vs 通用计算
+
+<GpgGpuComputingDiagram />
+
+<Term def="GPGPU 是 General-Purpose computing on GPU 的缩写，把 GPU 用于非图形的通用并行计算">
+GPGPU
+</Term>
+
+图形管线的输入是几何、输出是像素，必须经过顶点和光栅化阶段；通用计算管线的输入和输出都是任意数据缓冲，直接由线程组处理，没有光栅化约束。
+
+<Term def="SIMT 是 Single Instruction Multiple Threads 的缩写，GPU 的执行模型，同一指令同时驱动多个线程">
+SIMT
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：线程组组织">
+Compute Shader 以线程组（Thread Group）为单位调度。一个组通常 64-1024 个线程，共享同一块共享内存。组内线程可同步和通信，组间独立。设计时要把数据按组划分，让组内访问局部化。
+<GpgGpuComputingDiagram />
+</Step>
+<Step title="第二步：数据并行执行">
+每个线程执行同一段着色器代码，但处理不同的数据（按线程 ID 索引）。这就像 1000 个工人用同一份说明书，每人处理一个不同的零件。GPU 的 thousands of cores 让这种数据并行极其高效。
+</Step>
+<Step title="第三步：结果写回与归约">
+计算完成后，结果写回显存缓冲。对于需要汇总的场景（如求和、求最大值），用归约算法：先组内归约到共享内存，再组间归约，最后得到全局结果。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Compute Shader：图像模糊（卷积）
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(binding = 0, rgba8) uniform image2D inputImg;
+layout(binding = 1, rgba8) uniform image2D outputImg;
+shared vec4 sharedData[18][18]; // 共享内存缓存邻域
+
+void main() {
+    ivec2 localIdx = ivec2(gl_LocalInvocationID.xy);
+    ivec2 globalIdx = ivec2(gl_GlobalInvocationID.xy);
+
+    // 加载到共享内存（含 halo 区域）
+    ivec2 loadIdx = globalIdx - ivec2(1);
+    sharedData[localIdx.x + 1][localIdx.y + 1] = imageLoad(inputImg, loadIdx);
+
+    barrier(); // 组内同步
+
+    // 卷积模糊
+    vec4 sum = vec4(0.0);
+    for (int dx = -1; dx <= 1; dx++) {
+        for (int dy = -1; dy <= 1; dy++) {
+            sum += sharedData[localIdx.x + 1 + dx][localIdx.y + 1 + dy];
+        }
+    }
+    imageStore(outputImg, globalIdx, sum / 9.0);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在 GPU 上做大量分支判断。**
+SIMT 模型下，同一 warp 内的线程必须执行相同指令。如果 if-else 让 warp 内线程走了不同分支，GPU 会串行执行所有分支，性能减半。应尽量用数学函数（step、mix）替代分支。
+</Callout>
+
+<Callout type="trap">
+**误区：忽略共享内存与全局内存的带宽差异。**
+GPU 的共享内存比全局内存快 10-100 倍。如果每个线程都从全局内存读数据，会被带宽瓶颈卡住。正确做法是先协作加载到共享内存，再从共享内存读取计算。
+</Callout>
+
+<Exercises>
+**问题 1**：GPU 为什么适合数据并行而非任务并行？
+
+<Answer>
+GPU 的 SIMT 模型要求同一 warp 内线程执行相同指令。数据并行（同一段代码处理不同数据）天然符合此模型；任务并行（不同线程做不同的事）会导致 warp 内分支发散，GPU 串行执行所有分支，效率大幅下降。所以 GPU 擅长「同一件事的海量并行」，不擅长「不同事情的同时处理」。
+</Answer>
+
+**问题 2**：共享内存为什么能大幅提升 GPU 计算性能？
+
+<Answer>
+共享内存是片上高速缓存，带宽比全局显存高 10-100 倍，延迟低一个数量级。当多个线程需要访问重叠的邻域数据时（如图像卷积），先协作把数据从全局内存加载到共享内存，再从共享内存读取，避免了重复的全局内存访问。这就是 GPU 编程的「分块」优化策略。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="GPGPU">GPU 通用计算，把图形处理器用于非图形渲染的通用并行计算任务。</GlossaryItem>
+<GlossaryItem term="SIMT">单指令多线程，GPU 的执行模型，一条指令同时驱动一组线程（warp）。</GlossaryItem>
+<GlossaryItem term="线程组">Compute Shader 的调度单位，组内线程共享内存并可同步，组间独立执行。</GlossaryItem>
+<GlossaryItem term="分支发散">同一 warp 内线程因条件分支走向不同路径，导致串行执行和性能下降。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

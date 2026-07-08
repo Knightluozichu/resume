@@ -1,0 +1,129 @@
+---
+title: "OpenGL 架构与状态机"
+type: A
+section: "计算机图形学与渲染"
+order: 1
+description: "上下文、缓冲对象与状态驱动的渲染架构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogOpenglArchitectureDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-opengl-architecture";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释渲染上下文的作用与生命周期
+- 能区分 VAO、VBO、EBO 三类缓冲对象的职责
+- 能描述状态机模型如何驱动一次绘制
+- 能回答：为什么绑定（bind）操作如此频繁？
+</Objectives>
+
+## 直觉引入
+
+把 OpenGL 想成一台需要「接线」的机器：机器本身是渲染上下文，你要先把某根线（缓冲）插到指定接口（绑定点）上，机器才知道接下来操作的是谁。插上线后，后续的「上传数据」「设定属性」都作用在这根线上，直到你换一根。
+
+机器面板上还有一堆开关（深度测试、混合、剔除），拨到哪档就一直按那档工作。所以写 OpenGL 像是在「接线 + 拨开关」，最后按一下「启动」（draw call），机器就按当前接线和开关状态产出画面。
+
+## 概念讲解
+
+<Term def="承载所有 OpenGL 状态与资源的运行环境">渲染上下文</Term>（Context）是 OpenGL 工作的前提，所有状态、对象都隶属于某个上下文。<Term def="存储顶点属性数据的 GPU 缓冲">VBO</Term>（Vertex Buffer Object）存顶点数据；<Term def="存储索引数组、用索引复用顶点的缓冲">EBO</Term>（Element Buffer Object）存索引；<Term def="封装顶点属性配置的对象">VAO</Term>（Vertex Array Object）记录「从哪个 VBO 读、怎么解析」的配置。
+
+### 状态机模型
+OpenGL 的一切操作都基于「当前绑定对象」与「当前开关状态」。`bindBuffer` 把某缓冲设为当前操作对象，`enable(DEPTH_TEST)` 打开开关，`drawArrays` 按当前接线和开关跑管线。
+
+### 一次绘制的对象协作
+VAO 记录属性配置 → VBO 提供顶点数据 → EBO 提供索引 → 程序提供着色器 → drawElements 触发。绑定顺序很关键，因为 VAO 会「捕获」绑定时的 VBO/EBO 关联。
+
+## 交互Demo
+
+> 猜一猜：先绑定 VAO 再绑定 VBO，和反过来，效果一样吗？
+
+<DogOpenglArchitectureDiagram />
+
+<Stepper>
+<Step title="第一步：建上下文与对象">
+创建渲染上下文，生成 VAO、VBO、EBO 三个对象名（GLuint），它们目前还是空的壳。
+</Step>
+<Step title="第二步：绑接与配置">
+绑 VAO 记录配置，绑 VBO 上传顶点数据并设属性指针，绑 EBO 上传索引——VAO 捕获这些关联。
+</Step>
+<Step title="第三步：拨开关发绘制">
+设状态（useProgram、enable 深度测试），调 drawElements，管线按当前 VAO/VBO/EBO/程序/开关产出像素。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 顶点数据上传与绘制（JS）：
+
+```js
+// 生成对象
+const vao = gl.createVertexArray();
+const vbo = gl.createBuffer();
+const ebo = gl.createBuffer();
+
+// 绑 VAO（开始记录配置）
+gl.bindVertexArray(vao);
+
+// 绑 VBO 上传顶点数据
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+// 设属性：位置在 location 0，每顶点 3 float
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 6*4, 0);
+gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 6*4, 3*4); // 法线
+
+// 绑 EBO 上传索引（VAO 会记录 EBO 关联）
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+gl.bindVertexArray(null);   // 解绑，配置已存入 vao
+
+// 绘制时只需重绑 VAO + 程序
+gl.useProgram(program);
+gl.bindVertexArray(vao);
+gl.enable(gl.DEPTH_TEST);
+gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+```
+
+VAO 的价值：把「绑哪个 VBO、属性怎么解析、用哪个 EBO」全记录下来，绘制时绑一次 VAO 即可恢复全部配置。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** VAO 没记录到 VBO/EBO 配置，绘制时拿不到顶点数据。
+**原因 →** 绑 VBO、设 vertexAttribPointer、绑 EBO 的顺序不对——这些操作必须在 VAO 处于绑定时进行，VAO 才会捕获。
+**修法 →** 严格按 bindVertexArray → bindBuffer(ARRAY) → vertexAttribPointer → bindBuffer(ELEMENT) 顺序，确保配置时 VAO 是当前激活的。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 改了 VBO 数据但画面不变，或绘制了上一帧的对象。
+**原因 →** 状态机下上次的绑定/程序持续生效，忘记重新绑定目标 VAO 或 useProgram。
+**修法 →** 每次绘制前显式 bindVertexArray 和 useProgram 目标对象，不依赖上次残留状态。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：VAO、VBO、EBO 各自存什么？为什么绘制时只需绑定 VAO？
+
+<Answer>
+VBO 存顶点属性数据（位置、法线、UV），EBO 存索引数组用于复用顶点，VAO 存「从哪个 VBO 读、属性怎么解析、用哪个 EBO」的配置记录。绘制时只需绑 VAO，因为它已捕获了 VBO/EBO 的关联与属性指针，绑一个 VAO 就恢复了全部顶点配置，省去重复设定。
+</Answer>
+
+**问题**：为什么 OpenGL 里 bind 操作如此频繁？这反映了什么编程模型？
+
+<Answer>
+bind 把某对象设为「当前操作对象」，后续对该类型的操作都作用于它——这反映了状态机模型：OpenGL 不靠参数传对象，而靠「当前绑定」决定操作目标。所以每次要操作不同对象都要先 bind，频繁 bind 是状态机模型的必然结果。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="渲染上下文">承载所有 OpenGL 状态与资源的运行环境，是 OpenGL 工作的前提。</GlossaryItem>
+<GlossaryItem term="VBO">Vertex Buffer Object，存储顶点属性数据的 GPU 缓冲。</GlossaryItem>
+<GlossaryItem term="EBO">Element Buffer Object，存储索引数组，用索引复用顶点以省数据。</GlossaryItem>
+<GlossaryItem term="VAO">Vertex Array Object，封装顶点属性配置，记录 VBO/EBO 关联与属性指针。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

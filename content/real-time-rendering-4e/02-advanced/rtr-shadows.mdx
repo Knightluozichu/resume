@@ -1,0 +1,121 @@
+---
+title: "实时阴影技术"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "阴影映射三步流程与PCF/CSM/VSM优化方案"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrShadowsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shadows";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释阴影映射的两步Pass流程
+- 能分析Shadow Acne和Peter-panning两个经典问题及解法
+- 能解释PCF软阴影的原理
+- 能回答：CSM为什么能同时兼顾近处精度和远处覆盖？
+</Objectives>
+
+## 直觉引入
+
+想象你用手电筒照墙。手在墙上投下影子——因为手挡住了光。计算机做阴影的思路也一样：从光源角度看场景，被挡住的地方就是阴影。这就是阴影映射（Shadow Map）的核心思想。
+
+但实现起来有两个难题：一是「从光源看」的深度精度不够（Shadow Acne），二是阴影边缘太硬（需要PCF软化）。RTR4 花了大篇幅讲这些问题的解法。
+
+## 概念讲解
+
+### 阴影映射技术
+
+<RtrShadowsDiagram />
+
+<Term def="阴影映射是从光源视角渲染深度图，再比较片段深度判断是否被遮挡的阴影技术">阴影映射</Term>分两步：1) 从光源渲染深度到Shadow Map；2) 在主Pass比较片段到光源的距离与Shadow Map的深度。
+
+两个经典问题：
+- <Term def="Shadow Acne是阴影映射中因深度精度不足导致表面出现条纹状自阴影的现象">Shadow Acne</Term>：用偏移（Bias）解决
+- <Term def="Peter-panning是偏移过大导致阴影与物体分离悬浮的现象">Peter-panning</Term>：减小偏移或使用正面剔除
+
+<Term def="PCF是百分比渐进滤波，在阴影边缘采样多个点平均，产生软阴影效果">PCF</Term>是软阴影的基础技术。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：深度Pass">从光源视角渲染场景，只写深度不写颜色，生成Shadow Map。理解正交投影（方向光）和透视投影（点光源）的区别。</Step>
+<Step title="第二步：深度比较与偏移">
+在主Pass中，把片段变换到光源空间，比较深度。大于Shadow Map值则被遮挡。偏移解决Acne，但太大会导致Peter-panning。
+<RtrShadowsDiagram />
+</Step>
+<Step title="第三步：软阴影与级联">PCF采样多点平均产生软阴影边缘。CSM将视锥分成多段，近处用高精度Shadow Map，远处用低精度，兼顾精度和覆盖。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 阴影映射核心代码
+uniform sampler2D shadowMap;
+uniform mat4 lightSpaceMatrix;
+uniform vec3 lightDir;
+
+float calculateShadow(vec4 fragPosLightSpace, vec3 normal) {
+    // 透视除法
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5; // [-1,1] -> [0,1]
+    
+    // 当前片段到光源的距离
+    float currentDepth = projCoords.z;
+    
+    // 偏移（解决 Shadow Acne）
+    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
+    
+    // PCF 3x3 软阴影
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    for(int x = -1; x <= 1; ++x) {
+        for(int y = -1; y <= 1; ++y) {
+            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth - bias > pcfDepth ? 0.0 : 1.0;
+        }
+    }
+    shadow /= 9.0;
+    
+    return shadow;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Shadow Acne和Peter-panning是一个问题的两个方向。**
+偏移太小→Acne（自阴影条纹）；偏移太大→Peter-panning（阴影悬浮）。解法不是固定偏移值，而是用基于法线和光源角度的自适应偏移：bias = max(0.05*(1-N·L), 0.005)。
+</Callout>
+
+<Callout type="trap">
+**误区：认为PCF就是真软阴影。**
+PCF只是对硬阴影边缘做模糊，不是真正的面光源软阴影。真实的软阴影需要PCSS（根据遮挡距离自适应采样范围）或光线追踪。PCF是性能与效果的折中。
+</Callout>
+
+<Exercises>
+**问题 1**：阴影映射的两个Pass分别做什么？
+
+<Answer>
+第一个Pass（深度Pass）：从光源视角渲染场景，只写深度不写颜色，生成Shadow Map（阴影贴图）。第二个Pass（主Pass）：将每个片段变换到光源空间，比较其深度与Shadow Map中的深度，若片段深度大于Shadow Map深度则被遮挡（在阴影中），最终在着色时乘以阴影系数。
+</Answer>
+
+**问题 2**：CSM（级联阴影映射）如何同时兼顾近处精度和远处覆盖？
+
+<Answer>
+CSM将相机视锥沿深度方向分成多段（通常3-5级），每段使用独立的Shadow Map。近处段覆盖范围小但分辨率高（精度高），远处段覆盖范围大但分辨率低。渲染时根据片段深度选择对应级别的Shadow Map。这样近处物体有高精度阴影，远处物体也有覆盖，避免了单张Shadow Map精度和覆盖范围不可兼得的问题。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="阴影映射">从光源视角渲染深度图，再比较片段深度判断是否被遮挡的两步Pass阴影技术。</GlossaryItem>
+<GlossaryItem term="Shadow Acne">因深度精度不足导致表面出现条纹状自阴影的现象，用偏移（Bias）解决。</GlossaryItem>
+<GlossaryItem term="PCF">百分比渐进滤波，在阴影边缘采样多个点平均，产生软阴影效果。</GlossaryItem>
+<GlossaryItem term="CSM">级联阴影映射，将视锥分成多段分别使用不同精度的Shadow Map，兼顾近处精度和远处覆盖。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

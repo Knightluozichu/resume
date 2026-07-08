@@ -1,0 +1,185 @@
+---
+title: "图形管线"
+type: A
+section: "计算机图形学与渲染"
+order: 4
+description: "理解 Vulkan 图形管线的完整阶段与可编程/固定功能配置"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgGraphicsPipelineDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-graphics-pipeline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Vulkan 图形管线的完整阶段及其顺序关系
+- 区分可编程阶段（VS/FS）与固定功能阶段（光栅化/混合）
+- 掌握 VkGraphicsPipelineCreateInfo 的关键配置项
+- 理解管线布局（Pipeline Layout）与渲染通道（Render Pass）的关系
+</Objectives>
+
+## 直觉引入
+
+把图形管线想象成一条工厂流水线：原材料（顶点数据）从入口送进去，经过一系列加工站（顶点着色器→光栅化→片段着色器→混合），最终产出成品（屏幕像素）。与 OpenGL 不同的是，Vulkan 要求你在开工前就把整条流水线的所有参数「一次性配置好」并固化成一个不可变对象——这就是 <Term def="VkPipeline 是 Vulkan 中将图形管线所有状态预配置并固化为不可变对象的句柄，创建开销大但绑定开销极低。">VkPipeline</Term>。
+
+## 概念讲解
+
+### 管线阶段总览
+
+Vulkan 图形管线包含以下阶段（按执行顺序）：
+
+1. **顶点输入**：定义顶点数据的布局和绑定方式
+2. **输入装配**：定义图元拓扑（三角形列表、线带等）
+3. **顶点着色器**（可编程）：变换顶点位置
+4. **曲面细分**（可选可编程）：几何体细分
+5. **几何着色器**（可选可编程）：图元级几何操作
+6. **光栅化**：将图元转为片段，深度裁剪、面剔除
+7. **片段着色器**（可编程）：计算每个片段的颜色
+8. **颜色混合**：将片段颜色与帧缓冲已有颜色混合
+
+### 着色器阶段
+
+Vulkan 使用 SPIR-V 字节码，通过 `vkCreateShaderModule` 加载：
+
+```c
+VkShaderModule vertShaderModule;
+VkShaderModuleCreateInfo shaderInfo = {
+    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .codeSize = codeSize,
+    .pCode = (uint32_t*)shaderCode,
+};
+vkCreateShaderModule(device, &shaderInfo, NULL, &vertShaderModule);
+
+VkPipelineShaderStageCreateInfo vertStage = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage = VK_SHADER_STAGE_VERTEX_BIT,
+    .module = vertShaderModule,
+    .pName = "main",
+};
+```
+
+### 固定功能状态
+
+Vulkan 把 OpenGL 中的全局状态拆分到管线创建时的结构体中：
+
+```c
+VkPipelineRasterizationStateCreateInfo rasterizer = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+    .depthClampEnable = VK_FALSE,
+    .rasterizerDiscardEnable = VK_FALSE,
+    .polygonMode = VK_POLYGON_MODE_FILL,
+    .cullMode = VK_CULL_MODE_BACK_BIT,
+    .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
+    .lineWidth = 1.0f,
+};
+```
+
+### 管线布局与渲染通道
+
+<Term def="管线布局描述着色器所需的描述符集布局和推送常量范围，是 uniform 和纹理绑定的接口规范。">管线布局（Pipeline Layout）</Term> 定义了着色器访问资源的接口。它由一组 <Term def="描述符集布局定义着色器如何访问缓冲区和图像等资源，是 uniform、纹理、存储缓冲绑定的蓝图。">描述符集布局（Descriptor Set Layout）</Term> 和推送常量范围组成。
+
+<Term def="渲染通道定义渲染操作使用的附件格式、子通道和依赖关系，是 framebuffer 和 pipeline 的桥梁。">渲染通道（Render Pass）</Term> 定义了渲染目标的格式和附件结构，管线创建时必须引用它。
+
+### 动态状态
+
+某些状态可以在绘制时动态设置，无需重建管线：
+
+```c
+VkDynamicState dynamicStates[] = {
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR,
+};
+
+VkPipelineDynamicStateCreateInfo dynamicState = {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+    .dynamicStateCount = 2,
+    .pDynamicStates = dynamicStates,
+};
+```
+
+## 交互Demo
+
+> 猜一猜：Vulkan 为什么把管线做成不可变对象，而 OpenGL 允许随时修改状态？
+
+<VkgGraphicsPipelineDiagram />
+
+<Stepper>
+  <Step title="配置着色器与顶点输入">
+    创建 SPIR-V 着色器模块，配置 `VkPipelineShaderStageCreateInfo`（VS + FS）。同时填充 `VkPipelineVertexInputStateCreateInfo`（顶点属性绑定）和 `VkPipelineInputAssemblyStateCreateInfo`（图元拓扑）。
+  </Step>
+  <Step title="配置固定功能状态">
+    填充光栅化（面剔除、填充模式）、混合（颜色混合公式）、多重采样、视口/裁剪等状态结构体。选择动态状态（如 viewport/scissor）避免窗口尺寸变化时重建管线。
+  </Step>
+  <Step title="创建管线">
+    将所有状态结构体汇入 `VkGraphicsPipelineCreateInfo`，连同管线布局和渲染通道，调用 `vkCreateGraphicsPipelines`。使用管线缓存（VkPipelineCache）加速后续创建。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+完整的管线创建结构：
+
+```c
+VkGraphicsPipelineCreateInfo pipelineInfo = {
+    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+    .stageCount = 2,
+    .pStages = shaderStages,              // VS + FS
+    .pVertexInputState = &vertexInputInfo,
+    .pInputAssemblyState = &inputAssembly,
+    .pViewportState = &viewportState,
+    .pRasterizationState = &rasterizer,
+    .pMultisampleState = &multisampling,
+    .pColorBlendState = &colorBlending,
+    .pDynamicState = &dynamicState,
+    .layout = pipelineLayout,
+    .renderPass = renderPass,
+    .subpass = 0,
+};
+
+VkPipeline graphicsPipeline;
+vkCreateGraphicsPipelines(device, pipelineCache, 1,
+    &pipelineInfo, NULL, &graphicsPipeline);
+```
+
+## 常见误区
+
+<Callout type="trap">
+以为每次修改 viewport 都需要重建管线。实际上只需在创建管线时把 viewport/scissor 设为动态状态（`VK_DYNAMIC_STATE_VIEWPORT`），然后在绘制命令中用 `vkCmdSetViewport` 动态设置即可，大幅减少管线重建开销。
+</Callout>
+
+<Callout type="trap">
+忽略管线缓存的使用。`VkPipelineCache` 可以在多次创建管线时复用编译结果，跨运行甚至可以序列化到磁盘。不使用缓存会导致相同着色器每次启动都重新编译，严重影响加载时间。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. Vulkan 的不可变管线设计与 OpenGL 的状态机模式相比，有什么优劣？
+   <Answer>
+   优势：驱动无需在绘制时验证状态组合，绑定开销极低（仅需绑定一个对象）；状态切换可预测，性能更稳定；便于多线程并行创建管线。劣势：创建开销大（需编译着色器+验证全部状态）；状态组合多时需要创建大量管线对象（可通过管线缓存缓解）；灵活性不如 OpenGL 的即时状态修改。
+   </Answer>
+
+2. 什么情况下应该使用动态状态而不是重建管线？
+   <Answer>
+   当某个状态频繁变化但其他状态不变时用动态状态。最典型的是 viewport/scissor（窗口尺寸变化时）和 line width。把这些设为动态状态，用 vkCmdSetViewport 等命令在录制时设置，避免每次窗口 resize 都重建管线。但如果大量状态同时变化（如切换材质），则应预创建不同管线并用 vkCmdBindPipeline 切换。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="VkPipeline">
+    将图形管线所有状态（着色器、固定功能、布局）预配置并固化为不可变对象的句柄。创建开销大但绑定开销极低，是 Vulkan 性能优势的核心设计。
+  </GlossaryItem>
+  <GlossaryItem term="管线布局 (Pipeline Layout)">
+    描述着色器所需的描述符集布局和推送常量范围的接口规范。定义了着色器如何访问 uniform 缓冲、纹理和存储缓冲等资源。
+  </GlossaryItem>
+  <GlossaryItem term="SPIR-V">
+    Vulkan 使用的着色器中间字节码格式，跨平台跨驱动。通常从 GLSL/HLSL 编译而来，可预编译并嵌入应用，避免运行时编译开销。
+  </GlossaryItem>
+  <GlossaryItem term="VkPipelineCache">
+    管线缓存对象，可复用着色器编译和管线创建结果。可序列化到磁盘跨运行使用，显著减少重复管线的创建时间。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />

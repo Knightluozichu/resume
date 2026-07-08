@@ -1,0 +1,144 @@
+---
+title: "光线与射线相交"
+type: B
+section: "计算机图形学与渲染"
+order: 1
+description: "用参数方程表示射线，求解它与球面的交点"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwRayBasicsDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-ray-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出射线的参数方程并解释每个量的含义
+- 能推导射线与球面相交的二次方程并判别解
+- 能实现 ray_color 返回背景渐变色
+- 能回答：为什么求交要忽略 t<0 的解？
+</Objectives>
+
+## 直觉引入
+
+想象你站在原点朝远处开了一枪：子弹有一条起点 A 和一个方向 b，沿着 b 飞出去，任意时刻子弹的位置就是「起点 + 方向×时间」。这就是射线的全部数学。
+
+现在场景里有一个球，球心 C、半径 r。问子弹什么时候撞上球？把子弹位置代入「到球心距离等于 r」这个方程，就得到一个关于时间 t 的一元二次方程。有实数解说明射线穿过球，取最小的正 t 就是第一个撞点。
+
+## 概念讲解
+
+<Term def="起点加方向乘参数的直线表示">射线参数方程</Term>写作 $\mathbf{P}(t) = \mathbf{A} + t\,\mathbf{b}$，$\mathbf{A}$ 是起点、$\mathbf{b}$ 是方向、$t$ 是参数。<Term def="球面上点到球心距离恒等于半径">球面方程</Term>写作 $|\mathbf{P}-\mathbf{C}| = r$。
+
+### 推导相交
+把 $\mathbf{P}(t)$ 代入球面方程并两边平方：
+
+$$
+|\mathbf{A}+t\mathbf{b}-\mathbf{C}|^2 = r^2
+$$
+
+令 $\mathbf{o}=\mathbf{A}-\mathbf{C}$（起点相对球心的偏移），展开 $|\mathbf{o}+t\mathbf{b}|^2$ 得到标准二次型：
+
+$$
+(\mathbf{b}\cdot\mathbf{b})\,t^2 + 2(\mathbf{o}\cdot\mathbf{b})\,t + (\mathbf{o}\cdot\mathbf{o})-r^2 = 0
+$$
+
+记 $a=\mathbf{b}\cdot\mathbf{b}$，$h=\mathbf{o}\cdot\mathbf{b}$，$c=\mathbf{o}\cdot\mathbf{o}-r^2$，判别式 $\Delta=h^2-ac$。$\Delta<0$ 无交点（射线错过球）；$\Delta=0$ 相切；$\Delta>0$ 两个交点，取较小的正根 $t=(-h-\sqrt\Delta)/a$。
+
+## 交互Demo
+
+> 猜一猜：射线方向 b 不归一化，求出来的交点位置会错吗？（提示：t 的含义会变）
+
+<RtwRayBasicsDiagram />
+
+<Stepper>
+<Step title="第一步：构造射线">
+对每个像素，由相机起点 A 和方向 b 组成射线 P(t)=A+t·b。t 从 0 开始沿方向前进。
+</Step>
+<Step title="第二步：解二次方程">
+把射线代入球面方程，得到 at²+2ht+c=0。算判别式 Δ=h²−ac，判断是否相交。
+</Step>
+<Step title="第三步：取最近正根">
+Δ>0 时取较小正根 t，P(t) 即为最近交点；若两个根都为负，交点在射线背后，忽略。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 实现射线类与球面求交：
+
+```cpp
+class ray {
+  public:
+    ray() {}
+    ray(const point3& origin, const vec3& direction) : orig(origin), dir(direction) {}
+    point3 origin() const    { return orig; }
+    vec3   direction() const { return dir; }
+    point3 at(double t) const { return orig + t * dir; }
+  private:
+    point3 orig;
+    vec3   dir;
+};
+
+// 射线与球心 C、半径 r 的球求交：返回是否命中
+bool hit_sphere(const point3& center, double radius, const ray& r) {
+    vec3 oc = r.origin() - center;          // o = A - C
+    auto a = dot(r.direction(), r.direction());
+    auto h = dot(oc, r.direction());        // 半 b
+    auto c = dot(oc, oc) - radius * radius;
+    auto discriminant = h * h - a * c;
+    return discriminant > 0;
+}
+
+// 没命中返回背景渐变；命中则按法线着色（红→蓝可视化）
+color ray_color(const ray& r) {
+    if (hit_sphere(point3(0, 0, -1), 0.5, r)) {
+        vec3 N = unit_vector(r.at(t) - point3(0,0,-1));
+        return 0.5 * color(N.x()+1, N.y()+1, N.z()+1);
+    }
+    vec3 unit_dir = unit_vector(r.direction());
+    auto t = 0.5 * (unit_dir.y() + 1.0);
+    return (1.0-t)*color(1,1,1) + t*color(0.5,0.7,1.0);
+}
+```
+
+背景渐变是把射线方向 y 分量线性插值白→蓝，模拟天空。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 射线方向 b 忘了归一化，画面亮度或交点位置异常。
+**原因 →** 不归一化时 a=|b|²≠1，t 的尺度被方向长度污染，判别式与根都偏移。
+**修法 →** 要么在构造射线时 unit_vector(b) 归一化，要么如上保留 a 参与计算（代码对任意长度 b 都正确），二者只能选一种并保持一致。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 把 t<0 的根也当成交点，球出现在相机背后却仍被渲染。
+**原因 →** 射线方程对负 t 也有定义，但负 t 在起点反方向，不是「向前看到」的交点。
+**修法 →** 求交时只接受 t 在 [t_min, t_max] 区间的解，相机射线通常 t_min=0，从根源上排除背后的交点。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：写出射线与球面相交的二次方程，并说明判别式 Δ 三种取值各代表什么几何关系。
+
+<Answer>
+方程：$(\mathbf{b}\cdot\mathbf{b})t^2+2(\mathbf{o}\cdot\mathbf{b})t+(\mathbf{o}\cdot\mathbf{o})-r^2=0$，其中 $\mathbf{o}=\mathbf{A}-\mathbf{C}$。Δ<0 无实根，射线错过球；Δ=0 一个重根，射线与球相切；Δ>0 两个不同实根，射线穿过球，取较小正根为最近交点。
+</Answer>
+
+**问题**：为什么求交要忽略 t<0 的解？若忽略 t=0 附近的解又用什么参数避免「自相交」？
+
+<Answer>
+t<0 表示交点在射线起点的反方向（相机背后），不属于「向前看到」的内容，必须忽略。为避免浮点误差导致射线从物体表面出发时立刻命中自身（t≈0 的假交点），求交时设一个小的正下界 t_min（如 0.001），只接受 t>t_min 的解。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="射线参数方程">P(t)=A+t·b，用起点 A、方向 b 和参数 t 表示直线上任意点，t≥0 表示从起点向前的部分。</GlossaryItem>
+<GlossaryItem term="球面方程">|P−C|=r，即到球心 C 距离等于半径 r 的所有点集合，求交即把射线代入此式。</GlossaryItem>
+<GlossaryItem term="判别式">Δ=h²−ac，决定二次方程是否有实根，从而判断射线与球是否相交及相切。</GlossaryItem>
+<GlossaryItem term="背景渐变">未命中任何物体时按射线方向线性插值得到的颜色，本书用白→蓝模拟天空。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

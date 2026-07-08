@@ -1,0 +1,142 @@
+---
+title: "Vulkan 基础与概念"
+type: A
+section: "计算机图形学与渲染"
+order: 1
+description: "实例、设备、队列族、验证层与同步原语"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgVulkanBasicsDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-vulkan-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分物理设备与逻辑设备
+- 能说明队列族的作用与选择依据
+- 能解释验证层的意义与启用方式
+- 能回答：栅栏与信号量各用于什么同步场景？
+</Objectives>
+
+## 直觉引入
+
+Vulkan 的对象像层层嵌套的俄罗斯套娃：最外层是实例（连接整个 Vulkan 库），里面是物理设备（你选的那块显卡），再里面是逻辑设备（你打开的使用权），逻辑设备里又有队列（GPU 干活的窗口）。每个对象各司其职，显式创建显式销毁。
+
+同步方面，Vulkan 用两种原语：栅栏是「CPU 等 GPU 干完」的红绿灯，信号量是「GPU 内部一件活等另一件活」的接力棒。理解这两个，就理解了 Vulkan 同步的骨架。
+
+## 概念讲解
+
+### 设备层次
+<Term def="代表实际 GPU 硬件、用于查询能力的对象">物理设备</Term>（VkPhysicalDevice）代表显卡，可查询特性与队列族；<Term def="应用打开的 GPU 使用权、实际分配资源的对象">逻辑设备</Term>（VkDevice）是创建资源、执行命令的句柄。
+
+### 队列族
+<Term def="按命令类型分组的 GPU 执行通道">队列族</Term>（queue family）：图形、计算、传输、呈现等命令分属不同族，需选同时支持图形与呈现的族。逻辑设备创建时按族请求队列。
+
+### 验证层
+<Term def="在调试期拦截 API 调用做参数校验与错误报告的可选层">验证层</Term>（validation layer）：开发期启用，自动检查误用（如未设同步、对象漏销毁），发布期关闭零开销。
+
+### 同步原语
+- <Term def="CPU 等待 GPU 完成命令的同步对象">栅栏</Term>（Fence）：CPU 调 vkQueueSubmit 时带 fence，之后 vkWaitForFences 阻塞 CPU 等 GPU 做完。
+- <Term def="协调 GPU 内部命令顺序的同步对象">信号量</Term>（Semaphore）：GPU 内部用，如「取图像」信号量通知「绘制」可开始、「绘制完成」信号量通知「呈现」可进行。
+
+## 交互Demo
+
+> 猜一猜：发布版忘记关验证层，会怎样？
+
+<VkgVulkanBasicsDiagram />
+
+<Stepper>
+<Step title="第一步：建实例与设备">
+创建 Instance，枚举物理设备查队列族，选合适的创建逻辑设备并请求图形/呈现队列。
+</Step>
+<Step title="第二步：开验证层">
+开发期启用验证层，拦截错误调用并报详细原因，发布期关闭以免性能损耗。
+</Step>
+<Step title="第三步：用同步原语">
+提交命令时带 fence 让 CPU 等 GPU；用信号量串起取图像→绘制→呈现的 GPU 内部顺序。
+</Step>
+</Stepper>
+
+## 代码对照
+
+Vulkan 实例、设备与队列创建（C）：
+
+```c
+// 验证层（开发期）
+const char* layers[] = { "VK_LAYER_KHRONOS_validation" };
+VkInstanceCreateInfo ici = {
+  .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+  .enabledLayerCount = 1, .ppEnabledLayerNames = layers,
+};
+vkCreateInstance(&ici, NULL, &instance);
+
+// 选物理设备
+vkEnumeratePhysicalDevices(instance, &count, physDevs);
+VkPhysicalDevice physical = physDevs[0];
+
+// 找支持图形+呈现的队列族
+uint32_t queueFamilyIndex = findGraphicsPresentQueueFamily(physical);
+
+// 创建逻辑设备
+float prio = 1.0f;
+VkDeviceQueueCreateInfo qci = {
+  .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+  .queueFamilyIndex = queueFamilyIndex, .queueCount = 1, .pQueuePriorities = &prio,
+};
+VkDeviceCreateInfo dci = {
+  .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+  .queueCreateInfoCount = 1, .pQueueCreateInfos = &qci,
+};
+vkCreateDevice(physical, &dci, NULL, &device);
+vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+
+// 同步：栅栏（CPU 等 GPU）+ 信号量（GPU 内部）
+VkFence fence;
+VkFenceCreateInfo fci = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
+vkCreateFence(device, &fci, NULL, &fence);
+vkQueueSubmit(queue, 1, &submitInfo, fence);
+vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);  // CPU 阻塞等
+```
+
+验证层在开发期替你抓出大量误用，是 Vulkan 调试的基石。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 选了只支持计算的队列族，绘制命令提交失败。
+**原因 →** 队列族按命令类型分组，图形命令需 GRAPHICS 族，呈现需支持 PRESENT 的族。
+**修法 →** 枚举队列族时查 VK_QUEUE_GRAPHICS_BIT 与呈现支持（vkGetPhysicalDeviceSurfaceSupportKHR），选同时满足的族。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 用栅栏协调取图像与呈现，画面仍撕裂。
+**原因 →** 栅栏是 CPU 等 GPU，不串 GPU 内部命令顺序；取图像→绘制→呈现是 GPU 内部三步，需信号量串联。
+**修法 →** 用信号量：imageAvailable 通知绘制可开始、renderFinished 通知呈现可进行；栅栏只用于 CPU 等命令缓冲执行完以便重用。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：物理设备与逻辑设备有何区别？队列族怎么选？
+
+<Answer>
+物理设备代表实际显卡硬件，用于查询特性与队列族能力；逻辑设备是应用打开的 GPU 使用权，实际创建资源与执行命令。队列族按命令类型分组（图形/计算/传输/呈现），需枚举查 VK_QUEUE_GRAPHICS_BIT 与表面呈现支持（vkGetPhysicalDeviceSurfaceSupportKHR），选同时支持图形与呈现的族，再按族请求队列。
+</Answer>
+
+**问题**：栅栏和信号量分别用于什么同步场景？为什么不能互换？
+
+<Answer>
+栅栏用于 CPU 等 GPU：提交命令带 fence，CPU 调 vkWaitForFences 阻塞等 GPU 做完以便重用命令缓冲。信号量用于 GPU 内部命令顺序：协调「取图像→绘制→呈现」三步的接力。不能互换因为栅栏无法串 GPU 内部命令顺序（它只让 CPU 等），信号量不能被 CPU 直接等待（它只在 GPU 侧）。各管一侧，互不替代。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="物理设备">代表实际 GPU 硬件的对象，用于查询特性与队列族，不分配资源。</GlossaryItem>
+<GlossaryItem term="逻辑设备">应用打开的 GPU 使用权，实际创建资源与执行命令的句柄。</GlossaryItem>
+<GlossaryItem term="队列族">按命令类型分组的 GPU 执行通道，需选支持所需命令类型的族。</GlossaryItem>
+<GlossaryItem term="验证层">调试期拦截 API 调用做参数校验与错误报告的可选层，发布期关闭零开销。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="" />

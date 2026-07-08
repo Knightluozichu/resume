@@ -1,0 +1,152 @@
+---
+title: "球体与可命中对象"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "用 Hittable 抽象统一几何体的相交记录"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwSphereHittableDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-sphere-hittable";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说明 hit_record 各字段的含义与用途
+- 能实现 sphere::hit 取最近交点并记录法线
+- 能解释法线为什么要根据射线方向判定外表面
+- 能回答：hittable_list 如何在多个物体中选最近交点？
+</Objectives>
+
+## 直觉引入
+
+场景里不会只有一个球。要支持任意多个物体，得先抽象出一个共同接口：「给一条射线，告诉我你被击中了吗？击中点在哪、法线朝哪」。这就是可命中对象（hittable）。
+
+每种几何体（球、平面、三角形）各自实现这个接口，场景用一个列表把它们装起来。射线来了，列表挨个问每个物体「你最近被击中在哪」，记下全局最近的那个交点——这就是这一像素真正看到的东西。
+
+## 概念讲解
+
+<Term def="记录射线与物体相交结果的数据结构">命中记录</Term>（hit_record）包含：交点 $\mathbf{p}$、交点处法线 $\mathbf{n}$、参数 $t$、以及是否正面命中 `front_face`。<Term def="可被射线命中的几何体统一接口">可命中对象</Term>（hittable）提供 `hit(ray, t_min, t_max, rec)` 方法。
+
+### 法线方向判定
+射线可能从球外射入，也可能从球内射出（如折射后再相交）。约定法线永远朝射线来源的反方向（外法线）：
+
+$$
+\text{front\_face} = (\mathbf{d}\cdot\mathbf{n}_{out} < 0),\quad \mathbf{n} = \text{front\_face}\ ?\ \mathbf{n}_{out}\ :\ -\mathbf{n}_{out}
+$$
+
+### 取最近交点
+射线可能与球有两个交点，取 $t\in[t_{min},t_{max}]$ 内最小的正根，并不断收紧 $t_{max}$ 为当前最近距离，使后续物体只可能贡献更近的交点。
+
+## 交互Demo
+
+> 猜一猜：射线从球内部射出时，法线应该朝内还是朝外？
+
+<RtwSphereHittableDiagram />
+
+<Stepper>
+<Step title="第一步：定义命中记录">
+hit_record 存 p（交点）、normal（法线）、t（参数）、front_face（是否外表面命中），是相交结果的统一载体。
+</Step>
+<Step title="第二步：球实现 hit">
+解二次方程，在 [t_min,t_max] 内取最小正根，算出交点与外法线，再按射线方向翻转法线使它始终朝外。
+</Step>
+<Step title="第三步：列表取最近">
+hittable_list 遍历所有物体，命中即把 t_max 收紧为当前 t，最终留下全局最近的交点。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 抽象接口、球体命中与列表：
+
+```cpp
+struct hit_record {
+  point3 p;
+  vec3   normal;
+  double t;
+  bool   front_face;
+  shared_ptr<material> mat_ptr;   // 后面材质章会用到
+};
+
+class hittable {
+  public:
+    virtual ~hittable() = default;
+    virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
+};
+
+// 球的命中：取区间内最近正根，并确定朝外法线
+bool sphere::hit(const ray& r, interval ray_t, hit_record& rec) const {
+  vec3 oc = r.origin() - center;
+  auto a = r.direction().length_squared();
+  auto h = dot(oc, r.direction());
+  auto c = oc.length_squared() - radius*radius;
+  auto disc = h*h - a*c;
+  if (disc < 0) return false;
+  auto sqrtd = sqrt(disc);
+  auto root = (-h - sqrtd) / a;            // 近根
+  if (!ray_t.surrounds(root)) {            // 不在区间内试远根
+    root = (-h + sqrtd) / a;
+    if (!ray_t.surrounds(root)) return false;
+  }
+  rec.t = root;
+  rec.p = r.at(rec.t);
+  vec3 outward_normal = (rec.p - center) / radius;
+  rec.set_face_normal(r, outward_normal);  // 按射线方向翻转法线
+  return true;
+}
+
+// 列表：遍历并收紧 t_max
+bool hittable_list::hit(const ray& r, interval ray_t, hit_record& rec) const {
+  hit_record temp_rec; bool hit_anything = false;
+  auto closest = ray_t.max;
+  for (const auto& obj : objects)
+    if (obj->hit(r, interval(ray_t.min, closest), temp_rec)) {
+      hit_anything = true; closest = temp_rec.t; rec = temp_rec;
+    }
+  return hit_anything;
+}
+```
+
+`set_face_normal` 内部用点积判定正反面并翻转法线，使材质无需关心射线来自内还是外。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 玻璃球内部折射后再次相交时法线朝错方向，折射计算出错。
+**原因 →** 球的几何外法线始终朝球外，但折射公式需要法线朝射线来源侧。
+**修法 →** 用 set_face_normal 按入射方向翻转：射线从外进内时法线朝外，从内出外时法线朝内，并记 front_face 供材质判断介质。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 列表没收紧 t_max，结果渲染了「最远」而非「最近」的交点，出现穿透。
+**原因 →** 遍历时每个物体都在原始 [t_min,t_max] 区间求交，后命中的远物体覆盖了近物体。
+**修法 →** 每次命中把 closest 更新为当前 t，后续物体只在此更小区间内求交，保证留下全局最近交点。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：hit_record 里 front_face 是怎么判定的？为什么要把法线翻转成始终朝外？
+
+<Answer>
+front_face = (射线方向 · 外法线 < 0)，即射线迎着外法线射入为正面命中。翻转法线使它始终朝射线来源侧（朝外），是为了让材质的散射/折射公式有一个统一约定：法线总是指向入射光来的那一侧，无需在材质里再判断内外。
+</Answer>
+
+**问题**：hittable_list 如何保证返回的是最近交点而非任意一个？
+
+<Answer>
+维护一个 closest 变量初始化为 t_max，遍历每个物体时用 [t_min, closest] 作为求交区间；一旦命中就把 closest 更新为该交点的 t。这样后续物体只能在比当前更近的位置命中，遍历结束 rec 里留下的就是全局最近交点。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="命中记录">hit_record，记录射线与物体相交结果的统一结构，含交点 p、法线 normal、参数 t、front_face 与材质指针。</GlossaryItem>
+<GlossaryItem term="可命中对象">hittable，提供 hit(ray, t区间, rec) 接口的几何体抽象，球、列表等都实现它。</GlossaryItem>
+<GlossaryItem term="外法线">从球心指向交点的法线，始终朝球外；按射线方向翻转后成为渲染用的法线。</GlossaryItem>
+<GlossaryItem term="收紧区间">遍历列表时把求交上界 t_max 更新为当前最近 t，保证只保留更近的交点。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

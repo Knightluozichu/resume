@@ -1,0 +1,114 @@
+---
+title: "渲染算法与可见性"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "Z-buffer、Painter算法与光线投射对比"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CgpRenderingAlgorithmsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-rendering-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释Z-buffer算法的工作原理
+- 能说出Painter算法的局限和适用场景
+- 能描述光线投射如何天然解决可见性问题
+- 能回答：为什么GPU选择Z-buffer而不是其他算法？
+</Objectives>
+
+## 直觉引入
+
+想象你在画一幅油画。方案A（Painter算法）：先画远处的山，再画近处的树——树覆盖山，自然正确。方案B（Z-buffer）：每个位置记录最近的画笔距离，新的笔触如果更近就覆盖，更远就丢弃。
+
+方案C（光线投射）：从你的眼睛发射光线，穿过画布的每个像素，碰到的第一个物体就是你应该画的——天然解决「谁在前」的问题。三种思路各有优劣，GPU选择了Z-buffer因为它最简单、最并行。
+
+## 概念讲解
+
+### 可见性算法
+
+<CgpRenderingAlgorithmsDiagram />
+
+<Term def="Z-buffer是用深度缓冲区逐像素比较深度来解决可见性的算法">Z-buffer</Term>：每个像素存最近深度，新片段深度更近则覆盖。简单、无需排序、天然并行。
+
+<Term def="Painter算法是按深度从远到近排序绘制图元，近的覆盖远的">Painter算法</Term>：需要全局排序，无法处理循环遮挡（A挡B、B挡A）。
+
+<Term def="光线投射是从每个像素发射光线，求交最近物体来确定可见性">光线投射</Term>：天然解决可见性，支持反射折射，但计算量大。
+
+<Term def="BSP树是预计算空间分割的可见性算法，适合静态场景">BSP树</Term>：预排序，运行时只需遍历，适合早期3D游戏（Doom/Quake）。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Z-buffer核心">Z-buffer为每个像素维护一个深度值。渲染时比较新片段深度与当前深度，更近则覆盖。不需要排序，天然并行——GPU的标准方案。</Step>
+<Step title="第二步：其他算法">
+Painter算法适合半透明排序（Z-buffer无法处理半透明）。BSP树适合静态场景预计算。光线投射适合需要反射折射的场景。
+<CgpRenderingAlgorithmsDiagram />
+</Step>
+<Step title="第三步：算法选择">GPU用Z-buffer做不透明物体的可见性。半透明物体用Painter算法（按距离排序）。光线追踪用于反射/阴影/GI。根据场景特点选择。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// Z-buffer 算法核心
+float zbuffer[WIDTH][HEIGHT];
+// 初始化为最大深度
+for(int y=0; y<HEIGHT; y++)
+    for(int x=0; x<WIDTH; x++)
+        zbuffer[x][y] = INFINITY;
+
+// 渲染三角形
+void renderTriangle(Triangle tri) {
+    for(int y = minY(tri); y < maxY(tri); y++) {
+        for(int x = minX(tri); x < maxX(tri); x++) {
+            if(pointInTriangle(x, y, tri)) {
+                float z = interpolateDepth(x, y, tri);
+                // 关键：深度比较
+                if(z < zbuffer[x][y]) {
+                    zbuffer[x][y] = z;           // 更新深度
+                    framebuffer[x][y] = shade(x, y, tri); // 写入颜色
+                }
+            }
+        }
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Z-buffer能处理半透明物体。**
+Z-buffer只保留最近的不透明片段，丢弃更远的片段。但半透明需要看到后面的物体，所以不能用Z-buffer直接渲染——需要先渲染不透明物体，再按从远到近的顺序渲染半透明物体（Painter算法）。
+</Callout>
+
+<Callout type="trap">
+**误区：认为光线追踪一定比Z-buffer好。**
+Z-buffer做不透明场景的可见性判断非常高效（O(1)每像素），且天然并行。光线追踪的可见性判断需要O(logN)~O(N)求交运算（N=物体数），远慢于Z-buffer。光线追踪的优势在于反射/折射/阴影等全局效果，不是可见性判断本身。
+</Callout>
+
+<Exercises>
+**问题 1**：Z-buffer算法的工作原理是什么？
+
+<Answer>
+Z-buffer维护一个与帧缓冲同大小的深度缓冲区，初始值为无穷远。渲染每个图元时，对覆盖的每个像素计算片段深度z。如果z小于zbuffer中当前值（更近），则更新zbuffer并写入颜色；如果z大于等于当前值（更远），则丢弃该片段。这样最终帧缓冲中每个像素只保留最近的片段。算法无需全局排序，每个像素独立判断，天然适合GPU并行。
+</Answer>
+
+**问题 2**：为什么GPU选择Z-buffer而不是Painter算法或光线追踪？
+
+<Answer>
+Z-buffer的优势：1) 无需排序——Painter算法需要按深度全局排序所有图元，排序复杂度O(NlogN)且无法处理循环遮挡；2) 天然并行——每个像素独立做深度比较，完美匹配GPU的并行架构；3) 简单高效——每像素O(1)操作，不需要光线追踪的求交计算。劣势是不能处理半透明（需要额外Pass），且不能直接产生反射折射效果。但对不透明场景，Z-buffer是最优选择。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Z-buffer">用深度缓冲区逐像素比较深度来解决可见性的算法，GPU标准方案。</GlossaryItem>
+<GlossaryItem term="Painter算法">按深度从远到近排序绘制图元，近的覆盖远的，适合半透明排序但无法处理循环遮挡。</GlossaryItem>
+<GlossaryItem term="光线投射">从每个像素发射光线求交最近物体来确定可见性的方法，天然解决可见性但计算量大。</GlossaryItem>
+<GlossaryItem term="BSP树">预计算空间分割的可见性算法，运行时遍历确定绘制顺序，适合静态场景。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />

@@ -1,0 +1,116 @@
+---
+title: "纹理映射高级技术"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "多层纹理、压缩、各向异性与纹理数组"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlsTextureMappingDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-texture-mapping";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握多层纹理(Multitexturing)技术
+- 理解纹理压缩(BC/ASTC)
+- 学会各向异性过滤
+- 了解纹理数组与纹理图集
+</Objectives>
+
+## 直觉引入
+
+高级纹理技术就像专业摄影——多层纹理是多重滤镜(基础色+法线+高光叠加)，纹理压缩是JPEG压缩(减少存储和带宽)，各向异性是高清防抖(斜角也清晰)，纹理数组是相册(同尺寸图片批量管理)。
+
+## 概念讲解
+
+<Term def="着色器中混合多个纹理(基础色+法线+高光)">多层纹理</Term><Term def="BC/ASTC/ETC2格式，减少显存和带宽4-8倍">纹理压缩</Term><Term def="沿观察方向采样多个纹素，斜角清晰">各向异性过滤</Term><Term def="同尺寸纹理存在一个数组，着色器用索引选择">纹理数组</Term>
+
+### 多层纹理
+着色器声明多个sampler2D绑定不同纹理单元。片段着色器混合：finalColor=baseColor*lightColor+specularMap的高光。
+
+### 纹理压缩
+BC1-7(桌面)、ASTC(移动/桌面)、ETC2(移动)。GPU硬件解压零开销。质量有损但视觉影响小。
+
+### 各向异性
+斜角观察时标准Mipmap过度模糊。各向异性沿观察方向采样(非正方形区域)，最高16x。
+
+## 交互Demo
+
+> 猜一猜：纹理压缩为什么不影响渲染速度反而提升？
+
+<GlsTextureMappingDiagram />
+
+<Stepper>
+<Step title="第一步：多层纹理">
+在着色器中声明多个sampler2D，绑定不同纹理单元。混合基础色+法线+高光贴图。
+</Step>
+<Step title="第二步：纹理压缩">
+使用BC/ASTC压缩格式上传纹理，减少显存4-8倍、减少带宽提升性能。GPU硬件解压。
+</Step>
+<Step title="第三步：高级过滤">
+各向异性过滤解决斜角模糊。纹理数组管理同尺寸纹理集(如地形层纹理)。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 多层纹理混合
+#version 330 core
+in vec2 TexCoord;
+in vec3 Normal;
+uniform sampler2D diffuseMap;  // GL_TEXTURE0
+uniform sampler2D normalMap;   // GL_TEXTURE1
+uniform sampler2D specularMap; // GL_TEXTURE2
+void main() {
+    vec3 diffuse = texture(diffuseMap, TexCoord).rgb;
+    vec3 normal = texture(normalMap, TexCoord).rgb * 2.0 - 1.0;
+    float spec = texture(specularMap, TexCoord).r;
+    // 使用normal做光照计算...
+    FragColor = vec4(diffuse * (0.1 + spec), 1.0);
+}
+```
+
+多层纹理在着色器中混合多个采样结果。每个纹理绑定不同纹理单元(glActiveTexture)。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 用未压缩纹理。
+**原因 →** 压缩有损质量。
+**修法 →** 现代压缩格式(BC7/ASTC)质量接近无损。压缩减少显存4-8倍、减少带宽(移动端最大瓶颈)、GPU硬件解压零开销。反而提升性能。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 纹理图集跨边界采样。
+**原因 →** 多个纹理拼一张大图省绑定。
+**修法 →** 纹理图集可能在子纹理边界采样到相邻纹理。解决：留padding边距或使用纹理数组(数组不跨边界)。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：多层纹理如何实现？
+
+<Answer>
+着色器声明多个sampler2D，glActiveTexture激活不同纹理单元绑定纹理，uniform设为单元编号。片段着色器混合多个纹理采样结果。
+</Answer>
+
+**问题**：纹理压缩为什么能提升性能？
+
+<Answer>
+压缩减少显存占用4-8倍，减少GPU读取纹理的带宽(移动端最大瓶颈)，GPU硬件实时解压零开销。反而比未压缩更快。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="多层纹理">着色器中混合多个纹理(基础色+法线+高光)。</GlossaryItem>
+<GlossaryItem term="纹理压缩">BC/ASTC/ETC2格式，减少显存和带宽4-8倍。</GlossaryItem>
+<GlossaryItem term="各向异性过滤">沿观察方向采样多个纹素，斜角清晰。</GlossaryItem>
+<GlossaryItem term="纹理数组">同尺寸纹理存一个数组，着色器用索引选择。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

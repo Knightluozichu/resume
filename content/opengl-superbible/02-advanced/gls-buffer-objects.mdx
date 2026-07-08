@@ -1,0 +1,114 @@
+---
+title: "缓冲对象与数据管理"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "VBO/UBO/SSBO/PBO与持久映射"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlsBufferObjectsDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-buffer-objects";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解各种缓冲对象类型
+- 掌握VBO使用模式(STATIC/DYNAMIC/STREAM)
+- 学会持久映射零拷贝更新
+- 能选择合适的缓冲类型
+</Objectives>
+
+## 直觉引入
+
+缓冲对象就像不同类型的容器——VBO是水桶(装顶点数据)、UBO是公告板(所有着色器都能看)、SSBO是仓库(可读写大量数据)、PBO是传送带(异步传输像素)。选择合适容器让数据在CPU和GPU间高效流动。
+
+## 概念讲解
+
+<Term def="顶点缓冲对象，STATIC/DYNAMIC/STREAM三种使用模式">VBO</Term><Term def="Uniform缓冲对象，多个着色器共享只读数据(64KB限制)">UBO</Term><Term def="Shader Storage缓冲，可读写随机访问无大小限制">SSBO</Term><Term def="持续有效的缓冲指针，CPU零拷贝更新GPU数据">持久映射</Term>
+
+### VBO使用模式
+STATIC_DRAW(一次上传反复用)、DYNAMIC_DRAW(频繁修改)、STREAM_DRAW(每次都改)
+
+### UBO vs SSBO
+UBO:只读、64KB限制、所有着色器共享(如VP矩阵)。SSBO:读写、无限制、适合计算着色器(如粒子)。
+
+### 持久映射
+OpenGL 4.4 glBufferStorage+GL_MAP_PERSISTENT_BIT。CPU指针持续有效，零拷贝更新。配合fence同步。
+
+## 交互Demo
+
+> 猜一猜：持久映射比glBufferSubData快多少？
+
+<GlsBufferObjectsDiagram />
+
+<Stepper>
+<Step title="第一步：选择VBO模式">
+静态几何用STATIC_DRAW(场景网格)，动态数据用DYNAMIC_DRAW(变形网格)，每帧重建用STREAM_DRAW(粒子)。
+</Step>
+<Step title="第二步：共享数据用UBO">
+VP矩阵等共享只读数据放UBO，多个着色器通过binding point访问，避免重复设置。
+</Step>
+<Step title="第三步：大数据用SSBO+持久映射">
+粒子位置等大数据放SSBO，计算着色器更新。持久映射实现CPU零拷贝写入。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 持久映射: 零拷贝更新
+GLuint buf;
+glCreateBuffers(1, &buf);
+glNamedBufferStorage(buf, size, NULL,
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+// CPU指针持续有效
+float* ptr = (float*)glMapNamedBufferRange(buf, 0, size,
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+// 直接写入,无需glBufferSubData
+for(int i=0; i<count; i++)
+    ptr[i] = newValue; // 零拷贝
+// 配合fence同步防止CPU写太快覆盖GPU正在读的数据
+```
+
+持久映射避免每帧glBufferSubData的拷贝开销和同步等待。配合fence实现CPU-GPU同步。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 所有数据都用持久映射。
+**原因 →** 持久映射看起来最高效。
+**修法 →** 持久映射适合频繁更新的大数据(粒子/动态网格)。静态数据用STATIC_DRAW一次上传即可。持久映射需要管理同步(fence)，增加复杂度。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 用glBufferData更新数据。
+**原因 →** glBufferData能更新。
+**修法 →** glBufferData会重新分配内存(旧数据丢弃)。频繁更新应用glBufferSubData(原地更新)或持久映射。glBufferData适合一次性上传。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：VBO的STATIC/DYNAMIC/STREAM怎么选？
+
+<Answer>
+STATIC_DRAW:一次上传反复用(场景网格)。DYNAMIC_DRAW:频繁修改(变形网格)。STREAM_DRAW:每次都改(粒子)。正确选择让驱动优化内存布局。
+</Answer>
+
+**问题**：持久映射比glBufferSubData快多少？
+
+<Answer>
+持久映射避免每帧glBufferSubData的拷贝开销和驱动同步等待。CPU直接写GPU内存(零拷贝)。配合fence同步。适合频繁更新的大数据，可提升20-50%更新性能。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="VBO">顶点缓冲对象，STATIC/DYNAMIC/STREAM三种使用模式。</GlossaryItem>
+<GlossaryItem term="UBO">Uniform缓冲对象，多个着色器共享只读数据(64KB限制)。</GlossaryItem>
+<GlossaryItem term="SSBO">Shader Storage缓冲，可读写随机访问无大小限制。</GlossaryItem>
+<GlossaryItem term="持久映射">持续有效的缓冲指针，CPU零拷贝更新GPU数据。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

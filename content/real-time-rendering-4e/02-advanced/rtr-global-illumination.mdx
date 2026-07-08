@@ -1,0 +1,121 @@
+---
+title: "实时全局光照"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "直接光与间接光的近似方案——从AO到光线追踪"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrGlobalIlluminationDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-global-illumination";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分直接光照和间接光照（GI）
+- 能解释AO（环境光遮蔽）是GI的什么简化形式
+- 能列出三种实时GI技术及其优缺点
+- 能回答：为什么实时GI如此困难？
+</Objectives>
+
+## 直觉引入
+
+想象一个白色房间。阳光从窗户照进来，照到红色地毯上——墙壁上会泛着淡淡的红色。这就是全局光照（GI）：光不只从光源直接到眼睛，还会在表面之间弹射，携带颜色信息。
+
+直接光只算「光源→表面→眼睛」一次弹射，而GI要算多次弹射。每次弹射的计算量指数增长，这就是实时GI的根本困难——16.6ms内算不完。所以各种GI技术都是在「质量」和「速度」之间做妥协。
+
+## 概念讲解
+
+### 全局光照技术
+
+<RtrGlobalIlluminationDiagram />
+
+<Term def="全局光照模拟光线在场景中多次弹射的效果，包括直接光和间接光">全局光照</Term>（GI）的核心挑战：多次弹射的计算量指数增长。
+
+实时GI的主要方案：
+- <Term def="光探针在场景中预采样或实时更新间接光信息，用球谐函数压缩存储">光探针</Term>（Light Probe）：空间采样间接光
+- <Term def="SSAO在屏幕空间采样深度信息近似环境光遮蔽，是GI的最简形式">SSAO</Term>：屏幕空间环境光遮蔽
+- <Term def="DDGI用动态更新的体素网格存储辐照度，支持动态场景的实时GI">DDGI</Term>：动态辐照度体素
+- <Term def="RTX利用硬件光线追踪单元实时计算光线弹射，是最精确的实时GI方案">RTX光线追踪</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：GI的本质">理解直接光（一次弹射）和间接光（多次弹射）的区别。AO是最简GI——只计算遮蔽不计算颜色。</Step>
+<Step title="第二步：屏幕空间方案">
+SSAO/SSGI/SSR在屏幕空间做近似，快速但有限制（屏幕外的信息无法获取）。理解它们的原理和局限。
+<RtrGlobalIlluminationDiagram />
+</Step>
+<Step title="第三步：空间与追踪方案">光探针预采样间接光，DDGI动态更新体素，RTX用硬件做光线追踪。从预计算到实时的演进趋势。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// SSAO (屏幕空间环境光遮蔽) 简化实现
+uniform sampler2D gPosition;
+uniform sampler2D gNormal;
+uniform sampler2D noiseTexture;
+uniform vec3 samples[64]; // 采样球
+
+float SSAO(vec2 texCoords, mat4 projection) {
+    vec3 fragPos = texture(gPosition, texCoords).rgb;
+    vec3 normal = texture(gNormal, texCoords).rgb;
+    
+    float occlusion = 0.0;
+    for(int i = 0; i < 64; ++i) {
+        // 采样点从切线空间变换到世界空间
+        vec3 samplePos = fragPos + samples[i];
+        
+        // 变换到裁剪空间并采样深度
+        vec4 offset = projection * vec4(samplePos, 1.0);
+        offset.xyz /= offset.w;
+        offset.xyz = offset.xyz * 0.5 + 0.5;
+        
+        float sampleDepth = texture(gPosition, offset.xy).z;
+        
+        // 如果采样点的深度小于实际几何深度，则被遮挡
+        if(samplePos.z < sampleDepth + 0.025)
+            occlusion += 1.0;
+    }
+    occlusion = 1.0 - (occlusion / 64.0);
+    return occlusion;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把SSAO等同于全局光照。**
+SSAO只计算环境光的遮蔽程度（角落变暗），不计算间接光的颜色（红地毯反射到白墙上的红色）。它是GI的最简形式——只算遮蔽不算颜色。完整的GI需要额外的间接光计算。
+</Callout>
+
+<Callout type="trap">
+**误区：认为RTX已经完全解决实时GI。**
+RTX硬件光线追踪大幅提升了GI质量，但仍有局限：1）半分辨率采样需要降噪；2）弹射次数仍受限（通常1-2次）；3）高频间接光（如焦散）仍困难。RTX是当前最优方案但不是终极方案。
+</Callout>
+
+<Exercises>
+**问题 1**：直接光照和间接光照的区别是什么？为什么GI如此困难？
+
+<Answer>
+直接光是光从光源出发只弹射一次到达眼睛（光源→表面→眼睛）；间接光是光在场景中多次弹射后到达眼睛（光源→表面A→表面B→眼睛），携带了弹射表面的颜色信息。GI困难因为每次弹射的计算量指数增长——N个表面两两组合的弹射路径数量是O(N^弹射次数)，实时16.6ms内无法穷举，必须用近似方法。
+</Answer>
+
+**问题 2**：SSAO是全局光照的什么简化形式？它计算了什么，忽略了什么？
+
+<Answer>
+SSAO是GI的最简形式——只计算环境光的遮蔽程度，不计算间接光的颜色。它计算了：角落、缝隙等几何遮挡处变暗（遮蔽值高），开放处不暗（遮蔽值低）。它忽略了：间接光的颜色传播（红地毯的红色不会反射到白墙上）、间接光的方向性（只标量遮蔽不存方向）。SSAO快速但视觉信息有限，是质量与性能的折中。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="全局光照">模拟光线在场景中多次弹射效果的渲染技术，包括直接光和间接光。</GlossaryItem>
+<GlossaryItem term="SSAO">屏幕空间环境光遮蔽，在屏幕空间采样深度近似遮蔽，是GI的最简形式。</GlossaryItem>
+<GlossaryItem term="光探针">在场景空间中采样间接光信息并用球谐函数压缩存储的GI技术。</GlossaryItem>
+<GlossaryItem term="RTX光线追踪">利用硬件光线追踪单元实时计算光线弹射，是当前最精确的实时GI方案。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

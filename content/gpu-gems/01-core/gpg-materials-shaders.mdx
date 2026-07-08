@@ -1,0 +1,113 @@
+---
+title: "材质与着色器"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "用 BRDF 三分量和 PBR 参数控制表面外观"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgMaterialsShadersDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-materials-shaders";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 BRDF 的漫反射、镜面反射、环境光三个分量
+- 能修改 PBR 参数（粗糙度、金属度）调整材质外观
+- 能回答：PBR 为什么比经验模型更可预测？
+- 能区分 Lambert、Blinn-Phong、Cook-Torrance 的适用场景
+</Objectives>
+
+## 直觉引入
+
+同样是一块金属球和一个塑料球，为什么你一眼就能分清？因为金属的高光是「染色」的（反射金属本身的颜色），塑料的高光是白色的（反射光源颜色）；金属几乎没有漫反射，塑料的漫反射很明显。这些差异由物理规律决定——PBR 就是把这些规律编码成着色器参数。
+
+## 概念讲解
+
+### BRDF 三分量
+
+<GpgMaterialsShadersDiagram />
+
+<Term def="BRDF 是双向反射分布函数，描述光线从某方向入射后向某方向反射的比例">
+BRDF
+</Term>
+
+完整表面外观 = 漫反射（光线均匀散射）+ 镜面反射（光线镜面反弹）+ 环境光（间接光照近似）。漫反射用 Lambert 或 Oren-Nayar，镜面反射用 Blinn-Phong 或 Cook-Torrance，环境光用 Cubemap 或球谐函数。
+
+<Term def="PBR 是基于物理的渲染，用粗糙度和金属度等物理参数替代美术魔数">
+PBR
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：漫反射分量">
+漫反射模拟光线进入表面后均匀散射。Lambert 模型最简单：颜色乘以法线与光照方向的点积。粗糙表面用 Oren-Nayar 模型，它会增加掠射角的亮度。
+<GpgMaterialsShadersDiagram />
+</Step>
+<Step title="第二步：镜面反射分量">
+镜面反射模拟光线在表面的直接反弹。Blinn-Phong 用半向量与法线的点积；Cook-Torrance 更物理，用微表面理论：法线分布函数 D、几何遮蔽 G、菲涅尔 F 三项相乘。
+</Step>
+<Step title="第三步：环境光与金属度">
+环境光用 Cubemap 预滤波近似间接光照。金属度参数控制镜面反射是否「染色」——金属的高光带金属颜色，非金属的高光是白色。粗糙度控制高光的锐度。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Cook-Torrance BRDF（PBR 核心）
+vec3 cookTorrance(vec3 N, vec3 V, vec3 L, vec3 albedo,
+                  float roughness, float metalness) {
+    vec3 H = normalize(V + L);
+    float NDF = distributionGGX(N, H, roughness);   // D
+    float G = geometrySmith(N, V, L, roughness);     // G
+    vec3 F = fresnelSchlick(max(dot(H, V), 0.0),
+            mix(vec3(0.04), albedo, metalness));     // F
+
+    vec3 kS = F;
+    vec3 kD = (1.0 - kS) * (1.0 - metalness);
+
+    vec3 specular = (NDF * G * F) /
+                    (4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.001);
+    vec3 diffuse = kD * albedo / 3.14159;
+    return diffuse + specular;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把粗糙度和金属度混为一谈。**
+粗糙度控制高光的锐度（光滑=锐利小亮点，粗糙=模糊大光斑）；金属度控制高光是否染色（金属=有颜色，非金属=白色）。调错一个，塑料会变金属或金属会变塑料。
+</Callout>
+
+<Callout type="trap">
+**误区：镜面反射和漫反射能量不守恒。**
+PBR 要求能量守恒：漫反射加镜面反射的总量不能超过入射光。经验模型（如 Phong）常违反此约束导致过曝。Cook-Torrance 的 kD = (1-F)(1-metalness) 就是能量分配公式。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么金属的高光是「染色」的而非白色？
+
+<Answer>
+金属的电子结构使其直接反射光线且不发生次表面散射，所以镜面反射保留金属本身的颜色。非金属（电介质）的反射率很低（约 4%），高光几乎只反射光源颜色呈白色，主要能量进入漫反射。这就是 PBR 用金属度参数切换两种行为的原因。
+</Answer>
+
+**问题 2**：PBR 为什么比经验模型更可预测？
+
+<Answer>
+PBR 用物理参数（粗糙度、金属度、反照率）描述材质，参数有明确的物理含义且在不同光照下保持一致。经验模型用「高光强度」「高光指数」等魔数，换一个光照环境就要重新调参。PBR 的参数可以在材质编辑器中一次设定，在任意场景中都看起来正确。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="BRDF">双向反射分布函数，描述给定入射方向后光线向各方向反射的比例分布。</GlossaryItem>
+<GlossaryItem term="PBR">基于物理的渲染，用物理可测参数（粗糙度/金属度/反照率）驱动着色，保证跨场景一致性。</GlossaryItem>
+<GlossaryItem term="Cook-Torrance">基于微表面理论的 BRDF 模型，由法线分布 D、几何遮蔽 G、菲涅尔 F 三项组成。</GlossaryItem>
+<GlossaryItem term="能量守恒">漫反射与镜面反射的总能量不超过入射光能量，是 PBR 区别于经验模型的核心约束。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

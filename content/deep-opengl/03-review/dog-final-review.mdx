@@ -1,0 +1,122 @@
+---
+title: "深入理解 OpenGL WebGL OpenGL ES 总复习"
+type: D
+section: "计算机图形学与渲染"
+order: 9
+description: "全书知识链串讲与黑屏诊断"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogFinalReviewDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能把九章串成「设状态→喂数据→发绘制」的完整流程
+- 能诊断黑屏/性能差/兼容性三类典型问题
+- 能说出优化三大方向与各自手段
+- 能回答：从零做一个 WebGL 渲染器，关键决策点有哪些？
+</Objectives>
+
+## 直觉引入
+
+整本书浓缩成一句：设好状态、喂好数据、发一次绘制，GPU 按图形管线产出画面。复习就是把这条链上每个环节——上下文、缓冲、着色器、管线、优化、后处理、兼容、调试——重新串起来，并训练「看到症状就能定位到链上哪一环」的诊断力。
+
+## 概念讲解
+
+### 全书数据流
+取上下文 → 建 VAO/VBO/EBO → 编译链接着色器 → 设状态（useProgram/enable）→ drawElements →（可选）FBO 后处理 → 输出屏幕 → 上下文丢失时恢复。
+
+### 三大优化方向
+1. 减 draw call：批处理、实例化。
+2. 排状态：按 shader/纹理分组减少切换。
+3. 降带宽：纹理图集、压缩纹理、剔除、LOD。
+
+### 黑屏诊断三步
+查 getError → 查着色器日志 → 帧抓取逐 draw 核对管线状态。
+
+### 移动端要点
+TBDR 怕过度绘制；位置用 highp 防条纹；按能力分级降级。
+
+## 交互Demo
+
+> 猜一猜：画面黑屏，最快定位是「数据没传对」还是「着色器没编过」？
+
+<DogFinalReviewDiagram />
+
+<Stepper>
+<Step title="第一步：串数据流">
+按 取上下文→建缓冲→着色器→设状态→绘制→后处理 的链路，判断 bug 出在哪一环。
+</Step>
+<Step title="第二步：对症状">
+黑屏查错误与着色器日志、性能差查瓶颈类型、兼容问题查扩展与降级、移动发热查过度绘制与精度。
+</Step>
+<Step title="第三步：回归定位">
+定位环节后回到对应章节核对（VAO 绑定顺序、着色器日志、viewport 同步、扩展检测），用帧抓取器验证后修复。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 最小可运行骨架（伪代码）：
+
+```js
+const gl = canvas.getContext("webgl2");          // 第4章 上下文
+const program = linkProgram(gl, vsSrc, fsSrc);   // 第3章 着色器
+// 第2章 缓冲对象
+const vao = setupVAO(gl, vertices, indices);
+// 第6章 优化：实例化/状态排序按需
+gl.useProgram(program);
+gl.enable(gl.DEPTH_TEST);                         // 状态机
+// 第7章 FBO 后处理（可选）：渲染到纹理再加工
+renderToFBO(gl, scene);
+postProcessToScreen(gl);
+gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_SHORT, 0); // 触发管线
+// 第4章 上下文丢失恢复
+canvas.addEventListener("webglcontextlost", e => e.preventDefault());
+canvas.addEventListener("webglcontextrestored", rebuildAll);
+// 第9章 调试：每步查 getError 与着色器日志
+```
+
+每个环节对应特定章节，bug 出现时跳到对应章节核对。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 复习只记 API，没建立数据流全局观，遇 bug 无从下手。
+**原因 →** 把各章当孤立知识点，没串成 设状态→喂数据→发绘制 的链。
+**修法 →** 用一张数据流图把九章串起来，每个 bug 先定位链上哪一环，再回对应章节核对。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 移动端发热严重、桌面正常，却只优化着色器无效。
+**原因 →** 没意识到移动 TBDR 的头号杀手是过度绘制，而非着色器计算。
+**修法 →** 移动端先减透明、前向排序、early-z 降过度绘制；位置用 highp 防条纹；按能力分级降级。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：把全书九章串成一条数据流，并说明每环节对应哪章。
+
+<Answer>
+取上下文（第4章）→ 建 VAO/VBO/EBO（第2章）→ 编译链接着色器（第3章）→ 设状态 useProgram/enable（第2章状态机）→ drawElements 绘制（第1章管线）→ FBO 后处理（第7章）→ 输出屏幕；优化用批处理/实例化/排状态/降带宽（第6章）；移动端 TBDR 与精度（第5章）；跨平台检测降级（第8章）；调试用 getError/帧抓取/瓶颈定位（第9章）。
+</Answer>
+
+**问题**：画面黑屏，给出诊断三步与可能的根因。
+
+<Answer>
+三步：查 getError 错误码 → 查 getShaderInfoLog/getProgramInfoLog 着色器日志 → 用 Spector.js/RenderDoc 帧抓取逐 draw 核对管线状态。可能根因：着色器编译链接失败、VAO/VBO 绑定顺序错（属性指针没在 VAO 绑定时设）、uniform 没设、viewport/清屏错、深度测试状态不当、上下文丢失未恢复。逐一核对定位。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="数据流">取上下文→建缓冲→着色器→设状态→绘制→后处理→输出的完整链路，是诊断主线。</GlossaryItem>
+<GlossaryItem term="三大优化">减 draw call（批处理/实例化）、排状态（分组少切换）、降带宽（图集/压缩纹理/剔除/LOD）。</GlossaryItem>
+<GlossaryItem term="黑屏三步">查 getError → 查着色器日志 → 帧抓取逐 draw 核对管线状态。</GlossaryItem>
+<GlossaryItem term="移动端要点">TBDR 怕过度绘制、位置用 highp 防条纹、按能力分级降级。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

@@ -1,0 +1,141 @@
+---
+title: "相机与光线生成"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "从视口构造每像素的发射光线"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwCameraDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-camera";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释视口、相机起点与像素光线三者的几何关系
+- 能写出 get_ray(u,v) 由归一化像素坐标构造射线的公式
+- 能用视场角（fov）与宽高比推导视口尺寸
+- 能回答：为什么视口要放在相机前方一个固定距离？
+</Objectives>
+
+## 直觉引入
+
+把相机想象成一个针孔暗盒：盒子背面是底片（图像），前面有个小孔。光线从小孔穿过后落在底片上成像。光线追踪反过来做——从底片（像素）出发，穿过小孔（相机起点），向场景发射射线。
+
+为了覆盖整张底片，我们在相机前方摆一个矩形的「视口」，它的四个角对应图像的四个角。对每个像素，找到它在视口上的对应点，从相机起点连一条线到那个点，就是该像素的光线。
+
+## 概念讲解
+
+相机由三件东西定义：起点 $\mathbf{O}$（眼睛位置）、<Term def="相机前方表示图像平面的矩形">视口</Term>、和视线方向。本书用三个向量描述视口：左下角 `lower_left_corner`、水平跨度 `horizontal`、垂直跨度 `vertical`。
+
+### 像素到光线
+像素 $(i,j)$ 归一化为 $(u,v)\in[0,1]$，视口上对应点为：
+
+$$
+\mathbf{P}_{view}(u,v) = \text{lower\_left\_corner} + u\cdot\text{horizontal} + v\cdot\text{vertical}
+$$
+
+该像素的发射光线即 $\text{ray}(\mathbf{O},\ \mathbf{P}_{view}-\mathbf{O})$。
+
+### 用视场角定义视口
+设垂直视场角 $\theta$（fov）、宽高比 `aspect`，焦距 $f=1$ 时：
+
+$$
+h = \tan(\theta/2),\quad \text{viewport\_height}=2h,\quad \text{viewport\_width}=\text{aspect}\cdot\text{viewport\_height}
+$$
+
+`horizontal` = (viewport_width, 0, 0)，`vertical` = (0, viewport_height, 0)，`lower_left_corner` = $\mathbf{O} - \text{horizontal}/2 - \text{vertical}/2 - (0,0,f)$。
+
+## 交互Demo
+
+> 猜一猜：把 fov 从 90° 减到 20°，画面会变「广角拉近」还是「长焦压缩」？
+
+<RtwCameraDiagram />
+
+<Stepper>
+<Step title="第一步：定义视口">
+由 fov 和宽高比算出视口宽高，确定左下角、水平、垂直三个向量，视口摆在相机前方焦距处。
+</Step>
+<Step title="第二步：像素映射">
+把像素 (i,j) 归一化为 (u,v)∈[0,1]，在视口上找到对应点 P_view。
+</Step>
+<Step title="第三步：发射光线">
+从相机起点 O 连向 P_view，方向 = P_view − O，即为该像素的发射光线，交给求交着色。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 相机类构造每像素光线：
+
+```cpp
+class camera {
+  public:
+    camera(double vfov, double aspect_ratio) {
+      auto theta = degrees_to_radians(vfov);
+      auto h = tan(theta / 2);
+      auto viewport_height = 2.0 * h;
+      auto viewport_width   = aspect_ratio * viewport_height;
+
+      origin          = point3(0, 0, 0);
+      horizontal      = vec3(viewport_width, 0, 0);
+      vertical        = vec3(0, viewport_height, 0);
+      lower_left_corner = origin - horizontal/2 - vertical/2 - vec3(0, 0, 1);
+    }
+    ray get_ray(double u, double v) const {
+      return ray(origin,
+                 lower_left_corner + u*horizontal + v*vertical - origin);
+    }
+  private:
+    point3 origin, lower_left_corner;
+    vec3 horizontal, vertical;
+};
+
+// 渲染时：u、v 加随机抖动实现抗锯齿
+auto u = (i + random_double()) / (image_width - 1);
+auto v = (j + random_double()) / (image_height - 1);
+ray r = cam.get_ray(u, v);
+```
+
+`(i+random_double())` 在像素内随机取一点，多次采样平均后边缘锯齿被柔化。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 宽高比算反了，画面被横向拉伸或压扁。
+**原因 →** 视口宽高必须与图像宽高比一致；若 width 用 height 的比例或忘记乘 aspect，像素就不是方形。
+**修法 →** viewport_width = aspect_ratio × viewport_height，且 aspect = image_width / image_height，三者保持一致。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 图像上下颠倒。
+**原因 →** 屏幕坐标 y 向下增大，而视口 v 通常从下到上递增（v=0 在底边）。
+**修法 →** 渲染循环按 j 从上到下递减（image_height-1 → 0），并把 v 映射成自下而上，使图像正立。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：写出 get_ray(u,v) 的方向向量公式，并解释 lower_left_corner 的作用。
+
+<Answer>
+方向 = `lower_left_corner + u·horizontal + v·vertical − origin`。lower_left_corner 是视口左下角的位置（已包含视口偏移与焦距前移），加上 u、v 的水平垂直分量就定位到视口上 (u,v) 对应点，再减去 origin 得到从相机指向该点的方向。
+</Answer>
+
+**问题**：fov=90°、宽高比 16:9 时，视口宽高分别是多少（焦距 1）？
+
+<Answer>
+θ=90°，h=tan(45°)=1，viewport_height=2h=2，viewport_width=aspect×height=(16/9)×2≈3.556。视口比图像更宽以匹配 16:9。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="视口">相机前方表示图像平面的矩形，四个角对应图像四角，像素光线从相机穿过视口对应点进入场景。</GlossaryItem>
+<GlossaryItem term="视场角">fov，相机视野的张角，tan(θ/2) 决定视口高度；fov 越大越广角，越小越长焦。</GlossaryItem>
+<GlossaryItem term="宽高比">aspect = 图像宽/高，视口宽度 = aspect × 视口高度，保证像素为方形不被拉伸。</GlossaryItem>
+<GlossaryItem term="像素抖动">在像素内对 u、v 加随机偏移再发射光线，多次采样平均以消除边缘锯齿。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

@@ -137,6 +137,15 @@ export const BOOK_ORDER = [
   "linear-algebra-done-right",
   "concrete-mathematics",
   "geometric-data-structures",
+  "ray-tracing-weekend",
+  "deep-opengl",
+  "vulkan-guide",
+  "computer-graphics-4e",
+  "opengl-redbook",
+  "opengl-superbible",
+  "gpu-gems",
+  "real-time-rendering-4e",
+  "cg-principles-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -215,6 +224,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "linear-algebra-done-right": "线性代数应该这样学",
   "concrete-mathematics": "具体数学",
   "geometric-data-structures": "计算机图形学：几何体数据结构",
+  "ray-tracing-weekend": "Ray Tracing in One Weekend",
+  "deep-opengl": "深入理解 OpenGL WebGL OpenGL ES",
+  "vulkan-guide": "Vulkan 学习指南",
+  "computer-graphics-4e": "计算机图形学第4版",
+  "opengl-redbook": "OpenGL 红宝书",
+  "opengl-superbible": "OpenGL 超级宝典",
+  "gpu-gems": "GPU Gems 系列",
+  "real-time-rendering-4e": "实时渲染第4版",
+  "cg-principles-practice": "计算机图形学：原理及实践",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

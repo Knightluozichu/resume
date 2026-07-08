@@ -1,0 +1,118 @@
+---
+title: "顶点处理与变换"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "MVP变换、透视除法与裁剪"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GlsVertexProcessingDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-vertex-processing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解顶点着色器的完整职责
+- 掌握MVP变换链与透视除法
+- 了解裁剪与背面剔除
+- 能在顶点着色器中实现骨骼动画
+</Objectives>
+
+## 直觉引入
+
+顶点处理就像快递分拣——每个包裹(顶点)经过三道分拣(Model:确定发货地→World、View:转到快递公司视角、Projection:投影到地图平面)，最后裁掉地图外的包裹。每个顶点从局部坐标出发，最终到达屏幕。
+
+## 概念讲解
+
+<Term def="将顶点从模型局部空间变换到世界空间">Model矩阵</Term><Term def="将世界空间变换到摄像机空间">View矩阵</Term><Term def="将3D投影到2D裁剪空间">Projection矩阵</Term><Term def="裁剪坐标除以w得到NDC，产生近大远小效果">透视除法</Term>
+
+### MVP变换
+v_clip = P * V * M * v_local，从右向左作用。
+
+### 透视除法
+裁剪坐标(x,y,z,w)除以w得到NDC(x/w,y/w,z/w)。w与z相关使近大远小。在顶点着色器后由硬件自动执行。
+
+### 裁剪
+裁剪空间中视锥体对应立方体(-w~w)。完全在外丢弃，跨越边界的裁剪生成新顶点。
+
+## 交互Demo
+
+> 猜一猜：为什么透视除法要在顶点着色器之后而不是之前？
+
+<GlsVertexProcessingDiagram />
+
+<Stepper>
+<Step title="第一步：Model变换">
+Model=T*R*S将顶点从局部空间变换到世界空间。先缩放再旋转最后平移。
+</Step>
+<Step title="第二步：View变换">
+View矩阵将世界变换到摄像机空间，相当于摄像机变换的逆。
+</Step>
+<Step title="第三步：Projection+除法">
+Projection矩阵投影到裁剪空间，透视除法除以w得到NDC，最后映射到屏幕。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 顶点着色器: MVP变换
+#version 330 core
+layout(location=0) in vec3 aPos;
+layout(location=1) in vec2 aTexCoord;
+out vec2 TexCoord;
+uniform mat4 model, view, projection;
+void main() {
+    gl_Position = projection * view * model * vec4(aPos, 1.0);
+    TexCoord = aTexCoord;
+}
+// 骨骼动画(扩展)
+// layout(location=2) in ivec4 boneIds;
+// layout(location=3) in vec4 weights;
+// uniform mat4 boneMatrices[100];
+// mat4 boneTransform = boneMatrices[boneIds[0]]*weights[0] + ...;
+// gl_Position = projection * view * model * boneTransform * vec4(aPos, 1.0);
+```
+
+骨骼动画在顶点着色器中用骨骼矩阵加权混合变换顶点位置。weights和通常为1。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 在顶点着色器中做透视除法。
+**原因 →** 想提前得到NDC。
+**修法 →** 透视除法由硬件在顶点着色器后自动执行。手动除w会破坏裁剪(裁剪需要在裁剪空间做)。输出gl_Position是裁剪空间坐标。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 法线用Model矩阵变换。
+**原因 →** 顶点和法线都用Model。
+**修法 →** 非均匀缩放时Model矩阵会扭曲法线。法线需用normalMatrix=transpose(inverse(mat3(model)))变换。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：透视除法是什么？何时发生？
+
+<Answer>
+将裁剪坐标(x,y,z,w)除以w得到NDC。w与z相关(透视投影)使近大远小。在顶点着色器后、光栅化前由硬件自动执行。
+</Answer>
+
+**问题**：如何在顶点着色器中实现骨骼动画？
+
+<Answer>
+1)上传骨骼矩阵数组(UBO) 2)每个顶点有骨骼索引和权重 3)最终矩阵=sum(weight[i]*boneMatrix[idx[i]]) 4)变换顶点位置和法线。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Model矩阵">将顶点从模型局部空间变换到世界空间。</GlossaryItem>
+<GlossaryItem term="View矩阵">将世界空间变换到摄像机空间。</GlossaryItem>
+<GlossaryItem term="Projection矩阵">将3D投影到2D裁剪空间。</GlossaryItem>
+<GlossaryItem term="透视除法">裁剪坐标除以w得到NDC，产生近大远小效果。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

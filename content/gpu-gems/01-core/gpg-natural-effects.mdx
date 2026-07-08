@@ -1,0 +1,116 @@
+---
+title: "自然效果渲染"
+type: B
+section: "计算机图形学与渲染"
+order: 1
+description: "用程序化噪声和光照模型渲染水、火、毛发等自然现象"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgNaturalEffectsDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-natural-effects";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释水面、火焰、毛发三种自然效果的着色器核心思路
+- 能修改噪声参数控制效果的外观与动态
+- 能回答：为什么程序化噪声是自然效果渲染的通用工具？
+- 能将「扰动源 + 映射 + 光照」三步法应用到新的自然效果
+</Objectives>
+
+## 直觉引入
+
+大自然是最难伪造的。一个完美光滑的水面看起来像塑料，而真实水面有细碎的波纹、高光闪烁和透明折射。为什么？因为真实世界的表面充满「无序」——风吹出涟漪，热气搅动火焰，毛发各自朝向略有不同。
+
+GPU 渲染自然效果的秘诀不是建更精细的模型，而是用数学函数（噪声）模拟这种无序，再叠加物理光照让它融入场景。
+
+## 概念讲解
+
+### 三种自然效果的策略
+
+<GpgNaturalEffectsDiagram />
+
+<Term def="程序化噪声是用数学函数生成的伪随机图案，可在 GPU 上实时计算，无需预存纹理">
+程序化噪声
+</Term>
+
+水面靠顶点位移加法线扰动模拟波纹；火焰靠滚动噪声纹理加色温渐变模拟燃烧；毛发靠多层壳渲染加各向异性高光模拟发丝。三者的共同骨架是：生成扰动源、映射到几何或颜色、叠加光照。
+
+<Term def="菲涅尔效应是掠射角下反射率增大的物理现象，水面和玻璃的真实感主要来自它">
+菲涅尔效应
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：生成扰动源">
+用正弦波叠加（Gerstner 波）或 Perlin 噪声生成一个随时间变化的标量场。这是所有自然效果的起点——水面用高度场，火焰用密度场，毛发用偏移场。
+<GpgNaturalEffectsDiagram />
+</Step>
+<Step title="第二步：映射到几何或颜色">
+把扰动映射到可见属性：水面把高度场变成法线扰动，火焰把密度场映射成红黄渐变，毛发把偏移场变成壳层位置。映射函数决定了效果的「性格」。
+</Step>
+<Step title="第三步：叠加光照模型">
+最后叠上物理光照让效果融入场景。水面用菲涅尔反射加折射，火焰用加色混合发光，毛发用各向异性高光。没有光照这一步，效果像贴图而不像真实物体。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 水面着色器核心：Gerstner 波 + 菲涅尔
+vec3 gerstnerWave(vec2 pos, vec2 dir, float steepness,
+                  float wavelength, float time, inout vec3 tangent) {
+    float k = 6.28318 / wavelength;
+    float c = sqrt(9.8 / k);
+    vec2 d = normalize(dir);
+    float f = k * dot(d, pos) - c * time;
+    float a = steepness / k;
+    tangent += vec3(
+        -d.x * d.x * (steepness * sin(f)),
+        -d.x * d.y * (steepness * sin(f)),
+        d.x * (steepness * cos(f))
+    );
+    return vec3(d.x * (a * cos(f)), a * sin(f), d.y * (a * cos(f)));
+}
+// 菲涅尔：掠射角反射增强
+float fresnel = pow(1.0 - dot(normal, viewDir), 5.0);
+vec3 color = mix(refractColor, reflectColor, fresnel);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用一张噪声纹理贴图代替程序化噪声。**
+预存纹理虽然简单，但无法随时间无缝变化且占显存。程序化噪声可实时计算、无平铺痕迹、可任意缩放。除非性能极度受限，优先用程序化方案。
+</Callout>
+
+<Callout type="trap">
+**误区：水面只做颜色不做法线扰动。**
+只调水面颜色的波纹是「假」的——光照不会随波变化。真正的水面感来自法线扰动导致的高光闪烁，颜色变化是次要的。
+</Callout>
+
+<Exercises>
+**问题 1**：水面、火焰、毛发三种效果的「扰动源」分别是什么？
+
+<Answer>
+水面用高度场（Gerstner 波/正弦波叠加），映射为顶点位移和法线扰动；火焰用密度场（3D 噪声），映射为颜色渐变和透明度；毛发用偏移场，映射为壳层位置和法线插值。
+</Answer>
+
+**问题 2**：为什么自然效果渲染的第三步「叠加光照」不可省略？
+
+<Answer>
+没有光照，效果只是彩色图案而非真实物体。光照让效果与场景互动——水面的菲涅尔反射让它随视角变化，火焰的加色混合让它发光照亮周围，毛发的各向异性高光让它有丝绸质感。光照是连接「效果」与「场景」的桥梁。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="程序化噪声">用数学函数实时生成的伪随机图案，无需预存纹理，可无缝平铺和缩放。</GlossaryItem>
+<GlossaryItem term="菲涅尔效应">光线在掠射角下反射率增大的物理现象，是水面和玻璃真实感的关键。</GlossaryItem>
+<GlossaryItem term="Gerstner 波">一种水面波形数学模型，波的峰尖而谷平，比正弦波更接近真实海浪。</GlossaryItem>
+<GlossaryItem term="壳渲染">毛发渲染技术，用多层同心壳从内到外插值法线，模拟发丝体积感。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

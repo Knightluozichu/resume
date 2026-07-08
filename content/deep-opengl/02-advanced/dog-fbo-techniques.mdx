@@ -1,0 +1,144 @@
+---
+title: "FBO 与后处理技术"
+type: C
+section: "计算机图形学与渲染"
+order: 6
+description: "帧缓冲对象、渲染到纹理与后处理链"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogFboTechniquesDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-fbo-techniques";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出创建 FBO 并渲染到纹理的流程
+- 能解释颜色附件、深度附件与完整性检查
+- 能用 ping-pong 实现多遍后处理（如高斯模糊）
+- 能回答：为什么后处理要用 FBO 而不是直接画到屏幕？
+</Objectives>
+
+## 直觉引入
+
+默认情况下 OpenGL 把画面画到屏幕（默认帧缓冲）。但很多效果需要「先把场景画到一张图里，再对这张图加工」——比如先把场景渲染成一张纹理，再用一个着色器把它模糊、调色、加光晕。这就需要一个可写的「画布」：帧缓冲对象（FBO）。
+
+FBO 就是一块不直接显示的离屏画布，你可以给它挂一张颜色纹理（当画纸）和一张深度缓冲（记深度）。场景先画进 FBO 的纹理，再把这张纹理当输入，用后处理着色器加工后画到屏幕。
+
+## 概念讲解
+
+<Term def="可挂载纹理/缓冲作为渲染目标的离屏画布">帧缓冲对象</Term>（FBO）本身不含图像数据，只是「容器」，需挂载<Term def="挂到 FBO 上接收渲染输出的纹理或缓冲">附件</Term>：颜色附件（COLOR_ATTACHMENT0，挂 2D 纹理）、深度附件（DEPTH_ATTACHMENT）、模板附件。
+
+### 创建流程
+1. `genFramebuffers` → `bindFramebuffer`。
+2. 创建颜色纹理，`framebufferTexture2D` 挂为颜色附件。
+3. 创建深度缓冲（renderbuffer 或深度纹理），挂为深度附件。
+4. `checkFramebufferStatus` 检查完整性，必须 `FRAMEBUFFER_COMPLETE`。
+
+### Ping-Pong 多遍处理
+<Term def="用两个 FBO/纹理交替读写以实现多遍后处理的技术">乒乓</Term>：A 画到 B、B 画到 A，交替若干遍完成可分离高斯模糊等需多次采样的效果。
+
+### 常见后处理
+色调映射（HDR→LDR）、泛光（bloom，亮区提取+模糊+叠加）、屏幕空间反射、景深、辉光。
+
+## 交互Demo
+
+> 猜一猜：FBO 没挂深度附件，还能正常渲染 3D 场景吗？
+
+<DogFboTechniquesDiagram />
+
+<Stepper>
+<Step title="第一步：建 FBO">
+创建 FBO，挂一张颜色纹理当画纸、一张深度 renderbuffer 记深度，检查完整性通过。
+</Step>
+<Step title="第二步：渲染到纹理">
+绑 FBO，开深度测试，把 3D 场景画进 FBO 的颜色纹理（离屏，不直接显示）。
+</Step>
+<Step title="第三步：后处理到屏">
+解绑 FBO（回到默认帧缓冲），把颜色纹理作为输入，用后处理着色器（模糊/调色）画一个全屏四边形到屏幕。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 FBO 创建与渲染到纹理：
+
+```js
+// 创建 FBO
+const fbo = gl.createFramebuffer();
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+// 颜色附件：一张可采样的纹理
+const colorTex = gl.createTexture();
+gl.bindTexture(gl.TEXTURE_2D, colorTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTex, 0);
+
+// 深度附件：renderbuffer
+const rbo = gl.createRenderbuffer();
+gl.bindRenderbuffer(gl.RENDERBUFFER, rbo);
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, W, H);
+gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rbo);
+
+// 完整性检查
+if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
+  console.error("FBO 不完整");
+
+// 渲染到纹理
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+gl.viewport(0, 0, W, H);
+gl.enable(gl.DEPTH_TEST);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+drawScene();                       // 画进 colorTex
+
+// 后处理到屏幕：解绑回默认帧缓冲
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+gl.viewport(0, 0, canvas.width, canvas.height);
+gl.disable(gl.DEPTH_TEST);
+postProcessShader.bind();
+gl.bindTexture(gl.TEXTURE_2D, colorTex);   // 把场景纹理当输入
+drawFullScreenQuad();                       // 全屏四边形加工后输出
+```
+
+`checkFramebufferStatus` 是排错第一步；颜色纹理尺寸与视口必须一致。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** checkFramebufferStatus 报 FRAMEBUFFER_INCOMPLETE，FBO 无法用。
+**原因 →** 附件尺寸不一致、格式不支持、或漏挂附件（如只有颜色没深度但开了深度测试）。
+**修法 →** 确保所有附件同尺寸、格式被支持；若开深度测试必须挂深度附件；用 checkFramebufferStatus 排查并在文档查完整性规则。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 渲染到 FBO 后切回屏幕，画面尺寸错乱或只画了一小块。
+**原因 →** 绑/解绑 FBO 时忘了同步 gl.viewport——FBO 纹理尺寸与 canvas 尺寸通常不同。
+**修法 →** 每次切换渲染目标都重设 viewport：画 FBO 用纹理尺寸，画屏幕用 canvas 尺寸。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：FBO 本身存图像数据吗？它需要挂哪些附件？为什么后处理要用 FBO？
+
+<Answer>
+FBO 本身不存图像数据，只是容器，需挂载附件：颜色附件（2D 纹理接收颜色）、深度附件（renderbuffer 或深度纹理记深度）。后处理要用 FBO 是因为需要先把场景渲染成一张可采样的纹理，再以后处理着色器加工；直接画到屏幕无法把结果当输入再加工，FBO 的离屏纹理提供了这个「中间画布」。
+</Answer>
+
+**问题**：ping-pong 技术解决什么问题？以高斯模糊为例说明流程。
+
+<Answer>
+ping-pong 解决多遍后处理需要反复读写同一张图的问题：用两个 FBO/纹理 A、B 交替，第一遍从 A 读写到 B，第二遍从 B 读写到 A，交替 N 遍。高斯模糊常拆成水平、垂直两遍（可分离滤波），用 ping-pong 先水平模糊一遍、再垂直模糊一遍，每遍只在一维上采样，比二维卷积省大量纹理采样。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="FBO">帧缓冲对象，可挂载纹理/缓冲作为渲染目标的离屏画布。</GlossaryItem>
+<GlossaryItem term="附件">挂到 FBO 上接收渲染输出的纹理或缓冲，分颜色、深度、模板附件。</GlossaryItem>
+<GlossaryItem term="渲染到纹理">把场景画进 FBO 挂载的纹理，再作为后续绘制的输入。</GlossaryItem>
+<GlossaryItem term="乒乓">用两个 FBO/纹理交替读写以实现多遍后处理的技术。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

@@ -1,0 +1,120 @@
+---
+title: "高级渲染技术"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "前向渲染与延迟渲染的取舍及多光源场景策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgAdvancedTechniquesDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-advanced-techniques";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释前向渲染与延迟渲染的流程差异
+- 能分析多光源场景下两种渲染路径的性能特征
+- 能回答：为什么延迟渲染不支持 MSAA 和透明物体？
+- 能设计前向+延迟混合渲染方案
+</Objectives>
+
+## 直觉引入
+
+想象你要检查 100 件产品，每件要过 5 道质检。方法一是每件产品依次过 5 道质检（前向渲染：每个物体 × 每个光源）；方法二是先把 100 件产品全部登记到表格，再对表格逐道质检（延迟渲染：先存 G-Buffer，再逐光源算可见像素）。产品少时方法一快，质检道数多时方法二省——这就是前向与延迟渲染的核心取舍。
+
+## 概念讲解
+
+### 前向 vs 延迟渲染
+
+<GpgAdvancedTechniquesDiagram />
+
+<Term def="前向渲染是每个物体逐光源计算光照的传统渲染路径">
+前向渲染
+</Term>
+
+前向渲染的复杂度是 O(物体 × 光源)，光源多时大量片元被遮挡后仍计算光照造成浪费。延迟渲染先把几何和材质存入 G-Buffer，再对每个光源只算屏幕可见像素，复杂度降为 O(物体 + 像素 × 光源)。
+
+<Term def="延迟渲染是先把几何材质存入 G-Buffer，再在屏幕空间逐光源计算光照的渲染路径">
+延迟渲染
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：G-Buffer 几何 pass">
+延迟渲染第一个 pass 渲染所有不透明物体，把位置、法线、反照率、材质参数分别写入 G-Buffer 的多个渲染目标。这一步不做光照，只存「这个像素是什么材质」。
+<GpgAdvancedTechniquesDiagram />
+</Step>
+<Step title="第二步：逐光源光照 pass">
+对每个光源，用全屏四边形覆盖，从 G-Buffer 读取像素的几何和材质信息，计算该光源对此像素的贡献并累加。每个光源只算屏幕可见像素，遮挡浪费为零。
+</Step>
+<Step title="第三步：透明物体单独处理">
+G-Buffer 每个像素只能存一个表面，无法处理透明物体的多层叠加。透明物体必须用前向渲染单独处理，叠加在延迟渲染的不透明结果之上。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 延迟渲染：G-Buffer 写入 pass
+layout(location = 0) out vec4 gAlbedoSpec;  // RGB=反照率, A=高光强度
+layout(location = 1) out vec3 gNormal;      // 法线
+layout(location = 2) out vec3 gPosition;    // 世界空间位置
+
+void main() {
+    gAlbedoSpec = vec4(texture(albedoMap, uv).rgb, texture(specMap, uv).r);
+    gNormal = normalize(normal * 2.0 - 1.0);
+    gPosition = fragPos;
+}
+
+// 延迟渲染：光照 pass（逐光源）
+vec3 deferredLighting(vec2 uv, Light light) {
+    vec3 albedo = texture(gAlbedo, uv).rgb;
+    vec3 normal = texture(gNormal, uv).rgb;
+    vec3 pos    = texture(gPosition, uv).rgb;
+
+    vec3 L = normalize(light.position - pos);
+    float dist = length(light.position - pos);
+    float atten = 1.0 / (1.0 + 0.09 * dist + 0.032 * dist * dist);
+
+    vec3 diffuse = max(dot(normal, L), 0.0) * albedo * light.color;
+    return diffuse * atten;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：所有场景都用延迟渲染。**
+延迟渲染的 G-Buffer 占大量带宽（通常 16-32 字节/像素），在带宽受限的移动端反而比前向渲染慢。且延迟渲染不支持 MSAA 和多材质模型（G-Buffer 格式固定）。光源少、材质多样的场景前向渲染更合适。
+</Callout>
+
+<Callout type="trap">
+**误区：延迟渲染能处理任意多光源。**
+虽然延迟渲染消除了几何浪费，但每个光源仍需一个全屏 pass 或光照体积。上百个光源时带宽和着色器指令数仍是瓶颈。实际做法是用光源分块（Tiled）或集群（Clustered）剔除，只对影响当前 tile/cluster 的光源计算。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么延迟渲染不支持 MSAA 和透明物体？
+
+<Answer>
+MSAA 需要每个子样本独立计算光照，但 G-Buffer 每个像素只存一个表面数据，无法区分子样本的几何差异。透明物体需要多层叠加（一个像素有多个表面），G-Buffer 每个像素只能存一个表面，无法表达透明层。两者都是 G-Buffer「一像素一表面」限制的结果。
+</Answer>
+
+**问题 2**：什么时候应该选择前向渲染而非延迟渲染？
+
+<Answer>
+三种场景选前向：1) 光源数少（≤4），延迟渲染的 G-Buffer 开销不划算；2) 需要大量透明物体，延迟渲染无法处理；3) 需要多种不同 BRDF 模型，G-Buffer 格式固定无法容纳。移动端带宽受限时也倾向前向+ TBDR（分块延迟）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="前向渲染">每个物体逐光源计算光照的传统路径，支持透明和 MSAA 但光源多时浪费严重。</GlossaryItem>
+<GlossaryItem term="延迟渲染">先存 G-Buffer 再在屏幕空间逐光源算光照，消除遮挡浪费但不支持透明和 MSAA。</GlossaryItem>
+<GlossaryItem term="G-Buffer">几何缓冲区，存储每个像素的位置、法线、材质等信息的多个渲染目标。</GlossaryItem>
+<GlossaryItem term="Tiled/Clustered">光源分块/分簇优化，将屏幕空间分块只对影响当前块的光源计算，支持更多光源。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

@@ -1,0 +1,122 @@
+---
+title: "几何体处理与细分"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "用 LOD 和曲面细分管线实现自适应几何细节"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgGeometryDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-geometry";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 LOD 策略与距离驱动的细节分配
+- 能描述曲面细分管线（HS→细分器→DS）的工作流程
+- 能回答：为什么 GPU 端细分比 CPU 预生成多 LOD 更灵活？
+- 能区分壳着色器和域着色器的职责
+</Objectives>
+
+## 直觉引入
+
+你站在山顶俯瞰一座城市。近处的建筑窗户清晰可数，远处的建筑只是几个色块。你的眼睛自动做了 LOD（细节层次）——近处给高细节，远处给低细节。GPU 渲染也一样：给所有模型最高细节会爆显存，给所有模型低细节近处会模糊。LOD 策略就是让细节随距离自适应分配。
+
+## 概念讲解
+
+### LOD 与曲面细分
+
+<GpgGeometryDiagram />
+
+<Term def="LOD 是 Level of Detail 的缩写，根据距离用不同精度的模型渲染同一物体">
+LOD
+</Term>
+
+传统 LOD 在 CPU 端预生成多个精度模型，距离切换时会有跳变。曲面细分管线在 GPU 端实时生成顶点，根据距离动态调整细分因子，实现无缝过渡。
+
+<Term def="曲面细分是 GPU 管线中可编程阶段，由壳着色器、细分器、域着色器三部分组成">
+曲面细分
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：壳着色器决定细分程度">
+壳着色器接收控制点，根据距离、屏幕空间面积等因素计算细分因子。近处细分因子高（生成更多顶点），远处细分因子低（省三角形）。
+<GpgGeometryDiagram />
+</Step>
+<Step title="第二步：细分器生成新顶点">
+细分器是固定功能阶段，根据壳着色器输出的细分因子，在面片内部均匀或分数地生成新顶点坐标（u,v）。这一步不可编程但高度并行。
+</Step>
+<Step title="第三步：域着色器计算最终位置">
+域着色器接收控制点和细分坐标（u,v），用贝塞尔或 NURBS 曲面公式计算每个新顶点的最终位置和属性。这是把数学曲面变成三角形的地方。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 壳着色器：计算细分因子
+struct ConstantOutput {
+    float edges[3] : SV_TessFactor;
+    float inside   : SV_InsideTessFactor;
+};
+ConstantOutput HSConstant(InputPatch<VSOut, 3> patch) {
+    ConstantOutput output;
+    float dist = distance(cameraPos, patch[0].worldPos);
+    float tessFactor = max(1.0, 64.0 / (1.0 + dist * 0.1));
+    output.edges[0] = output.edges[1] = output.edges[2] = tessFactor;
+    output.inside = tessFactor;
+    return output;
+}
+
+// 域着色器：贝塞尔曲面求值
+[domain("tri")]
+DSOut DS(HSConstant input, float3 uv : SV_DomainLocation,
+         const OutputPatch<HSOut, 3> patch) {
+    // 重心坐标插值
+    float3 pos = uv.x * patch[0].pos + uv.y * patch[1].pos + uv.z * patch[2].pos;
+    // 位移映射：用纹理给曲面加凹凸
+    pos += normalize(patch[0].normal) * displacementTex.SampleLevel(sampler, uv.xy, 0).r;
+    DSOut output;
+    output.pos = mul(float4(pos, 1.0), viewProj);
+    return output;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：细分因子越高越好。**
+细分因子过高会生成海量三角形，顶点着色器成为瓶颈。正确做法是根据屏幕空间面积设上限——一个三角形在屏幕上占 10 像素时细分到极致也只是浪费。
+</Callout>
+
+<Callout type="trap">
+**误区：LOD 切换不做平滑过渡。**
+直接在两个精度模型间切换会有明显跳变（popping）。应该用 geomorphing 在切换距离区间内渐变插值，或者用曲面细分在 GPU 端连续调整。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 GPU 端曲面细分比 CPU 预生成多 LOD 更灵活？
+
+<Answer>
+CPU 预生成 LOD 是离散的（高/中/低三档），切换时有跳变且占更多显存。GPU 曲面细分是连续的，细分因子可逐帧根据距离平滑变化，无缝过渡。且细分只在需要的面片上发生，不会增加整体内存。
+</Answer>
+
+**问题 2**：壳着色器和域着色器各自的职责是什么？
+
+<Answer>
+壳着色器负责「决定细分多少」——接收控制点、计算细分因子、输出给细分器。域着色器负责「新顶点放哪」——接收细分器生成的（u,v）坐标和控制点，用曲面公式计算每个新顶点的位置和属性。壳在前定策略，域在后算结果。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="LOD">细节层次，根据物体与相机距离用不同精度模型渲染，平衡画质与性能。</GlossaryItem>
+<GlossaryItem term="曲面细分">GPU 可编程阶段，在管线上动态生成顶点，实现自适应几何细节。</GlossaryItem>
+<GlossaryItem term="壳着色器">曲面细分管线第一步，计算细分因子并传递控制点。</GlossaryItem>
+<GlossaryItem term="域着色器">曲面细分管线最后一步，用曲面公式从细分坐标计算顶点最终位置。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

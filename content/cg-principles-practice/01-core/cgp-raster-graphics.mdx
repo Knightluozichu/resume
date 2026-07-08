@@ -1,0 +1,108 @@
+---
+title: "光栅图形学基础"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "直线光栅化、三角形填充与抗锯齿"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CgpRasterGraphicsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-raster-graphics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用Bresenham算法画出一条直线并解释其原理
+- 能解释三角形光栅化的扫描线算法
+- 能区分SSAA和MSAA抗锯齿的原理差异
+- 能回答：为什么锯齿是光栅化的必然产物？
+</Objectives>
+
+## 直觉引入
+
+想象你在用方格纸画画。一条斜线经过的格子要涂色——但格子是离散的，线是连续的，你只能近似地选择「最接近线的格子」。这就是光栅化的本质：把连续的几何（线、三角形）转换成离散的像素。
+
+锯齿就是这种近似的副作用——边缘出现阶梯状。抗锯齿的思路是：不要只选「是或否」，而是算出「这个像素有多少被线覆盖」，用覆盖率来决定颜色深浅。
+
+## 概念讲解
+
+### 光栅化算法
+
+<CgpRasterGraphicsDiagram />
+
+<Term def="光栅化是将连续几何图元转换为离散像素的过程">光栅化</Term>是渲染管线的核心步骤。
+
+<Term def="Bresenham算法是用整数运算确定直线经过哪些像素的经典算法">Bresenham算法</Term>：只用整数加减和比较，无浮点运算，效率极高。
+
+<Term def="扫描线填充是逐行扫描三角形，计算每行与三角形边的交点来确定填充范围">扫描线填充</Term>是三角形光栅化的基础方法。
+
+<Term def="抗锯齿是通过计算像素被图元覆盖的比例来平滑边缘的技术">抗锯齿</Term>分超采样(SSAA)和多重采样(MSAA)。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：直线光栅化">理解DDA（浮点）和Bresenham（整数）算法。关键洞察：每个像素选择「最接近理想线」的格点。</Step>
+<Step title="第二步：三角形填充">
+扫描线算法逐行计算三角形边的交点。重心坐标法判断像素是否在三角形内。GPU用edge function并行处理。
+<CgpRasterGraphicsDiagram />
+</Step>
+<Step title="第三步：抗锯齿">SSAA对每个像素多次采样取平均（质量高但慢），MSAA只在边缘多次采样（质量够好且快）。理解覆盖率的概念。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// Bresenham 直线光栅化算法
+void drawLine(int x0, int y0, int x1, int y1) {
+    int dx = abs(x1 - x0), dy = abs(y1 - y0);
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+    int err = dx - dy;
+    
+    while(true) {
+        setPixel(x0, y0);  // 画当前像素
+        if(x0 == x1 && y0 == y1) break;
+        int e2 = 2 * err;
+        if(e2 > -dy) { err -= dy; x0 += sx; }  // 水平步进
+        if(e2 <  dx) { err += dx; y0 += sy; }  // 垂直步进
+    }
+}
+// 全整数运算，无浮点，无除法——极致高效
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为抗锯齿只是「模糊边缘」。**
+抗锯齿是计算像素被图元覆盖的精确比例，然后按比例混合图元颜色和背景颜色。这不是模糊，而是更准确地表示「这个像素一半在线内一半在线外」的真实情况。
+</Callout>
+
+<Callout type="trap">
+**误区：认为MSAA就是降低分辨率的SSAA。**
+MSAA只在几何边缘（三角形边界）处做多次采样，片段着色器只运行一次（用像素中心）。SSAA对整个画面每个像素多次运行着色器。MSAA质量略低但性能远好于SSAA，因为着色器计算是最贵的部分。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么锯齿是光栅化的必然产物？
+
+<Answer>
+光栅化把连续几何（无限精度的线/三角形）转换为离散像素（有限网格）。每个像素只能有一个颜色，但一条斜线可能只覆盖像素的一部分。如果只做「是或否」的判断（像素中心在图元内就涂色），边缘就会出现阶梯状锯齿。这是离散采样连续信号的必然结果，除非像素无限小（分辨率无限高），否则锯齿无法完全消除。
+</Answer>
+
+**问题 2**：SSAA和MSAA的原理有什么本质区别？
+
+<Answer>
+SSAA（超采样抗锯齿）：以更高分辨率渲染整个画面，然后缩小到目标分辨率。每个子像素都运行片段着色器，计算量是N倍（4xSSAA = 4倍着色器开销）。MSAA（多重采样抗锯齿）：只在几何边缘处做多次采样判断覆盖率，片段着色器只运行一次（用像素中心位置）。MSAA的着色器开销只有1倍，几何判断开销是N倍，因此远快于SSAA。质量上MSAA略低（着色器只用中心位置），但对于大多数场景视觉差异不明显。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="光栅化">将连续几何图元（线、三角形）转换为离散像素的过程，是渲染管线的核心步骤。</GlossaryItem>
+<GlossaryItem term="Bresenham算法">用纯整数运算确定直线经过哪些像素的经典直线光栅化算法，无浮点无除法。</GlossaryItem>
+<GlossaryItem term="扫描线填充">逐行扫描三角形，计算每行与三角形边的交点来确定填充范围的光栅化方法。</GlossaryItem>
+<GlossaryItem term="抗锯齿">通过计算像素被图元覆盖的比例来平滑边缘的技术，分SSAA（全场景超采样）和MSAA（边缘多重采样）。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />

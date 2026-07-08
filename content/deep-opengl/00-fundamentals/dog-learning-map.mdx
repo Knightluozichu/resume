@@ -1,0 +1,127 @@
+---
+title: "深入理解 OpenGL WebGL OpenGL ES 全书学习地图"
+type: A
+section: "计算机图形学与渲染"
+order: 0
+description: "十章脉络——从状态机到跨平台渲染的完整学习路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogLearningMapDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-learning-map";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 OpenGL / WebGL / OpenGL ES 三者的关系与差异
+- 能描述图形管线的核心阶段与可编程着色点
+- 能根据目标平台选择合适的 API 子集
+- 能回答：为什么 OpenGL 被称为「状态机」？
+</Objectives>
+
+## 直觉引入
+
+把 GPU 想象成一台流水线工厂：原料（顶点数据）从一端进，成品（屏幕像素）从另一端出。OpenGL/WebGL/OpenGL ES 就是操控这条流水线的「遥控器」——你设置好机器状态（用什么着色器、开不开深度测试），再把数据喂进去，流水线就按你的设定产出画面。
+
+这三个 API 是同一套理念的不同化身：OpenGL 是桌面原版，OpenGL ES 是为手机精简的子集，WebGL 是把 OpenGL ES 搬进浏览器。学会一个，另两个大同小异，差异主要在着色器语言和可用扩展上。
+
+## 概念讲解
+
+<Term def="以固定顺序处理顶点到像素的 GPU 渲染流程">图形管线</Term>分阶段：顶点输入 → 顶点着色器 → 图元装配 → 光栅化 → 片元着色器 → 逐片元测试（深度/模板）→ 帧缓冲。其中<Term def="用 GLSL 编写、运行在 GPU 的可编程阶段">可编程着色器</Term>主要有顶点与片元两个。
+
+### 三 API 关系
+- **OpenGL**：桌面全功能版，版本最高 4.6。
+- **<Term def="OpenGL 的移动精简子集">OpenGL ES</Term>**：嵌入式精简版，主流 3.0/3.2。
+- **WebGL**：浏览器版，本质是 OpenGL ES 的 JS 绑定，1.0≈ES2、2.0≈ES3。
+
+### 状态机本质
+OpenGL 是<Term def="通过设置当前状态来影响后续所有绘制的编程模型">状态机</Term>：你「绑定」一个缓冲、「使用」一个程序、「开启」深度测试后，这些设置一直生效直到被改。绘制命令本身不带配置，全靠当前状态决定行为。
+
+## 交互Demo
+
+> 猜一猜：在 WebGL 里写一段顶点着色器，能直接拿到 OpenGL 桌面上跑吗？
+
+<DogLearningMapDiagram />
+
+<Stepper>
+<Step title="第一步：设状态">
+绑定 VAO/VBO、编译链接着色器程序、开启深度测试——这些「当前状态」决定后续绘制行为。
+</Step>
+<Step title="第二步：喂数据">
+把顶点属性数组上传到缓冲，设定顶点布局（位置、法线、UV），告诉管线如何读取。
+</Step>
+<Step title="第三步：发绘制">
+调用 drawArrays/drawElements 触发管线，顶点经着色器、光栅化、片元着色、测试，写入帧缓冲成画。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 最小绘制骨架（JS）：
+
+```js
+// 1. 获取上下文
+const gl = canvas.getContext("webgl2");
+
+// 2. 编译着色器
+const vs = gl.createShader(gl.VERTEX_SHADER);
+gl.shaderSource(vs, `#version 300 es
+  in vec2 a_pos;
+  void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`);
+gl.compileShader(vs);
+// 片元着色器同理，链接成 program ...
+
+// 3. 上传顶点数据
+const vbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([...]), gl.STATIC_DRAW);
+
+// 4. 设置状态并绘制
+gl.useProgram(program);
+gl.enable(gl.DEPTH_TEST);            // 状态机：开启深度测试
+gl.clearColor(0, 0, 0, 1);
+gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+gl.drawArrays(gl.TRIANGLES, 0, 3);   // 触发管线
+```
+
+每个 `gl.enable/bind/use` 都在改「当前状态」，`drawArrays` 只负责按当前状态跑一遍管线。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 以为 WebGL 和桌面 OpenGL 函数完全一样，直接搬桌面代码到浏览器报错。
+**原因 →** WebGL 基于 OpenGL ES，是精简子集，缺少很多桌面扩展（如几何着色器、多重采样默认支持差异）。
+**修法 →** 以 OpenGL ES 3.0 为基线查函数可用性，桌面独有的特性需用扩展或换方案在 WebGL 实现。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 改了 VBO 数据但画面没变，或上一帧状态泄漏到下一帧。
+**原因 →** 忘记 OpenGL 是状态机，绑定/状态在帧间持续生效，没显式重设就被沿用。
+**修法 →** 每帧绘制前显式设定所需状态（bind、use、enable/disable），不要依赖「上一次留下的状态」。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：OpenGL、OpenGL ES、WebGL 三者是什么关系？为什么说「学会一个另两个大同小异」？
+
+<Answer>
+三者同源：OpenGL 是桌面全功能原版；OpenGL ES 是为移动/嵌入式精简的子集；WebGL 是 OpenGL ES 的浏览器 JS 绑定（WebGL1≈ES2、WebGL2≈ES3）。它们共享图形管线理念与 GLSL 着色器语言，差异主要在可用 API 子集、着色器版本和扩展。学会一个的管线与状态机模型，另两个只需查差异表即可上手。
+</Answer>
+
+**问题**：为什么说 OpenGL 是「状态机」？这给编程带来什么注意点？
+
+<Answer>
+OpenGL 通过「当前状态」（绑定的缓冲、使用的程序、开启的测试等）决定绘制行为，绘制命令本身不带配置。注意点是状态在帧间持续生效：忘记重设会沿用上次状态导致泄漏，所以每帧绘制前要显式设定所需状态，不能依赖隐式残留。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="图形管线">GPU 以固定顺序处理顶点到像素的流程，含顶点着色、光栅化、片元着色、测试等阶段。</GlossaryItem>
+<GlossaryItem term="可编程着色器">用 GLSL 编写、运行在 GPU 的阶段，主要有顶点与片元着色器。</GlossaryItem>
+<GlossaryItem term="OpenGL ES">OpenGL 的移动精简子集，主流 3.0/3.2，是 WebGL 的底层基础。</GlossaryItem>
+<GlossaryItem term="状态机">通过设置当前状态影响后续所有绘制的编程模型，状态持续生效直到被改。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

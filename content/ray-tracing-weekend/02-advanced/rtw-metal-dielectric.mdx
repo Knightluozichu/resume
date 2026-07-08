@@ -1,0 +1,164 @@
+---
+title: "金属与电介质材质"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "金属镜面反射与电介质折射的散射实现"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwMetalDielectricDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-metal-dielectric";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出镜面反射向量公式并推导
+- 能解释金属 fuzz 模糊度如何改变反射外观
+- 能用 Snell 定律与 Schlick 近似实现电介质折射
+- 能回答：全内反射在什么条件下发生？
+</Objectives>
+
+## 直觉引入
+
+金属像镜子：光打上去沿「入射角等于反射角」的方向弹回，只是被金属本色染了一下色。玻璃则让光穿过去并弯折——这就是折射，吸管插进水杯看起来「断」了的原因。
+
+光线追踪里，金属用一个简单公式算反射方向，再加一点随机扰动模拟磨砂金属；玻璃要判断光「该反射还是该折射」（角度越斜越容易反射），并用 Snell 定律算折射方向。两者都用前面 scatter 接口，只是算方向的公式不同。
+
+## 概念讲解
+
+### 金属：镜面反射 + 模糊
+<Term def="入射方向关于法线的对称向量">镜面反射</Term>公式：
+
+$$
+\mathbf{r} = \mathbf{d} - 2(\mathbf{d}\cdot\mathbf{N})\mathbf{N}
+$$
+
+金属散射方向 = $\mathbf{r} + \text{fuzz}\cdot\vec{s}_{rand}$，fuzz 越大反射越散（磨砂）。attenuation = 金属反照率（基础色）。
+
+### 电介质：Snell 折射 + Schlick 反射
+<Term def="入射角与折射角正弦之比等于两介质折射率之比">Snell 定律</Term>：$\eta_i\sin\theta_i = \eta_t\sin\theta_t$。折射方向：
+
+$$
+\mathbf{r}_{\perp} = \frac{\eta_i}{\eta_t}(\mathbf{d} + \cos\theta_i\,\mathbf{N}),\quad \mathbf{r}_{\parallel} = -\sqrt{1-|\mathbf{r}_{\perp}|^2}\,\mathbf{N}
+$$
+
+<Term def="用余弦近似反射率的经验公式">Schlick 近似</Term>给出反射概率 $R\approx R_0+(1-R_0)(1-\cos\theta)^5$，其中 $R_0=((\eta_i-\eta_t)/(\eta_i+\eta_t))^2$。每次命中按 R 与随机数比较决定走反射还是折射。
+
+### 全内反射
+当 $\sin\theta_t>1$（无实数解）时光无法折射，全部反射——这就是<Term def="光从密介质到疏介质且超过临界角时无法折射而全部反射">全内反射</Term>，发生在从水/玻璃射向空气且角度足够大时。
+
+## 交互Demo
+
+> 猜一猜：玻璃球的折射率从 1.5 调到 1.0，它还会折射光线吗？
+
+<RtwMetalDielectricDiagram />
+
+<Stepper>
+<Step title="第一步：金属反射">
+算 reflect(d, N)=d−2(d·N)N，加 fuzz 倍随机扰动得散射方向，attenuation 为金属色。
+</Step>
+<Step title="第二步：电介质判别">
+用 Snell 算折射方向；若根号内为负（sinθ_t>1）则全内反射，走反射方向。
+</Step>
+<Step title="第三步：Schlick 抽样">
+否则用 Schlick 算反射概率 R，与随机数比较：小则反射、大则折射，二者选一继续递归。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 金属与电介质材质：
+
+```cpp
+// 镜面反射向量
+vec3 reflect(const vec3& v, const vec3& n) {
+  return v - 2 * dot(v, n) * n;
+}
+
+class metal : public material {
+  public:
+    metal(const color& a, double f) : albedo(a), fuzz(f<1?f:1) {}
+    bool scatter(const ray& r_in, const hit_record& rec,
+                 color& attenuation, ray& scattered) const override {
+      vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
+      scattered   = ray(rec.p, reflected + fuzz*random_unit_vector());
+      attenuation = albedo;
+      // 反射方向若钻入表面则视为吸收
+      return (dot(scattered.direction(), rec.normal) > 0);
+    }
+  private:
+    color albedo; double fuzz;
+};
+
+// 折射向量
+vec3 refract(const vec3& uv, const vec3& n, double etai_over_etat) {
+  auto cos_theta = fmin(dot(-uv, n), 1.0);
+  vec3 r_out_perp = etai_over_etat * (uv + cos_theta*n);
+  vec3 r_out_para = -sqrt(fabs(1.0 - r_out_perp.length_squared())) * n;
+  return r_out_perp + r_out_para;
+}
+
+class dielectric : public material {
+  public:
+    dielectric(double index) : ir(index) {}
+    bool scatter(const ray& r_in, const hit_record& rec,
+                 color& attenuation, ray& scattered) const override {
+      attenuation = color(1,1,1);
+      double ratio = rec.front_face ? (1.0/ir) : ir;
+      vec3 unit_d = unit_vector(r_in.direction());
+      double cos_theta = fmin(dot(-unit_d, rec.normal), 1.0);
+      double sin_theta = sqrt(1 - cos_theta*cos_theta);
+      bool cannot_refract = ratio * sin_theta > 1.0;     // 全内反射
+      vec3 dir = (cannot_refract || schlick(cos_theta, ratio) > random_double())
+                 ? reflect(unit_d, rec.normal)           // 反射
+                 : refract(unit_d, rec.normal, ratio);   // 折射
+      scattered = ray(rec.p, dir);
+      return true;
+    }
+  private:
+    double ir;   // 折射率
+};
+```
+
+`cannot_refract` 即全内反射判定；`schlick` 返回反射概率与随机数比较实现蒙特卡洛选择。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 金属球反射方向钻进表面内部，画面出现黑斑。
+**原因 →** fuzz 扰动过大或反射方向未校验，导致散射方向 dot 法线 ≤ 0（指向表面内）。
+**修法 →** scatter 末尾判断 dot(scattered.direction(), normal)>0 才返回 true，否则视为吸收，避免非法方向递归。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 玻璃球背面该全内反射的地方却透出了背景，像没折射。
+**原因 →** 漏判全内反射：当 ratio·sinθ>1 时折射无解，必须走反射，若仍强行折射会产生非法向量。
+**修法 →** 显式判 cannot_refract = ratio·sin_theta>1，命中即用 reflect 而非 refract，保证物理正确。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：写出镜面反射向量公式并简述推导思路。金属 fuzz 起什么作用？
+
+<Answer>
+r = d − 2(d·N)N。d 可分解为垂直 N 的分量 d⊥ 和平行 N 的分量 d∥=(d·N)N；反射时垂直分量不变、平行分量反向，故 r=d⊥−d∥=d−2(d·N)N。fuzz 给反射方向加随机扰动，fuzz=0 是完美镜面，越大越像磨砂金属（漫散反射）。
+</Answer>
+
+**问题**：全内反射在什么条件下发生？Schlick 近似在电介质里解决什么问题？
+
+<Answer>
+全内反射发生在光从密介质射向疏介质（ηi>ηt）且入射角超过临界角时，此时 Snell 算出的 sinθt>1 无实数解，光无法折射而全部反射。Schlick 近似用余弦经验公式算反射概率 R，让每次命中按概率随机选择反射或折射，模拟玻璃在不同角度的反射/透射比，避免精确解 Fresnel 方程的复杂计算。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="镜面反射">入射方向关于法线的对称向量 r=d−2(d·N)N，金属材质的散射基础。</GlossaryItem>
+<GlossaryItem term="fuzz">金属反射方向的随机扰动幅度，0 为完美镜面，越大越磨砂。</GlossaryItem>
+<GlossaryItem term="Snell 定律">ηi·sinθi=ηt·sinθt，描述光在不同折射率介质间弯折的角度关系。</GlossaryItem>
+<GlossaryItem term="全内反射">光从密介质到疏介质且超过临界角时无法折射而全部反射的现象。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

@@ -1,0 +1,111 @@
+---
+title: "可见性与深度缓冲"
+type: B
+section: "计算机图形学与渲染"
+order: 4
+description: "Z-Buffer算法与可见性判定"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4VisibilityDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-visibility";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解深度缓冲的工作原理
+- 掌握Z-fighting的成因与解决
+- 对比画家算法与Z-Buffer
+- 了解深度预处理优化策略
+</Objectives>
+
+## 直觉引入
+
+深度缓冲就像一群人排队——后面的人被前面的挡住。Z-Buffer逐像素记录最近物体的深度，新来的片段如果更远就被丢弃，更近就替换。这比按深度排序（画家算法）简单得多，且天然适合GPU并行。
+
+## 概念讲解
+
+<Term def="与帧缓冲大小相同的缓冲区，存储每像素深度值">深度缓冲</Term><Term def="两个面非常接近时深度精度不足导致交替显示">Z-fighting</Term><Term def="按深度从远到近排序图元再绘制的算法">画家算法</Term><Term def="在片段着色器执行前做深度测试以提前剔除">Early-Z</Term>
+
+### Z-Buffer算法
+初始化深度缓冲为最大值。每个片段与当前深度比较：若fragment.z < zbuffer[x][y]，更新颜色和深度；否则丢弃。
+
+### Z-fighting
+透视投影后深度值近处密集远处稀疏，接近的面因精度不足交替显示。解决：增大近裁剪面、减小远裁剪面、polygon offset。
+
+### 性能优化
+Early-Z在片段着色前做深度测试；Z-Prepass先用简单着色器渲染深度再用复杂着色器渲染。
+
+## 交互Demo
+
+> 猜一猜：为什么Z-Buffer不需要排序图元就能正确处理遮挡？
+
+<Cg4VisibilityDiagram />
+
+<Stepper>
+<Step title="第一步：初始化">
+深度缓冲初始化为最大深度值（1.0），帧缓冲初始化为背景色。
+</Step>
+<Step title="第二步：逐片段比较">
+每个片段的深度与深度缓冲比较。更近则写入颜色和深度，更远则丢弃。
+</Step>
+<Step title="第三步：结果输出">
+所有图元处理完毕后，帧缓冲中每像素保留最近片段的颜色。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// OpenGL 深度测试配置
+glEnable(GL_DEPTH_TEST);
+glDepthFunc(GL_LESS);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+// Z-Prepass优化
+glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+renderScene(simpleShader);
+glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+renderScene(complexShader);
+```
+
+Early-Z由硬件自动执行（当片段着色器不修改深度时）。Z-Prepass是软件策略，多一次几何遍历但减少片段着色执行。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** Z-fighting：两个接近的面交替闪烁。
+**原因 →** 深度精度不足无法区分。
+**修法 →** 增大近裁剪面距离、减小远裁剪面、对共面物体加polygon offset、使用浮点深度缓冲。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 认为深度测试必须在片段着色后。
+**原因 →** 管线图通常把深度测试画在片段着色器之后。
+**修法 →** 现代GPU支持Early-Z——在片段着色前做深度测试。但如果片段着色器修改深度或使用discard，Early-Z失效。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：什么是深度缓冲？它解决什么问题？
+
+<Answer>
+深度缓冲是存储每像素深度值的缓冲区。当多个片段映射到同一像素时，比较深度保留更近的片段。解决可见性问题——遮挡关系无需排序即可正确处理。
+</Answer>
+
+**问题**：为什么透视投影后远处Z-fighting更严重？
+
+<Answer>
+透视投影后深度值非线性分布——近处密集远处稀疏。远处物体的深度值集中在1.0附近，区分度低，两个接近的面更容易因精度不足产生Z-fighting。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="深度缓冲">逐像素存储深度值的缓冲区，通过比较深度确定可见表面。</GlossaryItem>
+<GlossaryItem term="Z-fighting">两个接近的面因深度精度不足交替显示的现象。</GlossaryItem>
+<GlossaryItem term="画家算法">按深度从远到近排序图元再绘制的可见性算法。</GlossaryItem>
+<GlossaryItem term="Early-Z">在片段着色器执行前做深度测试以提前剔除被遮挡片段的技术。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

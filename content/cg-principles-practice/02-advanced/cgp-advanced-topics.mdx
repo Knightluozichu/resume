@@ -1,0 +1,119 @@
+---
+title: "高级主题与动画"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "关键帧、骨骼动画与物理模拟"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CgpAdvancedTopicsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-advanced-topics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分关键帧动画、骨骼动画和物理模拟的原理
+- 能解释骨骼动画的蒙皮权重绑定机制
+- 能说出正向运动学(FK)和逆向运动学(IK)的区别
+- 能回答：为什么物理模拟需要数值积分？
+</Objectives>
+
+## 直觉引入
+
+想象你在做动画片。方案A（关键帧）：画出关键姿势，中间帧自动插值——简单但只能做预设动作。方案B（骨骼动画）：给角色装骨骼，动骨骼带动皮肤——适合角色动画。方案C（物理模拟）：给物体物理属性（质量、速度、力），让物理引擎自动算运动——适合布料、流体、碰撞。
+
+真实游戏通常三种都用：角色用骨骼动画，碎布用物理模拟，UI用关键帧。每种方法解决不同类型的动画问题。
+
+## 概念讲解
+
+### 动画技术
+
+<CgpAdvancedTopicsDiagram />
+
+<Term def="关键帧动画是指定关键时间点的姿态，中间帧通过插值生成的动画方法">关键帧动画</Term>：简单直观，适合UI和简单物体。插值方式：线性、贝塞尔、Ease in/out。
+
+<Term def="骨骼动画是用骨骼层级结构驱动皮肤变形的动画技术">骨骼动画</Term>：骨骼层级+蒙皮权重。每个顶点绑定到骨骼，权重决定影响程度。
+
+<Term def="FK是正向运动学，从父骨骼到子骨骼逐级计算位置">FK</Term>（正向运动学）：旋转父骨骼→子骨骼跟随。
+<Term def="IK是逆向运动学，从末端位置反推骨骼角度">IK</Term>（逆向运动学）：指定脚的位置→反推膝盖和髋部角度。
+
+<Term def="物理模拟是用数值积分求解物理方程来生成运动的方法">物理模拟</Term>：刚体动力学、碰撞检测、粒子系统。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：关键帧与插值">关键帧指定关键时间点的值，中间帧用插值（线性/贝塞尔/Ease）填充。这是最基础的动画技术，适合UI和简单物体运动。</Step>
+<Step title="第二步：骨骼动画">
+骨骼层级结构+蒙皮权重。FK从父到子计算（直观），IK从末端反推（自然交互）。理解蒙皮矩阵 = bone × bind_inverse。
+<CgpAdvancedTopicsDiagram />
+</Step>
+<Step title="第三步：物理模拟">用数值积分（Euler/Verlet）求解牛顿方程。刚体动力学+碰撞检测+约束求解。布料/流体用更高级的方法（弹簧质点/SPH）。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 骨骼动画蒙皮计算
+struct Vertex {
+    vec3 position;
+    int boneIds[4];      // 影响该顶点的骨骼
+    float boneWeights[4]; // 权重（和为1）
+};
+
+// 蒙皮着色器
+vec3 skinnedPosition(vec3 pos, int boneIds[4], float weights[4], mat4 boneMatrices[]) {
+    vec3 result = vec3(0.0);
+    for(int i = 0; i < 4; i++) {
+        if(weights[i] > 0.0) {
+            // 蒙皮矩阵 = 当前骨骼变换 × 绑定姿势的逆
+            mat4 skinMatrix = boneMatrices[boneIds[i]] * inverseBindPose[boneIds[i]];
+            result += (skinMatrix * vec4(pos, 1.0)).xyz * weights[i];
+        }
+    }
+    return result;
+}
+
+// 物理模拟：Euler积分
+void physicsStep(RigidBody& body, float dt) {
+    body.velocity += body.force / body.mass * dt;
+    body.position += body.velocity * dt;
+    body.force = vec3(0); // 重置力
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为骨骼动画的骨骼是可见的。**
+骨骼是不可见的控制结构，就像人体骨架——你看不到骨头但它们决定了身体如何运动。骨骼动画只控制顶点位置变形，可见的是皮肤（网格）。骨骼数据包括层级关系、变换矩阵和蒙皮权重。
+</Callout>
+
+<Callout type="trap">
+**误区：认为物理模拟是精确的。**
+物理模拟用数值积分（如Euler法）近似求解微分方程，存在数值误差。Euler法简单但不稳定（能量泄漏/爆炸），Verlet积分更稳定但复杂。真实物理引擎用固定时间步长+多次子步进来平衡精度和性能。物理模拟永远是近似，关键是让近似「足够好」。
+</Callout>
+
+<Exercises>
+**问题 1**：关键帧动画、骨骼动画和物理模拟各适合什么场景？
+
+<Answer>
+关键帧动画：适合UI动画（按钮缩放）、简单物体运动（门开关）、预设轨迹（过场动画）。骨骼动画：适合角色动画（走路/跑步/攻击）——骨骼层级驱动皮肤变形，一个骨架可复用多个动画。物理模拟：适合非预设运动——布料飘动、粒子效果、碰撞反应、碎片飞溅。实际游戏中三者结合使用：角色身体用骨骼动画，披风用布料物理，落地碎屑用粒子物理。
+</Answer>
+
+**问题 2**：FK和IK有什么区别？各适合什么场景？
+
+<Answer>
+FK（正向运动学）：从父骨骼到子骨骼逐级计算位置。旋转肩关节→肘关节位置变化→手腕位置变化→手指位置变化。直观可控，适合动画师精确控制每个关节的旋转。IK（逆向运动学）：指定末端（如手掌）的目标位置，反推所有父关节的角度。适合交互式控制——如脚踩到地面（不穿地）、手抓住物体。FK适合预设动画，IK适合动态交互。实际角色动画通常FK和IK混合使用。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="关键帧动画">指定关键时间点姿态，中间帧通过插值生成的动画方法，适合UI和简单物体。</GlossaryItem>
+<GlossaryItem term="骨骼动画">用骨骼层级结构和蒙皮权重驱动皮肤变形的动画技术，角色动画的标准方案。</GlossaryItem>
+<GlossaryItem term="FK/IK">正向运动学从父骨骼到子骨骼计算位置；逆向运动学从末端位置反推骨骼角度。</GlossaryItem>
+<GlossaryItem term="物理模拟">用数值积分求解物理方程生成运动的方法，适合非预设运动如碰撞、布料、流体。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />

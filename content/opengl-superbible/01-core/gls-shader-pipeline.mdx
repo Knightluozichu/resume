@@ -1,0 +1,123 @@
+---
+title: "着色器管线详解"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "顶点→曲面细分→几何→光栅化→片段的完整管线"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GlsShaderPipelineDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-shader-pipeline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解OpenGL着色器管线的完整流程
+- 掌握各可编程阶段的职责
+- 了解曲面细分与几何着色器
+- 能根据需求选择管线阶段
+</Objectives>
+
+## 直觉引入
+
+着色器管线就像工厂流水线——原材料(顶点)经过多道工序(顶点着色器→曲面细分→几何着色器→光栅化→片段着色器)，每道工序可编程定制。不是每个产品(图元)都需要所有工序，但理解完整流水线才能知道在哪里优化。
+
+## 概念讲解
+
+<Term def="逐顶点执行的必需着色器，负责MVP变换">顶点着色器</Term><Term def="Hull+Tessellator+Domain三阶段，自适应细化曲面">曲面细分</Term><Term def="逐图元执行，可增删图元">几何着色器</Term><Term def="逐片段执行的必需着色器，计算最终颜色">片段着色器</Term>
+
+### 可编程阶段
+- 顶点着色器(必需)：MVP变换，属性输出
+- 曲面细分(可选)：Hull设定级别→Tessellator生成拓扑→Domain计算位置
+- 几何着色器(可选)：逐图元增删，适合法线可视化/毛发
+- 片段着色器(必需)：光照/纹理/最终颜色
+
+### 执行频率
+顶点(N次)→片段(N*M次)。片段着色器执行最多，优化优先级最高。
+
+## 交互Demo
+
+> 猜一猜：为什么曲面细分管线有三个子阶段而不是一个？
+
+<GlsShaderPipelineDiagram />
+
+<Stepper>
+<Step title="第一步：顶点处理">
+顶点着色器逐顶点执行MVP变换，输出裁剪空间坐标和插值属性。这是必需阶段。
+</Step>
+<Step title="第二步：可选阶段">
+曲面细分和几何着色器是可选的。曲面细分用于LOD，几何着色器用于图元增删。
+</Step>
+<Step title="第三步：片段着色">
+光栅化后片段着色器逐片段计算光照和纹理，输出最终颜色。这也是必需阶段。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 顶点着色器(必需)
+#version 330 core
+layout(location=0) in vec3 aPos;
+void main() { gl_Position = vec4(aPos, 1.0); }
+
+// 几何着色器(可选): 将点扩展为三角形
+#version 330 core
+layout(points) in;
+layout(triangle_strip, max_vertices=3) out;
+void main() {
+    vec4 pos = gl_in[0].gl_Position;
+    gl_Position = pos + vec4(-0.1,-0.1,0,0); EmitVertex();
+    gl_Position = pos + vec4(0.1,-0.1,0,0); EmitVertex();
+    gl_Position = pos + vec4(0,0.1,0,0); EmitVertex();
+    EndPrimitive();
+}
+
+// 片段着色器(必需)
+#version 330 core
+out vec4 FragColor;
+void main() { FragColor = vec4(1.0, 0.0, 0.0, 1.0); }
+```
+
+几何着色器用EmitVertex()发射顶点，EndPrimitive()结束图元。输入points输出triangle_strip。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 所有阶段都使用。
+**原因 →** 觉得管线阶段越多越好。
+**修法 →** 曲面细分和几何着色器有性能开销。只在需要时使用：曲面细分用于LOD曲面，几何着色器用于图元增删。简单场景只需顶点+片段着色器。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 几何着色器做大量细分。
+**原因 →** 几何着色器能增删图元。
+**修法 →** 几何着色器并行度低性能差。大量细分应用曲面细分管线(有专用Tessellator固定功能)。几何着色器适合少量图元变换(如法线可视化)。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：OpenGL管线有哪些可编程阶段？
+
+<Answer>
+顶点着色器(必需)、曲面细分(Hull+Domain可选)、几何着色器(可选)、片段着色器(必需)。计算着色器独立于图形管线。
+</Answer>
+
+**问题**：曲面细分的三个子阶段？
+
+<Answer>
+Hull/Tessellation Control Shader(设定细分级别)→Tessellator(固定功能生成拓扑)→Domain/Tessellation Evaluation Shader(计算顶点位置)。用于自适应LOD。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="顶点着色器">逐顶点执行的必需着色器，负责MVP变换。</GlossaryItem>
+<GlossaryItem term="曲面细分">Hull+Tessellator+Domain三阶段，自适应细化曲面。</GlossaryItem>
+<GlossaryItem term="几何着色器">逐图元执行，可增删图元。</GlossaryItem>
+<GlossaryItem term="片段着色器">逐片段执行的必需着色器，计算最终颜色。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

@@ -1,0 +1,118 @@
+---
+title: "光照模型与着色"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "Phong光照模型与着色模式"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4LightingModelsDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-lighting-models";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解Phong光照模型的三个分量
+- 掌握Blinn-Phong改进
+- 区分Flat/Gouraud/Phong着色模式
+- 了解BRDF与物理正确性
+</Objectives>
+
+## 直觉引入
+
+光照就像舞台灯光——环境光提供基础亮度（不会全黑），漫反射让物体面向光的面更亮（Lambert定律），镜面反射产生高光斑点（反射方向对准眼睛时最亮）。三者叠加就是Phong模型。
+
+## 概念讲解
+
+<Term def="模拟间接光照的常数项，确保阴影区不全黑">环境光</Term><Term def="Lambert定律，与法线和光源方向夹角余弦成正比">漫反射</Term><Term def="模拟高光，与反射向量和观察向量夹角的幂成正比">镜面反射</Term><Term def="双向反射分布函数，描述入射光如何反射到出射方向">BRDF</Term>
+
+### Phong模型
+总光照 = 环境光(I*k_a) + 漫反射(I*k_d*max(N.L,0)) + 镜面反射(I*k_s*max(R.V,0)^n)
+
+### Blinn-Phong改进
+用半向量H=normalize(L+V)替代反射向量R：max(N.H,0)^n。计算更简单，高光更自然。
+
+### 着色模式
+Flat(每图元一色)、Gouraud(顶点着色插值颜色)、Phong(片段着色插值法线)。质量递增性能递减。
+
+## 交互Demo
+
+> 猜一猜：为什么Blinn-Phong比Phong更常用，即使效果几乎一样？
+
+<Cg4LightingModelsDiagram />
+
+<Stepper>
+<Step title="第一步：环境光">
+I*k_a，模拟间接光的基础亮度，避免阴影区全黑。常数项与方向无关。
+</Step>
+<Step title="第二步：漫反射">
+I*k_d*max(N.L,0)，Lambert余弦定律。法线与光源方向夹角越小越亮，背光面为0。
+</Step>
+<Step title="第三步：镜面反射">
+I*k_s*max(R.V,0)^n（Phong）或I*k_s*max(N.H,0)^n（Blinn-Phong）。n为光泽度，越大高光越集中。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+#version 330 core
+in vec3 Normal;
+in vec3 FragPos;
+uniform vec3 lightPos, viewPos, lightColor, objectColor;
+void main() {
+    vec3 ambient = 0.1 * lightColor;
+    vec3 N = normalize(Normal);
+    vec3 L = normalize(lightPos - FragPos);
+    float diff = max(dot(N, L), 0.0);
+    vec3 diffuse = diff * lightColor;
+    vec3 V = normalize(viewPos - FragPos);
+    vec3 H = normalize(L + V); // Blinn-Phong
+    float spec = pow(max(dot(N, H), 0.0), 32.0);
+    vec3 specular = spec * lightColor;
+    FragColor = vec4((ambient + diffuse + specular) * objectColor, 1.0);
+}
+```
+
+Blinn-Phong用半向量H=normalize(L+V)替代反射向量R，计算更简单且高光更自然。32.0是光泽度指数，越大高光越集中。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 法线未归一化导致光照异常。
+**原因 →** 顶点法线插值后长度变化。
+**修法 →** 插值后法线长度可能变化，必须在片段着色器中normalize(Normal)。否则dot(N,L)结果不正确。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 把所有光源都放在片段着色器中逐个计算。
+**原因 →** 想精确计算每个光源。
+**修法 →** 多光源场景应考虑延迟着色——先写G-Buffer再用屏幕空间Pass计算光照，避免片段着色器重复执行。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：Phong模型的三个分量是什么？
+
+<Answer>
+环境光(I*k_a模拟间接光)、漫反射(I*k_d*max(N.L,0) Lambert定律)、镜面反射(I*k_s*max(R.V,0)^n高光)。总光照=三者之和。
+</Answer>
+
+**问题**：Blinn-Phong和Phong的区别？为什么Blinn-Phong更常用？
+
+<Answer>
+Phong用反射向量R与V的点积，Blinn-Phong用半向量H=normalize(L+V)与N的点积。Blinn-Phong更常用因：1)H计算比R简单 2)N.H角度变化更平缓高光更自然 3)性能更好质量相近。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="环境光">模拟间接光照的常数项，确保阴影区不全黑。</GlossaryItem>
+<GlossaryItem term="漫反射">Lambert定律，与法线和光源方向夹角余弦成正比。</GlossaryItem>
+<GlossaryItem term="镜面反射">模拟高光，与反射向量和观察向量夹角的幂成正比。</GlossaryItem>
+<GlossaryItem term="BRDF">双向反射分布函数，描述入射光如何反射到出射方向。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

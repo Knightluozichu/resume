@@ -1,0 +1,248 @@
+---
+title: "纹理与着色器"
+type: C
+section: "计算机图形学与渲染"
+order: 7
+description: "掌握图像创建、采样器配置、描述符集绑定与着色器资源访问"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgTexturesShadersDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-textures-shaders";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 VkImage/VkImageView 的创建与图像布局转换
+- 掌握 VkSampler 的配置与纹理采样参数
+- 理解描述符池、描述符集布局与描述符集的分配和绑定
+- 学会推送常量的使用与 GLSL 到 SPIR-V 的编译流程
+</Objectives>
+
+## 直觉引入
+
+想象一个厨房：食材（纹理数据）放在冰箱（VkImage）里，每个食材上有标签（VkImageView）说明怎么取用。菜谱（着色器）需要某些食材时，不是直接去冰箱拿，而是通过厨师长（描述符集）分配的取餐单（描述符）来获取。推送常量则像是厨师临时喊的一句「少放盐」，直接传递少量即时指令。
+
+Vulkan 的纹理-着色器系统就是这套机制：图像存储数据，采样器定义采样方式，描述符集把资源绑定到着色器。
+
+## 概念讲解
+
+### 图像与图像视图
+
+<Term def="VkImage 是 Vulkan 中的 GPU 图像资源，存储纹理或渲染目标的像素数据，需绑定设备内存。">VkImage</Term> 是 GPU 上的图像资源，创建时需指定格式、尺寸、用途和 tiling 模式：
+
+```c
+VkImageCreateInfo imageInfo = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+    .imageType = VK_IMAGE_TYPE_2D,
+    .format = VK_FORMAT_R8G8B8A8_SRGB,
+    .extent = { width, height, 1 },
+    .mipLevels = 1,
+    .arrayLayers = 1,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .tiling = VK_IMAGE_TILING_OPTIMAL,
+    .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+};
+vkCreateImage(device, &imageInfo, NULL, &textureImage);
+```
+
+<Term def="VkImageView 是对 VkImage 的子资源视图，定义如何解释图像数据（格式、范围、类型）。">VkImageView</Term> 是图像的「查看方式」：
+
+```c
+VkImageViewCreateInfo viewInfo = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+    .image = textureImage,
+    .viewType = VK_IMAGE_VIEW_TYPE_2D,
+    .format = VK_FORMAT_R8G8B8A8_SRGB,
+    .subresourceRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0, .levelCount = 1,
+        .baseArrayLayer = 0, .layerCount = 1,
+    },
+};
+```
+
+### 图像布局转换
+
+图像在不同用途间需要转换布局，通过 <Term def="图像内存屏障（VkImageMemoryBarrier）定义图像布局转换的源/目标布局、子资源范围和内存访问同步。">VkImageMemoryBarrier</Term> 实现：
+
+```c
+VkImageMemoryBarrier barrier = {
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+    .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+    .image = textureImage,
+    .subresourceRange = { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, ... },
+};
+vkCmdPipelineBarrier(cmdBuffer,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+    0, NULL, 0, NULL, 1, &barrier);
+```
+
+### 采样器
+
+<Term def="VkSampler 定义纹理采样参数，包括过滤模式、寻址模式、各向异性过滤和 LOD 范围。">VkSampler</Term> 控制着色器如何采样纹理：
+
+```c
+VkSamplerCreateInfo samplerInfo = {
+    .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+    .magFilter = VK_FILTER_LINEAR,
+    .minFilter = VK_FILTER_LINEAR,
+    .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+    .anisotropyEnable = VK_TRUE,
+    .maxAnisotropy = 16.0f,
+    .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+    .unnormalizedCoordinates = VK_FALSE,
+};
+```
+
+### 描述符集
+
+<Term def="描述符集是将资源（uniform 缓冲、纹理、存储缓冲）绑定到着色器的机制，通过描述符池分配。">描述符集（Descriptor Set）</Term> 是着色器访问资源的桥梁：
+
+```c
+// 描述符集布局
+VkDescriptorSetLayoutBinding layoutBinding = {
+    .binding = 0,
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+    .descriptorCount = 1,
+    .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+};
+
+// 分配并更新
+VkDescriptorSetAllocateInfo allocInfo = {
+    .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+    .descriptorPool = descriptorPool,
+    .descriptorSetCount = 1,
+    .pSetLayouts = &descriptorSetLayout,
+};
+vkAllocateDescriptorSets(device, &allocInfo, &descriptorSet);
+
+VkDescriptorImageInfo imageInfo = {
+    .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    .imageView = textureImageView,
+    .sampler = textureSampler,
+};
+VkWriteDescriptorSet descriptorWrite = {
+    .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+    .dstSet = descriptorSet,
+    .dstBinding = 0,
+    .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+    .pImageInfo = &imageInfo,
+};
+vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, NULL);
+```
+
+### 推送常量
+
+<Term def="推送常量是通过命令缓冲直接向着色器传递少量数据（通常 ≤128 字节）的机制，无需描述符。">推送常量（Push Constants）</Term> 适合小量频繁更新的数据：
+
+```c
+// 命令缓冲中
+vkCmdPushConstants(cmdBuffer, pipelineLayout,
+    VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(MVP), &mvpMatrix);
+```
+
+## 交互Demo
+
+> 猜一猜：如果纹理上传后忘记做布局转换（UNDEFINED → SHADER_READ_ONLY），片段着色器采样时会怎样？
+
+<VkgTexturesShadersDiagram />
+
+<Stepper>
+  <Step title="创建图像并上传数据">
+    创建 `VkImage`，绑定内存，用 staging buffer 把像素数据通过 `vkCmdCopyBufferToImage` 上传。上传前需把图像布局转到 `TRANSFER_DST_OPTIMAL`，上传后转到 `SHADER_READ_ONLY_OPTIMAL`。
+  </Step>
+  <Step title="创建视图与采样器">
+    为图像创建 `VkImageView`（指定格式和子资源范围），创建 `VkSampler`（配置过滤模式和寻址模式）。采样器独立于图像，可被多个纹理共享。
+  </Step>
+  <Step title="绑定描述符集并使用">
+    创建描述符池和描述符集布局，分配描述符集并写入图像+采样器信息。录制命令时 `vkCmdBindDescriptorSets` 绑定到管线，片段着色器中通过 `sampler2D` 采样。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+GLSL 着色器与描述符绑定：
+
+```glsl
+// vertex.glsl
+#version 450
+
+layout(location = 0) in vec3 inPosition;
+layout(location = 1) in vec2 inTexCoord;
+
+layout(push_constant) uniform PushConstants {
+    mat4 mvp;
+} pc;
+
+layout(location = 0) out vec2 fragTexCoord;
+
+void main() {
+    gl_Position = pc.mvp * vec4(inPosition, 1.0);
+    fragTexCoord = inTexCoord;
+}
+
+// fragment.glsl
+#version 450
+
+layout(binding = 0) uniform sampler2D texSampler;
+layout(location = 0) in vec2 fragTexCoord;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(texSampler, fragTexCoord);
+}
+```
+
+```bash
+# 编译 GLSL → SPIR-V
+glslangValidator -V vertex.glsl -o vert.spv
+glslangValidator -V fragment.glsl -o frag.spv
+```
+
+## 常见误区
+
+<Callout type="trap">
+在着色器中绑定了纹理但忘记更新描述符集。`vkAllocateDescriptorSets` 只分配空的描述符集，必须用 `vkUpdateDescriptorSets` 写入实际的 ImageView 和 Sampler 信息。不更新就使用会导致采样到未初始化数据或验证层报错。
+</Callout>
+
+<Callout type="trap">
+把推送常量当作 uniform 缓冲的替代品。推送常量有严格的大小限制（通常 128 字节，部分设备 256 字节），超大会导致创建管线布局失败。大矩阵数据（如多个 MVP 矩阵）应使用 uniform 缓冲，推送常量只用于少量频繁变化的小数据（如一个 MVP 矩阵或几个 flag）。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. 为什么需要 VkImageView 而不能直接在着色器中使用 VkImage？
+   <Answer>
+   VkImage 是原始的 GPU 图像资源，只存储像素数据，不定义如何解释。VkImageView 指定了图像的解释方式：格式（可做格式重解释）、视图类型（2D/3D/Cube）、mip 层范围和数组层范围。着色器通过描述符绑定的是 ImageView 而非 Image，因为驱动需要知道如何采样和过滤这个图像。一个 Image 可以创建多个 View（如 Cube Map 的 6 个面各有独立 View）。
+   </Answer>
+
+2. 描述符池、描述符集布局和描述符集三者是什么关系？
+   <Answer>
+   描述符集布局定义着色器需要的资源绑定结构（哪些 binding、什么类型、哪个阶段使用）。描述符池是描述符集的内存分配器，按类型和数量预分配内存。描述符集从池中分配，必须符合某个布局。创建管线布局时引用描述符集布局，运行时分配描述符集、写入资源信息、绑定到管线。一个布局可分配多个描述符集（如每帧或每个物体一个）。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="VkImage">
+    GPU 上的图像资源，存储纹理或渲染目标的像素数据。创建时需指定格式、尺寸、用途和 tiling 模式，并绑定设备内存。
+  </GlossaryItem>
+  <GlossaryItem term="VkSampler">
+    纹理采样参数对象，定义过滤模式（线性/最近）、寻址模式（重复/镜像/钳制）、各向异性过滤和 LOD 范围。独立于图像，可被多个纹理共享。
+  </GlossaryItem>
+  <GlossaryItem term="描述符集 (Descriptor Set)">
+    将资源（uniform 缓冲、纹理、存储缓冲）绑定到着色器的机制。从描述符池分配，符合描述符集布局，通过 vkCmdBindDescriptorSets 绑定到管线。
+  </GlossaryItem>
+  <GlossaryItem term="推送常量 (Push Constants)">
+    通过命令缓冲直接向着色器传递少量数据（通常 ≤128 字节）的机制。无需描述符，更新极快，适合频繁变化的小数据如 MVP 矩阵。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />

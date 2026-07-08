@@ -1,0 +1,119 @@
+---
+title: "现代OpenGL实践"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "实例化、间接绘制、DSA等现代技术"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlrModernOpenglDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-modern-opengl";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握实例化渲染(Instancing)
+- 理解间接绘制(Indirect Draw)
+- 了解DSA(Direct State Access)
+- 学会现代OpenGL性能优化策略
+</Objectives>
+
+## 直觉引入
+
+现代OpenGL就像从手工操作升级到自动化——实例化一次Draw Call画万个物体(如森林)，间接绘制让GPU自己决定画什么(CPU不参与)，DSA直接操作对象状态(不用先绑定)。核心是减少CPU-GPU通信。
+
+## 概念讲解
+
+<Term def="用一次Draw Call绘制多个相同网格的实例">实例化渲染</Term><Term def="Draw Call参数存GPU缓冲，CPU不参与">间接绘制</Term><Term def="Direct State Access，直接操作对象状态无需绑定">DSA</Term><Term def="持续有效的缓冲指针，实现零拷贝更新">持久映射</Term>
+
+### 实例化渲染
+glDrawArraysInstanced / glDrawElementsInstanced。每个实例通过gl_InstanceID区分，或用实例属性数组。
+
+### 间接绘制
+glMultiDrawElementsIndirect：参数存GPU缓冲，一次调用多次绘制。支持GPU端剔除。
+
+### DSA (OpenGL 4.5)
+glNamedBufferStorage替代glBindBuffer+glBufferData。代码更清晰减少绑定开销。
+
+### 性能优化
+减少Draw Call(实例化/合批)、减少CPU-GPU通信(间接绘制)、减少状态切换(排序)。
+
+## 交互Demo
+
+> 猜一猜：实例化渲染能减少多少Draw Call？
+
+<GlrModernOpenglDiagram />
+
+<Stepper>
+<Step title="第一步：实例化渲染">
+用glDrawArraysInstanced一次绘制多个相同网格。每个实例通过gl_InstanceID获取不同位置。
+</Step>
+<Step title="第二步：间接绘制">
+Draw Call参数存GPU缓冲，glMultiDrawElementsIndirect一次调用多个绘制命令。支持GPU端剔除。
+</Step>
+<Step title="第三步：DSA与持久映射">
+用DSA直接操作对象状态减少绑定。持久映射实现零拷贝数据更新。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 实例化渲染: 一次Draw Call画1000个立方体
+glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 1000);
+
+// 顶点着色器中获取实例偏移
+#version 330 core
+layout(location=0) in vec3 aPos;
+layout(location=3) in vec3 aOffset; // 实例属性
+void main() {
+    vec3 pos = aPos + aOffset;
+    gl_Position = mvp * vec4(pos, 1.0);
+}
+// 配置实例属性(每实例更新一次)
+glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)0);
+glVertexAttribDivisor(3, 1); // 每实例更新
+```
+
+glVertexAttribDivisor(attr, 1)使属性每实例更新一次而非每顶点。实例化可将1000个Draw Call减为1个。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 每个实例用独立VBO。
+**原因 →** 想给每个实例不同数据。
+**修法 →** 用实例属性数组(一个VBO存所有实例偏移)配glVertexAttribDivisor。一次绑定一次Draw Call。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 用CPU排序物体再逐个绘制。
+**原因 →** 按状态排序减少切换。
+**修法 →** 排序是对的但逐个绘制Draw Call太多。先排序再实例化批量绘制同材质物体。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：什么是实例化渲染？
+
+<Answer>
+用一次Draw Call绘制多个相同网格的实例。每个实例通过gl_InstanceID或实例属性获取不同变换。适合树木、草地、粒子。
+</Answer>
+
+**问题**：间接绘制有什么优势？
+
+<Answer>
+Draw Call参数存GPU缓冲，CPU不参与。一次调用多个绘制命令，减少CPU-GPU通信，支持GPU端剔除。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="实例化渲染">用一次Draw Call绘制多个相同网格的实例。</GlossaryItem>
+<GlossaryItem term="间接绘制">Draw Call参数存GPU缓冲，CPU不参与。</GlossaryItem>
+<GlossaryItem term="DSA">Direct State Access，直接操作对象状态无需绑定。</GlossaryItem>
+<GlossaryItem term="持久映射">持续有效的缓冲指针，实现零拷贝数据更新。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />

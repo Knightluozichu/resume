@@ -1,0 +1,132 @@
+---
+title: "GLSL ES 着色器语言"
+type: C
+section: "计算机图形学与渲染"
+order: 2
+description: "GLSL ES 的类型、限定符与内建变量"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogShaderLanguageDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-shader-language";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分 GLSL ES 的标量、向量与矩阵类型
+- 能说明 in/out、uniform、attribute/varying 限定符的用途
+- 能解释精度限定符在移动端的意义
+- 能回答：顶点与片元着色器如何通过 varying 传值？
+</Objectives>
+
+## 直觉引入
+
+GLSL ES 是给 GPU 说的「方言」：语法像 C，但天生擅长并行算向量矩阵。顶点着色器对每个顶点跑一遍，片元着色器对每个像素跑一遍，两者之间用「管道」传数据——这个管道就是 varying（ES3 里叫 in/out）。
+
+你可以把着色器想成两个工人：顶点工人加工每个顶点（算位置、传颜色），把半成品通过管道递给片元工人；片元工人对每个像素拿到管道里插值后的数据，算出最终颜色。uniform 则是两人共用的「公告板」，整次绘制不变。
+
+## 概念讲解
+
+### 类型
+<Term def="GPU 并行运算的基本数据类型">GLSL 类型</Term>：标量 `float/int/bool`、向量 `vec2/3/4`（可 `.xyz/.rgba` 分量访问）、矩阵 `mat2/3/4`、采样器 `sampler2D`。
+
+### 限定符
+- <Term def="每次绘制不变、所有顶点片元共享的全局变量">uniform</Term>：全局常量，如变换矩阵、光源参数。
+- **attribute（ES2）/ in（ES3 顶点）**：每顶点不同的输入，如位置、UV。
+- **varying（ES2）/ out→in（ES3）**：顶点输出、片元输入，管线自动插值。
+- <Term def="声明浮点精度的限定符">精度限定符</Term>：`highp/mediump/lowp`，片元着色器默认无 float 精度，必须显式声明。
+
+### 内建变量
+顶点：`gl_Position`（输出裁剪空间位置）、`gl_PointSize`。片元：`gl_FragColor`（ES2 输出颜色）/ ES3 用 `out vec4` 自定义输出、`gl_FragCoord`（像素坐标）。
+
+## 交互Demo
+
+> 猜一猜：顶点着色器输出一个 varying 颜色，片元收到的颜色和顶点输出的一样吗？
+
+<DogShaderLanguageDiagram />
+
+<Stepper>
+<Step title="第一步：顶点着色器">
+对每顶点读 attribute（位置、UV），用 uniform 变换矩阵算 gl_Position，把颜色/UV 写入 out varying。
+</Step>
+<Step title="第二步：管线插值">
+光栅化阶段对图元覆盖的每个像素，把顶点 varying 按重心坐标插值，得到片元级数据。
+</Step>
+<Step title="第三步：片元着色器">
+对每像素读 in varying（插值后的颜色/UV），采样纹理、算光照，写入 out 颜色到帧缓冲。
+</Step>
+</Stepper>
+
+## 代码对照
+
+GLSL ES 3.00 顶点与片元着色器：
+
+```glsl
+// 顶点着色器 #version 300 es
+#version 300 es
+precision highp float;                 // 顶点默认 highp，写明更稳
+in vec3 a_pos;                         // 每顶点属性
+in vec2 a_uv;
+uniform mat4 u_mvp;                    // 全局变换矩阵
+out vec2 v_uv;                         // 输出给片元（varying）
+out vec3 v_color;
+void main() {
+  gl_Position = u_mvp * vec4(a_pos, 1.0);
+  v_uv = a_uv;
+  v_color = a_pos;                     // 用位置当颜色示意
+}
+
+// 片元着色器 #version 300 es
+#version 300 es
+precision mediump float;               // 片元必须显式声明 float 精度
+in vec2 v_uv;                          // 接收插值后的 varying
+in vec3 v_color;
+uniform sampler2D u_tex;               // 纹理采样器
+out vec4 fragColor;                    // 自定义输出（取代 gl_FragColor）
+void main() {
+  vec4 tex = texture(u_tex, v_uv);
+  fragColor = tex * vec4(v_color, 1.0);
+}
+```
+
+`out`/`in` 配对：顶点 `out vec2 v_uv` 与片元 `in vec2 v_uv` 同名即自动连接，管线负责插值。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 片元着色器编译失败报「no default precision for float」。
+**原因 →** GLSL ES 片元着色器没有默认 float 精度，必须显式声明，顶点则有默认 highp。
+**修法 →** 在片元着色器顶部加 `precision mediump float;`（或 highp），整文件生效。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 顶点输出的 varying 在片元里拿不到或值乱跳。
+**原因 →** 顶点的 out 与片元的 in 名称不一致，或类型不匹配，管线没建立连接。
+**修法 →** 确保两端 varying 同名同类型（如都 `vec2 v_uv`），ES3 靠名称匹配，ES2 靠 varying 声明匹配，名称错就断开。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：uniform、attribute/in、varying/out-in 三类限定符分别什么用途？哪个会在管线中被插值？
+
+<Answer>
+uniform 是每次绘制不变的全局常量（如变换矩阵、光源），所有顶点片元共享；attribute（ES2）/in（ES3 顶点）是每顶点不同的输入（如位置、UV）；varying（ES2）/out-in（ES3）是顶点输出到片元输入的数据，会被光栅化按重心坐标插值。varying/out-in 是会被插值的那个。
+</Answer>
+
+**问题**：为什么片元着色器必须显式声明 float 精度？mediump 和 highp 各适合什么场景？
+
+<Answer>
+GLSL ES 规定片元着色器无默认 float 精度（顶点默认 highp），不声明会编译失败。highp 精度高但慢、可能不支持，适合需要精度的计算（如位置变换）；mediump 精度足够、性能好，适合颜色、UV、普通片元运算，是移动端常用默认。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="uniform">每次绘制不变、所有顶点片元共享的全局变量，如变换矩阵、光源参数。</GlossaryItem>
+<GlossaryItem term="varying">顶点输出、片元输入的变量，光栅化阶段按重心坐标自动插值。</GlossaryItem>
+<GlossaryItem term="精度限定符">highp/mediump/lowp，声明浮点精度；片元着色器必须显式声明 float 精度。</GlossaryItem>
+<GlossaryItem term="采样器">sampler2D 等，用于在着色器中读取纹理的颜色类型。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

@@ -1,0 +1,111 @@
+---
+title: "高级缓冲技术"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "UBO/SSBO/Transform Feedback等高级缓冲"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlrAdvancedBuffersDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-advanced-buffers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解UBO(Uniform Buffer Object)的原理
+- 掌握SSBO与计算着色器
+- 了解Transform Feedback
+- 能选择合适的缓冲类型
+</Objectives>
+
+## 直觉引入
+
+高级缓冲就像不同的储物柜——UBO是共享储物柜(所有着色器都能读，放常用数据如矩阵)，SSBO是大型仓库(可读写，适合粒子数据)，Transform Feedback是传送带(捕获顶点着色器输出到缓冲)。
+
+## 概念讲解
+
+<Term def="Uniform缓冲对象，让多个着色器程序共享uniform数据">UBO</Term><Term def="Shader Storage缓冲对象，可读写随机访问，大小无限制">SSBO</Term><Term def="捕获顶点着色器输出到缓冲而不光栅化">Transform Feedback</Term><Term def="持续映射的缓冲指针，实现零拷贝更新">Persistent Mapping</Term>
+
+### UBO
+多个着色器共享同一组uniform(如MVP矩阵)。用Uniform Block和Binding Point关联。
+
+### SSBO
+可读写、随机访问、大小无限制。适合计算着色器做GPU粒子、排序等。
+
+### Transform Feedback
+捕获顶点着色器(或几何着色器)输出到缓冲，下一帧用作输入。适合GPU粒子系统。
+
+## 交互Demo
+
+> 猜一猜：GPU粒子系统为什么用Transform Feedback而不是CPU更新？
+
+<GlrAdvancedBuffersDiagram />
+
+<Stepper>
+<Step title="第一步：理解UBO">
+创建UBO存储共享uniform(如ViewProjection矩阵)，多个着色器通过binding point访问同一数据。
+</Step>
+<Step title="第二步：使用SSBO">
+创建SSBO存储大数据(如粒子位置)，计算着色器读写更新，渲染时直接使用。
+</Step>
+<Step title="第三步：Transform Feedback">
+配置捕获变量，渲染时输出到缓冲而非屏幕，下帧作为顶点输入。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// UBO: 共享ViewProjection矩阵
+GLuint ubo;
+glGenBuffers(1, &ubo);
+glBindBuffer(GL_UNIFORM_BUFFER, ubo);
+glBufferData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
+glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo); // binding=0
+// 着色器中: layout(std140, binding=0) uniform Matrices {
+//     mat4 view; mat4 projection;
+// };
+```
+
+UBO通过binding point共享数据，避免每个着色器程序重复设置uniform。layout(std140)保证内存布局一致。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 用UBO存储每帧变化的数据。
+**原因 →** UBO可以存任何uniform。
+**修法 →** UBO适合共享只读数据(如VP矩阵)。频繁变化的大数据用SSBO+持久映射更高效，避免每帧glBufferSubData。
+</Callout>
+
+<Callout type="trap">
+**现象 →** SSBO当VBO用。
+**原因 →** SSBO也能存顶点数据。
+**修法 →** SSBO绑定到GL_ARRAY_BUFFER可能有性能问题。SSBO设计用于随机读写(计算着色器)，VBO用于顺序读取(顶点拉取)。按用途选择。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：UBO是什么？有什么优势？
+
+<Answer>
+Uniform缓冲对象，让多个着色器程序共享同一组uniform数据。优势：避免重复设置uniform、可存更多数据、跨程序共享。
+</Answer>
+
+**问题**：SSBO和UBO的区别？
+
+<Answer>
+SSBO可读写随机访问、大小无限制、适合计算着色器。UBO只读、有大小限制(64KB)、适合共享变换矩阵等常量。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="UBO">Uniform缓冲对象，让多个着色器程序共享uniform数据。</GlossaryItem>
+<GlossaryItem term="SSBO">Shader Storage缓冲对象，可读写随机访问，大小无限制。</GlossaryItem>
+<GlossaryItem term="Transform Feedback">捕获顶点着色器输出到缓冲区而不经过光栅化。</GlossaryItem>
+<GlossaryItem term="Persistent Mapping">持续映射的缓冲指针，实现零拷贝数据更新。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />

@@ -1,0 +1,134 @@
+---
+title: "跨平台兼容性"
+type: D
+section: "计算机图形学与渲染"
+order: 7
+description: "特性检测、扩展加载与多平台降级策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogCrossPlatformDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-cross-platform";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分能力检测与版本检测的取舍
+- 能写出扩展加载与使用流程
+- 能针对不同平台设计降级渲染路径
+- 能回答：为什么不能只靠版本号判断某特性可用？
+</Objectives>
+
+## 直觉引入
+
+不同设备、浏览器、驱动的 OpenGL/WebGL 能力参差不齐：桌面可能支持 4.6，手机只到 ES3.0，老浏览器只有 WebGL1，有的扩展这台有那台没有。如果代码假设「大家都有」，跑别的机器就崩。
+
+跨平台的核心是「先问能不能，再决定怎么用」：用<Term def="运行时查询某特性是否可用而非假设其存在的做法">特性检测</Term>查扩展与上限，能用高端路径就用、不能用就降级到次优方案，保证处处能跑只是效果有差。
+
+## 概念讲解
+
+### 检测手段
+- `getContext("webgl2")` 是否为 null：判断 WebGL2。
+- `gl.getSupportedExtensions()`：列出所有可用扩展。
+- `gl.getParameter(MAX_*）`：查纹理大小、UBO 大小等上限。
+- 着色器编译：用 `getShaderInfoLog` 验证 GLSL 是否被接受。
+
+### 扩展加载
+<Term def="在运行时获取扩展函数指针以使用非核心功能">扩展加载</Term>：WebGL 用 `gl.getExtension("NAME")` 返回扩展对象（非 null 即可用）；桌面用 GLAD/GLEW 加载函数指针。用前必查，查到才用。
+
+### 降级路径
+按能力分级：WebGL2+float-blend 走 HDR 路径；只有 WebGL2 走 LDR；只有 WebGL1 用扩展或简化效果。每条路径独立写，运行时按检测结果选一条。
+
+### GLSL 兼容
+ES2 用 `#version 100` + attribute/varying；ES3 用 `#version 300 es` + in/out；桌面用 `#version 330 core`。同一效果常需准备多份着色器源。
+
+## 交互Demo
+
+> 猜一猜：只靠 gl.getParameter(VERSION) 字符串判断「支持实例化」，可靠吗？
+
+<DogCrossPlatformDiagram />
+
+<Stepper>
+<Step title="第一步：查能力">
+运行时检测 WebGL2、扩展列表、各 MAX 上限，记录可用特性集，而非假设版本即能力。
+</Step>
+<Step title="第二步：选路径">
+按检测结果分级：高端走实例化+UBO+HDR，中端走 WebGL2+LDR，低端走 WebGL1+扩展或简化。
+</Step>
+<Step title="第三步：备降级">
+每条路径准备对应 GLSL 源与回退实现，缺失特性时自动降到次优效果，保证处处可跑。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL 特性检测与降级：
+
+```js
+const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+const isWebGL2 = !!gl.getParameter && gl.getParameter(gl.VERSION).includes("WebGL 2.0")
+                 || canvas.getContext("webgl2") !== null;
+
+// 检测扩展
+const extVAO = (!isWebGL2) ? gl.getExtension("OES_vertex_array_object") : null;
+const extInst = (!isWebGL2) ? gl.getExtension("ANGLE_instanced_arrays") : null;
+const floatBlend = gl.getExtension("EXT_float_blend");
+
+// 查上限
+const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+const maxSamples = isWebGL2 ? gl.getParameter(gl.MAX_SAMPLES) : 0;
+
+// 按能力选渲染路径
+let renderPath;
+if (isWebGL2 && floatBlend)      renderPath = "HDR";
+else if (isWebGL2)               renderPath = "LDR";
+else if (extVAO && extInst)      renderPath = "WebGL1+ext";
+else                             renderPath = "WebGL1-min";
+
+// WebGL1 用扩展模拟 VAO
+const vaoExt = extVAO;
+const myVAO = isWebGL2 ? gl.createVertexArray()
+                       : (vaoExt ? vaoExt.createVertexArrayOES() : null);
+```
+
+`getExtension` 返回 null 即不可用，绝不在未检测时调用扩展函数。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 只看版本号假设某特性可用，到老设备报「函数未定义」。
+**原因 →** 版本号不等于扩展支持，同版本不同驱动/浏览器扩展集合不同。
+**修法 →** 用 getExtension 运行时查每个扩展、getParameter 查上限，查到才用；版本号仅作粗筛。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 只写了高端路径，低端设备直接黑屏或崩溃。
+**原因 →** 没设计降级，缺特性时着色器编译失败或函数未定义。
+**修法 →** 按能力分级准备多套 GLSL 与回退实现，运行时检测后选一条，缺特性自动降到次优效果。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么不能只靠版本号判断某特性可用？正确的检测姿势是什么？
+
+<Answer>
+版本号只反映核心 API 等级，不反映扩展支持与上限差异——同版本不同驱动/浏览器的扩展集合、纹理大小上限等都不同，假设「版本够高就一定有」会在老设备翻车。正确姿势是运行时用 getExtension 查每个扩展、getParameter 查 MAX 上限、着色器编译日志验证 GLSL，查到才用，版本号仅作粗筛。
+</Answer>
+
+**问题**：如何为不同平台设计降级渲染路径？以 HDR 后处理为例。
+
+<Answer>
+按能力分级：WebGL2 + EXT_float_blend 走 HDR 路径（浮点渲染目标 + 线性色调映射）；只有 WebGL2 走 LDR（RGBA8 渲染目标 + 简化调色）；只有 WebGL1 用 OES_vertex_array_object/ANGLE_instanced_arrays 扩展或简化几何。每条路径独立 GLSL 源与回退实现，运行时检测后选一条，缺特性自动降级，保证处处可跑只是效果有差。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="特性检测">运行时查询某特性是否可用而非假设其存在，用 getExtension/getParameter/编译日志验证。</GlossaryItem>
+<GlossaryItem term="扩展">非核心的可选功能，需运行时 getExtension 加载，返回 null 即不可用。</GlossaryItem>
+<GlossaryItem term="降级路径">按能力分级的多套渲染实现，高端用不上时自动退到次优方案。</GlossaryItem>
+<GlossaryItem term="GLSL 版本">ES2 用 #version 100+attribute/varying，ES3 用 #version 300 es+in/out，桌面用 #version 330 core。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

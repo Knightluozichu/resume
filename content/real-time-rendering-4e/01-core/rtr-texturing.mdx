@@ -1,0 +1,107 @@
+---
+title: "纹理与采样技术"
+type: B
+section: "计算机图形学与渲染"
+order: 4
+description: "UV映射、过滤模式与Mipmap多级渐远纹理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrTexturingDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-texturing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释UV坐标如何把2D纹理映射到3D表面
+- 能区分最近邻、双线性、三线性过滤的效果差异
+- 能解释Mipmap如何解决远处纹理闪烁问题
+- 能回答：各向异性过滤解决了什么问题？
+</Objectives>
+
+## 直觉引入
+
+想象你在包装礼物。纹理就是包装纸上的图案，UV坐标就是「这张纸怎么贴到盒子上」的说明——哪块纸贴哪个面，怎么对齐。如果盒子很大但纸很小（放大），你需要插值补全像素；如果盒子很小但纸很大（缩小），你需要把多个像素合并成一个。
+
+Mipmap就像准备多张不同分辨率的包装纸——近处用高精度纸，远处用低精度纸，避免远处闪烁。
+
+## 概念讲解
+
+### 纹理映射与采样
+
+<RtrTexturingDiagram />
+
+<Term def="UV映射是将2D纹理坐标(u,v)映射到3D模型表面的过程">UV映射</Term>是纹理技术的核心。每个顶点除了位置还有UV坐标，光栅化阶段插值后，片段着色器用UV从纹理采样。
+
+<Term def="纹理过滤决定在UV坐标非整数时如何从纹素获取颜色">纹理过滤</Term>分放大过滤和缩小过滤。放大时像素多于纹素，用双线性插值；缩小时纹素多于像素，需要<Term def="Mipmap是预计算的多级渐远纹理，每级分辨率为上一级的一半">Mipmap</Term>避免走样。
+
+<Term def="各向异性过滤在斜角观察时沿投影方向做非对称采样，减少模糊">各向异性过滤</Term>（AF）解决斜面纹理模糊问题。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：UV映射基础">理解UV坐标空间[0,1]x[0,1]如何映射到3D表面。纹理坐标插值是光栅化的关键功能。</Step>
+<Step title="第二步：过滤与Mipmap">
+放大用双线性插值平滑像素，缩小用Mipmap+三线性消除走样。观察不同过滤模式的效果差异。
+<RtrTexturingDiagram />
+</Step>
+<Step title="第三步：高级纹理技术">纹理不只能存颜色——法线贴图存法线、阴影贴图存深度、查找表存预计算数据。纹理是GPU最通用的数据容器。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 纹理采样与过滤
+uniform sampler2D diffuseMap;
+uniform sampler2D normalMap;
+
+// 基础采样（GPU自动处理过滤和Mipmap）
+vec4 color = texture(diffuseMap, TexCoords);
+
+// 手动指定Mipmap级别（用于特殊效果）
+vec4 lodColor = textureLod(diffuseMap, TexCoords, 2.0); // 强制用Level 2
+
+// 各向异性采样（需要扩展）
+// float anisoLevel = 4.0;
+// vec4 afColor = textureGrad(diffuseMap, TexCoords, dFdx(TexCoords)*anisoLevel, dFdy(TexCoords)*anisoLevel);
+
+// 法线贴图：从纹理解压法线
+vec3 normal = texture(normalMap, TexCoords).rgb * 2.0 - 1.0;
+normal = normalize(normal);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为Mipmap浪费显存。**
+Mipmap只增加33%的显存（1+1/4+1/16+...=4/3），但大幅减少远处纹理采样带宽，提升性能的同时消除闪烁。这是性价比极高的技术。
+</Callout>
+
+<Callout type="trap">
+**误区：所有情况都用三线性过滤。**
+三线性过滤在两个Mipmap级别间插值，斜角观察时仍会模糊。各向异性过滤(AF)沿投影方向非对称采样，效果远好于三线性，适合地面、墙壁等斜面纹理。
+</Callout>
+
+<Exercises>
+**问题 1**：Mipmap如何解决远处纹理闪烁问题？
+
+<Answer>
+远处物体在屏幕上只占少量像素，但原始纹理分辨率很高，采样时跳过大量纹素导致走样（闪烁）。Mipmap预生成多级低分辨率版本，远处物体自动选择低级别纹理，每像素采样纹素数趋于1:1，消除走样。代价是增加33%显存。
+</Answer>
+
+**问题 2**：各向异性过滤解决了什么问题？三线性为什么不够？
+
+<Answer>
+三线性过滤在各向同性（圆形）区域采样，但斜面投影到屏幕时纹理变形为椭圆，各向同性采样会混入过多纹素导致模糊。各向异性过滤沿椭圆长轴方向做非对称采样（如16x），保留更多沿观察方向的细节，大幅减少斜面模糊。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="UV映射">将2D纹理坐标(u,v)映射到3D模型表面的过程，是纹理贴图的基础。</GlossaryItem>
+<GlossaryItem term="Mipmap">预计算的多级渐远纹理链，每级分辨率为上一级一半，用于减少远处纹理走样。</GlossaryItem>
+<GlossaryItem term="各向异性过滤">沿投影方向非对称采样的纹理过滤方式，解决斜面纹理模糊问题。</GlossaryItem>
+<GlossaryItem term="纹素">Texel，纹理中的单个像素，是纹理最小单元，类似屏幕的像素。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

@@ -1,0 +1,138 @@
+---
+title: "图形渲染管线"
+type: B
+section: "计算机图形学与渲染"
+order: 1
+description: "从顶点数据到屏幕像素的完整流水线解析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4GraphicsPipelineDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-graphics-pipeline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解图形渲染管线的完整流程与各阶段职责
+- 掌握顶点着色器与片段着色器的执行模型
+- 明确可编程阶段与固定功能阶段的区别
+- 能根据管线阶段定位渲染问题
+</Objectives>
+
+## 直觉引入
+
+渲染管线就像汽车装配线：原材料（顶点数据）进入流水线，经过多道工序（顶点着色、图元装配、光栅化、片段着色），每道工序都在前一道的基础上加工，最终产出成品（屏幕像素）。每道工序都可以独立优化，但整体速度取决于最慢的工序。
+
+关键在于理解流水线是「串行阶段、并行数据」——阶段之间串行，但每个阶段内部对大量顶点/片段并行处理。这就是 GPU 的设计哲学。
+
+## 概念讲解
+
+渲染管线从顶点数据到屏幕像素经历五个核心阶段：
+
+<Term def="逐顶点执行的着色器，负责坐标变换和属性计算">顶点着色器</Term>是第一个可编程阶段，每个顶点执行一次。<Term def="将顶点按绘制模式组装成图元并进行裁剪">图元装配</Term>将独立顶点组装为三角形等图元。<Term def="将图元扫描转换为像素片段">光栅化</Term>是 3D 到 2D 的桥梁。<Term def="逐片段计算最终颜色的着色器">片段着色器</Term>是另一个可编程阶段，执行次数远多于顶点着色器。
+
+### 阶段详解
+- **顶点输入**：CPU 将顶点数据（位置、法线、UV 等）上传到 GPU
+- **顶点着色器**：MVP 变换、逐顶点属性计算
+- **图元装配**：组装图元、裁剪、背面剔除
+- **光栅化**：扫描转换、属性插值（重心坐标）
+- **片段着色器**：纹理采样、光照计算、最终颜色
+- **逐片段操作**：深度测试、模板测试、混合、写入帧缓冲
+
+### 可编程 vs 固定功能
+顶点着色器和片段着色器是可编程的（开发者写 GLSL 代码），光栅化和深度测试是固定功能的（硬件实现，通过状态配置）。这种设计平衡了灵活性与性能。
+
+## 交互 Demo
+
+> 猜一猜：一个覆盖 10000 像素的三角形，顶点着色器和片段着色器分别执行多少次？
+
+<Cg4GraphicsPipelineDiagram />
+
+<Stepper>
+<Step title="第一步：顶点处理">
+3 个顶点进入顶点着色器，各执行 1 次（共 3 次），完成 MVP 变换，输出裁剪空间坐标和插值属性。
+</Step>
+<Step title="第二步：图元装配与光栅化">
+3 个顶点组装成 1 个三角形，经裁剪和背面剔除后光栅化，扫描转换生成约 10000 个片段。
+</Step>
+<Step title="第三步：片段处理">
+10000 个片段进入片段着色器，各执行 1 次（共 10000 次），计算光照和纹理后经深度测试写入帧缓冲。
+</Step>
+</Stepper>
+
+## 代码对照
+
+一个最小化的渲染管线 C++ + GLSL 实现：
+
+```cpp
+// C++ 端：配置管线状态并绘制
+// 1. 上传顶点数据
+GLuint VAO, VBO;
+glGenVertexArrays(1, &VAO);
+glGenBuffers(1, &VBO);
+glBindVertexArray(VAO);
+glBindBuffer(GL_ARRAY_BUFFER, VBO);
+glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+// 2. 设置顶点属性指针
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+glEnableVertexAttribArray(0);
+// 3. 使用着色器程序并绘制
+glUseProgram(shaderProgram);
+glDrawArrays(GL_TRIANGLES, 0, 3); // 3个顶点 = 1个三角形
+```
+
+```glsl
+// 顶点着色器：管线第一阶段
+#version 330 core
+layout(location = 0) in vec3 aPos;
+void main() {
+    gl_Position = vec4(aPos, 1.0); // 直接输出（无变换）
+}
+```
+
+```glsl
+// 片段着色器：管线最后可编程阶段
+#version 330 core
+out vec4 FragColor;
+void main() {
+    FragColor = vec4(1.0, 0.5, 0.2, 1.0); // 固定橙色
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 认为片段就是像素，混淆两个概念。
+**原因 →** 片段和像素在大多数情况下一一对应。
+**修法 →** 片段是潜在像素——它包含了颜色、深度等信息，但可能被深度测试、模板测试等丢弃。只有通过了所有逐片段操作后，片段才写入帧缓冲成为像素。一个像素位置可能对应多个片段（不同图元覆盖），但最终只有一个写入。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 把所有计算都放在片段着色器，忽视顶点着色器的分担能力。
+**原因 →** 片段着色器更灵活，容易想到在那里做所有计算。
+**修法 →** 片段着色器执行次数远多于顶点着色器（3 顶点 vs 10000 片段）。能放在顶点着色器计算并插值的就不要放在片段着色器。例如 ViewMatrix * ModelMatrix 可以预乘在 CPU 端，避免在着色器中重复计算。
+</Callout>
+
+<Exercises>
+**问题**：渲染管线中哪两个阶段是可编程的？为什么不全做成可编程的？
+
+<Answer>
+顶点着色器和片段着色器是可编程的（现代 OpenGL 还有几何着色器、曲面细分着色器）。不全做成可编程是因为：1) 光栅化等阶段需要高度的硬件并行优化，固定功能可保证性能；2) 统一的光栅化规则保证不同实现的一致性；3) 固定功能阶段减少驱动开销和编程复杂度。可编程与固定的混合设计平衡了灵活性与性能。
+</Answer>
+
+**问题**：一个三角形有 3 个顶点，覆盖 5000 个像素，顶点着色器和片段着色器各执行多少次？
+
+<Answer>
+顶点着色器执行 3 次（每个顶点一次）。片段着色器执行约 5000 次（每个片段一次）。如果开启了 MSAA 4x，片段着色器可能执行约 20000 次（每个像素 4 个子样本各一次，但现代 GPU 有优化）。这就是片段着色器优化比顶点着色器更重要的原因。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="顶点着色器">渲染管线第一个可编程阶段，逐顶点执行，负责坐标变换（MVP）和逐顶点属性计算。</GlossaryItem>
+<GlossaryItem term="图元装配">将顶点着色器输出的顶点按绘制模式组装成图元（点、线、三角形），并进行裁剪和背面剔除。</GlossaryItem>
+<GlossaryItem term="光栅化">将连续图元扫描转换为离散片段的过程，包括确定覆盖的像素和属性插值。</GlossaryItem>
+<GlossaryItem term="片段着色器">渲染管线最后一个可编程阶段，逐片段执行，计算最终颜色（纹理采样、光照计算等）。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

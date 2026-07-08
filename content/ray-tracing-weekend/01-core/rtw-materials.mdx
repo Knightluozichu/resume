@@ -1,0 +1,130 @@
+---
+title: "材质与散射"
+type: C
+section: "计算机图形学与渲染"
+order: 4
+description: "用 scatter 抽象描述光线如何被材质弹射"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtwMaterialsDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-materials";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出材质抽象接口 scatter 的输入与输出
+- 能区分 attenuation（衰减色）与 scattered（散射光线）的作用
+- 能解释为什么把材质指针放进 hit_record
+- 能回答：为什么不同材质用同一接口就能组合递归？
+</Objectives>
+
+## 直觉引入
+
+同样一束光打在墙、镜子和玻璃上，结果完全不同：墙把光随机弹向四面八方（哑光），镜子把光按原路反射（清晰成像），玻璃让光穿过去并弯折（折射）。这些「光被打到后变成什么样」的行为，就是材质。
+
+光线追踪把材质抽象成一个统一的问答：给你入射光和命中信息，请告诉我（1）这束光被吸收了多少、剩多少颜色（衰减），（2）它沿着哪条新方向继续走（散射光）。只要每种材质回答这两个问题，递归就能无限组合下去。
+
+## 概念讲解
+
+<Term def="描述光线被材质弹射后方向与强度变化的接口">材质</Term>的核心方法是 `scatter(r_in, rec, attenuation, scattered)`：输入入射射线与命中记录，输出<Term def="光线被材质吸收后剩余的颜色比例">衰减</Term>（attenuation，一个颜色向量）和<Term def="弹射后继续追踪的新射线">散射光线</Term>（scattered）。
+
+### 三种内置材质
+- **漫反射（lambertian）**：散射方向 = 交点法线 + 随机单位向量，attenuation = 基础色。
+- **金属（metal）**：散射方向 = 入射方向关于法线的镜面反射 + 模糊扰动，attenuation = 金属色。
+- **电介质（dielectric）**：按折射定律在反射与折射间选择，attenuation ≈ 白（不吸收）。
+
+### 材质与命中记录绑定
+球创建时传入材质指针，求交命中后写入 `rec.mat_ptr`。ray_color 拿到 rec 后调 `rec.mat_ptr->scatter(...)`，材质只关心 rec 里的法线、交点、front_face，与几何体类型解耦。
+
+## 交互Demo
+
+> 猜一猜：把金属的 fuzz 模糊度从 0 调到 1，反射会从「镜子」变成什么？
+
+<RtwMaterialsDiagram />
+
+<Stepper>
+<Step title="第一步：命中带材质">
+球在创建时绑定材质指针；射线命中球后，hit_record 里 mat_ptr 指向该球材质。
+</Step>
+<Step title="第二步：调 scatter">
+ray_color 调用 rec.mat_ptr->scatter(r, rec, attenuation, scattered)，材质用法线与入射方向算出衰减色和新方向。
+</Step>
+<Step title="第三步：递归着色">
+返回 attenuation * ray_color(scattered, depth-1)。颜色被逐层衰减、方向被逐层弹射，最终累加出像素颜色。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 材质抽象与 ray_color 调用：
+
+```cpp
+class material {
+  public:
+    virtual ~material() = default;
+    virtual bool scatter(const ray& r_in, const hit_record& rec,
+                         color& attenuation, ray& scattered) const = 0;
+};
+
+// ray_color 只认 scatter 接口，不关心是哪种材质
+color ray_color(const ray& r, const hittable& world, int depth) {
+  hit_record rec;
+  if (depth <= 0) return color(0,0,0);
+  if (world.hit(r, interval(0.001, infinity), rec)) {
+    ray scattered; color attenuation;
+    if (rec.mat_ptr->scatter(r, rec, attenuation, scattered))
+      return attenuation * ray_color(scattered, world, depth-1);
+    return color(0,0,0);                 // 全吸收
+  }
+  return background(r);
+}
+
+// 球创建时绑定材质
+world.add(make_shared<sphere>(point3(0,0,-1), 0.5,
+           make_shared<lambertian>(color(0.1,0.2,0.5))));
+world.add(make_shared<sphere>(point3(0,-100.5,-1), 100,
+           make_shared<lambertian>(color(0.8,0.8,0.0))));
+```
+
+`attenuation * ray_color(...)` 是关键：颜色逐层相乘衰减，深处的贡献被前面材质的色调过滤。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 把材质颜色直接当作像素颜色输出，画面全是纯色块，没有反射与阴影。
+**原因 →** 误以为材质决定「表面是什么颜色」就够，忽略了光线追踪要递归追踪散射光。
+**修法 →** 必须返回 attenuation * ray_color(scattered)，让散射光继续去取场景里别的颜色，反射、阴影、色渗才会出现。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 给每个球重复写一份散射逻辑，加新材质要改一堆地方。
+**原因 →** 没有用抽象基类隔离变化，散射逻辑和几何体耦合在一起。
+**修法 →** 抽出 material 基类，球只持有 mat_ptr 指针，新材质只需继承并实现 scatter，几何体与递归代码完全不用改。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：scatter 接口的输入和输出各是什么？attenuation 和 scattered 分别起什么作用？
+
+<Answer>
+输入：入射射线 r_in 和命中记录 rec（含法线、交点、front_face）。输出：attenuation（衰减色，表示光被材质吸收后剩余的颜色比例）和 scattered（散射后的新射线，决定光接下来往哪走）。ray_color 用 attenuation 乘以散射光的递归颜色，实现逐层调色与弹射。
+</Answer>
+
+**问题**：为什么把材质指针放进 hit_record，而不是在 ray_color 里判断物体类型再选材质？
+
+<Answer>
+放进 hit_record 让材质与几何体解耦：球只负责求交并把自己绑定的 mat_ptr 写入 rec，ray_color 只调 rec.mat_ptr->scatter，无需知道命中的是球还是别的。这样加新几何体或新材质都互不影响，符合开放-封闭原则，递归代码保持不变。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="材质">描述光线击中表面后如何弹射与衰减的抽象，核心方法 scatter 输出衰减色与散射光线。</GlossaryItem>
+<GlossaryItem term="衰减">attenuation，光被材质吸收后剩余的颜色比例，逐层相乘决定远处贡献被过滤的程度。</GlossaryItem>
+<GlossaryItem term="散射光线">scattered，材质弹射后继续追踪的新射线，方向由材质类型（漫反射/金属/电介质）决定。</GlossaryItem>
+<GlossaryItem term="材质指针">存于 hit_record 的 mat_ptr，把命中点与材质绑定，使 ray_color 无需关心几何体类型。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

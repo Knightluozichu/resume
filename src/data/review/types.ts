@@ -1012,7 +1012,106 @@ export type ReviewChapterSlug =
   | "gds-spatial-indexing"
   | "gds-collision-detection"
   | "gds-ray-tracing-struct"
-  | "gds-final-review";
+  | "gds-final-review"
+  // 计算机图形学第4版
+  | "cg4-learning-map"
+  | "cg4-graphics-pipeline"
+  | "cg4-rasterization"
+  | "cg4-transformations"
+  | "cg4-visibility"
+  | "cg4-lighting-models"
+  | "cg4-texturing"
+  | "cg4-curves-surfaces"
+  | "cg4-advanced-rendering"
+  | "cg4-final-review"
+  // OpenGL 红宝书
+  | "glr-learning-map"
+  | "glr-opengl-basics"
+  | "glr-shaders"
+  | "glr-geometry"
+  | "glr-textures"
+  | "glr-lighting"
+  | "glr-framebuffer"
+  | "glr-advanced-buffers"
+  | "glr-modern-opengl"
+  | "glr-final-review"
+  // OpenGL 超级宝典
+  | "gls-learning-map"
+  | "gls-first-program"
+  | "gls-shader-pipeline"
+  | "gls-vertex-processing"
+  | "gls-fragment-shading"
+  | "gls-texture-mapping"
+  | "gls-buffer-objects"
+  | "gls-geometry-shaders"
+  | "gls-performance"
+  | "gls-final-review"
+  // Ray Tracing in One Weekend
+  | "rtw-learning-map"
+  | "rtw-ray-basics"
+  | "rtw-camera"
+  | "rtw-sphere-hittable"
+  | "rtw-materials"
+  | "rtw-diffuse"
+  | "rtw-metal-dielectric"
+  | "rtw-defocus-blur"
+  | "rtw-final-scene"
+  | "rtw-final-review"
+  // 深入理解 OpenGL WebGL OpenGL ES
+  | "dog-learning-map"
+  | "dog-opengl-architecture"
+  | "dog-shader-language"
+  | "dog-webgl-basics"
+  | "dog-opengl-es"
+  | "dog-rendering-optimization"
+  | "dog-fbo-techniques"
+  | "dog-cross-platform"
+  | "dog-debugging-tools"
+  | "dog-final-review"
+  // Vulkan 学习指南
+  | "vkg-learning-map"
+  | "vkg-vulkan-basics"
+  | "vkg-instance-device"
+  | "vkg-swapchain"
+  | "vkg-graphics-pipeline"
+  | "vkg-command-buffers"
+  | "vkg-render-pass"
+  | "vkg-textures-shaders"
+  | "vkg-advanced-features"
+  | "vkg-final-review"
+  // GPU Gems 系列
+  | "gpg-learning-map"
+  | "gpg-natural-effects"
+  | "gpg-lighting-shadows"
+  | "gpg-materials-shaders"
+  | "gpg-image-processing"
+  | "gpg-geometry"
+  | "gpg-particle-systems"
+  | "gpg-gpu-computing"
+  | "gpg-advanced-techniques"
+  | "gpg-final-review"
+  // 实时渲染第4版
+  | "rtr-learning-map"
+  | "rtr-graphics-pipeline"
+  | "rtr-transforms"
+  | "rtr-shading-basics"
+  | "rtr-texturing"
+  | "rtr-advanced-shading"
+  | "rtr-shadows"
+  | "rtr-global-illumination"
+  | "rtr-optimization"
+  | "rtr-final-review"
+  // 计算机图形学：原理及实践
+  | "cgp-learning-map"
+  | "cgp-introduction"
+  | "cgp-raster-graphics"
+  | "cgp-2d-graphics"
+  | "cgp-3d-graphics"
+  | "cgp-rendering-algorithms"
+  | "cgp-lighting-models"
+  | "cgp-modeling"
+  | "cgp-advanced-topics"
+  | "cgp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2029,6 +2128,105 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gds-collision-detection": "碰撞检测：宽相与窄相",
   "gds-ray-tracing-struct": "光线追踪空间结构",
   "gds-final-review": "综合复习：全书知识链与应用",
+  // 计算机图形学第4版
+  "cg4-learning-map": "全书学习地图",
+  "cg4-graphics-pipeline": "图形渲染管线",
+  "cg4-rasterization": "光栅化与片段处理",
+  "cg4-transformations": "几何变换与坐标系",
+  "cg4-visibility": "可见性与深度缓冲",
+  "cg4-lighting-models": "光照模型与着色",
+  "cg4-texturing": "纹理映射技术",
+  "cg4-curves-surfaces": "曲线与曲面",
+  "cg4-advanced-rendering": "高级渲染技术",
+  "cg4-final-review": "总复习",
+  // OpenGL 红宝书
+  "glr-learning-map": "全书学习地图",
+  "glr-opengl-basics": "OpenGL 基础与初始化",
+  "glr-shaders": "着色器编程",
+  "glr-geometry": "几何图元与顶点处理",
+  "glr-textures": "纹理与采样器",
+  "glr-lighting": "光照与材质",
+  "glr-framebuffer": "帧缓冲与混合",
+  "glr-advanced-buffers": "高级缓冲技术",
+  "glr-modern-opengl": "现代 OpenGL 实践",
+  "glr-final-review": "总复习",
+  // OpenGL 超级宝典
+  "gls-learning-map": "全书学习地图",
+  "gls-first-program": "第一个 OpenGL 程序",
+  "gls-shader-pipeline": "着色器管线详解",
+  "gls-vertex-processing": "顶点处理与变换",
+  "gls-fragment-shading": "片段着色与混合",
+  "gls-texture-mapping": "纹理映射高级技术",
+  "gls-buffer-objects": "缓冲对象与数据管理",
+  "gls-geometry-shaders": "几何着色器与图元",
+  "gls-performance": "性能优化与调试",
+  "gls-final-review": "总复习",
+  // Ray Tracing in One Weekend
+  "rtw-learning-map": "全书学习地图",
+  "rtw-ray-basics": "光线与射线相交",
+  "rtw-camera": "相机与光线生成",
+  "rtw-sphere-hittable": "球体与可命中对象",
+  "rtw-materials": "材质与散射",
+  "rtw-diffuse": "漫反射与兰伯特模型",
+  "rtw-metal-dielectric": "金属与电介质材质",
+  "rtw-defocus-blur": "散焦模糊与景深",
+  "rtw-final-scene": "最终场景渲染",
+  "rtw-final-review": "总复习",
+  // 深入理解 OpenGL WebGL OpenGL ES
+  "dog-learning-map": "全书学习地图",
+  "dog-opengl-architecture": "OpenGL 架构与状态机",
+  "dog-shader-language": "GLSL ES 着色器语言",
+  "dog-webgl-basics": "WebGL 基础与上下文",
+  "dog-opengl-es": "OpenGL ES 移动端适配",
+  "dog-rendering-optimization": "渲染优化策略",
+  "dog-fbo-techniques": "FBO 与后处理技术",
+  "dog-cross-platform": "跨平台兼容性",
+  "dog-debugging-tools": "调试与性能分析",
+  "dog-final-review": "总复习",
+  // Vulkan 学习指南
+  "vkg-learning-map": "全书学习地图",
+  "vkg-vulkan-basics": "Vulkan 基础与概念",
+  "vkg-instance-device": "实例与物理设备",
+  "vkg-swapchain": "交换链与呈现",
+  "vkg-graphics-pipeline": "图形管线",
+  "vkg-command-buffers": "命令缓冲与录制",
+  "vkg-render-pass": "渲染通道与附件",
+  "vkg-textures-shaders": "纹理与着色器",
+  "vkg-advanced-features": "高级特性与扩展",
+  "vkg-final-review": "总复习",
+  // GPU Gems 系列
+  "gpg-learning-map": "GPU Gems 系列全书学习地图",
+  "gpg-natural-effects": "自然效果渲染",
+  "gpg-lighting-shadows": "光照与阴影技术",
+  "gpg-materials-shaders": "材质与着色器",
+  "gpg-image-processing": "图像处理与后处理",
+  "gpg-geometry": "几何体处理与细分",
+  "gpg-particle-systems": "粒子系统与物理",
+  "gpg-gpu-computing": "GPU 通用计算",
+  "gpg-advanced-techniques": "高级渲染技术",
+  "gpg-final-review": "GPU Gems 总复习",
+  // 实时渲染第4版
+  "rtr-learning-map": "实时渲染第4版全书学习地图",
+  "rtr-graphics-pipeline": "图形渲染管线",
+  "rtr-transforms": "几何变换与空间",
+  "rtr-shading-basics": "着色基础与光照模型",
+  "rtr-texturing": "纹理与采样技术",
+  "rtr-advanced-shading": "高级着色与BRDF",
+  "rtr-shadows": "实时阴影技术",
+  "rtr-global-illumination": "实时全局光照",
+  "rtr-optimization": "渲染优化与加速",
+  "rtr-final-review": "实时渲染第4版总复习",
+  // 计算机图形学：原理及实践
+  "cgp-learning-map": "计算机图形学：原理及实践 全书学习地图",
+  "cgp-introduction": "图形学导论与历史",
+  "cgp-raster-graphics": "光栅图形学基础",
+  "cgp-2d-graphics": "2D图形与变换",
+  "cgp-3d-graphics": "3D图形与投影",
+  "cgp-rendering-algorithms": "渲染算法与可见性",
+  "cgp-lighting-models": "光照模型与着色",
+  "cgp-modeling": "建模与表示方法",
+  "cgp-advanced-topics": "高级主题与动画",
+  "cgp-final-review": "计算机图形学：原理及实践 总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

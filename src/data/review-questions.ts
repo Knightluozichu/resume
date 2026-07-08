@@ -908,6 +908,96 @@ import { gdsSpatialIndexingQuestions } from "./review/gds-spatial-indexing";
 import { gdsCollisionDetectionQuestions } from "./review/gds-collision-detection";
 import { gdsRayTracingStructQuestions } from "./review/gds-ray-tracing-struct";
 import { gdsFinalReviewQuestions } from "./review/gds-final-review";
+import { rtwLearningMapQuestions } from "./review/rtw-learning-map";
+import { rtwRayBasicsQuestions } from "./review/rtw-ray-basics";
+import { rtwCameraQuestions } from "./review/rtw-camera";
+import { rtwSphereHittableQuestions } from "./review/rtw-sphere-hittable";
+import { rtwMaterialsQuestions } from "./review/rtw-materials";
+import { rtwDiffuseQuestions } from "./review/rtw-diffuse";
+import { rtwMetalDielectricQuestions } from "./review/rtw-metal-dielectric";
+import { rtwDefocusBlurQuestions } from "./review/rtw-defocus-blur";
+import { rtwFinalSceneQuestions } from "./review/rtw-final-scene";
+import { rtwFinalReviewQuestions } from "./review/rtw-final-review";
+import { dogLearningMapQuestions } from "./review/dog-learning-map";
+import { dogOpenglArchitectureQuestions } from "./review/dog-opengl-architecture";
+import { dogShaderLanguageQuestions } from "./review/dog-shader-language";
+import { dogWebglBasicsQuestions } from "./review/dog-webgl-basics";
+import { dogOpenglEsQuestions } from "./review/dog-opengl-es";
+import { dogRenderingOptimizationQuestions } from "./review/dog-rendering-optimization";
+import { dogFboTechniquesQuestions } from "./review/dog-fbo-techniques";
+import { dogCrossPlatformQuestions } from "./review/dog-cross-platform";
+import { dogDebuggingToolsQuestions } from "./review/dog-debugging-tools";
+import { dogFinalReviewQuestions } from "./review/dog-final-review";
+import { vkgLearningMapQuestions } from "./review/vkg-learning-map";
+import { vkgVulkanBasicsQuestions } from "./review/vkg-vulkan-basics";
+import { vkgInstanceDeviceQuestions } from "./review/vkg-instance-device";
+import { vkgSwapchainQuestions } from "./review/vkg-swapchain";
+import { vkgGraphicsPipelineQuestions } from "./review/vkg-graphics-pipeline";
+import { vkgCommandBuffersQuestions } from "./review/vkg-command-buffers";
+import { vkgRenderPassQuestions } from "./review/vkg-render-pass";
+import { vkgTexturesShadersQuestions } from "./review/vkg-textures-shaders";
+import { vkgAdvancedFeaturesQuestions } from "./review/vkg-advanced-features";
+import { vkgFinalReviewQuestions } from "./review/vkg-final-review";
+import { cg4LearningMapQuestions } from "./review/cg4-learning-map";
+import { cg4GraphicsPipelineQuestions } from "./review/cg4-graphics-pipeline";
+import { cg4RasterizationQuestions } from "./review/cg4-rasterization";
+import { cg4TransformationsQuestions } from "./review/cg4-transformations";
+import { cg4VisibilityQuestions } from "./review/cg4-visibility";
+import { cg4LightingModelsQuestions } from "./review/cg4-lighting-models";
+import { cg4TexturingQuestions } from "./review/cg4-texturing";
+import { cg4CurvesSurfacesQuestions } from "./review/cg4-curves-surfaces";
+import { cg4AdvancedRenderingQuestions } from "./review/cg4-advanced-rendering";
+import { cg4FinalReviewQuestions } from "./review/cg4-final-review";
+import { glrLearningMapQuestions } from "./review/glr-learning-map";
+import { glrOpenglBasicsQuestions } from "./review/glr-opengl-basics";
+import { glrShadersQuestions } from "./review/glr-shaders";
+import { glrGeometryQuestions } from "./review/glr-geometry";
+import { glrTexturesQuestions } from "./review/glr-textures";
+import { glrLightingQuestions } from "./review/glr-lighting";
+import { glrFramebufferQuestions } from "./review/glr-framebuffer";
+import { glrAdvancedBuffersQuestions } from "./review/glr-advanced-buffers";
+import { glrModernOpenglQuestions } from "./review/glr-modern-opengl";
+import { glrFinalReviewQuestions } from "./review/glr-final-review";
+import { glsLearningMapQuestions } from "./review/gls-learning-map";
+import { glsFirstProgramQuestions } from "./review/gls-first-program";
+import { glsShaderPipelineQuestions } from "./review/gls-shader-pipeline";
+import { glsVertexProcessingQuestions } from "./review/gls-vertex-processing";
+import { glsFragmentShadingQuestions } from "./review/gls-fragment-shading";
+import { glsTextureMappingQuestions } from "./review/gls-texture-mapping";
+import { glsBufferObjectsQuestions } from "./review/gls-buffer-objects";
+import { glsGeometryShadersQuestions } from "./review/gls-geometry-shaders";
+import { glsPerformanceQuestions } from "./review/gls-performance";
+import { glsFinalReviewQuestions } from "./review/gls-final-review";
+import { GpgLearningMapQuestions } from "./review/gpg-learning-map";
+import { GpgNaturalEffectsQuestions } from "./review/gpg-natural-effects";
+import { GpgLightingShadowsQuestions } from "./review/gpg-lighting-shadows";
+import { GpgMaterialsShadersQuestions } from "./review/gpg-materials-shaders";
+import { GpgImageProcessingQuestions } from "./review/gpg-image-processing";
+import { GpgGeometryQuestions } from "./review/gpg-geometry";
+import { GpgParticleSystemsQuestions } from "./review/gpg-particle-systems";
+import { GpgGpuComputingQuestions } from "./review/gpg-gpu-computing";
+import { GpgAdvancedTechniquesQuestions } from "./review/gpg-advanced-techniques";
+import { GpgFinalReviewQuestions } from "./review/gpg-final-review";
+import { RtrLearningMapQuestions } from "./review/rtr-learning-map";
+import { RtrGraphicsPipelineQuestions } from "./review/rtr-graphics-pipeline";
+import { RtrTransformsQuestions } from "./review/rtr-transforms";
+import { RtrShadingBasicsQuestions } from "./review/rtr-shading-basics";
+import { RtrTexturingQuestions } from "./review/rtr-texturing";
+import { RtrAdvancedShadingQuestions } from "./review/rtr-advanced-shading";
+import { RtrShadowsQuestions } from "./review/rtr-shadows";
+import { RtrGlobalIlluminationQuestions } from "./review/rtr-global-illumination";
+import { RtrOptimizationQuestions } from "./review/rtr-optimization";
+import { RtrFinalReviewQuestions } from "./review/rtr-final-review";
+import { CgpLearningMapQuestions } from "./review/cgp-learning-map";
+import { CgpIntroductionQuestions } from "./review/cgp-introduction";
+import { CgpRasterGraphicsQuestions } from "./review/cgp-raster-graphics";
+import { Cgp2dGraphicsQuestions } from "./review/cgp-2d-graphics";
+import { Cgp3dGraphicsQuestions } from "./review/cgp-3d-graphics";
+import { CgpRenderingAlgorithmsQuestions } from "./review/cgp-rendering-algorithms";
+import { CgpLightingModelsQuestions } from "./review/cgp-lighting-models";
+import { CgpModelingQuestions } from "./review/cgp-modeling";
+import { CgpAdvancedTopicsQuestions } from "./review/cgp-advanced-topics";
+import { CgpFinalReviewQuestions } from "./review/cgp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1832,6 +1922,102 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gdsCollisionDetectionQuestions,
   ...gdsRayTracingStructQuestions,
   ...gdsFinalReviewQuestions,
+  ...rtwLearningMapQuestions,
+  ...rtwRayBasicsQuestions,
+  ...rtwCameraQuestions,
+  ...rtwSphereHittableQuestions,
+  ...rtwMaterialsQuestions,
+  ...rtwDiffuseQuestions,
+  ...rtwMetalDielectricQuestions,
+  ...rtwDefocusBlurQuestions,
+  ...rtwFinalSceneQuestions,
+  ...rtwFinalReviewQuestions,
+  ...dogLearningMapQuestions,
+  ...dogOpenglArchitectureQuestions,
+  ...dogShaderLanguageQuestions,
+  ...dogWebglBasicsQuestions,
+  ...dogOpenglEsQuestions,
+  ...dogRenderingOptimizationQuestions,
+  ...dogFboTechniquesQuestions,
+  ...dogCrossPlatformQuestions,
+  ...dogDebuggingToolsQuestions,
+  ...dogFinalReviewQuestions,
+  ...vkgLearningMapQuestions,
+  ...vkgVulkanBasicsQuestions,
+  ...vkgInstanceDeviceQuestions,
+  ...vkgSwapchainQuestions,
+  ...vkgGraphicsPipelineQuestions,
+  ...vkgCommandBuffersQuestions,
+  ...vkgRenderPassQuestions,
+  ...vkgTexturesShadersQuestions,
+  ...vkgAdvancedFeaturesQuestions,
+  ...vkgFinalReviewQuestions,
+  // 计算机图形学第4版
+  ...cg4LearningMapQuestions,
+  ...cg4GraphicsPipelineQuestions,
+  ...cg4RasterizationQuestions,
+  ...cg4TransformationsQuestions,
+  ...cg4VisibilityQuestions,
+  ...cg4LightingModelsQuestions,
+  ...cg4TexturingQuestions,
+  ...cg4CurvesSurfacesQuestions,
+  ...cg4AdvancedRenderingQuestions,
+  ...cg4FinalReviewQuestions,
+  // OpenGL 红宝书
+  ...glrLearningMapQuestions,
+  ...glrOpenglBasicsQuestions,
+  ...glrShadersQuestions,
+  ...glrGeometryQuestions,
+  ...glrTexturesQuestions,
+  ...glrLightingQuestions,
+  ...glrFramebufferQuestions,
+  ...glrAdvancedBuffersQuestions,
+  ...glrModernOpenglQuestions,
+  ...glrFinalReviewQuestions,
+  // OpenGL 超级宝典
+  ...glsLearningMapQuestions,
+  ...glsFirstProgramQuestions,
+  ...glsShaderPipelineQuestions,
+  ...glsVertexProcessingQuestions,
+  ...glsFragmentShadingQuestions,
+  ...glsTextureMappingQuestions,
+  ...glsBufferObjectsQuestions,
+  ...glsGeometryShadersQuestions,
+  ...glsPerformanceQuestions,
+  ...glsFinalReviewQuestions,
+  // GPU Gems 系列
+  ...GpgLearningMapQuestions,
+  ...GpgNaturalEffectsQuestions,
+  ...GpgLightingShadowsQuestions,
+  ...GpgMaterialsShadersQuestions,
+  ...GpgImageProcessingQuestions,
+  ...GpgGeometryQuestions,
+  ...GpgParticleSystemsQuestions,
+  ...GpgGpuComputingQuestions,
+  ...GpgAdvancedTechniquesQuestions,
+  ...GpgFinalReviewQuestions,
+  // 实时渲染第4版
+  ...RtrLearningMapQuestions,
+  ...RtrGraphicsPipelineQuestions,
+  ...RtrTransformsQuestions,
+  ...RtrShadingBasicsQuestions,
+  ...RtrTexturingQuestions,
+  ...RtrAdvancedShadingQuestions,
+  ...RtrShadowsQuestions,
+  ...RtrGlobalIlluminationQuestions,
+  ...RtrOptimizationQuestions,
+  ...RtrFinalReviewQuestions,
+  // 计算机图形学：原理及实践
+  ...CgpLearningMapQuestions,
+  ...CgpIntroductionQuestions,
+  ...CgpRasterGraphicsQuestions,
+  ...Cgp2dGraphicsQuestions,
+  ...Cgp3dGraphicsQuestions,
+  ...CgpRenderingAlgorithmsQuestions,
+  ...CgpLightingModelsQuestions,
+  ...CgpModelingQuestions,
+  ...CgpAdvancedTopicsQuestions,
+  ...CgpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

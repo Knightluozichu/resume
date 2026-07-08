@@ -1,0 +1,139 @@
+---
+title: "OpenGL ES 移动端适配"
+type: D
+section: "计算机图形学与渲染"
+order: 4
+description: "ES2/3 差异、精度、EGL 与移动 GPU 特性适配"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogOpenglEsDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-opengl-es";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分 OpenGL ES 2.0 与 3.0 的关键能力差异
+- 能说明精度限定符在移动端为何更敏感
+- 能描述 EGL 的作用与上下文配置流程
+- 能回答：移动 GPU 的 TBDR 架构如何影响渲染策略？
+</Objectives>
+
+## 直觉引入
+
+桌面 GPU 像「大方之家」，显存大、带宽高，怎么画都扛得住；移动 GPU 像「小户型」，省电是头等大事，于是它用了一种叫「分块延迟渲染（TBDR）」的省电招：把画面切成小块，每块在极小的高速缓存里一次性完成所有片元处理，避免反复读写主显存。
+
+理解了这个架构差异，你就能解释很多移动端怪象：为什么移动端更怕过度绘制、为什么带宽敏感、为什么精度太低会出条纹。OpenGL ES 就是针对这些限制裁剪出的 API 子集。
+
+## 概念讲解
+
+### ES 2.0 vs 3.0
+<Term def="OpenGL ES 3.0 相对 2.0 的能力扩展">ES3 新增</Term>：多渲染目标 MRT、实例化、变换反馈、3D 纹理、统一缓冲 UBO、GLSL 3.00、深度纹理阴影采样、遮挡查询。
+
+### 精度
+移动 GPU 常用 `mediump` 省电省带宽，但 mediump 范围/精度有限，位置变换可能溢出产生条纹。原则：颜色/UV 用 mediump，位置矩阵用 highp。
+
+### EGL
+<Term def="OpenGL ES 与原生窗口系统之间的绑定接口">EGL</Term>负责创建渲染上下文、绑定到 Surface（窗口/像素图）、管理显示。流程：eglGetDisplay → eglInitialize → eglChooseConfig → eglCreateContext → eglCreateWindowSurface → eglMakeCurrent。
+
+### TBDR 适配
+移动 GPU 分块渲染，<Term def="片元被绘制后又被后续片元覆盖造成浪费">过度绘制</Term>直接增加每块的处理量与功耗。因此移动端应：减少透明、从前向后排序、用早期深度测试剔除被遮挡片元。
+
+## 交互Demo
+
+> 猜一猜：移动端把位置变换用 mediump 算，画面可能出什么毛病？
+
+<DogOpenglEsDiagram />
+
+<Stepper>
+<Step title="第一步：选 ES 版本">
+按目标平台最低支持选 ES 2.0 或 3.0；3.0 能用实例化/MRT/UBO，写复杂效果更省。
+</Step>
+<Step title="第二步：配精度">
+颜色 UV 用 mediump 省电，位置与矩阵用 highp 防溢出；片元着色器顶部必须声明默认 float 精度。
+</Step>
+<Step title="第三步：抗过度绘制">
+针对 TBDR：减少透明、不透明物体从前向后排序、用 early-z 剔除被遮挡片元，降低功耗。
+</Step>
+</Stepper>
+
+## 代码对照
+
+Android EGL 上下文创建（C/JNI 摘要）：
+
+```c
+EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+eglInitialize(display, &major, &minor);
+
+// 选择配置：RGBA8888 + 深度 24 + 模板 8，ES3
+EGLint configAttribs[] = {
+  EGL_RENDERABLE_TYPE, EGL_OPENGL_ES3_BIT,
+  EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
+  EGL_DEPTH_SIZE, 24, EGL_STENCIL_SIZE, 8,
+  EGL_NONE };
+eglChooseConfig(display, configAttribs, &config, 1, &numConfigs);
+
+EGLint ctxAttribs[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
+EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, ctxAttribs);
+EGLSurface surface = eglCreateWindowSurface(display, config, nativeWindow, NULL);
+eglMakeCurrent(display, surface, surface, context);
+```
+
+GLSL ES 精度策略：
+
+```glsl
+// 顶点：位置用 highp
+uniform highp mat4 u_mvp;
+in highp vec3 a_pos;
+void main(){ gl_Position = u_mvp * vec4(a_pos, 1.0); }
+
+// 片元：颜色用 mediump，声明默认精度
+#version 300 es
+precision mediump float;
+in mediump vec2 v_uv;
+uniform sampler2D u_tex;
+out vec4 fragColor;
+void main(){ fragColor = texture(u_tex, v_uv); }
+```
+
+`highp` 给位置防溢出，`mediump` 给颜色省电。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 移动端画面出现条纹/网格状失真，桌面正常。
+**原因 →** 位置变换用了 mediump，精度不够导致顶点位置抖动产生条纹。
+**修法 →** 位置、矩阵、法线变换一律 highp；颜色、UV 等可容忍低精度的用 mediump，分通道按需选精度。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 移动端发热严重、帧率掉，桌面却流畅。
+**原因 →** 大量透明物体导致过度绘制，TBDR 下每块都要处理被覆盖的片元，功耗暴涨。
+**修法 →** 减少透明、不透明物体从前向后排序、用 early-z 或预深度 pass 剔除被遮挡片元，降低每块片元处理量。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：OpenGL ES 3.0 相比 2.0 有哪些关键新增？这些能力对实际开发有什么好处？
+
+<Answer>
+ES3 新增多渲染目标 MRT、实例化、变换反馈、3D 纹理、统一缓冲 UBO、GLSL 3.00、遮挡查询、深度纹理阴影采样。好处：实例化可批量画大量重复物体省 draw call；MRT 支持延迟渲染 G-Buffer；UBO 统一更新多个 uniform；变换反馈支持 GPU 粒子；3D 纹理支持体积数据。整体让复杂效果在移动端可行且更高效。
+</Answer>
+
+**问题**：移动 GPU 的 TBDR 架构是什么？它为什么让过度绘制成为移动端的头号性能杀手？
+
+<Answer>
+TBDR（分块延迟渲染）把画面切成小块，每块在片上高速缓存里完成全部片元处理后一次写回显存，省带宽省电。但每块的片元处理量与过度绘制成正比：被覆盖的片元仍被着色计算，透明层叠尤其浪费，直接推高每块功耗与耗时。因此移动端要减透明、前向排序、early-z 剔除，把每块片元数压到最低。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="EGL">OpenGL ES 与原生窗口系统的绑定接口，负责上下文与 Surface 创建。</GlossaryItem>
+<GlossaryItem term="TBDR">分块延迟渲染，移动 GPU 把画面分块在片上缓存完成片元处理以省带宽省电。</GlossaryItem>
+<GlossaryItem term="精度限定符">highp/mediump/lowp，移动端按通道选精度省电；位置用 highp 防溢出。</GlossaryItem>
+<GlossaryItem term="过度绘制">同一像素被多次绘制，TBDR 下直接增加每块处理量与功耗。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

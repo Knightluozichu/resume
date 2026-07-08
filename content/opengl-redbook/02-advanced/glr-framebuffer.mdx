@@ -1,0 +1,118 @@
+---
+title: "帧缓冲与混合"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "FBO离屏渲染与Alpha混合"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlrFramebufferDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-framebuffer";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解帧缓冲对象(FBO)的原理
+- 掌握离屏渲染与Render Target
+- 学会Alpha混合与混合方程
+- 了解后处理基础
+</Objectives>
+
+## 直觉引入
+
+帧缓冲就像画家的画板——默认画板是屏幕，但你可以准备额外的画板(FBO)在后台画东西(如阴影贴图、后处理)，画完后再贴到屏幕上。Alpha混合就像水彩调色——新颜色和已有颜色按透明度混合。
+
+## 概念讲解
+
+<Term def="帧缓冲对象，自定义渲染目标，可附加颜色/深度/模板缓冲">FBO</Term><Term def="FBO中的渲染输出目标，可附加纹理或Renderbuffer">Render Target</Term><Term def="根据Alpha值将源色与目标色混合">Alpha混合</Term><Term def="可直接渲染但不能采样的缓冲，适合深度/模板">Renderbuffer</Term>
+
+### FBO创建
+glGenFramebuffers->glBindFramebuffer->glFramebufferTexture2D(颜色)->glFramebufferRenderbuffer(深度)->检查完整性
+
+### Alpha混合
+glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+result = src*srcAlpha + dst*(1-srcAlpha)
+
+### FBO用途
+阴影映射、后处理、反射、拾取
+
+## 交互Demo
+
+> 猜一猜：为什么透明物体必须从后向前排序渲染？
+
+<GlrFramebufferDiagram />
+
+<Stepper>
+<Step title="第一步：创建FBO">
+glGenFramebuffers生成FBO，绑定后附加纹理(颜色)和Renderbuffer(深度)。检查完整性。
+</Step>
+<Step title="第二步：离屏渲染">
+绑定FBO后所有绘制输出到FBO附件而非屏幕。
+</Step>
+<Step title="第三步：混合渲染">
+渲染半透明物体时启用Alpha混合，按深度排序从后向前绘制。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+GLuint fbo;
+glGenFramebuffers(1, &fbo);
+glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+GLuint texColor;
+glGenTextures(1, &texColor);
+glBindTexture(GL_TEXTURE_2D, texColor);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColor, 0);
+GLuint rbo;
+glGenRenderbuffers(1, &rbo);
+glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
+glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    std::cout << "FBO incomplete!";
+```
+
+FBO颜色附件用纹理(可采样)，深度附件可用Renderbuffer(不可采样但更高效)。必须检查完整性。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 透明物体未排序就渲染。
+**原因 →** 开启混合就行。
+**修法 →** Alpha混合不透明排序依赖——必须从后向前渲染透明物体。先渲染不透明(写深度)再排序渲染透明(开混合)。
+</Callout>
+
+<Callout type="trap">
+**现象 →** FBO创建后不检查完整性。
+**原因 →** 创建后就能用。
+**修法 →** FBO可能不完整(格式不兼容、缺少附件)。必须用glCheckFramebufferStatus检查。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：FBO和默认帧缓冲的区别？
+
+<Answer>
+默认帧缓冲是屏幕，FBO是自定义渲染目标。FBO可以附加纹理(可采样)或Renderbuffer(高效不可采样)。
+</Answer>
+
+**问题**：Alpha混合如何配置？
+
+<Answer>
+glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)。result=src*alpha+dst*(1-alpha)。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="FBO">帧缓冲对象，OpenGL中自定义的渲染目标。</GlossaryItem>
+<GlossaryItem term="Render Target">FBO中的渲染输出目标，可附加纹理或Renderbuffer。</GlossaryItem>
+<GlossaryItem term="Alpha混合">根据Alpha值将源色与目标色混合的过程。</GlossaryItem>
+<GlossaryItem term="Renderbuffer">可直接渲染但不能采样的缓冲对象，适合深度/模板。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />

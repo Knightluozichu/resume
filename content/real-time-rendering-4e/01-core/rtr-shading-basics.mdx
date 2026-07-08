@@ -1,0 +1,107 @@
+---
+title: "着色基础与光照模型"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "Phong光照模型三分量分解——环境光、漫反射、镜面反射"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrShadingBasicsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shading-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用一句话解释Phong光照模型的三个分量
+- 能写出Lambert余弦定律的公式并解释含义
+- 能区分Phong和Blinn-Phong的差异
+- 能回答：为什么max(N·L, 0)的max是必要的？
+</Objectives>
+
+## 直觉引入
+
+想象一个房间。环境光像房间的整体照明——均匀照亮每个角落，没有方向性。漫反射像墙壁——光打上去后向四面八方散射，看起来哑光。镜面反射像镜子或金属——光在特定方向反射，形成高光点。
+
+Phong模型就是把这三种光加在一起：环境光（兜底）+ 漫反射（主体）+ 镜面反射（高光）。虽然简单，但它是所有着色模型的基础。
+
+## 概念讲解
+
+### Phong光照模型
+
+<RtrShadingBasicsDiagram />
+
+<Term def="Phong模型将光照分解为环境光、漫反射和镜面反射三个分量的经验光照模型">Phong模型</Term>的核心公式：I = k_a×I_a + k_d×I×max(N·L,0) + k_s×I×max(R·V,0)^n。
+
+<Term def="Lambert余弦定律描述漫反射光强与表面法线和光源方向夹角余弦成正比">Lambert余弦定律</Term>是漫反射分量的理论基础：N·L就是法线与光源方向的点积。
+
+<Term def="Blinn-Phong模型用半角向量H替代反射向量R，是Phong模型的优化版本">Blinn-Phong</Term>用H=(L+V)/|L+V|替代R，计算更高效且高光更自然。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：环境光分量">环境光模拟间接光，给所有表面一个基础亮度。它是常数，不依赖法线或光源方向，避免阴影区域纯黑。</Step>
+<Step title="第二步：漫反射分量">
+漫反射由Lambert余弦定律决定。观察N·L如何控制亮度——法线正对光源时最亮，侧对时变暗，背对时为零。
+<RtrShadingBasicsDiagram />
+</Step>
+<Step title="第三步：镜面反射分量">镜面反射由反射方向R与视线方向V的夹角决定。指数n控制高光锐度——n越大高光越小越锐利。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Blinn-Phong 光照模型实现
+vec3 blinnPhong(vec3 N, vec3 L, vec3 V, vec3 lightColor,
+              vec3 ambient, vec3 diffuse, vec3 specular, float shininess) {
+    // 环境光
+    vec3 amb = ambient * lightColor;
+    
+    // 漫反射 (Lambert)
+    float diff = max(dot(N, L), 0.0);
+    vec3 dif = diff * diffuse * lightColor;
+    
+    // 镜面反射 (Blinn-Phong)
+    vec3 H = normalize(L + V);  // 半角向量
+    float spec = pow(max(dot(N, H), 0.0), shininess);
+    vec3 spe = spec * specular * lightColor;
+    
+    return amb + dif + spe;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：忘记max(N·L, 0)中的max。**
+当法线背对光源时，N·L为负。如果不clamp到0，漫反射会变成负值，从其他分量中「减去」光，导致颜色异常。max操作确保背光面只有环境光。
+</Callout>
+
+<Callout type="trap">
+**误区：认为Phong模型是物理正确的。**
+Phong是经验模型，参数k_a/k_d/k_s没有物理意义，也不保证能量守恒。真实渲染需要基于物理的BRDF（如Cook-Torrance），但Phong适合风格化渲染和学习入门。
+</Callout>
+
+<Exercises>
+**问题 1**：Phong模型的三个光照分量分别模拟什么现象？
+
+<Answer>
+环境光模拟间接光（光线弹射后均匀照亮所有表面）；漫反射模拟粗糙表面对光的均匀散射（Lambert余弦定律）；镜面反射模拟光滑表面的方向性反射高光。三者相加得到最终颜色。
+</Answer>
+
+**问题 2**：Blinn-Phong相比Phong有什么改进？
+
+<Answer>
+Blinn-Phong用半角向量H=(L+V)/2替代反射向量R=reflect(-L,N)。优势：1）计算H比计算R更简单（加法+归一化 vs 反射公式）；2）H与N的夹角是R与V夹角的一半，高光过渡更平滑自然；3）半角向量在概念上更接近微表面理论。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Phong模型">将光照分解为环境光、漫反射、镜面反射三个分量的经验光照模型。</GlossaryItem>
+<GlossaryItem term="Lambert余弦定律">漫反射光强与表面法线和光源方向夹角的余弦成正比，即I_diff = N·L。</GlossaryItem>
+<GlossaryItem term="Blinn-Phong">Phong的优化版本，用半角向量H替代反射向量R，更高效且高光更自然。</GlossaryItem>
+<GlossaryItem term="半角向量">光源方向L和视线方向V的中间方向H=normalize(L+V)，用于Blinn-Phong镜面计算。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

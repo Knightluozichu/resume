@@ -1,0 +1,122 @@
+---
+title: "图像处理与后处理"
+type: B
+section: "计算机图形学与渲染"
+order: 4
+description: "用后处理管线实现 Bloom、色调映射、屏幕空间特效"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgImageProcessingDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-image-processing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释后处理管线的多 Pass 流程与渲染目标切换
+- 能用降采样金字塔实现高性能 Bloom
+- 能回答：为什么 HDR 渲染需要色调映射？
+- 能区分 Reinhard 和 ACES 色调映射的视觉效果差异
+</Objectives>
+
+## 直觉引入
+
+拍完照片后用滤镜调色、加光晕、提亮暗部——这就是后处理。游戏渲染也一样：先渲染出 HDR 场景（颜色值可以超过 1.0），再通过一系列屏幕空间 Pass 加工成最终画面。每个 Pass 读上一帧的纹理、写入新的渲染目标，像流水线一样逐级加工。
+
+## 概念讲解
+
+### 后处理管线
+
+<GpgImageProcessingDiagram />
+
+<Term def="HDR 是高动态范围，颜色值可超过 1.0 以表达真实世界的亮度差异">
+HDR
+</Term>
+
+后处理管线从 HDR 场景开始：提取平均亮度用于曝光控制，提取高光区域做 Bloom 模糊叠加，最后用色调映射把 HDR 压缩到 LDR（0-1）输出到显示器。
+
+<Term def="色调映射是把 HDR 高动态范围颜色压缩到 LDR 显示范围的数学变换">
+色调映射
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：HDR 场景渲染">
+正常渲染场景，颜色值允许超过 1.0（太阳可以到 10.0）。同时输出深度和法线 G-Buffer 供后续屏幕空间特效使用。这一步决定了所有后处理的输入质量。
+<GpgImageProcessingDiagram />
+</Step>
+<Step title="第二步：Bloom 降采样金字塔">
+提取亮度超过阈值的像素，逐级降采样到 1/16 分辨率。每级降采样后做高斯模糊再叠加回上一级。用小纹理做大模糊，性能远优于全分辨率模糊。
+</Step>
+<Step title="第三步：色调映射与输出">
+用 ACES 曲线把 HDR 压缩到 LDR，暗部和亮部细节都保留。最后加 Gamma 校正输出到显示器。Bloom 叠加在色调映射之前或之后效果不同，需根据风格选择。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// ACES 色调映射（电影工业标准）
+vec3 ACESFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// Reinhard 色调映射（简单版）
+vec3 reinhard(vec3 hdr) {
+    return hdr / (hdr + 1.0);
+}
+
+// Bloom 降采样：取 4 个邻域像素加权平均
+vec3 downsample(sampler2D src, vec2 uv, vec2 texelSize) {
+    vec3 color = vec3(0.0);
+    vec2 offsets[4] = vec2[](
+        vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(1,1)
+    );
+    for (int i = 0; i < 4; i++) {
+        color += texture(src, uv + offsets[i] * texelSize).rgb;
+    }
+    return color * 0.25;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Bloom 在全分辨率上做高斯模糊。**
+全分辨率大半径模糊极其昂贵。正确做法是构建降采样金字塔，在最小 mip 上做大模糊，再逐级上采样叠加。5 级金字塔的 Bloom 性能比全分辨率快数十倍。
+</Callout>
+
+<Callout type="trap">
+**误区：色调映射在 Bloom 之前做。**
+如果先色调映射再做 Bloom，高光已被压缩到 1.0 以内，Bloom 的光晕会不明显。正确顺序是先在 HDR 空间做 Bloom 叠加，再统一色调映射。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 HDR 渲染需要色调映射？
+
+<Answer>
+HDR 颜色值可超过 1.0（如太阳=10.0），但显示器只能显示 0-1 的 LDR。直接截断会让所有超过 1.0 的区域变成纯白，丢失亮部细节。色调映射用非线性曲线压缩动态范围，让暗部和亮部细节同时可见。
+</Answer>
+
+**问题 2**：Bloom 降采样金字塔为什么比全分辨率模糊快？
+
+<Answer>
+降采样金字塔每级把分辨率减半，1/16 分辨率的像素数只有全分辨率的 1/256。在大模糊半径下，用小纹理做模糊的计算量是全分辨率的几百分之一。再逐级上采样叠加恢复细节，总开销远低于全分辨率方案。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="HDR">高动态范围，颜色值允许超过 1.0 以表达真实世界的亮度差异，是后处理的基础。</GlossaryItem>
+<GlossaryItem term="色调映射">把 HDR 颜色非线性压缩到 LDR 显示范围的数学变换，ACES 是电影工业标准。</GlossaryItem>
+<GlossaryItem term="Bloom">高光溢出效果，提取亮区模糊后叠加回原图，模拟镜头无法处理强光的物理现象。</GlossaryItem>
+<GlossaryItem term="降采样金字塔">逐级降低分辨率的纹理链，用于高效实现大半径模糊等屏幕空间特效。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

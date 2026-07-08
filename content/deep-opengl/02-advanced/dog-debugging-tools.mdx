@@ -1,0 +1,140 @@
+---
+title: "调试与性能分析"
+type: C
+section: "计算机图形学与渲染"
+order: 8
+description: "GL 错误检查、帧抓取与 GPU 性能剖析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogDebuggingToolsDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-debugging-tools";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 glGetError 与 KHR_debug 定位 GL 错误
+- 能用 Spector.js / RenderDoc 抓取并分析单帧
+- 能说明着色器编译链接日志的查询方法
+- 能回答：如何找出渲染管线里的性能瓶颈？
+</Objectives>
+
+## 直觉引入
+
+图形程序出错时往往「黑屏不报错」——CPU 代码没崩，但 GPU 画面是黑的，因为 GL 错误不会抛异常，只悄悄设个错误码。所以调试 GL 第一步永远是「主动问错误」：glGetError 查最近一次错误、着色器日志查编译失败原因。
+
+更复杂的问题（为什么这个像素是这个颜色、为什么这一帧慢）要靠帧抓取工具：Spector.js 抓 WebGL 单帧的全部调用，RenderDoc 抓桌面 GL 一帧并逐 draw 查看管线状态、纹理、着色器，像给 GPU 做 X 光。
+
+## 概念讲解
+
+### 错误检查
+`gl.getError()` 返回最近一次错误码（INVALID_ENUM/INVALID_VALUE/INVALID_OPERATION 等），需主动轮询。WebGL2 有 `KHR_debug` 扩展可设<Term def="在 GL 错误发生时回调通知的调试回调">调试回调</Term>，错误发生即触发带详细消息。
+
+### 着色器日志
+`getShaderInfoLog` 查编译错误、`getProgramInfoLog` 查链接错误。每个 shader 编译后必查，否则失败只表现为黑屏。
+
+### 帧抓取工具
+<Term def="记录一帧内所有 GL 调用供回放分析的工具">帧抓取器</Term>：Spector.js（浏览器插件/库，抓 WebGL）、RenderDoc（桌面，抓 Vulkan/OpenGL/D3D）。能逐 draw 查看顶点输入、纹理、uniform、管线状态、最终像素。
+
+### 性能剖析
+<Term def="测量 GPU 执行某段命令实际耗时的查询">GPU 计时器查询</Term>（timer query）测 GPU 端耗时；CPU 端用性能标记分段。瓶颈定位：顶点 bound（顶点多/着色器重）vs 片元 bound（过度绘制/片元着色器重）vs 带宽 bound（纹理采样多）。
+
+## 交互Demo
+
+> 猜一猜：画面黑屏但控制台无报错，最可能漏了哪一步检查？
+
+<DogDebuggingToolsDiagram />
+
+<Stepper>
+<Step title="第一步：查错误">
+每个关键操作后 gl.getError 查错误码，开启 KHR_debug 回调让错误主动通知，定位是哪次调用非法。
+</Step>
+<Step title="第二步：查着色器">
+每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog，定位 GLSL 语法或链接错误。
+</Step>
+<Step title="第三步：抓帧剖析">
+用 Spector.js/RenderDoc 抓一帧，逐 draw 查顶点/纹理/uniform/管线状态与像素，用 GPU timer query 定位性能瓶颈。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 错误检查与着色器日志：
+
+```js
+// 封装错误检查
+function checkGLError(gl, tag) {
+  const e = gl.getError();
+  if (e !== gl.NO_ERROR) console.error(`[GL ${tag}]`, e);
+}
+
+// 编译着色器必查日志
+function compileShader(gl, type, src) {
+  const sh = gl.createShader(type);
+  gl.shaderSource(sh, src); gl.compileShader(sh);
+  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+    console.error("着色器编译失败:", gl.getShaderInfoLog(sh));
+    gl.deleteShader(sh); return null;
+  }
+  return sh;
+}
+// 链接程序必查日志
+function linkProgram(gl, vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
+    console.error("链接失败:", gl.getProgramInfoLog(p));
+  return p;
+}
+
+// KHR_debug 回调（WebGL2）
+const dbg = gl.getExtension("KHR_debug");
+if (dbg) {
+  dbg.enable(gl.DEBUG_OUTPUT);
+  gl.debugMessageCallback((msg, source, type, id, sev) => {
+    console.warn("GL debug:", type === dbg.DEBUG_TYPE_ERROR ? "ERROR" : "INFO", msg);
+  }, null);
+}
+```
+
+桌面端用 `glQueryCounter`/`glGetQueryObjectui64v` 做 GPU 计时器查询测真实 GPU 耗时。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 画面黑屏，控制台无任何报错，无从下手。
+**原因 →** GL 错误不抛异常只设错误码，着色器编译失败也不主动报，需主动查。
+**修法 →** 每个关键操作后 getError、每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog；开发期开 KHR_debug 回调让错误主动通知。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 以为是 GPU 慢，优化着色器却没提速。
+**原因 →** 瓶颈可能在 CPU（draw call 太多、状态切换频繁）或带宽（纹理采样过多），而非 GPU 着色计算。
+**修法 →** 用 GPU timer query 测 GPU 端真实耗时，CPU 端分段计时，先定位是顶点/片元/带宽/CPU 哪类瓶颈，再针对性优化。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么 GL 程序出错常表现为黑屏而无异常？开发期应如何系统检查？
+
+<Answer>
+GL 错误不抛异常只设错误码，着色器编译/链接失败也不主动报，只表现为画面黑屏。开发期应系统检查：每个关键操作后 gl.getError 查错误码、每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog，并开启 KHR_debug 回调让错误带详细消息主动通知。
+</Answer>
+
+**问题**：如何找出渲染管线的性能瓶颈？列举主要瓶颈类型与定位手段。
+
+<Answer>
+用 GPU timer query 测 GPU 端真实耗时、CPU 端分段计时对比。主要瓶颈类型：顶点 bound（顶点多或顶点着色器重）、片元 bound（过度绘制或片元着色器重）、带宽 bound（纹理采样过多）、CPU bound（draw call 太多/状态切换频繁）。定位后针对性优化：顶点用 LOD/剔除、片元用前向排序/early-z、带宽用压缩纹理/图集、CPU 用批处理/实例化。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="glGetError">主动查询最近一次 GL 错误码的函数，GL 错误不抛异常需轮询。</GlossaryItem>
+<GlossaryItem term="着色器日志">getShaderInfoLog/getProgramInfoLog 查编译与链接错误，否则失败只表现为黑屏。</GlossaryItem>
+<GlossaryItem term="帧抓取器">记录一帧所有 GL 调用供逐 draw 回放分析的工具，如 Spector.js、RenderDoc。</GlossaryItem>
+<GlossaryItem term="GPU 计时器查询">测量 GPU 执行某段命令实际耗时的查询，用于定位 GPU 端瓶颈。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

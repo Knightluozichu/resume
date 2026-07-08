@@ -1,0 +1,131 @@
+---
+title: "渲染优化策略"
+type: C
+section: "计算机图形学与渲染"
+order: 5
+description: "批处理、实例化、状态排序与带宽优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogRenderingOptimizationDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 draw call 开销的来源与减少手段
+- 能区分批处理与实例化的适用场景
+- 能解释状态排序为何能提速
+- 能回答：为什么纹理图集能降低带宽？
+</Objectives>
+
+## 直觉引入
+
+GPU 画图极快，但每次「下达命令」（draw call）都有固定开销：CPU 要准备状态、驱动要校验、GPU 要切换。于是成百上千个小物体各发一次 draw call，瓶颈往往卡在 CPU 和驱动，而不是 GPU 本身。
+
+优化的核心思想就是「合并」：把多个小物体合成一次绘制（批处理），或用一次绘制画一堆相同几何的副本（实例化），再按状态分组减少切换。目标是让 GPU 忙于画图，而不是等 CPU 下命令。
+
+## 概念讲解
+
+### 减少 draw call
+<Term def="把多个物体合并为一次绘制以分摊固定开销">批处理</Term>（batching）：把同材质物体的顶点合并进一个 VBO 一次画。<Term def="用一次 draw call 绘制多份相同几何的副本">实例化</Term>（instancing）：每个实例只需传一个变换矩阵等「每实例属性」，GPU 复制几何。
+
+### 状态排序
+<Term def="按着色器/纹理/状态分组绘制以减少状态切换">状态排序</Term>：切换程序、绑纹理、开关测试都有开销，把同状态的物体排在一起绘制（如先按 shader 分桶、再按纹理）能大幅减少切换。
+
+### 带宽优化
+<Term def="把多张小纹理拼成一张大纹理减少绑定切换">纹理图集</Term>（atlas）让多个物体共用一个纹理绑定点，避免每物体换纹理；压缩纹理格式（ETC/ASTC）减小显存占用与采样带宽。
+
+### 其他
+视锥剔除、遮挡剔除、LOD、VBO 数据流式更新（glBufferSubData 而非重建）。
+
+## 交互Demo
+
+> 猜一猜：1000 个相同小球，用 drawArrays 画 1000 次和用 drawArraysInstanced 画 1 次，哪个快？
+
+<DogRenderingOptimizationDiagram />
+
+<Stepper>
+<Step title="第一步：减 draw call">
+同材质物体合并 VBO 批处理，或相同几何用实例化一次画多个，分摊每命令固定开销。
+</Step>
+<Step title="第二步：排状态">
+按 shader→纹理→其他状态分组绘制，把同状态物体排在一起，减少切换程序与纹理。
+</Step>
+<Step title="第三步：降带宽">
+用纹理图集让多物体共用纹理、压缩纹理格式减小占用，配合剔除与 LOD 减少需绘制的量。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 实例化与状态排序：
+
+```js
+// 实例化：一次画 N 个立方体，每实例一个变换矩阵
+const matrices = new Float32Array(N * 16);   // 每实例 model 矩阵
+// 把矩阵数组放进一个 VBO，作为实例化属性
+const instanceVBO = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, instanceVBO);
+gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.DYNAMIC_DRAW);
+// mat4 占 4 个属性槽 (2,3,4,5)，每实例推进 1
+for (let i = 0; i < 4; i++) {
+  gl.enableVertexAttribArray(2 + i);
+  gl.vertexAttribPointer(2 + i, 4, gl.FLOAT, false, 64, i * 16);
+  gl.vertexAttribDivisor(2 + i, 1);          // 每实例才推进
+}
+// 一次绘制 N 个实例
+gl.drawElementsInstanced(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0, N);
+
+// 状态排序：绘制前按 shader+纹理分桶
+renderList.sort((a, b) =>
+  a.shader !== b.shader ? a.shader - b.shader : a.texture - b.texture);
+let curShader = -1, curTex = -1;
+for (const item of renderList) {
+  if (item.shader !== curShader) { gl.useProgram(item.shader); curShader = item.shader; }
+  if (item.texture !== curTex)  { gl.bindTexture(gl.TEXTURE_2D, item.texture); curTex = item.texture; }
+  gl.drawElements(gl.TRIANGLES, item.count, gl.UNSIGNED_SHORT, 0);
+}
+```
+
+`vertexAttribDivisor(loc,1)` 让该属性每实例推进一次，是实现实例化的关键。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 用实例化画了 N 个物体，结果每个都长一样、位置没分开。
+**原因 →** 忘了给实例化属性设 vertexAttribDivisor，矩阵属性仍每顶点推进，所有实例拿到第 0 个矩阵。
+**修法 →** 对矩阵的每个属性槽调 vertexAttribDivisor(loc,1)，让属性每实例推进一次，每实例才读到自己的矩阵。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 批处理后物体材质各不相同，合并后没法区分纹理。
+**原因 →** 批处理要求同材质，硬把不同纹理物体合并就无法在着色器里区分。
+**修法 →** 只合并同材质物体；若要合并多纹理，用纹理图集把多张拼成一张，片元里按 UV 偏移采样对应子图。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：draw call 的开销主要在哪？批处理和实例化分别适合什么场景？
+
+<Answer>
+draw call 开销主要在 CPU 准备状态与驱动校验的固定成本，而非 GPU 绘制本身。批处理适合把多个不同几何但同材质的物体合并进一个 VBO 一次画；实例化适合用一次 draw call 画多份相同几何的副本（如一堆相同树/粒子），每实例只传变换等每实例属性。
+</Answer>
+
+**问题**：为什么状态排序能提速？纹理图集如何降低带宽？
+
+<Answer>
+切换程序、绑纹理、开关测试都有固定开销，状态排序把同 shader/纹理/状态的物体排在一起绘制，减少切换次数，让 CPU 和驱动少做无用功。纹理图集把多张小纹理拼成一张大纹理，多个物体共用一个纹理绑定点，避免每物体 bindTexture 切换；且一次绑定后采样器无需频繁换纹理，减少采样带宽与状态切换。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="draw call">一次绘制命令，其固定开销在 CPU 与驱动，是优化重点。</GlossaryItem>
+<GlossaryItem term="批处理">把多个同材质物体合并进一个 VBO 一次绘制，分摊 draw call 开销。</GlossaryItem>
+<GlossaryItem term="实例化">一次 draw call 绘制多份相同几何副本，每实例传变换等每实例属性。</GlossaryItem>
+<GlossaryItem term="纹理图集">多张小纹理拼成一张大纹理，共用绑定点减少切换与采样带宽。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

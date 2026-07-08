@@ -1,0 +1,116 @@
+---
+title: "光照与阴影技术"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "从硬阴影到软阴影再到全局光照近似的光照技术演进"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgLightingShadowsDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-lighting-shadows";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 Shadow Map 的工作原理与硬阴影的成因
+- 能用 PCF 实现软阴影并理解采样数与质量的关系
+- 能回答：阴影的「软」来自什么物理因素？
+- 能区分体积阴影与普通阴影的应用场景
+</Objectives>
+
+## 直觉引入
+
+想象你站在路灯下。灯是一个点时，你的影子边缘锐利；灯是一根长灯管时，影子边缘模糊——离脚越远越模糊。这个日常现象揭示了阴影的核心物理：阴影的软硬由光源面积决定，离遮挡物越远、光源越大，阴影越软。
+
+GPU 渲染阴影就是模拟这个过程：先从光源视角拍一张「深度照片」，再在渲染时比较像素深度判断是否被遮挡。
+
+## 概念讲解
+
+### 阴影技术演进
+
+<GpgLightingShadowsDiagram />
+
+<Term def="Shadow Map 是从光源视角渲染的深度图，用于判断场景中每点是否被光源遮挡">
+Shadow Map（阴影图）
+</Term>
+
+硬阴影只做单次深度比较，边缘锯齿明显；PCF（百分比渐近过滤）在邻域多次采样取平均，边缘平滑过渡；体积阴影存透射率函数，能处理毛发等半透明物；全局光照用球谐函数近似间接光。
+
+<Term def="PCF 是 Percentage-Closer Filtering 的缩写，对阴影图邻域多点采样取平均实现软边缘">
+PCF
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：生成阴影图">
+从光源位置渲染整个场景，只存深度值到纹理。这张深度图就是「光源能看到什么、看不到什么」的记录。阴影图分辨率决定了阴影质量——太低会出锯齿。
+<GpgLightingShadowsDiagram />
+</Step>
+<Step title="第二步：深度比较判断遮挡">
+渲染主场景时，把每个像素变换到光源空间，与阴影图对应位置的深度比较。如果像素深度大于阴影图深度，说明被遮挡，处于阴影中。
+</Step>
+<Step title="第三步：PCF 软化边缘">
+单次比较产生硬边。PCF 在当前像素周围采样多个点，计算被遮挡的比例作为阴影强度，边缘从全黑渐变到全亮，模拟面光源的半影效果。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Shadow Map + PCF 软阴影
+float shadowCalc(vec4 fragPosLightSpace, sampler2D shadowMap) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    float currentDepth = projCoords.z;
+
+    // PCF 3x3 采样
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    for (int x = -1; x <= 1; ++x) {
+        for (int y = -1; y <= 1; ++y) {
+            float closestDepth = texture(shadowMap,
+                projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += currentDepth > closestDepth + 0.005 ? 1.0 : 0.0;
+        }
+    }
+    return shadow / 9.0; // 9 个采样点取平均
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用模糊滤镜让硬阴影变软。**
+对硬阴影做高斯模糊只是在「模糊锯齿」，物理上不正确。真正的软阴影应该用 PCF 或 PCSS，根据遮挡距离自适应采样范围——离遮挡物越远半影越大。
+</Callout>
+
+<Callout type="trap">
+**误区：阴影图分辨率越高越好。**
+阴影图占显存且渲染开销随分辨率平方增长。正确做法是用级联阴影图（CSM），近处用高分辨率、远处用低分辨率，在有限带宽下最大化可视质量。
+</Callout>
+
+<Exercises>
+**问题 1**：阴影的「软」来自什么物理因素？
+
+<Answer>
+来自光源的面积。点光源产生硬阴影（全影无半影）；面光源产生软阴影，因为光源不同部分投射的阴影相互错开形成半影区。遮挡物离投影面越远，半影区越宽，阴影越软。
+</Answer>
+
+**问题 2**：PCF 和直接模糊阴影图有什么本质区别？
+
+<Answer>
+PCF 是在深度比较阶段对多个采样点分别判断遮挡再取平均，每个点的遮挡关系是物理正确的。直接模糊是对比较结果做后处理，会把本该锐利的接触阴影也糊掉。PCSS 进一步根据遮挡距离自适应采样半径，物理上更准确。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Shadow Map">从光源视角渲染的深度纹理，记录光源到各场景点的最近距离，用于判断遮挡。</GlossaryItem>
+<GlossaryItem term="PCF">百分比渐近过滤，对阴影图邻域多点采样取平均，实现物理正确的软阴影边缘。</GlossaryItem>
+<GlossaryItem term="体积阴影">存储透射率函数而非单一深度的阴影技术，能处理毛发、烟雾等半透明物体的自阴影。</GlossaryItem>
+<GlossaryItem term="CSM">级联阴影图，将视锥体分段用不同分辨率阴影图覆盖，近处高清远处低清。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

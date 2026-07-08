@@ -1,0 +1,120 @@
+---
+title: "几何着色器与图元"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "几何着色器的图元增删与应用"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GlsGeometryShadersDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-geometry-shaders";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解几何着色器的输入输出模型
+- 掌握EmitVertex/EndPrimitive
+- 了解几何着色器的典型应用
+- 理解几何着色器的性能限制
+</Objectives>
+
+## 直觉引入
+
+几何着色器就像变形金刚——输入一个图元(如三角形)，可以输出0个(删除)、1个(不变)或多个(分裂)图元。它能在图元级别增删几何体，但并行度低性能差，是管线中「最灵活但最慢」的阶段。
+
+## 概念讲解
+
+<Term def="逐图元执行的着色器，可增删图元">几何着色器</Term><Term def="发射一个顶点到输出图元">EmitVertex</Term><Term def="结束当前图元开始新图元">EndPrimitive</Term><Term def="几何着色器可输出0~N个图元(有上限)">图元增删</Term>
+
+### 输入输出
+输入:layout(points/lines/triangles) in，可选带邻接信息。输出:layout(points/line_strip/triangle_strip, max_vertices=N) out。
+
+### 核心API
+EmitVertex()发射顶点，EndPrimitive()结束图元。输入图元的顶点通过gl_in[i].gl_Position访问。
+
+### 应用
+法线可视化、毛发渲染、爆炸粒子、阴影体积、billboard生成。
+
+### 性能
+并行度低(逐图元)、输出不定(工作量不均)。现代API不推荐使用。
+
+## 交互Demo
+
+> 猜一猜：为什么几何着色器性能比顶点/片段着色器差？
+
+<GlsGeometryShadersDiagram />
+
+<Stepper>
+<Step title="第一步：配置输入输出">
+layout(triangles) in; layout(triangle_strip, max_vertices=3) out。定义输入输出图元类型和最大顶点数。
+</Step>
+<Step title="第二步：处理图元">
+读取输入图元顶点(gl_in[i].gl_Position)，计算变换后用EmitVertex()发射。
+</Step>
+<Step title="第三步：结束图元">
+EndPrimitive()结束当前图元。可发射多个图元(如法线可视化:三角形+法线线段)。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 几何着色器: 三角形法线可视化
+#version 330 core
+layout(triangles) in;
+layout(line_strip, max_vertices=2) out;
+in vec3 vNormal[];
+uniform mat4 mvp;
+void main() {
+    vec3 center = (gl_in[0].gl_Position.xyz + gl_in[1].gl_Position.xyz + gl_in[2].gl_Position.xyz) / 3.0;
+    vec3 normal = vNormal[0];
+    gl_Position = mvp * vec4(center, 1.0);
+    EmitVertex();
+    gl_Position = mvp * vec4(center + normal * 0.5, 1.0);
+    EmitVertex();
+    EndPrimitive(); // 输出法线线段
+}
+```
+
+几何着色器输入3个顶点(三角形)输出2个顶点(线段)表示法线方向。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 用几何着色器做大量细分。
+**原因 →** 几何着色器能输出多个图元。
+**修法 →** 几何着色器并行度低(max_vertices限制输出)。大量细分应用曲面细分管线(有Tessellator固定功能)。几何着色器适合少量图元变换。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 几何着色器输出无上限。
+**原因 →** 需要动态生成大量几何。
+**修法 →** max_vertices有上限(通常256)。大量几何应用曲面细分或预计算。几何着色器适合图元级别的少量变换。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：几何着色器为什么性能差？
+
+<Answer>
+1)并行度低(一个图元一个线程vs片段着色器大规模并行) 2)输出顶点数不定导致工作量不均 3)可能放大几何量增加光栅化负担。现代API不推荐使用。
+</Answer>
+
+**问题**：几何着色器的典型应用？
+
+<Answer>
+1)法线/线框可视化 2)毛发渲染 3)爆炸粒子 4)阴影体积 5)billboard生成。核心是图元级别的增删。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="几何着色器">逐图元执行的着色器，可增删图元。</GlossaryItem>
+<GlossaryItem term="EmitVertex">发射一个顶点到输出图元。</GlossaryItem>
+<GlossaryItem term="EndPrimitive">结束当前图元开始新图元。</GlossaryItem>
+<GlossaryItem term="图元增删">几何着色器可输出0~N个图元(有上限)。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

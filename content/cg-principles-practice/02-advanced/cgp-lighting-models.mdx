@@ -1,0 +1,121 @@
+---
+title: "光照模型与着色"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "Flat/Gouraud/Phong三种着色频率对比"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CgpLightingModelsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-lighting-models";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分光照模型（Phong/Blinn-Phong）和着色频率（Flat/Gouraud/Phong）
+- 能解释三种着色频率的原理和效果差异
+- 能说出Gouraud着色丢失高光的原因
+- 能回答：现代GPU用哪种着色频率？为什么？
+</Objectives>
+
+## 直觉引入
+
+想象你在给一个球上色。方案A（Flat）：每个面涂一个颜色——球看起来像由很多平面拼成。方案B（Gouraud）：在顶点处算颜色，面内渐变——球看起来光滑但高光可能不准确。方案C（Phong着色）：在面内插值法线，每个像素算光照——高光锐利准确。
+
+注意区分：Phong光照模型（环境+漫反射+镜面）和Phong着色频率（逐像素计算光照）是两个不同的概念，虽然都叫Phong。
+
+## 概念讲解
+
+### 着色频率
+
+<CgpLightingModelsDiagram />
+
+<Term def="Flat着色是逐面计算光照，每个图元一个颜色的着色方式">Flat着色</Term>：用面法线，一个三角形一个颜色。最快最粗糙。
+
+<Term def="Gouraud着色是逐顶点计算光照，颜色在面内插值的着色方式">Gouraud着色</Term>：在顶点处算光照，颜色双线性插值。高光可能丢失（如果高光不在顶点处）。
+
+<Term def="Phong着色是逐像素计算光照，法线在面内插值的着色方式">Phong着色</Term>：法线插值，每像素算光照。高光锐利准确，现代GPU标准。
+
+<Term def="着色频率是光照计算的粒度：面/顶点/像素">着色频率</Term>决定了渲染质量和性能的权衡。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Flat着色">逐面计算，用面法线。三角形内颜色一致，能看到明显的面边界。适合Low-poly风格或调试法线。</Step>
+<Step title="第二步：Gouraud着色">
+逐顶点计算，颜色在面内插值。比Flat光滑，但如果高光点不在顶点上，高光会丢失或变形。
+<CgpLightingModelsDiagram />
+</Step>
+<Step title="第三步：Phong着色">逐像素计算，法线在面内插值。高光准确锐利，质量最好。现代GPU的片段着色器天然支持逐像素着色。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 三种着色频率的对比
+
+// Flat: 在几何着色器中计算面法线
+// vec3 faceNormal = cross(v1-v0, v2-v0);
+// gl_FragColor = vec4(calcLight(faceNormal), 1.0);
+
+// Gouraud: 顶点着色器算颜色，插值传给片段着色器
+// vertex shader:
+// vec3 color = ambient + diffuse * max(dot(N, L), 0) + spec * pow(...);
+// outColor = color; // 传给片段着色器插值
+
+// Phong shading: 片段着色器逐像素计算
+#version 330 core
+in vec3 fragNormal;  // 插值后的法线
+in vec3 fragPos;     // 插值后的位置
+uniform vec3 lightDir;
+uniform vec3 viewDir;
+
+void main() {
+    vec3 N = normalize(fragNormal); // 逐像素归一化插值法线
+    vec3 L = normalize(lightDir);
+    vec3 V = normalize(viewDir);
+    // 逐像素计算Phong光照
+    vec3 ambient = vec3(0.1);
+    vec3 diffuse = max(dot(N, L), 0.0) * vec3(0.8);
+    vec3 H = normalize(L + V);
+    vec3 specular = pow(max(dot(N, H), 0.0), 32.0) * vec3(1.0);
+    gl_FragColor = vec4(ambient + diffuse + specular, 1.0);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：混淆Phong光照模型和Phong着色频率。**
+Phong光照模型 = 环境光+漫反射+镜面反射的公式。Phong着色频率 = 逐像素计算光照。两者独立——你可以用Gouraud着色频率配Phong光照模型（在顶点处算Phong公式），也可以用Phong着色频率配Lambert光照模型（逐像素算漫反射）。
+</Callout>
+
+<Callout type="trap">
+**误区：认为Gouraud和Phong着色只是性能差异。**
+不只是性能差异，是视觉质量的本质差异。Gouraud在顶点处算光照再插值颜色，如果高光点恰好在三角形中间（不在顶点上），高光会被完全丢失。Phong着色插值法线再逐像素计算，无论高光在哪里都能正确呈现。对于高光物体（金属、塑料），两者差异非常明显。
+</Callout>
+
+<Exercises>
+**问题 1**：三种着色频率的原理分别是什么？效果有什么差异？
+
+<Answer>
+Flat着色：逐面计算，用面法线算光照，三角形内颜色一致，能看到明显面边界。Gouraud着色：逐顶点计算，在顶点处用Phong模型算颜色，颜色在三角形内双线性插值，表面看起来光滑但高光可能丢失。Phong着色：逐像素计算，法线在三角形内插值，每像素用插值法线计算光照，高光锐利准确。质量递增：Flat < Gouraud < Phong；性能递减：Flat > Gouraud > Phong。
+</Answer>
+
+**问题 2**：现代GPU用哪种着色频率？为什么Gouraud着色会丢失高光？
+
+<Answer>
+现代GPU用Phong着色频率（逐像素计算光照），因为片段着色器天然逐像素执行，性能开销与Gouraud差异不大（早期GPU是逐顶点算再插值，现代GPU计算能力足够逐像素）。Gouraud丢失高光的原因：高光是光照的非线性函数（pow(N·H, n)），而Gouraud在顶点处算完颜色后再线性插值。如果高光点在三角形中间（不在顶点上），顶点处可能完全没有高光，插值后高光就消失了。Phong着色插值法线（线性量）再算光照（非线性函数），正确捕获了中间的高光。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="着色频率">光照计算的粒度，分Flat（面）、Gouraud（顶点）、Phong（像素）三种，决定渲染质量和性能。</GlossaryItem>
+<GlossaryItem term="Flat着色">逐面计算光照的着色方式，每个图元一个颜色，最快但最粗糙。</GlossaryItem>
+<GlossaryItem term="Gouraud着色">逐顶点计算光照再插值颜色的着色方式，高光可能丢失。</GlossaryItem>
+<GlossaryItem term="Phong着色">逐像素计算光照的着色方式，法线在面内插值，高光锐利准确，现代GPU标准。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />

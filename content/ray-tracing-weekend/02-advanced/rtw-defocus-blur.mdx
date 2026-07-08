@@ -1,0 +1,138 @@
+---
+title: "散焦模糊与景深"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "用薄透镜近似模拟相机的景深效果"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwDefocusBlurDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-defocus-blur";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释针孔相机与薄透镜相机的区别
+- 能写出从散焦圆盘采样起点构造光线的流程
+- 能说明焦距（focus_dist）如何决定清晰平面
+- 能回答：为什么远离焦平面的物体会变模糊？
+</Objectives>
+
+## 直觉引入
+
+之前的相机是个「针孔」：所有光线都从同一个点出发，所以远近物体都一样清晰。真实相机有镜头，镜头有一定大小，光线从镜头各处进入并汇聚——只有恰好在「对焦距离」上的物体落在焦平面上最清晰，太近或太远的物体会发散成一团光斑，这就是景深/散焦模糊。
+
+光线追踪用「薄透镜近似」模拟它：相机不再是单点，而是一个小圆盘；每条光线的起点在圆盘上随机取一点，但方向仍指向视口上同一像素对应的对焦点。对焦点固定在焦平面上，于是焦平面上的物体清晰，前后物体因不同起点出发的光线落点错开而模糊。
+
+## 概念讲解
+
+<Term def="假设光线穿过薄透镜中心不改变方向的简化模型">薄透镜近似</Term>。设<Term def="镜头开孔大小决定模糊强度">光圈</Term>半径 $r$、<Term def="对焦平面到相机的距离">焦距</Term> $f_d$。
+
+### 构造散焦光线
+1. 视口仍按焦距 $f_d$ 摆放（而非单位 1），使视口正好落在焦平面上。
+2. 对像素 $(u,v)$，先算焦平面上的目标点 $\mathbf{t}$ = `lower_left_corner + u·horizontal + v·vertical`。
+3. 在相机所在圆盘上随机取起点 $\mathbf{o}'=\mathbf{o}+\vec{p}_{disk}\cdot r$。
+4. 该像素的这条采样光线 = `ray(o', t − o')`。
+
+### 为什么产生模糊
+焦平面上的点：无论从圆盘哪个起点出发，方向都指向同一目标点，最终汇聚到同一像素——清晰。不在焦平面的点：不同起点出发的光线指向同一像素目标但实际经过该点的不同位置，叠加后散成一团——模糊。距离焦平面越远，散得越开，越模糊。
+
+## 交互Demo
+
+> 猜一猜：光圈半径调大，景深是变浅（模糊更明显）还是变深？
+
+<RtwDefocusBlurDiagram />
+
+<Stepper>
+<Step title="第一步：设焦平面">
+选定对焦距离 focus_dist，把视口摆在该距离处，视口上的点即对焦点。
+</Step>
+<Step title="第二步：圆盘采样">
+在相机所在的光圈圆盘内随机取一点 o' 作为这条光线的起点（替代原来的单点 O）。
+</Step>
+<Step title="第三步：发射与累加">
+光线方向 = 对焦点 t − o'。每像素多条采样平均，焦平面上清晰，前后物体因起点不同而发散模糊。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 散焦相机：
+
+```cpp
+class camera {
+  public:
+    camera(double vfov, double aspect, double focus_dist, double aperture) {
+      auto theta = degrees_to_radians(vfov);
+      auto h = tan(theta/2);
+      viewport_height = 2 * h;
+      viewport_width  = aspect * viewport_height;
+
+      w = unit_vector(lookfrom - lookat);     // 视线反方向
+      u = unit_vector(cross(vup, w));          // 右
+      v = cross(w, u);                          // 上
+
+      origin = lookfrom;
+      horizontal = focus_dist * viewport_width * u;
+      vertical   = focus_dist * viewport_height * v;
+      lower_left_corner = origin - horizontal/2 - vertical/2
+                          - focus_dist*w;
+      lens_radius = aperture / 2;
+    }
+    ray get_ray(double s, double t) const {
+      vec3 rd = lens_radius * random_in_unit_disk();   // 圆盘采样
+      vec3 offset = u*rd.x() + v*rd.y();
+      // 起点偏移，方向仍指向焦平面上的同一点
+      return ray(origin + offset,
+                 lower_left_corner + s*horizontal + t*vertical
+                 - origin - offset);
+    }
+  private:
+    point3 origin, lower_left_corner;
+    vec3 horizontal, vertical, u, v, w;
+    double lens_radius;
+};
+```
+
+`random_in_unit_disk` 在单位圆内均匀采样；`offset` 让起点在光圈圆盘内游走，方向始终锁向焦平面对焦点。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 调了光圈但画面毫无模糊，远近一样清晰。
+**原因 →** lens_radius 算成 0（aperture 没传或除错），或 offset 没加到 ray 的起点上，光线仍从单点出发。
+**修法 →** 确认 lens_radius=aperture/2 且 get_ray 把 offset 加到 origin 上、同时从方向里减去 offset，使方向锁向焦平面同一点。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 整张图都模糊，连对焦物体也糊。
+**原因 →** 视口没按 focus_dist 缩放，对焦点不在焦平面上，所有物体都偏离对焦距离。
+**修法 →** horizontal、vertical、lower_left_corner 都乘 focus_dist，让视口正好落在焦平面上，对焦物体才会清晰。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：散焦模糊的光线起点和方向分别怎么确定？为什么焦平面上的物体会清晰？
+
+<Answer>
+起点在相机光圈圆盘内随机取 o'=O+offset；方向指向焦平面上该像素的对焦点 t，即 t−o'。焦平面上的物体恰好在焦距处，不同起点出发的光线都汇聚到同一像素的同一像点，叠加不发散，所以清晰；偏离焦平面的物体则因不同起点的光线落点错开而模糊。
+</Answer>
+
+**问题**：光圈半径变大，景深如何变化？focus_dist 改变影响什么？
+
+<Answer>
+光圈半径变大，散焦圆盘更大，偏离焦平面的物体散得更开、模糊更强，景深变浅（清晰范围变窄）。focus_dist 决定焦平面到相机的距离，改变它就是「对焦」到不同远近的物体：该距离上的物体清晰，其他距离更模糊。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="薄透镜近似">假设光线过透镜中心不改变方向的简化模型，用于模拟相机景深。</GlossaryItem>
+<GlossaryItem term="光圈">镜头开孔大小（半径），决定散焦模糊强度；越大景深越浅。</GlossaryItem>
+<GlossaryItem term="焦距">focus_dist，对焦平面到相机的距离，该距离上的物体最清晰。</GlossaryItem>
+<GlossaryItem term="散焦圆盘">相机所在的光圈圆盘，每条光线的起点在其中随机采样。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

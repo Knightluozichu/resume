@@ -1,0 +1,170 @@
+---
+title: "交换链与呈现"
+type: C
+section: "计算机图形学与渲染"
+order: 3
+description: "创建交换链、选择格式与呈现模式、管理交换链图像并实现窗口呈现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgSwapchainDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-swapchain";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解交换链的核心作用与 VkSurfaceKHR 的创建方式
+- 掌握交换链格式、颜色空间、分辨率与呈现模式的选择策略
+- 学会获取和管理交换链图像并实现呈现循环
+- 理解窗口尺寸变化时重建交换链的必要性与流程
+</Objectives>
+
+## 直觉引入
+
+想象一个画师团队在画动画。他们有一块「展示板」挂在画廊墙上给观众看，同时手里有好几块「画板」在后台轮流画。画师在后台画板上画好下一帧后，把展示板和画好的画板「交换」一下，观众就看到了新画面。这就是交换链的本质——一组在后台渲染、前台展示之间轮换的图像缓冲。
+
+Vulkan 中交换链就是这套「画板系统」，它把渲染结果安全地送到屏幕上。
+
+## 概念讲解
+
+### VkSurfaceKHR：跨平台窗口表面
+
+<Term def="VkSurfaceKHR 是 Vulkan 与窗口系统之间的抽象连接，由平台特定的 WSI 扩展创建，是交换链的前提。">VkSurfaceKHR</Term> 将平台相关的窗口系统（如 Windows 的 HWND、Linux 的 XCB 窗口）抽象为 Vulkan 可识别的表面。它需要 `VK_KHR_surface` 实例扩展和平台特定的扩展（如 `VK_KHR_win32_surface`）。
+
+### 交换链的核心参数
+
+创建 <Term def="VkSwapchainKHR 是一组用于呈现到屏幕的图像的集合，管理着后台缓冲与前台显示的轮换机制。">VkSwapchainKHR</Term> 时需要配置以下关键参数：
+
+- **图像格式与颜色空间**：通常选 `VK_FORMAT_B8G8R8A8_SRGB` + `VK_COLOR_SPACE_SRGB_NONLINEAR_KHR`
+- **图像数量**：至少比 `minImageCount` 多一张，实现双缓冲或三缓冲
+- **分辨率（extent）**：取 `VkSurfaceCapabilitiesKHR.currentExtent`，特殊值时手动钳制到 `minImageExtent`~`maxImageExtent`
+- **用途**：渲染目标至少需要 `VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT`
+- **转换**：通常用 `VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR`
+
+### 呈现模式
+
+<Term def="呈现模式决定交换链图像如何与显示器刷新同步，影响延迟与撕裂之间的权衡。">呈现模式（Present Mode）</Term> 有三种主要类型：
+
+| 模式 | 行为 | 适用场景 |
+|------|------|----------|
+| `VK_PRESENT_MODE_FIFO_KHR` | 先进先出，VSync 开启 | 默认保证，无撕裂 |
+| `VK_PRESENT_MODE_MAILBOX_KHR` | 邮箱模式，丢弃旧帧 | 低延迟三缓冲 |
+| `VK_PRESENT_MODE_IMMEDIATE_KHR` | 立即呈现，无同步 | 最低延迟，可能撕裂 |
+
+### 图像获取与呈现
+
+```c
+// 获取交换链图像
+uint32_t imageIndex;
+vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+    imageAvailableSemaphore, VK_NULL_HANDLE, &imageIndex);
+
+// 渲染到 swapchainImages[imageIndex]...
+
+// 呈现
+VkPresentInfoKHR presentInfo = {
+    .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+    .swapchainCount = 1,
+    .pSwapchains = &swapchain,
+    .pImageIndices = &imageIndex,
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &renderFinishedSemaphore,
+};
+vkQueuePresentKHR(presentQueue, &presentInfo);
+```
+
+## 交互Demo
+
+> 猜一猜：FIFO 和 Mailbox 模式下，当 GPU 渲染速度远快于显示器刷新率时，帧率表现有何不同？
+
+<VkgSwapchainDiagram />
+
+<Stepper>
+  <Step title="查询表面能力">
+    调用 `vkGetPhysicalDeviceSurfaceCapabilitiesKHR` 获取 `minImageCount`、`currentExtent`、`maxImageExtent` 等参数。这些值决定交换链图像数量和分辨率的可选范围。
+  </Step>
+  <Step title="选择格式与呈现模式">
+    从 `vkGetPhysicalDeviceSurfaceFormatsKHR` 中选取格式（优先 `B8G8R8A8_SRGB`）；从 `vkGetPhysicalDeviceSurfacePresentModesKHR` 中选择模式。默认用 FIFO 保证无撕裂，需要低延迟时用 Mailbox。
+  </Step>
+  <Step title="创建交换链并获取图像">
+    填充 `VkSwapchainCreateInfoKHR`，调用 `vkCreateSwapchainKHR`。然后用 `vkGetSwapchainImagesKHR` 获取所有图像句柄，为每张图像创建 `VkImageView`。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+交换链创建与重建：
+
+```c
+// 查询表面能力
+VkSurfaceCapabilitiesKHR capabilities;
+vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+    physicalDevice, surface, &capabilities);
+
+// 选择图像数量（三缓冲）
+uint32_t imageCount = capabilities.minImageCount + 1;
+if (capabilities.maxImageCount > 0 &&
+    imageCount > capabilities.maxImageCount)
+    imageCount = capabilities.maxImageCount;
+
+// 创建交换链
+VkSwapchainCreateInfoKHR swapInfo = {
+    .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+    .surface = surface,
+    .minImageCount = imageCount,
+    .imageFormat = surfaceFormat.format,
+    .imageColorSpace = surfaceFormat.colorSpace,
+    .imageExtent = extent,
+    .imageArrayLayers = 1,
+    .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    .preTransform = capabilities.currentTransform,
+    .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+    .presentMode = presentMode,
+    .clipped = VK_TRUE,
+    .oldSwapchain = VK_NULL_HANDLE,
+};
+
+vkCreateSwapchainKHR(device, &swapInfo, NULL, &swapchain);
+```
+
+## 常见误区
+
+<Callout type="trap">
+在窗口尺寸变化时忘记重建交换链。当 `VK_ERROR_OUT_OF_DATE_KHR` 返回时，必须销毁旧交换链并创建新的，否则渲染会卡住或崩溃。重建前要等待设备空闲（`vkDeviceWaitIdle`）。
+</Callout>
+
+<Callout type="trap">
+混用 `imageAvailableSemaphore` 和 `renderFinishedSemaphore`。获取图像时等的是 `imageAvailable`（图像就绪），呈现时等的是 `renderFinished`（渲染完成）。顺序搞反会导致 GPU 空转或验证层报错。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. `VK_PRESENT_MODE_FIFO_KHR` 和 `VK_PRESENT_MODE_MAILBOX_KHR` 在帧率表现上有什么区别？
+   <Answer>
+   FIFO 模式下，如果 GPU 渲染快于显示器刷新，多余的帧会在队列中等待，帧率被限制在显示器刷新率，延迟较高但不丢帧。Mailbox 模式下，新渲染的帧会替换队列中尚未展示的旧帧（邮箱行为），帧率仍受刷新率限制但延迟更低，因为总是展示最新帧。
+   </Answer>
+
+2. 为什么 `vkAcquireNextImageKHR` 需要信号量？能否直接用 fence 代替？
+   <Answer>
+   信号量用于 GPU-GPU 同步：确保图像在渲染命令开始前就绪，让 GPU 自动等待，不阻塞 CPU。Fence 用于 CPU-GPU 同步，如果用 fence 则 CPU 必须阻塞等待 GPU 确认图像可用，降低并发效率。标准做法是用信号量做 GPU 侧同步，fence 仅用于帧级 CPU 同步（如等待前一帧渲染完成）。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="VkSurfaceKHR">
+    Vulkan 与窗口系统之间的抽象连接表面，由 WSI 扩展创建，是交换链呈现的前提。不同平台使用不同的 surface 创建扩展。
+  </GlossaryItem>
+  <GlossaryItem term="VkSwapchainKHR">
+    一组用于呈现到屏幕的图像集合，管理后台渲染与前台显示的轮换机制。创建时需指定格式、分辨率、图像数量和呈现模式。
+  </GlossaryItem>
+  <GlossaryItem term="呈现模式 (Present Mode)">
+    决定交换链图像如何与显示器刷新同步的策略。FIFO 保证无撕裂但有延迟，Mailbox 低延迟但消耗更多功耗，Immediate 无同步可能撕裂。
+  </GlossaryItem>
+  <GlossaryItem term="VK_ERROR_OUT_OF_DATE_KHR">
+    表示交换链不再与表面兼容（通常是窗口尺寸变化），需要销毁旧交换链并重建。是窗口应用必须处理的常见返回码。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />

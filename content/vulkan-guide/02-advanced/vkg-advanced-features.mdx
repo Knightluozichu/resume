@@ -1,0 +1,198 @@
+---
+title: "高级特性与扩展"
+type: D
+section: "计算机图形学与渲染"
+order: 8
+description: "对比理解 Vulkan 高级扩展：光线追踪、网格着色器、描述符索引与可变速率着色"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgAdvancedFeaturesDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-advanced-features";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Vulkan 扩展系统的层级与版本演进机制
+- 掌握光线追踪管线的核心概念（BLAS/TLAS/着色器绑定表）
+- 理解网格着色器对传统管线的替代与优势
+- 对比描述符索引（Bindless）与可变速率着色（VRS）的应用场景
+</Objectives>
+
+## 直觉引入
+
+Vulkan 的核心 API 像是一台标准相机——功能完备但基础。扩展系统则是这台相机的「镜头生态」：你可以在标准机身上加装长焦镜头（光线追踪）、微距镜头（网格着色器）或可变光圈（VRS）。每个扩展都有特定的 `VK_KHR_*` / `VK_EXT_*` 前缀，需要在使用前检查设备支持并启用。成熟的扩展会被「提升」进核心 API（如 Vulkan 1.3 把动态渲染和同步2提升为核心）。
+
+## 概念讲解
+
+### Vulkan 扩展系统
+
+<Term def="Vulkan 扩展是 API 功能的增量包，分实例级和设备级，通过扩展名启用，成熟后可被提升进核心版本。">Vulkan 扩展（Extension）</Term> 分为：
+
+- **KHR 扩展**（`VK_KHR_*`）：Khronos 官方认可，跨厂商广泛支持
+- **EXT 扩展**（`VK_EXT_*`）：多厂商扩展，支持度不一
+- **厂商扩展**（`VK_NV_*`、`VK_AMD_*`）：特定厂商专有
+
+使用前必须用 `vkEnumerateDeviceExtensionProperties` 检查支持，并在 `VkDeviceCreateInfo` 中启用。
+
+### 光线追踪
+
+<Term def="VK_KHR_ray_tracing_pipeline 扩展提供硬件加速光线追踪能力，通过加速结构（BLAS/TLAS）和着色器绑定表（SBT）实现。">光线追踪管线</Term> 的核心组件：
+
+```c
+// 加速结构
+// BLAS (Bottom-Level AS): 几何体加速结构（三角形/ AABB）
+// TLAS (Top-Level AS): 实例加速结构，引用多个 BLAS
+
+// 着色器绑定表 (SBT): 光线追踪着色器的函数指针表
+// 包含 raygen / miss / closest-hit / any-hit 着色器
+
+vkCmdTraceRaysKHR(cmdBuffer,
+    &raygenShaderBindingTable,
+    &missShaderBindingTable,
+    &hitShaderBindingTable,
+    &callableShaderBindingTable,
+    width, height, depth);
+```
+
+光线追踪着色器类型：`raygen`（生成光线）、`closest-hit`（最近命中）、`miss`（未命中）、`any-hit`（任意命中）、`intersection`（自定义相交）。
+
+### 网格着色器
+
+<Term def="VK_EXT_mesh_shader 扩展用网格着色器替代传统顶点输入/装配/曲面细分阶段，以线程组为单位直接生成图元。">网格着色器（Mesh Shader）</Term> 重新设计了几何处理管线：
+
+```glsl
+// mesh shader: 线程组直接输出顶点和三角形
+#version 460
+#extension GL_EXT_mesh_shader : require
+
+layout(local_size_x = 32) in;
+layout(triangles, max_vertices = 64, max_primitives = 124) out;
+
+void main() {
+    // 程序化生成几何体，无需顶点缓冲
+    SetMeshOutputsEXT(vertexCount, primitiveCount);
+    // ... 填充顶点和索引
+}
+```
+
+### 描述符索引（Bindless）
+
+<Term def="VK_EXT_descriptor_indexing 扩展允许着色器通过动态索引访问大型描述符数组，实现 bindless 资源绑定。">描述符索引</Term> 解放了描述符数量的硬限制：
+
+```glsl
+// Bindless 纹理数组
+layout(binding = 0) uniform sampler2D textures[];
+
+void main() {
+    // 通过实例索引或顶点数据动态选择纹理
+    vec4 color = texture(textures[materialIndex], uv);
+}
+```
+
+### 可变速率着色（VRS）
+
+<Term def="VK_KHR_fragment_shading_rate 扩展允许按图元或屏幕区域降低片段着色率，在低重要性区域节省 GPU 算力。">可变速率着色（VRS）</Term>：
+
+```c
+// 按图元设置着色率
+VkGraphicsPipelineShaderStageCreateInfo...
+vkCmdSetFragmentShadingRateKHR(cmdBuffer,
+    &fragmentShadingRate, &shadingRateCombinerOps);
+// 可选速率：1x1, 1x2, 2x1, 2x2, 4x4 等
+```
+
+## 交互Demo
+
+> 猜一猜：光线追踪和网格着色器能否在同一个渲染管线中混用？
+
+<VkgAdvancedFeaturesDiagram />
+
+<Stepper>
+  <Step title="检查扩展支持">
+    枚举设备扩展，检查 `VK_KHR_ray_tracing_pipeline`、`VK_EXT_mesh_shader`、`VK_EXT_descriptor_indexing` 等是否支持。在 `VkDeviceCreateInfo` 中启用所需扩展，并查询相关特性（如 `VkPhysicalDeviceRayTracingPipelineFeaturesKHR`）。
+  </Step>
+  <Step title="选择高级特性组合">
+    根据场景需求组合：光线追踪用于反射/阴影/全局光照；网格着色器用于程序化几何或 LOD；Bindless 用于大量纹理的材质系统；VRS 用于 VR 或低性能区域降采样。
+  </Step>
+  <Step title="实现与回退">
+    实现核心路径后，为不支持扩展的设备提供回退方案（如用计算着色器模拟光线追踪，用传统管线替代网格着色器）。用特性查询而非版本号判断支持度。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+扩展启用与特性查询：
+
+```c
+// 查询光线追踪特性
+VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+};
+VkPhysicalDeviceFeatures2 features2 = {
+    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+    .pNext = &rtFeatures,
+};
+vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+
+if (!rtFeatures.rayTracingPipeline) {
+    // 回退到光栅化或计算着色器方案
+}
+
+// 启用扩展
+const char* deviceExtensions[] = {
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+};
+
+VkDeviceCreateInfo deviceInfo = {
+    ...
+    .pNext = &features2,  // 链入特性结构体
+    .enabledExtensionCount = 4,
+    .ppEnabledExtensionNames = deviceExtensions,
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+用 API 版本号判断扩展支持。Vulkan 1.3 包含了部分被提升的扩展（如 descriptor_indexing、dynamic_rendering），但很多扩展（如 ray_tracing_pipeline、mesh_shader）永远不会被提升进核心，必须通过扩展查询判断。始终用 `vkEnumerateDeviceExtensionProperties` 检查。
+</Callout>
+
+<Callout type="trap">
+在 Bindless 场景中忘记启用 `shaderSampledImageArrayNonUniformIndexing` 特性。当着色器中根据非 uniform 数据（如 `gl_InstanceID`）索引纹理数组时，必须启用此特性。否则验证层会报错，且某些 GPU 上会出现未定义行为。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. 光线追踪管线中的 BLAS 和 TLAS 分别是什么？为什么要分两级？
+   <Answer>
+   BLAS（Bottom-Level AS）是几何体级别的加速结构，直接包含三角形或 AABB 数据，构建开销大但可复用。TLAS（Top-Level AS）是实例级别，引用多个 BLAS 并包含实例变换矩阵，构建快且可每帧重建。分两级的原因：场景中同一模型可能被多次实例化（如一片森林用同一棵树），BLAS 只构建一次，TLAS 每帧更新实例变换即可，避免重复构建几何加速结构。
+   </Answer>
+
+2. 网格着色器相比传统顶点管线有什么优势？适用于什么场景？
+   <Answer>
+   优势：1) 以线程组为单位直接输出顶点和图元，跳过顶点输入/装配/曲面细分等固定阶段，减少状态管理开销；2) 支持程序化几何生成，无需顶点缓冲；3) 更适合 GPU 驱动的渲染管线，减少 CPU-GPU 数据传输；4) 线程组内可共享数据，便于 LOD 和剔除。适用于：大规模粒子/植被渲染、GPU 驱动管线、程序化地形、点云渲染等场景。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Vulkan 扩展 (Extension)">
+    API 功能的增量包，分实例级和设备级。KHR 扩展跨厂商认可，EXT 扩展多厂商支持，厂商扩展特定设备专有。成熟扩展可被提升进核心 API。
+  </GlossaryItem>
+  <GlossaryItem term="BLAS/TLAS">
+    光线追踪的两级加速结构。BLAS 是几何体级（三角形/AABB），构建慢可复用；TLAS 是实例级，引用 BLAS 并含变换矩阵，构建快可每帧更新。
+  </GlossaryItem>
+  <GlossaryItem term="网格着色器 (Mesh Shader)">
+    替代传统顶点管线的可编程阶段，以线程组为单位直接输出顶点和图元。支持程序化几何和 GPU 驱动渲染，无需顶点缓冲。
+  </GlossaryItem>
+  <GlossaryItem term="可变速率着色 (VRS)">
+    允许按图元或屏幕区域降低片段着色率的机制。在低重要性区域（如边缘、运动模糊区）减少着色调用，节省 GPU 算力，适用于 VR 和性能敏感场景。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />

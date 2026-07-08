@@ -1,0 +1,112 @@
+---
+title: "高级渲染技术"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "阴影映射、延迟着色与全局光照"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4AdvancedRenderingDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-advanced-rendering";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解阴影映射的原理与两步法
+- 掌握Shadow Acne与Peter Panning的解决
+- 区分延迟着色与前向着色
+- 了解全局光照的实时近似方法
+</Objectives>
+
+## 直觉引入
+
+阴影映射就像用手电筒照墙——从光源视角看哪些面被照亮（生成阴影贴图），再从摄像机视角检查每个点是否在光源的阴影中。延迟着色则是先记录所有几何信息到G-Buffer，再统一计算光照，避免多光源时的重复计算。
+
+## 概念讲解
+
+<Term def="从光源视角渲染深度生成Shadow Map的两步阴影算法">阴影映射</Term><Term def="延迟着色中存储几何属性的多渲染目标缓冲区">G-Buffer</Term><Term def="先写G-Buffer再逐像素计算光照的渲染策略">延迟着色</Term><Term def="模拟光多次反弹形成间接光照的技术">全局光照</Term>
+
+### 阴影映射
+两步：1)从光源渲染深度->Shadow Map 2)从摄像机渲染时比较深度，被遮挡则在阴影中。
+问题：Shadow Acne(自遮挡)->加bias；Peter Panning(物体悬浮)->减小bias。
+
+### 延迟着色
+前向O(几何*光源)。延迟O(几何+像素*光源)，多光源高效但不支持透明。
+
+### 全局光照近似
+AO、Lightmap、Light Probe、VXGI、SSR、RTX。
+
+## 交互Demo
+
+> 猜一猜：为什么延迟着色不支持透明物体？
+
+<Cg4AdvancedRenderingDiagram />
+
+<Stepper>
+<Step title="第一步：生成Shadow Map">
+从光源视角渲染场景只写深度，生成阴影贴图。
+</Step>
+<Step title="第二步：阴影判定">
+从摄像机渲染时将片段变换到光源空间比较深度，更远则被遮挡。
+</Step>
+<Step title="第三步：高级技术">
+阴影边缘软化用PCF；延迟着色用G-Buffer分离几何与光照；GI用AO/Lightmap等近似。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 阴影判定(片段着色器)
+float shadowCalc(vec4 fragPosLightSpace, sampler2D shadowMap) {
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+    float closestDepth = texture(shadowMap, projCoords.xy).r;
+    float currentDepth = projCoords.z;
+    float bias = 0.005;
+    return currentDepth - bias > closestDepth ? 1.0 : 0.0;
+}
+```
+
+bias解决Shadow Acne(自遮挡条纹)。PCF(多点采样平均)软化阴影边缘。Shadow Map分辨率影响阴影质量。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** Shadow Acne：阴影区出现条纹。
+**原因 →** Shadow Map精度有限导致自遮挡。
+**修法 →** 加深度偏移(bias)或使用正面剔除生成Shadow Map。bias过大会导致Peter Panning。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 延迟着色不支持透明物体。
+**原因 →** G-Buffer只存一层几何信息。
+**修法 →** 透明物体用前向着色单独渲染，不透明用延迟着色，最后混合。这是混合渲染管线的常见做法。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：阴影映射的两步是什么？
+
+<Answer>
+1)从光源视角渲染深度生成Shadow Map 2)从摄像机渲染时将片段变换到光源空间比较深度，更远则被遮挡在阴影中。
+</Answer>
+
+**问题**：延迟着色和前向着色的区别？优缺点？
+
+<Answer>
+前向逐图元渲染O(几何*光源)简单但多光源重复计算。延迟先写G-Buffer再逐像素O(几何+像素*光源)多光源高效。缺点：G-Buffer带宽大、不支持透明、材质受限、MSAA困难。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="阴影映射">从光源视角渲染深度生成Shadow Map再比较深度的两步阴影算法。</GlossaryItem>
+<GlossaryItem term="G-Buffer">延迟着色中存储位置/法线/颜色等几何属性的缓冲区。</GlossaryItem>
+<GlossaryItem term="延迟着色">先写G-Buffer再逐像素计算光照的渲染策略，多光源高效。</GlossaryItem>
+<GlossaryItem term="全局光照">模拟光多次反弹形成间接光照的技术，实时中用多种近似。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

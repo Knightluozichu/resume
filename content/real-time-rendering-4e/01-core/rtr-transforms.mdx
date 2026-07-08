@@ -1,0 +1,106 @@
+---
+title: "几何变换与空间"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "从模型空间到裁剪空间的坐标变换链"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrTransformsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-transforms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能画出从模型空间到裁剪空间的完整变换链
+- 能解释Model、View、Projection三个矩阵各自的作用
+- 能区分透视投影和正交投影的适用场景
+- 能回答：为什么需要齐次坐标？
+</Objectives>
+
+## 直觉引入
+
+想象你在用Google Earth。最开始你看到的是整栋楼（模型空间），然后镜头拉远看到整条街（世界空间），再切换到街景视角（观察空间），最后屏幕上显示的画面（裁剪空间→屏幕空间）。每一步「切换」背后都是一个矩阵乘法。
+
+坐标变换的本质就是：同一个点，在不同参考系下有不同的坐标值。矩阵就是「翻译器」。
+
+## 概念讲解
+
+### 坐标空间变换链
+
+<RtrTransformsDiagram />
+
+一个顶点从模型空间到屏幕要经过四次变换：<Term def="Model矩阵将顶点从模型局部空间变换到世界空间">Model矩阵</Term>→<Term def="View矩阵将顶点从世界空间变换到相机观察空间">View矩阵</Term>→<Term def="Projection矩阵将顶点从观察空间变换到裁剪空间">Projection矩阵</Term>→透视除法→屏幕映射。
+
+合并后就是经典的MVP变换：clip_pos = P × V × M × model_pos。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：模型到世界">Model矩阵包含平移、旋转、缩放，把物体从局部坐标系放到世界坐标系。理解每个分量的含义。</Step>
+<Step title="第二步：世界到观察">
+View矩阵本质是相机的逆变换——把相机移到原点看向-Z方向。世界空间的所有物体随之变换。
+<RtrTransformsDiagram />
+</Step>
+<Step title="第三步：投影与除法">Projection矩阵做透视/正交投影，裁剪空间做透视除法（w除法）得到NDC，再映射到屏幕像素坐标。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// MVP 变换的完整代码
+// 顶点着色器
+uniform mat4 uModel;    // 模型矩阵
+uniform mat4 uView;     // 观察矩阵
+uniform mat4 uProj;     // 投影矩阵
+
+void main() {
+    // 方式1：分步变换（便于理解）
+    vec4 worldPos = uModel * vec4(aPos, 1.0);
+    vec4 viewPos  = uView * worldPos;
+    vec4 clipPos  = uProj * viewPos;
+    
+    // 方式2：合并变换（实际使用，CPU端预计算）
+    // mat4 mvp = uProj * uView * uModel;
+    // gl_Position = mvp * vec4(aPos, 1.0);
+    
+    gl_Position = clipPos;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：混淆行主序和列主序。**
+OpenGL/GLSL使用列主序矩阵，向量左乘矩阵（M×v）。DirectX使用行主序，向量右乘（v×M）。混用会导致变换结果完全错误。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解透视除法的作用。**
+裁剪空间的坐标是齐次的，w分量不为1。透视除法把x/y/z都除以w，才能得到归一化设备坐标（NDC）。这是「近大远小」效果产生的关键步骤。
+</Callout>
+
+<Exercises>
+**问题 1**：MVP变换中三个矩阵分别完成什么空间变换？
+
+<Answer>
+Model矩阵将顶点从模型空间变换到世界空间（放置物体）；View矩阵将顶点从世界空间变换到观察空间（相机视角）；Projection矩阵将顶点从观察空间变换到裁剪空间（投影）。三者组合：clip = P×V×M×pos。
+</Answer>
+
+**问题 2**：为什么需要齐次坐标？
+
+<Answer>
+齐次坐标用4个分量表示3D点，w=1表示点，w=0表示方向。这使得平移变换可以用矩阵乘法表示（3×3矩阵无法表示平移）。同时，透视投影后w分量携带深度信息，透视除法用w除以x/y/z实现近大远小效果。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Model矩阵">将顶点从模型局部空间变换到世界空间的4x4矩阵，包含平移、旋转、缩放。</GlossaryItem>
+<GlossaryItem term="View矩阵">将顶点从世界空间变换到相机观察空间的矩阵，本质是相机变换的逆矩阵。</GlossaryItem>
+<GlossaryItem term="Projection矩阵">将顶点从观察空间变换到裁剪空间的矩阵，分透视投影和正交投影两种。</GlossaryItem>
+<GlossaryItem term="透视除法">将裁剪空间坐标除以w分量得到归一化设备坐标（NDC）的操作，是透视效果产生的原因。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

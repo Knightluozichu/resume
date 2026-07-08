@@ -1,0 +1,136 @@
+---
+title: "漫反射与兰伯特模型"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "兰伯特余弦律与随机单位球采样的漫反射"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtwDiffuseDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-diffuse";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出兰伯特余弦律的物理含义
+- 能写出漫反射散射方向的「法线 + 随机单位向量」公式
+- 能解释伽马校正为什么对最终画面必不可少
+- 能回答：为什么随机采样会带来噪点，如何消除？
+</Objectives>
+
+## 直觉引入
+
+哑光墙面没有镜面反射，光打上去后均匀散向四面八方——但「均匀」不是真的各方向等量。物理上，光线越斜着照，单位面积分到的能量越少（冬天太阳低斜就冷），这就是兰伯特余弦律：亮度正比于光与法线夹角的余弦。
+
+光线追踪实现漫反射很巧妙：不直接算余弦，而是让散射方向 = 法线 + 一个随机单位向量。这样随机方向天然偏向法线一侧（与法线夹角大的概率低），恰好符合余弦分布——既物理正确又简单。
+
+## 概念讲解
+
+<Term def="漫反射亮度正比于光线与法线夹角余弦的物理定律">兰伯特余弦律</Term>。设入射方向与法线夹角 $\theta$，表面辐照度 $\propto \cos\theta$。
+
+### 散射方向公式
+本书的漫反射材质：在交点 $\mathbf{p}$ 处取一个随机单位向量 $\vec{s}$，散射方向为：
+
+$$
+\mathbf{d} = \mathbf{N} + \vec{s}
+$$
+
+若 $\mathbf{d}$ 恰好指向表面内部（与 $\mathbf{N}$ 反向），则取 $-\mathbf{d}$ 修正。这种「法线加随机向量」的采样等价于在单位球面上均匀采样后偏移，自然产生余弦加权分布，是物理正确的兰伯特模型。
+
+### 伽马校正
+光的能量与显示亮度是非线性的。线性累加的颜色需做伽马校正 $\sqrt{\cdot}$（γ=2）后写入像素，否则画面整体偏暗、中间调发灰。
+
+## 交互Demo
+
+> 猜一猜：把每个像素的采样数从 1 加到 100，漫反射球的噪点会怎样变化？
+
+<RtwDiffuseDiagram />
+
+<Stepper>
+<Step title="第一步：取随机向量">
+在交点 p 处生成随机单位向量 s（在单位球内均匀取点再归一化）。
+</Step>
+<Step title="第二步：构造散射方向">
+散射方向 d = N + s；若 d 与 N 反向（指向内部）则取 −d，保证光线射向表面外侧。
+</Step>
+<Step title="第三步：递归与平均">
+对每个像素发射多条这样的随机光线，递归取色后平均，再经伽马校正写入像素，得到平滑的哑光表面。
+</Step>
+</Stepper>
+
+## 代码对照
+
+C++ 漫反射材质与伽马校正：
+
+```cpp
+class lambertian : public material {
+  public:
+    lambertian(const color& a) : albedo(a) {}
+    bool scatter(const ray& r_in, const hit_record& rec,
+                 color& attenuation, ray& scattered) const override {
+      // 散射方向 = 法线 + 随机单位向量
+      vec3 scatter_dir = rec.normal + random_unit_vector();
+      // 防止退化方向（scatter_dir 接近 0）
+      if (scatter_dir.near_zero()) scatter_dir = rec.normal;
+      scattered   = ray(rec.p, scatter_dir, r_in.time());
+      attenuation = albedo;
+      return true;
+    }
+  private:
+    color albedo;
+};
+
+// 写入像素时做伽马校正（γ=2 即开平方）
+void write_color(std::ostream& out, color pixel_color, int samples) {
+  auto scale = 1.0 / samples;
+  auto r = sqrt(scale * pixel_color.x());   // gamma 2
+  auto g = sqrt(scale * pixel_color.y());
+  auto b = sqrt(scale * pixel_color.z());
+  out << static_cast<int>(256 * clamp(r, 0, 0.999)) << ' '
+      << static_cast<int>(256 * clamp(g, 0, 0.999)) << ' '
+      << static_cast<int>(256 * clamp(b, 0, 0.999)) << '\n';
+}
+```
+
+`sqrt` 就是 γ=2 的伽马校正；`samples` 分摊保证多次采样平均。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 漫反射球边缘出现一圈过亮的「光晕」，且噪点偏多。
+**原因 →** 用了「在单位球内取随机点」直接当方向（旧版的简单但偏置写法），分布不够准确。
+**修法 →** 使用法线 + 随机单位向量（random_unit_vector）的真正兰伯特采样，分布物理正确，阴影过渡更柔和。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 渲染结果整体偏暗，灰墙像水泥。
+**原因 →** 累加颜色后没做伽马校正，线性值直接映射到 0–255，中间调被压暗。
+**修法 →** 写入像素前对每个通道开平方（sqrt），做 γ=2 校正，灰墙才会呈现自然的中间灰。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么散射方向用 N + 随机单位向量能近似兰伯特余弦分布？
+
+<Answer>
+在单位球面上均匀采样得到的方向 s，加到法线 N 上后，合成方向 d 与 N 的夹角越大概率越小（因为 s 偏离 N 时 d 长度与方向变化使大角样本稀疏），自然产生与 cosθ 成正比的密度——这正是兰伯特余弦律要求的分布。无需显式算余弦，几何采样就内置了正确的加权。
+</Answer>
+
+**问题**：为什么写入像素前要开平方（伽马校正）？不做会怎样？
+
+<Answer>
+光的能量累加是线性的，但显示器亮度与输入信号是非线性的（约 γ=2.2）。不做伽马校正时，线性值直接映射会压暗中间调，画面整体偏暗发灰。开平方（γ=2 近似）把线性值「提亮」回感知均匀的亮度，灰墙才显得自然。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="兰伯特余弦律">漫反射表面亮度正比于入射光与法线夹角的余弦 cosθ，是哑光材质的物理基础。</GlossaryItem>
+<GlossaryItem term="随机单位向量">在单位球面上均匀采样得到的方向，加到法线上构成漫反射散射方向。</GlossaryItem>
+<GlossaryItem term="伽马校正">把线性累加的颜色按 γ≈2 映射到显示亮度（开平方），使中间调不致偏暗。</GlossaryItem>
+<GlossaryItem term="albedo">反照率，漫反射材质的衰减色，表示表面反射各波长的比例。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

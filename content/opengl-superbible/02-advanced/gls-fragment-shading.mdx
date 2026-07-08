@@ -1,0 +1,117 @@
+---
+title: "片段着色与混合"
+type: B
+section: "计算机图形学与渲染"
+order: 4
+description: "片段着色器、深度测试与混合"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GlsFragmentShadingDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-fragment-shading";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解片段与像素的区别
+- 掌握逐片段操作流程
+- 学会Alpha混合配置
+- 能优化片段着色器性能
+</Objectives>
+
+## 直觉引入
+
+片段着色就像画画的最后一步——每个片段(潜在像素)经过着色(上色)→深度测试(是否被挡)→模板测试(是否在掩码内)→混合(与已有颜色混合)后，才能成为屏幕上的像素。不是所有片段都能成为像素。
+
+## 概念讲解
+
+<Term def="光栅化生成的潜在像素，包含颜色/深度等信息">片段</Term><Term def="比较片段深度与深度缓冲，更近的通过">深度测试</Term><Term def="用模板缓冲做掩码控制哪些像素可写">模板测试</Term><Term def="根据Alpha值将源色与目标色混合">Alpha混合</Term>
+
+### 逐片段操作顺序
+片段着色器→深度测试(可Early-Z)→模板测试→混合→写入帧缓冲
+
+### Early-Z
+在片段着色器前做深度测试提前剔除。但如果着色器修改深度或discard则失效。
+
+### 混合
+result = src*srcAlpha + dst*(1-srcAlpha)。透明物体需从后向前排序。
+
+## 交互Demo
+
+> 猜一猜：为什么discard会降低性能？
+
+<GlsFragmentShadingDiagram />
+
+<Stepper>
+<Step title="第一步：片段着色">
+片段着色器逐片段计算光照/纹理，输出最终颜色。执行次数最多(逐片段)。
+</Step>
+<Step title="第二步：深度/模板测试">
+Early-Z在着色器前做深度测试(如果着色器不修改深度)。模板测试用掩码控制可写区域。
+</Step>
+<Step title="第三步：混合输出">
+Alpha混合将片段颜色与帧缓冲已有颜色混合。透明物体需从后向前排序。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 片段着色器: 光照+透明裁剪
+#version 330 core
+in vec2 TexCoord;
+in vec3 Normal;
+uniform sampler2D texture1;
+void main() {
+    vec4 texColor = texture(texture1, TexCoord);
+    if(texColor.a < 0.1) discard; // 透明像素丢弃
+    vec3 N = normalize(Normal);
+    FragColor = texColor;
+}
+// 混合配置(CPU端)
+// glEnable(GL_BLEND);
+// glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+// glDepthMask(GL_FALSE); // 透明物体不写深度
+```
+
+discard直接丢弃片段(不写入帧缓冲)。但会禁用Early-Z(硬件无法提前知道哪些被discard)。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 透明物体用discard而非混合。
+**原因 →** discard看起来更简单。
+**修法 →** discard适合硬边透明(如叶子纹理)。半透明(玻璃)应用Alpha混合。discard禁用Early-Z影响性能，混合则不影响。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 在片段着色器中修改gl_FragDepth。
+**原因 →** 想精确控制深度。
+**修法 →** 修改gl_FragDepth禁用Early-Z，性能大幅下降。只在必要时使用。如果深度可以提前计算，尽量在顶点着色器中输出。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：片段和像素的区别？
+
+<Answer>
+片段是潜在像素，含颜色/深度/模板等信息。通过深度测试、模板测试、混合等逐片段操作后写入帧缓冲才成为像素。一个像素可能对应多个片段。
+</Answer>
+
+**问题**：如何优化片段着色器性能？
+
+<Answer>
+1)减少纹理采样 2)用Mipmap减少带宽 3)避免discard(用alpha blend替代) 4)简化光照 5)Z-Prepass减少着色器执行 6)延迟着色多光源。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="片段">光栅化生成的潜在像素，包含颜色/深度等信息。</GlossaryItem>
+<GlossaryItem term="深度测试">比较片段深度与深度缓冲，更近的通过。</GlossaryItem>
+<GlossaryItem term="模板测试">用模板缓冲做掩码控制哪些像素可写。</GlossaryItem>
+<GlossaryItem term="Alpha混合">根据Alpha值将源色与目标色混合。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />

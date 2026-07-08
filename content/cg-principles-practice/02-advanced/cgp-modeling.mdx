@@ -1,0 +1,122 @@
+---
+title: "建模与表示方法"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "多边形网格、参数曲面、体素与CSG对比"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CgpModelingDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-modeling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出四种3D表示方法及其特点
+- 能解释多边形网格为什么是GPU的标准格式
+- 能描述Bezier曲线和NURBS的控制原理
+- 能回答：细分曲面如何从低模生成光滑曲面？
+</Objectives>
+
+## 直觉引入
+
+想象你在做雕塑。方案A（多边形网格）：用很多小三角形拼出形状——简单但不够光滑。方案B（参数曲面）：用控制点拉出光滑曲面——光滑但GPU不直接支持。方案C（体素）：用小方块堆叠——像Minecraft。方案D（CSG）：用基本体做布尔运算（并/交/差）——像搭积木。
+
+每种表示方法都有适用场景。GPU只认多边形网格，所以其他表示方法最终都要转换（tessellation）成网格才能渲染。
+
+## 概念讲解
+
+### 3D表示方法
+
+<CgpModelingDiagram />
+
+<Term def="多边形网格是用顶点、边、面表示3D物体的离散表示方法">多边形网格</Term>：GPU原生支持，简单高效，但光滑度受面数限制。
+
+<Term def="参数曲面是用数学函数和控制点定义的光滑曲面，如Bezier和B-spline">参数曲面</Term>：精确光滑，适合CAD，需tessellation转网格。
+
+<Term def="体素是用3D规则网格表示体积数据的表示方法">体素</Term>：适合体积数据（医学CT/MRI），内存消耗大。
+
+<Term def="CSG是用布尔运算（并/交/差）组合基本体的建模方法">CSG</Term>：适合CAD，参数化精确，渲染需转网格。
+
+<Term def="细分曲面是通过迭代细化多边形网格生成光滑曲面的技术">细分曲面</Term>：Catmull-Clark/Loop细分，动画电影标配。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：多边形网格">顶点+边+面。GPU原生格式，最通用。三角形是最小图元，任何多边形都可三角化。理解为什么GPU只支持三角形。</Step>
+<Step title="第二步：参数曲面与细分">
+Bezier/B-spline/NURBS用控制点定义曲面。细分曲面（Catmull-Clark）迭代细化网格到光滑。动画电影用低模控制+细分生成高模。
+<CgpModelingDiagram />
+</Step>
+<Step title="第三步：体素与CSG">体素适合体积数据（CT/MRI/地形）。CSG用布尔运算组合基本体（球/柱/方），适合CAD参数化建模。两者渲染时都需转换。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 多边形网格数据结构
+struct Mesh {
+    std::vector<vec3> vertices;   // 顶点位置
+    std::vector<vec3> normals;    // 顶点法线
+    std::vector<vec2> uvs;        // 纹理坐标
+    std::vector<int> indices;     // 索引（三角形）
+};
+
+// 渲染时提交给GPU
+void render(Mesh& mesh) {
+    glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+    glBufferData(GL_ARRAY_BUFFER, 
+        mesh.vertices.size() * sizeof(vec3),
+        mesh.vertices.data(), GL_STATIC_DRAW);
+    // ... 绑定法线、UV等
+    glDrawElements(GL_TRIANGLES, 
+        mesh.indices.size(), 
+        GL_UNSIGNED_INT, 0);
+}
+
+// Catmull-Clark 细分（简化）
+Mesh subdivide(Mesh& m) {
+    // 1. 每个面添加面点（顶点平均）
+    // 2. 每条边添加边点（邻接顶点+面点平均）
+    // 3. 更新原顶点（周围点加权平均）
+    // 4. 重新连接生成新面
+    return refinedMesh;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为多边形网格不能表示光滑曲面。**
+多边形网格本身是离散的，但通过增加面数可以达到任意光滑度。细分曲面技术（Catmull-Clark）可以从低模自动生成高模光滑曲面——皮克斯的所有动画电影都用这种方法，最终渲染时仍是多边形网格。
+</Callout>
+
+<Callout type="trap">
+**误区：认为NURBS比多边形网格更先进应该取代它。**
+NURBS在CAD领域确实更精确（参数化、可编辑），但GPU只支持三角形渲染。NURBS需要tessellation（曲面细分）转换成三角形才能渲染，转换的开销和复杂度限制了它在实时渲染中的应用。多边形网格+细分曲面是实时渲染的主流方案。
+</Callout>
+
+<Exercises>
+**问题 1**：四种3D表示方法各有什么特点和适用场景？
+
+<Answer>
+多边形网格：顶点+边+面，GPU原生支持，简单高效，适合实时渲染和游戏。参数曲面（Bezier/NURBS）：控制点定义光滑曲面，精确可编辑，适合CAD/工业设计，需tessellation转网格。体素：3D规则网格表示体积，适合医学成像/地形/流体模拟，内存消耗大。CSG：布尔运算组合基本体，参数化精确，适合CAD建模，渲染需转网格。选择依据：实时渲染用网格，精确设计用参数曲面/CSG，体积数据用体素。
+</Answer>
+
+**问题 2**：细分曲面如何从低模生成光滑曲面？
+
+<Answer>
+细分曲面通过迭代规则细化多边形网格，每次细分将一个面分成更多小面，新顶点位置由周围顶点加权计算，经过多次迭代后网格收敛到光滑曲面。Catmull-Clark细分（皮克斯发明的标准）：1)每个面添加面点（面顶点平均）；2)每条边添加边点（邻接顶点和面点的平均）；3)更新原顶点（周围面点和边点的加权平均）；4)重新连接生成4边形面。经过2-3次迭代，低模就变成光滑的高模。动画师只需控制低模，细分自动生成光滑效果。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="多边形网格">用顶点、边、面表示3D物体的离散表示方法，GPU原生支持的标准格式。</GlossaryItem>
+<GlossaryItem term="参数曲面">用数学函数和控制点定义的光滑曲面（Bezier/B-spline/NURBS），需tessellation转网格渲染。</GlossaryItem>
+<GlossaryItem term="体素">用3D规则网格表示体积数据的表示方法，适合医学成像和流体模拟。</GlossaryItem>
+<GlossaryItem term="细分曲面">通过迭代细化多边形网格生成光滑曲面的技术，Catmull-Clark/Loop细分是动画电影标配。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />

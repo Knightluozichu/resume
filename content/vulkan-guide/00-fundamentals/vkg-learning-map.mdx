@@ -1,0 +1,137 @@
+---
+title: "Vulkan 学习指南 全书学习地图"
+type: A
+section: "计算机图形学与渲染"
+order: 0
+description: "十章脉络——从显式 API 到完整渲染管线的路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgLearningMapDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-learning-map";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Vulkan 相对 OpenGL 的「显式」体现在哪
+- 能描述 Vulkan 程序的五大初始化步骤
+- 能解释命令缓冲与队列的提交模型
+- 能回答：为什么 Vulkan 代码量大但性能高？
+</Objectives>
+
+## 直觉引入
+
+如果说 OpenGL 是「自动挡」（驱动帮你猜很多事），Vulkan 就是「手动挡」：你要自己选设备、自己分配内存、自己录命令、自己管同步。麻烦，但你能精确控制每一步，没有驱动的隐式开销，性能天花板更高。
+
+Vulkan 的哲学是「显式」：把过去驱动偷偷做的事全部暴露给你——内存怎么分、资源何时同步、命令怎么录。代码量大得多，但换来的是可预测的高性能和跨平台一致行为。
+
+## 概念讲解
+
+### 与 OpenGL 的区别
+<Term def="驱动不做隐式状态管理与同步、一切由应用显式指定的 API 风格">显式 API</Term>：OpenGL 是状态机，驱动隐式管理同步与内存；Vulkan 无全局状态，对象显式创建，同步由你负责。
+
+### 五大初始化步骤
+1. <Term def="Vulkan 与应用连接的根对象">实例</Term>（Instance）：初始化 Vulkan 库。
+2. <Term def="选择 GPU 并创建逻辑设备">物理/逻辑设备</Term>：选显卡、建队列。
+3. <Term def="管理可呈现图像的缓冲队列">交换链</Term>：创建可显示的图像。
+4. <Term def="描述完整渲染流程的不可变对象">图形管线</Term>：编译着色器、管线状态。
+5. <Term def="预录制绘制命令供反复提交">命令缓冲</Term>：录命令、提交到队列、呈现。
+
+### 提交模型
+<Term def="预录制的 GPU 命令序列">命令缓冲</Term>录制好后提交到<Term def="GPU 执行命令的通道">队列</Term>，GPU 异步执行；同步靠栅栏与信号量显式控制。
+
+## 交互Demo
+
+> 猜一猜：Vulkan 画一个三角形，初始化代码比 OpenGL 多多少？
+
+<VkgLearningMapDiagram />
+
+<Stepper>
+<Step title="第一步：初始化">
+创建 Instance、选物理设备、建逻辑设备与队列、建交换链，搭好 GPU 通信骨架。
+</Step>
+<Step title="第二步：建管线">
+创建渲染通道、编译图形管线（着色器+固定状态），描述完整渲染流程。
+</Step>
+<Step title="第三步：录命令渲染">
+录制命令缓冲（begin→draw→end）、提交到队列、等待栅栏、呈现交换链图像，循环渲染。
+</Step>
+</Stepper>
+
+## 代码对照
+
+Vulkan 程序骨架（C，伪代码）：
+
+```c
+// 1. 实例
+VkInstance instance;
+VkInstanceCreateInfo ci = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
+vkCreateInstance(&ci, NULL, &instance);
+
+// 2. 物理设备 + 逻辑设备
+VkPhysicalDevice physical;
+vkEnumeratePhysicalDevices(instance, &count, &physical);
+VkDevice device;
+VkDeviceQueueCreateInfo qci = { /* queue family */ };
+VkDeviceCreateInfo dci = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+                           .queueCreateInfoCount = 1, .pQueueCreateInfos = &qci };
+vkCreateDevice(physical, &dci, NULL, &device);
+
+// 3. 交换链
+createSwapchain(device, &swapchain);          // 含图像、格式、呈现模式
+
+// 4. 图形管线
+createRenderPass(device, &renderPass);
+createGraphicsPipeline(device, renderPass, &pipeline); // 着色器+状态
+
+// 5. 命令缓冲与渲染循环
+recordCommandBuffer(cmd, pipeline, swapchain);
+while (!done) {
+  vkAcquireNextImageKHR(...);                  // 取图像
+  vkQueueSubmit(queue, submitInfo, fence);     // 提交命令
+  vkQueueWaitIdle(queue);                      // 显式同步
+  vkQueuePresentKHR(queue, &presentInfo);      // 呈现
+}
+```
+
+每一步都对应一个 Vulkan 对象，显式创建显式管理。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 以为 Vulkan 比 OpenGL「更先进」所以学 Vulkan 就抛弃 OpenGL。
+**原因 →** 误把 API 风格当优劣，忽略 Vulkan 的代码量与复杂度代价。
+**修法 →** 按需选择：要极致性能与跨平台一致行为、团队有能力管理复杂度才上 Vulkan；快速原型或学习图形学仍可从 OpenGL 开始，Vulkan 是进阶。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 跳过同步直接提交命令，画面撕裂或崩溃。
+**原因 →** Vulkan 无隐式同步，图像未就绪就绘制、未画完就呈现都会出错。
+**修法 →** 用信号量协调「取图像→绘制→呈现」的顺序，用栅栏等 CPU 端命令完成，显式管理每个资源的生命周期。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：Vulkan 的「显式」体现在哪几个方面？它和 OpenGL 状态机模型有何不同？
+
+<Answer>
+显式体现在：无全局状态、对象显式创建；内存分配由应用管；同步（栅栏/信号量）由应用负责；命令预录制到命令缓冲再提交。OpenGL 是状态机，驱动隐式管理状态与同步、有全局当前上下文；Vulkan 把这些隐式行为全部暴露给应用，代码量大但可预测、无驱动隐式开销。
+</Answer>
+
+**问题**：为什么 Vulkan 代码量大但性能高？
+
+<Answer>
+代码量大因为应用要显式做很多 OpenGL 里驱动偷做的事（选设备、分配内存、管同步、录命令、建管线）。性能高因为没有了驱动的隐式状态检查与同步开销，应用能精确控制资源生命周期与并行度，多线程录制命令缓冲、预编译管线，CPU 开销低且行为可预测，跨平台一致。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="显式 API">驱动不做隐式状态管理与同步、一切由应用显式指定的 API 风格，Vulkan 的核心特征。</GlossaryItem>
+<GlossaryItem term="实例">Vulkan 与应用连接的根对象，初始化 Vulkan 库。</GlossaryItem>
+<GlossaryItem term="命令缓冲">预录制的 GPU 命令序列，提交到队列异步执行，可反复重用。</GlossaryItem>
+<GlossaryItem term="同步原语">栅栏（Fence，CPU 等 GPU）与信号量（Semaphore，GPU 内部顺序），Vulkan 同步靠它们显式管理。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="" />

@@ -1,0 +1,128 @@
+---
+title: "高级着色与BRDF"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "从经验模型到基于物理的微表面理论"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrAdvancedShadingDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-advanced-shading";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出BRDF的一般形式并解释漫反射+镜面反射的分解
+- 能解释Cook-Torrance模型的三个微表面函数(D/F/G)
+- 能区分经验模型和PBR的核心差异
+- 能回答：为什么PBR需要能量守恒？
+</Objectives>
+
+## 直觉引入
+
+想象你在鉴定宝石。经验模型（Phong）像用肉眼估光泽——看起来差不多就行。基于物理的BRDF像用光谱仪测量——每个参数都有物理意义，能量必须守恒。Phong说「这个高光看起来对」就够了，PBR说「这个材质在不同光照下都对」。
+
+PBR的核心是微表面理论：表面由无数微小镜面组成，它们的朝向分布决定了反射模式。粗糙表面微镜面朝向混乱，反射光散开；光滑表面微镜面整齐，反射光集中。
+
+## 概念讲解
+
+### 基于物理的BRDF
+
+<RtrAdvancedShadingDiagram />
+
+<Term def="BRDF是双向反射分布函数，描述光线从入射方向到反射方向的能量分布">BRDF</Term>的一般形式：f_r = k_d×f_diffuse + k_s×f_specular。
+
+<Term def="Cook-Torrance模型是基于微表面理论的物理BRDF，镜面项为D×F×G/(4(N·L)(N·V))">Cook-Torrance</Term>模型的三个关键函数：
+- <Term def="D是法线分布函数，描述微表面法线与半角向量对齐的比例，常用GGX">D（法线分布）</Term>：控制高光形状和锐度
+- <Term def="F是菲涅尔项，描述反射率随入射角增大而增大的现象，常用Schlick近似">F（菲涅尔）</Term>：掠射角反射增强
+- <Term def="G是几何遮蔽函数，描述微表面之间相互遮挡的比例，常用Smith">G（几何遮蔽）</Term>：边缘暗化效果
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：从经验到物理">Phong的参数是任意调的，PBR的参数有物理意义（粗糙度、金属度）。理解为什么能量守恒是PBR的核心约束。</Step>
+<Step title="第二步：微表面三函数">
+D控制高光大小（粗糙度），F控制反射强度（角度依赖），G控制边缘暗化（遮蔽）。三者相乘除以归一化项。
+<RtrAdvancedShadingDiagram />
+</Step>
+<Step title="第三步：PBR实践">金属度工作流：金属用F0=反射率，非金属用F0=0.04。粗糙度映射到GGX的alpha参数。跨引擎一致是PBR的关键优势。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Cook-Torrance BRDF 实现 (GLSL)
+
+// GGX 法线分布函数 D
+float D_GGX(float NdotH, float roughness) {
+    float a = roughness * roughness;
+    float a2 = a * a;
+    float NdotH2 = NdotH * NdotH;
+    float denom = NdotH2 * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * denom * denom);
+}
+
+// Schlick 菲涅尔近似 F
+vec3 F_Schlick(float cosTheta, vec3 F0) {
+    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
+}
+
+// Smith 几何遮蔽 G
+float G_Smith(float NdotV, float NdotL, float roughness) {
+    float r = roughness + 1.0;
+    float k = (r * r) / 8.0;
+    float gv = NdotV / (NdotV * (1.0 - k) + k);
+    float gl = NdotL / (NdotL * (1.0 - k) + k);
+    return gv * gl;
+}
+
+// 最终 BRDF
+vec3 cookTorrance(vec3 N, vec3 L, vec3 V, vec3 F0, float roughness) {
+    vec3 H = normalize(L + V);
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotV = max(dot(N, V), 0.0);
+    float NdotH = max(dot(N, H), 0.0);
+    float D = D_GGX(NdotH, roughness);
+    vec3 F = F_Schlick(max(dot(H, V), 0.0), F0);
+    float G = G_Smith(NdotV, NdotL, roughness);
+    vec3 spec = (D * F * G) / (4.0 * NdotL * NdotV + 0.001);
+    return spec * NdotL;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把粗糙度和金属度混为一谈。**
+粗糙度控制高光的扩散程度（光滑→锐利高光，粗糙→散开高光），金属度控制反射率和颜色（金属=反射率高且无漫反射，非金属=反射率低且有漫反射）。两者是完全独立的材质属性。
+</Callout>
+
+<Callout type="trap">
+**误区：忽略能量守恒。**
+PBR要求反射光能量不超过入射光能量。如果k_d + k_s > 1，表面会「发光」。正确做法是从Fresnel计算k_s，然后k_d = 1 - k_s（对金属k_d=0），保证总能量守恒。
+</Callout>
+
+<Exercises>
+**问题 1**：Cook-Torrance模型的D、F、G三个函数分别描述什么物理现象？
+
+<Answer>
+D（法线分布函数）描述微表面法线与半角向量H对齐的比例，控制高光的形状和锐度（GGX比Blinn更真实）；F（菲涅尔项）描述反射率随入射角增大而增大的现象（掠射角时接近全反射）；G（几何遮蔽函数）描述微表面之间相互遮挡的比例，产生边缘暗化效果。三者乘积除以归一化因子4(N·L)(N·V)得到镜面反射BRDF。
+</Answer>
+
+**问题 2**：为什么PBR需要能量守恒？不守恒会怎样？
+
+<Answer>
+能量守恒保证反射光不超过入射光，这是物理定律。不守恒时：1）表面可能「发光」（反射比入射还亮）；2）在不同光照条件下材质表现不一致（白天看起来对、夜晚太亮）；3）无法跨场景复用材质参数。PBR通过Fresnel计算k_s再用k_d=(1-k_s)保证漫反射+镜面反射之和不超过入射能量，使同一组参数在任何光照下都正确。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="BRDF">双向反射分布函数，描述光线从入射方向到反射方向的能量分布比例。</GlossaryItem>
+<GlossaryItem term="Cook-Torrance">基于微表面理论的物理BRDF模型，镜面项由D（法线分布）、F（菲涅尔）、G（几何遮蔽）三个函数组成。</GlossaryItem>
+<GlossaryItem term="微表面理论">假设表面由无数微小镜面组成，它们的朝向统计分布决定宏观反射特性的理论模型。</GlossaryItem>
+<GlossaryItem term="能量守恒">PBR的核心约束，要求反射光能量不超过入射光能量，通过Fresnel和漫反射/镜面反射的权重分配实现。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

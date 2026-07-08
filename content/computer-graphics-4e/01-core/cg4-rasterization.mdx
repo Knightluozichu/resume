@@ -1,0 +1,104 @@
+---
+title: "光栅化与片段处理"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "从三角形到像素片段的扫描转换与插值"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4RasterizationDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-rasterization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解光栅化的扫描转换原理
+- 掌握重心坐标插值与透视正确插值
+- 区分片段与像素的概念
+- 能分析光栅化中的走样问题
+</Objectives>
+
+## 直觉引入
+
+光栅化就像用方格纸描绘三角形——把连续的几何形状填入离散的像素格子。每个被三角形覆盖的格子生成一个片段，格子内顶点属性通过重心坐标插值得到。关键是让连续世界的属性在离散网格上正确呈现。
+
+## 概念讲解
+
+<Term def="确定哪些像素被图元覆盖并生成片段的过程">扫描转换</Term><Term def="三角形内一点相对于三个顶点的权重坐标，和为1">重心坐标</Term><Term def="先除w插值再乘回w来正确插值属性的方法">透视正确插值</Term><Term def="采样率不足导致高频信号混叠为低频伪影">走样</Term>
+
+光栅化分两步：扫描转换确定覆盖像素，属性插值计算片段属性。GPU用边界函数算法——每像素独立判定三边符号，天然适合并行。属性用重心坐标加权插值。透视投影下需透视正确插值：先对attr/w和1/w分别插值，再attr=(插值attr/w)/(插值1/w)。
+
+## 交互Demo
+
+> 猜一猜：为什么透视投影后不能直接用屏幕空间线性插值？
+
+<Cg4RasterizationDiagram />
+
+<Stepper>
+<Step title="第一步：扫描转换">
+对三角形三边计算边界函数，判断像素中心是否在三角形内，生成覆盖片段集合。
+</Step>
+<Step title="第二步：属性插值">
+用重心坐标(a,b,c)对顶点属性加权插值，a+b+c=1。
+</Step>
+<Step title="第三步：透视校正">
+透视投影下先对属性除w插值再乘回w，确保远近属性渐变正确。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+#version 330 core
+in vec2 TexCoord;  // 光栅化自动插值
+in vec3 Normal;
+uniform sampler2D tex;
+void main() {
+    vec4 color = texture(tex, TexCoord);
+    vec3 N = normalize(Normal);
+    FragColor = color;
+}
+```
+
+GLSL中in变量的插值由光栅化阶段自动完成，GPU硬件保证透视正确插值。开发者只需在顶点着色器输出、片段着色器接收。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 认为光栅化只是简单填色，忽略属性插值复杂性。
+**原因 →** 光栅化输出看起来就是给像素上色。
+**修法 →** 光栅化包含扫描转换和属性插值两个子步骤。透视正确插值是关键——直接线性插值会导致远处纹理失真。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 混淆走样与锯齿，认为抗锯齿就是模糊边缘。
+**原因 →** 两者都表现为边缘锯齿。
+**修法 →** 走样是采样定理问题。MSAA减轻几何走样但无法解决着色走样（需Mipmap或超采样）。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么透视投影后需要透视正确插值？
+
+<Answer>
+透视投影后深度z非线性映射到屏幕空间，屏幕空间均匀间距对应世界空间非均匀间距。直接线性插值会使远处属性变化过快产生失真。透视正确插值通过先除w再插值最后乘回，保证世界空间均匀属性变化。
+</Answer>
+
+**问题**：给定三角形UV(0,0),(1,0),(0,1)，某片段重心坐标(0.2,0.3,0.5)，求UV。
+
+<Answer>
+UV=0.2*(0,0)+0.3*(1,0)+0.5*(0,1)=(0.3,0.5)。重心坐标直接作为权重加权平均即可（非透视情况）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="扫描转换">确定哪些像素被几何图元覆盖并生成对应片段的过程。</GlossaryItem>
+<GlossaryItem term="重心坐标">三角形内一点相对于三个顶点的权重，和为1，用于属性插值。</GlossaryItem>
+<GlossaryItem term="透视正确插值">先除w插值再乘回w保证属性在世界空间正确渐变的方法。</GlossaryItem>
+<GlossaryItem term="走样">采样率不足导致高频信号混叠为低频伪影的现象。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

@@ -1,0 +1,142 @@
+---
+title: "WebGL 基础与上下文"
+type: C
+section: "计算机图形学与渲染"
+order: 3
+description: "Canvas 上下文获取、WebGL1/2 差异与上下文丢失处理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DogWebglBasicsDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-webgl-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出获取 WebGL 上下文并初始化的标准流程
+- 能区分 WebGL1 与 WebGL2 的主要能力差异
+- 能解释上下文丢失事件及恢复策略
+- 能回答：为什么 uniform/attribute 位置要在链接后查询？
+</Objectives>
+
+## 直觉引入
+
+WebGL 把 OpenGL ES 装进浏览器：你拿一块 `<canvas>` 画布，向它要一个「WebGL 上下文」——这就是你和 GPU 通话的电话线。拿到上下文后，所有 `gl.xxx` 调用都通过这条线指挥 GPU 画图。
+
+但浏览器环境比桌面复杂：标签页可能被切到后台导致 GPU 资源被回收（上下文丢失），用户显卡可能不支持 WebGL2。所以写 WebGL 不仅要会画，还要会「查能力、防丢失、能恢复」。
+
+## 概念讲解
+
+### 上下文获取
+```js
+const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+```
+优先 WebGL2（≈ES3），不支持则退回 WebGL1（≈ES2）。
+
+### WebGL1 vs WebGL2
+<Term def="基于 OpenGL ES 3.0 的浏览器渲染 API">WebGL2</Term>新增：3D 纹理、变换反馈、实例化（默认）、统一缓冲对象 UBO、GLSL 3.00、多重渲染目标 MRT、顶点数组对象 VAO 原生支持。WebGL1 需扩展才有 VAO/实例化。
+
+### 上下文丢失
+浏览器在显存压力下可能触发<Term def="GPU 资源被回收导致 WebGL 上下文失效的事件">上下文丢失</Term>（webglcontextlost）。此时所有 GL 资源失效，需阻止默认行为、重新创建上下文与资源。
+
+### 资源位置查询
+着色器链接后，用 `getAttribLocation`/`getUniformLocation` 查询属性与 uniform 的位置（槽号）。位置在链接时确定，链接后查询才有效；改了着色器需重新链接重查。
+
+## 交互Demo
+
+> 猜一猜：上下文丢失后，原来的 VBO 和纹理还能用吗？
+
+<DogWebglBasicsDiagram />
+
+<Stepper>
+<Step title="第一步：取上下文">
+从 canvas 获取 webgl2（或回退 webgl）上下文，查询支持的扩展，设定清屏色与视口。
+</Step>
+<Step title="第二步：建资源">
+编译链接着色器，查询 attribute/uniform 位置，创建 VAO/VBO/纹理并上传数据。
+</Step>
+<Step title="第三步：防丢失恢复">
+监听 webglcontextlost 阻止默认、标记需重建；webglcontextrestored 触发时重新创建全部资源与状态。
+</Step>
+</Stepper>
+
+## 代码对照
+
+WebGL2 初始化与上下文丢失处理（JS）：
+
+```js
+const canvas = document.querySelector("canvas");
+const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
+if (!gl) { alert("不支持 WebGL2"); }
+
+// 查能力
+const ext = gl.getExtension("EXT_color_buffer_float"); // 浮点渲染目标
+
+// 链接程序后查位置
+const program = linkProgram(gl, vsSrc, fsSrc);
+const a_pos = gl.getAttribLocation(program, "a_pos");
+const u_mvp = gl.getUniformLocation(program, "u_mvp");
+
+// 上下文丢失处理
+canvas.addEventListener("webglcontextlost", (e) => {
+  e.preventDefault();        // 阻止默认，允许恢复
+  resourcesValid = false;    // 标记资源失效
+});
+canvas.addEventListener("webglcontextrestored", () => {
+  rebuildAllResources(gl);   // 重新创建着色器、缓冲、纹理、状态
+  resourcesValid = true;
+});
+
+// 渲染循环
+function render() {
+  if (!resourcesValid) { requestAnimationFrame(render); return; }
+  resizeCanvasToDisplaySize(canvas);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
+  requestAnimationFrame(render);
+}
+```
+
+`e.preventDefault()` 是恢复的关键：不阻止则上下文永久丢失。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 切到别的标签页再切回来，画面全黑或报错。
+**原因 →** 浏览器回收了 GPU 资源触发上下文丢失，原 VBO/纹理/程序全部失效，未处理恢复。
+**修法 →** 监听 webglcontextlost 调 preventDefault、webglcontextrestored 里重建所有资源与状态，渲染循环检测 resourcesValid 跳过失效帧。
+</Callout>
+
+<Callout type="trap">
+**现象 →** getAttribLocation 返回 -1，属性数据上传了却没生效。
+**原因 →** 着色器里该属性被优化掉（未使用），或程序未链接就查询。
+**修法 →** 确保属性在着色器中真正被使用，链接成功后再查询；返回 -1 表示无需设定，跳过即可，不算错误。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：WebGL1 和 WebGL2 主要能力差异有哪些？为什么要优先用 WebGL2？
+
+<Answer>
+WebGL2（≈ES3）新增：3D 纹理、变换反馈、默认实例化、统一缓冲 UBO、GLSL 3.00、多重渲染目标 MRT、原生 VAO。WebGL1 需扩展才有 VAO/实例化，能力弱。优先 WebGL2 能用更现代 API、减少扩展依赖、着色器更强，写复杂效果更方便；不支持时再回退 WebGL1。
+</Answer>
+
+**问题**：上下文丢失后原来的资源还能用吗？恢复流程是什么？
+
+<Answer>
+不能。上下文丢失时所有 GL 资源（程序、缓冲、纹理、VAO、状态）全部失效。恢复流程：webglcontextlost 事件调 preventDefault 阻止默认销毁；webglcontextrestored 触发时重新创建着色器、缓冲、纹理并重设状态，渲染循环在失效期间跳过绘制。关键是 preventDefault，否则上下文永久丢失。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="WebGL 上下文">从 canvas 获取的、与 GPU 通话的接口，所有 gl 调用通过它指挥渲染。</GlossaryItem>
+<GlossaryItem term="WebGL2">基于 OpenGL ES 3.0 的浏览器渲染 API，新增 3D 纹理、UBO、MRT 等能力。</GlossaryItem>
+<GlossaryItem term="上下文丢失">浏览器在显存压力下回收 GPU 资源使 WebGL 上下文失效的事件，需 preventDefault 后恢复。</GlossaryItem>
+<GlossaryItem term="位置查询">链接后用 getAttribLocation/getUniformLocation 查属性与 uniform 槽号，改着色器需重链重查。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />

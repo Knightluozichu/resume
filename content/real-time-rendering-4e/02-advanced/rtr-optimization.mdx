@@ -1,0 +1,122 @@
+---
+title: "渲染优化与加速"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "剔除、合批、LOD、带宽优化的完整流程"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RtrOptimizationDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能列出渲染优化的四个步骤及其顺序
+- 能解释Draw Call为什么是CPU瓶颈
+- 能区分视锥剔除、遮挡剔除和背面剔除
+- 能回答：什么时候用前向渲染，什么时候用延迟渲染？
+</Objectives>
+
+## 直觉引入
+
+想象一个仓库管理员。如果每次只取一件货（一个Draw Call），1000件货要跑1000趟。如果合并同类货一次取（合批），可能50趟就够了。如果远处的小货不取（LOD+剔除），可能只要20趟。
+
+渲染优化的本质就是：少做事（剔除）、合并做事（合批）、分级做事（LOD）、高效做事（带宽优化）。核心原则：先Profile再优化，80%的问题来自20%的代码。
+
+## 概念讲解
+
+### 渲染优化四步法
+
+<RtrOptimizationDiagram />
+
+优化按顺序进行：
+1. <Term def="视锥剔除是丢弃相机视锥外物体的操作，是最基本的剔除策略">剔除</Term>：视锥剔除+遮挡剔除+背面剔除
+2. <Term def="合批是将多个Draw Call合并为一个，减少CPU到GPU的提交开销">合批</Term>：静态合批+动态合批+GPU Instancing
+3. <Term def="LOD是根据距离切换不同细节层次模型的技术，远处用低面数模型">LOD</Term>：Mesh LOD+Shader LOD+纹理LOD（Mipmap）
+4. 带宽优化：纹理压缩+G-Buffer精简+前向vs延迟渲染选择
+
+<Term def="Draw Call是CPU向GPU提交一次绘制命令，每个Draw Call都有CPU端开销">Draw Call</Term>是CPU瓶颈的主要来源——GPU画得快但CPU提交得慢。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：剔除优先">先做视锥剔除（不渲染看不见的），再做遮挡剔除（被前面挡住的也不渲染），最后背面剔除（背面不渲染）。层层过滤减少Draw Call。</Step>
+<Step title="第二步：合批与LOD">
+合并相同材质的物体减少Draw Call。根据距离切换LOD级别——远处用低模、低分辨率着色器。观察性能提升。
+<RtrOptimizationDiagram />
+</Step>
+<Step title="第三步：带宽与前向vs延迟">前向渲染适合少量光源，延迟渲染适合多光源但G-Buffer占带宽。纹理压缩减少显存占用。根据场景特点选择策略。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 渲染优化关键代码示例
+
+// 1. GPU Instancing (减少Draw Call)
+// OpenGL: glDrawArraysInstanced(GL_TRIANGLES, 0, vertexCount, instanceCount)
+// 着色器中获取实例属性
+#version 330 core
+layout(location = 0) in vec3 aPos;
+layout(location = 3) in mat4 instanceMatrix; // 实例矩阵
+
+void main() {
+    gl_Position = projection * view * instanceMatrix * vec4(aPos, 1.0);
+}
+
+// 2. 剔除在CPU端完成
+// 视锥剔除: 检查包围球是否在视锥内
+bool inFrustum(BoundingSphere sphere, Frustum frustum) {
+    for(int i = 0; i < 6; i++) {
+        if(dot(frustum.planes[i], sphere.center) + sphere.radius < 0)
+            return false; // 在裁剪面外
+    }
+    return true;
+}
+
+// 3. LOD选择
+int selectLOD(float distance) {
+    if(distance < 10.0)  return 0; // 高精度
+    if(distance < 30.0)  return 1; // 中精度
+    if(distance < 80.0)  return 2; // 低精度
+    return -1; // 太远不渲染
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：优化就是减少三角形数量。**
+三角形数量通常是GPU瓶颈，但很多时候瓶颈在CPU（Draw Call太多）或带宽（纹理太大）。先Profile确定瓶颈：CPU瓶颈就合批，GPU瓶颈就减三角形，带宽瓶颈就压缩纹理。盲目减三角形可能完全无效。
+</Callout>
+
+<Callout type="trap">
+**误区：延迟渲染一定比前向渲染好。**
+延迟渲染的优势是光照成本与光源数量基本无关（在G-Buffer上做光照）。但劣势是：1）G-Buffer占大量带宽；2）不支持半透明（需要前向Pass补充）；3）不支持MSAA。光源少时前向渲染反而更快。
+</Callout>
+
+<Exercises>
+**问题 1**：渲染优化的四个步骤是什么？为什么按这个顺序？
+
+<Answer>
+剔除→合批→LOD→带宽优化。顺序原因：剔除最便宜（CPU端判断，直接跳过渲染），收益最大；合批减少Draw Call（CPU瓶颈），中等成本；LOD减少GPU工作量（三角形和着色复杂度），需要预制作模型；带宽优化最复杂（涉及渲染管线架构选择），放在最后。先做收益大成本小的优化。
+</Answer>
+
+**问题 2**：前向渲染和延迟渲染各适合什么场景？
+
+<Answer>
+前向渲染：每个物体在每个光源下逐一计算着色，适合少量光源（1-4个）的场景。优势是支持半透明和MSAA，劣势是光源多时光照计算量 = 物体数 × 光源数。延迟渲染：先渲染几何到G-Buffer（位置/法线/颜色），再在屏幕空间统一做光照，适合多光源（4个以上）场景。优势是光照成本只与屏幕像素数×光源数相关（与物体数无关），劣势是不支持半透明、不支持MSAA、G-Buffer占带宽大。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="视锥剔除">丢弃相机视锥外物体的操作，是最基本也是收益最大的剔除策略。</GlossaryItem>
+<GlossaryItem term="合批">将多个Draw Call合并为一个，减少CPU到GPU的提交开销，是解决CPU瓶颈的关键手段。</GlossaryItem>
+<GlossaryItem term="LOD">细节层次技术，根据距离切换不同精度模型，远处用低面数模型减少GPU工作量。</GlossaryItem>
+<GlossaryItem term="Draw Call">CPU向GPU提交的一次绘制命令，每个Draw Call都有CPU端开销，是CPU瓶颈的主要来源。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />

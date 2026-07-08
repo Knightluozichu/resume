@@ -1,0 +1,111 @@
+---
+title: "纹理映射技术"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "UV坐标、采样过滤与Mipmap"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Cg4TexturingDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-texturing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解纹理映射与UV坐标
+- 掌握采样过滤方法
+- 理解Mipmap的作用与原理
+- 了解法线贴图的原理
+</Objectives>
+
+## 直觉引入
+
+纹理映射就像给纸盒贴包装纸——UV坐标定义了包装纸上哪个位置对应纸盒的哪个面。光栅化时UV通过重心坐标插值到每个片段，片段着色器用UV从纹理中采样颜色。远处纹理会因采样不足产生摩尔纹，Mipmap通过预生成多级纹理解决。
+
+## 概念讲解
+
+<Term def="纹理空间中的2D坐标(u,v)，范围[0,1]">UV坐标</Term><Term def="取4个最近邻纹素按距离加权平均">双线性采样</Term><Term def="预生成的多级纹理金字塔，减少远处aliasing">Mipmap</Term><Term def="存储逐纹素法线方向的纹理，用2D纹理模拟3D凹凸">法线贴图</Term>
+
+### 纹理映射流程
+顶点UV -> 光栅化插值 -> 片段着色器采样 -> 纹素颜色
+
+### 采样过滤
+最近邻(快但锯齿)->双线性(4邻加权平均)->三线性(Mipmap层间混合)->各向异性(斜角优化)
+
+### Mipmap
+预生成每级缩小一半的纹理金字塔。渲染时根据纹素密度选级别。代价是额外1/3内存。解决远处aliasing。
+
+## 交互Demo
+
+> 猜一猜：为什么不用超大的纹理而是用Mipmap？
+
+<Cg4TexturingDiagram />
+
+<Stepper>
+<Step title="第一步：UV映射">
+每个顶点指定UV坐标(0~1)，定义纹理图像上的对应位置。UV通过重心坐标插值到片段。
+</Step>
+<Step title="第二步：纹理采样">
+用插值后的UV从纹理中取颜色。最近邻取最近纹素(快但锯齿)，双线性取4邻加权平均(平滑)。
+</Step>
+<Step title="第三步：Mipmap过滤">
+远处片段覆盖多个纹素，用低分辨率Mipmap等价于区域平均，消除摩尔纹。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// OpenGL纹理配置
+GLuint tex;
+glGenTextures(1, &tex);
+glBindTexture(GL_TEXTURE_2D, tex);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+glGenerateMipmap(GL_TEXTURE_2D);
+```
+
+MIN_FILTER用GL_LINEAR_MIPMAP_LINEAR(三线性)消除远处aliasing。MAG_FILTER只能用GL_LINEAR(双线性)因为放大时没有更高级别可用。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 远处纹理闪烁/摩尔纹。
+**原因 →** 未使用Mipmap，远处一个像素覆盖多个纹素但只采样一个。
+**修法 →** 启用Mipmap：glGenerateMipmap自动生成多级纹理，MIN_FILTER设为GL_LINEAR_MIPMAP_LINEAR。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 法线贴图侧面看仍然是平的。
+**原因 →** 法线贴图只改变法线不改变实际几何。
+**修法 →** 法线贴图本质是欺骗光照计算——改变法线产生凹凸错觉但不产生真实位移。需要Parallax或Displacement Mapping才能在侧面也看到凹凸。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：什么是UV坐标？它在纹理映射中的作用？
+
+<Answer>
+UV坐标是纹理空间中的2D坐标(u,v)，范围通常[0,1]，定义每个顶点对应纹理图像的位置。光栅化时UV通过重心坐标插值到片段，片段着色器用插值UV采样纹理。
+</Answer>
+
+**问题**：Mipmap如何解决远处纹理aliasing？代价是什么？
+
+<Answer>
+Mipmap预生成每级缩小一半的纹理金字塔。远处片段覆盖多个纹素时用低分辨率级别等价于区域平均，消除摩尔纹。代价是额外1/3内存。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="UV坐标">纹理空间中的2D坐标(u,v)，范围[0,1]，定义顶点对应纹理位置。</GlossaryItem>
+<GlossaryItem term="双线性采样">取4个最近邻纹素按距离加权平均的采样方法。</GlossaryItem>
+<GlossaryItem term="Mipmap">预生成多级纹理金字塔减少远处aliasing，代价1/3内存。</GlossaryItem>
+<GlossaryItem term="法线贴图">存储逐纹素法线方向的纹理，用2D纹理模拟3D凹凸细节。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />

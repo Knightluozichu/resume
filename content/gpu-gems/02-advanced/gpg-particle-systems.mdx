@@ -1,0 +1,123 @@
+---
+title: "粒子系统与物理"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "用 GPU 并行更新百万级粒子的位置与速度"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpgParticleSystemsDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-particle-systems";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 CPU 粒子与 GPU 粒子的性能差异根源
+- 能用欧拉积分法更新粒子位置与速度
+- 能回答：为什么 GPU 粒子不需要数据回传？
+- 能设计一个包含发射、更新、渲染三阶段的粒子系统
+</Objectives>
+
+## 直觉引入
+
+想象一万只萤火虫在夜空中飞舞。CPU 逐只计算位置要一帧一帧串行，太慢；GPU 有数千个核心，每只萤火虫分一个核心同时算，瞬间完成。粒子系统就是把「大量独立小物体」的运动计算从 CPU 搬到 GPU 的典型场景——突破的不是单个粒子的计算速度，而是并行处理海量粒子的总吞吐量。
+
+## 概念讲解
+
+### CPU vs GPU 粒子
+
+<GpgParticleSystemsDiagram />
+
+<Term def="GPU 粒子是把粒子数据全程保留在显存，用着色器并行更新和渲染的技术">
+GPU 粒子
+</Term>
+
+CPU 粒子每帧逐个计算后需把数据传回显存渲染，带宽瓶颈限制在约 1 万粒子。GPU 粒子把位置、速度等数据存在纹理或缓冲中，着色器直接读写，全程不离开显存，可达百万级。
+
+<Term def="欧拉积分是用当前速度和加速度逐步外推位置的数值积分方法">
+欧拉积分
+</Term>
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：粒子数据存储">
+把每个粒子的位置、速度、寿命存在 GPU 缓冲（如 StructuredBuffer 或纹理）中。一个粒子占一个纹素或一个结构体槽位，数据始终在显存，CPU 不触碰。
+<GpgParticleSystemsDiagram />
+</Step>
+<Step title="第二步：GPU 并行更新">
+Compute Shader 对每个粒子并行执行物理积分：加速度 = 重力 + 风力 + 吸引力；速度 += 加速度 * dt；位置 += 速度 * dt；寿命 -= dt。百万粒子只需一个 dispatch。
+</Step>
+<Step title="第三步：直接渲染">
+更新后的粒子缓冲直接绑定为顶点源，用顶点着色器把位置变换到屏幕空间渲染。无需 CPU 读取或数据回传，渲染与更新在同一帧内无缝衔接。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// Compute Shader：GPU 粒子更新
+layout(std430, binding = 0) buffer ParticleBuffer {
+    struct Particle {
+        vec4 position; // xyz=位置, w=寿命
+        vec4 velocity; // xyz=速度, w=大小
+    } particles[];
+};
+
+layout(local_size_x = 64) in;
+uniform float dt;
+uniform vec3 gravity;
+
+void main() {
+    uint idx = gl_GlobalInvocationID.x;
+    if (idx >= particleCount) return;
+
+    Particle p = particles[idx];
+    if (p.position.w <= 0.0) return; // 已死亡
+
+    // 欧拉积分
+    vec3 accel = gravity + windForce(p.position.xyz);
+    p.velocity.xyz += accel * dt;
+    p.position.xyz += p.velocity.xyz * dt;
+    p.position.w   -= dt; // 寿命递减
+
+    particles[idx] = p;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 transform feedback 但仍每帧回传 CPU 做逻辑判断。**
+即使 GPU 更新了位置，如果每帧把数据读回 CPU 做碰撞或生成新粒子，带宽瓶颈依然存在。正确做法是用 GPU 原子计数器管理粒子生死，用 Compute Shader 做碰撞检测。
+</Callout>
+
+<Callout type="trap">
+**误区：欧拉积分步长太大导致粒子爆炸。**
+欧拉积分是显式方法，dt 太大时能量会发散（粒子飞到无穷远）。高速度场景应该用半隐式欧拉或 Verlet 积分，或对 dt 做子步长拆分。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 GPU 粒子不需要数据回传？
+
+<Answer>
+GPU 粒子的位置、速度等数据全程存储在显存的缓冲中，Compute Shader 直接读写同一缓冲完成更新，顶点着色器再直接从该缓冲读取位置进行渲染。数据始终在 GPU 内流转，CPU 只在初始化时写入一次参数，运行时无需任何回传，消除了 PCIe 带宽瓶颈。
+</Answer>
+
+**问题 2**：欧拉积分为什么在大步长时不稳定？
+
+<Answer>
+显式欧拉积分用当前状态外推下一步，当 dt 较大或速度较高时，外推误差累积导致能量发散——粒子越飞越远直到爆炸。因为它是显式的（只用当前时刻信息），无法保证稳定。半隐式欧拉先更新速度再更新位置，或 Verlet 积分用前后两步信息，稳定性更好。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="GPU 粒子">粒子数据全程在显存，用 Compute Shader 并行更新并直接渲染，无需 CPU 回传。</GlossaryItem>
+<GlossaryItem term="欧拉积分">用当前速度和加速度逐步外推位置的显式数值积分方法，简单但大步长时不稳定。</GlossaryItem>
+<GlossaryItem term="Compute Shader">GPU 通用计算着色器，不经过图形管线，直接以线程组形式并行处理任意数据。</GlossaryItem>
+<GlossaryItem term="StructuredBuffer">GPU 中存储结构化数据的缓冲区，可被着色器按索引随机读写。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />

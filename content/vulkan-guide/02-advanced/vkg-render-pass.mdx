@@ -1,0 +1,190 @@
+---
+title: "渲染通道与附件"
+type: A
+section: "计算机图形学与渲染"
+order: 6
+description: "理解渲染通道、附件描述、子通道与子通道依赖及图像布局转换"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgRenderPassDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-render-pass";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解渲染通道（Render Pass）的作用与 VkFramebuffer 的关系
+- 掌握附件描述的格式、加载/存储操作与布局转换
+- 理解子通道（Subpass）与子通道依赖的作用
+- 了解 Vulkan 1.3 动态渲染（Dynamic Rendering）的简化方案
+</Objectives>
+
+## 直觉引入
+
+想象一个画家在画一幅油画：他不是一次性画完，而是分层作画——先打底色（子通道 1），再画细节（子通道 2），最后上光油（子通道 3）。每一步用到的画布状态不同，前一步的结果会影响后一步。Vulkan 的 <Term def="VkRenderPass 描述渲染操作使用的附件格式、子通道结构及子通道间的依赖关系，是 Vulkan 管线对渲染目标的抽象。">VkRenderPass</Term> 就是这种分层渲染的「作画计划」，它定义了所有附件的格式、每个子通道读/写哪些附件，以及子通道之间如何衔接。
+
+## 概念讲解
+
+### 附件描述
+
+<Term def="附件描述定义渲染通道中每个附件的格式、采样数、加载/存储操作和初始/最终布局。">附件描述（Attachment Description）</Term> 是渲染通道的核心组成：
+
+```c
+VkAttachmentDescription colorAttachment = {
+    .format = swapchainImageFormat,
+    .samples = VK_SAMPLE_COUNT_1_BIT,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,     // 开始时清空
+    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,    // 结束时保留
+    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+};
+```
+
+- **loadOp**：渲染开始时如何处理附件（清空/加载/不关心）
+- **storeOp**：渲染结束时是否保留内容
+- **initialLayout/finalLayout**：附件进入和离开渲染通道时的布局
+
+### 子通道
+
+<Term def="子通道是渲染通道内的一个渲染步骤，定义该步骤引用哪些附件及以何种方式引用。">子通道（Subpass）</Term> 通过 <Term def="附件引用指定子通道中附件的索引和该阶段的布局，决定着色器如何访问该附件。">附件引用（Attachment Reference）</Term> 关联附件：
+
+```c
+VkAttachmentReference colorAttachmentRef = {
+    .attachment = 0,
+    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+};
+
+VkSubpassDescription subpass = {
+    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+    .colorAttachmentCount = 1,
+    .pColorAttachments = &colorAttachmentRef,
+};
+```
+
+### 子通道依赖
+
+<Term def="子通道依赖定义子通道之间的执行顺序和内存依赖，确保前一个子通道的写入对后一个子通道可见。">子通道依赖（Subpass Dependency）</Term> 控制子通道间的同步与布局转换：
+
+```c
+VkSubpassDependency dependency = {
+    .srcSubpass = VK_SUBPASS_EXTERNAL,
+    .dstSubpass = 0,
+    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .srcAccessMask = 0,
+    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+};
+```
+
+### 帧缓冲
+
+<Term def="VkFramebuffer 绑定具体的 VkImageView 到渲染通道的附件槽位，是渲染操作的实际目标。">VkFramebuffer</Term> 把渲染通道的抽象附件绑定到具体的图像视图：
+
+```c
+VkFramebufferCreateInfo fbInfo = {
+    .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+    .renderPass = renderPass,
+    .attachmentCount = 1,
+    .pAttachments = &imageView,
+    .width = swapchainExtent.width,
+    .height = swapchainExtent.height,
+    .layers = 1,
+};
+vkCreateFramebuffer(device, &fbInfo, NULL, &framebuffer);
+```
+
+## 交互Demo
+
+> 猜一猜：如果一个渲染通道有 2 个子通道（G-Buffer + 光照），它们之间需要什么样的依赖？
+
+<VkgRenderPassDiagram />
+
+<Stepper>
+  <Step title="定义附件描述">
+    为每个附件（颜色、深度等）配置格式、采样数、loadOp/storeOp 和 initialLayout/finalLayout。例如颜色附件用 `CLEAR` + `STORE`，从 `UNDEFINED` 转到 `PRESENT_SRC_KHR`。
+  </Step>
+  <Step title="定义子通道与引用">
+    为每个渲染步骤创建 `VkSubpassDescription`，通过附件引用指定该步骤读/写哪些附件。延迟渲染的 G-Buffer 子通道写入多个颜色附件，光照子通道读取它们作为输入附件。
+  </Step>
+  <Step title="定义子通道依赖并创建">
+    用 `VkSubpassDependency` 指定子通道间的同步和布局转换时机。`srcSubpass = EXTERNAL` 表示渲染通道之前，`dstSubpass = EXTERNAL` 表示之后。最后调用 `vkCreateRenderPass` 创建。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+延迟渲染的渲染通道结构（G-Buffer + 光照两个子通道）：
+
+```c
+// 附件：位置、法线、颜色 + 深度
+VkAttachmentDescription attachments[] = {
+    { .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }, // 位置
+    { .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 法线
+    { .format = swapchainFormat,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR }, // 最终颜色
+    { .format = depthFormat,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+      .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL }, // 深度
+};
+
+// 子通道 0：G-Buffer（写位置、法线、深度）
+// 子通道 1：光照（读位置、法线作为输入附件，写最终颜色）
+// 依赖：子通道 0 完成后子通道 1 才能开始
+```
+
+## 常见误区
+
+<Callout type="trap">
+把 `initialLayout` 设为 `VK_IMAGE_LAYOUT_UNDEFINED` 后期望保留旧内容。`UNDEFINED` 表示内容未定义，驱动可能会丢弃旧数据。如果需要保留上一帧的内容，应使用 `VK_IMAGE_LAYOUT_GENERAL` 或对应的 `*_OPTIMAL` 布局，并用 `loadOp = LOAD`。
+</Callout>
+
+<Callout type="trap">
+遗漏子通道依赖，导致两个子通道之间出现数据竞争。没有显式依赖时，驱动不保证子通道 0 的写入对子通道 1 可见。必须用 `VkSubpassDependency` 指定 `srcStageMask` 和 `dstAccessMask`，确保前一个子通道的写入操作在后一个子通道开始前完成。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. `VK_ATTACHMENT_LOAD_OP_CLEAR`、`VK_ATTACHMENT_LOAD_OP_LOAD` 和 `VK_ATTACHMENT_LOAD_OP_DONT_CARE` 各有什么区别？
+   <Answer>
+   CLEAR：渲染开始时把附件清空为指定值（通过 clearValue），最常用于颜色和深度缓冲。LOAD：保留附件已有内容，渲染在其基础上叠加，适用于分层渲染或保留上一帧。DONT_CARE：不关心附件初始内容，驱动可以自由处理（可能不清空也不加载），性能最优但内容未定义，适用于中间缓冲。
+   </Answer>
+
+2. Vulkan 1.3 的动态渲染（Dynamic Rendering）相比传统渲染通道有什么优势？
+   <Answer>
+   动态渲染用 vkCmdBeginRendering/vkCmdEndRendering 替代 vkCmdBeginRenderPass/vkCmdEndRenderPass，无需预先创建 VkRenderPass 和 VkFramebuffer 对象。优势：1) 减少样板代码，简化初始化；2) 不需要手动管理附件布局转换，驱动自动处理；3) 更容易实现动态分辨率和可变附件配置。劣势：某些复杂的多子通道场景（如延迟渲染）仍需传统渲染通道，且旧驱动可能不支持。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="VkRenderPass">
+    描述渲染操作的附件格式、子通道结构和子通道间依赖关系的不可变对象。是 framebuffer 和 pipeline 的桥梁，定义了渲染目标的完整布局。
+  </GlossaryItem>
+  <GlossaryItem term="附件描述 (Attachment Description)">
+    定义附件的格式、采样数、加载/存储操作和初始/最终布局。loadOp 决定渲染开始时如何处理内容，finalLayout 决定渲染后的用途。
+  </GlossaryItem>
+  <GlossaryItem term="子通道依赖 (Subpass Dependency)">
+    定义子通道间或子通道与外部的执行顺序和内存依赖。指定源/目标阶段掩码和访问掩码，确保写入操作对后续读取可见。
+  </GlossaryItem>
+  <GlossaryItem term="VkFramebuffer">
+    绑定具体 VkImageView 到渲染通道附件槽位的对象。是渲染操作的实际目标，尺寸和层数在创建时固定。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />

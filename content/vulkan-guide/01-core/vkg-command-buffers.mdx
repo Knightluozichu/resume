@@ -1,0 +1,196 @@
+---
+title: "命令缓冲与录制"
+type: C
+section: "计算机图形学与渲染"
+order: 5
+description: "掌握命令池创建、命令缓冲分配与录制、提交及同步原语的使用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VkgCommandBuffersDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-command-buffers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解命令池与命令缓冲的关系及分配策略
+- 掌握命令缓冲的录制流程（begin/beginRenderPass/cmd*/endRenderPass/end）
+- 学会主命令缓冲与次级命令缓冲的区别与使用场景
+- 掌握命令提交与信号量/fence 同步的正确用法
+</Objectives>
+
+## 直觉引入
+
+想象一个工厂调度员：他不直接操作机器，而是把生产指令写在「工单」上，然后把工单交给车间执行。Vulkan 的 <Term def="VkCommandBuffer 是预录制的 GPU 命令序列，提交后由队列异步执行，是 Vulkan 命令录制与提交的核心机制。">VkCommandBuffer</Term> 就是这样的「工单」。你先在 CPU 端把所有绘制命令录制好，然后一次性提交给 GPU 队列执行。
+
+这种设计让 CPU 和 GPU 可以并行工作：CPU 录制下一帧命令时，GPU 正在执行上一帧的命令。
+
+## 概念讲解
+
+### 命令池
+
+<Term def="VkCommandPool 是命令缓冲的内存分配器，与特定队列族绑定，管理命令缓冲的分配和回收。">VkCommandPool</Term> 是命令缓冲的内存来源，创建时必须指定队列族：
+
+```c
+VkCommandPoolCreateInfo poolInfo = {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+    .queueFamilyIndex = graphicsFamilyIndex,
+};
+vkCreateCommandPool(device, &poolInfo, NULL, &commandPool);
+```
+
+标志位 `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` 表示命令缓冲频繁重新录制（短生命周期），`VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT` 允许单独重置命令缓冲。
+
+### 命令缓冲分配与录制
+
+```c
+// 分配
+VkCommandBufferAllocateInfo allocInfo = {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+    .commandPool = commandPool,
+    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    .commandBufferCount = 1,
+};
+vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+
+// 开始录制
+VkCommandBufferBeginInfo beginInfo = {
+    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+};
+vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+// 录制渲染命令
+vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
+vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
+vkCmdEndRenderPass(commandBuffer);
+
+// 结束录制
+vkEndCommandBuffer(commandBuffer);
+```
+
+### 主命令缓冲与次级命令缓冲
+
+<Term def="主命令缓冲可直接提交到队列执行，次级命令缓冲不能单独提交，只能被主命令缓冲通过 vkCmdExecuteCommands 调用。">主/次级命令缓冲</Term> 的区别：
+
+- **主命令缓冲**（`VK_COMMAND_BUFFER_LEVEL_PRIMARY`）：可直接提交到队列
+- **次级命令缓冲**（`VK_COMMAND_BUFFER_LEVEL_SECONDARY`）：不能单独提交，由主缓冲通过 `vkCmdExecuteCommands` 执行
+
+次级缓冲适用于可复用的命令片段（如固定 UI 绘制），在多线程录制时也很有用。
+
+### 提交与同步
+
+```c
+VkSubmitInfo submitInfo = {
+    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+    .waitSemaphoreCount = 1,
+    .pWaitSemaphores = &imageAvailableSemaphore,
+    .pWaitDstStageMask = &waitStages,
+    .commandBufferCount = 1,
+    .pCommandBuffers = &commandBuffer,
+    .signalSemaphoreCount = 1,
+    .pSignalSemaphores = &renderFinishedSemaphore,
+};
+
+vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence);
+```
+
+## 交互Demo
+
+> 猜一猜：如果你在录制命令缓冲时忘记调用 `vkEndCommandBuffer`，提交时会发生什么？
+
+<VkgCommandBuffersDiagram />
+
+<Stepper>
+  <Step title="分配与开始录制">
+    从命令池分配命令缓冲，调用 `vkBeginCommandBuffer` 开始录制。设置 usage flags（如 `ONE_TIME_SUBMIT` 表示一次性提交，`SIMULTANEOUS_USE` 表示可并发执行）。
+  </Step>
+  <Step title="录制渲染命令">
+    在 render pass 内绑定管线、设置动态状态（viewport/scissor）、绑定顶点/索引缓冲、绑定描述符集，最后调用 `vkCmdDraw` 或 `vkCmdDrawIndexed` 绘制。所有命令都是异步的——录制本身不执行任何 GPU 操作。
+  </Step>
+  <Step title="结束录制并提交">
+    调用 `vkEndCommandBuffer` 结束录制。填充 `VkSubmitInfo`（指定等待的信号量、命令缓冲、触发的信号量），调用 `vkQueueSubmit` 提交。用 fence 通知 CPU 这一帧已完成。
+  </Step>
+</Stepper>
+
+## 代码对照
+
+多帧并行提交（双缓冲/三缓冲）：
+
+```c
+#define MAX_FRAMES_IN_FLIGHT 2
+
+VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
+VkSemaphore imageAvailable[MAX_FRAMES_IN_FLIGHT];
+VkSemaphore renderFinished[MAX_FRAMES_IN_FLIGHT];
+VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
+
+// 每帧渲染循环
+uint32_t frameIndex = currentFrame % MAX_FRAMES_IN_FLIGHT;
+
+// 等待前一帧完成
+vkWaitForFences(device, 1, &inFlightFences[frameIndex],
+    VK_TRUE, UINT64_MAX);
+vkResetFences(device, 1, &inFlightFences[frameIndex]);
+
+// 获取交换链图像
+vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
+    imageAvailable[frameIndex], VK_NULL_HANDLE, &imageIndex);
+
+// 重新录制命令
+vkResetCommandBuffer(commandBuffers[frameIndex], 0);
+recordCommandBuffer(commandBuffers[frameIndex], imageIndex);
+
+// 提交
+VkSubmitInfo submit = { ... };
+vkQueueSubmit(graphicsQueue, 1, &submit, inFlightFences[frameIndex]);
+
+// 呈现
+VkPresentInfoKHR presentInfo = { ... };
+vkQueuePresentKHR(presentQueue, &presentInfo);
+```
+
+## 常见误区
+
+<Callout type="trap">
+在命令缓冲正在执行时重置或重新录制它。必须用 fence 确认 GPU 已完成执行后才能 `vkResetCommandBuffer`。不等待直接重置会导致验证层报错甚至 GPU 崩溃。使用多帧并行（MAX_FRAMES_IN_FLIGHT）是标准解法。
+</Callout>
+
+<Callout type="trap">
+混淆 `pWaitDstStageMask` 的作用。这个字段指定信号量等待在管线的哪个阶段解除阻塞，不是指定等待哪个阶段完成。通常设为 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`，让 GPU 在顶点处理阶段就开始工作，直到颜色输出阶段才等待图像可用。
+</Callout>
+
+## 练习
+
+<Exercises>
+1. 为什么要用 `MAX_FRAMES_IN_FLIGHT`（多帧并行）而不是单缓冲？
+   <Answer>
+   单缓冲下，CPU 必须等 GPU 完成当前帧才能录制下一帧（vkWaitForFences 阻塞），CPU 和 GPU 无法并行工作。多帧并行下，CPU 录制第 N+1 帧时 GPU 正在执行第 N 帧，两者重叠执行，大幅提升吞吐量。通常用 2（双缓冲）即可，3 帧可进一步平滑帧时间波动。
+   </Answer>
+
+2. 次级命令缓冲在什么场景下有优势？
+   <Answer>
+   次级命令缓冲适合可复用的命令片段：1) 固定 UI 绘制——每帧不变的 UI 可预录制为次级缓冲，主缓冲只需 vkCmdExecuteCommands 调用；2) 多线程录制——不同线程录制不同次级缓冲，最后由主线程的主缓冲汇总；3) 复杂场景分块——将场景分为多个模块各自录制，减少主缓冲重录开销。注意次级缓冲不能单独提交且不支持 render pass 的 begin/end。
+   </Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="VkCommandPool">
+    命令缓冲的内存分配器，与特定队列族绑定。管理命令缓冲的分配和回收，标志位控制重置策略和生命周期提示。
+  </GlossaryItem>
+  <GlossaryItem term="VkCommandBuffer">
+    预录制的 GPU 命令序列。录制在 CPU 端进行，提交后由队列异步执行。主缓冲可单独提交，次级缓冲只能被主缓冲调用。
+  </GlossaryItem>
+  <GlossaryItem term="VkSubmitInfo">
+    命令提交结构体，指定等待的信号量、等待阶段掩码、命令缓冲数组和触发的信号量。是 GPU-GPU 同步的核心配置。
+  </GlossaryItem>
+  <GlossaryItem term="MAX_FRAMES_IN_FLIGHT">
+    同时在 GPU 上执行的最大帧数。通过为每帧分配独立的命令缓冲、信号量和 fence 实现 CPU/GPU 并行工作，通常设为 2。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
