@@ -1,0 +1,126 @@
+---
+title: "状态管理：Vuex 与 Pinia"
+type: C
+section: "前端与Web"
+order: 5
+description: "对比 Vuex 与 Pinia——为何需要状态管理、mutation 同步约束、Pinia 的简化模型与何时不该用全局状态"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VjpVuexPiniaDiagram } from "@/components/mdx/vuejs-practice/diagrams/vjp-vuex-pinia";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解状态管理解决「跨组件共享状态」的问题与适用场景
+- 掌握 Vuex 的 state/getters/mutations/actions 五要素与同步约束
+- 理解 Pinia 相比 Vuex 的简化与代价
+- 能判断何时该用、何时不该用全局状态管理
+</Objectives>
+
+## 直觉引入
+
+props/emit 只适合父子直接通信。当多个不相邻组件要共享同一份数据（用户登录态、购物车、全局主题），用 props 逐层透传（prop drilling）会让中间组件被迫转发不属于自己的数据，代码臃肿难维护。状态管理把共享数据抽到一个独立的 store，任何组件都能直接读写，数据源单一、变更可追踪（DevTools 时间旅行）。但 store 不是万能药——滥用会让组件失去内聚性、数据流难追踪。
+
+<VjpVuexPiniaDiagram />
+
+## 为何需要状态管理
+
+<Term def="状态管理是把跨多个组件共享的数据抽到独立 store 统一管理，提供单一数据源、可追踪变更与跨组件同步能力的模式。">状态管理</Term>解决的是「多个不相邻组件需要共享并同步同一份数据」的问题。典型场景：用户登录态、购物车数量、全局主题、多视图需同步的数据。判断标准：这个状态是否被多个不相邻组件共享且需要同步——是则上 store，否则局部管理。
+
+## Vuex：五要素与同步约束
+
+Vuex 用 state/getters/mutations/actions 四要素 + 严格单向流：state 是唯一数据源（只读）；getters 派生状态；mutations 是唯一能改 state 的地方且必须同步；actions 处理异步后 commit mutation。
+
+```javascript
+// Vuex store
+const store = {
+  state: { count: 0 },
+  getters: { double: (s) => s.count * 2 },
+  mutations: {
+    increment(state) { state.count++; } // 同步，唯一改 state 的地方
+  },
+  actions: {
+    async incrementAsync({ commit }) {
+      await fetch("/api");        // 异步放 action
+      commit("increment");        // 仍要 commit mutation 改 state
+    },
+  },
+};
+```
+
+mutation 必须同步是为了让 DevTools 准确记录每次状态快照（时间旅行调试）。异步在 mutation 里会让快照错乱。
+
+## Pinia：简化模型
+
+Pinia 去掉 mutation 层，action（同步/异步均可）直接改 state，无嵌套模块，TypeScript 友好，与 Composition API 心智一致。
+
+```javascript
+import { defineStore } from "pinia";
+
+export const useCounterStore = defineStore("counter", {
+  state: () => ({ count: 0 }),
+  getters: { double: (s) => s.count * 2 },
+  actions: {
+    increment() { this.count++; },              // 直接改 state，无 mutation
+    async incrementAsync() {
+      await fetch("/api"); this.increment();    // 异步也可
+    },
+  },
+});
+
+// 组件里使用
+const store = useCounterStore();
+store.increment(); // 直接调 action
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：所有状态都往 store 里塞。** 组件局部状态（表单输入、弹窗开关、当前 tab）应留在组件内 ref，放全局反而让组件依赖外部、降低复用性。store 只放真正跨组件共享且需要单一来源的状态。判断标准：「多个不相邻组件是否共享并需同步」。
+</Callout>
+
+<Callout type="trap">
+**误区二：Vuex 的 mutation 里写异步「也能跑」。** mutation 里写 setTimeout 改 state，代码能执行但破坏了 DevTools 的时间旅行——快照无法准确对应这次变更，调试时状态不可重放。异步必须放 action，由 action commit 同步 mutation 改 state，把「副作用」与「状态变更」分离。
+</Callout>
+
+<Callout type="trap">
+**误区三：从 Vuex 迁移就一定要原样照搬 mutation。** 迁移到 Pinia 时不必保留 mutation 这层无意义的中转，应直接让 action 改 state。若机械照搬 Vuex 结构，既丢了 Pinia 的简洁优势又增加了心智负担。Pinia 的 action 直接改 state 是设计取舍，不是缺陷。
+</Callout>
+
+<Exercises>
+**问题 1**：Vuex 的 mutation 为什么必须是同步的？
+
+<Answer>
+为了让状态变更可追踪、可重放。DevTools 依赖 mutation 记录每次状态快照做时间旅行调试，同步 mutation 执行完状态就确定、快照准确。若 mutation 内有异步，回调何时执行不可控，DevTools 无法准确捕获「这次 mutation 对应的状态变化」，快照错乱。异步放 action（可 async），action 不直接改 state 而是 commit 同步 mutation，把副作用与状态变更分离。
+</Answer>
+
+**问题 2（实现题）**：用 Pinia 实现一个用户 store，包含 token 状态、login 异步 action、isLogin getter，并说明它相比 Vuex 简化了什么。
+
+<Answer>
+```javascript
+import { defineStore } from "pinia";
+
+export const useUserStore = defineStore("user", {
+  state: () => ({ token: "" }),
+  getters: { isLogin: (s) => !!s.token },
+  actions: {
+    async login(user) {
+      const res = await fetch("/api/login", { method: "POST", body: JSON.stringify(user) });
+      this.token = (await res.json()).token; // action 直接改 state，无需 mutation
+    },
+    logout() { this.token = ""; },
+  },
+});
+```
+相比 Vuex 简化：①无 mutation 层，login/logout 这些 action 直接 `this.token = ...` 改 state，少一层 commit；②无 namespaced 嵌套模块，store 按 id 平级；③TypeScript 自动推导无需手动声明类型；④async 直接在 action 里写，不必「action 异步 + mutation 同步」二段式。代码量更少、心智更轻。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="prop drilling">props 逐层透传——多个不相邻组件共享数据时，中间组件被迫接收并转发不属于自己的 props，代码臃肿难维护。状态管理通过独立 store 消除 prop drilling。</GlossaryItem>
+<GlossaryItem term="mutation 同步约束">Vuex 规定 mutation 必须同步，以保证 DevTools 能准确记录状态快照实现时间旅行调试。异步逻辑放 action，由 action commit 同步 mutation 改 state。</GlossaryItem>
+<GlossaryItem term="Pinia">Vue 官方推荐的新一代状态管理库，去掉 mutation 层（action 直接改 state）、无嵌套模块、TypeScript 友好、支持 setup 风格 store，更贴合 Composition API 心智。</GlossaryItem>
+</Glossary>

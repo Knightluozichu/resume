@@ -1335,6 +1335,16 @@ import { jpgEventLoopQuestions } from "./review/jpg-event-loop";
 import { jpgDomBomQuestions } from "./review/jpg-dom-bom";
 import { jpgModulesQuestions } from "./review/jpg-modules";
 import { jpgFinalReviewQuestions } from "./review/jpg-final-review";
+import { vjpLearningMapQuestions } from "./review/vjp-learning-map";
+import { vjpReactivitySystemQuestions } from "./review/vjp-reactivity-system";
+import { vjpTemplateSyntaxQuestions } from "./review/vjp-template-syntax";
+import { vjpComponentDesignQuestions } from "./review/vjp-component-design";
+import { vjpCompositionApiQuestions } from "./review/vjp-composition-api";
+import { vjpVuexPiniaQuestions } from "./review/vjp-vuex-pinia";
+import { vjpRouterGuardQuestions } from "./review/vjp-router-guard";
+import { vjpSsrSsgQuestions } from "./review/vjp-ssr-ssg";
+import { vjpBuildDeployQuestions } from "./review/vjp-build-deploy";
+import { vjpFinalReviewQuestions } from "./review/vjp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2701,6 +2711,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jpgDomBomQuestions,
   ...jpgModulesQuestions,
   ...jpgFinalReviewQuestions,
+  ...vjpLearningMapQuestions,
+  ...vjpReactivitySystemQuestions,
+  ...vjpTemplateSyntaxQuestions,
+  ...vjpComponentDesignQuestions,
+  ...vjpCompositionApiQuestions,
+  ...vjpVuexPiniaQuestions,
+  ...vjpRouterGuardQuestions,
+  ...vjpSsrSsgQuestions,
+  ...vjpBuildDeployQuestions,
+  ...vjpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

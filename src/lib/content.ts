@@ -181,6 +181,7 @@ export const BOOK_ORDER = [
   "game-server-architecture",
   "multiplayer-game-programming",
   "javascript-pro-guide",
+  "vuejs-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -302,6 +303,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "game-server-architecture": "游戏服务器架构与优化",
   "multiplayer-game-programming": "Multiplayer Game Programming",
   "javascript-pro-guide": "JavaScript高级程序设计（第4版）",
+  "vuejs-practice": "Vue.js从入门到项目实战",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

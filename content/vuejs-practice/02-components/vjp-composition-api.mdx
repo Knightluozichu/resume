@@ -1,0 +1,125 @@
+---
+title: "Composition API 与 Hooks"
+type: C
+section: "前端与Web"
+order: 4
+description: "拆解 Composition API——从按选项切分到按功能聚合，setup 时机、ref/reactive 与可复用 Hooks 的组织方式"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VjpCompositionApiDiagram } from "@/components/mdx/vuejs-practice/diagrams/vjp-composition-api";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Composition API 相比 Options API 解决的核心问题
+- 掌握 setup 的执行时机与带来的约束
+- 理解 ref 为何需要 .value 而模板不用
+- 能把一段逻辑抽成可复用的 Hook（composable）
+</Objectives>
+
+## 直觉引入
+
+Options API 把一个功能的代码打散到 data、computed、methods、mounted 四个地方，理解一个功能要上下跳读，复用一个功能要拷贝散落四处的代码。Composition API 换了个组织方式：在 setup 里把同一功能的 ref/computed/watch/method 聚到一起写成功能块，逻辑内聚可读；更重要的是复用单位从 mixin（命名冲突、来源不清）变成独立函数 `useXxx()`，import 即用、来源明确、类型友好。本质是从「按选项类型切分」转向「按功能切分」。
+
+<VjpCompositionApiDiagram />
+
+## setup 时机与约束
+
+<Term def="setup 是 Composition API 的入口，在组件实例创建之初、props 解析之后、beforeCreate 之前执行，此时 this 不可用，是组件的纯逻辑初始化阶段。">setup</Term>执行时组件实例尚未完全创建，data/computed/methods 还没挂到 this 上，所以 setup 里拿不到 this（Vue 3 故意如此避免误用旧选项）。约束：生命周期要用 `onMounted` 等组合式函数（且须在 setup 同步执行期间注册才有效）；props 通过第一参数接收且只读；context（emit/attrs/slots）通过第二参数接收；返回的对象属性暴露给模板和实例。
+
+```javascript
+import { ref, onMounted } from "vue";
+
+export default {
+  props: { initial: Number },
+  setup(props, { emit }) {
+    const count = ref(props.initial); // ref 创建响应式状态
+    onMounted(() => console.log("挂载完成")); // 钩子在此注册才有效
+    function inc() { count.value++; emit("change", count.value); }
+    return { count, inc }; // 暴露给模板
+  },
+};
+```
+
+## ref 与 .value
+
+原始类型无法被 Proxy 代理，Vue 用 `{ value: T }` 包裹并对 `.value` 做拦截，所以 JS 里访问修改必须走 `.value`。模板中编译器自动解包（unwrap）所以不用写。
+
+```javascript
+import { ref, computed } from "vue";
+
+const count = ref(0);
+count.value++;        // JS 里必须 .value 才触发 set
+// 模板里 {{ count }} 自动解包，不用 .value
+
+const double = computed(() => count.value * 2); // computed 依赖 count.value
+```
+
+## 抽成可复用 Hook
+
+把逻辑抽成独立函数 `useXxx`，import 进组件即可复用，返回的 ref 保持响应式。
+
+```javascript
+// composables/useCounter.ts
+import { ref, computed } from "vue";
+
+export function useCounter(initial = 0) {
+  const count = ref(initial);
+  const double = computed(() => count.value * 2);
+  function increment() { count.value++; }
+  return { count, double, increment }; // 返回对象，具名解构更清晰
+}
+
+// 组件里复用
+import { useCounter } from "@/composables/useCounter";
+const { count, increment } = useCounter(10);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：在异步回调里注册生命周期钩子。** `onMounted` 等组合式函数必须在 setup 同步执行期间调用才能注册成功。若放在 `await` 之后或 setTimeout 回调里，setup 已结束、当前 effect 上下文丢失，注册会失效且无警告。需要异步后的副作用，应在 onMounted 内部发起异步操作。
+</Callout>
+
+<Callout type="trap">
+**误区二：Hook 里忘了清理副作用导致内存泄漏。** Hook 内若注册了定时器、事件监听、WebSocket，组件卸载时不清理会泄漏。应在 Hook 内用 `onScopeDispose` 或 `onUnmounted` 注册清理逻辑，让 Hook 自管生命周期，使用者无需关心。
+</Callout>
+
+<Callout type="trap">
+**误区三：把 Composition API 当成「Options API 换个写法」。** 若只是把 data/methods 平移到 setup 里而不按功能聚合，代码依旧碎片化、依旧难复用，只是换了语法没换心智。Composition API 的价值在于「按功能切分 + 函数级复用」，不按功能组织就丢了它的全部意义。
+</Callout>
+
+<Exercises>
+**问题 1**：Composition API 相比 Options API 解决了什么问题？
+
+<Answer>
+Options API 把同一功能代码打散到 data/computed/methods/mounted，理解要跳读、复用要拷贝散落代码，组件变大后逻辑碎片化。Composition API 在 setup 里按功能聚合成块，逻辑内聚可读；复用单位从 mixin（命名冲突、来源不清、数据流隐式）变成独立函数 useXxx()，import 即用、来源明确、TypeScript 友好。本质是从「按选项类型切分」转向「按功能切分」。
+</Answer>
+
+**问题 2（实现题）**：实现一个 `useMouse` Hook，跟踪鼠标位置并在组件卸载时清理事件监听。
+
+<Answer>
+```javascript
+import { ref, onMounted, onUnmounted } from "vue";
+
+export function useMouse() {
+  const x = ref(0);
+  const y = ref(0);
+  function update(e) { x.value = e.clientX; y.value = e.clientY; }
+  onMounted(() => window.addEventListener("mousemove", update));
+  onUnmounted(() => window.removeEventListener("mousemove", update)); // 清理防泄漏
+  return { x, y };
+}
+```
+在 setup 同步期间调用 onMounted/onUnmounted 注册（满足钩子注册时机约束），返回的 x/y 是 ref 在组件里保持响应式，模板可直接用 `{{ x }}, {{ y }}`。卸载时移除监听避免内存泄漏，Hook 自管生命周期，使用者 import 即用无需关心清理。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="setup">Composition API 入口，在 props 解析后、beforeCreate 前执行。此时无 this，须用组合式函数（ref/onMounted 等）创建状态与注册钩子，返回对象暴露给模板。是组件的纯逻辑初始化阶段。</GlossaryItem>
+<GlossaryItem term="composable（Hook）">以 use 开头的可复用函数，内部用 ref/computed/watch 组织一段逻辑并 return 暴露，可被任意组件 import 复用。是 Composition API 的复用单位，替代了 Options API 时代的 mixin。</GlossaryItem>
+<GlossaryItem term="自动解包">模板编译器识别 ref 并在 render 中自动加 .value 读取，让模板书写无需 .value。但 setup 的 JS 代码没有这层编译魔法，必须显式写 .value。这是「编译期便利 vs 运行时显式」的权衡。</GlossaryItem>
+</Glossary>

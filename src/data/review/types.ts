@@ -1458,7 +1458,17 @@ export type ReviewChapterSlug =
   | "jpg-event-loop"
   | "jpg-dom-bom"
   | "jpg-modules"
-  | "jpg-final-review";
+  | "jpg-final-review"
+  | "vjp-learning-map"
+  | "vjp-reactivity-system"
+  | "vjp-template-syntax"
+  | "vjp-component-design"
+  | "vjp-composition-api"
+  | "vjp-vuex-pinia"
+  | "vjp-router-guard"
+  | "vjp-ssr-ssg"
+  | "vjp-build-deploy"
+  | "vjp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2921,6 +2931,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jpg-dom-bom": "DOM 与 BOM 操作",
   "jpg-modules": "模块系统",
   "jpg-final-review": "全书总复习",
+  "vjp-learning-map": "全书学习地图",
+  "vjp-reactivity-system": "响应式系统原理",
+  "vjp-template-syntax": "模板语法与指令",
+  "vjp-component-design": "组件设计模式",
+  "vjp-composition-api": "Composition API 与 Hooks",
+  "vjp-vuex-pinia": "状态管理：Vuex 与 Pinia",
+  "vjp-router-guard": "路由与导航守卫",
+  "vjp-ssr-ssg": "SSR/SSG 与 Nuxt.js",
+  "vjp-build-deploy": "构建优化与部署",
+  "vjp-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

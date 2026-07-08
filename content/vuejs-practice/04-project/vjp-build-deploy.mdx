@@ -1,0 +1,121 @@
+---
+title: "构建优化与部署"
+type: C
+section: "前端与Web"
+order: 8
+description: "拆解 Vue 项目构建部署全链路——Vite 预构建、Rollup 打包、代码分割、内容哈希缓存与 CDN 部署"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VjpBuildDeployDiagram } from "@/components/mdx/vuejs-practice/diagrams/vjp-build-deploy";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Vite 开发快的原因与依赖预构建的作用
+- 掌握代码分割与路由懒加载的实现与意义
+- 理解内容哈希命名的缓存策略原理
+- 能描述从源码到上线的构建部署全链路
+</Objectives>
+
+## 直觉引入
+
+你写完代码到用户能用，中间还有一道「构建」：源码要编译、依赖要打包、产物要优化、文件要部署到 CDN。这一步做不好，首屏要下载几 MB 的 JS、改一行代码导致所有缓存失效、大组件拖慢首屏。构建优化的目标就两条：减少首屏要下载的代码量，让缓存命中率最大化——让用户「只下载当前页面需要的代码，且没改的部分能长效缓存」。
+
+<VjpBuildDeployDiagram />
+
+## Vite 为何开发快
+
+<Term def="Vite 开发模式用原生 ESM 按需加载 + esbuild 预构建依赖，冷启动几乎瞬时；生产构建切换到 Rollup 做 Tree-shaking 与代码分割。">Vite</Term>开发时不打包，直接让浏览器用原生 ES Module 按需 import（请求一个模块才编译一个），冷启动瞬时。依赖预构建（esbuild）做三件事：把 CommonJS/UMD 依赖转成 ESM、把零碎小模块合并成单文件减少请求、用 esbuild（Go 编写，比 JS 打包器快 10-100 倍）执行。生产构建则用 Rollup（Tree-shaking 与代码分割更成熟）。
+
+## 代码分割与懒加载
+
+```javascript
+// 路由懒加载：每个路由单独 chunk，访问时才加载
+const routes = [
+  { path: "/detail", component: () => import("@/views/Detail.vue") },
+];
+
+// 动态 import：按需加载大组件/库
+button.addEventListener("click", async () => {
+  const { Chart } = await import("chart-lib"); // 点击才加载图表库
+  new Chart(/* ... */);
+});
+
+// Vite 手动分包
+// vite.config.ts
+export default {
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: { vendor: ["vue", "vue-router", "pinia"] },
+      },
+    },
+  },
+};
+```
+
+## 内容哈希缓存
+
+```javascript
+// 构建产物文件名带内容哈希：app.a3f9b2.js
+// 内容不变哈希不变 → 长效缓存命中；内容变哈希变 → 浏览器当新文件请求
+
+// 部署配置（伪配置）
+// index.html        → Cache-Control: no-cache（入口必须取最新）
+// assets/*.js|css   → Cache-Control: max-age=31536000（一年长效缓存）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：把所有代码打成一个 bundle 最省事。** 一个大 bundle 让用户首屏下载全部代码（含当前用不到的路由和库），拖慢首屏、浪费带宽。应做代码分割：路由懒加载让每个路由独立 chunk，动态 import 按需加载大组件/库。目标是「用户只下载当前页面真正需要的代码」。
+</Callout>
+
+<Callout type="trap">
+**误区二：HTML 也设长效缓存。** HTML 是入口文件，文件名总叫 index.html，若被强缓存，用户拿旧 HTML 指向旧哈希的 JS/CSS，永远看不到更新。HTML 必须 no-cache 或短缓存，带哈希的静态资源才长效缓存——这样改了的内容（哈希变）能被取到，没改的（哈希不变）能命中缓存。
+</Callout>
+
+<Callout type="trap">
+**误区三：内容哈希里混入构建时间等不稳定因素。** 若哈希含构建时间戳，每次构建哈希都变，所有缓存全失效，用户每次都要重新下载。哈希必须只基于文件内容稳定计算，内容不变哈希就不变。还要注意分包时的级联失效——一个 chunk 变可能让依赖它的 chunk 哈希也变，需合理控制分包粒度。
+</Callout>
+
+<Exercises>
+**问题 1**：代码分割解决什么问题？路由懒加载如何实现？
+
+<Answer>
+代码分割把大 bundle 拆成多个小 chunk 按需加载，解决「首屏要下载全部代码导致慢」的问题。路由懒加载用 `component: () => import('@/views/Detail.vue')`，`() => import()` 是 ES 动态 import 返回 Promise，打包器识别后把 Detail.vue 单独打成 chunk，只在路由被访问时才加载该 chunk。它和通用动态 import 本质相同，区别只是用于按路由切分。配合 prefetch 可预取下一个可能访问的 chunk。
+</Answer>
+
+**问题 2（实现题）**：为一个多路由 Vue 应用配置：路由懒加载 + vendor 分包 + 内容哈希，说明缓存策略。
+
+<Answer>
+```javascript
+// 路由懒加载
+const routes = [
+  { path: "/", component: () => import("@/views/Home.vue") },
+  { path: "/detail", component: () => import("@/views/Detail.vue") },
+];
+
+// vite.config.ts 分包 + 哈希（Vite 默认带内容哈希）
+export default {
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: { vendor: ["vue", "vue-router", "pinia"] },
+      },
+    },
+  },
+};
+```
+缓存策略：index.html 设 no-cache（入口必须取最新以指向新哈希文件）；带哈希的 assets/*.js|css 设 max-age=31536000 长效缓存（内容变哈希变文件名变，浏览器当新文件请求；内容不变哈希不变，二次访问命中缓存零下载）。vendor 单独分包后，业务代码变动不影响 vendor chunk 的哈希，用户改业务代码时 vendor 仍命中缓存无需重下，提升二次访问速度。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="依赖预构建">Vite 用 esbuild 在开发期把 CommonJS/UMD 依赖转 ESM、合并零碎小模块、缓存到 node_modules/.vite。esbuild（Go 编写）速度远超 JS 打包器，让开发冷启动瞬时。</GlossaryItem>
+<GlossaryItem term="代码分割">把大 bundle 拆成多个 chunk 按需加载，让首屏只下载当前路由需要的代码。实现靠动态 import()（路由懒加载是其应用）与 manualChunks 分包。</GlossaryItem>
+<GlossaryItem term="内容哈希缓存">产物文件名含内容哈希：内容不变哈希不变命中长效缓存，内容变哈希变文件名变强制刷新。HTML 不缓存（入口取最新），带哈希静态资源长效缓存，实现「改了的刷新、没改的缓存」。</GlossaryItem>
+</Glossary>

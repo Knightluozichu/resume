@@ -1,0 +1,129 @@
+---
+title: "组件设计模式"
+type: C
+section: "前端与Web"
+order: 3
+description: "拆解 Vue 组件通信与设计——props/emit 单向流、slots 内容分发、provide/inject 跨层注入与契约化设计"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VjpComponentDesignDiagram } from "@/components/mdx/vuejs-practice/diagrams/vjp-component-design";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 props 单向数据流与 emit 事件冒泡的协作
+- 掌握默认/具名/作用域插槽的区别与使用场景
+- 理解 provide/inject 跨层注入的取舍
+- 建立「组件是带契约的黑箱」设计心智
+</Objectives>
+
+## 直觉引入
+
+组件化就是把界面拆成一块块独立的积木。每块积木有明确的接口：你往里塞数据（props），它向外喊事件（emit），还能留出空位让外部填内容（slots）。使用者不需要知道积木内部怎么实现，只要遵守接口约定就能拼装。这和函数的「入参/返回值」思路一致——组件不过是「带 UI 的函数」。理解了接口契约，组件就能像乐高一样随意组合；接口一乱，组件就成了缠在一起的线团，改一处崩多处。
+
+<VjpComponentDesignDiagram />
+
+## props 与 emit：单向数据流
+
+<Term def="单向数据流指数据只能从父通过 props 传给子，子不能反向改 props；子要让父改数据时通过 emit 通知父，由父修改后再经 props 流回。">单向数据流</Term>保证了数据来源单一、变化可追踪。父用 `:value` 传数据，子用 `emit` 发事件，父监听事件后修改自己的状态，新状态再经 props 流回子组件。
+
+```javascript
+// 父组件
+const count = ref(0);
+// <Child :value="count" @add="n => count = n" />
+
+// 子组件（setup 语法糖）
+const props = defineProps({ value: Number });
+const emit = defineEmits({ add: (n) => typeof n === "number" });
+// 子组件不能直接改 props.value，只能通知父：
+emit("add", props.value + 1); // 父收到后改 count，新值经 props 流回
+```
+
+## slots：内容分发
+
+插槽让父组件决定子组件某区域显示什么。默认插槽投递标签间内容；具名插槽用 `name` 分区；作用域插槽让子组件把数据回传给父，由父决定如何渲染。
+
+```html
+<!-- 子组件 Card.vue -->
+<div class="card">
+  <header><slot name="header" /></header>
+  <main><slot /></main>
+  <!-- 作用域插槽：把 item 数据回传给父 -->
+  <footer><slot name="item" :item="item" /></footer>
+</div>
+
+<!-- 父组件使用 -->
+<Card>
+  <template #header>标题</template>
+  默认内容
+  <template #item="{ item }">{{ item.name }}</template>
+</Card>
+```
+
+## provide/inject：跨层注入
+
+当很多层后代都要同一份数据（主题、用户信息），用 props 逐层透传（prop drilling）会让中间组件被迫转发不属于自己的数据。`provide/inject` 让祖先提供数据，任意后代直接注入，解耦中间层。
+
+```javascript
+// 祖先组件
+import { provide, ref } from "vue";
+const theme = ref("dark");
+provide("theme", theme); // 后代可注入并保持响应式
+
+// 任意层级的后代组件
+import { inject } from "vue";
+const theme = inject("theme"); // 直接拿到，无需中间组件透传
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：子组件直接改 props 省事。** 直接 `props.value = 5` 在 Vue 3 会报警告，且若 props 是对象改其内部属性虽能改成功但破坏单向流，导致父状态与 props 来源不一致。正确做法：派生值用 computed，要改父数据用 emit 通知，需本地可变副本用 `ref(props.x)` 复制。
+</Callout>
+
+<Callout type="trap">
+**误区二：provide/inject 随便用不讲究响应式与约束。** provide 一个原始值后代拿到的是非响应式快照；后代乱 inject 来的数据直接改会破坏数据流。应 provide ref/reactive 保持响应式，且尽量提供只读或带约束的接口（如 provide 一个带方法的对象而非裸状态），避免后代随意篡改。
+</Callout>
+
+<Callout type="trap">
+**误区三：props 越多越「灵活」。** 一个组件 props 超过 7 个往往说明职责过大该拆分，而非更灵活。props 爆炸会让组件难用、难测、难复用——使用者记不住每个 prop 的含义和组合。应按职责拆成多个小组件，或用 slots/组合式 API 替代部分配置型 props。
+</Callout>
+
+<Exercises>
+**问题 1**：默认插槽、具名插槽、作用域插槽的区别？
+
+<Answer>
+默认插槽：父写在子标签间的内容投递到子的 `<slot/>`，让父决定子某区域显示什么。具名插槽：子用 `<slot name="header"/>` 定义多个占位，父用 `#header` 指定投到哪个位置，用于一个组件多个可定制区域。作用域插槽：子在 `<slot :item="item"/>` 把数据传给父，父用 `#default="{ item }"` 接收，用于子提供数据、父决定如何渲染每一项（如列表组件让父定制每行模板）。三者递进：从「父塞内容」到「父分区塞」到「子给数据父定渲染」。
+</Answer>
+
+**问题 2（实现题）**：实现一个 `Counter` 子组件，接收 `modelValue`，通过 `update:modelValue` 实现双向绑定，并说明为什么子组件不直接改 props。
+
+<Answer>
+```html
+<!-- Counter.vue -->
+<script setup>
+const props = defineProps({ modelValue: Number });
+const emit = defineEmits(["update:modelValue"]);
+function inc() {
+  emit("update:modelValue", props.modelValue + 1); // 通知父改，不直接改 props
+}
+</script>
+<template>
+  <button @click="inc">{{ modelValue }}</button>
+</template>
+
+<!-- 父组件 -->
+<Counter v-model="count" />
+```
+子组件不直接改 props 是单向数据流的要求：数据来源单一（父），变化可追踪。若子直接改 `props.modelValue`，父的状态与 props 来源不一致，调试时无法确定谁改了数据。通过 emit 通知父、由父修改后经 props 流回，保证了数据流的单向与可预测，这正是 `v-model` 的本质（props `modelValue` + emit `update:modelValue`）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="单向数据流">数据只能从父经 props 传给子，子不能反向改 props；子要让父改数据用 emit 通知，父改后经 props 流回。保证数据来源单一、变化可追踪。</GlossaryItem>
+<GlossaryItem term="作用域插槽">子组件在 slot 上绑定数据传给父，父用解构接收并决定如何渲染该数据。让「子提供数据、父定渲染」，是列表/表格组件让父定制每行模板的标准手段。</GlossaryItem>
+<GlossaryItem term="组件契约">组件对外暴露的稳定接口：props 是入参、emit 是回调、slot 是扩展点、expose 是可选公开方法。契约清晰则组件可像积木组合，契约混乱则改一处崩多处。</GlossaryItem>
+</Glossary>

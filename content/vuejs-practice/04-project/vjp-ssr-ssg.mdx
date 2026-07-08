@@ -1,0 +1,114 @@
+---
+title: "SSR/SSG 与 Nuxt.js"
+type: C
+section: "前端与Web"
+order: 7
+description: "对比 CSR/SSR/SSG 三种渲染模式——hydration 注水、浏览器 API 处理与 Nuxt 统一抽象及选型权衡"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VjpSsrSsgDiagram } from "@/components/mdx/vuejs-practice/diagrams/vjp-ssr-ssg";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 区分 CSR/SSR/SSG 三种渲染模式的首屏与 SEO 表现
+- 理解 hydration（注水）的作用与 hydration mismatch 的成因
+- 掌握 SSR 中处理浏览器 API（window 等）的方式
+- 能根据场景权衡是否采用 SSR
+</Objectives>
+
+## 直觉引入
+
+「渲染模式」回答的是「HTML 什么时候生成」。CSR（客户端渲染）让浏览器下载空 HTML 和 JS 后自己渲染，首屏慢、SEO 弱；SSR（服务端渲染）让服务器执行组件取数据生成完整 HTML 返回，首屏快、SEO 强；SSG（静态生成）在构建期就预渲染好静态 HTML 丢 CDN，首屏极快、服务器零运行时。三者不是三门技术，而是「何时生成 HTML」的取舍，Nuxt 用同一套组件代码通过配置切换。
+
+<VjpSsrSsgDiagram />
+
+## 三种模式对比
+
+<Term def="渲染模式决定 HTML 在何时生成：CSR 在浏览器、SSR 在服务端请求时、SSG 在构建期，三者各有首屏与 SEO 取舍。">渲染模式</Term>的核心差异在首屏速度、SEO 与服务器开销。CSR 服务器压力小但首屏慢 SEO 弱；SSR 首屏快 SEO 强但服务器开销大、需注意 hydration；SSG 首屏极快 SEO 强服务器零开销但内容更新需重新构建。
+
+```javascript
+// Nuxt 用同一套组件，靠配置切模式
+// nuxt.config.ts
+export default defineNuxtConfig({
+  ssr: true, // SSR 模式（默认）
+  // ssr: false 即 CSR（SPA）
+  // nitro: { preset: "static" } 配合 nuxt generate 即 SSG
+});
+```
+
+## hydration 注水
+
+SSR 只生成 HTML 字符串，没有事件绑定、没有响应式——按钮点了没反应。hydration 让客户端 JS 加载后，Vue 把虚拟 DOM 与已有真实 DOM 关联：比对服务端渲染的 DOM 和客户端 render 的 VNode，一致则复用 DOM 只附加事件和响应式，不一致则警告 hydration mismatch。
+
+```javascript
+// hydration mismatch 的常见成因：服务端客户端渲染结果不一致
+// 错误：依赖时间的渲染，两端不同
+//   <div>{{ new Date().toLocaleTimeString() }}</div>
+// 正确：把依赖客户端的数据放到 onMounted 后渲染
+const time = ref("");
+onMounted(() => { time.value = new Date().toLocaleTimeString(); });
+```
+
+## 浏览器 API 处理
+
+SSR 在 Node 执行渲染，Node 没有 window/document，直接访问会报错。
+
+```javascript
+import { onMounted } from "vue";
+
+// 错误：setup 顶层直接读 window，服务端崩溃
+// const width = window.innerWidth;
+
+// 正确：放 onMounted（仅客户端执行）
+const width = ref(0);
+onMounted(() => { width.value = window.innerWidth; });
+
+// 或用条件判断 / ClientOnly 组件包裹仅在客户端渲染的部分
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：SSR 一定比 CSR 快。** SSR 首屏 HTML 直出快，但服务器每个请求都要执行组件取数据渲染，高并发下 CPU/内存压力大；且 HTML 显示后 JS 未加载完时无法交互（hydration 前的死区）。纯后台管理无 SEO 需求、首屏非关键，用 CSR 更简单高效。SSR 的收益（首屏/SEO）要大于其服务器与复杂度成本才值得。
+</Callout>
+
+<Callout type="trap">
+**误区二：hydration mismatch 只是警告无所谓。** mismatch 时 Vue 会警告并可能重新渲染该节点，导致首屏闪烁、性能损耗，严重时 DOM 与状态不一致。常见成因：服务端客户端用了不同数据、依赖 Date/Math.random 等不稳定值、依赖 localStorage 的渲染。应保证两端渲染一致，客户端专属内容推迟到 onMounted 后渲染。
+</Callout>
+
+<Callout type="trap">
+**误区三：在 setup 顶层直接用 window 等 SSR 能跑。** SSR 时 setup 在 Node 执行，window 不存在直接报错。必须用 onMounted 包裹、import.meta.client 条件判断或 ClientOnly 组件。原则：渲染相关逻辑两端一致，副作用和浏览器 API 推迟到挂载后。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是 hydration？为什么需要它？
+
+<Answer>
+hydration（注水/水合）是 SSR 返回的静态 HTML 与客户端 Vue 应用「附加事件、建立响应式」的过程。SSR 只生成 HTML 字符串没有事件和响应式（按钮点了没反应），hydration 让客户端 JS 加载后把虚拟 DOM 与已有真实 DOM 关联：比对两端渲染一致则复用 DOM 只附加事件监听和响应式，不一致则警告 hydration mismatch。需要它是因为既要首屏快（SSR 直出 HTML 立即可见）又要可交互（必须 client 激活成真正 Vue 应用）。
+</Answer>
+
+**问题 2（实现题）**：SSR 应用中，组件需要读取 window.innerWidth 显示屏幕宽度，写出避免 SSR 报错的实现，并说明为什么不能在 setup 顶层直接读。
+
+<Answer>
+```javascript
+import { ref, onMounted } from "vue";
+
+const width = ref(0); // 初始值两端一致（0）
+onMounted(() => {
+  width.value = window.innerWidth; // 仅客户端执行，服务端不跑
+});
+// 模板：<div v-if="width">屏幕宽度：{{ width }}</div>
+```
+不能在 setup 顶层直接读 window，因为 SSR 时 setup 在 Node 环境执行，Node 没有 window 对象直接报 ReferenceError。onMounted 只在客户端执行，把访问 window 的代码放这里最安全；初始值 width=0 保证两端首次渲染一致避免 hydration mismatch，挂载后再填真实值。也可用 import.meta.client 条件判断或 ClientOnly 组件包裹。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="hydration（注水）">SSR 返回的静态 HTML 与客户端 Vue 应用关联的过程：比对服务端 DOM 与客户端 VNode，一致则复用 DOM 只附加事件和响应式，不一致则警告 mismatch。让首屏快（HTML 直出）且可交互（client 激活）。</GlossaryItem>
+<GlossaryItem term="hydration mismatch">服务端客户端渲染结果不一致导致的警告，Vue 会重新渲染该节点。常见成因：依赖 Date/Math.random/localStorage 等不稳定或客户端专属数据。应保证两端渲染一致。</GlossaryItem>
+<GlossaryItem term="Nuxt">基于 Vue 的元框架，用同一套组件代码通过配置切换 CSR/SSR/SSG/hybrid 模式，提供路由、数据获取、SSR 等开箱即用的工程化能力。</GlossaryItem>
+</Glossary>
