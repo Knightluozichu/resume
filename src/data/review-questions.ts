@@ -1415,6 +1415,16 @@ import { ndbgFlameGraphQuestions } from "./review/ndbg-flame-graph";
 import { ndbgAsyncTracingQuestions } from "./review/ndbg-async-tracing";
 import { ndbgProductionDebugQuestions } from "./review/ndbg-production-debug";
 import { ndbgFinalReviewQuestions } from "./review/ndbg-final-review";
+import { dnjLearningMapQuestions } from "./review/dnj-learning-map";
+import { dnjV8EngineQuestions } from "./review/dnj-v8-engine";
+import { dnjEventLoopAdvQuestions } from "./review/dnj-event-loop-adv";
+import { dnjAsyncProgrammingQuestions } from "./review/dnj-async-programming";
+import { dnjStreamImplementationQuestions } from "./review/dnj-stream-implementation";
+import { dnjTcpHttpQuestions } from "./review/dnj-tcp-http";
+import { dnjWebsocketQuestions } from "./review/dnj-websocket";
+import { dnjNpmModuleQuestions } from "./review/dnj-npm-module";
+import { dnjTestingDeployQuestions } from "./review/dnj-testing-deploy";
+import { dnjFinalReviewQuestions } from "./review/dnj-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2861,6 +2871,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ndbgAsyncTracingQuestions,
   ...ndbgProductionDebugQuestions,
   ...ndbgFinalReviewQuestions,
+  ...dnjLearningMapQuestions,
+  ...dnjV8EngineQuestions,
+  ...dnjEventLoopAdvQuestions,
+  ...dnjAsyncProgrammingQuestions,
+  ...dnjStreamImplementationQuestions,
+  ...dnjTcpHttpQuestions,
+  ...dnjWebsocketQuestions,
+  ...dnjNpmModuleQuestions,
+  ...dnjTestingDeployQuestions,
+  ...dnjFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

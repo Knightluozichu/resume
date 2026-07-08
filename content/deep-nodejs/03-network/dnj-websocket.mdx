@@ -1,0 +1,186 @@
+---
+title: "WebSocket 与实时通信"
+type: A
+section: "前端与Web"
+order: 6
+description: "深入 WebSocket 握手升级、帧协议、全双工通信与心跳保活机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnjWebsocketDiagram } from "@/components/mdx/deep-nodejs/diagrams/dnj-websocket";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 WebSocket 握手过程：HTTP 升级到 WebSocket 协议
+- 掌握 WebSocket 帧格式：FIN、opcode、MASK、payload
+- 对比 WebSocket、HTTP 轮询、SSE 三种实时通信方式
+- 掌握 WebSocket 心跳保活与关闭流程
+</Objectives>
+
+## 直觉引入
+
+把 WebSocket 想象成对讲机。HTTP 轮询是「定时打电话问有没有事」——你每隔几秒拨一次号，对方说「没事」你就挂了，浪费电话费。SSE 是「收音机」——只能服务端往客户端广播，客户端不能回话。WebSocket 是「对讲机」——<Term def="WebSocket 是通过 HTTP 握手升级后在单条 TCP 连接上进行全双工通信的协议，客户端和服务端可随时发送帧，支持文本和二进制数据，低延迟、低开销。">WebSocket</Term>一旦建立连接，双方随时可以说话（全双工），不用每次拨号（无 HTTP 头部开销），还能传照片（二进制帧）。握手时用了一次 HTTP（借道收费站），之后这条路就变成了专用通道。
+
+<DnjWebsocketDiagram />
+
+## 握手升级
+
+WebSocket 握手基于 HTTP，复用 HTTP 基础设施（穿防火墙、走 80/443 端口），握手成功后协议「升级」为 WebSocket：
+
+```javascript
+// 客户端发送 HTTP 升级请求
+// GET /ws HTTP/1.1
+// Host: example.com
+// Upgrade: websocket
+// Connection: Upgrade
+// Sec-WebSocket-Key: dGhlIHNhbXBsZQ==        ← 客户端随机生成
+// Sec-WebSocket-Version: 13
+
+// 服务端返回 101 Switching Protocols
+// HTTP/1.1 101 Switching Protocols
+// Upgrade: websocket
+// Connection: Upgrade
+// Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+//   ↑ 服务端用 Key + 固定 GUID（258EAFA5-E914-47DA-95CA-C5AB0DC85B11）
+//     经 SHA-1 + Base64 计算，证明理解 WebSocket 协议
+
+// 握手成功后，TCP 连接不再走 HTTP，切换为 WebSocket 帧协议
+```
+
+```javascript
+// Node.js WebSocket 服务端（ws 库）
+const { WebSocketServer } = require("ws");
+
+const wss = new WebSocketServer({ port: 8080 });
+
+wss.on("connection", (ws, req) => {
+  console.log("客户端连接:", req.socket.remoteAddress);
+
+  // 收到消息（文本或二进制帧）
+  ws.on("message", (data, isBinary) => {
+    console.log("收到:", isBinary ? data : data.toString());
+    ws.send("Echo: " + data.toString()); // 随时发送，全双工
+  });
+
+  ws.on("close", (code, reason) => {
+    console.log("关闭:", code, reason.toString());
+  });
+
+  ws.on("error", (err) => {
+    console.error("错误:", err);
+  });
+});
+
+// 客户端
+const ws = new WebSocket("ws://localhost:8080");
+ws.on("open", () => ws.send("Hello Server"));
+ws.on("message", (data) => console.log("收到:", data.toString()));
+```
+
+## 帧协议
+
+握手后通信以**帧（Frame）**为单位，每帧由以下字段组成：
+
+- **FIN**（1bit）：是否为最后一个分片帧（大消息可拆分多帧）
+- **opcode**（4bit）：帧类型——0x0 续帧、0x1 文本帧、0x2 二进制帧、0x8 关闭帧、0x9 ping、0xA pong
+- **MASK**（1bit）：是否掩码（客户端发送必须掩码，服务端不掩码）
+- **payload length**（7/16/64bit）：数据长度
+- **mask key**（32bit）：掩码密钥（仅客户端帧）
+- **payload data**：实际数据
+
+```javascript
+// 掩码的作用：防止中间代理缓存污染
+// 攻击者可能利用 HTTP 代理的缓存机制注入恶意数据
+// 掩码用随机 mask key 与 payload 逐字节 XOR
+// 代理无法预测帧内容，仅防篡改不提供加密
+// 加密靠 wss://（WebSocket over TLS）
+
+// 分片机制：大消息可拆成多个帧传输
+// 第一帧：FIN=0, opcode=0x1（文本）
+// 中间帧：FIN=0, opcode=0x0（续帧）
+// 最后帧：FIN=1, opcode=0x0（续帧）
+```
+
+## 三种实时通信对比
+
+```javascript
+// 1. HTTP 轮询：客户端定时请求
+setInterval(() => {
+  fetch("/api/messages").then(res => res.json()).then(msgs => {
+    // 处理消息，但大部分请求可能返回空
+  });
+}, 3000); // 每 3 秒一次，延迟高、空请求浪费
+
+// 2. SSE：服务端单向推送（基于 HTTP 长连接）
+const eventSource = new EventSource("/api/stream");
+eventSource.onmessage = (event) => {
+  console.log("收到推送:", event.data); // 只能服务端→客户端
+};
+// 优点：简单、自动重连、标准 HTTP
+// 缺点：单向、仅文本、受 HTTP/1.1 并发连接数限制
+
+// 3. WebSocket：全双工双向通信
+const ws = new WebSocket("ws://localhost:8080");
+ws.onmessage = (event) => { /* 接收 */ };
+ws.send("客户端消息"); // 随时发送
+// 优点：低延迟、双向、二进制、低开销
+// 缺点：实现复杂、需处理重连和心跳
+```
+
+## 心跳与关闭
+
+```javascript
+// 心跳保活：防止代理/负载均衡在连接空闲时断开
+const wss = new WebSocketServer({ port: 8080 });
+const HEARTBEAT_INTERVAL = 30000; // 30 秒
+
+wss.on("connection", (ws) => {
+  ws.isAlive = true;
+
+  ws.on("pong", () => { ws.isAlive = true; });
+
+  // 定时 ping，检测连接是否存活
+  const interval = setInterval(() => {
+    wss.clients.forEach((client) => {
+      if (client.isAlive === false) return client.terminate(); // 未回应 pong → 断开
+      client.isAlive = false;
+      client.ping(); // 发送 ping 帧
+    });
+  }, HEARTBEAT_INTERVAL);
+
+  ws.on("close", () => clearInterval(interval));
+});
+
+// 关闭流程
+// 1. 一端发送 close 帧（opcode 0x8），携带状态码
+//    1000 正常关闭 / 1001 端点离开 / 1011 服务端内部错误
+// 2. 另一端收到后回送 close 帧确认
+// 3. 双方关闭底层 TCP 连接
+```
+
+<Callout type="trap">
+**误区：WebSocket 连接建立后就不用管了。** WebSocket 是长连接，但中间的代理、负载均衡可能在连接空闲时（如 60 秒无数据）主动断开。不处理心跳会导致「连接看似在但实际已断」，消息发送失败。生产中必须：①定时 ping/pong 心跳（30 秒）；②监听 close 和 error 事件清理资源；③实现自动重连机制（指数退避）。未处理的断连会导致连接泄漏和消息丢失。
+</Callout>
+
+<Exercises>
+**问题 1**：WebSocket 的握手过程是怎样的？为什么说是「HTTP 升级」协议？
+
+<Answer>
+客户端发 HTTP GET 请求携带 Upgrade: websocket、Connection: Upgrade、Sec-WebSocket-Key。服务端返回 101 Switching Protocols，携带 Sec-WebSocket-Accept（Key+固定 GUID 经 SHA-1+Base64 计算）。握手成功后 TCP 连接切换为 WebSocket 帧协议。叫「HTTP 升级」是因为握手复用 HTTP（穿防火墙、走 80/443），但握手后协议升级为 WebSocket，后续通信不再是 HTTP 报文。
+</Answer>
+
+**问题 2**：WebSocket、HTTP 轮询、SSE 的区别和适用场景？
+
+<Answer>
+HTTP 轮询：客户端定时请求，延迟高、空请求浪费，适用低频更新。SSE：服务端单向推送，基于 HTTP 长连接，简单自动重连，但单向仅文本，适用通知推送。WebSocket：全双工双向，低延迟支持二进制，但实现复杂需心跳重连，适用聊天/游戏/协同编辑。选型：单向推送用 SSE，双向实时用 WebSocket，低频用轮询。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="WebSocket 握手">基于 HTTP 的协议升级：客户端发 GET + Upgrade: websocket + Sec-WebSocket-Key，服务端返 101 + Sec-WebSocket-Accept（Key+GUID 经 SHA-1+Base64）。握手后 TCP 连接切换为 WebSocket 帧协议，不再走 HTTP。</GlossaryItem>
+<GlossaryItem term="WebSocket 帧格式">FIN（是否最后分片）+ opcode（帧类型：0x1 文本/0x2 二进制/0x8 关闭/0x9 ping/0xA pong）+ MASK（客户端必掩码防代理污染）+ payload length（7/16/64bit）+ mask key + payload data。大消息可分片多帧传输。</GlossaryItem>
+<GlossaryItem term="心跳保活">WebSocket 长连接可能被中间代理在空闲时断开。用 ping/pong 帧（opcode 0x9/0xA）定时检测连接存活，超时未回应则断开并重连。关闭用 close 帧（opcode 0x8）+ 状态码（1000 正常/1011 服务端错误），双方确认后关 TCP。</GlossaryItem>
+</Glossary>

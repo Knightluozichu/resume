@@ -1,0 +1,130 @@
+---
+title: "事件循环进阶"
+type: A
+section: "前端与Web"
+order: 2
+description: "深入事件循环六阶段调度、poll 阻塞策略、nextTick 与 Promise 微任务优先级"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnjEventLoopAdvDiagram } from "@/components/mdx/deep-nodejs/diagrams/dnj-event-loop-adv";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握事件循环六阶段（timers/pending/idle/poll/check/close）各自处理什么回调
+- 理解 poll 阶段的阻塞策略：何时阻塞、阻塞多久、何时跳过
+- 掌握微任务优先级：nextTick > Promise > setImmediate > setTimeout
+- 理解递归 nextTick 导致 I/O 饥饿的原因与解法
+</Objectives>
+
+## 直觉引入
+
+把事件循环想象成医院的分诊台。<Term def="事件循环（Event Loop）是 Node.js 的调度核心，由 libuv 实现，将执行分为 timers、pending callbacks、idle/prepare、poll、check、close callbacks 六个阶段，每阶段处理一类回调，阶段切换间清空微任务队列。">事件循环</Term>的六个阶段就是六个诊室：**timers** 是「预约挂号」——到点的 setTimeout 回调在这里处理；**pending callbacks** 是「系统延误处理」——操作系统报错的回调；**poll** 是「主诊室」——大部分 I/O 回调在这里处理，没有病人时等待；**check** 是「急诊窗口」——setImmediate 回调优先处理；**close callbacks** 是「出院手续」——连接关闭的回调。每个诊室处理完所有病人后，护士会先处理**微任务**（nextTick 是「加急挂号」，Promise 是「普通加急」），然后才去下一个诊室。
+
+<DnjEventLoopAdvDiagram />
+
+## 六阶段调度
+
+事件循环由 libuv 的 `uv_run` 驱动，每轮循环依次经过六个阶段：
+
+1. **timers**——执行到期的 `setTimeout` / `setInterval` 回调。注意 Node.js 的 setTimeout 最小延迟被 clamp 到 1ms。
+2. **pending callbacks**——执行系统级回调，如 TCP `ECONNREFUSED` 错误、DNS 解析错误。
+3. **idle/prepare**——libuv 内部使用，开发者通常不接触。
+4. **poll**——最重要的阶段。轮询 I/O 事件，取出已完成的 I/O 回调执行。若队列为空则阻塞等待（除非有到期 timer 或 setImmediate）。
+5. **check**——执行 `setImmediate` 回调。
+6. **close callbacks**——执行 close 事件回调，如 `socket.on('close')`。
+
+每个阶段有一个 FIFO 队列，执行完队列中所有回调（或达到系统限制）后进入下一阶段。**阶段切换之间会清空微任务队列**——先清空 `process.nextTick` 队列，再清空 Promise 微任务队列。
+
+```javascript
+// 验证六阶段执行顺序
+const fs = require("fs");
+
+fs.readFile("./test.txt", () => {
+  // I/O 回调在 poll 阶段执行
+  setTimeout(() => console.log("timeout"), 0);   // 下一轮 timers
+  setImmediate(() => console.log("immediate"));   // 同一轮 check（poll 之后）
+  // 在 I/O 回调中，setImmediate 一定先于 setTimeout 执行
+  // 因为 poll → check →（下一轮）timers
+});
+
+// 但在主模块（非 I/O 回调）中，setTimeout 和 setImmediate 的顺序不确定
+// 取决于事件循环进入时 1ms 是否已到
+```
+
+## poll 阻塞策略
+
+poll 阶段是事件循环的「心脏」，它的阻塞策略决定了 Node.js 如何在「及时处理 I/O」和「不浪费 CPU」之间平衡：
+
+1. 如果 poll 队列有 I/O 回调，执行它们，执行完后进入 check 阶段。
+2. 如果队列为空，检查是否有 `setImmediate` 回调——有则不阻塞，直接进入 check 阶段。
+3. 若无 setImmediate 但有到期的 timer，也不阻塞，进入 timers 阶段。
+4. 若无 setImmediate 也无到期 timer，则**阻塞等待** I/O 事件到来，阻塞时间设为最近一个 timer 的到期时间（确保 timer 到期时被唤醒）。
+
+这个策略保证了：I/O 事件能及时处理（poll 阻塞等待 epoll/kqueue 通知），timer 不会延迟（阻塞时间受 timer 约束），setImmediate 能在 I/O 后立即执行。
+
+## 微任务优先级
+
+在每阶段切换之间，事件循环会清空微任务队列，顺序如下：
+
+```javascript
+// 优先级验证：nextTick > Promise > setImmediate > setTimeout
+Promise.resolve().then(() => console.log("promise"));
+process.nextTick(() => console.log("nextTick"));
+setImmediate(() => console.log("immediate"));
+setTimeout(() => console.log("timeout"), 0);
+
+// 输出顺序：
+// nextTick        ← 微任务，最高优先级
+// promise         ← 微任务，nextTick 之后
+// timeout 或 immediate ← 宏任务，顺序取决于上下文
+// immediate 或 timeout
+```
+
+**`process.nextTick`** 优先级最高，在 Promise 微任务之前清空。这是因为 nextTick 是 Node.js 特有的、设计用于「当前操作完成后立即执行」的机制。**`Promise.then`** 是标准微任务，在 nextTick 清空后执行。**`setImmediate`** 和 **`setTimeout`** 都是宏任务，但在 I/O 回调后 setImmediate 一定先于 setTimeout（因为 check 阶段在 timers 之前）。
+
+<Callout type="trap">
+**误区：递归 process.nextTick 和递归 setImmediate 效果一样。** 完全不同！递归 nextTick 会不断向 nextTick 队列添加回调，导致队列永远清不完，事件循环无法进入下一个阶段——I/O 回调被无限延迟，这就是 **I/O 饥饿**。递归 setImmediate 则每轮只执行一个，执行完进入下一轮循环，I/O 有机会被处理。解法：需要「立即但不阻塞」的递归用 setImmediate 代替 nextTick。
+</Callout>
+
+```javascript
+// I/O 饥饿演示（危险！不要在生产环境运行）
+const fs = require("fs");
+
+// 递归 nextTick：I/O 永远得不到执行
+let count = 0;
+function recursiveNextTick() {
+  process.nextTick(recursiveNextTick);
+  count++;
+}
+fs.readFile("./file.txt", () => console.log("I/O done")); // 永远不会执行！
+recursiveNextTick();
+
+// 正确做法：用 setImmediate
+function recursiveImmediate() {
+  setImmediate(recursiveImmediate); // 每轮一个，I/O 有机会执行
+}
+```
+
+<Exercises>
+**问题 1**：事件循环有哪六个阶段？poll 阶段的阻塞策略是什么？
+
+<Answer>
+六阶段：timers（setTimeout/setInterval）→ pending callbacks（系统级回调）→ idle/prepare（内部使用）→ poll（I/O 回调轮询）→ check（setImmediate）→ close callbacks（close 事件）。poll 阻塞策略：①有 I/O 回调则执行，完成后进 check；②无回调但有 setImmediate 则不阻塞跳 check；③无 setImmediate 但有到期 timer 则不阻塞跳 timers；④都没有则阻塞等待 I/O，阻塞时间=最近 timer 到期时间。
+</Answer>
+
+**问题 2**：为什么递归 process.nextTick 会导致 I/O 饥饿？如何避免？
+
+<Answer>
+nextTick 在每阶段切换间清空，优先级最高。递归调用会不断向 nextTick 队列添加回调，队列永远清不完，事件循环无法进入 poll 阶段，I/O 回调被无限延迟。避免方法：①用 setImmediate 代替递归 nextTick——setImmediate 在 check 队列每轮只执行一次，允许事件循环进入其他阶段；②用 queueMicrotask 代替——标准微任务语义更清晰；③从根本上避免递归调度微任务，改用迭代或分批处理。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="事件循环六阶段">timers（定时器回调）→ pending callbacks（系统回调）→ idle/prepare（内部）→ poll（I/O 轮询，核心阶段）→ check（setImmediate）→ close callbacks（关闭事件）。每阶段执行 FIFO 队列中所有回调，阶段切换间清空微任务（nextTick 优先于 Promise）。</GlossaryItem>
+<GlossaryItem term="poll 阻塞策略">poll 队列有回调则执行后进 check；无回调有 setImmediate 则不阻塞跳 check；无 setImmediate 有到期 timer 则跳 timers；都没有则阻塞等待 I/O，阻塞时间为最近 timer 到期时间。保证 I/O 及时处理、timer 不延迟、setImmediate 在 I/O 后立即执行。</GlossaryItem>
+<GlossaryItem term="微任务优先级">process.nextTick（最高，Node 特有）> Promise.then / queueMicrotask（标准微任务）> setImmediate（check 阶段宏任务）> setTimeout（timers 阶段宏任务）。递归 nextTick 会导致 I/O 饥饿，应改用 setImmediate。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,153 @@
+---
+title: "异步编程演进"
+type: A
+section: "前端与Web"
+order: 3
+description: "从回调地狱到 Promise 链到 async/await——异步编程三阶段演进与并发控制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnjAsyncProgrammingDiagram } from "@/components/mdx/deep-nodejs/diagrams/dnj-async-programming";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解异步编程三阶段演进：回调地狱 → Promise 链 → async/await
+- 掌握 Promise 三状态机与错误冒泡机制
+- 理解 async/await 是 Promise + Generator 的语法糖，await 暂停函数不阻塞事件循环
+- 掌握串行/并行控制与 forEach 中 await 不生效的陷阱
+</Objectives>
+
+## 直觉引入
+
+异步编程的演进就像写信方式的进化。<Term def="回调（Callback）是最原始的异步模式，将后续操作作为函数参数传入，I/O 完成后调用。多层嵌套形成「回调地狱」，错误处理分散、控制流难以追踪。">回调</Term>是「托人带话」——你让张三传话给李四，李四再传给王五，嵌套层级深了谁都搞不清话传到哪了。**Promise** 是「挂号信」——信发出后有一个单号（Promise 对象），信有三种状态（寄出/送达/退回），你可以链式追踪（.then），信退回了自动找到最近的邮局处理（.catch 错误冒泡）。**async/await** 是「打电话」——虽然底层还是异步的，但你写代码的感觉是同步的：说一句等一句回（await），中间可以 try/catch 捕获异常，代码读起来像顺序执行。
+
+<DnjAsyncProgrammingDiagram />
+
+## 三阶段演进
+
+### 阶段1：回调地狱
+
+Node.js 最初的异步模式是回调。每个 I/O 操作接收一个回调函数，操作完成后调用。问题在于多个异步操作有依赖关系时，必须层层嵌套：
+
+```javascript
+// 回调地狱：串行读取三个文件
+fs.readFile("a.txt", (err, dataA) => {
+  if (err) return console.error(err);
+  fs.readFile("b.txt", (err, dataB) => {
+    if (err) return console.error(err);
+    fs.readFile("c.txt", (err, dataC) => {
+      if (err) return console.error(err);
+      // 三层嵌套，错误处理重复三次，难以维护
+      console.log(dataA, dataB, dataC);
+    });
+  });
+});
+```
+
+痛点：①嵌套层级深，代码呈「金字塔」结构；②错误处理分散，每层都要 if(err)；③无法正常 return/throw，控制流被打断；④难以组合（并行、竞速、重试）。
+
+### 阶段2：Promise 链
+
+<Term def="Promise 是表示异步操作最终完成（或失败）及其结果值的对象，有 pending/fulfilled/rejected 三种状态，状态一旦改变不可逆，通过 .then/.catch 链式调用编排异步流程。">Promise</Term> 用链式调用扁平化了嵌套，并提供统一的错误冒泡机制：
+
+```javascript
+// Promise 链：同样的串行读取
+readFile("a.txt")
+  .then(dataA => readFile("b.txt"))     // 返回新 Promise，链自动等待
+  .then(dataB => readFile("c.txt"))
+  .then(dataC => {
+    // dataA 在闭包中丢失？用 Promise.all 包装
+  })
+  .catch(err => {
+    // 统一错误处理：链中任一 reject 都冒泡到这里
+    console.error(err);
+  });
+
+// 并行读取：Promise.all
+Promise.all([readFile("a.txt"), readFile("b.txt"), readFile("c.txt")])
+  .then(([dataA, dataB, dataC]) => {
+    console.log(dataA, dataB, dataC); // 全部完成后一起拿到
+  })
+  .catch(err => console.error(err));  // 任一失败立即 reject
+```
+
+Promise 的三状态机：`pending`（初始）→ `fulfilled`（resolve 触发）或 `rejected`（reject 触发），状态变化不可逆。.then 返回新 Promise，其状态由回调返回值决定：返回普通值则 fulfilled，返回 Promise 则跟随，抛异常则 rejected。
+
+### 阶段3：async/await
+
+`async/await` 是 Promise + Generator 的语法糖，让异步代码看起来像同步代码：
+
+```javascript
+// async/await：同步写法，异步执行
+async function readFiles() {
+  try {
+    const dataA = await readFile("a.txt"); // 暂停函数，等 Promise resolve
+    const dataB = await readFile("b.txt"); // 不阻塞事件循环！
+    const dataC = await readFile("c.txt");
+    return [dataA, dataB, dataC];
+  } catch (err) {
+    // 统一错误处理，像同步代码一样 try/catch
+    console.error(err);
+  }
+}
+
+// 并行：Promise.all + await
+async function readFilesParallel() {
+  const [a, b, c] = await Promise.all([
+    readFile("a.txt"),
+    readFile("b.txt"),
+    readFile("c.txt"),
+  ]);
+  return [a, b, c];
+}
+```
+
+`await` 的本质：将后续代码包装为 `.then` 回调注册到 Promise 上，暂停当前 async 函数（类似 Generator yield），事件循环继续运行其他任务。当 Promise settle 后，后续代码作为微任务恢复执行。**暂停的是函数，不是线程**。
+
+## 串行与并行陷阱
+
+```javascript
+// 陷阱：forEach 中 await 不生效！
+const files = ["a.txt", "b.txt", "c.txt"];
+
+// 错误写法：forEach 不会等待 await
+files.forEach(async (file) => {
+  await readFile(file); // 三个 readFile 同时启动，forEach 已返回
+});
+console.log("done"); // 可能在 readFile 完成前打印
+
+// 正确串行：for...of
+for (const file of files) {
+  await readFile(file); // 一个读完再读下一个
+}
+
+// 正确并行：Promise.all + map
+await Promise.all(files.map(file => readFile(file))); // 同时启动，等全部完成
+```
+
+<Callout type="trap">
+**误区：async 函数中所有 await 都是串行的。** 只有写在同一个执行流中的 await 才串行。用 `Promise.all(items.map(async fn))` 可以让多个 async 操作并行——map 同步执行返回 Promise 数组，Promise.all 并行等待。关键认知：map 返回 Promise 数组时所有 async 函数已启动，Promise.all 只是等它们完成。
+</Callout>
+
+<Exercises>
+**问题 1**：async/await 的本质是什么？await 暂停函数时会阻塞事件循环吗？
+
+<Answer>
+async/await 是 Promise + Generator 的语法糖。async function 总是返回 Promise；await 将表达式包装为 Promise，暂停当前 async 函数执行（类似 yield），后续代码作为 .then 回调注册。await 暂停的是「当前 async 函数」，不是事件循环——事件循环继续处理其他回调、I/O 事件。Promise settle 后后续代码作为微任务恢复。代码看起来同步，底层仍异步。
+</Answer>
+
+**问题 2**：为什么 forEach 中使用 await 不会串行等待？如何正确实现串行和并行？
+
+<Answer>
+forEach 回调是普通函数调用，不等待返回的 Promise——所有迭代几乎同时启动，await 被忽略。正确串行用 for...of：`for (const item of items) { await process(item); }`。正确并行用 Promise.all + map：`await Promise.all(items.map(item => process(item)))`，map 同步执行启动所有 process，Promise.all 并行等待。限制并发数用 p-limit 或手写分批。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="回调地狱">多个有依赖关系的异步操作用回调嵌套实现，形成深层金字塔结构。痛点：嵌套深、错误处理分散、无法 return/throw、难以组合。Promise 用链式调用扁平化解决。</GlossaryItem>
+<GlossaryItem term="Promise 三状态机">pending（初始未决）→ fulfilled（resolve 触发，触发 .then(onF)）或 rejected（reject 触发，触发 .catch(onR)）。状态不可逆。.then 返回新 Promise，状态由回调返回值决定。错误冒泡：链中任一 reject 跳过后续 .then 到达最近 .catch。</GlossaryItem>
+<GlossaryItem term="async/await">Promise + Generator 语法糖。async function 返回 Promise，await 暂停函数等待 Promise settle，后续代码作为微任务恢复。暂停函数不阻塞事件循环。用 try/catch 处理错误，for...of 实现串行，Promise.all + map 实现并行。</GlossaryItem>
+</Glossary>

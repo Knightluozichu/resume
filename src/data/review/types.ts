@@ -1538,7 +1538,17 @@ export type ReviewChapterSlug =
   | "ndbg-flame-graph"
   | "ndbg-async-tracing"
   | "ndbg-production-debug"
-  | "ndbg-final-review";
+  | "ndbg-final-review"
+  | "dnj-learning-map"
+  | "dnj-v8-engine"
+  | "dnj-event-loop-adv"
+  | "dnj-async-programming"
+  | "dnj-stream-implementation"
+  | "dnj-tcp-http"
+  | "dnj-websocket"
+  | "dnj-npm-module"
+  | "dnj-testing-deploy"
+  | "dnj-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3081,6 +3091,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ndbg-async-tracing": "异步追踪",
   "ndbg-production-debug": "生产环境调试",
   "ndbg-final-review": "全书总复习",
+  "dnj-learning-map": "全书学习地图",
+  "dnj-v8-engine": "V8引擎原理",
+  "dnj-event-loop-adv": "事件循环进阶",
+  "dnj-async-programming": "异步编程演进",
+  "dnj-stream-implementation": "Stream实现原理",
+  "dnj-tcp-http": "TCP与HTTP实现",
+  "dnj-websocket": "WebSocket与实时通信",
+  "dnj-npm-module": "NPM与模块生态",
+  "dnj-testing-deploy": "测试与部署",
+  "dnj-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

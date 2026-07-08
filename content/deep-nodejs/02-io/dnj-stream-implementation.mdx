@@ -1,0 +1,176 @@
+---
+title: "Stream 实现原理"
+type: A
+section: "前端与Web"
+order: 4
+description: "深入 Stream 四种类型、背压机制、pipe 与 pipeline——大数据不爆内存的核心"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnjStreamImplementationDiagram } from "@/components/mdx/deep-nodejs/diagrams/dnj-stream-implementation";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Stream 四种类型：Readable、Writable、Duplex、Transform
+- 理解背压（Backpressure）机制：highWaterMark、write 返回 false、pause/resume
+- 掌握 pipe 与 pipeline 的区别，理解为什么推荐 pipeline
+- 学会自定义流：继承 Readable/Writable/Transform 实现 _read/_write/_transform
+</Objectives>
+
+## 直觉引入
+
+把 Stream 想象成工厂的传送带。<Term def="Stream 是 Node.js 中处理流式数据的抽象接口，将大数据分块（chunk）逐段处理，而非一次性读入内存。有 Readable（可读）、Writable（可写）、Duplex（双工）、Transform（转换）四种类型。">Stream</Term>的四种类型就是四种传送带：**Readable** 是「进货传送带」——只往外送料（读文件、收网络数据）；**Writable** 是「出货传送带」——只往里收料（写文件、发网络数据）；**Duplex** 是「双向传送带」——进出两条独立履带（TCP Socket，可收可发）；**Transform** 是「加工传送带」——进料加工后从另一端出（Gzip 压缩，原始数据进、压缩数据出）。**背压**是「传送带堵塞保护」——下游加工慢了，上游传送带暂停送料，等下游跟上再恢复，防止料堆满仓库（内存溢出）。
+
+<DnjStreamImplementationDiagram />
+
+## 四种流类型
+
+```javascript
+const { Readable, Writable, Duplex, Transform } = require("stream");
+
+// Readable：只读，消费者从流中读取
+const readStream = fs.createReadStream("big.txt"); // 文件可读流
+process.stdin;                                     // 标准输入可读流
+
+// Writable：只写，生产者向流中写入
+const writeStream = fs.createWriteStream("out.txt"); // 文件可写流
+process.stdout;                                      // 标准输出可写流
+
+// Duplex：可读可写，读写独立（两个独立缓冲区）
+const socket = new net.Socket(); // TCP 连接：可收（读）可发（写），互不干扰
+
+// Transform：Duplex 的特例，写入的数据经变换后从读取端输出
+const gzip = zlib.createGzip(); // 写入原始数据，读取端输出压缩数据
+```
+
+## 背压机制
+
+背压是 Stream 防止内存溢出的核心机制。每个流有 **highWaterMark（高水位线）**——缓冲区上限，默认 16KB（对象流为 16 个对象）。
+
+```javascript
+// 背压的底层原理
+const readable = fs.createReadStream("source.txt");
+const writable = fs.createWriteStream("dest.txt");
+
+// 手动处理背压（不用 pipe/pipeline 时的正确写法）
+readable.on("data", (chunk) => {
+  // write 返回 false 表示写缓冲区已超 highWaterMark
+  const canContinue = writable.write(chunk);
+  if (!canContinue) {
+    readable.pause(); // 暂停读取，防止内存堆积
+  }
+});
+
+writable.on("drain", () => {
+  // 写缓冲区排空，恢复读取
+  readable.resume();
+});
+
+readable.on("end", () => {
+  writable.end(); // 所有数据写完，关闭可写流
+});
+```
+
+背压闭环：**写得快读得慢 → write 返回 false → 暂停读取 → 写完 drain → 恢复读取**。如果不用 pipe/pipeline 而手动 write，必须检查返回值并处理 drain 事件，否则内存会爆。
+
+## pipe 与 pipeline
+
+```javascript
+const { pipeline } = require("stream");
+const { promisify } = require("util");
+const pipelineAsync = promisify(pipeline);
+
+// pipe（已不推荐）：错误处理复杂，不自动销毁流
+readStream
+  .pipe(gzip)       // 需要分别监听每个流的 error
+  .pipe(writeStream);
+readStream.on("error", err => console.error(err));
+gzip.on("error", err => console.error(err));
+writeStream.on("error", err => console.error(err));
+
+// pipeline（推荐）：统一错误处理，自动销毁全部流
+pipeline(
+  readStream,
+  gzip,
+  writeStream,
+  (err) => {
+    if (err) console.error("Pipeline 失败:", err);
+    else console.log("Pipeline 成功");
+  }
+);
+
+// Promise 版（stream/promises，Node 15+）
+const { pipeline } = require("stream/promises");
+await pipeline(readStream, gzip, writeStream); // 错误自动 throw
+```
+
+<Callout type="trap">
+**误区：用 pipe 也能正常工作，没必要换 pipeline。** pipe 能跑不代表它安全。pipe 的两个致命问题：①错误处理复杂——需要分别监听每个流的 error 事件，漏监听会导致未捕获异常进程崩溃；②不自动销毁流——中途出错时，上下游流不会被 destroy，文件描述符不释放，资源泄漏。pipeline 解决了这两个问题：统一回调处理错误，失败时自动 destroy 所有流。新代码一律用 pipeline。
+</Callout>
+
+## 自定义流
+
+```javascript
+const { Transform } = require("stream");
+
+// 自定义 Transform 流：将每行文本转为大写
+class UpperCaseLine extends Transform {
+  constructor(options) {
+    super({ ...options, readableObjectMode: false, writableObjectMode: false });
+    this._lineBuffer = "";
+  }
+
+  // 每收到一个 chunk 调用
+  _transform(chunk, encoding, callback) {
+    this._lineBuffer += chunk.toString();
+    const lines = this._lineBuffer.split("\n");
+    this._lineBuffer = lines.pop(); // 最后一段可能不完整，缓存
+
+    for (const line of lines) {
+      this.push(line.toUpperCase() + "\n"); // 输出变换后的数据
+    }
+    callback(); // 必须调用，表示这个 chunk 处理完
+  }
+
+  // 流结束前调用一次，输出缓存的尾部数据
+  _flush(callback) {
+    if (this._lineBuffer) {
+      this.push(this._lineBuffer.toUpperCase()); // 输出最后一行
+    }
+    callback();
+  }
+}
+
+// 使用
+pipeline(
+  fs.createReadStream("input.txt"),
+  new UpperCaseLine(),
+  fs.createWriteStream("output.txt"),
+  (err) => { if (err) console.error(err); }
+);
+```
+
+**_transform** 的作用：每接收一个 chunk 时调用，在此做变换，通过 `this.push()` 输出变换后的数据，调用 `callback()` 表示处理完毕。可以不输出（过滤）、输出一个（1:1）、输出多个（1:N 拆分）。**_flush** 的作用：流结束前调用一次，输出缓存的尾部数据（如 Base64 填充符、行分割器的最后一行）。关键：_transform 中的 callback 必须调用，否则流会卡住。
+
+<Exercises>
+**问题 1**：Stream 的背压机制是什么？它如何防止内存溢出？
+
+<Answer>
+Writable 流有 highWaterMark（默认 16KB）缓冲区。write(chunk) 返回布尔值：缓冲区未满返回 true，超 HWM 返回 false。在 pipe/pipeline 中，write 返回 false 时自动调用 Readable.pause() 暂停读取，防止缓冲区无限膨胀。Writable 缓冲区排空后触发 drain 事件，自动调用 Readable.resume() 恢复。闭环：写得快读得慢 → write 返回 false → 暂停读取 → drain → 恢复。手动 write 不检查返回值会导致内存溢出。
+</Answer>
+
+**问题 2**：pipe 和 pipeline 有什么区别？为什么推荐 pipeline？
+
+<Answer>
+pipe：错误处理复杂（需分别监听每个流的 error），且出错时不自动销毁流导致资源泄漏。pipeline：统一错误回调（任一流出错回调接收错误并自动 destroy 所有流），支持中间 Transform 链式传递，正确处理中途流提前结束。pipeline 还提供 stream/promises 的 Promise 版。新代码一律用 pipeline，pipe 已不推荐。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Stream 四种类型">Readable（只读，如 fs.createReadStream）、Writable（只写，如 fs.createWriteStream）、Duplex（可读可写独立，如 net.Socket）、Transform（Duplex 特例，写入经变换后读取输出，如 zlib.createGzip）。自定义分别继承并实现 _read/_write/_transform/_flush。</GlossaryItem>
+<GlossaryItem term="背压（Backpressure）">Writable 流缓冲区超 highWaterMark 时 write 返回 false，触发 Readable.pause() 暂停读取，防止内存溢出。缓冲区排空后 drain 事件触发 resume() 恢复。闭环：写得快读得慢 → 暂停 → drain → 恢复。手动 write 必须检查返回值。</GlossaryItem>
+<GlossaryItem term="pipeline">stream.pipeline(src, ...transforms, dest, callback)，推荐替代 pipe。统一错误处理回调，失败时自动 destroy 全部流防止资源泄漏。stream/promises 版返回 Promise。pipe 需分别监听 error 且不自动销毁流，已不推荐。</GlossaryItem>
+</Glossary>

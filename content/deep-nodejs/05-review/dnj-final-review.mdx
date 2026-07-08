@@ -1,0 +1,152 @@
+---
+title: "全书总复习"
+type: A
+section: "前端与Web"
+order: 9
+description: "以运行时旅程串联全书八大知识域，构建 Node.js 工程判断力"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnjFinalReviewDiagram } from "@/components/mdx/deep-nodejs/diagrams/dnj-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 用「一次 HTTP 请求」旅程串联全书八大知识域
+- 理解 Node.js 适合 I/O 密集型而不适合 CPU 密集型的本质原因
+- 掌握内存持续增长的排查路径与工具
+- 构建支撑高并发实时通信服务的架构设计能力
+</Objectives>
+
+## 直觉引入
+
+经过前九章的学习，我们已经从 V8 引擎的 JIT 编译管线，一路走到了 Docker 容器化部署。现在是时候把所有知识串联起来，形成一张完整的 Node.js 运行时认知地图。把全书想象成一棵大树：<Term def="Node.js 运行时内核是以 V8 引擎为根、事件循环为主干、异步编程为枝、流和网络为叶、模块生态和工程化为土壤的完整体系。">运行时内核</Term>是树根（V8）和树干（事件循环），异步编程是树枝（代码组织方式），流和网络通信是树叶（数据流动和传输），模块生态和工程化是土壤（代码复用和生产保障）。一棵树要长得高，根要深（引擎要懂）、干要壮（调度要稳）、枝要顺（代码要清晰）、叶要茂（I/O 要高效）、土壤要肥（工程化要到位）。
+
+<DnjFinalReviewDiagram />
+
+## 运行时旅程串联
+
+用一次完整的「用户请求到达 Node.js 服务器到响应返回」旅程，串联全书核心知识点：
+
+```javascript
+// === 一次请求的完整运行时旅程 ===
+const http = require("http"); // ① V8 编译执行，require 缓存（第2、8章）
+
+const server = http.createServer(async (req, res) => {
+  // ② 事件循环 poll 阶段取出 I/O 回调（第3章）
+  // ③ http 模块解析 HTTP 报文，req 是 Readable Stream（第6章）
+
+  // ④ async/await 编排异步操作，不阻塞事件循环（第4章）
+  const user = await db.findUser(req.userId);
+
+  // ⑤ Stream 背压流式输出大响应（第5章）
+  const fileStream = fs.createReadStream("large.json");
+  pipeline(fileStream, res); // pipeline 统一错误处理
+
+  // ⑥ TCP 连接通过 Keep-Alive 复用（第6章）
+  // ⑦ 若是 WebSocket 路径则走全双工通道（第7章）
+});
+
+server.listen(3000); // ⑧ PM2 cluster 多进程管理（第9章）
+// ⑨ Docker 容器化部署，SIGTERM 优雅关闭（第9章）
+```
+
+## I/O 密集 vs CPU 密集
+
+Node.js 的核心设计决策是「单线程事件循环 + 异步 I/O」，这决定了它的适用场景：
+
+```javascript
+// I/O 密集型：Node.js 的主场
+// 一个线程管理数万并发连接，I/O 等待时处理其他请求
+http.createServer(async (req, res) => {
+  const data = await fs.readFile("./data.json"); // I/O 不阻塞
+  res.end(data);
+}).listen(3000);
+// 吞吐量高，因为 I/O 等待时间被其他请求利用
+
+// CPU 密集型：Node.js 的短板
+// JS 执行在单线程，CPU 计算阻塞事件循环
+function heavyCompute(n) {
+  let result = 0;
+  for (let i = 0; i < n; i++) result += Math.sqrt(i);
+  return result;
+}
+// heavyCompute(1e9) 会阻塞事件循环数秒，所有请求被卡住
+
+// 解决方案1：worker_threads
+const { Worker } = require("worker_threads");
+const worker = new Worker("./compute.js");
+worker.postMessage({ n: 1e9 });
+worker.on("message", (result) => console.log(result));
+
+// 解决方案2：cluster 多进程
+const cluster = require("cluster");
+if (cluster.isPrimary) {
+  for (let i = 0; i < 4; i++) cluster.fork(); // 4 个进程利用多核
+}
+
+// 解决方案3：C++ Addon / N-API 在 libuv 线程池中执行
+// 解决方案4：拆分为微服务
+```
+
+## 内存泄漏排查
+
+```javascript
+// 排查路径
+// 1. 确认是 V8 堆泄漏还是堆外内存
+console.log(process.memoryUsage());
+// rss 增长但 heapUsed 稳定 → 堆外泄漏（Buffer/C++ Addon）
+// heapUsed 持续增长 → V8 堆泄漏
+
+// 2. V8 堆泄漏：Heap Snapshot 对比
+// node --inspect app.js → Chrome DevTools → Memory → Heap Snapshot
+// 拍两个快照，对比 retained size 最大的对象
+
+// 常见泄漏原因：
+// ① EventEmitter 内存泄漏：监听器未移除
+const ee = new EventEmitter();
+function handler() {}
+ee.on("event", handler);
+// 忘记 ee.removeListener("event", handler)
+
+// ② 全局缓存无淘汰
+const cache = new Map();
+cache.set(key, bigObject); // 只存不删
+
+// ③ 闭包引用大对象
+function createHandler() {
+  const bigData = Buffer.alloc(1024 * 1024); // 1MB
+  return () => { console.log(bigData.length); }; // bigData 永远不释放
+}
+
+// 3. 工具
+// clinic.js doctor — 内存趋势分析
+// --prof — CPU/内存 profile
+// PM2 max_memory_restart — 兜底自动重启
+```
+
+<Callout type="trap">
+**误区：Node.js 内存涨了就是泄漏。** 不一定。V8 的 GC 是惰性的——内存涨到一定阈值才触发回收。判断泄漏的标准是「多次 GC 后内存仍持续增长且不回落」，而非「内存数字在涨」。正确做法：用 `--expose-gc` 启动，手动 `global.gc()` 后看 heapUsed 是否回落。如果 GC 后仍不回落，才是泄漏。生产环境用 PM2 `max_memory_restart` 做兜底，防止泄漏导致 OOM。
+</Callout>
+
+<Exercises>
+**问题 1**：用一次完整的「用户请求到达 Node.js 服务器到响应返回」旅程，串联全书核心知识点。
+
+<Answer>
+①V8 引擎——服务器代码经 JIT 编译执行，热点函数被 TurboFan 优化；②事件循环——TCP 数据到达，libuv 通知 poll 阶段取出 I/O 回调；③HTTP 模块——net.Socket 触发 data 事件，http 解析报文生成 req（Readable）和 res（Writable）；④异步编程——业务用 async/await 编排异步操作，await 暂停函数不阻塞事件循环；⑤Stream——大响应用 pipeline 流式输出，背压防内存溢出；⑥TCP/HTTP——响应通过 Keep-Alive 连接返回；⑦WebSocket——实时通信走全双工通道；⑧NPM——代码通过 require 加载缓存；⑨部署——PM2 cluster 多进程或 Docker 容器化，SIGTERM 优雅关闭。
+</Answer>
+
+**问题 2**：如果要设计一个支撑 10 万并发连接的 Node.js 实时通信服务，你会如何架构？
+
+<Answer>
+①连接层——WebSocket（ws 库）长连接，单进程管理 1-2 万连接；②进程模型——cluster fork N 个 Worker 或 PM2 cluster，主进程 round-robin 分发；③跨进程通信——Redis Pub/Sub 广播消息；④内存管理——连接对象用 Map 存储，心跳超时（30s ping/pong）清理断连，消息缓冲用流式处理；⑤背压——WebSocket 发送慢的客户端用 writableHighWaterMark 判断，缓冲满暂停推送或丢旧消息；⑥水平扩展——Nginx/HAProxy 负载均衡（ip_hash），多实例 Redis 广播；⑦优雅关闭——SIGTERM 停新连接、等存量、通知客户端重连；⑧监控——Prometheus 采集连接数/延迟/内存；⑨安全——wss:// TLS、JWT 鉴权、限流。每连接约 50KB，10 万连接约 5GB，需调 --max-old-space-size 和 ulimit -n。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="运行时旅程">一次 HTTP 请求贯穿全书：V8 编译执行 → 事件循环 poll 调度 → HTTP 模块解析 req/res → async/await 编排异步 → Stream 背压流式输出 → TCP Keep-Alive 连接复用 → WebSocket 双工通道 → require 模块加载缓存 → PM2/Docker 部署。全书以这条主线串联。</GlossaryItem>
+<GlossaryItem term="I/O 密集 vs CPU 密集">Node.js 单线程事件循环适合 I/O 密集（I/O 等待时处理其他请求，吞吐量高），不适合 CPU 密集（JS 计算阻塞事件循环）。CPU 密集解法：worker_threads（子线程 JS）、cluster（多进程）、C++ Addon（libuv 线程池）、微服务拆分。</GlossaryItem>
+<GlossaryItem term="内存泄漏排查">先确认 V8 堆泄漏（heapUsed 涨）还是堆外（rss 涨 heapUsed 稳定）。V8 堆泄漏用 Heap Snapshot 对比找 retained size 最大的对象。常见原因：EventEmitter 监听器未移除、全局缓存无淘汰、闭包引用大对象、Stream 未关闭。判断标准是「多次 GC 后不回落」而非「数字在涨」。PM2 max_memory_restart 兜底。</GlossaryItem>
+</Glossary>
