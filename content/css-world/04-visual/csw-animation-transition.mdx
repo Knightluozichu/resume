@@ -1,0 +1,120 @@
+---
+title: "动画与过渡"
+type: A
+section: "前端与Web"
+order: 1
+description: "掌握 transition 状态补间、@keyframes 自驱动动画与 will-change 合成层性能"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CswAnimationTransitionDiagram } from "@/components/mdx/css-world/diagrams/csw-animation-transition";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 transition（状态触发补间）与 @keyframes（自驱动循环）的本质区别
+- 掌握 timing-function 缓动函数对动画节奏的影响
+- 理解 will-change 与合成层对动画性能的作用
+- 能区分「只合成」「重绘不重排」「触发重排」三档动画属性
+</Objectives>
+
+## 直觉引入
+
+动画有两种触发方式。transition 像自动门——你推一下（改变状态），它自己平滑过渡到新状态，到位就停。@keyframes 像旋转木马——设定好关键帧后它自己转，不需要你推，可以无限循环。两者的性能关键在于动画什么属性：transform/opacity 只在 GPU 合成层操作（最快），color/background 触发重绘（中等），width/margin/top 触发重排（最慢，要重新算布局）。
+
+<CswAnimationTransitionDiagram />
+
+## transition 过渡
+
+<Term def="transition 在元素状态变化时自动补间过渡，需要明确的起止两态，属性包含 property/duration/timing-function/delay。">transition</Term> 是被动触发——hover、class 切换等状态变化时才启动，到位后停止。
+
+```css
+.card {
+  transition: transform 0.3s ease 0.1s;
+  /* property | duration | timing | delay */
+}
+.card:hover {
+  transform: translateY(-4px);  /* 触发过渡 */
+}
+/* 鼠标移出时自动反向过渡回原位 */
+
+/* 注意：display 和 auto 值不可过渡 */
+.box { transition: height 0.3s; }
+.box:hover { height: auto; }  /* 无效！auto 无法补间 */
+```
+
+## @keyframes 动画
+
+<Term def="@keyframes 定义关键帧动画，由 animation 属性驱动，可自动循环播放，无需状态触发。">@keyframes</Term> 是主动驱动——设定关键帧后自动播放，可无限循环。
+
+```css
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.loader {
+  animation: spin 2s linear infinite;
+  /* name | duration | timing | iteration-count */
+}
+
+/* 多关键帧 */
+@keyframes bounce {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-20px); }
+  100% { transform: translateY(0); }
+}
+.ball { animation: bounce 1s ease-in-out infinite; }
+```
+
+## 缓动函数
+
+```css
+.ease-out    { transition: all 0.3s ease-out; }    /* 快→慢，出场首选 */
+.ease-in     { transition: all 0.3s ease-in; }     /* 慢→快，进场 */
+.ease-in-out { transition: all 0.3s ease-in-out; } /* 慢-快-慢 */
+.linear      { transition: all 0.3s linear; }      /* 匀速，慎用（机械感） */
+/* 自定义贝塞尔曲线 */
+.custom { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+```
+
+## 性能：will-change 与合成层
+
+```css
+/* 提前告知浏览器哪些属性将变化，提前提升合成层 */
+.card { will-change: transform; }
+/* 动画结束后应移除 will-change，避免内存占用 */
+
+/* 性能分级：
+   最优：transform / opacity（只合成）
+   中等：color / background（重绘不重排）
+   最差：width / margin / top（触发重排）
+*/
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`will-change` 加得越多越好。** will-change 会为元素创建独立的合成层，每层都占用额外内存（GPU 显存）。如果给大量元素都加 will-change，会导致显存暴涨、反而卡顿。正确做法是：只在即将动画的元素上加 will-change，动画结束后移除。另一个误区是用 `transition: all`——它会尝试过渡所有变化的属性，包括不需要过渡的，性能差且容易产生意外动画。应明确指定要过渡的属性，如 `transition: transform 0.3s, opacity 0.2s`。
+</Callout>
+
+<Exercises>
+**问题 1**：transition 和 @keyframes animation 的本质区别是什么？各适合什么场景？
+
+<Answer>
+transition：被动触发，状态变化时自动补间，需明确起止两态，到位停止。适合 hover/click 等交互反馈（按钮上浮、颜色渐变）。@keyframes animation：主动驱动，设定关键帧后自动播放，可无限循环，无需状态触发。适合持续动画（加载旋转、呼吸效果、入场动画）。核心区别：transition 是「两态之间的补间」，animation 是「多关键帧的序列」；transition 到位即停，animation 可循环；transition 需要触发条件，animation 自驱动。
+</Answer>
+
+**问题 2**：为什么动画应优先用 transform/opacity 而非 width/top？will-change 应该如何正确使用？
+
+<Answer>
+transform/opacity 是合成属性，浏览器把元素提升到独立合成层，直接在 GPU 移动/调整已绘制好的位图，不触发重排也不重绘，主线程几乎无负担。width/top 是布局属性，修改它们触发重排（重新计算所有受影响元素的位置尺寸），再重绘，主线程负担重，容易掉帧。will-change 提前告知浏览器哪些属性将变化，浏览器可提前创建合成层优化。正确用法：① 只在即将动画的元素上加；② 明确指定属性（will-change: transform 而非 will-change: all）；③ 动画结束后移除（避免显存浪费）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="transition">状态触发补间过渡，需起止两态，到位停止。适合交互反馈。display/auto 值不可过渡。避免 transition:all，应明确指定属性。</GlossaryItem>
+<GlossaryItem term="@keyframes">自驱动关键帧动画，可循环，无需触发。animation: name duration timing count。适合加载/呼吸/入场等持续动画。</GlossaryItem>
+<GlossaryItem term="will-change">提前告知浏览器将变化的属性以创建合成层优化。只在即将动画的元素上加，明确指定属性，动画后移除。滥用导致显存暴涨。动画属性性能分三档：transform/opacity（只合成）&gt; color/background（重绘）&gt; width/top（重排）。</GlossaryItem>
+</Glossary>

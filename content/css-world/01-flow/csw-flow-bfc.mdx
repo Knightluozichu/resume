@@ -1,0 +1,89 @@
+---
+title: "流与BFC"
+type: A
+section: "前端与Web"
+order: 0
+description: "理解正常流、浮动塌陷与 BFC 隔离机制，掌握清除浮动的现代方案"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CswFlowBfcDiagram } from "@/components/mdx/css-world/diagrams/csw-flow-bfc";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解正常流的排列规则与浮动脱离文档流后的行为
+- 掌握浮动塌陷的成因与 BFC（块级格式化上下文）的隔离原理
+- 能列举 BFC 的触发条件并选择无副作用的清除浮动方案
+- 理解 BFC 三大布局特性在工程中的实际应用场景
+</Objectives>
+
+## 直觉引入
+
+把正常流想象成排队。块级元素一个挨一个竖着排，行内元素横着排——这是默认秩序。浮动就像有人从队伍里跳出来贴到墙边，后面的人会自动填上来环绕它。问题来了：如果一排人都浮动了，队伍就「空」了，父容器以为没人，高度塌陷为 0。BFC 就是给父容器建一道「隔离墙」——墙内的浮动算作墙的高度，墙外的元素不受影响。
+
+<CswFlowBfcDiagram />
+
+## 正常流与浮动
+
+<Term def="正常流（Normal Flow）是 CSS 默认的排版方式：块级元素从上到下依次排列，每个占满可用宽度；行内元素从左到右排列，超出则换行。">正常流</Term>是所有布局的起点。当给元素设置 `float: left` 后，元素脱离正常流，向左贴边排列，后续正常流的**行内元素会环绕浮动元素**，但块级元素会无视浮动占据整行（只是文字内容避让）。
+
+```css
+/* 浮动塌陷的经典场景 */
+.parent {
+  border: 2px solid red;
+  /* 子元素全浮动 → 父容器高度为 0，红色边框贴在一起 */
+}
+.child {
+  float: left;
+  width: 100px;
+  height: 100px;
+}
+```
+
+## BFC 触发与隔离
+
+<Term def="BFC（Block Formatting Context，块级格式化上下文）是一个独立的渲染区域，内部元素的布局不影响外部，外部也不影响内部。">BFC</Term> 的核心价值是**隔离**。触发 BFC 后，父容器会：把内部浮动计入自身高度（包裹浮动）、阻止子元素 margin 穿透（隔离外边距）、不与外部浮动重叠（避让浮动区）。
+
+```css
+/* 方案一：display:flow-root（现代首选，无副作用） */
+.parent { display: flow-root; }
+
+/* 方案二：overflow:hidden（经典，但可能裁剪子元素） */
+.parent { overflow: hidden; }
+
+/* 方案三：伪元素清除浮动（兼容性最好） */
+.parent::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`overflow: hidden` 是清除浮动的万能方案。** 它确实能触发 BFC 包裹浮动，但有副作用：如果子元素用了 `position: absolute` 定位到父容器外、或者有阴影/负 margin 超出边界，会被裁剪掉。现代项目应优先用 `display: flow-root`，它专门为触发 BFC 设计，没有裁剪副作用。另一个误区是混淆「清除浮动」和「BFC」——清除浮动（clear）只是让元素不紧邻浮动，BFC 则是让容器整体隔离，两者机制不同。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么浮动元素会导致父容器高度塌陷？BFC 如何解决？
+
+<Answer>
+浮动的本质是脱离正常流，父容器在计算自身高度时只看正常流子元素，浮动子元素不参与高度计算，所以全浮动的子元素让父容器高度为 0。BFC 解决：触发 BFC 后，父容器成为一个独立渲染区域，其内部布局规则变为「计算高度时包含所有浮动子元素」。本质是 BFC 改变了高度计算规则——普通流的容器忽略浮动高度，BFC 容器纳入浮动高度。
+</Answer>
+
+**问题 2**：列举 BFC 的触发条件，哪种是清除浮动的现代首选？为什么？
+
+<Answer>
+触发条件：根元素 html（天然 BFC）、float 不为 none、overflow 不为 visible（hidden/auto/scroll）、display 为 flow-root/inline-block/flex/grid/table-cell 等、position 为 absolute/fixed。现代首选 `display: flow-root`，因为它专为触发 BFC 设计，语义明确，无副作用——不像 overflow:hidden 会裁剪溢出内容，不像 float 会改变自身布局行为，不像 position:absolute 会脱离文档流。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="正常流">CSS 默认排版方式：块级元素从上到下占满宽度排列，行内元素从左到右排列。所有布局的基线。</GlossaryItem>
+<GlossaryItem term="BFC">块级格式化上下文，一个独立的渲染区域。触发后内部布局不影响外部：包裹浮动（高度含浮动子）、隔离 margin（阻止穿透合并）、不与外部浮动重叠。display:flow-root 是现代首选触发方式。</GlossaryItem>
+<GlossaryItem term="浮动塌陷">父容器内所有子元素浮动后，因浮动元素脱离正常流不参与父容器高度计算，导致父容器高度为 0 的现象。解决方法是触发父容器 BFC 或用 clear 清除。</GlossaryItem>
+</Glossary>

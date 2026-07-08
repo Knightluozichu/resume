@@ -1498,7 +1498,17 @@ export type ReviewChapterSlug =
   | "jfs-graphql-api"
   | "jfs-auth-security"
   | "jfs-testing-deploy"
-  | "jfs-final-review";
+  | "jfs-final-review"
+  | "csw-learning-map"
+  | "csw-flow-bfc"
+  | "csw-box-model"
+  | "csw-text-decoration"
+  | "csw-vertical-rhythm"
+  | "csw-flex-layout"
+  | "csw-grid-layout"
+  | "csw-transform-perspective"
+  | "csw-animation-transition"
+  | "csw-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3001,6 +3011,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jfs-auth-security": "认证与安全",
   "jfs-testing-deploy": "测试与部署",
   "jfs-final-review": "全书总复习",
+  "csw-learning-map": "全书学习地图",
+  "csw-flow-bfc": "流与BFC",
+  "csw-box-model": "盒模型详解",
+  "csw-text-decoration": "文本装饰",
+  "csw-vertical-rhythm": "垂直韵律与行高",
+  "csw-flex-layout": "Flex布局精解",
+  "csw-grid-layout": "Grid布局与二维排版",
+  "csw-transform-perspective": "变换与透视",
+  "csw-animation-transition": "动画与过渡",
+  "csw-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

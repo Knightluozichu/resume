@@ -1375,6 +1375,16 @@ import { jfsGraphqlApiQuestions } from "./review/jfs-graphql-api";
 import { jfsAuthSecurityQuestions } from "./review/jfs-auth-security";
 import { jfsTestingDeployQuestions } from "./review/jfs-testing-deploy";
 import { jfsFinalReviewQuestions } from "./review/jfs-final-review";
+import { cswLearningMapQuestions } from "./review/csw-learning-map";
+import { cswFlowBfcQuestions } from "./review/csw-flow-bfc";
+import { cswBoxModelQuestions } from "./review/csw-box-model";
+import { cswTextDecorationQuestions } from "./review/csw-text-decoration";
+import { cswVerticalRhythmQuestions } from "./review/csw-vertical-rhythm";
+import { cswFlexLayoutQuestions } from "./review/csw-flex-layout";
+import { cswGridLayoutQuestions } from "./review/csw-grid-layout";
+import { cswTransformPerspectiveQuestions } from "./review/csw-transform-perspective";
+import { cswAnimationTransitionQuestions } from "./review/csw-animation-transition";
+import { cswFinalReviewQuestions } from "./review/csw-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2781,6 +2791,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jfsAuthSecurityQuestions,
   ...jfsTestingDeployQuestions,
   ...jfsFinalReviewQuestions,
+  ...cswLearningMapQuestions,
+  ...cswFlowBfcQuestions,
+  ...cswBoxModelQuestions,
+  ...cswTextDecorationQuestions,
+  ...cswVerticalRhythmQuestions,
+  ...cswFlexLayoutQuestions,
+  ...cswGridLayoutQuestions,
+  ...cswTransformPerspectiveQuestions,
+  ...cswAnimationTransitionQuestions,
+  ...cswFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
