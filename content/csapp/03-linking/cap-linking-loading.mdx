@@ -1,0 +1,69 @@
+---
+title: "链接与加载"
+type: B
+section: "系统与操作系统"
+order: 5
+description: "符号解析、重定位、静态链接与动态链接、可执行文件加载——多个目标文件如何合并成一个进程映像"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { CapLinkingLoadingDiagram } from "@/components/mdx/csapp/diagrams/cap-linking-loading";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解编译-汇编-链接三步流水线与目标文件格式（ELF）
+- 掌握符号解析与重定位：链接器如何合并多个 .o 文件
+- 理解静态链接与动态链接的权衡及加载时/运行时绑定
+- 识别全局符号冲突、静态库符号解析顺序等常见链接陷阱
+</Objectives>
+
+## 直觉引入
+
+你写了一个 `main.c` 调用 `printf`，但 `printf` 的代码在 `libc` 里。`main.c` 编译成 `main.o` 时，`call printf` 的目标地址是空的——编译器不知道 `printf` 在哪。链接器（linker）的工作就是把这些半成品拼成完整可执行文件：找到 `printf` 的真实地址填进去，把多个 `.o` 的代码段数据段合并，解析所有跨文件符号引用。理解链接，就理解了「为什么 `extern` 变量能跨文件」「为什么库要按顺序链接」「为什么有些符号冲突不报错」。
+
+<CapLinkingLoadingDiagram />
+
+## 编译流水线与 ELF
+
+<Term def="ELF（Executable and Linkable Format）是 Unix 类系统的可执行/可链接文件格式，含代码段 .text、数据段 .data/.bss、符号表 .symtab、重定位表 .rela 等节。">ELF</Term>是链接的核心数据结构。从源码到可执行文件分四步：①**预处理**——展开 `#include`、`#define`；②**编译**——生成汇编 `.s`；③**汇编**——生成目标文件 `.o`（ELF 格式，含 `.text` 代码、`.data` 已初始化全局、`.bss` 未初始化全局、`.symtab` 符号表、`.rela.text` 重定位条目）；④**链接**——合并多个 `.o` 和库，解析符号、重定位地址，生成可执行文件。`.o` 里的地址还是相对的（从 0 开始），链接后才确定绝对地址。
+
+## 符号解析与重定位
+
+**符号解析**是把每个符号引用绑定到唯一定义。链接器维护全局符号表，每个 `.o` 的 `.symtab` 声明自己定义和引用的符号。同名全局符号冲突时，链接器按规则裁决：强符号（已初始化全局）不允许重复定义；弱符号（未初始化全局、`__attribute__((weak))`）可被强符号覆盖。**重定位**是把符号引用地址填成真实地址：链接器合并所有 `.o` 的 `.text` 后每个符号有了最终地址，再扫 `.rela.text` 重定位条目，把 `call printf` 之类指令的占位地址改写成真实地址。
+
+## 静态链接与动态链接
+
+**静态链接**在构建期把库代码完整复制进可执行文件——独立、启动快，但体积大、库更新需重新链接所有程序。**动态链接**把库的绑定推迟到加载时或运行时：可执行文件只记录对 `libc.so` 的依赖，加载器在 `execve` 时把共享库映射进进程地址空间，动态链接器（`ld-linux.so`）解析符号、做重定位。优点：多进程共享一份库代码（节省内存）、库升级不需重链接。代价：启动时需解析符号（稍慢）、PIC（位置无关代码）有间接寻址开销。现代系统默认动态链接。
+
+## 加载与进程映像
+
+**加载器**是操作系统 `execve` 系统调用的一部分。它读 ELF 头，把 `.text` `.data` 等段映射到进程虚拟地址空间（按程序头表 `PHDR`），初始化栈（压入 argv/envp），把控制权交给 `_start` → `__libc_start_main` → `main`。代码段只读共享，数据段写时复制。动态库在加载时由 `ld-linux.so` 进一步绑定。理解加载，就理解了「为什么 `main` 之前 `_start` 先跑」「为什么全局变量有初值」「为什么栈上 argv 排布固定」。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：库链接顺序无所谓。** 静态库（`.a`）的符号解析是**单向**的：链接器从左到右扫，只解析当前未决符号。若 `main.o` 引用 `liba.a` 的函数，而 `liba.a` 又引用 `libb.a`，则必须写成 `gcc main.o -la -lb`——`-la` 在前解析 `main.o` 的引用并产生对 `libb` 的新引用，`-lb` 在后解析之。若写成 `-lb -la`，扫 `-lb` 时没有未决引用跳过，扫 `-la` 时产生对 `libb` 的引用但已无后续库可解析，报 `undefined reference`。这就是 `gcc ... -lm` 要放最后的根源。循环依赖可用 `--start-group ... --end-group` 反复扫描解决。
+</Callout>
+
+<Exercises>
+**问题 1**：静态链接和动态链接各有什么优缺点？为什么现代系统默认动态链接？
+
+<Answer>
+静态链接：构建期把库代码复制进可执行文件。优点——独立可移植（不依赖系统库）、启动快（无需运行时解析符号）。缺点——体积大、库升级需重链接所有程序、多进程各存一份库代码浪费内存。动态链接：可执行文件只记录库依赖，加载时/运行时由动态链接器解析符号做重定位。优点——多进程共享一份库代码（节省内存，libc 被千百进程共享）、库升级不需重链接（修 .so 即可）、可运行时按需加载（dlopen）。缺点——启动稍慢（需解析符号）、PIC 位置无关代码有间接寻址开销、依赖环境（库缺失/版本不匹配会启动失败）。现代系统默认动态链接，因内存共享和可维护性收益远大于启动开销。
+</Answer>
+
+**问题 2**：ELF 文件包含哪些关键段？链接器如何用重定位表完成符号绑定？
+
+<Answer>
+ELF 关键段：`.text` 代码、`.rodata` 只读数据、`.data` 已初始化全局变量、`.bss` 未初始化全局变量（不占文件空间运行时清零）、`.symtab` 符号表（记录每个符号的定义/引用/地址/绑定类型）、`.rela.text` 代码段重定位条目、`.rela.data` 数据段重定位条目、`.debug` 调试信息。链接流程：①合并所有 `.o` 的 `.text` `.data` 等段，每个符号获得最终虚拟地址；②符号解析——把每个引用绑定到唯一定义，处理强弱符号冲突；③扫 `.rela.text` `.rela.data`，按重定位条目类型（R_X86_64_PC32 相对调用、R_X86_64_64 绝对地址等）把指令中的占位地址改写成符号的真实地址。重定位条目记录「哪条指令的哪个字节要改、改成什么符号的地址、按什么公式计算」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="ELF">Executable and Linkable Format，Unix 可执行/可链接文件格式。含 .text 代码、.data/.bss 数据、.symtab 符号表、.rela 重定位表等节。.o 与可执行文件都是 ELF。</GlossaryItem>
+<GlossaryItem term="重定位">链接器把符号引用地址改写为真实地址的过程。合并段后符号有最终地址，扫 .rela 重定位条目按公式（PC 相对/绝对）改写指令占位字节。</GlossaryItem>
+<GlossaryItem term="动态链接">加载时由 ld-linux.so 解析共享库符号做重定位。多进程共享库代码省内存、库升级不需重链接，代价是启动开销和 PIC 间接寻址。现代系统默认。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,69 @@
+---
+title: "系统级 I/O"
+type: B
+section: "系统与操作系统"
+order: 8
+description: "文件描述符、open/read/write/close、缓冲 I/O 与内核缓冲、重定向与管道——Unix 一切皆文件的内核接口"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { CapSystemLevelIoDiagram } from "@/components/mdx/csapp/diagrams/cap-system-level-io";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Unix「一切皆文件」抽象与文件描述符的本质
+- 掌握 open/read/write/close 四个基础系统调用与返回值语义
+- 理解内核缓冲、标准库缓冲、行缓冲/全缓冲的区别与 fsync 的作用
+- 掌握重定向（dup2）、管道（pipe）与 I/O 重定向的底层原理
+</Objectives>
+
+## 直觉引入
+
+Unix 哲学最优雅的一句是「一切皆文件」。读文件、读键盘、读网络、读管道——都用同一个 `read(fd, buf, n)` 接口；写文件、写屏幕、写网络——都用 `write(fd, buf, n)`。差别只在 `fd`（文件描述符）指向什么。这个统一接口让 `cat file | grep x | sort` 这种流水线组合成为可能——每个程序只读写 fd，不关心另一端是文件还是管道还是终端。理解系统级 I/O，就理解了 Unix 工具链为什么这么强大、为什么 shell 重定向 `>` `<` `|` 能这么简洁地工作、为什么 `printf` 不是立即输出到屏幕。
+
+<CapSystemLevelIoDiagram />
+
+## 文件描述符
+
+<Term def="文件描述符（fd）是进程打开文件的整数句柄，是 Unix 一切皆文件抽象的核心。每个进程的 fd 表记录它打开的所有文件，fd 0/1/2 默认是 stdin/stdout/stderr。">文件描述符</Term>是 Unix I/O 的钥匙。每个进程有独立的 fd 表（在 PCB 里），`open` 返回一个空闲 fd（最小可用整数）。fd 0 = stdin、1 = stdout、2 = stderr 是进程启动时默认打开的。`open` 在 fd 表新建一项，指向系统级打开文件表（含文件偏移量、状态标志），后者又指向 inode 表（磁盘文件元数据）。`fork` 时子进程继承父进程 fd 表的副本（指向同一打开文件表项，共享偏移量）。`close` 释放 fd。fd 耗尽（默认 1024）是服务器常见瓶颈，可用 `ulimit -n` 调高。
+
+## 基础系统调用
+
+四个基础系统调用撑起 Unix I/O：①**`open(path, flags, mode)`**——打开/创建文件，返回 fd；②**`read(fd, buf, n)`**——从 fd 读最多 n 字节到 buf，返回实际读取数（可能小于 n，如遇到 EOF 或中断）；③**`write(fd, buf, n)`**——把 buf 的 n 字节写到 fd，返回实际写入数（通常 = n，但磁盘满或信号中断可能短写）；④**`close(fd)`**——关闭 fd 释放资源。关键陷阱：`read`/`write` 可能**短读短写**（返回值 < 请求量），必须用循环包裹直到处理完所有字节。`read` 返回 0 表示 EOF，返回 -1 表示错误（检查 `errno`）。
+
+## 缓冲层次
+
+I/O 有三层缓冲，理解它们才能解释「为什么 `printf` 不立即显示」。①**用户态缓冲**——`printf`/`fread`/`fwrite`（C 标准库）先写到 `FILE` 的用户缓冲区，满了或换行（行缓冲）或 `fflush` 时才调 `write`；②**内核缓冲**——`write` 写到内核 page cache，不立即落盘，由内核异步刷盘或 `fsync` 强制；③**设备缓冲**——磁盘控制器自己的缓存。所以 `printf("hi")` 不带 `\n` 时数据在用户缓冲区，`write` 之后数据在内核缓冲区，都还没到屏幕/磁盘。`fork` 前不 `fflush` 会导致子进程重复输出。`fsync(fd)` 强制把内核缓冲刷到磁盘，是数据库持久化的关键。
+
+## 重定向与管道
+
+**重定向**和**管道**是 Unix shell 的精髓，底层都是 fd 操作。**重定向** `> file`：shell 在 `fork` 后的子进程里 `close(1); open(file, O_WRONLY)`——新打开的 fd 复用 1（最小可用原则），于是 stdout 指向文件。更通用的 `dup2(oldfd, newfd)` 把 newfd 指向 oldfd 同一文件。**管道** `|`：`pipe(fds)` 创建一对 fd，`fds[0]` 读端 `fds[1]` 写端，内核用环形缓冲区实现。shell `fork` 两个子进程，左进程 `dup2(fds[1], 1)` 把 stdout 接到管道写端，右进程 `dup2(fds[0], 0)` 把 stdin 接到读端，于是左进程的输出自动流入右进程的输入。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`write` 返回后数据就到磁盘了。** 错。`write` 只把数据从用户空间拷到**内核 page cache**，立即返回。数据何时真正写入磁盘由内核 pdflush/flush 线程决定（通常延迟 30 秒），期间断电会丢数据。要保证持久化必须 `fsync(fd)` 等待数据真正落盘。这就是数据库为什么要 `fsync` 日志、为什么 `O_DIRECT` 绕过 page cache、为什么 Redis 的 AOF 有 `appendfsync always/everysec/no` 三档权衡。另一个相关坑：`fflush` 只把用户缓冲刷到内核（调 `write`），不等落盘——`fflush` 后 `fsync` 才是「真正持久化」。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是文件描述符？fd 0/1/2 分别是什么？`fork` 后子进程的 fd 表如何？
+
+<Answer>
+文件描述符（fd）是进程打开文件的整数句柄，是 Unix「一切皆文件」抽象的核心。每个进程在 PCB 里有独立 fd 表，`open` 返回最小可用整数作为 fd。fd 0/1/2 是进程启动时默认打开的：0=stdin（标准输入）、1=stdout（标准输出）、2=stderr（标准错误）。fd 表项指向系统级打开文件表（含文件偏移量、状态标志如 O_APPEND/O_NONBLOCK），后者指向 inode 表（磁盘文件元数据）。`fork` 时子进程继承父进程 fd 表的**副本**——fd 表是独立的，但每项指向同一系统级打开文件表项，所以父子共享同一文件偏移量，父读 100 字节后子接着读会从 100 开始。这就是 shell 实现重定向和管道的基础。
+</Answer>
+
+**问题 2**：解释 shell 重定向 `>` 和管道 `|` 的底层实现原理。
+
+<Answer>
+重定向 `cmd > file`：shell `fork` 子进程后，在子进程里执行 `close(1)` 关闭 stdout，再 `open(file, O_WRONLY|O_CREAT|O_TRUNC)`——按「最小可用 fd」原则新 fd 复用刚释放的 1，于是该进程的 stdout 指向文件，`printf`/`write(1,...)` 都写到文件。更通用的 `dup2(oldfd, newfd)` 把 newfd 指向 oldfd 同一打开文件表项。管道 `cmd1 | cmd2`：shell 先 `pipe(fds)` 创建管道（`fds[0]` 读端 `fds[1]` 写端，内核环形缓冲区），然后 `fork` 两个子进程：左子进程 `close(fds[0]); dup2(fds[1], 1); close(fds[1])` 把 stdout 接管道写端，右子进程 `close(fds[1]); dup2(fds[0], 0); close(fds[0])` 把 stdin 接读端，于是左进程输出自动流入右进程输入。两端都 close 不用的端很重要，否则读端不知道写端已关（不会 EOF）造成死锁。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="文件描述符">进程打开文件的整数句柄，Unix 一切皆文件的核心。每进程独立 fd 表，0/1/2 默认 stdin/stdout/stderr。open 返回最小可用整数。fork 继承副本共享打开文件表项。</GlossaryItem>
+<GlossaryItem term="短读短写">read/write 返回值可能小于请求字节数（EOF/信号中断/磁盘满），必须循环直到处理完所有字节。read 返回 0 = EOF，-1 = 错误查 errno。是 I/O 编程常见 bug 源。</GlossaryItem>
+<GlossaryItem term="缓冲层次">三层缓冲：用户态（printf/fwrite 的 FILE 缓冲，fflush 刷内核）、内核（page cache，fsync 刷磁盘）、设备（磁盘控制器）。write 只到内核缓冲，断电会丢，持久化需 fsync。</GlossaryItem>
+</Glossary>

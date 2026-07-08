@@ -1588,7 +1588,17 @@ export type ReviewChapterSlug =
   | "hpw-system-calls"
   | "hpw-dynamic-linking"
   | "hpw-garbage-collection"
-  | "hpw-final-review";
+  | "hpw-final-review"
+  | "cap-learning-map"
+  | "cap-data-representation"
+  | "cap-machine-level"
+  | "cap-processor-architecture"
+  | "cap-memory-hierarchy"
+  | "cap-linking-loading"
+  | "cap-exceptional-control"
+  | "cap-virtual-memory"
+  | "cap-system-level-io"
+  | "cap-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3181,6 +3191,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "hpw-dynamic-linking": "动态链接",
   "hpw-garbage-collection": "垃圾回收",
   "hpw-final-review": "全书总复习",
+  "cap-learning-map": "全书学习地图",
+  "cap-data-representation": "信息的表示与处理",
+  "cap-machine-level": "机器级表示",
+  "cap-processor-architecture": "处理器体系结构",
+  "cap-memory-hierarchy": "存储器层次结构",
+  "cap-linking-loading": "链接与加载",
+  "cap-exceptional-control": "异常控制流",
+  "cap-virtual-memory": "虚拟内存",
+  "cap-system-level-io": "系统级 I/O",
+  "cap-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

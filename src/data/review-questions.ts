@@ -1465,6 +1465,16 @@ import { hpwSystemCallsQuestions } from "./review/hpw-system-calls";
 import { hpwDynamicLinkingQuestions } from "./review/hpw-dynamic-linking";
 import { hpwGarbageCollectionQuestions } from "./review/hpw-garbage-collection";
 import { hpwFinalReviewQuestions } from "./review/hpw-final-review";
+import { capLearningMapQuestions } from "./review/cap-learning-map";
+import { capDataRepresentationQuestions } from "./review/cap-data-representation";
+import { capMachineLevelQuestions } from "./review/cap-machine-level";
+import { capProcessorArchitectureQuestions } from "./review/cap-processor-architecture";
+import { capMemoryHierarchyQuestions } from "./review/cap-memory-hierarchy";
+import { capLinkingLoadingQuestions } from "./review/cap-linking-loading";
+import { capExceptionalControlQuestions } from "./review/cap-exceptional-control";
+import { capVirtualMemoryQuestions } from "./review/cap-virtual-memory";
+import { capSystemLevelIoQuestions } from "./review/cap-system-level-io";
+import { capFinalReviewQuestions } from "./review/cap-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2964,6 +2974,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...hpwDynamicLinkingQuestions,
   ...hpwGarbageCollectionQuestions,
   ...hpwFinalReviewQuestions,
+  ...capLearningMapQuestions,
+  ...capDataRepresentationQuestions,
+  ...capMachineLevelQuestions,
+  ...capProcessorArchitectureQuestions,
+  ...capMemoryHierarchyQuestions,
+  ...capLinkingLoadingQuestions,
+  ...capExceptionalControlQuestions,
+  ...capVirtualMemoryQuestions,
+  ...capSystemLevelIoQuestions,
+  ...capFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
