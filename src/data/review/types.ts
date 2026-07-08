@@ -1698,7 +1698,17 @@ export type ReviewChapterSlug =
   | "hfj-event-handling"
   | "hfj-concurrency"
   | "hfj-networking"
-  | "hfj-final-review";
+  | "hfj-final-review"
+  | "jct-learning-map"
+  | "jct-java-fundamentals"
+  | "jct-oop-design"
+  | "jct-interfaces-lambda"
+  | "jct-collections-generics"
+  | "jct-io-streams"
+  | "jct-concurrency"
+  | "jct-advanced-features"
+  | "jct-xml-network"
+  | "jct-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3401,6 +3411,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "hfj-concurrency": "并发与多线程",
   "hfj-networking": "网络编程",
   "hfj-final-review": "全书复习",
+  "jct-learning-map": "全书学习地图",
+  "jct-java-fundamentals": "Java基础语法",
+  "jct-oop-design": "面向对象设计",
+  "jct-interfaces-lambda": "接口与Lambda",
+  "jct-collections-generics": "集合与泛型",
+  "jct-io-streams": "I/O与流",
+  "jct-concurrency": "并发编程",
+  "jct-advanced-features": "高级特性（注解/反射/类加载）",
+  "jct-xml-network": "XML与网络",
+  "jct-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

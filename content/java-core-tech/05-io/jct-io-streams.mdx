@@ -1,0 +1,166 @@
+---
+title: "I/O与流"
+type: C
+section: "JVM与Java生态"
+order: 5
+description: "字节流与字符流、try-with-resources、NIO Channel/Buffer、Stream API、装饰器模式、序列化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JctIoStreamsDiagram } from "@/components/mdx/java-core-tech/diagrams/jct-io-streams";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握字节流与字符流的区别和使用场景
+- 掌握 try-with-resources 自动资源管理
+- 理解 NIO 的 Channel/Buffer 模型
+- 理解装饰器模式在 IO 体系中的体现
+</Objectives>
+
+## 字节流与字符流
+
+<Term def="IO流是Java处理输入输出的抽象。字节流以byte为单位处理二进制数据,字符流以char为单位处理文本数据(自动编码转换)。">IO流</Term>是 Java IO 的核心抽象。
+
+<JctIoStreamsDiagram />
+
+```java
+import java.io.*;
+import java.nio.file.*;
+
+// 字节流: 处理二进制数据 (图片/视频/等)
+// InputStream / OutputStream
+try (var in = new FileInputStream("image.png");
+     var out = new FileOutputStream("copy.png")) {
+    byte[] buffer = new byte[4096];
+    int bytesRead;
+    while ((bytesRead = in.read(buffer)) != -1) {
+        out.write(buffer, 0, bytesRead);
+    }
+}
+
+// 字符流: 处理文本数据 (自动编码转换)
+// Reader / Writer
+try (var reader = new BufferedReader(
+         new InputStreamReader(
+             new FileInputStream("text.txt"), StandardCharsets.UTF_8))) {
+    String line;
+    while ((line = reader.readLine()) != null) {
+        System.out.println(line);
+    }
+}
+
+// Java 7+ Files API: 一行搞定
+String content = Files.readString(Path.of("config.txt"));
+List<String> lines = Files.readAllLines(Path.of("data.csv"));
+Files.writeString(Path.of("output.txt"), "Hello World");
+
+// 装饰器模式: 层层包装增强功能
+// FileInputStream -> BufferedInputStream (加缓冲)
+//               -> DataInputStream (加类型读取)
+var dis = new DataInputStream(
+    new BufferedInputStream(
+        new FileInputStream("data.bin")));
+int n = dis.readInt();     // 读取int
+double d = dis.readDouble(); // 读取double
+```
+
+## try-with-resources
+
+```java
+// 旧方式: 手动 close + finally (冗长且容易遗漏)
+BufferedReader reader = null;
+try {
+    reader = new BufferedReader(new FileReader("data.txt"));
+    // ...
+} catch (IOException e) {
+    e.printStackTrace();
+} finally {
+    if (reader != null) {
+        try {
+            reader.close();  // close也可能抛异常!
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+// 新方式: try-with-resources (Java 7+)
+// 自动调用 close(), 即使异常也会关闭
+// 资源必须实现 AutoCloseable 接口
+try (var r1 = new BufferedReader(new FileReader("a.txt"));
+     var r2 = new BufferedReader(new FileReader("b.txt"))) {
+    // 多个资源, 逆序关闭 (r2先close, r1后close)
+    System.out.println(r1.readLine());
+    System.out.println(r2.readLine());
+} // 自动 close, 无需 finally
+
+// 异常处理: try块异常优先, close()异常被addSuppressed
+```
+
+## NIO 与 Stream API
+
+```java
+import java.nio.*;
+import java.nio.channels.*;
+import java.util.stream.*;
+
+// NIO: Channel + Buffer (不同于IO流)
+// Channel: 双向, 可非阻塞
+// Buffer: 数据容器, flip/clear/compact
+try (var channel = FileChannel.open(
+        Path.of("data.bin"),
+        StandardOpenOption.READ)) {
+    ByteBuffer buffer = ByteBuffer.allocate(1024);
+    int bytesRead = channel.read(buffer);  // 读入buffer
+    buffer.flip();  // 切换为读模式
+    while (buffer.hasRemaining()) {
+        System.out.print((char) buffer.get());
+    }
+    buffer.clear(); // 重置为写模式
+}
+
+// Stream API (函数式数据处理, 不同于IO流!)
+List<String> names = List.of("Alice", "Bob", "Charlie");
+
+// 中间操作(惰性) + 终止操作(触发)
+List<String> filtered = names.stream()
+    .filter(n -> n.length() > 3)         // 中间: 过滤
+    .map(String::toUpperCase)            // 中间: 映射
+    .sorted()                            // 中间: 排序
+    .collect(Collectors.toList());       // 终止: 收集
+
+// reduce 聚合
+int sum = List.of(1, 2, 3, 4, 5).stream()
+    .reduce(0, Integer::sum);  // 15
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：混淆「IO流」和「Stream API」。** 它们是完全不同的概念！IO 流（InputStream/Reader）是数据读写管道，Stream API（java.util.stream.Stream）是函数式数据处理管道。IO 流操作外部资源（文件/网络），Stream API 操作内存中的集合数据。另一个常见错误：忘记用缓冲流——`new FileInputStream` 直接读写每次都是系统调用，性能极差，应包装为 `BufferedInputStream`。最佳实践：Java 7+ 用 Files API 简化文件操作，需要精细控制时用 try-with-resources + 缓冲流。
+</Callout>
+
+<Exercises>
+**问题 1**：字节流和字符流有什么区别？什么时候用哪个？
+
+<Answer>
+字节流（InputStream/OutputStream）以字节为单位，处理原始二进制数据，无编码转换。字符流（Reader/Writer）以字符为单位，处理文本数据，自动处理字符编码（UTF-8/GBK等）。使用场景：二进制文件（图片/视频/PDF）用字节流；文本文件用字符流。桥接：InputStreamReader 将字节流转为字符流。始终用缓冲流包装（BufferedReader/BufferedInputStream）减少 IO 次数。Java 7+ 推荐 Files.readString()/readAllLines() 一行搞定文本读取。
+</Answer>
+
+**问题 2**：装饰器模式在 Java IO 体系中如何体现？
+
+<Answer>
+Java IO 是装饰器模式的经典应用。InputStream 是抽象组件，FileInputStream 是具体组件，BufferedInputStream/DataInputStream 是具体装饰器。`new BufferedInputStream(new FileInputStream("f.txt"))` 给 FileInputStream 装上缓冲功能。多层装饰：`new DataInputStream(new BufferedInputStream(new FileInputStream("f.txt")))` = 文件流+缓冲+数据类型读取。装饰器特点：与被装饰者同接口、可嵌套、运行时动态组合。比继承更灵活——N 种功能只需 N 个装饰器类而非 2^N 个子类。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="字节流">以字节（byte）为单位读写数据的 IO 流。InputStream/OutputStream 是基类。处理二进制数据（图片/视频等），无编码转换。FileInputStream/FileOutputStream 常用。缓冲流 BufferedInputStream 提升性能。</GlossaryItem>
+<GlossaryItem term="字符流">以字符（char）为单位读写数据的 IO 流。Reader/Writer 是基类。处理文本数据，自动编码转换。InputStreamReader 是字节流到字符流的桥接。BufferedReader 提供行读取。</GlossaryItem>
+<GlossaryItem term="try-with-resources">Java 7+ 语法糖，自动关闭 AutoCloseable 资源。无需 finally 手动 close()，异常时也会关闭。资源逆序关闭。try 块异常优先，close() 异常被 addSuppressed。</GlossaryItem>
+<GlossaryItem term="NIO">New IO，基于 Channel + Buffer 的 IO 模型。Channel 双向可非阻塞，Buffer 是数据容器（flip/clear/compact）。支持 Selector 多路复用，单线程管理多个 Channel。适合高并发网络 IO。</GlossaryItem>
+<GlossaryItem term="装饰器模式">动态给对象添加职责。Java IO 体系的经典应用：BufferedInputStream 装饰 FileInputStream 添加缓冲功能。与被装饰者同接口，可嵌套，比继承更灵活。</GlossaryItem>
+</Glossary>

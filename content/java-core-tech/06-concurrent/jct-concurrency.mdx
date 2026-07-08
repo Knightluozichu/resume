@@ -1,0 +1,170 @@
+---
+title: "并发编程"
+type: B
+section: "JVM与Java生态"
+order: 6
+description: "线程创建与状态机、synchronized与ReentrantLock、volatile与CAS、并发集合与原子类、线程池与CompletableFuture"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { JctConcurrencyDiagram } from "@/components/mdx/java-core-tech/diagrams/jct-concurrency";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握线程创建的三种方式与线程状态机
+- 掌握 synchronized 与 ReentrantLock 的区别和使用
+- 理解 volatile 的可见性与 CAS 无锁原子操作
+- 掌握线程池配置与 CompletableFuture 异步编排
+</Objectives>
+
+## 线程创建
+
+<Term def="线程是程序执行的最小单元,一个进程可包含多个线程共享同一进程的内存空间。Java中通过Runnable、Callable或线程池创建。">线程</Term>让程序同时做多件事。
+
+<JctConcurrencyDiagram />
+
+```java
+// 方式1: Runnable (推荐, 解耦任务与线程)
+Thread t1 = new Thread(() -> {
+    System.out.println("Runnable: " + Thread.currentThread().getName());
+});
+t1.start();  // 启动新线程, 自动调用 run()
+
+// 方式2: Callable + Future (有返回值)
+ExecutorService pool = Executors.newFixedThreadPool(4);
+Future<Integer> future = pool.submit(() -> {
+    Thread.sleep(1000);
+    return 42;
+});
+Integer result = future.get();  // 阻塞等待结果
+pool.shutdown();
+
+// 方式3: 线程池 (生产环境推荐)
+ExecutorService pool2 = new ThreadPoolExecutor(
+    4,                          // corePoolSize
+    8,                          // maximumPoolSize
+    60, TimeUnit.SECONDS,       // keepAliveTime + unit
+    new LinkedBlockingQueue<>(100),  // workQueue
+    Executors.defaultThreadFactory(),
+    new ThreadPoolExecutor.CallerRunsPolicy()  // 拒绝策略
+);
+
+// 线程状态: NEW -> RUNNABLE -> (BLOCKED/WAITING/TIMED_WAITING) -> TERMINATED
+```
+
+## 同步机制
+
+```java
+// 1. synchronized: 内置锁, 自动释放
+class Counter {
+    private int count = 0;
+
+    public synchronized void increment() {  // 锁 this
+        count++;
+    }
+
+    public void increment2() {
+        synchronized(this) {  // 同步块, 更细粒度
+            count++;
+        }
+    }
+}
+
+// 2. ReentrantLock: 显式锁, 可中断/超时/公平
+class Counter2 {
+    private final Lock lock = new ReentrantLock();
+    private int count = 0;
+
+    public void increment() {
+        lock.lock();
+        try {
+            count++;
+        } finally {
+            lock.unlock();  // 必须在finally中释放!
+        }
+    }
+
+    public boolean tryIncrement(long timeout) throws InterruptedException {
+        if (lock.tryLock(timeout, TimeUnit.SECONDS)) {  // 超时获取
+            try { count++; return true; }
+            finally { lock.unlock(); }
+        }
+        return false;
+    }
+}
+
+// 3. volatile: 保证可见性, 不保证原子性
+class Flag {
+    private volatile boolean running = true;  // 所有线程立即可见
+    public void stop() { running = false; }   // 其他线程立即看到
+    // count++ 不安全! volatile 不保证原子性
+}
+
+// 4. Atomic: CAS 无锁原子操作
+AtomicInteger atomicCount = new AtomicInteger(0);
+atomicCount.incrementAndGet();  // CAS 原子自增
+atomicCount.compareAndSet(0, 1); // 期望0, 设为1
+```
+
+## 并发集合与线程池
+
+```java
+// ConcurrentHashMap: 线程安全的高并发Map
+ConcurrentHashMap<String, Integer> cache = new ConcurrentHashMap<>();
+cache.put("key", 1);
+cache.computeIfAbsent("key2", k -> expensiveCompute(k));
+
+// CopyOnWriteArrayList: 读无锁, 写时复制
+CopyOnWriteArrayList<String> list = new CopyOnWriteArrayList<>();
+list.add("item");  // 复制整个数组
+
+// BlockingQueue: 生产者-消费者
+BlockingQueue<Task> queue = new LinkedBlockingQueue<>(100);
+// 生产者: queue.put(task);  // 满了阻塞
+// 消费者: queue.take();     // 空了阻塞
+
+// CompletableFuture: 链式异步编排
+CompletableFuture.supplyAsync(() -> fetchUser(userId))      // 异步获取用户
+    .thenApply(user -> user.getEmail())                     // 转换
+    .thenCompose(email -> sendEmail(email))                 // 组合另一个异步
+    .thenAccept(result -> System.out.println("完成: " + result))
+    .exceptionally(ex -> { System.err.println("错误: " + ex); return null; });
+
+// 并行执行多个任务后合并
+CompletableFuture<String> f1 = CompletableFuture.supplyAsync(() -> "A");
+CompletableFuture<String> f2 = CompletableFuture.supplyAsync(() -> "B");
+CompletableFuture.allOf(f1, f2).thenRun(() -> {
+    System.out.println(f1.join() + f2.join());  // "AB"
+});
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 `Executors.newFixedThreadPool` 或 `newCachedThreadPool` 创建线程池。** 生产环境禁止这样做！newFixedThreadPool 用无界队列（LinkedBlockingQueue 无容量限制），任务堆积导致 OOM；newCachedThreadPool 线程数无上限，创建过多线程导致 OOM。必须用 ThreadPoolExecutor 手动配置七参数：corePoolSize、maximumPoolSize、keepAliveTime、unit、workQueue、threadFactory、handler。另一个常见错误：ReentrantLock 忘记在 finally 中 unlock()，导致死锁。synchronized 自动释放是优势，简单同步优先用它。
+</Callout>
+
+<Exercises>
+**问题 1**：synchronized 和 ReentrantLock 有什么区别？
+
+<Answer>
+①实现：synchronized 是 JVM 内置关键字（monitorenter/monitorexit），ReentrantLock 是基于 AQS 的类；②释放：synchronized 自动释放，ReentrantLock 必须手动 unlock()（finally 中）；③中断：synchronized 不可中断，ReentrantLock.lockInterruptibly() 可中断；④超时：synchronized 无超时，ReentrantLock.tryLock(timeout) 支持超时；⑤公平性：synchronized 非公平，ReentrantLock 可选公平；⑥条件变量：synchronized 一个 wait/notify 队列，ReentrantLock 可多个 Condition。使用场景：简单同步用 synchronized，需要超时/中断/多条件用 ReentrantLock。
+</Answer>
+
+**问题 2**：volatile 的作用是什么？为什么不保证原子性？
+
+<Answer>
+volatile 两个作用：①保证可见性——写立即刷新主内存，读从主内存读取，所有线程看到最新值；②禁止指令重排序（内存屏障）。不保证原子性：`count++` 是读-改-写三步操作，volatile 只保证每次读到最新值，但两个线程可能同时读到相同的值然后各自+1写回，丢失一次更新。volatile 适合状态标志（`volatile boolean running`）。DCL 单例模式中 volatile 防止 new 对象的指令重排序。原子性用 synchronized 或 Atomic 原子类（CAS）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="线程">程序执行的最小单元。一个进程包含多个线程，共享堆和方法区，各有独立栈和程序计数器。Java 通过 Runnable/Callable/线程池创建，start() 启动。线程状态：NEW→RUNNABLE→(BLOCKED/WAITING/TIMED_WAITING)→TERMINATED。</GlossaryItem>
+<GlossaryItem term="synchronized">Java 内置同步机制。synchronized 方法锁 this，同步块锁指定对象。同一时刻只一个线程进入。保证原子性+可见性+有序性。自动释放锁。JVM 做了锁升级优化（偏向锁→轻量级锁→重量级锁）。</GlossaryItem>
+<GlossaryItem term="volatile">轻量级同步机制。保证可见性（写立即刷新主内存）和有序性（禁止指令重排序），不保证原子性。适合状态标志。DCL 单例中防止 new 对象指令重排。原子性需 synchronized 或 Atomic（CAS）。</GlossaryItem>
+<GlossaryItem term="线程池">ThreadPoolExecutor 七参数：corePoolSize、maximumPoolSize、keepAliveTime、unit、workQueue、threadFactory、handler。流程：核心线程→队列→非核心线程→拒绝策略。生产环境禁用 Executors 工厂方法，必须手动配置有界队列和合理线程数。</GlossaryItem>
+<GlossaryItem term="CompletableFuture">Java 8+ 异步编排工具。supplyAsync 异步执行，thenApply 转换，thenCompose 组合，allOf 等待全部，exceptionally 异常处理。支持链式调用和并行任务编排。</GlossaryItem>
+</Glossary>

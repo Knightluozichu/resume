@@ -1,0 +1,192 @@
+---
+title: "XML与网络"
+type: C
+section: "JVM与Java生态"
+order: 8
+description: "DOM/SAX/StAX解析XML、Jackson/Gson处理JSON、Socket TCP通信、HttpClient HTTP/2、序列化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JctXmlNetworkDiagram } from "@/components/mdx/java-core-tech/diagrams/jct-xml-network";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 DOM/SAX/StAX 三种 XML 解析方式的区别和使用
+- 掌握 Jackson/Gson 的 JSON 序列化与反序列化
+- 掌握 Socket/ServerSocket 的 TCP 通信
+- 掌握 HttpClient 的现代 HTTP 请求方式
+</Objectives>
+
+## XML 解析
+
+<Term def="XML解析是将XML文档转换为程序可操作的数据结构。DOM构建整棵树,SAX事件驱动流式解析,StAX拉取式流解析。">XML解析</Term>是数据交换的基础。
+
+<JctXmlNetworkDiagram />
+
+```java
+import javax.xml.parsers.*;
+import org.xml.sax.*;
+import org.xml.sax.helpers.*;
+
+// 1. DOM: 整棵树加载到内存, 可随机访问和修改
+DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+DocumentBuilder builder = factory.newDocumentBuilder();
+Document doc = builder.parse(new File("data.xml"));
+
+NodeList books = doc.getElementsByTagName("book");
+for (int i = 0; i < books.getLength(); i++) {
+    Element book = (Element) books.item(i);
+    String title = book.getElementsByTagName("title")
+                          .item(0).getTextContent();
+    System.out.println(title);
+}
+// 适合小文件, 内存开销大
+
+// 2. SAX: 事件驱动流式解析, 内存省
+XMLReader reader = XMLReaderFactory.createXMLReader();
+reader.setContentHandler(new DefaultHandler() {
+    @Override
+    public void startElement(String uri, String local, String qName, Attributes attrs) {
+        System.out.println("开始: " + qName);
+    }
+    @Override
+    public void endElement(String uri, String local, String qName) {
+        System.out.println("结束: " + qName);
+    }
+    @Override
+    public void characters(char[] ch, int start, int length) {
+        System.out.println("内容: " + new String(ch, start, length).trim());
+    }
+});
+reader.parse("data.xml");
+// 适合大文件, 只读, 不能随机访问
+```
+
+## JSON 处理
+
+```java
+import com.fasterxml.jackson.databind.*;
+
+// Jackson: 最常用的 JSON 库
+ObjectMapper mapper = new ObjectMapper();
+
+// 序列化: 对象 -> JSON
+User user = new User("Alice", 25);
+String json = mapper.writeValueAsString(user);
+// {"name":"Alice","age":25}
+
+// 反序列化: JSON -> 对象
+User u = mapper.readValue(json, User.class);
+
+// 集合反序列化
+List<User> users = mapper.readValue(jsonArray,
+    new TypeReference<List<User>>() {});
+
+// 注解控制序列化
+public class User {
+    @JsonProperty("user_name")  // 重命名
+    private String name;
+
+    @JsonIgnore                // 忽略字段
+    private String password;
+
+    @JsonFormat(pattern = "yyyy-MM-dd")
+    private LocalDate birthday;
+
+    // getter/setter...
+}
+
+// Gson: Google 的 JSON 库
+Gson gson = new Gson();
+String json = gson.toJson(user);       // 序列化
+User u = gson.fromJson(json, User.class); // 反序列化
+```
+
+## 网络通信
+
+```java
+import java.net.*;
+import java.net.http.*;
+
+// 1. Socket/ServerSocket: TCP 通信
+// 服务端
+try (var server = new ServerSocket(8080)) {
+    System.out.println("服务器启动, 等待连接...");
+    while (true) {
+        Socket client = server.accept();  // 阻塞等待
+        // 每个连接一个线程 (或用线程池)
+        new Thread(() -> handleClient(client)).start();
+    }
+}
+
+void handleClient(Socket client) {
+    try (var in = new BufferedReader(
+            new InputStreamReader(client.getInputStream()));
+         var out = new PrintWriter(client.getOutputStream(), true)) {
+        String request = in.readLine();
+        out.println("HTTP/1.1 200 OK\r\n\r\nHello!");
+    }
+}
+
+// 2. HttpClient (Java 11+): 现代HTTP客户端
+HttpClient client = HttpClient.newBuilder()
+    .version(HttpClient.Version.HTTP_2)
+    .connectTimeout(Duration.ofSeconds(10))
+    .build();
+
+// GET 请求
+HttpRequest req = HttpRequest.newBuilder()
+    .uri(URI.create("https://api.example.com/users"))
+    .GET()
+    .header("Accept", "application/json")
+    .build();
+
+// 同步发送
+HttpResponse<String> res = client.send(req,
+    HttpResponse.BodyHandlers.ofString());
+System.out.println(res.statusCode());  // 200
+System.out.println(res.body());        // JSON 响应
+
+// 异步发送
+client.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+    .thenApply(HttpResponse::body)
+    .thenAccept(System.out::println)
+    .exceptionally(ex -> { System.err.println(ex); return null; });
+
+// POST 请求
+HttpRequest postReq = HttpRequest.newBuilder()
+    .uri(URI.create("https://api.example.com/users"))
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"Alice\"}"))
+    .build();
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Socket 通信忘记 flush。** PrintWriter/BufferedWriter 有缓冲区，写入后数据不一定立即发送。必须调用 `flush()` 或创建时设置 autoFlush（`new PrintWriter(out, true)`）。另一个常见错误：服务端 `server.accept()` 阻塞等待连接，如果不为每个连接创建新线程或使用线程池，服务端只能串行处理一个客户端。高并发应使用 NIO Selector 多路复用或 Netty 框架。现代 Java 开发推荐用 HttpClient（Java 11+）替代 HttpURLConnection——支持 HTTP/2、异步、连接池。
+</Callout>
+
+<Exercises>
+**问题 1**：DOM 和 SAX 解析 XML 有什么区别？
+
+<Answer>
+DOM 将整个 XML 加载为内存中的树结构，可随机访问和修改，适合小文件。SAX 事件驱动流式解析，遇到标签触发回调（startElement/endElement/characters），内存占用极小，适合大文件。区别：①DOM 需加载全文，SAX 流式不构建树；②DOM 可修改，SAX 只读；③DOM 可随机访问，SAX 只能顺序遍历。StAX 是折中方案——拉取式流解析，按需读取。XML 也可用 XPath 查询特定节点。
+</Answer>
+
+**问题 2**：Java 11+ HttpClient 相比传统 HttpURLConnection 有什么优势？
+
+<Answer>
+①API 现代化——Builder 模式链式调用，比 HttpURLConnection 简洁；②HTTP/2 支持——多路复用、头部压缩、服务器推送；③异步支持——sendAsync() 返回 CompletableFuture，非阻塞；④连接池——内置连接复用；⑤超时配置——connectTimeout/requestTimeout 分别配置；⑥WebSocket 支持。使用示例：HttpClient.newBuilder().build() + HttpRequest.newBuilder().uri().GET().build() + client.send(req, ofString())。替代方案：Apache HttpClient、OkHttp。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="DOM解析">将整个 XML 文档加载为内存中的树结构（Document→Element→Node）。可随机访问、修改内容。适合小文件。API：DocumentBuilder.parse()→Document，getElementsByTagName()→NodeList。</GlossaryItem>
+<GlossaryItem term="SAX解析">事件驱动流式 XML 解析。遇到开始/结束标签/文本时触发回调。内存占用极小，适合大文件。只读，不能随机访问。需自己维护解析状态。</GlossaryItem>
+<GlossaryItem term="JSON处理">Jackson/Gson 将 Java 对象与 JSON 互转。Jackson：ObjectMapper.writeValueAsString()/readValue()。注解：@JsonProperty 重命名、@JsonIgnore 忽略、@JsonFormat 日期格式。现代 API 首选 JSON 序列化。</GlossaryItem>
+<GlossaryItem term="Socket">TCP 通信基础。ServerSocket.accept() 阻塞等待连接，Socket.getInputStream()/getOutputStream() 读写数据。需 flush() 刷新缓冲区。高并发用线程池或 NIO Selector。Java 11+ HttpClient 替代 HttpURLConnection，支持 HTTP/2 和异步。</GlossaryItem>
+</Glossary>

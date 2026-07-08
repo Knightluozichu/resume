@@ -1,0 +1,153 @@
+---
+title: "集合与泛型"
+type: C
+section: "JVM与Java生态"
+order: 4
+description: "List/Set/Queue/Map继承体系、ArrayList与HashMap底层原理、泛型与类型擦除、迭代器与fail-fast"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JctCollectionsGenericsDiagram } from "@/components/mdx/java-core-tech/diagrams/jct-collections-generics";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Collection 三大子接口与 Map 独立体系
+- 掌握 ArrayList 与 HashMap 的底层实现与时间复杂度
+- 理解泛型、类型擦除与 PECS 原则
+- 掌握迭代器与 fail-fast 机制
+</Objectives>
+
+## 集合框架
+
+<Term def="集合框架是Java标准库提供的统一数据容器架构,核心接口为Collection和Map,各有多种实现类。">集合框架</Term>是 Java 最常用的 API。
+
+<JctCollectionsGenericsDiagram />
+
+```java
+// List: 有序可重复
+List<String> list = new ArrayList<>();
+list.add("Java"); list.add("Python"); list.add("Java");
+list.get(0);          // "Java" O(1)
+list.remove(0);       // O(n) 中间删除
+List<String> linked = new LinkedList<>();  // 链表实现
+
+// Set: 无序不重复
+Set<String> set = new HashSet<>();     // 哈希表 O(1)
+set.add("Java"); set.add("Python");
+Set<String> tree = new TreeSet<>();    // 红黑树 O(log n), 有序
+
+// Queue/Deque: 队列
+Queue<String> queue = new ArrayDeque<>();
+queue.offer("A"); queue.poll();        // FIFO
+Deque<String> stack = new ArrayDeque<>();
+stack.push("A"); stack.pop();          // LIFO 栈
+
+// Map: 键值映射, 键唯一
+Map<String, Integer> map = new HashMap<>();
+map.put("Java", 1995); map.put("Python", 1991);
+map.get("Java");      // 1995
+map.containsKey("Java"); // true
+for (var entry : map.entrySet()) {
+    System.out.println(entry.getKey() + ": " + entry.getValue());
+}
+```
+
+## ArrayList 与 HashMap 原理
+
+```java
+// ArrayList 底层: 动态数组
+// 初始容量 10, 不足时扩容 1.5 倍
+// get(i): 直接索引 O(1)
+// add(末尾): 均摊 O(1)
+// add/remove(中间): 需移动元素 O(n)
+
+// HashMap 底层: 哈希表(数组 + 链表/红黑树)
+// put(key, value):
+//   1. hash = key.hashCode() ^ (hashCode >>> 16)  // 扰动
+//   2. index = (n-1) & hash                        // 定位桶
+//   3. 桶空 -> 直接放入
+//   4. 桶非空 -> 遍历链表, equals则覆盖, 否则尾插
+//   5. 链表 >= 8 且数组 >= 64 -> 转红黑树 (O(log n))
+//   6. 元素 > capacity * 0.75 -> 扩容2倍 + rehash
+
+// 自定义类作为 HashMap 键: 必须重写 hashCode 和 equals
+public class Person {
+    private String name;
+    private int age;
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, age);  // 用工具类
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (!(obj instanceof Person)) return false;
+        Person p = (Person) obj;
+        return age == p.age && Objects.equals(name, p.name);
+    }
+}
+// 规则: a.equals(b) 为 true => a.hashCode() == b.hashCode()
+```
+
+## 泛型
+
+```java
+// 泛型: 编译期类型安全
+List<String> list = new ArrayList<>();   // 菱形语法
+list.add("hi");
+// list.add(123);  // 编译报错! 只能存 String
+
+// 泛型方法
+public static <T> T getFirst(List<T> list) {
+    return list.isEmpty() ? null : list.get(0);
+}
+String s = getFirst(List.of("a", "b"));   // T 推断为 String
+
+// 通配符: PECS 原则
+// ? extends T: 上界, 生产者, 只读
+public static double sum(List<? extends Number> nums) {
+    double total = 0;
+    for (Number n : nums) total += n.doubleValue();  // 只能读
+    return total;
+}
+// ? super T: 下界, 消费者, 只写
+public static void addNumbers(List<? super Integer> list) {
+    list.add(1); list.add(2);  // 只能写 Integer
+}
+
+// 类型擦除: 运行时 List<String> 和 List<Integer> 都是 List
+// 限制: 不能 new T(), 不能 instanceof List<String>
+//       基本类型不能做泛型参数 (用 Integer)
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 `==` 比较 Integer 对象内容。** Integer 有缓存（-128~127），这个范围内 `==` 可能为 true，但超出范围为 false——`Integer.valueOf(128) == Integer.valueOf(128)` 为 false。比较 Integer 内容始终用 `.equals()`。同理，HashMap 的键如果是自定义类，必须正确重写 `hashCode()` 和 `equals()`——hashCode 决定桶位置，equals 决定是否匹配。两者不一致会导致 HashMap 找不到值或重复存储。另一个坑：循环中 `list.remove()` 会触发 ConcurrentModificationException，应用 `list.removeIf()` 或 `Iterator.remove()`。
+</Callout>
+
+<Exercises>
+**问题 1**：ArrayList 和 LinkedList 各自的底层实现和适用场景是什么？
+
+<Answer>
+ArrayList 底层是动态数组（初始容量 10，扩容 1.5 倍）：get O(1)、尾部 add 均摊 O(1)、中间增删 O(n)。适合随机访问多、尾部增删多的场景。LinkedList 底层是双向链表：首尾增删 O(1)、get O(n)。适合频繁首尾增删的场景。实际开发中 ArrayList 几乎总是更好的默认选择——缓存友好（连续内存），且 90% 场景是尾部增删。常见误区：LinkedList「增删快」在指定位置增删时不成立，因为查找节点 O(n)。
+</Answer>
+
+**问题 2**：什么是类型擦除？它带来了哪些限制？
+
+<Answer>
+类型擦除：Java 泛型是编译期机制，编译后泛型类型信息被擦除——`List<String>` 运行时就是 `List`。原因：兼容 Java 4 的非泛型集合。限制：①运行时无法获取泛型类型（`list instanceof List<String>` 编译错误）；②不能 new T()；③基本类型不能做泛型参数（用 Integer）；④静态字段不能用类的泛型参数。解决：传入 Class<T> 参数保留类型信息。PECS：生产者用 `? extends T`（只读），消费者用 `? super T`（只写）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="集合框架">Java 标准库的统一数据容器架构。Collection 接口下有 List（有序可重复）、Set（无序不重复）、Queue（队列）三大子接口。Map 是独立体系（键值映射）。常用实现：ArrayList、HashMap、HashSet、LinkedList、TreeMap。</GlossaryItem>
+<GlossaryItem term="HashMap">基于哈希表的键值映射。put 时用 key.hashCode() 定位桶，equals 匹配。链表长度 ≥8 且数组 ≥64 转红黑树（O(log n)）。负载因子 0.75，扩容 2 倍。非线程安全，多线程用 ConcurrentHashMap。键可为 null。</GlossaryItem>
+<GlossaryItem term="泛型">编译期类型安全机制。`List<String>` 只能存 String，编译器检查类型。类型擦除：运行时泛型信息被擦除。PECS 原则：生产者用 `? extends T`（只读），消费者用 `? super T`（只写）。泛型方法：`<T> T getFirst(List<T> list)`。</GlossaryItem>
+<GlossaryItem term="fail-fast">迭代器在遍历时检测到结构性修改立即抛出 ConcurrentModificationException。原理：集合维护 modCount，迭代器每次 next() 检查 expectedModCount。正确删除方式：Iterator.remove() 或 removeIf()。CopyOnWriteArrayList 是 fail-safe（遍历快照）。</GlossaryItem>
+</Glossary>

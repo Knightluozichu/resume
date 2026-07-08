@@ -205,6 +205,7 @@ export const BOOK_ORDER = [
   "linux-kernel-design",
   "unix-advanced-programming",
   "head-first-java",
+  "java-core-tech",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -350,6 +351,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "linux-kernel-design": "Linux内核设计与实现",
   "unix-advanced-programming": "UNIX环境高级编程",
   "head-first-java": "Head First Java",
+  "java-core-tech": "Java核心技术",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

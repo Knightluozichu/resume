@@ -1235,6 +1235,16 @@ import { hfjEventHandlingQuestions } from "./review/hfj-event-handling";
 import { hfjConcurrencyQuestions } from "./review/hfj-concurrency";
 import { hfjNetworkingQuestions } from "./review/hfj-networking";
 import { hfjFinalReviewQuestions } from "./review/hfj-final-review";
+import { jctLearningMapQuestions } from "./review/jct-learning-map";
+import { jctJavaFundamentalsQuestions } from "./review/jct-java-fundamentals";
+import { jctOopDesignQuestions } from "./review/jct-oop-design";
+import { jctInterfacesLambdaQuestions } from "./review/jct-interfaces-lambda";
+import { jctCollectionsGenericsQuestions } from "./review/jct-collections-generics";
+import { jctIoStreamsQuestions } from "./review/jct-io-streams";
+import { jctConcurrencyQuestions } from "./review/jct-concurrency";
+import { jctAdvancedFeaturesQuestions } from "./review/jct-advanced-features";
+import { jctXmlNetworkQuestions } from "./review/jct-xml-network";
+import { jctFinalReviewQuestions } from "./review/jct-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3185,6 +3195,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...hfjConcurrencyQuestions,
   ...hfjNetworkingQuestions,
   ...hfjFinalReviewQuestions,
+  ...jctLearningMapQuestions,
+  ...jctJavaFundamentalsQuestions,
+  ...jctOopDesignQuestions,
+  ...jctInterfacesLambdaQuestions,
+  ...jctCollectionsGenericsQuestions,
+  ...jctIoStreamsQuestions,
+  ...jctConcurrencyQuestions,
+  ...jctAdvancedFeaturesQuestions,
+  ...jctXmlNetworkQuestions,
+  ...jctFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
