@@ -1,0 +1,78 @@
+---
+title: "事件系统与消息分发"
+type: A
+section: "游戏引擎架构"
+order: 8
+description: "发布订阅、事件队列、三种分发模式——模块如何不直接调用而协作"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep1EventSystemDiagram } from "@/components/mdx/game-engine-practice-vol1/diagrams/gep1-event-system";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解发布订阅模式如何实现模块双向解耦
+- 能说出立即分发、排队分发、下一帧分发三种模式的适用场景
+- 理解事件队列如何避免「回调中再触发」的无限递归
+- 掌握事件系统与直接调用的取舍
+</Objectives>
+
+## 直接调用的耦合问题
+
+玩家开枪时，要通知 UI 更新弹药数、通知音频播枪声、通知成就系统记录击杀。如果开枪代码直接调 `ui.UpdateAmmo()`、`audio.Play()`、`achievement.OnShoot()`，开枪逻辑就和这三个系统死耦合——加一个新系统（如震动反馈）就要改开枪代码。<Term def="事件系统基于发布订阅模式：发布者不关心谁接收，订阅者不关心谁触发，通过事件队列解耦双方。">事件系统</Term>让开枪逻辑只发一个 `ShootEvent`，谁关心谁订阅，互不感知。
+
+<Gep1EventSystemDiagram />
+
+## 三种分发模式
+
+**立即分发**：emit 的瞬间同步调用所有订阅者回调。延迟最低，适合输入响应（按键要立刻生效）。风险是回调中可能再 emit，导致递归甚至栈溢出。**排队分发**：emit 把事件入队，帧末统一处理。发送与处理时机分离，适合玩法逻辑——保证事件按帧有序处理，不会被中途状态打断。**下一帧分发**：事件延迟到下一帧处理。适合销毁对象——当前帧迭代中不能安全删除自己，延迟到下帧就不会破坏正在遍历的集合。
+
+```cpp
+// 排队分发：发送与处理分离
+void EventBus::Emit(const Event& evt) {
+    queue_.push(evt);  // 只入队，不立即处理
+}
+void EventBus::Dispatch() {
+    while (!queue_.empty()) {
+        auto evt = queue_.front();
+        queue_.pop();
+        for (auto& handler : subscribers_[evt.type]) {
+            handler(evt);  // 帧末统一处理
+        }
+    }
+}
+// 帧循环：Update 前 Dispatch 上帧积压事件
+eventBus.Dispatch();
+scene.Update(dt);
+```
+
+## 队列解决递归陷阱
+
+立即分发的最大坑是「回调中再 emit」。A 处理事件时触发 B，B 处理时又触发 A，无限递归栈溢出。用队列把「触发」和「处理」分开：emit 只入队不处理，Dispatch 时才出队执行。即使回调中再 emit，新事件排到队尾，当前事件处理完才轮到它，不会递归。
+
+<Callout type="trap">
+**坑：在遍历订阅者列表时取消订阅。** Dispatch 遍历 `subscribers_` 时，某个回调里调了 `Unsubscribe()` 修改了正在遍历的列表，导致迭代器失效崩溃。修法：取消订阅只标记「待移除」，Dispatch 结束后统一清理，而非遍历中修改容器。
+</Callout>
+
+<Exercises>
+**问题 1**：立即分发和排队分发各自适合什么场景？为什么？
+
+<Answer>
+立即分发适合输入响应——玩家按键要立刻生效，不能等到帧末。排队分发适合玩法逻辑——保证事件按帧有序、不被中途状态打断。比如「角色死亡」事件，如果立即分发，死亡回调里可能修改了正在遍历的状态，导致其他系统读到不一致数据。排队到帧末处理，此时这一帧的状态更新都已完成，安全。
+</Answer>
+
+**问题 2**：为什么事件系统要避免「回调中再 emit 同类事件」？队列如何解决？
+
+<Answer>
+立即分发下，回调 A 处理时 emit 事件 B，B 立即调用回调 B，B 又 emit A……无限递归栈溢出。队列方案：emit 只入队不执行，Dispatch 从队头取事件执行。回调中再 emit 的事件排到队尾，当前事件处理完才轮到它。这样事件按入队顺序线性处理，不会递归，最多队列变长但不会栈溢出。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="发布订阅">发布者发事件、订阅者收事件，双方互不感知的解耦模式。事件系统是其具体实现。</GlossaryItem>
+<GlossaryItem term="事件队列">暂存待处理事件的 FIFO 队列，把「触发」与「处理」分离，避免递归和保证有序。</GlossaryItem>
+<GlossaryItem term="下一帧分发">事件延迟到下一帧处理，避免在当前帧遍历中修改集合（如销毁正在迭代的对象）。</GlossaryItem>
+</Glossary>

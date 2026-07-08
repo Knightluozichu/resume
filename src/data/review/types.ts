@@ -1348,7 +1348,17 @@ export type ReviewChapterSlug =
   | "uap-network-sync"
   | "uap-hot-update"
   | "uap-ci-cd"
-  | "uap-final-review";
+  | "uap-final-review"
+  | "gep1-learning-map"
+  | "gep1-engine-architecture"
+  | "gep1-memory-system"
+  | "gep1-math-library"
+  | "gep1-transform-system"
+  | "gep1-render-pipeline"
+  | "gep1-resource-management"
+  | "gep1-scene-graph"
+  | "gep1-event-system"
+  | "gep1-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2701,6 +2711,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "uap-hot-update": "热更新方案",
   "uap-ci-cd": "持续集成与自动化构建",
   "uap-final-review": "全书总复习",
+  "gep1-learning-map": "全书学习地图",
+  "gep1-engine-architecture": "引擎整体架构与模块划分",
+  "gep1-memory-system": "内存分配与管理",
+  "gep1-math-library": "数学库设计",
+  "gep1-transform-system": "变换系统与场景层级",
+  "gep1-render-pipeline": "渲染管线架构",
+  "gep1-resource-management": "资源管理",
+  "gep1-scene-graph": "场景图与空间分割",
+  "gep1-event-system": "事件系统与消息分发",
+  "gep1-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

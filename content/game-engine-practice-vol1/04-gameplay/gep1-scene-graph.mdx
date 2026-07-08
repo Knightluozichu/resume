@@ -1,0 +1,80 @@
+---
+title: "场景图与空间分割"
+type: A
+section: "游戏引擎架构"
+order: 7
+description: "八叉树、BVH、视锥剔除——如何用空间结构快速砍掉看不见的物体"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep1SceneGraphDiagram } from "@/components/mdx/game-engine-practice-vol1/diagrams/gep1-scene-graph";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解空间分割（八叉树/BVH）如何加速视锥剔除
+- 能描述场景图遍历的四步流程
+- 理解包围球在剔除中的作用与父子包含关系
+- 掌握早剪枝把剔除从 O(n) 降到 O(log n) 的原理
+</Objectives>
+
+## 暴力遍历的代价
+
+一个场景有十万个物体，每帧都要判断哪些在摄像机视锥内。如果逐个检测，是 O(n) = 十万次包围盒与视锥的相交测试。但大部分物体聚簇分布——远处整座山都在视锥外，没必要检测山上每一块石头。<Term def="空间分割把场景按空间位置组织成树（八叉树/BVH），每个内部节点的包围体包含所有子节点，剔除时先测节点，节点在外则整棵子树跳过。">空间分割</Term>就是利用这种聚簇性做「早剪枝」。
+
+<Gep1SceneGraphDiagram />
+
+## 八叉树与 BVH
+
+**八叉树**把 3D 空间递归切成八块，每块再切八块，物体挂在最底层的叶节点。剔除时从根节点开始，如果某个节点的包围盒完全在视锥外，整棵子树直接跳过——可能一跳砍掉上万个物体。**BVH（层次包围盒）**不切空间，而是把物体按包围球递归合并成树，更适合动态场景（物体移动时只需更新包围球，不必重建树结构）。静态场景用八叉树，动态场景用 BVH。
+
+```cpp
+// 视锥剔除：递归遍历空间树
+void Cull(SpatialNode* node, const Frustum& frustum, VisibleList& out) {
+    // 测节点包围球与视锥的关系
+    auto result = frustum.Intersect(node->bounds);
+    if (result == OUTSIDE) return;       // 整棵子树在外，跳过！
+    if (result == INSIDE) {
+        out.AppendAll(node->objects);    // 整棵子树在内，全收
+        return;
+    }
+    // 相交：递归子节点
+    for (auto* child : node->children)
+        Cull(child, frustum, out);
+    out.Append(node->ownObjects);
+}
+```
+
+## 场景图遍历四步
+
+每帧场景图按固定顺序遍历四步：① 更新世界变换（上一章的脏标记递归）；② 更新包围球（从叶节点向上合并，父包围球 = 所有子包围球的并集）；③ 视锥剔除（用空间树做早剪枝）；④ 收集可见物体进渲染列表。父节点包围球包含所有子节点的包围球，所以父节点被剔除时子节点一定也在视锥外，可以安全跳过。
+
+## 早剪枝的收益
+
+没有空间分割，剔除是 O(n)（遍历所有物体）。有了八叉树/BVH，剔除变成 O(log n) 量级——每层只测少数节点，大部分子树被早剪枝跳过。对于十万个物体的场景，可能只需测几百个节点就能完成剔除，性能提升百倍。
+
+<Callout type="trap">
+**坑：动态物体频繁重建八叉树。** 物体每帧移动，如果每次都从零重建八叉树，重建开销可能比剔除省下的还多。动态场景应该用 BVH（只更新包围球、做局部重平衡），或对八叉树做增量更新（物体移动时只调整它所在的节点）。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么父节点包围球要包含所有子节点包围球？这对剔除有什么意义？
+
+<Answer>
+包含关系保证：如果父节点包围球在视锥外，所有子节点也一定在外（因为子节点在父包围球内部）。这样测父节点一次就能跳过整棵子树，不必逐个测子节点，这就是早剪枝。如果没有这个包含保证，父节点在外不代表子节点在外，就无法跳过，退化回 O(n)。
+</Answer>
+
+**问题 2**：静态场景用八叉树、动态场景用 BVH，为什么？
+
+<Answer>
+八叉树按固定空间划分，物体移动后可能跨到相邻区域，需要从旧节点删除、插入新节点，频繁移动时维护开销大。BVH 按包围球组织，物体移动只需更新自己的包围球并向上传播（父包围球重算），不需要重新划分结构，增量更新更轻。所以静态场景用八叉树（划分稳定、查询快），动态场景用 BVH（更新便宜）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="八叉树">把 3D 空间递归八等分的树结构，每个叶节点存该区域的物体。适合静态场景的空间剔除。</GlossaryItem>
+<GlossaryItem term="BVH">层次包围盒：把物体按包围球递归合并的树，不切空间只包物体。动态场景更新便宜。</GlossaryItem>
+<GlossaryItem term="视锥剔除">判断物体是否在摄像机视锥（可见锥体）内，在外的物体不渲染。空间分割让它从 O(n) 降到 O(log n)。</GlossaryItem>
+</Glossary>

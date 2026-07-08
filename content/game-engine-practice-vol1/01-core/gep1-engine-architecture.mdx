@@ -1,0 +1,67 @@
+---
+title: "引擎整体架构与模块划分"
+type: A
+section: "游戏引擎架构"
+order: 1
+description: "四层架构模型——平台层、核心层、功能层、游戏层如何自底向上协作"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep1EngineArchitectureDiagram } from "@/components/mdx/game-engine-practice-vol1/diagrams/gep1-engine-architecture";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能画出引擎四层架构，并说出每层的职责边界
+- 理解「上层依赖下层、绝不反向」这条规则的意义
+- 能解释工具链与运行时为什么必须解耦
+- 掌握子系统启动顺序与生命周期管理的基本思路
+</Objectives>
+
+## 为什么引擎要分层
+
+想象你直接在操作系统 API 上写游戏：换一个平台（Windows 到 Android）就要重写一半代码。分层的本质是**隔离变化**——把「不变的基础能力」沉到下层，把「每款游戏都不同的逻辑」放到上层。这样换平台只改最底层，换游戏只改最上层，中间引擎能力原封不动复用。
+
+<Gep1EngineArchitectureDiagram />
+
+## 四层职责
+
+<Term def="平台层封装操作系统与硬件差异，向上提供统一的文件IO、窗口、输入和图形API接口。">平台层</Term>是引擎的「翻译官」，把 Windows、Linux、Android 的差异吸收掉。**核心层**提供内存分配器、数学库、容器、事件系统、任务调度——这些是所有功能模块共享的「公共工具箱」。**功能层**把核心能力组装成渲染、物理、动画、音频等可直接使用的子系统。**游戏层**是每款游戏特有的逻辑：角色控制、关卡规则、AI 行为。
+
+```cpp
+// 分层的代码体现：上层 include 下层，绝不反过来
+// 游戏层
+#include "engine/render/Renderer.h"     // 依赖功能层
+#include "engine/core/memory/Pool.h"    // 依赖核心层
+// 绝不出现：#include "platform/Window.h" —— 游戏层不直接碰平台
+```
+
+## 两条横切关注点
+
+除了纵向分层，引擎还有两个横切的子系统。**工具与资源管线**把美术资产从 DCC 工具（Blender/Maya）导入成引擎格式，离线处理和运行时加载彻底解耦——运行时绝不解析原始 `.fbx`。**配置与初始化**管理子系统启动顺序：渲染依赖窗口先创建、物理依赖内存分配器先就绪，用依赖注入或服务定位器管理这些全局单例的生命周期。
+
+<Callout type="trap">
+**误区：把所有东西塞进一个「引擎类」单例。** 随着引擎长大，这个 God Object 会变成无人敢动的泥球。正确做法是每个子系统独立成类，通过明确的接口和事件通信，初始化顺序由配置驱动而非隐式依赖。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么游戏层不能直接调用平台层的窗口 API？
+
+<Answer>
+为了隔离变化。如果游戏层直接调平台 API，换平台时游戏逻辑也要改，失去了分层复用的意义。平台层把这些差异封装成统一接口（如 `IWindow`），上层只依赖抽象接口。这样引擎和游戏代码可以跨平台编译，不需要为每个平台重写逻辑。
+</Answer>
+
+**问题 2**：渲染子系统和物理子系统同属功能层，它们之间应该怎么通信？
+
+<Answer>
+同层模块不应直接互相调用（会产生紧耦合）。应该通过核心层的事件系统或明确的接口通信：物理系统在碰撞发生时发出事件，渲染系统订阅该事件更新视觉效果。或者通过场景图这一中间数据结构——物理写变换结果到场景节点，渲染从场景节点读。两条路都是「通过下层或共享数据间接协作」，而非直接依赖。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="平台层">封装 OS 与硬件差异的底层，提供统一的窗口、输入、文件IO、图形 API 抽象，让上层代码跨平台。</GlossaryItem>
+<GlossaryItem term="服务定位器">一种管理全局服务的模式：子系统通过 Locator.GetService() 按需获取依赖，而非硬编码单例引用，便于测试和替换。</GlossaryItem>
+<GlossaryItem term="资源管线">从美术资产（fbx/psd）到运行时格式的离线转换流程，包括导入、压缩、序列化，运行时只加载处理后的格式。</GlossaryItem>
+</Glossary>

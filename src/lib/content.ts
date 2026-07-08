@@ -67,6 +67,7 @@ export const BOOK_ORDER = [
   "game-math-3d",
   "learnopengl",
   "game-engine-architecture-3e",
+  "game-engine-practice-vol1",
   "cpp-primer-5e",
   "c-primer-plus",
   "coding-interviews",
@@ -178,6 +179,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "game-math-3d": "游戏和图形学的 3D 数学",
   learnopengl: "LearnOpenGL",
   "game-engine-architecture-3e": "游戏引擎架构（第三版）",
+  "game-engine-practice-vol1": "游戏引擎原理与实践·卷1",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
   "coding-interviews": "剑指Offer：名企面试官精讲典型编程题（第2版）",
@@ -897,6 +899,8 @@ export const SECTION_ORDER = [
   "高级CLR",
   // §6 游戏开发
   "游戏开发",
+  // 游戏引擎原理与实践·卷1
+  "游戏引擎架构",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

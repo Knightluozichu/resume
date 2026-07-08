@@ -1,0 +1,69 @@
+---
+title: "数学库设计"
+type: A
+section: "游戏引擎架构"
+order: 3
+description: "向量、矩阵、四元数——引擎数学库的类型体系与 SIMD 加速"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep1MathLibraryDiagram } from "@/components/mdx/game-engine-practice-vol1/diagrams/gep1-math-library";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解向量、矩阵、四元数在引擎中的分工与适用场景
+- 能解释 SIMD 如何加速向量运算
+- 知道为什么数学类型要设计成值语义而非虚函数继承
+- 掌握四元数相比欧拉角在旋转表示上的优势
+</Objectives>
+
+## 数学库是引擎的「语言」
+
+引擎里几乎每个计算都离不开向量、矩阵和四元数：位置是 Vec3、变换是 Mat4、旋转是 Quaternion。数学库不仅要正确，更要快——一帧可能做几十万次向量运算。所以引擎数学库的两大设计目标：**类型语义清晰**和**底层 SIMD 加速**。
+
+<Gep1MathLibraryDiagram />
+
+## 三种类型的分工
+
+<Term def="向量表示方向与位置，是引擎中最基础的数据载体。点乘算夹角与投影、叉乘算垂直方向与面积。">向量</Term>表示方向和位置。**矩阵**表示线性变换：平移、旋转、缩放、投影都能写成 4×4 矩阵，多个变换可以通过矩阵乘法复合成单个矩阵，GPU 一次乘法搞定。**四元数** $(w, x, y, z)$ 专门表示旋转——它只有 4 个分量（矩阵要 16 个），且球面插值 slerp 能做平滑动画，还没有欧拉角的万向锁问题。
+
+```cpp
+// 四元数球面插值：平滑的旋转动画
+Quaternion q1 = fromEuler(0, 0, 0);        // 起始朝向
+Quaternion q2 = fromEuler(0, PI / 2, 0);   // 目标朝向（右转90°）
+// slerp 在球面上做等角插值，旋转均匀无扭曲
+Quaternion q = slerp(q1, q2, t);  // t 从 0 到 1
+// 转成矩阵交给渲染管线
+Mat4 world = toMatrix(q) * translate(pos);
+```
+
+## SIMD：一条指令算四个 float
+
+数学库的性能关键在 SIMD。普通标量代码算一个 Vec3 点乘要 3 次乘法 + 2 次加法（5 条指令）；用 `__m128` 寄存器，一条指令同时处理 4 个 float，点乘只需 1 条乘 + 1 条水平加。设计上，数学类型内部用 SIMD 寄存器存储，对外暴露值语义（拷贝而非引用），且**不使用虚函数**——虚函数表指针会破坏 16 字节对齐，让 SIMD 加载失败。
+
+<Callout type="trap">
+**坑：四元数忘记归一化。** 数值误差累积会让 $|q| \neq 1$，旋转开始变形。每帧或每次复合旋转后应做 `q = normalize(q)`。单位四元数才表示纯旋转，非单位四元数会引入缩放。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么用四元数而不是欧拉角表示旋转？
+
+<Answer>
+三个原因：① 无万向锁——欧拉角按固定轴序旋转，当两轴重合时会丢失一个自由度；② 插值平滑——四元数的 slerp 在球面上等角插值，欧拉角的线性插值会导致转速不均匀；③ 复合高效——两个四元数相乘（16 次乘）比两个旋转矩阵相乘（64 次乘）快得多。欧拉角只在需要人类可读角度（编辑器面板）时用，内部计算一律四元数。
+</Answer>
+
+**问题 2**：数学类型为什么不能有虚函数？
+
+<Answer>
+虚函数会让对象多一个 vptr 指针（8 字节），破坏 16 字节对齐。SIMD 的 `__m128` 加载要求 16 字节对齐，不对齐会触发对齐错误或性能惩罚。此外数学类型是值语义、高频拷贝的，虚函数的动态分发开销和缓存不友好都会拖慢性能。正确做法是用普通函数或模板泛型，把多态需求留给上层的游戏对象系统。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SIMD">单指令多数据：一条 CPU 指令同时处理多个数据（如 4 个 float）。引擎数学库用它把向量运算提速 3-4 倍。</GlossaryItem>
+<GlossaryItem term="万向锁">欧拉角旋转时，当中间轴旋转 90° 导致两轴重合，丢失一个旋转自由度。四元数无此问题。</GlossaryItem>
+<GlossaryItem term="slerp">球面线性插值：在四维单位球面上做等速插值，用于旋转动画，保证角速度恒定。</GlossaryItem>
+</Glossary>

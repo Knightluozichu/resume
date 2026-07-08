@@ -1225,6 +1225,16 @@ import { uapNetworkSyncQuestions } from "./review/uap-network-sync";
 import { uapHotUpdateQuestions } from "./review/uap-hot-update";
 import { uapCiCdQuestions } from "./review/uap-ci-cd";
 import { uapFinalReviewQuestions } from "./review/uap-final-review";
+import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
+import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
+import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
+import { gep1MathLibraryQuestions } from "./review/gep1-math-library";
+import { gep1TransformSystemQuestions } from "./review/gep1-transform-system";
+import { gep1RenderPipelineQuestions } from "./review/gep1-render-pipeline";
+import { gep1ResourceManagementQuestions } from "./review/gep1-resource-management";
+import { gep1SceneGraphQuestions } from "./review/gep1-scene-graph";
+import { gep1EventSystemQuestions } from "./review/gep1-event-system";
+import { gep1FinalReviewQuestions } from "./review/gep1-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2481,6 +2491,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...uapHotUpdateQuestions,
   ...uapCiCdQuestions,
   ...uapFinalReviewQuestions,
+  ...gep1LearningMapQuestions,
+  ...gep1EngineArchitectureQuestions,
+  ...gep1MemorySystemQuestions,
+  ...gep1MathLibraryQuestions,
+  ...gep1TransformSystemQuestions,
+  ...gep1RenderPipelineQuestions,
+  ...gep1ResourceManagementQuestions,
+  ...gep1SceneGraphQuestions,
+  ...gep1EventSystemQuestions,
+  ...gep1FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
