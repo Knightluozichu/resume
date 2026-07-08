@@ -1,0 +1,111 @@
+---
+title: "测试与部署"
+type: C
+section: "前端与Web"
+order: 8
+description: "掌握 Jest 测试、Docker 容器化与 CI/CD——从自动化测试到持续部署的工程化实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JfsTestingDeployDiagram } from "@/components/mdx/javascript-fullstack/diagrams/jfs-testing-deploy";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解测试金字塔：单元测试、集成测试、端到端测试的分层与比例
+- 掌握 Jest 的 mock、spy、async 测试与覆盖率
+- 理解 Docker 镜像构建、分层缓存与多阶段构建
+- 掌握 CI/CD 流水线：从代码提交到自动测试、构建、部署的闭环
+</Objectives>
+
+## 直觉引入
+
+把测试想象成「质检流程」，把部署想象成「开店分号」。质检有三种：零件级（单元测试，测每个函数对不对）、组装级（集成测试，测模块拼起来通不通）、整车型（E2E，测用户真坐进去能不能开）。零件测最多最快最便宜，整车测最少最慢最贵——这就是测试金字塔。Docker 像把整车连同发动机打包装进集装箱，到哪台机器都能原样跑；CI/CD 像自动化流水线——代码一提交，自动质检、打包、运到分店上架。
+
+<JfsTestingDeployDiagram />
+
+## 测试金字塔与 Jest
+
+<Term def="测试金字塔是分层测试策略：底层大量单元测试（快、便宜、隔离）、中层适量集成测试（模块协作）、顶层少量端到端测试（真实用户路径，慢且脆）。比例倒置（冰淇淋模型）会导致反馈慢、维护贵。">测试金字塔</Term>指导测试投入分配。
+
+```javascript
+// Jest 单元测试：测纯函数，mock 外部依赖
+const { getUserOrders } = require("./order-service");
+jest.mock("./db");
+jest.mock("./email");
+
+describe("getUserOrders", () => {
+  it("用户无订单时返回空数组", async () => {
+    db.find.mockResolvedValue([]); // mock 数据库
+    const result = await getUserOrders("u1");
+    expect(result).toEqual([]);
+    expect(db.find).toHaveBeenCalledWith({ userId: "u1" });
+  });
+
+  it("下单后发送确认邮件", async () => {
+    const spy = jest.spyOn(email, "send");
+    await getUserOrders("u1");
+    expect(spy).toHaveBeenCalledTimes(1); // 验证副作用
+  });
+});
+```
+
+## Docker 与 CI/CD
+
+```dockerfile
+# 多阶段构建：构建期用全量镜像，运行期只留产物，镜像更小更安全
+FROM node:18 AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci                # 利用层缓存：依赖不变就复用
+COPY . .
+RUN npm run build         # 编译产物
+
+FROM node:18-slim         # 运行期：精简镜像
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+CMD ["node", "dist/server.js"]
+```
+
+```yaml
+# CI/CD 流水线（GitHub Actions 示例）
+# push → 安装 → 测试 → 构建 → 部署
+on: [push]
+jobs:
+  ci:
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm ci
+      - run: npm test -- --coverage   # 测试不通过则流水线红，禁止部署
+      - run: docker build -t app .
+      - run: docker push registry/app:latest  # 测试全绿才推送镜像
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：测试越多越好，全写 E2E 最放心。** 这是「测试冰淇淋」反模式——E2E 慢、脆（依赖环境、网络、UI 变化）、定位难（一个失败不知哪层断了）。一个纯函数的边界用例用单元测试毫秒级验证，用 E2E 要起浏览器走全流程。正确分配：纯逻辑 90% 用单元测试覆盖；模块协作用集成测试；只有核心用户旅程（登录、下单、支付）用少量 E2E。判断标准：这个测试失败时能不能 3 秒内知道是哪行代码错？能→单元；不能→层级太高。
+</Callout>
+
+<Exercises>
+**问题 1**：测试金字塔为什么底宽顶窄？倒过来（冰淇淋模型）有什么问题？
+
+<Answer>
+底宽顶窄是因为越底层测试越快、越便宜、越精准：单元测试毫秒级、隔离运行、失败直接定位到某函数；E2E 秒级甚至分钟级、依赖完整环境、失败要排查整条链路。大量单元测试能快速反馈、低成本覆盖分支；少量 E2E 验证关键路径。倒过来（冰淇淋）的问题：①慢——全跑一遍要几十分钟，开发者不愿频繁跑；②脆——环境/网络/UI 微变就大面积红；③定位难——E2E 失败不知是前端、后端还是数据库的锅；④维护贵——改一个按钮可能要改 20 个 E2E。结果是测试成负担而非保障。
+</Answer>
+
+**问题 2**：Docker 多阶段构建为什么比单阶段镜像更优？
+
+<Answer>
+单阶段把构建工具（devDependencies、TypeScript 编译器、源码）全打进运行镜像，导致镜像大（动辄 1GB+）、攻击面大（带编译器等多余工具）、拉取慢。多阶段构建分两步：①构建阶段用全量镜像装依赖、编译产物；②运行阶段用精简基础镜像（如 node:18-slim），只 COPY 构建阶段的产物和运行依赖。好处：运行镜像小（几百 MB）、不含源码和构建工具（安全）、拉取和启动快、层缓存友好（依赖不变复用 npm ci 层）。核心思想是「构建环境与运行环境分离」，只让运行环境带必需之物。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="测试金字塔">底层大量单元测试（快、隔离）、中层集成测试（模块协作）、顶层少量 E2E（真实路径）。比例倒置成冰淇淋模型会导致慢、脆、维护贵。</GlossaryItem>
+<GlossaryItem term="多阶段构建">Docker 构建用全量镜像编译，运行镜像只 COPY 产物。镜像更小、更安全、拉取更快。</GlossaryItem>
+<GlossaryItem term="CI/CD">持续集成（代码提交自动测试）/ 持续部署（测试通过自动构建发布）。核心是「每次提交都经过自动化验证」，测试不绿禁止上线。</GlossaryItem>
+</Glossary>

@@ -1365,6 +1365,16 @@ import { jdgCollectionsMetaprogrammingQuestions } from "./review/jdg-collections
 import { jdgDomEventsQuestions } from "./review/jdg-dom-events";
 import { jdgBrowserApisQuestions } from "./review/jdg-browser-apis";
 import { jdgFinalReviewQuestions } from "./review/jdg-final-review";
+import { jfsLearningMapQuestions } from "./review/jfs-learning-map";
+import { jfsReactEssentialsQuestions } from "./review/jfs-react-essentials";
+import { jfsStateManagementQuestions } from "./review/jfs-state-management";
+import { jfsNodejsServerQuestions } from "./review/jfs-nodejs-server";
+import { jfsExpressKoaQuestions } from "./review/jfs-express-koa";
+import { jfsMongodbMongooseQuestions } from "./review/jfs-mongodb-mongoose";
+import { jfsGraphqlApiQuestions } from "./review/jfs-graphql-api";
+import { jfsAuthSecurityQuestions } from "./review/jfs-auth-security";
+import { jfsTestingDeployQuestions } from "./review/jfs-testing-deploy";
+import { jfsFinalReviewQuestions } from "./review/jfs-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2761,6 +2771,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jdgDomEventsQuestions,
   ...jdgBrowserApisQuestions,
   ...jdgFinalReviewQuestions,
+  ...jfsLearningMapQuestions,
+  ...jfsReactEssentialsQuestions,
+  ...jfsStateManagementQuestions,
+  ...jfsNodejsServerQuestions,
+  ...jfsExpressKoaQuestions,
+  ...jfsMongodbMongooseQuestions,
+  ...jfsGraphqlApiQuestions,
+  ...jfsAuthSecurityQuestions,
+  ...jfsTestingDeployQuestions,
+  ...jfsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,110 @@
+---
+title: "状态管理方案"
+type: C
+section: "前端与Web"
+order: 2
+description: "对比 Redux、Zustand 与 Context——从全局 store 到轻量状态共享的选型实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JfsStateManagementDiagram } from "@/components/mdx/javascript-fullstack/diagrams/jfs-state-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解为什么组件本地状态不够用，何时需要引入全局状态管理
+- 掌握 Redux 的单向数据流：action → reducer → store → view
+- 对比 Zustand 的极简 API 与 Context 的依赖注入模型
+- 能够根据应用规模与复杂度选择合适的状态管理方案
+</Objectives>
+
+## 直觉引入
+
+把状态管理想象成公司的信息流转。小组内部的事（本组件的开关、输入框）用口头沟通就够了——这是 `useState` 本地状态。但跨部门的事（登录状态、购物车、全局主题）口头传话会失真，需要建立「公告板」——这就是全局 store。Redux 像一个有严格流程的公告板（任何变更都要走审批单 action）；Zustand 像一个灵活的共享白板（直接改就行）；Context 像公司广播系统（从上往下发，谁需要谁听）。
+
+<JfsStateManagementDiagram />
+
+## 为什么需要全局状态
+
+<Term def="状态提升是指把多个组件共享的状态挪到它们最近的共同父级，通过 props 下传、回调上提；当组件树很深时 props 层层传递（prop drilling）变得不可维护，全局状态管理应运而生。">prop drilling</Term>是本地状态的痛点：状态在顶层，使用者在最底层，中间组件被迫当搬运工。全局状态让任何组件直接订阅所需切片，跳过中间层。
+
+## Redux 单向数据流
+
+```javascript
+// Redux：严格的 action → reducer → store → view 单向流
+const initialState = { cart: [], user: null };
+
+// reducer：纯函数，根据 action 计算新 state
+function reducer(state = initialState, action) {
+  switch (action.type) {
+    case "ADD_TO_CART":
+      return { ...state, cart: [...state.cart, action.payload] };
+    case "LOGIN":
+      return { ...state, user: action.payload };
+    default:
+      return state;
+  }
+}
+
+// 组件：dispatch action 触发变更，selector 订阅切片
+function CartButton({ product }) {
+  const dispatch = useDispatch();
+  const cartCount = useSelector((s) => s.cart.length);
+  return <button onClick={() => dispatch({ type: "ADD_TO_CART", payload: product })}>
+    加入购物车（{cartCount}）
+  </button>;
+}
+```
+
+Redux 的严格性带来可预测性（时间旅行调试、状态可序列化），但样板代码多。Redux Toolkit 用 `createSlice` 把 action + reducer 合并，大幅减少样板。
+
+## Zustand 与 Context
+
+```javascript
+// Zustand：一个 create 函数搞定 store，无需 reducer/action
+const useCart = create((set, get) => ({
+  cart: [],
+  addToCart: (product) => set((s) => ({ cart: [...s.cart, product] })),
+  count: () => get().cart.length,
+}));
+
+// 组件直接用，自动按订阅粒度重渲染
+function CartButton({ product }) {
+  const addToCart = useCart((s) => s.addToCart); // 只订阅这一个方法
+  return <button onClick={() => addToCart(product)}>加入</button>;
+}
+
+// Context：依赖注入，适合低频变更的「全局配置」
+const ThemeContext = createContext("light");
+function App() {
+  return <ThemeContext.Provider value="dark"><Page /></ThemeContext.Provider>;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：所有状态都往全局 store 塞。** 全局状态有成本：每次 store 变化，所有订阅它的组件都要参与 reconciliation，滥用会导致全 app 重渲染。判断标准：这个状态是不是「多个不相邻组件」都要读写？是→全局；否→本地。表单输入值、下拉开关这类短暂、局部的状态应留在本地 useState。把全局 store 当垃圾桶的人，应用越做越卡；把状态分层管理的人，才能兼顾可维护与性能。
+</Callout>
+
+<Exercises>
+**问题 1**：Redux、Zustand、Context 三者各自适合什么场景？
+
+<Answer>
+Redux 适合大型应用、状态变更逻辑复杂、需要严格可追溯（时间旅行调试、中间件日志）的场景，代价是样板代码多。Zustand 适合中小型应用、想要全局状态但嫌 Redux 繁琐的场景，API 极简、按订阅粒度重渲染、无 Provider 包裹。Context 适合「低频变更的全局配置」（主题、语言、当前用户），它是依赖注入机制而非状态库，高频更新会让所有消费者重渲染。选型：先本地 useState；跨组件共享先试 Context（低频）；高频/复杂上 Zustand；超大型团队协作上 Redux。
+</Answer>
+
+**问题 2**：为什么 Context 不适合管理高频变化的购物车状态？
+
+<Answer>
+Context 的机制是「Provider 的 value 变化时，所有消费该 Context 的组件全部重渲染」，它没有细粒度订阅。购物车状态高频变化（频繁增删商品），若用 Context，每次加购都会让所有 useContext(CartContext) 的组件重渲染，哪怕它只关心数量不关心商品列表。Zustand/Redux 支持 selector 订阅切片（只订阅 cart.length 的组件在商品列表变化时不重渲染），能把重渲染范围压到最小。Context 适合低频、全局、几乎所有人都要的整体配置，不适合高频细粒度状态。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="单向数据流">Redux 的核心：数据只能 action → reducer → store → view 单向流动，view 通过 dispatch 触发 action，不能直接改 store。这让状态变更可追溯、可调试、可序列化。</GlossaryItem>
+<GlossaryItem term="selector 订阅">Redux/Zustand 让组件只订阅 store 的某个切片（如 cart.length），切片不变就不重渲染。这是细粒度性能优化的关键，Context 缺这个能力。</GlossaryItem>
+<GlossaryItem term="prop drilling">状态在顶层组件，使用者在最底层，中间组件被迫层层 props 传递。层数一深就不可维护，是引入全局状态的主要动机。</GlossaryItem>
+</Glossary>

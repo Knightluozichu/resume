@@ -1,0 +1,97 @@
+---
+title: "Web 框架对比"
+type: C
+section: "前端与Web"
+order: 4
+description: "对比 Express、Koa 与 Fastify——从中间件模型到性能特性的 Web 框架选型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JfsExpressKoaDiagram } from "@/components/mdx/javascript-fullstack/diagrams/jfs-express-koa";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Web 框架的核心职责：路由、中间件、请求/响应抽象
+- 对比 Express 的回调中间件与 Koa 的 async/await 洋葱模型
+- 理解 Fastify 的 schema 驱动与高性能设计
+- 能够根据团队与性能需求选择合适的 Node.js Web 框架
+</Objectives>
+
+## 直觉引入
+
+把 Web 框架想象成快递分拣中心。请求是包裹，进来后要经过一系列处理站：安检（认证）、贴标（日志）、分拣（路由）、打包（响应）。Express 的处理站用「接力跑」（回调，下一站要手动 next()）；Koa 的处理站用「双向门」（async/await 洋葱，进去时做前置、出来时做后置）；Fastify 的处理站用「流水线预检」（schema 提前校验，快准狠）。
+
+<JfsExpressKoaDiagram />
+
+## 中间件模型对比
+
+<Term def="中间件是处理请求-响应周期的函数链，每个中间件可以读取/修改 req/res，并决定是否交给下一个中间件。Express 用回调式 next()，Koa 用 async/await 洋葱模型（前置-后续双向执行）。">中间件</Term>是三个框架最核心的差异点。
+
+```javascript
+// Express：回调式，next() 手动传递，错误处理用 (err, req, res, next)
+const express = require("express");
+const app = express();
+
+app.use((req, res, next) => {
+  console.log("前置：记录请求");
+  next(); // 交给下一个中间件
+});
+app.get("/users", (req, res) => {
+  res.json({ users: [] }); // 响应后无法再执行「后续」逻辑
+});
+
+// Koa：async/await 洋葱模型，await next() 后还能做后续处理
+const Koa = require("koa");
+const app = new Koa();
+
+app.use(async (ctx, next) => {
+  const start = Date.now();
+  await next(); // 等待后续中间件执行完
+  const ms = Date.now() - start; // 后续：响应已发出，还能算耗时
+  ctx.set("X-Response-Time", `${ms}ms`);
+});
+
+// Fastify：schema 驱动，编译期校验，性能最高
+const fastify = require("fastify")();
+fastify.get("/users", {
+  schema: {
+    response: {
+      200: { type: "array", items: { type: "object", properties: { id: { type: "number" } } } },
+    },
+  },
+  handler: (req, reply) => reply.send([{ id: 1 }]), // schema 自动校验+序列化
+});
+```
+
+## 路由与错误处理
+
+Koa 的洋葱模型让错误处理和横切关注点（日志、计时、错误捕获）格外优雅——一个 try/catch 包住整个下游链。Express 的错误中间件必须放最后、四参数签名；Fastify 有独立的 errorHandler 钩子。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Express 和 Koa 的中间件可以随便混用。** 两者的中间件签名和执行模型根本不同：Express 中间件收 (req, res, next)，Koa 收 (ctx, next) 且必须 async。Express 的 next() 是同步接力，异步错误要用 next(err) 显式传递；Koa 的 await next() 天然支持 async/await，错误用 try/catch 捕获。把 Express 中间件直接搬进 Koa 会因为 ctx/res 不兼容而崩。选型时一个项目只用一套生态，别混搭。
+</Callout>
+
+<Exercises>
+**问题 1**：Express 的回调中间件和 Koa 的洋葱模型有什么本质区别？
+
+<Answer>
+Express 中间件是回调式单向链：next() 把控制权交给下游，但下游执行完不会自动「回到」上游——上游在 next() 之后的代码除非用回调否则无法作为「响应后处理」执行，且异步错误必须 next(err) 手动传递。Koa 中间件是 async 函数，await next() 会暂停当前中间件、等下游全部执行完后再恢复，形成「洋葱」——请求穿透时执行前置逻辑、响应回溯时执行后续逻辑，天然支持用 try/catch 在最外层捕获整条链的错误。这让日志、计时、错误处理这类横切逻辑在 Koa 中写起来远比 Express 优雅。代价是 Koa 剥离了路由等内置功能，需自行组合。
+</Answer>
+
+**问题 2**：Fastify 为什么比 Express 快？schema 驱动带来什么？
+
+<Answer>
+Fastify 快的核心是「把运行期能做的事挪到编译/启动期」：它根据 schema 在启动时预编译 JSON 序列化和参数校验函数（用 fast-json-stringify 和 ajv），运行时直接调用编译产物，跳过逐字段反射。Express 的 res.json 每次都做运行时序列化，校验靠手写或中间件运行时执行。schema 驱动还带来：自动生成 OpenAPI 文档、请求/响应类型契约、更早暴露数据错误。代价是必须维护 schema（有额外书写成本），且对动态结构不友好。性能敏感、接口契约清晰的服务（高 QPS API 网关）最适合 Fastify；快速原型和小项目 Express 更省事。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="洋葱模型">Koa 中间件的执行顺序：请求从外向内逐层 await next()，响应从内向外逐层回溯，形如洋葱。前置逻辑在 next() 前，后续逻辑在 next() 后，错误用最外层 try/catch 统一捕获。</GlossaryItem>
+<GlossaryItem term="schema 驱动">Fastify 在启动期根据 JSON Schema 预编译校验和序列化函数，运行时零反射。带来高性能、自动文档和强契约，代价是需维护 schema。</GlossaryItem>
+<GlossaryItem term="横切关注点">日志、认证、计时、错误处理等「所有路由都要做」的逻辑，通过中间件统一注入，避免每个 handler 重复写。</GlossaryItem>
+</Glossary>

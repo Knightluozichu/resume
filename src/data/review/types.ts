@@ -1488,7 +1488,17 @@ export type ReviewChapterSlug =
   | "jdg-collections-metaprogramming"
   | "jdg-dom-events"
   | "jdg-browser-apis"
-  | "jdg-final-review";
+  | "jdg-final-review"
+  | "jfs-learning-map"
+  | "jfs-react-essentials"
+  | "jfs-state-management"
+  | "jfs-nodejs-server"
+  | "jfs-express-koa"
+  | "jfs-mongodb-mongoose"
+  | "jfs-graphql-api"
+  | "jfs-auth-security"
+  | "jfs-testing-deploy"
+  | "jfs-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2981,6 +2991,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jdg-dom-events": "DOM 与事件",
   "jdg-browser-apis": "浏览器 API",
   "jdg-final-review": "全书总复习",
+  "jfs-learning-map": "全书学习地图",
+  "jfs-react-essentials": "React 核心概念",
+  "jfs-state-management": "状态管理方案",
+  "jfs-nodejs-server": "Node.js 服务器基础",
+  "jfs-express-koa": "Web 框架对比",
+  "jfs-mongodb-mongoose": "MongoDB 与 Mongoose",
+  "jfs-graphql-api": "GraphQL API 设计",
+  "jfs-auth-security": "认证与安全",
+  "jfs-testing-deploy": "测试与部署",
+  "jfs-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

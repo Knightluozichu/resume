@@ -1,0 +1,94 @@
+---
+title: "MongoDB 与 Mongoose"
+type: C
+section: "前端与Web"
+order: 5
+description: "掌握 MongoDB 文档模型与 Mongoose ODM——从 Schema 设计到关联查询的持久层实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JfsMongodbMongooseDiagram } from "@/components/mdx/javascript-fullstack/diagrams/jfs-mongodb-mongoose";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 MongoDB 文档模型与关系型数据库的核心差异
+- 掌握 Mongoose Schema/Model/Document 三层抽象
+- 理解 populate 关联查询与索引优化策略
+- 区分嵌入与引用两种建模方式，能根据访问模式选型
+</Objectives>
+
+## 直觉引入
+
+把 MongoDB 想象成「活页夹」，把关系型数据库想象成「多个表格」。表格数据库把信息拆成多张表用外键关联（用户表、订单表、商品表），查一个完整订单要 JOIN 三次。活页夹把相关信息订在一起（一个订单文档里直接嵌着商品列表），一次读取就拿到全部。前者适合「数据关系复杂、需多维度查询」；后者适合「数据自然成簇、读多写少」。Mongoose 则是给活页夹加上「目录规范」——规定每页必须有哪些字段、什么类型。
+
+<JfsMongodbMongooseDiagram />
+
+## 文档模型与 Mongoose 抽象
+
+<Term def="Mongoose 是 MongoDB 的 ODM（对象文档建模），用 Schema 定义文档结构、Model 编译为可操作集合的类、Document 是实例。它在无 schema 的 MongoDB 之上加了类型约束与校验，代价是多一层抽象的开销。">Mongoose ODM</Term>让 MongoDB 有了「结构感」。
+
+```javascript
+const mongoose = require("mongoose");
+const { Schema } = mongoose;
+
+// Schema：定义文档结构与校验规则
+const userSchema = new Schema({
+  name: { type: String, required: true, trim: true },
+  email: { type: String, required: true, unique: true, lowercase: true },
+  age: { type: Number, min: 0, max: 150 },
+  posts: [{ type: Schema.Types.ObjectId, ref: "Post" }], // 引用关联
+}, { timestamps: true });
+
+// Model：编译 Schema 为可操作集合的类
+const User = mongoose.model("User", userSchema);
+
+// Document：Model 的实例
+const user = new User({ name: "张三", email: "zs@test.com" });
+await user.save(); // 校验通过才落盘
+```
+
+## 嵌入 vs 引用与 populate
+
+```javascript
+// 嵌入：评论直接嵌在文章文档里（读多写少、数据成簇）
+const postSchema = new Schema({
+  title: String,
+  comments: [{ author: String, text: String, createdAt: Date }], // 嵌入
+});
+
+// 引用：文章只存作者 id，查询时 populate 填充（数据独立、多端共享）
+const postSchema2 = new Schema({
+  author: { type: Schema.Types.ObjectId, ref: "User" }, // 引用
+});
+// populate 类似 SQL 的 JOIN，但实际是发两次查询再在内存拼接
+const posts = await Post.find().populate("author", "name email");
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Mongoose 的 populate 等于 SQL 的 JOIN，性能也一样。** populate 根本不是数据库层面的 JOIN，而是「先查主文档，再拿 id 集合发第二个查询取关联文档，最后在内存拼接」。一个 N+1 查询陷阱：遍历 100 篇文章各 populate 作者 = 101 次查询。正确做法是用 `populate` 配合 `lean()` 减少 overhead，或用聚合管道的 `$lookup` 在数据库层做 JOIN，或提前反范式嵌入。无脑 populate 全栈的人，列表页一慢就是 N+1。
+</Callout>
+
+<Exercises>
+**问题 1**：MongoDB 的嵌入和引用两种建模方式各自适合什么场景？
+
+<Answer>
+嵌入适合「数据自然成簇、读多写少、子文档随父文档生命周期一致」的场景，如文章+评论（评论只在文章上下文有意义）、订单+订单项。优点是一次读取拿到全部、原子写入、无 JOIN。缺点是子文档无限增长会撑爆 16MB 文档上限，且子文档被多处共享时冗余。引用适合「数据独立、多处共享、需独立查询/更新」的场景，如用户被订单、评论、消息多处引用。优点是单一数据源无冗余、子集合可独立分页。缺点是查询需 populate/$lookup 多次往返。选型看访问模式：一起读的多用嵌入，分开操作的多用引用。
+</Answer>
+
+**问题 2**：什么是 N+1 查询问题？Mongoose 中如何避免？
+
+<Answer>
+N+1 是指查 N 条主记录后，又对每条单独发一次查询取关联数据，共 N+1 次查询而非 1 次。Mongoose 中典型陷阱：循环 await Post.find().populate('author') 或在遍历中逐个 populate。避免方法：①批量 populate——Post.find().populate('author') 一次性把所有作者的 id 收集再发一次查询，总共 2 次而非 N+1 次；②用 $lookup 聚合在数据库层 JOIN；③反范式嵌入避免关联；④用 lean() 减少每条 Document 实例化的开销。判断 N+1 的标志：列表页慢、数据库日志里同一条关联查询重复出现 N 次。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="文档模型">MongoDB 以 BSON 文档（类 JSON）为存储单元，相关数据可嵌入同一文档，避免 JOIN。每个文档最多 16MB，无强制 schema。</GlossaryItem>
+<GlossaryItem term="Schema/Model/Document">Mongoose 三层抽象：Schema 定义结构与校验，Model 是编译后的集合操作类，Document 是 Model 实例。在无 schema 的 MongoDB 上加类型约束。</GlossaryItem>
+<GlossaryItem term="populate">Mongoose 的关联填充：先查主文档，再用 id 集合发第二个查询取关联文档，内存拼接。非数据库层 JOIN，注意 N+1 陷阱。</GlossaryItem>
+</Glossary>
