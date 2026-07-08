@@ -1658,7 +1658,17 @@ export type ReviewChapterSlug =
   | "wkp-synchronization-primitives"
   | "wkp-pnp-power"
   | "wkp-wdm-wdf"
-  | "wkp-final-review";
+  | "wkp-final-review"
+  | "lke-learning-map"
+  | "lke-kernel-architecture"
+  | "lke-process-scheduling"
+  | "lke-memory-management"
+  | "lke-filesystem"
+  | "lke-io-subsystem"
+  | "lke-network-stack"
+  | "lke-kernel-synchronization"
+  | "lke-kernel-debugging"
+  | "lke-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3321,6 +3331,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "wkp-pnp-power": "即插即用与电源管理",
   "wkp-wdm-wdf": "WDM与WDF对比",
   "wkp-final-review": "全书总复习",
+  "lke-learning-map": "全书学习地图",
+  "lke-kernel-architecture": "内核架构概述",
+  "lke-process-scheduling": "进程管理与调度",
+  "lke-memory-management": "内存管理",
+  "lke-filesystem": "文件系统",
+  "lke-io-subsystem": "I/O子系统与设备驱动",
+  "lke-network-stack": "网络协议栈",
+  "lke-kernel-synchronization": "内核同步机制",
+  "lke-kernel-debugging": "内核调试与性能分析",
+  "lke-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

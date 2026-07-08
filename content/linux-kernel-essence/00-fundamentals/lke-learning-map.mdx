@@ -1,0 +1,94 @@
+---
+title: "全书学习地图"
+type: A
+section: "系统与操作系统"
+order: 0
+description: "俯瞰《Linux内核精髓》十大主题——从内核架构到进程调度、从内存管理到文件系统、从I/O驱动到网络栈、从同步机制到调试分析的完整进阶路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LkeLearningMapDiagram } from "@/components/mdx/linux-kernel-essence/diagrams/lke-learning-map";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解「内核基础 → 进程与调度 → 内存管理 → 文件与I/O → 同步网络与调试」的递进结构
+- 建立「Linux内核的系统视角」：从系统调用到中断、从进程调度到内存分配、从VFS到块设备、从同步原语到网络协议栈的完整链条
+- 明确十个章节之间的依赖关系与学习顺序，知道每章解决什么问题
+- 掌握用「一次read()系统调用经过的所有子系统」串联全书知识点的方法
+</Objectives>
+
+## 直觉引入
+
+把 Linux 内核想象成一座「超级交通枢纽」。你写的一个用户程序调用 `read(fd, buf, 4096)`，这个请求要经过七道关卡：首先通过「安检口」（系统调用入口，第 2 章）从用户态进入内核态；内核查阅「户籍册」（VFS，第 5 章）找到文件对应的操作函数；先去「缓存仓库」（Page Cache，第 5 章）找数据，如果命中直接返回；如果没命中，要去「仓储区」（块设备I/O，第 6 章）调取；调取过程中要分配「搬运箱」（内存管理，第 4 章）；搬运完毕后设备发出「完成信号」（中断处理，第 6 章）；整个过程要「排队挂号」（同步机制，第 7 章）防止数据竞争；如果出了问题要「调取监控」（调试工具，第 9 章）定位原因；而这一切的调度由「交通指挥」（CFS调度器，第 3 章）协调。
+
+<LkeLearningMapDiagram />
+
+## 五阶段递进
+
+<Term def="Linux内核是操作系统的核心，运行在CPU最高特权级（Ring 0），管理进程、内存、文件、设备和网络等所有硬件资源，为用户态程序提供统一的系统调用接口。">Linux内核</Term>的学习可以拆成五个递进阶段。**内核基础**包括用户态/内核态分层、系统调用和中断入口——它们解决「怎么进入内核」和「内核怎么组织」。**进程与调度**包括 task_struct 和 CFS 调度器——它们解决「怎么管理进程」和「怎么分配CPU」。**内存管理**包括 Zone/Buddy/Slab 和虚拟内存/页表——它们解决「怎么分配物理内存」和「怎么映射虚拟地址」。**文件与I/O**包括 VFS、Page Cache 和块设备驱动——它们解决「怎么读写文件」和「怎么与设备通信」。**同步网络与调试**包括同步原语、网络协议栈、调试工具和总复习——它们解决「怎么并发安全」「怎么处理网络」和「怎么定位问题」。
+
+```text
+// 「一次 read() 系统调用」——Linux 内核全程参与的数据流
+read(fd, buf, 4096)
+  // 1. 系统调用入口（第 2 章）：用户态 → 内核态
+  //    syscall 指令 → entry_SYSCALL_64 → sys_read
+  //    切换栈、保存寄存器、校验参数
+
+  // 2. VFS 层（第 5 章）：找到文件操作集
+  //    fget(fd) → file → file.f_op->read_iter
+  //    ext4_file_read_iter / generic_file_read_iter
+
+  // 3. Page Cache（第 5 章）：先查缓存
+  //    page_cache_sync_readahead → 预读
+  //    命中？copy_to_user → 返回
+  //    未命中？→ 分配页，发起块I/O
+
+  // 4. 内存分配（第 4 章）：分配缓存页
+  //    alloc_pages(GFP_KERNEL, order)
+  //    → Buddy System 从 Zone 分配
+
+  // 5. 块I/O栈（第 6 章）：构造I/O请求
+  //    submit_bio → I/O调度器 → blk-mq 队列
+  //    → 驱动 do_request → DMA 读取
+
+  // 6. 中断处理（第 6 章）：设备完成
+  //    硬中断 → ACK + 调度 softirq
+  //    softirq → 标记页完成 → 唤醒等待进程
+
+  // 7. 同步保护（第 7 章）：保护共享数据
+  //    自旋锁保护 per-cpu 计数
+  //    RCU 保护 dentry/inode 查找
+
+  // 8. 数据返回（全链路）：
+  //    softirq完成 → 唤醒进程 → copy_to_user
+  //    → sys_read 返回 → 用户程序继续
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：会调内核 API 就等于懂内核。** 会写 `kmalloc`、`copy_to_user` 注册个设备只是「会用内核接口」——照着教程抄就能做。真正懂内核的人能解释：为什么 CFS 用红黑树而非优先队列（O(log n) 插入删除且可预测）、为什么自旋锁要关抢占而非仅原子操作（防止单核上持锁进程被调度走导致死锁）、为什么 RCU 读端不加锁也能安全（写端先拷贝再延迟回收旧副本，读端看到的指针要么旧要么新）、为什么 Page Cache 用地址空间而非缓冲区头（支持以页为单位的统一缓存，减少元数据开销）、为什么 softirq 不能睡眠（在中断返回路径执行，无进程上下文）。把内核当黑盒的人遇到 panic 只能重启；懂机制的人能用 crash 分析 vmcore、用 eBPF 追踪函数参数、用 ftrace 绘制调用图。区分标志：能否解释「Linux 内核为什么这样设计」而非只是「能编译它」。
+</Callout>
+
+<Exercises>
+**问题 1**：全书五阶段递进是什么？为什么是这个顺序？
+
+<Answer>
+内核基础（架构与系统调用）→ 进程与调度（task_struct/CFS）→ 内存管理（Buddy/Slab/页表）→ 文件与I/O（VFS/Page Cache/块设备）→ 同步网络与调试（同步原语/网络栈/调试/总复习）。顺序由依赖关系决定：先掌握用户态与内核态的边界和系统调用入口才有「能进入内核」的基础；内核要管理进程和调度CPU，于是进入进程管理；进程需要内存才能运行，于是进入内存管理；进程要读写持久化数据，于是进入文件系统与I/O；多进程并发需要同步保护，网络是现代内核的核心子系统，调试是工程必备能力，总复习用一次完整的数据流串联。先「能进入」，再「能调度」，然后「能分配」，接着「能读写」，最后「能贯通」。
+</Answer>
+
+**问题 2**：用「一次 read() 系统调用」描述全书主线。
+
+<Answer>
+一次 read() 经过七个内核子系统：①系统调用入口（第2章）——syscall指令进入内核态，保存上下文，校验参数；②VFS层（第5章）——通过fd找到file对象，调用file.f_op->read_iter；③Page Cache（第5章）——查缓存，命中则copy_to_user返回；④内存分配（第4章）——未命中时alloc_pages从Buddy分配物理页；⑤块I/O（第6章）——submit_bio提交请求，经I/O调度器到驱动；⑥中断处理（第6章）——DMA完成后硬中断+softirq标记完成，唤醒等待进程；⑦同步保护（第7章）——全程用自旋锁/RCU保护共享数据。一条数据流，七大子系统全部参与。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Linux内核">运行在CPU最高特权级（Ring 0）的核心软件，管理进程、内存、文件、设备和网络等所有硬件资源，为用户态程序提供统一的系统调用接口。全书从架构分层出发，最终用一次read()串联所有子系统。</GlossaryItem>
+<GlossaryItem term="五阶段递进">内核基础 → 进程与调度 → 内存管理 → 文件与I/O → 同步网络与调试。每层解决前一层的遗留问题：架构解决「怎么进入」，调度解决「怎么运行」，内存解决「怎么分配」，文件解决「怎么存储」，同步解决「怎么并发」。</GlossaryItem>
+<GlossaryItem term="一次read()的全旅程">用户程序调用read()后，数据流经过系统调用入口→VFS→Page Cache→内存分配→块I/O→中断处理→同步保护七个环节，最终copy_to_user返回数据。全书以这条主线串联各章节。</GlossaryItem>
+</Glossary>

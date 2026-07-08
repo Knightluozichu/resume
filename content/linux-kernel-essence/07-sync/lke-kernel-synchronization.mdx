@@ -1,0 +1,140 @@
+---
+title: "内核同步机制"
+type: B
+section: "系统与操作系统"
+order: 7
+description: "自旋锁、互斥锁、RCU、原子操作、percpu变量的原理对比与选型决策树、内核抢占与并发场景分析"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { LkeKernelSynchronizationDiagram } from "@/components/mdx/linux-kernel-essence/diagrams/lke-kernel-synchronization";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解内核并发的来源：SMP 多核、抢占、中断
+- 掌握自旋锁、互斥锁、RCU、原子操作、percpu 的原理与适用场景
+- 理解 RCU 读端零开销的实现机制（宽限期与延迟回收）
+- 掌握同步原语选型决策树
+</Objectives>
+
+## 并发的来源
+
+内核代码运行时面临三种并发干扰：**SMP 多核**——同一代码可能被多个 CPU 核心同时执行；**抢占**——单核上代码执行到一半可能被调度器抢占；**中断**——代码执行时随时可能被硬中断打断。同步原语的核心任务就是保护临界区不被这三种并发干扰破坏。
+
+<LkeKernelSynchronizationDiagram />
+
+## 自旋锁与互斥锁
+
+```text
+// 自旋锁（spinlock_t）——短临界区，忙等
+spinlock_t my_lock = SPIN_LOCK_UNLOCKED;
+
+// 进程上下文使用：
+spin_lock(&my_lock);       // 关抢占，忙等获取
+/* 临界区：不能睡眠！ */
+spin_unlock(&my_lock);     // 释放，开抢占
+
+// 中断上下文使用（必须关中断防死锁）：
+spin_lock_irqsave(&my_lock, flags);  // 关中断 + 关抢占 + 获取锁
+/* 临界区 */
+spin_unlock_irqrestore(&my_lock, flags);  // 释放 + 恢复
+
+// 互斥锁（struct mutex）——长临界区，睡眠等待
+DEFINE_MUTEX(my_mutex);
+
+mutex_lock(&my_mutex);     // 争用时睡眠（加入等待队列）
+/* 临界区：可以睡眠！可以持有数毫秒 */
+mutex_unlock(&my_mutex);   // 唤醒一个等待者
+
+// 两者对比：
+// spinlock：忙等（CPU空转），不可睡眠，O(1)获取，适合<10us临界区
+// mutex：睡眠等待（让出CPU），可睡眠，有调度开销，适合>10us临界区
+```
+
+## RCU 原理
+
+<Term def="RCU（Read-Copy-Update）是一种读端零开销的同步机制。读端不加锁、不计数、不等待；写端先拷贝修改再替换指针，旧数据在所有读者完成后延迟回收。">RCU</Term> 是 Linux 内核最精巧的同步机制——读端完全无开销。
+
+```text
+// RCU 的核心：读端不加锁，写端延迟回收
+//
+// 读端：
+rcu_read_lock();            // 标记进入RCU读临界区（仅关抢占）
+p = rcu_dereference(ptr);   // 安全读取指针
+/* 使用 p 指向的数据 */
+rcu_read_unlock();          // 退出读临界区（开抢占）
+
+// 写端：
+new = kmalloc(sizeof(*new), GFP_KERNEL);
+memcpy(new, old, sizeof(*old));
+new->field = new_value;     // 修改副本
+rcu_assign_pointer(ptr, new);  // 原子替换指针（发布新版本）
+synchronize_rcu();          // 等待宽限期（所有读者退出）
+kfree(old);                 // 安全释放旧数据
+
+// 宽限期（Grace Period）：
+// 从 rcu_assign_pointer 到 synchronize_rcu 返回之间
+// 所有CPU都至少经历了一次「静止状态」（context switch / idle）
+// → 说明所有在替换前进入的读者都已退出
+// → 旧数据无人引用，安全释放
+```
+
+$$\text{读者延迟} = O(1) \quad \text{写者延迟} = O(\text{宽限期}) \approx O(\text{ms级})$$
+
+## 原子操作与 percpu
+
+```text
+// 原子操作（atomic_t）——单值无锁
+atomic_t counter = ATOMIC_INIT(0);
+atomic_inc(&counter);           // 原子递增（单条lock前缀指令）
+atomic_add(5, &counter);        // 原子加
+int v = atomic_read(&counter);  // 原子读
+// 底层：x86 的 LOCK CMPXCHG / LOCK XADD 指令
+// 优势：无锁，无上下文切换开销
+// 限制：只能操作单个整数
+
+// percpu 变量——每核独立，无争用
+DEFINE_PER_CPU(int, my_counter);
+// 每个CPU核心有独立的 my_counter 副本
+
+// 写：操作本核副本，无需加锁
+this_cpu_inc(my_counter);       // 本核递增
+
+// 读：汇总时需禁抢占 + 加锁
+int total = 0;
+for_each_online_cpu(cpu) {
+    total += per_cpu(my_counter, cpu);
+}
+// 优势：无争用，无缓存行争用（cache line bouncing）
+// 适用：统计计数器（包数、事件数）
+```
+
+## 选型决策
+
+<Callout type="trap">
+**误区：RCU 是万能的读多写少锁。** RCU 有严格前提：①读端只能通过指针访问数据——RCU 保护的是「指针替换」而非「原地修改」。如果读者直接修改被指对象，RCU 无法提供保护。②写端必须能容忍延迟回收——`synchronize_rcu()` 可能等待数毫秒（需等所有CPU经过静止状态），实时性要求高的场景不能接受。③被保护的数据结构必须通过指针发布——链表、树等指针型结构适合，连续数组不适合。④写端开销大——每次写都要拷贝整个对象 + 等待宽限期。RCU 最适合的场景：配置表/路由表/模块列表等「几乎不写、大量读」的指针型数据结构。不满足前提时，应退回自旋锁或 seqlock。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么自旋锁要关抢占？不关抢占会发生什么？
+
+<Answer>
+自旋锁通过忙等（循环检测锁是否释放）获取锁，如果关抢占，持锁进程不会被调度器抢占。如果不关抢占，假设CPU0上的进程A持有自旋锁后被抢占（时间片用完或更高优先级进程就绪），调度器切换到进程B。如果进程B也需要获取同一把锁，它会忙等——但锁被A持有，A需要被调度回来才能释放锁，而B正在运行不让出CPU（忙等不让出CPU）。结果：B持有CPU不放，A永远得不到调度，锁永远不释放——死锁。即使B不需要同一把锁，A被抢占期间锁被无谓持有，其他CPU上等待此锁的进程白白忙等浪费CPU。因此自旋锁必须关抢占（spin_lock内部隐含preempt_disable）。在中断上下文使用时还需关中断（spin_lock_irqsave），因为中断不分CPU核心，可能打断正在持锁的代码并尝试获取同一把锁导致死锁。
+</Answer>
+
+**问题 2**：RCU 的宽限期是什么？写端如何安全释放旧数据？
+
+<Answer>
+宽限期（Grace Period）是从指针替换（rcu_assign_pointer发布新指针）到所有CPU都经历「静止状态」之间的时间段。静止状态指CPU发生上下文切换或进入idle——因为RCU读临界区在rcu_read_lock/rcu_read_unlock之间（关抢占），一个CPU如果要发生上下文切换，必然已经退出了所有RCU读临界区。因此当所有CPU都至少经过一次静止状态后，可以保证在指针替换之前进入的所有读者都已退出——它们要么看到旧指针（旧数据仍然有效），要么看到新指针（新数据有效），不可能再访问旧数据。写端安全释放流程：①分配新副本，修改副本内容；②rcu_assign_pointer原子替换指针（发布新版本，后续新读者看到新指针）；③调用synchronize_rcu()等待宽限期——所有CPU经过静止状态，旧读者全部退出；④kfree释放旧数据——此时无人引用旧数据，安全释放。synchronize_rcu可能等待数毫秒（取决于调度频率），也可用call_rcu注册异步回调在宽限期结束后释放。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="自旋锁（spinlock）">短临界区同步原语，通过忙等获取锁，持有期间关抢占（进程上下文）或关中断（中断上下文），不能睡眠。适合<10us的轻量临界区。</GlossaryItem>
+<GlossaryItem term="互斥锁（mutex）">长临界区同步原语，争用时睡眠等待（让出CPU），可在进程上下文中使用，允许睡眠。适合>10us的临界区或需要睡眠的操作。</GlossaryItem>
+<GlossaryItem term="RCU（Read-Copy-Update）">读端零开销同步机制。读者不加锁，写者先拷贝修改再原子替换指针，旧数据在宽限期（所有读者退出）后延迟回收。适合读多写少的指针型数据结构。</GlossaryItem>
+<GlossaryItem term="percpu变量">每个CPU核心有独立副本的变量，写操作只访问本核副本无争用，汇总时才需加锁。适合统计计数器等高频写场景。</GlossaryItem>
+</Glossary>

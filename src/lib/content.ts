@@ -201,6 +201,7 @@ export const BOOK_ORDER = [
   "linux-os-practice",
   "mfc-deep-dive",
   "windows-kernel-programming",
+  "linux-kernel-essence",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -342,6 +343,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "linux-os-practice": "Linux操作系统实战",
   "mfc-deep-dive": "深入浅出MFC",
   "windows-kernel-programming": "Windows内核编程",
+  "linux-kernel-essence": "Linux内核精髓",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

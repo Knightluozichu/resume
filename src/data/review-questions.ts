@@ -1535,6 +1535,16 @@ import { wkpSynchronizationPrimitivesQuestions } from "./review/wkp-synchronizat
 import { wkpPnpPowerQuestions } from "./review/wkp-pnp-power";
 import { wkpWdmWdfQuestions } from "./review/wkp-wdm-wdf";
 import { wkpFinalReviewQuestions } from "./review/wkp-final-review";
+import { lkeLearningMapQuestions } from "./review/lke-learning-map";
+import { lkeKernelArchitectureQuestions } from "./review/lke-kernel-architecture";
+import { lkeProcessSchedulingQuestions } from "./review/lke-process-scheduling";
+import { lkeMemoryManagementQuestions } from "./review/lke-memory-management";
+import { lkeFilesystemQuestions } from "./review/lke-filesystem";
+import { lkeIoSubsystemQuestions } from "./review/lke-io-subsystem";
+import { lkeNetworkStackQuestions } from "./review/lke-network-stack";
+import { lkeKernelSynchronizationQuestions } from "./review/lke-kernel-synchronization";
+import { lkeKernelDebuggingQuestions } from "./review/lke-kernel-debugging";
+import { lkeFinalReviewQuestions } from "./review/lke-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3105,6 +3115,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...wkpPnpPowerQuestions,
   ...wkpWdmWdfQuestions,
   ...wkpFinalReviewQuestions,
+  ...lkeLearningMapQuestions,
+  ...lkeKernelArchitectureQuestions,
+  ...lkeProcessSchedulingQuestions,
+  ...lkeMemoryManagementQuestions,
+  ...lkeFilesystemQuestions,
+  ...lkeIoSubsystemQuestions,
+  ...lkeNetworkStackQuestions,
+  ...lkeKernelSynchronizationQuestions,
+  ...lkeKernelDebuggingQuestions,
+  ...lkeFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

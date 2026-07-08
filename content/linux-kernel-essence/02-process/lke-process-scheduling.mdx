@@ -1,0 +1,133 @@
+---
+title: "进程管理与调度"
+type: C
+section: "系统与操作系统"
+order: 2
+description: "从fork到exit的进程生命周期、task_struct核心字段、CFS完全公平调度器的红黑树与虚拟运行时间、上下文切换机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LkeProcessSchedulingDiagram } from "@/components/mdx/linux-kernel-essence/diagrams/lke-process-scheduling";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握进程的创建（fork）、执行（exec）、等待（wait）和终止（exit）全生命周期
+- 理解 task_struct 的核心字段：pid、state、mm、fs、files、signal、sched_entity
+- 理解 CFS 调度器用红黑树按 vruntime 排序、总选 leftmost 运行的原理
+- 掌握上下文切换的步骤：schedule → pick_next_task → context_switch → switch_mm + switch_to
+</Objectives>
+
+## 进程的一生
+
+```text
+// fork() → 子进程创建
+//   kernel_clone() → copy_process()
+//     分配新 task_struct（dup_task_struct）
+//     复制父进程资源（写时复制 COW）
+//       copy_mm → 共享页表，标记只读
+//       copy_files → 共享文件描述符表
+//       copy_signal → 复制信号处理表
+//     分配新 PID
+//     设置 sched_entity（vruntime = 父进程vruntime）
+//     加入调度器运行队列
+
+// exec() → 加载新程序
+//   execve() → do_execve()
+//     读取 ELF 文件头
+//     替换 mm_struct（新地址空间）
+//     映射代码段/数据段/BSS/堆/栈
+//     设置入口点（ELF entry point）
+//     从第一条指令重新开始
+
+// exit() → 进程终止
+//   do_exit()
+//     释放 mm / files / fs / signal
+//     设置 state = TASK_DEAD
+//     通知父进程（SIGCHLD）
+//     加入僵尸队列（等待 wait() 回收）
+
+// wait() → 父进程回收
+//   子进程 task_struct 被释放
+//   资源彻底回收
+```
+
+## CFS 调度器
+
+<LkeProcessSchedulingDiagram />
+
+<Term def="CFS（Completely Fair Scheduler）是Linux默认的进程调度器，核心思想是「完全公平」：维护每个进程的虚拟运行时间（vruntime），总是选择vruntime最小的进程运行，用红黑树高效查找。">CFS</Term> 的核心数据结构是红黑树（rbtree），每个 CPU 核心维护一棵，所有可运行进程按 vruntime 排序挂在树上。vruntime 最小的进程在树的最左节点（leftmost），CFS 每次 `pick_next_task` 只需取 leftmost——O(1) 选择。
+
+```text
+// vruntime 计算：虚拟运行时间
+// 每次时钟中断更新当前进程的 vruntime
+delta_exec = now - curr->se.exec_start  // 实际运行时间
+vruntime_delta = delta_exec * NICE_0_LOAD / curr->se.load.weight
+curr->se.vruntime += vruntime_delta
+
+// 关键洞察：
+// - nice 0 的进程：vruntime 增长 = 实际运行时间（NICE_0_LOAD/weight=1）
+// - nice -10（高优先级）：weight 大 → vruntime 增长慢 → 获得更多CPU
+// - nice +10（低优先级）：weight 小 → vruntime 增长快 → 获得更少CPU
+// - 结果：每个进程的「虚拟时间」公平推进，但实际CPU时间按权重分配
+
+// 新进程的 vruntime：
+//   = min(curr->vruntime, cfs_rq->min_vruntime)
+//   防止新进程通过 fork 重置 vruntime 独占CPU
+
+// 睡眠进程唤醒：
+//   vruntime = max(se->vruntime, cfs_rq->min_vruntime - sched_latency)
+//   保证唤醒后不会被饿死（不会因 vruntime 太小独占CPU）
+```
+
+## 上下文切换
+
+```text
+// schedule() 的核心流程
+schedule()
+  → __schedule()
+    → prev = current
+    → next = pick_next_task(rq)     // 从调度类选下一个进程
+    → if (prev == next) return      // 不需要切换
+    → context_switch(rq, prev, next)
+      → switch_mm(prev->mm, next->mm)  // 切换页表
+          // 加载 next->mm->pgd 到 CR3 寄存器
+          // TLB 部分刷新（或全刷）
+      → switch_to(prev, next)
+          // 保存 prev 的寄存器到 prev 的内核栈
+          // 加载 next 的寄存器 from next 的内核栈
+          // 切换内核栈指针（RSP）
+          // 切换 TLS（线程局部存储）
+      → barrier()                   // 编译屏障，防止重排
+    → finish_task_switch(prev)      // 清理 prev
+
+// 注意：switch_to 返回后才在 next 进程的上下文中执行
+// 如果 prev 是正在退出的进程，此处完成最终清理
+```
+
+<Callout type="trap">
+**误区：CFS 是「绝对公平」的调度器。** CFS 的「公平」是「按权重的虚拟时间公平」，不是「绝对平均分配CPU」。一个 nice -20 的进程和一个 nice +19 的进程，CFS 会给前者远多于后者的 CPU 时间——这才是「公平」（按你应得的份额分配）。CFS 追求的是「vruntime 的公平推进」：每个进程的虚拟运行时间以相同速率增长，而虚拟时间到实际时间的映射由权重决定。此外 CFS 有调度周期（sched_latency，默认 6ms）概念：在一个周期内，所有可运行进程至少跑一次。进程数超过阈值后，周期会拉长以保证每个进程的最小粒度（min_granularity，默认 0.75ms）。
+</Callout>
+
+<Exercises>
+**问题 1**：CFS 为什么用红黑树而不是普通链表或优先队列？
+
+<Answer>
+CFS需要频繁做三种操作：①插入新进程到运行队列；②删除被调度的进程；③取vruntime最小的进程（leftmost）。红黑树是自平衡二叉搜索树，三种操作都是O(log n)。普通链表取最小值O(n)（需遍历），插入也O(n)（需保序或后排序）。优先队列（堆）取最小值O(1)但删除任意节点O(n)（无法高效删除非根节点），而CFS需要从树中删除任意被调度走或被阻塞的进程。红黑树还保证最坏情况O(log n)深度，性能可预测。此外红黑树的leftmost指针缓存在cfs_rq中，取最小节点实际上是O(1)。综合来看，红黑树在插入/删除/查找最小三个操作上提供了最优的均衡性能。
+</Answer>
+
+**问题 2**：描述从进程A切换到进程B的完整上下文切换过程。
+
+<Answer>
+①时钟中断或进程A主动调用schedule()触发调度；②__schedule()调用pick_next_task()，从调度类优先级从高到低查找，CFS取红黑树leftmost（进程B）；③判断prev!=next，调用context_switch()；④switch_mm()：加载B的页表（B->mm->pgd）到CR3寄存器，刷新TLB（如果ASID可用则部分刷新）；⑤switch_to()：保存A的寄存器（RBP/RBX/R12-R15等callee-saved）到A的内核栈，加载B的寄存器从B的内核栈，切换RSP内核栈指针，切换TLS（FS/GS段基址）；⑥此时CPU已经在B的上下文中执行；⑦finish_task_switch()清理A的残留工作（如果A已退出则最终释放task_struct）；⑧B从上次被切换走的位置继续执行。整个过程核心开销在页表切换（TLB失效）和寄存器保存恢复。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="task_struct">Linux中描述进程/线程的核心数据结构，包含pid、状态、调度信息(sched_entity)、内存描述符(mm_struct)、文件表(files_struct)、信号处理(signal_struct)等数百个字段。每个进程/线程一个task_struct。</GlossaryItem>
+<GlossaryItem term="CFS（完全公平调度器）">Linux默认进程调度器，用红黑树按虚拟运行时间(vruntime)排序所有可运行进程，总选leftmost运行。vruntime增长速度由进程nice值决定的权重控制，实现按权重的公平分配。</GlossaryItem>
+<GlossaryItem term="vruntime（虚拟运行时间）">CFS中衡量进程「应得CPU时间」的虚拟计数器。vruntime += 实际运行时间 * NICE_0_LOAD / 进程权重。高优先级进程权重大，vruntime增长慢，获得更多CPU时间。</GlossaryItem>
+<GlossaryItem term="上下文切换">从一个进程切换到另一个进程的过程：保存prev的寄存器和栈指针，加载next的寄存器和栈指针，切换页表(CR3)。核心开销在TLB失效导致的后续访存延迟。</GlossaryItem>
+</Glossary>
