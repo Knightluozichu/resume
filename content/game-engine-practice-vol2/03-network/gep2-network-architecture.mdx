@@ -1,0 +1,96 @@
+---
+title: "网络架构与同步"
+type: A
+section: "游戏引擎架构"
+order: 6
+description: "权威服务器、预测回滚与状态/帧同步——在延迟与公平间权衡"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep2NetworkArchitectureDiagram } from "@/components/mdx/game-engine-practice-vol2/diagrams/gep2-network-architecture";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+  - 能画出 C/S 模型的数据流向 - 理解客户端预测 + 回滚如何掩盖延迟 -
+  掌握状态同步与帧同步的区别与取舍 - 能解释插值如何掩盖丢包卡顿
+</Objectives>
+
+## 直觉引入
+
+你按下开火键，要等一个网络往返（RTT）服务器确认才能看到子弹——50ms 还好，200ms 就感觉手柄泡在糖浆里。但如果本地立刻响应、等服务器确认再修正，玩家就感觉不到延迟。这就是网络游戏的核心难题：服务器必须权威（防作弊、保公平），但网络有延迟，得用预测和插值把延迟藏起来。
+
+<Gep2NetworkArchitectureDiagram />
+
+## 权威服务器与预测
+
+<Term def="权威服务器是世界状态的唯一真相源，校验客户端输入、运行模拟、把结果广播成快照，拥有最终裁决权防作弊。">
+  权威服务器
+</Term>
+是真相源：客户端把输入发上去，服务器校验、模拟、广播快照。但纯服务器权威下每次输入要等
+RTT
+才有响应，延迟感强。**客户端预测**让本地立即应用自己的输入（假设服务器会同意），手感即时；服务器确认回来若和预测一致则无事，不一致就**回滚**到服务器状态并重放期间输入。这样把延迟藏进预测里。
+
+```cpp
+// 客户端预测 + 回滚
+void Client::OnInput(Input cmd) {
+    pendingInputs.push(cmd);
+    localPlayer.Apply(cmd);              // 预测：本地立即响应
+    network.Send(cmd);                   // 同时发给服务器
+}
+
+void Client::OnSnapshot(Snapshot snap) {
+    // 服务器权威状态回来，回滚到服务器状态
+    localPlayer.state = snap.playerState;
+    // 重放尚未确认的输入，重新预测
+    for (auto& cmd : pendingInputs.after(snap.lastAckedSeq))
+        localPlayer.Apply(cmd);
+}
+```
+
+## 同步策略与插值
+
+**状态同步**服务器跑完整模拟只广播结果（位置/血量），带宽随状态量增长，但客户端逻辑简单、防作弊好。**帧同步**服务器只广播输入，所有客户端各自跑相同确定性模拟，带宽低但要求逻辑完全确定性、怕不同步。丢包时客户端用插值掩盖：把渲染时间点设在最新快照之前一小段，在已收快照间插值；丢一两个包仍能平滑，严重丢包才用外推（会失真）。权衡：插值延迟越大越抗丢包但手感越滞后，延迟越小手感好但易卡顿。
+
+<Callout type="trap">
+  **误区：让客户端直接改权威状态。**
+  客户端可被改包作弊，权威状态必须由服务器裁决。客户端只能「预测」自己的输入并等服务器确认，不能直接定状态。否则血量、位置都可被篡改。
+</Callout>
+
+<Exercises>
+**问题 1**：客户端预测 + 回滚为什么能让游戏「不卡」？
+
+<Answer>
+  纯服务器权威下每次输入要等 RTT
+  才有响应，延迟感强。预测让客户端本地立即应用自己的输入（假设服务器同意），手感即时。服务器确认回来若和预测一致则无事，不一致就回滚到服务器状态并重放期间输入。这样把网络延迟藏进预测里，玩家感觉不到
+  RTT。
+</Answer>
+
+**问题 2**：状态同步和帧同步的区别与取舍？
+
+<Answer>
+状态同步：服务器跑完整模拟只广播结果，带宽随状态量增长，但客户端逻辑简单、防作弊好（客户端不知逻辑）。帧同步：服务器只广播输入，所有客户端各自跑相同确定性模拟，带宽低但要求逻辑完全确定性，一旦不同步就永久错位，且客户端可知全部逻辑、防作弊差。RTS 常用帧同步，FPS/MMO 常用状态同步。
+</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="权威服务器">
+    世界状态唯一真相源，校验输入、运行模拟、广播快照，拥有最终裁决权防作弊。
+  </GlossaryItem>
+  <GlossaryItem term="客户端预测">
+    本地立即应用自己的输入不等服务器，掩盖 RTT 延迟，服务器确认后修正。
+  </GlossaryItem>
+  <GlossaryItem term="状态同步/帧同步">
+    前者传结果（防作弊好、带宽大），后者传输入各自模拟（省带宽、要求确定性）。
+  </GlossaryItem>
+</Glossary>

@@ -1368,7 +1368,17 @@ export type ReviewChapterSlug =
   | "rtcd-sat"
   | "rtcd-continuous-collision"
   | "rtcd-optimization-strategies"
-  | "rtcd-final-review";
+  | "rtcd-final-review"
+  | "gep2-learning-map"
+  | "gep2-physics-engine"
+  | "gep2-collision-system"
+  | "gep2-skeletal-animation"
+  | "gep2-animation-blend"
+  | "gep2-audio-system"
+  | "gep2-network-architecture"
+  | "gep2-editor-framework"
+  | "gep2-scripting-system"
+  | "gep2-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2741,6 +2751,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "rtcd-continuous-collision": "连续碰撞检测",
   "rtcd-optimization-strategies": "优化策略",
   "rtcd-final-review": "全书总复习",
+  "gep2-learning-map": "全书学习地图",
+  "gep2-physics-engine": "物理引擎架构",
+  "gep2-collision-system": "碰撞检测系统",
+  "gep2-skeletal-animation": "骨骼动画系统",
+  "gep2-animation-blend": "动画混合与状态机",
+  "gep2-audio-system": "音频系统",
+  "gep2-network-architecture": "网络架构与同步",
+  "gep2-editor-framework": "编辑器框架",
+  "gep2-scripting-system": "脚本系统",
+  "gep2-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

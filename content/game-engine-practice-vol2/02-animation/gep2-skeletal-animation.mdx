@@ -1,0 +1,96 @@
+---
+title: "骨骼动画系统"
+type: A
+section: "游戏引擎架构"
+order: 3
+description: "骨骼层级与蒙皮矩阵——用少量骨骼驱动海量顶点的高效动画方案"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Gep2SkeletalAnimationDiagram } from "@/components/mdx/game-engine-practice-vol2/diagrams/gep2-skeletal-animation";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+  - 能画出骨骼层级树并解释父子矩阵累积 - 理解蒙皮公式 v&apos; = Σ wᵢ·Mᵢ·v
+  的每一项含义 - 掌握 offset 矩阵与 pose 矩阵的作用 - 能解释为何一个顶点最多绑 4
+  块骨骼
+</Objectives>
+
+## 直觉引入
+
+让一个角色挥挥手，最直接的办法是存每一帧每个顶点的位置——但一个角色上万个顶点、几十帧动画，存储和回放都炸。骨骼动画的聪明之处：只在几十块「骨骼」上存关键帧，运行时让顶点按权重跟随骨骼动。骨骼少、顶点多，用少量骨骼数据驱动海量顶点，蒙皮在 GPU 并行算，CPU 几乎不碰。
+
+<Gep2SkeletalAnimationDiagram />
+
+## 骨骼层级与蒙皮
+
+<Term def="骨骼层级是一棵父子树，子骨骼的局部变换相对父骨骼，世界变换由自顶向下的局部矩阵相乘累积得到。">
+  骨骼层级
+</Term>
+是一棵树（Root→Spine→Neck→Head，肩→上臂→前臂→手）。子骨骼继承父骨骼变换，动一下上臂，前臂和手自动跟着动。**蒙皮**让网格顶点跟随骨骼：每个顶点绑定若干骨骼及权重，最终位置
+$v' = \sum w_i \cdot M_i \cdot v$，权重之和为 1，骨骼动则顶点平滑跟随。
+
+```cpp
+// 蒙皮矩阵 = offset（绑定逆） × pose（当前姿势）
+// offset 把顶点从模型空间转到骨骼绑定空间；pose 是该骨骼当前世界矩阵
+Matrix4x4 skinMatrix[MAX_BONES];
+for (int i = 0; i < boneCount; ++i) {
+    skinMatrix[i] = bone[i].offset * boneWorldMatrix[i];  // Mᵢ = offset·pose
+}
+// 顶点着色器里：v' = Σ wᵢ · Mᵢ · v（最多 4 块骨骼）
+vec4 finalPos = mat4(0.0);
+for (int j = 0; j < 4; ++j) {
+    finalPos += weight[j] * skinMatrix[boneIndex[j]] * vec4(pos, 1.0);
+}
+```
+
+## 关键：offset 与 pose
+
+`Mᵢ = offsetMatrixᵢ · poseMatrixᵢ`。offset（绑定姿势逆矩阵）把顶点从模型空间转到「该骨骼的绑定空间」，是美术建模时的固定数据；poseMatrix 是当前帧该骨骼的世界姿势。两者相乘表示「顶点先回到骨骼空间，再随骨骼当前姿势变换到新位置」。一个顶点通常最多绑 4 块骨骼——4 个索引 + 4 个权重刚好填满 GPU 一个寄存器组，更多骨骼收益递减却显著增加带宽。
+
+<Callout type="trap">
+  **误区：以为存顶点动画更直接。** 上万顶点 ×
+  几十帧的顶点动画数据量巨大，且无法在 GPU
+  高效回放。骨骼动画只存几十块骨骼的关键帧，蒙皮在 GPU 并行算，存储和 CPU
+  开销都低几个数量级。
+</Callout>
+
+<Exercises>
+**问题 1**：蒙皮矩阵 Mᵢ 是怎么算出来的？
+
+<Answer>
+  Mᵢ = offsetMatrixᵢ ·
+  poseMatrixᵢ。offset（绑定姿势逆矩阵）把顶点从模型空间转到骨骼绑定空间，是美术建模时固定数据；poseMatrixᵢ
+  是当前帧该骨骼的世界姿势矩阵。两者相乘表示「顶点先回到骨骼空间，再随骨骼当前姿势变换到新位置」。权重之和为
+  1，多骨骼加权混合才平滑。
+</Answer>
+
+**问题 2**：为什么一个顶点通常最多绑 4 块骨骼？
+
+<Answer>
+4 块是 GPU 着色器常用上限：顶点属性存 4 个骨骼索引 + 4 个权重，刚好填满一个寄存器组，访问高效。更多骨骼需拆成多个属性槽或多次 draw，增加带宽和指令开销。肘部膝盖这类弯曲处 2-3 块已够平滑，更多骨骼收益递减却显著增加 GPU 负担，是精度与性能的工程权衡。
+</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="骨骼层级">
+    父子树结构的骨骼，子骨骼继承父骨骼变换，局部矩阵自顶向下相乘得世界矩阵。
+  </GlossaryItem>
+  <GlossaryItem term="蒙皮矩阵">
+    Mᵢ = offset·pose，把顶点从模型空间经骨骼绑定空间变换到当前姿势下的新位置。
+  </GlossaryItem>
+  <GlossaryItem term="绑定姿势">
+    美术建模时骨骼的初始姿态，offset 矩阵是其逆矩阵，固定不变。
+  </GlossaryItem>
+</Glossary>

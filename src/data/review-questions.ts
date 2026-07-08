@@ -1245,6 +1245,16 @@ import { rtcdSatQuestions } from "./review/rtcd-sat";
 import { rtcdContinuousCollisionQuestions } from "./review/rtcd-continuous-collision";
 import { rtcdOptimizationStrategiesQuestions } from "./review/rtcd-optimization-strategies";
 import { rtcdFinalReviewQuestions } from "./review/rtcd-final-review";
+import { gep2LearningMapQuestions } from "./review/gep2-learning-map";
+import { gep2PhysicsEngineQuestions } from "./review/gep2-physics-engine";
+import { gep2CollisionSystemQuestions } from "./review/gep2-collision-system";
+import { gep2SkeletalAnimationQuestions } from "./review/gep2-skeletal-animation";
+import { gep2AnimationBlendQuestions } from "./review/gep2-animation-blend";
+import { gep2AudioSystemQuestions } from "./review/gep2-audio-system";
+import { gep2NetworkArchitectureQuestions } from "./review/gep2-network-architecture";
+import { gep2EditorFrameworkQuestions } from "./review/gep2-editor-framework";
+import { gep2ScriptingSystemQuestions } from "./review/gep2-scripting-system";
+import { gep2FinalReviewQuestions } from "./review/gep2-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2521,6 +2531,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...rtcdContinuousCollisionQuestions,
   ...rtcdOptimizationStrategiesQuestions,
   ...rtcdFinalReviewQuestions,
+  ...gep2LearningMapQuestions,
+  ...gep2PhysicsEngineQuestions,
+  ...gep2CollisionSystemQuestions,
+  ...gep2SkeletalAnimationQuestions,
+  ...gep2AnimationBlendQuestions,
+  ...gep2AudioSystemQuestions,
+  ...gep2NetworkArchitectureQuestions,
+  ...gep2EditorFrameworkQuestions,
+  ...gep2ScriptingSystemQuestions,
+  ...gep2FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

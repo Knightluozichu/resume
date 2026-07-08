@@ -68,6 +68,7 @@ export const BOOK_ORDER = [
   "learnopengl",
   "game-engine-architecture-3e",
   "game-engine-practice-vol1",
+  "game-engine-practice-vol2",
   "real-time-collision-detection",
   "cpp-primer-5e",
   "c-primer-plus",
@@ -181,6 +182,7 @@ export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
   "game-engine-architecture-3e": "游戏引擎架构（第三版）",
   "game-engine-practice-vol1": "游戏引擎原理与实践·卷1",
+  "game-engine-practice-vol2": "游戏引擎原理与实践·卷2",
   "real-time-collision-detection": "实时碰撞检测算法技术",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
@@ -246,7 +248,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "competitive-algorithms": "深入浅出竞赛算法",
   "introduction-to-algorithms": "算法导论",
   "hackers-delight": "算法心得",
-  "taocp": "计算机程序设计艺术",
+  taocp: "计算机程序设计艺术",
   "programmers-math": "程序员的数学",
   "head-first-statistics": "深入浅出统计学",
   "linear-algebra-done-right": "线性代数应该这样学",
@@ -269,7 +271,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-screen-effects": "Unity 着色器和屏幕特效",
   "unity-urp-shaders": "Unity URP 内置 Shader 解析",
   "gpu-pro": "GPU Pro 系列",
-  "shaderx": "ShaderX 系列",
+  shaderx: "ShaderX 系列",
   "unity-hmi": "Unity HMI 开发",
   "game-design-fundamentals": "游戏设计基础",
   "game-mechanics-advanced": "游戏机制：高级游戏设计技术",
@@ -486,7 +488,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "automotive",
     title: "汽车体系",
-    description: "从整车构造入门，逐步进入底盘、动力、电气电子、新能源和车载软件。",
+    description:
+      "从整车构造入门，逐步进入底盘、动力、电气电子、新能源和车载软件。",
     stages: [
       {
         level: "beginner",
@@ -601,7 +604,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
     stages: [
       {
         level: "beginner",
-        summary: "先用图解建立 23 种设计模式的直觉，理解「为什么需要模式」；再用游戏编程模式拓展视野。",
+        summary:
+          "先用图解建立 23 种设计模式的直觉，理解「为什么需要模式」；再用游戏编程模式拓展视野。",
         items: [
           {
             bookSlug: "design-patterns",

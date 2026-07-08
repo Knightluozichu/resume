@@ -78,6 +78,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["ums-", "unity-master"],
   ["uap-", "unity-advanced-programming"],
   ["gep1-", "game-engine-practice-vol1"],
+  ["gep2-", "game-engine-practice-vol2"],
   ["rtcd-", "real-time-collision-detection"],
 ];
 
