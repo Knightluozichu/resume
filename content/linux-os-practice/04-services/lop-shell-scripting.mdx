@@ -1,0 +1,223 @@
+---
+title: "Shell 脚本编程"
+type: C
+section: "系统与操作系统"
+order: 8
+description: "掌握 Shell 脚本编程——Shebang、变量与引号、条件判断、循环控制、函数定义与 set 安全选项，实现运维自动化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopShellScriptingDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-shell-scripting";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Shell 脚本执行流程：Shebang → 逐行读取 → 变量展开 → 命令执行 → 退出码
+- 掌握变量赋值与引用规则，理解单引号/双引号/反引号的区别
+- 学会条件判断（if/case）、循环控制（for/while）和函数定义
+- 理解 `set -euo pipefail` 安全选项在生产脚本中的重要性
+</Objectives>
+
+## 直觉引入
+
+运维工作中有很多重复操作——每天备份日志、每小时检查磁盘空间、批量部署配置到 10 台服务器。手动敲一遍可以，敲 100 遍就是浪费生命。Shell 脚本把这些重复操作写成一系列命令，一次编写反复执行。它本质上是「把终端里敲的命令按顺序存成文件，让 Shell 自动逐行执行」。
+
+<LopShellScriptingDiagram />
+
+## 脚本基础与变量
+
+<Term def="Shebang 是脚本第一行的 #!/bin/bash，告诉系统用哪个解释器执行脚本。不加 Shebang 则用当前 Shell 解释，可能因 Shell 不兼容而出错。">Shebang</Term> 和变量是脚本的基础：
+
+```bash
+#!/bin/bash
+# Shebang 行：指定用 /bin/bash 解释器执行
+
+# 变量赋值（等号两边不能有空格！）
+name="Linux"
+count=5
+path="/var/log/nginx"
+
+# 引用变量
+echo $name               # Linux
+echo "Hello, $name"      # Hello, Linux（双引号会展开变量）
+echo 'Hello, $name'      # Hello, $name（单引号不展开，字面量）
+echo "Path: ${path}"     # 花括号界定变量名边界
+
+# 位置参数（脚本参数）
+# ./script.sh arg1 arg2 arg3
+echo $0    # 脚本名（script.sh）
+echo $1    # 第1个参数（arg1）
+echo $2    # 第2个参数（arg2）
+echo $#    # 参数个数（3）
+echo $@    # 所有参数（arg1 arg2 arg3）
+
+# 命令替换
+current_date=$(date +%Y%m%d)    # 把命令输出赋值给变量
+files=$(ls *.txt)                # 把 ls 结果存入变量
+echo "Today is $current_date"
+
+# 特殊变量
+echo $?    # 上一条命令的退出码（0=成功, 非0=失败）
+echo $$    # 当前脚本的PID
+echo $!    # 最近一个后台进程的PID
+```
+
+## 条件判断与循环
+
+```bash
+# if 条件判断
+if [ -f /etc/nginx/nginx.conf ]; then
+    echo "nginx config exists"
+elif [ -d /etc/nginx ]; then
+    echo "nginx dir exists but no config"
+else
+    echo "nginx not found"
+fi
+
+# 常用判断条件
+# 文件：-f 存在且为文件  -d 存在且为目录  -e 存在  -r 可读  -w 可写  -x 可执行
+# 字符串：= 相等  != 不等  -z 空  -n 非空
+# 数字：-eq 等于  -ne 不等  -lt 小于  -gt 大于  -le 小于等于  -ge 大于等于
+
+# case 分支
+case $1 in
+    start)   systemctl start nginx ;;
+    stop)    systemctl stop nginx ;;
+    restart) systemctl restart nginx ;;
+    *)       echo "Usage: $0 {start|stop|restart}" ;;
+esac
+
+# for 循环
+for f in *.txt; do
+    cp "$f" /backup/
+    echo "backed up: $f"
+done
+
+for i in $(seq 1 5); do
+    echo "iteration $i"
+done
+
+# while 循环
+count=0
+while [ $count -lt 10 ]; do
+    echo "count: $count"
+    count=$((count + 1))
+done
+
+# 逐行读文件
+while IFS= read -r line; do
+    echo "processing: $line"
+done < /etc/hosts
+```
+
+## 函数与安全选项
+
+```bash
+#!/bin/bash
+set -euo pipefail    # 安全三件套（生产脚本必加）
+
+# 函数定义
+backup() {
+    local src=$1
+    local dst="/backup/${src##*/}.$(date +%Y%m%d)"
+    tar czf "$dst" "$src"
+    echo "backed up $src to $dst"
+}
+
+# 调用函数
+backup /etc/nginx
+backup /etc/mysql
+
+# 带返回值的函数
+check_port() {
+    if ss -tlnp | grep -q ":$1 "; then
+        return 0    # 端口被占用
+    else
+        return 1    # 端口空闲
+    fi
+}
+
+if check_port 80; then
+    echo "port 80 in use"
+else
+    echo "port 80 free"
+fi
+```
+
+```bash
+# set 安全选项解释：
+# set -e         遇错即停（errexit）——命令返回非零立即终止脚本
+# set -u         引用未定义变量报错（nounset）——防止拼写错误导致空值
+# set -o pipefail 管道中任一命令失败则整体失败——默认只看最后一个命令
+# 组合：set -euo pipefail
+
+# 为什么生产脚本要加 set -e：
+# 不加：cd /nonexistent; rm -rf * —— cd失败但rm仍执行，灾难！
+# 加了：cd /nonexistent 失败即停，不会执行rm
+
+# 调试技巧
+set -x    # 打印每条执行的命令（调试用）
+set +x    # 关闭打印
+```
+
+## 实战：自动化运维脚本
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# 服务器健康检查脚本
+LOG="/var/log/health-check.log"
+ALERT_EMAIL="admin@example.com"
+
+check_disk() {
+    local threshold=80
+    local usage=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+    if [ "$usage" -gt "$threshold" ]; then
+        echo "[$(date)] WARNING: disk usage ${usage}% exceeds ${threshold}%" | tee -a "$LOG"
+    fi
+}
+
+check_service() {
+    local svc=$1
+    if ! systemctl is-active --quiet "$svc"; then
+        echo "[$(date)] ERROR: $svc is down, restarting..." | tee -a "$LOG"
+        systemctl restart "$svc"
+    fi
+}
+
+check_disk
+check_service nginx
+check_service mysql
+echo "[$(date)] health check complete" >> "$LOG"
+
+# crontab 定时执行
+# crontab -e
+# 0 * * * * /opt/scripts/health-check.sh    # 每小时执行一次
+```
+
+<Callout type="trap">
+**误区：Shell 变量赋值等号两边可以有空格。** `name="Linux"` 是赋值，`name = "Linux"` 会被解析为执行命令 `name` 传参 `=` 和 `"Linux"`——因为 Shell 用空格分词。另一个关键误区：`$var` 不加引号时，如果值含空格会被拆分成多个词。引用变量应始终加双引号 `"$var"` 防止空格和通配符问题。命令替换同理：`"$(command)"`。
+</Callout>
+
+<Exercises>
+**问题 1**：`#!/bin/bash` 的作用是什么？`$var` 和 `"$var"` 有什么区别？
+
+<Answer>
+Shebang 告诉系统用 /bin/bash 解释器执行脚本。不加则用当前 Shell 解释，可能不兼容。`$var` 不加引号时值含空格会被拆分成多个词（如 `ls $path` 中 path="/a b" 会 ls 两个目录）。`"$var"` 加双引号保持值完整性。最佳实践：引用变量始终加双引号。
+</Answer>
+
+**问题 2**：`set -euo pipefail` 各选项的含义是什么？为什么生产脚本必加？
+
+<Answer>
+`-e` 遇错即停——命令返回非零立即终止脚本，防止在错误状态下执行后续危险操作（如 cd 失败后 rm）；`-u` 引用未定义变量报错——防止拼写错误导致空值；`-o pipefail` 管道中任一命令失败则整体失败——默认只看最后一个命令的退出码。生产脚本必加因为：防止错误被掩盖、防止在错误状态下执行危险操作、快速暴露问题。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Shebang">脚本第一行 `#!/bin/bash`，指定解释器。不加则用当前 Shell 解释可能不兼容。可移植写法 `#!/usr/bin/env bash`。</GlossaryItem>
+<GlossaryItem term="变量引号规则">Shell 引用变量应加双引号 `"$var"` 防止空格被拆分。单引号 `'$var'` 不展开变量（字面量）。双引号展开变量和命令替换。赋值时等号两边不能有空格（否则被解析为命令+参数）。</GlossaryItem>
+<GlossaryItem term="set -euo pipefail">生产脚本安全三件套：-e 遇错即停、-u 未定义变量报错、-o pipefail 管道任一失败则整体失败。防止错误被掩盖、防止危险操作在错误状态下执行。</GlossaryItem>
+</Glossary>

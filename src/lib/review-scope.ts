@@ -105,6 +105,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mos-", "modern-os"],
   ["osc-", "os-concepts"],
   ["wj-", "windows-journey"],
+  ["lop-", "linux-os-practice"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

@@ -1,0 +1,112 @@
+---
+title: "包管理"
+type: C
+section: "系统与操作系统"
+order: 4
+description: "掌握 Linux 包管理系统——apt/dpkg 与 dnf/yum/rpm 的分层架构、仓库索引、依赖解析与软件包生命周期"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopPackageManagementDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-package-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解包管理的两层架构：高层前端（apt/dnf）与底层工具（dpkg/rpm）
+- 掌握软件包生命周期：update 索引 → install 安装 → upgrade 升级 → remove 卸载
+- 理解依赖解析机制：仓库索引、依赖树构建、拓扑排序安装
+- 能对比 Debian 系（apt/dpkg）和 RHEL 系（dnf/rpm）的命令对应关系
+</Objectives>
+
+## 直觉引入
+
+在 Windows 上装软件，你要去官网下载 .exe 安装包，手动双击安装，还要自己处理依赖。Linux 的包管理器把这个过程自动化了——它像一个「应用商店」：你只需要说「我要装 nginx」，它自动从仓库下载 nginx 及其所有依赖，按正确顺序安装配置好。Debian/Ubuntu 用 apt（底层 dpkg），RHEL/CentOS 用 dnf（底层 rpm），机制类似但命令不同。
+
+<LopPackageManagementDiagram />
+
+## 两层架构
+
+<Term def="apt 是 Debian/Ubuntu 系的高级包管理前端，在 dpkg 之上增加了仓库管理、依赖解析和自动下载功能。dpkg 是底层工具，只负责单个 .deb 包的安装卸载，不处理依赖。">apt</Term> 和 <Term def="dpkg 是 Debian 系的底层包管理工具，直接操作 .deb 包文件，负责解包、配置、注册，但不处理依赖关系。apt 在其之上提供依赖解析和仓库功能。">dpkg</Term> 是两层关系：
+
+```bash
+# 高层：apt（含仓库+依赖解析）
+sudo apt update              # 刷新仓库索引（不安装任何东西）
+sudo apt install nginx       # 安装包（自动解析依赖）
+sudo apt upgrade             # 升级所有已安装包
+sudo apt remove nginx        # 卸载包（保留配置）
+sudo apt purge nginx         # 卸载包+删除配置
+sudo apt autoremove          # 清理不再需要的依赖包
+apt search nginx             # 搜索包
+apt show nginx               # 查看包详细信息
+
+# 底层：dpkg（单包操作，无依赖解析）
+dpkg -l                      # 列出所有已安装的包
+dpkg -l nginx                # 查看指定包安装状态
+dpkg -L nginx                # 查看包安装了哪些文件
+dpkg -i package.deb          # 安装本地 .deb 文件（不解析依赖）
+```
+
+## RHEL 系（dnf/yum/rpm）
+
+```bash
+# 高层：dnf（Fedora/RHEL 8+，yum 的改进版）
+sudo dnf check-update        # 检查可用更新
+sudo dnf install nginx       # 安装包
+sudo dnf upgrade             # 升级所有包
+sudo dnf remove nginx        # 卸载包
+dnf search nginx             # 搜索包
+dnf info nginx               # 查看包信息
+dnf history                  # 查看操作历史（可回滚）
+
+# 底层：rpm
+rpm -qa                      # 列出所有已安装包
+rpm -q nginx                 # 查看指定包
+rpm -ql nginx                # 查看包安装的文件列表
+rpm -ivh package.rpm         # 安装本地 .rpm（i=install, v=verbose, h=hash）
+```
+
+## 依赖解析流程
+
+```bash
+# 以 apt install nginx 为例：
+# 1. 读取本地索引（apt update 下载的 Packages 列表）
+# 2. 构建依赖树：nginx 依赖 nginx-common, libc6, libssl...
+# 3. 拓扑排序：先装依赖再装 nginx
+# 4. 从仓库下载所有 .deb 包到 /var/cache/apt/archives/
+# 5. 调用 dpkg 逐个解包、配置、注册
+
+# 查看包的依赖关系
+apt depends nginx            # 查看 nginx 依赖什么
+apt rdepends nginx           # 查看什么依赖 nginx（反向依赖）
+dnf repoquery --requires nginx  # RHEL 系查看依赖
+
+# 修复损坏的依赖
+sudo apt -f install          # 修复未满足的依赖关系
+sudo dnf install --best --allowerasing  # RHEL 系解决冲突
+```
+
+<Callout type="trap">
+**误区：`apt update` 会安装更新。** `apt update` 只下载仓库索引（Packages/Sources 文件），更新本地「哪些包有新版本」的信息，不安装任何东西。`apt upgrade` 才是实际下载安装更新。必须先 update 再 upgrade——如果索引过期，upgrade 不知道有新版本。相当于先刷新商品目录（update）再按目录购物（upgrade）。另一个坑：`apt install` 也依赖最新索引来解析依赖，所以安装前也应先 update。
+</Callout>
+
+<Exercises>
+**问题 1**：apt 和 dpkg 的关系是什么？为什么分两层？
+
+<Answer>
+dpkg 是底层工具，负责单个 .deb 包的安装卸载，不处理依赖。apt 是高层前端，在 dpkg 之上增加仓库管理、依赖解析、自动下载。分两层因为 dpkg 足够轻量可靠直接操作包文件，apt 处理复杂的依赖树和远程仓库。流程：apt install → apt 解析依赖 → 下载 .deb → 调用 dpkg 逐个安装。
+</Answer>
+
+**问题 2**：Debian 系和 RHEL 系的包管理命令如何对应？
+
+<Answer>
+高层前端：apt ↔ dnf/yum。底层工具：dpkg ↔ rpm。包格式：.deb ↔ .rpm。仓库配置：/etc/apt/sources.list ↔ /etc/yum.repos.d/。命令对应：apt update ↔ dnf check-update，apt install ↔ dnf install，apt upgrade ↔ dnf upgrade，apt remove ↔ dnf remove，apt search ↔ dnf search。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="包管理器">自动化管理软件包安装、更新、卸载的工具。高层前端（apt/dnf）提供仓库管理和依赖解析，底层工具（dpkg/rpm）直接操作包文件。让用户只需说「装什么」，包管理器自动处理「怎么装、依赖什么、从哪下载」。</GlossaryItem>
+<GlossaryItem term="依赖解析">包管理器读取仓库索引获取每个包的依赖列表，构建依赖树，拓扑排序确定安装顺序，自动下载安装所有依赖。解决手动安装时「装A需要先装B，B又需要C」的繁琐问题。</GlossaryItem>
+<GlossaryItem term="仓库索引">包仓库的目录清单，记录每个包的名称、版本、依赖关系。`apt update` / `dnf check-update` 从远程仓库下载最新索引到本地，供后续 install/upgrade 查询。索引过期会导致无法发现新版本。</GlossaryItem>
+</Glossary>

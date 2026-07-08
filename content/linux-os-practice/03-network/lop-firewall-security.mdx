@@ -1,0 +1,140 @@
+---
+title: "防火墙安全"
+type: C
+section: "系统与操作系统"
+order: 6
+description: "掌握 Linux 防火墙——Netfilter 钩子机制、iptables 五链四表、规则匹配与 ufw 简化前端，实施默认拒绝安全策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopFirewallSecurityDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-firewall-security";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Netfilter 钩子机制：PREROUTING/INPUT/FORWARD/OUTPUT/POSTROUTING 五条链
+- 掌握 iptables 规则匹配：协议、端口、源IP、动作（ACCEPT/DROP/REJECT）
+- 学会用 ufw 简化前端配置防火墙：allow/deny/default enable
+- 理解「默认拒绝」安全策略与白名单模式的生产实践
+</Objectives>
+
+## 直觉引入
+
+服务器连上网后，全世界都能尝试连接它——其中既有正常用户，也有扫描端口的攻击者。防火墙就是服务器的「门卫」：它在数据包进入和离开的必经之路上设卡检查，根据规则决定放行还是拒绝。Linux 的防火墙底层是 Netfilter（内核模块），上层用 iptables 或 ufw 配置规则。核心原则是「默认拒绝」——除非你明确放行，否则全部拒绝。
+
+<LopFirewallSecurityDiagram />
+
+## Netfilter 与 iptables
+
+<Term def="Netfilter 是 Linux 内核中的数据包过滤框架，在数据包经过网络栈的五个关键点（钩子）拦截处理。iptables 是用户态配置工具，往这些钩子上挂规则链。">Netfilter</Term> 在五个钩子点拦截数据包：
+
+```bash
+# 五条链的数据包流向：
+# 入站（到本机）：PREROUTING → INPUT → 本机进程
+# 出站（从本机）：本机进程 → OUTPUT → POSTROUTING
+# 转发（经过本机）：PREROUTING → FORWARD → POSTROUTING
+
+# iptables 规则语法
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT    # 放行SSH
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT    # 放行HTTP
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT   # 放行HTTPS
+sudo iptables -A INPUT -j DROP                         # 其余全部拒绝
+
+# 参数解释：
+# -A INPUT    追加规则到INPUT链末尾
+# -p tcp      匹配TCP协议
+# --dport 22  匹配目标端口22
+# -j ACCEPT   动作：ACCEPT(放行)/DROP(丢弃)/REJECT(拒绝+回复)
+# -s 1.2.3.4  匹配源IP
+# -m state --state ESTABLISHED,RELATED  匹配已建立连接的回包
+
+# 设置默认策略
+sudo iptables -P INPUT DROP      # 默认拒绝入站（关键！）
+sudo iptables -P FORWARD DROP    # 默认拒绝转发
+sudo iptables -P OUTPUT ACCEPT   # 默认允许出站
+
+# 查看规则
+sudo iptables -L -n -v           # 查看所有链的规则（n=数字IP, v=详细）
+sudo iptables -L INPUT --line-numbers  # 带行号查看（用于删除）
+
+# 删除规则
+sudo iptables -D INPUT 3         # 删除INPUT链第3条规则
+```
+
+## ufw 简化前端
+
+```bash
+# ufw（Uncomplicated Firewall）是 iptables 的高级前端，语法简单
+sudo ufw enable                  # 启用防火墙（默认拒绝入站，允许出站）
+sudo ufw disable                 # 关闭防火墙
+sudo ufw status                  # 查看状态和规则
+sudo ufw status verbose          # 详细状态
+
+# 放行/拒绝端口
+sudo ufw allow 22/tcp            # 放行SSH（TCP 22端口）
+sudo ufw allow 80/tcp            # 放行HTTP
+sudo ufw allow 443/tcp           # 放行HTTPS
+sudo ufw allow 3000:5000/tcp     # 放行端口范围
+sudo ufw deny 3306               # 拒绝MySQL外网访问
+sudo ufw deny 6379               # 拒绝Redis外网访问
+
+# 限定源IP
+sudo ufw allow from 192.168.1.0/24 to any port 22  # 只允许内网SSH
+sudo ufw allow from 10.0.0.5 to any port 3306      # 只允许特定IP访问MySQL
+
+# 删除规则
+sudo ufw delete allow 80/tcp     # 删除放行80端口的规则
+
+# 重置
+sudo ufw reset                   # 重置所有规则（恢复默认）
+```
+
+## 生产环境安全配置
+
+```bash
+# 标准安全配置流程
+sudo ufw default deny incoming     # 默认拒绝入站
+sudo ufw default allow outgoing    # 默认允许出站
+sudo ufw allow 22/tcp              # 放行SSH（运维必须）
+sudo ufw allow 80/tcp              # 放行HTTP
+sudo ufw allow 443/tcp             # 放行HTTPS
+sudo ufw enable                    # 启用
+
+# 验证
+sudo ufw status numbered
+# Status: active
+# [1] 22/tcp                     ALLOW IN    Anywhere
+# [2] 80/tcp                     ALLOW IN    Anywhere
+# [3] 443/tcp                    ALLOW IN    Anywhere
+# [4] 3306                       DENY IN     Anywhere
+
+# iptables 规则持久化（Ubuntu）
+sudo apt install iptables-persistent
+sudo netfilter-persistent save     # 保存规则到 /etc/iptables/rules.v4
+```
+
+<Callout type="trap">
+**误区：防火墙默认放行更方便。** 生产环境必须「默认拒绝」（default deny）——默认拒绝所有入站流量，只放行显式允许的端口。原因：新装的服务（Redis/MySQL/MongoDB）默认监听 0.0.0.0，如果防火墙默认放行则暴露到公网，造成严重安全隐患。白名单模式（只开需要的端口）使攻击面最小。`ufw enable` 时会自动设置默认拒绝入站。另一个坑：改防火墙规则前先放行 SSH，否则会把自己锁在外面。
+</Callout>
+
+<Exercises>
+**问题 1**：iptables 的五条链分别在哪里拦截数据包？
+
+<Answer>
+PREROUTING——包刚进入网卡路由判断前；INPUT——包目的地是本机即将交给进程前；FORWARD——包需转发到其他接口时；OUTPUT——本机进程产生的包路由后发出前；POSTROUTING——包即将离开网卡前。入站：PREROUTING→INPUT→进程。出站：进程→OUTPUT→POSTROUTING。
+</Answer>
+
+**问题 2**：为什么生产环境要用「默认拒绝」策略？
+
+<Answer>
+默认拒绝（白名单）只放行显式允许的端口，攻击面最小。新装服务（如 Redis/MySQL）默认监听 0.0.0.0，如果默认放行则暴露公网造成安全隐患。默认拒绝遵循最小权限原则——只允许必要流量。ufw 启用时 `ufw default deny incoming` 默认拒绝入站，然后逐个 allow 需要的端口。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Netfilter">Linux 内核的数据包过滤框架，在数据包经过网络栈的五个关键点（钩子）拦截处理。iptables 是其用户态配置工具，往钩子上挂规则链。</GlossaryItem>
+<GlossaryItem term="iptables 规则链">数据包按链中规则从上到下匹配，命中即停执行动作（ACCEPT/DROP/REJECT）。五条链：PREROUTING/INPUT/FORWARD/OUTPUT/POSTROUTING。规则顺序至关重要——放行规则要在拒绝规则之前。</GlossaryItem>
+<GlossaryItem term="默认拒绝">防火墙安全策略：默认拒绝所有入站流量，只放行显式允许的端口/服务（白名单模式）。遵循最小权限原则，攻击面最小。生产环境必须使用。ufw 的 `ufw default deny incoming` 实现。</GlossaryItem>
+</Glossary>

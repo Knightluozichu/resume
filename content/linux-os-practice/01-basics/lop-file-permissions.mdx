@@ -1,0 +1,126 @@
+---
+title: "文件权限"
+type: C
+section: "系统与操作系统"
+order: 2
+description: "掌握 Linux 文件权限模型——rwx 三元组、UGO 身份分组、数字与符号表示法，以及 ACL 精细化授权"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopFilePermissionsDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-file-permissions";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 rwx 权限模型：read/write/execute 对文件和目录的不同含义
+- 掌握 UGO 三组身份（所有者/组/其他）与数字表示法（r=4, w=2, x=1）
+- 学会用 chmod（数字法/符号法）和 chown 修改权限和属主
+- 理解 ACL 作为 UGO 的精细化补充，能用 setfacl/getfacl 管理访问控制列表
+</Objectives>
+
+## 直觉引入
+
+Linux 是多用户系统——一台服务器上可能有 deploy、alice、bob 三个人同时工作。怎么防止 bob 偷看 alice 的日记、防止 deploy 误删系统文件？答案就是权限系统。每个文件都带着一张「门禁卡」：上面写着「谁拥有它、哪个组能碰它、其他人能干什么」。这张门禁卡用 `rwx` 三个字母表示——r 是读、w 是写、x 是执行。内核在每次文件访问时检查这张门禁卡，决定放行还是拒绝。
+
+<LopFilePermissionsDiagram />
+
+## rwx 与 UGO 模型
+
+<Term def="UGO 是 Linux 文件权限的三组身份模型：U（User/所有者）、G（Group/组）、O（Other/其他）。每组各有 rwx 三个权限位，共 9 位。内核按 UID/GID 匹配进程属于哪一组，决定使用哪组权限。">UGO 模型</Term> 用 `ls -l` 查看：
+
+```bash
+$ ls -l
+drwxr-xr--  2 deploy  dev-team  4096  Jul 8  project/
+-rw-r-----  1 alice   dev-team   812  Jul 8  notes.txt
+-rwxr-xr-x  1 deploy  deploy    256  Jul 8  deploy.sh
+
+# 权限位拆解（以 drwxr-xr-- 为例）：
+# d         文件类型（d=目录, -=普通文件, l=符号链接）
+# rwx       所有者(user)：可读可写可进入
+# r-x       组(group)：可读可进入，不可写
+# r--       其他(other)：只读
+
+# rwx 对文件和目录的含义不同：
+# r: 文件→读内容(cat)    目录→列文件名(ls)
+# w: 文件→改内容(echo>)  目录→增删文件(touch/rm)
+# x: 文件→可执行(./)     目录→可进入(cd)
+```
+
+## 数字法与符号法
+
+```bash
+# 数字法：r=4, w=2, x=1，按组求和
+chmod 755 script.sh    # rwxr-xr-x（所有者全权限，组和其他可读可执行）
+chmod 644 config.conf  # rw-r--r--（所有者可读写，其他只读）
+chmod 600 id_rsa       # rw-------（仅所有者可读写，私钥标准权限）
+chmod 700 ~/.ssh       # rwx------（仅所有者可进入，SSH目录标准权限）
+
+# 符号法：身份(u/g/a) 操作(+/-/=) 权限(r/w/x)
+chmod u+x deploy.sh        # 给所有者加执行权限
+chmod g-w config.conf      # 去掉组的写权限
+chmod a=r notes.txt        # 所有人只读
+chmod u+x,g-w deploy.sh    # 组合操作：所有者加x，组减w
+
+# 修改属主和属组
+chown alice notes.txt       # 改属主
+chown alice:dev-team file   # 改属主和属组
+chgrp dev-team project/     # 只改属组
+chown -R deploy:deploy /var/www  # 递归修改目录及内容
+```
+
+## ACL 精细化授权
+
+当 UGO 三组权限不够用时（比如要让 alice 有写权限、bob 有读权限、carol 无任何权限），ACL 登场。
+
+```bash
+# 给单个用户设置权限
+setfacl -m u:alice:rw notes.txt    # alice 可读写
+setfacl -m u:bob:r notes.txt       # bob 只读
+
+# 给组设置权限
+setfacl -m g:qa:rx project/        # qa 组可读可进入
+
+# 查看 ACL
+getfacl notes.txt
+# # file: notes.txt
+# # owner: deploy
+# # group: dev-team
+# user::rw-
+# user:alice:rw-
+# user:bob:r--
+# group::r--
+# mask::rw-
+# other::r--
+
+# 移除 ACL 条目
+setfacl -x u:alice notes.txt       # 移除 alice 的 ACL 条目
+
+# 递归设置目录 ACL
+setfacl -R -m u:alice:rx project/  # 递归给 alice 读执行权限
+```
+
+<Callout type="trap">
+**误区：给目录 r 权限就能 ls 列出文件内容。** 目录的 r 权限只允许列出文件名，要读取文件属性（大小、权限、时间）还需要 x 权限。`ls -l` 需要 r+x，只有 r 只能 `ls` 看文件名不能看属性。更重要的误区：目录有 w 权限就能删除其中的文件，即使该文件本身没有 w 权限——因为删除文件是修改目录的文件名列表，不是修改文件本身。所以 `/tmp` 通常设 `1777`（sticky bit），防止用户互删文件。
+</Callout>
+
+<Exercises>
+**问题 1**：解释 `drwxr-xr--` 的含义并算出数字权限。
+
+<Answer>
+`d` 表示目录。三组权限：`rwx`（所有者：读写进入）、`r-x`（组：读进入不可写）、`r--`（其他：只读）。数字：rwx=4+2+1=7，r-x=4+0+1=5，r--=4+0+0=4，所以数字权限为 754。
+</Answer>
+
+**问题 2**：ACL 相比 UGO 有什么优势？`setfacl -m u:alice:rw file` 做了什么？
+
+<Answer>
+UGO 只有所有者/组/其他三组，无法对特定用户单独授权。ACL 可为任意单个用户或组设置独立权限，突破三组限制。`setfacl -m u:alice:rw file` 给用户 alice 设置对 file 的读写权限，不影响 UGO 基本权限。ACL 是 UGO 的精细化补充，叠加而非替代。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="rwx">Linux 权限的三种基本操作：read（读）、write（写）、execute（执行）。对文件和目录含义不同——目录的 x 是「可进入(cd)」而非「可执行」，目录的 w 是「可增删文件」而非「可改文件内容」。</GlossaryItem>
+<GlossaryItem term="数字权限">用八进制数字表示 rwx：r=4, w=2, x=1，每组求和。755 = rwxr-xr-x，644 = rw-r--r--。三位数字分别对应 UGO 三组权限。</GlossaryItem>
+<GlossaryItem term="ACL">Access Control List，访问控制列表。UGO 的精细化补充，可为任意单个用户或组设置独立权限，突破 UGO 三组限制。用 setfacl 设置、getfacl 查看。</GlossaryItem>
+</Glossary>

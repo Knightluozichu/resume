@@ -1505,6 +1505,16 @@ import { wjProcessThreadWinQuestions } from "./review/wj-process-thread-win";
 import { wjFileIoQuestions } from "./review/wj-file-io";
 import { wjNetworkProgrammingQuestions } from "./review/wj-network-programming";
 import { wjFinalReviewQuestions } from "./review/wj-final-review";
+import { lopLearningMapQuestions } from "./review/lop-learning-map";
+import { lopCommandLineQuestions } from "./review/lop-command-line";
+import { lopFilePermissionsQuestions } from "./review/lop-file-permissions";
+import { lopUserManagementQuestions } from "./review/lop-user-management";
+import { lopPackageManagementQuestions } from "./review/lop-package-management";
+import { lopNetworkConfigQuestions } from "./review/lop-network-config";
+import { lopFirewallSecurityQuestions } from "./review/lop-firewall-security";
+import { lopSystemdServicesQuestions } from "./review/lop-systemd-services";
+import { lopShellScriptingQuestions } from "./review/lop-shell-scripting";
+import { lopFinalReviewQuestions } from "./review/lop-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3045,6 +3055,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...wjFileIoQuestions,
   ...wjNetworkProgrammingQuestions,
   ...wjFinalReviewQuestions,
+  ...lopLearningMapQuestions,
+  ...lopCommandLineQuestions,
+  ...lopFilePermissionsQuestions,
+  ...lopUserManagementQuestions,
+  ...lopPackageManagementQuestions,
+  ...lopNetworkConfigQuestions,
+  ...lopFirewallSecurityQuestions,
+  ...lopSystemdServicesQuestions,
+  ...lopShellScriptingQuestions,
+  ...lopFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

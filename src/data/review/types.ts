@@ -1628,7 +1628,17 @@ export type ReviewChapterSlug =
   | "wj-process-thread-win"
   | "wj-file-io"
   | "wj-network-programming"
-  | "wj-final-review";
+  | "wj-final-review"
+  | "lop-learning-map"
+  | "lop-command-line"
+  | "lop-file-permissions"
+  | "lop-user-management"
+  | "lop-package-management"
+  | "lop-network-config"
+  | "lop-firewall-security"
+  | "lop-systemd-services"
+  | "lop-shell-scripting"
+  | "lop-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3261,6 +3271,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "wj-file-io": "文件I/O",
   "wj-network-programming": "网络编程",
   "wj-final-review": "全书总复习",
+  "lop-learning-map": "全书学习地图",
+  "lop-command-line": "命令行基础",
+  "lop-file-permissions": "文件权限",
+  "lop-user-management": "用户管理",
+  "lop-package-management": "包管理",
+  "lop-network-config": "网络配置",
+  "lop-firewall-security": "防火墙安全",
+  "lop-systemd-services": "systemd服务管理",
+  "lop-shell-scripting": "Shell脚本编程",
+  "lop-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,117 @@
+---
+title: "用户管理"
+type: C
+section: "系统与操作系统"
+order: 3
+description: "掌握 Linux 用户与组管理——UID/GID 身份系统、useradd/usermod 命令、sudo 最小权限提权与 SSH 密钥认证"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopUserManagementDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-user-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 UID/GID 身份系统：root(UID=0)、系统用户(1-999)、普通用户(1000+)
+- 掌握 useradd/usermod/userdel 创建、修改、删除用户和组
+- 理解主组与附加组的区别，能用 usermod -aG 管理组成员身份
+- 掌握 sudo 最小权限提权机制与 /etc/sudoers 配置
+</Objectives>
+
+## 直觉引入
+
+Linux 是多用户系统——一台服务器上可能有运维、开发、测试多个人同时工作。每个人需要一个「身份证」（UID）来标识身份，内核根据 UID 决定能访问什么。root 是「超级管理员」（UID=0），拥有至高无上的权力。但如果每个人都用 root 登录，出了问题无法追责、误操作没有防护。所以最佳实践是：每个人用自己的账号操作，需要特权时用 sudo 临时提权——这就是「最小权限原则」。
+
+<LopUserManagementDiagram />
+
+## 用户与组
+
+<Term def="UID（User ID）是用户的唯一数字标识。root 的 UID=0 拥有最高权限；系统用户 UID 1-999 用于运行服务（如 www-data）；普通用户 UID 从 1000 开始。用户信息存在 /etc/passwd，密码哈希存在 /etc/shadow。">UID</Term> 和 <Term def="GID（Group ID）是组的唯一数字标识。每个用户有一个主组（创建时指定）和多个附加组。组用于批量管理权限——同组用户共享组级权限。组信息存在 /etc/group。">GID</Term> 是 Linux 身份系统的基础。
+
+```bash
+# 用户相关文件
+cat /etc/passwd    # 用户名:密码占位:UID:GID:注释:家目录:Shell
+# deploy:x:1000:1000::/home/deploy:/bin/bash
+# www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+
+cat /etc/shadow    # 用户名:密码哈希（仅 root 可读）
+cat /etc/group     # 组名:密码占位:GID:组成员列表
+
+# 创建用户
+useradd -m -s /bin/bash deploy        # -m 创建家目录, -s 指定Shell
+passwd deploy                          # 设置密码
+
+# 修改用户
+usermod -aG sudo deploy                # 加入sudo附加组（-a追加, -G附加组）
+usermod -aG docker,www-data deploy     # 加入多个附加组
+usermod -s /bin/zsh deploy             # 修改登录Shell
+usermod -l newname oldname             # 改用户名
+
+# 删除用户
+userdel -r deploy                      # -r 一并删除家目录
+```
+
+## sudo 最小权限提权
+
+```bash
+# sudo 提权流程：普通用户 → 查 /etc/sudoers → 验证密码 → 以root执行
+sudo apt install nginx                # 临时以 root 身份安装 nginx
+sudo -u www-data cat /var/www/file    # 以 www-data 用户身份执行
+
+# 配置 sudo 权限（必须用 visudo 编辑，有语法检查防锁死）
+sudo visudo
+# /etc/sudoers 关键内容：
+# root    ALL=(ALL:ALL) ALL           # root 可执行所有命令
+# %sudo   ALL=(ALL:ALL) ALL           # sudo 组成员可执行所有命令
+# deploy  ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart nginx
+#         # deploy 可免密重启 nginx（精细化控制）
+
+# sudo 日志（审计追踪）
+sudo cat /var/log/auth.log | grep sudo   # 查看谁在何时用了sudo
+```
+
+## SSH 密钥认证
+
+```bash
+# 在本地机器生成密钥对
+ssh-keygen -t ed25519 -C "deploy@server"
+# 生成 ~/.ssh/id_ed25519（私钥）和 ~/.ssh/id_ed25519.pub（公钥）
+
+# 把公钥复制到服务器
+ssh-copy-id deploy@server
+# 或手动：
+cat ~/.ssh/id_ed25519.pub | ssh deploy@server "mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"
+
+# 服务器端 SSH 安全配置
+sudo vim /etc/ssh/sshd_config
+# PermitRootLogin no          # 禁止 root 直接 SSH 登录
+# PasswordAuthentication no   # 禁用密码登录（仅密钥）
+# Port 2222                   # 改默认端口（减少扫描）
+sudo systemctl restart sshd
+```
+
+<Callout type="trap">
+**误区：`usermod -G docker deploy` 和 `usermod -aG docker deploy` 一样。** 不加 `-a` 的 `-G` 会**覆盖**用户的所有附加组——如果 deploy 原来在 sudo 组，执行后只会在 docker 组，sudo 权限丢失，可能锁死自己。`-a`（append）是追加，不覆盖已有附加组。记住：加附加组永远用 `-aG`，不用 `-G`。如果不幸用错，需要 root 用户帮你 `usermod -aG sudo deploy` 加回来。
+</Callout>
+
+<Exercises>
+**问题 1**：主组和附加组的区别是什么？`usermod -aG docker bob` 做了什么？
+
+<Answer>
+主组是用户创建时分配的唯一组，通常与用户名同名。附加组是用户额外加入的组，可有多个。`usermod -aG docker bob` 把 bob 加入 docker 附加组——`-a` 追加（不覆盖已有附加组），`-G` 指定附加组。加入后 bob 可无需 sudo 运行 docker。关键：不加 `-a` 的 `-G` 会覆盖所有附加组，丢失已有组成员身份。
+</Answer>
+
+**问题 2**：sudo 相比直接用 root 登录有什么优势？提权流程是什么？
+
+<Answer>
+优势：①最小权限——平时普通用户，需要时提权；②审计——sudo 日志记录谁在何时执行了什么命令；③不共享 root 密码——每人用自己的密码；④可精细控制——sudoers 限制能执行的命令。流程：普通用户执行 `sudo command` → 查 /etc/sudoers 验证权限 → 验证用户密码（15分钟内免密）→ 以 root 执行。配置用 visudo 编辑。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="UID/GID">UID 是用户唯一数字标识，GID 是组唯一标识。root UID=0，系统用户 1-999，普通用户 1000+。用户信息在 /etc/passwd，组信息在 /etc/group。</GlossaryItem>
+<GlossaryItem term="sudo">允许授权用户以 root 身份临时执行命令的机制。遵循最小权限原则：平时普通用户操作，需要时提权。配置在 /etc/sudoers（用 visudo 编辑）。优势：审计追踪、不共享 root 密码、可精细控制命令权限。</GlossaryItem>
+<GlossaryItem term="SSH 密钥认证">用非对称密钥替代密码登录 SSH。公钥放服务器 ~/.ssh/authorized_keys，私钥留在本地。比密码更安全（不可暴力破解）且更方便（免密登录）。生产环境应禁用密码登录，仅用密钥。</GlossaryItem>
+</Glossary>

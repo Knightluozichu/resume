@@ -1,0 +1,150 @@
+---
+title: "systemd 服务管理"
+type: C
+section: "系统与操作系统"
+order: 7
+description: "掌握 systemd 服务管理——Unit 单元类型、服务生命周期、systemctl 核心命令、Unit 文件编写与开机自启配置"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LopSystemdServicesDiagram } from "@/components/mdx/linux-os-practice/diagrams/lop-systemd-services";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 systemd 作为 PID 1 的角色：统一管理所有系统资源为 Unit 单元
+- 掌握 systemctl 核心命令：start/stop/restart/enable/status
+- 理解服务状态生命周期：inactive → activating → active(running) → deactivating
+- 能编写 .service Unit 文件并配置开机自启
+</Objectives>
+
+## 直觉引入
+
+服务器上跑着很多服务——Web 服务器、数据库、SSH 守护进程……它们需要被统一管理：开机时自动启动、崩溃时自动重启、依赖关系要正确排序。传统 SysV init 用脚本串行启动服务，慢且复杂。systemd 作为现代 Linux 的 init 系统（PID 1），把所有系统资源抽象为「Unit」单元，用声明式配置管理，支持并行启动、依赖排序、自动重启和统一日志——是服务管理的核心工具。
+
+<LopSystemdServicesDiagram />
+
+## Unit 类型与 systemctl
+
+<Term def="systemd 是现代 Linux 的 init 系统（PID 1），用声明式 Unit 文件管理所有系统资源。相比传统 SysV init 的串行脚本启动，systemd 支持并行启动、依赖排序、按需启动和统一日志（journalctl）。">systemd</Term> 把资源分为多种 Unit 类型：
+
+```bash
+# Unit 类型
+# .service   服务单元（最常用，如 nginx.service）
+# .target    目标组（一组Unit的集合，如 multi-user.target）
+# .socket    套接字单元（按需启动）
+# .timer     定时器单元（替代crontab）
+# .mount     挂载单元
+# .device    设备单元
+
+# systemctl 核心命令
+sudo systemctl start nginx         # 启动服务
+sudo systemctl stop nginx          # 停止服务
+sudo systemctl restart nginx       # 重启服务
+sudo systemctl reload nginx        # 重载配置（不中断连接）
+sudo systemctl status nginx        # 查看状态+最近日志
+systemctl is-active nginx          # 检查是否运行中（返回active/inactive）
+systemctl is-enabled nginx         # 检查是否开机自启（返回enabled/disabled）
+
+# 开机自启
+sudo systemctl enable nginx        # 设置开机自启（创建符号链接）
+sudo systemctl enable --now nginx  # 既启动又设自启
+sudo systemctl disable nginx       # 取消开机自启
+
+# 查看所有服务
+systemctl list-units --type=service              # 所有已加载的服务
+systemctl list-units --type=service --state=running  # 正在运行的服务
+systemctl list-unit-files --type=service         # 所有已安装的服务文件
+systemctl list-units --failed                    # 失败的服务
+```
+
+## 服务生命周期
+
+```bash
+# 状态流转
+# start:  inactive → activating → active(running)
+# stop:   active(running) → deactivating → inactive
+# crash:  active(running) → failed（异常退出）
+
+# 查看状态详情
+systemctl status nginx
+# ● nginx.service - The nginx HTTP and reverse proxy server
+#    Loaded: loaded (/lib/systemd/system/nginx.service; enabled)
+#    Active: active (running) since Mon 2024-01-01 10:00:00 UTC
+#  Main PID: 1234 (nginx)
+#     Tasks: 2
+#    Memory: 5.2M
+#    CGroup: /system.slice/nginx.service
+#            ├─1234 nginx: master process
+#            └─1235 nginx: worker process
+
+# 查看服务日志
+journalctl -u nginx               # 该服务所有日志
+journalctl -u nginx -n 50         # 最近50条
+journalctl -u nginx -f            # 实时跟踪（类似tail -f）
+journalctl -u nginx --since '1 hour ago'  # 最近1小时
+journalctl -u nginx --since today # 今天
+journalctl -p err                 # 只看错误级别日志
+```
+
+## 编写 Unit 文件
+
+```ini
+# /etc/systemd/system/myapp.service
+[Unit]
+Description=My Web Application           # 服务描述
+After=network.target                     # 在网络启动后启动
+Wants=network.target                     # 弱依赖网络（没起来也不报错）
+
+[Service]
+Type=simple                              # 进程类型（simple/forking/oneshot）
+ExecStart=/usr/bin/node /opt/myapp/app.js  # 启动命令
+ExecStop=/bin/kill -TERM $MAINPID        # 停止命令
+ExecReload=/bin/kill -HUP $MAINPID       # 重载命令
+Restart=on-failure                       # 异常退出时自动重启
+RestartSec=5                             # 重启间隔5秒
+User=deploy                              # 以deploy用户运行
+WorkingDirectory=/opt/myapp              # 工作目录
+Environment=NODE_ENV=production          # 环境变量
+
+[Install]
+WantedBy=multi-user.target               # enable时在multi-user目标下创建自启链接
+```
+
+```bash
+# 管理自定义 Unit 文件
+sudo cp myapp.service /etc/systemd/system/  # 放到系统目录
+sudo systemctl daemon-reload               # 重新加载Unit文件（修改后必须执行）
+sudo systemctl enable --now myapp          # 启动并设自启
+sudo systemctl status myapp                # 检查状态
+sudo systemctl restart myapp               # 重启
+
+# 验证 Unit 文件语法
+systemd-analyze verify /etc/systemd/system/myapp.service
+```
+
+<Callout type="trap">
+**误区：修改了 Unit 文件后直接 restart 就能生效。** 修改 .service 文件后必须先 `systemctl daemon-reload` 重新加载配置，再 `systemctl restart` 重启服务。daemon-reload 告诉 systemd 重新读取磁盘上的 Unit 文件——不执行这步，systemd 仍用内存中的旧配置。另一个常见问题：`enable` 只是设置开机自启，不会立即启动服务；`start` 只是立即启动，重启后不自动启动。要两者都做用 `enable --now`。
+</Callout>
+
+<Exercises>
+**问题 1**：`systemctl enable` 和 `systemctl start` 的区别是什么？
+
+<Answer>
+`start` 立即启动服务（当前生效，重启后不自动启动）。`enable` 设置开机自启——创建符号链接使系统启动到 multi-user.target 时自动启动该服务，但不会立即启动。`enable --now` 既启动又设自启。`disable` 取消自启，`stop` 停止服务。
+</Answer>
+
+**问题 2**：服务启动失败如何排查？列出关键命令。
+
+<Answer>
+①`systemctl status nginx`——看状态、错误摘要、退出码；②`journalctl -u nginx -n 50`——看详细日志；③`systemctl daemon-reload`——修改Unit文件后重新加载；④`systemd-analyze verify`——检查Unit文件语法；⑤`ss -tlnp | grep 80`——检查端口冲突。常见原因：配置错误、端口被占、权限不足、依赖服务未启动。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="systemd">现代 Linux 的 init 系统（PID 1），用声明式 Unit 文件管理系统资源。支持并行启动、依赖排序、按需启动、自动重启和统一日志（journalctl）。替代传统 SysV init 的串行脚本。</GlossaryItem>
+<GlossaryItem term="Unit 文件">systemd 管理单元的声明式配置文件。三个关键段：[Unit]描述和依赖、[Service]启动参数（ExecStart/Restart）、[Install]开机自启设置（WantedBy）。修改后需 daemon-reload。</GlossaryItem>
+<GlossaryItem term="systemctl">systemd 的管理命令工具。start/stop/restart 控制服务运行，enable/disable 控制开机自启，status 查看状态，journalctl 查看日志。enable --now 同时启动并设自启。</GlossaryItem>
+</Glossary>
