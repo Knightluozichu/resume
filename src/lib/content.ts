@@ -173,6 +173,7 @@ export const BOOK_ORDER = [
   "unity-scripting-game-dev",
   "unity-master",
   "unity-advanced-programming",
+  "game-server-programming",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -286,6 +287,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-scripting-game-dev": "Unity 3D 脚本编程与游戏开发",
   "unity-master": "Unity 神技达人炼成记",
   "unity-advanced-programming": "Unity 3D 高级编程之进阶主程",
+  "game-server-programming": "网络游戏服务器端编程",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -907,6 +909,7 @@ export const SECTION_ORDER = [
   "游戏开发",
   // 游戏引擎原理与实践·卷1
   "游戏引擎架构",
+  "网络游戏与服务器",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

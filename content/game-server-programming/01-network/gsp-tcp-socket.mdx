@@ -1,0 +1,110 @@
+---
+title: "TCP Socket 编程基础"
+type: A
+section: "网络游戏与服务器"
+order: 1
+description: "掌握 TCP 连接生命周期——三次握手、数据收发、粘包处理与四次挥手"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GspTcpSocketDiagram } from "@/components/mdx/game-server-programming/diagrams/gsp-tcp-socket";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 TCP 三次握手与四次挥手的时序与状态机
+- 掌握 Socket API 的服务端/客户端编程模型（bind/listen/accept/connect/send/recv）
+- 理解 TCP 字节流特性与粘包/半包问题的成因
+- 掌握 epoll 事件驱动模型在游戏服务器中的应用
+</Objectives>
+
+## 直觉引入
+
+TCP 连接就像打电话。你要先拨号建立连接（三次握手），确认双方都能听到对方后才开始说话（数据收发），说完后要挂断（四次挥手）。和 UDP 的「发短信」不同，TCP 保证你说的话对方一定能按顺序收到——但代价是你得自己管理这个连接的生命周期，而且 TCP 把你说的话看成一串连续的字节流，不会自动帮你区分哪几句是一段话——这就是粘包问题的根源。
+
+<GspTcpSocketDiagram />
+
+## 连接生命周期
+
+<Term def="TCP（传输控制协议）是面向连接的、可靠的、有序的字节流传输协议，通过序列号、确认应答和重传机制保证数据可靠到达。">TCP</Term> 的连接生命周期分为三个阶段。**建立连接（三次握手）**：客户端发 SYN，服务器回 SYN+ACK，客户端再发 ACK，双方进入 ESTABLISHED 状态。**数据收发**：双方通过 send/recv 互相收发字节流，TCP 保证有序可靠。**关闭连接（四次挥手）**：一方发 FIN，对方回 ACK，对方再发 FIN，一方回 ACK，连接彻底关闭。
+
+```cpp
+// 服务端 Socket 编程模型
+int listenFd = socket(AF_INET, SOCK_STREAM, 0);
+bind(listenFd, (sockaddr*)&addr, sizeof(addr));
+listen(listenFd, 511);
+
+while (true) {
+    int connFd = accept(listenFd, nullptr, nullptr);  // 阻塞等待新连接
+    char buf[4096];
+    int n = recv(connFd, buf, sizeof(buf), 0);         // 阻塞读取数据
+    // 注意：n 可能包含多个消息，也可能只有半个消息——这就是粘包
+    process(buf, n);
+}
+```
+
+## 粘包问题
+
+TCP 是**字节流**协议，不是消息协议。发送方连续调用两次 `send("AAA")` 和 `send("BBB")`，接收方可能一次 `recv` 收到 `"AAABBB"`（粘包），也可能收到 `"AA"` 和 `"ABBB"`（半包）。TCP 只保证字节有序到达，不维护「消息边界」。
+
+<Callout type="trap">
+**误区：认为一次 send 对应一次 recv。** 这是初学者最常见的错误。TCP 把所有 send 的数据放进发送缓冲区，按自己的节奏（Nagle 算法、MTU、拥塞窗口）切分发送。接收端 recv 读到的是一段连续字节流，与发送端的 send 调用次数没有任何对应关系。
+</Callout>
+
+解决方案是在**应用层**定义消息边界，最常用的是**长度前缀法**：每个消息前面加一个固定长度的头部，头部中包含消息体的长度。接收端先读头部，再按长度读取完整的消息体。
+
+## epoll 事件驱动
+
+游戏服务器要同时处理数千个连接，不能为每个连接阻塞一个线程。`epoll` 是 Linux 下高效的 I/O 多路复用机制：线程在 `epoll_wait` 上阻塞，当任意连接有数据可读或可写时被唤醒，处理完后再回到 `epoll_wait`。
+
+```cpp
+// epoll 事件循环骨架
+int epfd = epoll_create1(0);
+// 将 listenFd 加入 epoll，监听 EPOLLIN（新连接到达）
+epoll_ctl(epfd, EPOLL_CTL_ADD, listenFd, &ev);
+
+while (true) {
+    epoll_event events[1024];
+    int n = epoll_wait(epfd, events, 1024, -1);  // 阻塞等待事件
+    for (int i = 0; i < n; i++) {
+        if (events[i].data.fd == listenFd) {
+            int connFd = accept(listenFd, nullptr, nullptr);
+            // 将 connFd 加入 epoll，监听 EPOLLIN（数据到达）
+            setnonblocking(connFd);
+            epoll_ctl(epfd, EPOLL_CTL_ADD, connFd, &ev);
+        } else {
+            // 已有连接有数据可读
+            handleRead(events[i].data.fd);
+        }
+    }
+}
+```
+
+<Exercises>
+**问题 1**：TCP 三次握手的过程是什么？为什么不是两次或四次？
+
+<Answer>
+客户端发 SYN, seq=x → 服务器回 SYN+ACK, seq=y, ack=x+1 → 客户端发 ACK, ack=y+1。三次是因为要确认双方的收发能力都正常：第一次确认客户端能发，第二次确认服务器能收能发，第三次确认客户端能收。两次无法确认客户端的接收能力（服务器不知道自己的 SYN 是否到达客户端）；四次多余——服务器可以把 SYN 和 ACK 合并为一次发送。
+</Answer>
+
+**问题 2**：什么是粘包？如何在应用层解决？
+
+<Answer>
+粘包是指 TCP 字节流中多个消息被合并接收，或一个消息被拆分接收的现象。TCP 是字节流协议，不维护消息边界。解决方案是在应用层定义封包格式，最常用的是长度前缀法：包头包含魔数（校验）、消息长度、消息ID，接收端先读包头，再按长度读取完整消息体。这样无论字节流怎么被 TCP 切分，都能正确还原出一条条完整的消息。
+</Answer>
+
+**问题 3**：为什么游戏服务器用 epoll 而不是多线程阻塞模型？
+
+<Answer>
+多线程阻塞模型为每个连接分配一个线程，连接数等于线程数。游戏服务器可能有数千甚至上万并发连接，每个线程消耗约 8MB 栈空间，数千线程光是栈内存就需要数十 GB，且线程切换开销随数量线性增长。epoll 是事件驱动模型：一个线程可以管理数千个连接，只在有事件（数据到达/可写）时才被唤醒处理，空闲时完全不消耗 CPU。这使得单机承载万级连接成为可能。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="TCP">面向连接的可靠有序字节流传输协议。通过序列号、确认应答和重传保证数据可靠到达，但不维护消息边界。</GlossaryItem>
+<GlossaryItem term="粘包">TCP 字节流中多个应用层消息被合并接收，或一个消息被拆分接收的现象。根因是 TCP 不维护消息边界，需在应用层解决。</GlossaryItem>
+<GlossaryItem term="epoll">Linux 下高效的 I/O 多路复用机制。线程在 epoll_wait 上阻塞等待事件，当任意连接有数据可读/可写时被唤醒，适合管理大量并发连接。</GlossaryItem>
+<GlossaryItem term="非阻塞IO">将 Socket 设为非阻塞模式后，recv/send 调用立即返回，没有数据时返回 EAGAIN 而非阻塞等待。配合 epoll 实现事件驱动。</GlossaryItem>
+</Glossary>

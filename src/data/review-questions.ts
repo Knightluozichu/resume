@@ -1255,6 +1255,16 @@ import { gep2NetworkArchitectureQuestions } from "./review/gep2-network-architec
 import { gep2EditorFrameworkQuestions } from "./review/gep2-editor-framework";
 import { gep2ScriptingSystemQuestions } from "./review/gep2-scripting-system";
 import { gep2FinalReviewQuestions } from "./review/gep2-final-review";
+import { gspLearningMapQuestions } from "./review/gsp-learning-map";
+import { gspTcpSocketQuestions } from "./review/gsp-tcp-socket";
+import { gspProtocolDesignQuestions } from "./review/gsp-protocol-design";
+import { gspServerArchitectureQuestions } from "./review/gsp-server-architecture";
+import { gspThreadModelQuestions } from "./review/gsp-thread-model";
+import { gspDataPersistenceQuestions } from "./review/gsp-data-persistence";
+import { gspCacheStrategyQuestions } from "./review/gsp-cache-strategy";
+import { gspLoadBalanceQuestions } from "./review/gsp-load-balance";
+import { gspSecurityAnticheatQuestions } from "./review/gsp-security-anticheat";
+import { gspFinalReviewQuestions } from "./review/gsp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2541,6 +2551,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gep2EditorFrameworkQuestions,
   ...gep2ScriptingSystemQuestions,
   ...gep2FinalReviewQuestions,
+  ...gspLearningMapQuestions,
+  ...gspTcpSocketQuestions,
+  ...gspProtocolDesignQuestions,
+  ...gspServerArchitectureQuestions,
+  ...gspThreadModelQuestions,
+  ...gspDataPersistenceQuestions,
+  ...gspCacheStrategyQuestions,
+  ...gspLoadBalanceQuestions,
+  ...gspSecurityAnticheatQuestions,
+  ...gspFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

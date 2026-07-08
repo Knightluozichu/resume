@@ -1378,7 +1378,17 @@ export type ReviewChapterSlug =
   | "gep2-network-architecture"
   | "gep2-editor-framework"
   | "gep2-scripting-system"
-  | "gep2-final-review";
+  | "gep2-final-review"
+  | "gsp-learning-map"
+  | "gsp-tcp-socket"
+  | "gsp-protocol-design"
+  | "gsp-server-architecture"
+  | "gsp-thread-model"
+  | "gsp-data-persistence"
+  | "gsp-cache-strategy"
+  | "gsp-load-balance"
+  | "gsp-security-anticheat"
+  | "gsp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2761,6 +2771,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gep2-editor-framework": "编辑器框架",
   "gep2-scripting-system": "脚本系统",
   "gep2-final-review": "全书总复习",
+  "gsp-learning-map": "全书学习地图",
+  "gsp-tcp-socket": "TCP Socket 编程基础",
+  "gsp-protocol-design": "网络协议设计",
+  "gsp-server-architecture": "服务器架构",
+  "gsp-thread-model": "线程模型",
+  "gsp-data-persistence": "数据持久化",
+  "gsp-cache-strategy": "缓存策略与一致性",
+  "gsp-load-balance": "负载均衡与扩容",
+  "gsp-security-anticheat": "安全与反作弊",
+  "gsp-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
