@@ -1,0 +1,123 @@
+---
+title: "算术技巧：无分支与位运算加减"
+type: B
+section: "算术技巧"
+order: 2
+description: "无分支绝对值、三值比较、位运算加法"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { HdArithmeticTricksDiagram } from "@/components/mdx/hackers-delight/diagrams/hd-arithmetic-tricks";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用位运算实现无分支的绝对值和符号函数
+- 能用 XOR 和进位实现位运算加法
+- 能实现无分支的 min/max 和三值比较
+- 能回答：为什么无分支代码在某些场景更快？
+</Objectives>
+
+## 直觉引入
+
+现代 CPU 有很深的流水线（10-20 级），分支预测失败时要冲刷流水线，代价 10-20 个时钟周期。如果用位运算消除分支，虽然可能多执行几条指令，但避免了预测失败的惩罚。
+
+比如求绝对值：`if (x<0) x=-x;` 有一个分支。用 `(x^mask)-mask`（mask=x>>31）无分支实现，虽然 3 条指令但没有分支预测风险。在分支不可预测的场景（随机数据），无分支版本快 2-3 倍。
+
+## 概念讲解
+
+### 无分支技巧
+
+<HdArithmeticTricksDiagram />
+
+<Term def="用位运算替代条件分支，避免分支预测失败的编程技巧">
+无分支代码
+</Term>
+
+核心思想：利用算术右移（负数右移补1即全1掩码0xFFFFFFFF，正数补0即全0掩码0），将条件判断转化为掩码运算。负数的 mask=x>>31=0xFFFFFFFF，正数的 mask=0。
+
+### 位运算加法
+
+<Term def="用 XOR 求无进位和、AND+移位求进位，递归直到无进位的加法实现">
+位运算加法
+</Term>
+
+a+b = (a^b) + ((a&b)<<1)。a^b 是不考虑进位的和，a&b<<1 是进位。递归直到进位为 0。这在硬件没有加法器的场景有用（如 FPGA）。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：符号掩码">x>>31：负数得 0xFFFFFFFF（全1），正数得 0（全0）。这是无分支的基础。</Step>
+<Step title="第二步：无分支绝对值">mask=x>>31; abs=(x^mask)-mask。负数：取反加1=取负。正数：不变。</Step>
+<Step title="第三步：无分支 min/max">min = y ^ ((x^y) & -(x<y))。x<y 时取 x，否则取 y，无分支。</Step>
+</Stepper>
+
+## 代码对照
+
+```c
+// 无分支绝对值
+int abs_branchless(int x) {
+    int mask = x >> 31;        // 负数: 0xFFFFFFFF, 正数: 0
+    return (x ^ mask) - mask;  // 负数: (~x) - (-1) = ~x + 1 = -x
+                               // 正数: x ^ 0 - 0 = x
+}
+
+// 无分支符号函数：x>0返回1, x<0返回-1, x==0返回0
+int sign(int x) {
+    return (x > 0) - (x < 0);  // 利用布尔值转int
+}
+
+// 无分支 min/max
+int min_branchless(int x, int y) {
+    return y ^ ((x ^ y) & -(x < y));  // x<y: -(1)=0xFFFFFFFF, 取x
+}                                      // x>=y: -(0)=0, 取y
+
+// 位运算加法（无加法器场景）
+int add_bitwise(int a, int b) {
+    while (b) {
+        int carry = (a & b) << 1;  // 进位
+        a = a ^ b;                  // 无进位和
+        b = carry;
+    }
+    return a;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：无分支代码总是更快。**
+原因 → 无分支多了几条指令，分支可预测时分支版本更快。
+修法 → 无分支在分支不可预测（随机数据）时优势明显。可预测时直接用 if。
+</Callout>
+
+<Callout type="trap">
+**现象：位运算加法比直接用 + 更快。**
+原因 → 现代 CPU 有硬件加法器，1 周期完成。位运算加法要循环多次。
+修法 → 位运算加法只在无加法器的场景（FPGA、教学）有意义。实际代码直接用 +。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么无分支代码在某些场景更快？
+
+<Answer>
+现代 CPU 有 10-20 级流水线，分支预测失败需冲刷流水线，代价 10-20 周期。无分支代码虽多几条指令（3-4 周期）但无预测失败风险。在分支不可预测（随机数据）的场景，无分支版本快 2-3 倍。但分支可预测时，分支版本更快。
+</Answer>
+
+**问题 2**：用位运算求绝对值的原理是什么？
+
+<Answer>
+mask = x >> 31（算术右移）。负数 mask = 0xFFFFFFFF（全1），正数 mask = 0。abs = (x ^ mask) - mask。负数：(x ^ 0xFFFFFFFF) - 0xFFFFFFFF = ~x - (-1) = ~x + 1 = -x（补码取负）。正数：(x ^ 0) - 0 = x。利用了补码和算术右移的性质。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="无分支代码">用位运算替代条件分支的编程技巧，避免分支预测失败，在不可预测分支场景更快。</GlossaryItem>
+<GlossaryItem term="算术右移">有符号数右移时补符号位，负数补1得全1掩码，正数补0得全0掩码。</GlossaryItem>
+<GlossaryItem term="位运算加法">用 XOR 求无进位和、AND+移位求进位的加法实现，主要用于无硬件加法器的场景。</GlossaryItem>
+<GlossaryItem term="分支预测失败">CPU 预测的分支方向与实际不符，需冲刷流水线，代价 10-20 个周期。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="算法心得：高效算法的秘籍" adaptedUrl="" />

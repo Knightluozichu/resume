@@ -1,0 +1,193 @@
+---
+title: "综合复习：全书知识链与应用"
+type: B
+section: "应用"
+order: 9
+description: "图元→空间分割→算法→应用的完整知识链与结构选择决策"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GdsFinalReviewDiagram } from "@/components/mdx/geometric-data-structures/diagrams/gds-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能综合运用图元运算与空间结构解决几何问题
+- 理解全书知识链的递进关系
+- 能根据查询类型和数据分布选择最优空间结构
+- 掌握碰撞检测与光线追踪的完整流程
+</Objectives>
+
+## 直觉引入
+
+综合复习把全书工具串联成完整的解题链：图元运算→空间分割→加速结构→应用场景。每种结构都有其适用范围，关键是理解权衡。
+
+全书核心主线是「用空间数据结构把暴力 O(n) 降为 O(log n)」。图元是原子操作，空间分割（网格/树/哈希）是加速手段，算法（三角剖分/Voronoi/碰撞/光线追踪）是应用。选择结构时需考虑：数据分布、查询类型、动态更新频率。
+
+## 概念讲解
+
+全书知识链：
+- <Term def="点向量射线平面的基本运算">图元</Term> → 点积叉积、射线求交、AABB 测试
+- <Term def="递归分割空间的树结构">空间分割</Term> → 四叉树/八叉树（自适应）、BVH（层次包围盒）
+- <Term def="网格哈希R-Tree等空间索引">空间索引</Term> → 均匀网格 O(1)、空间哈希 O(1)、R-Tree O(log n+k)
+- <Term def="碰撞检测与光线追踪">应用</Term> → 两阶段碰撞、BVH 射线遍历
+
+### 结构选择决策树
+1. 查询类型？射线→BVH(SAH)，范围→R-Tree，最近邻→KD-Tree，精确点→网格/哈希
+2. 数据分布？均匀→网格，稀疏→哈希，非均匀→四叉树/BVH
+3. 动态更新？静态→BVH/KD-Tree（构建一次），动态→哈希/网格/动态BVH
+4. 维度？2D→四叉树/网格，3D→八叉树/BVH
+
+### 综合题：游戏引擎碰撞检测全流程
+1. **宽相**：空间哈希定位近邻 → AABB 重叠测试 → 候选对
+2. **窄相**：SAT（凸体）或 GJK（通用凸体）→ 碰撞/不碰撞
+3. **响应**：EPA 求穿透深度 → 约束求解器 → 位置修正
+
+### 综合题：光线追踪渲染全流程
+1. **预处理**：场景三角形 → BVH 构建（SAH 最优分裂）
+2. **渲染**：每像素发射射线 → BVH 遍历（前向排序+剪枝）→ Moller-Trumbore 求交
+3. **着色**：交点处计算光照、阴影射线（递归 BVH 遍历）
+
+### 性能基准
+| 结构 | 构建 | 查询 | 动态更新 | 适用 |
+|---|---|---|---|---|
+| 暴力 | 无 | O(n) | O(1) | 基准 |
+| 网格 | O(n) | O(1)+k | O(1) | 均匀 |
+| 哈希 | O(n) | O(1)+k | O(1) | 稀疏动态 |
+| 四叉树 | O(n log n) | O(log n)+k | O(log n) | 2D自适应 |
+| BVH | O(n log n) | O(log n) | O(log n) | 射线查询 |
+| R-Tree | O(n log n) | O(log n)+k | O(log n) | 范围查询 |
+
+## 交互 Demo
+
+> 猜一猜：如果一个场景同时需要碰撞检测和光线追踪，应该用一个空间结构还是两个？
+
+<GdsFinalReviewDiagram />
+
+<Stepper>
+<Step title="第一步：分析需求">
+确定查询类型（射线/范围/精确点）、数据分布（均匀/稀疏/非均匀）、动态性（静态/动态）。
+</Step>
+<Step title="第二部：选择结构">
+射线查询→BVH(SAH)，范围查询→R-Tree，精确点→网格/哈希。2D→四叉树，3D→BVH/八叉树。
+</Step>
+<Step title="第三步：验证与优化">
+构建后验证查询正确性。优化：BVH用SAH，R-Tree用R*分裂，网格调格子大小。动态场景考虑增量更新。
+</Step>
+</Stepper>
+
+## 代码对照
+
+用 Python 综合对比全书空间结构的性能：
+
+```python
+import time, random, math
+
+def brute_force_nearest(points, q):
+    """暴力最近邻 O(n)"""
+    best_d, best_i = math.inf, -1
+    for i, p in enumerate(points):
+        d = (p[0]-q[0])**2 + (p[1]-q[1])**2
+        if d < best_d:
+            best_d, best_i = d, i
+    return best_i
+
+def grid_nearest(grid, cell_size, q):
+    """网格最近邻：先查本格再扩展"""
+    cx, cy = int(q[0]//cell_size), int(q[1]//cell_size)
+    best_d, best_i = math.inf, -1
+    for r in range(0, 10):
+        for dx in range(-r, r+1):
+            for dy in range(-r, r+1):
+                cell = (cx+dx, cy+dy)
+                if cell in grid:
+                    for idx, p in grid[cell]:
+                        d = (p[0]-q[0])**2 + (p[1]-q[1])**2
+                        if d < best_d:
+                            best_d, best_i = d, idx
+        if best_i >= 0 and r > 0:
+            break
+    return best_i
+
+# 性能对比
+N = 10000
+points = [(random.random()*100, random.random()*100) for _ in range(N)]
+cell_size = 10
+grid = {}
+for i, p in enumerate(points):
+    key = (int(p[0]//cell_size), int(p[1]//cell_size))
+    grid.setdefault(key, []).append((i, p))
+
+q = (50, 50)
+# 暴力
+t0 = time.time()
+for _ in range(1000):
+    brute_force_nearest(points, q)
+t_brute = time.time() - t0
+
+# 网格
+t0 = time.time()
+for _ in range(1000):
+    grid_nearest(grid, cell_size, q)
+t_grid = time.time() - t0
+
+print(f"n={N}, 查询1000次:")
+print(f"  暴力: {t_brute*1000:.1f}ms")
+print(f"  网格: {t_grid*1000:.1f}ms")
+print(f"  加速比: {t_brute/t_grid:.1f}x")
+
+# 全书结构总结
+print("\n=== 全书结构总结 ===")
+structures = [
+    ("图元", "O(1)", "点积/叉积/求交", "所有几何算法的基础"),
+    ("网格", "O(1)+k", "等大格子", "均匀分布"),
+    ("空间哈希", "O(1)+k", "稀疏哈希", "游戏引擎动态场景"),
+    ("四叉树", "O(log n)+k", "2D自适应分割", "碰撞/LOD/图像"),
+    ("BVH(SAH)", "O(log n)", "层次包围盒", "光线追踪/碰撞"),
+    ("R-Tree", "O(log n)+k", "层次MBR", "GIS/范围查询"),
+]
+for name, q_complexity, desc, app in structures:
+    print(f"  {name:<12} {q_complexity:<14} {desc:<14} {app}")
+
+```
+
+性能对比显示网格查询比暴力快数十倍。全书六种结构各有适用场景：图元是基础原子操作，网格/哈希适合 O(1) 精确查询，四叉树/BVH/R-Tree 适合 O(log n) 复杂查询。选择关键是匹配查询类型、数据分布和动态性需求。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 遇到几何查询问题不知道该用什么结构。
+**原因 →** 没有建立结构选择决策树。
+**修法 →** 决策三步：1.查询类型（射线/范围/精确/最近邻）→ 2.数据分布（均匀/稀疏/非均匀）→ 3.动态性（静态/动态）。射线选 BVH，范围选 R-Tree，均匀选网格，动态选哈希。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 碰撞检测和光线追踪用同一个 BVH，性能不理想。
+**原因 →** 碰撞检测需要范围查询（AABB 重叠），光线追踪需要射线查询，最优结构可能不同。
+**修法 →** 可以用两套结构：BVH 用于光线追踪（射线最优），空间哈希用于碰撞检测（动态更新友好）。虽然内存翻倍但每种查询都用最优结构。或用动态 BVH 兼顾两者。
+</Callout>
+
+<Exercises>
+**问题**：综合题：设计一个游戏引擎的碰撞检测系统，描述完整流程。
+
+<Answer>
+1.宽相：空间哈希定位近邻对象（O(1) 插入/删除，适合每帧动态更新）→ AABB 重叠测试生成候选对。2.窄相：凸体用 SAT（边法向量投影分离），通用凸体用 GJK（Minkowski 差含原点判定）。3.响应：EPA 求穿透深度和法向量 → 约束求解器做位置修正。时间一致性使宽相排序几乎不变，增量更新接近 O(n)。
+</Answer>
+
+**问题**：综合题：光线追踪渲染器如何用 BVH 加速射线-场景相交？
+
+<Answer>
+1.预处理：场景三角形用 SAH 构建 BVH（选表面积加权代价最小的分裂位置）。2.渲染：每像素射线从 BVH 根遍历，slab method 测 AABB 相交 O(1)，不相交剪枝。前向排序先访问近子树得 t_best，远子树 AABB 距离≥t_best 时跳过。3.叶节点：Moller-Trumbore O(1) 测射线-三角形。总复杂度 O(log n)/射线。10万三角形场景每射线约测 20 个 AABB + 几个三角形，远快于 10 万次暴力测试。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="知识链">图元→空间分割→加速结构→应用的层层递进解题流程。</GlossaryItem>
+<GlossaryItem term="结构选择决策树">根据查询类型、数据分布、动态性选择最优空间结构的方法。</GlossaryItem>
+<GlossaryItem term="两阶段碰撞">宽相（AABB+空间索引剔除）→窄相（SAT/GJK精确检测）的碰撞架构。</GlossaryItem>
+<GlossaryItem term="BVH 射线遍历">前向排序+剪枝使射线-场景相交从 O(n) 降为 O(log n)。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：几何体数据结构" adaptedUrl="" />

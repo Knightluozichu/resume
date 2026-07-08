@@ -913,7 +913,106 @@ export type ReviewChapterSlug =
   | "pp-back-of-envelope"
   | "pp-perspectives"
   | "pp-epilog"
-  | "pp-final-review";
+  | "pp-final-review"
+  // 深入浅出竞赛算法
+  | "ca-learning-map"
+  | "ca-contest-basics"
+  | "ca-dp"
+  | "ca-greedy"
+  | "ca-graph-algos"
+  | "ca-string-algos"
+  | "ca-math-tricks"
+  | "ca-segment-tree"
+  | "ca-union-find"
+  | "ca-final-review"
+  // 算法导论
+  | "ial-learning-map"
+  | "ial-foundations"
+  | "ial-sorting"
+  | "ial-selection"
+  | "ial-binary-search-trees"
+  | "ial-hash-tables"
+  | "ial-data-structures"
+  | "ial-graph-algorithms"
+  | "ial-dp-advanced"
+  | "ial-final-review"
+  // 算法心得
+  | "hd-learning-map"
+  | "hd-bit-manipulation"
+  | "hd-arithmetic-tricks"
+  | "hd-division"
+  | "hd-power"
+  | "hd-unusual-bases"
+  | "hd-hashing-search"
+  | "hd-floating-point"
+  | "hd-crc-error"
+  | "hd-final-review"
+  // 计算机程序设计艺术
+  | "tcp-learning-map"
+  | "tcp-mathematical-preliminaries"
+  | "tcp-sequences"
+  | "tcp-arithmetic"
+  | "tcp-polynomials"
+  | "tcp-gf2"
+  | "tcp-random-numbers"
+  | "tcp-efficient-searching"
+  | "tcp-info-structures"
+  | "tcp-final-review"
+  // 程序员的数学
+  | "pm-learning-map"
+  | "pm-0-and-1"
+  | "pm-permutations"
+  | "pm-probability"
+  | "pm-random-variables"
+  | "pm-statistics"
+  | "pm-distributions"
+  | "pm-recurrence"
+  | "pm-encryption"
+  | "pm-final-review"
+  // 深入浅出统计学
+  | "hfs-learning-map"
+  | "hfs-data-display"
+  | "hfs-central-tendency"
+  | "hfs-dispersion"
+  | "hfs-probability"
+  | "hfs-discrete-distributions"
+  | "hfs-continuous-distributions"
+  | "hfs-sampling"
+  | "hfs-confidence-intervals"
+  | "hfs-final-review"
+  // 线性代数应该这样学
+  | "lad-learning-map"
+  | "lad-vector-spaces"
+  | "lad-linear-maps"
+  | "lad-matrices"
+  | "lad-operators"
+  | "lad-inner-product"
+  | "lad-det-trace"
+  | "lad-eigenvalues"
+  | "lad-complex-vectors"
+  | "lad-final-review"
+  // 具体数学
+  | "cm-learning-map"
+  | "cm-recurrent-problems"
+  | "cm-sums"
+  | "cm-integer-functions"
+  | "cm-number-theory"
+  | "cm-binomial"
+  | "cm-stirling"
+  | "cm-discrete-prob"
+  | "cm-generating-funcs"
+  | "cm-final-review"
+  // 计算机图形学：几何体数据结构
+  | "gds-learning-map"
+  | "gds-geom-primitives"
+  | "gds-triangulation"
+  | "gds-voronoi"
+  | "gds-quadtrees"
+  | "gds-bvh"
+  | "gds-spatial-indexing"
+  | "gds-collision-detection"
+  | "gds-ray-tracing-struct"
+  | "gds-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1831,6 +1930,105 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pp-perspectives": "视角",
   "pp-epilog": "结语",
   "pp-final-review": "总复习",
+  // 深入浅出竞赛算法
+  "ca-learning-map": "深入浅出竞赛算法全书学习地图",
+  "ca-contest-basics": "竞赛基础：I/O、复杂度与调试",
+  "ca-dp": "动态规划：状态转移",
+  "ca-greedy": "贪心算法：局部最优到全局最优",
+  "ca-graph-algos": "图算法：最短路、最小生成树与拓扑排序",
+  "ca-string-algos": "字符串算法：KMP、字典树与 AC 自动机",
+  "ca-math-tricks": "数学技巧：数论、组合与快速幂",
+  "ca-segment-tree": "线段树：区间查询与更新",
+  "ca-union-find": "并查集：连通性判断",
+  "ca-final-review": "深入浅出竞赛算法总复习",
+  // 算法导论
+  "ial-learning-map": "算法导论全书学习地图",
+  "ial-foundations": "算法基础：渐近分析与递归",
+  "ial-sorting": "排序算法：堆排、快排与线性排序",
+  "ial-selection": "选择与中位数",
+  "ial-binary-search-trees": "二叉搜索树与红黑树",
+  "ial-hash-tables": "散列表",
+  "ial-data-structures": "基本数据结构：栈、队列与链表",
+  "ial-graph-algorithms": "图算法：BFS、DFS 与最短路",
+  "ial-dp-advanced": "高级动态规划",
+  "ial-final-review": "算法导论总复习",
+  // 算法心得
+  "hd-learning-map": "算法心得全书学习地图",
+  "hd-bit-manipulation": "位操作基础：掩码与位运算",
+  "hd-arithmetic-tricks": "算术技巧：无分支与位运算加减",
+  "hd-division": "除法优化：常量除法与取模",
+  "hd-power": "幂运算与根号：快速幂与整数开方",
+  "hd-unusual-bases": "非常规进位制：Gray 码与负二进制",
+  "hd-hashing-search": "哈希与搜索：完美哈希与 Bloom 过滤器",
+  "hd-floating-point": "浮点数技巧：IEEE 754 的位级操作",
+  "hd-crc-error": "CRC 校验与纠错码",
+  "hd-final-review": "算法心得总复习",
+  // 计算机程序设计艺术
+  "tcp-learning-map": "TAOCP 全书学习地图",
+  "tcp-mathematical-preliminaries": "数学预备知识",
+  "tcp-sequences": "序列的生成与排列",
+  "tcp-arithmetic": "浮点算术与进制转换",
+  "tcp-polynomials": "多项式运算",
+  "tcp-gf2": "GF(2) 域上的运算",
+  "tcp-random-numbers": "随机数生成",
+  "tcp-efficient-searching": "高效搜索",
+  "tcp-info-structures": "信息结构",
+  "tcp-final-review": "TAOCP 总复习",
+  // 程序员的数学
+  "pm-learning-map": "程序员的数学全书学习地图",
+  "pm-0-and-1": "0 的故事与二进制",
+  "pm-permutations": "排列与组合",
+  "pm-probability": "概率论基础",
+  "pm-random-variables": "随机变量与期望",
+  "pm-statistics": "描述统计",
+  "pm-distributions": "概率分布",
+  "pm-recurrence": "递归与递推关系",
+  "pm-encryption": "加密与模运算",
+  "pm-final-review": "程序员的数学总复习",
+  // 深入浅出统计学
+  "hfs-learning-map": "深入浅出统计学全书学习地图",
+  "hfs-data-display": "数据展示与可视化",
+  "hfs-central-tendency": "集中趋势度量",
+  "hfs-dispersion": "离散程度度量",
+  "hfs-probability": "概率基础",
+  "hfs-discrete-distributions": "离散概率分布",
+  "hfs-continuous-distributions": "连续概率分布",
+  "hfs-sampling": "抽样与中心极限定理",
+  "hfs-confidence-intervals": "置信区间",
+  "hfs-final-review": "深入浅出统计学总复习",
+  // 线性代数应该这样学
+  "lad-learning-map": "线性代数应该这样学全书学习地图",
+  "lad-vector-spaces": "向量空间与子空间",
+  "lad-linear-maps": "线性映射与核、像",
+  "lad-matrices": "矩阵表示与基变更",
+  "lad-operators": "算子与谱定理",
+  "lad-inner-product": "内积空间",
+  "lad-det-trace": "行列式与迹",
+  "lad-eigenvalues": "特征值与特征向量",
+  "lad-complex-vectors": "复向量空间与算子",
+  "lad-final-review": "线性代数应该这样学总复习",
+  // 具体数学
+  "cm-learning-map": "具体数学全书学习地图",
+  "cm-recurrent-problems": "递归问题：汉诺塔、Josephus 与成套方法",
+  "cm-sums": "求和：记号、法则与扰动法",
+  "cm-integer-functions": "整函数：取整、取模与谱",
+  "cm-number-theory": "数论：整除、素数与同余",
+  "cm-binomial": "二项式系数：恒等式与技巧",
+  "cm-stirling": "Stirling 数：两类转换与互逆关系",
+  "cm-discrete-prob": "离散概率：均值、方差与 PGF",
+  "cm-generating-funcs": "生成函数：OGF、EGF 与解递归",
+  "cm-final-review": "综合复习：全书知识链与综合应用",
+  // 计算机图形学：几何体数据结构
+  "gds-learning-map": "几何体数据结构全书学习地图",
+  "gds-geom-primitives": "几何图元：点、向量、射线与平面",
+  "gds-triangulation": "三角剖分：Delaunay 与约束",
+  "gds-voronoi": "Voronoi 图：空间分割与对偶性",
+  "gds-quadtrees": "四叉树与八叉树：自适应空间分割",
+  "gds-bvh": "BVH：层次包围盒与 SAH 构建",
+  "gds-spatial-indexing": "空间索引：网格、哈希与 R-Tree",
+  "gds-collision-detection": "碰撞检测：宽相与窄相",
+  "gds-ray-tracing-struct": "光线追踪空间结构",
+  "gds-final-review": "综合复习：全书知识链与应用",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

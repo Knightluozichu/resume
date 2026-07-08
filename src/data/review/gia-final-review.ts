@@ -14,7 +14,7 @@ export const giaFinalReviewQuestions: ReviewQuestion[] = [
     id: "gia-final-review-2",
     level: 2,
     chapter: "gia-final-review",
-    question: "解释 Go 的设计哲学"少即是多"在语言层面的三个具体体现。",
+    question: "解释 Go 的设计哲学「少即是多」在语言层面的三个具体体现。",
     answer: "1) 没有继承——用组合和接口替代，避免了菱形继承和深层类层次；2) 没有泛型（1.18 前）/ 谨慎引入泛型——标准库长期用 interface{} 和代码生成解决复用，避免过度抽象；3) 没有异常——用 error 返回值替代 try/catch，强制开发者面对失败、减少隐式控制流。这些设计让语言简单、编译快、心智负担低，但也要求开发者用更显式的方式组织代码。",
     tags: ["Go 哲学", "设计原则", "理解"],
   },

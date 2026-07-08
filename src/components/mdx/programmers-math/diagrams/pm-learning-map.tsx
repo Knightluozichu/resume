@@ -1,0 +1,61 @@
+/**
+ * <PmBookMap>：程序员的数学全书学习地图（programmers-math 入门章）。
+ * 纯静态展示，无交互。Server Component。
+ */
+
+const VIEW_W = 720;
+const VIEW_H = 460;
+const COL_W = 156;
+const COL_GAP = 12;
+const COL_MARGIN = 36;
+const CARDS_TOP_Y = 168;
+const CARD_H = 32;
+const CARD_GAP = 10;
+const CARD_ROW = CARD_H + CARD_GAP;
+const colX = (i: number) => COL_MARGIN + i * (COL_W + COL_GAP);
+
+const COLUMNS: readonly { name: string; color: string; chapters: string[] }[] = [
+  { name: "数学基础", color: "var(--accent)", chapters: ["0. 学习地图", "1. 0和1的故事"] },
+  { name: "概率思维", color: "var(--success)", chapters: ["2. 排列组合", "3. 概率"] },
+  { name: "统计思维", color: "var(--warning)", chapters: ["4. 统计", "5. 随机变量", "6. 分布"] },
+  { name: "高级数学", color: "var(--danger)", chapters: ["7. 递归", "8. 加密", "9. 总复习"] },
+];
+
+export function PmBookMap() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
+        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label="从 0 和 1 → 计数 → 推理 → 分析 → 应用，五段递进覆盖程序员数学全貌" className="mx-auto block h-auto w-full max-w-[720px]">
+          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">程序员的数学 · 全书学习地图</text>
+          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">从 0 和 1 → 计数 → 推理 → 分析 → 应用，五段递进覆盖程序员数学全貌</text>
+          <rect x={COL_MARGIN} y="76" width={VIEW_W - COL_MARGIN * 2} height="32" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
+          <text x={VIEW_W / 2} y="97" textAnchor="middle" fontSize="12" fill="var(--text-secondary)"><tspan fontWeight="700" fill="var(--accent)" fontSize="13">学习路径</tspan><tspan>{"　"}</tspan><tspan fill="var(--text-primary)">表示 → 计数 → 推理 → 分析 → 应用</tspan></text>
+          {COLUMNS.map((col, ci) => {
+            const x = colX(ci);
+            return (
+              <g key={col.name}>
+                <rect x={x} y="124" width={COL_W} height="32" rx="8" fill={col.color} fillOpacity="0.12" stroke={col.color} strokeWidth="1.2" />
+                <text x={x + COL_W / 2} y="145" textAnchor="middle" fontSize="13" fontWeight="700" fill={col.color}>{col.name}（{col.chapters.length}）</text>
+                {col.chapters.map((name, pi) => {
+                  const cy = CARDS_TOP_Y + pi * CARD_ROW;
+                  return (
+                    <g key={name}>
+                      <rect x={x} y={cy} width={COL_W} height={CARD_H} rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
+                      <circle cx={x + 12} cy={cy + CARD_H / 2} r="3" fill={col.color} />
+                      <text x={x + COL_W / 2} y={cy + CARD_H / 2 + 4} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{name}</text>
+                      {pi < col.chapters.length - 1 && (<line x1={x + COL_W / 2} y1={cy + CARD_H} x2={x + COL_W / 2} y2={cy + CARD_ROW - 2} stroke={col.color} strokeWidth="1.4" strokeOpacity="0.6" />)}
+                    </g>
+                  );
+                })}
+              </g>
+            );
+          })}
+          <rect x="60" y="384" width={VIEW_W - 120} height="52" rx="12" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.4" />
+          <text x={VIEW_W / 2} y="407" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">全书 10 章 · 四段递进</text>
+          <text x={VIEW_W / 2} y="426" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">先打数学基础，再用计数工具学概率，然后统计思维分析数据，最后递归与加密综合应用</text>
+        </svg>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">从 0 和 1 → 计数 → 推理 → 分析 → 应用，五段递进覆盖程序员数学全貌</figcaption>
+    </figure>
+  );
+}

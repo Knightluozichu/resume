@@ -1,0 +1,136 @@
+---
+title: "哈希与搜索：完美哈希与 Bloom 过滤器"
+type: B
+section: "实际应用"
+order: 8
+description: "FNV 哈希、完美哈希与 Bloom 过滤器"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { HdHashingSearchDiagram } from "@/components/mdx/hackers-delight/diagrams/hd-hashing-search";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能实现 FNV 等简单快速的哈希函数
+- 能解释完美哈希的无冲突保证
+- 能实现 Bloom 过滤器并分析误判率
+- 能回答：Bloom 过滤器的假阳率如何控制？
+</Objectives>
+
+## 直觉引入
+
+哈希函数把任意数据"压缩"成固定长度的指纹。好的哈希函数要快（计算开销小）、要均匀（冲突少）。FNV 哈希只用乘法和 XOR，几行代码就能实现，适合非加密场景。
+
+如果键集合是固定的（如编译器的关键字表），可以构造完美哈希——保证零冲突，查找最坏 O(1)。如果键集合不固定但允许极小概率误判，Bloom 过滤器用多个哈希函数+位数组实现高效成员查询，空间只需传统哈希的 1/10。
+
+## 概念讲解
+
+### 哈希函数
+
+<HdHashingSearchDiagram />
+
+<Term def="将任意长度数据映射到固定长度值的函数，好的哈希函数快速且分布均匀">
+哈希函数
+</Term>
+
+FNV 哈希：hash = (hash ^ byte) * FNV_prime，简单快速。MurmurHash 更复杂但分布更好。加密哈希（SHA-256）安全但慢，非加密场景不用。选择原则：非加密用 FNV/Murmur，安全用 SHA。
+
+### 完美哈希与 Bloom 过滤器
+
+<Term def="对固定键集合构造的零冲突哈希表，查找最坏 O(1) 的两级哈希方案">
+完美哈希
+</Term>
+
+<Term def="用 k 个哈希函数和位数组实现的概率型数据结构，可能有假阳但无假阴">
+Bloom 过滤器
+</Term>
+
+完美哈希用两级哈希：第一级散列到一组桶，第二级对每个桶单独散列到无冲突的表。CHD 算法可在 O(n) 时间内构造。Bloom 过滤器：插入时用 k 个哈希函数设 k 位为 1，查询时检查 k 位是否全为 1。全 1 可能存在（假阳），有 0 则一定不存在（无假阴）。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：FNV 哈希">hash=(hash^byte)*prime，逐字节处理。简单快速，非加密场景首选。</Step>
+<Step title="第二步：完美哈希">对固定键集构造两级哈希，保证零冲突。编译器关键字表常用。</Step>
+<Step title="第三步：Bloom 过滤器">k 个哈希函数设 k 位为 1。查询全 1=可能存在（假阳），有 0=一定不存在。</Step>
+</Stepper>
+
+## 代码对照
+
+```c
+#include <stdint.h>
+
+// FNV-1a 哈希（32 位）
+uint32_t fnv1a(const void* data, int len) {
+    const uint8_t* p = (const uint8_t*)data;
+    uint32_t hash = 0x811c9dc5;       // FNV offset basis
+    for (int i = 0; i < len; i++) {
+        hash ^= p[i];                  // XOR 字节
+        hash *= 0x01000193;            // 乘 FNV prime
+    }
+    return hash;
+}
+
+// Bloom 过滤器
+typedef struct {
+    uint8_t* bits;    // 位数组
+    int size;          // 位数
+    int k;             // 哈希函数个数
+} BloomFilter;
+
+void bloom_add(BloomFilter* bf, const void* key, int len) {
+    for (int i = 0; i < bf->k; i++) {
+        uint32_t h = fnv1a(key, len) + i * 0x5bd1e995;  // k 个哈希
+        bf->bits[(h % bf->size) / 8] |= 1 << ((h % bf->size) % 8);
+    }
+}
+
+int bloom_check(BloomFilter* bf, const void* key, int len) {
+    for (int i = 0; i < bf->k; i++) {
+        uint32_t h = fnv1a(key, len) + i * 0x5bd1e995;
+        if (!(bf->bits[(h % bf->size) / 8] & (1 << ((h % bf->size) % 8))))
+            return 0;  // 有0 → 一定不存在（无假阴）
+    }
+    return 1;  // 全1 → 可能存在（有假阳）
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：Bloom 过滤器查询说"存在"但实际不存在。**
+原因 → 假阳性。其他元素设置的位恰好覆盖了查询元素的所有哈希位。
+修法 → 假阳率可控：(1-e^(-kn/m))^k。增大位数组 m 或优化 k 可降低。不可消除。
+</Callout>
+
+<Callout type="trap">
+**现象：用加密哈希（如 SHA-256）做哈希表。**
+原因 → 加密哈希设计目标是抗碰撞和单向性，速度慢。非加密场景不需要这些性质。
+修法 → 非加密场景用 FNV/MurmurHash，速度快 10-100 倍。只在需要安全性时用加密哈希。
+</Callout>
+
+<Exercises>
+**问题 1**：Bloom 过滤器的假阳率如何控制？
+
+<Answer>
+假阳率 p ≈ (1 - e^(-kn/m))^k，其中 n 是元素数、m 是位数、k 是哈希函数个数。最优 k = (m/n)·ln2。给定目标 p，需要 m = -n·ln(p)/(ln2)^2 位。增大 m 降低 p，但无法消除。典型配置：1% 假阳率约需 9.6 bits/元素。
+</Answer>
+
+**问题 2**：完美哈希和 Bloom 过滤器各适合什么场景？
+
+<Answer>
+完美哈希适合键集合固定不变的静态场景（如编译器关键字表、只读字典），保证零冲突最坏 O(1)。Bloom 过滤器适合键集合动态变化且允许假阳的场景（如缓存过滤、垃圾邮件过滤），空间效率高但不能删除元素且可能有假阳性。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="FNV 哈希">hash=(hash^byte)*prime 的简单快速非加密哈希函数。</GlossaryItem>
+<GlossaryItem term="完美哈希">对固定键集合构造的零冲突哈希表，查找最坏 O(1)。</GlossaryItem>
+<GlossaryItem term="Bloom 过滤器">用 k 个哈希函数和位数组实现的概率型数据结构，有假阳无假阴。</GlossaryItem>
+<GlossaryItem term="假阳率">Bloom 过滤器查询"存在"但实际不存在的概率，与 m/n/k 有关，不可消除。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="算法心得：高效算法的秘籍" adaptedUrl="" />

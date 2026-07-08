@@ -1,0 +1,142 @@
+---
+title: "浮点算术与进制转换"
+type: B
+section: "随机数"
+order: 5
+description: "浮点表示、精度损失与进制转换——TAOCP 中数值计算的基础"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { TcpArithmeticDiagram } from "@/components/mdx/taocp/diagrams/tcp-arithmetic";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 IEEE 754 浮点数的表示格式并计算表示范围与精度
+- 能分析浮点运算中精度损失的原因并给出缓解策略
+- 能手算十进制到二进制的转换以及任意进制间的转换
+- 能回答：为什么 0.1 + 0.2 ≠ 0.3 在浮点运算中？
+</Objectives>
+
+## 直觉引入
+
+超市找零时，1 元减 9 角 9 分应该剩 1 分。但如果你的计算器只能精确到角，1 元就变成了 10 角，减 9.9 角... 剩 0.1 角？这就是浮点数的困境——有限的位数无法精确表示所有实数。
+
+浮点算术的核心矛盾是**范围与精度的权衡**：你要么能表示很大的数（但精度低），要么能精确表示小数（但范围小）。理解这个权衡是数值计算的基础。
+
+## 概念讲解
+
+### 浮点数表示
+
+<Term def="浮点数是用科学计数法表示实数的方式：±d₀.d₁d₂...d_p × b^e，其中 p 是精度，b 是基数，e 是指数">浮点数</Term>的核心是科学计数法。IEEE 754 双精度格式用 1 位符号、11 位指数、52 位尾数，能表示约 $\pm 10^{308}$ 的范围和约 15-16 位有效数字。
+
+### 精度损失
+
+<Term def="机器 epsilon 是浮点数系中 1 与下一个可表示数之间的差，衡量浮点运算的相对精度">机器 epsilon</Term>是衡量浮点精度的关键指标。双精度的 $\epsilon \approx 2.2 \times 10^{-16}$。
+
+浮点运算不满足结合律：
+
+$$(a + b) + c \neq a + (b + c)$$
+
+因为中间结果的舍入方向不同。这就是 0.1 + 0.2 ≠ 0.3 的根本原因——0.1 和 0.2 在二进制中是无限循环小数，截断后产生误差。
+
+### 进制转换
+
+<Term def="进制转换是在不同基数表示之间转换数值的过程，核心是除法（整数部分）和乘法（小数部分）">进制转换</Term>的关键区分整数和小数部分。整数部分用「除基取余法」，小数部分用「乘基取整法」。
+
+## 交互 Demo
+
+<TcpArithmeticDiagram />
+
+<Stepper>
+<Step title="第一步：分离整数和小数">
+将 12.375 分离为整数部分 12 和小数部分 0.375。整数部分用除 2 取余法转换。
+</Step>
+<Step title="第二步：转换整数部分">
+12 ÷ 2 = 6 余 0，6 ÷ 2 = 3 余 0，3 ÷ 2 = 1 余 1，1 ÷ 2 = 0 余 1。从下往上读：1100。
+</Step>
+<Step title="第三步：转换小数部分">
+0.375 × 2 = 0.75 取 0，0.75 × 2 = 1.5 取 1，0.5 × 2 = 1.0 取 1。从上往下读：011。合在一起：1100.011。注意：0.1 的二进制是无限循环 0.000110011...，无法精确表示。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# 浮点精度问题演示
+print(0.1 + 0.2)        # 0.30000000000000004 ≠ 0.3
+print(0.1 + 0.2 == 0.3) # False
+
+# 原因：0.1 和 0.2 在二进制中是无限循环小数
+from decimal import Decimal
+print(Decimal(0.1))  # 0.1000000000000000055511151231257827021181583404541015625
+
+# 缓解方案1：用 decimal 模块（任意精度）
+from decimal import Decimal, getcontext
+getcontext().prec = 50
+print(Decimal('0.1') + Decimal('0.2'))  # 0.3 精确
+
+# 缓解方案2：用误差容忍比较
+def almost_equal(a, b, eps=1e-10):
+    return abs(a - b) < eps
+
+# 进制转换
+def dec_to_bin_fraction(n, bits=20):
+    # 十进制小数转二进制小数
+    result = []
+    for _ in range(bits):
+        n *= 2
+        if n >= 1:
+            result.append('1')
+            n -= 1
+        else:
+            result.append('0')
+    return '0.' + ''.join(result)
+
+print(dec_to_bin_fraction(0.1))  # 0.00011001100110011...（无限循环）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为浮点数运算满足结合律和分配律。**
+浮点运算不满足结合律：(a+b)+c ≠ a+(b+c)，因为中间结果的舍入不同。也不满足分配律：a×(b+c) ≠ a×b+a×c。在数值算法中，运算顺序会影响结果精度——这就是数值稳定性分析的核心。
+</Callout>
+
+<Callout type="trap">
+**误区：认为 double 精度足够所有场景。**
+double 有约 15-16 位有效数字，但累积误差可以让结果完全失真。例如用 naive 方法对 $10^{16}$ 个接近 1 的数求和，误差可以达到 1 的量级。金融计算、科学模拟等场景需要 arbitrary-precision arithmetic。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 0.1 + 0.2 ≠ 0.3 在浮点运算中？
+
+<Answer>
+0.1 和 0.2 在二进制中是无限循环小数（0.1₁₀ = 0.0001100110011...₂），浮点数用有限位数存储时会截断产生误差。两个有误差的数相加后，误差累积，结果与 0.3 的二进制表示（也是无限循环小数的截断）不完全相同。具体来说，0.1 存储为约 0.1000000000000000056，0.2 存储为约 0.2000000000000000111，相加得 0.30000000000000004，而 0.3 存储为约 0.2999999999999999889。
+</Answer>
+
+**问题 2**：手算十进制 12.375 的二进制表示。
+
+<Answer>
+整数部分 12：12÷2=6余0，6÷2=3余0，3÷2=1余1，1÷2=0余1，从下往上读 = 1100。小数部分 0.375：0.375×2=0.75取0，0.75×2=1.5取1，0.5×2=1.0取1，从上往下读 = 011。合在一起 = 1100.011₂。验证：8+4+0.25+0.125 = 12.375 ✓。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="浮点数">
+用科学计数法表示实数的方式：±d₀.d₁d₂...d_p × b^e。IEEE 754 双精度用 64 位存储，约 15-16 位有效数字。
+</GlossaryItem>
+<GlossaryItem term="机器 epsilon">
+浮点数系中 1 与下一个可表示数之间的差，衡量浮点运算的相对精度。双精度约 2.2×10⁻¹⁶。
+</GlossaryItem>
+<GlossaryItem term="精度损失">
+浮点运算中因有限位数截断导致的误差。0.1 等十进制小数在二进制中是无限循环，截断后产生系统性误差。
+</GlossaryItem>
+<GlossaryItem term="进制转换">
+在不同基数表示间转换数值的过程。整数部分用除基取余法，小数部分用乘基取整法。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />

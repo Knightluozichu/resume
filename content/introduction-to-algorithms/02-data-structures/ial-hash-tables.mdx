@@ -1,0 +1,140 @@
+---
+title: "散列表"
+type: B
+section: "数据结构"
+order: 5
+description: "散列函数、冲突处理与全域散列"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { IalHashTablesDiagram } from "@/components/mdx/introduction-to-algorithms/diagrams/ial-hash-tables";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释散列表通过散列函数将键映射到数组位置的原理
+- 能实现链地址法和开放寻址法两种冲突处理
+- 能解释全域散列和完美散列的概念
+- 能回答：为什么散列表期望 O(1) 但最坏 O(n)？
+</Objectives>
+
+## 直觉引入
+
+你要在一个有 1000 个抽屉的柜子里放文件。如果按名字首字母放，"张三"和"张伟"会挤一个抽屉。散列表的做法是用一个函数把文件名直接算成抽屉号，尽量分散。但再好的函数也可能冲突（两个文件算到同一个号），所以需要冲突处理策略。
+
+散列表的核心价值：期望 O(1) 的查找、插入、删除。代价是最坏 O(n)（所有键冲突到一个位置），但好的散列函数让这种情况概率极低。
+
+## 概念讲解
+
+### 散列函数与冲突
+
+<IalHashTablesDiagram />
+
+<Term def="将键映射到数组下标的函数 h: U → {0,1,...,m-1}">
+散列函数
+</Term>
+
+理想散列函数将键均匀分布。实践中常用除留余数法 h(k)=k mod m。冲突不可避免（鸽巢原理：|U|>m），需要冲突处理：链地址法（每个位置挂链表）或开放寻址法（冲突了找下一个空位）。
+
+### 全域散列
+
+<Term def="从一组散列函数中随机选择，使得任意两个键冲突概率不超过 1/m 的散列方案">
+全域散列
+</Term>
+
+<Term def="对静态键集合构造的散列表，保证最坏 O(1) 查找的两级散列方案">
+完美散列
+</Term>
+
+全域散列解决"对手构造恶意输入攻击"的问题：随机选散列函数，使任何输入的期望冲突概率可控。完美散列对固定的键集合构造两级散列，保证无冲突、最坏 O(1)。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：链地址法">h(k)=k mod m。冲突的键挂在同一位置的链表上。查找 O(1+α)，α=负载因子。</Step>
+<Step title="第二步：开放寻址法">冲突时用探查序列找下一个空位：线性探查 h(k,i)=(h'(k)+i) mod m。</Step>
+<Step title="第三步：全域散列">随机选 h(k)=((ak+b) mod p) mod m，a,b 随机。冲突概率 ≤1/m。</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# 链地址法散列表
+class HashTable:
+    def __init__(self, m=10):
+        self.m = m
+        self.table = [[] for _ in range(m)]
+
+    def h(self, key):
+        return key % self.m
+
+    def insert(self, key, value):
+        i = self.h(key)
+        for j, (k, _) in enumerate(self.table[i]):
+            if k == key:
+                self.table[i][j] = (key, value)
+                return
+        self.table[i].append((key, value))
+
+    def search(self, key):
+        i = self.h(key)
+        for k, v in self.table[i]:
+            if k == key: return v
+        return None  # 期望 O(1+α)，α=n/m
+
+# 开放寻址法（线性探查）
+class OpenAddrTable:
+    def __init__(self, m=10):
+        self.m = m
+        self.table = [None] * m
+
+    def h(self, key, i):
+        return (key + i) % self.m  # 线性探查
+
+    def insert(self, key):
+        for i in range(self.m):
+            j = self.h(key, i)
+            if self.table[j] is None:
+                self.table[j] = key
+                return j
+        raise Exception("Hash table full")
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：散列表查找不是 O(1) 而是 O(n)。**
+原因 → 散列函数差导致大量冲突，退化为链表。
+修法 → 好的散列函数+合理的负载因子 α=n/m（通常 ≤0.75）。必要时 rehash 扩容。
+</Callout>
+
+<Callout type="trap">
+**现象：线性探查产生聚集（clustering）。**
+原因 → 连续占用位置导致新插入的键探查距离越来越长。
+修法 → 用双重散列 h(k,i)=(h1(k)+i·h2(k)) mod m，探查序列更均匀。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么散列表期望 O(1) 但最坏 O(n)？
+
+<Answer>
+期望 O(1)：好的散列函数将键均匀分布，每个位置平均 α=n/m 个键，链表查找 O(1+α)，m 与 n 同阶时 O(1)。最坏 O(n)：所有键散列到同一位置，退化为长链表。全域散列保证期望冲突概率可控，但无法消除最坏情况。
+</Answer>
+
+**问题 2**：链地址法和开放寻址法各有什么优劣？
+
+<Answer>
+链地址法：实现简单，不怕满（链表可无限长），但需要额外指针空间。开放寻址法：不需要指针，缓存友好，但怕满（满时必须 rehash），且删除困难（需标记"已删除"而非直接清除）。实践中数据量适中用开放寻址，数据量大用链地址。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="散列函数">将键映射到数组下标的函数 h: U→{0,...,m-1}，理想情况下均匀分布。</GlossaryItem>
+<GlossaryItem term="链地址法">冲突处理策略，每个位置挂链表存储冲突的键。查找 O(1+α)。</GlossaryItem>
+<GlossaryItem term="开放寻址法">冲突处理策略，冲突时按探查序列找下一个空位，不需要额外指针空间。</GlossaryItem>
+<GlossaryItem term="全域散列">随机选择散列函数使任意两键冲突概率 ≤1/m 的方案，防止恶意输入攻击。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="算法导论" adaptedUrl="" />

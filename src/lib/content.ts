@@ -128,6 +128,15 @@ export const BOOK_ORDER = [
   "python-advanced",
   "algorithms-4e",
   "programming-pearls",
+  "competitive-algorithms",
+  "introduction-to-algorithms",
+  "hackers-delight",
+  "taocp",
+  "programmers-math",
+  "head-first-statistics",
+  "linear-algebra-done-right",
+  "concrete-mathematics",
+  "geometric-data-structures",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -197,6 +206,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "python-advanced": "Python 高级编程",
   "algorithms-4e": "算法（第4版）",
   "programming-pearls": "编程珠玑",
+  "competitive-algorithms": "深入浅出竞赛算法",
+  "introduction-to-algorithms": "算法导论",
+  "hackers-delight": "算法心得",
+  "taocp": "计算机程序设计艺术",
+  "programmers-math": "程序员的数学",
+  "head-first-statistics": "深入浅出统计学",
+  "linear-algebra-done-right": "线性代数应该这样学",
+  "concrete-mathematics": "具体数学",
+  "geometric-data-structures": "计算机图形学：几何体数据结构",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,221 @@
+---
+title: "BVH：层次包围盒与 SAH 构建"
+type: B
+section: "数据结构"
+order: 3
+description: "BVH 的自顶向下构建、SAH 启发式与射线遍历"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GdsBvhDiagram } from "@/components/mdx/geometric-data-structures/diagrams/gds-bvh";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 BVH 的层次包围盒结构与构建流程
+- 掌握 SAH（表面积启发式）的原理与计算
+- 能实现 BVH 的射线遍历与前向排序
+- 理解 BVH 相比 KD-Tree 的优势
+</Objectives>
+
+## 直觉引入
+
+BVH（Bounding Volume Hierarchy）是现代光线追踪的核心加速结构。它用 AABB 层层包裹几何体，射线只需测试 $O(\log n)$ 个 AABB 节点而非全部 $n$ 个三角形。
+
+BVH 与四叉树/KD-Tree 的本质区别：四叉树分割「空间」，BVH 分割「对象」。这意味着 BVH 的节点 AABB 可以重叠，但每个对象只属于一个叶节点——这使得 BVH 对动态场景更友好（对象移动时只需更新路径上的 AABB）。
+
+## 概念讲解
+
+<Term def="用 AABB 层层包裹几何体的树结构">BVH</Term>每个内部节点的 AABB 包含其所有子节点的 AABB。叶节点存少量三角形（如 1-4 个）。
+
+<Term def="用表面积估计射线命中概率的 BVH 构建启发式">SAH</Term>（Surface Area Heuristic）：射线命中 AABB 的概率正比于其表面积。构建时选择使代价函数最小的分裂位置：
+$$C = C_{\text{trav}} + P_{\text{left}} \cdot C_{\text{left}} + P_{\text{right}} \cdot C_{\text{right}}}$$
+其中 $P = \text{SA}(\text{child}) / \text{SA}(\text{parent})$。
+
+### 自顶向下构建
+1. 计算所有对象质心的 AABB。
+2. 选最长轴作为分裂轴。
+3. 按质心坐标在该轴上排序。
+4. 在中位数处分裂为左右两组。
+5. 递归构建左右子树。
+6. 节点 AABB = 子节点 AABB 的并集。
+
+### SAH 构建
+中位数分裂不总是最优。SAH 在分裂轴上尝试多个位置（bin），计算每处的代价函数 $C$，选最小代价的位置：
+$$C_{\text{split}} = C_{\text{trav}} + \frac{SA(B_L)}{SA(B)} N_L C_{\text{intersect}} + \frac{SA(B_R)}{SA(B)} N_R C_{\text{intersect}}}$$
+$SA$ 为表面积，$N$ 为对象数，$C_{\text{trav}}$ 和 $C_{\text{intersect}}$ 为代价常数（通常 $C_{\text{trav}} < C_{\text{intersect}}}$）。
+
+### 射线遍历 BVH
+```
+traverse(node, ray, t_best):
+    if not ray_aabb(node.aabb, ray): return
+    if is_leaf(node):
+        for tri in node.triangles:
+            t = ray_triangle(tri, ray)
+            t_best = min(t_best, t)
+        return
+    # 前向排序：近的子树先访问
+    near, far = sort_children_by_distance(node, ray)
+    traverse(near, ray, t_best)
+    if far.aabb might be closer than t_best:
+        traverse(far, ray, t_best)
+```
+
+### BVH vs KD-Tree
+| | BVH | KD-Tree |
+|---|---|---|
+| 分割方式 | 对象分割 | 空间分割 |
+| AABB 重叠 | 允许 | 无 |
+| 构建 | 快 | 慢 |
+| 动态更新 | 友好 | 困难 |
+| GPU 友好 | 是 | 较难 |
+
+## 交互 Demo
+
+> 猜一猜：SAH 公式中，为什么用表面积而不是体积来估计射线命中概率？
+
+<GdsBvhDiagram />
+
+<Stepper>
+<Step title="第一步：构建 BVH">
+选最长轴 → 按质心排序 → SAH 选最优分裂位置 → 递归构建子树。叶节点存 1-4 个三角形。
+</Step>
+<Step title="第二步：射线遍历">
+从根开始，先测 AABB 相交。前向排序：近的子树先访问。叶节点测三角形。
+</Step>
+<Step title="第三步：剪枝优化">
+维护当前最近交点 t_best。远子树 AABB 的最近距离 > t_best 时跳过（剪枝）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+用 Python 实现 BVH 构建与射线遍历：
+
+```python
+class BVHNode:
+    def __init__(self):
+        self.aabb_min = None
+        self.aabb_max = None
+        self.left = None
+        self.right = None
+        self.triangles = None  # 仅叶节点有
+
+def compute_aabb(triangles):
+    """计算三角形列表的整体 AABB"""
+    import math
+    mn = [math.inf] * 3
+    mx = [-math.inf] * 3
+    for tri in triangles:
+        for v in tri:
+            for i in range(3):
+                mn[i] = min(mn[i], v[i])
+                mx[i] = max(mx[i], v[i])
+    return mn, mx
+
+def centroid(tri):
+    """三角形质心"""
+    return [(tri[0][i] + tri[1][i] + tri[2][i]) / 3 for i in range(3)]
+
+def surface_area(mn, mx):
+    """AABB 表面积"""
+    dx = mx[0] - mn[0]
+    dy = mx[1] - mn[1]
+    dz = mx[2] - mn[1]
+    return 2 * (dx * dy + dy * dz + dz * dx)
+
+def build_bvh(triangles, max_leaf_size=4, depth=0, max_depth=30):
+    """自顶向下构建 BVH（中位数分裂）"""
+    node = BVHNode()
+    node.aabb_min, node.aabb_max = compute_aabb(triangles)
+    
+    if len(triangles) <= max_leaf_size or depth >= max_depth:
+        node.triangles = triangles
+        return node
+    
+    # 选最长轴
+    extents = [node.aabb_max[i] - node.aabb_min[i] for i in range(3)]
+    axis = extents.index(max(extents))
+    
+    # 按质心排序，中位数分裂
+    triangles.sort(key=lambda t: centroid(t)[axis])
+    mid = len(triangles) // 2
+    
+    node.left = build_bvh(triangles[:mid], max_leaf_size, depth+1, max_depth)
+    node.right = build_bvh(triangles[mid:], max_leaf_size, depth+1, max_depth)
+    return node
+
+def sah_cost(left_tris, right_tris, parent_sa):
+    """SAH 代价函数"""
+    C_trav = 1.0   # 遍历代价
+    C_isect = 4.0  # 相交测试代价
+    lmn, lmx = compute_aabb(left_tris)
+    rmn, rmx = compute_aabb(right_tris)
+    l_sa = surface_area(lmn, lmx)
+    r_sa = surface_area(rmn, rmx)
+    p_left = l_sa / parent_sa if parent_sa > 0 else 0
+    p_right = r_sa / parent_sa if parent_sa > 0 else 0
+    return C_trav + p_left * len(left_tris) * C_isect + p_right * len(right_tris) * C_isect
+
+def count_nodes(node):
+    if node.triangles is not None:
+        return 1, 1
+    l_inner, l_leaf = count_nodes(node.left)
+    r_inner, r_leaf = count_nodes(node.right)
+    return 1 + l_inner + r_inner, l_leaf + r_leaf
+
+# 测试：生成随机三角形
+import random
+tris = [[
+    [random.random()*10, random.random()*10, random.random()*10],
+    [random.random()*10, random.random()*10, random.random()*10],
+    [random.random()*10, random.random()*10, random.random()*10],
+] for _ in range(1000)]
+
+bvh = build_bvh(tris)
+inner, leaf = count_nodes(bvh)
+print(f"BVH: {inner} 内部节点, {leaf} 叶节点")
+print(f"树高约: {inner.bit_length()} 层")
+
+```
+
+`build_bvh` 用中位数分裂构建 BVH。`sah_cost` 计算 SAH 代价——实际构建中应在分裂轴上尝试多个位置，选 SAH 代价最小的。1000 个三角形构建的 BVH 约有 $\log_2 1000 \approx 10$ 层，射线只需测试约 10 个 AABB + 少量三角形。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** BVH 构建用中位数分裂，查询性能不理想。
+**原因 →** 中位数分裂只保证平衡，不保证查询最优。
+**修法 →** 用 SAH 代替中位数。SAH 在分裂轴上尝试多个 bin 位置，选代价函数最小的位置。代价 = 遍历开销 + 表面积加权的子树相交开销。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 射线遍历 BVH 时没有剪枝，遍历了所有相交节点。
+**原因 →** 没有维护当前最近交点 t_best。
+**修法 →** 维护 t_best，前向排序后先访问近子树。远子树 AABB 的最近距离 ≥ t_best 时跳过。这把最坏 O(n) 降为 O(log n)。
+</Callout>
+
+<Exercises>
+**问题**：SAH 代价函数是什么？为什么用表面积作为权重？
+
+<Answer>
+C = C_trav + (SA_L/SA_parent)·N_L·C_isect + (SA_R/SA_parent)·N_R·C_isect。射线命中 AABB 的概率正比于其表面积（几何概率：随机射线击中凸体的概率 = 表面积/4π，在大场景中简化为 SA/SA_parent）。表面积大的子树更可能被射线命中，应放更少对象。
+</Answer>
+
+**问题**：对比 BVH 和 KD-Tree 在动态场景中的表现。
+
+<Answer>
+BVH（对象分割）：对象移动时只需更新路径上祖先的 AABB，O(log n) 更新。Refit（重新计算 AABB）后可选择性 Rebuild（重建质量下降时）。KD-Tree（空间分割）：对象移动后可能跨越分割面，需要删除+重新插入，代价高。动态场景首选 BVH。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="BVH">层次包围盒：用 AABB 层层包裹几何体的树，射线遍历 O(log n)。</GlossaryItem>
+<GlossaryItem term="SAH">表面积启发式：用 AABB 表面积估计射线命中概率，指导 BVH 最优分裂。</GlossaryItem>
+<GlossaryItem term="前向排序">射线遍历时按到子节点 AABB 的距离排序，近的先访问以便剪枝。</GlossaryItem>
+<GlossaryItem term="对象分割">BVH 分割对象而非空间，每个对象只属于一个叶节点，AABB 可重叠。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：几何体数据结构" adaptedUrl="" />

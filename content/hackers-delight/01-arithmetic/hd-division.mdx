@@ -1,0 +1,121 @@
+---
+title: "除法优化：常量除法与取模"
+type: B
+section: "算术技巧"
+order: 3
+description: "用乘法替代除法、魔法数除法、无除法取模"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { HdDivisionDiagram } from "@/components/mdx/hackers-delight/diagrams/hd-division";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释除以 2 的幂用右移替代的原理
+- 能理解魔法数除法的核心思想：1/d ≈ m/2^k
+- 能实现除以常量的乘法替代方案
+- 能回答：为什么编译器会把除以常量优化成乘法？
+</Objectives>
+
+## 直觉引入
+
+除法是 CPU 最慢的基本运算之一（20-40 周期），乘法只需 3-5 周期。如果除数是常量，编译器会把除法变成乘法+移位。比如 x/4 变成 x>>2，x/3 变成 (x*M)>>33（M 是"魔法数"）。
+
+魔法数的原理：1/3 ≈ M/2^33，所以 x/3 ≈ (x*M)>>33。M 是一个精心选择的整数，使得 (x*M)>>k 精确等于 x/d 对所有 x 成立（在无溢出的范围内）。编译器自动做这个优化，但理解原理能帮你手写高性能代码。
+
+## 概念讲解
+
+### 除以 2 的幂
+
+<HdDivisionDiagram />
+
+<Term def="用右移 x>>k 替代 x/(2^k) 的优化，无符号除法精确成立">
+移位替代除法
+</Term>
+
+无符号数 x/(2^k) = x >> k，精确成立。有符号数需要算术右移+修正（向下取整 vs 向零取整的差异）。
+
+### 魔法数除法
+
+<Term def="用乘以一个精心选择的整数 M 后右移 k 位来精确实现 x/d 的技术，M 称为魔法数">
+魔法数除法
+</Term>
+
+对于常量除数 d，找到 M 和 k 使得 x/d = (x*M) >> k 对所有 x 精确成立。原理：M ≈ 2^k / d，选择足够大的 k 使误差 <1。编译器自动生成魔法数。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：除以2的幂">无符号 x/4 = x>>2。有符号需修正：(x + sign_correction) >> 2。</Step>
+<Step title="第二步：魔法数原理">x/d ≈ x*M >> k，其中 M≈2^k/d。选 k 足够大使精度无损。</Step>
+<Step title="第三步：取模优化">x%d = x - d*(x/d)。先算除法再减。对 2 的幂 x%(2^k) = x & (2^k - 1)。</Step>
+</Stepper>
+
+## 代码对照
+
+```c
+// 除以 2 的幂：无符号直接右移
+unsigned int div_pow2(unsigned int x, int k) {
+    return x >> k;  // 精确等于 x / (2^k)
+}
+
+// 有符号除以 2 的幂（需要修正向零取整）
+int div_pow2_signed(int x, int k) {
+    // 算术右移是向下取整，但 C 的除法向零取整
+    // 负数需要修正
+    return (x + ((x >> 31) & ((1 << k) - 1))) >> k;
+}
+
+// 魔法数除法示例：x / 3
+// 3 的魔法数 M = 0xAAAAAAAB (32位), k = 33
+// x/3 = (unsigned long long)x * 0xAAAAAAAB >> 33
+unsigned int div3(unsigned int x) {
+    return (unsigned int)((unsigned long long)x * 0xAAAAAAAB >> 33);
+    // 一次乘法+一次移位，替代一次除法（20-40周期→3-5周期）
+}
+
+// 取模优化：x % 8 = x & 7
+unsigned int mod8(unsigned int x) {
+    return x & 7;  // 等价于 x % 8，但快得多
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：有符号数直接右移当除法用结果不对。**
+原因 → 算术右移向下取整，C 除法向零取整。负数时差异：-3>>1 = -2（向下），-3/2 = -1（向零）。
+修法 → 负数加修正：x + ((1<<k)-1) 再右移，或用上面的修正公式。
+</Callout>
+
+<Callout type="trap">
+**现象：手写魔法数除法结果偶尔出错。**
+原因 → 魔法数 M 和移位 k 需要精确计算，不能随便选。溢出问题也需要处理。
+修法 → 让编译器自动优化（写 x/3 编译器自动用魔法数），或用 Hacker's Delight 的算法精确计算 M 和 k。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么编译器会把除以常量优化成乘法？
+
+<Answer>
+除法在 CPU 上需要 20-40 周期，乘法只需 3-5 周期。对常量除数 d，可找到魔法数 M 和移位 k 使 x/d = (x*M)>>k 精确成立。这样把除法变成乘法+移位，快 4-8 倍。编译器自动做此优化。
+</Answer>
+
+**问题 2**：有符号数除以 2 的幂为什么不能直接右移？
+
+<Answer>
+C 语言除法向零取整（-3/2=-1），但算术右移向下取整（-3>>1=-2）。负数时两者不一致。修正方法：对负数先加 (2^k - 1) 再右移，即 (x + (x>>31 & ((1<<k)-1))) >> k，使结果向零取整。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="移位替代除法">用 x>>k 替代 x/(2^k)。无符号精确成立，有符号需修正取整方向。</GlossaryItem>
+<GlossaryItem term="魔法数除法">用乘以魔法数 M 后右移 k 位来精确实现常量除法的技术，M≈2^k/d。</GlossaryItem>
+<GlossaryItem term="向零取整">C 语言除法的取整方式，-3/2=-1（向零靠近）。算术右移是向下取整，-3>>1=-2。</GlossaryItem>
+<GlossaryItem term="取模优化">x%(2^k) = x & (2^k-1)，用位运算替代取模，对 2 的幂精确成立。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="算法心得：高效算法的秘籍" adaptedUrl="" />

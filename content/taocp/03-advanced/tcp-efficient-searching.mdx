@@ -1,0 +1,149 @@
+---
+title: "高效搜索"
+type: B
+section: "高级主题"
+order: 8
+description: "哈希表、B 树与多路搜索——TAOCP 中搜索算法的效率极限"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { TcpEfficientSearchingDiagram } from "@/components/mdx/taocp/diagrams/tcp-efficient-searching";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释哈希表的工作原理并分析冲突解决策略的优劣
+- 能描述 B 树的结构特点及其在数据库索引中的应用
+- 能推导二分搜索的时间复杂度并理解其前提条件
+- 能回答：为什么 B 树而非二叉搜索树被用于数据库索引？
+</Objectives>
+
+## 直觉引入
+
+在图书馆找一本书，有三种策略：一种按编号顺序找（二分搜索），一种用编号直接算出位置（哈希表），一种按类别层层缩小范围（B 树）。哪种最快取决于数据量和访问模式。
+
+搜索是计算机科学的核心操作之一。Knuth 在 TAOCP 中系统讨论了从顺序搜索到哈希搜索到多路搜索树的各种技术，核心问题是：如何在不同的数据量和访问模式下达到最优的搜索效率。
+
+## 概念讲解
+
+### 哈希搜索
+
+<Term def="哈希表通过哈希函数将键映射到数组位置，实现平均 O(1) 的查找、插入和删除">哈希表</Term>是理论上最快的搜索结构。关键挑战是<Term def="哈希冲突是两个不同键映射到同一位置的现象，需要用链地址法或开放地址法解决">哈希冲突</Term>。
+
+### 二分搜索
+
+<Term def="二分搜索在有序数组中每次比较中点，将搜索范围减半，时间复杂度 O(log n)">二分搜索</Term>的前提是数据有序。它是最优雅的搜索算法之一——$O(\log n)$ 意味着 10 亿个数据只需 30 次比较。
+
+### B 树
+
+<Term def="B 树是一种自平衡的多路搜索树，每个节点可有多个键和多个子节点，专为磁盘等块存储设备优化">B 树</Term>是数据库索引的标准结构。与二叉搜索树相比，B 树每个节点存储多个键（通常几十到几百个），树高很低（3-4 层就能存储数十亿条记录），大幅减少磁盘 I/O 次数。
+
+## 交互 Demo
+
+<TcpEfficientSearchingDiagram />
+
+<Stepper>
+<Step title="第一步：分析数据特征">
+数据是否有序？有序用二分搜索 $O(\log n)$。数据量多大？小规模在内存用哈希表 $O(1)$；大规模在磁盘用 B 树（减少 I/O）。是否需要范围查询？需要则不能用哈希表（只支持精确匹配）。
+</Step>
+<Step title="第二步：评估访问模式">
+精确查找为主 → 哈希表（平均 $O(1)$）。范围查询为主 → B 树 / B+ 树（$O(\log n + k)$，k 是结果数）。顺序遍历为主 → 有序数组。插入删除频繁 → 平衡树或哈希表。
+</Step>
+<Step title="第三步：考虑存储层次">
+内存中的搜索：哈希表和平衡二叉树都很快，哈希表平均更优。磁盘上的搜索：B 树远优于二叉树——因为磁盘按块读取（4KB-64KB），B 树每个节点一整块，3-4 层就能覆盖数十亿条记录，而二叉树需要 30+ 层，每层一次 I/O。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# 三种搜索结构的实现对比
+
+# 1. 二分搜索 O(log n) —— 需要有序数组
+def binary_search(arr, target):
+    lo, hi = 0, len(arr) - 1
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if arr[mid] == target:
+            return mid
+        elif arr[mid] < target:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return -1
+
+# 2. 哈希表 O(1) 平均 —— 用 Python dict 模拟
+hash_table = {}
+hash_table["alice"] = 25
+hash_table["bob"] = 30
+# 查找
+print(hash_table.get("alice"))  # O(1) 平均
+
+# 3. B 树（简化版）—— 多路搜索树
+class BTreeNode:
+    def __init__(self, t=3):  # t 是最小度数
+        self.keys = []
+        self.children = []
+        self.leaf = True
+        self.t = t  # 每个节点最多 2t-1 个键
+
+    def search(self, key):
+        i = 0
+        while i < len(self.keys) and key > self.keys[i]:
+            i += 1
+        if i < len(self.keys) and key == self.keys[i]:
+            return self.keys[i]
+        if self.leaf:
+            return None
+        return self.children[i].search(key)
+
+# B 树优势：磁盘 I/O 友好
+# 一个节点 = 一个磁盘块（如 4KB）
+# 3 层 B 树（t=200）可存 200^3 = 8,000,000 条记录
+# 而二叉树需要 log2(8000000) ≈ 23 层 = 23 次磁盘 I/O
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为哈希表总是 O(1) 所以永远最优。**
+哈希表的 O(1) 是平均复杂度，最坏情况（所有键冲突）是 O(n)。更重要的是，哈希表不支持范围查询——找 [25, 35] 之间的所有记录，哈希表只能遍历全部，而 B+ 树只需 $O(\log n + k)$。数据库索引普遍用 B+ 树而非哈希表。
+</Callout>
+
+<Callout type="trap">
+**误区：认为二叉搜索树和 B 树的渐近复杂度相同所以没区别。**
+两者查找都是 $O(\log n)$，但常数差异巨大。二叉树每个节点 1 个键、2 个子节点，$10^9$ 条记录需要 30 层。B 树每个节点几百个键，$10^9$ 条记录只需 3-4 层。在磁盘上，每多一层就是一次额外的 I/O（毫秒级），B 树的 3 次 I/O vs 二叉树的 30 次 I/O 差距是数量级的。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 B 树而非二叉搜索树被用于数据库索引？
+
+<Answer>
+数据库数据存储在磁盘上，磁盘 I/O 是瓶颈（毫秒级，比内存慢 10 万倍）。B 树每个节点存储多个键（与磁盘块大小匹配，如 4KB 能存几百个键），树高很低——3-4 层就能覆盖数十亿条记录，每次查询只需 3-4 次磁盘 I/O。二叉搜索树每个节点 1 个键，$10^9$ 条记录需要约 30 层，30 次 I/O。虽然两者都是 $O(\log n)$，但 B 树的底数大（几百 vs 2），I/O 次数少一个数量级以上。
+</Answer>
+
+**问题 2**：哈希表和 B+ 树各自适合什么查询场景？
+
+<Answer>
+哈希表适合精确查找（等值查询），平均 O(1)，但不支持范围查询和有序遍历。B+ 树适合范围查询和有序遍历，查找 O(log n + k)（k 是结果数），同时支持精确查找。数据库中：点查询可用哈希索引，范围查询、排序、前缀匹配必须用 B+ 树索引。这也是为什么大多数数据库默认用 B+ 树。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="哈希表">
+通过哈希函数将键映射到数组位置的结构。平均 O(1) 查找插入删除，但不支持范围查询。
+</GlossaryItem>
+<GlossaryItem term="哈希冲突">
+两个不同键映射到同一位置的现象。解决方法有链地址法（拉链）和开放地址法（线性探测等）。
+</GlossaryItem>
+<GlossaryItem term="B 树">
+自平衡多路搜索树，每节点多个键和子节点。专为磁盘优化，3-4 层可覆盖数十亿记录。数据库索引标准结构。
+</GlossaryItem>
+<GlossaryItem term="二分搜索">
+在有序数组中每次比较中点将范围减半的搜索算法。O(log n)，前提是数据有序且支持随机访问。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />

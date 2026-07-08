@@ -818,6 +818,96 @@ import { ppBackOfEnvelopeQuestions } from "./review/pp-back-of-envelope";
 import { ppPerspectivesQuestions } from "./review/pp-perspectives";
 import { ppEpilogQuestions } from "./review/pp-epilog";
 import { ppFinalReviewQuestions } from "./review/pp-final-review";
+import { caLearningMapQuestions } from "./review/ca-learning-map";
+import { caContestBasicsQuestions } from "./review/ca-contest-basics";
+import { caDpQuestions } from "./review/ca-dp";
+import { caGreedyQuestions } from "./review/ca-greedy";
+import { caGraphAlgosQuestions } from "./review/ca-graph-algos";
+import { caStringAlgosQuestions } from "./review/ca-string-algos";
+import { caMathTricksQuestions } from "./review/ca-math-tricks";
+import { caSegmentTreeQuestions } from "./review/ca-segment-tree";
+import { caUnionFindQuestions } from "./review/ca-union-find";
+import { caFinalReviewQuestions } from "./review/ca-final-review";
+import { ialLearningMapQuestions } from "./review/ial-learning-map";
+import { ialFoundationsQuestions } from "./review/ial-foundations";
+import { ialSortingQuestions } from "./review/ial-sorting";
+import { ialSelectionQuestions } from "./review/ial-selection";
+import { ialBinarySearchTreesQuestions } from "./review/ial-binary-search-trees";
+import { ialHashTablesQuestions } from "./review/ial-hash-tables";
+import { ialDataStructuresQuestions } from "./review/ial-data-structures";
+import { ialGraphAlgorithmsQuestions } from "./review/ial-graph-algorithms";
+import { ialDpAdvancedQuestions } from "./review/ial-dp-advanced";
+import { ialFinalReviewQuestions } from "./review/ial-final-review";
+import { hdLearningMapQuestions } from "./review/hd-learning-map";
+import { hdBitManipulationQuestions } from "./review/hd-bit-manipulation";
+import { hdArithmeticTricksQuestions } from "./review/hd-arithmetic-tricks";
+import { hdDivisionQuestions } from "./review/hd-division";
+import { hdPowerQuestions } from "./review/hd-power";
+import { hdUnusualBasesQuestions } from "./review/hd-unusual-bases";
+import { hdHashingSearchQuestions } from "./review/hd-hashing-search";
+import { hdFloatingPointQuestions } from "./review/hd-floating-point";
+import { hdCrcErrorQuestions } from "./review/hd-crc-error";
+import { hdFinalReviewQuestions } from "./review/hd-final-review";
+import { tcpLearningMapQuestions } from "./review/tcp-learning-map";
+import { tcpMathematicalPreliminariesQuestions } from "./review/tcp-mathematical-preliminaries";
+import { tcpSequencesQuestions } from "./review/tcp-sequences";
+import { tcpArithmeticQuestions } from "./review/tcp-arithmetic";
+import { tcpPolynomialsQuestions } from "./review/tcp-polynomials";
+import { tcpGf2Questions } from "./review/tcp-gf2";
+import { tcpRandomNumbersQuestions } from "./review/tcp-random-numbers";
+import { tcpEfficientSearchingQuestions } from "./review/tcp-efficient-searching";
+import { tcpInfoStructuresQuestions } from "./review/tcp-info-structures";
+import { tcpFinalReviewQuestions } from "./review/tcp-final-review";
+import { pmLearningMapQuestions } from "./review/pm-learning-map";
+import { pm0And1Questions } from "./review/pm-0-and-1";
+import { pmPermutationsQuestions } from "./review/pm-permutations";
+import { pmProbabilityQuestions } from "./review/pm-probability";
+import { pmRandomVariablesQuestions } from "./review/pm-random-variables";
+import { pmStatisticsQuestions } from "./review/pm-statistics";
+import { pmDistributionsQuestions } from "./review/pm-distributions";
+import { pmRecurrenceQuestions } from "./review/pm-recurrence";
+import { pmEncryptionQuestions } from "./review/pm-encryption";
+import { pmFinalReviewQuestions } from "./review/pm-final-review";
+import { hfsLearningMapQuestions } from "./review/hfs-learning-map";
+import { hfsDataDisplayQuestions } from "./review/hfs-data-display";
+import { hfsCentralTendencyQuestions } from "./review/hfs-central-tendency";
+import { hfsDispersionQuestions } from "./review/hfs-dispersion";
+import { hfsProbabilityQuestions } from "./review/hfs-probability";
+import { hfsDiscreteDistributionsQuestions } from "./review/hfs-discrete-distributions";
+import { hfsContinuousDistributionsQuestions } from "./review/hfs-continuous-distributions";
+import { hfsSamplingQuestions } from "./review/hfs-sampling";
+import { hfsConfidenceIntervalsQuestions } from "./review/hfs-confidence-intervals";
+import { hfsFinalReviewQuestions } from "./review/hfs-final-review";
+import { ladLearningMapQuestions } from "./review/lad-learning-map";
+import { ladVectorSpacesQuestions } from "./review/lad-vector-spaces";
+import { ladLinearMapsQuestions } from "./review/lad-linear-maps";
+import { ladMatricesQuestions } from "./review/lad-matrices";
+import { ladOperatorsQuestions } from "./review/lad-operators";
+import { ladInnerProductQuestions } from "./review/lad-inner-product";
+import { ladDetTraceQuestions } from "./review/lad-det-trace";
+import { ladEigenvaluesQuestions } from "./review/lad-eigenvalues";
+import { ladComplexVectorsQuestions } from "./review/lad-complex-vectors";
+import { ladFinalReviewQuestions } from "./review/lad-final-review";
+import { cmLearningMapQuestions } from "./review/cm-learning-map";
+import { cmRecurrentProblemsQuestions } from "./review/cm-recurrent-problems";
+import { cmSumsQuestions } from "./review/cm-sums";
+import { cmIntegerFunctionsQuestions } from "./review/cm-integer-functions";
+import { cmNumberTheoryQuestions } from "./review/cm-number-theory";
+import { cmBinomialQuestions } from "./review/cm-binomial";
+import { cmStirlingQuestions } from "./review/cm-stirling";
+import { cmDiscreteProbQuestions } from "./review/cm-discrete-prob";
+import { cmGeneratingFuncsQuestions } from "./review/cm-generating-funcs";
+import { cmFinalReviewQuestions } from "./review/cm-final-review";
+import { gdsLearningMapQuestions } from "./review/gds-learning-map";
+import { gdsGeomPrimitivesQuestions } from "./review/gds-geom-primitives";
+import { gdsTriangulationQuestions } from "./review/gds-triangulation";
+import { gdsVoronoiQuestions } from "./review/gds-voronoi";
+import { gdsQuadtreesQuestions } from "./review/gds-quadtrees";
+import { gdsBvhQuestions } from "./review/gds-bvh";
+import { gdsSpatialIndexingQuestions } from "./review/gds-spatial-indexing";
+import { gdsCollisionDetectionQuestions } from "./review/gds-collision-detection";
+import { gdsRayTracingStructQuestions } from "./review/gds-ray-tracing-struct";
+import { gdsFinalReviewQuestions } from "./review/gds-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1643,6 +1733,105 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ppPerspectivesQuestions,
   ...ppEpilogQuestions,
   ...ppFinalReviewQuestions,
+  // 深入浅出竞赛算法
+  ...caLearningMapQuestions,
+  ...caContestBasicsQuestions,
+  ...caDpQuestions,
+  ...caGreedyQuestions,
+  ...caGraphAlgosQuestions,
+  ...caStringAlgosQuestions,
+  ...caMathTricksQuestions,
+  ...caSegmentTreeQuestions,
+  ...caUnionFindQuestions,
+  ...caFinalReviewQuestions,
+  // 算法导论
+  ...ialLearningMapQuestions,
+  ...ialFoundationsQuestions,
+  ...ialSortingQuestions,
+  ...ialSelectionQuestions,
+  ...ialBinarySearchTreesQuestions,
+  ...ialHashTablesQuestions,
+  ...ialDataStructuresQuestions,
+  ...ialGraphAlgorithmsQuestions,
+  ...ialDpAdvancedQuestions,
+  ...ialFinalReviewQuestions,
+  // 算法心得
+  ...hdLearningMapQuestions,
+  ...hdBitManipulationQuestions,
+  ...hdArithmeticTricksQuestions,
+  ...hdDivisionQuestions,
+  ...hdPowerQuestions,
+  ...hdUnusualBasesQuestions,
+  ...hdHashingSearchQuestions,
+  ...hdFloatingPointQuestions,
+  ...hdCrcErrorQuestions,
+  ...hdFinalReviewQuestions,
+  // 计算机程序设计艺术
+  ...tcpLearningMapQuestions,
+  ...tcpMathematicalPreliminariesQuestions,
+  ...tcpSequencesQuestions,
+  ...tcpArithmeticQuestions,
+  ...tcpPolynomialsQuestions,
+  ...tcpGf2Questions,
+  ...tcpRandomNumbersQuestions,
+  ...tcpEfficientSearchingQuestions,
+  ...tcpInfoStructuresQuestions,
+  ...tcpFinalReviewQuestions,
+  // 程序员的数学
+  ...pmLearningMapQuestions,
+  ...pm0And1Questions,
+  ...pmPermutationsQuestions,
+  ...pmProbabilityQuestions,
+  ...pmRandomVariablesQuestions,
+  ...pmStatisticsQuestions,
+  ...pmDistributionsQuestions,
+  ...pmRecurrenceQuestions,
+  ...pmEncryptionQuestions,
+  ...pmFinalReviewQuestions,
+  // 深入浅出统计学
+  ...hfsLearningMapQuestions,
+  ...hfsDataDisplayQuestions,
+  ...hfsCentralTendencyQuestions,
+  ...hfsDispersionQuestions,
+  ...hfsProbabilityQuestions,
+  ...hfsDiscreteDistributionsQuestions,
+  ...hfsContinuousDistributionsQuestions,
+  ...hfsSamplingQuestions,
+  ...hfsConfidenceIntervalsQuestions,
+  ...hfsFinalReviewQuestions,
+  // 线性代数应该这样学
+  ...ladLearningMapQuestions,
+  ...ladVectorSpacesQuestions,
+  ...ladLinearMapsQuestions,
+  ...ladMatricesQuestions,
+  ...ladOperatorsQuestions,
+  ...ladInnerProductQuestions,
+  ...ladDetTraceQuestions,
+  ...ladEigenvaluesQuestions,
+  ...ladComplexVectorsQuestions,
+  ...ladFinalReviewQuestions,
+  // 具体数学
+  ...cmLearningMapQuestions,
+  ...cmRecurrentProblemsQuestions,
+  ...cmSumsQuestions,
+  ...cmIntegerFunctionsQuestions,
+  ...cmNumberTheoryQuestions,
+  ...cmBinomialQuestions,
+  ...cmStirlingQuestions,
+  ...cmDiscreteProbQuestions,
+  ...cmGeneratingFuncsQuestions,
+  ...cmFinalReviewQuestions,
+  // 计算机图形学：几何体数据结构
+  ...gdsLearningMapQuestions,
+  ...gdsGeomPrimitivesQuestions,
+  ...gdsTriangulationQuestions,
+  ...gdsVoronoiQuestions,
+  ...gdsQuadtreesQuestions,
+  ...gdsBvhQuestions,
+  ...gdsSpatialIndexingQuestions,
+  ...gdsCollisionDetectionQuestions,
+  ...gdsRayTracingStructQuestions,
+  ...gdsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

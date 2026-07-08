@@ -7,7 +7,7 @@ export const giaStandardLibQuestions: ReviewQuestion[] = [
     chapter: "gia-standard-lib",
     level: 1,
     question: "io.Reader 接口定义了什么方法？为什么它是 Go 标准库的基石之一？",
-    answer: "io.Reader 定义了 Read(p []byte) (n int, err error) 方法。它表示"从某处读取数据到 p"的抽象——文件、网络连接、内存缓冲、压缩流都可以实现 io.Reader。标准库大量函数接受 io.Reader 参数，使得任何实现了该接口的数据源都能无缝接入，实现了"组合优于继承"的设计哲学。",
+    answer: "io.Reader 定义了 Read(p []byte) (n int, err error) 方法。它表示「从某处读取数据到 p」的抽象——文件、网络连接、内存缓冲、压缩流都可以实现 io.Reader。标准库大量函数接受 io.Reader 参数，使得任何实现了该接口的数据源都能无缝接入，实现了「组合优于继承」的设计哲学。",
     tags: ["io.Reader", "接口", "标准库"],
   },
   {

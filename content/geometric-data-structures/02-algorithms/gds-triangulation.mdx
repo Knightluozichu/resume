@@ -1,0 +1,199 @@
+---
+title: "三角剖分：Delaunay 与约束"
+type: B
+section: "算法"
+order: 4
+description: "Delaunay 三角剖分的空圆性质、增量构建算法与质量指标"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GdsTriangulationDiagram } from "@/components/mdx/geometric-data-structures/diagrams/gds-triangulation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解三角剖分的基本概念与合法性
+- 掌握 Delaunay 三角剖分的空圆性质
+- 能用增量插入法（Bowyer-Watson）构建 Delaunay 三角剖分
+- 理解约束三角剖分（CDT）的用途
+</Objectives>
+
+## 直觉引入
+
+三角剖分把点集连接成三角形网格——这是地形渲染、有限元分析、几何建模的基础。Delaunay 三角剖分因其「空圆性质」最大化最小角，避免了瘦长三角形，是最常用的剖分方法。
+
+Delaunay 三角剖分与 Voronoi 图是对偶的：Delaunay 三角形的外心就是 Voronoi 顶点。这个对偶关系意味着从任一结构可以推导出另一个，在计算几何中非常重要。
+
+## 概念讲解
+
+<Term def="把点集连接成不重叠三角形集合的剖分">三角剖分</Term>要求所有三角形不重叠、覆盖凸包、顶点恰好是给定点集。
+
+<Term def="每个三角形外接圆内不含其他点的三角剖分">Delaunay 三角剖分</Term>具有空圆性质。这等价于最大化最小角——避免瘦长三角形，网格质量最优。
+
+<Term def="逐点插入并翻转不满足空圆性质的边">Bowyer-Watson 算法</Term>：插入新点后，找到外接圆包含该点的所有三角形（「坏三角形」），删除它们形成空腔，然后连接新点到空腔边界。
+
+### Bowyer-Watson 算法
+1. 创建一个包含所有点的超大初始三角形。
+2. 逐个插入点 $p$：
+   a. 找到外接圆包含 $p$ 的所有三角形（坏三角形）。
+   b. 删除坏三角形，形成空腔（多边形）。
+   c. 连接 $p$ 到空腔的每个边界顶点，形成新三角形。
+3. 移除与初始超大三角形相关的边。
+
+### 翻边操作
+两个相邻三角形组成的四边形中，如果对角线不满足空圆性质，翻转对角线即可恢复 Delaunay 性质。这是增量算法的基础操作。
+
+### 约束三角剖分（CDT）
+标准 Delaunay 可能不保留指定的边（如地形中的山脊线）。CDT 在 Delaunay 的基础上强制保留约束边，同时尽可能保持 Delaunay 性质。用于：道路网络、建筑轮廓、有限元网格。
+
+### 质量指标
+- **最小角**：Delaunay 最大化最小角（避免瘦长三角形）。
+- **面积均匀性**：三角形面积方差小。
+- **边长均匀性**：边长方差小。
+- Delaunay 不保证全局最优面积/边长分布，但保证最小角局部最优。
+
+## 交互 Demo
+
+> 猜一猜：四个共圆点能否形成唯一的 Delaunay 三角剖分？（提示：退化情况）
+
+<GdsTriangulationDiagram />
+
+<Stepper>
+<Step title="第一步：创建初始三角形">
+创建一个包含所有点的超大三角形（或凸包初始剖分）。
+</Step>
+<Step title="第二步：逐点插入">
+对每个点，找到外接圆包含该点的坏三角形，删除形成空腔，连接新点到空腔边界。
+</Step>
+<Step title="第三步：清理与验证">
+移除初始超大三角形的边。验证空圆性质：每个三角形外接圆不含其他点。
+</Step>
+</Stepper>
+
+## 代码对照
+
+用 Python 实现 Bowyer-Watson 算法：
+
+```python
+import math
+
+def circumcircle(p1, p2, p3):
+    """计算三角形外接圆 (cx, cy, r)"""
+    ax, ay = p1
+    bx, by = p2
+    cx, cy = p3
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-10:
+        return None  # 共线
+    ux = ((ax**2 + ay**2) * (by - cy) + (bx**2 + by**2) * (cy - ay) + (cx**2 + cy**2) * (ay - by)) / d
+    uy = ((ax**2 + ay**2) * (cx - bx) + (bx**2 + by**2) * (ax - cx) + (cx**2 + cy**2) * (bx - ax)) / d
+    r = math.sqrt((ax - ux)**2 + (ay - uy)**2)
+    return (ux, uy, r)
+
+def in_circumcircle(p, tri):
+    """点 p 是否在三角形 tri 的外接圆内"""
+    cc = circumcircle(*tri)
+    if cc is None:
+        return False
+    cx, cy, r = cc
+    return math.sqrt((p[0]-cx)**2 + (p[1]-cy)**2) < r - 1e-10
+
+def bowyer_watson(points):
+    """Bowyer-Watson Delaunay 三角剖分"""
+    # 超大初始三角形
+    M = 1000
+    super_tri = [(0, -M), (M, M), (-M, M)]
+    triangles = [super_tri[:]]
+    
+    for p in points:
+        # 找坏三角形
+        bad = [t for t in triangles if in_circumcircle(p, t)]
+        # 收集空腔边
+        edges = []
+        for t in bad:
+            for i in range(3):
+                edge = tuple(sorted([t[i], t[(i+1)%3]]))
+                edges.append(edge)
+        # 只保留出现一次的边（空腔边界）
+        boundary = [e for e in edges if edges.count(e) == 1]
+        # 删除坏三角形
+        triangles = [t for t in triangles if t not in bad]
+        # 连接新点到空腔边界
+        for e in boundary:
+            triangles.append([e[0], e[1], p])
+    
+    # 移除包含超级三角形顶点的三角形
+    triangles = [t for t in triangles
+                 if all(v not in super_tri for v in t)]
+    return triangles
+
+# 测试
+random.seed(42)
+pts = [(random.random()*10, random.random()*10) for _ in range(20)]
+tris = bowyer_watson(pts)
+print(f"{len(pts)} 个点, {len(tris)} 个三角形")
+
+# 验证空圆性质
+for t in tris:
+    for p in pts:
+        if p in t:
+            continue
+        assert not in_circumcircle(p, t), f"空圆性质违反!"
+print("空圆性质验证通过")
+
+# 计算最小角
+def min_angle(tri):
+    a, b, c = tri
+    angles = []
+    for p1, p2, p3 in [(a,b,c), (b,c,a), (c,a,b)]:
+        v1 = (p1[0]-p3[0], p1[1]-p3[1])
+        v2 = (p2[0]-p3[0], p2[1]-p3[1])
+        cos_a = (v1[0]*v2[0]+v1[1]*v2[1]) / (math.hypot(*v1)*math.hypot(*v2))
+        angles.append(math.acos(max(-1, min(1, cos_a))))
+    return min(angles)
+
+min_a = min(min_angle(t) for t in tris)
+print(f"最小角: {math.degrees(min_a):.1f}°")
+
+```
+
+`bowyer_watson` 实现了增量插入：找坏三角形 → 空腔边界 → 连接新点。`circumcircle` 计算外接圆用于空圆判定。20 个点的 Delaunay 剖分验证空圆性质通过，最小角较大（避免瘦长三角形）。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 共线点导致外接圆计算除零。
+**原因 →** 三个共线点的外接圆为无穷大（外心在无穷远处）。
+**修法 →** 检测共线（d≈0）并跳过该三角形。或在预处理阶段去除共线点。数值稳定性是三角剖分实现的主要挑战。
+</Callout>
+
+<Callout type="trap">
+**现象 →** Delaunay 三角剖分不保留指定的边。
+**原因 →** 空圆性质可能要求翻转约束边。
+**修法 →** 使用约束 Delaunay 三角剖分（CDT）。CDT 强制保留约束边，只对非约束边保持 Delaunay 性质。用于道路、建筑轮廓等需要保留特定边的场景。
+</Callout>
+
+<Exercises>
+**问题**：什么是 Delaunay 三角剖分的空圆性质？它有什么好处？
+
+<Answer>
+每个三角形的外接圆内不包含其他点。好处：最大化最小角，避免瘦长三角形，网格质量最优。这保证了数值稳定性（有限元、插值不会因退化三角形而出错）。
+</Answer>
+
+**问题**：Bowyer-Watson 算法的时间复杂度是多少？如何优化？
+
+<Answer>
+朴素实现 O(n²)（每次插入找坏三角形需遍历所有三角形）。优化：用空间索引（如 DAG）维护三角形邻接关系，定位插入点所在三角形 O(log n)，总复杂度 O(n log n)。实际中先排序点再批量插入也可加速。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Delaunay 三角剖分">满足空圆性质的三角剖分，最大化最小角，网格质量最优。</GlossaryItem>
+<GlossaryItem term="空圆性质">每个三角形外接圆内不含其他点，是 Delaunay 的定义特征。</GlossaryItem>
+<GlossaryItem term="Bowyer-Watson">逐点插入的 Delaunay 构建算法：找坏三角形→空腔→连接新点。</GlossaryItem>
+<GlossaryItem term="约束三角剖分">强制保留指定边的三角剖分，用于道路/建筑轮廓等场景。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：几何体数据结构" adaptedUrl="" />

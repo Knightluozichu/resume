@@ -1,0 +1,147 @@
+---
+title: "随机数生成"
+type: B
+section: "随机数"
+order: 4
+description: "线性同余生成器、统计检验与谱检验——TAOCP 中伪随机数的艺术"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { TcpRandomNumbersDiagram } from "@/components/mdx/taocp/diagrams/tcp-random-numbers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释线性同余生成器的公式并推导其周期上限
+- 能描述 χ² 检验如何判断随机数序列的均匀性
+- 能分析为什么谱检验比统计检验更能揭示随机数缺陷
+- 能回答：为什么计算机无法生成「真随机数」？
+</Objectives>
+
+## 直觉引入
+
+抛硬币看似随机，但如果你知道了抛出的力度、角度、空气阻力，结果其实是确定的。计算机生成的随机数也一样——它们是「伪随机」的，用确定的公式算出来，但看起来像随机的。
+
+问题在于：怎么让「看起来像随机」这件事可量化？Knuth 的回答是：用统计检验和谱检验来衡量。一个差的随机数生成器可以让模拟仿真给出完全错误的结论。
+
+## 概念讲解
+
+### 线性同余生成器
+
+<Term def="线性同余生成器（LCG）是用递推公式 X(n+1) = (a·X(n) + c) mod m 生成伪随机数的算法">线性同余生成器</Term>是最经典的伪随机数算法。其中 $a$ 是乘数，$c$ 是增量，$m$ 是模数，$X_0$ 是种子。
+
+LCG 的周期最多为 $m$（达到时称为「满周期」），满周期条件是：
+- $c$ 与 $m$ 互素
+- $a - 1$ 是 $m$ 的每个素因子的倍数
+- 若 $m$ 是 4 的倍数，则 $a - 1$ 也是 4 的倍数
+
+### 统计检验
+
+<Term def="卡方检验（χ² 检验）通过比较观测频率与期望频率来判断随机数序列是否服从均匀分布">卡方检验</Term>把 $[0, m)$ 分成 $k$ 个等长区间，统计随机数落入每个区间的次数 $f_i$，计算：
+
+$$\chi^2 = \sum_{i=1}^{k} \frac{(f_i - N/k)^2}{N/k}$$
+
+如果 $\chi^2$ 太大，说明分布不均匀；太小，说明「太均匀」了（也不随机）。
+
+### 谱检验
+
+<Term def="谱检验通过分析随机数在多维空间中形成的超平面结构来评估其质量，是比统计检验更严格的检验方法">谱检验</Term>把连续 $t$ 个随机数看作 $t$ 维空间中的点，检查这些点分布的均匀性。好的生成器在高维空间中点分布均匀，差的生成器会聚集在少数超平面上。
+
+## 交互 Demo
+
+<TcpRandomNumbersDiagram />
+
+<Stepper>
+<Step title="第一步：选模数 m">
+通常选 $m = 2^{31}$ 或 $m = 2^{32}$（利用整数溢出自动取模）。模数越大，周期越长。但大模数不保证质量——还需选好乘数。
+</Step>
+<Step title="第二步：选乘数 a">
+乘数 $a$ 决定了随机数的质量。好的 $a$ 让谱检验通过高维检验。Knuth 推荐 $a \approx m \cdot \phi$（黄金比例）附近，且 $a \mod 8 = 3$ 或 5。
+</Step>
+<Step title="第三步：统计与谱检验">
+先用卡方检验检查均匀性，再用谱检验检查高维结构。只有两项都通过的生成器才能用于严肃的模拟仿真。RANDU（IBM 的著名失败案例）通过了统计检验但谱检验在 3 维就暴露了严重缺陷。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# 线性同余生成器实现与检验
+class LCG:
+    def __init__(self, seed, a=1664525, c=1013904223, m=2**32):
+        self.x = seed
+        self.a = a
+        self.c = c
+        self.m = m
+
+    def next(self):
+        self.x = (self.a * self.x + self.c) % self.m
+        return self.x
+
+    def uniform(self):
+        return self.next() / self.m  # 归一化到 [0, 1)
+
+# 生成随机数序列
+rng = LCG(seed=42)
+samples = [rng.uniform() for _ in range(10000)]
+
+# 卡方均匀性检验
+import math
+k = 20  # 分 20 个区间
+N = len(samples)
+expected = N / k
+observed = [0] * k
+for s in samples:
+    observed[min(int(s * k), k - 1)] += 1
+
+chi2 = sum((f - expected) ** 2 / expected for f in observed)
+print(f"chi² = {chi2:.2f} (自由度 {k-1}，临界值约 30.1)")
+
+# RANDU 的灾难（a=65539, m=2^31）—— 3 维谱检验失败
+# 连续 3 个 RANDU 数落在 15 个超平面上，远少于理论最大值
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为只要通过了卡方检验，随机数生成器就是好的。**
+卡方检验只检查一维均匀性，无法发现高维结构缺陷。IBM 的 RANDU 通过了卡方检验，但在 3 维空间中所有点聚集在 15 个超平面上——这让物理模拟完全失真。谱检验才是更严格的质量标准。
+</Callout>
+
+<Callout type="trap">
+**误区：认为周期越长，随机数质量越高。**
+周期长是必要条件但非充分条件。LCG 的满周期可达 $m = 2^{32}$，但如果乘数选择不当，连续 $t$ 个随机数在高维空间中可能聚集在很少的超平面上。谱检验揭示的正是这种结构性缺陷。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么计算机无法生成「真随机数」？
+
+<Answer>
+计算机是确定性机器——给定相同的输入和状态，总是产生相同的输出。伪随机数生成器用确定的递推公式（如 LCG 的 $X_{n+1} = (aX_n + c) \mod m$）生成数列，只要知道种子就能预测所有后续值。真随机需要物理过程（如放射性衰变、电子噪声），成本高且不可复现。伪随机在多数应用中足够，但密码学需要真随机或密码学安全的伪随机。
+</Answer>
+
+**问题 2**：写出 LCG 满周期的三个条件，并解释为什么它们是必要的。
+
+<Answer>
+1) $c$ 与 $m$ 互素：保证增量不会在循环中跳过某些值。2) $a-1$ 是 $m$ 每个素因子的倍数：保证乘法不会在某些剩余类中循环。3) 若 $4|m$ 则 $4|(a-1)$：保证在 2 的幂次模数下周期不缩短。这三个条件合在一起保证了 LCG 遍历 $m$ 个可能值后才开始重复。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="线性同余生成器">
+用递推公式 X(n+1) = (a·X(n) + c) mod m 生成伪随机数的算法。是最经典的 PRNG，周期最多为 m。
+</GlossaryItem>
+<GlossaryItem term="卡方检验">
+通过比较观测频率与期望频率来判断随机数是否均匀分布的统计方法。只检查一维均匀性。
+</GlossaryItem>
+<GlossaryItem term="谱检验">
+通过分析随机数在多维空间中形成的超平面结构来评估质量的检验方法。比卡方检验更严格。
+</GlossaryItem>
+<GlossaryItem term="满周期">
+LCG 的周期达到理论上限 m 的状态。满周期需要 c 与 m 互素、a-1 是 m 每个素因子的倍数等条件。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />

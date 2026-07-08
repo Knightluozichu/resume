@@ -1,0 +1,201 @@
+---
+title: "空间索引：网格、哈希与 R-Tree"
+type: B
+section: "算法"
+order: 6
+description: "均匀网格、空间哈希与 R-Tree 的原理、实现与适用场景"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GdsSpatialIndexingDiagram } from "@/components/mdx/geometric-data-structures/diagrams/gds-spatial-indexing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解均匀网格的原理与优缺点
+- 掌握空间哈希在游戏引擎中的应用
+- 理解 R-Tree 的层次 MBR 结构与查询流程
+- 能根据场景选择最优空间索引
+</Objectives>
+
+## 直觉引入
+
+空间索引是空间查询的加速器。均匀网格最简单但密度不均时退化；空间哈希对稀疏场景友好；R-Tree 用层次 MBR 实现高效范围查询。没有万能结构，只有场景最优。
+
+游戏引擎偏爱空间哈希：插入/删除 O(1)、实现简单、动态更新友好。GIS 领域则多用 R-Tree：范围查询 O(log n + k)、支持复杂空间关系。理解每种结构的权衡是关键。
+
+## 概念讲解
+
+<Term def="空间分等大格子的索引">均匀网格</Term>每格存对象列表。查询 O(1) 定位格子 + O(k) 遍历。优点：简单快速。缺点：密度不均时退化（密格子变链表）。
+
+<Term def="用哈希函数映射格子坐标到桶">空间哈希</Term>对稀疏场景内存友好。$\text{hash}(c_x, c_y, c_z) \to \text{bucket}$。邻居查询需检查 $3^d$ 个格子（$d$ 维）。
+
+<Term def="层次最小外接矩形的索引">R-Tree</Term>节点存多个 MBR 条目，叶节点 MBR 包含实际对象。插入用最小面积增长策略。范围查询 O(log n + k)。
+
+### R-Tree 详解
+R-Tree 是 B-Tree 的空间推广。每个节点有 $M$ 个条目（MBR），$m \leq M/2$。叶节点条目 = (MBR, 对象指针)。内部节点条目 = (MBR, 子节点指针)。
+
+**插入**：从根开始选面积增长最小的子节点递归下降。叶节点满时分裂（如 R*-Tree 用表面积/周长优化分裂策略）。
+
+**范围查询**：从根开始，递归进入与查询矩形相交的所有 MBR 子节点。叶节点返回相交对象。
+
+**KNN 查询**：用优先队列（Best-First Search），按 MBR 到查询点的最小距离排序。
+
+### 结构选择决策
+| 场景 | 推荐结构 | 理由 |
+|---|---|---|
+| 均匀分布 + 精确查询 | 均匀网格 | O(1) 定位 |
+| 稀疏 + 动态 | 空间哈希 | O(1) 插入/删除 |
+| 射线查询 | BVH (SAH) | O(log n) 射线遍历 |
+| 范围查询 | R-Tree | O(log n + k) |
+| 2D 自适应 | 四叉树 | 密度自适应 |
+| 最近邻 | KD-Tree | O(log n) 最近邻 |
+
+## 交互 Demo
+
+> 猜一猜：游戏引擎中为什么偏爱空间哈希而不是 R-Tree？（提示：考虑每帧动态更新）
+
+<GdsSpatialIndexingDiagram />
+
+<Stepper>
+<Step title="第一步：分析数据特征">
+均匀→网格，稀疏→哈希，非均匀→树。判断数据分布和查询类型。
+</Step>
+<Step title="第二步：选择结构">
+精确查询选网格/哈希 O(1)，范围查询选 R-Tree O(log n+k)，射线查询选 BVH O(log n)，最近邻选 KD-Tree。
+</Step>
+<Step title="第三步：评估动态性">
+静态场景构建一次反复用（BVH/KD-Tree），动态场景需快速插入/删除（哈希/网格/动态BVH）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+用 Python 实现空间哈希与 R-Tree 的基本操作：
+
+```python
+from collections import defaultdict
+
+class SpatialHash:
+    """空间哈希：稀疏场景的 O(1) 插入/查询"""
+    def __init__(self, cell_size=10):
+        self.cell_size = cell_size
+        self.grid = defaultdict(list)
+    
+    def _key(self, x, y):
+        return (int(x // self.cell_size), int(y // self.cell_size))
+    
+    def insert(self, obj_id, x, y):
+        self.grid[self._key(x, y)].append((obj_id, x, y))
+    
+    def query_point(self, x, y):
+        """查询点所在格子的所有对象"""
+        return self.grid.get(self._key(x, y), [])
+    
+    def query_range(self, x0, y0, x1, y1):
+        """范围查询：遍历覆盖区域的格子"""
+        results = []
+        cx0 = int(x0 // self.cell_size)
+        cx1 = int(x1 // self.cell_size)
+        cy0 = int(y0 // self.cell_size)
+        cy1 = int(y1 // self.cell_size)
+        for cx in range(cx0, cx1 + 1):
+            for cy in range(cy0, cy1 + 1):
+                results.extend(self.grid.get((cx, cy), []))
+        return results
+
+class RTreeNode:
+    def __init__(self, mbr=None, children=None, is_leaf=True):
+        self.mbr = mbr  # (xmin, ymin, xmax, ymax)
+        self.children = children or []
+        self.is_leaf = is_leaf
+
+class RTree:
+    """简化 R-Tree"""
+    def __init__(self, max_entries=4):
+        self.root = RTreeNode()
+        self.max_entries = max_entries
+    
+    def _area_enlarge(self, mbr, obj_mbr):
+        """MBR 扩大面积"""
+        new_mbr = (min(mbr[0], obj_mbr[0]), min(mbr[1], obj_mbr[1]),
+                   max(mbr[2], obj_mbr[3]), max(mbr[3], obj_mbr[3]))
+        old = (mbr[2]-mbr[0]) * (mbr[3]-mbr[1])
+        new = (new_mbr[2]-new_mbr[0]) * (new_mbr[3]-new_mbr[1])
+        return new - old, new_mbr
+    
+    def insert(self, obj_mbr, obj_id):
+        """简化插入：选面积增长最小的叶节点"""
+        # 实际 R-Tree 需处理分裂，这里简化
+        self.root.children.append((obj_mbr, obj_id))
+        if self.root.mbr is None:
+            self.root.mbr = obj_mbr
+        else:
+            self.root.mbr = (min(self.root.mbr[0], obj_mbr[0]),
+                             min(self.root.mbr[1], obj_mbr[1]),
+                             max(self.root.mbr[2], obj_mbr[2]),
+                             max(self.root.mbr[3], obj_mbr[3]))
+    
+    def query_range(self, qmbr):
+        """范围查询"""
+        results = []
+        for obj_mbr, obj_id in self.root.children:
+            if not (obj_mbr[2] < qmbr[0] or obj_mbr[0] > qmbr[2] or
+                    obj_mbr[3] < qmbr[1] or obj_mbr[1] > qmbr[3]):
+                results.append(obj_id)
+        return results
+
+# 测试
+sh = SpatialHash(cell_size=10)
+for i in range(100):
+    sh.insert(i, i * 0.5, i * 0.3)
+print(f"空间哈希点查询: {len(sh.query_point(5, 3))} 个对象")
+print(f"空间哈希范围查询: {len(sh.query_range(0, 0, 20, 20))} 个对象")
+
+rt = RTree()
+for i in range(20):
+    rt.insert((i, i, i+1, i+1), f"obj_{i}")
+print(f"R-Tree 范围查询: {rt.query_range((5, 5, 15, 15))}")
+
+```
+
+`SpatialHash` 用字典映射格子坐标到对象列表，插入 O(1)、查询 O(1)+k。`RTree` 是简化版（未实现分裂），实际 R-Tree 的层次 MBR 结构支持 O(log n+k) 范围查询。游戏引擎用空间哈希因为每帧大量动态更新。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 均匀网格在密度不均时性能急剧下降。
+**原因 →** 对象聚集在少数格子中，那些格子退化为长链表。
+**修法 →** 用自适应结构（四叉树/BVH）或空间哈希。也可用多级网格（细网格+粗网格）处理不同密度区域。
+</Callout>
+
+<Callout type="trap">
+**现象 →** R-Tree 范围查询比暴力还慢。
+**原因 →** MBR 重叠严重，导致查询需要遍历大量节点。
+**修法 →** 用 R*-Tree 优化分裂策略（减少重叠），或用 STR（Sort-Tile-Recursive）批量构建方法。R-Tree 质量高度依赖构建策略。
+</Callout>
+
+<Exercises>
+**问题**：游戏引擎中每帧需要更新 1000 个动态对象的碰撞检测，选哪种空间索引？
+
+<Answer>
+空间哈希。理由：插入/删除 O(1)，每帧全量更新只需 O(n)；实现简单，缓存友好；稀疏场景内存高效。R-Tree/BVH 每帧重建/更新成本高，不适合高频动态场景。
+</Answer>
+
+**问题**：R-Tree 的范围查询复杂度是多少？什么情况下退化？
+
+<Answer>
+平均 O(log n + k)（k 为结果数）。退化情况：MBR 重叠严重时，查询矩形与大量 MBR 相交，需遍历过多节点。R*-Tree 通过优化分裂策略减少重叠，STR 批量构建进一步优化。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="均匀网格">空间分等大格子，O(1) 定位 + O(k) 遍历，简单但密度不均时退化。</GlossaryItem>
+<GlossaryItem term="空间哈希">哈希映射格子坐标到桶，稀疏场景 O(1) 插入/查询，游戏引擎常用。</GlossaryItem>
+<GlossaryItem term="R-Tree">层次 MBR 索引，范围查询 O(log n + k)，GIS 领域标准。</GlossaryItem>
+<GlossaryItem term="MBR">最小外接矩形，R-Tree 中包裹对象或子节点的矩形。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机图形学：几何体数据结构" adaptedUrl="" />

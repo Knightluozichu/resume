@@ -1,0 +1,162 @@
+---
+title: "GF(2) 域上的运算"
+type: B
+section: "高级主题"
+order: 7
+description: "二元域算术、多项式运算与纠错码——TAOCP 中有限域的应用"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { TcpGf2Diagram } from "@/components/mdx/taocp/diagrams/tcp-gf2";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释 GF(2) 域的定义及其与普通算术的区别
+- 能实现 GF(2) 上的多项式加法和乘法
+- 能描述 CRC 校验如何利用 GF(2) 多项式检测错误
+- 能回答：为什么 GF(2) 上的加法等同于异或运算？
+</Objectives>
+
+## 直觉引入
+
+普通算术中 1+1=2，但在 GF(2) 中 1+1=0。这不是算错了——GF(2) 是一个只有 0 和 1 两个元素的数学域，加法就是异或（XOR），乘法就是与（AND）。这种简化让硬件实现极其高效：一个异或门就完成了加法。
+
+GF(2) 看似简单，却支撑了 CRC 校验、Reed-Solomon 纠错码、AES 加密等关键技术。Knuth 在 TAOCP 中讨论 GF(2) 是因为它是有限域运算的基础。
+
+## 概念讲解
+
+### GF(2) 域
+
+<Term def="GF(2) 是只有两个元素 {0, 1} 的有限域，加法等同异或（XOR），乘法等同与（AND）">GF(2)</Term>是最简单的有限域。其加法和乘法表为：
+
+| + | 0 | 1 |
+|---|---|---|
+| 0 | 0 | 1 |
+| 1 | 1 | 0 |
+
+| × | 0 | 1 |
+|---|---|---|
+| 0 | 0 | 0 |
+| 1 | 0 | 1 |
+
+关键特性：加法 = 减法 = XOR，因为 $1 + 1 = 0$ 意味着 $1 = -1$。
+
+### GF(2) 上的多项式
+
+<Term def="GF(2) 上的多项式是系数全为 0 或 1 的多项式，加法系数模 2，乘法系数模 2">GF(2) 多项式</Term>把 GF(2) 推广到多项式域。例如 $x^3 + x + 1$ 和 $x^2 + 1$ 的加法是 $x^3 + x^2 + x$（对应位异或）。
+
+### CRC 校验
+
+<Term def="CRC（循环冗余校验）用 GF(2) 多项式除法生成校验码，能检测突发错误">CRC</Term>把数据看作 GF(2) 上的多项式，用预定的生成多项式 $G(x)$ 去除，余数就是校验码。接收方用同样的 $G(x)$ 除，余数为 0 则无错误。
+
+## 交互 Demo
+
+<TcpGf2Diagram />
+
+<Stepper>
+<Step title="第一步：数据多项式">
+把数据比特串看作 GF(2) 多项式。例如数据 1011 对应 $M(x) = x^3 + x + 1$。在数据后补 $r$ 个零（$r$ 是生成多项式 $G(x)$ 的次数），得到 $x^r \cdot M(x)$。
+</Step>
+<Step title="第二步：GF(2) 多项式除法">
+用 $x^r \cdot M(x)$ 除以 $G(x)$，除法规则是系数模 2（即异或）。例如 $G(x) = x^3 + x + 1$（CRC-3），除法过程就是反复异或。余数 $R(x)$ 就是 CRC 校验码。
+</Step>
+<Step title="第三步：附上校验码">
+发送 $x^r \cdot M(x) + R(x)$（即原始数据 + CRC 校验码）。接收方用 $G(x)$ 除收到的多项式：如果余数为 0，数据无误；余数非 0，有错误。CRC 能检测所有 ≤ $r$ 位的突发错误。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# GF(2) 运算实现
+# GF(2) 加法 = XOR，乘法 = AND
+
+# GF(2) 多项式加法（异或）
+def gf2_add(a, b):
+    return a ^ b
+
+# GF(2) 多项式乘法
+def gf2_mul(a, b):
+    result = 0
+    while b:
+        if b & 1:
+            result ^= a
+        a <<= 1
+        b >>= 1
+    return result
+
+# GF(2) 多项式除法（返回商和余数）
+def gf2_divmod(a, b):
+    if b == 0:
+        raise ZeroDivisionError
+    quotient = 0
+    remainder = a
+    b_deg = b.bit_length() - 1
+    while remainder.bit_length() - 1 >= b_deg:
+        shift = remainder.bit_length() - 1 - b_deg
+        quotient ^= (1 << shift)
+        remainder ^= (b << shift)
+    return quotient, remainder
+
+# CRC 计算
+def crc(data, generator):
+    # 计算 CRC 校验码
+    r = generator.bit_length() - 1  # 生成多项式的次数
+    padded = data << r  # 补 r 个零
+    _, remainder = gf2_divmod(padded, generator)
+    return remainder
+
+# 示例：CRC-3, G(x) = x³ + x + 1 = 0b1011
+data = 0b1011  # 数据
+gen = 0b1011   # 生成多项式
+crc_val = crc(data, gen)
+print(f"CRC = {bin(crc_val)}")  # 校验码
+transmitted = (data << 3) | crc_val  # 发送的数据+校验码
+print(f"发送: {bin(transmitted)}")
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为 GF(2) 的加法是普通加法模 2。**
+虽然结果相同（$1+1=0$），但概念上 GF(2) 的加法是域运算，不是「普通加法再取模」。GF(2) 中加法和减法是同一个运算（因为 $1=-1$），这意味着 GF(2) 多项式的除法只需要异或，不需要借位——这极大简化了硬件实现。
+</Callout>
+
+<Callout type="trap">
+**误区：认为 CRC 能纠正错误。**
+CRC 只能检测错误，不能纠正。它通过余数判断数据是否出错，但不告诉你哪里出错了。纠错需要更强的编码（如 Reed-Solomon、BCH 码），它们也基于 GF(2) 或其扩域 $GF(2^m)$，但利用了更多的代数结构。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 GF(2) 上的加法等同于异或运算？
+
+<Answer>
+GF(2) 只有 0 和 1 两个元素。加法定义为：0+0=0, 0+1=1, 1+0=1, 1+1=0。这与异或的真值表完全相同：0⊕0=0, 0⊕1=1, 1⊕0=1, 1⊕1=0。本质上，GF(2) 是模 2 的整数环，加法就是模 2 加法，而异或正是比特级的模 2 加法。此外，GF(2) 中 1+1=0 意味着 1=-1，所以加法=减法，除法只需异或无需借位。
+</Answer>
+
+**问题 2**：用 GF(2) 多项式除法计算 1011 ÷ 11（二进制）的余数。
+
+<Answer>
+被除数 1011，除数 11。1011 ÷ 11：最高位对齐，1011 XOR 1100（11 左移 2 位）= 0111。0111 ÷ 11：0111 XOR 0110（11 左移 1 位）= 0001。0001 的位数 < 11 的位数，余数为 1。验证：1011 = 11 × 110 + 1（模 2），余数 R = 1。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="GF(2)">
+只有 {0,1} 两个元素的有限域。加法 = XOR，乘法 = AND。是最简单的有限域，硬件实现极高效。
+</GlossaryItem>
+<GlossaryItem term="GF(2) 多项式">
+系数全为 0 或 1 的多项式。加法系数模 2（异或），乘法系数模 2。用于 CRC 和纠错码。
+</GlossaryItem>
+<GlossaryItem term="CRC">
+循环冗余校验。用 GF(2) 多项式除法生成校验码，能检测突发错误，但不能纠错。
+</GlossaryItem>
+<GlossaryItem term="有限域">
+含有限个元素的代数域，满足域的所有公理（加法乘法群、分配律）。GF(2) 是最简单的有限域。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />
