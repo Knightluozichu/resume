@@ -1,0 +1,116 @@
+---
+title: "系统架构与并行"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "场景图、加速结构、并行化——渲染器的工程骨架"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { PbtSystemArchitectureDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-system-architecture";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 PBRT 的核心系统组件及其职责
+- 能解释 BVH 加速结构的工作原理
+- 能描述并行渲染的瓦片化策略
+- 能回答为什么内存局部性对渲染性能至关重要？
+</Objectives>
+
+## 直觉引入
+
+想象一座工厂。原材料（场景数据）进入流水线（渲染管线），经过不同车间（光线生成、求交、着色、积分），最终产出成品（像素）。PBRT 就是这座工厂的蓝图——它定义了每个组件的职责、组件之间如何协作、以及如何并行生产。
+
+渲染是计算密集型任务，PBRT 的架构设计直接影响性能。好的架构能让渲染快10倍，差的架构能让理论正确的算法变得不可用。
+
+## 概念讲解
+
+### 系统架构核心组件
+
+<PbtSystemArchitectureDiagram />
+
+<Term def="加速结构(BVH)是用层次包围盒组织几何体，快速剔除不可能相交的光线-三角形测试">BVH</Term>是渲染器最重要的数据结构。
+
+<Term def="瓦片化渲染将图像分成小块(如32x32)，每个瓦片独立渲染，天然支持并行">瓦片化</Term>是并行渲染的标准策略。
+
+<Term def="积分器接口统一了不同渲染算法(PT/BDPT/MLT)的调用方式">积分器接口</Term>使算法可插拔，用户可按需选择。
+
+<Term def="采样器负责生成高质量的随机数序列，支持低差异序列和自适应采样">采样器</Term>决定了蒙特卡洛采样的质量。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：核心组件">PBRT 的核心流水线：Scene（场景数据）→ Accelerator（BVH加速结构）→ Integrator（积分器）→ Sampler（采样器）→ Film（帧缓冲）。</Step>
+<Step title="第二步：BVH 加速结构">
+BVH 把场景组织成层次包围盒树。光线追踪时先测试包围盒，只有穿过叶子节点包围盒的光线才测试内部三角形。这把 O(N) 的暴力搜索降到 O(logN)。
+<PbtSystemArchitectureDiagram />
+</Step>
+<Step title="第三步：并行化策略">将图像分成瓦片，每个线程独立渲染一个瓦片。瓦片内共享采样器和帧缓冲，减少锁竞争。用无锁队列管理瓦片分配。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// PBRT 并行渲染架构
+void Render(Scene scene) {
+    // 1. 构建 BVH 加速结构
+    BVH bvh(scene.primitives);
+    
+    // 2. 瓦片化并行渲染
+    int tileSize = 16;
+    std::vector<Tile> tiles = generateTiles(film, tileSize);
+    
+    ParallelFor(tiles, [&](Tile tile) {
+        Sampler sampler(tile.seed);
+        for (auto pixel : tile.pixels) {
+            for (int s = 0; s < sampler.SPP; s++) {
+                CameraSample cs = sampler.GetCameraSample(pixel);
+                Ray ray = camera.GenerateRay(cs);
+                Spectrum L = integrator.Li(ray, scene, sampler);
+                film.AddSample(pixel, L);
+            }
+        }
+    });
+    
+    // 3. 写入图像
+    film.WriteImage();
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为渲染性能只取决于算法复杂度。**
+实际性能受内存访问模式影响巨大。BVH 遍历中缓存未命中可能比三角形求交慢10倍。好的 BVH 构建算法（如 Morton 排序）不仅减少节点数，更优化内存局部性。
+</Callout>
+
+<Callout type="trap">
+**误区：瓦片越小并行度越高越好。**
+瓦片太小会导致每个瓦片的启动开销（采样器初始化、局部缓冲分配）占比增大，且瓦片间负载不均。瓦片太大则并行度不足。通常 16x16 到 64x64 是经验最佳值。
+</Callout>
+
+<Exercises>
+**问题 1**：BVH 加速结构如何将光线-三角形测试从 O(N) 降到 O(logN)？
+
+<Answer>
+BVH 把场景组织成一棵二叉树：每个内部节点存储一个包围所有子节点的轴对齐包围盒(AABB)，叶子节点存储少量三角形。光线追踪时，从根节点开始，先测试光线是否与节点的 AABB 相交——不相交则跳过整个子树。只有到达叶子节点才进行三角形求交。由于每层只访问一个子树（或两个都访问但很快剔除一个），树高 log(N)，平均测试次数 O(logN)。
+</Answer>
+
+**问题 2**：为什么 PBRT 使用瓦片化并行渲染？瓦片大小如何影响性能？
+
+<Answer>
+瓦片化的优势：1）每个瓦片独立渲染，线程间无需同步（除瓦片分配）；2）瓦片内采样器和缓冲局部化，缓存友好；3）自然支持负载均衡（用无锁队列动态分配瓦片）。瓦片大小的影响：太小→启动开销大、负载不均；太大→并行度不足、内存占用高。通常 16x16~64x64 像素是最佳值，需根据缓存大小和场景复杂度调整。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="BVH(层次包围盒)">用AABB树组织几何体，光线追踪时快速剔除不可能相交的子树，测试复杂度O(logN)。</GlossaryItem>
+<GlossaryItem term="瓦片化渲染">将图像分成小块独立渲染，天然支持并行，减少线程间同步和锁竞争。</GlossaryItem>
+<GlossaryItem term="积分器接口">统一不同渲染算法的调用接口，使PT/BDPT/MLT等算法可插拔切换。</GlossaryItem>
+<GlossaryItem term="采样器">生成高质量随机数序列的组件，支持低差异序列和自适应采样优化。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

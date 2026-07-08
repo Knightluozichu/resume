@@ -1,0 +1,107 @@
+---
+title: "相机模型与采样"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "从针孔相机到薄透镜——光线如何从像素发出"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtCameraModelDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-camera-model";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解针孔相机模型与透视投影矩阵的关系
+- 能解释薄透镜模型如何产生景深效果
+- 能写出相机生成光线的步骤
+- 能回答为什么需要多重采样（anti-aliasing）来消除锯齿？
+</Objectives>
+
+## 直觉引入
+
+想象你透过窗户看风景。你的眼睛是相机，窗户是视口，窗框限制了你能看到的范围。在 PBRT 中，相机不是「拍照」而是「发光线」——从每个像素发出光线，追踪它碰到什么，就是那个像素的颜色。
+
+真实的相机有镜头，镜头有光圈、焦距，会产生景深。PBRT 的相机模型把这些物理特性都建模了，所以能渲染出真实的光学效果。
+
+## 概念讲解
+
+### 相机模型与光线生成
+
+<PbtCameraModelDiagram />
+
+<Term def="针孔相机模型是理想的透视投影，无畸变无景深，所有光线通过一个几何点">针孔相机</Term>是最简单的相机模型，通过一个点投影所有光线。
+
+<Term def="薄透镜模型用理想透镜替代针孔，引入焦距和光圈，能模拟景深和散景">薄透镜模型</Term>更接近真实相机，通过光圈大小控制景深范围。
+
+<Term def="光线生成是将像素坐标转换为3D光线方向的过程">光线生成</Term>是渲染的第一步：对每个像素采样，生成从相机出发的光线。
+
+<Term def="抗锯齿通过在像素内多次采样并平均来消除边缘锯齿">抗锯齿</Term>通过多重采样实现，每个像素发射多条光线并取平均。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：针孔相机">先理解最简单的针孔模型：所有光线通过一个点，形成完美的透视投影。这是理解相机模型的基础。</Step>
+<Step title="第二步：薄透镜与景深">
+真实相机用透镜而非针孔。透镜有光圈，光圈越大景深越浅。PBRT 在透镜上采样多个点来模拟景深。
+<PbtCameraModelDiagram />
+</Step>
+<Step title="第三步：像素采样">每个像素不是发射一条光线，而是在像素面积内随机采样多个点发射光线，取平均值消除锯齿。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// PBRT 相机光线生成
+Ray GenerateRay(CameraSample cs) {
+    // 1. 像素坐标 → 相机空间方向
+    Point2f pFilm = cs.pFilm;
+    Vector3f dir = Normalize(
+        pFilm.x * cameraX + pFilm.y * cameraY + forward);
+    
+    // 2. 薄透镜采样（景深）
+    Point2f pLens = sampleDisk(cs.pLens, lensRadius);
+    Point3f pFocus = focalDistance / dir.z * dir;
+    
+    // 3. 从透镜上的采样点射向焦点
+    Ray ray(pLens, Normalize(pFocus - pLens));
+    return cameraToWorld(ray);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为相机「接收」光线而非「发出」光线。**
+在光线追踪中，光线是从相机发出、射向场景的（backward tracing）。这与物理上光从光源发出相反。之所以反向追踪，是因为只有到达相机的光才对图像有贡献，正向追踪绝大多数光子会浪费在不到达相机的路径上。
+</Callout>
+
+<Callout type="trap">
+**误区：以为景深只是简单的模糊滤镜。**
+景深是光学现象——焦平面上的点在透镜上所有采样点都汇聚到同一像素，清晰；焦外的点在不同透镜采样位置投影到不同像素，产生散布圆（circle of confusion），看起来模糊。PBRT 通过物理建模实现这一效果，而非后处理模糊。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么光线追踪从相机发出光线而非从光源发出？
+
+<Answer>
+因为从光源正向追踪效率极低——光源发出的光子中只有极少量最终到达相机像素，绝大多数被浪费。从相机反向追踪保证每条光线都对最终图像有贡献，效率高出几个数量级。这虽然与物理方向相反，但由于光路可逆性，正反追踪得到的结果相同。
+</Answer>
+
+**问题 2**：薄透镜模型如何产生景深效果？光圈大小如何影响景深？
+
+<Answer>
+薄透镜模型在透镜光圈上采样多个点，每个点发射一条光线。焦平面上的物体，所有透镜采样点的光线都汇聚到同一像素，成像清晰。焦外的物体，不同采样点的光线打在不同位置，形成散布圆，成像模糊。光圈越大（透镜半径越大），散布圆越大，景深越浅（模糊区域更明显）；光圈越小，越接近针孔模型，景深越深。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="针孔相机">理想透视投影模型，所有光线通过一个几何点，无畸变无景深。</GlossaryItem>
+<GlossaryItem term="薄透镜模型">用理想透镜替代针孔，引入焦距和光圈，能模拟景深和散景效果。</GlossaryItem>
+<GlossaryItem term="景深">焦平面附近成像清晰的距离范围，由光圈大小和焦距决定。</GlossaryItem>
+<GlossaryItem term="抗锯齿">在像素内多次采样并平均，消除边缘锯齿，常用随机或分层采样。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

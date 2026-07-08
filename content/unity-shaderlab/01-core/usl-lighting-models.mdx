@@ -1,0 +1,134 @@
+---
+title: "自定义光照模型"
+type: B
+section: "Shader 与 GPU 编程"
+order: 5
+description: "内置光照模型、PBR 参数与自定义光照函数"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UslLightingModelsDiagram } from "@/components/mdx/unity-shaderlab/diagrams/usl-lighting-models";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Unity 内置光照模型的特点与区别
+- 理解 Standard PBR 中 Metallic 和 Smoothness 的作用
+- 学会编写自定义光照函数
+- 能实现 Toon 卡通渲染光照模型
+</Objectives>
+
+## 直觉引入
+
+光照模型就像不同风格的摄影师——Lambert 是只拍漫反射的朴素风格，BlinnPhong 是加上高光的商业风格，Standard PBR 是追求物理真实的纪实风格，自定义 Toon 是漫画风格。选什么模型就是选什么「打光方式」，决定物体的视觉表现。
+
+## 概念讲解
+
+<Term def="纯漫反射无高光的简单光照模型">Lambert</Term><Term def="基于物理的金属度流程标准光照模型">Standard PBR</Term><erm def="在表面着色器中自定义的光照计算函数">自定义光照</Term><Term def="将光照量化为离散阶的卡通风格光照">Toon 渲染</Term>
+
+### 内置模型
+- Lambert：纯漫反射 max(N·L, 0)，无高光
+- BlinnPhong：漫反射 + Blinn-Phong 高光
+- Standard：PBR 金属度流程，含 Metallic 和 Smoothness
+- StandardSpecular：PBR 高光流程
+
+### PBR 参数
+Metallic 控制金属度（0=电介质，1=金属），影响反射率。Smoothness 控制光滑度（0=粗糙，1=镜面），影响高光大小。两者共同决定 PBR 渲染的视觉表现。
+
+### 自定义光照
+编写 Lighting 函数（命名 LightingName），在 #pragma surface 中用 Custom 引用。函数接收 SurfaceOutput、光照方向、衰减等参数，返回最终颜色。
+
+## 交互Demo
+
+> 猜一猜：Toon 渲染如何把连续光照变成卡通色块？
+
+<UslLightingModelsDiagram />
+
+<Stepper>
+<Step title="第一步：内置模型">
+选择合适的内置光照模型。Lambert 用于简单漫反射，Standard 用于 PBR 效果。Metallic 和 Smoothness 控制 PBR 材质表现。
+</Step>
+<Step title="第二步：自定义光照">
+编写 Lighting 函数，在 #pragma surface 中引用。函数接收 SurfaceOutput 和光照参数，可完全控制 Diffuse 和 Specular 计算。
+</Step>
+<Step title="第三步：Toon 渲染">
+计算 N·L 点积后量化为 2-3 个离散阶，每阶对应固定颜色。添加 Fresnel 边缘高光和描边 Pass，关闭环境光避免平滑过渡。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```shaderlab
+// 自定义 Toon 光照模型
+CGPROGRAM
+#pragma surface surf Toon
+#pragma target 3.0
+
+sampler2D _MainTex;
+sampler2D _RampTex;
+
+struct Input {
+    float2 uv_MainTex;
+};
+
+void surf(Input IN, inout SurfaceOutput o) {
+    o.Albedo = tex2D(_MainTex, IN.uv_MainTex).rgb;
+}
+
+// 自定义光照函数
+float4 LightingToon(SurfaceOutput s, float3 lightDir, float3 viewDir, float atten) {
+    float NdotL = dot(s.Normal, lightDir);
+    // 量化为色阶 — 用 Ramp 纹理
+    float ramp = tex2D(_RampTex, float2(saturate(NdotL) * 0.85 + 0.05, 0.5)).r;
+    // Fresnel 边缘高光
+    float fresnel = pow(1.0 - max(dot(s.Normal, viewDir), 0.0), 3.0);
+
+    float3 color = s.Albedo * ramp * _LightColor0.rgb * atten;
+    color += fresnel * _LightColor0.rgb * 0.5;
+    return float4(color, s.Alpha);
+}
+ENDCG
+```
+
+Toon 光照用 Ramp 纹理将 N·L 量化为色阶，Fresnel 增加边缘高光。自定义光照函数可完全控制光照计算。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** Toon 渲染色阶过渡不够硬，像普通光照。
+**原因 →** 量化阶数太多或有环境光干扰。
+**修法 →** 减少色阶数量（2-3 阶），用 step 函数而非 smoothstep 确保硬边。关闭或降低环境光和全局光照，避免平滑过渡破坏卡通效果。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 自定义光照函数不被调用。
+**原因 →** 函数名与 #pragma surface 中的名称不匹配。
+**修法 →** 如果 #pragma surface surf MyLight，则光照函数名必须为 LightingMyLight。函数签名要与 Unity 要求一致。ForwardBase 和 ForwardAdd 需要分别处理。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：Standard PBR 光照模型中 Metallic 和 Smoothness 分别控制什么？
+
+<Answer>
+Metallic 控制材质的金属度（0=非金属/电介质，1=金属），影响反射率和反射颜色。Smoothness 控制表面光滑度（0=粗糙，1=镜面），影响高光大小和锐利程度。
+</Answer>
+
+**问题**：如何实现 Toon（卡通）光照模型？
+
+<Answer>
+1)自定义 Lighting 函数 2)计算 N·L 点积后量化为 2-3 个离散阶 3)每阶对应一个固定颜色 4)添加边缘高光（Fresnel）5)添加描边 Pass 6)关闭环境光避免平滑过渡 7)用 Ramp 纹理控制色阶映射。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Lambert">纯漫反射无高光的简单光照模型。</GlossaryItem>
+<GlossaryItem term="Standard PBR">基于物理的金属度流程标准光照模型。</GlossaryItem>
+<GlossaryItem term="自定义光照">在表面着色器中自定义的光照计算函数。</GlossaryItem>
+<GlossaryItem term="Toon 渲染">将光照量化为离散阶的卡通风格光照。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity ShaderLab 开发实战详解" adaptedUrl="" />

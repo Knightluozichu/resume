@@ -1,0 +1,110 @@
+---
+title: "光子映射"
+type: B
+section: "计算机图形学与渲染"
+order: 4
+description: "从光源出发的光子追踪——焦散与GI的有偏方法"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilPhotonMappingDiagram } from "@/components/mdx/global-illumination/diagrams/gil-photon-mapping";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述光子映射的两遍算法流程
+- 能解释光子映射为什么是有偏但一致的
+- 能说出光子映射擅长解决什么问题
+- 能回答渐进式光子映射(PPM)如何解决内存问题？
+</Objectives>
+
+## 直觉引入
+
+想象你往房间里撒一把发光的沙子。每粒沙子代表一个光子，从光源出发，在场景中弹射，最终停在某个表面上。沙子密集的地方亮，稀疏的地方暗。这就是光子映射——从光源正向追踪光子，统计表面上的光子密度来估算光照。
+
+光子映射擅长路径追踪不擅长的焦散——因为光子从光源出发经过镜面是自然的路径，而从相机反向追踪到镜面再到光源很难。
+
+## 概念讲解
+
+### 光子映射算法
+
+<GilPhotonMappingDiagram />
+
+<Term def="光子映射是从光源发射光子在场景中追踪弹射，存储在表面上，用密度估计计算光照的两遍GI方法">光子映射</Term>分两遍执行。
+
+<Term def="光子贴图(Photon Map)是存储光子撞击点位置、方向、能量的空间数据结构">光子贴图</Term>通常用kd-tree组织，支持快速最近邻查询。
+
+<Term def="辐射度估计(Radiance Estimate)在查询点附近找N个最近光子，用其能量和面积估算辐射度">辐射度估计</Term>是光子映射的核心计算步骤。
+
+<Term def="渐进式光子映射(PPM)通过多遍迭代逐步缩小搜索半径，避免存储大量光子">PPM</Term>解决了光子映射的内存瓶颈。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：第一遍：光子追踪">从光源发射光子，在场景中追踪弹射（反射/透射/吸收），每个撞击点存入光子贴图。这一遍从光源正向追踪，天然处理焦散。</Step>
+<Step title="第二步：第二遍：渲染">
+从相机发射光线，在交点查询光子贴图找最近N个光子，用其能量除以搜索圆盘面积估算辐射度。搜索半径越大越平滑但越模糊。
+<GilPhotonMappingDiagram />
+</Step>
+<Step title="第三步：渐进式PPM">PPM不存储所有光子，而是多遍迭代：每遍发射少量光子，在固定交点上累积，逐步缩小搜索半径。半径越小越精确，一致收敛。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 光子映射两遍算法
+// Pass 1: 光子追踪
+void TracePhotons(Scene scene, int numPhotons) {
+    for (int i = 0; i < numPhotons; i++) {
+        Ray ray = light.EmitPhoton();
+        TracePhoton(ray, scene);  // 弹射并存入photonMap
+    }
+    photonMap.BuildKDTree();
+}
+
+// Pass 2: 渲染（辐射度估计）
+Spectrum EstimateRadiance(Point p, Vector n) {
+    auto photons = photonMap.NearestNeighbors(p, N, radius);
+    Spectrum flux(0);
+    for (auto &ph : photons)
+        flux += ph.flux * BRDF(ph.dir, n);
+    return flux / (PI * radius * radius);  // 密度估计
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为光子映射是无偏的。**
+光子映射是有偏的——辐射度估计用有限半径的圆盘近似点密度，引入系统性模糊（偏差）。但它是「一致的」——光子数趋于无穷且半径趋于零时收敛到正确值。有偏但一致在实践中可接受。
+</Callout>
+
+<Callout type="trap">
+**误区：认为光子映射可以完全替代路径追踪。**
+光子映射擅长焦散和漫反射间接光，但不擅长直接光照（用NEE更高效）和镜面反射（delta分布无法用密度估计）。实际中通常混合使用：路径追踪处理直接光和镜面，光子映射处理焦散和漫反射间接光。
+</Callout>
+
+<Exercises>
+**问题 1**：光子映射的两遍算法流程是什么？
+
+<Answer>
+有偏性来自辐射度估计——用有限半径r的圆盘上的光子密度近似点的光子密度。这相当于低通滤波，引入系统性模糊。半径r越大模糊越严重（偏差越大），但方差越小（噪声越少）。一致性保证：当光子数N→无穷且半径r→0时，偏差→0，收敛到正确值。这需要N的增长比r的缩小快（如r ∝ 1/sqrt(N)）。
+</Answer>
+
+**问题 2**：渐进式光子映射(PPM)如何解决传统光子映射的内存问题？
+
+<Answer>
+传统光子映射需要存储数百万光子在kd-tree中，内存消耗巨大。PPM不存储所有光子，而是：1)从相机发射光线确定交点；2)每遍迭代发射少量光子，在固定交点上累积命中光子的能量；3)每遍迭代后缩小搜索半径r（r_new = r_old * (N+alpha)/(N+1)）；4)半径趋近零时收敛到无偏结果。PPM只需存储交点的累积统计量（几个浮点数），不需存储光子贴图，内存消耗与光子数无关。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="光子映射">从光源发射光子追踪弹射，存储在表面上，用密度估计计算光照的两遍GI方法。</GlossaryItem>
+<GlossaryItem term="光子贴图">存储光子撞击点位置、方向、能量的kd-tree空间数据结构。</GlossaryItem>
+<GlossaryItem term="辐射度估计">在查询点附近找N个最近光子，用能量和面积估算辐射度的密度估计方法。</GlossaryItem>
+<GlossaryItem term="渐进式光子映射(PPM)">多遍迭代逐步缩小搜索半径，避免存储大量光子的内存优化方案。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

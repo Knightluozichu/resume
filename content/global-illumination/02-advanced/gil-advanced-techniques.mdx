@@ -1,0 +1,120 @@
+---
+title: "高级 GI 技术"
+type: B
+section: "计算机图形学与渲染"
+order: 8
+description: "MLT、辐照度缓存、自适应采样——GI方法的进阶组合"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilAdvancedTechniquesDiagram } from "@/components/mdx/global-illumination/diagrams/gil-advanced-techniques";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释Metropolis光线传输(MLT)的工作原理
+- 能描述辐照度缓存的空间插值策略
+- 能说出自适应采样如何分配采样预算
+- 能回答为什么现代渲染器混合多种GI技术？
+</Objectives>
+
+## 直觉引入
+
+想象你在黑暗中找钥匙。随机摸索（路径追踪）可能很久找不到。但如果你找到过一次，就知道大概位置，下次在附近找（MLT变异）。或者你记得客厅灯开关的位置，直接去摸（辐照度缓存）。又或者你在钥匙可能多的地方多摸几把（自适应采样）。
+
+高级GI技术就是这些「聪明策略」——MLT在找到好路径后局部探索，辐照度缓存复用已有结果，自适应采样把预算花在刀刃上。现代渲染器不是用一种方法，而是组合多种取长补短。
+
+## 概念讲解
+
+### 高级GI技术
+
+<GilAdvancedTechniquesDiagram />
+
+<Term def="Metropolis光线传输(MLT)用马尔可夫链在路径空间中探索，找到高贡献路径后局部变异">MLT</Term>擅长难以采样的间接光路径。
+
+<Term def="辐照度缓存(Irradiance Cache)在稀疏点上计算漫反射间接光，用插值填充中间区域">辐照度缓存</Term>大幅加速漫反射GI。
+
+<Term def="自适应采样(Adaptive Sampling)在噪声大的区域增加采样数，在平滑区域减少采样数">自适应采样</Term>优化采样预算分配。
+
+<Term def="多路径采样(Multi-path)在一个渲染中组合路径追踪、光子映射、辐照度缓存等多种方法">混合渲染</Term>是现代渲染器的标准架构。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：MLT局部探索">MLT用马尔可夫链：找到一条高贡献路径后，通过小变异（扰动方向/距离）在附近探索更多类似路径。对困难间接光（如门缝透光）效率远超纯随机。</Step>
+<Step title="第二步：辐照度缓存">
+漫反射间接光在空间上平滑变化——邻近点的间接光几乎相同。辐照度缓存只在稀疏点计算间接光，中间点用插值。计算量减少10-100倍。
+<GilAdvancedTechniquesDiagram />
+</Step>
+<Step title="第三步：自适应与混合">自适应采样先低采样预览全图，在噪声大的区域增加采样。混合渲染器按场景特征选择：直接光用NEE，焦散用光子映射，漫反射间接用缓存，光泽间接用路径追踪。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 混合渲染器架构
+Spectrum Li(Ray ray, Scene scene) {
+    Spectrum L(0);
+    SurfaceInteraction si = scene.Intersect(ray);
+    
+    // 1. 直接光: NEE + MIS
+    L += estimateDirectNEE(si, scene);
+    
+    // 2. 漫反射间接: 辐照度缓存
+    if (si.bsdf->isDiffuse()) {
+        if (cache.isValid(si))
+            L += cache.interpolate(si);  // 有偏但快
+        else {
+            Spectrum irr = pathTraceDiffuse(si);
+            cache.add(si, irr);  // 计算并缓存
+            L += irr;
+        }
+    }
+    
+    // 3. 焦散: 光子映射
+    L += photonMap.estimateCaustics(si);
+    
+    // 4. 光泽间接: 路径追踪
+    if (si.bsdf->isGlossy())
+        L += pathTraceGlossy(si);
+    
+    return L;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为MLT是万能的。**
+辐照度缓存的插值假设间接光空间平滑，但在几何突变处（如角落、边缘）失效，导致漏光或漏暗。需要梯度引导的插值和遮挡检测。
+</Callout>
+
+<Callout type="trap">
+**误区：辐照度缓存总是安全的。**
+辐照度缓存的插值假设间接光在空间上平滑变化。但在几何突变处（角落、门框边缘）间接光变化剧烈，插值会导致漏光或暗斑。好的实现需要遮挡检测和梯度引导插值，在平滑区域用缓存，在突变区域回退到完整计算。
+</Callout>
+
+<Exercises>
+**问题 1**：MLT的工作原理是什么？它解决了路径追踪的什么问题？
+
+<Answer>
+因为不同GI技术各有擅长：路径追踪通用但焦散差，光子映射擅长焦散但直接光差，辐照度缓存快但只适合漫反射，MLT擅长困难光路但收敛不均。混合渲染器按场景特征分工：直接光用NEE+MIS（高效无噪声），漫反射间接光用辐照度缓存（插值快10-100倍），焦散用光子映射（正向追踪天然处理），光泽间接光用路径追踪（BRDF采样高效），困难光路用MLT补充。每种技术只做自己擅长的部分，整体效率和质量远超单一方法。
+</Answer>
+
+**问题 2**：为什么现代渲染器混合多种GI技术？举例说明各技术的分工。
+
+<Answer>
+不同GI技术各有擅长和短板。混合渲染器按场景特征分工：1)直接光用NEE+MIS——高效无噪声；2)漫反射间接用辐照度缓存——插值快10-100倍；3)焦散用光子映射——正向追踪天然处理；4)光泽间接用路径追踪——BRDF采样高效；5)困难光路用MLT补充——局部探索高效。每种技术只做擅长的部分，整体效率和质量远超单一方法。代价是系统复杂度增加——需要管理多种算法的接口和数据结构。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Metropolis光线传输(MLT)">用马尔可夫链在路径空间局部变异探索，擅长困难间接光路径的GI方法。</GlossaryItem>
+<GlossaryItem term="辐照度缓存">在稀疏点计算漫反射间接光并插值填充中间区域，大幅加速漫反射GI。</GlossaryItem>
+<GlossaryItem term="自适应采样">在噪声大的区域增加采样数、平滑区域减少采样数的预算优化策略。</GlossaryItem>
+<GlossaryItem term="混合渲染">在一个渲染器中组合路径追踪、光子映射、辐照度缓存等多种GI技术的架构。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

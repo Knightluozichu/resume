@@ -1,0 +1,140 @@
+---
+title: "高级特效实现"
+type: B
+section: "Shader 与 GPU 编程"
+order: 8
+description: "SSR、体积雾、水面效果与程序化纹理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ShpAdvancedEffectsDiagram } from "@/components/mdx/shader-practice/diagrams/shp-advanced-effects";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解屏幕空间反射（SSR）的原理与局限
+- 掌握体积雾的射线步进实现
+- 学会水面效果的多技术组合
+- 能用噪声函数生成程序化纹理
+</Objectives>
+
+## 直觉引入
+
+高级特效就像变魔术——看起来复杂，其实是基础手法的组合。屏幕空间反射是「从屏幕上找颜色」，体积雾是「沿光线数密度」，水面是「法线扰动加 Fresnel」，程序化纹理是「用数学画花纹」。掌握了噪声、射线步进、Fresnel 这三招，就能组合出各种高级效果。
+
+## 概念讲解
+
+<Term def="在屏幕空间沿反射方向步进找交点的反射技术">屏幕空间反射 SSR</Term><Term def="沿视线方向步进累加密度的雾效果">体积雾</Term><Term def="视线越平反射越强的光学现象">Fresnel 效应</Term><Term def="用 Perlin/Simplex 噪声叠加生成的纹理">程序化纹理</Term>
+
+### SSR 原理
+从每个像素出发沿反射方向做射线步进，采样深度缓冲判断是否相交。相交点颜色即为反射颜色。无法反射屏幕外的物体。
+
+### 体积雾
+从相机到片段方向做射线步进，每步采样密度函数，用 Beer-Lambert 定律计算透射率，与场景颜色混合。
+
+### Fresnel 效应
+fresnel = pow(1 - dot(N, V), 5)。视线越平（掠射角），反射越强。用于水面反射/折射混合。
+
+### 程序化纹理
+用 Perlin/Simplex 噪声多层叠加（FBM），将噪声值映射到颜色梯度生成大理石、木纹等纹理。
+
+## 交互Demo
+
+> 猜一猜：SSR 为什么无法反射屏幕外的物体？
+
+<ShpAdvancedEffectsDiagram />
+
+<Stepper>
+<Step title="第一步：SSR 射线步进">
+从像素位置出发，沿反射方向逐步前进，每步采样深度缓冲判断是否命中几何体。命中后采样该处颜色作为反射色。
+</Step>
+<Step title="第二步：体积雾">
+从相机到片段方向做射线步进，每步采样密度函数累加雾密度，用 Beer-Lambert 定律计算透射率，与场景颜色混合。
+</Step>
+<Step title="第三步：水面 + 程序化纹理">
+Gerstner 波顶点位移 + 法线贴图流动 UV + Fresnel 混合反射/折射 + 泡沫噪声叠加。程序化纹理用 FBM 噪声映射颜色。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// SSR 射线步进
+float3 ScreenSpaceReflection(float2 uv, float3 normal, float3 viewDir) {
+    float3 reflectDir = reflect(-viewDir, normal);
+    float3 pos = float3(uv, depthTexture.Sample(samp, uv).r);
+    float3 step = reflectDir * stepSize;
+    for (int i = 0; i < maxSteps; i++) {
+        pos += step;
+        if (any(pos.xy < 0) || any(pos.xy > 1)) break;
+        float sampledDepth = depthTexture.Sample(samp, pos.xy).r;
+        if (pos.z - sampledDepth < threshold && pos.z > sampledDepth) {
+            return sceneTexture.Sample(samp, pos.xy).rgb;
+        }
+    }
+    return 0;
+}
+
+// Fresnel 水面混合
+float4 PSMainWater(VSOutput input) : SV_TARGET {
+    float3 N = normalize(waveNormal);
+    float3 V = normalize(ViewPos - input.WorldPos);
+    float fresnel = pow(1.0 - max(dot(N, V), 0.0), 5.0);
+    float3 refraction = sceneTexture.Sample(samp, input.ScreenUV + N.xy * 0.02).rgb;
+    float3 reflection = envMap.Sample(samp, reflect(-V, N)).rgb;
+    return float4(lerp(refraction, reflection, fresnel), 1.0);
+}
+
+// FBM 程序化噪声
+float fbm(float2 uv) {
+    float value = 0, amp = 0.5;
+    for (int i = 0; i < 5; i++) {
+        value += amp * noise(uv);
+        uv *= 2.0; amp *= 0.5;
+    }
+    return value;
+}
+```
+
+SSR 用射线步进找反射色，Fresnel 控制反射/折射混合，FBM 叠加噪声生成程序化纹理。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** SSR 反射出现噪点和断裂。
+**原因 →** 射线步进步长太大，跳过了薄几何体。
+**修法 →** 使用自适应步长（远处步长大近处步长小），或二分搜索精确定位交点。添加 RayMarching 时的厚度阈值判断，避免穿透薄物体。降分辨率渲染 SSR 再上采样可平衡性能。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 程序化噪声纹理在远处出现摩尔纹。
+**原因 →** 高频噪声在低分辨率采样时产生走样。
+**修法 →** 使用 FBM 时限制最高频率，或用导数噪声（ddx/ddy）自动调整频率。远处用低频噪声、近处用高频噪声。预烘焙到纹理也可避免实时计算走样。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：屏幕空间反射（SSR）的基本原理是什么？
+
+<Answer>
+在屏幕空间中，从每个像素出发沿反射方向做射线步进，采样深度缓冲判断是否相交。相交点的颜色即为反射颜色。优点是不需要额外渲染 Pass，缺点是无法反射屏幕外的物体。
+</Answer>
+
+**问题**：如何在 Shader 中实现基于噪声的程序化纹理？
+
+<Answer>
+1)选择噪声函数（Perlin/Simplex/Worley）2)多层叠加不同频率和振幅（FBM）3)用噪声值映射到颜色梯度 4)用导数噪声生成法线增加凹凸感 5)预烘焙到纹理可提升性能。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="屏幕空间反射 SSR">在屏幕空间沿反射方向步进找交点的反射技术。</GlossaryItem>
+<GlossaryItem term="体积雾">沿视线方向步进累加密度的雾效果。</GlossaryItem>
+<GlossaryItem term="Fresnel 效应">视线越平反射越强的光学现象。</GlossaryItem>
+<GlossaryItem term="程序化纹理">用 Perlin/Simplex 噪声叠加生成的纹理。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Shader 开发实战" adaptedUrl="" />

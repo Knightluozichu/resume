@@ -1,0 +1,130 @@
+---
+title: "Shader 性能优化"
+type: B
+section: "Shader 与 GPU 编程"
+order: 7
+description: "减少计算/采样/寄存器与分支发散优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ShpOptimizationDiagram } from "@/components/mdx/shader-practice/diagrams/shp-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Shader 性能优化的基本原则
+- 理解分支发散对 GPU 并行的影响
+- 学会避免寄存器溢出
+- 能利用 Mipmap 和 LOD 优化纹理采样
+</Objectives>
+
+## 直觉引入
+
+GPU 就像一个超大厨房——有上千个厨师（线程）同时做菜。但如果一个厨师要切菜另一个要炒菜（分支发散），他们没法同时开工，得排队。如果灶台（寄存器）不够用，厨师就得跑到远处拿食材（spilling），速度大降。优化的核心就是让所有厨师同时做同一道菜，且灶台够用。
+
+## 概念讲解
+
+<Term def="减少计算量、采样次数和寄存器占用的优化策略">优化原则</Term><Term def="同一 warp 线程走不同分支导致的串行执行">分支发散</Term><Term def="临时变量超出寄存器数量时存到慢速显存">寄存器溢出</Term><Term def="利用多级纹理和依赖读取避免优化采样">纹理优化</Term>
+
+### 三大优化方向
+1. 减少计算：低精度 half、避免分支、用内置函数
+2. 减少采样：Mipmap、合并纹理、避免依赖读取
+3. 减少寄存器：简化表达式、控制循环展开、避免 spilling
+
+### 分支发散
+GPU 以 warp（32 线程）为单位执行。同一 warp 内线程走不同 if/else 分支时需要串行执行所有路径，导致部分线程空等。应尽量用 step/lerp/saturate 等数学函数替代分支。
+
+### 寄存器溢出
+Shader 临时变量超过 GPU 寄存器数量时，编译器将数据 spill 到慢速显存，大幅降低性能。需检查编译器报告的寄存器数，控制循环展开程度。
+
+## 交互Demo
+
+> 猜一猜：为什么 if/else 在 GPU 中可能比数学运算慢？
+
+<ShpOptimizationDiagram />
+
+<Stepper>
+<Step title="第一步：定位瓶颈">
+用 Profiler 工具定位瓶颈位置。降低分辨率看帧率变化判断是否像素瓶颈，简化着色器看变化判断具体阶段。
+</Step>
+<Step title="第二步：减少分支">
+将 if/else 替换为 step/lerp/saturate 等数学函数。例如 if (a > b) x = c; else x = d; 可写为 x = lerp(d, c, step(b, a));
+</Step>
+<Step title="第三步：纹理优化">
+为所有纹理生成 Mipmap，GPU 自动选择合适层级。避免依赖纹理读取（用前一次采样结果做下一次采样的坐标），这会导致缓存失效。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 分支发散 — 不推荐
+float4 PSMainBranch(VSOutput input) : SV_TARGET {
+    float4 color;
+    if (input.TexCoord.y > 0.5) {
+        color = tex1.Sample(samp, input.TexCoord);
+    } else {
+        color = tex2.Sample(samp, input.TexCoord);
+    }
+    return color;
+}
+
+// 数学替代 — 推荐
+float4 PSMainNoBranch(VSOutput input) : SV_TARGET {
+    float4 c1 = tex1.Sample(samp, input.TexCoord);
+    float4 c2 = tex2.Sample(samp, input.TexCoord);
+    float t = step(0.5, input.TexCoord.y);
+    return lerp(c2, c1, t);
+}
+
+// 低精度优化
+half4 PSMainHalf(VSOutput input) : SV_TARGET {
+    half3 N = normalize(input.Normal);  // half 精度足够
+    half3 L = normalize(LightDir);
+    half diff = max(dot(N, L), 0.0h);
+    return half4(diff.xxx, 1.0h);
+}
+```
+
+用数学函数替代分支、用 half 降低精度、用 Mipmap 优化采样是三大基本优化手段。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 优化了半天帧率没变化。
+**原因 →** 没有先定位瓶颈就盲目优化。
+**修法 →** 优化前先用 Profiler 定位瓶颈。如果瓶颈在 CPU（Draw Call 过多），优化 Shader 不会有效。降低分辨率、简化着色器、减少 Draw Call 逐步排除，找到真正的瓶颈再优化。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 着色器编译后运行速度反而变慢。
+**原因 →** 循环展开过度导致寄存器溢出。
+**修法 →** 检查编译器报告的寄存器使用量。如果寄存器数超过 GPU 限制，数据会被 spill 到显存。减少同时活跃的变量、限制循环展开次数、简化复杂表达式。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：什么是分支发散？为什么它影响性能？
+
+<Answer>
+GPU 以 warp/wavefront 为单位执行，同一组线程走不同分支时需要串行执行所有分支路径。if/else 中不同线程走不同路径会导致一部分线程空等，降低并行效率。应尽量用数学运算替代分支。
+</Answer>
+
+**问题**：如何利用 Mipmap 优化纹理采样性能？
+
+<Answer>
+1)为所有纹理生成 Mipmap 链，GPU 自动选择合适层级 2)远处物体用低分辨率纹理 3)用 textureGrad 手动控制 mip 选择 4)避免依赖纹理读取（用前一次采样结果做下一次采样坐标），会导致缓存失效。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="优化原则">减少计算量、采样次数和寄存器占用的优化策略。</GlossaryItem>
+<GlossaryItem term="分支发散">同一 warp 线程走不同分支导致的串行执行。</GlossaryItem>
+<GlossaryItem term="寄存器溢出">临时变量超出寄存器数量时存到慢速显存。</GlossaryItem>
+<GlossaryItem term="纹理优化">利用 Mipmap 和避免依赖读取优化采样性能。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Shader 开发实战" adaptedUrl="" />

@@ -1,0 +1,113 @@
+---
+title: "Unity URP 总复习"
+type: B
+section: "Shader 与 GPU 编程"
+order: 9
+description: "全书知识图谱——管线、着色、光照、阴影、后处理、性能"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UusFinalReviewDiagram } from "@/components/mdx/unity-urp-shaders/diagrams/uus-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能串联全书六大模块：管线架构、Shader Graph、光照、阴影、后处理、性能优化
+- 能描述一帧 URP 渲染的完整流程
+- 能识别各模块的常见陷阱和优化策略
+- 能回答：从零搭建 URP 项目的关键决策点
+</Objectives>
+
+## 直觉引入
+
+全书就像拼一幅拼图。管线架构是拼图的边框（搭结构），Shader Graph 是图案（填内容），光照是色彩（定基调），阴影是暗部（加层次），后处理是滤镜（调风格），性能优化是装裱（保品质）。每块拼图单独看是碎片，拼在一起才是完整的 URP 渲染画面。
+
+## 概念讲解
+
+### 全书知识图谱
+
+<UusFinalReviewDiagram />
+
+全书六大模块围绕 URP 管线核心展开：
+
+1. **管线架构**：SRP Core → Renderer → Render Pass → Shader，URP Asset 配置全局参数
+2. **Shader Graph**：Property → Math Node → Master Node，可视化编辑生成 HLSL
+3. **光照系统**：直接光（主光 + 附加光）+ 间接光（GI/SH/Reflection Probe），BRDF 合成
+4. **阴影系统**：Shadow Map → CSM 级联 → PCF 柔化 → Bias 修正
+5. **后处理栈**：Volume 系统 → Bloom → 调色 → Tone Mapping → 输出
+6. **性能优化**：SRP Batch / 剔除 / Render Scale / 纹理压缩 / 变体控制
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：一帧渲染流程">SRP Core 调度 → Shadow Pass（Shadow Map）→ Opaque Pass（Lit/Unlit + 光照 + 阴影）→ Depth/Normal Pass（辅助）→ Transparent Pass → Post Processing（Bloom/调色/ToneMap）→ 输出。</Step>
+<Step title="第二步：模块间依赖">
+管线架构是基础（决定 Pass 组织），Shader Graph 是工具（编写着色器），光照和阴影是效果（决定视觉真实感），后处理是修饰（整体风格），性能优化是保障（确保运行效率）。
+<UusFinalReviewDiagram />
+</Step>
+<Step title="第三步：关键决策点">项目启动时需决策：URP vs HDRP（跨平台 vs 高端）、Shader Graph vs HLSL（可视化 vs 精控）、移动端配置（Render Scale/CSM/HDR/后处理取舍）。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 一帧 URP 渲染的完整流程（伪码）
+// 1. SRP Core: Render()
+ScriptableRenderer.Render(context, renderingData) {
+    // 2. Shadow Pass: 渲染 Shadow Map
+    m_ShadowPass.Execute(); // CSM 4级 / Cube Shadow Map
+
+    // 3. Opaque Pass: 不透明物体
+    m_OpaquePass.Execute(); // Lit (PBR BRDF + GI + Shadow) / Unlit
+    //    Fragment: UniversalFragmentPBR(inputData, surface)
+    //    → GetMainLight(shadowCoord) + GetAdditionalLights()
+    //    → SH (indirect diffuse) + ReflectionProbe (indirect specular)
+
+    // 4. Depth Normal Pass (SSAO 等)
+    m_DepthNormalPass.Execute();
+
+    // 5. Transparent Pass: 半透明物体
+    m_TransparentPass.Execute();
+
+    // 6. Post Processing: Volume 系统驱动
+    m_PostProcessingPass.Execute();
+    //    Bloom → ColorAdjustments → ToneMapping → Vignette
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：孤立学习各模块不串联。**
+管线架构决定 Pass 组织方式，Shader 必须匹配 Pass 的 LightMode 标签才能被正确渲染。光照依赖管线提供的光源数据（CBUFFER），阴影依赖 Shadow Pass 渲染的 Shadow Map，后处理依赖 Opaque Pass 输出的 Camera Color RT。不串联理解会导致自定义 Shader 光照/阴影不正确。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视平台差异的统一设计。**
+PC 和移动端的 URP 配置差异巨大（Render Scale / HDR / CSM 级数 / 附加光逐像素上限 / 后处理链）。在 PC 上调好的效果在移动端可能掉到 15fps。应在项目初期建立多平台 URP Asset，每次改动都在各平台验证。
+</Callout>
+
+<Exercises>
+**问题 1**：描述一帧 URP 渲染的完整流程。
+
+<Answer>
+1) SRP Core 调用 Render() 入口。2) Shadow Pass：从光源视角渲染 Shadow Map（主光用 CSM 级联，附加光用 Cube Shadow Map）。3) Opaque Pass：渲染不透明物体，Lit Shader 执行 PBR 光照计算（直接光 Diffuse+Specular + 间接光 SH+ReflectionProbe + 阴影衰减），Unlit 直通输出。4) Depth/Normal Pass：渲染辅助纹理供 SSAO 等效果使用。5) Transparent Pass：按从后向前顺序渲染半透明物体。6) Post Processing：Volume 系统按 Bloom → Color Adjustments → Tone Mapping → Vignette 顺序执行全屏 Blit。7) 输出到屏幕。
+</Answer>
+
+**问题 2**：从零搭建 URP 项目时，关键决策点有哪些？
+
+<Answer>
+1) URP vs HDRP：URP 跨平台兼容（PC/Mobile/Console），HDRP 追求高端画质（PC/Console only）。2) Shader Graph vs HLSL：简单效果用 Shader Graph 快速迭代，复杂/性能敏感效果手写 HLSL。3) 移动端配置：Render Scale（0.5~0.8）、HDR 关闭、MSAA 2x 或关闭、CSM 2 级 1024 分辨率、附加光逐顶点上限 2-4、后处理简化为 Tone Mapping + 轻量 Bloom。4) SRP Batcher 兼容：所有 Shader 使用 CBUFFER，禁用 MaterialPropertyBlock。5) 变体控制：规划 Keyword 数量，用 if 分支替代不影响性能的功能切换。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="URP 渲染流程">一帧渲染从 SRP Core 调度到后处理输出的完整链路：Shadow → Opaque → Transparent → Post Processing。</GlossaryItem>
+<GlossaryItem term="PBR 光照">基于物理的渲染，通过 BRDF（Cook-Torrance）计算直接光和间接光合成最终颜色。</GlossaryItem>
+<GlossaryItem term="Volume 系统">URP 后处理参数管理框架，Global/Local Volume 按权重混合后处理效果。</GlossaryItem>
+<GlossaryItem term="多平台 URP Asset">为不同平台（PC/Mobile）配置不同的 URP Asset，平衡画质与性能。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity URP 官方文档" adaptedUrl="https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@latest" />

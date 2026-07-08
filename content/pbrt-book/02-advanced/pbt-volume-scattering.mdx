@@ -1,0 +1,113 @@
+---
+title: "体积散射"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "吸收、散射、相函数——光在参与介质中的传播"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtVolumeScatteringDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-volume-scattering";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分吸收、外散射、内散射三种体交互类型
+- 能解释 σa（吸收系数）和 σs（散射系数）的物理含义
+- 能说出相函数的作用和常见模型
+- 能回答为什么体积渲染比表面渲染计算量更大？
+</Objectives>
+
+## 直觉引入
+
+想象一束阳光穿过雾气。光被水滴打散（散射），部分被吸收变热（吸收），从其他方向也有光散射进来（内散射）。雾不是表面——它是「参与介质」，光在其中不断改变方向和强度。
+
+体积散射就是研究光如何在3D空间（而非表面）中传播。它解释了云、雾、天空蓝色、皮肤次表面散射等现象。PBRT 把这些物理过程都建模了。
+
+## 概念讲解
+
+### 体积散射三大过程
+
+<PbtVolumeScatteringDiagram />
+
+<Term def="吸收（Absorption）是光在介质中传播时能量被介质吸收转化为热能的过程">吸收</Term>用吸收系数 σa 描述，光强按指数衰减。
+
+<Term def="外散射（Out-scattering）是光在介质中被粒子偏转到其他方向的过程">外散射</Term>用散射系数 σs 描述，同样导致光强衰减。
+
+<Term def="内散射（In-scattering）是其他方向的光被散射到当前光线方向，增加光强的过程">内散射</Term>是外散射的逆过程，是体积渲染的主要光源。
+
+<Term def="相函数（Phase Function）描述散射光的方向分布，类似于 BRDF 但用于体积">相函数</Term>决定了散射光往哪些方向偏转，常用 Henyey-Greenstein 模型。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：吸收与外散射">光在介质中传播时，被吸收（σa）和被散射出去（σs）都会使光强衰减。总衰减系数 σt = σa + σs，光强按 e^(-σt·d) 指数衰减。</Step>
+<Step title="第二步：内散射与相函数">
+其他方向的光也会被散射进来（内散射），增加光强。相函数 p(ω,ω') 描述散射的方向分布，决定了雾看起来是均匀的还是向前散射的。
+<PbtVolumeScatteringDiagram />
+</Step>
+<Step title="第三步：体渲染方程">体积渲染方程把吸收、外散射、内散射组合成一个积分方程。沿光线步进，在每一点计算衰减和内散射贡献。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 体积光线步进
+Spectrum VolumeIntegrate(Ray ray, Scene scene) {
+    Spectrum L(0), T(1);  // 累积辐射度、透射率
+    float t = 0;
+    while (t < ray.tMax) {
+        float step = sampleStep();
+        t += step;
+        
+        // 衰减: T *= exp(-σt * step)
+        Density d = medium.Density(ray(t));
+        T *= exp(-(d.sigmaA + d.sigmaS) * step);
+        
+        // 内散射贡献
+        for (auto &light : scene.lights) {
+            Spectrum Li = light.L(ray(t));
+            float p = phaseFunction(ray.dir, light.dir);
+            L += T * d.sigmaS * p * Li * step;
+        }
+    }
+    return L;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：混淆外散射和内散射。**
+外散射是光被偏转走，减少光强（衰减）；内散射是其他方向的光偏转进来，增加光强（光源）。两者用同一个 σs 但方向相反。体积渲染的颜色主要来自内散射。
+</Callout>
+
+<Callout type="trap">
+**误区：用表面渲染思路理解体积。**
+表面渲染在交点计算一次 BRDF，体积渲染需要沿光线连续采样多个点，每点计算衰减和内散射。计算量是表面渲染的数十倍。
+</Callout>
+
+<Exercises>
+**问题 1**：σa 和 σs 分别描述什么？它们如何组合形成总衰减系数？
+
+<Answer>
+σa（吸收系数）描述光被介质吸收转化为热能的速率，σs（散射系数）描述光被粒子偏转到其他方向的速率。总衰减系数 σt = σa + σs，描述光强在单位距离内的总衰减率。光穿过距离 d 后透射率 T = e^(-σt·d)。
+</Answer>
+
+**问题 2**：相函数在体积散射中扮演什么角色？Henyey-Greenstein 模型的 g 参数有什么含义？
+
+<Answer>
+相函数 p(ω→ω') 类似于 BRDF 但用于体积，描述散射光从方向 ω 偏转到 ω' 的概率分布。它决定了介质的视觉特征——各向同性（均匀雾）还是各向异性（向前散射的烟尘）。Henyey-Greenstein 模型的 g 参数控制散射方向性：g=0 是各向同性（均匀散射），g>0 是前向散射（光倾向于继续前进），g<0 是后向散射（光被反弹回来）。g 的绝对值越大各向异性越强。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="吸收系数(σa)">描述光在介质中被吸收衰减的速率，单位 1/m，导致光强指数衰减。</GlossaryItem>
+<GlossaryItem term="散射系数(σs)">描述光被介质粒子偏转到其他方向的速率，导致外散射衰减。</GlossaryItem>
+<GlossaryItem term="相函数">描述散射光方向分布的函数，类似BRDF但用于体积，常用Henyey-Greenstein模型。</GlossaryItem>
+<GlossaryItem term="透射率">光穿过介质后的剩余光强比例，T = exp(-σt·d)，σt=σa+σs。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

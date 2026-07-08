@@ -1,0 +1,127 @@
+---
+title: "后处理 Shader"
+type: B
+section: "Shader 与 GPU 编程"
+order: 6
+description: "离屏渲染、高斯模糊、色调映射与 Bloom"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ShpPostProcessingDiagram } from "@/components/mdx/shader-practice/diagrams/shp-post-processing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解后处理的基本原理与离屏渲染
+- 掌握高斯模糊分离两趟优化
+- 了解色调映射在 HDR 中的作用
+- 能设计 Bloom 辉光效果管线
+</Objectives>
+
+## 直觉引入
+
+后处理就像照片的滤镜——先把场景拍下来（渲染到纹理），再用滤镜处理这张照片（全屏 Pass 着色器）。模糊让画面柔和，色调映射让 HDR 颜色适应屏幕，辉光让亮的东西发光。每个滤镜都是一个像素着色器，对纹理上每个像素做处理。
+
+## 概念讲解
+
+<Term def="场景先渲染到纹理再经全屏着色器处理的技术">后处理</Term><Term def="将 2D 卷积分离为水平+垂直两趟的优化">分离高斯模糊</Term><Term def="将 HDR 颜色压缩到 LDR 显示范围的映射">色调映射</Term><Term def="提取高亮区域模糊后叠加的辉光效果">Bloom</Term>
+
+### 后处理原理
+1. 场景渲染到离屏纹理（Render Target）
+2. 全屏三角形/四边形将该纹理作为输入
+3. 像素着色器对每个像素做处理
+4. 输出到最终屏幕缓冲
+
+### 高斯模糊分离
+2D 高斯模糊卷积核 N*N，一趟需 N*N 次采样。分离为水平（1*N）+垂直（1*N）两趟后只需 2*N 次采样，复杂度从 O(N^2) 降为 O(N)。
+
+### 色调映射
+HDR 渲染颜色可能超过 [0,1]，显示器无法直接显示。色调映射用 ACES/Reinhard 等曲线将 HDR 压缩到 LDR [0,1]，保留高亮细节。
+
+## 交互Demo
+
+> 猜一猜：高斯模糊为什么分两趟而不是一趟？
+
+<ShpPostProcessingDiagram />
+
+<Stepper>
+<Step title="第一步：离屏渲染">
+将场景渲染到 Render Target 纹理。这张纹理就是后处理的输入素材，包含场景的颜色信息。
+</Step>
+<Step title="第二步：高斯模糊">
+将 2D 高斯模糊分离为水平+垂直两趟。每趟只做 1D 卷积，采样次数从 N^2 降为 2N。两趟结果等价于一趟 2D 模糊。
+</Step>
+<Step title="第三步：Bloom + 色调映射">
+提取高亮区域 → 降采样模糊 → 上采样叠加 → 与场景颜色相加 → 色调映射到 LDR → 输出到屏幕。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 水平高斯模糊 Pass
+float4 PSMainBlurH(VSOutput input) : SV_TARGET {
+    float weights[5] = {0.227, 0.194, 0.121, 0.054, 0.016};
+    float3 result = SceneTexture.Sample(Sampler, input.TexCoord).rgb * weights[0];
+    for (int i = 1; i < 5; i++) {
+        result += SceneTexture.Sample(Sampler, input.TexCoord + float2(i * TexelSize.x, 0)).rgb * weights[i];
+        result += SceneTexture.Sample(Sampler, input.TexCoord - float2(i * TexelSize.x, 0)).rgb * weights[i];
+    }
+    return float4(result, 1.0);
+}
+
+// ACES 色调映射
+float3 ACESFilm(float3 x) {
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+float4 PSMainToneMap(VSOutput input) : SV_TARGET {
+    float3 hdr = SceneTexture.Sample(Sampler, input.TexCoord).rgb;
+    float3 ldr = ACESFilm(hdr);
+    return float4(ldr, 1.0);
+}
+```
+
+分离高斯模糊是后处理最常用的优化。ACES 色调映射能保留 HDR 高光细节。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 高斯模糊用一趟 2D 卷积导致性能很差。
+**原因 →** 2D 卷积采样次数为 N*N。
+**修法 →** 高斯核是可分离的，将 2D 卷积分解为水平 1D + 垂直 1D 两趟，采样次数从 N^2 降为 2N。这是后处理最基本的优化。
+</Callout>
+
+<Callout type="trap">
+**现象 →** HDR 渲染后亮区域全白，丢失细节。
+**原因 →** 超过 1.0 的颜色值被直接截断。
+**修法 →** 使用色调映射曲线（ACES/Reinhard）将 HDR 值压缩到 [0,1] 范围，而不是直接 saturate 截断。色调映射能保留高亮区域的色彩细节。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：高斯模糊为什么通常分两趟？
+
+<Answer>
+二维高斯模糊的卷积核大小为 N*N，一趟需要 N*N 次采样。分离为水平和垂直两趟后只需 2*N 次采样，复杂度从 O(N^2) 降为 O(N)，大幅减少纹理采样次数。
+</Answer>
+
+**问题**：如何实现 Bloom 辉光效果管线？
+
+<Answer>
+1)渲染场景到 HDR 纹理 2)用亮度阈值提取高亮区域 3)对高亮纹理做多次降采样 4)每级做高斯模糊并累加 5)从最小 Mip 逐级上采样叠加 6)将 Bloom 结果叠加回场景并做色调映射。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="后处理">场景先渲染到纹理再经全屏着色器处理的技术。</GlossaryItem>
+<GlossaryItem term="分离高斯模糊">将 2D 卷积分离为水平+垂直两趟的优化。</GlossaryItem>
+<GlossaryItem term="色调映射">将 HDR 颜色压缩到 LDR 显示范围的映射。</GlossaryItem>
+<GlossaryItem term="Bloom">提取高亮区域模糊后叠加的辉光效果。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Shader 开发实战" adaptedUrl="" />

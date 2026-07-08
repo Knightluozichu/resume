@@ -1,0 +1,121 @@
+---
+title: "URP 性能优化"
+type: B
+section: "Shader 与 GPU 编程"
+order: 8
+description: "SRP Batch、剔除、渲染分辨率、纹理压缩与变体控制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UusUrpOptimizationDiagram } from "@/components/mdx/unity-urp-shaders/diagrams/uus-urp-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能列出 URP 性能优化的五大维度：合批、剔除、分辨率、纹理、着色器
+- 能解释 SRP Batch 与 GPU Instancing 的区别和适用条件
+- 能描述 Shader 变体控制策略
+- 能回答：移动端 URP 优化的关键项有哪些
+</Objectives>
+
+## 直觉引入
+
+想象一条高速公路。合批是「拼车」（减少车辆数），剔除是「不走冤枉路」（只跑需要的路段），降分辨率是「缩窄车道」（减少通行面积），纹理压缩是「减轻货物」（减少载重），变体控制是「减少车型」（简化管理）。URP 性能优化就是让渲染这辆「车」跑得更快更省油。
+
+## 概念讲解
+
+### 优化策略全景
+
+<UusUrpOptimizationDiagram />
+
+五大优化维度：
+- <Term def="SRP Batch 是 URP 合批机制，将相同 Shader 的材质合并到一次绘制调用">SRP Batch</Term>：同 Shader 合批，减少 SetPassCall
+- <Term def="剔除（Culling）是跳过不可见物体的渲染，包括视锥剔除和遮挡剔除">剔除</Term>：Frustum Culling + Occlusion Culling + LOD
+- <Term def="渲染分辨率（Render Scale）是降低渲染纹理分辨率以减少像素填充率开销">渲染分辨率</Term>：Render Scale < 1，MSAA 降级
+- <Term def="Shader 变体（Shader Variant）是 Shader Keyword 组合编译出的不同版本">Shader 变体</Term>：减少 Keyword → 减少变体数 → 减少内存和加载时间
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：合批优化">启用 SRP Batcher，确保 Shader 使用 CBUFFER。对相同 Mesh + 相同材质的物体用 GPU Instancing。在 Frame Debugger 确认合批效果。</Step>
+<Step title="第二步：剔除与分辨率">
+启用 Occlusion Culling 和 LOD，降低 Render Scale（移动端 0.5~0.8），关闭不必要的 MSAA 和 HDR。
+<UusUrpOptimizationDiagram />
+</Step>
+<Step title="第三步：纹理与变体">纹理用 ASTC 压缩 + Mipmap，减少 Shader Keyword 数量控制变体。移动端关闭实时 GI，简化后处理链。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// URP 性能检查清单
+// 1. SRP Batcher 兼容性检查
+//    Shader 必须使用 CBUFFER_START(UnityPerMaterial) / CBUFFER_END
+//    不能使用 MaterialPropertyBlock
+
+// 2. GPU Instancing 启用
+Shader "Custom/Instanced" {
+    SubShader {
+        Pass {
+            #pragma multi_compile_instancing // 启用 Instancing
+            #pragma instancing_options assumeuniformscaling
+            HLSLPROGRAM
+            // 每实例数据
+            UNITY_INSTANCING_BUFFER_START(Props)
+                UNITY_DEFINE_INSTANCED_PROP(float, _Value)
+            UNITY_INSTANCING_BUFFER_END(Props)
+            ENDHLSL
+        }
+    }
+}
+
+// 3. Shader 变体控制（减少 Keyword）
+// 差：每个功能一个 Keyword → 2^N 个变体
+#pragma multi_compile _ FEATURE_A FEATURE_B FEATURE_C // 4 变体
+// 好：用 if 分支替代不必要的 Keyword（现代 GPU 分支开销低）
+// 只对真正影响性能路径的功能用 Keyword
+
+// 4. 移动端 URP Asset 配置
+// Render Scale: 0.5~0.8
+// MSAA: Disabled 或 2x
+// HDR: 关闭
+// Shadow: 2 级 CSM, 1024 分辨率
+// Additional Lights: Per Vertex, 上限 2-4
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：SRP Batcher 和 GPU Instancing 可以同时生效。**
+SRP Batcher 合并相同 Shader 的不同材质（通过 CBUFFER），GPU Instancing 合并相同 Mesh + 相同材质的不同实例。当物体满足 GPU Instancing 条件时（相同 Mesh + 相同材质），优先走 Instancing 路径，SRP Batcher 不参与。两者是互补关系，不是叠加关系。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视 Shader 变体爆炸。**
+每个 multi_compile Keyword 翻倍变体数。5 个 boolean Keyword = 2^5 = 32 个变体，10 个 = 1024 个。变体过多导致：编译时间暴增、内存占用大、加载卡顿。应只在影响性能路径的功能上用 Keyword，用 if 分支替代不影响性能的功能切换。
+</Callout>
+
+<Exercises>
+**问题 1**：SRP Batch 和 GPU Instancing 的区别是什么？何时各用？
+
+<Answer>
+SRP Batch 合并相同 Shader 的不同材质绘制调用（通过 CBUFFER 持久化材质参数到 GPU），减少 CPU 端 SetPassCall，适用于不同材质但相同 Shader 的物体。GPU Instancing 合并相同 Mesh + 相同材质的不同实例到一次 Draw Call，适用于大量相同物体的重复渲染（如树木、草地）。当满足 Instancing 条件时优先走 Instancing，否则走 SRP Batch。两者互补不叠加。
+</Answer>
+
+**问题 2**：移动端 URP 优化的关键项有哪些？为什么？
+
+<Answer>
+1) Render Scale 降到 0.5~0.8：移动端像素填充率有限，降分辨率是最直接的帧率提升手段。2) 关闭 HDR：HDR RT 占用双倍带宽，移动端 GPU 带宽受限。3) MSAA 降到 2x 或关闭：4x MSAA 开销大，可用 FXAA 替代。4) 阴影 2 级 CSM + 1024 分辨率：4 级 CSM 开销是 2 级的 2 倍。5) 附加光用逐顶点计算：移动端 ALU 有限，逐像素光源开销大。6) 关闭实时 GI：SH 计算和 Reflection Probe 采样开销大。7) 后处理只保留 Tone Mapping + 简化 Bloom：每个 Blit 在移动端带宽开销显著。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SRP Batch">URP 合批机制，合并相同 Shader 的材质绘制调用，减少 SetPassCall。</GlossaryItem>
+<GlossaryItem term="GPU Instancing">GPU 实例化，将相同 Mesh + 相同材质的多个实例合并为一次 Draw Call。</GlossaryItem>
+<GlossaryItem term="Shader 变体">Shader Keyword 组合编译出的不同 Shader 版本，过多会导致内存和加载问题。</GlossaryItem>
+<GlossaryItem term="Render Scale">渲染分辨率缩放因子，降低可减少像素填充率开销，代价是画面模糊。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity URP 官方文档" adaptedUrl="https://docs.unity3d.com/Packages/com.unity.render-pipelines.universal@latest" />

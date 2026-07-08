@@ -1,0 +1,113 @@
+---
+title: "光照模型实现"
+type: B
+section: "Shader 与 GPU 编程"
+order: 4
+description: "从Lambert到Blinn-Phong——在Shader中实现光照"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { UseLightingModelsDiagram } from "@/components/mdx/unity-shader-essentials/diagrams/use-lighting-models";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用Shader实现Lambert漫反射光照
+- 能实现Blinn-Phong镜面反射
+- 能区分逐顶点光照和逐片元光照
+- 能回答环境光+漫反射+镜面反射如何组合？
+</Objectives>
+
+## 直觉引入
+
+想象一个苹果。在阳光下，苹果整体亮（环境光），朝光的面更亮（漫反射），表面有个白色高光点（镜面反射）。这三种光叠加在一起，就是你看到的苹果颜色。
+
+在Shader中实现光照，就是把这三种光的数学公式写成代码。Lambert余弦定律算漫反射，Phong/Blinn-Phong算镜面反射，环境光常数兜底。组合起来就是经典的光照模型。
+
+## 概念讲解
+
+### 光照模型实现
+
+<UseLightingModelsDiagram />
+
+<Term def="Lambert漫反射用N dot L计算漫反射光强，是简单但有效的漫反射模型">Lambert漫反射</Term>：diffuse = max(0, dot(N,L)) * lightColor。
+
+<Term def="Blinn-Phong镜面反射用半角向量H=N+L替代反射向量R，计算更高效">Blinn-Phong</Term>：specular = pow(max(0,dot(N,H)), gloss)。
+
+<Term def="逐顶点光照在顶点着色器中计算光照，结果插值到片元——快但有马赫带">逐顶点光照</Term>性能高但质量低。
+
+<Term def="逐片元光照在片元着色器中计算光照，使用插值后的法线——慢但质量高">逐片元光照</Term>是标准做法。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Lambert漫反射">漫反射 = max(0, dot(N,L)) * albedo * lightColor。N是法线，L是光源方向。法线正对光源最亮，侧对变暗，背对为零。max(0,...)防止负值。</Step>
+<Step title="第二步：Blinn-Phong镜面">
+镜面反射 = pow(max(0,dot(N,H)), gloss)。H=normalize(L+V)是半角向量。gloss越大高光越锐利越小。加上漫反射和环境光组成完整光照。
+<UseLightingModelsDiagram />
+</Step>
+<Step title="第三步：逐顶点 vs 逐片元">逐顶点在顶点着色器算光照，结果随顶点插值——快但低面模型有马赫带（色阶不连续）。逐片元在片元着色器用法线插值后计算——慢但平滑。现代标准是逐片元。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 完整光照模型: 环境+漫反射+镜面
+fixed4 frag(v2f i) : SV_Target {
+    // 环境光
+    fixed3 ambient = UNITY_LIGHTMODEL_AMBIENT.rgb * _Color.rgb;
+    
+    // 漫反射 (Lambert)
+    float3 N = normalize(i.worldNormal);
+    float3 L = normalize(_WorldSpaceLightPos0.xyz);
+    float NdotL = max(0, dot(N, L));
+    fixed3 diffuse = _LightColor0.rgb * _Color.rgb * NdotL;
+    
+    // 镜面反射 (Blinn-Phong)
+    float3 V = normalize(_WorldSpaceCameraPos - i.worldPos);
+    float3 H = normalize(L + V);
+    float spec = pow(max(0, dot(N, H)), _Gloss);
+    fixed3 specular = _LightColor0.rgb * _SpecColor.rgb * spec;
+    
+    fixed4 col = tex2D(_MainTex, i.uv);
+    col.rgb = (ambient + diffuse) * col.rgb + specular;
+    return col;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在顶点着色器中归一化法线就够了。**
+当法线背对光源时dot(N,L)为负，不clamp到0会导致漫反射为负，从其他分量减去光，颜色异常。
+</Callout>
+
+<Callout type="trap">
+**误区：忘记max(0, dot(N,L))中的max。**
+当法线背对光源时dot(N,L)为负。不clamp到0，漫反射变负值，会从环境光和镜面反射中「减去」光，导致背面偏暗甚至颜色反转。max(0,...)确保背光面只有环境光。
+</Callout>
+
+<Exercises>
+**问题 1**：Lambert漫反射的公式是什么？N和L分别是什么？
+
+<Answer>
+逐顶点：在顶点着色器计算光照，结果随顶点属性插值到片元。优点是快（顶点数远少于像素数），缺点是低面数模型有马赫带——三角形面之间的光照不连续，因为光照值在顶点间线性插值无法捕捉面内的曲率变化。逐片元：法线插值到片元后在片元着色器计算光照。优点是平滑（每个像素独立计算光照），缺点是慢（像素数远多于顶点数）。现代GPU性能足够，标准做法是逐片元。
+</Answer>
+
+**问题 2**：逐顶点光照和逐片元光照有什么区别？为什么现代Shader用逐片元？
+
+<Answer>
+逐顶点光照在顶点着色器计算光照，结果随顶点插值到片元。逐片元光照在片元着色器用插值法线计算。逐顶点快但低面模型有马赫带（光照不连续）。逐片元慢但平滑。现代GPU性能足够，逐片元是标准做法。逐顶点适用于移动端低性能设备或超高面数模型（面足够多时插值误差小）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term='Lambert漫反射'>用max(0,dot(N,L))计算漫反射光强的模型，法线正对光源最亮。</GlossaryItem>
+<GlossaryItem term='Blinn-Phong'>用半角向量H=normalize(L+V)替代反射向量的镜面反射模型，比Phong高效。</GlossaryItem>
+<GlossaryItem term='逐顶点光照'>在顶点着色器计算光照，结果插值到片元，快但有马赫带。</GlossaryItem>
+<GlossaryItem term='逐片元光照'>在片元着色器用插值法线计算光照，慢但平滑，是现代标准。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity Shader 入门精要" adaptedUrl="https://book.douban.com/subject/26839416/" />

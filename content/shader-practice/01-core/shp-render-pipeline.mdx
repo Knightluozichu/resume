@@ -1,0 +1,117 @@
+---
+title: "渲染管线与 Shader 角色"
+type: B
+section: "Shader 与 GPU 编程"
+order: 1
+description: "理解渲染管线三阶段与 Shader 在其中的角色"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ShpRenderPipelineDiagram } from "@/components/mdx/shader-practice/diagrams/shp-render-pipeline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解渲染管线的三大阶段
+- 掌握顶点着色器和像素着色器在管线中的位置
+- 了解各阶段的执行频率差异
+- 能根据瓶颈分析定位性能问题
+</Objectives>
+
+## 直觉引入
+
+渲染管线就像一条工厂流水线——原材料（顶点数据）先在仓库（应用程序阶段）打包，然后送到加工车间（几何阶段）做成型，最后到喷涂线（光栅化阶段）上色。Shader 就是流水线上可编程的工位：顶点着色器在加工车间塑形，像素着色器在喷涂线上色。
+
+## 概念讲解
+
+<Term def="CPU 侧准备数据、发起 Draw Call 的阶段">应用程序阶段</Term><Term def="顶点变换、裁剪、投影的 GPU 阶段">几何阶段</Term><Term def="图元转换为片段并着色的 GPU 阶段">光栅化阶段</Term><Term def="同组线程走不同分支导致的串行执行">分支发散</Term>
+
+### 三大阶段
+- 应用程序阶段：CPU 侧准备顶点数据、纹理、常量，发起 Draw Call
+- 几何阶段：顶点着色器执行 MVP 变换，裁剪和投影到裁剪空间
+- 光栅化阶段：图元光栅化为片段，像素着色器逐像素着色
+
+### 执行频率
+顶点着色器执行 N 次（每顶点），像素着色器执行 N*M 次（每片段）。片段数量远多于顶点，所以像素着色器优化优先级更高。
+
+## 交互Demo
+
+> 猜一猜：为什么像素着色器的执行次数远多于顶点着色器？
+
+<ShpRenderPipelineDiagram />
+
+<Stepper>
+<Step title="第一步：应用程序阶段">
+CPU 准备顶点缓冲、纹理、常量缓冲，设置渲染状态，发起 Draw Call 将数据提交给 GPU。
+</Step>
+<Step title="第二步：几何阶段">
+顶点着色器逐顶点执行 MVP 变换，将模型空间坐标变换到裁剪空间。这是 Shader 的第一个可编程工位。
+</Step>
+<Step title="第三步：光栅化阶段">
+图元光栅化为片段后，像素着色器逐片段计算光照和纹理，输出最终颜色到渲染目标。这是 Shader 的第二个可编程工位。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 顶点着色器：几何阶段
+VSOutput VSMain(VSInput input) {
+    VSOutput output;
+    output.Position = mul(WorldViewProj, float4(input.Position, 1.0));
+    output.TexCoord = input.TexCoord;
+    output.Normal = mul((float3x3)World, input.Normal);
+    return output;
+}
+
+// 像素着色器：光栅化阶段
+float4 PSMain(VSOutput input) : SV_TARGET {
+    float4 texColor = DiffuseTexture.Sample(Sampler, input.TexCoord);
+    float3 lightDir = normalize(LightDir);
+    float diff = max(dot(input.Normal, lightDir), 0.0);
+    return texColor * float4(diff.xxx, 1.0);
+}
+```
+
+顶点着色器负责变换，像素着色器负责着色，两者通过插值属性传递数据。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 在顶点着色器中做纹理采样和光照计算。
+**原因 →** 觉得在顶点阶段算好更高效。
+**修法 →** 顶点着色器执行次数少但粒度粗，顶点级光照会产生面片化效果。光照和纹理采样应在像素着色器中做，顶点着色器只负责变换和属性传递。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 优化顶点着色器但帧率没有提升。
+**原因 →** 以为所有 Shader 优化都有效。
+**修法 →** 先用 Profiler 定位瓶颈。降低分辨率若帧率提升明显，说明瓶颈在像素着色器而非顶点着色器。针对性优化才有效。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：渲染管线的三个主要阶段是什么？
+
+<Answer>
+应用程序阶段（CPU 侧准备数据）、几何阶段（顶点变换、裁剪、投影）、光栅化阶段（图元转换为片段并着色）。Shader 主要在几何阶段和光栅化阶段执行。
+</Answer>
+
+**问题**：如何判断瓶颈在管线的哪个阶段？
+
+<Answer>
+1)降低分辨率：若帧率显著提升则瓶颈在像素着色器 2)简化着色器逻辑：若提升明显则瓶颈在对应着色器 3)减少 Draw Call：若提升则瓶颈在 CPU 4)减少顶点数：若提升则瓶颈在顶点阶段。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="应用程序阶段">CPU 侧准备数据、发起 Draw Call 的阶段。</GlossaryItem>
+<GlossaryItem term="几何阶段">顶点变换、裁剪、投影的 GPU 阶段，顶点着色器在此执行。</GlossaryItem>
+<GlossaryItem term="光栅化阶段">图元转换为片段并着色的 GPU 阶段，像素着色器在此执行。</GlossaryItem>
+<GlossaryItem term="执行频率">顶点着色器 N 次，像素着色器 N*M 次，决定优化优先级。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Shader 开发实战" adaptedUrl="" />

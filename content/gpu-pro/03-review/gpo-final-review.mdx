@@ -1,0 +1,117 @@
+---
+title: "GPU Pro 总复习"
+type: B
+section: "Shader 与 GPU 编程"
+order: 9
+description: "全书知识图谱——渲染技术到高级着色的完整链路"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpoFinalReviewDiagram } from "@/components/mdx/gpu-pro/diagrams/gpo-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能串联全书六大模块：渲染技术、光照阴影、图像空间、GPU 模拟、体积渲染、高级着色
+- 能描述从论文到工程实现的转化流程
+- 能识别各技术的性能权衡和平台适配策略
+- 能回答：如何根据项目需求选择 GPU Pro 中的技术
+</Objectives>
+
+## 直觉引入
+
+全书就像一座渲染技术的「工具箱」。渲染技术是工具箱的框架（决定工作方式），光照阴影是主工具（决定视觉基础），图像空间效果是装饰工具（增强细节），GPU 模拟是专用工具（处理物理），程序化生成是模板工具（批量生产），体积渲染和高级着色是高级工具（处理特殊效果）。每件工具单独看是独立技术，组合使用才是完整的渲染方案。
+
+## 概念讲解
+
+### 全书知识图谱
+
+<GpoFinalReviewDiagram />
+
+全书六大模块围绕「前沿渲染」核心展开：
+
+1. **渲染技术**：前向/延迟/可见性缓冲，管线层面的效率权衡
+2. **光照阴影**：PBR BRDF + 实时 GI + PCSS/VSM 物理软阴影
+3. **图像空间**：SSAO/SSR/SSGI，屏幕空间近似的优劣与降级
+4. **GPU 模拟**：Compute Shader 粒子/流体/布料，数据全在 GPU
+5. **体积渲染**：Ray Marching + Froxel 优化，参与介质散射
+6. **高级着色**：SSS/各向异性/多层材质，工程近似实现复杂材质
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：技术选型">根据项目需求选技术：多光源场景用延迟渲染，移动端用 Forward+，需要反射用 SSR + Probe 降级，需要雾用 Froxel 体积雾。</Step>
+<Step title="第二步：论文工程化">
+学术论文追求质量，工程实现追求平衡。每项技术需做近似：SSAO 减采样数、SSR 加降级方案、Ray Marching 加 Jittering+TAA、SSS 用 Separable 近似。
+<GpoFinalReviewDiagram />
+</Step>
+<Step title="第三步：性能与平台适配">PC 端可用完整实现（32 步 Ray March、64 样本 SSAO），移动端需大幅简化（8 步、16 样本、half 精度、降分辨率）。关键是理解原理后根据平台做合理近似。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// GPU Pro 技术栈在一帧中的协作（简化伪码）
+void RenderFrame() {
+    // 1. 渲染技术（Forward+/Deferred/Visibility Buffer）
+    GBufferPass(); // 写 G-Buffer 或 Visibility Buffer
+    LightingPass(); // PBR BRDF + 实时 GI（LPV/DDGI）
+
+    // 2. 图像空间效果
+    SSAOPass();   // 屏幕空间环境光遮蔽
+    SSRPass();    // 屏幕空间反射 + Probe 降级
+
+    // 3. 阴影
+    ShadowPass(); // PCSS 物理软阴影 或 VSM
+
+    // 4. GPU 模拟（Compute Shader，与渲染并行）
+    // 粒子/流体/布料更新在 Compute Shader 中完成
+    // 通过 Indirect Draw 渲染，不回读 CPU
+
+    // 5. 体积渲染
+    VolumetricFogPass(); // Froxel Ray March → 3D 纹理 → 采样
+
+    // 6. 高级着色（在材质 Shader 中）
+    // SSS：Separable 卷积 | 各向异性：GGX aniso | 多层：Fresnel 混合
+
+    // 7. 后处理
+    PostProcessPass(); // Bloom → 调色 → Tone Mapping
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：所有技术一起上效果最好。**
+每项技术都有性能开销，全开会导致帧率暴跌。应根据场景需求选择性启用：室内场景重点用 GI 和 SSS，室外场景重点用体积雾和地形，水面场景重点用 SSR 和流体模拟。用性能预算驱动技术选择，而非「越多越好」。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视技术间的相互影响。**
+SSR 需要场景颜色 RT，体积雾需要深度 RT，SSAO 需要深度+法线 RT。同时启用会增加 RT 数量和带宽。延迟渲染的 G-Buffer 已有法线和深度，SSAO/SSR 可复用；前向渲染需额外 Pass 生成法线 RT。技术选择应考虑资源共享和数据流依赖。
+</Callout>
+
+<Exercises>
+**问题 1**：如何根据项目需求选择 GPU Pro 中的技术？给出决策框架。
+
+<Answer>
+决策框架：1) 场景类型——室内场景重点 GI（LPV/DDGI）+ SSS（角色皮肤），室外场景重点体积雾（Froxel）+ 地形（程序化），水面场景重点 SSR + 流体模拟（SPH）。2) 平台——PC 端可用完整实现（延迟渲染 + PCSS + 32 步 Ray March），移动端用 Forward+ + PCF + 8 步 + half 精度。3) 性能预算——按帧时间分配：光照 30%、阴影 15%、后处理 20%、体积 15%、其他 20%。4) 交互需求——需要动态 GI 用 DDGI，静态 GI 用烘焙 Lightmap。5) 技术依赖——SSR 需场景颜色 RT，SSAO 需法线 RT，延迟渲染可复用 G-Buffer。
+</Answer>
+
+**问题 2**：GPU Pro 技术的「论文工程化」包含哪些步骤？
+
+<Answer>
+1) 理解原理——读论文理解数学模型和物理假设（如 PCSS 的面光源几何关系、VSM 的切比雪夫不等式）。2) 识别可近似点——找计算量大但不影响视觉的环节（如 SSAO 采样数从 64 降到 16，SSS 的 3D 散射分解为 1D 卷积）。3) 工程近似——用 LUT 替代运行时计算（BRDF 积分 LUT）、降分辨率渲染再上采样（体积雾 1/4 分辨率）、时间复用（TAA 历史帧混合）。4) 降级方案——处理失败情况（SSR 未命中用 Probe 降级，SSAO 边缘与烘焙 AO 混合）。5) 平台适配——PC 端完整实现，移动端用 half 精度 + 减少采样 + 简化 BRDF。6) 性能验证——在目标平台用 GPU Profiler 验证帧时间和瓶颈，迭代优化。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="论文工程化">将学术研究中的渲染技术转化为实时游戏可用方案的工程过程。</GlossaryItem>
+<GlossaryItem term="性能预算">按帧时间分配给各渲染模块的预算，驱动技术选择和优化优先级。</GlossaryItem>
+<GlossaryItem term="技术依赖">渲染技术间的数据流依赖，如 SSR 需场景颜色 RT、SSAO 需法线 RT。</GlossaryItem>
+<GlossaryItem term="平台适配">同一技术在不同平台（PC/移动端）用不同实现精度的策略。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 系列" adaptedUrl="https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques/p/book/9781498742535" />

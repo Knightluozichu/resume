@@ -1,0 +1,110 @@
+---
+title: "实时全局光照"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "RSM、LPV、VPL——毫秒预算内的GI近似"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GilRealtimeGiDiagram } from "@/components/mdx/global-illumination/diagrams/gil-realtime-gi";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出实时GI与离线GI的核心差异
+- 能解释RSM(Reflective Shadow Map)的原理
+- 能描述LPV(Light Propagation Volume)的工作流程
+- 能回答为什么降噪是现代实时GI的关键组件？
+</Objectives>
+
+## 直觉引入
+
+想象你要在16毫秒内画完一帧——包括直接光、阴影、间接光、后处理。离线路径追踪一帧需要16分钟。你怎么在16毫秒内做16分钟的事？答案是：大幅近似。
+
+实时GI不是「更快地做正确的事」，而是「用不正确但够快的方法近似正确结果」。RSM把反射光烘焙到阴影贴图，LPV把光照注入3D网格传播，VPL把间接光变成一堆小光源。每种方法都有代价——精度损失、内存开销、漏光问题。降噪器则是最后的「遮羞布」——把低采样的噪声抹平。
+
+## 概念讲解
+
+### 实时GI方法
+
+<GilRealtimeGiDiagram />
+
+<Term def="反射阴影贴图(RSM)在阴影贴图基础上额外存储反射光信息，将每个纹素当作次级光源">RSM</Term>是最简单的实时GI方法。
+
+<Term def="光传播体积(LPV)将场景离散化为3D网格，在网格中迭代传播光照">LPV</Term>用体素化近似光弹射。
+
+<Term def="虚拟点光源(VPL)将间接光近似为大量虚拟点光源，用矩阵求解光照">VPL</Term>把GI变成多光源问题。
+
+<Term def="时空降噪(SVGF)利用时间一致性和空间邻域滤波消除低采样GI的噪声">SVGF</Term>是现代实时GI的标配后处理。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：RSM反射阴影贴图">RSM在阴影贴图的每个纹素上额外存储位置、法线、反射光通量。渲染时把每个纹素当次级光源采样。简单但只能处理一次弹射，且需大量采样。</Step>
+<Step title="第二步：LPV光传播体积">
+LPV把场景分成3D网格，将直接光照注入网格，用球面谐波存储方向分布，迭代传播到邻居网格。多弹射但精度低（网格分辨率限制），可能有漏光。
+<GilRealtimeGiDiagram />
+</Step>
+<Step title="第三步：降噪与组合">现代实时GI通常用低精度GI(如1spp路径追踪) + 降噪(SVGF)。降噪利用时间累积（上一帧信息）和空间滤波（邻域平均），把1spp噪声变成平滑结果。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// RSM: 反射阴影贴图
+// 1. 从光源渲染RSM（位置+法线+反射通量）
+for (each texel in RSM) {
+    RSM[pos] = {worldPos, normal, flux};
+}
+
+// 2. 对每个像素，采样RSM纹素作为次级光源
+Spectrum indirectL(0);
+for (int i = 0; i < numSamples; i++) {
+    RSMEntry rsm = sampleRSM(texelCoord, sampler);
+    float dist = length(rsm.pos - pixelPos);
+    float geom = max(0, dot(rsm.normal, dir)) * max(0, dot(pixelNormal, -dir));
+    indirectL += rsm.flux * geom / (dist * dist);
+}
+indirectL /= numSamples;
+
+// 3. 降噪(SVGF)
+indirectL = SVGFFilter(indirectL, historyBuffer, moments);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为实时GI可以替代离线GI。**
+实时GI是大幅近似——RSM只有一次弹射，LPV精度受网格限制，VPL有矩阵开销上限。它们在特定场景（室内漫反射）效果尚可，但在复杂场景（多弹射、焦散、高精度间接光）与离线GI差距很大。实时GI是「够用」而非「正确」。
+</Callout>
+
+<Callout type="trap">
+**误区：认为降噪是万能的。**
+降噪能消除噪声但引入偏差——过度滤波会模糊细节、产生残影、丢失高频信息。好的降噪需要在去噪和保真之间平衡。AI降噪（如OIDN）比传统滤波效果更好，但仍是「有偏近似」。
+</Callout>
+
+<Exercises>
+**问题 1**：RSM(反射阴影贴图)的原理是什么？它有什么局限？
+
+<Answer>
+RSM原理：从光源渲染阴影贴图时额外存储每个纹素的世界位置、法线、反射光通量。渲染时把每个纹素当作次级光源，对像素采样这些次级光源计算间接光。局限：1)只能处理一次弹射（直接照亮的面反射到其他面）；2)需要大量采样（数千个纹素中采样几十个），低采样噪声大；3)不考虑遮挡（次级光源到像素间可能有遮挡物）；4)只适合漫反射（纹素存储标量通量，无方向信息）。
+</Answer>
+
+**问题 2**：为什么降噪是现代实时GI的关键组件？SVGF如何工作？
+
+<Answer>
+现代实时GI用极低采样（1-4spp），噪声严重。降噪是让低采样结果可用的关键。SVGF工作原理：1)时间累积——用运动矢量将上一帧结果投影到当前帧，累积历史样本增加有效采样数；2)空间滤波——在邻域内用方差指导的权重平均，方差大的区域更大范围滤波；3)自适应滤波——用局部亮度方差调整滤波强度。三者组合让1spp接近16spp的视觉质量。代价是时间累积引入拖影，需历史拒绝策略缓解。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="反射阴影贴图(RSM)">在阴影贴图上额外存储反射光信息，将纹素当次级光源的简单实时GI方法。</GlossaryItem>
+<GlossaryItem term="光传播体积(LPV)">将场景离散化为3D网格，用球面谐波存储方向分布，迭代传播光照的实时GI方法。</GlossaryItem>
+<GlossaryItem term="虚拟点光源(VPL)">将间接光近似为大量虚拟点光源，把GI变成多光源求解问题的方法。</GlossaryItem>
+<GlossaryItem term="时空降噪(SVGF)">利用时间累积和空间滤波消除低采样GI噪声的后处理技术，是现代实时GI标配。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

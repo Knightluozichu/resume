@@ -1,0 +1,135 @@
+---
+title: "色彩校正与调色"
+type: B
+section: "Shader 与 GPU 编程"
+order: 6
+description: "LUT 查找表、ACES 色调映射与完整色彩管线"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsfColorGradingDiagram } from "@/components/mdx/unity-screen-effects/diagrams/usf-color-grading";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解色彩校正的目的与三层结构
+- 掌握 LUT 查找表的使用方法
+- 理解 ACES 色调映射的优势
+- 能设计完整的色彩校正管线
+</Objectives>
+
+## 直觉引入
+
+色彩校正就像给照片加滤镜和调色——先用色调映射把太亮的颜色压回来（HDR→LDR），再调亮度对比度饱和度让画面更好看，最后用 LUT 查找表套上特定风格（如电影感冷色调、复古暖色调）。三层处理从技术正确到艺术风格逐步叠加。
+
+## 概念讲解
+
+<Term def="统一场景色彩风格，调整亮度对比度饱和度的处理">色彩校正</Term><Term def="将 HDR 颜色压缩到 LDR 显示范围的映射函数">色调映射</Term><Term def="预计算的 3D 颜色查找表，将输入 RGB 映射到输出 RGB">LUT</Term><Term def="电影级色调映射曲线，保留高光暗部细节">ACES</Term>
+
+### 三层结构
+1. 颜色映射（Tone Mapping）：HDR→LDR，用 ACES/Reinhard 曲线
+2. 颜色调整：亮度/对比度/饱和度/色相
+3. 风格化：LUT 查找表应用特定调色风格
+
+### LUT 使用
+LUT 是预计算的 3D 颜色查找表。用原始 RGB 作为 UV 采样 LUT 纹理，直接得到调色后颜色。可在 Photoshop/DaVinci 调色后导出。常用 256x16 的 2D 纹理存储 3D LUT。
+
+### ACES vs Reinhard
+ACES 保留更多高光和暗部细节，色彩过渡自然，是电影行业标准。Reinhard 简单但高光区域容易发灰。
+
+## 交互Demo
+
+> 猜一猜：LUT 查找表是如何工作的？
+
+<UsfColorGradingDiagram />
+
+<Stepper>
+<Step title="第一步：色调映射">
+HDR 渲染的颜色可能超过 [0,1]，用 ACES 曲线压缩到 LDR 范围。ACES 公式：(x*(2.51x+0.03))/(x*(2.43x+0.59)+0.14)。
+</Step>
+<Step title="第二步：颜色调整">
+调整亮度（乘法）、对比度（围绕中灰的缩放）、饱和度（灰度与彩色的插值）、色相（色彩空间旋转）。
+</Step>
+<Step title="第三步：LUT 风格化">
+用调色后颜色作为 UV 采样 LUT 纹理，直接得到风格化颜色。LUT 可在外部工具调色后导出。Volume Blending 支持区域调色过渡。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// ACES 色调映射
+float3 ACESFilm(float3 x) {
+    float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
+// LUT 查找
+sampler2D _MainTex;
+sampler2D _LutTex;
+float _LutContribution;
+
+fixed4 frag(v2f_img i) : SV_Target {
+    fixed4 col = tex2D(_MainTex, i.uv);
+    // ACES 色调映射
+    col.rgb = ACESFilm(col.rgb);
+    // 颜色调整（亮度/对比度/饱和度）
+    col.rgb = adjustColor(col.rgb, _Brightness, _Contrast, _Saturation);
+    // LUT 查找
+    float3 lutUV = float3(
+        (col.r * 255 + 0.5) / 256,
+        (col.g * 15 + 0.5) / 16,
+        (col.b * 15 + 0.5) / 16
+    );
+    float2 lutCoord = float2(
+        lutUV.x / 16 + lutUV.z / 16,
+        lutUV.y
+    );
+    float3 graded = tex2D(_LutTex, lutCoord).rgb;
+    col.rgb = lerp(col.rgb, graded, _LutContribution);
+    return col;
+}
+```
+
+完整色彩管线：HDR → ACES 色调映射 → 颜色调整 → LUT 风格化 → 输出。Volume Blending 支持参数平滑过渡。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 调色后画面颜色突变不自然。
+**原因 →** 色调映射前没有做白平衡，或 LUT 贡献度太高。
+**修法 →** 色调映射前先做白平衡（色温/色调调整）。LUT 贡献度用 lerp 控制混合比例，不要直接替换。多效果用 Volume Blending 平滑过渡参数。
+</Callout>
+
+<Callout type="trap">
+**现象 →** LUT 导入后颜色不准确。
+**原因 →** LUT 纹理导入设置不对。
+**修法 →** 确保 LUT 纹理的导入设置为 Texture，无压缩（或高质量压缩），Filter Mode 为 Bilinear，Wrap Mode 为 Clamp。色彩空间要与项目设置一致（Linear）。检查 LUT 尺寸是否正确（通常 256x16 对应 16x16x16 的 3D LUT）。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：LUT（Look-Up Table）在色彩校正中如何使用？
+
+<Answer>
+LUT 是预计算的 3D 颜色查找表，将输入 RGB 映射到输出 RGB。在 Shader 中用原始颜色作为 UV 采样 LUT 纹理，直接得到调色后颜色。优点是可在外部工具调色后导出 LUT，在引擎中一键应用。常用 256x16 的 2D 纹理存储 3D LUT。
+</Answer>
+
+**问题**：如何实现完整的色彩校正管线？
+
+<Answer>
+1)HDR 渲染场景 2)白平衡调整 3)色调映射（ACES/Reinhard）将 HDR→LDR 4)颜色调整（亮度/对比度/饱和度）5)LUT 查找应用风格化调色 6)最终输出。用后处理栈 Volume 控制参数，支持 Blending 过渡。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="色彩校正">统一场景色彩风格，调整亮度对比度饱和度的处理。</GlossaryItem>
+<GlossaryItem term="色调映射">将 HDR 颜色压缩到 LDR 显示范围的映射函数。</GlossaryItem>
+<GlossaryItem term="LUT">预计算的 3D 颜色查找表，将输入 RGB 映射到输出 RGB。</GlossaryItem>
+<GlossaryItem term="ACES">电影级色调映射曲线，保留高光暗部细节。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 着色器和屏幕特效" adaptedUrl="" />

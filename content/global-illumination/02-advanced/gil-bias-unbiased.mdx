@@ -1,0 +1,104 @@
+---
+title: "有偏与无偏估计"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "偏差与一致性的权衡——什么时候有偏反而更好"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilBiasUnbiasedDiagram } from "@/components/mdx/global-illumination/diagrams/gil-bias-unbiased";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能定义无偏估计和一致估计
+- 能解释为什么有偏但一致在实践中可接受
+- 能举出有偏GI方法的例子
+- 能回答什么时候应该选择有偏方法而非无偏方法？
+</Objectives>
+
+## 直觉引入
+
+想象用尺子量桌子。如果尺子本身偏长1cm，每次测量都偏大1cm——这是有偏的。但如果你量很多次取平均，结果还是偏大1cm，不会收敛到正确值。另一种情况：尺子准确但你手抖，每次测量有随机误差——这是无偏的，多次平均会收敛到正确值。
+
+渲染中：路径追踪是无偏的（手抖但尺子准），光子映射是有偏的（尺子偏但多次测量偏差减小）。有趣的是，有时「偏一点的尺子」比「完全准但手抖厉害的尺子」更快得到好结果。
+
+## 概念讲解
+
+### 偏差与一致性
+
+<GilBiasUnbiasedDiagram />
+
+<Term def="无偏估计是指估计量的期望等于真实值的估计方法">无偏估计</Term>：E[F_N] = I，没有系统性误差。
+
+<Term def="一致估计是指采样数趋于无穷时估计值收敛到真实值的估计方法">一致估计</Term>：lim N→∞ F_N = I，有偏但一致也可以接受。
+
+<Term def="光子映射是有偏但一致的GI方法——密度估计引入偏差但光子数增加时偏差减小">光子映射</Term>是最著名的有偏GI方法。
+
+<Term def="辐照度缓存是有偏的——插值引入系统性误差，插值点不够密时偏差显著">辐照度缓存</Term>用稀疏采样+插值加速GI，牺牲精度换速度。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：无偏性">无偏意味着估计量的期望等于真实值。路径追踪的每次采样期望等于积分值，N次平均的期望仍是积分值。无偏不等于无噪声——单个样本可能偏离很远，但平均收敛到正确值。</Step>
+<Step title="第二步：一致性">
+一致意味着N→∞时收敛到正确值。有偏但一致的方法（如光子映射）：偏差随N增加而减小，最终收敛。有偏但一致在实践中可接受——只要偏差可控。
+<GilBiasUnbiasedDiagram />
+</Step>
+<Step title="第三步：权衡选择">无偏方法（路径追踪）在高采样时质量最高，但低采样噪声大。有偏方法（光子映射/辐照度缓存）低采样时更平滑（偏差比噪声不显眼），但高采样时有上限（偏差不随N消失）。按场景需求选择。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 无偏 vs 有偏 vs 一致
+// 无偏: E[F_N] = I (路径追踪)
+Spectrum L_unbiased = pathTrace(ray);  // 期望=真实值
+
+// 有偏但一致: lim F_N = I (光子映射)
+// 偏差 = E[F_N] - I ≠ 0, 但 N→∞ 时偏差→0
+Spectrum L_biased = photonMap.Estimate(p, radius);
+// radius→0 时偏差→0, 但需要更多光子保持低方差
+
+// 有偏不一致: 辐照度缓存
+// 插值误差不随采样增加而消失
+Spectrum L_cached = irradianceCache.Interpolate(p);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为无偏等于高质量。**
+有偏方法在低采样时往往更实用——偏差可控且视觉上不显眼，而有偏方法在相同采样数下方差更低。
+</Callout>
+
+<Callout type="trap">
+**误区：认为有偏方法一定不如无偏方法。**
+实际中「有偏但低方差」往往比「无偏但高方差」视觉效果更好。人眼对平滑的偏差（如轻微模糊）比对高频噪声更不敏感。现代渲染器常混合使用：无偏路径追踪+有偏降噪。
+</Callout>
+
+<Exercises>
+**问题 1**：无偏估计和一致估计的区别是什么？
+
+<Answer>
+无偏：估计量的期望等于真实值 E[F_N]=I，任何N都成立。一致：N→∞时估计值收敛到真实值 lim F_N=I。无偏一定一致（期望正确+方差→0），但一致不一定无偏（偏差→0但有限N时有偏差）。路径追踪无偏，光子映射有偏但一致，辐照度缓存有偏且不一致。
+</Answer>
+
+**问题 2**：什么时候应该选择有偏方法而非无偏方法？
+
+<Answer>
+选择有偏方法的场景：1)采样预算有限——有偏方法低采样时方差低，视觉上更平滑；2)需要快速预览——有偏的辐照度缓存几秒出结果，无偏路径追踪需分钟级；3)焦散场景——无偏路径追踪对焦散方差爆炸，有偏光子映射高效；4)实时渲染——所有实时GI方法都有偏（LPV/RSM/VPL），因为时间预算不允许无偏采样。选择无偏方法的场景：1)需要物理正确参考——科研验证、材质标定；2)采样预算充足——最终渲染；3)不确定偏差是否可接受——无偏最安全。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="无偏估计">估计量的期望等于真实值E[F_N]=I，无系统性误差，如路径追踪。</GlossaryItem>
+<GlossaryItem term="一致估计">采样数趋于无穷时收敛到真实值lim F_N=I，有偏但一致也可接受。</GlossaryItem>
+<GlossaryItem term="光子映射(有偏)">密度估计引入系统性偏差，但光子数增加时偏差减小，是有偏但一致的GI方法。</GlossaryItem>
+<GlossaryItem term="辐照度缓存(有偏)">稀疏采样+插值加速GI，插值误差不随采样增加消失，是有偏且不一致的方法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

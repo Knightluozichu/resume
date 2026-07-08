@@ -1,0 +1,127 @@
+---
+title: "顶点着色器实战"
+type: B
+section: "Shader 与 GPU 编程"
+order: 3
+description: "MVP 变换、属性传递与顶点动画"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { ShpVertexShadersDiagram } from "@/components/mdx/shader-practice/diagrams/shp-vertex-shaders";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握顶点着色器的 MVP 变换流程
+- 理解 SV_POSITION 与 POSITION 语义的区别
+- 了解光栅化阶段的属性插值机制
+- 能实现简单的顶点动画效果
+</Objectives>
+
+## 直觉引入
+
+顶点着色器就像雕塑师——拿到一块原材料（模型空间坐标），先用 World 矩阵把它摆到场景中（世界空间），再用 View 矩阵调整到相机视角（观察空间），最后用 Proj 矩阵投影到屏幕（裁剪空间）。每一步都是矩阵乘法，每个顶点走一遍这条流水线。
+
+## 概念讲解
+
+<Term def="Model→World→View→Proj 的坐标空间变换链">MVP 变换</Term><Term def="顶点着色器输出的裁剪空间坐标系统语义">SV_POSITION</Term><Term def="光栅化阶段根据重心坐标对属性的线性插值">属性插值</Term><Term def="在顶点着色器中用时间函数驱动顶点位移">顶点动画</Term>
+
+### MVP 变换链
+模型空间 →（× World）→ 世界空间 →（× View）→ 观察空间 →（× Proj）→ 裁剪空间
+
+### SV_POSITION vs POSITION
+POSITION 是输入语义，从顶点缓冲读取模型空间坐标。SV_POSITION 是输出语义，系统自动进行透视除法和视口变换。像素着色器中读取的 SV_Position 已是屏幕空间坐标。
+
+### 插值机制
+光栅化器根据片段在图元内的重心坐标做透视校正插值，确保纹理在透视投影下不变形。可用 centroid/flat 修饰符改变插值方式。
+
+## 交互Demo
+
+> 猜一猜：顶点属性从顶点着色器到像素着色器经历了什么？
+
+<ShpVertexShadersDiagram />
+
+<Stepper>
+<Step title="第一步：MVP 变换">
+在顶点着色器中，将模型空间坐标依次乘以 World、View、Proj 矩阵，输出裁剪空间坐标到 SV_POSITION。系统自动完成透视除法和视口变换。
+</Step>
+<Step title="第二步：属性传递">
+将法线、UV、颜色等属性输出到对应语义。光栅化器根据片段在图元内的重心坐标做透视校正插值，传递给像素着色器。
+</Step>
+<Step title="第三步：顶点动画">
+读取时间参数，根据顶点高度计算弯曲权重，用 sin/cos 生成偏移量，叠加到顶点坐标上实现风吹草等动画效果。注意同步更新法线。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 基本顶点着色器 — MVP 变换
+VSOutput VSMain(VSInput input) {
+    VSOutput output;
+    // MVP 变换
+    float4 worldPos = mul(World, float4(input.Position, 1.0));
+    output.Position = mul(ViewProj, worldPos);
+    // 属性传递
+    output.Normal = normalize(mul((float3x3)World, input.Normal));
+    output.TexCoord = input.TexCoord;
+    return output;
+}
+
+// 顶点动画 — 风吹草效果
+VSOutput VSMainWind(VSInput input) {
+    VSOutput output;
+    float3 pos = input.Position;
+    // 高度越高弯曲越大
+    float bendFactor = saturate(pos.y / 2.0);
+    // 风的偏移
+    float windOffset = sin(Time * 3.0 + pos.x * 0.5) * 0.1;
+    pos.x += windOffset * bendFactor;
+    output.Position = mul(ViewProj, mul(World, float4(pos, 1.0)));
+    output.TexCoord = input.TexCoord;
+    return output;
+}
+```
+
+顶点动画的关键是根据顶点属性（如高度）计算偏移权重，用时间函数生成动画，同时保证法线更新以避免光照错误。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 法线变换后不做归一化导致光照异常。
+**原因 →** 以为法线从顶点缓冲读取后可以直接用。
+**修法 →** 法线经矩阵变换后长度会变化，且光栅化插值后长度再次改变。必须在像素着色器中重新 normalize。顶点着色器中也应 normalize 变换后的法线。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 顶点动画只移动位置不更新法线，导致光照闪烁。
+**原因 →** 顶点位移后表面朝向变了但法线没更新。
+**修法 →** 顶点位移后需要重新计算法线。简单方法是对相邻顶点也做位移再叉积求法线，或用解析方法计算位移函数的梯度作为新法线。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：SV_POSITION 和 POSITION 语义有什么区别？
+
+<Answer>
+POSITION 是顶点着色器输入语义，从顶点缓冲读取模型空间坐标；SV_POSITION 是顶点着色器输出语义，表示裁剪空间坐标，系统会自动进行透视除法和视口变换。
+</Answer>
+
+**问题**：如何在顶点着色器中实现风吹草效果？
+
+<Answer>
+1)读取顶点位置和时间参数 2)根据顶点高度计算弯曲权重 3)用 sin/cos 函数加时间生成偏移 4)偏移量乘以权重加到顶点 x/z 分量 5)输出变换后位置。注意保持法线同步更新。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="MVP 变换">Model→World→View→Proj 的坐标空间变换链，顶点着色器核心。</GlossaryItem>
+<GlossaryItem term="SV_POSITION">顶点着色器输出的裁剪空间坐标系统语义。</GlossaryItem>
+<GlossaryItem term="属性插值">光栅化阶段根据重心坐标对属性做透视校正插值。</GlossaryItem>
+<GlossaryItem term="顶点动画">在顶点着色器中用时间函数驱动顶点位移的效果。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Shader 开发实战" adaptedUrl="" />

@@ -1,0 +1,129 @@
+---
+title: "GPU 物理模拟"
+type: B
+section: "Shader 与 GPU 编程"
+order: 4
+description: "Compute Shader 驱动的粒子、流体与布料模拟"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpoGpuSimulationDiagram } from "@/components/mdx/gpu-pro/diagrams/gpo-gpu-simulation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述 GPU 模拟的数据流：Compute Shader → 结构化缓冲 → 渲染
+- 能解释粒子系统的 Append/Consume Buffer 生命周期管理
+- 能区分 SPH 和 Eulerian 流体模拟方法
+- 能回答：为什么 GPU 模拟数据不回读 CPU
+</Objectives>
+
+## 直觉引入
+
+想象一个沙漏。CPU 像一个人一粒一粒数沙子（串行），GPU 像一万个人同时数各自面前的沙子（并行）。GPU 物理模拟就是把粒子/网格的计算分配给上万个 GPU 线程同时执行——数万个粒子的位置更新在一帧内完成。关键是数据始终在 GPU 显存，不需要「拿回 CPU 再送回去」。
+
+## 概念讲解
+
+### GPU 模拟技术
+
+<GpoGpuSimulationDiagram />
+
+- <Term def="Compute Shader 是 GPU 上的通用计算程序，不经过光栅化管线，直接操作缓冲资源">Compute Shader</Term>：通用 GPU 计算
+- <Term def="结构化缓冲（Structured Buffer）是 GPU 端的数组，每个元素是一个结构体，支持随机读写">结构化缓冲</Term>：GPU 端数据存储
+- <Term def="SPH（Smoothed Particle Hydrodynamics）是拉格朗日视角的流体模拟，每个粒子携带流体属性">SPH</Term>：粒子流体
+- <Term def="PBD（Position Based Dynamics）是基于位置的动力学，直接求解位置约束而非力">PBD</Term>：布料/柔体
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：GPU 粒子">Compute Shader 更新结构化缓冲中的粒子位置/速度，Append/Consume Buffer 管理粒子的发射和死亡，Vertex Shader 读取缓冲渲染。</Step>
+<Step title="第二步：流体模拟">
+SPH 逐粒子计算邻居密度和压力，Eulerian 用 3D 网格纹理存密度/速度场。两种方法各有优劣。
+<GpoGpuSimulationDiagram />
+</Step>
+<Step title="第三步：布料与头发">PBD 用距离约束迭代求解弹簧质点，头发用引导链 + Follow Hair 降低计算量。数据全在 GPU 端。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// GPU 粒子 Compute Shader（简化）
+#pragma kernel UpdateParticles
+
+RWStructuredBuffer<float3> Positions;
+RWStructuredBuffer<float3> Velocities;
+RWStructuredBuffer<float> Lifetimes;
+AppendStructuredBuffer<uint> DeadList; // 死亡粒子索引
+
+[numthreads(64, 1, 1)]
+void UpdateParticles(uint id : SV_DispatchThreadID) {
+    if (id.x >= particleCount) return;
+
+    float lifetime = Lifetimes[id.x] - deltaTime;
+    if (lifetime <= 0) {
+        DeadList.Append(id.x); // 回收到死亡列表
+        return;
+    }
+    Lifetimes[id.x] = lifetime;
+
+    // 更新速度和位置
+    Velocities[id.x] += gravity * deltaTime;
+    Positions[id.x] += Velocities[id.x] * deltaTime;
+}
+
+// 发射粒子（从 DeadList 取索引）
+#pragma kernel EmitParticles
+ConsumeStructuredBuffer<uint> DeadList; // 消费死亡索引
+[numthreads(64, 1, 1)]
+void EmitParticles(uint id : SV_DispatchThreadID) {
+    uint particleIndex = DeadList.Consume(); // 取一个空位
+    Positions[particleIndex] = emitPosition;
+    Velocities[particleIndex] = emitVelocity;
+    Lifetimes[particleIndex] = maxLifetime;
+}
+
+// 渲染：Vertex Shader 直接读缓冲
+// DrawProcedural 不需要顶点缓冲，GPU 侧生成顶点 ID
+VSOutput VS(uint vid : SV_VertexID) {
+    uint particleID = vid / 4; // 每粒子 4 顶点（Billboard）
+    float3 pos = Positions[particleID];
+    // ... 生成 Billboard 四边形
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：GPU 模拟需要回读 CPU 验证状态。**
+GPU→CPU 回读（GetData/Map）会强制 GPU 等待（Stall），破坏并行流水线。GPU 模拟的设计原则是数据始终在 GPU——用 Compute Shader 更新状态，用 DrawProcedural/DrawIndexedInstanced 直接渲染缓冲，用原子操作（InterlockedAdd）做统计。需要 CPU 交互时用间接绘制（Indirect Draw）参数。
+</Callout>
+
+<Callout type="trap">
+**误区：SPH 和 Eulerian 流体可以随意选择。**
+SPH（拉格朗日）无网格、自然处理自由表面，但邻居搜索开销大（需空间哈希）。Eulerian（欧拉）固定网格、易并行，但需处理对流项和界面追踪。SPH 适合飞溅/水滴效果，Eulerian 适合大面积水体。选择需考虑场景需求和 GPU 架构。
+</Callout>
+
+<Exercises>
+**问题 1**：GPU 模拟的数据流是什么？为什么数据不回读 CPU？
+
+<Answer>
+数据流：Compute Shader 更新结构化缓冲（Position/Velocity/Lifetime）→ Append/Consume Buffer 管理粒子生命周期 → Vertex Shader 读取缓冲 → DrawProcedural 渲染。数据不回读 CPU 因为：1) GPU→CPU 回读（GetData/Map）会强制 GPU 等待（Pipeline Stall），破坏 CPU/GPU 并行；2) 回读数据量大时带宽成为瓶颈；3) 大多数模拟状态不需要 CPU 知晓。需要 CPU 交互时用间接绘制（Indirect Draw）参数——GPU 写入 Draw Call 参数，CPU 不需读取。
+</Answer>
+
+**问题 2**：SPH 和 Eulerian 流体模拟的区别是什么？各适合什么场景？
+
+<Answer>
+SPH（拉格朗日视角）：每个粒子携带流体属性（密度/压力），逐粒子计算邻居粒子的贡献。优势：无网格、自然处理自由表面（飞溅/水滴）、拓扑变化自动。劣势：邻居搜索开销大（需空间哈希加速）、常密度维护困难。适合飞溅、水滴、小面积流体效果。Eulerian（欧拉视角）：固定 3D 网格存储密度/速度场，在网格上求解 Navier-Stokes 方程。优势：易并行（规则网格）、精度可控。劣势：需处理对流项数值耗散、界面追踪需额外方法（Level Set）。适合大面积水体、烟雾扩散。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Compute Shader">GPU 上的通用计算程序，不经过光栅化管线，直接操作缓冲资源。</GlossaryItem>
+<GlossaryItem term="结构化缓冲">GPU 端的数组，每个元素是结构体，支持随机读写，是 GPU 模拟的数据基础。</GlossaryItem>
+<GlossaryItem term="SPH">Smoothed Particle Hydrodynamics，拉格朗日粒子流体模拟方法。</GlossaryItem>
+<GlossaryItem term="PBD">Position Based Dynamics，基于位置的动力学，直接求解位置约束。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 系列" adaptedUrl="https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques/p/book/9781498742535" />

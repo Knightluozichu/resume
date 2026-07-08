@@ -1,0 +1,137 @@
+---
+title: "环境效果渲染"
+type: B
+section: "Shader 与 GPU 编程"
+order: 6
+description: "天空盒、大气散射、水面与雾效的环境着色技术"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { SxxEnvironmentDiagram } from "@/components/mdx/shaderx/diagrams/sxx-environment";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能实现天空盒渲染并理解立方体贴图的采样原理
+- 能解释 Rayleigh 和 Mie 散射的大气渲染物理基础
+- 能实现水面效果：反射、折射与菲涅尔混合
+- 能实现三种雾效模型并理解其数学差异
+</Objectives>
+
+## 直觉引入
+
+想象你站在海边。天空是蓝色的（大气散射），远处海天交界处雾蒙蒙的（大气雾效），水面反射着天空的颜色（菲涅尔反射），近处清澈见底远处一片白茫（深度雾）。这些环境效果让虚拟世界「活」起来——没有天空和水面的场景就像一个空旷的灰色盒子。
+
+关键洞察：环境渲染的核心是**用着色器模拟光与大气/水体的交互**。天空盒是预烘焙的环境贴图，大气散射是实时的物理模拟，水面是反射+折射的混合，雾效是距离衰减的颜色混合。它们共同构成场景的「氛围层」。
+
+## 概念讲解
+
+### 环境效果体系
+
+<SxxEnvironmentDiagram />
+
+四种核心环境效果：
+
+- <Term def="天空盒用立方体贴图包围场景，根据视线方向采样天空颜色">天空盒</Term>：texCUBE(skybox, viewDir)
+- <Term def="大气散射模拟光在大气中的瑞利散射和米氏散射，产生天空颜色和日出日落效果">大气散射</Term>：Rayleigh (1/λ^4) + Mie 散射
+- <Term def="水面渲染结合反射、折射和菲涅尔效应，模拟水面的光学特性">水面</Term>：reflect + refract + fresnel
+- <Term def="雾效用距离衰减函数将场景颜色与雾色混合，模拟大气中的光散射">雾效</Term>：线性、指数、指数平方
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：天空盒渲染">天空盒是一个无限远的大立方体，用 6 张纹理组成。渲染时用视线方向（world space 的 view direction）采样立方体贴图。关键：天空盒的 Z 值设为最大（深度为 1.0），且关闭深度写入，这样它永远在场景最远处。</Step>
+<Step title="第二步：水面反射与折射">
+水面效果 = 反射 + 折射 + 菲涅尔。反射用 reflect(viewDir, normal) 采样天空/环境；折射用 refract 采样水下场景纹理；菲涅尔用 pow(1 - N·V, 5) 控制混合权重——正视水面看水底（折射为主），掠射水面看倒影（反射为主）。
+<SxxEnvironmentDiagram />
+</Step>
+<Step title="第三步：雾效混合">雾效的核心公式：finalColor = lerp(fogColor, surfaceColor, fogFactor)。fogFactor 由距离决定：线性雾 = (end-d)/(end-start)，指数雾 = exp(-d*density)，指数平方雾 = exp(-(d*density)^2)。指数平方雾过渡最自然，是工业首选。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 水面着色器：反射 + 折射 + 菲涅尔
+TextureCube envMap       : register(t0); // 天空盒
+Texture2D refractionMap  : register(t1); // 水下场景渲染纹理
+SamplerState linearClamp : register(s0);
+
+cbuffer WaterCB : register(b0) {
+    float3 viewPos;
+    float time;
+    float3 waterColor;
+    float fresnelPower;
+    float3 waveNormal; // 程序化法线或法线贴图
+};
+
+float4 main(float3 worldPos : POSITION, float2 uv : TEXCOORD0) : SV_TARGET {
+    float3 N = normalize(waveNormal);
+    float3 V = normalize(viewPos - worldPos);
+    float3 R = reflect(-V, N);   // 反射方向
+    float3 T = refract(-V, N, 1.0/1.33); // 折射方向 (1.0/1.33 = 空气/水)
+    
+    // 采样反射和折射颜色
+    float3 reflectColor = envMap.Sample(linearClamp, R).rgb;
+    float3 refractColor = refractionMap.Sample(linearClamp, uv).rgb * waterColor;
+    
+    // 菲涅尔混合
+    float fresnel = pow(1.0 - max(dot(N, V), 0.0), fresnelPower);
+    fresnel = lerp(0.2, 1.0, fresnel); // 最低反射率20%
+    
+    float3 color = lerp(refractColor, reflectColor, fresnel);
+    
+    // 添加高光（太阳反射）
+    float3 L = normalize(float3(0.5, 0.8, 0.3)); // 太阳方向
+    float3 H = normalize(L + V);
+    float spec = pow(max(dot(N, H), 0.0), 128.0);
+    color += float3(1.0, 0.95, 0.8) * spec * 2.0;
+    
+    return float4(color, 1.0);
+}
+
+// 雾效计算
+float ApplyFog(float3 surfaceColor, float distance, float3 fogColor) {
+    float density = 0.02;
+    float fogFactor = exp(-pow(distance * density, 2.0)); // 指数平方雾
+    return lerp(fogColor, surfaceColor, fogFactor);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：天空盒用普通 2D 纹理。**
+天空盒必须用立方体贴图（Cube Map），因为需要从任意方向采样。2D 纹理无法正确映射到球面/立方体表面。更关键的是采样方向：应该用世界空间的视线方向（world space view direction），不能用切线空间或屏幕空间方向。常见错误是在顶点着色器中用 localPos 采样——如果相机移动了但 localPos 没变，天空盒看起来「贴」在相机上而不是在远处。
+</Callout>
+
+<Callout type="trap">
+**误区：水面只用反射不用菲涅尔。**
+纯反射的水面像镜子，不真实——真实水面正视时能看到水底（折射为主），只有掠射角才像镜子（反射为主）。菲涅尔效应是水面的核心视觉特征，缺少它水面看起来像固体金属。另一个常见错误是菲涅尔系数直接用 pow(1-N·V, 5)，没有设最低反射率——正视角时反射为 0 也不对，真实水面正视角仍有约 2-5% 的反射。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题 1**：为什么天空是蓝色的？大气散射的物理原理是什么？
+
+<Answer>
+天空是蓝色的是因为 Rayleigh（瑞利）散射：大气分子比光波长小得多，散射强度与波长的四次方成反比（I ∝ 1/λ^4）。蓝光波长短（约450nm），散射强度约为红光（约650nm）的 (650/450)^4 ≈ 4.3 倍。因此白光中的蓝光被大气向四面八方散射，天空呈现蓝色。日落时太阳低角度，光线穿过更厚的大气层，蓝光几乎全被散射掉，只剩红光到达眼睛，所以日落呈红色。Mie（米氏）散射由较大颗粒（灰尘、水滴）引起，各波长散射较均匀，产生白色的雾/光晕效果。大气渲染通常组合这两种散射模型。
+</Answer>
+
+**问题 2**：水面渲染中菲涅尔效应的作用是什么？如何实现？
+
+<Answer>
+菲涅尔效应描述反射率随视角变化：正视角（低头看水）反射率低（约2-5%），主要看到水底（折射）；掠射角（平视水面）反射率趋近100%，主要看到天空倒影（反射）。这是水面最核心的视觉特征——没有它水面就像固体。实现：fresnel = pow(1 - dot(N, V), 5)，其中 N 是水面法线，V 是视线方向。然后 finalColor = lerp(refractColor, reflectColor, fresnel)。实际中应设最低反射率：fresnel = lerp(0.02, 1.0, fresnel)，因为正视角时真实水面仍有约2%反射。法线扰动（用噪声或法线贴图模拟波浪）能让菲涅尔效果更动态自然。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="天空盒">用立方体贴图包围场景的环境渲染技术，根据视线方向采样天空颜色。</GlossaryItem>
+<GlossaryItem term="Rayleigh 散射">大气分子对光的散射，散射强度与波长四次方成反比，导致天空呈蓝色。</GlossaryItem>
+<GlossaryItem term="菲涅尔效应">反射率随观察角度变化的物理现象，水面正视角以折射为主，掠射角以反射为主。</GlossaryItem>
+<GlossaryItem term="指数平方雾">雾效因子为 exp(-(d*density)^2) 的雾效模型，过渡最自然，是工业首选。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="ShaderX 系列" adaptedUrl="https://www.realtimerendering.com/shaderx/" />

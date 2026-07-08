@@ -1111,7 +1111,106 @@ export type ReviewChapterSlug =
   | "cgp-lighting-models"
   | "cgp-modeling"
   | "cgp-advanced-topics"
-  | "cgp-final-review";
+  | "cgp-final-review"
+  // 基于物理的渲染 PBRT
+  | "pbt-learning-map"
+  | "pbt-radiometry"
+  | "pbt-camera-model"
+  | "pbt-monte-carlo"
+  | "pbt-bxdf"
+  | "pbt-volume-scattering"
+  | "pbt-light-transport"
+  | "pbt-integrators"
+  | "pbt-system-architecture"
+  | "pbt-final-review"
+  // 全局光照技术
+  | "gil-learning-map"
+  | "gil-direct-indirect"
+  | "gil-radiosity"
+  | "gil-path-tracing"
+  | "gil-photon-mapping"
+  | "gil-importance-sampling"
+  | "gil-bias-unbiased"
+  | "gil-realtime-gi"
+  | "gil-advanced-techniques"
+  | "gil-final-review"
+  // Unity Shader 入门精要
+  | "use-learning-map"
+  | "use-shader-basics"
+  | "use-shaderlab-syntax"
+  | "use-vertex-fragment"
+  | "use-lighting-models"
+  | "use-alpha-blending"
+  | "use-depth-normal"
+  | "use-post-effects"
+  | "use-advanced-shader"
+  | "use-final-review"
+  // Shader 开发实战
+  | "shp-learning-map"
+  | "shp-render-pipeline"
+  | "shp-hlsl-basics"
+  | "shp-vertex-shaders"
+  | "shp-pixel-shaders"
+  | "shp-lighting-shaders"
+  | "shp-post-processing"
+  | "shp-optimization"
+  | "shp-advanced-effects"
+  | "shp-final-review"
+  // Unity ShaderLab 开发实战详解
+  | "usl-learning-map"
+  | "usl-shaderlab-structure"
+  | "usl-properties-block"
+  | "usl-subshader-pass"
+  | "usl-surface-shaders"
+  | "usl-lighting-models"
+  | "usl-grabpass"
+  | "usl-command-buffer"
+  | "usl-advanced-techniques"
+  | "usl-final-review"
+  // Unity 着色器和屏幕特效
+  | "usf-learning-map"
+  | "usf-screen-basics"
+  | "usf-depth-effects"
+  | "usf-post-processing"
+  | "usf-image-effects"
+  | "usf-light-effects"
+  | "usf-color-grading"
+  | "usf-bloom-glow"
+  | "usf-advanced-effects"
+  | "usf-final-review"
+  // Unity URP 内置 Shader 解析
+  | "uus-learning-map"
+  | "uus-urp-basics"
+  | "uus-urp-shader-graph"
+  | "uus-lit-unlit"
+  | "uus-urp-lighting"
+  | "uus-urp-shadows"
+  | "uus-urp-post-processing"
+  | "uus-custom-pass"
+  | "uus-urp-optimization"
+  | "uus-final-review"
+  // GPU Pro 系列
+  | "gpo-learning-map"
+  | "gpo-rendering-techniques"
+  | "gpo-lighting-shadows"
+  | "gpo-image-space"
+  | "gpo-gpu-simulation"
+  | "gpo-procedural"
+  | "gpo-mobile-rendering"
+  | "gpo-volume-rendering"
+  | "gpo-advanced-shading"
+  | "gpo-final-review"
+  // ShaderX 系列
+  | "sxx-learning-map"
+  | "sxx-vertex-shaders"
+  | "sxx-pixel-shaders"
+  | "sxx-lighting-models"
+  | "sxx-shadow-techniques"
+  | "sxx-post-processing"
+  | "sxx-environment"
+  | "sxx-procedural-texturing"
+  | "sxx-performance"
+  | "sxx-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2227,6 +2326,105 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cgp-modeling": "建模与表示方法",
   "cgp-advanced-topics": "高级主题与动画",
   "cgp-final-review": "计算机图形学：原理及实践 总复习",
+  // 基于物理的渲染 PBRT
+  "pbt-learning-map": "基于物理的渲染全书学习地图",
+  "pbt-radiometry": "辐射度量学",
+  "pbt-camera-model": "相机模型与采样",
+  "pbt-monte-carlo": "蒙特卡洛积分",
+  "pbt-bxdf": "BRDF 与 BxDF 模型",
+  "pbt-volume-scattering": "体积散射",
+  "pbt-light-transport": "光线传输方程",
+  "pbt-integrators": "积分器与采样器",
+  "pbt-system-architecture": "系统架构与并行",
+  "pbt-final-review": "基于物理的渲染总复习",
+  // 全局光照技术
+  "gil-learning-map": "全局光照技术全书学习地图",
+  "gil-direct-indirect": "直接光与间接光",
+  "gil-radiosity": "辐射度方法",
+  "gil-path-tracing": "路径追踪",
+  "gil-photon-mapping": "光子映射",
+  "gil-importance-sampling": "重要性采样",
+  "gil-bias-unbiased": "有偏与无偏估计",
+  "gil-realtime-gi": "实时全局光照",
+  "gil-advanced-techniques": "高级 GI 技术",
+  "gil-final-review": "全局光照技术总复习",
+  // Unity Shader 入门精要
+  "use-learning-map": "Unity Shader 入门精要全书学习地图",
+  "use-shader-basics": "Shader 基础与渲染管线",
+  "use-shaderlab-syntax": "ShaderLab 语法",
+  "use-vertex-fragment": "顶点/片元着色器",
+  "use-lighting-models": "光照模型实现",
+  "use-alpha-blending": "透明效果与混合",
+  "use-depth-normal": "深度与法线纹理",
+  "use-post-effects": "屏幕后处理效果",
+  "use-advanced-shader": "高级 Shader 技术",
+  "use-final-review": "Unity Shader 入门精要总复习",
+  // Shader 开发实战
+  "shp-learning-map": "Shader 开发实战全书学习地图",
+  "shp-render-pipeline": "渲染管线与 Shader 角色",
+  "shp-hlsl-basics": "HLSL 基础语法",
+  "shp-vertex-shaders": "顶点着色器实战",
+  "shp-pixel-shaders": "像素着色器实战",
+  "shp-lighting-shaders": "光照着色器",
+  "shp-post-processing": "后处理 Shader",
+  "shp-optimization": "Shader 性能优化",
+  "shp-advanced-effects": "高级特效实现",
+  "shp-final-review": "Shader 开发实战总复习",
+  // Unity ShaderLab 开发实战详解
+  "usl-learning-map": "Unity ShaderLab 开发实战详解全书学习地图",
+  "usl-shaderlab-structure": "ShaderLab 文件结构",
+  "usl-properties-block": "Properties 语义块",
+  "usl-subshader-pass": "SubShader 与 Pass",
+  "usl-surface-shaders": "表面着色器",
+  "usl-lighting-models": "自定义光照模型",
+  "usl-grabpass": "GrabPass 与屏幕抓取",
+  "usl-command-buffer": "命令缓冲区",
+  "usl-advanced-techniques": "高级 ShaderLab 技巧",
+  "usl-final-review": "Unity ShaderLab 开发实战详解总复习",
+  // Unity 着色器和屏幕特效
+  "usf-learning-map": "Unity 着色器和屏幕特效全书学习地图",
+  "usf-screen-basics": "屏幕特效基础",
+  "usf-depth-effects": "深度纹理特效",
+  "usf-post-processing": "后处理栈",
+  "usf-image-effects": "图像效果实现",
+  "usf-light-effects": "光照特效",
+  "usf-color-grading": "色彩校正与调色",
+  "usf-bloom-glow": "辉光与泛光效果",
+  "usf-advanced-effects": "高级屏幕特效",
+  "usf-final-review": "Unity 着色器和屏幕特效总复习",
+  // Unity URP 内置 Shader 解析
+  "uus-learning-map": "Unity URP 内置 Shader 解析全书学习地图",
+  "uus-urp-basics": "URP 基础与架构",
+  "uus-urp-shader-graph": "Shader Graph 基础",
+  "uus-lit-unlit": "Lit 与 Unlit Shader",
+  "uus-urp-lighting": "URP 光照系统",
+  "uus-urp-shadows": "URP 阴影实现",
+  "uus-urp-post-processing": "URP 后处理栈",
+  "uus-custom-pass": "自定义 Pass 与渲染特性",
+  "uus-urp-optimization": "URP 性能优化",
+  "uus-final-review": "Unity URP 内置 Shader 解析总复习",
+  // GPU Pro 系列
+  "gpo-learning-map": "GPU Pro 系列全书学习地图",
+  "gpo-rendering-techniques": "高级渲染技术",
+  "gpo-lighting-shadows": "光照与阴影",
+  "gpo-image-space": "图像空间效果",
+  "gpo-gpu-simulation": "GPU 物理模拟",
+  "gpo-procedural": "程序化生成",
+  "gpo-mobile-rendering": "移动端渲染优化",
+  "gpo-volume-rendering": "体积渲染",
+  "gpo-advanced-shading": "高级着色技术",
+  "gpo-final-review": "GPU Pro 系列总复习",
+  // ShaderX 系列
+  "sxx-learning-map": "ShaderX 系列全书学习地图",
+  "sxx-vertex-shaders": "顶点着色器进阶",
+  "sxx-pixel-shaders": "像素着色器技巧",
+  "sxx-lighting-models": "高级光照模型",
+  "sxx-shadow-techniques": "阴影技术",
+  "sxx-post-processing": "后处理与图像效果",
+  "sxx-environment": "环境效果渲染",
+  "sxx-procedural-texturing": "程序化纹理",
+  "sxx-performance": "性能优化技巧",
+  "sxx-final-review": "ShaderX 系列总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,119 @@
+---
+title: "光线传输方程"
+type: B
+section: "计算机图形学与渲染"
+order: 6
+description: "渲染方程的推导与求解——PBRT 的核心灵魂"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtLightTransportDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-light-transport";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出渲染方程（光传输方程）的完整形式
+- 能解释方程中每一项的物理含义
+- 能区分直接光照和间接光照的计算方式
+- 能回答为什么渲染方程是递归的？如何求解？
+</Objectives>
+
+## 直觉引入
+
+想象一个房间。你看到每个点的颜色，是光从光源出发、经过多次弹射、最终到达你眼睛的结果。要精确计算这个过程，需要回答一个问题：每个点反射了多少光？
+
+渲染方程就是回答这个问题的数学公式——它把「光的弹射」写成一个积分方程。每个点的亮度 = 自发光 + 反射的入射光。但入射光又是其他点的出射光……这就形成了递归。
+
+## 概念讲解
+
+### 渲染方程
+
+<PbtLightTransportDiagram />
+
+<Term def="渲染方程是描述光在场景中平衡分布的积分方程，是所有基于物理的渲染的理论基础">渲染方程</Term>：L_o(p,ωo) = L_e(p,ωo) + ∫ f_r(ωi,ωo) L_i(p,ωi) cosθi dωi。
+
+<Term def="直接光照是光从光源直接射到表面（一次弹射）后反射到相机的光">直接光照</Term>只需要对光源面积积分，计算相对简单。
+
+<Term def="间接光照是光经过场景中其他表面多次弹射后到达当前表面的光">间接光照</Term>需要对整个半球面积分，是渲染方程递归的根源。
+
+<Term def="光路表示法用 L(S|D|G) 正则表达式描述光从光源到相机的弹射路径类型">光路表示法</Term>如 LS+E 表示光源经过多次镜面反射到相机。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：方程推导">从能量守恒出发：出射光 = 自发光 + 反射光。反射光是所有入射光经BRDF反射的积分。这就是渲染方程。</Step>
+<Step title="第二步：直接与间接光照">
+把入射光分为直接（来自光源）和间接（来自其他表面）。直接光照可显式采样光源，间接光照需要递归追踪反射光线。
+<PbtLightTransportDiagram />
+</Step>
+<Step title="第三步：求解方法">渲染方程是第二类Fredholm积分方程，无法解析求解。用蒙特卡洛路径追踪递归采样：每交点选一个随机方向继续追踪，用俄罗斯轮盘赌截断。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 渲染方程的递归求解（路径追踪）
+Spectrum Li(Ray ray, int depth) {
+    SurfaceInteraction si;
+    if (!scene.Intersect(ray, &si)) 
+        return scene.Le(ray);
+    
+    Spectrum L(0);
+    
+    // 1. 自发光
+    L += si.Le;
+    
+    // 2. 直接光照：采样光源
+    for (auto &light : scene.lights) {
+        auto [wi, Li, pdf] = light.Sample_Li(si);
+        if (!scene.Occluded(si, light))
+            L += bsdf.f(wo, wi) * Li * abs(dot(n, wi)) / pdf;
+    }
+    
+    // 3. 间接光照：递归追踪
+    if (depth < maxDepth) {
+        auto [wi, f, pdf] = bsdf.Sample_f(wo);
+        Ray newRay(si.p, wi);
+        L += f * Li(newRay, depth+1) * abs(dot(n,wi)) / pdf;
+    }
+    
+    return L;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为渲染方程可以解析求解。**
+渲染方程是第二类Fredholm积分方程，被积函数中 L_i 又包含 L_o（递归），无法得到解析解。只能用蒙特卡洛等数值方法近似求解，这就是为什么路径追踪需要大量采样。
+</Callout>
+
+<Callout type="trap">
+**误区：忽略直接光照和间接光照的区分。**
+直接光照可以显式采样光源（效率高、噪声低），间接光照必须随机采样BRDF方向（效率低、噪声大）。不区分两者、统一用BRDF采样，会导致直接光照噪声极大——因为随机方向很难恰好命中小光源。
+</Callout>
+
+<Exercises>
+**问题 1**：写出渲染方程并解释每一项的含义。
+
+<Answer>
+L_o(p,ωo) = L_e(p,ωo) + ∫_Ω f_r(ωi,ωo) · L_i(p,ωi) · cosθi · dωi。L_o 是点 p 沿 ωo 方向的出射辐亮度。L_e 是自发光。积分项是反射光：f_r 是BRDF，L_i 是入射辐亮度，cosθi 是入射角余弦（投影因子），dωi 是立体角微元。物理含义：出射光 = 自发光 + 所有方向入射光经BRDF反射的贡献之和。
+</Answer>
+
+**问题 2**：为什么渲染方程是递归的？路径追踪如何处理这种递归？
+
+<Answer>
+递归性来自 L_i(p,ωi) = L_o(p',-ωi)，即入射光是另一个点 p' 的出射光。代入方程后 L_o 依赖于 L_o 自身，形成递归。路径追踪通过随机游走处理递归：从相机出发，每交点按BRDF采样一个方向继续追踪，直到命中光源或被俄罗斯轮盘赌终止。整条路径的贡献是各交点BRDF、cosθ、几何项的乘积。路径长度趋于无穷时收敛到方程的解。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="渲染方程">描述光在场景中平衡分布的积分方程：出射光=自发光+反射光积分，是PBR的理论核心。</GlossaryItem>
+<GlossaryItem term="直接光照">从光源直接射到表面的光（一次弹射），可显式采样光源高效计算。</GlossaryItem>
+<GlossaryItem term="间接光照">经其他表面多次弹射后到达的光，是渲染方程递归的根源，需随机采样求解。</GlossaryItem>
+<GlossaryItem term="光路表示法">用L(光源)S(镜面)D(漫反射)G(光泽)E(相机)的正则表达式描述光线路径类型。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

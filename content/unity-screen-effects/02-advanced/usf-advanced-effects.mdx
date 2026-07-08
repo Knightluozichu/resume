@@ -1,0 +1,145 @@
+---
+title: "高级屏幕特效"
+type: B
+section: "Shader 与 GPU 编程"
+order: 8
+description: "SSR、运动模糊、色差与屏幕折射"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsfAdvancedEffectsDiagram } from "@/components/mdx/unity-screen-effects/diagrams/usf-advanced-effects";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解屏幕空间反射（SSR）在屏幕特效中的实现
+- 掌握运动模糊的速度纹理方法
+- 学会色差效果的实现原理
+- 能实现屏幕空间折射效果
+</Objectives>
+
+## 直觉引入
+
+高级屏幕特效就像特种摄影技法——SSR 是在屏幕上找反射（像镜子从画面中找颜色），运动模糊是按运动方向拖出残影，色差是模拟镜头边缘 RGB 错位，屏幕折射是透过玻璃看到的扭曲画面。每个效果都需要深度、法线或速度等额外纹理数据支撑。
+
+## 概念讲解
+
+<Term def="在屏幕空间沿反射方向步进找交点的反射技术">屏幕空间反射 SSR</Term><Term def="利用速度纹理沿运动方向模糊的效果">运动模糊</Term><Term def="模拟镜头边缘 RGB 通道偏移的效果">色差</Term><Term def="用法线扰动屏幕 UV 采样不透明纹理的效果">屏幕折射</Term>
+
+### SSR
+从像素出发沿反射方向做射线步进，采样深度缓冲判断相交。相交点颜色即为反射色。无法反射屏外物体。
+
+### 运动模糊
+使用速度纹理（Motion Vectors）记录每个像素屏幕空间移动量，沿速度方向多次采样累加。速度越大模糊越强。
+
+### 色差
+计算像素到屏幕中心的距离，距离越远 RGB 偏移越大。R 通道向外偏移，B 通道向内偏移。通常只在画面边缘产生。
+
+### 屏幕折射
+获取不透明纹理，采样法线获取扰动方向，用扰动后的 UV 采样不透明纹理，结合 Fresnel 混合反射和折射。
+
+## 交互Demo
+
+> 猜一猜：运动模糊需要什么额外纹理？
+
+<UsfAdvancedEffectsDiagram />
+
+<Stepper>
+<Step title="第一步：SSR 射线步进">
+从像素位置沿反射方向逐步前进，每步采样深度缓冲判断是否命中。命中后采样该处颜色作为反射色。需要深度纹理。
+</Step>
+<Step title="第二步：运动模糊">
+使用速度纹理记录每个像素的屏幕空间移动量，沿速度方向多次采样源纹理累加平均。需要 Motion Vector 纹理。
+</Step>
+<Step title="第三步：色差与折射">
+色差按像素到中心距离偏移 RGB 通道采样。折射用法线扰动 UV 采样不透明纹理。两者都不需要额外纹理。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 运动模糊 — 速度纹理
+sampler2D _MainTex;
+sampler2D _MotionVecTex; // 速度纹理
+float _BlurStrength;
+
+fixed4 frag(v2f_img i) : SV_Target {
+    float2 motionVec = tex2D(_MotionVecTex, i.uv).rg;
+    motionVec = (motionVec - 0.5) * 2.0; // 解码到 -1~1
+
+    fixed4 color = tex2D(_MainTex, i.uv);
+    float2 blurDir = motionVec * _BlurStrength;
+
+    // 沿速度方向多次采样
+    for (int s = 1; s <= 8; s++) {
+        float2 offset = blurDir * (float(s) / 8.0);
+        color += tex2D(_MainTex, i.uv + offset);
+    }
+    color /= 9.0;
+    return color;
+}
+```
+
+```hlsl
+// 色差效果
+sampler2D _MainTex;
+float _AberrationStrength;
+
+fixed4 frag(v2f_img i) : SV_Target {
+    float2 center = float2(0.5, 0.5);
+    float2 dir = i.uv - center;
+    float dist = length(dir);
+    float strength = dist * _AberrationStrength;
+
+    // RGB 通道分别偏移采样
+    float r = tex2D(_MainTex, i.uv + dir * strength).r;
+    float g = tex2D(_MainTex, i.uv).g;
+    float b = tex2D(_MainTex, i.uv - dir * strength).b;
+
+    return fixed4(r, g, b, 1.0);
+}
+```
+
+运动模糊沿速度纹理方向多次采样累加。色差按距离偏移 RGB 通道分别采样。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 运动模糊画面闪烁不稳定。
+**原因 →** 速度纹理精度不够或采样次数太少。
+**修法 →** 确保 Motion Vector 纹理精度足够（至少 RG16F）。增加采样次数或使用随机抖动采样。时域累加可稳定画面。注意相机运动和物体运动分别处理。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 色差效果太强看起来不自然。
+**原因 →** 偏移系数太大或全屏都有色差。
+**修法 →** 色差通常只在画面边缘明显，中心区域应无色差。用 dist^2 或 smoothstep 控制边缘强度曲线。偏移系数通常很小（0.001-0.01）。模拟真实镜头的色差是微妙的，不应太明显。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：运动模糊（Motion Blur）在屏幕特效中如何实现？
+
+<Answer>
+1)使用速度纹理记录每个像素的屏幕空间移动量 2)在屏幕特效 Shader 中沿速度方向多次采样源纹理 3)累加采样结果实现模糊 4)速度越大模糊越强 5)可分 Object Motion 和 Camera Motion 处理 6)降分辨率计算速度场提升性能。
+</Answer>
+
+**问题**：如何实现屏幕空间折射效果？
+
+<Answer>
+1)获取场景不透明纹理 2)采样法线贴图获取扰动方向 3)将法线扰动乘以折射强度 4)用扰动后的 UV 采样不透明纹理 5)叠加折射物体的颜色和透明度 6)结合 Fresnel 混合反射和折射。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="屏幕空间反射 SSR">在屏幕空间沿反射方向步进找交点的反射技术。</GlossaryItem>
+<GlossaryItem term="运动模糊">利用速度纹理沿运动方向模糊的效果。</GlossaryItem>
+<GlossaryItem term="色差">模拟镜头边缘 RGB 通道偏移的效果。</GlossaryItem>
+<GlossaryItem term="屏幕折射">用法线扰动屏幕 UV 采样不透明纹理的效果。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 着色器和屏幕特效" adaptedUrl="" />

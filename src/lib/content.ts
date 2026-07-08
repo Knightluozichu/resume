@@ -146,6 +146,15 @@ export const BOOK_ORDER = [
   "gpu-gems",
   "real-time-rendering-4e",
   "cg-principles-practice",
+  "pbrt-book",
+  "global-illumination",
+  "unity-shader-essentials",
+  "shader-practice",
+  "unity-shaderlab",
+  "unity-screen-effects",
+  "unity-urp-shaders",
+  "gpu-pro",
+  "shaderx",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -233,6 +242,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "gpu-gems": "GPU Gems 系列",
   "real-time-rendering-4e": "实时渲染第4版",
   "cg-principles-practice": "计算机图形学：原理及实践",
+  "pbrt-book": "基于物理的渲染 PBRT",
+  "global-illumination": "全局光照技术",
+  "unity-shader-essentials": "Unity Shader 入门精要",
+  "shader-practice": "Shader 开发实战",
+  "unity-shaderlab": "Unity ShaderLab 开发实战详解",
+  "unity-screen-effects": "Unity 着色器和屏幕特效",
+  "unity-urp-shaders": "Unity URP 内置 Shader 解析",
+  "gpu-pro": "GPU Pro 系列",
+  "shaderx": "ShaderX 系列",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

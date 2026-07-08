@@ -1,0 +1,110 @@
+---
+title: "蒙特卡洛积分"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "用随机采样近似求解定积分——PBRT 的数学引擎"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtMonteCarloDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-monte-carlo";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出蒙特卡洛积分估计量的公式
+- 能解释无偏估计的定义和重要性
+- 能推导重要性采样的方差缩减原理
+- 能回答为什么蒙特卡洛积分适合求解光传输方程？
+</Objectives>
+
+## 直觉引入
+
+想象你要计算一个不规则湖面的面积。直接积分很难——湖岸线太复杂。但如果你随机往地图上扔飞镖，统计落入湖中的比例，乘以地图总面积，就能估算湖的面积。扔的飞镖越多，估计越准确。
+
+这就是蒙特卡洛积分的核心思想——用随机采样来近似求解定积分。在 PBRT 中，光传输方程是一个复杂的高维积分，解析解不可能，蒙特卡洛是唯一可行的数值方法。
+
+## 概念讲解
+
+### 蒙特卡洛积分原理
+
+<PbtMonteCarloDiagram />
+
+<Term def="蒙特卡洛积分用随机采样近似求解定积分的数值方法">蒙特卡洛积分</Term>的核心公式：∫f(x)dx ≈ (1/N)Σf(Xi)/p(Xi)。
+
+<Term def="无偏估计是指估计量的期望等于真实值的估计方法">无偏估计</Term>意味着采样数趋于无穷时，估计值收敛到真实值。
+
+<Term def="重要性采样是通过在高贡献区域增加采样概率来降低方差的技巧">重要性采样</Term>让采样分布 p(x) 与被积函数 f(x) 成正比，大幅降低方差。
+
+<Term def="俄罗斯轮盘赌通过随机终止低贡献路径来控制递归深度，同时保持无偏性">俄罗斯轮盘赌</Term>在路径追踪中用来截断无限递归。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：基本估计量">先理解最简单的均匀采样蒙特卡洛：在积分域上均匀采样 N 个点，取函数值的平均。这是无偏的但方差可能很大。</Step>
+<Step title="第二步：重要性采样">
+如果让采样分布 p(x) 与 f(x) 形状匹配，高贡献区域多采样，低贡献区域少采样，方差就能大幅降低。这就是重要性采样。
+<PbtMonteCarloDiagram />
+</Step>
+<Step title="第三步：俄罗斯轮盘赌">路径追踪需要递归追踪反射光线，可能无限深。俄罗斯轮盘赌以概率 q 继续追踪，1-q 终止，终止时贡献归零，继续时贡献除以 q 保持无偏。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 蒙特卡洛积分估计
+Spectrum MonteCarloEstimate(Function f, int N) {
+    Spectrum sum(0);
+    for (int i = 0; i < N; i++) {
+        float Xi = sampleRandom();      // 采样
+        float pdf = samplePDF(Xi);      // 采样概率
+        sum += f(Xi) / pdf;             // 加权
+    }
+    return sum / N;  // 无偏估计
+}
+
+// 重要性采样：让 p(x) ∝ f(x)
+// 例如对 Lambert BRDF: p(ω) ∝ cosθ
+Vector3f sampleCosHemisphere(float u1, float u2) {
+    float phi = 2 * PI * u1;
+    float theta = acos(sqrt(1 - u2));
+    return sphericalToCartesian(theta, phi);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为增加采样数一定能消除噪声。**
+蒙特卡洛的方差以 1/N 速率下降——采样数翻倍只减半噪声。要从 64 spp 到「无噪声」可能需要 65536 spp。因此不能只靠增加采样，必须配合重要性采样和降噪技术。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解俄罗斯轮盘赌为什么能保持无偏。**
+俄罗斯轮盘赌以概率 q 继续时贡献除以 q。期望 E = (1-q)·0 + q·(L/q) = L，与不截断的期望相同，所以无偏。如果只截断不除以 q，期望变小，就变成有偏了。
+</Callout>
+
+<Exercises>
+**问题 1**：写出蒙特卡洛积分估计量的公式，并解释为什么它是无偏的。
+
+<Answer>
+估计量 F_N = (1/N) Σ f(Xi)/p(Xi)。无偏性证明：E[F_N] = (1/N) Σ E[f(Xi)/p(Xi)] = (1/N) · N · ∫ f(x)/p(x) · p(x) dx = ∫ f(x) dx = I。每次采样的期望就是真实积分值，N 次平均的期望仍是 I，所以无偏。
+</Answer>
+
+**问题 2**：重要性采样如何降低方差？最优采样分布是什么？
+
+<Answer>
+重要性采样让 p(x) 与 f(x) 形状匹配。当 p(x) ∝ |f(x)| 时，f(x)/p(x) 接近常数，方差趋近于零（方差公式 Var = ∫f²/p dx - I²，p ∝ |f| 时第一项最小）。实际中无法完全匹配（因为不知道 f 的归一化常数），但用与 f 近似的分布（如对 BRDF 用余弦分布）已能大幅降低方差。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="蒙特卡洛积分">用随机采样近似求解定积分的数值方法，估计量为 (1/N)Σf(Xi)/p(Xi)。</GlossaryItem>
+<GlossaryItem term="无偏估计">估计量的期望等于真实值，采样数趋于无穷时收敛到正确结果。</GlossaryItem>
+<GlossaryItem term="重要性采样">在高贡献区域增加采样概率以降低方差的技术，最优分布 p∝|f|。</GlossaryItem>
+<GlossaryItem term="俄罗斯轮盘赌">以概率随机终止递归路径，通过除以继续概率保持无偏性的方差控制技术。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

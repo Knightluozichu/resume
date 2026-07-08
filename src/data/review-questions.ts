@@ -998,6 +998,96 @@ import { CgpLightingModelsQuestions } from "./review/cgp-lighting-models";
 import { CgpModelingQuestions } from "./review/cgp-modeling";
 import { CgpAdvancedTopicsQuestions } from "./review/cgp-advanced-topics";
 import { CgpFinalReviewQuestions } from "./review/cgp-final-review";
+import { pbtLearningMapQuestions } from "./review/pbt-learning-map";
+import { pbtRadiometryQuestions } from "./review/pbt-radiometry";
+import { pbtCameraModelQuestions } from "./review/pbt-camera-model";
+import { pbtMonteCarloQuestions } from "./review/pbt-monte-carlo";
+import { pbtBxdfQuestions } from "./review/pbt-bxdf";
+import { pbtVolumeScatteringQuestions } from "./review/pbt-volume-scattering";
+import { pbtLightTransportQuestions } from "./review/pbt-light-transport";
+import { pbtIntegratorsQuestions } from "./review/pbt-integrators";
+import { pbtSystemArchitectureQuestions } from "./review/pbt-system-architecture";
+import { pbtFinalReviewQuestions } from "./review/pbt-final-review";
+import { gilLearningMapQuestions } from "./review/gil-learning-map";
+import { gilDirectIndirectQuestions } from "./review/gil-direct-indirect";
+import { gilRadiosityQuestions } from "./review/gil-radiosity";
+import { gilPathTracingQuestions } from "./review/gil-path-tracing";
+import { gilPhotonMappingQuestions } from "./review/gil-photon-mapping";
+import { gilImportanceSamplingQuestions } from "./review/gil-importance-sampling";
+import { gilBiasUnbiasedQuestions } from "./review/gil-bias-unbiased";
+import { gilRealtimeGiQuestions } from "./review/gil-realtime-gi";
+import { gilAdvancedTechniquesQuestions } from "./review/gil-advanced-techniques";
+import { gilFinalReviewQuestions } from "./review/gil-final-review";
+import { useLearningMapQuestions } from "./review/use-learning-map";
+import { useShaderBasicsQuestions } from "./review/use-shader-basics";
+import { useShaderlabSyntaxQuestions } from "./review/use-shaderlab-syntax";
+import { useVertexFragmentQuestions } from "./review/use-vertex-fragment";
+import { useLightingModelsQuestions } from "./review/use-lighting-models";
+import { useAlphaBlendingQuestions } from "./review/use-alpha-blending";
+import { useDepthNormalQuestions } from "./review/use-depth-normal";
+import { usePostEffectsQuestions } from "./review/use-post-effects";
+import { useAdvancedShaderQuestions } from "./review/use-advanced-shader";
+import { useFinalReviewQuestions } from "./review/use-final-review";
+import { shpLearningMapQuestions } from "./review/shp-learning-map";
+import { shpRenderPipelineQuestions } from "./review/shp-render-pipeline";
+import { shpHlslBasicsQuestions } from "./review/shp-hlsl-basics";
+import { shpVertexShadersQuestions } from "./review/shp-vertex-shaders";
+import { shpPixelShadersQuestions } from "./review/shp-pixel-shaders";
+import { shpLightingShadersQuestions } from "./review/shp-lighting-shaders";
+import { shpPostProcessingQuestions } from "./review/shp-post-processing";
+import { shpOptimizationQuestions } from "./review/shp-optimization";
+import { shpAdvancedEffectsQuestions } from "./review/shp-advanced-effects";
+import { shpFinalReviewQuestions } from "./review/shp-final-review";
+import { uslLearningMapQuestions } from "./review/usl-learning-map";
+import { uslShaderlabStructureQuestions } from "./review/usl-shaderlab-structure";
+import { uslPropertiesBlockQuestions } from "./review/usl-properties-block";
+import { uslSubshaderPassQuestions } from "./review/usl-subshader-pass";
+import { uslSurfaceShadersQuestions } from "./review/usl-surface-shaders";
+import { uslLightingModelsQuestions } from "./review/usl-lighting-models";
+import { uslGrabpassQuestions } from "./review/usl-grabpass";
+import { uslCommandBufferQuestions } from "./review/usl-command-buffer";
+import { uslAdvancedTechniquesQuestions } from "./review/usl-advanced-techniques";
+import { uslFinalReviewQuestions } from "./review/usl-final-review";
+import { usfLearningMapQuestions } from "./review/usf-learning-map";
+import { usfScreenBasicsQuestions } from "./review/usf-screen-basics";
+import { usfDepthEffectsQuestions } from "./review/usf-depth-effects";
+import { usfPostProcessingQuestions } from "./review/usf-post-processing";
+import { usfImageEffectsQuestions } from "./review/usf-image-effects";
+import { usfLightEffectsQuestions } from "./review/usf-light-effects";
+import { usfColorGradingQuestions } from "./review/usf-color-grading";
+import { usfBloomGlowQuestions } from "./review/usf-bloom-glow";
+import { usfAdvancedEffectsQuestions } from "./review/usf-advanced-effects";
+import { usfFinalReviewQuestions } from "./review/usf-final-review";
+import { uusLearningMapQuestions } from "./review/uus-learning-map";
+import { uusUrpBasicsQuestions } from "./review/uus-urp-basics";
+import { uusUrpShaderGraphQuestions } from "./review/uus-urp-shader-graph";
+import { uusLitUnlitQuestions } from "./review/uus-lit-unlit";
+import { uusUrpLightingQuestions } from "./review/uus-urp-lighting";
+import { uusUrpShadowsQuestions } from "./review/uus-urp-shadows";
+import { uusUrpPostProcessingQuestions } from "./review/uus-urp-post-processing";
+import { uusCustomPassQuestions } from "./review/uus-custom-pass";
+import { uusUrpOptimizationQuestions } from "./review/uus-urp-optimization";
+import { uusFinalReviewQuestions } from "./review/uus-final-review";
+import { gpoLearningMapQuestions } from "./review/gpo-learning-map";
+import { gpoRenderingTechniquesQuestions } from "./review/gpo-rendering-techniques";
+import { gpoLightingShadowsQuestions } from "./review/gpo-lighting-shadows";
+import { gpoImageSpaceQuestions } from "./review/gpo-image-space";
+import { gpoGpuSimulationQuestions } from "./review/gpo-gpu-simulation";
+import { gpoProceduralQuestions } from "./review/gpo-procedural";
+import { gpoMobileRenderingQuestions } from "./review/gpo-mobile-rendering";
+import { gpoVolumeRenderingQuestions } from "./review/gpo-volume-rendering";
+import { gpoAdvancedShadingQuestions } from "./review/gpo-advanced-shading";
+import { gpoFinalReviewQuestions } from "./review/gpo-final-review";
+import { sxxLearningMapQuestions } from "./review/sxx-learning-map";
+import { sxxVertexShadersQuestions } from "./review/sxx-vertex-shaders";
+import { sxxPixelShadersQuestions } from "./review/sxx-pixel-shaders";
+import { sxxLightingModelsQuestions } from "./review/sxx-lighting-models";
+import { sxxShadowTechniquesQuestions } from "./review/sxx-shadow-techniques";
+import { sxxPostProcessingQuestions } from "./review/sxx-post-processing";
+import { sxxEnvironmentQuestions } from "./review/sxx-environment";
+import { sxxProceduralTexturingQuestions } from "./review/sxx-procedural-texturing";
+import { sxxPerformanceQuestions } from "./review/sxx-performance";
+import { sxxFinalReviewQuestions } from "./review/sxx-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2018,6 +2108,105 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...CgpModelingQuestions,
   ...CgpAdvancedTopicsQuestions,
   ...CgpFinalReviewQuestions,
+  // 基于物理的渲染 PBRT
+  ...pbtLearningMapQuestions,
+  ...pbtRadiometryQuestions,
+  ...pbtCameraModelQuestions,
+  ...pbtMonteCarloQuestions,
+  ...pbtBxdfQuestions,
+  ...pbtVolumeScatteringQuestions,
+  ...pbtLightTransportQuestions,
+  ...pbtIntegratorsQuestions,
+  ...pbtSystemArchitectureQuestions,
+  ...pbtFinalReviewQuestions,
+  // 全局光照技术
+  ...gilLearningMapQuestions,
+  ...gilDirectIndirectQuestions,
+  ...gilRadiosityQuestions,
+  ...gilPathTracingQuestions,
+  ...gilPhotonMappingQuestions,
+  ...gilImportanceSamplingQuestions,
+  ...gilBiasUnbiasedQuestions,
+  ...gilRealtimeGiQuestions,
+  ...gilAdvancedTechniquesQuestions,
+  ...gilFinalReviewQuestions,
+  // Unity Shader 入门精要
+  ...useLearningMapQuestions,
+  ...useShaderBasicsQuestions,
+  ...useShaderlabSyntaxQuestions,
+  ...useVertexFragmentQuestions,
+  ...useLightingModelsQuestions,
+  ...useAlphaBlendingQuestions,
+  ...useDepthNormalQuestions,
+  ...usePostEffectsQuestions,
+  ...useAdvancedShaderQuestions,
+  ...useFinalReviewQuestions,
+  // Shader 开发实战
+  ...shpLearningMapQuestions,
+  ...shpRenderPipelineQuestions,
+  ...shpHlslBasicsQuestions,
+  ...shpVertexShadersQuestions,
+  ...shpPixelShadersQuestions,
+  ...shpLightingShadersQuestions,
+  ...shpPostProcessingQuestions,
+  ...shpOptimizationQuestions,
+  ...shpAdvancedEffectsQuestions,
+  ...shpFinalReviewQuestions,
+  // Unity ShaderLab 开发实战详解
+  ...uslLearningMapQuestions,
+  ...uslShaderlabStructureQuestions,
+  ...uslPropertiesBlockQuestions,
+  ...uslSubshaderPassQuestions,
+  ...uslSurfaceShadersQuestions,
+  ...uslLightingModelsQuestions,
+  ...uslGrabpassQuestions,
+  ...uslCommandBufferQuestions,
+  ...uslAdvancedTechniquesQuestions,
+  ...uslFinalReviewQuestions,
+  // Unity 着色器和屏幕特效
+  ...usfLearningMapQuestions,
+  ...usfScreenBasicsQuestions,
+  ...usfDepthEffectsQuestions,
+  ...usfPostProcessingQuestions,
+  ...usfImageEffectsQuestions,
+  ...usfLightEffectsQuestions,
+  ...usfColorGradingQuestions,
+  ...usfBloomGlowQuestions,
+  ...usfAdvancedEffectsQuestions,
+  ...usfFinalReviewQuestions,
+  // Unity URP 内置 Shader 解析
+  ...uusLearningMapQuestions,
+  ...uusUrpBasicsQuestions,
+  ...uusUrpShaderGraphQuestions,
+  ...uusLitUnlitQuestions,
+  ...uusUrpLightingQuestions,
+  ...uusUrpShadowsQuestions,
+  ...uusUrpPostProcessingQuestions,
+  ...uusCustomPassQuestions,
+  ...uusUrpOptimizationQuestions,
+  ...uusFinalReviewQuestions,
+  // GPU Pro 系列
+  ...gpoLearningMapQuestions,
+  ...gpoRenderingTechniquesQuestions,
+  ...gpoLightingShadowsQuestions,
+  ...gpoImageSpaceQuestions,
+  ...gpoGpuSimulationQuestions,
+  ...gpoProceduralQuestions,
+  ...gpoMobileRenderingQuestions,
+  ...gpoVolumeRenderingQuestions,
+  ...gpoAdvancedShadingQuestions,
+  ...gpoFinalReviewQuestions,
+  // ShaderX 系列
+  ...sxxLearningMapQuestions,
+  ...sxxVertexShadersQuestions,
+  ...sxxPixelShadersQuestions,
+  ...sxxLightingModelsQuestions,
+  ...sxxShadowTechniquesQuestions,
+  ...sxxPostProcessingQuestions,
+  ...sxxEnvironmentQuestions,
+  ...sxxProceduralTexturingQuestions,
+  ...sxxPerformanceQuestions,
+  ...sxxFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

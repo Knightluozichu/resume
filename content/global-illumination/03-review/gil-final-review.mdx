@@ -1,0 +1,114 @@
+---
+title: "全局光照总复习"
+type: B
+section: "计算机图形学与渲染"
+order: 9
+description: "串联全书核心概念——从直接光到实时GI的全景回顾"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilFinalReviewDiagram } from "@/components/mdx/global-illumination/diagrams/gil-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用光的弹射次数串联全书四大板块
+- 能区分辐射度、路径追踪、光子映射的核心差异
+- 能解释有偏无偏和重要性采样的工程意义
+- 能针对不同场景设计合适的GI方案
+</Objectives>
+
+## 直觉引入
+
+想象一束阳光从窗户射入。它直接照亮地板（直接光），地板反射的光照亮墙壁（一次间接光），墙壁再反射照亮天花板（二次间接光）……每一次弹射都是GI的一个层次。
+
+全书就是沿着这束光的弹射旅程展开：直接光是起点，间接光是核心，辐射度/路径追踪/光子映射是不同求解策略，重要性采样/有偏无偏是优化理论，实时GI是工程目标。总复习就是把这条光的旅程完整走一遍。
+
+## 概念讲解
+
+### 全书知识串联
+
+<GilFinalReviewDiagram />
+
+<Term def="直接光是GI的起点——一次弹射的光照，高效计算但效果扁平">直接光</Term>回答「光源照亮了什么」。
+
+<Term def="间接光是GI的核心——多次弹射的光照，产生色渗透和环境光">间接光</Term>回答「光弹射后又到了什么」。
+
+<Term def="辐射度/路径追踪/光子映射是三种不同策略——矩阵求解/随机游走/正向追踪">GI方法</Term>回答「如何计算光弹射」。
+
+<Term def="实时GI是工程目标——在毫秒预算内用近似方法逼近离线GI质量">实时GI</Term>回答「如何快速近似GI」。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：概念回顾">直接光一次弹射（NEE高效），间接光多次弹射（递归追踪）。色渗透和AO是间接光的视觉特征。理解「为什么只有直接光不真实」是GI的起点。</Step>
+<Step title="第二步：方法回顾">
+辐射度：漫反射矩阵求解，视角无关。路径追踪：随机游走，通用无偏。光子映射：正向追踪，擅长焦散，有偏但一致。各有适用场景。
+<GilFinalReviewDiagram />
+</Step>
+<Step title="第三步：理论与工程回顾">重要性采样降低方差（p∝|f|最优），MIS组合策略。有偏无偏的权衡：低采样有偏差小方差低，高采样无偏差大方差高。实时GI用近似+降噪在毫秒内逼近离线质量。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// GI 全景：从概念到工程
+Spectrum FullGI(Ray ray, Scene scene) {
+    // 1. 直接光 (NEE + MIS)
+    Spectrum L_direct = estimateDirectNEE_MIS(si, scene);
+    
+    // 2. 间接光 (按材质选择方法)
+    Spectrum L_indirect(0);
+    if (si.isDiffuse)
+        L_indirect = irradianceCache.interpolate(si);  // 缓存加速
+    else if (si.isCaustic)
+        L_indirect = photonMap.estimate(si);  // 光子映射
+    else
+        L_indirect = pathTrace(si);  // 路径追踪
+    
+    // 3. 组合
+    Spectrum L = L_direct + L_indirect;
+    
+    // 4. 降噪 (实时)
+    if (realtime) L = SVGF_denoise(L);
+    
+    return L;  // 直接光 + 间接光 = 全局光照
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：孤立学习各章不串联。**
+GI的核心是权衡——精度vs速度、无偏vs有偏、通用vs专用。不理解权衡就无法选择方法。
+</Callout>
+
+<Callout type="trap">
+**误区：只学方法不学权衡。**
+GI每种方法都有代价：路径追踪无偏但慢，光子映射快但偏，辐照度缓存更快但更偏。不理解这些权衡就无法在工程中做选择。学方法要同时学它的「适用条件」和「失效条件」。
+</Callout>
+
+<Exercises>
+**问题 1**：用光的弹射次数串联全书四大板块。
+
+<Answer>
+1)直接与间接光：0-1次弹射（直接光）vs 2+次弹射（间接光），建立GI基本概念。2)离线GI方法：辐射度用矩阵求解所有弹射（漫反射），路径追踪用随机游走递归弹射（通用），光子映射用正向追踪弹射（焦散）。3)采样理论：重要性采样让每次弹射的采样更高效，有偏无偏决定弹射估计的性质，MIS组合不同弹射方向的采样。4)实时GI：在毫秒内近似所有弹射（RSM一次弹射，LPV多弹射低精度，降噪处理低采样噪声）。
+</Answer>
+
+**问题 2**：给定一个有玻璃窗(焦散)、红砖墙(色渗透)、金属雕塑(光泽反射)的博物馆场景，设计完整的GI方案。
+
+<Answer>
+1)直接光：NEE+MIS处理所有光源，保证硬阴影和直接照明质量。2)玻璃焦散：光子映射——从光源正向追踪光子经玻璃聚焦到地面，密度估计计算焦散图案。3)红砖墙色渗透：路径追踪或辐照度缓存——红墙反射红光照到邻近白色展品表面，漫反射间接光用缓存插值加速。4)金属雕塑光泽反射：路径追踪BRDF采样——Cook-Torrance重要性采样高效处理镜面反射方向。5)多弹射环境光：辐照度缓存——多次弹射后的环境光在空间上平滑，用稀疏点缓存插值。6)自适应采样：焦散区域和阴影边缘增加采样，纯色墙面减少采样。7)如果实时：1spp路径追踪+SVGF降噪，或RSM+LPV组合。整体：直接光NEE，焦散PM，漫反射IC，光泽PT，自适应分配，降噪后处理——混合架构取长补短。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term='GI全书链'>直接光(起点)->间接光(核心)->GI方法(策略)->采样理论(优化)->实时GI(工程)。</GlossaryItem>
+<GlossaryItem term='三大GI方法'>辐射度(矩阵求解漫反射)、路径追踪(随机游走通用)、光子映射(正向追踪焦散)各有擅长。</GlossaryItem>
+<GlossaryItem term='采样优化'>重要性采样降低方差(p正比|f|)，MIS组合策略，有偏无偏权衡精度与速度。</GlossaryItem>
+<GlossaryItem term='实时GI工程'>近似方法(RSM/LPV/VPL)+降噪(SVGF)在毫秒预算内逼近离线GI质量。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

@@ -1,0 +1,127 @@
+---
+title: "全书学习地图"
+type: B
+section: "Shader 与 GPU 编程"
+order: 0
+description: "Unity 着色器和屏幕特效的学习路径与知识体系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsfLearningMapDiagram } from "@/components/mdx/unity-screen-effects/diagrams/usf-learning-map";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Unity 着色器和屏幕特效的知识架构与板块划分
+- 掌握从屏幕特效基础到高级后处理管线的主线
+- 明确屏幕特效与普通 Shader 的核心区别
+- 能制定系统化的屏幕特效学习路径
+</Objectives>
+
+## 直觉引入
+
+屏幕特效就像照片的后期处理——先把场景拍下来（渲染到纹理），再用各种滤镜处理（全屏着色器）。模糊让画面柔和，景深让远处虚化，辉光让亮的东西发光，调色改变整体氛围。本书从最基础的 OnRenderImage 出发，逐步构建电影级后处理管线。
+
+## 概念讲解
+
+<Term def="处理全屏 2D 图像而非 3D 几何体的着色器">屏幕特效</Term><Term def="Unity 中处理屏幕特效的 C# 回调函数">OnRenderImage</Term><Term def="包含每个像素深度信息的特殊纹理">深度纹理</Term><Term def="预计算的 3D 颜色查找表用于风格化调色">LUT</Term>
+
+全书分四大板块：**基础**（学习地图、屏幕特效基础）、**核心**（深度纹理特效、后处理栈、图像效果、光照特效）、**高级**（色彩校正调色、辉光泛光、高级屏幕特效）、**复习**（总复习）。
+
+### 学习主线
+从屏幕特效基础原理出发，利用深度纹理实现特效，掌握后处理栈架构，实现图像效果和光照特效，色彩校正与调色，辉光泛光效果，最后高级屏幕特效综合实战。
+
+### 屏幕特效 vs 普通 Shader
+普通 Shader 处理 3D 几何体的顶点和像素，屏幕特效处理全屏 2D 图像。屏幕特效将场景渲染到纹理后，用全屏着色器对每个像素做后处理。
+
+## 交互Demo
+
+> 猜一猜：屏幕特效和普通 Shader 的核心区别是什么？
+
+<UsfLearningMapDiagram />
+
+<Stepper>
+<Step title="第一步：基础认知">
+理解 OnRenderImage 和 Graphics.Blit 的工作原理。场景渲染到 RenderTexture 后，通过全屏着色器处理每个像素，实现后处理效果。
+</Step>
+<Step title="第二步：核心实战">
+利用深度纹理实现景深和屏幕空间雾，掌握后处理栈架构，实现图像效果（模糊/边缘检测）和光照特效（体积光/SSAO）。
+</Step>
+<Step title="第三步：高级进阶">
+色彩校正（LUT/ACES 色调映射），辉光泛光（降采样-上采样管线），高级特效（SSR/运动模糊/色差），最终整合电影级后处理管线。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 屏幕特效基础 — OnRenderImage
+[ExecuteAlways]
+public class ScreenEffectBase : MonoBehaviour {
+    public Material effectMaterial;
+
+    void OnRenderImage(RenderTexture src, RenderTexture dest) {
+        if (effectMaterial != null) {
+            // src → Shader 处理 → dest
+            Graphics.Blit(src, dest, effectMaterial);
+        } else {
+            Graphics.Blit(src, dest);
+        }
+    }
+}
+```
+
+```hlsl
+// 屏幕特效 Shader — 全屏处理
+sampler2D _MainTex;
+
+fixed4 frag(v2f_img i) : SV_Target {
+    // 采样源纹理
+    fixed4 col = tex2D(_MainTex, i.uv);
+    // 简单反色效果
+    return 1.0 - col;
+}
+```
+
+OnRenderImage 接收 src（场景渲染结果），经材质的 Shader 处理后输出到 dest（屏幕）。每个屏幕特效都是一个全屏着色器。
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 把屏幕特效写在普通物体 Shader 中。
+**原因 →** 不理解屏幕特效是全屏 2D 处理。
+**修法 →** 屏幕特效必须通过 OnRenderImage 或后处理栈执行，处理的是全屏 RenderTexture 而非 3D 几何体。需要 C# 脚本驱动，不能直接挂在物体材质上。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 每个效果都用单独的 OnRenderImage，性能很差。
+**原因 →** 每个 Blit 都是一次全屏绘制调用。
+**修法 →** 合并多个效果到一个 Shader 的多个 Pass。使用 RenderTexture 池化避免频繁创建销毁。降分辨率处理再上采样。优先使用后处理栈或 URP RenderFeature 统一管理。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：屏幕特效和普通 Shader 的核心区别是什么？
+
+<Answer>
+普通 Shader 处理 3D 几何体的顶点和像素，屏幕特效处理全屏 2D 图像。屏幕特效将场景渲染到纹理后，用全屏着色器对每个像素做后处理（模糊、调色、辉光等），不需要几何体数据。
+</Answer>
+
+**问题**：如何系统学习 Unity 屏幕特效开发？
+
+<Answer>
+1)理解 OnRenderImage 和 RenderTexture 基础 2)学习深度纹理获取和使用 3)掌握后处理栈架构 4)逐个实现图像效果 5)光照特效 6)色彩校正 7)辉光泛光管线 8)综合实战。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="屏幕特效">处理全屏 2D 图像而非 3D 几何体的着色器。</GlossaryItem>
+<GlossaryItem term="OnRenderImage">Unity 中处理屏幕特效的 C# 回调函数。</GlossaryItem>
+<GlossaryItem term="深度纹理">包含每个像素深度信息的特殊纹理，屏幕特效核心数据源。</GlossaryItem>
+<GlossaryItem term="LUT">预计算的 3D 颜色查找表，用于风格化调色。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 着色器和屏幕特效" adaptedUrl="" />

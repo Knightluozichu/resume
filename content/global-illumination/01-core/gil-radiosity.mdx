@@ -1,0 +1,107 @@
+---
+title: "辐射度方法"
+type: B
+section: "计算机图形学与渲染"
+order: 2
+description: "有限元思想求解GI——漫反射场景的经典方法"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilRadiosityDiagram } from "@/components/mdx/global-illumination/diagrams/gil-radiosity";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出辐射度方法的核心假设（漫反射-only）
+- 能写出辐射度方程的矩阵形式
+- 能解释形状因子的物理含义和计算方法
+- 能回答辐射度方法为什么不适合光泽/镜面表面？
+</Objectives>
+
+## 直觉引入
+
+想象把一面墙分成很多小方块。每个方块接收其他方块反射的光，也反射光给其他方块。如果你能算出每对方块之间的「光传递比例」（形状因子），就能解一个巨大的线性方程组，一次性得到所有方块的亮度。
+
+这就是辐射度方法——用有限元离散化场景，把GI变成矩阵求解问题。它适合漫反射场景，因为漫反射的光分布与方向无关，只有「亮度」一个未知量。
+
+## 概念讲解
+
+### 辐射度方程
+
+<GilRadiosityDiagram />
+
+<Term def="辐射度方法将场景表面离散化为面片，假设所有面片是理想漫反射，求解每个面片的辐射度">辐射度方法</Term>是GI的有限元方法。
+
+<Term def="形状因子(Form Factor)描述从一面片到另一面片的光传递比例，是辐射度方法的核心计算">形状因子</Term>F_ij 表示面片j发出的光有多少比例到达面片i。
+
+<Term def="辐射度方程的矩阵形式是 B = E + RBF，其中B是辐射度、E是自发光、R是反射率、F是形状因子矩阵">矩阵形式</Term>将GI变成线性方程组求解问题。
+
+<Term def="Gauss-Seidel迭代是求解辐射度方程的常用方法，每次迭代用最新值更新">Gauss-Seidel迭代</Term>逐步收敛到全局解。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：漫反射假设">辐射度方法假设所有表面是理想漫反射（Lambert）。这意味着光均匀散射到所有方向，每个面片只需一个标量值（辐射度B），不需方向信息。</Step>
+<Step title="第二步：形状因子">
+形状因子F_ij 是纯几何量——取决于两面的面积、距离、朝向和遮挡。计算F_ij 是辐射度方法的主要开销，常用半立方体方法加速。
+<GilRadiosityDiagram />
+</Step>
+<Step title="第三步：矩阵求解">把所有面片的辐射度方程联立，得到 B = E + RBF。用Gauss-Seidel或Southwell迭代求解。解是全局的——一次性得到所有面片的最终亮度。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 辐射度方程: B_i = E_i + rho_i * sum_j(F_ij * B_j)
+// 矩阵形式: B = E + R * F * B
+// 迭代求解:
+void SolveRadiosity(int patches, Matrix F, Vector E, Vector rho) {
+    Vector B = E;  // 初始化为自发光
+    for (int iter = 0; iter < maxIter; iter++) {
+        for (int i = 0; i < patches; i++) {
+            float sum = 0;
+            for (int j = 0; j < patches; j++)
+                sum += F[i][j] * B[j];
+            B[i] = E[i] + rho[i] * sum;
+        }
+        if (converged(B)) break;
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为辐射度方法可以处理任意材质。**
+辐射度方法的核心假设是漫反射——光均匀散射，每个面片只需一个标量值。光泽和镜面反射的光分布与方向相关，需要方向信息（球面谐波或方向缓存），辐射度的标量形式无法表达。
+</Callout>
+
+<Callout type="trap">
+**误区：认为形状因子计算很简单。**
+形状因子计算需要考虑遮挡——两面片之间可能有其他物体挡住。完整计算需要射线测试，O(N^2)对面片中每对都要测试，复杂度很高。半立方体方法用光栅化加速，但精度有限。
+</Callout>
+
+<Exercises>
+**问题 1**：辐射度方法的核心假设是什么？为什么需要这个假设？
+
+<Answer>
+核心假设是所有表面是理想漫反射（Lambert）。需要这个假设是因为漫反射的光分布与方向无关——光均匀散射到所有方向，每个面片只需一个标量值（辐射度B）。如果表面有方向性反射（光泽/镜面），光分布依赖方向，需要存储方向信息，辐射度的标量形式无法表达。
+</Answer>
+
+**问题 2**：形状因子F_ij 的物理含义是什么？它受哪些因素影响？
+
+<Answer>
+F_ij 表示从面片j发出的光能量有多少比例到达面片i。它是一个纯几何量，受以下因素影响：1）两面的距离（越远F越小）；2）两面的朝向（面对面最大，背对背为零）；3）两面之间的遮挡（有遮挡物则F为零或减小）；4）两面的面积（面积比影响比例）。F_ij 的计算公式涉及双重面积分，常用半立方体或射线投射近似。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="辐射度方法">将场景离散化为面片，假设漫反射，求解线性方程组得到每面片辐射度的GI方法。</GlossaryItem>
+<GlossaryItem term="形状因子(Form Factor)">描述面片间光传递比例的纯几何量，是辐射度方法的核心计算。</GlossaryItem>
+<GlossaryItem term="矩阵形式">B=E+RBF，将GI变成线性方程组，可用迭代法求解。</GlossaryItem>
+<GlossaryItem term="Gauss-Seidel迭代">用最新值逐步更新每个面片辐射度的迭代求解方法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

@@ -1,0 +1,76 @@
+/**
+ * <UusFinalReviewDiagram>：Unity URP 总复习图解。
+ * 纯静态展示，无交互。Server Component（不加 "use client"）。
+ * 全部 DESIGN token 配色，无裸 hex。
+ */
+
+const VIEW_W = 720;
+const VIEW_H = 400;
+
+export function UusFinalReviewDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          role="img"
+          aria-label="Unity URP 总复习图解"
+          className="mx-auto block h-auto w-full max-w-[720px]"
+        >
+          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
+            Unity URP 知识图谱总览
+          </text>
+          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
+            管线 → 着色 → 光照 → 阴影 → 后处理 → 性能
+          </text>
+
+          <rect x="40" y="78" width="640" height="290" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+
+          {/* Center hub */}
+          <circle cx={VIEW_W / 2} cy="200" r="55" fill="var(--accent)" fillOpacity="0.10" stroke="var(--accent)" strokeWidth="2" />
+          <text x={VIEW_W / 2} y="195" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">URP</text>
+          <text x={VIEW_W / 2} y="212" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">渲染管线</text>
+
+          {/* Surrounding nodes */}
+          <rect x="60" y="110" width="120" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
+          <text x="120" y="132" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">管线架构</text>
+          <text x="120" y="148" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">SRP/Renderer</text>
+
+          <rect x="60" y="175" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
+          <text x="120" y="197" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">Shader Graph</text>
+          <text x="120" y="213" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Lit/Unlit</text>
+
+          <rect x="60" y="240" width="120" height="50" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
+          <text x="120" y="262" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">光照系统</text>
+          <text x="120" y="278" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">PBR/GI</text>
+
+          <rect x="540" y="110" width="120" height="50" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
+          <text x="600" y="132" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">阴影系统</text>
+          <text x="600" y="148" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">CSM/PCF</text>
+
+          <rect x="540" y="175" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
+          <text x="600" y="197" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">后处理</text>
+          <text x="600" y="213" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Volume</text>
+
+          <rect x="540" y="240" width="120" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
+          <text x="600" y="262" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">性能优化</text>
+          <text x="600" y="278" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Batch/Variant</text>
+
+          {/* Lines to center */}
+          <line x1="180" y1="135" x2="305" y2="180" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+          <line x1="180" y1="200" x2="305" y2="200" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+          <line x1="180" y1="265" x2="305" y2="220" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+          <line x1="540" y1="135" x2="415" y2="180" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+          <line x1="540" y1="200" x2="415" y2="200" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+          <line x1="540" y1="265" x2="415" y2="220" stroke="var(--text-tertiary)" strokeWidth="1" strokeOpacity="0.5" />
+
+          <rect x="210" y="310" width="300" height="40" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
+          <text x={VIEW_W / 2} y="335" textAnchor="middle" fontSize="11" fill="var(--text-primary)">核心原则：理解管线 → 掌握着色 → 调优性能</text>
+        </svg>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        Unity URP 知识图谱总览——六大模块围绕管线核心展开
+      </figcaption>
+    </figure>
+  );
+}

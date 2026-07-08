@@ -1,0 +1,110 @@
+---
+title: "路径追踪"
+type: B
+section: "计算机图形学与渲染"
+order: 3
+description: "从相机出发的随机游走——现代GI的标准方法"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilPathTracingDiagram } from "@/components/mdx/global-illumination/diagrams/gil-path-tracing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述路径追踪的基本算法流程
+- 能解释为什么路径追踪是无偏的
+- 能说出路径追踪与双向路径追踪的区别
+- 能回答路径追踪的主要瓶颈是什么？如何缓解？
+</Objectives>
+
+## 直觉引入
+
+想象你闭着眼睛站在房间中央，手里拿一支画笔。你随机选一个方向走，碰到墙壁就在那点一个点。如果碰巧走到了窗户（光源），你就在起点画一个亮点。走很多次后，起点处点的密度就是那一点的亮度。
+
+路径追踪就是这种「随机游走」——从相机出发，每次交点随机选一个方向继续，直到命中光源。大量路径平均后得到图像。它简单、通用、无偏，是现代GI的标准方法。
+
+## 概念讲解
+
+### 路径追踪算法
+
+<GilPathTracingDiagram />
+
+<Term def="路径追踪从相机出发随机游走，每次交点按BRDF采样方向继续，直到命中光源">路径追踪</Term>是最通用的GI方法。
+
+<Term def="无偏性指采样数趋于无穷时估计值收敛到真实值的性质">无偏性</Term>是路径追踪的核心优势——没有系统性误差。
+
+<Term def="双向路径追踪(BDPT)同时从光源和相机生成子路径再连接">BDPT</Term>对焦散等困难光路效率更高。
+
+<Term def="Next Event Estimation在每次交点显式采样光源，避免依赖随机方向命中光源">NEE</Term>大幅提升直接光照效率。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：基本路径追踪">从相机发射光线，每次交点按BRDF随机采样一个方向继续，直到命中光源或被俄罗斯轮盘赌终止。每条路径贡献一个颜色样本。</Step>
+<Step title="第二步：NEE与MIS">
+纯随机游走很难命中小光源。Next Event Estimation在每次交点显式采样光源方向。MIS组合BRDF采样和光源采样取最优。
+<GilPathTracingDiagram />
+</Step>
+<Step title="第三步：双向路径追踪">BDPT同时从光源和相机生成子路径，连接两段上的点。对焦散(光经镜面到漫反射面)等困难光路效率大幅提升。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 路径追踪核心
+Spectrum PathTrace(Ray ray, int depth) {
+    SurfaceInteraction si;
+    if (!scene.Intersect(ray, &si)) return scene.Le(ray);
+    
+    Spectrum L = si.Le;  // 自发光
+    
+    // NEE: 显式采样光源
+    for (auto &light : scene.lights)
+        L += EstimateDirect(si, light);  // MIS
+    
+    // 间接光: BRDF采样继续
+    if (depth < maxDepth) {
+        auto [wi, f, pdf] = si.bsdf->Sample_f(ray.d);
+        L += f * PathTrace(Ray(si.p, wi), depth+1) * cos / pdf;
+    }
+    return L;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为路径追踪每条光线只弹射一次。**
+路径追踪是递归的——每次交点继续发射新光线，直到命中光源或被俄罗斯轮盘赌终止。一条路径可能弹射数十次。限制弹射深度会导致间接光丢失（如深角落变暗）。
+</Callout>
+
+<Callout type="trap">
+**误区：认为增加SPP(samples per pixel)是唯一的降噪方法。**
+SPP翻倍只减半噪声(O(1/sqrt(N))收敛)。更有效的方法：重要性采样降低单采样方差、NEE让直接光几乎无噪声、自适应采样在噪声大区域增加SPP、降噪滤波器事后处理。现代渲染器组合使用这些技术。
+</Callout>
+
+<Exercises>
+**问题 1**：路径追踪的基本流程是什么？为什么它是无偏的？
+
+<Answer>
+流程：从相机发射光线→求交→NEE采样光源计算直接光→按BRDF采样方向→递归追踪间接光→俄罗斯轮盘赌终止。无偏性来自蒙特卡洛理论：每次采样的期望等于真实积分值，N次平均的期望仍等于真实值，采样数趋于无穷时收敛到正确结果。无系统性误差。
+</Answer>
+
+**问题 2**：BDPT相比单向路径追踪有什么优势？它解决了什么问题？
+
+<Answer>
+BDPT同时从光源（光子路径）和相机（相机路径）生成子路径，连接两段上的每对点。优势是解决「困难光路」问题——如焦散(光经镜面反射到漫反射面再到相机)。单向PT从漫反射面按BRDF随机采样几乎不可能命中镜面再到光源，BDPT从光源出发经镜面到漫反射面（光子路径容易采样），再从相机到漫反射面（相机路径容易采样），连接即可。把难以采样的长路径变成两条短路径的连接。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="路径追踪">从相机出发随机游走求解渲染方程的GI方法，通用无偏，是现代GI标准。</GlossaryItem>
+<GlossaryItem term="无偏性">采样数趋于无穷时估计值收敛到真实值，无系统性误差。</GlossaryItem>
+<GlossaryItem term="Next Event Estimation(NEE)">每次交点显式采样光源计算直接光，避免依赖随机方向命中光源。</GlossaryItem>
+<GlossaryItem term="双向路径追踪(BDPT)">从光源和相机双向生成子路径再连接，对焦散等困难光路效率高。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

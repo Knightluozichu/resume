@@ -1,0 +1,126 @@
+---
+title: "高级着色技术"
+type: B
+section: "Shader 与 GPU 编程"
+order: 8
+description: "次表面散射、各向异性、多层材质与位移"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpoAdvancedShadingDiagram } from "@/components/mdx/gpu-pro/diagrams/gpo-advanced-shading";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述次表面散射的原理和 Separable SSS 近似方法
+- 能解释各向异性 BRDF 与各向同性 BRDF 的区别
+- 能对比多层材质（车漆）的 Fresnel 混合策略
+- 能回答：游戏渲染中高级着色的近似原则
+</Objectives>
+
+## 直觉引入
+
+想象你拿手电筒贴着手指照——手指边缘泛红，因为光穿过皮肤组织在内部散射后透出。这就是次表面散射（SSS）。真实 SSS 需要模拟光在物体内部的多次散射（离线渲染用 BSSRDF），但实时渲染中用近似方法——Separable SSS 将 3D 散射分解为 2D 横向卷积，大幅降低计算量。GPU Pro 的高级着色章节核心就是：用工程近似实现视觉可信的复杂材质。
+
+## 概念讲解
+
+### 高级着色技术
+
+<GpoAdvancedShadingDiagram />
+
+- <Term def="次表面散射（SSS）模拟光进入半透明材质内部多次散射后透出的效果，如皮肤、蜡、玉石">SSS</Term>：皮肤/蜡/玉石
+- <Term def="各向异性 BRDF 沿切线方向调制镜面反射分布，产生拉丝金属/头发的方向性高光">各向异性</Term>：金属拉丝/头发
+- <Term def="多层材质用 Fresnel 权重混合两层 BRDF，模拟车漆（清漆层 + 底漆层）">多层材质</Term>：车漆/清漆
+- <Term def="位移贴图（Displacement）在顶点着色器或曲面细分阶段沿法线位移顶点，产生真实几何细节">位移</Term>：地形/细节
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：SSS 近似">Separable SSS 将 3D 散射核分解为两次 1D 卷积（横向 + 纵向），用预计算的扩散剖面纹理做高斯卷积。预积分 SSS 在法线曲率方向预计算颜色查找表。</Step>
+<Step title="第二步：各向异性 BRDF">
+各向同性 BRDF 的 NDF 在所有方向对称，各向异性 BRDF 沿切线方向拉伸 NDF（用 roughness 的两个分量 roughnessT/roughnessB）。GGX 各向异性用切线方向调制。
+<GpoAdvancedShadingDiagram />
+</Step>
+<Step title="第三步：多层材质">车漆 = 底漆层（金属 BRDF）+ 清漆层（透明涂层 BRDF），用 Fresnel 权重混合——掠射角清漆反射强，正面底漆颜色明显。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// Separable SSS（简化）
+// 1. 两次 1D 卷积替代 2D 卷积（可分离滤波器）
+float3 SeparableSSS(float2 uv, float3 color, sampler2D blurKernel) {
+    // 横向卷积
+    float3 diffuseH = 0;
+    for (int i = 0; i < KERNEL_SIZE; i++) {
+        float2 offset = float2(kernel[i].x * radius, 0);
+        diffuseH += tex2D(colorTex, uv + offset).rgb * kernel[i].w;
+    }
+    // 纵向卷积（用横向结果）
+    float3 result = 0;
+    for (int j = 0; j < KERNEL_SIZE; j++) {
+        float2 offset = float2(0, kernel[j].x * radius);
+        result += tex2D(tempTex, uv + offset).rgb * kernel[j].w;
+    }
+    return result;
+}
+
+// 各向异性 GGX NDF（简化）
+float GGX_aniso(float3 N, float3 H, float3 T, float3 B, float roughnessT, float roughnessB) {
+    float NoH = dot(N, H);
+    float ToH = dot(T, H);
+    float BoH = dot(B, H);
+    float aT = roughnessT * roughnessT;
+    float aB = roughnessB * roughnessB;
+    float denom = (ToH * ToH) / (aT * aT) + (BoH * BoH) / (aB * aB) + NoH * NoH;
+    return 1.0 / (PI * aT * aB * denom * denom);
+}
+
+// 多层材质：车漆（简化）
+float3 CarPaint(float3 N, float3 V, float3 L) {
+    // 底漆层：金属 BRDF
+    float3 baseLayer = MetallicBRDF(N, V, L, baseColor, metallic, roughness);
+    // 清漆层：透明涂层 BRDF（高反射低粗糙度）
+    float3 clearCoat = DielectricBRDF(N, V, L, float3(1,1,1), 0.0, 0.1); // IOR=1.5
+    // Fresnel 权重混合
+    float fresnel = SchlickFresnel(dot(N, V), 0.04); // 清漆 Fresnel
+    return lerp(baseLayer, baseLayer * 0.3 + clearCoat, fresnel);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：SSS 需要完整的 BSSRDF 模拟。**
+完整 BSSRDF 需模拟光在物体内部 3D 空间的多次散射，计算量在实时渲染中不可接受。实际项目用近似：1) Separable SSS——将 3D 散射核分解为两次 1D 卷积；2) 预积分 SSS——在法线曲率方向预计算颜色 LUT；3) Screen-space SSS——在屏幕空间做模糊。这些近似在视觉上接近完整 BSSRDF 但开销降低 10-100 倍。
+</Callout>
+
+<Callout type="trap">
+**误区：多层材质简单叠加两层 BRDF。**
+简单叠加会导致能量不守恒（反射光超过入射光）。正确做法：用 Fresnel 权重混合——清漆层的反射率随视角增加（Fresnel 效应），底漆层的光照需乘以清漆层的透射率（1 - Fresnel）。底漆层被清漆层部分遮挡，不应获得全部光照。
+</Callout>
+
+<Exercises>
+**问题 1**：SSS 的 Separable 近似原理是什么？为什么能大幅降低计算量？
+
+<Answer>
+Separable SSS 基于可分离滤波器理论：如果 3D 散射核可以分解为多个 1D 核的乘积，则 2D 卷积可以分解为两次 1D 卷积（先横向后纵向）。原始 2D 卷积需 KERNEL_SIZE^2 次采样，分离后只需 2 * KERNEL_SIZE 次。例如 21x21 的卷积核从 441 次采样降到 42 次。实际 SSS 散射核（高斯混合）近似可分离，用预计算的 1D 扩散剖面核做两次方向卷积，视觉上接近完整 2D 散射但计算量降低约 10 倍。
+</Answer>
+
+**问题 2**：各向异性 BRDF 和各向同性 BRDF 的区别是什么？如何实现？
+
+<Answer>
+各向同性 BRDF 的 NDF（法线分布函数）在切线空间所有方向对称——roughness 是标量，高光呈圆形。各向异性 BRDF 的 NDF 沿一个切线方向拉伸——roughness 分解为 roughnessT（切线方向）和 roughnessB（副切线方向），高光呈椭圆形/细条状。实现：在 GGX NDF 中用切线 T 和副切线 B 方向的 roughness 分别调制，各向异性因子 = roughnessT / roughnessB。当 roughnessT = roughnessB 时退化为各向同性。适合模拟金属拉丝（沿拉丝方向高光拉伸）和头发（沿发丝方向高光条）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SSS">次表面散射，模拟光进入半透明材质内部多次散射后透出的效果。</GlossaryItem>
+<GlossaryItem term="各向异性 BRDF">沿切线方向调制镜面反射分布的 BRDF，产生方向性高光。</GlossaryItem>
+<GlossaryItem term="多层材质">用 Fresnel 权重混合多层 BRDF 的材质模型，如车漆的清漆+底漆。</GlossaryItem>
+<GlossaryItem term="位移贴图">沿法线位移顶点几何的贴图，产生真实几何细节（区别于法线贴图的视觉欺骗）。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 系列" adaptedUrl="https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques/p/book/9781498742535" />

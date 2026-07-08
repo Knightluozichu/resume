@@ -1,0 +1,115 @@
+---
+title: "PBRT 总复习"
+type: B
+section: "计算机图形学与渲染"
+order: 9
+description: "串联全书核心概念——从辐射度量学到系统架构的全景回顾"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtFinalReviewDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用一条光线的旅程串联全书五大板块
+- 能区分辐射度量学、蒙特卡洛、BxDF、光传输、系统架构各自的核心问题
+- 能解释 PBRT 如何实现「物理正确」与「工程可行」的平衡
+- 能针对不同渲染需求选择合适的积分器和采样策略
+</Objectives>
+
+## 直觉引入
+
+想象一条光线从相机出发，穿过镜头、进入场景、打到一个表面、被反射到另一个表面、最终命中光源。这条光线的旅程，就是 PBRT 全书的缩影——相机模型生成它，BVH 找到交点，BxDF 决定反射方向，蒙特卡洛采样选择路径，光传输方程计算贡献，系统架构保证一切高效运行。
+
+总复习就是把这条光线的旅程完整走一遍，把每一步对应的知识点串联起来。
+
+## 概念讲解
+
+### 全书知识串联
+
+<PbtFinalReviewDiagram />
+
+<Term def="辐射度量学定义了光的语言——flux、radiance、irradiance 是全书所有公式的词汇">辐射度量学</Term>解决了「如何精确描述光」的问题。
+
+<Term def="蒙特卡洛积分提供了求解高维积分的工具，是光传输方程的唯一可行求解方法">蒙特卡洛</Term>解决了「如何计算无限积分」的问题。
+
+<Term def="BxDF 模型描述了材料如何反射光，连接了物理材料与数学函数">BxDF</Term>解决了「如何描述材料」的问题。
+
+<Term def="光传输方程把辐射度量学、BxDF、蒙特卡洛三者统一为可求解的系统">光传输方程</Term>解决了「如何把一切串起来」的问题。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：物理基础回顾">辐射度量学定义了 radiance 等物理量，BxDF 描述了材料如何改变光的 radiance。这两者是渲染方程的物理基础。</Step>
+<Step title="第二步：求解引擎回顾">
+渲染方程是高维递归积分，蒙特卡洛积分是唯一可行求解方法。路径追踪/BDPT/MLT 是不同求解策略，MIS 和重要性采样是降低方差的关键。
+<PbtFinalReviewDiagram />
+</Step>
+<Step title="第三步：工程实现回顾">BVH 加速求交，瓦片化并行渲染，采样器保证质量。系统架构把理论算法变成可运行的渲染器。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// PBRT 全书核心：一条光线的完整旅程
+Spectrum Li(Ray ray, Scene &scene, Sampler &sampler, int depth) {
+    // 1. 系统架构：BVH 加速求交
+    SurfaceInteraction si;
+    if (!scene.bvh.Intersect(ray, &si))
+        return scene.environmentLe(ray);  // 环境光
+    
+    // 2. 辐射度量学：自发光
+    Spectrum L = si.Le;
+    
+    // 3. BxDF + 蒙特卡洛：直接光照(MIS)
+    for (auto &light : scene.lights)
+        L += EstimateDirect(si, light, scene, sampler);  // MIS
+    
+    // 4. 光传输方程：间接光照(递归)
+    if (depth < maxDepth) {
+        auto [wi, f, pdf] = si.bsdf->Sample_f(ray.d, sampler);
+        Spectrum Li_indirect = Li(Ray(si.p, wi), scene, sampler, depth+1);
+        L += f * Li_indirect * abs(dot(si.n, wi)) / pdf;
+    }
+    
+    return L;  // radiance —— 辐射度量学的核心量
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：孤立学习各章而不串联。**
+PBRT 的五大板块不是独立章节，而是一条链：辐射度量学是词汇，BxDF 是语法，光传输方程是句子，蒙特卡洛是翻译方法，系统架构是印刷机。不串联就只看到碎片，看不到全貌。
+</Callout>
+
+<Callout type="trap">
+**误区：重理论轻实践。**
+PBRT 的每章都有 C++ 实现。只读公式不跑代码，会错过工程细节（如浮点精度、内存布局、并行同步）对渲染结果的影响。建议编译运行 pbrt-v4，修改参数观察效果。
+</Callout>
+
+<Exercises>
+**问题 1**：用一条光线的旅程串联全书五大板块。
+
+<Answer>
+1）相机模型：从像素生成光线（薄透镜、景深）。2）系统架构：BVH 加速求交，找到光线与场景的交点。3）BxDF：在交点查询材料的反射特性（Cook-Torrance DGF）。4）光传输方程：计算该点的出射 radiance = 自发光 + 直接光照 + 间接光照。5）蒙特卡洛：用随机采样（重要性采样、MIS、俄罗斯轮盘赌）求解光传输方程的积分。每个像素重复多次取平均，得到最终图像。
+</Answer>
+
+**问题 2**：PBRT 如何实现「物理正确」与「工程可行」的平衡？
+
+<Answer>
+物理正确性体现在：用辐射度量学定义光的能量，用光传输方程描述光的传播，用物理测量的 BxDF 数据描述材料，用无偏的蒙特卡洛方法求解。工程可行性体现在：用 BVH 把求交从 O(N) 降到 O(logN)，用瓦片化并行充分利用多核，用重要性采样和 MIS 在有限采样数下降低方差，用俄罗斯轮盘赌控制递归深度。两者平衡的关键是蒙特卡洛——它既保证无偏（物理正确），又支持自适应采样（工程可控）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="PBRT全书链">辐射度量学(词汇)→BxDF(语法)→光传输方程(句子)→蒙特卡洛(求解)→系统架构(工程)。</GlossaryItem>
+<GlossaryItem term="物理正确性">用辐射度量学、光传输方程、物理BxDF和无偏蒙特卡洛保证渲染结果可预测可验证。</GlossaryItem>
+<GlossaryItem term="工程可行性">用BVH加速、瓦片并行、重要性采样、MIS在有限资源下逼近物理正确。</GlossaryItem>
+<GlossaryItem term="光线的旅程">从相机生成→BVH求交→BxDF反射→光传输计算→蒙特卡洛采样，串联全书。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

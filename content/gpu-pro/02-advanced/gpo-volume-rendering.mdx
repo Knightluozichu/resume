@@ -1,0 +1,133 @@
+---
+title: "体积渲染"
+type: B
+section: "Shader 与 GPU 编程"
+order: 7
+description: "Ray Marching、体积光照与体积雾的原理与优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpoVolumeRenderingDiagram } from "@/components/mdx/gpu-pro/diagrams/gpo-volume-rendering";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述 Ray Marching 的步进采样流程
+- 能解释 Beer-Lambert 透射率公式和参与介质散射
+- 能列出体积渲染的性能优化策略
+- 能回答：Froxel 分块和时间复用如何优化体积雾
+</Objectives>
+
+## 直觉引入
+
+想象你在浓雾中看一盏灯。灯光穿过雾气时被散射和吸收——越远越暗，雾气本身也被照亮——这就是体积渲染。Ray Marching 就是从你的眼睛沿视线方向「一步步走」穿过雾气，每一步采样雾的密度和光照，累积散射和吸收，最终得到这个像素的颜色和透明度。
+
+## 概念讲解
+
+### 体积渲染技术
+
+<GpoVolumeRenderingDiagram />
+
+- <Term def="Ray Marching 沿光线方向按固定步长逐步采样体积数据，累积密度、散射光和透射率">Ray Marching</Term>：体积渲染核心
+- <Term def="Beer-Lambert 定律描述光穿过参与介质的衰减：T = exp(-sigma * d)">Beer-Lambert</Term>：透射率
+- <Term def="参与介质（Participating Media）是光在其中被散射和吸收的介质，如雾、云、烟">参与介质</Term>：体积散射
+- <Term def="Froxel（Frustum Voxel）将视锥体分块为 3D 网格，逐格计算体积光照">Froxel</Term>：体积雾加速
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Ray Marching">从相机出发沿像素方向步进，每步采样 3D 密度纹理，计算散射光（内散射 + 外散射 + 吸收 + 自发光），累积透射率。</Step>
+<Step title="第二步：体积光照方程">
+L = integral[Scattering(Li * phase) - Absorption(L) + Emission] * transmittance dt。Phase 函数（Henyey-Greenstein）控制散射方向性。
+<GpoVolumeRenderingDiagram />
+</Step>
+<Step title="第三步：优化策略">Froxel 分块（降低分辨率）、时间复用（历史帧累积）、早期终止（alpha < 阈值跳出）、Jittering（抖动步长消除环带）。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 体积渲染 Ray Marching（简化）
+float4 VolumetricRayMarch(float3 rayOrigin, float3 rayDir, float maxDistance) {
+    float transmittance = 1.0;
+    float3 scatteredLight = 0;
+
+    int steps = 32; // PC 端 32 步，移动端 8 步
+    float stepSize = maxDistance / steps;
+    // Jittering：抖动起始位置消除环带
+    float jitter = interleavedGradientNoise(pixelCoord) * stepSize;
+
+    for (int i = 0; i < steps; i++) {
+        float3 pos = rayOrigin + rayDir * (i * stepSize + jitter);
+
+        // 采样密度（3D 纹理或程序化噪声）
+        float density = SampleDensity(pos);
+        if (density <= 0) continue;
+
+        // 计算光照散射
+        float3 lightDir = normalize(lightPos - pos);
+        float lightVisibility = ShadowRayMarch(pos, lightDir); // 光线到光源的透射率
+        float phase = HenyeyGreenstein(dot(rayDir, lightDir), g); // 相位函数
+        float3 inScattering = lightColor * lightVisibility * phase * density;
+
+        // 累积
+        float sigma = density * extinctionCoeff;
+        float3 sigmaS = density * scatteringCoeff;
+        scatteredLight += transmittance * sigmaS * inScattering * stepSize;
+        transmittance *= exp(-sigma * stepSize);
+
+        // 早期终止
+        if (transmittance < 0.01) break;
+    }
+
+    return float4(scatteredLight, transmittance);
+}
+
+// Henyey-Greenstein 相位函数
+float HenyeyGreenstein(float cosTheta, float g) {
+    float g2 = g * g;
+    return (1 - g2) / pow(1 + g2 - 2 * g * cosTheta, 1.5) / (4 * PI);
+}
+
+// Froxel 体积雾（简化）
+// 将视锥体分为 WxHxD 的 3D 网格
+// Compute Shader 逐 Froxel 计算体积光照，存入 3D 纹理
+// 渲染时根据像素位置采样 3D 纹理（一次纹理查找替代 Ray March）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Ray Marching 步数越多越好。**
+每步采样密度和光照（含阴影 Ray March），32 步 = 32 次密度采样 + 32 次光照采样。4K 分辨率下 32 步 = 800 万次采样/帧。步数翻倍帧率减半。应配合 Jittering（抖动起始位置）+ 时间复用（TAA 混合历史帧），用 8 步达到 32 步的视觉质量。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视环带伪影（Banding）。**
+固定步长 Ray March 在密度梯度变化处产生等距环带——视觉上像等高线。解决方法：1) Jittering——每像素随机偏移起始位置（interleaved gradient noise），配合 TAA 在时间域消除噪点；2) 增加步数（治标不治本）；3) 在采样间做插值（而非阶梯式）。Jittering + TAA 是标准方案。
+</Callout>
+
+<Exercises>
+**问题 1**：Ray Marching 的流程是什么？体积渲染方程包含哪些项？
+
+<Answer>
+Ray Marching 从相机出发沿像素方向按步长逐步前进，每步采样体积密度并计算光照，累积散射光和透射率。体积渲染方程：L = integral[Scattering(Li * phase) - Absorption(L) + Emission] * transmittance dt。包含：1) Scattering（内散射）——光被介质散射到视线方向，由入射光 Li、相位函数 phase 和密度决定；2) Absorption（吸收）——光被介质吸收衰减；3) Emission（自发光）——介质自身发光（如火焰）；4) transmittance（透射率）——从相机到当前步的累积透射率，用 Beer-Lambert 定律 T = exp(-sigma * d) 计算。
+</Answer>
+
+**问题 2**：Froxel 分块和时间复用如何优化体积雾？
+
+<Answer>
+Froxel 分块：将视锥体分为 WxHxD 的 3D 网格（如 160x90x64），在 Compute Shader 中逐 Froxel 计算体积光照（Ray March），结果存入 3D 纹理。渲染时每个像素根据位置采样 3D 纹理——一次纹理查找替代逐像素 Ray March，从百万次采样降到 WxHxD 次（如 92 万→160x90x64=92 万次，但分摊到全屏只需 1 次采样/像素）。时间复用：每帧只计算一部分 Froxel（如 1/4），其余用历史帧结果，4 帧完成全量更新。配合 Jittering 和 TAA 在时间域消除噪点，用 1/4 计算量达到全量质量。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Ray Marching">沿光线方向逐步采样体积数据，累积密度、散射光和透射率。</GlossaryItem>
+<GlossaryItem term="Beer-Lambert 定律">光穿过参与介质的衰减公式：T = exp(-sigma * d)。</GlossaryItem>
+<GlossaryItem term="参与介质">光在其中被散射和吸收的介质，如雾、云、烟。</GlossaryItem>
+<GlossaryItem term="Froxel">Frustum Voxel，将视锥体分块为 3D 网格逐格计算体积光照的加速结构。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 系列" adaptedUrl="https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques/p/book/9781498742535" />

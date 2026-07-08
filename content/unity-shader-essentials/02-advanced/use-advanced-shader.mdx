@@ -1,0 +1,119 @@
+---
+title: "高级 Shader 技术"
+type: B
+section: "Shader 与 GPU 编程"
+order: 8
+description: "程序化纹理、噪声、置换——Shader的进阶应用"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { UseAdvancedShaderDiagram } from "@/components/mdx/unity-shader-essentials/diagrams/use-advanced-shader";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释程序化纹理的概念和优势
+- 能实现基本的噪声函数(Perlin/Value)
+- 能描述置换贴图(Displacement)和视差贴图(Parallax)的区别
+- 能回答Shader在GPU Instancing中的作用？
+</Objectives>
+
+## 直觉引入
+
+想象你不画贴图，而是用数学公式「算」出纹理。木纹、大理石、火焰、云彩——这些自然界中随机但有规律的图案，可以用噪声函数生成。这就是程序化纹理——用代码而非图片生成纹理。
+
+高级Shader技术还包括视差贴图（用纹理模拟几何凹凸）、置换贴图（用纹理真正改变顶点位置）、GPU Instancing（用一次Draw Call绘制大量相同物体）。这些技术让Shader从「贴图+光照」进化到「程序化生成+几何变形+批量渲染」。
+
+## 概念讲解
+
+### 高级Shader技术
+
+<UseAdvancedShaderDiagram />
+
+<Term def="程序化纹理(Procedural Texture)用数学函数而非图片生成纹理，无需存储空间且分辨率无关">程序化纹理</Term>用算法代替图片。
+
+<Term def="噪声函数(Noise Function)生成伪随机但平滑的值，Perlin噪声和Value噪声最常用">噪声函数</Term>是程序化纹理的基础。
+
+<Term def="视差贴图(Parallax Mapping)用高度纹理在片元着色器中偏移UV，模拟凹凸效果">视差贴图</Term>不改变几何，只偏移纹理采样。
+
+<Term def="GPU Instancing用一次Draw Call绘制多个相同网格但不同变换的物体">GPU Instancing</Term>大幅减少Draw Call。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：程序化纹理与噪声">Perlin噪声：在网格点生成随机梯度，插值得到平滑噪声。叠加多个频率(octaves)得到分形噪声。可用于生成云、地形、木纹等自然纹理。优势：分辨率无关、无需存储、可参数化。</Step>
+<Step title="第二步：视差与置换">
+视差贴图：用高度图偏移UV采样，模拟视角变化时的凹凸感（假的，不改几何）。置换贴图：在顶点着色器用高度图真正移动顶点位置（真的改几何，需高面数模型）。
+<UseAdvancedShaderDiagram />
+</Step>
+<Step title="第三步：GPU Instancing">GPU Instancing：一次Draw Call提交一个网格+多个变换矩阵，GPU并行绘制所有实例。需Shader支持UNITY_SETUP_INSTANCE_ID。适合森林(树)、草地(草)、粒子(雨)等大量重复物体。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 1. 程序化噪声(简单Value噪声)
+float hash(float2 p) {
+    return frac(sin(dot(p, float2(127.1, 311.7))) * 43758.5453);
+}
+
+float noise(float2 uv) {
+    float2 i = floor(uv);
+    float2 f = frac(uv);
+    f = f * f * (3 - 2 * f);  // 平滑插值
+    float a = hash(i);
+    float b = hash(i + float2(1, 0));
+    float c = hash(i + float2(0, 1));
+    float d = hash(i + float2(1, 1));
+    return lerp(lerp(a, b, f.x), lerp(c, d, f.x), f.y);
+}
+
+// 2. 视差贴图
+float2 parallaxUV(float2 uv, float3 viewDir) {
+    float height = tex2D(_HeightMap, uv).r;
+    return uv - viewDir.xy * height * _ParallaxScale;
+}
+
+// 3. GPU Instancing
+#pragma multi_compile_instancing
+UNITY_INSTANCING_BUFFER_START(Props)
+    UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
+UNITY_INSTANCING_BUFFER_END(Props)
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为程序化纹理总是比图片纹理好。**
+视差贴图只在片元着色器偏移UV，不改几何——边缘仍是平的，从侧面看没有真正的凹凸。置换贴图在顶点着色器移动顶点位置，真改几何——边缘有真正凹凸，但需要高面数模型才有效果。
+</Callout>
+
+<Callout type="trap">
+**误区：视差贴图等于置换贴图。**
+视差贴图在片元着色器偏移UV采样位置，不改几何——边缘轮廓仍是平面，侧面看无凹凸。置换贴图在顶点着色器用高度图移动顶点，真改几何——边缘有真正凹凸，但需高面数模型(否则顶点不够密无法表现细节)。视差是「视觉欺骗」，置换是「物理改变」。
+</Callout>
+
+<Exercises>
+**问题 1**：程序化纹理的优势和劣势是什么？
+
+<Answer>
+视差贴图在片元着色器用高度图偏移UV采样位置——模拟视角变化时纹理的「视差」效果，看起来有凹凸但不改几何。边缘轮廓仍是平面，侧面看无凹凸。开销低(片元级)。置换贴图在顶点着色器用高度图移动顶点位置——真正改变几何形状。边缘有真正凹凸，侧面看也有。但需要高面数模型(顶点足够密才能表现细节)，开销高(顶点级，需曲面细分)。
+</Answer>
+
+**问题 2**：视差贴图和置换贴图有什么区别？
+
+<Answer>
+视差贴图在片元着色器偏移UV，不改几何，边缘平面，开销低。置换贴图在顶点着色器移动顶点，真改几何，边缘有凹凸，需高面数模型+曲面细分，开销高。视差是视觉欺骗，置换是物理改变。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term='程序化纹理'>用数学函数生成纹理，分辨率无关且无需存储，Perlin/Value噪声是基础。</GlossaryItem>
+<GlossaryItem term='噪声函数'>生成伪随机但平滑值的函数，Perlin噪声最常用，叠加octaves得分形噪声。</GlossaryItem>
+<GlossaryItem term='视差贴图'>用高度图在片元着色器偏移UV模拟凹凸，不改几何，开销低但边缘假。</GlossaryItem>
+<GlossaryItem term='GPU Instancing'>一次Draw Call绘制多个相同网格不同变换的物体，大幅减少Draw Call数量。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity Shader 入门精要" adaptedUrl="https://book.douban.com/subject/26839416/" />

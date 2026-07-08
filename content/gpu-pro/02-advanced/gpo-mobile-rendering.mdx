@@ -1,0 +1,122 @@
+---
+title: "移动端渲染优化"
+type: B
+section: "Shader 与 GPU 编程"
+order: 6
+description: "TBR 架构、带宽优化与着色器精简策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GpoMobileRenderingDiagram } from "@/components/mdx/gpu-pro/diagrams/gpo-mobile-rendering";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述 TBR（Tile-Based Rendering）架构的工作原理
+- 能解释移动端带宽瓶颈与 PC 端计算瓶颈的差异
+- 能列出移动端着色器精简策略
+- 能回答：为什么移动端优先减少 RT 数量和 Blit 次数
+</Objectives>
+
+## 直觉引入
+
+PC GPU 像大型仓库——一次性看到所有货架（IMR 立即模式），取货快但来回搬运费油（带宽大）。移动 GPU 像分拣快递——把仓库分成小格子（Tile），逐格处理（TBR），在格内用临时货架（片上缓存）减少来回搬运。移动端优化的核心就是「减少搬运」——减少 RT 读写次数。
+
+## 概念讲解
+
+### 移动端渲染架构
+
+<GpoMobileRenderingDiagram />
+
+- <Term def="TBR（Tile-Based Rendering）将屏幕分成小块 Tile，逐 Tile 渲染，利用片上缓存减少带宽">TBR</Term>：移动 GPU 标准架构
+- <Term def="TBDR（Tile-Based Deferred Rendering）在 TBR 基础上延迟像素着色，跳过被遮挡的片元">TBDR</Term>：PowerVR/Apple GPU
+- <Term def="带宽（Bandwidth）是 GPU 读写显存的速率，移动端的最大性能瓶颈">带宽</Term>：移动端核心瓶颈
+- <Term def="half 精度是 16 位浮点数，移动 GPU 的 half 吞吐量是 float 的 2 倍">half 精度</Term>：移动端性能利器
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：理解 TBR">屏幕分 Tile（如 16x16 像素），逐 Tile 执行全部渲染管线（几何→光栅→着色），片上缓存（Tile Memory）暂存 RT 避免频繁读写显存。</Step>
+<Step title="第二步：带宽优化">
+减少 RT 数量（延迟渲染 G-Buffer 在 TBR 下增加 Tile 内存压力）、降低 RT 分辨率、ASTC 纹理压缩、避免 GPU 回读。
+<GpoMobileRenderingDiagram />
+</Step>
+<Step title="第三步：着色器精简">用 half 替代 float（吞吐量翻倍）、减少分支（移动 GPU 分支惩罚大）、预计算 LUT、简化 BRDF（如用 Blinn-Phong 近似 Cook-Torrance）。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 移动端着色器优化示例
+
+// 差：全 float 精度 + 复杂分支
+float3 BadMobileShader(float3 pos, float3 normal) {
+    float3 color = 0;
+    for (int i = 0; i < 8; i++) {       // float 精度
+        if (lights[i].type == DIRECTIONAL) {  // 动态分支
+            color += CookTorranceBRDF(pos, normal, lights[i]); // 完整 BRDF
+        } else if (lights[i].type == POINT) {
+            color += PointLightBRDF(pos, normal, lights[i]);
+        }
+    }
+    return color;
+}
+
+// 好：half 精度 + 简化计算 + LUT
+half3 GoodMobileShader(half3 pos, half3 normal) {
+    half3 color = 0;
+    // 主光：简化 BRDF（用 LUT 替代 GGX 积分）
+    half3 mainLight = SimpleBRDF_LUT(pos, normal, mainLightDir);
+    color += mainLight;
+    // 附加光：Blinn-Phong 近似（远比 Cook-Torrance 轻量）
+    for (int i = 0; i < 2; i++) {  // 移动端限制 2 个附加光
+        half3 lightDir = normalize(lights[i].pos - pos);
+        half NdotL = max(dot(normal, lightDir), 0);
+        half3 H = normalize(lightDir + viewDir);
+        half spec = pow(max(dot(normal, H), 0), 32); // Blinn-Phong
+        color += (diffuse * NdotL + specular * spec) * lights[i].color;
+    }
+    return color;
+}
+
+// 移动端 RT 优化：减少 MRT 数量
+// 差：3 张 MRT（albedo + normal + material）= 3x 带宽
+// 好：1 张 RT（albedo），法线从深度重建，材质参数硬编码
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把 PC 端的延迟渲染直接搬到移动端。**
+延迟渲染需要 3-4 张 G-Buffer RT，在 TBR 架构下每张 RT 占用 Tile Memory。多张 RT 会超出 Tile Memory 容量导致溢出到显存（Tile Memory Spill），带宽暴增。移动端应优先用 Forward+ 或 Tile-Based Deferred（G-Buffer 在 Tile 内完成光照不写出）。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视 half 精度的性能差异。**
+移动 GPU（Mali/Adreno/PowerVR）的 half ALU 吞吐量是 float 的 2 倍，且 half 寄存器占用减半。全 float Shader 在移动端的帧率可能比 half 版本低 30-50%。应在所有非位置/深度计算中使用 half，只在必要时用 float。
+</Callout>
+
+<Exercises>
+**问题 1**：TBR 的工作原理是什么？为什么能减少带宽？
+
+<Answer>
+TBR 将屏幕分成小块 Tile（如 16x16 或 32x32 像素），逐 Tile 执行完整渲染管线（几何处理 → 光栅化 → 像素着色）。每个 Tile 在片上缓存（Tile Memory / On-Chip SRAM）中暂存渲染目标（Color/Depth RT），Tile 内的读写不经过显存。完成一个 Tile 后将结果写回显存，再处理下一个 Tile。减少带宽的原因：1) Tile 内的 G-Buffer 读写在片上缓存完成（如延迟渲染光照 Pass 读 G-Buffer 不走显存）；2) 深度测试在 Tile 内完成，被遮挡片元不写出；3) 减少 RT 的全屏读写次数——只需最终写回一次。
+</Answer>
+
+**问题 2**：为什么移动端优先减少 RT 数量和 Blit 次数？
+
+<Answer>
+移动端的核心瓶颈是带宽而非计算量。每个 RT 的读写都消耗带宽：1 张 1080p RGBA8 RT 一次读写约 8MB。延迟渲染 3 张 G-Buffer + 光照 RT = 4 张 RT 读写 = 约 32MB/帧。加上后处理 Blit（每次读+写 2 张 RT），5 个后处理效果 = 约 80MB/帧。移动 GPU 带宽通常 10-20GB/s，32+80=112MB/帧在 60fps 下需 6.7GB/s，接近带宽上限。减少 RT 数量（用 Forward+ 替代延迟）和 Blit 次数（合并后处理、降分辨率渲染）直接降低带宽压力，是移动端最有效的优化手段。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="TBR">Tile-Based Rendering，将屏幕分块逐 Tile 渲染，利用片上缓存减少带宽。</GlossaryItem>
+<GlossaryItem term="TBDR">Tile-Based Deferred Rendering，TBR + 延迟着色，跳过被遮挡片元。</GlossaryItem>
+<GlossaryItem term="带宽">GPU 读写显存的速率，移动端渲染的最大性能瓶颈。</GlossaryItem>
+<GlossaryItem term="half 精度">16 位浮点数，移动 GPU 的 half 吞吐量是 float 的 2 倍。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 系列" adaptedUrl="https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques/p/book/9781498742535" />

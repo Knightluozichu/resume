@@ -1,0 +1,108 @@
+---
+title: "重要性采样"
+type: B
+section: "计算机图形学与渲染"
+order: 5
+description: "让采样分布匹配被积函数——降低蒙特卡洛方差的核心技术"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilImportanceSamplingDiagram } from "@/components/mdx/global-illumination/diagrams/gil-importance-sampling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出重要性采样的数学原理
+- 能解释BRDF采样和光源采样各自的优势
+- 能描述MIS如何组合多种采样策略
+- 能回答为什么最优采样分布是p∝|f|？
+</Objectives>
+
+## 直觉引入
+
+想象你要估算一个湖的面积，但湖的形状很不规则——中间宽两头窄。如果你均匀地在地图上扔飞镖，大部分飞镖落在湖外（低贡献区域），效率很低。但如果你知道湖的大致形状，往湖中心多扔、湖边缘少扔，同样的飞镖数就能得到更准确的估计。
+
+重要性采样就是这个思想——让采样分布匹配被积函数的形状，在高贡献区域多采样，低贡献区域少采样，用相同采样数得到更低方差的估计。
+
+## 概念讲解
+
+### 重要性采样原理
+
+<GilImportanceSamplingDiagram />
+
+<Term def="重要性采样通过让采样分布p(x)与被积函数f(x)形状匹配来降低蒙特卡洛方差">重要性采样</Term>的核心：方差最小当p∝|f|。
+
+<Term def="BRDF采样按BRDF分布采样方向，适合光泽/镜面表面">BRDF采样</Term>在强方向性材料上高效，但可能错过小光源。
+
+<Term def="光源采样按光源面积采样方向，适合小光源和直接光照">光源采样</Term>保证命中光源，但可能在BRDF贡献小的方向浪费采样。
+
+<Term def="多重重要性采样(MIS)加权组合多种采样策略，取各自最优部分">MIS</Term>是现代渲染器的标配技术。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：数学原理">蒙特卡洛估计量 F=(1/N)Σf(Xi)/p(Xi)。方差Var(F) = (1/N)∫f²/p dx - I²。当p∝|f|时∫f²/p dx最小，方差最小。</Step>
+<Step title="第二步：BRDF vs 光源采样">
+BRDF采样按材料反射分布选方向，光泽表面效率高但小光源噪声大。光源采样直接对光源采样，小光源效率高但光泽表面可能浪费。各有优劣。
+<GilImportanceSamplingDiagram />
+</Step>
+<Step title="第三步：MIS组合">MIS对两种采样策略各取部分采样，用启发式权重(如balance heuristic)组合。在BRDF擅长区域(光泽反射)权重偏向BRDF采样，在光源擅长区域(小光源直射)权重偏向光源采样，保证方差始终可控。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// MIS: 多重重要性采样
+Spectrum EstimateDirectMIS(SurfaceInteraction si, Light light) {
+    // 策略1: 光源采样
+    auto [wi1, Li, pdf1] = light.Sample_Li(si);
+    Spectrum L_light = BRDF(wi1) * Li * cos / pdf1;
+    
+    // 策略2: BRDF采样
+    auto [wi2, f, pdf2] = si.bsdf->Sample_f(wo);
+    Spectrum L_brdf = f * light.L(wi2) * cos / pdf2;
+    
+    // MIS权重 (balance heuristic)
+    float w1 = pdf1 / (pdf1 + pdf2);
+    float w2 = pdf2 / (pdf1 + pdf2);
+    
+    return w1 * L_light + w2 * L_brdf;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为重要性采样能消除所有噪声。**
+重要性采样降低方差但不能消除。即使p∝|f|，方差仍为(1/N)(∫|f|dx)²-I²，只是从高方差降到低方差。完全消除方差需要p∝|f|且∫|f|dx已知（通常不知道）。实际中重要性采样配合降噪使用。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解MIS权重的选择。**
+MIS权重不是简单的平均值。Balance heuristic w_i = n_i*p_i / Σ n_j*p_j 在理论上接近最优。Power heuristic在极窄分布时更优。错误的权重（如简单平均）在某些场景下方差反而比单一策略更差。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么最优采样分布是p(x)∝|f(x)|？推导过程是什么？
+
+<Answer>
+蒙特卡洛方差 Var = (1/N)∫(f²/p)dx - I²。要最小化Var，等价于最小化∫(f²/p)dx。用Cauchy-Schwarz不等式：(∫|f|dx)² ≤ (∫f²/p dx)(∫p dx) = ∫f²/p dx（因为∫p=1）。当且仅当p∝|f|时等号成立，此时∫f²/p dx = (∫|f|dx)²，方差最小为(1/N)(∫|f|dx)²-I²。所以p∝|f|是最优分布。
+</Answer>
+
+**问题 2**：MIS如何组合BRDF采样和光源采样？balance heuristic的权重公式是什么？
+
+<Answer>
+MIS对BRDF采样和光源采样各分配部分采样数(n_B和n_L)，对每个样本用权重组合。Balance heuristic权重：w_B = n_B*p_B / (n_B*p_B + n_L*p_L)，w_L = n_L*p_L / (n_B*p_B + n_L*p_L)。其中p_B和p_L是两种策略在相同方向上的概率密度。效果：在BRDF采样擅长的方向（p_B>>p_L）w_B接近1用BRDF结果；在光源采样擅长的方向（p_L>>p_B）w_L接近1用光源结果。保证方差始终不差于单一策略。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="重要性采样">让采样分布匹配被积函数形状以降低方差的蒙特卡洛技术，最优分布p正比于|f|。</GlossaryItem>
+<GlossaryItem term="BRDF采样">按BRDF分布采样方向，适合光泽/镜面表面但在小光源上噪声大。</GlossaryItem>
+<GlossaryItem term="光源采样">按光源面积采样方向，适合小光源和直接光照但在光泽表面可能浪费。</GlossaryItem>
+<GlossaryItem term="多重重要性采样(MIS)">加权组合多种采样策略，用balance heuristic取各自最优部分，保证方差可控。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />

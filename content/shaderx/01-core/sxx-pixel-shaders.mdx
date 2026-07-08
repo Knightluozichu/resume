@@ -1,0 +1,127 @@
+---
+title: "像素着色器技巧"
+type: B
+section: "Shader 与 GPU 编程"
+order: 2
+description: "像素着色器高级技巧：颜色操作、纹理混合与后处理基础"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { SxxPixelShadersDiagram } from "@/components/mdx/shaderx/diagrams/sxx-pixel-shaders";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释像素着色器的作用和与顶点着色器的数据流关系
+- 能实现纹理混合与多层叠加效果
+- 能使用像素着色器实现颜色校正和色调映射
+- 能理解像素着色器的性能特点与优化策略
+</Objectives>
+
+## 直觉引入
+
+想象你面前有一幅线稿（顶点着色器画好了轮廓），现在你要给它上色。像素着色器就是你的数字画笔——你可以为每个像素混合多种颜料（纹理混合），调整色调（颜色校正），甚至添加特效（发光、描边）。GPU 并行处理数百万个像素，让你实时完成这幅「画作」。
+
+关键洞察：像素着色器的核心能力是**逐像素控制最终颜色**。每个像素的颜色可以由纹理采样、光照计算、数学函数等多源数据混合而成，这种逐像素的自由度是实时图形效果的基础。
+
+## 概念讲解
+
+### 像素着色器核心技巧
+
+<SxxPixelShadersDiagram />
+
+<Term def="像素着色器是渲染管线的最终可编程阶段，决定每个像素的最终颜色">像素着色器</Term>的核心技巧包括：
+
+- <Term def="纹理混合将多张纹理按权重组合，实现地形过渡、细节叠加等效果">纹理混合</Term>：lerp、加法、乘法、遮罩混合
+- <Term def="颜色校正对像素颜色进行亮度、对比度、色相等调整">颜色校正</Term>：色调映射、LUT 查找、HSV 调整
+- <Term def="后处理基础在像素着色器中对渲染结果做全屏效果">后处理基础</Term>：模糊、锐化、辉光
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：纹理采样与混合">像素着色器最基本的操作是纹理采样：float4 color = tex2D(sampler, uv)。多个纹理通过 lerp 函数混合：finalColor = lerp(tex1, tex2, mask)。混合权重可以来自遮罩纹理、顶点颜色或数学函数。</Step>
+<Step title="第二步：颜色空间操作">
+理解 sRGB 和线性颜色空间的区别。光照计算必须在线性空间进行，显示前转换回 sRGB。颜色校正包括亮度调整（乘以系数）、对比度（以0.5为中心缩放）、色调偏移（HSV 旋转）。
+<SxxPixelShadersDiagram />
+</Step>
+<Step title="第三步：性能意识">像素着色器对每个像素执行，1920x1080 屏幕有200万像素。每多一次纹理采样或分支判断，性能开销乘以百万。优化原则：减少纹理采样数、避免动态分支、利用早期Z测试。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 像素着色器：多层纹理混合 + 颜色校正
+struct PSInput {
+    float4 position : SV_POSITION;
+    float3 normal   : NORMAL;
+    float2 uv       : TEXCOORD0;
+};
+
+Texture2D baseMap    : register(t0);
+Texture2D detailMap  : register(t1);
+Texture2D maskMap    : register(t2);
+SamplerState samLinear : register(s0);
+
+cbuffer PSConstants : register(b0) {
+    float brightness;
+    float contrast;
+    float saturation;
+    float3 tint;
+};
+
+float4 main(PSInput input) : SV_TARGET {
+    // 多层纹理混合
+    float4 baseColor  = baseMap.Sample(samLinear, input.uv);
+    float4 detail     = detailMap.Sample(samLinear, input.uv * 8.0); // 细节UV放大
+    float  mask       = maskMap.Sample(samLinear, input.uv).r;
+    
+    float4 color = lerp(baseColor, baseColor * detail * 2.0, mask);
+    
+    // 颜色校正
+    color.rgb *= brightness;                          // 亮度
+    color.rgb = (color.rgb - 0.5) * contrast + 0.5;   // 对比度
+    color.rgb = lerp(dot(color.rgb, float3(0.299, 0.587, 0.114)), color.rgb, saturation); // 饱和度
+    color.rgb *= tint;                                // 色调
+    
+    return color;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在 sRGB 空间做光照计算。**
+纹理通常以 sRGB 编码存储（非线性），如果直接用 sRGB 颜色做光照混合，结果会偏暗且不正确。必须先将 sRGB 转换到线性空间（pow(c, 2.2)），在线性空间做所有光照和混合计算，最后再转回 sRGB 输出。现代 API 支持硬件 sRGB 转换，应优先使用。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视像素着色器的性能开销。**
+像素着色器是性能瓶颈高发区——每多一个纹理采样，就多一次带宽访问；每多一个 if 分支，就可能产生 warp 发散。一个复杂的像素着色器在 1080p 分辨率下可能比简化版慢 5-10 倍。务必用 GPU Profiler 分析像素着色器的指令数和带宽占用，在高频区域（如全屏后处理）格外注意优化。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题 1**：纹理混合有哪些常见模式？各自适用于什么场景？
+
+<Answer>
+常见混合模式：1) lerp 线性插值——按权重混合两纹理，适用于地形过渡（草地到岩石）；2) 乘法（multiply）——颜色相乘，适用于细节纹理叠加（在基础色上增加表面细节）；3) 加法（add）——颜色相加，适用于发光效果叠加；4) 遮罩（mask）——用一张纹理的某通道作为混合权重，适用于局部效果控制（如伤痕只在特定区域）。选择依据：线性插值适合过渡，乘法适合增强细节，加法适合光效，遮罩适合精确控制区域。
+</Answer>
+
+**问题 2**：为什么光照计算必须在线性空间进行？在 sRGB 空间计算会出什么问题？
+
+<Answer>
+光照是物理过程，颜色在线性空间中按能量叠加。sRGB 是非线性编码（近似 gamma 2.2），用于适配显示器。在 sRGB 空间做光照会导致：1) 混合结果偏暗——因为 sRGB 编码使中间值被压低，两个颜色平均后比线性空间暗；2) 高光位置偏移——光照衰减在非线性空间变形，高光范围和强度不正确；3) 抗锯齿失真——边缘像素在非线性空间混合产生错误亮度。正确流程：采样时 sRGB→线性（或用硬件 sRGB 纹理），光照在线性空间计算，输出时线性→sRGB（或用硬件 sRGB Render Target）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="纹理混合">在像素着色器中将多张纹理按权重或规则组合，实现地形过渡、细节叠加等效果。</GlossaryItem>
+<GlossaryItem term="sRGB 空间">非线性的颜色编码空间（近似 gamma 2.2），用于适配显示器输出，光照计算不应在此空间进行。</GlossaryItem>
+<GlossaryItem term="颜色校正">对像素颜色进行亮度、对比度、饱和度、色调等调整，实现艺术化画面风格。</GlossaryItem>
+<GlossaryItem term="早期Z测试">GPU 在像素着色器执行前进行深度测试，被遮挡像素的着色器被跳过，是重要的性能优化机制。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="ShaderX 系列" adaptedUrl="https://www.realtimerendering.com/shaderx/" />

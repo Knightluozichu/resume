@@ -1,0 +1,121 @@
+---
+title: "顶点/片元着色器"
+type: B
+section: "Shader 与 GPU 编程"
+order: 3
+description: "从结构体到插值——编写完整的顶点片元Shader"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { UseVertexFragmentDiagram } from "@/components/mdx/unity-shader-essentials/diagrams/use-vertex-fragment";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能写出完整的顶点/片元着色器结构
+- 能解释顶点到片元的数据传递机制
+- 能使用Unity内置变量和宏
+- 能回答为什么需要语义绑定(semantic)？
+</Objectives>
+
+## 直觉引入
+
+想象一个工厂的两道工序。第一道（顶点着色器）接收原材料（顶点数据），加工后传递给第二道。第二道（片元着色器）接收半成品（插值后的数据），产出成品（像素颜色）。两道工序之间需要「传送带」传递中间数据——这就是v2f结构体。
+
+写顶点/片元Shader就是定义这个「传送带」上有什么数据，以及每道工序怎么处理这些数据。
+
+## 概念讲解
+
+### 顶点片元Shader结构
+
+<UseVertexFragmentDiagram />
+
+<Term def="appdata结构体定义从顶点缓冲传入顶点着色器的数据（位置、UV、法线等）">appdata</Term>是顶点着色器的输入。
+
+<Term def="v2f结构体定义从顶点着色器传递到片元着色器的数据（经过光栅化插值）">v2f</Term>是顶点到片元的传送带。
+
+<Term def="语义绑定(Semantic)用POSITION/TEXCOORD0/NORMAL等标记告诉GPU数据的用途">语义绑定</Term>确保数据正确路由。
+
+<Term def="Unity内置变量(如UnityObjectToClipPos/_WorldSpaceCameraPos等)提供常用计算和场景信息">Unity内置变量</Term>简化跨平台Shader编写。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：输入输出结构">顶点着色器接收appdata（顶点缓冲数据），输出v2f（插值数据）。片元着色器接收v2f，输出颜色。语义绑定(POSITION/TEXCOORD0等)标记每个变量的用途。</Step>
+<Step title="第二步：数据插值">
+光栅化对v2f中的数据做插值——三角形三个顶点的值在内部线性插值（透视校正）。UV、颜色、法线等都通过这种方式从顶点传递到片元。
+<UseVertexFragmentDiagram />
+</Step>
+<Step title="第三步：Unity内置">Unity提供大量内置变量和宏：UnityObjectToClipPos(MVP变换)、_WorldSpaceCameraPos(相机位置)、unity_WorldToWorld(世界矩阵)、UNITY_MATRIX_VP(视图投影矩阵)等。这些封装了跨平台差异。</Step>
+</Stepper>
+
+## 代码对照
+
+```hlsl
+// 完整顶点/片元着色器
+struct appdata {
+    float4 vertex : POSITION;    // 顶点位置
+    float2 uv : TEXCOORD0;       // 纹理坐标
+    float3 normal : NORMAL;       // 法线
+};
+
+struct v2f {
+    float4 pos : SV_POSITION;    // 裁剪空间位置(必须)
+    float2 uv : TEXCOORD0;       // 插值UV
+    float3 worldNormal : TEXCOORD1; // 世界空间法线
+};
+
+v2f vert(appdata v) {
+    v2f o;
+    o.pos = UnityObjectToClipPos(v.vertex);
+    o.uv = v.uv;
+    o.worldNormal = UnityObjectToWorldNormal(v.normal);
+    return o;
+}
+
+fixed4 frag(v2f i) : SV_Target {
+    fixed4 col = tex2D(_MainTex, i.uv);
+    float3 N = normalize(i.worldNormal);
+    float3 L = normalize(_WorldSpaceLightPos0.xyz);
+    float diff = max(0, dot(N, L));
+    col.rgb *= diff * _LightColor0.rgb;
+    return col;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：忘记SV_POSITION语义。**
+法线经光栅化插值后长度会变化，需在片元着色器中重新normalize。否则光照计算结果不正确。
+</Callout>
+
+<Callout type="trap">
+**误区：在片元着色器中使用未归一化的法线。**
+法线从顶点传递到片元经过插值，插值后向量长度改变（不再是单位向量）。在片元着色器中用法线做光照计算(dot(N,L))前必须normalize(N)。忘记normalize会导致光照不均匀——某些区域偏亮或偏暗。
+</Callout>
+
+<Exercises>
+**问题 1**：appdata和v2f结构体分别是什么？它们如何传递数据？
+
+<Answer>
+语义绑定是用POSITION/TEXCOORD0/NORMAL/SV_POSITION等标记告诉GPU每个变量的用途。需要它是因为：1)GPU需要知道哪些变量是顶点位置(SV_POSITION用于光栅化)；2)从顶点缓冲到appdata的映射(POSITION对应顶点位置属性)；3)从顶点到片元的插值标记(TEXCOORD0/TEXCOORD1标识可插值变量)。没有语义，GPU不知道如何路由数据。
+</Answer>
+
+**问题 2**：语义绑定(Semantic)是什么？为什么需要它？
+
+<Answer>
+语义绑定用POSITION/TEXCOORD0/NORMAL/SV_POSITION等标记变量用途。需要因为：1)GPU需知道哪个变量是裁剪空间位置(SV_POSITION用于光栅化)；2)顶点缓冲到appdata的映射(POSITION对应mesh顶点)；3)标记可插值变量(TEXCOORD0等)。SV_POSITION是强制语义，没有它GPU无法光栅化。TEXCOORD0/1/2...是通用插值语义，可传任意插值数据。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term='appdata'>定义从顶点缓冲传入顶点着色器的数据结构，包含位置/UV/法线等。</GlossaryItem>
+<GlossaryItem term='v2f'>定义从顶点着色器传递到片元着色器的数据结构，经光栅化插值。</GlossaryItem>
+<GlossaryItem term='语义绑定(Semantic)'>用POSITION/TEXCOORD0等标记变量用途，确保GPU正确路由数据。</GlossaryItem>
+<GlossaryItem term='Unity内置变量'>Unity提供的跨平台变量和宏，如UnityObjectToClipPos/_WorldSpaceLightPos0等。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity Shader 入门精要" adaptedUrl="https://book.douban.com/subject/26839416/" />

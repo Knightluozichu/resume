@@ -1,0 +1,117 @@
+---
+title: "积分器与采样器"
+type: B
+section: "计算机图形学与渲染"
+order: 7
+description: "路径追踪、双向路径追踪、MLM——求解渲染方程的算法"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PbtIntegratorsDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-integrators";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能解释路径追踪的基本算法流程
+- 能说出双向路径追踪(BDPT)的优势
+- 能描述 Metropolis 光线传输(MLT)的原理
+- 能回答为什么不同场景需要不同积分器？
+</Objectives>
+
+## 直觉引入
+
+想象你在黑暗的迷宫中找出口。路径追踪像随机走——每到一个路口随机选方向。BDPT 像从入口和出口同时出发，看哪两条路能接上。MLT 像「找到一个出口后，在附近探索更多出口」。
+
+积分器就是求解渲染方程的不同策略。不同场景的难点不同——焦散适合BDPT，难以采样的间接光适合MLT。PBRT 提供多种积分器让你按需选择。
+
+## 概念讲解
+
+### 积分器算法对比
+
+<PbtIntegratorsDiagram />
+
+<Term def="路径追踪(PT)从相机出发单向随机游走，是简单通用的积分器">路径追踪</Term>适合大多数场景，但对焦散等困难光路效率低。
+
+<Term def="双向路径追踪(BDPT)同时从光源和相机出发生成两条子路径，再连接它们">BDPT</Term>对焦散和小光源场景效率远超PT。
+
+<Term def="Metropolis光线传输(MLT)用马尔可夫链在路径空间中探索，找到一条好路径后在附近变异">MLT</Term>擅长难以采样的间接光路径。
+
+<Term def="多重重要性采样(MIS)组合多种采样策略的估计，取各自最优部分，避免方差爆炸">MIS</Term>是现代积分器的核心组件。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：路径追踪">最基础的积分器：从相机发射光线，每次交点随机选一个方向继续，直到命中光源。简单但某些光路效率极低。</Step>
+<Step title="第二步：双向路径追踪">
+BDPT 同时从光源和相机发射子路径，然后尝试连接两段子路径上的点。对焦散等困难光路效率大幅提升。
+<PbtIntegratorsDiagram />
+</Step>
+<Step title="第三步：MLT 与 MIS">MLT 找到一条贡献大的路径后，在其附近做局部变异探索更多类似路径。MIS 组合多种采样策略，自动选择最优权重。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 路径追踪核心循环
+Spectrum PathTracer::Li(Ray ray) {
+    Spectrum L(0), beta(1);
+    for (int bounces = 0; ; bounces++) {
+        SurfaceInteraction si;
+        if (!scene.Intersect(ray, &si)) {
+            L += beta * scene.Le(ray);
+            break;
+        }
+        
+        // 直接光照（MIS）
+        for (auto &light : scene.lights)
+            L += beta * EstimateDirect(si, light, sampler);
+        
+        // 间接光照：BRDF采样
+        auto [wi, f, pdf] = si.bsdf->Sample_f(ray.d, sampler);
+        beta *= f * abs(dot(n, wi)) / pdf;
+        
+        // 俄罗斯轮盘赌
+        if (bounces > 3 && beta.MaxComponent() < 0.1)
+            if (sampler.Get1D() < 0.5) break;
+            else beta /= 0.5;
+    }
+    return L;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为一种积分器可以通吃所有场景。**
+不同积分器各有擅长：PT 通用但对焦散差，BDPT 对焦散强但对大场景内存开销大，MLT 对困难间接光强但有局部收敛不均的问题。实际中应根据场景特征选择，甚至混合使用。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解 MIS 的重要性。**
+没有 MIS，当光源采样和BRDF采样一个有效一个无效时，方差会爆炸。MIS 通过加权组合两者，在各自擅长的区域取最优，使方差始终可控。现代渲染器几乎都默认使用 MIS。
+</Callout>
+
+<Exercises>
+**问题 1**：路径追踪的基本流程是什么？它的主要缺点是什么？
+
+<Answer>
+流程：从相机发射光线→求交→计算直接光照（采样光源）→按BRDF采样新方向→递归追踪间接光照→俄罗斯轮盘赌终止。主要缺点是对焦散（光经镜面反射到漫反射面）效率极低——从漫反射面按BRDF随机采样几乎不可能恰好命中镜面再到光源，导致大量光线浪费。
+</Answer>
+
+**问题 2**：BDPT 相比 PT 有什么优势？它如何解决焦散问题？
+
+<Answer>
+BDPT 同时从光源（光子路径）和相机（相机路径）生成两条子路径，然后尝试连接两段子路径上的每对点。对于焦散光路 L(S)D E，PT 需要从漫反射面随机采样到镜面再到光源（极低概率），BDPT 则从光源出发经镜面到达漫反射面（光子路径），再从相机到达漫反射面（相机路径），连接两者即可。这把「难以采样的单向路径」变成「两条容易采样的子路径的连接」，效率大幅提升。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="路径追踪(PT)">从相机出发单向随机游走求解渲染方程的积分器，简单通用但对焦散效率低。</GlossaryItem>
+<GlossaryItem term="双向路径追踪(BDPT)">从光源和相机同时生成子路径再连接，对焦散和小光源场景效率高。</GlossaryItem>
+<GlossaryItem term="Metropolis光线传输(MLT)">用马尔可夫链在路径空间局部变异探索，擅长困难间接光路径。</GlossaryItem>
+<GlossaryItem term="多重重要性采样(MIS)">加权组合多种采样策略，取各自最优部分，避免方差爆炸的核心技术。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />

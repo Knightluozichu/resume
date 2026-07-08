@@ -1,0 +1,107 @@
+---
+title: "直接光与间接光"
+type: B
+section: "计算机图形学与渲染"
+order: 1
+description: "光弹射的分类与计算——GI的概念基石"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GilDirectIndirectDiagram } from "@/components/mdx/global-illumination/diagrams/gil-direct-indirect";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分直接光照、间接光照、环境光照
+- 能解释为什么间接光照是真实感的关键
+- 能写出直接光照和间接光照的计算公式
+- 能回答色渗透(Color Bleeding)是如何产生的？
+</Objectives>
+
+## 直觉引入
+
+想象一个白色房间，一面墙是红色。阳光照到红墙，红墙反射红光。这些红光又照到旁边的白墙上，让白墙微微泛红——这就是色渗透。没有间接光照计算，红墙旁边的白墙就是纯白，看起来不自然。
+
+直接光回答「光源直接照到了哪里」，间接光回答「光弹射后又到了哪里」。两者之和才是最终看到的颜色。
+
+## 概念讲解
+
+### 直接光与间接光
+
+<GilDirectIndirectDiagram />
+
+<Term def="直接光照是光从光源出发经一次反射到达相机的光路">直接光照</Term>只需对光源积分，计算高效。
+
+<Term def="间接光照是光经两次或更多次反射后到达相机的光路">间接光照</Term>需要递归追踪，是GI计算的核心开销。
+
+<Term def="色渗透(Color Bleeding)是间接光的色彩传递效果——彩色表面的反射光给附近物体染上颜色">色渗透</Term>是间接光照最显著的视觉特征。
+
+<Term def="环境光遮蔽(AO)是间接光在角落和缝隙处减弱的效果，是GI最简单的近似">环境光遮蔽</Term>用低成本的近似模拟间接光衰减。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：直接光照">直接光照 = 光源到表面到相机，一次弹射。显式采样光源即可计算，效率高、噪声低。</Step>
+<Step title="第二步：间接光照">
+间接光照 = 光源到表面A到表面B到...到相机，多次弹射。需要递归追踪或预计算，是GI的核心开销。
+<GilDirectIndirectDiagram />
+</Step>
+<Step title="第三步：视觉特征">间接光产生色渗透（彩色反射光染到邻近物体）、环境光填充（阴影区域不纯黑）、接触阴影（AO在角落变暗）。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 直接光照 + 间接光照 = 全局光照
+Spectrum GI(SurfaceInteraction si) {
+    Spectrum L_direct(0), L_indirect(0);
+    
+    // 直接光照：采样光源
+    for (auto &light : scene.lights)
+        L_direct += EstimateDirect(si, light);
+    
+    // 间接光照：递归追踪反射光
+    auto [wi, f, pdf] = si.bsdf->Sample_f(wo);
+    Ray reflectRay(si.p, wi);
+    L_indirect = f * Li(reflectRay) * cos / pdf;
+    
+    return L_direct + L_indirect;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为环境光等于间接光照。**
+环境光是间接光的常数近似——假设间接光均匀来自四面八方。真实间接光有方向性（靠近红墙的方向偏红），环境光丢失了这种信息。AO是对环境光的改进——在角落减少环境光，但仍是粗糙近似。
+</Callout>
+
+<Callout type="trap">
+**误区：忽略色渗透的重要性。**
+色渗透是观众感知「真实」的关键线索。一个纯白场景如果有红色物体，旁边的白色表面应该微微泛红。缺少色渗透是「CG感」的常见来源——一切看起来太干净、太分离。
+</Callout>
+
+<Exercises>
+**问题 1**：直接光照和间接光照的区别是什么？如何计算？
+
+<Answer>
+直接光照是光从光源经一次反射到达相机，通过显式采样光源计算——对每个光源采样一个方向，检查遮挡，计算BRDF贡献。间接光照是光经两次或更多次反射到达相机，需要递归追踪——从当前表面按BRDF采样方向，追踪反射光线，其返回值就是间接光。直接光效率高（光源采样），间接光效率低（随机方向采样）。
+</Answer>
+
+**问题 2**：色渗透是如何产生的？为什么它是真实感的重要标志？
+
+<Answer>
+色渗透产生过程：白光照到红色表面→红表面吸收绿蓝光、反射红光→反射的红光照射到邻近的白色表面→白表面反射红光→相机看到白表面泛红。这是间接光照的自然结果。色渗透是真实感的重要标志因为它编码了场景中物体间的空间关系——只有相邻的物体才有色渗透，观众的潜意识用色渗透判断物体的距离和材质，缺少色渗透会让场景看起来「物体漂浮」而非「物体共处一室」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="直接光照">光从光源出发经一次反射到达相机的光路，显式采样光源高效计算。</GlossaryItem>
+<GlossaryItem term="间接光照">光经两次或更多次反射后到达相机的光路，需递归追踪，是GI核心开销。</GlossaryItem>
+<GlossaryItem term="色渗透(Color Bleeding)">彩色表面的反射光给附近物体染上颜色的间接光效果，是真实感关键线索。</GlossaryItem>
+<GlossaryItem term="环境光遮蔽(AO)">间接光在角落和缝隙处减弱的近似效果，是GI最简单最低成本的近似。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
