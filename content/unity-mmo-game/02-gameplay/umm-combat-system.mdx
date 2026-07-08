@@ -1,0 +1,184 @@
+---
+title: "战斗系统"
+type: C
+section: "网络游戏与服务器"
+order: 4
+description: "技能校验、伤害计算公式、范围检测（球形/扇形/矩形）、弹道同步——Unity MMO 战斗系统"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmmCombatSystemDiagram } from "@/components/mdx/unity-mmo-game/diagrams/umm-combat-system";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 MMO 战斗系统的完整管线：技能请求 → 服务器校验 → 范围检测 → 伤害计算 → 广播结果
+- 掌握伤害计算公式的各组成部分：基础攻击、技能倍率、防御减免、暴击、抗性
+- 掌握 Unity 中球形、扇形、矩形三种范围检测的实现方法
+- 理解弹道技能的同步策略：只同步生成和命中事件，客户端模拟飞行过程
+</Objectives>
+
+## 直觉引入
+
+想象你在 MMO 里释放一个火球术。你按下技能键（客户端发请求），服务器检查你能不能放（CD 好了吗、蓝够吗、距离够吗），检查通过后执行技能——找到火球范围内的敌人（范围检测），算出每个人扣多少血（伤害计算），然后把结果告诉范围内的所有玩家（AOI 广播）。客户端收到后播放火球飞行动画和爆炸特效。整个过程客户端不算伤害，服务器才是唯一的裁判。
+
+<UmmCombatSystemDiagram />
+
+## 战斗管线
+
+<Term def="战斗管线是 MMO 战斗系统从技能请求到结果广播的完整流程：客户端发请求 → 服务器校验 → 执行逻辑 → 范围检测 → 伤害计算 → AOI 广播。">战斗管线</Term>的每个环节都在服务器执行，客户端只负责发请求和播表现：
+
+```csharp
+// 服务器端：技能处理管线
+public void HandleCastSkill(Connection conn, CastSkillReq req) {
+    var caster = GetPlayer(conn.PlayerId);
+
+    // 1. 校验阶段
+    if (!ValidateSkill(caster, req))
+        return;  // CD/蓝量/射程/状态不满足，静默拒绝或回错误码
+
+    // 2. 执行阶段：扣除蓝量、进入技能 CD
+    caster.MP -= skillConfig.ManaCost;
+    caster.SetSkillCD(req.SkillId, Time.Now);
+
+    // 3. 范围检测：找到受影响的实体
+    var targets = FindTargetsInArea(caster.Position, skillConfig);
+
+    // 4. 伤害计算：对每个目标算伤害
+    foreach (var target in targets) {
+        int damage = CalcDamage(caster, target, skillConfig);
+        target.HP -= damage;
+        // 5. 广播伤害结果给 AOI 范围内所有客户端
+        Broadcast(new DamageNotify {
+            TargetId = target.Id,
+            Damage = damage,
+            SkillId = req.SkillId
+        });
+    }
+}
+```
+
+## 伤害计算
+
+伤害公式是战斗系统的数学核心，包含多个修正层：
+
+```csharp
+// 伤害计算公式
+public int CalcDamage(Character caster, Character target, SkillConfig skill) {
+    // 基础伤害 = 攻击力 * 技能倍率 - 防御力 * 防御系数
+    int baseDamage = (int)(caster.FinalATK * skill.DamageRatio
+                         - target.FinalDEF * 0.5f);
+    baseDamage = Math.Max(1, baseDamage);  // 保底 1 点伤害
+
+    // 暴击判定
+    float critMult = RandomCheck(caster.CritRate) ? caster.CritDamage : 1.0f;
+
+    // 属性抗性（如火抗减免火系伤害）
+    float resistMult = 1.0f - target.GetResistance(skill.Element) / 100f;
+
+    // 随机浮动 ±10%
+    float randomMult = Random.Range(0.9f, 1.1f);
+
+    // 最终伤害
+    int finalDamage = (int)(baseDamage * critMult * resistMult * randomMult);
+    return Math.Max(1, finalDamage);
+}
+```
+
+## 范围检测
+
+不同技能类型需要不同的范围检测算法：
+
+```csharp
+// 球形范围（如爆炸、光环）
+public List<Character> FindInSphere(Vector3 center, float radius) {
+    var hits = Physics.OverlapSphere(center, radius, enemyLayer);
+    return hits.Select(h => h.GetComponent<Character>()).ToList();
+}
+
+// 扇形范围（如顺劈、龙息）
+public List<Character> FindInSector(
+    Vector3 origin, Vector3 forward, float radius, float halfAngle) {
+    var candidates = Physics.OverlapSphere(origin, radius, enemyLayer);
+    return candidates.Where(c => {
+        Vector3 toTarget = (c.transform.position - origin).normalized;
+        // 距离已由 OverlapSphere 保证，只需检查角度
+        return Vector3.Angle(forward, toTarget) <= halfAngle;
+    }).Select(c => c.GetComponent<Character>()).ToList();
+}
+
+// 矩形范围（如直线冲锋）
+public List<Character> FindInBox(Vector3 center, Vector3 forward,
+    float length, float width) {
+    // 用 Physics.OverlapBox 或 Bounds.Intersects
+    var box = new Bounds(center + forward * length / 2,
+        new Vector3(width, 5f, length));
+    return allEnemies.Where(e => box.Contains(e.Position)).ToList();
+}
+```
+
+## 弹道技能同步
+
+弹道技能（如火球术、箭矢）的飞行过程是高频位置更新，全量同步费带宽。常用策略是只同步「生成」和「命中」两个事件：
+
+```csharp
+// 服务器只发两个事件
+message ProjectileSpawnNotify {
+    int32 projectile_id = 1;
+    Vector3 start_pos = 2;
+    Vector3 direction = 3;
+    float speed = 4;
+    int32 skill_id = 5;
+}
+
+message ProjectileHitNotify {
+    int32 projectile_id = 1;
+    int32 target_id = 2;
+    int32 damage = 3;
+    Vector3 hit_pos = 4;  // 命中位置（用于校正）
+}
+
+// 客户端收到 Spawn 后自行模拟飞行
+public void OnProjectileSpawn(ProjectileSpawnNotify notify) {
+    var projectile = SpawnProjectile(notify.StartPos);
+    projectile.Velocity = notify.Direction * notify.Speed;
+    // 客户端自己飞，不需要服务器逐帧同步位置
+}
+
+// 客户端收到 Hit 后播放命中特效并校正位置
+public void OnProjectileHit(ProjectileHitNotify notify) {
+    var projectile = GetProjectile(notify.ProjectileId);
+    projectile.transform.position = notify.HitPos;  // 服务器校正
+    PlayHitEffect(notify.HitPos);
+    DespawnProjectile(projectile);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在客户端计算伤害然后发给服务器。** 如果客户端算伤害，玩家可以修改伤害值为 99999 实现秒杀。正确做法是客户端只发 CastSkillReq（我要放技能），服务器计算伤害后广播 DamageNotify（谁扣了多少血）。客户端收到后才播放扣血动画和数字。即使客户端篡改，也只是自己看到假象，不影响服务器和其他玩家。
+</Callout>
+
+<Exercises>
+**问题 1**：伤害计算公式通常包含哪些因素？
+
+<Answer>
+最终伤害 = (攻击方ATK * 技能倍率 - 防守方DEF * 防御系数) * 暴击倍数 * 抗性系数 * 随机浮动。ATK 含基础+装备+Buff，技能倍率来自技能表，DEF 含基础+装备+Buff，暴击由暴击率判定触发，抗性按属性克制减免，随机浮动 ±10%。所有计算在服务器执行。
+</Answer>
+
+**问题 2**：弹道技能的飞行过程如何同步？
+
+<Answer>
+服务器只同步「生成」和「命中」两个事件。客户端收到生成事件后用起点+方向+速度自行模拟弹道飞行轨迹（匀速运动）。命中时收到服务器的 ProjectileHitNotify，播放命中特效并用服务器的命中位置校正。如果客户端模拟偏差大（如目标移动了），服务器在命中时纠正最终位置。这样避免了逐帧同步位置的高带宽消耗。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="战斗管线">从技能请求到结果广播的完整流程：客户端发请求 → 服务器校验 → 执行逻辑 → 范围检测 → 伤害计算 → AOI 广播。</GlossaryItem>
+<GlossaryItem term="伤害公式">最终伤害 = (ATK * 技能倍率 - DEF * 防御系数) * 暴击倍数 * 抗性系数 * 随机浮动。所有计算在服务器执行。</GlossaryItem>
+<GlossaryItem term="弹道同步">只同步弹道的「生成」和「命中」事件，客户端自行模拟飞行过程。避免高频位置同步的带宽消耗。</GlossaryItem>
+<GlossaryItem term="范围检测">根据技能形状（球形/扇形/矩形）找到受影响的目标实体。球形用 OverlapSphere，扇形加角度判定，矩形用 Bounds。</GlossaryItem>
+</Glossary>

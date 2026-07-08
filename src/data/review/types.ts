@@ -1388,7 +1388,17 @@ export type ReviewChapterSlug =
   | "gsp-cache-strategy"
   | "gsp-load-balance"
   | "gsp-security-anticheat"
-  | "gsp-final-review";
+  | "gsp-final-review"
+  | "umm-learning-map"
+  | "umm-network-client"
+  | "umm-state-sync"
+  | "umm-character-system"
+  | "umm-combat-system"
+  | "umm-scene-streaming"
+  | "umm-aoi-system"
+  | "umm-optimization"
+  | "umm-deployment"
+  | "umm-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2781,6 +2791,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gsp-load-balance": "负载均衡与扩容",
   "gsp-security-anticheat": "安全与反作弊",
   "gsp-final-review": "全书总复习",
+  "umm-learning-map": "全书学习地图",
+  "umm-network-client": "网络客户端架构",
+  "umm-state-sync": "状态同步与帧同步",
+  "umm-character-system": "角色系统",
+  "umm-combat-system": "战斗系统",
+  "umm-scene-streaming": "场景流式加载",
+  "umm-aoi-system": "AOI 兴趣区域管理",
+  "umm-optimization": "网游性能优化",
+  "umm-deployment": "部署与运维",
+  "umm-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

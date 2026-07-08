@@ -1,0 +1,111 @@
+---
+title: "状态同步与帧同步"
+type: C
+section: "网络游戏与服务器"
+order: 2
+description: "状态同步 vs 帧同步的架构对比、增量同步、浮点确定性与同步模式选型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmmStateSyncDiagram } from "@/components/mdx/unity-mmo-game/diagrams/umm-state-sync";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解状态同步与帧同步的本质区别，能根据游戏类型选择合适的同步模式
+- 掌握增量同步的原理，理解为什么它比全量同步更省带宽
+- 理解帧同步的浮点确定性要求及 Unity 中的解决方案
+- 掌握客户端预测与服务器校正的配合机制
+</Objectives>
+
+## 直觉引入
+
+想象两个教室的学生在做同一道数学题。状态同步就像老师在 A 教室算完答案后，把最终结果写在黑板上，B 教室的学生照抄就行——每个教室不需要自己算，但老师很忙。帧同步就像老师只告诉每个教室「第一步加 5，第二步乘 3」，每个教室自己算——老师轻松了，但必须保证每个教室的计算规则完全一样（确定性），否则答案就不同了。
+
+<UmmStateSyncDiagram />
+
+## 两种同步模式
+
+<Term def="状态同步是服务器计算全部游戏逻辑后，把结果状态（位置、HP、Buff）广播给客户端，客户端直接渲染。服务器是唯一权威。">状态同步</Term>是 MMO 最常用的模式。客户端发操作请求，服务器验证后执行逻辑，把变化后的状态广播给视野内的客户端。优点是反作弊容易（服务器说了算）、断线恢复快（直接下发当前状态）。缺点是服务器计算压力大、带宽消耗大（每个状态变化都要广播）。
+
+<Term def="帧同步是客户端上传操作输入，服务器收集后按帧广播，每个客户端各自模拟演算，要求所有客户端产生完全相同的输出。">帧同步</Term>常用于 RTS 和格斗游戏。客户端上传每帧的操作（按键、摇杆），服务器收集所有操作打包成「操作帧」广播，每个客户端收到后用相同的逻辑模拟。优点是带宽小（只传操作不传状态）、可回放录像。缺点是浮点确定性难保证、断线需要追帧回放。
+
+## 增量同步
+
+状态同步中，如果每帧发送角色的所有属性（位置、旋转、HP、MP...），即使大部分属性没变，带宽浪费严重。增量同步只发送变化的字段：
+
+```csharp
+// 全量同步：每帧发送所有属性（浪费）
+message EntitySync {
+    int32 entity_id = 1;
+    Vector3 position = 2;    // 每帧都发
+    Vector3 rotation = 3;    // 每帧都发
+    int32 hp = 4;            // 没变也发
+    int32 mp = 5;            // 没变也发
+}
+
+// 增量同步：用 bitmask 标记哪些字段有效（省带宽）
+message EntityDelta {
+    int32 entity_id = 1;
+    uint32 dirty_mask = 2;   // bit0=position, bit1=rotation, bit2=hp, bit3=mp
+    optional Vector3 position = 3;  // 只有 dirty_mask bit0=1 时才有值
+    optional Vector3 rotation = 4;
+    optional int32 hp = 5;
+    optional int32 mp = 6;
+}
+// 角色只移动不受伤时：dirty_mask = 0b0001，只发 position，省 60%+ 带宽
+```
+
+## 帧同步的浮点确定性
+
+帧同步要求所有客户端对相同输入产生完全相同的输出。但浮点运算在不同 CPU 上可能有微小差异（如 `0.1 + 0.2` 的结果不统一），差异会累积放大导致不同步。Unity 中的解决方案：
+
+```csharp
+// 用定点数替代 float
+public struct Fixed64 {
+    private long rawValue;  // 实际值 = rawValue / SCALE
+    private const long SCALE = 10000;  // 精度 0.0001
+
+    public static Fixed64 FromFloat(float f) =>
+        new Fixed64 { rawValue = (long)(f * SCALE) };
+
+    public float ToFloat() => (float)rawValue / SCALE;
+
+    // 定点运算：确定性保证
+    public static Fixed64 operator +(Fixed64 a, Fixed64 b) =>
+        new Fixed64 { rawValue = a.rawValue + b.rawValue };
+}
+
+// 禁用 Unity Physics（浮点不确定），改用自写碰撞
+// 禁用 Time.deltaTime，用固定逻辑帧步长（如 66ms）
+// 随机数用固定种子 + 确定性算法（不能用 System.Random）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：MMO 用帧同步更省带宽，所以选帧同步。** 帧同步的浮点确定性在 Unity 中极难实现——Unity 的 Physics、Time.deltaTime、Shader 运算都依赖浮点，无法保证跨设备一致。MMO 角色属性复杂（装备、Buff、技能），确定性模拟成本极高。此外 MMO 需要频繁断线重连，帧同步要追帧回放，恢复时间长。MMO 几乎都用状态同步，帧同步适合单位多但逻辑简单的 RTS。
+</Callout>
+
+<Exercises>
+**问题 1**：状态同步和帧同步的核心区别是什么？
+
+<Answer>
+状态同步传「结果」：服务器计算所有逻辑，把最终状态广播给客户端渲染。帧同步传「输入」：客户端上传操作，服务器广播操作帧，每个客户端各自模拟。状态同步省客户端算力但费服务器算力和带宽；帧同步省服务器算力和带宽但要求客户端有确定性模拟能力。
+</Answer>
+
+**问题 2**：增量同步为什么比全量同步高效？
+
+<Answer>
+全量同步每帧发送所有属性，即使大部分没变。增量同步用 bitmask 标记哪些字段变化了，只发送变化的字段。角色移动时只发 position（省 60-80% 带宽），HP/MP 不变就不发。在 MMO 场景中属性多但变化少，增量同步的带宽节省非常显著。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="状态同步">服务器计算全部逻辑后广播结果状态（位置、HP、Buff），客户端直接渲染。服务器是唯一权威，反作弊容易、断线恢复快。</GlossaryItem>
+<GlossaryItem term="帧同步">客户端上传操作输入，服务器按帧广播，每个客户端各自模拟。要求浮点确定性，带宽小、可回放，但实现难度高。</GlossaryItem>
+<GlossaryItem term="增量同步">只发送变化的字段而非全量属性，用 bitmask 标记有效字段。在属性多但变化少的 MMO 场景下可节省 60-80% 带宽。</GlossaryItem>
+<GlossaryItem term="浮点确定性">帧同步要求所有客户端对相同输入产生完全相同输出。浮点运算跨 CPU 可能不一致，需用定点数替代。</GlossaryItem>
+</Glossary>

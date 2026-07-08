@@ -1,0 +1,149 @@
+---
+title: "网游性能优化"
+type: C
+section: "网络游戏与服务器"
+order: 7
+description: "对象池、Draw Call 合批、GC 控制、网络压缩——Unity MMO 性能优化三条线"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmmOptimizationDiagram } from "@/components/mdx/unity-mmo-game/diagrams/umm-optimization";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 MMO 性能优化的三条线：渲染优化、逻辑与内存优化、网络带宽优化
+- 理解对象池的原理与适用场景，能用对象池消除 GC Spike
+- 掌握 Draw Call 优化方法：SRP Batcher、LOD、遮挡剔除、GPU Instancing
+- 理解网络带宽优化策略：增量同步、位置量化、消息合并、AOI 裁剪
+</Objectives>
+
+## 直觉引入
+
+想象 MMO 是一条流水线。渲染是展示厅——要把画面画到屏幕上（60FPS），Draw Call 太多就像展厅门太窄，观众排队进不来。逻辑和内存是后厨——GC 就像临时工频繁被招来又解雇，每次交接都浪费时间，对象池就是雇长期工。网络是物流——每条消息都是一箱货，全量同步就像每箱都装所有商品，增量同步只装变化的部分。三条线要同时优化，木桶的短板决定帧率。
+
+<UmmOptimizationDiagram />
+
+## 三条优化线
+
+<Term def="MMO 性能优化的三条线：渲染优化（Draw Call/LOD/剔除）保证 60FPS、逻辑与内存优化（对象池/GC 控制）消除卡顿、网络带宽优化（增量同步/压缩）控制流量。">性能优化三条线</Term>互相关联但各有侧重。渲染瓶颈看 Profiler 的 Camera.Render 占比，逻辑瓶颈看 GC.Alloc 和 Scripts 占比，网络瓶颈看带宽监控。优化原则：先用 Profiler 量化瓶颈，再针对性优化——测量优先于猜测。
+
+## 对象池
+
+对象池预分配一批对象，用完放回池中复用，避免运行时 Instantiate/Destroy 的 GC 和内存分配：
+
+```csharp
+// 通用对象池
+public class ObjectPool<T> where T : new() {
+    private Stack<T> pool = new();
+    private int maxSize;
+
+    public ObjectPool(int initialSize, int maxSize = 100) {
+        this.maxSize = maxSize;
+        for (int i = 0; i < initialSize; i++)
+            pool.Push(new T());
+    }
+
+    public T Get() => pool.Count > 0 ? pool.Pop() : new T();
+
+    public void Return(T item) {
+        if (pool.Count < maxSize)
+            pool.Push(item);
+    }
+}
+
+// 特效对象池：避免每次播放特效都 Instantiate
+public class EffectPool : MonoBehaviour {
+    private ObjectPool<ParticleSystem> pool;
+
+    void Awake() {
+        pool = new ObjectPool<ParticleSystem>(20);  // 预分配 20 个
+    }
+
+    public void PlayEffect(Vector3 pos) {
+        var fx = pool.Get();
+        fx.transform.position = pos;
+        fx.Play();
+        // 延迟回收到池中
+        StartCoroutine(ReturnAfterDelay(fx, fx.main.duration));
+    }
+}
+```
+
+## Draw Call 优化
+
+Draw Call 是 CPU 向 GPU 提交绘制命令的次数。每次 Draw Call 都有 CPU 端开销（状态切换、矩阵设置），过多会导致 CPU 瓶颈：
+
+```csharp
+// SRP Batcher：相同 Shader 的材质自动合批（URP 内置）
+// 前提：材质用同一个 Shader，属性走 CBUFFER
+// 效果：100 个同 Shader 对象从 100 Draw Call 降到 1 次 SetPass + 100 次 Draw
+
+// LOD：远处用低精度模型
+[RequireComponent(typeof(LODGroup))]
+public class TreeLOD : MonoBehaviour {
+    void Start() {
+        var lodGroup = GetComponent<LODGroup>();
+        lodGroup.SetLODs(new LOD[] {
+            new LOD(0.6f, new Renderer[] { /* 高精度 */ }),  // 60% 屏幕占比以上
+            new LOD(0.3f, new Renderer[] { /* 中精度 */ }),  // 30%-60%
+            new LOD(0.05f, new Renderer[] { /* 低精度 */ }), // 5%-30%
+        });
+        lodGroup.RecalculateBounds();
+    }
+}
+
+// GPU Instancing：相同网格+材质的多个对象一次绘制
+// Material 上勾选 "Enable GPU Instancing" 即可
+// 适用于：树木、草地、石头等大量重复物体
+```
+
+## 网络带宽优化
+
+```csharp
+// 1. 位置量化：float (4B) → short (2B)
+// 世界 4096x4096，精度 0.1m → 0-40960 用 16 位整数表示
+short Quantize(float value) =>
+    (short)Mathf.Clamp(value * 10f, 0, 65535);
+// 3 轴从 12 字节降到 6 字节，省 50%
+
+// 2. 消息合并：一帧内的多条消息打包发送
+public void FlushFrameMessages() {
+    if (pendingMessages.Count == 0) return;
+    var batch = new BatchMessage { Messages = pendingMessages.ToList() };
+    Send(ProtobufCodec.Encode(batch));  // 一次发送
+    pendingMessages.Clear();
+}
+
+// 3. 增量同步：只发变化的字段（见状态同步章）
+// 4. AOI 裁剪：只广播视野内的实体（见 AOI 章）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：优化就是减少 Draw Call 数量。** Draw Call 只是性能的一个维度。如果瓶颈在 GC（内存分配），减少 Draw Call 没用；如果瓶颈在网络带宽，渲染优化也帮不上。优化前必须用 Profiler 量化瓶颈在哪——CPU 还是 GPU？渲染还是逻辑？本地还是网络？盲目减少 Draw Call 可能徒劳无功，甚至引入更复杂的问题。
+</Callout>
+
+<Exercises>
+**问题 1**：对象池解决什么问题？为什么不能用 Instantiate/Destroy？
+
+<Answer>
+对象池解决频繁创建销除导致的 GC Spike 和内存碎片。Instantiate 分配内存、Destroy 触发 GC 回收，大量频繁操作会导致帧率骤降。对象池预分配一批对象复用，避免运行时分配和 GC。主要用于子弹、特效、伤害数字、UI 列表项等高频创建销毁的对象。
+</Answer>
+
+**问题 2**：如何用 Profiler 定位性能瓶颈？
+
+<Answer>
+用 CPU Usage 模块看帧耗时分布：GC.Alloc 高查对象池和字符串拼接；Camera.Render 高查 Draw Call 数量和 Overdraw；Physics.Simulate 高查碰撞体数量；Scripts 高用 Deep Profile 定位具体函数。移动端额外看 Memory 的纹理内存。原则：先量化再优化，帧时间预算优先于绝对数字。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="对象池">预分配一批对象复用，避免运行时 Instantiate/Destroy 的 GC 和内存碎片。适用于子弹、特效等高频创建销毁的对象。</GlossaryItem>
+<GlossaryItem term="SRP Batcher">URP/HDRP 下的自动合批机制，相同 Shader 的材质在 GPU 端批量提交，减少 CPU 的 SetPassCall 开销。</GlossaryItem>
+<GlossaryItem term="位置量化">把 float 坐标压缩为 short 定点数，3 轴从 12 字节降到 6 字节，节省 50% 带宽。精度损失在可接受范围内。</GlossaryItem>
+<GlossaryItem term="GC Spike">垃圾回收导致的帧率骤降。通过对象池、避免字符串拼接、避免装箱来消除。</GlossaryItem>
+</Glossary>

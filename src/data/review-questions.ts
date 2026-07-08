@@ -1265,6 +1265,16 @@ import { gspCacheStrategyQuestions } from "./review/gsp-cache-strategy";
 import { gspLoadBalanceQuestions } from "./review/gsp-load-balance";
 import { gspSecurityAnticheatQuestions } from "./review/gsp-security-anticheat";
 import { gspFinalReviewQuestions } from "./review/gsp-final-review";
+import { ummLearningMapQuestions } from "./review/umm-learning-map";
+import { ummNetworkClientQuestions } from "./review/umm-network-client";
+import { ummStateSyncQuestions } from "./review/umm-state-sync";
+import { ummCharacterSystemQuestions } from "./review/umm-character-system";
+import { ummCombatSystemQuestions } from "./review/umm-combat-system";
+import { ummSceneStreamingQuestions } from "./review/umm-scene-streaming";
+import { ummAoiSystemQuestions } from "./review/umm-aoi-system";
+import { ummOptimizationQuestions } from "./review/umm-optimization";
+import { ummDeploymentQuestions } from "./review/umm-deployment";
+import { ummFinalReviewQuestions } from "./review/umm-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2561,6 +2571,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gspLoadBalanceQuestions,
   ...gspSecurityAnticheatQuestions,
   ...gspFinalReviewQuestions,
+  ...ummLearningMapQuestions,
+  ...ummNetworkClientQuestions,
+  ...ummStateSyncQuestions,
+  ...ummCharacterSystemQuestions,
+  ...ummCombatSystemQuestions,
+  ...ummSceneStreamingQuestions,
+  ...ummAoiSystemQuestions,
+  ...ummOptimizationQuestions,
+  ...ummDeploymentQuestions,
+  ...ummFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

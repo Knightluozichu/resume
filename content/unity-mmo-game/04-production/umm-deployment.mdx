@@ -1,0 +1,183 @@
+---
+title: "部署与运维"
+type: C
+section: "网络游戏与服务器"
+order: 8
+description: "分服架构、合服数据迁移、热更方案（Lua/HybridCLR）、灰度发布——Unity MMO 上线运维"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmmDeploymentDiagram } from "@/components/mdx/unity-mmo-game/diagrams/umm-deployment";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 MMO 分服架构的必要性：为什么不能所有玩家放一个服务器
+- 掌握合服流程：数据迁移、ID 冲突处理、重名规则
+- 理解 Unity 客户端热更方案的对比：Lua、ILRuntime、HybridCLR、AssetBundle
+- 掌握灰度发布策略：按区服灰度、按比例灰度、回滚机制
+</Objectives>
+
+## 直觉引入
+
+想象 MMO 是连锁酒店。分服就像每个城市的酒店独立运营——有独立的房间（数据库）和员工（服务器进程），互不干扰。合服就像两个城市的酒店合并——要重新编排房间号（ID 映射）、处理重名客人。热更就像不停业装修——客人在住的同时换家具修水管。灰度发布就像先在一个楼层试点新服务，没问题再全酒店推广。运维的核心不是不出问题，而是出了问题能快速恢复。
+
+<UmmDeploymentDiagram />
+
+## 分服架构
+
+<Term def="分服是把玩家按区服分配到独立的服务器进程，每个区服有独立的逻辑线程、数据库实例和网络端口，通过网关层统一入口。">分服</Term>是 MMO 的基础部署模式。不能全放一个服务器的原因：① 单机 CPU 和内存有上限，万人在线的逻辑计算超出单机能力；② 单点故障会导致全部玩家掉线；③ 不同地区玩家网络延迟差异大，分服可就近部署。
+
+```csharp
+// 网关层：统一入口，按区服路由
+public class Gateway {
+    private Dictionary<int, GameServer> serverByZone = new();
+
+    public void RouteMessage(Connection conn, byte[] data) {
+        int zoneId = conn.ZoneId;
+        if (serverByZone.TryGetValue(zoneId, out var server)) {
+            server.EnqueueMessage(conn, data);
+        } else {
+            conn.SendError("Zone not found");
+        }
+    }
+
+    // 跨服请求转发到跨服中心
+    public void RouteCrossServer(Connection conn, byte[] data) {
+        crossServerCenter.EnqueueMessage(conn, data);
+    }
+}
+```
+
+## 合服
+
+合服是运营后期的常见操作——老服人数减少，合并提升活跃度。核心挑战是数据迁移和 ID 冲突：
+
+```csharp
+// 合服数据迁移流程
+public class ServerMerge {
+    // 角色唯一 ID 用全局 UUID，天然避免冲突
+    // 但角色名可能冲突，需要规则处理
+    public void MergeCharacters(ServerData sourceA, ServerData sourceB) {
+        foreach (var charA in sourceA.Characters) {
+            var conflict = sourceB.Characters.FirstOrDefault(c =>
+                c.Name == charA.Name);
+
+            if (conflict != null) {
+                // 规则：充值高/等级高/注册早的保留原名
+                var winner = PickWinner(charA, conflict);
+                var loser = winner == charA ? conflict : charA;
+
+                // 劣势方自动加后缀
+                loser.Name += $"_{loser.OriginalServerId}";
+                // 给改名卡补偿
+                loser.AddItem(ItemType.RenameCard, 1);
+            }
+        }
+
+        // 数据迁移：源服 → 目标服
+        // 停服维护窗口内完成
+    }
+}
+```
+
+## 热更方案
+
+Unity 客户端热更让游戏不停机更新逻辑代码，是长线运营的关键：
+
+```csharp
+// 方案对比：
+// 1. Lua 热更（xLua）：用 Lua 写逻辑层，热更 Lua 脚本
+//    优点：成熟、社区大；缺点：跨语言调用开销、性能不如 C#
+
+// 2. ILRuntime：在 C# 中跑 IL 解释器，热更 DLL
+//    优点：全 C# 开发；缺点：部分反射不支持、调试困难
+
+// 3. HybridCLR：Unity 原生 AOT+Interpreter 混合
+//    优点：全 C#、性能好、兼容性高；缺点：需额外编译流程
+
+// 4. AssetBundle 热更：只热更资源，不热更代码
+//    配合 Lua/HybridCLR 做代码热更
+
+// 热更流程（以 Lua 为例）
+public class HotUpdateManager {
+    public async Task CheckAndUpdate() {
+        // 1. 比对版本号
+        var remoteVer = await FetchRemoteVersion();
+        if (remoteVer <= localVersion) return;
+
+        // 2. 下载差异包（只下变化的文件）
+        var diffList = await FetchDiffList(localVersion, remoteVer);
+        foreach (var file in diffList)
+            await DownloadFile(file);
+
+        // 3. 校验 MD5
+        if (!VerifyChecksum(diffList)) {
+            // 校验失败，回退到旧版本
+            Rollback();
+            return;
+        }
+
+        // 4. 重载 Lua 脚本
+        LuaVM.ReloadAllScripts();
+    }
+}
+```
+
+## 灰度发布
+
+灰度发布是逐步将新版本推给部分用户，确认无问题后再全量发布：
+
+```csharp
+// 灰度发布策略
+public class CanaryRelease {
+    // 策略 1：按区服灰度
+    public bool ShouldUpdateZone(int zoneId, int[] canaryZones) {
+        return canaryZones.Contains(zoneId);
+        // 先更新 1-2 个测试服，观察 24-48 小时
+    }
+
+    // 策略 2：按比例灰度（网关层分流）
+    public bool ShouldRouteToNewVersion(int playerId) {
+        int hash = playerId % 100;
+        return hash < 10;  // 10% 流量到新版本
+    }
+
+    // 回滚机制
+    public void Rollback() {
+        // 网关一键切回旧版本
+        gateway.SwitchAllTraffic(oldVersion);
+        // 数据库向前兼容：新版本不删旧字段、不改字段类型
+        // 所以回滚后旧版本仍能正常读写
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：热更就是更新 AssetBundle。** AssetBundle 只能热更资源（预制体、贴图、音频），不能热更 C# 逻辑代码。如果技能逻辑写死在 C# 中，出 bug 后必须发新包（过审等几天），玩家只能等。真正的代码热更需要 Lua/ILRuntime/HybridCLR 等方案，把可变逻辑放在解释执行的代码中。AssetBundle 热更和代码热更通常配合使用。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 MMO 要分服？不能所有玩家放一个服务器吗？
+
+<Answer>
+三个原因：① 单机 CPU 和内存有上限，万人在线的逻辑计算和内存超出单机能力；② 单点故障导致全部玩家掉线，风险过高；③ 不同地区玩家延迟差异大，分服可就近部署。分服代价是跨服交互需要额外的跨服中心。
+</Answer>
+
+**问题 2**：灰度发布如何做？回滚机制是什么？
+
+<Answer>
+灰度发布按区服或按比例逐步推送新版本：先更新 1-2 个测试服观察 24-48 小时，或网关层按用户 ID 哈希分流 10% 到新版本。回滚机制：网关一键切回旧版本。数据库向前兼容（新版本不删旧字段、不改字段类型），保证回滚后旧版本仍能正常读写。核心是小范围试错、快速回滚。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分服">把玩家按区服分配到独立服务器进程，每个区服有独立的逻辑线程和数据库。隔离风险、就近部署、独立扩缩容。</GlossaryItem>
+<GlossaryItem term="合服">合并多个老服提升活跃度。需要数据迁移、角色 ID 冲突处理（全局 UUID）、重名规则（优势方保留、劣势方加后缀）。</GlossaryItem>
+<GlossaryItem term="热更">不停机更新客户端逻辑代码。方案包括 Lua（xLua）、ILRuntime（IL 解释器）、HybridCLR（AOT+Interpreter）。AssetBundle 只热更资源不热更代码。</GlossaryItem>
+<GlossaryItem term="灰度发布">逐步将新版本推给部分用户（按区服或按比例），确认无问题后全量发布。配合回滚机制（网关一键切回旧版本），核心是小范围试错、快速恢复。</GlossaryItem>
+</Glossary>
