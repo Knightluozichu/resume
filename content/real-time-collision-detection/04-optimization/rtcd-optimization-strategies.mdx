@@ -1,0 +1,84 @@
+---
+title: "优化策略：SIMD、缓存与并行"
+type: B
+section: "游戏引擎架构"
+order: 8
+description: "三大性能优化支柱——SIMD 数据并行、缓存友好布局、多核并行分片"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtcdOptimizationStrategiesDiagram } from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-optimization-strategies";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 SIMD 如何用一条指令处理多组碰撞数据
+- 掌握 AoS 到 SoA 的数据布局转换与缓存优化
+- 理解多核并行的候选对分片与工作窃取策略
+- 能说出三支柱如何协同提升碰撞管线吞吐
+</Objectives>
+
+## 碰撞检测是数据密集型计算
+
+碰撞检测每帧要处理成千上万个物体对，每个检测都是独立的算术运算，天然适合数据并行。性能瓶颈往往不在算法复杂度，而在**数据如何喂给 CPU**。三大优化支柱——SIMD、缓存、并行——分别从指令级、内存级、核心级榨取性能。
+
+<RtcdOptimizationStrategiesDiagram />
+
+## SIMD：一条指令算四组
+
+<Term def="SIMD（单指令多数据）用一条 CPU 指令同时处理多个数据元素，如 128-bit 寄存器同时做 4 个 float 运算，是碰撞检测的核心加速手段。">SIMD</Term>把 4 个 float 打包进一个 128-bit 寄存器（SSE）或 8 个 float 打包进 256-bit 寄存器（AVX），一条指令同时运算。AABB 相交检测需要 3 轴 x 2 端点 = 6 次比较，用 SIMD 可以同时处理 4 组 AABB 对——一次比较 4 个 min.x vs 4 个 max.x。但前提是数据要按 **SoA（Structure of Arrays）**布局排列，让 4 个 AABB 的 min.x 连续存放。
+
+```cpp
+// SoA 布局：4 组 AABB 的数据连续排列
+struct AabbPack4 {
+    __m128 minx, miny, minz;  // 4 个 AABB 的 min.x 连续
+    __m128 maxx, maxy, maxz;  // 4 个 AABB 的 max.x 连续
+};
+
+// SIMD 批量检测 4 组 AABB 相交
+__m128 intersect4(const AabbPack4& a, const AabbPack4& b) {
+    // 一条指令比较 4 个分量，结果为掩码
+    __m128 sepX = _mm_or_ps(_mm_cmplt_ps(a.maxx, b.minx),
+                             _mm_cmplt_ps(b.maxx, a.minx));
+    __m128 sepY = _mm_or_ps(_mm_cmplt_ps(a.maxy, b.miny),
+                             _mm_cmplt_ps(b.maxy, a.miny));
+    __m128 sepZ = _mm_or_ps(_mm_cmplt_ps(a.maxz, b.minz),
+                             _mm_cmplt_ps(b.maxz, a.minz));
+    __m128 separated = _mm_or_ps(_mm_or_ps(sepX, sepY), sepZ);
+    return _mm_xor_ps(separated, _mm_set1_ps(1.0f)); // 取反=相交
+}
+```
+
+## 缓存：让热数据驻留 L1
+
+CPU 访问 L1 缓存约 1ns，访问 RAM 约 100ns——差 100 倍。如果 AABB 数据散落在内存各处，每次访问都 cache miss，SIMD 再快也白搭。优化手段：①AoS 转 SoA，让同类数据连续排列；②剔除冷字段（如物体的渲染数据不进碰撞结构），让每条记录更紧凑；③顺序访问而非随机访问，利用 CPU 预取器提前加载。
+
+## 并行：候选对天然可分
+
+Broad Phase 产出的候选对列表天然可并行——每对独立检测，无数据依赖。把候选对列表按核分片，每核处理一部分，写入分离的结果缓冲区避免竞争。负载均衡用**工作窃取**：空闲核从忙核的队列尾部「偷」任务。N 核可获近 N 倍加速。
+
+<Callout type="trap">
+**误区：先并行再优化数据布局。** 如果数据是随机散落的 AoS，多核并行只会让 8 个核同时 cache miss，加速比远低于 8。正确顺序：先做数据布局优化（SoA + 紧凑），让单核吞吐最大化；再做 SIMD 向量化；最后多核并行。布局是地基——地基对了，SIMD 和并行自然受益。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 AABB 数据要从 AoS 改成 SoA 布局？具体怎么改？
+
+<Answer>
+AoS（Array of Structures）是 `struct{min,max} arr[N]`，每个 AABB 的 min 和 max 紧挨着，但不同 AABB 的 min.x 不连续。SIMD 要同时取 4 个 AABB 的 min.x，AoS 布局下这 4 个值分散在 4 个 cache line，取数开销大。SoA（Structure of Arrays）改为 `struct{ minx[N], miny[N], ... }`，4 个 AABB 的 min.x 连续存放，一次 SIMD 加载就能取到 4 个值。具体改法：把 AABB 数组从「N 个 {min,max} 结构」重排为「minx 数组 + miny 数组 + ...」，所有 x 分量连续、所有 y 分量连续。
+</Answer>
+
+**问题 2**：碰撞检测的候选对并行为什么要用工作窃取？直接平均分片不行吗？
+
+<Answer>
+候选对的计算量不均匀——有些对只需一次 AABB 比较就退出，有些要跑完整 GJK 迭代。直接平均分片会导致某些核先做完空闲，某些核还在忙。工作窃取让空闲核从忙核的队列尾部偷任务，动态均衡负载，减少核间等待时间。此外，碰撞检测每帧的候选对数量和复杂度都在变化，静态分片无法适应这种动态性，工作窃取是自适应的。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SIMD">单指令多数据，一条 CPU 指令同时处理多个数据，SSE 处理 4 个 float，AVX 处理 8 个。</GlossaryItem>
+<GlossaryItem term="SoA">Structure of Arrays，同类字段连续排列的数据布局，是 SIMD 向量化和缓存友好的前提。</GlossaryItem>
+<GlossaryItem term="工作窃取">空闲线程从忙线程队列偷任务的负载均衡策略，适合计算量不均的并行任务。</GlossaryItem>
+</Glossary>

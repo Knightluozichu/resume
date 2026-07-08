@@ -1,0 +1,94 @@
+---
+title: "GJK 算法详解"
+type: B
+section: "游戏引擎架构"
+order: 5
+description: "GJK 利用 Minkowski 差与支撑函数，用单纯形迭代判定两凸体碰撞"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtcdGjkDiagram } from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-gjk";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Minkowski 差与碰撞判定的等价关系
+- 掌握支撑函数的定义与作用
+- 理解 GJK 单纯形从点到线到三角形/四面体的演进
+- 能描述 GJK 的迭代终止条件
+</Objectives>
+
+## Minkowski 差的魔法
+
+GJK 的理论基础是 <Term def="Minkowski 差 A ⊖ B 是集合 {a - b | a ∈ A, b ∈ B}，两凸体相交当且仅当原点属于它们的 Minkowski 差。">Minkowski 差</Term>。两个凸体 A 和 B 相交，等价于它们的 Minkowski 差 $C = A \ominus B$ 包含原点。这是因为如果相交，存在 $a \in A, b \in B$ 使 $a = b$，即 $a - b = 0$，原点在 $C$ 中。GJK 的巧妙之处：它不显式构造 $C$（太贵），而是用**支撑函数**在 $C$ 上迭代取点，逐步构建一个单纯形（点→线段→三角形→四面体），判断原点是否在单纯形内部。
+
+<RtcdGjkDiagram />
+
+## 支撑函数
+
+<Term def="支撑函数 S_A(d) 返回凸体 A 中沿方向 d 的最远点，是 GJK 算法的基本操作。">支撑函数</Term> $S_A(d)$ 返回凸体 A 中沿方向 $d$ 最远的点。对 Minkowski 差 $C$，支撑点可以分解为 $S_C(d) = S_A(d) - S_B(-d)$——分别在 A 和 B 上求支撑点再相减，无需构造 $C$。支撑函数对凸多面体只需遍历顶点取最大点积，$O(|V|)$。
+
+```cpp
+// 支撑函数：凸体上沿 d 的最远点
+Vec3 support(const ConvexHull& A, const Vec3& d) {
+    Vec3 best = A.vertices[0];
+    float maxDot = dot(best, d);
+    for (auto& v : A.vertices) {
+        float dt = dot(v, d);
+        if (dt > maxDot) { maxDot = dt; best = v; }
+    }
+    return best;
+}
+
+// Minkowski 差的支撑点 = A 的支撑点 - B 的反向支撑点
+Vec3 supportCD(const ConvexHull& A, const ConvexHull& B, const Vec3& d) {
+    return support(A, d) - support(B, -d);
+}
+
+// GJK 迭代核心
+bool GJK(const ConvexHull& A, const ConvexHull& B) {
+    Vec3 d = {1, 0, 0};  // 初始方向
+    Simplex simplex;
+    simplex.add(supportCD(A, B, d));
+    d = -simplex[0];      // 朝原点方向
+    for (int iter = 0; iter < MAX_ITER; iter++) {
+        Vec3 p = supportCD(A, B, d);
+        if (dot(p, d) < 0) return false;  // 原点不在 C 中 → 未碰撞
+        simplex.add(p);
+        if (simplex.containsOrigin()) return true;  // 原点在单纯形内 → 碰撞
+        d = simplex.directionToOrigin();  // 更新方向朝原点
+        simplex.reduce();                  // 去掉最远顶点
+    }
+    return false;
+}
+```
+
+## 单纯形演进
+
+GJK 从一个点开始，逐步添加支撑点构建更高维的单纯形。2D 中：点→线段→三角形；3D 中最高到四面体。每一步判断原点是否在当前单纯形内。不在则去掉离原点最远的顶点，沿新方向取下一个支撑点继续迭代。凸体的性质保证了迭代收敛——每次添加的支撑点都在原点方向的「正确侧」。
+
+<Callout type="trap">
+**误区：GJK 只能判碰撞不能求接触信息。** 基础 GJK 确实只返回布尔值（碰/没碰），但它的扩展——EPA（Expanding Polytope Algorithm）——可以在 GJK 返回碰撞后，从终止单纯形向外扩展，求出穿透深度和分离法向。所以 GJK + EPA 是一对组合：GJK 判定碰撞，EPA 求接触信息。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么说「两凸体相交当且仅当原点在 Minkowski 差中」？
+
+<Answer>
+Minkowski 差 $C = A \ominus B = \{a - b \mid a \in A, b \in B\}$。如果 A 和 B 相交，存在点 $p \in A \cap B$，即 $p \in A$ 且 $p \in B$，则 $p - p = 0 \in C$，原点在 $C$ 中。反之，如果原点 $0 \in C$，存在 $a \in A, b \in B$ 使 $a - b = 0$，即 $a = b$，该点同时在 A 和 B 中，故相交。这个等价关系把「两体相交」转化为「原点在差集中」，简化了判定。
+</Answer>
+
+**问题 2**：GJK 如何避免显式构造 Minkowski 差？
+
+<Answer>
+显式构造 $C = A \ominus B$ 需要枚举 A 的所有顶点与 B 的所有顶点做差，产生 $|V_A| \times |V_B|$ 个点，太贵。GJK 利用支撑函数的性质：$C$ 上沿方向 $d$ 的支撑点等于 $S_A(d) - S_B(-d)$。即只需在 A 上求沿 $d$ 的最远点、在 B 上求沿 $-d$ 的最远点，相减就得到 $C$ 上的支撑点。这样每次迭代只需 $O(|V_A| + |V_B|)$，而非 $O(|V_A| \times |V_B|)$，大幅降低开销。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Minkowski 差">集合 {a-b | a∈A, b∈B}，两凸体相交当且仅当原点属于此集合，是 GJK 的理论基础。</GlossaryItem>
+<GlossaryItem term="支撑函数">返回凸体沿给定方向最远点的函数，GJK 用它在 Minkowski 差上取点而无需构造差集。</GlossaryItem>
+<GlossaryItem term="单纯形">点(0D)、线段(1D)、三角形(2D)、四面体(3D)的统称，GJK 用它逐步逼近原点判定碰撞。</GlossaryItem>
+</Glossary>

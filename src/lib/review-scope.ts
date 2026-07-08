@@ -78,6 +78,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["ums-", "unity-master"],
   ["uap-", "unity-advanced-programming"],
   ["gep1-", "game-engine-practice-vol1"],
+  ["rtcd-", "real-time-collision-detection"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

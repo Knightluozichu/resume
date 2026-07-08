@@ -1,0 +1,87 @@
+---
+title: "Sweep and Prune 粗粒度检测"
+type: B
+section: "游戏引擎架构"
+order: 3
+description: "一维排序端点法——用插入排序利用时间连贯性实现近线性 Broad Phase"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtcdSweepPruneDiagram } from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-sweep-prune";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Sweep and Prune 的端点排序与活动集机制
+- 掌握三轴分离检测的原理与优化
+- 理解时间连贯性如何让排序退化到近 $O(n)$
+- 能说出 Sap 与暴力法的复杂度差异
+</Objectives>
+
+## 排序即剔除
+
+<Term def="Sweep and Prune（扫掠裁剪）是一种 Broad Phase 算法，将物体在坐标轴上的 min/max 端点排序后扫掠，利用活动集检测区间重叠的物体对。">Sweep and Prune</Term>的核心洞察：两个物体的 AABB 要相交，它们在每条坐标轴上的投影区间都必须重叠。反之，只要有一条轴上的区间不重叠，就一定不相交。所以把所有物体的 min/max 端点在轴上排序，扫掠时维护一个「活动集」——遇到 min 端点加入，遇到 max 端点移出——活动集内的物体在该轴上区间重叠，配对为候选对。
+
+<RtcdSweepPruneDiagram />
+
+## 活动集机制
+
+扫掠时维护一个动态的活动列表。当遇到某个物体的 min 端点时，把它加入活动集，并与活动集中已有的所有物体配对（这些对在该轴上区间重叠）。当遇到 max 端点时，把该物体移出活动集。关键效率：只有区间重叠的物体才会同时在活动集中，远离的物体永远不会配对。
+
+```cpp
+// 单轴 Sweep and Prune（简化版）
+vector<Pair> sweepAndPrune(vector<Body>& bodies) {
+    // 1. 收集所有端点并排序
+    struct EndPoint { float val; int bodyId; bool isMin; };
+    vector<EndPoint> pts;
+    for (auto& b : bodies) {
+        pts.push_back({b.aabb.min.x, b.id, true});
+        pts.push_back({b.aabb.max.x, b.id, false});
+    }
+    sort(pts.begin(), pts.end());  // 按坐标排序
+
+    // 2. 扫掠，维护活动集
+    vector<Pair> candidates;
+    set<int> active;
+    for (auto& p : pts) {
+        if (p.isMin) {
+            for (int id : active)          // 与活动集中所有物体配对
+                candidates.push_back({p.bodyId, id});
+            active.insert(p.bodyId);
+        } else {
+            active.erase(p.bodyId);
+        }
+    }
+    return candidates;  // 再用 Y/Z 轴过滤
+}
+```
+
+## 三轴与时间连贯性
+
+实际实现要检测三条轴：先在 X 轴生成候选对，再用 Y、Z 轴的区间重叠过滤。只有三轴都重叠的对才是最终候选对。排序是主要开销（$O(n \log n)$），但游戏世界里物体每帧移动很小，端点顺序几乎不变——用**插入排序**代替快速排序，近乎有序的数组排序退化为 $O(n)$，这叫利用时间连贯性。
+
+<Callout type="trap">
+**误区：每帧重新快速排序端点。** 快速排序对近乎有序的数组反而表现差（退化到 $O(n^2)$ 的分区）。正确做法是用插入排序——对几乎排好序的数据，插入排序每次只移动一两个元素，接近 $O(n)$。这正是 Sweep and Prune 在游戏场景中高效的关键：帧间连贯性让排序几乎免费。
+</Callout>
+
+<Exercises>
+**问题 1**：Sweep and Prune 如何利用时间连贯性降低复杂度？
+
+<Answer>
+游戏世界中物体每帧位移很小，端点在轴上的相对顺序几乎不变——上一帧排好序的数组这一帧几乎还是有序的。用插入排序处理这种近乎有序的数据，每个元素只需移动 0-1 个位置，整体退化为 $O(n)$。如果每帧用快速排序重排，不仅无法利用连贯性，对近乎有序数据还可能退化到 $O(n^2)$。时间连贯性让 Sap 的均摊复杂度接近线性。
+</Answer>
+
+**问题 2**：为什么单轴 Sweep and Prune 的候选对还需要三轴过滤？
+
+<Answer>
+单轴（如 X 轴）的区间重叠只是 AABB 相交的必要条件而非充分条件。两物体可能在 X 轴上区间重叠，但在 Y 轴上完全分离（一个在左上、一个在右下）。AABB 相交要求三轴区间同时重叠。所以先在一条轴上生成候选对（粗筛），再用另外两条轴的区间重叠过滤（细筛），只有三轴都重叠的对才送入 Narrow Phase。这把候选对数量进一步压缩。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="活动集">Sweep and Prune 扫掠时维护的当前区间重叠物体集合，遇到 min 加入、遇到 max 移出。</GlossaryItem>
+<GlossaryItem term="时间连贯性">相邻帧间物体位置变化很小的特性，使排序等数据结构可增量更新而非全量重建。</GlossaryItem>
+<GlossaryItem term="插入排序">对近乎有序数据接近 $O(n)$ 的排序算法，是 Sap 利用时间连贯性的关键。</GlossaryItem>
+</Glossary>

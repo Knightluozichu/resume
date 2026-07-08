@@ -1235,6 +1235,16 @@ import { gep1ResourceManagementQuestions } from "./review/gep1-resource-manageme
 import { gep1SceneGraphQuestions } from "./review/gep1-scene-graph";
 import { gep1EventSystemQuestions } from "./review/gep1-event-system";
 import { gep1FinalReviewQuestions } from "./review/gep1-final-review";
+import { rtcdLearningMapQuestions } from "./review/rtcd-learning-map";
+import { rtcdCollisionTypesQuestions } from "./review/rtcd-collision-types";
+import { rtcdBvTypesQuestions } from "./review/rtcd-bv-types";
+import { rtcdSweepPruneQuestions } from "./review/rtcd-sweep-prune";
+import { rtcdSpatialPartitioningQuestions } from "./review/rtcd-spatial-partitioning";
+import { rtcdGjkQuestions } from "./review/rtcd-gjk";
+import { rtcdSatQuestions } from "./review/rtcd-sat";
+import { rtcdContinuousCollisionQuestions } from "./review/rtcd-continuous-collision";
+import { rtcdOptimizationStrategiesQuestions } from "./review/rtcd-optimization-strategies";
+import { rtcdFinalReviewQuestions } from "./review/rtcd-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2501,6 +2511,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gep1SceneGraphQuestions,
   ...gep1EventSystemQuestions,
   ...gep1FinalReviewQuestions,
+  ...rtcdLearningMapQuestions,
+  ...rtcdCollisionTypesQuestions,
+  ...rtcdBvTypesQuestions,
+  ...rtcdSweepPruneQuestions,
+  ...rtcdSpatialPartitioningQuestions,
+  ...rtcdGjkQuestions,
+  ...rtcdSatQuestions,
+  ...rtcdContinuousCollisionQuestions,
+  ...rtcdOptimizationStrategiesQuestions,
+  ...rtcdFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

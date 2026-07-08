@@ -1358,7 +1358,17 @@ export type ReviewChapterSlug =
   | "gep1-resource-management"
   | "gep1-scene-graph"
   | "gep1-event-system"
-  | "gep1-final-review";
+  | "gep1-final-review"
+  | "rtcd-learning-map"
+  | "rtcd-collision-types"
+  | "rtcd-bv-types"
+  | "rtcd-sweep-prune"
+  | "rtcd-spatial-partitioning"
+  | "rtcd-gjk"
+  | "rtcd-sat"
+  | "rtcd-continuous-collision"
+  | "rtcd-optimization-strategies"
+  | "rtcd-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2721,6 +2731,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gep1-scene-graph": "场景图与空间分割",
   "gep1-event-system": "事件系统与消息分发",
   "gep1-final-review": "全书总复习",
+  "rtcd-learning-map": "全书学习地图",
+  "rtcd-collision-types": "碰撞检测类型",
+  "rtcd-bv-types": "包围体类型",
+  "rtcd-sweep-prune": "Sweep and Prune",
+  "rtcd-spatial-partitioning": "空间分割",
+  "rtcd-gjk": "GJK 算法",
+  "rtcd-sat": "SAT 分离轴定理",
+  "rtcd-continuous-collision": "连续碰撞检测",
+  "rtcd-optimization-strategies": "优化策略",
+  "rtcd-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,86 @@
+---
+title: "SAT 分离轴定理"
+type: B
+section: "游戏引擎架构"
+order: 6
+description: "分离轴定理——将凸体投影到候选轴上，区间分离即无碰撞"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtcdSatDiagram } from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-sat";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解分离轴定理的数学表述与判定逻辑
+- 掌握 2D 和 3D 中候选轴的选取规则
+- 理解 SAT 与 GJK 的适用场景差异
+- 能计算投影区间并判断重叠
+</Objectives>
+
+## 一条轴定生死
+
+<Term def="分离轴定理 SAT 指出：两个凸体不相交，当且仅当存在一条轴使它们在该轴上的投影区间不重叠。">分离轴定理（SAT）</Term>是一个优美的几何定理：两个凸体如果不相交，一定存在一条「分离轴」——把它们投影到这条轴上，投影区间有间隙。反之，如果所有候选轴上的投影都重叠，则两体相交。SAT 的策略就是把所有可能的分离轴都试一遍，只要找到一条区间分离的轴，就能立即判定「不相交」并提前退出。
+
+<RtcdSatDiagram />
+
+## 候选轴选取
+
+关键问题是「要试哪些轴」。对于两个凸多面体，分离轴只可能是以下方向之一：①A 的每个面的法向；②B 的每个面的法向；③A 的每条边与 B 的每条边的叉积方向（仅 3D）。2D 中只需面法向（即边法向），两个矩形共 4 条轴。3D 中两个 OBB 最多需检测 $6+6+9=15$ 条轴（每条边与对方每条边叉积，3x3=9）。
+
+```cpp
+// 2D 矩形 SAT 检测
+bool satRectRect(const Rect& a, const Rect& b) {
+    // 候选轴 = 两个矩形的边法向（共4条）
+    Vec3 axes[] = {a.axisX, a.axisY, b.axisX, b.axisY};
+    for (auto& axis : axes) {
+        auto [minA, maxA] = project(a, axis);  // A 在轴上的投影区间
+        auto [minB, maxB] = project(b, axis);  // B 在轴上的投影区间
+        if (maxA < minB || maxB < minA)
+            return false;  // 此轴有间隙 → 不相交
+    }
+    return true;  // 全部轴都重叠 → 相交
+}
+
+// 投影：凸体顶点在轴上的最小/最大点积
+Interval project(const Rect& r, const Vec3& axis) {
+    float mn = dot(r.corners[0], axis);
+    float mx = mn;
+    for (int i = 1; i < 4; i++) {
+        float d = dot(r.corners[i], axis);
+        mn = min(mn, d);
+        mx = max(mx, d);
+    }
+    return {mn, mx};
+}
+```
+
+## 提前退出与最小穿透
+
+SAT 的优势是**提前退出**：只要找到一条分离轴就能立即返回「不相交」，不用检测剩余轴。大部分不相交的物体在前几条轴上就能排除。如果全部轴都重叠，SAT 还可以记录每条轴的重叠量，取最小值作为**最小穿透深度**，对应的轴就是**分离法向**——这正是碰撞响应需要的信息。
+
+<Callout type="trap">
+**误区：SAT 适合所有形状。** SAT 只对**凸体**有效——凹体的投影区间可能重叠但实际上凹处没有接触。对凹体必须先分解成凸体片段再分别用 SAT，或者改用 GJK + EPA。此外，SAT 的候选轴数量随边数增长（3D 中边叉积是 $O(E_A \times E_B)$），对高多边形网格不实用，通常先包裹一层 OBB 再用 SAT。
+</Callout>
+
+<Exercises>
+**问题 1**：SAT 为什么只对凸体有效？凹体会出什么问题？
+
+<Answer>
+SAT 依赖「凸体不相交则存在分离轴」这条定理，而凹体不满足此定理。凹体的投影区间在所有轴上可能都重叠，但实际上凹的缺口处并没有接触——投影重叠但实际分离。例如两个 L 形凹体互相嵌套对方凹槽，投影全重叠但不相交。SAT 会误判为碰撞。解决方案是把凹体分解为多个凸体片段（凸分解），分别用 SAT 检测，或改用基于体素/网格的方法。
+</Answer>
+
+**问题 2**：两个 3D OBB 用 SAT 最多检测几条轴？为什么是 15 条？
+
+<Answer>
+最多 15 条轴：①A 的 3 个面法向（OBB 只有 3 对平行面，对应 3 条独立法向）；②B 的 3 个面法向；③A 的 3 条边与 B 的 3 条边的叉积，共 $3 \times 3 = 9$ 条。合计 $3+3+9=15$。面法向覆盖「面-面」「面-边」分离情况，边叉积覆盖「边-边」分离情况。这 15 条轴是完备的——定理保证如果两 OBB 不相交，分离轴必在这 15 条之中。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分离轴">使两凸体投影区间不重叠的方向，存在分离轴即证明两体不相交。</GlossaryItem>
+<GlossaryItem term="投影区间">凸体所有顶点在某轴上点积的最小值与最大值构成的区间，是 SAT 的基本操作。</GlossaryItem>
+<GlossaryItem term="最小穿透深度">所有候选轴上投影重叠量的最小值，对应分离法向，用于碰撞响应的穿透修正。</GlossaryItem>
+</Glossary>

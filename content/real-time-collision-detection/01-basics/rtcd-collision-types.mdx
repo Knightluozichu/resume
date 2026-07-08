@@ -1,0 +1,80 @@
+---
+title: "碰撞检测类型：离散与连续"
+type: B
+section: "游戏引擎架构"
+order: 1
+description: "离散碰撞检测 DCCD 与连续碰撞检测 CCD 的原理、优劣与选择策略"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RtcdCollisionTypesDiagram } from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-collision-types";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 区分离散碰撞检测 DCCD 与连续碰撞检测 CCD 的本质差异
+- 理解隧穿现象的产生原因与危害
+- 掌握 CCD 求解时间冲击点 $t_{hit}$ 的基本思路
+- 能根据物体速度选择合适的检测类型
+</Objectives>
+
+## 两种检测哲学
+
+碰撞检测按「时间维度」分两种。<Term def="离散碰撞检测在固定时间点（每帧）采样物体位置做相交判断，帧间运动不可见。">离散碰撞检测（DCCD）</Term>只在每帧采样时刻判断物体是否重叠——简单快速，但如果物体在一帧内移动距离大于障碍物厚度，就会从一帧的「没碰」直接跳到下一帧的「已穿过去」，完全错过碰撞，这就是**隧穿**。
+
+<RtcdCollisionTypesDiagram />
+
+## 连续碰撞检测
+
+<Term def="连续碰撞检测沿物体运动轨迹连续检测，求解精确的碰撞时间点，从根本上消除隧穿。">连续碰撞检测（CCD）</Term>不满足于采样点，而是检测物体从 $t_0$ 到 $t_1$ 的整段运动轨迹。它把物体的运动建模为「扫掠体」——球运动一圈扫出一个胶囊，盒子运动一段扫出一个六面体。然后判断扫掠体是否与障碍物相交，并求出最早的相交时刻 $t_{hit}$。
+
+```cpp
+// 离散：只看两个时刻
+bool DCCD(const Sphere& a, const Sphere& b) {
+    return distance(a.center, b.center) < a.r + b.r;  // 只检测当前位置
+}
+
+// 连续：沿轨迹求根
+float CCD(const Sphere& a, const Vec3& va,
+          const Sphere& b, const Vec3& vb) {
+    // 相对运动：P(t) = P0 + (va - vb) * t
+    // |P(t)|² = (ra + rb)² 解二次方程求最小正根 t_hit
+    Vec3 rel = a.center - b.center;
+    Vec3 relVel = va - vb;
+    float A = dot(relVel, relVel);
+    float B = 2 * dot(rel, relVel);
+    float C = dot(rel, rel) - sq(a.r + b.r);
+    // 解 A*t² + B*t + C = 0
+    return solveQuadratic(A, B, C);  // 返回 t_hit 或 -1
+}
+```
+
+## 选择策略
+
+实际项目通常混合使用：大部分慢速物体用 DCCD（省算力），少数高速物体（子弹、高速载具）用 CCD（防穿透）。关键是设一个速度阈值——当物体一帧位移超过其包围体尺寸的一定比例时，自动切换到 CCD。
+
+<Callout type="trap">
+**误区：所有物体都开 CCD。** CCD 的计算开销远高于 DCCD（要解方程或迭代逼近）。如果给所有物体都开 CCD，帧时间会暴涨。正确做法是按速度筛选，只对「一帧位移可能超过障碍厚度」的物体启用 CCD，其余用 DCCD。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是隧穿？为什么离散碰撞检测会产生隧穿？
+
+<Answer>
+隧穿是高速物体在一帧内穿过障碍物而未被检测到的现象。DCCD 只在帧采样时刻 $t$ 和 $t+\Delta t$ 检测物体位置：如果 $t$ 时刻物体在障碍左侧未碰，$t+\Delta t$ 时刻已越过障碍到右侧也未碰，DCCD 就会判定「未碰撞」，但实际上物体在这一帧中间穿过了障碍。物体速度越快、障碍越薄，隧穿越容易发生。
+</Answer>
+
+**问题 2**：CCD 如何求 $t_{hit}$？以球-球为例说明。
+
+<Answer>
+两球做匀速运动，相对位置 $P(t) = P_0 + v_{rel} \cdot t$。碰撞条件是两球心距离等于半径之和：$|P(t)|^2 = (r_a + r_b)^2$。展开得 $A t^2 + B t + C = 0$，其中 $A = v_{rel} \cdot v_{rel}$，$B = 2(P_0 \cdot v_{rel})$，$C = P_0 \cdot P_0 - (r_a+r_b)^2$。解这个二次方程，取 $[0, \Delta t]$ 范围内的最小正根即为 $t_{hit}$。无正根则本帧无碰撞。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="隧穿 Tunneling">离散碰撞检测中高速物体在一帧内穿过薄障碍物而未被检出的现象，是 DCCD 的固有缺陷。</GlossaryItem>
+<GlossaryItem term="扫掠体">物体沿运动轨迹扫过的空间体积，CCD 通过检测扫掠体与障碍物的相交来求碰撞时间。</GlossaryItem>
+<GlossaryItem term="时间冲击点">物体首次发生碰撞的时刻 $t_{hit}$，CCD 的核心输出，用于精确的碰撞响应。</GlossaryItem>
+</Glossary>
