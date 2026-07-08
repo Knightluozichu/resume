@@ -1,0 +1,201 @@
+---
+title: "战斗特效综合"
+type: C
+section: "游戏开发"
+order: 8
+description: "技能特效时间线、打击感四要素（顿帧/震屏/爆发/音效）、连击递进系统"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UvfCombatVfxDiagram } from "@/components/mdx/unity-vfx/diagrams/uvf-combat-vfx";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能编排技能特效时间线（蓄力→释放→命中→余波→结束）
+- 能实现打击感四要素：顿帧、震屏、特效爆发、音效同步
+- 能实现连击系统中的伤害倍率递增和特效升级
+- 能回答：为什么打击感需要四要素配合？缺少任何一个会怎样？
+</Objectives>
+
+## 直觉引入
+
+战斗特效是全书技术的综合应用——粒子做素材、Shader 做质感、后处理做氛围、动画驱动做节奏、物理碰撞做定位、UI 做反馈，最终汇聚为玩家感受到的「打击感」。
+
+打击感不是某个特效好不好看，而是四要素同时爆发的一瞬间：顿帧让时间凝固、震屏让空间震荡、粒子让视觉爆发、音效让听觉冲击。四者必须在同一帧触发，延迟超过1帧就会感到「松散」。
+
+## 概念讲解
+
+### 技能特效时间线
+
+| 阶段 | 时间 | 特效内容 |
+|---|---|---|
+| 蓄力 | 0-0.5s | 粒子汇聚+地面光环+屏幕变暗 |
+| 释放 | 0.5-0.6s | 顿帧+全屏闪白+光柱+震屏 |
+| 命中 | 0.6-1.5s | 冲击波+飞溅粒子+受击特效 |
+| 余波 | 1.5-2.5s | 烧焦痕迹+烟尘消散 |
+| 结束 | 2.5-3.0s | 后处理恢复正常 |
+
+### 打击感四要素
+
+<Term def="命中瞬间短暂暂停游戏模拟（timeScale=0）">顿帧</Term>让命中更有重量。<Term def="命中时摄像机抖动">震屏</Term>让冲击有空间感。<Term def="命中点 Burst 发射大量粒子+光效">特效爆发</Term>让视觉冲击。<Term def="命中音效+低频冲击音同步爆发">音效</Term>让听觉冲击。
+
+### 连击递进
+
+| 连击数 | 倍率 | 特效升级 |
+|---|---|---|
+| 1-2 | x1.0 | 普通命中特效 |
+| 3-5 | x1.2 | 强化特效（更多粒子+更亮） |
+| 6+ | x1.5 | 终极特效（冲击波+额外震屏） |
+
+## 交互Demo
+
+> 猜一猜：顿帧应该持续多久？（提示：0.05-0.1秒，重武器长轻武器短）
+
+<UvfCombatVfxDiagram />
+
+<Stepper>
+<Step title="第一步：编排技能时间线">
+用协程按时间编排：0s蓄力粒子汇聚→0.5s顿帧+闪白+光柱→0.6s冲击波+飞溅→1.5s烟尘消散→2.5s结束。每阶段用 YieldInstruction 控制延迟。
+</Step>
+<Step title="第二步：实现打击感四要素">
+顿帧：`Time.timeScale=0; yield return new WaitForSecondsRealtime(0.08f); Time.timeScale=1;`。震屏：`camera.DoShakePosition(0.3f, 0.5f)`。特效爆发：Burst 50粒子。音效：`AudioSource.PlayOneShot(hitClip)`。四者在同一帧触发。
+</Step>
+<Step title="第三步：连击递进">
+连击计数器 comboCount，每次命中递增，2秒超时归零。倍率 `1 + comboCount * 0.1`。根据 comboCount 切换特效预制体（普通→强化→终极）。暴击飘字字号随 comboCount 递增。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using UnityEngine;
+using System.Collections;
+using DGTweening;
+
+// 战斗特效综合控制器
+public class CombatVfxController : MonoBehaviour
+{
+    [Header("特效预制体")]
+    public GameObject normalHitPrefab;
+    public GameObject strongHitPrefab;
+    public GameObject ultimateHitPrefab;
+
+    [Header("打击感")]
+    public Camera mainCamera;
+    public float hitStopDuration = 0.08f;
+    public float shakeDuration = 0.3f;
+    public float shakeStrength = 0.5f;
+
+    [Header("音效")]
+    public AudioSource audioSource;
+    public AudioClip hitSound;
+    public AudioClip critSound;
+
+    [Header("连击")]
+    public int comboCount;
+    public float comboTimeout = 2f;
+    private float comboTimer;
+
+    void Update()
+    {
+        // 连击超时归零
+        if (comboTimer > 0)
+        {
+            comboTimer -= Time.deltaTime;
+            if (comboTimer <= 0) comboCount = 0;
+        }
+    }
+
+    // 命中触发：四要素同时爆发
+    public void OnHit(Vector3 hitPoint, bool isCrit = false)
+    {
+        comboCount++;
+        comboTimer = comboTimeout;
+
+        float multiplier = 1f + comboCount * 0.1f;
+        int damage = Mathf.RoundToInt(100 * multiplier);
+
+        // 1. 顿帧
+        StartCoroutine(HitStop(isCrit ? 0.12f : hitStopDuration));
+
+        // 2. 震屏（连击越高震屏越强）
+        float shakeMult = 1f + comboCount * 0.1f;
+        mainCamera.DOShakePosition(
+            shakeDuration, shakeStrength * shakeMult);
+
+        // 3. 特效爆发（根据连击数升级）
+        GameObject prefab = comboCount < 3 ? normalHitPrefab
+            : comboCount < 6 ? strongHitPrefab
+            : ultimateHitPrefab;
+        var vfx = ObjectPool.Get(prefab);
+        vfx.transform.position = hitPoint;
+        var ps = vfx.GetComponent<ParticleSystem>();
+        var emission = ps.emission;
+        emission.SetBurst(0,
+            new ParticleSystem.Burst(0, 30 + comboCount * 5));
+        ps.Play();
+
+        // 4. 音效同步
+        audioSource.PlayOneShot(isCrit ? critSound : hitSound);
+
+        // 5. 飘字
+        UiVfxManager.Instance.ShowDamage(hitPoint, damage, isCrit);
+    }
+
+    // 顿帧：注意用 WaitForSecondsRealtime
+    IEnumerator HitStop(float duration)
+    {
+        Time.timeScale = 0f;
+        yield return new WaitForSecondsRealtime(duration);
+        Time.timeScale = 1f;
+    }
+
+    // 大招技能时间线编排
+    public IEnumerator UltimateSkillRoutine(Vector3 target)
+    {
+        // 蓄力
+        yield return new WaitForSeconds(0.5f);
+
+        // 释放：顿帧+闪白
+        StartCoroutine(HitStop(0.15f));
+        UiVfxManager.Instance.FlashScreen(Color.white, 0.2f);
+        yield return new WaitForSecondsRealtime(0.15f);
+
+        // 命中
+        OnHit(target, true);
+        yield return new WaitForSeconds(0.5f);
+
+        // 余波（烟尘消散等由粒子系统自动完成）
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 战斗特效看起来好看但「不够爽」，缺乏冲击力。
+**原因 →** 打击感四要素没有在同一帧同步触发，或者缺少其中一个。
+**修法 →** 检查四要素：1）顿帧有没有？——Time.timeScale=0 持续0.05-0.1s；2）震屏有没有？——Camera DoShake；3）特效爆发够不够？——Burst 发射50+粒子；4）音效同步了没？——同一帧 PlayOneShot。四者必须在 OnHit 方法中连续调用，不经过任何延迟。重武器顿帧0.1s，轻武器0.05s，大招0.15s。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么打击感需要四要素配合？缺少任何一个会怎样？
+
+<Answer>
+四要素各有不可替代的作用：缺顿帧——命中感觉轻飘飘，没有「重量感」；缺震屏——冲击感局限在命中点，缺乏空间感；缺特效爆发——命中点空洞，视觉无反馈；缺音效——视觉再好也感觉「假」，听觉是冲击感的重要组成。四者必须在同一帧触发——延迟超过1帧（16ms）就会感到「松散」。重武器（大剑）四要素全开且强度大，轻武器（匕首）顿帧短震屏弱但特效频率高（连击快），大招四要素全开且加额外效果（闪白、慢动作、冲击波）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="顿帧（Hit Stop）">命中瞬间将 Time.timeScale 设为0短暂暂停游戏，持续0.05-0.1秒，让玩家感受到命中的「重量感」。用 WaitForSecondsRealtime 恢复。</GlossaryItem>
+<GlossaryItem term="技能时间线">技能特效从蓄力到结束的完整编排，分蓄力→释放→命中→余波→结束五个阶段，每阶段由不同特效组成。</GlossaryItem>
+<GlossaryItem term="连击（Combo）">连续命中不中断时伤害倍率递增的机制，通常每次连击+10%伤害，超时（约2秒未命中）归零，连击数越高特效越华丽。</GlossaryItem>
+<GlossaryItem term="Burst">ParticleSystem Emission 模块的突发发射功能，在指定时间一次性发射指定数量的粒子，用于命中瞬间的特效爆发。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 游戏特效制作典型实例" adaptedUrl="" />

@@ -1,0 +1,164 @@
+---
+title: "物理特效"
+type: C
+section: "游戏开发"
+order: 6
+description: "碰撞特效、Force Field 力场、Cloth 布料——物理驱动的动态特效"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UvfPhysicsVfxDiagram } from "@/components/mdx/unity-vfx/diagrams/uvf-physics-vfx";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能在 OnCollisionEnter 中获取碰撞点和法线生成定向特效
+- 能用 ParticleSystem Force Field 实现吸引、排斥、漩涡力场
+- 能用 Cloth 组件配合粒子实现布料拖尾和撕裂特效
+- 能回答：物理碰撞特效如何确定生成位置和飞溅方向？
+</Objectives>
+
+## 直觉引入
+
+物理引擎不只用于运动模拟——它也是特效的「触发器」。子弹打到墙上的碰撞点就是弹孔特效的位置，碰撞法线就是火花飞溅的方向。陨石落地时 OnCollisionEnter 触发，Force Field 把周围粒子推开模拟冲击波，Cloth 模拟披风在爆炸中的飘动。
+
+物理驱动特效的关键是「用物理数据定位特效」——碰撞点决定位置，法线决定方向，相对速度决定强度。
+
+## 概念讲解
+
+<Term def="物理碰撞回调中获取的接触点，包含位置和法线">ContactPoint</Term>定位特效生成位置。
+
+<Term def="ParticleSystem 的外部力场模块，施加方向力/吸引力/排斥力/漩涡力">Force Field</Term>影响粒子运动轨迹。
+
+<Term def="Unity 的布料模拟组件，逐顶点 CPU 模拟柔软物体">Cloth</Term>配合粒子实现拖尾和扰动。
+
+### 碰撞数据 → 特效参数
+
+| 物理数据 | 特效用途 |
+|---|---|
+| contact.point | 特效生成位置 |
+| contact.normal | 粒子飞溅方向 |
+| collision.relativeVelocity | 特效强度/规模 |
+
+## 交互Demo
+
+> 猜一猜：子弹打墙的火花特效应该沿什么方向飞溅？（提示：碰撞法线 contact.normal）
+
+<UvfPhysicsVfxDiagram />
+
+<Stepper>
+<Step title="第一步：碰撞点特效">
+在 OnCollisionEnter 中取 `collision.contacts[0]`，用 `contact.point` 定位、`Quaternion.LookRotation(contact.normal)` 定向生成命中特效。粒子沿法线方向飞溅。
+</Step>
+<Step title="第二步：力场扰动">
+在碰撞点放 Force Field（排斥力），影响周围环境粒子（灰尘、碎片）。力的强度用 AnimationCurve 衰减，模拟冲击波扩散。
+</Step>
+<Step title="第三步：布料配合">
+角色 Cloth 披风在爆炸范围内受 AddExplosionForce 影响。Cloth 顶点挂粒子发射器，运动时产生拖尾粒子。撕裂时在边缘生成碎片粒子。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using UnityEngine;
+using System.Collections;
+
+// 物理碰撞特效：子弹打墙
+public class BulletImpactVfx : MonoBehaviour
+{
+    public GameObject sparkPrefab;     // 火花特效
+    public GameObject dustPrefab;      // 灰尘特效
+    public GameObject decalPrefab;     // 弹孔贴花
+
+    void OnCollisionEnter(Collision collision)
+    {
+        // 获取第一个碰撞接触点
+        ContactPoint cp = collision.contacts[0];
+
+        // 1. 火花特效：沿法线方向飞溅
+        GameObject sparks = ObjectPool.Get(sparkPrefab);
+        sparks.transform.position = cp.point;
+        // 法线方向决定飞溅朝向
+        sparks.transform.rotation =
+            Quaternion.LookRotation(cp.normal);
+        sparks.GetComponent<ParticleSystem>().Play();
+
+        // 2. 灰尘特效：沿墙面扩散（法线方向的垂直面）
+        GameObject dust = ObjectPool.Get(dustPrefab);
+        dust.transform.position = cp.point;
+        dust.transform.rotation =
+            Quaternion.LookRotation(cp.normal);
+        dust.GetComponent<ParticleSystem>().Play();
+
+        // 3. 弹孔贴花：贴在墙面
+        if (decalPrefab != null)
+        {
+            var decal = Instantiate(decalPrefab,
+                cp.point + cp.normal * 0.01f,
+                Quaternion.LookRotation(-cp.normal));
+            Destroy(decal, 10f); // 10秒后消失
+        }
+
+        // 4. 根据碰撞速度调整特效规模
+        float impactForce = collision.relativeVelocity.magnitude;
+        var main = sparks.GetComponent<ParticleSystem>().main;
+        main.startSpeed = Mathf.Lerp(2f, 8f,
+            impactForce / 20f);
+    }
+}
+
+// 爆炸力场：推开周围物体和粒子
+public class ExplosionForce : MonoBehaviour
+{
+    public float radius = 5f;
+    public float force = 500f;
+
+    public void Explode(Vector3 center)
+    {
+        // 对范围内所有 Rigidbody 施加爆炸力
+        Collider[] colliders =
+            Physics.OverlapSphere(center, radius);
+        foreach (var col in colliders)
+        {
+            var rb = col.GetComponent<Rigidbody>();
+            if (rb != null)
+            {
+                rb.AddExplosionForce(force, center, radius);
+            }
+        }
+
+        // 生成爆炸粒子特效
+        // （配合 Force Field 影响周围环境粒子）
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 碰撞特效出现在错误的位置或朝向错误的方向。
+**原因 →** 用 transform.position 而非 contact.point 定位，用 transform.forward 而非 contact.normal 定向。
+**修法 →** 碰撞特效必须用 ContactPoint 数据：`cp.point` 是碰撞接触点（特效位置），`cp.normal` 是碰撞面法线（特效朝向）。火花沿法线飞溅才符合物理直觉——子弹打墙，火花应该垂直于墙面向外飞，而非沿子弹方向。用 `Quaternion.LookRotation(cp.normal)` 让特效朝法线方向。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：设计一个「陨石坠落撞击地面」的完整物理特效链，涉及哪些物理回调？
+
+<Answer>
+1）陨石下落：Rigidbody 自由落体，尾迹用 Trail Renderer。2）撞击瞬间：OnCollisionEnter 触发，获取 contact.point 和 contact.normal。3）撞击坑特效：在碰撞点生成爆炸粒子（Burst 50碎片沿法线散射）+ 烟尘粒子（向上扩散）+ 冲击波环（沿地面扩张）。4）物理交互：碰撞点 AddExplosionForce 推开周围 Rigidbody。5）力场扰动：碰撞点放 Force Field 排斥力，影响环境粒子。6）地面裂痕：投影贴图生成烧焦痕迹。7）震屏+顿帧。用协程按时间延迟编排：0s爆炸+震屏→0.1s烟尘→0.3s冲击波→0.5s碎片落地→2s消散。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="ContactPoint">物理碰撞回调中的接触点数据，包含 point（位置）和 normal（法线），用于定位和定向碰撞特效。</GlossaryItem>
+<GlossaryItem term="Force Field">ParticleSystem 的力场模块，在空间中施加方向力、吸引力、排斥力、漩涡力，影响经过区域的粒子运动。</GlossaryItem>
+<GlossaryItem term="Cloth">Unity 布料模拟组件，在 CPU 上逐顶点模拟柔软物体（披风、旗帜），可配合粒子实现拖尾和撕裂特效。</GlossaryItem>
+<GlossaryItem term="AddExplosionForce">Rigidbody 的爆炸力方法，从中心点向周围施加衰减的推力，模拟爆炸冲击波对物理物体的影响。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 游戏特效制作典型实例" adaptedUrl="" />

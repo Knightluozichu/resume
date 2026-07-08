@@ -1297,7 +1297,17 @@ export type ReviewChapterSlug =
   | "usc-lifecycle"
   | "usc-mono-basics"
   | "usc-physics"
-  | "usc-scriptable-objects";
+  | "usc-scriptable-objects"
+  | "uvf-animation-vfx"
+  | "uvf-combat-vfx"
+  | "uvf-final-review"
+  | "uvf-learning-map"
+  | "uvf-particle-advanced"
+  | "uvf-particle-basics"
+  | "uvf-physics-vfx"
+  | "uvf-post-processing"
+  | "uvf-shader-vfx"
+  | "uvf-ui-vfx";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2600,6 +2610,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ugc-racing-game": "赛车游戏",
   "ugc-strategy-game": "策略游戏",
   "ugc-final-review": "游戏案例开发复习与综合实践",
+  "uvf-learning-map": "Unity 3D 游戏特效制作典型实例全书学习地图",
+  "uvf-particle-basics": "粒子系统基础",
+  "uvf-particle-advanced": "粒子系统进阶",
+  "uvf-shader-vfx": "Shader 特效",
+  "uvf-post-processing": "后处理特效",
+  "uvf-animation-vfx": "动画特效",
+  "uvf-physics-vfx": "物理特效",
+  "uvf-ui-vfx": "UI 特效",
+  "uvf-combat-vfx": "战斗特效综合",
+  "uvf-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

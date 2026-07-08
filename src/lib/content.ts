@@ -165,6 +165,7 @@ export const BOOK_ORDER = [
   "blender-3d",
   "unity-core-tech",
   "unity-game-cases",
+  "unity-vfx",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -270,6 +271,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "blender-3d": "Blender 3D",
   "unity-core-tech": "Unity 核心技术",
   "unity-game-cases": "Unity 游戏案例",
+  "unity-vfx": "Unity 3D 游戏特效制作典型实例",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1175,6 +1175,16 @@ import { uscLifecycleQuestions } from "./review/usc-lifecycle";
 import { uscMonoBasicsQuestions } from "./review/usc-mono-basics";
 import { uscPhysicsQuestions } from "./review/usc-physics";
 import { uscScriptableObjectsQuestions } from "./review/usc-scriptable-objects";
+import { uvfAnimationVfxQuestions } from "./review/uvf-animation-vfx";
+import { uvfCombatVfxQuestions } from "./review/uvf-combat-vfx";
+import { uvfFinalReviewQuestions } from "./review/uvf-final-review";
+import { uvfLearningMapQuestions } from "./review/uvf-learning-map";
+import { uvfParticleAdvancedQuestions } from "./review/uvf-particle-advanced";
+import { uvfParticleBasicsQuestions } from "./review/uvf-particle-basics";
+import { uvfPhysicsVfxQuestions } from "./review/uvf-physics-vfx";
+import { uvfPostProcessingQuestions } from "./review/uvf-post-processing";
+import { uvfShaderVfxQuestions } from "./review/uvf-shader-vfx";
+import { uvfUiVfxQuestions } from "./review/uvf-ui-vfx";
 
 export {
   CHAPTER_TITLES,
@@ -2381,6 +2391,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...uscMonoBasicsQuestions,
   ...uscPhysicsQuestions,
   ...uscScriptableObjectsQuestions,
+  ...uvfAnimationVfxQuestions,
+  ...uvfCombatVfxQuestions,
+  ...uvfFinalReviewQuestions,
+  ...uvfLearningMapQuestions,
+  ...uvfParticleAdvancedQuestions,
+  ...uvfParticleBasicsQuestions,
+  ...uvfPhysicsVfxQuestions,
+  ...uvfPostProcessingQuestions,
+  ...uvfShaderVfxQuestions,
+  ...uvfUiVfxQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

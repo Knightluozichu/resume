@@ -1,0 +1,157 @@
+---
+title: "动画特效"
+type: C
+section: "游戏开发"
+order: 5
+description: "Animation Event 动画事件触发特效、AnimationCurve 曲线驱动特效参数"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UvfAnimationVfxDiagram } from "@/components/mdx/unity-vfx/diagrams/uvf-animation-vfx";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能在 AnimationClip 中添加 Animation Event 并绑定 C# 回调
+- 能用 AnimationCurve.Evaluate() 驱动特效参数随时间变化
+- 能实现攻击动画在精确帧触发刀光特效
+- 能回答：为什么用 AnimationEvent 而非 Update 轮询来触发特效？
+</Objectives>
+
+## 直觉引入
+
+特效不应该「凭空出现」——它必须与动画同步。角色挥剑到第18帧时刀光才该出现，脚着地时才该有灰尘，跳跃到最高点才该有滞空特效。如果特效与动画脱节，玩家会立刻感到「不协调」。
+
+Unity 提供了两种动画驱动特效的方式：AnimationEvent 在动画的特定帧调用方法，AnimationCurve 用曲线驱动特效参数随时间变化。两者配合可以实现帧精确的特效同步。
+
+## 概念讲解
+
+<Term def="在 AnimationClip 的指定帧绑定 C# 方法回调">Animation Event</Term>实现帧精确触发。
+
+<Term def="可编辑的关键帧曲线，在任意时间点取样值">AnimationCurve</Term>驱动参数变化。
+
+### AnimationEvent 工作流程
+
+| 步骤 | 操作 | 说明 |
+|---|---|---|
+| 1 | 在动画窗口选帧 | 定位到需要触发特效的帧 |
+| 2 | 添加 Animation Event | 绑定到该帧 |
+| 3 | 指定函数名 | C# 脚本中同名 public 方法 |
+| 4 | 可选传参 | float/int/string/Object |
+
+### AnimationCurve 驱动场景
+- 粒子发射率随攻击动画递增（蓄力→释放）
+- 光效强度随技能动画变化
+- 特效缩放配合动画关键帧
+
+## 交互Demo
+
+> 猜一猜：攻击动画的刀光特效应该在挥砍的哪一帧触发？（提示：武器速度最快的帧）
+
+<UvfAnimationVfxDiagram />
+
+<Stepper>
+<Step title="第一步：添加 Animation Event">
+打开 Animation 窗口，选中攻击动画，移动时间轴到命中帧（如第18帧），点击 Add Animation Event。在 Inspector 中设置 Function 名为 OnSlash。
+</Step>
+<Step title="第二步：写回调方法">
+在挂载到角色上的脚本中实现 `public void OnSlash()` 方法。方法名必须与 Event 的 Function 完全一致。在该方法中从对象池取刀光特效，设置位置和旋转后播放。
+</Step>
+<Step title="第三步：曲线驱动参数">
+用 AnimationCurve 控制特效参数：`float t = (Time.time - startTime) / duration; float value = curve.Evaluate(t); ps.emission.rateOverTime = value * 50;`。曲线前段急升（蓄力释放），后段缓降（消散）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using UnityEngine;
+using System.Collections;
+
+// 动画事件驱动的战斗特效
+public class AnimationVfxController : MonoBehaviour
+{
+    public GameObject slashVfxPrefab;
+    public GameObject impactVfxPrefab;
+    public AnimationCurve intensityCurve;
+    public Transform weaponTip; // 武器尖端位置
+
+    private ParticleSystem activeVfx;
+    private float vfxStartTime;
+
+    // AnimationEvent 回调：挥砍刀光
+    public void OnSlash()
+    {
+        // 从对象池获取刀光特效
+        var vfx = ObjectPool.Get(slashVfxPrefab);
+        vfx.transform.position = weaponTip.position;
+        vfx.transform.rotation = weaponTip.rotation;
+
+        activeVfx = vfx.GetComponent<ParticleSystem>();
+        activeVfx.Play();
+        vfxStartTime = Time.time;
+    }
+
+    // AnimationEvent 回调：命中冲击
+    public void OnHitImpact()
+    {
+        var vfx = ObjectPool.Get(impactVfxPrefab);
+        vfx.transform.position = weaponTip.position;
+        vfx.GetComponent<ParticleSystem>().Play();
+    }
+
+    // Update 中用曲线驱动特效强度
+    void Update()
+    {
+        if (activeVfx != null && activeVfx.isPlaying)
+        {
+            float t = (Time.time - vfxStartTime) /
+                      activeVfx.main.duration;
+            float intensity = intensityCurve.Evaluate(t);
+
+            var emission = activeVfx.emission;
+            emission.rateOverTime = intensity * 50f;
+        }
+    }
+
+    // 连击取消时停止当前特效
+    public void CancelCurrentVfx()
+    {
+        if (activeVfx != null)
+        {
+            activeVfx.Stop(true,
+                ParticleSystemStopBehavior.StopEmitting);
+            activeVfx = null;
+        }
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 特效触发时机与动画不同步，刀光在挥剑前就出现了。
+**原因 →** 用 Update 中检测动画状态来触发特效，网络延迟或帧率波动导致触发不精确。
+**修法 →** 改用 AnimationEvent——它在动画播放到指定帧时精确触发，与帧率无关。AnimationEvent 直接调用绑定的 C# 方法，不经过 Update 轮询，帧精确。注意：方法名必须与 Event 中填写的 Function 完全一致（区分大小写），且方法必须是 public。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么用 AnimationEvent 而非 Update 轮询来触发特效？
+
+<Answer>
+AnimationEvent 在动画播放到指定帧时由动画系统直接调用绑定的 C# 方法，是帧精确的——无论帧率是30fps还是60fps，特效都在动画的同一帧触发。Update 轮询检测动画状态（如 `if (anim.GetCurrentAnimatorStateInfo(0).normalizedTime > 0.5f)`）受帧率影响：30fps时检测间隔约33ms，可能跳过目标帧；60fps时检测更频繁但仍有误差。此外 Update 轮询每帧执行判断浪费 CPU，AnimationEvent 只在触发帧执行一次。所以需要帧精确同步的特效（如刀光、命中）必须用 AnimationEvent。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Animation Event">在 AnimationClip 的指定帧绑定的回调事件，动画播放到该帧时调用指定的 C# 方法，可传递 float/int/string/Object 参数。</GlossaryItem>
+<GlossaryItem term="AnimationCurve">可编辑的关键帧曲线，通过 Evaluate(time) 在任意时间点取样值，用于驱动特效参数随时间变化。</GlossaryItem>
+<GlossaryItem term="帧精确">特效触发与动画帧完全同步，不受帧率波动影响。AnimationEvent 是唯一保证帧精确的机制。</GlossaryItem>
+<GlossaryItem term="对象池">预创建特效实例复用而非每次 Instantiate/Destroy，消除 GC 卡顿。动画事件触发的特效必须走对象池。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 游戏特效制作典型实例" adaptedUrl="" />

@@ -1,0 +1,148 @@
+---
+title: "后处理特效"
+type: C
+section: "游戏开发"
+order: 4
+description: "Bloom 泛光、DOF 景深、Color Grading 色彩校正——渲染管线末端的画面增强"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UvfPostProcessingDiagram } from "@/components/mdx/unity-vfx/diagrams/uvf-post-processing";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能在 URP 中配置 Volume + Profile 管理后处理
+- 能用 Bloom + HDR 实现泛光效果，并解释为什么需要 HDR
+- 能用 Color Grading（Tonemapping + LUT）统一画面风格
+- 能回答：移动端后处理优化的核心策略是什么？
+</Objectives>
+
+## 直觉引入
+
+后处理是渲染管线的「最后一公里」——相机渲染完画面后，在输出到屏幕前对全屏图像施加处理。Bloom 让亮的东西发光，景深让远处模糊，色彩校正统一画面色调。没有后处理的画面是「干的」，加了后处理是「润的」。
+
+但后处理是 GPU 带宽大户——每个 Pass 都要读写全屏纹理。移动端开太多后处理会直接掉帧。关键是找到效果和性能的平衡点。
+
+## 概念讲解
+
+<Term def="Unity URP 中管理后处理参数的系统">Volume + Profile</Term>按优先级叠加参数。
+
+### 三大核心后处理
+
+| 效果 | 作用 | 原理 |
+|---|---|---|
+| Bloom | 泛光 | 提取亮度>1的区域→高斯模糊→叠加回原图 |
+| DOF | 景深 | 根据深度图模糊非焦点区域 |
+| Color Grading | 色彩校正 | Tonemapping 映射 HDR→LDR + LUT 调色 |
+
+<Term def="将画面中亮度超过阈值的区域提取、模糊后叠加回原图产生光晕扩散">Bloom</Term>需要 HDR 才能正常工作。<Term def="将 HDR 线性色彩映射到 LDR 显示范围">Tonemapping</Term>常用 ACES 曲线。<Term def="颜色查找表，将原始颜色映射为目标风格颜色">LUT</Term>预烘焙调色方案。
+
+## 交互Demo
+
+> 猜一猜：为什么 Bloom 效果需要开启 HDR？不开 HDR 会怎样？
+
+<UvfPostProcessingDiagram />
+
+<Stepper>
+<Step title="第一步：配 Volume">
+场景中添加 Global Volume 组件，新建 Volume Profile 资源。在 Profile 中 Add Override，添加 Bloom、Color Adjustments、Tonemapping。
+</Step>
+<Step title="第二步：配 Bloom">
+确保 Camera 和 URP Asset 都开启 HDR。Bloom 的 Threshold 设为1.0（只提取亮度超过1的区域），Intensity=2，Scatter=0.7。亮的区域（火光、天空）会产生光晕扩散。
+</Step>
+<Step title="第三步：配色彩校正">
+Tonemapping 选 ACES。Color Adjustments 调色温（偏暖+5）、对比度（+10）、饱和度（+5）。可选 LUT 贴图统一风格。Vignette 加暗角聚焦视线。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
+
+// 动态控制后处理参数（如受伤时屏幕变红）
+public class PostProcessController : MonoBehaviour
+{
+    public Volume postProcessVolume;
+    private Bloom bloom;
+    private ColorAdjustments colorAdjustments;
+    private Vignette vignette;
+
+    void Start()
+    {
+        // 从 Volume Profile 获取各组件引用
+        postProcessVolume.profile.TryGet(out bloom);
+        postProcessVolume.profile.TryGet(out colorAdjustments);
+        postProcessVolume.profile.TryGet(out vignette);
+    }
+
+    // 受伤时屏幕变红 + 暗角加强
+    public void OnDamaged()
+    {
+        StartCoroutine(DamageFlash());
+    }
+
+    IEnumerator DamageFlash()
+    {
+        // 瞬间变红
+        colorAdjustments.colorFilter.value = Color.red;
+        vignette.intensity.value = 0.6f;
+        bloom.intensity.value = 4f;
+
+        // 渐变恢复
+        float t = 0;
+        while (t < 0.5f)
+        {
+            t += Time.deltaTime;
+            float lerp = t / 0.5f;
+            colorAdjustments.colorFilter.value =
+                Color.Lerp(Color.red, Color.white, lerp);
+            vignette.intensity.value =
+                Mathf.Lerp(0.6f, 0.3f, lerp);
+            bloom.intensity.value =
+                Mathf.Lerp(4f, 2f, lerp);
+            yield return null;
+        }
+    }
+
+    // Local Volume：进入特定区域切换氛围
+    public void EnterBossRoom()
+    {
+        // Boss 房间偏冷色调
+        colorAdjustments.colorFilter.value = new Color(0.8f, 0.9f, 1f);
+        colorAdjustments.contrast.value = 20;
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** Bloom 效果很弱或完全看不到光晕。
+**原因 →** Camera 或 URP Asset 没有开启 HDR。LDR 模式下颜色最大值为1.0，Bloom 的 Threshold 设为1.0时几乎所有像素都不超过阈值，无法提取亮区。
+**修法 →** 在 URP Asset 中勾选 HDR，在 Camera 上勾选 HDR。确保材质的 Emission 通道有值且超过1.0。Bloom Threshold 设为0.9左右，让略高于1的区域也能产生光晕。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：移动端后处理优化的核心策略是什么？如何在效果和性能之间取得平衡？
+
+<Answer>
+核心策略：1）减少 Pass 数——只保留最关键的1-2个后处理（如 Bloom+Color Grading），砍掉 DOF、Motion Blur 等高消耗效果；2）降低渲染分辨率——后处理在半分辨率上计算；3）用 LUT 替代实时调色计算——预烘焙 LUT 查找更省性能；4）按场景动态开关——过场动画开全部效果，游戏内只开 Bloom。平衡原则：移动端保留 Bloom+Tonemapping+LUT 三件套，其余按需开启，帧率优先于画质。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Volume">URP 中管理后处理参数的组件，分 Global（全局）和 Local（局部触发器范围）两种，多个 Volume 按优先级叠加。</GlossaryItem>
+<GlossaryItem term="Bloom">泛光后处理，提取画面中亮度超过阈值的区域，高斯模糊后叠加回原图，产生光晕扩散效果。需要 HDR 支持。</GlossaryItem>
+<GlossaryItem term="Tonemapping">色调映射，将 HDR 线性色彩映射到 LDR 显示范围（0-255），常用 ACES 电影色调曲线。</GlossaryItem>
+<GlossaryItem term="LUT">Look-Up Table 颜色查找表，将原始颜色映射为目标风格颜色，可预烘焙为贴图实现高效调色。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 游戏特效制作典型实例" adaptedUrl="" />

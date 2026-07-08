@@ -1,0 +1,138 @@
+---
+title: "粒子系统进阶"
+type: C
+section: "游戏开发"
+order: 2
+description: "Color/Size 曲线、Collision 碰撞、Sub Emitters 连锁特效与 Trails 拖尾"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UvfParticleAdvancedDiagram } from "@/components/mdx/unity-vfx/diagrams/uvf-particle-advanced";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 Color over Lifetime 和 Size over Lifetime 曲线控制粒子渐隐渐缩
+- 能用 Collision 模块实现粒子与世界碰撞反弹
+- 能用 Sub Emitters 实现爆炸→烟雾→余烬的连锁特效
+- 能回答：CPU 粒子和 GPU 粒子（VFX Graph）的区别与选择标准
+</Objectives>
+
+## 直觉引入
+
+基础粒子系统只会「喷粒子」，但真实特效需要粒子随时间变化——颜色渐变、尺寸缩放、碰撞反弹、连锁触发。这些进阶模块让粒子从「白色方块」变成「有生命的特效」。
+
+爆炸不是一个粒子系统的事——主爆炸粒子在 Death 时触发烟雾子粒子，烟雾在 Collision 时触发余烬子粒子，这就是 Sub Emitters 的连锁链路。
+
+## 概念讲解
+
+<Term def="控制粒子颜色和透明度随生命周期变化的模块">Color over Lifetime</Term>让粒子渐隐。<Term def="控制粒子尺寸随生命周期变化的模块">Size over Lifetime</Term>让粒子渐缩。
+
+<Term def="在粒子的 Birth/Collision/Death 事件触发另一个粒子系统">Sub Emitters</Term>实现连锁特效。
+
+<Term def="让粒子与场景碰撞体交互的模块">Collision</Term>让雨滴落地溅射、弹片撞墙反弹。
+
+### Sub Emitters 连锁链路
+
+| 触发事件 | 触发子粒子 | 应用场景 |
+|---|---|---|
+| Birth | 闪光粒子 | 爆炸瞬间闪光 |
+| Death | 烟雾+余烬 | 爆炸后残留烟雾 |
+| Collision | 溅射粒子 | 雨滴落地水花 |
+
+## 交互Demo
+
+> 猜一猜：如何让爆炸后留下持续上升的烟雾？（提示：Sub Emitters 的 Death 事件）
+
+<UvfParticleAdvancedDiagram />
+
+<Stepper>
+<Step title="第一步：配 Color/Size 曲线">
+Color over Lifetime 曲线：Alpha 从255渐变到0（渐隐）。Size over Lifetime 曲线：先从0升到1再降到0（膨胀后收缩）。两条曲线配合让粒子有「出现→活跃→消亡」的生命感。
+</Step>
+<Step title="第二步：配 Collision">
+启用 Collision，Type=World。Dampen=1（碰撞后停止），Bounce=0.3（轻微弹跳），Lifetime Loss=1（碰撞后死亡并触发 Sub Emitter）。
+</Step>
+<Step title="第三步：配 Sub Emitters">
+在 Death 事件关联烟雾粒子系统。主爆炸粒子死亡时自动生成烟雾子粒子，实现「爆炸→烟雾」连锁。再加一个余烬子粒子在 Death 时触发，形成三层连锁。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using UnityEngine;
+
+// 爆炸特效控制器：Sub Emitters 连锁
+public class ExplosionVfx : MonoBehaviour
+{
+    public ParticleSystem mainExplosion;  // 主爆炸
+    public ParticleSystem smokeTrail;     // 烟雾子粒子
+    public ParticleSystem embers;         // 余烬子粒子
+
+    public void Play(Vector3 pos)
+    {
+        transform.position = pos;
+
+        // 主爆炸
+        mainExplosion.Play();
+
+        // 延迟触发烟雾（模拟 Death 事件的代码版）
+        Invoke(nameof(PlaySmoke), 0.3f);
+
+        // 延迟触发余烬
+        Invoke(nameof(PlayEmbers), 0.5f);
+    }
+
+    void PlaySmoke()
+    {
+        smokeTrail.Play();
+    }
+
+    void PlayEmbers()
+    {
+        embers.Play();
+    }
+
+    // 通过代码动态配置 Sub Emitters
+    void ConfigureSubEmitters()
+    {
+        var sub = mainExplosion.subEmitters;
+        sub.enabled = true;
+        // Death 事件触发烟雾
+        sub.AddSubEmitter(
+            ParticleSystemSubEmitterType.Death,
+            ParticleSystemSubEmitterProperties.InheritNothing,
+            smokeTrail);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 爆炸特效看起来只有「一团火球」，缺少层次感。
+**原因 →** 只用了一个粒子系统，没有用 Sub Emitters 分层。
+**修法 →** 用 Sub Emitters 分三层：主爆炸粒子（Birth 触发闪光）→ 死亡时触发烟雾子粒子 → 烟雾死亡时触发余烬子粒子。每层粒子的参数不同（主爆炸快速猛烈，烟雾缓慢上升，余烬零星飘落），形成时间上的层次递进。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：CPU 粒子（ParticleSystem）和 GPU 粒子（VFX Graph）有什么区别？什么场景用哪个？
+
+<Answer>
+CPU 粒子在 CPU 上逐个模拟，受限于单线程，最大约几万粒子，但支持世界碰撞、移动端兼容性好，适合简单特效和需要物理交互的场景。GPU 粒子（VFX Graph）在 GPU 上并行模拟，可处理百万级粒子，支持噪声场和事件链，但不支持原生世界碰撞，需要计算着色器支持。选择标准：移动端或简单特效用 CPU 粒子；PC/主机端的大规模环境特效（暴风雪、万人战场）用 VFX Graph。移动端慎用 VFX Graph。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Color over Lifetime">控制粒子颜色和透明度随生命周期变化的模块，用 Gradient 编辑器配置渐变色，常用于粒子渐隐效果。</GlossaryItem>
+<GlossaryItem term="Sub Emitters">子发射器模块，在粒子的 Birth/Collision/Death 事件触发另一个粒子系统，实现连锁特效。</GlossaryItem>
+<GlossaryItem term="Collision">碰撞模块，让粒子与场景碰撞体交互，可配置反弹系数、速度衰减和碰撞后生命损失。</GlossaryItem>
+<GlossaryItem term="VFX Graph">Unity 的 GPU 粒子系统，使用节点图编辑，可处理百万级粒子，适合大规模环境特效，但移动端兼容性受限。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 游戏特效制作典型实例" adaptedUrl="" />
