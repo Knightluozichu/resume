@@ -1,0 +1,85 @@
+---
+title: "C++ 机制：虚函数与多态"
+type: A
+section: "系统与操作系统"
+order: 2
+description: "理解 MFC 依赖的 C++ 特性——虚函数表、动态绑定、继承体系，以及 MFC 用宏模拟 RTTI 与动态创建的工程权衡"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcCppMechanicsDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-cpp-mechanics";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解虚函数表（vtable）与动态绑定的工作机制，明白「基类指针调用派生类实现」的底层原理
+- 掌握 MFC 的核心继承体系：CObject → CCmdTarget → CWnd/CDocument/CWinApp
+- 看清 MFC 为什么把消息处理做成「映射表」而非「每消息一虚函数」
+- 理解 MFC 用宏模拟 RTTI/动态创建的历史原因与利弊
+</Objectives>
+
+## 直觉引入
+
+把 C++ 的虚函数想象成「快递柜的电子目录」。每个对象（包裹）里藏着一张小卡片（vptr），指向它所属类型的那本「配送目录」（vtable）。你拿一个贴着「水果」标签的包裹（基类指针 `CObject*`），扫码卡片（通过 vptr 查 vtable），目录会告诉你「这个具体品种（实际类型 CMyDoc）该走哪条配送路线（CMyDoc::Serialize）」——目录是按实际品种印的，不是按标签印的。这就是动态绑定：调用哪个函数，取决于包裹**实际是什么**，而非标签写的是什么。MFC 全程靠这套机制「用基类指针调用用户派生类的代码」——框架拿着 `CObject*`/`CDocument*`/`CView*`，却能调到你写的 `CMyDoc::Serialize`、`CMyView::OnDraw`。没有虚函数，MFC 的「框架调用用户代码」根本无法实现。
+
+<MfcCppMechanicsDiagram />
+
+## 虚函数与继承体系
+
+<Term def="虚函数表（vtable）是 C++ 编译器为每个含虚函数的类生成的一张函数指针数组，每个槽位对应一个虚函数。对象内部藏一个 vptr 指向其所属类的 vtable。调用虚函数时，编译器生成「通过 vptr 查 vtable 对应槽位再跳转」的代码，于是在运行期根据对象的实际类型决定调用哪个实现——这就是动态绑定/多态。">虚函数表（vtable）</Term>是 MFC 的基石。机制：带虚函数的类对象内部藏一个 `vptr`（虚表指针），指向该类对应的 `vtable`；`vtable` 是函数指针数组，每槽对应一个虚函数。调用虚函数时编译器不直接绑定地址，而是生成「通过 vptr 查 vtable 对应槽位再跳转」的代码，于是在运行期根据对象实际类型（而非指针的静态类型）决定调用哪个实现。例如 `CObject* p = &myDoc; p->Serialize(ar);` 实际调 `CMyDoc::Serialize`。
+
+MFC 的核心继承体系：`CObject`（根）→ `CCmdTarget`（支持消息映射）→ `CWnd`（窗口）→ `CFrameWnd`/`CView`/`CDialog`；`CCmdTarget` 另一支 → `CDocument` → `CMyDoc`；`CWinApp` 也派生自 `CCmdTarget`。`CObject` 是根，因为它集中提供 MFC 六大技术所需的基础能力：运行时类型信息（GetRuntimeClass/IsKindOf）、动态创建、序列化（Serialize）、诊断（Dump/AssertValid）、对象计数。把这些放在根类，所有派生类「免费」获得统一接口，框架才能用基类指针统一管理异质对象。
+
+```text
+// MFC 用基类指针统一管理异质对象，靠虚函数多态分发
+void CDocument::Serialize(CArchive& ar) {  // 框架代码
+  // ... 通用处理 ...
+  // 调虚函数，实际跑到 CMyDoc::Serialize
+}
+
+CMyDoc myDoc;
+CDocument* pDoc = &myDoc;       // 基类指针指向派生对象
+pDoc->Serialize(ar);            // 运行期查 myDoc 的 vptr→vtable
+                                // → 命中 CMyDoc::Serialize，而非 CDocument::Serialize
+
+// CObject 提供的虚函数钩子（派生类按需重写）
+class CObject {
+  virtual CRuntimeClass* GetRuntimeClass() const;
+  virtual BOOL IsKindOf(const CRuntimeClass*) const;
+  virtual void Serialize(CArchive&);
+  virtual void AssertValid() const;
+  virtual void Dump(CDumpContext&) const;
+};
+```
+
+## 为什么不用虚函数处理消息
+
+一个看似自然的想法是「每个消息一个虚函数」：在 `CWnd` 里 `virtual void OnPaint(); virtual void OnMouseMove(...);`，派生类重写即可。但 MFC 没这么做，而是造了消息映射表。原因：①Windows 消息有数百条（WM_*），若每条都是虚函数，`CWnd` 的 vtable 会膨胀到几百项，**每个**派生对象都背这个开销，即使只重写一两个；②虚函数一旦声明不能撤销，所有派生类被迫继承全部槽位；③无法表达「消息归属层级」（某消息该在 View 处理还是 Frame）。MFC 的消息映射表（`BEGIN_MESSAGE_MAP`/`ON_COMMAND`）是编译期生成的静态数组，记录「消息码→成员函数指针」，运行期查表分发，只处理你显式登记的消息。这是「用数据表替代巨型 vtable」的经典权衡——空间按需、扩展灵活。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：以为 MFC 的宏（DECLARE_DYNAMIC 等）只是「语法糖」。** 这些宏是 MFC 在「C++ 标准尚未成熟」年代用宏模拟现代特性的硬核手段。`DECLARE_DYNAMIC/IMPLEMENT_DYNAMIC` 在每个类里塞一个静态 `CRuntimeClass` 成员并接入类型链，模拟了 C++98 才正式入标准的 RTTI；`DECLARE_DYNCREATE` 加工厂函数指针，模拟了「按类型 new 对象」（标准 RTTI 做不到）；`DECLARE_SERIAL` 再加 schema 版本号，支撑序列化。利：在编译器支持有限的时代就拿到了 RTTI+动态创建+序列化，且自建的 CRuntimeClass 比标准 RTTI 更强（能 CreateObject、能存 schema）。弊：宏展开的代码晦涩、调试难、错误信息差、侵入式、与标准设施不互通。这是「框架早于语言成熟」的典型工程现实——理解宏的展开，才算真正读懂 MFC。
+</Callout>
+
+<Exercises>
+**问题 1**：虚函数与多态的工作机制是什么？MFC 为什么离不开它？
+
+<Answer>
+机制：带虚函数的类对象内部藏 vptr 指向 vtable（函数指针数组）；调用虚函数时编译器生成「通过 vptr 查 vtable 槽位再跳转」的代码，运行期根据对象实际类型决定调用哪个实现。例如 CObject* p = &myDoc; p->Serialize(ar) 实际调 CMyDoc::Serialize。MFC 离不开它：CObject 声明虚的 Serialize/IsKindOf/GetRuntimeClass，派生类重写，框架全程持有基类指针靠多态调到用户实现。没有虚函数，CWinApp::Run 没法调用户的 OnDraw、CDocTemplate 没法统一管理派生 Document、序列化没法按基类指针写出派生类状态。MFC 整套「框架调用用户代码」的反向控制全靠虚函数实现。
+</Answer>
+
+**问题 2**：MFC 的虚函数机制为什么没有用在「消息处理」上，而是另造消息映射表？
+
+<Answer>
+「每消息一虚函数」有问题：①Windows 消息数百条，若每条都是虚函数，CWnd 的 vtable 膨胀到几百项，每个派生对象都背开销；②虚函数一旦声明不能撤销，所有派生类被迫继承全部槽位；③无法表达消息归属层级。MFC 的消息映射表是编译期生成的静态数组，记录「消息码→成员函数指针」，运行期查表分发，只处理显式登记的消息，未登记走默认。这样 vtable 只保留少数真正需要多态的虚函数，消息处理按需登记、可跨层级路由。这是「用数据表替代巨型 vtable」的经典权衡——空间按需、扩展灵活。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="虚函数表（vtable）">编译器为含虚函数的类生成的函数指针数组，每槽对应一个虚函数。对象内部藏 vptr 指向其所属类的 vtable。调用虚函数时通过 vptr 查 vtable 槽位再跳转，运行期根据对象实际类型决定调用哪个实现——动态绑定。MFC 全程靠它「用基类指针调派生类代码」。</GlossaryItem>
+<GlossaryItem term="CObject">MFC 之根，几乎所有类派生自它。集中提供 RTTI（GetRuntimeClass/IsKindOf）、动态创建、序列化（Serialize）、诊断（Dump/AssertValid）、对象计数等基础能力。把这些放根类，所有派生类免费获得统一接口，框架才能用基类指针统一管理异质对象。</GlossaryItem>
+<GlossaryItem term="DECLARE_DYNAMIC/IMPLEMENT_DYNAMIC">MFC 用宏模拟 RTTI 的手段：在每个类里塞一个静态 CRuntimeClass 成员并接入类型链。DYNCREATE 版加工厂函数指针支持动态创建；SERIAL 版再加 schema 支持序列化。能力递增：SERIAL ⊃ DYNCREATE ⊃ DYNAMIC。是「框架早于语言成熟」的工程产物。</GlossaryItem>
+</Glossary>

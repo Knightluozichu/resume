@@ -1,0 +1,84 @@
+---
+title: "持久化与序列化：CArchive"
+type: A
+section: "系统与操作系统"
+order: 6
+description: "理解 MFC 序列化机制——CObject::Serialize 配合 CArchive 把对象图写入自描述字节流，读时按类名动态重建"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcPersistenceSerializationDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-persistence-serialization";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 MFC 序列化的完整流程，明确 CArchive 与 CObject::Serialize 的分工
+- 掌握「读」时框架如何根据字节流重建出正确类型的对象（依赖 RTTI+动态创建+多态）
+- 理解 schema 版本号如何解决数据格式演进的版本兼容问题
+- 明白 CArchive 如何处理对象图中的共享引用与循环引用
+</Objectives>
+
+## 直觉引入
+
+把序列化想象成「家具的拆装搬运服务」。你要搬家（存盘），搬运公司（CArchive）不是把家具整个塞进车厢，而是按一套「自描述清单」操作：每件家具（对象）先贴一张标签写明「这是书架 CMyDoc、版本 2、尺寸 ...」（写 CRuntimeClass 类名+schema），再拆成零件（字段值）装箱。到了新家（读盘），搬运工看标签上的「书架」字样，去户籍册（CRuntimeClass 类型链）查到书架的「克隆授权」（工厂函数），现场造一个空书架（CreateObject 动态创建），再按清单把零件装回去（调 Serialize 读字段填回）。如果清单里写「这零件就是刚才那个抽屉」（共享引用），搬运工不会再造一个，而是直接指向已经造好的那个——这就是引用去重。整个过程自描述（标签写清类型）、可重建（按标签克隆）、能处理共享与循环——这正是 MFC 序列化的精髓。
+
+<MfcPersistenceSerializationDiagram />
+
+## 序列化的完整流程
+
+<Term def="CArchive 是 MFC 序列化的中介对象，是「对象图↔字节流」的桥梁。提供读写模式、流式 << / >> 操作符、对象引用去重、schema 版本校验。持有 CFile 做实际字节 I/O。写时先写对象的 CRuntimeClass 类名+schema 再写内容；读时按类名查 CRuntimeClass、CreateObject 重建对象。">CArchive</Term> 是「中介」。写流程（存盘）：①用户「文件/保存」，框架创建 CArchive（写模式）调 `CDocument::Serialize(ar)`；②CDocument::Serialize 先调基类，再对成员调 Serialize 或用 `ar<<pObj`；③`CArchive<<pObj` 先写对象所属类的 CRuntimeClass 类名+schema，再调该对象的 `Serialize(ar)`（虚函数，动态绑定到派生类）；④派生类 Serialize 把字段写进 CArchive 底层 CFile。读流程（读盘）：①框架创建 CArchive（读模式）调 Serialize；②`CArchive>>pObj` 先读类名，在 CRuntimeClass 类型链查同名类，调其 `CreateObject` 动态创建空对象，再调该对象 `Serialize(ar)` 读字段填回；③递归处理嵌套对象。分工：CArchive 管流与元数据，CObject::Serialize 管字段读写。
+
+```text
+// 序列化的类必须用 DECLARE_SERIAL / IMPLEMENT_SERIAL（内含 DYNCREATE）
+class CMyDoc : public CDocument {
+  DECLARE_SERIAL(CMyDoc)
+  CObArray m_lines;   // 元素是 CLine*（CObject 派生）
+public:
+  virtual void Serialize(CArchive& ar);
+};
+IMPLEMENT_SERIAL(CMyDoc, CDocument, 1 | VERSIONABLE_SCHEMA)
+
+void CMyDoc::Serialize(CArchive& ar) {
+  CDocument::Serialize(ar);        // 基类先存取
+  m_lines.Serialize(ar);           // CObArray 会对每个元素调 ar<<pObj / ar>>pObj
+  if (ar.IsStoring())
+    ar << m_nCount;                // 简单字段用 << / >>
+  else {
+    ar >> m_nCount;
+    DWORD schema = ar.GetObjectSchema();  // 取版本号做兼容分支
+    if (schema >= 2) ar >> m_strNewField; // 新版才有
+  }
+}
+```
+
+## 重建对象依赖的机制
+
+序列化「读」时框架根据字节流重建出正确类型对象，依赖三大机制：①**RTTI**——读出类名后在 CRuntimeClass 类型链里按 `m_lpszClassName` 查找匹配的类，所以类必须 IMPLEMENT_DYNAMIC；②**动态创建**——找到 CRuntimeClass 后调 `CreateObject()`（通过 `m_pfnCreateObject` 工厂函数）new 出空对象，所以序列化的类必须 IMPLEMENT_SERIAL（内含 DYNCREATE）；③**虚函数多态**——new 出对象后调它的 `Serialize(ar)`（虚函数），靠多态分发到派生类读取自己的字段。此外还有④**对象引用表**——处理共享/循环引用。一句话：序列化读 = RTTI 查类 + 动态创建 new + 多态调 Serialize。这是 MFC 六大技术环环相扣的最强证据。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：以为序列化只是「把字段按顺序写进文件」。** 朴素「按字段顺序写」的方案有三个致命问题：①**不知道类型**——读回时不知道字节流里这一段该填进 CMyDoc 还是 COtherDoc，必须靠 CRuntimeClass 类名自描述；②**格式一改旧文件失效**——增删字段后旧文件读错，必须靠 schema 版本号做兼容分支（`ar.GetObjectSchema()` 取版本，按版本读不同字段）；③**共享/循环引用炸栈**——对象图里同一对象被多处引用时朴素递归会写多份（读回变多副本破坏共享语义），循环引用（A 含 B、B 含 A）会无限递归。CArchive 的解法：维护「已读/已写对象表」做引用去重，写时遇已写过对象只写引用编号，读时遇引用号直接取表里已建对象。所以 MFC 序列化是「自描述（类名+schema）+ 动态重建（RTTI+CreateObject）+ 引用去重」的完整方案，远比「写字段」复杂。
+</Callout>
+
+<Exercises>
+**问题 1**：MFC 序列化的完整流程是什么？CArchive 和 CObject::Serialize 各起什么作用？
+
+<Answer>
+写流程：用户「文件/保存」→框架创建 CArchive（写模式）调 CDocument::Serialize→对成员调 Serialize 或 `ar<<pObj`→`CArchive<<pObj` 先写对象 CRuntimeClass 类名+schema 再调该对象 Serialize(ar)（虚函数）→派生类把字段写进 CArchive 底层 CFile。读流程：创建 CArchive（读模式）调 Serialize→`CArchive>>pObj` 先读类名查 CRuntimeClass 类型链→CreateObject 动态创建空对象→调其 Serialize(ar) 读字段填回→递归嵌套对象。分工：CArchive 管流与元数据（读写模式、`<< / >>`、引用去重、schema 校验），CObject::Serialize 管字段读写（每个类自定义的虚函数钩子）。
+</Answer>
+
+**问题 2**：序列化「读」时框架如何根据字节流重建出正确类型的对象？这依赖哪些机制？
+
+<Answer>
+重建流程：①CArchive 写入对象时先写其 CRuntimeClass 类名+schema 再写字段；②读时先读类名；③在 CRuntimeClass 类型链里按 m_lpszClassName 线性查找匹配类；④调 CRuntimeClass::CreateObject()（通过 m_pfnCreateObject 工厂函数）new 出空对象；⑤登记到已读对象表并用 schema 校验版本；⑥调新对象 Serialize(ar)（虚函数）让它读字段填回；⑦字段含 CObject* 递归同样过程，已读对象用引用去重。依赖机制：RTTI（按名查类）、动态创建（CreateObject new）、虚函数多态（调派生 Serialize）、对象引用表（共享/循环去重）。一句话：序列化读 = RTTI 查类 + 动态创建 new + 多态调 Serialize。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CArchive">MFC 序列化的中介对象，「对象图↔字节流」桥梁。提供读写模式、`<< / >>` 操作符、对象引用去重、schema 版本校验，持有 CFile 做字节 I/O。写时先写 CRuntimeClass 类名+schema 再写内容；读时按类名查 CRuntimeClass、CreateObject 重建对象。</GlossaryItem>
+<GlossaryItem term="schema 版本号">序列化的数据格式版本，IMPLEMENT_SERIAL 第三参指定，随类名一起写入文件。读出后用 ar.GetObjectSchema() 取出，按版本分支读字段实现向前/向后兼容。带 VERSIONABLE_SCHEMA 标志表示「我要自己处理版本」。让格式演进不破坏旧文件。</GlossaryItem>
+<GlossaryItem term="引用去重">CArchive 维护已读/已写对象表处理对象图的共享与循环引用。写时遇已写过对象只写引用编号；读时遇引用号直接取表里已建对象。共享引用只存一份读回仍同对象；循环引用因第二次只写引用号不再递归自然终止。和 Java 序列化同理。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,81 @@
+---
+title: "RTTI 与动态创建：CRuntimeClass"
+type: A
+section: "系统与操作系统"
+order: 5
+description: "理解 MFC 自建的运行时类型信息——CRuntimeClass 类型链支撑 IsKindOf 类型识别与 CreateObject 动态实例化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcRttiDynamicCreationDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-rtti-dynamic-creation";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 CRuntimeClass 结构的关键字段及它如何同时支撑 RTTI 与动态创建
+- 区分 DECLARE_DYNAMIC / DECLARE_DYNCREATE / DECLARE_SERIAL 三个宏的能力层级
+- 掌握 IsKindOf 沿基类链上溯识别类型的实现原理
+- 理解 MFC 自建 CRuntimeClass 而不用标准 RTTI 的深层原因
+</Objectives>
+
+## 直觉引入
+
+把 CRuntimeClass 想象成「每个人的身份证 + 克隆授权」。每个类都有一张身份证（静态 CRuntimeClass），上面写着：姓名（m_lpszClassName）、体型（m_nObjectSize）、版本号（m_wSchema）、父亲姓名（m_pBaseClass）、还有一张「克隆授权卡」（m_pfnCreateObject 工厂函数）。所有身份证串成一本户籍册（类型链，m_pNext）。查某对象「是不是某某类的人」（IsKindOf），就翻它的身份证，再沿「父亲」一栏往上查家谱，对上就返回是。而「克隆授权卡」更厉害——拿着身份证就能复制一个同款人出来（CreateObject），不需要你事先认识这个人的具体名字。C++ 标准的 RTTI（typeid）只给你身份证号能比对，但给不了「克隆授权」——MFC 早于标准 RTTI，干脆自建了一套带克隆能力的身份证体系。这套体系既是类型识别（RTTI），又是对象工厂（动态创建），还是序列化「按身份证复制人」的前提。
+
+<MfcRttiDynamicCreationDiagram />
+
+## CRuntimeClass 的双重身份
+
+<Term def="CRuntimeClass 是 MFC 自建的运行时类型信息结构，每个类用 IMPLEMENT_DYNAMIC/IMPLEMENT_DYNCREATE/IMPLEMENT_SERIAL 注册一个静态实例。含类名、对象大小、schema 版本号、工厂函数指针 m_pfnCreateObject、基类指针 m_pBaseClass、链表指针 m_pNext。一身二任：既是类型标识（支撑 GetRuntimeClass/IsKindOf），又是对象工厂（支撑 CreateObject 动态创建）。">CRuntimeClass</Term> 的关键字段：①`m_lpszClassName` 类名；②`m_nObjectSize` 对象大小；③`m_wSchema` 版本号（序列化用）；④`m_pfnCreateObject` 工厂函数指针，能 new 出该类对象；⑤`m_pBaseClass` 指向基类的 CRuntimeClass（类型链）；⑥`m_pNext` 类型链表中下一个类。支撑 RTTI：每个类用 `IMPLEMENT_DYNAMIC` 注册一个静态 CRuntimeClass，所有类的串成全局类型链；`GetRuntimeClass` 返回对象所属类的 CRuntimeClass；`IsKindOf` 从对象的类开始沿 `m_pBaseClass` 向上比对。支撑动态创建：`m_pfnCreateObject` 是工厂函数指针，`CreateObject()` 调它 new 出对象，无需编译期写死类型名。
+
+```text
+// 三个宏能力递增：SERIAL ⊃ DYNCREATE ⊃ DYNAMIC
+class CMyDoc : public CDocument {
+  DECLARE_SERIAL(CMyDoc)          // 头文件：声明 RTTI + 动态创建 + 序列化
+  // ...
+};
+
+// 实现文件：IMPLEMENT_SERIAL(类名, 基类, schema版本号)
+IMPLEMENT_SERIAL(CMyDoc, CDocument, 1 | VERSIONABLE_SCHEMA)
+
+// RTTI 用法
+CObject* p = &myDoc;
+p->IsKindOf(RUNTIME_CLASS(CDocument));   // TRUE，沿基类链上溯命中
+CRuntimeClass* pRC = p->GetRuntimeClass();
+// pRC->m_lpszClassName == "CMyDoc"
+
+// 动态创建用法（框架用这个按类型 new 对象）
+CObject* pNew = pRC->CreateObject();     // 等价于 new CMyDoc，但框架无需知道类名
+```
+
+## IsKindOf 的实现原理
+
+`IsKindOf(pClass)` 的实现：①取对象自己的运行时类型 `this->GetRuntimeClass()` 得 `pThisClass`；②循环：若 `pThisClass == pClass`（指针相等，同一个静态 CRuntimeClass）返回 TRUE，否则 `pThisClass = pThisClass->m_pBaseClass` 沿基类链上走；③走到 CObject 的 CRuntimeClass（`m_pBaseClass` 为 NULL）仍未匹配，返回 FALSE。原理：CRuntimeClass 通过 `m_pBaseClass` 形成「类继承链」的运行时镜像，IsKindOf 沿这条链向上遍历，等价于「我是这个类吗？不是的话我爹是吗？我爹的爹是吗？……」。判断「CMyDoc 对象是不是 CDocument」时，链是 `CMyDoc→CDocument→CCmdTarget→CObject`，走到 CDocument 命中返回 TRUE。这和标准 `dynamic_cast` 的「向上找基类」逻辑同构，但 MFC 早于标准 RTTI 自建了这套链表。局限：只能向上查继承关系，不能像 dynamic_cast 那样做跨层级 downcast。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：以为 MFC 的 CRuntimeClass 等价于 C++ 标准的 typeid/dynamic_cast，可以替换。** 不能替换，有深层原因：①历史——MFC 诞生于 1992 年，远早于 C++ 标准 RTTI（1998 入标准），当年没有标准 RTTI 可用；②能力更强——标准 RTTI 只能「识别类型」，不能「按类型创建对象」（new 需要编译期类型名），而 MFC 序列化、文档模板都需要动态创建，CRuntimeClass 的 m_pfnCreateObject 工厂指针提供了标准 RTTI 没有的能力；③携带元数据——CRuntimeClass 自带类名、对象大小、schema 版本号、基类指针，序列化和诊断需要，标准 type_info 只有名字；④与序列化深度耦合——读时要「按流中类名查 CRuntimeClass→CreateObject」，标准 RTTI 无法从字符串反查类型。即便标准 RTTI 后来可用，MFC 也无法回头替换——动态创建和序列化两大技术彻底依赖 CRuntimeClass 的工厂能力，这是「框架早于语言成熟」的典型代价。
+</Callout>
+
+<Exercises>
+**问题 1**：CRuntimeClass 结构里有哪些关键字段？它如何支撑 RTTI 与动态创建？
+
+<Answer>
+关键字段：①m_lpszClassName 类名；②m_nObjectSize 对象大小；③m_wSchema 版本号；④m_pfnCreateObject 工厂函数指针；⑤m_pBaseClass 基类 CRuntimeClass 指针（类型链）；⑥m_pNext 链表下一个。支撑 RTTI：每类注册静态 CRuntimeClass 串成类型链，GetRuntimeClass 返回对象所属类，IsKindOf 沿 m_pBaseClass 上溯比对。支撑动态创建：m_pfnCreateObject 是工厂函数指针，CreateObject() 调它 new 出对象无需编译期写死类型名。所以 CRuntimeClass 一身二任：既是类型标识（RTTI），又是对象工厂（动态创建）。
+</Answer>
+
+**问题 2**：DECLARE_DYNAMIC / DECLARE_DYNCREATE / DECLARE_SERIAL 三个宏有什么区别？分别用在什么场景？
+
+<Answer>
+能力递增：①DECLARE_DYNAMIC——只提供 RTTI（GetRuntimeClass/IsKindOf），不能动态创建。用于「需类型识别但不需要按类型 new」的类；②DECLARE_DYNCREATE——RTTI + 动态创建（m_pfnCreateObject + CreateObject）。用于「需框架按类型实例化」的类，如 CDocument/CView/CFrameWnd 派生类——CDocTemplate 要 CreateObject 动态创建它们；③DECLARE_SERIAL——DYNCREATE + 序列化（带 schema 版本号的 `<< / >>` 操作符）。用于「需持久化」的类。关系：SERIAL ⊃ DYNCREATE ⊃ DYNAMIC。选哪个看需求：只识别类型用 DYNAMIC；要被框架动态 new 用 DYNCREATE；要序列化必须 SERIAL（因为序列化读时要动态创建）。这是「按需付费」设计。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CRuntimeClass">MFC 自建的运行时类型信息结构，每类用 IMPLEMENT_* 宏注册一个静态实例。含类名/对象大小/schema/工厂函数指针/基类指针/链表指针。一身二任：类型识别（IsKindOf 沿 m_pBaseClass 上溯）+ 对象工厂（CreateObject 调 m_pfnCreateObject）。是 RTTI、动态创建、序列化的共同基石。</GlossaryItem>
+<GlossaryItem term="IsKindOf">运行时类型判断。实现：取对象 GetRuntimeClass，沿 m_pBaseClass 向上遍历基类链，命中返回 TRUE。等价于「我是这个类吗？我爹是吗？……」。和 dynamic_cast 同构但只能向上查继承，不能跨层级 downcast。</GlossaryItem>
+<GlossaryItem term="动态创建">按运行时类型 new 对象的能力。CRuntimeClass::CreateObject 调 m_pfnCreateObject 工厂函数 new 出对象，无需编译期写死类型名。标准 RTTI 做不到。是文档模板（动态创建 Doc/View/Frame）和序列化（按类名重建对象）的前提。</GlossaryItem>
+</Glossary>

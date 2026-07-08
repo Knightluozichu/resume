@@ -1,0 +1,84 @@
+---
+title: "全书总复习"
+type: A
+section: "系统与操作系统"
+order: 9
+description: "以 CObject 为根串联 MFC 六大技术——从 Win32 到 C++ 多态、从框架控制流到 COM 组件化的设计哲学贯通"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcFinalReviewDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 用「CObject 为根」串联 MFC 六大技术，看清它们如何环环相扣
+- 理解 MFC「框架调用用户代码」（控制反转）的四处体现及各自机制
+- 掌握 MFC 用映射表替代部分虚函数的设计权衡与场景判断
+- 反思「框架早于语言成熟」的工程教训，知道哪些设计会变、哪些不会变
+</Objectives>
+
+## 直觉引入
+
+把 MFC 想象成一棵「嫁接树」。树根是 `CObject`——它提供养分（RTTI、序列化、诊断的统一接口）给整棵树；主干是 `CRuntimeClass`——它既是年轮（记录类型），又是扦插繁殖的能力（动态创建），让这棵树能凭一段枝条复制出同款新树（序列化重建）；从主干长出几根大枝：消息映射、文档/视图、命令路由，每根枝上又嫁接用户的品种（CMyDoc/CMyView）。整棵树的**生长方式**由园丁（框架）定——何时浇水（InitInstance）、何时修剪（OnIdle）、何时落果（ExitInstance），用户只在标记好的嫁接点（虚函数钩子）提供自己的芽条。理解这棵树的关键不是记住每根枝叫什么，而是看清「根→主干→枝→嫁接点」的传导关系：删掉根（CObject）或主干（CRuntimeClass），RTTI/动态创建/序列化/文档视图全塌。本章就是把全书的嫁接点串成这张传导图。
+
+<MfcFinalReviewDiagram />
+
+## CObject 为根串联六大技术
+
+<Term def="CObject 是 MFC 之根，几乎所有类派生自它。集中提供 RTTI（GetRuntimeClass/IsKindOf）、动态创建、序列化（Serialize）、诊断（Dump/AssertValid）、对象计数等基础能力。MFC 六大技术全部建立在 CObject 之上：CRuntimeClass 同时支撑 RTTI/动态创建/序列化，文档模板用 CRuntimeClass 动态创建 Doc/View/Frame，消息映射基类 CCmdTarget 也派生自 CObject。">CObject</Term> 是根，六大技术环环相扣：①**RTTI**（CRuntimeClass 类型链）——CObject 注册 classCObject，派生类用 IMPLEMENT_DYNAMIC 接入类型链，IsKindOf 沿 m_pBaseClass 上溯识别类型；②**动态创建**——CRuntimeClass 的 m_pfnCreateObject 工厂函数让 CreateObject 能按类型 new 对象；③**文档/视图**——CDocTemplate 必须用 CRuntimeClass 动态创建 Doc/View/Frame，依赖②；④**序列化**——CObject::Serialize 是钩子，CArchive 读时按流中类名查 CRuntimeClass（依赖①）再 CreateObject（依赖②）重建对象，再靠虚函数多态调派生 Serialize；⑤**消息映射**——CCmdTarget 派生自 CObject，用映射表+OnCmdMsg 路由命令消息；⑥**程序初始化**——CWinApp::InitInstance 流程里 AddDocTemplate 又依赖③。COM 扩展——CCmdTarget 用接口映射表承载 IUnknown，引用计数复用 CObject 体系。一句话：删掉 CObject 或 CRuntimeClass，RTTI/动态创建/序列化/文档视图全塌。
+
+```text
+// 一个 MFC 程序的运行里，六大技术全部登场（环环相扣的证据）
+CMyApp theApp;                          // CObject 体系（构造）
+
+theApp.InitInstance();                  // ⑥ 模板方法（CWinApp 钩子）
+  AddDocTemplate(new CSingleDocTemplate(
+      IDR_MAINFRAME,
+      RUNTIME_CLASS(CMyDoc),            // ① RTTI + ② 动态创建
+      RUNTIME_CLASS(CMainFrame),        //    CDocTemplate 用 CreateObject
+      RUNTIME_CLASS(CMyView)));         //    动态创建 Doc/View/Frame（③ 文档/视图）
+  m_pMainWnd->ShowWindow(SW_SHOW);
+
+theApp.Run();                           // ⑥ 消息循环骨架
+  // 用户「文件/打开」→ CArchive 读字节流
+  //   → 按类名查 CRuntimeClass（① RTTI）→ CreateObject（② 动态创建）
+  //   → 调 Serialize 读字段（④ 序列化，靠虚函数多态）
+  // 用户点菜单 → WM_COMMAND → View→Doc→Frame→App 路由（⑤ 消息映射/路由）
+  //   → 命中 CMyDoc::OnFileOpen → 改数据 → UpdateAllViews → OnDraw（③ 文档/视图）
+  // 集成 OLE 时 CCmdTarget 承载 IUnknown（COM 扩展）
+
+theApp.ExitInstance();                  // ⑥ 退出钩子
+```
+
+## 控制反转的四处体现
+
+MFC「框架调用用户代码」（控制反转）体现在四处：①**模板方法**——CWinApp::InitInstance/Run/ExitInstance、CDocument::OnNewDocument、CView::OnDraw 等是虚函数钩子，框架在固定流程节点调用，用户重写填内容；机制是 C++ 虚函数动态绑定。②**消息映射**——命令/窗口消息到达时，框架 OnCmdMsg/OnWndMsg 查消息映射表调用用户登记的成员函数；机制是宏生成的静态表+成员函数指针回调。③**命令路由**——WM_COMMAND 按 View→Document→Frame→App 逐级调 OnCmdMsg，让多个候选对象有机会处理；机制是 CCmdTarget 统一接口+链式分发。④**序列化**——CArchive 调 CObject::Serialize 虚函数，动态绑定到用户派生类实现；机制是虚函数多态+RTTI/动态创建重建对象。共同点：流程/分发逻辑在框架，用户只提供「具体处理」，框架用虚函数、映射表、路由链等手段在合适时机回调用户代码。这是「框架 vs 库」的本质。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：读完 MFC 只记住了「一堆宏和类名」，没抓住主线。** MFC 的主线不是「CWinApp/CDocument/CView 这些类」，而是「用 C++ 把 Win32 过程式模型抽象成可复用框架」的**设计思想**。抓主线要回答三个问题：①**根在哪里**——CObject，它统一提供 RTTI/序列化/诊断接口，让框架能用基类指针管理异质对象；②**脊柱是什么**——CRuntimeClass，它既是类型标识（RTTI）又是对象工厂（动态创建），是序列化「按类名重建」和文档模板「按类型实例化」的共同前提；③**控制权在谁**——在框架（模板方法+消息映射+命令路由+序列化回调），用户代码是被框架在固定节点调用的「钩子」。把这三条想清楚，六大技术就串成一张传导图，而不是一盘散沙。脱离主线背类名，等于没读懂 MFC——这正是「深入浅出」的要义：浅在表面 API，深在设计哲学。
+</Callout>
+
+<Exercises>
+**问题 1**：用「CObject 为根」串联 MFC 六大技术，说明它们如何环环相扣。
+
+<Answer>
+①CObject 是根，提供虚的 Serialize/IsKindOf/GetRuntimeClass/Dump；②RTTI——派生类用 IMPLEMENT_DYNAMIC 注册 CRuntimeClass 接入类型链，IsKindOf 沿 m_pBaseClass 上溯；③动态创建——CRuntimeClass 的 m_pfnCreateObject 让 CreateObject 按类型 new 对象；④文档/视图——CDocTemplate 必须用 CRuntimeClass 动态创建 Doc/View/Frame，依赖③；⑤序列化——CArchive 读时按流中类名查 CRuntimeClass（依赖②）再 CreateObject（依赖③）重建对象，再靠虚函数多态调派生 Serialize；⑥消息映射——CCmdTarget 派生自 CObject，用映射表+OnCmdMsg 路由命令；程序初始化——CWinApp::InitInstance 里 AddDocTemplate 又依赖④；COM——CCmdTarget 用接口映射表承载 IUnknown。环环相扣：删掉 CObject 或 CRuntimeClass，RTTI/动态创建/序列化/文档视图全塌。
+</Answer>
+
+**问题 2**：如果今天重写 MFC，哪些设计会变、哪些不会变？
+
+<Answer>
+会变：①RTTI/动态创建——用标准 C++ RTTI（typeid）做识别，用模板或注册表做动态创建，去掉 DECLARE_DYNAMIC 等宏；②消息映射——用 std::function/信号槽/委托替代宏表，类型安全且动态可连接（类似 Qt/WPF）；③字符串/集合——用 std::string/std::vector 替代 CString/CObArray；④错误处理——用异常替代 HRESULT/BOOL；⑤模板方法——部分用回调/lambda 替代继承，减少强制派生；⑥COM——基于现代 C++ 重做或用 C++/WinRT。不会变：①CObject 作根提供统一 RTTI/序列化/诊断的思路（实现现代化）；②文档/视图分离（数据与显示解耦是 GUI 通用原则）；③命令路由（让最合适对象处理命令的解耦思想）；④框架控流程的模板方法精神（框架 vs 库本质不变）；⑤「用映射表处理开放集合」的数据驱动思想。教训：语言能力不足时用宏模拟是技术债；核心设计原则超越语言值得保留；API 一旦发布就难撤。不求「重写」而求「理解为什么」正是读 MFC 的价值。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CObject 为根">MFC 几乎所有类派生自 CObject，它统一提供 RTTI/动态创建/序列化/诊断接口，让框架能用基类指针管理异质对象。六大技术全部建立在它之上：CRuntimeClass 支撑 RTTI/动态创建/序列化，文档模板用 CRuntimeClass 动态创建，消息映射基类 CCmdTarget 也派生自 CObject。删掉 CObject 整套体系坍塌。</GlossaryItem>
+<GlossaryItem term="控制反转（框架调用户）">MFC 的核心特征：流程/分发逻辑在框架，用户只提供具体处理。四处体现：模板方法（虚函数钩子）、消息映射（静态表+成员函数指针）、命令路由（CCmdTarget 链式分发）、序列化（虚函数多态+RTTI 重建）。本质是「框架 vs 库」：库是你调它，框架是它调你。</GlossaryItem>
+<GlossaryItem term="数据驱动的映射表">MFC 用静态登记表替代部分虚函数处理开放集合（消息码/接口 IID 可扩）。消息映射表、接口映射表、分派映射表同构：编译期宏生成、按需登记、可跨层级、带元数据。利在空间按需与扩展灵活，弊在宏晦涩与类型安全弱。场景：封闭集合用虚函数，开放集合用映射表。</GlossaryItem>
+</Glossary>

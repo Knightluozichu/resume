@@ -1515,6 +1515,16 @@ import { lopFirewallSecurityQuestions } from "./review/lop-firewall-security";
 import { lopSystemdServicesQuestions } from "./review/lop-systemd-services";
 import { lopShellScriptingQuestions } from "./review/lop-shell-scripting";
 import { lopFinalReviewQuestions } from "./review/lop-final-review";
+import { mfcLearningMapQuestions } from "./review/mfc-learning-map";
+import { mfcWin32FoundationQuestions } from "./review/mfc-win32-foundation";
+import { mfcCppMechanicsQuestions } from "./review/mfc-cpp-mechanics";
+import { mfcDocumentViewQuestions } from "./review/mfc-document-view";
+import { mfcMessageRoutingQuestions } from "./review/mfc-message-routing";
+import { mfcRttiDynamicCreationQuestions } from "./review/mfc-rtti-dynamic-creation";
+import { mfcPersistenceSerializationQuestions } from "./review/mfc-persistence-serialization";
+import { mfcTemplateMethodQuestions } from "./review/mfc-template-method";
+import { mfcComInterfaceQuestions } from "./review/mfc-com-interface";
+import { mfcFinalReviewQuestions } from "./review/mfc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3065,6 +3075,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lopSystemdServicesQuestions,
   ...lopShellScriptingQuestions,
   ...lopFinalReviewQuestions,
+  ...mfcLearningMapQuestions,
+  ...mfcWin32FoundationQuestions,
+  ...mfcCppMechanicsQuestions,
+  ...mfcDocumentViewQuestions,
+  ...mfcMessageRoutingQuestions,
+  ...mfcRttiDynamicCreationQuestions,
+  ...mfcPersistenceSerializationQuestions,
+  ...mfcTemplateMethodQuestions,
+  ...mfcComInterfaceQuestions,
+  ...mfcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

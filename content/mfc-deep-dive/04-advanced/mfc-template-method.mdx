@@ -1,0 +1,83 @@
+---
+title: "模板方法模式应用"
+type: A
+section: "系统与操作系统"
+order: 7
+description: "理解模板方法模式在 MFC 中的应用——CWinApp::InitInstance 定义启动骨架，派生类重写虚函数填入具体步骤，框架拥有主控权"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcTemplateMethodDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-template-method";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解模板方法模式的核心思想：基类定骨架、派生类填步骤（好莱坞原则）
+- 掌握 MFC 在 CWinApp::InitInstance/Run/ExitInstance 等处的模板方法应用
+- 明白「框架控流程」相对「用户自己写 WinMain」的利弊
+- 对比 MFC 模板方法与现代框架（Qt 信号槽、C# 事件）的解耦思路
+</Objectives>
+
+## 直觉引入
+
+把模板方法想象成「自助餐厅的固定流程」。餐厅（框架）规定了吃饭的流程：进门拿盘子（固定步骤 1）→ 自己挑菜（变化点，你填）→ 收银台结账（固定步骤 3）→ 自己找位子吃（变化点，你填）→ 还盘子离场（固定步骤 5）。流程的**编排权在餐厅**——它决定先做什么后做什么、每步何时发生；你只在标记好的「变化点」填入自己的选择，不能改流程顺序。这就是好莱坞原则「Don't call us, we'll call you」——你不用催餐厅上菜，餐厅会在该叫你的时候叫你（比如到挑菜环节喊你过来）。MFC 正是这样：CWinApp::InitInstance 是「餐厅流程」，里面有几个固定步骤（注册、命令行处理、显示窗口），中间夹着「你重写的虚函数钩子」（如 InitInstance 本身、OnNewDocument、OnDraw）。你写的代码是被框架在固定节点调用的，不是你主动调用框架。这种「框架拥有主控权」的反向控制，让 MFC 成其为「框架」而非「库」。
+
+<MfcTemplateMethodDiagram />
+
+## 模板方法与好莱坞原则
+
+<Term def="模板方法模式：基类用一个方法定义「算法骨架」，把其中变化的步骤声明为虚函数（钩子），由派生类重写填入具体实现；流程控制权在基类（框架），派生类只填变化点。体现「Don't call us, we'll call you」的好莱坞原则——你写的代码是被框架调用的，而非你调用框架。">模板方法模式</Term>是 MFC 实现控制反转的核心手段。MFC 多处用了它：①最典型 `CWinApp::InitInstance`——MFC 的 WinMain 调 `theApp.InitInstance()`，用户在派生 CMyApp 重写它填「加文档模板、显示主窗口」；②`CWinApp::Run` 控制消息循环骨架，可重写 `OnIdle`/`ExitInstance`；③`CDocument::OnNewDocument` 新建文档的钩子；④`CView::OnDraw` 绘制钩子（框架在 WM_PAINT 里调 OnPaint→OnDraw）；⑤`CDocument::Serialize` 也是钩子。共同点：流程由框架编排（何时调、调几次、调完干什么），用户只重写几个虚函数提供具体内容。
+
+```text
+// MFC 内部的 WinMain（你几乎不碰，框架拥有主控权）
+int AFXAPI AfxWinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+  CWinApp* pApp = AfxGetApp();
+  pApp->InitApplication();          // 框架固定步骤
+  if (!pApp->InitInstance())        // 钩子：用户重写填内容（模板方法）
+    return 0;
+  int nRet = pApp->Run();           // 框架：消息循环骨架 + OnIdle
+  pApp->ExitInstance();             // 钩子：用户重写做清理
+  return nRet;
+}
+
+// 你只重写变化点（CMyApp 派生 CWinApp）
+BOOL CMyApp::InitInstance() {
+  AddDocTemplate(new CSingleDocTemplate(IDR_MAINFRAME,
+      RUNTIME_CLASS(CMyDoc), RUNTIME_CLASS(CMainFrame), RUNTIME_CLASS(CMyView)));
+  m_pMainWnd->ShowWindow(SW_SHOW);  // 填「显示主窗口」
+  return TRUE;                       // 返回 TRUE 才进 Run
+}
+// Run 一般不重写——骨架交给框架，你只在 OnIdle/OnDraw/OnFileOpen 等钩子里填代码
+```
+
+## 框架 vs 库
+
+为什么 MFC 用模板方法（框架控流程）而不让用户自己写 WinMain？原因：①**统一流程**——所有 MFC 程序的启动/消息循环/退出流程一致，框架能在固定节点插入自己的管理（OnIdle 空闲处理、临时对象清理、退出资源回收）；②**减少样板**——用户不用每次重写 RegisterClass/CreateWindow/消息循环；③**保证不变量**——框架确保「文档模板注册了才进消息循环」「退出前调 ExitInstance」。利：开发效率高、流程统一易维护、框架能演进（改 Run 不影响用户代码）。弊：①控制反转带来「隐式」——流程在框架内部，新手不知「我的代码何时被调」，调试要懂框架流程；②灵活性受限——骨架不易大改，想自定义消息循环细节得重写 Run 破坏统一性。这是「框架」与「库」的本质区别：库是你调它，框架是它调你。MFC 是典型框架，模板方法是它实现控制反转的核心手段。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：以为「重写 InitInstance」就是模板方法的全部，搞不清框架到底何时调自己。** 模板方法的精髓不在「重写哪个函数」，而在「理解框架的流程编排」。新手常困惑「为什么我写的 OnFileOpen 没被调用」「为什么 OnDraw 反复触发」——根源是不懂框架流程。真相：框架的 WinMain 调 InitInstance（你建窗口）→ Run 进消息循环 → 用户点菜单触发 WM_COMMAND → 命令路由到你的 OnFileOpen → OnFileOpen 改文档数据 → UpdateAllViews → OnUpdate → Invalidate → WM_PAINT → OnPaint → OnDraw。你的代码是这条链上的若干「钩子节点」，框架决定它们何时被调。不画清这条流程链，写 MFC 就是「瞎猜框架会不会调我」。所以学模板方法的关键是**画清框架的调用流程**，而不是记住「要重写 InitInstance」。
+</Callout>
+
+<Exercises>
+**问题 1**：模板方法模式的核心思想是什么？MFC 在哪里用了它？
+
+<Answer>
+核心思想：基类用一个方法定义算法骨架，把变化步骤声明为虚函数（钩子），派生类重写填具体实现；流程控制权在基类（框架），派生类只填变化点。即好莱坞原则「Don't call us, we'll call you」——你写的代码被框架调用而非你调框架。MFC 多处用：①CWinApp::InitInstance（用户重写填「加文档模板、显示窗口」）；②CWinApp::Run（消息循环骨架，可重写 OnIdle/ExitInstance）；③CDocument::OnNewDocument；④CView::OnDraw（框架在 WM_PAINT 调 OnPaint→OnDraw）；⑤CDocument::Serialize。共同点：流程由框架编排，用户只重写几个虚函数提供内容。
+</Answer>
+
+**问题 2**：为什么 MFC 要用模板方法（框架控流程）而不是让用户自己写 WinMain？这带来什么利弊？
+
+<Answer>
+原因：①统一流程——所有 MFC 程序启动/消息循环/退出流程一致，框架能在固定节点插入管理（OnIdle 空闲处理、临时对象清理、退出回收）；②减少样板——用户不用重写 RegisterClass/CreateWindow/消息循环；③保证不变量——框架确保「模板注册了才进消息循环」「退出前调 ExitInstance」。利：开发效率高、流程统一易维护、框架能演进。弊：①控制反转带来隐式，新手不知代码何时被调，调试要懂框架流程；②灵活性受限，骨架不易大改，想自定义消息循环细节得重写 Run 破坏统一性。本质：库是你调它，框架是它调你，MFC 是典型框架。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="模板方法模式">基类用方法定义算法骨架，变化步骤声明为虚函数（钩子），派生类重写填具体实现，流程控制权在基类。体现好莱坞原则。MFC 的 CWinApp::InitInstance/Run/ExitInstance、CDocument::OnNewDocument/Serialize、CView::OnDraw 都是模板方法钩子，框架在固定流程节点调用用户重写的虚函数。</GlossaryItem>
+<GlossaryItem term="好莱坞原则">「Don't call us, we'll call you」。框架拥有主控权，用户代码「挂」在框架的流程节点上被调用，而非用户主动调用框架。这是「框架 vs 库」的本质区别：库是你调它，框架是它调你。模板方法、回调、事件机制都是这一原则的实现。</GlossaryItem>
+<GlossaryItem term="InitInstance / Run / ExitInstance">CWinApp 的生命周期三钩子。InitInstance 管「起来」（建窗口/文档，返回 TRUE 才继续），Run 管「活着」（消息循环骨架 + OnIdle 空闲），ExitInstance 管「收尾」（清理资源）。用户一般在 InitInstance/ExitInstance 填代码，Run 一般不重写。是模板方法的教科书级应用。</GlossaryItem>
+</Glossary>

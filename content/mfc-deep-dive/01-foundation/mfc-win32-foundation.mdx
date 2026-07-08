@@ -1,0 +1,90 @@
+---
+title: "Win32 基础：HWND 与窗口过程"
+type: A
+section: "系统与操作系统"
+order: 1
+description: "从 Win32 窗口程序模型理解 MFC 的封装起点——WinMain、窗口类注册、消息循环与 WndProc 的完整链路"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcWin32FoundationDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-win32-foundation";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解一个 Win32 窗口程序从 WinMain 到退出的完整生命周期
+- 掌握 HWND（窗口句柄）和 WndProc（窗口过程）在窗口模型中的角色
+- 看清 MFC 封装前的「原始形态」：注册窗口类、创建窗口、消息循环、switch-case 分发
+- 明白为什么 MFC 要在这层之上再做面向对象封装
+</Objectives>
+
+## 直觉引入
+
+写一个最朴素的 Windows 窗口程序，就像开一家「无人值守的小卖部」。你先去工商局「注册一个招牌」（RegisterClass，把窗口类名和「接待员」WndProc 登记好），再「装修开门」（CreateWindow 拿到门牌号 HWND，ShowWindow 营业）。之后小卖部就进入「等客模式」：门口有个信箱（消息队列），接待员（WndProc）一直等信（GetMessage 阻塞），来了信就拆看（TranslateMessage 翻译按键）、按信的内容办事（DispatchMessage 分发到 WndProc 的 switch-case）：客人要画窗户（WM_PAINT）就画，要关店（WM_DESTROY）就发「关门通知」（PostQuitMessage）。关门通知一到，等信循环结束，小卖部下班的。MFC 做的事，就是把这整套「信箱+接待员+switch-case」包装成「窗口对象+消息映射表+成员函数」，让你不用每次重写流程。但要看懂 MFC，必须先看懂这个原始形态。
+
+<MfcWin32FoundationDiagram />
+
+## 窗口程序的一生
+
+<Term def="HWND 是 Windows 窗口的句柄，一个不透明类型值，由系统分配，程序通过它引用窗口并调用 API。句柄而非指针的原因是封装与安全：内核对象由系统管理，用户态不能直接操作其内存。">HWND</Term> 和 <Term def="WndProc 是窗口过程回调函数，签名 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM)，在注册窗口类时通过 lpfnWndProc 绑定到窗口类，系统把所有发往该窗口的消息都送到这个函数处理。">WndProc</Term> 是 Win32 窗口模型的两个支柱。一个完整的 Win32 程序流程：①`WinMain` 入口接收 `hInstance`；②填充 `WNDCLASS` 把 `lpfnWndProc` 设为窗口过程函数，`RegisterClass` 注册；③`CreateWindow` 按类名创建窗口实例返回 `HWND`；④`ShowWindow`/`UpdateWindow` 显示并触发首次 `WM_PAINT`；⑤消息循环 `while(GetMessage(&msg)) { TranslateMessage(&msg); DispatchMessage(&msg); }`；⑥`WndProc` 用 `switch(msg)` 处理各类消息，未处理的交 `DefWindowProc`；⑦`WM_DESTROY` 中 `PostQuitMessage(0)`；⑧`GetMessage` 收到 `WM_QUIT` 返回 `FALSE`，循环结束退出。
+
+```text
+// Win32 窗口程序的核心骨架（MFC 封装前的原貌）
+int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nShow) {
+  WNDCLASS wc = { 0 };
+  wc.lpfnWndProc = MyWndProc;        // 绑定窗口过程
+  wc.lpszClassName = "MyApp";
+  wc.hInstance = hInst;
+  RegisterClass(&wc);                 // 注册窗口类
+
+  HWND hwnd = CreateWindow("MyApp", "我的应用",
+      WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+      480, 320, NULL, NULL, hInst, NULL);
+  ShowWindow(hwnd, nShow);            // 显示
+
+  MSG msg;
+  while (GetMessage(&msg, NULL, 0, 0)) {  // 阻塞取消息
+    TranslateMessage(&msg);           // 按键 → 字符
+    DispatchMessage(&msg);            // 分发到 MyWndProc
+  }
+  return msg.wParam;
+}
+
+LRESULT CALLBACK MyWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+  switch (msg) {
+    case WM_PAINT:  /* BeginPaint... 绘制 ... EndPaint */ break;
+    case WM_COMMAND: /* 菜单/控件命令 */ break;
+    case WM_DESTROY: PostQuitMessage(0); break;
+    default: return DefWindowProc(hwnd, msg, wp, lp);  // 默认处理
+  }
+  return 0;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把消息循环当成「死循环空耗 CPU」。** 有人看到 `while(GetMessage(...))` 以为程序在疯狂自旋。其实 `GetMessage` 在没有消息时会让线程**阻塞**（交出 CPU），等系统有消息才唤醒返回——这是事件驱动模型能省 CPU 的关键。若用忙等待（`while(true) PeekMessage()`）才会 100% 空耗。`GetMessage` 取到 `WM_QUIT` 时返回 `FALSE` 退出循环，其他消息返回 `TRUE` 继续。MFC 的消息循环封装在 `CWinApp::Run`：基本结构仍是 `GetMessage`/`TranslateMessage`/`DispatchMessage`，但扩展了 `OnIdle` 空闲处理——队列空时调 `OnIdle` 做后台任务（更新 UI、回收临时对象映射），再回到 `GetMessage` 阻塞。理解这点才能解释为什么 MFC 程序空闲时 CPU 占用低、为什么 `OnIdle` 会被周期性调用。
+</Callout>
+
+<Exercises>
+**问题 1**：一个 Win32 窗口程序从 WinMain 到退出的完整流程是什么？
+
+<Answer>
+①WinMain 入口接收 hInstance；②填充 WNDCLASS 把 lpfnWndProc 设为窗口过程，RegisterClass 注册；③CreateWindow 按类名创建窗口返回 HWND；④ShowWindow/UpdateWindow 显示并触发首次 WM_PAINT；⑤消息循环 `while(GetMessage(&msg)) { TranslateMessage; DispatchMessage; }`；⑥WndProc 用 switch(msg) 处理 WM_CREATE/WM_PAINT/WM_COMMAND 等，未处理的交 DefWindowProc；⑦WM_DESTROY 中 PostQuitMessage(0)；⑧GetMessage 收到 WM_QUIT 返回 FALSE，循环结束，WinMain 返回进程退出。MFC 把这套流程封装进 CWinApp：WinMain 在 MFC 内部，InitInstance 是用户填的钩子，消息循环在 CWinApp::Run。
+</Answer>
+
+**问题 2**：为什么 MFC 要在 Win32 之上再做一层封装？解决了哪些痛点？
+
+<Answer>
+Win32 的痛点：①窗口过程是全局回调函数，无法和窗口数据绑定，状态靠全局变量，难以面向对象；②switch-case 处理消息，消息一多成巨型函数；③重复样板代码；④没有类型识别、没有持久化。MFC 封装解决：①把 HWND 包装成 CWnd 对象，窗口数据和成员函数绑定；②用消息映射表取代 switch-case，每条消息映射到一个成员函数；③把样板收进 CWinApp 框架，用户只重写 InitInstance（模板方法）；④基于 CObject 提供 RTTI、动态创建、序列化。一句话：MFC 用 C++ 把 Win32 的「过程式回调+句柄」抽象成「对象+消息映射+可复用框架」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="HWND">窗口句柄，不透明类型值，系统分配，程序通过它引用窗口调用 API。句柄而非指针是为了封装与安全：内核对象由系统管理，用户态不能直接操作其内存。MFC 把 HWND 包装成 CWnd 对象。</GlossaryItem>
+<GlossaryItem term="WndProc">窗口过程回调函数 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM)，注册窗口类时通过 lpfnWndProc 绑定。系统把所有发往该窗口的消息送到这里，用 switch-case 分发。MFC 把它升级为消息映射表+成员函数。</GlossaryItem>
+<GlossaryItem term="消息循环">`while(GetMessage(&msg)) { TranslateMessage(&msg); DispatchMessage(&msg); }`。GetMessage 阻塞取消息省 CPU，TranslateMessage 把按键翻译成字符消息，DispatchMessage 分发到 WndProc。收到 WM_QUIT 退出。MFC 封装在 CWinApp::Run，加 OnIdle 空闲处理。</GlossaryItem>
+</Glossary>

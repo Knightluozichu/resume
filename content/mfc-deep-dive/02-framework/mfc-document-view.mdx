@@ -1,0 +1,83 @@
+---
+title: "文档/视图架构"
+type: A
+section: "系统与操作系统"
+order: 3
+description: "理解 MFC 文档/视图架构——CDocTemplate 绑定 CDocument/CView/CFrameWnd，数据与显示解耦，UpdateAllViews 驱动多视图刷新"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MfcDocumentViewDiagram } from "@/components/mdx/mfc-deep-dive/diagrams/mfc-document-view";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 CDocument、CView、CFrameWnd、CDocTemplate 各自的职责与协作关系
+- 明白为什么要把「文档」与「视图」分开（数据与显示解耦）
+- 掌握 UpdateAllViews → OnUpdate → OnDraw 的刷新链路（观察者模式）
+- 理解 CDocTemplate 为什么必须用 CRuntimeClass 动态创建 Doc/View/Frame
+</Objectives>
+
+## 直觉引入
+
+把文档/视图架构想象成「博物馆的藏品管理」。博物馆有三个角色：**库房管理员**（CDocument）只管藏品数据——登记入库、整理台账、打包出库（序列化）；**策展人**（CView）只管怎么展示——挑哪些藏品、摆什么位置、画什么解说牌；**展厅**（CFrameWnd）是物理外壳——挂灯、门牌、导览栏。还有一个**总调度**（CDocTemplate），它手里攥着「这三种人的岗位说明书（CRuntimeClass）」，每次新开一个展览，调度按说明书现场招募一整套班底（动态创建 Doc+View+Frame）并让他们结对。藏品更新时，库房广播「数据变了」（UpdateAllViews），所有策展人收到通知（OnUpdate）重新布展（OnDraw）。这种分工让同一批藏品能被多个展厅同时布展，换展陈不用动库房。MFC 的文档/视图就是这套分工——数据、显示、外壳、装配四者解耦又协作。
+
+<MfcDocumentViewDiagram />
+
+## 四件套的分工
+
+<Term def="CDocTemplate 把 CDocument、CView、CFrameWnd 三类的运行时类型信息（CRuntimeClass）绑定为一个协作单元。CSingleDocTemplate 单文档，CMultiDocTemplate 多文档。用户「文件/新建」时，模板用这三个 CRuntimeClass 动态创建 Doc/View/Frame 实例并建立关联。">CDocTemplate</Term> 是「装配者」。`CDocument` 管**数据**：派生自 CObject，提供 `Serialize`（存取）、`OnNewDocument`（新建初始化）、`UpdateAllViews`（通知视图刷新）；用户业务数据放派生的 `CMyDoc` 成员里。`CView` 管**显示与交互**：派生自 CWnd，在 `OnDraw(CDC*)` 里调 `GetDocument()` 取数据再绘制；鼠标/键盘交互也由视图处理。`CFrameWnd` 管**外壳**：容纳视图（作为子窗口），挂载菜单/工具栏/状态栏，管理窗口框架尺寸布局。`CDocTemplate` 管**装配**：构造时接收三个 `CRuntimeClass`（Doc/View/Frame），「文件/新建」时用 `CRuntimeClass::CreateObject` 动态创建三者实例并建立关联。
+
+```text
+// 在 CMyApp::InitInstance 里注册文档模板（模板方法 + 动态创建）
+AddDocTemplate(new CSingleDocTemplate(
+    IDR_MAINFRAME,
+    RUNTIME_CLASS(CMyDoc),      // 文档类
+    RUNTIME_CLASS(CMainFrame),  // 框架窗口类
+    RUNTIME_CLASS(CMyView)));   // 视图类
+
+// 数据改动 → 通知所有视图刷新（观察者模式）
+void CMyDoc::ModifySomething() {
+  // ... 改数据 ...
+  UpdateAllViews(NULL);            // 通知所有视图
+  // → 每个视图的 OnUpdate → Invalidate → WM_PAINT → OnDraw
+}
+
+// 视图从文档取数据绘制
+void CMyView::OnDraw(CDC* pDC) {
+  CMyDoc* pDoc = GetDocument();
+  // 用 pDoc 的数据画图
+}
+```
+
+## 数据改动如何刷新视图
+
+数据改动后视图自动刷新的链路是「观察者模式」的经典实现：①文档数据被改动；②调用 `CDocument::UpdateAllViews(CView* pSender, LPARAM lHint, CObject* pHint)`，`pSender` 是发起改动的视图（避免通知自己）；③`UpdateAllViews` 遍历该文档关联的所有视图，对每个非 sender 视图调 `CView::OnUpdate`；④`OnUpdate` 默认 `Invalidate()` 标记客户区无效，触发 `WM_PAINT`；⑤消息循环分发 `WM_PAINT` 到视图，`CView::OnPaint` 调 `OnDraw(CDC*)`，用户在 `OnDraw` 重新读取数据并绘制。`lHint`/`pHint` 可传「改了哪一块」的提示，让 `OnUpdate` 只 `Invalidate` 局部矩形减少重绘。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把数据塞进 View，让 View 直接管一切。** 新手常把业务数据直接写在 `CMyView` 里，在 `OnDraw` 里画、在命令处理里改——图省事。后果：①一个数据想用两种视图看（表格+图表）做不到，数据被绑死在一个 View；②换 UI 要动数据，改 UI 容易碰坏数据；③窗口关了数据也没了，没法「关视图留数据」；④存盘读盘要在 View 里手写，没法用 CDocument::Serialize 的统一机制。正确做法是数据放 CDocument，View 只负责「取数据+绘制+转发命令」，数据与显示严格分离。这正是 MVC「模型与视图分离」思想在桌面 GUI 的体现，MFC 把 Controller 职责分散到 View/Frame/Document 的命令路由里。文档/视图分离不是 MFC 的任性，而是 GUI 架构的通用原则。
+</Callout>
+
+<Exercises>
+**问题 1**：文档/视图架构中 CDocument、CView、CFrameWnd、CDocTemplate 各自的职责是什么？
+
+<Answer>
+①CDocument 管数据：Serialize 存取、OnNewDocument 新建初始化、UpdateAllViews 通知视图刷新，业务数据放派生 CMyDoc；②CView 管显示与交互：OnDraw(CDC*) 取数据绘制，鼠标/键盘交互由视图处理；③CFrameWnd 管外壳：容纳视图子窗口，挂菜单/工具栏/状态栏，管理窗口框架；④CDocTemplate 管装配：构造时接收三个 CRuntimeClass（Doc/View/Frame），「文件/新建」时用 CreateObject 动态创建三者并建立关联。一句话：文档管数据、视图管显示、框架管外壳、模板管装配。
+</Answer>
+
+**问题 2**：CDocTemplate 为什么必须用 CRuntimeClass（运行时类型信息）来绑定 Doc/View/Frame？用普通 C++ 类做不到吗？
+
+<Answer>
+普通 C++ 做不到「按类型动态创建」。CDocTemplate 的需求是：用户「文件/新建」时框架要按用户在 AppWizard 里选定的 Doc/View/Frame 类型 new 出实例——但框架代码（CWinApp/CDocTemplate）写时不知道用户派生了 CMyDoc/CMyView/CMainFrame。普通 new 必须编译期写死类型名（new CMyDoc），框架无法凭一个类型标识 new 出任意用户类。CRuntimeClass 解决：每个类用 IMPLEMENT_DYNCREATE 注册一个静态 CRuntimeClass 含工厂函数指针 m_pfnCreateObject；CDocTemplate 构造时接收三个 CRuntimeClass*，新建时调 pRuntimeClass->CreateObject() 按类型 new 出对象，无需框架知道具体类名。所以文档模板强依赖 RTTI+动态创建，这正是六大技术环环相扣的体现。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CDocTemplate">文档模板，把 Doc/View/Frame 三类的 CRuntimeClass 绑定为一个协作单元。CSingleDocTemplate 单文档，CMultiDocTemplate 多文档。「文件/新建」时用 CreateObject 动态创建三者实例并建立关联。强依赖 RTTI+动态创建。</GlossaryItem>
+<GlossaryItem term="UpdateAllViews / OnUpdate">数据改动刷新视图的链路。CDocument::UpdateAllViews 遍历关联视图调 OnUpdate，OnUpdate 默认 Invalidate 触发 WM_PAINT，最终 CView::OnDraw 重绘。lHint/pHint 可传局部提示减少重绘。本质是观察者模式：文档是被观察者，视图是观察者。</GlossaryItem>
+<GlossaryItem term="数据与显示解耦">文档管数据、视图管显示、框架管外壳。收益：一个文档可多视图（表格+图表），换 UI 不动数据，数据逻辑独立可测，关视图留数据。这是 MVC「模型与视图分离」在桌面 GUI 的体现。</GlossaryItem>
+</Glossary>

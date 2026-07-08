@@ -1638,7 +1638,17 @@ export type ReviewChapterSlug =
   | "lop-firewall-security"
   | "lop-systemd-services"
   | "lop-shell-scripting"
-  | "lop-final-review";
+  | "lop-final-review"
+  | "mfc-learning-map"
+  | "mfc-win32-foundation"
+  | "mfc-cpp-mechanics"
+  | "mfc-document-view"
+  | "mfc-message-routing"
+  | "mfc-rtti-dynamic-creation"
+  | "mfc-persistence-serialization"
+  | "mfc-template-method"
+  | "mfc-com-interface"
+  | "mfc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3281,6 +3291,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lop-systemd-services": "systemd服务管理",
   "lop-shell-scripting": "Shell脚本编程",
   "lop-final-review": "全书总复习",
+  "mfc-learning-map": "全书学习地图",
+  "mfc-win32-foundation": "Win32基础",
+  "mfc-cpp-mechanics": "C++机制",
+  "mfc-document-view": "文档/视图架构",
+  "mfc-message-routing": "消息路由",
+  "mfc-rtti-dynamic-creation": "RTTI与动态创建",
+  "mfc-persistence-serialization": "持久化与序列化",
+  "mfc-template-method": "模板方法模式",
+  "mfc-com-interface": "COM接口与MFC",
+  "mfc-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
