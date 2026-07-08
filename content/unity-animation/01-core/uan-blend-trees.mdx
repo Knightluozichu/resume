@@ -1,0 +1,115 @@
+---
+title: "动画混合树"
+type: B
+section: "游戏开发"
+order: 4
+description: "掌握1D/2D Blend Tree按参数平滑混合多个动画片段的机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UanBlendTreesDiagram } from "@/components/mdx/unity-animation/diagrams/uan-blend-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Blend Tree 与 Transition 的区别
+- 能区分 1D 和 2D 混合树的适用场景
+- 能解释 Threshold 如何控制混合比例
+- 能设计 8 方向移动的 Blend Tree 方案
+</Objectives>
+
+## 直觉引入
+
+Blend Tree 像调色盘。红色和黄色之间有无数种橙色——参数（速度）决定混合多少红色（Idle）和黄色（Run）。Transition 是开关——要么红灯要么绿灯。Blend Tree 是渐变——从红灯到绿灯之间有无数种颜色。走/跑切换用 Blend Tree（速度 0~1 连续混合），跳跃/攻击用 Transition（离散切换）。
+
+## 概念讲解
+
+### 混合树机制
+
+<UanBlendTreesDiagram />
+
+<Term def="Blend Tree是Animator中按参数平滑混合多个AnimationClip的节点，参数连续变化时动画无缝过渡">Blend Tree</Term>是平滑混合器。
+
+<Term def="1D混合树按单个参数(如Speed)混合动画，适合一个维度的连续变化(走/跑切换)">1D 混合树</Term>单参数混合。
+
+<Term def="2D混合树按两个参数(如Speed+Direction)混合动画，适合两个维度的变化(8方向移动)">2D 混合树</Term>双参数混合。
+
+<Term def="Threshold(阈值)是每个动画在参数轴上的位置，决定混合权重——参数越靠近某动画的Threshold，该动画权重越高">Threshold</Term>控制混合权重。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：1D 混合树">在 Animator 中创建 Blend Tree，双击编辑。Parameter 选 Speed，添加 Idle(Threshold=0)、Walk(0.5)、Run(1)。代码 animator.SetFloat("Speed", velocity) 驱动——Speed=0.3 时 Idle/Walk 按 0.4:0.6 混合。Automate Thresholds 自动均匀分布。</Step>
+<Step title="第二步：2D 混合树">
+2D 混合树用两个参数。如 InputX/InputY 控制 8 方向移动——9 个动画分别放在坐标 (0,0)/(0,1)/(0,-1)/(-1,0)/(1,0)/(-1,1)/(1,1)/(-1,-1)/(1,-1)。摇杆方向连续混合最近的动画。2D 类型选 Simple Cartesian（简单坐标，推荐）。
+<UanBlendTreesDiagram />
+</Step>
+<Step title="第三步：Threshold 与 Dead Zone">Threshold 间距影响混合速度——间距大过渡柔和，间距小响应灵敏。Dead Zone 设置参数死区（如 0.1），摇杆微小输入不触发动画混合，避免角色抖动。代码中用 Mathf.Abs(value) > 0.1f 过滤微小输入。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 1D 混合树（走/跑）
+void Update() {
+    float speed = _rb.velocity.magnitude;
+    _animator.SetFloat("Speed", speed);
+}
+
+// 2D 混合树（8方向移动）
+void Update() {
+    float x = Input.GetAxis("Horizontal");
+    float y = Input.GetAxis("Vertical");
+    _animator.SetFloat("InputX", x);
+    _animator.SetFloat("InputY", y);
+}
+
+// Dead Zone 过滤
+float ApplyDeadZone(float value, float dead = 0.1f) {
+    return Mathf.Abs(value) < dead ? 0f : value;
+}
+
+// 2D 混合树参数设置
+_animator.SetFloat("InputX", ApplyDeadZone(x));
+_animator.SetFloat("InputY", ApplyDeadZone(y));
+
+// 混合树中可以嵌套混合树
+// 如：移动混合树 + 瞄准混合树用 Layer 分开播放
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 Transition 做走/跑切换，导致动画跳变。**
+Transition 是离散切换——Idle 直接跳到 Run 有明显跳变。走/跑是连续变化（速度从 0 到 1），应该用 Blend Tree 平滑混合——Speed=0.3 时 Idle/Walk 按 0.4:0.6 混合，无跳变。原则：离散动作用 Transition（走→跳），连续变化用 Blend Tree（走→跑）。
+</Callout>
+
+<Callout type="trap">
+**误区：2D 混合树的动画位置设置不均匀，导致某些方向动画扭曲。**
+2D 混合树中每个动画的 Position(X,Y) 必须均匀分布在坐标轴上——前(0,1)、后(0,-1)、左(-1,0)、右(1,0)、对角线(±0.707,±0.707)。如果位置不均匀，某些方向的混合权重失真，角色移动看起来扭曲。对角线动画的位置应该用 0.707（1/√2）而非 1，确保所有方向的混合权重一致。
+</Callout>
+
+<Exercises>
+**问题 1**：Blend Tree 和 Transition 有什么区别？分别适合什么场景？
+
+<Answer>
+Transition 是状态间的离散切换——有明确转换时刻（Idle→Jump）。Blend Tree 是状态内的连续混合——按参数平滑混合多个动画（Speed=0~1 混合 Idle/Walk/Run）。选择：离散动作用 Transition（跳跃/攻击/受击/死亡），连续变化用 Blend Tree（走/跑/8方向移动/瞄准角度）。Blend Tree 无切换跳变，参数连续变化时动画无缝过渡。
+</Answer>
+
+**问题 2**：设计一个 8 方向移动的 Blend Tree。
+
+<Answer>
+1)创建 2D Blend Tree，类型 Simple Cartesian；2)参数 InputX(-1~1) 和 InputY(-1~1)；3)9 个动画：Idle(0,0)、Forward(0,1)、Back(0,-1)、Left(-1,0)、Right(1,0)、FL(-0.707,0.707)、FR(0.707,0.707)、BL(-0.707,-0.707)、BR(0.707,-0.707)；4)对角线位置用 0.707 确保权重均匀；5)代码 animator.SetFloat("InputX", ApplyDeadZone(x)); animator.SetFloat("InputY", ApplyDeadZone(y));；6)Dead Zone 0.1 避免微小输入抖动。摇杆方向连续混合最近动画，平滑无跳变。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Blend Tree">按参数平滑混合多个 AnimationClip 的 Animator 节点。</GlossaryItem>
+<GlossaryItem term="1D 混合树">单参数混合，适合走/跑切换等单维度变化。</GlossaryItem>
+<GlossaryItem term="2D 混合树">双参数混合，适合 8 方向移动等双维度变化。</GlossaryItem>
+<GlossaryItem term="Threshold">动画在参数轴上的位置，决定混合权重。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 游戏动画设计" adaptedUrl="" />

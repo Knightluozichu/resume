@@ -1,0 +1,122 @@
+---
+title: "高级 HMI 技术"
+type: B
+section: "游戏开发"
+order: 3
+description: "探索 3D 仪表盘、多屏联动、语音交互等高级 HMI 技术"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UhmAdvancedHmiDiagram } from "@/components/mdx/unity-hmi/diagrams/uhm-advanced-hmi";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 3D 仪表盘与传统 2D 仪表盘的区别
+- 能看懂并独立修改多屏联动的数据同步代码
+- 能回答：语音交互在 HMI 中的优势和挑战是什么？
+- 掌握高级 HMI 的技术选型原则
+</Objectives>
+
+## 直觉引入
+
+传统仪表盘是平面的——指针在 2D 圆盘上转。现代高端车开始用 3D 仪表盘——车辆模型在屏幕上实时旋转，你可以看到 3D 的车门状态、轮胎压力、导航箭头。这不仅是视觉升级，更是信息维度的扩展。
+
+高级 HMI 的核心趋势是：从 2D 到 3D、从单屏到多屏、从触控到多模态（语音+手势+眼动）。
+
+## 概念讲解
+
+### 3D 仪表盘
+
+<UhmAdvancedHmiDiagram />
+
+<Term def="在 HMI 中嵌入 3D 渲染场景，用 3D 模型替代 2D 图标展示车辆状态">3D 仪表盘</Term>利用 Unity 的 3D 渲染能力，在 UI 中嵌入 3D 车辆模型。用户可以看到自己车的 3D 外观，车门开闭、车灯闪烁都是实时 3D 渲染的。
+
+<Term def="多个屏幕共享同一数据源并保持显示同步的机制">多屏联动</Term>是高端 HMI 的标配。仪表屏、中控屏、副驾屏、后排屏共享数据，一个操作在所有屏幕上同步显示。
+
+### 多模态交互
+
+HMI 的交互方式正在从纯触控扩展到语音、手势、眼动等多模态。每种模态有优势和局限：语音解放双手但受噪音影响，手势直观但需要学习，眼动自然但精度有限。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：3D 嵌入">在 UI Canvas 中嵌入 RenderTexture，将 3D 场景渲染到纹理上显示。
+<UhmAdvancedHmiDiagram />
+</Step>
+<Step title="第二步：多屏同步">用统一数据源驱动多个屏幕，通过事件广播确保所有屏幕同步更新。</Step>
+<Step title="第三步：多模态融合">将语音、手势、触摸的输入统一到逻辑动作层，由系统选择最佳模态响应。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 多屏联动：统一数据源 + 事件广播
+public class MultiScreenManager : MonoBehaviour
+{
+    public static event Action<float> OnSpeedChanged;
+    private float _speed;
+    
+    public float Speed
+    {
+        get => _speed;
+        set
+        {
+            _speed = value;
+            // 广播到所有屏幕（仪表/中控/副驾/后排）
+            OnSpeedChanged?.Invoke(_speed);
+        }
+    }
+}
+
+// 3D 仪表盘：RenderTexture 嵌入
+public class Dashboard3D : MonoBehaviour
+{
+    [SerializeField] private Camera car3DCam;
+    [SerializeField] private RawImage display;
+    
+    void Start()
+    {
+        var rt = new RenderTexture(1024, 768, 24);
+        car3DCam.targetTexture = rt;
+        display.texture = rt; // 3D 场景渲染到 UI 上
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：3D 模型面数过高导致帧率暴跌。**
+原因：HMI 嵌入 3D 渲染会占用 GPU 资源，高精度模型在嵌入式平台上跑不动。修法：3D 模型面数控制在 5 万以内，用 LOD 按距离切换精度，纹理用 ASTC 压缩。3D 渲染区域限制在屏幕一部分，不全屏 3D。
+</Callout>
+
+<Callout type="trap">
+**现象：多屏同步有延迟，不同屏幕显示不一致。**
+原因：各屏幕独立请求数据或数据广播有先后顺序，导致同一时刻不同屏幕显示不同值。修法：所有屏幕共享同一数据源实例，数据变更在同一帧内广播到所有屏幕，确保帧内一致性。
+</Callout>
+
+<Exercises>
+**问题 1**：3D 仪表盘与传统 2D 仪表盘的区别是什么？
+
+<Answer>
+3D 仪表盘在 UI 中嵌入 3D 渲染场景，用实时 3D 模型替代 2D 图标展示车辆状态。用户可以看到 3D 车辆外观、车门开闭动画、车灯状态等，信息维度更丰富。传统 2D 仪表盘用平面图标和指针，信息量有限。3D 仪表盘的挑战是 GPU 开销大，需要在嵌入式平台上控制模型面数和纹理大小。
+</Answer>
+
+**问题 2**：多屏联动如何保证各屏幕显示一致？
+
+<Answer>
+所有屏幕共享同一数据源实例，数据变更时在同一帧内广播到所有屏幕的订阅者。不能用各屏幕独立请求数据的方式（会有时序差异），也不能用串行通知（后面的屏幕晚一帧更新）。正确做法是用事件广播机制，所有订阅者在同一帧的同一回调中收到更新，保证帧内一致性。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="3D 仪表盘">在 HMI 中嵌入 3D 渲染场景，用实时 3D 模型替代 2D 图标展示车辆状态，信息维度更丰富。</GlossaryItem>
+<GlossaryItem term="多屏联动">多个屏幕共享同一数据源并保持显示同步的机制，通过事件广播确保帧内一致性。</GlossaryItem>
+<GlossaryItem term="多模态交互">结合语音、手势、眼动、触摸等多种输入方式，由系统选择最佳模态响应的交互模式。</GlossaryItem>
+<GlossaryItem term="RenderTexture">Unity 的渲染目标纹理，可将 3D 摄像机的画面渲染到纹理上，嵌入到 UI 中显示。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity for HMI" adaptedUrl="" />

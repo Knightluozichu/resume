@@ -62,6 +62,16 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mxrw-", "mobile-xr-web-optimization"],
   ["pbr-", "learnopengl"],
   ["auto-", "auto-why-car-runs"],
+  // §6 游戏开发
+  ["bl3-", "blender-3d"],
+  ["gdf-", "game-design-fundamentals"],
+  ["gmp-", "game-programmer-path"],
+  ["uhm-", "unity-hmi"],
+  ["uid-", "unity-ui-design"],
+  ["usc-", "unity-scripting"],
+  ["uct-", "unity-core-tech"],
+  ["ugc-", "unity-game-cases"],
+  ["uan-", "unity-animation"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

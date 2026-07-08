@@ -1,0 +1,123 @@
+---
+title: "脚本生命周期详解"
+type: B
+section: "游戏开发"
+order: 3
+description: "深入理解Unity脚本从初始化到销毁的完整生命周期流程"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UscLifecycleDiagram } from "@/components/mdx/unity-scripting/diagrams/usc-lifecycle";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Unity 脚本生命周期的完整执行顺序
+- 能区分 OnEnable/OnDisable 与 Awake/Start/OnDestroy 的触发特点
+- 能解释为什么事件订阅要放 OnEnable/OnDisable
+- 能设计对象池场景的生命周期管理方案
+</Objectives>
+
+## 直觉引入
+
+Unity 脚本的生命周期像一天的日程表。早上起床（Awake）→ 开机工作（OnEnable）→ 准备就绪（Start）→ 每小时工作（Update）→ 下班关机（OnDisable）→ 彻底离开（OnDestroy）。理解这个流程，才能知道「什么代码该放哪里」——初始化放 Awake，获取引用放 Start，输入处理放 Update，事件订阅放 OnEnable，清理放 OnDisable。
+
+## 概念讲解
+
+### 生命周期流程
+
+<UscLifecycleDiagram />
+
+<Term def="OnEnable在对象启用时触发，Awake之后Start之前，每次启用都会调用，适合事件订阅">OnEnable</Term>是启用回调。
+
+<Term def="OnDisable在对象禁用时触发，每次禁用都会调用，适合取消事件订阅和停止协程">OnDisable</Term>是禁用回调。
+
+<Term def="LateUpdate在所有Update之后调用，适合相机跟随（确保角色已移动后才更新相机位置）">LateUpdate</Term>是延迟更新。
+
+<Term def="OnDestroy在对象销毁时调用，只调用一次，适合最终资源清理">OnDestroy</Term>是销毁回调。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：初始化阶段">Awake（对象创建时调用一次）→ OnEnable（启用时调用，可多次）→ Start（第一帧前调用一次）。Awake 初始化自身，Start 获取其他对象引用。如果脚本初始禁用，Awake 仍调用但 Start 不调用。</Step>
+<Step title="第二步：每帧循环">
+FixedUpdate（固定时间步，物理用）→ 碰撞/触发事件 → Update（每帧，逻辑用）→ 协程更新 → LateUpdate（Update 后，相机用）。物理放 FixedUpdate 保证稳定，输入放 Update 保证响应，相机放 LateUpdate 确保跟随。
+<UscLifecycleDiagram />
+</Step>
+<Step title="第三步：销毁阶段">OnDisable（禁用，可多次）→ OnDestroy（销毁，只一次）。OnDisable 取消订阅、停止协程。OnDestroy 释放资源。对象池场景用 SetActive(false) 触发 OnDisable 而非 Destroy。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+public class Enemy : MonoBehaviour {
+    [SerializeField] private float speed = 3f;
+    private Rigidbody _rb;
+    private bool _isActive;
+
+    void Awake() {
+        _rb = GetComponent<Rigidbody>(); // 缓存引用（一次性）
+    }
+
+    void OnEnable() {
+        _isActive = true;
+        EventManager.OnPlayerSpawned += HandlePlayerSpawned; // 订阅事件
+        StartCoroutine(PatrolRoutine()); // 启动协程
+    }
+
+    void OnDisable() {
+        EventManager.OnPlayerSpawned -= HandlePlayerSpawned; // 取消订阅
+        StopAllCoroutines(); // 停止协程
+        _rb.velocity = Vector3.zero; // 重置物理
+    }
+
+    void FixedUpdate() {
+        if (_isActive) _rb.MovePosition(transform.position + transform.forward * speed * Time.fixedDeltaTime);
+    }
+
+    void Update() {
+        if (Input.GetKeyDown(KeyCode.Space)) Attack();
+    }
+
+    void OnDestroy() {
+        // 最终清理（池销毁时）
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：事件订阅放在 Awake 中，取消放在 OnDestroy 中。**
+Awake 只调用一次，如果对象被禁用再启用，订阅不会重新建立——禁用期间事件丢失，启用后也无法接收。OnDestroy 只在销毁时调用，如果对象只是暂时禁用（对象池），订阅仍然存在——禁用后仍响应事件。正确做法：OnEnable 订阅，OnDisable 取消，保证订阅生命周期与启用状态一致。
+</Callout>
+
+<Callout type="trap">
+**误区：在 OnDisable 中调用 Destroy(gameObject) 来「回收」对象。**
+对象池的核心是复用——用 SetActive(false) 禁用而非 Destroy 销毁。OnDisable 中 Destroy 会彻底销毁对象，下次需要时必须重新 Instantiate，失去对象池的意义。正确做法：OnDisable 中清理状态（停协程、重置位置/速度），对象池管理器将对象放回空闲队列，下次取出时 SetActive(true) 触发 OnEnable 重置。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么事件订阅要放 OnEnable，取消要放 OnDisable？
+
+<Answer>
+因为 OnEnable/OnDisable 每次启用/禁用都触发，而 Awake/OnDestroy 只调用一次。如果订阅在 Awake 中，对象禁用再启用后订阅不会重新建立——事件丢失。如果取消在 OnDestroy 中，对象只是禁用（未销毁）时订阅仍存在——禁用后仍响应事件。OnEnable 订阅 + OnDisable 取消，保证订阅生命周期与对象启用状态完全一致——启用时订阅，禁用时取消，不会漏接也不会多接。
+</Answer>
+
+**问题 2**：设计一个对象池子弹的生命周期管理。
+
+<Answer>
+1)Awake：一次性初始化——缓存 Rigidbody/Collider 引用，设置伤害值等静态参数。2)OnEnable：每次从池取出时重置——位置归零、速度归零、重置存活时间、订阅事件、启动弹道协程。3)OnDisable：每次回收时清理——StopAllCoroutines()、取消事件订阅、_rb.velocity=Vector3.zero、重置碰撞体。4)OnDestroy：池销毁时释放资源。关键：不在 OnDisable 中 Destroy（否则池失效），不在 Awake 中依赖其他场景对象（场景可能未完全加载），用 SetActive 控制启用/禁用。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="OnEnable">对象启用时触发，每次启用都调用，适合事件订阅和协程启动。</GlossaryItem>
+<GlossaryItem term="OnDisable">对象禁用时触发，每次禁用都调用，适合取消订阅和停止协程。</GlossaryItem>
+<GlossaryItem term="LateUpdate">所有 Update 之后调用，适合相机跟随和后处理逻辑。</GlossaryItem>
+<GlossaryItem term="OnDestroy">对象销毁时调用，只调用一次，适合最终资源清理。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 脚本设计" adaptedUrl="" />

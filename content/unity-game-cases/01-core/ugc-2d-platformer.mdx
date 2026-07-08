@@ -1,0 +1,180 @@
+---
+title: "2D 平台跳跃游戏"
+type: B
+section: "游戏开发"
+order: 0
+description: "Tilemap、Rigidbody2D 与精确物理跳跃"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Ugc2dPlatformerDiagram } from "@/components/mdx/unity-game-cases/diagrams/ugc-2d-platformer";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 Tilemap 搭建 2D 关卡
+- 能用 Rigidbody2D 实现精确的移动和跳跃
+- 能用 Coyote Time 和 Jump Buffer 优化跳跃手感
+- 能回答：为什么 2D 平台游戏的手感比物理真实更重要？
+</Objectives>
+
+## 直觉引入
+
+2D 平台跳跃是最经典的游戏类型——从超级马里奥到蔚蓝，核心都是「跑+跳」。但简单的跑跳背后是精心的手感设计：角色起跳前的几帧仍能跳（Coyote Time），跳跃缓冲让按键更宽容（Jump Buffer），可变跳跃高度让长按跳更高。
+
+Unity 的 Tilemap 系统让 2D 关卡搭建像拼积木——画格子放图块，自动碰撞。Rigidbody2D 处理物理，但平台游戏不需要完全真实的物理，而是需要「感觉对」的物理。
+
+## 概念讲解
+
+<Term def="Unity 的 2D 瓦片地图系统，用图块拼接搭建关卡">Tilemap</Term>是 2D 关卡的基石。
+
+<Term def="Unity 2D 物理组件，处理移动和碰撞">Rigidbody2D</Term>是 2D 物理的入口。
+
+<Term def="角色离开地面后仍有几帧可以跳跃的宽容机制">Coyote Time</Term>提升手感。
+
+### 平台跳跃手感三要素
+- **Coyote Time**：离开边缘后 0.1 秒仍可跳
+- **Jump Buffer**：落地前 0.1 秒按跳，落地自动跳
+- **可变跳跃高度**：松开跳跃键跳得低
+
+<Term def="在落地前提前按跳跃键，落地后自动执行的缓冲机制">Jump Buffer</Term>让操作更流畅。
+
+## 交互Demo
+
+> 猜一猜：超级马里奥的跳跃高度是固定的还是可变的？（提示：长按跳更高，短按跳更低）
+
+<Ugc2dPlatformerDiagram />
+
+<Stepper>
+<Step title="第一步：搭 Tilemap 关卡">
+创建 Tilemap，画 Tile Palette 的图块。给 Tilemap 加 Tilemap Collider 2D 和 Composite Collider 2D。地面标记为 Ground 层。
+</Step>
+<Step title="第二步：写移动跳跃">
+角色用 Rigidbody2D + Box Collider 2D。水平移动用 velocity.x，跳跃用 AddForce。加 Coyote Time（离开地面后 0.1 秒仍可跳）和 Jump Buffer（落地前 0.1 秒按跳自动跳）。
+</Step>
+<Step title="第三步：调手感">
+可变跳跃高度：松开跳跃键时把 velocity.y 减半。加空中操控（空中水平速度降低）。重力倍率：下落时重力增大让跳跃更利落。反复测试调参数。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 2D 平台跳跃控制器
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody2D))]
+public class PlatformerController : MonoBehaviour
+{
+    private Rigidbody2D rb;
+    public float moveSpeed = 6f;
+    public float jumpForce = 12f;
+    public LayerMask groundLayer;
+
+    // 手感优化参数
+    public float coyoteTime = 0.1f;    // 离地宽限
+    public float jumpBufferTime = 0.1f; // 跳跃缓冲
+    public float variableJumpMultiplier = 0.5f; // 可变跳跃
+    public float fallMultiplier = 2f;   // 下落加速
+
+    private float coyoteTimer = 0f;
+    private float jumpBufferTimer = 0f;
+    private bool isJumping = false;
+
+    void Awake() => rb = GetComponent<Rigidbody2D>();
+
+    void Update()
+    {
+        // Coyote Time: 在地面时重置计时器，离开后递减
+        if (IsGrounded())
+        {
+            coyoteTimer = coyoteTime;
+            isJumping = false;
+        }
+        else
+        {
+            coyoteTimer -= Time.deltaTime;
+        }
+
+        // Jump Buffer: 按跳跃键时记录
+        if (Input.GetKeyDown(KeyCode.Space))
+            jumpBufferTimer = jumpBufferTime;
+        else
+            jumpBufferTimer -= Time.deltaTime;
+
+        // 可变跳跃: 松开键时减速上升
+        if (Input.GetKeyUp(KeyCode.Space) && rb.velocity.y > 0)
+            rb.velocity = new Vector2(rb.velocity.x,
+                rb.velocity.y * variableJumpMultiplier);
+    }
+
+    void FixedUpdate()
+    {
+        // 水平移动
+        float h = Input.GetAxisRaw("Horizontal");
+        rb.velocity = new Vector2(h * moveSpeed, rb.velocity.y);
+
+        // 跳跃: Coyote Time + Jump Buffer
+        if (jumpBufferTimer > 0 && coyoteTimer > 0 && !isJumping)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, jumpForce);
+            coyoteTimer = 0;
+            jumpBufferTimer = 0;
+            isJumping = true;
+        }
+
+        // 下落加速: 跳跃手感更利落
+        if (rb.velocity.y < 0)
+            rb.velocity += Vector2.up * Physics2D.gravity
+                * (fallMultiplier - 1) * Time.fixedDeltaTime;
+    }
+
+    bool IsGrounded()
+    {
+        return Physics2D.BoxCast(
+            transform.position,
+            GetComponent<BoxCollider2D>().size,
+            0f, Vector2.down, 0.1f, groundLayer);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 角色跳跃手感僵硬，按了没反应或跳太高。
+**原因 →** 没有 Coyote Time 和 Jump Buffer，操作窗口太严格。固定跳跃高度不可变。
+**修法 →** 加 Coyote Time（离地 0.1 秒仍可跳）和 Jump Buffer（落地前 0.1 秒按跳自动跳）。可变跳跃高度：松开键时 velocity.y 乘 0.5。下落时重力倍率增大让跳跃更利落。
+</Callout>
+<Callout type="trap">
+**现象 →** 角色卡在墙上下滑或粘在平台上。
+**原因 →** Box Collider 和 Tilemap Collider 摩擦导致角色卡住。
+**修法 →** 给角色加 Physics Material 2D，Friction 设 0，Bounciness 设 0。或用 Composite Collider 2D 合并 Tilemap 碰撞体减少边缘。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么 2D 平台游戏的手感比物理真实更重要？
+
+<Answer>
+玩家不关心物理是否真实，只关心操作是否流畅。真实的物理会导致：起跳延迟、跳跃高度固定、空中无法转向。好的平台游戏用假物理：Coyote Time 宽容离地跳跃、Jump Buffer 预输入、可变跳跃高度控制跳高、空中操控调整方向。这些假的比真的感觉更好。蔚蓝和超级马里奥都是精心调校的假物理。
+</Answer>
+
+**问题**：Coyote Time 和 Jump Buffer 各解决什么问题？
+
+<Answer>
+Coyote Time 解决「刚离开边缘按跳没反应」的挫败感——角色离开地面后 0.1 秒仍可跳，玩家感觉操作被尊重。Jump Buffer 解决「落地前按跳没反应」——落地前 0.1 秒按跳，着地自动跳，玩家不需要精确到帧。两者让操作容错更高，手感更流畅。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Tilemap">Unity 的 2D 瓦片地图系统，用图块拼接搭建关卡，配合 Tilemap Collider 自动生成碰撞体。</GlossaryItem>
+<GlossaryItem term="Rigidbody2D">Unity 2D 物理组件，处理 2D 移动、重力和碰撞，是 2D 平台游戏物理模拟的入口。</GlossaryItem>
+<GlossaryItem term="Coyote Time">角色离开地面后仍有几帧可以跳跃的宽容机制，提升平台跳跃手感。</GlossaryItem>
+<GlossaryItem term="Jump Buffer">在落地前提前按跳跃键，落地后自动执行的缓冲机制，让操作更流畅。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 游戏案例开发大全" adaptedUrl="" />

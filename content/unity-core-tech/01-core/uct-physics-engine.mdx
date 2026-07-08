@@ -1,0 +1,175 @@
+---
+title: "Unity 物理引擎"
+type: B
+section: "游戏开发"
+order: 2
+description: "PhysX 刚体、碰撞检测与 Raycast 射线"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UctPhysicsEngineDiagram } from "@/components/mdx/unity-core-tech/diagrams/uct-physics-engine";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Rigidbody 的三种力和三种 ForceMode
+- 能用 OnTriggerEnter/OnCollisionEnter 处理碰撞交互
+- 能用 Raycast 实现射击判定和地面检测
+- 能回答：为什么物理计算必须放在 FixedUpdate 而非 Update？
+</Objectives>
+
+## 直觉引入
+
+Unity 物理引擎是内置的 PhysX。角色跳跃、子弹飞行、箱子推动——都需要物理。但物理引擎不是万能的：它有自己的运行节奏（FixedUpdate，固定 0.02 秒一步），跟 Update（每帧）不同步。
+
+最常见的物理问题是「抖动」——角色站在地面上不停闪烁。原因往往是物理代码放在 Update 里，每帧调用次数不固定，物理引擎计算不稳定。解决方案很简单：所有物理代码放 FixedUpdate。
+
+## 概念讲解
+
+<Term def="Unity 内置的物理引擎，模拟刚体运动和碰撞检测">PhysX</Term>在后台持续模拟。
+
+<Term def="固定时间步长的物理更新函数，默认每 0.02 秒调用一次">FixedUpdate</Term>是物理计算的唯一位置。
+
+<Term def="从一点沿方向发射射线，检测碰到的第一个碰撞体">Raycast</Term>是射击和检测的核心。
+
+### 碰撞 vs 触发
+| | Collision | Trigger |
+|---|---|---|
+| 物理阻挡 | 是 | 否 |
+| 回调 | OnCollisionEnter | OnTriggerEnter |
+| 两者需 Rigidbody | 至少一个 | 至少一个 |
+
+<Term def="挂在物体上使其受物理引擎控制的组件">Rigidbody</Term>是物理模拟的入口。
+
+## 交互Demo
+
+> 猜一猜：角色站在斜坡上不滑动，需要把 Rigidbody 的哪个属性冻结？（提示：Freeze Position）
+
+<UctPhysicsEngineDiagram />
+
+<Stepper>
+<Step title="第一步：配物理组件">
+给需要物理的物体加 Rigidbody（控制运动）和 Collider（检测碰撞）。静态地面只需 Collider 不需要 Rigidbody。角色通常用 Capsule Collider。
+</Step>
+<Step title="第二步：写物理代码">
+所有物理代码放 FixedUpdate：AddForce 施力、MovePosition 移动。用 OnTriggerEnter 处理拾取，OnCollisionEnter 处理撞击。Raycast 用于射击和地面检测。
+</Step>
+<Step title="第三步：调物理参数">
+Time Manager 中 Fixed Timestep = 0.02（50Hz）。连续抖动调 Solver Iterations。角色飘移减小 Drag。穿墙调 Continuous Collision Detection。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 物理系统核心代码
+using UnityEngine;
+
+[RequireComponent(typeof(Rigidbody))]
+public class PlayerPhysics : MonoBehaviour
+{
+    private Rigidbody rb;
+    public float moveSpeed = 5f;
+    public float jumpForce = 7f;
+    public LayerMask groundLayer;
+
+    void Awake() => rb = GetComponent<Rigidbody>();
+
+    // 物理代码必须放 FixedUpdate
+    void FixedUpdate()
+    {
+        // 移动
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+        Vector3 velocity = new Vector3(h, 0, v) * moveSpeed;
+        velocity.y = rb.velocity.y; // 保持 Y 速度
+        rb.velocity = velocity;
+
+        // 跳跃：先检测地面
+        if (Input.GetKeyDown(KeyCode.Space) && IsGrounded())
+        {
+            rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
+        }
+    }
+
+    // Raycast 地面检测
+    bool IsGrounded()
+    {
+        // 从脚底向下发射短射线
+        return Physics.Raycast(
+            transform.position + Vector3.up * 0.1f,
+            Vector3.down,
+            0.15f,
+            groundLayer);
+    }
+
+    // 射击：Raycast 检测命中
+    void Shoot()
+    {
+        Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        if (Physics.Raycast(ray, out RaycastHit hit, 100f))
+        {
+            Debug.Log($"命中: {hit.collider.name}");
+            // hit.point 是命中点
+            // hit.normal 是命中面法线
+        }
+    }
+
+    // 触发器: 拾取道具
+    void OnTriggerEnter(Collider other)
+    {
+        if (other.CompareTag("Coin"))
+            Destroy(other.gameObject);
+    }
+
+    // 碰撞: 撞墙
+    void OnCollisionEnter(Collision collision)
+    {
+        // collision.contacts[0].point 是碰撞点
+        foreach (ContactPoint contact in collision.contacts)
+        {
+            Debug.DrawRay(contact.point, contact.normal, Color.red, 1f);
+        }
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 角色站地面上不停抖动闪烁，像在跳舞。
+**原因 →** 物理代码放在 Update 里，每帧调用次数不固定（30fps 和 60fps 物理计算次数不同），物理引擎模拟不稳定。
+**修法 →** 所有物理代码移到 FixedUpdate。FixedUpdate 固定每 0.02 秒调用一次，与帧率无关，物理模拟稳定。读输入可以在 Update，施力必须在 FixedUpdate。
+</Callout>
+<Callout type="trap">
+**现象 →** 高速子弹穿墙了，碰撞检测失败。
+**原因 →** Rigidbody 的 Collision Detection 设为 Discrete（离散），高速物体一步跨过墙壁。
+**修法 →** 把高速物体的 Collision Detection 改为 Continuous（连续）或 Continuous Dynamic。连续检测在两帧之间插值检测碰撞，防止穿墙。代价是性能开销增加。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么物理计算必须放在 FixedUpdate 而非 Update？
+
+<Answer>
+Update 每帧调用一次，帧率不固定（30fps 时每秒 30 次，60fps 时每秒 60 次）。物理引擎需要固定时间步长来保证模拟稳定性——同样速度在不同帧率下移动距离不同会导致抖动、穿墙。FixedUpdate 固定每 0.02 秒（50Hz）调用，与帧率无关，物理模拟一致且稳定。这是物理引擎的基本要求。
+</Answer>
+
+**问题**：Collision 和 Trigger 有什么区别？什么时候用哪个？
+
+<Answer>
+Collision（碰撞）有物理阻挡，物体之间会弹开，回调是 OnCollisionEnter。Trigger（触发器）没有物理阻挡，物体可以穿过，回调是 OnTriggerEnter。Collision 用于需要物理交互的场景（撞击、推箱子）。Trigger 用于不需要阻挡但需要检测重叠的场景（拾取道具、进入区域）。两者都至少需要一个 Rigidbody。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="PhysX">Unity 内置的物理引擎，模拟刚体运动、碰撞检测、关节约束等物理行为。</GlossaryItem>
+<GlossaryItem term="FixedUpdate">固定时间步长的更新函数，默认每 0.02 秒调用一次，所有物理代码必须放在这里。</GlossaryItem>
+<GlossaryItem term="Raycast">从一点沿方向发射射线检测碰撞体，用于射击判定、地面检测、视线检测等。</GlossaryItem>
+<GlossaryItem term="Rigidbody">挂在 GameObject 上使其受物理引擎控制的组件，提供力、速度、质量等物理属性。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 实战核心技术" adaptedUrl="" />

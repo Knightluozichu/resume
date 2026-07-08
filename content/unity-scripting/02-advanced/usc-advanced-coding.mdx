@@ -1,0 +1,123 @@
+---
+title: "高级编程技巧"
+type: B
+section: "游戏开发"
+order: 8
+description: "掌握单例、对象池、状态机、观察者四大设计模式及SOLID原则"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UscAdvancedCodingDiagram } from "@/components/mdx/unity-scripting/diagrams/usc-advanced-coding";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Unity 常用四大设计模式及其适用场景
+- 能实现对象池模式复用频繁创建销毁的对象
+- 能用状态机模式管理敌人 AI 行为
+- 能解释 SOLID 原则并在代码中应用
+</Objectives>
+
+## 直觉引入
+
+设计模式是前人总结的「最佳实践」。单例像公司的 CEO——全局唯一，所有人都能找到他。对象池像共享单车——用完放回，不造新车。状态机像红绿灯——按规则在红/黄/绿间切换。观察者像订阅公众号——发布者发文章，订阅者自动收到。模式是工具，不是目标——先有问题再选模式。
+
+## 概念讲解
+
+### 四大模式
+
+<UscAdvancedCodingDiagram />
+
+<Term def="单例模式(Singleton)保证一个类只有一个实例，提供全局访问点，适合GameManager/AudioManager等全局管理器">单例模式</Term>管理全局状态。
+
+<Term def="对象池模式(Object Pool)预创建并复用对象，避免频繁Instantiate/Destroy的GC开销，适合子弹/粒子等频繁创建销毁的对象">对象池</Term>复用资源。
+
+<Term def="状态机模式(FSM)将对象行为封装为状态，通过条件在状态间切换，适合AI/角色行为管理">状态机</Term>管理行为。
+
+<Term def="观察者模式(Observer)定义一对多依赖，当对象状态变化时通知所有订阅者，适合事件驱动解耦通信">观察者</Term>解耦通信。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：单例模式">public static T Instance { get; private set; }，Awake 中赋值，DontDestroyOnLoad 跨场景持久化。适用于 GameManager/AudioManager/EventManager 等真正的全局唯一管理器。注意：不要滥用——不是全局需要的东西都用单例。</Step>
+<Step title="第二步：对象池">
+预创建 N 个对象放入 Queue，Get 时出队 SetActive(true)，Release 时入队 SetActive(false)。不 Destroy，避免 GC。取出时重置状态。适合子弹/粒子/敌人等高频创建销毁的对象。
+<UscAdvancedCodingDiagram />
+</Step>
+<Step title="第三步：状态机与观察者">状态机：每个状态是独立类（实现 IState 接口），Enter/Update/Exit 三方法。切换时旧状态 Exit→新状态 Enter。观察者：用 C# event 或 UnityEvent，发布者触发事件，监听者订阅/取消订阅。OnEnable 订阅，OnDisable 取消。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 单例模式
+public class GameManager : MonoBehaviour {
+    public static GameManager Instance { get; private set; }
+    void Awake() {
+        if (Instance != null) { Destroy(gameObject); return; }
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
+    }
+}
+
+// 对象池
+public class ObjectPool<T> where T : Component {
+    private readonly Queue<T> _pool = new();
+    private readonly T _prefab;
+
+    public ObjectPool(T prefab, int initialSize) {
+        _prefab = prefab;
+        for (int i = 0; i < initialSize; i++) _pool.Enqueue(Create());
+    }
+    public T Get() { var obj = _pool.Count > 0 ? _pool.Dequeue() : Create(); obj.gameObject.SetActive(true); return obj; }
+    public void Release(T obj) { obj.gameObject.SetActive(false); _pool.Enqueue(obj); }
+    private T Create() => Object.Instantiate(_prefab);
+}
+
+// 状态机
+interface IState { void Enter(); void Update(); void Exit(); }
+class PatrolState : IState { /* 巡逻逻辑 */ }
+
+// 观察者
+public class Health : MonoBehaviour {
+    public event Action<int> OnDamaged;
+    public void TakeDamage(int dmg) { OnDamaged?.Invoke(dmg); }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：滥用单例模式，把所有管理器都做成单例。**
+单例是全局状态——所有依赖它的代码都硬编码引用 Instance，导致紧耦合、难以测试、难以扩展。只把真正的全局唯一管理器（GameManager/AudioManager）做成单例。能用依赖注入（构造函数传参）或事件系统替代的，不要用单例。一个项目中超过 5 个单例就是坏味道。
+</Callout>
+
+<Callout type="trap">
+**误区：在状态机中用大量的 if-else / switch-case 切换状态。**
+if (state == State.Patrol) { ... } else if (state == State.Chase) { ... } 是状态机的反模式——状态多时代码膨胀，新增状态需修改所有 switch。正确做法：每个状态是独立类（实现 IState 接口），Enter/Update/Exit 方法。切换时 currentState.Exit()→currentState = newState→currentState.Enter()。新增状态只需新建类，不改其他状态代码（开闭原则）。
+</Callout>
+
+<Exercises>
+**问题 1**：对象池模式如何实现？有什么优势？
+
+<Answer>
+实现：预创建 N 个对象放入 Queue，Get 时出队 SetActive(true)，Release 时 SetActive(false) 入队，不 Destroy。取出时重置状态（位置/速度/血量）。优势：1)避免频繁 Instantiate/Destroy 的 GC 开销和内存碎片；2)避免运行时创建对象的卡顿；3)内存占用稳定可控。适合子弹/粒子/敌人/UI 列表项等高频创建销毁的对象。注意：对象池大小要合理（太小频繁扩容，太大浪费内存），用 OnEnable/OnDisable 管理重置逻辑。
+</Answer>
+
+**问题 2**：用状态机设计敌人 AI，包含巡逻/追击/攻击/逃跑四个状态。
+
+<Answer>
+1)定义接口 interface IEnemyState { void Enter(Enemy e); void Update(Enemy e); void Exit(Enemy e); }；2)实现四类：PatrolState（巡逻到随机点）、ChaseState（追击玩家）、AttackState（范围内攻击）、FleeState（血量<30%逃跑）；3)转换条件：Patrol→Chase（发现玩家<5m）、Chase→Attack（距离<2m）、Attack→Chase（距离>3m）、Any→Flee（hp<30%）、Flee→Patrol（脱离危险10m）；4)Enemy 持有 currentState，Update 调 currentState.Update(this)。切换时 currentState.Exit()→currentState=newState→currentState.Enter()。优势：每状态逻辑独立，新增状态不改其他，条件清晰。复杂 AI 用层次状态机（HSM）嵌套。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="单例模式(Singleton)">保证类只有一个实例，提供全局访问点，适合全局管理器。</GlossaryItem>
+<GlossaryItem term="对象池(Object Pool)">预创建并复用对象，避免频繁创建销毁的 GC 开销。</GlossaryItem>
+<GlossaryItem term="状态机(FSM)">将行为封装为状态，通过条件切换，适合 AI 和角色行为管理。</GlossaryItem>
+<GlossaryItem term="观察者(Observer)">一对多依赖，状态变化时通知订阅者，适合事件驱动解耦。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 脚本设计" adaptedUrl="" />

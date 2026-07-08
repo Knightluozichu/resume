@@ -1,0 +1,317 @@
+---
+title: "益智游戏"
+type: B
+section: "游戏开发"
+order: 1
+description: "状态管理、规则引擎与消除系统"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UgcPuzzleGameDiagram } from "@/components/mdx/unity-game-cases/diagrams/ugc-puzzle-game";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用状态机管理游戏状态（等待/交换/消除/下落）
+- 能实现三消游戏的匹配检测和消除
+- 能用动画协程实现消除和下落的视觉效果
+- 能回答：为什么益智游戏的核心是状态管理而非物理？
+</Objectives>
+
+## 直觉引入
+
+益智游戏（如宝石迷阵、糖果传奇）的核心是「规则」——三个相同颜色连成一线就消除，上面的宝石下落填补，新的宝石从顶部生成。这背后没有物理引擎，全靠状态机管理游戏流程：等待输入→交换宝石→检测匹配→消除→下落→补充→再检测（连锁）。
+
+每个状态完成才能进入下一个，用协程控制动画时序：先播交换动画，再检测，再播消除动画，再播下落动画。状态机保证不会同时做两件事。
+
+## 概念讲解
+
+<Term def="管理游戏流程的状态机，控制等待/交换/消除/下落等状态切换">游戏状态机</Term>是益智游戏的核心。
+
+<Term def="检测三个或以上相同元素连成一线并消除的规则系统">匹配检测</Term>是三消游戏的规则引擎。
+
+<Term def="消除后上方元素下落填补空位的机制">下落系统</Term>是三消的动态来源。
+
+### 三消游戏状态流
+1. **Waiting**：等待玩家交换
+2. **Swapping**：播放交换动画
+3. **Matching**：检测匹配
+4. **Clearing**：消除匹配
+5. **Falling**：下落填补
+6. **Spawning**：生成新元素
+7. 回到 Matching（连锁）
+
+<Term def="消除后产生新匹配的连锁反应，分数倍增">连锁消除</Term>是三消的爽点。
+
+## 交互Demo
+
+> 猜一猜：糖果传奇一次消除后下落产生新的匹配，分数翻几倍？（提示：连锁通常 2x 递增）
+
+<UgcPuzzleGameDiagram />
+
+<Stepper>
+<Step title="第一步：建网格和数据">
+创建 8x8 网格，每格随机一种颜色的宝石。用 2D 数组存储宝石数据。实现交换逻辑：点击两个相邻宝石交换位置。
+</Step>
+<Step title="第二步：检测和消除">
+遍历网格检测横向和纵向三个以上相同颜色的连续宝石。标记匹配的宝石，播放消除动画后移除。记录连锁倍数。
+</Step>
+<Step title="第三步：下落和补充">
+消除后上方宝石下落填补空位。用协程播放下落动画。顶部生成新宝石。下落完成后回到检测步骤（连锁检测）。无匹配则回到 Waiting。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 三消游戏核心系统
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+
+public enum GameState { Waiting, Swapping, Matching, Clearing, Falling, Spawning }
+
+public class Match3Game : MonoBehaviour
+{
+    public int width = 8;
+    public int height = 8;
+    public GemPrefab[] gemPrefabs; // 不同颜色的宝石预制体
+    public float animSpeed = 0.2f;
+
+    private Gem[,] grid;
+    private GameState state = GameState.Waiting;
+    private int comboMultiplier = 1;
+
+    void Start()
+    {
+        InitializeGrid();
+    }
+
+    void InitializeGrid()
+    {
+        grid = new Gem[width, height];
+        for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+                grid[x, y] = CreateRandomGem(x, y);
+    }
+
+    // 玩家点击交换
+    public void TrySwap(int x1, int y1, int x2, int y2)
+    {
+        if (state != GameState.Waiting) return;
+        if (!AreAdjacent(x1, y1, x2, y2)) return;
+
+        StartCoroutine(SwapAndCheck(x1, y1, x2, y2));
+    }
+
+    IEnumerator SwapAndCheck(int x1, int y1, int x2, int y2)
+    {
+        state = GameState.Swapping;
+        comboMultiplier = 1;
+
+        // 交换数据
+        SwapGems(x1, y1, x2, y2);
+
+        // 播放交换动画
+        yield return StartCoroutine(AnimateSwap(x1, y1, x2, y2));
+
+        // 检测匹配
+        var matches = FindAllMatches();
+        if (matches.Count == 0)
+        {
+            // 无匹配，交换回来
+            SwapGems(x1, y1, x2, y2);
+            yield return StartCoroutine(AnimateSwap(x1, y1, x2, y2));
+            state = GameState.Waiting;
+            yield break;
+        }
+
+        // 有匹配，进入消除循环
+        while (matches.Count > 0)
+        {
+            state = GameState.Clearing;
+            int score = matches.Count * 10 * comboMultiplier;
+            Debug.Log("消除 " + matches.Count + " 个，得分 " + score);
+
+            // 消除动画
+            yield return StartCoroutine(ClearMatches(matches));
+
+            // 下落
+            state = GameState.Falling;
+            yield return StartCoroutine(FallGems());
+
+            // 补充
+            state = GameState.Spawning;
+            yield return StartCoroutine(SpawnNewGems());
+
+            // 连锁检测
+            comboMultiplier++;
+            state = GameState.Matching;
+            matches = FindAllMatches();
+        }
+
+        state = GameState.Waiting;
+    }
+
+    // 检测所有匹配
+    List<Vector2Int> FindAllMatches()
+    {
+        var matches = new List<Vector2Int>();
+
+        // 横向检测
+        for (int y = 0; y < height; y++)
+        {
+            int count = 1;
+            for (int x = 1; x < width; x++)
+            {
+                if (grid[x, y] != null && grid[x-1, y] != null &&
+                    grid[x, y].type == grid[x-1, y].type)
+                    count++;
+                else
+                {
+                    if (count >= 3)
+                        for (int i = x - count; i < x; i++)
+                            matches.Add(new Vector2Int(i, y));
+                    count = 1;
+                }
+            }
+            if (count >= 3)
+                for (int i = width - count; i < width; i++)
+                    matches.Add(new Vector2Int(i, y));
+        }
+
+        // 纵向检测 (类似横向)
+        for (int x = 0; x < width; x++)
+        {
+            int count = 1;
+            for (int y = 1; y < height; y++)
+            {
+                if (grid[x, y] != null && grid[x, y-1] != null &&
+                    grid[x, y].type == grid[x, y-1].type)
+                    count++;
+                else
+                {
+                    if (count >= 3)
+                        for (int i = y - count; i < y; i++)
+                            matches.Add(new Vector2Int(x, i));
+                    count = 1;
+                }
+            }
+            if (count >= 3)
+                for (int i = height - count; i < height; i++)
+                    matches.Add(new Vector2Int(x, i));
+        }
+
+        return matches;
+    }
+
+    IEnumerator ClearMatches(List<Vector2Int> matches)
+    {
+        foreach (var pos in matches)
+        {
+            if (grid[pos.x, pos.y] != null)
+            {
+                Destroy(grid[pos.x, pos.y].gameObject);
+                grid[pos.x, pos.y] = null;
+            }
+        }
+        yield return new WaitForSeconds(animSpeed);
+    }
+
+    IEnumerator FallGems()
+    {
+        for (int x = 0; x < width; x++)
+        {
+            int emptyCount = 0;
+            for (int y = 0; y < height; y++)
+            {
+                if (grid[x, y] == null)
+                    emptyCount++;
+                else if (emptyCount > 0)
+                {
+                    grid[x, y - emptyCount] = grid[x, y];
+                    grid[x, y] = null;
+                    grid[x, y - emptyCount].targetPos =
+                        GridToWorld(x, y - emptyCount);
+                }
+            }
+        }
+        yield return new WaitForSeconds(animSpeed * 2);
+    }
+
+    IEnumerator SpawnNewGems()
+    {
+        for (int x = 0; x < width; x++)
+            for (int y = 0; y < height; y++)
+                if (grid[x, y] == null)
+                    grid[x, y] = CreateRandomGem(x, y);
+        yield return new WaitForSeconds(animSpeed);
+    }
+
+    bool AreAdjacent(int x1, int y1, int x2, int y2)
+    {
+        return Mathf.Abs(x1 - x2) + Mathf.Abs(y1 - y2) == 1;
+    }
+
+    void SwapGems(int x1, int y1, int x2, int y2)
+    {
+        var temp = grid[x1, y1];
+        grid[x1, y1] = grid[x2, y2];
+        grid[x2, y2] = temp;
+    }
+
+    Gem CreateRandomGem(int x, int y)
+    {
+        int type = Random.Range(0, gemPrefabs.Length);
+        var gem = Instantiate(gemPrefabs[type]);
+        gem.type = type;
+        gem.targetPos = GridToWorld(x, y);
+        return gem;
+    }
+
+    Vector3 GridToWorld(int x, int y)
+    {
+        return new Vector3(x - width / 2f, y - height / 2f, 0);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 消除动画和下落动画同时播放，画面混乱。
+**原因 →** 没有用状态机控制流程，消除和下落同时执行。
+**修法 →** 用状态机+协程：先播消除动画等完成，再播下落动画等完成，再补充新宝石。每个状态完成后才进入下一个。协程 yield return 等待动画播完。
+</Callout>
+<Callout type="trap">
+**现象 →** 连锁消除不触发或只触发一次。
+**原因 →** 下落后没有重新检测匹配，或检测后没有循环。
+**修法 →** 消除后用 while 循环：下落→补充→检测匹配→有匹配则继续消除→无匹配则退出循环。每次循环 comboMultiplier+1 实现连锁倍数。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么益智游戏的核心是状态管理而非物理？
+
+<Answer>
+益智游戏没有物理模拟——宝石不靠重力下落，靠代码控制位置。核心是规则和流程：交换→检测→消除→下落→补充→连锁检测。每步有严格的先后顺序，必须前一步完成才进入下一步。状态机保证流程不混乱。如果不用状态机，消除和下落同时执行会导致数据错乱和动画重叠。
+</Answer>
+
+**问题**：三消游戏的连锁消除怎么实现？
+
+<Answer>
+消除后不是直接结束，而是进入循环：1）消除匹配的宝石；2）上方宝石下落填补空位；3）顶部生成新宝石；4）重新检测匹配；5）如果有新匹配则 comboMultiplier+1 继续消除（连锁）；6）无匹配则退出循环回到 Waiting。连锁倍数让分数递增（2x、3x...），是三消的爽点。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="游戏状态机">管理游戏流程的状态机，控制等待/交换/消除/下落等状态切换，保证流程不混乱。</GlossaryItem>
+<GlossaryItem term="匹配检测">检测三个或以上相同元素连成一线的规则系统，是三消游戏的规则引擎。</GlossaryItem>
+<GlossaryItem term="下落系统">消除后上方元素下落填补空位的机制，是三消的动态来源。</GlossaryItem>
+<GlossaryItem term="连锁消除">消除后下落产生新匹配的连锁反应，分数倍增，是三消游戏的爽点。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 游戏案例开发大全" adaptedUrl="" />

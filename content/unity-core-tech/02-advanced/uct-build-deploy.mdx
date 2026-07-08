@@ -1,0 +1,148 @@
+---
+title: "Unity 构建与部署"
+type: B
+section: "游戏开发"
+order: 2
+description: "PlayerSettings、BuildPipeline 与多平台发布"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UctBuildDeployDiagram } from "@/components/mdx/unity-core-tech/diagrams/uct-build-deploy";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能配置 PlayerSettings 面向不同平台
+- 能用 BuildPipeline 实现自动化构建
+- 能理解 IL2CPP 和 Mono 后端的区别
+- 能回答：为什么移动端必须用 IL2CPP？
+</Objectives>
+
+## 直觉引入
+
+做完了游戏，最后一步是构建发布。Unity 支持一键打包到 PC、iOS、Android、WebGL 等平台。但「一键」背后有很多配置：色彩空间、图形 API、脚本后端、包名签名……配置错了，要么跑不起来，要么性能拉跨。
+
+大规模项目还会用 CI/CD（持续集成/持续部署）自动化构建：提交代码后 Jenkins 或 GitHub Actions 自动拉取、构建、签名、上传。掌握 BuildPipeline API 是实现自动化的前提。
+
+## 概念讲解
+
+<Term def="Unity 的项目级配置面板，设置包名、图标、分辨率等">PlayerSettings</Term>是构建前必配项。<Term def="Unity 的构建 API，支持脚本化自动化构建">BuildPipeline</Term>让构建可编程。
+
+<Term def="Unity 的两种脚本后端：Mono 跨平台 JIT，IL2CPP 编译成 C++ 再编译原生码">脚本后端</Term>影响性能和包体。
+
+### IL2CPP vs Mono
+| | Mono | IL2CPP |
+|---|---|---|
+| 编译方式 | JIT | AOT 转 C++ 转 原生 |
+| 性能 | 中等 | 高 |
+| 包体 | 小 | 大（含 C++ 码）|
+| 反逆向 | 容易 | 难 |
+| iOS 支持 | 不支持 | 必须 |
+
+<Term def="构建后优化包体大小的过程">Strip</Term>裁剪未使用的代码和资源。
+
+## 交互Demo
+
+> 猜一猜：用 IL2CPP 构建 Android 包比 Mono 构建大多少？（提示：IL2CPP 额外包含编译后的 C++ 代码）
+
+<UctBuildDeployDiagram />
+
+<Stepper>
+<Step title="第一步：配 PlayerSettings">
+设置 Company Name 和 Product Name（包名）、Default Icon、色彩空间（Linear）、脚本后端（IL2CPP）、目标 API 版本。每个平台有不同的必配项。
+</Step>
+<Step title="第二步：构建测试">
+File -> Build Settings 选平台，Build 出包。第一次构建比较慢（IL2CPP 要编译 C++）。在真机上测试性能和兼容性。
+</Step>
+<Step title="第三步：自动化构建">
+用 BuildPipeline.BuildPlayer 写构建脚本，配合命令行参数 -batchmode -nographics 实现无界面自动化。集成到 CI/CD。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 自动化构建脚本
+using UnityEditor;
+using UnityEngine;
+using System.IO;
+
+public static class BuildScript
+{
+    [MenuItem("Build/Android Release")]
+    public static void BuildAndroid()
+    {
+        // 配置 PlayerSettings
+        PlayerSettings.companyName = "MyCompany";
+        PlayerSettings.productName = "MyGame";
+        PlayerSettings.SetScriptingBackend(
+            BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+        PlayerSettings.SetIl2CppCodeGeneration(
+            BuildTargetGroup.Android,
+            Il2CppCodeGeneration.OptimizeSize);
+        PlayerSettings.stripEngineCode = true;
+
+        // 收集场景
+        string[] scenes = new string[]
+        {
+            "Assets/Scenes/MainMenu.unity",
+            "Assets/Scenes/GameScene.unity",
+        };
+
+        // 构建路径
+        string buildPath = "Builds/Android/MyGame.apk";
+        Directory.CreateDirectory(Path.GetDirectoryName(buildPath));
+
+        // 执行构建
+        var report = BuildPipeline.BuildPlayer(
+            scenes, buildPath, BuildTarget.Android,
+            BuildOptions.Development | BuildOptions.ShowBuiltPlayer
+        );
+
+        if (report.summary.result == BuildResult.Succeeded)
+            Debug.Log("构建成功: " + buildPath);
+        else
+            Debug.LogError("构建失败: " + report.summary.result);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** iOS 构建报错 IL2CPP not found 或构建失败。
+**原因 →** iOS 必须用 IL2CPP，但本地没安装 Xcode 或 IL2CPP 工具链。
+**修法 →** 确保安装 Xcode 和 Unity 的 iOS Build Support 模块。在 Unity Hub 的 Installs 里添加 iOS 模块。构建时需要 Mac 环境。
+</Callout>
+<Callout type="trap">
+**现象 →** 构建后包体太大，超过应用商店限制。
+**原因 →** 没有开启代码裁剪（Stripping）和资源压缩。纹理没按平台压缩，音频用了未压缩格式。
+**修法 →** 开启 Managed Stripping Level 为 High 或 Very High。纹理用 ASTC 压缩，音频用 Vorbis 编码。用 Build Report 查看各资源占用，针对性优化。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么移动端必须用 IL2CPP？Mono 不行吗？
+
+<Answer>
+iOS 不允许 JIT（即时编译），App Store 政策禁止运行时生成代码。Mono 依赖 JIT，无法在 iOS 上运行。IL2CPP 把 C# 编译成 C++ 再编译成原生机器码（AOT），不依赖 JIT。此外 IL2CPP 性能更高（原生代码比 JIT 快）、更难逆向（C++ 比 C# IL 难反编译）。Android 也推荐 IL2CPP，性能和安全性更好。
+</Answer>
+
+**问题**：Managed Stripping Level 有什么作用？设置太高有什么风险？
+
+<Answer>
+Stripping 裁剪未使用的代码减少包体。High/Very High 裁剪更激进但可能误删反射调用的代码。如果用了反射（如 JSON 序列化、依赖注入），Stripping 可能删掉看似未引用但运行时需要的类。解决：用 link.xml 手动保留需要的类，或用 [Preserve] 特性标注。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="PlayerSettings">Unity 的项目级配置面板，设置包名、图标、分辨率、色彩空间、脚本后端等。</GlossaryItem>
+<GlossaryItem term="BuildPipeline">Unity 的构建 API，支持脚本化自动化构建，可集成到 CI/CD 流水线。</GlossaryItem>
+<GlossaryItem term="IL2CPP">Unity 的 AOT 脚本后端，将 C# 编译成 C++ 再编译原生码，性能高、难逆向，iOS 必须使用。</GlossaryItem>
+<GlossaryItem term="Stripping">构建时裁剪未使用的代码和资源减小包体，有 Low/Medium/High/Very High 级别。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 实战核心技术" adaptedUrl="" />

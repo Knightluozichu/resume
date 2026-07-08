@@ -1,0 +1,156 @@
+---
+title: "Unity 场景管理"
+type: B
+section: "游戏开发"
+order: 1
+description: "SceneManager、多场景架构与场景流式加载"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UctSceneManagementDiagram } from "@/components/mdx/unity-core-tech/diagrams/uct-scene-management";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 SceneManager 实现场景的加载与卸载
+- 能设计多场景 Additive 架构（主场景+UI场景+关卡场景）
+- 能用 DontDestroyOnLoad 保持跨场景对象
+- 能回答：为什么大世界游戏需要场景流式加载？
+</Objectives>
+
+## 直觉引入
+
+场景是 Unity 组织内容的容器。一个游戏可能有主菜单、战斗界面、设置界面——如果全塞在一个场景里，文件会巨大且难以协作。SceneManager 让你把内容拆分到多个场景，按需加载卸载。
+
+大世界游戏（如原神）更进一步：把大地图切成格子，玩家走到哪加载哪，走远了卸载。这就是场景流式加载，核心是 LoadSceneMode.Additive——新场景叠加到当前场景上，而非替换。
+
+## 概念讲解
+
+<Term def="Unity 管理场景加载卸载的 API，支持 Single 和 Additive 两种模式">SceneManager</Term>是场景控制的入口。
+
+<Term def="新场景叠加到当前场景而非替换，多场景同时存在">LoadSceneMode.Additive</Term>是多场景架构的基础。
+
+<Term def="标记 GameObject 在场景切换时不销毁">DontDestroyOnLoad</Term>保持全局管理器存活。
+
+### 多场景架构模式
+- **主场景**：GameManager、Camera 等全局对象
+- **UI 场景**：Additive 加载，HUD/菜单
+- **关卡场景**：按需加载卸载
+
+### 场景加载方式
+- 同步加载：LoadScene（卡顿，简单）
+- 异步加载：LoadSceneAsync（不卡顿，需回调）
+- 流式加载：格子化场景 Additive 加载
+
+## 交互Demo
+
+> 猜一猜：一个 100MB 的大场景，如果只在玩家附近加载 3 个 5MB 的子场景，内存省了多少？（提示：100 - 15 = 85MB）
+
+<UctSceneManagementDiagram />
+
+<Stepper>
+<Step title="第一步：设计场景架构">
+把游戏拆成：Boot（启动）→ Main（主菜单）→ Game（战斗）→ UI（叠加）。Boot 场景用 DontDestroyOnLoad 保持 GameManager。
+</Step>
+<Step title="第二步：异步加载场景">
+用 SceneManager.LoadSceneAsync 异步加载，配合 AllowSceneActivation 控制激活时机。加载进度条用 operation.progress。
+</Step>
+<Step title="第三步：流式加载大世界">
+把大地图切成 Grid 格子场景，玩家移动时动态加载附近格子、卸载远处格子。用触发器或距离判断。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 多场景管理器
+using UnityEngine;
+using UnityEngine.SceneManagement;
+
+public class SceneLoader : MonoBehaviour
+{
+    public static SceneLoader Instance { get; private set; }
+
+    void Awake()
+    {
+        if (Instance == null)
+        {
+            Instance = this;
+            DontDestroyOnLoad(gameObject);
+        }
+        else Destroy(gameObject);
+    }
+
+    // 异步加载场景（叠加模式）
+    public void LoadAdditive(string sceneName)
+    {
+        StartCoroutine(LoadSceneAsync(sceneName, true));
+    }
+
+    // 异步加载场景（替换模式）
+    public void LoadScene(string sceneName)
+    {
+        StartCoroutine(LoadSceneAsync(sceneName, false));
+    }
+
+    System.Collections.IEnumerator LoadSceneAsync(
+        string sceneName, bool additive)
+    {
+        var mode = additive ? LoadSceneMode.Additive : LoadSceneMode.Single;
+        var op = SceneManager.LoadSceneAsync(sceneName, mode);
+
+        while (!op.isDone)
+        {
+            // progress: 0~0.9 加载中, 1.0 完成
+            Debug.Log($"加载进度: {op.progress * 100:F0}%");
+            yield return null;
+        }
+    }
+
+    // 卸载场景
+    public void UnloadScene(string sceneName)
+    {
+        SceneManager.UnloadSceneAsync(sceneName);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 场景切换后全局管理器消失了，单例报空引用。
+**原因 →** GameManager 在场景中而非 DontDestroyOnLoad，切场景时被销毁了。
+**修法 →** 在 GameManager 的 Awake 中调用 DontDestroyOnLoad(gameObject)。注意防止重复创建：判断 Instance 是否已存在。
+</Callout>
+<Callout type="trap">
+**现象 →** 异步加载场景时卡顿严重，进度条不动。
+**原因 →** 用了同步 LoadScene 而非 LoadSceneAsync，或者 AllowSceneActivation 设为 true 导致首帧激活卡顿。
+**修法 →** 用 LoadSceneAsync 异步加载。设 op.allowSceneActivation = false 在加载到 90% 时等待，准备好后再设 true 激活。这样加载阶段不卡。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么大世界游戏需要场景流式加载？不用会怎样？
+
+<Answer>
+大世界地图可能有几百 MB，一次性加载导致内存溢出和超长加载时间。流式加载把地图切成格子场景，玩家附近加载几个格子，远处卸载。内存占用从几百 MB 降到几十 MB，加载时间分散到游戏过程中。不用流式加载，移动端根本跑不起来。
+</Answer>
+
+**问题**：LoadSceneMode.Single 和 Additive 有什么区别？什么时候用 Additive？
+
+<Answer>
+Single 模式加载新场景时销毁当前场景所有对象，是替换。Additive 模式新场景叠加到当前场景上，不销毁已有对象。Additive 用于：UI 场景叠加到游戏场景上、关卡场景叠加到主场景上、流式加载地图格子。需要跨场景保持对象时必须用 Additive。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SceneManager">Unity 管理场景加载卸载的 API，支持 Single（替换）和 Additive（叠加）两种模式。</GlossaryItem>
+<GlossaryItem term="LoadSceneMode.Additive">场景叠加模式，新场景叠加到当前场景上而非替换，是多场景架构和流式加载的基础。</GlossaryItem>
+<GlossaryItem term="DontDestroyOnLoad">标记 GameObject 在场景切换时不被销毁，用于保持全局管理器、相机等跨场景对象。</GlossaryItem>
+<GlossaryItem term="流式加载">把大世界场景切成格子，玩家移动时动态加载附近格子、卸载远处格子，降低内存占用。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 实战核心技术" adaptedUrl="" />

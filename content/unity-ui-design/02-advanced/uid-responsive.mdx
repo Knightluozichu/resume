@@ -1,0 +1,107 @@
+---
+title: "响应式 UI 设计"
+type: B
+section: "游戏开发"
+order: 8
+description: "掌握Canvas Scaler、Anchor、Safe Area三大响应式适配机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UidResponsiveDiagram } from "@/components/mdx/unity-ui-design/diagrams/uid-responsive";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Canvas Scaler 的三种缩放模式及推荐用法
+- 能解释 Match 属性在宽高比适配中的作用
+- 能使用 Safe Area 适配刘海屏和圆角
+- 能设计一个支持横竖屏切换的 UI 方案
+</Objectives>
+
+## 直觉引入
+
+同一个游戏要跑在手机、平板、电脑上——屏幕大小、比例、甚至有无刘海都不同。怎么让 UI 在所有设备上都好看？答案是三件套：Canvas Scaler 控制整体缩放（让 1080p 设计的 UI 在 4K 屏上也清晰），Anchor 控制元素定位（让按钮始终在右下角），Safe Area 避开刘海和圆角（让 UI 不被遮挡）。
+
+## 概念讲解
+
+### 三大适配机制
+
+<UidResponsiveDiagram />
+
+<Term def="Canvas Scaler是控制Canvas整体缩放的组件，Scale With Screen Size模式按参考分辨率缩放UI，是响应式设计的基础">Canvas Scaler</Term>控制整体缩放。
+
+<Term def="Anchor(锚点)定义UI元素相对于父级矩形的参考点，点锚点固定位置，拉伸锚点(四角拉开)让元素随屏幕拉伸">Anchor</Term>控制元素定位。
+
+<Term def="Safe Area是屏幕上不被刘海/圆角/状态栏遮挡的安全区域，通过Screen.safeArea获取并调整RectTransform">Safe Area</Term>避开非安全区。
+
+<Term def="Match是Canvas Scaler的属性，决定宽高比不匹配时以宽度(0)还是高度(1)为基准缩放">Match</Term>决定缩放基准。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Canvas Scaler">设置 Canvas Scaler 为 Scale With Screen Size，Reference Resolution 设为设计基准分辨率（横屏 1920x1080，竖屏 1080x1920）。UI 会按基准分辨率设计，在不同屏幕上自动缩放。Match 属性决定宽高比不匹配时的缩放策略。</Step>
+<Step title="第二步：Anchor 锚点">
+点锚点（四角合拢）让元素固定在父级的某个位置——如右上角按钮。拉伸锚点（四角拉开到父级四角）让元素随父级拉伸——如全屏背景。合理搭配：背景用拉伸锚点，按钮用点锚点。
+<UidResponsiveDiagram />
+</Step>
+<Step title="第三步：Safe Area">在 Awake 中获取 Screen.safeArea，调整根 Canvas 的 RectTransform offset 到安全区域内。全屏背景不裁剪（保持拉伸），只裁剪交互元素。监听屏幕旋转事件重新应用 Safe Area。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Canvas Scaler 设置
+var scaler = canvas.GetComponent<CanvasScaler>();
+scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+scaler.referenceResolution = new Vector2(1920, 1080);
+scaler.matchWidthOrHeight = 0f; // 以宽度为基准
+
+// Safe Area 适配
+void ApplySafeArea() {
+    var safeArea = Screen.safeArea;
+    var root = canvas.GetComponent<RectTransform>();
+    root.offsetMin = safeArea.min;
+    root.offsetMax = safeArea.max - new Vector2(Screen.width, Screen.height);
+}
+
+// 横竖屏检测
+float aspect = (float)Screen.width / Screen.height;
+bool isLandscape = aspect > 1.5f;
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Canvas Scaler 设为 Constant Pixel Size 就能适配所有屏幕。**
+Constant Pixel Size 不缩放 UI——1080p 设计的按钮在 4K 屏上会变得很小，在 720p 屏上会变得很大。必须用 Scale With Screen Size + Reference Resolution 才能保证 UI 在不同分辨率上视觉一致。Constant Pixel Size 仅适合像素艺术游戏。
+</Callout>
+
+<Callout type="trap">
+**误区：所有元素用同一个锚点（如中心），靠手动计算位置适配。**
+手动计算位置在屏幕比例变化时会全部错位。正确做法：用拉伸锚点让背景/面板随屏幕拉伸，用点锚点让按钮固定在角落/边缘，用 LayoutGroup 让列表自动排列。锚点是响应式布局的基础——它让元素「知道」自己应该相对父级的哪个位置。
+</Callout>
+
+<Exercises>
+**问题 1**：Canvas Scaler 的 Match 属性有什么作用？横屏和竖屏游戏分别该怎么设？
+
+<Answer>
+Match 决定当屏幕宽高比与 Reference Resolution 不匹配时，以宽度还是高度为基准缩放。Match=0 以宽度为基准——宽度始终填满，高度可能留白或超出（横屏游戏推荐，因为横屏宽度更重要）。Match=1 以高度为基准——高度始终填满，宽度可能留白或超出（竖屏游戏推荐）。Match=0.5 宽高各占一半，是折中方案。选择取决于 UI 的主要方向和哪些元素不能被裁剪。
+</Answer>
+
+**问题 2**：如何适配 iPhone 的刘海屏？
+
+<Answer>
+使用 Screen.safeArea 获取安全区域（不被刘海/圆角/状态栏遮挡的区域），在 Awake 中调整根 Canvas 的 RectTransform：root.offsetMin = safeArea.position; root.offsetMax = safeArea.max - new Vector2(Screen.width, Screen.height)。全屏背景图不裁剪（保持拉伸填满屏幕），只裁剪交互元素到安全区内。注意：1)不同设备 safeArea 不同，必须运行时获取；2)屏幕旋转时 safeArea 会变化，需重新应用；3)刘海可能在左侧（横屏），需处理四个方向。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Canvas Scaler">控制 Canvas 整体缩放的组件，Scale With Screen Size 是推荐模式。</GlossaryItem>
+<GlossaryItem term="Anchor(锚点)">定义元素相对父级的参考点，点锚点固定位置，拉伸锚点随屏幕拉伸。</GlossaryItem>
+<GlossaryItem term="Safe Area">屏幕上不被刘海/圆角遮挡的安全区域，通过 Screen.safeArea 获取。</GlossaryItem>
+<GlossaryItem term="Match">Canvas Scaler 的属性，决定宽高比不匹配时以宽度还是高度为基准缩放。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity UI 设计" adaptedUrl="" />

@@ -1,0 +1,113 @@
+---
+title: "C++ 基础与内存管理"
+type: B
+section: "游戏开发"
+order: 0
+description: "掌握游戏开发必备的 C++ 核心特性与内存管理原理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GmpCppFoundationDiagram } from "@/components/mdx/game-programmer-path/diagrams/gmp-cpp-foundation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 C++ 的内存模型和 RAII 原则
+- 能看懂并独立修改智能指针和移动语义的代码
+- 能回答：为什么游戏开发优先选 C++ 而非其他语言？
+- 掌握栈内存和堆内存的区别与使用场景
+</Objectives>
+
+## 直觉引入
+
+C++ 给你两把钥匙：一把开栈（自动管理，用完即回收），一把开堆（手动管理，忘了回收就泄漏）。游戏每帧分配成千上万对象，全用堆会卡（分配慢+碎片化），全用栈放不下（栈空间小）。游戏程序员的核心技能就是知道什么时候用哪把钥匙。
+
+C++ 之所以是游戏开发的主流语言，不是因为它好用，而是因为它给你完全的内存控制权——你可以精确决定每个字节在哪里分配、什么时候释放。
+
+## 概念讲解
+
+### 内存模型
+
+<GmpCppFoundationDiagram />
+
+<Term def="C++ 的资源获取即初始化原则，用对象生命周期自动管理资源">RAII</Term>是 C++ 内存安全的核心。资源在构造函数中获取，在析构函数中释放。对象离开作用域时析构函数自动调用，资源自动释放。
+
+<Term def="自动管理堆内存的模板类，自动释放内存避免泄漏">智能指针</Term>是 RAII 的实践。`unique_ptr`（独占所有权）、`shared_ptr`（共享所有权+引用计数）、`weak_ptr`（弱引用，不增加引用计数）。
+
+### 栈与堆
+
+<Term def="后进先出的内存区域，分配释放快但空间有限">栈内存</Term>分配只需移动指针，速度极快（纳秒级），但大小有限（通常 1-8MB）。局部变量、函数参数在栈上。
+
+<Term def="动态分配的内存区域，空间大但分配慢且可能碎片化">堆内存</Term>分配需要搜索空闲块，速度慢（百纳秒到微秒），但空间大（GB 级）。`new`/`malloc` 在堆上分配。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：理解栈与堆">栈快但小（局部变量），堆大但慢（动态分配）。游戏每帧大量分配优先用栈或对象池。
+<GmpCppFoundationDiagram />
+</Step>
+<Step title="第二步：掌握 RAII">用对象生命周期管理资源——构造函数获取，析构函数释放。离开作用域自动回收，不需要手动 delete。</Step>
+<Step title="第三步：使用智能指针">unique_ptr 独占（默认选择），shared_ptr 共享（需要共享时用），weak_ptr 打破循环引用。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// RAII + 智能指针 + 移动语义
+#include <memory>
+
+class GameObject {
+public:
+    GameObject() { /* 构造时获取资源 */ }
+    ~GameObject() { /* 析构时自动释放 */ }
+};
+
+void Example() {
+    // 栈分配：快，自动释放
+    Vector3 pos(1, 2, 3);  // 离开作用域自动回收
+    
+    // 堆分配 + 智能指针：安全，自动释放
+    auto obj = std::make_unique<GameObject>(); // unique_ptr 独占
+    // obj 离开作用域，析构函数自动调用，内存自动释放
+    
+    // 移动语义：避免不必要的拷贝
+    auto obj2 = std::move(obj); // obj 变 nullptr，obj2 接管资源
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：游戏循环中用 new/delete 频繁分配堆内存。**
+原因：堆分配慢（百纳秒级）且产生碎片，每帧大量 new/delete 会导致帧率不稳。修法：用对象池预分配，或用栈分配/自定义分配器。游戏中的临时对象用栈或线性分配器，长期对象用智能指针管理。
+</Callout>
+
+<Callout type="trap">
+**现象：用 shared_ptr 管理所有对象。**
+原因：shared_ptr 有引用计数开销（原子操作），且容易产生循环引用导致内存泄漏。修法：默认用 unique_ptr（零开销），只在需要共享所有权时用 shared_ptr，配合 weak_ptr 打破循环引用。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么游戏开发优先选 C++ 而非其他语言？
+
+<Answer>
+三个核心原因：1. 内存控制权——C++ 允许精确控制每个对象的分配位置和释放时机，游戏每帧大量分配需要这种控制。2. 性能——C++ 编译为原生代码，无 GC 停顿，游戏要求稳定帧率不能容忍 GC 间歇性暂停。3. 跨平台——C++ 可编译到所有主流游戏平台（PC/主机/手机）。其他语言要么没有内存控制权（C#/Java），要么性能不够（Python），要么生态不够（Rust 游戏生态尚在发展中）。
+</Answer>
+
+**问题 2**：RAII 的核心思想是什么？它如何保证内存安全？
+
+<Answer>
+RAII（Resource Acquisition Is Initialization）核心思想是用对象生命周期管理资源——构造函数获取资源，析构函数释放资源。保证内存安全的机制：C++ 保证对象离开作用域时析构函数一定被调用（即使发生异常），因此资源一定被释放。不需要手动 delete，不会忘记释放，不会异常时泄漏。智能指针是 RAII 的直接应用。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="RAII">C++ 的资源获取即初始化原则，用对象生命周期自动管理资源，构造获取析构释放。</GlossaryItem>
+<GlossaryItem term="智能指针">自动管理堆内存的模板类，包括 unique_ptr（独占）、shared_ptr（共享+引用计数）、weak_ptr（弱引用）。</GlossaryItem>
+<GlossaryItem term="栈内存">后进先出的内存区域，分配释放快但空间有限（1-8MB），局部变量在栈上。</GlossaryItem>
+<GlossaryItem term="移动语义">通过转移资源所有权而非拷贝来传递对象，避免不必要的深拷贝，提升性能。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="游戏程序员的学习之路" adaptedUrl="" />

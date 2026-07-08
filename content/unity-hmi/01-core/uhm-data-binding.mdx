@@ -1,0 +1,119 @@
+---
+title: "数据绑定与响应式更新"
+type: B
+section: "游戏开发"
+order: 1
+description: "掌握 Unity HMI 的数据绑定机制，实现数据到 UI 的自动同步"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UhmDataBindingDiagram } from "@/components/mdx/unity-hmi/diagrams/uhm-data-binding";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释数据绑定的原理和单向/双向绑定的区别
+- 能看懂并独立修改 Unity HMI 的数据绑定代码
+- 能回答：脏标记模式如何减少无效 UI 刷新？
+- 掌握事件驱动与轮询两种数据同步策略的取舍
+</Objectives>
+
+## 直觉引入
+
+想象仪表盘和车速传感器之间有一根线。传感器转速变化，线的另一端指针自动跟着转。这根「线」就是数据绑定——数据变了，界面自动变，不需要人去手动拉。
+
+没有数据绑定，你得在每个可能改变数据的地方手动写「更新界面」的代码。漏一处，界面就不准。有了数据绑定，数据源是唯一的真相，界面只是它的投影。
+
+## 概念讲解
+
+### 数据绑定原理
+
+<UhmDataBindingDiagram />
+
+<Term def="数据源变化时自动通知 UI 更新的机制，分为单向和双向两种">数据绑定</Term>的核心是「观察者模式」：数据源持有订阅者列表，值变化时遍历列表通知。UI 元素是订阅者，收到通知后更新显示。
+
+<Term def="用布尔标记记录数据是否已变化，仅在标记为真时才触发 UI 更新">脏标记</Term>是数据绑定的性能优化手段。不是每次赋值都立即更新 UI，而是先标记为脏，在帧末或定时器中批量处理脏标记，合并多次更新为一次。
+
+### 单向与双向绑定
+
+单向绑定：数据 → UI，数据变化时 UI 更新，但用户修改 UI 不影响数据。HMI 中大部分场景用单向绑定（如速度显示）。
+
+双向绑定：数据 ↔ UI，任一方变化都同步到另一方。HMI 中用于可交互控件（如设置滑块）。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：定义数据源">创建可观察的属性，setter 中触发变更通知。
+<UhmDataBindingDiagram />
+</Step>
+<Step title="第二步：注册订阅">UI 元素在 OnEnable 时订阅数据源，OnDisable 时取消订阅，避免内存泄漏。</Step>
+<Step title="第三步：批量更新">用脏标记在帧末批量处理变更，合并同一帧内的多次赋值为一次 UI 更新。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 数据绑定核心：可观察属性 + 脏标记批量更新
+public class ObservableProperty<T>
+{
+    private T _value;
+    private bool _dirty = false;
+    private System.Action<T> _onChanged;
+    
+    public T Value
+    {
+        get => _value;
+        set
+        {
+            if (!Equals(_value, value))
+            {
+                _value = value;
+                _dirty = true; // 标记为脏，不立即更新
+            }
+        }
+    }
+    
+    // 帧末批量刷新
+    public void Flush()
+    {
+        if (_dirty) { _onChanged?.Invoke(_value); _dirty = false; }
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：每次属性赋值都立即更新 UI。**
+原因：一帧内可能多次赋值（如连续的数据流），每次都更新 UI 会造成冗余刷新。修法：用脏标记延迟更新，在 LateUpdate 或定时器中统一刷新，合并同帧多次赋值为一次 UI 更新。
+</Callout>
+
+<Callout type="trap">
+**现象：订阅了事件但忘记取消订阅。**
+原因：UI 元素销毁后，数据源仍持有对其的引用，导致内存泄漏或空引用异常。修法：在 OnEnable 中订阅，OnDisable 中取消订阅，确保生命周期对称。或使用弱引用事件系统。
+</Callout>
+
+<Exercises>
+**问题 1**：单向绑定和双向绑定在 HMI 中分别用于什么场景？
+
+<Answer>
+单向绑定（数据→UI）用于纯显示场景，如车速、转速、油量等只读信息——数据变了界面自动更新，但用户不能通过界面改数据。双向绑定（数据↔UI）用于可交互控件，如亮度调节滑块——用户拖滑块改变数据，数据变化也更新滑块位置。HMI 中大部分是单向绑定，双向绑定用于设置类控件。
+</Answer>
+
+**问题 2**：脏标记如何减少无效 UI 刷新？
+
+<Answer>
+不用脏标记时，每次属性赋值都立即触发 UI 更新。一帧内若赋值 10 次，UI 更新 10 次，但只有最后一次的值会被用户看到。用脏标记后，赋值时只标记为脏不更新，帧末统一检查脏标记，只更新一次。这样 10 次赋值合并为 1 次 UI 更新，性能提升显著。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="数据绑定">数据源变化时自动通知 UI 更新的机制，分为单向（数据→UI）和双向（数据↔UI）两种。</GlossaryItem>
+<GlossaryItem term="脏标记">用布尔值记录数据是否已变化，仅在标记为真时才触发 UI 更新，合并同帧多次赋值为一次刷新。</GlossaryItem>
+<GlossaryItem term="观察者模式">数据源持有订阅者列表，值变化时遍历列表通知所有订阅者的设计模式，是数据绑定的基础。</GlossaryItem>
+<GlossaryItem term="批量更新">将一帧内的多次数据变更合并为一次 UI 更新的策略，通常在 LateUpdate 或定时器中统一处理脏标记。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity for HMI" adaptedUrl="" />

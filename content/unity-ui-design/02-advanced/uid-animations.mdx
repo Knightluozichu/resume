@@ -1,0 +1,111 @@
+---
+title: "UI 动画系统"
+type: B
+section: "游戏开发"
+order: 5
+description: "掌握DOTween、Animator、Lerp四种UI动画方案的选型与实现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UidAnimationsDiagram } from "@/components/mdx/unity-ui-design/diagrams/uid-animations";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出四种 UI 动画方案的优缺点和适用场景
+- 能使用 DOTween 实现淡入淡出、位移、缩放动画
+- 能解释缓动函数（Ease）的作用和常见类型
+- 能设计一个带动画过渡的弹窗系统
+</Objectives>
+
+## 直觉引入
+
+想象一扇门。推开门时不是瞬间打开，而是缓缓转动——这就是动画。UI 动画让界面「活」起来：弹窗缩放出现、按钮按下回弹、列表项淡入。Unity 中有四种方式实现 UI 动画：Animator（像导演编排）、DOTween（像写一句话）、LeanTween（类似 DOTween）、手动 Lerp（像手工打磨）。
+
+## 概念讲解
+
+### 方案对比
+
+<UidAnimationsDiagram />
+
+<Term def="DOTween是Unity第三方动画库，提供链式API(DOFade/DOMove/DOScale)和丰富的缓动函数，是UI动画的首选方案">DOTween</Term>是日常 UI 动画的利器。
+
+<Term def="Animator是Unity内置的动画状态机，适合复杂状态切换(如角色面板的多状态动画)，但性能开销大于DOTween">Animator</Term>适合复杂状态动画。
+
+<Term def="缓动函数(Ease)控制动画值的变化速率曲线，如OutQuad(先快后慢)、OutBack(轻微回弹)、InOutCubic(两端慢中间快)">缓动函数</Term>决定动画的「手感」。
+
+<Term def="Sequence是DOTween的动画序列，用Append/Join/Prepend组合多个tween，实现顺序或并行动画">Sequence</Term>是动画的编排器。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：DOTween 基础">DOTween 用 DO 前缀方法修改属性：DOFade（透明度）、DOMove（位置）、DOScale（缩放）、DORotate（旋转）。每个方法返回 Tween 对象，可链式调用 SetEase/OnComplete/SetDelay。</Step>
+<Step title="第二步：缓动函数">
+缓动函数决定动画的「手感」。OutQuad 开始快后慢（自然减速），OutBack 末尾轻微回弹（按钮弹出感），InOutSpline 两端慢中间快（匀速感）。选对缓动函数是动画质感的关键——UI 动画常用 Out 系列（结束时有缓冲感）。
+<UidAnimationsDiagram />
+</Step>
+<Step title="第三步：Sequence 编排">用 Sequence 组合多个动画：Append 顺序执行，Join 同时执行。如弹窗动画：Sequence.Append(fade).Join(scale).AppendCallback(完成回调)。SetUpdate(true) 让动画不受 Time.timeScale 影响，暂停时弹窗仍可动画。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+using DG.Tweening;
+
+// 淡入
+canvasGroup.DOFade(1f, 0.3f).SetEase(Ease.OutQuad);
+
+// 缩放弹出（带回弹）
+transform.DOScale(1f, 0.3f).SetEase(Ease.OutBack);
+
+// 位移 + 淡入（同时进行）
+var seq = DOTween.Sequence();
+seq.Join(canvasGroup.DOFade(1f, 0.2f))
+   .Join(rectTransform.DOAnchorPos(Vector2.zero, 0.3f).SetEase(Ease.OutCubic))
+   .OnComplete(() => Debug.Log("动画完成"));
+
+// 关闭时反向播放
+seq.Kill(); // 先杀掉已有动画
+transform.DOScale(0f, 0.2f).SetEase(Ease.InQuad)
+    .OnComplete(() => gameObject.SetActive(false));
+
+// 不受暂停影响
+tween.SetUpdate(true); // 忽略 Time.timeScale
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：动画完成后忘记 Kill tween，导致内存泄漏。**
+每个 DOTween tween 都占用内存。如果频繁创建但不销毁，tween 会堆积导致内存增长。解决方案：1)用 OnComplete 中自动销毁（DOTween 默认 autoKill=true）；2)对象销毁前调用 transform.DOKill() 杀掉关联 tween；3)用 SetAutoKill(true) 确保自动销毁。OnDisable 中 DOKill 是好习惯。
+</Callout>
+
+<Callout type="trap">
+**误区：UI 动画时长设置过长，影响交互体验。**
+UI 动画的最佳时长是 0.2~0.3 秒。超过 0.5 秒用户会感觉迟钝，低于 0.1 秒又感觉突兀。弹窗弹出 0.3 秒、按钮反馈 0.15 秒、页面切换 0.25 秒是常用值。动画是辅助而非主角——用户要的是快速响应，不是看电影。
+</Callout>
+
+<Exercises>
+**问题 1**：DOTween 和 Animator 分别适合什么场景？
+
+<Answer>
+DOTween 适合简单属性动画——淡入淡出、位移、缩放、旋转，一行代码完成，性能优秀。Animator 适合复杂状态机动画——多个状态间切换（如角色面板的打开/关闭/最小化/锁定），需要可视化的状态连线。日常 UI 动画 90% 用 DOTween，只有需要复杂状态管理时才用 Animator。两者不互斥，可以组合使用。
+</Answer>
+
+**问题 2**：如何实现一个弹窗的缩放弹出+淡入效果？
+
+<Answer>
+弹窗根节点挂 CanvasGroup（控制 alpha），子节点挂 RectTransform（控制 scale）。打开时初始 alpha=0、scale=0，用 Sequence 编排：seq.Join(canvasGroup.DOFade(1, 0.2f)).Join(transform.DOScale(1, 0.3f).SetEase(Ease.OutBack))。OutBack 缓动让缩放有轻微回弹感。关闭时反向：seq.Join(canvasGroup.DOFade(0, 0.2f)).Join(transform.DOScale(0.8f, 0.2f)).OnComplete(() => SetActive(false))。关闭前 Kill 已有 tween 避免冲突，SetUpdate(true) 确保暂停时弹窗仍可播放关闭动画。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="DOTween">Unity 第三方动画库，链式 API + 缓动函数，UI 动画首选。</GlossaryItem>
+<GlossaryItem term="缓动函数(Ease)">控制动画值变化速率的曲线，如 OutQuad/OutBack/InOutCubic。</GlossaryItem>
+<GlossaryItem term="Sequence">DOTween 的动画序列，组合多个 tween 实现顺序或并行动画。</GlossaryItem>
+<GlossaryItem term="SetUpdate(true)">让 tween 不受 Time.timeScale 影响，暂停时仍可动画。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity UI 设计" adaptedUrl="" />

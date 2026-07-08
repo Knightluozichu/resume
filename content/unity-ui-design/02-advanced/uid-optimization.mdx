@@ -1,0 +1,107 @@
+---
+title: "UI 性能优化"
+type: B
+section: "游戏开发"
+order: 6
+description: "掌握合批优化、图集管理、Overdraw削减三大UI性能优化方向"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UidOptimizationDiagram } from "@/components/mdx/unity-ui-design/diagrams/uid-optimization";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 UI 性能优化的三大方向（合批/图集/Overdraw）
+- 能识别合批打断的常见原因并修复
+- 能解释为什么静态 UI 和动态 UI 要分 Canvas
+- 能设计一个高性能的动态列表方案
+</Objectives>
+
+## 直觉引入
+
+想象一个工厂。每生产一种产品就需要换一次模具（Draw Call）。如果你能批量生产同模具的产品（合批），效率就高。但如果不同模具的产品交替排列（穿插），就得频繁换模具。UI 优化就是减少「换模具」次数——同图集的元素排在一起，不同图集的分开，减少重叠绘制。
+
+## 概念讲解
+
+### 三大优化方向
+
+<UidOptimizationDiagram />
+
+<Term def="合批(Batching)是将使用相同图集和材质的UI元素合并到一次Draw Call中绘制，是UI性能优化的核心">合批</Term>减少 Draw Call。
+
+<Term def="Sprite Atlas是将多张碎图合并为一张大图的资源，相同图集的精灵可以合批，减少纹理切换">Sprite Atlas</Term>是合批的前提。
+
+<Term def="Overdraw是同一像素被多次绘制（UI元素重叠），浪费GPU填充率，需通过减少重叠和裁剪透明区域来削减">Overdraw</Term>浪费 GPU 填充率。
+
+<Term def="Canvas重建(Rebuild)是Canvas子元素的网格重新生成的过程，任何子元素变化都触发整个Canvas重建">Canvas 重建</Term>是 CPU 开销大户。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：合批优化">UGUI 自动合并相同图集+相同材质的元素为一次 Draw Call。打断合批的原因：不同图集穿插排列、Text 和 Image 穿插、不同 Canvas。用 Frame Debugger 检查每个 Draw Call 的原因，按图集分组排列。</Step>
+<Step title="第二步：图集管理">
+创建 Sprite Atlas，将同一界面的碎图打包。运行时 Include in Build 自动加载。注意：图集不要过大（单张不超过 2048x2048），按模块拆分（HUD/背包/设置各一个图集），避免加载超大图集卡顿。
+<UidOptimizationDiagram />
+</Step>
+<Step title="第三步：Overdraw 与 Canvas 分组">关闭不可见元素（SetActive=false 而非 alpha=0）、关闭纯装饰元素的 RaycastTarget、静态 UI 和动态 UI 分 Canvas 避免全量重建。Canvas 分组是最高性价比的优化——将频繁变化的 HUD 和静态背景分到不同 Canvas。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 关闭纯装饰元素的射线检测
+image.raycastTarget = false;
+text.raycastTarget = false;
+
+// 静态/动态 Canvas 分组
+// Canvas-Static (背景/边框，不变化)
+//   └─ Canvas-Dynamic (血条/计时器，每帧变化)
+
+// 按需更新（脏标记模式）
+private bool _dirty = true;
+public void MarkDirty() => _dirty = true;
+void Update() {
+    if (_dirty) { RefreshUI(); _dirty = false; }
+}
+
+// 对象池 + 虚拟化（大量列表项）
+// 只创建可见区域的格子，滚动时回收不可见的
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 alpha=0 隐藏 UI 元素来「优化」性能。**
+alpha=0 的元素仍然参与渲染——它会被绘制（增加 Overdraw）并参与射线检测（增加 CPU 开销）。正确做法是 SetActive(false) 完全禁用，或使用 CanvasGroup.alpha=0 + blocksRaycast=false + interactable=false。如果需要保持状态不重置，用 enable=false 禁用组件而非 SetActive。
+</Callout>
+
+<Callout type="trap">
+**误区：所有 UI 放在一个 Canvas 里「简单方便」。**
+Canvas 重建以 Canvas 为单位——任何一个子元素变化都触发整个 Canvas 的网格重建。如果 100 个元素中有 1 个血条每帧更新，另外 99 个静态元素也会每帧重建。应该把频繁变化的元素（HUD/动画）和静态元素（背景/边框）分到不同 Canvas，让重建只影响动态部分。
+</Callout>
+
+<Exercises>
+**问题 1**：什么情况会打断 UGUI 的合批？如何修复？
+
+<Answer>
+打断合批的常见原因：1)不同图集的精灵穿插排列——A 图集元素在 B 图集元素上方，渲染顺序交替导致无法合并。修复：按图集分组，同图集元素连续排列。2)Text 和 Image 穿插——Text 用字体材质，Image 用精灵材质，天然不合批。修复：Text 和 Image 分组排列。3)不同 Canvas 天然不合批——修复：评估是否可以合并 Canvas。用 Frame Debugger 逐个检查 Draw Call 原因。
+</Answer>
+
+**问题 2**：为什么静态 UI 和动态 UI 要分到不同 Canvas？
+
+<Answer>
+Canvas 的网格重建（Rebuild）以 Canvas 为单位。任何子元素的属性变化（位置/颜色/文字内容/enable）都会标记整个 Canvas 为脏，下一帧重建整个 Canvas 的所有子元素网格。如果静态背景和动态血条在同一个 Canvas，血条每帧更新会导致 99 个静态元素也每帧重建，浪费大量 CPU。分到不同 Canvas 后，只有动态 Canvas 重建，静态 Canvas 保持不变。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="合批(Batching)">将相同图集+材质的 UI 元素合并为一次 Draw Call 绘制。</GlossaryItem>
+<GlossaryItem term="Sprite Atlas">将多张碎图合并为大图的资源，是合批的前提。</GlossaryItem>
+<GlossaryItem term="Overdraw">同一像素被多次绘制，浪费 GPU 填充率。</GlossaryItem>
+<GlossaryItem term="Canvas重建">Canvas 子元素网格重新生成，任何子元素变化都触发整个 Canvas 重建。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity UI 设计" adaptedUrl="" />

@@ -1,0 +1,119 @@
+---
+title: "Blender 雕刻模式"
+type: B
+section: "游戏开发"
+order: 0
+description: "雕刻笔刷、Dyntopo 与高模工作流"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Bl3SculptingDiagram } from "@/components/mdx/blender-3d/diagrams/bl3-sculpting";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出雕刻模式与编辑模式的核心区别
+- 能独立使用主要笔刷进行角色或道具的细节雕刻
+- 能理解 Dyntopo 和 Multires 两种细分策略的优劣
+- 能回答：为什么雕刻适合做有机体而不适合做硬表面？
+</Objectives>
+
+## 直觉引入
+
+建模像用尺子画图——精确但费时；雕刻像用橡皮泥捏——自由但粗放。Blender 的雕刻模式让你用笔刷在模型表面「推拉捏挤」，像雕塑家一样自由塑造形状，特别适合做角色、怪物、岩石等有机体。
+
+雕刻的秘密武器是 Dyntopo（动态拓扑）：笔刷推过的地方自动加面，不用预先分段。你不必担心面数不够——想加细节就刷，Dyntopo 帮你加面。但代价是面数会爆炸增长，所以雕刻完要做减面烘焙。
+
+## 概念讲解
+
+雕刻模式与编辑模式的本质区别：<Term def="在模型表面用笔刷推拉捏挤来塑造形状的模式">雕刻</Term>操作的是顶点位移，不关心拓扑结构；编辑模式操作的是点线面的精确选择。
+
+<Term def="动态拓扑，笔刷经过处自动增加面数">Dyntopo</Term>让雕刻不受初始面数限制。另一种方案是<Term def="多分辨率修改器，在原有网格上叠加细分层">Multires</Term>，保持底层拓扑不变。
+
+常用笔刷：Grab（抓取拖动）、Clay（堆泥巴）、Flatten（压平）、Crease（折痕）、Smooth（平滑）。
+
+### 雕刻工作流
+1. 用低面数基础模型搭大型
+2. 开 Dyntopo 或加 Multires
+3. 从大到小：先抓大型轮廓，再做肌肉块，最后刻细节
+4. 烘焙到低模（法线贴图）
+
+## 交互Demo
+
+> 猜一猜：用 Dyntopo 把细节级别调到最高，在一个小区域反复刷会发生什么？（提示：面数会指数增长）
+
+<Bl3SculptingDiagram />
+
+<Stepper>
+<Step title="第一步：搭基础大型">
+在编辑模式用基础几何体搭出角色的大型比例，不需要太精细。切换到 Sculpt 模式。
+</Step>
+<Step title="第二步：开 Dyntopo 雕刻">
+开启 Dyntopo（Detail Size 约 10-20px），用 Grab 笔刷调整轮廓，用 Clay 笔刷堆体积。从大到小逐步细化。
+</Step>
+<Step title="第三步：细节与烘焙">
+用 Crease 笔刷加折痕，用 Pinch 笔刷收边。完成后用 Decimate 减面或烘焙法线贴图到低模。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# Blender Python：雕刻模式自动化设置
+import bpy
+
+bpy.ops.object.mode_set(mode='SCULPT')
+bpy.ops.sculpt.dynamic_topology_toggle()
+
+dyntopo = bpy.context.scene.tool_settings.sculpt
+dyntopo.detail_type = 'RELATIVE'
+dyntopo.detail_size = 15
+
+current_brush = bpy.data.brushes.get('Clay Strips')
+if current_brush:
+    bpy.context.tool_settings.sculpt.brush = current_brush
+    current_brush.size = 40
+    current_brush.strength = 0.6
+
+print('雕刻模式配置完成')
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 雕刻后面数达到数百万，Blender 卡顿严重。
+**原因 →** Dyntopo 细节级别设置太低（面太密），或者在大面积区域用高细节刷。
+**修法 →** 先用大笔刷低细节做大型，只在小区域用高细节。雕刻完用 Decimate 修改器减面。
+</Callout>
+<Callout type="trap">
+**现象 →** 雕刻的模型导出后细节全丢了。
+**原因 →** 直接导出高模到引擎，面数太高被减面或拒绝。
+**修法 →** 制作低面数版本（Retopo），把高模的法线烘焙到低模的法线贴图上。低模+法线贴图才是游戏资产。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么雕刻适合做有机体而不适合做硬表面？
+
+<Answer>
+有机体表面是自由曲面，用笔刷推拉效率高。硬表面需要精确的直线和棱角，笔刷很难控制精确度，用编辑模式挤出和倒角更合适。
+</Answer>
+
+**问题**：Dyntopo 和 Multires 两种细分策略各有什么优劣？
+
+<Answer>
+Dyntopo 随刻随加面，自由度高但拓扑不可控，适合概念阶段。Multires 保持底层拓扑整洁、可随时回退，但细节受初始面数限制。正式项目用 Multires。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="雕刻">用笔刷在模型表面推拉捏挤来塑造形状的模式，操作顶点位移而非拓扑结构。</GlossaryItem>
+<GlossaryItem term="Dyntopo">动态拓扑，笔刷经过处自动增加面数以提供足够细节，不受初始面数限制。</GlossaryItem>
+<GlossaryItem term="Multires">多分辨率修改器，在原有网格上叠加细分层进行雕刻，保持底层拓扑不变。</GlossaryItem>
+<GlossaryItem term="烘焙">把高模的表面细节（法线、AO）投射到低模的纹理上，让低模呈现高模的外观。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="玩转 Blender" adaptedUrl="" />

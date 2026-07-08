@@ -1,0 +1,122 @@
+---
+title: "游戏引擎基础"
+type: B
+section: "游戏开发"
+order: 0
+description: "理解游戏引擎的核心架构：游戏循环、组件系统与资源管理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GmpEngineBasicsDiagram } from "@/components/mdx/game-programmer-path/diagrams/gmp-engine-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释游戏循环和组件系统的工作原理
+- 能看懂并独立修改引擎核心架构的代码
+- 能回答：为什么现代引擎用组件系统而非继承？
+- 掌握资源管理的加载/卸载策略
+</Objectives>
+
+## 直觉引入
+
+游戏引擎像一个工厂流水线。每秒钟，流水线转 60 圈，每圈做同样的事：收原料（输入）→ 加工（逻辑更新）→ 检验（物理）→ 包装（渲染）→ 出货（显示）。这叫游戏循环。
+
+工厂里的产品（游戏对象）不是一个个完整的大零件，而是由小零件（组件）拼装而成。需要碰撞就加碰撞组件，需要渲染就加渲染组件。这比「每种产品从头造」灵活得多——这就是组件系统。
+
+## 概念讲解
+
+### 游戏循环
+
+<GmpEngineBasicsDiagram />
+
+<Term def="引擎的核心循环，每帧执行输入→更新→物理→渲染的流水线">游戏循环</Term>是引擎的心脏。固定时间步长（Fixed Update）用于物理模拟保证确定性，可变时间步长（Update）用于逻辑和渲染保证流畅。
+
+<Term def="将游戏对象功能拆分为可复用组件而非深层继承的架构模式">组件系统</Term>（ECS）是现代引擎的主流设计。GameObject 是组件容器，Component 是功能单元。需要什么功能加什么组件，组合优于继承。
+
+### 资源管理
+
+<Term def="负责异步加载、缓存和卸载游戏资源的子系统">资源管理器</Term>管理纹理、网格、音频等资源的生命周期。关键策略：按需加载（用到才加载）、引用计数（没人用了才卸载）、资源池（复用减少分配）。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：游戏循环">输入采集 → 逻辑更新（Update） → 物理模拟（FixedUpdate） → 渲染输出。每帧重复。
+<GmpEngineBasicsDiagram />
+</Step>
+<Step title="第二步：组件系统">GameObject 持有组件列表，每帧遍历组件调用 Update。添加功能=添加组件，不需要改继承层级。</Step>
+<Step title="第三步：资源管理">按需加载资源（Addressables），引用计数追踪使用情况，无人引用时卸载释放内存。</Step>
+</Stepper>
+
+## 代码对照
+
+```cpp
+// 引擎核心：游戏循环 + 组件系统
+class Engine {
+    std::vector<GameObject*> gameObjects;
+    bool isRunning = true;
+    
+    void Run() {
+        while (isRunning) {
+            float dt = CalculateDeltaTime();
+            ProcessInput();                          // 1. 输入
+            for (auto* go : gameObjects)
+                go->Update(dt);                      // 2. 逻辑更新
+            physics.Simulate(fixedDt);               // 3. 物理模拟
+            renderer.Render(gameObjects);            // 4. 渲染
+            SwapBuffers();                           // 5. 显示
+        }
+    }
+};
+
+// 组件系统：组合优于继承
+class GameObject {
+    std::vector<std::unique_ptr<Component>> components;
+public:
+    template<typename T> T* AddComponent() {
+        components.push_back(std::make_unique<T>());
+        return static_cast<T*>(components.back().get());
+    }
+    void Update(float dt) {
+        for (auto& c : components) c->Update(dt);
+    }
+};
+// 用法：需要碰撞加 Collider，需要渲染加 MeshRenderer，需要移动加 Rigidbody
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：用深层继承构建游戏对象（GameObject→Character→Player→PlayerWithGun）。**
+原因：继承层级深导致修改困难——加一个新功能可能要改整个继承链。修法：用组件系统，功能拆为组件，按需组合。需要飞行就加 FlyComponent，不需要就不加，不影响其他功能。
+</Callout>
+
+<Callout type="trap">
+**现象：所有资源在启动时全量加载。**
+原因：全量加载导致启动慢、内存占用高。修法：按需加载（用到才加载）+ 引用计数（不用了卸载）。关卡切换时预加载下一关资源，当前关资源延迟卸载。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么现代引擎用组件系统而非继承？
+
+<Answer>
+继承的问题：1. 层级深修改难——加一个功能可能改整个继承链。2. 菱形继承——多个父类有相同方法时冲突。3. 不灵活——飞行敌人需要飞行+战斗+AI，用继承需要多重继承很复杂。组件系统优势：1. 功能按需组合——需要什么加什么组件。2. 修改局部——改一个组件不影响其他。3. 复用性强——同一个 FlyComponent 可用于飞行敌人、飞行道具、飞行坐骑。
+</Answer>
+
+**问题 2**：游戏循环中固定时间步长和可变时间步长分别用于什么？
+
+<Answer>
+固定时间步长（FixedUpdate）：固定间隔（如 1/50 秒）执行，用于物理模拟。物理需要确定性（相同输入相同结果），固定步长保证物理积分稳定。可变时间步长（Update）：每帧间隔不固定（取决于帧率），用于逻辑更新和渲染。可变步长适应帧率波动保证流畅。两者结合：物理用固定步长保证确定性，渲染用可变步长保证流畅，是现代引擎的标准做法。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="游戏循环">引擎核心循环，每帧执行输入→更新→物理→渲染流水线，60fps 每帧 16ms。</GlossaryItem>
+<GlossaryItem term="组件系统">将游戏对象功能拆为可复用组件的架构模式，组合优于继承，现代引擎主流设计。</GlossaryItem>
+<GlossaryItem term="固定时间步长">物理模拟使用的固定间隔更新，保证物理积分稳定和确定性。</GlossaryItem>
+<GlossaryItem term="引用计数">追踪资源被引用次数，归零时自动卸载的内存管理策略。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="游戏程序员的学习之路" adaptedUrl="" />

@@ -1,0 +1,109 @@
+---
+title: "输入处理与交互响应"
+type: B
+section: "游戏开发"
+order: 0
+description: "掌握 HMI 场景下的触摸、旋钮、手势等多种输入方式的处理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UhmInputHandlingDiagram } from "@/components/mdx/unity-hmi/diagrams/uhm-input-handling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 HMI 输入处理与游戏输入的区别
+- 能看懂并独立修改 Unity 输入事件处理代码
+- 能回答：为什么 HMI 输入需要防抖和去重？
+- 掌握多输入源（触摸/旋钮/键盘）的统一处理模式
+</Objectives>
+
+## 直觉引入
+
+你在车载屏幕上点一个按钮，手指碰到屏幕的瞬间界面就该响应。不能有延迟，不能有误触。但车在颠簸，你的手指可能抖了一下碰到旁边按钮。HMI 输入处理就是在「快速响应」和「防止误操作」之间找平衡。
+
+游戏输入可以容忍几帧延迟，HMI 输入必须即时响应。但 HMI 又不能太敏感——颠簸环境下的误触可能导致严重后果。
+
+## 概念讲解
+
+### 输入源与事件系统
+
+<UhmInputHandlingDiagram />
+
+<Term def="Unity 的新输入系统，支持多设备映射和事件驱动，替代旧的 Input Manager">Input System</Term> 通过 Input Action Asset 定义输入映射，将物理设备信号抽象为逻辑动作。HMI 中常用 Pointer（触摸/鼠标）、Button（物理按键）、Axis（旋钮/摇杆）三种输入类型。
+
+<Term def="在短时间内收到多个相同输入时只处理第一个，忽略后续重复">防抖</Term>是 HMI 输入的必要机制。车载环境颠簸，一次按压可能产生多个 PointerDown 事件，防抖确保只触发一次响应。
+
+### 多输入源统一处理
+
+HMI 设备通常有多种输入：触摸屏、物理旋钮、方向盘按键、语音。统一的做法是将所有输入映射到逻辑动作（如「确认」「取消」「下一项」），UI 只响应逻辑动作，不关心来自哪个设备。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：定义输入映射">在 Input Action Asset 中定义逻辑动作（Confirm/Cancel/Navigate），为每个动作绑定物理输入。
+<UhmInputHandlingDiagram />
+</Step>
+<Step title="第二步：添加防抖去重">在输入处理层加入防抖逻辑，短时间内重复输入只处理第一次。</Step>
+<Step title="第三步：路由到 UI">将逻辑动作路由到当前焦点 UI 元素，实现设备无关的交互响应。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// HMI 输入处理：防抖 + 逻辑动作路由
+public class HmiInputHandler : MonoBehaviour
+{
+    private float _lastClickTime;
+    private const float DebounceTime = 0.2f;
+    
+    public void OnPointerDown(InputAction.CallbackContext ctx)
+    {
+        if (ctx.phase != InputActionPhase.Started) return;
+        // 防抖：200ms 内重复输入忽略
+        if (Time.time - _lastClickTime < DebounceTime) return;
+        _lastClickTime = Time.time;
+        
+        // 路由到当前焦点元素
+        var focused = EventSystem.current.currentSelectedGameObject;
+        focused?.GetComponent<IHmiInteractable>()?.OnActivate();
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：直接用 Input.GetMouseButtonDown 处理所有点击。**
+原因：旧 Input API 不支持多设备、不支持事件驱动，且无法区分触摸和鼠标。修法：使用新 Input System，通过 Input Action Asset 统一映射，支持触摸/旋钮/键盘等多设备输入。
+</Callout>
+
+<Callout type="trap">
+**现象：没有防抖，颠簸环境下按钮被触发多次。**
+原因：一次物理按压可能产生多个输入事件，不防抖会导致重复操作。修法：在输入处理层加入时间窗口防抖（通常 100-300ms），同一动作在窗口内只处理第一次。
+</Callout>
+
+<Exercises>
+**问题 1**：HMI 输入处理与游戏输入处理的核心区别是什么？
+
+<Answer>
+HMI 输入要求即时响应（延迟低于 50ms）且防止误操作（颠簸环境下不能误触）。游戏输入可以容忍几帧延迟，也不需要严格的防抖。HMI 还需要支持多输入源（触摸/旋钮/方向盘按键/语音）的统一处理，将物理设备信号抽象为逻辑动作，UI 只响应逻辑动作不关心设备来源。
+</Answer>
+
+**问题 2**：为什么 HMI 输入需要防抖？推荐的时间窗口是多少？
+
+<Answer>
+车载环境颠簸，手指抖动可能导致一次按压产生多个 PointerDown 事件；机械按钮的物理抖动也会产生多个信号。不防抖会导致重复操作（如连续翻页、连续切换）。推荐时间窗口 100-300ms：太短防不住抖动，太长影响操作流畅度。关键操作（如确认/取消）可用更长的 300ms，快速操作（如列表滚动）可用 100ms。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Input System">Unity 的新输入系统，支持多设备映射和事件驱动，通过 Input Action Asset 将物理信号抽象为逻辑动作。</GlossaryItem>
+<GlossaryItem term="防抖">在短时间内收到多个相同输入时只处理第一个，忽略后续重复，防止颠簸环境下的误触。</GlossaryItem>
+<GlossaryItem term="逻辑动作">将物理输入抽象为语义级操作（如确认/取消/导航），UI 只响应逻辑动作不关心设备来源。</GlossaryItem>
+<GlossaryItem term="输入路由">将逻辑动作分发到当前焦点 UI 元素的机制，实现设备无关的交互响应。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity for HMI" adaptedUrl="" />

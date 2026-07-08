@@ -1088,6 +1088,93 @@ import { sxxEnvironmentQuestions } from "./review/sxx-environment";
 import { sxxProceduralTexturingQuestions } from "./review/sxx-procedural-texturing";
 import { sxxPerformanceQuestions } from "./review/sxx-performance";
 import { sxxFinalReviewQuestions } from "./review/sxx-final-review";
+import { bl3AnimationQuestions } from "./review/bl3-animation";
+import { bl3FinalReviewQuestions } from "./review/bl3-final-review";
+import { bl3GameExportQuestions } from "./review/bl3-game-export";
+import { bl3InterfaceQuestions } from "./review/bl3-interface";
+import { bl3LearningMapQuestions } from "./review/bl3-learning-map";
+import { bl3LightingQuestions } from "./review/bl3-lighting";
+import { bl3ModelingQuestions } from "./review/bl3-modeling";
+import { bl3RenderingQuestions } from "./review/bl3-rendering";
+import { bl3SculptingQuestions } from "./review/bl3-sculpting";
+import { bl3TexturingQuestions } from "./review/bl3-texturing";
+import { gdfAestheticsQuestions } from "./review/gdf-aesthetics";
+import { gdfBalancingQuestions } from "./review/gdf-balancing";
+import { gdfDynamicsQuestions } from "./review/gdf-dynamics";
+import { gdfFinalReviewQuestions } from "./review/gdf-final-review";
+import { gdfLearningMapQuestions } from "./review/gdf-learning-map";
+import { gdfLevelDesignQuestions } from "./review/gdf-level-design";
+import { gdfMdfFrameworkQuestions } from "./review/gdf-mdf-framework";
+import { gdfMechanicsQuestions } from "./review/gdf-mechanics";
+import { gdfPlayerExperienceQuestions } from "./review/gdf-player-experience";
+import { gdfPrototypingQuestions } from "./review/gdf-prototyping";
+import { gmpAlgorithmsQuestions } from "./review/gmp-algorithms";
+import { gmpCareerPathQuestions } from "./review/gmp-career-path";
+import { gmpCppFoundationQuestions } from "./review/gmp-cpp-foundation";
+import { gmpDataStructuresQuestions } from "./review/gmp-data-structures";
+import { gmpEngineBasicsQuestions } from "./review/gmp-engine-basics";
+import { gmpFinalReviewQuestions } from "./review/gmp-final-review";
+import { gmpGameplayCodingQuestions } from "./review/gmp-gameplay-coding";
+import { gmpGraphicsQuestions } from "./review/gmp-graphics";
+import { gmpInterviewQuestions } from "./review/gmp-interview";
+import { gmpLearningMapQuestions } from "./review/gmp-learning-map";
+import { uanAnimationBasicsQuestions } from "./review/uan-animation-basics";
+import { uanAnimatorControllerQuestions } from "./review/uan-animator-controller";
+import { uanBlendTreesQuestions } from "./review/uan-blend-trees";
+import { uanIkSystemQuestions } from "./review/uan-ik-system";
+import { uanLearningMapQuestions } from "./review/uan-learning-map";
+import { uanStateMachineQuestions } from "./review/uan-state-machine";
+import { uanTimelineQuestions } from "./review/uan-timeline";
+import { uctAssetPipelineQuestions } from "./review/uct-asset-pipeline";
+import { uctAudioSystemQuestions } from "./review/uct-audio-system";
+import { uctBuildDeployQuestions } from "./review/uct-build-deploy";
+import { uctFinalReviewQuestions } from "./review/uct-final-review";
+import { uctLearningMapQuestions } from "./review/uct-learning-map";
+import { uctMemoryManagementQuestions } from "./review/uct-memory-management";
+import { uctNavigationQuestions } from "./review/uct-navigation";
+import { uctPhysicsEngineQuestions } from "./review/uct-physics-engine";
+import { uctRenderingPipelineQuestions } from "./review/uct-rendering-pipeline";
+import { uctSceneManagementQuestions } from "./review/uct-scene-management";
+import { ugc2dPlatformerQuestions } from "./review/ugc-2d-platformer";
+import { ugc3dActionQuestions } from "./review/ugc-3d-action";
+import { ugcFinalReviewQuestions } from "./review/ugc-final-review";
+import { ugcFpsBasicsQuestions } from "./review/ugc-fps-basics";
+import { ugcGamePolishQuestions } from "./review/ugc-game-polish";
+import { ugcLearningMapQuestions } from "./review/ugc-learning-map";
+import { ugcPuzzleGameQuestions } from "./review/ugc-puzzle-game";
+import { ugcRacingGameQuestions } from "./review/ugc-racing-game";
+import { ugcRpgBasicsQuestions } from "./review/ugc-rpg-basics";
+import { ugcStrategyGameQuestions } from "./review/ugc-strategy-game";
+import { uhmAdvancedHmiQuestions } from "./review/uhm-advanced-hmi";
+import { uhmAnimationQuestions } from "./review/uhm-animation";
+import { uhmDataBindingQuestions } from "./review/uhm-data-binding";
+import { uhmDeploymentQuestions } from "./review/uhm-deployment";
+import { uhmFinalReviewQuestions } from "./review/uhm-final-review";
+import { uhmHmiBasicsQuestions } from "./review/uhm-hmi-basics";
+import { uhmInputHandlingQuestions } from "./review/uhm-input-handling";
+import { uhmLearningMapQuestions } from "./review/uhm-learning-map";
+import { uhmPerformanceQuestions } from "./review/uhm-performance";
+import { uhmUiFrameworkQuestions } from "./review/uhm-ui-framework";
+import { uidAnimationsQuestions } from "./review/uid-animations";
+import { uidFinalReviewQuestions } from "./review/uid-final-review";
+import { uidInteractiveQuestions } from "./review/uid-interactive";
+import { uidLayoutSystemQuestions } from "./review/uid-layout-system";
+import { uidLearningMapQuestions } from "./review/uid-learning-map";
+import { uidOptimizationQuestions } from "./review/uid-optimization";
+import { uidResponsiveQuestions } from "./review/uid-responsive";
+import { uidUguiBasicsQuestions } from "./review/uid-ugui-basics";
+import { uidUiSystemQuestions } from "./review/uid-ui-system";
+import { uidUitoolkitQuestions } from "./review/uid-uitoolkit";
+import { uscAdvancedCodingQuestions } from "./review/usc-advanced-coding";
+import { uscComponentSystemQuestions } from "./review/usc-component-system";
+import { uscCoroutinesQuestions } from "./review/usc-coroutines";
+import { uscFinalReviewQuestions } from "./review/usc-final-review";
+import { uscInputSystemQuestions } from "./review/usc-input-system";
+import { uscLearningMapQuestions } from "./review/usc-learning-map";
+import { uscLifecycleQuestions } from "./review/usc-lifecycle";
+import { uscMonoBasicsQuestions } from "./review/usc-mono-basics";
+import { uscPhysicsQuestions } from "./review/usc-physics";
+import { uscScriptableObjectsQuestions } from "./review/usc-scriptable-objects";
 
 export {
   CHAPTER_TITLES,
@@ -2207,6 +2294,93 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...sxxProceduralTexturingQuestions,
   ...sxxPerformanceQuestions,
   ...sxxFinalReviewQuestions,
+  ...bl3AnimationQuestions,
+  ...bl3FinalReviewQuestions,
+  ...bl3GameExportQuestions,
+  ...bl3InterfaceQuestions,
+  ...bl3LearningMapQuestions,
+  ...bl3LightingQuestions,
+  ...bl3ModelingQuestions,
+  ...bl3RenderingQuestions,
+  ...bl3SculptingQuestions,
+  ...bl3TexturingQuestions,
+  ...gdfAestheticsQuestions,
+  ...gdfBalancingQuestions,
+  ...gdfDynamicsQuestions,
+  ...gdfFinalReviewQuestions,
+  ...gdfLearningMapQuestions,
+  ...gdfLevelDesignQuestions,
+  ...gdfMdfFrameworkQuestions,
+  ...gdfMechanicsQuestions,
+  ...gdfPlayerExperienceQuestions,
+  ...gdfPrototypingQuestions,
+  ...gmpAlgorithmsQuestions,
+  ...gmpCareerPathQuestions,
+  ...gmpCppFoundationQuestions,
+  ...gmpDataStructuresQuestions,
+  ...gmpEngineBasicsQuestions,
+  ...gmpFinalReviewQuestions,
+  ...gmpGameplayCodingQuestions,
+  ...gmpGraphicsQuestions,
+  ...gmpInterviewQuestions,
+  ...gmpLearningMapQuestions,
+  ...uanAnimationBasicsQuestions,
+  ...uanAnimatorControllerQuestions,
+  ...uanBlendTreesQuestions,
+  ...uanIkSystemQuestions,
+  ...uanLearningMapQuestions,
+  ...uanStateMachineQuestions,
+  ...uanTimelineQuestions,
+  ...uctAssetPipelineQuestions,
+  ...uctAudioSystemQuestions,
+  ...uctBuildDeployQuestions,
+  ...uctFinalReviewQuestions,
+  ...uctLearningMapQuestions,
+  ...uctMemoryManagementQuestions,
+  ...uctNavigationQuestions,
+  ...uctPhysicsEngineQuestions,
+  ...uctRenderingPipelineQuestions,
+  ...uctSceneManagementQuestions,
+  ...ugc2dPlatformerQuestions,
+  ...ugc3dActionQuestions,
+  ...ugcFinalReviewQuestions,
+  ...ugcFpsBasicsQuestions,
+  ...ugcGamePolishQuestions,
+  ...ugcLearningMapQuestions,
+  ...ugcPuzzleGameQuestions,
+  ...ugcRacingGameQuestions,
+  ...ugcRpgBasicsQuestions,
+  ...ugcStrategyGameQuestions,
+  ...uhmAdvancedHmiQuestions,
+  ...uhmAnimationQuestions,
+  ...uhmDataBindingQuestions,
+  ...uhmDeploymentQuestions,
+  ...uhmFinalReviewQuestions,
+  ...uhmHmiBasicsQuestions,
+  ...uhmInputHandlingQuestions,
+  ...uhmLearningMapQuestions,
+  ...uhmPerformanceQuestions,
+  ...uhmUiFrameworkQuestions,
+  ...uidAnimationsQuestions,
+  ...uidFinalReviewQuestions,
+  ...uidInteractiveQuestions,
+  ...uidLayoutSystemQuestions,
+  ...uidLearningMapQuestions,
+  ...uidOptimizationQuestions,
+  ...uidResponsiveQuestions,
+  ...uidUguiBasicsQuestions,
+  ...uidUiSystemQuestions,
+  ...uidUitoolkitQuestions,
+  ...uscAdvancedCodingQuestions,
+  ...uscComponentSystemQuestions,
+  ...uscCoroutinesQuestions,
+  ...uscFinalReviewQuestions,
+  ...uscInputSystemQuestions,
+  ...uscLearningMapQuestions,
+  ...uscLifecycleQuestions,
+  ...uscMonoBasicsQuestions,
+  ...uscPhysicsQuestions,
+  ...uscScriptableObjectsQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

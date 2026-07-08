@@ -1,0 +1,121 @@
+---
+title: "Blender 多边形建模"
+type: B
+section: "游戏开发"
+order: 0
+description: "从基础几何体到复杂模型的建模流程与修改器工作流"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Bl3ModelingDiagram } from "@/components/mdx/blender-3d/diagrams/bl3-modeling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能独立使用编辑模式的点线面操作构建模型
+- 能运用镜像、阵列、布尔等修改器实现非破坏性建模
+- 能判断模型拓扑是否合理并做基本优化
+- 能回答：为什么游戏模型要求低面数但保持轮廓清晰？
+</Objectives>
+
+## 直觉引入
+
+建模像用乐高搭积木：从一个立方体或圆柱开始，通过挤出、倒角、切割，逐步把简单形状变成复杂物体。Blender 的编辑模式就是你的积木操作台——选中面、按 E 挤出、按 I 内插、按 Ctrl+R 环切，三四个快捷键就能搭出大部分形状。
+
+关键思想是「非破坏性」：尽量用修改器而不是直接编辑。镜像修改器让你只做一半模型，阵列修改器让一个零件变成一排。这些操作都可以随时撤销或调参数，不会破坏原始网格。
+
+## 概念讲解
+
+Blender 建模的核心是<Term def="由顶点、边、面组成的多边形网格">网格</Term>。进入编辑模式（Tab）后，可以操作三种基本元素：顶点（1）、边（2）、面（3）。
+
+<Term def="把一个面沿法线方向拉出新几何体的操作">挤出</Term>是建模最常用的操作（E 键）。<Term def="在网格上添加新的循环边来增加细节">环切</Term>（Ctrl+R）控制模型的分段数。<Term def="非破坏性地变换网格的附加层">修改器</Term>是 Blender 建模的灵魂：镜像做对称、阵列做重复、布尔做挖孔和合并。
+
+### 建模流程
+1. 大型：用基础几何体 + 挤出搭出轮廓
+2. 细分：用环切加线，调整顶点位置
+3. 修线：清理 N-gon 和三角面，尽量保持四边形
+4. 修改器：加镜像、阵列等非破坏性变换
+
+## 交互Demo
+
+> 猜一猜：用镜像修改器只做左半边模型，右边会自动对称。如果修改器没加对，哪边会出问题？
+
+<Bl3ModelingDiagram />
+
+<Stepper>
+<Step title="第一步：搭大型">
+从立方体或圆柱开始，用挤出（E）和缩放（S）快速搭出模型的轮廓比例。这个阶段不追求细节，只看剪影是否对。
+</Step>
+<Step title="第二步：加细节">
+用环切（Ctrl+R）在需要转折的地方加线，调整顶点位置让曲面更圆滑。用倒角（Ctrl+B）给硬边缘加过渡。
+</Step>
+<Step title="第三步：加修改器">
+加镜像修改器做对称、加细分曲面修改器让模型圆滑、加阵列修改器做重复结构。修改器可以随时调整顺序和参数。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# Blender Python：程序化建模示例——生成齿轮
+import bpy, math
+
+bpy.ops.object.select_all(action='SELECT')
+bpy.ops.object.delete()
+
+bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=1.0, depth=0.3)
+gear = bpy.context.active_object
+gear.name = 'Gear'
+
+tooth_count = 12
+for i in range(tooth_count):
+    angle = (2 * math.pi / tooth_count) * i
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.15,
+        location=(math.cos(angle), math.sin(angle), 0)
+    )
+
+gear.modifiers.new(name='Subsurf', type='SUBSURF')
+gear.modifiers['Subsurf'].levels = 2
+print(f'齿轮生成完成: {tooth_count} 齿')
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 镜像修改器对称后有缝或重叠。
+**原因 →** 模型中线上的顶点没有精确对齐到镜像轴（X=0），或者中线面上有偏移。
+**修法 →** 选中中线顶点，按 S X 0 把 X 坐标归零；或在镜像修改器里勾选「Clipping」防止缝。
+</Callout>
+<Callout type="trap">
+**现象 →** 布尔修改器结果面数暴增、出现乱线。
+**原因 →** 两个物体的法线方向不一致，或者网格有 N-gon 和非流形几何。
+**修法 →** 先对两个物体执行 Ctrl+N 重算法线，确保都是流形网格；尽量用简单形状做布尔。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么游戏模型要求低面数但保持轮廓清晰？高面数模型怎么用？
+
+<Answer>
+游戏引擎实时渲染，面数直接影响帧率。高面数模型通过烘焙法线贴图给低模提供表面细节——低模面数低但用法线贴图骗过渲染器，看起来像高模。轮廓是低模本身的剪影，不能靠贴图弥补。
+</Answer>
+
+**问题**：镜像修改器的 Clipping 选项有什么作用？什么时候需要开启？
+
+<Answer>
+Clipping 把镜像轴附近的顶点焊接到一起，防止对称中线出现缝隙。当模型需要在中心线处完全闭合（如人物头部）时必须开启。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="网格">由顶点、边、面组成的多边形结构，是 Blender 建模的基本数据类型。</GlossaryItem>
+<GlossaryItem term="挤出">把选中的面或边沿法线方向拉出新的几何体，是建模最核心的操作，快捷键 E。</GlossaryItem>
+<GlossaryItem term="修改器">非破坏性地变换网格的附加层，如镜像、阵列、布尔、细分曲面，可随时调整或删除。</GlossaryItem>
+<GlossaryItem term="环切">在网格上沿一圈边添加新的循环边来增加细节或分段，快捷键 Ctrl+R。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="玩转 Blender" adaptedUrl="" />

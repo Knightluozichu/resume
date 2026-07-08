@@ -155,6 +155,16 @@ export const BOOK_ORDER = [
   "unity-urp-shaders",
   "gpu-pro",
   "shaderx",
+  // §6 游戏开发
+  "unity-hmi",
+  "game-design-fundamentals",
+  "game-programmer-path",
+  "unity-ui-design",
+  "unity-scripting",
+  "unity-animation",
+  "blender-3d",
+  "unity-core-tech",
+  "unity-game-cases",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -251,6 +261,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-urp-shaders": "Unity URP 内置 Shader 解析",
   "gpu-pro": "GPU Pro 系列",
   "shaderx": "ShaderX 系列",
+  "unity-hmi": "Unity HMI 开发",
+  "game-design-fundamentals": "游戏设计基础",
+  "game-programmer-path": "游戏程序员之路",
+  "unity-ui-design": "Unity UI 设计",
+  "unity-scripting": "Unity 脚本编程",
+  "unity-animation": "Unity 动画",
+  "blender-3d": "Blender 3D",
+  "unity-core-tech": "Unity 核心技术",
+  "unity-game-cases": "Unity 游戏案例",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -866,6 +885,8 @@ export const SECTION_ORDER = [
   "类型设计",
   "内存GC",
   "高级CLR",
+  // §6 游戏开发
+  "游戏开发",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

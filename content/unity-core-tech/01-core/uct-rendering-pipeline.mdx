@@ -1,0 +1,161 @@
+---
+title: "Unity 渲染管线"
+type: B
+section: "游戏开发"
+order: 1
+description: "Built-in/URP/HDRP、DrawCall 优化与批处理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UctRenderingPipelineDiagram } from "@/components/mdx/unity-core-tech/diagrams/uct-rendering-pipeline";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Built-in、URP、HDRP 三种管线的区别与选型
+- 能用 SRP Batcher 和 GPU Instancing 降低 DrawCall
+- 能用 Frame Debugger 分析渲染瓶颈
+- 能回答：为什么 100 个相同物体比 100 个不同物体快？
+</Objectives>
+
+## 直觉引入
+
+渲染管线是 Unity 把 3D 场景变成 2D 像素的全过程。Unity 提供三种管线：Built-in（老牌通用）、URP（轻量快速，移动端首选）、HDRP（高端真实感，PC/主机）。选错管线，要么移动端跑不动，要么画面不够真实。
+
+渲染性能的核心指标是 DrawCall——CPU 每次告诉 GPU 画一批物体的调用。DrawCall 越多 CPU 越忙，100 个不同材质的物体 = 100 个 DrawCall。批处理技术把多个物体合并为一次 DrawCall，是渲染优化的关键。
+
+## 概念讲解
+
+<Term def="Unity 的可编程渲染管线，轻量高效，移动端首选">URP</Term>是性能与画质的平衡。
+
+<Term def="CPU 提交一次绘制命令给 GPU 的调用，是渲染性能核心指标">DrawCall</Term>越少越好。
+
+<Term def="将使用相同材质的物体合并为一次 DrawCall 的技术">批处理</Term>是降 DrawCall 的核心手段。
+
+### 三种管线对比
+| 管线 | 定位 | 平台 | 性能 |
+|---|---|---|---|
+| Built-in | 通用 | 全平台 | 中 |
+| URP | 轻量 | 移动/Web | 高 |
+| HDRP | 高端 | PC/主机 | 低 |
+
+### 批处理技术
+- **SRP Batcher**：相同 Shader 的材质不切 GPU 状态
+- **GPU Instancing**：相同 Mesh+材质的物体一次画
+- **动态批处理**：小网格自动合并（自动）
+- **静态批处理**：静态物体合并（需标记）
+
+## 交互Demo
+
+> 猜一猜：100 个相同立方体用 GPU Instancing 只需要几个 DrawCall？（提示：1 个！）
+
+<UctRenderingPipelineDiagram />
+
+<Stepper>
+<Step title="第一步：选管线">
+移动端选 URP，PC 大作选 HDRP，快速原型用 Built-in。在 Package Manager 安装 URP，创建 URP Asset 并指定到 Graphics Settings。
+</Step>
+<Step title="第二步：开批处理">
+在 URP Asset 中开启 SRP Batcher。材质的 Shader 须支持 SRP Batcher（URP 内置 Shader 都支持）。GPU Instancing 在材质面板勾选。
+</Step>
+<Step title="第三步：分析优化">
+Window → Frame Debugger 逐帧查看 DrawCall。每个 DrawCall 显示原因（为何没批处理）。目标：移动端 DrawCall < 100。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: GPU Instancing 材质设置
+using UnityEngine;
+
+public class InstancingSetup : MonoBehaviour
+{
+    public Mesh mesh;
+    public Material instancingMaterial;
+    public int count = 1000;
+
+    void Start()
+    {
+        // 确保材质开启 GPU Instancing
+        instancingMaterial.enableInstancing = true;
+
+        // 方式1: Graphics.DrawMeshInstanced (最快)
+        Matrix4x4[] matrices = new Matrix4x4[count];
+        for (int i = 0; i < count; i++)
+        {
+            Vector3 pos = new Vector3(i % 100, 0, i / 100);
+            matrices[i] = Matrix4x4.TRS(
+                pos, Quaternion.identity, Vector3.one);
+        }
+        Graphics.DrawMeshInstanced(mesh, 0, instancingMaterial, matrices);
+
+        // 方式2: Graphics.RenderMeshIndirect (超大数量)
+        // 使用 Compute Shader 计算，支持百万级
+    }
+}
+
+// SRP Batcher 兼容检查:
+// 1. 材质用 URP/Lit 等 SRP Batcher 兼容 Shader
+// 2. 不要在代码中修改 material 的属性
+//    用 MaterialPropertyBlock 替代
+public class OptimizedRenderer : MonoBehaviour
+{
+    public Renderer rend;
+    private MaterialPropertyBlock block;
+
+    void Start()
+    {
+        block = new MaterialPropertyBlock();
+    }
+
+    void Update()
+    {
+        // 用 MaterialPropertyBlock 修改属性
+        // 不打断 SRP Batcher
+        rend.GetPropertyBlock(block);
+        block.SetColor("_BaseColor", Color.red);
+        rend.SetPropertyBlock(block);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 移动端 DrawCall 超过 500，帧率掉到 30fps。
+**原因 →** 每个物体用不同材质实例，无法批处理，每个物体一个 DrawCall。
+**修法 →** 用相同材质+MaterialPropertyBlock 改变属性（不打断 SRP Batcher）。开启 SRP Batcher 和 GPU Instancing。用 Frame Debugger 逐个检查 DrawCall 原因。
+</Callout>
+<Callout type="trap">
+**现象 →** 代码中 renderer.material.color = Color.red 后 DrawCall 增多。
+**原因 →** 访问 renderer.material 会创建材质副本（实例化），导致无法批处理。
+**修法 →** 用 renderer.sharedMaterial 访问共享材质，或用 MaterialPropertyBlock 修改属性而不创建副本。MaterialPropertyBlock 不打断 SRP Batcher。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么 100 个相同物体比 100 个不同物体快？
+
+<Answer>
+100 个相同 Mesh+材质的物体可用 GPU Instancing 合并为 1 个 DrawCall，GPU 一次绘制全部。100 个不同材质的物体每个需要独立 DrawCall（材质切换导致 GPU 状态切换），共 100 个 DrawCall。CPU 提交 DrawCall 的开销远大于 GPU 绘制本身，所以 DrawCall 数量是瓶颈。
+</Answer>
+
+**问题**：URP、HDRP、Built-in 三种管线怎么选？
+
+<Answer>
+移动端/WebGL 选 URP——轻量高效，画质够用。PC/主机大作选 HDRP——高端物理渲染，真实感强但性能开销大。快速原型或老项目用 Built-in——通用兼容但不再更新。选型原则：先定平台再定画质需求。URP 是大多数项目的最佳选择。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="URP">通用渲染管线，Unity 的轻量可编程渲染管线，性能高效，移动端和 WebGL 首选。</GlossaryItem>
+<GlossaryItem term="DrawCall">CPU 提交一次绘制命令给 GPU 的调用，是渲染性能的核心指标，移动端建议低于 100。</GlossaryItem>
+<GlossaryItem term="SRP Batcher">URP/HDRP 的批处理技术，相同 Shader 的材质不切换 GPU 状态，大幅减少 DrawCall 开销。</GlossaryItem>
+<GlossaryItem term="GPU Instancing">将相同 Mesh 和材质的多个物体用一次 DrawCall 绘制，适合渲染大量相同物体如草、树。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 实战核心技术" adaptedUrl="" />

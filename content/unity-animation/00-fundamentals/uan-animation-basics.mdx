@@ -1,0 +1,109 @@
+---
+title: "动画基础原理"
+type: B
+section: "游戏开发"
+order: 1
+description: "理解关键帧、插值曲线、采样率等动画核心概念"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UanAnimationBasicsDiagram } from "@/components/mdx/unity-animation/diagrams/uan-animation-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出关键帧的定义及其在动画中的作用
+- 能区分线性插值和缓动插值对动画手感的影响
+- 能解释采样率的高低对动画质量和内存的影响
+- 能提出 AnimationClip 内存优化的方案
+</Objectives>
+
+## 直觉引入
+
+动画的本质是「快速翻页」。每页画一个姿态，快速翻动就成了动画。Unity 的关键帧就像这些画——在特定时间点记录骨骼姿态，播放时在帧间插值生成平滑过渡。关键帧越密动画越精细但数据越大，插值曲线决定动作的「手感」——匀速还是加速减速。
+
+## 概念讲解
+
+### 动画原理
+
+<UanAnimationBasicsDiagram />
+
+<Term def="关键帧(Keyframe)是记录物体在特定时间点状态(位置/旋转/缩放)的帧，动画系统在帧间插值生成平滑过渡">关键帧</Term>是动画的骨架。
+
+<Term def="插值(Interpolation)是在关键帧之间生成中间值的算法，线性插值匀速，缓动插值有加速/减速">插值</Term>决定过渡方式。
+
+<Term def="采样率(Sample Rate)是每秒记录的关键帧数量，越高动画越精细但数据量越大">采样率</Term>决定精度。
+
+<Term def="AnimationClip是Unity存储动画数据的资产，包含关键帧、曲线、事件和采样率设置">AnimationClip</Term>是动画数据。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：关键帧与插值">美术在关键帧上设计姿态——0 秒站立、0.3 秒起跳、0.6 秒最高点、1.0 秒落地。播放时系统在关键帧间插值，生成 60fps 的平滑动画。关键帧的切线（Tangent）控制插值曲线——平直切线是线性，弯曲切线是缓动。</Step>
+<Step title="第二步：插值类型">
+线性插值：值匀速变化，机械感强。缓动插值：EaseIn 先慢后快（加速），EaseOut 先快后慢（减速），EaseInOut 两端慢中间快。角色动作用缓动更自然，机械运动用线性更准确。
+<UanAnimationBasicsDiagram />
+</Step>
+<Step title="第三步：采样率与优化">采样率越高动画越精细但数据越大。优化：身体动作 15-30fps 足够，面部/手指用 60fps。用 Keyframe Reduction 压缩删冗余帧，直线段只留首尾帧。WrapMode 设 Loop 做循环动画（走路/呼吸），Clamp 做一次性动画（攻击/死亡）。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 运行时创建 AnimationClip（代码生成动画）
+var clip = new AnimationClip { name = "Bounce", frameRate = 30f };
+
+// 添加关键帧曲线
+var curve = new AnimationCurve(
+    new Keyframe(0f, 0f),      // 0秒 y=0
+    new Keyframe(0.5f, 2f),    // 0.5秒 y=2（最高点）
+    new Keyframe(1f, 0f)       // 1秒 y=0（落地）
+);
+curve.SmoothTangents(1, 0); // 平滑切线
+
+clip.SetCurve("", typeof(Transform), "localPosition.y", curve);
+
+// 播放动画
+GetComponent<Animation>().AddClip(clip, "Bounce");
+GetComponent<Animation>().Play("Bounce");
+
+// WrapMode 设置
+clip.wrapMode = WrapMode.Loop; // 循环播放
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：采样率越高动画越好，所有动画都用 60fps。**
+高采样率只对精细动作（面部表情/手指弯曲）有意义。身体大幅动作（跑步/跳跃/攻击）15-30fps 已经足够——人眼难以分辨高速动作的帧间差异。60fps 的身体动画数据量是 30fps 的两倍，但视觉差异微乎其微。应该根据动作类型分级设置采样率，而非统一用最高值。
+</Callout>
+
+<Callout type="trap">
+**误区：所有动画都用线性插值，觉得「均匀变化最准确」。**
+线性插值对机械运动（齿轮/传送带）准确，但对角色动作（走路/跳跃/攻击）显得僵硬不自然。真实世界的运动都有加速和减速——起跳时加速、落地时减速。用缓动插值（EaseOut/EaseIn）让角色动作有「重量感」和「弹性」。曲线编辑器中调整关键帧的切线类型是动画手感调优的核心技能。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是关键帧？插值在动画中的作用是什么？
+
+<Answer>
+关键帧是记录物体在特定时间点状态（位置/旋转/缩放）的帧。美术在关键帧上设计动作姿态（如 0 秒站立、0.3 秒起跳、0.6 秒最高点、1.0 秒落地）。插值是动画系统在关键帧之间生成中间值的算法——播放时在帧间插值，生成平滑过渡。插值类型决定动作手感：线性插值匀速（机械感），缓动插值有加减速（自然感）。
+</Answer>
+
+**问题 2**：如何优化 AnimationClip 的内存占用？
+
+<Answer>
+1)降低采样率：身体动作 15-30fps 足够，只有精细动作（面部/手指）用 60fps；2)减少关键帧：用 Keyframe Reduction 自动删除冗余帧——直线段只需首尾两帧；3)压缩格式：Compression 选 Keyframe Reduction 或 Optimal，权衡大小和质量；4)骨骼优化：只动画必要骨骼，不动的骨骼不录关键帧；5)动画复用：Avatar Mask + Blend Tree 复用上下半身动画，减少总 Clip 数量。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="关键帧(Keyframe)">记录物体在特定时间点状态的帧，是动画的骨架。</GlossaryItem>
+<GlossaryItem term="插值(Interpolation)">关键帧间生成中间值的算法，线性匀速、缓动有加减速。</GlossaryItem>
+<GlossaryItem term="采样率(Sample Rate)">每秒记录的关键帧数量，决定动画精度和数据量。</GlossaryItem>
+<GlossaryItem term="AnimationClip">存储关键帧、曲线和事件的动画数据资产。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 游戏动画设计" adaptedUrl="" />

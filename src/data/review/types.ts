@@ -1210,7 +1210,94 @@ export type ReviewChapterSlug =
   | "sxx-environment"
   | "sxx-procedural-texturing"
   | "sxx-performance"
-  | "sxx-final-review";
+  | "sxx-final-review"
+  | "bl3-animation"
+  | "bl3-final-review"
+  | "bl3-game-export"
+  | "bl3-interface"
+  | "bl3-learning-map"
+  | "bl3-lighting"
+  | "bl3-modeling"
+  | "bl3-rendering"
+  | "bl3-sculpting"
+  | "bl3-texturing"
+  | "gdf-aesthetics"
+  | "gdf-balancing"
+  | "gdf-dynamics"
+  | "gdf-final-review"
+  | "gdf-learning-map"
+  | "gdf-level-design"
+  | "gdf-mdf-framework"
+  | "gdf-mechanics"
+  | "gdf-player-experience"
+  | "gdf-prototyping"
+  | "gmp-algorithms"
+  | "gmp-career-path"
+  | "gmp-cpp-foundation"
+  | "gmp-data-structures"
+  | "gmp-engine-basics"
+  | "gmp-final-review"
+  | "gmp-gameplay-coding"
+  | "gmp-graphics"
+  | "gmp-interview"
+  | "gmp-learning-map"
+  | "uan-animation-basics"
+  | "uan-animator-controller"
+  | "uan-blend-trees"
+  | "uan-ik-system"
+  | "uan-learning-map"
+  | "uan-state-machine"
+  | "uan-timeline"
+  | "uct-asset-pipeline"
+  | "uct-audio-system"
+  | "uct-build-deploy"
+  | "uct-final-review"
+  | "uct-learning-map"
+  | "uct-memory-management"
+  | "uct-navigation"
+  | "uct-physics-engine"
+  | "uct-rendering-pipeline"
+  | "uct-scene-management"
+  | "ugc-2d-platformer"
+  | "ugc-3d-action"
+  | "ugc-final-review"
+  | "ugc-fps-basics"
+  | "ugc-game-polish"
+  | "ugc-learning-map"
+  | "ugc-puzzle-game"
+  | "ugc-racing-game"
+  | "ugc-rpg-basics"
+  | "ugc-strategy-game"
+  | "uhm-advanced-hmi"
+  | "uhm-animation"
+  | "uhm-data-binding"
+  | "uhm-deployment"
+  | "uhm-final-review"
+  | "uhm-hmi-basics"
+  | "uhm-input-handling"
+  | "uhm-learning-map"
+  | "uhm-performance"
+  | "uhm-ui-framework"
+  | "uid-animations"
+  | "uid-final-review"
+  | "uid-interactive"
+  | "uid-layout-system"
+  | "uid-learning-map"
+  | "uid-optimization"
+  | "uid-responsive"
+  | "uid-ugui-basics"
+  | "uid-ui-system"
+  | "uid-uitoolkit"
+  | "usc-advanced-coding"
+  | "usc-component-system"
+  | "usc-coroutines"
+  | "usc-final-review"
+  | "usc-input-system"
+  | "usc-learning-map"
+  | "usc-lifecycle"
+  | "usc-mono-basics"
+  | "usc-physics"
+  | "usc-scriptable-objects";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2425,6 +2512,94 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "sxx-procedural-texturing": "程序化纹理",
   "sxx-performance": "性能优化技巧",
   "sxx-final-review": "ShaderX 系列总复习",
+  // §6 游戏开发
+  "bl3-interface": "Blender 界面与导航",
+  "bl3-learning-map": "Blender 全书学习地图",
+  "bl3-animation": "Blender 动画基础",
+  "bl3-lighting": "Blender 灯光与世界设置",
+  "bl3-modeling": "Blender 多边形建模",
+  "bl3-texturing": "Blender 材质与贴图",
+  "bl3-game-export": "Blender 游戏导出工作流",
+  "bl3-rendering": "Blender 渲染：Cycles 与 Eevee",
+  "bl3-sculpting": "Blender 雕刻模式",
+  "bl3-final-review": "Blender 全书复习与综合实践",
+  "gdf-learning-map": "游戏设计基础 全书学习地图",
+  "gdf-mdf-framework": "MDA 框架详解",
+  "gdf-aesthetics": "美学体验设计",
+  "gdf-dynamics": "动态与涌现行为",
+  "gdf-mechanics": "游戏机制设计",
+  "gdf-balancing": "游戏平衡性",
+  "gdf-level-design": "关卡设计",
+  "gdf-player-experience": "玩家体验设计",
+  "gdf-prototyping": "原型设计与迭代",
+  "gdf-final-review": "游戏设计基础 总复习",
+  "gmp-career-path": "游戏程序员职业路径",
+  "gmp-learning-map": "游戏程序员的学习之路 全书学习地图",
+  "gmp-algorithms": "算法基础与复杂度分析",
+  "gmp-cpp-foundation": "C++ 基础与内存管理",
+  "gmp-data-structures": "数据结构基础",
+  "gmp-engine-basics": "游戏引擎基础",
+  "gmp-gameplay-coding": "玩法编程与游戏逻辑",
+  "gmp-graphics": "图形学与渲染管线",
+  "gmp-interview": "面试准备与算法实战",
+  "gmp-final-review": "游戏程序员的学习之路 总复习",
+  "uhm-hmi-basics": "HMI 基础概念",
+  "uhm-learning-map": "Unity for HMI 全书学习地图",
+  "uhm-animation": "动画系统与过渡效果",
+  "uhm-data-binding": "数据绑定与响应式更新",
+  "uhm-ui-framework": "UI 框架与布局系统",
+  "uhm-advanced-hmi": "高级 HMI 技术",
+  "uhm-deployment": "部署发布与平台适配",
+  "uhm-input-handling": "输入处理与交互响应",
+  "uhm-performance": "性能优化与帧率保障",
+  "uhm-final-review": "Unity for HMI 总复习",
+  "uid-learning-map": "Unity UI 设计全书学习地图",
+  "uid-ui-system": "Unity UI 系统架构",
+  "uid-interactive": "UGUI 交互组件",
+  "uid-layout-system": "UGUI 布局系统",
+  "uid-ugui-basics": "UGUI 基础组件",
+  "uid-animations": "UI 动画系统",
+  "uid-optimization": "UI 性能优化",
+  "uid-responsive": "响应式 UI 设计",
+  "uid-uitoolkit": "UI Toolkit",
+  "uid-final-review": "全书复习与总结",
+  "usc-learning-map": "Unity 脚本设计全书学习地图",
+  "usc-mono-basics": "MonoBehaviour 基础",
+  "usc-component-system": "Unity 组件系统",
+  "usc-input-system": "Unity 输入系统",
+  "usc-lifecycle": "脚本生命周期详解",
+  "usc-advanced-coding": "高级编程技巧",
+  "usc-coroutines": "协程系统",
+  "usc-physics": "Unity 物理系统",
+  "usc-scriptable-objects": "ScriptableObject",
+  "usc-final-review": "全书复习与总结",
+  "uan-animation-basics": "动画基础原理",
+  "uan-learning-map": "Unity 游戏动画设计全书学习地图",
+  "uan-animator-controller": "Animator 控制器",
+  "uan-blend-trees": "动画混合树",
+  "uan-state-machine": "动画状态机详解",
+  "uan-ik-system": "IK 逆向运动学系统",
+  "uan-timeline": "Timeline 系统",
+  "uct-learning-map": "Unity 核心技术全书学习地图",
+  "uct-scene-management": "Unity 场景管理",
+  "uct-asset-pipeline": "Unity 资源管线",
+  "uct-audio-system": "Unity 音频系统",
+  "uct-physics-engine": "Unity 物理引擎",
+  "uct-rendering-pipeline": "Unity 渲染管线",
+  "uct-build-deploy": "Unity 构建与部署",
+  "uct-memory-management": "Unity 内存管理",
+  "uct-navigation": "Unity 导航系统",
+  "uct-final-review": "Unity 核心技术复习与综合实践",
+  "ugc-learning-map": "Unity 游戏案例全书学习地图",
+  "ugc-2d-platformer": "2D 平台跳跃游戏",
+  "ugc-3d-action": "3D 动作游戏",
+  "ugc-fps-basics": "FPS 第一人称射击游戏基础",
+  "ugc-rpg-basics": "RPG 角色扮演游戏基础",
+  "ugc-game-polish": "游戏打磨与发布",
+  "ugc-puzzle-game": "益智游戏",
+  "ugc-racing-game": "赛车游戏",
+  "ugc-strategy-game": "策略游戏",
+  "ugc-final-review": "游戏案例开发复习与综合实践",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

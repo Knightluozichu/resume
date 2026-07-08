@@ -1,0 +1,109 @@
+---
+title: "性能优化与帧率保障"
+type: B
+section: "游戏开发"
+order: 1
+description: "掌握 HMI 性能优化的核心策略，保障稳定帧率与低延迟"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UhmPerformanceDiagram } from "@/components/mdx/unity-hmi/diagrams/uhm-performance";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释 HMI 性能优化的三大维度
+- 能看懂并独立修改 Unity Profiler 分析代码
+- 能回答：为什么 HMI 要求稳定帧率而不是最高帧率？
+- 掌握 DrawCall 合并和内存控制的核心策略
+</Objectives>
+
+## 直觉引入
+
+HMI 性质像红绿灯——稳定比快更重要。60fps 稳定比 120fps 偶尔掉到 30fps 好得多。因为掉帧的瞬间，仪表盘可能卡在旧数值上，司机误判车速。
+
+HMI 性能优化的核心不是「跑得更快」，而是「跑得更稳」。三个维度：CPU（少算）、GPU（少画）、内存（少存）。
+
+## 概念讲解
+
+### 性能三大维度
+
+<UhmPerformanceDiagram />
+
+<Term def="CPU 每帧完成的计算量，包括逻辑更新、数据绑定、布局计算等">CPU 开销</Term>是 HMI 性能的第一瓶颈。优化方向：减少每帧的布局计算（用子 Canvas 隔离）、减少数据绑定遍历（用脏标记）、减少字符串拼接（用 StringBuilder）。
+
+<Term def="GPU 每帧的绘制调用次数和填充率，HMI 中主要受 UI 批处理影响">DrawCall</Term>是 GPU 开销的核心指标。每个 DrawCall 都有固定开销，HMI 界面可能包含上百个 UI 元素，不合并 DrawCall 会导致帧率暴跌。
+
+### 帧率稳定性
+
+HMI 要求帧率标准差小（抖动少），而不是峰值高。Profiler 的关键指标不是平均帧率，而是最差帧率（1% Low FPS）——它决定了用户是否感知到卡顿。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Profiler 定位瓶颈">用 Unity Profiler 录制帧数据，定位 CPU/GPU/内存的瓶颈位置。
+<UhmPerformanceDiagram />
+</Step>
+<Step title="第二步：CPU 优化">减少布局计算（子 Canvas 隔离）、减少数据绑定遍历（脏标记）、减少字符串拼接（StringBuilder）。</Step>
+<Step title="第三步：GPU 优化">合并 DrawCall（图集/批处理）、减少 Overdraw（简化层级）、控制透明度混合。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// HMI 性能优化：减少每帧字符串拼接
+public class HmiPerformanceOpt : MonoBehaviour
+{
+    private StringBuilder _sb = new StringBuilder(32);
+    [SerializeField] private Text speedText;
+    
+    // 错误：每帧拼接字符串产生 GC
+    // speedText.text = speed + " km/h";
+    
+    // 正确：用 StringBuilder 复用
+    public void UpdateSpeed(float speed)
+    {
+        _sb.Clear();
+        _sb.Append(speed.ToString("F0"));
+        _sb.Append(" km/h");
+        speedText.text = _sb.ToString();
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：追求最高帧率而非稳定帧率。**
+原因：HMI 的核心是稳定，100fps 偶尔掉到 30fps 比稳定 60fps 差得多。掉帧瞬间仪表卡在旧值上可能导致误读。修法：以 1% Low FPS 为优化目标，确保最差帧也在可接受范围内。用 QualitySettings.vSyncCount 锁定帧率。
+</Callout>
+
+<Callout type="trap">
+**现象：UI 元素散落在多个图集中，DrawCall 无法合并。**
+原因：不同图集的元素无法批处理，每个图集切换产生一个新 DrawCall。修法：将同一界面的 UI 元素打包到同一图集中，减少图集切换。用 Sprite Atlas 工具自动合并。
+</Callout>
+
+<Exercises>
+**问题 1**：HMI 性能优化的三大维度是什么？
+
+<Answer>
+CPU（少算）：减少每帧布局计算、数据绑定遍历、字符串拼接。GPU（少画）：合并 DrawCall、减少 Overdraw、控制透明度混合。内存（少存）：减少 GC 分配、复用对象、控制资源大小。三者中 CPU 通常是第一瓶颈，因为 HMI 有大量数据绑定和布局计算。
+</Answer>
+
+**问题 2**：为什么 HMI 要求稳定帧率而不是最高帧率？
+
+<Answer>
+HMI 面向安全关键场景，掉帧瞬间仪表盘可能卡在旧数值上，司机误判车速导致事故。稳定 60fps 比偶尔 120fps 但经常掉到 30fps 好得多。优化目标应是最差帧率（1% Low FPS），确保最差帧也在可接受范围内。用 vSyncCount 锁定帧率避免帧率波动。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CPU 开销">每帧的计算量，包括逻辑更新、数据绑定、布局计算等，是 HMI 性能的第一瓶颈。</GlossaryItem>
+<GlossaryItem term="DrawCall">GPU 每次的绘制调用，每个有固定开销，HMI 界面需通过图集和批处理合并 DrawCall。</GlossaryItem>
+<GlossaryItem term="1% Low FPS">最差 1% 帧的帧率，比平均帧率更能反映用户感知到的卡顿程度。</GlossaryItem>
+<GlossaryItem term="Sprite Atlas">将多个小图合并为一张大图的工具，减少图集切换从而合并 DrawCall。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity for HMI" adaptedUrl="" />

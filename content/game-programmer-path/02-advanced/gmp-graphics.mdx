@@ -1,0 +1,111 @@
+---
+title: "图形学与渲染管线"
+type: B
+section: "游戏开发"
+order: 1
+description: "理解渲染管线的各阶段，掌握游戏图形学的核心概念"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GmpGraphicsDiagram } from "@/components/mdx/game-programmer-path/diagrams/gmp-graphics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用自己的话解释渲染管线的各阶段
+- 能看懂并独立修改简单的着色器代码
+- 能回答：为什么 DrawCall 是性能瓶颈？
+- 掌握空间裁剪和可见性剔除的原理
+</Objectives>
+
+## 直觉引入
+
+把 3D 场景画到 2D 屏幕上，就像用相机拍照。相机有镜头（投影）、有方向（视图）、只能拍到前方一部分（裁剪）。渲染管线就是从 3D 数据到 2D 像素的完整流水线——每个 3D 顶点经过一系列变换，最终变成屏幕上的一个像素。
+
+理解渲染管线是图形程序员的基本功。不知道像素怎么来的，就不知道怎么优化。
+
+## 概念讲解
+
+### 渲染管线阶段
+
+<GmpGraphicsDiagram />
+
+<Term def="从 3D 顶点到 2D 像素的完整处理流程">渲染管线</Term>分阶段：顶点着色（坐标变换）→ 曲面细分（可选）→ 几何着色（可选）→ 裁剪（去掉视野外的）→ 光栅化（三角形变像素）→ 片段着色（像素着色）→ 输出合并（深度测试+混合）。
+
+<Term def="控制 GPU 如何变换顶点和着色像素的小程序，运行在 GPU 上">着色器</Term>分顶点着色器（变换坐标）和片段着色器（计算颜色）。着色器是图形程序员的核心工具。
+
+### 性能瓶颈
+
+<Term def="CPU 向 GPU 提交一次绘制命令，有固定开销，过多 DrawCall 导致 CPU 瓶颈">DrawCall</Term>是渲染性能的核心指标。每个 DrawCall 有 CPU 端开销（状态切换+命令提交），1000 个 DrawCall 可能吃掉一帧 50% 的 CPU 时间。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：顶点处理">顶点着色器将 3D 坐标变换到屏幕空间（模型→世界→视图→投影→屏幕）。
+<GmpGraphicsDiagram />
+</Step>
+<Step title="第二步：裁剪与光栅化">裁剪掉视野外的三角形，光栅化将可见三角形转换为像素片段。</Step>
+<Step title="第三步：片段处理">片段着色器计算每个像素的颜色（纹理采样+光照计算），深度测试决定可见性，混合处理半透明。</Step>
+</Stepper>
+
+## 代码对照
+
+```glsl
+// 顶点着色器：3D 坐标变换到屏幕空间
+#version 330 core
+layout(location = 0) in vec3 aPos;      // 模型空间坐标
+uniform mat4 uMVP;                        // 合并的 MVP 矩阵
+void main() {
+    gl_Position = uMVP * vec4(aPos, 1.0); // 变换到裁剪空间
+}
+
+// 片段着色器：计算像素颜色
+#version 330 core
+out vec4 FragColor;
+uniform sampler2D uTexture;
+uniform vec3 uLightDir;
+in vec2 vTexCoord;
+in vec3 vNormal;
+void main() {
+    vec3 color = texture(uTexture, vTexCoord).rgb;
+    float light = max(dot(vNormal, uLightDir), 0.0); // 兰伯特光照
+    FragColor = vec4(color * light, 1.0);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象：不理解 DrawCall 开销，每个物体单独绘制。**
+原因：每个 DrawCall 有 CPU 端固定开销（状态切换+命令提交），1000 个小物体单独绘制 = 1000 个 DrawCall = CPU 瓶颈。修法：合并 DrawCall——静态合批（相同材质的静态物体合并）、实例化（相同网格画多次用一个 DrawCall）、图集（减少材质切换）。
+</Callout>
+
+<Callout type="trap">
+**现象：不做可见性剔除，所有物体都提交给 GPU。**
+原因：GPU 虽然会裁剪视野外的三角形，但 CPU 提交 DrawCall 的开销已经产生了。修法：CPU 端先做粗粒度剔除——视锥体剔除（去掉视野外的整个物体）、遮挡剔除（去掉被大物体挡住的小物体）、距离剔除（太远的不画）。
+</Callout>
+
+<Exercises>
+**问题 1**：渲染管线的主要阶段是什么？
+
+<Answer>
+顶点着色（3D 坐标变换到屏幕空间）→ 裁剪（去掉视野外的三角形）→ 光栅化（三角形转换为像素片段）→ 片段着色（计算每个像素颜色，纹理采样+光照）→ 输出合并（深度测试决定可见性，混合处理半透明）。可选阶段还有曲面细分和几何着色。每个阶段处理特定任务，前一阶段的输出是后一阶段的输入。
+</Answer>
+
+**问题 2**：为什么 DrawCall 是性能瓶颈？如何减少 DrawCall？
+
+<Answer>
+DrawCall 是性能瓶颈因为每个 DrawCall 有 CPU 端固定开销（状态切换+命令提交），即使画一个三角形也要付这个开销。1000 个 DrawCall 可能吃掉一帧 50% 的 CPU 时间。减少方法：1. 静态合批（相同材质的静态物体合并为一个大网格）。2. 实例化（相同网格和材质画多次用一个 DrawCall）。3. 图集（减少材质切换）。4. GPU Driven Pipeline（GPU 端决定画什么，减少 CPU 提交）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="渲染管线">从 3D 顶点到 2D 像素的完整处理流程，包括顶点着色、裁剪、光栅化、片段着色等阶段。</GlossaryItem>
+<GlossaryItem term="着色器">控制 GPU 变换顶点和着色像素的小程序，分顶点着色器和片段着色器。</GlossaryItem>
+<GlossaryItem term="DrawCall">CPU 向 GPU 提交一次绘制命令，有固定开销，过多导致 CPU 瓶颈。</GlossaryItem>
+<GlossaryItem term="视锥体剔除">CPU 端去掉视野锥体外整个物体的优化，避免无效 DrawCall 提交。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="游戏程序员的学习之路" adaptedUrl="" />
