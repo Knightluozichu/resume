@@ -204,6 +204,7 @@ export const BOOK_ORDER = [
   "linux-kernel-essence",
   "linux-kernel-design",
   "unix-advanced-programming",
+  "head-first-java",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -348,6 +349,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "linux-kernel-essence": "Linux内核精髓",
   "linux-kernel-design": "Linux内核设计与实现",
   "unix-advanced-programming": "UNIX环境高级编程",
+  "head-first-java": "Head First Java",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -973,6 +975,7 @@ export const SECTION_ORDER = [
   // JavaScript高级程序设计（第4版）
   "前端与Web",
   "系统与操作系统",
+  "JVM与Java生态",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

@@ -1688,7 +1688,17 @@ export type ReviewChapterSlug =
   | "uap-process-ipc"
   | "uap-threads"
   | "uap-advanced-io"
-  | "uap-final-review";
+  | "uap-final-review"
+  | "hfj-learning-map"
+  | "hfj-java-basics"
+  | "hfj-oop-fundamentals"
+  | "hfj-java-api"
+  | "hfj-inheritance-polymorphism"
+  | "hfj-swing-gui"
+  | "hfj-event-handling"
+  | "hfj-concurrency"
+  | "hfj-networking"
+  | "hfj-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3381,6 +3391,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "uap-threads": "线程",
   "uap-advanced-io": "高级I/O",
   "uap-final-review": "全书复习",
+  "hfj-learning-map": "全书学习地图",
+  "hfj-java-basics": "Java入门基础",
+  "hfj-oop-fundamentals": "面向对象基础",
+  "hfj-java-api": "核心API与集合",
+  "hfj-inheritance-polymorphism": "继承与多态",
+  "hfj-swing-gui": "Swing图形界面",
+  "hfj-event-handling": "事件处理",
+  "hfj-concurrency": "并发与多线程",
+  "hfj-networking": "网络编程",
+  "hfj-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1225,6 +1225,16 @@ import { uapNetworkSyncQuestions } from "./review/uap-network-sync";
 import { uapHotUpdateQuestions } from "./review/uap-hot-update";
 import { uapCiCdQuestions } from "./review/uap-ci-cd";
 import { uapFinalReviewQuestions } from "./review/uap-final-review";
+import { hfjLearningMapQuestions } from "./review/hfj-learning-map";
+import { hfjJavaBasicsQuestions } from "./review/hfj-java-basics";
+import { hfjOopFundamentalsQuestions } from "./review/hfj-oop-fundamentals";
+import { hfjJavaApiQuestions } from "./review/hfj-java-api";
+import { hfjInheritancePolymorphismQuestions } from "./review/hfj-inheritance-polymorphism";
+import { hfjSwingGuiQuestions } from "./review/hfj-swing-gui";
+import { hfjEventHandlingQuestions } from "./review/hfj-event-handling";
+import { hfjConcurrencyQuestions } from "./review/hfj-concurrency";
+import { hfjNetworkingQuestions } from "./review/hfj-networking";
+import { hfjFinalReviewQuestions } from "./review/hfj-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3165,6 +3175,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...uapThreadsQuestions,
   ...uapAdvancedIoQuestions,
   ...uapFinalReviewQuestions,
+  ...hfjLearningMapQuestions,
+  ...hfjJavaBasicsQuestions,
+  ...hfjOopFundamentalsQuestions,
+  ...hfjJavaApiQuestions,
+  ...hfjInheritancePolymorphismQuestions,
+  ...hfjSwingGuiQuestions,
+  ...hfjEventHandlingQuestions,
+  ...hfjConcurrencyQuestions,
+  ...hfjNetworkingQuestions,
+  ...hfjFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

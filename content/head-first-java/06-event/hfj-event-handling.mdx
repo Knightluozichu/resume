@@ -1,0 +1,155 @@
+---
+title: "事件处理"
+type: C
+section: "JVM与Java生态"
+order: 6
+description: "事件源-事件对象-监听器三要素、EDT事件分发线程、ActionEvent/MouseEvent/KeyEvent、适配器模式"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { HfjEventHandlingDiagram } from "@/components/mdx/head-first-java/diagrams/hfj-event-handling";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解事件处理的三个核心要素：事件源、事件对象、监听器
+- 掌握注册监听器和处理事件的完整流程
+- 理解 EDT（事件分发线程）的单线程模型和阻塞问题
+- 掌握 ActionListener、MouseListener、KeyListener 等常用监听器
+- 理解适配器（Adapter）模式的作用和使用
+</Objectives>
+
+## 三要素
+
+<Term def="事件处理是GUI程序响应用户操作的机制，核心三要素是事件源(产生事件的组件)、事件对象(封装事件信息)、监听器(接收并处理事件)。">事件处理三要素</Term>通过「注册—通知」模式协作。
+
+<HfjEventHandlingDiagram />
+
+```java
+import java.awt.event.*;
+
+// 事件源: JButton
+JButton button = new JButton("点击我");
+
+// 监听器: ActionListener (函数式接口, 只有一个方法)
+button.addActionListener(new ActionListener() {
+    @Override
+    public void actionPerformed(ActionEvent e) {
+        // 事件对象 e 包含事件信息
+        System.out.println("按钮被点击了!");
+        System.out.println("事件源: " + e.getSource());
+        System.out.println("命令: " + e.getActionCommand());
+    }
+});
+
+// Lambda 简写 (Java 8+, ActionListener 是函数式接口)
+button.addActionListener(e -> {
+    System.out.println("按钮被点击了!");
+});
+```
+
+## EDT 与事件队列
+
+```java
+// EDT (Event Dispatch Thread): Swing 的单线程事件分发线程
+// 所有 GUI 事件和组件绘制都在 EDT 上串行处理
+
+// 错误: 在事件处理中执行耗时操作 → 界面冻结
+button.addActionListener(e -> {
+    Thread.sleep(10000); // 阻塞 EDT 10秒! 界面完全冻结
+});
+
+// 正确: 耗时操作放到工作线程
+button.addActionListener(e -> {
+    new Thread(() -> {
+        // 耗时操作在工作线程执行
+        doHeavyWork();
+        // UI 更新必须回到 EDT
+        SwingUtilities.invokeLater(() -> {
+            label.setText("完成!");
+        });
+    }).start();
+});
+```
+
+## 常见事件类型
+
+```java
+// ActionEvent: 按钮点击、回车
+button.addActionListener(e -> System.out.println("点击"));
+
+// MouseEvent: 鼠标点击、移动、进入、离开
+component.addMouseListener(new MouseAdapter() {
+    // 继承适配器, 只重写需要的方法
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        System.out.println("点击位置: " + e.getX() + ", " + e.getY());
+    }
+});
+
+// KeyEvent: 键盘按下、释放
+component.addKeyListener(new KeyAdapter() {
+    @Override
+    public void keyPressed(KeyEvent e) {
+        System.out.println("按下: " + e.getKeyChar());
+    }
+});
+
+// WindowEvent: 窗口打开、关闭
+frame.addWindowListener(new WindowAdapter() {
+    @Override
+    public void windowClosing(WindowEvent e) {
+        System.out.println("窗口关闭中...");
+    }
+});
+```
+
+## 适配器模式
+
+```java
+// MouseListener 接口有 5 个方法
+// 如果直接 implements, 必须全部实现(空方法体)
+component.addMouseListener(new MouseListener() {
+    @Override public void mouseClicked(MouseEvent e) { /* 只关心这个 */ }
+    @Override public void mousePressed(MouseEvent e) {}  // 空实现
+    @Override public void mouseReleased(MouseEvent e) {} // 空实现
+    @Override public void mouseEntered(MouseEvent e) {}  // 空实现
+    @Override public void mouseExited(MouseEvent e) {}   // 空实现
+});
+
+// MouseAdapter 实现了所有方法的空类, 继承它只需重写需要的
+component.addMouseListener(new MouseAdapter() {
+    @Override
+    public void mouseClicked(MouseEvent e) { /* 只写这一个 */ }
+});
+// 口诀: 接口要全部实现, 适配器只需重写需要的
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在事件处理方法中直接执行耗时操作。** EDT 是单线程的，所有事件和绘制都在 EDT 上串行处理。如果在事件处理方法（如 actionPerformed）中执行耗时操作（网络请求、大量计算、Thread.sleep），EDT 就被阻塞，无法处理后续事件和重绘，导致界面冻结——按钮点不动、窗口拖不动。正确做法：耗时操作放到工作线程（new Thread 或 SwingWorker），完成后用 SwingUtilities.invokeLater() 把 UI 更新提交回 EDT。
+</Callout>
+
+<Exercises>
+**问题 1**：事件处理的三个核心要素是什么？它们如何协作？
+
+<Answer>
+三要素：①事件源（Source）——产生事件的组件如 JButton，维护监听器列表，通过 addActionListener 注册；②事件对象（Event）——封装事件信息如 ActionEvent，含 getSource()/getActionCommand()；③监听器（Listener）——实现监听器接口如 ActionListener，含回调方法 actionPerformed(ActionEvent e)。协作流程：用户操作事件源 → 事件源创建事件对象 → 遍历监听器列表调用回调方法传入事件对象 → 监听器处理事件。三者通过「注册—通知」模式解耦。
+</Answer>
+
+**问题 2**：监听器适配器是什么？为什么不直接实现监听器接口？
+
+<Answer>
+适配器是实现了监听器接口所有方法的空类。使用时继承适配器只重写需要的方法。不直接实现接口的原因：很多监听器接口有多个方法（MouseListener 有5个、WindowListener 有7个），直接 implements 必须把所有方法都写出来（空方法体），否则编译报错。用适配器继承只需重写关心的方法，未重写的自动用空实现。注意适配器是类只能继承，Java 单继承有限制。Java 8+ 函数式接口可用 Lambda 替代。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="事件源">产生事件的 GUI 组件，如 JButton、JTextField。维护一个监听器列表，通过 add*Listener 方法注册监听器。用户操作时创建事件对象并通知所有注册的监听器。</GlossaryItem>
+<GlossaryItem term="事件对象">封装事件信息的对象，如 ActionEvent、MouseEvent、KeyEvent。含事件源引用（getSource()）、位置（getX/getY）、按键（getKeyChar）等信息。作为参数传给监听器回调方法。</GlossaryItem>
+<GlossaryItem term="EDT">事件分发线程（Event Dispatch Thread）。Swing 的单线程事件处理模型，所有 GUI 事件和组件绘制都在 EDT 上串行执行。耗时操作不能在 EDT 上执行，否则界面冻结。用 SwingUtilities.invokeLater() 把 UI 更新提交回 EDT。</GlossaryItem>
+<GlossaryItem term="适配器">实现了监听器接口所有方法的空类（如 MouseAdapter、KeyAdapter、WindowAdapter）。继承适配器只需重写关心的方法，避免直接 implements 接口时必须实现所有方法的冗余。口诀：接口要全部实现，适配器只需重写需要的。</GlossaryItem>
+</Glossary>

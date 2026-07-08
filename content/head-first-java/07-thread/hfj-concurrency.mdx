@@ -1,0 +1,191 @@
+---
+title: "并发与多线程"
+type: B
+section: "JVM与Java生态"
+order: 7
+description: "Thread与Runnable创建线程、线程状态机、竞争条件与synchronized同步、wait/notify线程通信"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { HfjConcurrencyDiagram } from "@/components/mdx/head-first-java/diagrams/hfj-concurrency";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握创建线程的两种方式：extends Thread 和 implements Runnable
+- 理解线程的生命周期状态和状态转换
+- 理解竞争条件产生的原因和 synchronized 的解决方法
+- 掌握 synchronized 方法和 synchronized 块的使用
+- 理解 wait/notify 机制实现线程间通信
+</Objectives>
+
+## 创建线程
+
+<Term def="线程是程序执行的最小单元,一个进程可包含多个线程共享同一进程的内存空间。Java中通过Thread或Runnable创建。">线程</Term>让程序同时做多件事。
+
+<HfjConcurrencyDiagram />
+
+```java
+// 方式1: extends Thread
+class MyThread extends Thread {
+    @Override
+    public void run() {
+        System.out.println("线程运行中: " + Thread.currentThread().getName());
+    }
+}
+MyThread t1 = new MyThread();
+t1.start();  // 启动新线程, 自动调用 run()
+
+// 方式2: implements Runnable (推荐)
+class MyJob implements Runnable {
+    @Override
+    public void run() {
+        System.out.println("Runnable 运行中");
+    }
+}
+Thread t2 = new Thread(new MyJob());
+t2.start();
+
+// Lambda 简写 (Runnable 是函数式接口)
+Thread t3 = new Thread(() -> System.out.println("Lambda 线程"));
+t3.start();
+
+// 关键: 调用 start() 而非 run()
+// start() 创建新线程并调用 run()
+// 直接调 run() 只在当前线程同步执行, 不创建新线程!
+```
+
+## 线程状态
+
+```java
+// 线程状态转换
+Thread t = new Thread(() -> {
+    // RUNNABLE: 运行中
+    try {
+        Thread.sleep(1000);  // TIMED_WAITING: 计时等待
+    } catch (InterruptedException e) {}
+});
+// t 处于 NEW 状态
+t.start();
+// t 进入 RUNNABLE 状态
+// sleep() 期间处于 TIMED_WAITING
+// run() 结束后进入 TERMINATED
+
+// 状态说明:
+// NEW: 已创建未启动
+// RUNNABLE: 已 start(), 运行或等待CPU调度
+// BLOCKED: 等待 synchronized 锁
+// WAITING: wait()/join() 无限等待
+// TIMED_WAITING: sleep(ms)/wait(ms) 有限等待
+// TERMINATED: run() 执行完毕
+
+// sleep vs wait:
+// sleep: Thread 静态方法, 不释放锁, 超时自动唤醒
+// wait: Object 方法, 释放锁, 需要 notify 唤醒, 必须在 synchronized 内调用
+```
+
+## 竞争条件
+
+```java
+// 问题: 多线程共享数据导致竞争条件
+class BadAccount {
+    private int balance = 100;
+
+    public void withdraw(int amount) {
+        // 非原子操作: 读-算-写, 中间可能被打断
+        if (balance >= amount) {
+            // 线程A执行到这里, balance=100
+            // 线程B也执行到这里, balance=100 (A还没写回)
+            balance = balance - amount;
+            // A写 balance=50, B也写 balance=50
+            // 取了两次50, 余额还有50 (应该为0!)
+        }
+    }
+}
+
+// 解决: synchronized 同步
+class GoodAccount {
+    private int balance = 100;
+
+    // synchronized 方法: 一次只允许一个线程进入
+    public synchronized void withdraw(int amount) {
+        if (balance >= amount) {
+            balance = balance - amount;
+        }
+    }
+}
+
+// synchronized 块: 更细粒度的控制
+class FineAccount {
+    private int balance = 100;
+    private final Object lock = new Object();
+
+    public void withdraw(int amount) {
+        synchronized(lock) {  // 只同步关键代码段
+            if (balance >= amount) {
+                balance = balance - amount;
+            }
+        }
+    }
+}
+```
+
+## wait / notify
+
+```java
+// 线程间通信: 生产者-消费者模式
+class Buffer {
+    private int data;
+    private boolean hasData = false;
+
+    public synchronized void put(int value) throws InterruptedException {
+        while (hasData) {
+            wait();  // 缓冲区满, 等待消费者消费, 释放锁
+        }
+        data = value;
+        hasData = true;
+        notifyAll();  // 通知消费者可以消费了
+    }
+
+    public synchronized int get() throws InterruptedException {
+        while (!hasData) {
+            wait();  // 缓冲区空, 等待生产者生产, 释放锁
+        }
+        hasData = false;
+        notifyAll();  // 通知生产者可以生产了
+        return data;
+    }
+}
+// wait(): 释放锁, 线程进入 WAITING
+// notify()/notifyAll(): 唤醒等待的线程
+// 必须在 synchronized 块内调用 (持有锁才能释放)
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：调 run() 就能启动新线程。** 完全错误。直接调 run() 只是在当前线程同步执行方法体，跟调普通方法没区别，不会创建新线程。必须调 start()，它才会在 JVM 层面创建新线程并自动调用 run()。而且一个 Thread 对象只能 start() 一次，重复 start() 会抛 IllegalThreadStateException。推荐用 Runnable 而非继承 Thread，因为 Java 单继承限制，且 Runnable 更解耦、可复用、兼容线程池。
+</Callout>
+
+<Exercises>
+**问题 1**：创建线程的两种方式是什么？为什么推荐 Runnable？
+
+<Answer>
+方式1：extends Thread，重写 run()，new MyThread().start()。方式2：implements Runnable，实现 run()，new Thread(new MyJob()).start()。推荐 Runnable：①Java 单继承，extends Thread 后不能继承其他类；②解耦——Thread 负责线程管理，Runnable 只负责任务逻辑；③复用——同一 Runnable 可被多个 Thread 共享执行；④兼容线程池（ExecutorService 接受 Runnable）。调 start() 而非 run()：start() 创建新线程调用 run()，直接调 run() 只是当前线程同步执行。
+</Answer>
+
+**问题 2**：什么是竞争条件？synchronized 如何解决？
+
+<Answer>
+竞争条件：多线程同时访问修改共享数据时，执行顺序不确定导致结果不正确。银行取款示例：balance=100，线程A和B同时取50。A读100，B读100（A没写回），A写50，B写50。结果取了两次50余额还有50（应0）。问题在「读-算-写」非原子。synchronized 解决：标记方法/代码块为同步，同一时刻只一个线程进入，保证原子性。锁的粒度：synchronized 方法锁 this（粗），synchronized 块锁指定对象（细）。代价是性能下降（线程排队等待锁）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="线程">程序执行的最小单元。一个进程可包含多个线程，共享进程的内存空间（堆、方法区），各有独立的栈和程序计数器。Java 中通过 Thread 或 Runnable 创建，start() 启动。</GlossaryItem>
+<GlossaryItem term="竞争条件">多线程同时读写共享数据时，因执行顺序不确定导致结果错误的问题。本质是「读-算-写」非原子操作被其他线程打断。用 synchronized 同步保证原子性。</GlossaryItem>
+<GlossaryItem term="synchronized">Java 内置同步机制。synchronized 方法锁 this 对象，synchronized 块锁指定对象。同一时刻只一个线程能进入同步区域。保证原子性、可见性、有序性。代价是性能下降。</GlossaryItem>
+<GlossaryItem term="wait/notify">线程间通信机制。wait() 释放锁使线程等待，notify()/notifyAll() 唤醒等待线程。必须在 synchronized 块内调用。用于生产者-消费者模式：wait 等待条件满足，notify 通知条件变化。推荐用 notifyAll 避免信号丢失。</GlossaryItem>
+</Glossary>
