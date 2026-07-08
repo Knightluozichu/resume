@@ -1455,6 +1455,16 @@ import { hcwCompilerLinkerQuestions } from "./review/hcw-compiler-linker";
 import { hcwOsFundamentalsQuestions } from "./review/hcw-os-fundamentals";
 import { hcwFileSystemQuestions } from "./review/hcw-file-system";
 import { hcwFinalReviewQuestions } from "./review/hcw-final-review";
+import { hpwLearningMapQuestions } from "./review/hpw-learning-map";
+import { hpwMemoryBasicsQuestions } from "./review/hpw-memory-basics";
+import { hpwPointersQuestions } from "./review/hpw-pointers";
+import { hpwMachineInstructionsQuestions } from "./review/hpw-machine-instructions";
+import { hpwStackHeapQuestions } from "./review/hpw-stack-heap";
+import { hpwProcessSchedulingQuestions } from "./review/hpw-process-scheduling";
+import { hpwSystemCallsQuestions } from "./review/hpw-system-calls";
+import { hpwDynamicLinkingQuestions } from "./review/hpw-dynamic-linking";
+import { hpwGarbageCollectionQuestions } from "./review/hpw-garbage-collection";
+import { hpwFinalReviewQuestions } from "./review/hpw-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2943,6 +2953,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...hcwOsFundamentalsQuestions,
   ...hcwFileSystemQuestions,
   ...hcwFinalReviewQuestions,
+  // 程序是怎么跑起来的
+  ...hpwLearningMapQuestions,
+  ...hpwMemoryBasicsQuestions,
+  ...hpwPointersQuestions,
+  ...hpwMachineInstructionsQuestions,
+  ...hpwStackHeapQuestions,
+  ...hpwProcessSchedulingQuestions,
+  ...hpwSystemCallsQuestions,
+  ...hpwDynamicLinkingQuestions,
+  ...hpwGarbageCollectionQuestions,
+  ...hpwFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

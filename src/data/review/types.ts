@@ -1578,7 +1578,17 @@ export type ReviewChapterSlug =
   | "hcw-compiler-linker"
   | "hcw-os-fundamentals"
   | "hcw-file-system"
-  | "hcw-final-review";
+  | "hcw-final-review"
+  | "hpw-learning-map"
+  | "hpw-memory-basics"
+  | "hpw-pointers"
+  | "hpw-machine-instructions"
+  | "hpw-stack-heap"
+  | "hpw-process-scheduling"
+  | "hpw-system-calls"
+  | "hpw-dynamic-linking"
+  | "hpw-garbage-collection"
+  | "hpw-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3161,6 +3171,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "hcw-os-fundamentals": "操作系统基础",
   "hcw-file-system": "文件系统原理",
   "hcw-final-review": "全书总复习",
+  "hpw-learning-map": "全书学习地图",
+  "hpw-memory-basics": "内存基础",
+  "hpw-pointers": "指针原理",
+  "hpw-machine-instructions": "机器指令",
+  "hpw-stack-heap": "栈与堆",
+  "hpw-process-scheduling": "进程调度",
+  "hpw-system-calls": "系统调用",
+  "hpw-dynamic-linking": "动态链接",
+  "hpw-garbage-collection": "垃圾回收",
+  "hpw-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
