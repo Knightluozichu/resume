@@ -1,0 +1,169 @@
+---
+title: "可靠 UDP 实现"
+type: C
+section: "网络游戏与服务器"
+order: 5
+description: "在 UDP 上实现按需可靠性：序号、ACK、重传、滑动窗口——自己造一个游戏级可靠层"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { MgpReliableUdpDiagram } from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-reliable-udp";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解序号（sequence number）在可靠传输中的作用
+- 掌握 ACK 确认机制与累积确认（cumulative ACK）
+- 理解超时重传（RTO）的计算与指数退避
+- 能实现一个基本的可靠 UDP 通道：可靠 + 不可靠双通道
+</Objectives>
+
+## 直觉引入
+
+UDP 像一个不负责任的快递员——包裹丢了不管、顺序乱了不管。但游戏有些数据必须可靠到达（比如「开火」指令不能丢），有些无所谓（比如位置快照丢了下一个就补上了）。所以我们自己在 UDP 上建一个「可靠通道」：给每个包编上序号，接收方收到后回一个 ACK 确认，发送方没收到 ACK 就重传。关键是——这个可靠通道只处理需要可靠的包，不可靠的包走另一条通道直接发。这就是「按需可靠」：你选择哪些包需要可靠性，而不是像 TCP 那样全部可靠。
+
+<MgpReliableUdpDiagram />
+
+## 序号与 ACK
+
+<Term def="序号（Sequence Number）是发送方为每个可靠包分配的递增编号，接收方用它检测丢包和排序。ACK（Acknowledgment）是接收方对已收到包的确认，发送方据此判断是否需要重传。">序号与 ACK</Term>是可靠传输的基础。每个可靠包附带一个序号，接收方收到后返回 ACK 告知「我收到了几号包」。
+
+```cpp
+class ReliableChannel {
+    uint32_t localSeq = 0;       // 发送序号
+    uint32_t remoteSeq = 0;      // 接收到的最大连续序号
+    std::map<uint32_t, Packet> pendingAcks;  // 待确认的包
+
+    static constexpr float RTO = 0.5f;  // 重传超时（秒）
+
+public:
+    // 发送可靠包
+    void SendReliable(const Packet& pkt) {
+        Packet reliable = pkt;
+        reliable.seq = localSeq++;
+        pendingAcks[reliable.seq] = reliable;
+        reliable.sendTime = GetTime();
+        socket.SendTo(reliable);
+    }
+
+    // 接收方：收到包后发 ACK
+    void OnPacketReceived(const Packet& pkt) {
+        if (pkt.seq == remoteSeq + 1 || pkt.seq == 0) {
+            remoteSeq = pkt.seq;  // 顺序到达，更新
+        } else if (pkt.seq > remoteSeq + 1) {
+            // 有缺口：收到 N+2 但 N+1 没到
+            // 可以发 NACK 或等重传
+        }
+        // 发送 ACK 确认
+        SendAck(pkt.seq);
+    }
+
+    // 发送方：检查超时重传
+    void Update(float dt) {
+        for (auto& [seq, pkt] : pendingAcks) {
+            if (GetTime() - pkt.sendTime > RTO) {
+                pkt.sendTime = GetTime();  // 重置计时
+                socket.SendTo(pkt);         // 重传
+            }
+        }
+    }
+
+    // 收到 ACK：移除已确认的包
+    void OnAckReceived(uint32_t ackSeq) {
+        pendingAcks.erase(ackSeq);
+    }
+};
+```
+
+## 累积确认与 ACK 位域
+
+<Term def="累积确认（Cumulative ACK）是指一个 ACK 确认所有序号小于等于该值的包。ACK 位域（ACK bitfield）用一个 32 位 bitmask 额外确认后续 32 个包的到达情况，减少 ACK 包数量。">累积确认与 ACK 位域</Term>让 ACK 更高效。与其每个包单独 ACK，不如一个 ACK 带上「我连续收到了几号，以及之后哪些也收到了」。
+
+```cpp
+// ACK 包结构
+struct AckPacket {
+    uint32_t ackSeq;        // 累积确认：<= ackSeq 的包都已收到
+    uint32_t ackBitfield;   // 位域：ackSeq+1 到 ackSeq+32 各是否收到
+    // bit 0 = ackSeq+1 是否收到, bit 1 = ackSeq+2, ...
+};
+
+// 接收方构建 ACK
+AckPacket BuildAck() {
+    AckPacket ack;
+    ack.ackSeq = remoteSeq;  // 最大连续序号
+    ack.ackBitfield = 0;
+    // 检查 remoteSeq+1 到 remoteSeq+32 是否在已收集合中
+    for (int i = 0; i < 32; i++) {
+        if (receivedSet.count(remoteSeq + 1 + i)) {
+            ack.ackBitfield |= (1 << i);
+        }
+    }
+    return ack;
+}
+
+// 发送方处理 ACK
+void ProcessAck(const AckPacket& ack) {
+    // 清除 <= ackSeq 的待确认包
+    for (auto it = pendingAcks.begin(); it != pendingAcks.end(); ) {
+        if (it->first <= ack.ackSeq) {
+            it = pendingAcks.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    // 清除位域中标记的包
+    for (int i = 0; i < 32; i++) {
+        if (ack.ackBitfield & (1 << i)) {
+            pendingAcks.erase(ack.ackSeq + 1 + i);
+        }
+    }
+}
+```
+
+## 双通道设计
+
+游戏网络通常同时需要可靠和不可靠两条通道：
+
+```cpp
+class NetworkChannel {
+    ReliableChannel reliable;     // 可靠通道：输入、登录、聊天
+    UnreliableChannel unreliable; // 不可靠通道：位置快照、动画状态
+
+    void SendInput(const InputState& input) {
+        reliable.SendReliable(Pack(input));  // 必须到达
+    }
+
+    void SendSnapshot(const Transform& tf) {
+        unreliable.SendUnreliable(Pack(tf)); // 丢了无所谓
+    }
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：重传超时设得越短越好，这样丢包恢复更快。** 重传超时（RTO）设太短会导致大量误判重传——包还在路上没到，你就以为丢了又发一份，反而加重网络负担。正确做法是 RTO 略大于一个 RTT（往返时延）。动态测量 RTT 并用类似 TCP 的公式：$RTO = SRTT + 4 \times RTTVAR$（SRTT 是平滑 RTT，RTTVAR 是 RTT 方差）。典型游戏 RTO 在 100-500ms 之间。过短的 RTO 在丢包场景下会产生重传风暴，让拥塞更严重。
+</Callout>
+
+<Exercises>
+**问题 1**：解释序号、ACK 和重传如何在可靠 UDP 中协同工作。
+
+<Answer>
+序号：发送方为每个可靠包分配递增序号，让接收方能识别包的顺序和检测缺失。ACK：接收方收到包后返回确认，告知发送方「这个序号的包已收到」。重传：发送方把已发但未确认的包存在 pendingAcks 中，每个包记录发送时间。每帧检查：如果当前时间 - 发送时间 > RTO（重传超时），就重新发送该包并重置计时器。收到 ACK 后从 pendingAcks 中移除对应包。三者协同：序号标识包 → ACK 确认到达 → 未确认超时触发重传，形成闭环。
+</Answer>
+
+**问题 2**：为什么使用累积确认 + ACK 位域而不是每个包单独 ACK？
+
+<Answer>
+单独 ACK 每个包效率低——每个可靠包都要等一个 ACK 包，ACK 包数量等于数据包数量，浪费带宽。累积确认让一个 ACK 确认所有序号小于等于它的包，大幅减少 ACK 数量。ACK 位域更进一步：一个 ACK 包除了累积确认序号 N，还用 32 位 bitmask 标记 N+1 到 N+32 各是否收到，这样一个 ACK 包就能确认最多 33 个包的到达状态。这在乱序到达场景下特别有效——即使包不连续到达也能被批量确认，减少重传和 ACK 往返。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="序号">发送方为每个可靠包分配的递增编号。接收方用它检测丢包（序号有缺口）和去重（已见过的序号丢弃）。32 位序号在 60Hz 下可用约 2 年才回绕。</GlossaryItem>
+<GlossaryItem term="ACK">接收方对已收到包的确认。累积确认确认所有序号 <= N 的包，ACK 位域用 bitmask 额外标记后续 32 个包。发送方收到 ACK 后从待确认队列移除对应包。</GlossaryItem>
+<GlossaryItem term="重传超时（RTO）">发送方等待 ACK 的超时阈值。超过 RTO 未收到 ACK 则重传。应略大于 RTT，过短导致误判重传风暴，过长导致丢包恢复慢。动态测量 RTT 并调整 RTO。</GlossaryItem>
+<GlossaryItem term="双通道">游戏网络同时维护可靠和不可靠两条通道。可靠通道处理必须到达的包（输入、登录），不可靠通道处理可容忍丢失的包（位置快照）。这是 UDP 相对 TCP 的核心优势——按需可靠。</GlossaryItem>
+</Glossary>

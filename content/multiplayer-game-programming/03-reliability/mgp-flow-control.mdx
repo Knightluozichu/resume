@@ -1,0 +1,164 @@
+---
+title: "流量控制与拥塞避免"
+type: A
+section: "网络游戏与服务器"
+order: 6
+description: "掌握滑动窗口流量控制与带宽估计——让数据发得快但不堵死网络"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { MgpFlowControlDiagram } from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-flow-control";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解流量控制（flow control）与拥塞控制（congestion control）的区别
+- 掌握滑动窗口机制：限制在途未确认包的数量
+- 理解带宽估计（bandwidth estimation）的原理
+- 能实现基本的 AIMD（加性增、乘性减）拥塞控制
+</Objectives>
+
+## 直觉引入
+
+流量控制像水管上的阀门。如果水龙头开太大（发包太快），水管（网络）会爆裂（拥塞丢包），水（数据包）到处乱溅。如果开太小，水流量不够（带宽浪费），游戏更新慢。流量控制就是动态调节阀门大小：网络好的时候慢慢开大，发现丢包了就赶紧关小。关键是要「温柔」——增大时一步步加（加性增），减小时一刀切（乘性减），这叫 AIMD。这样多个连接共享网络时能公平地收敛到平衡点。
+
+<MgpFlowControlDiagram />
+
+## 流量控制 vs 拥塞控制
+
+<Term def="流量控制（Flow Control）防止发送方压垮接收方——限制发送速率不超过接收方的处理能力。拥塞控制（Congestion Control）防止发送方压垮网络——限制发送速率不超过网络链路的承载能力。">流量控制与拥塞控制</Term>是两个不同的问题。流量控制保护接收方（滑动窗口），拥塞控制保护网络（带宽估计 + AIMD）。
+
+```cpp
+class FlowControl {
+    // 流量控制：接收方 advertised window
+    uint32_t recvWindow = 1024 * 64;  // 接收方告诉发送方「我还能收 64KB」
+
+    // 拥塞控制：发送方估计的网络容量
+    float congestionWindow = 1024 * 16;  // 拥塞窗口，从 16KB 开始
+
+    // 有效窗口 = min(接收窗口, 拥塞窗口)
+    uint32_t GetEffectiveWindow() const {
+        return std::min(recvWindow, (uint32_t)congestionWindow);
+    }
+};
+```
+
+## 滑动窗口
+
+<Term def="滑动窗口（Sliding Window）是流量控制的核心机制：发送方维护一个「窗口」，窗口内的包可以连续发送而不必等待 ACK。窗口随 ACK 到达向前滑动，控制同时在途的未确认包数量。">滑动窗口</Term>让发送方不必每发一个包就等 ACK——可以连续发多个包，只要在途数据量不超过窗口大小。
+
+```cpp
+class SlidingWindow {
+    uint32_t windowSize;     // 窗口大小（字节）
+    uint32_t bytesInFlight;  // 在途字节数（已发未确认）
+    uint32_t sendBase;       // 最早未确认的字节序号
+
+public:
+    // 能否继续发送？
+    bool CanSend(size_t bytes) const {
+        return bytesInFlight + bytes <= windowSize;
+    }
+
+    // 发送数据后更新
+    void OnSend(size_t bytes) {
+        bytesInFlight += bytes;
+    }
+
+    // 收到 ACK 后滑动窗口
+    void OnAck(uint32_t ackSeq) {
+        uint32_t ackedBytes = ackSeq - sendBase;
+        sendBase = ackSeq;
+        bytesInFlight -= ackedBytes;
+        // 窗口向前滑动，可以发更多数据了
+    }
+};
+```
+
+## AIMD 拥塞控制
+
+<Term def="AIMD（Additive Increase, Multiplicative Decrease）是拥塞控制的核心策略：正常时线性增大拥塞窗口（每 RTT +1），丢包时乘性减小（减半）。多个 AIMD 连接能公平收敛到网络带宽。">AIMD</Term>是 TCP 验证过的经典拥塞控制策略，游戏可靠 UDP 也可以借鉴：
+
+```cpp
+class AimdCongestionControl {
+    float cwnd = 16000;        // 拥塞窗口（字节），初始 16KB
+    static constexpr float MSS = 1200;     // 最大包大小
+    static constexpr float ALPHA = 0.5;    // 乘性减因子
+    static constexpr float BETA = 1.0;     // 加性增量（每 RTT）
+
+    // 收到 ACK：加性增
+    void OnAck() {
+        // 慢启动阶段：每个 ACK 翻倍（指数增长）
+        if (cwnd < slowStartThreshold) {
+            cwnd += MSS;
+        }
+        // 拥塞避免阶段：每个 RTT +MSS（线性增长）
+        else {
+            cwnd += MSS * MSS / cwnd;
+        }
+    }
+
+    // 丢包：乘性减
+    void OnLoss() {
+        slowStartThreshold = cwnd / 2;  // 阈值减半
+        cwnd = cwnd * ALPHA;            // 窗口减半
+        // 或直接回到慢启动
+    }
+};
+```
+
+## 带宽估计
+
+```cpp
+// 基于 ACK 的带宽估计
+class BandwidthEstimator {
+    float estimatedBandwidth = 0;  // bytes/sec
+    uint32_t bytesAcked = 0;
+    float windowStart = 0;
+
+    void OnAck(uint32_t bytes, float rtt) {
+        bytesAcked += bytes;
+        // 每 RTT 更新一次估计
+        if (GetTime() - windowStart >= rtt) {
+            float elapsed = GetTime() - windowStart;
+            float rate = bytesAcked / elapsed;
+            // 指数平滑
+            estimatedBandwidth = estimatedBandwidth * 0.9 + rate * 0.1;
+            bytesAcked = 0;
+            windowStart = GetTime();
+        }
+    }
+
+    float GetSendRate() const {
+        return estimatedBandwidth;
+    }
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：不做拥塞控制也行，游戏数据量小。** 即使游戏数据量小，不做拥塞控制也会出问题。当多个玩家同时连接服务器时，如果每个连接都全速发送，路由器队列会溢出导致大量丢包。没有拥塞控制意味着丢包后重传频率不变甚至更猛（因为不减速），形成恶性循环——重传加剧拥塞，拥塞导致更多丢包，更多丢包导致更多重传。TCP 的 AIMD 证明了：即使每个连接自私地最大化自己的吞吐，AIMD 策略也能让它们公平收敛。游戏可靠 UDP 必须实现某种形式的拥塞控制，否则在网络拥塞时会崩溃。
+</Callout>
+
+<Exercises>
+**问题 1**：流量控制和拥塞控制有什么区别？分别保护什么？
+
+<Answer>
+流量控制保护接收方：防止发送方发包速度超过接收方的处理和缓冲能力。机制是滑动窗口——接收方通过 ACK 告知发送方「我还能收多少」（advertised window），发送方不超过此限制。拥塞控制保护网络：防止发送方发包速度超过网络链路的承载能力。机制是拥塞窗口 + AIMD——发送方通过丢包反馈估计网络容量，正常时线性增大窗口，丢包时乘性减小。有效发送窗口 = min(接收窗口, 拥塞窗口)，同时保护接收方和网络。
+</Answer>
+
+**问题 2**：解释 AIMD 策略，为什么加性增、乘性减能让多连接公平收敛？
+
+<Answer>
+AIMD：正常时加性增——每个 RTT 拥塞窗口 +1 MSS（线性增长），缓慢探测可用带宽。丢包时乘性减——窗口减半（乘 0.5），快速释放带宽。公平收敛原理：假设两条连接共享一条带宽为 B 的链路。初始时各占 B/2。如果某次丢包，一条减半到 B/4，另一条保持 B/2。下一轮：B/4 的加性增到 B/4+1，B/2 的因丢包减到 B/4。两者趋于 B/2 的平衡。乘性减保证总带宽不超过链路容量，加性增保证减小的连接能逐渐追回带宽。数学上可证明多个 AIMD 连接最终收敛到公平共享。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="流量控制">防止发送方压垮接收方的机制。接收方通过 advertised window 告知接收能力，发送方不超过此限制。保护接收方缓冲区不溢出。</GlossaryItem>
+<GlossaryItem term="拥塞控制">防止发送方压垮网络的机制。通过丢包反馈估计网络容量，用 AIMD 策略调节发送速率。保护网络链路不拥塞崩溃。</GlossaryItem>
+<GlossaryItem term="滑动窗口">流量控制核心机制。窗口内的包可连续发送而不必等 ACK，窗口随 ACK 到达前滑。窗口大小 = 同时在途的最大未确认数据量。</GlossaryItem>
+<GlossaryItem term="AIMD">加性增乘性减。正常时每 RTT 窗口 +1（线性探测），丢包时窗口减半（快速退避）。多连接场景下能公平收敛到带宽共享。TCP 验证的经典策略。</GlossaryItem>
+</Glossary>

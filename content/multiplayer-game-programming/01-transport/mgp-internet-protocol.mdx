@@ -1,0 +1,134 @@
+---
+title: "互联网协议基础"
+type: A
+section: "网络游戏与服务器"
+order: 1
+description: "掌握 IP 地址、端口、字节序与数据包打包——多人游戏网络的地基"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { MgpInternetProtocolDiagram } from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-internet-protocol";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 IP 地址与端口号的作用，知道「IP + 端口 = 唯一通信端点」
+- 掌握大小端字节序的区别，能写出正确的序列化与反序列化代码
+- 理解数据包（Packet）的结构：头部 + 载荷
+- 学会用 BSD Socket API 收发 UDP 数据包
+</Objectives>
+
+## 直觉引入
+
+把互联网想象成一个巨大的邮政系统。每台计算机是一栋大楼，IP 地址是大楼的地址（如「北京朝阳区 xx 号」），端口号是大楼里的房间号（如「305 室」）。你写信（数据包）时必须同时写清楚地址和房间号，邮递员（路由器）只负责把信送到大楼，大楼前台（操作系统）根据房间号把信递给对应的人（进程）。如果你写错了房间号，信就会被退回或丢弃。理解这套地址系统，是所有网络编程的第一步。
+
+<MgpInternetProtocolDiagram />
+
+## IP 地址与端口
+
+<Term def="IP 地址是网络中每个主机的逻辑地址，端口号是主机上进程的标识符。IP + 端口组成「套接字地址」（socket address），唯一确定一个通信端点。">IP 地址与端口</Term>是网络通信的基础寻址机制。IPv4 地址是 32 位整数（如 `192.168.1.100`），IPv6 是 128 位。端口号是 16 位整数（0-65535），其中 0-1023 是知名端口（well-known ports），1024-49151 是注册端口，49152-65535 是动态端口。游戏服务器通常使用注册端口或动态端口。
+
+在 BSD Socket API 中，使用 `sockaddr_in` 结构体来表示一个 IPv4 套接字地址：
+
+```cpp
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+// 创建 UDP socket
+int sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+// 绑定到本地端口
+sockaddr_in addr{};
+addr.sin_family = AF_INET;
+addr.sin_port = htons(9999);          // 注意字节序转换
+addr.sin_addr.s_addr = INADDR_ANY;    // 监听所有网卡
+bind(sock, (sockaddr*)&addr, sizeof(addr));
+
+// 向目标发送数据
+sockaddr_in dest{};
+dest.sin_family = AF_INET;
+dest.sin_port = htons(9999);
+inet_pton(AF_INET, "192.168.1.100", &dest.sin_addr.s_addr);
+
+const char* msg = "Hello";
+sendto(sock, msg, 5, 0, (sockaddr*)&dest, sizeof(dest));
+```
+
+## 字节序问题
+
+<Term def="字节序（Endianness）指多字节数据在内存中的存储顺序。大端序（Big-Endian）高位在前，小端序（Little-Endian）低位在前。网络协议统一使用大端序（网络字节序）。">字节序</Term>是跨平台网络编程的核心陷阱。x86/ARM CPU 使用小端序，而网络协议规定使用大端序。这意味着发送多字节数据（如 `uint32_t`）前必须转换为网络字节序，接收后再转回主机字节序。
+
+```cpp
+// 序列化：把结构体打包成字节流
+class PacketBuilder {
+    std::vector<uint8_t> buffer;
+public:
+    void WriteUint8(uint8_t v) {
+        buffer.push_back(v);
+    }
+    void WriteUint16(uint16_t v) {
+        buffer.push_back((v >> 8) & 0xFF);  // 高字节在前 = 大端序
+        buffer.push_back(v & 0xFF);
+    }
+    void WriteUint32(uint32_t v) {
+        buffer.push_back((v >> 24) & 0xFF);
+        buffer.push_back((v >> 16) & 0xFF);
+        buffer.push_back((v >> 8) & 0xFF);
+        buffer.push_back(v & 0xFF);
+    }
+    void WriteFloat(float v) {
+        uint32_t bits;
+        memcpy(&bits, &v, 4);
+        WriteUint32(bits);  // 复用 uint32 序列化
+    }
+};
+
+// 反序列化：从字节流解析
+class PacketReader {
+    const uint8_t* data;
+    size_t size;
+    size_t pos = 0;
+public:
+    uint16_t ReadUint16() {
+        uint16_t v = (data[pos] << 8) | data[pos + 1];
+        pos += 2;
+        return v;
+    }
+    uint32_t ReadUint32() {
+        uint32_t v = (data[pos] << 24) | (data[pos+1] << 16)
+                   | (data[pos+2] << 8) | data[pos+3];
+        pos += 4;
+        return v;
+    }
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：直接 memcpy 结构体发送就行，省事。** 直接 memcpy 结构体有三个致命问题：一是字节序不兼容——小端序机器发出的数据在大端序机器上解析错误；二是对齐填充（padding）不同编译器可能不同，同一结构体在不同平台大小不一致；三是结构体里如果有指针，复制过去完全无意义。正确做法是逐字段序列化：自己控制每个字段的字节序和布局，确保任何平台发出的字节流都一致。这就是为什么所有专业游戏引擎都有自己的序列化层。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么网络协议统一使用大端序（网络字节序）？
+
+<Answer>
+统一使用大端序是为了消除跨平台通信时的歧义。不同 CPU 架构使用不同字节序（x86/ARM 小端，部分 MIPS/PowerPC 大端），如果各自直接发送内存中的原始字节，接收方可能以错误顺序解读数据。网络字节序规定统一使用大端序，发送方在发送前用 `htons`/`htonl` 转换，接收方用 `ntohs`/`ntohl` 转回主机序。这保证了任何平台发出的数据在任何平台都能正确解析。
+</Answer>
+
+**问题 2**：为什么不能直接 memcpy 结构体进行网络传输？正确做法是什么？
+
+<Answer>
+直接 memcpy 有三个问题：①字节序不兼容——小端序机器发的数据在大端序机器上解析错误；②内存对齐填充不同——不同编译器/平台对结构体的 padding 可能不同，导致同结构体大小不一致；③指针无意义——结构体中的指针地址在另一台机器上完全无效。正确做法是逐字段序列化：为每个字段手动控制字节序（统一大端序）和字节布局，写成独立的 Write/Read 方法。这样确保任何平台产生的字节流都一致，且不依赖编译器对齐规则。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="IP 地址">网络中每个主机的逻辑地址。IPv4 为 32 位（如 192.168.1.100），IPv6 为 128 位。路由器根据 IP 地址转发数据包到目标主机。</GlossaryItem>
+<GlossaryItem term="端口号">主机上进程的标识符，16 位整数（0-65535）。IP + 端口组成套接字地址，唯一确定一个通信端点。0-1023 为知名端口，游戏通常使用 1024 以上。</GlossaryItem>
+<GlossaryItem term="字节序">多字节数据在内存中的存储顺序。大端序高位字节在前，小端序低位字节在前。网络协议统一使用大端序（网络字节序），CPU 内部可能使用小端序（x86/ARM），跨平台通信必须转换。</GlossaryItem>
+<GlossaryItem term="序列化">把内存中的结构化数据转换为平台无关的字节流的过程。正确序列化要求逐字段写入、统一字节序、不依赖内存对齐。反序列化是逆过程。</GlossaryItem>
+</Glossary>

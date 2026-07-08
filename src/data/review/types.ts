@@ -1438,7 +1438,17 @@ export type ReviewChapterSlug =
   | "gsa-redis-cluster"
   | "gsa-ci-cd"
   | "gsa-capacity-planning"
-  | "gsa-final-review";
+  | "gsa-final-review"
+  | "mgp-learning-map"
+  | "mgp-internet-protocol"
+  | "mgp-udp-tcp"
+  | "mgp-connection-management"
+  | "mgp-nat-punch-through"
+  | "mgp-reliable-udp"
+  | "mgp-flow-control"
+  | "mgp-prediction-reconciliation"
+  | "mgp-entity-interpolation"
+  | "mgp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2881,6 +2891,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gsa-ci-cd": "持续集成与灰度发布",
   "gsa-capacity-planning": "容量规划与压测",
   "gsa-final-review": "全书总复习",
+  "mgp-learning-map": "全书学习地图",
+  "mgp-internet-protocol": "互联网协议基础",
+  "mgp-udp-tcp": "UDP 与 TCP 选型分析",
+  "mgp-connection-management": "连接管理与会话状态机",
+  "mgp-nat-punch-through": "NAT 穿透",
+  "mgp-reliable-udp": "可靠 UDP 实现",
+  "mgp-flow-control": "流量控制与拥塞避免",
+  "mgp-prediction-reconciliation": "客户端预测与服务器校正",
+  "mgp-entity-interpolation": "实体插值与平滑渲染",
+  "mgp-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

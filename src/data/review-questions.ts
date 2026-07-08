@@ -1315,6 +1315,16 @@ import { gsaRedisClusterQuestions } from "./review/gsa-redis-cluster";
 import { gsaCiCdQuestions } from "./review/gsa-ci-cd";
 import { gsaCapacityPlanningQuestions } from "./review/gsa-capacity-planning";
 import { gsaFinalReviewQuestions } from "./review/gsa-final-review";
+import { mgpLearningMapQuestions } from "./review/mgp-learning-map";
+import { mgpInternetProtocolQuestions } from "./review/mgp-internet-protocol";
+import { mgpUdpTcpQuestions } from "./review/mgp-udp-tcp";
+import { mgpConnectionManagementQuestions } from "./review/mgp-connection-management";
+import { mgpNatPunchThroughQuestions } from "./review/mgp-nat-punch-through";
+import { mgpReliableUdpQuestions } from "./review/mgp-reliable-udp";
+import { mgpFlowControlQuestions } from "./review/mgp-flow-control";
+import { mgpPredictionReconciliationQuestions } from "./review/mgp-prediction-reconciliation";
+import { mgpEntityInterpolationQuestions } from "./review/mgp-entity-interpolation";
+import { mgpFinalReviewQuestions } from "./review/mgp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2661,6 +2671,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gsaCiCdQuestions,
   ...gsaCapacityPlanningQuestions,
   ...gsaFinalReviewQuestions,
+  ...mgpLearningMapQuestions,
+  ...mgpInternetProtocolQuestions,
+  ...mgpUdpTcpQuestions,
+  ...mgpConnectionManagementQuestions,
+  ...mgpNatPunchThroughQuestions,
+  ...mgpReliableUdpQuestions,
+  ...mgpFlowControlQuestions,
+  ...mgpPredictionReconciliationQuestions,
+  ...mgpEntityInterpolationQuestions,
+  ...mgpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

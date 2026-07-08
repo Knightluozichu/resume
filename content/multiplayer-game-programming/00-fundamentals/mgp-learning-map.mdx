@@ -1,0 +1,85 @@
+---
+title: "全书学习地图"
+type: A
+section: "网络游戏与服务器"
+order: 0
+description: "俯瞰多人游戏网络编程十大主题——从互联网协议到实体插值的完整进阶路径"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { MgpLearningMapDiagram } from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-learning-map";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解「传输层 → 连接层 → 可靠层 → 同步层 → 总复习」四阶段递进结构
+- 建立多人游戏网络编程整体认知：每章解决什么问题、为何这样设计
+- 明确十个章节之间的依赖关系与学习顺序
+- 掌握用「一次按键到屏幕移动」的完整网络旅程串联全书知识点的方法
+</Objectives>
+
+## 直觉引入
+
+把多人游戏网络想象成一条高速公路。你先要修好路基——数据包怎么从一端到另一端（IP 协议）、选哪条车道（UDP 还是 TCP）；然后建好收费站——连接怎么建立、怎么维持、怎么断开（连接管理）、遇到中间关卡怎么绕路（NAT 穿透）；接着保证包裹不丢——丢了怎么补（可靠 UDP）、路堵了怎么减速（流量控制）；最后让乘客感觉不到延迟——客户端先走一步（预测校正）、看别人时平滑过渡（实体插值）。本书回答的就是这些「从协议到同步」的网络游戏工程问题。
+
+<MgpLearningMapDiagram />
+
+## 四阶段递进
+
+<Term def="多人游戏网络系统是以 IP/UDP 为传输基底、通过连接管理与 NAT 穿透建立端到端通路、用可靠 UDP 与流量控制保障数据可靠到达、靠客户端预测与实体插值消除延迟感知的分层架构。">多人游戏网络系统</Term>的开发可以拆成四个递进阶段。**传输层**包括互联网协议和 UDP/TCP 选型——它们解决「数据怎么走」和「走哪条路」，是所有上层逻辑的基底。**连接层**包括连接管理和 NAT 穿透——它们决定「怎么建立会话」和「怎么穿越中间盒」。**可靠层**包括可靠 UDP 和流量控制——它们让数据「不丢」和「不堵」。**同步层**包括客户端预测和实体插值——它们让玩家「感觉不到延迟」。**总复习**串联全部知识点。
+
+```cpp
+// 多人游戏网络的核心脉络：一次按键到屏幕移动的完整旅程
+void OnPlayerInput(const InputState& input) {
+    // 1. 传输层：把输入打包成 UDP 数据包发出
+    auto packet = PacketBuilder()
+        .WriteUint8(MSG_INPUT)
+        .WriteUint32(input.sequence)
+        .WriteInputState(input)
+        .Build();                    // 字节序转换（第 2 章）
+    socket.SendTo(packet, serverAddr); // UDP 发送（第 3 章）
+
+    // 2. 连接层：连接状态机确保会话有效
+    if (connection.state != CONN_CONNECTED) return; // 状态机（第 4 章）
+    // NAT 穿透让数据包能到达对端（第 5 章）
+
+    // 3. 可靠层：可靠通道保证输入到达
+    reliableChannel.Send(packet);    // ACK + 重传（第 6 章）
+    flowControl.OnSend(packet.size); // 流控调速（第 7 章）
+
+    // 4. 同步层：客户端预测 + 服务器校正
+    auto predicted = localSim.Advance(input); // 预测（第 8 章）
+    auto corrected = serverReconcile();        // 校正（第 8 章）
+
+    // 远程玩家通过插值平滑显示
+    remoteEntity.Interpolate(snapshotBuffer);  // 插值（第 9 章）
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 TCP 做游戏网络就行了，TCP 自带可靠性。** TCP 确实自带可靠有序传输，但它的可靠性是以延迟为代价的——丢一个包，后续所有包都被阻塞等待重传（队头阻塞）。在快节奏游戏中，100ms 前的输入已经没用了，等它重传完成反而让当前输入也卡住。这就是为什么几乎所有竞技游戏都用 UDP 自己实现可靠性——只对需要可靠的包做重传，不可靠的包（如位置快照）丢了就算了，下一个快照马上就到。把 TCP 的「全部可靠有序」换成「按需可靠」，是游戏网络的第一课。
+</Callout>
+
+<Exercises>
+**问题 1**：全书四阶段是什么？为什么是这个顺序？
+
+<Answer>
+传输层（互联网协议/UDP-TCP 选型）→ 连接层（连接管理/NAT 穿透）→ 可靠层（可靠 UDP/流量控制）→ 同步层（客户端预测/实体插值）→ 总复习。顺序由依赖关系决定：上层依赖下层。没有协议基础就没有数据传输；没有连接管理就没有会话；没有可靠传输就丢数据；没有同步层玩家就感觉卡。先有「能通」，再有「能连」，然后能「不丢不堵」，最后能「感觉流畅」。
+</Answer>
+
+**问题 2**：为什么多人游戏网络普遍采用 UDP 而非 TCP？
+
+<Answer>
+TCP 的核心问题是队头阻塞（head-of-line blocking）——丢一个包后，后续已到达的包也被阻塞在内核缓冲区中等待重传完成。在游戏中，位置更新等数据有时效性：100ms 前的位置已经过时，重传它毫无意义，反而阻塞了最新数据的交付。UDP 不保证可靠有序，游戏可以自行决定哪些数据需要可靠传输（如输入、聊天），哪些可以容忍丢失（如位置快照）。这种「按需可靠」让游戏在丢包网络下仍保持低延迟，是实时游戏的基本选择。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="多人游戏网络系统">以 IP/UDP 为传输基底、通过连接管理与 NAT 穿透建立端到端通路、用可靠 UDP 与流量控制保障数据可靠到达、靠客户端预测与实体插值消除延迟感知的分层架构。所有网络同步建立在这四层之上。</GlossaryItem>
+<GlossaryItem term="四阶段递进">传输层（IP/UDP-TCP）→ 连接层（连接管理/NAT 穿透）→ 可靠层（可靠 UDP/流量控制）→ 同步层（客户端预测/实体插值）。每层解决前一层的遗留问题：传输层通了但不可靠，可靠层补可靠性；可靠层通了但延迟高，同步层补延迟感知。</GlossaryItem>
+<GlossaryItem term="网络旅程">一次玩家输入从本地按键到屏幕移动的完整路径：打包成 UDP 数据包（第 2-3 章）→ 连接状态机验证会话（第 4 章）→ NAT 穿透到达对端（第 5 章）→ 可靠通道 ACK 重传（第 6 章）→ 流控调速（第 7 章）→ 客户端预测本地前进（第 8 章）→ 服务器校正回退（第 8 章）→ 远程实体插值显示（第 9 章）。全书以这条主线串联各章节。</GlossaryItem>
+</Glossary>
