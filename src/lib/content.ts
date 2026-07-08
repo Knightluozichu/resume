@@ -158,6 +158,7 @@ export const BOOK_ORDER = [
   // §6 游戏开发
   "unity-hmi",
   "game-design-fundamentals",
+  "game-mechanics-advanced",
   "game-programmer-path",
   "unity-ui-design",
   "unity-scripting",
@@ -265,6 +266,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "shaderx": "ShaderX 系列",
   "unity-hmi": "Unity HMI 开发",
   "game-design-fundamentals": "游戏设计基础",
+  "game-mechanics-advanced": "游戏机制：高级游戏设计技术",
   "game-programmer-path": "游戏程序员之路",
   "unity-ui-design": "Unity UI 设计",
   "unity-scripting": "Unity 脚本编程",

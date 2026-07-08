@@ -1231,6 +1231,16 @@ export type ReviewChapterSlug =
   | "gdf-mechanics"
   | "gdf-player-experience"
   | "gdf-prototyping"
+  | "gma-learning-map"
+  | "gma-mechanics-design"
+  | "gma-mdf-framework"
+  | "gma-discrete-simulation"
+  | "gma-continuous-simulation"
+  | "gma-economy-design"
+  | "gma-probability-mechanics"
+  | "gma-puzzle-design"
+  | "gma-mechanism-tuning"
+  | "gma-final-review"
   | "gmp-algorithms"
   | "gmp-career-path"
   | "gmp-cpp-foundation"
@@ -2553,6 +2563,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gdf-player-experience": "玩家体验设计",
   "gdf-prototyping": "原型设计与迭代",
   "gdf-final-review": "游戏设计基础 总复习",
+  "gma-learning-map": "游戏机制：高级游戏设计技术 全书学习地图",
+  "gma-mechanics-design": "机制设计基础",
+  "gma-mdf-framework": "Machinations 框架详解",
+  "gma-discrete-simulation": "离散事件模拟",
+  "gma-continuous-simulation": "连续模拟与反馈系统",
+  "gma-economy-design": "游戏经济系统设计",
+  "gma-probability-mechanics": "概率与随机机制",
+  "gma-puzzle-design": "谜题设计与渐进难度",
+  "gma-mechanism-tuning": "机制调优与平衡",
+  "gma-final-review": "游戏机制：高级游戏设计技术 总复习",
   "gmp-career-path": "游戏程序员职业路径",
   "gmp-learning-map": "游戏程序员的学习之路 全书学习地图",
   "gmp-algorithms": "算法基础与复杂度分析",

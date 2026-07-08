@@ -65,6 +65,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   // §6 游戏开发
   ["bl3-", "blender-3d"],
   ["gdf-", "game-design-fundamentals"],
+  ["gma-", "game-mechanics-advanced"],
   ["gmp-", "game-programmer-path"],
   ["uhm-", "unity-hmi"],
   ["uid-", "unity-ui-design"],

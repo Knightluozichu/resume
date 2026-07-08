@@ -1195,6 +1195,16 @@ import { usgDataPersistenceQuestions } from "./review/usg-data-persistence";
 import { usgOptimizationQuestions } from "./review/usg-optimization";
 import { usgBuildDeployQuestions } from "./review/usg-build-deploy";
 import { usgFinalReviewQuestions } from "./review/usg-final-review";
+import { gmaLearningMapQuestions } from "./review/gma-learning-map";
+import { gmaMechanicsDesignQuestions } from "./review/gma-mechanics-design";
+import { gmaMdfFrameworkQuestions } from "./review/gma-mdf-framework";
+import { gmaDiscreteSimulationQuestions } from "./review/gma-discrete-simulation";
+import { gmaContinuousSimulationQuestions } from "./review/gma-continuous-simulation";
+import { gmaEconomyDesignQuestions } from "./review/gma-economy-design";
+import { gmaProbabilityMechanicsQuestions } from "./review/gma-probability-mechanics";
+import { gmaPuzzleDesignQuestions } from "./review/gma-puzzle-design";
+import { gmaMechanismTuningQuestions } from "./review/gma-mechanism-tuning";
+import { gmaFinalReviewQuestions } from "./review/gma-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2421,6 +2431,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...usgOptimizationQuestions,
   ...usgBuildDeployQuestions,
   ...usgFinalReviewQuestions,
+  ...gmaLearningMapQuestions,
+  ...gmaMechanicsDesignQuestions,
+  ...gmaMdfFrameworkQuestions,
+  ...gmaDiscreteSimulationQuestions,
+  ...gmaContinuousSimulationQuestions,
+  ...gmaEconomyDesignQuestions,
+  ...gmaProbabilityMechanicsQuestions,
+  ...gmaPuzzleDesignQuestions,
+  ...gmaMechanismTuningQuestions,
+  ...gmaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
