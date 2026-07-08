@@ -1469,6 +1469,16 @@ export type ReviewChapterSlug =
   | "vjp-ssr-ssg"
   | "vjp-build-deploy"
   | "vjp-final-review"
+  | "vdi-learning-map"
+  | "vdi-reactive-design"
+  | "vdi-effect-scheduler"
+  | "vdi-renderer-architecture"
+  | "vdi-diff-algorithm"
+  | "vdi-component-model"
+  | "vdi-async-component"
+  | "vdi-compiler-architecture"
+  | "vdi-built-in-components"
+  | "vdi-final-review"
   | "ydk-learning-map"
   | "ydk-type-coercion"
   | "ydk-grammar-natives"
@@ -3021,6 +3031,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "vjp-ssr-ssg": "SSR/SSG 与 Nuxt.js",
   "vjp-build-deploy": "构建优化与部署",
   "vjp-final-review": "全书总复习",
+  "vdi-learning-map": "全书学习地图",
+  "vdi-reactive-design": "响应式系统设计",
+  "vdi-effect-scheduler": "副作用与调度器",
+  "vdi-renderer-architecture": "渲染器架构",
+  "vdi-diff-algorithm": "Diff 算法详解",
+  "vdi-component-model": "组件模型",
+  "vdi-async-component": "异步组件与 Suspense",
+  "vdi-compiler-architecture": "编译器架构",
+  "vdi-built-in-components": "内置组件原理",
+  "vdi-final-review": "全书总复习",
   "ydk-learning-map": "全书学习地图",
   "ydk-type-coercion": "类型转换的隐式规则",
   "ydk-grammar-natives": "语法与原生函数",

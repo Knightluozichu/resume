@@ -1425,6 +1425,16 @@ import { dnjWebsocketQuestions } from "./review/dnj-websocket";
 import { dnjNpmModuleQuestions } from "./review/dnj-npm-module";
 import { dnjTestingDeployQuestions } from "./review/dnj-testing-deploy";
 import { dnjFinalReviewQuestions } from "./review/dnj-final-review";
+import { vdiLearningMapQuestions } from "./review/vdi-learning-map";
+import { vdiReactiveDesignQuestions } from "./review/vdi-reactive-design";
+import { vdiEffectSchedulerQuestions } from "./review/vdi-effect-scheduler";
+import { vdiRendererArchitectureQuestions } from "./review/vdi-renderer-architecture";
+import { vdiDiffAlgorithmQuestions } from "./review/vdi-diff-algorithm";
+import { vdiComponentModelQuestions } from "./review/vdi-component-model";
+import { vdiAsyncComponentQuestions } from "./review/vdi-async-component";
+import { vdiCompilerArchitectureQuestions } from "./review/vdi-compiler-architecture";
+import { vdiBuiltInComponentsQuestions } from "./review/vdi-built-in-components";
+import { vdiFinalReviewQuestions } from "./review/vdi-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2881,6 +2891,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dnjNpmModuleQuestions,
   ...dnjTestingDeployQuestions,
   ...dnjFinalReviewQuestions,
+  ...vdiLearningMapQuestions,
+  ...vdiReactiveDesignQuestions,
+  ...vdiEffectSchedulerQuestions,
+  ...vdiRendererArchitectureQuestions,
+  ...vdiDiffAlgorithmQuestions,
+  ...vdiComponentModelQuestions,
+  ...vdiAsyncComponentQuestions,
+  ...vdiCompilerArchitectureQuestions,
+  ...vdiBuiltInComponentsQuestions,
+  ...vdiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

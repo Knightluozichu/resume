@@ -1,0 +1,152 @@
+---
+title: "响应式系统设计"
+type: A
+section: "前端与Web"
+order: 1
+description: "拆解 Vue 响应式核心设计——Proxy 拦截、track 依赖收集、trigger 派发更新，以及 ref 与 reactive 的取舍"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VdiReactiveDesignDiagram } from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-reactive-design";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Vue 用 Proxy 拦截读写实现响应式的设计思路
+- 掌握 track（读时登记依赖）与 trigger（写时派发 effect）的协作机制
+- 区分 ref 与 reactive 的设计差异与各自陷阱
+- 能从源码设计角度解释「数据变了副作用自动重跑」的原理
+</Objectives>
+
+## 直觉引入
+
+命令式编程里，你改了数据后要手动去操作 DOM。数据和视图的对应关系靠人脑维护，一旦漏改就出 bug。Vue 的响应式换了个思路：你只管声明数据与副作用的关系，数据一变，框架自动找到依赖这块数据的副作用并重新执行。怎么做到的？答案是在数据的读写上「装监控」——读数据时记下「谁在用我」，写数据时通知「用过我的人重新跑」。这就是 Proxy 拦截 + 依赖收集。
+
+<VdiReactiveDesignDiagram />
+
+## Proxy 拦截与 track/trigger
+
+<Term def="响应式系统是通过 Proxy 代理对象、在 get 时 track 收集依赖、在 set 时 trigger 派发 effect 重新执行，从而让数据变化自动反映到副作用的设计。">响应式系统</Term>的核心是 `reactive(obj)` 返回一个 Proxy 代理。读取属性触发 `get` 拦截，执行 `track(target, key)`：把当前正在运行的 effect（全局变量 `activeEffect`）记录到「对象 → 属性 → 依赖集合」的映射 `targetMap` 里。写入属性触发 `set` 拦截，执行 `trigger(target, key)`：从 `targetMap` 查出该属性的所有 effect，逐个调度执行，effect 重新运行时读取最新数据产出新结果。
+
+```javascript
+// 响应式系统最小实现（源码设计简化版）
+let activeEffect = null;
+const targetMap = new WeakMap(); // target → Map<key, Set<effect>>
+
+function track(target, key) {
+  if (!activeEffect) return;
+  let depsMap = targetMap.get(target);
+  if (!depsMap) targetMap.set(target, (depsMap = new Map()));
+  let dep = depsMap.get(key);
+  if (!dep) depsMap.set(key, (dep = new Set()));
+  dep.add(activeEffect); // 登记当前 effect
+}
+
+function trigger(target, key) {
+  const depsMap = targetMap.get(target);
+  if (!depsMap) return;
+  const dep = depsMap.get(key);
+  if (dep) dep.forEach((fn) => fn()); // 派发所有依赖
+}
+
+function reactive(obj) {
+  return new Proxy(obj, {
+    get(target, key, receiver) {
+      track(target, key); // 读时登记
+      return Reflect.get(target, key, receiver);
+    },
+    set(target, key, value, receiver) {
+      const res = Reflect.set(target, key, value, receiver);
+      trigger(target, key); // 写时派发
+      return res;
+    },
+  });
+}
+```
+
+## ref 与 reactive
+
+原始类型（number/string/boolean）无法被 Proxy 代理（Proxy 只能代理对象），所以 Vue 设计了 `ref`：用一个 `{ value: T }` 对象包裹任意值，对 `.value` 做 get/set 拦截。`reactive` 直接代理整个对象，访问属性自动触发拦截，但解构会丢失响应式——因为解构把代理属性「拆」成了原始值，脱离了 Proxy。
+
+```javascript
+import { ref, reactive } from "vue";
+
+// ref：原始类型必须用，访问修改走 .value
+const count = ref(0);
+count.value++; // 触发 set → trigger
+
+// reactive：对象/数组直接代理，无需 .value
+const state = reactive({ list: [] });
+state.list.push(1); // 触发响应
+
+// 陷阱：解构 reactive 丢失响应式
+const { list } = state; // list 不再响应式！应改用 toRefs 或保持 state.list
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区一：解构 reactive 对象后仍保持响应式。** `const { count } = reactiveState` 之后，`count` 是一个普通值，改它不会触发更新。解构把代理属性「拆」成了原始值，脱离了 Proxy。解决：用 `toRefs(reactiveState)` 把每个属性转成 ref 再解构，或始终通过 `reactiveState.count` 访问。
+</Callout>
+
+<Callout type="trap">
+**误区二：整体替换 reactive 对象能保持响应式。** `let state = reactive({ count: 0 }); state = reactive({ count: 1 })` 看似换了内容，但原 Proxy 代理的是旧对象，已建立的依赖关系还连在旧代理上，视图不更新。正确做法用 `ref`：`state.value = newObj` 会触发响应；或用 `Object.assign(state, newObj)` 逐属性写入仍走 set 拦截。
+</Callout>
+
+<Exercises>
+**问题 1**：简述 Vue 响应式的 track/trigger 机制。
+
+<Answer>
+读取属性时（get 拦截）执行 track：把当前 effect（存在全局 activeEffect）记录到「对象 → 属性 → Dep(Set&lt;effect&gt;)」的 targetMap 里。写入属性时（set 拦截）执行 trigger：从 targetMap 查出该属性的所有 effect，逐个调度执行，effect 重跑读取最新数据产出新结果。核心：读时登记「谁用了这个数据」，写时通知「用过的人重新跑」。
+</Answer>
+
+**问题 2（实现题）**：手写一个 `reactive` + `effect`，让 `effect(() => console.log(obj.count))` 在 `obj.count = 1` 时自动重新执行。
+
+<Answer>
+```javascript
+let activeEffect = null;
+const targetMap = new WeakMap();
+
+function track(target, key) {
+  if (!activeEffect) return;
+  let depsMap = targetMap.get(target);
+  if (!depsMap) targetMap.set(target, (depsMap = new Map()));
+  let dep = depsMap.get(key);
+  if (!dep) depsMap.set(key, (dep = new Set()));
+  dep.add(activeEffect);
+}
+
+function trigger(target, key) {
+  const dep = targetMap.get(target)?.get(key);
+  dep?.forEach((fn) => fn());
+}
+
+function effect(fn) {
+  activeEffect = fn;
+  fn(); // 首次执行，触发 track 登记
+  activeEffect = null;
+}
+
+function reactive(obj) {
+  return new Proxy(obj, {
+    get(t, k, r) { track(t, k); return Reflect.get(t, k, r); },
+    set(t, k, v, r) { const r2 = Reflect.set(t, k, v, r); trigger(t, k); return r2; },
+  });
+}
+
+const obj = reactive({ count: 0 });
+effect(() => console.log(obj.count)); // 打印 0，track 登记
+obj.count = 1; // set → trigger → effect 重跑 → 打印 1
+```
+关键：effect 执行前把 fn 赋给 activeEffect，执行中读取属性触发 track 把 fn 登记进 targetMap；写入时 trigger 取出并执行所有登记的 fn。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Proxy 代理">Vue 用 Proxy 包裹对象，拦截属性的 get（读取）和 set（写入）操作，从而在读写时插入 track/trigger 逻辑。相比 Vue 2 的 Object.defineProperty，Proxy 能监听属性新增/删除和数组索引修改。</GlossaryItem>
+<GlossaryItem term="targetMap">响应式系统的依赖映射：WeakMap&lt;target, Map&lt;key, Set&lt;effect&gt;&gt;&gt;。track 往里写（登记依赖），trigger 从里读（取出派发），是「读时收集、写时派发」的数据结构基础。</GlossaryItem>
+<GlossaryItem term="activeEffect">全局变量，指向当前正在执行的 effect 函数。track 时用它登记「谁在用这个属性」，effect 执行前赋值、执行后清空，保证只有 effect 内读取的属性才建立依赖。</GlossaryItem>
+<GlossaryItem term="ref vs reactive">ref 用 { value } 对象包裹任意类型（含原始类型），访问修改走 .value；reactive 用 Proxy 代理对象/数组，属性访问自动拦截但解构丢响应式。原始类型必须用 ref，对象两者皆可。</GlossaryItem>
+</Glossary>

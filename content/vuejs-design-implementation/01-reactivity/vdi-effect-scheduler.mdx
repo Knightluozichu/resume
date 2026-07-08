@@ -1,0 +1,144 @@
+---
+title: "副作用与调度器"
+type: A
+section: "前端与Web"
+order: 2
+description: "拆解 effect 的 lazy 与 scheduler 设计——computed 懒求值缓存、watch 侦听回调如何基于 effect 实现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VdiEffectSchedulerDiagram } from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-effect-scheduler";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 effect 的 lazy 选项：控制副作用是否立即执行
+- 掌握 scheduler 选项：自定义依赖变化时的行为
+- 看懂 computed 如何用 lazy + scheduler 实现懒求值与缓存
+- 看懂 watch 如何用 scheduler 实现侦听回调
+</Objectives>
+
+## 直觉引入
+
+`effect(fn)` 默认会立即执行一次 fn，并在依赖变化时重新执行 fn。但有时候你不想要这种默认行为——computed 只想在你「读」它时才算，不想依赖一变就立刻算；watch 想在依赖变化时执行一段「别的」回调，而不是重新跑原函数。怎么做到？答案是在 effect 上加两个开关：`lazy` 控制「要不要立即执行」，`scheduler` 控制「依赖变化时做什么」。computed 和 watch 就是这两个开关的不同组合。
+
+<VdiEffectSchedulerDiagram />
+
+## lazy 与 scheduler
+
+<Term def="调度器是 effect 的 scheduler 选项函数，当依赖变化时由 trigger 调用，替代默认的重新执行 fn 行为。">scheduler</Term>是 effect 的可选配置。默认情况下，trigger 会直接重新执行 effect 的 fn。但如果传了 `scheduler`，trigger 改为调用 scheduler——fn 本身不再自动重跑，执行什么、何时执行完全由 scheduler 决定。`lazy` 则控制 effect 是否在注册时立即执行一次：默认 false（立即执行以收集依赖），设为 true 则不立即执行，需要手动调用返回的 effectFn 来执行并收集依赖。
+
+```javascript
+// effect 支持 lazy 和 scheduler 的设计
+function effect(fn, options = {}) {
+  const effectFn = () => {
+    activeEffect = effectFn;
+    const res = fn();       // 执行并 track
+    activeEffect = null;
+    return res;
+  };
+  effectFn.deps = [];       // 记录依赖，便于清理
+  if (!options.lazy) effectFn(); // 非 lazy 立即执行
+  effectFn.scheduler = options.scheduler; // 存 scheduler
+  return effectFn;
+}
+
+// trigger 改为：有 scheduler 调 scheduler，否则直接执行
+function trigger(target, key) {
+  const dep = targetMap.get(target)?.get(key);
+  dep?.forEach((fn) => {
+    if (fn.scheduler) fn.scheduler(); // 走自定义调度
+    else fn();                         // 默认重新执行
+  });
+}
+```
+
+## computed：lazy + scheduler 的懒求值缓存
+
+`computed(getter)` 的设计：用 `lazy: true` 让 effect 不立即执行（首次不计算）；trigger 时不重跑 getter，而是用 scheduler 把缓存标脏（dirty = true）；下次读取 `.value` 时若标脏才重新计算 getter 并缓存结果，否则直接返回缓存值。这样依赖频繁变化但值未真正改变时，getter 不会重复执行。
+
+```javascript
+function computed(getter) {
+  let value, dirty = true;
+  const effectFn = effect(getter, {
+    lazy: true, // 不立即执行
+    scheduler() { dirty = true; }, // 依赖变 → 只标脏，不重算
+  });
+  const obj = {
+    get value() {
+      if (dirty) { value = effectFn(); dirty = false; } // 标脏才重算
+      return value; // 否则返回缓存
+    },
+  };
+  return obj;
+}
+```
+
+## watch：scheduler 实现侦听回调
+
+`watch(source, cb)` 的设计：内部用 effect 注册对 source 的依赖，但 trigger 时不重跑 source，而是用 scheduler 执行 cb 回调，并把新旧值传给 cb。`immediate` 选项让 cb 首次也执行，`flush: 'post'` 让 cb 在 DOM 更新后执行。
+
+```javascript
+function watch(source, cb, options = {}) {
+  let oldValue;
+  const effectFn = effect(() => (oldValue = source()), {
+    lazy: true,
+    scheduler() {
+      const newValue = source();
+      cb(newValue, oldValue); // 执行回调，传新旧值
+      oldValue = newValue;
+    },
+  });
+  if (options.immediate) effectFn(); // 立即执行一次
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：computed 每次依赖变化都会重新计算。** 恰恰相反——computed 的 scheduler 只是把 dirty 标为 true，并不重算 getter。真正重算发生在下次读取 `.value` 时。如果依赖变了但值相同（如从 1 变 1），且没人读取 .value，getter 根本不会执行。这正是 computed 高效的原因：懒求值 + 缓存。
+</Callout>
+
+<Callout type="trap">
+**误区：watch 的回调在数据变化时同步执行。** 默认 watch 的 scheduler 在 trigger 时被调用，但 Vue 会把多次变化合并到微任务中执行 cb（flush 默认 'pre'）。如果需要在 DOM 更新后访问最新 DOM，要用 `flush: 'post'`，否则拿到的是更新前的 DOM。
+</Callout>
+
+<Exercises>
+**问题 1**：computed 和 watch 都基于 effect，它们各自用了 lazy 和 scheduler 哪些组合？
+
+<Answer>
+computed 用 `lazy: true`（不立即执行 getter）+ `scheduler`（依赖变化时只标脏 dirty=true，不重算）。读取 .value 时若 dirty 才重算 getter 并缓存。watch 用 `lazy: true`（不立即执行，除非 immediate）+ `scheduler`（依赖变化时执行 cb 回调，传新旧值）。共同点：都用 lazy 避免立即执行默认 effect 逻辑；都用 scheduler 替换默认的「重跑 fn」行为。区别：computed 的 scheduler 只标脏、由读取触发计算（懒）；watch 的 scheduler 直接执行 cb（响应式）。
+</Answer>
+
+**问题 2（实现题）**：手写 `computed`，要求：首次读取才计算，依赖变化标脏，值未变不触发下游。
+
+<Answer>
+```javascript
+function computed(getter) {
+  let value, dirty = true;
+  // lazy:true 不立即执行；scheduler 标脏不重算
+  const effectFn = effect(getter, {
+    lazy: true,
+    scheduler() { dirty = true; },
+  });
+  const obj = {
+    get value() {
+      if (dirty) { value = effectFn(); dirty = false; }
+      return value;
+    },
+  };
+  return obj;
+}
+```
+工作流：①创建时不执行 getter（lazy）。②首次读 .value：dirty 为真 → 执行 effectFn 收集依赖并取值 → dirty 置 false → 返回缓存。③依赖变化：trigger 调 scheduler → dirty 置 true（不重算）。④下次读 .value：dirty 为真 → 重算 → 缓存 → 返回。若两次读之间依赖未变，dirty 仍 false，直接返回缓存，getter 不执行。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="lazy">effect 的选项，为 true 时不立即执行 fn，需手动调用返回的 effectFn 才执行并收集依赖。computed 和 watch 都用 lazy 避免注册时立即执行默认逻辑。</GlossaryItem>
+<GlossaryItem term="scheduler">effect 的选项函数。trigger 时若有 scheduler 则调用它替代默认的「重新执行 fn」。computed 用它标脏（懒重算），watch 用它执行回调（响应变化）。</GlossaryItem>
+<GlossaryItem term="computed 缓存">computed 用 dirty 标志位实现缓存：依赖变 → scheduler 标脏（不重算）；读 .value → 标脏才重算并缓存。未变不重算，未读不重算，这是 computed 高效的核心。</GlossaryItem>
+<GlossaryItem term="watch 侦听">watch 内部用 effect + lazy + scheduler 实现：lazy 避免立即跑，scheduler 在依赖变时执行 cb 并传新旧值。immediate 让 cb 首次执行，flush 控制执行时机（pre/post/sync）。</GlossaryItem>
+</Glossary>

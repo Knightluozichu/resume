@@ -1,0 +1,102 @@
+---
+title: "编译器架构"
+type: A
+section: "前端与Web"
+order: 7
+description: "拆解编译器三阶段——Parse 构造模板 AST、Transform 转换为 JS AST、Generate 生成渲染函数与编译优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VdiCompilerArchitectureDiagram } from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-compiler-architecture";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解编译器的三阶段流水线：Parse → Transform → Generate
+- 掌握 Parse 如何把模板字符串解析为模板 AST
+- 掌握 Transform 如何把模板 AST 转换为 JavaScript AST
+- 理解编译期优化：静态提升、patchFlag、Block Tree
+</Objectives>
+
+## 直觉引入
+
+你写的是 `<template><div>{{ msg }}</div></template>`，但组件运行时需要的是 `render` 函数。把模板翻译成渲染函数就是编译器的职责。编译器分三步：①Parse——像分析句子语法一样，把模板字符串拆成「标签、属性、插值」的词法单元，再组装成一棵模板 AST（抽象语法树）；②Transform——遍历 AST，把 `v-if` 转成条件分支、`v-for` 转成循环，注入编译优化，生成 JavaScript AST；③Generate——把 JS AST 拼成 render 函数代码字符串。
+
+<VdiCompilerArchitectureDiagram />
+
+## Parse：模板字符串 → 模板 AST
+
+<Term def="Parse 是编译器第一阶段，通过词法分析扫描模板字符流识别标签/属性/插值，通过语法分析递归下降构造模板 AST（抽象语法树）。">Parse</Term>扫描模板字符流，用有限状态机识别开标签、闭标签、属性、插值表达式（`{{ }}`）、注释等词法单元，再用递归下降解析器把它们组装成一棵模板 AST。AST 节点类型有 Root、Element、Interpolation、Text 等。例如 `<div>{{ msg }}</div>` 解析为 Root → Element(div) → Interpolation(msg)。
+
+```javascript
+// Parse 输入输出
+// 输入：模板字符串
+`<div class="box">{{ msg }}</div>`
+
+// 输出：模板 AST
+{
+  type: "Root",
+  children: [{
+    type: "Element",
+    tag: "div",
+    props: [{ name: "class", value: "box" }],
+    children: [{ type: "Interpolation", content: "msg" }],
+  }],
+}
+```
+
+## Transform：模板 AST → JavaScript AST
+
+<Term def="Transform 是编译器第二阶段，遍历模板 AST，用转换插件把 v-if/v-for 等指令转为对应 JS 结构，注入编译优化，生成 JavaScript AST。">Transform</Term>深度优先遍历模板 AST，对每种节点应用转换插件：`v-if` 转成三元表达式条件分支、`v-for` 转成 helper 函数循环、插值转成 `toDisplayString(msg)` 调用、元素转成 `createVNode('div', ...)` 调用。同时注入编译优化：静态提升（纯静态节点提到 render 外只创建一次）、patchFlag（标记动态节点类型，运行时只 diff 标记部分）、Block Tree（收集动态子节点）。输出是 JavaScript AST——可直接生成代码的 AST。
+
+## Generate：JavaScript AST → 渲染函数
+
+<Term def="Generate 是编译器第三阶段，遍历 JavaScript AST 拼接成 render 函数代码字符串，包含静态提升、patchFlag 等编译期优化。">Generate</Term>遍历 JS AST，把每个节点拼成对应的代码字符串。最终输出类似：
+
+```javascript
+// 编译输出（含优化）
+const _hoisted_1 = createVNode("div", null, null, -1 /* HOISTED */); // 静态提升
+
+function render(_ctx, _cache) {
+  return createVNode("div", null, [
+    _hoisted_1, // 复用静态节点
+    createVNode("span", null, toDisplayString(_ctx.msg), 1 /* TEXT patchFlag */),
+  ]);
+}
+```
+
+`-1`（HOISTED）标记静态提升到 render 外；`1`（TEXT）是 patchFlag，告诉运行时这个节点只有文本是动态的，patch 时只更新文本。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：编译器只是把模板翻译成 h() 调用，没有优化。** Vue 3 编译器的核心价值在于编译期优化：静态提升把纯静态节点提到 render 外只创建一次（减少 VNode 创建）；patchFlag 标记动态节点类型，运行时 patch 只比对标记的动态部分跳过静态；Block Tree 收集动态子节点，把 Diff 范围从整棵树缩小到动态节点。没有这些优化，运行时 Diff 开销会大很多。
+</Callout>
+
+<Callout type="trap">
+**误区：Transform 和 Generate 可以合并成一步。** 分两步是为了关注点分离：Transform 只负责「语义转换 + 优化注入」（与目标代码格式无关），Generate 只负责「代码拼接」（与语义无关）。这样换输出格式（如输出 ES Module vs CommonJS）只改 Generate，换转换逻辑（如支持新指令）只改 Transform。这也是编译器领域的通用设计模式。
+</Callout>
+
+<Exercises>
+**问题 1**：编译器三阶段各自输入输出是什么？为什么 Transform 要和 Generate 分开？
+
+<Answer>
+Parse：输入模板字符串，输出模板 AST（Root/Element/Interpolation/Text 节点）。Transform：输入模板 AST，输出 JavaScript AST（含 createVNode 调用结构、patchFlag、静态提升标记等）。Generate：输入 JavaScript AST，输出 render 函数代码字符串。Transform 和 Generate 分开是为了关注点分离：Transform 负责语义转换和优化注入（与代码格式无关），Generate 负责代码拼接（与语义无关）。换输出格式只改 Generate，换转换逻辑只改 Transform，互不影响。
+</Answer>
+
+**问题 2（实现题）**：解释 patchFlag 的作用，它如何让运行时 patch 更高效？
+
+<Answer>
+patchFlag 是编译器在 Transform 阶段给动态节点打的标记，存入 VNode 的 patchFlag 字段，告诉运行时这个节点的哪些部分是动态的。例如 TEXT(1) 表示只有文本动态、CLASS(2) 表示只有 class 动态、PROPS(8) 表示 props 动态。patch 时，渲染器检查 patchFlag：如果是 TEXT，只比对更新文本内容，跳过 props 和 children 的 Diff；如果是 CLASS，只比对 class 属性。这样把「全量比对节点所有属性和子节点」优化为「只比对标记的动态部分」，跳过大量静态比对。因为编译期已经知道哪些是动态的，运行时无需重复判断，这是编译时与运行时协作优化的典型案例。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Parse">编译器第一阶段。词法分析扫描模板字符流识别标签/属性/插值，语法分析递归下降构造模板 AST。输入模板字符串，输出 Root/Element/Interpolation/Text 节点树。</GlossaryItem>
+<GlossaryItem term="Transform">编译器第二阶段。遍历模板 AST 应用转换插件：v-if→条件分支、v-for→循环、插值→toDisplayString、元素→createVNode。注入静态提升、patchFlag、Block Tree 优化。输出 JavaScript AST。</GlossaryItem>
+<GlossaryItem term="Generate">编译器第三阶段。遍历 JavaScript AST 拼接成 render 函数代码字符串，含静态提升常量、patchFlag 标记。输入 JS AST，输出可执行的渲染函数代码。</GlossaryItem>
+<GlossaryItem term="patchFlag">编译期给动态节点打的标记，存入 VNode。运行时 patch 检查 patchFlag，只比对标记的动态部分（TEXT/CLASS/PROPS 等），跳过静态比对，是编译时与运行时协作优化的核心。</GlossaryItem>
+<GlossaryItem term="静态提升">编译优化：把纯静态 VNode 提到 render 函数外只创建一次（hoisted），每次 render 复用同一引用，避免重复创建 VNode 对象。</GlossaryItem>
+</Glossary>

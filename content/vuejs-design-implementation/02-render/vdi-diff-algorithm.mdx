@@ -1,0 +1,104 @@
+---
+title: "Diff 算法详解"
+type: A
+section: "前端与Web"
+order: 4
+description: "拆解子节点更新算法——双端 Diff 四步交叉、快速 Diff 预处理与最长递增子序列、key 的作用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VdiDiffAlgorithmDiagram } from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-diff-algorithm";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解为什么需要 Diff：新旧 children 比对最小化 DOM 操作
+- 掌握双端 Diff 的四步交叉比对策略
+- 掌握快速 Diff 的头尾预处理 + 最长递增子序列（LIS）
+- 理解 key 是节点身份标识，有 key 才能复用
+</Objectives>
+
+## 直觉引入
+
+patch 更新子节点时，最暴力的做法是：把旧子节点全删掉，把新子节点全建一遍。但这浪费严重——明明只是移动了一个节点的位置，为什么要全部重建？Diff 算法解决的就是「怎么最小化 DOM 操作」：比对新旧 children，找出哪些能复用（key 相同）、哪些要新增、哪些要删除、哪些要移动。Vue 2 用双端 Diff，Vue 3 用快速 Diff（借鉴 inferno），后者在头尾预处理后用最长递增子序列让移动次数最少。
+
+<VdiDiffAlgorithmDiagram />
+
+## 双端 Diff：四步交叉
+
+<Term def="双端 Diff 是用新旧 children 各自的头尾四个指针，通过头头、尾尾、头尾、尾头四种交叉比对来复用节点、减少移动的算法。">双端 Diff</Term>维护四个指针：oldStart、oldEnd、newStart、newEnd。每轮做四步尝试：①头头比（oldStart vs newStart），key 同则 patch 复用、两指针后移；②尾尾比（oldEnd vs newEnd），key 同则 patch、两指针前移；③头尾交叉（oldStart vs newEnd），key 同则 patch 并把旧头节点移到旧尾后；④尾头交叉（oldEnd vs newStart），key 同则 patch 并把旧尾节点移到旧头前。四步都不中时，用 key 在旧 children 中找位置。循环到 oldStart &gt; oldEnd 或 newStart &gt; newEnd 结束，剩余新增或删除。
+
+```javascript
+// 双端 Diff 核心循环（简化）
+function diff(c1, c2, container) {
+  let i = 0, e1 = c1.length - 1, e2 = c2.length - 1;
+  while (i <= e1 && i <= e2) {
+    if (c1[i].key === c2[i].key) { patch(c1[i], c2[i]); i++; }        // ①头头
+    else if (c1[e1].key === c2[e2].key) { patch(c1[e1], c2[e2]); e1--; e2--; } // ②尾尾
+    else if (c1[i].key === c2[e2].key) { /* ③ 移动 */ patch(...); i++; e2--; }
+    else if (c1[e1].key === c2[i].key) { /* ④ 移动 */ patch(...); e1--; i++; }
+    else { /* key 查找位置 */ break; }
+  }
+  // 收尾：i>e1 → 新增 c2[i..e2]；i>e2 → 删除 c1[i..e1]
+}
+```
+
+## 快速 Diff：预处理 + LIS
+
+<Term def="快速 Diff 是 Vue 3 采用的子节点比对算法，先预处理新旧 children 的公共前缀和后缀，再对中间未知序列用最长递增子序列（LIS）确定哪些节点无需移动，从而最小化 DOM 移动次数。">快速 Diff</Term>分三步：①头部预处理——从头比 key 相同的，直接 patch 跳过；②尾部预处理——从尾比 key 相同的，直接 patch 跳过；③对中间未知序列处理——新有旧无的新增，旧有新无的删除，都有的用最长递增子序列（LIS）找出「不需要移动」的节点（LIS 中的节点相对顺序已正确），只移动不在 LIS 中的节点。LIS 让需要移动的节点数达到理论最少。
+
+```javascript
+// 快速 Diff 三阶段（简化）
+function fastDiff(c1, c2) {
+  let i = 0, e1 = c1.length - 1, e2 = c2.length - 1;
+  // ① 头部预处理：key 相同直接 patch
+  while (i <= e1 && i <= e2 && c1[i].key === c2[i].key) { patch(c1[i], c2[i]); i++; }
+  // ② 尾部预处理：key 相同直接 patch
+  while (e1 >= i && e2 >= i && c1[e1].key === c2[e2].key) { patch(c1[e1], c2[e2]); e1--; e2--; }
+  // ③ 中间未知序列
+  if (i > e1) { /* 新增 c2[i..e2] */ }
+  else if (i > e2) { /* 删除 c1[i..e1] */ }
+  else {
+    // 用 key 建索引，算 LIS，只移动不在 LIS 中的节点
+    const seq = lis(newIndexToOldIndexMap);
+    // 从后向前遍历，不在 seq 中的节点需要移动/新增
+  }
+}
+```
+
+## key 的作用
+
+key 是节点的身份标识。Diff 时用 key 判断新旧节点是否「同一个」——key 相同则复用（patch 更新内容），key 不同则不能复用。没有 key 时只能按位置比对，位置不同就当不同节点，导致本可复用的节点被重建。**常见错误**：用 index 做 key——当列表顺序变化（插入/删除/排序），index 会重新分配，导致 key 错位，组件状态混乱。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用 index 做 key 没问题。** 当列表只做追加确实看不出问题，但一旦中间插入或排序，index 重新分配导致 key 错位：原来 key=0 的节点现在 key=1，Diff 认为是不同节点，强行 patch 内容，组件内部状态（输入框值、子组件状态）会错乱。正确做法用数据唯一 ID 做 key，让节点身份稳定。
+</Callout>
+
+<Callout type="trap">
+**误区：快速 Diff 比 Diff 快是因为算法复杂度更低。** 快速 Diff 的优势在工程实践而非理论复杂度——它先用头尾预处理跳过大量公共前缀后缀（实际场景中前后不变的情况很多），再对中间少量未知序列用 LIS。双端 Diff 对纯头尾移动友好，但遇到头尾都不匹配的中间大段移动时效率差。快速 Diff 综合更优。
+</Callout>
+
+<Exercises>
+**问题 1**：双端 Diff 的四步是什么？快速 Diff 比双端 Diff 好在哪？
+
+<Answer>
+双端 Diff 四步：①头头比（oldStart vs newStart）key 同则 patch 后移；②尾尾比（oldEnd vs newEnd）key 同则 patch 前移；③头尾交叉（oldStart vs newEnd）key 同则 patch 并移到旧尾后；④尾头交叉（oldEnd vs newStart）key 同则 patch 并移到旧头前。快速 Diff 好在：①头尾预处理直接跳过公共前后缀，省去大量比对（实际场景前后不变多）；②中间未知序列用最长递增子序列（LIS）确定无需移动的节点，只移动 LIS 外的节点，移动次数理论最少。双端 Diff 遇到中间大段移动时效率差，快速 Diff 综合更优。
+</Answer>
+
+**问题 2（实现题）**：解释最长递增子序列在快速 Diff 中的作用，为什么能最小化移动？
+
+<Answer>
+快速 Diff 对中间未知序列，先建一个「新节点位置 → 旧节点位置」的映射数组。对这个数组求最长递增子序列（LIS）：LIS 中的节点在新旧序列中的相对顺序一致，说明它们不需要移动，只需原地 patch。不在 LIS 中的节点才需要移动（插入到正确位置）。因为 LIS 是最长的「顺序不变的子序列」，所以需要移动的节点数 = 总数 - LIS 长度，达到理论最少。例如新旧中间序列映射为 [2,3,1,4]，LIS 是 [2,3,4]（长度3），只有 1 需要移动。这样把 O(n) 次移动优化到只移动真正需要移动的节点。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="双端 Diff">Vue 2 的子节点比对算法。用新旧 children 各自头尾四个指针，通过头头、尾尾、头尾、尾头四步交叉比对复用节点。对纯头尾移动友好，但中间大段移动效率差。</GlossaryItem>
+<GlossaryItem term="快速 Diff">Vue 3 采用的子节点比对算法（借鉴 inferno）。先头尾预处理跳过公共前后缀，再对中间未知序列用最长递增子序列（LIS）确定无需移动的节点，只移动 LIS 外的节点，移动次数最少。</GlossaryItem>
+<GlossaryItem term="key">节点的身份标识。Diff 用 key 判断新旧节点是否同一个——key 同则复用（patch 内容），不同则不复用。无 key 只能按位置比对，index 做 key 在列表顺序变化时会导致状态错乱。用数据唯一 ID 做 key 最稳。</GlossaryItem>
+<GlossaryItem term="最长递增子序列 LIS">快速 Diff 的核心数学工具。对「新位置→旧位置」映射数组求 LIS，LIS 中的节点相对顺序已正确无需移动，只移动 LIS 外的节点。移动次数 = 总数 - LIS 长度，达到理论最少。</GlossaryItem>
+</Glossary>

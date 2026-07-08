@@ -89,6 +89,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mgp-", "multiplayer-game-programming"],
   ["jpg-", "javascript-pro-guide"],
   ["vjp-", "vuejs-practice"],
+  ["vdi-", "vuejs-design-implementation"],
   ["ydk-", "you-dont-know-js"],
   ["jdg-", "javascript-definitive-guide"],
   ["jfs-", "javascript-fullstack"],

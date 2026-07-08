@@ -1,0 +1,114 @@
+---
+title: "组件模型"
+type: A
+section: "前端与Web"
+order: 5
+description: "拆解组件的本质——setup 初始化、渲染函数返回 VNode、Props/emit/slots 父子通信、组件实例"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { VdiComponentModelDiagram } from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-component-model";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解组件的本质：一个返回 VNode 的函数 + setup 提供状态
+- 掌握组件挂载的完整流程：实例创建 → setup → render → patch
+- 理解 Props 只读设计、emit 向上通信、slots 内容分发
+- 区分手写渲染函数与编译器生成渲染函数
+</Objectives>
+
+## 直觉引入
+
+在渲染器看来，组件不过是 VNode 的 type 为函数（或对象）的一种特殊节点。当 patch 遇到组件类型的 VNode，它不创建 DOM 元素，而是：创建组件实例 → 执行 setup 拿到状态 → 执行 render 函数拿到子 VNode 树 → 递归 patch 子树。组件的本质就是「把一段可复用的 VNode 树封装起来，用一个函数描述它的结构，用 setup 描述它的状态」。props 是父传子的数据，emit 是子触父的事件，slots 是父传子的内容。
+
+<VdiComponentModelDiagram />
+
+## 组件挂载流程
+
+<Term def="组件本质是一个返回 VNode 的函数，setup 提供响应式状态与副作用，渲染器把组件 VNode 展开为子树 VNode 再递归挂载。">组件</Term>的挂载流程：①创建组件实例 instance（存 props、setupResult、subTree 等）；②resolveProps 把父传入的 props 解析到实例（只读浅响应式）；③执行 `setup(props, ctx)` 拿到 setupResult（返回的对象暴露给 render）；④取组件的 render 函数（手写或编译器生成）；⑤用 effect 包裹 render，建立响应式——render 内读取响应式数据会 track，数据变 trigger 重跑 render 产出新 subTree；⑥执行 render 产出 subTree（VNode 树）；⑦patch(subTree) 递归挂载真实 DOM。
+
+```javascript
+// 组件挂载核心逻辑（简化）
+function mountComponent(vnode, container) {
+  const instance = { vnode, props: {}, setupState: null, subTree: null };
+  instance.props = resolveProps(vnode.props); // 解析 props（只读）
+
+  // 执行 setup
+  const setupResult = vnode.type.setup(instance.props, {
+    emit: (event, ...args) => {
+      const handler = instance.props[`on${event}`]; // onAdd → handleAdd
+      handler && handler(...args);
+    },
+    slots: vnode.children,
+  });
+  instance.setupState = setupResult;
+
+  // 用 effect 包裹 render，建立响应式
+  instance.update = effect(() => {
+    const subTree = vnode.type.render.call(setupResult); // 产出 VNode
+    patch(instance.subTree, subTree, container); // 比对更新
+    instance.subTree = subTree;
+  }, { scheduler: queueJob }); // 调度合并
+}
+```
+
+## Props、emit、slots
+
+**Props** 是父组件传入的数据，设计为只读（单向数据流）——子组件不能直接改 props，要改需 emit 通知父组件改。Props 是浅响应式的：顶层属性响应，但不会深度代理。**emit** 是子组件向父通信的机制：子组件 `ctx.emit('add', value)`，渲染器找 props 上的 `onAdd`（add → onAdd 转换）执行。**slots** 是父组件传入的内容分发：父在子组件标签里写的内容，子组件用 `<slot>` 接收渲染。
+
+```javascript
+// 父组件
+h(Counter, {
+  count: state.count,
+  onAdd: (n) => state.count += n, // emit('add') → 执行 onAdd
+}, {
+  default: () => h('span', '默认插槽'), // slots
+})
+
+// 子组件 setup
+setup(props, { emit, slots }) {
+  const increment = () => emit('add', props.count + 1);
+  return () => h('button', { onClick: increment }, [
+    slots.default?.(), // 渲染插槽内容
+    `count: ${props.count}`,
+  ]);
+}
+```
+
+## 渲染函数的两种来源
+
+组件的 render 函数有两种来源：①手写渲染函数——`import { h } from 'vue'`，setup 返回一个 `() => h(...)` 函数，完全控制结构、无编译开销；②编译器生成——写 `<template>`，编译器（见第 8 章）在构建期把模板编译成 render 函数，含静态提升、patchFlag 等优化。两者运行时行为一致，但编译器生成的版本有编译期优化。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：直接修改 props 能更新父组件。** Props 是只读的——直接 `props.count++` 不会同步回父组件，且 Vue 会在开发模式告警。正确做法：子组件 emit 事件通知父组件，父组件改自己的数据，数据变经响应式触发父重渲染，新 props 流向子组件。这就是单向数据流：父 → props → 子，子 → emit → 父。
+</Callout>
+
+<Callout type="trap">
+**误区：组件的 render 函数每次数据变都重新创建。** render 函数本身只创建一次（挂载时取），变化的是它执行产出的 subTree。effect 包裹 render 后，render 内读取的响应式数据变化时，trigger 让 effect 重跑，即重新执行同一个 render 函数产出新 subTree，再 patch 新旧 subTree。函数不变，执行结果变。
+</Callout>
+
+<Exercises>
+**问题 1**：组件挂载的完整流程是什么？setup 和 render 各负责什么？
+
+<Answer>
+组件挂载流程：①创建组件实例 instance；②resolveProps 解析父传入的 props（只读）；③执行 setup(props, ctx) 拿到 setupResult（响应式状态、副作用注册、暴露给 render 的数据）；④取 render 函数（手写或编译生成）；⑤用 effect 包裹 render 建立响应式（render 内读响应式数据 track，数据变 trigger 重跑）；⑥执行 render 产出 subTree（VNode 树）；⑦patch(subTree) 递归挂载真实 DOM。setup 负责初始化状态和注册副作用（返回的数据暴露给 render）；render 负责描述组件的视图结构（返回 VNode 树）。setup 执行一次，render 在响应式数据变化时重跑。
+</Answer>
+
+**问题 2（实现题）**：解释 emit 的工作原理，为什么 `emit('add')` 能触发父组件的 `onAdd`？
+
+<Answer>
+emit 的设计基于「事件名 → props 名」的命名约定转换。子组件调用 ctx.emit('add', value) 时，渲染器把事件名 add 转成 props 名 onAdd（首字母大写加 on 前缀），然后从 instance.props 上找 onAdd 对应的函数执行。父组件写 `<Counter onAdd={handleAdd} />` 时，onAdd 作为普通 prop 传给子组件的 instance.props。所以 emit('add') → 找 props.onAdd → 执行 handleAdd(value)。这本质是用 props 传递回调函数，emit 只是查找并调用的语法糖。优点是声明式、类型安全，子组件不直接依赖父组件的方法名。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="组件实例 instance">渲染器为每个组件创建的内部对象，存储 props、setupResult、subTree、update（effect）等。挂载时创建，更新时复用，卸载时销毁。是组件运行时状态的容器。</GlossaryItem>
+<GlossaryItem term="setup">组件的初始化函数，接收 props 和 ctx（含 emit、slots、attrs），执行一次。负责创建响应式状态、注册副作用、返回暴露给 render 的数据。是 Composition API 的入口。</GlossaryItem>
+<GlossaryItem term="单向数据流">Vue 组件通信的设计约束：父 → 子用 props（只读），子 → 父用 emit 事件。子组件不能直接改 props，要改需 emit 通知父组件改自己的数据。这保证了数据流向可追溯。</GlossaryItem>
+<GlossaryItem term="渲染函数">返回 VNode 树的函数，描述组件视图结构。两种来源：手写 `() => h(...)` 或编译器从 template 生成。被 effect 包裹，响应式数据变化时重跑产出新 subTree。</GlossaryItem>
+</Glossary>
