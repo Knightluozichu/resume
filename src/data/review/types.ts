@@ -1408,7 +1408,17 @@ export type ReviewChapterSlug =
   | "ucn-network-framework"
   | "ucn-realtime-sync"
   | "ucn-room-management"
-  | "ucn-final-review";
+  | "ucn-final-review"
+  | "mga-learning-map"
+  | "mga-cs-model"
+  | "mga-microservice"
+  | "mga-state-replication"
+  | "mga-interest-management"
+  | "mga-sharding"
+  | "mga-gateway-proxy"
+  | "mga-fault-tolerance"
+  | "mga-monitoring"
+  | "mga-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2821,6 +2831,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ucn-realtime-sync": "实时同步与插值预测",
   "ucn-room-management": "房间管理与匹配系统",
   "ucn-final-review": "全书总复习",
+  "mga-learning-map": "全书学习地图",
+  "mga-cs-model": "C/S 架构模型",
+  "mga-microservice": "微服务拆分与通信",
+  "mga-state-replication": "状态复制模型",
+  "mga-interest-management": "兴趣管理",
+  "mga-sharding": "分片与分布式场景",
+  "mga-gateway-proxy": "网关与代理层设计",
+  "mga-fault-tolerance": "容错与灾备",
+  "mga-monitoring": "监控与日志系统",
+  "mga-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

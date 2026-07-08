@@ -1,0 +1,102 @@
+---
+title: "兴趣管理"
+type: A
+section: "网络游戏与服务器"
+order: 4
+description: "掌握 AOI 兴趣区域管理的九宫格与十字链表算法——让万人同服不崩溃"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MgaInterestManagementDiagram } from "@/components/mdx/multiplayer-game-architecture/diagrams/mga-interest-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 AOI（Area of Interest）兴趣管理的核心目标：只广播玩家能看到的状态
+- 掌握九宫格 AOI 算法的网格划分与邻居查询机制
+- 理解十字链表 AOI 算法在稀疏场景下的优势
+- 能根据场景密度选择合适的 AOI 策略
+</Objectives>
+
+## 直觉引入
+
+想象你站在一个万人演唱会的操场上。你不需要知道操场另一头的人在干什么——你只关心你周围几米内的人。如果把所有人的位置实时广播给所有人，操场上的「通信系统」会瞬间崩溃（N 平方爆炸）。AOI（Area of Interest）就是给每个人画一个「关注圈」——只接收圈内人的信息。演唱会用物理距离划定关注范围，游戏服务器用 AOI 算法做同样的事：只把玩家视野范围内的实体状态发送给他，把网络流量从 O(N²) 降到 O(N×K)（K 是视野内平均实体数）。
+
+<MgaInterestManagementDiagram />
+
+## 九宫格与十字链表
+
+<Term def="九宫格 AOI 是将世界划分为固定大小的网格，每个实体归属一个格子，查询某玩家视野时只需检查周围 9 个格子（自身+周围 8 格）。">九宫格 AOI</Term>是最经典的兴趣管理算法。世界被切成等大的方格（如每格 10×10 米），每个格子维护一个实体列表。当玩家需要广播时，服务器只遍历玩家所在格子的周围 9 格中的实体。当玩家移动跨越格子边界时，触发「离开旧格子、进入新格子」事件，更新兴趣列表。九宫格的优势是查询效率稳定（O(1) 定位格子 + O(K) 遍历邻居），缺点是当格子内实体密集时（如主城广场）单格仍然有大量实体。
+
+<Term def="十字链表 AOI 是用两条有序链表（X 轴和 Y 轴）维护实体坐标，查询视野时在两条链表上分别做范围查找取交集。">十字链表 AOI</Term>更适合实体分布稀疏且不均匀的场景。每个实体按 X 坐标插入 X 链表、按 Y 坐标插入 Y 链表。查询视野范围 [x1, x2] × [y1, y2] 时，分别在 X 链表和 Y 链表上做范围查找，取交集即为视野内实体。十字链表的优势是空间利用率高（不需要预分配网格），且在稀疏区域查询效率高；缺点是实体移动时需要调整链表位置（O(N) 最坏），实现复杂度高于九宫格。
+
+```go
+// 九宫格 AOI 实现
+type GridAOI struct {
+    gridWidth  float64          // 每格宽度
+    grids      map[GridKey]*Grid // 格子坐标 → 格子对象
+}
+
+type GridKey struct{ X, Y int }
+
+type Grid struct {
+    entities map[int64]*Entity // 格子内的实体
+}
+
+// 玩家移动到新位置
+func (a *GridAOI) OnMove(entity *Entity, newPos Vec3) {
+    oldGrid := a.gridKey(entity.Pos)
+    newGrid := a.gridKey(newPos)
+    entity.Pos = newPos
+
+    if oldGrid == newGrid {
+        return // 同格内移动，不触发 AOI 事件
+    }
+    // 跨格移动：从旧格移除、加入新格
+    a.grids[oldGrid].Remove(entity.ID)
+    a.grids[newGrid].Add(entity)
+
+    // 计算旧九宫格和新九宫格的差集
+    oldNeighbors := a.get9Grids(oldGrid)
+    newNeighbors := a.get9Grids(newGrid)
+    leaveGrids := diff(oldNeighbors, newNeighbors) // 离开的格子
+    enterGrids := diff(newNeighbors, oldNeighbors) // 进入的格子
+
+    // 通知客户端：离开的实体消失、进入的实体出现
+    for _, g := range leaveGrids {
+        notifyEntityLeave(entity, a.grids[g].entities)
+    }
+    for _, g := range enterGrids {
+        notifyEntityEnter(entity, a.grids[g].entities)
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：AOI 只影响网络流量，不影响服务器性能。** AOI 不仅减少网络广播量，还直接影响服务器 CPU 和内存开销。没有 AOI 时，每帧要为每个玩家遍历所有实体做视野判断——O(N²) 的计算量在万人同服时是灾难性的。有了 AOI，视野查询降为 O(K)（K 远小于 N），服务器帧循环的计算量也大幅下降。此外，AOI 还决定了碰撞检测、技能范围判定的候选集大小——这些逻辑都只在 AOI 范围内执行，而不是全局扫描。
+</Callout>
+
+<Exercises>
+**问题 1**：九宫格 AOI 和十字链表 AOI 各自适合什么场景？
+
+<Answer>
+九宫格适合实体分布均匀、密度适中的场景（如野外地图、副本）——网格预分配、查询 O(1) 定位 + O(K) 遍历，实现简单、性能稳定。十字链表适合实体分布稀疏且不均匀的场景（如大世界空旷区域多）——不需要预分配网格、稀疏区域查询效率高，但实现复杂、移动时链表调整开销大。实际项目中常混合使用：主城等密集区用九宫格，野外稀疏区用十字链表，或在九宫格基础上做动态格子大小调整。
+</Answer>
+
+**问题 2**：为什么 AOI 能把网络流量从 O(N²) 降到 O(N×K)？
+
+<Answer>
+没有 AOI 时，每个玩家的状态变更要广播给所有 N 个玩家，N 个玩家总共产生 O(N²) 次消息。有 AOI 后，每个玩家只广播给视野内的 K 个玩家（K 远小于 N），N 个玩家总共产生 O(N×K) 次消息。例如万人同服时 N=10000，如果每人视野内平均 50 人（K=50），则流量从 1 亿次/帧降到 50 万次/帧——降低了 200 倍。K 的大小取决于视野半径和实体密度，是 AOI 设计的核心参数。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="AOI 兴趣区域">Area of Interest，只向玩家广播其视野范围内实体状态的管理机制，将网络流量从 O(N²) 降为 O(N×K)。</GlossaryItem>
+<GlossaryItem term="九宫格 AOI">将世界划分为固定网格，查询视野时遍历自身及周围 8 格的算法。查询效率稳定，适合密度均匀的场景。</GlossaryItem>
+<GlossaryItem term="十字链表 AOI">用 X/Y 两条有序链表维护实体坐标，范围查询取交集的算法。适合稀疏不均匀场景。</GlossaryItem>
+<GlossaryItem term="兴趣列表">每个玩家维护的「当前视野内实体」列表，随玩家移动动态增删，是广播的目标集合。</GlossaryItem>
+</Glossary>

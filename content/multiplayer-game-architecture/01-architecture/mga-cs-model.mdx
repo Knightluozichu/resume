@@ -1,0 +1,89 @@
+---
+title: "C/S 架构模型"
+type: A
+section: "网络游戏与服务器"
+order: 1
+description: "掌握专服/世界服/大厅服三种 C/S 架构模型的取舍——从单服到分布式世界的演进路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MgaCsModelDiagram } from "@/components/mdx/multiplayer-game-architecture/diagrams/mga-cs-model";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 区分专服、世界服、大厅服三种架构模型的结构差异与适用场景
+- 理解登录流程中鉴权、选服、进入世界三个阶段的职责分配
+- 掌握服务器权威在三种架构中的不同体现方式
+- 能根据游戏类型（竞技/MMO/休闲）选择合适的 C/S 架构
+</Objectives>
+
+## 直觉引入
+
+想象你经营一家连锁餐厅。**专服**就像独立加盟店——每家店自己进货、自己接客、互不相干，玩家在「店 1」打的装备到「店 2」不存在。**世界服**就像一家超大 Mall——所有顾客进同一个大门、逛同一个商场，但商场太大要分区管理，你在一楼买东西、朋友在五楼吃饭，你们还在同一个「世界」里。**大厅服**则像外卖平台——平台统一接单和派单，但实际做饭的是不同厨房，一局对战打完就散。三种模型没有绝对优劣，取决于游戏类型。
+
+<MgaCsModelDiagram />
+
+## 三种架构模型
+
+<Term def="专服架构是每个服务器实例独立运行、数据隔离、玩家需要选择具体服务器登录的 C/S 模型，适合数据量大的 RPG 和 SLG。">专服架构</Term>是最经典的游戏服务器模型。玩家选择一个服务器（如「一区」「二区」），角色数据存储在该服，无法跨服交互。优点是隔离性好——一个服崩了不影响其他服；缺点是好友在不同服就无法一起玩。典型场景：传统 MMO（如魔兽世界早期）、SLG 策略游戏。
+
+<Term def="世界服架构是所有玩家共享同一个逻辑世界、通过分片和网关水平扩展的 C/S 模型，适合大世界 MMO。">世界服架构</Term>把所有玩家放进同一个「世界」。玩家不再选服，而是通过网关接入后直接进入大世界。世界太大时通过分片（Scene Sharding）切割场景，玩家在分片边界做迁移。优点是无缝大世界体验；缺点是架构复杂、跨分片交互难度高。典型场景：开放世界 MMO、元宇宙。
+
+<Term def="大厅服架构是以大厅为中心进行匹配和房间管理、实际对战在独立游戏服进行的 C/S 模型，适合竞技对战游戏。">大厅服架构</Term>把「社交/匹配」和「对战」分离。玩家先连大厅服进行匹配，匹配成功后分配到一个游戏服房间进行对战，结束后回到大厅。优点是对战服无状态、易扩展；缺点是大厅服是单点瓶颈。典型场景：MOBA、FPS、吃鸡。
+
+```go
+// 三种架构的登录流程对比
+// 专服：选服 → 连游戏服 → 直接进游戏
+func loginDedicated(uid int64, serverId int) (*Player, error) {
+    server := serverRegistry.Get(serverId)
+    player := server.AuthAndLoad(uid) // 角色数据在本服
+    return player, nil
+}
+
+// 世界服：网关接入 → 大厅鉴权 → 进入世界
+func loginWorld(uid int64) (*Player, error) {
+    player := lobby.Auth(uid)         // 大厅鉴权
+    world.Enter(player)               // 进入大世界
+    shard := shardMgr.Assign(player)  // 分配到分片
+    return player, nil
+}
+
+// 大厅服：大厅匹配 → 分配游戏服 → 对战 → 回大厅
+func loginLobby(uid int64) (*Player, error) {
+    player := lobby.Auth(uid)
+    match := lobby.Matchmake(player)   // 匹配
+    gameServer := pool.Allocate()      // 分配游戏服
+    gameServer.StartMatch(match)       // 开始对战
+    return player, nil
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：世界服一定能替代专服。** 世界服虽然体验更好（无选服、无缝大世界），但架构复杂度和运维成本远高于专服。一个世界服集群需要分片管理、跨片迁移、全局 ID 分配、分布式事务等基础设施。如果游戏类型不需要大世界（如卡牌、竞技），用世界服是过度设计。选择架构的第一原则是「匹配游戏类型」，不是「越先进越好」。
+</Callout>
+
+<Exercises>
+**问题 1**：专服、世界服、大厅服分别适合什么类型的游戏？为什么？
+
+<Answer>
+专服适合数据量大、社交范围固定的 RPG/SLG——隔离简单、运维成本低。世界服适合大世界 MMO/元宇宙——所有玩家共享一个世界、需要无缝体验。大厅服适合竞技对战（MOBA/FPS/吃鸡）——对战局独立、匹配和社交分离。选择依据是「社交模式」和「世界规模」：需要跨服社交选世界服，不需要选专服，对战局分离选大厅服。
+</Answer>
+
+**问题 2**：大厅服架构中，为什么要把「大厅」和「对战」分离？
+
+<Answer>
+分离有两个核心好处：① 对战服无状态、可按需扩缩容——高峰期多开、低谷期关服，成本可控；② 大厅服专注社交和匹配，不会被战斗逻辑拖慢。如果大厅和对战混在一起，一场对战崩了整个大厅都受影响；分离后即使所有对战服都崩了，大厅仍能运行，玩家只是无法开新局。这本质上是「有状态服务」和「无状态服务」的隔离。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="专服架构">每个服务器实例独立运行、数据隔离的 C/S 模型。玩家选服登录，角色数据存储在该服。隔离性好但无法跨服交互。</GlossaryItem>
+<GlossaryItem term="世界服架构">所有玩家共享同一个逻辑世界、通过分片和网关水平扩展的 C/S 模型。无需选服，但架构复杂。</GlossaryItem>
+<GlossaryItem term="大厅服架构">以大厅为中心进行匹配和房间管理、实际对战在独立游戏服进行的 C/S 模型。对战服无状态易扩展。</GlossaryItem>
+<GlossaryItem term="服务器权威">所有关键游戏逻辑由服务器计算，客户端输入只是请求。在三种架构中都需要遵守，只是实现位置不同。</GlossaryItem>
+</Glossary>

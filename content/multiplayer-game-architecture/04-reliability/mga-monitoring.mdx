@@ -1,0 +1,100 @@
+---
+title: "监控与日志系统"
+type: A
+section: "网络游戏与服务器"
+order: 8
+description: "掌握游戏服务端的 Metrics/Logging/Tracing 三位一体可观测体系——出事能查、查了能修"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { MgaMonitoringDiagram } from "@/components/mdx/multiplayer-game-architecture/diagrams/mga-monitoring";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解可观测性三支柱：Metrics、Logging、Tracing 各自的职责与关系
+- 掌握游戏服务端关键指标的埋点设计（在线人数/帧时间/RTT/丢包率）
+- 理解告警系统的分级与降噪原则
+- 能设计支持全链路追踪的分布式日志体系
+</Objectives>
+
+## 直觉引入
+
+把游戏服务端想象成一辆汽车。**Metrics** 是仪表盘——速度表、油量表、发动机温度，时刻显示当前状态（指标监控）。**Logging** 是行车记录仪——记录每一秒发生了什么，出事时回放查看（日志）。**Tracing** 是 GPS 轨迹——你从家出发到公司，经过哪些路段、每段花了多久（链路追踪）。三者缺一不可：只有仪表盘不知道出事时发生了什么；只有记录仪不知道当前整体状态；只有 GPS 不知道具体某个零件的温度。这就是可观测性三支柱。
+
+<MgaMonitoringDiagram />
+
+## 可观测性三支柱
+
+<Term def="Metrics 是对系统运行状态的数值化度量，通过定期采集和聚合展示系统健康度，适合宏观趋势监控和告警。">Metrics（指标监控）</Term>回答「系统现在怎么样」。游戏服务端的核心指标包括：① 在线人数（CCU）——实时并发连接数；② 帧时间（Frame Time）——每个逻辑帧的耗时，超过阈值说明卡顿；③ 网络延迟（RTT）——客户端到服务器的往返延迟；④ 丢包率——网络质量指标；⑤ 消息吞吐量——每秒处理的消息数。Metrics 的优势是体量小、可聚合、适合趋势分析和阈值告警。常用工具：Prometheus + Grafana。
+
+<Term def="Logging 是对系统事件的文本化记录，包含时间戳、级别、上下文等详细信息，适合事后排查和审计。">Logging（日志）</Term>回答「发生了什么」。游戏服务端的日志分为：① 操作日志——玩家做了什么（登录/交易/战斗）；② 系统日志——服务端自身发生了什么（启动/报错/告警）；③ 审计日志——关键操作的可追溯记录（充值/ GM 命令）。日志的核心挑战是「大海捞针」——一个万人的服务器每秒产生数千条日志，如何快速定位问题？解决方案是结构化日志（JSON 格式）+ 全文索引（Elasticsearch），支持按时间、玩家 ID、关键词检索。日志级别要分级（DEBUG/INFO/WARN/ERROR），生产环境通常只开 INFO 以上。
+
+<Term def="Tracing 是对请求在分布式系统中流转路径的端到端追踪，记录每个服务节点的耗时和状态，适合排查跨服务延迟问题。">Tracing（链路追踪）</Term>回答「慢在哪里」。在微服务架构中，一个玩家请求可能经过网关 → 大厅服 → 世界服 → 经济服 → 日志服。如果玩家反馈「交易卡顿」，没有 Tracing 你不知道是哪个服务慢。Tracing 给每个请求分配一个 Trace ID，在所有经过的服务中传递，记录每个节点的处理时间。最终在时间轴上展示完整链路——一眼看出哪个服务是瓶颈。常用工具：Jaeger/Zipkin。
+
+```go
+// 游戏服务端可观测性埋点示例
+func (s *GameServer) OnPlayerCastSkill(uid int64, skillId int) {
+    // 1. Tracing：创建 span
+    span := tracer.StartSpan("cast_skill")
+    span.SetTag("uid", uid)
+    span.SetTag("skillId", skillId)
+    defer span.Finish()
+
+    // 2. Metrics：记录技能施放计数
+    metrics.Inc("skill.cast.count", map[string]string{
+        "skill_id": strconv.Itoa(skillId),
+    })
+
+    // 3. Logging：结构化日志
+    log.Info("player cast skill",
+        "uid", uid,
+        "skill_id", skillId,
+        "pos", player.Pos,
+        "trace_id", span.TraceID(),
+    )
+
+    // 4. 执行技能逻辑（带计时）
+    timer := metrics.StartTimer("skill.cast.duration")
+    err := s.executeSkill(uid, skillId)
+    timer.Stop()
+
+    if err != nil {
+        log.Error("skill cast failed",
+            "uid", uid,
+            "skill_id", skillId,
+            "err", err,
+        )
+        metrics.Inc("skill.cast.error", nil)
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：日志越多越好，出了问题总能查到。** 过量日志是生产环境的隐形杀手。① 磁盘成本——一个万人服务器开 DEBUG 级别日志，每天可能产生几百 GB，磁盘很快打满；② 性能开销——每条日志涉及序列化、IO 写入，高频日志会拖慢主逻辑帧；③ 检索效率——日志太多反而找不到关键信息（信噪比太低）。正确做法：生产环境只开 INFO 级别，ERROR 日志实时告警，DEBUG 日志按需动态开启（如只对特定玩家开启调试日志）。日志要结构化（JSON）、带上下文（玩家 ID/Trace ID），而不是漫无目的的 print。
+</Callout>
+
+<Exercises>
+**问题 1**：Metrics、Logging、Tracing 三者各自解决什么问题？举例说明。
+
+<Answer>
+Metrics 解决「系统现在怎么样」——如在线人数从 5000 骤降到 2000，说明可能出了问题。优势是实时聚合、适合告警。Logging 解决「发生了什么」——如查某个玩家为什么掉线，按玩家 ID 检索日志发现是技能校验异常。优势是信息丰富、适合事后排查。Tracing 解决「慢在哪里」——如玩家反馈交易卡顿，Tracing 显示交易请求在 经济服耗时 800ms（正常应 &lt; 50ms）。优势是跨服务端到端、适合定位瓶颈。三者互补：Metrics 发现问题、Logging 查细节、Tracing 定位瓶颈。
+</Answer>
+
+**问题 2**：游戏服务端的关键监控指标有哪些？为什么帧时间是最重要的指标之一？
+
+<Answer>
+关键指标：① 在线人数（CCU）——反映负载；② 帧时间（Frame Time）——反映服务器流畅度；③ RTT——反映网络质量；④ 丢包率——反映网络稳定性；⑤ 消息吞吐量——反映处理能力；⑥ CPU/内存——反映资源使用。帧时间最重要的原因是：游戏服务端是实时循环（如 20Hz/50ms 每帧），帧时间超过帧预算（如 50ms）就意味着逻辑卡顿、玩家操作延迟、状态同步积压。帧时间飙升是服务器过载的最早信号——比 CPU 或内存告警更早、更准确。帧时间 P99 &gt; 帧预算就该告警扩容。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Metrics">对系统运行状态的数值化度量，适合宏观趋势监控和告警。游戏核心指标：CCU/帧时间/RTT/丢包率。</GlossaryItem>
+<GlossaryItem term="Logging">对系统事件的文本化记录，适合事后排查和审计。结构化日志 + 全文索引是关键。</GlossaryItem>
+<GlossaryItem term="Tracing">对请求在分布式系统中流转路径的端到端追踪，适合排查跨服务延迟问题。Trace ID 贯穿全链路。</GlossaryItem>
+<GlossaryItem term="可观测性三支柱">Metrics + Logging + Tracing 三者互补，构成完整的系统可观测体系。Metrics 发现问题、Logging 查细节、Tracing 定位瓶颈。</GlossaryItem>
+</Glossary>

@@ -1285,6 +1285,16 @@ import { ucnNetworkFrameworkQuestions } from "./review/ucn-network-framework";
 import { ucnRealtimeSyncQuestions } from "./review/ucn-realtime-sync";
 import { ucnRoomManagementQuestions } from "./review/ucn-room-management";
 import { ucnFinalReviewQuestions } from "./review/ucn-final-review";
+import { mgaLearningMapQuestions } from "./review/mga-learning-map";
+import { mgaCsModelQuestions } from "./review/mga-cs-model";
+import { mgaMicroserviceQuestions } from "./review/mga-microservice";
+import { mgaStateReplicationQuestions } from "./review/mga-state-replication";
+import { mgaInterestManagementQuestions } from "./review/mga-interest-management";
+import { mgaShardingQuestions } from "./review/mga-sharding";
+import { mgaGatewayProxyQuestions } from "./review/mga-gateway-proxy";
+import { mgaFaultToleranceQuestions } from "./review/mga-fault-tolerance";
+import { mgaMonitoringQuestions } from "./review/mga-monitoring";
+import { mgaFinalReviewQuestions } from "./review/mga-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2601,6 +2611,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ucnRealtimeSyncQuestions,
   ...ucnRoomManagementQuestions,
   ...ucnFinalReviewQuestions,
+  ...mgaLearningMapQuestions,
+  ...mgaCsModelQuestions,
+  ...mgaMicroserviceQuestions,
+  ...mgaStateReplicationQuestions,
+  ...mgaInterestManagementQuestions,
+  ...mgaShardingQuestions,
+  ...mgaGatewayProxyQuestions,
+  ...mgaFaultToleranceQuestions,
+  ...mgaMonitoringQuestions,
+  ...mgaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
