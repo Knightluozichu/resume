@@ -1,0 +1,111 @@
+---
+title: "测试策略"
+type: A
+section: "前端与Web"
+order: 4
+description: "掌握测试金字塔分层策略，理解单元/集成/E2E 的投入产出与 Jest/Vitest/Playwright 选型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FengTestingStrategyDiagram } from "@/components/mdx/frontend-engineering/diagrams/feng-testing-strategy";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能画出测试金字塔并解释底层多、顶层少的原因
+- 能区分 Vitest 与 Jest 的差异并做出选型
+- 能说明 Testing Library「以用户方式测试」的哲学
+- 能正确看待测试覆盖率：是底线而非目标
+</Objectives>
+
+## 直觉引入
+
+盖一栋楼，你不会只在大楼竣工后做一次整楼验收——那发现问题太晚、修复太贵。聪明的做法是：每块砖出厂前都测过（单元测试）、每面墙拼好测一次（集成测试）、整楼搭好再做一次端到端验收（E2E）。砖测得最多最快最便宜，整楼验收最少最慢最贵。前端测试同理：函数级别大量快测、组件协作中量测、用户流程少量慢测。这就是测试金字塔。
+
+<FengTestingStrategyDiagram />
+
+## 概念讲解
+
+### 测试金字塔三层
+
+<Term def="测试金字塔是按投入产出比分层的测试策略：底层单元测试多而快、中层集成测试适中、顶层 E2E 少而慢。倒置则回馈慢且脆。">测试金字塔</Term>三层：**单元测试**隔离函数/模块验证纯逻辑，速度快（毫秒级）、成本低、定位精确，可以大量写覆盖每个分支；**集成测试**验证组件+依赖协作的交互路径，数量适中；**E2E 端到端测试**模拟真实用户走完整业务流程，速度慢（秒级）、成本高、脆弱（UI 改动易断），只能少量写覆盖关键路径。底层多、顶层少是因为投入产出比——单元测试性价比最高，E2E 最低。
+
+### 工具选型：Vitest vs Jest
+
+```typescript
+// 单元测试示例（Vitest / Jest API 几乎一致）
+import { describe, it, expect } from "vitest";
+import { formatPrice } from "./format";
+
+describe("formatPrice", () => {
+  it("把分转成元并保留两位小数", () => {
+    expect(formatPrice(1999)).toBe("19.99");
+  });
+
+  it("负数加括号表示", () => {
+    expect(formatPrice(-500)).toBe("(5.00)");
+  });
+});
+```
+
+<Term def="Vitest 是 Vite 原生测试框架，与 Vite 共享配置和转换管线，原生支持 ESM，零配置开箱即用。">Vitest</Term>与 Vite 共享配置和转换管线，原生支持 ESM，不需要额外配 Babel/ts-jest，启动快。<Term def="Jest 是生态最成熟的测试框架，快照测试和 mock 生态丰富，但默认基于 CommonJS，对 ESM 支持需额外配置。">Jest</Term>生态最成熟、快照测试和 mock 生态丰富，但默认 CommonJS，ESM 需额外配置。新 Vite 项目首选 Vitest；已有 Jest 配置或依赖其特定插件选 Jest。
+
+### Testing Library：以用户方式测试
+
+```typescript
+// 集成测试示例 —— Testing Library
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { LoginForm } from "./LoginForm";
+
+it("输入正确凭据后提交成功", async () => {
+  const user = userEvent.setup();
+  render(<LoginForm />);
+
+  // 以用户方式查询：通过角色和文本，而非 test-id 或实例
+  await user.type(screen.getByRole("textbox", { name: /用户名/ }), "admin");
+  await user.type(screen.getByLabelText(/密码/), "123456");
+  await user.click(screen.getByRole("button", { name: /登录/ }));
+
+  expect(await screen.findByText(/登录成功/)).toBeInTheDocument();
+});
+```
+
+<Term def="Testing Library 的核心哲学是「以用户方式测试组件」——通过角色、文本、标签等可访问属性查询和交互 DOM，而非通过组件实例或内部状态，让测试更像黑盒、更耐用。">Testing Library</Term>的哲学是「以用户方式测试」：查询和交互 DOM 的方式与真实用户一致（通过 role、text、label），而非通过组件实例或内部状态。这让测试避免实现细节耦合——重构不破坏测试。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：测试越多越好，追求覆盖率 100%。** 覆盖率只衡量「代码被执行过」，不衡量「行为被正确验证」。一个 if/else 都执行过但断言缺失的测试也能 100% 覆盖，却没有验证任何东西。盲目追 100% 会产生大量低价值测试（为 getter/setter、纯样式写测试），增加维护负担。正确做法：把覆盖率当「底线」而非「目标」——设合理阈值（核心逻辑 80-90%），关注「关键路径覆盖」而非数字，测试质量比数量重要。
+</Callout>
+
+<Callout type="trap">
+**误区：E2E 测试最接近真实用户，应该多写。** E2E 最慢、最贵、最脆弱——启动浏览器+服务、UI 改动易断、失败要排查整条链路。E2E 多了会导致：CI 跑半小时、维护成本爆炸、flake（偶发失败）消磨信心。E2E 应少量写，只覆盖最关键的业务冒烟路径（如登录、下单、支付）。绝大多数逻辑用单元测试覆盖，交互用集成测试，E2E 兜底——这才是金字塔，而非倒过来的冰淇淋。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+**问题 1**：测试金字塔的三层是什么？为什么底层多、顶层少？
+
+<Answer>
+三层：底层单元测试（隔离函数/模块验证纯逻辑）、中层集成测试（组件+依赖协作验证交互）、顶层 E2E 端到端测试（模拟真实用户全链路验证业务流程）。底层多、顶层少是因为投入产出比：单元测试速度快（毫秒级）、成本低、定位精确，可大量写覆盖每个分支；E2E 速度慢（秒级）、成本高、脆弱、失败定位难，只能少量覆盖关键路径。金字塔倒置（E2E 多、单元少）会导致回馈慢、维护痛苦、脆性高。
+</Answer>
+
+**问题 2**：前端集成测试中 Testing Library 的核心哲学是什么？为什么不建议用 enzyme？
+
+<Answer>
+Testing Library 核心哲学是「以用户方式测试组件」——通过角色、文本、标签等可访问属性查询和交互 DOM，而非通过组件实例或内部状态，让测试更像黑盒、更耐用。不建议用 enzyme 因为它鼓励测试组件内部实现（shallow render、实例方法、setState），导致测试与实现强耦合，一重构就大面积断测试，维护成本高且价值低。Testing Library 强制从用户视角写测试，自然过滤掉脆弱的实现细节测试，符合「测行为不测实现」原则。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="测试金字塔">按投入产出比分层的测试策略：底层单元测试多而快、中层集成测试适中、顶层 E2E 少而慢。底层多因为性价比高，顶层少因为慢且贵。倒置则回馈慢且脆。</GlossaryItem>
+<GlossaryItem term="单元测试">隔离函数/模块验证纯逻辑的测试，速度快（毫秒级）、成本低、定位精确，可大量写覆盖每个分支。工具用 Vitest 或 Jest。</GlossaryItem>
+<GlossaryItem term="集成测试">验证组件+依赖协作交互路径的测试，数量适中。工具用 Testing Library，以用户方式查询和交互 DOM。</GlossaryItem>
+<GlossaryItem term="E2E 端到端测试">模拟真实用户走完整业务流程的测试，速度慢、成本高、脆弱，只能少量覆盖关键冒烟路径。工具用 Playwright 或 Cypress。</GlossaryItem>
+<GlossaryItem term="Vitest">Vite 原生测试框架，与 Vite 共享配置和转换管线，原生支持 ESM，零配置开箱即用。新 Vite 项目首选。</GlossaryItem>
+<GlossaryItem term="Testing Library">以用户方式测试组件的库，通过角色/文本/标签等可访问属性查询交互 DOM，而非实例或内部状态，让测试像黑盒、更耐用，避免实现细节耦合。</GlossaryItem>
+</Glossary>

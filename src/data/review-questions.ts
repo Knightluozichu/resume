@@ -1435,6 +1435,16 @@ import { vdiAsyncComponentQuestions } from "./review/vdi-async-component";
 import { vdiCompilerArchitectureQuestions } from "./review/vdi-compiler-architecture";
 import { vdiBuiltInComponentsQuestions } from "./review/vdi-built-in-components";
 import { vdiFinalReviewQuestions } from "./review/vdi-final-review";
+import { fengLearningMapQuestions } from "./review/feng-learning-map";
+import { fengWebpackViteQuestions } from "./review/feng-webpack-vite";
+import { fengModuleFederationQuestions } from "./review/feng-module-federation";
+import { fengTypescriptEslintQuestions } from "./review/feng-typescript-eslint";
+import { fengTestingStrategyQuestions } from "./review/feng-testing-strategy";
+import { fengCiPipelineQuestions } from "./review/feng-ci-pipeline";
+import { fengDeployStrategyQuestions } from "./review/feng-deploy-strategy";
+import { fengPerformanceMonitorQuestions } from "./review/feng-performance-monitor";
+import { fengErrorTrackingQuestions } from "./review/feng-error-tracking";
+import { fengFinalReviewQuestions } from "./review/feng-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2901,6 +2911,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...vdiCompilerArchitectureQuestions,
   ...vdiBuiltInComponentsQuestions,
   ...vdiFinalReviewQuestions,
+  // 前端工程化体系设计与实践
+  ...fengLearningMapQuestions,
+  ...fengWebpackViteQuestions,
+  ...fengModuleFederationQuestions,
+  ...fengTypescriptEslintQuestions,
+  ...fengTestingStrategyQuestions,
+  ...fengCiPipelineQuestions,
+  ...fengDeployStrategyQuestions,
+  ...fengPerformanceMonitorQuestions,
+  ...fengErrorTrackingQuestions,
+  ...fengFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

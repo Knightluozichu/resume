@@ -1,0 +1,121 @@
+---
+title: "CI 流水线"
+type: A
+section: "前端与Web"
+order: 5
+description: "掌握 GitHub Actions 编排 CI 流水线，理解并行串行、缓存加速与 Fail Fast 原则"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FengCiPipelineDiagram } from "@/components/mdx/frontend-engineering/diagrams/feng-ci-pipeline";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述 CI 流水线 Lint/Test/Build/Deploy/Release 五阶段及各自职责
+- 能用 GitHub Actions 的 jobs/needs 实现并行与串行编排
+- 能设计依赖缓存与构建缓存策略加速 CI
+- 能解释 Fail Fast 原则及其落地方式
+</Objectives>
+
+## 直觉引入
+
+想象一条汽车装配线：先检零件合格（Lint）、再测发动机能转（Test）、然后组装成车（Build）、出厂前路测（Deploy 冒烟）、最后交付给经销商（Release）。任何一个环节发现问题，整条线立刻停——没必要拿一个零件不合格的车去组装。CI 流水线就是把这套自动化搬到代码上：你一 push，机器就自动检查、测试、构建、部署，出问题立刻告诉你哪里坏了。
+
+<FengCiPipelineDiagram />
+
+## 概念讲解
+
+### 五阶段流水线
+
+<Term def="CI（Continuous Integration，持续集成）是开发者提交代码后自动运行检查、测试、构建的实践，确保主干随时可发布。">CI</Term>流水线典型五阶段：**①Lint**——ESLint + Prettier + `tsc --noEmit`，拦截风格和类型错误，最快最先跑；**②Test**——Vitest/Jest 跑单元和集成测试，上报覆盖率；**③Build**——`pnpm build` 打包产物，生成 SourceMap；**④Deploy**——上传 CDN/部署预发，冒烟验证；**⑤Release**——灰度/蓝绿发布到线上，配监控告警，可回滚。
+
+### GitHub Actions 编排
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  # 无依赖的 job 默认并行
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint && pnpm tsc --noEmit
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test --coverage
+
+  # build 依赖 lint 和 test 通过（串行）
+  build:
+    needs: [lint, test] # 前置全过才触发
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # deploy 仅 main 分支触发
+  deploy:
+    needs: [build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - run: ./deploy.sh
+```
+
+无依赖的 job（lint、test）默认并行；需要串行的 job 用 `needs` 声明依赖。这样既加速（并行无依赖检查）又可靠（有依赖的串行把关）。
+
+### 缓存加速
+
+<Term def="CI 缓存是把依赖安装结果和构建产物存起来，下次命中时跳过全量下载和重复构建，显著加速 CI。key 通常含 lock 文件哈希。">CI 缓存</Term>能大幅提速：依赖安装从缓存恢复比全量下载快数倍；构建缓存（`.next/cache`、Turborepo 远程缓存）可跳过未变更包的重复构建。缓存 key 含 lock 文件哈希，依赖不变时命中；`restore-keys` 用前缀模糊匹配做降级恢复。
+
+### Fail Fast 原则
+
+<Term def="Fail Fast 指 CI 流水线任一阶段失败就立即中止后续阶段，快速反馈给开发者，避免在已有问题的代码上浪费构建和部署资源。">Fail Fast</Term>是 CI 的核心原则。阶段按「快到慢」排序——Lint（秒级）在前、Test（分钟级）次之、Build/Deploy（最慢）在后，让最快的检查最先拦截。失败立即中止后续、通知作者，缩短 fix 循环。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：CI 就是跑个测试。** CI 不只是测试，而是一整套自动化质量门禁。完整的 CI 包括：Lint（风格/类型）→ Test（单元/集成）→ Build（产物）→ Deploy（预发）→ Release（线上），每环都有职责。只跑测试的 CI 漏掉了类型检查（tsc）、产物验证（构建能否成功）、部署可行性。更关键的是编排——并行加速、串行把关、Fail Fast 短路、缓存复用，这些才是 CI 的工程价值所在。
+</Callout>
+
+<Callout type="trap">
+**误区：CI 越全面越好，所有检查都串行跑一遍最安全。** 串行虽然安全但慢——如果 Lint 要 1 分钟、Test 要 3 分钟、Build 要 2 分钟，串行就是 6 分钟；而 Lint 和 Test 无依赖可以并行，只要 3 分钟就能到 Build。CI 时间直接影响团队效率——每次 push 等 6 分钟和等 3 分钟，一天几十次提交差异巨大。正确做法：无依赖的检查并行（Lint/Test/类型检查），有依赖的串行（Build 依赖 Test 通过，Deploy 依赖 Build 通过），用缓存进一步压缩时间。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+**问题 1**：CI 流水线的典型阶段有哪些？每个阶段的职责是什么？
+
+<Answer>
+典型五阶段：①Lint——ESLint + Prettier + tsc --noEmit，拦截风格和类型错误，最快最先跑；②Test——Vitest/Jest 跑单元和集成测试，上报覆盖率，验证逻辑正确性；③Build——pnpm build 打包产物，生成 SourceMap，产出可部署物；④Deploy——上传产物到 CDN/部署预发，冒烟验证；⑤Release——灰度/蓝绿发布到线上，配监控告警，可回滚。每阶段有明确职责，前一阶段失败短路后续（Fail Fast），避免在已有问题的代码上浪费资源。
+</Answer>
+
+**问题 2**：什么是 CI 的 Fail Fast 原则？如何落地？
+
+<Answer>
+Fail Fast 指流水线任一阶段失败就立即中止后续阶段，快速反馈给开发者。落地方式：①阶段按「快到慢」排序——Lint（秒级）在前，Test（分钟级）次之，Build/Deploy（最慢）在后，让最快检查最先拦截；②job 间用 needs 串联，前置失败自动跳过后置；③job 内 step 失败默认中止后续 step（bash set -e）；④失败通知到 PR/IM，标注失败阶段和日志链接。价值：节省资源（Lint 失败不必再 Build）、加速反馈（第一时间知道哪里坏）、防止坏代码进入下游。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CI（持续集成）">开发者提交代码后自动运行检查、测试、构建的实践，确保主干随时可发布。典型五阶段：Lint/Test/Build/Deploy/Release。</GlossaryItem>
+<GlossaryItem term="GitHub Actions">GitHub 内置的 CI/CD 编排工具，用 YAML 定义 workflow，jobs 默认并行、needs 声明串行依赖，matrix 跨版本并行。</GlossaryItem>
+<GlossaryItem term="jobs / needs">GitHub Actions 中 jobs 默认并行运行，needs 声明依赖关系使后置 job 等前置全部成功才触发，实现并行与串行混合编排。</GlossaryItem>
+<GlossaryItem term="CI 缓存">把依赖安装结果和构建产物存起来，下次命中时跳过全量下载和重复构建。key 含 lock 文件哈希，restore-keys 前缀模糊匹配降级恢复。</GlossaryItem>
+<GlossaryItem term="Fail Fast">CI 任一阶段失败立即中止后续阶段的原则。阶段按快到慢排序让最快检查最先拦截，节省资源、加速反馈、防止坏代码进入下游。</GlossaryItem>
+<GlossaryItem term="Turborepo 远程缓存">monorepo 构建工具的远程缓存，让多机器/多分支共享构建结果（同一输入只构建一次），显著加速大型项目 CI。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,98 @@
+---
+title: "性能监控"
+type: A
+section: "前端与Web"
+order: 7
+description: "掌握 Web Vitals 三大核心指标 LCP/INP/CLS，理解 Lighthouse/RUM/APM 三层监控与 P75 告警"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FengPerformanceMonitorDiagram } from "@/components/mdx/frontend-engineering/diagrams/feng-performance-monitor";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说明 LCP/INP/CLS 三大 Web Vitals 指标分别衡量什么及目标值
+- 能区分 Lighthouse（实验室）与 RUM（真实用户）并说明为何要结合
+- 能列举 LCP 优化的常见瓶颈与对应手段
+- 能解释为什么性能监控看 P75 而非平均值，及如何建立告警机制
+</Objectives>
+
+## 直觉引入
+
+你做一个页面，本地打开秒开，觉得很快。但线上用户在老旧手机上用 4G 打开要等 5 秒——你永远不知道，因为没有监控。性能监控就是给应用装「体检仪」：实时采集真实用户的加载速度、交互响应、视觉稳定性，让你看见「用户实际体验如何」而非「我的开发机很快」。没有监控的优化都是瞎猜——你不知道慢在哪、改了有没有效果、是不是某个版本退化了。
+
+<FengPerformanceMonitorDiagram />
+
+## 概念讲解
+
+### Web Vitals 三大核心指标
+
+<Term def="Web Vitals 是 Google 定义的前端性能核心指标集，其中 LCP/INP/CLS 为三大核心，分别衡量加载体验、交互响应、视觉稳定性。">Web Vitals</Term>三大核心指标：**LCP**（Largest Contentful Paint，最大内容绘制）衡量加载体验——首屏最大元素渲染完成时间，目标 < 2.5s；**INP**（Interaction to Next Paint，交互到下一帧）衡量交互响应——所有交互到下一帧的最坏延迟，目标 < 200ms，2024 年替代 FID；**CLS**（Cumulative Layout Shift，累积布局偏移）衡量视觉稳定——页面意外位移累积分数，目标 < 0.1。三者覆盖加载、交互、稳定三个维度。
+
+### Lighthouse 与 RUM
+
+<Term def="Lighthouse 是实验室环境合成检测工具，在固定网络和模拟设备上跑页面产出性能评分，可控可重复可进 CI。">Lighthouse</Term>是实验室检测：固定网络和模拟设备上跑，产出评分和优化建议，可控可重复，能进 CI 守阈值，但无法反映真实用户多样性。<Term def="RUM（Real User Monitoring）通过 web-vitals 库在真实用户浏览器采集性能数据并上报，反映真实体验分布（P75/P95）。">RUM</Term>是真实用户监控：`web-vitals` 库 + `PerformanceObserver` 在用户浏览器采集真实 LCP/INP/CLS，用 `navigator.sendBeacon` 上报，反映真实体验分布。两者结合：Lighthouse 守基线防退化，RUM 看真实体验知实况。
+
+```typescript
+// 真实用户性能采集（RUM）
+import { onLCP, onINP, onCLS } from "web-vitals";
+
+function report(metric) {
+  // 用 beacon 上报，页面关闭也不丢
+  navigator.sendBeacon("/api/vitals", JSON.stringify({
+    name: metric.name,      // "LCP" | "INP" | "CLS"
+    value: metric.value,    // 数值
+    rating: metric.rating,  // "good" | "needs-improvement" | "poor"
+    page: location.pathname,
+    release: __APP_VERSION__, // 关联版本，定位哪个发布退化
+  }));
+}
+
+onLCP(report);
+onINP(report);
+onCLS(report);
+```
+
+### 看 P75 而非平均值
+
+性能监控看 <Term def="P75（75 分位数）表示 75% 的用户体验优于这个值，关注「大多数人的下限体验」。Web Vitals 官方按 P75 评定，平均值会被快用户拉低掩盖慢用户的痛苦。">P75（75 分位数）</Term>而非平均值。平均值会被快用户拉低，掩盖慢用户的痛苦——如果 80% 用户 LCP 是 1s 但 20% 是 8s，平均值 2.2s 看着还行，但那 20% 体验极差。P75 表示「75% 用户优于这个值」，关注大多数人的下限体验。Web Vitals 官方标准就是按 P75 评定。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：本地开发机打开很快，线上肯定也快。** 开发机是高端 CPU、千兆网络、本地服务器零延迟，与真实用户环境天差地别。真实用户可能是老旧手机、弱网、跨地域高延迟。没有 RUM 你永远不知道真实用户体验。更关键的是「长尾」——平均值看着好但 20% 慢用户被掩盖。必须用 RUM 采集真实用户 P75/P95，配合 Lighthouse 守基线，两者缺一都会盲。
+</Callout>
+
+<Callout type="trap">
+**误区：性能监控就是接个 SDK 上报数据，看平均值达标就行。** 平均值会骗人——快用户拉低平均，掩盖慢用户痛苦。必须看 P75/P95 分位数，关注「大多数人的下限体验」。此外还要：①按版本/地域/设备分桶，定位退化是哪个发布引入的；②设绝对阈值（LCP P75 > 2.5s 告警）+ 相对退化（比上版差 20% 告警）；③告警带版本标签和源码线索，可立即行动。监控的价值不在「有数据」而在「能驱动改进」。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+**问题 1**：Web Vitals 的三大核心指标分别衡量什么？目标值是多少？
+
+<Answer>
+LCP（最大内容绘制）衡量加载体验——首屏最大元素渲染完成时间，目标 < 2.5s。INP（交互到下一帧）衡量交互响应——所有交互到下一帧的最坏延迟，目标 < 200ms，2024 年替代 FID，覆盖页面全生命周期。CLS（累积布局偏移）衡量视觉稳定——页面意外位移累积分数，目标 < 0.1。三者分别覆盖加载、交互、稳定三个维度，是 Google 评定页面体验的核心指标。
+</Answer>
+
+**问题 2**：性能监控中为什么要看 P75 而非平均值？
+
+<Answer>
+看 P75 而非平均值的原因：①平均值掩盖长尾——80% 用户 LCP 1s 但 20% 是 8s，平均值 2.2s 看着还行，但 20% 用户体验极差，平均值被快用户拉低；②Web Vitals 官方标准按 P75 评定——Google 用「75% 页面加载达 Good」作搜索排名考量；③分位数反映分布——P75 表示 75% 用户优于这个值，关注大多数人的下限体验。建立告警：采集后按分位数聚合，设绝对阈值（LCP P75 > 2.5s）和相对退化（比上版差 X%），带版本标签定位退化来源。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Web Vitals">Google 定义的前端性能核心指标集，LCP/INP/CLS 为三大核心，分别衡量加载体验、交互响应、视觉稳定性。</GlossaryItem>
+<GlossaryItem term="LCP">Largest Contentful Paint，最大内容绘制。首屏最大元素渲染完成时间，衡量加载体验，目标 < 2.5s。优化手段：图片优化、减少首屏 JS、SSR、CDN。</GlossaryItem>
+<GlossaryItem term="INP">Interaction to Next Paint，交互到下一帧。所有交互到下一帧渲染的最坏延迟，衡量交互响应，目标 < 200ms。2024 年替代 FID，覆盖全生命周期。</GlossaryItem>
+<GlossaryItem term="CLS">Cumulative Layout Shift，累积布局偏移。页面意外位移累积分数，衡量视觉稳定，目标 < 0.1。优化：图片预留尺寸、font-display swap。</GlossaryItem>
+<GlossaryItem term="Lighthouse">实验室环境合成检测工具，固定网络和模拟设备上跑页面产出性能评分和优化建议，可控可重复可进 CI 守阈值。</GlossaryItem>
+<GlossaryItem term="RUM">Real User Monitoring，真实用户监控。通过 web-vitals 库在用户浏览器采集真实性能数据并上报，反映真实体验分布（P75/P95）。</GlossaryItem>
+<GlossaryItem term="P75">75 分位数，表示 75% 的用户体验优于这个值，关注大多数人的下限体验。Web Vitals 官方按 P75 评定，平均值会被快用户拉低掩盖慢用户痛苦。</GlossaryItem>
+<GlossaryItem term="APM">Application Performance Monitoring，全链路性能监控。前后端+资源加载串联，trace 追踪请求链路定位瓶颈在哪一层，适合复杂分布式系统。</GlossaryItem>
+</Glossary>

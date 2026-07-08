@@ -1558,7 +1558,17 @@ export type ReviewChapterSlug =
   | "dnj-websocket"
   | "dnj-npm-module"
   | "dnj-testing-deploy"
-  | "dnj-final-review";
+  | "dnj-final-review"
+  | "feng-learning-map"
+  | "feng-webpack-vite"
+  | "feng-module-federation"
+  | "feng-typescript-eslint"
+  | "feng-testing-strategy"
+  | "feng-ci-pipeline"
+  | "feng-deploy-strategy"
+  | "feng-performance-monitor"
+  | "feng-error-tracking"
+  | "feng-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3121,6 +3131,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dnj-npm-module": "NPM与模块生态",
   "dnj-testing-deploy": "测试与部署",
   "dnj-final-review": "全书总复习",
+  "feng-learning-map": "全书学习地图",
+  "feng-webpack-vite": "构建工具演进",
+  "feng-module-federation": "模块联邦与微前端",
+  "feng-typescript-eslint": "TypeScript与ESLint",
+  "feng-testing-strategy": "测试策略",
+  "feng-ci-pipeline": "CI流水线",
+  "feng-deploy-strategy": "部署策略",
+  "feng-performance-monitor": "性能监控",
+  "feng-error-tracking": "错误追踪",
+  "feng-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

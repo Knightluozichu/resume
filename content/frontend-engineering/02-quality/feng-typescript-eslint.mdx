@@ -1,0 +1,117 @@
+---
+title: "TypeScript 与 ESLint"
+type: A
+section: "前端与Web"
+order: 3
+description: "掌握 TypeScript 类型安全与 ESLint 代码规范的双层质量防护，理解 strict 模式与 typescript-eslint 桥接"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FengTypescriptEslintDiagram } from "@/components/mdx/frontend-engineering/diagrams/feng-typescript-eslint";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能区分 TypeScript（类型层）与 ESLint（规范层）的职责与互补关系
+- 能说明 strict 模式包含的关键检查及其价值
+- 能解释 typescript-eslint 如何桥接类型信息让 lint 更智能
+- 能划分 ESLint 与 Prettier 的职责边界
+</Objectives>
+
+## 直觉引入
+
+写代码时有两类错误最让人头疼：一类是「参数传错了类型」——本来要数字你传了字符串，运行时才崩；另一类是「代码写得乱」——变量没用、console 没删、导入顺序乱七八糟。TypeScript 专门拦第一类，在编译期就把类型不匹配揪出来；ESLint 专门拦第二类，扫描代码模式报告坏味道。一个管「对不对」，一个管「好不好」，两者叠加才让代码既安全又可维护。
+
+<FengTypescriptEslintDiagram />
+
+## 概念讲解
+
+### 双层防护：类型层与规范层
+
+<Term def="TypeScript 在编译期通过类型系统检查类型匹配、null 安全、泛型约束等，拦截「类型不匹配」错误，属于类型层防护。">TypeScript（类型层）</Term>的工作发生在 `tsc` 编译时：它检查函数参数类型、返回值结构、null/undefined 是否被安全处理、泛型约束是否满足。类型错误在编码期就被拦截，不必等运行时崩溃。<Term def="ESLint 通过 AST 扫描代码模式，检查未使用变量、调试残留、导入顺序、潜在 bug 模式等，拦截「风格不一致」和「坏味道」，属于规范层防护。">ESLint（规范层）</Term>的工作是把代码解析成 AST（抽象语法树），然后按规则扫描模式：未使用变量、console 残留、import 顺序、相等比较用 `==` 而非 `===` 等。两者互补不替代——TS 管类型安全，ESLint 管代码规范。
+
+### strict 模式
+
+```json
+// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true, // 聚合开关，开启以下全部
+    // noImplicitAny: 禁止隐式 any，参数必须有类型或可推断
+    // strictNullChecks: null/undefined 不再是所有类型子类型，必须显式处理
+    // strictFunctionTypes: 函数参数检查改为逆变（更安全）
+    // strictPropertyInitialization: 类属性必须构造函数中初始化
+    // noImplicitThis: 禁止 this 为隐式 any
+    "noEmit": true // 只做类型检查不产出，配合 Vite 用
+  }
+}
+```
+
+`strict: true` 是一组严格检查的聚合开关。开启它初期会增加类型标注成本，但换来「编译通过即类型安全」的信心，大幅减少线上空指针和类型 bug。
+
+### typescript-eslint：让 lint 懂类型
+
+纯 ESLint 不理解 TypeScript 的类型信息——它只知道语法结构。`@typescript-eslint` 插件让 ESLint 能读取 TS 类型，从而启用「需要类型信息才能写」的规则：
+
+```javascript
+// .eslintrc —— typescript-eslint 推荐配置
+module.exports = {
+  parser: "@typescript-eslint/parser",
+  parserOptions: { project: "./tsconfig.json" }, // 启用类型感知规则
+  plugins: ["@typescript-eslint"],
+  extends: [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:@typescript-eslint/recommended-requiring-type-checking",
+  ],
+  rules: {
+    // 需要 TS 类型信息才能检查的规则
+    "@typescript-eslint/no-floating-promises": "error", // 未处理的 Promise
+    "@typescript-eslint/await-thenable": "error", // await 非 Promise
+    "@typescript-eslint/no-misused-promises": "error", // Promise 当回调误用
+  },
+};
+```
+
+<Term def="no-floating-promises 是 typescript-eslint 的规则，检查未 await/then/catch 的 Promise，防止 rejection 被静默吞掉。它需要 TS 类型信息才能判断一个调用是否返回 Promise。">no-floating-promises</Term>就是个典型——纯 ESLint 无法知道一个函数调用返回 Promise，必须靠 TS 类型信息。这体现了「类型信息让 lint 更智能」。
+
+### ESLint 与 Prettier 分工
+
+Prettier 专注**格式化**（缩进、引号、换行），不考虑语义只重排版面；ESLint 专注**代码质量与规范**，理解 AST 语义。用 `eslint-config-prettier` 关掉 ESLint 中与 Prettier 冲突的格式规则，两者各司其职——Prettier 管格式，ESLint 管质量。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：开了 TypeScript 就不需要 ESLint 了。** TS 只管类型安全，不管代码规范。`no-unused-vars`（未使用变量）、`no-console`（调试残留）、`import/order`（导入排序）这些规范问题 TS 完全不检查。更关键的是 typescript-eslint 提供的类型感知规则（如 no-floating-promises）连 TS 自己都不报——TS 不会因为你忘了 await 一个 Promise 而报错，但 ESLint 配合类型信息能。两者必须叠加使用。
+</Callout>
+
+<Callout type="trap">
+**误区：strict 模式太严格，初期开 noImplicitAny 会拖慢开发。** 初期确实要多写类型标注，但这正是它的价值——逼你在编码时就思考数据形状，而不是运行时才发现传错了。短期成本换来长期收益：类型安全让重构有信心（改了类型编译器会告诉你哪里漏改）、让 IDE 智能补全更准、让线上类型 bug 大幅减少。生产项目从一开始就开 strict 比后期补救成本低得多。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+**问题 1**：TypeScript 和 ESLint 分别在什么层面保障代码质量？两者关系是什么？
+
+<Answer>
+TypeScript 在「类型层」保障：编译期通过类型系统检查参数类型、返回值结构、null/undefined 安全、泛型约束，拦截「类型不匹配」错误。ESLint 在「规范层」保障：通过 AST 扫描代码模式，检查未使用变量、调试残留、导入顺序、潜在 bug 模式，拦截「风格不一致」和「坏味道」。两者互补不替代——TS 管类型安全，ESLint 管代码规范。typescript-eslint 插件让 ESLint 能理解 TS 语法并增加类型相关 lint 规则（如 no-floating-promises），桥接两层。
+</Answer>
+
+**问题 2**：typescript-eslint 的 no-floating-promises 规则解决什么问题？为什么纯 ESLint 做不到？
+
+<Answer>
+no-floating-promises 检查「未 await/then/catch 的 Promise」——即返回 Promise 的函数调用被悬浮着没处理。这解决 Promise rejection 被静默吞掉、错误不传播也不捕获、bug 难定位的问题。纯 ESLint 做不到是因为它不理解类型信息——它只知道语法结构，无法判断一个函数调用是否返回 Promise。typescript-eslint 通过 parserOptions.project 读取 TS 类型信息，才能判断调用返回类型是否是 Promise，从而启用此规则。这体现「类型信息让 lint 更智能」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="TypeScript（类型层）">在编译期通过类型系统检查类型匹配、null 安全、泛型约束等，拦截「类型不匹配」错误，属于类型层防护。tsc --noEmit 只做类型检查不产出。</GlossaryItem>
+<GlossaryItem term="ESLint（规范层）">通过 AST 扫描代码模式，检查未使用变量、调试残留、导入顺序、潜在 bug 模式等，拦截「风格不一致」和「坏味道」，属于规范层防护。</GlossaryItem>
+<GlossaryItem term="strict 模式">TypeScript 的严格检查聚合开关，包含 noImplicitAny（禁隐式 any）、strictNullChecks（null 安全）、strictFunctionTypes（逆变检查）、strictPropertyInitialization（属性初始化）等。开启后编译通过即类型安全。</GlossaryItem>
+<GlossaryItem term="typescript-eslint">让 ESLint 理解 TypeScript 类型信息的插件集，提供类型感知规则（如 no-floating-promises、await-thenable），桥接类型层与规范层。</GlossaryItem>
+<GlossaryItem term="no-floating-promises">typescript-eslint 规则，检查未 await/then/catch 的 Promise，防止 rejection 被静默吞掉。需要 TS 类型信息才能判断调用是否返回 Promise。</GlossaryItem>
+<GlossaryItem term="Prettier">专注代码格式化的工具（缩进/引号/换行），不考虑语义只重排版面。与 ESLint 分工：Prettier 管格式，ESLint 管质量，用 eslint-config-prettier 解决冲突。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,93 @@
+---
+title: "错误追踪"
+type: A
+section: "前端与Web"
+order: 8
+description: "掌握 Sentry 错误追踪闭环，理解 SourceMap 还原、聚合去重与告警治理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FengErrorTrackingDiagram } from "@/components/mdx/frontend-engineering/diagrams/feng-error-tracking";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能描述 Sentry 错误追踪从捕获到修复的完整闭环
+- 能解释 SourceMap 在错误追踪中的作用及为何不暴露给客户端
+- 能说明 Sentry 聚合去重的 fingerprint 机制
+- 能设计有效的错误告警策略避免告警风暴
+</Objectives>
+
+## 直觉引入
+
+线上出了个白屏，用户骂骂咧咧走了，你却毫不知情——因为没有错误追踪。错误追踪就是给应用装「黑匣子」：用户浏览器一报错，SDK 立刻把错误堆栈、用户轨迹、设备信息打包上报，服务端用 SourceMap 把压缩堆栈还原成源码行号，聚合成 issue 按影响排序，超阈值就告警通知你。没有它，你对线上状态是聋的；有了它，你能比用户更早知道哪里坏了。
+
+<FengErrorTrackingDiagram />
+
+## 概念讲解
+
+### 错误追踪闭环
+
+<Term def="Sentry 是开源的错误追踪平台，通过 SDK 捕获运行时异常、用 SourceMap 还原源码、聚合去重排序、超阈值告警，形成从报错到修复的闭环。">Sentry</Term>错误追踪闭环：**①捕获**——SDK 通过 `window.onerror`、`onunhandledrejection`、ErrorBoundary 捕获运行时异常；**②采集**——收集错误堆栈、用户轨迹（breadcrumb）、设备/浏览器/release 标签；**③上报**——用 `navigator.sendBeacon` 异步上报，不阻塞页面；**④还原**——Sentry 用 SourceMap 把压缩堆栈还原成源码位置；**⑤聚合**——相同堆栈归并为一个 issue，按影响用户数/频率排序；**⑥告警**——达阈值触发通知；**⑦修复**——定位源码、修复、发版，标记 resolved。
+
+### SourceMap 还原
+
+<Term def="SourceMap 是构建时生成的映射文件，记录压缩代码到源代码的对应关系（位置、变量名）。Sentry 用它把压缩堆栈还原成源码位置。">SourceMap</Term>记录了压缩代码到源代码的映射。用户浏览器上报的错误堆栈是压缩后的（如 `a.js:1:23456`），毫无可读性。Sentry 用上传的 SourceMap 还原成源码位置（如 `src/components/Login.tsx:42:15`），让开发者直接看到哪行源码出错。
+
+```javascript
+// Sentry 初始化 + SourceMap 上传（构建时）
+import * as Sentry from "@sentry/react";
+
+Sentry.init({
+  dsn: "https://xxx@sentry.io/project",
+  release: __APP_VERSION__, // 版本标签，关联 SourceMap
+  // tracesSampleRate 控制性能采样率
+});
+
+// 构建脚本中上传 SourceMap 到 Sentry（不入 CDN）
+// $ sentry-cli sourcemaps upload --release=v1.2.3 dist/
+// 产物中删除 sourceMappingURL 注释，避免 .map 暴露给客户端
+```
+
+SourceMap **不能暴露给客户端**：①安全——它含完整源码结构、变量名、注释，暴露等于公开源代码；②体积——可能比产物还大；③隐私——含内部命名、API 路径。正确做法：构建生成 .map，上传到 Sentry 私有存储，产物不引用。
+
+### 聚合去重
+
+<Term def="Sentry 通过错误指纹（fingerprint）聚合去重，相同指纹的报错归并为一个 issue，记录累计次数和影响用户数，按影响排序聚焦高价值修复。">fingerprint 聚合</Term>默认用错误类型和调用栈结构生成指纹，相同指纹归并为一个 issue。这很重要：同一 bug 可能被上万用户触发上万次，不聚合会淹没告警看板。也可自定义 fingerprint（如把动态 URL 参数归一化，避免同一错误因 URL 不同被拆成多个 issue）。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：SourceMap 和产物一起部署到 CDN 就行，方便调试。** SourceMap 含完整源码（变量名、注释、结构），部署到 CDN 等于公开源代码，攻击者可据此分析业务逻辑和漏洞。正确做法：构建时生成 .map，上传到 Sentry 私有存储，产物中删除 sourceMappingURL 注释或不发布 .map 到 CDN。调试用 Sentry 服务端还原，而非在客户端暴露 map。
+</Callout>
+
+<Callout type="trap">
+**误区：每条错误都该告警，越多越安全。** 每条都告警会产生「告警风暴」——同一个 bug 被上万用户触发上万次，告警刷屏，团队产生「告警疲劳」看到就忽略，真正的新问题反而被淹没。正确做法：按错误率告警而非逐条（5 分钟内错误率 > 1% 才告警）；分级（P0 电话/P1 IM/P2 看板）；首次出现告警（可能是新 bug）；激增告警（量翻倍）；治理噪音（已知 issue 标 ignored）。目标：高信噪比，每条告警都值得看、能行动。
+</Callout>
+
+## 小结与练习
+
+<Exercises>
+**问题 1**：前端错误追踪系统（如 Sentry）的工作流程是什么？
+
+<Answer>
+Sentry 工作流程：①捕获——SDK 通过 window.onerror、onunhandledrejection、ErrorBoundary 捕获运行时异常；②采集——收集错误堆栈、用户轨迹（breadcrumb）、设备/浏览器/release 标签；③上报——用 navigator.sendBeacon 异步上报，不阻塞页面；④还原——Sentry 用上传的 SourceMap 把压缩堆栈还原成源码位置；⑤聚合——相同堆栈归并为一个 issue，按影响用户数和频率排序；⑥告警——达阈值触发通知；⑦修复——定位源码、修复、发版，标记 resolved，监控曲线下降验证。整个流程把「线上报错」变成「可定位、可追踪、可验证」的闭环。
+</Answer>
+
+**问题 2**：SourceMap 在错误追踪中起什么作用？为什么不能暴露给客户端？
+
+<Answer>
+SourceMap 是构建时生成的映射文件，记录压缩代码到源代码的对应关系（位置、变量名）。在错误追踪中，用户浏览器上报的错误堆栈是压缩后的（如 a.js:1:23456），毫无可读性。Sentry 用 SourceMap 把压缩堆栈还原成源码位置（如 src/components/Login.tsx:42:15），让开发者直接看到哪行源码出错。不能暴露给客户端的原因：①安全——SourceMap 含完整源码结构、变量名、注释，暴露等于公开源代码，攻击者可分析业务逻辑和漏洞；②体积——可能比产物还大；③隐私——含内部命名、API 路径。正确做法：生成 .map 上传 Sentry 私有存储，产物不引用。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Sentry">开源错误追踪平台，通过 SDK 捕获运行时异常、用 SourceMap 还原源码、聚合去重排序、超阈值告警，形成从报错到修复的闭环。</GlossaryItem>
+<GlossaryItem term="SourceMap">构建时生成的映射文件，记录压缩代码到源代码的对应关系（位置、变量名）。Sentry 用它把压缩堆栈还原成源码位置。不能暴露给客户端（含完整源码）。</GlossaryItem>
+<GlossaryItem term="breadcrumb">Sentry 采集的用户轨迹，记录错误发生前的用户操作（点击、导航、请求），帮助复现问题上下文。</GlossaryItem>
+<GlossaryItem term="fingerprint 聚合">Sentry 通过错误指纹（默认用错误类型和调用栈结构）把相同报错归并为一个 issue，记录累计次数和影响用户数，按影响排序聚焦高价值修复，避免告警淹没。</GlossaryItem>
+<GlossaryItem term="release 标签">Sentry 中标记错误来源版本的标签，关联上传的 SourceMap，用于定位错误是哪个发布引入的、发版后曲线是否下降验证修复。</GlossaryItem>
+<GlossaryItem term="告警治理">通过按率告警（非逐条）、分级（P0/P1/P2）、首次出现告警、激增告警、噪音标记 ignored 等策略，提高告警信噪比，避免告警风暴和告警疲劳。</GlossaryItem>
+</Glossary>
