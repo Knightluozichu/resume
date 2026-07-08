@@ -1,0 +1,174 @@
+---
+title: "全书总复习"
+type: C
+section: "网络游戏与服务器"
+order: 9
+description: "全书总复习——四层架构知识图谱、消息旅程串联、性能排查与架构设计"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UcnFinalReviewDiagram } from "@/components/mdx/unity-cpp-network-game/diagrams/ucn-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 用「一条消息的旅程」串联全书四层架构知识点
+- 掌握游戏卡顿的性能排查方法论
+- 综合理解客户端预测-校正与碰撞检测的配合
+- 能够从零设计支持千人同服的网络游戏架构
+</Objectives>
+
+## 直觉引入
+
+全书十章就像一条流水线上的十个工位。一颗螺丝（玩家操作）从流水线起点进入，依次经过：收发车间（I/O 层）→ 编解码车间（协议层）→ 接入车间（Unity 客户端层）→ 装配车间（玩法同步层）。每个车间处理完后传递给下一个。最后这章就是把整条流水线连起来看一遍——如果某个环节出了问题（卡顿/丢包/穿墙），你能快速定位是哪个车间的问题。
+
+<UcnFinalReviewDiagram />
+
+## 四层架构回顾
+
+全书十章对应四层架构，每层解决一个核心问题：
+
+### ① 服务器 I/O 层——「数据怎么收发」
+
+```cpp
+// 第一章 + 第二章的精华
+void io_thread_loop() {
+    // epoll ET 收包
+    int n = epoll_wait(epfd, events, MAX, 100);
+    for (int i = 0; i < n; i++) {
+        recv_to_ringbuf(events[i].data.fd);  // 写入环形缓冲区
+        while (auto pkt = ringbuf.try_pop()) {
+            // 长度前缀法拆包
+            g_msg_queue.push({session, pkt->msg_id, pkt->body, pkt->len});
+        }
+    }
+}
+```
+
+关键知识点：epoll ET 必须读到 EAGAIN、环形缓冲区位运算取模、长度前缀法解决粘包、IO 线程与逻辑线程通过消息队列解耦。
+
+### ② 协议与路由层——「消息怎么编解码和分发」
+
+```cpp
+// 第三章 + 第四章的精华
+void logic_thread_loop() {
+    auto [session, msg_id, data, len] = g_msg_queue.pop();
+    auto handler = g_router.find(msg_id);  // 查路由表
+    if (handler) {
+        // Protobuf 反序列化 → 执行 Handler
+        CastSkillReq req;
+        req.ParseFromArray(data, len);
+        CombatHandler::on_cast_skill(session, req);
+    }
+}
+```
+
+关键知识点：Protobuf varint 编码省空间、字段编号 1-15 占 1 字节、MsgId 按 module 分区间、REGISTER_HANDLER 宏自动注册、SPSC 无锁队列 alignas(64) 防 false sharing。
+
+### ③ Unity 客户端层——「Unity 怎么接入」
+
+```csharp
+// 第五章 + 第六章的精华
+void Update() {
+    // P/Invoke 从 C++ 队列取消息
+    int n = net_poll(m_recvBuf, m_recvBuf.Length);
+    if (n > 0) {
+        ushort msgId = BitConverter.ToUInt16(m_recvBuf, 0);
+        MessageDispatcher.Dispatch(msgId, m_recvBuf, 2, n - 2);
+    }
+    // 心跳检测 + 重连
+    connection.heartbeat_tick();
+}
+```
+
+关键知识点：C++ Native Plugin 无 GC 停顿、DllImport 桥接、net_poll 主线程轮询、连接状态机（IDLE→CONNECTING→CONNECTED→RECONNECTING）、心跳 5 秒+3 次超时断线、指数退避重连防雪崩。
+
+### ④ 玩法同步层——「怎么实时同步和匹配」
+
+```csharp
+// 第七章 + 第八章的精华
+// 本地玩家：预测-校正
+void OnMoveAck(MoveAck ack) {
+    float error = Vector3.Distance(predictedPos, ack.ServerPos);
+    if (error < 0.5f) lerp_to(ack.ServerPos);      // 插值
+    else if (error > 2f) teleport(ack.ServerPos);   // 瞬移
+}
+
+// 远程玩家：100ms 延迟插值
+void Update() {
+    float renderTime = GetNetworkTime() - 0.1f;  // 渲染 100ms 前
+    transform.position = Vector3.Lerp(t1.pos, t2.pos, alpha);
+}
+```
+
+关键知识点：客户端预测消除操作延迟、服务器校正偏差阈值（0.5m/2m）、远程玩家 100ms 延迟插值平滑、状态同步 vs 帧同步选型、增量同步省 80-90% 带宽、MMR 搜索窗口扩大、房间状态机生命周期、大厅-房间服分离、崩溃快照恢复。
+
+## 性能排查方法论
+
+<Callout type="info">
+玩家反馈「卡顿」时，先区分是网络卡（操作延迟）还是帧率卡（画面卡），再按维度排查。
+</Callout>
+
+```
+玩家反馈「卡」
+    │
+    ├── 网络卡（操作延迟）
+    │   ├── RTT 飙升？ → 网络抖动/路由问题
+    │   ├── 丢包率高？ → 网络质量差/服务器带宽不足
+    │   ├── 服务器 CPU 满？ → 逻辑线程处理慢
+    │   └── 消息队列堆积？ → IO 快但逻辑慢
+    │
+    └── 帧率卡（画面卡）
+        ├── GC.Alloc 高？ → 对象池不够/频繁 new
+        ├── DrawCall 多？ → 合批/LOD/遮挡剔除
+        ├── Scripts 重？ → 逻辑优化/分帧
+        ├── AOI 范围大？ → 广播量爆炸
+        └── GC Spike？ → 大对象分配/Protobuf 反序列化
+```
+
+## 架构设计题
+
+设计一个支持 1000 人同服的 Unity + C++ 网络对战游戏：
+
+```
+┌─────────────────────────────────────────────────────┐
+│  服务器 I/O 层                                       │
+│  epoll ET + 非阻塞 Socket + 环形缓冲区              │
+│  IO 线程池收发字节 → 消息队列 → 逻辑线程             │
+├─────────────────────────────────────────────────────┤
+│  协议路由层                                          │
+│  Protobuf proto3 + 长度前缀封包 + MsgId 路由表      │
+│  逻辑线程单线程串行（无锁）+ Handler 宏注册          │
+├─────────────────────────────────────────────────────┤
+│  Unity 客户端层                                      │
+│  C++ Native Plugin（P/Invoke）+ 独立网络线程        │
+│  连接状态机 + 心跳 5 秒 + 指数退避重连              │
+├─────────────────────────────────────────────────────┤
+│  玩法同步层                                          │
+│  状态同步 + 预测校正（本地）+ 100ms 插值（远程）    │
+│  增量同步 + AOI 九宫格 + MMR 匹配 + 房间状态机      │
+│  大厅-房间服分离 + 崩溃快照恢复                     │
+└─────────────────────────────────────────────────────┘
+```
+
+<Glossary>
+<GlossaryItem term="四层架构">I/O 层（收发字节）→ 协议层（编解码+路由）→ 客户端层（接入+连接管理）→ 玩法层（同步+匹配），每层解决一个核心问题。</GlossaryItem>
+<GlossaryItem term="消息旅程">一条消息从客户端发出到服务器处理再到客户端渲染的完整路径，是串联全书知识的主线。</GlossaryItem>
+<GlossaryItem term="性能排查方法论">先区分网络卡还是帧率卡，再按维度（RTT/丢包/CPU/GC/DrawCall/AOI）逐层定位，用数据而非猜测。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+1. 用「一条消息的旅程」描述玩家释放技能从点击到渲染的全过程。
+2. 玩家反馈「游戏卡顿」，你会从哪几个维度排查？按优先级排序。
+3. 客户端预测和服务器校正如何配合？校正时如何避免穿墙？
+4. 从零设计一个支持 1000 人同服的网络游戏架构。
+</Exercises>
+
+<Answer>
+1. ① Unity 点击技能 → P/Invoke 调 C++ → Protobuf 序列化 + 封包 → TCP 发送；② 服务器 epoll 收包 → 环形缓冲区拆包 → 消息队列；③ 逻辑线程查路由表 → CombatHandler 校验+执行 → 广播 DamageNotify；④ 客户端 net_poll 收包 → 播放动画 + 预测校正。
+2. ① 区分网络卡还是帧率卡；② 网络卡查 RTT/丢包/服务器 CPU/消息队列堆积；③ 帧率卡查 GC.Alloc/DrawCall/Scripts/AOI/GC Spike。用数据定位不靠猜。
+3. 预测：按键即移动+发请求。校正：偏差&lt;0.5m 插值，&gt;2m 瞬移。防穿墙：预测时做本地碰撞检测，服务器做速度上限校验，校正时沿墙滑动不穿墙。
+4. 四层：① I/O 层 epoll+环形缓冲区+IO/逻辑线程分离；② 协议层 Protobuf+路由表+单线程逻辑；③ 客户端层 Native Plugin+状态机+心跳重连；④ 玩法层 状态同步+预测校正+插值+增量同步+AOI+房间匹配+大厅分离。
+</Answer>

@@ -1,0 +1,118 @@
+---
+title: "全书学习地图"
+type: C
+section: "网络游戏与服务器"
+order: 0
+description: "俯瞰 Unity 与 C++ 网络游戏开发实战十大主题——从 C++ 服务器到 Unity 客户端的四阶段进阶路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UcnLearningMapDiagram } from "@/components/mdx/unity-cpp-network-game/diagrams/ucn-learning-map";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解「C++ 服务器 → 协议设计 → Unity 客户端 → 玩法系统 → 总复习」四阶段递进结构
+- 建立 Unity + C++ 网络游戏开发整体认知：每章解决什么问题、为何这样设计
+- 明确十个章节之间的依赖关系与学习顺序
+- 掌握用「一条消息的旅程」串联全书知识点的方法
+</Objectives>
+
+## 直觉引入
+
+把网络游戏开发想象成建造一条高速公路。你先要铺设路基——让数据能在客户端和服务器之间流动（C++ 服务器基础、Socket 编程）；然后制定交通规则——决定数据怎么编码、怎么分发（Protobuf 协议、消息路由）；接着在两端修建收费站和匝道——让 Unity 客户端接入这条高速公路（Native Plugin 集成、网络框架）；最后让车跑起来——实时同步位置、管理房间对局（实时同步、房间匹配）。本书回答的就是这些「从 C++ 服务器底层到 Unity 玩法上层」的实战问题。
+
+<UcnLearningMapDiagram />
+
+## 四阶段递进
+
+<Term def="Unity + C++ 网络游戏是以 C++ 编写高性能服务器、以 Unity 引擎为客户端、通过 Native Plugin 桥接的网络多人对战游戏，强调低延迟、服务器权威和实时状态同步。">Unity + C++ 网络游戏</Term>的开发可以拆成四个递进阶段。**服务器基础层**包括 C++ 服务器基础和 Socket 编程——它们解决「服务器怎么跑」和「数据怎么收发」，是所有上层协议和玩法的地基。**协议设计层**包括 Protobuf 协议设计和消息路由——它们决定「消息怎么编码」和「消息怎么分发到对应处理器」。**客户端接入层**包括 Unity 集成和网络框架——它们让 Unity「能通信」和「能稳定通信」。**玩法系统层**包括实时同步和房间管理——它们让游戏「能玩起来」和「能匹配对战」。
+
+```cpp
+// Unity + C++ 网络游戏的核心脉络：一条消息的旅程
+// 1. 服务器 I/O 层：epoll 收包
+void OnRecv(Session* session) {
+    int n = recv(session->fd, session->recv_buf, MAX_BUF, 0);
+    session->ring_buf.write(session->recv_buf, n);  // 写入环形缓冲区
+    while (auto packet = session->ring_buf.try_pop()) {
+        msg_queue.push(session, packet);  // 推入消息队列
+    }
+}
+
+// 2. 协议路由层：逻辑线程分发
+void LogicThread() {
+    while (running) {
+        auto [session, packet] = msg_queue.pop();
+        uint16_t msg_id = packet->read_msg_id();
+        auto handler = g_router.find(msg_id);  // 查路由表
+        if (handler) handler(session, packet); // 分发到 Handler
+    }
+}
+
+// 3. Unity 客户端层：P/Invoke 取消息
+// C# 侧
+// [DllImport("net")] extern static int net_poll(byte[] buf, int size);
+
+// 4. 玩法同步层：预测 + 校正
+void OnMoveAck(MoveAck msg) {
+    if (distance(predicted_pos, msg.server_pos) < 0.5f)
+        lerp_to(msg.server_pos);  // 偏差小，插值
+    else
+        teleport(msg.server_pos);  // 偏差大，瞬移
+}
+```
+
+## 为什么用 C++ 写服务器
+
+<Callout type="info">网络游戏服务器有三条硬约束：高并发（数千连接）、低延迟（毫秒级响应）、高吞吐（每秒数万消息）。C++ 能同时满足这三条——</Callout>
+
+- **零成本抽象**：模板、内联、RAII 带来安全的同时不牺牲性能，没有 GC 停顿
+- **直接 I/O 控制**：原生 epoll/IOCP API，精确控制事件循环和内存
+- **Native Plugin 复用**：C++ 网络层直接编译为 Unity 可调用的动态库，客户端和服务器共享 Protobuf 代码
+
+<Callout type="info">
+本书不追求「C++ 最新标准」的炫技，而是用务实的方式构建可运行的网络游戏框架。所有代码以 Linux epoll 为主线，IOCP 作为对照。
+</Callout>
+
+## 章节依赖关系
+
+这十章不是平行关系，而是严格的上下游依赖：
+
+| 阶段 | 章节 | 依赖 |
+|------|------|------|
+| 服务器基础 | C++ 服务器基础、Socket 编程 | 无（起点） |
+| 协议设计 | Protobuf 设计、消息路由 | 依赖服务器基础（收发字节才能谈协议） |
+| 客户端接入 | Unity 集成、网络框架 | 依赖协议设计（客户端要解析同样的协议） |
+| 玩法系统 | 实时同步、房间管理 | 依赖客户端接入（能通信才能谈同步和匹配） |
+| 总复习 | 全书总复习 | 依赖全部章节 |
+
+## 学习建议
+
+- **动手跑代码**：每章都有可运行的代码片段，不要只看不练
+- **从服务器到客户端**：先理解服务器怎么收发，再理解客户端怎么接入，最后看玩法层怎么用
+- **画消息旅程**：学完每章后，尝试画一条消息从发出到处理的完整路径
+- **对比思考**：epoll vs IOCP、TCP vs UDP、状态同步 vs 帧同步——对比是最好的理解方式
+
+<Glossary>
+<GlossaryItem term="epoll">Linux 的高性能 I/O 多路复用机制，支持水平触发和边沿触发，是 C10K 问题的核心解决方案。</GlossaryItem>
+<GlossaryItem term="IOCP">Windows 的完成端口模型，Proactor 模式的实现，内核完成 I/O 后通知应用程序。</GlossaryItem>
+<GlossaryItem term="Protobuf">Google 的协议缓冲区，二进制序列化格式，比 JSON 小 3-10 倍，适合游戏网络通信。</GlossaryItem>
+<GlossaryItem term="P/Invoke">Unity/C# 调用 C++ Native Plugin 的机制，通过 DllImport 声明 extern 函数实现跨语言调用。</GlossaryItem>
+<GlossaryItem term="状态同步">服务器计算所有逻辑并广播结果状态，客户端只负责渲染，是本书的主线同步方案。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+1. 用一句话描述本书四阶段递进结构中每一层的核心职责。
+2. 为什么客户端和服务器要共享同一份 Protobuf 定义？
+3. 用「一条玩家释放技能的消息旅程」串联全书的四个阶段。
+4. 游戏服务器和 Web 服务器在网络模型上最大的区别是什么？
+</Exercises>
+
+<Answer>
+1. 服务器基础层负责收发字节，协议设计层负责编解码和分发，客户端接入层负责 Unity 侧通信和连接管理，玩法系统层负责实时同步和房间匹配。
+2. 共享 Protobuf 定义确保两端的消息结构一致，避免手动维护两份格式导致的不一致 bug，同时 protoc 一键生成 C++ 和 C# 代码。
+3. ① 服务器 I/O 层收包 → ② 协议层反序列化 + 路由到 CombatHandler → ③ 客户端层通过 P/Invoke 接收广播 → ④ 玩法层播放动画 + 预测校正。
+4. Web 是短连接请求-响应模式，游戏是 TCP 长连接双向实时推送，且需要维护实时状态和低延迟同步。
+</Answer>

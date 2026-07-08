@@ -1,0 +1,174 @@
+---
+title: "C++ 服务器基础"
+type: C
+section: "网络游戏与服务器"
+order: 1
+description: "C++ 游戏服务器的事件驱动 I/O 模型——epoll 与 IOCP 的原理、区别和实战选型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UcnCppServerBaseDiagram } from "@/components/mdx/unity-cpp-network-game/diagrams/ucn-cpp-server-base";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 epoll 的 LT/ET 两种触发模式及各自的编程注意事项
+- 理解 IOCP 的 Proactor 模型与 epoll 的 Reactor 模型的核心区别
+- 掌握「IO 线程 + 逻辑线程」分离的游戏服务器线程模型
+- 理解为什么游戏服务器逻辑通常用单线程而非多线程并行
+</Objectives>
+
+## 直觉引入
+
+想象一个餐厅。服务员（IO 线程）负责在门口接待客人、传菜（收发数据），厨师（逻辑线程）负责做菜（处理业务逻辑）。如果服务员一边接待一边做菜，客人来了没人理。正确做法是服务员只管传菜，把订单贴到厨房窗口（消息队列），厨师从窗口取订单做菜。这就是 IO 与逻辑分离的核心思想。
+
+<UcnCppServerBaseDiagram />
+
+## epoll：Linux 的事件驱动 I/O
+
+<Term def="epoll 是 Linux 内核提供的高性能 I/O 多路复用机制，通过内核事件表监视大量 fd，只在 fd 就绪时通知应用程序，时间复杂度 O(1)。">epoll</Term> 是 Linux 游戏服务器的基石。它的核心是三个 API：
+
+```cpp
+// 1. 创建内核事件表
+int epfd = epoll_create1(0);
+
+// 2. 注册感兴趣的 fd 和事件
+struct epoll_event ev;
+ev.events = EPOLLIN | EPOLLET;  // 可读 + 边沿触发
+ev.data.fd = client_fd;
+epoll_ctl(epfd, EPOLL_CTL_ADD, client_fd, &ev);
+
+// 3. 等待就绪事件
+struct epoll_event events[MAX_EVENTS];
+while (true) {
+    int n = epoll_wait(epfd, events, MAX_EVENTS, -1);  // 阻塞等待
+    for (int i = 0; i < n; i++) {
+        if (events[i].events & EPOLLIN) {
+            handle_read(events[i].data.fd);  // 处理可读
+        }
+    }
+}
+```
+
+### LT vs ET
+
+<Callout type="warning">
+ET 模式必须在循环中 read 直到返回 EAGAIN，否则数据残留在内核缓冲区，下次不会再通知。这是 ET 模式最常见的 bug 来源。
+</Callout>
+
+**LT 水平触发**：只要 fd 上有数据可读，每次 epoll_wait 都会通知。编程简单，但可能重复通知。
+
+**ET 边沿触发**：只在 fd 状态变化时通知一次。必须一次性读完所有数据：
+
+```cpp
+void handle_read_et(int fd) {
+    while (true) {
+        int n = recv(fd, buf, BUF_SIZE, MSG_DONTWAIT);  // 非阻塞读
+        if (n > 0) {
+            process_data(buf, n);
+        } else if (n == 0) {
+            close_connection(fd);  // 对方关闭
+            break;
+        } else {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) break;  // 读完了
+            if (errno == EINTR) continue;  // 被信号中断，重试
+            close_connection(fd);  // 其他错误
+            break;
+        }
+    }
+}
+```
+
+## IOCP：Windows 的完成端口
+
+<Term def="IOCP（I/O Completion Port）是 Windows 的高性能异步 I/O 模型，采用 Proactor 模式——应用程序发起 I/O 后立即返回，内核完成后通知，数据已拷贝到用户缓冲区。">IOCP</Term> 与 epoll 的根本区别是「谁负责拷贝数据」：
+
+```cpp
+// 1. 创建完成端口
+HANDLE iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+
+// 2. 关联 Socket 到完成端口
+CreateIoCompletionPort(client_socket, iocp, completion_key, 0);
+
+// 3. 投递异步读（立即返回，内核负责完成）
+WSABUF wsa_buf = {BUF_SIZE, buf};
+DWORD flags = 0;
+WSARecv(client_socket, &wsa_buf, 1, &bytes_recv, &flags, &overlapped, NULL);
+
+// 4. 工作线程从完成端口取结果
+DWORD bytes_transferred;
+ULONG_PTR key;
+LPOVERLAPPED overlapped;
+while (true) {
+    GetQueuedCompletionStatus(iocp, &bytes_transferred, &key, &overlapped, INFINITE);
+    // 此时数据已经在 buf 中，内核已完成拷贝
+    process_data(buf, bytes_transferred);
+    // 再次投递 WSARecv
+    post_next_recv(client_socket);
+}
+```
+
+## IO 线程与逻辑线程分离
+
+游戏服务器的标准线程模型：
+
+```
+┌──────────────┐     消息队列      ┌──────────────┐
+│  IO 线程池    │ ──────────────→  │  逻辑线程     │
+│ (epoll/IOCP) │   (无锁/有锁)    │ (单线程串行)  │
+│  收发字节     │                  │  处理业务     │
+└──────────────┘                  └──────────────┘
+```
+
+```cpp
+// IO 线程：只管收发
+void io_thread(int epfd) {
+    while (running) {
+        int n = epoll_wait(epfd, events, MAX, 100);  // 100ms 超时
+        for (int i = 0; i < n; i++) {
+            if (events[i].events & EPOLLIN) {
+                recv_to_ringbuf(events[i].data.fd);
+                while (auto pkt = ringbuf.try_pop()) {
+                    g_msg_queue.push(session, pkt);  // 推入队列
+                }
+            }
+        }
+    }
+}
+
+// 逻辑线程：只管处理
+void logic_thread() {
+    while (running) {
+        auto [session, pkt] = g_msg_queue.pop();  // 阻塞取
+        auto handler = g_router.find(pkt->msg_id);
+        if (handler) handler(session, pkt);  // 串行执行，无锁
+    }
+}
+```
+
+<Callout type="info">
+单线程逻辑的核心优势：所有游戏状态（HP、位置、背包）在同一线程内串行修改，天然线程安全，不需要任何锁。如果单核扛不住，按房间分进程（分片），而不是在同一进程内多线程并行逻辑。
+</Callout>
+
+<Glossary>
+<GlossaryItem term="Reactor 模式">同步 I/O 模式，操作系统通知「数据就绪」，应用程序自己执行 read/write 拷贝。对应 epoll。</GlossaryItem>
+<GlossaryItem term="Proactor 模式">异步 I/O 模式，应用程序发起读请求后立即返回，操作系统完成拷贝后通知「I/O 完成」。对应 IOCP。</GlossaryItem>
+<GlossaryItem term="事件循环（Event Loop）">不断调用 epoll_wait/GetQueuedCompletionStatus 获取就绪事件并处理的无限循环，是事件驱动服务器的核心结构。</GlossaryItem>
+<GlossaryItem term="C10K">同时处理 10000 个并发连接的挑战，epoll/IOCP 是解决 C10K 问题的关键技术。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+1. epoll 的 ET 模式为什么必须读到 EAGAIN？不读会怎样？
+2. Reactor 和 Proactor 的核心区别是什么？分别对应什么系统 API？
+3. 为什么游戏服务器逻辑通常用单线程而不是多线程并行？
+4. IO 线程和逻辑线程之间用什么数据结构通信？为什么需要解耦？
+</Exercises>
+
+<Answer>
+1. ET 只在状态变化时通知一次，如果不一次读完，残留数据不会被再次通知，导致数据丢失。必须循环 read 直到 EAGAIN 确保读完。
+2. Reactor 通知「就绪」由应用自己拷贝数据（epoll），Proactor 通知「完成」由内核拷贝数据（IOCP）。Reactor 是同步，Proactor 是异步。
+3. 单线程逻辑不需要锁——所有状态串行修改，避免锁竞争、死锁等并发问题。游戏逻辑本质是状态机，串行语义最简单。性能不够时按房间分进程。
+4. 用消息队列通信。解耦是因为 IO 和逻辑的处理速度不同——IO 快（只搬字节），逻辑慢（要计算）。队列作为缓冲，互不阻塞。
+</Answer>

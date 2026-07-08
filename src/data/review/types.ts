@@ -1398,7 +1398,17 @@ export type ReviewChapterSlug =
   | "umm-aoi-system"
   | "umm-optimization"
   | "umm-deployment"
-  | "umm-final-review";
+  | "umm-final-review"
+  | "ucn-learning-map"
+  | "ucn-cpp-server-base"
+  | "ucn-socket-programming"
+  | "ucn-protobuf-design"
+  | "ucn-message-routing"
+  | "ucn-unity-integration"
+  | "ucn-network-framework"
+  | "ucn-realtime-sync"
+  | "ucn-room-management"
+  | "ucn-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2801,6 +2811,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "umm-optimization": "网游性能优化",
   "umm-deployment": "部署与运维",
   "umm-final-review": "全书总复习",
+  "ucn-learning-map": "全书学习地图",
+  "ucn-cpp-server-base": "C++ 服务器基础",
+  "ucn-socket-programming": "Socket 编程与缓冲区设计",
+  "ucn-protobuf-design": "Protobuf 协议设计",
+  "ucn-message-routing": "消息路由与分发",
+  "ucn-unity-integration": "Unity 客户端集成",
+  "ucn-network-framework": "网络框架设计",
+  "ucn-realtime-sync": "实时同步与插值预测",
+  "ucn-room-management": "房间管理与匹配系统",
+  "ucn-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,205 @@
+---
+title: "实时同步与插值预测"
+type: C
+section: "网络游戏与服务器"
+order: 7
+description: "实时同步——客户端预测-校正循环、远程玩家插值渲染、状态同步 vs 帧同步、增量同步"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UcnRealtimeSyncDiagram } from "@/components/mdx/unity-cpp-network-game/diagrams/ucn-realtime-sync";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解客户端预测-校正循环的原理和实现
+- 掌握远程玩家插值渲染的延迟缓冲机制
+- 理解状态同步和帧同步的核心区别与适用场景
+- 设计增量同步方案减少带宽消耗
+</Objectives>
+
+## 直觉引入
+
+你开车时（本地玩家），方向盘一转车就动——这是预测，不等 GPS 确认。但 GPS 偶尔会纠正你：「你偏了 0.3 米」，你微调一下方向盘——这是校正。而看别人开车（远程玩家），你看到的是他 100 毫秒前的位置——因为他开车的画面传到你这里需要时间。为了让画面不卡顿，你在他上一个位置和当前位置之间做平滑过渡——这是插值。
+
+<UcnRealtimeSyncDiagram />
+
+## 客户端预测
+
+<Term def="客户端预测是指玩家操作后不等服务器确认，立即在本地执行，让操作感觉零延迟，同时发送请求给服务器校验。">客户端预测</Term>是消除操作延迟的核心技术：
+
+```csharp
+// Unity C# 侧：本地玩家移动
+public class LocalPlayerController : MonoBehaviour
+{
+    private Vector3 m_predictedPos;
+    private int m_seq = 0;
+
+    void Update()
+    {
+        float dx = Input.GetAxis("Horizontal") * moveSpeed * Time.deltaTime;
+        float dz = Input.GetAxis("Vertical") * moveSpeed * Time.deltaTime;
+        if (dx == 0 && dz == 0) return;
+
+        // 1. 预测：立即移动（不等服务器）
+        Vector3 newPos = m_predictedPos + new Vector3(dx, 0, dz);
+        if (!Physics.CheckSphere(newPos, 0.5f))  // 本地碰撞检测
+        {
+            m_predictedPos = newPos;
+            transform.position = newPos;
+        }
+
+        // 2. 发送移动请求（带序列号）
+        m_seq++;
+        var req = new MoveReq {
+            Seq = m_seq,
+            Pos = new Vec3 { X = newPos.x, Y = newPos.y, Z = newPos.z },
+            Dir = new Vec3 { X = dx, Y = 0, Z = dz }
+        };
+        NetworkManager.Send(2003, req);
+    }
+
+    // 3. 收到服务器校正
+    void OnMoveAck(MoveAck ack)
+    {
+        Vector3 serverPos = new Vector3(ack.Pos.X, ack.Pos.Y, ack.Pos.Z);
+        float error = Vector3.Distance(m_predictedPos, serverPos);
+
+        if (error < 0.5f)
+        {
+            // 偏差小：平滑插值（玩家几乎无感）
+            StartCoroutine(LerpTo(serverPos, 0.1f));
+        }
+        else if (error < 2f)
+        {
+            // 中等偏差：快速修正
+            StartCoroutine(LerpTo(serverPos, 0.05f));
+        }
+        else
+        {
+            // 偏差大：直接瞬移（可能穿墙/作弊/严重丢包）
+            m_predictedPos = serverPos;
+            transform.position = serverPos;
+        }
+    }
+}
+```
+
+<Callout type="warning">
+预测时必须做本地碰撞检测，否则服务器校正时可能穿墙。服务器必须做速度上限校验，防止客户端篡改位置作弊。
+</Callout>
+
+## 远程玩家插值
+
+```csharp
+// 远程玩家：始终渲染 100ms 前的状态
+public class RemotePlayerController : MonoBehaviour
+{
+    private struct Snapshot
+    {
+        public Vector3 pos;
+        public float timestamp;  // 服务器时间戳
+    }
+
+    private Queue<Snapshot> m_snapshots = new Queue<Snapshot>();
+    private const float INTERP_DELAY = 0.1f;  // 100ms 延迟缓冲
+
+    // 收到服务器快照
+    public void OnSnapshot(Vec3 pos, float serverTime)
+    {
+        m_snapshots.Enqueue(new Snapshot {
+            pos = new Vector3(pos.X, pos.Y, pos.Z),
+            timestamp = serverTime
+        });
+        // 保留最近 1 秒的快照
+        while (m_snapshots.Count > 15) m_snapshots.Dequeue();
+    }
+
+    void Update()
+    {
+        if (m_snapshots.Count < 2) return;
+
+        float renderTime = GetNetworkTime() - INTERP_DELAY;
+
+        // 找到渲染时间前后的两个快照
+        Snapshot t1 = m_snapshots.Dequeue();
+        while (m_snapshots.Count > 1 && m_snapshots.Peek().timestamp < renderTime)
+            t1 = m_snapshots.Dequeue();
+
+        Snapshot t2 = m_snapshots.Peek();
+        if (t2.timestamp <= t1.timestamp) return;
+
+        // 线性插值
+        float alpha = (renderTime - t1.timestamp) / (t2.timestamp - t1.timestamp);
+        transform.position = Vector3.Lerp(t1.pos, t2.pos, alpha);
+    }
+}
+```
+
+## 状态同步 vs 帧同步
+
+| 维度 | 状态同步 | 帧同步 |
+|------|----------|--------|
+| 服务器职责 | 计算所有逻辑 | 只转发输入 |
+| 客户端职责 | 只渲染 | 跑完整逻辑 |
+| 带宽 | 大（广播状态） | 小（只传输入） |
+| 防作弊 | 强（客户端看不到全图） | 弱（客户端跑逻辑） |
+| 断线重连 | 简单（收快照恢复） | 复杂（补算所有帧） |
+| 确定性要求 | 无 | 极高（浮点/随机/遍历序） |
+| 适用 | MMO/MOBA | RTS/格斗 |
+| 本书 | 主线 | 对照 |
+
+## 增量同步
+
+```cpp
+// 服务器侧：只发变化字段
+void broadcast_entity_updates() {
+    for (auto* entity : aoi_get_visible(player)) {
+        EntityDelta delta;
+        delta.entity_id = entity->id();
+
+        // 只发变化的字段
+        if (entity->pos_changed()) {
+            delta.mutable_pos() = entity->pos();
+            delta.has_pos = true;
+        }
+        if (entity->hp_changed()) {
+            delta.hp = entity->hp();
+            delta.has_hp = true;
+        }
+
+        if (delta.has_any_field()) {
+            // 量化压缩：位置用 float16（精度 1cm）
+            delta.mutable_pos()->set_x(quantize_f16(delta.pos().x()));
+            send_packet(MSG_ENTITY_DELTA, delta);
+        }
+    }
+}
+```
+
+<Callout type="info">
+增量同步可将带宽降低 80-90%：只发变化字段 + 量化压缩（float16/定点数）+ AOI 过滤 + 优先级队列（近高频远低频）+ 消息合并。
+</Callout>
+
+<Glossary>
+<GlossaryItem term="客户端预测">玩家操作后不等服务器确认立即在本地执行，消除操作延迟，收到服务器校正后修正偏差。</GlossaryItem>
+<GlossaryItem term="插值（Interpolation）">在两个已知快照之间做线性插值，让远程玩家移动平滑，需要 100ms 延迟缓冲覆盖网络抖动。</GlossaryItem>
+<GlossaryItem term="外推（Extrapolation）">快照缺失时根据上一帧速度预测未来位置，超过 200ms 停止外推等新快照。</GlossaryItem>
+<GlossaryItem term="AOI">Area of Interest，只同步玩家视野内的实体，用九宫格或十字链表实现，大幅减少广播量。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+1. 什么是客户端预测？为什么需要预测？预测和服务器权威如何配合？
+2. 远程玩家的插值渲染为什么需要 100ms 延迟缓冲？不缓冲会怎样？
+3. 状态同步和帧同步的核心区别是什么？各自适用什么场景？
+4. 如何减少状态同步的带宽消耗？设计一个增量同步方案。
+</Exercises>
+
+<Answer>
+1. 客户端预测是按键后不等服务器立即在本地移动，消除 RTT 延迟感。同时发请求给服务器校验，收到校正后按偏差大小插值或瞬移。预测必须做本地碰撞防穿墙，服务器必须做速度校验防作弊。
+2. 服务器 15Hz 广播快照但网络有抖动，立即渲染会忽快忽慢。100ms 缓冲让客户端始终渲染「100ms 前的状态」在两个快照间插值，覆盖抖动和丢包。不缓冲会导致角色瞬移/抖动。
+3. 状态同步：服务器跑逻辑广播状态，客户端只渲染，防作弊强但带宽大，适合 MMO/MOBA。帧同步：服务器只转输入，客户端各自跑逻辑，带宽省但确定性要求高，适合 RTS/格斗。
+4. ① 只发变化字段（EntityDelta）；② 量化压缩（float16/定点数）；③ AOI 过滤只同步视野内实体；④ 优先级队列（近高频远低频）；⑤ Delta 压缩位置增量；⑥ 消息合并减少包头。综合降 80-90%。
+</Answer>

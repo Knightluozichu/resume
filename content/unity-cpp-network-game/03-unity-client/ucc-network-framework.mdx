@@ -1,0 +1,205 @@
+---
+title: "网络框架设计"
+type: C
+section: "网络游戏与服务器"
+order: 6
+description: "网络框架设计——连接状态机、心跳机制、指数退避重连、断线状态恢复与连接池"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UcnNetworkFrameworkDiagram } from "@/components/mdx/unity-cpp-network-game/diagrams/ucn-network-framework";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握客户端连接状态机的设计和状态转换条件
+- 理解心跳机制的作用和参数设定
+- 掌握指数退避重连策略的原理和实现
+- 理解断线重连后的状态恢复方案
+</Objectives>
+
+## 直觉引入
+
+网络连接就像打电话。你拨号（CONNECTING）→ 对方接听（CONNECTED）→ 通话中每隔几秒「嗯」一声确认对方还在（心跳）→ 如果连续几次没回应，挂了重拨（RECONNECTING）→ 重拨第一次1秒、第二次2秒、第三次4秒（指数退避）→ 重拨10次还没人接就放弃了（DISCONNECTED）。这就是连接状态机的完整生命周期。
+
+<UcnNetworkFrameworkDiagram />
+
+## 连接状态机
+
+<Term def="连接状态机是客户端网络连接的生命周期管理模型，包含 IDLE/CONNECTING/CONNECTED/RECONNECTING/DISCONNECTED 五个状态及转换条件。">连接状态机</Term>确保连接的每个阶段都有明确的行为和退出条件：
+
+```cpp
+enum class ConnState {
+    IDLE,           // 未连接
+    CONNECTING,     // TCP 三次握手中
+    CONNECTED,      // 正常通信
+    RECONNECTING,   // 断线重连中
+    DISCONNECTED    // 连接已关闭
+};
+
+class Connection {
+    ConnState m_state = ConnState::IDLE;
+    int m_reconnect_count = 0;
+    int64_t m_last_heartbeat_time = 0;
+    int m_missed_acks = 0;
+
+public:
+    void connect(const std::string& host, int port) {
+        m_state = ConnState::CONNECTING;
+        async_connect(host, port, [this](bool success) {
+            if (success) {
+                m_state = ConnState::CONNECTED;
+                m_reconnect_count = 0;
+                m_missed_acks = 0;
+                on_connected();
+            } else {
+                m_state = ConnState::RECONNECTING;
+                schedule_reconnect();
+            }
+        });
+    }
+
+    void on_disconnect() {
+        if (m_state == ConnState::CONNECTED) {
+            m_state = ConnState::RECONNECTING;
+            m_reconnect_count = 0;
+            schedule_reconnect();
+        }
+    }
+};
+```
+
+## 心跳机制
+
+```cpp
+// 客户端心跳
+void Connection::heartbeat_tick() {
+    if (m_state != ConnState::CONNECTED) return;
+
+    int64_t now = get_time_ms();
+    if (now - m_last_heartbeat_time > 5000) {  // 每 5 秒发一次
+        HeartbeatReq req;
+        req.set_client_time(now);
+        send_packet(MSG_HEARTBEAT_REQ, req);
+        m_last_heartbeat_time = now;
+        m_missed_acks++;
+    }
+
+    // 连续 3 次未收到 Ack（15 秒）→ 断线
+    if (m_missed_acks >= 3) {
+        LOG_WARN("heartbeat timeout, reconnecting...");
+        on_disconnect();
+    }
+}
+
+// 收到心跳 Ack
+void Connection::on_heartbeat_ack(const HeartbeatAck& ack) {
+    m_missed_acks = 0;
+    // 计算 RTT（往返延迟）
+    int64_t now = get_time_ms();
+    int64_t rtt = now - ack.client_time();
+    m_rtt = m_rtt * 0.8 + rtt * 0.2;  // 平滑 RTT
+    // 时钟偏移 = 服务器时间 - (客户端时间 - RTT/2)
+    m_clock_offset = ack.server_time() - (now - rtt / 2);
+}
+```
+
+<Callout type="info">
+心跳 Ack 中的服务器时间戳有两个用途：① 计算 RTT（网络延迟），用于插值缓冲；② 时钟同步，让客户端的插值时间线与服务器对齐。
+</Callout>
+
+## 指数退避重连
+
+```cpp
+void Connection::schedule_reconnect() {
+    if (m_reconnect_count >= 10) {
+        m_state = ConnState::DISCONNECTED;
+        on_disconnected("max reconnect attempts exceeded");
+        return;
+    }
+
+    // 指数退避：1, 2, 4, 8, 16, 30, 30, 30...
+    int delay = std::min(1 << m_reconnect_count, 30);  // 封顶 30 秒
+    m_reconnect_count++;
+
+    LOG_INFO("reconnect in %d seconds (attempt %d)", delay, m_reconnect_count);
+
+    set_timer(delay * 1000, [this]() {
+        connect(m_host, m_port);
+    });
+}
+```
+
+<Callout type="warning">
+不用固定间隔重连的原因：服务器重启时大量客户端同时重连形成请求洪峰（雪崩效应），指数退避让重连请求在时间上分散。
+</Callout>
+
+## 断线状态恢复
+
+```cpp
+// 服务器侧：断线不立即销毁
+void Session::on_disconnect() {
+    m_state = SessionState::OFFLINE_HANGING;  // 离线挂起
+    set_timer(300000, [this]() {  // 5 分钟后清理
+        if (m_state == SessionState::OFFLINE_HANGING) {
+            destroy_player_data();
+        }
+    });
+}
+
+// 重连后恢复
+void Session::on_reconnect(uint64_t player_id) {
+    auto* player = find_player(player_id);
+    if (!player) {
+        // 超过 5 分钟，数据已清理 → 重新登录
+        send_packet(MSG_RECONNECT_FAILED);
+        return;
+    }
+    m_state = SessionState::ONLINE;
+    // 发送完整场景快照
+    SceneSnapshot snapshot;
+    snapshot.set_player(player->serialize());
+    for (auto* nearby : aoi_get_nearby(player)) {
+        snapshot.add_entities(nearby->serialize());
+    }
+    send_packet(MSG_SCENE_SNAPSHOT, snapshot);
+}
+
+// 客户端侧：重连成功后处理
+void on_reconnect_success(const SceneSnapshot& snapshot) {
+    // 全量更新本地状态
+    local_player->deserialize(snapshot.player());
+    for (const auto& entity : snapshot.entities()) {
+        remote_entities[entity.id()].deserialize(entity);
+    }
+    // 清理预测缓冲区，以服务器权威状态为准
+    prediction_buffer.clear();
+    // 重发未确认的消息
+    for (auto& pending : pending_send_queue) {
+        net_send(pending.data, pending.size);
+    }
+}
+```
+
+<Glossary>
+<GlossaryItem term="心跳（Heartbeat）">客户端定期发送的心跳包，用于检测连接存活和计算 RTT，连续 N 次未收到 Ack 则判定断线。</GlossaryItem>
+<GlossaryItem term="RTT">Round-Trip Time，往返延迟，心跳请求发出到收到 Ack 的时间差，用于插值缓冲和时钟同步。</GlossaryItem>
+<GlossaryItem term="指数退避">重连失败后等待时间按 2 的幂次增长（1→2→4→8→16→30），避免雪崩效应。</GlossaryItem>
+<GlossaryItem term="离线挂起">服务器在连接断开后不立即销毁玩家数据，保留 N 分钟等待重连，超时才清理。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+1. 心跳机制的作用是什么？心跳间隔和超时阈值如何设定？
+2. 什么是指数退避重连？为什么不用固定间隔？
+3. 断线重连后如何恢复游戏状态？服务器和客户端各做什么？
+4. 设计一个连接池管理多服务器连接（大厅+战斗服+聊天服）。
+</Exercises>
+
+<Answer>
+1. ① 检测连接存活——连续 N 次未收到 Ack 判定断线；② 时钟同步——Ack 带服务器时间戳计算 RTT 和时钟偏移。间隔通常 5 秒，连续 3 次（15 秒）判定断线。竞技游戏可缩短到 2 秒+2 次。
+2. 等待时间按 2^(N-1) 增长（1→2→4→8→16→30 封顶）。不用固定间隔是因为服务器重启时大量客户端同时重连形成请求洪峰（雪崩效应），指数退避让请求在时间上分散。
+3. 服务器：断线后标记「离线挂起」保留数据 N 分钟，重连后发送场景快照恢复状态。客户端：全量更新本地状态、清理预测缓冲区、重发未确认消息。超时则视为重新登录。
+4. 按服务器类型分池（Lobby/Battle/Chat），统一接口 Send(serverType, msgId, data)，内部路由到对应连接。连接断开自动重连（指数退避），重连后恢复订阅。不同类型的心跳参数不同（战斗服更严格）。
+</Answer>

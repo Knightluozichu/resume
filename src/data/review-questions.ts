@@ -1275,6 +1275,16 @@ import { ummAoiSystemQuestions } from "./review/umm-aoi-system";
 import { ummOptimizationQuestions } from "./review/umm-optimization";
 import { ummDeploymentQuestions } from "./review/umm-deployment";
 import { ummFinalReviewQuestions } from "./review/umm-final-review";
+import { ucnLearningMapQuestions } from "./review/ucn-learning-map";
+import { ucnCppServerBaseQuestions } from "./review/ucn-cpp-server-base";
+import { ucnSocketProgrammingQuestions } from "./review/ucn-socket-programming";
+import { ucnProtobufDesignQuestions } from "./review/ucn-protobuf-design";
+import { ucnMessageRoutingQuestions } from "./review/ucn-message-routing";
+import { ucnUnityIntegrationQuestions } from "./review/ucn-unity-integration";
+import { ucnNetworkFrameworkQuestions } from "./review/ucn-network-framework";
+import { ucnRealtimeSyncQuestions } from "./review/ucn-realtime-sync";
+import { ucnRoomManagementQuestions } from "./review/ucn-room-management";
+import { ucnFinalReviewQuestions } from "./review/ucn-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2581,6 +2591,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ummOptimizationQuestions,
   ...ummDeploymentQuestions,
   ...ummFinalReviewQuestions,
+  ...ucnLearningMapQuestions,
+  ...ucnCppServerBaseQuestions,
+  ...ucnSocketProgrammingQuestions,
+  ...ucnProtobufDesignQuestions,
+  ...ucnMessageRoutingQuestions,
+  ...ucnUnityIntegrationQuestions,
+  ...ucnNetworkFrameworkQuestions,
+  ...ucnRealtimeSyncQuestions,
+  ...ucnRoomManagementQuestions,
+  ...ucnFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
