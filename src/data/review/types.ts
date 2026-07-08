@@ -1618,7 +1618,17 @@ export type ReviewChapterSlug =
   | "osc-virtual-memory"
   | "osc-file-system-impl"
   | "osc-mass-storage"
-  | "osc-final-review";
+  | "osc-final-review"
+  | "wj-learning-map"
+  | "wj-win32-api"
+  | "wj-message-loop"
+  | "wj-window-management"
+  | "wj-gdi-rendering"
+  | "wj-registry-service"
+  | "wj-process-thread-win"
+  | "wj-file-io"
+  | "wj-network-programming"
+  | "wj-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3241,6 +3251,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "osc-file-system-impl": "文件系统实现",
   "osc-mass-storage": "大容量存储",
   "osc-final-review": "全书总复习",
+  "wj-learning-map": "全书学习地图",
+  "wj-win32-api": "Win32 API基础",
+  "wj-message-loop": "消息循环机制",
+  "wj-window-management": "窗口管理",
+  "wj-gdi-rendering": "GDI绘图",
+  "wj-registry-service": "注册表与服务",
+  "wj-process-thread-win": "进程与线程",
+  "wj-file-io": "文件I/O",
+  "wj-network-programming": "网络编程",
+  "wj-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

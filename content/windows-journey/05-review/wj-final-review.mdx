@@ -1,0 +1,162 @@
+---
+title: "全书总复习"
+type: C
+section: "系统与操作系统"
+order: 9
+description: "用一个窗口程序从WinMain到WM_DESTROY的完整旅程串联全书九章知识——从API调用到网络通信的全链贯通"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WjFinalReviewDiagram } from "@/components/mdx/windows-journey/diagrams/wj-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 用「一个窗口程序的一生」串联全书九章知识点
+- 理解消息驱动与过程式调用编程范式的本质区别
+- 掌握高并发 Windows 网络服务器的架构设计思路
+- 理解「一切皆 HANDLE」设计哲学的优势与挑战
+</Objectives>
+
+## 直觉引入
+
+全书九章学完，我们来跟踪一个真实的 Windows 程序——从用户双击 `myapp.exe` 到最终关闭的完整旅程。这个程序不复杂：一个窗口程序，启动时读取注册表配置，后台线程处理数据，通过网络同步到服务器，界面实时显示状态。但它调用了全书学过的每一个机制——API 调用、消息循环、窗口管理、GDI 绘制、注册表、进程线程、文件 I/O、网络通信。一个程序的一生，九章知识全部参与。
+
+<WjFinalReviewDiagram />
+
+## 一个窗口程序的一生
+
+<Term def="消息驱动是 Windows GUI 程序的核心范式：程序不主动执行逻辑，而是被动响应系统发来的消息。程序结构是「初始化+消息循环+窗口过程回调」三段式。与过程式调用的线性流程不同，消息驱动的控制流由事件决定。">消息驱动</Term>贯穿程序的一生：
+
+```text
+// 一个窗口程序的一生——全书知识串联
+int WINAPI WinMain(hInstance, hPrevInstance, lpCmdLine, nCmdShow)
+{
+    // ========== 阶段1：初始化（第2章 + 第9章）==========
+    WSAStartup(MAKEWORD(2,2), &wsaData);  // 初始化网络子系统
+    HMODULE hMod = GetModuleHandleW(NULL);  // 获取实例句柄
+
+    // ========== 阶段2：窗口创建（第4章）==========
+    WNDCLASSEXW wc = { sizeof(wc) };
+    wc.lpfnWndProc = WndProc;               // 窗口过程
+    wc.lpszClassName = L"MyApp";            // 类名
+    wc.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
+    RegisterClassExW(&wc);                  // 注册窗口类
+
+    HWND hwnd = CreateWindowExW(0, L"MyApp", L"我的应用",
+        WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, 800, 600,
+        NULL, NULL, hInstance, NULL);
+    ShowWindow(hwnd, nCmdShow);             // 显示窗口
+    UpdateWindow(hwnd);                     // 触发首次 WM_PAINT
+
+    // ========== 阶段3：消息循环（第3章）==========
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    // WM_QUIT 后退出循环
+
+    WSACleanup();  // 清理网络
+    return (int)msg.wParam;
+}
+
+LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg) {
+    case WM_CREATE:
+        // ========== 阶段4：读取配置（第6章）==========
+        HKEY hKey;
+        RegOpenKeyExW(HKEY_CURRENT_USER, L"Software\\MyApp", 0, KEY_READ, &hKey);
+        WCHAR serverAddr[64]; DWORD size = sizeof(serverAddr);
+        RegQueryValueExW(hKey, L"ServerAddr", NULL, NULL, (BYTE*)serverAddr, &size);
+        RegCloseKey(hKey);
+
+        // ========== 阶段5：后台线程（第7章）==========
+        CreateThread(NULL, 0, DataSyncThread, hwnd, 0, NULL);
+        break;
+
+    case WM_PAINT: {
+        // ========== 阶段6：GDI 绘制（第5章）==========
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        TextOutW(hdc, 10, 10, L"状态: 运行中", 7);
+        EndPaint(hwnd, &ps);
+        break;
+    }
+
+    case WM_USER + 100:  // 后台线程发来的状态更新
+        InvalidateRect(hwnd, NULL, TRUE);  // 触发重绘
+        break;
+
+    case WM_DESTROY:
+        PostQuitMessage(0);  // 发送 WM_QUIT
+        break;
+
+    default:
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+    return 0;
+}
+
+DWORD WINAPI DataSyncThread(LPVOID param)
+{
+    HWND hwnd = (HWND)param;
+
+    // ========== 阶段7：文件 I/O（第8章）==========
+    HANDLE hFile = CreateFileW(L"local.dat", GENERIC_READ, FILE_SHARE_READ,
+        NULL, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, NULL);
+    char buf[4096]; OVERLAPPED ov = {}; ov.hEvent = CreateEventW(NULL,TRUE,FALSE,NULL);
+    ReadFile(hFile, buf, sizeof(buf), NULL, &ov);  // 异步读取
+    WaitForSingleObject(ov.hEvent, INFINITE);
+    CloseHandle(ov.hEvent); CloseHandle(hFile);
+
+    // ========== 阶段8：网络通信（第9章）==========
+    SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in addr = {};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(8080);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+    connect(sock, (sockaddr*)&addr, sizeof(addr));
+    send(sock, buf, strlen(buf), 0);
+    closesocket(sock);
+
+    // 通知 UI 线程更新
+    PostMessage(hwnd, WM_USER + 100, 0, 0);
+    return 0;
+}
+
+// ========== 阶段9：退出 ==========
+// 用户点击关闭 → WM_CLOSE → DefWindowProc → WM_DESTROY
+// → PostQuitMessage(0) → GetMessage 收到 WM_QUIT 返回 FALSE
+// → 消息循环结束 → WSACleanup → 进程退出
+// 全部句柄（文件/线程/事件/套接字）在各自作用域 CloseHandle/closesocket
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：学了 Win32 API 就没必要学系统机制了。** 会调 `CreateWindow`、`MessageBox` 只是「会用 Windows API」——照着 MSDN 抄就行。但遇到这些问题时你只能束手无策：窗口卡死（消息循环被阻塞，需理解消息驱动模型）、程序崩溃找不到原因（需理解进程地址空间和异常处理）、多线程数据竞争（需理解同步对象和内存可见性）、高并发服务器性能差（需理解 IOCP 和线程池模型）、文件被占用无法删除（需理解句柄生命周期）。懂系统机制的人能：用 Spy++ 追踪消息流、用 Process Explorer 分析句柄泄漏、用 xperf 定位线程阻塞、理解注册表对系统行为的影响。区分标志：能否诊断和解决「调用 API 解决不了」的问题。
+</Callout>
+
+<Exercises>
+**问题 1**：用「一个窗口程序的一生」串联全书九章。
+
+<Answer>
+一个窗口程序从 `WinMain` 到 `WM_DESTROY`：①API基础（第2章）——`WinMain` 入口，`GetModuleHandle` 获取句柄，`WSAStartup` 初始化网络；②注册窗口类（第4章）——`WNDCLASSEX`+`RegisterClassEx`；③创建窗口（第4章）——`CreateWindowEx`+`ShowWindow`；④消息循环（第3章）——`GetMessage`/`TranslateMessage`/`DispatchMessage`；⑤GDI绘制（第5章）——`WM_PAINT` 中 `BeginPaint`/`TextOut`/`EndPaint`；⑥读取配置（第6章）——`RegOpenKey`/`RegQueryValue`；⑦后台线程（第7章）——`CreateThread`/`WaitForSingleObject`；⑧文件I/O（第8章）——`CreateFile`/`ReadFile`（异步 OVERLAPPED）；⑨网络通信（第9章）——`socket`/`connect`/`send`/`recv`；⑩退出——`WM_DESTROY`→`PostQuitMessage`→资源回收。一次运行，九章贯通。
+</Answer>
+
+**问题 2**：如何设计一个高并发的 Windows 网络服务器？
+
+<Answer>
+①网络层——Winsock + IOCP：`CreateIoCompletionPort` 创建端口，套接字用 `WSARecv`/`WSASend` 异步投递 I/O，完成通知由 IOCP 分发给线程池。②线程模型——N+1 个工作线程（N=CPU核数），`GetQueuedCompletionStatus` 取完成通知处理；业务逻辑可分离到任务队列由另一组业务线程处理。③同步——CRITICAL_SECTION 保护共享数据（连接列表/会话表），进程内用临界区，跨进程用 Mutex/Event。④配置——注册表存储端口/线程数/日志路径，启动时 `RegQueryValue` 读取。⑤日志——异步 `WriteFile`+`OVERLAPPED` 或内存映射文件批量写入。⑥运行——以 Windows 服务形式运行（`ServiceMain`+`SCM`），开机自启动。核心：IOCP 最大化 I/O 吞吐，线程池最小化切换，异步贯穿全链路。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="一个窗口程序的一生">一个 Windows 程序从 `WinMain` 到 `WM_DESTROY` 的完整旅程：获取句柄 → 注册窗口类 → 创建窗口 → 消息循环 → GDI绘制 → 注册表配置 → 后台线程 → 文件读写 → 网络通信 → 退出回收。全书九章知识在一个程序的生命周期中全部参与，是总复习的主线。</GlossaryItem>
+<GlossaryItem term="消息驱动 vs 过程式调用">过程式调用（控制台程序）：程序主动调用函数，控制流线性。消息驱动（GUI程序）：程序被动响应消息，控制流由事件决定，结构是「初始化+循环+回调」三段式。本质区别：控制权在程序还是在事件。消息驱动天然支持异步事件，UI线程单线程避免了竞态。</GlossaryItem>
+<GlossaryItem term="一切皆 HANDLE">Windows 的统一设计哲学：文件、进程、线程、窗口、事件、互斥量、套接字都是句柄。优势：统一 API（WaitForSingleObject 可等待所有内核对象）、统一生命周期（CloseHandle）、统一安全（安全描述符）、跨进程共享（命名对象）。挑战：句柄泄漏、类型不安全、异常安全需 RAII。最佳实践：RAII 封装所有句柄。</GlossaryItem>
+</Glossary>

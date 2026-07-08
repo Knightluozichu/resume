@@ -1,0 +1,119 @@
+---
+title: "窗口管理"
+type: C
+section: "系统与操作系统"
+order: 3
+description: "掌握Windows窗口生命周期——从窗口类注册到实例创建、属性体系与子类化机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WjWindowManagementDiagram } from "@/components/mdx/windows-journey/diagrams/wj-window-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解窗口类（模板）与窗口实例（对象）的关系
+- 掌握窗口生命周期：RegisterClass → CreateWindow → ShowWindow → 消息循环 → DestroyWindow
+- 理解 WNDCLASSEX 结构体的关键字段和窗口样式体系
+- 掌握子类化（Subclassing）和超类化（Superclassing）的区别与应用
+</Objectives>
+
+## 直觉引入
+
+创建一个窗口就像开一家连锁店。你先去工商局注册一个「品牌」（`RegisterClassEx` 注册窗口类），定义好这个品牌的统一风格（窗口过程、光标、背景色）。然后你可以用这个品牌开很多家分店（`CreateWindowEx` 创建窗口实例），每家分店有自己的地址（位置）和大小（尺寸），但都遵循品牌的统一风格。`HWND` 就是每家分店的门牌号——你通过门牌号找到具体的店，但所有店共享同一个品牌定义。
+
+<WjWindowManagementDiagram />
+
+## 窗口生命周期
+
+<Term def="窗口类是窗口的模板，通过 RegisterClassEx 注册，定义了该类所有窗口共享的属性（窗口过程、光标、背景画刷等）。窗口实例是通过 CreateWindowEx 基于已注册的类名创建的具体窗口对象，拥有独立的 HWND。一个窗口类可以创建多个实例。">窗口类</Term>与窗口实例的关系是面向对象的映射。完整生命周期：
+
+```c
+// 1. 注册窗口类（定义模板）
+WNDCLASSEXW wc = { sizeof(WNDCLASSEXW) };
+wc.lpfnWndProc   = WindowProc;           // 窗口过程回调（最关键）
+wc.hInstance     = hInstance;            // 模块实例句柄
+wc.lpszClassName = L"MyWindowClass";     // 类名（唯一标识）
+wc.hCursor       = LoadCursor(NULL, IDC_ARROW);   // 光标
+wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);     // 背景画刷
+wc.style         = CS_HREDRAW | CS_VREDRAW;        // 尺寸变化时重绘
+RegisterClassExW(&wc);
+
+// 2. 创建窗口实例（实例化）
+HWND hwnd = CreateWindowExW(
+    0,                         // dwExStyle（扩展样式）
+    L"MyWindowClass",          // 已注册的类名
+    L"我的应用",                // 窗口标题
+    WS_OVERLAPPEDWINDOW,       // dwStyle（基本样式）
+    CW_USEDEFAULT, CW_USEDEFAULT,  // x, y（位置）
+    800, 600,                  // nWidth, nHeight
+    NULL,                      // hWndParent（无父窗口）
+    NULL,                      // hMenu（无菜单）
+    hInstance,                 // hInstance
+    NULL                       // lpParam
+);
+
+// 3. 显示并更新窗口
+ShowWindow(hwnd, nCmdShow);    // 显示窗口
+UpdateWindow(hwnd);            // 立即触发 WM_PAINT
+
+// 4. 消息循环（见第3章）
+// ...
+
+// 5. 销毁窗口（用户点击关闭按钮 → WM_DESTROY）
+//    PostQuitMessage(0) 发送 WM_QUIT → 消息循环结束
+```
+
+## 窗口样式与子类化
+
+窗口样式分两层：`dwStyle`（基本样式，`WS_*`）和 `dwExStyle`（扩展样式，`WS_EX_*`）。`WS_OVERLAPPEDWINDOW` 是最常用的组合样式，包含标题栏、系统菜单、最小化/最大化按钮和可调边框。
+
+子类化是修改已有窗口行为的强大技术——通过替换窗口过程来拦截和处理消息：
+
+```c
+// 保存原始窗口过程
+WNDPROC OldProc;
+
+// 自定义窗口过程
+LRESULT CALLBACK MyEditProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    if (msg == WM_CHAR) {
+        // 拦截：只允许输入数字
+        if (wp < '0' || wp > '9') return 0;  // 吞掉非数字按键
+    }
+    // 其余消息转发给原始窗口过程
+    return CallWindowProcW(OldProc, hwnd, msg, wp, lp);
+}
+
+// 子类化：替换编辑框的窗口过程
+OldProc = (WNDPROC)SetWindowLongPtrW(hEdit, GWLP_WNDPROC, (LONG_PTR)MyEditProc);
+// 现在 hEdit 的消息先经过 MyEditProc 处理
+
+// 恢复：换回原始窗口过程
+SetWindowLongPtrW(hEdit, GWLP_WNDPROC, (LONG_PTR)OldProc);
+```
+
+<Callout type="tip">
+**最佳实践：窗口类只需注册一次。** 一个窗口类（如 `MyWindowClass`）在进程内只需 `RegisterClassEx` 一次，之后可以 `CreateWindowEx` 创建任意多个同类窗口实例。它们共享同一个窗口过程和类属性，但拥有各自的 HWND、位置和窗口数据。这和面向对象中「类定义一次，创建多个对象」完全一致。注册失败会返回 0，可用 `GetLastError()` 查询原因（常见：类名已存在）。
+</Callout>
+
+<Exercises>
+**问题 1**：窗口类和窗口实例的关系是什么？
+
+<Answer>
+窗口类是模板，窗口实例是按模板创建的具体对象。`RegisterClassEx` 注册窗口类（`WNDCLASSEX`），定义共享属性（窗口过程、光标、图标、背景画刷、类样式）。`CreateWindowEx` 基于类名创建窗口实例，可创建多个同类窗口——共享窗口过程和类属性，但拥有独立 HWND、位置、大小。类比 OOP：窗口类=类定义（含方法 WindowProc），窗口实例=对象实例，HWND=对象引用。`UnregisterClass` 注销不需要的类。
+</Answer>
+
+**问题 2**：什么是窗口子类化？它和超类化有什么区别？
+
+<Answer>
+子类化是替换已有窗口的窗口过程函数指针，使其消息先经过自定义函数——常用于修改标准控件行为。实例子类化用 `SetWindowLongPtr(GWLP_WNDPROC, NewProc)` 替换特定窗口实例；自定义过程处理完后通过 `CallWindowProc(OldProc, ...)` 转发。超类化是基于已有窗口类创建新类——先 `GetClassInfoEx` 取原类属性，修改 `lpfnWndProc` 和 `lpszClassName` 后 `RegisterClassEx` 注册新类。区别：子类化改已有窗口实例（运行时），超类化创建新类（初始化时），不影响原类窗口。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="WNDCLASSEX">窗口类注册结构体，包含窗口过程指针（lpfnWndProc）、类名（lpszClassName）、模块实例（hInstance）、光标（hCursor）、图标（hIcon）、背景画刷（hbrBackground）、类样式（style）等字段。RegisterClassEx 将其注册到系统，之后 CreateWindowEx 通过类名创建实例。</GlossaryItem>
+<GlossaryItem term="窗口样式（WS_*）">CreateWindowEx 的 dwStyle 参数，定义窗口基本外观和行为。WS_OVERLAPPEDWINDOW（组合样式：标题栏+系统菜单+最小化/最大化按钮+边框）最常用。WS_POPUP（无边框弹出窗口）、WS_CHILD（子窗口）常见。WS_EX_*（扩展样式）定义高级行为：WS_EX_TOPMOST（置顶）、WS_EX_LAYERED（分层透明）、WS_EX_TOOLWINDOW（工具窗口）。</GlossaryItem>
+<GlossaryItem term="子类化（Subclassing）">替换已有窗口的窗口过程函数指针（SetWindowLongPtr + GWLP_WNDPROC），使消息先经过自定义函数处理。实例子类化影响单个窗口，全局子类化影响整个类。自定义过程通过 CallWindowProc 转发未处理消息给原过程。常用于修改标准控件（如只允许数字输入的编辑框）。</GlossaryItem>
+</Glossary>

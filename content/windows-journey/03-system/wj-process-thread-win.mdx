@@ -1,0 +1,140 @@
+---
+title: "进程与线程"
+type: C
+section: "系统与操作系统"
+order: 6
+description: "掌握Windows进程线程模型与四大同步机制——从CreateProcess到Mutex/Semaphore/Event/CriticalSection"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WjProcessThreadWinDiagram } from "@/components/mdx/windows-journey/diagrams/wj-process-thread-win";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解进程（资源容器）与线程（执行单元）的核心区别
+- 掌握 CreateProcess 和 CreateThread 的使用与参数语义
+- 理解四大同步对象：Mutex、Semaphore、Event、Critical Section
+- 掌握 WaitForSingleObject/WaitForMultipleObjects 的等待机制
+</Objectives>
+
+## 直觉引入
+
+进程是一家「工厂」，线程是工厂里的「工人」。工厂提供工作场所（地址空间）和设备（句柄表、代码、数据），工人负责实际干活（CPU 执行）。一个工厂至少有一个工人（主线程），也可以雇佣更多工人（`CreateThread`）并行工作。工人们共享工厂的所有资源，但各自有自己的工具箱（线程栈和寄存器）。当多个工人需要使用同一台机器（共享数据）时，就需要排队规则（同步机制）——否则会抢机器导致混乱（数据竞争）。
+
+<WjProcessThreadWinDiagram />
+
+## 进程与线程创建
+
+<Term def="进程是资源容器（虚拟地址空间+句柄表+安全令牌），线程是 CPU 调度实体（栈+寄存器现场）。一个进程至少有一个主线程。CreateProcess 创建进程+主线程，CreateThread 在已有进程中创建额外线程。">进程与线程</Term>的创建和等待：
+
+```c
+// 创建子进程
+STARTUPINFOW si = { sizeof(STARTUPINFOW) };
+PROCESS_INFORMATION pi = {};
+
+CreateProcessW(
+    L"C:\\Windows\\System32\\notepad.exe",  // 可执行文件路径
+    NULL,                                    // 命令行参数
+    NULL, NULL,                              // 进程/线程安全属性
+    FALSE,                                   // 不继承句柄
+    0,                                       // 创建标志
+    NULL, NULL,                              // 环境块/当前目录
+    &si, &pi                                 // 启动信息/进程信息
+);
+// pi.hProcess = 进程句柄, pi.hThread = 主线程句柄
+// pi.dwProcessId = PID, pi.dwThreadId = TID
+
+// 等待子进程退出
+WaitForSingleObject(pi.hProcess, INFINITE);
+
+// 获取退出码
+DWORD exitCode;
+GetExitCodeProcess(pi.hProcess, &exitCode);
+
+// 关闭句柄（不关闭不终止进程，但泄漏句柄表项）
+CloseHandle(pi.hProcess);
+CloseHandle(pi.hThread);
+
+// 创建工作线程
+DWORD WINAPI WorkerThread(LPVOID param) {
+    // 线程函数：在线程中执行的代码
+    for (int i = 0; i < 100; i++) {
+        // 执行工作...
+        Sleep(10);  // 模拟耗时操作
+    }
+    return 0;  // 线程退出码
+}
+
+HANDLE hThread = CreateThread(
+    NULL,           // 安全属性
+    0,              // 栈大小（0=默认1MB）
+    WorkerThread,   // 线程函数
+    NULL,           // 参数
+    0,              // 创建标志（0=立即运行，CREATE_SUSPENDED=挂起）
+    NULL            // 线程ID输出
+);
+WaitForSingleObject(hThread, INFINITE);  // 等待线程完成
+CloseHandle(hThread);
+```
+
+## 四大同步机制
+
+当多个线程访问共享数据时，必须使用同步对象防止数据竞争：
+
+```c
+// 1. 临界区（CRITICAL_SECTION）——进程内，轻量级（用户态自旋）
+CRITICAL_SECTION cs;
+InitializeCriticalSection(&cs);
+
+EnterCriticalSection(&cs);    // 获取（同线程可重入）
+// ... 访问共享数据 ...
+LeaveCriticalSection(&cs);    // 释放
+DeleteCriticalSection(&cs);   // 销毁
+
+// 2. 互斥量（Mutex）——可跨进程，有拥有者概念
+HANDLE hMutex = CreateMutexW(NULL, FALSE, L"Global\\MyMutex");
+WaitForSingleObject(hMutex, INFINITE);  // 获取
+// ... 临界区 ...
+ReleaseMutex(hMutex);                   // 释放（必须拥有者释放）
+
+// 3. 信号量（Semaphore）——计数器，允许多线程同时获取
+HANDLE hSem = CreateSemaphoreW(NULL, 3, 3, NULL);  // 初始3，最大3
+WaitForSingleObject(hSem, INFINITE);  // 计数-1（到0则阻塞）
+// ... 访问资源池（最多3个线程同时） ...
+ReleaseSemaphore(hSem, 1, NULL);      // 计数+1
+
+// 4. 事件（Event）——通知机制
+HANDLE hEvent = CreateEventW(NULL, TRUE, FALSE, NULL);  // 手动重置
+// 工作线程：
+WaitForSingleObject(hEvent, INFINITE);  // 等待事件
+// 通知线程：
+SetEvent(hEvent);    // 设置有信号（唤醒所有等待者）
+ResetEvent(hEvent);  // 手动重置为无信号
+```
+
+<Callout type="trap">
+**误区：线程越多程序越快。** 线程创建和切换有开销（内核态栈分配、寄存器现场保存/恢复、CPU 缓存失效）。当线程数远超 CPU 核数时，线程争抢 CPU 导致频繁切换，反而比单线程慢。更严重的是：多个线程争抢同步对象（锁）会导致锁竞争——线程把时间花在等锁而非干活上。最佳实践：CPU 密集型任务线程数 ≈ CPU 核数；I/O 密集型任务可用线程池或 IOCP（少量线程管理海量 I/O）。用性能分析器（如 xperf）验证线程是否在干活而非等锁。
+</Callout>
+
+<Exercises>
+**问题 1**：进程和线程的关系是什么？各自包含哪些核心资源？
+
+<Answer>
+进程是资源容器，线程是 CPU 调度实体。一个进程至少一个主线程，多线程共享进程资源。进程包含：虚拟地址空间、EPROCESS（内核进程对象）、PEB（进程环境块）、句柄表、安全令牌、优先级类。线程包含：ETHREAD（内核线程对象）、TEB（线程环境块）、用户态栈（默认1MB）、内核态栈（12~24KB）、寄存器现场 CONTEXT、线程优先级（0~31）。进程提供隔离，线程提供并发。CreateProcess 创建进程+主线程，CreateThread 创建额外线程。
+</Answer>
+
+**问题 2**：Mutex、Semaphore、Event 和 Critical Section 的区别是什么？
+
+<Answer>
+①Mutex——可跨进程，有拥有者概念（只有获取者能释放），可递归，内核对象（等待进内核态）。②Semaphore——计数器，允许多线程同时获取（资源池），内核对象，可跨进程。③Event——通知机制，分手动重置（唤醒所有等待者，手动 ResetEvent）和自动重置（唤醒一个后自动复位），内核对象，可跨进程。④Critical Section——进程内使用，轻量级（先用户态自旋未获取才进内核态），不是内核对象。选择：进程内同步优先用临界区（性能最好），跨进程或需超时用 Mutex/Semaphore/Event。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="进程（Process）">Windows 的资源容器，包含虚拟地址空间、句柄表、安全令牌等。EPROCESS 是内核进程对象，PEB 是进程环境块。通过 CreateProcess 创建，包含主线程。进程间地址空间隔离，通过共享内存/管道/邮槽等 IPC 机制通信。优先级类：IDLE/NORMAL/HIGH/REALTIME。</GlossaryItem>
+<GlossaryItem term="线程（Thread）">CPU 调度实体，包含用户态栈（1MB）、内核态栈、寄存器现场 CONTEXT。ETHREAD 是内核线程对象，TEB 是线程环境块。通过 CreateThread 创建。同一进程的线程共享地址空间和资源，通过同步对象（Mutex/Semaphore/Event/Critical Section）协调访问。线程优先级 0~31。</GlossaryItem>
+<GlossaryItem term="四大同步对象">①Mutex（互斥量）——可跨进程，有拥有者，可递归，内核对象。②Semaphore（信号量）——计数器，允许多线程同时获取，内核对象。③Event（事件）——通知机制，手动/自动重置，内核对象。④Critical Section（临界区）——进程内，轻量级用户态自旋，非内核对象。WaitForSingleObject/WaitForMultipleObjects 等待内核对象变为有信号。</GlossaryItem>
+</Glossary>

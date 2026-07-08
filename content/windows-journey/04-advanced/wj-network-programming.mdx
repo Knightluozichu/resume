@@ -1,0 +1,129 @@
+---
+title: "网络编程"
+type: C
+section: "系统与操作系统"
+order: 8
+description: "掌握Winsock网络编程——从套接字生命周期到五种I/O模型，TCP/UDP对比与IOCP高并发架构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WjNetworkProgrammingDiagram } from "@/components/mdx/windows-journey/diagrams/wj-network-programming";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Winsock 初始化和套接字通信生命周期
+- 理解 TCP 服务器/客户端和 UDP 编程的调用流程差异
+- 掌握五种 Winsock I/O 模型的特点和适用场景
+- 理解 IOCP + Winsock 的高并发网络服务器架构
+</Objectives>
+
+## 直觉引入
+
+网络编程就像打电话。TCP 是「正式电话」——你先拨号建立连接（`connect`），对方接听（`accept`），然后双方通话（`send`/`recv`），最后挂断（`closesocket`）。通话保证每句话对方都能听到（可靠传输）。UDP 是「对讲机」——你按下按钮就喊（`sendto`），不需要先建立连接，对方听到就听到，没听到就算了（不可靠但快速）。Winsock 是 Windows 的「通信局」——你需要先去登记（`WSAStartup`），用完去注销（`WSACleanup`）。
+
+<WjNetworkProgrammingDiagram />
+
+## Winsock 生命周期
+
+<Term def="Winsock（Windows Sockets）是 Windows 的网络编程接口，封装在 ws2_32.dll 中。提供套接字创建、连接、数据收发等 API。使用前必须 WSAStartup 初始化，退出前 WSACleanup 清理。支持 TCP（流式）和 UDP（数据报）两种协议。">Winsock</Term>的通信流程：
+
+```c
+// TCP 服务器端
+WSADATA wsaData;
+WSAStartup(MAKEWORD(2, 2), &wsaData);  // ① 初始化 Winsock
+
+SOCKET listenSock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);  // ② 创建套接字
+
+sockaddr_in addr = {};
+addr.sin_family = AF_INET;
+addr.sin_port = htons(8080);
+addr.sin_addr.s_addr = htonl(INADDR_ANY);
+bind(listenSock, (sockaddr*)&addr, sizeof(addr));  // ③ 绑定地址端口
+
+listen(listenSock, SOMAXCONN);  // ④ 开始监听
+
+// ⑤ 接受连接（阻塞等待）
+sockaddr_in clientAddr;
+int clientLen = sizeof(clientAddr);
+SOCKET clientSock = accept(listenSock, (sockaddr*)&clientAddr, &clientLen);
+
+// ⑥ 收发数据
+char buf[4096];
+int received = recv(clientSock, buf, sizeof(buf), 0);
+send(clientSock, "Hello", 5, 0);
+
+closesocket(clientSock);  // ⑦ 关闭连接
+closesocket(listenSock);  // ⑧ 关闭监听
+WSACleanup();              // ⑨ 清理
+
+// TCP 客户端
+SOCKET sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+sockaddr_in serverAddr = {};
+serverAddr.sin_family = AF_INET;
+serverAddr.sin_port = htons(8080);
+inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
+connect(sock, (sockaddr*)&serverAddr, sizeof(serverAddr));  // 主动连接
+send(sock, "Hello", 5, 0);
+recv(sock, buf, sizeof(buf), 0);
+closesocket(sock);
+WSACleanup();
+```
+
+## 五种 I/O 模型
+
+```c
+// select 模型：轮询多个套接字
+fd_set readSet;
+FD_ZERO(&readSet);
+FD_SET(sock1, &readSet);
+FD_SET(sock2, &readSet);
+timeval tv = { 1, 0 };  // 1秒超时
+int result = select(0, &readSet, NULL, NULL, &tv);
+if (result > 0) {
+    if (FD_ISSET(sock1, &readSet)) { /* sock1 可读 */ }
+    if (FD_ISSET(sock2, &readSet)) { /* sock2 可读 */ }
+}
+
+// IOCP 模型：高并发服务器首选
+HANDLE hIOCP = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
+CreateIoCompletionPort((HANDLE)clientSock, hIOCP, (ULONG_PTR)sessionData, 0);
+
+// 投递异步接收
+WSABUF wsaBuf = { sizeof(buf), buf };
+OVERLAPPED* pOv = new OVERLAPPED{};
+DWORD flags = 0;
+WSARecv(clientSock, &wsaBuf, 1, NULL, &flags, pOv, NULL);
+
+// 工作线程取完成通知
+DWORD bytesTransferred;
+ULONG_PTR key;
+OVERLAPPED* pOv;
+GetQueuedCompletionStatus(hIOCP, &bytesTransferred, &key, &pOv, INFINITE);
+```
+
+<Callout type="trap">
+**误区：select 可以处理任意数量的连接。** `select` 有 FD 上限（默认 64，可通过修改 `FD_SETSIZE` 重新编译提升到 1024）。更关键的是 `select` 每次调用都要把全部 FD 集合从用户态拷贝到内核态，内核线性扫描所有 FD 检查就绪状态——连接数越多性能越差（O(n)）。高并发服务器（数千连接）应使用 IOCP：异步 I/O + 线程池 + 完成队列，内核只通知真正有事件完成的连接（O(1) 每事件），线程不阻塞在单个连接上。IOCP 是 Windows 高并发网络服务器的唯一正确选择。
+</Callout>
+
+<Exercises>
+**问题 1**：TCP 服务器端和客户端的套接字调用流程分别是什么？
+
+<Answer>
+服务器：WSAStartup → socket(SOCK_STREAM) → bind(地址+端口) → listen(backlog) → accept(阻塞等待,返回新套接字) → send/recv → closesocket → WSACleanup。客户端：WSAStartup → socket(SOCK_STREAM) → connect(主动连接,三次握手) → send/recv → closesocket → WSACleanup。区别：服务器需 bind+listen+accept，客户端只需 connect。accept 返回的新套接字与监听套接字共享本地端口但远程地址不同。
+</Answer>
+
+**问题 2**：Winsock 五种 I/O 模型分别是什么？
+
+<Answer>
+①select——用 fd_set 管理多个套接字，select() 阻塞等待任一就绪，有 FD 上限（64/1024），适合少量连接。②WSAAsyncSelect——基于窗口消息通知网络事件，适合 GUI 程序。③WSAEventSelect——基于事件对象通知，适合无窗口控制台程序。④Overlapped I/O——异步 WSARecv/WSASend + OVERLAPPED，完成后通过事件/APC 通知，适合中等并发。⑤IOCP 完成端口——CreateIoCompletionPort 关联套接字，GetQueuedCompletionStatus 取完成通知，线程池处理，适合高并发服务器。性能递增、复杂度递增。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Winsock">Windows 的网络编程接口（ws2_32.dll）。使用前 WSAStartup 初始化（版本协商），退出前 WSACleanup 清理。提供套接字创建（socket）、连接（connect/accept）、收发（send/recv/sendto/recvfrom）、关闭（closesocket）等 API。支持 TCP（SOCK_STREAM，可靠有序）和 UDP（SOCK_DGRAM，无连接不可靠）。</GlossaryItem>
+<GlossaryItem term="五种 I/O 模型">①select（轮询，FD上限64/1024，O(n)）②WSAAsyncSelect（窗口消息通知，适合GUI）③WSAEventSelect（事件对象通知，无窗口程序）④Overlapped I/O（异步+OVERLAPPED，中等并发）⑤IOCP完成端口（线程池+完成队列，O(1)每事件，高并发首选）。性能递增复杂度递增。</GlossaryItem>
+<GlossaryItem term="IOCP + Winsock">Windows 高并发网络服务器标准架构。CreateIoCompletionPort 将套接字关联到完成端口；WSARecv/WSASend 异步投递 I/O；GetQueuedCompletionStatus 在工作线程中取完成通知处理；N+1 个工作线程（N=CPU核数）处理海量连接。内核自动负载均衡，线程不阻塞在单个连接上。IIS、高性能游戏服务器均基于此架构。</GlossaryItem>
+</Glossary>

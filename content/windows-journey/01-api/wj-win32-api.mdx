@@ -1,0 +1,109 @@
+---
+title: "Win32 API基础"
+type: C
+section: "系统与操作系统"
+order: 1
+description: "理解Win32 API分层架构与句柄体系，掌握从应用调用到内核系统调用的完整路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { WjWin32ApiDiagram } from "@/components/mdx/windows-journey/diagrams/wj-win32-api";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Win32 API 的分层架构：应用层 → API 层 → NTDLL → 内核 → 硬件
+- 掌握句柄（HANDLE）的概念、类型和生命周期管理
+- 理解 user32/kernel32/gdi32 三大子系统的职责分工
+- 掌握 WinMain 入口函数的参数语义和 Unicode 处理机制
+</Objectives>
+
+## 直觉引入
+
+你在 Windows 上写的每一个程序，都是「大厦里的一间办公室」。你想开灯（调用系统功能），不是直接去碰电线（操作硬件），而是按墙上的开关（调用 Win32 API）——开关把信号传给大楼的电路系统（NTDLL 系统调用），电路系统控制配电箱（内核），配电箱接通灯泡（硬件）。你不需要懂电线怎么接，只需要知道按哪个开关。而那个开关给你的一张「操作凭证」，就是**句柄（HANDLE）**——你拿着它，系统就知道你要操作什么。
+
+<WjWin32ApiDiagram />
+
+## 分层架构与三大子系统
+
+<Term def="句柄（HANDLE）是 Windows 中代表内核对象或资源的不透明标识符，本质是进程句柄表中的索引。用户态代码通过句柄间接引用内核对象，内核在每次操作时验证有效性和权限，实现安全隔离和封装。">句柄</Term>是 Win32 API 的基石。Win32 API 分为三大子系统 DLL：
+
+- **user32.dll**（窗口管理子系统）：窗口创建与销毁、消息处理、控件（按钮/编辑框）、菜单、对话框、定时器。代表函数：`CreateWindowEx`、`MessageBox`、`GetMessage`。
+- **kernel32.dll**（系统服务子系统）：进程线程管理、文件 I/O、内存管理、同步对象、动态链接库加载。代表函数：`CreateProcess`、`CreateFile`、`VirtualAlloc`。
+- **gdi32.dll**（图形设备接口子系统）：图形绘制、文本输出、位图操作、字体管理。代表函数：`TextOut`、`Rectangle`、`BitBlt`。
+
+调用路径从应用层出发，经 `user32.dll`/`kernel32.dll`/`gdi32.dll` 做参数校验和预处理，再到 `NTDLL.dll` 执行 `syscall` 指令进入内核态，内核调度驱动程序操作硬件。用户态到内核态的切换有性能开销，因此频繁的小操作应考虑批量处理。
+
+```c
+// Win32 API 调用示例：从应用层到内核的完整路径
+#include <windows.h>
+
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+                   LPSTR lpCmdLine, int nCmdShow) {
+    // 1. 获取模块实例句柄（kernel32.dll → NTDLL → 内核）
+    HMODULE hMod = GetModuleHandleW(NULL);  // 返回当前 EXE 的基址
+
+    // 2. 弹出消息框（user32.dll → NTDLL → 内核 → win32k.sys）
+    MessageBoxW(NULL, L"Hello, Windows!", L"First App", MB_OK);
+
+    // 3. 创建文件（kernel32.dll → NTDLL → 内核 I/O 管理器）
+    HANDLE hFile = CreateFileW(L"test.txt", GENERIC_WRITE, 0, NULL,
+                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile != INVALID_HANDLE_VALUE) {
+        DWORD written;
+        WriteFile(hFile, L"Hello", 10, &written, NULL);
+        CloseHandle(hFile);  // 释放句柄（内核对象引用计数-1）
+    }
+    return 0;
+}
+```
+
+## 句柄体系与 Unicode
+
+句柄是 Win32 API 的统一抽象——文件、进程、线程、事件、互斥量都是 `HANDLE`。句柄的生命周期严格遵循「创建 → 使用 → 关闭」三步：`CreateFile` 创建返回句柄，`ReadFile`/`WriteFile` 使用句柄操作，`CloseHandle` 关闭释放。不关闭句柄会泄漏内核对象。
+
+Windows NT 内核内部使用 UTF-16LE 编码，API 提供 A 版（ANSI）和 W 版（Unicode）两套函数。现代程序应直接使用 W 版函数和 `wchar_t`：
+
+```c
+// 定义 UNICODE 宏后，TCHAR = wchar_t，函数自动映射到 W 版
+#define UNICODE
+#define _UNICODE
+#include <windows.h>
+
+// 直接使用 W 版函数（推荐）
+HWND hwnd = CreateWindowExW(
+    0,                          // dwExStyle
+    L"MyWindowClass",           // lpszClassName（宽字符）
+    L"我的窗口",                 // lpszWindowName
+    WS_OVERLAPPEDWINDOW,        // dwStyle
+    CW_USEDEFAULT, CW_USEDEFAULT,  // x, y
+    800, 600,                   // nWidth, nHeight
+    NULL, NULL, hInstance, NULL
+);
+```
+
+<Callout type="trap">
+**误区：不关闭句柄无所谓，程序退出会自动回收。** 程序退出时内核确实会回收所有资源，但在长时间运行的服务器程序中，句柄泄漏会导致进程句柄数持续增长，最终触及上限（每进程约 1600 万句柄，GDI 对象约 10000）而无法创建新对象。更危险的是：未关闭的文件句柄会阻止其他进程删除该文件（「文件被占用」错误）。最佳实践是用 RAII（C++ `std::unique_ptr` 自定义删除器或 `wil::unique_handle`）或 `try-finally` 确保句柄在所有路径上关闭。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是句柄（HANDLE）？为什么 Windows 大量使用句柄而非直接指针？
+
+<Answer>
+句柄是不透明标识符（进程句柄表中的索引），代表内核对象或资源。使用句柄而非直接指针的原因：①安全隔离——用户态不能直接访问内核对象数据，句柄是间接引用，内核验证有效性；②封装性——内核对象布局可随版本变更，句柄屏蔽内部结构；③统一管理——所有内核对象通过 `CloseHandle` 统一释放；④权限控制——句柄创建时携带权限标志（如 `GENERIC_READ`），内核每次操作时检查。常见句柄类型：`HWND`（窗口）、`HANDLE`（文件/进程/线程）、`HDC`（设备上下文）、`HKEY`（注册表键）。
+</Answer>
+
+**问题 2**：Win32 API 从应用层到硬件层的调用路径是什么？
+
+<Answer>
+应用程序 → Win32 API 层（`user32.dll`/`kernel32.dll`/`gdi32.dll`）→ `NTDLL.dll`（系统调用入口）→ Windows 内核（`ntoskrnl.exe`）→ 硬件。应用调用如 `CreateFile`，由 `kernel32.dll` 做参数校验和预处理，再调用 `NTDLL.dll` 中的 `NtCreateFile`，后者执行 `syscall` 指令从用户态切换到内核态，内核的 I/O 管理器接收请求并调度驱动程序操作硬件。`NTDLL.dll` 是用户态和内核态的分界线。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="句柄（HANDLE）">代表内核对象或资源的不透明标识符，本质是进程句柄表中的索引。用户态代码通过句柄间接引用内核对象，内核在每次操作时验证有效性和权限。常见类型：HWND（窗口）、HDC（设备上下文）、HKEY（注册表键）、HMODULE（模块）。生命周期：创建 → 使用 → CloseHandle 关闭。</GlossaryItem>
+<GlossaryItem term="NTDLL.dll">Win32 API 的系统调用入口层，是用户态和内核态的分界线。所有 Win32 API 最终都通过 NTDLL 中的 Nt* 函数执行 syscall 指令进入内核态。NTDLL 不属于 Win32 子系统，而是 Windows NT 原生 API（Native API）的导出层。</GlossaryItem>
+<GlossaryItem term="Unicode（W版函数）">Windows NT 内核使用 UTF-16LE 编码。Win32 API 提供 A 版（ANSI）和 W 版（Unicode）两套函数，A 版内部转换为 W 版。现代程序应直接使用 W 版函数和 wchar_t，避免转换开销和编码问题。定义 UNICODE 和 _UNICODE 宏后 TCHAR 映射为 wchar_t。</GlossaryItem>
+</Glossary>

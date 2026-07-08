@@ -1495,6 +1495,16 @@ import { oscVirtualMemoryQuestions } from "./review/osc-virtual-memory";
 import { oscFileSystemImplQuestions } from "./review/osc-file-system-impl";
 import { oscMassStorageQuestions } from "./review/osc-mass-storage";
 import { oscFinalReviewQuestions } from "./review/osc-final-review";
+import { wjLearningMapQuestions } from "./review/wj-learning-map";
+import { wjWin32ApiQuestions } from "./review/wj-win32-api";
+import { wjMessageLoopQuestions } from "./review/wj-message-loop";
+import { wjWindowManagementQuestions } from "./review/wj-window-management";
+import { wjGdiRenderingQuestions } from "./review/wj-gdi-rendering";
+import { wjRegistryServiceQuestions } from "./review/wj-registry-service";
+import { wjProcessThreadWinQuestions } from "./review/wj-process-thread-win";
+import { wjFileIoQuestions } from "./review/wj-file-io";
+import { wjNetworkProgrammingQuestions } from "./review/wj-network-programming";
+import { wjFinalReviewQuestions } from "./review/wj-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3025,6 +3035,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...oscFileSystemImplQuestions,
   ...oscMassStorageQuestions,
   ...oscFinalReviewQuestions,
+  ...wjLearningMapQuestions,
+  ...wjWin32ApiQuestions,
+  ...wjMessageLoopQuestions,
+  ...wjWindowManagementQuestions,
+  ...wjGdiRenderingQuestions,
+  ...wjRegistryServiceQuestions,
+  ...wjProcessThreadWinQuestions,
+  ...wjFileIoQuestions,
+  ...wjNetworkProgrammingQuestions,
+  ...wjFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

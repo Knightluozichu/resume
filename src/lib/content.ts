@@ -197,6 +197,7 @@ export const BOOK_ORDER = [
   "csapp",
   "modern-os",
   "os-concepts",
+  "windows-journey",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -334,6 +335,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "csapp": "深入理解计算机系统（CSAPP）",
   "modern-os": "现代操作系统（第4版）",
   "os-concepts": "操作系统概念（恐龙书）",
+  "windows-journey": "Windows逐梦旅程",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
