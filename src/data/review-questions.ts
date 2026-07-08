@@ -1475,6 +1475,16 @@ import { capExceptionalControlQuestions } from "./review/cap-exceptional-control
 import { capVirtualMemoryQuestions } from "./review/cap-virtual-memory";
 import { capSystemLevelIoQuestions } from "./review/cap-system-level-io";
 import { capFinalReviewQuestions } from "./review/cap-final-review";
+import { mosLearningMapQuestions } from "./review/mos-learning-map";
+import { mosProcessManagementQuestions } from "./review/mos-process-management";
+import { mosThreadModelQuestions } from "./review/mos-thread-model";
+import { mosMemoryManagementQuestions } from "./review/mos-memory-management";
+import { mosPageReplacementQuestions } from "./review/mos-page-replacement";
+import { mosFileSystemQuestions } from "./review/mos-file-system";
+import { mosDiskSchedulingQuestions } from "./review/mos-disk-scheduling";
+import { mosDeadlockQuestions } from "./review/mos-deadlock";
+import { mosSecurityProtectionQuestions } from "./review/mos-security-protection";
+import { mosFinalReviewQuestions } from "./review/mos-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2984,6 +2994,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...capVirtualMemoryQuestions,
   ...capSystemLevelIoQuestions,
   ...capFinalReviewQuestions,
+  ...mosLearningMapQuestions,
+  ...mosProcessManagementQuestions,
+  ...mosThreadModelQuestions,
+  ...mosMemoryManagementQuestions,
+  ...mosPageReplacementQuestions,
+  ...mosFileSystemQuestions,
+  ...mosDiskSchedulingQuestions,
+  ...mosDeadlockQuestions,
+  ...mosSecurityProtectionQuestions,
+  ...mosFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

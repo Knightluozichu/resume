@@ -1598,7 +1598,17 @@ export type ReviewChapterSlug =
   | "cap-exceptional-control"
   | "cap-virtual-memory"
   | "cap-system-level-io"
-  | "cap-final-review";
+  | "cap-final-review"
+  | "mos-learning-map"
+  | "mos-process-management"
+  | "mos-thread-model"
+  | "mos-memory-management"
+  | "mos-page-replacement"
+  | "mos-file-system"
+  | "mos-disk-scheduling"
+  | "mos-deadlock"
+  | "mos-security-protection"
+  | "mos-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3201,6 +3211,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cap-virtual-memory": "虚拟内存",
   "cap-system-level-io": "系统级 I/O",
   "cap-final-review": "全书总复习",
+  "mos-learning-map": "全书学习地图",
+  "mos-process-management": "进程管理",
+  "mos-thread-model": "线程模型",
+  "mos-memory-management": "内存管理",
+  "mos-page-replacement": "页面置换",
+  "mos-file-system": "文件系统",
+  "mos-disk-scheduling": "磁盘调度",
+  "mos-deadlock": "死锁",
+  "mos-security-protection": "安全与保护",
+  "mos-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
