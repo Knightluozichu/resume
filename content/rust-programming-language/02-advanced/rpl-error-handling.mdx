@@ -1,0 +1,177 @@
+---
+title: "错误处理"
+type: B
+section: "高级特性"
+order: 5
+description: "Result、Option 与 ? 运算符。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplErrorHandlingDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-error-handling";
+
+<Objectives>
+- 掌握 Result<T,E> 和 Option<T> 的使用
+- 理解 ? 运算符的传播机制
+- 学会自定义错误类型和 thiserror/anyhow
+- 区分可恢复错误和不可恢复 panic
+</Objectives>
+
+## 直觉引入
+
+Rust 的错误处理像快递签收——每个包裹（操作结果）都明确标注「成功」或「失败」（Result），你必须签收才能拿到内容。不像异常那样可能被「忘记处理」，Rust 强制你面对每一种可能的失败。? 运算符就像「代签」——把失败自动转发给上级处理。
+
+## 概念讲解
+
+### Result 与 ?
+
+<Term def="Result<T,E> 表示成功(Ok)或失败(Err)。? 运算符自动传播错误：Err 时立即返回，Ok 时解包继续。">
+Rust 没有 null（用 Option<T> 替代）和异常（用 Result<T,E> 替代）。
+
+`?` 运算符是错误传播的语法糖：
+```rust
+fn read_config() -> Result<String, io::Error> {
+    let content = fs::read_to_string("config.txt")?; // Err 时自动 return Err
+    Ok(content)
+}
+```
+`?` 等价于：
+```rust
+match expr {
+    Ok(v) => v,
+    Err(e) => return Err(e.into()), // 自动类型转换
+}
+```
+
+`?` 让错误传播像异常一样简洁，但每次都用 `?` 显式标记——不像异常那样隐式传播。
+</Term>
+
+### 自定义错误与 thiserror/anyhow
+
+<Term def="thiserror 用 derive 宏生成错误类型，适合库 API。anyhow 自动装箱任何错误，适合应用内部。">
+自定义错误类型实现 `Error` trait（含 Display + Debug）：
+
+**thiserror**（库推荐）：
+```rust
+#[derive(Error, Debug)]
+enum ParseError {
+    #[error("io: {0}")]
+    Io(#[from] io::Error),
+    #[error("syntax at line {line}")]
+    Syntax { line: usize },
+}
+```
+
+**anyhow**（应用推荐）：
+```rust
+fn main() -> anyhow::Result<()> {
+    let content = fs::read_to_string("config.txt")?; // 自动装箱
+    Ok(())
+}
+```
+
+选择：库用 thiserror（消费者需 match 具体错误类型），应用用 anyhow（只关心成功失败不关心具体类型）。
+</Term>
+
+## 交互Demo
+
+<RplErrorHandlingDiagram />
+
+<Stepper>
+<Step title="Result/Option">
+Result<T,E> 替代异常，Option<T> 替代 null。两者都是枚举，必须显式处理。
+</Step>
+<Step title="? 运算符">
+expr? 在 Err 时自动 return Err(e.into())，Ok 时解包继续。让错误传播像异常一样简洁但显式。
+</Step>
+<Step title="thiserror/anyhow">
+库用 thiserror 定义精确错误类型（消费者可 match），应用用 anyhow 装箱任何错误（只关心成功失败）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+use std::fs;
+use std::io;
+
+// Result + ? 传播
+fn read_and_parse() -> Result<i32, io::Error> {
+    let content = fs::read_to_string("num.txt")?;
+    let num: i32 = content.trim().parse()
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    Ok(num)
+}
+
+// 自定义错误类型（thiserror）
+#[derive(thiserror::Error, Debug)]
+enum AppError {
+    #[error("IO error: {0}")]
+    Io(#[from] io::Error),
+    #[error("Parse error: {0}")]
+    Parse(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
+}
+
+fn load_config() -> Result<Config, AppError> {
+    let content = fs::read_to_string("config.toml")?; // Io 自动转换
+    let config = parse(&content).map_err(|e| AppError::Parse(e.to_string()))?;
+    if config.is_empty() {
+        return Err(AppError::NotFound("empty config".into()));
+    }
+    Ok(config)
+}
+
+// 应用层用 anyhow
+fn main() -> anyhow::Result<()> {
+    let config = load_config()?; // anyhow 自动装箱 AppError
+    println!("{:?}", config);
+    Ok(())
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：? 运算符和异常一样是隐式的**
+?` 是显式的——每次用 `?` 都标记了一个可能的错误传播点。你可以一眼看出哪些操作可能失败。异常是隐式传播的——调用一个可能抛异常的函数不需要任何标记。显式性让 Rust 代码的错误处理路径更清晰。
+</Callout>
+
+<Callout type="trap">
+**误区：所有错误都应该用 anyhow**
+anyhow 适合应用层（只关心成功失败）。库的公开 API 应该用 thiserror 定义精确错误类型——消费者需要 match 具体错误做不同处理（如 NotFound 重试、Parse 提示用户修正）。anyhow 的错误不便于程序化 match。
+</Callout>
+
+<Exercises>
+**问题 1**：? 运算符的工作原理是什么？
+
+<Answer>
+let x = expr?; 等价于 match expr { Ok(v)=>v, Err(e)=>return Err(e.into()) }。如果 Err 立即从当前函数返回错误（自动 via From 转换类型）。如果 None（Option）立即返回 None。要求函数返回类型必须是 Result/Option。让错误传播像异常一样简洁但显式（每次用 ? 标记）。
+</Answer>
+
+**问题 2**：thiserror 和 anyhow 分别适合什么场景？
+
+<Answer>
+thiserror：derive 宏自动生成 Display 和 From，适合库的公开 API 错误类型——消费者需要 match 具体错误做不同处理。anyhow：提供 anyhow::Result 自动装箱任何错误，适合应用 main 和内部代码——只关心成功失败不关心具体类型。原则：库用 thiserror，应用用 anyhow。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Result<T,E>">
+表示成功(Ok(T))或失败(Err(E))的枚举。替代异常，强制显式处理。
+</GlossaryItem>
+<GlossaryItem term="Option<T>">
+表示有值(Some(T))或无值(None)的枚举。替代 null。
+</GlossaryItem>
+<GlossaryItem term="? 运算符">
+错误传播语法糖。Err 时自动 return Err(e.into())，Ok 时解包。要求函数返回 Result/Option。
+</GlossaryItem>
+<GlossaryItem term="panic!">
+不可恢复错误的宏。打印错误信息后 unwind 栈（或 abort）。用于不变量违反等不应恢复的场景。
+</GlossaryItem>
+</Glossary>

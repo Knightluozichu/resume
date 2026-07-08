@@ -1,0 +1,253 @@
+---
+title: "channel"
+type: B
+section: "并发编程"
+order: 5
+description: "CSP 通信模型与 channel 操作。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GplChannelsDiagram } from "@/components/mdx/go-programming-language/diagrams/gpl-channels";
+
+<Objectives>
+- 理解 CSP 通信模型的核心思想
+- 掌握无缓冲和有缓冲 channel 的区别
+- 学会 channel 的 close/range/direction 操作
+- 理解「通过通信共享内存」的哲学
+</Objectives>
+
+## 直觉引入
+
+channel 就像一根管子——一端塞入数据，另一端取出数据。无缓冲的管子是同步的：塞入的人必须等到有人来取才能松手（交接）。有缓冲的管子是异步的：管子有空间可以先塞进去走人。Go 的哲学是「不要通过共享内存通信，而要通过通信共享内存」——channel 就是这根管子，让 goroutine 之间安全地传递数据。
+
+## 概念讲解
+
+### CSP 与 channel 类型
+
+<Term def="CSP（Communicating Sequential Processes）通过 channel 传递消息而非共享内存。无缓冲 channel 同步，有缓冲 channel 异步。">
+**CSP 模型**：goroutine 之间通过 channel 传递消息，而不是共享变量加锁。这是 Go 并发的核心哲学。
+
+**无缓冲 channel**（`make(chan int)`）：
+- 发送和接收同步——发送方阻塞直到有接收方
+- 用于 goroutine 间的同步交接
+```go
+ch := make(chan int) // 无缓冲
+go func() { ch <- 42 }() // 阻塞直到有人接收
+val := <-ch // 接收，发送方才解除阻塞
+```
+
+**有缓冲 channel**（`make(chan int, N)`）：
+- 缓冲区未满时发送不阻塞，未空时接收不阻塞
+- 缓冲区满时发送阻塞，空时接收阻塞
+```go
+ch := make(chan int, 3) // 缓冲区 3
+ch <- 1 // 不阻塞（有空间）
+ch <- 2 // 不阻塞
+ch <- 3 // 不阻塞
+// ch <- 4 // 阻塞（缓冲区满）
+val := <-ch // 取出 1
+```
+
+选择：同步交接用无缓冲，解耦生产消费用有缓冲。缓冲区大小不等于并发安全——channel 本身始终线程安全。
+</Term>
+
+### channel 操作与方向
+
+<Term def="close 标记 channel 不再发送。range 遍历直到 close。方向限制（chan<- 发送，<-chan 接收）由类型系统强制。">
+**close**：
+```go
+ch := make(chan int, 3)
+ch <- 1
+close(ch) // 标记不再发送
+val, ok := <-ch // ok=false 表示已关闭且缓冲区空
+```
+
+**range 遍历**：
+```go
+for val := range ch { // 持续接收直到 close 且缓冲区空
+    fmt.Println(val)
+}
+```
+
+**方向限制**（类型安全）：
+```go
+func producer(out chan<- int) { // 只能发送
+    out <- 42
+    close(out)
+}
+func consumer(in <-chan int) { // 只能接收
+    val := <-in
+    fmt.Println(val)
+}
+// 双向 channel 可隐式转为单向，反过来不行
+ch := make(chan int)
+go producer(ch) // chan int → chan<- int
+go consumer(ch) // chan int → <-chan int
+```
+
+**原则**：
+1. 由发送方 close channel（接收方 close 是错误）
+2. 不要 close 已经 close 的 channel（panic）
+3. 不要向已 close 的 channel 发送（panic）
+4. 从已 close 且空的 channel 接收返回零值（不 panic）
+</Term>
+
+## 交互Demo
+
+<GplChannelsDiagram />
+
+<Stepper>
+<Step title="无缓冲 vs 有缓冲">
+无缓冲：发送阻塞直到接收，同步交接。有缓冲：缓冲区未满发送不阻塞，异步解耦。
+</Step>
+<Step title="close 与 range">
+发送方 close 标记不再发送。range 持续接收直到 close 且空。已 close 的 channel 接收返回零值。
+</Step>
+<Step title="方向限制">
+chan<- 只发送，<-chan 只接收。双向可隐式转单向，反向不行。类型系统强制。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+// 无缓冲 channel：同步交接
+func syncHandoff() {
+    ch := make(chan string)
+    go func() {
+        ch <- "data" // 阻塞直到主 goroutine 接收
+        fmt.Println("sent")
+    }()
+    msg := <-ch // 接收
+    fmt.Println("received:", msg)
+}
+
+// 有缓冲 channel：生产者消费者
+func producerConsumer() {
+    ch := make(chan int, 3) // 缓冲区 3
+
+    // 生产者
+    go func() {
+        for i := 0; i < 5; i++ {
+            ch <- i // 缓冲区满时阻塞
+            fmt.Println("produced:", i)
+        }
+        close(ch) // 生产完毕，关闭 channel
+    }()
+
+    // 消费者：range 直到 close 且空
+    for val := range ch {
+        fmt.Println("consumed:", val)
+    }
+}
+
+// 方向限制
+func producer(out chan<- int) {
+    for i := 0; i < 3; i++ {
+        out <- i
+    }
+    close(out)
+}
+
+func consumer(in <-chan int) {
+    for val := range in {
+        fmt.Println("got:", val)
+    }
+}
+
+// worker pool 模式
+func workerPool() {
+    jobs := make(chan int, 10)
+    results := make(chan int, 10)
+
+    // 3 个 worker
+    var wg sync.WaitGroup
+    for w := 0; w < 3; w++ {
+        wg.Add(1)
+        go func(id int) {
+            defer wg.Done()
+            for job := range jobs {
+                results <- job * job // 处理并返回结果
+            }
+        }(w)
+    }
+
+    // 发送任务
+    go func() {
+        for i := 1; i <= 6; i++ {
+            jobs <- i
+        }
+        close(jobs)
+    }()
+
+    // 等待 worker 完成
+    go func() {
+        wg.Wait()
+        close(results)
+    }()
+
+    // 收集结果
+    for r := range results {
+        fmt.Println("result:", r)
+    }
+}
+
+func main() {
+    syncHandoff()
+    producerConsumer()
+    workerPool()
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：有缓冲 channel 的缓冲区大小等于并发安全保证**
+channel 本身始终是并发安全的——无论缓冲区大小。缓冲区大小只影响阻塞行为：缓冲区满时发送阻塞，空时接收阻塞。缓冲区大小 0（无缓冲）和 100 都一样安全。选择缓冲区大小是性能调优问题，不是安全问题。通常缓冲区大小应根据生产消费速率匹配选择。
+</Callout>
+
+<Callout type="trap">
+**误区：接收方应该负责 close channel**
+channel 应由发送方 close。原因：1.接收方不知道有多少发送方——close 后其他发送方会 panic。2.向已 close 的 channel 发送会 panic，而接收不会。3.close 的语义是「不再有新数据发送」，只有发送方知道这一点。多个发送方时用 WaitGroup 等待全部完成再 close。
+</Callout>
+
+<Exercises>
+**问题 1**：无缓冲 channel 和有缓冲 channel 有什么区别？分别适合什么场景？
+
+<Answer>
+无缓冲 channel：发送阻塞直到有接收方，同步交接。适合 goroutine 同步（等对方准备好）、信号通知。有缓冲 channel：缓冲区未满时发送不阻塞，异步解耦。适合生产消费模型（速率不匹配时缓冲）、worker pool 任务队列。选择：需要同步交接用无缓冲，需要解耦用有缓冲。缓冲区大小根据生产消费速率差选择，不是越大越好。
+</Answer>
+
+**问题 2**：为什么应该由发送方 close channel？向已 close 的 channel 发送和接收分别会怎样？
+
+<Answer>
+发送方 close 因为 close 语义是「不再有新数据」，只有发送方知道。多发送方时用 WaitGroup 等全部完成再 close。向已 close 的 channel 发送会 panic（runtime error）。从已 close 且缓冲区空的 channel 接收返回零值（不 panic），可用 val,ok:=<-ch 的 ok 判断是否已 close。range 在 close 且空后自动结束循环。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CSP">
+Communicating Sequential Processes。通过 channel 传递消息而非共享内存。Go 并发的核心哲学。
+</GlossaryItem>
+<GlossaryItem term="无缓冲 channel">
+make(chan T)。发送阻塞直到有接收方。同步交接，用于 goroutine 同步。
+</GlossaryItem>
+<GlossaryItem term="有缓冲 channel">
+make(chan T, N)。缓冲区未满不阻塞。异步解耦，用于生产消费模型。
+</GlossaryItem>
+<GlossaryItem term="方向限制">
+chan<- T 只发送，<-chan T 只接收。双向可隐式转单向。类型系统强制安全。
+</GlossaryItem>
+</Glossary>

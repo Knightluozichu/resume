@@ -1,0 +1,160 @@
+---
+title: "生命周期"
+type: B
+section: "类型系统"
+order: 3
+description: "生命周期标注与省略规则。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplLifetimesDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-lifetimes";
+
+<Objectives>
+- 理解生命周期如何防止悬空引用
+- 掌握生命周期标注语法 'a
+- 学会三条生命周期省略规则
+- 理解结构体持有引用的生命周期约束
+</Objectives>
+
+## 直觉引入
+
+生命周期就像「保质期」标签——每个引用都有一个保质期，确保它不会比被引用的数据活得更久。就像你不能吃过期食品（悬空引用），Rust 编译器在编译期检查每个引用的保质期，确保它们都在有效期内使用。
+
+## 概念讲解
+
+### 生命周期基础
+
+<Term def="生命周期是编译器追踪引用有效范围的标注，确保引用不比被引用数据活得更久。运行时零开销。">
+生命周期解决悬空引用问题。当函数返回一个引用时，编译器需要知道返回的引用依赖于哪个参数，以保证返回值不会在参数被释放后变成悬空指针。
+
+```rust
+// 这个函数返回的引用依赖 x 还是 y？
+fn longest(x: &str, y: &str) -> &str { // 编译错误：需要生命周期标注
+    if x.len() > y.len() { x } else { y }
+}
+```
+
+生命周期标注告诉编译器引用之间的关系：
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+```
+`'a` 表示 x、y 和返回值的生命周期相同——返回的引用不会比 x 和 y 中较短的那个活得更久。
+
+生命周期标注不改变运行时行为，只告诉编译器引用之间的关系。
+</Term>
+
+### 省略规则
+
+<Term def="三条规则让大多数函数无需手动标注生命周期：每引用获独立 'a、单输入赋输出、&self 赋输出。">
+三条生命周期省略规则：
+
+1. **每个引用参数获得自己的生命周期参数**：`fn foo(x: &str, y: &str)` → `fn foo<'a, 'b>(x: &'a str, y: &'b str)`
+
+2. **如果只有一个输入生命周期参数，它被赋给所有输出引用**：`fn foo(x: &str) -> &str` → `fn foo<'a>(x: &'a str) -> &'a str`
+
+3. **如果有多个输入但其中一个是 &self/&mut self，self 的生命周期赋给所有输出**（方法场景）
+
+三条规则应用后如果还能确定所有输出生命周期，则省略成功；否则编译器报错要求手动标注。
+</Term>
+
+## 交互Demo
+
+<RplLifetimesDiagram />
+
+<Stepper>
+<Step title="理解问题">
+函数返回引用时，编译器需知道返回值依赖哪个参数，确保不悬空。无标注时编译器无法推断。
+</Step>
+<Step title="标注语法">
+'a 是生命周期参数，表示引用有效范围。fn longest<'a>(x:&'a,y:&'a)->&'a 表示返回值不比 x y 短者活得久。
+</Step>
+<Step title="省略规则">
+三条规则自动推断大多数场景：每引用独立 'a、单输入赋输出、&self 赋输出。不确定时需手动标注。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// 生命周期标注
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+// 省略规则应用
+// 规则2: 单输入赋输出
+fn first_word(s: &str) -> &str { // 自动推断为 &'a str -> &'a str
+    // ... 返回 s 的切片
+    s
+}
+
+// 结构体持有引用需要生命周期
+struct Excerpt<'a> {
+    part: &'a str, // part 的生命周期不能超过 Excerpt
+}
+
+impl<'a> Excerpt<'a> {
+    // 规则3: &self 的生命周期赋给输出
+    fn announce(&self, msg: &str) -> &str {
+        println!("{}", msg);
+        self.part // 返回 &'a str（self 的生命周期）
+    }
+}
+
+fn main() {
+    let novel = String::from("Hello world. Hello Rust.");
+    let first = novel.split('.').next().unwrap();
+    
+    let ex = Excerpt { part: first };
+    // ex 的生命周期不能超过 novel（part 借用 novel 的数据）
+    println!("{}", ex.part);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：生命周期标注会改变运行时行为**
+生命周期标注纯粹是编译期的静态分析工具，不影响运行时行为。它不延长或缩短引用的实际寿命，只告诉编译器引用之间的关系，让编译器验证安全性。运行时零开销——没有运行时检查。
+</Callout>
+
+<Callout type="trap">
+**误区：结构体持有引用总是好的**
+持有引用的结构体受生命周期约束——实例不能比引用的数据活得更久，限制了使用场景（不方便移动和存储）。优先使用拥有数据的类型（String、Vec），只在性能关键且生命周期清晰时用引用字段。或用 Cow<'a, str> 兼顾借用和拥有。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 fn longest(x: &str, y: &str) -> &str 需要生命周期标注？
+
+<Answer>
+因为编译器不知道返回的引用依赖 x 还是 y。如果返回 x 但 y 先被释放，返回值就悬空。标注 'a 告诉编译器返回值和 x y 生命周期相同——不比 x y 中较短者活得久。编译器据此验证调用处的安全性。
+</Answer>
+
+**问题 2**：三条生命周期省略规则是什么？
+
+<Answer>
+1.每个引用参数获自己的 'a。2.只有一个输入生命周期时赋给所有输出。3.多个输入但含 &self 时 self 的生命周期赋给所有输出（方法场景）。三规则后若能确定所有输出则省略成功，否则需手动标注。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="生命周期（'a）">
+编译器追踪引用有效范围的标注。确保引用不比数据活得更久。运行时零开销。
+</GlossaryItem>
+<GlossaryItem term="悬空引用">
+引用指向已释放的内存。Rust 通过生命周期在编译期消除。
+</GlossaryItem>
+<GlossaryItem term="生命周期省略规则">
+三条规则自动推断生命周期：每引用独立 'a、单输入赋输出、&self 赋输出。
+</GlossaryItem>
+<GlossaryItem term="Cow<'a, B>">
+Clone-on-Write 类型，可能借用（&'a）也可能拥有（B::Owned）。按需克隆，兼顾性能和灵活性。
+</GlossaryItem>
+</Glossary>

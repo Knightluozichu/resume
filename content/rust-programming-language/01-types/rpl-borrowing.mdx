@@ -1,0 +1,152 @@
+---
+title: "借用与引用"
+type: B
+section: "类型系统"
+order: 2
+description: "借用规则与借用检查器。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplBorrowingDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-borrowing";
+
+<Objectives>
+- 掌握借用规则：&T 可多个，&mut T 独占
+- 理解借用检查器如何防止数据竞争
+- 了解 NLL 优化如何放宽借用限制
+- 能够诊断和修复借用编译错误
+</Objectives>
+
+## 直觉引入
+
+借用就像从图书馆借书——你可以借阅多本相同的书（多个 &T），但如果有人要修改这本书（&mut T），就必须独占——不能同时有人在读。Rust 的借用检查器就是图书管理员，在编译期检查这些规则，确保不会出现数据竞争。
+
+## 概念讲解
+
+### 借用规则
+
+<Term def="任意时刻可有任意多个 &T 或一个 &mut T，不能共存。引用生命周期不能超过数据。">
+Rust 借用两条规则：
+
+1. **在任意时刻，可以有任意多个不可变引用（&T），或者只有一个可变引用（&mut T），两者不能共存**
+2. **引用的生命周期不能超过被引用数据的生命周期**（引用不能悬空）
+
+规则1防止数据竞争：多个 &mut T 会导致并发写入冲突；&T 和 &mut T 共存会导致 &T 看到的数据被 &mut T 修改。
+
+规则2防止悬空引用：确保引用不会比数据活得更久。
+
+这些规则在编译期由借用检查器强制执行——编译通过的多线程代码在内存安全上有保证。
+</Term>
+
+### NLL 优化
+
+<Term def="Non-Lexical Lifetimes：引用活跃范围只到最后一次使用处，而非词法作用域结束。让更多安全代码通过编译。">
+Rust 2018 引入 NLL（Non-Lexical Lifetimes）。在 NLL 之前，引用的生命周期按词法作用域计算——从创建到所在作用域结束都算「活跃」。
+
+问题示例：
+```rust
+let mut data = vec![1, 2, 3];
+let r = &data[0];      // 不可变借用
+println!("{}", r);     // r 最后一次使用
+data.push(4);          // 旧检查器: r 仍活跃, 编译错误
+```
+
+NLL 通过数据流分析，引用的「活跃范围」只到最后一次使用处。上面的代码在 NLL 下编译通过——r 在 push 之前已不再使用，借用已结束。
+</Term>
+
+## 交互Demo
+
+<RplBorrowingDiagram />
+
+<Stepper>
+<Step title="理解规则">
+&T 可多个共存（只读），&mut T 独占（可写），不能同时存在。编译期由借用检查器强制。
+</Step>
+<Step title="NLL 优化">
+引用活跃范围只到最后一次使用处（非作用域结束）。让更多安全代码通过编译。
+</Step>
+<Step title="诊断错误">
+借用编译错误通常是 &T 和 &mut T 共存。调整顺序让引用在使用后失效，或用 RefCell 运行时检查。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// 借用规则演示
+fn main() {
+    let mut s = String::from("hello");
+
+    // 多个 &T 可以共存
+    let r1 = &s;
+    let r2 = &s;
+    println!("{} {}", r1, r2); // OK: 多个不可变引用
+
+    // r1, r2 在此之后不再使用（NLL）
+    
+    // &mut T 独占
+    let r3 = &mut s;           // OK: 之前的 &T 已结束
+    r3.push_str(" world");
+    println!("{}", r3);
+
+    // 编译错误示例:
+    // let r4 = &s;
+    // let r5 = &mut s;  // 错误: &T 和 &mut T 不能共存
+    // println!("{}", r4);
+}
+
+// 函数参数借用
+fn calculate_length(s: &String) -> usize {
+    s.len()
+    // s 是借用，函数结束不 drop
+}
+
+fn modify(s: &mut String) {
+    s.push_str("!");
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：借用规则只在多线程中有用**
+借用规则在单线程中也强制执行。它不仅防止数据竞争，还防止更微妙的问题：迭代器失效（遍历 Vec 时修改它）、别名优化（编译器假设 &T 指向的数据不变）。即使单线程，&T 和 &mut T 共存也是未定义行为。
+</Callout>
+
+<Callout type="trap">
+**误区：NLL 让所有借用冲突消失**
+NLL 只放宽了「引用活跃范围」的计算——从词法作用域改为数据流分析。但如果引用确实同时活跃（如一个 &T 在 &mut T 创建后仍被使用），NLL 也无法解决。需要重构代码调整使用顺序，或用 RefCell<T> 在运行时检查。
+</Callout>
+
+<Exercises>
+**问题 1**：以下代码为什么编译失败？let mut s=String::from("hi"); let r=&s; let r2=&mut s; println!("{}",r);
+
+<Answer>
+r 是不可变引用，r2 是可变引用，两者共存违反借用规则。println 仍使用 r，所以 r 的生命周期覆盖到 println，此时 r2 也存在——冲突。修改：调整顺序让 r 在 r2 前结束——let r=&s; println!("{}",r); let r2=&mut s;（NLL 下 r 在 println 后失效 r2 可创建）。
+</Answer>
+
+**问题 2**：NLL 解决了什么问题？举例说明。
+
+<Answer>
+NLL 解决了引用生命周期按词法作用域计算导致安全代码编译失败的问题。如 let r=&data[0]; println!("{}",r); data.push(4); 旧检查器认为 r 从创建到作用域结束都活跃，push 报错。NLL 通过数据流分析发现 r 在 push 前已不再使用，编译通过。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="&T（不可变引用）">
+只读引用，可同时存在多个。创建不影响所有权。是 Copy 的可随意复制。
+</GlossaryItem>
+<GlossaryItem term="&mut T（可变引用）">
+可写引用，同一时间只能一个。原变量需 mut。不是 Copy 只能 move。
+</GlossaryItem>
+<GlossaryItem term="借用检查器">
+Rust 编译器组件，编译期验证借用规则（&T/&mut T 不共存、引用不悬空）。
+</GlossaryItem>
+<GlossaryItem term="NLL">
+Non-Lexical Lifetimes，引用活跃范围只到最后一次使用处而非作用域结束。Rust 2018 引入。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,182 @@
+---
+title: "泛型"
+type: B
+section: "高级特性"
+order: 6
+description: "泛型与单态化。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplGenericsDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-generics";
+
+<Objectives>
+- 理解泛型单态化的原理和代价
+- 掌握 trait bound 的多种写法
+- 区分关联类型和泛型参数
+- 学会泛型数据结构的设计
+</Objectives>
+
+## 直觉引入
+
+泛型就像一个「万能模具」——你定义一个模板（泛型函数），编译器根据实际使用的类型为每种类型浇铸一个具体版本（单态化）。最终代码和手写每种类型一样高效——零运行时开销，但代价是编译后的代码体积增大。
+
+## 概念讲解
+
+### 单态化
+
+<Term def="编译器为每个具体泛型类型生成独立代码。零运行时开销但代码体积增大。与 Java 类型擦除相反。">
+Rust 泛型通过**单态化（Monomorphization）**实现：
+```rust
+fn max<T: Ord>(a: T, b: T) -> T {
+    if a > b { a } else { b }
+}
+
+max(1i32, 2i32)    // 生成 max_i32 版本
+max(1.0f64, 2.0)  // 生成 max_f64 版本
+```
+
+编译后生成两个独立的函数，每个直接操作具体类型——无虚函数表、无间接调用、零运行时开销。
+
+对比 Java 类型擦除：编译后所有泛型变为 Object，运行时无类型信息。优点代码体积小，缺点基本类型需装箱（开销）。
+
+代价：代码体积增大（每种类型一份代码）。Rust 选择性能优先——零开销优于小体积。
+</Term>
+
+### trait bound 与关联类型
+
+<Term def="trait bound 约束泛型类型的能力。关联类型表示一对一关系（一个类型只能实现一次），泛型参数表示多对一。">
+trait bound 多种写法：
+```rust
+// 1. 单个 bound
+fn f<T: Clone>(x: T) { }
+// 2. 多个 bound
+fn f<T: Clone + Debug>(x: T) { }
+// 3. where 子句（复杂场景更清晰）
+fn f<T, U>(x: T, y: U) where T: Clone + Debug, U: Display { }
+// 4. impl Trait 语法（简洁）
+fn f(x: impl Clone + Debug) { }
+```
+
+关联类型 vs 泛型参数：
+```rust
+// 泛型参数：一个类型可多次实现
+trait Add<Rhs> { type Output; fn add(self, rhs: Rhs) -> Self::Output; }
+// 关联类型：一个类型只能实现一次
+trait Iterator { type Item; fn next(&mut self) -> Option<Self::Item>; }
+```
+关联类型表示一对一关系（一种迭代方式），泛型参数表示多对一（多种加法实现）。
+</Term>
+
+## 交互Demo
+
+<RplGenericsDiagram />
+
+<Stepper>
+<Step title="单态化">
+编译器为每种具体泛型类型生成独立代码。直接调用具体类型方法，零运行时开销，代价是代码体积增大。
+</Step>
+<Step title="trait bound">
+约束泛型类型的能力。多种写法：T:Clone+Debug、where 子句、impl Trait 语法。
+</Step>
+<Step title="关联类型">
+trait Iterator{type Item;} 表示一对一关系（只能实现一次）。泛型参数表示多对一（可多次实现）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// 泛型函数 + trait bound
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut max = &list[0];
+    for item in &list[1..] {
+        if item > max { max = item; }
+    }
+    max
+}
+
+// 泛型结构体 + 多重 bound
+struct Pair<T> { x: T, y: T }
+impl<T: Clone + PartialOrd> Pair<T> {
+    fn larger(&self) -> T {
+        if self.x > self.y { self.x.clone() } else { self.y.clone() }
+    }
+}
+
+// 关联类型
+trait Container {
+    type Item; // 关联类型
+    fn contains(&self, item: &Self::Item) -> bool;
+}
+
+struct VecContainer<T> { items: Vec<T> }
+impl<T: PartialEq> Container for VecContainer<T> {
+    type Item = T; // 指定关联类型
+    fn contains(&self, item: &T) -> bool {
+        self.items.contains(item)
+    }
+}
+
+// where 子句（复杂约束更清晰）
+fn merge<T, U>(t: T, u: U) -> String
+where
+    T: std::fmt::Display,
+    U: std::fmt::Display,
+{
+    format!("{}{}", t, u)
+}
+
+fn main() {
+    let nums = vec![1, 5, 3, 9, 2];
+    println!("最大: {}", largest(&nums)); // 单态化为 i32 版本
+    
+    let p = Pair { x: 3, y: 7 };
+    println!("较大: {}", p.larger());
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：泛型代码运行时会有性能开销**
+Rust 泛型通过单态化在编译期生成具体类型代码——运行时零开销。调用 max(1,2) 和手写 fn max_i32(a:i32,b:i32)->i32 完全一样高效。没有 vtable 查找、没有装箱、没有间接调用。代价只是编译后代码体积增大。
+</Callout>
+
+<Callout type="trap">
+**误区：关联类型和泛型参数可以互换**
+关联类型表示一对一关系——一个类型只能为某 trait 实现一次（Iterator 的 Item 只有一个）。泛型参数表示多对一——一个类型可以为不同泛型参数实现多次（Add<i32> 和 Add<f64>）。选择取决于语义：一种实现用关联类型，多种实现用泛型参数。
+</Callout>
+
+<Exercises>
+**问题 1**：Rust 泛型单态化与 Java 类型擦除有什么区别？
+
+<Answer>
+单态化：编译器为每种具体泛型类型生成独立代码。零运行时开销但代码体积增大。基本类型直接使用无装箱。Java 类型擦除：编译后泛型变 Object 运行时无类型信息。代码体积小但基本类型需装箱有开销。Rust 选择性能优先。
+</Answer>
+
+**问题 2**：关联类型和泛型参数何时用哪个？
+
+<Answer>
+关联类型：一对一关系——一个类型只能为 trait 实现一次（如 Iterator 的 Item，一个类型只有一种迭代方式）。泛型参数：多对一关系——一个类型可为不同泛型参数实现多次（如 Add<Rhs>，可对不同 Rhs 类型有不同加法实现）。一种实现用关联类型，多种实现用泛型参数。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="单态化（Monomorphization）">
+编译器为每种具体泛型类型生成独立代码。零运行时开销，代价是代码体积增大。
+</GlossaryItem>
+<GlossaryItem term="trait bound">
+约束泛型类型必须实现的 trait。T: Clone+Debug 表示 T 必须实现 Clone 和 Debug。
+</GlossaryItem>
+<GlossaryItem term="关联类型">
+trait 中的 type Item; 表示一对一关系。一个类型只能为该 trait 实现一次。
+</GlossaryItem>
+<GlossaryItem term="where 子句">
+trait bound 的另一种写法，将约束放在函数签名后，适合复杂约束场景。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,174 @@
+---
+title: "总复习"
+type: B
+section: "并发与现代特性"
+order: 9
+description: "全书知识串联。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplFinalReviewDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-final-review";
+
+<Objectives>
+- 串联全书从所有权到异步的完整知识链
+- 掌握 Rust 三大内存安全机制
+- 能够综合运用 trait/泛型/错误处理设计系统
+- 理解 Rust 线程安全和异步编程的底层原理
+</Objectives>
+
+## 直觉引入
+
+回顾整本书的旅程：我们从所有权出发，学会了借用和生命周期的编译期安全保障，掌握了 trait 和泛型的抽象能力，理解了错误处理的显式哲学，最后深入并发和异步的底层原理。现在把这些知识串联起来——Rust 的每个特性都不是孤立的，它们共同构成了一个编译期保证安全、运行时零开销的完整体系。
+
+## 概念讲解
+
+### 知识串联
+
+<Term def="所有权→借用/生命周期→trait/泛型→错误处理→并发/异步。每个特性建立在前一个之上，形成编译期安全+零开销的完整体系。">
+全书知识链：
+
+1. **所有权**（第 0-1 章）：move 语义、drop 机制、Copy trait。是一切的基础。
+2. **借用/生命周期**（第 2-3 章）：&T/&mut T 借用规则、NLL、生命周期标注。建立在所有权之上。
+3. **trait/泛型**（第 4-6 章）：静态/动态分发、trait bound、单态化、关联类型、Result/? 错误处理。类型系统的高级应用。
+4. **并发/异步**（第 7-9 章）：Send/Sync 编译期线程安全、Arc<Mutex> 共享可变、async/await 状态机+runtime。
+
+因果链：所有权是借用规则的基础（&mut T 独占源于所有权唯一）；生命周期保证引用安全（建立在 move 之上）；trait bound 约束泛型（需要所有权和生命周期正确定义）；Send/Sync 依赖所有权系统（&mut T 独占消除数据竞争）；async 状态机保存跨 await 变量（依赖生命周期）。
+</Term>
+
+### 综合设计
+
+<Term def="综合运用所有权、trait、泛型、错误处理、并发设计线程安全的 KV 存储服务器。">
+综合设计一个线程安全的 KV 存储：
+
+1. **所有权**：每个连接 handler 独立拥有请求数据，连接结束自动释放
+2. **借用**：解析请求时 &str 借用缓冲区数据，零拷贝
+3. **生命周期**：响应构建器持有请求引用，确保安全
+4. **trait**：定义 Storage trait（get/put/delete），内存和磁盘两种实现
+5. **泛型**：fn handle<S: Storage>(store: Arc<S>, req: Request) -> Response，单态化
+6. **错误处理**：enum KvError + ? 传播 + thiserror
+7. **并发**：Arc<RwLock<HashMap>> 共享存储，多读单写
+8. **async**：tokio::spawn 每连接一个 task，非阻塞 IO
+</Term>
+
+## 交互Demo
+
+<RplFinalReviewDiagram />
+
+<Stepper>
+<Step title="所有权基础">
+move/drop 是一切基础。借用规则源于所有权唯一，生命周期保证引用安全。
+</Step>
+<Step title="类型系统">
+trait 定义行为，泛型单态化零开销，错误处理用 Result/? 显式传播。
+</Step>
+<Step title="并发异步">
+Send/Sync 编译期消除数据竞争，Arc<Mutex> 共享可变，async 状态机+runtime 调度。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// 综合：线程安全 KV 存储服务器
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
+use tokio::net::TcpListener;
+
+// trait 定义存储接口
+trait Storage: Send + Sync {
+    fn get(&self, key: &str) -> Option<String>;
+    fn put(&self, key: String, val: String);
+    fn delete(&self, key: &str) -> bool;
+}
+
+// 内存实现
+struct MemStorage {
+    data: RwLock<HashMap<String, String>>,
+}
+
+impl Storage for MemStorage {
+    fn get(&self, key: &str) -> Option<String> {
+        self.data.read().unwrap().get(key).cloned()
+    }
+    fn put(&self, key: String, val: String) {
+        self.data.write().unwrap().insert(key, val);
+    }
+    fn delete(&self, key: &str) -> bool {
+        self.data.write().unwrap().remove(key).is_some()
+    }
+}
+
+// 泛型 + 错误处理
+#[derive(thiserror::Error, Debug)]
+enum KvError {
+    #[error("not found: {0}")]
+    NotFound(String),
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let store: Arc<MemStorage> = Arc::new(MemStorage {
+        data: RwLock::new(HashMap::new()),
+    });
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    loop {
+        let (socket, _) = listener.accept().await?;
+        let store = Arc::clone(&store); // Arc 共享所有权
+        tokio::spawn(async move {       // async task
+            handle::<MemStorage>(socket, store).await
+        });
+    }
+}
+
+async fn handle<S: Storage>(socket: tokio::net::TcpStream, store: Arc<S>) {
+    // 借用、所有权、错误处理综合应用
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Rust 的安全保证只针对内存**
+Rust 的安全保证涵盖内存安全（无 use-after-free/double-free/悬空指针）和线程安全（无数据竞争）。两者都在编译期保证，运行时零开销。这是通过所有权系统+借用检查器+Send/Sync 标记三者配合实现的。
+</Callout>
+
+<Callout type="trap">
+**误区：Rust 完全不需要 GC 就能管理所有内存**
+Rust 的所有权系统管理堆内存（自动 drop）。但循环引用（如 Rc/RefCell 形成环）无法被所有权系统自动回收——需要用 Weak<T> 手动打破环。此外，非托管资源（文件、网络连接）需要手动 Dispose/RAII。Rust 不是「零成本管理一切」，而是「编译期保证安全，确定性释放」。
+</Callout>
+
+<Exercises>
+**问题 1**：Rust 保证内存安全的三大机制是什么？
+
+<Answer>
+1.所有权系统：每个值有唯一所有者离开作用域自动 drop，move 语义防 double-free。2.借用检查器：编译期验证引用规则（不可变和可变引用不共存，引用不悬空）防数据竞争和 use-after-free。3.生命周期标注：编译期验证引用有效范围确保引用不比数据活得久。三者配合编译期保证内存安全运行时零开销。
+</Answer>
+
+**问题 2**：综合全书设计线程安全 KV 存储服务器，说明每个 Rust 特性的应用。
+
+<Answer>
+1.所有权：每连接 handler 独立拥有请求数据连接结束自动释放。2.借用：解析请求 &str 借用零拷贝。3.生命周期：响应构建器持有请求引用确保安全。4.trait：定义 Storage trait 内存和磁盘两种实现。5.泛型：fn handle<S:Storage> 单态化。6.错误处理：enum KvError+?+thiserror。7.并发：Arc<RwLock<HashMap>> 多读单写。8.async：tokio::spawn 每连接 task 非阻塞 IO。9.Send+Sync：自动满足可跨 task 共享。10.Drop：连接 drop 自动清理。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="所有权系统">
+Rust 内存管理的核心：唯一所有者+move+drop。编译期保证无 double-free/use-after-free。
+</GlossaryItem>
+<GlossaryItem term="借用检查器">
+编译期验证借用规则（&T/&mut T 不共存、引用不悬空），消除数据竞争。
+</GlossaryItem>
+<GlossaryItem term="零成本抽象">
+Rust 设计原则：编译期完成安全检查，运行时零开销。所有权/trait/泛型/async 都是零成本抽象。
+</GlossaryItem>
+<GlossaryItem term="Send/Sync">
+标记 trait 保证线程安全。编译期验证，不满足则编译错误。消除数据竞争。
+</GlossaryItem>
+</Glossary>

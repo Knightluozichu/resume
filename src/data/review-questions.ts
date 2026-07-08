@@ -620,6 +620,105 @@ import { cvcExceptionHandlingQuestions } from "./review/cvc-exception-handling";
 import { cvcAsyncClrQuestions } from "./review/cvc-async-clr";
 import { cvcReflectionAttributesQuestions } from "./review/cvc-reflection-attributes";
 import { cvcFinalReviewQuestions } from "./review/cvc-final-review";
+// .NET 内存管理宝典
+import { dnmMemoryModelQuestions } from "./review/dnm-memory-model";
+import { dnmGcBasicsQuestions } from "./review/dnm-gc-basics";
+import { dnmSosDumpQuestions } from "./review/dnm-sos-dump";
+import { dnmSosHeapQuestions } from "./review/dnm-sos-heap";
+import { dnmLargeObjectQuestions } from "./review/dnm-large-object";
+import { dnmPinningQuestions } from "./review/dnm-pinning";
+import { dnmFinalizationQuestions } from "./review/dnm-finalization";
+import { dnmMemoryPressureQuestions } from "./review/dnm-memory-pressure";
+import { dnmFragOptimizationQuestions } from "./review/dnm-frag-optimization";
+import { dnmFinalReviewQuestions } from "./review/dnm-final-review";
+// Rust 程序设计语言
+import { rplLearningMapQuestions } from "./review/rpl-learning-map";
+import { rplOwnershipQuestions } from "./review/rpl-ownership";
+import { rplBorrowingQuestions } from "./review/rpl-borrowing";
+import { rplLifetimesQuestions } from "./review/rpl-lifetimes";
+import { rplTraitsQuestions } from "./review/rpl-traits";
+import { rplErrorHandlingQuestions } from "./review/rpl-error-handling";
+import { rplGenericsQuestions } from "./review/rpl-generics";
+import { rplConcurrencyQuestions } from "./review/rpl-concurrency";
+import { rplAsyncQuestions } from "./review/rpl-async";
+import { rplFinalReviewQuestions } from "./review/rpl-final-review";
+// Go 程序设计语言
+import { gplLearningMapQuestions } from "./review/gpl-learning-map";
+import { gplTypesVariablesQuestions } from "./review/gpl-types-variables";
+import { gplFunctionsQuestions } from "./review/gpl-functions";
+import { gplInterfacesQuestions } from "./review/gpl-interfaces";
+import { gplGoroutinesQuestions } from "./review/gpl-goroutines";
+import { gplChannelsQuestions } from "./review/gpl-channels";
+import { gplSelectQuestions } from "./review/gpl-select";
+import { gplPackagesQuestions } from "./review/gpl-packages";
+import { gplTestingQuestions } from "./review/gpl-testing";
+import { gplFinalReviewQuestions } from "./review/gpl-final-review";
+// Python 编程：从入门到实践
+import { pccLearningMapQuestions } from "./review/pcc-learning-map";
+import { pccVariablesListsQuestions } from "./review/pcc-variables-lists";
+import { pccIfLoopsQuestions } from "./review/pcc-if-loops";
+import { pccFunctionsQuestions } from "./review/pcc-functions";
+import { pccClassesQuestions } from "./review/pcc-classes";
+import { pccFilesExceptionsQuestions } from "./review/pcc-files-exceptions";
+import { pccTestingQuestions } from "./review/pcc-testing";
+import { pccGameDevQuestions } from "./review/pcc-game-dev";
+import { pccDataVizQuestions } from "./review/pcc-data-viz";
+import { pccFinalReviewQuestions } from "./review/pcc-final-review";
+// Lua 程序设计
+import { lupLearningMapQuestions } from "./review/lup-learning-map";
+import { lupTypesValuesQuestions } from "./review/lup-types-values";
+import { lupExpressionsQuestions } from "./review/lup-expressions";
+import { lupStatementsQuestions } from "./review/lup-statements";
+import { lupFunctionsQuestions } from "./review/lup-functions";
+import { lupClosuresQuestions } from "./review/lup-closures";
+import { lupCoroutinesQuestions } from "./review/lup-coroutines";
+import { lupMetatablesQuestions } from "./review/lup-metatables";
+import { lupCApiQuestions } from "./review/lup-c-api";
+import { lupFinalReviewQuestions } from "./review/lup-final-review";
+// Ruby 基础教程
+import { rubLearningMapQuestions } from "./review/rub-learning-map";
+import { rubObjectsVariablesQuestions } from "./review/rub-objects-variables";
+import { rubStringsQuestions } from "./review/rub-strings";
+import { rubControlFlowQuestions } from "./review/rub-control-flow";
+import { rubClassesQuestions } from "./review/rub-classes";
+import { rubModulesMixinsQuestions } from "./review/rub-modules-mixins";
+import { rubBlocksProcsQuestions } from "./review/rub-blocks-procs";
+import { rubMetaprogrammingQuestions } from "./review/rub-metaprogramming";
+import { rubGemsBundlerQuestions } from "./review/rub-gems-bundler";
+import { rubFinalReviewQuestions } from "./review/rub-final-review";
+// 大话数据结构
+import { dsvLearningMapQuestions } from "./review/dsv-learning-map";
+import { dsvComplexityQuestions } from "./review/dsv-complexity";
+import { dsvArraysLinkedQuestions } from "./review/dsv-arrays-linked";
+import { dsvStacksQueuesQuestions } from "./review/dsv-stacks-queues";
+import { dsvTreesBstQuestions } from "./review/dsv-trees-bst";
+import { dsvHeapsQuestions } from "./review/dsv-heaps";
+import { dsvGraphsQuestions } from "./review/dsv-graphs";
+import { dsvSortingQuestions } from "./review/dsv-sorting";
+import { dsvSearchingQuestions } from "./review/dsv-searching";
+import { dsvFinalReviewQuestions } from "./review/dsv-final-review";
+// 图灵数学女孩系列
+import { mglLearningMapQuestions } from "./review/mgl-learning-map";
+import { mglNumberTheoryQuestions } from "./review/mgl-number-theory";
+import { mglEquationsQuestions } from "./review/mgl-equations";
+import { mglFunctionsQuestions } from "./review/mgl-functions";
+import { mglCombinatoricsQuestions } from "./review/mgl-combinatorics";
+import { mglGraphTheoryQuestions } from "./review/mgl-graph-theory";
+import { mglProbabilityQuestions } from "./review/mgl-probability";
+import { mglAlgorithmsQuestions } from "./review/mgl-algorithms";
+import { mglMachineLearningQuestions } from "./review/mgl-machine-learning";
+import { mglFinalReviewQuestions } from "./review/mgl-final-review";
+// 数据结构与算法分析（C++描述）
+import { dsaLearningMapQuestions } from "./review/dsa-learning-map";
+import { dsaComplexityAnalysisQuestions } from "./review/dsa-complexity-analysis";
+import { dsaListsQuestions } from "./review/dsa-lists";
+import { dsaTreesQuestions } from "./review/dsa-trees";
+import { dsaHashTablesQuestions } from "./review/dsa-hash-tables";
+import { dsaDisjointSetsQuestions } from "./review/dsa-disjoint-sets";
+import { dsaGraphAlgsQuestions } from "./review/dsa-graph-algs";
+import { dsaSortingQuestions } from "./review/dsa-sorting";
+import { dsaDynamicProgrammingQuestions } from "./review/dsa-dynamic-programming";
+import { dsaFinalReviewQuestions } from "./review/dsa-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1247,6 +1346,105 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cvcAsyncClrQuestions,
   ...cvcReflectionAttributesQuestions,
   ...cvcFinalReviewQuestions,
+  // .NET 内存管理宝典
+  ...dnmMemoryModelQuestions,
+  ...dnmGcBasicsQuestions,
+  ...dnmSosDumpQuestions,
+  ...dnmSosHeapQuestions,
+  ...dnmLargeObjectQuestions,
+  ...dnmPinningQuestions,
+  ...dnmFinalizationQuestions,
+  ...dnmMemoryPressureQuestions,
+  ...dnmFragOptimizationQuestions,
+  ...dnmFinalReviewQuestions,
+  // Rust 程序设计语言
+  ...rplLearningMapQuestions,
+  ...rplOwnershipQuestions,
+  ...rplBorrowingQuestions,
+  ...rplLifetimesQuestions,
+  ...rplTraitsQuestions,
+  ...rplErrorHandlingQuestions,
+  ...rplGenericsQuestions,
+  ...rplConcurrencyQuestions,
+  ...rplAsyncQuestions,
+  ...rplFinalReviewQuestions,
+  // Go 程序设计语言
+  ...gplLearningMapQuestions,
+  ...gplTypesVariablesQuestions,
+  ...gplFunctionsQuestions,
+  ...gplInterfacesQuestions,
+  ...gplGoroutinesQuestions,
+  ...gplChannelsQuestions,
+  ...gplSelectQuestions,
+  ...gplPackagesQuestions,
+  ...gplTestingQuestions,
+  ...gplFinalReviewQuestions,
+  // Python 编程：从入门到实践
+  ...pccLearningMapQuestions,
+  ...pccVariablesListsQuestions,
+  ...pccIfLoopsQuestions,
+  ...pccFunctionsQuestions,
+  ...pccClassesQuestions,
+  ...pccFilesExceptionsQuestions,
+  ...pccTestingQuestions,
+  ...pccGameDevQuestions,
+  ...pccDataVizQuestions,
+  ...pccFinalReviewQuestions,
+  // Lua 程序设计
+  ...lupLearningMapQuestions,
+  ...lupTypesValuesQuestions,
+  ...lupExpressionsQuestions,
+  ...lupStatementsQuestions,
+  ...lupFunctionsQuestions,
+  ...lupClosuresQuestions,
+  ...lupCoroutinesQuestions,
+  ...lupMetatablesQuestions,
+  ...lupCApiQuestions,
+  ...lupFinalReviewQuestions,
+  // Ruby 基础教程
+  ...rubLearningMapQuestions,
+  ...rubObjectsVariablesQuestions,
+  ...rubStringsQuestions,
+  ...rubControlFlowQuestions,
+  ...rubClassesQuestions,
+  ...rubModulesMixinsQuestions,
+  ...rubBlocksProcsQuestions,
+  ...rubMetaprogrammingQuestions,
+  ...rubGemsBundlerQuestions,
+  ...rubFinalReviewQuestions,
+  // 大话数据结构
+  ...dsvLearningMapQuestions,
+  ...dsvComplexityQuestions,
+  ...dsvArraysLinkedQuestions,
+  ...dsvStacksQueuesQuestions,
+  ...dsvTreesBstQuestions,
+  ...dsvHeapsQuestions,
+  ...dsvGraphsQuestions,
+  ...dsvSortingQuestions,
+  ...dsvSearchingQuestions,
+  ...dsvFinalReviewQuestions,
+  // 图灵数学女孩系列
+  ...mglLearningMapQuestions,
+  ...mglNumberTheoryQuestions,
+  ...mglEquationsQuestions,
+  ...mglFunctionsQuestions,
+  ...mglCombinatoricsQuestions,
+  ...mglGraphTheoryQuestions,
+  ...mglProbabilityQuestions,
+  ...mglAlgorithmsQuestions,
+  ...mglMachineLearningQuestions,
+  ...mglFinalReviewQuestions,
+  // 数据结构与算法分析（C++描述）
+  ...dsaLearningMapQuestions,
+  ...dsaComplexityAnalysisQuestions,
+  ...dsaListsQuestions,
+  ...dsaTreesQuestions,
+  ...dsaHashTablesQuestions,
+  ...dsaDisjointSetsQuestions,
+  ...dsaGraphAlgsQuestions,
+  ...dsaSortingQuestions,
+  ...dsaDynamicProgrammingQuestions,
+  ...dsaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

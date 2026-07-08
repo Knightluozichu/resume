@@ -1,0 +1,387 @@
+---
+title: "元表"
+type: B
+section: "元编程与C交互"
+order: 7
+description: "Lua 元表与元方法：__index 实现继承、运算符重载、__call/__tostring 及面向对象编程。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { LupMetatablesDiagram } from "@/components/mdx/lua-programming/diagrams/lup-metatables";
+
+<Objectives>
+
+- 能使用 setmetatable/getmetatable 管理元表
+- 能使用 __index 实现 table 继承和默认值
+- 能使用算术/比较元方法重载运算符
+- 能用元表实现面向对象编程（类、继承、多态）
+
+</Objectives>
+
+## 直觉引入
+
+table 默认只会做两件事：存值和取值。但如果你想让它支持加法运算（`t1 + t2`）、支持函数调用（`t()`）、支持在键不存在时返回默认值——就需要元表。
+
+元表是"行为的说明书"。普通 table 遇到未知操作（如 `t1 + t2`）时不知道怎么办。元表告诉它："遇到加法，调用 __add 函数"。这就像给 table 装了一个"操作系统"——原来只能存取数据，现在可以自定义各种行为。Lua 没有类关键字——OOP 完全通过元表实现。
+
+## 概念讲解
+
+### 元表基础
+
+<Term def="元表是另一个 table，定义了原 table 遇到特定操作时的回退行为。setmetatable(t, mt) 设置元表，getmetatable(t) 获取元表。">
+
+```lua
+local t = setmetatable({}, {
+    __index = function(table, key)
+        return "default:" .. key
+    end
+})
+
+print(t.foo)  -- default:foo（键不存在时调用 __index）
+t.bar = 42
+print(t.bar)  -- 42（键存在，不调用 __index）
+```
+
+</Term>
+
+### __index 实现继承
+
+```lua
+-- __index 可以是函数或 table
+-- 如果是 table，在原表找不到键时去 __index table 中查找
+
+local Animal = {legs = 4}
+Animal.__index = Animal  -- 让实例继承 Animal
+
+function Animal:speak()
+    return "..."
+end
+
+function Animal.new(name)
+    local self = setmetatable({}, Animal)
+    self.name = name
+    return self
+end
+
+-- 继承
+local Dog = setmetatable({}, {__index = Animal})
+Dog.__index = Dog
+
+function Dog.new(name, breed)
+    local self = Animal.new(name)  -- 调用父类构造
+    setmetatable(self, Dog)        -- 设置子类元表
+    self.breed = breed
+    return self
+end
+
+function Dog:speak()  -- 重写
+    return self.name .. " says Woof!"
+end
+
+local d = Dog.new("Rex", "Labrador")
+print(d:speak())  -- Rex says Woof!
+print(d.legs)     -- 4（继承自 Animal）
+print(d.name)     -- Rex
+```
+
+### 运算符重载
+
+```lua
+local Vector = {}
+Vector.__index = Vector
+
+function Vector.new(x, y)
+    return setmetatable({x = x, y = y}, Vector)
+end
+
+function Vector.__add(a, b)      -- + 运算符
+    return Vector.new(a.x + b.x, a.y + b.y)
+end
+
+function Vector.__sub(a, b)      -- - 运算符
+    return Vector.new(a.x - b.x, a.y - b.y)
+end
+
+function Vector.__mul(a, k)      -- * 运算符（向量乘标量）
+    if type(k) == "number" then
+        return Vector.new(a.x * k, a.y * k)
+    end
+    return Vector.new(a.x * k.x, a.y * k.y)  -- 点积简化
+end
+
+function Vector.__eq(a, b)       -- == 运算符
+    return a.x == b.x and a.y == b.y
+end
+
+function Vector.__lt(a, b)       -- < 运算符（按模长比较）
+    return (a.x^2 + a.y^2) < (b.x^2 + b.y^2)
+end
+
+function Vector.__tostring(v)    -- tostring() 调用
+    return string.format("(%d, %d)", v.x, v.y)
+end
+
+function Vector.__call(cls, x, y) -- 调用 Vector(x, y) 时触发
+    return cls.new(x, y)
+end
+
+-- 使用
+local v1 = Vector.new(1, 2)
+local v2 = Vector.new(3, 4)
+print(v1 + v2)      -- (4, 6)
+print(v2 - v1)      -- (2, 2)
+print(v1 * 3)       -- (3, 6)
+print(v1 == Vector.new(1, 2))  -- true
+print(v1 < v2)      -- true（1+4 < 9+16）
+```
+
+### 常用元方法一览
+
+| 元方法 | 触发操作 |
+|--------|---------|
+| `__index` | `t[key]` 键不存在 |
+| `__newindex` | `t[key] = v` 新键赋值 |
+| `__add` `__sub` `__mul` `__div` `__mod` `__pow` | `+ - * / % ^` |
+| `__unm` | `-t`（一元负号）|
+| `__concat` | `..` 连接 |
+| `__eq` `__lt` `__le` | `== < <=` |
+| `__len` | `#t` |
+| `__call` | `t(args)` 调用 |
+| `__tostring` | `tostring(t)` |
+
+### __newindex 拦截赋值
+
+```lua
+-- 只读 table
+local readOnly = setmetatable({}, {
+    __index = originalTable,  -- 读取转发到原表
+    __newindex = function(t, k, v)
+        error("attempt to update a read-only table", 2)
+    end
+})
+```
+
+## 交互Demo
+
+<LupMetatablesDiagram />
+
+<Stepper>
+
+<Step title="第一步：元表基础">
+
+setmetatable(t, mt) 给 t 设置元表 mt。当 t 遇到它不知道如何处理的操作时（如访问不存在的键、加法运算），Lua 查找 t 的元表中对应的元方法。__index 是最常用的元方法——控制"键不存在时的行为"。
+
+</Step>
+
+<Step title="第二步：__index 实现继承">
+
+__index 可以是函数 `function(t, k) ... end` 或 table。如果是 table，Lua 在原表找不到键时去 __index table 中查找。这正是继承的原理——子类的 __index 指向父类，访问子类不存在的键时自动查找父类。`Animal.__index = Animal` 然后实例 `setmetatable({}, Animal)` 就实现了继承。
+
+</Step>
+
+<Step title="第三步：运算符重载与 OOP">
+
+算术元方法（__add/__sub/__mul 等）重载运算符，让自定义类型支持 + - * 等操作。__tostring 控制 print 输出。__call 让 table 可以像函数一样调用。组合 __index + 方法 + 冒号语法，就用元表实现了完整的 OOP——类、继承、多态。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```lua
+-- 元表综合示例：面向对象 Vector 类
+
+local Vector = {}
+Vector.__index = Vector
+
+-- 构造函数
+function Vector.new(x, y)
+    return setmetatable({x = x or 0, y = y or 0}, Vector)
+end
+
+-- 运算符重载
+function Vector.__add(a, b) return Vector.new(a.x + b.x, a.y + b.y) end
+function Vector.__sub(a, b) return Vector.new(a.x - b.x, a.y - b.y) end
+function Vector.__mul(a, k)
+    if type(k) == "number" then
+        return Vector.new(a.x * k, a.y * k)
+    end
+    -- 点积
+    return a.x * k.x + a.y * k.y
+end
+function Vector.__eq(a, b) return a.x == b.x and a.y == b.y end
+function Vector.__tostring(v) return string.format("(%g, %g)", v.x, v.y) end
+
+-- 实例方法
+function Vector:magnitude()
+    return math.sqrt(self.x^2 + self.y^2)
+end
+
+function Vector:normalize()
+    local mag = self:magnitude()
+    if mag == 0 then return Vector.new(0, 0) end
+    return Vector.new(self.x / mag, self.y / mag)
+end
+
+function Vector:dot(other)
+    return self.x * other.x + self.y * other.y
+end
+
+-- 使用
+local v1 = Vector.new(3, 4)
+local v2 = Vector.new(1, 2)
+
+print(v1)              -- (3, 4)
+print(v1 + v2)         -- (4, 6)
+print(v1 * 2)          -- (6, 8)
+print(v1:dot(v2))      -- 11
+print(v1:magnitude())  -- 5
+print(v1:normalize())  -- (0.6, 0.8)
+print(v1 == Vector.new(3, 4))  -- true
+
+-- 继承：Vector3D 继承 Vector
+local Vector3D = setmetatable({}, {__index = Vector})
+Vector3D.__index = Vector3D
+
+function Vector3D.new(x, y, z)
+    local self = Vector.new(x, y)  -- 调用父类构造
+    setmetatable(self, Vector3D)
+    self.z = z or 0
+    return self
+end
+
+function Vector3D:magnitude()  -- 重写
+    return math.sqrt(self.x^2 + self.y^2 + self.z^2)
+end
+
+local v3 = Vector3D.new(1, 2, 3)
+print(v3:magnitude())  -- 3.606（3D 版本）
+print(v3.x)            -- 1（继承自 Vector）
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：忘记设置 __index = 自身**
+
+`Animal.__index = Animal` 是让实例继承 Animal 方法的关键。如果不设置，`setmetatable({}, Animal)` 后访问实例的方法（如 `d:speak()`）会返回 nil——因为 __index 没有指向包含方法的 table。记住模式：`Class.__index = Class; instance = setmetatable({}, Class)`。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：在子类构造函数中忘记设置子类元表**
+
+`function Dog.new(name) local self = Animal.new(name); setmetatable(self, Dog); return self end`——调用父类构造后，self 的元表是 Animal。需要重新 `setmetatable(self, Dog)` 才能让 self 继承 Dog 的方法。否则 `d:speak()` 调用的是 Animal.speak 而非 Dog.speak。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：__index 元方法的作用是什么？它可以是哪两种类型？
+
+<Answer>
+
+`__index` 控制"访问 table 不存在的键时的行为"——是 Lua 继承的核心。
+
+它可以有两种类型：
+
+1. **table 类型**：Lua 在原表找不到键时，去 __index 指向的 table 中查找。
+```lua
+local parent = {greet = function() return "hi" end}
+local child = setmetatable({}, {__index = parent})
+print(child.greet)  -- function（从 parent 找到）
+```
+
+2. **function 类型**：Lua 调用该函数 `__index(table, key)`，返回值就是访问结果。
+```lua
+local t = setmetatable({}, {
+    __index = function(t, k) return "default:" .. k end
+})
+print(t.foo)  -- default:foo
+```
+
+最常用的模式是 table 类型——`Class.__index = Class`，然后 `setmetatable({}, Class)`，实现实例继承类方法。这就是 Lua OOP 的基础。
+
+</Answer>
+
+**问题 2**：用元表实现一个 Vector 类，支持 + 运算和 :magnitude() 方法。
+
+<Answer>
+
+```lua
+local Vector = {}
+Vector.__index = Vector  -- 关键：让实例继承方法
+
+function Vector.new(x, y)
+    return setmetatable({x = x, y = y}, Vector)
+end
+
+-- 运算符重载
+function Vector.__add(a, b)
+    return Vector.new(a.x + b.x, a.y + b.y)
+end
+
+-- 实例方法
+function Vector:magnitude()
+    return math.sqrt(self.x^2 + self.y^2)
+end
+
+-- 可选：友好的打印
+function Vector.__tostring(v)
+    return string.format("(%g, %g)", v.x, v.y)
+end
+
+-- 测试
+local v1 = Vector.new(3, 4)
+local v2 = Vector.new(1, 2)
+local v3 = v1 + v2  -- 调用 __add
+
+print(v3)              -- (4, 6)
+print(v1:magnitude())  -- 5
+print(v3:magnitude())  -- 7.21（sqrt(16+36)）
+```
+
+关键点：
+1. `Vector.__index = Vector` 让实例通过元表查找 Vector 的方法
+2. `Vector.__add` 定义 + 运算符的行为
+3. `setmetatable({x, y}, Vector)` 创建实例并设置元表
+4. 冒号语法 `v:magnitude()` 等价 `Vector.magnitude(v)`
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="元表（metatable）">
+
+定义 table 遇到特定操作时的回退行为的另一个 table。setmetatable(t, mt) 设置，getmetatable(t) 获取。元表中的元方法（如 __index、__add）控制 table 的各种行为。
+
+</GlossaryItem>
+
+<GlossaryItem term="__index">
+
+最常用的元方法。控制"访问 table 不存在的键时的行为"。可以是 table（去该 table 中查找）或 function（调用函数返回结果）。是 Lua 继承和 OOP 的核心机制。
+
+</GlossaryItem>
+
+<GlossaryItem term="运算符重载">
+
+通过元方法重载运算符行为：__add（+）、__sub（-）、__mul（*）、__div（/）、__mod（%）、__pow（^）、__concat（..）、__eq（==）、__lt（<）、__le（<=）。让自定义类型支持运算符操作。
+
+</GlossaryItem>
+
+<GlossaryItem term="Lua OOP 模式">
+
+Lua 没有 class 关键字——OOP 通过元表实现。模式：`Class.__index = Class`（继承），`function Class.new() return setmetatable({}, Class) end`（构造），`function Class:method()`（方法，冒号语法隐式 self）。子类 `setmetatable({}, {__index = Parent})` 继承父类。
+
+</GlossaryItem>
+
+</Glossary>

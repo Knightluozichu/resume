@@ -1,0 +1,224 @@
+---
+title: "接口"
+type: B
+section: "核心机制"
+order: 3
+description: "隐式实现、类型断言与空接口。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GplInterfacesDiagram } from "@/components/mdx/go-programming-language/diagrams/gpl-interfaces";
+
+<Objectives>
+- 理解 Go 接口的隐式实现机制
+- 掌握类型断言和 type switch
+- 理解空接口 interface{} 的用途与限制
+- 学会接口设计原则（小接口）
+</Objectives>
+
+## 直觉引入
+
+Go 的接口像一种「能力认证」——你不需要声明「我有这个能力」，只要你的行为符合要求（实现了方法），就自动获得认证。这叫「隐式实现」或「鸭子类型」。与 Java 的 `implements` 显式声明不同，Go 的接口让解耦变得自然——定义方和使用方不需要知道彼此的存在。
+
+## 概念讲解
+
+### 隐式实现
+
+<Term def="Go 接口是隐式实现的：类型只要实现了接口的所有方法就自动满足接口，无需 implements 声明。">
+Go 接口定义方法签名集合，类型通过实现这些方法自动满足接口：
+
+```go
+type Reader interface {
+    Read(p []byte) (n int, err error)
+}
+
+type File struct{ name string }
+
+// File 自动满足 Reader（实现了 Read 方法）
+func (f *File) Read(p []byte) (n int, err error) {
+    // 实现...
+    return
+}
+```
+
+不需要 `implements Reader`——只要方法签名匹配就自动满足。这带来两个优势：
+1. **解耦**：定义 Reader 接口时不需要知道 File 的存在，File 实现 Read 时也不需要知道 Reader
+2. **后适配**：可以为已有类型定义新接口，无需修改原类型代码
+
+这是 Go 和 Java 接口的根本区别——Java 是声明式的（必须显式 implements），Go 是结构式的（行为匹配即满足）。
+</Term>
+
+### 类型断言与空接口
+
+<Term def="类型断言从接口值提取具体类型。空接口 interface{} 可持有任何值（Go 1.18+ 用 any 替代）。">
+**类型断言**：
+```go
+var r Reader = &File{name: "test"}
+f, ok := r.(*File) // 类型断言，ok=true 则 f 是 *File
+if ok { fmt.Println(f.name) }
+```
+
+**type switch**：
+```go
+switch v := r.(type) {
+case *File:  fmt.Println("File:", v.name)
+case *Buffer: fmt.Println("Buffer")
+default:     fmt.Println("unknown")
+}
+```
+
+**空接口 interface{}**（Go 1.18+ 可写 `any`）：
+```go
+func print(v any) { // 接受任何类型
+    fmt.Println(v)
+}
+print(42)
+print("hello")
+```
+
+空接口的代价：丢失类型安全。使用前需类型断言，运行时可能 panic。Go 1.18 的泛型是更好的替代方案——`func print[T any](v T)` 在编译期保持类型信息。
+
+**接口设计原则**：Go 推崇小接口（io.Reader 只有一个方法）。大接口通过组合小接口构建：`type ReadWriter interface { Reader; Writer }`。
+</Term>
+
+## 交互Demo
+
+<GplInterfacesDiagram />
+
+<Stepper>
+<Step title="隐式实现">
+类型实现接口所有方法即自动满足接口，无需 implements 声明。解耦定义方和使用方。
+</Step>
+<Step title="类型断言">
+从接口值提取具体类型。v, ok := i.(Type) 安全断言。type switch 多类型判断。
+</Step>
+<Step title="空接口与泛型">
+interface{} (any) 可持有任何值但丢失类型安全。Go 1.18 泛型是更安全的替代。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+package main
+
+import (
+    "fmt"
+    "io"
+    "strings"
+)
+
+// 小接口：只定义必要方法
+type Reader interface {
+    Read(p []byte) (n int, err error)
+}
+
+type Writer interface {
+    Write(p []byte) (n int, err error)
+}
+
+// 组合接口
+type ReadWriter interface {
+    Reader
+    Writer
+}
+
+// 隐式实现：实现方法即满足接口
+type StringBuffer struct {
+    buf *strings.Builder
+}
+
+func (s *StringBuffer) Read(p []byte) (n int, err error) {
+    return s.buf.Read(p)
+}
+
+func (s *StringBuffer) Write(p []byte) (n int, err error) {
+    return s.buf.Write(p)
+}
+
+// 接口作为参数（多态）
+func copyData(dst Writer, src Reader) error {
+    _, err := io.Copy(dst, src)
+    return err
+}
+
+// 类型断言
+func identify(r Reader) {
+    if sb, ok := r.(*StringBuffer); ok {
+        fmt.Println("StringBuffer:", sb.buf.String())
+        return
+    }
+    fmt.Println("unknown Reader")
+}
+
+// type switch
+func describe(v interface{}) {
+    switch v := v.(type) {
+    case int:    fmt.Println("int:", v)
+    case string: fmt.Println("string:", v)
+    default:     fmt.Println("unknown type")
+    }
+}
+
+func main() {
+    sb := &StringBuffer{buf: &strings.Builder{}}
+    sb.Write([]byte("hello"))
+
+    // 多态：StringBuffer 满足 ReadWriter
+    var rw ReadWriter = sb
+    fmt.Println(rw)
+
+    // 类型断言
+    identify(sb)
+
+    // 空接口 + type switch
+    describe(42)
+    describe("hello")
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：接口和指针接收者无关**
+接口方法集与接收者类型有关。如果用 `func (f *File) Read()` 实现，则只有 *File 满足 Reader，File 不满足。用 `func (f File) Read()` 实现，则 File 和 *File 都满足。实际开发中常用指针接收者（避免值拷贝），所以接口变量通常存的是指针。
+</Callout>
+
+<Callout type="trap">
+**误区：空接口是 Go 处理泛型的最佳方式**
+空接口丢失类型安全——使用前必须类型断言，运行时可能 panic。Go 1.18 引入泛型（`func foo[T any](v T)`）在编译期保持类型信息，是更安全的替代方案。新代码应优先用泛型，空接口仅在需要存储异构类型（如 JSON 解析）时使用。
+</Callout>
+
+<Exercises>
+**问题 1**：Go 接口的隐式实现与 Java 的显式 implements 有什么区别？
+
+<Answer>
+Java 需要显式声明 implements——类型定义时就绑定接口。Go 是隐式的——只要方法签名匹配就自动满足，定义方和使用方互不知道。Go 的优势：1.解耦——定义新接口不需修改已有类型。2.后适配——可为第三方类型定义接口。3.减少依赖——不需要 import 接口定义。Java 的优势：工具链可静态检查实现关系。Go 的隐式实现更灵活但需要更多测试覆盖。
+</Answer>
+
+**问题 2**：以下代码能编译吗？type R interface{Read()} ; type F struct{}; func(f F) Read(){}; var r R = &F{};
+
+<Answer>
+能编译。F 用值接收者实现了 Read()，所以 F 和 *F 都满足 R 接口。var r R = &F{} 把 *F 赋给 r 接口变量，合法。如果改为 var r R = F{} 也能编译。但如果用指针接收者 func(f *F) Read()，则只有 *F 满足 R，var r R = F{} 编译错误。规则：值接收者→值和指针都满足；指针接收者→只有指针满足。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="隐式实现">
+类型实现接口所有方法即自动满足接口，无需 implements 声明。Go 接口的核心特性。
+</GlossaryItem>
+<GlossaryItem term="类型断言">
+从接口值提取具体类型。v, ok := i.(Type) 安全断言，ok 为 false 不 panic。
+</GlossaryItem>
+<GlossaryItem term="空接口（any）">
+interface{} 可持有任何值。Go 1.18+ 可用 any 替代。代价是丢失类型安全。
+</GlossaryItem>
+<GlossaryItem term="小接口原则">
+Go 推崇单方法小接口（io.Reader）。大接口通过组合小接口构建，提高复用性。
+</GlossaryItem>
+</Glossary>

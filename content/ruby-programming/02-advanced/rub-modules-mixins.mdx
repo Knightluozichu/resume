@@ -1,0 +1,342 @@
+---
+title: "模块与 Mixin"
+type: B
+section: "类与模块"
+order: 5
+description: "Ruby 模块：命名空间组织代码，Mixin 解决单继承限制。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubModulesMixinsDiagram } from "@/components/mdx/ruby-programming/diagrams/rub-modules-mixins";
+
+<Objectives>
+- 理解模块的双重角色：命名空间组织代码 + Mixin 实现多重继承
+- 掌握 include/prepend/extend 三种混入方式及其方法查找顺序
+- 理解 Ruby 的方法查找链（ancestor chain）
+- 掌握 Comparable、Enumerable 等核心内置模块的使用
+</Objectives>
+
+## 直觉引入
+
+Ruby 只允许单继承——一个类只能有一个父类。但现实中，一个 `Dog` 既是 `Animal`（继承），又能 `Walkable`（行走），还能 `Swimmable`（游泳）。怎么让一个类获得多种能力？答案就是模块 Mixin——把能力打包成模块，混入类中。
+
+模块就像 USB 接口标准——你不需要重新设计电脑（类），只需插入不同的 USB 设备（模块）就能获得新功能。`include Walkable` 就像插入"行走能力"的 USB——类立即获得 `walk` 方法。
+
+## 概念讲解
+
+### 模块作为命名空间
+
+<Term def="模块可以用 module 关键字定义，作为命名空间组织常量和方法，避免命名冲突。模块不能实例化（不能 new）。">
+
+```ruby
+module MathUtils
+  PI = 3.14159  # 常量
+
+  # 模块方法（self 前缀）
+  def self.square(x)
+    x * x
+  end
+
+  def self.cube(x)
+    x * x * x
+  end
+end
+
+# 通过模块名访问
+puts MathUtils.square(5)   # => 25
+puts MathUtils::PI          # => 3.14159（常量用 ::）
+```
+
+模块作为命名空间的典型应用：`FileUtils`、`JSON`、`Process` 等标准库模块。它们把相关功能组织在一起，不污染全局命名空间。
+
+</Term>
+
+### Mixin：include / prepend / extend
+
+<Term def="Mixin 是 Ruby 解决单继承限制的机制——通过 include/prepend/extend 将模块方法混入类中。三种方式的查找链顺序不同。">
+
+```ruby
+module Walkable
+  def walk
+    "#{self.class} is walking"
+  end
+end
+
+module Swimmable
+  def swim
+    "#{self.class} is swimming"
+  end
+end
+
+class Dog < Animal
+  include Walkable    # 实例方法混入
+  include Swimmable
+end
+
+dog = Dog.new("Rex")
+dog.walk  # => "Dog is walking"
+dog.swim  # => "Dog is swimming"
+```
+
+三种混入方式：
+- **include**：模块方法插入到类**之后**、父类**之前**的查找链中
+- **prepend**：模块方法插入到类**之前**（最高优先级，可覆盖类方法）
+- **extend**：模块方法变成**类方法**（而非实例方法）
+
+</Term>
+
+### 方法查找链
+
+<Term def="方法查找链（ancestor chain）是 Ruby 查找方法时的顺序列表。prepend 的模块在最前，然后是类本身，然后是 include 的模块（后 include 的在前），然后是父类。">
+
+```ruby
+module M1; end
+module M2; end
+
+class Base; end
+
+class Foo < Base
+  prepend M1     # 最前
+  include M2     # 类之后
+end
+
+Foo.ancestors
+# => [M1, Foo, M2, Base, Object, Kernel, BasicObject]
+```
+
+理解查找链是理解 Ruby 方法分派的核心：
+- `prepend` 的模块优先级最高——可在其中用 `super` 调用原始方法（"环绕增强"）
+- `include` 后加入的模块在前——后 include 的方法可覆盖先 include 的
+- 类自身在 include 模块之前
+
+</Term>
+
+## 交互Demo
+
+<RubModulesMixinsDiagram />
+
+<Stepper>
+<Step title="用模块做命名空间">
+`module MyModule` 定义模块。常量用 `Module::CONST` 访问，模块方法用 `Module.method` 调用。模块不能 `new`——它不是类。适合组织相关工具方法，如 `Math.sqrt`、`FileUtils.cp`。
+</Step>
+<Step title="用 include 混入实例方法">
+`include Module` 将模块的实例方法混入类——类的实例获得这些方法。Ruby 单继承下，include 是实现"多重继承"的主要手段。多个 include 按逆序查找（后 include 的优先级高）。
+</Step>
+<Step title="区分 prepend 和 extend">
+`prepend` 比 include 优先级更高——模块方法在类之前查找，可以用 `super` 调用被覆盖的类方法（环绕增强）。`extend` 把模块方法变成类方法（而非实例方法）——`extend Module` 后类本身获得这些方法。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```ruby
+# === 模块作为命名空间 ===
+module Payment
+  class CreditCard    # 模块内的类
+    def initialize(number); @number = number; end
+    def charge(amount); "Charged $#{amount}"; end
+  end
+
+  def self.process(card, amount)  # 模块方法
+    card.charge(amount)
+  end
+end
+
+card = Payment::CreditCard.new("1234-5678")
+puts Payment.process(card, 100)  # => Charged $100
+
+# === Mixin 实现多重继承 ===
+module ComparableMixin
+  def <(other)
+    (self <=> other) < 0
+  end
+
+  def ==(other)
+    (self <=> other) == 0
+  end
+
+  def >(other)
+    (self <=> other) > 0
+  end
+end
+
+class Temperature
+  include ComparableMixin  # 获得 <, ==, > 等方法
+
+  attr_reader :celsius
+
+  def initialize(celsius)
+    @celsius = celsius
+  end
+
+  def <=>(other)  # 只需定义 <=>，ComparableMixin 自动生成其他比较
+    @celsius <=> other.celsius
+  end
+end
+
+t1 = Temperature.new(20)
+t2 = Temperature.new(30)
+puts t1 < t2   # => true（ComparableMixin 提供）
+puts t1 > t2   # => false
+
+# === prepend 环绕增强 ===
+module Logging
+  def save
+    puts "开始保存..."
+    result = super    # 调用原始 save 方法
+    puts "保存完成: #{result}"
+    result
+  end
+end
+
+class Document
+  def save; "OK"; end
+  prepend Logging     # prepend 让 Logging#save 在 Document#save 之前
+end
+
+Document.new.save
+# 输出：
+# 开始保存...
+# 保存完成: OK
+
+# === extend 添加类方法 ===
+module Findable
+  def find(id)
+    puts "Finding #{self} with id=#{id}"
+  end
+end
+
+class User
+  extend Findable    # User.find 变成类方法
+end
+
+User.find(1)  # => Finding User with id=1
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：混淆 include 和 extend**
+`include Module` 把模块方法变成**实例方法**——`Dog.new.walk`。`extend Module` 把模块方法变成**类方法**——`Dog.find(1)`。记住：include 给实例加方法，extend 给类本身加方法。一个常见的模式是在类中 `extend` 做类方法，`include` 做实例方法。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解 prepend 的价值**
+prepend 看起来像"更强的 include"，但它的核心价值是**环绕增强**——可以在 `super` 前后添加逻辑，而不修改原始方法。这是 include 做不到的（include 的模块在类之后查找，无法"拦截"类方法）。Rails 的 `ActiveSupport::Callbacks` 和 AOP（面向切面编程）大量使用 prepend。
+</Callout>
+
+<Exercises>
+**问题 1**：以下代码的 `Foo.ancestors` 是什么顺序？方法查找时先找哪个？
+
+```ruby
+module A; end
+module B; end
+class Base; end
+class Foo < Base
+  include A
+  include B
+  prepend A  # 假设重新 prepend（实际不会这样，仅为理解）
+end
+```
+
+<Answer>
+实际 `include` 和 `prepend` 同名模块会去重。假设是不同模块，查找链顺序为：
+
+```ruby
+# 假设 prepend M3, include A, include B
+Foo.ancestors
+# => [M3(prepended), Foo, B(last included), A(first included), Base, Object, Kernel, BasicObject]
+```
+
+规则：
+1. **prepend 的模块**在最前（最高优先级）
+2. **类自身**
+3. **include 的模块**，后 include 的在前（B 在 A 之前）
+4. **父类** Base
+5. **Object** 及其 include 的模块（Kernel）
+6. **BasicObject**
+
+方法查找时从前往后——先找 prepend 模块，再找类，再找 include 模块（后 include 先找），再找父类。第一个找到的方法被执行。
+
+核心：prepend 用于覆盖类方法（环绕增强），include 用于扩展实例方法，extend 用于添加类方法。
+</Answer>
+
+**问题 2**：用模块实现一个 `Loggable` Mixin，让任何类 include 后自动获得日志功能。
+
+<Answer>
+```ruby
+module Loggable
+  def log(message, level = :info)
+    timestamp = Time.now.strftime("%Y-%m-%d %H:%M:%S")
+    prefix = case level
+             when :info then "[INFO]"
+             when :warn then "[WARN]"
+             when :error then "[ERROR]"
+             end
+    puts "#{timestamp} #{prefix} #{self.class}: #{message}"
+  end
+
+  # 环绕增强：自动记录方法调用
+  def self.included(base)
+    base.extend(ClassMethods)
+  end
+
+  module ClassMethods
+    def log_class_activity
+      puts "类 #{self} 被加载"
+    end
+  end
+end
+
+class Order
+  include Loggable  # 获得 log 方法
+
+  def process
+    log("开始处理订单")
+    # ... 业务逻辑 ...
+    log("订单处理完成", :info)
+  end
+end
+
+class Payment
+  include Loggable  # 也获得 log 方法
+end
+
+# 使用
+order = Order.new
+order.process
+# => 2024-01-15 10:30:00 [INFO] Order: 开始处理订单
+# => 2024-01-15 10:30:00 [INFO] Order: 订单处理完成
+
+payment = Payment.new
+payment.log("支付已提交", :warn)
+# => 2024-01-15 10:30:01 [WARN] Payment: 支付已提交
+```
+
+关键点：
+1. `log` 是实例方法——include 后所有实例都有
+2. `self.included(base)` 是钩子方法——模块被 include 时自动调用
+3. `extend(ClassMethods)` 让类获得类方法——`Order.log_class_activity`
+4. 多个类 include 同一模块，复用代码——这是 Mixin 的核心价值
+5. 不修改类继承链——Order 可以继承其他类，同时获得 Loggable 能力
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Mixin">
+Ruby 通过模块实现的多重复用机制。将模块方法混入类中，弥补单继承的限制。include 混入实例方法，extend 混入类方法，prepend 混入并优先于类方法。
+</GlossaryItem>
+<GlossaryItem term="方法查找链">
+Ruby 查找方法时的顺序列表（ancestors）。prepend 模块 → 类 → include 模块（逆序）→ 父类 → Object → BasicObject。第一个匹配的方法被执行。
+</GlossaryItem>
+<GlossaryItem term="prepend">
+将模块插入类**之前**的查找链中。核心价值是"环绕增强"——可以在 `super` 调用前后添加逻辑，不修改原始方法。Rails 的 Callback 机制基于 prepend。
+</GlossaryItem>
+<GlossaryItem term="included 钩子">
+模块被 include 时自动调用的回调方法。`def self.included(base)` 接收目标类，可在其中 `extend` 类方法或做其他初始化。是 Mixin DSL 的基础。
+</GlossaryItem>
+</Glossary>

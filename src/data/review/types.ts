@@ -715,7 +715,106 @@ export type ReviewChapterSlug =
   | "cvc-exception-handling"
   | "cvc-async-clr"
   | "cvc-reflection-attributes"
-  | "cvc-final-review";
+  | "cvc-final-review"
+  // .NET 内存管理宝典
+  | "dnm-memory-model"
+  | "dnm-gc-basics"
+  | "dnm-sos-dump"
+  | "dnm-sos-heap"
+  | "dnm-large-object"
+  | "dnm-pinning"
+  | "dnm-finalization"
+  | "dnm-memory-pressure"
+  | "dnm-frag-optimization"
+  | "dnm-final-review"
+  // Rust 程序设计语言
+  | "rpl-learning-map"
+  | "rpl-ownership"
+  | "rpl-borrowing"
+  | "rpl-lifetimes"
+  | "rpl-traits"
+  | "rpl-error-handling"
+  | "rpl-generics"
+  | "rpl-concurrency"
+  | "rpl-async"
+  | "rpl-final-review"
+  // Go 程序设计语言
+  | "gpl-learning-map"
+  | "gpl-types-variables"
+  | "gpl-functions"
+  | "gpl-interfaces"
+  | "gpl-goroutines"
+  | "gpl-channels"
+  | "gpl-select"
+  | "gpl-packages"
+  | "gpl-testing"
+  | "gpl-final-review"
+  // Python 编程：从入门到实践
+  | "pcc-learning-map"
+  | "pcc-variables-lists"
+  | "pcc-if-loops"
+  | "pcc-functions"
+  | "pcc-classes"
+  | "pcc-files-exceptions"
+  | "pcc-testing"
+  | "pcc-game-dev"
+  | "pcc-data-viz"
+  | "pcc-final-review"
+  // Lua 程序设计
+  | "lup-learning-map"
+  | "lup-types-values"
+  | "lup-expressions"
+  | "lup-statements"
+  | "lup-functions"
+  | "lup-closures"
+  | "lup-coroutines"
+  | "lup-metatables"
+  | "lup-c-api"
+  | "lup-final-review"
+  // Ruby 基础教程
+  | "rub-learning-map"
+  | "rub-objects-variables"
+  | "rub-strings"
+  | "rub-control-flow"
+  | "rub-classes"
+  | "rub-modules-mixins"
+  | "rub-blocks-procs"
+  | "rub-metaprogramming"
+  | "rub-gems-bundler"
+  | "rub-final-review"
+  // 大话数据结构
+  | "dsv-learning-map"
+  | "dsv-complexity"
+  | "dsv-arrays-linked"
+  | "dsv-stacks-queues"
+  | "dsv-trees-bst"
+  | "dsv-heaps"
+  | "dsv-graphs"
+  | "dsv-sorting"
+  | "dsv-searching"
+  | "dsv-final-review"
+  // 图灵数学女孩系列
+  | "mgl-learning-map"
+  | "mgl-number-theory"
+  | "mgl-equations"
+  | "mgl-functions"
+  | "mgl-combinatorics"
+  | "mgl-graph-theory"
+  | "mgl-probability"
+  | "mgl-algorithms"
+  | "mgl-machine-learning"
+  | "mgl-final-review"
+  // 数据结构与算法分析（C++描述）
+  | "dsa-learning-map"
+  | "dsa-complexity-analysis"
+  | "dsa-lists"
+  | "dsa-trees"
+  | "dsa-hash-tables"
+  | "dsa-disjoint-sets"
+  | "dsa-graph-algs"
+  | "dsa-sorting"
+  | "dsa-dynamic-programming"
+  | "dsa-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1435,6 +1534,105 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cvc-async-clr": "异步与 CLR",
   "cvc-reflection-attributes": "反射与特性",
   "cvc-final-review": "总复习",
+  // .NET 内存管理宝典
+  "dnm-memory-model": "学习地图",
+  "dnm-gc-basics": "GC 基础",
+  "dnm-sos-dump": "SOS Dump",
+  "dnm-sos-heap": "SOS 堆分析",
+  "dnm-large-object": "大对象堆",
+  "dnm-pinning": "对象固定",
+  "dnm-finalization": "终结化",
+  "dnm-memory-pressure": "内存压力",
+  "dnm-frag-optimization": "碎片优化",
+  "dnm-final-review": "总复习",
+  // Rust 程序设计语言
+  "rpl-learning-map": "学习地图",
+  "rpl-ownership": "所有权",
+  "rpl-borrowing": "借用",
+  "rpl-lifetimes": "生命周期",
+  "rpl-traits": "Trait",
+  "rpl-error-handling": "错误处理",
+  "rpl-generics": "泛型",
+  "rpl-concurrency": "并发",
+  "rpl-async": "异步",
+  "rpl-final-review": "总复习",
+  // Go 程序设计语言
+  "gpl-learning-map": "学习地图",
+  "gpl-types-variables": "类型与变量",
+  "gpl-functions": "函数",
+  "gpl-interfaces": "接口",
+  "gpl-goroutines": "Goroutine",
+  "gpl-channels": "Channel",
+  "gpl-select": "Select",
+  "gpl-packages": "包",
+  "gpl-testing": "测试",
+  "gpl-final-review": "总复习",
+  // Python 编程：从入门到实践
+  "pcc-learning-map": "学习地图",
+  "pcc-variables-lists": "变量与列表",
+  "pcc-if-loops": "条件与循环",
+  "pcc-functions": "函数",
+  "pcc-classes": "类",
+  "pcc-files-exceptions": "文件与异常",
+  "pcc-testing": "测试",
+  "pcc-game-dev": "游戏开发",
+  "pcc-data-viz": "数据可视化",
+  "pcc-final-review": "总复习",
+  // Lua 程序设计
+  "lup-learning-map": "学习地图",
+  "lup-types-values": "类型与值",
+  "lup-expressions": "表达式",
+  "lup-statements": "语句",
+  "lup-functions": "函数",
+  "lup-closures": "闭包",
+  "lup-coroutines": "协程",
+  "lup-metatables": "元表",
+  "lup-c-api": "C API",
+  "lup-final-review": "总复习",
+  // Ruby 基础教程
+  "rub-learning-map": "学习地图",
+  "rub-objects-variables": "对象与变量",
+  "rub-strings": "字符串",
+  "rub-control-flow": "控制流",
+  "rub-classes": "类",
+  "rub-modules-mixins": "模块与混入",
+  "rub-blocks-procs": "块与 Proc",
+  "rub-metaprogramming": "元编程",
+  "rub-gems-bundler": "Gems 与 Bundler",
+  "rub-final-review": "总复习",
+  // 大话数据结构
+  "dsv-learning-map": "学习地图",
+  "dsv-complexity": "复杂度",
+  "dsv-arrays-linked": "数组与链表",
+  "dsv-stacks-queues": "栈与队列",
+  "dsv-trees-bst": "树与二叉搜索树",
+  "dsv-heaps": "堆",
+  "dsv-graphs": "图",
+  "dsv-sorting": "排序",
+  "dsv-searching": "查找",
+  "dsv-final-review": "总复习",
+  // 图灵数学女孩系列
+  "mgl-learning-map": "学习地图",
+  "mgl-number-theory": "数论",
+  "mgl-equations": "方程",
+  "mgl-functions": "函数",
+  "mgl-combinatorics": "组合数学",
+  "mgl-graph-theory": "图论",
+  "mgl-probability": "概率",
+  "mgl-algorithms": "算法",
+  "mgl-machine-learning": "机器学习",
+  "mgl-final-review": "总复习",
+  // 数据结构与算法分析（C++描述）
+  "dsa-learning-map": "学习地图",
+  "dsa-complexity-analysis": "复杂度分析",
+  "dsa-lists": "线性表",
+  "dsa-trees": "树",
+  "dsa-hash-tables": "散列表",
+  "dsa-disjoint-sets": "并查集",
+  "dsa-graph-algs": "图算法",
+  "dsa-sorting": "排序",
+  "dsa-dynamic-programming": "动态规划",
+  "dsa-final-review": "总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,351 @@
+---
+title: "函数"
+type: B
+section: "高级特性"
+order: 4
+description: "Lua 函数作为一等公民：多返回值、可变参数（...）、冒号语法与 table 中的函数。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { LupFunctionsDiagram } from "@/components/mdx/lua-programming/diagrams/lup-functions";
+
+<Objectives>
+
+- 能使用多种语法定义函数，理解函数是一等公民
+- 能使用多返回值和可变参数（...）
+- 能使用冒号语法（:method）实现面向对象风格调用
+- 能使用 select 操作可变参数
+
+</Objectives>
+
+## 直觉引入
+
+在 Lua 中，函数和数字、字符串一样是值。你可以把函数赋给变量、存入 table、作为参数传递、作为返回值返回。这不是"函数式编程"的特权——这是 Lua 的基本设计。
+
+Lua 函数有两个独特特性：多返回值（一个函数可以返回多个值）和可变参数（`...` 收集任意数量的参数）。这两个特性让 Lua 的函数非常灵活——`string.find` 返回起始位置和结束位置，`table.unpack` 展开数组为参数列表，都依赖多返回值。
+
+## 概念讲解
+
+### 函数定义
+
+<Term def="Lua 函数是一等公民——可以赋值给变量、存入 table、作为参数传递和返回。有两种定义语法：function name() ... end 和 local name = function() ... end。">
+
+```lua
+-- 语法1：函数声明（如果是 local 则为局部）
+local function greet(name)
+    return "Hello, " .. name
+end
+
+-- 语法2：赋值（等价）
+local greet = function(name)
+    return "Hello, " .. name
+end
+
+-- 语法3：table 中的函数
+local utils = {}
+function utils.greet(name)   -- 等价 utils.greet = function(name) ...
+    return "Hello, " .. name
+end
+```
+
+</Term>
+
+### 多返回值
+
+<Term def="Lua 函数可以返回多个值。调用时：在表达式末尾展开所有返回值，不在末尾只取第一个。">
+
+```lua
+local function minmax(t)
+    local min, max = t[1], t[1]
+    for _, v in ipairs(t) do
+        if v < min then min = v end
+        if v > max then max = v end
+    end
+    return min, max  -- 返回两个值
+end
+
+local lo, hi = minmax({3, 1, 4, 1, 5})  -- lo=1, hi=5
+local only = minmax({3, 1, 4})          -- only=1（只取第一个）
+print(minmax({3, 1, 4}))                 -- 1  4（展开所有返回值）
+
+-- 在表构造器和函数调用中展开
+local range = {minmax({3, 1, 4})}  -- {1, 4}
+print(string.format("min=%d max=%d", minmax({3, 1, 4})))  -- min=1 max=4
+```
+
+### 可变参数
+
+```lua
+local function sum(...)
+    local total = 0
+    for _, v in ipairs({...}) do  -- {...} 打包为 table
+        total = total + v
+    end
+    return total
+end
+
+print(sum(1, 2, 3, 4, 5))  -- 15
+
+-- select 函数操作可变参数
+local function first(...)
+    return select(1, ...)  -- 返回第1个参数及之后所有
+end
+
+local function count(...)
+    return select("#", ...)  -- 返回参数个数
+end
+
+print(count(1, 2, 3))  -- 3
+```
+
+### 冒号语法
+
+<Term def="冒号语法 obj:method(args) 等价于 obj.method(obj, args)——隐式传递 self 作为第一个参数。定义时 function obj:method(args) 等价 function obj.method(self, args)。">
+
+```lua
+local Account = {balance = 0}
+
+-- 冒号定义：隐式 self 参数
+function Account:deposit(amount)
+    self.balance = self.balance + amount
+end
+
+function Account:withdraw(amount)
+    self.balance = self.balance - amount
+end
+
+-- 冒号调用：隐式传递 self
+Account:deposit(100)
+Account:withdraw(30)
+print(Account.balance)  -- 70
+
+-- 等价的点号写法
+Account.deposit(Account, 100)  -- 手动传 self
+```
+
+</Term>
+
+### table.unpack
+
+```lua
+-- unpack 将数组展开为多个返回值
+local args = {1, 2, 3}
+print(table.unpack(args))  -- 1  2  3
+
+-- 用于转发参数
+local function call_with(fn, ...)
+    return fn(...)  -- 直接转发可变参数
+end
+
+-- unpack 范围
+local t = {10, 20, 30, 40, 50}
+print(table.unpack(t, 2, 4))  -- 20  30  40
+```
+
+## 交互Demo
+
+<LupFunctionsDiagram />
+
+<Stepper>
+
+<Step title="第一步：函数是一等公民">
+
+函数可以赋值给变量（`local f = function() end`）、存入 table（`t.fn = print`）、作为参数传递（`map(t, f)`）、作为返回值返回（`return function() end`）。这和数字、字符串一样——函数就是值。这让 Lua 天然支持高阶函数和回调模式。
+
+</Step>
+
+<Step title="第二步：多返回值的展开规则">
+
+函数返回多个值时，展开规则是：在表达式列表的末尾展开所有返回值，不在末尾只取第一个。`local a, b = f(), 10` 中 f() 不在末尾（后面还有 10），只取第一个返回值。`local a, b = 10, f()` 中 f() 在末尾，展开所有返回值。
+
+</Step>
+
+<Step title="第三步：冒号语法与可变参数">
+
+冒号语法 `obj:method()` 隐式传递 self，是 Lua 面向对象风格的基础。可变参数 `...` 收集任意数量的参数，`{...}` 打包为 table，`select("#", ...)` 获取个数，`select(n, ...)` 从第 n 个开始取。`table.unpack` 是逆操作——展开 table 为多个参数。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```lua
+-- 函数综合示例：灵活的事件系统
+
+local EventBus = {}
+
+-- 使用可变参数和多返回值
+function EventBus.on(self, event, handler)
+    self._handlers = self._handlers or {}
+    self._handlers[event] = self._handlers[event] or {}
+    table.insert(self._handlers[event], handler)
+    return self  -- 返回 self 支持链式调用
+end
+
+function EventBus.emit(self, event, ...)
+    local handlers = self._handlers and self._handlers[event]
+    if not handlers then return end
+
+    -- 多返回值：收集所有 handler 的返回值
+    local results = {}
+    for _, handler in ipairs(handlers) do
+        -- 转发可变参数给 handler
+        local result = handler(...)
+        if result ~= nil then
+            table.insert(results, result)
+        end
+    end
+
+    -- 返回所有结果
+    return table.unpack(results)
+end
+
+-- 高阶函数：函数作为参数
+local function compose(f, g)
+    -- 返回一个新函数（闭包）
+    return function(x)
+        return f(g(x))
+    end
+end
+
+local double = function(x) return x * 2 end
+local addOne = function(x) return x + 1 end
+local doubleThenAdd = compose(addOne, double)
+
+-- 使用
+local bus = EventBus
+bus:on("data", function(payload)
+    print("收到: " .. payload)
+    return "ack:" .. payload
+end)
+bus:on("data", function(payload)
+    print("处理: " .. payload)
+end)
+
+local result = bus:emit("data", "hello")
+print("结果:", result)  -- ack:hello
+
+print(doubleThenAdd(5))  -- 11（double(5)=10, addOne(10)=11）
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：多返回值在表达式中间被截断**
+
+`local a, b, c = f(), g()` 中 f() 不在末尾——只取第一个返回值，g() 在末尾展开。如果 f() 返回两个值，第二个值被丢弃。要保留所有返回值，把 f() 放在最后：`local a, b, c = g(), f()`，或用 table 包装：`local results = {f()}`。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：在递归 local function 定义中引用自己**
+
+`local f = function() f() end` 中 f 在函数体内部是 nil——因为 local 声明还没完成。用 `local function f() f() end` 语法（语法糖），它在函数体内部可见。等价于 `local f; f = function() f() end`。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？解释多返回值的展开规则。
+
+```lua
+local function f() return 1, 2 end
+local function g() return 3, 4 end
+
+print(f(), g())
+print(f(), 10)
+local a, b, c = f(), g()
+```
+
+<Answer>
+
+```
+1    3    4
+1    10
+1    3    4
+```
+
+解释：
+- `print(f(), g())`：f() 不在末尾（后面有 g()），只取第一个返回值 1。g() 在末尾，展开所有返回值 3, 4。输出 1 3 4。
+- `print(f(), 10)`：f() 不在末尾（后面有 10），只取 1。输出 1 10。
+- `local a, b, c = f(), g()`：f() 不在末尾，只取 1 赋给 a。g() 在末尾，展开 3, 4 赋给 b, c。a=1, b=3, c=4。
+
+规则：只有表达式列表最后一个位置的函数调用才会展开所有返回值。其他位置只取第一个返回值。
+
+</Answer>
+
+**问题 2**：冒号语法 `obj:method()` 和点号语法 `obj.method()` 有什么区别？
+
+<Answer>
+
+区别在于 self 参数的隐式传递：
+
+**冒号语法 `obj:method(args)`**：
+- 等价于 `obj.method(obj, args)`——隐式把 obj 作为第一个参数传入
+- 定义时 `function obj:method(args)` 等价 `function obj.method(self, args)`——隐式声明 self 参数
+- 用于面向对象风格调用
+
+**点号语法 `obj.method(args)`**：
+- 不自动传 obj——需要手动传 `obj.method(obj, args)`
+- 定义时 `function obj.method(args)` 没有 self 参数
+- 用于普通函数调用
+
+```lua
+local T = {value = 42}
+
+-- 冒号定义和调用（推荐用于方法）
+function T:getValue()
+    return self.value  -- self 是隐式的
+end
+print(T:getValue())  -- 42
+
+-- 点号定义和调用（需要手动传 self）
+function T.getValue2(self)
+    return self.value
+end
+print(T.getValue2(T))  -- 42
+
+-- 混用：冒号调用点号定义的函数会出错
+-- T:getValue2()  -- 错误！self 会被设为 T，但 getValue2 没有 self 参数
+```
+
+最佳实践：方法用冒号（`:`），普通函数用点号（`.`）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="一等公民函数">
+
+Lua 中函数和数字、字符串一样是值——可以赋值给变量、存入 table、作为参数传递、作为返回值返回。这让 Lua 天然支持高阶函数、回调和函数式编程模式。
+
+</GlossaryItem>
+
+<GlossaryItem term="多返回值">
+
+函数可以返回多个值 `return a, b, c`。展开规则：在表达式列表末尾展开所有返回值，不在末尾只取第一个。`local a, b = f()` 取多个，`local a = f(), 10` 只取第一个。
+
+</GlossaryItem>
+
+<GlossaryItem term="可变参数（...）">
+
+`function f(...)` 收集任意数量的参数。`{...}` 打包为 table，`select("#", ...)` 获取个数，`select(n, ...)` 从第 n 个开始取。`table.unpack` 是逆操作——展开 table 为多个参数。
+
+</GlossaryItem>
+
+<GlossaryItem term="冒号语法">
+
+`obj:method(args)` 等价 `obj.method(obj, args)`——隐式传递 self。定义 `function obj:method(args)` 等价 `function obj.method(self, args)`。是 Lua 面向对象风格调用的基础。
+
+</GlossaryItem>
+
+</Glossary>

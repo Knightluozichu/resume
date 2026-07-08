@@ -1,0 +1,372 @@
+---
+title: "闭包"
+type: B
+section: "高级特性"
+order: 5
+description: "Lua 闭包与词法作用域：upvalue 捕获、每次调用创建独立闭包、迭代器与私有状态封装。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { LupClosuresDiagram } from "@/components/mdx/lua-programming/diagrams/lup-closures";
+
+<Objectives>
+
+- 能解释闭包的构成：函数 + 捕获的外层变量（upvalue）
+- 能理解每次调用外层函数创建独立的闭包实例
+- 能使用闭包实现私有状态封装
+- 能使用闭包实现迭代器
+
+</Objectives>
+
+## 直觉引入
+
+闭包就像一个有记忆的函数。普通函数是无状态的——每次调用都从零开始。闭包有状态——它能"记住"外层作用域中的变量，跨调用保持它们的值。
+
+想象一个计数器：你不想用全局变量（不安全），不想每次传参（麻烦）。闭包给你第三个选择——把计数变量藏在函数内部，外部无法直接访问，但闭包每次调用都能修改它。这就是"私有状态封装"——用闭包实现了面向对象中"私有成员"的效果。
+
+## 概念讲解
+
+### 闭包的构成
+
+<Term def="闭包 = 函数 + 其引用的外层局部变量（upvalue）。当内层函数引用外层函数的局部变量时，即使外层函数已返回，这些变量仍然存活——被闭包捕获（upvalue）。">
+
+```lua
+local function makeCounter()
+    local count = 0           -- upvalue（外层局部变量）
+
+    return function()         -- 内层函数（闭包）
+        count = count + 1     -- 引用并修改 upvalue
+        return count
+    end
+end
+
+local c = makeCounter()
+print(c())  -- 1
+print(c())  -- 2
+print(c())  -- 3
+-- count 变量在 makeCounter 返回后仍然存活——被闭包 c 捕获
+```
+
+</Term>
+
+### 每次调用创建独立闭包
+
+```lua
+local c1 = makeCounter()
+local c2 = makeCounter()
+
+print(c1())  -- 1
+print(c1())  -- 2
+print(c2())  -- 1（独立的 count！）
+print(c1())  -- 3（c1 的 count 不受 c2 影响）
+```
+
+每次调用 `makeCounter()` 都创建一个新的 `count` 变量和一个新的闭包。c1 和 c2 各有独立的 count，互不影响。
+
+### 词法作用域
+
+```lua
+local function makeAdder(n)
+    return function(x)
+        return x + n  -- n 是 upvalue，捕获自 makeAdder 的参数
+    end
+end
+
+local add10 = makeAdder(10)
+local add20 = makeAdder(20)
+
+print(add10(5))  -- 15（n=10）
+print(add20(5))  -- 25（n=20）
+```
+
+闭包捕获的是**定义时**的外层变量，不是**调用时**的。这叫词法作用域（静态作用域）——变量的可见性由代码结构决定，不由调用栈决定。
+
+### 用闭包实现迭代器
+
+```lua
+-- 无状态迭代器
+local function range(start, stop, step)
+    step = step or 1
+    local i = start
+    return function()       -- 闭包迭代器
+        if i <= stop then
+            local current = i
+            i = i + step
+            return current
+        end
+    end
+end
+
+for v in range(1, 5) do
+    print(v)  -- 1 2 3 4 5
+end
+
+for v in range(0, 10, 2) do
+    print(v)  -- 0 2 4 6 8 10
+end
+```
+
+### 私有状态封装
+
+```lua
+local function createBankAccount(initial)
+    local balance = initial  -- 私有！外部无法直接访问
+
+    return {
+        deposit = function(amount)
+            if amount > 0 then
+                balance = balance + amount
+                return balance
+            end
+        end,
+        withdraw = function(amount)
+            if amount > 0 and amount <= balance then
+                balance = balance - amount
+                return balance
+            end
+            return nil, "余额不足"
+        end,
+        getBalance = function()
+            return balance
+        end
+    }
+end
+
+local acc = createBankAccount(100)
+print(acc.getBalance())  -- 100
+acc.deposit(50)
+print(acc.getBalance())  -- 150
+acc.withdraw(30)
+print(acc.getBalance())  -- 120
+-- acc.balance = 0  -- 这不会影响闭包内的 balance！
+-- 因为 balance 是 upvalue，不是 table 字段
+```
+
+## 交互Demo
+
+<LupClosuresDiagram />
+
+<Stepper>
+
+<Step title="第一步：理解 upvalue">
+
+upvalue 是闭包引用的外层局部变量。当外层函数返回后，普通局部变量会被回收——但如果被闭包引用，它们就会作为 upvalue 存活。闭包可以在后续调用中读取和修改 upvalue，实现跨调用的状态保持。
+
+</Step>
+
+<Step title="第二步：每次调用创建独立闭包">
+
+每次调用外层函数都会创建新的局部变量和新的闭包。不同闭包实例的 upvalue 是独立的——修改一个不影响另一个。这使得闭包天然适合封装独立状态（如多个计数器、多个银行账户）。
+
+</Step>
+
+<Step title="第三步：闭包的应用场景">
+
+闭包的三大应用：1. 私有状态封装（把变量藏起来只通过方法访问）；2. 迭代器（记住遍历位置跨调用）；3. 回调中保持上下文（在异步/事件处理中捕获外部变量）。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```lua
+-- 闭包综合示例：记忆化与生成器
+
+-- 1. 记忆化（缓存计算结果）
+local function memoize(fn)
+    local cache = {}  -- 私有缓存（upvalue）
+
+    return function(...)
+        -- 将参数序列化为 key
+        local key = table.concat({...}, ",")
+        if cache[key] ~= nil then
+            return cache[key]
+        end
+
+        local result = fn(...)
+        cache[key] = result
+        return result
+    end
+end
+
+local slowSquare = function(n)
+    -- 模拟耗时计算
+    local result = n * n
+    return result
+end
+
+local fastSquare = memoize(slowSquare)
+print(fastSquare(5))  -- 25（计算）
+print(fastSquare(5))  -- 25（缓存命中）
+
+-- 2. 生成器（无限序列）
+local function fibonacci()
+    local a, b = 0, 1
+    return function()
+        local current = a
+        a, b = b, a + b  -- 多重赋值
+        return current
+    end
+end
+
+local fib = fibonacci()
+for i = 1, 10 do
+    print(fib())  -- 0 1 1 2 3 5 8 13 21 34
+end
+
+-- 3. 私有状态（安全的计数器工厂）
+local function createIdGenerator(prefix)
+    local id = 0  -- 私有
+
+    return function()
+        id = id + 1
+        return prefix .. string.format("%04d", id)
+    end
+end
+
+local genUser = createIdGenerator("USER_")
+local genOrder = createIdGenerator("ORDER_")
+
+print(genUser())  -- USER_0001
+print(genUser())  -- USER_0002
+print(genOrder()) -- ORDER_0001（独立计数）
+print(genUser())  -- USER_0003
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：在循环中创建闭包捕获同一个变量**
+
+```lua
+local fns = {}
+for i = 1, 3 do
+    fns[i] = function() return i end
+end
+print(fns[1](), fns[2](), fns[3]())  -- 1 2 3（Lua 正确！）
+```
+
+在 Lua 中这实际上是对的——因为数值 for 的循环变量每次迭代是新的局部变量。但在某些语言中（如 JavaScript 的 var），所有闭包捕获同一个变量。如果你在 Lua 中用 while 循环模拟，需要注意：`local i = 1; while i <= 3 do fns[i] = function() return i end; i = i + 1 end` 中所有闭包共享同一个 i（返回 4）。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：混淆 table 字段和 upvalue**
+
+闭包捕获的 upvalue 和 table 字段是不同的。`local balance = 100; return {getBalance = function() return balance end}` 中 balance 是 upvalue——外部设置 `obj.balance = 0` 不影响闭包内的 balance。如果要通过 table 字段访问，需要把 balance 存在 table 中而非 local 变量。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：以下代码输出什么？解释原因。
+
+```lua
+local function makeAdder(n)
+    return function(x) return x + n end
+end
+
+local add10 = makeAdder(10)
+local add20 = makeAdder(20)
+print(add10(5))
+print(add20(5))
+```
+
+<Answer>
+
+输出：
+```
+15
+25
+```
+
+解释：`makeAdder(10)` 创建一个闭包，捕获 n=10 作为 upvalue。`add10(5)` 返回 5+10=15。`makeAdder(20)` 创建另一个闭包，捕获 n=20。`add20(5)` 返回 5+20=25。
+
+两个闭包有各自独立的 upvalue n——词法作用域决定了 n 的值在闭包**定义时**就确定了（makeAdder 调用时的参数值），而不是在调用时。add10 的 n 永远是 10，add20 的 n 永远是 20。
+
+</Answer>
+
+**问题 2**：用闭包实现一个 `createBankAccount(initial)` 函数，使得 balance 是私有的，只能通过 deposit/withdraw/getBalance 方法访问。
+
+<Answer>
+
+```lua
+local function createBankAccount(initial)
+    local balance = initial  -- upvalue，外部无法直接访问
+
+    return {
+        deposit = function(amount)
+            if amount > 0 then
+                balance = balance + amount
+                return true
+            end
+            return false, "存入金额必须为正"
+        end,
+        withdraw = function(amount)
+            if amount <= 0 then
+                return false, "取出金额必须为正"
+            end
+            if amount > balance then
+                return false, "余额不足"
+            end
+            balance = balance - amount
+            return true
+        end,
+        getBalance = function()
+            return balance
+        end
+    }
+end
+
+-- 测试
+local acc = createBankAccount(100)
+print(acc.getBalance())  -- 100
+acc.deposit(50)
+print(acc.getBalance())  -- 150
+acc.withdraw(200)        -- 失败：余额不足
+acc.withdraw(30)
+print(acc.getBalance())  -- 120
+-- acc.balance = 999  -- 这不会影响真正的 balance！
+-- 因为 balance 是 upvalue，不是 table 字段
+```
+
+关键点：`balance` 是 `createBankAccount` 的局部变量，被返回的三个函数（闭包）作为 upvalue 捕获。外部无法直接访问 `balance`——只能通过方法操作。即使设置 `acc.balance = 999`，只是在 table 上加了一个 balance 字段，不影响闭包内的 upvalue。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="闭包（closure）">
+
+函数 + 其引用的外层局部变量（upvalue）。当内层函数引用外层函数的局部变量时，即使外层函数已返回，这些变量仍作为 upvalue 存活。闭包可以在后续调用中读取和修改 upvalue。
+
+</GlossaryItem>
+
+<GlossaryItem term="upvalue">
+
+闭包捕获的外层局部变量。upvalue 在外层函数返回后仍然存活——被闭包引用。每个闭包实例有独立的 upvalue。upvalue 可以被闭包读取和修改。
+
+</GlossaryItem>
+
+<GlossaryItem term="词法作用域">
+
+变量的可见性由代码结构（词法位置）决定，不由调用栈决定。闭包捕获的是定义时的外层变量，不是调用时的。这意味着 `makeAdder(10)` 创建的闭包中 n 永远是 10。
+
+</GlossaryItem>
+
+<GlossaryItem term="闭包应用">
+
+三大应用：1. 私有状态封装（把变量藏为 upvalue 只通过方法访问）；2. 迭代器（记住遍历位置跨调用）；3. 回调中保持上下文（在异步/事件处理中捕获外部变量）。
+
+</GlossaryItem>
+
+</Glossary>

@@ -1,0 +1,220 @@
+---
+title: "包与模块"
+type: B
+section: "高级主题"
+order: 7
+description: "包组织、模块管理与可见性规则。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GplPackagesDiagram } from "@/components/mdx/go-programming-language/diagrams/gpl-packages";
+
+<Objectives>
+- 理解 Go 包的组织原则和可见性规则
+- 掌握 Go Modules 的依赖管理
+- 理解内部包（internal）的特殊可见性
+- 学会设计良好的包接口
+</Objectives>
+
+## 直觉引入
+
+Go 的包就像公司的部门划分——每个部门（包）有明确的职责，内部实现细节（小写）对外保密，公开接口（大写）是部门的对外服务。Go Modules 是公司的供应商管理系统——记录每个依赖的精确版本，确保任何人都能重现完全相同的构建。好的包设计遵循「高内聚低耦合」——包内紧密合作，包间通过接口通信。
+
+## 概念讲解
+
+### 包与可见性
+
+<Term def="Go 用大小写控制可见性：大写=导出（公开），小写=未导出（包内私有）。internal 包只能被父目录下的包导入。">
+**可见性规则**：
+- **大写开头**：导出（公开），外部包可访问
+- **小写开头**：未导出（私有），仅包内可访问
+
+```go
+package user
+
+type User struct {
+    Name  string  // 导出（公开）
+    email string  // 未导出（私有）
+}
+
+func CreateUser(name string) *User { /* 导出 */ }
+func validateEmail(s string) bool { /* 未导出 */ }
+```
+
+**内部包（internal）**：
+```
+project/
+├── internal/
+│   └── config/    // 只能被 project/ 下导入
+├── main.go
+└── api/
+    └── handler.go // 可以导入 internal/config
+```
+`internal/` 目录下的包只能被其父目录（及子目录）的包导入。外部项目无法导入——用于保护内部实现不被外部依赖。
+
+**包设计原则**：
+1. 一个包一个职责（SRP）
+2. 包名应简短、小写、单数
+3. 避免包名冲突（如 util、common 是坏名字）
+4. 导出的 API 最小化
+</Term>
+
+### Go Modules
+
+<Term def="Go Modules 是 Go 1.11+ 的依赖管理系统。go.mod 声明模块路径和依赖，go.sum 记录校验和。支持语义化版本。">
+**Go Modules**：
+
+```bash
+go mod init github.com/user/project  # 初始化模块
+go get github.com/pkg/errors@v1.0.0  # 添加依赖
+go mod tidy                            # 清理未使用依赖
+```
+
+**go.mod 文件**：
+```
+module github.com/user/project
+
+go 1.21
+
+require (
+    github.com/pkg/errors v0.9.1
+    golang.org/x/sync v0.3.0
+)
+```
+
+**版本规则**（语义化版本 vMAJOR.MINOR.PATCH）：
+- MAJOR：不兼容变更（API 破坏）
+- MINOR：向后兼容的功能新增
+- PATCH：向后兼容的 bug 修复
+
+`go get` 默认拉取最新 MINOR.PATCH（如 v1.2.3 → 更新到 v1.x 最新）。MAJOR 版本不同是不同模块路径（如 /v2 后缀）。
+
+**vendor 模式**：`go mod vendor` 将依赖复制到 vendor/ 目录，适合无网络环境构建。但增大仓库体积，CI 可用模块缓存替代。
+</Term>
+
+## 交互Demo
+
+<GplPackagesDiagram />
+
+<Stepper>
+<Step title="可见性规则">
+大写=导出（公开），小写=未导出（私有）。internal 包只能被父目录导入。用大小写而非 public/private 关键字。
+</Step>
+<Step title="Go Modules">
+go.mod 声明模块和依赖。语义化版本 vMAJOR.MINOR.PATCH。go mod tidy 清理，go get 添加。
+</Step>
+<Step title="包设计">
+一个包一个职责，包名简短小写单数。避免 util/common 等无意义名字。导出 API 最小化。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// go.mod
+// module github.com/user/project
+// go 1.21
+// require github.com/pkg/errors v0.9.1
+
+// ===== internal/config/config.go =====
+package config
+
+import "fmt"
+
+// Config 导出（大写）：外部可访问
+type Config struct {
+    Port    int
+    Secret  string // 导出但敏感信息不建议导出
+    timeout int    // 未导出（小写）：仅包内可访问
+}
+
+// Load 导出函数
+func Load(path string) (*Config, error) {
+    // validatePath 未导出，仅包内调用
+    if !validatePath(path) {
+        return nil, fmt.Errorf("invalid path")
+    }
+    return &Config{Port: 8080, timeout: 30}, nil
+}
+
+// 未导出函数
+func validatePath(path string) bool {
+    return path != ""
+}
+
+// Setter 方法可修改未导出字段
+func (c *Config) SetTimeout(t int) {
+    c.timeout = t
+}
+
+// ===== main.go =====
+package main
+
+import (
+    "fmt"
+    "github.com/user/project/internal/config"
+)
+
+func main() {
+    cfg, err := config.Load("/etc/app.conf")
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(cfg.Port)    // OK: 导出
+    cfg.SetTimeout(60)       // OK: 通过方法修改
+    // fmt.Println(cfg.timeout) // 编译错误: timeout 未导出
+}
+
+// ===== 包设计示例：好的包名 =====
+// package user     // 好：明确职责
+// package payment  // 好：明确职责
+// package util     // 坏：太泛泛
+// package common   // 坏：太泛泛
+// package helpers  // 坏：太泛泛
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：internal 包和普通包一样可以被任意导入**
+internal 包有特殊可见性限制——只能被 internal 目录的父目录（及子目录）中的包导入。如 a/b/c/internal/d 只能被 a/b/c/ 下导入。外部项目导入会编译错误。这是 Go 编译器强制的，不是约定。用于封装不希望被外部依赖的内部实现。
+</Callout>
+
+<Callout type="trap">
+**误区：go get 拉取的依赖总是最新的**
+go get 默认拉取最新版本，但 go.mod 中的 require 记录了精确版本。团队成员用 go mod download 拉取 go.mod 中指定的版本，保证一致性。go get -u 更新到最新版本并修改 go.mod。生产环境应锁定版本（go.sum 校验），避免依赖被篡改或意外升级。
+</Callout>
+
+<Exercises>
+**问题 1**：Go 用大小写控制可见性，这相比 public/private 关键字有什么优势？
+
+<Answer>
+优势：1.简洁——不需要额外关键字，标识符首字母大小写即决定可见性。2.统一——变量、函数、类型、方法、字段的可见性规则完全一致。3.包级别——可见性是包级别的（不是类级别），更符合 Go 的包导向设计。4.工具友好——一眼可看出标识符是否导出，IDE 可高亮提示。缺点：不能精细控制（如 Java 的 protected），但 Go 认为包级别可见性足够。
+</Answer>
+
+**问题 2**：如何设计一个好的 Go 包？列举三个原则。
+
+<Answer>
+三个原则：1.单一职责——一个包做一件事，如 net/http 只做 HTTP。包名应反映职责（user/payment/hash），避免 util/common/helpers 等泛泛名字。2.最小导出——只导出必要 API，内部实现用小写隐藏。导出 API 是承诺，变更需向后兼容。3.少依赖——包间依赖应单向无环，避免循环依赖。internal 包封装不希望被外部依赖的内部实现。好的包应该能独立理解和使用。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="导出（大写）">
+大写开头的标识符对外公开。外部包可通过 包名.标识符 访问。
+</GlossaryItem>
+<GlossaryItem term="未导出（小写）">
+小写开头的标识符仅包内可访问。封装内部实现细节。
+</GlossaryItem>
+<GlossaryItem term="internal 包">
+internal/ 目录下的包只能被父目录（及子目录）导入。编译器强制。
+</GlossaryItem>
+<GlossaryItem term="Go Modules">
+Go 1.11+ 依赖管理系统。go.mod 声明模块和依赖，go.sum 校验。语义化版本。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,128 @@
+---
+title: "学习地图"
+type: B
+section: "内存基础"
+order: 0
+description: "全书学习地图：四大板块与十章结构。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DnmMemoryModelDiagram } from "@/components/mdx/dotnet-memory/diagrams/dnm-memory-model";
+
+<Objectives>
+- 理解 .NET 托管堆与栈的区别
+- 掌握全书四大板块的学习路径
+- 建立内存模型到优化策略的因果链
+- 了解每章在整体中的定位
+</Objectives>
+
+## 直觉引入
+
+想象你经营一个巨大的仓库（托管堆），货物不断进出。栈就像你手边的工具箱——用完即刻归位，速度极快但空间有限。仓库则需要一个管理员（GC）定期巡查，清理过期货物（不可达对象）、整理货架（压缩碎片）。.NET 内存管理就是研究这个仓库如何高效运转的学问。
+
+## 概念讲解
+
+### 托管堆与栈
+
+<Term def="托管堆是 CLR 管理的内存区域，存放引用类型实例；栈由操作系统管理，存放值类型和局部变量。">
+在 .NET 中，内存分为两大区域：**栈**和**托管堆**。栈是一块 LIFO（后进先出）的内存区域，方法调用时分配栈帧（存放局部变量和参数），方法返回时自动释放——只需移动栈指针，速度极快。
+
+托管堆由 CLR 的垃圾回收器（GC）管理。当你写 `new Foo()` 时，CLR 在托管堆上分配一块内存存放对象实例，栈上只存指向堆对象的引用（指针）。堆对象的回收由 GC 自动完成，开发者不需手动 `free`。
+
+核心区别：栈的分配释放是确定性的（方法返回即释放），堆的回收是非确定性的（GC 决定何时回收）。这就是为什么理解 GC 机制对写出高性能 C# 至关重要。
+</Term>
+
+### 全书学习路径
+
+<Term def="四大板块按因果链组织：内存基础 → SOS 调试 → 内存模式 → 高级优化。">
+本书分为四大板块：
+
+1. **内存基础**（第 0-1 章）：建立托管堆和 GC 的心智模型。不理解分代回收就无法理解后续所有内容。
+2. **SOS 调试工具**（第 2-3 章）：学会用 SOS 实际观察堆状态。理论需要工具验证——你不能优化你看不见的东西。
+3. **内存模式**（第 4-6 章）：深入研究 LOH、Pinning、Finalization 三大内存模式。这些是性能问题的常见根源。
+4. **高级主题**（第 7-9 章）：综合应用——内存压力协调、碎片优化策略、全书知识串联。
+
+每个板块建立在前一个之上，形成完整的因果链。
+</Term>
+
+## 交互Demo
+
+<DnmMemoryModelDiagram />
+
+<Stepper>
+<Step title="建立心智模型">
+先理解托管堆（仓库）和栈（工具箱）的区别，建立 GC 自动回收的基本认知。
+</Step>
+<Step title="掌握调试工具">
+学习 SOS 调试扩展，能够实际观察堆状态、定位内存问题。理论需要工具验证。
+</Step>
+<Step title="优化收全貌">
+综合内存模式和优化策略，形成从诊断到优化的完整闭环。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 栈分配：值类型，方法返回即释放
+public int Add(int a, int b)  // a, b 在栈上
+{
+    int result = a + b;        // result 在栈上
+    return result;             // 方法返回，栈帧释放
+}
+
+// 堆分配：引用类型，GC 回收
+public List<int> CreateList()
+{
+    // new 在堆上分配 List<int> 对象
+    // list 变量（引用）在栈上，指向堆对象
+    var list = new List<int> { 1, 2, 3 };
+    return list;  // 引用返回，堆对象在 GC 确认不可达后回收
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：值类型总是在栈上分配**
+值类型作为类的字段时，内联在堆上的包含对象中（不是栈上）。只有方法内的局部值类型变量才在栈上。`class Foo { int x; }` 中的 `x` 随 Foo 实例在堆上。
+</Callout>
+
+<Callout type="trap">
+**误区：GC 会立即回收不可达对象**
+GC 是非确定性的——对象变为不可达后不会立即回收，而是等 GC 下一次回收时才处理。如果有 Finalizer 还需两次 GC。需要确定性释放时用 Dispose。
+</Callout>
+
+<Exercises>
+**问题 1**：一个 `new byte[100000]` 的大数组分配在哪个堆上？为什么？
+
+<Answer>
+分配在 LOH（大对象堆）上，因为 100000 > 85000 字节阈值。LOH 在 GC 视角下属 Gen2，回收 LOH 需要触发 Full GC。这也是为什么大对象需要特别关注——用 ArrayPool<T> 租用复用而非反复 new。
+</Answer>
+
+**问题 2**：本书为什么先讲内存基础再讲 SOS 调试？
+
+<Answer>
+因为理解内存模型（分代回收、GC 流程）是使用 SOS 的前提。SOS 命令（如 !dumpheap -gen 2）的输出只有在理解分代机制后才能正确解读。没有理论基础，工具输出只是一堆数字。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="托管堆">
+CLR 管理的内存区域，存放引用类型实例，由 GC 自动分配和回收。
+</GlossaryItem>
+<GlossaryItem term="栈">
+LIFO 内存区域，存放值类型和局部变量，方法返回时自动释放。
+</GlossaryItem>
+<GlossaryItem term="GC（垃圾回收器）">
+CLR 的内存回收机制，自动标记不可达对象并回收其内存。
+</GlossaryItem>
+<GlossaryItem term="LOH（大对象堆）">
+存放 >=85000 字节对象的堆区域，属 Gen2 视角，默认不压缩。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,319 @@
+---
+title: "Gems 与 Bundler"
+type: B
+section: "元编程与实战"
+order: 8
+description: "Ruby 包管理：Gem 安装、Gemfile 依赖声明、Bundler 版本锁定。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubGemsBundlerDiagram } from "@/components/mdx/ruby-programming/diagrams/rub-gems-bundler";
+
+<Objectives>
+- 理解 Gem 是 Ruby 的包格式，掌握 gem install/list/uninstall 命令
+- 掌握 Gemfile 声明项目依赖，理解版本约束语法（~>, >=, =）
+- 理解 Gemfile.lock 的作用：锁定版本保证可重现构建
+- 掌握 bundle install / bundle exec 的工作原理
+</Objectives>
+
+## 直觉引入
+
+Gem 就像 Ruby 的"应用商店"——每个 Gem 是一个打包好的 Ruby 库，安装后就能用。Rails 是 Gem，RSpec 是 Gem，你自己也可以发布 Gem。
+
+Bundler 就像"采购清单"——你在 Gemfile 中声明项目需要哪些 Gem 及版本范围，Bundler 负责解析依赖、安装、生成 Gemfile.lock 锁定精确版本。这保证了团队中每个人和部署环境用完全相同的 Gem 版本——不会出现"我这能跑你那报错"的问题。
+
+## 概念讲解
+
+### Gem 命令
+
+<Term def="Gem 是 Ruby 的标准包格式（.gem 文件）。gem 命令行工具负责安装、卸载、查询、发布 Gem。RubyGems.org 是官方仓库。">
+
+```bash
+# 安装 gem
+gem install rails              # 安装最新版
+gem install rails -v 7.0.4     # 安装指定版本
+gem install rails --pre        # 安装预发布版
+
+# 查询
+gem list                       # 列出已安装的 gem
+gem list rails                 # 查询特定 gem
+gem search ^rails              # 搜索远程仓库
+
+# 卸载
+gem uninstall rails
+
+# 镜像源管理
+gem sources                    # 查看镜像源
+gem sources --remove https://rubygems.org/
+gem sources -a https://gems.ruby-china.com  # 国内镜像
+
+# 发布
+gem build mygem.gemspec        # 打包
+gem push mygem-1.0.0.gem       # 发布到 RubyGems.org
+```
+
+</Term>
+
+### Gemfile 与版本约束
+
+<Term def="Gemfile 是 Bundler 的依赖声明文件，描述项目依赖的 gem 及版本范围。版本约束符号：~> (悲观约束), >=, =, <。">
+
+```ruby
+# Gemfile
+source "https://rubygems.org"
+
+ruby "3.2.0"  # 指定 Ruby 版本
+
+# 悲观约束（最常用）
+gem "rails", "~> 7.0"       # >= 7.0 且 < 8.0（允许 7.x，不允许 8.0）
+gem "pg", "~> 1.4"          # >= 1.4 且 < 2.0
+gem "puma", "~> 5.6.4"      # >= 5.6.4 且 < 5.7.0（更严格）
+
+# 精确版本
+gem "sidekiq", "6.5.0"      # 精确 6.5.0
+
+# 范围
+gem "redis", ">= 4.5"       # >= 4.5（无上限）
+gem "rake", ">= 12.0", "< 14.0"  # 范围
+
+# 分组
+gem "rspec", group: :test
+gem "pry", group: :development
+
+group :development, :test do
+  gem "factory_bot"
+  gem "faker"
+end
+
+# 从 Git 仓库安装
+gem "awesome_print", github: "awesome-print/awesome_print"
+```
+
+`~> 7.0` 是悲观约束（Pessimistic Version Constraint）——允许最后一个数字位递增，但不允许更高位变化。`~> 7.0.4` 允许 `7.0.5`、`7.0.99`，但不允许 `7.1.0`。
+
+</Term>
+
+### Bundler 工作流
+
+<Term def="Bundler 通过 Gemfile 声明依赖，bundle install 安装并生成 Gemfile.lock 锁定版本。bundle exec 确保用锁定的版本运行命令。">
+
+```bash
+# 初始化
+bundle init                   # 生成空 Gemfile
+
+# 安装依赖
+bundle install                # 安装 Gemfile 中的依赖，生成/更新 Gemfile.lock
+bundle install --without test  # 跳过 test 组
+
+# 执行命令
+bundle exec rspec             # 用锁定的 gem 版本运行 rspec
+bundle exec rails server      # 用锁定的版本运行 rails
+
+# 更新
+bundle update rails           # 更新 rails 及其依赖
+bundle update                 # 更新所有 gem（慎用！）
+
+# 检查
+bundle check                  # 检查依赖是否满足
+bundle outdated               # 查看过时的 gem
+bundle list                   # 列出已安装的 gem
+```
+
+`Gemfile.lock` 是 Bundler 生成的版本锁定文件——记录每个 gem 的精确版本和依赖树。它应该被提交到 git——保证团队和部署环境用完全相同的版本。
+
+</Term>
+
+## 交互Demo
+
+<RubGemsBundlerDiagram />
+
+<Stepper>
+<Step title="Gem 与 gem 命令">
+Gem 是 Ruby 包的标准格式。`gem install rails` 安装到系统。`gem list` 查看已安装。`gem build` 打包自己的 gem。`gem push` 发布到 RubyGems.org。Gem 之间可以互相依赖——安装 rails 会自动安装其依赖的 gem。
+</Step>
+<Step title="Gemfile 声明依赖">
+在项目根目录创建 Gemfile，用 `gem "name", "version"` 声明依赖。`~> 7.0` 是最常用的版本约束——允许小版本升级但不允许大版本变更。分组管理开发/测试/生产依赖，避免生产环境加载不必要的 gem。
+</Step>
+<Step title="Gemfile.lock 与 bundle exec">
+`bundle install` 解析依赖树，安装满足所有约束的版本组合，将精确版本写入 Gemfile.lock。`bundle exec cmd` 确保用 lock 中的版本运行命令——不用 bundle exec 可能用系统安装的其他版本，导致行为不一致。lock 文件应提交到 git。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```ruby
+# === Gemfile 示例 ===
+source "https://rubygems.org"
+
+ruby "3.2.0"
+
+# 核心框架
+gem "rails", "~> 7.0"
+gem "pg", "~> 1.4"
+gem "puma", "~> 5.0"
+
+# 工具库
+gem "redis", "~> 5.0"
+gem "sidekiq", "~> 6.5"
+gem "bootsnap", require: false
+
+# 开发与测试
+group :development do
+  gem "pry-rails"
+  gem "better_errors"
+  gem "rubocop", require: false
+end
+
+group :test do
+  gem "rspec-rails"
+  gem "factory_bot_rails"
+  gem "shoulda-matchers"
+end
+
+# === gemspec 示例（制作自己的 gem）===
+# my_gem.gemspec
+Gem::Specification.new do |spec|
+  spec.name          = "my_gem"
+  spec.version       = "1.0.0"
+  spec.summary       = "A simple Ruby gem"
+  spec.description   = "This gem does something useful"
+  spec.authors       = ["Your Name"]
+  spec.email         = "you@example.com"
+  spec.homepage      = "https://github.com/you/my_gem"
+  spec.license       = "MIT"
+
+  spec.files         = Dir["lib/**/*.rb"]
+  spec.require_paths = ["lib"]
+
+  spec.add_dependency "json", "~> 2.6"        # 运行时依赖
+  spec.add_development_dependency "rspec"     # 开发依赖
+end
+
+# === Gemfile.lock 示例 ===
+# 自动生成，不要手动编辑
+# GEM
+#   remote: https://rubygems.org/
+#   specs:
+#     actionpack (7.0.4)
+#       activesupport (= 7.0.4)
+#     rails (7.0.4)
+#       actionpack (= 7.0.4)
+#
+# PLATFORMS
+#   ruby
+#
+# DEPENDENCIES
+#   rails (~> 7.0)
+#
+# RUBY VERSION
+#    ruby 3.2.0
+```
+
+```bash
+# === Bundler 常用命令 ===
+
+# 新项目初始化
+bundle init                    # 生成 Gemfile
+# 编辑 Gemfile 添加依赖
+bundle install                 # 安装依赖
+
+# 日常开发
+bundle exec rails server       # 启动 Rails（用锁定版本）
+bundle exec rspec              # 运行测试
+bundle exec rake db:migrate    # 运行迁移
+
+# 依赖管理
+bundle outdated                # 哪些 gem 有新版本
+bundle update rails            # 只更新 rails（及其依赖）
+bundle update                  # 更新所有（慎用！可能破坏 lock）
+
+# 部署
+bundle config set deployment true  # 部署模式（不修改 lock）
+bundle install --deployment         # 用 lock 中的精确版本安装
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：不用 bundle exec 直接运行命令**
+直接运行 `rspec` 可能用系统安装的 rspec 版本，而非 Gemfile.lock 锁定的版本。版本不一致可能导致测试行为不同——"我这能跑 CI 上报错"。始终用 `bundle exec rspec` 确保版本一致。或者用 `bundler binstubs` 生成 `bin/rspec` 脚本。
+</Callout>
+
+<Callout type="trap">
+**误区：不理解 `~>` 悲观约束的精确含义**
+`~> 7.0` 不是"大约 7.0"——它是 `>= 7.0 且 < 8.0`。`~> 7.0.4` 是 `>= 7.0.4 且 < 7.1.0`（注意是 < 7.1，不是 < 8）。规则：最后一个数字位可递增，前一位的递增被禁止。这让你获得 bug 修复和小功能更新，但不会意外引入破坏性变更。`~>` 是最推荐的版本约束方式。
+</Callout>
+
+<Exercises>
+**问题 1**：解释 `~> 2.5.3` 约束允许哪些版本，不允许哪些。
+
+<Answer>
+`~> 2.5.3` 是悲观约束，等价于 `>= 2.5.3 且 < 2.6.0`。
+
+允许的版本：
+- 2.5.3（下界）
+- 2.5.4
+- 2.5.5
+- 2.5.99
+- 任何 2.5.x（x >= 3）
+
+不允许的版本：
+- 2.5.2（低于下界）
+- 2.6.0（上界，不包含）
+- 2.6.1
+- 3.0.0
+
+规则：`~> X.Y.Z` 允许 Z 递增，但 Y 和 X 不变。即 `>= X.Y.Z 且 < X.(Y+1).0`。
+
+对比其他约束：
+- `~> 2.5` = `>= 2.5 且 < 3.0`（允许 Y 递增，X 不变）
+- `~> 2` = `>= 2 且 < 3`（允许 Y、Z 递增，X 不变）
+- `>= 2.5.3` = `>= 2.5.3`（无上界，3.0 也允许——危险）
+- `= 2.5.3` = 精确 2.5.3（不允许任何变化——太严格）
+
+最佳实践：用 `~> X.Y`（允许小版本升级，避免大版本破坏性变更）。
+</Answer>
+
+**问题 2**：为什么 `Gemfile.lock` 应该提交到 git？什么情况下应该更新它？
+
+<Answer>
+**Gemfile.lock 应该提交到 git 的原因：**
+
+1. **可重现构建**：每个开发者、CI、部署环境用完全相同的 gem 版本。避免"我这能跑你那报错"。
+2. **版本一致性**：lock 文件记录精确版本和完整依赖树。没有 lock，`bundle install` 可能选择不同的版本组合。
+3. **安全审计**：通过 lock 文件可以审查项目用了哪些 gem 的哪些版本，检查是否有已知漏洞。
+4. **部署稳定性**：生产部署时用 `bundle install --deployment`，严格按照 lock 安装，不会意外升级。
+
+**应该更新 Gemfile.lock 的情况：**
+
+1. **修改 Gemfile**：添加/删除/修改 gem 版本约束后，运行 `bundle install` 更新 lock。
+2. **主动升级 gem**：`bundle update rails` 升级 rails 及其依赖。更新后应运行测试验证。
+3. **安全补丁**：`bundle update --patch` 只升级补丁版本（x.y.Z）。
+4. **Ruby 版本变更**：修改 Gemfile 中的 `ruby "3.2.0"` 后重新 `bundle install`。
+
+**不应该更新 Gemfile.lock 的情况：**
+- 部署环境中——部署用 `--deployment` 标志，禁止修改 lock。
+- 不相关变更的 PR 中——lock 变更应独立提交，方便审查。
+
+最佳实践：更新 lock 后运行完整测试套件，确保版本升级没有破坏功能。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Gem">
+Ruby 的标准包格式。一个 .gem 文件包含代码、gemspec 元数据和文件列表。通过 `gem install` 安装，`gem push` 发布到 RubyGems.org。
+</GlossaryItem>
+<GlossaryItem term="Bundler">
+Ruby 的依赖管理工具。通过 Gemfile 声明依赖，bundle install 安装并生成 Gemfile.lock 锁定版本。bundle exec 确保用锁定的版本运行命令。
+</GlossaryItem>
+<GlossaryItem term="悲观约束 (~>)">
+`~> X.Y.Z` 允许 Z 递增但禁止 Y 递增。`~> 7.0` = `>= 7.0 且 < 8.0`。允许小版本升级（bug 修复），避免大版本破坏性变更。最推荐的版本约束方式。
+</GlossaryItem>
+<GlossaryItem term="Gemfile.lock">
+Bundler 自动生成的版本锁定文件，记录每个 gem 的精确版本和依赖树。应提交到 git，保证团队和部署环境版本一致。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,220 @@
+---
+title: "动态规划"
+type: B
+section: "算法设计"
+order: 8
+description: "最优子结构、重叠子问题——动态规划的设计模式与C++实现"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DsaDynamicProgrammingDiagram } from "@/components/mdx/dsa-cpp/diagrams/dsa-dynamic-programming";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解动态规划的两个核心要素：最优子结构与重叠子问题
+- 掌握自顶向下（记忆化）与自底向上（递推）两种实现方式
+- 掌握经典 DP 问题：背包、LCS、编辑距离
+- 学会识别 DP 问题的状态定义与状态转移方程
+</Objectives>
+
+## 直觉引入
+
+假设你要从家走到公司，有无数条路，但你想找最短的。你不必枚举所有路——只要知道「到每个路口的最短距离」，下一个路口的最短距离就是「前一个路口的最短距离 + 这段路」。
+
+这就是动态规划的核心思想：**把大问题拆成子问题，子问题的最优解组合成大问题的最优解**。关键在于子问题有**重叠**——如果不缓存，会重复计算指数级次。
+
+动态规划是算法设计中最精巧的技术。它不是模板，而是一种思维方式：定义状态 → 找转移方程 → 确定计算顺序。
+
+## 概念讲解
+
+### 两个核心要素
+
+<DsaDynamicProgrammingDiagram />
+
+<Term def="最优子结构指问题的最优解包含子问题的最优解，是动态规划可行的前提">
+最优子结构
+</Term>
+
+<Term def="重叠子问题指递归求解时同一个子问题被反复计算，DP 用缓存避免重复">
+重叠子问题
+</Term>
+
+动态规划 = 分治 + 缓存。分治法（如归并排序）的子问题不重叠，DP 的子问题大量重叠——缓存才有意义。
+
+### 设计步骤
+
+<Stepper>
+<Step title="定义状态">
+用 `dp[i]`（一维）或 `dp[i][j]`（二维）描述子问题的解。状态定义是 DP 的灵魂——定义对了，转移方程自然浮现。
+</Step>
+<Step title="找状态转移方程">
+回答「`dp[i]` 由哪些更小的子问题推出？」例如 `dp[i] = max(dp[i-1], dp[i-2] + val[i])`。
+</Step>
+<Step title="确定边界条件">
+最小子问题的答案：`dp[0] = 0, dp[1] = 1` 等。边界是递推的起点。
+</Step>
+<Step title="确定计算顺序">
+自底向上：从最小子问题开始，逐步填表。确保计算 `dp[i]` 时它依赖的 `dp[j]`（$j<i$）已算好。
+</Step>
+<Step title="优化空间（可选）">
+如果 `dp[i]` 只依赖 `dp[i-1]`，可以省掉数组用滚动变量，空间从 $O(n)$ 降到 $O(1)$。
+</Step>
+</Stepper>
+
+### 经典问题：0-1 背包
+
+有 $n$ 个物品，重量 $w_i$，价值 $v_i$，背包容量 $W$。每个物品选或不选，求最大价值。
+
+**状态**：`dp[i][j]` = 前 $i$ 个物品、容量 $j$ 时的最大价值
+
+**转移**：`dp[i][j] = max(dp[i-1][j], dp[i-1][j-w[i]] + v[i])`
+- 不选第 $i$ 个：`dp[i-1][j]`
+- 选第 $i$ 个：`dp[i-1][j-w[i]] + v[i]`（前提 $j \geq w[i]$）
+
+**空间优化**：一维数组逆序遍历，`dp[j] = max(dp[j], dp[j-w[i]] + v[i])`
+
+### 经典问题：最长公共子序列（LCS）
+
+**状态**：`dp[i][j]` = $s_1[0..i)$ 与 $s_2[0..j)$ 的 LCS 长度
+
+**转移**：
+$$dp[i][j] = \begin{cases} dp[i-1][j-1] + 1 & \text{if } s_1[i] = s_2[j] \\ \max(dp[i-1][j], dp[i][j-1]) & \text{otherwise} \end{cases}$$
+
+### 记忆化 vs 递推
+
+| 方式 | 实现 | 优势 | 劣势 |
+|---|---|---|---|
+| 自顶向下（记忆化） | 递归 + 缓存 | 思路自然，只算需要的状态 | 递归栈开销 |
+| 自底向上（递推） | 循环填表 | 无递归开销，常数小 | 可能算不需要的状态 |
+
+## 代码对照
+
+```cpp
+#include <vector>
+#include <algorithm>
+#include <cstring>
+using namespace std;
+
+// 0-1 背包（空间优化版）
+int knapsack01(const vector<int>& w, const vector<int>& v, int W) {
+    int n = w.size();
+    // dp[j] = 容量 j 时的最大价值
+    vector<int> dp(W + 1, 0);
+
+    for (int i = 0; i < n; i++) {
+        // 逆序遍历！保证每个物品只用一次
+        // 正序遍历会变成完全背包（物品可重复选）
+        for (int j = W; j >= w[i]; j--) {
+            dp[j] = max(dp[j],              // 不选物品 i
+                        dp[j - w[i]] + v[i]); // 选物品 i
+        }
+    }
+    return dp[W];
+}
+
+// 最长公共子序列
+int lcs(const string& s1, const string& s2) {
+    int m = s1.size(), n = s2.size();
+    // dp[i][j] = s1[0..i) 与 s2[0..j) 的 LCS 长度
+    vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
+
+    for (int i = 1; i <= m; i++) {
+        for (int j = 1; j <= n; j++) {
+            if (s1[i-1] == s2[j-1]) {
+                dp[i][j] = dp[i-1][j-1] + 1;
+            } else {
+                dp[i][j] = max(dp[i-1][j], dp[i][j-1]);
+            }
+        }
+    }
+    return dp[m][n];
+}
+
+// 编辑距离（Levenshtein）
+int editDistance(const string& s1, const string& s2) {
+    int m = s1.size(), n = s2.size();
+    vector<vector<int>> dp(m + 1, vector<int>(n + 1, 0));
+
+    // 边界：空串到另一个串的距离
+    for (int i = 0; i <= m; i++) dp[i][0] = i;
+    for (int j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (int i = 1; i <= m; i++) {
+        for (int j = 1; j <= n; j++) {
+            if (s1[i-1] == s2[j-1]) {
+                dp[i][j] = dp[i-1][j-1];  // 字符相同，无需操作
+            } else {
+                dp[i][j] = 1 + min({
+                    dp[i-1][j],    // 删除 s1[i-1]
+                    dp[i][j-1],    // 插入 s2[j-1]
+                    dp[i-1][j-1]   // 替换
+                });
+            }
+        }
+    }
+    return dp[m][n];
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：所有递归问题都适合用 DP 优化**
+DP 只对有「重叠子问题」的递归有效。如果子问题不重叠（如归并排序、快速排序），缓存没有意义——每个子问题只算一次，DP 不会带来收益。判断标准：递归树中是否大量出现相同的子问题。
+</Callout>
+
+<Callout type="trap">
+**误区：0-1 背包的一维优化正序遍历**
+一维背包必须**逆序遍历**容量。正序遍历时，`dp[j-w[i]]` 可能已经在当前轮更新过（包含了物品 $i$），导致物品 $i$ 被选了多次——变成完全背包。逆序保证 `dp[j-w[i]]` 还是上一轮的值（不含物品 $i$）。
+</Callout>
+
+<Callout type="trap">
+**误区：DP 一定比贪心优**
+贪心是 DP 的特例：当「局部最优 = 全局最优」时，贪心更简单高效。DP 的代价是状态空间大（$O(nW)$ 或 $O(n^2)$）。如果问题有贪心选择性质（如活动选择、Huffman 编码），贪心 $O(n\log n)$ 远优于 DP。
+</Callout>
+
+<Exercises>
+**问题 1**：动态规划和分治法的关键区别是什么？
+
+<Answer>
+关键区别在于子问题是否重叠。分治法（如归并排序）的子问题互不相交，每个只算一次；DP 的子问题大量重叠，朴素递归会指数级重复计算，必须用缓存（记忆化或递推）避免。DP = 分治 + 缓存，缓存是 DP 的本质。
+</Answer>
+
+**问题 2**：0-1 背包的一维空间优化为什么必须逆序遍历容量？
+
+<Answer>
+逆序遍历保证计算 `dp[j]` 时，`dp[j-w[i]]` 还是上一轮（物品 $i-1$）的值，不含物品 $i$。若正序遍历，`dp[j-w[i]]` 可能已被当前轮更新（含物品 $i$），再选一次就变成物品 $i$ 被选了两次——退化成完全背包。逆序是 0-1 背包正确性的关键。
+</Answer>
+
+**问题 3**：LCS 问题的状态 `dp[i][j]` 定义是什么？时间复杂度是多少？
+
+<Answer>
+`dp[i][j]` = 字符串 $s_1$ 的前 $i$ 个字符与 $s_2$ 的前 $j$ 个字符的最长公共子序列长度。转移：字符相同则 `dp[i-1][j-1]+1`，不同则 `max(dp[i-1][j], dp[i][j-1])`。填 $m \times n$ 的表，时间 $O(mn)$，空间 $O(mn)$（可优化到 $O(\min(m,n))$）。
+</Answer>
+
+**问题 4**：什么情况下应该用贪心而不是动态规划？
+
+<Answer>
+当问题具有「贪心选择性质」（局部最优选择能导出全局最优解）时用贪心。典型例子：活动选择问题（选最早结束的活动）、Huffman 编码（合并最小频率）。贪心无需缓存所有子问题，通常 $O(n\log n)$，比 DP 的 $O(n^2)$ 或 $O(nW)$ 更高效。但贪心需要证明正确性，否则可能得到次优解。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="最优子结构">
+问题的最优解由子问题的最优解构成。例如最短路径的子路径也是最短的。这是 DP 可行的前提——没有最优子结构就无法用子问题的最优解组合出全局最优。
+</GlossaryItem>
+<GlossaryItem term="重叠子问题">
+递归求解时同一个子问题被反复计算。例如斐波那契 `fib(5)` 会计算 `fib(3)` 两次、`fib(2)` 三次。DP 用缓存避免重复，将指数级降为多项式级。
+</GlossaryItem>
+<GlossaryItem term="状态转移方程">
+描述 `dp[i]` 如何从更小的子问题推出。例如 `dp[i] = max(dp[i-1], dp[i-2]+val[i])`。找到正确的转移方程是 DP 的核心，通常通过「最后一步做了什么选择」来推导。
+</GlossaryItem>
+<GlossaryItem term="记忆化搜索">
+自顶向下的 DP 实现：用递归 + 缓存（哈希表/数组），进入函数前检查是否已算过。思路自然（直接按递归定义写），但比自底向上有递归开销。适合状态空间稀疏的情况。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《数据结构与算法分析：C++描述（第三版）》Mark Allen Weiss 著" adaptedUrl="" />

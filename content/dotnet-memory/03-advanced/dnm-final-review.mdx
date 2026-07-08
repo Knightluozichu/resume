@@ -1,0 +1,144 @@
+---
+title: "总复习"
+type: B
+section: "高级主题"
+order: 9
+description: "全书知识串联：从内存模型到优化策略。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DnmFinalReviewDiagram } from "@/components/mdx/dotnet-memory/diagrams/dnm-final-review";
+
+<Objectives>
+- 串联全书四大板块的核心知识点
+- 掌握从内存模型到优化策略的完整闭环
+- 能够系统性排查内存增长问题
+- 综合设计内存优化策略清单
+</Objectives>
+
+## 直觉引入
+
+回顾整本书的旅程：我们从理解仓库（托管堆）和管理员（GC）开始，学会用 X 光机（SOS）观察堆状态，研究了三种内存模式（LOH/Pinning/Finalization）的性能影响，最后掌握了优化策略。现在把这些知识串联成完整的闭环——从诊断到优化的全景图。
+
+## 概念讲解
+
+### 核心知识串联
+
+<Term def="托管堆模型→GC 分代回收→SOS 调试探查→内存模式定位→优化策略闭环。">
+全书知识链：
+
+1. **托管堆模型**（第 0-1 章）：栈 vs 堆、分代回收（Gen0/1/2+LOH）、标记-清除-压缩三阶段
+2. **SOS 调试**（第 2-3 章）：dump 生成、!dumpheap/-gen/-stat、!gcroot、!eeheap、泄漏诊断工作流
+3. **内存模式**（第 4-6 章）：LOH（85000 阈值不压缩碎片化）、Pinning（固定阻碍压缩）、Finalization（freachable 两次 GC）
+4. **高级优化**（第 7-9 章）：AddMemoryPressure（非托管协调）、碎片优化（struct/Span/ArrayPool/池化）
+
+因果链：不理解堆模型就无法用 SOS 正确解读输出；不掌握 SOS 就无法定位是哪种内存模式的问题；不理解模式就无法选择正确的优化策略。
+</Term>
+
+### 优化策略清单
+
+<Term def="分配优化（struct/Span/stackalloc）+ 池化复用（ArrayPool/StringBuilder）+ 生命周期控制 + GC 调度 + 非托管协调 + 监控诊断。">
+综合优化策略：
+
+1. **分配优化**：struct 替代 class、Span/Memory 零拷贝、stackalloc 小数组
+2. **池化复用**：ArrayPool 大数组、StringBuilder 字符串、ObjectPool 复杂对象
+3. **生命周期控制**：缩短对象生命避免 Gen2 晋升、using Dispose、SuppressFinalize
+4. **固定优化**：缩短 fixed 作用域、长期固定用非托管内存
+5. **GC 调度**：服务器 GC 模式、LatencyMode 控制停顿、TryStartNoGCRegion
+6. **非托管协调**：SafeHandle 封装句柄、AddMemoryPressure 告知大块非托管内存
+7. **监控诊断**：dotnet-counters 实时监控、定期 dotnet-dump 快照、CI 内存回归测试
+</Term>
+
+## 交互Demo
+
+<DnmFinalReviewDiagram />
+
+<Stepper>
+<Step title="诊断定位">
+监控确认泄漏→!eeheap 定代→!dumpheap -stat 定类型→!gcroot 定根因。形成从宏观到微观的诊断链。
+</Step>
+<Step title="模式识别">
+根据诊断结果识别内存模式：LOH 碎片化？Pinning 阻碍压缩？Finalizer 两次 GC？非托管内存未协调？
+</Step>
+<Step title="优化闭环">
+针对模式选择优化：ArrayPool 池化/struct 栈分配/SafeHandle 封装/缩短 fixed。修复后重新监控验证形成闭环。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 综合优化示例：高性能请求处理器
+public class OptimizedRequestHandler : IDisposable {
+  // 1. 池化大缓冲区避免 LOH
+  private readonly ArrayPool<byte> _pool = ArrayPool<byte>.Shared;
+  
+  // 2. struct 避免堆分配
+  public struct RequestStats { public int Count; public long Ticks; }
+  
+  public ReadOnlySpan<byte> Process(ReadOnlySpan<byte> input) {
+    // 3. Span 零拷贝切片
+    var header = input[..4];
+    var body = input[4..];
+    
+    // 4. ArrayPool 租用替代 new
+    byte[] buffer = _pool.Rent(body.Length);
+    try {
+      // 5. stackalloc 小缓冲区
+      Span<byte> temp = stackalloc byte[64];
+      // ... 处理 ...
+      return buffer.AsSpan(0, body.Length);
+    }
+    finally { _pool.Return(buffer); }
+  }
+  
+  // 6. Dispose 模式 + SuppressFinalize
+  public void Dispose() { /* 释放 */ GC.SuppressFinalize(this); }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：优化应该一步到位全部应用**
+优化应该基于测量（dotnet-counters/dump）有针对性应用。盲目应用所有优化策略可能过度设计——比如对低频操作用 ArrayPool 反而增加复杂度。先用工具定位瓶颈（是 Gen0 分配过多？LOH 碎片？Full GC 频繁？），再针对性优化。
+</Callout>
+
+<Callout type="trap">
+**误区：内存优化只影响内存使用量**
+内存优化直接影响性能——减少 GC 压力意味着更少的 Stop-The-World 停顿、更高的吞吐、更低的延迟。一个每秒 100 万请求的服务，每次减少一个 Gen0 分配就能减少每秒 100 万次 GC 标记开销。内存优化就是性能优化。
+</Callout>
+
+<Exercises>
+**问题 1**：如何系统性排查 .NET 应用内存增长问题？
+
+<Answer>
+1.dotnet-counters 监控 GC Heap Size 确认泄漏。2.高峰时 dotnet-dump collect 生成 dump。3.!eeheap -gc 看哪代泄漏。4.!dumpheap -stat 排序找热点类型。5.!dumpheap -type+!gcroot 追根。6.排查常见根因：静态集合增长、事件未取消、GCHandle 未 Free、缓存无过期。7.非托管检查 P/Invoke malloc/free 和 AddMemoryPressure。8.修复后重新监控。
+</Answer>
+
+**问题 2**：综合全书设计 .NET 应用内存优化策略清单。
+
+<Answer>
+1.分配优化：struct/Span/stackalloc。2.池化：ArrayPool/StringBuilder/ObjectPool。3.生命周期：缩短生命避免 Gen2、using Dispose、SuppressFinalize。4.固定优化：缩短 fixed、长期用非托管内存。5.GC 调度：服务器 GC、LatencyMode、TryStartNoGCRegion。6.非托管协调：SafeHandle、AddMemoryPressure。7.监控：dotnet-counters+定期 dump+CI 内存回归测试。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="知识闭环">
+从托管堆模型→GC 回收→SOS 调试→内存模式定位→优化策略的完整诊断优化链。
+</GlossaryItem>
+<GlossaryItem term="GC 压力">
+频繁的堆分配导致 GC 频繁回收，引起 Stop-The-World 停顿降低吞吐增加延迟。
+</GlossaryItem>
+<GlossaryItem term="零成本抽象">
+struct/Span 等在编译期完成优化，运行时零开销（无 GC、无虚函数表）的抽象机制。
+</GlossaryItem>
+<GlossaryItem term="内存回归测试">
+CI 中对比基准的内存使用量测试，防止代码变更引入内存退化。
+</GlossaryItem>
+</Glossary>

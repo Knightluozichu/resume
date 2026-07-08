@@ -110,6 +110,15 @@ export const BOOK_ORDER = [
   "csharp-functional-programming",
   "csharp-10-core",
   "clr-via-csharp",
+  "dotnet-memory",
+  "rust-programming-language",
+  "go-programming-language",
+  "python-crash-course",
+  "lua-programming",
+  "ruby-programming",
+  "data-structures-visual",
+  "math-girl",
+  "dsa-cpp",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -161,6 +170,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "csharp-functional-programming": "C# 函数式编程",
   "csharp-10-core": "C# 10 核心技术指南",
   "clr-via-csharp": "CLR via C#",
+  "dotnet-memory": ".NET 内存管理宝典",
+  "rust-programming-language": "Rust 程序设计语言",
+  "go-programming-language": "Go 程序设计语言",
+  "python-crash-course": "Python 编程：从入门到实践",
+  "lua-programming": "Lua 程序设计",
+  "ruby-programming": "Ruby 基础教程",
+  "data-structures-visual": "大话数据结构",
+  "math-girl": "图灵数学女孩系列",
+  "dsa-cpp": "数据结构与算法分析（C++描述）",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

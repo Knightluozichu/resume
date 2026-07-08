@@ -1,0 +1,141 @@
+---
+title: "SOS 转储"
+type: B
+section: "SOS 调试工具"
+order: 2
+description: "SOS 调试扩展：生成 dump 转储与离线分析。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DnmSosDumpDiagram } from "@/components/mdx/dotnet-memory/diagrams/dnm-sos-dump";
+
+<Objectives>
+- 理解 SOS 调试扩展的作用和加载方式
+- 掌握生产环境生成 dump 的安全方法
+- 学会核心 SOS 命令的使用
+- 能够从 dump 中定位内存问题
+</Objectives>
+
+## 直觉引入
+
+你的应用在生产环境内存持续增长，但你无法在开发环境复现。这就像医生需要 X 光片才能诊断——你需要进程的「内存快照」。SOS 调试扩展就是你的 X 光机，生成 dump 快照后离线分析，不影响运行中的进程。
+
+## 概念讲解
+
+### SOS 与 dump 生成
+
+<Term def="SOS（Son of Strike）是 .NET 调试扩展 DLL，加载到 WinDbg/dotnet-dump 中检查 CLR 内部结构。">
+SOS 是 .NET 的调试扩展，提供检查 CLR 内部数据结构的命令：托管堆对象、GC 状态、方法表、线程栈等。
+
+生成 dump 的方式：
+- `dotnet-dump collect -p <PID>`：生成完整 dump 文件（推荐）
+- `createdump`：.NET Core 内置工具
+- `ProcDump -ma <PID>`：Sysinternals 工具
+
+分析 dump：`dotnet-dump analyze <dump.dmp>` 进入交互式分析，自动加载 SOS。在 WinDbg 中用 `.loadby sos clr`（.NET Core）或 `.loadby sos mscorwks`（.NET Framework）加载。
+
+注意：生成 dump 会短暂暂停进程（几秒），应在非高峰期执行。
+</Term>
+
+### 核心 SOS 命令
+
+<Term def="SOS 提供检查托管堆、GC、对象和根引用的命令，如 !dumpheap、!gcroot、!eeheap。">
+SOS 核心命令：
+
+- `!dumpheap -stat`：按类型统计堆内对象（MT、Count、TotalSize、Class Name）
+- `!dumpheap -mt <MT>`：列出某类型的所有对象
+- `!dumpheap -gen 2`：列出 Gen2 中的对象
+- `!gcroot <地址>`：追溯对象的根引用链
+- `!dumpobj <地址>`（`!do`）：查看对象详情（字段值、类型）
+- `!eeheap -gc`：查看各代 GC 堆大小
+- `!gcinfo`：查看 GC 句柄表统计
+
+分析流程：先 `!eeheap -gc` 看哪代堆异常，再 `!dumpheap -stat` 找热点类型，最后 `!gcroot` 追溯根引用定位泄漏源。
+</Term>
+
+## 交互Demo
+
+<DnmSosDumpDiagram />
+
+<Stepper>
+<Step title="生成 dump">
+用 dotnet-dump collect -p <PID> 生成进程内存快照。在内存高峰时取样，确保捕获问题状态。
+</Step>
+<Step title="加载 SOS 分析">
+dotnet-dump analyze <dump> 进入交互式分析，SOS 自动加载。用 !eeheap -gc 看各代堆大小。
+</Step>
+<Step title="定位问题">
+!dumpheap -stat 找热点类型，!gcroot 追溯根引用链，定位泄漏源（静态字段/事件订阅/GCHandle）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```bash
+# 1. 生成 dump（生产环境）
+dotnet-dump collect -p 12345 -o memory.dmp
+# 输出: Writing minidump to memory.dmp
+#       Complete
+
+# 2. 离线分析
+dotnet-dump analyze memory.dmp
+
+# 3. SOS 命令
+> !eeheap -gc          # 查看各代 GC 堆大小
+> !dumpheap -stat      # 按类型统计堆内对象
+> !dumpheap -mt 6e4a3b00   # 列出某类型所有对象
+> !gcroot 0x000001a2b3c4d5e6   # 追溯对象根引用
+> !dumpobj 0x000001a2b3c4d5e6  # 查看对象详情
+
+# 4. 常见根类型
+# DOMAIN(...):HANDLE(Strong)  -> 强引用句柄
+# DOMAIN(...):HANDLE(Pinned)  -> 固定句柄
+# DOMAIN(...):HANDLE(AsyncPinned) -> 异步固定
+# NEWSUBHEAP:STATICVAR        -> 静态字段
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在生产环境直接 attach 调试器分析**
+直接 attach 调试器会暂停进程，影响生产服务。正确做法是生成 dump 文件后离线分析。dotnet-dump collect 只短暂暂停（几秒），可接受。分析在另一台机器上做。
+</Callout>
+
+<Callout type="trap">
+**误区：!dumpheap 不带参数就能看到所有问题**
+!dumpheap 不带参数列出所有对象，输出量巨大（数十万行）。应该用 -stat 先按类型统计，找到异常类型后再用 -mt/-type 定位具体对象。对比两次 dump 的 Count 变化才能确认泄漏。
+</Callout>
+
+<Exercises>
+**问题 1**：!dumpheap -stat 输出中，如何判断哪个类型可能有内存泄漏？
+
+<Answer>
+关注两点：1. TotalSize 排序——占用内存最大的类型。2. Count 异常多——如某自定义类型有 152 个实例（合理预期是几个）。最有效的方法是对比两次 dump 的 Count 变化——持续增长的类型是泄漏嫌疑。
+</Answer>
+
+**问题 2**：!gcroot 输出中 HANDLE(Strong) 和 freachable 各表示什么？
+
+<Answer>
+HANDLE(Strong) 表示强引用 GC 句柄——说明代码中 GCHandle.Alloc(target, GCHandleType.Normal) 未调用 Free()。freachable 表示对象在终结队列中——有 Finalizer 但还未被执行。两者都使对象保持可达不被回收。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="SOS">
+Son of Strike，.NET 调试扩展 DLL，提供检查 CLR 内部结构的命令。
+</GlossaryItem>
+<GlossaryItem term="dump 文件">
+进程内存的完整快照，用于离线分析。包含所有堆内存、线程栈和 CLR 状态。
+</GlossaryItem>
+<GlossaryItem term="!dumpheap">
+SOS 命令，遍历托管堆按类型统计对象。-stat 按类型汇总，-mt 按方法表过滤。
+</GlossaryItem>
+<GlossaryItem term="!gcroot">
+SOS 命令，追溯对象的根引用链，找出谁持有该对象使其不被回收。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,240 @@
+---
+title: "总复习"
+type: B
+section: "高级主题"
+order: 9
+description: "全书知识串联：从类型系统到并发编程。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GplFinalReviewDiagram } from "@/components/mdx/go-programming-language/diagrams/gpl-final-review";
+
+<Objectives>
+- 串联全书从类型系统到并发编程的完整知识链
+- 掌握 Go 三大核心设计：组合、接口、并发
+- 能够综合运用 type/func/interface/concurrency 设计系统
+- 理解 Go 工程化的完整图景
+</Objectives>
+
+## 直觉引入
+
+回顾整本书的旅程：我们从类型系统出发，掌握了值类型和引用类型的本质区别；学会了函数作为一等公民的灵活运用和闭包机制；理解了接口的隐式实现和解耦能力；深入了 goroutine、channel、select 三件套的并发编程；最后掌握了包管理和测试的工程化能力。现在把这些知识串联起来——Go 的每个特性都不是孤立的，它们共同构成了一个简洁、高效、并发友好的完整体系。
+
+## 概念讲解
+
+### 知识串联
+
+<Term def="类型系统→函数→接口→并发→工程化。每个特性建立在前一个之上，形成简洁高效的完整体系。">
+全书知识链：
+
+1. **类型系统**（第 0-1 章）：值类型 vs 引用类型、零值机制、指针。是一切的基础——不理解传值 vs 传引用就无法理解函数传参和接口行为。
+2. **核心机制**（第 2-3 章）：函数（一等公民、闭包、defer）和接口（隐式实现、类型断言）。这是 Go 的核心抽象能力。
+3. **并发编程**（第 4-6 章）：goroutine（GMP 调度）、channel（CSP 模型）、select（多路复用）。Go 最独特的优势。
+4. **工程化**（第 7-9 章）：包管理（可见性、Modules）和测试（表驱动、benchmark、race）。让 Go 适合大型团队协作。
+
+因果链：类型系统决定传参行为（值 vs 引用）→ 函数闭包捕获变量引用（需理解类型）→ 接口隐式实现依赖方法集（需理解指针接收者）→ goroutine 捕获闭包变量（需理解闭包和并发）→ channel 传递数据（需理解值类型复制）→ select 多路复用 channel → 工程化保证代码质量（测试覆盖并发场景）。
+</Term>
+
+### 综合设计
+
+<Term def="综合运用类型、函数、接口、并发、测试设计一个并发安全的 HTTP API 服务器。">
+综合设计一个并发 HTTP API 服务器：
+
+1. **类型系统**：Request/Response struct，Config struct（值类型传递配置）
+2. **函数**：handler 函数作为参数（http.HandleFunc），defer 资源清理，闭包捕获配置
+3. **接口**：Storage interface（Get/Put/Delete），内存和磁盘两种实现可替换
+4. **并发**：每个请求一个 goroutine（http.Server 自动），channel 传递任务到 worker pool，select 超时控制
+5. **工程化**：internal 包封装存储实现，表驱动测试覆盖 API，benchmark 性能基线，-race 检测并发安全
+
+```go
+// 接口定义
+type Storage interface {
+    Get(key string) (string, error)
+    Put(key, value string) error
+}
+
+// handler 用闭包捕获 Storage
+func makeHandler(store Storage) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // defer + context 超时控制
+        ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+        defer cancel()
+        // ... 处理请求 ...
+    }
+}
+
+// worker pool 用 channel
+func startWorkers(jobs <-chan Job, results chan<- Result, n int) {
+    for i := 0; i < n; i++ {
+        go worker(jobs, results)
+    }
+}
+```
+</Term>
+
+## 交互Demo
+
+<GplFinalReviewDiagram />
+
+<Stepper>
+<Step title="类型与核心">
+值/引用类型决定传参行为。函数一等公民+闭包+defer 是核心抽象。接口隐式实现解耦。
+</Step>
+<Step title="并发编程">
+goroutine(GMP)+channel(CSP)+select(多路复用) 三件套。不要共享内存通信，而要通信共享内存。
+</Step>
+<Step title="工程化">
+包管理（可见性+Modules）和测试（表驱动+benchmark+race）让 Go 适合大型团队协作。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// 综合：并发 HTTP API 服务器
+package main
+
+import (
+    "context"
+    "encoding/json"
+    "fmt"
+    "net/http"
+    "sync"
+    "time"
+)
+
+// ===== 类型系统 =====
+type KVRequest struct {
+    Key   string `json:"key"`
+    Value string `json:"value"`
+}
+
+// ===== 接口（隐式实现）=====
+type Storage interface {
+    Get(key string) (string, bool)
+    Put(key, value string)
+    Delete(key string) bool
+}
+
+// 内存实现（引用类型 map + Mutex 保护）
+type MemStorage struct {
+    mu   sync.RWMutex
+    data map[string]string
+}
+
+func NewMemStorage() *MemStorage {
+    return &MemStorage{data: make(map[string]string)}
+}
+
+func (s *MemStorage) Get(key string) (string, bool) {
+    s.mu.RLock()
+    defer s.mu.RUnlock()
+    val, ok := s.data[key]
+    return val, ok
+}
+
+func (s *MemStorage) Put(key, value string) {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    s.data[key] = value
+}
+
+func (s *MemStorage) Delete(key string) bool {
+    s.mu.Lock()
+    defer s.mu.Unlock()
+    _, ok := s.data[key]
+    delete(s.data, key)
+    return ok
+}
+
+// ===== 函数 + 闭包 + 接口 =====
+func makeGetHandler(store Storage) http.HandlerFunc {
+    return func(w http.ResponseWriter, r *http.Request) {
+        // defer + context 超时
+        ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+        defer cancel()
+
+        select {
+        case <-ctx.Done():
+            http.Error(w, "timeout", http.StatusGatewayTimeout)
+            return
+        default:
+        }
+
+        key := r.URL.Query().Get("key")
+        if val, ok := store.Get(key); ok {
+            json.NewEncoder(w).Encode(map[string]string{"value": val})
+        } else {
+            http.Error(w, "not found", http.StatusNotFound)
+        }
+    }
+}
+
+// ===== 并发安全 =====
+func main() {
+    store := NewMemStorage()
+    store.Put("hello", "world")
+
+    // http.Server 每请求一个 goroutine
+    mux := http.NewServeMux()
+    mux.HandleFunc("/get", makeGetHandler(store))
+
+    srv := &http.Server{
+        Addr:         ":8080",
+        Handler:      mux,
+        ReadTimeout:  5 * time.Second,
+        WriteTimeout: 10 * time.Second,
+    }
+
+    fmt.Println("server starting on :8080")
+    if err := srv.ListenAndServe(); err != nil {
+        panic(err)
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Go 的并发安全是自动的**
+Go 的并发原语（goroutine/channel）不是自动安全的。共享变量需要 sync.Mutex/RWMutex/atomic 保护，或用 channel 传递数据。-race 检测器可以发现数据竞争。Go 的哲学是「通过通信共享内存」而非「通过共享内存通信」——用 channel 传递数据所有权比共享变量加锁更安全。
+</Callout>
+
+<Callout type="trap">
+**误区：Go 不需要架构设计因为太简单**
+Go 的简单是语言层面的，不是架构层面的。大型 Go 项目仍需要良好的架构：包的职责划分、接口设计、依赖注入、错误处理策略、并发模型设计。Go 的包和接口提供了强大的封装和解耦能力——但前提是你正确使用了它们。坏架构在 Go 中同样难以维护。
+</Callout>
+
+<Exercises>
+**问题 1**：Go 的三大核心设计是什么？它们如何配合构成完整体系？
+
+<Answer>
+三大核心设计：1.组合优于继承——结构体嵌入复用代码，没有类层级。2.隐式接口——类型实现方法即满足接口，解耦定义方和使用方。3.内置并发——goroutine+channel+select 是语言级原语。配合：组合构建数据结构，接口定义行为契约，goroutine/channel 实现并发。三者共同构成简洁高效的编程模型——代码风格统一、编译快速、并发安全。
+</Answer>
+
+**问题 2**：综合全书设计一个并发 HTTP API 服务器，说明每个 Go 特性的应用。
+
+<Answer>
+1.类型系统：Request/Response struct（值类型传递），Config struct。2.函数：handler 作为参数（http.HandleFunc），defer 资源清理，闭包捕获 store。3.接口：Storage interface（Get/Put/Delete），内存和磁盘实现可替换。4.并发：http.Server 每请求 goroutine，sync.RWMutex 保护 map，context 超时控制。5.select：多路复用 ctx.Done() 和数据处理。6.包管理：internal 封装存储实现。7.测试：表驱动测试 API，benchmark 性能基线，-race 检测并发安全。8.错误处理：error 返回值 + if err 显式处理。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="组合优于继承">
+Go 没有类继承，用结构体嵌入复用代码。更灵活，无脆弱基类问题。
+</GlossaryItem>
+<GlossaryItem term="隐式接口">
+类型实现方法即自动满足接口，无需 implements。解耦定义方和使用方。
+</GlossaryItem>
+<GlossaryItem term="CSP 并发模型">
+通过 channel 传递消息而非共享内存。goroutine+channel+select 三件套。
+</GlossaryItem>
+<GlossaryItem term="显式错误处理">
+error 是普通返回值，调用者必须处理。无异常，错误路径清晰。
+</GlossaryItem>
+</Glossary>

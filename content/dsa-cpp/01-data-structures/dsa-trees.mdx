@@ -1,0 +1,204 @@
+---
+title: "树结构"
+type: B
+section: "数据结构"
+order: 3
+description: "BST、AVL树与B树——自平衡保证O(log n)查找"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DsaTreesDiagram } from "@/components/mdx/dsa-cpp/diagrams/dsa-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握二叉搜索树（BST）的 C++ 实现与退化问题
+- 理解 AVL 树的旋转操作与平衡因子维护
+- 了解 B 树在磁盘存储中的应用
+- 理解自平衡机制如何保证 O(log n) 操作
+</Objectives>
+
+## 直觉引入
+
+BST 的查找 $O(\log n)$ 很好，但如果插入有序数据会退化成链表 $O(n)$。AVL 树通过旋转操作保证「任意节点左右子树高度差 $\leq 1$」，让树始终平衡，查找永远是 $O(\log n)$。
+
+B 树更进一步——每个节点存储多个关键字、有多个子节点，让树更「矮胖」。磁盘 I/O 以「块」为单位，B 树的一个节点恰好填满一个磁盘块，一次 I/O 读入多个关键字，大幅减少磁盘访问次数。这就是数据库索引用 B+ 树的原因。
+
+## 概念讲解
+
+### BST 与退化问题
+
+<DsaTreesDiagram />
+
+<Term def="二叉搜索树：左子树值<根<右子树值。平衡时O(log n)，退化为链时O(n)">
+二叉搜索树
+</Term>
+
+BST 的操作效率取决于树高。随机插入时树高 $O(\log n)$，但有序插入退化为链表，树高 $O(n)$。需要自平衡机制。
+
+### AVL 树：自平衡
+
+<Term def="AVL树是任意节点左右子树高度差≤1的BST，通过旋转维护平衡，保证O(log n)操作">
+AVL 树
+</Term>
+
+<Stepper>
+<Step title="平衡因子">
+每个节点维护平衡因子 BF = 左子树高 - 右子树高。AVL 要求 |BF| ≤ 1。插入/删除后如果某节点 |BF| > 1，需要旋转。
+</Step>
+<Step title="四种旋转">
+**LL 旋转**（右旋）：左孩子的左子树过高。**RR 旋转**（左旋）：右孩子的右子树过高。**LR 旋转**：先左旋左孩子再右旋根。**RL 旋转**：先右旋右孩子再左旋根。每种旋转 $O(1)$，恢复平衡。
+</Step>
+<Step title="AVL 的高度保证">
+$n$ 个节点的 AVL 树高度 $h \leq 1.44 \log_2(n+2)$。所以查找、插入、删除都是 $O(\log n)$，不退化。代价是每次插入/删除可能需要 $O(\log n)$ 次旋转回溯。
+</Step>
+</Stepper>
+
+### B 树：磁盘优化
+
+<Term def="B树是多路搜索树，每个节点存储多个关键字并有多个子节点，专为磁盘I/O优化">
+B 树
+</Term>
+
+$m$ 阶 B 树：每个节点最多 $m$ 个子节点、$m-1$ 个关键字。根至少 2 个子节点，内部节点至少 $\lceil m/2 \rceil$ 个子节点。所有叶子在同一层。
+
+B 树的优势在于「矮胖」——$n$ 个关键字的 B 树高度 $O(\log_m n)$。当 $m = 256$（一个节点填满一个磁盘块），10 亿关键字只需 4 层，即 4 次磁盘 I/O。这就是数据库索引的核心。
+
+### C++ STL 中的树
+
+`std::map` 和 `std::set` 在 C++ 中通常用**红黑树**实现（不是 AVL）。红黑树的平衡条件比 AVL 弱（保证高度 $\leq 2\log n$），但插入/删除时旋转次数少（最多 3 次），在频繁修改的场景下性能更好。
+
+## 代码对照
+
+```cpp
+#include <iostream>
+
+// AVL 树节点
+template <typename T>
+struct AVLNode {
+    T data;
+    AVLNode* left;
+    AVLNode* right;
+    int height;  // 节点高度
+
+    AVLNode(const T& d) : data(d), left(nullptr), right(nullptr), height(0) {}
+};
+
+template <typename T>
+class AVLTree {
+    AVLNode<T>* root;
+
+    int height(AVLNode<T>* n) { return n ? n->height : -1; }
+
+    int balanceFactor(AVLNode<T>* n) {
+        return n ? height(n->left) - height(n->right) : 0;
+    }
+
+    void updateHeight(AVLNode<T>* n) {
+        n->height = 1 + std::max(height(n->left), height(n->right));
+    }
+
+    // 右旋（LL 情况）
+    AVLNode<T>* rotateRight(AVLNode<T>* y) {
+        AVLNode<T>* x = y->left;
+        y->left = x->right;
+        x->right = y;
+        updateHeight(y);
+        updateHeight(x);
+        return x;  // x 成为新的子树根
+    }
+
+    // 左旋（RR 情况）
+    AVLNode<T>* rotateLeft(AVLNode<T>* x) {
+        AVLNode<T>* y = x->right;
+        x->right = y->left;
+        y->left = x;
+        updateHeight(x);
+        updateHeight(y);
+        return y;
+    }
+
+    // 插入并自动平衡
+    AVLNode<T>* insert(AVLNode<T>* node, const T& val) {
+        if (!node) return new AVLNode<T>(val);
+
+        if (val < node->data)
+            node->left = insert(node->left, val);
+        else if (val > node->data)
+            node->right = insert(node->right, val);
+        else
+            return node;  // 不允许重复
+
+        updateHeight(node);
+        int bf = balanceFactor(node);
+
+        // LL
+        if (bf > 1 && val < node->left->data)
+            return rotateRight(node);
+        // RR
+        if (bf < -1 && val > node->right->data)
+            return rotateLeft(node);
+        // LR
+        if (bf > 1 && val > node->left->data) {
+            node->left = rotateLeft(node->left);
+            return rotateRight(node);
+        }
+        // RL
+        if (bf < -1 && val < node->right->data) {
+            node->right = rotateRight(node->right);
+            return rotateLeft(node);
+        }
+
+        return node;
+    }
+
+public:
+    AVLTree() : root(nullptr) {}
+    void insert(const T& val) { root = insert(root, val); }
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：AVL 树和红黑树是一回事。**
+两者都是自平衡 BST，但平衡条件不同。AVL 要求 |BF| ≤ 1（更严格），树更平衡（高度更小），查找更快。红黑树保证高度 $\leq 2\log n$（更宽松），插入/删除旋转次数少（最多 3 次 vs AVL 最多 $O(\log n)$）。查找密集选 AVL，修改密集选红黑树。
+</Callout>
+
+<Callout type="trap">
+**误区：认为 B 树只是二叉树的推广，没有实际意义。**
+B 树是磁盘存储的核心结构。磁盘 I/O 以块为单位（4KB-64KB），二叉树每个节点 1 个关键字需要 $O(\log_2 n)$ 次 I/O，B 树每个节点 $m-1$ 个关键字只需 $O(\log_m n)$ 次 I/O。对于 10 亿数据，$m=256$ 时 B 树仅需 4 次 I/O vs 二叉树的 30 次。
+</Callout>
+
+<Exercises>
+**问题 1**：AVL 树的四种旋转分别在什么情况下使用？
+
+<Answer>
+**LL**：左孩子的左子树过高（BF > 1 且新节点在左孩子的左子树）→ 右旋。**RR**：右孩子的右子树过高（BF < -1 且新节点在右孩子的右子树）→ 左旋。**LR**：左孩子的右子树过高（BF > 1 且新节点在左孩子的右子树）→ 先左旋左孩子再右旋根。**RL**：右孩子的左子树过高（BF < -1 且新节点在右孩子的左子树）→ 先右旋右孩子再左旋根。
+</Answer>
+
+**问题 2**：为什么数据库索引用 B+ 树而不是 BST 或 AVL 树？
+
+<Answer>
+磁盘 I/O 以块为单位，B+ 树每个节点存储多个关键字填满一个磁盘块，一次 I/O 读入多个数据。$n$ 个关键字的 $m$ 阶 B+ 树高度仅 $O(\log_m n)$，当 $m=256$ 时 10 亿数据只需约 4 次 I/O。BST/AVL 每个节点 1 个关键字，需要 $O(\log_2 n) \approx 30$ 次 I/O，慢 7 倍以上。B+ 树的叶子链表还支持范围查询（扫叶子），这是 BST 无法高效支持的。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="AVL树">
+自平衡 BST，任意节点左右子树高度差≤1。通过四种旋转（LL/RR/LR/RL）维护平衡。查找 O(log n)，插入删除需 O(log n) 回溯调整。
+</GlossaryItem>
+<GlossaryItem term="B树">
+m 阶多路搜索树，每个节点最多 m 个子节点、m-1 个关键字。专为磁盘 I/O 优化，高度 O(log_m n)，大幅减少磁盘访问。数据库索引的核心。
+</GlossaryItem>
+<GlossaryItem term="红黑树">
+弱平衡 BST，保证高度≤2log n。插入删除最多 3 次旋转（比 AVL 少），C++ std::map/set 的底层实现。修改密集场景优于 AVL。
+</GlossaryItem>
+<GlossaryItem term="旋转">
+BST 的局部重组操作，O(1) 恢复平衡。左旋和右旋是基本操作，组合后处理 LL/RR/LR/RL 四种失衡情况。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Data Structures and Algorithm Analysis in C++ (Mark Allen Weiss)" adaptedUrl="https://www.pearson.com/" />

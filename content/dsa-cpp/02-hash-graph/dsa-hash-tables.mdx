@@ -1,0 +1,235 @@
+---
+title: "散列表"
+type: B
+section: "散列与图"
+order: 4
+description: "分离链接法与开放寻址法——O(1)平均查找的工程实现"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DsaHashTablesDiagram } from "@/components/mdx/dsa-cpp/diagrams/dsa-hash-tables";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解散列函数的设计原则与冲突的不可避免性
+- 掌握分离链接法的实现与复杂度分析
+- 掌握开放寻址法（线性探测、双散列）的实现
+- 理解装填因子与再散列的时机选择
+</Objectives>
+
+## 直觉引入
+
+散列表是人类发明的最高效的查找结构——平均 $O(1)$。它的原理简单到不可思议：用一个函数把键直接映射到数组下标，一步到位。
+
+但天下没有免费的午餐。不同的键可能映射到同一个下标（冲突），冲突处理决定了散列表的实际性能。分离链接法在每个槽位挂链表，开放寻址法在冲突时找下一个空槽。两种方法各有优劣，理解它们的取舍是工程选型的关键。
+
+## 概念讲解
+
+### 散列函数与冲突
+
+<DsaHashTablesDiagram />
+
+<Term def="散列函数将键映射到数组下标，好的散列函数均匀分布且计算快速">
+散列函数
+</Term>
+
+散列函数的设计原则：①**均匀分布**（减少冲突）②**计算快速**（$O(1)$）③**确定性**（相同键相同结果）。
+
+常用散列函数：除留余数法 `h(key) = key % m`（$m$ 选质数）、乘积取整法 `h(key) = floor(m × (key × A mod 1))`（$A = (\sqrt{5}-1)/2$）。
+
+**冲突不可避免**：鸽巢原理保证当键数 > 表长时必有冲突。冲突处理策略是散列表的核心。
+
+### 分离链接法
+
+<Term def="分离链接法在每个散列槽位维护一个链表，冲突元素挂入同一链表">
+分离链接法
+</Term>
+
+<Stepper>
+<Step title="分离链接的实现">
+每个槽位 `table[i]` 是一个链表。插入：`h(key)` 算出槽位，头插法加入链表。查找：算槽位，遍历链表比较。删除：同查找后摘除节点。
+</Step>
+<Step title="复杂度分析">
+平均查找长度 = $1 + \lambda/2$（$\lambda$ = 装填因子 = 元素数/表长）。$\lambda = 1$ 时平均 1.5 次比较。需要控制 $\lambda \leq 1$，超过则再散列。
+</Step>
+<Step title="再散列（Rehashing）">
+当装填因子超过阈值（通常 1.0），分配新表（容量翻倍），重新散列所有元素。单次 $O(n)$ 但均摊 $O(1)$（类似 vector 扩容）。
+</Step>
+</Stepper>
+
+### 开放寻址法
+
+<Term def="开放寻址法在冲突时按探测序列寻找下一个空槽，不使用链表">
+开放寻址法
+</Term>
+
+- **线性探测**：冲突时依次检查 `h+1, h+2, h+3, ...`。简单但会产生**聚集**（primary clustering），连续占用区越来越长。
+- **双散列**：用第二个散列函数 `h2(key)` 计算步长，探测 `h + i·h2(key)`。避免聚集，性能最好。
+
+开放寻址的优势：无指针开销（缓存友好），适合小元素。劣势：删除困难（需标记墓碑），装填因子不能太高（$\lambda < 0.75$）。
+
+### C++ STL: unordered_map
+
+`std::unordered_map` 通常用分离链接法实现。默认最大装填因子 1.0，超过自动再散列。查找/插入/删除平均 $O(1)$，最坏 $O(n)$（所有键冲突）。
+
+## 代码对照
+
+```cpp
+#include <vector>
+#include <list>
+#include <string>
+#include <iostream>
+
+// 分离链接法散列表
+template <typename K, typename V>
+class HashTable {
+    int tableSize;
+    int count;
+    std::vector<std::list<std::pair<K, V>>> table;
+
+    // 散列函数（简化版：取模）
+    int hash(const K& key) const {
+        return std::hash<K>{}(key) % tableSize;
+    }
+
+    // 再散列
+    void rehash() {
+        int oldSize = tableSize;
+        tableSize *= 2;  // 容量翻倍
+        std::vector<std::list<std::pair<K, V>>> oldTable = table;
+        table.clear();
+        table.resize(tableSize);
+        count = 0;
+
+        // 重新插入所有元素
+        for (int i = 0; i < oldSize; ++i) {
+            for (auto& p : oldTable[i]) {
+                insert(p.first, p.second);  // 重新散列
+            }
+        }
+    }
+
+public:
+    HashTable(int size = 101) : tableSize(size), count(0) {
+        table.resize(tableSize);
+    }
+
+    // O(1) 平均插入
+    void insert(const K& key, const V& val) {
+        int idx = hash(key);
+        // 先检查是否已存在
+        for (auto& p : table[idx]) {
+            if (p.first == key) { p.second = val; return; }
+        }
+        table[idx].push_front({key, val});  // 头插法
+        ++count;
+
+        // 装填因子超过 1.0 → 再散列
+        if (count > tableSize) rehash();
+    }
+
+    // O(1) 平均查找
+    V* find(const K& key) {
+        int idx = hash(key);
+        for (auto& p : table[idx]) {
+            if (p.first == key) return &p.second;
+        }
+        return nullptr;  // 未找到
+    }
+
+    // O(1) 平均删除
+    void erase(const K& key) {
+        int idx = hash(key);
+        table[idx].remove_if([&key](const std::pair<K, V>& p) {
+            return p.first == key;
+        });
+        --count;
+    }
+
+    double loadFactor() const { return (double)count / tableSize; }
+};
+
+// 开放寻址法（线性探测）简化实现
+template <typename K, typename V>
+class OpenAddressing {
+    struct Slot { K key; V val; bool occupied; bool deleted; };
+    std::vector<Slot> table;
+    int count;
+
+    int hash(const K& key) const {
+        return std::hash<K>{}(key) % table.size();
+    }
+
+public:
+    OpenAddressing(int size = 101) : count(0) {
+        table.resize(size);
+        for (auto& s : table) { s.occupied = false; s.deleted = false; }
+    }
+
+    void insert(const K& key, const V& val) {
+        int idx = hash(key);
+        while (table[idx].occupied && !table[idx].deleted) {
+            if (table[idx].key == key) { table[idx].val = val; return; }
+            idx = (idx + 1) % table.size();  // 线性探测
+        }
+        table[idx] = {key, val, true, false};
+        ++count;
+    }
+
+    V* find(const K& key) {
+        int idx = hash(key);
+        while (table[idx].occupied || table[idx].deleted) {
+            if (table[idx].occupied && table[idx].key == key)
+                return &table[idx].val;
+            idx = (idx + 1) % table.size();
+        }
+        return nullptr;
+    }
+};
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为散列表的查找一定是 $O(1)$。**
+$O(1)$ 是平均复杂度，依赖好的散列函数和低装填因子。最坏情况 $O(n)$——所有键冲突到同一个槽位，链表退化为长链。C++ `unordered_map` 最坏 $O(n)$，而 `map`（红黑树）保证 $O(\log n)$。如果需要最坏保证，用 `map`。
+</Callout>
+
+<Callout type="trap">
+**误区：散列表装填因子越高越好（省空间）。**
+装填因子过高导致冲突频繁，查找退化为遍历长链。分离链接法建议 $\lambda \leq 1$，开放寻址法建议 $\lambda \leq 0.75$（线性探测）或 $\leq 0.5$（双散列）。超过阈值应再散列，用空间换时间。
+</Callout>
+
+<Exercises>
+**问题 1**：分离链接法和开放寻址法各自的优缺点是什么？
+
+<Answer>
+分离链接法：优点是实现简单、删除方便（直接摘链）、装填因子可 >1。缺点是链表有指针开销（缓存不友好）、需要额外内存分配。开放寻址法：优点是无指针开销（缓存友好）、适合小元素。缺点是删除困难（需墓碑标记）、装填因子不能太高、聚集问题。实际中 STL `unordered_map` 多用分离链接。
+</Answer>
+
+**问题 2**：`std::unordered_map` 和 `std::map` 应该如何选择？
+
+<Answer>
+`unordered_map`（散列表）：平均 $O(1)$ 查找，最坏 $O(n)$，无序，不支持范围查询。适合高频精确查找、不需要有序遍历。`map`（红黑树）：保证 $O(\log n)$ 查找，有序，支持范围查询（`lower_bound`/`upper_bound`）。需要有序遍历、范围查询或最坏保证时选 `map`。大多数「查找」场景优先 `unordered_map`（更快），需要「有序」时选 `map`。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分离链接法">
+每个散列槽位维护链表，冲突元素挂入同一链表。平均查找 O(1)，装填因子建议≤1。C++ unordered_map 的常用实现。
+</GlossaryItem>
+<GlossaryItem term="开放寻址法">
+冲突时按探测序列找下一个空槽，不使用链表。线性探测有聚集问题，双散列避免聚集。缓存友好但删除困难。
+</GlossaryItem>
+<GlossaryItem term="装填因子">
+元素数与散列表长度的比值 λ=n/m。λ 越高冲突越频繁。分离链接 λ≤1，开放寻址 λ≤0.75。超过阈值需再散列。
+</GlossaryItem>
+<GlossaryItem term="再散列">
+当装填因子超过阈值时，分配更大表（通常翻倍）并重新散列所有元素。单次 O(n) 但均摊 O(1)。
+</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Data Structures and Algorithm Analysis in C++ (Mark Allen Weiss)" adaptedUrl="https://www.pearson.com/" />

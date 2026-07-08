@@ -1,0 +1,142 @@
+---
+title: "大对象堆"
+type: B
+section: "内存模式"
+order: 4
+description: "大对象堆 LOH：阈值、不压缩与碎片化。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DnmLargeObjectDiagram } from "@/components/mdx/dotnet-memory/diagrams/dnm-large-object";
+
+<Objectives>
+- 理解 LOH 的 85000 字节阈值与 Gen2 视角
+- 掌握 LOH 不压缩导致碎片化的原因
+- 学会用 ArrayPool 缓解 LOH 碎片
+- 了解 LOH 压缩模式的使用场景
+</Objectives>
+
+## 直觉引入
+
+想象一个停车场，小车（小对象）可以随时挪动重新排列（压缩），但大卡车（大对象）一旦停好就很难移动——移动一辆大卡车需要很大空间和时间。所以大卡车区域（LOH）干脆不挪车，结果就是车位碎片化：总空位够但连续空位不够停新的大卡车。
+
+## 概念讲解
+
+### LOH 阈值与特征
+
+<Term def="LOH（Large Object Heap）存放 >=85000 字节的对象，在 GC 视角下属 Gen2，回收需 Full GC。">
+>=85000 字节的对象（如大数组、大字符串）直接分配在 LOH，而不是 Gen0。LOH 在 GC 视角下属 **Gen2**——回收 LOH 等于 Full GC。
+
+LOH 的关键特征：
+1. **不压缩**：大对象复制成本极高（移动 1MB 数组需复制 1MB 内存），所以 GC 默认不压缩 LOH
+2. **直接 Gen2**：大对象一开始就在 Gen2，不经过 Gen0/Gen1 晋升
+3. **Full GC 回收**：回收 LOH 需要扫描整个堆，代价最高
+
+这意味着频繁分配大对象会导致频繁 Full GC，严重影响性能。
+</Term>
+
+### 碎片化与 ArrayPool
+
+<Term def="LOH 不压缩导致碎片化：总空闲够但连续不够，可能 OOM。ArrayPool 租用复用避免反复分配。">
+LOH 不压缩的直接后果是**碎片化**：分配和释放交替后，LOH 中出现不连续的空闲块。总空闲空间可能足够，但连续空闲空间不够，导致新的大对象分配失败（OOM），即使实际空闲内存充足。
+
+**ArrayPool<T>** 是缓解方案：
+```csharp
+var pool = ArrayPool<byte>.Shared;
+byte[] buffer = pool.Rent(1024);  // 租用（复用已有数组）
+try { /* 使用 buffer */ }
+finally { pool.Return(buffer); }   // 归还，不进 GC
+```
+
+注意：1. Return 后不能继续使用（可能被其他人租用）。2. Rent 返回的数组可能更大（按 2 的幂对齐），需用 Span<T> 限定范围。3. .NET 4.5.1+ 可用 `GCSettings.LargeObjectHeapCompactionMode = CompactOnce` 临时压缩 LOH，但代价是 Full GC 停顿。
+</Term>
+
+## 交互Demo
+
+<DnmLargeObjectDiagram />
+
+<Stepper>
+<Step title="理解碎片化">
+LOH 不压缩→分配释放交替→空闲块不连续。总空闲够但连续不够→新大对象 OOM。
+</Step>
+<Step title="ArrayPool 复用">
+Rent 从池中租用已有数组，Return 归还复用。避免反复 new 大数组进 LOH，零 GC 分配。
+</Step>
+<Step title="临时压缩">
+GCSettings.LargeObjectHeapCompactionMode = CompactOnce 可在下一次 GC 时压缩 LOH。代价是 Full GC 停顿，仅在确认碎片严重时使用。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 问题代码：每次请求分配 100KB 数组进 LOH
+public byte[] ProcessRequest() {
+    var buffer = new byte[100_000]; // >85000 → LOH → Full GC
+    // ... 处理 ...
+    return buffer; // 每秒 1000 请求 = 100MB/s 进 LOH
+}
+
+// 优化代码：用 ArrayPool 租用复用
+public byte[] ProcessRequest() {
+    var pool = ArrayPool<byte>.Shared;
+    byte[] buffer = pool.Rent(100_000); // 租用，不分配
+    try {
+        // ... 处理 ...
+        return buffer[..actualSize]; // 只返回有效部分
+    }
+    finally {
+        pool.Return(buffer); // 归还复用
+    }
+}
+
+// 极端优化：用 MemoryPool 或 stackalloc
+// stackalloc 不进堆（小缓冲区）
+Span<byte> smallBuf = stackalloc byte[256]; // 栈分配
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：LOH 阈值是 85KB（85000 字节）就是 85000 字节**
+阈值确实是 85000 字节，但注意是字节数不是元素数。`new double[10625]`（10625×8=85000 字节）刚好在阈值边界。实际实现中，某些类型（如 double[]）的 LOH 阈值可能略有不同，但 85000 字节是通用规则。
+</Callout>
+
+<Callout type="trap">
+**误区：ArrayPool.Rent 返回的数组大小等于请求大小**
+Rent 返回的数组可能比请求的大（池按 2 的幂对齐分配）。必须用实际长度（通过参数或 Span 限定），否则可能访问到未初始化的数据。用 `buffer.AsSpan(0, actualSize)` 限定有效范围。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 LOH 不做压缩？这带来什么问题？
+
+<Answer>
+不做压缩因为大对象复制成本极高（移动 1MB 需复制 1MB 内存）且更新所有引用指针开销大。问题：碎片化——空闲块不连续，总空闲够但连续不够导致 OOM。缓解：ArrayPool 复用避免反复分配，或 LargeObjectHeapCompactionMode 临时压缩。
+</Answer>
+
+**问题 2**：一个服务每秒 1000 请求每个需 100KB byte[]，分析直接 new 和用 ArrayPool 的 GC 影响。
+
+<Answer>
+直接 new：每秒 100MB 分配，100KB>85000 进 LOH(Gen2)，频繁 Full GC 停顿。用 ArrayPool：Rent 复用已有数组零分配不进 LOH 不触发 GC，吞吐提升延迟降低。注意 Rent 返回数组可能更大需 Span 限定。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="LOH">
+大对象堆，存放 >=85000 字节的对象，属 Gen2 视角，默认不压缩。
+</GlossaryItem>
+<GlossaryItem term="碎片化">
+空闲内存不连续导致无法分配。外部碎片=空闲块不连续，内部碎片=对齐填充浪费。
+</GlossaryItem>
+<GlossaryItem term="ArrayPool<T>">
+共享数组池，Rent 租用 Return 归还复用，避免反复分配大数组进 LOH。
+</GlossaryItem>
+<GlossaryItem term="LargeObjectHeapCompactionMode">
+GC 设置，设为 CompactOnce 可在下一次 GC 时压缩 LOH。代价是 Full GC 停顿。
+</GlossaryItem>
+</Glossary>

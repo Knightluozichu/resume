@@ -1,0 +1,252 @@
+---
+title: "测试"
+type: B
+section: "高级主题"
+order: 8
+description: "表驱动测试、基准测试与覆盖率。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GplTestingDiagram } from "@/components/mdx/go-programming-language/diagrams/gpl-testing";
+
+<Objectives>
+- 掌握 Go 表驱动测试的模式
+- 理解 benchmark 基准测试和 -benchmem
+- 学会测试覆盖率分析和 -race 检测
+- 理解 testify 断言库的取舍
+</Objectives>
+
+## 直觉引入
+
+Go 的测试就像体检报告——标准化的检查项目，一目了然的结果。表驱动测试是 Go 社区最推崇的模式：把所有测试用例放在一个表格里，循环执行，避免重复代码。benchmark 给你性能体检数据，-race 检测给你并发安全体检。Go 内置测试框架意味着没有「配置测试环境」的门槛——写个 _test.go 文件就能跑。
+
+## 概念讲解
+
+### 表驱动测试
+
+<Term def="表驱动测试将测试用例组织为结构体切片，循环执行。避免重复代码，新增用例只需加一行。">
+**表驱动测试模式**（Go 社区标准实践）：
+
+```go
+func TestDivide(t *testing.T) {
+    tests := []struct {
+        name    string
+        a, b    float64
+        want    float64
+        wantErr error
+    }{
+        {"normal", 10, 2, 5, nil},
+        {"zero divisor", 10, 0, 0, ErrDivisionByZero},
+        {"negative", -6, 3, -2, nil},
+    }
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) { // 子测试
+            got, err := divide(tt.a, tt.b)
+            if tt.wantErr != nil && err != tt.wantErr {
+                t.Errorf("err = %v, want %v", err, tt.wantErr)
+            }
+            if got != tt.want {
+                t.Errorf("got = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+```
+
+优点：1.新增用例只需加一行。2.测试逻辑只写一次。3.t.Run 子测试可单独运行（go test -run TestDivide/normal）。4.并行执行 t.Parallel()。
+
+运行测试：
+```bash
+go test ./...           # 运行所有测试
+go test -v ./...        # 详细输出
+go test -run TestDivide # 指定测试
+go test -race ./...     # 数据竞争检测
+go test -cover ./...    # 覆盖率
+```
+</Term>
+
+### benchmark 与覆盖率
+
+<Term def="Benchmark 用 func BenchmarkXxx(b *testing.B) 定义。b.N 自动调整。-benchmem 显示内存分配。-cover 覆盖率。-race 检测数据竞争。">
+**基准测试**：
+```go
+func BenchmarkSort(b *testing.B) {
+    for i := 0; i < b.N; i++ { // b.N 由框架自动调整
+        data := generateData(1000)
+        sort.Ints(data)
+    }
+}
+// go test -bench=. -benchmem
+// BenchmarkSort-8    1000000   1234 ns/op   1024 B/op   1 allocs/op
+```
+
+**覆盖率**：
+```bash
+go test -cover -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out # 浏览器可视化
+```
+覆盖率显示哪些代码行被执行。目标：核心逻辑 >80%，错误处理路径 >50%。100% 覆盖率不等于无 bug——只表示代码被执行过。
+
+**-race 检测器**：
+```bash
+go test -race ./...
+```
+race 检测器在运行时监控内存访问，发现数据竞争立即报告。是 Go 最强大的并发调试工具。代价：10x 内存和 CPU 开销，只在测试时开启。
+
+**testify 断言库**：
+```go
+import "github.com/stretchr/testify/assert"
+assert.Equal(t, 42, result) // 比 if result != 42 { t.Errorf() } 简洁
+```
+是否用 testify 有争议——标准库 if + t.Errorf 更显式，testify 更简洁但隐藏逻辑。Go 团队推荐标准库方式。
+</Term>
+
+## 交互Demo
+
+<GplTestingDiagram />
+
+<Stepper>
+<Step title="表驱动测试">
+测试用例组织为结构体切片循环执行。t.Run 子测试可单独运行。新增用例只需加一行。
+</Step>
+<Step title="benchmark">
+func BenchmarkX(b *testing.B) b.N 自动调整。-benchmem 显示内存分配。用于性能基线和回归检测。
+</Step>
+<Step title="race + cover">
+go test -race 检测数据竞争。go test -cover 覆盖率。两者是 Go 并发安全和测试质量的核心工具。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// math.go
+package math
+
+import "errors"
+
+var ErrDivisionByZero = errors.New("division by zero")
+
+func Divide(a, b float64) (float64, error) {
+    if b == 0 {
+        return 0, ErrDivisionByZero
+    }
+    return a / b, nil
+}
+
+func Sort(data []int) {
+    // 简单插入排序（演示用）
+    for i := 1; i < len(data); i++ {
+        key := data[i]
+        j := i - 1
+        for j >= 0 && data[j] > key {
+            data[j+1] = data[j]
+            j--
+        }
+        data[j+1] = key
+    }
+}
+
+// ===== math_test.go =====
+package math
+
+import (
+    "testing"
+)
+
+// 表驱动测试
+func TestDivide(t *testing.T) {
+    tests := []struct {
+        name    string
+        a, b    float64
+        want    float64
+        wantErr error
+    }{
+        {"normal division", 10, 2, 5, nil},
+        {"zero divisor", 10, 0, 0, ErrDivisionByZero},
+        {"negative result", -6, 3, -2, nil},
+        {"fractional result", 7, 2, 3.5, nil},
+    }
+
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            got, err := Divide(tt.a, tt.b)
+            if tt.wantErr != nil {
+                if err != tt.wantErr {
+                    t.Errorf("Divide() error = %v, want %v", err, tt.wantErr)
+                }
+                return
+            }
+            if err != nil {
+                t.Errorf("unexpected error: %v", err)
+            }
+            if got != tt.want {
+                t.Errorf("Divide() = %v, want %v", got, tt.want)
+            }
+        })
+    }
+}
+
+// 基准测试
+func BenchmarkSort(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        data := []int{5, 3, 8, 1, 9, 2, 7, 4, 6}
+        Sort(data)
+    }
+}
+
+// 基准测试带内存统计
+func BenchmarkSortWithAllocs(b *testing.B) {
+    b.ReportAllocs()
+    for i := 0; i < b.N; i++ {
+        data := []int{5, 3, 8, 1, 9}
+        Sort(data)
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：100% 测试覆盖率意味着代码无 bug**
+覆盖率只表示代码行被执行过——不表示所有边界条件都测试了。100% 覆盖率可能有：1.边界值未测试（如 MAX_INT 溢出）。2.错误路径只执行但未验证结果。3.并发场景未覆盖。4.集成场景未测试。覆盖率是必要不充分条件——目标核心逻辑 >80%，但重点在测试质量而非数字。
+</Callout>
+
+<Callout type="trap">
+**误区：基准测试的 b.N 需要手动设置**
+b.N 由 testing 框架自动调整——先从小值（如 1）开始，根据执行时间逐渐增大直到测量稳定。开发者只需 for i := 0; i < b.N; i++。框架会自动运行多次取稳定值。b.ResetTimer() 可排除初始化时间。b.RunParallel() 可并行基准测试。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 Go 社区推崇表驱动测试？它有什么优势？
+
+<Answer>
+优势：1.避免重复——测试逻辑写一次，用例组织为结构体切片循环执行。2.可扩展——新增用例只需加一行结构体字面量。3.可读性——所有用例一目了然，像文档。4.子测试——t.Run 每个用例是独立子测试，可单独运行（go test -run TestX/case_name）。5.并行——t.Parallel() 子测试可并行执行加速。6.命名——name 字段让失败信息更清晰。
+</Answer>
+
+**问题 2**：go test -race 是什么？它能检测什么类型的问题？
+
+<Answer>
+-race 启用 Go 的数据竞争检测器。它在运行时监控所有内存访问，检测多个 goroutine 对同一变量的非同步访问（至少一个写）。能检测：1.数据竞争——并发读写无同步。2.不会误报有同步的访问（channel/Mutex/atomic）。代价：10x 内存和 CPU 开销，只在测试时开启。是 Go 并发调试的最强大工具——上线前必须 go test -race 通过。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="表驱动测试">
+Go 社区标准测试模式。用例组织为结构体切片循环执行。t.Run 子测试可单独运行。
+</GlossaryItem>
+<GlossaryItem term="benchmark">
+func BenchmarkX(b *testing.B) 基准测试。b.N 自动调整。-benchmem 显示内存分配。
+</GlossaryItem>
+<GlossaryItem term="-race">
+数据竞争检测器。运行时监控内存访问，发现并发非同步读写立即报告。10x 开销。
+</GlossaryItem>
+<GlossaryItem term="覆盖率（-cover）">
+go test -cover 显示被执行的代码行比例。-coverprofile 生成详细报告，go tool cover -html 可视化。
+</GlossaryItem>
+</Glossary>

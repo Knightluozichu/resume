@@ -1,0 +1,151 @@
+---
+title: "所有权"
+type: B
+section: "基础语法"
+order: 1
+description: "Rust 所有权系统：move 语义、drop 与作用域。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RplOwnershipDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-ownership";
+
+<Objectives>
+- 掌握 String 的 move 语义和内存布局
+- 理解 Copy trait 的条件和行为
+- 学会函数参数和返回值的所有权转移
+- 避免频繁 clone 的所有权优化策略
+</Objectives>
+
+## 直觉引入
+
+想象你有一把钥匙（栈上的引用）开一个储物柜（堆上的数据）。把钥匙给别人（move），你就打不开柜子了——但你不会担心两个人同时开柜子导致冲突。Rust 的 move 语义就是这个逻辑：转移钥匙（栈上指针）而不是复制柜子（堆数据），既高效又安全。
+
+## 概念讲解
+
+### move 语义与内存布局
+
+<Term def="move 时只复制栈上的元数据（指针/长度/容量），堆数据不复制，原变量失效避免 double-free。">
+`let s1 = String::from("hello"); let s2 = s1;` 时发生 move：
+
+String 在内存中分两部分：
+- **栈上**：三元组（ptr, len, cap）——指针指向堆数据、长度、容量
+- **堆上**：实际字符串数据 "hello"
+
+move 只复制栈上的三元组（s2 得到指针的副本，指向同一块堆内存），然后使 s1 失效。这样两个变量不会同时指向同一块堆内存——避免了 double-free（两个变量离开作用域都尝试释放同一块堆内存）。
+
+之后使用 s1 会编译错误：`borrow of moved value`。
+</Term>
+
+### Copy trait
+
+<Term def="Copy trait 表示类型可按位复制且安全。赋值时复制而非 move，原变量仍有效。条件：无 Drop、所有字段 Copy。">
+i32、bool、f64 等基本类型实现 Copy trait，赋值时复制值而非 move：
+```rust
+let a = 5;
+let b = a; // Copy，a 仍有效
+println!("{}", a); // OK
+```
+
+Copy 的条件：
+1. 类型不能实现 Drop（无需自定义释放）
+2. 所有字段都是 Copy
+
+String 不能 Copy（有堆指针需要 drop），i32/bool/f64/&T 可以 Copy。struct 如果所有字段都是 Copy 且无 Drop，可以 `#[derive(Copy, Clone)]`。
+</Term>
+
+## 交互Demo
+
+<RplOwnershipDiagram />
+
+<Stepper>
+<Step title="分配">
+String::from() 在堆上分配数据，栈上创建三元组（ptr/len/cap），变量是所有者。
+</Step>
+<Step title="Move 转移">
+let s2 = s1 时栈三元组复制到 s2，s1 失效。堆数据不复制，避免 double-free。
+</Step>
+<Step title="Drop 释放">
+所有者离开作用域时自动调用 drop 释放堆内存。无需手动 free，无内存泄漏。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// move vs Copy
+fn main() {
+    // String: move 语义
+    let s1 = String::from("hello");
+    let s2 = s1;          // move! s1 失效
+    // println!("{}", s1); // 错误: borrow of moved value
+    
+    // i32: Copy 语义
+    let x = 42;
+    let y = x;            // Copy, x 仍有效
+    println!("{}", x);    // OK
+    
+    // 函数传参: move
+    let s3 = String::from("world");
+    takes_ownership(s3);  // s3 move 到函数
+    // println!("{}", s3); // 错误: s3 已 move
+    
+    // 函数返回: move 回调用方
+    let s4 = gives_ownership(); // 所有权转移到 s4
+    println!("{}", s4);   // OK
+    
+    // 借用: 不转移所有权
+    let s5 = String::from("borrow");
+    let len = calculate_length(&s5); // 借用，不 move
+    println!("'{}' 的长度是 {}", s5, len); // s5 仍有效
+}
+
+fn takes_ownership(s: String) { /* s 在函数结束 drop */ }
+fn gives_ownership() -> String { String::from("returned") }
+fn calculate_length(s: &String) -> usize { s.len() }
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：move 会复制堆数据**
+move 只复制栈上的元数据（指针/长度/容量），堆数据不复制。这是 move 高效的原因——O(1) 操作不管数据多大。如果每次 move 都复制堆数据，就和深拷贝一样低效了。
+</Callout>
+
+<Callout type="trap">
+**误区：所有类型要么 move 要么 Copy**
+Clone trait 是第三种选择。String 不能 Copy 但可以 Clone（`s2 = s1.clone()` 深拷贝）。Clone 是显式的——你看到 clone 就知道有拷贝开销。Copy 是隐式的（赋值自动复制）。设计原则：便宜的复制用 Copy，昂贵的深拷贝用 Clone 显式标记。
+</Callout>
+
+<Exercises>
+**问题 1**：let s1 = String::from("hi"); let s2 = s1; 后 s1 和 s2 的内存状态是什么？
+
+<Answer>
+栈上：s1 的三元组（ptr/len/cap）被复制到 s2，s1 被标记为失效。堆上：只有一份 "hi" 数据，s2 的 ptr 指向它。s1 不能再使用（编译错误 borrow of moved value）。堆数据不复制——move 只复制栈上元数据，O(1) 操作。
+</Answer>
+
+**问题 2**：如何让函数使用 String 但不获取所有权？
+
+<Answer>
+用引用借用：fn calculate_length(s: &String) -> usize { s.len() }。&String 是不可变引用，不转移所有权，调用后原变量仍有效。如需修改用 &mut String。这是避免频繁 clone 的关键——借用让函数临时访问数据而不获取所有权。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="move">
+所有权转移。栈上元数据复制，原变量失效，堆数据不复制。避免 double-free。
+</GlossaryItem>
+<GlossaryItem term="Copy trait">
+类型可按位复制且安全。赋值时复制不 move，原变量仍有效。条件：无 Drop、所有字段 Copy。
+</GlossaryItem>
+<GlossaryItem term="Clone trait">
+显式深拷贝。s.clone() 复制堆数据。比 Copy 昂贵，用 clone() 显式标记开销。
+</GlossaryItem>
+<GlossaryItem term="借用（&T）">
+引用别人的数据而不获取所有权。&T 只读，&mut T 可写。函数参数用引用避免 move。
+</GlossaryItem>
+</Glossary>
