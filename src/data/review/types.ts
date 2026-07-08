@@ -1448,7 +1448,17 @@ export type ReviewChapterSlug =
   | "mgp-flow-control"
   | "mgp-prediction-reconciliation"
   | "mgp-entity-interpolation"
-  | "mgp-final-review";
+  | "mgp-final-review"
+  | "jpg-learning-map"
+  | "jpg-types-variables"
+  | "jpg-scope-closure"
+  | "jpg-objects-oop"
+  | "jpg-prototype-chain"
+  | "jpg-promise-async"
+  | "jpg-event-loop"
+  | "jpg-dom-bom"
+  | "jpg-modules"
+  | "jpg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2901,6 +2911,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mgp-prediction-reconciliation": "客户端预测与服务器校正",
   "mgp-entity-interpolation": "实体插值与平滑渲染",
   "mgp-final-review": "全书总复习",
+  "jpg-learning-map": "全书学习地图",
+  "jpg-types-variables": "数据类型与变量",
+  "jpg-scope-closure": "作用域与闭包",
+  "jpg-objects-oop": "对象与面向对象",
+  "jpg-prototype-chain": "原型与原型链",
+  "jpg-promise-async": "Promise 与 async/await",
+  "jpg-event-loop": "事件循环与异步编程模型",
+  "jpg-dom-bom": "DOM 与 BOM 操作",
+  "jpg-modules": "模块系统",
+  "jpg-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

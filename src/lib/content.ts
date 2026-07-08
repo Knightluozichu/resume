@@ -180,6 +180,7 @@ export const BOOK_ORDER = [
   "game-network-core-tech",
   "game-server-architecture",
   "multiplayer-game-programming",
+  "javascript-pro-guide",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -300,6 +301,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "game-network-core-tech": "网络游戏核心技术与实战",
   "game-server-architecture": "游戏服务器架构与优化",
   "multiplayer-game-programming": "Multiplayer Game Programming",
+  "javascript-pro-guide": "JavaScript高级程序设计（第4版）",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -922,6 +924,8 @@ export const SECTION_ORDER = [
   // 游戏引擎原理与实践·卷1
   "游戏引擎架构",
   "网络游戏与服务器",
+  // JavaScript高级程序设计（第4版）
+  "前端与Web",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

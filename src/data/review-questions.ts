@@ -1325,6 +1325,16 @@ import { mgpFlowControlQuestions } from "./review/mgp-flow-control";
 import { mgpPredictionReconciliationQuestions } from "./review/mgp-prediction-reconciliation";
 import { mgpEntityInterpolationQuestions } from "./review/mgp-entity-interpolation";
 import { mgpFinalReviewQuestions } from "./review/mgp-final-review";
+import { jpgLearningMapQuestions } from "./review/jpg-learning-map";
+import { jpgTypesVariablesQuestions } from "./review/jpg-types-variables";
+import { jpgScopeClosureQuestions } from "./review/jpg-scope-closure";
+import { jpgObjectsOopQuestions } from "./review/jpg-objects-oop";
+import { jpgPrototypeChainQuestions } from "./review/jpg-prototype-chain";
+import { jpgPromiseAsyncQuestions } from "./review/jpg-promise-async";
+import { jpgEventLoopQuestions } from "./review/jpg-event-loop";
+import { jpgDomBomQuestions } from "./review/jpg-dom-bom";
+import { jpgModulesQuestions } from "./review/jpg-modules";
+import { jpgFinalReviewQuestions } from "./review/jpg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2681,6 +2691,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mgpPredictionReconciliationQuestions,
   ...mgpEntityInterpolationQuestions,
   ...mgpFinalReviewQuestions,
+  ...jpgLearningMapQuestions,
+  ...jpgTypesVariablesQuestions,
+  ...jpgScopeClosureQuestions,
+  ...jpgObjectsOopQuestions,
+  ...jpgPrototypeChainQuestions,
+  ...jpgPromiseAsyncQuestions,
+  ...jpgEventLoopQuestions,
+  ...jpgDomBomQuestions,
+  ...jpgModulesQuestions,
+  ...jpgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

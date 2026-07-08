@@ -1,0 +1,121 @@
+---
+title: "原型与原型链"
+type: A
+section: "前端与Web"
+order: 4
+description: "理解 prototype、__proto__、constructor 三角关系，掌握原型链查找与寄生组合继承"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JpgPrototypeChainDiagram } from "@/components/mdx/javascript-pro-guide/diagrams/jpg-prototype-chain";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 prototype、__proto__、constructor 三者的指向关系
+- 掌握原型链查找机制：实例 → 构造函数.prototype → Object.prototype → null
+- 区分原型链继承、构造函数继承、组合继承、寄生组合继承的优劣
+- 理解 ES6 class extends 的底层就是寄生组合继承
+</Objectives>
+
+## 直觉引入
+
+把原型链想象成家族族谱。你（实例）有些东西是自己独有的（实例属性），有些东西是从父亲那继承的（构造函数.prototype 上的方法），还有些是从祖父那继承的（Object.prototype 上的 toString 等）。当你需要用某样东西时，先翻自己的口袋，没有就去问父亲，父亲没有就去问祖父，一层层往上，直到最早的祖先（Object.prototype），再往上就是「无人」（null）——族谱到头了。这条向上的查找链就是原型链。
+
+<JpgPrototypeChainDiagram />
+
+## prototype / __proto__ / constructor 三角
+
+<Term def="每个函数都有一个 prototype 属性指向其原型对象；原型对象有 constructor 指回函数；每个对象有 __proto__ 指向其构造函数的 prototype。这三者构成 JS 继承的核心三角，原型链通过 __proto__ 逐层向上查找属性。">原型三角</Term>是理解 JS 继承的钥匙。注意区分：`prototype` 是**函数**才有的属性（箭头函数除外），普通对象没有；`__proto__` 是**所有对象**都有的内部指针（已被标准化为 Object.getPrototypeOf）。函数本身也是对象，所以函数既有 prototype 也有 __proto__。
+
+```javascript
+function Person(name) { this.name = name; }
+Person.prototype.say = function() { console.log(this.name); };
+const p = new Person("JS");
+
+// 三角关系
+p.__proto__ === Person.prototype;          // true —— 实例指向原型
+Person.prototype.constructor === Person;   // true —— 原型指回构造函数
+Person.__proto__ === Function.prototype;   // true —— 函数也是对象，__proto__ 指向 Function.prototype
+Person.prototype.__proto__ === Object.prototype; // true —— 原型对象的 __proto__ 指向 Object.prototype
+Object.prototype.__proto__ === null;       // true —— 原型链终点
+
+// 沿原型链查找
+p.toString(); // p 自身没有 → Person.prototype 没有 → Object.prototype 有 ✓
+p.say();      // p 自身没有 → Person.prototype 有 ✓
+p.name;       // p 自身有 ✓
+```
+
+## 继承的演进
+
+```javascript
+// ① 原型链继承：简单但有引用属性共享 + 无法传参问题
+function Super() { this.colors = ["red"]; }
+function Sub() {}
+Sub.prototype = new Super(); // 关键
+const s1 = new Sub(); s1.colors.push("blue");
+const s2 = new Sub();
+console.log(s2.colors); // ["red","blue"] —— 共享被污染
+
+// ② 借用构造函数（call）：解决共享与传参，但方法无法复用
+function Super2(name) { this.name = name; this.colors = []; }
+function Sub2(name) { Super2.call(this, name); } // 借用
+// 缺点：Super2 的原型方法 Sub2 拿不到
+
+// ③ 组合继承：原型链 + call，但调用两次父构造函数
+function Super3(name) { this.name = name; this.colors = []; }
+Super3.prototype.say = function() { console.log(this.name); };
+function Sub3(name, age) {
+  Super3.call(this, name); // 第二次：实例属性
+  this.age = age;
+}
+Sub3.prototype = new Super3(); // 第一次：原型（含冗余属性）
+Sub3.prototype.constructor = Sub3;
+
+// ④ 寄生组合继承（最优，class extends 底层）
+function inherit(sub, sup) {
+  const proto = Object.create(sup.prototype); // 复制原型，不调构造函数
+  proto.constructor = sub;
+  sub.prototype = proto;
+}
+function Sub4(name, age) {
+  Super3.call(this, name); // 只调一次
+  this.age = age;
+}
+inherit(Sub4, Super3); // 原型链只复制不实例化
+
+// ⑤ ES6 class：语法糖，底层同 ④
+class Super5 { constructor(name) { this.name = name; } say() {} }
+class Sub5 extends Super5 {
+  constructor(name, age) { super(name); this.age = age; } // super = 借用构造函数
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：__proto__ 和 prototype 是一回事。** 它们完全不同。`prototype` 是**函数**独有的属性，指向「由这个函数 new 出来的实例的共享原型对象」——它定义了「将来我的实例们共享什么」。`__proto__` 是**所有对象**都有的内部指针，指向「我自己的原型对象」——它定义了「我从哪继承」。关系是：`实例.__proto__ === 构造函数.prototype`。函数也是对象，所以函数有 __proto__（指向 Function.prototype），同时有 prototype（指向它作为构造函数时的原型）。混淆两者是原型链理解错误的最大根源。
+</Callout>
+
+<Exercises>
+**问题 1**：描述 `new Person("x")` 后，实例到 null 的完整原型链。
+
+<Answer>
+实例 p 的 __proto__ 指向 Person.prototype（new 时第二步绑定）。Person.prototype 本身是个普通对象，它的 __proto__ 指向 Object.prototype（因为 Person.prototype 是由 Object 构造的）。Object.prototype 的 __proto__ 指向 null（原型链终点）。所以完整链：p → Person.prototype → Object.prototype → null。属性查找沿这条链：先查 p 自身，再查 Person.prototype（如 say 方法），再查 Object.prototype（如 toString/hasOwnProperty），到 null 仍未找到则返回 undefined。这就是为什么所有对象都有 toString——它在 Object.prototype 上。
+</Answer>
+
+**问题 2**：为什么寄生组合继承是最优方案？它解决了前几种的什么问题？
+
+<Answer>
+寄生组合继承 = Object.create(父.prototype) + 子构造函数内 call 父构造函数。它解决了三种问题：① 原型链继承的「引用属性共享污染」——子实例共享父的引用属性，一个改全乱；② 借用构造函数的「无法继承原型方法」——只 call 不接原型链，父 prototype 上的方法子拿不到；③ 组合继承的「调用两次父构造函数」——一次在 Sub.prototype = new Super()（原型链），一次在 Super.call(this)（实例），导致原型上有冗余的实例属性。寄生组合用 Object.create 复制父原型建立链（不调构造函数，只调一次），再用 call 继承实例属性（解决共享），是最干净高效的方案。ES6 的 class extends 底层就是它。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="原型三角">prototype（函数独有，指向其实例的原型对象）、__proto__（所有对象都有，指向自身原型）、constructor（原型对象指回构造函数）三者构成的核心关系。实例.__proto__ === 构造函数.prototype。</GlossaryItem>
+<GlossaryItem term="原型链">对象通过 __proto__ 逐层向上查找属性的链：实例 → 构造函数.prototype → Object.prototype → null。属性先查自身，找不到沿链向上，到 null 仍未找到返回 undefined。所有对象共享 Object.prototype 上的方法（toString 等）。</GlossaryItem>
+<GlossaryItem term="寄生组合继承">最优继承方案：Object.create(父.prototype) 复制原型建立链（不调父构造函数），子构造函数内 call 父构造函数继承实例属性。只调一次父构造函数，无引用共享污染，无冗余属性。ES6 class extends 的底层实现。</GlossaryItem>
+<GlossaryItem term="Object.create">以指定原型创建新对象的方法。Object.create(proto) 返回一个 __proto__ 指向 proto 的新对象。是建立原型链而不调用构造函数的关键手段，寄生组合继承的核心。</GlossaryItem>
+</Glossary>

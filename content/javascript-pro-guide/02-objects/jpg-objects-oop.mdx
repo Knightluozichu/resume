@@ -1,0 +1,126 @@
+---
+title: "对象与面向对象"
+type: A
+section: "前端与Web"
+order: 3
+description: "掌握对象创建的演进方式与属性描述符（writable/enumerable/configurable），理解 new 与 class 的本质"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JpgObjectsOopDiagram } from "@/components/mdx/javascript-pro-guide/diagrams/jpg-objects-oop";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解对象创建的四种演进：字面量 → 工厂 → 构造函数 → 原型模式
+- 掌握属性描述符的四个特征（value/writable/enumerable/configurable）及 Object.defineProperty
+- 理解 new 操作符的四个步骤与构造函数返回值规则
+- 区分数据属性与访问器属性，理解 class 语法糖的本质
+</Objectives>
+
+## 直觉引入
+
+把对象想象成一张填好的表格。表格上有许多字段（属性），每个字段除了值本身，还附带几张小标签说明「这个字段能不能改、能不能被遍历到、能不能删掉」。最早人们用字面量 `{}` 手写表格，但每张都重新写一遍没法复用；于是发明工厂模式——写个函数批量生产表格；但工厂产出的表格没有「出生证」（无法识别类型）；又发明构造函数——给表格盖上「由谁制造」的章；但构造函数把方法也抄到每张表上太浪费；最终用原型模式——把通用方法放在一张「母版」上，所有表格共享。
+
+<JpgObjectsOopDiagram />
+
+## 属性描述符
+
+<Term def="属性描述符是定义对象属性元数据的内部特征，数据属性有 value/writable/enumerable/configurable 四个特征，访问器属性用 get/set 替代 value/writable。可通过 Object.defineProperty 精确控制属性行为，默认特征均为 false（与字面量定义相反）。">属性描述符</Term>是 JS 对象系统的精细控制层。字面量定义的属性默认四个特征都是 true，但用 Object.defineProperty 定义的属性默认都是 false——这是常见的坑。`configurable: false` 后属性不可删除、不可再改特征（单向操作，不可逆）；`enumerable: false` 让属性在 for-in/Object.keys 中隐藏。
+
+```javascript
+const obj = {};
+
+// 字面量定义：默认全 true
+const o1 = { x: 1 };
+Object.getOwnPropertyDescriptor(o1, "x");
+// { value: 1, writable: true, enumerable: true, configurable: true }
+
+// defineProperty 定义：默认全 false
+Object.defineProperty(obj, "y", { value: 2 });
+Object.getOwnPropertyDescriptor(obj, "y");
+// { value: 2, writable: false, enumerable: false, configurable: false }
+obj.y = 99; // 静默失败（严格模式抛错）
+delete obj.y; // 失败（configurable false）
+
+// 访问器属性：用 get/set 替代 value
+const person = { _name: "" };
+Object.defineProperty(person, "name", {
+  get() { return this._name; },
+  set(v) { this._name = v.trim(); }, // 写入时自动校验
+  enumerable: true,
+});
+person.name = "  JS  ";
+console.log(person.name); // "JS" —— 自动去空格
+```
+
+## 对象创建的演进
+
+```javascript
+// ① 字面量：简单但无法复用
+const p1 = { name: "A", say() { console.log(this.name); } };
+
+// ② 工厂模式：能复用但无类型识别
+function createPerson(name) {
+  return { name, say() { console.log(name); } };
+}
+const p2 = createPerson("B");
+// p2 instanceof ??? —— 无法判断类型
+
+// ③ 构造函数：有类型但方法不共享
+function Person(name) {
+  this.name = name;
+  this.say = function() { console.log(this.name); };
+  // 每个 new 都创建新函数，浪费内存
+}
+const p3 = new Person("C");
+p3 instanceof Person; // true —— 有类型
+p3.say === new Person("D").say; // false —— 方法不共享
+
+// ④ 构造函数 + 原型（组合，标准范式）
+function Person2(name) {
+  this.name = name; // 实例属性进构造函数
+}
+Person2.prototype.say = function() { console.log(this.name); }; // 方法进原型共享
+const p4 = new Person2("E");
+p4.say === new Person2("F").say; // true —— 共享同一方法
+
+// ⑤ class 语法糖：本质同 ④
+class Person3 {
+  constructor(name) { this.name = name; }
+  say() { console.log(this.name); } // 自动挂原型
+}
+```
+
+## new 操作符的四个步骤
+
+`new Person("X")` 实际做了四件事：① 在堆中创建一个新空对象；② 将新对象的 `__proto__` 指向 `Person.prototype`（建立原型链）；③ 以新对象为 `this` 执行构造函数（绑定属性）；④ 若构造函数返回的是对象则用该返回值，否则返回新对象。理解这四步是理解原型链与 this 绑定的前提。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：class 是新的面向对象机制，和构造函数不同。** `class` 只是构造函数 + 原型组合的语法糖，底层完全一样。`class Person {}` 编译后 `typeof Person === "function"`，方法仍挂在 `Person.prototype` 上，实例通过 `__proto__` 共享。class 提供的 extends/super 在底层就是寄生组合继承。它解决的是「构造函数写法像函数易误导」和「继承写法繁琐」的工程问题，不改变原型机制。所以原型链、this 绑定、方法共享等底层问题在 class 里同样存在，只是语法更清晰。
+</Callout>
+
+<Exercises>
+**问题 1**：new 操作符具体做了哪四件事？构造函数 return 一个对象会怎样？
+
+<Answer>
+new 做四步：① 创建一个新空对象；② 将新对象的 [[Prototype]]（__proto__）指向构造函数的 prototype 属性，建立原型链；③ 以新对象为 this 执行构造函数，绑定实例属性；④ 如果构造函数显式返回一个对象，则 new 的结果是该返回对象（而非新对象）；如果返回的是原始值或无 return，则返回第①步创建的新对象。这意味着构造函数若 return 一个对象，原型链绑定会失效——new 出来的实例的 __proto__ 不再指向构造函数的 prototype。这是实现「构造函数劫持」的原理，也是滥用 return 导致 instanceof 失效的坑。
+</Answer>
+
+**问题 2**：为什么构造函数 + 原型的组合是创建对象的标准范式？
+
+<Answer>
+因为属性和方法有不同需求。属性（如 name、age）每个实例不同，必须各自拥有，放进构造函数随 this 绑定，每次 new 各自拷贝。方法（如 say）逻辑相同、所有实例共享，若放进构造函数每个实例都创建一份函数对象，浪费内存且 === 比较为 false。放进原型则所有实例通过原型链共享同一份方法引用，省内存且 === 为 true。所以标准范式是：实例属性进构造函数，方法进原型。class 语法的 constructor 对应构造函数部分，方法定义自动挂原型，本质就是这个组合范式。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="属性描述符">定义属性元数据的内部特征。数据属性：value（值）、writable（可否改）、enumerable（可否枚举）、configurable（可否删除/改特征）。访问器属性：get/set 替代 value/writable。Object.defineProperty 可精确控制，注意 defineProperty 定义的属性默认特征为 false（与字面量相反）。</GlossaryItem>
+<GlossaryItem term="构造函数+原型组合">创建对象的标准范式：实例属性进构造函数（随 this 绑定，各实例独立），方法进原型（所有实例共享同一引用，省内存）。class 语法是其语法糖，constructor 对应构造函数部分，方法自动挂原型。</GlossaryItem>
+<GlossaryItem term="new 操作符四步">① 建新空对象；② __proto__ 指向构造函数 prototype（建原型链）；③ 以新对象为 this 执行构造函数；④ 构造函数返回对象则用之，否则返回新对象。理解四步是理解原型链与 this 的前提。</GlossaryItem>
+<GlossaryItem term="访问器属性">用 get/set 替代 value/writable 的属性，常用于数据校验、计算属性、双向绑定。读取触发 get，赋值触发 set。Vue 的响应式、MobX 的可观察对象底层都基于访问器属性（或 Proxy）。</GlossaryItem>
+</Glossary>

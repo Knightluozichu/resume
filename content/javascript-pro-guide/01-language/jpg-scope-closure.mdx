@@ -1,0 +1,117 @@
+---
+title: "作用域与闭包"
+type: A
+section: "前端与Web"
+order: 2
+description: "理解词法作用域链、函数作用域与块级作用域，掌握闭包原理及其在模块模式中的应用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JpgScopeClosureDiagram } from "@/components/mdx/javascript-pro-guide/diagrams/jpg-scope-closure";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解词法作用域由函数定义位置决定，与调用位置无关
+- 区分函数作用域（var）与块级作用域（let/const）的可见性差异
+- 掌握闭包的本质：函数携带其定义时的词法环境
+- 运用闭包实现模块模式、私有变量、柯里化，并警惕内存泄漏
+</Objectives>
+
+## 直觉引入
+
+把作用域想象成一系列嵌套的房间，每个房间有名字标签。你站在某个房间里找东西（变量），先在自己房间里翻，找不到就去隔壁外层房间，一层层往外，直到最外面的「大厅」（全局作用域）。关键是——你能去哪些房间找，是在你「出生」（函数定义）时就由你站在哪个房间决定的，而不是你后来走到哪里决定的。这就是词法作用域：由代码书写的位置决定，与运行时调用无关。闭包则是：当你把一个函数带走离开它出生的房间，它仍然记得出生时周围有哪些东西可拿。
+
+<JpgScopeClosureDiagram />
+
+## 词法作用域链
+
+<Term def="词法作用域是由函数定义时所在的代码位置决定的作用域，查找变量时沿定义位置的嵌套结构由内向外逐层查找，与函数被调用的位置无关。JavaScript 采用词法作用域（非动态作用域）。">词法作用域</Term>形成一条由内向外的链。函数执行时访问变量，先查自身作用域，找不到沿定义位置的父作用域逐层向外，直到全局。这条链在函数定义时就确定，不随调用环境改变。`var` 创建函数作用域（整个函数内可见，含提升）；`let`/`const` 创建块级作用域（仅 `{}` 内可见）。
+
+```javascript
+// 词法作用域：由定义位置决定
+const globalVar = "G";
+
+function outer() {
+  const outerVar = "O";
+  function inner() {
+    const innerVar = "I";
+    // 查找顺序：inner → outer → global
+    console.log(innerVar, outerVar, globalVar); // I O G
+  }
+  return inner;
+}
+
+// 即使在别处调用，inner 仍记得它定义时的作用域链
+const fn = outer();
+fn(); // I O G —— 闭包效应，outerVar 不被回收
+```
+
+## 闭包：函数 + 词法环境
+
+<Term def="闭包是函数与其定义时所处的词法环境的组合。即使函数在其词法作用域之外被执行，它仍能访问定义时捕获的变量，这些变量不会被垃圾回收，只要闭包存在就持续存活。">闭包</Term>是 JS 实现数据封装与状态保持的核心机制。每当函数被创建，它就携带一个对其定义环境的引用。常见的应用：模块模式（IIFE + 闭包制造私有变量）、工厂函数（makeCounter 制造独立计数器）、回调记忆（事件处理函数捕获 DOM 引用）。但闭包会阻止变量回收，滥用易致内存泄漏。
+
+```javascript
+// 1. 模块模式：IIFE + 闭包 = 私有状态
+const counter = (() => {
+  let count = 0; // 私有，外部不可直接访问
+  return {
+    increment: () => ++count,
+    getCount: () => count,
+  };
+})();
+counter.increment();
+console.log(counter.getCount()); // 1
+
+// 2. 工厂函数：每个闭包独立的状态
+function makeCounter() {
+  let count = 0;
+  return () => ++count; // 每次调用 makeCounter 产生独立 count
+}
+const a = makeCounter();
+const b = makeCounter();
+a(); a(); // a 的 count = 2
+b();      // b 的 count = 1，与 a 独立
+
+// 3. 经典陷阱：循环中的 var
+for (var i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0); // 3 3 3 —— 共享同一个 i
+}
+// 用 let 修复：每次迭代产生新的块级 i
+for (let i = 0; i < 3; i++) {
+  setTimeout(() => console.log(i), 0); // 0 1 2
+}
+// 用 IIFE 修复（let 出现前的方案）
+for (var i = 0; i < 3; i++) {
+  ((j) => setTimeout(() => console.log(j), 0))(i); // 0 1 2
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：闭包就是「函数里嵌套函数」。** 嵌套只是结构，闭包的关键是「内层函数引用了外层变量，导致外层变量在外层函数返回后仍不释放」。如果一个内层函数没引用任何外层变量，它只是个普通嵌套函数，不形成有意义的闭包。判断闭包的标志是：函数在其词法作用域外被执行，却仍能访问定义时的变量。这也解释了为什么闭包易致内存泄漏——被捕获的变量会随闭包存活，只要闭包被引用就不会被 GC。处理长生命周期闭包（如全局缓存、单例）时，需在不用时显式置 null 释放。
+</Callout>
+
+<Exercises>
+**问题 1**：词法作用域和动态作用域的区别是什么？JS 是哪种？
+
+<Answer>
+词法作用域由函数定义时所在的代码位置决定，变量查找沿定义位置的嵌套结构进行，与函数在哪里被调用无关。动态作用域由函数调用时的调用栈决定，变量查找沿调用链进行。JS 采用词法作用域——函数定义时就确定了它能访问哪些变量，无论之后被传到哪里调用都不变。例如 outer 内定义的 inner，即使被赋给全局变量后调用，仍访问 outer 内的变量（这就是闭包的基础）。JS 中 this 的绑定机制有点像动态作用域的味道，但作用域本身是词法的。
+</Answer>
+
+**问题 2**：解释下面的循环陷阱及三种修复方式。
+
+<Answer>
+`for (var i=0; i<3; i++) setTimeout(()=>console.log(i),0)` 输出 3 3 3。原因：var 是函数作用域，整个循环共享一个 i；setTimeout 的回调是异步的，等主循环结束（i 已变成 3）才执行，三个回调都读到同一个 i=3。三种修复：① 用 let 替代 var——let 是块级作用域，每次迭代产生新的 i 副本，回调各自捕获独立的值；② 用 IIFE 包裹——立即执行函数把当前 i 作为参数传入，形成独立作用域；③ 用 forEach 替代 for 循环——回调参数天然每次独立。现代代码首选 let。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="词法作用域">由函数定义位置决定的作用域，查找变量沿定义时的嵌套结构由内向外，与调用位置无关。JS 采用词法作用域，这是闭包能跨作用域访问变量的基础。</GlossaryItem>
+<GlossaryItem term="作用域链">函数执行时访问变量的查找路径：自身作用域 → 定义位置的父作用域 → ... → 全局作用域。链在定义时确定，执行时按链逐层查找，找不到抛 ReferenceError。</GlossaryItem>
+<GlossaryItem term="闭包">函数与其定义时词法环境的组合。即使函数在其词法作用域外被执行，仍能访问定义时捕获的变量。用于模块模式、私有状态、柯里化、回调记忆；但被捕获变量不被 GC，滥用易内存泄漏。</GlossaryItem>
+<GlossaryItem term="IIFE（立即调用函数表达式）">`(function(){...})()` 的写法，利用函数作用域制造一次性私有作用域。在 let 出现前用于模拟块级作用域、避免变量污染全局、修复循环闭包陷阱。模块模式的基石。</GlossaryItem>
+</Glossary>

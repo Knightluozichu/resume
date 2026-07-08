@@ -1,0 +1,97 @@
+---
+title: "事件循环与异步编程模型"
+type: A
+section: "前端与Web"
+order: 6
+description: "理解 JS 单线程事件循环机制，掌握调用栈、微任务、宏任务、渲染的调度顺序"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JpgEventLoopDiagram } from "@/components/mdx/javascript-pro-guide/diagrams/jpg-event-loop";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 JS 单线程模型与事件循环的必要性
+- 区分调用栈、Web API、微任务队列、宏任务队列、渲染阶段
+- 掌握单轮事件循环的执行顺序：宏任务 → 清空微任务 → 渲染
+- 理解 Promise.then 与 setTimeout 的优先级差异及 await 的微任务本质
+</Objectives>
+
+## 直觉引入
+
+把 JavaScript 主线程想象成只有一个窗口的银行柜台。柜员（调用栈）同一时间只能办一笔业务（同步代码）。但有些业务（如定时器、网络请求）不用柜员盯着——柜员把它们交给后台（Web API）处理，自己继续叫下一个号。后台办完后，把回执放进两个收件箱：微任务箱（VIP，Promise 回调）和宏任务箱（普通，setTimeout 回调）。柜员每办完一笔手头业务，会先把 VIP 箱全部清空（微任务），再决定要不要刷新屏幕（渲染），然后从普通箱取一张（宏任务）继续办。这就是事件循环。
+
+<JpgEventLoopDiagram />
+
+## 事件循环六要素
+
+<Term def="事件循环是 JavaScript 单线程环境下调度异步回调的机制。调用栈执行同步代码；Web API（浏览器提供）处理异步操作；回调进入微任务队列（Promise.then/MutationObserver）或宏任务队列（setTimeout/I/O）；每轮循环：取一个宏任务执行 → 清空所有微任务 → 必要时渲染（rAF + paint）→ 循环。">事件循环</Term>是 JS 异步的核心调度器。六个关键要素：① 调用栈（同步执行，LIFO）；② 堆（对象分配）；③ Web API（浏览器多线程处理 setTimeout/fetch/DOM 事件等）；④ 微任务队列（高优先级，每轮全部清空）；⑤ 宏任务队列（低优先级，每轮取一个）；⑥ 渲染阶段（rAF + 布局 + 绘制，约 16.6ms/帧）。
+
+```javascript
+console.log("1 同步");            // 调用栈直接执行
+setTimeout(() => console.log("4 宏任务"), 0);  // Web API → 宏任务队列
+Promise.resolve().then(() => console.log("3 微任务")); // → 微任务队列
+console.log("2 同步");            // 调用栈继续
+// 输出：1 2 3 4 —— 同步先跑完，微任务在宏任务前
+```
+
+## 微任务 vs 宏任务
+
+微任务（microtask）包括：Promise.then/catch/finally、queueMicrotask、MutationObserver、async 函数 await 之后的代码。宏任务（macrotask）包括：setTimeout/setInterval、I/O、UI 事件、postMessage、MessageChannel。**核心规则**：每轮事件循环，先执行一个宏任务，然后**清空所有微任务**（而非只取一个），再决定是否渲染，然后进入下一轮取下一个宏任务。这就是 Promise.then 总比 setTimeout 先执行的原因。
+
+```javascript
+// 经典面试题：输出顺序
+async function async1() {
+  console.log("async1 start");
+  await async2();              // await 后的代码 = .then 回调 = 微任务
+  console.log("async1 end");   // 微任务
+}
+async function async2() {
+  console.log("async2");       // 同步（await 前）
+}
+console.log("script start");
+setTimeout(() => console.log("setTimeout"), 0); // 宏任务
+async1();
+new Promise((resolve) => {
+  console.log("promise");      // 同步（executor 立即执行）
+  resolve();
+}).then(() => console.log("then")); // 微任务
+console.log("script end");
+// 输出：script start → async1 start → async2 → promise → script end
+//      → async1 end → then → setTimeout
+// 解析：同步代码跑完后，微任务队列有 [async1 end, then]，全清空，再取 setTimeout 宏任务
+```
+
+## 渲染与 rAF
+
+浏览器渲染约 60fps（每帧 16.6ms），发生在微任务清空后、下一个宏任务前。`requestAnimationFrame` 的回调在渲染前执行，是做视觉动画的最佳位置（与刷新同步，不丢帧）。长任务（>50ms）会阻塞渲染导致卡顿，应拆分用 setTimeout/rAF 让出主线程，或用 Web Worker 移出主线程。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：setTimeout(fn, 0) 会立即执行。** `setTimeout(fn, 0)` 实际上最小延迟约 4ms（嵌套时更长），且 fn 进入**宏任务队列**，必须等当前同步代码和所有微任务清空后才执行。所以 `Promise.resolve().then(fn)` 比 `setTimeout(fn, 0)` 先执行——then 是微任务，在下一个宏任务前全部清空。这也是为什么「想尽快执行但要让出主线程」应优先用 queueMicrotask（微任务）而非 setTimeout(0)，除非确实需要等到渲染后再执行（用 rAF 或 setTimeout）。
+</Callout>
+
+<Exercises>
+**问题 1**：描述单轮事件循环的完整执行顺序。
+
+<Answer>
+单轮事件循环顺序：① 从宏任务队列取一个任务执行（如 setTimeout 回调、I/O 回调、UI 事件回调）；② 执行过程中产生的微任务进入微任务队列；③ 该宏任务执行完后，清空微任务队列中的所有微任务（注意是全部，非只取一个），执行过程中新产生的微任务也会在本轮清空；④ 必要时进行渲染——先执行 requestAnimationFrame 回调，再布局（layout）和绘制（paint），约每 16.6ms 一次；⑤ 回到 ① 取下一个宏任务。关键点：微任务总在下一个宏任务前全部清空；渲染发生在微任务后、下一宏任务前（非每轮都渲染，受帧率限制）。
+</Answer>
+
+**问题 2**：为什么 Promise.then 比 setTimeout 先执行？await 之后的代码属于什么任务？
+
+<Answer>
+Promise.then 的回调是微任务，setTimeout 的回调是宏任务。事件循环规则是每轮先执行一个宏任务，然后清空所有微任务，再取下一个宏任务。所以即使 setTimeout(fn,0) 和 Promise.resolve().then(fn) 在同一同步代码中注册，then 也会在下一次取宏任务前先执行完。await 之后的代码等价于 .then 回调——async 函数遇到 await 时暂停，把后续代码包装成微任务（Promise.then），等 await 的 Promise 落定后排入微任务队列。所以 await 后的代码是微任务，在当前同步代码后、下一个宏任务前执行。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="事件循环">JS 单线程调度异步回调的机制。每轮：取一个宏任务 → 清空所有微任务 → 必要时渲染 → 循环。让单线程能高效处理并发 I/O，是异步编程的运行时基础。</GlossaryItem>
+<GlossaryItem term="微任务">Promise.then/catch/finally、queueMicrotask、MutationObserver、await 后的代码。每轮事件循环在宏任务后全部清空（非只取一个），优先级高于宏任务。Promise.then 比 setTimeout 先执行的原因。</GlossaryItem>
+<GlossaryItem term="宏任务">setTimeout/setInterval、I/O、UI 事件、postMessage 等。每轮事件循环只取一个执行。优先级低于微任务。setTimeout(fn,0) 实际最小延迟约 4ms 且在微任务后。</GlossaryItem>
+<GlossaryItem term="requestAnimationFrame">浏览器提供的在下次重绘前执行回调的 API，与刷新率同步（约 60fps）。是做视觉动画的最佳位置，避免丢帧。回调在微任务清空后、渲染前执行。</GlossaryItem>
+</Glossary>
