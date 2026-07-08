@@ -1,0 +1,77 @@
+---
+title: "提升机制详解"
+type: A
+section: "前端与Web"
+order: 4
+description: "拆解变量与函数声明的编译期提升、函数优先规则、let/const 的暂时性死区（TDZ）"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { YdkHoistingDiagram } from "@/components/mdx/you-dont-know-js/diagrams/ydk-hoisting";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 JavaScript 先编译后执行的两阶段模型
+- 掌握 var 声明提升、值为 undefined 的机制
+- 分清函数声明整体提升且优先于变量的规则
+- 理解 let/const 也提升但因 TDZ 在声明前访问会报错
+</Objectives>
+
+## 直觉引入
+
+你以为 JavaScript 是「从上到下一行行执行」的，其实它在执行前先做了一遍「编译」：扫描整个作用域，把所有声明（变量、函数）收集到作用域顶部。这个动作叫**提升**。关键细节是：**只有声明被提升，赋值留在原地**。所以 `console.log(a); var a = 2;` 打印的是 `undefined` 而非报错——`var a` 提升了，但 `a = 2` 的赋值还在原位。函数声明更特殊：整个函数体跟着声明一起提升。而 `let`/`const` 虽然也提升，但它们有一段「暂时性死区」——从作用域顶部到声明语句之间访问会抛 `ReferenceError`，而不是静默返回 `undefined`。
+
+<YdkHoistingDiagram />
+
+## 编译期提升与函数优先
+
+<Term def="提升是 JavaScript 在执行前编译阶段把变量和函数声明收集到作用域顶部的过程。只有声明被提升，赋值留在原地；函数声明整体提升（含函数体）且优先于变量声明，var 声明提升后值为 undefined。">提升</Term>是编译期行为。引擎执行代码前先扫一遍，把 `var`/`function` 声明登记到作用域。`var a = 2` 被拆成 `var a`（提升）和 `a = 2`（留在原位）。函数声明 `function foo() {...}` 整体提升，所以可以在定义之前调用。**函数优先**：当函数声明和变量声明同名时，函数声明先提升并整体占据位置，随后的 `var` 声明因同名已被占用而被忽略（不会覆盖已存在的函数）。注意函数表达式 `var foo = function() {...}` 只提升 `var foo`，赋值（函数体）不提升，所以表达式在赋值前调用会得到 `undefined is not a function`。
+
+```javascript
+// 你写的代码                      // 引擎看到的（编译后）
+foo();                              // function foo 先整体提升
+var foo;                            // var foo 被忽略（同名函数已存在）
+function foo() { console.log(1); }  // → foo() 可正常调用
+
+// 函数表达式不整体提升
+bar();            // TypeError: bar is not a function（var bar 提升为 undefined）
+var bar = function () { console.log(2); };
+
+// let 的 TDZ
+console.log(b);   // ReferenceError（TDZ 内访问）
+let b = 1;
+typeof b;         // ReferenceError（typeof 在 TDZ 内也救不了）
+```
+
+## let/const 的暂时性死区
+
+`let` 和 `const` 也会被提升，但和 `var` 不同——它们在声明语句执行前处于**暂时性死区（TDZ）**：从作用域顶部到声明语句这段区间内，访问该变量会抛 `ReferenceError`，而非像 `var` 那样返回 `undefined`。这是 ES6 刻意的设计：强制「先声明后使用」，把 `var` 那种静默 `undefined` 导致的隐蔽 bug 变成立即抛错。`typeof` 在 TDZ 内也会抛错，所以「用 typeof 检测全局变量是否存在」的技巧对 `let`/`const` 失效。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：let/const 不会被提升。** 它们其实也会提升——区别在于提升后的状态。`var` 提升后初始化为 `undefined`，可以安全访问（只是值是 undefined）；`let`/`const` 提升后处于未初始化的 TDZ，在声明语句执行前访问会抛 `ReferenceError`。证据是 `let x = 1; { console.log(x); let x = 2; }` 会报错——内层 x 的声明被提升到块顶，遮蔽了外层 x，内层处于 TDZ，所以 `console.log(x)` 访问的是 TDZ 中的内层 x 而非外层。理解 TDZ 能解释很多「明明外层有同名变量却报错」的诡异现象。最佳实践：先声明再使用，默认 let/const，需要重新赋值才用 var（基本用不到 var）。
+</Callout>
+
+<Exercises>
+**问题 1**：`console.log(a); var a = 2;` 为什么打印 `undefined` 而不是报错？
+
+<Answer>
+因为提升只提升声明、不提升赋值。引擎在执行前先编译，把 var a 的声明收集到作用域顶部，但 a = 2 的赋值留在原位。编译后等价于：var a; console.log(a); a = 2;。执行到 console.log(a) 时，a 已声明（值为 undefined），所以打印 undefined 而非 ReferenceError。这就是 var 的「静默 undefined」——变量已存在但还没赋值。let 不会有这个问题，因为 TDZ 会直接抛错，强制先声明后使用。
+</Answer>
+
+**问题 2**：函数声明和函数表达式在提升上有什么区别？函数优先规则是什么？
+
+<Answer>
+函数声明 function foo() {...} 整体提升——声明和函数体一起提到作用域顶部，所以可以在定义之前调用。函数表达式 var foo = function() {...} 只提升 var foo（值为 undefined），赋值的函数体留在原位，所以在赋值前调用会得到 TypeError（undefined 不是函数）。函数优先规则：当函数声明和变量声明同名时，函数声明先提升并整体占据位置，随后的 var 声明因同名已被占用而被忽略（不会覆盖函数），但后续若有赋值（foo = ...）则赋值会覆盖函数。最佳实践：函数声明放作用域顶部，函数表达式用 let 而非 var，先声明再使用，避免依赖提升的隐式行为。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="提升">JavaScript 在执行前编译阶段把变量和函数声明收集到作用域顶部的过程。只有声明提升，赋值留原地；var 提升后值为 undefined，函数声明整体提升（含函数体）。函数优先于变量声明，同名时 var 被忽略。</GlossaryItem>
+<GlossaryItem term="暂时性死区（TDZ）">let/const 从作用域顶部到声明语句之间的区间。变量虽被提升但未初始化，在此区间内访问（含 typeof）会抛 ReferenceError。是 ES6 强制「先声明后使用」的机制，替代 var 的静默 undefined，把隐蔽 bug 变成立即抛错。</GlossaryItem>
+<GlossaryItem term="函数优先">提升时函数声明先于变量声明处理：同名时函数声明整体占据位置，随后的 var 声明被忽略（不覆盖函数），但后续赋值会覆盖。函数声明可提前调用，函数表达式（var fn = function）只提升 var、赋值不提升，赋值前调用报 TypeError。</GlossaryItem>
+</Glossary>

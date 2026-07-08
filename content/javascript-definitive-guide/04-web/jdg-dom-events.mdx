@@ -1,0 +1,115 @@
+---
+title: "DOM 与事件"
+type: A
+section: "前端与Web"
+order: 7
+description: "拆解事件流三阶段（捕获-目标-冒泡）、事件委托、阻止冒泡与默认行为、MutationObserver"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JdgDomEventsDiagram } from "@/components/mdx/javascript-definitive-guide/diagrams/jdg-dom-events";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解事件流三阶段（捕获 → 目标 → 冒泡）及 addEventListener 第三参的作用
+- 掌握事件委托原理：利用冒泡在父节点统一处理，减少监听器数量
+- 区分 stopPropagation 与 preventDefault，理解 target 与 currentTarget
+- 掌握 MutationObserver 异步批量监听 DOM 变更的用法
+</Objectives>
+
+## 直觉引入
+
+当你点击页面上的一个按钮，这个点击事件并不是直接「跳」到按钮上的——它从 window 开始，经过 document、各级祖先元素「向下」传播到按钮（捕获阶段），在按钮上触发（目标阶段），再从按钮「向上」冒泡回 window（冒泡阶段）。这个传播路径就是事件流。理解事件流的最大工程价值是**事件委托**：你不需要给 100 个列表项各绑一个监听器，只需在父元素上绑一个，利用冒泡统一处理——`event.target` 告诉你实际点击的是哪个子元素。这把监听器从 100 个减到 1 个，而且动态新增的子元素也自动被覆盖。
+
+<JdgDomEventsDiagram />
+
+## 事件流三阶段
+
+<Term def="事件流三阶段是 DOM 事件传播的路径：捕获阶段（window → document → 祖先 → 目标父）、目标阶段（在目标元素上触发）、冒泡阶段（目标父 → 祖先 → document → window）。addEventListener 第三参为 true 时在捕获阶段监听，默认 false 在冒泡阶段监听。">事件流三阶段</Term>是理解 DOM 事件的基础。事件从 window 向下传播到目标元素（捕获），在目标上触发（目标），再从目标向上冒泡回 window（冒泡）。`addEventListener(type, fn, useCapture)` 的第三参 `useCapture` 为 `true` 时在捕获阶段触发，默认 `false` 在冒泡阶段触发。`event.target` 是事件的实际源头（被点击的元素），`event.currentTarget` 是当前绑定监听器的元素（在冒泡过程中会逐层变化）。
+
+```javascript
+// 1. 事件流三阶段
+window.addEventListener("click", e => console.log("window 捕获"), true);
+document.addEventListener("click", e => console.log("document 捕获"), true);
+parent.addEventListener("click", e => console.log("parent 冒泡"), false);
+btn.addEventListener("click", e => console.log("btn 目标"));
+// 点击 btn 的输出顺序：
+// window 捕获 → document 捕获 → btn 目标 → parent 冒泡
+
+// 2. target vs currentTarget
+list.addEventListener("click", e => {
+  console.log(e.target);        // 实际点击的子元素（如 <li> 或 <span>）
+  console.log(e.currentTarget); // 绑定监听器的 list（始终是它）
+});
+
+// 3. 事件委托：在父元素统一处理
+document.querySelector(".list").addEventListener("click", e => {
+  const item = e.target.closest(".item"); // 精确匹配，避免点到子元素
+  if (item) {
+    console.log("点击了", item.dataset.id);
+  }
+});
+// 动态新增的 .item 也自动被覆盖，无需重新绑定
+
+// 4. 阻止冒泡与默认行为
+link.addEventListener("click", e => {
+  e.stopPropagation(); // 阻止事件继续冒泡
+  e.preventDefault();  // 阻止默认行为（如链接跳转）
+});
+```
+
+## MutationObserver
+
+<Term def="MutationObserver 是异步监听 DOM 树变更的 API：observe(root, options) 开始观察指定节点的子树/属性/文本变化，变更在微任务中批量回调。比已废弃的 mutation events 更高效（后者每次变更同步触发，可能卡顿）。">MutationObserver</Term>用于监听 DOM 变更——子节点增删、属性变化、文本内容变化。相比已废弃的 mutation events（每次变更同步触发，易卡顿），MutationObserver 是异步的——多个变更在微任务中批量回调，性能更好。`observe(root, { childList, subtree, attributes, characterData })` 配置观察选项，`disconnect()` 停止观察，`takeRecords()` 取出待处理的变更记录。
+
+```javascript
+// MutationObserver：监听列表动态变化
+const observer = new MutationObserver((mutations) => {
+  for (const mutation of mutations) {
+    if (mutation.type === "childList") {
+      console.log(`新增 ${mutation.addedNodes.length} 个节点`);
+      console.log(`删除 ${mutation.removedNodes.length} 个节点`);
+    }
+    if (mutation.type === "attributes") {
+      console.log(`属性 ${mutation.attributeName} 变为 ${mutation.target.getAttribute(mutation.attributeName)}`);
+    }
+  }
+});
+observer.observe(document.querySelector(".list"), {
+  childList: true,    // 监听子节点增删
+  subtree: true,      // 监听整个子树
+  attributes: true,   // 监听属性变化
+  attributeFilter: ["class", "data-id"], // 只监听指定属性
+});
+// 不再需要时
+observer.disconnect();
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：每个列表项都绑一个监听器是最直接的做法。** 给 100 个列表项各绑监听器有三个问题：①内存浪费——100 个监听器对象；②初始化慢——DOM 加载后要逐个绑定；③动态新增的元素需要手动再绑——容易遗漏。事件委托把监听器绑在父元素上（只需 1 个），利用冒泡统一处理，用 `event.target.closest(".item")` 精确匹配实际点击的子元素。三个问题全解决：1 个监听器、一次绑定、动态新增自动覆盖。代价是需要在回调里判断 target（但 closest 已经很方便）。另一个常见误用是滥用 `stopPropagation()` 阻止冒泡——它会让父元素的委托失效，只在确需隔离事件传播时才用，不要无脑加。
+</Callout>
+
+<Exercises>
+**问题 1**：事件委托是什么？它解决了什么问题？如何用 `closest` 精确匹配？
+
+<Answer>
+事件委托是利用事件冒泡在父元素上注册一个监听器，统一处理所有子元素的事件。它解决三个问题：①减少监听器数量——100 个子元素只需 1 个父级监听器，节省内存；②初始化效率——一次绑定而非逐个绑定；③动态元素覆盖——运行时新增的子元素自动被父级监听器覆盖，无需重新绑定。实现：在父元素上 addEventListener，回调中用 e.target 获取实际点击的子元素，但 e.target 可能是子元素的子元素（如 li 里的 span），所以用 e.target.closest(".item") 向上查找最近的匹配元素，确保匹配到列表项而非其内部元素。判断 if (item) 排除点击到空白区域的情况。e.currentTarget 始终是绑监听器的父元素，不随点击位置变化。
+</Answer>
+
+**问题 2**：`stopPropagation()` 和 `preventDefault()` 的区别是什么？什么时候该用，什么时候不该用？
+
+<Answer>
+stopPropagation() 阻止事件在 DOM 树中继续传播（冒泡或捕获），但当前元素上的其他监听器仍会执行（要阻止同元素其他监听器用 stopImmediatePropagation）。preventDefault() 阻止元素的默认行为（如链接跳转、表单提交、复选框勾选），但不影响事件传播。两者独立。该用 stopPropagation 的场景：弹窗内部点击不应触发 document 上的关闭弹窗监听器、嵌套组件需隔离事件传播。不该用的场景：无脑给所有监听器加 stopPropagation 会破坏父级事件委托——如果父元素靠冒泡统一处理子元素事件，子元素 stopPropagation 会让委托失效。该用 preventDefault 的场景：表单校验失败阻止提交、链接用 JS 处理而非跳转、自定义右键菜单阻止默认菜单。两者原则：只在确有需求时用，不要习惯性加上。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="事件流三阶段">DOM 事件传播路径：捕获阶段（window→document→祖先→目标父，需 addEventListener 第三参 true 监听）、目标阶段（在 event.target 上触发）、冒泡阶段（目标父→祖先→document→window，默认在此阶段触发）。e.target 是实际事件源，e.currentTarget 是当前绑定监听器的元素。</GlossaryItem>
+<GlossaryItem term="事件委托">利用冒泡在父元素注册一个监听器统一处理所有子元素事件。用 e.target.closest(".item") 精确匹配实际子元素。优势：监听器少（省内存）、一次绑定、动态新增子元素自动覆盖。比逐个绑定更高效，是处理列表/表格事件的惯用手法。</GlossaryItem>
+<GlossaryItem term="MutationObserver">异步监听 DOM 变更的 API。observe(root, { childList, subtree, attributes }) 配置观察选项，变更在微任务中批量回调（比已废弃的同步 mutation events 更高效）。disconnect() 停止，takeRecords() 取待处理记录。用途：监听动态内容变化、第三方库 DOM 操作追踪、虚拟列表同步。</GlossaryItem>
+</Glossary>

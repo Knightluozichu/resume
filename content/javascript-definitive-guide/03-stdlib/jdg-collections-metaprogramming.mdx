@@ -1,0 +1,128 @@
+---
+title: "集合与元编程"
+type: A
+section: "前端与Web"
+order: 6
+description: "拆解 Map/Set/WeakMap 集合类型与 Proxy/Reflect 元编程——键值集合、弱引用、代理拦截与操作转发"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JdgCollectionsMetaprogrammingDiagram } from "@/components/mdx/javascript-definitive-guide/diagrams/jdg-collections-metaprogramming";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Map/Set 相比普通对象作集合的优势（任意键、有序、无原型干扰）
+- 掌握 WeakMap/WeakSet 的弱引用特性及其防内存泄漏的用途
+- 理解 Proxy 拦截基本操作（get/set/has/apply）的机制
+- 掌握 Reflect 与 Proxy trap 的一一对应关系及转发默认行为的用法
+</Objectives>
+
+## 直觉引入
+
+当你想用对象当字典（key-value 映射）时，普通对象有个硬伤：键只能是字符串或 Symbol，且原型链上的属性会干扰遍历。Map 解决了这个问题——任意类型都能做键，保持插入顺序，有 size 属性。当你想给一个对象关联一些额外数据又不想阻止它被垃圾回收时，WeakMap 是答案——它的弱引用让关联数据随对象一起被回收。而当你想「拦截」对象的所有操作（读、写、删除、调用）来添加校验、日志或响应式追踪时，Proxy 就是你的工具。Map/Set/WeakMap 是标准库提供的集合工具箱，Proxy/Reflect 是改写语言默认行为的元编程能力。
+
+<JdgCollectionsMetaprogrammingDiagram />
+
+## 集合类型
+
+<Term def="WeakMap 的键必须是对象且是弱引用——不阻止键对象被垃圾回收。当键对象在外部没有其他引用时，GC 会回收它及对应的值，无需手动清理。这让 WeakMap 适合给对象关联额外数据（如私有数据、缓存）而不泄漏内存。WeakMap 不可遍历、无 size。">WeakMap 弱引用</Term>是集合类型中最具工程价值的设计。**Map** 是有序键值集合，任意类型可做键（含对象），保持插入顺序，有 `size`/`get`/`set`/`has`/`delete`，可遍历。**Set** 是唯一值集合，用于去重（`[...new Set(arr)]`），支持并交差运算。**WeakMap/WeakSet** 的键/值必须是对象且是弱引用——不阻止 GC 回收，不可遍历、无 size，适合关联数据不泄漏。
+
+```javascript
+// 1. Map：任意键 + 有序（优于对象当字典）
+const map = new Map();
+const objKey = {};
+map.set(objKey, "对象做键"); // 对象可做键
+map.set("str", "字符串键");
+map.set(1, "数字键");
+console.log(map.size); // 3
+for (const [k, v] of map) {} // 按插入顺序遍历
+
+// 2. Set：去重 + 集合运算
+const unique = [...new Set([1, 2, 2, 3])]; // [1, 2, 3]
+const a = new Set([1, 2, 3]);
+const b = new Set([2, 3, 4]);
+new Set([...a, ...b]); // 并集 {1,2,3,4}
+new Set([...a].filter(x => b.has(x))); // 交集 {2,3}
+new Set([...a].filter(x => !b.has(x))); // 差集 {1}
+
+// 3. WeakMap：关联数据不泄漏
+const cache = new WeakMap();
+function process(obj) {
+  if (cache.has(obj)) return cache.get(obj); // 缓存命中
+  const result = heavyCompute(obj);
+  cache.set(obj, result); // obj 被回收时，缓存自动清除
+  return result;
+}
+// obj 在外部无引用时，GC 回收它和缓存项，无需手动清理
+```
+
+## Proxy 与 Reflect
+
+<Term def="Proxy 是创建对象代理的机制：new Proxy(target, handler) 返回一个代理对象，对代理的任何操作（get/set/has/deleteProperty/apply/construct）都会被 handler 中对应的 trap 拦截。Reflect 提供与 Proxy trap 一一对应的方法，用于在 trap 中转发默认行为。">Proxy 代理</Term>是 JavaScript 元编程的核心。`new Proxy(target, handler)` 创建代理对象，handler 中的 trap 拦截对代理的操作。**Reflect** 的方法与 Proxy trap 一一对应（`Reflect.get`/`Reflect.set`/`Reflect.has`/`Reflect.deleteProperty`/`Reflect.ownKeys`/`Reflect.apply`/`Reflect.construct`），用于在 trap 中转发默认行为。Proxy + Reflect 是 Vue3 响应式、校验库、ORM 的底层机制。
+
+```javascript
+// 1. Proxy 拦截读写：校验 + 日志
+const validator = {
+  get(target, key, receiver) {
+    console.log(`读取 ${key}`);
+    return Reflect.get(target, key, receiver); // 转发默认读取
+  },
+  set(target, key, value, receiver) {
+    if (key === "age" && typeof value !== "number") {
+      throw new TypeError("age 必须是数字");
+    }
+    return Reflect.set(target, key, value, receiver); // 转发默认设置
+  },
+};
+const proxy = new Proxy({ age: 18 }, validator);
+proxy.age; // 日志：读取 age → 18
+proxy.age = "abc"; // TypeError: age 必须是数字
+
+// 2. 响应式原理（Vue3 简化版）
+function reactive(obj) {
+  return new Proxy(obj, {
+    get(target, key, receiver) {
+      track(target, key); // 依赖收集
+      return Reflect.get(target, key, receiver);
+    },
+    set(target, key, value, receiver) {
+      const result = Reflect.set(target, key, value, receiver);
+      trigger(target, key); // 触发更新
+      return result;
+    },
+  });
+}
+
+// 3. Proxy vs Object.defineProperty（Vue2 → Vue3 的演进）
+// defineProperty：只能拦截已声明属性，新增/删除监听不到，需 $set/$delete
+// Proxy：拦截所有操作（含新增删除），是真正的全代理
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：普通对象当字典用就够了，不需要 Map。** 普通对象当字典有四个硬伤：①键只能是字符串或 Symbol，想用对象/数字做键会被强制转成字符串（`obj[{}] = 1` 的键是 `"[object Object]"`）；②原型链属性会干扰 `for...in` 遍历和 `Object.keys()`（虽然有 `Object.create(null)` 可规避但不方便）；③没有 size 属性，不知道有多少键值对；④键顺序不完全可靠（数字键按数值排序，字符串键按插入顺序）。Map 解决了所有这些问题：任意类型键、保持插入顺序、size 属性、无原型干扰。工程上需要键值映射且键类型不确定或需要有序时用 Map，需要结构化数据（固定属性）时用对象。把对象当通用字典用，迟早踩原型链和键类型转换的坑。
+</Callout>
+
+<Exercises>
+**问题 1**：Map 相比普通对象作字典有哪些优势？WeakMap 解决了什么问题？
+
+<Answer>
+Map 相比普通对象的优势：①任意类型可做键（对象、函数、原始类型都行），对象做键时不会被强制转成字符串；②保持插入顺序，遍历顺序可预测；③有 size 属性直接知道键值对数量；④无原型链干扰，不会遍历到继承属性；⑤性能在频繁增删键值对时更优。WeakMap 解决的问题是：给对象关联额外数据时不阻止该对象被垃圾回收。普通对象/Map 持有键的强引用，即使外部不再引用该对象，Map 仍阻止它被回收，导致内存泄漏。WeakMap 的键是弱引用，当键对象在外部无其他引用时，GC 会回收它及对应的值，无需手动清理。用途：私有数据存储（把实例关联私有字段）、缓存（对象销毁缓存自动清除）、DOM 节点关联数据。代价：不可遍历、无 size（因为随时可能被 GC，遍历无意义）。
+</Answer>
+
+**问题 2**：Proxy 和 Reflect 如何配合实现响应式？为什么 Vue3 用 Proxy 替代 Object.defineProperty？
+
+<Answer>
+Proxy + Reflect 实现响应式：reactive(obj) 返回 new Proxy(obj, handler)，get trap 中调用 track(target, key) 收集依赖（记录哪个副作用函数用到了这个属性），再用 Reflect.get 转发默认读取返回值；set trap 中先用 Reflect.set 转发默认设置，再调用 trigger(target, key) 通知依赖该属性的副作用函数重新执行。Reflect 的作用是转发默认行为——在 trap 中手动操作 target 会丢失 receiver（继承链上的正确 this），Reflect.get/set 第三参 receiver 解决这个问题。Vue3 用 Proxy 替代 Object.defineProperty 的原因：①defineProperty 只能拦截已声明的属性，新增/删除属性监听不到（Vue2 需 Vue.set/$delete 补救）；②defineProperty 无法监听数组索引和 length 变化（Vue2 需重写数组方法）；③Proxy 拦截所有操作（含新增删除、数组操作），是真正的全代理；④Proxy 是惰性的（访问时才代理嵌套对象），defineProperty 需初始化时递归遍历所有属性，初始化成本高。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Map/Set 集合">Map 是有序键值集合，任意类型可做键、保持插入顺序、有 size，优于普通对象当字典。Set 是唯一值集合，用于去重和并交差运算。WeakMap/WeakSet 键/值必须是对象且弱引用，不阻止 GC 回收，不可遍历无 size，适合关联数据不泄漏内存。</GlossaryItem>
+<GlossaryItem term="Proxy 代理">new Proxy(target, handler) 创建对象代理，对代理的任何操作（get/set/has/deleteProperty/apply/construct）被 handler 的 trap 拦截。可改写对象默认行为，实现校验、日志、响应式。是 Vue3 响应式、校验库、ORM 的底层机制。</GlossaryItem>
+<GlossaryItem term="Reflect 反射">提供与 Proxy trap 一一对应的方法（get/set/has/ownKeys/apply/construct 等）。在 Proxy trap 中用 Reflect 转发默认行为，第三参 receiver 保证继承链上正确的 this 指向。让「拦截后仍执行默认行为」的代码更规范，也是 Vue3 reactive 中 track/trigger 的承载点。</GlossaryItem>
+</Glossary>

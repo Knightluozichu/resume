@@ -89,6 +89,8 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mgp-", "multiplayer-game-programming"],
   ["jpg-", "javascript-pro-guide"],
   ["vjp-", "vuejs-practice"],
+  ["ydk-", "you-dont-know-js"],
+  ["jdg-", "javascript-definitive-guide"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

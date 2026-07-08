@@ -182,6 +182,8 @@ export const BOOK_ORDER = [
   "multiplayer-game-programming",
   "javascript-pro-guide",
   "vuejs-practice",
+  "you-dont-know-js",
+  "javascript-definitive-guide",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -304,6 +306,8 @@ export const BOOK_TITLES: Record<string, string> = {
   "multiplayer-game-programming": "Multiplayer Game Programming",
   "javascript-pro-guide": "JavaScript高级程序设计（第4版）",
   "vuejs-practice": "Vue.js从入门到项目实战",
+  "you-dont-know-js": "你不知道的JavaScript",
+  "javascript-definitive-guide": "JavaScript权威指南（第7版）",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1345,6 +1345,26 @@ import { vjpRouterGuardQuestions } from "./review/vjp-router-guard";
 import { vjpSsrSsgQuestions } from "./review/vjp-ssr-ssg";
 import { vjpBuildDeployQuestions } from "./review/vjp-build-deploy";
 import { vjpFinalReviewQuestions } from "./review/vjp-final-review";
+import { ydkLearningMapQuestions } from "./review/ydk-learning-map";
+import { ydkTypeCoercionQuestions } from "./review/ydk-type-coercion";
+import { ydkGrammarNativesQuestions } from "./review/ydk-grammar-natives";
+import { ydkScopeClosuresQuestions } from "./review/ydk-scope-closures";
+import { ydkHoistingQuestions } from "./review/ydk-hoisting";
+import { ydkThisBindingQuestions } from "./review/ydk-this-binding";
+import { ydkPrototypesQuestions } from "./review/ydk-prototypes";
+import { ydkGeneratorsQuestions } from "./review/ydk-generators";
+import { ydkAsyncPerformanceQuestions } from "./review/ydk-async-performance";
+import { ydkFinalReviewQuestions } from "./review/ydk-final-review";
+import { jdgLearningMapQuestions } from "./review/jdg-learning-map";
+import { jdgLexiconGrammarQuestions } from "./review/jdg-lexicon-grammar";
+import { jdgTypesValuesQuestions } from "./review/jdg-types-values";
+import { jdgFunctionsClosuresQuestions } from "./review/jdg-functions-closures";
+import { jdgClassesModulesQuestions } from "./review/jdg-classes-modules";
+import { jdgArraysObjectsQuestions } from "./review/jdg-arrays-objects";
+import { jdgCollectionsMetaprogrammingQuestions } from "./review/jdg-collections-metaprogramming";
+import { jdgDomEventsQuestions } from "./review/jdg-dom-events";
+import { jdgBrowserApisQuestions } from "./review/jdg-browser-apis";
+import { jdgFinalReviewQuestions } from "./review/jdg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2721,6 +2741,26 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...vjpSsrSsgQuestions,
   ...vjpBuildDeployQuestions,
   ...vjpFinalReviewQuestions,
+  ...ydkLearningMapQuestions,
+  ...ydkTypeCoercionQuestions,
+  ...ydkGrammarNativesQuestions,
+  ...ydkScopeClosuresQuestions,
+  ...ydkHoistingQuestions,
+  ...ydkThisBindingQuestions,
+  ...ydkPrototypesQuestions,
+  ...ydkGeneratorsQuestions,
+  ...ydkAsyncPerformanceQuestions,
+  ...ydkFinalReviewQuestions,
+  ...jdgLearningMapQuestions,
+  ...jdgLexiconGrammarQuestions,
+  ...jdgTypesValuesQuestions,
+  ...jdgFunctionsClosuresQuestions,
+  ...jdgClassesModulesQuestions,
+  ...jdgArraysObjectsQuestions,
+  ...jdgCollectionsMetaprogrammingQuestions,
+  ...jdgDomEventsQuestions,
+  ...jdgBrowserApisQuestions,
+  ...jdgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

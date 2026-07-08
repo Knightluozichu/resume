@@ -1,0 +1,95 @@
+---
+title: "异步与性能"
+type: A
+section: "前端与Web"
+order: 8
+description: "拆解 Promise 串行与并发模式、Promise.all/allSettled/race、微任务顺序与让出主线程的性能要点"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { YdkAsyncPerformanceDiagram } from "@/components/mdx/you-dont-know-js/diagrams/ydk-async-performance";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 区分串行（then 链）与并发（Promise.all），知道何时用哪种
+- 掌握 Promise.all / allSettled / race / any 的语义差异与适用场景
+- 理解并发控制的限流池模式，避免一次性全发压垮下游
+- 认清微任务密集会饿死宏任务，学会用 await 让出主线程
+</Objectives>
+
+## 直觉引入
+
+异步代码的性能，核心在于「能不能并发」。假设要发三个独立请求，每个 200ms。如果串行（`await a(); await b(); await c()`），总耗时 600ms；如果并发（`Promise.all([a(), b(), c()])`），三个同时发出，总耗时约 200ms——快了三倍。区别只在「请求之间有没有依赖」：有依赖才必须串行，无依赖就该并发。但并发也不是越多越好：一次性发上千个请求会压垮下游服务器、触发限流、占满连接池。这时需要**并发控制**——限流池，维护固定数量的进行中任务，完成一个补一个。此外还要理解微任务顺序：Promise 回调进微任务队列，密集的微任务会饿死渲染和 IO，需要主动用 `await` 让出主线程。
+
+<YdkAsyncPerformanceDiagram />
+
+## 串行与并发模式
+
+<Term def="并发控制是管理异步任务执行节奏的模式：无依赖用 Promise.all 并发（取最慢耗时），有依赖用 then 链串行（累加耗时），任务量大用限流池控制并发数避免压垮下游。Promise.all 全成功才成功、allSettled 等全部落定、race 取最快、any 取首个成功。">并发控制</Term>的关键是判断依赖关系。**串行**用 `then` 链或 `for...of` + `await`：`fetch(a) → 用 a 请求 b → 用 b 请求 c`，每步依赖前一步结果，总耗时是各步之和。通用的串行模式是 `reduce` 串联 Promise：`[a, b, c].reduce((p, x) => p.then(() => fetch(x)), Promise.resolve())`。**并发**用 `Promise.all`：三个独立请求同时发出，等最慢的完成，总耗时取最大值。`Promise.all` 的特点：任一 `reject` 整体立即 `reject`，但结果数组顺序与传入顺序一致（不按完成先后）。**限流池**用于任务量大时：维护进行中任务的 `Set`，每完成一个从队列补一个，控制并发数不超上限（如 5 个），避免压垮下游或触发限流。
+
+```javascript
+// 串行（有依赖）：累加耗时
+async function serial() {
+  const a = await fetch("/a").then(r => r.json()); // 200ms
+  const b = await fetch(`/b?id=${a.id}`).then(r => r.json()); // 200ms
+  const c = await fetch(`/c?id=${b.id}`).then(r => r.json()); // 200ms
+  return [a, b, c]; // 总 ≈ 600ms
+}
+
+// 并发（无依赖）：取最大耗时
+async function parallel() {
+  const [a, b, c] = await Promise.all([
+    fetch("/a").then(r => r.json()), // 200ms
+    fetch("/b").then(r => r.json()), // 200ms
+    fetch("/c").then(r => r.json()), // 200ms
+  ]);
+  return [a, b, c]; // 总 ≈ 200ms（同时发出）
+}
+
+// 限流池：N 个任务，并发上限 concurrency
+async function pool(tasks, concurrency) {
+  const results = [];
+  const executing = new Set();
+  for (const task of tasks) {
+    const p = task().then(r => { results.push(r); });
+    executing.add(p);
+    p.finally(() => executing.delete(p));
+    if (executing.size >= concurrency) await Promise.race(executing);
+  }
+  await Promise.all(executing);
+  return results;
+}
+```
+
+## 微任务顺序与让出主线程
+
+Promise 的回调进入**微任务队列**，事件循环的规则是：每个宏任务执行完后，清空全部微任务，再执行下一个宏任务。这意味着密集的微任务会「饿死」宏任务——渲染、IO 回调、定时器都被推迟，导致页面卡顿、响应延迟。长任务拆分是关键技巧：用 `await` 在循环中让出主线程（`await Promise.resolve()` 或 `await new Promise(r => setTimeout(r, 0))`），给渲染和其它任务执行的机会。CPU 密集任务更应放进 **Web Worker**，彻底脱离主线程。低优先级任务可用 `requestIdleCallback` 在浏览器空闲时执行。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`Promise.all` 一定会更快。** 不一定。`Promise.all` 只在任务之间无依赖时才更快（并发取最大耗时）。如果后一个请求依赖前一个的结果（比如分页翻页、链式查询），强行用 `Promise.all` 反而会因拿不到前一步结果而无法发起后一步——这时必须串行。另一个坑：`Promise.all` 任一 reject 整体 reject，如果希望「即使部分失败也要拿到其余成功结果」，应该用 `Promise.allSettled`（等全部落定，每个是 {status, value/reason}）。还有「一次性全发」的陷阱：任务量大时 `Promise.all` 一次发出所有请求会压垮下游或触发限流，这时要配合限流池控制并发数。工具选型：all（全成才成）、allSettled（全落定）、race（最快落定，含失败）、any（首个成功）。
+</Callout>
+
+<Exercises>
+**问题 1**：三个独立的网络请求，每个 200ms，串行和并发各需多久？何时该用哪种？
+
+<Answer>
+串行约 600ms（200+200+200，累加），并发约 200ms（三个同时发出，等最慢的，取最大）。判断依据是请求之间有无依赖：有依赖（后一个需要前一个的结果，如用 a 的 id 请求 b）必须串行，无法并发；无依赖（三个独立请求，如并行加载多张图片、多个独立接口）应该用 Promise.all 并发，显著缩短总耗时。串行通用模式是 reduce 串联 Promise 或 for...of + await；并发用 Promise.all。注意 Promise.all 结果数组顺序与传入顺序一致（不按完成先后），且任一 reject 整体 reject。
+</Answer>
+
+**问题 2**：为什么微任务密集会「饿死」宏任务？如何用 `await` 让出主线程？
+
+<Answer>
+事件循环规则：每个宏任务执行完后，清空全部微任务，再执行下一个宏任务。Promise 回调进微任务队列，若一个微任务又产生新微任务（如 then 链不断），微任务队列持续非空，事件循环一直处理微任务，宏任务（渲染、IO 回调、setTimeout）被无限推迟——这就是「饿死」，表现为页面卡顿、点击无响应。让出主线程的方法：在长循环中插入 await Promise.resolve()（让出一次微任务轮次）或 await new Promise(r => setTimeout(r), 0)（让出到下一个宏任务），给渲染和其它任务执行机会。本质是主动把控制权交还事件循环。CPU 密集任务更适合用 Web Worker 完全脱离主线程，低优先级任务用 requestIdleCallback。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="并发控制">管理异步任务执行节奏：无依赖用 Promise.all 并发（取最大耗时），有依赖用 then 链串行（累加耗时），任务量大用限流池控制并发数。Promise.all 全成才成、allSettled 全落定、race 最快落定、any 首个成功。</GlossaryItem>
+<GlossaryItem term="限流池">控制并发数的模式：维护进行中任务的 Set，每完成一个从队列补一个，使并发数不超上限。避免 Promise.all 一次性全发压垮下游或触发限流。p-limit 等库封装了此模式。</GlossaryItem>
+<GlossaryItem term="微任务饿死">Promise 回调进微任务队列，事件循环每个宏任务后清空全部微任务。微任务密集（如 then 链不断产生新微任务）会让宏任务（渲染/IO/定时器）被无限推迟，导致卡顿。解决：await 让出主线程、Web Worker 拆 CPU 密集、requestIdleCallback 处理低优先级。</GlossaryItem>
+</Glossary>

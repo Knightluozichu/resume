@@ -1,0 +1,113 @@
+---
+title: "类与模块"
+type: A
+section: "前端与Web"
+order: 4
+description: "拆解 class 语法糖本质、继承与 super、ESM 静态 import 与动态 import() 的差异和工程意义"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JdgClassesModulesDiagram } from "@/components/mdx/javascript-definitive-guide/diagrams/jdg-classes-modules";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 class 语法是原型链的语法糖，掌握 constructor/方法/static/extends/super
+- 区分 ESM 静态 import 与 CommonJS require 的本质差异（静态分析/tree-shaking/实时绑定）
+- 掌握动态 import() 的用途：按需加载、路由懒加载、代码分割
+- 理解私有字段 #x 的真私有性与模块单例、live binding 特性
+</Objectives>
+
+## 直觉引入
+
+你写的每个 `class` 本质上都在做同一件事：创建一个构造函数，把方法挂在它的原型上。JavaScript 的 class 语法是原型链的语法糖——它没有引入新的继承模型，只是让「构造函数 + 原型方法 + 继承」的写法更接近传统面向对象语言。同样，你写的每个 `import` 也在做一件重要的事：在编译期静态声明依赖，让打包工具能分析出哪些导出没被使用（tree-shaking），哪些模块可以延迟加载。理解 class 的语法糖本质和 ESM 的静态特性，是从「会用语法」到「懂工程」的关键一步。
+
+<JdgClassesModulesDiagram />
+
+## class 语法要素
+
+<Term def="class 是 JavaScript 原型链继承的语法糖：constructor 初始化实例属性，方法挂在原型上供实例共享，static 定义类自身的属性方法，extends + super 实现继承。class 声明不提升（TDZ），内部默认严格模式，方法不可枚举。">class 语法糖</Term>把构造函数 + 原型方法的写法包装成更清晰的语法。`constructor` 是构造函数（new 时调用，初始化实例属性）；方法定义在 class 体内的方法挂在原型上（所有实例共享一份）；`static` 定义类自身的属性方法（不在实例上）；`extends` 继承父类，`super()` 在子类 constructor 中调用父类构造函数（`super.method()` 调用父类方法）。ES2022 的**私有字段** `#x` 是真正的私有——不在原型上，外部无法访问，连子类都不行。
+
+```javascript
+// class 语法糖 = 构造函数 + 原型方法
+class Animal {
+  #name; // 私有字段，真私有
+  static count = 0; // 静态属性
+
+  constructor(name) {
+    this.#name = name;
+    Animal.count++;
+  }
+  speak() { return `${this.#name} makes a sound`; } // 原型方法
+  static create(name) { return new Animal(name); } // 静态方法
+}
+
+class Dog extends Animal {
+  constructor(name) {
+    super(name); // 必须先调 super 再用 this
+  }
+  speak() { return `${super.speak()}: Woof`; } // super 调用父方法
+}
+
+const d = new Dog("Rex");
+d.speak(); // "Rex makes a sound: Woof"
+// d.#name; // SyntaxError，外部无法访问私有字段
+```
+
+## ES 模块系统
+
+<Term def="ESM（ES 模块）是 JavaScript 官方的模块系统：import/export 在编译期静态分析依赖，支持 tree-shaking；模块单例（同一模块只执行一次）；导出是实时绑定（live binding，导出方改变导入方可见）；默认严格模式。">ES 模块</Term>与 CommonJS 有本质差异。ESM 的 `import`/`export` 是**静态声明**——在编译期就能确定依赖关系，打包工具据此做 tree-shaking（移除未使用的导出）。CommonJS 的 `require` 是**动态执行**——在运行时加载，无法静态分析。ESM 的导出是**实时绑定**：导出方修改了变量，导入方能看到新值；CommonJS 是**值拷贝**：导出的是快照，导出方后续修改不影响已导入的值。
+
+```javascript
+// ESM 静态 import（编译期确定，支持 tree-shaking）
+import { util } from "./utils.js";       // 命名导入
+import * as Utils from "./utils.js";     // 命名空间导入
+import defaultExport from "./utils.js";  // 默认导入
+export const x = 1;                       // 命名导出
+export default function() {};             // 默认导出
+
+// 动态 import()（运行时加载，返回 Promise，用于按需加载）
+const module = await import("./heavy.js"); // 路由懒加载/代码分割
+// 条件加载：只在需要时加载
+if (needsFeature) {
+  const { feature } = await import("./feature.js");
+  feature();
+}
+
+// ESM vs CommonJS 对比
+// ESM：import { x } from "./m.js"    静态分析、实时绑定、可 tree-shake
+// CJS：const { x } = require("./m")  动态执行、值拷贝、不可 tree-shake
+
+// live binding 演示
+// counter.js: export let count = 0; export function inc() { count++; }
+// main.js:   import { count, inc } from "./counter.js"; inc(); console.log(count); // 1，实时绑定
+// 若是 CommonJS，count 仍是 0（值拷贝）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：ESM 和 CommonJS 只是写法不同，功能一样可以混用。** 两者有本质差异且混用有坑。ESM 是静态分析（编译期确定依赖，支持 tree-shaking），CommonJS 是动态执行（运行时加载，无法 tree-shaking）；ESM 导出是实时绑定（导出方改变导入方可见），CommonJS 是值拷贝（快照，后续改变不可见）；ESM 顶层 await 可用，CommonJS 不可；ESM 默认严格模式，CommonJS 不是。混用时 ESM import CommonJS 只能拿到 module.exports 作为默认导入（拿不到命名导出），CommonJS require ESM 会报错（需用异步 import()）。现代前端项目应统一用 ESM，CommonJS 留给 Node 传统服务端。把 require 和 import 混着用，打包工具和运行时都会出问题。
+</Callout>
+
+<Exercises>
+**问题 1**：class 的本质是什么？`class A { f() {} }` 中 `f` 存在哪里？new A() 的实例如何找到 f？
+
+<Answer>
+class 是原型链继承的语法糖，底层仍是构造函数 + 原型方法。`class A { f() {} }` 中 f 存在 A.prototype 上（A.prototype.f），不在实例自身。new A() 创建的实例自身没有 f，但通过原型链查找：实例 → 实例.__proto__（即 A.prototype）→ 找到 f。这就是为什么所有实例共享一份方法（不重复创建），也是原型链委托的本质。class 语法糖与传统构造函数的差异：class 声明不提升（TDZ，先声明后用）、内部默认严格模式、方法不可枚举（for...in 遍历不到）、必须用 new 调用（直接当函数调用报错）、extends 实现继承比手动改原型链更可靠。
+</Answer>
+
+**问题 2**：ESM 静态 import 和动态 import() 有什么区别？动态 import() 解决了什么工程问题？
+
+<Answer>
+ESM 静态 import（`import { x } from "./m.js"`）在编译期确定依赖，模块在程序启动时同步加载，支持 tree-shaking（打包工具能分析出未使用的导出并移除）。动态 import()（`const m = await import("./m.js")`）在运行时加载，返回 Promise，模块按需加载。静态 import 是声明（会被提升到模块顶部先执行），动态 import() 是表达式（在执行到该行时才加载）。动态 import() 解决的工程问题：①按需加载——只在用户用到某功能时才加载对应代码，减少首屏体积；②路由懒加载——SPA 中按路由分割代码块；③条件加载——根据运行时条件决定是否加载；④代码分割——配合打包工具自动拆分 chunk。代价是返回 Promise 需 async/await 处理，且无法静态分析依赖（不能 tree-shaking 动态导入的模块）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="class 语法糖">原型链继承的语法糖：constructor 初始化实例属性，方法挂原型供实例共享，static 定义类自身方法，extends + super 实现继承，#x 私有字段真私有。class 声明不提升（TDZ）、默认严格模式、方法不可枚举、必须 new 调用。本质仍是构造函数 + 原型链，无新继承模型。</GlossaryItem>
+<GlossaryItem term="ESM 模块系统">JavaScript 官方模块系统。静态 import/export 编译期确定依赖支持 tree-shaking；模块单例（同模块只执行一次）；导出是实时绑定（导出方改变导入方可见）；默认严格模式；顶层 await 可用。与 CommonJS（动态 require、值拷贝、同步）有本质差异，现代前端统一用 ESM。</GlossaryItem>
+<GlossaryItem term="动态 import()">运行时加载模块的表达式，返回 Promise。用于按需加载、路由懒加载、条件加载、代码分割。与静态 import 区别：静态是声明（编译期确定、可 tree-shake、会提升），动态是表达式（运行时加载、返回 Promise、不 tree-shake）。是现代前端性能优化（减少首屏体积）的核心手段。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,116 @@
+---
+title: "数组与对象"
+type: A
+section: "前端与Web"
+order: 5
+description: "拆解数组方法分类（纯函数 vs 副作用）、对象展开浅拷贝、解构赋值模式与 reduce 归约"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JdgArraysObjectsDiagram } from "@/components/mdx/javascript-definitive-guide/diagrams/jdg-arrays-objects";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 区分数组纯函数方法与副作用方法，避免意外修改原数组
+- 理解展开运算符的浅拷贝特性及其嵌套对象的共享陷阱
+- 掌握解构赋值的模式：重命名、默认值、跳过、嵌套、函数参数解构
+- 掌握 reduce 通用归约的用法与初始值的重要性
+</Objectives>
+
+## 直觉引入
+
+数组和对象是 JavaScript 最常用的数据结构，也是最容易写出 bug 的地方。一个典型陷阱：你以为 `map` 不会改原数组，但如果回调里修改了数组元素的对象属性，原数组里的对象也变了——因为对象是引用传递。另一个陷阱：`[...arr]` 展开只拷贝一层，嵌套对象还是共享的。理解数组与对象的关键在于分清两件事：哪些方法改原数组（push/sort/splice），哪些返回新数组（map/filter/reduce）；以及「浅拷贝」到底拷贝了什么。掌握这两点，你就能写出可预测、无副作用的代码。
+
+<JdgArraysObjectsDiagram />
+
+## 数组方法分类
+
+<Term def="纯函数方法是不修改原数组、返回新数组的方法（map/filter/reduce/slice/concat/flat）；副作用方法是直接修改原数组的方法（push/pop/shift/unshift/splice/sort/reverse）。区分这两类是写出可预测代码的关键——纯函数方法链式调用安全，副作用方法会意外改变原数据。">纯函数 vs 副作用</Term>是数组方法最重要的分类维度。**纯函数方法**返回新数组或新值，不改原数组：`map`（映射）、`filter`（过滤）、`reduce`（归约）、`slice`（切片）、`concat`（拼接）、`flat`/`flatMap`（扁平化）、`find`/`findIndex`（查找）、`some`/`every`（判断）、`includes`/`indexOf`（包含）。**副作用方法**直接改原数组：`push`/`pop`/`shift`/`unshift`（增删）、`splice`（增删改）、`sort`/`reverse`（排序反转）、`fill`/`copyWithin`（填充复制）。
+
+```javascript
+// 1. 纯函数链式调用：不改原数组
+const nums = [1, 2, 3, 4, 5];
+const result = nums
+  .filter(n => n > 2)        // [3, 4, 5]
+  .map(n => n * 2)           // [6, 8, 10]
+  .reduce((sum, n) => sum + n, 0); // 24
+console.log(nums); // [1,2,3,4,5]，原数组不变
+
+// 2. 副作用方法：改原数组
+const arr = [3, 1, 2];
+arr.sort(); // [1, 2, 3]，arr 被修改！
+// sort 默认按字符串排序：[10, 2, 1].sort() → [1, 10, 2]
+arr.sort((a, b) => a - b); // 数值排序
+
+// 3. 引用陷阱：map 不改数组结构，但元素若是对象会改
+const objs = [{ x: 1 }, { x: 2 }];
+objs.map(o => { o.x *= 2; }); // 修改了元素对象的属性！
+console.log(objs); // [{x:2}, {x:4}]，原数组对象被改
+
+// 4. reduce 必须给初始值
+const sum = [1, 2, 3].reduce((acc, n) => acc + n, 0); // 6
+[].reduce((acc, n) => acc + n, 0); // 0，有初始值不报错
+// [].reduce((acc, n) => acc + n);  // TypeError，无初始值空数组报错
+```
+
+## 对象展开与解构
+
+**展开运算符** `...` 做的是浅拷贝：`{ ...obj }` 复制一层属性，嵌套对象仍是引用共享。`{ ...a, b: 2 }` 后者覆盖前者。**解构赋值**是声明式提取：`const { a, b: y } = obj`（重命名 b 为 y）、`const { a = 1 } = obj`（默认值）、`const [x, , z] = arr`（跳过）、嵌套解构、函数参数解构 `function f({ name, age = 0 }) {}`。
+
+```javascript
+// 展开浅拷贝陷阱
+const original = { a: 1, nested: { b: 2 } };
+const copy = { ...original };
+copy.nested.b = 99;
+console.log(original.nested.b); // 99！嵌套对象共享
+
+// 深拷贝
+const deep = structuredClone(original); // 现代深拷贝
+deep.nested.b = 0;
+console.log(original.nested.b); // 99，不影响原对象
+
+// 解构
+const { name, age = 18 } = { name: "A" }; // name="A", age=18
+const [first, , third] = [1, 2, 3]; // first=1, third=3
+const { a: { b } } = { a: { b: 1 } }; // 嵌套解构 b=1
+
+// 函数参数解构 + 默认值
+function greet({ name = "匿名", greeting = "Hello" } = {}) {
+  console.log(`${greeting}, ${name}`);
+}
+greet({ name: "A" }); // "Hello, A"
+greet(); // "Hello, 匿名"
+
+// for...of vs for...in
+for (const v of [1, 2, 3]) {} // 遍历值 1 2 3
+for (const k in { a: 1, b: 2 }) {} // 遍历键 "a" "b"（含原型链，慎用）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`[...arr]` 展开就是深拷贝，改 copy 不影响原数组。** 展开运算符只做浅拷贝——复制一层，嵌套的对象/数组仍是引用共享。`const copy = { ...obj }; copy.nested.b = 2;` 会改到原 obj 的 nested.b，因为 copy.nested 和 obj.nested 指向同一对象。要深拷贝用 `structuredClone(obj)`（现代浏览器原生支持）或 `JSON.parse(JSON.stringify(obj))`（不支持函数/undefined/循环引用）。另一个常被忽视的陷阱是 `sort`：默认按字符串 Unicode 排序，`[10, 2, 1].sort()` 得到 `[1, 10, 2]` 而非 `[1, 2, 10]`——数值排序必须传比较函数 `(a, b) => a - b`。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 `[...obj]` 展开后修改嵌套对象会影响原对象？如何实现深拷贝？
+
+<Answer>
+展开运算符 `...` 做的是浅拷贝——只复制对象的第一层属性。对于原始类型属性（如数字、字符串），复制的是值的副本；对于引用类型属性（如嵌套对象、数组），复制的是引用地址。所以 `const copy = { ...obj }; copy.nested.b = 2;` 中，copy.nested 和 obj.nested 指向堆中同一个嵌套对象，修改 copy.nested.b 就是修改这个共享对象，obj.nested.b 也随之改变。深拷贝方法：①structuredClone(obj)——现代浏览器原生 API，支持循环引用和大多数类型，推荐；②JSON.parse(JSON.stringify(obj))——简单但有局限（不支持函数、undefined、Symbol、Date 会变字符串、循环引用报错）；③递归手写或用 lodash 的 _.cloneDeep。注意 structuredClone 不支持函数和 DOM 节点。
+</Answer>
+
+**问题 2**：`[10, 2, 1].sort()` 的结果是什么？为什么？如何正确排序数字？
+
+<Answer>
+结果是 [1, 10, 2] 而非 [1, 2, 10]。因为 Array.prototype.sort() 默认把元素转成字符串后按 Unicode 码点顺序排序。"10" 的第一个字符 "1" 码点是 49，"2" 是 50，"1" 是 49，所以 "1" < "10" < "2"（字符串比较逐字符比较，"10" 第二位 "0" 比 "2" 短但先比第一位 "1" vs "2"，"1" < "2" 所以 "10" < "2"）。正确排序数字需传比较函数：arr.sort((a, b) => a - b) 升序（返回负数表示 a 在前），arr.sort((a, b) => b - a) 降序。这个陷阱也适用于对象数组排序：users.sort((a, b) => a.age - b.age) 而非 users.sort()。sort 是副作用方法（改原数组），若需保留原数组先 [...arr].sort()。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="纯函数 vs 副作用方法">数组方法按是否修改原数组分类。纯函数（map/filter/reduce/slice/concat/flat/find/some/every）返回新数组/新值不改原数组，链式调用安全；副作用方法（push/pop/shift/unshift/splice/sort/reverse/fill）直接改原数组。写可预测代码的关键是区分两者，需保留原数组时用纯函数或先拷贝。</GlossaryItem>
+<GlossaryItem term="展开浅拷贝">... 运算符做浅拷贝：复制第一层属性，原始类型复制值副本，引用类型复制引用地址（嵌套对象共享）。{ ...a, b: 2 } 后者覆盖前者。深拷贝用 structuredClone（推荐，支持循环引用）或 JSON.parse(JSON.stringify())（有局限）。改嵌套对象会影响原对象是常见陷阱。</GlossaryItem>
+<GlossaryItem term="解构赋值">声明式从数组/对象提取值的语法。{ a, b: y } = obj（重命名）、{ a = 1 } = obj（默认值）、[x, , z] = arr（跳过）、嵌套解构、函数参数解构。让代码更声明式，减少临时变量，是现代 JS 处理数据的惯用手法。</GlossaryItem>
+</Glossary>

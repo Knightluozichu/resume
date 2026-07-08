@@ -1468,7 +1468,27 @@ export type ReviewChapterSlug =
   | "vjp-router-guard"
   | "vjp-ssr-ssg"
   | "vjp-build-deploy"
-  | "vjp-final-review";
+  | "vjp-final-review"
+  | "ydk-learning-map"
+  | "ydk-type-coercion"
+  | "ydk-grammar-natives"
+  | "ydk-scope-closures"
+  | "ydk-hoisting"
+  | "ydk-this-binding"
+  | "ydk-prototypes"
+  | "ydk-generators"
+  | "ydk-async-performance"
+  | "ydk-final-review"
+  | "jdg-learning-map"
+  | "jdg-lexicon-grammar"
+  | "jdg-types-values"
+  | "jdg-functions-closures"
+  | "jdg-classes-modules"
+  | "jdg-arrays-objects"
+  | "jdg-collections-metaprogramming"
+  | "jdg-dom-events"
+  | "jdg-browser-apis"
+  | "jdg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2941,6 +2961,26 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "vjp-ssr-ssg": "SSR/SSG 与 Nuxt.js",
   "vjp-build-deploy": "构建优化与部署",
   "vjp-final-review": "全书总复习",
+  "ydk-learning-map": "全书学习地图",
+  "ydk-type-coercion": "类型转换的隐式规则",
+  "ydk-grammar-natives": "语法与原生函数",
+  "ydk-scope-closures": "作用域与闭包深度",
+  "ydk-hoisting": "提升机制详解",
+  "ydk-this-binding": "this 绑定四规则",
+  "ydk-prototypes": "原型机制深度",
+  "ydk-generators": "生成器与迭代器协议",
+  "ydk-async-performance": "异步与性能",
+  "ydk-final-review": "全书总复习",
+  "jdg-learning-map": "全书学习地图",
+  "jdg-lexicon-grammar": "词法结构与语法",
+  "jdg-types-values": "类型与值",
+  "jdg-functions-closures": "函数与闭包",
+  "jdg-classes-modules": "类与模块",
+  "jdg-arrays-objects": "数组与对象",
+  "jdg-collections-metaprogramming": "集合与元编程",
+  "jdg-dom-events": "DOM 与事件",
+  "jdg-browser-apis": "浏览器 API",
+  "jdg-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
