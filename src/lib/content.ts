@@ -169,6 +169,7 @@ export const BOOK_ORDER = [
   "unity-vfx",
   "unity-scripting-game-dev",
   "unity-master",
+  "unity-advanced-programming",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -278,6 +279,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-vfx": "Unity 3D 游戏特效制作典型实例",
   "unity-scripting-game-dev": "Unity 3D 脚本编程与游戏开发",
   "unity-master": "Unity 神技达人炼成记",
+  "unity-advanced-programming": "Unity 3D 高级编程之进阶主程",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

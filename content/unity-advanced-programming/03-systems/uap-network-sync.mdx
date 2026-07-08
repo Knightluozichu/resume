@@ -1,0 +1,156 @@
+---
+title: "网络同步与状态同步"
+type: C
+section: "游戏开发"
+order: 1
+description: "帧同步、状态同步、插值预测、延迟补偿——联机游戏的一致性工程"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapNetworkSyncDiagram } from "@/components/mdx/unity-advanced-programming/diagrams/uap-network-sync";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出帧同步和状态同步的核心区别及各自适用场景
+- 能用插值和预测平滑客户端表现，掩盖网络延迟
+- 能解释延迟补偿的原理，说出射击游戏为什么需要它
+- 能回答：为什么帧同步要求逻辑和表现分离？
+</Objectives>
+
+## 直觉引入
+
+联机游戏的本质难题：信息通过网络传输有延迟，但玩家希望「按下立刻响应」。你不能等服务器确认才动，那太卡；你也不能只信客户端，那会作弊。网络同步就是在「响应速度」和「一致性」之间找平衡。
+
+两大流派：<Term def="只传输入，各端各自模拟，保证确定性">帧同步</Term>和<Term def="服务器算结果，传状态给客户端">状态同步</Term>。前者适合 RTS/格斗（单位多、逻辑重），后者适合 FPS/MMO（反作弊要求高）。
+
+## 概念讲解
+
+### 帧同步
+服务器收集所有玩家输入，每帧广播给所有人。各端用相同输入跑相同逻辑，只要逻辑确定（不用浮点、不依赖系统时间），结果就一致。优点：流量小、能做海量单位。缺点：必须严格确定性，一个 float 误差就不同步；反作弊难。
+
+### 状态同步
+服务器跑权威逻辑，把对象状态（位置/血量）序列化广播给客户端。客户端只做表现。优点：反作弊强、不怕浮点误差。缺点：流量大、服务器压力大。 MMO/FPS 主流方案。
+
+### 插值与预测
+- **插值**：客户端收到服务器状态后不直接跳到目标位置，而是在前两个已知状态间插值，画面滞后 1-2 帧但平滑
+- **预测**：客户端本地先模拟输入结果（如移动），不等服务器确认。服务器结果回来后对账，不一致则回滚纠正
+- **延迟补偿**：射击游戏中，服务器用客户端发出指令时的时间戳「回溯」命中检测，补偿网络延迟
+
+### 确定性要求（帧同步）
+帧同步的逻辑层必须完全确定：用定点数替代 float、排序遍历集合、禁用 System.Random 用固定种子、不依赖 Time.deltaTime（用固定步长）。表现层（动画/特效）可以不确定。
+
+## 交互Demo
+
+> 猜一猜：FPS 游戏你瞄准开枪，服务器收到时敌人已经移动了 100ms 的距离，怎么判定命中？（提示：延迟补偿回溯）
+
+<UapNetworkSyncDiagram />
+
+<Stepper>
+<Step title="第一步：选流派">
+单位多+需回放→帧同步；反作弊+少量权威对象→状态同步。混合方案：战斗用帧同步，社交用状态同步。
+</Step>
+<Step title="第二步：做平滑">
+状态同步加插值（1-2 帧滞后）+ 客户端预测（本地先跑）。帧同步加帧间插值掩盖逻辑帧间隔。
+</Step>
+<Step title="第三步：处理延迟">
+射击游戏加延迟补偿（服务器回溯命中检测）。网络波动加快照插值缓冲。断线重连做状态快照恢复。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 状态同步的插值与预测
+// 1. 状态同步：客户端插值
+public class NetworkTransform : MonoBehaviour {
+    private struct Snapshot { public Vector3 pos; public double time; }
+    private readonly Queue<Snapshot> _buffer = new();
+    private const float INTERP_DELAY = 0.1f; // 渲染滞后 100ms
+
+    public void OnServerState(Vector3 pos, double time) {
+        _buffer.Enqueue(new Snapshot { pos = pos, time = time });
+    }
+
+    void Update() {
+        if (_buffer.Count < 2) return;
+        double renderTime = NetworkTime.Now - INTERP_DELAY;
+        // 在两个快照间插值，不直接跳
+        while (_buffer.Count > 2 && _buffer.Peek().time < renderTime)
+            _buffer.Dequeue();
+        var s0 = _buffer.ToArray()[0];
+        var s1 = _buffer.ToArray()[1];
+        float t = (float)((renderTime - s0.time) / (s1.time - s0.time));
+        transform.position = Vector3.Lerp(s0.pos, s1.pos, t);
+    }
+}
+
+// 2. 客户端预测：本地先跑，服务器回来对账
+public class ClientPrediction {
+    private readonly Queue<InputState> _pending = new();
+    public Vector3 PredictPosition(Vector3 current, Vector2 input) {
+        var next = current + new Vector3(input.x, 0, input.y) * 5f * Time.deltaTime;
+        _pending.Enqueue(new InputState { input = input, predictedPos = next });
+        return next; // 本地立刻应用
+    }
+    public void OnServerReconcile(Vector3 serverPos, int ackTick) {
+        // 丢弃已确认的输入，从服务器位置重新模拟未确认输入
+        while (_pending.Count > 0 && _pending.Peek().tick <= ackTick)
+            _pending.Dequeue();
+        var pos = serverPos;
+        foreach (var p in _pending) {
+            pos += new Vector3(p.input.x, 0, p.input.y) * 5f * FIXED_DT;
+            p.predictedPos = pos; // 修正预测
+        }
+    }
+}
+
+// 3. 帧同步：确定性逻辑（定点数，不用 float）
+public class FrameLogic {
+    private readonly FixedPoint _x, _y; // 定点数，不用 float
+    public void Step(Input input, int frame) {
+        _x += FixedPoint.FromInt(input.dirX) * FIXED_SPEED; // 确定性运算
+        // 禁止：Time.deltaTime、UnityEngine.Random、浮点数学
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 帧同步跑几分钟后各端结果不一致，画面错位。
+**原因 →** 逻辑层不是确定性的：用了 float（不同 CPU 浮点结果可能不同）、System.Random、Time.deltaTime（帧率不同步）、未排序的字典遍历。任何一个不确定都导致累计误差。
+**修法 →** 逻辑层必须严格确定：用定点数替代 float、用固定种子伪随机、固定步长逻辑帧（不用 deltaTime）、遍历集合前排序。表现层（动画/特效/音效）可以不确定，但必须与逻辑层完全分离。
+</Callout>
+<Callout type="trap">
+**现象 →** 状态同步角色移动一顿一顿，不流畅。
+**原因 →** 客户端收到服务器状态后直接 SetPosition，网络抖动导致位置跳跃。
+**修法 →** 加插值缓冲：客户端维护一个快照队列，渲染时在 100ms 前的两个快照间插值。画面有 100ms 滞后但绝对平滑。再加客户端预测：本地输入立刻响应，不等服务器，回来后对账纠正。插值掩盖抖动，预测掩盖延迟。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：帧同步和状态同步各适合什么类型的游戏？为什么？
+
+<Answer>
+帧同步适合 RTS、格斗、MOBA：单位多（流量小优势大）、需要录像回放（存输入即可重放）、逻辑重（各端跑相同逻辑省服务器算力）。但反作弊难（客户端跑逻辑），不适合竞技 FPS。状态同步适合 FPS、MMO：反作弊强（服务器权威）、不怕浮点误差（只传结果）。但流量大（N 个对象 × M 玩家）、服务器贵。选型核心：反作弊要求高→状态同步，单位海量+需回放→帧同步。
+</Answer>
+
+**问题**：射击游戏的延迟补偿是怎么工作的？对被击方公平吗？
+
+<Answer>
+原理：服务器收到客户端「开枪」指令时带时间戳，服务器把所有玩家的位置历史回溯到该时间戳，用那时的位置做命中判定。比如玩家 A 延迟 100ms，他看到敌人在 X 位置开枪，服务器收到时敌人已到 Y，但服务器回溯到 100ms 前的 X 位置判定命中。对被击方「不公平」：被击方在画面上已经躲到掩体后，但仍被判命中——因为它在 A 的画面上还露着。这是延迟下不可避免的取舍，补偿开枪方的体验。竞技游戏通常设延迟上限（如 > 200ms 不补偿）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="帧同步">只同步玩家输入，各端各自模拟，要求逻辑完全确定性。适合单位多的游戏。</GlossaryItem>
+<GlossaryItem term="状态同步">服务器算权威结果，同步状态给客户端。反作弊强，适合 FPS/MMO。</GlossaryItem>
+<GlossaryItem term="插值">客户端在历史快照间插值渲染，掩盖网络抖动，代价是画面滞后。</GlossaryItem>
+<GlossaryItem term="延迟补偿">服务器用时间戳回溯历史位置做命中判定，补偿网络延迟对射击体验的影响。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 高级编程之进阶主程" adaptedUrl="" />

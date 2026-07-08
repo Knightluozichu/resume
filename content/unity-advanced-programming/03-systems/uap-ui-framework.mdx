@@ -1,0 +1,167 @@
+---
+title: "UI 框架架构设计"
+type: C
+section: "游戏开发"
+order: 0
+description: "UGUI 架构、MVP 分层、事件系统、性能优化——搭一套可维护的 UI 框架"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapUiFrameworkDiagram } from "@/components/mdx/unity-advanced-programming/diagrams/uap-ui-framework";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能设计一套分层 UI 框架（View/Presenter/Model）并说明职责
+- 能实现 UI 栈管理（打开/关闭/层级），支持弹窗排队
+- 能用对象池和动静分离优化 UI 性能
+- 能回答：为什么 UI 逻辑不该写在 MonoBehaviour 里？
+</Objectives>
+
+## 直觉引入
+
+游戏 UI 看似简单——摆几个按钮、绑定几个事件——但项目做大后它会变成最大的坑：面板越来越多、跳转越来越乱、性能越来越差、改一个面板影响一片。
+
+UI 框架的核心目标是「让面板可独立开发、可复用、可测试」。这要求把 UI 拆成三层：View 只管显示，Presenter 只管逻辑，Model 只管数据。面板之间通过框架管理器调度，不直接互相调用。
+
+## 概念讲解
+
+### MVP 三层分离
+<Term def="纯表现层，只负责把数据渲染到 UGUI 控件，不含逻辑">View</Term>、<Term def="中间层，处理 UI 交互逻辑，连接 View 和 Model">Presenter</Term>、<Term def="数据层，持有 UI 状态，可被多个 Presenter 共享">Model</Term>。View 依赖 Presenter，Presenter 依赖 Model，反向走事件。
+
+### UI 栈管理
+所有面板走统一的 UIManager 打开/关闭。UIManager 维护一个栈：打开面板 push，关闭 pop。层级（HUD/Panel/Dialog/Top）通过 SortingOrder 控制。弹窗排队：Dialog 队列，一次只显示一个，关闭后弹下一个。
+
+### 性能三件套
+- **动静分离**：静态 UI（背景框）和动态 UI（滚动列表、动画文本）分开 Canvas，避免整个 Canvas 重建
+- **对象池**：列表 Item、弹窗预制体池化，Instantiate/Destroy 是 UI 性能杀手
+- **过度绘制**：半透明叠加层越少越好，全屏半透明遮罩 + 面板 = 双倍像素填充
+
+### 事件系统
+UI 事件用 EventBus 或信号解耦：按钮点击 → 发信号 → Presenter 响应 → 更新 Model → Model 通知 View 刷新。View 不知道信号谁发的，Presenter 不知道 View 怎么画。
+
+## 交互Demo
+
+> 猜一猜：一个背包面板有 100 个格子，每次刷新全部 SetActive，和用对象池复用格子，性能差几倍？（提示：重建 vs 复用）
+
+<UapUiFrameworkDiagram />
+
+<Stepper>
+<Step title="第一步：定基类">
+定义 UIPanel 基类（含 Open/Close/Refresh 生命周期），所有面板继承它，统一入口。
+</Step>
+<Step title="第二步：做管理器">
+UIManager 管面板栈和层级。打开走 push，关闭走 pop，弹窗走队列。面板间不直接调用。
+</Step>
+<Step title="第三步：接数据">
+View 绑定数据源，Model 变化时通过事件通知 View 刷新。列表用对象池 + 虚拟滚动。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: UI 框架核心
+// 1. 面板基类
+public abstract class UIPanel : MonoBehaviour {
+    public virtual void OnOpen(object param) { gameObject.SetActive(true); }
+    public virtual void OnClose() { gameObject.SetActive(false); }
+    public virtual void OnRefresh() { }
+}
+
+// 2. UI 管理器：栈 + 层级 + 池
+public class UIManager {
+    private readonly Dictionary<string, UIPanel> _panels = new();
+    private readonly Stack<UIPanel> _stack = new();
+    private readonly GameObjectPool _pool;
+    private int _sortOrder = 0;
+
+    public async Task<T> OpenAsync<T>(object param = null) where T : UIPanel {
+        var name = typeof(T).Name;
+        if (_panels.TryGetValue(name, out var exist)) {
+            exist.transform.SetAsLastSibling();
+            exist.OnOpen(param);
+            return exist as T;
+        }
+        var go = _pool.Get(); // 池化复用
+        var panel = go.GetComponent<T>();
+        var canvas = go.GetComponent<Canvas>();
+        canvas.sortingOrder = ++_sortOrder; // 层级递增
+        panel.OnOpen(param);
+        _stack.Push(panel);
+        _panels[name] = panel;
+        return panel;
+    }
+
+    public void Close(string name) {
+        if (!_panels.TryGetValue(name, out var panel)) return;
+        panel.OnClose();
+        _pool.Release(panel.gameObject); // 回池不销毁
+        _panels.Remove(name);
+    }
+}
+
+// 3. MVP 分层示例
+public class背包View : UIPanel {
+    [SerializeField] private Text _coinText;
+    [SerializeField] private Transform _itemContainer;
+    public void RefreshCoin(int coin) => _coinText.text = coin.ToString();
+    public void RefreshItems(IReadOnlyList<Item> items) {
+        // 虚拟滚动：只刷新可见格子，用对象池
+        _virtualScroll.SetData(items);
+    }
+}
+
+public class背包Presenter {
+    private readonly 背包View _view;
+    private readonly InventoryModel _model;
+    public 背包Presenter(背包View view, InventoryModel model) {
+        _view = view; _model = model;
+        _model.OnChanged += Refresh; // Model 变→刷新 View
+    }
+    private void Refresh() {
+        _view.RefreshCoin(_model.Coin);
+        _view.RefreshItems(_model.Items);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** UI 一多就卡，Profile 显示 Canvas.SendWillRenderCanvals 占大头。
+**原因 →** 所有 UI 放一个 Canvas，任何元素变化都触发整个 Canvas 重建（布局重算 + 网格重建）。
+**修法 →** 动静分离：静态背景一个 Canvas，动态文本/列表单独 Canvas。Canvas 的重建粒度是自身，拆分后只有变化的 Canvas 重建。滚动列表尤其要独立 Canvas + 对象池。
+</Callout>
+<Callout type="trap">
+**现象 →** 面板之间互相 FindObjectOfType 调用，耦合成一团。
+**原因 →** 没有统一 UI 管理器，面板直接持有彼此引用。打开背包直接调商店面板的方法。
+**修法 →** 所有面板走 UIManager.Open/Close，面板间不直接调用。需要联动时走 EventBus 发信号（如「购买成功」信号→背包刷新+商店刷新），面板订阅信号而非持有引用。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：UI 列表 1000 条数据，怎么保证滚动不卡？
+
+<Answer>
+用虚拟滚动（Virtual Scroll）：只实例化可见区域的 Item（约 10-20 个），滚动时复用 Item、只更新数据。核心是对象池 + 滚动位置计算。Unity 可用 EnhancedScroller 或自己实现：监听 ScrollRect.onValueChanged，根据可见区域算出需要显示的 index 范围，从池取 Item 填数据，滚出区域的 Item 回池。1000 条数据实际只渲染 15 个 Item，性能与数据量无关。
+</Answer>
+
+**问题**：为什么 UI 逻辑不该写在 MonoBehaviour 里？MVP 怎么解决这个问题？
+
+<Answer>
+MonoBehaviour 强耦合 Unity 生命周期和场景，逻辑写在里面无法脱离场景测试、无法被 DI 容器管理、Inspector 序列化字段污染状态。MVP 把逻辑下沉到 Presenter（纯 C# 类）：View（MonoBehaviour）只管显示和转发输入，Presenter 处理交互逻辑，Model 持数据。Presenter 可单元测试（注入 mock View 和 Model），View 可替换（换 UGUI 为 UIToolkit 不影响逻辑）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="MVP">Model-View-Presenter，UI 三层分离模式。View 只显示，Presenter 管逻辑，Model 持数据。</GlossaryItem>
+<GlossaryItem term="UI 栈管理">通过栈管理面板打开关闭，支持返回上一级和弹窗排队。</GlossaryItem>
+<GlossaryItem term="动静分离">将静态 UI 和动态 UI 拆分到不同 Canvas，避免整个 Canvas 重建。</GlossaryItem>
+<GlossaryItem term="虚拟滚动">列表只渲染可见区域 Item，配合对象池复用，实现大数据量滚动不卡。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 高级编程之进阶主程" adaptedUrl="" />

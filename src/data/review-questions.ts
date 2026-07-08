@@ -1215,6 +1215,16 @@ import { umsPerformanceProfilingQuestions } from "./review/ums-performance-profi
 import { umsAssetManagementQuestions } from "./review/ums-asset-management";
 import { umsTeamCollaborationQuestions } from "./review/ums-team-collaboration";
 import { umsFinalReviewQuestions } from "./review/ums-final-review";
+import { uapLearningMapQuestions } from "./review/uap-learning-map";
+import { uapArchDesignQuestions } from "./review/uap-arch-design";
+import { uapDesignPatternsQuestions } from "./review/uap-design-patterns";
+import { uapMemoryManagementQuestions } from "./review/uap-memory-management";
+import { uapRenderingOptimizationQuestions } from "./review/uap-rendering-optimization";
+import { uapUiFrameworkQuestions } from "./review/uap-ui-framework";
+import { uapNetworkSyncQuestions } from "./review/uap-network-sync";
+import { uapHotUpdateQuestions } from "./review/uap-hot-update";
+import { uapCiCdQuestions } from "./review/uap-ci-cd";
+import { uapFinalReviewQuestions } from "./review/uap-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2461,6 +2471,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...umsAssetManagementQuestions,
   ...umsTeamCollaborationQuestions,
   ...umsFinalReviewQuestions,
+  ...uapLearningMapQuestions,
+  ...uapArchDesignQuestions,
+  ...uapDesignPatternsQuestions,
+  ...uapMemoryManagementQuestions,
+  ...uapRenderingOptimizationQuestions,
+  ...uapUiFrameworkQuestions,
+  ...uapNetworkSyncQuestions,
+  ...uapHotUpdateQuestions,
+  ...uapCiCdQuestions,
+  ...uapFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

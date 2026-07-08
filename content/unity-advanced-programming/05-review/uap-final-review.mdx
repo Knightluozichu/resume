@@ -1,0 +1,142 @@
+---
+title: "全书总复习"
+type: C
+section: "游戏开发"
+order: 0
+description: "串联十章——从架构到工程，做一次主程级综合架构评审"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapFinalReviewDiagram } from "@/components/mdx/unity-advanced-programming/diagrams/uap-final-review";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用全书十章知识对一个 Unity 项目做架构评审
+- 能根据项目症状定位问题章节并给出修复路径
+- 能画出从需求到上线的完整主程决策链路
+- 能回答：主程在项目各阶段的核心决策是什么？
+</Objectives>
+
+## 直觉引入
+
+学了十章，真正的考验不是「记住每个知识点」，而是「遇到问题时知道该用哪几章的知识组合解决」。主程的价值不是单点深度，而是跨系统的判断力——一个帧率问题可能同时涉及架构（逻辑耦合）、内存（GC）、渲染（DrawCall）、工程（CI 没拦住回归）。
+
+这一章把全书串成一条决策链：需求来了→架构怎么承接→性能怎么扛→系统怎么搭→工程怎么交付。每个环节都有对应章节的工具和原则。
+
+## 概念讲解
+
+### 全书知识地图
+<Term def="分层+模块化+DI，让代码可演进">架构（第2-3章）</Term>是地基。<Term def="零GC+DrawCall预算，让运行稳定">性能（第4-5章）</Term>是底线。<Term def="UI框架+网络同步，让功能成型">系统（第6-7章）</Term>是上层。<Term def="热更新+CI/CD，让迭代安全">工程（第8-9章）</Term>是护城河。
+
+### 主程决策链路
+一个新需求到来，主程的思考顺序：
+1. **架构承接**（第2章）：这个需求放哪层？依赖谁？会不会引入循环依赖？
+2. **模式选择**（第3章）：用什么模式实现？单例/观察者/状态/命令？
+3. **性能预算**（第4-5章）：会产生 GC 吗？DrawCall 会超预算吗？需要池化吗？
+4. **系统对接**（第6-7章）：涉及 UI 吗？需要联网同步吗？
+5. **工程交付**（第8-9章）：需要热更吗？CI 能自动测试吗？
+
+### 项目阶段与主程重心
+- **原型期**：架构先行（第2-3章），别让原型代码变成正式代码
+- **开发期**：性能立规矩（第4-5章），GC 和 DrawCall 设预算
+- **联调期**：系统打通（第6-7章），UI 和网络对接
+- **上线期**：工程收尾（第8-9章），热更新通道和 CI/CD 就位
+
+## 交互Demo
+
+> 猜一猜：一个项目「开发期一切正常，上线后每更新一次就出 Bug」，问题出在哪一章？（提示：工程—CI/CD 缺自动化测试）
+
+<UapFinalReviewDiagram />
+
+<Stepper>
+<Step title="第一步：架构评审">
+拿项目代码过一遍：有没有分层？有没有循环依赖？MonoBehaviour 是否承担了逻辑？能测吗？
+</Step>
+<Step title="第二步：性能体检">
+Profiler 跑一遍：每帧 GC Alloc 是 0 吗？DrawCall 在预算内吗？有没有内存泄漏？建立性能基线。
+</Step>
+<Step title="第三步：工程闭环">
+CI/CD 跑通了吗？自动化测试覆盖核心流程吗？热更新通道验证过吗？出包到分发全自动吗？
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 主程综合决策——一个「排行榜」需求的全链路
+// 1. 架构承接（第2章）：分层 + DI
+public interface IRankingService { List<RankEntry> GetTop100(); void SubmitScore(int score); }
+
+// 2. 模式选择（第3章）：观察者——分数变化通知排行榜
+public static class GameEvents {
+    public static event Action<int> OnScoreSubmitted; // 排行榜订阅
+}
+
+// 3. 性能预算（第4章）：排行榜列表用对象池 + 虚拟滚动
+public class RankingView : MonoBehaviour {
+    private readonly List<RankEntry> _data = new(100); // 预分配
+    private VirtualScroll _scroll; // 只渲染可见 Item
+    public void Refresh(IReadOnlyList<RankEntry> data) {
+        _data.Clear(); // 不释放底层数组
+        foreach (var e in data) _data.Add(e);
+        _scroll.SetData(_data); // 零 GC 刷新
+    }
+}
+
+// 4. 系统对接（第6-7章）：UI 框架打开 + 网络提交
+public class RankingPresenter {
+    private readonly IRankingService _service;
+    public async void OnOpen() {
+        var list = await _service.GetTop100(); // 网络请求
+        _view.Refresh(list); // UI 刷新
+    }
+}
+
+// 5. 工程交付（第9章）：CI 自动测试排行榜逻辑
+[Test] public void SubmitScore_UpdatesRanking() {
+    var service = new MockRankingService();
+    service.SubmitScore(100);
+    Assert.AreEqual(1, service.GetTop100().Count);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 项目每个模块单独看都没问题，组合起来就出各种跨系统 Bug。
+**原因 →** 模块间边界不清、契约不明。各模块自己定义接口和数据格式，组合时才发现对不上。
+**修法 →** 主程的核心职责是定义模块边界和交互契约。架构评审时重点看：模块间数据格式是否统一？事件命名是否规范？错误处理是否一致？用 EventBus + 统一数据模型（DTO）约束跨模块通信。这比单模块内部实现更重要。
+</Callout>
+<Callout type="trap">
+**现象 →** 团队每个人都能写功能，但没有人能说清项目整体架构。
+**原因 →** 没有架构文档和决策记录。每个开发者按自己理解写，架构在每个人脑子里都不一样。
+**修法 →** 主程维护一份「架构决策记录（ADR）」：每个重大决策记录背景、方案、取舍。新人 onboard 先读 ADR。定期做架构评审，让全队对齐认知。架构不是主程一个人的事，但主程是架构一致性的守门人。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：用全书十章知识，分析「项目上线后每次更新都引入回归 Bug」这个问题的根因和修复方案。
+
+<Answer>
+根因在工程层（第8-9章）：①没有 CI/CD 或 CI 没集成自动化测试，回归 Bug 没在出包前拦截；②没有热更新通道，每次修 Bug 都要重新发版，发版压力大导致测试不充分；③架构层（第2-3章）可能也有问题：模块耦合高，改一处影响多处。修复：①CI 流水线加 UTF 自动化测试，核心流程不过不出包（第9章）；②建热更新通道，紧急 Bug 热更修复不重新发版（第8章）；③架构评审降低模块耦合，提升可测试性（第2章）。三层组合，从根上减少回归。
+</Answer>
+
+**问题**：主程在项目「原型期」「开发期」「上线期」三个阶段的核心决策分别是什么？
+
+<Answer>
+原型期：架构决策（第2-3章）——确定分层、模块边界、DI 容器。原型代码要能被抛弃，架构要能保留。核心判断：哪些是验证性代码（可丢弃），哪些是骨架代码（要保留）。开发期：性能决策（第4-5章）——立 GC 零容忍、DrawCall 预算、Profiler 常态化。核心判断：性能基线在哪里，哪些优化现在做、哪些留到后期。上线期：工程决策（第8-9章）——热更新通道、CI/CD 流水线、自动化测试覆盖。核心判断：迭代安全性如何保障、紧急修复走哪条路。三阶段重心不同，但架构是贯穿始终的地基。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="架构决策记录（ADR）">记录每个重大架构决策的背景、方案和取舍，让团队对架构认知一致。</GlossaryItem>
+<GlossaryItem term="性能基线">项目在标准场景下的 GC、DrawCall、帧率、内存等核心指标基准，用于回归检测。</GlossaryItem>
+<GlossaryItem term="主程决策链">从需求到上线的完整思考路径：架构→模式→性能→系统→工程。</GlossaryItem>
+<GlossaryItem term="回归 Bug">修改代码后引入的、之前不存在的新 Bug，靠自动化测试在 CI 阶段拦截。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 高级编程之进阶主程" adaptedUrl="" />

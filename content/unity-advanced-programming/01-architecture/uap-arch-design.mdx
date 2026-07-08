@@ -1,0 +1,139 @@
+---
+title: "架构设计原则"
+type: C
+section: "游戏开发"
+order: 0
+description: "分层、模块化、依赖注入——让 Unity 项目扛住需求膨胀的三根支柱"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapArchDesignDiagram } from "@/components/mdx/unity-advanced-programming/diagrams/uap-arch-design";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能画出 Unity 项目的分层架构图并说明每层职责
+- 能用依赖注入解耦模块，消除 new 带来的硬依赖
+- 能识别循环依赖并用接口反转打破
+- 能回答：为什么 MonoBehaviour 不应该直接操作数据访问层？
+</Objectives>
+
+## 直觉引入
+
+Unity 项目的代码腐烂，几乎都从「一个脚本调用另一个脚本」开始。Player 脚本里 `new Enemy()`，Enemy 脚本里 `FindObjectOfType<Player>()`，三个月后谁也改不动——动一个类编译器报四十个错。
+
+架构设计就是把这种「面条式依赖」变成「分层管线」：上层依赖下层，下层不知道上层存在，跨层通过接口通信。好的架构不是让你写得更快，而是让你改得更安全。
+
+## 概念讲解
+
+Unity 项目典型分四层：**表现层**（MonoBehaviour/View）、**逻辑层**（Controller/Service）、**领域层**（Domain/Model）、**基础设施层**（Data/Network/Pool）。
+
+<Term def="上层依赖下层，依赖方向单向向下，禁止反向调用">分层架构</Term>是骨架。<Term def="按业务领域划分独立模块，模块间通过接口通信">模块化</Term>是肌肉。<Term def="把依赖的创建交给容器，使用方只声明需要什么">依赖注入</Term>是关节——让分层和模块化真正可替换。
+
+### 三条铁律
+- **依赖方向单向向下**：View → Controller → Service → Data，反向一律走事件/回调
+- **跨层通信走接口**：上层只依赖 interface，不依赖具体类，方便测试和替换
+- **MonoBehaviour 只做表现**：逻辑不写在 MonoBehaviour 里，它只负责把数据渲染到屏幕
+
+### 依赖注入落地
+Unity 生态常用 VContainer 或 Zenject 作为 DI 容器。注册在场景加载时完成，注入通过构造函数或 `[Inject]` 特性。
+
+## 交互Demo
+
+> 猜一猜：一个 Player 脚本同时处理输入、移动、攻击、UI、存档，它违反了哪条原则？（提示：单一职责 + 分层）
+
+<UapArchDesignDiagram />
+
+<Stepper>
+<Step title="第一步：划层">
+按 View/Controller/Service/Data 划分目录与命名空间，明确每层能调用谁、不能调用谁。
+</Step>
+<Step title="第二步：抽接口">
+跨层调用点抽出 interface，上层依赖 interface 而非具体类，便于 mock 测试。
+</Step>
+<Step title="第三步：接容器">
+引入 VContainer/Zenject，注册绑定关系，用构造注入替换所有 new，彻底解耦。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 分层 + 依赖注入实战
+// ❌ 反面：面条式依赖，Player 直接 new Enemy、调 UI
+public class PlayerBad : MonoBehaviour {
+    void Update() {
+        if (Input.GetKeyDown(KeyCode.Space)) {
+            var enemy = new Enemy();          // 硬依赖
+            enemy.TakeDamage(10);
+            FindObjectOfType<UIManager>().UpdateHp(); // 找对象，脆弱
+        }
+    }
+}
+
+// ✅ 正面：分层 + DI
+public interface IEnemyService { void DealDamage(int amount); }
+public interface IUIService { void RefreshHp(); }
+
+public class PlayerController {
+    private readonly IEnemyService _enemy;
+    private readonly IUIService _ui;
+    // 构造注入：依赖从外部传入，不 new
+    public PlayerController(IEnemyService enemy, IUIService ui) {
+        _enemy = enemy; _ui = ui;
+    }
+    public void Attack() {
+        _enemy.DealDamage(10);
+        _ui.RefreshHp();
+    }
+}
+
+// VContainer 注册（Composition Root）
+public class GameLifetimeScope : LifetimeScope {
+    protected override void Configure(IContainerBuilder builder) {
+        builder.Register<IEnemyService, EnemyService>(Lifetime.Singleton);
+        builder.Register<IUIService, UIService>(Lifetime.Singleton);
+        builder.Register<PlayerController>(Lifetime.Transient);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 改一个功能要动十几个脚本，编译器报一堆错。
+**原因 →** 没有分层，类之间双向依赖，形成网状耦合。改一个节点波及整个网。
+**修法 →** 强制分层：View→Controller→Service→Data 单向依赖。跨层走接口和事件，禁止反向 FindObjectOfType。先用命名空间隔离，再逐步重构热点。
+</Callout>
+<Callout type="trap">
+**现象 →** 单元测试写不了，因为类里全是 new 和静态调用。
+**原因 →** 依赖在类内部创建，无法替换为 mock。没有依赖注入，类不可隔离。
+**修法 →** 把所有 new 改成构造注入，依赖通过 interface 声明。测试时注入 mock 实现，生产时注入真实实现。先从纯逻辑类开始，MonoBehaviour 最后处理。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么 MonoBehaviour 不应该承担业务逻辑？它应该只做什么？
+
+<Answer>
+MonoBehaviour 是 Unity 引擎的胶水层，强耦合引擎生命周期（Awake/Update/序列化字段），把业务逻辑写进去会导致：无法脱离场景测试、无法被 DI 容器管理、字段被 Inspector 序列化导致状态不可控。它应该只做表现——把 Controller 算好的数据渲染到屏幕、把用户输入转发给 Controller。逻辑下沉到纯 C# 类，可测试、可替换。
+</Answer>
+
+**问题**：分层架构中，Service 层需要通知 View 层更新，但不允许反向依赖，怎么做？
+
+<Answer>
+用事件/观察者模式解耦。Service 暴露事件（如 `event Action<int> OnHpChanged`），View 订阅该事件。Service 触发事件时不知道谁在听，View 响应事件时不知道谁发的。依赖方向仍是 View→Service（View 订阅 Service 的事件），但数据流是 Service→View，不违反分层。也可用 EventBus 做更彻底的解耦。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分层架构">将代码按职责分为表现层、逻辑层、领域层、基础设施层，依赖单向向下，禁止反向调用。</GlossaryItem>
+<GlossaryItem term="依赖注入">把依赖对象的创建交给容器，使用方只声明需要什么接口，实现解耦和可测试性。</GlossaryItem>
+<GlossaryItem term="模块化">按业务领域划分独立模块，模块间通过接口通信，内部实现对外部不可见。</GlossaryItem>
+<GlossaryItem term="Composition Root">依赖注入的唯一注册点，通常在场景入口或 LifetimeScope 中完成所有绑定。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 高级编程之进阶主程" adaptedUrl="" />

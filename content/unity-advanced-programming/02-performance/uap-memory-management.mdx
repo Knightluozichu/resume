@@ -1,0 +1,150 @@
+---
+title: "内存管理与 GC 优化"
+type: C
+section: "游戏开发"
+order: 0
+description: "托管堆、GC 触发、对象池——消除帧率暴跌的内存实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UapMemoryManagementDiagram } from "@/components/mdx/unity-advanced-programming/diagrams/uap-memory-management";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Unity 托管堆和原生堆的区别及各自回收机制
+- 能用对象池消除每帧 GC，实现零 GC 运行
+- 能用 Profiler 定位内存泄漏并给出修复方案
+- 能回答：为什么 GC 会导致帧率暴跌，如何彻底避免？
+</Objectives>
+
+## 直觉引入
+
+Unity 项目帧率暴跌，十次有八次是 GC。每帧 `new` 几个对象，托管堆碎片化，触发垃圾回收时主线程暂停几十毫秒——玩家看到的就是「每几秒卡一下」。
+
+内存管理的核心不是「管理内存」，而是「不产生垃圾」。对象池复用、struct 替代 class、预分配容器，目标只有一个：运行时零 GC。
+
+## 概念讲解
+
+Unity 内存分两大块：<Term def="C# 托管堆，由 Mono/IL2CPP GC 自动回收">托管堆</Term>和<Term def="Unity 引擎原生内存，不受 GC 管理">原生堆</Term>。
+
+### GC 为何卡顿
+Unity 默认用「标记-压缩」GC：暂停主线程 → 遍历所有对象引用链标记可达对象 → 压缩堆。堆越大、对象越多，暂停越久。托管堆 100MB 时一次 GC 可能暂停 30-50ms，直接掉帧。
+
+### 零 GC 四件套
+- **对象池**：敌人、子弹、特效、UI 预制体全部池化，Get/Release 替代 Instantiate/Destroy
+- **struct 替代 class**：值类型在栈上分配，不进托管堆。数学运算、事件参数用 struct
+- **预分配容器**：List/Dictionary 预设 Capacity，避免运行时扩容产生垃圾
+- **避免闭包捕获**：lambda 捕获局部变量会生成隐藏类，每帧触发就是每帧垃圾
+
+### 内存泄漏排查
+Profiler Memory 模块拍快照，对比两次快照找到只增不减的对象。常见泄漏：事件未取消订阅、静态集合无限增长、Object.Destroy 未释放引用。
+
+## 交互Demo
+
+> 猜一猜：每帧 new 一个 Vector3[] 数组，30 帧后会怎样？（提示：840 字节垃圾 + GC 触发）
+
+<UapMemoryManagementDiagram />
+
+<Stepper>
+<Step title="第一步：测基线">
+用 Profiler 的 GC Alloc 列定位每帧产生垃圾的代码。目标：每帧 GC Alloc = 0B。
+</Step>
+<Step title="第二步：池化高频对象">
+Instantiate/Destroy 频繁的对象（子弹、敌人、特效）全部走对象池。Get 时激活，Release 时禁用并回池。
+</Step>
+<Step title="第三步：消灭残余垃圾">
+lambda 闭包改显式方法、List 预设 Capacity、string 拼接改 StringBuilder。零 GC 是硬指标。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// Unity C#: 零 GC 实战
+// ❌ 反面：每帧 new，GC 杀手
+void Update() {
+    var enemies = new List<Enemy>(FindObjectsOfType<Enemy>()); // 每帧 new List + new 数组
+    foreach (var e in enemies) {
+        e.transform.position += Vector3.up * Time.deltaTime;   // struct 还行
+    }
+    var msg = "Score: " + score; // string 拼接产生垃圾
+}
+
+// ✅ 正面：零 GC
+private readonly List<Enemy> _enemyBuffer = new(64); // 预分配，复用
+private readonly StringBuilder _sb = new(32);
+
+void Update() {
+    _enemyBuffer.Clear(); // 清空但不释放底层数组
+    // 用非分配 API 填充（避免 FindObjectsOfType）
+    _enemyManager.GetActiveEnemies(_enemyBuffer);
+    foreach (var e in _enemyBuffer) {
+        e.transform.position += Vector3.up * Time.deltaTime;
+    }
+    _sb.Clear(); _sb.Append("Score: ").Append(score); // StringBuilder 复用
+}
+
+// 对象池：消除 Instantiate/Destroy 的 GC
+public class GameObjectPool {
+    private readonly Stack<GameObject> _stack = new();
+    private readonly GameObject _prefab;
+    public GameObjectPool(GameObject prefab, int prewarm = 8) {
+        _prefab = prefab;
+        for (int i = 0; i < prewarm; i++) {
+            var go = Object.Instantiate(prefab);
+            go.SetActive(false);
+            _stack.Push(go);
+        }
+    }
+    public GameObject Get() {
+        var go = _stack.Count > 0 ? _stack.Pop() : Object.Instantiate(_prefab);
+        go.SetActive(true);
+        return go;
+    }
+    public void Release(GameObject go) {
+        go.SetActive(false);
+        _stack.Push(go);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 游戏每几秒卡一下，Profiler 显示 GC.Alloc 尖峰。
+**原因 →** 每帧在 Update 里 new 对象（List、数组、闭包、string），托管堆碎片化后触发 GC 暂停。
+**修法 →** 目标每帧 GC Alloc = 0B。用 Profiler GC Alloc 列定位热点，List 预分配并复用、对象池替代 Instantiate、StringBuilder 替代 string 拼接。零 GC 不是奢侈，是底线。
+</Callout>
+<Callout type="trap">
+**现象 →** 玩久了内存持续增长，退出场景也不降。
+**原因 →** 内存泄漏。最常见：订阅了事件但场景退出时没取消订阅，导致对象无法被 GC 回收。静态集合只加不删同理。
+**修法 →** OnDisable/OnDestroy 里必须取消所有事件订阅（`-= `）。静态集合定期清理。用 Profiler Memory 快照对比两次场景切换，找到只增不减的对象。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：为什么 `foreach` 遍历 List 在旧版 Mono 下会产生 GC，新版还产生吗？
+
+<Answer>
+旧版 Mono 的 `List.GetEnumerator()` 返回的是 `IEnumerator<T>` 接口（引用类型），装箱产生垃圾。新版 Mono/IL2CPP 下，`foreach` 直接用 `List<T>.Enumerator`（struct 值类型），不装箱、不产生 GC。但要注意：如果通过 `IEnumerable<T>` 接口遍历（如把 List 传给接受 IEnumerable 的方法），仍会装箱。结论：直接 foreach List 无 GC，但避免把 List 当 IEnumerable 传递。
+</Answer>
+
+**问题**：对象池的预热数量（prewarm）怎么定？太大太小各有什么问题？
+
+<Answer>
+预热数量 = 预期峰值并发数。太小：运行时池空了仍要 Instantiate，产生 GC 和卡顿，失去池的意义。太大：占内存且大部分时间闲置浪费。定法：用 Profiler 观察峰值并发对象数（如同时存在的子弹数），取峰值的 1.2 倍作为 prewarm。如果峰值波动大，让池在运行时按需扩容，但记录扩容次数——频繁扩容说明 prewarm 不够。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="托管堆">C# 运行时管理的堆内存，由 Mono/IL2CPP 的 GC 自动回收。堆越大 GC 暂停越久。</GlossaryItem>
+<GlossaryItem term="原生堆">Unity 引擎分配的原生内存（纹理、网格、音频等资源），不受 GC 管理，需手动释放。</GlossaryItem>
+<GlossaryItem term="对象池">预创建并复用对象的技术，用 Get/Release 替代 Instantiate/Destroy，消除运行时 GC。</GlossaryItem>
+<GlossaryItem term="GC Alloc">每帧分配到托管堆的字节数。零 GC 运行的核心指标，目标值为 0B/帧。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 高级编程之进阶主程" adaptedUrl="" />

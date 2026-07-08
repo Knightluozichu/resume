@@ -1338,7 +1338,17 @@ export type ReviewChapterSlug =
   | "ums-performance-profiling"
   | "ums-asset-management"
   | "ums-team-collaboration"
-  | "ums-final-review";
+  | "ums-final-review"
+  | "uap-learning-map"
+  | "uap-arch-design"
+  | "uap-design-patterns"
+  | "uap-memory-management"
+  | "uap-rendering-optimization"
+  | "uap-ui-framework"
+  | "uap-network-sync"
+  | "uap-hot-update"
+  | "uap-ci-cd"
+  | "uap-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2681,6 +2691,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ums-asset-management": "资源管理",
   "ums-team-collaboration": "团队协作",
   "ums-final-review": "全书总复习",
+  "uap-learning-map": "Unity 3D 高级编程全书学习地图",
+  "uap-arch-design": "架构设计原则",
+  "uap-design-patterns": "Unity 中的设计模式应用",
+  "uap-memory-management": "内存管理与 GC 优化",
+  "uap-rendering-optimization": "渲染优化",
+  "uap-ui-framework": "UI 框架架构设计",
+  "uap-network-sync": "网络同步与状态同步",
+  "uap-hot-update": "热更新方案",
+  "uap-ci-cd": "持续集成与自动化构建",
+  "uap-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
