@@ -1,0 +1,96 @@
+---
+title: "裁剪路径与几何形状"
+type: C
+section: "前端与Web"
+order: 3
+description: "用 clip-path 裁剪出任意几何形状，从三角形到星形到自定义路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CsecClipPathDiagram } from "@/components/mdx/css-secrets/diagrams/csec-clip-path";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 clip-path: polygon() 裁剪任意多边形的原理
+- 理解 clip-path 与 overflow: hidden 在裁剪行为上的差异
+- 学会用 clip-path 替代背景图实现斜切、菱形等不规则形状
+- 了解 clip-path 的动画性能优势与浏览器兼容策略
+</Objectives>
+
+## 直觉引入
+
+想把一个矩形切成三角形？以前要么用透明 PNG 覆盖、要么用 transform rotate 加 overflow hidden。`clip-path` 让你直接用坐标描述「保留哪个区域」——像剪刀一样裁掉多余部分。而且 clip-path 只影响渲染层，不改变盒模型、不触发重排，天然适合动画。
+
+<CsecClipPathDiagram />
+
+## polygon 多边形裁剪
+
+<Term def="clip-path: polygon() 用一组坐标点描述裁剪路径，路径内的区域可见、路径外的区域被裁掉，坐标以元素左上角为原点、百分比或像素为单位。">polygon 裁剪</Term>是最常用的裁剪函数。
+
+```css
+/* 三角形：保留顶部中心 + 底部两角 */
+.triangle {
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+}
+
+/* 梯形：切掉左上和右上的角 */
+.trapezoid {
+  clip-path: polygon(20% 0, 80% 0, 100% 100%, 0 100%);
+}
+
+/* 菱形：四个边中点 */
+.diamond {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+/* 星形：10 个点交替外圆内圆 */
+.star {
+  clip-path: polygon(
+    50% 0%, 61% 35%, 98% 35%, 68% 57%,
+    79% 91%, 50% 70%, 21% 91%, 32% 57%,
+    2% 35%, 39% 35%
+  );
+}
+```
+
+## clip-path vs overflow
+
+`overflow: hidden` 裁剪的是内容溢出——子元素超出 padding box 就被切掉。`clip-path` 裁剪的是元素本身——连背景、边框一起裁。两者可叠加使用。
+
+```css
+/* 斜切卡片：顶部斜角 + 底部正常 */
+.clip-card {
+  clip-path: polygon(0 20px, 100% 0, 100% 100%, 0 100%);
+  /* 内容也会被裁——需用 padding 留出安全区 */
+  padding-top: 30px;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：clip-path 会影响布局和事件命中。** clip-path 只裁剪视觉渲染——元素的盒模型尺寸、在文档流中的位置、margin/padding 都不变。被裁掉的「透明区域」仍然占据空间，也不会被相邻元素填充。但事件命中区域会被裁剪：点击在被裁掉的区域不会触发该元素的 click 事件。如果你需要「视觉裁掉但事件保留」，要用其他方案（如叠加遮罩层）。
+</Callout>
+
+<Exercises>
+**问题 1**：用 `clip-path: polygon()` 画一个向上的三角形，坐标怎么选？
+
+<Answer>
+向上三角形需要保留三个顶点：顶部中心点和底部两个角。以元素左上角为原点（0,0），三个点分别是：顶部中心 `(50%, 0)`、左下角 `(0, 100%)`、右下角 `(100%, 100%)`。代码：`clip-path: polygon(50% 0, 0 100%, 100% 100%)`。polygon 按顺序连线围成闭合区域，区域内的内容保留、区域外裁掉。50% 表示水平方向的中间位置，100% 表示底部边缘。如果想要向下三角形则选 `(0,0), (100%,0), (50%,100%)`。
+</Answer>
+
+**问题 2**：clip-path 动画为什么比 width/margin 动画性能更好？
+
+<Answer>
+clip-path 在大多数现代浏览器中只触发合成（composite）阶段——浏览器在 GPU 上重新计算裁剪路径的像素输出，不需要重新布局（reflow）也不需要重绘整个元素（repaint）。而 width/margin 动画会触发 reflow：每改变一帧，浏览器要重新计算元素及其后代的盒模型、重新排列文档流、再重绘——代价远高于合成。不过 clip-path 动画的性能依赖浏览器是否将 polygon 提升为合成层；对于复杂路径（大量顶点），仍可能比简单的 transform 动画慢。最佳实践是配合 `will-change: clip-path` 提示浏览器预创建合成层。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="clip-path">CSS 属性，用裁剪函数（polygon/circle/ellipse/path/inset）描述元素的可见区域，路径外部分不渲染、不响应事件。不影响盒模型和文档流。</GlossaryItem>
+<GlossaryItem term="polygon()">clip-path 的多边形函数，接受一组坐标点，按顺序连线围成闭合裁剪区域。坐标可用百分比（相对元素尺寸）或像素。</GlossaryItem>
+<GlossaryItem term="inset()">clip-path 的内缩矩形函数，如 `inset(10px 20px 30px 40px round 5px)` 表示四边内缩并带圆角，比 polygon 更适合矩形裁剪。</GlossaryItem>
+</Glossary>

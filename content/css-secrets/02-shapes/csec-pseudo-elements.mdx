@@ -1,0 +1,111 @@
+---
+title: "伪元素妙用"
+type: C
+section: "前端与Web"
+order: 4
+description: "用 ::before 和 ::after 创造 tooltip、清除浮动和展开动画"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CsecPseudoElementsDiagram } from "@/components/mdx/css-secrets/diagrams/csec-pseudo-elements";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解伪元素是「不增加 DOM 节点的额外渲染层」
+- 掌握用 ::before/::after 配合 clip-path 画 tooltip 气泡箭头
+- 学会用伪元素实现 clearfix 清除浮动
+- 掌握用 max-height transition 实现展开/收起动画
+</Objectives>
+
+## 直觉引入
+
+每个元素天生可以带两个「幽灵子元素」——`::before` 和 `::after`。它们不是 DOM 节点（不占 HTML），但能设背景、边框、定位、动画——完全可以当真元素用。Lea Verou 把伪元素比作「免费的两个额外盒子」：tooltip 箭头、清除浮动、展开动画，全都不用加 HTML。
+
+<CsecPseudoElementsDiagram />
+
+## Tooltip 气泡箭头
+
+<Term def="伪元素 ::before/::after 是 CSS 生成的额外渲染盒子，不增加 DOM 节点，可设 content/background/position/animation，相当于每个元素免费获得两个子层。">伪元素</Term>画 tooltip 箭头是经典用法——不需要 SVG、不需要额外标签。
+
+```css
+.tooltip {
+  position: relative;
+  background: #333;
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+/* 用 ::after 画三角形箭头 */
+.tooltip::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;       /* 在元素上方 */
+  left: 50%;
+  transform: translateX(-50%);
+  border: 8px solid transparent;
+  border-bottom-color: #333; /* 只显示底边 = 向上三角 */
+}
+```
+
+## 清除浮动（clearfix）
+
+浮动元素的父容器不会自动撑高——子元素全浮动后父容器高度塌陷。伪元素 clearfix 是最干净的方案。
+
+```css
+/* 现代 clearfix：一行搞定 */
+.clearfix::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+
+/* 更现代的写法：用 flow-root 替代 */
+.container {
+  display: flow-root; /* 创建 BFC，自动包含浮动 */
+}
+```
+
+## 展开动画
+
+`height: auto` 不能做 transition。经典技巧是用 `max-height` 替代——设一个足够大的 max-height，transition max-height 即可。
+
+```css
+.accordion-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+}
+.accordion-body.open {
+  max-height: 500px; /* 必须大于实际内容高度 */
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：伪元素的 content 属性可以省略。** 伪元素必须有 `content` 属性才会生成——即使值为空字符串 `content: ""`。省略 content 时伪元素不渲染，这是最常见的「为什么我的 ::after 没生效」原因。content 的值不仅限于文本，空字符串、attr() 函数、url() 图片都可以。此外伪元素默认是 inline 的，设定位或尺寸前需要先 `display: block` 或 `position: absolute`。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么用 `border` 技巧画三角形时，`border: 8px solid transparent` + `border-bottom-color: #333` 会产生一个向上的三角形？
+
+<Answer>
+当元素的 width 和 height 都为 0 时，四条 border 围成一个由四个三角形拼成的正方形——每条 border 是一个等腰三角形，底边朝外、顶点指向中心。四条 border 颜色相同时看到的是正方形（四个三角形拼合）。当只把 border-bottom-color 设为有色、其余三条设为 transparent 时，只有底部那个三角形可见——底边在下方、顶点朝上，看起来就是一个向上的三角形。tooltip 把它定位到 `bottom: 100%`（元素上方），箭头就指向气泡内容。
+</Answer>
+
+**问题 2**：为什么 `height: auto` 不能做 transition，而 `max-height` 可以？
+
+<Answer>
+transition 需要一个确定的起止数值来做插值。`height: auto` 的实际高度依赖内容——浏览器在动画开始前无法确定最终高度值（内容可能动态变化），因此无法做数值插值，transition 直接失效。`max-height` 是一个确定的长度值（如 0 → 500px），浏览器可以做线性插值。但 max-height 方案有局限：如果 max-height 设得比实际内容高很多，动画会「先快后慢」——前半段视觉上没变化（因为内容已经完全展开但 max-height 还在过渡）。解决方案是尽量让 max-height 接近实际内容高度，或用 JS 读取 scrollHeight 精确设置。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="伪元素">CSS 通过 ::before/::after 生成的额外渲染盒子，不增加 DOM 节点。需设 content 属性才会生成，默认 inline 行为，可设为 block/absolute/flex 等。</GlossaryItem>
+<GlossaryItem term="clearfix">清除浮动的技术。核心是在父容器末尾生成一个块级伪元素并设 clear: both，强制父容器包含浮动子元素。现代可用 display: flow-root 替代。</GlossaryItem>
+<GlossaryItem term="max-height 动画">用 max-height 替代 height: auto 做展开过渡。起止值为确定长度（0 → 足够大的值），浏览器可插值。缺点是 max-height 远大于实际内容时动画节奏不均匀。</GlossaryItem>
+</Glossary>

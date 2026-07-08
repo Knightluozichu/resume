@@ -1385,6 +1385,16 @@ import { cswGridLayoutQuestions } from "./review/csw-grid-layout";
 import { cswTransformPerspectiveQuestions } from "./review/csw-transform-perspective";
 import { cswAnimationTransitionQuestions } from "./review/csw-animation-transition";
 import { cswFinalReviewQuestions } from "./review/csw-final-review";
+import { csecLearningMapQuestions } from "./review/csec-learning-map";
+import { csecBackgroundPatternsQuestions } from "./review/csec-background-patterns";
+import { csecBorderShapesQuestions } from "./review/csec-border-shapes";
+import { csecClipPathQuestions } from "./review/csec-clip-path";
+import { csecPseudoElementsQuestions } from "./review/csec-pseudo-elements";
+import { csecTextEffectsQuestions } from "./review/csec-text-effects";
+import { csecFontFeaturesQuestions } from "./review/csec-font-features";
+import { csecUserExperienceQuestions } from "./review/csec-user-experience";
+import { csecMotionVisualQuestions } from "./review/csec-motion-visual";
+import { csecFinalReviewQuestions } from "./review/csec-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2801,6 +2811,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cswTransformPerspectiveQuestions,
   ...cswAnimationTransitionQuestions,
   ...cswFinalReviewQuestions,
+  ...csecLearningMapQuestions,
+  ...csecBackgroundPatternsQuestions,
+  ...csecBorderShapesQuestions,
+  ...csecClipPathQuestions,
+  ...csecPseudoElementsQuestions,
+  ...csecTextEffectsQuestions,
+  ...csecFontFeaturesQuestions,
+  ...csecUserExperienceQuestions,
+  ...csecMotionVisualQuestions,
+  ...csecFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

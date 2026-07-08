@@ -1508,7 +1508,17 @@ export type ReviewChapterSlug =
   | "csw-grid-layout"
   | "csw-transform-perspective"
   | "csw-animation-transition"
-  | "csw-final-review";
+  | "csw-final-review"
+  | "csec-learning-map"
+  | "csec-background-patterns"
+  | "csec-border-shapes"
+  | "csec-clip-path"
+  | "csec-pseudo-elements"
+  | "csec-text-effects"
+  | "csec-font-features"
+  | "csec-user-experience"
+  | "csec-motion-visual"
+  | "csec-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3021,6 +3031,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "csw-transform-perspective": "变换与透视",
   "csw-animation-transition": "动画与过渡",
   "csw-final-review": "全书总复习",
+  "csec-learning-map": "全书学习地图",
+  "csec-background-patterns": "背景与条纹",
+  "csec-border-shapes": "边框与形状",
+  "csec-clip-path": "裁剪路径与几何形状",
+  "csec-pseudo-elements": "伪元素妙用",
+  "csec-text-effects": "文本特效",
+  "csec-font-features": "字体特性",
+  "csec-user-experience": "用户体验技巧",
+  "csec-motion-visual": "动效与视觉",
+  "csec-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

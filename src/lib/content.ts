@@ -186,6 +186,7 @@ export const BOOK_ORDER = [
   "javascript-definitive-guide",
   "javascript-fullstack",
   "css-world",
+  "css-secrets",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -312,6 +313,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "javascript-definitive-guide": "JavaScript权威指南（第7版）",
   "javascript-fullstack": "JavaScript全栈开发",
   "css-world": "CSS世界",
+  "css-secrets": "CSS揭秘",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
