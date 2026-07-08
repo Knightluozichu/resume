@@ -1,0 +1,137 @@
+---
+title: "协程与事件系统"
+type: C
+section: "游戏开发"
+order: 5
+description: "用协程实现跨帧异步，用事件系统实现组件解耦"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsgCoroutineEventDiagram } from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-coroutine-event";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握协程的启动、暂停、恢复与停止
+- 理解 yield return 各种指令的区别与适用场景
+- 能用 C# event 实现发布订阅模式解耦组件
+- 能正确管理事件订阅生命周期，避免内存泄漏
+</Objectives>
+
+## 直觉引入
+
+协程像「定时闹钟」——你设一个 2 秒后的任务，然后继续干手头的事，2 秒后闹钟响了你回来执行。事件系统像「广播电台」——电台广播「敌人死了」，谁关心谁订阅，电台不需要知道有谁在听。协程解决「延迟执行」问题（2 秒后生成敌人、每 0.5 秒发射子弹），事件系统解决「组件解耦」问题（击杀者不需要知道计分板的存在）。两者配合，让游戏逻辑既异步又松耦合。
+
+## 概念讲解
+
+### 协程与事件
+
+<UsgCoroutineEventDiagram />
+
+<Term def="协程(Coroutine)是用 IEnumerator 实现的跨帧异步机制，用 yield return 控制暂停与恢复，仍在主线程执行，不是多线程">协程</Term>管异步。
+
+<Term def="yield return null 等一帧，WaitForSeconds(n) 等n秒，WaitForFixedUpdate 等到下个物理帧，WWW/UnityWebRequest 等异步加载完成">yield return</Term>控时机。
+
+<Term def="事件(event)是 C# 的发布订阅机制，发布者用 event 声明，订阅者用 += / -= 订阅和取消，发布者用 Invoke 触发">事件系统</Term>管通信。
+
+<Term def="Action 是 C# 内置委托类型，表示无参数无返回值的方法引用；UnityEvent 是 Unity 特有的可序列化事件">Action 与 UnityEvent</Term>是委托类型。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：协程基础">`IEnumerator` 定义协程方法，`yield return` 暂停并返回控制权给 Unity。`StartCoroutine(Routine())` 启动，`StopCoroutine` / `StopAllCoroutines` 停止。协程在 GameObject 禁用或销毁时自动停止。</Step>
+<Step title="第二步：事件系统">
+发布者声明 `public event Action OnEnemyDead`，在敌人死亡时 `OnEnemyDead?.Invoke()`。订阅者在 OnEnable 中 `+=` 订阅，OnDisable 中 `-=` 取消。发布者不需要知道有谁订阅——彻底解耦。
+<UsgCoroutineEventDiagram />
+</Step>
+<Step title="第三步：配合使用">协程做延迟序列（2秒后爆炸→再1秒后消失），事件做跨组件通知（爆炸时通知 UI 显示得分、通知音效播放爆炸声）。协程管时间，事件管通信，各司其职。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 协程：跨帧异步序列
+public class SpawnController : MonoBehaviour {
+    [SerializeField] private GameObject enemyPrefab;
+
+    void Start() {
+        StartCoroutine(SpawnWaves()); // 启动协程
+    }
+
+    IEnumerator SpawnWaves() {
+        yield return new WaitForSeconds(3f); // 等3秒开局
+
+        while (true) {
+            Instantiate(enemyPrefab, RandomPosition(), Quaternion.identity);
+            yield return new WaitForSeconds(2f); // 每2秒生成一个
+        }
+    }
+
+    // 异步加载
+    IEnumerator LoadAsset(string url) {
+        using var request = UnityWebRequest.Get(url);
+        yield return request.SendWebRequest(); // 等下载完成
+        if (request.result == UnityWebRequest.Result.Success)
+            Debug.Log("下载完成");
+    }
+}
+
+// 事件系统：发布订阅
+public class Enemy : MonoBehaviour {
+    public static event Action<Enemy> OnEnemyKilled; // 静态事件，全局可订阅
+
+    public void Die() {
+        OnEnemyKilled?.Invoke(this); // 通知所有订阅者
+        Destroy(gameObject);
+    }
+}
+
+public class ScoreUI : MonoBehaviour {
+    private int _score;
+
+    void OnEnable() { Enemy.OnEnemyKilled += HandleKill; }   // 订阅
+    void OnDisable() { Enemy.OnEnemyKilled -= HandleKill; }  // 取消
+
+    private void HandleKill(Enemy enemy) {
+        _score += 100;
+        UpdateUI();
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：把协程当成多线程使用。**
+协程不是多线程——它仍在主线程执行，只是用 yield return 把执行权交还给 Unity，等条件满足后再继续。协程内不能做阻塞操作（如死循环、Thread.Sleep），否则会卡住主线程。协程适合延迟序列、异步加载、分帧处理，不适合 CPU 密集计算。如果需要真正的并行计算，应使用 Task/async 或 C# Job System。
+</Callout>
+
+<Callout type="trap">
+**误区：事件订阅放在 Awake 中，取消放在 OnDestroy 中。**
+Awake 只调用一次，如果对象禁用再启用，订阅不会重新建立——禁用期间事件丢失。OnDestroy 只在销毁时调用，对象只是禁用（对象池）时订阅仍存在——禁用后仍响应事件。正确做法：OnEnable 中 `+=` 订阅，OnDisable 中 `-=` 取消，保证订阅生命周期与对象启用状态一致。未取消的事件订阅会导致内存泄漏（发布者持有已销毁订阅者的引用）。
+</Callout>
+
+<Exercises>
+**问题 1**：协程和多线程有什么区别？协程适合做什么？
+
+<Answer>
+协程不是多线程——它在主线程执行，用 yield return 把控制权交还给 Unity，等条件满足后继续。区别：1)多线程是真正的并行，协程是「伪并发」（交出执行权后 Unity 继续渲染下一帧）；2)协程内可直接访问 Unity API（因为仍在主线程），多线程不能；3)协程不能做阻塞操作，否则卡主线程。协程适合：延迟序列（2秒后爆炸）、异步加载（下载资源）、分帧处理（大任务拆分到多帧）、定时重复（每2秒生成敌人）。
+</Answer>
+
+**问题 2**：为什么事件订阅要放 OnEnable，取消要放 OnDisable？
+
+<Answer>
+因为 OnEnable/OnDisable 每次启用/禁用都触发，而 Awake/OnDestroy 只调用一次。如果订阅在 Awake 中，对象禁用再启用后订阅不会重新建立——事件丢失。如果取消在 OnDestroy 中，对象只是禁用（未销毁，如对象池场景）时订阅仍存在——禁用后仍响应事件。OnEnable 订阅 + OnDisable 取消，保证订阅生命周期与对象启用状态完全一致——启用时订阅，禁用时取消，不会漏接也不会多接。未取消的订阅还可能导致内存泄漏。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="协程(Coroutine)">IEnumerator 实现的跨帧异步机制，仍在主线程。</GlossaryItem>
+<GlossaryItem term="yield return">控制协程暂停与恢复的指令。</GlossaryItem>
+<GlossaryItem term="事件(event)">C# 发布订阅机制，用 += / -= 订阅取消。</GlossaryItem>
+<GlossaryItem term="Action">C# 内置委托类型，表示无参无返回值方法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 脚本编程与游戏开发" adaptedUrl="" />

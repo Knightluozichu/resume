@@ -1,0 +1,134 @@
+---
+title: "游戏循环与 Update 生命周期"
+type: C
+section: "游戏开发"
+order: 4
+description: "深入理解 Unity 游戏循环的三阶段与 Update/FixedUpdate/LateUpdate 的分工"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsgGameLoopDiagram } from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-game-loop";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 Unity 游戏循环的完整执行顺序
+- 能区分 FixedUpdate、Update、LateUpdate 的触发时机与适用场景
+- 能解释 Awake/Start/OnEnable/OnDisable/OnDestroy 的触发特点
+- 能设计对象池场景的生命周期管理方案
+</Objectives>
+
+## 直觉引入
+
+Unity 的游戏循环像一天的作息。早上起床（Awake）→ 开机工作（OnEnable）→ 准备就绪（Start）→ 每小时工作（Update）→ 下班关机（OnDisable）→ 彻底离开（OnDestroy）。其中每小时的工作分三个时段：物理计算（FixedUpdate，固定节奏）→ 日常逻辑（Update，每帧）→ 收尾整理（LateUpdate，Update 后）。理解这个流程，才能知道「什么代码该放哪里」——物理放 FixedUpdate，输入放 Update，相机放 LateUpdate。
+
+## 概念讲解
+
+### 游戏循环三阶段
+
+<UsgGameLoopDiagram />
+
+<Term def="FixedUpdate 按固定时间步长(fixedDeltaTime)调用，适合物理计算(Rigidbody)，保证物理模拟稳定">FixedUpdate</Term>管物理。
+
+<Term def="Update 每帧调用一次，帧间隔不固定，适合输入处理和游戏逻辑，移动须乘 Time.deltaTime">Update</Term>管逻辑。
+
+<Term def="LateUpdate 在所有 Update 之后调用，适合相机跟随——确保角色已移动完毕再更新相机位置，避免抖动">LateUpdate</Term>管相机。
+
+<Term def="Awake 对象创建时调用一次（早于 Start），适合初始化自身；Start 第一帧前调用一次，适合获取其他对象引用">Awake 与 Start</Term>管初始化。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：初始化阶段">Awake（对象创建时一次）→ OnEnable（每次启用）→ Start（第一帧前一次）。Awake 初始化自身（缓存组件引用），Start 获取其他对象引用。脚本初始禁用时 Awake 仍调用但 Start 不调用——直到启用后才调 Start。</Step>
+<Step title="第二步：每帧循环">
+FixedUpdate（固定步长，物理用）→ 碰撞/触发事件 → Update（每帧，逻辑用）→ 协程更新 → LateUpdate（Update 后，相机用）。物理放 FixedUpdate 保证稳定，输入放 Update 保证响应，相机放 LateUpdate 确保跟随。
+<UsgGameLoopDiagram />
+</Step>
+<Step title="第三步：销毁阶段">OnDisable（禁用，可多次）→ OnDestroy（销毁，只一次）。OnDisable 取消事件订阅、停止协程。OnDestroy 释放资源。对象池用 SetActive(false) 触发 OnDisable 而非 Destroy。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+public class GameLoopDemo : MonoBehaviour {
+    [SerializeField] private float moveSpeed = 3f;
+    private Rigidbody _rb;
+    private Transform _camera;
+
+    void Awake() {
+        _rb = GetComponent<Rigidbody>(); // 缓存自身组件
+    }
+
+    void OnEnable() {
+        // 每次启用时订阅事件、启动协程
+        EventManager.OnPlayerSpawned += HandleSpawn;
+        StartCoroutine(PatrolRoutine());
+    }
+
+    void Start() {
+        _camera = Camera.main.transform; // 获取其他对象引用
+    }
+
+    void FixedUpdate() {
+        // 物理：固定步长，用 MovePosition 而非 transform.position
+        _rb.MovePosition(transform.position + transform.forward * moveSpeed * Time.fixedDeltaTime);
+    }
+
+    void Update() {
+        // 逻辑：每帧，输入检测
+        if (Input.GetKeyDown(KeyCode.Space)) Jump();
+    }
+
+    void LateUpdate() {
+        // 相机：在角色移动后更新
+        _camera.position = transform.position + new Vector3(0, 5, -10);
+    }
+
+    void OnDisable() {
+        // 每次禁用时取消订阅、停止协程
+        EventManager.OnPlayerSpawned -= HandleSpawn;
+        StopAllCoroutines();
+    }
+
+    void OnDestroy() {
+        // 最终资源清理
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在 Update 中做物理移动（transform.position += ...）。**
+Update 帧间隔不固定，直接改 transform.position 会导致物理碰撞检测不稳定（可能穿透）。正确做法：物理移动放 FixedUpdate，用 Rigidbody 的 MovePosition 或 AddForce。FixedUpdate 按固定步长调用，物理引擎在此步长内做碰撞检测和求解，保证模拟稳定。如果必须在 Update 移动，至少要乘 deltaTime 保证速度一致，但碰撞仍不如 FixedUpdate 可靠。
+</Callout>
+
+<Callout type="trap">
+**误区：相机跟随写在 Update 中导致画面抖动。**
+Update 中角色先移动，然后相机跟随也在同一帧 Update 中执行——但如果相机 Update 先于角色 Update（脚本执行顺序不确定），相机会跟随上一帧的角色位置，产生一帧延迟的抖动。正确做法：相机跟随放 LateUpdate——LateUpdate 在所有 Update 之后执行，确保角色已移动到本帧最终位置后相机才更新，消除抖动。
+</Callout>
+
+<Exercises>
+**问题 1**：FixedUpdate、Update、LateUpdate 分别适合放什么逻辑？为什么？
+
+<Answer>
+FixedUpdate 适合物理逻辑（Rigidbody 移动/施力）——它按固定时间步长调用，物理引擎在此步长内做碰撞检测，保证模拟稳定。Update 适合游戏逻辑和输入——每帧调用，响应及时，但帧间隔不固定，移动需乘 deltaTime。LateUpdate 适合相机跟随和后处理——在所有 Update 之后执行，确保角色等对象已移动到本帧最终位置，相机跟随不会有一帧延迟的抖动。三者分工：物理稳定用 FixedUpdate，逻辑响应用 Update，画面收尾用 LateUpdate。
+</Answer>
+
+**问题 2**：设计一个对象池子弹的生命周期管理。
+
+<Answer>
+1)Awake：一次性初始化——缓存 Rigidbody/Collider 引用，设置伤害值。2)OnEnable：每次从池取出时重置——位置归零、速度归零、重置存活时间、订阅事件、启动弹道协程。3)OnDisable：每次回收时清理——StopAllCoroutines()、取消事件订阅、_rb.velocity=Vector3.zero、重置碰撞体。4)OnDestroy：池销毁时释放资源。关键：不在 OnDisable 中 Destroy（否则池失效），用 SetActive 控制启用/禁用，OnEnable/OnDisable 处理每次复用的重置逻辑。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="FixedUpdate">固定步长调用，适合物理计算。</GlossaryItem>
+<GlossaryItem term="Update">每帧调用，适合游戏逻辑和输入。</GlossaryItem>
+<GlossaryItem term="LateUpdate">所有 Update 后调用，适合相机跟随。</GlossaryItem>
+<GlossaryItem term="OnEnable/OnDisable">每次启用/禁用触发，适合事件订阅与取消。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 脚本编程与游戏开发" adaptedUrl="" />

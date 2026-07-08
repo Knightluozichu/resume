@@ -1,0 +1,129 @@
+---
+title: "Unity API 核心调用"
+type: C
+section: "游戏开发"
+order: 2
+description: "掌握 Transform、GameObject、Input、Time 四大核心 API 的用法"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsgUnityApiDiagram } from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-unity-api";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Transform API 操作位置、旋转、缩放
+- 掌握 GameObject 的创建、销毁、查找与组件获取
+- 掌握 Input 系统读取键盘、鼠标、轴输入
+- 理解 Time.deltaTime 的作用，写出帧率无关的移动逻辑
+</Objectives>
+
+## 直觉引入
+
+Unity API 是脚本的「手和眼」。Transform 是手——移动物体、转向、缩放。GameObject 是工厂——创建、销毁、开关对象。Input 是眼——读取玩家按键。Time 是时钟——让动作与帧率无关。四大 API 配合使用：Input 读输入 → Time 算时间 → Transform 做移动 → GameObject 管生命周期。掌握它们，就能写出基本的游戏交互。
+
+## 概念讲解
+
+### 四大核心 API
+
+<UsgUnityApiDiagram />
+
+<Term def="Transform 是每个 GameObject 必有的组件，管理位置(position)、旋转(rotation)、缩放(scale)，并提供 Translate/Rotate 方法">Transform</Term>管变换。
+
+<Term def="Time.deltaTime 是上一帧到当前帧的秒数间隔，移动逻辑乘以它可保证不同帧率下速度一致">Time.deltaTime</Term>是帧率无关的关键。
+
+<Term def="GetComponent<T>() 获取同 GameObject 上的指定类型组件，每帧调用有开销，应在 Awake/Start 缓存引用">GetComponent</Term>是组件通信的桥梁。
+
+<Term def="Input 系统读取玩家输入：GetKeyDown 按键、GetAxis 轴值、mousePosition 鼠标位置">Input</Term>读输入。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：Transform">`transform.position` 直接设置位置，`Translate()` 相对移动。旋转用 `rotation`（Quaternion）或 `Rotate()`。缩放用 `localScale`。注意 position 是世界坐标，localPosition 是相对父对象。</Step>
+<Step title="第二步：GameObject 与 Time">
+Instantiate 创建对象，Destroy 延迟销毁，SetActive 开关。GetComponent 获取组件——缓存引用避免每帧调用。Time.deltaTime 让移动与帧率无关。
+<UsgUnityApiDiagram />
+</Step>
+<Step title="第三步：Input">`Input.GetAxis("Horizontal")` 返回 -1~1 的轴值，适合平滑移动。`Input.GetKeyDown(KeyCode.Space)` 返回按下瞬间。`Input.mousePosition` 获取鼠标位置。新输入系统（Input System Package）支持多设备映射。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+public class PlayerAPI : MonoBehaviour {
+    [SerializeField] private float moveSpeed = 5f;
+    [SerializeField] private GameObject bulletPrefab;
+    private Rigidbody _rb;
+
+    void Awake() {
+        _rb = GetComponent<Rigidbody>(); // 缓存引用，避免每帧 GetComponent
+    }
+
+    void Update() {
+        // Input：读取轴输入
+        float h = Input.GetAxis("Horizontal");
+        float v = Input.GetAxis("Vertical");
+
+        // Time + Transform：帧率无关移动
+        Vector3 move = new Vector3(h, 0, v) * moveSpeed * Time.deltaTime;
+        transform.Translate(move);
+
+        // Input：按键事件
+        if (Input.GetKeyDown(KeyCode.Space)) {
+            // GameObject：创建子弹
+            Instantiate(bulletPrefab, transform.position, transform.rotation);
+        }
+    }
+
+    void OnCollisionEnter(Collision other) {
+        // GetComponent：获取碰撞对象上的组件
+        var enemy = other.gameObject.GetComponent<Enemy>();
+        if (enemy != null) {
+            enemy.TakeDamage(10);
+        }
+    }
+
+    // 延迟销毁
+    IEnumerator DestroyAfter(float delay) {
+        yield return new WaitForSeconds(delay);
+        Destroy(gameObject);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在 Update 中每帧调用 GetComponent。**
+`GetComponent` 需要遍历组件列表查找，每帧调用会造成不必要的 CPU 开销。正确做法：在 Awake 或 Start 中调用一次并缓存到字段，后续直接用字段引用。对于频繁访问的组件（Rigidbody/Collider/Animator），缓存引用是基本的性能习惯。
+</Callout>
+
+<Callout type="trap">
+**误区：移动逻辑不乘 Time.deltaTime。**
+`transform.position += Vector3.forward * speed;` 在 60fps 和 30fps 下移动速度差一倍——帧率越高移动越快。乘以 `Time.deltaTime` 后变成 `speed * deltaTime`（每秒移动 speed 米），与帧率无关。所有 Update 中的移动、旋转、计时都必须乘 deltaTime。FixedUpdate 中用 fixedDeltaTime（物理已自动处理）。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么移动逻辑必须乘 Time.deltaTime？
+
+<Answer>
+Update 每帧调用一次，但帧间隔不固定——60fps 每帧约 0.0167s，30fps 每帧约 0.033s。如果不乘 deltaTime，`speed` 就是每帧移动的距离，帧率越高每秒移动越快（60fps 移动 60*speed，30fps 移动 30*speed）。乘以 deltaTime 后，每帧移动 `speed * deltaTime`，一秒内累加正好是 `speed`（米/秒），与帧率无关。这是保证游戏在不同设备上表现一致的基础。
+</Answer>
+
+**问题 2**：GetComponent 为什么应该缓存？如何正确缓存？
+
+<Answer>
+GetComponent 需要遍历 GameObject 的组件列表做类型匹配，是一个有开销的查找操作。如果每帧在 Update 中调用，累积开销会影响性能。正确缓存方法：在 Awake（对象创建时）或 Start（第一帧前）中调用一次 GetComponent，存入私有字段，后续直接用字段引用。注意：Awake 时同对象的所有组件已就绪，但其他对象可能未初始化——跨对象获取引用应放 Start。缓存的引用在对象生命周期内有效。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Transform">管理位置/旋转/缩放，每个 GameObject 必有。</GlossaryItem>
+<GlossaryItem term="Time.deltaTime">上一帧到当前帧的秒数，乘以它实现帧率无关。</GlossaryItem>
+<GlossaryItem term="GetComponent<T>">获取同对象上的指定组件，应缓存引用。</GlossaryItem>
+<GlossaryItem term="Input">读取键盘/鼠标/轴输入，GetAxis 返回平滑值。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 脚本编程与游戏开发" adaptedUrl="" />

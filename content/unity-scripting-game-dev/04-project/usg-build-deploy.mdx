@@ -1,0 +1,138 @@
+---
+title: "构建与发布"
+type: C
+section: "游戏开发"
+order: 8
+description: "从 Build Settings 到多平台发布的完整构建管线与检查清单"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsgBuildDeployDiagram } from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-build-deploy";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 Unity 构建管线的四个步骤
+- 理解 Player Settings 的关键配置项
+- 能针对不同平台（Windows/Android/iOS/WebGL）做构建准备
+- 掌握发布前检查清单，避免低级错误
+</Objectives>
+
+## 直觉引入
+
+构建发布是游戏的「出厂流程」。第一步选产品清单（哪些场景进 Build），第二步选销售地区（目标平台），第三步贴标签说明书（Player Settings：包名、图标、版本），第四步打包出厂（Build 生成可执行文件）。出厂前还要过质检清单：代码剥离开了吗？纹理压缩对了吗？签名配置好了吗？漏一项都可能被商店拒审或玩家投诉。理解完整流程，才能把游戏从开发环境送到玩家手中。
+
+## 概念讲解
+
+### 构建管线
+
+<UsgBuildDeployDiagram />
+
+<Term def="Scenes In Build 是 Build Settings 中勾选的场景列表，只有勾选的场景才会打包进最终游戏，顺序决定加载序号">Scenes In Build</Term>定场景清单。
+
+<Term def="Player Settings 是平台级配置：包名(Bundle Identifier)、图标、版本号、脚本后端(Mono/IL2CPP)、画质、剥离等级">Player Settings</Term>管平台配置。
+
+<Term def="IL2CPP 是 Unity 的脚本后端，将 C# 编译为 C++ 再编译为原生代码，比 Mono 更快且支持代码剥离，但编译时间长">IL2CPP</Term>是脚本后端。
+
+<Term def="Strip Engine Code 是代码剥离，移除未使用的引擎代码减小包体，需注意反射调用的代码可能被误删">Strip Engine Code</Term>减包体。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：场景配置">File → Build Settings，把需要的场景拖入 Scenes In Build 列表，勾选并排序。场景 0 是启动场景。不需要的场景取消勾选（不打包），减小包体。</Step>
+<Step title="第二步：平台选择与 Player Settings">
+在 Build Settings 切换目标平台（Windows/Android/iOS/WebGL）。点 Player Settings 配置：包名（com.company.game）、图标、版本号、脚本后端（选 IL2CPP）、画质。Android 需配 Keystore 签名，iOS 需配 Bundle ID。
+<UsgBuildDeployDiagram />
+</Step>
+<Step title="第三步：Build 与发布">点 Build 生成可执行包。Windows 生成 .exe，Android 生成 .apk/.aab，iOS 生成 Xcode 工程（需 Xcode 导出 .ipa），WebGL 生成网页文件。发布前过检查清单：Development Build 关闭、Strip Engine Code 开启、纹理压缩匹配平台、版本号递增、真机测试。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 命令行构建脚本（CI/CD 自动化）
+#if UNITY_EDITOR
+using UnityEditor;
+
+public static class BuildScript {
+    public static void BuildAndroid() {
+        string[] scenes = {
+            "Assets/Scenes/MainMenu.unity",
+            "Assets/Scenes/GameLevel.unity",
+        };
+
+        BuildPlayerOptions options = new BuildPlayerOptions {
+            scenes = scenes,
+            locationPathName = "Builds/Android/game.apk",
+            target = BuildTarget.Android,
+            options = BuildOptions.None,
+        };
+
+        BuildPipeline.BuildPlayer(options);
+        // 输出构建结果
+        Debug.Log("Android 构建完成");
+    }
+
+    public static void BuildWebGL() {
+        BuildPipeline.BuildPlayer(
+            new[] { "Assets/Scenes/MainMenu.unity", "Assets/Scenes/GameLevel.unity" },
+            "Builds/WebGL",
+            BuildTarget.WebGL,
+            BuildOptions.None
+        );
+    }
+}
+#endif
+
+// 运行时检测平台
+public class PlatformDetector : MonoBehaviour {
+    void Start() {
+#if UNITY_ANDROID
+        Debug.Log("运行在 Android");
+#elif UNITY_IOS
+        Debug.Log("运行在 iOS");
+#elif UNITY_WEBGL
+        Debug.Log("运行在 WebGL");
+#elif UNITY_STANDALONE_WIN
+        Debug.Log("运行在 Windows");
+#endif
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：发布包忘了关闭 Development Build。**
+Development Build 包含调试符号和 Profiler 连接支持，体积大、性能低。如果发布到商店时忘记关闭，玩家下载的包运行慢且可能暴露调试信息。正确做法：发布前确认 Build Settings 中 Development Build 未勾选，且勾选了 Strip Engine Code。建议用命令行构建（CI/CD）时显式设置 BuildOptions.None，避免人为遗漏。
+</Callout>
+
+<Callout type="trap">
+**误区：纹理压缩格式不匹配目标平台。**
+Windows 用 DXT，Android 用 ETC2/ASTC，iOS 用 ASTC。如果用默认设置或不匹配的格式，要么包体膨胀（未压缩），要么某些设备显示异常（格式不支持）。正确做法：在 Player Settings 的 Texture Compression 按平台设置；纹理资源单独设 Platform Overrides；移动端用 ASTC（6x6 或 8x8 区块）兼顾质量和大小。用 Build Report 检查纹理在包体中的占比。
+</Callout>
+
+<Exercises>
+**问题 1**：Mono 和 IL2CPP 脚本后端有什么区别？发布时应该选哪个？
+
+<Answer>
+Mono 是 JIT（即时编译），构建快但运行性能较低，且容易被反编译。IL2CPP 是 AOT（提前编译），将 C# IL 编译为 C++ 再编译为原生代码，运行更快、更难反编译、支持代码剥离（减小包体），但编译时间长。发布时应选 IL2CPP——性能更好、包体更小、更安全。Mono 仅在开发期快速迭代时使用。注意：IL2CPP 不支持运行时代码生成（如某些反射），需测试反射相关代码是否正常。iOS 强制使用 IL2CPP（Apple 不允许 JIT）。
+</Answer>
+
+**问题 2**：发布前需要检查哪些关键项？
+
+<Answer>
+1)Build Settings：Development Build 关闭、Strip Engine Code 开启。2)Player Settings：脚本后端设为 IL2CPP、版本号递增、包名正确。3)资源：纹理压缩匹配平台（ASTC/ETC2/DXT）、音频编码匹配、图标和启动屏配置。4)平台签名：Android 配 Keystore 签名、iOS 配 Provisioning Profile 和 Bundle ID。5)测试：先在目标设备真机测试（不仅编辑器），再用 Profiler 验证发布包性能。6)商店要求：包体大小、截图、隐私政策、年龄分级。逐项检查避免被商店拒审。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Scenes In Build">构建场景列表，只有勾选的场景才打包。</GlossaryItem>
+<GlossaryItem term="Player Settings">平台级配置：包名、图标、版本、脚本后端。</GlossaryItem>
+<GlossaryItem term="IL2CPP">C# 编译为 C++ 再编译为原生码，更快更安全。</GlossaryItem>
+<GlossaryItem term="Strip Engine Code">剥离未使用引擎代码，减小包体。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 脚本编程与游戏开发" adaptedUrl="" />

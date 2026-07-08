@@ -1,0 +1,126 @@
+---
+title: "组件模式与游戏对象"
+type: C
+section: "游戏开发"
+order: 3
+description: "理解 GameObject 容器与 Component 功能模块的组合架构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UsgComponentPatternDiagram } from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-component-pattern";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 GameObject 是空容器、Component 是功能模块的组件架构
+- 掌握 GetComponent 实现组件间通信
+- 能区分组合与继承，理解「组合优于继承」的设计原则
+- 能将一个 God Class 拆分为多个职责单一的组件
+</Objectives>
+
+## 直觉引入
+
+搭积木时，每块积木只有一个功能——轮子负责滚，窗户负责透光，马达负责转。把不同积木组合起来就是一辆车。Unity 的组件模式正是如此：GameObject 是底盘（空容器），Component 是积木块（功能模块）。一个「敌人」= Transform（位置）+ Rigidbody（物理）+ Collider（碰撞）+ EnemyAI（AI 逻辑）+ MeshRenderer（显示）。需要什么功能就挂什么组件，不需要就拆掉——这就是组合优于继承。
+
+## 概念讲解
+
+### 组件架构
+
+<UsgComponentPatternDiagram />
+
+<Term def="GameObject 是 Unity 场景中的基本对象，本身无功能，只作为容器承载 Component">GameObject</Term>是容器。
+
+<Term def="Component 是挂载在 GameObject 上的功能模块，每个组件负责单一职责，通过组合实现复杂功能">Component</Term>是功能模块。
+
+<Term def="GetComponent<T>() 获取同一 GameObject 上指定类型的组件引用，实现组件间通信，应缓存避免每帧调用">GetComponent</Term>是通信桥梁。
+
+<Term def="组合优于继承是 Unity 的核心设计原则——用组件组合代替深层继承树，灵活可拆装、职责单一">组合优于继承</Term>是设计原则。
+
+## 交互Demo
+
+<Stepper>
+<Step title="第一步：GameObject 是空容器">新建一个 GameObject，它只有一个 Transform 组件（位置/旋转/缩放），没有任何功能。要让它能动，加 Rigidbody；要让它能撞，加 Collider；要让它可见，加 MeshRenderer；要让它有 AI，加自定义脚本。</Step>
+<Step title="第二步：组件间通信">
+PlayerMovement 需要 Rigidbody 施力 → `GetComponent<Rigidbody>()` 获取引用。PlayerHealth 受伤后通知 PlayerMovement 减速 → 也可用 GetComponent 直接调用。注意：通信应单向依赖，避免循环引用。
+<UsgComponentPatternDiagram />
+</Step>
+<Step title="第三步：拆分 God Class">把一个 500 行的 PlayerController 拆为：PlayerMovement（移动）、PlayerCombat（战斗）、PlayerHealth（血量）、PlayerInventory（背包）。每个组件职责单一，通过 GetComponent 或事件通信，互不耦合。</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 组件拆分：职责单一
+public class PlayerMovement : MonoBehaviour {
+    [SerializeField] private float speed = 5f;
+    private Rigidbody _rb;
+
+    void Awake() { _rb = GetComponent<Rigidbody>(); }
+
+    public void Move(Vector3 direction) {
+        _rb.MovePosition(transform.position + direction * speed * Time.deltaTime);
+    }
+}
+
+public class PlayerHealth : MonoBehaviour {
+    [SerializeField] private int maxHp = 100;
+    private int _currentHp;
+    private PlayerMovement _movement; // 跨组件引用
+
+    void Awake() { _movement = GetComponent<PlayerMovement>(); }
+
+    public void TakeDamage(int damage) {
+        _currentHp -= damage;
+        if (_currentHp <= 0) Die();
+    }
+
+    void Die() {
+        _movement.enabled = false; // 通知移动组件停止
+    }
+}
+
+// 父子关系管理
+public class WeaponHolder : MonoBehaviour {
+    void EquipWeapon(GameObject weapon) {
+        weapon.transform.SetParent(transform); // 设为子对象
+        weapon.transform.localPosition = Vector3.zero;
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用深层继承树代替组件组合。**
+`Enemy : Character : Entity : MonoBehaviour` 四层继承——每加一个功能就往下继承一层，最终 Boss 类耦合了所有父类的实现，改一处影响整棵树。正确做法：用组件组合代替继承——把移动、战斗、AI 拆成独立组件，按需挂载。继承只用于「是一个」关系（Boss 是一个 Enemy），组件用于「有一个」关系（Enemy 有移动功能）。
+</Callout>
+
+<Callout type="trap">
+**误区：组件间循环依赖（A 依赖 B，B 依赖 A）。**
+PlayerMovement 引用 PlayerHealth，PlayerHealth 又引用 PlayerMovement——编译可通过但维护困难，改任一方都可能引发连锁修改。正确做法：单向依赖或用事件解耦。PlayerHealth 不直接引用 PlayerMovement，而是发布 OnDamaged 事件，PlayerMovement 订阅该事件做减速——发布者不需要知道订阅者是谁。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 Unity 采用组件模式而非传统继承？
+
+<Answer>
+因为组件模式比继承更灵活：1)可拆装——不需要的功能直接拆掉组件，不影响其他功能；2)可复用——同一个 AI 组件可挂到不同敌人上，无需继承；3)避免继承爆炸——传统继承中「会飞的鱼」需要多重继承或深层继承树，组件模式只需挂 Fish + Fly 两个组件。Unity 的设计哲学是「GameObject 是空容器，功能全靠组件组合」，这让游戏对象的行为可以在运行时动态改变（AddComponent/RemoveComponent），远比静态继承灵活。
+</Answer>
+
+**问题 2**：如何将一个 God Class 拆分为多个组件？
+
+<Answer>
+按职责拆分：1)识别功能领域——移动、战斗、血量、背包、UI 等；2)每个领域一个 MonoBehaviour 组件，职责单一；3)跨组件通信用 GetComponent（直接引用，适合同对象内强依赖）或事件系统（发布订阅，适合跨对象松耦合）；4)避免循环依赖——通信方向单向，或用事件解耦；5)共享数据用 ScriptableObject 或独立的 PlayerData 组件。拆分后每个组件可独立测试、复用、维护，符合单一职责原则。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="GameObject">场景中的空容器，只承载 Component。</GlossaryItem>
+<GlossaryItem term="Component">挂载在 GameObject 上的功能模块，职责单一。</GlossaryItem>
+<GlossaryItem term="GetComponent<T>">获取同对象上的组件，实现组件通信。</GlossaryItem>
+<GlossaryItem term="组合优于继承">用组件组合代替深层继承，灵活可拆装。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 3D 脚本编程与游戏开发" adaptedUrl="" />

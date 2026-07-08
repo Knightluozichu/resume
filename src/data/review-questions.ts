@@ -1185,6 +1185,16 @@ import { uvfPhysicsVfxQuestions } from "./review/uvf-physics-vfx";
 import { uvfPostProcessingQuestions } from "./review/uvf-post-processing";
 import { uvfShaderVfxQuestions } from "./review/uvf-shader-vfx";
 import { uvfUiVfxQuestions } from "./review/uvf-ui-vfx";
+import { usgLearningMapQuestions } from "./review/usg-learning-map";
+import { usgCsharpBasicsQuestions } from "./review/usg-csharp-basics";
+import { usgUnityApiQuestions } from "./review/usg-unity-api";
+import { usgComponentPatternQuestions } from "./review/usg-component-pattern";
+import { usgGameLoopQuestions } from "./review/usg-game-loop";
+import { usgCoroutineEventQuestions } from "./review/usg-coroutine-event";
+import { usgDataPersistenceQuestions } from "./review/usg-data-persistence";
+import { usgOptimizationQuestions } from "./review/usg-optimization";
+import { usgBuildDeployQuestions } from "./review/usg-build-deploy";
+import { usgFinalReviewQuestions } from "./review/usg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2401,6 +2411,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...uvfPostProcessingQuestions,
   ...uvfShaderVfxQuestions,
   ...uvfUiVfxQuestions,
+  ...usgLearningMapQuestions,
+  ...usgCsharpBasicsQuestions,
+  ...usgUnityApiQuestions,
+  ...usgComponentPatternQuestions,
+  ...usgGameLoopQuestions,
+  ...usgCoroutineEventQuestions,
+  ...usgDataPersistenceQuestions,
+  ...usgOptimizationQuestions,
+  ...usgBuildDeployQuestions,
+  ...usgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

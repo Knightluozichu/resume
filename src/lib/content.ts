@@ -166,6 +166,7 @@ export const BOOK_ORDER = [
   "unity-core-tech",
   "unity-game-cases",
   "unity-vfx",
+  "unity-scripting-game-dev",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -272,6 +273,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-core-tech": "Unity 核心技术",
   "unity-game-cases": "Unity 游戏案例",
   "unity-vfx": "Unity 3D 游戏特效制作典型实例",
+  "unity-scripting-game-dev": "Unity 3D 脚本编程与游戏开发",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

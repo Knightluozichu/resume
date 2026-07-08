@@ -1307,7 +1307,17 @@ export type ReviewChapterSlug =
   | "uvf-physics-vfx"
   | "uvf-post-processing"
   | "uvf-shader-vfx"
-  | "uvf-ui-vfx";
+  | "uvf-ui-vfx"
+  | "usg-learning-map"
+  | "usg-csharp-basics"
+  | "usg-unity-api"
+  | "usg-component-pattern"
+  | "usg-game-loop"
+  | "usg-coroutine-event"
+  | "usg-data-persistence"
+  | "usg-optimization"
+  | "usg-build-deploy"
+  | "usg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2620,6 +2630,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "uvf-ui-vfx": "UI 特效",
   "uvf-combat-vfx": "战斗特效综合",
   "uvf-final-review": "全书总复习",
+  "usg-learning-map": "学习地图",
+  "usg-csharp-basics": "C# 语法基础与 Unity 脚本",
+  "usg-unity-api": "Unity API 核心调用",
+  "usg-component-pattern": "组件模式与游戏对象",
+  "usg-game-loop": "游戏循环与 Update 生命周期",
+  "usg-coroutine-event": "协程与事件系统",
+  "usg-data-persistence": "数据持久化",
+  "usg-optimization": "性能优化实践",
+  "usg-build-deploy": "构建与发布",
+  "usg-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
