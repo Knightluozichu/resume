@@ -192,6 +192,7 @@ export const BOOK_ORDER = [
   "nodejs-debugging-guide",
   "deep-nodejs",
   "frontend-engineering",
+  "how-computers-work",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -324,6 +325,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "nodejs-debugging-guide": "Node.js调试指南",
   "deep-nodejs": "深入浅出Node.js",
   "frontend-engineering": "前端工程化体系设计与实践",
+  "how-computers-work": "计算机是怎么跑起来的",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -948,6 +950,7 @@ export const SECTION_ORDER = [
   "网络游戏与服务器",
   // JavaScript高级程序设计（第4版）
   "前端与Web",
+  "系统与操作系统",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

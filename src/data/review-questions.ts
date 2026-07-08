@@ -1445,6 +1445,16 @@ import { fengDeployStrategyQuestions } from "./review/feng-deploy-strategy";
 import { fengPerformanceMonitorQuestions } from "./review/feng-performance-monitor";
 import { fengErrorTrackingQuestions } from "./review/feng-error-tracking";
 import { fengFinalReviewQuestions } from "./review/feng-final-review";
+import { hcwLearningMapQuestions } from "./review/hcw-learning-map";
+import { hcwCpuArchitectureQuestions } from "./review/hcw-cpu-architecture";
+import { hcwMemoryHierarchyQuestions } from "./review/hcw-memory-hierarchy";
+import { hcwBinaryNumbersQuestions } from "./review/hcw-binary-numbers";
+import { hcwDataRepresentationQuestions } from "./review/hcw-data-representation";
+import { hcwAssemblyLanguageQuestions } from "./review/hcw-assembly-language";
+import { hcwCompilerLinkerQuestions } from "./review/hcw-compiler-linker";
+import { hcwOsFundamentalsQuestions } from "./review/hcw-os-fundamentals";
+import { hcwFileSystemQuestions } from "./review/hcw-file-system";
+import { hcwFinalReviewQuestions } from "./review/hcw-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2922,6 +2932,17 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...fengPerformanceMonitorQuestions,
   ...fengErrorTrackingQuestions,
   ...fengFinalReviewQuestions,
+  // 计算机是怎么跑起来的
+  ...hcwLearningMapQuestions,
+  ...hcwCpuArchitectureQuestions,
+  ...hcwMemoryHierarchyQuestions,
+  ...hcwBinaryNumbersQuestions,
+  ...hcwDataRepresentationQuestions,
+  ...hcwAssemblyLanguageQuestions,
+  ...hcwCompilerLinkerQuestions,
+  ...hcwOsFundamentalsQuestions,
+  ...hcwFileSystemQuestions,
+  ...hcwFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

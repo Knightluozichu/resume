@@ -1568,7 +1568,17 @@ export type ReviewChapterSlug =
   | "feng-deploy-strategy"
   | "feng-performance-monitor"
   | "feng-error-tracking"
-  | "feng-final-review";
+  | "feng-final-review"
+  | "hcw-learning-map"
+  | "hcw-cpu-architecture"
+  | "hcw-memory-hierarchy"
+  | "hcw-binary-numbers"
+  | "hcw-data-representation"
+  | "hcw-assembly-language"
+  | "hcw-compiler-linker"
+  | "hcw-os-fundamentals"
+  | "hcw-file-system"
+  | "hcw-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3141,6 +3151,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "feng-performance-monitor": "性能监控",
   "feng-error-tracking": "错误追踪",
   "feng-final-review": "全书总复习",
+  "hcw-learning-map": "全书学习地图",
+  "hcw-cpu-architecture": "CPU架构",
+  "hcw-memory-hierarchy": "内存层次",
+  "hcw-binary-numbers": "二进制与进制转换",
+  "hcw-data-representation": "数据表示",
+  "hcw-assembly-language": "汇编语言入门",
+  "hcw-compiler-linker": "编译与链接",
+  "hcw-os-fundamentals": "操作系统基础",
+  "hcw-file-system": "文件系统原理",
+  "hcw-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
