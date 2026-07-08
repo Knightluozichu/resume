@@ -1,0 +1,141 @@
+---
+title: "编辑器精通：自定义窗口与 Inspector"
+type: C
+section: "游戏开发"
+order: 1
+description: "用 EditorWindow、PropertyDrawer 和 Gizmo 把 Unity 编辑器变成专属工具链"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmsEditorMasteryDiagram } from "@/components/mdx/unity-master/diagrams/ums-editor-mastery";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 EditorWindow 创建自定义工具窗口并绘制 GUI
+- 能用 PropertyDrawer 定制 Inspector 中自定义类型的显示
+- 能用 OnDrawGizmos / OnDrawGizmosSelected 绘制场景辅助标记
+- 能回答：什么时候该用 EditorWindow，什么时候该用 PropertyDrawer？
+</Objectives>
+
+## 直觉引入
+
+Unity 编辑器本身是用 Unity 的 IMGUI（即时模式 GUI）写的。这意味着你能用同样的 API 造自己的工具窗口。当你发现自己每天重复同一串操作（选中物体 → 改参数 → 对齐 → 重命名），那就是该写 EditorWindow 的时候了。
+
+Inspector 定制则是另一条路：PropertyDrawer 让你控制自定义类型在 Inspector 里的显示方式。比如一个 `Range` 类型，默认只能看到两个数字，定制后可以画一个滑动条。
+
+## 概念讲解
+
+编辑器扩展有三把钥匙：<Term def="继承 EditorWindow 的类，用 OnGUI 绘制独立浮动窗口">EditorWindow</Term> 做独立工具面板；<Term def="继承 PropertyDrawer 的类，控制 Serializable 类型在 Inspector 中的渲染">PropertyDrawer</Term> 做字段级定制；<Term def="在 MonoBehaviour 中用 Gizmos API 在 Scene 视图绘制辅助图形">Gizmo</Term> 做场景可视化。
+
+### 三者的适用场景
+- **EditorWindow**：批量操作、数据导入导出、团队工具面板
+- **PropertyDrawer**：自定义类型的美化显示、输入约束、条件隐藏
+- **Gizmo**：范围标记、连线、路径预览、调试可视化
+
+## 交互Demo
+
+> 猜一猜：一个 RPG 技能编辑器，该用 EditorWindow 还是 PropertyDrawer？（提示：技能数据是 ScriptableObject，编辑面板需要多列布局）
+
+<UmsEditorMasteryDiagram />
+
+<Stepper>
+<Step title="第一步：EditorWindow 工具窗口">
+继承 EditorWindow，用 `[MenuItem]` 注册菜单入口，在 OnGUI 里用 GUILayout / EditorGUI 画界面。适合批量操作和独立面板。
+</Step>
+<Step title="第二步：PropertyDrawer 字段定制">
+给自定义 Serializable 类型写 PropertyDrawer，重写 OnGUI 和 GetPropertyHeight。适合让 Inspector 更直观。
+</Step>
+<Step title="第三步：Gizmo 场景可视化">
+在 MonoBehaviour 里实现 OnDrawGizmos，用 Gizmos.DrawWireSphere 等画范围、连线。适合调试和编辑辅助。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 1. EditorWindow: 批量重命名工具
+public class BatchRenamer : EditorWindow {
+    [MenuItem("Tools/Batch Renamer")]
+    static void Open() => GetWindow<BatchRenamer>("批量重命名");
+
+    string prefix = "Enemy_";
+    void OnGUI() {
+        prefix = EditorGUILayout.TextField("前缀", prefix);
+        if (GUILayout.Button("重命名选中物体")) {
+            foreach (var go in Selection.gameObjects)
+                Undo.RecordObject(go, "Rename");
+                go.name = prefix + Random.Range(0, 1000);
+        }
+    }
+}
+
+// 2. PropertyDrawer: 自定义 Range 滑动条
+[Serializable]
+public class FloatRange {
+    public float min, max;
+}
+
+[CustomPropertyDrawer(typeof(FloatRange))]
+public class FloatRangeDrawer : PropertyDrawer {
+    public override void OnGUI(Rect pos, SerializedProperty prop, GUIContent label) {
+        var minProp = prop.FindPropertyRelative("min");
+        var maxProp = prop.FindPropertyRelative("max");
+        EditorGUI.LabelField(pos, label);
+        minProp.floatValue = EditorGUI.Slider(
+            new Rect(pos.x, pos.y + 18, pos.width, 16), "Min", minProp.floatValue, 0, 1);
+        maxProp.floatValue = EditorGUI.Slider(
+            new Rect(pos.x, pos.y + 36, pos.width, 16), "Max", maxProp.floatValue, 0, 1);
+    }
+    public override float GetPropertyHeight(SerializedProperty prop, GUIContent label) => 54;
+}
+
+// 3. Gizmo: 塔防攻击范围
+public class Tower : MonoBehaviour {
+    public float attackRange = 5f;
+    void OnDrawGizmosSelected() {
+        Gizmos.color = Color.red;
+        Gizmos.DrawWireSphere(transform.position, attackRange);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 在 PropertyDrawer 里直接修改目标对象，但 Undo 不生效。
+**原因 →** 直接操作 C# 对象绕过了 SerializedProperty，Undo 系统无法追踪。
+**修法 →** 始终通过 SerializedProperty 修改数据（FindPropertyRelative + floatValue 等），不要直接访问 C# 字段。这样 Undo/Redo、预制体覆盖、场景脏标记才能正常工作。
+</Callout>
+<Callout type="trap">
+**现象 →** OnDrawGizmos 每帧画大量 Gizmo，编辑器卡顿。
+**原因 →** Gizmo 绘制没有做数量控制，场景里几百个物体全画。
+**修法 →** 用 OnDrawGizmosSelected（仅选中时画）替代 OnDrawGizmos（始终画），或加 `[DrawGizmo(GizmoType.Selected)]` 条件控制。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：EditorWindow 和 PropertyDrawer 各自适合什么场景？举一个必须用 EditorWindow 的例子。
+
+<Answer>
+EditorWindow 适合独立工具面板（批量操作、数据导入导出、多列布局），PropertyDrawer 适合 Inspector 内的字段级美化（滑动条、颜色选择器、条件显示）。批量重命名选中物体必须用 EditorWindow——它需要访问 Selection.gameObjects 并提供按钮操作，PropertyDrawer 只能定制已有字段的显示，无法添加全局操作入口。
+</Answer>
+
+**问题**：为什么编辑器脚本里修改数据要用 SerializedProperty 而不是直接改 C# 字段？
+
+<Answer>
+SerializedProperty 是 Unity 编辑器的数据访问层，它桥接了 Undo/Redo、Prefab 覆盖、多对象编辑、场景脏标记等系统。直接改 C# 字段绕过这些系统，会导致 Undo 不生效、Prefab 修改不保存、场景不标记为已修改。用 SerializedProperty 虽然 API 啰嗦，但保证了编辑器数据一致性。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="EditorWindow">Unity 编辑器扩展基类，继承后用 OnGUI 绘制独立浮动窗口，适合工具面板和批量操作。</GlossaryItem>
+<GlossaryItem term="PropertyDrawer">控制 Serializable 自定义类型在 Inspector 中渲染方式的类，重写 OnGUI 和 GetPropertyHeight。</GlossaryItem>
+<GlossaryItem term="Gizmo">在 Scene 视图中绘制的辅助图形，通过 OnDrawGizmos / OnDrawGizmosSelected 实现，用于范围标记和调试可视化。</GlossaryItem>
+<GlossaryItem term="SerializedProperty">Unity 编辑器的数据访问抽象，桥接 Undo、Prefab、多选编辑等系统，编辑器脚本修改数据的标准方式。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 神技达人炼成记" adaptedUrl="" />

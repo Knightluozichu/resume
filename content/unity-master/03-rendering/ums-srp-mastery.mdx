@@ -1,0 +1,153 @@
+---
+title: "SRP 精通：URP/HDRP 自定义 Renderer"
+type: C
+section: "游戏开发"
+order: 5
+description: "掌握可编程渲染管线的 Renderer Feature 与 Render Pass，实现自定义渲染效果"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmsSrpMasteryDiagram } from "@/components/mdx/unity-master/diagrams/ums-srp-mastery";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能说出 URP 渲染流程的各阶段及注入点
+- 能编写 ScriptableRendererFeature 注入自定义 Render Pass
+- 能用 RenderObjects / Blit 做 Renderer Feature 的基础效果
+- 能回答：SRP Batcher 为什么能降低 DrawCall 开销？
+</Objectives>
+
+## 直觉引入
+
+Built-in 管线时代，改渲染流程要写 CommandBuffer 挂到 CameraEvent 上，黑盒且受限。SRP（可编程渲染管线）彻底打开了这个黑盒：整个渲染流程用 C# 脚本编排，你可以精确控制每一步渲染什么、用什么材质、输出到哪里。
+
+URP 是 SRP 的通用管线实现，适合移动端和跨平台。HDRP 面向高端 PC/主机。两者架构一致：Renderer → RendererFeature → RenderPass。理解了这个三层结构，就能自定义任何渲染效果。
+
+## 概念讲解
+
+<Term def="SRP 的渲染器，定义一组 RenderPass 的执行顺序，URP 默认用 UniversalRenderer">ScriptableRenderer</Term> 编排渲染流程。<Term def="挂载在 Renderer 上的可复用渲染特性，封装一组 RenderPass">RendererFeature</Term> 做功能模块。<Term def="渲染管线的最小执行单元，在特定时机执行 CommandBuffer">RenderPass</Term> 做实际绘制。<Term def="URP 的批处理优化，相同 Shader 的材质不需要重新绑定 CBUFFER">SRP Batcher</Term> 降开销。
+
+### URP 渲染流程与注入点
+- Opaque Before Rendering → 不透明物体渲染前
+- Opaque → 不透明物体渲染
+- Sky → 天空盒
+- Transparent → 半透明物体渲染
+- After Rendering → 渲染后（后处理）
+
+## 交互Demo
+
+> 猜一猜：SRP Batcher 开启后，100 个用同一 Shader 但不同材质的物体，DrawCall 数量和 CBUFFER 绑定次数分别是多少？（提示：DrawCall 还是 100，但 CBUFFER 绑定大幅减少）
+
+<UmsSrpMasteryDiagram />
+
+<Stepper>
+<Step title="第一步：理解 Renderer">
+URP 的 UniversalRenderer 定义了渲染流程：Shadow → Opaque → Sky → Transparent → PostProcessing。每步是一个 RenderPass。
+</Step>
+<Step title="第二步：编写 RendererFeature">
+继承 ScriptableRendererFeature，Create() 里实例化 RenderPass，AddRenderPasses() 里把它注入渲染流程。Feature 是可复用的功能模块。
+</Step>
+<Step title="第三步：编写 RenderPass">
+继承 ScriptableRenderPass，Execute() 里用 CommandBuffer 绘制。注入点通过 renderPassEvent 字段控制（如 AfterRenderingOpaques）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 1. 自定义 RendererFeature: 描边效果
+public class OutlineFeature : ScriptableRendererFeature {
+    public RenderPassEvent passEvent = RenderPassEvent.AfterRenderingOpaques;
+    public Material outlineMaterial;
+    OutlinePass _pass;
+
+    public override void Create() {
+        _pass = new OutlinePass(outlineMaterial) { renderPassEvent = passEvent };
+    }
+
+    public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData data) {
+        if (outlineMaterial != null)
+            renderer.EnqueuePass(_pass);
+    }
+}
+
+// 2. 自定义 RenderPass: 执行描边绘制
+public class OutlinePass : ScriptableRenderPass {
+    readonly Material _material;
+    RTHandle _tempTexture;
+
+    public OutlinePass(Material material) => _material = material;
+
+    public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData data) {
+        // 分配临时 RenderTexture
+        var desc = data.cameraData.cameraTargetDescriptor;
+        desc.depthBufferBits = 0;
+        RenderingUtils.ReAllocateIfNeeded(ref _tempTexture, desc);
+    }
+
+    public override void Execute(ScriptableRenderContext ctx, ref RenderingData data) {
+        if (_material == null) return;
+        var cmd = CommandBufferPool.Get("OutlinePass");
+        // 把场景渲染到临时纹理，再用描边材质 Blit 回来
+        Blitter.BlitCameraTexture(cmd, data.cameraData.renderer.cameraColorTargetHandle, _tempTexture);
+        Blitter.BlitCameraTexture(cmd, _tempTexture, data.cameraData.renderer.cameraColorTargetHandle, _material, 0);
+        ctx.ExecuteCommandBuffer(cmd);
+        CommandBufferPool.Release(cmd);
+    }
+
+    public override void OnCameraCleanup(CommandBuffer cmd) => _tempTexture?.Release();
+}
+
+// 3. SRP Batcher: 兼容的 Shader 需要 CBUFFER
+// 在 ShaderLab 里:
+// CBUFFER_START(UnityPerMaterial)
+//     float4 _Color;
+//     float _Smoothness;
+// CBUFFER_END
+// 这样 SRP Batcher 才能合批同 Shader 不同材质
+
+// 4. 开启 SRP Batcher
+// Project Settings > Graphics > SRP Batcher: 勾选
+// 或代码: GraphicsSettings.useScriptableRenderPipelineBatching = true;
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 开了 SRP Batcher 但 Profiler 显示 DrawCall 没减少。
+**原因 →** SRP Batcher 不减少 DrawCall，减少的是 CBUFFER 绑定开销。DrawCall 仍然是每物体一次，但 GPU 提交命令的开销降低了。
+**修法 →** 看 Profiler 的 GPU 模块，找 "SRP Batcher" 条目。如果显示 "Not Batched"，说明材质的 Shader 不兼容（缺少 CBUFFER_START(UnityPerMaterial)）。用 Frame Debugger 确认批处理状态。
+</Callout>
+<Callout type="trap">
+**现象 →** 自定义 RenderPass 里 Blit 后画面黑屏。
+**原因 →** Blit 的源和目标 RenderTexture 格式不匹配，或者 depthBuffer 设置错误，或者 passEvent 时机不对。
+**修法 →** 确保临时纹理的 descriptor 和 camera target 一致（颜色格式、尺寸），depthBufferBits 设为 0（后处理不需要深度）。passEvent 选 AfterRenderingOpaques 或 AfterRenderingTransparents，不要在渲染中途 Blit。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：SRP Batcher 和 GPU Instancing 有什么区别？能不能同时用？
+
+<Answer>
+SRP Batcher 合并相同 Shader 的材质的 CBUFFER 绑定，不合并 DrawCall（每物体仍一次 DrawCall），适合大量不同网格同 Shader 的场景。GPU Instancing 把同 Mesh 同 Material 的物体合并成一次 DrawCall，适合大量相同物体。两者互斥：一个 DrawCall 要么走 SRP Batcher 要么走 Instancing。规则：相同物体用 Instancing，不同物体同 Shader 用 SRP Batcher。
+</Answer>
+
+**问题**：RendererFeature 和 RenderPass 是什么关系？为什么要分两层？
+
+<Answer>
+RenderPass 是渲染执行单元（画什么、怎么画），RendererFeature 是可复用的功能封装（配置 + 挂载 RenderPass）。分层是因为 Feature 需要在 Inspector 里配置参数（材质、注入时机），而 Pass 负责实际执行。一个 Feature 可以管理多个 Pass（如描边 Feature 含渲染 Pass + Blit Pass）。Feature 可被多个 Renderer 复用，Pass 是 Feature 内部实现细节。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="ScriptableRenderer">SRP 的渲染器，定义一组 RenderPass 的执行顺序，URP 默认使用 UniversalRenderer。</GlossaryItem>
+<GlossaryItem term="RendererFeature">挂载在 Renderer 上的可复用渲染特性，封装一组 RenderPass 并在 Inspector 可配置，是自定义渲染效果的入口。</GlossaryItem>
+<GlossaryItem term="RenderPass">渲染管线最小执行单元，继承 ScriptableRenderPass，在 Execute 中用 CommandBuffer 绘制，通过 renderPassEvent 控制注入时机。</GlossaryItem>
+<GlossaryItem term="SRP Batcher">URP 的批处理优化，相同 Shader 的材质不需要重新绑定 CBUFFER（常量缓冲区），减少 CPU 端的渲染状态设置开销。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 神技达人炼成记" adaptedUrl="" />

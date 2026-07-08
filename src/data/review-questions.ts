@@ -1205,6 +1205,16 @@ import { gmaProbabilityMechanicsQuestions } from "./review/gma-probability-mecha
 import { gmaPuzzleDesignQuestions } from "./review/gma-puzzle-design";
 import { gmaMechanismTuningQuestions } from "./review/gma-mechanism-tuning";
 import { gmaFinalReviewQuestions } from "./review/gma-final-review";
+import { umsLearningMapQuestions } from "./review/ums-learning-map";
+import { umsEditorMasteryQuestions } from "./review/ums-editor-mastery";
+import { umsWorkflowOptimizationQuestions } from "./review/ums-workflow-optimization";
+import { umsAdvancedScriptingQuestions } from "./review/ums-advanced-scripting";
+import { umsEditorExtensionQuestions } from "./review/ums-editor-extension";
+import { umsSrpMasteryQuestions } from "./review/ums-srp-mastery";
+import { umsPerformanceProfilingQuestions } from "./review/ums-performance-profiling";
+import { umsAssetManagementQuestions } from "./review/ums-asset-management";
+import { umsTeamCollaborationQuestions } from "./review/ums-team-collaboration";
+import { umsFinalReviewQuestions } from "./review/ums-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2441,6 +2451,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gmaPuzzleDesignQuestions,
   ...gmaMechanismTuningQuestions,
   ...gmaFinalReviewQuestions,
+  ...umsLearningMapQuestions,
+  ...umsEditorMasteryQuestions,
+  ...umsWorkflowOptimizationQuestions,
+  ...umsAdvancedScriptingQuestions,
+  ...umsEditorExtensionQuestions,
+  ...umsSrpMasteryQuestions,
+  ...umsPerformanceProfilingQuestions,
+  ...umsAssetManagementQuestions,
+  ...umsTeamCollaborationQuestions,
+  ...umsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

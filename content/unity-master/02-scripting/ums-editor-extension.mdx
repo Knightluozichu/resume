@@ -1,0 +1,179 @@
+---
+title: "编辑器扩展：EditorWindow、PropertyDrawer 与菜单"
+type: C
+section: "游戏开发"
+order: 4
+description: "深入编辑器扩展三件套，打造团队级工具链与数据编辑器"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmsEditorExtensionDiagram } from "@/components/mdx/unity-master/diagrams/ums-editor-extension";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用 EditorWindow 配合 ScriptableObject 搭建数据编辑器
+- 能用 PropertyDrawer + DecoratorDrawer 实现字段级 UI 控制
+- 能用 MenuItem、ContextMenu、ContextMenuItem 注册各级右键菜单
+- 能回答：Editor vs Runtime 程序集如何隔离？
+</Objectives>
+
+## 直觉引入
+
+编辑器扩展是 Unity 达人的核心竞争力。当策划需要配技能表、美术需要批量处理材质、QA 需要一键测试场景——这些都靠编辑器扩展解决。但这不是随便画几个按钮的事，而是要理解 Unity 编辑器的架构：Editor 脚本和 Runtime 脚本必须分程序集隔离，否则打包时会报错。
+
+这一章把编辑器扩展从「能画窗口」推进到「能搭工具链」：ScriptableObject 做数据层，EditorWindow 做编辑面板，PropertyDrawer 做字段美化，MenuItem 做入口注册。
+
+## 概念讲解
+
+<Term def="用 asmdef 将编辑器脚本隔离到 Editor 程序集，运行时打包不含编辑器代码">程序集隔离</Term>是工程前提。<Term def="继承 ScriptableObject 的数据资产类，配合 EditorWindow 做可视化编辑">数据资产</Term>做配置层。<Term def="通过 ScriptableObjectEditor 重写 Inspector，添加按钮、校验、批量操作">自定义 Editor</Term>做对象级控制。<Term def="用 MenuItem、ContextMenu、ContextMenuItem 在各级菜单注册入口">菜单注册</Term>做操作入口。
+
+### 编辑器扩展的分层
+- **数据层**：ScriptableObject 定义数据结构
+- **编辑层**：EditorWindow / CustomEditor 做可视化编辑
+- **字段层**：PropertyDrawer 做字段级 UI
+- **入口层**：MenuItem 做菜单注册
+
+## 交互Demo
+
+> 猜一猜：为什么编辑器脚本必须放在 Editor 文件夹或 Editor 程序集里？（提示：打包时 IL2CPP 不认识 UnityEditor 命名空间）
+
+<UmsEditorExtensionDiagram />
+
+<Stepper>
+<Step title="第一步：程序集隔离">
+创建 `MyGame.Editor.asmdef`，勾选 Editor Only，引用 `MyGame.Runtime.asmdef`。编辑器代码不会打进运行时包。
+</Step>
+<Step title="第二步：数据编辑器">
+定义 ScriptableObject 做技能数据，用 EditorWindow 列表 + 详情布局做可视化编辑面板。策划直接在面板里改数据。
+</Step>
+<Step title="第三步：自定义 Inspector">
+用 `[CustomEditor(typeof(Skill))]` 重写 Inspector，加「测试技能」「复制数据」等按钮。右键菜单用 ContextMenuItem。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// === Runtime 程序集 (MyGame.Runtime) ===
+
+// 1. ScriptableObject: 技能数据
+[CreateAssetMenu(menuName = "Game/Skill")]
+public class SkillData : ScriptableObject {
+    public string skillName;
+    public float cooldown;
+    public float damage;
+    public List<EffectData> effects;
+}
+
+[Serializable]
+public class EffectData {
+    public EffectType type;
+    public float duration;
+    public float magnitude;
+}
+
+// === Editor 程序集 (MyGame.Editor) ===
+
+// 2. EditorWindow: 技能数据编辑器
+public class SkillEditorWindow : EditorWindow {
+    [MenuItem("Tools/Skill Editor")]
+    static void Open() => GetWindow<SkillEditorWindow>("技能编辑器");
+
+    Vector2 _scroll;
+    List<SkillData> _skills;
+
+    void OnEnable() => LoadSkills();
+    void LoadSkills() {
+        _skills = AssetDatabase.FindAssets("t:SkillData")
+            .Select(guid => AssetDatabase.LoadAssetAtPath<SkillData>(
+                AssetDatabase.GUIDToAssetPath(guid))).ToList();
+    }
+
+    void OnGUI() {
+        _scroll = EditorGUILayout.BeginScrollView(_scroll);
+        foreach (var skill in _skills) {
+            EditorGUILayout.BeginVertical("box");
+            skill.skillName = EditorGUILayout.TextField("名称", skill.skillName);
+            skill.cooldown = EditorGUILayout.Slider("冷却", skill.cooldown, 0, 30);
+            skill.damage = EditorGUILayout.FloatField("伤害", skill.damage);
+            EditorGUILayout.EndVertical();
+        }
+        EditorGUILayout.EndScrollView();
+        if (GUILayout.Button("保存所有")) AssetDatabase.SaveAssets();
+    }
+}
+
+// 3. CustomEditor: 技能 Inspector 增强
+[CustomEditor(typeof(SkillData))]
+public class SkillDataEditor : Editor {
+    public override void OnInspectorGUI() {
+        DrawDefaultInspector();
+        var skill = (SkillData)target;
+        EditorGUILayout.Space();
+        if (GUILayout.Button("测试技能")) {
+            Debug.Log($"施放技能: {skill.skillName}, 伤害: {skill.damage}");
+            // 实际调用游戏内技能系统
+        }
+    }
+}
+
+// 4. PropertyDrawer: 效果字段美化
+[CustomPropertyDrawer(typeof(EffectData))]
+public class EffectDataDrawer : PropertyDrawer {
+    public override void OnGUI(Rect pos, SerializedProperty prop, GUIContent label) {
+        EditorGUI.BeginProperty(pos, label, prop);
+        var typeProp = prop.FindPropertyRelative("type");
+        var durProp = prop.FindPropertyRelative("duration");
+        var magProp = prop.FindPropertyRelative("magnitude");
+        pos.height = 18;
+        EditorGUI.PropertyField(pos, typeProp);
+        pos.y += 20;
+        EditorGUI.Slider(pos, durProp, 0, 10, new GUIContent("持续"));
+        pos.y += 20;
+        EditorGUI.Slider(pos, magProp, 0, 100, new GUIContent("强度"));
+        EditorGUI.EndProperty();
+    }
+    public override float GetPropertyHeight(SerializedProperty p, GUIContent l) => 58;
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 打包时报错 `The type or namespace 'UnityEditor' could not be found`。
+**原因 →** 编辑器脚本没有放进 Editor 文件夹或没有用 asmdef 隔离，运行时程序集引用了 UnityEditor。
+**修法 →** 方案一：把编辑器脚本移到 Editor 子文件夹（Unity 自动排除）。方案二（推荐）：创建 `.Editor.asmdef`，勾选 Editor Only，引用运行时 asmdef。asmdef 方案更可靠，大型项目必用。
+</Callout>
+<Callout type="trap">
+**现象 →** CustomEditor 里直接改 target 的 C# 字段，但预制体修改不生效。
+**原因 →** 和 PropertyDrawer 一样，直接改 C# 字段绕过了 SerializedObject，预制体覆盖系统不追踪。
+**修法 →** 用 `serializedObject.FindProperty("fieldName").floatValue = newVal;` + `serializedObject.ApplyModifiedProperties();` 修改数据。需要批量操作时用 `Undo.RecordObject`。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：编辑器脚本为什么必须和运行时脚本分程序集？不分会有什么后果？
+
+<Answer>
+UnityEditor 命名空间只在编辑器内可用，打包时 IL2CPP 不包含它。如果运行时代码引用了 UnityEditor（如 EditorWindow、AssetDatabase），打包直接报错。分程序集后，Editor asmdef 标记为 Editor Only，打包时自动排除，运行时 asmdef 不引用 Editor 程序集，保证安全。大型项目必须用 asmdef，否则一个误引用就会导致打包失败。
+</Answer>
+
+**问题**：ScriptableObject 做配置数据相比 JSON 配置表有什么优势？
+
+<Answer>
+ScriptableObject 在 Inspector 里可视化编辑、支持引用（直接拖贴图、预制体）、支持自定义 PropertyDrawer 美化、可以热重载、与 Unity 资源系统深度集成（Addressables 可加载）。JSON 需要自己写反序列化、不支持 Unity 对象引用、编辑体验差。但 JSON 跨引擎、可被外部工具生成、版本控制 diff 友好。Unity 项目内配置用 ScriptableObject，外部数据导入用 JSON。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="程序集隔离">用 asmdef 文件将编辑器脚本隔离到标记 Editor Only 的程序集，运行时打包自动排除，防止 UnityEditor 命名空间引用导致打包失败。</GlossaryItem>
+<GlossaryItem term="ScriptableObject">Unity 的数据资产类，可在 Inspector 可视化编辑、支持对象引用、可被 Addressables 加载，适合做游戏配置数据。</GlossaryItem>
+<GlossaryItem term="CustomEditor">用 `[CustomEditor(typeof(T))]` 标记的类，重写 OnInspectorGUI 自定义对象在 Inspector 中的显示和操作。</GlossaryItem>
+<GlossaryItem term="DecoratorDrawer">修饰性绘制器，用 `[Space]`、`[Header]`、`[Tooltip]` 等特性修饰字段显示，不改变数据。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 神技达人炼成记" adaptedUrl="" />

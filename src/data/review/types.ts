@@ -1327,7 +1327,18 @@ export type ReviewChapterSlug =
   | "usg-data-persistence"
   | "usg-optimization"
   | "usg-build-deploy"
-  | "usg-final-review";
+  | "usg-final-review"
+  // Unity 神技达人炼成记
+  | "ums-learning-map"
+  | "ums-editor-mastery"
+  | "ums-workflow-optimization"
+  | "ums-advanced-scripting"
+  | "ums-editor-extension"
+  | "ums-srp-mastery"
+  | "ums-performance-profiling"
+  | "ums-asset-management"
+  | "ums-team-collaboration"
+  | "ums-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2660,6 +2671,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "usg-optimization": "性能优化实践",
   "usg-build-deploy": "构建与发布",
   "usg-final-review": "全书总复习",
+  "ums-learning-map": "Unity 神技达人炼成记全书学习地图",
+  "ums-editor-mastery": "编辑器精通",
+  "ums-workflow-optimization": "工作流优化",
+  "ums-advanced-scripting": "高级脚本技巧",
+  "ums-editor-extension": "编辑器扩展",
+  "ums-srp-mastery": "SRP 精通",
+  "ums-performance-profiling": "性能分析精要",
+  "ums-asset-management": "资源管理",
+  "ums-team-collaboration": "团队协作",
+  "ums-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

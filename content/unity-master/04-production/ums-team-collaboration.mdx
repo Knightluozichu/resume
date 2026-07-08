@@ -1,0 +1,164 @@
+---
+title: "团队协作：Git、版本控制与代码规范"
+type: C
+section: "游戏开发"
+order: 8
+description: "用 Git 管控 Unity 项目，建立 .gitignore、场景合并与代码规范体系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmsTeamCollaborationDiagram } from "@/components/mdx/unity-master/diagrams/ums-team-collaboration";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能配置 Unity 项目的 .gitignore 和 Git LFS（大文件版本控制）
+- 能用 Smart Merge / UnityYAMLMerge 处理场景和预制体冲突
+- 能建立 C# 代码规范和 Code Review 流程
+- 能回答：Unity 场景文件冲突为什么难合并？怎么解决？
+</Objectives>
+
+## 直觉引入
+
+Unity 项目的版本控制比普通软件复杂得多：场景文件（.unity）和预制体文件（.prefab）是 YAML 格式，两个人的改动冲突后几乎无法手动合并；美术资源（贴图、模型、音频）动辄几十 MB，Git 直接存会导致仓库膨胀到无法克隆。
+
+这不是 Git 的问题，而是 Unity 二进制/序列化文件特性决定的。解决方案是组合拳：.gitignore 排除临时文件、Git LFS 管大文件、UnityYAMLMerge 做场景智能合并、代码规范 + Code Review 保障代码质量。
+
+## 概念讲解
+
+<Term def="用 Git LFS（Large File Storage）把大文件存到独立存储，仓库只存指针">Git LFS</Term>管大文件。<Term def="Unity 内置的 YAML 合并工具，按语义合并场景和预制体而非按文本行">UnityYAMLMerge</Term>解场景冲突。<Term def="用 .editorconfig + Analyzer 强制执行命名、格式、架构约束">代码规范</Term>保障质量。<Term def="二进制资产用文本占位符合并，冲突时让美术选择版本而非手动改二进制">合并策略</Term>处理资源冲突。
+
+### Unity 项目的版本控制分层
+- **代码**（.cs）→ Git 文本合并 + Code Review
+- **场景/预制体**（.unity/.prefab）→ UnityYAMLMerge 语义合并
+- **美术资源**（.png/.fbx/.wav）→ Git LFS，冲突时选一方
+- **配置**（.asmdef/.asset）→ Git 文本合并 + 预制体序列化配置
+
+## 交互Demo
+
+> 猜一猜：一个 50 人团队的 Unity 项目，不用 Git LFS，半年后仓库多大？用了 LFS 多大？（提示：50 人每周提交 10 个资源，平均 5MB/个，半年约 650GB）
+
+<UmsTeamCollaborationDiagram />
+
+<Stepper>
+<Step title="第一步：配置 .gitignore 和 LFS">
+从 github/gitignore 取 Unity 模板，加入 Library/、Temp/、Obj/ 等。用 `git lfs track "*.png" "*.fbx" "*.wav"` 注册大文件类型。
+</Step>
+<Step title="第二步：配置 UnityYAMLMerge">
+在 .gitattributes 里指定 .unity 和 .prefab 用 UnityYAMLMerge 合并。工具在 Unity 安装目录的 Tools/UnityYAMLMerge.exe。
+</Step>
+<Step title="第三步：代码规范与 Review">
+用 .editorconfig 统一缩进/命名，用 Roslyn Analyzer 强制规则。PR 流程：分支开发 → 提交 PR → 至少一人 Review → 合并。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```ini
+# 1. .gitignore (Unity 项目核心)
+# 临时文件夹
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+# 但保留 !Library/PackageCache（有时需要）
+# IDE
+.vs/
+.idea/
+*.csproj
+*.sln
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 2. .gitattributes (LFS + YAML 合并)
+# 大文件走 LFS
+*.png filter=lfs diff=lfs merge=lfs -text
+*.jpg filter=lfs diff=lfs merge=lfs -text
+*.fbx filter=lfs diff=lfs merge=lfs -text
+*.wav filter=lfs diff=lfs merge=lfs -text
+*.psd filter=lfs diff=lfs merge=lfs -text
+
+# 场景和预制体用 UnityYAMLMerge
+*.unity merge=unityyamlmerge eol=lf
+*.prefab merge=unityyamlmerge eol=lf
+*.mat merge=unityyamlmerge eol=lf
+*.asset merge=unityyamlmerge eol=lf
+
+# 3. .gitconfig (配置 UnityYAMLMerge)
+# git config --global merge.unityyamlmerge.name "Unity SmartMerge"
+# git config --global merge.unityyamlmerge.driver \
+#   "'C:/Program Files/Unity/Hub/Editor/2022.3/Editor/Data/Tools/UnityYAMLMerge.exe' merge -h -p --force --fallback none %O %A %B %P"
+```
+
+```csharp
+// 4. 代码规范示例: .editorconfig
+# [*.cs]
+# indent_style = space
+# indent_size = 4
+# naming_rule.private_fields_must_be_camel_case.symbols = private_fields
+# naming_rule.private_fields_must_be_camel_case.style = camel_case_underscore
+# naming_rule.private_fields_must_be_camel_case.severity = error
+
+// 规范后的 Unity 脚本
+public class PlayerController : MonoBehaviour {
+    // 私有字段 _camelCase
+    [SerializeField] private float _moveSpeed = 5f;
+    [SerializeField] private Rigidbody _rb;
+
+    // 公开属性 PascalCase
+    public float MoveSpeed => _moveSpeed;
+
+    // 生命周期方法保持 Unity 默认命名
+    void Awake() => _rb = GetComponent<Rigidbody>();
+
+    void FixedUpdate() {
+        var input = new Vector3(
+            Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
+        _rb.MovePosition(transform.position + input * _moveSpeed * Time.fixedDeltaTime);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 两个策划同时改同一个场景，合并后场景损坏，打开报错。
+**原因 →** 场景文件是 YAML，Git 默认按文本行合并，不理解 YAML 语义，合并后格式破坏。
+**修法 →** 配置 UnityYAMLMerge 作为 .unity/.prefab 的自定义合并驱动。它理解 Unity YAML 结构，按对象 ID 语义合并。若合并仍失败（同一物体两边都改），需要手动在编辑器里解决。预防：大场景拆成 Additive 多场景，减少冲突面。
+</Callout>
+<Callout type="trap">
+**现象 →** clone 仓库后 Unity 重新导入资源要 2 小时。
+**原因 →** Library 文件夹被 .gitignore 排除（正确），但 .meta 文件没有提交，导致 GUID 变化，所有引用断裂，Unity 全量重新导入。
+**修法 →** 确保 .meta 文件提交到 Git（.gitignore 不能排除 *.meta）。Library 不提交是对的（可重建），但 .meta 必须提交（GUID 是引用基础）。新人 clone 后首次导入慢是正常的，后续用 Unity 的 Cache Server 加速。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：Unity 场景文件冲突为什么难合并？UnityYAMLMerge 怎么解决？
+
+<Answer>
+场景文件是 Unity 序列化的 YAML，包含数千行对象定义和引用关系。Git 默认按文本行合并，不理解 YAML 语义——两行改动可能破坏引用链导致场景损坏。UnityYAMLMerge 理解 Unity YAML 结构，按对象 GUID 和 fileID 语义合并：同一物体两边的不同属性可以自动合并，只有同一属性两边都改才报冲突。它还能用 fallback 策略在语义合并失败时回退到文本合并。
+</Answer>
+
+**问题**：.meta 文件为什么必须提交到 Git？不提交会怎样？
+
+<Answer>
+.meta 文件包含资源的 GUID（全局唯一标识），Unity 所有跨资源引用（预制体引用贴图、场景引用预制体）都靠 GUID。不提交 .meta 时，每个人本地 Unity 会重新生成 .meta，GUID 不同 → 引用断裂 → 场景里贴图丢失、预制体变成空物体。规则：.gitignore 排除 Library/Temp/Build 但绝不排除 *.meta。新增资源后立即提交 .meta 文件。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Git LFS">Git Large File Storage，把大文件（贴图、模型、音频）存到独立存储，仓库只存指针，避免仓库膨胀。</GlossaryItem>
+<GlossaryItem term="UnityYAMLMerge">Unity 内置的 YAML 语义合并工具，按对象 GUID 和 fileID 合并场景和预制体，而非按文本行，大幅减少冲突。</GlossaryItem>
+<GlossaryItem term=".gitignore">Git 忽略规则文件，Unity 项目必须排除 Library/、Temp/、Build/ 等临时目录，但保留 .meta 文件。</GlossaryItem>
+<GlossaryItem term=".editorconfig">跨编辑器的代码风格配置文件，配合 Roslyn Analyzer 可强制执行命名规范、格式约束和架构规则。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 神技达人炼成记" adaptedUrl="" />

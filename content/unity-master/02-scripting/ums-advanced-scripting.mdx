@@ -1,0 +1,151 @@
+---
+title: "高级脚本技巧：泛型、委托与扩展方法"
+type: C
+section: "游戏开发"
+order: 3
+description: "用 C# 泛型约束、委托事件和扩展方法写出高复用、低耦合的 Unity 脚本"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { UmsAdvancedScriptingDiagram } from "@/components/mdx/unity-master/diagrams/ums-advanced-scripting";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 能用泛型约束编写类型安全的可复用组件（单例、对象池、事件系统）
+- 能用委托和事件实现模块间松耦合通信
+- 能用扩展方法为已有类型添加功能而不修改原代码
+- 能回答：泛型约束的 where 子句解决了什么问题？
+</Objectives>
+
+## 直觉引入
+
+Unity 脚本写到一定量之后，会出现大量重复代码：每种敌人都要写一个单例，每种子弹都要写一个对象池，每个系统间通信都硬引用。代码越来越臃肿，改一个系统牵连一堆。
+
+C# 的高级特性就是解决这些问题的工具：**泛型**让一份代码服务多种类型，**委托**让系统间通信不硬引用，**扩展方法**让已有类型「无侵入」地获得新功能。这三者是写出优雅 Unity 代码的核心。
+
+## 概念讲解
+
+<Term def="用类型参数 T 编写通用代码，通过 where 约束限制 T 必须满足的条件">泛型</Term>解决代码复用。<Term def="将方法作为参数传递的类型安全包装，事件是基于委托的发布订阅模式">委托与事件</Term>解决模块解耦。<Term def="用 this 关键字为已有类型添加实例方法，无需继承或修改源码">扩展方法</Term>解决无侵入增强。
+
+### 三者的协作
+- 泛型单例 + 事件系统 → 全局事件总线，任何模块都能发布/监听
+- 泛型对象池 + 扩展方法 → `gameObject.ReleaseToPool()` 一行回收
+- 委托 + 泛型约束 → 类型安全的事件回调，无装箱拆箱
+
+## 交互Demo
+
+> 猜一猜：一个射击游戏里，玩家开枪通知音效系统和特效系统，用硬引用 vs 用事件，代码耦合度差多少？（提示：硬引用 = Player 直接持有 AudioSystem 和 VFXSystem 的引用）
+
+<UmsAdvancedScriptingDiagram />
+
+<Stepper>
+<Step title="第一步：泛型单例">
+用 `where T : MonoBehaviour` 约束泛型参数，一份 Singleton 代码服务所有 MonoBehaviour 子类。避免每个管理器都写一遍单例样板。
+</Step>
+<Step title="第二步：委托事件">
+定义 `Action<GameEvent>` 委托，用 event 关键字限制外部只能 += / -=。模块间通过事件通信，不互相持有引用。
+</Step>
+<Step title="第三步：扩展方法">
+用 `public static void ReleaseToPool(this GameObject go)` 为 GameObject 添加池化回收方法。调用方代码 `go.ReleaseToPool()` 自然直观。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```csharp
+// 1. 泛型单例: 一份代码服务所有管理器
+public abstract class Singleton<T> : MonoBehaviour where T : MonoBehaviour {
+    static T _instance;
+    public static T Instance {
+        get {
+            if (_instance == null)
+                _instance = FindAnyObjectByType<T>();
+            return _instance;
+        }
+    }
+    protected virtual void Awake() => _instance = this as T;
+}
+
+// 2. 泛型对象池: 类型安全
+public class ObjectPool<T> where T : Component {
+    readonly Stack<T> _pool = new();
+    readonly T _prefab;
+    public ObjectPool(T prefab, int initial = 10) {
+        _prefab = prefab;
+        for (int i = 0; i < initial; i++)
+            _pool.Push(Object.Instantiate(prefab));
+    }
+    public T Get() => _pool.Count > 0 ? _pool.Pop() : Object.Instantiate(_prefab);
+    public void Release(T item) { item.gameObject.SetActive(false); _pool.Push(item); }
+}
+
+// 3. 事件系统: 委托 + 泛型
+public static class EventBus {
+    static readonly Dictionary<Type, Delegate> _handlers = new();
+    public static void Subscribe<T>(Action<T> handler) where T : struct, IGameEvent {
+        if (_handlers.TryGetValue(typeof(T), out var del))
+            _handlers[typeof(T)] = Delegate.Combine(del, handler);
+        else
+            _handlers[typeof(T)] = handler;
+    }
+    public static void Publish<T>(T evt) where T : struct, IGameEvent {
+        if (_handlers.TryGetValue(typeof(T), out var del))
+            ((Action<T>)del)?.Invoke(evt);
+    }
+}
+
+// 4. 扩展方法: 无侵入增强
+public static class GameObjectExtensions {
+    public static void SetLayerRecursive(this GameObject go, int layer) {
+        go.layer = layer;
+        foreach (Transform child in go.transform)
+            child.gameObject.SetLayerRecursive(layer);
+    }
+}
+
+// 使用: 事件驱动，零硬引用
+public struct PlayerFiredEvent : IGameEvent { public Vector3 Position; }
+EventBus.Subscribe<PlayerFiredEvent>(e => PlaySound(e.Position));
+EventBus.Publish(new PlayerFiredEvent { Position = muzzle.position });
+```
+
+## 常见误区
+
+<Callout type="trap">
+**现象 →** 泛型单例在场景里有多个实例时报 NullReferenceException。
+**原因 →** Awake 里无条件赋值 `_instance = this`，后创建的实例覆盖了先创建的。
+**修法 →** Awake 里先检查 `_instance` 是否已存在：若存在且不是自己，Destroy(gameObject)；若为 null 才赋值。加 `[DisallowMultipleComponent]` 防止同物体多挂。
+</Callout>
+<Callout type="trap">
+**现象 →** 事件订阅后忘记取消订阅，对象被销毁后仍收到事件，报 MissingReferenceException。
+**原因 →** event 是强引用，持有订阅者的委托引用，订阅者即使被 Destroy 也不会被 GC 回收，事件触发时访问已销毁的对象。
+**修法 →** 在 OnDisable / OnDestroy 里 -= 取消所有订阅。或用弱引用事件系统。养成「订阅必取消」的习惯。
+</Callout>
+
+## 练习
+
+<Exercises>
+**问题**：泛型约束 `where T : MonoBehaviour` 解决了什么问题？不加约束会怎样？
+
+<Answer>
+约束确保 T 一定是 MonoBehaviour 子类，从而可以在泛型代码里安全调用 MonoBehaviour 的方法（如 Instantiate、GetComponent）。不加约束时，编译器不知道 T 有什么方法，连 `Object.Instantiate` 都调不了——必须先 cast。约束让泛型代码类型安全且不需要运行时 cast，编译期就能发现类型错误。
+</Answer>
+
+**问题**：用事件总线 vs 直接引用，各有什么优缺点？什么时候该用哪种？
+
+<Answer>
+事件总线优点是松耦合：发布者不认识订阅者，新增系统不需要改已有代码。缺点是调试困难（事件链不直观）、性能有开销（字典查找 + 委托调用）。直接引用优点是直观、高性能，缺点是强耦合。规则：跨系统通信用事件总线（如 UI 通知游戏逻辑），系统内部通信用直接引用（如 Player 调用自己的 Rigidbody）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="泛型约束">用 where 子句限制泛型类型参数必须满足的条件（如 where T : MonoBehaviour），确保类型安全并允许调用约束类型的方法。</GlossaryItem>
+<GlossaryItem term="委托">将方法作为参数传递的类型安全包装，C# 的 Action 和 Func 是内置泛型委托，事件是基于委托的发布订阅模式。</GlossaryItem>
+<GlossaryItem term="扩展方法">用 this 关键字在静态类中为已有类型添加实例方法，无需继承或修改源码，Unity 中常用于增强 GameObject、Transform 等内置类型。</GlossaryItem>
+<GlossaryItem term="事件总线">基于 Dictionary 和委托的全局事件系统，模块间通过 Publish/Subscribe 通信，实现松耦合架构。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Unity 神技达人炼成记" adaptedUrl="" />
