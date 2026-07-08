@@ -1295,6 +1295,16 @@ import { mgaGatewayProxyQuestions } from "./review/mga-gateway-proxy";
 import { mgaFaultToleranceQuestions } from "./review/mga-fault-tolerance";
 import { mgaMonitoringQuestions } from "./review/mga-monitoring";
 import { mgaFinalReviewQuestions } from "./review/mga-final-review";
+import { gncLearningMapQuestions } from "./review/gnc-learning-map";
+import { gncUdpReliableQuestions } from "./review/gnc-udp-reliable";
+import { gncCongestionControlQuestions } from "./review/gnc-congestion-control";
+import { gncFrameSyncQuestions } from "./review/gnc-frame-sync";
+import { gncStateSyncAdvQuestions } from "./review/gnc-state-sync-adv";
+import { gncBandwidthOptimizationQuestions } from "./review/gnc-bandwidth-optimization";
+import { gncLatencyCompensationQuestions } from "./review/gnc-latency-compensation";
+import { gncEncryptionQuestions } from "./review/gnc-encryption";
+import { gncAntiCheatQuestions } from "./review/gnc-anti-cheat";
+import { gncFinalReviewQuestions } from "./review/gnc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2621,6 +2631,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mgaFaultToleranceQuestions,
   ...mgaMonitoringQuestions,
   ...mgaFinalReviewQuestions,
+  ...gncLearningMapQuestions,
+  ...gncUdpReliableQuestions,
+  ...gncCongestionControlQuestions,
+  ...gncFrameSyncQuestions,
+  ...gncStateSyncAdvQuestions,
+  ...gncBandwidthOptimizationQuestions,
+  ...gncLatencyCompensationQuestions,
+  ...gncEncryptionQuestions,
+  ...gncAntiCheatQuestions,
+  ...gncFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

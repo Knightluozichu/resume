@@ -1,0 +1,90 @@
+---
+title: "拥塞控制算法"
+type: A
+section: "网络游戏与服务器"
+order: 2
+description: "让可靠 UDP 不把网络挤爆——从 AIMD 到 BBR 的拥塞控制原理与游戏适配"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { GncCongestionControlDiagram } from "@/components/mdx/game-network-core-tech/diagrams/gnc-congestion-control";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解网络拥塞的本质：路由器缓冲区溢出导致丢包
+- 掌握 AIMD（加性增/乘性减）拥塞窗口调节原理
+- 区分基于丢包的算法（CUBIC/Reno）与基于带宽估计的算法（BBR）
+- 学会为游戏场景选择或适配拥塞控制策略
+</Objectives>
+
+## 直觉引入
+
+想象一条多车道高速公路。你的车（数据包）开得越快，单位时间运送的货物越多——但如果所有车都全速开，路面就会拥堵，反而更慢。拥塞控制就是一套自动限速规则：路空的时候慢慢加速（加性增），一旦发现堵车（丢包）立刻大幅减速（乘性减），然后重新慢慢加速。这个简单的「快了就砍一刀，慢了就一点点加」策略，就是 TCP 拥塞控制几十年的核心思想。
+
+<GncCongestionControlDiagram />
+
+## 拥塞窗口与 AIMD
+
+<Term def="拥塞窗口（cwnd）是发送端在未收到 ACK 前最多能发多少数据的核心限制参数，AIMD 策略按「加性增、乘性减」动态调节它。">拥塞窗口</Term>决定了发送方的「在途数据量」上限。**AIMD**（Additive Increase / Multiplicative Decrease）是最经典的调节策略：正常时每个 RTT 把 cwnd 加 1（线性增长），一旦检测到丢包就把 cwnd 减半（乘性下降）。这种不对称设计保证了全局公平性——多个连接共享带宽时，减半快的连接会让出资源，最终收敛到公平分配。
+
+```cpp
+class CongestionController {
+    float cwnd = 10;        // 拥塞窗口（包数）
+    float ssthresh = 64;    // 慢启动阈值
+    Mode mode = SLOW_START; // 慢启动 / 拥塞避免
+
+    void OnAckReceived(uint32_t ackedPackets) {
+        if (mode == SLOW_START) {
+            cwnd += ackedPackets;        // 指数增长：每收到一个 ACK +1
+            if (cwnd >= ssthresh) mode = CONGESTION_AVOIDANCE;
+        } else {
+            cwnd += ackedPackets / cwnd; // 线性增长：每 RTT +1
+        }
+    }
+
+    void OnPacketLoss() {
+        ssthresh = cwnd / 2;             // 阈值减半
+        cwnd = cwnd / 2;                 // 窗口减半（乘性减）
+        mode = CONGESTION_AVOIDANCE;
+        // Reno: cwnd = 1, 回到慢启动
+    }
+};
+```
+
+## 基于丢包 vs 基于带宽估计
+
+传统算法（Reno、CUBIC）以**丢包**为拥塞信号——丢包了才减速。但现代网络的中间路由器有很深的缓冲区（bufferbloat），包会在队列里排队很久才被丢弃，导致延迟飙升而 cwnd 还在增长。**BBR**（Bottleneck Bandwidth and Round-trip propagation time）不以丢包为信号，而是主动探测**瓶颈带宽**和**最小 RTT**，把在途数据量控制在 `BDP = 带宽 × RTT` 附近，既不排队也不浪费。
+
+## 游戏场景的特殊考量
+
+游戏的拥塞控制不能直接套用 TCP 算法。第一，游戏流量是**小包高频**，AIMD 的粒度太粗——cwnd 减半意味着一半关键操作发不出去。第二，游戏有**优先级**——位置心跳可以丢，开火指令不能丢，拥塞时应优先保障高优先级消息。第三，游戏对**延迟敏感**——基于丢包的算法在 bufferbloat 下延迟会飙升到几百毫秒。实践中常用 BBR 思路做带宽估计，配合优先级队列在拥塞时先丢低优先级包。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：检测到丢包就立刻把 cwnd 砍到 1。** 这是 TCP Reno 的做法，对游戏过于激进。一个偶发丢包（无线网络干扰）就把窗口砍到 1，意味着接下来几个 RTT 只能发 1 个包，手感会瞬间卡顿。现代做法是 CUBIC 风格的乘性减（减半而非砍到 1），或者 BBR 风格的不因丢包减窗口——只在实际带宽下降时才降速。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 BBR 比 CUBIC 更适合高延迟链路？
+
+<Answer>
+CUBIC 以丢包为拥塞信号，但现代路由器的深缓冲区（bufferbloat）会让包排队很久才丢——在丢包发生前，延迟已经飙升到几百毫秒。BBR 不等丢包，而是主动探测瓶颈带宽和最小 RTT，把在途数据量控制在 BDP（带宽×RTT）附近。这意味着 BBR 不会让缓冲区排队，延迟始终接近物理最小 RTT。对于跨区游戏（如中美 200ms RTT），CUBIC 可能把延迟推到 500ms+，而 BBR 能维持在 200ms 附近。
+</Answer>
+
+**问题 2**：BDP（带宽延迟积）是什么？为什么它是拥塞窗口的理想值？
+
+<Answer>
+BDP = 瓶颈带宽 × 往返延迟（RTT）。它表示「在收到第一个 ACK 之前，链路上最多能容纳多少在途数据」。如果 cwnd 小于 BDP，带宽没用满（管道没填满）；如果 cwnd 大于 BDP，多余的数据会在路由器缓冲区排队，导致延迟增加但不增加吞吐。因此 BDP 是既不浪费带宽又不增加排队延迟的理想窗口值，BBR 的核心就是把 cwnd 维持在 BDP 附近。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="拥塞窗口（cwnd）">发送端在未收到 ACK 前最多能发出的数据量上限。AIMD 策略动态调节它：正常时线性增长，丢包时乘性减半。</GlossaryItem>
+<GlossaryItem term="AIMD">Additive Increase / Multiplicative Decrease，加性增乘性减。每个 RTT cwnd +1，丢包时 cwnd 减半。不对称设计保证多连接公平收敛。</GlossaryItem>
+<GlossaryItem term="BDP（带宽延迟积）">瓶颈带宽 × RTT，表示链路上最多能容纳的在途数据量。cwnd 设为 BDP 可同时最大化吞吐且最小化排队延迟，是 BBR 的核心目标。</GlossaryItem>
+<GlossaryItem term="bufferbloat">路由器缓冲区过大导致数据包排队等待、延迟飙升的现象。基于丢包的拥塞控制（CUBIC）在 bufferbloat 下会把延迟推到几百毫秒，对游戏致命。</GlossaryItem>
+</Glossary>

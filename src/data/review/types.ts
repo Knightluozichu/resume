@@ -1418,7 +1418,17 @@ export type ReviewChapterSlug =
   | "mga-gateway-proxy"
   | "mga-fault-tolerance"
   | "mga-monitoring"
-  | "mga-final-review";
+  | "mga-final-review"
+  | "gnc-learning-map"
+  | "gnc-udp-reliable"
+  | "gnc-congestion-control"
+  | "gnc-frame-sync"
+  | "gnc-state-sync-adv"
+  | "gnc-bandwidth-optimization"
+  | "gnc-latency-compensation"
+  | "gnc-encryption"
+  | "gnc-anti-cheat"
+  | "gnc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2841,6 +2851,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mga-fault-tolerance": "容错与灾备",
   "mga-monitoring": "监控与日志系统",
   "mga-final-review": "全书总复习",
+  "gnc-learning-map": "全书学习地图",
+  "gnc-udp-reliable": "可靠 UDP 传输（RUDP/QUIC）",
+  "gnc-congestion-control": "拥塞控制算法",
+  "gnc-frame-sync": "帧同步原理与实现（Lockstep）",
+  "gnc-state-sync-adv": "状态同步进阶（快照插值）",
+  "gnc-bandwidth-optimization": "带宽优化（Delta 压缩、位打包）",
+  "gnc-latency-compensation": "延迟补偿（回退/前移插值）",
+  "gnc-encryption": "加密与安全通信",
+  "gnc-anti-cheat": "反作弊系统设计",
+  "gnc-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
