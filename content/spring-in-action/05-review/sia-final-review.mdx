@@ -1,0 +1,133 @@
+---
+title: "全书复习"
+type: D
+section: "JVM与Java生态"
+order: 9
+description: "从IoC到微服务——Spring全栈技术体系整合：核心容器、Web、数据、安全、Boot、Cloud的完整知识图谱"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { SiaFinalReviewDiagram } from "@/components/mdx/spring-in-action/diagrams/sia-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 整合全书八大主题，建立 Spring 全栈技术体系的全局视角
+- 理解各层技术之间的依赖关系：容器是地基，AOP/MVC/Web 在容器之上，数据/安全是生产标配，Boot/Cloud 是工程化与分布式
+- 掌握用一个电商订单系统串联全书知识点的方法
+- 识别常见误区：注解崇拜、作用域误判、懒加载陷阱、密码明文、雪崩重试
+</Objectives>
+
+## 全书知识图谱
+
+<Term def="Spring 全栈的核心是一条递进链：IoC 管理对象 → AOP 分离切面 → MVC 处理请求 → JPA 持久化 → Security 控制访问 → Boot 自动化 → Cloud 分布式治理。每层都建立在前一层之上。">递进链</Term>是复习的主线。
+
+<SiaFinalReviewDiagram />
+
+## 四阶段整合
+
+```text
+// 阶段一：核心与装配（第1-2章）——对象怎么来、怎么连
+// IoC 容器：实例化 → 属性填充 → 初始化 → 销毁
+// 装配方式：自动装配（@Component+@Autowired）/ Java配置（@Bean）/ XML（遗留）
+// 关键决策：构造器注入（不可变+可测试）、单例作用域必须无状态
+
+// 阶段二：Web与切面（第3-4章）——请求怎么流转、切面怎么分离
+// AOP：切面=切点+通知，运行时代理织入，@Transactional 是典型应用
+// MVC：DispatcherServlet → HandlerMapping → HandlerAdapter → Controller → 响应
+// 关键决策：RESTful 设计（HTTP方法语义化）、内部自调用AOP失效
+
+// 阶段三：数据与安全（第5-6章）——数据怎么存、访问怎么控
+// JPA：只写Repository接口，方法名派生查询，脏检查自动同步
+// Security：过滤链 → 认证（你是谁）→ 授权（你能做什么）
+// 关键决策：BCrypt存密码、N+1用JOIN FETCH解决、方法级授权@PreAuthorize
+
+// 阶段四：云原生（第7-8章）——配置怎么自动化、服务怎么治
+// Boot：自动配置（@Conditional条件装配）+ 起步依赖 + 内嵌Tomcat
+// Cloud：注册中心 + 网关 + Feign + 熔断器 + 配置中心 + 链路追踪
+// 关键决策：敏感配置环境变量注入、熔断器防雪崩
+```
+
+## 一条主线串联
+
+```java
+// 一个电商下单请求，全书知识点全程参与
+
+// 1. 客户端 → API网关（Spring Cloud Gateway）：路由 + 鉴权 + 限流
+//    POST /api/orders → 路由到 order-service
+
+// 2. order-service（Spring Boot 应用）启动时：
+//    @SpringBootApplication → 自动配置 DispatcherServlet + 内嵌Tomcat
+//    @EnableDiscoveryClient → 注册到 Eureka/Nacos
+//    @ConditionalOnClass(DataSource) → 自动配置 HikariCP 数据源
+
+// 3. 请求到达 OrderController（Spring MVC）：
+//    DispatcherServlet → HandlerMapping 找到 @PostMapping("/orders")
+//    HandlerAdapter 绑定 @RequestBody OrderDto（Jackson反序列化）
+//    @Valid 触发参数校验
+
+// 4. OrderService（IoC容器管理的Bean，构造器注入依赖）：
+//    @PreAuthorize("hasRole('USER')")  // Spring Security 方法级授权
+//    @Transactional                     // AOP 声明式事务
+//    public Order create(OrderDto dto) {
+//        // 4a. 远程调用 user-service（OpenFeign 声明式调用 + 负载均衡）
+//        User user = userClient.getById(dto.getUserId());
+//        // 熔断器保护：user-service故障时走fallback降级
+//
+//        // 4b. 持久化（Spring Data JPA，Repository接口零SQL）
+//        Order order = new Order(user, dto);
+//        return orderRepo.save(order);  // 脏检查：事务提交时自动INSERT
+//    }
+
+// 5. 异常处理：@RestControllerAdvice 统一异常 → JSON错误响应
+// 6. 链路追踪：Sleuth 注入 traceId，Zipkin 可视化跨服务调用链
+// 7. 响应 → 网关 → 客户端
+```
+
+## 常见误区盘点
+
+<Callout type="trap">
+**误区一：注解崇拜。** 会写 `@Autowired` 不等于懂 IoC——要能解释控制反转为何松耦合。**误区二：单例有状态。** 单例 Bean 放可变实例字段，多线程并发数据竞争。**误区三：内部自调用。** this.xxx() 不经过代理，@Transactional 失效。**误区四：懒加载 N+1。** 循环访问懒加载关联触发 N+1 查询。**误区五：密码明文/MD5。** 必须用 BCrypt 慢哈希。**误区六：雪崩重试。** 下游故障时无限重试放大流量级联崩溃，要用熔断器快速失败降级。**误区七：敏感配置进代码。** 数据库密码写进 application.yml 进 git 仓库即泄露。每个误区都对应一个正确实践：构造器注入、无状态单例、自身代理注入、JOIN FETCH、BCrypt、熔断降级、环境变量注入。
+</Callout>
+
+## 技术选型对比
+
+```text
+// 注入方式：构造器注入（推荐）> setter注入（可选依赖）> 字段注入（不推荐）
+// 装配方式：自动装配（推荐）> Java配置（第三方类）> XML配置（遗留）
+// 查询方式：方法名派生（简单）> @Query JPQL（复杂）> Specification（动态）
+// 密码存储：BCrypt（推荐）> Argon2（更强）>> MD5（禁用）>>> 明文（灾难）
+// 配置注入：@ConfigurationProperties（推荐）> @Value（散落难维护）
+// 服务调用：OpenFeign（声明式）> RestTemplate（手动）> 直接HTTP（不推荐）
+// 熔断器：Resilience4j（推荐）> Hystrix（已停止维护）
+// 注册中心：Nacos（推荐，配置中心一体）> Eureka（简单）/ Consul
+```
+
+<Exercises>
+**问题 1**：用一个电商下单请求串联全书八大主题，说明每个知识点的作用。
+
+<Answer>
+下单请求 POST /api/orders 的完整旅程：①Spring Boot（第7章）——order-service 用 @SpringBootApplication 自动配置 DispatcherServlet、内嵌 Tomcat、HikariCP 数据源，@EnableDiscoveryClient 注册到注册中心；②API网关（第8章）——Spring Cloud Gateway 路由请求到 order-service，前置鉴权和限流；③Spring MVC（第4章）——DispatcherServlet 调度到 @PostMapping("/orders")，@RequestBody 反序列化 JSON，@Valid 校验参数；④IoC容器（第1章）——OrderService 由容器管理，构造器注入 OrderRepo 和 UserClient 依赖；⑤Spring Security（第6章）——@PreAuthorize("hasRole('USER')") 校验用户已认证且有权限；⑥AOP（第3章）——@Transactional 声明式事务，AOP 织入开启/提交/回滚逻辑；⑦OpenFeign（第8章）——userClient.getById() 声明式远程调用 user-service，负载均衡 + 熔断降级；⑧Spring Data JPA（第5章）——orderRepo.save() 持久化，脏检查在事务提交时自动 INSERT。一次请求，八大知识点全部参与。
+</Answer>
+
+**问题 2**：Spring 技术栈的四个递进阶段是什么？为什么是这个顺序？
+
+<Answer>
+四阶段：①核心与装配（IoC+Bean装配）——解决对象怎么创建和连接，是所有功能的地基，没有容器就没有 Bean；②Web与切面（AOP+MVC）——在容器之上处理 HTTP 请求流转和横切关注点分离，AOP 依赖容器代理织入，MVC 依赖容器管理控制器 Bean；③数据与安全（JPA+Security）——生产级应用的标配，数据持久化和访问控制，建立在 Web 层之上（请求经过安全过滤链到达控制器，控制器调用 Repository）；④云原生（Boot+Cloud）——工程化与分布式治理，Boot 把前三层自动化（约定优于配置），Cloud 把多个应用组成分布式系统。顺序由依赖决定：没有容器就没有 Bean（阶段一），没有容器和 Bean 就没有 AOP 代理和 MVC 控制器（阶段二），没有 Web 层就无需数据持久化和安全控制（阶段三），没有单个应用就谈不上微服务治理（阶段四）。
+</Answer>
+
+**问题 3**：盘点全书七个常见误区，每个给出正确实践。
+
+<Answer>
+①注解崇拜——会写 @Autowired 不等于懂 IoC，要理解控制反转为何松耦合；②单例有状态——单例 Bean 默共享实例，放可变字段导致并发数据竞争，正确实践是单例无状态（只放 final 依赖和线程安全容器）；③内部自调用——this.xxx() 指向原始对象不经过代理，@Transactional 失效，正确实践是注入自身代理 self.xxx() 或重构拆分；④懒加载 N+1——循环访问懒加载关联触发 N 次查询，正确实践用 JOIN FETCH 或 @EntityGraph 一次联表查出；⑤密码明文/MD5——快哈希可暴力破解，正确实践用 BCrypt 慢哈希（自适应成本+内置盐）；⑥雪崩重试——下游故障时无限重试放大流量级联崩溃，正确实践用熔断器三态状态机快速失败降级；⑦敏感配置进代码——数据库密码写 application.yml 进 git 即泄露，正确实践用环境变量注入 + profile 隔离。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Spring全栈">以 IoC 容器为核心，覆盖 Web（MVC）、切面（AOP）、数据（JPA）、安全（Security）、工程化（Boot）、分布式（Cloud）的完整技术体系。每层建立在前一层之上。</GlossaryItem>
+<GlossaryItem term="递进链">IoC 管理对象 → AOP 分离切面 → MVC 处理请求 → JPA 持久化 → Security 控制访问 → Boot 自动化 → Cloud 分布式治理。每层解决前一层的遗留问题。</GlossaryItem>
+<GlossaryItem term="核心理念">IoC 解耦（容器管理依赖）、AOP 分离横切关注点（声明式事务）、Boot 约定优于配置（自动配置+合理默认）、Cloud 治理微服务（注册/网关/熔断/配置中心）。</GlossaryItem>
+<GlossaryItem term="七大误区">注解崇拜、单例有状态、内部自调用AOP失效、懒加载N+1、密码明文/MD5、雪崩重试、敏感配置进代码——每个误区都有对应的正确实践。</GlossaryItem>
+</Glossary>

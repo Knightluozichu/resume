@@ -1255,6 +1255,16 @@ import { ejvLambdasStreamsQuestions } from "./review/ejv-lambdas-streams";
 import { ejvMethodsQuestions } from "./review/ejv-methods";
 import { ejvConcurrencyQuestions } from "./review/ejv-concurrency";
 import { ejvFinalReviewQuestions } from "./review/ejv-final-review";
+import { siaLearningMapQuestions } from "./review/sia-learning-map";
+import { siaSpringCoreQuestions } from "./review/sia-spring-core";
+import { siaBeanWiringQuestions } from "./review/sia-bean-wiring";
+import { siaAopQuestions } from "./review/sia-aop";
+import { siaSpringMvcQuestions } from "./review/sia-spring-mvc";
+import { siaDataJpaQuestions } from "./review/sia-data-jpa";
+import { siaSpringSecurityQuestions } from "./review/sia-spring-security";
+import { siaSpringBootQuestions } from "./review/sia-spring-boot";
+import { siaSpringCloudQuestions } from "./review/sia-spring-cloud";
+import { siaFinalReviewQuestions } from "./review/sia-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3225,6 +3235,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ejvMethodsQuestions,
   ...ejvConcurrencyQuestions,
   ...ejvFinalReviewQuestions,
+  ...siaLearningMapQuestions,
+  ...siaSpringCoreQuestions,
+  ...siaBeanWiringQuestions,
+  ...siaAopQuestions,
+  ...siaSpringMvcQuestions,
+  ...siaDataJpaQuestions,
+  ...siaSpringSecurityQuestions,
+  ...siaSpringBootQuestions,
+  ...siaSpringCloudQuestions,
+  ...siaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

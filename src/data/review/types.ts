@@ -1718,7 +1718,17 @@ export type ReviewChapterSlug =
   | "ejv-lambdas-streams"
   | "ejv-methods"
   | "ejv-concurrency"
-  | "ejv-final-review";
+  | "ejv-final-review"
+  | "sia-learning-map"
+  | "sia-spring-core"
+  | "sia-bean-wiring"
+  | "sia-aop"
+  | "sia-spring-mvc"
+  | "sia-data-jpa"
+  | "sia-spring-security"
+  | "sia-spring-boot"
+  | "sia-spring-cloud"
+  | "sia-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3441,6 +3451,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ejv-methods": "方法设计",
   "ejv-concurrency": "并发",
   "ejv-final-review": "全书复习",
+  "sia-learning-map": "全书学习地图",
+  "sia-spring-core": "Spring核心与IoC",
+  "sia-bean-wiring": "Bean装配",
+  "sia-aop": "面向切面编程",
+  "sia-spring-mvc": "Spring MVC",
+  "sia-data-jpa": "数据访问与JPA",
+  "sia-spring-security": "Spring Security",
+  "sia-spring-boot": "Spring Boot",
+  "sia-spring-cloud": "Spring Cloud微服务",
+  "sia-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

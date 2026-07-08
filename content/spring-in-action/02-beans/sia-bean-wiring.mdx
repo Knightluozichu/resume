@@ -1,0 +1,194 @@
+---
+title: "Bean装配"
+type: C
+section: "JVM与Java生态"
+order: 2
+description: "自动装配、Java配置、XML配置三种装配方式、组件扫描、Bean作用域、条件化装配"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { SiaBeanWiringDiagram } from "@/components/mdx/spring-in-action/diagrams/sia-bean-wiring";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握自动装配、Java配置、XML配置三种 Bean 装配方式及适用场景
+- 理解组件扫描（@ComponentScan）如何自动发现并注册 Bean
+- 掌握 @Autowired 按类型注入与 @Qualifier 消歧义
+- 理解 singleton/prototype/request/session 四种 Bean 作用域
+- 掌握 @Conditional 条件化装配的原理
+</Objectives>
+
+## 三种装配方式
+
+<Term def="Bean 装配是容器创建 Bean 并建立依赖关系的过程——Spring 提供自动装配、Java配置、XML配置三种方式，自动装配最简、Java配置最灵活、XML配置用于遗留兼容。">Bean 装配</Term>决定了容器如何知道要创建哪些 Bean、它们之间如何连接。
+
+<SiaBeanWiringDiagram />
+
+```java
+// 方式一：自动装配（推荐）——@Component + 组件扫描 + @Autowired
+@Component                  // 标记为Bean，类名首字母小写作为默认id
+public class MysqlOrderRepo implements OrderRepo {
+    @Override
+    public Order find(Long id) { ... }
+}
+
+@Service                     // @Service = @Component 的语义化特化
+public class OrderService {
+    private final OrderRepo repo;
+    @Autowired               // 按类型注入（单构造器可省略）
+    public OrderService(OrderRepo repo) { this.repo = repo; }
+}
+
+// 方式二：Java配置——@Configuration + @Bean（装配第三方库的类）
+@Configuration
+public class DataSourceConfig {
+    @Bean                    // 方法返回值注册为Bean，方法名为id
+    public DataSource dataSource() {
+        return new HikariDataSource();  // 第三方类无法加@Component
+    }
+}
+
+// 方式三：XML配置（遗留）——显式声明
+// <bean id="dataSource" class="com.zaxxer.HikariDataSource"/>
+```
+
+## 组件扫描
+
+`@ComponentScan` 扫描指定包下所有 @Component/@Service/@Repository/@Controller 注解的类，自动注册为 Bean。`@SpringBootApplication` 默认包含 `@ComponentScan`，扫描启动类所在包及子包。
+
+```java
+// @SpringBootApplication = @Configuration + @ComponentScan + @EnableAutoConfiguration
+@SpringBootApplication
+// 默认扫描启动类所在包及子包
+public class App { ... }
+
+// 需要扫描其他包：显式指定
+@SpringBootApplication
+@ComponentScan(basePackages = {"com.app.service", "com.app.repo"})
+public class App { ... }
+
+// 或用 basePackageClasses（类型安全，重构友好）
+@ComponentScan(basePackageClasses = {OrderService.class, UserRepo.class})
+public class App { ... }
+
+// @Component 派生注解——语义化标记
+@Repository   // 数据访问层：额外做异常转换
+@Service      // 业务层：语义标记
+@Controller   // 表现层：可被MVC扫描
+@Component    // 通用组件
+```
+
+## 自动装配消歧义
+
+当同一类型有多个实现时，@Autowired 按类型注入会冲突。三种解法：
+
+```java
+// 冲突场景：两个 OrderRepo 实现
+@Component
+public class MysqlOrderRepo implements OrderRepo { }
+@Component
+public class PgOrderRepo implements OrderRepo { }
+// @Autowired OrderRepo repo;  // 报错：期望1个，找到2个
+
+// 解法一：@Qualifier 指定Bean名
+@Autowired
+@Qualifier("mysqlOrderRepo")   // 默认Bean名 = 类名首字母小写
+private OrderRepo repo;
+
+// 解法二：@Primary 标记首选
+@Primary                        // 多个候选时优先选这个
+@Component
+public class MysqlOrderRepo implements OrderRepo { }
+
+// 解法三：@Resource 按名称注入
+@Resource(name = "mysqlOrderRepo")
+private OrderRepo repo;
+```
+
+## Bean 作用域
+
+<Callout type="trap">
+**误区：所有 Bean 都是单例，所以有状态也没关系。** Spring Bean 默认 singleton 作用域——整个容器一个实例。如果在这个单例里放了实例字段（如 `private List<Order> cache;`），多线程并发访问会共享这个字段，导致数据竞争。单例 Bean 必须无状态（或用线程安全容器如 ConcurrentHashMap）。需要每个请求独立状态时用 prototype 作用域，或用 ThreadLocal。误判作用域是 Spring 并发 bug 的头号来源。
+</Callout>
+
+```java
+// singleton（默认）——无状态Service首选
+@Service
+@Scope("singleton")            // 整个容器一个实例
+public class OrderService {
+    private final OrderRepo repo;  // 无状态：只有final依赖
+    // 绝不要写 private List<Order> cache;  // 共享状态危险！
+}
+
+// prototype——每次注入新实例
+@Scope("prototype")            // 每次获取都创建新对象
+public class ShoppingCart {     // 有状态：每个购物车独立
+    private List<Item> items = new ArrayList<>();
+}
+
+// request（Web）——每个HTTP请求一个
+@Scope(value = WebApplicationContext.SCOPE_REQUEST, proxyMode = TARGET_CLASS)
+public class RequestContext { ... }
+
+// session（Web）——每个会话一个
+@Scope(value = WebApplicationContext.SCOPE_SESSION, proxyMode = TARGET_CLASS)
+public class UserPreferences { ... }
+```
+
+## 条件化装配
+
+`@Conditional` 让 Bean 按条件装配——Spring Boot 自动配置的基石。满足条件才注册 Bean。
+
+```java
+// 自定义条件：类路径有 MySQL 驱动才装配
+public class MysqlCondition implements Condition {
+    @Override
+    public boolean matches(ConditionContext ctx, AnnotatedTypeMetadata meta) {
+        return ctx.getClassLoader().getResource("com/mysql/Driver.class") != null;
+    }
+}
+
+@Configuration
+public class DbConfig {
+    @Bean
+    @Conditional(MysqlCondition.class)   // 满足条件才创建
+    public DataSource mysqlDataSource() { return new HikariDataSource(); }
+}
+
+// Spring Boot 预置条件注解
+@Bean
+@ConditionalOnClass(DataSource.class)         // classpath有这个类
+@ConditionalOnMissingBean(DataSource.class)   // 容器里还没有这个Bean
+@ConditionalOnProperty(name = "db.enabled", havingValue = "true")  // 配置项匹配
+public DataSource dataSource() { ... }
+```
+
+<Exercises>
+**问题 1**：三种 Bean 装配方式各有什么优劣？分别适用于什么场景？
+
+<Answer>
+①自动装配（@Component + @Autowired）：最简洁，Spring Boot 默认方式，适合自己开发的类——加注解即可，组件扫描自动发现。优点是零配置；局限是无法装配无法修改源码的第三方类。②Java配置（@Configuration + @Bean）：类型安全、可重构、IDE 友好，适合装配第三方库的类（如 HikariDataSource 无法加 @Component）。可以精确控制实例化逻辑。③XML配置：冗长、不类型安全、无编译期检查，仅用于遗留项目兼容或 namespace 配置。现代 Spring 项目应优先自动装配，第三方类用 Java 配置，避免 XML。
+</Answer>
+
+**问题 2**：@Autowired 按类型注入遇到多个候选时怎么办？
+
+<Answer>
+三种解法：①@Qualifier("beanName")——在注入点指定具体 Bean 名称，最精确最常用；②@Primary——在某个实现类上标记为「首选」，多候选时容器自动选它，适合有一个明确默认实现的场景；③@Resource(name="beanName")——JSR-250 注解，按名称注入（@Autowired 默认按类型）。实践中优先 @Qualifier（精确控制每个注入点），@Primary 用于全局默认（如主数据源），@Resource 较少用因为它是按名称而非类型。注意：@Autowired 默认 required=true，找不到候选会报错；@Autowired(required=false) 则允许不注入。
+</Answer>
+
+**问题 3**：为什么单例 Bean 不能有可变实例字段？应该怎么处理有状态场景？
+
+<Answer>
+单例 Bean 整个容器只有一个实例，被所有请求共享。如果有可变实例字段（如 `private List<Order> cache`），多线程并发访问会共享这个字段，导致数据竞争、脏读、 ConcurrentModificationException。处理方式：①单例 Bean 保持无状态——只放 final 依赖和线程安全容器（ConcurrentHashMap、AtomicReference）；②需要独立状态用 prototype 作用域——每次注入新实例，但注意 singleton 注入 prototype 只会注入一次（需 @Lookup 或 ObjectFactory）；③请求级状态用 request 作用域；④会话级状态用 session 作用域；⑤方法内局部变量天然线程安全（每个线程有独立栈帧）。核心原则：有状态用短作用域，无状态才用 singleton。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Bean装配">容器创建 Bean 并建立依赖关系的过程。三种方式：自动装配（@Component+@Autowired，最简）、Java配置（@Configuration+@Bean，装配第三方类）、XML配置（遗留兼容）。</GlossaryItem>
+<GlossaryItem term="组件扫描">@ComponentScan 扫描指定包下所有 @Component 派生注解（@Service/@Repository/@Controller）的类，自动注册为 Bean。@SpringBootApplication 默认包含它，扫描启动类所在包及子包。</GlossaryItem>
+<GlossaryItem term="Bean作用域">Bean 的实例化策略：singleton（默认，容器一个实例，无状态首选）、prototype（每次注入新实例，有状态用）、request（每个HTTP请求一个）、session（每个会话一个）。单例 Bean 必须无状态。</GlossaryItem>
+<GlossaryItem term="条件化装配">@Conditional 让 Bean 按条件注册——满足条件才创建。Spring Boot 的 @ConditionalOnClass/@ConditionalOnMissingBean/@ConditionalOnProperty 是其特化，自动配置的基石。</GlossaryItem>
+</Glossary>
