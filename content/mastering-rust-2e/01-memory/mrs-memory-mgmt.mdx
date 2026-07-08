@@ -1,0 +1,238 @@
+---
+title: "内存管理"
+type: B
+section: "内存与并发"
+order: 2
+description: "Rust 所有权系统、借用规则与生命周期：无 GC 的编译期内存安全，零运行时开销的内存管理模型。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsMemoryMgmtDiagram } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-memory-mgmt";
+
+<Objectives>
+
+- 能描述所有权三原则并解释其内存安全保证
+- 能应用借用规则避免数据竞争
+- 能编写需要显式生命周期标注的函数
+- 能对比 Rust 所有权、C++ RAII 与 Java GC 的优劣
+
+</Objectives>
+
+## 直觉引入
+
+想象你租了一间储物间。规则很简单：每个物品只有一个租户负责（唯一所有者），租期到了租户必须把物品清走（作用域释放），如果你把物品转给别人，你就不再负责了（移动语义）。
+
+如果你想借别人的物品用一下，规则是：要么多个人同时看（不可变借用），要么只有一个人在改（可变借用），但不能有人改的同时有人在看（借用互斥）。这防止了「有人正在改，你看到的却是旧版本」的问题。
+
+这些规则就是 Rust 的所有权系统。它不需要垃圾回收器（GC），也不需要你手动 free——编译器在编译期就检查所有规则，通过则运行时零开销且内存安全。
+
+## 概念讲解
+
+### 所有权三原则
+
+<Term def="所有权系统三原则：每个值有唯一所有者；所有者离开作用域时值自动释放（drop）；赋值或传参转移所有权（move 语义）。">
+
+```rust
+let s1 = String::from("hello");
+let s2 = s1;        // s1 的所有权 move 给 s2
+// println!("{}", s1);  // 编译错误！s1 已失效
+// s1 离开作用域时不会 double-free，因为它已不再是所有者
+```
+
+String 的数据在堆上，s1 持有指针。move 后 s1 的指针失效，s2 成为唯一所有者。s1 离开作用域时不会释放（已失效），s2 离开时释放。
+
+</Term>
+
+### 借用规则
+
+<Term def="借用规则：可有任意多个不可变借用 &T；只能有唯一一个可变借用 &mut T；可变与不可变借用不能同时存在。编译器在编译期检查。">
+
+```rust
+let mut s = String::from("hello");
+
+let r1 = &s;          // 不可变借用 OK
+let r2 = &s;          // 多个不可变借用共存 OK
+// let r3 = &mut s;   // 编译错误！已有不可变借用
+
+let r4 = &mut s;      // r1, r2 不再使用后，可变借用 OK
+```
+
+这条规则从源头消灭数据竞争——不可能同时有读和写。
+
+</Term>
+
+### 生命周期
+
+<Term def="生命周期是编译期标注引用有效期的标记（'a），确保引用不会比被引用数据活得更久，防止悬垂引用。">
+
+```rust
+// 显式标注：返回引用与两个参数中较短的生命周期一致
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+```
+
+`'a` 告诉编译器：返回的引用至少和 x、y 中较短的那个活一样久。如果调用方试图在 x 或 y 释放后使用返回值，编译器报错。
+
+</Term>
+
+## 交互Demo
+
+<MrsMemoryMgmtDiagram />
+
+<Stepper>
+
+<Step title="第一步：理解所有权 move 语义">
+
+赋值和传参不是复制而是移动——`let s2 = s1` 后 s1 失效。这是 Rust 与 C/C++ 最大的区别。实现了 Copy trait 的类型（如 i32、bool）是例外，按位复制不 move。理解 move 语义是读懂编译器错误的前提。
+
+</Step>
+
+<Step title="第二步：掌握借用与引用">
+
+用 `&s` 借用而不获取所有权——借用的变量不负责释放。`&mut s` 可变借用可以修改原值。关键是借用规则：多个 & 或一个 &mut，不能混用。借用让函数可以使用数据而不拥有它。
+
+</Step>
+
+<Step title="第三步：学习生命周期标注">
+
+当函数返回引用且参数有多个引用时，需显式标注生命周期。编译器用标注验证返回引用不会悬垂。大多数场景编译器自动推导（生命周期省略规则），只有复杂场景需要手写。
+
+</Step>
+
+<Step title="第四步：栈 vs 堆与性能">
+
+固定大小数据放栈（自动管理，快），动态大小放堆（所有权管理）。Rust 的所有权系统运行时零开销——没有 GC 停顿，没有引用计数开销（Arc 除外），drop 调用编译期确定。这是 Rust 与 Java/Go 的根本性能差异。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```rust
+// === 所有权 ===
+fn ownership_demo() {
+    let s1 = String::from("hello");  // s1 拥有堆数据
+    let s2 = s1;                      // move: s1 → s2
+    // s1 已失效，不能使用
+    // 离开作用域时 s2 自动 drop
+
+    let n1 = 5;                       // i32 实现了 Copy
+    let n2 = n1;                      // 按位复制，n1 仍可用
+}
+
+// === 借用 ===
+fn borrow_demo() {
+    let mut s = String::from("hello");
+    let len = calculate_length(&s);   // 借用，不转移所有权
+    println!("'{}' 的长度是 {}", s, len);
+
+    change(&mut s);                    // 可变借用
+}
+
+fn calculate_length(s: &String) -> usize {
+    s.len()  // 借用，不负责释放
+}
+
+fn change(s: &mut String) {
+    s.push_str(", world");
+}
+
+// === 生命周期 ===
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+
+// 结构体中的生命周期
+struct Excerpt<'a> {
+    part: &'a str,  // part 的生命周期不能短于 Excerpt
+}
+
+// === Clone: 需要时显式复制 ===
+fn clone_demo() {
+    let s1 = String::from("hello");
+    let s2 = s1.clone();  // 深拷贝，s1 仍可用
+    println!("{} {}", s1, s2);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：把所有权当引用计数理解**
+
+有人从 Swift/ARC 背景转来，以为 Rust 的所有权是引用计数——多个变量共享同一份数据，计数归零时释放。这是错的。Rust 默认是 move 语义——赋值后原变量失效，不存在共享。要共享用 Rc/Arc（显式引用计数），要借用用 &/&mut（编译期借用检查）。把所有权当引用计数会导致对 move 语义的误解，编译错误看不懂。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：到处用 clone 绕过借用检查**
+
+遇到借用检查报错，第一反应是加 `.clone()` 让代码编译通过。这能工作但完全错误——clone 有运行时开销（堆分配 + 复制），大量 clone 把 Rust 写出了 Java 的性能。正确做法是理解借用规则，用引用传递而非 clone；确实需要共享所有权时用 Rc/Arc；只在值小或偶尔复制时用 clone。编译错误是帮你写出高效代码，不是要你用 clone 绕过。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：Rust 的借用规则是什么？为什么可变借用和不可变借用不能同时存在？
+
+<Answer>
+
+借用规则：1) 可以有任意多个不可变借用 &T 同时存在；2) 只能有唯一一个可变借用 &mut T；3) 可变借用和不可变借用不能同时存在。
+
+不能同时存在的原因是防止数据竞争：如果同时有可变借用（写入）和不可变借用（读取），不可变借用可能读到写入的中间状态——数据不一致。例如一个线程在修改字符串长度，另一个线程在读长度，可能读到半修改的值。Rust 在编译期通过借用检查器强制这条规则，从源头消灭数据竞争，这是 Rust 编译期线程安全的基础。与 C++ 靠运行时检测（TSan）或程序员纪律不同，Rust 让数据竞争在编译期就不可发生。
+
+</Answer>
+
+**问题 2**：Rust 的所有权系统与 C++ RAII 和 Java GC 相比，各自的优势和代价是什么？
+
+<Answer>
+
+1) C++ RAII：析构函数自动释放，零运行时开销，性能最优。但靠程序员纪律保证安全——移动后使用、双重释放、悬垂指针等错误在运行时才暴露，内存安全风险高。
+
+2) Java GC：自动回收，开发者无负担，内存安全。但牺牲运行时性能——GC 停顿（STW）导致延迟不可预测，内存开销大（需要额外的堆头信息），不适合实时系统和嵌入式。
+
+3) Rust 所有权：编译期保证内存安全（借用检查防止 UAF 和数据竞争），运行时零开销（无 GC、无引用计数），性能与 C/C++ 相当。代价是编译期约束严格——学习曲线陡峭，需要与借用检查器「搏斗」，部分场景（自引用、图结构）需要 unsafe 或 Arena 分配器。
+
+Rust 的折衷：用编译期的严格约束换取运行时的安全和性能。如果能编译通过，就不会有内存安全问题，且运行时与 C 一样快。适合对安全和性能都有高要求的场景（系统编程、嵌入式、WebAssembly）。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="所有权">
+
+Rust 内存管理的核心机制：每个值有唯一所有者，所有者离开作用域时自动释放，赋值/传参转移所有权（move）。无需 GC 即可保证内存安全，运行时零开销。
+
+</GlossaryItem>
+
+<GlossaryItem term="借用">
+
+通过引用 &T / &mut T 使用数据而不获取所有权。借用规则（多个 &T 或一个 &mut T，不可混用）在编译期防止数据竞争，是 Rust 编译期线程安全的基础。
+
+</GlossaryItem>
+
+<GlossaryItem term="生命周期">
+
+编译期标注引用有效期的标记（'a），确保引用不比被引用数据活得更久，防止悬垂引用。大多数场景编译器自动推导，复杂场景需显式标注。
+
+</GlossaryItem>
+
+<GlossaryItem term="move 语义">
+
+Rust 默认的赋值行为：赋值或传参时所有权从原变量转移到新变量，原变量失效。与 Copy 语义（按位复制，原变量仍可用）和 Clone（显式深拷贝）相对。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution source="精通Rust第2版" license="原创" note="本章基于 Rust Reference 和所有权系统文档整理" />

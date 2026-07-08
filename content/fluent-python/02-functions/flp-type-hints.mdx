@@ -1,0 +1,179 @@
+---
+title: "类型提示"
+type: B
+section: "函数与对象"
+order: 5
+description: "理解Python类型提示：静态检查与运行时不强制、渐进式类型、list[str]与int|None新语法。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpTypeHintsDiagram } from "@/components/mdx/fluent-python/diagrams/flp-type-hints";
+
+<Objectives>
+
+- 能解释类型提示在运行时不被强制、由静态检查器使用
+- 能说明渐进式类型如何平衡动态灵活与静态安全
+- 能用 `list[str]`、`int | None` 等新语法写出类型注解
+
+</Objectives>
+
+## 直觉引入
+
+类型提示就像在快递单上写「易碎品·轻放」。这行字本身不会让包裹变轻——搬运工（Python 解释器）依旧照常搬；但质检员（mypy/pyright）会扫描单子，发现你把「易碎品」扔进「重物堆」就警告你。
+
+Python 依然是动态类型语言，加了注解运行行为不变。注解是给工具和读代码的人看的契约：提前发现「传了 int 给期望 str 的函数」这类 bug，让 IDE 补全更准、重构更安全。
+
+## 概念讲解
+
+### 静态检查，运行时不强制
+
+<Term def="类型注解在运行时被解释器忽略，由 mypy/pyright 等静态检查器在运行前强制。注解存于 __annotations__ 可反射读取。">
+
+CPython 运行时基本忽略类型注解——`def greet(name: str): greet(123)` 不会因传 int 报错。注解被存进 `__annotations__` 字典，函数调用时不检查类型。强制力来自**静态检查器**：mypy、pyright 在运行前扫描注解、对照调用，发现不一致就报错。框架（FastAPI、Pydantic）也会在运行时反射读取注解做依赖注入和校验。
+
+</Term>
+
+### 渐进式类型
+
+Python 类型系统是**渐进式**的：可只标注关键函数，未标注处视为 `Any`、退回动态、不报错。这让你能「逐步加固」老代码库——从核心模块开始标注，不必一步到位。既有动态语言的开发速度，又能在关键处获得静态安全保障。
+
+### 新语法
+
+Python 3.9+ 支持内置泛型 `list[str]`（无需 `from typing import List`）；3.10+ 支持联合类型 `int | None`（替代 `Optional[int]`）。新版推荐用最简语法。
+
+## 交互Demo
+
+<FlpTypeHintsDiagram />
+
+<Stepper>
+
+<Step title="第一步：注解是给工具看的">
+
+`def greet(name: str) -> str:` 的注解不改变运行行为，解释器照常动态执行。mypy 扫描时发现 `greet(123)` 与 `str` 不符才报错——这是运行前拦截。
+
+</Step>
+
+<Step title="第二步：渐进式标注关键函数">
+
+不必全标注。从公共 API、核心数据模型开始标注，内部辅助函数可暂留 `Any`。检查器对未标注处不报错，让你平滑引入。
+
+</Step>
+
+<Step title="第三步：用新语法写简洁注解">
+
+3.9+ 用 `list[str]` 替代 `List[str]`，3.10+ 用 `int | None` 替代 `Optional[int]`。语义相同，更简洁、无需 import typing。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+# 类型提示：静态检查 + 新语法
+from collections.abc import Callable
+
+def parse_tokens(text: str, max_len: int | None = None) -> list[str]:
+    """分割文本为 token 列表，可选截断。"""
+    tokens = text.split()
+    if max_len is not None:        # None 检查帮检查器收窄类型
+        tokens = tokens[:max_len]
+    return tokens
+
+# mypy 会检查调用
+result = parse_tokens("a b c d", max_len=2)
+print(result)                      # ['a', 'b']
+
+# 函数作为参数的类型：Callable
+def apply_twice(fn: Callable[[int], int], x: int) -> int:
+    return fn(fn(x))
+
+print(apply_twice(lambda n: n + 1, 5))   # 7
+
+# 渐进式：未标注的函数仍可工作
+def helper(data):                 # 无注解，视为 Any，不报错
+    return data + 1
+
+# TypedStruct：用 TypedDict 描述结构化字典
+from typing import TypedDict
+
+class User(TypedDict):
+    id: int
+    name: str
+
+u: User = {"id": 1, "name": "Bob"}   # mypy 校验键和类型
+```
+
+`max_len is not None` 这步不只是逻辑判断，还帮 mypy 把类型从 `int | None` 收窄为 `int`，后续 `tokens[:max_len]` 才不报错——这是「类型收窄」的典型用法。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：以为加了类型提示运行就会变快或强制检查**
+
+类型注解运行时基本无开销——解释器只把它存进 `__annotations__`，调用时不检查。它不会让代码变快，也不会自动拦截运行时类型错误。强制力来自独立的静态检查器（mypy/pyright），需在 CI 里配置运行。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：在低版本用 `list[str]` / `int | None` 导致运行错误**
+
+`list[str]` 需要 Python 3.9+，`int | None` 需要 3.10+。在 3.8 里写 `list[str]` 会在运行时抛 `TypeError`。低版本必须用 `from typing import List, Optional` 的 `List[str]` / `Optional[int]`。注解虽不强制类型，但语法本身要被解释器解析。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：类型提示在运行时会被强制吗？它主要由谁使用？
+
+<Answer>
+
+不会被运行时强制。CPython 解释器运行时基本忽略注解——`greet(123)` 不会因传 int 报错，函数照常执行。类型提示主要由静态检查工具（mypy、pyright、IDE 类型检查器）使用：它们在运行前扫描注解、对照调用，发现类型不一致就报错。注解也会存入 `__annotations__`，供框架（FastAPI、Pydantic）运行时反射做依赖注入和校验。所以类型提示是写给工具看的契约，不改变 Python 的动态运行本质。
+
+</Answer>
+
+**问题 2**：什么是渐进式类型？它解决了纯静态和纯动态各自的什么痛点？
+
+<Answer>
+
+渐进式类型允许部分标注、部分不标注：标注处由静态检查器严格检查，未标注处退回动态（视为 `Any`）。解决的痛点：纯动态（无注解）的痛点是大型项目类型 bug 要到运行才暴露、重构不敢动——渐进式类型让关键模块提前拦截 bug；纯静态（强制全标注）的痛点是迁移成本高、样板多、与 Python 灵活风格冲突——渐进式类型允许逐步加固、从核心库开始、平滑引入老代码。价值是既有动态语言的开发速度，又能按需获得静态安全保障。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="类型提示">
+
+函数签名上的类型注解（如 `name: str`、`-> int`）。运行时被解释器忽略，由 mypy/pyright 等静态检查器强制。注解存于 `__annotations__` 可反射读取。
+
+</GlossaryItem>
+
+<GlossaryItem term="渐进式类型">
+
+允许部分标注、部分不标注的类型系统。标注处严格检查，未标注处退回动态（`Any`）。让老代码库能逐步加固，平衡灵活与安全。
+
+</GlossaryItem>
+
+<GlossaryItem term="静态检查器">
+
+mypy、pyright 等工具，在运行前扫描类型注解、对照调用，发现类型不一致即报错。是类型提示强制力的来源，需在 CI 配置运行。
+
+</GlossaryItem>
+
+<GlossaryItem term="类型收窄">
+
+通过 `is None`、`isinstance` 等运行时检查，让检查器在分支内把宽类型（如 `int | None`）收窄为窄类型（如 `int`），后续操作不报错。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution sourceUrl="" />

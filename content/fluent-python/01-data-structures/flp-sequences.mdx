@@ -1,0 +1,182 @@
+---
+title: "序列类型"
+type: B
+section: "数据结构"
+order: 2
+description: "掌握Python序列分类与底层语义：容器vs扁平、可变vs不可变、切片解包推导式与共享引用陷阱。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpSequencesDiagram } from "@/components/mdx/fluent-python/diagrams/flp-sequences";
+
+<Objectives>
+
+- 能按容器/扁平、可变/不可变两个维度给序列分类并举例
+- 能用切片、解包、推导式写出 Pythonic 的序列操作
+- 能回答：为什么 `[[0]] * 3` 修改一个会牵连全部？
+
+</Objectives>
+
+## 直觉引入
+
+序列就像一排储物柜。有的柜子大，能塞任意东西（容器序列，存的是「东西的地址」）；有的柜子窄，只能塞同一种小件（扁平序列，直接存值）。有的柜子门能随时开关换东西（可变），有的焊死了只能整柜换（不可变）。
+
+Python 的序列家族看似庞杂——list、tuple、str、bytes、array、deque——但只要按「存什么」和「能不能改」两个维度一摆，立刻井然有序。理解这两个维度，你才知道该用哪种序列，以及为什么 `[[0]] * 3` 会踩坑。
+
+没有这层认知，你会无脑用 list 存一千万个整数（浪费内存），或在 `*` 复制嵌套列表时遭遇「改一个全变」的灵异 bug。
+
+## 概念讲解
+
+### 两个分类维度
+
+<Term def="容器序列存的是对象的引用（可异构）；扁平序列在内存中紧凑存原始值（同质）。">
+
+**容器序列**（list、tuple、deque）存的是对象的引用，柜子里放的是「地址」，所以能混装不同类型。**扁平序列**（str、bytes、array.array）直接在连续内存里存原始值，只能存同一种类型，但更紧凑省空间。
+
+</Term>
+
+另一个维度是可变性：**可变序列**（list、bytearray、array、deque）能就地增删改；**不可变序列**（tuple、str、bytes）一旦创建内容固定，要"改"只能重建一个新对象。两个维度交叉，正好四类。
+
+### 切片与解包
+
+切片 `s[a:b:c]` 的第三参数是步长，且支持负数（反向）。切片是"浅拷贝"——新建容器，但元素仍是原引用。解包 `a, b, *rest = seq` 用星号收集剩余项，是替代下标循环的 Pythonic 写法。
+
+### 推导式与生成器表达式
+
+列表推导式 `[x for x in seq if cond]` 立即求值生成 list；生成器表达式 `(x for x in seq)` 惰性求值，逐个产出，内存 O(1)。大数据流用生成器表达式，需要随机访问或多次遍历用列表推导式。
+
+## 交互Demo
+
+<FlpSequencesDiagram />
+
+<Stepper>
+
+<Step title="第一步：判断存什么、能不能改">
+
+选序列前先问两个问题：元素是异构对象还是同质数值？需要中途修改吗？异构用容器序列，同质大量数值用扁平序列；要改用可变，要哈希（做字典键）用不可变。
+
+</Step>
+
+<Step title="第二步：用切片与解包替代下标循环">
+
+`first, *middle, last = seq` 一行取首尾；`seq[::-1]` 一行反转；`seq[::2]` 取偶数位。这些语法糖背后是 `__getitem__` 的切片协议，比手写 for 循环又快又清晰。
+
+</Step>
+
+<Step title="第三步：警惕 * 对可变内层的共享引用">
+
+`[[0]] * 3` 复制的是引用，三个内层列表是同一对象。要用 `[[0] for _ in range(3)]` 让每项独立。这是「容器存引用」语义的必然后果。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+# 序列操作：分类、切片、解包、推导式
+from array import array
+
+# 容器序列：异构引用
+mixed = [1, "two", 3.0, None]          # list 存引用，可混装
+
+# 扁平序列：同质紧凑
+nums = array('i', [1, 2, 3, 4, 5])     # 4 字节/元素，比 list 省内存
+
+# 切片：步长与反向
+s = list(range(10))
+print(s[2:8:2])     # [2, 4, 6] —— 起止步长
+print(s[::-1])      # [9..0]   —— 反转
+print(s[::2])       # [0, 2, 4, 6, 8] —— 偶数位
+
+# 解包：星号收集
+first, *rest, last = s
+print(first, last, len(rest))   # 0 9 8
+
+# 推导式 vs 生成器表达式
+squares = [x*x for x in range(5)]        # list，立即求值
+squares_gen = (x*x for x in range(5))    # generator，惰性
+print(sum(squares_gen))                  # 30，逐个产出累加
+
+# 共享引用陷阱
+bad = [[0]] * 3
+bad[0][0] = 9
+print(bad)           # [[9], [9], [9]] —— 三处同一对象！
+good = [[0] for _ in range(3)]
+good[0][0] = 9
+print(good)          # [[9], [0], [0]] —— 各自独立
+```
+
+`bad` 与 `good` 的对比，是「容器存引用」语义最直观的教训：`*` 复制引用而非对象。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：用 `[[0]] * n` 创建二维矩阵**
+
+`[[0]] * n` 会让所有行指向同一个内层列表，改一行全变。正确写法是推导式 `[[0] * cols for _ in range(rows)]`，每行独立新建。这是 Python 新手最经典的坑，根源是不理解容器序列存引用。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：对生成器表达式多次遍历或下标访问**
+
+生成器表达式 `(x for x in seq)` 是一次性迭代器，遍历完即耗尽，且不支持 `gen[i]`。如果你需要多次遍历或随机访问，必须先转成 list。把它当 list 用会得到空序列或 `TypeError`。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：`a = [1, 2, 3]; b = a * 2` 与 `c = [[0]] * 3; c[0][0] = 9` 的结果分别是什么？后者为何会「全部变成 9」？
+
+<Answer>
+
+`a * 2` = `[1, 2, 3, 1, 2, 3]`，因为元素是不可变整数，`*` 重复拼接没问题。`c = [[0]] * 3` 看似是 `[[0],[0],[0]]`，但三个子列表是**同一对象的引用**（`*` 复制引用不复制对象），所以 `c[0][0] = 9` 改的是那个共享的内层列表，三处都变，结果 `[[9],[9],[9]]`。正确写法 `[[0] for _ in range(3)]` 每次循环新建内层列表，互相独立。
+
+</Answer>
+
+**问题 2**：什么场景下该用 `array.array` 而非 `list`？请从内存和类型约束两个角度说明。
+
+<Answer>
+
+1. 内存：`array.array` 是扁平序列，在连续内存紧凑存原始数值（如 `'i'` 型 4 字节/元素），而 `list` 存指向 Python 整型对象的指针（每个对象还有对象头）。存上千万个整数时 `array` 可省数倍内存。2. 类型约束：`array` 强制同类型，能提前发现类型混用错误，二进制布局确定，便于和 C 库、`struct`、`memoryview` 零拷贝交互。反过来，需要异构混装或频繁中间增删时仍用 `list`。口诀：同质大量数值用扁平，异构灵活用容器。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="容器序列">
+
+存对象引用的序列（list、tuple、deque），可混装异构类型。元素是「指向对象的地址」，所以嵌套时要注意共享引用。
+
+</GlossaryItem>
+
+<GlossaryItem term="扁平序列">
+
+在连续内存中直接存原始值的序列（str、bytes、array.array），同质紧凑、省内存，但不存对象引用。
+
+</GlossaryItem>
+
+<GlossaryItem term="生成器表达式">
+
+用圆括号 `(x for x in seq)` 的惰性求值表达式，逐个产出值、内存 O(1)，适合大数据流。一次性迭代器，不支持随机访问。
+
+</GlossaryItem>
+
+<GlossaryItem term="共享引用陷阱">
+
+`[[0]] * n` 等便捷语法对可变内层对象只复制引用，导致多处指向同一对象，改一处全变。改用推导式 `[[0] for _ in range(n)]` 可让各项独立。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution sourceUrl="" />

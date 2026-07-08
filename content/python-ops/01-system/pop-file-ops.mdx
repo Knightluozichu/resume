@@ -1,0 +1,202 @@
+---
+title: "文件操作"
+type: B
+section: "系统管理"
+order: 2
+description: "用pathlib面向对象操作文件：跨平台路径拼接、glob/rglob遍历、批量改名与读写处理。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopFileOpsDiagram } from "@/components/mdx/python-ops/diagrams/pop-file-ops";
+
+<Objectives>
+
+- 能用 pathlib 的 `/` 跨平台拼接路径、用方法操作文件
+- 能用 glob/rglob 遍历查找文件并说明生成器的优势
+- 能写出幂等、可回滚的批量改名脚本
+
+</Objectives>
+
+## 直觉引入
+
+操作文件像在文件柜里找资料。老办法（os.path）是手写一串字符串路径，自己拼分隔符、自己 split 后缀，容易拼错还跨平台不通用。pathlib 给你一个「路径对象」——`Path('/var') / 'log'` 直接用斜杠拼，`.glob('*.log')` 直接找，`.read_text()` 直接读，操作和路径绑在一起，像操作一个智能文件柜。
+
+运维最频繁的动作就是和文件打交道：找日志、批量改名、读写配置。用对 pathlib，这些操作变得又短又跨平台；用错（手拼字符串），就会陷入分隔符、编码、句柄泄漏的坑。
+
+## 概念讲解
+
+### pathlib 面向对象操作
+
+<Term def="Path 对象用 / 拼接（跨平台）、用方法做操作（glob/read_text/stat），替代 os.path 字符串拼接。">
+
+`Path` 把路径和操作绑定：`Path('/var') / 'log' / 'app.log'` 用 `/` 拼接，跨平台自动处理分隔符；`.parent`/`.name`/`.suffix`/`.with_suffix()` 操作路径部件；`.glob()`/`.rglob()` 查找；`.read_text()`/`.write_text()` 读写；`.stat()` 取信息；`.exists()`/`.is_file()` 判断。比 os.path 一堆散函数更直观。
+
+</Term>
+
+### glob 与 rglob
+
+`.glob('*.log')` 只在当前目录一层查找；`.rglob('*.log')` 递归遍历所有子目录（等价 `.glob('**/*.log')`）。两者都返回**生成器**——惰性求值，几十万文件也内存恒定，可提前终止、可串联管道。
+
+### 读写处理
+
+`.read_text(encoding='utf-8')` 一行读全文、自动关闭句柄；`.write_text(data)` 一行写。处理大文件仍用 `with open(p) as f:` 逐行读，避免一次性加载。删除单文件用 `.unlink()`，删目录树用 `shutil.rmtree()`。
+
+### 批量处理的工程化
+
+批量改名不是「一个 for 循环」——要注意幂等性（重复执行不误操作）、原子性（中途失败可回滚）、冲突检测（dst 已存在不覆盖）。关键场景先 dry-run 打印计划、确认后再执行。
+
+## 交互Demo
+
+<PopFileOpsDiagram />
+
+<Stepper>
+
+<Step title="第一步：用 / 拼路径、用方法操作">
+
+`Path('/var') / 'log' / 'app.log'` 跨平台拼接；`.parent`/`.name`/`.suffix` 取部件；`.with_suffix('.md')` 改后缀。不再手拼分隔符。
+
+</Step>
+
+<Step title="第二步：用 rglob 递归查找">
+
+`.rglob('*.log')` 递归找所有日志，返回生成器省内存。加 `.is_file()` 过滤目录，`.stat().st_size` 取大小筛选。
+
+</Step>
+
+<Step title="第三步：批量改名先 dry-run">
+
+收集 (src, dst) 对、预检查冲突、打印计划确认，再逐个 rename 记录成功失败。保证幂等、可回滚。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+from pathlib import Path
+import shutil
+
+# 1. 跨平台拼接与路径部件
+p = Path('/var') / 'log' / 'app.log'
+print(p.parent, p.name, p.suffix)     # /var/log app.log .log
+print(p.with_suffix('.md'))           # /var/log/app.md
+
+# 2. 查找遍历（生成器，惰性）
+for f in Path('logs').rglob('*.log'):  # 递归所有子目录
+    print(f, f.stat().st_size)
+
+# 3. 批量改名（先 dry-run）
+def batch_rename(directory, dry_run=True):
+    directory = Path(directory)
+    plan = [(f, f.with_suffix('.md')) for f in directory.glob('*.txt')]
+    # 冲突检测
+    for src, dst in plan:
+        if dst.exists():
+            print(f"跳过（目标已存在）: {dst}")
+            continue
+        if dry_run:
+            print(f"[DRY] {src.name} -> {dst.name}")
+        else:
+            src.rename(dst)
+
+batch_rename('notes', dry_run=True)   # 先看计划
+# batch_rename('notes', dry_run=False) # 确认后真改
+
+# 4. 读写处理
+cfg = Path('config.toml')
+content = cfg.read_text(encoding='utf-8')   # 一行读，自动关句柄
+cfg.write_text(content.replace('debug=false', 'debug=true'), encoding='utf-8')
+
+# 5. 大文件逐行读（避免一次性加载）
+with open(Path('logs') / 'big.log', encoding='utf-8') as f:
+    for line in f:                          # 逐行，内存恒定
+        if 'ERROR' in line:
+            print(line.strip())
+
+# 6. 删除
+Path('temp.txt').unlink(missing_ok=True)    # 删单文件，不存在不报错
+shutil.rmtree('old_build')                  # 删目录树
+```
+
+`batch_rename` 的 dry-run 模式让批量操作可审查——先看计划再执行，避免误改。`missing_ok=True` 让删除幂等。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：手拼字符串路径 `path + '/' + name`**
+
+手拼分隔符在 Windows 会出错（应该用 `\`），且无法用 Path 的方法。正确做法是 `Path(base) / name` 跨平台拼接。老代码的 `os.path.join` 也可，但新代码优先 pathlib。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：批量改名一个 for 循环直接 rename，不做预检**
+
+不检查目标是否已存在、不做 dry-run，中途失败留半成品、重复执行可能链式误改。工程化批量改名要：收集计划、冲突检测、dry-run 确认、逐个执行记录、失败可回滚。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：pathlib 相对 os.path 有什么优势？写一个用 `/` 拼接路径的例子。
+
+<Answer>
+
+优势：1. 面向对象，Path 对象有方法（glob/read_text/stat），操作和路径绑定，不必在 os.path 散函数间切换；2. 用 `/` 拼接跨平台自动处理分隔符；3. 可读性好，`.with_suffix('.md')`/`.parent`/`.name` 比 `os.path.splitext`/`dirname` 直观。例子：`p = Path('/var') / 'log' / 'app.log'`，Linux/Windows 都正确。现代运维脚本优先 pathlib。
+
+</Answer>
+
+**问题 2**：用 pathlib 写代码：递归找出 `logs/` 下所有 `.log` 文件，按大小排序，把超过 10MB 的写入 `big.txt`。
+
+<Answer>
+
+```python
+from pathlib import Path
+logs = Path('logs')
+big_files = [f for f in logs.rglob('*.log')
+             if f.is_file() and f.stat().st_size > 10*1024*1024]
+big_files.sort(key=lambda f: f.stat().st_size, reverse=True)
+Path('big.txt').write_text('\n'.join(f'{f.name}\t{f.stat().st_size}' for f in big_files), encoding='utf-8')
+```
+要点：rglob 递归查找返回生成器；is_file 过滤目录；stat().st_size 取字节比较阈值；sort 按大小降序；write_text 一行写并指定编码。全程 pathlib 面向对象，无手拼路径。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="pathlib">
+
+面向对象的路径库。Path 对象用 `/` 跨平台拼接、用方法（glob/rglob/read_text/stat）操作，替代 os.path 字符串拼接，更安全可读。
+
+</GlossaryItem>
+
+<GlossaryItem term="rglob">
+
+`Path.rglob(pattern)` 递归遍历所有子目录查找匹配文件，返回惰性生成器。等价 `.glob('**/pattern')`。
+
+</GlossaryItem>
+
+<GlossaryItem term="dry-run">
+
+批量操作前先打印计划不实际执行，供人工确认。是工程化批量处理的标配，避免误改、保证可审查。
+
+</GlossaryItem>
+
+<GlossaryItem term="幂等性">
+
+脚本重复执行产生相同结果、不误操作。批量改名要避免「链式命中」（如 a→ab→abb），rename 前检查目标已存在。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution sourceUrl="" />

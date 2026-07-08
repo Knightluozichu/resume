@@ -1,0 +1,196 @@
+---
+title: "字典与集合"
+type: B
+section: "数据结构"
+order: 3
+description: "理解字典与集合的哈希表机制：可哈希性、setdefault/defaultdict、插入顺序保证与变体映射。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpDictSetsDiagram } from "@/components/mdx/fluent-python/diagrams/flp-dict-sets";
+
+<Objectives>
+
+- 能解释字典的哈希定位过程及键必须可哈希的原因
+- 能用 `defaultdict` / `setdefault` 写出 Pythonic 的分组计数代码
+- 能回答：为什么 list 不能做字典键、tuple 能？
+
+</Objectives>
+
+## 直觉引入
+
+字典就像一栋带编号的储物柜，但你不必挨个翻找。你把钥匙（key）交给前台，前台用一个数学函数（hash）算出"该去几号柜"，直接带你过去。这就是字典和集合快得离谱的原因——查找不用逐个比较，而是"算"出位置。
+
+集合则是同一栋柜子，只是每个柜里只放钥匙本身、不存别的值。所以"这东西在不在集合里"和"查字典某键"一样快。
+
+没有哈希表，你要在十万条记录里查一个名字，只能线性翻找（O(n)）；有了它，一次哈希计算就能定位（O(1) 均摊）。但前提是钥匙"可哈希"——它的哈希值不能变，否则存进去就再也找不到。
+
+## 概念讲解
+
+### 哈希表机制
+
+<Term def="通过 hash(key) 对桶数取模直接定位存储位置的结构，让查找/插入/删除均为 O(1) 均摊。">
+
+字典和集合底层都是**哈希表**。访问 `d[k]` 时，Python 先算 `hash(k)`，对桶数取模定位到目标桶，再用 `==` 处理冲突。只要哈希函数质量好、装填因子低，定位只需常数步，故均摊 O(1)。集合相当于"只有键、值为占位"的字典，所以成员查找、去重也是 O(1)。
+
+</Term>
+
+### 键必须可哈希
+
+哈希表的不变量：键存进去后哈希值不能变，且 `a == b` 蕴含 `hash(a) == hash(b)`。否则键的哈希变了，就再也定位不到它。所以键必须**可哈希**——对象不可变，且其元素也可哈希（递归要求）。`list` 可变故 `__hash__` 为 `None`，不能做键；`tuple` 不可变可做键，但若内含 list 则 `hash` 抛 `TypeError`。
+
+### setdefault 与 defaultdict
+
+普通字典访问缺失键会抛 `KeyError`。两种 Pythonic 解决：`d.setdefault(k, default)` 在缺失时存入 default 并返回；`collections.defaultdict(factory)` 在缺失时自动调用工厂（如 `list`、`int`）生成默认值。后者语义更清晰，适合分组、计数。
+
+### 插入顺序保证
+
+Python 3.7 起 dict 保证按插入顺序遍历。实现上采用"紧凑哈希表"：稀疏索引数组负责 O(1) 定位，紧凑 entries 数组按插入顺序存键值对，遍历沿 entries 数组进行。这不矛盾，还顺带省了约 20% 内存。
+
+## 交互Demo
+
+<FlpDictSetsDiagram />
+
+<Stepper>
+
+<Step title="第一步：理解哈希定位">
+
+`d['name'] = 'Bob'`：算 `hash('name')` → 对桶数取模 → 定位到桶 0 → 存入键值对。查找 `d['name']` 走同样的定位路径，所以 O(1)。哈希冲突时向后探测空位（开放寻址法）。
+
+</Step>
+
+<Step title="第二步：判断键是否可哈希">
+
+键必须不可变。`list`、`dict`、`set` 可变，不能做键；`tuple` 不可变可做键，但内含可变元素时仍不可哈希。要存"复合键"就用全不可变的 tuple。
+
+</Step>
+
+<Step title="第三步：用 defaultdict 写分组计数">
+
+`defaultdict(list)` 访问缺失键自动建空列表，分组一行搞定；`defaultdict(int)` 访问缺失键自动得 0，计数直接 `+=1`。比手写 `setdefault` 更清晰高效。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+from collections import defaultdict, Counter
+
+# 哈希定位：键可哈希才能用
+d = {'name': 'Bob', 'age': 30}
+print(d['name'])            # Bob —— hash('name') 定位
+
+# list 不可哈希，不能做键
+# d[[1, 2]] = 'x'           # TypeError: unhashable type: 'list'
+d[(1, 2)] = 'point'         # tuple 可哈希，OK
+# d[([1],)] = 'x'           # TypeError：tuple 内含 list 也不行
+
+# defaultdict 分组
+pairs = [('a', 1), ('b', 2), ('a', 3)]
+grouped = defaultdict(list)
+for k, v in pairs:
+    grouped[k].append(v)
+print(dict(grouped))        # {'a': [1, 3], 'b': [2]}
+
+# defaultdict 计数
+counts = defaultdict(int)
+for word in "the cat the dog the".split():
+    counts[word] += 1       # 缺失键自动得 0
+print(dict(counts))         # {'the': 3, 'cat': 1, 'dog': 1}
+
+# Counter 是计数专用工具
+print(Counter("the cat the dog the"))   # Counter({'the': 3, 'cat': 1, 'dog': 1})
+
+# 集合：去重与成员判断 O(1)
+ids = [1, 2, 2, 3, 3, 3]
+unique = list(set(ids))     # [1, 2, 3]
+print(2 in set(ids))        # True，O(1) 均摊
+
+# 插入顺序保证（3.7+）
+od = {}
+for k in 'cab':
+    od[k] = 1
+print(list(od))             # ['c', 'a', 'b'] —— 按插入顺序
+```
+
+`defaultdict` 和 `Counter` 把"分组、计数"这种高频模式一行化，背后都是哈希表的 O(1) 定位。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：边遍历字典边修改它**
+
+`for k in d: del d[k]` 会在迭代中改变字典结构，触发 `RuntimeError: dictionary changed size during iteration`。要边遍历边删，应先收集要删的键再统一删，或遍历副本 `for k in list(d):`。集合同理。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：把 list 当字典键，或用含 list 的 tuple 当键**
+
+list 可变，`__hash__` 为 `None`，做键会抛 `TypeError`。即使外层是 tuple，只要内含 list（如 `([1], 2)`）也不可哈希。需要复合键时，把内层也改成 tuple，确保整条路径全不可变。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：为什么 list 不能做字典键，而 tuple 能？tuple 一定可哈希吗？
+
+<Answer>
+
+字典键必须可哈希——哈希值生命周期内不变且 `a==b` 蕴含 `hash(a)==hash(b)`。list 是可变对象，内容可变会导致哈希值变化，故 Python 把 `list.__hash__` 设为 `None`，禁止做键。tuple 本身不可变、哈希值稳定，原则上可做键。但 tuple 不一定可哈希：若内含可变元素（如 `([1], 2)`），`hash()` 会递归求元素哈希时抛 `TypeError`。所以「可哈希」是递归要求——对象及其所有元素都不可变。要存复合键，确保整条路径都是不可变类型。
+
+</Answer>
+
+**问题 2**：用 `defaultdict` 写一段代码统计句子中每个单词出现次数，并说明它比 `setdefault` 优势在哪。
+
+<Answer>
+
+```python
+from collections import defaultdict
+counts = defaultdict(int)
+for w in "the cat the dog".split():
+    counts[w] += 1   # 缺失键自动得 0，无需判断
+```
+优势：`defaultdict(int)` 在缺失键时自动调用 `int()` 得 0，代码只需 `+= 1`，语义清晰。用 `setdefault` 则要写 `d.setdefault(w, 0); d[w] += 1`，且 `setdefault` 每次都构造默认值（即使键已存在），默认值构造昂贵时浪费。`defaultdict` 的工厂只在缺失时触发，更高效也更易读。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="哈希表">
+
+通过 `hash(key)` 对桶数取模直接定位存储位置的结构，字典和集合的底层。查找/插入/删除均摊 O(1)，冲突用开放寻址法探测。
+
+</GlossaryItem>
+
+<GlossaryItem term="可哈希">
+
+对象的哈希值生命周期内不变，且 `a == b` 蕴含 `hash(a) == hash(b)`。可哈希是做字典键/集合元素的必要条件，要求对象不可变且元素也可哈希（递归）。
+
+</GlossaryItem>
+
+<GlossaryItem term="defaultdict">
+
+`collections.defaultdict(factory)` 在访问缺失键时自动调用工厂函数生成默认值并存入。适合分组（`list`）、计数（`int`）等模式，比 `setdefault` 更清晰高效。
+
+</GlossaryItem>
+
+<GlossaryItem term="紧凑哈希表">
+
+Python 3.6+ dict 的实现：稀疏索引数组负责 O(1) 定位，紧凑 entries 数组按插入顺序存键值对。保证遍历顺序的同时省约 20% 内存。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution sourceUrl="" />

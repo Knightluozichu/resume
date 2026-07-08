@@ -719,6 +719,105 @@ import { dsaGraphAlgsQuestions } from "./review/dsa-graph-algs";
 import { dsaSortingQuestions } from "./review/dsa-sorting";
 import { dsaDynamicProgrammingQuestions } from "./review/dsa-dynamic-programming";
 import { dsaFinalReviewQuestions } from "./review/dsa-final-review";
+// Rust 编程之道
+import { rswLearningMapQuestions } from "./review/rsw-learning-map";
+import { rswOwnershipBorrowQuestions } from "./review/rsw-ownership-borrow";
+import { rswTraitsGenericsQuestions } from "./review/rsw-traits-generics";
+import { rswLifetimesQuestions } from "./review/rsw-lifetimes";
+import { rswErrorHandlingQuestions } from "./review/rsw-error-handling";
+import { rswUnsafeRustQuestions } from "./review/rsw-unsafe-rust";
+import { rswConcurrencyQuestions } from "./review/rsw-concurrency";
+import { rswAsyncRuntimeQuestions } from "./review/rsw-async-runtime";
+import { rswMacrosQuestions } from "./review/rsw-macros";
+import { rswFinalReviewQuestions } from "./review/rsw-final-review";
+// Go 语言实战
+import { giaLearningMapQuestions } from "./review/gia-learning-map";
+import { giaGoPhilosophyQuestions } from "./review/gia-go-philosophy";
+import { giaArraysSlicesQuestions } from "./review/gia-arrays-slices";
+import { giaMapStructQuestions } from "./review/gia-map-struct";
+import { giaGoroutinesQuestions } from "./review/gia-goroutines";
+import { giaChannelsQuestions } from "./review/gia-channels";
+import { giaConcurrencyPatternsQuestions } from "./review/gia-concurrency-patterns";
+import { giaTestingPackagingQuestions } from "./review/gia-testing-packaging";
+import { giaStandardLibQuestions } from "./review/gia-standard-lib";
+import { giaFinalReviewQuestions } from "./review/gia-final-review";
+// Go Web 编程
+import { gwpLearningMapQuestions } from "./review/gwp-learning-map";
+import { gwpHttpBasicsQuestions } from "./review/gwp-http-basics";
+import { gwpRoutingQuestions } from "./review/gwp-routing";
+import { gwpMiddlewareQuestions } from "./review/gwp-middleware";
+import { gwpDatabaseQuestions } from "./review/gwp-database";
+import { gwpTemplatesQuestions } from "./review/gwp-templates";
+import { gwpJsonApiQuestions } from "./review/gwp-json-api";
+import { gwpAuthenticationQuestions } from "./review/gwp-authentication";
+import { gwpDeploymentQuestions } from "./review/gwp-deployment";
+import { gwpFinalReviewQuestions } from "./review/gwp-final-review";
+// 流畅的 Python
+import { flpLearningMapQuestions } from "./review/flp-learning-map";
+import { flpDataModelQuestions } from "./review/flp-data-model";
+import { flpSequencesQuestions } from "./review/flp-sequences";
+import { flpDictSetsQuestions } from "./review/flp-dict-sets";
+import { flpFunctionsFirstClassQuestions } from "./review/flp-functions-first-class";
+import { flpTypeHintsQuestions } from "./review/flp-type-hints";
+import { flpProtocolsAbcQuestions } from "./review/flp-protocols-abc";
+import { flpClosuresDecoratorsQuestions } from "./review/flp-closures-decorators";
+import { flpGeneratorsQuestions } from "./review/flp-generators";
+import { flpFinalReviewQuestions } from "./review/flp-final-review";
+// Python 自动化运维
+import { popLearningMapQuestions } from "./review/pop-learning-map";
+import { popPythonOpsBasicsQuestions } from "./review/pop-python-ops-basics";
+import { popFileOpsQuestions } from "./review/pop-file-ops";
+import { popProcessMgmtQuestions } from "./review/pop-process-mgmt";
+import { popNetworkAutomationQuestions } from "./review/pop-network-automation";
+import { popSshParamikoQuestions } from "./review/pop-ssh-paramiko";
+import { popWebScrapingQuestions } from "./review/pop-web-scraping";
+import { popMonitoringAlertingQuestions } from "./review/pop-monitoring-alerting";
+import { popConfigMgmtQuestions } from "./review/pop-config-mgmt";
+import { popFinalReviewQuestions } from "./review/pop-final-review";
+// 精通 Rust（第2版）
+import { mrsLearningMapQuestions } from "./review/mrs-learning-map";
+import { mrsAdvancedTypesQuestions } from "./review/mrs-advanced-types";
+import { mrsMemoryMgmtQuestions } from "./review/mrs-memory-mgmt";
+import { mrsConcurrencyDeepQuestions } from "./review/mrs-concurrency-deep";
+import { mrsMacrosDeepQuestions } from "./review/mrs-macros-deep";
+import { mrsTraitsAdvancedQuestions } from "./review/mrs-traits-advanced";
+import { mrsUnsafeDeepQuestions } from "./review/mrs-unsafe-deep";
+import { mrsWebAssemblyQuestions } from "./review/mrs-web-assembly";
+import { mrsNetworkingQuestions } from "./review/mrs-networking";
+import { mrsFinalReviewQuestions } from "./review/mrs-final-review";
+// Python 高级编程
+import { pyaLearningMapQuestions } from "./review/pya-learning-map";
+import { pyaPythonInternalsQuestions } from "./review/pya-python-internals";
+import { pyaIteratorsGeneratorsQuestions } from "./review/pya-iterators-generators";
+import { pyaDecoratorsMetaQuestions } from "./review/pya-decorators-meta";
+import { pyaAsyncioQuestions } from "./review/pya-asyncio";
+import { pyaMultiprocessingQuestions } from "./review/pya-multiprocessing";
+import { pyaCythonQuestions } from "./review/pya-cython";
+import { pyaTestingQuestions } from "./review/pya-testing";
+import { pyaPackagingQuestions } from "./review/pya-packaging";
+import { pyaFinalReviewQuestions } from "./review/pya-final-review";
+// 算法（第4版）
+import { al4LearningMapQuestions } from "./review/al4-learning-map";
+import { al4FundamentalsQuestions } from "./review/al4-fundamentals";
+import { al4SortingElementaryQuestions } from "./review/al4-sorting-elementary";
+import { al4SortingMergeQuickQuestions } from "./review/al4-sorting-merge-quick";
+import { al4SearchingStQuestions } from "./review/al4-searching-st";
+import { al4HashTablesQuestions } from "./review/al4-hash-tables";
+import { al4GraphsUndirectedQuestions } from "./review/al4-graphs-undirected";
+import { al4GraphsDirectedQuestions } from "./review/al4-graphs-directed";
+import { al4StringsQuestions } from "./review/al4-strings";
+import { al4FinalReviewQuestions } from "./review/al4-final-review";
+// 编程珠玑
+import { ppLearningMapQuestions } from "./review/pp-learning-map";
+import { ppCrackingProblemsQuestions } from "./review/pp-cracking-problems";
+import { ppBinarySearchQuestions } from "./review/pp-binary-search";
+import { ppBitVectorsQuestions } from "./review/pp-bit-vectors";
+import { ppDesignPrinciplesQuestions } from "./review/pp-design-principles";
+import { ppCodeTuningQuestions } from "./review/pp-code-tuning";
+import { ppBackOfEnvelopeQuestions } from "./review/pp-back-of-envelope";
+import { ppPerspectivesQuestions } from "./review/pp-perspectives";
+import { ppEpilogQuestions } from "./review/pp-epilog";
+import { ppFinalReviewQuestions } from "./review/pp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -1445,6 +1544,105 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dsaSortingQuestions,
   ...dsaDynamicProgrammingQuestions,
   ...dsaFinalReviewQuestions,
+  // Rust 编程之道
+  ...rswLearningMapQuestions,
+  ...rswOwnershipBorrowQuestions,
+  ...rswTraitsGenericsQuestions,
+  ...rswLifetimesQuestions,
+  ...rswErrorHandlingQuestions,
+  ...rswUnsafeRustQuestions,
+  ...rswConcurrencyQuestions,
+  ...rswAsyncRuntimeQuestions,
+  ...rswMacrosQuestions,
+  ...rswFinalReviewQuestions,
+  // Go 语言实战
+  ...giaLearningMapQuestions,
+  ...giaGoPhilosophyQuestions,
+  ...giaArraysSlicesQuestions,
+  ...giaMapStructQuestions,
+  ...giaGoroutinesQuestions,
+  ...giaChannelsQuestions,
+  ...giaConcurrencyPatternsQuestions,
+  ...giaTestingPackagingQuestions,
+  ...giaStandardLibQuestions,
+  ...giaFinalReviewQuestions,
+  // Go Web 编程
+  ...gwpLearningMapQuestions,
+  ...gwpHttpBasicsQuestions,
+  ...gwpRoutingQuestions,
+  ...gwpMiddlewareQuestions,
+  ...gwpDatabaseQuestions,
+  ...gwpTemplatesQuestions,
+  ...gwpJsonApiQuestions,
+  ...gwpAuthenticationQuestions,
+  ...gwpDeploymentQuestions,
+  ...gwpFinalReviewQuestions,
+  // 流畅的 Python
+  ...flpLearningMapQuestions,
+  ...flpDataModelQuestions,
+  ...flpSequencesQuestions,
+  ...flpDictSetsQuestions,
+  ...flpFunctionsFirstClassQuestions,
+  ...flpTypeHintsQuestions,
+  ...flpProtocolsAbcQuestions,
+  ...flpClosuresDecoratorsQuestions,
+  ...flpGeneratorsQuestions,
+  ...flpFinalReviewQuestions,
+  // Python 自动化运维
+  ...popLearningMapQuestions,
+  ...popPythonOpsBasicsQuestions,
+  ...popFileOpsQuestions,
+  ...popProcessMgmtQuestions,
+  ...popNetworkAutomationQuestions,
+  ...popSshParamikoQuestions,
+  ...popWebScrapingQuestions,
+  ...popMonitoringAlertingQuestions,
+  ...popConfigMgmtQuestions,
+  ...popFinalReviewQuestions,
+  // 精通 Rust（第2版）
+  ...mrsLearningMapQuestions,
+  ...mrsAdvancedTypesQuestions,
+  ...mrsMemoryMgmtQuestions,
+  ...mrsConcurrencyDeepQuestions,
+  ...mrsMacrosDeepQuestions,
+  ...mrsTraitsAdvancedQuestions,
+  ...mrsUnsafeDeepQuestions,
+  ...mrsWebAssemblyQuestions,
+  ...mrsNetworkingQuestions,
+  ...mrsFinalReviewQuestions,
+  // Python 高级编程
+  ...pyaLearningMapQuestions,
+  ...pyaPythonInternalsQuestions,
+  ...pyaIteratorsGeneratorsQuestions,
+  ...pyaDecoratorsMetaQuestions,
+  ...pyaAsyncioQuestions,
+  ...pyaMultiprocessingQuestions,
+  ...pyaCythonQuestions,
+  ...pyaTestingQuestions,
+  ...pyaPackagingQuestions,
+  ...pyaFinalReviewQuestions,
+  // 算法（第4版）
+  ...al4LearningMapQuestions,
+  ...al4FundamentalsQuestions,
+  ...al4SortingElementaryQuestions,
+  ...al4SortingMergeQuickQuestions,
+  ...al4SearchingStQuestions,
+  ...al4HashTablesQuestions,
+  ...al4GraphsUndirectedQuestions,
+  ...al4GraphsDirectedQuestions,
+  ...al4StringsQuestions,
+  ...al4FinalReviewQuestions,
+  // 编程珠玑
+  ...ppLearningMapQuestions,
+  ...ppCrackingProblemsQuestions,
+  ...ppBinarySearchQuestions,
+  ...ppBitVectorsQuestions,
+  ...ppDesignPrinciplesQuestions,
+  ...ppCodeTuningQuestions,
+  ...ppBackOfEnvelopeQuestions,
+  ...ppPerspectivesQuestions,
+  ...ppEpilogQuestions,
+  ...ppFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

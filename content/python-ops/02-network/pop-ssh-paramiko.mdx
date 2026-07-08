@@ -1,0 +1,222 @@
+---
+title: "SSH 与 Paramiko"
+type: B
+section: "网络自动化"
+order: 5
+description: "用 Paramiko 实现 SSH 远程命令执行与批量运维，掌握密钥认证、host key 安全策略与并发巡检方案。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopSshParamikoDiagram } from "@/components/mdx/python-ops/diagrams/pop-ssh-paramiko";
+
+<Objectives>
+
+- 能用 Paramiko 的 SSHClient 建立连接并执行远程命令
+- 能解释密钥认证优于密码认证的安全原因
+- 能正确处理 host key 验证，避免中间人攻击风险
+- 能设计批量 SSH 并发巡检方案，兼顾速度与稳定
+
+</Objectives>
+
+## 直觉引入
+
+想象你是大楼物业，要逐户检查 500 间房的水管。你有两种方式：一是每次敲门让住户开门检查——这是密码登录，每次都要对暗号，慢且容易被冒充；二是提前拿到每户的专用钥匙——这是密钥认证，直接开门，快且安全。但钥匙不能随便发，你得确认这把钥匙确实是那户的——这就是 host key 验证。
+
+Paramiko 就是你的「万能钥匙管理器」。它帮你用密钥批量开门（连接）、进屋检查（执行命令）、记录结果（收集输出）。核心原则：用密钥不用密码，验身份不盲目信任，控并发不蛮干。
+
+## 概念讲解
+
+### SSHClient 与 Transport
+
+<Term def="SSHClient 是 Paramiko 的高层封装，提供 connect/exec_command 等便捷方法；Transport 是底层通道，手动管理更灵活但繁琐。">
+
+日常运维优先用 SSHClient——一行 `connect()` 建立连接，`exec_command()` 执行命令拿 stdin/stdout/stderr。需要端口转发、SFTP 文件传输或多通道复用时，再降级到 Transport 手动管理。
+
+</Term>
+
+### 密钥认证
+
+<Term def="SSH 密钥认证用非对称加密：客户端持有私钥，服务器持有对应公钥，连接时通过签名验证身份，无需传输密码，比密码认证更安全更自动化。">
+
+密钥认证的流程：本地生成密钥对（ssh-keygen），把公钥追加到服务器的 `~/.ssh/authorized_keys`，连接时 Paramiko 用私钥签名，服务器用公钥验签。全程不传密码，无法被中间人窃取，且支持自动化无人值守。
+
+</Term>
+
+### Host Key 安全策略
+
+<Term def="host key 是服务器 SSH 服务的公钥指纹，用于验证「我连的确实是这台服务器」。Paramiko 提供 AutoAddPolicy（自动接受）、RejectPolicy（拒绝未知）、WarningPolicy（警告）三种策略。">
+
+`AutoAddPolicy` 自动接受未知密钥——方便但有中间人攻击风险。生产环境必须用 `RejectPolicy`，预先用 `ssh-keyscan` 采集真实 host key 固化到 known_hosts，连接时严格比对，密钥不匹配即拒绝。
+
+</Term>
+
+## 交互Demo
+
+<PopSshParamikoDiagram />
+
+<Stepper>
+
+<Step title="第一步：建立单连接并执行命令">
+
+创建 `SSHClient`，设置 host key 策略，用 `key_filename` 指定私钥路径，`connect()` 建立连接，`exec_command()` 执行命令。从 stdout 读输出，用 `recv_exit_status()` 拿退出码判断成功失败。
+
+</Step>
+
+<Step title="第二步：批量串行执行">
+
+用循环遍历主机列表，每台建立连接、执行、关闭。用 try-except 捕获单台异常，记录错误但不中断循环。这是最简单的批量模式，适合几十台规模。
+
+</Step>
+
+<Step title="第三步：升级为密钥认证">
+
+放弃密码改用密钥：先生成密钥对，公钥分发到所有目标，连接时传 `key_filename`。这一步让自动化运维真正无人值守，安全性和效率都大幅提升。
+
+</Step>
+
+<Step title="第四步：并发巡检与结果聚合">
+
+用 `ThreadPoolExecutor` 控制并发数（如 20），每线程独立 SSHClient。单台超时/失败隔离，结果统一收集后分批写入。这是 500 台规模的完整巡检方案。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+import paramiko
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+# === Level 1: 单台连接执行 ===
+client = paramiko.SSHClient()
+# 生产环境用 RejectPolicy，预采集 host key
+client.set_missing_host_key_policy(paramiko.RejectPolicy())
+client.connect(
+    hostname="server1",
+    username="ops",
+    key_filename="~/.ssh/id_ed25519",  # 密钥认证
+    timeout=10
+)
+stdin, stdout, stderr = client.exec_command("df -h", timeout=10)
+exit_code = stdout.channel.recv_exit_status()
+output = stdout.read().decode()
+client.close()
+
+# === Level 2: 批量串行 ===
+def exec_on_host(host, command, key_path):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        client.connect(host, username="ops",
+                       key_filename=key_path, timeout=10)
+        _, stdout, _ = client.exec_command(command, timeout=10)
+        return host, stdout.read().decode(), None
+    except Exception as e:
+        return host, None, str(e)
+    finally:
+        client.close()
+
+hosts = ["node1", "node2", "node3"]
+for h in hosts:
+    host, out, err = exec_on_host(h, "uptime", "~/.ssh/id_ed25519")
+    print(f"{host}: {out or err}")
+
+# === Level 3: 并发批量巡检 ===
+def check_host(host):
+    return exec_on_host(host, "uptime && free -m", "~/.ssh/id_ed25519")
+
+hosts = [f"node{i}" for i in range(500)]
+results = {}
+with ThreadPoolExecutor(max_workers=20) as pool:
+    futures = {pool.submit(check_host, h): h for h in hosts}
+    for f in as_completed(futures):
+        host, out, err = f.result()
+        results[host] = {"output": out, "error": err}
+
+# 汇总：成功/失败分类
+ok = {h: r for h, r in results.items() if r["error"] is None}
+fail = {h: r for h, r in results.items() if r["error"] is not None}
+print(f"成功 {len(ok)} 台，失败 {len(fail)} 台")
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：用 AutoAddPolicy 图方便**
+
+很多人写 `client.set_missing_host_key_policy(paramiko.AutoAddPolicy())` 图省事，第一次连接自动接受密钥。但这意味着你从不验证服务器身份——攻击者可以伪装成目标服务器（DNS 劫持、ARP 欺骗），你却毫不知情地交出了凭据。生产环境必须用 RejectPolicy，预采集 host key 固化。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：密码认证做自动化**
+
+用密码连接看起来简单，但密码要硬编码或存配置文件，泄露风险高；且密码可被暴力破解，安全等级低。密钥认证是自动化运维的唯一正确选择——私钥不离开本机，无暴力破解可能，配合 passphrase 双重保护。养成习惯：SSH 自动化一律用密钥。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：Paramiko 中 AutoAddPolicy 和 RejectPolicy 的区别是什么？为什么生产环境必须用后者？
+
+<Answer>
+
+AutoAddPolicy 首次连接时自动接受服务器密钥并写入 known_hosts，后续比对——这意味着首次连接不验证身份，存在中间人攻击风险。RejectPolicy 严格拒绝未知密钥，只有 known_hosts 中已存在的密钥才允许连接。
+
+生产环境必须用 RejectPolicy 的原因：攻击者可通过 DNS 劫持、ARP 欺骗等手段伪装目标服务器，AutoAddPolicy 会盲目信任，导致私钥凭据泄露。正确做法是用 ssh-keyscan 预先采集真实 host key，人工核对后写入 known_hosts，连接时严格比对。密钥变更必须走变更流程，禁止为图方便退回 AutoAddPolicy。
+
+</Answer>
+
+**问题 2**：设计一个 500 台服务器的 SSH 并发巡检方案，需要考虑哪些关键点？
+
+<Answer>
+
+1. **认证方式**：密钥认证优先，禁止密码，私钥加 passphrase 保护。
+2. **host key 安全**：预采集固化到 known_hosts，用 RejectPolicy，禁止 AutoAddPolicy。
+3. **并发控制**：ThreadPoolExecutor 控制 20-50 并发，避免本机资源耗尽和目标 sshd 连接数压力。
+4. **超时控制**：connect 超时 10s + exec 超时 10s，防止单台挂死拖垮整体。
+5. **容错隔离**：单台异常捕获不阻塞其余，结果标记成功/失败/超时三类。
+6. **连接管理**：每任务独立 SSHClient，用完即关，避免长连接状态混乱。
+7. **结果聚合**：分批写入，支持断点续跑，失败列表可单独重跑。
+8. **限流**：根据目标 sshd MaxStartups 配置控制并发，避免连接被拒。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Paramiko">
+
+Python 的 SSHv2 协议实现库，纯 Python 编写，支持 SSH 连接、命令执行、SFTP 文件传输、端口转发，是 Python 运维自动化的 SSH 核心工具。
+
+</GlossaryItem>
+
+<GlossaryItem term="密钥认证">
+
+SSH 认证方式：客户端持私钥，服务器持公钥，通过非对称加密签名验证身份，无需传输密码，比密码认证更安全且支持无人值守自动化。
+
+</GlossaryItem>
+
+<GlossaryItem term="host key">
+
+SSH 服务器公钥指纹，用于验证服务器身份。客户端首次连接时记录 host key，后续比对以防范中间人攻击。生产环境必须预采集固化，禁止自动接受未知密钥。
+
+</GlossaryItem>
+
+<GlossaryItem term="RejectPolicy">
+
+Paramiko host key 策略：严格拒绝不在 known_hosts 中的密钥，是最安全的策略。配合预采集的 host key 使用，是生产环境的唯一正确选择。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution source="Python自动化运维" license="原创" note="本章基于 Paramiko 官方文档和 SSH 运维实践经验整理" />

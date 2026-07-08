@@ -1,0 +1,295 @@
+---
+title: "总复习"
+type: B
+section: "生产部署"
+order: 9
+description: "Go Web 编程全书知识图谱与综合应用：从 HTTP 到生产的完整闭环。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpFinalReviewDiagram } from "@/components/mdx/go-web-programming/diagrams/gwp-final-review";
+
+<Objectives>
+- 串联全书四大板块知识，形成完整的 Web 应用请求-响应闭环
+- 掌握从零设计一个 Go Web 应用的架构思路与组件选型
+- 理解每个知识节点在实际请求生命周期中的位置和职责
+- 能够综合运用路由、中间件、数据层和部署知识构建生产级应用
+</Objectives>
+
+## 直觉引入
+
+学完整本书，我们回头看看一个 HTTP 请求从"进门"到"出门"经历了什么。就像追踪一个快递包裹的完整旅程：下单（HTTP 请求）→ 分拣中心（路由）→ 安检（中间件）→ 仓库取货（数据库）→ 包装（模板/JSON）→ 贴标签（响应头）→ 发货（HTTP 响应）→ 物流监控（日志/监控）。
+
+每个环节都对应书中的一个章节，缺一不可。理解这条完整链路，你就理解了 Go Web 开发的全貌。
+
+## 概念讲解
+
+### 请求生命周期全景
+
+<Term def="一个 HTTP 请求在 Go Web 应用中的完整生命周期：HTTP 请求 → 路由匹配 → 中间件链（日志/认证/限流）→ Handler → 数据层（数据库/模板/JSON）→ 响应返回 → 运维保障（日志/监控/优雅关闭）。">
+
+全书十章对应请求生命周期的各个环节：
+
+1. **HTTP 基础**（第1-2章）：请求到达服务器，解析为 `http.Request`
+2. **路由匹配**（第3章）：`ServeMux` 按 Method+Path 找到 Handler
+3. **中间件链**（第4章）：日志记录开始 → 认证验证 Token → 限流检查频率
+4. **Handler 执行**：业务逻辑开始
+5. **数据层**（第5-7章）：`database/sql` 查数据库 → `html/template` 渲染 HTML 或 `encoding/json` 返回 JSON
+6. **响应返回**：通过 `ResponseWriter` 写状态码、头、体
+7. **运维保障**（第8-9章）：结构化日志记录请求、Prometheus 采集指标、优雅关闭等待处理完成
+
+</Term>
+
+### 组件协作关系
+
+<Term def="Go Web 应用的核心组件通过 http.Handler 接口统一协作：路由器分发请求、中间件包装 Handler、数据层提供数据、模板/JSON 编码响应。所有组件通过接口解耦，可独立替换。">
+
+核心设计模式：
+
+- **接口契约**：`http.Handler` 是所有组件的统一契约——路由器、中间件、Handler 都实现它
+- **组合优于继承**：中间件通过 `func(http.Handler) http.Handler` 组合，而非继承基类
+- **依赖注入**：数据库连接、配置等通过构造函数注入 Handler，便于测试和替换
+- **关注点分离**：路由只管分发、中间件只管横切、Handler 只管业务、数据层只管存取
+
+</Term>
+
+## 交互Demo
+
+<GwpFinalReviewDiagram />
+
+<Stepper>
+<Step title="第一板块回顾：Web 基础">
+HTTP 协议定义了请求-响应模型。Go 的 `net/http` 标准库提供了 `Handler` 接口（`ServeHTTP(w, r)`）、`ServeMux` 路由器和 `ResponseWriter` 响应写入器。`http.HandleFunc` 注册路由，`ListenAndServe` 启动服务器。这是一切的基础——不理解 HTTP 方法语义、状态码约定、请求/响应结构，就无法写出符合规范的 Web 应用。
+</Step>
+<Step title="第二板块回顾：路由与中间件">
+路由将 Method+Path 映射到 Handler——Go 1.22+ 的 ServeMux 支持参数路由（`/users/{id}`）。中间件用 `func(http.Handler) http.Handler` 签名包装 Handler，形成洋葱模型：Recovery（最外层）→ Logging → Auth → RateLimit → Handler。中间件通过 context 传递数据（如认证后的用户 ID）。
+</Step>
+<Step title="第三板块回顾：数据层">
+`database/sql` 通过 driver 适配多数据库，连接池复用连接，Query/QueryRow/Exec 三种查询方式。`html/template` 解析模板为 AST，执行时按上下文自动转义（防 XSS）。`encoding/json` 用 struct tag 控制字段映射，Marshal/Unmarshal 编解码，Encoder/Decoder 流式处理。
+</Step>
+<Step title="第四板块回顾：生产部署">
+认证用 Session-Cookie（有状态）或 JWT（无状态），密码用 bcrypt 存储。部署用 Docker 多阶段构建（scratch 镜像 ~15MB），Nginx 做 TLS 终止和反向代理。优雅关闭：捕获 SIGTERM → Shutdown → 等待请求完成 → 关闭连接池。配置用环境变量（12-Factor），日志用结构化 JSON（slog）。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// 一个完整的 Go Web 应用骨架——综合全书知识
+package main
+
+import (
+    "context"
+    "database/sql"
+    "encoding/json"
+    "html/template"
+    "log/slog"
+    "net/http"
+    "os"
+    "os/signal"
+    "time"
+
+    _ "github.com/lib/pq"
+)
+
+// === 数据模型 ===
+type User struct {
+    ID    int    `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email,omitempty"`
+}
+
+// === 中间件 ===
+type Middleware func(http.Handler) http.Handler
+
+func Chain(h http.Handler, mws ...Middleware) http.Handler {
+    for i := len(mws) - 1; i >= 0; i-- {
+        h = mws[i](h)
+    }
+    return h
+}
+
+func Recovery(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            if err := recover(); err != nil {
+                slog.Error("panic recovered", "error", err)
+                http.Error(w, "Internal Error", 500)
+            }
+        }()
+        next.ServeHTTP(w, r)
+    })
+}
+
+func Logging(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        slog.Info("request",
+            "method", r.Method, "path", r.URL.Path,
+            "duration", time.Since(start))
+    })
+}
+
+// === Handler（依赖注入数据库）===
+type App struct {
+    db   *sql.DB
+    tmpl *template.Template
+}
+
+func (a *App) listUsers(w http.ResponseWriter, r *http.Request) {
+    rows, err := a.db.Query("SELECT id, name, email FROM users LIMIT 50")
+    if err != nil {
+        http.Error(w, "DB error", 500)
+        return
+    }
+    defer rows.Close()
+
+    var users []User
+    for rows.Next() {
+        var u User
+        rows.Scan(&u.ID, &u.Name, &u.Email)
+        users = append(users, u)
+    }
+
+    w.Header().Set("Content-Type", "application/json")
+    json.NewEncoder(w).Encode(users)
+}
+
+// === 主函数 ===
+func main() {
+    slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
+    db, err := sql.Open("postgres", os.Getenv("DATABASE_URL"))
+    if err != nil {
+        slog.Error("DB init failed", "error", err)
+        os.Exit(1)
+    }
+    defer db.Close()
+    db.SetMaxOpenConns(25)
+
+    app := &App{db: db}
+
+    mux := http.NewServeMux()
+    mux.HandleFunc("GET /users", app.listUsers)
+    mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+        if err := db.Ping(); err != nil {
+            w.WriteHeader(503)
+            return
+        }
+        w.Write([]byte("OK"))
+    })
+
+    // 中间件链
+    handler := Chain(mux, Recovery, Logging)
+
+    server := &http.Server{
+        Addr:         ":8080",
+        Handler:      handler,
+        ReadTimeout:  10 * time.Second,
+        WriteTimeout: 30 * time.Second,
+    }
+
+    go func() {
+        slog.Info("Server starting", "port", 8080)
+        if err := server.ListenAndServe(); err != http.ErrServerClosed {
+            slog.Error("Server failed", "error", err)
+        }
+    }()
+
+    // 优雅关闭
+    quit := make(chan os.Signal, 1)
+    signal.Notify(quit, os.Interrupt)
+    <-quit
+
+    ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+    defer cancel()
+    server.Shutdown(ctx)
+    slog.Info("Server stopped")
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：只学框架不学原理**
+很多开发者直接用 Gin/Echo 跑通了一个 CRUD 就以为"会 Go Web 开发了"。但框架封装了 `net/http` 的细节——你不理解 `Handler` 接口、`ServeMux` 匹配规则、`ResponseWriter` 的顺序约束，遇到框架的边界问题（如自定义中间件、流式响应、WebSocket 升级）就束手无策。先学标准库原理，再用框架，才能理解框架"帮你做了什么"和"没帮你做什么"。
+</Callout>
+
+<Callout type="trap">
+**误区：忽视运维和安全**
+功能跑通不等于可以上线。生产环境需要：HTTPS（防窃听）、认证（防未授权访问）、限流（防 DDoS）、日志（故障排查）、监控（告警）、优雅关闭（零停机部署）、健康检查（K8s 探针）。这些"非功能性需求"往往决定了应用的可靠性。在开发阶段就考虑这些——而不是上线后出事再补。
+</Callout>
+
+<Exercises>
+**问题 1**：一个 `GET /api/users/42` 请求到达 Go Web 应用，请按顺序描述它经过的每个组件，以及每个组件的职责。
+
+<Answer>
+完整路径：
+
+1. **TCP/HTTP 层**：`net/http` 的 Server 接收 TCP 连接，解析 HTTP 请求行（`GET /api/users/42 HTTP/1.1`）、请求头、请求体，构造 `http.Request` 和 `http.ResponseWriter`。
+
+2. **路由匹配**：`ServeMux` 根据 `GET` 方法 + `/api/users/42` 路径匹配到注册的模式 `GET /api/users/{id}`。提取路径参数 `id=42`，存入 `r.PathValue("id")`。
+
+3. **中间件链（外→内）**：
+   - Recovery：注册 defer recover，准备捕获 panic
+   - Logging：记录请求开始时间、方法、路径
+   - Auth：从 `Authorization` 头提取 JWT，验签，注入 userID 到 context
+   - RateLimit：检查令牌桶，放行
+
+4. **Handler 执行**：`getUserHandler` 从 context 取认证信息，从 `r.PathValue("id")` 取 `42`，调用 `db.QueryRow("SELECT ... WHERE id = ?", 42)` 查数据库。Scan 结果到 User struct。
+
+5. **响应构建**：`w.Header().Set("Content-Type", "application/json")`，`json.NewEncoder(w).Encode(user)` 将 User 编码为 JSON 写入 ResponseWriter。
+
+6. **中间件链（内→外）**：
+   - RateLimit：释放令牌
+   - Auth：无后置
+   - Logging：记录状态码和耗时
+   - Recovery：defer 执行（无 panic 则无操作）
+
+7. **HTTP 响应返回**：`net/http` 将 ResponseWriter 中的数据组装为 HTTP 响应（状态行+头+体），通过 TCP 连接返回给客户端。
+</Answer>
+
+**问题 2**：如果要为一个创业公司设计一个 Go Web 后端架构，包含用户注册登录、文章 CRUD、API 认证，你会如何选择技术组件？请说明每个选择的理由。
+
+<Answer>
+架构设计：
+
+**路由层**：Go 1.22+ 增强版 `ServeMux`。理由：标准库原生支持方法和参数路由，无需第三方依赖。如果未来需要更复杂功能（路由分组、正则约束），再迁移到 chi。
+
+**中间件**：自实现 Recovery + Logging + Auth + CORS。理由：中间件签名简单（`func(http.Handler) http.Handler`），自实现可控、无依赖。Logging 用 `slog`（Go 1.21+ 标准库）。
+
+**数据库**：PostgreSQL + `database/sql` + `lib/pq`。理由：PostgreSQL 功能强大（JSON 列、全文搜索、事务），`database/sql` 标准库连接池成熟。如果查询复杂可用 `sqlc`（类型安全的代码生成）或 `squirrel`（查询构建器），但避免重 ORM（如 GORM）——它隐藏了 SQL 细节。
+
+**认证**：JWT（`golang-jwt/jwt`）。理由：API 服务无状态、易扩展。密码用 `bcrypt`。HTTPS 必须开启。前端存 HttpOnly Cookie（防 XSS + 搭配 SameSite 防 CSRF）。
+
+**JSON**：`encoding/json` 标准库。理由：够用，struct tag 控制映射。如需高性能可用 `jsoniter` 或 `sonic`（Drop 换标准库 API）。
+
+**部署**：Docker 多阶段构建（scratch 镜像）+ Nginx 反向代理（TLS 终止）+ Kubernetes（如团队有运维能力）或 Docker Compose（小团队）。理由：Go 单二进制天然适合容器化，镜像极小。
+
+**运维**：`/health` 健康检查端点 + `/metrics` Prometheus 指标 + 结构化 JSON 日志（slog）。理由：标准化接口，可接入 Grafana 告警。
+
+**配置**：环境变量 + `envconfig` 库。理由：12-Factor App 原则，同一二进制跑多环境。
+
+**选型原则**：标准库优先 → 有成熟社区共识的第三方库 → 自实现。避免过度工程化——创业初期简单可控比"完美架构"更重要。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="请求生命周期">
+一个 HTTP 请求从到达服务器到响应返回的完整路径：TCP 接收 → HTTP 解析 → 路由匹配 → 中间件链（前置）→ Handler → 数据层 → 中间件链（后置）→ HTTP 响应。全书十章覆盖这条链路的每个环节，理解它就理解了 Web 开发全貌。
+</GlossaryItem>
+<GlossaryItem term="接口契约">
+Go Web 的核心设计——`http.Handler` 接口（`ServeHTTP(w, r)`）是所有组件的统一契约。路由器、中间件、Handler 都实现这个接口，通过组合而非继承协作。这意味着任何组件都可以被替换——只要满足接口契约，就能插入链路中。
+</GlossaryItem>
+<GlossaryItem term="依赖注入">
+将数据库连接、配置、日志等依赖通过构造函数传入 Handler（如 `type App struct{ db *sql.DB }`），而非在 Handler 内部全局获取。好处：Handler 不依赖全局状态、易于测试（可注入 mock 数据库）、依赖关系显式可见。
+</GlossaryItem>
+<GlossaryItem term="生产就绪">
+一个 Web 应用从"能跑"到"能稳定服务"需要的非功能性保障：HTTPS、认证授权、限流防护、结构化日志、监控告警、健康检查、优雅关闭、零停机部署、配置外部化、错误恢复。这些运维和安全措施在开发阶段就应规划，而非上线后补。
+</GlossaryItem>
+</Glossary>

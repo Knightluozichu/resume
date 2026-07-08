@@ -1,0 +1,260 @@
+---
+title: "配置管理"
+type: B
+section: "高级运维"
+order: 8
+description: "用声明式 YAML + Jinja2 模板实现配置管理，掌握幂等分发、配置漂移检测与灰度发布策略。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopConfigMgmtDiagram } from "@/components/mdx/python-ops/diagrams/pop-config-mgmt";
+
+<Objectives>
+
+- 能区分声明式与命令式配置，理解声明式的优势
+- 能用 YAML + Jinja2 实现配置模板渲染
+- 能解释幂等性及其在配置管理中的关键作用
+-能设计配置漂移检测与灰度发布方案
+
+</Objectives>
+
+## 直觉引入
+
+想象你是个连锁餐厅的总部，要统一 500 家分店的菜单。你有两种方式：一是给每家店打电话口头交代「把红烧肉价格改成 38」——这是命令式，你得记住谁改了谁没改，改两次会出错；二是发一份统一菜单文件给所有店，要求「菜单就是这个样」——这是声明式，发 100 次结果一样，安全可靠。
+
+配置管理就是第二种方式。YAML 文件是那份统一菜单（声明期望状态），Jinja2 模板是根据各地差异生成具体配置的工具，幂等分发确保多次执行结果一致。核心思想：声明「想要什么」而非「怎么做」。
+
+## 概念讲解
+
+### 声明式配置
+
+<Term def="声明式配置描述期望状态（如 YAML 声明 port: 8080），系统自动计算如何达到该状态；命令式配置描述操作步骤（先停服务、改配置、启服务）。声明式天然幂等，可审计。">
+
+```yaml
+# site-config.yaml — 声明期望状态
+port: 8080
+workers: 4
+log_level: info
+max_conn: 1024
+```
+
+这份 YAML 不关心怎么改配置，只声明最终应该是什么样。系统读取后自动比对当前状态，只修改差异部分。
+
+</Term>
+
+### Jinja2 模板渲染
+
+<Term def="Jinja2 是 Python 模板引擎，用 {{ 变量 }} 语法将 YAML 配置数据注入模板，生成最终配置文件，实现配置与模板分离。">
+
+```python
+from jinja2 import Template
+
+template = Template("""
+worker_processes {{ workers }};
+listen {{ port }};
+log_level {{ log_level }};
+""")
+
+rendered = template.render(workers=4, port=8080, log_level="info")
+```
+
+配置数据（YAML）和模板（Jinja2）分离，改配置不改模板，改模板不改配置，各司其职。
+
+</Term>
+
+### 幂等性
+
+<Term def="幂等性指同一操作执行一次和执行多次结果完全一致。配置管理中，幂等意味着重复部署不会产生副作用，是安全重试和定时收敛的基础。">
+
+设置 `port=8080` 执行 100 次结果仍是 8080——这是幂等。`append "line"` 执行 100 次会追加 100 行——这是非幂等。配置管理必须幂等：网络抖动中断后可重跑，定期巡检纠正漂移，并行分发互不干扰。
+
+</Term>
+
+## 交互Demo
+
+<PopConfigMgmtDiagram />
+
+<Stepper>
+
+<Step title="第一步：编写声明式配置">
+
+用 YAML 声明期望状态：端口、进程数、日志级别、最大连接数。这份文件是唯一的配置真相源，所有节点以此为准。
+
+</Step>
+
+<Step title="第二步：Jinja2 模板渲染">
+
+编写 Jinja2 模板（如 nginx.conf.j2），用 `{{ 变量 }}` 占位。读取 YAML 数据后渲染生成最终配置文件。模板可复用，配置可随时改。
+
+</Step>
+
+<Step title="第三步：幂等分发到节点">
+
+用 Paramiko SFTP 上传渲染后的配置到目标节点。先 `nginx -t` 校验语法，通过后 `systemctl reload` 热加载。重复执行结果一致，安全可重入。
+
+</Step>
+
+<Step title="第四步：漂移检测与收敛">
+
+定期巡检：对比节点实际配置与期望配置，发现漂移（人工误改）即标记并自动收敛回期望状态。所有变更走 Git 版本管理，支持一键回滚。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+import yaml
+import paramiko
+from jinja2 import Template
+from concurrent.futures import ThreadPoolExecutor
+
+# === Level 1: 声明式配置 ===
+# site-config.yaml
+config = {
+    "port": 8080,
+    "workers": 4,
+    "log_level": "info",
+    "max_conn": 1024,
+}
+
+# === Level 2: Jinja2 模板渲染 ===
+template_str = """
+worker_processes {{ workers }};
+listen {{ port }};
+error_log /var/log/nginx/error.log {{ log_level }};
+worker_connections {{ max_conn }};
+"""
+rendered = Template(template_str).render(**config)
+
+# === Level 3: 幂等分发 ===
+def deploy_to_node(node, content, remote_path, key_path):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        client.connect(node, username="ops",
+                       key_filename=key_path, timeout=10)
+        sftp = client.open_sftp()
+        with sftp.file(remote_path, "w") as f:
+            f.write(content)  # 覆盖写入，幂等
+        # 先校验再重载
+        _, stdout, stderr = client.exec_command("nginx -t", timeout=10)
+        if stdout.channel.recv_exit_status() == 0:
+            client.exec_command("systemctl reload nginx", timeout=10)
+            return node, True, None
+        else:
+            return node, False, stderr.read().decode()
+    except Exception as e:
+        return node, False, str(e)
+    finally:
+        client.close()
+
+# 并发分发
+nodes = ["node-01", "node-02", "node-03", "node-04"]
+with ThreadPoolExecutor(max_workers=10) as pool:
+    results = list(pool.map(
+        lambda n: deploy_to_node(n, rendered,
+                                 "/etc/nginx/nginx.conf",
+                                 "~/.ssh/id_ed25519"),
+        nodes
+    ))
+
+# === Level 4: 漂移检测 ===
+def check_drift(node, expected_content, remote_path, key_path):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+    try:
+        client.connect(node, username="ops",
+                       key_filename=key_path, timeout=10)
+        sftp = client.open_sftp()
+        with sftp.file(remote_path, "r") as f:
+            actual = f.read().decode()
+        drift = actual.strip() != expected_content.strip()
+        return node, drift
+    finally:
+        client.close()
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：用 append 命令改配置，不幂等**
+
+有人用 `echo "line" >> config.conf` 追加配置——执行一次加一行，执行十次加十行，配置完全错乱。正确做法是覆盖写入整个配置文件（声明式），或用专门的配置管理工具（Ansible 的 lineinfile 模块）确保幂等。配置管理的第一原则就是幂等：重复执行不能产生副作用。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：配置不版本管理，改了不知道改了啥**
+
+直接在节点上改配置文件，没有 Git 记录，出问题不知道谁改了什么、改之前是什么样。正确做法：所有配置文件用 Git 管理，每次部署记录 commit hash，回滚即 checkout 旧版本。配置即代码（GitOps），变更有审计、可追溯、可回滚。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：什么是配置管理的幂等性？为什么它是生产环境的关键要求？
+
+<Answer>
+
+幂等性指同一配置操作执行一次和执行多次的结果完全一致，不会因重复执行产生副作用。例如设置 port=8080，执行 100 次结果仍是 8080。
+
+它是生产环境关键要求的原因：1) **安全重试**——网络抖动导致部署中断后可重跑，不会产生不一致状态；2) **定时收敛**——可定期执行自动纠正配置漂移（人工误改），重复执行不会出错；3) **并行安全**——多节点同时配置互不干扰，不需要担心执行顺序。非幂等操作（如 append）重复执行会导致配置累积错误，在大规模集群中是灾难性的。
+
+</Answer>
+
+**问题 2**：在大规模集群中如何解决配置漂移问题？
+
+<Answer>
+
+配置漂移是指节点实际配置与期望配置不一致（通常因人工直接修改导致）。解决方案：
+
+1. **配置中心化**——所有配置用 Git 版本管理，YAML 文件是唯一真相源，禁止人工直接改节点文件。
+2. **定期巡检**——cron 定时跑配置比对脚本，对比节点实际配置与期望配置，发现不一致即标记。
+3. **自动收敛**——发现漂移后自动用期望配置覆盖，纠正回正确状态，并记录漂移事件。
+4. **审计日志**——所有配置变更（包括自动收敛）记录日志，可追溯谁在什么时候改了什么。
+5. **变更流程**——配置变更必须走 Git PR 流程，经 review 后才能部署，禁止绕过流程直接改。
+6. **告警通知**——漂移事件触发告警，运维知晓并排查根因（是人为误改还是程序 bug）。
+
+核心思想是配置即代码（GitOps），让配置变可控、可审计、可回滚。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="声明式配置">
+
+描述期望状态的配置方式（如 YAML 声明 port: 8080），系统自动计算如何达到该状态。优势是幂等、可审计、可版本管理，是现代配置管理的核心理念。
+
+</GlossaryItem>
+
+<GlossaryItem term="Jinja2">
+
+Python 模板引擎，用 {{ 变量 }} 语法将配置数据注入模板生成最终文件，实现配置数据与模板的分离，是 Ansible 等配置管理工具的底层引擎。
+
+</GlossaryItem>
+
+<GlossaryItem term="幂等性">
+
+同一操作执行一次和多次结果完全一致。配置管理中，幂等意味着重复部署不产生副作用，是安全重试、定时收敛和并行分发的基础。
+
+</GlossaryItem>
+
+<GlossaryItem term="配置漂移">
+
+节点实际配置与期望配置不一致的现象，通常由人工直接修改导致。需通过定期巡检和自动收敛机制纠正，是配置管理的核心挑战。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution source="Python自动化运维" license="原创" note="本章基于 Jinja2 文档和配置管理实践经验整理" />

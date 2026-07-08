@@ -1,0 +1,193 @@
+---
+title: "Goroutine"
+type: B
+section: "并发模型"
+order: 4
+description: "Goroutine 是轻量协程，通过 G-M-P 模型在少量 OS 线程上调度数十万并发。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaGoroutinesDiagram } from "@/components/mdx/go-in-action/diagrams/gia-goroutines";
+
+<Objectives>
+- 理解 goroutine 的轻量本质与 go 关键字启动
+- 掌握 G-M-P 调度模型：G(goroutine)-M(线程)-P(处理器)
+- 区分 goroutine 与 OS 线程的开销与适用场景
+- 能识别 goroutine 泄漏并用 context 管理生命周期
+</Objectives>
+
+## 直觉引入
+
+想象一个工厂。OS 线程像「每个工人配一间独立办公室」——办公室（2MB 栈）很贵，工人（线程）切换要经过保安（内核），工厂最多容纳几千个办公室。goroutine 像「一个大办公室里有很多工位」——每个工位（2KB 栈）很便宜，工人切换在办公室内部完成（用户态），一个工厂能容纳几十万个工位。
+
+`go func()` 就像喊一声「你去那个工位干活」——极其轻量。goroutine 由 Go 运行时调度器在少量 OS 线程上多路复用，这就是 M:N 调度——M 个 goroutine 跑在 N 个 OS 线程上。
+
+## 概念讲解
+
+### goroutine 与 go 关键字
+
+<Term def="goroutine 是 Go 运行时管理的轻量协程。用 go 关键字启动一个函数调用，函数在新 goroutine 中并发执行。2KB 栈起步，按需增长。">
+
+```go
+go doWork()              // 启动 goroutine 执行 doWork
+go func(x int) {         // 启动匿名函数 goroutine
+    fmt.Println(x)
+}(42)
+```
+
+goroutine 没有返回值、没有 ID（运行时不暴露）。主 goroutine（main 函数）退出时所有 goroutine 被终止——所以需要同步机制（channel、sync.WaitGroup）等待 goroutine 完成。
+
+</Term>
+
+### G-M-P 调度模型
+
+<Term def="Go 调度器的 G-M-P 模型：G 是 goroutine，M 是 OS 线程，P 是处理器（持有本地运行队列）。P 的数量等于 GOMAXPROCS，M 按需创建。">
+
+- **G**：goroutine，包含栈和指令指针
+- **M**：OS 线程，实际执行 G 的载体
+- **P**：处理器，持有本地运行队列（LRQ），数量 = GOMAXPROCS
+
+调度流程：G 加入 P 的本地队列，M 绑定 P 从队列取 G 执行。当 G 阻塞（如 I/O）时，M 释放 P 让其他 M 使用；当 P 队列空时，会从其他 P 偷 G（work stealing）。
+
+</Term>
+
+### 栈管理
+
+<Term def="goroutine 栈从 2KB 起步，按需增长（最多 1GB）。这是 goroutine 轻量的关键——相比 OS 线程固定 1-8MB 栈，goroutine 可创建数十万个。">
+
+栈增长通过「连续栈」或「分段栈」实现。当栈空间不足时，运行时分配更大栈并复制现有数据。这让小 goroutine 占用极少内存，大递归也不溢出。
+
+</Term>
+
+## 交互Demo
+
+<GiaGoroutinesDiagram />
+
+<Stepper>
+<Step title="步骤1：用 go 启动并发">
+`go funcName(args)` 即启动一个 goroutine。它与其他 goroutine 并发执行，顺序不确定。记住：go 语句后面的函数参数在 go 语句执行时求值，但函数体稍后异步执行。
+</Step>
+<Step title="步骤2：用 sync.WaitGroup 等待">
+主 goroutine 退出会终止所有 goroutine。用 WaitGroup 等待：wg.Add(1) 计数，goroutine 内 defer wg.Done()，主 goroutine wg.Wait() 阻塞直到全部完成。这是无 channel 场景的同步方式。
+</Step>
+<Step title="步骤3：管理 goroutine 生命周期">
+每个 goroutine 启动时就要想好如何退出。用 context.Context 传递取消信号，goroutine 内 select 监听 ctx.Done()。忘记退出的 goroutine 会泄漏——长期运行的服务中这是内存与 goroutine 数缓慢增长的元凶。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// 基本启动
+go fmt.Println("并发执行")
+
+// WaitGroup 等待多个 goroutine
+var wg sync.WaitGroup
+for i := 0; i < 5; i++ {
+    wg.Add(1)
+    go func(n int) {
+        defer wg.Done()
+        fmt.Println("worker", n)
+    }(i)
+}
+wg.Wait() // 等待全部完成
+
+// context 管理生命周期
+ctx, cancel := context.WithCancel(context.Background())
+go func() {
+    for {
+        select {
+        case <-ctx.Done():
+            return // 收到取消信号，退出
+        default:
+            doWork()
+        }
+    }
+}()
+cancel() // 通知 goroutine 退出
+
+// 闭包变量捕获陷阱
+for i := 0; i < 3; i++ {
+    go func() {
+        fmt.Println(i) // 可能全打印 3！闭包捕获的是变量 i
+    }()
+}
+// 修复：传参
+for i := 0; i < 3; i++ {
+    go func(n int) {
+        fmt.Println(n) // 正确：每个 goroutine 有独立副本
+    }(i)
+}
+
+// GOMAXPROCS 控制并行度
+runtime.GOMAXPROCS(4) // 使用 4 个 P（CPU 核数）
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：闭包捕获循环变量导致所有 goroutine 打印相同值**
+`for i := 0; ... { go func() { fmt.Println(i) }() }` 中闭包捕获的是变量 i 的引用，而非值的副本。当 goroutine 实际执行时，循环可能已结束，i 是最终值。修复：把 i 作为参数传入 `go func(n int) {...}(i)`，或 Go 1.22+ 循环变量每次迭代是新变量。这是 Go 最经典的并发陷阱。
+</Callout>
+
+<Callout type="trap">
+**误区：启动 goroutine 但不管理退出导致泄漏**
+`go func() { for { doWork() } }()` 启动一个永不退出的 goroutine。如果这个 goroutine 持有资源（连接、内存），就会泄漏。在长期运行的服务中，泄漏的 goroutine 不断累积，最终 OOM。规则：每个 goroutine 启动时就要设计退出路径——用 context 取消、用 done channel、用超时。用 runtime.NumGoroutine() 监控 goroutine 数量。
+</Callout>
+
+<Exercises>
+**问题 1**：G-M-P 调度模型的三个组件分别是什么？work stealing 是什么？
+
+<Answer>
+G：goroutine，包含栈和指令指针，是被调度的基本单位。M：OS 线程，实际执行 G 的载体，由内核调度。P：处理器，持有本地运行队列（LRQ），数量等于 GOMAXPROCS，是 G 和 M 之间的中介。
+
+调度流程：G 加入 P 的本地队列，M 绑定 P 从队列取 G 执行。当 M 上的 G 阻塞（如系统调用）时，M 释放 P，让其他 M 绑定该 P 继续跑队列里的 G。当 P 的本地队列空时，会执行 work stealing——从其他 P 的队列偷取一半 G 过来执行，保证负载均衡。这避免了全局锁的竞争，让调度高效。
+
+GOMAXPROCS 控制 P 的数量（默认=CPU 核数），决定真正的并行度。M 的数量可以超过 P（阻塞的 M 不占 P），Go 运行时按需创建和回收 M。
+</Answer>
+
+**问题 2**：以下代码有什么问题？如何修复？
+
+```go
+for i := 0; i < 3; i++ {
+    go func() { fmt.Println(i) }()
+}
+time.Sleep(time.Second)
+```
+
+<Answer>
+问题：闭包捕获循环变量 i 的引用，而非值的副本。三个 goroutine 实际执行时（Sleep 期间或之后），循环已结束，i 的最终值是 3。所以可能打印三个 3（而非 0, 1, 2）。这是 Go 最经典的闭包捕获陷阱。
+
+修复方法 1（传参）：把 i 作为参数传入匿名函数，每个 goroutine 获得独立副本：
+```go
+for i := 0; i < 3; i++ {
+    go func(n int) { fmt.Println(n) }(i)
+}
+```
+
+修复方法 2（Go 1.22+）：Go 1.22 改变了循环变量语义，每次迭代 i 是新变量，闭包捕获的是独立副本，无需修复。
+
+修复方法 3（局部变量）：在循环内创建局部变量 `i := i`，闭包捕获的是这个新变量。但方法 1 传参最清晰。
+
+另外用 time.Sleep 等待 goroutine 是不可靠的（不知要等多久）——生产代码应用 sync.WaitGroup 或 channel 同步。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Goroutine">
+Go 运行时管理的轻量协程，用 go 关键字启动。2KB 栈起步按需增长，用户态调度，可创建数十万个。主 goroutine 退出时所有 goroutine 终止。
+</GlossaryItem>
+<GlossaryItem term="G-M-P 模型">
+Go 调度器模型：G(goroutine)-M(OS线程)-P(处理器)。P 持有本地运行队列，M 绑定 P 执行 G。work stealing 让空闲 P 偷取其他 P 的 G 实现负载均衡。
+</GlossaryItem>
+<GlossaryItem term="GOMAXPROCS">
+P 的数量，决定真正的并行度（同时执行的 goroutine 数上限）。默认等于 CPU 核数。可 runtime.GOMAXPROCS(n) 调整。注意：goroutine 总数远超 GOMAXPROCS，但同时运行的受其限制。
+</GlossaryItem>
+<GlossaryItem term="Goroutine 泄漏">
+启动后永不退出、无法被回收的 goroutine。通常因忘记设计退出路径（无 context 取消、无 done channel）。长期运行服务中泄漏累积导致内存增长。用 runtime.NumGoroutine() 监控，用 pprof 排查。
+</GlossaryItem>
+</Glossary>

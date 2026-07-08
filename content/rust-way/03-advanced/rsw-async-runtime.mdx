@@ -1,0 +1,187 @@
+---
+title: "async 运行时"
+type: B
+section: "高级工程"
+order: 7
+description: "async fn 编译成 Future 状态机，执行器通过 poll/Waker 调度海量并发。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswAsyncRuntimeDiagram } from "@/components/mdx/rust-way/diagrams/rsw-async-runtime";
+
+<Objectives>
+- 理解 async fn 编译成 Future 状态机的零成本本质
+- 掌握 poll/Waker 协作式调度模型
+- 区分 OS 线程与 async 任务的开销与适用场景
+- 能用 tokio/async-std 编写高并发网络服务
+</Objectives>
+
+## 直觉引入
+
+想象一家餐厅的服务员。一种模式是「一个客人配一个服务员」（OS 线程）——服务员端完菜就站着等客人吃完，效率极低，客人多了餐厅就雇不起那么多服务员。另一种模式是「一个服务员服务多桌」（async 任务）——服务员点完一桌的单，趁等厨房做菜时立刻去下一桌，厨房好了再回来上菜。一个服务员能服务几十桌。
+
+这就是 async 的核心：**协作式调度**。`async fn` 里的 `.await` 就是「我暂时没事做，让出 CPU 给别人」的信号。编译器把 async fn 编译成一个状态机，每个 await 是一个「挂起点」，保存当前状态后让出，等条件就绪（Waker 唤醒）再恢复。这种模式让少数线程就能承载海量并发任务。
+
+## 概念讲解
+
+### Future trait 与状态机
+
+<Term def="async fn 被编译器编译成实现 Future trait 的状态机。Future 的 poll 方法驱动状态推进，返回 Pending（未就绪）或 Ready（完成）。每个 .await 是一个挂起点。">
+
+```rust
+trait Future {
+    type Output;
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output>;
+}
+enum Poll<T> { Ready(T), Pending }
+```
+
+`async fn foo() -> T` 等价于 `fn foo() -> impl Future<Output = T>`。函数体被编译成状态机的 `poll` 实现：执行到 `.await` 若未就绪则存状态返回 `Pending`，就绪后下次 poll 从挂起点恢复。
+
+</Term>
+
+### 执行器与 Waker
+
+<Term def="执行器（executor）持有任务队列，循环 poll 就绪的 Future。Future 返回 Pending 时注册 Waker，I/O 完成后 Waker 把任务重新入队。这是协作式调度的核心。">
+
+`async fn` 本身不会执行——必须有执行器驱动。流程：
+1. 执行器从队列取任务，调用 `poll`
+2. `poll` 执行到 await，若 I/O 未就绪，注册 Waker 返回 `Pending`
+3. I/O 完成（由 reactor 通知），Waker 被调用，任务重新入队
+4. 执行器再次 poll，从挂起点恢复，I/O 已就绪继续执行
+
+tokio/async-std 提供 executor + reactor 的完整运行时。
+
+</Term>
+
+### async vs 线程
+
+<Term def="OS 线程每条约 2MB 栈、内核调度、阻塞式 I/O，适合 CPU 密集；async 任务每条约百字节、用户态调度、非阻塞 I/O，适合 I/O 密集的高并发。">
+
+| 维度 | OS 线程 | async 任务 |
+|------|---------|-----------|
+| 栈空间 | ~2MB | ~百字节 |
+| 调度 | 内核抢占 | 用户态协作 |
+| I/O | 阻塞 | 非阻塞 await |
+| 数量上限 | 万级 | 百万级 |
+| 适用 | CPU 密集 | I/O 密集并发 |
+
+</Term>
+
+## 交互Demo
+
+<RswAsyncRuntimeDiagram />
+
+<Stepper>
+<Step title="步骤1：理解 async fn 是惰性的">
+`async fn` 调用只是返回一个 Future，不会执行任何代码——直到被 poll 才开始。这与普通函数「调用即执行」根本不同。`let f = async_fn();` 此刻函数体一行没跑。
+</Step>
+<Step title="步骤2：用 .await 驱动推进">
+`.await` 驱动 Future：poll 到就绪则继续，未就绪则挂起让出。在 async 函数中 `result = future.await?` 会自动 poll 并处理结果。await 是挂起点——执行器可在此切换到其他任务。
+</Step>
+<Step title="步骤3：用 tokio 运行时驱动">
+`#[tokio::main]` 在 main 中启动执行器。`tokio::spawn` 把 Future 提交到执行器并发运行。不要在 async 中用 std::sync::Mutex 或阻塞式 sleep——会卡住整个执行器线程。用 `tokio::time::sleep`、`tokio::sync::Mutex`。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+use tokio;
+
+#[tokio::main]
+async fn main() {
+    // 并发执行多个任务
+    let (r1, r2) = tokio::join!(fetch_data("a"), fetch_data("b"));
+    println!("{} {}", r1, r2);
+}
+
+async fn fetch_data(key: &str) -> String {
+    // .await 让出执行权，I/O 完成后恢复
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    format!("data-{}", key)
+}
+
+// spawn 后台任务
+async fn server() {
+    tokio::spawn(async {
+        loop {
+            handle_connection().await;
+        }
+    });
+}
+
+// select：等待第一个完成的任务
+async fn with_timeout() -> Option<String> {
+    tokio::select! {
+        data = fetch_data("x") => Some(data),
+        _ = tokio::time::sleep(Duration::from_secs(1)) => None, // 超时
+    }
+}
+
+// 流式处理：async 迭代器
+use tokio_stream;
+async fn process_all() {
+    let mut stream = tokio_stream::iter(vec![1, 2, 3]);
+    while let Some(n) = stream.next().await {
+        println!("{}", n);
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：忘记 await 导致 Future 不执行**
+`async_fn()` 只返回 Future，不执行。如果你写 `async_fn();` 不加 `.await`，函数体一行没跑，编译器会警告 `unused Future`。这和 JS Promise 类似但更严格——Rust 的 Future 是惰性的，必须被 poll（通常通过 await 或 spawn）才会推进。
+</Callout>
+
+<Callout type="trap">
+**误区：在 async 中使用阻塞操作卡死执行器**
+`std::thread::sleep`、`std::sync::Mutex::lock`（持锁期间）、CPU 密集的同步循环——这些会阻塞当前执行器线程，导致该线程上的所有其他任务都无法推进。async 代码必须用异步版本：`tokio::time::sleep`、`tokio::sync::Mutex`、`tokio::task::spawn_blocking`（把 CPU 密集任务丢到独立线程池）。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 `async fn` 调用后不会立即执行？这种「惰性」设计有什么好处？
+
+<Answer>
+`async fn` 调用只构造一个 Future 状态机，不执行函数体——直到被 poll 才开始。这是因为 Future 是惰性的（lazy）。
+
+好处：
+1. **零成本组合**：多个 Future 可以组合（join、select、链式）而不立即执行，最终只在顶层 await 时统一驱动。这让 `join!(f1, f2)` 这样的并发组合高效——无需为每个 Future 启动线程。
+2. **调度灵活性**：调用方决定何时、在哪个执行器上运行 Future，而非函数自己启动。
+3. **零分配**：状态机在栈上构造（或内联），无需堆分配，比 JS Promise（每次都堆分配）更高效。
+
+对比：JS 的 async function 调用后立即开始执行到第一个 await。Rust 的惰性设计让组合更可控，但要求显式 await/spawn 来驱动。
+</Answer>
+
+**问题 2**：在 async 代码中应该用 `std::sync::Mutex` 还是 `tokio::sync::Mutex`？为什么？
+
+<Answer>
+取决于是否在持锁期间 `.await`：
+
+- **不在持锁期间 await**：可以用 `std::sync::Mutex`。它是 OS 级锁，持锁时阻塞当前线程。如果锁内只有同步操作（无 await），短暂阻塞可接受，且 std::sync::Mutex 比 tokio 版快。
+- **需要在持锁期间 await**：必须用 `tokio::sync::Mutex`。如果用 std 锁且持锁时 await，当前执行器线程阻塞，该线程上其他任务全部卡死；更糟的是，若 await 唤醒需要同一把锁，直接死锁。
+
+经验法则：默认用 `tokio::sync::Mutex` 避免 await 持锁陷阱；性能敏感且确认锁内无 await 时用 `std::sync::Mutex`。永远不要在持有任何锁时 `.await`——这是 async 死锁的头号原因。或者用 `tokio::task::spawn_blocking` 把持锁操作移到阻塞线程池。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Future trait">
+表示异步运算的核心 trait。`poll` 方法驱动状态推进，返回 Pending（未就绪，注册 Waker）或 Ready（完成）。async fn 编译成实现 Future 的状态机。
+</GlossaryItem>
+<GlossaryItem term="poll / Waker">
+执行器调用 poll 驱动 Future。未就绪时 Future 注册 Waker 返回 Pending；I/O 完成后 Waker 唤醒任务重新入队。这是协作式调度的核心协议。
+</GlossaryItem>
+<GlossaryItem term="执行器（Executor）">
+驱动 Future 的运行时组件，持任务队列循环 poll。tokio/async-std 提供多线程执行器 + I/O reactor。async fn 必须被执行器 poll 才会执行。
+</GlossaryItem>
+<GlossaryItem term=".await 挂起点">
+async 函数中等待 Future 完成的位置。编译器在此保存状态、让出执行权，就绪后恢复。是协作式调度切换任务的时机。每个 await 对应状态机的一个状态。
+</GlossaryItem>
+</Glossary>

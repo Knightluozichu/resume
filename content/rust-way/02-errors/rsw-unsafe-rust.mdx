@@ -1,0 +1,173 @@
+---
+title: "unsafe Rust"
+type: B
+section: "错误与安全"
+order: 5
+description: "unsafe 块解锁裸指针等五大能力，须用 safe API 封装不变式。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswUnsafeRustDiagram } from "@/components/mdx/rust-way/diagrams/rsw-unsafe-rust";
+
+<Objectives>
+- 理解 unsafe 块解锁的五大能力及其必要性
+- 掌握 safe/unsafe 边界的封装契约——unsafe 是实现细节
+- 理解裸指针 *const/*mut 与引用 & 的区别
+- 能识别 unsafe 代码需维护的不变式并安全封装
+</Objectives>
+
+## 直觉引入
+
+Rust 的安全保证像一堵「编译期防火墙」——借用检查器拦住了绝大多数内存错误。但有些场景编译器无法自动验证：调用 C 语言的 FFI、手动管理共享内存、实现底层并发原语。这时你需要一扇「安全门」——`unsafe` 块。
+
+关键认知：`unsafe` 不是「关闭安全检查」，而是「编译器说『我无法证明这段代码安全，请你（程序员）用人工推理来保证』」。它把责任从编译器转移到程序员。而好的 Rust 工程实践是：unsafe 只出现在最小范围内，外面用 safe API 封装，让调用方完全无感——标准库的 `Vec`、`Rc`、`Arc` 内部都用了 unsafe，但你用它们时从不担心。
+
+## 概念讲解
+
+### unsafe 的五大能力
+
+<Term def="unsafe 块解锁五种编译器无法自动验证的操作：解引用裸指针、调用 unsafe 函数、访问可变 static、实现 unsafe trait、访问 union 字段。">
+
+1. **解引用裸指针** `*const T` / `*mut T`：裸指针无借用检查，可能别名、可能悬垂
+2. **调用 unsafe 函数/方法**：如 FFI 调用 C 库
+3. **访问/修改可变 static 变量**：多线程数据竞争风险
+4. **实现 unsafe trait**：如手动实现 `Send`/`Sync`，承诺线程安全
+5. **访问 union 字段**：union 的多个字段共享内存，读取类型必须匹配
+
+这些操作的共同点：编译器无法静态验证其安全性，需程序员保证不变式。
+
+</Term>
+
+### 封装契约
+
+<Term def="好的 unsafe 代码遵循封装契约：unsafe 是实现细节，不泄漏到 safe 公共 API。safe 函数用不变式约束，让所有合法输入都安全。">
+
+封装原则：
+- `unsafe` 块尽量小，只包围真正需要的语句
+- 用 safe 函数包装，对所有输入维护不变式
+- 文档标注 `# Safety` 说明 unsafe 函数的前置条件
+
+标准库的 `Vec::push` 内部用 unsafe 操作裸指针和容量，但对外是 safe 的——因为 `Vec` 维护了「长度不超过容量、指针有效」的不变式，调用方无法破坏。
+
+</Term>
+
+### 裸指针 vs 引用
+
+<Term def="引用 &T/&mut T 受借用检查器守护，保证有效且无别名；裸指针 *const/*mut 无此保证，可别名、可不齐、可悬垂，只能在 unsafe 中解引用。">
+
+引用是「编译器担保安全」的指针；裸指针是「程序员担保安全」的指针。裸指针接近 C 的指针，但默认不可解引用（必须 unsafe）。它们用于 FFI 和底层性能优化。
+
+</Term>
+
+## 交互Demo
+
+<RswUnsafeRustDiagram />
+
+<Stepper>
+<Step title="步骤1：定位 unsafe 的真实需求">
+先问：真的需要 unsafe 吗？大多数场景标准库已有 safe 封装。unsafe 的正当理由：FFI 调 C 库、实现新的并发原语、极致性能优化（绕过边界检查）、操作硬件/内存映射。
+</Step>
+<Step title="步骤2：最小化 unsafe 范围">
+把 unsafe 块缩到最小——只包围真正解引用裸指针或调用 unsafe 函数的语句。不要把整段函数标 unsafe，让 safe 的逻辑留在 safe 区域，便于审查。
+</Step>
+<Step title="步骤3：用 safe API 封装不变式">
+设计 safe 函数，让所有合法输入都触发安全行为。例如 `split_at` 内部 unsafe 操作指针，但公共 API 保证返回的两个切片不重叠。写 `# Safety` 文档说明前置条件。这样调用方无需关心 unsafe。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// 裸指针：unsafe 中解引用
+let mut x = 42;
+let raw = &mut x as *mut i32;
+unsafe {
+    *raw += 1; // 必须在 unsafe 块中
+}
+println!("{}", x); // 43
+
+// safe 封装 unsafe：维护不变式
+struct Buffer {
+    data: Vec<i32>,
+    len: usize,
+}
+impl Buffer {
+    // safe 公共 API：调用方无需关心内部 unsafe
+    fn get(&self, idx: usize) -> Option<i32> {
+        if idx < self.len {
+            // unsafe 只包围必要的指针操作
+            Some(unsafe { *self.data.get_unchecked(idx) })
+        } else {
+            None
+        }
+    }
+}
+
+// unsafe 函数：需标注 # Safety
+/// # Safety
+/// ptr 必须指向有效且对齐的 i32，且调用期间不被释放。
+unsafe fn read_i32(ptr: *const i32) -> i32 {
+    *ptr
+}
+
+// FFI：调用 C 函数
+extern "C" {
+    fn abs(input: i32) -> i32;
+}
+let n = unsafe { abs(-5) }; // C 函数都是 unsafe
+
+// unsafe impl：手动承诺 Send/Sync
+struct MyRaw(*mut u8);
+unsafe impl Send for MyRaw {} // 承诺可跨线程转移
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：以为 unsafe 块内代码不被检查**
+`unsafe` 块内的代码仍然受类型检查、借用检查（对引用部分）等约束。它只是「关闭」了五项特定检查（如裸指针解引用）。你不能在 unsafe 块里做任何 safe 代码不能做的事——它只是解锁了那五种能力。把 unsafe 当「免检通行证」会导致隐蔽的内存安全 bug。
+</Callout>
+
+<Callout type="trap">
+**误区：把 safe 函数标成 unsafe 来「推卸责任」**
+如果一个函数实际上对所有合法输入都安全，却标成 `unsafe fn`，是把本应由函数维护的不变式推给调用方。这破坏了封装，让 unsafe 蔓延。只有当函数确实有「调用方必须保证的前置条件」（如指针有效性）时才标 unsafe，并写清楚 `# Safety`。
+</Callout>
+
+<Exercises>
+**问题 1**：unsafe 块解锁的五大能力是什么？它们的共同点是什么？
+
+<Answer>
+五大能力：1. 解引用裸指针 `*const T`/`*mut T`；2. 调用 unsafe 函数/方法（含 FFI）；3. 访问或修改可变 `static` 变量；4. 实现 unsafe trait（如手动 `Send`/`Sync`）；5. 访问 `union` 的字段。
+
+共同点：编译器无法静态验证这些操作的安全性。例如裸指针可能别名（多指针指向同一数据）或悬垂，编译器无法追踪；可变 static 可能被多线程同时访问产生数据竞争；union 字段共享内存，读取类型必须与写入匹配。这些都需要程序员用人工推理维护不变式，所以编译器要求显式 `unsafe` 标注来表明「我承担这份责任」。
+</Answer>
+
+**问题 2**：什么是 unsafe 的封装契约？为什么 `Vec::push` 对外是 safe 的但内部用了 unsafe？
+
+<Answer>
+封装契约：unsafe 是实现细节，不应泄漏到 safe 公共 API。safe 函数通过维护不变式，保证所有合法输入都触发安全行为——调用方无需知道内部有 unsafe。
+
+`Vec::push` 内部用 unsafe 是因为要操作裸指针和容量来实现高效内存管理（手动分配/拷贝/释放），这些操作编译器无法自动验证。但 `Vec` 维护了不变式：`len <= capacity`、指针始终有效、元素正确初始化。`push` 对所有合法调用（任何 `T` 值）都保持这些不变式不变——它永远把 `len` 限制在 `capacity` 内，必要时扩容。因此调用方无法通过正常使用 `push` 触发内存不安全，对外就是 safe 的。
+
+这就是好的封装：把 unsafe 藏在最小范围，用 safe API 包出不变式，让用户享受高性能同时完全无感于底层复杂性。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="unsafe 块">
+显式标注的代码区域，解锁五种编译器无法自动验证的操作（裸指针解引用、unsafe 函数调用、可变 static、unsafe trait 实现、union 访问）。它转移安全责任到程序员，不关闭其他检查。
+</GlossaryItem>
+<GlossaryItem term="裸指针（*const / *mut）">
+不受借用检查器守护的指针，可别名、可悬垂、可不齐。接近 C 指针，但默认不可解引用（需 unsafe）。用于 FFI 和底层优化。
+</GlossaryItem>
+<GlossaryItem term="封装契约">
+unsafe 代码的工程准则：unsafe 是实现细节，用 safe API 封装，维护不变式让所有合法输入都安全。文档用 `# Safety` 标注 unsafe 函数的前置条件。
+</GlossaryItem>
+<GlossaryItem term="不变式（Invariant）">
+数据结构或代码在任意时刻必须成立的条件。例如 Vec 的 `len <= capacity`。unsafe 代码必须维护不变式，safe 封装保证不变式不被外部输入破坏。
+</GlossaryItem>
+</Glossary>

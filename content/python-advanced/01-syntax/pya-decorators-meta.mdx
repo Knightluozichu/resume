@@ -1,0 +1,123 @@
+---
+title: "装饰器与元类"
+type: B
+section: "高级语法"
+order: 3
+description: "掌握装饰器的拦截机制与元类的类创建控制——Python元编程两大利器"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { PyaDecoratorsMetaDiagram } from "@/components/mdx/python-advanced/diagrams/pya-decorators-meta";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解装饰器的本质：接收函数返回函数的高阶函数
+- 掌握带参数装饰器、类装饰器、functools.wraps 的使用
+- 理解元类：type 既是类也是元类，通过 __init_subclass__ 控制类创建
+- 学会用描述符协议实现属性访问拦截
+</Objectives>
+
+## 直觉引入
+
+想象你去政务大厅办事。你不直接找具体窗口，而是先过一道前置服务台——它检查你的材料、盖个章、再把你引导到正确的窗口。装饰器就是这道前置服务台：它拦截函数的调用，在调用前后加料（日志、缓存、权限检查），然后把结果传回。元类则更进一步——它拦截的是类的创建本身。
+
+## 概念讲解
+
+### 装饰器
+
+<PyaDecoratorsMetaDiagram />
+
+<Term def="装饰器是接收一个函数（或类）作为参数并返回一个新函数（或类）的可调用对象，用 @decorator 语法糖应用">
+装饰器
+</Term>
+
+@decorator 本质上就是 func = decorator(func)。装饰器在函数定义时（模块加载时）就执行，而非调用时。最常见的用途：日志、计时、缓存、权限检查、注册（路由注册、插件注册）。
+
+### 元类
+
+元类是创建类的类。class Foo(metaclass=Meta) 时，Python 调用 Meta('Foo', bases, namespace) 创建类。元类可以拦截类定义，在类创建时修改属性、添加方法、做注册。type 是默认元类。大多数场景用 __init_subclass__ 或类装饰器替代元类，更简单。
+
+## 交互Demo
+
+<Stepper>
+<Step title="基础装饰器">@dec 等价于 func = dec(func)。装饰器返回的新函数替代原函数。用 functools.wraps 保留原函数的 __name__、__doc__ 等元信息。</Step>
+<Step title="带参数装饰器">三层嵌套：外层接收参数，中层接收函数，内层是实际包装函数。@dec(arg) 先执行 dec(arg) 返回真正的装饰器，再应用。</Step>
+<Step title="元类与 __init_subclass__">定义元类继承 type，重写 __new__ 或 __init__ 拦截类创建。现代 Python 推荐用 __init_subclass__ 替代元类，更直观。</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+import functools, time
+
+# 1. 基础装饰器：计时
+def timer(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        print(f"{func.__name__} took {time.perf_counter()-start:.4f}s")
+        return result
+    return wrapper
+
+@timer
+def slow_func():
+    time.sleep(1)
+
+# 2. 带参数装饰器：重试
+def retry(times=3):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            for i in range(times):
+                try: return func(*args, **kwargs)
+                except: 
+                    if i == times-1: raise
+        return wrapper
+    return decorator
+
+# 3. __init_subclass__ 替代元类
+class Base:
+    _registry = {}
+    def __init_subclass__(cls, **kw):
+        super().__init_subclass__(**kw)
+        Base._registry[cls.__name__] = cls
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：装饰器在函数调用时执行。**
+装饰器在函数定义时（模块加载时）就执行，将原函数替换为包装函数。只有包装函数内部的逻辑在每次调用时执行。
+</Callout>
+
+<Callout type="trap">
+**误区：认为元类是日常开发常用工具。**
+元类是深层魔法，绝大多数场景不需要。需要拦截类创建时，优先用 __init_subclass__ 或类装饰器。元类主要用在框架底层。
+</Callout>
+
+<Exercises>
+**问题 1**：写一个 @cache 装饰器，缓存函数结果。注意什么问题？
+
+<Answer>
+用字典缓存参数到结果的映射。注意：1）参数必须可哈希；2）缓存会持续增长，生产环境用 lru_cache 限制大小；3）用 functools.wraps 保留原函数元信息。
+</Answer>
+
+**问题 2**：元类和 __init_subclass__ 各自的适用场景？
+
+<Answer>
+__init_subclass__ 适合子类注册等简单场景。元类适合需要完全控制类创建过程的场景：修改 namespace、控制 MRO、实现描述符协议。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="装饰器">接收函数/类并返回新函数/类的可调用对象，用 @ 语法糖应用。在定义时执行。</GlossaryItem>
+<GlossaryItem term="元类">创建类的类。type 是默认元类。自定义元类继承 type，可在 __new__/__init__ 中拦截类的创建过程。</GlossaryItem>
+<GlossaryItem term="描述符">实现 __get__/__set__/__delete__ 的对象，用于拦截属性访问。property、classmethod 都是描述符。</GlossaryItem>
+<GlossaryItem term="__init_subclass__">Python 3.6+ 的类创建钩子，定义在父类中，子类创建时自动调用。是元类的轻量替代。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Python高级编程" adaptedUrl="https://book.douban.com/" />

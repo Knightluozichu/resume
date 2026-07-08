@@ -814,7 +814,106 @@ export type ReviewChapterSlug =
   | "dsa-graph-algs"
   | "dsa-sorting"
   | "dsa-dynamic-programming"
-  | "dsa-final-review";
+  | "dsa-final-review"
+  // Rust 编程之道
+  | "rsw-learning-map"
+  | "rsw-ownership-borrow"
+  | "rsw-traits-generics"
+  | "rsw-lifetimes"
+  | "rsw-error-handling"
+  | "rsw-unsafe-rust"
+  | "rsw-concurrency"
+  | "rsw-async-runtime"
+  | "rsw-macros"
+  | "rsw-final-review"
+  // Go 语言实战
+  | "gia-learning-map"
+  | "gia-go-philosophy"
+  | "gia-arrays-slices"
+  | "gia-map-struct"
+  | "gia-goroutines"
+  | "gia-channels"
+  | "gia-concurrency-patterns"
+  | "gia-testing-packaging"
+  | "gia-standard-lib"
+  | "gia-final-review"
+  // Go Web 编程
+  | "gwp-learning-map"
+  | "gwp-http-basics"
+  | "gwp-routing"
+  | "gwp-middleware"
+  | "gwp-database"
+  | "gwp-templates"
+  | "gwp-json-api"
+  | "gwp-authentication"
+  | "gwp-deployment"
+  | "gwp-final-review"
+  // 流畅的 Python
+  | "flp-learning-map"
+  | "flp-data-model"
+  | "flp-sequences"
+  | "flp-dict-sets"
+  | "flp-functions-first-class"
+  | "flp-type-hints"
+  | "flp-protocols-abc"
+  | "flp-closures-decorators"
+  | "flp-generators"
+  | "flp-final-review"
+  // Python 自动化运维
+  | "pop-learning-map"
+  | "pop-python-ops-basics"
+  | "pop-file-ops"
+  | "pop-process-mgmt"
+  | "pop-network-automation"
+  | "pop-ssh-paramiko"
+  | "pop-web-scraping"
+  | "pop-monitoring-alerting"
+  | "pop-config-mgmt"
+  | "pop-final-review"
+  // 精通 Rust（第2版）
+  | "mrs-learning-map"
+  | "mrs-advanced-types"
+  | "mrs-memory-mgmt"
+  | "mrs-concurrency-deep"
+  | "mrs-macros-deep"
+  | "mrs-traits-advanced"
+  | "mrs-unsafe-deep"
+  | "mrs-web-assembly"
+  | "mrs-networking"
+  | "mrs-final-review"
+  // Python 高级编程
+  | "pya-learning-map"
+  | "pya-python-internals"
+  | "pya-iterators-generators"
+  | "pya-decorators-meta"
+  | "pya-asyncio"
+  | "pya-multiprocessing"
+  | "pya-cython"
+  | "pya-testing"
+  | "pya-packaging"
+  | "pya-final-review"
+  // 算法（第4版）
+  | "al4-learning-map"
+  | "al4-fundamentals"
+  | "al4-sorting-elementary"
+  | "al4-sorting-merge-quick"
+  | "al4-searching-st"
+  | "al4-hash-tables"
+  | "al4-graphs-undirected"
+  | "al4-graphs-directed"
+  | "al4-strings"
+  | "al4-final-review"
+  // 编程珠玑
+  | "pp-learning-map"
+  | "pp-cracking-problems"
+  | "pp-binary-search"
+  | "pp-bit-vectors"
+  | "pp-design-principles"
+  | "pp-code-tuning"
+  | "pp-back-of-envelope"
+  | "pp-perspectives"
+  | "pp-epilog"
+  | "pp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -1633,6 +1732,105 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dsa-sorting": "排序",
   "dsa-dynamic-programming": "动态规划",
   "dsa-final-review": "总复习",
+  // Rust 编程之道
+  "rsw-learning-map": "学习地图",
+  "rsw-ownership-borrow": "所有权与借用",
+  "rsw-traits-generics": "Trait与泛型",
+  "rsw-lifetimes": "生命周期",
+  "rsw-error-handling": "错误处理",
+  "rsw-unsafe-rust": "Unsafe Rust",
+  "rsw-concurrency": "并发",
+  "rsw-async-runtime": "异步运行时",
+  "rsw-macros": "宏",
+  "rsw-final-review": "总复习",
+  // Go 语言实战
+  "gia-learning-map": "学习地图",
+  "gia-go-philosophy": "Go哲学",
+  "gia-arrays-slices": "数组与切片",
+  "gia-map-struct": "Map与结构体",
+  "gia-goroutines": "Goroutine",
+  "gia-channels": "Channel",
+  "gia-concurrency-patterns": "并发模式",
+  "gia-testing-packaging": "测试与打包",
+  "gia-standard-lib": "标准库",
+  "gia-final-review": "总复习",
+  // Go Web 编程
+  "gwp-learning-map": "学习地图",
+  "gwp-http-basics": "HTTP基础",
+  "gwp-routing": "路由",
+  "gwp-middleware": "中间件",
+  "gwp-database": "数据库",
+  "gwp-templates": "模板",
+  "gwp-json-api": "JSON API",
+  "gwp-authentication": "认证",
+  "gwp-deployment": "部署",
+  "gwp-final-review": "总复习",
+  // 流畅的 Python
+  "flp-learning-map": "学习地图",
+  "flp-data-model": "数据模型",
+  "flp-sequences": "序列",
+  "flp-dict-sets": "字典与集合",
+  "flp-functions-first-class": "一等函数",
+  "flp-type-hints": "类型提示",
+  "flp-protocols-abc": "协议与ABC",
+  "flp-closures-decorators": "闭包与装饰器",
+  "flp-generators": "生成器",
+  "flp-final-review": "总复习",
+  // Python 自动化运维
+  "pop-learning-map": "学习地图",
+  "pop-python-ops-basics": "运维基础",
+  "pop-file-ops": "文件操作",
+  "pop-process-mgmt": "进程管理",
+  "pop-network-automation": "网络自动化",
+  "pop-ssh-paramiko": "SSH与Paramiko",
+  "pop-web-scraping": "Web爬虫",
+  "pop-monitoring-alerting": "监控告警",
+  "pop-config-mgmt": "配置管理",
+  "pop-final-review": "总复习",
+  // 精通 Rust（第2版）
+  "mrs-learning-map": "学习地图",
+  "mrs-advanced-types": "高级类型",
+  "mrs-memory-mgmt": "内存管理",
+  "mrs-concurrency-deep": "深入并发",
+  "mrs-macros-deep": "深入宏",
+  "mrs-traits-advanced": "高级Trait",
+  "mrs-unsafe-deep": "深入Unsafe",
+  "mrs-web-assembly": "WebAssembly",
+  "mrs-networking": "网络编程",
+  "mrs-final-review": "总复习",
+  // Python 高级编程
+  "pya-learning-map": "学习地图",
+  "pya-python-internals": "Python内部机制",
+  "pya-iterators-generators": "迭代器与生成器",
+  "pya-decorators-meta": "装饰器与元编程",
+  "pya-asyncio": "Asyncio",
+  "pya-multiprocessing": "多进程",
+  "pya-cython": "Cython",
+  "pya-testing": "测试",
+  "pya-packaging": "打包",
+  "pya-final-review": "总复习",
+  // 算法（第4版）
+  "al4-learning-map": "学习地图",
+  "al4-fundamentals": "基础",
+  "al4-sorting-elementary": "基础排序",
+  "al4-sorting-merge-quick": "归并与快速排序",
+  "al4-searching-st": "符号表查找",
+  "al4-hash-tables": "散列表",
+  "al4-graphs-undirected": "无向图",
+  "al4-graphs-directed": "有向图",
+  "al4-strings": "字符串",
+  "al4-final-review": "总复习",
+  // 编程珠玑
+  "pp-learning-map": "学习地图",
+  "pp-cracking-problems": "破题",
+  "pp-binary-search": "二分搜索",
+  "pp-bit-vectors": "位向量",
+  "pp-design-principles": "设计原则",
+  "pp-code-tuning": "代码调优",
+  "pp-back-of-envelope": "粗略估算",
+  "pp-perspectives": "视角",
+  "pp-epilog": "结语",
+  "pp-final-review": "总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

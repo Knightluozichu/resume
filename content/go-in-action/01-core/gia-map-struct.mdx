@@ -1,0 +1,202 @@
+---
+title: "Map 与 Struct"
+type: B
+section: "核心类型"
+order: 3
+description: "map 是哈希表引用类型，struct 是值类型，组合+接口替代继承。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaMapStructDiagram } from "@/components/mdx/go-in-action/diagrams/gia-map-struct";
+
+<Objectives>
+- 理解 map 的引用本质、零值 nil 限制与并发安全问题
+- 掌握 struct 的值语义、字段标签与指针接收者选择
+- 理解嵌入（embedding）实现组合优于继承
+- 能用 struct + interface 设计 Go 风格的数据模型
+</Objectives>
+
+## 直觉引入
+
+map 像一本通讯录——你用名字（key）查电话（value），但通讯录本身是个「共享的活页本」：把它复印给别人，别人改了第一页，你看到的也变了（引用类型）。而且一本空白通讯录（nil map）你不能直接往里写——必须先买一本（make）。
+
+struct 像一张表格的模板——定义好字段名和类型，填入数据就是一张实例表。复制这张表会抄写所有字段（值类型）。如果你想让多人改同一张表，得复印「表的位置」（指针）而非表本身。
+
+Go 没有 class，struct + interface 就是全部面向对象能力：struct 装数据，interface 定契约，嵌入做组合。
+
+## 概念讲解
+
+### map：引用类型
+
+<Term def="map[K]V 是哈希表的引用类型。零值 nil 不能写入（panic），需 make 初始化。无序、非并发安全。赋值/传参共享底层数据。">
+
+```go
+m := make(map[string]int)
+m["a"] = 1
+v, ok := m["b"] // ok 模式：ok=false 表示不存在
+
+var nilMap map[string]int
+// nilMap["x"] = 1 // panic: assignment to entry in nil map
+```
+
+map 不是并发安全的——多 goroutine 同时读写会 panic。并发场景用 sync.Map 或加锁。
+
+</Term>
+
+### struct：值类型
+
+<Term def="struct 是命名字段集合的值类型。字段连续内存，零值为各字段零值。赋值/传参复制全部字段。用指针避免复制或修改原值。">
+
+```go
+type User struct {
+    Name string `json:"name"` // 结构体标签
+    Age  int
+}
+u := User{Name: "Alice", Age: 30}
+u2 := u      // 复制全部字段
+u2.Name = "Bob" // u.Name 仍是 Alice
+```
+
+字段标签（struct tag）是元信息，被 encoding/json 等包通过反射读取。
+
+</Term>
+
+### 嵌入与组合
+
+<Term def="struct 嵌入（embedding）一个命名字段只有类型无名字，被嵌入字段的方法提升到外层 struct，实现组合复用。">
+
+```go
+type Base struct{ ID int }
+func (b Base) GetID() int { return b.ID }
+
+type User struct {
+    Base // 嵌入：方法提升
+    Name string
+}
+u := User{Base: Base{ID: 1}, Name: "Alice"}
+u.GetID()     // 等价于 u.Base.GetID()
+u.ID          // 字段也提升
+```
+
+嵌入是组合不是继承——User「有一个」Base，不是「是一个」Base。
+
+</Term>
+
+## 交互Demo
+
+<GiaMapStructDiagram />
+
+<Stepper>
+<Step title="步骤1：选择 map 还是 struct">
+用 key 查值、key 动态变化用 map。字段固定、类型已知用 struct。struct 编译期类型安全且性能更好（连续内存）；map 灵活但有哈希计算开销。配置项固定用 struct，运行时动态键值用 map。
+</Step>
+<Step title="步骤2：选择值接收者还是指针接收者">
+默认用指针接收者 *T——避免每次方法调用复制 struct，且能修改字段。只有小 struct（几个基本类型）或需要值语义（如排序的 Less）时用值接收者。一个类型的方法集应统一用值或指针，不要混用。
+</Step>
+<Step title="步骤3：用嵌入组合，用接口抽象">
+用嵌入复用通用能力（如嵌入 Logger、嵌入 sync.Mutex）。用接口定义行为契约（如 Repository 接口）。先写 struct 和方法，再从使用场景提取小接口——消费者定义接口。避免预先设计庞大接口。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// map：引用类型，ok 模式
+m := map[string]int{"a": 1, "b": 2}
+if v, ok := m["c"]; ok {
+    fmt.Println("存在", v)
+} else {
+    fmt.Println("不存在")
+}
+delete(m, "a") // 删除 key
+
+// struct：值类型 + 标签
+type Config struct {
+    Host string `json:"host" env:"HOST"`
+    Port int    `json:"port" env:"PORT" default:"8080"`
+}
+
+// 嵌入组合
+type Repository struct {
+    db *sql.DB
+}
+func (r *Repository) Save(item interface{}) error { /* ... */ return nil }
+
+type UserService struct {
+    Repository // 嵌入，Save 方法提升
+}
+// UserService 实例可直接调用 Save()
+
+// 指针接收者：修改字段
+func (u *User) Birthday() { u.Age++ }
+u := &User{Name: "Alice", Age: 30}
+u.Birthday() // u.Age = 31
+
+// 匿名 struct：临时结构
+point := struct{ X, Y int }{1, 2}
+
+// map 并发安全：sync.Map 或加锁
+var sm sync.Map
+sm.Store("k", "v")
+v, _ := sm.Load("k")
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：向 nil map 写入导致 panic**
+`var m map[string]int` 创建的是 nil map，能读（返回零值）但不能写（panic: assignment to entry in nil map）。必须 `m := make(map[string]int)` 初始化后才可写。读 nil map 是安全的（返回零值），这是设计上的便利，但写 nil map 是 bug。养成 make 初始化的习惯。
+</Callout>
+
+<Callout type="trap">
+**误区：多个 goroutine 读写同一 map 导致 panic**
+标准 map 不是并发安全的——多 goroutine 同时读写会运行时 panic（concurrent map read and map write）。并发场景必须用 sync.Map（读多写少）或 sync.RWMutex 加锁。不要心存侥幸——并发 map 问题在压测时才暴露，线上就是事故。go test -race 能检测到这类问题。
+</Callout>
+
+<Exercises>
+**问题 1**：以下代码会发生什么？如何修复？
+
+```go
+var m map[string]int
+m["a"] = 1
+```
+
+<Answer>
+会 panic：`assignment to entry in nil map`。
+
+原因：`var m map[string]int` 声明的是 nil map（零值 nil）。nil map 能安全读取（返回零值），但不能写入——因为底层的哈希表还未分配。
+
+修复：用 make 初始化 `m := make(map[string]int)` 或 map 字面量 `m := map[string]int{}`。初始化后底层数据结构已就绪，可以正常读写。
+
+记住：map 是引用类型，零值 nil 不指向任何底层哈希表。这与切片不同——nil 切片可以 append（append 会分配），但 nil map 不能直接写入。这是 Go 设计上的不对称，需特别注意。
+</Answer>
+
+**问题 2**：什么时候用值接收者，什么时候用指针接收者？
+
+<Answer>
+默认用指针接收者 *T：1. 避免大 struct 每次方法调用复制（性能）；2. 能修改接收者的字段；3. 方法返回 this 链式调用时需要一致性。
+
+用值接收者 T：1. struct 很小（几个基本类型，复制成本可忽略）；2. 需要值语义——如排序的 Less(i,j int) bool 用值接收者保证不可变；3. 类型本身是不可变的（如 time.Time 全部用值接收者，因为它是只读的）。
+
+关键规则：一个类型的方法集应统一用值或指针，不要混用。如果某个方法需要修改字段（必须指针），其余方法也应用指针保持一致。混用会导致接口实现不一致——值接收者的方法集只包含值方法，指针接收者包含值+指针方法，影响接口满足性判断。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="map[K]V">
+哈希表引用类型。零值 nil 不能写入（panic），需 make 初始化。无序、非并发安全。用 ok 模式 v, ok := m[k] 检查 key 存在性。并发场景用 sync.Map 或加锁。
+</GlossaryItem>
+<GlossaryItem term="struct">
+命名字段集合的值类型。字段连续内存，赋值复制全部字段。字段标签（tag）提供反射元信息。Go 没有 class，struct 是数据封装的基本单位。
+</GlossaryItem>
+<GlossaryItem term="嵌入（Embedding）">
+struct 中只有类型无名字的字段，被嵌入字段的方法和字段提升到外层 struct。实现组合复用，替代继承。嵌入是 has-a 关系，不是 is-a。
+</GlossaryItem>
+<GlossaryItem term="结构体标签（Struct Tag）">
+字段后的反引号字符串，如 `json:"name"`。提供反射元信息，被 encoding/json、env 解析等通过 reflect 读取。编译器不检查标签内容，是约定俗成的元数据机制。
+</GlossaryItem>
+</Glossary>

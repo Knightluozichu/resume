@@ -1,0 +1,233 @@
+---
+title: "中间件"
+type: B
+section: "路由与中间件"
+order: 3
+description: "中间件洋葱模型：横切关注点的优雅实现，日志/认证/限流/恢复。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpMiddlewareDiagram } from "@/components/mdx/go-web-programming/diagrams/gwp-middleware";
+
+<Objectives>
+- 理解中间件的洋葱模型：请求外到内，响应内到外
+- 掌握中间件函数签名 func(http.Handler) http.Handler 的设计原理
+- 学会编写日志、认证、限流、panic 恢复等常用中间件
+- 理解中间件链的组合顺序对行为的影响
+</Objectives>
+
+## 直觉引入
+
+中间件就像快递包裹的层层包装：你寄一个包裹（请求），先套一层泡沫（日志中间件），再套一层防水袋（认证中间件），最后装入纸箱（限流中间件），最里面是商品本身（Handler）。拆包裹时反着来——先拆纸箱，再拆防水袋，最后拆泡沫。
+
+每一层包装可以在"打包"时做事（前置处理），也可以在"拆包"时做事（后置处理）。比如日志中间件在打包时记录请求开始时间，在拆包时记录总耗时。
+
+## 概念讲解
+
+### 中间件签名与洋葱模型
+
+<Term def="Go 中间件是签名为 func(http.Handler) http.Handler 的函数，接收下一个 Handler 返回包装后的 Handler。多个中间件嵌套形成洋葱模型——请求从外向内穿过各层，响应从内向外返回。">
+
+```go
+type Middleware func(http.Handler) http.Handler
+
+func Logging(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        // 前置处理：记录请求开始
+        next.ServeHTTP(w, r) // 调用下一层
+        // 后置处理：记录耗时
+        log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+```
+
+组合中间件时，最外层最先执行前置处理、最后执行后置处理：
+
+```go
+h := Logging(Auth(RateLimit(finalHandler)))
+// 请求流：Logging前置 → Auth前置 → RateLimit前置 → finalHandler
+// 响应流：finalHandler → RateLimit后置 → Auth后置 → Logging后置
+```
+
+</Term>
+
+### 常用中间件模式
+
+<Term def="Web 应用四类核心中间件：日志（记录请求）、认证（验证身份）、限流（控制频率）、恢复（捕获 panic 防止崩溃）。每类处理一个横切关注点。">
+
+四种核心中间件：
+
+- **日志**：记录每个请求的方法、路径、状态码、耗时，用于监控和调试
+- **认证**：检查 Cookie/Token，未认证返回 401，通过后注入用户信息到 context
+- **限流**：令牌桶或滑动窗口，防止恶意请求压垮服务，超限返回 429
+- **恢复**：`defer recover()` 捕获 Handler 中的 panic，返回 500 并记录堆栈，防止整个进程崩溃
+
+</Term>
+
+## 交互Demo
+
+<GwpMiddlewareDiagram />
+
+<Stepper>
+<Step title="第一步：编写中间件">
+定义 `func(http.Handler) http.Handler` 签名的函数。内部返回一个 `http.HandlerFunc`，在调用 `next.ServeHTTP(w, r)` 前做前置处理，调用后做后置处理。通过 `defer` 确保后置处理即使 panic 也会执行。
+</Step>
+<Step title="第二步：组合中间件链">
+将中间件按顺序套在最终 Handler 外层。组合顺序很重要：Recovery 应在最外层（确保能捕获所有 panic），Logging 在 Recovery 内层（记录所有请求），Auth 在需要保护的路由上。用辅助函数 `Chain(h, mw1, mw2, ...)` 简化组合。
+</Step>
+<Step title="第三步：使用 context 传递数据">
+中间件可以通过 `r.WithContext(context.WithValue(r.Context(), key, value))` 将数据（如认证后的用户 ID）传给后续 Handler。Handler 中用 `r.Context().Value(key)` 取出。注意用自定义类型作为 key 避免冲突。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+package main
+
+import (
+    "context"
+    "log"
+    "net/http"
+    "runtime/debug"
+    "time"
+)
+
+// 中间件类型
+type Middleware func(http.Handler) http.Handler
+
+// 链式组合
+func Chain(h http.Handler, mws ...Middleware) http.Handler {
+    for i := len(mws) - 1; i >= 0; i-- {
+        h = mws[i](h)
+    }
+    return h
+}
+
+// 日志中间件
+func Logging(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        start := time.Now()
+        next.ServeHTTP(w, r)
+        log.Printf("%s %s %v", r.Method, r.URL.Path, time.Since(start))
+    })
+}
+
+// Panic 恢复中间件
+func Recovery(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        defer func() {
+            if err := recover(); err != nil {
+                log.Printf("panic: %v\n%s", err, debug.Stack())
+                http.Error(w, "Internal Server Error", 500)
+            }
+        }()
+        next.ServeHTTP(w, r)
+    })
+}
+
+// 认证中间件（使用 context 传递用户）
+type contextKey string
+const userKey contextKey = "user"
+
+func Auth(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        token := r.Header.Get("Authorization")
+        if token == "" {
+            http.Error(w, "Unauthorized", 401)
+            return
+        }
+        // 验证 token... 假设验证通过
+        ctx := context.WithValue(r.Context(), userKey, "user-from-token")
+        next.ServeHTTP(w, r.WithContext(ctx))
+    })
+}
+
+// 最终 Handler
+func profileHandler(w http.ResponseWriter, r *http.Request) {
+    user := r.Context().Value(userKey).(string)
+    w.Write([]byte("Hello, " + user))
+}
+
+func main() {
+    mux := http.NewServeMux()
+    mux.HandleFunc("/profile", profileHandler)
+
+    // 中间件链：Recovery → Logging → Auth → mux
+    handler := Chain(mux, Recovery, Logging, Auth)
+    http.ListenAndServe(":8080", handler)
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：中间件顺序无所谓**
+中间件的组合顺序直接影响行为。Recovery 必须在最外层——如果它在 Logging 内层，Logging 中的 panic 就无法被捕获。Auth 应该在 RateLimit 内层——先限流防止暴力破解，再认证。Logging 通常在 Recovery 内层、其他中间件外层，确保记录所有请求（包括被中间件拒绝的）。
+</Callout>
+
+<Callout type="trap">
+**误区：用字符串作为 context key**
+`context.WithValue(ctx, "user", data)` 看起来简单，但字符串 key 容易冲突——其他包也可能用 `"user"`。正确做法是定义自定义类型 `type contextKey string; const userKey contextKey = "user"`，利用类型系统保证唯一性。context 应该传请求作用域的元数据，不要传业务参数。
+</Callout>
+
+<Exercises>
+**问题 1**：为什么 Recovery 中间件应该放在中间件链的最外层？如果放在内层会发生什么？
+
+<Answer>
+Recovery 用 `defer recover()` 捕获后续所有代码的 panic。如果 Recovery 在最外层，它包裹了所有其他中间件和 Handler，任何一层的 panic 都能被捕获，返回 500 并记录堆栈，进程不会崩溃。
+
+如果 Recovery 放在内层（比如在 Logging 内层），那么 Logging 中间件自身的 panic 就无法被 Recovery 捕获——因为 Recovery 的 defer 作用域只覆盖它所包裹的内层，不覆盖外层的 Logging。Logging 的 panic 会导致进程崩溃。因此 Recovery 必须在最外层，确保覆盖所有代码路径。
+</Answer>
+
+**问题 2**：写一个限流中间件，使用带缓冲 channel 作为令牌桶，每秒最多允许 10 个请求通过，超限返回 429 Too Many Requests。
+
+<Answer>
+```go
+func RateLimit(maxPerSec int) Middleware {
+    tokens := make(chan struct{}, maxPerSec)
+    // 每秒填充令牌
+    go func() {
+        ticker := time.NewTicker(time.Second / time.Duration(maxPerSec))
+        for range ticker.C {
+            select {
+            case tokens <- struct{}{}:
+            default: // 桶满则丢弃
+            }
+        }
+    }()
+    return func(next http.Handler) http.Handler {
+        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+            select {
+            case <-tokens:
+                next.ServeHTTP(w, r) // 获取令牌，放行
+            default:
+                http.Error(w, "Too Many Requests", 429)
+            }
+        })
+    }
+}
+```
+关键点：带缓冲 channel 容量等于每秒上限，goroutine 定时填充令牌，非阻塞 select 判断是否有令牌。这是简化版令牌桶——真正的实现还需考虑突发流量（burst）和滑动窗口。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="中间件（Middleware）">
+签名为 `func(http.Handler) http.Handler` 的函数，包装一个 Handler 添加横切逻辑。中间件可在请求处理前（前置）和处理后（后置）执行代码，多个中间件组成洋葱模型。常见用途：日志、认证、限流、CORS、压缩、恢复。
+</GlossaryItem>
+<GlossaryItem term="洋葱模型">
+多个中间件嵌套调用的执行模式——请求从最外层中间件开始，逐层向内穿过，到达核心 Handler 后，响应从内向外逐层返回。每层中间件有前置和后置两个执行点，形状像洋葱的同心层。
+</GlossaryItem>
+<GlossaryItem term="横切关注点">
+多个 Handler 都需要但与核心业务逻辑无关的功能——日志、认证、限流、监控、CORS 等。中间件将这些关注点从 Handler 中抽离，统一处理，避免代码重复和耦合。
+</GlossaryItem>
+<GlossaryItem term="context 传递">
+中间件通过 `context.WithValue` 将数据（如认证后的用户信息）注入请求上下文，后续 Handler 通过 `r.Context().Value(key)` 取出。用自定义类型作为 key 避免冲突，且 context 在请求结束后自动回收，适合传递请求作用域的元数据。
+</GlossaryItem>
+</Glossary>

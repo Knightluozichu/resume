@@ -1,0 +1,197 @@
+---
+title: "一等函数"
+type: B
+section: "函数与对象"
+order: 4
+description: "理解函数作为一等公民：可赋值、可传参、可返回，高阶函数与函数式管道的引擎。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpFunctionsFirstClassDiagram } from "@/components/mdx/fluent-python/diagrams/flp-functions-first-class";
+
+<Objectives>
+
+- 能描述函数作为一等公民的三种能力
+- 能解释 `key=len` 传的是函数对象而非调用结果
+- 能用工厂函数返回定制化的函数，并说明它与装饰器的关系
+
+</Objectives>
+
+## 直觉引入
+
+在 Python 里，函数和整数、字符串一样，是个可以拿来拿去的「东西」。你可以把函数装进变量、塞进参数、从另一个函数里生产出来——就像工厂流水线上传送的零件。
+
+这种「函数即值」的能力，是 map、sorted、filter、装饰器的共同地基。`sorted(words, key=len)` 之所以能按词长排序，正是因为 `len` 这个函数被当作参数传了进去，由 sorted 决定对每个元素调用它。如果函数不能当值传，你就只能手写比较逻辑，每换一种排序规则都重写一遍。
+
+## 概念讲解
+
+### 一等公民的三种能力
+
+<Term def="函数可被赋值给变量、作为参数传递、作为返回值返回。接收或返回函数的函数叫高阶函数。">
+
+函数在 Python 里是**一等公民**：与 int、str 地位平等。三种能力：1. 赋值给变量（`f = len`）；2. 作为参数传递（`sorted(s, key=len)`）；3. 作为返回值（工厂函数产出新函数）。接收函数为参数或返回函数的函数叫**高阶函数**。
+
+</Term>
+
+### 高阶函数与推导式
+
+`map`、`filter`、`sorted`、`functools.reduce` 都是高阶函数。但 Python 社区对「映射+过滤」类变换更推荐**推导式**：`[x*x for x in nums if x > 0]` 比 `list(map(lambda x: x*x, filter(lambda x: x>0, nums)))` 清晰得多。高阶函数的优势在「把函数传给已有接口」（如 `key=`、`reduce`）和惰性管道（`map` 返回迭代器）。
+
+### 可调用对象
+
+任何实现 `__call__` 的对象都可像函数一样调用。函数只是最常见的可调用对象，类、`functools.partial`、实现 `__call__` 的实例也都是。`callable(obj)` 可判断。
+
+## 交互Demo
+
+<FlpFunctionsFirstClassDiagram />
+
+<Stepper>
+
+<Step title="第一步：把函数当值传">
+
+`key=len` 传的是函数对象本身，sorted 内部对每个元素调用 `key(element)` 得到排序键。记住：传函数引用，而非传调用结果。
+
+</Step>
+
+<Step title="第二步：用工厂函数产函数">
+
+`make_tagger('b')` 返回一个记住了 `tag='b'` 的新函数。这种「接收参数、返回定制函数」的模式，是装饰器的雏形。
+
+</Step>
+
+<Step title="第三步：简单变换用推导式">
+
+`[f(x) for x in seq if cond(x)]` 比 map+filter+lambda 嵌套清晰。需要惰性或传给 reduce/key 时才用高阶函数。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```python
+# 一等函数的完整演示
+from functools import reduce
+
+# 1. 赋值给变量
+f = len
+print(f([1, 2, 3]))            # 3 —— f 就是 len
+
+# 2. 作为参数（高阶函数）
+words = ['banana', 'apple', 'cherry', 'fig']
+print(sorted(words, key=len))  # ['fig', 'apple', 'banana', 'cherry']
+print(sorted(words, key=str.lower))  # 按小写排序
+
+# 3. 作为返回值（工厂函数）
+def make_tagger(tag):
+    def tagger(text):
+        return f"<{tag}>{text}</{tag}>"
+    return tagger
+
+b = make_tagger('b')
+print(b('hello'))              # <b>hello</b>
+
+# 推导式 vs 高阶函数（同效，推导式更清晰）
+nums = range(10)
+squares = [x*x for x in nums if x % 2 == 0]
+# 等价：list(map(lambda x: x*x, filter(lambda x: x%2==0, nums)))
+print(squares)                 # [0, 4, 16, 36, 64]
+
+# reduce：高阶函数的不可替代场景（累积）
+product = reduce(lambda a, b: a * b, range(1, 6))
+print(product)                 # 120 = 5!
+
+# 可调用对象：实现 __call__
+class Multiplier:
+    def __init__(self, n):
+        self.n = n
+    def __call__(self, x):
+        return x * self.n
+
+triple = Multiplier(3)
+print(triple(14))              # 42 —— 实例像函数一样调用
+print(callable(triple))        # True
+```
+
+`make_tagger` 返回的内部函数 `tagger` 记住了外层参数 `tag`——这就是闭包的雏形，下一板块会深入。
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：把 `key=len` 写成 `key=len()`**
+
+`key=len()` 会立即调用 `len()`（无参数抛 `TypeError`），即使能调用，传的也是固定结果而非函数。`key` 要的是「接收元素、返回键」的函数对象，由 sorted 决定何时调用。记住传引用不传调用。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：把高阶函数当万能锤，到处 map+lambda**
+
+`list(map(lambda x: x*x, filter(lambda x: x>0, nums)))` 嵌套难读。Pythonic 做法是 `[x*x for x in nums if x > 0]`。map/filter 在「传给 key/reduce」或「需要惰性迭代器」时才有优势，简单变换首选推导式。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：`sorted(words, key=len)` 中 `key=len` 传的是函数还是调用结果？为什么不写 `key=len()`？
+
+<Answer>
+
+传的是函数对象本身（len 的引用），不是调用结果。`key` 参数期望接收「接收元素、返回排序键」的函数，sorted 内部对每个元素调用 `key(element)` 计算排序键。写 `key=len()` 会立即调用 `len()`（无参数）抛 `TypeError`；即使能调用，传的也是某次调用的固定结果而非函数。这是「函数即值」的体现：把函数当参数传递，由接收方决定何时调用。
+
+</Answer>
+
+**问题 2**：用高阶函数实现 `make_tagger(tag)` 工厂，返回把字符串包进 HTML 标签的函数。它如何体现「函数即返回值」？
+
+<Answer>
+
+```python
+def make_tagger(tag):
+    def tagger(text):
+        return f"<{tag}>{text}</{tag}>"
+    return tagger
+
+b = make_tagger('b')   # b 是记住 tag='b' 的函数
+print(b('hello'))      # <b>hello</b>
+```
+`make_tagger` 不返回数据，而返回一个根据参数定制的新函数。每次调用都产出一个记住了外层参数的闭包。`b` 和 `i` 是两个行为不同但同源的函数——这是工厂模式的函数式表达，也是装饰器（接收函数、返回函数的高阶函数）的雏形。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="一等函数">
+
+函数与其他对象地位平等，可被赋值、作为参数传递、作为返回值返回。Python 的函数是一等公民，这是高阶函数和装饰器的基础。
+
+</GlossaryItem>
+
+<GlossaryItem term="高阶函数">
+
+接收函数为参数或返回函数的函数。map、filter、sorted、reduce 都是高阶函数。简单变换常用推导式替代，但 key=/reduce 等场景不可替代。
+
+</GlossaryItem>
+
+<GlossaryItem term="可调用对象">
+
+任何实现 `__call__` 的对象都可像函数一样调用。函数、类、`functools.partial`、实现 `__call__` 的实例都是。`callable(obj)` 可判断。
+
+</GlossaryItem>
+
+<GlossaryItem term="工厂函数">
+
+接收参数、返回定制化新函数的函数。返回的内部函数通常记住外层参数（闭包），是装饰器和函数式工厂模式的表达。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution sourceUrl="" />

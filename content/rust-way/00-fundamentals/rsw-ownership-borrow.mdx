@@ -1,0 +1,165 @@
+---
+title: "所有权与借用"
+type: B
+section: "Rust基石"
+order: 1
+description: "Rust 所有权三原则、借用检查器规则与 Copy/Clone 语义。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswOwnershipBorrowDiagram } from "@/components/mdx/rust-way/diagrams/rsw-ownership-borrow";
+
+<Objectives>
+- 掌握所有权三原则：唯一所有者、自动释放、move 语义
+- 理解借用检查器规则：& 与 &mut 的互斥约束
+- 区分 Copy 与 Clone 语义及栈类型与堆类型
+- 能用所有权思维重写 C/C++ 的指针共享代码
+</Objectives>
+
+## 直觉引入
+
+想象你有一本珍贵的绝版书（堆上的 String）。你把它「借」给朋友看（& 借用），朋友只能看不能涂改，而且你可以同时借给多个人看。但如果你想让人帮你修改批注（&mut 借用），同一时间只能交给一个人，且此时谁也不能在看。
+
+如果你干脆把书「送」给朋友（move），那这本书就归他了，你手上空空如也——再翻就是非法操作。这就是 Rust 所有权模型的生活类比：所有权转移像送出实物，借用像借阅图书，规则全由编译器在编译期检查。
+
+## 概念讲解
+
+### 所有权三原则
+
+<Term def="所有权三原则：每个值有唯一所有者；所有者离开作用域时值被自动释放；赋值或传参默认是移动（move）而非复制。">
+
+所有权是 Rust 内存管理的核心：
+
+1. **唯一所有者**：每个值在任一时刻只有一个所有者变量
+2. **自动释放**：所有者离开作用域时，`Drop` trait 被调用，资源自动回收
+3. **默认移动**：赋值 `let s2 = s1` 或传参 `fn(s1)` 转移所有权，原变量失效
+
+对于栈上的简单类型（整数、布尔等实现了 `Copy` 的类型），赋值是复制而非移动，因为复制成本极低且无资源管理需求。
+
+</Term>
+
+### 借用规则
+
+<Term def="借用规则：任意数量的不可变引用 &，或唯一一个可变引用 &mut，二者不能同时存在。引用必须始终有效。">
+
+借用让函数访问数据而不获取所有权：
+
+- `&T`：不可变借用，可同时存在多个，只读
+- `&mut T`：可变借用，同一时刻只能有一个，可写
+- **互斥**：有不可变借用时不能可变借用，反之亦然（但不可变借用的最后一个使用之后可以可变借用——NLL 非词法生命周期）
+
+借用检查器在编译期验证这些规则，运行时零开销。
+
+</Term>
+
+## 交互Demo
+
+<RswOwnershipBorrowDiagram />
+
+<Stepper>
+<Step title="步骤1：理解 move">
+当你写 `let s2 = s1` 时，对于 `String` 这样的堆类型，s1 的所有权移动给 s2，s1 失效。这避免了双重释放——两个变量都释放同一块内存。如果你确实需要两份独立副本，用 `s1.clone()`。
+</Step>
+<Step title="步骤2：练习借用">
+函数参数用 `&T` 或 `&mut T` 而非 `T`，这样函数只是借用而不夺走所有权。调用后原变量仍可用。这是 Rust 函数签名设计的核心——通过引用传递而非值传递。
+</Step>
+<Step title="步骤3：识别 Copy 类型">
+整数、浮点、布尔、字符及完全由它们组成的元组/数组实现了 `Copy`。这些类型赋值时复制而非移动，因为它们在栈上、复制成本等于移动。自定义类型默认不是 Copy，需手动 `#[derive(Copy, Clone)]` 且所有字段都是 Copy。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```rust
+// move 语义：堆类型
+let s1 = String::from("hello");
+let s2 = s1;            // s1 移动给 s2
+// println!("{}", s1);  // 编译错误：value borrowed here after move
+
+// Copy 语义：栈类型
+let a = 5;
+let b = a;              // 复制，a 仍可用
+println!("{} {}", a, b); // 正常
+
+// 借用：不转移所有权
+fn calculate_length(s: &String) -> usize {
+    s.len()
+}                       // s 离开作用域，但它是借用，不释放
+let s = String::from("hello");
+let len = calculate_length(&s); // 借用 s
+println!("'{}' 长度 {}", s, len); // s 仍可用
+
+// 可变借用
+fn push_value(v: &mut Vec<i32>) {
+    v.push(42);
+}
+let mut v = vec![1, 2];
+push_value(&mut v);
+
+// 克隆：需要独立副本时
+let original = String::from("data");
+let copy = original.clone(); // 两份独立内存
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：在循环中反复获取可变借用导致编译失败**
+当你写 `for i in 0..n { let r = &mut vec[i]; use(r); }` 时，每次循环借用在迭代结束才释放。如果借用跨越了下一次循环的借用，就会冲突。解决方法：缩小借用作用域，或用索引直接访问而非持有引用。理解 NLL（非词法生命周期）——借用在最后一次使用后即结束，而非作用域结束。
+</Callout>
+
+<Callout type="trap">
+**误区：滥用 clone 逃避所有权问题**
+初学者遇到所有权错误时，习惯性地用 `.clone()` 解决。这虽然能编译通过，但掩盖了对所有权模型的理解，且带来不必要的性能开销。正确做法是分析数据流：谁拥有数据、谁需要借用、谁需要所有权。只在确实需要独立副本时才 clone。
+</Callout>
+
+<Exercises>
+**问题 1**：以下代码能否编译？为什么？
+
+```rust
+let mut s = String::from("hi");
+let r1 = &s;
+let r2 = &mut s;
+println!("{} {}", r1, r2);
+```
+
+<Answer>
+不能编译。`r1` 是不可变借用，`r2` 是可变借用，两者不能同时存在。借用检查器规则：有不可变借用时不能创建可变借用（反之亦然）。因为如果允许，可变借用可能修改数据，而不可变借用还以为数据没变，产生数据不一致。
+
+修复方法：让不可变借用在可变借用之前结束使用。利用 NLL，如果 `r1` 在 `r2` 之前最后一次使用，可以编译：
+```rust
+let mut s = String::from("hi");
+let r1 = &s;
+println!("{}", r1);     // r1 最后使用于此
+let r2 = &mut s;        // 此时 r1 已结束，可创建可变借用
+r2.push_str(" there");
+```
+</Answer>
+
+**问题 2**：为什么 `i32` 赋值是 Copy 而 `String` 是 move？背后的设计考量是什么？
+
+<Answer>
+`i32` 是固定大小的栈类型，复制成本等于一次内存拷贝（4 字节），且复制后两份完全独立、无资源管理需求，所以实现了 `Copy` trait，赋值时复制。
+
+`String` 持有堆内存指针，复制需要深拷贝堆数据（成本与字符串长度成正比）。如果默认 Copy，一次赋值就可能触发意外的 O(n) 深拷贝。Rust 选择默认 move，让你在需要副本时显式 `.clone()`——这是「不为隐式操作付代价」的设计哲学。只有当类型「复制成本低且无堆资源」时才允许实现 Copy。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="移动（Move）">
+所有权转移：将值的所有权从一个变量转移给另一个。堆类型赋值或传参时默认移动，原变量失效。这避免了双重释放和隐式深拷贝。
+</GlossaryItem>
+<GlossaryItem term="借用（Borrow）">
+通过引用 `&T` 或 `&mut T` 访问数据而不获取所有权。不可变借用可多个共存，可变借用唯一独占，二者互斥。借用让函数访问数据后，调用方的数据仍可用。
+</GlossaryItem>
+<GlossaryItem term="Copy trait">
+标记类型赋值时是复制而非移动。适用于栈上固定大小、复制无副作用的类型（i32、f64、bool 等）。实现了 Copy 的类型赋值后原变量仍可用。
+</GlossaryItem>
+<GlossaryItem term="NLL（非词法生命周期）">
+借用检查器的优化：借用的生命周期到「最后一次使用」而非「作用域结束」。这让许多直觉上合理的代码能编译通过，减少不必要的冲突。
+</GlossaryItem>
+</Glossary>

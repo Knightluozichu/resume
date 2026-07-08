@@ -1,0 +1,194 @@
+---
+title: "数据库"
+type: B
+section: "数据层"
+order: 4
+description: "database/sql 连接池、预编译语句与查询流程，driver 适配器模式。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpDatabaseDiagram } from "@/components/mdx/go-web-programming/diagrams/gwp-database";
+
+<Objectives>
+- 理解 database/sql 的连接池机制与配置参数
+- 掌握 Query/QueryRow/Exec 三种查询方式的区别与适用场景
+- 学会使用预编译语句防止 SQL 注入
+- 理解 rows.Close() 的重要性与连接泄漏风险
+</Objectives>
+
+## 直觉引入
+
+数据库连接就像餐厅的餐桌——数量有限，需要复用。如果每来一个客人都新开一桌（新连接），桌子的开销很大（TCP 握手、认证、分配资源）；如果客人吃完不收拾（不 Close），桌子很快就被占满了，新客人没桌子用。
+
+Go 的 `database/sql` 就像一个智能餐桌管理员：维护一个餐桌池（连接池），客人来了分配空闲桌子，走了收回桌子复用。你只需要告诉它"最多多少桌"（MaxOpenConns）、"空桌保留多少"（MaxIdleConns），剩下的管理它全包了。
+
+## 概念讲解
+
+### 连接池
+
+<Term def="database/sql 内置连接池，通过 sql.Open 创建。配置参数：MaxOpenConns（最大连接数）、MaxIdleConns（最大空闲连接数）、ConnMaxLifetime（连接最大存活时间）。连接在池中复用，避免频繁创建销毁。">
+
+```go
+db, err := sql.Open("mysql", dsn)
+db.SetMaxOpenConns(25)        // 最多 25 个并发连接
+db.SetMaxIdleConns(10)        // 最多保留 10 个空闲连接
+db.SetConnMaxLifetime(5 * time.Minute) // 连接最多用 5 分钟
+```
+
+连接池是惰性的——`sql.Open` 不会立即连接，首次查询时才创建连接。`db.Ping()` 可以强制初始化连接，用于启动时验证数据库可达性。
+
+</Term>
+
+### 三种查询方式
+
+<Term def="database/sql 提供三种查询方法：Query 返回多行结果集（SELECT）、QueryRow 返回单行（SELECT ... WHERE id=?）、Exec 不返回行（INSERT/UPDATE/DELETE）。">
+
+- **`db.Query(query, args...)`** — 返回 `*sql.Rows`，需要 `for rows.Next()` 遍历，必须 `defer rows.Close()`
+- **`db.QueryRow(query, args...)`** — 返回 `*sql.Row`，直接 `row.Scan(&v)`，无结果时返回 `sql.ErrNoRows`
+- **`db.Exec(query, args...)`** — 返回 `sql.Result`，可获取 `LastInsertId()` 和 `RowsAffected()`
+
+参数用 `?` 占位（MySQL）或 `$1`（PostgreSQL），值通过 args 传入，自动参数化防止 SQL 注入。
+
+</Term>
+
+## 交互Demo
+
+<GwpDatabaseDiagram />
+
+<Stepper>
+<Step title="第一步：初始化连接池">
+`sql.Open("driver", dsn)` 创建数据库实例（不是单个连接），配置连接池参数。`sql.Open` 不会立即连接数据库——它是惰性的。用 `db.Ping()` 验证连接是否成功，通常在应用启动时调用。
+</Step>
+<Step title="第二步：执行查询">
+SELECT 用 `db.Query` 或 `db.QueryRow`，INSERT/UPDATE/DELETE 用 `db.Exec`。参数化查询用占位符传值：`db.Query("SELECT * FROM users WHERE id = ?", id)`。永远不要用 `fmt.Sprintf` 拼接 SQL——会导致注入漏洞。
+</Step>
+<Step title="第三步：处理结果与关闭">
+`db.Query` 返回的 `*sql.Rows` 持有一个连接，必须调用 `rows.Close()` 释放。最佳实践是 `defer rows.Close()`。Scan 时传指针：`rows.Scan(&id, &name)`。遍历完后检查 `rows.Err()` 捕获遍历中的错误。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+package main
+
+import (
+    "database/sql"
+    "log"
+
+    _ "github.com/go-sql-driver/mysql" // 注册 driver，不直接使用
+)
+
+type User struct {
+    ID   int    `json:"id"`
+    Name string `json:"name"`
+    Email string `json:"email"`
+}
+
+func setupDB() *sql.DB {
+    db, err := sql.Open("mysql", "user:pass@tcp(localhost:3306)/app")
+    if err != nil {
+        log.Fatal(err)
+    }
+    db.SetMaxOpenConns(25)
+    db.SetMaxIdleConns(10)
+    db.SetConnMaxLifetime(5 * time.Minute)
+
+    if err := db.Ping(); err != nil {
+        log.Fatal("DB unreachable:", err)
+    }
+    return db
+}
+
+// 查询多行
+func listUsers(db *sql.DB) ([]User, error) {
+    rows, err := db.Query("SELECT id, name, email FROM users LIMIT 100")
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close() // 必须关闭！
+
+    var users []User
+    for rows.Next() {
+        var u User
+        if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
+            return nil, err
+        }
+        users = append(users, u)
+    }
+    return users, rows.Err() // 检查遍历错误
+}
+
+// 查询单行
+func getUser(db *sql.DB, id int) (User, error) {
+    var u User
+    err := db.QueryRow("SELECT id, name, email FROM users WHERE id = ?", id).
+        Scan(&u.ID, &u.Name, &u.Email)
+    if err == sql.ErrNoRows {
+        return u, fmt.Errorf("user %d not found", id)
+    }
+    return u, err
+}
+
+// 插入
+func createUser(db *sql.DB, name, email string) (int64, error) {
+    result, err := db.Exec("INSERT INTO users (name, email) VALUES (?, ?)", name, email)
+    if err != nil {
+        return 0, err
+    }
+    return result.LastInsertId()
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：忘记 rows.Close()**
+`db.Query` 返回的 `*sql.Rows` 持有一个数据库连接。如果你不调用 `rows.Close()`，这个连接永远不会归还连接池，导致连接泄漏。积累下去连接池耗尽，新请求会阻塞等待空闲连接。始终用 `defer rows.Close()` 确保—even if 循环中 return 或 panic—连接也会被释放。
+</Callout>
+
+<Callout type="trap">
+**误区：用 fmt.Sprintf 拼接 SQL**
+`db.Query(fmt.Sprintf("SELECT * FROM users WHERE name = '%s'", name))` 是严重的 SQL 注入漏洞——如果 name 是 `' OR '1'='1`，攻击者能获取所有用户数据。永远使用参数化查询：`db.Query("SELECT * FROM users WHERE name = ?", name)`，driver 会安全处理转义。
+</Callout>
+
+<Exercises>
+**问题 1**：`db.Query`、`db.QueryRow` 和 `db.Exec` 三者的返回值有什么不同？各自适用于什么场景？
+
+<Answer>
+- `db.Query(query, args)` 返回 `(*sql.Rows, error)`，Rows 是多行结果集的游标，用 `rows.Next()` 遍历。适用于 SELECT 查询可能返回多行的场景。必须 `defer rows.Close()`。
+- `db.QueryRow(query, args)` 返回 `*sql.Row`（不返回 error），直接调用 `row.Scan(&v)` 扫描单行。如果无结果，Scan 返回 `sql.ErrNoRows`。适用于主键查询等确定最多一行的场景，简化错误处理。
+- `db.Exec(query, args)` 返回 `(sql.Result, error)`，Result 提供 `LastInsertId()` 和 `RowsAffected()`。适用于 INSERT/UPDATE/DELETE 不需要返回结果集的场景。
+
+选型原则：需要遍历多行用 Query，查单行用 QueryRow，修改数据用 Exec。
+</Answer>
+
+**问题 2**：连接池中 `MaxOpenConns`、`MaxIdleConns` 和 `ConnMaxLifetime` 三个参数分别控制什么？如果设置不当会导致什么问题？
+
+<Answer>
+- `MaxOpenConns`：同时打开的最大连接数。设置过高会耗尽数据库连接数（数据库有上限），设置过低会成为并发瓶颈——超过限制的请求会阻塞等待空闲连接。
+- `MaxIdleConns`：连接池中保持的最大空闲连接数。设置过低会导致频繁创建/销毁连接（每次请求都新建 TCP 连接），设置过高会占用数据库资源（空闲连接也占数据库连接配额）。
+- `ConnMaxLifetime`：连接的最大存活时间。到期后连接会被关闭重建。用于防止长时间使用的连接因网络问题（如数据库重启、防火墙超时）变为不可用——"腐败连接"问题。通常设为 5-30 分钟。
+
+合理配置：MaxOpenConns 应略低于数据库 `max_connections` 除以应用实例数；MaxIdleConns 约为 MaxOpenConns 的 50-80%；ConnMaxLifetime 设为 5-15 分钟。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="database/sql">
+Go 标准库的数据库访问抽象层，提供连接池、查询接口和事务管理。它不直接连接数据库，而是通过 driver（如 go-sql-driver/mysql）适配不同数据库。使用时 import driver 包（用 `_` 空白导入触发 init 注册），然后通过 `sql.Open` 创建 `*sql.DB`。
+</GlossaryItem>
+<GlossaryItem term="连接池">
+`database/sql` 内置的数据库连接复用机制。维护一组到数据库的连接，查询时从池中借出，用完归还。通过 `MaxOpenConns`、`MaxIdleConns`、`ConnMaxLifetime` 配置。避免每次查询都创建 TCP 连接和认证，大幅提升性能。
+</GlossaryItem>
+<GlossaryItem term="参数化查询">
+用占位符（`?` 或 `$1`）代替直接拼接 SQL 值，driver 负责安全转义。`db.Query("WHERE id = ?", id)` 而非 `fmt.Sprintf("WHERE id = %d", id)`。参数化查询是防止 SQL 注入的标准做法——driver 确保值被正确转义，不会被解释为 SQL 语法。
+</GlossaryItem>
+<GlossaryItem term="sql.ErrNoRows">
+`db.QueryRow().Scan()` 在无结果时返回的特殊错误。注意 `db.Query` 不会返回这个错误——无结果时 `rows.Next()` 直接返回 false。`QueryRow` 的设计是延迟错误到 Scan，让单行查询的错误处理更简洁：一行 Scan 调用同时处理"有结果"和"无结果"两种情况。
+</GlossaryItem>
+</Glossary>

@@ -1,0 +1,211 @@
+---
+title: "Channel"
+type: B
+section: "并发模型"
+order: 5
+description: "Channel 实现 CSP 通信：无缓冲同步握手，有缓冲异步解耦，select 多路复用。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaChannelsDiagram } from "@/components/mdx/go-in-action/diagrams/gia-channels";
+
+<Objectives>
+- 理解 CSP 哲学：通过通信共享内存而非通过共享内存通信
+- 区分无缓冲 channel（同步）与有缓冲 channel（异步）
+- 掌握 select 多路复用、方向限制与 close 语义
+- 能用 channel 实现 goroutine 间安全的数据传递与协调
+</Objectives>
+
+## 直觉引入
+
+channel 像一根「传送管」。无缓冲的传送管很窄——你把球放进去，必须等另一头有人接住，你的手才能松开（同步）。有缓冲的传送管中间有个暂存桶——你可以连续放几个球（不超过桶容量），桶满了才需要等对面取走（异步）。
+
+Go 的并发哲学叫 CSP（Communicating Sequential Processes）：**不要通过共享内存通信，而要通过通信共享内存**。传统并发是「多个线程共享一个变量，加锁互斥访问」；Go 的方式是「每个 goroutine 拥有自己的数据，通过 channel 把数据发给需要的 goroutine」——数据所有权通过 channel 转移，天然避免数据竞争。
+
+## 概念讲解
+
+### 无缓冲 channel：同步
+
+<Term def="无缓冲 channel make(chan T) 没有缓冲区。发送阻塞直到有接收者，接收阻塞直到有发送者——同步握手。用于 goroutine 间同步信号。">
+
+```go
+ch := make(chan int)
+go func() {
+    ch <- 42 // 阻塞，直到主 goroutine 接收
+}()
+fmt.Println(<-ch) // 接收后，发送方才解除阻塞
+```
+
+无缓冲 channel 保证发送和接收「同时发生」——发送方知道接收方一定拿到了数据。适合做「等待完成」「信号通知」。
+
+</Term>
+
+### 有缓冲 channel：异步
+
+<Term def="有缓冲 channel make(chan T, n) 有 n 容量的缓冲区。缓冲未满时发送不阻塞，缓冲非空时接收不阻塞——解耦生产消费速率。">
+
+```go
+ch := make(chan int, 3)
+ch <- 1 // 不阻塞（缓冲未满）
+ch <- 2
+ch <- 3
+// ch <- 4 // 阻塞（缓冲满）
+fmt.Println(<-ch) // 1，缓冲有空位
+```
+
+缓冲大小是性能与内存的权衡。缓冲为 0 是纯同步，缓冲过大可能掩盖背压问题。经验：从无缓冲开始，有明确理由（削峰）才加缓冲。
+
+</Term>
+
+### select 多路复用
+
+<Term def="select 同时监听多个 channel 操作，随机选择一个就绪的执行。配合 default 实现非阻塞，配合 time.After 实现超时。">
+
+```go
+select {
+case v := <-ch1: // ch1 有数据
+    handle(v)
+case ch2 <- 42:  // ch2 可发送
+case <-time.After(time.Second): // 超时
+case <-ctx.Done(): // 取消
+}
+```
+
+select 是 Go 并发协调的核心——它让一个 goroutine 能同时等待多个事件，无需为每个 channel 起一个 goroutine。
+
+</Term>
+
+## 交互Demo
+
+<GiaChannelsDiagram />
+
+<Stepper>
+<Step title="步骤1：选择缓冲大小">
+默认用无缓冲 channel（同步、明确）。只有需要解耦生产消费速率（生产快消费慢，或反之）才用有缓冲。缓冲大小不要随意设大——它可能掩盖设计问题（如消费方太慢）。从无缓冲开始，有测量数据支撑才加缓冲。
+</Step>
+<Step title="步骤2：用方向限制增强安全">
+chan<- T（只发送）给生产者，<-chan T（只接收）给消费者。编译器会阻止生产者误接收、消费者误发送。关闭只应在发送方做（接收方关闭会导致发送方 panic）。方向限制让 channel 的角色在类型层面明确。
+</Step>
+<Step title="步骤3：用 select 处理多路等待">
+任何需要「等待多个事件之一」的场景都用 select。加 time.After 防止永久阻塞，加 ctx.Done() 响应取消。select 的 case 是随机选的——不保证公平，但避免饥饿。用 for + select 构成事件循环。
+</Step>
+</Stepper>
+
+## 代码对照
+
+```go
+// 无缓冲：同步信号
+done := make(chan struct{})
+go func() {
+    doWork()
+    close(done) // 用 close 通知完成（广播）
+}()
+<-done // 阻塞直到 close
+
+// 有缓冲：生产消费
+jobs := make(chan int, 10)
+results := make(chan int, 10)
+for w := 0; w < 3; w++ {
+    go worker(jobs, results) // 3 个 worker
+}
+for j := 1; j <= 10; j++ { jobs <- j }
+close(jobs) // 发送方关闭
+for r := 1; r <= 10; r++ { fmt.Println(<-results) }
+
+// 方向限制
+func producer(out chan<- int) { out <- 1; close(out) }  // 只发送
+func consumer(in <-chan int) { for v := range in { ... } } // 只接收
+
+// select 超时 + 取消
+func waitFor(ctx context.Context, ch <-chan int) (int, error) {
+    select {
+    case v := <-ch:
+        return v, nil
+    case <-time.After(5 * time.Second):
+        return 0, errors.New("timeout")
+    case <-ctx.Done():
+        return 0, ctx.Err()
+    }
+}
+
+// range 遍历直到关闭
+for v := range ch {
+    process(v)
+} // ch 关闭后退出循环
+
+// 检测关闭
+v, ok := <-ch
+if !ok { /* ch 已关闭 */ }
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：向已关闭的 channel 发送数据导致 panic**
+`close(ch)` 后再 `ch <- x` 会 panic: send on closed channel。而接收已关闭的 channel 是安全的——返回零值和 ok=false。所以关闭只应由发送方负责，且确保关闭后不再发送。多个发送方时用额外的 done channel 协调关闭，或用 sync.Once 保证只关闭一次。接收方关闭是经典 bug——它不知道发送方是否还会发。
+</Callout>
+
+<Callout type="trap">
+**误区：用 channel 传大值导致性能问题**
+channel 发送会「复制」值。如果传递大 struct（如 1KB 的配置），每次发送都复制。优化：传指针 `chan *BigStruct`，或传值的引用。但传指针要小心所有权——确保发送后不再访问（CSP 的所有权转移原则）。小值（int、小 struct）直接传值更安全，复制成本可忽略。
+</Callout>
+
+<Exercises>
+**问题 1**：无缓冲 channel 和有缓冲 channel 的区别是什么？分别适用什么场景？
+
+<Answer>
+无缓冲 channel（make(chan T)）：没有缓冲区，发送阻塞直到有接收者，接收阻塞直到有发送者——同步握手。发送方确保接收方在场才完成发送。适用：同步信号（done channel）、保证顺序、 rendezvous（会合）。
+
+有缓冲 channel（make(chan T, n)）：有 n 容量缓冲区。缓冲未满时发送不阻塞，缓冲非空时接收不阻塞——异步解耦。适用：生产消费解耦（削峰填谷）、限流（缓冲大小=并发数）。
+
+选择原则：默认用无缓冲（同步、明确、强制背压）。只有需要解耦速率且有明确理由时才用有缓冲。缓冲大小不要随意设大——它可能掩盖消费方太慢的设计问题。无缓冲强制生产消费同步，有缓冲允许暂时不同步但最终要对齐。
+</Answer>
+
+**问题 2**：以下代码会发生什么？如何修复？
+
+```go
+ch := make(chan int)
+go func() { ch <- 1; ch <- 2 }()
+close(ch)
+```
+
+<Answer>
+会 panic: send on closed channel。
+
+原因：main goroutine 执行 close(ch) 后，子 goroutine 执行 ch <- 1 时 channel 已关闭，向已关闭 channel 发送会 panic。close 和 send 的执行顺序不确定，但只要 close 在 send 之前发生就 panic。
+
+正确做法：由发送方关闭，且关闭后不再发送：
+```go
+ch := make(chan int)
+go func() {
+    defer close(ch) // 发送完毕后关闭
+    ch <- 1
+    ch <- 2
+}()
+fmt.Println(<-ch) // 1
+fmt.Println(<-ch) // 2
+v, ok := <-ch     // 0, false（已关闭）
+```
+
+原则：1. 关闭只由发送方负责——接收方不知道发送方是否还会发；2. 确保关闭后不再发送；3. 多个发送方时用协调机制（done channel 或 sync.Once）。向已关闭 channel 发送 panic，但从已关闭 channel 接收是安全的（返回零值）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CSP 模型">
+Communicating Sequential Processes，Go 并发理论基础。「不要通过共享内存通信，而要通过通信共享内存」——goroutine 间通过 channel 传递数据所有权，而非共享变量加锁。
+</GlossaryItem>
+<GlossaryItem term="无缓冲 channel">
+make(chan T)，无缓冲区，发送阻塞直到接收——同步握手。保证发送瞬间接收方在场。用于同步信号、保证顺序。
+</GlossaryItem>
+<GlossaryItem term="有缓冲 channel">
+make(chan T, n)，n 容量缓冲区。未满时发送不阻塞，非空时接收不阻塞——异步解耦生产消费。缓冲过大可能掩盖背压问题。
+</GlossaryItem>
+<GlossaryItem term="select">
+多路复用语句，同时监听多个 channel 操作，随机选一个就绪的执行。配合 default 非阻塞、time.After 超时、ctx.Done() 取消。是 Go 并发协调的核心。
+</GlossaryItem>
+</Glossary>

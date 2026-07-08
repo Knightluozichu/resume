@@ -1,0 +1,118 @@
+---
+title: "迭代器与生成器"
+type: B
+section: "高级语法"
+order: 2
+description: "掌握迭代器协议与生成器——Python惰性求值的核心机制"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PyaIteratorsGeneratorsDiagram } from "@/components/mdx/python-advanced/diagrams/pya-iterators-generators";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解迭代器协议：__iter__ 与 __next__ 的协作契约
+- 掌握生成器的暂停-恢复机制：yield 的执行原理
+- 区分迭代器、生成器、生成器表达式的异同与适用场景
+- 学会用生成器处理大数据流，实现内存友好的惰性管道
+</Objectives>
+
+## 直觉引入
+
+想象一条传送带。你不需要把所有零件一次性堆在车间里（那样车间会爆），而是让零件一个一个地过来，处理完一个再要下一个。生成器就是 Python 的传送带——它不会一次性产出所有数据，而是按需 yield 一个、暂停、等你来取再继续。这就是惰性求值的核心思想。
+
+## 概念讲解
+
+### 迭代器协议
+
+<PyaIteratorsGeneratorsDiagram />
+
+<Term def="迭代器协议要求对象实现 __iter__() 返回自身和 __next__() 返回下一个值或在结束时抛出 StopIteration">
+迭代器协议
+</Term>
+
+迭代器是实现了 __iter__ 和 __next__ 的对象。for x in obj 实际上先调用 iter(obj) 获取迭代器，然后不断调用 next() 直到抛出 StopIteration。理解这一点，就能解释为什么 for x in my_list 可以工作——list 实现了 __iter__ 返回一个 list_iterator。
+
+### 生成器：yield 的魔法
+
+生成器函数包含 yield 关键字，调用时返回一个生成器对象而非执行函数体。每次 next() 执行到 yield 时暂停并返回值，再次 next() 从暂停处恢复。这使得生成器可以表示无限序列（如斐波那契），内存占用恒定。协程（asyncio）本质上是生成器的进化——用 yield from 和 await 实现暂停-恢复。
+
+## 交互Demo
+
+<Stepper>
+<Step title="迭代器创建">实现 __iter__ 返回 self，__next__ 返回下一个值。耗尽时 raise StopIteration。迭代器是一次性的，遍历完后不能重用。</Step>
+<Step title="生成器函数">用 yield 代替 return。调用生成器函数返回生成器对象（不执行函数体）。每次 next() 执行到 yield 暂停，返回 yield 后的值。</Step>
+<Step title="yield from 委托">yield from sub_iter 将生成器的部分操作委托给子生成器，自动处理 StopIteration 传递和返回值。是协程组合的基础。</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# 1. 手写迭代器
+class CountDown:
+    def __init__(self, start):
+        self.current = start
+    def __iter__(self):
+        return self
+    def __next__(self):
+        if self.current <= 0:
+            raise StopIteration
+        self.current -= 1
+        return self.current + 1
+
+# 2. 生成器：等价但更简洁
+def countdown(start):
+    while start > 0:
+        yield start
+        start -= 1
+
+# 3. 无限序列：内存恒定
+def fibonacci():
+    a, b = 0, 1
+    while True:
+        yield a
+        a, b = b, a + b
+
+# 4. 生成器管道：惰性求值链
+def read_lines(path):
+    with open(path) as f:
+        yield from f
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为生成器就是节省内存的列表。**
+生成器更本质的特性是惰性求值——值在需要时才计算。这不仅节省内存，还能表示无限序列、实现协程、做管道式数据流处理。把它仅当省内存的列表是对其能力的严重低估。
+</Callout>
+
+<Callout type="trap">
+**误区：在生成器中用 return 返回值。**
+生成器中的 return value 会触发 StopIteration(value)，值可通过 yield from 表达式的结果获取，但 for 循环看不到它。如果想让调用者拿到最终结果，应该用 yield from 委托或直接 yield 最后一个值。
+</Callout>
+
+<Exercises>
+**问题 1**：迭代器和可迭代对象有什么区别？为什么 for 循环可以遍历列表但不能遍历整数？
+
+<Answer>
+可迭代对象（Iterable）实现了 __iter__，返回一个迭代器。迭代器（Iterator）额外实现了 __next__，能产出下一个值。for x in obj 调用 iter(obj) 获取迭代器，再反复调用 next()。列表实现了 __iter__ 所以可遍历；整数没有实现 __iter__ 所以不可遍历。
+</Answer>
+
+**问题 2**：写一个生成器函数，读取大文件并逐行 yield，同时统计已读取的字节数。
+
+<Answer>
+def read_with_count(path):\n    total = 0\n    with open(path, 'rb') as f:\n        for line in f:\n            total += len(line)\n            yield line.decode().strip(), total\n生成器每次 yield 一行和累计字节数，调用者按需消费。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="迭代器协议">对象实现 __iter__() 和 __next__() 的契约。__iter__ 返回迭代器自身，__next__ 返回下一个值或抛出 StopIteration。</GlossaryItem>
+<GlossaryItem term="生成器">包含 yield 语句的函数，调用时返回生成器对象而非执行函数体。每次 next() 执行到 yield 暂停并返回值。</GlossaryItem>
+<GlossaryItem term="惰性求值">值在真正需要时才计算的策略。生成器、生成器表达式、map/filter 等都采用惰性求值。</GlossaryItem>
+<GlossaryItem term="yield from">生成器委托语法，将子生成器的产出直接传递给调用者，并处理 StopIteration 和返回值。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Python高级编程" adaptedUrl="https://book.douban.com/" />

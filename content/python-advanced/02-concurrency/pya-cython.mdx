@@ -1,0 +1,114 @@
+---
+title: "Cython扩展编程"
+type: B
+section: "并发编程"
+order: 6
+description: "将Python热点编译为C——终极性能优化手段"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PyaCythonDiagram } from "@/components/mdx/python-advanced/diagrams/pya-cython";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Cython 的定位：Python 超集，编译为 C 扩展
+- 掌握类型注解加速：cdef 变量、cpdef 函数
+- 理解 nogil 上下文：手动释放 GIL 实现 C 级多线程
+- 学会用 Cython 包装 C/C++ 库供 Python 调用
+</Objectives>
+
+## 直觉引入
+
+想象你的 Python 代码是一辆自行车，够用但慢。Cython 就像给它装上电动马达——你只需在关键部位标注类型（把动态类型变成静态类型），Cython 就能把那段 Python 编译成 C 代码，速度提升几十到上百倍。更强大的是，它能直接调用 C/C++ 库，让 Python 拥有 C 级性能。
+
+## 概念讲解
+
+### Cython类型注解
+
+<PyaCythonDiagram />
+
+<Term def="Cython 是 Python 的超集，通过添加静态类型声明将 Python 代码编译为 C 扩展模块">
+Cython
+</Term>
+
+Cython 文件后缀 .pyx，通过 cdef 声明 C 类型变量，cpdef 声明可被 Python 和 C 同时调用的函数。类型注解让 Cython 生成高效的 C 代码：避免 Python 对象创建、减少引用计数开销、使用 C 原生算术。纯 Python 循环可提速 50-100 倍。
+
+### nogil 与多线程
+
+Cython 的 with nogil 上下文手动释放 GIL，允许 C 代码在多线程中真正并行执行。这是 Cython 相比 multiprocessing 的优势：同进程内多线程并行，无 IPC 开销。适合数值计算密集且可并行的场景。
+
+## 交互Demo
+
+<Stepper>
+<Step title="类型注解">用 cdef int i 声明 C 整型，cpdef double compute(double x) 声明带类型的函数。类型化代码避免 Python 对象开销。</Step>
+<Step title="编译流程">.pyx 文件 → Cython 编译器 → .c 文件 → C 编译器 → .so 共享库 → Python import。用 setup.py 配置编译。</Step>
+<Step title="nogil 并行">在 with nogil 块中执行纯 C 计算（不碰 Python 对象），释放 GIL 允许多线程并行。</Step>
+</Stepper>
+
+## 代码对照
+
+```python
+# compute.pyx — Cython 文件
+# 1. 类型注解加速
+cpdef double fast_sum(double[:] arr):
+    cdef double total = 0.0
+    cdef int i
+    for i in range(arr.shape[0]):
+        total += arr[i]
+    return total
+
+# 2. nogil：释放 GIL 实现 C 级多线程
+cpdef double parallel_sum(double[:] arr):
+    cdef double total = 0.0
+    cdef int i
+    with nogil:
+        for i in range(arr.shape[0]):
+            total += arr[i]
+    return total
+
+# 3. 调用 C 库
+cdef extern from "math.h":
+    double sqrt(double x)
+
+# setup.py
+# from Cython.Build import cythonize
+# setup(ext_modules=cythonize('compute.pyx'))
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：认为 Cython 就是写 C。**
+Cython 仍是 Python 风格语法，只是添加了类型注解。不需要手动管理内存。它更像带类型的 Python 而非简化的 C。
+</Callout>
+
+<Callout type="trap">
+**误区：对所有代码都上 Cython。**
+只有热点代码（循环密集、数值计算）值得 Cython 化。IO 密集代码用 Cython 无加速。先用 cProfile 定位热点。
+</Callout>
+
+<Exercises>
+**问题 1**：Cython 和 C 扩展有什么区别？
+
+<Answer>
+Cython 用 Python 语法+类型注解自动生成 C 代码，开发效率高。C 扩展直接写 C 代码用 Python C API，性能极致但开发困难。Cython 是性能与开发效率的折中。
+</Answer>
+
+**问题 2**：什么时候用 nogil，什么时候用 multiprocessing？
+
+<Answer>
+nogil 适合同进程内 C 级多线程并行，无 IPC 开销。multiprocessing 适合需要并行执行 Python 代码或需要进程隔离的场景。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Cython">Python 的超集语言，通过静态类型声明将 Python 代码编译为 C 扩展模块。</GlossaryItem>
+<GlossaryItem term="cdef">Cython 关键字，声明 C 类型变量或函数。cdef 变量不创建 Python 对象。</GlossaryItem>
+<GlossaryItem term="nogil">Cython 上下文管理器，手动释放 GIL。在 nogil 块中只能执行纯 C 操作。</GlossaryItem>
+<GlossaryItem term="cpdef">Cython 函数声明，同时生成 C 接口和 Python 接口。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Python高级编程" adaptedUrl="https://book.douban.com/" />

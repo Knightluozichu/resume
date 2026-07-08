@@ -119,6 +119,15 @@ export const BOOK_ORDER = [
   "data-structures-visual",
   "math-girl",
   "dsa-cpp",
+  "rust-way",
+  "go-in-action",
+  "go-web-programming",
+  "fluent-python",
+  "python-ops",
+  "mastering-rust-2e",
+  "python-advanced",
+  "algorithms-4e",
+  "programming-pearls",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -179,6 +188,15 @@ export const BOOK_TITLES: Record<string, string> = {
   "data-structures-visual": "大话数据结构",
   "math-girl": "图灵数学女孩系列",
   "dsa-cpp": "数据结构与算法分析（C++描述）",
+  "rust-way": "Rust 编程之道",
+  "go-in-action": "Go 语言实战",
+  "go-web-programming": "Go Web 编程",
+  "fluent-python": "流畅的 Python",
+  "python-ops": "Python 自动化运维",
+  "mastering-rust-2e": "精通 Rust（第2版）",
+  "python-advanced": "Python 高级编程",
+  "algorithms-4e": "算法（第4版）",
+  "programming-pearls": "编程珠玑",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,282 @@
+---
+title: "网络编程"
+type: B
+section: "生态与工程"
+order: 8
+description: "Rust async 网络编程：用 tokio 构建 TCP 服务端，掌握异步 IO、高并发模型与 AsyncRead/AsyncWrite trait。"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsNetworkingDiagram } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-networking";
+
+<Objectives>
+
+- 能用 tokio 编写 async TCP 服务端，支持多客户端并发
+- 能解释 tokio 运行时的高并发原理
+- 能用 AsyncRead/AsyncWrite 处理异步 IO
+- 能对比 Rust async 与 Go goroutine、Node.js 事件循环的优劣
+
+</Objectives>
+
+## 直觉引入
+
+想象一个电话客服中心。传统方式（线程模型）是每个客户分配一个客服——1000 个客户需要 1000 个客服（线程），人力成本高。异步方式（async 模型）是少量客服服务大量客户——客服接通电话后，客户去查资料时（IO 等待），客服不傻等而是接下一个电话，等客户查完再回来继续。
+
+Rust 的 async 网络就是这个模式。tokio 运行时是客服中心，async 任务是客户请求，.await 是「客户去查资料」的挂起点。少量线程（客服）服务大量连接（客户），IO 等待时不阻塞而是处理其他连接。这就是十万级并发的实现方式。
+
+## 概念讲解
+
+### TCP 服务端五步流程
+
+<Term def="async TCP 服务端五步：bind 绑定地址 → accept 等待连接 → spawn 为每个连接创建任务 → read/write 读写数据 → close 自动关闭。每步 .await 不阻塞线程。">
+
+```rust
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    loop {
+        let (socket, addr) = listener.accept().await?;
+        tokio::spawn(handle_connection(socket));  // 每连接一任务
+    }
+}
+```
+
+accept().await 挂起时不阻塞线程——运行时可处理其他连接。spawn 创建独立 async 任务。
+
+</Term>
+
+### tokio 运行时
+
+<Term def="tokio 是 Rust 最流行的 async 运行时，核心组件：Reactor（IO 多路复用监控事件）、Thread Pool（工作窃取调度）、Task Scheduler（async 任务调度）。">
+
+- Reactor 基于 epoll/kqueue/IOCP 监控所有 IO 事件
+- Thread Pool 用工作窃取算法平衡线程负载
+- Task Scheduler 在 .await 挂起时切换到其他任务
+
+每个 async 任务几 KB 内存，一个线程可服务数千连接——这就是高并发的来源。
+
+</Term>
+
+### AsyncRead / AsyncWrite
+
+<Term def="AsyncRead 和 AsyncWrite 是异步 IO 的核心 trait，对应同步的 Read/Write。read().await 和 write().await 在数据就绪前挂起，不阻塞线程。">
+
+```rust
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+async fn handle_connection(mut socket: TcpStream) {
+    let mut buf = [0u8; 1024];
+    loop {
+        let n = socket.read(&mut buf).await;  // 异步读
+        match n {
+            Ok(0) => return,  // 连接关闭
+            Ok(n) => { socket.write_all(&buf[..n]).await.unwrap(); }  // 异步写
+            Err(_) => return,
+        }
+    }
+}
+```
+
+</Term>
+
+## 交互Demo
+
+<MrsNetworkingDiagram />
+
+<Stepper>
+
+<Step title="第一步：绑定监听端口">
+
+用 `TcpListener::bind("127.0.0.1:8080").await?` 绑定地址端口。这是服务端的入口，所有客户端连接通过这个 listener 接入。
+
+</Step>
+
+<Step title="第二步：异步接受连接">
+
+`listener.accept().await` 异步等待新连接——没有连接时挂起不阻塞线程，有连接时返回 (TcpStream, SocketAddr)。循环调用持续接受新连接。
+
+</Step>
+
+<Step title="第三步：spawn 并发处理">
+
+每个连接用 `tokio::spawn(handle_connection(socket))` 创建独立 async 任务。任务间互不阻塞——一个连接慢不影响其他连接。这是并发的关键。
+
+</Step>
+
+<Step title="第四步：异步读写数据">
+
+在 handle_connection 中用 `socket.read(&mut buf).await` 和 `socket.write_all(&data).await` 异步读写。read 返回 Ok(0) 表示对端关闭连接。循环读写实现 echo/协议处理。
+
+</Step>
+
+<Step title="第五步：自动关闭连接">
+
+TcpStream 离开作用域时 Drop trait 自动关闭连接——无需手动 close。RAII 模式保证连接不会泄漏。错误处理用 `?` 或 match 传播。
+
+</Step>
+
+</Stepper>
+
+## 代码对照
+
+```rust
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpListener, TcpStream};
+
+// === 基础 echo 服务端 ===
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:8080").await?;
+    println!("Echo server on :8080");
+
+    loop {
+        let (socket, addr) = listener.accept().await?;
+        println!("Connection from {}", addr);
+        tokio::spawn(handle_echo(socket));
+    }
+}
+
+async fn handle_echo(mut socket: TcpStream) {
+    let mut buf = [0u8; 1024];
+    loop {
+        match socket.read(&mut buf).await {
+            Ok(0) => return,  // 连接关闭
+            Ok(n) => {
+                if socket.write_all(&buf[..n]).await.is_err() {
+                    return;
+                }
+            }
+            Err(_) => return,
+        }
+    }
+}
+
+// === 带超时的连接处理 ===
+use tokio::time::{timeout, Duration};
+
+async fn handle_with_timeout(socket: TcpStream) {
+    let result = timeout(Duration::from_secs(30), async {
+        let mut buf = [0u8; 1024];
+        loop {
+            let n = socket.read(&mut buf).await?;
+            if n == 0 { break; }
+            socket.write_all(&buf[..n]).await?;
+        }
+        Ok::<_, std::io::Error>(())
+    }).await;
+
+    match result {
+        Ok(Ok(())) => println!("Connection closed normally"),
+        Ok(Err(e)) => println!("IO error: {}", e),
+        Err(_) => println!("Connection timed out"),
+    }
+}
+
+// === 多连接并发 + select 多路复用 ===
+use tokio::select;
+
+async fn select_example() {
+    let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<String>(100);
+
+    loop {
+        select! {
+            // 有新连接
+            Ok((socket, _)) = listener.accept() => {
+                let tx = tx.clone();
+                tokio::spawn(async move {
+                    // 处理连接，发送消息到 channel
+                    let _ = tx.send("new connection".to_string()).await;
+                });
+            }
+            // 有内部消息
+            Some(msg) = rx.recv() => {
+                println!("Internal: {}", msg);
+            }
+        }
+    }
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+
+**误区：在 async 函数中使用 std::sync::Mutex**
+
+在 async 函数中用 `std::sync::Mutex` 的 lock() 是阻塞操作——会阻塞整个线程，期间该线程上的其他 async 任务也无法执行，相当于把 async 退化成同步。正确做法是用 `tokio::sync::Mutex`——lock().await 是异步的，等待锁时不阻塞线程。同理，Channel 也应用 `tokio::sync::mpsc` 而非 `std::sync::mpsc`。混用同步和异步原语是 async Rust 最常见的陷阱。
+
+</Callout>
+
+<Callout type="trap">
+
+**误区：忘记 .await 导致 Future 不执行**
+
+Rust 的 Future 是惰性的——创建了不 .await 就不会执行。`tokio::spawn(future)` 会自动驱动，但直接调用 async fn 返回的 Future 必须 .await。常见错误：`let task = handle_connection(socket);` 忘了 .await，结果连接没被处理。记住：async fn 调用只是创建 Future，必须 .await 或 spawn 才会执行。
+
+</Callout>
+
+<Exercises>
+
+**问题 1**：tokio 运行时的核心组件是什么？它如何实现高并发？
+
+<Answer>
+
+tokio 运行时三个核心组件：
+1. Reactor——基于操作系统的 IO 多路复用机制（Linux epoll、macOS kqueue、Windows IOCP），统一监控所有 IO 事件。IO 就绪时唤醒对应的 async 任务。
+2. Thread Pool——工作线程池，使用工作窃取（work-stealing）调度算法。空闲线程从忙碌线程的任务队列末尾「窃取」任务，均衡负载。
+3. Task Scheduler——调度 async 任务。.await 挂起时任务让出线程，运行时可执行其他任务；IO 就绪时任务被重新调度恢复执行。
+
+高并发原理：每个连接是一个 async 任务，内存仅几 KB（vs 线程几 MB）。.await 挂起时任务不占线程——一个线程可服务数千个连接。IO 事件由 Reactor 统一监控（而非每连接一线程阻塞等待），就绪后调度到线程池执行。相比每连接一线程模型（每线程几 MB 栈），tokio 可在同等内存下支持数十倍并发连接。
+
+</Answer>
+
+**问题 2**：Rust 的 async 网络模型相比 Go goroutine 和 Node.js 事件循环有什么优劣？
+
+<Answer>
+
+1) Rust async——零成本状态机（编译期生成），无运行时调度器开销（tokio 是库非语言内置），任务极轻量（几 KB），无 GC 停顿。优势是极致性能和可预测延迟，适合金融、游戏、基础设施。劣势是 async 传染性强（async fn 调 async fn 都要 .await），学习曲线陡，生态不如 Go 成熟。
+
+2) Go goroutine——语言内置调度器，语法简单（go func()），栈可动态增长。优势是开发效率高、并发模型直观，适合微服务和 API。劣势是 GC 停顿影响延迟，goroutine 调度有运行时开销，内存占用比 Rust 高。
+
+3) Node.js 事件循环——单线程 JS + libuv，回调/Promise 模型。优势是生态丰富、前端复用。劣势是单线程无法利用多核（需 cluster），JS 性能不如编译语言，CPU 密集任务阻塞事件循环。
+
+选择：极致性能和低延迟选 Rust（10万+连接、亚毫秒级延迟），开发效率选 Go，全栈和生态选 Node.js。Rust 的 async 在连接数极多且延迟敏感的场景优势最明显。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="tokio">
+
+Rust 最流行的 async 运行时，提供 Reactor（IO 多路复用）、Thread Pool（工作窃取调度）、Task Scheduler（async 任务调度）。是 async Rust 生态的事实标准运行时。
+
+</GlossaryItem>
+
+<GlossaryItem term="AsyncRead/AsyncWrite">
+
+异步 IO 的核心 trait，对应同步的 Read/Write。read().await 和 write().await 在数据就绪前挂起不阻塞线程，是 async 网络编程的基础。
+
+</GlossaryItem>
+
+<GlossaryItem term="tokio::spawn">
+
+为 async 任务创建独立执行单元的函数。每个 spawn 的任务是独立的 async 单元，可并发执行互不阻塞。是处理多连接并发的关键——每连接 spawn 一个任务。
+
+</GlossaryItem>
+
+<GlossaryItem term="select!">
+
+tokio 提供的宏，实现多路复用——同时等待多个 async 操作，任一就绪则执行对应分支。类似 select 系统调用，用于同时处理多个 IO 事件源。
+
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution source="精通Rust第2版" license="原创" note="本章基于 tokio 官方文档和网络编程实践经验整理" />
