@@ -1,0 +1,146 @@
+---
+title: "系统调用"
+type: C
+section: "系统与操作系统"
+order: 4
+description: "系统调用与函数调用的区别、syscall指令执行全流程、sys_call_table分发、copy_from_user安全机制、阻塞I/O衔接"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LkdSystemCallsDiagram } from "@/components/mdx/linux-kernel-design/diagrams/lkd-system-calls";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解系统调用与普通函数调用的根本区别（特权级切换）
+- 掌握系统调用从用户态到内核态再返回的完整执行流程
+- 理解内核安全访问用户指针的机制（copy_from_user/copy_to_user）
+- 掌握系统调用中阻塞 I/O 的衔接过程（睡眠-唤醒机制）
+</Objectives>
+
+## 系统调用全流程
+
+<Term def="系统调用是用户程序进入内核态的唯一合法入口，通过syscall指令触发CPU特权级切换，由内核校验参数后代为执行特权操作。">系统调用</Term>是用户态与内核态之间的桥梁。普通函数调用在同一特权级内用 call 指令跳转，而系统调用必须跨越 Ring 3 到 Ring 0 的边界。
+
+<LkdSystemCallsDiagram />
+
+## 执行流程
+
+```text
+// 以 read(fd, buf, 4096) 为例
+
+// 用户态:
+//   1. 用户程序调用 libc 的 read() 包装函数
+//   2. libc 将系统调用号放入 rax（__NR_read = 0）
+//      参数放入 rdi=fd, rsi=buf, rdx=4096
+//   3. 执行 syscall 指令
+//      -> CPU 硬件切换到 Ring 0
+//      -> 跳转到 entry_SYSCALL_64 入口
+
+// 内核态:
+//   4. entry_SYSCALL_64:
+//      保存用户态上下文到内核栈（pt_regs结构）
+//      切换到内核栈
+//   5. 从 rax 取系统调用号
+//      查 sys_call_table[] 数组
+//      -> 找到 sys_read 函数指针
+//   6. 校验参数:
+//      access_ok(buf) // 检查指针是否在用户地址范围
+//   7. 执行 sys_read 核心逻辑:
+//      fd -> file -> file.f_op->read_iter
+//      -> VFS路由到具体文件系统
+//   8. 将返回值放入 rax
+//   9. 执行 sysret 指令
+//      恢复用户态上下文
+//      返回 Ring 3
+
+// 用户态:
+//  10. libc 从 rax 取返回值
+//      返回给用户程序
+```
+
+## 安全访问用户指针
+
+```text
+// 内核绝不能直接解引用用户态指针！
+// 原因：
+//   1. 指针可能指向未映射地址 -> 内核缺页 -> panic
+//      （用户程序缺页只导致SIGSEGV）
+//   2. 指针可能是恶意的 -> 传内核地址窃取/篡改数据
+//   3. SMAP/SMEP硬件保护 -> 内核直接访问用户内存触发异常
+
+// 安全做法：
+//   access_ok(addr, size)
+//     初步校验：指针是否在用户地址范围内
+//     不保证指向有效页，只检查范围
+
+//   copy_from_user(kernel_dst, user_src, size)
+//   copy_to_user(user_dst, kernel_src, size)
+//     安全复制：内部处理缺页
+//     在异常表(__ex_table)中注册修复入口
+//     缺页时跳到修复代码返回-EFAULT（而非panic）
+//     使能SMAP时: 内部用 stac 临时开启用户内存访问
+//                 完成后用 clac 关闭
+
+// sys_call_table 结构:
+//   256个函数指针的数组
+//   sys_call_table[__NR_read] = sys_read
+//   sys_call_table[__NR_write] = sys_write
+//   ...
+```
+
+<Callout type="trap">
+**误区：系统调用是同步的，所以内核函数执行期间 CPU 一直被占用。** 实际上系统调用从用户视角是同步的（调用后阻塞直到返回），但内核内部可以将当前进程置于睡眠状态让出 CPU。例如 read() 发现数据不在缓存，内核提交 I/O 请求后调用 schedule() 睡眠，其他进程运行；磁盘完成后中断唤醒等待进程，被调度后继续执行 sys_read 返回数据。用户感知的是「调用阻塞了一段时间」。
+</Callout>
+
+## 阻塞 I/O 衔接
+
+```text
+// 系统调用中的异步衔接（以磁盘读为例）
+
+// 1. sys_read 发现数据不在 Page Cache
+//    -> submit_bio() 提交I/O请求到块设备队列
+//    -> wait_event() / io_schedule()
+//       设置 state = TASK_INTERRUPTIBLE
+//       加入等待队列
+//       schedule()  // 让出CPU！
+
+// 2. 其他进程运行（CPU不被浪费）
+
+// 3. 磁盘 DMA 完成触发硬中断
+//    -> 中断处理标记I/O完成
+//    -> softirq/workqueue 唤醒等待队列上的进程
+
+// 4. 被唤醒的进程回到 TASK_RUNNING
+//    -> 被调度器选中
+//    -> 继续执行 sys_read 剩余逻辑
+//    -> copy_to_user 返回数据
+//    -> 系统调用返回用户态
+
+// 用户程序感知：
+//   read() 调用阻塞了一段时间后返回数据
+//   内核内部经历了 提交I/O -> 睡眠 -> 被唤醒 -> 继续
+```
+
+<Exercises>
+**问题 1**：系统调用与普通函数调用的根本区别是什么？
+
+<Answer>
+根本区别在于特权级切换和上下文保存。普通函数调用在同一特权级（用户态）内通过 call 指令跳转，只用栈保存返回地址和寄存器。系统调用必须从用户态（Ring 3）切换到内核态（Ring 0）：通过 syscall 指令触发 CPU 硬件执行特权级切换，切换栈（用户栈到内核栈），保存完整上下文到 pt_regs 结构，通过系统调用号查找 sys_call_table 找到内核函数。系统调用是用户程序进入内核的唯一合法入口。
+</Answer>
+
+**问题 2**：内核如何安全地访问用户空间传来的指针？为什么不能直接解引用？
+
+<Answer>
+内核不能直接解引用用户态指针，原因：①指针可能指向未映射地址导致内核缺页崩溃（panic）；②指针可能来自恶意程序传内核地址窃取数据；③SMAP/SMEP硬件保护阻止内核直接访问用户内存。安全做法：用 access_ok() 初步校验指针在用户地址范围内，用 copy_from_user()/copy_to_user() 安全复制（内部在异常表注册修复入口，缺页时跳到修复代码返回错误而非 panic）。使能 SMAP 时这些函数内部临时用 stac 开启用户内存访问权限，完成后用 clac 关闭。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="系统调用">用户程序进入内核态的唯一合法入口。通过syscall指令触发CPU特权级切换，内核校验参数后代为执行特权操作，完成后通过sysret返回用户态。</GlossaryItem>
+<GlossaryItem term="sys_call_table">系统调用分发表，一个函数指针数组。系统调用号作为索引查找对应的内核函数（如sys_read）。新增系统调用只需在此表注册。</GlossaryItem>
+<GlossaryItem term="copy_from_user/copy_to_user">内核安全访问用户内存的函数。内部处理缺页（异常表修复），避免内核因用户指针无效而panic。使能SMAP时临时开启用户内存访问权限。</GlossaryItem>
+<GlossaryItem term="SMAP/SMEP">CPU硬件安全特性。SMAP（Supervisor Mode Access Prevention）阻止内核直接读写用户内存；SMEP阻止内核执行用户代码。系统调用内部通过stac/clac指令临时绕过。</GlossaryItem>
+</Glossary>

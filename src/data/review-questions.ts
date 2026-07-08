@@ -1545,6 +1545,16 @@ import { lkeNetworkStackQuestions } from "./review/lke-network-stack";
 import { lkeKernelSynchronizationQuestions } from "./review/lke-kernel-synchronization";
 import { lkeKernelDebuggingQuestions } from "./review/lke-kernel-debugging";
 import { lkeFinalReviewQuestions } from "./review/lke-final-review";
+import { lkdLearningMapQuestions } from "./review/lkd-learning-map";
+import { lkdLinuxKernelIntroQuestions } from "./review/lkd-linux-kernel-intro";
+import { lkdProcessManagementQuestions } from "./review/lkd-process-management";
+import { lkdSchedulingQuestions } from "./review/lkd-scheduling";
+import { lkdSystemCallsQuestions } from "./review/lkd-system-calls";
+import { lkdInterruptsQuestions } from "./review/lkd-interrupts";
+import { lkdKernelSyncQuestions } from "./review/lkd-kernel-sync";
+import { lkdMemoryManagementQuestions } from "./review/lkd-memory-management";
+import { lkdVirtualFilesystemQuestions } from "./review/lkd-virtual-filesystem";
+import { lkdFinalReviewQuestions } from "./review/lkd-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3125,6 +3135,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lkeKernelSynchronizationQuestions,
   ...lkeKernelDebuggingQuestions,
   ...lkeFinalReviewQuestions,
+  ...lkdLearningMapQuestions,
+  ...lkdLinuxKernelIntroQuestions,
+  ...lkdProcessManagementQuestions,
+  ...lkdSchedulingQuestions,
+  ...lkdSystemCallsQuestions,
+  ...lkdInterruptsQuestions,
+  ...lkdKernelSyncQuestions,
+  ...lkdMemoryManagementQuestions,
+  ...lkdVirtualFilesystemQuestions,
+  ...lkdFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

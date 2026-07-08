@@ -1,0 +1,154 @@
+---
+title: "全书复习"
+type: D
+section: "系统与操作系统"
+order: 9
+description: "用一次fork+exec+wait串联进程管理、内存管理、VFS、系统调用、中断、同步全书子系统，性能排查思路与机制策略分离哲学"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LkdFinalReviewDiagram } from "@/components/mdx/linux-kernel-design/diagrams/lkd-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 用一次 fork()+exec()+wait() 串联全书所有子系统的知识点
+- 建立从系统调用到硬件的完整数据通路认知
+- 掌握系统性能问题的分层排查思路（调度/内存/I/O/中断/同步）
+- 从架构哲学层面理解「机制与策略分离」在各子系统中的体现
+</Objectives>
+
+## 全书主线串联
+
+<Term def="机制与策略分离是Linux内核的核心设计哲学——内核提供通用机制（调度框架、VFS抽象层），具体策略由用户态或可配置模块决定，使内核保持通用而可扩展。">机制与策略分离</Term>贯穿全书所有子系统。现在用一次完整的进程生命周期——从 fork 到 exit——串联所有知识点。
+
+<LkdFinalReviewDiagram />
+
+## 一次进程的完整旅程
+
+```text
+// 一次 fork() + exec() + 运行 + exit() + wait()
+// 串联全书七大子系统
+
+// === 1. fork() ===
+// 系统调用（第4章）: syscall指令 -> 内核态
+// 进程管理（第2章）: 分配新task_struct
+//   -> dup_task_struct 复制父进程结构
+//   -> copy_process 复制资源
+// 内存管理（第7章）: COW复制地址空间
+//   -> copy_mm -> 共享页表标记只读
+//   -> 实际写入时才触发缺页复制
+// 进程管理: copy_files共享文件描述符表
+// 调度器（第3章）: 设置sched_entity
+//   -> vruntime = 父进程vruntime（公平起点）
+//   -> 加入CFS运行队列（红黑树）
+
+// === 2. exec() ===
+// 系统调用: execve -> do_execve
+// VFS（第8章）: 读取ELF文件
+//   -> path_lookup: /usr/bin/program
+//   -> dentry/inode找到文件
+//   -> file.f_op->read读取ELF头
+// 内存管理: 替换地址空间
+//   -> 销毁旧mm_struct
+//   -> 建立新地址空间(代码/数据/BSS/堆/栈)
+//   -> 映射ELF段到虚拟地址
+//   -> 设置入口点(ELF entry)
+//   -> 从第一条指令重新执行
+
+// === 3. 运行中 ===
+// 调度器: CFS按vruntime分配CPU时间
+// 系统调用: read/write等与内核交互
+// VFS: 操作文件
+// 中断（第5章）: I/O完成触发中断
+//   -> 上半部应答硬件
+//   -> 下半部唤醒等待进程
+// 同步（第6章）: 保护共享数据
+//   -> 自旋锁保护per-cpu计数
+//   -> RCU保护dentry查找
+
+// === 4. exit() ===
+// 系统调用: exit -> do_exit
+// 进程管理: 释放资源
+//   -> 释放mm(地址空间)
+//   -> 释放files(文件描述符表)
+//   -> 释放signal(信号处理表)
+//   -> 设置state = EXIT_ZOMBIE
+//   -> SIGCHLD通知父进程
+
+// === 5. wait() ===
+// 系统调用: wait4 -> do_wait
+// 进程管理: 检查子进程是否僵尸
+//   -> 如果是EXIT_ZOMBIE
+//   -> release_task()回收task_struct
+//   -> 收集退出状态返回给父进程
+
+// 一次进程从诞生到消亡，七大子系统全部参与
+```
+
+## 性能排查思路
+
+```text
+// 系统性能问题的分层排查
+
+// 1. 进程调度层
+top / htop       // CPU占用率 + 运行队列长度(loadavg)
+pidstat -u       // 单进程CPU时间分布
+// 如果runqueue长 -> CPU不足或调度不均
+// 如果大量si(软中断) -> 网络/I/O中断负载重
+
+// 2. 内存管理层
+free -h          // 可用内存
+vmstat 1         // swap和page fault频率
+// si/so高 -> 内存不足在换页
+slabtop          // 内核slab缓存占用
+// oom-killer日志 -> 触发OOM
+
+// 3. I/O与VFS层
+iostat -x 1      // 磁盘IOPS和延迟
+iotop            // I/O大户
+// %util高且await大 -> 磁盘瓶颈
+
+// 4. 中断层
+cat /proc/interrupts  // 中断分布
+// 某CPU中断集中 -> IRQ亲和性不均
+
+// 5. 同步层
+perf lock        // 锁竞争
+// 大量spinlock等待 -> 并发瓶颈
+
+// 深度分析工具:
+perf top         // 热点函数
+ftrace           // 调用图追踪
+eBPF / bpftrace  // 函数参数追踪
+crash            // vmcore分析
+```
+
+## 架构哲学
+
+<Callout type="info">
+**机制与策略分离在各子系统中的体现：** ①CFS 提供调度机制（红黑树/vruntime），策略由 nice/cgroups 配置；②VFS 提供文件操作机制（四对象/路径查找），策略由各文件系统实现；③Buddy/Slab 提供分配机制，策略由 GFP 标志控制；④中断提供上下半部机制，策略选择 softirq/tasklet/workqueue。这让内核保持通用而可扩展——新增文件系统只需实现接口，不需改内核核心。
+</Callout>
+
+<Exercises>
+**问题 1**：用一次 fork()+exec()+wait() 串联进程管理、内存管理、VFS 和系统调用四个子系统。
+
+<Answer>
+①fork()——系统调用进入内核，进程管理分配新 task_struct，内存管理用 COW 复制地址空间（共享页表标记只读）；②exec()——系统调用进入内核，VFS 读取 ELF 文件头（经 dentry/inode 找到文件），内存管理销毁旧 mm_struct 建立新地址空间；③子进程运行期间——通过系统调用与内核交互，经 VFS 操作文件，经内存管理分配/释放内存；④exit()——进程管理执行 do_exit() 释放资源设置 EXIT_ZOMBIE；⑤wait()——父进程系统调用进入内核，进程管理检查僵尸态后 release_task() 回收 task_struct。四个子系统全部参与。
+</Answer>
+
+**问题 2**：从内核架构角度，解释「机制与策略分离」在 Linux 各子系统中的具体体现。
+
+<Answer>
+①进程调度——CFS 提供调度机制（红黑树管理运行队列、vruntime 计算），策略通过可配置参数和调度类实现，用户可通过 nice/cgroups 调整；②VFS——提供文件操作机制（四对象、路径查找、Page Cache），具体策略由各文件系统实现（ext4日志、nfs网络传输、procfs动态生成），通过函数指针表多态分发；③内存管理——Buddy/Slab 提供分配机制，分配策略由 GFP 标志控制（GFP_KERNEL可睡眠、GFP_ATOMIC不睡眠、GFP_DMA限定Zone）；④中断——上下半部是机制，softirq/tasklet/workqueue 是策略选择；⑤设备驱动——bus-device-driver绑定是机制，具体驱动行为是策略。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="机制与策略分离">Linux内核核心设计哲学。内核提供通用机制（调度框架、VFS抽象层、分配器），具体策略由用户态或可配置模块决定。使内核保持通用而可扩展。</GlossaryItem>
+<GlossaryItem term="一次进程旅程">从fork创建（COW+task_struct）到exec加载新程序（VFS+内存替换）到运行（调度+系统调用+中断+同步）到exit终止（释放资源变僵尸）到wait回收（父进程清理）。串联全书七大子系统。</GlossaryItem>
+<GlossaryItem term="性能排查分层">按子系统分层排查：进程调度(top/pidstat)、内存管理(free/vmstat/slabtop)、I/O(iostat/iotop)、中断(/proc/interrupts)、同步(perf lock)。深度工具: perf/ftrace/eBPF/crash。</GlossaryItem>
+<GlossaryItem term="一切皆文件">Linux设计哲学。设备、proc文件、socket都通过VFS的file_operations接口统一操作。是机制与策略分离在文件系统层面的体现——VFS是机制，各文件系统是策略。</GlossaryItem>
+</Glossary>

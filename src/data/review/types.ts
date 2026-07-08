@@ -1668,7 +1668,17 @@ export type ReviewChapterSlug =
   | "lke-network-stack"
   | "lke-kernel-synchronization"
   | "lke-kernel-debugging"
-  | "lke-final-review";
+  | "lke-final-review"
+  | "lkd-learning-map"
+  | "lkd-linux-kernel-intro"
+  | "lkd-process-management"
+  | "lkd-scheduling"
+  | "lkd-system-calls"
+  | "lkd-interrupts"
+  | "lkd-kernel-sync"
+  | "lkd-memory-management"
+  | "lkd-virtual-filesystem"
+  | "lkd-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3341,6 +3351,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lke-kernel-synchronization": "内核同步机制",
   "lke-kernel-debugging": "内核调试与性能分析",
   "lke-final-review": "全书复习",
+  "lkd-learning-map": "全书学习地图",
+  "lkd-linux-kernel-intro": "Linux内核简介",
+  "lkd-process-management": "进程管理",
+  "lkd-scheduling": "进程调度",
+  "lkd-system-calls": "系统调用",
+  "lkd-interrupts": "中断与中断处理",
+  "lkd-kernel-sync": "内核同步",
+  "lkd-memory-management": "内存管理",
+  "lkd-virtual-filesystem": "虚拟文件系统",
+  "lkd-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
