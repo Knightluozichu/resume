@@ -1,0 +1,130 @@
+---
+title: "模块系统"
+type: A
+section: "前端与Web"
+order: 2
+description: "CommonJS 与 ES Modules 的本质差异——require 机制、值拷贝 vs 实时绑定、互操作"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdgModuleSystemDiagram } from "@/components/mdx/nodejs-definitive-guide/diagrams/ndg-module-system";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 CommonJS 的 require 三步机制（路径解析 → 文件定位 → 编译缓存）
+- 掌握 CommonJS 值拷贝与 ESM 实时绑定（live binding）的本质区别
+- 理解 ESM 的三阶段加载（解析 → 实例化 → 求值）与静态分析
+- 能够处理 CommonJS 与 ESM 互操作的限制与最佳实践
+</Objectives>
+
+## 直觉引入
+
+想象你在组装一辆汽车。CommonJS 像是「整车交付」——你下单（require）后，工厂现场把零件全部装好交给你一辆完整的车（module.exports），之后工厂内部改了设计图不影响你手里的车（值拷贝）。ES Modules 像是「实时连接」——你拿到的是一根连到工厂的线（import 绑定），工厂那边零件更新了，你这边立刻看到最新版（实时绑定）。而且 ESM 在下单前就先列好了所有零件清单（静态分析），工厂可以根据清单提前优化配送路线（tree-shaking）；CommonJS 是到了才知道要什么（动态求值），没法提前优化。
+
+<NdgModuleSystemDiagram />
+
+## CommonJS：require 机制
+
+<Term def="require 是 CommonJS 的模块加载函数，执行三步：路径解析（Module._resolveFilename）、文件定位（扩展名 + index）、编译执行（包装函数 + Module._cache 缓存）。">require 机制</Term>
+
+```javascript
+// lib/counter.js
+let count = 0;
+module.exports = {
+  increment: () => { count++; },
+  getCount: () => count,        // 闭包捕获 count
+  count: count,                 // 值拷贝！导出时 count = 0
+};
+
+// app.js
+const counter = require("./counter");
+counter.increment();
+console.log(counter.getCount()); // 1 ← 闭包读到最新值
+console.log(counter.count);      // 0 ← 值拷贝，导出时的快照
+
+// require 内部做了什么：
+// 1. 路径解析：Module._resolveFilename("./counter", module)
+//    → /abs/path/counter.js
+// 2. 文件定位：尝试 .js → .json → .node → package.json main → index.js
+// 3. 编译执行：
+//    包裹进函数 (function(exports, require, module, __filename, __dirname) {
+//      /* 文件内容 */
+//    })
+//    执行后缓存到 Module._cache[filename]
+//    后续 require 同一文件直接返回缓存（不重复执行）
+```
+
+## ESM：静态分析与实时绑定
+
+ESM 的加载分三阶段：①**解析（Parse）**——静态分析所有 import/export，构建模块依赖图（此时不执行任何代码）；②**实例化（Instantiate）**——为每个 export 创建内存绑定（live binding），import 侧指向同一内存地址；③**求值（Evaluate）**——按依赖拓扑序异步执行模块代码。
+
+```javascript
+// lib/counter.mjs
+export let count = 0;           // 导出的是绑定，不是值
+export function increment() {
+  count++;
+}
+
+// app.mjs
+import { count, increment } from "./lib/counter.mjs";
+console.log(count);             // 0
+increment();
+console.log(count);             // 1 ← 实时绑定！内部修改后导入方立即看到
+
+// ESM 的静态分析能力：
+// import 必须在顶层，路径必须是字符串字面量
+// 构建工具可在编译期确定依赖图 → tree-shaking（删除未使用的导出）
+// 动态导入用 import() 返回 Promise：
+const mod = await import("./lib/counter.mjs");
+```
+
+## 互操作与限制
+
+CommonJS 和 ESM 互操作有严格限制：
+
+```javascript
+// CJS require ESM：不能直接 require，要用 import()
+// const mod = require("./esm.mjs");  // ERR_REQUIRE_ESM!
+const mod = await import("./esm.mjs"); // 正确
+
+// ESM import CJS：可以默认导入，具名导入可能不可靠
+import pkg from "./cjs.cjs";   // 得到 module.exports（默认导出）
+// import { named } from "./cjs.cjs"; // 可能失败：CJS 导出在运行时才确定
+// Node 用 cjs-module-lexer 静态检测 module.exports 属性来支持具名导入
+// 但 exports[动态key] 无法检测
+
+// ESM 中没有 __dirname/__filename
+// CJS:  console.log(__dirname);
+// ESM:  import { fileURLToPath } from "url";
+//       import { dirname } from "path";
+//       const __dirname = dirname(fileURLToPath(import.meta.url));
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：CommonJS 的 `exports` 和 `module.exports` 是同一个东西。** 它们初始时指向同一对象，但如果你写了 `exports = fn`，只是改变了局部变量 `exports` 的指向，`module.exports` 不受影响——require 返回的是 `module.exports`。所以导出单个函数/对象时必须用 `module.exports = fn`，不能写 `exports = fn`。正确写法：`exports.foo = fn`（添加属性可以）或 `module.exports = fn`（整体替换）。
+</Callout>
+
+<Exercises>
+**问题 1**：CommonJS 的值拷贝和 ESM 的实时绑定有什么区别？
+
+<Answer>
+CommonJS 导出值的拷贝——导出时复制当前值，之后模块内部修改不影响导入方。例如 module.exports.count = 0 导入后内部修改 count，导入方看到的仍是 0。ESM 导出实时绑定——导入方看到同一引用，模块内部修改后导入方立即看到新值。这是因为 CJS 在运行时求值并拷贝，ESM 在实例化阶段建立绑定关系。此外 ESM 是静态分析（编译期确定依赖）支持 tree-shaking；CJS 是动态求值（运行时确定）无法 tree-shaking。
+</Answer>
+
+**问题 2**：为什么 require 的模块会被缓存？如何实现模块热更新？
+
+<Answer>
+缓存原因：性能（避免重复编译执行）+ 正确性（保证单例，模块级状态全局共享）。Module._cache 以文件绝对路径为 key。热更新方案：删除 require.cache[require.resolve(path)] 再重新 require——但有风险：旧模块引用可能仍被持有导致内存泄漏和状态不一致。生产推荐用 cluster + 信号重启 Worker（graceful reload）而非热更新。热更新的核心矛盾：缓存保证单例，清除缓存意味着放弃单例保证。社区共识是「不要热更新模块，而是重启进程」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="require 三步机制">路径解析（Module._resolveFilename）→ 文件定位（.js/.json/.node + index）→ 编译执行（包装函数 + Module._cache 缓存）。路径解析按核心模块/相对路径/绝对路径/裸模块 node_modules 逐层查找。缓存以文件绝对路径为 key，保证模块只执行一次。</GlossaryItem>
+<GlossaryItem term="值拷贝 vs 实时绑定">CommonJS 导出值的拷贝（基本类型拷贝值，引用类型拷贝引用），之后修改不影响导入方。ESM 导出实时绑定（live binding）——导入侧和导出侧指向同一内存地址，修改后双向可见。根本原因：CJS 运行时求值+拷贝，ESM 实例化阶段建立绑定。</GlossaryItem>
+<GlossaryItem term="tree-shaking">ESM 独有的死代码消除——因为 import 在编译期静态分析即可确定完整依赖图，构建工具（webpack/rollup/esbuild）可删除未被 import 的 export。CommonJS 的 require 是动态的（可在 if/函数中调用），编译期无法确定依赖，故不支持 tree-shaking。</GlossaryItem>
+</Glossary>

@@ -1518,7 +1518,17 @@ export type ReviewChapterSlug =
   | "csec-font-features"
   | "csec-user-experience"
   | "csec-motion-visual"
-  | "csec-final-review";
+  | "csec-final-review"
+  | "ndg-learning-map"
+  | "ndg-event-loop"
+  | "ndg-module-system"
+  | "ndg-stream-pipe"
+  | "ndg-buffer-filesystem"
+  | "ndg-http-server"
+  | "ndg-tcp-tls"
+  | "ndg-cluster-worker"
+  | "ndg-performance-debug"
+  | "ndg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3041,6 +3051,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "csec-user-experience": "用户体验技巧",
   "csec-motion-visual": "动效与视觉",
   "csec-final-review": "全书总复习",
+  "ndg-learning-map": "全书学习地图",
+  "ndg-event-loop": "事件循环机制",
+  "ndg-module-system": "模块系统",
+  "ndg-stream-pipe": "流与管道",
+  "ndg-buffer-filesystem": "Buffer与文件系统",
+  "ndg-http-server": "HTTP服务器",
+  "ndg-tcp-tls": "TCP与TLS",
+  "ndg-cluster-worker": "集群与Worker Threads",
+  "ndg-performance-debug": "性能分析与调试",
+  "ndg-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

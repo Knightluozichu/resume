@@ -1395,6 +1395,16 @@ import { csecFontFeaturesQuestions } from "./review/csec-font-features";
 import { csecUserExperienceQuestions } from "./review/csec-user-experience";
 import { csecMotionVisualQuestions } from "./review/csec-motion-visual";
 import { csecFinalReviewQuestions } from "./review/csec-final-review";
+import { ndgLearningMapQuestions } from "./review/ndg-learning-map";
+import { ndgEventLoopQuestions } from "./review/ndg-event-loop";
+import { ndgModuleSystemQuestions } from "./review/ndg-module-system";
+import { ndgStreamPipeQuestions } from "./review/ndg-stream-pipe";
+import { ndgBufferFilesystemQuestions } from "./review/ndg-buffer-filesystem";
+import { ndgHttpServerQuestions } from "./review/ndg-http-server";
+import { ndgTcpTlsQuestions } from "./review/ndg-tcp-tls";
+import { ndgClusterWorkerQuestions } from "./review/ndg-cluster-worker";
+import { ndgPerformanceDebugQuestions } from "./review/ndg-performance-debug";
+import { ndgFinalReviewQuestions } from "./review/ndg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2821,6 +2831,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...csecUserExperienceQuestions,
   ...csecMotionVisualQuestions,
   ...csecFinalReviewQuestions,
+  ...ndgLearningMapQuestions,
+  ...ndgEventLoopQuestions,
+  ...ndgModuleSystemQuestions,
+  ...ndgStreamPipeQuestions,
+  ...ndgBufferFilesystemQuestions,
+  ...ndgHttpServerQuestions,
+  ...ndgTcpTlsQuestions,
+  ...ndgClusterWorkerQuestions,
+  ...ndgPerformanceDebugQuestions,
+  ...ndgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

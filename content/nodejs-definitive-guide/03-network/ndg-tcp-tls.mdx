@@ -1,0 +1,119 @@
+---
+title: "TCP与TLS"
+type: A
+section: "前端与Web"
+order: 6
+description: "net 模块裸 TCP 三次握手与 tls 模块加密通信——证书链验证与密钥协商"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdgTcpTlsDiagram } from "@/components/mdx/nodejs-definitive-guide/diagrams/ndg-tcp-tls";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 TCP 三次握手过程及 net 模块的 socket（Duplex 流）模型
+- 掌握 TLS 握手的非对称密钥协商到对称加密传输的切换
+- 理解证书链验证机制（根 CA → 中间 CA → 服务器证书）
+- 能够创建 HTTPS 服务器并排查证书问题
+</Objectives>
+
+## 直觉引入
+
+想象两个人要安全通信。**TCP** 是先打电话确认对方在不在——「喂？」（SYN）、「我在」（SYN+ACK）、「好，开始说」（ACK），三次确认后建立连接。但裸 TCP 像明信片——邮递员（中间路由器）能看到所有内容。**TLS** 是在电话接通后再加一层加密协议：先交换身份证（证书）确认对方身份，然后用对方的公钥加密一个「会话密钥」传过去（非对称加密），之后所有对话都用这个会话密钥加密（对称加密，快得多）。为什么混用？非对称加密太慢不适合大量数据，但能安全协商密钥；对称加密快但需要双方已有密钥。所以用非对称安全地「递钥匙」，再用对称高效地「锁门」。
+
+<NdgTcpTlsDiagram />
+
+## TCP：net 模块
+
+<Term def="TCP 是传输层协议，通过三次握手建立可靠连接。net 模块创建的 socket 是 Duplex 流——同时可读（接收数据）可写（发送数据），读写独立。">TCP 与 net 模块</Term>
+
+```javascript
+const net = require("net");
+
+// TCP 服务器
+const server = net.createServer((socket) => {
+  console.log("客户端连接");
+
+  socket.on("data", (data) => {
+    console.log("收到:", data.toString()); // data 是 Buffer
+    socket.write("ACK: " + data.toString()); // 全双工——同时收发
+  });
+
+  socket.on("end", () => console.log("客户端断开"));
+  socket.on("error", (err) => console.error("Socket 错误:", err));
+});
+
+server.listen(4000, () => console.log("TCP server on :4000"));
+
+// TCP 客户端
+const client = net.connect(4000, "localhost", () => {
+  client.write("Hello Server");
+});
+client.on("data", (data) => {
+  console.log("服务器回复:", data.toString());
+  client.end(); // 主动断开
+});
+
+// 关键：TCP 是流式协议——没有消息边界
+// 多次 write 可能合并为一个 data 事件
+// 一个 write 也可能拆成多个 data
+// 应用层需自己实现分包（如 \n 分隔或长度前缀）
+```
+
+## TLS：加密通信
+
+```javascript
+const https = require("https");
+const tls = require("tls");
+const fs = require("fs");
+
+// HTTPS 服务器
+const options = {
+  key:  fs.readFileSync("private.key"),  // 私钥
+  cert: fs.readFileSync("cert.pem"),     // 证书（含公钥）
+  // 如果有中间证书，拼接到 cert.pem 末尾或用 ca 选项
+};
+
+https.createServer(options, (req, res) => {
+  res.writeHead(200);
+  res.end("Secure Hello");
+}).listen(443);
+
+// TLS 客户端
+const socket = tls.connect(443, "example.com", { 
+  // ca: [customCA],           // 信任自定义 CA
+  // rejectUnauthorized: false, // 跳过验证（不安全，仅调试用）
+}, () => {
+  console.log("TLS 连接建立，证书验证通过");
+  socket.write("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n");
+});
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：TCP 的 `data` 事件每次对应一次 `write`。** 错。TCP 是字节流协议，没有消息边界——发送方调用 3 次 `write("A")`、`write("B")`、`write("C")`，接收方可能收到 1 个 `data` 事件 `"ABC"`，也可能收到 3 个 `"A"` `"BC"` 等。这不是 bug 而是 TCP 的流式特性。应用层必须自己定义消息边界：①用固定分隔符（如 `\n`）；②用长度前缀（`4字节长度 + 数据`）；③用 JSON 等结构化格式按字段切分。这是 TCP 编程的头号坑。
+</Callout>
+
+<Exercises>
+**问题 1**：TCP 为什么需要三次握手？两次不行吗？
+
+<Answer>
+三次握手目的：双方确认彼此收发能力正常，同步初始序列号（ISN），防止历史无效连接。①客户端发 SYN——服务端确认客户端能发；②服务端回 SYN+ACK——客户端确认服务端能收能发；③客户端发 ACK——服务端确认客户端能收。两次不行：如果只有两次，服务端无法确认客户端的接收能力——万一客户端的 SYN 是历史延迟到达的无效包，服务端直接建立连接浪费资源。三次握手中客户端收到 SYN+ACK 后可以判断连接是否有效（历史包会发 RST）。此外序列号同步需要一来一回各确认一次，刚好三次。
+</Answer>
+
+**问题 2**：TLS 握手过程是怎样的？为什么用非对称加密协商密钥后切换到对称加密？
+
+<Answer>
+①ClientHello：客户端发密码套件列表+客户端随机数；②ServerHello：服务端选定套件，发服务端随机数+证书（含公钥）；③客户端验证证书链，用公钥加密预主密钥发送；④双方用两个随机数+预主密钥派生会话密钥；⑤Finished：用会话密钥加密验证，之后用对称密钥传输。混用原因：非对称加密（RSA/ECDHE）计算极慢但无需预共享密钥，适合安全协商；对称加密（AES）快百倍但需共享密钥。用非对称安全协商出对称密钥，之后用对称高速传输——兼顾安全与性能。ECDHE 还提供前向安全性。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="TCP 三次握手">SYN(seq=x) → SYN+ACK(seq=y,ack=x+1) → ACK(ack=y+1)。三次确认双方收发能力正常并同步序列号。连接建立后 socket 是 Duplex 流（全双工），on("data") 收数据、write() 发数据。TCP 是流式协议无消息边界——应用层需自定义分包。</GlossaryItem>
+<GlossaryItem term="TLS 握手">ClientHello（密码套件+随机数）→ ServerHello+证书+公钥 → 客户端验证证书链+加密预主密钥 → 双方派生会话密钥 → Finished → 对称加密传输。非对称加密（RSA/ECDHE）协商密钥，对称加密（AES）传输数据——安全与性能兼顾。ECDHE 提供前向安全性。</GlossaryItem>
+<GlossaryItem term="证书链验证">根 CA → 中间 CA → 服务器证书的信任链。客户端只内置信任根 CA，通过逐级验证签名确认服务器证书可信。验证失败常见原因：缺少中间证书（cert.pem 需含完整链）、域名不匹配（CN/SAN）、证书过期、自签名证书（需 NODE_TLS_REJECT_UNAUTHORIZED=0 或 ca 选项信任）。调试用 openssl s_client。</GlossaryItem>
+</Glossary>
