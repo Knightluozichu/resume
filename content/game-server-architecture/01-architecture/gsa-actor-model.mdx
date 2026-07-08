@@ -1,0 +1,95 @@
+---
+title: "Actor 模型与消息驱动"
+type: A
+section: "网络游戏与服务器"
+order: 2
+description: "理解 Actor 模型如何用单线程消息邮箱实现高并发，掌握 Actor 生命周期与消息投递语义"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GsaActorModelDiagram } from "@/components/mdx/game-server-architecture/diagrams/gsa-actor-model";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Actor 模型的三要素：状态、行为、邮箱
+- 掌握消息驱动的并发模型为何天然避免数据竞争
+- 理解 Actor 生命周期：创建→投递→处理→停止
+- 能够为玩家、NPC、场景分别设计合适的 Actor 粒度
+</Objectives>
+
+## 直觉引入
+
+想象一个邮政系统。每个人是一个 Actor——有自己的房子（私有状态）、有信箱（消息队列）、每天按时收信并按顺序处理（单线程消费邮箱）。你想让别人做事，不能闯进他家里翻东西（共享内存），只能给他写信（发消息），他收到信后自己决定怎么改自己家里的东西。因为每个人只动自己家的东西，永远不存在两个人抢同一个抽屉（数据竞争）。邮局（调度器）负责把信投递到位，忙的人信会排队（背压）。这就是 Actor 模型的本质：用「隔离状态 + 消息通信」替代「共享内存 + 锁」。
+
+<GsaActorModelDiagram />
+
+## 三要素与并发语义
+
+<Term def="Actor 是一种并发原语，拥有私有状态、一个邮箱和一组行为，只能通过异步消息与其他 Actor 通信，同一时刻只处理一条消息，故天然无数据竞争。">Actor</Term>有三要素。**私有状态**：每个 Actor 的字段只有自己能读写，外部无法直接访问，这天然消除了数据竞争——不需要锁。**邮箱**：一个 FIFO 队列，所有发来的消息排队等候，Actor 一次只从队首取一条处理。**行为**：收到特定消息时执行的处理函数，可修改自身状态、创建新 Actor、向其他 Actor 发消息。
+
+```cpp
+// 玩家 Actor：单线程处理消息，状态无锁安全
+class PlayerActor {
+    State state_;           // 私有状态（只有自己能改）
+    Mailbox mailbox_;       // FIFO 邮箱
+
+    void OnMessage(const Message& msg) {
+        // 同一时刻只有一个线程在此执行 → state_ 无需加锁
+        switch (msg.type) {
+            case MSG_FIRE:  HandleFire(msg); break;
+            case MSG_MOVE:   HandleMove(msg); break;
+            case MSG_TRADE:  HandleTrade(msg); break;
+        }
+    }
+
+    void HandleFire(const FireMsg& m) {
+        if (state_.cooldown &gt; 0) return;        // CD 中
+        state_.cooldown = 500;
+        // 向场景 Actor 发消息（异步，不等返回）
+        sceneActor_.Tell(DamageMsg{state_.uid, m.target, 100});
+    }
+};
+
+// Actor 系统：调度器从各邮箱取消息分发给空闲 worker
+void ActorSystem::Run() {
+    while (auto* task = scheduler_.Pop()) {
+        task->actor->OnMessage(task->msg);  // 单条消息处理完才取下一条
+    }
+}
+```
+
+**关键优势**是并发模型简单。传统多线程要给每个共享变量加锁，锁用错就死锁或竞态；Actor 模型里每个 Actor 的状态只在自己线程内访问，**无需任何锁**。多个 Actor 可在不同线程/机器上并行执行，靠消息通信协调。代价是「不能直接调函数拿返回值」——只能发消息异步通知，响应也要靠反向消息传回。
+
+## Actor 粒度选择
+
+Actor 粒度是个关键设计决策。**太细**（每个物品一个 Actor）会导致消息爆炸，调度开销吞没收益；**太粗**（整个场景一个 Actor）会退化成单线程瓶颈。常见实践：**玩家**一个 Actor（状态隔离清晰）、**场景/房间**一个 Actor（聚合该场景所有玩家）、**全局服务**（匹配、排行榜）一个 Actor。玩家发消息给场景 Actor，场景 Actor 广播给同场景其他玩家 Actor——这种两级拓扑能撑住单服万人。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：Actor 模型比线程池快，因为它无锁。** Actor 的「无锁」是指状态访问无锁，但消息投递有成本：消息入队、出队、跨线程唤醒、可能的跨机器网络序列化。对于计算密集型任务，Actor 的消息开销可能比直接函数调用慢 10-100 倍。Actor 模型的价值不是「单次更快」，而是「可扩展、可组合、故障隔离」——它让你能放心地横向扩容到成百上千个 Actor 而不担心锁地狱。选型时想清楚你要的是「峰值性能」还是「可维护的并发架构」。
+</Callout>
+
+<Exercises>
+**问题 1**：Actor 模型为什么能天然避免数据竞争？
+
+<Answer>
+因为 Actor 的私有状态只有该 Actor 自己的执行线程能访问——外部无法直接读写其字段，只能发消息。Actor 一次只处理一条消息（邮箱 FIFO + 单线程消费），所以处理某条消息时状态不会被并发修改。这把「共享内存 + 锁」的并发模型替换成了「隔离状态 + 消息通信」——根本不存在共享的可变状态，自然就没有竞争。代价是通信必须异步（发消息不等返回），且消息投递有序列化/调度开销。
+</Answer>
+
+**问题 2**：为玩家、场景、匹配服务分别设计 Actor 粒度，说明理由。
+
+<Answer>
+玩家一人一 Actor：玩家状态（背包、位置、CD）强一致需求高，单 Actor 串行处理避免锁，且玩家间天然隔离。场景一服一 Actor：聚合同场景玩家，场景内广播（如伤害事件）通过场景 Actor 中转，避免 N 个玩家 Actor 互相直连造成消息扇出爆炸；场景 Actor 还能做 AOI 兴趣裁剪。匹配服务一个全局 Actor：匹配是跨场景的全局调度，单 Actor 串行处理匹配队列，避免多线程抢同一队列加锁；匹配吞吐不够时再按段位分多个匹配 Actor。粒度原则是「强隔离的状态用细粒度 Actor，全局协调用粗粒度 Actor」。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Actor">并发原语，拥有私有状态、邮箱、行为。只能通过异步消息通信，同一时刻只处理一条消息，天然无数据竞争。</GlossaryItem>
+<GlossaryItem term="邮箱">Actor 的 FIFO 消息队列，所有发来的消息排队等候。单线程消费保证处理顺序；队列积压即背压信号。</GlossaryItem>
+<GlossaryItem term="消息驱动">Actor 间通过异步消息而非函数调用通信。不能直接拿返回值，响应也靠反向消息。解耦了调用方与执行方，支持跨进程/跨机器部署。</GlossaryItem>
+<GlossaryItem term="Actor 粒度">单个 Actor 承载的逻辑范围。太细导致消息爆炸，太粗退化为单线程瓶颈。实践：玩家一人一个，场景一个，全局服务一个。</GlossaryItem>
+</Glossary>

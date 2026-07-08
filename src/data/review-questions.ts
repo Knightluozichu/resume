@@ -1305,6 +1305,16 @@ import { gncLatencyCompensationQuestions } from "./review/gnc-latency-compensati
 import { gncEncryptionQuestions } from "./review/gnc-encryption";
 import { gncAntiCheatQuestions } from "./review/gnc-anti-cheat";
 import { gncFinalReviewQuestions } from "./review/gnc-final-review";
+import { gsaLearningMapQuestions } from "./review/gsa-learning-map";
+import { gsaServerTopologyQuestions } from "./review/gsa-server-topology";
+import { gsaActorModelQuestions } from "./review/gsa-actor-model";
+import { gsaCoroutineModelQuestions } from "./review/gsa-coroutine-model";
+import { gsaMemoryPoolQuestions } from "./review/gsa-memory-pool";
+import { gsaDbShardingQuestions } from "./review/gsa-db-sharding";
+import { gsaRedisClusterQuestions } from "./review/gsa-redis-cluster";
+import { gsaCiCdQuestions } from "./review/gsa-ci-cd";
+import { gsaCapacityPlanningQuestions } from "./review/gsa-capacity-planning";
+import { gsaFinalReviewQuestions } from "./review/gsa-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2641,6 +2651,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gncEncryptionQuestions,
   ...gncAntiCheatQuestions,
   ...gncFinalReviewQuestions,
+  ...gsaLearningMapQuestions,
+  ...gsaServerTopologyQuestions,
+  ...gsaActorModelQuestions,
+  ...gsaCoroutineModelQuestions,
+  ...gsaMemoryPoolQuestions,
+  ...gsaDbShardingQuestions,
+  ...gsaRedisClusterQuestions,
+  ...gsaCiCdQuestions,
+  ...gsaCapacityPlanningQuestions,
+  ...gsaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

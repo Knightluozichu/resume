@@ -1,0 +1,81 @@
+---
+title: "协程模型与异步编程"
+type: A
+section: "网络游戏与服务器"
+order: 3
+description: "理解协程如何用同步写法实现异步非阻塞，掌握有栈协程与无栈协程的取舍"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GsaCoroutineModelDiagram } from "@/components/mdx/game-server-architecture/diagrams/gsa-coroutine-model";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解协程相对线程的优势：用户态调度、零切换开销
+- 区分有栈协程（goroutine/fiber）与无栈协程（C++20/JS async）的本质差异
+- 掌握协程化 I/O 编程模型：await 挂起、事件循环唤醒
+- 能够把一个同步阻塞的 DB 调用改造为协程异步
+</Objectives>
+
+## 直觉引入
+
+想象你在厨房做菜。传统多线程模型是「每道菜雇一个厨师」——厨师 A 炖汤时干等着，厨师 B 炒菜时也干等着，人力浪费严重。协程模型是「一个厨师做所有菜，但会合理切换」——汤下锅炖着（I/O 提交）的 30 分钟里，厨师不傻等，而是去切菜、炒另一道菜；汤炖好（I/O 完成）时厨房定时器一响，厨师再回来处理汤。厨师没有「多招人」（开线程），却同时推进了多道菜。协程就是这种「单线程内主动让出与恢复」的能力——I/O 等待时不阻塞线程，而是挂起当前任务去执行别的任务，等 I/O 完成再恢复。
+
+<GsaCoroutineModelDiagram />
+
+## 协程 vs 线程
+
+<Term def="协程是用户态的轻量级并发单元，由运行时而非操作系统调度，挂起时不涉及内核态切换，可在单线程内并发处理大量 I/O 任务。">协程</Term>相对线程的核心优势是**轻量**。一个线程栈默认 1-8MB，开 1 万个线程就吃掉 10GB 内存；一个协程栈只需几 KB（有栈）甚至零开销（无栈），单机轻松撑 10 万协程。更关键的是**切换成本**：线程切换要陷入内核、保存寄存器、TLB 失效，约 1-10 微秒；协程切换在用户态完成，约 100 纳秒。对于 I/O 密集的游戏服务器，协程能用更少的资源承载更多并发连接。
+
+```cpp
+// 同步阻塞写法：一个 DB 查询阻塞整个线程
+Player ProfileSync(int uid) {
+    auto row = db.Query("SELECT ... WHERE uid=" + uid);  // 阻塞 5ms，线程干等
+    return Parse(row);
+}
+// 1 万玩家同时登录 → 需要 1 万线程，每线程 8MB → 80GB 内存，不可行
+
+// 协程异步写法：DB 等待时让出执行权，单线程扛万级并发
+co_await<Player> ProfileCoroutine(int uid) {
+    auto row = co_await db.QueryAsync("SELECT ... WHERE uid=" + uid);
+    // ↑ 提交查询后挂起，事件循环去跑别的协程；查询完成时唤醒本协程
+    co_return Parse(row);
+}
+// 1 万玩家同时登录 → 1 万协程跑在 N 个线程（N = CPU 核数），内存几十 MB
+```
+
+## 有栈 vs 无栈
+
+<Term def="有栈协程每个协程拥有独立栈内存，可在任意函数层级挂起；无栈协程由编译器将函数改写为状态机，无需独立栈，但只能在被声明为协程的函数内挂起。">两类协程</Term>有本质差异。**有栈协程**（Go goroutine、Lua coroutine、C++ boost.fiber）每个协程有独立栈，可在任意嵌套函数深处挂起——写法接近同步，但每个协程固定占几 KB 栈。**无栈协程**（C++20 co_await、JS async、Python async/await）由编译器把协程函数改写为状态机，挂起点必须在协程函数体内（不能在被调用的普通函数里挂起），但栈开销几乎为零。
+
+游戏服务器的选择：**Go 体系**用 goroutine（有栈）天然异步，写起来最舒服；**C++ 体系**用 C++20 无栈协程性能最佳，但要小心「协程传染」（一旦某层 async，上层全得 async）。实践中常混合：网络 I/O 用协程，CPU 密集计算用线程池，避免协程被长计算卡住事件循环。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：用了协程就不用管线程安全了。** 协程只是「让出/恢复」的调度单元，它跑在事件循环线程上。如果多个协程共享同一份可变状态（如全局排行榜），且某个协程在 await 之前读了、await 之后写——另一个协程可能在这个间隙插入并改了状态，照样产生竞态。协程解决的「线程安全」仅限于「同一协程内的代码不会被并发打断」；跨协程共享状态仍需锁或 Actor 隔离。记住：协程消除了抢占式中断，但没消除协作式并发下的逻辑竞态。
+</Callout>
+
+<Exercises>
+**问题 1**：协程相对线程的两大核心优势是什么？为什么协程能撑住更高并发？
+
+<Answer>
+两大优势：①轻量——线程栈 1-8MB，协程栈几 KB（有栈）或零开销（无栈），同样内存能开百倍以上的并发单元；②切换快——线程切换陷内核、保存寄存器、TLB 失效，约 1-10 微秒；协程切换纯用户态，约 100 纳秒。能撑高并发的根本原因是「I/O 密集型任务大部分时间在等」，协程让等待时不占用线程——单线程内事件循环驱动成千上万协程，I/O 完成就唤醒对应协程继续跑。1 万个并发 DB 查询只需 CPU 核数个线程，而非 1 万线程。
+</Answer>
+
+**问题 2**：有栈协程和无栈协程的核心区别是什么？各举一个实现例子。
+
+<Answer>
+核心区别在「能否在任意函数层级挂起」和「栈开销」。有栈协程（Go goroutine、Lua coroutine、boost.fiber）每个协程有独立栈内存，可在任意嵌套调用深处挂起，写法接近同步代码；代价是每个协程固定占几 KB 栈，10 万协程约几百 MB。无栈协程（C++20 co_await、JS async/await、Python asyncio）由编译器把协程函数改写为状态机，挂起点只能在被声明为协程的函数体内（普通子函数不能挂起），栈开销近乎为零；代价是「协程传染」——一旦某层异步，调用链上层全得改成 async。选型：Go 生态选有栈最省心；C++ 极致性能选无栈。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="协程">用户态轻量并发单元，由运行时调度而非操作系统。挂起时不陷内核，单线程内可并发处理大量 I/O。</GlossaryItem>
+<GlossaryItem term="有栈协程">每个协程拥有独立栈，可在任意嵌套函数层级挂起。代表：Go goroutine、Lua coroutine、boost.fiber。栈开销几 KB。</GlossaryItem>
+<GlossaryItem term="无栈协程">编译器将协程函数改写为状态机，无需独立栈，但只能在被声明为协程的函数内挂起。代表：C++20 co_await、JS async/await。栈开销近零。</GlossaryItem>
+<GlossaryItem term="协程传染">无栈协程的特性：一旦某层函数 async，其调用链上层全得改成 async。导致异步从底层 I/O 一路蔓延到业务入口。</GlossaryItem>
+</Glossary>

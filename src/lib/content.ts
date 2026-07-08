@@ -178,6 +178,7 @@ export const BOOK_ORDER = [
   "unity-cpp-network-game",
   "multiplayer-game-architecture",
   "game-network-core-tech",
+  "game-server-architecture",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -296,6 +297,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unity-cpp-network-game": "Unity 与 C++ 网络游戏开发实战",
   "multiplayer-game-architecture": "多人在线游戏架构与开发实战",
   "game-network-core-tech": "网络游戏核心技术与实战",
+  "game-server-architecture": "游戏服务器架构与优化",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

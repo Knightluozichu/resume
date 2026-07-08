@@ -1,0 +1,84 @@
+---
+title: "全书学习地图"
+type: A
+section: "网络游戏与服务器"
+order: 0
+description: "俯瞰游戏服务器架构与优化十大主题——从拓扑设计到容量压测的完整进阶路径"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GsaLearningMapDiagram } from "@/components/mdx/game-server-architecture/diagrams/gsa-learning-map";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解「架构层 → 性能层 → 数据层 → 运维层 → 总复习」四阶段递进结构
+- 建立游戏服务器整体认知：每章解决什么问题、为何这样设计
+- 明确十个章节之间的依赖关系与学习顺序
+- 掌握用「一次登录到战斗结算」的完整服务端旅程串联全书知识点的方法
+</Objectives>
+
+## 直觉引入
+
+把游戏服务器想象成一座大型游乐场。你先要规划园区道路——游客从哪个门进来（网关）、怎么分流到不同项目（逻辑服务器）、最后在哪里存包（数据库）；然后让每个项目运转得快——排队不堵塞（协程）、设备不空转（内存池）；接着管理游乐场的账本——人多时分多个售票窗口（分库分表）、热门项目设快速通道（Redis 缓存）；最后保证游乐场不倒闭——新设备能平滑上线（灰度发布）、节假日扛得住客流（容量压测）。本书回答的就是这些「从架构到运维」的游戏服务端工程问题。
+
+<GsaLearningMapDiagram />
+
+## 四阶段递进
+
+<Term def="游戏服务器系统是以网关→逻辑→DB 三层拓扑为骨架、通过 Actor 与协程模型支撑高并发、用分库分表与缓存承接海量数据、靠灰度发布与压测保障线上稳定的分层架构。">游戏服务器系统</Term>的开发可以拆成四个递进阶段。**架构层**包括服务器拓扑和 Actor 模型——它们解决「服务怎么分层组织」和「并发怎么消息驱动」，是所有上层逻辑的骨架。**性能层**包括协程模型和内存池——它们决定「异步怎么不阻塞」和「对象怎么不反复分配」。**数据层**包括分库分表和 Redis 集群——它们让系统「存得下」和「读得快」。**运维层**包括持续集成与容量压测——它们保证「发得稳」和「扛得住」。**总复习**串联全部知识点。
+
+```cpp
+// 游戏服务器的核心脉络：一次登录到战斗结算的完整旅程
+void OnPlayerLogin(const LoginRequest& req) {
+    // 1. 架构层：网关鉴权 → 路由到逻辑服
+    auto session = gateway.Auth(req);        // 网关层（第 2 章）
+    auto logic = router.RouteTo(session.uid); // 三层拓扑路由（第 2 章）
+
+    // Actor 模型：每个玩家一个 Actor，消息驱动（第 3 章）
+    auto& actor = actorSystem.Get(session.uid);
+    actor.Tell(LoginMessage{session});
+
+    // 2. 性能层：协程化异步加载，不阻塞线程
+    auto profile = co_await db.LoadProfile(session.uid); // 协程（第 4 章）
+
+    // 内存池：复用战斗对象，避免频繁 GC（第 5 章）
+    auto* battle = pool.Acquire<BattleScene>();
+
+    // 3. 数据层：分库分表 + Redis 缓存
+    auto shard = sharding.Route(session.uid);   // 分库分表（第 6 章）
+    auto cached = redis.GetOrSet("player:" + uid, profile); // 缓存（第 7 章）
+
+    // 4. 运维层：灰度发布 + 压测保障
+    deploy.CanaryRollout("battle_v2", 0.05);    // 灰度（第 8 章）
+    loadtest.AssertQPS("login", 50000);          // 压测（第 9 章）
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：先写逻辑，架构以后再说。** 单体服务器在demo阶段跑得飞快，但当玩家数从 100 涨到 10000 时，所有问题会同时爆发：网络线程阻塞、数据库连接耗尽、内存碎片导致卡顿、发版必须停服。架构不是「锦上添花」，而是「未雨绸缪」——网关层让你能横向扩容，Actor 模型让你能并发处理，分库分表让你能存更多数据。等到线上崩了再改架构，代价是设计期的十倍。这就是为什么大型游戏的服务端架构在第一行代码之前就要定下来。
+</Callout>
+
+<Exercises>
+**问题 1**：全书四阶段是什么？为什么是这个顺序？
+
+<Answer>
+架构层（服务器拓扑/Actor 模型）→ 性能层（协程/内存池）→ 数据层（分库分表/Redis）→ 运维层（CI-CD/容量压测）→ 总复习。顺序由依赖关系决定：上层依赖下层。没有拓扑分层就没有可扩展的骨架；没有并发模型就扛不住连接数；没有数据分片就存不下海量玩家；没有运维保障就上不了线。先有「能扩展」，再有「能并发」，然后能「存得下」，最后能「稳上线」。
+</Answer>
+
+**问题 2**：为什么游戏服务器普遍采用三层架构（网关→逻辑→DB）而非单体？
+
+<Answer>
+单体服务器把网络、逻辑、数据耦合在一个进程里，致命缺陷是「一损俱损」——任何一处卡顿（如 DB 慢查询）会阻塞整个进程的所有连接。三层架构解耦了关注点：网关专注网络 I/O（长连接维护、流量削峰），逻辑服专注业务计算（可按场景分服横向扩容），DB 专注持久化。网关可独立扩容应对连接数，逻辑服可按场景分区部署，DB 可读写分离。故障隔离也更好——逻辑服挂了网关仍能踢人重连，DB 慢了逻辑服可降级读缓存。这种分层是「分布式可扩展」的前提。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="游戏服务器系统">以网关→逻辑→DB 三层拓扑为骨架、通过 Actor 与协程模型支撑高并发、用分库分表与缓存承接海量数据、靠灰度发布与压测保障线上稳定的分层架构。所有线上服务建立在这四层之上。</GlossaryItem>
+<GlossaryItem term="三层拓扑">网关层（负责连接管理、鉴权、流量调度）→ 逻辑层（按场景/功能分服，处理业务计算）→ 数据层（DB + 缓存，负责持久化与高速读取）。三层之间通过网络通信解耦，各自可独立扩容。</GlossaryItem>
+<GlossaryItem term="服务端旅程">一次玩家操作从客户端到达网关到最终落库的完整路径：网关鉴权 → 路由到逻辑服 → Actor 消息驱动 → 协程异步加载 → 内存池复用对象 → 分库分表写入 → Redis 缓存更新 → 灰度发布保障 → 压测验证。全书以这条主线串联各章节。</GlossaryItem>
+</Glossary>

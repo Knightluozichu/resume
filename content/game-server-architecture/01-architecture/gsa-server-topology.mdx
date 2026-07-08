@@ -1,0 +1,90 @@
+---
+title: "服务器拓扑：网关→逻辑→DB 三层架构"
+type: A
+section: "网络游戏与服务器"
+order: 1
+description: "掌握网关层、逻辑层、数据层的职责划分与横向扩容策略，理解为什么分层是可扩展的前提"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GsaServerTopologyDiagram } from "@/components/mdx/game-server-architecture/diagrams/gsa-server-topology";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解网关层、逻辑层、数据层各自的职责边界
+- 掌握网关层的核心能力：长连接管理、鉴权、流量调度、负载均衡
+- 理解逻辑服按场景分服 vs 按功能微服务的取舍
+- 能够为一个万人在线游戏设计基础的三层拓扑
+</Objectives>
+
+## 直觉引入
+
+想象一家大型医院。挂号处是「网关层」——所有病人先进这一个门，护士检查你的就诊卡（鉴权），然后告诉你去几楼哪个科室（路由）。各科室是「逻辑层」——内科、外科、放射科各干各的，互不阻塞，忙的科室可以多开几个诊室（横向扩容）。病案室和药房是「数据层」——所有病历集中存档（DB），常用药放前台柜台（缓存）。如果所有事情都挤在挂号处做，挂号处会立刻瘫痪。医院之所以能同时服务上万人，靠的就是这种「分流 + 专科 + 后库」的三段式结构。游戏服务器同理。
+
+<GsaServerTopologyDiagram />
+
+## 三层职责
+
+<Term def="网关层是服务器集群的最前端，负责长连接维护、鉴权、流量调度与负载均衡，本身不处理业务逻辑。">网关层</Term>是流量入口。它维护客户端的长连接（TCP/WebSocket），做鉴权（token 校验）、限流（防 DDoS）、负载均衡（把请求分发到空闲的逻辑服）。网关层必须是无状态的——这样才能随时加机器扛更多连接。**关键指标**是连接数和转发延迟，单组网关扛 5-10 万连接是常见目标。
+
+<Term def="逻辑层是业务计算核心，按场景（登录/战斗/聊天/匹配）或按功能拆分成多个进程，互相通过 RPC 或消息总线通信。">逻辑层</Term>处理真正的游戏逻辑。拆法有两种：**按场景分服**（战斗服、聊天服、匹配服各干各的，进程隔离，故障不扩散）和**按功能微服务**（背包服务、任务服务、社交服务细粒度拆分，灵活但运维复杂）。中小项目通常用前者，大型 MMORPG 会混用。逻辑层与网关层之间、逻辑层各服之间通过内网 RPC（gRPC/自研协议）通信。
+
+<Term def="数据层由持久化存储（MySQL/分库分表）与缓存（Redis）组成，逻辑层只与缓存交互，缓存未命中再回源 DB。">数据层</Term>负责存取。**DB 层**做持久化（玩家档、日志、交易流水），单库扛不住时分库分表（第 6 章）。**缓存层**（Redis）放热数据和会话状态，挡在 DB 前面降低压力。逻辑层绝不直连 DB——所有读走缓存，写走消息队列异步落库。这种「缓存优先、DB 兜底」是高并发数据层的标准形态。
+
+```cpp
+// 三层拓扑下一次请求的完整流转
+// 1. 客户端 → 网关层
+void Gateway::OnPacket(const ConnId& conn, const Packet& pkt) {
+    auto session = sessions_.Get(conn);       // 长连接映射
+    if (!session || !session->authed) {
+        if (pkt.type == PKT_LOGIN) HandleLogin(conn, pkt);
+        else Kick(conn);                        // 未鉴权直接踢
+        return;
+    }
+    // 2. 网关 → 逻辑层（按场景路由）
+    auto target = router_.Pick(pkt.sceneType, session->uid);
+    // 负载均衡：按玩家 hash 固定到某台逻辑服（保证同玩家同服）
+    rpc_.Call(target, pkt);
+}
+
+// 3. 逻辑层处理业务
+void BattleServer::OnFire(const FireReq& req) {
+    auto& player = actors_.Get(req.uid);       // Actor 模型（第 3 章）
+    auto result = player.TryFire(req);
+    // 4. 逻辑层 → 数据层（写缓存，异步落库）
+    cache_->Set("battle:" + uid, result);      // Redis（第 7 章）
+    mq_.Publish("db_write", result);           // 异步写 DB（第 6 章）
+    // 5. 结果回网关 → 客户端
+    gateway_.SendBack(req.conn, result);
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：网关层直接查数据库做鉴权。** 鉴权看起来简单（查 token 是否有效），但每次请求都查库会让网关层被 DB 拖死——网关的本职是转发，不是存储。正确做法是把 session/token 放 Redis，网关层只查缓存；token 签发时带过期时间，JWT 风格的无状态校验则完全本地验证。网关层的铁律是「绝不做任何阻塞 I/O，绝不持有状态」，一旦它开始等 DB，整个集群的连接吞吐都会崩塌。
+</Callout>
+
+<Exercises>
+**问题 1**：网关层、逻辑层、数据层各自的核心职责是什么？为什么不能合并？
+
+<Answer>
+网关层负责连接管理、鉴权、负载均衡（无状态、可水平扩容、专注网络 I/O）；逻辑层负责业务计算（有状态、按场景分服、可按需扩容）；数据层负责持久化与缓存（强一致与高吞吐的权衡）。不能合并的原因是「关注点冲突」：网关追求低延迟转发，逻辑追求正确计算，数据追求可靠存储。合并后一处慢全盘崩——DB 慢查询会卡住逻辑线程，逻辑卡住会撑爆连接队列。分层让每层独立优化、独立扩容、独立故障隔离。
+</Answer>
+
+**问题 2**：网关层为什么必须无状态？有状态会带来什么后果？
+
+<Answer>
+网关层无状态才能随时加机器分担连接——任何一台网关挂了，客户端重连到另一台即可，session 从 Redis 取回。有状态的网关会导致「连接粘性」：某玩家只能由特定网关处理，该网关挂了玩家必掉线，无法平滑迁移。且扩容时新机器拿不到旧 session，旧连接无法迁移。无状态让网关成为「可替换的转发管道」，这是横向扩容的前提。session 状态交给 Redis 集群统一存储，网关只做转发。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="网关层">服务器集群最前端，负责长连接维护、鉴权、限流、负载均衡。必须无状态，本身不处理业务逻辑。单组可扛 5-10 万连接。</GlossaryItem>
+<GlossaryItem term="逻辑层">业务计算核心，按场景分服（战斗/聊天/匹配）或按功能微服务（背包/任务/社交）。与网关、数据层通过内网 RPC 通信。</GlossaryItem>
+<GlossaryItem term="数据层">持久化（MySQL 分库分表）+ 缓存（Redis）双层。逻辑层只与缓存交互，写操作经消息队列异步落库，避免 DB 成为瓶颈。</GlossaryItem>
+<GlossaryItem term="连接粘性">有状态网关的致命缺陷——某玩家只能由特定网关处理，该网关挂了玩家必掉线且无法迁移。无状态设计可消除此问题。</GlossaryItem>
+</Glossary>

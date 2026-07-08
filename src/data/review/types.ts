@@ -1428,7 +1428,17 @@ export type ReviewChapterSlug =
   | "gnc-latency-compensation"
   | "gnc-encryption"
   | "gnc-anti-cheat"
-  | "gnc-final-review";
+  | "gnc-final-review"
+  | "gsa-learning-map"
+  | "gsa-server-topology"
+  | "gsa-actor-model"
+  | "gsa-coroutine-model"
+  | "gsa-memory-pool"
+  | "gsa-db-sharding"
+  | "gsa-redis-cluster"
+  | "gsa-ci-cd"
+  | "gsa-capacity-planning"
+  | "gsa-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -2861,6 +2871,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gnc-encryption": "加密与安全通信",
   "gnc-anti-cheat": "反作弊系统设计",
   "gnc-final-review": "全书总复习",
+  "gsa-learning-map": "全书学习地图",
+  "gsa-server-topology": "服务器拓扑：网关→逻辑→DB 三层架构",
+  "gsa-actor-model": "Actor 模型与消息驱动",
+  "gsa-coroutine-model": "协程模型与异步编程",
+  "gsa-memory-pool": "内存池与对象池优化",
+  "gsa-db-sharding": "数据库分库分表",
+  "gsa-redis-cluster": "Redis 集群与数据一致性",
+  "gsa-ci-cd": "持续集成与灰度发布",
+  "gsa-capacity-planning": "容量规划与压测",
+  "gsa-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

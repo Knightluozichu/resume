@@ -1,0 +1,95 @@
+---
+title: "数据库分库分表"
+type: A
+section: "网络游戏与服务器"
+order: 5
+description: "理解分库分表如何突破单库瓶颈，掌握哈希分片、范围分片与一致性哈希的取舍"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { GsaDbShardingDiagram } from "@/components/mdx/game-server-architecture/diagrams/gsa-db-sharding";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解单库瓶颈：连接数、写入吞吐、单表数据量上限
+- 掌握分片策略：哈希分片、范围分片、一致性哈希
+- 理解分片键选择对跨分片查询的决定性影响
+- 能够为玩家数据、交易流水、排行榜分别选择合适分片策略
+</Objectives>
+
+## 直觉引入
+
+想象一个图书馆只有一个书架（单库单表）。书少时没问题，书多了之后：①找书慢（要在巨多书里翻）；②放不下（书架满了）；③大家都挤这一个书架（锁竞争）。解决办法是把书分到多个书架（分库分表）。怎么分？按书名首字母分（哈希分片）——找书快但同类的散落各处；按出版日期分（范围分片）——近期书集中但热门时段某书架爆满；按编号取模分（一致性哈希）——加减书架时搬迁少。游戏数据同理：单库扛不住百万玩家时，必须按某种规则把数据拆到多个库。
+
+<GsaDbShardingDiagram />
+
+## 分片策略
+
+<Term def="分库分表是把原本存在单库单表的数据按分片键拆分到多个库多个表，以突破单库连接数、写入吞吐与单表数据量瓶颈的横向扩展手段。">分库分表</Term>的核心是**分片策略**——用什么规则决定一条数据去哪个库。**哈希分片**：对分片键取模（如 `uid % 4`），数据均匀分布，但加减库要全量迁移。**范围分片**：按分片键区间分（如 uid 0-100万在库0，100万-200万在库1），加减库只动边界，但易热点（新区玩家全挤一个库）。**一致性哈希**：分片键哈希到环上，库落在环上位置，加减库只影响相邻区间——游戏服务器常用此方案，扩容时迁移量最小。
+
+```cpp
+// 哈希分片：uid 决定去哪个库
+int ShardByHash(int uid, int shardCount) {
+    return uid % shardCount;   // 简单但加减库要全量 rehash
+}
+
+// 一致性哈希：加减库只迁移相邻区间
+int ShardByConsistentHash(int uid) {
+    uint32_t h = Hash(uid);
+    // 在哈希环上顺时针找到第一个库节点
+    auto it = ring_.lower_bound(h);
+    return it == ring_.end() ? ring_.begin()->second : it->second;
+}
+
+// 分片路由：业务层只调一次，分库分表对上透明
+Player LoadPlayer(int uid) {
+    int shard = ShardByConsistentHash(uid);
+    auto& db = shards_[shard];
+    return db.Query("SELECT * FROM player WHERE uid=?", uid);
+}
+
+// 跨分片查询的痛点：排行榜要聚合所有分片
+vector<RankItem> GetTop100() {
+    vector<RankItem> all;
+    for (auto& db : shards_) {           // 必须查全部分片
+        auto part = db.Query("SELECT ... ORDER BY score LIMIT 100");
+        all.insert(all.end(), part.begin(), part.end());
+    }
+    sort(all); return top100(all);       // 内存归并，昂贵
+}
+// 解法：排行榜不放关系库，放 Redis ZSet（第 7 章）
+```
+
+## 分片键选择
+
+分片键的选择决定系统能力。**好的分片键**能让大部分查询只命中单分片（单分片查询快，无需归并）。玩家数据用 `uid` 分片——查询「我的背包」天然只查一个库。但「查公会所有成员」就要扫所有库（因为成员 uid 散落各分片）。解法是**双写**：玩家表按 uid 分片，公会成员表按 guild_id 分片——同一公会成员落同一库，查公会只需单分片。**反模式**是按自增 id 分片（新增数据全落最后一个库，热点）或按时间分片（近期数据热点，历史库闲置）。
+
+## 常见误区
+
+<Callout type="trap">
+**误区：分库分表能解决所有性能问题。** 分库分表解决的是「单库容量与吞吐瓶颈」，但它引入了新问题：①跨分片 JOIN 失效（玩家表和公会表不在一个库，无法 JOIN）；②分布式事务复杂（跨库转账要两阶段提交，性能骤降）；③全局唯一 id 难生成（自增 id 在多库会冲突，要用雪花算法）。如果你的瓶颈是「单条慢查询」或「锁等待」，分库分表反而让问题更难查（要在多个库追日志）。先优化索引、SQL、缓存，确认单库确实扛不住再分片。分片是最后的扩容手段，不是第一优化项。
+</Callout>
+
+<Exercises>
+**问题 1**：哈希分片、范围分片、一致性哈希各自的特点与适用场景？
+
+<Answer>
+哈希分片：对分片键取模，数据均匀分布，查询可精确定位单分片；缺点是加减库要全量 rehash 迁移。适合分片数固定的场景，如玩家数据按 uid 取模。范围分片：按分片键区间划分，加减库只动边界；缺点是易热点（新注册玩家全挤最新区间）。适合时间序列数据如日志、交易流水。一致性哈希：分片键和库节点都哈希到环上，顺时针找最近库；加减库只影响相邻区间，迁移量最小；缺点是数据可能不均匀（需加虚拟节点）。游戏服务器扩容频繁，多用一致性哈希。
+</Answer>
+
+**问题 2**：为什么分片键选择至关重要？举一个好分片键和坏分片键的例子。
+
+<Answer>
+分片键决定数据分布和查询模式。好分片键能让大部分业务查询只命中单分片，避免跨分片归并。好的例子：玩家数据用 uid 分片——查「我的背包」「我的任务」天然单分片命中。坏的例子：用自增 id 分片——新增玩家全落最后一个库（热点），且查询「某公会成员」要扫所有库。更坏的例子：用时间分片——近期数据热点、历史库闲置，且查「某玩家近 30 天」可能跨多个时间分片。实践中常双写：玩家表按 uid 分片（查个人快），公会表按 guild_id 分片（查公会单分片），用冗余存储换查询效率。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分库分表">把单库单表数据按分片键拆到多库多表，突破单库连接数、写入吞吐、单表数据量瓶颈。横向扩展的核心手段。</GlossaryItem>
+<GlossaryItem term="分片键">决定数据去哪个分片的字段。选择决定查询是否单分片命中。好分片键让 90%+ 查询单分片，坏分片键导致跨分片归并。</GlossaryItem>
+<GlossaryItem term="一致性哈希">分片键与节点都哈希到环上，顺时针找最近节点。加减节点只影响相邻区间，迁移量最小。游戏服务器扩容首选。</GlossaryItem>
+<GlossaryItem term="跨分片查询">需要扫描多个分片并归并结果的查询。昂贵且无法用索引下推，是分片后最大的痛点，常靠冗余表或 Redis 缓解。</GlossaryItem>
+</Glossary>
