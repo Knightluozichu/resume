@@ -1,0 +1,136 @@
+---
+title: "Inspector Protocol 与 --inspect"
+type: C
+section: "前端与Web"
+order: 1
+description: "掌握 Node.js Inspector Protocol 的通信模型——从 --inspect 启动参数到 WebSocket 双向通道的完整调试链路"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdbgInspectorProtocolDiagram } from "@/components/mdx/nodejs-debugging-guide/diagrams/ndbg-inspector-protocol";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Inspector Protocol 的三层架构：HTTP 发现 → WebSocket 通道 → V8 Inspector 域
+- 掌握 `--inspect`、`--inspect-brk`、`--inspect=0.0.0.0:9229` 三种启动模式的使用场景
+- 能用 `chrome://inspect` 或 `ws://` 直连建立远程调试会话
+- 理解 Inspector 域（Runtime/Debugger/Profiler/HeapProfiler）的职责划分
+</Objectives>
+
+## 直觉引入
+
+Inspector Protocol 就像医院里的「内窥镜系统」。医生（调试器）不能直接用手伸进病人体内（Node.js 进程），需要一根管子（WebSocket 通道）建立连接，管子头上装着摄像头和手术钳（Inspector 域的各类命令）。启动 `--inspect` 相当于在病人身上开了一个口子，等待医生接入；`--inspect-brk` 则是在开口的同时先暂停一切生命活动，等医生到位才开始。HTTP 发现服务相当于前台的导诊单——告诉医生有哪些病人可以接诊、在哪个房间。
+
+<NdbgInspectorProtocolDiagram />
+
+## 三层通信架构
+
+<Term def="Inspector Protocol 是 Node.js 基于 V8 Inspector API 暴露的调试协议，通过 HTTP 端点暴露 WebSocket 调试 URL，再经 WebSocket 双向通道传递 JSON-RPC 消息，消息按域（Domain）组织——Runtime 管运行时求值、Debugger 管断点控制、Profiler 管 CPU 采样、HeapProfiler 管堆快照。">Inspector Protocol</Term>的通信分三层。第一层是 **HTTP 发现**：Node.js 启动 `--inspect` 后在指定端口监听 HTTP，访问 `http://localhost:9229/json` 返回一个 JSON 数组，包含 WebSocket 调试 URL、页面标题、favicon 等元信息。第二层是 **WebSocket 通道**：调试器拿到 `ws://localhost:9229/uuid` 后建立 WebSocket 连接，后续所有调试命令和事件都走这条双向通道。第三层是 **V8 Inspector 域**：消息体是 JSON-RPC 格式，按域划分能力。
+
+```bash
+# 三种启动模式
+node --inspect server.js              # 启动后继续执行，等待调试器随时接入
+node --inspect-brk server.js          # 启动后立即在首行断点暂停，等调试器接入才继续
+node --inspect=0.0.0.0:9229 server.js # 绑定到所有网卡（远程调试，需配合防火墙）
+
+# HTTP 发现：列出可调试的 Node 进程
+curl http://localhost:9229/json
+# 返回:
+# [{
+#   "id": "uuid-...",
+#   "type": "node",
+#   "title": "server.js",
+#   "webSocketDebuggerUrl": "ws://localhost:9229/uuid-..."
+# }]
+
+# 用 Chrome DevTools 接入
+# 方式一：chrome://inspect → Open dedicated DevTools for Node
+# 方式二：在 DevTools 中直连 ws://localhost:9229/uuid-...
+```
+
+```javascript
+// 用代码直接对接 Inspector Protocol（不经过 DevTools）
+const inspector = require("node:inspector");
+const session = new inspector.Session();
+
+session.connect();
+
+// 发送 Debugger 域命令：设置断点
+session.post("Debugger.setBreakpointByUrl", {
+  lineNumber: 10,
+  url: "file:///app/server.js",
+}, (err, result) => {
+  if (err) return console.error(err);
+  console.log("断点 ID:", result.breakpointId);
+});
+
+// 监听 Debugger 域事件：断点命中
+session.on("Debugger.paused", ({ params }) => {
+  const { callFrames, reason } = params;
+  console.log("暂停原因:", reason);
+  console.log("调用栈:", callFrames.map(f => f.functionName));
+  // 检查变量后继续执行
+  session.post("Debugger.resume");
+});
+```
+
+## Inspector 域职责划分
+
+Inspector Protocol 把调试能力按域组织，每个域负责一类操作。理解域的划分就知道调试器能做什么。
+
+```javascript
+// Runtime 域：运行时求值与对象检查
+session.post("Runtime.evaluate", { expression: "process.memoryUsage()" });
+session.post("Runtime.getProperties", { objectId: "..." });
+
+// Debugger 域：断点与执行控制
+session.post("Debugger.enable");                    // 开启调试器（必须先 enable）
+session.post("Debugger.setBreakpoint", { ... });    // 设置断点
+session.post("Debugger.pause");                     // 暂停执行
+session.post("Debugger.stepOver");                  // 单步跳过
+session.post("Debugger.stepInto");                  // 单步进入
+session.post("Debugger.resume");                    // 继续执行
+
+// Profiler 域：CPU 采样
+session.post("Profiler.start");
+// ... 压测一段时间 ...
+session.post("Profiler.stop", (err, { profile }) => {
+  // profile.profile.nodes = 采样到的调用栈节点
+  // 写入 .cpuprofile 文件，可被 DevTools 加载
+  require("fs").writeFileSync("cpu.cpuprofile", JSON.stringify(profile));
+});
+
+// HeapProfiler 域：堆快照
+session.post("HeapProfiler.takeHeapSnapshot", null, (err) => {
+  // 快照数据通过 HeapProfiler.addHeapSnapshotChunk 事件流式返回
+});
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：`--inspect` 和 `--debug` 是一回事。** `--debug`（和 `--debug-brk`）是 Node.js v8 之前的旧版调试协议（V8 Debugging Protocol），基于 TCP 的 JSON 协议，已在 Node.js v8 开始废弃、v10 完全移除。`--inspect` 是替代者，基于 Chrome DevTools Protocol（CDP），与浏览器 DevTools 完全兼容。旧教程里写的 `node debug` 命令行调试器也已移除。如果你看到 `--debug` 的教程，那是过时的——全部换成 `--inspect`。
+</Callout>
+
+<Exercises>
+**问题 1**：`--inspect` 和 `--inspect-brk` 的区别是什么？各自适用于什么场景？
+
+<Answer>
+`--inspect` 启动 Node 后立即开始执行代码，调试器可以随时通过 WebSocket 接入——但如果代码在调试器接入前就执行完了（如短脚本），就来不及调试。`--inspect-brk` 启动后在用户代码首行立即暂停执行，等待调试器建立 WebSocket 连接并发送 `Debugger.resume` 后才继续——保证调试器一定能在代码执行前就位。适用场景：长时间运行的服务用 `--inspect`（随时接入即可）；启动阶段就需要调试的脚本用 `--inspect-brk`（如排查模块加载顺序、启动崩溃）。远程调试通常也用 `--inspect-brk` 确保连接就绪。
+</Answer>
+
+**问题 2**：Inspector Protocol 的三层通信架构是什么？为什么需要 HTTP 发现层？
+
+<Answer>
+三层架构：①HTTP 发现层——Node 在指定端口监听 HTTP，`GET /json` 返回可调试目标的元信息（WebSocket URL、标题、ID），`GET /json/version` 返回 V8/Node 版本；②WebSocket 通道层——调试器拿到 `ws://host:port/uuid` 后建立 WebSocket 双向连接，所有 JSON-RPC 消息走此通道；③V8 Inspector 域层——消息按域组织（Runtime/Debugger/Profiler/HeapProfiler），每个域有自己的命令和事件。需要 HTTP 发现层的原因：WebSocket 需要知道完整的 URL（含 UUID 路径），但 UUID 是运行时生成的，不能硬编码。HTTP 发现层让调试器先查询可用的目标及其 WebSocket URL，再建立连接。Chrome DevTools 的 `chrome://inspect` 就是自动轮询 HTTP 发现端点来列出可调试进程的。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Inspector Protocol">Node.js 基于 V8 Inspector API 暴露的调试协议，通过 HTTP 端点暴露 WebSocket 调试 URL，再经 WebSocket 双向通道传递 JSON-RPC 消息。与 Chrome DevTools Protocol 兼容，可用浏览器 DevTools 直接调试 Node.js。</GlossaryItem>
+<GlossaryItem term="--inspect-brk">启动参数，在用户代码首行立即暂停执行，等待调试器通过 WebSocket 接入并发送 resume 命令后才继续。适用于调试启动阶段代码或远程调试场景。与 --inspect 的区别在于是否在首行断点等待。</GlossaryItem>
+<GlossaryItem term="Inspector 域">Inspector Protocol 按功能划分的命令和事件命名空间。Runtime 域管运行时求值和对象检查，Debugger 域管断点和执行控制，Profiler 域管 CPU 采样，HeapProfiler 域管堆快照。使用前需先 enable 对应域。</GlossaryItem>
+</Glossary>

@@ -188,6 +188,7 @@ export const BOOK_ORDER = [
   "css-world",
   "css-secrets",
   "nodejs-definitive-guide",
+  "nodejs-debugging-guide",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -316,6 +317,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "css-world": "CSS世界",
   "css-secrets": "CSS揭秘",
   "nodejs-definitive-guide": "Node.js权威指南",
+  "nodejs-debugging-guide": "Node.js调试指南",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

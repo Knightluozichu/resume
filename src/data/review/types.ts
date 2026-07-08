@@ -1528,7 +1528,17 @@ export type ReviewChapterSlug =
   | "ndg-tcp-tls"
   | "ndg-cluster-worker"
   | "ndg-performance-debug"
-  | "ndg-final-review";
+  | "ndg-final-review"
+  | "ndbg-learning-map"
+  | "ndbg-inspector-protocol"
+  | "ndbg-devtools"
+  | "ndbg-memory-leaks"
+  | "ndbg-heap-snapshot"
+  | "ndbg-cpu-profiling"
+  | "ndbg-flame-graph"
+  | "ndbg-async-tracing"
+  | "ndbg-production-debug"
+  | "ndbg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3061,6 +3071,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ndg-cluster-worker": "集群与Worker Threads",
   "ndg-performance-debug": "性能分析与调试",
   "ndg-final-review": "全书总复习",
+  "ndbg-learning-map": "全书学习地图",
+  "ndbg-inspector-protocol": "Inspector Protocol与--inspect",
+  "ndbg-devtools": "DevTools调试Node.js",
+  "ndbg-memory-leaks": "内存泄漏排查",
+  "ndbg-heap-snapshot": "堆快照分析",
+  "ndbg-cpu-profiling": "CPU性能分析",
+  "ndbg-flame-graph": "火焰图解读",
+  "ndbg-async-tracing": "异步追踪",
+  "ndbg-production-debug": "生产环境调试",
+  "ndbg-final-review": "全书总复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1,0 +1,181 @@
+---
+title: "异步追踪"
+type: C
+section: "前端与Web"
+order: 7
+description: "用 AsyncHooks 和 trace 事件追踪 Node.js 异步调用链——asyncId 父子关系、AsyncLocalStorage、跨 tick 上下文传递"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdbgAsyncTracingDiagram } from "@/components/mdx/nodejs-debugging-guide/diagrams/ndbg-async-tracing";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 AsyncHooks 的核心概念：asyncId/triggerAsyncId/type 的父子关系模型
+- 掌握用 createHook 追踪异步资源生命周期的编程方法
+- 能用 AsyncLocalStorage 实现跨异步边界的请求级上下文传递
+- 理解 --trace-warnings 和 process.on('unhandledRejection') 的异步错误追踪
+</Objectives>
+
+## 直觉引入
+
+异步追踪就像在医院里追踪一个病人的「转科记录」。病人（请求）从急诊科（HTTP 回调）进来，被转到了检验科（fs.readFile），又转到放射科（DNS lookup），最后回到急诊科出报告（res.end）。每次转科都是一次异步操作的切换，但病历本上只记了最后一次科室——你不知道病人之前去过哪里。AsyncHooks 就是给每个病人发一个「电子手环」（asyncId），每次转科自动记录「谁转过来的」（triggerAsyncId），这样你就能还原完整的转科路径。AsyncLocalStorage 更进一步——手环上还挂着一个「信息卡」，不管病人转到哪个科，信息卡上的数据（如请求 ID）都跟着走。
+
+<NdbgAsyncTracingDiagram />
+
+## AsyncHooks 核心模型
+
+<Term def="AsyncHooks 是 Node.js 提供的异步资源追踪 API，每个异步操作（Promise/Timer/FS/HTTP）被分配一个唯一的 asyncId，并记录 triggerAsyncId（触发它的父异步资源 ID），形成异步调用树。通过 createHook 注册 init/before/after/destroy 回调，可以追踪异步资源的完整生命周期。">AsyncHooks</Term>解决的核心问题是「异步调用链断裂」——在同步代码中调用栈（Call Stack）天然维护了调用关系，但异步操作（Promise.then、setTimeout、fs.readFile 回调）会切断调用栈，回调的调用栈是全新的，看不到是谁触发了这次异步操作。
+
+```javascript
+const async_hooks = require("node:async_hooks");
+
+// 异步追踪：打印每个异步操作的父子关系
+const hook = async_hooks.createHook({
+  init(asyncId, type, triggerAsyncId, resource) {
+    // 异步资源创建时调用
+    console.log(`[init] id=${asyncId} type=${type} ` +
+      `trigger=${triggerAsyncId}`);
+  },
+  before(asyncId) {
+    // 异步回调即将执行
+    console.log(`[before] id=${asyncId}`);
+  },
+  after(asyncId) {
+    // 异步回调执行完毕
+    console.log(`[after] id=${asyncId}`);
+  },
+  destroy(asyncId) {
+    // 异步资源销毁
+    console.log(`[destroy] id=${asyncId}`);
+  },
+});
+hook.enable();
+
+// 示例输出（一次 HTTP 请求的异步追踪）:
+// [init] id=5 type=HTTPINCOMINGMESSAGE trigger=1
+// [init] id=7 type=TCPSERVERWRAP trigger=1
+// [before] id=5                          ← HTTP 回调开始
+// [init] id=9 type=FSReqCallback trigger=5  ← fs.readFile 被请求5触发
+// [after] id=5
+// [before] id=9                          ← fs 回调开始
+// [init] id=11 type=Promise trigger=9     ← Promise 被 fs 回调触发
+// [after] id=9
+// [destroy] id=9                         ← fs 资源销毁
+```
+
+## AsyncLocalStorage：跨异步上下文传递
+
+```javascript
+const { AsyncLocalStorage } = require("node:async_hooks");
+
+// 请求级上下文：替代传统的请求 ID 透传
+const als = new AsyncLocalStorage();
+
+// 中间件：在请求开始时设置上下文
+app.use((req, res, next) => {
+  const requestId = req.headers["x-request-id"] || crypto.randomUUID();
+  als.run({ requestId, startTime: Date.now() }, () => {
+    next(); // 后续所有异步操作都能通过 als.getStore() 访问上下文
+  });
+});
+
+// 在任意深层异步代码中获取上下文（无需参数透传）
+async function queryDatabase(sql) {
+  const store = als.getStore(); // { requestId, startTime }
+  logger.info({ requestId: store.requestId, sql }, "查询数据库");
+  // 即使经过了 Promise.then / setTimeout / fs 回调，
+  // als.getStore() 依然返回正确的请求上下文
+  return db.query(sql);
+}
+
+// 对比：传统方式需要手动透传 requestId（侵入式）
+async function queryDatabaseOld(sql, requestId) { // ← 必须传参
+  logger.info({ requestId, sql }, "查询数据库");
+  return db.query(sql);
+}
+// 如果调用链有 10 层，每层都要加 requestId 参数 → 侵入式
+
+// AsyncLocalStorage 的原理：
+// 1. als.run(store, callback) 在当前 asyncId 上绑定 store
+// 2. 后续异步操作继承 triggerAsyncId 的 store（类似原型链）
+// 3. als.getStore() 沿 asyncId → triggerAsyncId 链查找最近的 store
+```
+
+## 异步错误追踪
+
+```javascript
+// 问题：未捕获的 Promise rejection 很难定位来源
+// 错误栈只显示 rejection 发生的位置，不显示谁创建了这个 Promise
+
+// 方案一：--trace-warnings 追踪 warning 来源
+// node --trace-warnings server.js
+// 当出现 "UnhandledPromiseRejection" warning 时，打印完整创建栈
+
+// 方案二：监听 unhandledRejection 事件
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("未处理的 Promise Rejection:");
+  console.error("原因:", reason);
+  console.error("Promise:", promise);
+  // 注意：Node.js 15+ 默认在此事件后退出进程（--unhandled-rejections=throw）
+});
+
+// 方案三：用 AsyncHooks 追踪未完成 Promise 的来源
+const unresolvedPromises = new Map();
+
+async_hooks.createHook({
+  init(asyncId, type, triggerAsyncId) {
+    if (type === "PROMISE") {
+      // 记录 Promise 创建时的调用栈
+      unresolvedPromises.set(asyncId, {
+        stack: new Error().stack,
+        trigger: triggerAsyncId,
+        created: Date.now(),
+      });
+    }
+  },
+  destroy(asyncId) {
+    unresolvedPromises.delete(asyncId);
+  },
+}).enable();
+
+// 定时检查长时间未完成的 Promise
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, info] of unresolvedPromises) {
+    if (now - info.created > 5000) { // 超过 5 秒未完成
+      console.warn(`Promise ${id} 悬挂超过 5s`);
+      console.warn("创建栈:", info.stack);
+    }
+  }
+}, 5000);
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：AsyncHooks 没有性能开销，生产环境可以随意开启。** AsyncHooks 的 init 回调在每个异步资源创建时都会触发——Node.js 应用每秒可能创建数千个异步资源（每个 Promise、每个 Timer、每个 I/O 回调），hook 回调的执行开销会累积。实测全量 AsyncHooks（四个回调都注册）可能导致 5-15% 的性能下降。生产环境建议：①仅在排障时临时开启；②用 AsyncLocalStorage 时 Node.js 16+ 已做优化（开销约 1-3%），可长期开启；③避免在 init 回调中做重操作（如 JSON.stringify、网络请求）；④用 `if (process.env.DEBUG_ASYNC)` 守卫，按需开关。
+</Callout>
+
+<Exercises>
+**问题 1**：AsyncHooks 的 asyncId 和 triggerAsyncId 分别是什么？它们如何解决异步调用链断裂问题？
+
+<Answer>
+asyncId 是每个异步资源（Promise、Timer、FS 操作、HTTP 请求等）的唯一标识符，从 1 开始递增。triggerAsyncId 是创建当前异步资源的「父」异步资源的 asyncId——即「是谁触发了这个异步操作」。它们解决异步调用链断裂的原理：同步代码中调用栈天然维护调用关系（函数 A 调用 B，B 的栈帧在 A 之上），但异步操作切换时调用栈是全新的（Promise.then 的回调栈里看不到创建 Promise 的代码）。AsyncHooks 通过 asyncId → triggerAsyncId 的父子关系，构建了一棵「异步调用树」——不管异步操作跨了多少个 tick，都能通过 triggerAsyncId 链追溯到最初的发起者。例如 HTTP 回调（asyncId=5）中创建了 fs.readFile（asyncId=9, triggerAsyncId=5），fs 回调中创建了 Promise（asyncId=11, triggerAsyncId=9），通过 11→9→5 的链就能知道这个 Promise 最终是由 HTTP 请求 5 触发的。
+</Answer>
+
+**问题 2**：AsyncLocalStorage 如何实现跨异步边界的上下文传递？相比手动参数透传有什么优势？
+
+<Answer>
+AsyncLocalStorage 的原理：①als.run(store, callback) 在当前执行上下文（当前 asyncId）上绑定 store；②后续在 callback 中创建的异步资源会继承 triggerAsyncId 的 store（沿 asyncId → triggerAsyncId 链向上查找）；③als.getStore() 在任意异步回调中都能查找到最近的祖先上下文中绑定的 store。这实现了「请求级上下文」的自动传递——一个 HTTP 请求中所有同步和异步代码都能通过 als.getStore() 获取该请求的上下文（如 requestId、userId）。相比手动参数透传的优势：①非侵入式——不需要修改函数签名加 requestId 参数，老代码无需改动；②不遗漏——手动透传容易在某个中间层忘记传参，AsyncLocalStorage 自动传递不会断；③可组合——多个中间件可以嵌套 als.run 叠加上下文。Node.js 16+ 对 AsyncLocalStorage 做了性能优化，开销约 1-3%，可在生产环境长期开启。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="AsyncHooks">Node.js 异步资源追踪 API，每个异步操作分配唯一 asyncId 并记录 triggerAsyncId（父资源 ID），形成异步调用树。通过 createHook 注册 init/before/after/destroy 回调追踪异步资源生命周期。解决异步调用链断裂问题。</GlossaryItem>
+<GlossaryItem term="AsyncLocalStorage">基于 AsyncHooks 实现的跨异步边界上下文传递 API。als.run(store, callback) 绑定上下文，后续异步操作自动继承，als.getStore() 在任意异步回调中获取。替代手动参数透传，非侵入式。</GlossaryItem>
+<GlossaryItem term="异步调用链断裂">异步操作（Promise.then/setTimeout/fs 回调）切换时调用栈是全新的，回调中看不到触发者的调用栈。AsyncHooks 通过 asyncId → triggerAsyncId 的父子关系重建异步调用树解决此问题。</GlossaryItem>
+</Glossary>

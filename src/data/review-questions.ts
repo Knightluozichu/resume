@@ -1405,6 +1405,16 @@ import { ndgTcpTlsQuestions } from "./review/ndg-tcp-tls";
 import { ndgClusterWorkerQuestions } from "./review/ndg-cluster-worker";
 import { ndgPerformanceDebugQuestions } from "./review/ndg-performance-debug";
 import { ndgFinalReviewQuestions } from "./review/ndg-final-review";
+import { ndbgLearningMapQuestions } from "./review/ndbg-learning-map";
+import { ndbgInspectorProtocolQuestions } from "./review/ndbg-inspector-protocol";
+import { ndbgDevtoolsQuestions } from "./review/ndbg-devtools";
+import { ndbgMemoryLeaksQuestions } from "./review/ndbg-memory-leaks";
+import { ndbgHeapSnapshotQuestions } from "./review/ndbg-heap-snapshot";
+import { ndbgCpuProfilingQuestions } from "./review/ndbg-cpu-profiling";
+import { ndbgFlameGraphQuestions } from "./review/ndbg-flame-graph";
+import { ndbgAsyncTracingQuestions } from "./review/ndbg-async-tracing";
+import { ndbgProductionDebugQuestions } from "./review/ndbg-production-debug";
+import { ndbgFinalReviewQuestions } from "./review/ndbg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -2841,6 +2851,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ndgClusterWorkerQuestions,
   ...ndgPerformanceDebugQuestions,
   ...ndgFinalReviewQuestions,
+  ...ndbgLearningMapQuestions,
+  ...ndbgInspectorProtocolQuestions,
+  ...ndbgDevtoolsQuestions,
+  ...ndbgMemoryLeaksQuestions,
+  ...ndbgHeapSnapshotQuestions,
+  ...ndbgCpuProfilingQuestions,
+  ...ndbgFlameGraphQuestions,
+  ...ndbgAsyncTracingQuestions,
+  ...ndbgProductionDebugQuestions,
+  ...ndbgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

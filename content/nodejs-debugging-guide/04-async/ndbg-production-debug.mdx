@@ -1,0 +1,203 @@
+---
+title: "生产环境调试"
+type: C
+section: "前端与Web"
+order: 8
+description: "生产环境 Node.js 调试方法论——结构化日志、APM 监控、--report 诊断报告、llnode postmortem 分析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdbgProductionDebugDiagram } from "@/components/mdx/nodejs-debugging-guide/diagrams/ndbg-production-debug";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解生产环境调试与开发环境调试的本质差异：不可重启、不可断点、需事后分析
+- 掌握结构化日志方案：用 pino/winston 输出 JSON 日志 + request ID 关联
+- 能用 --report-on-fatalerror 在进程崩溃时自动生成诊断报告
+- 理解 postmortem 分析：用 --abort-on-uncaught-exception + llnode/core 分析 core dump
+</Objectives>
+
+## 直觉引入
+
+生产环境调试就像「空难事故调查」。飞机（Node.js 进程）已经坠毁（崩溃），黑匣子（日志）可能只记录了最后几秒，残骸（core dump）散落在地上。你不能让飞机重新飞一遍来复现问题（不可重启、不可断点），只能靠三种证据还原真相：①**黑匣子**（结构化日志）——记录飞行过程中每个关键操作的参数和结果；②**塔台雷达**（APM 监控）——从外部记录飞机的飞行轨迹（CPU/内存/延迟趋势）；③**残骸分析**（postmortem）——把残骸运回实验室，用 llnode 检查坠毁瞬间每个零件的状态（变量值、调用栈、堆对象）。三种证据交叉验证，才能还原事故根因。
+
+<NdbgProductionDebugDiagram />
+
+## 生产 vs 开发调试的差异
+
+<Term def="生产环境调试是在不可重启、不可断点、需事后分析约束下的调试方法论，依赖三类工具：结构化日志（pino/winston + request ID 关联）、APM 监控（PM2/New Relic 采集 CPU/内存/延迟趋势）、postmortem 分析（--abort-on-uncaught-exception 生成 core dump + llnode 检查崩溃瞬间的堆状态）。">生产环境调试</Term>与开发环境调试的本质差异在于约束条件：生产环境不能暂停服务（不能断点）、不能随意重启（不能改代码重跑）、问题可能是偶发的（难以复现）。因此生产调试以「事后分析」为主，在事故发生时尽可能多地采集证据。
+
+```javascript
+// 生产环境调试的三层证据采集
+
+// 第一层：结构化日志（黑匣子）
+const pino = require("pino");
+const logger = pino({
+  level: process.env.LOG_LEVEL || "info",
+  // JSON 格式输出，便于 ELK/Loki 采集和检索
+  formatters: {
+    level: (label) => ({ level: label }),
+  },
+});
+
+// 每条日志都带 request ID，可在日志系统中串联一个请求的全部日志
+function requestLogger(req, res, next) {
+  const requestId = req.headers["x-request-id"] || crypto.randomUUID();
+  req.log = logger.child({ requestId, path: req.path, method: req.method });
+  req.log.info("请求开始");
+  res.on("finish", () => {
+    req.log.info({ status: res.statusCode, duration: Date.now() - req.startTime }, "请求结束");
+  });
+  next();
+}
+
+// 在业务代码中使用
+async function getUser(userId) {
+  req.log.debug({ userId }, "查询用户");
+  const user = await db.query("SELECT * FROM users WHERE id = $1", [userId]);
+  req.log.debug({ userId, found: !!user }, "查询结果");
+  return user;
+}
+// 日志输出: {"level":"debug","requestId":"abc-123","userId":42,"msg":"查询用户","time":...}
+// 在 ELK 中搜 requestId:abc-123 可看到该请求的全部日志链
+```
+
+## APM 监控与 --report
+
+```javascript
+// 第二层：APM 监控（塔台雷达）
+// 用 PM2 或 New Relic / Datadog 采集运行时指标
+
+// PM2 内置监控
+// pm2 start server.js --max-memory-restart 1G
+// pm2 monit  → 实时 CPU/内存面板
+// pm2 prof   → 远程 CPU Profile
+// pm2 dump   → 内存快照
+
+// 应用内自监控：定时采集关键指标
+const { monitorEventLoopDelay } = require("node:perf_hooks");
+
+const h = monitorEventLoopDelay();
+h.enable();
+
+setInterval(() => {
+  const mem = process.memoryUsage();
+  const loopDelay = h; // 事件循环延迟
+  console.log(JSON.stringify({
+    type: "metrics",
+    timestamp: Date.now(),
+    heapUsed: mem.heapUsed,
+    rss: mem.rss,
+    eventLoopDelay: {
+      min: h.min,
+      max: h.max,
+      mean: h.mean,
+      p99: h.percentile(99), // 99 分位延迟
+    },
+    activeHandles: process._getActiveHandles().length,
+    activeRequests: process._getActiveRequests().length,
+  }));
+}, 10000);
+
+// 第三层：--report 诊断报告
+// 启动时启用
+// node --report-on-fatalerror --report-directory=/tmp/diag server.js
+// 进程崩溃时自动生成 report-YYYYMMDD.HHMMSS.pid.txt
+
+// 也可以在代码中手动触发
+const { report } = require("node:process");
+function triggerReport(label) {
+  const filename = report.writeReport(`/tmp/diag/report-${label}`);
+  console.log(`诊断报告已写入: ${filename}`);
+}
+
+// 在内存超阈值时自动触发
+setInterval(() => {
+  if (process.memoryUsage().heapUsed > 800 * 1024 * 1024) {
+    triggerReport("high-memory");
+  }
+}, 30000);
+```
+
+```javascript
+// --report 报告内容包含:
+// 1. header: Node 版本、平台、PID、触发原因
+// 2. javascriptStack: JS 调用栈（崩溃时的）
+// 3. nativeStack: C++ 调用栈
+// 4. javascriptHeap: 堆内存详情（total/used/limit）
+// 5. libuv: 事件循环句柄（active handles/requests）
+//    → 可看到哪些 Timer/Socket/FS 句柄未关闭
+// 6. environmentVariables: 环境变量
+// 7. userConstraints: 用户代码中的共享资源
+
+// 典型用途:
+// - "我的进程为什么 OOM 崩溃了？" → 看 javascriptHeap + active handles
+// - "事件循环为什么卡住了？" → 看 nativeStack + libuv
+// - "内存泄漏在哪里？" → 对比多次 report 的 javascriptHeap 趋势
+```
+
+## Postmortem 分析
+
+```bash
+# Postmortem: 进程崩溃后分析 core dump
+
+# 步骤一：启用 core dump
+# 启动时加 --abort-on-uncaught-exception
+node --abort-on-uncaught-exception server.js
+# 进程遇到未捕获异常时会 abort 并生成 core dump
+
+# 或用 ulimit 确保 core dump 不被截断
+ulimit -c unlimited
+node --abort-on-uncaught-exception server.js
+
+# 步骤二：用 llnode 分析 core dump
+# 安装 llnode（LLDB 的 Node.js 插件）
+npm install -g llnode
+
+# 加载 core dump
+lldb -c core.node.server.12345
+
+# 在 LLDB 中加载 llnode 插件
+(lldb) plugin load /path/to/llnode.so
+
+# 检查崩溃瞬间的状态
+(lldb) v8 bt           # JS 调用栈
+(lldb) v8 bt full      # JS 调用栈 + 变量值
+(lldb) v8 inspect <obj># 检查某个 JS 对象
+(lldb) v8 findjsobjs   # 列出堆中的 JS 对象
+(lldb) v8 findjsinstances -d 10 String  # 找最多的 10 个 String 对象
+
+# 步骤三：用 --heapsnapshot-signal=SIGUSR2 在崩溃前拍快照
+# 在进程 OOM 前手动发信号
+kill -SIGUSR2 $(pgrep -f "node server")
+# → 生成 heapsnapshot-*.json 文件
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：生产环境出问题就加 --inspect 远程调试。** 生产环境暴露 --inspect 端口是极高风险操作：①Inspector Protocol 可以执行任意代码（Runtime.evaluate），一旦端口被未授权访问，等于服务器被完全控制；②断点暂停会阻塞事件循环，一个断点可能导致整个服务不可用；③WebSocket 连接不加密，命令可被中间人篡改。正确的做法：①用结构化日志 + APM 做事后分析，不依赖在线调试；②确需远程调试时，通过 SSH 隧道（`ssh -L 9229:localhost:9229 server`）而非直接暴露端口；③调试完立即关闭 --inspect；④用 --report 和 postmortem 替代在线断点，在崩溃后分析而非实时干预。
+</Callout>
+
+<Exercises>
+**问题 1**：生产环境调试与开发环境调试的核心差异是什么？各自依赖什么工具？
+
+<Answer>
+核心差异在于约束条件：开发环境可以随意重启、设断点、改代码重跑，以「实时交互」为主（DevTools 断点、Heap Snapshot、CPU Profiler）；生产环境不能暂停服务（断点阻塞事件循环）、不能随意重启（影响用户）、问题可能偶发难复现，以「事后分析」为主。生产环境依赖三类工具：①结构化日志（pino/winston 输出 JSON + request ID 关联），相当于黑匣子记录每个请求的操作链；②APM 监控（PM2/New Relic/Datadog 采集 CPU/内存/事件循环延迟趋势），相当于塔台雷达从外部观察；③postmortem 分析（--abort-on-uncaught-exception 生成 core dump + llnode 检查崩溃瞬间的堆状态），相当于残骸分析。三层证据交叉验证还原事故根因。开发环境用 DevTools/Inspector Protocol 交互式调试，生产环境用日志/APM/--report 事后分析。
+</Answer>
+
+**问题 2**：--report 诊断报告包含哪些信息？它在生产排障中解决什么问题？
+
+<Answer>
+--report 报告包含：①header——Node 版本、平台、PID、触发原因（fatalerror/manual/signal）；②javascriptStack——崩溃时的 JS 调用栈；③nativeStack——C++ 层调用栈；④javascriptHeap——堆内存详情（total/used/limit/fragmentation）；⑤libuv——事件循环状态（active handles 如未关闭的 Timer/Socket/FS、active requests）；⑥environmentVariables——环境变量；⑦os/environment——操作系统信息。它在生产排障中解决的问题：①OOM 崩溃——看 javascriptHeap 确认内存使用量，看 active handles 找未关闭的资源；②事件循环卡死——看 nativeStack 找 C++ 层阻塞，看 libuv 找堆积的请求；③内存泄漏——对比多次 report 的 javascriptHeap 趋势，看堆是否持续增长；④未捕获异常崩溃——看 javascriptStack 定位崩溃位置。--report 的优势是开销极小（只在触发时生成）且不阻塞事件循环，适合生产环境。通过 --report-on-fatalerror 可以在进程崩溃时自动生成。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="生产环境调试">在不可重启、不可断点、需事后分析约束下的调试方法论，依赖结构化日志（pino + request ID）、APM 监控（PM2/New Relic 采集 CPU/内存/延迟）、postmortem 分析（core dump + llnode）三层证据。</GlossaryItem>
+<GlossaryItem term="--report">Node.js 诊断报告，包含 JS/C++ 调用栈、堆内存详情、事件循环句柄、环境变量。通过 --report-on-fatalerror 在崩溃时自动生成，开销极小不阻塞事件循环，适合生产环境事后分析。</GlossaryItem>
+<GlossaryItem term="postmortem 分析">进程崩溃后分析 core dump 的技术。用 --abort-on-uncaught-exception 生成 core dump，再用 llnode（LLDB 插件）检查崩溃瞬间的 JS 调用栈、变量值、堆对象。适合无法在线调试的生产环境。</GlossaryItem>
+</Glossary>

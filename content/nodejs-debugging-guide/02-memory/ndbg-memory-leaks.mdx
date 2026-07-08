@@ -1,0 +1,149 @@
+---
+title: "内存泄漏排查"
+type: C
+section: "前端与Web"
+order: 3
+description: "系统化排查 Node.js 内存泄漏——从 process.memoryUsage 监控到 retainer 链追溯的完整方法论"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { NdbgMemoryLeaksDiagram } from "@/components/mdx/nodejs-debugging-guide/diagrams/ndbg-memory-leaks";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Node.js 内存模型：堆内存/堆外内存/GC 机制，以及泄漏发生的根因
+- 掌握用 process.memoryUsage() 和 --trace-gc 监控内存趋势的方法
+- 能识别四类常见泄漏模式：全局变量缓存、闭包引用、事件监听器堆积、Timer 未清理
+- 理解 retainer 链的概念：从泄漏对象出发追溯到 GC Root 的引用路径
+</Objectives>
+
+## 直觉引入
+
+内存泄漏就像家里的垃圾桶。正常情况下，你用完东西扔进垃圾桶（GC 回收），垃圾车定期来清走。但如果有个柜子（全局变量）里堆满了你不记得放进去的东西，而且柜门永远开着（引用没断），垃圾车就永远清不走这些东西——柜子越来越满，最后整个屋子塞不下（OOM 崩溃）。排查泄漏就是找到那个「永远开着的柜门」——从堆积的垃圾（泄漏对象）出发，沿着「谁引用了它 → 谁引用了那个引用者 → ... → 谁是 GC Root」这条 retainer 链一路追溯，找到那个该断却没断的引用。
+
+<NdbgMemoryLeaksDiagram />
+
+## Node.js 内存模型与泄漏根因
+
+<Term def="内存泄漏是指程序中不再使用的对象因为仍被引用（从 GC Root 可达）而无法被垃圾回收器回收，导致堆内存持续增长最终 OOM 的现象。Node.js 中泄漏对象一定有一条从 GC Root（全局变量/活跃栈帧/Timer 回调）到该对象的引用链——retainer 链——找到并切断这条链就修复了泄漏。">内存泄漏</Term>在 Node.js 中表现为堆内存（heapUsed）随时间持续增长，GC 后不回落。V8 的 GC 分为新生代（Scavenge，短命对象）和老生代（Mark-Sweep/Mark-Compact，长命对象），泄漏对象通常是被晋升到老生代后无法被 Mark-Sweep 回收的对象。
+
+```javascript
+// 用 process.memoryUsage() 监控内存趋势
+function logMemory(label) {
+  const m = process.memoryUsage();
+  console.log(`[${label}] rss=${(m.rss/1024/1024).toFixed(1)}MB ` +
+    `heapUsed=${(m.heapUsed/1024/1024).toFixed(1)}MB ` +
+    `heapTotal=${(m.heapTotal/1024/1024).toFixed(1)}MB ` +
+    `external=${(m.external/1024/1024).toFixed(1)}MB`);
+}
+
+// rss: 进程常驻内存（含堆 + 堆外 + C++ 对象）
+// heapUsed: V8 堆中已使用部分（JS 对象在这）
+// heapTotal: V8 堆已分配总量（含未使用部分）
+// external: 堆外内存（Buffer/ArrayBuffer 等 C++ 对象）
+
+// 定时采样，观察趋势
+setInterval(() => logMemory("monitor"), 5000);
+
+// 启动时加 --trace-gc 看 GC 日志
+// node --trace-gc server.js
+// 输出示例:
+// [1234:0x...] 45678 ms: Scavenge 12.3MB -> 10.5MB (20.0MB) ...
+//                    ^新生代回收    ^回收前  ^回收后  ^堆总量
+```
+
+## 四类常见泄漏模式
+
+```javascript
+// ① 全局变量缓存（最常见）
+// leak: 往全局对象不停塞数据，从不删除
+const cache = {}; // 全局缓存
+function handleRequest(userId, data) {
+  cache[userId] = data; // 每个用户的数据都留着，永远不删 → 泄漏
+}
+// fix: 限制缓存大小 + 过期淘汰
+const cache = new Map();
+function handleRequest(userId, data) {
+  if (cache.size > 10000) {
+    // 删除最早的条目（简易 LRU）
+    const oldest = cache.keys().next().value;
+    cache.delete(oldest);
+  }
+  cache.set(userId, { data, ts: Date.now() });
+}
+
+// ② 闭包引用（隐蔽）
+// leak: 闭包意外持有大对象
+function createHandler() {
+  const hugeData = new Array(1e6).fill("x"); // 100万元素的大数组
+  return function handler() {
+    // handler 不需要 hugeData，但闭包捕获了它
+    console.log("handler called");
+  };
+}
+// fix: 只闭包需要的值
+function createHandler() {
+  const needed = "just-a-string";
+  return function handler() {
+    console.log(needed);
+  };
+}
+
+// ③ 事件监听器堆积（ EventEmitter 泄漏）
+// leak: 每次请求都 on，从不 off
+const emitter = new EventEmitter();
+function setup(req) {
+  emitter.on("event", function callback() {
+    // 每次请求都添加一个监听器，从不移除
+    // callback 闭包捕获 req，req 持有大量数据 → 泄漏
+  });
+}
+// fix: 用 once 或手动 off
+emitter.once("event", callback); // 触发一次后自动移除
+// 或在请求结束时 off
+req.on("close", () => emitter.off("event", callback));
+
+// ④ Timer 未清理
+// leak: setInterval 回调持有引用，从不 clear
+function startTimer(data) {
+  setInterval(() => {
+    console.log(data); // data 被闭包持有，Timer 永远不清 → 泄漏
+  }, 1000);
+}
+// fix: 返回 timer 引用，适时 clear
+function startTimer(data) {
+  const timer = setInterval(() => {
+    console.log(data);
+  }, 1000);
+  return () => clearInterval(timer); // 返回清理函数
+}
+```
+
+## 常见误区
+
+<Callout type="trap">
+**误区：内存增长一定是泄漏。** 不一定。V8 的堆会「预分配」——heapTotal 通常比 heapUsed 大，GC 后 heapUsed 下降但 heapTotal 可能不降（V8 保留空间供下次分配）。此外，启动后前几分钟内存自然增长（模块加载、JIT 编译、内联缓存优化），这是正常的。判断泄漏的正确方法：在固定负载下持续运行，观察 heapUsed 在多次 GC 后是否呈单调上升趋势——如果每次 GC 后的低点都在抬高，才是泄漏。一次性增长（如加载大文件）不是泄漏。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是 retainer 链？为什么找到 retainer 链就能修复泄漏？
+
+<Answer>
+retainer 链是从泄漏对象出发、沿着引用关系一路追溯到 GC Root 的路径。GC Root 是 GC 不可回收的起始点，包括：全局变量（global）、当前活跃的栈帧（正在执行的函数的局部变量）、Timer 回调队列中的回调、EventEmitter 的监听器列表。一个对象只要从任意 GC Root 可达就不会被回收。内存泄漏的本质就是：对象本该不可达（本该被回收），但因为某条 retainer 链仍连着 GC Root，导致它「可达但不使用」。找到 retainer 链后，切断链条上那个「不该存在」的引用（删除缓存 key、移除监听器、clearInterval），对象就变成不可达，下次 GC 就会回收。Heap Snapshot 的 Retainers 面板就是展示这条链的工具。
+</Answer>
+
+**问题 2**：四类常见泄漏模式各自的泄漏机制是什么？如何修复？
+
+<Answer>
+①全局变量缓存——往全局对象/模块级变量不停塞数据且不删除，数据从全局变量可达所以不回收。修复：限制缓存大小 + LRU 过期淘汰。②闭包引用——闭包捕获了大对象，即使回调函数不使用它，闭包作用域仍持有引用。修复：只闭包需要的值，或在函数内用完后置 null。③事件监听器堆积——每次请求都 emitter.on 添加回调但不 off，回调闭包又捕获了请求数据，emitter 本身是 GC Root 级的长生命周期对象。修复：用 once 自动清理，或在请求结束时手动 off。④Timer 未清理——setInterval/setTimeout 的回调在事件循环队列中存活，闭包持有引用且永不 clear。修复：保存 timer 引用，在适当时机 clearInterval/clearTimeout。四类的共性是：长生命周期对象（全局/Emitter/Timer）持有短生命周期对象（请求数据）的引用，阻止了回收。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="内存泄漏">程序中不再使用的对象因仍被引用（从 GC Root 可达）而无法被垃圾回收器回收，导致堆内存持续增长最终 OOM。Node.js 中泄漏对象一定有一条从 GC Root 到该对象的 retainer 链，切断该链即修复泄漏。</GlossaryItem>
+<GlossaryItem term="retainer 链">从泄漏对象出发、沿引用关系追溯到 GC Root 的路径。GC Root 包括全局变量、活跃栈帧、Timer 回调、EventEmitter 监听器。Heap Snapshot 的 Retainers 面板展示这条链，帮开发者找到「不该存在的引用」。</GlossaryItem>
+<GlossaryItem term="process.memoryUsage">Node.js 内置 API，返回 rss（进程常驻内存）、heapUsed（V8 堆已用）、heapTotal（V8 堆已分配）、external（堆外内存如 Buffer）。监控 heapUsed 在 GC 后的低点是否单调上升是判断泄漏的标准方法。</GlossaryItem>
+</Glossary>
