@@ -2235,6 +2235,16 @@ import { bdpTestingSecurityQuestions } from "./review/bdp-testing-security";
 import { bdpDeploymentMainnetQuestions } from "./review/bdp-deployment-mainnet";
 import { bdpDefiNftPracticeQuestions } from "./review/bdp-defi-nft-practice";
 import { bdpFinalReviewQuestions } from "./review/bdp-final-review";
+import { mbtLearningMapQuestions } from "./review/mbt-learning-map";
+import { mbtBitcoinOverviewQuestions } from "./review/mbt-bitcoin-overview";
+import { mbtKeysAddressesQuestions } from "./review/mbt-keys-addresses";
+import { mbtTransactionsQuestions } from "./review/mbt-transactions";
+import { mbtBlockchainLedgerQuestions } from "./review/mbt-blockchain-ledger";
+import { mbtMiningConsensusQuestions } from "./review/mbt-mining-consensus";
+import { mbtP2pNetworkQuestions } from "./review/mbt-p2p-network";
+import { mbtWalletsUsageQuestions } from "./review/mbt-wallets-usage";
+import { mbtAdvancedTopicsQuestions } from "./review/mbt-advanced-topics";
+import { mbtFinalReviewQuestions } from "./review/mbt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4505,6 +4515,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bdpDeploymentMainnetQuestions,
   ...bdpDefiNftPracticeQuestions,
   ...bdpFinalReviewQuestions,
+  ...mbtLearningMapQuestions,
+  ...mbtBitcoinOverviewQuestions,
+  ...mbtKeysAddressesQuestions,
+  ...mbtTransactionsQuestions,
+  ...mbtBlockchainLedgerQuestions,
+  ...mbtMiningConsensusQuestions,
+  ...mbtP2pNetworkQuestions,
+  ...mbtWalletsUsageQuestions,
+  ...mbtAdvancedTopicsQuestions,
+  ...mbtFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

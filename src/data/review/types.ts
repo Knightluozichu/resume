@@ -2358,7 +2358,17 @@ export type ReviewChapterSlug =
   | "bdp-testing-security"
   | "bdp-deployment-mainnet"
   | "bdp-defi-nft-practice"
-  | "bdp-final-review";
+  | "bdp-final-review"
+  | "mbt-learning-map"
+  | "mbt-bitcoin-overview"
+  | "mbt-keys-addresses"
+  | "mbt-transactions"
+  | "mbt-blockchain-ledger"
+  | "mbt-mining-consensus"
+  | "mbt-p2p-network"
+  | "mbt-wallets-usage"
+  | "mbt-advanced-topics"
+  | "mbt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4721,6 +4731,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "bdp-deployment-mainnet": "部署与主网上线",
   "bdp-defi-nft-practice": "DeFi与NFT实战",
   "bdp-final-review": "全书复习与知识整合",
+  "mbt-learning-map": "精通比特币·知识全景图",
+  "mbt-bitcoin-overview": "比特币概览",
+  "mbt-keys-addresses": "密钥与地址",
+  "mbt-transactions": "交易结构",
+  "mbt-blockchain-ledger": "区块链与分布式账本",
+  "mbt-mining-consensus": "挖矿与共识",
+  "mbt-p2p-network": "P2P网络协议",
+  "mbt-wallets-usage": "钱包与实际使用",
+  "mbt-advanced-topics": "高级话题与扩展",
+  "mbt-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
