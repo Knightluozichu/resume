@@ -1975,6 +1975,16 @@ import { eacCodeOptimizationQuestions } from "./review/eac-code-optimization";
 import { eacInstructionSelectionQuestions } from "./review/eac-instruction-selection";
 import { eacRegisterAllocationQuestions } from "./review/eac-register-allocation";
 import { eacFinalReviewQuestions } from "./review/eac-final-review";
+import { dbcLearningMapQuestions } from "./review/dbc-learning-map";
+import { dbcLexicalAnalysisQuestions } from "./review/dbc-lexical-analysis";
+import { dbcSyntaxAnalysisQuestions } from "./review/dbc-syntax-analysis";
+import { dbcSymTablesQuestions } from "./review/dbc-sym-tables";
+import { dbcTypeCheckingQuestions } from "./review/dbc-type-checking";
+import { dbcRuntimeEnvironmentQuestions } from "./review/dbc-runtime-environment";
+import { dbcCodeGenerationQuestions } from "./review/dbc-code-generation";
+import { dbcMachineIndependentOptQuestions } from "./review/dbc-machine-independent-opt";
+import { dbcMachineDependentOptQuestions } from "./review/dbc-machine-dependent-opt";
+import { dbcFinalReviewQuestions } from "./review/dbc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3985,6 +3995,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...eacInstructionSelectionQuestions,
   ...eacRegisterAllocationQuestions,
   ...eacFinalReviewQuestions,
+  ...dbcLearningMapQuestions,
+  ...dbcLexicalAnalysisQuestions,
+  ...dbcSyntaxAnalysisQuestions,
+  ...dbcSymTablesQuestions,
+  ...dbcTypeCheckingQuestions,
+  ...dbcRuntimeEnvironmentQuestions,
+  ...dbcCodeGenerationQuestions,
+  ...dbcMachineIndependentOptQuestions,
+  ...dbcMachineDependentOptQuestions,
+  ...dbcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

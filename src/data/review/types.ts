@@ -2098,7 +2098,17 @@ export type ReviewChapterSlug =
   | "eac-code-optimization"
   | "eac-instruction-selection"
   | "eac-register-allocation"
-  | "eac-final-review";
+  | "eac-final-review"
+  | "dbc-learning-map"
+  | "dbc-lexical-analysis"
+  | "dbc-syntax-analysis"
+  | "dbc-sym-tables"
+  | "dbc-type-checking"
+  | "dbc-runtime-environment"
+  | "dbc-code-generation"
+  | "dbc-machine-independent-opt"
+  | "dbc-machine-dependent-opt"
+  | "dbc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4201,6 +4211,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "eac-instruction-selection": "指令选择",
   "eac-register-allocation": "寄存器分配",
   "eac-final-review": "全书复习与知识整合",
+  "dbc-learning-map": "全书学习地图",
+  "dbc-lexical-analysis": "词法分析",
+  "dbc-syntax-analysis": "语法分析",
+  "dbc-sym-tables": "符号表与语义分析",
+  "dbc-type-checking": "类型检查与类型系统",
+  "dbc-runtime-environment": "运行时环境",
+  "dbc-code-generation": "目标代码生成",
+  "dbc-machine-independent-opt": "机器无关优化",
+  "dbc-machine-dependent-opt": "机器相关优化",
+  "dbc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
