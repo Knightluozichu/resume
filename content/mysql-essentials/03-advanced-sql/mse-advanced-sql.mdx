@@ -1,0 +1,174 @@
+---
+title: "高级查询"
+type: C
+section: "数据库"
+order: 3
+description: "JOIN连接查询、子查询与窗口函数——掌握复杂数据检索技巧"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { MseAdvancedSqlDiagram } from "@/components/mdx/mysql-essentials/diagrams/mse-advanced-sql";
+
+<Objectives>
+
+- 掌握七大JOIN类型（INNER/LEFT/RIGHT/FULL/CROSS/SELF/NATURAL）及连接条件
+- 理解子查询的分类（标量/行/列/表）及IN与EXISTS的性能差异
+- 掌握窗口函数（RANK/DENSE_RANK/ROW_NUMBER/聚合窗口）的用法
+- 能用UNION/UNION ALL合并结果集并理解区别
+
+</Objectives>
+
+## JOIN连接查询
+
+<MseAdvancedSqlDiagram />
+
+JOIN用于将多张表按关联条件组合成一张结果集。核心是ON指定连接条件，WHERE在连接后过滤。
+
+```
+-- INNER JOIN：只返回两表匹配的行
+SELECT o.order_id, c.name, o.total
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.id
+WHERE o.total > 100;
+
+-- LEFT JOIN：返回左表全部 + 右表匹配（右表无匹配则NULL）
+-- 查询所有客户包括没下过单的
+SELECT c.name, COUNT(o.id) AS order_count
+FROM customers c
+LEFT JOIN orders o ON c.id = o.customer_id
+GROUP BY c.id, c.name;
+
+-- 多表JOIN
+SELECT o.order_id, c.name, p.product_name, oi.quantity
+FROM orders o
+INNER JOIN customers c ON o.customer_id = c.id
+INNER JOIN order_items oi ON o.id = oi.order_id
+INNER JOIN products p ON oi.product_id = p.id
+WHERE o.status = 'completed';
+```
+
+<Callout type="info" title="LEFT JOIN陷阱">
+LEFT JOIN中如果WHERE过滤右表字段为NULL的条件，会将外连接退化为内连接——右表无匹配的左表行也被过滤掉。应将右表过滤条件放在ON中而非WHERE中。
+</Callout>
+
+## 子查询
+
+```
+-- 标量子查询（返回单值）：用在SELECT/WHERE中
+SELECT name, salary,
+  (SELECT AVG(salary) FROM employees) AS company_avg
+FROM employees
+WHERE salary > (SELECT AVG(salary) FROM employees);
+
+-- 列子查询 + IN：返回多行单列
+SELECT name FROM employees
+WHERE dept_id IN (SELECT id FROM departments WHERE budget > 100000);
+
+-- EXISTS vs IN（外表小用IN，内表小用EXISTS）
+SELECT name FROM customers c
+WHERE EXISTS (
+  SELECT 1 FROM orders o WHERE o.customer_id = c.id AND o.total > 1000
+);
+
+-- 派生表（FROM子句中的子查询）
+SELECT dept, avg_sal FROM (
+  SELECT dept_id, AVG(salary) AS avg_sal
+  FROM employees GROUP BY dept_id
+) AS dept_stats WHERE avg_sal > 10000;
+```
+
+## 窗口函数（MySQL 8.0+）
+
+```
+-- 排名函数：PARTITION BY分组，ORDER BY排序
+SELECT name, dept, salary,
+  RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk,
+  DENSE_RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS dense_rnk,
+  ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) AS rn
+FROM employees;
+
+-- 聚合窗口函数：不减少行数
+SELECT name, dept, salary,
+  SUM(salary) OVER (PARTITION BY dept) AS dept_total,
+  AVG(salary) OVER (PARTITION BY dept) AS dept_avg
+FROM employees;
+
+-- 偏移函数
+SELECT name, salary,
+  LAG(salary, 1) OVER (ORDER BY salary) AS prev_sal,
+  LEAD(salary, 1) OVER (ORDER BY salary) AS next_sal
+FROM employees;
+```
+
+| 函数 | 并列处理 | 示例(8000,8000,7000) |
+|------|----------|----------------------|
+| RANK | 跳号 | 1, 1, 3 |
+| DENSE_RANK | 不跳号 | 1, 1, 2 |
+| ROW_NUMBER | 不并列 | 1, 2, 3 |
+
+## UNION合并结果集
+
+```
+-- UNION ALL：不去重，性能好
+SELECT name, email FROM customers
+UNION ALL
+SELECT name, email FROM suppliers;
+
+-- UNION：去重（内部做DISTINCT），性能差
+SELECT name FROM employees WHERE dept = 'IT'
+UNION
+SELECT name FROM employees WHERE dept = 'HR';
+-- 等价于 SELECT name FROM employees WHERE dept IN ('IT','HR');
+```
+
+<Glossary>
+
+<GlossaryItem term="JOIN">
+连接查询，将多张表按关联条件组合成结果集。INNER JOIN取交集，LEFT JOIN保留左表全部，RIGHT JOIN保留右表全部，FULL JOIN取并集（MySQL用UNION模拟）。ON指定连接条件。
+</GlossaryItem>
+
+<GlossaryItem term="子查询">
+嵌套在另一个查询中的SELECT语句。按返回结果分标量（单值）/行（单行多列）/列（多行单列）/表（多行多列）。按位置分SELECT子句/FROM子句（派生表）/WHERE子句。IN适合子查询小，EXISTS适合外表小。
+</GlossaryItem>
+
+<GlossaryItem term="窗口函数">
+在不减少行数的情况下对一组行计算值的函数。语法 `函数 OVER (PARTITION BY 分组列 ORDER BY 排序列)`。排序类：RANK/DENSE_RANK/ROW_NUMBER；聚合类：SUM/AVG/COUNT；偏移类：LAG/LEAD。MySQL 8.0+支持。
+</GlossaryItem>
+
+<GlossaryItem term="UNION ALL">
+合并两个查询结果集不去重，直接拼接，性能好。UNION会去重（内部DISTINCT）性能差。两者都要求列数相同、类型兼容、顺序一致。确定无重复时优先UNION ALL。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：INNER JOIN、LEFT JOIN、RIGHT JOIN、FULL JOIN的区别？
+
+<Answer>
+INNER JOIN只返回两表匹配的交集行。LEFT JOIN返回左表全部+右表匹配（无匹配则NULL）。RIGHT JOIN返回右表全部+左表匹配。FULL JOIN返回两表全部无匹配侧为NULL（MySQL用LEFT JOIN UNION RIGHT JOIN模拟）。选择：需两表都有用INNER，需保留某侧全部用LEFT/RIGHT JOIN。
+</Answer>
+
+**问题 2**：什么是子查询？IN和EXISTS在子查询中有什么性能差异？
+
+<Answer>
+子查询是嵌套在另一个查询中的SELECT。按返回分标量/行/列/表，按位置分SELECT/FROM/WHERE子句。IN先执行子查询得结果集再对外表逐行检查——适合子查询小外表大。EXISTS对外表逐行执行子查询检查是否返回行——适合外表小内表大。原则：小表驱动大表。
+</Answer>
+
+**问题 3**：写出窗口函数SQL：查询每个部门按薪资降序排名的员工。RANK、DENSE_RANK、ROW_NUMBER有什么区别？
+
+<Answer>
+SELECT name, dept, salary, RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rnk, DENSE_RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS dense_rnk, ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) AS rn FROM employees; RANK并列跳号(1,1,3)，DENSE_RANK并列不跳号(1,1,2)，ROW_NUMBER不并列连续编号(1,2,3)。
+</Answer>
+
+**问题 4**：UNION和UNION ALL的区别？什么场景用哪个？
+
+<Answer>
+UNION合并结果集并去重（内部DISTINCT）性能差。UNION ALL合并不去重直接拼接性能好。确定无重复用UNION ALL，需去重用UNION。两者都要求列数相同类型兼容顺序一致。生产默认用UNION ALL，需去重再改UNION。
+</Answer>
+
+</Exercises>

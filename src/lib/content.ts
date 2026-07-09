@@ -223,6 +223,7 @@ export const BOOK_ORDER = [
   "android-advanced-light",
   "deep-android-kernel",
   "deep-android-volumes",
+  "mysql-essentials",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -386,6 +387,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "android-advanced-light": "Android进阶之光",
   "deep-android-kernel": "深入理解Android内核设计思想",
   "deep-android-volumes": "深入理解Android（卷I/II/III）",
+  "mysql-essentials": "MySQL数据库应用从入门到精通",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1013,6 +1015,7 @@ export const SECTION_ORDER = [
   "系统与操作系统",
   "JVM与Java生态",
   "Android开发",
+  "数据库",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

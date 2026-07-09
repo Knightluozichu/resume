@@ -1878,7 +1878,17 @@ export type ReviewChapterSlug =
   | "dav-wms-deep"
   | "dav-pms-deep"
   | "dav-media-audio"
-  | "dav-final-review";
+  | "dav-final-review"
+  | "mse-learning-map"
+  | "mse-mysql-basics"
+  | "mse-sql-fundamentals"
+  | "mse-advanced-sql"
+  | "mse-database-design"
+  | "mse-index-optimization"
+  | "mse-transactions"
+  | "mse-security-backup"
+  | "mse-db-administration"
+  | "mse-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3761,6 +3771,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dav-pms-deep": "PMS深度解析",
   "dav-media-audio": "媒体与音频框架",
   "dav-final-review": "全书复习",
+  "mse-learning-map": "全书学习地图",
+  "mse-mysql-basics": "MySQL入门基础",
+  "mse-sql-fundamentals": "SQL基础",
+  "mse-advanced-sql": "高级查询",
+  "mse-database-design": "数据库设计",
+  "mse-index-optimization": "索引与优化",
+  "mse-transactions": "事务与锁",
+  "mse-security-backup": "安全与备份",
+  "mse-db-administration": "数据库管理",
+  "mse-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1755,6 +1755,16 @@ import { davWmsDeepQuestions } from "./review/dav-wms-deep";
 import { davPmsDeepQuestions } from "./review/dav-pms-deep";
 import { davMediaAudioQuestions } from "./review/dav-media-audio";
 import { davFinalReviewQuestions } from "./review/dav-final-review";
+import { mseLearningMapQuestions } from "./review/mse-learning-map";
+import { mseMysqlBasicsQuestions } from "./review/mse-mysql-basics";
+import { mseSqlFundamentalsQuestions } from "./review/mse-sql-fundamentals";
+import { mseAdvancedSqlQuestions } from "./review/mse-advanced-sql";
+import { mseDatabaseDesignQuestions } from "./review/mse-database-design";
+import { mseIndexOptimizationQuestions } from "./review/mse-index-optimization";
+import { mseTransactionsQuestions } from "./review/mse-transactions";
+import { mseSecurityBackupQuestions } from "./review/mse-security-backup";
+import { mseDbAdministrationQuestions } from "./review/mse-db-administration";
+import { mseFinalReviewQuestions } from "./review/mse-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3545,6 +3555,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...davPmsDeepQuestions,
   ...davMediaAudioQuestions,
   ...davFinalReviewQuestions,
+  ...mseLearningMapQuestions,
+  ...mseMysqlBasicsQuestions,
+  ...mseSqlFundamentalsQuestions,
+  ...mseAdvancedSqlQuestions,
+  ...mseDatabaseDesignQuestions,
+  ...mseIndexOptimizationQuestions,
+  ...mseTransactionsQuestions,
+  ...mseSecurityBackupQuestions,
+  ...mseDbAdministrationQuestions,
+  ...mseFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
