@@ -1,0 +1,40 @@
+import { ReviewQuestion } from "../types";
+
+export const tbcSemanticAnalysisQuestions: ReviewQuestion[] = [
+  {
+    id: "tbc-semantic-analysis-1",
+    chapter: "tbc-semantic-analysis",
+    level: 1,
+    question: "语义分析的任务是什么？双环境（tenv / venv）如何工作？",
+    answer:
+      "语义分析接收 AST，绑定标识符的声明信息并做类型检查，输出带类型的结果。虎书用双环境：类型环境 tenv（Symbol → 类型绑定，记录 type 声明，如 int、string、自定义 record/array 类型）和值环境 venv（Symbol → 值绑定，记录变量 Var 和函数 Func 的类型签名）。进入 let 作用域时把新绑定压入环境，end 时弹出。语义分析器（transVar/transExp/transDec）递归遍历 AST，查环境应用类型规则，类型错误时报错。",
+    tags: ["语义分析", "双环境", "tenv", "venv", "符号表"],
+  },
+  {
+    id: "tbc-semantic-analysis-2",
+    chapter: "tbc-semantic-analysis",
+    level: 2,
+    question: "Tiger 的类型系统有哪些类型？记录类型和数组类型如何判断相等？",
+    answer:
+      "Tiger 类型包括：基本类型 int（整数）、string（字符串）、unit（无值，相当于 void）；复合类型 record（记录，{字段: 类型}）和 array（同类型序列）；以及 nil（record 的零值）。记录类型和数组类型按声明唯一性判断相等——每个 record/array 类型声明产生一个唯一的类型对象，即使两个 record 字段结构完全相同（如都是 {x:int}）也不相等。这是结构相等 vs 名字相等的区别，Tiger 用名字相等（唯一性引用相等）。",
+    tags: ["类型系统", "记录类型", "数组类型", "名字相等", "唯一性"],
+  },
+  {
+    id: "tbc-semantic-analysis-3",
+    chapter: "tbc-semantic-analysis",
+    level: 3,
+    question: "nil 子类型规则是什么？为什么需要它？",
+    answer:
+      "nil 是所有 record 类型的子类型（nil ⊑ 任意 record 类型），可用于任何需要 record 值的位置作为「空记录」。需要它的原因：record 类型用名字相等，每个声明唯一，无法预定义一个通用的「空值」与所有 record 类型都相等。所以引入 nil 作为特殊的子类型——它不是某个具体 record 类型，但可以匹配任何 record 类型。例如 `type rec = {x:int}; var r: rec := nil` 合法。注意 nil 不能用于需要 int 或 array 的位置，只针对 record。",
+    tags: ["nil", "子类型", "record", "类型规则"],
+  },
+  {
+    id: "tbc-semantic-analysis-4",
+    chapter: "tbc-semantic-analysis",
+    level: 2,
+    question: "类型检查器返回的 (exp, ty) 表示什么？为什么要同时返回 exp 和 ty？",
+    answer:
+      "类型检查器对每个表达式返回二元组 (exp, ty)：exp 是该表达式翻译成的 IR 片段（Tree IR 表达式），ty 是推导出的类型。同时返回两者是因为虎书把语义分析和翻译到 IR 合并在一个递归遍历中完成——类型检查的同时生成 IR 片段，避免对 AST 做两次遍历。ty 用于上层做类型一致性检查（如 if-then-else 两臂类型必须相同、while 条件必须为 int），exp 则积累成完整的 Tree IR。这种「一遍做语义检查+翻译」是虎书的设计特色。",
+    tags: ["exp ty", "类型检查", "翻译", "一遍遍历"],
+  },
+];

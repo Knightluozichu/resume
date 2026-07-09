@@ -1,0 +1,40 @@
+import { ReviewQuestion } from "../types";
+
+export const tbcInstructionSelectionQuestions: ReviewQuestion[] = [
+  {
+    id: "tbc-instruction-selection-1",
+    chapter: "tbc-instruction-selection",
+    level: 1,
+    question: "指令选择的任务是什么？Maximal Munch 算法如何工作？",
+    answer:
+      "指令选择把规范化 IR（树形）转换为目标机器的汇编指令序列，每条机器指令对应一个 IR 子树模式。Maximal Munch（最大贪吃）算法：①从 IR 树根自顶向下遍历 ②尝试用最大的指令模板匹配当前子树 ③命中则发射对应机器指令，递归处理剩余子树 ④TEMP 作为虚拟寄存器保留，留待寄存器分配。例如 MOVE(MEM(BINOP(+, CONST, TEMP)), e) 可被「STORE M[base+offset] := e」模板整体覆盖，生成一条 store 指令而非多条加法+访存指令。",
+    tags: ["指令选择", "Maximal Munch", "树覆盖", "指令模板"],
+  },
+  {
+    id: "tbc-instruction-selection-2",
+    chapter: "tbc-instruction-selection",
+    level: 2,
+    question: "什么是树覆盖（tree pattern covering）？指令模板如何与 IR 树匹配？",
+    answer:
+      "树覆盖是每条目标机器指令用一个 IR 子树模式（模板）描述，指令选择就是用一组模板「覆盖」整棵 IR 树，每个节点被恰好一个模板覆盖。模板形如「STORE M[e1] := e2」匹配 MOVE(MEM(e1), e2)、「+(CONST, TEMP)」匹配 BINOP(+, CONST, TEMP) 生成带偏移寻址。模板覆盖后发射对应汇编（如 store、addi、load）。好的覆盖用更少指令完成相同语义——大模板覆盖更多节点，Maximal Munch 贪心选最大模板正是为此。寄存器用 TEMP 表示，覆盖结果含若干虚拟寄存器待分配。",
+    tags: ["树覆盖", "指令模板", "IR 树", "匹配"],
+  },
+  {
+    id: "tbc-instruction-selection-3",
+    chapter: "tbc-instruction-selection",
+    level: 3,
+    question: "为什么贪心的 Maximal Munch 不一定生成最优指令序列，但仍被虎书采用？",
+    answer:
+      "Maximal Munch 贪心选当前能覆盖的最大模板，但局部最优不保证全局最优——有时选稍小的模板能让后续覆盖更高效，整体指令更少。例如某节点用大模板覆盖后剩余子树形状难匹配，而小模板虽当前多一条指令但后续更顺。虎书仍采用因为它实现简单高效：自顶向下递归，无需动态规划或搜索，生成质量「足够好」。追求最优可用动态规划（每棵子树算最优覆盖再组合），但实现复杂、编译慢。虎书权衡简洁性与实用性，Maximal Munch 是工程上的合理选择。",
+    tags: ["Maximal Munch", "贪心", "最优性", "动态规划", "工程权衡"],
+  },
+  {
+    id: "tbc-instruction-selection-4",
+    chapter: "tbc-instruction-selection",
+    level: 2,
+    question: "指令选择后 TEMP 的作用是什么？它如何衔接寄存器分配阶段？",
+    answer:
+      "指令选择把 IR 树转成汇编，但其中的操作数用 TEMP（虚拟寄存器）表示——TEMP 数量无限，远多于机器物理寄存器。这样指令选择不必关心寄存器数量限制，只管选对指令形式。生成的指令序列含若干 TEMP，随后交给寄存器分配器：构建干涉图、图着色，把无限 TEMP 映射到有限物理寄存器，着色失败的 TEMP 溢出到栈。这种「先用虚拟寄存器、后分配物理寄存器」的解耦让指令选择和寄存器分配各自独立、互不干扰。",
+    tags: ["TEMP", "虚拟寄存器", "物理寄存器", "解耦", "寄存器分配"],
+  },
+];

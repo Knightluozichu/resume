@@ -2108,7 +2108,17 @@ export type ReviewChapterSlug =
   | "dbc-code-generation"
   | "dbc-machine-independent-opt"
   | "dbc-machine-dependent-opt"
-  | "dbc-final-review";
+  | "dbc-final-review"
+  | "tbc-learning-map"
+  | "tbc-lexing"
+  | "tbc-parsing"
+  | "tbc-semantic-analysis"
+  | "tbc-activation-records"
+  | "tbc-translation-ir"
+  | "tbc-canonicalization"
+  | "tbc-instruction-selection"
+  | "tbc-register-allocation"
+  | "tbc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4221,6 +4231,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dbc-machine-independent-opt": "机器无关优化",
   "dbc-machine-dependent-opt": "机器相关优化",
   "dbc-final-review": "全书复习与知识整合",
+  "tbc-learning-map": "全书学习地图",
+  "tbc-lexing": "词法分析",
+  "tbc-parsing": "语法分析",
+  "tbc-semantic-analysis": "语义分析与类型",
+  "tbc-activation-records": "活动记录与栈帧",
+  "tbc-translation-ir": "翻译到中间表示",
+  "tbc-canonicalization": "规范化与基本块",
+  "tbc-instruction-selection": "指令选择",
+  "tbc-register-allocation": "寄存器分配与图着色",
+  "tbc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

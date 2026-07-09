@@ -1,0 +1,208 @@
+---
+title: "全书复习与知识整合"
+type: D
+section: "编译原理"
+order: 9
+description: "端到端编译流程整合与虎书核心思想"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { TbcFinalReviewDiagram } from "@/components/mdx/tiger-book-compiler/diagrams/tbc-final-review";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 完整描述从 Tiger 源码到目标代码的端到端编译流程
+- 理解 Tree IR 在前后端解耦中的核心作用
+- 理解 Frame 抽象如何贯穿前后端
+- 串联各阶段数据结构与算法的衔接关系
+- 把握虎书「端到端实现一个完整编译器」的工程导向核心思想
+
+</Objectives>
+
+## 端到端编译流程
+
+虎书围绕 Tiger 语言端到端实现一个完整编译器。从源码到目标代码经过 8 个阶段，每阶段输入输出明确：
+
+```text
+Tiger 源码
+   │ 词法分析（ML-Lex）
+   ▼
+Token 序列
+   │ 语法分析（ML-Yacc）
+   ▼
+AST
+   │ 语义分析与类型（双环境）
+   ▼
+带类型结果 (exp, ty)
+   │ 翻译到 IR（Ex/Nx/Cx）
+   ▼
+Tree IR
+   │ 规范化（消除 ESEQ/基本块/trace）
+   ▼
+规范化 IR
+   │ 指令选择（Maximal Munch）
+   ▼
+含 TEMP 的机器指令
+   │ 寄存器分配（图着色）
+   ▼
+目标代码
+```
+
+<TbcFinalReviewDiagram />
+
+## 三大模块的职责
+
+### 前端（ch1-ch3）——关注 Tiger 语言
+
+| 阶段 | 输入 → 输出 | 核心技术 |
+|------|------------|---------|
+| 词法分析 | 源码 → Token | ML-Lex / DFA / 最长匹配 |
+| 语法分析 | Token → AST | ML-Yacc / LALR(1) / 移进归约 |
+| 语义分析与类型 | AST → (exp, ty) | 双环境 / 类型规则 / nil 子类型 |
+
+### IR 层（ch4-ch6）——关注前后端契约
+
+| 阶段 | 输入 → 输出 | 核心技术 |
+|------|------------|---------|
+| 活动记录与栈帧 | Frame 抽象 | escape / static link / 调用约定 |
+| 翻译到 IR | 带类型 AST → Tree IR | Ex / Nx / Cx 三形式 |
+| 规范化 | Tree IR → 线性 IR | 消除 ESEQ / 基本块 / trace |
+
+### 后端（ch7-ch8）——关注目标机器
+
+| 阶段 | 输入 → 输出 | 核心技术 |
+|------|------------|---------|
+| 指令选择 | IR → 机器指令 | Maximal Munch 树覆盖 |
+| 寄存器分配 | TEMP → 寄存器 | 干涉图 / 图着色 / 溢出 |
+
+## Tree IR：前后端的解耦枢纽
+
+Tree IR 是介于带类型 AST 和目标机器指令之间的树形中间表示，是前后端的**契约**：前端把 Tiger 翻译成 Tree IR，后端从 Tree IR 生成目标代码。
+
+<Callout type="info">
+
+**Tree IR 的核心价值**：①前端关注源语言（词法/语法/语义/类型），后端关注目标机器（指令选择/寄存器分配），互不耦合 ②支持多语言×多平台——M 个前端 + N 个后端共享一套 Tree IR，避免 M×N 组合爆炸 ③Tree IR 设计成树形，便于后端用 Maximal Munch 做树覆盖指令选择 ④规范化让 IR 变纯净，使指令选择和寄存器分配各自独立 ⑤TEMP 虚拟寄存器解耦指令选择与寄存器分配。这是 GCC、LLVM 等工业编译器的标准架构思想。
+
+</Callout>
+
+## Frame 抽象：贯穿前后端
+
+Frame 抽象封装活动记录（栈帧），提供 `newFrame`/`formals`/`allocLocal` 等平台无关接口，让前端只关心 escape 判定与 static link，具体栈帧布局交给后端实现。
+
+贯穿方式：
+
+- **语义分析**：判定哪些变量 escape → `allocLocal(true)`
+- **翻译 IR**：通过 Frame 拿到变量访问方式（`fp` 偏移）生成 MEM 节点
+- **static link**：作为 escape 变量存栈帧，支持嵌套函数访问外层变量
+- **寄存器分配溢出**：溢出的 TEMP 也用 Frame 的栈空间存
+
+<Callout type="tip">
+
+Frame 抽象解决的核心问题：把「变量存哪」这一与机器强相关的决策抽象化，前端写一次即可适配多平台，后端按机器特性实现布局。这是平台无关编译器的标准设计，与 Tree IR 的解耦思想一脉相承。
+
+</Callout>
+
+## 数据结构与算法的衔接
+
+虎书的数据结构环环相扣，前一阶段的输出是后一阶段的输入：
+
+| 数据结构 | 产生阶段 | 消费阶段 |
+|---------|---------|---------|
+| Symbol 表 | 词法/语法 | 语义分析（环境） |
+| AST | 语法分析 | 语义分析 |
+| 双环境（tenv/venv） | 语义分析 | 类型检查 |
+| (exp, ty) | 语义分析 | 翻译 IR |
+| Tree IR | 翻译 IR | 规范化 |
+| 规范化 IR / 基本块 | 规范化 | 指令选择 |
+| 含 TEMP 指令 | 指令选择 | 寄存器分配 |
+| 干涉图 | 寄存器分配 | 图着色 |
+| Frame | 语义分析 | 翻译/寄存器分配（溢出） |
+
+## 虎书的核心思想
+
+虎书的核心思想：**围绕 Tiger 语言端到端实现一个完整可运行的编译器，以 Tree IR 为解耦枢纽，每个阶段有明确的输入输出和可落地的算法。**
+
+工程导向体现：
+
+1. **不空谈理论**——每个概念都对应具体实现：ML-Lex 生成扫描器、ML-Yacc 生成分析器、Frame 接口管理栈帧、Maximal Munch 做指令选择、Chaitin-Briggs 算法做寄存器分配
+2. **数据结构贯穿始终**——Symbol 表、双环境、Tree IR、干涉图，环环相扣
+3. **关注实现细节**——escape 判定、static link、ESEQ 消除、trace 调度、move coalescing、溢出重写，都是工程中的真实问题
+4. **分阶段解耦**——每部分可独立实现、测试、替换
+
+<Callout type="info">
+
+虎书是「做出来」的编译器教材，与偏理论的龙书互补：龙书讲清楚「为什么」，虎书带读者「动手做」。两者结合，既懂理论又能落地，是掌握编译原理的最佳路径。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="端到端编译流程">
+Tiger 源码 → 词法 → 语法 → 语义 → 栈帧 → 翻译 IR → 规范化 → 指令选择 → 寄存器分配 → 目标代码的完整编译路径。
+</GlossaryItem>
+
+<GlossaryItem term="Tree IR 枢纽">
+Tree IR 作为前后端契约，解耦前端（关注源语言）与后端（关注目标机器），支持多语言×多平台复用，避免 M×N 组合爆炸。
+</GlossaryItem>
+
+<GlossaryItem term="Frame 贯穿">
+Frame 抽象从前端语义分析（escape 判定）贯穿到后端寄存器分配（溢出存栈），把与机器强相关的栈帧布局抽象化。
+</GlossaryItem>
+
+<GlossaryItem term="工程导向">
+虎书每个概念对应具体实现（ML-Lex/ML-Yacc/Frame/Maximal Munch/Chaitin-Briggs），数据结构环环相扣，分阶段解耦可独立实现测试。
+</GlossaryItem>
+
+<GlossaryItem term="虎书 vs 龙书">
+虎书偏工程实现（做出来），围绕 Tiger 端到端实现编译器；龙书偏理论奠基（讲清楚为什么），系统讲解形式语言、自动机、类型系统理论。两者互补。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+请完整描述从 Tiger 源码到目标代码的端到端编译流程，每个阶段的输入输出是什么？
+
+<Answer>
+
+①词法分析：输入源码字符流，输出 Token 序列（ML-Lex 表驱动 DFA）②语法分析：输入 Token，输出 AST（ML-Yacc LALR(1) 移进归约）③语义分析与类型：输入 AST + 双环境，输出带类型结果 (exp, ty)（环境查表 + 类型规则）④翻译到 IR：输入带类型 AST，输出 Tree IR（Ex/Nx/Cx 三形式）⑤规范化：输入 Tree IR（含 ESEQ/嵌套 CALL），输出规范化 IR（无 ESEQ、CALL 顶层、线性）⑥基本块与 trace：输入规范化 IR，输出线性基本块序列 ⑦指令选择：输入基本块，输出含 TEMP 的机器指令（Maximal Munch 树覆盖）⑧寄存器分配：输入含 TEMP 指令，输出物理寄存器目标代码（干涉图着色 + 溢出）。全程 Tree IR 解耦前后端，Frame 抽象贯穿。
+
+</Answer>
+
+### 问题 2
+
+Tree IR 在前后端解耦中起什么作用？虎书的解耦架构有哪些具体好处？
+
+<Answer>
+
+Tree IR 是介于带类型 AST 和目标机器指令之间的树形中间表示，是前后端的契约：前端把 Tiger 翻译成 Tree IR，后端从 Tree IR 生成目标代码。好处：①前端关注源语言（词法/语法/语义/类型），后端关注目标机器（指令选择/寄存器分配），互不耦合 ②支持多语言×多平台——M 个前端 + N 个后端共享一套 Tree IR，避免 M×N 组合爆炸 ③Tree IR 设计成树形，便于后端用 Maximal Munch 做树覆盖指令选择 ④规范化让 IR 变纯净，使指令选择和寄存器分配各自独立 ⑤TEMP 虚拟寄存器解耦指令选择与寄存器分配。这是 GCC、LLVM 等工业编译器的标准架构思想。
+
+</Answer>
+
+### 问题 3
+
+Frame 抽象如何贯穿前后端？它解决了什么问题？
+
+<Answer>
+
+Frame 抽象封装活动记录（栈帧），提供 newFrame/formals/allocLocal 等平台无关接口，让前端只关心 escape 判定与 static link，具体栈帧布局交给后端实现。贯穿方式：前端语义分析时判定哪些变量 escape（被嵌套函数引用）→ allocLocal(true) 在栈帧分配；翻译 IR 时通过 Frame 拿到变量访问方式（fp 偏移）生成 MEM 节点；static link 作为 escape 变量存栈帧，支持嵌套函数访问外层变量；后端寄存器分配溢出时也用 Frame 的栈空间存溢出变量。解决的问题：把「变量存哪」这一与机器强相关的决策抽象化，前端写一次即可适配多平台，后端按机器特性实现布局。
+
+</Answer>
+
+### 问题 4
+
+虎书的核心思想是什么？它如何体现「端到端实现一个完整编译器」的工程导向？
+
+<Answer>
+
+核心思想：围绕 Tiger 语言端到端实现一个完整可运行的编译器，以 Tree IR 为解耦枢纽，每个阶段有明确的输入输出和可落地的算法。工程导向体现：①不空谈理论，每个概念都对应具体实现——ML-Lex 生成扫描器、ML-Yacc 生成分析器、Frame 接口管理栈帧、Maximal Munch 做指令选择、Chaitin-Briggs 算法做寄存器分配 ②数据结构贯穿始终——Symbol 表、双环境、Tree IR、干涉图，环环相扣 ③关注实现细节——escape 判定、static link、ESEQ 消除、trace 调度、move coalescing、溢出重写，都是工程中的真实问题 ④分阶段解耦让每部分可独立实现、测试、替换。虎书是「做出来」的编译器教材，与偏理论的龙书互补。
+
+</Answer>
+
+</Exercises>

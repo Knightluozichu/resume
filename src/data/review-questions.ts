@@ -1985,6 +1985,16 @@ import { dbcCodeGenerationQuestions } from "./review/dbc-code-generation";
 import { dbcMachineIndependentOptQuestions } from "./review/dbc-machine-independent-opt";
 import { dbcMachineDependentOptQuestions } from "./review/dbc-machine-dependent-opt";
 import { dbcFinalReviewQuestions } from "./review/dbc-final-review";
+import { tbcLearningMapQuestions } from "./review/tbc-learning-map";
+import { tbcLexingQuestions } from "./review/tbc-lexing";
+import { tbcParsingQuestions } from "./review/tbc-parsing";
+import { tbcSemanticAnalysisQuestions } from "./review/tbc-semantic-analysis";
+import { tbcActivationRecordsQuestions } from "./review/tbc-activation-records";
+import { tbcTranslationIrQuestions } from "./review/tbc-translation-ir";
+import { tbcCanonicalizationQuestions } from "./review/tbc-canonicalization";
+import { tbcInstructionSelectionQuestions } from "./review/tbc-instruction-selection";
+import { tbcRegisterAllocationQuestions } from "./review/tbc-register-allocation";
+import { tbcFinalReviewQuestions } from "./review/tbc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4005,6 +4015,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dbcMachineIndependentOptQuestions,
   ...dbcMachineDependentOptQuestions,
   ...dbcFinalReviewQuestions,
+  ...tbcLearningMapQuestions,
+  ...tbcLexingQuestions,
+  ...tbcParsingQuestions,
+  ...tbcSemanticAnalysisQuestions,
+  ...tbcActivationRecordsQuestions,
+  ...tbcTranslationIrQuestions,
+  ...tbcCanonicalizationQuestions,
+  ...tbcInstructionSelectionQuestions,
+  ...tbcRegisterAllocationQuestions,
+  ...tbcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
