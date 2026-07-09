@@ -1,0 +1,207 @@
+---
+title: "中间代码生成"
+type: B
+section: "编译原理"
+order: 5
+description: "AST到三地址码的语法制导翻译与IR形式"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { CrcIntermediateCodeDiagram } from "@/components/mdx/crafting-compiler/diagrams/crc-intermediate-code";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解中间代码（IR）的作用和三种常见形式
+- 掌握 AST 到三地址码的语法制导翻译
+- 理解综合属性和继承属性在翻译中的作用
+- 了解控制流语句的翻译方法
+
+</Objectives>
+
+## 中间代码的作用
+
+中间代码是介于 AST 和目标代码之间的**机器无关**表示。前端输出 AST，中端翻译为 IR，后端从 IR 生成目标代码：
+
+```text
+带注解 AST  →  IR 生成  →  三地址码  →  优化  →  优化后 IR
+```
+
+<CrcIntermediateCodeDiagram />
+
+<Callout type="info">
+
+不直接在 AST 上生成目标代码，是因为 AST 层次结构复杂、与源语言耦合紧密。IR 形式简单（线性指令），便于做机器无关优化，也便于后端复用。
+
+</Callout>
+
+## 三地址码（TAC）
+
+三地址码每条指令最多包含**三个操作数**（两个源 + 一个目的）：
+
+```text
+t1 = c * 2        ← 两个源操作数 c 和 2，目的 t1
+t2 = b + t1       ← 两个源操作数 b 和 t1，目的 t2
+a = t2            ← 一个源操作数 t2，目的 a
+```
+
+### AST → TAC 翻译示例
+
+以 `a = b + c * 2` 为例：
+
+```text
+AST:                          TAC:
+Assign                        t1 = c * 2
+├── a                         t2 = b + t1
+└── BinOp(+)                  a = t2
+    ├── b
+    └── BinOp(*)
+        ├── c
+        └── 2
+```
+
+翻译过程**自底向上**：先翻译 `c * 2` 生成 `t1`，再翻译 `b + t1` 生成 `t2`，最后赋值 `a = t2`。
+
+## 语法制导翻译（SDT）
+
+语法制导翻译在遍历 AST 时为每个节点计算属性并生成 IR 指令：
+
+### 综合属性（Synthesized）
+
+子节点的属性值由其子树计算，**自底向上**传递：
+
+```text
+E.addr = new_temp()                        ← 分配临时变量
+emit(E.addr = E1.addr + E2.addr)           ← 生成指令
+```
+
+表达式节点 E 的 addr 属性 = 临时变量名，子表达式先算好 addr 传给父节点。
+
+### 继承属性（Inherited）
+
+节点的属性值由父节点传入，**自顶向下**传递：
+
+```text
+S.next = inherited_label    ← 控制流标签从父节点传入
+```
+
+控制流翻译需用继承属性传递跳转标号、循环入口/出口等上下文信息。
+
+<Callout type="tip">
+
+IR 生成主要用综合属性（为表达式分配临时变量并 emit 指令），控制流翻译需用继承属性（传递跳转标号）。两者配合完成完整翻译。
+
+</Callout>
+
+## 三种 IR 形式对比
+
+| IR 形式 | 特点 | 优势 | 用途 |
+|---------|------|------|------|
+| 三地址码（TAC） | 线性指令，每条最多 3 操作数 | 简单易生成 | 基础 IR |
+| SSA 形式 | 每变量只赋值一次 | 优化友好 | LLVM IR |
+| 控制流图（CFG） | 基本块 + 跳转边 | 数据流分析基础 | 优化分析 |
+
+### SSA 形式
+
+SSA（静态单赋值）要求每个变量只被赋值一次，在控制流汇合点用 $\phi$ 函数合并：
+
+```text
+TAC:              SSA:
+t1 = a + b        t1_1 = a + b
+t1 = c * d        t1_2 = c * d
+                  t1_3 = phi(t1_1, t1_2)   ← φ 函数合并两条路径
+```
+
+$\phi$ 函数的数学含义：$t_1^{(3)} = \phi(t_1^{(1)}, t_1^{(2)})$ 表示根据到达该点的路径选择对应的值。
+
+## 控制流翻译
+
+```text
+if (E) S1 else S2:
+  code(E, Ltrue, Lfalse)     ← E 为真跳 Ltrue，为假跳 Lfalse
+  Ltrue: code(S1); goto Lnext
+  Lfalse: code(S2)
+  Lnext:
+
+while (E) S1:
+  Lbegin: code(E, Lbody, Lnext)
+  Lbody: code(S1); goto Lbegin
+  Lnext:
+```
+
+<Callout type="warning">
+
+短路求值：`a && b` 翻译为分支跳转而非逻辑运算——若 a 为假则跳过 b 的计算，直接结果为假。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="三地址码（TAC）">
+每条指令最多包含三个操作数的线性中间表示，形式如 `x = y op z`，是最基础的 IR 形式。
+</GlossaryItem>
+
+<GlossaryItem term="SSA（静态单赋值）">
+要求每个变量只被赋值一次的 IR 形式，在控制流汇合点用 φ 函数合并不同路径的值，使数据流分析更精确、优化更高效。
+</GlossaryItem>
+
+<GlossaryItem term="语法制导翻译（SDT）">
+在遍历 AST 时为每个节点计算属性并生成 IR 指令的翻译方法，综合属性自底向上传递，继承属性自顶向下传递。
+</GlossaryItem>
+
+<GlossaryItem term="综合属性（Synthesized Attribute）">
+由子树计算并自底向上传递的属性，如表达式节点的 addr（临时变量名），IR 生成主要使用综合属性。
+</GlossaryItem>
+
+<GlossaryItem term="控制流图（CFG）">
+将基本块作为节点、跳转作为边的图结构，显式表达程序的控制流，是数据流分析的基础数据结构。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+中间代码（IR）的作用是什么？为什么不在 AST 上直接生成目标代码？
+
+<Answer>
+
+中间代码是介于AST和目标代码之间的机器无关表示。作用：解耦前端与后端——前端输出AST，中端翻译为IR，后端从IR生成目标代码，两端独立。优化友好——IR形式简单（线性指令），比AST更容易做数据流分析和各种优化。多平台复用——同一份IR可生成不同平台的目标代码，优化只需做一次。不直接在AST上生成目标代码是因为AST层次结构复杂、与源语言耦合紧密，直接生成会混杂语法结构与机器细节，难以做机器无关优化，也无法复用后端。
+
+</Answer>
+
+### 问题 2
+
+三地址码（TAC）的格式是什么？以 `a = b + c * 2` 为例说明 AST 如何翻译为三地址码。
+
+<Answer>
+
+三地址码每条指令最多包含三个操作数（两个源+一个目的），形式如x = y op z。以a = b + c * 2为例：AST的Assign节点右子树是BinOp(+)，其右操作数是BinOp(*)。翻译过程（语法制导，自底向上）：为c * 2生成临时变量t1，emit `t1 = c * 2`；为b + t1生成临时变量t2，emit `t2 = b + t1`；生成赋值 `a = t2`。临时变量t1、t2存储中间结果，将嵌套表达式展平为线性指令序列。
+
+</Answer>
+
+### 问题 3
+
+三地址码（TAC）、SSA 形式和控制流图（CFG）这三种 IR 各有什么特点？
+
+<Answer>
+
+三地址码（TAC）：线性指令序列，每条指令最多三个操作数，简单易生成，是最基础的IR形式。SSA（静态单赋值）形式：在TAC基础上要求每个变量只被赋值一次，在控制流汇合点用φ（phi）函数合并不同路径的值。SSA使数据流分析更精确、优化更高效（如常量传播、死代码消除），是现代编译器（LLVM IR）的主流形式。控制流图（CFG）：将基本块作为节点、跳转作为边的图结构，显式表达程序的控制流（分支、循环），是数据流分析（到达定值、活跃变量等）的基础数据结构。三者可组合使用：SSA形式的指令组织在CFG的基本块中。
+
+</Answer>
+
+### 问题 4
+
+语法制导翻译（SDT）中的综合属性和继承属性是什么？在 IR 生成中各起什么作用？
+
+<Answer>
+
+综合属性（Synthesized）：子节点的属性值由其子树计算，自底向上传递。如表达式节点E的addr属性=new_temp()生成临时变量存放计算结果，子表达式先算好addr传给父节点。继承属性（Inherited）：节点的属性值由父节点或兄弟节点传入，自顶向下传递。如语句节点的next属性（下一条指令的标号）由父控制结构传入，使break/continue知道跳转目标。IR生成主要用综合属性（为表达式分配临时变量并emit指令），控制流翻译需用继承属性（传递跳转标号、循环入口/出口等上下文信息）。两者配合完成完整的AST→IR翻译。
+
+</Answer>
+
+</Exercises>

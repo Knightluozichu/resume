@@ -243,6 +243,7 @@ export const BOOK_ORDER = [
   "tcp-ip-illustrated-vol1",
   "unix-network-programming-vol1",
   "two-week-scripting-language",
+  "crafting-compiler",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -426,6 +427,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议",
   "unix-network-programming-vol1": "UNIX网络编程 卷1：套接字联网API",
   "two-week-scripting-language": "两周自制脚本语言",
+  "crafting-compiler": "自制编译器",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

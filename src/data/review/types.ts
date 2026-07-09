@@ -2078,7 +2078,17 @@ export type ReviewChapterSlug =
   | "tws-types-errors"
   | "tws-classes"
   | "tws-arrays-hash"
-  | "tws-final-review";
+  | "tws-final-review"
+  | "crc-learning-map"
+  | "crc-compiler-architecture"
+  | "crc-lexer-generator"
+  | "crc-parser-generator"
+  | "crc-semantics"
+  | "crc-intermediate-code"
+  | "crc-optimization"
+  | "crc-code-generation"
+  | "crc-linker-loader"
+  | "crc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4161,6 +4171,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "tws-classes": "类与继承",
   "tws-arrays-hash": "数组与哈希表",
   "tws-final-review": "全书复习与知识整合",
+  "crc-learning-map": "全书学习地图",
+  "crc-compiler-architecture": "编译器架构",
+  "crc-lexer-generator": "词法分析生成器",
+  "crc-parser-generator": "语法分析生成器",
+  "crc-semantics": "语义分析与类型检查",
+  "crc-intermediate-code": "中间代码生成",
+  "crc-optimization": "代码优化",
+  "crc-code-generation": "目标代码生成",
+  "crc-linker-loader": "链接与加载",
+  "crc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

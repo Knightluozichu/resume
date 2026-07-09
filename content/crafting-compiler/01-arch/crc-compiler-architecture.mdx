@@ -1,0 +1,172 @@
+---
+title: "编译器架构"
+type: A
+section: "编译原理"
+order: 1
+description: "编译器三段式架构与Pass流水线设计"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CrcCompilerArchitectureDiagram } from "@/components/mdx/crafting-compiler/diagrams/crc-compiler-architecture";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解编译器三段式架构：前端、中端、后端
+- 掌握中间表示（IR）作为三段解耦桥梁的作用
+- 理解编译 Pass（遍）的组织方式
+- 明确三段式如何实现多语言 × 多平台复用
+
+</Objectives>
+
+## 编译器的三段式架构
+
+现代编译器（GCC、LLVM）普遍采用**三段式架构**——将编译过程分为前端、中端、后端三个独立阶段：
+
+```text
+源码 → [前端] → AST → [中端] → IR → [后端] → 目标代码
+       词法+语法      语义+IR+优化      指令选择+寄存器分配
+```
+
+<CrcCompilerArchitectureDiagram />
+
+## 三段各自职责
+
+| 阶段 | 职责 | 输入 → 输出 | 关键技术 |
+|------|------|------------|---------|
+| 前端 | 理解源代码结构 | 源码 → AST | 词法分析、语法分析 |
+| 中端 | 语义分析 + 优化 | AST → 优化 IR | 类型检查、IR 生成、数据流优化 |
+| 后端 | 生成目标代码 | IR → 目标指令 | 指令选择、寄存器分配 |
+
+<Callout type="info">
+
+前端关注「代码说了什么」，后端关注「代码如何高效执行」，中端用 IR 将两者解耦。
+
+</Callout>
+
+## 中间表示（IR）的桥梁作用
+
+中间表示是三段之间的**数据接口**：
+
+```text
+AST（前端输出）  →  IR（中端操作对象）  →  目标指令（后端输出）
+  语法结构            机器无关指令          机器相关指令
+```
+
+| IR 形式 | 特点 | 用途 |
+|---------|------|------|
+| 三地址码（TAC） | 每条指令最多 3 操作数 | 简单易生成 |
+| SSA 形式 | 每变量只赋值一次 | 优化友好 |
+| 控制流图（CFG） | 基本块 + 跳转边 | 数据流分析基础 |
+
+## 三段式的核心优势
+
+### 复杂度从 M × N 降为 M + N
+
+```text
+无 IR：M 种语言 × N 种平台 = M × N 个编译器
+有 IR：M 个前端 + 1 套中端 + N 个后端 = M + N + 1
+```
+
+| 优势 | 说明 |
+|------|------|
+| 多语言支持（M × 1） | M 种语言只需 M 个前端，中端/后端复用 |
+| 多平台支持（1 × N） | 统一 IR 只需 N 个后端，前端/中端复用 |
+| 优化复用（1 次） | IR 层优化只写一次，对所有语言/平台生效 |
+
+<Callout type="tip">
+
+GCC 支持 C/C++/Fortran 等多种语言和 x86/ARM/MIPS 等多种平台，正是依靠三段式架构和统一的 GIMPLE/RTL 中间表示。
+
+</Callout>
+
+## 编译 Pass（遍）
+
+编译器将处理过程组织为一系列 **Pass**，每个 Pass 做一种特定变换：
+
+```text
+Pass 1: AST 构建    → 输出 AST
+Pass 2: IR 生成     → 输出 TAC
+Pass 3: 常量折叠     → 输出优化 IR
+Pass 4: 死代码消除   → 输出优化 IR
+Pass 5: 代码生成    → 输出目标指令
+```
+
+每个 Pass 的特征：
+
+- 读入一种 IR，做一种变换，输出新 IR
+- 职责单一，便于独立开发和测试
+- 可按需启用/禁用（如 `-O0` 关闭优化 Pass）
+
+<Callout type="warning">
+
+Pass 之间通过 IR 传递数据。如果某 Pass 的输出格式不兼容下一 Pass 的输入，需要插入格式转换 Pass。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="前端（Frontend）">
+编译器负责理解源代码结构的阶段，包括词法分析（源码→Token）和语法分析（Token→AST），与源语言相关、与目标机器无关。
+</GlossaryItem>
+
+<GlossaryItem term="中端（Middle-end）">
+编译器负责语义分析和优化的阶段，将 AST 翻译为中间表示（IR）并做机器无关优化，与源语言和目标机器都无关。
+</GlossaryItem>
+
+<GlossaryItem term="后端（Backend）">
+编译器负责生成目标代码的阶段，包括指令选择和寄存器分配，将 IR 转为目标机器的指令序列，与目标机器相关、与源语言无关。
+</GlossaryItem>
+
+<GlossaryItem term="编译 Pass（遍）">
+对中间表示做一次完整处理的过程，每个 Pass 读入 IR 做一种变换后输出新 IR，多个 Pass 串成流水线。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+编译器的前端、中端、后端各自负责什么工作？
+
+<Answer>
+
+前端负责理解源代码结构：词法分析（源码→Token序列）+语法分析（Token→AST），输出抽象语法树。中端负责语义分析和优化：语义分析（类型检查、符号表）+IR生成（AST→三地址码）+代码优化（常量折叠、死代码消除等），输出优化后的中间表示。后端负责生成目标代码：指令选择+寄存器分配+指令调度，输出目标机器的指令序列（目标文件）。
+
+</Answer>
+
+### 问题 2
+
+什么是编译 Pass（遍）？它在编译器架构中如何组织？
+
+<Answer>
+
+Pass（遍）是编译器中对中间表示做一次完整处理的过程。每个 Pass 读入一种 IR，做一种特定的变换，输出新的 IR，多个 Pass 串成流水线。典型 Pass 序列：Pass 1 构建 AST→Pass 2 生成 IR→Pass 3 做各种优化（可细分为多个子 Pass）→Pass 4 生成目标代码。Pass 之间通过 IR 传递数据，每个 Pass 职责单一，便于独立开发、测试和复用。
+
+</Answer>
+
+### 问题 3
+
+三段式架构如何实现多语言 × 多平台的复用？复杂度从 M×N 降到了什么？
+
+<Answer>
+
+如果没有中间表示，M 种语言 × N 种平台需要 M×N 个编译器。三段式架构通过统一的 IR 解耦：每种语言只需一个前端（M 个前端），每种平台只需一个后端（N 个后端），中端（含优化）只需一套。总复杂度从 M×N 降为 M+N+1。例如 GCC 支持 C/C++/Fortran 等多种语言和 x86/ARM/MIPS 等多种平台，正是依靠三段式架构和统一的 GIMPLE/RTL 中间表示。
+
+</Answer>
+
+### 问题 4
+
+AST、IR、目标指令序列这三种中间数据分别在哪个阶段产生？各自的作用是什么？
+
+<Answer>
+
+AST（抽象语法树）在前端产生——语法分析器根据文法规则将 Token 组织成树形结构，反映源代码的语法结构，是前端与中端的接口。IR（中间表示，如三地址码/SSA）在中端产生——语义分析后通过语法制导翻译从 AST 生成，是优化和后端的统一数据格式，与具体机器无关。目标指令序列在后端产生——从优化后的 IR 通过指令选择和寄存器分配生成，是具体机器的指令。三者层层递进：从语法结构到机器无关的中间代码再到机器相关的目标代码。
+
+</Answer>
+
+</Exercises>

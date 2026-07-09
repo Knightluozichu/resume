@@ -1955,6 +1955,16 @@ import { twsTypesErrorsQuestions } from "./review/tws-types-errors";
 import { twsClassesQuestions } from "./review/tws-classes";
 import { twsArraysHashQuestions } from "./review/tws-arrays-hash";
 import { twsFinalReviewQuestions } from "./review/tws-final-review";
+import { crcLearningMapQuestions } from "./review/crc-learning-map";
+import { crcCompilerArchitectureQuestions } from "./review/crc-compiler-architecture";
+import { crcLexerGeneratorQuestions } from "./review/crc-lexer-generator";
+import { crcParserGeneratorQuestions } from "./review/crc-parser-generator";
+import { crcSemanticsQuestions } from "./review/crc-semantics";
+import { crcIntermediateCodeQuestions } from "./review/crc-intermediate-code";
+import { crcOptimizationQuestions } from "./review/crc-optimization";
+import { crcCodeGenerationQuestions } from "./review/crc-code-generation";
+import { crcLinkerLoaderQuestions } from "./review/crc-linker-loader";
+import { crcFinalReviewQuestions } from "./review/crc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3945,6 +3955,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...twsClassesQuestions,
   ...twsArraysHashQuestions,
   ...twsFinalReviewQuestions,
+  ...crcLearningMapQuestions,
+  ...crcCompilerArchitectureQuestions,
+  ...crcLexerGeneratorQuestions,
+  ...crcParserGeneratorQuestions,
+  ...crcSemanticsQuestions,
+  ...crcIntermediateCodeQuestions,
+  ...crcOptimizationQuestions,
+  ...crcCodeGenerationQuestions,
+  ...crcLinkerLoaderQuestions,
+  ...crcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
