@@ -1,0 +1,214 @@
+---
+title: "类与继承"
+type: C
+section: "编译原理"
+order: 7
+description: "类定义、继承机制与方法分发"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { TwsClassesDiagram } from "@/components/mdx/two-week-scripting-language/diagrams/tws-classes";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 掌握 Stone 中类的定义语法
+- 理解构造参数自动成为字段的机制
+- 掌握继承（extends）与方法复用
+- 理解方法查找链与 this 绑定
+
+</Objectives>
+
+## 类的定义
+
+```text
+class Point(x, y) {
+    def move(dx, dy) { x = x + dx; y = y + dy }
+    def toString() { "(" + x + ", " + y + ")" }
+}
+```
+
+<TwsClassesDiagram />
+
+### 构造参数 = 字段
+
+Stone 中类的构造参数**自动成为实例字段**——无需额外声明：
+
+```text
+class Point(x, y) { ... }
+            ↑  ↑
+        构造参数 = 实例字段
+
+p = Point(1, 2)
+// p 的字段环境: { x=1, y=2 }
+// 方法内可直接通过名称访问 x, y
+```
+
+## 类继承
+
+```text
+class Point3D(x, y, z) extends Point(x, y) {
+    def moveZ(dz) { z = z + dz }
+}
+```
+
+| 要素 | 说明 |
+|------|------|
+| `extends Point(x, y)` | 调用父类构造器初始化继承的字段 |
+| 方法继承 | Point3D 自动获得 Point 的 move、toString 方法 |
+| 方法新增 | Point3D 新增 moveZ 方法 |
+| 方法重写 | 子类定义同名方法，查找时优先找到子类版本 |
+
+## 方法调用与分发
+
+```text
+p = Point(1, 2)
+p.move(3, 4)
+
+调用过程:
+  1. 查找 move 方法
+  2. 绑定 this = p
+  3. 在 this 的环境中执行方法体
+```
+
+### 方法查找链
+
+```text
+p.move(3, 4):
+  1. 在 Point3D 类中查找 move → 未找到
+  2. 在父类 Point 中查找 move → 找到！
+  3. 绑定 this = p
+  4. 执行方法体 { x = x + dx; y = y + dy }
+```
+
+<Callout type="info">
+
+方法查找从**子类开始**，沿继承链向上查找。这确保子类重写的方法优先被找到——这是**动态分派**的基础。
+
+</Callout>
+
+## StoneObject 内部结构
+
+```java
+public class StoneObject {
+    StoneClassInfo classInfo;  // 类元信息（方法表 + 父类引用）
+    Environment fields;        // 字段绑定环境
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| classInfo | StoneClassInfo | 类的元信息，含方法定义表和父类引用 |
+| fields | Environment | 实例字段绑定，存储字段值 |
+
+<Callout type="tip">
+
+StoneObject **复用 Environment** 作为字段存储——字段就是环境中的变量绑定。方法执行时创建的新环境以 this 对象的 fields 环境为 outer，使方法体能直接通过名称访问字段。
+
+</Callout>
+
+### 方法执行时的环境链
+
+```text
+方法执行环境: { this=p, dx=3, dy=4 }
+       ↓ outer
+  p.fields: { x=1, y=2 }       ← this 的字段
+       ↓ outer
+  定义环境: { Point=ClassInfo }
+```
+
+## this 绑定与 super 调用
+
+### this 绑定
+
+```text
+p.move(1, 2)
+  → this = p
+  → 方法体内 this.x 访问 p 的字段 x
+```
+
+方法执行时 this 指向**调用者对象**，可访问其字段和方法。
+
+### super 调用
+
+```text
+class Point3D(x, y, z) extends Point(x, y) {
+    def move(dx, dy, dz) {
+        super.move(dx, dy)  ← 从父类开始查找 move
+        z = z + dz
+    }
+}
+```
+
+`super.move()` 从**父类开始**查找方法，跳过当前类的定义。
+
+<Glossary>
+
+<GlossaryItem term="class 语句">
+Stone 中定义类的语法。`class ClassName(params) extends Parent(params) { methods }`。构造参数自动成为实例字段，类体内用 def 定义方法。
+</GlossaryItem>
+
+<GlossaryItem term="extends（继承）">
+子类通过 extends 关键字继承父类。子类自动获得父类的所有方法，也可新增或重写方法。extends 后调用父类构造器初始化继承的字段。
+</GlossaryItem>
+
+<GlossaryItem term="方法查找链">
+方法调用时从子类开始查找，沿继承链向上到父类，直到找到方法或到达根类。这确保子类重写的方法优先被找到，是动态分派的基础。
+</GlossaryItem>
+
+<GlossaryItem term="StoneObject">
+Stone 中类的实例对象，包含 classInfo（类元信息）和 fields（字段环境）。复用 Environment 存储字段，使字段访问与变量查找统一。
+</GlossaryItem>
+
+<GlossaryItem term="this">
+方法执行时绑定到调用者对象的特殊变量。方法体内通过 this 访问对象自身的字段和方法。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+Stone 中如何定义类？构造参数和字段的关系是什么？
+
+<Answer>
+
+定义类用 class 语句：`class Point(x, y) { def move(dx, dy) { ... } }`。构造参数（x, y）在类定义的圆括号中声明，自动成为实例字段——创建对象时传入的参数值直接绑定到对象环境的字段中。类体内用 def 定义方法。创建实例用 `Point(1, 2)` 语法。构造参数不需要额外声明字段，Stone 自动将它们放入对象的字段环境中，方法内可通过名称直接访问。
+
+</Answer>
+
+### 问题 2
+
+Stone 中如何实现继承？子类如何复用父类的构造和方法？
+
+<Answer>
+
+继承用 extends 关键字：`class Point3D(x, y, z) extends Point(x, y) { ... }`。extends 后的 `Point(x, y)` 表示调用父类构造器初始化继承的字段。子类自动获得父类定义的所有方法（如 move），也可新增自己的方法（如 moveZ）。方法查找时先在子类中找，找不到再到父类找。子类可以重写父类方法——定义同名方法，查找时优先找到子类版本。super.method() 可显式调用父类方法。
+
+</Answer>
+
+### 问题 3
+
+方法调用时 this 是如何绑定的？方法查找链是如何工作的？
+
+<Answer>
+
+this 绑定：调用 `p.move(1, 2)` 时，求值器将 p 绑定到方法执行环境中的 this 变量，方法体内通过 this 访问对象自身的字段和方法。方法查找链：①先在对象的 classInfo 中查找方法定义 ②如果当前类没有该方法，沿继承链到父类查找 ③一直找到根类 ④如果整条链都找不到，抛出方法不存在的异常。查找从子类开始，确保子类重写的方法优先被找到——这是动态分派的基础。
+
+</Answer>
+
+### 问题 4
+
+StoneObject 内部包含哪些信息？它与 Environment 是什么关系？
+
+<Answer>
+
+StoneObject 包含：①classInfo（StoneClassInfo）—— 类的元信息，包括方法定义表和父类引用 ②fields（Environment）—— 字段绑定环境，存储实例的字段值。StoneObject 复用 Environment 作为字段存储——字段就是环境中的变量绑定。方法执行时创建的新环境以 this 对象的 fields 环境为 outer，使方法体内能直接通过名称访问字段。这种设计让字段访问和方法内变量查找统一使用环境链机制。
+
+</Answer>
+
+</Exercises>

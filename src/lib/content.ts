@@ -242,6 +242,7 @@ export const BOOK_ORDER = [
   "wireshark-packet-analysis",
   "tcp-ip-illustrated-vol1",
   "unix-network-programming-vol1",
+  "two-week-scripting-language",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -424,6 +425,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "wireshark-packet-analysis": "Wireshark数据包分析实战",
   "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议",
   "unix-network-programming-vol1": "UNIX网络编程 卷1：套接字联网API",
+  "two-week-scripting-language": "两周自制脚本语言",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1054,6 +1056,7 @@ export const SECTION_ORDER = [
   "数据库",
   "分布式与中间件",
   "网络",
+  "编译原理",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

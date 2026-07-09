@@ -1,0 +1,195 @@
+---
+title: "语法分析器"
+type: C
+section: "编译原理"
+order: 2
+description: "Parser 组合子与递归下降语法分析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { TwsParserDiagram } from "@/components/mdx/two-week-scripting-language/diagrams/tws-parser";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解语法分析器的作用：Token 序列 → AST
+- 掌握 Parser 组合子的四个基本原语
+- 理解表达式文法的三层递归结构与运算符优先级
+- 理解 repeat 如何实现左结合运算
+
+</Objectives>
+
+## 语法分析器的作用
+
+语法分析器（Parser）是解释器的**第二道工序**：将 Token 序列按语法规则组织成抽象语法树（AST）。
+
+```text
+Token 序列                              AST
+INT("3") PLUS("+") INT("4")  ──Parser──→  BinaryExpr(+)
+STAR("*") INT("5")                         ├ Number(3)
+                                           └ BinaryExpr(*)
+                                             ├ Number(4)
+                                             └ Number(5)
+```
+
+<TwsParserDiagram />
+
+## Parser 组合子
+
+Stone 的 Parser 使用 **Parser 组合子**（Parser Combinator）技术——通过组合小的解析器原语来构建复杂语法规则。
+
+### 四个基本原语
+
+| 原语 | 作用 | 行为 |
+|------|------|------|
+| `token(pattern)` | 匹配指定 Token | 成功返回该 Token 节点 |
+| `or(p1, p2, ...)` | 选择分支 | 按序尝试，返回第一个成功的结果 |
+| `seq(p1, p2, ...)` | 序列拼接 | 依次匹配全部，全部成功才返回 |
+| `repeat(p)` / `option(p)` | 循环/可选 | repeat 零次或多次；option 零次或一次 |
+
+<Callout type="info">
+
+通过这四个原语的**嵌套组合**，可以表达任意复杂的 BNF 文法规则。这比手写递归下降更声明式，代码更简洁。
+
+</Callout>
+
+## 表达式文法的三层递归
+
+运算符优先级通过**文法层次嵌套**实现——层次越深优先级越高：
+
+```text
+expr  → term { ("+"|"-") term }       ← 加减，最低优先级
+term  → factor { ("*"|"/") factor }   ← 乘除，中等优先级
+factor → NUMBER | "(" expr ")" | "-" factor  ← 最高优先级
+```
+
+### 优先级解析示例
+
+```text
+输入: 3 + 4 * 5
+
+解析过程:
+  expr 解析 term → 得到 Number(3)
+  expr 匹配 "+"
+  expr 解析 term → term 解析 factor(4), 匹配 "*", factor(5) → BinaryExpr(*, 4, 5)
+  expr 组合 → BinaryExpr(+, 3, BinaryExpr(*, 4, 5))
+
+结果: 3 + (4 * 5) = 23  ✓ 乘法先于加法
+```
+
+## 左结合的实现
+
+`repeat` 组合子通过循环匹配实现**左结合**：
+
+```text
+输入: 1 - 2 - 3
+
+解析过程:
+  term 解析 factor → 得到 Number(1)
+  repeat 第一次: 匹配 "-", 解析 term → Number(2)
+    组合 → BinaryExpr(-, 1, 2)
+  repeat 第二次: 匹配 "-", 解析 term → Number(3)
+    组合 → BinaryExpr(-, BinaryExpr(-, 1, 2), 3)
+
+结果: (1 - 2) - 3 = -4  ✓ 左结合
+```
+
+<Callout type="warning">
+
+如果用右递归（`expr → term "-" expr`）则会得到 `1 - (2 - 3) = 2`，即右结合，结果不同。`repeat` 的循环结构自然实现了左结合。
+
+</Callout>
+
+## 组合子构建表达式 Parser
+
+```java
+Parser expr = rule().expression(BinaryExpr.class,
+    term, ExprGrammar.or("+", "-"), term);
+
+Parser term = rule().expression(BinaryExpr.class,
+    factor, ExprGrammar.or("*", "/"), factor);
+
+Parser factor = rule().or(
+    NumberLiteral.rule(),     // NUMBER
+    rule().symbol("(").ast(expr).symbol(")"),  // (expr)
+    rule().symbol("-").ast(factor)              // -factor
+);
+```
+
+## 错误处理
+
+```text
+Token: IDENT("x") PLUS("+")  ← 缺少右操作数
+                    ↑
+              匹配失败 → 抛出 ParseExc
+              "syntax error around line 1"
+```
+
+匹配失败时抛出 `ParseExc` 异常，携带 Token 行号和期望信息。
+
+<Glossary>
+
+<GlossaryItem term="Parser 组合子（Parser Combinator）">
+一种构建语法分析器的方法，通过组合小的解析器原语（token、or、seq、repeat）来构建复杂的语法规则解析器，实现递归下降解析。
+</GlossaryItem>
+
+<GlossaryItem term="递归下降（Recursive Descent）">
+一种自顶向下的语法分析方法，每个非终结符对应一个解析函数，函数内部递归调用其他非终结符的解析函数。
+</GlossaryItem>
+
+<GlossaryItem term="运算符优先级">
+表达式中多个运算符的求值顺序规则。Stone 通过文法层次嵌套实现：expr(加减) → term(乘除) → factor(括号/负号)，层次越深优先级越高。
+</GlossaryItem>
+
+<GlossaryItem term="左结合（Left Associative）">
+同优先级运算符从左到右计算。`1 - 2 - 3` 等价于 `(1-2)-3`。Stone 用 repeat 循环自然实现左结合。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+语法分析器的作用是什么？它使用什么技术来构建 AST？
+
+<Answer>
+
+语法分析器的作用是将 Token 序列按照语法规则组织成抽象语法树（AST）。Stone 的 Parser 使用 Parser 组合子技术——通过组合小的解析器原语（如 token、or、seq、repeat、option）来构建复杂的语法规则解析器，实现递归下降解析。这种方式比手写递归下降更声明式，代码更简洁，易于扩展。
+
+</Answer>
+
+### 问题 2
+
+Parser 组合子的四个基本原语是什么？各自的作用是什么？
+
+<Answer>
+
+四个基本原语：①token(pattern)——匹配指定类型的 Token，成功返回该 Token 节点 ②or(p1, p2, ...)——按序尝试各子 parser，返回第一个成功的结果，实现选择分支 ③seq(p1, p2, ...)——依次匹配全部子 parser，全部成功才返回结果列表，实现序列拼接 ④repeat(p) / option(p)——repeat 匹配零次或多次（循环），option 匹配零次或一次（可选）。通过这四个原语的嵌套组合，可以表达任意复杂的 BNF 文法规则。
+
+</Answer>
+
+### 问题 3
+
+表达式文法的三层递归结构如何实现运算符优先级？
+
+<Answer>
+
+三层结构：expr → term { (+|-) term }（加减，最低优先级）→ term → factor { (*|/) factor }（乘除，中等优先级）→ factor → NUMBER | (expr) | -factor（最高优先级）。优先级通过嵌套层次实现：层次越深优先级越高。解析 expr 时先解析 term，term 内先解析 factor。这样 `3 + 4 * 5` 会被解析为 `3 + (4 * 5)`，因为 `*` 在更深的 term 层先被解析。括号表达式 `(expr)` 回到最外层，实现优先级覆盖。
+
+</Answer>
+
+### 问题 4
+
+repeat 组合子是如何实现左结合运算的？以 `1 - 2 - 3` 为例说明。
+
+<Answer>
+
+repeat 组合子循环匹配 `(- term)` 部分，每次循环将当前结果作为左操作数与新的右操作数组合。以 `1 - 2 - 3` 为例：第一次匹配 term 得到 1，然后 repeat 循环第一次匹配到 `- 2`，生成 BinaryExpr(-, 1, 2)；循环第二次匹配到 `- 3`，生成 BinaryExpr(-, BinaryExpr(-, 1, 2), 3)。最终 AST 结构为 (1-2)-3，即左结合。如果用右递归则会得到 1-(2-3) 即右结合，结果不同。
+
+</Answer>
+
+</Exercises>

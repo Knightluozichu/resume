@@ -1945,6 +1945,16 @@ import { unpIpv6Questions } from "./review/unp-ipv6";
 import { unpDaemonIpcQuestions } from "./review/unp-daemon-ipc";
 import { unpAdvancedIoQuestions } from "./review/unp-advanced-io";
 import { unpFinalReviewQuestions } from "./review/unp-final-review";
+import { twsLearningMapQuestions } from "./review/tws-learning-map";
+import { twsLexerQuestions } from "./review/tws-lexer";
+import { twsParserQuestions } from "./review/tws-parser";
+import { twsAstQuestions } from "./review/tws-ast";
+import { twsEvaluatorQuestions } from "./review/tws-evaluator";
+import { twsFunctionsQuestions } from "./review/tws-functions";
+import { twsTypesErrorsQuestions } from "./review/tws-types-errors";
+import { twsClassesQuestions } from "./review/tws-classes";
+import { twsArraysHashQuestions } from "./review/tws-arrays-hash";
+import { twsFinalReviewQuestions } from "./review/tws-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3925,6 +3935,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...unpDaemonIpcQuestions,
   ...unpAdvancedIoQuestions,
   ...unpFinalReviewQuestions,
+  ...twsLearningMapQuestions,
+  ...twsLexerQuestions,
+  ...twsParserQuestions,
+  ...twsAstQuestions,
+  ...twsEvaluatorQuestions,
+  ...twsFunctionsQuestions,
+  ...twsTypesErrorsQuestions,
+  ...twsClassesQuestions,
+  ...twsArraysHashQuestions,
+  ...twsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -2068,7 +2068,17 @@ export type ReviewChapterSlug =
   | "unp-ipv6"
   | "unp-daemon-ipc"
   | "unp-advanced-io"
-  | "unp-final-review";
+  | "unp-final-review"
+  | "tws-learning-map"
+  | "tws-lexer"
+  | "tws-parser"
+  | "tws-ast"
+  | "tws-evaluator"
+  | "tws-functions"
+  | "tws-types-errors"
+  | "tws-classes"
+  | "tws-arrays-hash"
+  | "tws-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4141,6 +4151,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "unp-daemon-ipc": "守护进程与IPC",
   "unp-advanced-io": "高级I/O与信号",
   "unp-final-review": "全书复习与知识整合",
+  "tws-learning-map": "全书学习地图",
+  "tws-lexer": "词法分析器",
+  "tws-parser": "语法分析器",
+  "tws-ast": "抽象语法树",
+  "tws-evaluator": "求值器",
+  "tws-functions": "函数与闭包",
+  "tws-types-errors": "类型与错误处理",
+  "tws-classes": "类与继承",
+  "tws-arrays-hash": "数组与哈希表",
+  "tws-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
