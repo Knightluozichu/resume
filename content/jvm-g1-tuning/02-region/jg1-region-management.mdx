@@ -1,0 +1,146 @@
+---
+title: "Region管理与内存布局"
+type: B
+section: "JVM与Java生态"
+order: 2
+description: "深入理解G1的Region大小计算、HeapRegion内部结构、Region状态机流转与Humongous对象分配机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Jg1RegionManagementDiagram } from "@/components/mdx/jvm-g1-tuning/diagrams/jg1-region-management";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解Region大小的自动计算机制——为什么是2的幂、为什么目标2048个Region
+- 掌握HeapRegion的内部结构——_bottom/_top/_end/_type
+- 理解Region状态机——Free→Eden→Survivor→Old→Free的流转条件
+- 掌握Humongous对象的分配流程与性能影响
+</Objectives>
+
+## 直觉引入
+
+G1的Region像一个「可变角色的标准货柜」。每个货柜大小一样（RegionSize，1-32MB），但角色随时变化——今天放新货（Eden），明天存活货搬到隔壁货柜后这里清空（Free），后天变成存存货区（Old）。货柜内部用一根指针（_top）分隔已用和未用空间。当货物太大超过半个货柜时（Humongous对象），需要连续租多个货柜存放。
+
+<Jg1RegionManagementDiagram />
+
+## Region 大小计算
+
+```text
+计算公式：
+  RegionSize = 堆大小 / 2048（目标Region数）
+  向上取整到最近的 2 的幂
+  范围限制：1MB ~ 32MB
+
+示例：
+  4GB 堆 → 4096MB / 2048 = 2MB
+  8GB 堆 → 8192MB / 2048 = 4MB
+  16GB 堆 → 16384MB / 2048 = 8MB
+  32GB 堆 → 32768MB / 2048 = 16MB
+  64GB 堆 → 65536MB / 2048 = 32MB
+
+也可手动指定：-XX:G1HeapRegionSize=16m（必须是2的幂）
+```
+
+<Callout type="insight">
+**为什么必须是2的幂**：①位运算高效——Region索引和地址转换用位移（`address >> log2(RegionSize)`）替代除法；②内存对齐——2的幂大小保证Region起始地址对齐，有利于CPU缓存行对齐和TLB效率；③Humongous判定——大对象阈值（RegionSize/2）也是2的幂的除法，计算简单。
+</Callout>
+
+## HeapRegion 内部结构
+
+```text
+源码类：HeapRegion（hotspot/share/gc/g1/heapRegion.hpp）
+
+核心字段：
+  _bottom    Region 起始地址（不变）
+  _top       已分配指针（分配时推进）
+  _end       Region 结束地址（不变）
+  _type      Region 类型（HeapRegionType 管理）
+
+内存布局：
+  _bottom ──── 已分配区 ──── _top ──── 未分配区 ──── _end
+  |<---------- 已用 ---------->|<-------- 可用 -------->|
+
+对象分配：
+  新对象在 _top 处分配，_top 向 _end 方向推进
+  _top == _end 时 Region 已满，需要分配新 Region
+```
+
+## Region 状态机
+
+```text
+状态流转（通过 HeapRegionType 管理）：
+
+  ┌─────────┐  分配   ┌───────┐  Young GC  ┌──────────┐  晋升  ┌──────┐
+  │  Free   │ ──────→ │ Eden  │ ─────────→ │ Survivor │ ────→ │ Old  │
+  │ 空闲可用 │         │ 新对象  │            │ 存活暂存  │       │ 长期  │
+  └─────────┘         └───────┘            └──────────┘       └──────┘
+       ↑                  │                      │                │
+       │    Young GC      │   Young GC           │   Mixed GC     │
+       └──────────────────┘ ←────────────────────┘ ←──────────────┘
+                         回收后清空 _top → _bottom，变回 Free
+
+关键源码：
+  G1CollectedHeap::allocate_new_region     → 分配新 Region
+  HeapRegion::note_start_of_marking        → 标记阶段开始
+  HeapRegion::note_end_of_marking          → 标记阶段结束
+  G1CollectedHeap::retire_region           → Region 回收
+```
+
+## Humongous 对象分配
+
+```text
+判定条件：对象大小 > RegionSize / 2
+
+分配流程：
+  ① 判定对象为 Humongous
+  ② 在堆中找连续的 Free Region
+  ③ 第一个 Region 标记为 Humongous Start (H)
+  ④ 后续 Region 标记为 Humongous Continuation (HC)
+  ⑤ 找不到连续 Free Region → 触发并发标记或 Full GC
+
+性能问题：
+  ① 碎片风险 → 回收后需连续 Region 才能分配新 Humongous
+  ② 并发标记触发 → 大量 Humongous 快速消耗 Free Region
+  ③ RSet 开销 → 被大量引用时 RSet 膨胀
+  ④ 回收延迟 → JDK 8u40 前只能在 Full GC 中回收
+```
+
+<Callout type="trap">
+**陷阱**：一个10MB的数组在RegionSize=4MB的堆中是Humongous对象（10MB > 4MB/2=2MB），需要3个连续Region存放。如果将RegionSize调大到16MB，同一个10MB数组不再是Humongous（10MB < 16MB/2=8MB？不对，10MB > 8MB仍然是Humongous），需要32MB RegionSize才能避免。选择RegionSize时需考虑最大对象大小。
+</Callout>
+
+<Exercises>
+**问题 1**：G1的Region大小如何确定？为什么默认大小是1-32MB且必须是2的幂？
+
+<Answer>
+Region大小确定方式：G1根据堆大小自动计算，目标是将堆划分为约2048个Region。计算公式：RegionSize = 堆大小 / 2048，然后向上取整到最近的2的幂，范围限制在1MB到32MB之间。例如4GB堆→RegionSize=2MB，8GB堆→RegionSize=4MB。必须是2的幂的原因：①位运算高效——Region索引和地址转换可以用位移替代除法；②内存对齐——2的幂大小保证Region起始地址对齐，有利于CPU缓存行对齐和TLB效率；③Humongous判定——大对象阈值（RegionSize/2）也是2的幂的除法，计算简单。2048个Region的目标是为了在Region粒度和管理开销之间取得平衡。
+</Answer>
+
+**问题 2**：G1堆内存布局中，Eden/Survivor/Old的比例是如何动态调整的？
+
+<Answer>
+G1没有固定的新生代大小，Eden Region数量在每次Young GC后根据停顿目标动态调整。如果上一次Young GC停顿时间远低于MaxGCPauseMillis，G1会增加Eden Region数量（让更多对象在Young GC中被回收，减少GC频率，提升吞吐），反之减少。Survivor由TargetSurvivorCount和存活对象量决定Survivor Region数量。Old Region在对象晋升时从Free List分配，没有固定比例。源码中G1AdaptiveSizePolicy负责根据历史GC数据调整Eden大小。这种自适应策略使得G1在不需要手动调参的情况下就能在吞吐和停顿之间自动平衡。
+</Answer>
+
+**问题 3**：G1中Humongous对象的分配流程是什么？为什么容易导致性能问题？
+
+<Answer>
+分配流程：①判定——对象大小超过RegionSize/2即为Humongous对象；②分配——在堆中找连续的Free Region，第一个标记为Humongous Start(H)，后续标记为Humongous Continuation(HC)；③如果找不到连续Free Region，触发并发标记或Full GC。性能问题原因：①碎片风险——Humongous对象占用连续Region，回收后这些Region必须连续才能分配新的Humongous对象；②并发标记触发——大量Humongous分配可能快速消耗Free Region；③RSet开销——Humongous对象的RSet需要记录所有引用它的Region；④Mixed GC延迟——JDK 8u40之前只能在Full GC中回收。优化建议：避免创建超过RegionSize/2的大数组，或增大RegionSize。
+</Answer>
+
+**问题 4**：G1源码中HeapRegion类如何表示一个Region？Region的状态机如何流转？
+
+<Answer>
+HeapRegion类（hotspot/share/gc/g1/heapRegion.hpp）表示一个Region，核心字段：_bottom（Region起始地址）、_end（Region结束地址）、_top（已分配指针）、_type（Region类型）。状态流转通过HeapRegionType管理：①Free→Eden——Young GC前G1从Free List分配Region设为Eden类型，对象分配在_top指针推进；②Eden→Survivor——Young GC时Eden中存活对象复制到Survivor Region，原Eden Region清空_top回到_bottom变为Free，目标Region标记为Survivor；③Survivor→Old——对象年龄达到MaxTenuringThreshold后，在Young GC时从Survivor复制到Old Region；④Old→Free——Mixed GC将Old Region纳入CSet，evacuation后存活对象复制到新Old Region，原Region变Free。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="RegionSize计算">堆大小/2048，向上取整到2的幂，范围1-32MB。2048个Region是粒度和管理开销的平衡点。</GlossaryItem>
+<GlossaryItem term="HeapRegion内部结构">_bottom（起始地址）、_top（已分配指针，分配时推进）、_end（结束地址）、_type（Region类型）。对象在_top处分配，_top向_end推进。</GlossaryItem>
+<GlossaryItem term="Region状态机">Free→Eden（分配）→Survivor（Young GC存活复制）→Old（晋升，MaxTenuringThreshold次后）→Free（Mixed GC回收）。Region类型不固定，一个Free Region可在不同GC周期扮演不同角色。</GlossaryItem>
+<GlossaryItem term="Humongous分配">对象大小>RegionSize/2时为Humongous，需连续Free Region分配，标记为Humongous Start(H)+Humongous Continuation(HC)。容易导致碎片和频繁并发标记。</GlossaryItem>
+</Glossary>

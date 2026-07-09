@@ -1625,6 +1625,16 @@ import { uapProcessIpcQuestions } from "./review/uap-process-ipc";
 import { uapThreadsQuestions } from "./review/uap-threads";
 import { uapAdvancedIoQuestions } from "./review/uap-advanced-io";
 import { uapFinalReviewQuestions } from "./review/uap-final-review";
+import { jg1LearningMapQuestions } from "./review/jg1-learning-map";
+import { jg1G1OverviewQuestions } from "./review/jg1-g1-overview";
+import { jg1RegionManagementQuestions } from "./review/jg1-region-management";
+import { jg1RememberedSetQuestions } from "./review/jg1-remembered-set";
+import { jg1GcCycleQuestions } from "./review/jg1-gc-cycle";
+import { jg1YoungGcQuestions } from "./review/jg1-young-gc";
+import { jg1MixedGcQuestions } from "./review/jg1-mixed-gc";
+import { jg1FullGcQuestions } from "./review/jg1-full-gc";
+import { jg1G1TuningPracticeQuestions } from "./review/jg1-g1-tuning-practice";
+import { jg1FinalReviewQuestions } from "./review/jg1-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3285,6 +3295,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dujLockOptimizeQuestions,
   ...dujPracticeTuningQuestions,
   ...dujFinalReviewQuestions,
+  ...jg1LearningMapQuestions,
+  ...jg1G1OverviewQuestions,
+  ...jg1RegionManagementQuestions,
+  ...jg1RememberedSetQuestions,
+  ...jg1GcCycleQuestions,
+  ...jg1YoungGcQuestions,
+  ...jg1MixedGcQuestions,
+  ...jg1FullGcQuestions,
+  ...jg1G1TuningPracticeQuestions,
+  ...jg1FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1748,7 +1748,17 @@ export type ReviewChapterSlug =
   | "duj-memory-model"
   | "duj-lock-optimize"
   | "duj-practice-tuning"
-  | "duj-final-review";
+  | "duj-final-review"
+  | "jg1-learning-map"
+  | "jg1-g1-overview"
+  | "jg1-region-management"
+  | "jg1-remembered-set"
+  | "jg1-gc-cycle"
+  | "jg1-young-gc"
+  | "jg1-mixed-gc"
+  | "jg1-full-gc"
+  | "jg1-g1-tuning-practice"
+  | "jg1-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3501,6 +3511,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "duj-lock-optimize": "锁优化",
   "duj-practice-tuning": "实战调优",
   "duj-final-review": "全书复习",
+  "jg1-learning-map": "全书学习地图",
+  "jg1-g1-overview": "G1收集器概述",
+  "jg1-region-management": "Region管理与内存布局",
+  "jg1-remembered-set": "RSet与卡表",
+  "jg1-gc-cycle": "G1 GC周期",
+  "jg1-young-gc": "Young GC源码分析",
+  "jg1-mixed-gc": "Mixed GC源码分析",
+  "jg1-full-gc": "Full GC与退化",
+  "jg1-g1-tuning-practice": "G1调优实践",
+  "jg1-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

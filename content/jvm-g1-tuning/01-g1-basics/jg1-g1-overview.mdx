@@ -1,0 +1,127 @@
+---
+title: "G1收集器概述"
+type: A
+section: "JVM与Java生态"
+order: 1
+description: "深入理解G1收集器的设计目标、Region类型布局、三色标记法与SATB机制、Garbage First策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Jg1G1OverviewDiagram } from "@/components/mdx/jvm-g1-tuning/diagrams/jg1-g1-overview";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解G1收集器的设计目标——可预测停顿、大堆友好、压缩式回收
+- 掌握G1的Region化堆布局——Eden/Survivor/Old/Humongous四种类型
+- 理解三色标记法与SATB（Snapshot At The Beginning）如何解决并发标记的正确性问题
+- 掌握Garbage First策略——优先回收垃圾最多的Region
+</Objectives>
+
+## 直觉引入
+
+G1（Garbage First）收集器像一个「智能仓储系统」。传统仓库（CMS/Parallel）把货物分成两大区（新生代/老年代），清运时要么清整个新生代要么清整个老年代，大仓库清运时间长。G1把仓库分成等大的小格子（Region），清运时只挑「垃圾最多」的格子清（Garbage First），通过估算每个格子的清运时间，在用户设定的停顿目标内尽可能多清格子（可预测停顿）。
+
+<Jg1G1OverviewDiagram />
+
+## G1 设计目标
+
+```text
+目标               实现方式                         对比传统收集器
+可预测停顿         MaxGCPauseMillis + Region选择    CMS/Parallel 无法精确控制
+大堆友好           Region化避免全堆扫描             传统收集器堆越大扫描越慢
+压缩式回收         evacuation复制存活对象           CMS标记-清除产生碎片
+Mixed GC           增量回收老年代                   CMS只能Full GC回收老年代
+```
+
+G1在JDK 9起成为默认收集器，适合6GB以上堆、需要可控停顿的场景。
+
+## Region 类型与布局
+
+```text
+堆被划分为等大 Region（1-32MB，2的幂，约2048个）
+每个 Region 动态充当以下角色之一：
+
+Eden Region      新对象分配区 → Young GC 存活对象复制到 Survivor
+Survivor Region  存活暂存区   → 经过 MaxTenuringThreshold(15) 次后晋升 Old
+Old Region       长期存活区   → Mixed GC 纳入 CSet 回收
+Humongous Region 大对象(>RegionSize/2) → 连续多个 Region 分配
+Free Region      空闲可用     → 随时被分配为以上任一类型
+```
+
+<Callout type="trap">
+**陷阱**：Region类型不是固定的。一个Free Region可以在不同GC周期中扮演Eden、Survivor、Old等不同角色。这和传统收集器物理隔离的Eden/Survivor/Old完全不同——G1没有物理分代边界，只有逻辑分代。
+</Callout>
+
+## 三色标记法与 SATB
+
+```text
+三色标记法（并发标记的基础）：
+  白色 = 未访问（可回收候选）
+  灰色 = 已访问但引用未扫描完
+  黑色 = 已访问且引用已扫描完（存活）
+
+并发标记的「对象消失」问题：
+  Mutator 修改引用：黑→白新引用建立 + 灰→白旧引用断开
+  → GC 认为白色对象不可达 → 错误回收
+
+G1 的解决方案（SATB）：
+  并发标记开始时拍逻辑快照
+  Write Barrier 捕获被覆盖的旧引用 → 加入 SATB 队列
+  再标记阶段处理 SATB 队列 → 保证这些对象不被遗漏
+  代价：可能保留浮动垃圾（下一轮回收）
+```
+
+## Garbage First 策略
+
+```text
+核心思想：优先回收垃圾最多的 Region
+
+执行流程：
+  ① 并发标记阶段统计各 Region 的存活/垃圾比例
+  ② 按垃圾比例降序排列候选 Region
+  ③ 估算每个 Region 的回收耗时（基于历史数据）
+  ④ 贪心选择：加入 Region 直到预估总时间达到 MaxGCPauseMillis
+  ⑤ 超过时间预算的 Region 留到下一轮（浮动垃圾）
+
+效果：在停顿目标内最大化回收量
+```
+
+<Callout type="insight">
+**核心理念**：G1的「可预测停顿」不是「停顿一定不超过目标」，而是「G1尽力在目标时间内回收尽可能多的Region」。如果某个Region回收耗时估算不准（如RSet突然变粗），实际停顿可能超标。自适应IHOP和G1Analytics持续修正成本模型，使估算越来越准。
+</Callout>
+
+<Exercises>
+**问题 1**：G1（Garbage First）收集器的设计目标和核心特征是什么？
+
+<Answer>
+设计目标：①在停顿时间可控的前提下追求高吞吐量——通过MaxGCPauseMillis设定停顿目标（默认200ms），G1在回收时估算各Region回收耗时，选择在目标时间内能完成的最大Region集合；②适合大堆——通过Region化内存布局避免全堆扫描，在6GB以上堆上优势明显；③压缩式回收——G1的evacuation阶段复制存活对象到空Region，天然避免内存碎片。核心特征：Region化堆布局（无物理分代边界）、Garbage First策略（优先回收垃圾最多的Region）、并发标记+疏散回收的组合、可预测停顿模型。G1在JDK 9起成为默认收集器。
+</Answer>
+
+**问题 2**：G1收集器的四种Region类型各自的角色和转换条件是什么？
+
+<Answer>
+①Eden Region——新对象分配区，Young GC时存活对象被复制到Survivor Region，原Eden Region清空后回到Free List；②Survivor Region——Young GC后存活对象的暂存区，对象经过一定次数（MaxTenuringThreshold，默认15）Young GC后晋升到Old Region；③Old Region——长期存活对象存储区，在Mixed GC中被纳入CSet回收；④Humongous Region——大对象专用，当对象大小超过Region大小的50%时，在连续的Humongous Region中分配。转换条件：Region类型不是固定的，一个Free Region可以在不同GC周期中扮演不同角色。
+</Answer>
+
+**问题 3**：G1收集器相比CMS收集器有哪些优势和劣势？在什么场景下应该选择G1？
+
+<Answer>
+优势：①无内存碎片——G1使用复制式evacuation，CMS使用标记-清除产生碎片；②可预测停顿——G1通过MaxGCPauseMillis控制回收时间，CMS的STW阶段时长不可控；③大堆友好——G1的Region化布局在大堆下扫描效率优于CMS的全堆扫描；④Mixed GC——G1可以增量回收老年代。劣势：①内存开销——G1的RSet占用约1%-20%堆内存；②CPU开销——Write Barrier开销大；③小堆不如Parallel——6GB以下堆G1的固定开销占比过高。选择G1的场景：堆大于6GB、需要可控停顿、无法接受CMS的碎片导致的Full GC停顿。
+</Answer>
+
+**问题 4**：G1收集器的三色标记法如何解决并发标记中的「对象消失」问题？
+
+<Answer>
+三色标记法：白色（未访问）、灰色（已访问但引用未扫描完）、黑色（已访问且引用已扫描完）。并发标记中「对象消失」问题：Mutator线程在GC并发标记的同时修改引用——如果将黑色对象到白色对象的引用建立，同时断开灰色对象到该白色对象的引用，则GC认为白色对象不可达而错误回收。G1的解决方案（SATB）：在GC开始时逻辑上拍一张引用快照，并发标记期间通过Write Barrier在引用被修改时，将被覆盖的旧引用对象标记为存活。具体实现：G1使用SATB Mark Queue，Write Barrier在写操作前将旧引用值加入SATB队列，再发标记阶段处理队列中的引用。代价：可能保留浮动垃圾，下一轮GC回收。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Region化布局">G1将堆划分为等大Region（1-32MB，2的幂，约2048个），每个Region动态充当Eden/Survivor/Old/Humongous/Free，无物理分代边界。</GlossaryItem>
+<GlossaryItem term="Garbage First">G1的回收策略：并发标记统计各Region垃圾比例，按性价比降序选择Region纳入CSet，在MaxGCPauseMillis时间预算内最大化回收量。</GlossaryItem>
+<GlossaryItem term="SATB">Snapshot At The Beginning——并发标记开始时拍逻辑快照，Write Barrier捕获被覆盖的旧引用加入SATB队列，保证并发标记开始时可达的对象在标记结束前都视为存活。代价是可能产生浮动垃圾。</GlossaryItem>
+<GlossaryItem term="Humongous对象">大小超过RegionSize/2的对象，在连续的Humongous Region中分配。第一个Region标记为Humongous Start(H)，后续标记为Humongous Continuation(HC)。</GlossaryItem>
+</Glossary>

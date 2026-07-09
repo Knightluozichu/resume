@@ -117,6 +117,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["sia-", "spring-in-action"],
   ["jvt-", "jvm-troubleshooting"],
   ["duj-", "deep-understanding-jvm"],
+  ["jg1-", "jvm-g1-tuning"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

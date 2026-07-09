@@ -1,0 +1,162 @@
+---
+title: "G1 GC周期"
+type: A
+section: "JVM与Java生态"
+order: 4
+description: "深入理解G1的并发标记五阶段、IHOP触发机制、自适应IHOP与CSet选择算法"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Jg1GcCycleDiagram } from "@/components/mdx/jvm-g1-tuning/diagrams/jg1-gc-cycle";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解G1 GC周期的两大类——日常Young GC与完整并发标记周期
+- 掌握并发标记五阶段——初始标记/并发标记/最终标记/清理/疏散回收
+- 理解IHOP触发机制与自适应IHOP的工作原理
+- 掌握CSet选择算法——时间预算/贪心选择/分批回收
+</Objectives>
+
+## 直觉引入
+
+G1的GC周期像「城市垃圾分类清运」。日常清运（Young GC）每天执行，只清生活垃圾（新生代Region）；深度清运周期定期启动，先派调查员在后台统计各区垃圾量（并发标记），统计完后制定清运计划（Cleanup选CSet），最后分批清运积存垃圾（Mixed GC疏散回收）。启动深度清运的时机由「垃圾堆积量」决定（IHOP——堆使用率达到45%就启动）。
+
+<Jg1GcCycleDiagram />
+
+## 两大类 GC
+
+```text
+日常 Young GC（不需要完整周期）：
+  触发：Eden Region 分配满
+  回收：仅新生代 Region（Eden + Survivor）
+  STW：全程 STW，停顿短（<50ms）
+  频率：高（取决于分配速率和 Eden 大小）
+
+完整 GC 周期（并发标记周期）：
+  触发：堆使用率 ≥ IHOP（默认 45%）
+  阶段：初始标记 → 并发标记 → 最终标记 → 清理 → 疏散回收(Mixed GC)
+  目的：增量回收老年代，避免 Full GC
+```
+
+## 并发标记五阶段
+
+```text
+① 初始标记 (Initial Mark) —— STW
+   搭便车一次 Young GC，标记 GC Roots 直接引用的对象
+   不需要独立 STW，借用 Young GC 的暂停时间
+
+② 并发标记 (Concurrent Mark) —— 并发（与应用同时运行）
+   沿引用链递归标记所有存活对象
+   耗时最长但不暂停应用
+   SATB 机制保证并发标记的正确性
+
+③ 最终标记 (Remark) —— STW
+   处理 SATB 队列中积压的引用变更
+   保证标记完整性，停顿时间短
+
+④ 清理 (Cleanup) —— 部分 STW
+   统计各 Region 存活/垃圾比例
+   选择 Mixed GC 的 CSet 候选
+   回收完全为空（无存活对象）的 Region
+
+⑤ 疏散回收 (Evacuation / Mixed GC) —— STW
+   将 CSet 中存活对象复制到新 Region
+   CSet = 所有新生代 Region + 部分老年代 Region
+   分批执行（G1MixedGCCountTarget=8）
+```
+
+<Callout type="insight">
+**设计精髓**：标记阶段（②）耗时最长但不需要移动对象，可与应用并发执行；只有需要修改堆内存的阶段（①③④⑤）才STW。这就是G1能在大堆上保持低停顿的核心——把最耗时的标记工作放到并发阶段。
+</Callout>
+
+## IHOP 触发机制
+
+```text
+IHOP (InitiatingHeapOccupancyPercent)
+  默认值：45%
+  作用：堆使用率 ≥ IHOP → 下一次 Young GC 搭便车触发初始标记
+
+影响：
+  IHOP 过高（如 70%）→ 并发标记启动晚 → 老年代积累过多垃圾
+    → Mixed GC 回收压力大 → 可能退化为 Full GC
+
+  IHOP 过低（如 20%）→ 并发标记过于频繁
+    → 增加 CPU 开销和浮动垃圾
+
+自适应 IHOP（JDK 9+ 默认开启）：
+  G1 根据历史 GC 数据动态调整 IHOP
+  上次 Mixed GC 停顿远低于目标 → 降低 IHOP（更早启动标记）
+  上次 Mixed GC 频繁超时 → 提高 IHOP（延迟启动标记）
+  目标：让 Mixed GC 停顿尽量接近但不超 MaxGCPauseMillis
+```
+
+## CSet 选择算法
+
+```text
+源码：G1Policy::finalize_collection_set
+
+Young GC 的 CSet：
+  = 所有 Eden Region + 所有 Survivor Region（固定）
+
+Mixed GC 的 CSet：
+  = 所有 Eden + 所有 Survivor + 部分老年代 Region
+
+老年代 Region 选择流程：
+  ① 候选列表：并发标记 Cleanup 阶段选出垃圾比例高的 Old Region
+     按垃圾比例降序排列（_collection_set_candidates）
+  
+  ② 时间预算计算：
+     预算 = MaxGCPauseMillis
+          - 新生代 Region 预估回收时间
+          - 固定开销（根扫描/RSets 更新等）
+  
+  ③ 贪心选择：
+     按候选列表顺序（垃圾多→少）
+     逐个估算 Old Region 回收耗时（G1Analytics 历史数据）
+     加入后总预估时间 ≤ 预算 → 纳入 CSet
+     加入后总预估时间 > 预算 → 停止选择（留浮动垃圾下轮回收）
+  
+  ④ 数量上限：
+     G1MixedGCCountTarget=8 → 每次最多选候选总量的 1/8
+     分 8 次 Mixed GC 回收完所有候选 Old Region
+```
+
+<Callout type="trap">
+**陷阱**：MaxGCPauseMillis不是「硬保证」。G1基于历史数据估算Region回收时间，如果估算不准（如RSet突然变粗、存活对象突增），实际停顿可能超标。G1Analytics会持续修正成本模型，但无法100%预测。
+</Callout>
+
+<Exercises>
+**问题 1**：G1的GC周期包含哪些阶段？Young GC和Mixed GC在周期中的位置是什么？
+
+<Answer>
+G1的GC周期分为两大类：①日常Young GC——不需要经过完整周期，Eden满了就触发，只回收新生代Region，STW阶段包括根扫描/RRS扫描/更新RSets/对象复制；②完整GC周期——当堆使用率超过IHOP（默认45%）时触发并发标记周期，包含五个阶段：初始标记（STW，搭便车一次Young GC）→并发标记（并发，沿引用链标记存活对象）→最终标记（STW，处理SATB队列）→清理（STW，统计各Region垃圾比例、选择CSet候选）→疏散回收（Mixed GC，STW，将CSet中存活对象复制到新Region）。Young GC在周期外独立触发；Mixed GC只在并发标记周期的疏散阶段触发。
+</Answer>
+
+**问题 2**：G1并发标记周期的五个阶段中，哪些是STW？哪些是并发的？为什么要这样设计？
+
+<Answer>
+五阶段STW/并发划分：①初始标记——STW，标记GC Roots直接引用的对象，搭便车一次Young GC；②并发标记——并发，沿引用链递归标记所有存活对象，耗时最长但不暂停应用；③最终标记——STW，处理SATB队列收集的引用变更，停顿时间短；④清理——部分STW，统计各Region存活/垃圾比例、选择CSet候选；⑤疏散回收——STW，将CSet中存活对象复制到新Region。设计原因：标记阶段（②）耗时最长但不需要移动对象，可与应用并发执行；只有需要修改堆内存的阶段（①③④⑤）才STW，最大化应用运行时间。SATB机制保证并发标记的正确性，代价是可能产生浮动垃圾。
+</Answer>
+
+**问题 3**：G1中IHOP的作用是什么？自适应IHOP如何工作？
+
+<Answer>
+IHOP（-XX:InitiatingHeapOccupancyPercent，默认45%）决定何时启动并发标记周期——当堆使用率达到IHOP阈值时，G1在下一次Young GC时搭便车触发初始标记。作用：控制Mixed GC的触发频率——IHOP过高则并发标记启动晚，老年代积累过多垃圾，Mixed GC回收压力大可能退化为Full GC；IHOP过低则并发标记过于频繁，增加CPU开销和浮动垃圾。自适应IHOP（-XX:+G1UseAdaptiveIHOP，JDK 9+默认开启）：G1根据历史GC数据动态调整IHOP——如果上一次Mixed GC的回收时间远低于MaxGCPauseMillis，降低IHOP让标记更早启动；如果Mixed GC频繁超时，提高IHOP让标记延迟启动。自适应目标是让Mixed GC的停顿时间尽量接近但不超MaxGCPauseMillis。
+</Answer>
+
+**问题 4**：G1的CSet选择算法如何在源码中实现？它如何平衡停顿目标和回收效率？
+
+<Answer>
+CSet选择算法（源码G1Policy::finalize_collection_set）：①Young GC的CSet——包含所有Eden和Survivor Region（固定的），加上G1Policy::collection_set_candidates中的老年代Region（仅Mixed GC）；②Mixed GC的CSet——首先包含所有新生代Region，然后从候选老年代Region中按「回收效率」（垃圾字节数/预估回收耗时）降序选择，直到预估总回收时间达到MaxGCPauseMillis目标。源码流程：G1Policy::finalize_cset先用G1Analytics中的历史数据估算每个候选Region的回收耗时，再按G1MixedGCCountTarget（默认8）控制的选择比例确定老年代Region数量上限。平衡机制：如果加入某个Region后预估时间超过MaxGCPauseMillis，则停止添加（留下浮动垃圾下轮回收）；如果所有候选都加入仍未达目标时间，也不额外添加。这实现了「在停顿目标内最大化回收量」的Garbage First策略。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="并发标记五阶段">初始标记(STW)→并发标记(并发)→最终标记(STW)→清理(部分STW)→疏散回收/Mixed GC(STW)。标记阶段并发执行是G1低停顿的核心。</GlossaryItem>
+<GlossaryItem term="IHOP">InitiatingHeapOccupancyPercent——堆使用率达到此阈值（默认45%）触发并发标记周期。过高→Full GC风险，过低→CPU浪费。自适应IHOP在JDK 9+默认开启。</GlossaryItem>
+<GlossaryItem term="CSet选择">Mixed GC的CSet=新生代Region+按垃圾比例降序选择的老年代Region。贪心算法：在MaxGCPauseMillis时间预算内最大化回收量，超预算则停止选择留浮动垃圾。</GlossaryItem>
+<GlossaryItem term="G1MixedGCCountTarget">Mixed GC分批次数（默认8），期望分8次Mixed GC回收完所有候选Old Region，每次回收1/8，控制单次停顿。</GlossaryItem>
+</Glossary>
