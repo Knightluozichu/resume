@@ -2185,6 +2185,16 @@ import { llmInferenceQuestions } from "./review/llm-inference";
 import { llmEvaluationQuestions } from "./review/llm-evaluation";
 import { llmFrontiersQuestions } from "./review/llm-frontiers";
 import { llmFinalReviewQuestions } from "./review/llm-final-review";
+import { lslLearningMapQuestions } from "./review/lsl-learning-map";
+import { lslTheoryFoundationsQuestions } from "./review/lsl-theory-foundations";
+import { lslModelArchitectureQuestions } from "./review/lsl-model-architecture";
+import { lslDataPipelineQuestions } from "./review/lsl-data-pipeline";
+import { lslDistributedTrainingQuestions } from "./review/lsl-distributed-training";
+import { lslAlignmentTechniquesQuestions } from "./review/lsl-alignment-techniques";
+import { lslServingInferenceQuestions } from "./review/lsl-serving-inference";
+import { lslEvaluationTestingQuestions } from "./review/lsl-evaluation-testing";
+import { lslDeploymentCaseQuestions } from "./review/lsl-deployment-case";
+import { lslFinalReviewQuestions } from "./review/lsl-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4405,6 +4415,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...llmEvaluationQuestions,
   ...llmFrontiersQuestions,
   ...llmFinalReviewQuestions,
+  ...lslLearningMapQuestions,
+  ...lslTheoryFoundationsQuestions,
+  ...lslModelArchitectureQuestions,
+  ...lslDataPipelineQuestions,
+  ...lslDistributedTrainingQuestions,
+  ...lslAlignmentTechniquesQuestions,
+  ...lslServingInferenceQuestions,
+  ...lslEvaluationTestingQuestions,
+  ...lslDeploymentCaseQuestions,
+  ...lslFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,92 @@
+---
+title: 模型架构设计
+type: B
+section: AI Agent与大模型应用
+order: 2
+description: Transformer Decoder 架构、自注意力机制、MoE 变体与高效架构优化
+demo: false
+math: true
+draft: true
+sourceUrl: ""
+---
+
+import { LslModelArchitectureDiagram } from "@/components/mdx/large-scale-llm-practice/diagrams/lsl-model-architecture";
+
+# 模型架构设计
+
+## 学习目标
+
+完成本章学习后，你将能够：
+
+1. 掌握 Transformer Decoder 的完整架构层次和自注意力机制原理
+2. 理解 RoPE 旋转位置编码、SwiGLU、RMSNorm 等关键组件的改进
+3. 分析 MoE 混合专家架构的工作原理与优劣
+4. 评估 MQA/GQA 等高效注意力变体对推理优化的影响
+
+## 核心概念
+
+### Transformer Decoder 架构
+
+大语言模型普遍采用 Transformer Decoder-only 架构。从底到顶包含以下层次：
+
+**Token 嵌入 + 位置编码**：将 Token ID 映射为稠密向量，并注入位置信息。位置编码使模型能区分词序，是序列建模的关键。
+
+**多头自注意力（因果掩码）**：建模序列内 Token 间的依赖关系。因果掩码确保每个位置只能看到之前的位置，保证自回归生成的合法性。
+
+**Add & Norm（残差连接 + 层归一化）**：残差连接缓解梯度消失，层归一化稳定训练。两者组合是深层网络训练的基础。
+
+**前馈网络（FFN/SwiGLU）**：对每个位置独立做非线性变换，增强模型表达能力。
+
+**输出层（LM Head + Softmax）**：将隐藏表示映射到词表概率分布，用于预测下一个 Token。
+
+<LslModelArchitectureDiagram />
+
+### 自注意力机制
+
+自注意力是 Transformer 的核心。对于输入序列的每个 Token，通过三个权重矩阵生成 Query、Key、Value 向量：
+
+$$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{QK^T}{\sqrt{d_k}}\right)V$$
+
+- **Query**：当前位置的查询向量，表示「我要找什么」
+- **Key**：每个位置的键向量，表示「我有什么」
+- **Value**：每个位置的值向量，表示「我的内容」
+
+注意力分数 = Q 与 K 的点积（相似度），经 Softmax 归一化为权重后对 V 加权求和。多头机制将注意力拆到多个子空间并行计算再拼接，增强模型捕捉不同模式的能力。
+
+### 关键组件技术
+
+**RoPE 旋转位置编码**：将位置信息编码为对 Q/K 向量的旋转操作。优势在于相对位置建模（注意力只依赖相对距离）、可外推（通过缩放扩展上下文长度）、计算高效。是 LLaMA、Qwen 等主流长上下文模型的标准选择。
+
+**SwiGLU 激活函数**：引入门控机制的 FFN，$\text{SwiGLU}(x) = \text{Swish}(W_1 x) \odot (W_3 x) W_2$。门控让模型自适应控制信息流，效果优于传统 ReLU/GeLU，代价是多一个权重矩阵。
+
+**RMSNorm**：去掉 LayerNorm 的均值减法，$\text{RMSNorm}(x) = \frac{x}{\sqrt{\text{mean}(x^2)}} \gamma$。计算更简单、速度更快，效果与 LayerNorm 相当。
+
+### 架构变体对比
+
+| 变体 | 核心思想 | 代表模型 | 优势 |
+|------|----------|----------|------|
+| GPT（密集） | Decoder-only 因果自注意力 | GPT-3/LLaMA | 主流标准，训练稳定 |
+| MoE | 混合专家稀疏激活 | Mixtral/DeepSeek | 容量大推理快 |
+| 长上下文 | RoPE/ALiBi 扩展上下文 | GPT-4-128K | 超长文档处理 |
+| 高效架构 | MQA/GQA/FlashAttention | LLaMA-2/3 | 推理显存优化 |
+
+**MoE 混合专家**：将 FFN 替换为多个专家 FFN，门控网络为每个 Token 路由 Top-K 个专家。总参数量大但单次激活少，实现「以存储换计算」。挑战在于负载均衡和通信开销。
+
+**MQA/GQA**：优化 KV 缓存显存。MQA 让所有 Query 头共享一组 K/V（显存降 1/n_heads），GQA 分组共享（折中方案）。GQA 在显存节省和质量间平衡，是 LLaMA-2/3 的选择。
+
+## 术语表
+
+- **自注意力（Self-Attention）**：序列内每个位置与其他位置计算注意力权重的机制
+- **因果掩码（Causal Mask）**：将未来位置的注意力分数设为负无穷，保证自回归生成
+- **RoPE（旋转位置编码）**：通过旋转 Q/K 向量编码相对位置信息的方法
+- **MoE（混合专家）**：用门控网络为每个 Token 路由少量专家的稀疏架构
+- **MQA/GQA**：多查询注意力/分组查询注意力，优化 KV 缓存显存的注意力变体
+- **SwiGLU**：带门控机制的前馈网络激活函数
+- **RMSNorm**：均方根归一化，LayerNorm 的高效替代
+
+## 练习题
+
+1. 详细描述 Transformer Decoder 的架构层次，解释每层的作用。
+2. 自注意力机制的 Q/K/V 分别是什么？因果掩码为什么是必要的？
+3. MoE 架构如何实现「以存储换计算」？它面临哪些挑战？
+4. MQA 和 GQA 如何优化推理显存？为什么 GQA 是更好的折中方案？

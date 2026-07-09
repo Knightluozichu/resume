@@ -2308,7 +2308,17 @@ export type ReviewChapterSlug =
   | "llm-inference"
   | "llm-evaluation"
   | "llm-frontiers"
-  | "llm-final-review";
+  | "llm-final-review"
+  | "lsl-learning-map"
+  | "lsl-theory-foundations"
+  | "lsl-model-architecture"
+  | "lsl-data-pipeline"
+  | "lsl-distributed-training"
+  | "lsl-alignment-techniques"
+  | "lsl-serving-inference"
+  | "lsl-evaluation-testing"
+  | "lsl-deployment-case"
+  | "lsl-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4621,6 +4631,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "llm-evaluation": "评估方法与基准",
   "llm-frontiers": "前沿研究方向",
   "llm-final-review": "全书复习与知识整合",
+  "lsl-learning-map": "大规模语言模型·知识全景图",
+  "lsl-theory-foundations": "理论基础与语言建模",
+  "lsl-model-architecture": "模型架构设计",
+  "lsl-data-pipeline": "数据处理流水线",
+  "lsl-distributed-training": "分布式训练",
+  "lsl-alignment-techniques": "对齐技术实践",
+  "lsl-serving-inference": "服务化与推理优化",
+  "lsl-evaluation-testing": "评测与测试",
+  "lsl-deployment-case": "部署实践与案例分析",
+  "lsl-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

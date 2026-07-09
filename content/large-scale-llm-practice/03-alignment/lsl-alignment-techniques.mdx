@@ -1,0 +1,92 @@
+---
+title: 对齐技术实践
+type: B
+section: AI Agent与大模型应用
+order: 5
+description: SFT、RLHF、DPO 三阶段对齐流程，3H 目标与安全护栏工程化
+demo: false
+math: true
+draft: true
+sourceUrl: ""
+---
+
+import { LslAlignmentTechniquesDiagram } from "@/components/mdx/large-scale-llm-practice/diagrams/lsl-alignment-techniques";
+
+# 对齐技术实践
+
+## 学习目标
+
+完成本章学习后，你将能够：
+
+1. 掌握 SFT、RLHF、DPO 三阶段对齐流程的原理与工程实现
+2. 理解 RLHF 中 PPO 训练的四模型架构和 KL 散度惩罚的作用
+3. 分析 DPO 相比 RLHF 的优势与局限
+4. 理解 3H 对齐目标（Helpful/Honest/Harmless）的张力与平衡策略
+
+## 核心概念
+
+### 为什么需要对齐
+
+预训练模型只是「续写器」——给它一段文本它会继续写下去，但不会按指令回答问题、不会拒绝有害请求、不会承认不确定性。对齐技术的目标是让模型行为符合人类意图和价值观：听懂指令（Helpful）、诚实回答（Honest）、拒绝有害（Harmless）。
+
+<LslAlignmentTechniquesDiagram />
+
+### 三阶段对齐流程
+
+**阶段一：SFT（监督微调）**——解决「指令遵循」问题。收集指令-回答对（1万-10万条），用最大似然损失微调模型。SFT 是对齐的必经第一步，简单稳定，让预训练基座学会按指令格式回答。
+
+**阶段二：RLHF（人类反馈强化学习）**——解决「偏好优化」问题。流程包含三步：
+1. 用 SFT 模型对同一 prompt 生成多个回答，人工排序得到偏好数据
+2. 训练奖励模型（RM）预测偏好排序
+3. 用 PPO 算法以 RM 奖励为信号优化策略模型
+
+**阶段三：DPO（直接偏好优化）**——RLHF 的简化替代。跳过 RM 训练和 PPO，直接用偏好对微调。损失函数让模型增大 chosen 概率、降低 rejected 概率。
+
+### RLHF 详细流程
+
+PPO 训练涉及四个模型同时运行：
+
+| 模型 | 角色 | 是否更新 |
+|------|------|----------|
+| 策略模型（Actor） | 生成回答 | 是 |
+| 奖励模型（RM） | 对回答打分 | 否（预训练好） |
+| 参考模型（Reference） | 计算 KL 散度 | 否（冻结的 SFT） |
+| 价值模型（Critic） | 估计状态价值 | 是 |
+
+**KL 散度惩罚**是 RLHF 的关键机制：总奖励 = RM 奖励 - beta * KL(策略 || 参考)。KL 惩罚的作用：防止奖励黑客（模型钻 RM 漏洞生成高分但无意义文本）、防止分布漂移（偏离语言分布导致不流畅）、保持语言能力。beta 控制约束强度——太大模型不变好，太小模型跑偏。
+
+### DPO 的核心思想
+
+DPO 推导出最优策略与奖励函数的关系，将 RLHF 的奖励最大化转化为直接分类问题：
+
+$$\mathcal{L}_{DPO} = -\log\sigma\left(\beta\left[\log\frac{\pi(chosen)}{ref(chosen)} - \log\frac{\pi(rejected)}{ref(rejected)}\right]\right)$$
+
+核心是让策略模型相对参考模型，增大 chosen 概率同时降低 rejected 概率。DPO 优势：无需 RM、无需在线采样、训练简单稳定、只需 2 个模型。局限：效果上限略低于 RLHF、离线数据依赖、对数据质量敏感。
+
+### 3H 对齐目标
+
+| 目标 | 含义 | 张力 |
+|------|------|------|
+| Helpful | 有用——准确回答、完成任务 | 与 Harmless 张力：有用回答可能有害 |
+| Honest | 诚实——不编造、承认不确定 | 与 Helpful 张力：诚实可能降低有用性 |
+| Harmless | 无害——拒绝有害请求 | 与 Helpful 张力：过度无害导致拒绝正常请求 |
+
+平衡策略：分阶段对齐（SFT 教能力、安全微调教安全）、红队测试（主动攻击找漏洞）、Constitutional AI（AI 自我批评修正）、安全护栏（推理时拦截有害输出）。
+
+## 术语表
+
+- **SFT（监督微调）**：用指令-回答对微调模型学习指令遵循
+- **RLHF**：人类反馈强化学习，RM + PPO 优化人类偏好
+- **DPO**：直接偏好优化，无需 RM 直接用偏好对微调
+- **奖励模型（RM）**：预测人类偏好排序的模型
+- **KL 散度惩罚**：约束策略模型不偏离参考模型的正则项
+- **3H 目标**：Helpful（有用）、Honest（诚实）、Harmless（无害）
+- **奖励黑客（Reward Hacking）**：模型钻 RM 漏洞生成高分但无意义文本
+- **红队测试（Red Teaming）**：主动构造攻击性 prompt 测试安全边界
+
+## 练习题
+
+1. SFT、RLHF、DPO 三阶段分别解决什么问题？核心流程是什么？
+2. RLHF 中 PPO 涉及哪几个模型？为什么需要 KL 散度惩罚？
+3. DPO 相比 RLHF 有哪些优势和局限？损失函数核心思想是什么？
+4. 3H 目标之间存在哪些张力？实践中如何平衡？
