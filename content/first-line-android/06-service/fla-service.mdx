@@ -1,0 +1,211 @@
+---
+title: "服务与通知"
+type: C
+section: "Android开发"
+order: 6
+description: "掌握Service两种模式生命周期（启动式/绑定式）、前台Service与通知渠道机制、Binder通信与WorkManager后台任务调度"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FlaServiceDiagram } from "@/components/mdx/first-line-android/diagrams/fla-service";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握Service两种模式——启动式startService与绑定式bindService的生命周期
+- 理解前台Service——startForeground与通知渠道（Android 8.0+必须）
+- 掌握通知机制——NotificationCompat.Builder与NotificationManager
+- 理解Binder通信机制与onStartCommand返回值
+</Objectives>
+
+## 直觉引入
+
+Service像「后台工人」。启动式Service像「外包合同工」——你叫来干活（startService），他独立干活直到你喊停（stopService），你不用一直盯着他。绑定式Service像「私人助理」——你绑定他（bindService），可以通过对讲机（Binder）随时指挥他，所有雇主都解绑了他才走（自动销毁）。前台Service像「穿制服的工人」——他必须挂个工牌（通知），虽然显眼但系统不会轻易赶走他（高优先级）。通知像「告示牌」——告诉用户后台在干什么，Android 8.0后必须分门别类挂在不同告示牌上（通知渠道）。
+
+<FlaServiceDiagram />
+
+## 启动式Service vs 绑定式Service
+
+```text
+启动式Service（startService）：
+  onCreate()           ← 首次创建（只调一次）
+      ↓
+  onStartCommand()     ← 每次startService都调用（可多次）
+      ↓
+    [运行中]
+      ↓
+  onDestroy()          ← stopService()或stopSelf()后销毁
+
+  特点：独立运行，手动停止才销毁
+        适合：后台音乐播放/下载
+
+绑定式Service（bindService）：
+  onCreate()           ← 首次创建
+      ↓
+  onBind()             ← 返回IBinder给客户端
+      ↓
+    [客户端通过Binder通信]
+      ↓
+  onUnbind()           ← 所有客户端unbind
+      ↓
+  onDestroy()          ← 自动销毁
+
+  特点：与调用者绑定，可双向通信
+        所有客户端unbind后自动销毁
+        适合：Activity与Service交互
+
+混合模式（start + bind）：
+  需同时 stopService/stopSelf + 所有客户端unbind 才销毁
+
+onStartCommand返回值（控制被杀后重启行为）：
+  START_STICKY          杀后重建，intent为null
+  START_NOT_STICKY      杀后不重建
+  START_REDELIVER_INTENT 杀后重建并重传最后一个intent
+```
+
+<Callout type="insight">
+**两种模式的选择**：独立后台任务（音乐播放/下载，不需与Activity交互）用startService；需要Activity与Service双向通信（如实时获取下载进度）用bindService；既要独立运行又要交互（如音乐播放器需控制播放）用混合模式。
+</Callout>
+
+## 前台Service与通知渠道
+
+```text
+前台Service（Android 8.0+推荐）：
+  // 1. 创建通知渠道（Android 8.0+必须，否则通知不显示）
+  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(
+          "channel_id", "服务通知", NotificationManager.IMPORTANCE_LOW
+      )
+      manager.createNotificationChannel(channel)
+  }
+
+  // 2. 构建通知
+  val notification = NotificationCompat.Builder(this, "channel_id")
+      .setContentTitle("正在播放音乐")
+      .setContentText("歌曲名")
+      .setSmallIcon(R.drawable.ic_notification)  // 必须！
+      .build()
+
+  // 3. 启动前台Service
+  startForeground(1, notification)  // 必须在5秒内调用
+
+  // Android 8.0+后台启动Service：
+  startForegroundService(intent)  // 5秒内必须调startForeground显示通知
+
+为什么用前台Service：
+  - 普通后台Service优先级低，系统为省电会频繁杀死
+  - 前台Service通过显示通知获得高优先级，不易被杀
+  - Android 8.0+后台startService受限，需startForegroundService
+```
+
+<Callout type="trap">
+**Android 8.0+前台Service限制**：后台App调用startService()抛IllegalStateException。必须用startForegroundService()启动，并在5秒内调用startForeground()显示通知（否则系统ANR杀进程）。Android 10+还需声明foregroundServiceType。
+</Callout>
+
+## Binder通信机制
+
+```text
+Activity与Service通信（同进程）：
+
+  // Service端
+  class MyService : Service() {
+      private val binder = LocalBinder()
+
+      inner class LocalBinder : Binder() {
+          fun getService(): MyService = this@MyService
+      }
+
+      override fun onBind(intent: Intent): IBinder = binder
+
+      // Service的公开方法
+      fun doSomething() { ... }
+  }
+
+  // Activity端
+  val connection = object : ServiceConnection {
+      override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+          val service = (binder as LocalBinder).getService()
+          service.doSomething()  // 直接调用Service方法
+      }
+      override fun onServiceDisconnected(name: ComponentName) { }
+  }
+  bindService(intent, connection, BIND_AUTO_CREATE)
+
+跨进程通信：
+  - Messenger：基于Handler，单向/双向消息传递
+  - AIDL：定义接口，编译器生成Stub/Proxy，支持复杂方法调用
+  - Binder机制：内核binder驱动，同进程直接调用，跨进程序列化传输
+```
+
+## WorkManager替代后台Service
+
+```text
+WorkManager（Jetpack推荐后台任务方案）：
+  // 定义Worker
+  class SyncWorker(context: Context, params: WorkerParameters) :
+      Worker(context, params) {
+      override fun doWork(): Result {
+          // 后台任务逻辑
+          return Result.success()  // success/failure/retry
+      }
+  }
+
+  // 提交任务（带约束条件）
+  val request = OneTimeWorkRequestBuilder<SyncWorker>()
+      .setConstraints(
+          Constraints.Builder()
+              .setRequiredNetworkType(NetworkType.CONNECTED)  // 需网络
+              .setRequiresCharging(true)                       // 需充电
+              .build()
+      )
+      .setInitialDelay(10, TimeUnit.MINUTES)  // 延迟10分钟
+      .build()
+  WorkManager.getInstance(context).enqueue(request)
+
+  WorkManager优势：
+  - 保证执行（持久化到数据库，设备重启恢复）
+  - 可约束（网络/充电/空闲）
+  - 系统调度（底层自动选JobScheduler/AlarmManager）
+  - 省电（系统批量调度）
+  - 替代不可靠的后台Service
+```
+
+<Callout type="insight">
+**WorkManager vs 前台Service**：用户可感知的后台任务（音乐播放/下载进度）用前台Service+通知；不可感知的后台任务（数据同步/日志上传/缓存清理）用WorkManager（系统调度，保证执行，省电）。需要实时的仍用前台Service。
+</Callout>
+
+<Exercises>
+**问题 1**：启动式Service和绑定式Service的生命周期有何不同？混合模式下何时销毁？
+
+<Answer>
+启动式Service：onCreate→onStartCommand（每次startService都调）→运行→stopService/stopSelf→onDestroy。独立运行手动停止才销毁。绑定式Service：onCreate→onBind返回IBinder→客户端通过Binder通信→所有客户端unbind→onUnbind→onDestroy。所有客户端unbind后自动销毁。混合模式：需同时stopService/stopSelf + 所有客户端unbind才销毁，只满足一个不销毁。onStartCommand返回值控制重启：START_STICKY杀后重建intent为null，START_NOT_STICKY不重建，START_REDELIVER_INTENT重建重传intent。
+</Answer>
+
+**问题 2**：前台Service是什么？为什么Android 8.0+推荐使用前台Service替代后台Service？
+
+<Answer>
+前台Service通过startForeground(id, notification)提升为前台优先级并显示持续性通知。高系统优先级，内存不足时不轻易被杀。Android 8.0+后台限制：①后台startService抛异常，需startForegroundService并在5秒内调startForeground显示通知。②普通后台Service被系统频繁杀死（省电）。前台Service通过通知告知用户正在运行获得高存活优先级。通知必须先创建NotificationChannel（Android 8.0+），否则不显示。Android 10+需声明foregroundServiceType。用户可感知的后台任务用前台Service，不可感知的用WorkManager。
+</Answer>
+
+**问题 3**：如何实现Activity与Service的双向通信？Binder机制如何工作？
+
+<Answer>
+同进程通信：Service中创建Binder内部类（getService返回Service实例），onBind返回该Binder。Activity在ServiceConnection.onServiceConnected中强转IBinder为LocalBinder，调getService获取Service实例直接调方法。跨进程通信：①Messenger——基于Handler发送Message，单向通信（双向需replyTo）。②AIDL——定义.aidl接口，编译器生成Stub和Proxy，支持复杂方法调用。Binder机制原理：Android的IPC机制，基于内核binder驱动。Service的Binder在内核注册，客户端获取Binder代理，同进程直接走本地方法（无IPC开销），跨进程走binder驱动序列化传输。
+</Answer>
+
+**问题 4**：Android的通知机制是怎样的？NotificationChannel的作用是什么？
+
+<Answer>
+通知机制：用NotificationCompat.Builder(context, channelId)构建通知（setContentTitle/Text/setSmallIcon必须/setContentIntent点击跳转），通过NotificationManager.notify(id, notification)发送，cancel(id)取消。NotificationChannel（Android 8.0+必须）：通知渠道分类管理。①不创建Channel通知不显示（静默失败）。②创建方式NotificationChannel(id, name, importance)配置描述/灯光/震动/声音。③重要性等级IMPORTANCE_HIGH（横幅+声音+震动）到IMPORTANCE_MIN。④用户可按渠道单独开关通知。⑤Builder构造函数传入channelId归属渠道。前台Service通知也必须通过已创建Channel发送。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="启动式Service">startService启动，onCreate→onStartCommand→运行→stopService/stopSelf→onDestroy。独立运行手动停止才销毁。onStartCommand返回值控制被杀后重启行为。</GlossaryItem>
+<GlossaryItem term="绑定式Service">bindService绑定，onCreate→onBind返回IBinder→客户端通过Binder通信→所有unbind后→onUnbind→onDestroy自动销毁。与调用者绑定可双向通信。</GlossaryItem>
+<GlossaryItem term="前台Service">startForeground(id, notification)提升为前台优先级并显示持续性通知。高优先级不易被系统杀死。Android 8.0+后台startService受限，需startForegroundService并在5秒内显示通知。</GlossaryItem>
+<GlossaryItem term="NotificationChannel">通知渠道（Android 8.0+必须），按功能分类管理通知。不创建则通知不显示。用户可按渠道单独开关通知和修改重要性。</GlossaryItem>
+<GlossaryItem term="WorkManager">Jetpack后台任务调度库，保证执行（持久化+设备重启恢复）、可约束（网络/充电/空闲）、系统调度省电。替代不可靠的后台Service处理不可感知的后台任务。</GlossaryItem>
+</Glossary>

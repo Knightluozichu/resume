@@ -1,0 +1,195 @@
+---
+title: "广播机制"
+type: A
+section: "Android开发"
+order: 5
+description: "理解Android广播机制——标准广播与有序广播、动态注册与静态注册、BroadcastReceiver执行限制与常见系统广播"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FlaBroadcastDiagram } from "@/components/mdx/first-line-android/diagrams/fla-broadcast";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解标准广播与有序广播的区别——异步同时送达 vs 按优先级链式传递
+- 掌握动态注册与静态注册——各自特点与Android 8.0+限制
+- 理解BroadcastReceiver执行限制——onReceive的10秒ANR阈值与耗时操作处理
+- 掌握常见系统广播与开机自启动实现
+</Objectives>
+
+## 直觉引入
+
+广播像「小区广播系统」。标准广播像「消防警报」——一旦响起所有喇叭同时响，无法截断，效率高但不可控。有序广播像「传话游戏」——按优先级一个人一个人传，高优先级的人可以先处理甚至可以喊停（abortBroadcast），也可以在传话时夹带私货（setResultData修改数据）。注册广播有两种方式：动态注册像「临时挂个对讲机」（代码注册，组件销毁要注销），静态注册像「装了个固定接收器」（清单文件声明，App没启动也能收，但Android 8.0后大部分不让装了）。
+
+<FlaBroadcastDiagram />
+
+## 标准广播 vs 有序广播
+
+```text
+标准广播（Normal Broadcast）：
+  sendBroadcast(intent)
+
+  发送方 ──→ 接收者A（同时收到）
+         ├──→ 接收者B（同时收到）
+         └──→ 接收者C（同时收到）
+
+  特点：完全异步，所有接收者几乎同时收到
+        无法截断，无法控制顺序
+        效率高
+
+有序广播（Ordered Broadcast）：
+  sendOrderedBroadcast(intent, permission)
+
+  发送方 ──→ 接收者A（priority=100）──→ 接收者B（priority=50）──→ 接收者C（priority=10）
+              可abortBroadcast()截断       可读A的结果数据
+
+  特点：按priority从高到低依次传递
+        高优先级可截断（abortBroadcast）
+        可传递结果数据（setResultData/getResultData）
+        priority在intent-filter中设置（-1000~1000）
+```
+
+<Callout type="insight">
+**选型建议**：需要所有接收者同时收到且不在乎顺序→标准广播；需要按优先级处理或可能截断→有序广播。安全建议：发送广播时指定权限限制接收者，或用LocalBroadcastManager只在应用内传递（不跨进程，更安全高效）。
+</Callout>
+
+## 动态注册 vs 静态注册
+
+```text
+动态注册（代码注册）：
+  val receiver = object : BroadcastReceiver() {
+      override fun onReceive(context: Context, intent: Intent) {
+          // 处理广播
+      }
+  }
+  val filter = IntentFilter("com.example.MY_BROADCAST")
+  registerReceiver(receiver, filter)    // 注册
+
+  // 必须在onDestroy中注销（否则内存泄漏！）
+  unregisterReceiver(receiver)
+
+  特点：跟随组件生命周期，灵活但需手动注销
+        能收到大部分广播
+
+静态注册（清单文件声明）：
+  <receiver android:name=".MyReceiver">
+      <intent-filter>
+          <action android:name="android.intent.action.BOOT_COMPLETED" />
+      </intent-filter>
+  </receiver>
+
+  特点：App安装后即生效，无需运行即可接收
+        Android 8.0+大部分隐式广播不再允许静态注册（省电）
+        只有少数豁免广播可静态注册（BOOT_COMPLETED等）
+```
+
+<Callout type="trap">
+**Android 8.0静态注册限制**：Android 8.0（API 26）起，大部分隐式广播不再允许静态注册——系统为省电限制后台唤醒。CONNECTIVITY_CHANGE、NEW_PICTURE等隐式广播静态注册失效，需改为动态注册。只有BOOT_COMPLETED、LOCALE_CHANGED等少数豁免广播仍可静态注册。
+</Callout>
+
+## BroadcastReceiver执行限制
+
+```text
+onReceive() 执行限制：
+  - 分配时间约10秒（超过→ANR→进程可能被杀）
+  - 运行在主线程（不能做网络请求/大量IO/复杂计算）
+
+耗时操作的正确处理方式：
+
+  方式1：启动Service
+  override fun onReceive(context: Context, intent: Intent) {
+      val serviceIntent = Intent(context, MyService::class.java)
+      ContextCompat.startForegroundService(context, serviceIntent)
+  }
+
+  方式2：goAsync()（最多10秒异步处理）
+  override fun onReceive(context: Context, intent: Intent) {
+      val pendingResult = goAsync()
+      Thread {
+          // 子线程执行耗时操作
+          pendingResult.finish()  // 必须调用，否则ANR
+      }.start()
+  }
+
+  方式3：WorkManager调度
+  override fun onReceive(context: Context, intent: Intent) {
+      WorkManager.getInstance(context).enqueue(OneTimeWorkRequest)
+  }
+```
+
+<Callout type="trap">
+**onReceive返回后BroadcastReceiver可能被销毁**：不能在异步线程中持有receiver引用；goAsync()给了最多10秒异步处理时间，完成后必须调finish()，否则ANR。onReceive只做轻量操作，耗时逻辑全部委托给Service或WorkManager。
+</Callout>
+
+## 常见系统广播与开机自启动
+
+```text
+常见系统广播：
+  BOOT_COMPLETED        开机完成（需RECEIVE_BOOT_COMPLETED权限）
+  CONNECTIVITY_CHANGE   网络连接变化
+  BATTERY_LOW           电量低
+  SCREEN_ON / SCREEN_OFF 屏幕亮起/关闭
+  PACKAGE_ADDED         应用安装
+  android.intent.action.TIME_TICK  每分钟一次（只能动态注册）
+
+开机自启动实现：
+  1. 声明权限
+     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+  2. 静态注册接收者（BOOT_COMPLETED是豁免广播，可静态注册）
+     <receiver android:name=".BootReceiver">
+         <intent-filter>
+             <action android:name="android.intent.action.BOOT_COMPLETED" />
+         </intent-filter>
+     </receiver>
+
+  3. 实现BroadcastReceiver
+     class BootReceiver : BroadcastReceiver() {
+         override fun onReceive(context: Context, intent: Intent) {
+             if (Intent.ACTION_BOOT_COMPLETED == intent.action) {
+                 // 启动Activity或Service
+             }
+         }
+     }
+```
+
+<Callout type="insight">
+**LocalBroadcastManager**：只在应用内传递广播的工具类，不跨进程。优势：①安全——其他App无法收到或伪造。②高效——无IPC开销。已被废弃但概念仍有参考价值，现代可用LiveData/Flow/SharedFlow替代应用内事件通信。
+</Callout>
+
+<Exercises>
+**问题 1**：标准广播和有序广播的区别是什么？各自的发送方式和接收流程是怎样的？
+
+<Answer>
+标准广播sendBroadcast(intent)——完全异步，所有匹配接收者几乎同时收到，无法截断，效率高。有序广播sendOrderedBroadcast(intent, permission)——按priority从高到低依次传递，高优先级可abortBroadcast截断或setResultData修改数据传给下一个。priority在intent-filter中设置（-1000~1000）。最终接收者无论是否被截断都会收到。选型：需同时收到→标准广播；需按优先级或可截断→有序广播。安全：指定权限或用LocalBroadcastManager。
+</Answer>
+
+**问题 2**：广播的动态注册和静态注册有什么区别？Android 8.0后对静态注册有什么限制？
+
+<Answer>
+动态注册——代码中registerReceiver/unregisterReceiver，跟随组件生命周期需手动注销（不注销内存泄漏），能收到大部分广播。静态注册——AndroidManifest中<receiver>声明，App安装后即生效无需运行，但Android 8.0起大部分隐式广播不再允许静态注册（省电限制后台唤醒），只有BOOT_COMPLETED/LOCALE_CHANGED等少数豁免广播可静态注册。CONNECTIVITY_CHANGE等需改动态注册。最佳实践：运行时监听用动态注册（注意注销），开机自启用静态注册（豁免广播），应用内通信用LocalBroadcastManager。
+</Answer>
+
+**问题 3**：BroadcastReceiver的onReceive()有什么执行限制？如何在广播接收者中执行耗时操作？
+
+<Answer>
+onReceive()分配约10秒执行时间（超过ANR），运行在主线程，不能做网络请求/大量IO/复杂计算。耗时操作处理方式：①启动Service——onReceive中startForegroundService，耗时操作放Service中（Android 8.0+需startForegroundService+5秒内显示通知）。②goAsync()——获取PendingResult在子线程执行，完成后调finish()，最多10秒。③WorkManager——调度后台任务。注意onReceive返回后receiver可能被销毁，不能在异步线程持有receiver引用。
+</Answer>
+
+**问题 4**：常见的系统广播有哪些？如何实现开机自启动功能？
+
+<Answer>
+常见系统广播：BOOT_COMPLETED（开机）、CONNECTIVITY_CHANGE（网络变化）、BATTERY_LOW（电量低）、SCREEN_ON/OFF（屏幕亮灭）、PACKAGE_ADDED（应用安装）、TIME_TICK（每分钟，只能动态注册）。开机自启动实现：①声明RECEIVE_BOOT_COMPLETED权限。②静态注册<receiver>监听BOOT_COMPLETED（豁免广播可静态注册）。③onReceive中判断ACTION_BOOT_COMPLETED后启动Activity或Service。Android 10+需App至少手动启动一次才能收到开机广播（安全策略防恶意自启）。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="标准广播">sendBroadcast发送，完全异步，所有接收者几乎同时收到，无法截断，效率高但不可控。</GlossaryItem>
+<GlossaryItem term="有序广播">sendOrderedBroadcast发送，按priority从高到低链式传递，高优先级可abortBroadcast截断或setResultData修改数据。</GlossaryItem>
+<GlossaryItem term="动态注册">代码中registerReceiver注册/unregisterReceiver注销，跟随组件生命周期，需手动注销否则内存泄漏。能收到大部分广播。</GlossaryItem>
+<GlossaryItem term="静态注册">AndroidManifest中<receiver>声明，App安装后即生效。Android 8.0+大部分隐式广播不再允许静态注册（省电），仅BOOT_COMPLETED等少数豁免。</GlossaryItem>
+<GlossaryItem term="goAsync">BroadcastReceiver获取异步处理权限的方法，给最多10秒在子线程执行耗时操作，完成后必须调finish()。</GlossaryItem>
+</Glossary>

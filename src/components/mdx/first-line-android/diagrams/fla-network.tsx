@@ -1,0 +1,113 @@
+/**
+ * <FlaNetworkDiagram>：网络编程——HTTP请求流程与异步处理图解。
+ * 纯静态展示，无交互。Server Component（不加 "use client"）。
+ * 全部 DESIGN token 配色，无裸 hex。
+ */
+
+const VIEW_W = 740;
+const VIEW_H = 540;
+
+export function FlaNetworkDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          role="img"
+          aria-label="Android网络编程流程图解"
+          className="mx-auto block h-auto w-full max-w-[740px]"
+        >
+          <text x={VIEW_W / 2} y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
+            网络编程：请求流程与异步处理
+          </text>
+
+          {/* 上半：网络请求流程 */}
+          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">HTTP 请求处理流程</text>
+
+          <rect x="30" y="66" width="130" height="56" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
+          <text x="95" y="88" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">子线程发起</text>
+          <text x="95" y="104" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">HttpURLConnection</text>
+          <text x="95" y="116" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">/ OkHttp</text>
+
+          <text x="175" y="94" textAnchor="middle" fontSize="16" fill="var(--text-tertiary)">&rarr;</text>
+
+          <rect x="190" y="66" width="130" height="56" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
+          <text x="255" y="88" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">建立连接</text>
+          <text x="255" y="104" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">openConnection()</text>
+          <text x="255" y="116" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">setRequestMethod</text>
+
+          <text x="335" y="94" textAnchor="middle" fontSize="16" fill="var(--text-tertiary)">&rarr;</text>
+
+          <rect x="350" y="66" width="130" height="56" rx="8" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.2" />
+          <text x="415" y="88" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">读取响应</text>
+          <text x="415" y="104" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">getInputStream()</text>
+          <text x="415" y="116" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">BufferedReader</text>
+
+          <text x="495" y="94" textAnchor="middle" fontSize="16" fill="var(--text-tertiary)">&rarr;</text>
+
+          <rect x="510" y="66" width="130" height="56" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
+          <text x="575" y="88" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">解析JSON</text>
+          <text x="575" y="104" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">JSONObject</text>
+          <text x="575" y="116" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">/ Gson / Moshi</text>
+
+          <text x="650" y="94" textAnchor="middle" fontSize="16" fill="var(--text-tertiary)">&rarr;</text>
+
+          <rect x="665" y="66" width="45" height="56" rx="8" fill="var(--text-primary)" fillOpacity="0.08" stroke="var(--text-primary)" strokeWidth="1.2" strokeOpacity="0.4" />
+          <text x="687" y="88" textAnchor="middle" fontSize="10" fontWeight="600" fill="var(--text-primary)">回调</text>
+          <text x="687" y="102" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">主线程</text>
+          <text x="687" y="114" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">更新UI</text>
+
+          {/* 中间：异步处理方式 */}
+          <text x={VIEW_W / 2} y="152" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">异步处理方式对比</text>
+
+          <rect x="30" y="164" width="210" height="100" rx="8" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1.2" />
+          <text x="135" y="184" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">Thread + Handler</text>
+          <text x="135" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">子线程请求网络</text>
+          <text x="135" y="214" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Handler.sendMessage()</text>
+          <text x="135" y="228" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">handleMessage() 切主线程</text>
+          <text x="135" y="246" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">最底层，代码量大</text>
+          <text x="135" y="258" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">AsyncTask（已废弃）</text>
+
+          <rect x="255" y="164" width="210" height="100" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
+          <text x="360" y="184" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">OkHttp（推荐）</text>
+          <text x="360" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">OkHttpClient</text>
+          <text x="360" y="214" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Request / Response</text>
+          <text x="360" y="228" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">enqueue() 异步回调</text>
+          <text x="360" y="246" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">连接池/拦截器/缓存</text>
+          <text x="360" y="258" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">社区主流方案</text>
+
+          <rect x="480" y="164" width="230" height="100" rx="8" fill="var(--danger)" fillOpacity="0.1" stroke="var(--danger)" strokeWidth="1.2" />
+          <text x="595" y="184" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--danger)">Retrofit（推荐）</text>
+          <text x="595" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">接口定义API（注解）</text>
+          <text x="595" y="214" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">@GET / @POST / @Path</text>
+          <text x="595" y="228" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">底层基于OkHttp</text>
+          <text x="595" y="246" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">自动JSON解析（Converter）</text>
+          <text x="595" y="258" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">配合Coroutine/Flow</text>
+
+          {/* 下半：XML/JSON解析 */}
+          <rect x="30" y="284" width="340" height="80" rx="8" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
+          <text x="200" y="304" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">XML 解析</text>
+          <text x="200" y="322" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Pull解析：XmlPullParser（Android内置）</text>
+          <text x="200" y="336" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">SAX解析：事件驱动流式解析</text>
+          <text x="200" y="350" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">START_TAG / TEXT / END_TAG 事件</text>
+
+          <rect x="380" y="284" width="330" height="80" rx="8" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
+          <text x="545" y="304" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">JSON 解析</text>
+          <text x="545" y="322" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">JSONObject：手动解析，适合简单结构</text>
+          <text x="545" y="336" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Gson：fromJson/toJson 自动映射对象</text>
+          <text x="545" y="350" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Moshi：Kotlin友好，KSP编译期生成</text>
+
+          {/* 底部要点 */}
+          <text x="370" y="388" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">关键约束</text>
+          <text x="370" y="410" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">网络请求必须在子线程 — 主线程NetworkOnMainThreadException</text>
+          <text x="370" y="426" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">AndroidManifest 必须声明 &lt;uses-permission android:name="android.permission.INTERNET"/&gt;</text>
+          <text x="370" y="442" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">HTTPS默认信任 — HTTP需配置 networkSecurityConfig（Android 9.0+ 默认禁明文）</text>
+          <text x="370" y="458" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">现代方案：Retrofit + OkHttp + Coroutine + Gson/Moshi，网络层与UI层解耦</text>
+        </svg>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        网络请求流程（子线程发起→连接→读取→解析→回调主线程）与三种异步方案（Thread+Handler/OkHttp/Retrofit）对比
+      </figcaption>
+    </figure>
+  );
+}

@@ -1768,7 +1768,17 @@ export type ReviewChapterSlug =
   | "gch-concurrent-gc"
   | "gch-realtime-gc"
   | "gch-modern-gc"
-  | "gch-final-review";
+  | "gch-final-review"
+  | "fla-learning-map"
+  | "fla-android-basics"
+  | "fla-ui-layout"
+  | "fla-activity"
+  | "fla-data-storage"
+  | "fla-broadcast"
+  | "fla-service"
+  | "fla-network"
+  | "fla-advanced-features"
+  | "fla-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3541,6 +3551,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "gch-realtime-gc": "实时GC",
   "gch-modern-gc": "现代GC对比",
   "gch-final-review": "全书复习",
+  "fla-learning-map": "全书学习地图",
+  "fla-android-basics": "Android入门",
+  "fla-ui-layout": "UI布局与控件",
+  "fla-activity": "Activity与Fragment",
+  "fla-data-storage": "数据存储",
+  "fla-broadcast": "广播机制",
+  "fla-service": "服务与通知",
+  "fla-network": "网络编程",
+  "fla-advanced-features": "高级特性（Material Design/Jetpack）",
+  "fla-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

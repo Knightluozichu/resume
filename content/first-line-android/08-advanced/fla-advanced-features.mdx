@@ -1,0 +1,196 @@
+---
+title: "高级特性（Material Design/Jetpack）"
+type: A
+section: "Android开发"
+order: 8
+description: "掌握Material Design视觉组件与Jetpack架构组件——CoordinatorLayout协调滚动、ViewModel/LiveData的MVVM架构、Navigation导航、WorkManager后台调度"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { FlaAdvancedFeaturesDiagram } from "@/components/mdx/first-line-android/diagrams/fla-advanced-features";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握Material Design核心组件——CoordinatorLayout/AppBarLayout/FAB/Snackbar/BottomNavigation
+- 理解Jetpack架构组件——ViewModel/LiveData/Room/Navigation/WorkManager
+- 掌握MVVM架构——UI层↔ViewModel+LiveData↔Repository→Room/Retrofit
+- 理解现代Android开发（MAD）的技术栈组合
+</Objectives>
+
+## 直觉引入
+
+Material Design像「装修标准」——规定怎么把界面做得好看（卡片/阴影/动画/协调滚动）。Jetpack像「建筑规范」——规定怎么把代码写得稳健（ViewModel管数据/LiveData管通知/Room管存储/Navigation管导航/WorkManager管后台）。两者结合就是「现代Android开发」（MAD）——既有好看的皮囊（Material Design），又有稳健的骨架（Jetpack MVVM）。ViewModel像「不随装修队（Activity重建）换的管家」——房子拆了重建（屏幕旋转），管家还在，数据不丢。LiveData像「自动感应的传令兵」——只在主人（Activity/Fragment）醒着的时候才传消息，主人睡了自动不传（生命周期感知）。
+
+<FlaAdvancedFeaturesDiagram />
+
+## Material Design核心组件
+
+```text
+组件                              作用
+──────────────────────────────────────────────────────────────────
+CoordinatorLayout                 协调布局，子View通过Behavior协调交互
+AppBarLayout                      垂直LinearLayout，专为滚动行为设计
+CollapsingToolbarLayout           可折叠工具栏，配合AppBarLayout
+FloatingActionButton              悬浮操作按钮，可随滚动显示/隐藏
+Snackbar                          底部提示条（比Toast更交互式）
+BottomNavigation                  底部导航栏
+TabLayout                         选项卡布局（配合ViewPager2）
+TextInputLayout                   带浮动标签的输入框
+MaterialCardView                  带阴影圆角的卡片
+```
+
+<Callout type="insight">
+**CoordinatorLayout协调滚动原理**：通过Behavior机制协调子View。AppBarLayout的子View设置layout_scrollFlags（scroll|enterAlways等），RecyclerView设置layout_behavior。滚动时Behavior拦截事件，根据scrollFlags控制AppBarLayout子View同步滚动（Toolbar随列表滑出、CollapsingToolbarLayout折叠），FAB随滚动显示/隐藏。无需手动写动画代码。
+</Callout>
+
+## Jetpack架构组件
+
+```text
+ViewModel：
+  - 持有UI数据，配置变更（屏幕旋转）时不销毁
+  - 不持有View引用（避免内存泄漏）
+  - 通过ViewModelProvider(this).get(MyViewModel::class.java)获取
+  - onCleared()在Activity真正销毁时清理资源
+
+  class MyViewModel : ViewModel() {
+      private val _data = MutableLiveData<String>()
+      val data: LiveData<String> = _data  // 对外暴露不可变
+
+      fun fetchData() {
+          viewModelScope.launch {
+              _data.value = repository.getData()  // 主线程更新
+          }
+      }
+  }
+
+LiveData：
+  - 可观察的数据持有者
+  - 生命周期感知：只在STARTED/RESUMED状态通知更新
+  - 自动在DESTROYED时取消订阅（无需手动removeObserver）
+
+  // UI层观察
+  viewModel.data.observe(this) { data ->
+      textView.text = data  // 自动在活跃状态时回调
+  }
+
+Room（数据层）：
+  - @Entity定义表 / @Dao定义操作 / @Database定义数据库
+  - 编译期SQL检查 + 类型安全 + 响应式查询（LiveData/Flow）
+  - DAO方法可返回LiveData<List<User>>，数据变化自动通知UI
+
+Navigation Component：
+  - NavGraph可视化导航图管理Fragment跳转
+  - Safe Args类型安全传参（编译期生成Directions/Args类）
+  - NavController.navigate(actionId)跳转
+  - 统一回退栈管理
+
+WorkManager：
+  - 保证执行的后台任务调度（持久化+设备重启恢复）
+  - 可约束（网络/充电/空闲）
+  - 可延迟/可周期/链式任务
+  - 替代不可靠的后台Service
+```
+
+## MVVM架构
+
+```text
+Jetpack推荐架构（MVVM）：
+
+  ┌─────────────────────────┐
+  │  UI层（Activity/Fragment）│  ← 观察LiveData更新UI
+  │  viewModel.data.observe  │     调用ViewModel方法请求数据
+  └───────────┬─────────────┘
+              ↕ LiveData观察
+  ┌───────────┴─────────────┐
+  │  ViewModel + LiveData    │  ← 持有UI数据（跨配置变更存活）
+  │  管理状态，协调数据请求    │     不持有View引用
+  └───────────┬─────────────┘
+              ↕ suspend函数调用
+  ┌───────────┴─────────────┐
+  │  Repository              │  ← 统一管理数据源
+  │  决定本地还是远程          │     协调Room和Retrofit
+  └──────┬──────────┬───────┘
+         ↕          ↕
+  ┌──────┴───┐ ┌───┴───────┐
+  │  Room    │ │  Retrofit  │  ← 本地数据库 / 远程API
+  │  (本地)  │ │  (远程)    │
+  └──────────┘ └───────────┘
+
+数据流（单向）：
+  UI调用ViewModel方法 → ViewModel通过Repository获取数据
+  → Repository协调Room/Retrofit → 数据返回ViewModel
+  → ViewModel更新LiveData → LiveData通知UI更新
+
+关键原则：
+  - UI层不直接操作数据源（只通过ViewModel）
+  - ViewModel不持有View引用（避免泄漏）
+  - Repository是唯一数据源入口（协调本地和远程）
+  - LiveData生命周期感知（自动管理订阅）
+```
+
+<Callout type="trap">
+**ViewModel为什么能在配置变更时存活**：Activity持有ViewModelStore（HashMap存ViewModel），配置变更时系统通过onRetainNonConfigurationInstance保存ViewModelStore，重建后恢复。因此ViewModel实例不随Activity重建销毁，数据自动保留。只有Activity真正finish时ViewModelStore.clear()调onCleared()。但ViewModel不跨进程（进程被杀也销毁）。
+</Callout>
+
+## 现代Android开发（MAD）
+
+```text
+MAD技术栈组合：
+  语言：Kotlin（协程/Flow/空安全/data class）
+  UI：Material Design + ConstraintLayout + RecyclerView + ViewPager2
+  架构：MVVM（ViewModel + LiveData + Repository）
+  数据：Room（本地） + Retrofit + OkHttp（远程）+ Gson/Moshi（解析）
+  异步：Coroutines + Flow
+  导航：Navigation Component（单Activity多Fragment）
+  后台：WorkManager
+  图片：Glide / Coil
+  依赖注入：Hilt / Dagger
+  生命周期：Lifecycle-aware components
+
+  理念：
+  Material Design = 视觉规范（怎么做界面好看）
+  Jetpack = 架构规范（怎么写代码稳健）
+  两者结合 = 现代Android开发（MAD）
+```
+
+<Callout type="insight">
+**MAD的核心理念**：声明式>命令式（Retrofit注解声明API vs 手写URL拼接）、类型安全>运行时检查（Room编译期检查 vs SQLite运行时崩溃）、系统调度>应用自管理（WorkManager vs Service）、数据驱动UI（LiveData观察 vs 手动刷新）、生命周期感知（LiveData自动管理订阅 vs 手动注册注销）。
+</Callout>
+
+<Exercises>
+**问题 1**：Material Design的核心组件有哪些？CoordinatorLayout如何实现协调滚动效果？
+
+<Answer>
+Material Design核心组件：MaterialCardView卡片、CoordinatorLayout协调布局、AppBarLayout/CollapsingToolbarLayout可折叠工具栏、FloatingActionButton悬浮按钮、Snackbar底部提示、BottomNavigation底部导航、TabLayout选项卡、TextInputLayout浮动标签输入框。CoordinatorLayout协调滚动原理：通过Behavior机制协调子View。AppBarLayout子View设layout_scrollFlags（scroll|enterAlways等），RecyclerView设layout_behavior。滚动时Behavior拦截事件，根据scrollFlags控制AppBarLayout子View同步滚动（Toolbar滑出/CollapsingToolbarLayout折叠），FAB随滚动显隐。无需手动写动画代码。
+</Answer>
+
+**问题 2**：ViewModel和LiveData如何配合实现MVVM架构？为什么ViewModel能在配置变更时存活？
+
+<Answer>
+ViewModel持有UI数据（跨配置变更存活），不持有View引用。LiveData是可观察的数据持有者（生命周期感知——只在活跃状态通知，DESTROYED自动取消订阅）。MVVM数据流：UI层调ViewModel方法→ViewModel通过Repository获取数据→更新LiveData→LiveData通知UI自动更新。单向数据流，UI不直接操作数据源。ViewModel能在配置变更存活的原因：Activity持有ViewModelStore（HashMap），配置变更时系统通过onRetainNonConfigurationInstance保存ViewModelStore，重建后恢复，ViewModel实例不随Activity重建销毁。只有Activity真正finish时clear()调onCleared()。不跨进程。
+</Answer>
+
+**问题 3**：Jetpack的Navigation Component如何工作？相比传统Intent跳转有什么优势？
+
+<Answer>
+Navigation Component：①NavGraph——res/navigation/下XML导航图，<fragment>声明目的地，<action>声明跳转关系。②NavHost——Activity中放NavHostFragment容器绑定导航图。③NavController——navigate(actionId)跳转，navigateUp/popBackStack返回。④Safe Args——编译期生成类型安全参数传递类（Directions/Args）。优势：①可视化导航图展示跳转关系。②Safe Args类型安全传参（编译期检查）。③统一回退栈管理（不需手动Fragment事务）。④action中统一配转场动画。⑤支持Deep Link。⑥简化Fragment事务（不再手写beginTransaction/replace/addToBackStack/commit）。最佳实践：单Activity多Fragment架构。
+</Answer>
+
+**问题 4**：WorkManager的作用是什么？它如何替代传统的后台Service？
+
+<Answer>
+WorkManager是Jetpack后台任务调度库，用于可延迟的需保证执行的后台任务（即使App退出或设备重启也执行）。核心特性：①保证执行（持久化到数据库，设备重启恢复）。②可约束（网络/充电/空闲/存储充足）。③可延迟/可周期（OneTimeWorkRequest/PeriodicWorkRequest最短15分钟）。④链式任务（串联/并联组合）。⑤后台线程执行。替代后台Service原因：①Android 8.0+后台Service严重受限（startService抛异常，被系统杀死）。②WorkManager底层自动选JobScheduler/AlarmManager最优实现。③系统批量调度省电。④持久化保证执行比Service可靠。使用：定义Worker类（doWork返回Result），创建WorkRequest（设约束/延迟），WorkManager.enqueue(request)。场景：数据同步/日志上传/缓存清理。需实时的仍用前台Service。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CoordinatorLayout">Material Design协调布局，通过Behavior机制协调子View交互。AppBarLayout子View设scrollFlags，RecyclerView设layout_behavior，滚动时自动协调Toolbar折叠/FAB显隐，无需手动动画。</GlossaryItem>
+<GlossaryItem term="ViewModel">Jetpack架构组件，持有UI数据。配置变更（屏幕旋转）时不销毁（ViewModelStore跨重建存活），不持有View引用避免泄漏。onCleared()在Activity真正销毁时清理。</GlossaryItem>
+<GlossaryItem term="LiveData">Jetpack可观察数据持有者，生命周期感知——只在STARTED/RESUMED状态通知更新，DESTROYED自动取消订阅。ViewModel持有MutableLiveData，UI层observe自动更新。</GlossaryItem>
+<GlossaryItem term="Navigation Component">Jetpack导航组件，NavGraph可视化导航图+NavHost容器+NavController跳转+Safe Args类型安全传参。替代手写Fragment事务，统一回退栈管理。推荐单Activity多Fragment架构。</GlossaryItem>
+<GlossaryItem term="WorkManager">Jetpack后台任务调度库，保证执行（持久化+设备重启恢复）、可约束（网络/充电）、系统调度省电。替代不可靠的后台Service处理不可感知的后台任务。</GlossaryItem>
+<GlossaryItem term="MVVM">Model-View-ViewModel架构。UI层观察ViewModel的LiveData→ViewModel管理状态协调Repository→Repository协调Room(本地)和Retrofit(远程)。单向数据流，ViewModel跨配置变更存活，LiveData生命周期感知。</GlossaryItem>
+</Glossary>

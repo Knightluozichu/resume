@@ -1645,6 +1645,16 @@ import { gchConcurrentGcQuestions } from "./review/gch-concurrent-gc";
 import { gchRealtimeGcQuestions } from "./review/gch-realtime-gc";
 import { gchModernGcQuestions } from "./review/gch-modern-gc";
 import { gchFinalReviewQuestions } from "./review/gch-final-review";
+import { flaLearningMapQuestions } from "./review/fla-learning-map";
+import { flaAndroidBasicsQuestions } from "./review/fla-android-basics";
+import { flaUiLayoutQuestions } from "./review/fla-ui-layout";
+import { flaActivityQuestions } from "./review/fla-activity";
+import { flaDataStorageQuestions } from "./review/fla-data-storage";
+import { flaBroadcastQuestions } from "./review/fla-broadcast";
+import { flaServiceQuestions } from "./review/fla-service";
+import { flaNetworkQuestions } from "./review/fla-network";
+import { flaAdvancedFeaturesQuestions } from "./review/fla-advanced-features";
+import { flaFinalReviewQuestions } from "./review/fla-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3325,6 +3335,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...gchRealtimeGcQuestions,
   ...gchModernGcQuestions,
   ...gchFinalReviewQuestions,
+  ...flaLearningMapQuestions,
+  ...flaAndroidBasicsQuestions,
+  ...flaUiLayoutQuestions,
+  ...flaActivityQuestions,
+  ...flaDataStorageQuestions,
+  ...flaBroadcastQuestions,
+  ...flaServiceQuestions,
+  ...flaNetworkQuestions,
+  ...flaAdvancedFeaturesQuestions,
+  ...flaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

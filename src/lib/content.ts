@@ -212,6 +212,7 @@ export const BOOK_ORDER = [
   "deep-understanding-jvm",
   "jvm-g1-tuning",
   "gc-handbook",
+  "first-line-android",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -364,6 +365,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "deep-understanding-jvm": "深入理解Java虚拟机",
   "jvm-g1-tuning": "JVM G1源码分析和调优",
   "gc-handbook": "垃圾回收算法手册",
+  "first-line-android": "第一行代码Android",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -990,6 +992,7 @@ export const SECTION_ORDER = [
   "前端与Web",
   "系统与操作系统",
   "JVM与Java生态",
+  "Android开发",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */
