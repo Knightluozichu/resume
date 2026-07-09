@@ -1,0 +1,178 @@
+---
+title: "消息模式"
+type: A
+section: "分布式与中间件"
+order: 2
+description: "RabbitMQ四种Exchange类型与高级消息模式——死信队列、延迟队列、优先级队列"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { RmqMessagingPatternsDiagram } from "@/components/mdx/rabbitmq-practice/diagrams/rmq-messaging-patterns";
+
+<Objectives>
+
+- 掌握Exchange四种类型（direct/fanout/topic/headers）的路由规则和适用场景
+- 理解死信队列（DLX）的触发条件和应用场景
+- 掌握延迟队列的两种实现方式（TTL+DLX / delayed_message插件）
+- 了解优先级队列的使用场景和限制
+
+</Objectives>
+
+## 四种 Exchange 类型
+
+<RmqMessagingPatternsDiagram />
+
+RabbitMQ的Exchange有四种类型，每种类型的路由规则不同，覆盖了从精确点对点到广播到模式匹配的全部路由场景。选择正确的Exchange类型是设计消息系统的关键决策。
+
+## 路由规则详解
+
+```
+// direct（精确匹配）
+//   Routing Key == Binding Key → 消息进入 Queue
+//   一个 Routing Key 可绑定多个 Queue（1:N）
+//   示例：RK="error" → Q1, RK="info" → Q2
+//   适用：日志按级别分发、点对点精确路由
+//
+// fanout（广播）
+//   忽略 Routing Key → 消息进入所有绑定的 Queue
+//   效率最高：不需要匹配，直接广播
+//   适用：配置推送、事件广播、多消费者全量消费
+//
+// topic（模式匹配）
+//   Routing Key 与 Binding Key 做通配符匹配
+//   * = 匹配一个单词（以 . 分隔）
+//   # = 匹配零或多个单词
+//   示例："kern.critical" 匹配 "kern.*" 和 "*.critical"
+//   适用：订阅过滤、日志路由、按主题订阅
+//
+// headers（头匹配）
+//   匹配消息头（headers）属性，忽略 Routing Key
+//   x-match: all → 所有头属性都匹配
+//   x-match: any → 任一头属性匹配
+//   适用：多条件路由、非 Routing Key 场景
+```
+
+## 死信队列（DLX）
+
+```
+// Dead Letter Exchange（死信交换器）
+// 消息变成"死信"的三个条件：
+//   ① 消息被 basic.reject / basic.nack 且 requeue=false
+//   ② 消息 TTL 过期（x-message-ttl）
+//   ③ 队列达到最大长度（x-max-length）
+//
+// 配置方式：
+//   队列声明时设置参数：
+//   x-dead-letter-exchange = "dlx.exchange"
+//   x-dead-letter-routing-key = "dlx.routing.key"
+//
+// 典型应用：
+//   → 消费失败的消息进入死信队列，人工处理或告警
+//   → 配合 TTL 实现延迟队列
+//   → 防止有毒消息无限重试阻塞正常消费
+//
+// 架构：
+//   正常Queue → (消息变死信) → DLX → 死信Queue → 人工/告警消费
+```
+
+## 延迟队列
+
+```
+// 延迟队列两种实现方式
+//
+// 方式一：TTL + DLX（原生方案，无需插件）
+//   ① 消息发到普通 Queue，设置 x-message-ttl
+//   ② 消息过期后成为死信，转发到 DLX
+//   ③ DLX 路由到目标 Queue，消费者消费
+//   注意：队列级 TTL 是先进先出，头部消息未过期会阻塞后续
+//
+// 方式二：rabbitmq_delayed_message_exchange 插件
+//   ① 安装插件后声明 x-delayed-message 类型 Exchange
+//   ② 发消息时设置 x-delay 头 = 延迟毫秒数
+//   ③ Exchange 延迟后路由到绑定 Queue
+//   优势：每条消息独立延迟，不受队列顺序影响
+//
+// 典型应用：
+//   → 订单超时取消（下单30分钟未支付自动取消）
+//   → 延迟重试（失败后延迟N秒重试）
+//   → 定时通知（指定时间后发送提醒）
+```
+
+## 优先级队列
+
+```
+// Priority Queue（优先级队列）
+// 声明队列时设置 x-max-priority = 255
+// 消息发送时设置 priority = 0~255
+// 高优先级消息先被消费
+//
+// 限制：
+//   → 必须消费者在线时才有效（无消费者时消息仍按FIFO存入）
+//   → priority 超过 x-max-priority 会被截断
+//   → 性能开销：维护优先级堆，吞吐量降低
+//
+// 典型应用：
+//   → VIP 用户消息优先处理
+//   → 紧急告警插队
+//   → SLA 差异化服务
+```
+
+<Callout type="warning" title="Exchange 选择决策">
+direct 适合精确路由（如按日志级别分发），fanout 适合广播（如配置推送），topic 适合模式订阅（如按主题过滤日志），headers 适合多属性匹配（但性能最差，尽量用 topic 替代）。大多数场景下 direct 和 topic 足够使用。fanout 效率最高因为不需要匹配。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="direct Exchange">
+精确匹配路由键的Exchange类型。消息的Routing Key必须与Binding Key完全相等，消息才会被路由到对应Queue。一个Routing Key可以绑定多个Queue实现一对多。典型场景：日志系统按级别（info/warn/error）分发到不同队列，由不同消费者处理。
+</GlossaryItem>
+
+<GlossaryItem term="fanout Exchange">
+广播类型的Exchange，忽略Routing Key，将消息路由到所有绑定的Queue。这是效率最高的Exchange类型，因为不需要做任何匹配。典型场景：配置更新通知（所有服务节点都需要收到）、事件广播、多系统并行处理同一事件。
+</GlossaryItem>
+
+<GlossaryItem term="topic Exchange">
+模式匹配路由键的Exchange类型，支持通配符：*匹配一个单词（以点号分隔），#匹配零或多个单词。例如Binding Key "kern.*"匹配"kern.critical"和"kern.info"，"#.critical"匹配所有以.critical结尾的Routing Key。是最灵活的Exchange类型，适用于复杂的订阅过滤场景。
+</GlossaryItem>
+
+<GlossaryItem term="死信队列（DLX）">
+Dead Letter Exchange的缩写。当消息变成"死信"时（被reject/nack且requeue=false、TTL过期、队列超长），会被转发到指定的死信Exchange，再路由到死信Queue。死信队列用于：消费失败的消息隔离处理、配合TTL实现延迟队列、防止有毒消息阻塞正常消费。
+</GlossaryItem>
+
+<GlossaryItem term="延迟队列">
+让消息延迟一定时间后才被消费的机制。两种实现：①TTL+DLX方案——给消息设置TTL，过期后通过死信Exchange转发到目标队列，原生支持无需插件，但队列级TTL有头部阻塞问题；②rabbitmq_delayed_message_exchange插件——自定义Exchange类型，每条消息独立设置x-delay延迟时间，无阻塞问题。典型应用：订单超时取消、延迟重试、定时通知。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：RabbitMQ的四种Exchange类型分别是什么？各自的路由规则和适用场景是什么？
+
+<Answer>
+四种Exchange类型：①direct——Routing Key与Binding Key精确匹配，消息进入匹配的Queue。适用：点对点精确路由、日志按级别分发（RK="error"→错误队列）。②fanout——忽略Routing Key，消息广播到所有绑定的Queue。适用：广播通知、配置推送、多消费者全量消费。③topic——Routing Key与Binding Key做通配符匹配，*匹配一个单词，#匹配零或多个单词。适用：订阅过滤、日志按主题路由（如"kern.*"匹配所有内核日志）。④headers——匹配消息头属性而非Routing Key，x-match:all要求所有头匹配，x-match:any要求任一头匹配。适用：多条件路由、非Routing Key场景。选择决策：需要精确路由用direct，需要广播用fanout（效率最高），需要模式订阅用topic（最灵活），需要多属性匹配用headers（性能最差，尽量用topic替代）。
+</Answer>
+
+**问题 2**：死信队列的触发条件有哪些？如何配置？在什么场景下使用？
+
+<Answer>
+死信触发三个条件：①消息被basic.reject或basic.nack且requeue=false——消费者拒绝消息且不重新入队；②消息TTL过期——队列设置了x-message-ttl或消息设置了expiration，超时后成为死信；③队列达到最大长度——设置了x-max-length，超限时队头的消息成为死信。配置方式：在声明Queue时设置参数x-dead-letter-exchange指定死信Exchange，x-dead-letter-routing-key指定死信路由键（可选，不设置则用原消息的Routing Key）。使用场景：①消费失败隔离——处理失败的消息进入死信队列，由专门的消费者进行人工处理或告警；②配合TTL实现延迟队列——消息先进入有TTL的队列，过期后通过DLX转发到目标队列实现延迟消费；③防止有毒消息无限重试——限制重试次数后进入死信队列，避免阻塞正常消费。
+</Answer>
+
+**问题 3**：延迟队列有哪两种实现方式？各自的优缺点是什么？
+
+<Answer>
+两种实现方式：①TTL+DLX方案（原生支持，无需插件）：给消息设置TTL（x-message-ttl或expiration），消息过期后成为死信，通过x-dead-letter-exchange转发到目标Queue被消费。优点：无需安装插件，原生支持。缺点：队列级TTL有头部阻塞问题——如果队列设置统一TTL，前面消息未过期时后面消息即使先过期也不能出队，因为Queue是FIFO的。解决方法：每条消息单独设置expiration而非队列级TTL，但 RabbitMQ 对单消息TTL的过期检查是惰性的。②rabbitmq_delayed_message_exchange插件方案：安装插件后声明x-delayed-message类型Exchange，发送消息时设置x-delay头为延迟毫秒数，Exchange延迟指定时间后路由到绑定Queue。优点：每条消息独立延迟，无头部阻塞问题。缺点：需要安装插件，插件将消息存储在Mnesia表中，大量延迟消息可能影响性能。典型应用：订单超时取消（下单30分钟未支付自动取消）、延迟重试（失败后延迟N秒重试）、定时通知。
+</Answer>
+
+**问题 4**：topic Exchange的通配符规则是什么？如何设计Routing Key和Binding Key来实现灵活的订阅过滤？
+
+<Answer>
+topic Exchange通配符规则：Routing Key和Binding Key都是以点号（.）分隔的单词字符串，如"kern.critical.disk"。*匹配恰好一个单词，#匹配零或多个单词。匹配示例：Binding Key "kern.*"匹配"kern.critical"和"kern.info"但不匹配"kern.critical.disk"；Binding Key "kern.#"匹配"kern"、"kern.critical"和"kern.critical.disk"；Binding Key "#.critical"匹配所有以.critical结尾的Routing Key；Binding Key "#"匹配所有消息（等同于fanout）。设计建议：①Routing Key用层次结构——如"facility.severity"（设施.严重级别），便于按维度过滤；②Binding Key按订阅需求设计——运维只订阅"*.critical"和"*.error"，开发只订阅"app.#"，DBA只订阅"db.*"；③特殊键："#"作为Binding Key等同于fanout广播，"*"作为Binding Key只匹配单单词Routing Key。topic Exchange是最灵活的路由方式，推荐用于需要动态订阅过滤的场景。
+</Answer>
+
+</Exercises>

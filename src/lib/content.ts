@@ -230,6 +230,7 @@ export const BOOK_ORDER = [
   "ddia",
   "redis-design-implementation",
   "kafka-definitive-guide",
+  "rabbitmq-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -400,6 +401,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "ddia": "数据密集型应用系统设计",
   "redis-design-implementation": "Redis设计与实现",
   "kafka-definitive-guide": "Kafka权威指南",
+  "rabbitmq-practice": "RabbitMQ实战",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,191 @@
+---
+title: "集群与镜像队列"
+type: B
+section: "分布式与中间件"
+order: 5
+description: "RabbitMQ集群节点类型、镜像队列Master-Slave架构与Quorum仲裁队列原理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { RmqClusteringDiagram } from "@/components/mdx/rabbitmq-practice/diagrams/rmq-clustering";
+
+<Objectives>
+
+- 理解RabbitMQ集群的架构和Disk/RAM节点类型的区别
+- 掌握镜像队列的Master-Slave工作原理和配置方式
+- 理解Quorum Queue基于Raft协议的优势和适用场景
+- 了解集群搭建步骤和节点管理操作
+
+</Objectives>
+
+## 集群架构
+
+<RmqClusteringDiagram />
+
+RabbitMQ集群由多个节点（Node）组成，所有节点共享Exchange/Binding/用户等元数据。集群中的节点分为两种类型：Disk Node（磁盘节点）将元数据持久化到磁盘，RAM Node（内存节点）将元数据仅保存在内存中。集群至少需要一个Disk Node保证元数据安全。
+
+## 节点类型
+
+```
+// Disk Node（磁盘节点）
+//   → 元数据（Exchange/Queue/Binding/用户/VHost）写入磁盘
+//   → Broker 重启后元数据不丢失
+//   → 集群至少需要一个 Disk Node
+//   → 元数据变更（声明/删除 Exchange/Queue）会同步到所有节点
+//
+// RAM Node（内存节点）
+//   → 元数据仅保存在内存中
+//   → 性能略高于 Disk Node（省去磁盘写入）
+//   → 重启后元数据丢失，需从其他节点同步
+//   → 不能是集群中唯一的 Disk Node
+//
+// 消息数据：
+//   → 默认只在 Queue 所在节点上（非集群共享）
+//   → 集群中的 Queue 默认不复制消息
+//   → 需要镜像队列或 Quorum Queue 实现消息冗余
+//
+// 集群搭建：
+//   rabbitmqctl stop_app
+//   rabbitmqctl join_cluster rabbit@node-a
+//   rabbitmqctl start_app
+```
+
+## 镜像队列
+
+```
+// Classic Mirror Queue（经典镜像队列）
+//   → Master-Slave 模式，消息多副本
+//   → Master 处理所有读写，Slave 同步副本
+//   → Master 宕机 → 最旧的 Slave 升级为新 Master
+//
+// 配置策略（policy）：
+//   x-ha-policy: all        → 镜像到所有节点
+//   x-ha-policy: exactly    → 镜像到恰好 N 个节点
+//   x-ha-policy: nodes      → 镜像到指定节点列表
+//
+// 同步模式：
+//   ha-sync-mode: manual    → 新 Slave 异步同步（默认）
+//   ha-sync-mode: automatic → 新 Slave 同步完成后才可用
+//
+// 命令示例：
+//   rabbitmqctl set_policy ha-all "^order\." \
+//     '{"ha-mode":"all","ha-sync-mode":"automatic"}'
+//
+// 限制：
+//   → Master 是性能瓶颈（所有写操作经过 Master）
+//   → 脑裂风险：网络分区时可能出现两个 Master
+//   → 异步同步模式下 Slave 数据可能滞后
+```
+
+## Quorum Queue
+
+```
+// Quorum Queue（仲裁队列）—— RabbitMQ 3.8+ 推荐
+//   → 基于 Raft 共识协议
+//   → 无 Master/Slave 区分，所有副本平等
+//   → 多数派（quorum）写入确认即可
+//   → 无脑裂问题（少数派自动暂停）
+//
+// 声明方式：
+//   queue.declare(
+//     x-queue-type = "quorum"   // 关键参数
+//   )
+//
+// 优势：
+//   → 数据安全更强（Raft 保证强一致性）
+//   → 无脑裂风险（少数派节点自动暂停，不提供服务）
+//   → 自动故障恢复（Leader 宕机自动选举新 Leader）
+//   → 推荐替代 Classic 镜像队列
+//
+// 限制：
+//   → 不支持 exclusive 队列
+//   → 不支持 auto-delete
+//   → 不支持非持久化消息（所有消息强制持久化）
+//   → 内存占用更高（Raft 日志）
+```
+
+## 镜像队列 vs Quorum Queue
+
+```
+// 对比决策
+//
+// Classic 镜像队列：
+//   ✓ 兼容性好（老版本支持）
+//   ✓ 支持非持久化消息
+//   ✗ 有脑裂风险
+//   ✗ Master 是单点瓶颈
+//   ✗ 异步同步可能数据丢失
+//
+// Quorum Queue：
+//   ✓ 无脑裂（Raft 共识）
+//   ✓ 强一致性保证
+//   ✓ 自动 Leader 选举
+//   ✗ 仅支持持久化消息
+//   ✗ 内存开销略高
+//   ✗ 需要 RabbitMQ 3.8+
+//
+// 决策建议：
+//   → 新系统首选 Quorum Queue
+//   → 老系统可迁移到 Quorum Queue
+//   → 需要非持久化高性能场景 → Classic 镜像队列
+```
+
+<Callout type="info" title="集群关键认知">
+RabbitMQ集群共享元数据（Exchange/Binding/用户），但Queue默认不共享消息——消息只存在Queue所在的节点上。集群扩展提高的是路由能力和可用性，不是单Queue的存储容量。需要消息冗余必须配置镜像队列或Quorum Queue。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="Disk Node（磁盘节点）">
+将集群元数据（Exchange/Queue/Binding/用户/VHost定义）持久化到磁盘的节点。Broker重启后元数据不丢失。集群至少需要一个Disk Node保证元数据安全。元数据变更操作（声明/删除Exchange/Queue）会在所有Disk Node上持久化，在RAM Node上仅更新内存。
+</GlossaryItem>
+
+<GlossaryItem term="RAM Node（内存节点）">
+元数据仅保存在内存中的节点，性能略高于Disk Node。重启后元数据丢失，需从其他节点同步。RAM Node不能是集群中唯一的Disk Node。适合对元数据操作性能要求高、但可以容忍重启同步的场景。
+</GlossaryItem>
+
+<GlossaryItem term="镜像队列（Classic Mirror Queue）">
+Classic队列的镜像方案，采用Master-Slave模式。Master节点上的Queue处理所有读写操作，Slave节点同步消息副本。Master宕机时，最旧的Slave自动升级为新Master。通过policy配置：x-ha-policy:all镜像到所有节点，exactly镜像到N个节点。缺点：Master是单点瓶颈，异步同步可能数据丢失，有脑裂风险。
+</GlossaryItem>
+
+<GlossaryItem term="Quorum Queue（仲裁队列）">
+RabbitMQ 3.8+引入的基于Raft共识协议的队列类型。无Master/Slave区分，所有副本平等，多数派写入确认即可。优势：无脑裂问题（少数派自动暂停）、强一致性保证、自动Leader选举。限制：仅支持持久化消息、不支持exclusive/auto-delete。推荐新系统首选Quorum Queue替代Classic镜像队列。
+</GlossaryItem>
+
+<GlossaryItem term="脑裂（Split-Brain）">
+网络分区导致集群节点间通信中断，可能出现两个独立子集群各自认为对方已宕机，各自选举Master/Leader，导致数据不一致。Classic镜像队列通过pause-minority策略防护（少数派节点自动暂停服务）。Quorum Queue基于Raft协议天然避免脑裂（多数派才能写入）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：RabbitMQ集群中Disk Node和RAM Node有什么区别？为什么集群至少需要一个Disk Node？
+
+<Answer>
+Disk Node将集群元数据（Exchange/Queue/Binding/用户/VHost定义）持久化到磁盘，Broker重启后元数据不丢失。RAM Node将元数据仅保存在内存中，重启后元数据丢失需要从其他节点同步，但性能略高（省去磁盘写入开销）。集群至少需要一个Disk Node的原因：①元数据安全——如果所有节点都是RAM Node，集群整体重启后所有元数据（Exchange/Queue/Binding/用户权限）全部丢失，需要重新声明所有资源；②集群恢复——集群重启时，Disk Node上的元数据用于恢复集群状态，RAM Node从Disk Node同步元数据。实践建议：生产集群至少2个Disk Node（防单点故障），其余可为RAM Node提升性能。集群中Disk Node的数量不影响消息数据的持久化——消息持久化由消息的delivery_mode和Queue的durable决定，与节点类型无关。
+</Answer>
+
+**问题 2**：镜像队列的Master-Slave工作原理是什么？如何配置？
+
+<Answer>
+镜像队列工作原理：Master节点上的Queue处理所有读写操作——生产者写入消息到Master，消费者从Master消费，Master将消息同步到所有Slave节点。Slave只是消息的副本，不直接处理客户端请求。当Master宕机时，最旧的Slave（数据最完整的）自动升级为新Master，客户端自动重连到新Master继续服务。配置方式：通过policy设置——rabbitmqctl set_policy ha-all "^order\." '{"ha-mode":"all","ha-sync-mode":"automatic"}'。ha-mode:all镜像到所有节点，exactly:N镜像到N个节点，nodes:["node-a","node-b"]镜像到指定节点。ha-sync-mode:automatic新Slave同步完成后才可用（安全但慢），manual异步同步（快但数据可能滞后）。缺点：①Master是单点瓶颈，所有写操作经过Master；②异步同步模式下Slave数据可能滞后于Master；③网络分区时有脑裂风险，可能出现两个Master导致数据不一致。
+</Answer>
+
+**问题 3**：Quorum Queue相比Classic镜像队列有什么优势？为什么推荐使用？
+
+<Answer>
+Quorum Queue基于Raft共识协议，优势：①无脑裂——Raft协议要求多数派写入确认，网络分区时少数派节点自动暂停服务（不提供读写），不会出现两个Leader，从根本上避免脑裂。Classic镜像队列需要额外配置pause-minority策略才能防护脑裂。②强一致性——Raft保证已确认的消息在多数派节点上都持久化，Leader切换时不会丢数据。Classic镜像队列异步同步模式下Slave可能滞后，Master宕机时未同步的消息会丢失。③自动Leader选举——Leader宕机后Raft协议自动从多数派中选举新Leader，恢复快速且安全。④无Master瓶颈——虽然实际仍是Leader处理写操作，但Raft的日志复制比Classic镜像更高效。限制：①仅支持持久化消息（delivery_mode强制为2），不支持非持久化高性能场景；②不支持exclusive和auto-delete队列；③内存开销略高（维护Raft日志）；④需要RabbitMQ 3.8+。推荐新系统首选Quorum Queue，老系统逐步迁移。仅需要非持久化极致性能的场景才使用Classic镜像队列。
+</Answer>
+
+**问题 4**：RabbitMQ集群中，消息数据是共享在所有节点上的吗？如何实现消息的冗余和高可用？
+
+<Answer>
+RabbitMQ集群中消息默认不共享——每个Queue只存在于声明它时所在的节点上，消息只存储在该节点的Queue中。集群共享的是元数据（Exchange/Binding/用户/VHost定义），不是消息数据。这意味着：①如果Queue所在节点宕机且没有镜像，该Queue上的消息不可用，直到节点恢复；②集群扩展提高的是路由能力和连接容量，不是单个Queue的存储容量。实现消息冗余和高可用有两种方式：①Classic镜像队列——通过policy配置ha-mode，Master-Slave模式将消息复制到多个节点，Master宕机Slave升主。缺点是有脑裂风险和Master瓶颈。②Quorum Queue——基于Raft协议，多数派写入确认，无脑裂，推荐新系统使用。两种方式都是队列级别的冗余（将同一个Queue的消息复制到多个节点），不是集群级别的共享（不是所有节点都能直接访问所有Queue的消息）。消费者连接集群中任意节点都能消费到Queue的消息——如果连接的节点不是Queue所在节点，RabbitMQ会通过集群内部通信将消息转发给消费者。
+</Answer>
+
+</Exercises>

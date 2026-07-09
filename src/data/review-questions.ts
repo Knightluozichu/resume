@@ -1825,6 +1825,16 @@ import { kfkReliabilityQuestions } from "./review/kfk-reliability";
 import { kfkKafkaStreamsQuestions } from "./review/kfk-kafka-streams";
 import { kfkAdminOpsQuestions } from "./review/kfk-admin-ops";
 import { kfkFinalReviewQuestions } from "./review/kfk-final-review";
+import { rmqLearningMapQuestions } from "./review/rmq-learning-map";
+import { rmqAmqpBasicsQuestions } from "./review/rmq-amqp-basics";
+import { rmqMessagingPatternsQuestions } from "./review/rmq-messaging-patterns";
+import { rmqProducersQuestions } from "./review/rmq-producers";
+import { rmqConsumersQuestions } from "./review/rmq-consumers";
+import { rmqClusteringQuestions } from "./review/rmq-clustering";
+import { rmqHighAvailabilityQuestions } from "./review/rmq-high-availability";
+import { rmqPerformanceTuningQuestions } from "./review/rmq-performance-tuning";
+import { rmqMonitoringOpsQuestions } from "./review/rmq-monitoring-ops";
+import { rmqFinalReviewQuestions } from "./review/rmq-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3685,6 +3695,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...kfkKafkaStreamsQuestions,
   ...kfkAdminOpsQuestions,
   ...kfkFinalReviewQuestions,
+  ...rmqLearningMapQuestions,
+  ...rmqAmqpBasicsQuestions,
+  ...rmqMessagingPatternsQuestions,
+  ...rmqProducersQuestions,
+  ...rmqConsumersQuestions,
+  ...rmqClusteringQuestions,
+  ...rmqHighAvailabilityQuestions,
+  ...rmqPerformanceTuningQuestions,
+  ...rmqMonitoringOpsQuestions,
+  ...rmqFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

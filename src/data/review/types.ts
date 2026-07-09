@@ -1948,7 +1948,17 @@ export type ReviewChapterSlug =
   | "kfk-reliability"
   | "kfk-kafka-streams"
   | "kfk-admin-ops"
-  | "kfk-final-review";
+  | "kfk-final-review"
+  | "rmq-learning-map"
+  | "rmq-amqp-basics"
+  | "rmq-messaging-patterns"
+  | "rmq-producers"
+  | "rmq-consumers"
+  | "rmq-clustering"
+  | "rmq-high-availability"
+  | "rmq-performance-tuning"
+  | "rmq-monitoring-ops"
+  | "rmq-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3901,6 +3911,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "kfk-kafka-streams": "Kafka Streams",
   "kfk-admin-ops": "管理与运维",
   "kfk-final-review": "全书复习",
+  "rmq-learning-map": "全书学习地图",
+  "rmq-amqp-basics": "AMQP与RabbitMQ基础",
+  "rmq-messaging-patterns": "消息模式",
+  "rmq-producers": "生产者与确认",
+  "rmq-consumers": "消费者与QoS",
+  "rmq-clustering": "集群与镜像队列",
+  "rmq-high-availability": "高可用与federation",
+  "rmq-performance-tuning": "性能调优",
+  "rmq-monitoring-ops": "监控与运维",
+  "rmq-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

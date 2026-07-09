@@ -1,0 +1,215 @@
+---
+title: "性能调优"
+type: B
+section: "分布式与中间件"
+order: 7
+description: "RabbitMQ性能调优——Erlang VM参数、内存水位、磁盘告警、连接池与Lazy Queue"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { RmqPerformanceTuningDiagram } from "@/components/mdx/rabbitmq-practice/diagrams/rmq-performance-tuning";
+
+<Objectives>
+
+- 掌握Erlang VM参数调优（调度器/线程池/IO线程）
+- 理解内存水位和磁盘告警的配置原理
+- 掌握生产者和消费者的性能优化策略
+- 了解Lazy Queue的使用场景和性能优势
+
+</Objectives>
+
+## 三大调优维度
+
+<RmqPerformanceTuningDiagram />
+
+RabbitMQ性能调优分为三个维度：生产者优化（连接池复用/异步Confirm/批量发送）、Broker优化（Erlang VM参数/内存水位/磁盘告警/文件描述符）、消费者优化（prefetch调优/多线程消费/批量Ack）。三者协同才能达到最佳性能。
+
+## Erlang VM 调优
+
+```
+// Erlang VM 关键参数（RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS）
+//
+// +S N
+//   → 调度器线程数，通常 = CPU 核心数
+//   → 多核CPU充分利用并行能力
+//
+// +sd N
+//   → 调度器绑定方式，提升缓存命中率
+//
+// +A N
+//   → 异步IO线程池大小（默认通常不够）
+//   → 推荐 = 96~128（高并发场景）
+//   → 影响 TCP 读写性能
+//
+// +sbwt none +sbwtdcpu none +sbwtdio none
+//   → 减少调度器忙等待，降低CPU空转
+//
+// 推荐配置：
+//   RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="+A 128 +sbwt none +sbwtdcpu none +sbwtdio none"
+//
+// 文件描述符：
+//   ulimit -n 65536（每个连接消耗一个fd）
+//   rabbitmq.conf: max_open_files = 65536
+```
+
+## 内存与磁盘
+
+```
+// 内存水位控制
+//
+// vm_memory_high_watermark = 0.4
+//   → Broker 内存使用达 40% 时触发流控（flow control）
+//   → 生产者被阻塞（blocking），消息发送被限流
+//   → 默认 0.4，建议不超过 0.6
+//
+// vm_memory_high_watermark.paging_ratio = 0.5
+//   → 内存达 20%（0.4 * 0.5）时开始将消息写磁盘（page out）
+//   → 避免内存满后突然大量写磁盘
+//
+// 磁盘告警
+//
+// disk_free_limit = 2GB（或 RAM * 0.5）
+//   → 磁盘剩余低于阈值时触发流控
+//   → 阻止生产者写入，防止磁盘满
+//   → 集群中任一节点磁盘不足都会触发全集群流控
+//
+// 流控行为：
+//   → 生产者 Connection 被 block
+//   → 消费者不受影响（可以继续消费）
+//   → 内存/磁盘恢复后自动 unblock
+```
+
+## 生产者优化
+
+```
+// 生产者性能优化策略
+//
+// ① 连接池复用
+//    → 避免频繁创建/销毁 TCP 连接
+//    → 维护 2~5 个 Connection，每个 Connection 多个 Channel
+//
+// ② 异步 Confirm 替代事务
+//    → Confirm 异步模式吞吐量是事务模式的 250 倍
+//    → 不要用 txSelect/txCommit
+//
+// ③ 批量发送
+//    → 合并小消息减少网络 RTT
+//    → 适合日志类、指标类场景
+//
+// ④ 持久化权衡
+//    → delivery_mode=2 持久化，安全但慢
+//    → 非关键业务可使用非持久化提升性能
+//    → 批量 flush：多条持久化消息合并写入磁盘
+//
+// ⑤ 避免大消息
+//    → 单消息建议 < 128KB
+//    → 大消息拆分或使用外部存储 + 消息引用
+```
+
+## 消费者优化
+
+```
+// 消费者性能优化策略
+//
+// ① prefetch_count 调优
+//    → 处理快（< 1ms）：prefetch = 50~100
+//    → 处理慢（> 100ms）：prefetch = 1~10
+//    → 消息体大（> 10KB）：减小 prefetch 防内存溢出
+//
+// ② 多线程消费
+//    → 多个 Channel 并行消费不同消息
+//    → 注意：同 Queue 消息可能乱序（多线程并行处理）
+//    → 需要顺序：单 Channel + prefetch=1（牺牲性能）
+//
+// ③ 批量 Ack
+//    → multiple=true 批量确认多条消息
+//    → 减少 Ack 的网络往返次数
+//
+// ④ 消费幂等
+//    → 减少重复处理开销
+//    → 使用 Redis/数据库去重表
+```
+
+## Lazy Queue
+
+```
+// Lazy Queue（惰性队列）
+//   → 消息直接写磁盘，内存只存索引
+//   → 适用于百万级消息积压场景
+//
+// 声明方式：
+//   queue.declare(
+//     x-queue-mode = "lazy"
+//   )
+//
+// 特点：
+//   → 内存占用极低（只存索引不存消息体）
+//   → 可支持百万级消息积压不 OOM
+//   → 消费时从磁盘读取，延迟略高
+//   → 适合消费速度远低于生产速度的场景
+//
+// vs 普通队列：
+//   普通队列 → 消息在内存中（快但内存有限）
+//   Lazy Queue → 消息在磁盘上（慢但容量大）
+//
+// 适用场景：
+//   → 日志队列（积压大量日志）
+//   → 消息削峰（生产远快于消费）
+//   → 历史数据暂存
+```
+
+<Callout type="info" title="性能调优核心原则">
+生产者用异步Confirm+连接池 | Broker调内存/磁盘/VM参数 | 消费者调prefetch+批量Ack。持久化权衡：delivery_mode=2+ durable queue数据安全但性能下降。Lazy Queue解决百万级积压问题。三者协同+合理持久化策略=最佳性能。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="Erlang VM调优">
+RabbitMQ基于Erlang语言运行，通过Erlang VM参数优化性能。关键参数：+S设置调度器线程数（通常=CPU核心数），+A设置异步IO线程池大小（推荐96~128，影响TCP读写），+sbwt none减少调度器忙等待降低CPU空转。通过RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS环境变量配置。文件描述符（ulimit -n / max_open_files）也需调大（65536），因为每个TCP连接消耗一个文件描述符。
+</GlossaryItem>
+
+<GlossaryItem term="内存水位（vm_memory_high_watermark）">
+Broker内存使用达到阈值时触发流控的机制。默认0.4（内存的40%），建议不超过0.6。触发流控后：生产者Connection被block（阻塞写入），消费者不受影响（可继续消费）。paging_ratio=0.5表示内存达水位的50%时开始将消息page out到磁盘，避免内存满后突然大量写磁盘。内存/磁盘恢复后自动unblock。
+</GlossaryItem>
+
+<GlossaryItem term="流控（Flow Control）">
+RabbitMQ的自我保护机制。当内存超过vm_memory_high_watermark或磁盘低于disk_free_limit时，Broker对生产者连接发送connection.block，阻止消息写入。消费者不受影响可继续消费。资源恢复后发送connection.unblock恢复写入。流控是进程级的信用机制——Erlang进程间消息传递有信用额度，耗尽则暂停。
+</GlossaryItem>
+
+<GlossaryItem term="Lazy Queue（惰性队列）">
+消息直接写入磁盘、内存只存索引的队列模式。声明时设置x-queue-mode="lazy"。优势：内存占用极低（只存索引不存消息体），可支持百万级消息积压不OOM。劣势：消费时从磁盘读取，延迟略高于普通队列。适用场景：日志队列（积压大量日志）、消息削峰（生产远快于消费）、历史数据暂存。与普通队列对比：普通队列消息在内存中（快但内存有限），Lazy Queue消息在磁盘上（慢但容量大）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Erlang VM的关键调优参数有哪些？如何配置？
+
+<Answer>
+关键参数：①+S N——调度器线程数，通常设为CPU核心数，充分利用多核并行能力。②+A N——异步IO线程池大小，默认通常不够，推荐96~128（高并发场景），影响TCP读写性能。IO线程负责网络数据的读写，线程数不足会导致网络I/O成为瓶颈。③+sbwt none +sbwtdcpu none +sbwtdio none——减少调度器忙等待（busy wait），降低CPU空转。默认调度器在空闲时会忙等待以快速响应新任务，但会浪费CPU。配置方式：通过RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS环境变量设置。推荐配置：RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS="+A 128 +sbwt none +sbwtdcpu none +sbwtdio none"。此外还需调大文件描述符：ulimit -n 65536（每个TCP连接消耗一个fd），rabbitmq.conf中max_open_files=65536。调优步骤：先监控当前瓶颈（CPU/内存/网络/磁盘I/O），再有针对性地调整VM参数，逐步测试验证效果。
+</Answer>
+
+**问题 2**：内存水位和磁盘告警的机制是什么？触发流控后会怎样？
+
+<Answer>
+内存水位（vm_memory_high_watermark）：默认0.4（Broker内存的40%），建议不超过0.6。当内存使用达到阈值时触发流控。paging_ratio=0.5表示内存达水位的50%（即总内存的20%）时开始将消息page out到磁盘，提前将消息从内存转移到磁盘，避免内存满后突然大量写磁盘造成性能抖动。磁盘告警（disk_free_limit）：默认2GB或RAM*0.5，磁盘剩余低于阈值时触发流控。集群中任一节点磁盘不足都会触发全集群流控（因为消息可能在节点间复制）。触发流控后的行为：①生产者Connection被block——Broker向生产者发送connection.block，阻止消息写入，生产者被限流；②消费者不受影响——消费者可以继续消费消息（消费消息不增加内存/磁盘压力，反而释放资源）；③资源恢复后自动unblock——内存降到阈值以下或磁盘空间恢复后，Broker发送connection.unblock恢复生产者写入。流控是RabbitMQ的自我保护机制，防止内存溢出或磁盘满导致Broker崩溃。
+</Answer>
+
+**问题 3**：如何优化生产者和消费者的性能？请描述完整的优化策略。
+
+<Answer>
+生产者优化策略：①连接池复用——维护2~5个Connection，每个Connection上创建多个Channel供线程使用，避免频繁创建/销毁TCP连接。②异步Confirm替代事务——Confirm异步模式吞吐量是事务模式的250倍，不要用txSelect/txCommit。③批量发送——合并小消息减少网络RTT，适合日志类、指标类场景。④持久化权衡——delivery_mode=2持久化安全但慢，非关键业务可用非持久化提升性能。⑤避免大消息——单消息建议<128KB，大消息拆分或用外部存储+消息引用。消费者优化策略：①prefetch_count调优——处理快（<1ms）设50~100，处理慢（>100ms）设1~10，消息体大（>10KB）减小prefetch防内存溢出。②多线程消费——多个Channel并行消费不同消息提高吞吐，注意同Queue消息可能乱序（需要严格顺序则单Channel+prefetch=1）。③批量Ack——multiple=true批量确认多条消息，减少Ack网络往返。④消费幂等——减少重复处理开销，用Redis/数据库去重表。⑤多消费者负载均衡——多个消费者订阅同一Queue，Broker自动负载均衡。核心原则：生产者减少网络往返+连接复用，消费者合理预取+并行处理+批量确认。
+</Answer>
+
+**问题 4**：Lazy Queue是什么？在什么场景下使用？它有什么优缺点？
+
+<Answer>
+Lazy Queue（惰性队列）是RabbitMQ的一种队列模式，消息直接写入磁盘，内存只存消息索引。声明方式：queue.declare时设置x-queue-mode="lazy"。优点：①内存占用极低——只存索引不存消息体，可支持百万级消息积压不OOM（Out of Memory）。普通队列消息存储在内存中，大量积压会导致内存溢出；Lazy Queue将消息体直接写入磁盘，内存只保存少量索引信息。②适合消费速度远低于生产速度的场景——当生产者速度远大于消费者时，消息会大量积压，普通队列内存溢出风险高，Lazy Queue可以将积压消息安全存储在磁盘上。缺点：①消费延迟略高——消费时需要从磁盘读取消息，比从内存读取慢。②磁盘I/O开销——所有消息都写磁盘，增加磁盘I/O压力。③不适合低延迟场景——需要毫秒级延迟的场景不适合用Lazy Queue。适用场景：①日志队列——大量日志消息积压，不需要实时消费。②消息削峰——生产远快于消费时，用Lazy Queue安全吸收峰值。③历史数据暂存——需要长时间保存但消费频率低的场景。与普通队列对比：普通队列消息在内存中（快但内存有限），Lazy Queue消息在磁盘上（慢但容量大）。选择决策：需要低延迟+消息量可控→普通队列；需要大容量积压+可容忍延迟→Lazy Queue。
+</Answer>
+
+</Exercises>
