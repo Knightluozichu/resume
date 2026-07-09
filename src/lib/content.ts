@@ -248,6 +248,7 @@ export const BOOK_ORDER = [
   "dragon-book-compilers",
   "tiger-book-compiler",
   "illustrated-ai",
+  "illustrated-ml",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -436,6 +437,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "dragon-book-compilers": "龙书（编译原理）",
   "tiger-book-compiler": "虎书（现代编译器实现）",
   "illustrated-ai": "图解人工智能",
+  "illustrated-ml": "图解机器学习",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

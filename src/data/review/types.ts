@@ -2128,7 +2128,17 @@ export type ReviewChapterSlug =
   | "iai-computer-vision"
   | "iai-reinforcement-learning"
   | "iai-ai-ethics"
-  | "iai-final-review";
+  | "iai-final-review"
+  | "iml-learning-map"
+  | "iml-ml-basics"
+  | "iml-linear-models"
+  | "iml-classification"
+  | "iml-decision-trees"
+  | "iml-neural-networks"
+  | "iml-support-vector"
+  | "iml-unsupervised"
+  | "iml-model-evaluation"
+  | "iml-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4261,6 +4271,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "iai-reinforcement-learning": "强化学习",
   "iai-ai-ethics": "AI伦理与未来",
   "iai-final-review": "全书复习与知识整合",
+  "iml-learning-map": "全书学习地图",
+  "iml-ml-basics": "机器学习基础概念",
+  "iml-linear-models": "线性模型与回归",
+  "iml-classification": "分类与逻辑回归",
+  "iml-decision-trees": "决策树与集成学习",
+  "iml-neural-networks": "神经网络基础",
+  "iml-support-vector": "支持向量机",
+  "iml-unsupervised": "无监督学习与聚类",
+  "iml-model-evaluation": "模型评估与调优",
+  "iml-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

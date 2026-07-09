@@ -155,6 +155,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["dbc-", "dragon-book-compilers"],
   ["tbc-", "tiger-book-compiler"],
   ["iai-", "illustrated-ai"],
+  ["iml-", "illustrated-ml"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

@@ -2005,6 +2005,16 @@ import { iaiComputerVisionQuestions } from "./review/iai-computer-vision";
 import { iaiReinforcementLearningQuestions } from "./review/iai-reinforcement-learning";
 import { iaiAiEthicsQuestions } from "./review/iai-ai-ethics";
 import { iaiFinalReviewQuestions } from "./review/iai-final-review";
+import { imlLearningMapQuestions } from "./review/iml-learning-map";
+import { imlMlBasicsQuestions } from "./review/iml-ml-basics";
+import { imlLinearModelsQuestions } from "./review/iml-linear-models";
+import { imlClassificationQuestions } from "./review/iml-classification";
+import { imlDecisionTreesQuestions } from "./review/iml-decision-trees";
+import { imlNeuralNetworksQuestions } from "./review/iml-neural-networks";
+import { imlSupportVectorQuestions } from "./review/iml-support-vector";
+import { imlUnsupervisedQuestions } from "./review/iml-unsupervised";
+import { imlModelEvaluationQuestions } from "./review/iml-model-evaluation";
+import { imlFinalReviewQuestions } from "./review/iml-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4045,6 +4055,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...iaiReinforcementLearningQuestions,
   ...iaiAiEthicsQuestions,
   ...iaiFinalReviewQuestions,
+  ...imlLearningMapQuestions,
+  ...imlMlBasicsQuestions,
+  ...imlLinearModelsQuestions,
+  ...imlClassificationQuestions,
+  ...imlDecisionTreesQuestions,
+  ...imlNeuralNetworksQuestions,
+  ...imlSupportVectorQuestions,
+  ...imlUnsupervisedQuestions,
+  ...imlModelEvaluationQuestions,
+  ...imlFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
