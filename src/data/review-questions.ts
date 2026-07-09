@@ -2245,6 +2245,16 @@ import { mbtP2pNetworkQuestions } from "./review/mbt-p2p-network";
 import { mbtWalletsUsageQuestions } from "./review/mbt-wallets-usage";
 import { mbtAdvancedTopicsQuestions } from "./review/mbt-advanced-topics";
 import { mbtFinalReviewQuestions } from "./review/mbt-final-review";
+import { metLearningMapQuestions } from "./review/met-learning-map";
+import { metEthereumOverviewQuestions } from "./review/met-ethereum-overview";
+import { metAccountsKeysQuestions } from "./review/met-accounts-keys";
+import { metTransactionsGasQuestions } from "./review/met-transactions-gas";
+import { metEvmBytecodeQuestions } from "./review/met-evm-bytecode";
+import { metSolidityProgrammingQuestions } from "./review/met-solidity-programming";
+import { metSmartContractSecurityQuestions } from "./review/met-smart-contract-security";
+import { metTokensStandardsQuestions } from "./review/met-tokens-standards";
+import { metDappsOraclesQuestions } from "./review/met-dapps-oracles";
+import { metFinalReviewQuestions } from "./review/met-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4525,6 +4535,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mbtWalletsUsageQuestions,
   ...mbtAdvancedTopicsQuestions,
   ...mbtFinalReviewQuestions,
+  ...metLearningMapQuestions,
+  ...metEthereumOverviewQuestions,
+  ...metAccountsKeysQuestions,
+  ...metTransactionsGasQuestions,
+  ...metEvmBytecodeQuestions,
+  ...metSolidityProgrammingQuestions,
+  ...metSmartContractSecurityQuestions,
+  ...metTokensStandardsQuestions,
+  ...metDappsOraclesQuestions,
+  ...metFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

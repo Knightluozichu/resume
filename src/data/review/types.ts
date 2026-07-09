@@ -2368,7 +2368,17 @@ export type ReviewChapterSlug =
   | "mbt-p2p-network"
   | "mbt-wallets-usage"
   | "mbt-advanced-topics"
-  | "mbt-final-review";
+  | "mbt-final-review"
+  | "met-learning-map"
+  | "met-ethereum-overview"
+  | "met-accounts-keys"
+  | "met-transactions-gas"
+  | "met-evm-bytecode"
+  | "met-solidity-programming"
+  | "met-smart-contract-security"
+  | "met-tokens-standards"
+  | "met-dapps-oracles"
+  | "met-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4741,6 +4751,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mbt-wallets-usage": "钱包与实际使用",
   "mbt-advanced-topics": "高级话题与扩展",
   "mbt-final-review": "全书复习与知识整合",
+  "met-learning-map": "精通以太坊·知识全景图",
+  "met-ethereum-overview": "以太坊概览",
+  "met-accounts-keys": "账户与密钥",
+  "met-transactions-gas": "交易与Gas机制",
+  "met-evm-bytecode": "EVM与字节码",
+  "met-solidity-programming": "Solidity编程",
+  "met-smart-contract-security": "智能合约安全",
+  "met-tokens-standards": "代币与标准(ERC)",
+  "met-dapps-oracles": "DApp与预言机",
+  "met-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
