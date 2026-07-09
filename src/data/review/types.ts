@@ -2208,7 +2208,17 @@ export type ReviewChapterSlug =
   | "dlr-q-learning"
   | "dlr-deep-q-network"
   | "dlr-policy-gradient"
-  | "dlr-final-review";
+  | "dlr-final-review"
+  | "dlg-learning-map"
+  | "dlg-generative-models-basics"
+  | "dlg-autoencoder-vae"
+  | "dlg-flow-models"
+  | "dlg-gan-basics"
+  | "dlg-dcgan"
+  | "dlg-diffusion-models"
+  | "dlg-text-to-image"
+  | "dlg-evaluation-ethics"
+  | "dlg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4421,6 +4431,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dlr-deep-q-network": "深度Q网络",
   "dlr-policy-gradient": "策略梯度方法",
   "dlr-final-review": "全书复习与知识整合",
+  "dlg-learning-map": "全书学习地图",
+  "dlg-generative-models-basics": "生成模型基础",
+  "dlg-autoencoder-vae": "自编码器与VAE",
+  "dlg-flow-models": "流模型",
+  "dlg-gan-basics": "生成对抗网络",
+  "dlg-dcgan": "DCGAN实现",
+  "dlg-diffusion-models": "扩散模型",
+  "dlg-text-to-image": "文本到图像生成",
+  "dlg-evaluation-ethics": "评估与伦理",
+  "dlg-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

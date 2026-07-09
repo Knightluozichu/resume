@@ -1,0 +1,213 @@
+---
+title: "文本到图像生成"
+type: C
+section: "人工智能与机器学习"
+order: 7
+description: "条件扩散、文本编码与可控生成实践"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DlgTextToImageDiagram } from "@/components/mdx/deep-learning-gen-models/diagrams/dlg-text-to-image";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 掌握文本到图像生成的基本流程
+- 理解 CLIP 文本编码器与交叉注意力条件注入
+- 掌握无分类器引导（CFG）提升生成质量的原理
+- 理解潜在扩散（Stable Diffusion）的架构优势
+
+</Objectives>
+
+## 文本到图像生成：可控生成的实践
+
+**文本到图像生成**（Text-to-Image, T2I）是生成模型最具影响力的应用——用户输入文本描述，模型生成匹配的图像。Stable Diffusion、DALL-E、Midjourney 等模型都基于这一范式。
+
+<DlgTextToImageDiagram />
+
+## 基本流程
+
+文本到图像生成的四个步骤：
+
+1. **文本输入**——用户输入文本描述（如「一只猫坐在月亮上」）
+2. **文本编码**——用预训练编码器将文本映射为嵌入向量 c
+3. **条件生成**——将文本嵌入 c 注入扩散模型，从噪声逐步去噪生成图像
+4. **输出生成图像**——与文本描述语义匹配的图像
+
+## 文本编码：CLIP
+
+**CLIP（Contrastive Language-Image Pre-training）**是 OpenAI 提出的多模态模型，通过对比学习将文本和图像映射到同一嵌入空间。
+
+<Callout type="info">
+
+**CLIP 为什么适合做文本编码器**：CLIP 在 4 亿图文对上训练，学到的文本嵌入与图像语义高度对齐。文本编码器天然学会了「描述图像」的能力，且对未见过的文本描述有良好的泛化。
+
+</Callout>
+
+```python
+# CLIP 文本编码的简化示例
+import clip
+import torch
+
+model, preprocess = clip.load("ViT-B/32")
+
+# 编码文本
+text = clip.tokenize(["a cat sitting on the moon"])
+with torch.no_grad():
+    text_features = model.encode_text(text)  # 512维嵌入向量
+
+# 这个嵌入向量将作为扩散模型的条件输入
+```
+
+## 条件注入：交叉注意力
+
+**交叉注意力（Cross-Attention）**是将文本条件注入扩散模型的核心方法（Stable Diffusion 采用）：
+
+- **Query**：图像特征（去噪 U-Net 中间层的特征）
+- **Key, Value**：文本嵌入（经线性投影）
+- 注意力机制使图像生成在每一步都「关注」文本描述的对应部分
+
+```python
+# 交叉注意力的简化实现
+class CrossAttention(nn.Module):
+    def __init__(self, query_dim, context_dim, heads=8):
+        super().__init__()
+        self.heads = heads
+        self.scale = (query_dim // heads) ** -0.5
+        self.to_q = nn.Linear(query_dim, query_dim)
+        self.to_k = nn.Linear(context_dim, query_dim)
+        self.to_v = nn.Linear(context_dim, query_dim)
+        self.to_out = nn.Linear(query_dim, query_dim)
+
+    def forward(self, x, context):
+        # x: 图像特征 [B, H*W, C]
+        # context: 文本嵌入 [B, L, D]
+        q = self.to_q(x)
+        k = self.to_k(context)
+        v = self.to_v(context)
+        # 注意力计算
+        attn = torch.einsum('b i d, b j d -> b i j', q, k) * self.scale
+        attn = attn.softmax(dim=-1)
+        out = torch.einsum('b i j, b j d -> b i d', attn, v)
+        return self.to_out(out)
+```
+
+## 无分类器引导（CFG）
+
+**无分类器引导（Classifier-Free Guidance, CFG）**是让文生图模型「听话」的关键技术。
+
+### 训练阶段
+
+以一定概率（如 10%）随机丢弃条件——模型同时学习：
+- 条件生成：`epsilon_theta(x_t, t, c)`（有文本条件）
+- 无条件生成：`epsilon_theta(x_t, t, None)`（无文本条件）
+
+### 推理阶段
+
+用条件和无条件预测的差值**放大引导**：
+
+```text
+eps_guided = eps_uncond + w * (eps_cond - eps_uncond)
+```
+
+其中 `w` 是引导强度（guidance scale，通常 7-15）。
+
+<Callout type="tip">
+
+**引导强度 w 的权衡**：w=1 时为标准条件生成（高多样性），w 大时为强引导（高质量、低多样性）。用户可按需调节。w 越大，生成图像越严格遵循文本描述，但多样性降低。
+
+</Callout>
+
+## 潜在扩散：Stable Diffusion
+
+**潜在扩散模型（Latent Diffusion Model, LDM）**是 Stable Diffusion 的核心创新。
+
+### 工作流程
+
+1. **训练自编码器**——将 512x512x3 图像压缩到 64x64x4 隐空间（压缩比约 48:1）
+2. **在隐空间训练扩散模型**——前向加噪和反向去噪都在 64x64x4 隐空间进行
+3. **生成**——从隐空间噪声逐步去噪，再用解码器恢复为最终图像
+
+### 优势
+
+| 优势 | 说明 |
+|------|------|
+| 计算效率 | 隐空间维度远低于像素空间，每步计算量减少约 48 倍 |
+| 感知质量 | 自编码器过滤高频噪声，隐空间只保留语义信息 |
+| 灵活性 | 统一低维表示，易于引入条件信息 |
+
+## 代表模型
+
+| 模型 | 文本编码器 | 生成模型 | 特点 |
+|------|-----------|---------|------|
+| DALL-E / DALL-E 2 | CLIP | 扩散模型 | OpenAI，未开源 |
+| Stable Diffusion | CLIP | 潜在扩散 | 开源，社区生态强 |
+| Imagen | T5 + CLIP | 扩散模型 | Google，文本理解强 |
+| Midjourney | CLIP | 扩散模型 | 艺术风格突出 |
+
+<Glossary>
+
+<GlossaryItem term="文本到图像生成（Text-to-Image）">
+用户输入文本描述，模型生成匹配图像的任务。基本流程：文本编码（CLIP/T5）→ 条件注入（交叉注意力）→ 扩散模型生成。关键技术：无分类器引导（CFG）增强文本遵循度，潜在扩散（LDM）提升计算效率。代表模型：Stable Diffusion、DALL-E 2、Imagen、Midjourney。文生图是生成模型最具影响力的应用。
+</GlossaryItem>
+
+<GlossaryItem term="CLIP（Contrastive Language-Image Pre-training）">
+OpenAI 提出的多模态模型。通过对比学习将文本和图像映射到同一嵌入空间——匹配的图文对在嵌入空间中靠近，不匹配的远离。在 4 亿图文对上训练。CLIP 的文本编码器广泛用于文生图模型中编码文本条件。CLIP Score（文本与图像嵌入的余弦相似度）可用于评估文生图的文本-图像匹配度。
+</GlossaryItem>
+
+<GlossaryItem term="交叉注意力（Cross-Attention）">
+将文本条件注入扩散模型的核心方法。在 U-Net 的中间层加入交叉注意力模块：图像特征作为 Query，文本嵌入作为 Key 和 Value。注意力机制使图像生成在每一步都「关注」文本描述的对应部分。这是 Stable Diffusion 的核心条件注入方法，使模型能精确理解「红色汽车」「坐在月亮上的猫」等复杂描述。
+</GlossaryItem>
+
+<GlossaryItem term="无分类器引导（Classifier-Free Guidance, CFG）">
+文生图模型的关键技术。训练时随机丢弃条件（同时学习条件和无条件生成），推理时用条件和无条件预测的差值放大引导：eps = eps_uncond + w * (eps_cond - eps_uncond)。引导强度 w 越大，生成图像越严格遵循文本描述，但多样性降低。CFG 是让文生图模型「听话」的核心技术，是 Stable Diffusion、DALL-E 2、Imagen 的标准配置。
+</GlossaryItem>
+
+<GlossaryItem term="潜在扩散模型（Latent Diffusion Model, LDM）">
+在压缩的隐空间而非像素空间进行扩散的模型。先用自编码器将图像压缩到低维隐空间，在隐空间训练扩散模型，再用解码器恢复图像。优势：计算效率大幅提升、感知质量更高。Stable Diffusion 是 LDM 的开源实现。LDM 证明了隐空间扩散的实用性和可扩展性，是文生图走向普及的关键。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+文本到图像生成的基本流程是什么？文本条件如何注入生成模型？
+
+<Answer>
+
+文本到图像生成的基本流程：①文本输入——用户输入文本描述。②文本编码——用预训练的文本编码器（CLIP、T5、BERT 等）将文本映射为嵌入向量 c。③条件生成——将文本嵌入 c 作为条件注入生成模型（通常用扩散模型），从噪声逐步去噪生成图像。④输出生成图像。文本条件注入的主要方法：①交叉注意力——在 U-Net 的中间层加入交叉注意力模块，文本嵌入作为 Key 和 Value，图像特征作为 Query。这是 Stable Diffusion 的核心方法。②条件归一化（AdaBN）——用文本嵌入调制 BatchNorm 参数。③无分类器引导——训练时随机丢弃条件，推理时用条件和无条件预测的差值放大引导。
+</Answer>
+
+### 问题 2
+
+CLIP 模型在文本到图像生成中起什么作用？为什么它适合做文本编码器？
+
+<Answer>
+
+CLIP 是 OpenAI 提出的多模态模型，通过对比学习将文本和图像映射到同一嵌入空间。在文生图中的作用：①文本编码器——CLIP 的文本编码器将用户输入的文本映射为语义丰富的嵌入向量，作为扩散模型的条件输入。②语义对齐——CLIP 在 4 亿图文对上训练，学到的文本嵌入与图像语义高度对齐。③评估——CLIP Score 可评估生成图像与文本的语义匹配度。CLIP 适合做文本编码器的原因：①跨模态对齐——CLIP 的对比学习目标迫使文本和对应图像在嵌入空间中靠近，文本编码器天然学会了「描述图像」的能力。②泛化性强——在大规模数据上预训练，对未见过的文本描述也有良好的泛化。③语义连续——CLIP 嵌入空间是连续的，有利于生成模型的条件注入。
+</Answer>
+
+### 问题 3
+
+潜在扩散模型（Latent Diffusion / Stable Diffusion）是如何工作的？为什么在隐空间扩散比在像素空间扩散更好？
+
+<Answer>
+
+潜在扩散模型工作流程：①训练自编码器——先用 VAE/GAN 训练一个图像压缩自编码器，将 512x512x3 的图像压缩到 64x64x4 的隐空间表示（压缩比约 48:1）。②在隐空间训练扩散模型——前向加噪和反向去噪都在 64x64x4 的隐空间进行。③生成——从隐空间噪声 z_T 开始逐步去噪得到隐表示 z_0，再用解码器将 z_0 解码为最终图像。在隐空间扩散的优势：①计算效率——隐空间维度远低于像素空间，每步去噪的计算量减少约 48 倍。②感知质量——自编码器过滤了高频像素噪声，隐空间只保留感知上有意义的语义信息。③灵活性——隐空间是统一的低维表示，易于引入条件信息。
+</Answer>
+
+### 问题 4
+
+无分类器引导（Classifier-Free Guidance）是什么？它如何提升文本到图像生成的质量？
+
+<Answer>
+
+无分类器引导（CFG）是一种在推理时增强条件信号的技术。训练阶段：以一定概率（如 10%）随机丢弃条件——模型同时学习条件生成和无条件生成。推理阶段：用条件和无条件预测的差值放大条件引导：eps_guided = eps_uncond + w * (eps_cond - eps_uncond)，其中 w 是引导强度（通常 7-15）。原理：eps_cond - eps_uncond 度量了「条件信号的方向」，沿这个方向放大使生成结果更强烈地遵循文本描述。CFG 提升质量的原因：①增强文本遵循度——大的 w 使生成图像更精确地匹配文本描述。②简化训练——不需要额外训练分类器。③可控权衡——w=1 时为标准条件生成（高多样性），w 大时为强引导（高质量、低多样性）。CFG 是现代文生图模型的标准配置。
+</Answer>
+
+</Exercises>

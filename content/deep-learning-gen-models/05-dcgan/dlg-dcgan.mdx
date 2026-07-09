@@ -1,0 +1,241 @@
+---
+title: "DCGAN实现"
+type: C
+section: "人工智能与机器学习"
+order: 5
+description: "卷积生成对抗网络的架构设计与训练实践"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DlgDcganDiagram } from "@/components/mdx/deep-learning-gen-models/diagrams/dlg-dcgan";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 掌握 DCGAN 生成器与判别器的卷积架构设计
+- 理解转置卷积上采样与步长卷积下采样的原理
+- 掌握 DCGAN 交替训练的完整流程
+- 理解 BatchNorm 在 DCGAN 中的作用与设计准则
+
+</Objectives>
+
+## DCGAN：用卷积革新 GAN
+
+**DCGAN（Deep Convolutional GAN）**是将卷积神经网络引入 GAN 的里程碑式架构。原始 GAN 用全连接层，而 DCGAN 用卷积层处理图像，显著提升了生成质量和训练稳定性。
+
+<DlgDcganDiagram />
+
+## 生成器架构
+
+DCGAN 生成器用**转置卷积**逐步上采样，从 4x4 特征图放大到 64x64 图像：
+
+```text
+噪声 z (100维)
+  → 投影+Reshape → 4x4x1024
+  → ConvT+BN+ReLU → 8x8x512
+  → ConvT+BN+ReLU → 16x16x256
+  → ConvT+BN+ReLU → 32x32x128
+  → ConvT+Tanh → 64x64x3（RGB图像）
+```
+
+```python
+import torch.nn as nn
+
+class DCGANGenerator(nn.Module):
+    def __init__(self, nz=100, ngf=64, nc=3):
+        super().__init__()
+        self.main = nn.Sequential(
+            # 输入: z (nz, 1, 1) → 4x4xngf*8
+            nn.ConvTranspose2d(nz, ngf * 8, 4, 1, 0, bias=False),
+            nn.BatchNorm2d(ngf * 8),
+            nn.ReLU(True),
+            # 4x4 → 8x8
+            nn.ConvTranspose2d(ngf * 8, ngf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 4),
+            nn.ReLU(True),
+            # 8x8 → 16x16
+            nn.ConvTranspose2d(ngf * 4, ngf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf * 2),
+            nn.ReLU(True),
+            # 16x16 → 32x32
+            nn.ConvTranspose2d(ngf * 2, ngf, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ngf),
+            nn.ReLU(True),
+            # 32x32 → 64x64
+            nn.ConvTranspose2d(ngf, nc, 4, 2, 1, bias=False),
+            nn.Tanh(),  # 输出归一化到 [-1, 1]
+        )
+
+    def forward(self, z):
+        return self.main(z)
+```
+
+## 判别器架构
+
+DCGAN 判别器用**步长卷积**替代池化下采样：
+
+```python
+class DCGANDiscriminator(nn.Module):
+    def __init__(self, nc=3, ndf=64):
+        super().__init__()
+        self.main = nn.Sequential(
+            # 64x64 → 32x32（第一层不用 BN）
+            nn.Conv2d(nc, ndf, 4, 2, 1, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 32x32 → 16x16
+            nn.Conv2d(ndf, ndf * 2, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 2),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 16x16 → 8x8
+            nn.Conv2d(ndf * 2, ndf * 4, 4, 2, 1, bias=False),
+            nn.BatchNorm2d(ndf * 4),
+            nn.LeakyReLU(0.2, inplace=True),
+            # 8x8 → 4x4 → 1x1（概率值）
+            nn.Conv2d(ndf * 4, 1, 4, 1, 0, bias=False),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        return self.main(x).view(-1)
+```
+
+## DCGAN 设计准则
+
+<Callout type="info">
+
+**DCGAN 的四条设计准则**是后续 GAN 架构（StyleGAN、BigGAN 等）的基石：用卷积替代全连接、用 BatchNorm 稳定训练、用 ReLU/LeakyReLU 激活、用步长卷积替代池化。
+
+</Callout>
+
+| 设计点 | 生成器 | 判别器 |
+|--------|--------|--------|
+| 上/下采样 | 转置卷积（stride=2） | 步长卷积（stride=2） |
+| 归一化 | BatchNorm（除输出层） | BatchNorm（除输入层） |
+| 激活函数 | ReLU（输出层 Tanh） | LeakyReLU（0.2） |
+| 池化 | 不使用 | 用步长卷积替代 |
+
+## 训练流程
+
+DCGAN 的训练是判别器和生成器的**交替优化**：
+
+```python
+import torch
+import torch.optim as optim
+
+# 初始化
+G = DCGANGenerator()
+D = DCGANDiscriminator()
+optimizerG = optim.Adam(G.parameters(), lr=0.0002, betas=(0.5, 0.999))
+optimizerD = optim.Adam(D.parameters(), lr=0.0002, betas=(0.5, 0.999))
+criterion = nn.BCELoss()
+
+for epoch in range(num_epochs):
+    for i, real_data in enumerate(dataloader):
+        batch_size = real_data.size(0)
+        real_label = torch.ones(batch_size)
+        fake_label = torch.zeros(batch_size)
+
+        # === 1. 训练判别器 ===
+        optimizerD.zero_grad()
+        # 真实样本
+        d_real = D(real_data)
+        loss_d_real = criterion(d_real, real_label)
+        # 生成样本
+        z = torch.randn(batch_size, 100, 1, 1)
+        fake_data = G(z).detach()
+        d_fake = D(fake_data)
+        loss_d_fake = criterion(d_fake, fake_label)
+        loss_d = loss_d_real + loss_d_fake
+        loss_d.backward()
+        optimizerD.step()
+
+        # === 2. 训练生成器 ===
+        optimizerG.zero_grad()
+        z = torch.randn(batch_size, 100, 1, 1)
+        fake_data = G(z)
+        d_fake = D(fake_data)
+        loss_g = criterion(d_fake, real_label)  # 非饱和损失
+        loss_g.backward()
+        optimizerG.step()
+```
+
+### 优化器配置
+
+- **Adam 优化器**：`lr=0.0002`, `beta1=0.5`（默认 0.9 会导致训练不稳定）
+- **损失函数**：二元交叉熵（BCE）
+- **交替训练**：每训练 D 一次训练 G 一次，保持双方能力均衡
+
+## BatchNorm 的作用
+
+<Callout type="tip">
+
+**BatchNorm 在 DCGAN 中至关重要**——它稳定了训练、缓解了模式崩溃、使梯度传播更平滑。但生成器输出层和判别器输入层不用 BN，以保持生成精确性和判别敏感性。
+
+</Callout>
+
+为什么生成器输出层不用 BN：输出层需要精确控制生成图像的像素值范围（Tanh 归一化到 `[-1,1]`），BN 的批量统计噪声会破坏生成精确性。
+
+为什么判别器输入层不用 BN：输入层直接接收原始图像，BN 会改变原始数据分布，可能丢失判别所需的关键信息。
+
+<Glossary>
+
+<GlossaryItem term="DCGAN（Deep Convolutional GAN）">
+将卷积神经网络引入 GAN 的架构。生成器用转置卷积逐步上采样，判别器用步长卷积逐步下采样。设计准则：用卷积替代全连接、用 BatchNorm 稳定训练、用 ReLU/LeakyReLU 激活、用步长卷积替代池化。DCGAN 是首个成功生成高质量图像的 GAN 架构，奠定了后续 StyleGAN 等模型的基础。
+</GlossaryItem>
+
+<GlossaryItem term="转置卷积（Transposed Convolution）">
+用于上采样的卷积操作（ConvTranspose2d）。与普通卷积相反——普通卷积将大特征图变为小特征图（下采样），转置卷积将小特征图变为大特征图（上采样）。DCGAN 生成器用 stride=2 的转置卷积将 4x4 特征图逐步放大到 64x64。转置卷积的参数与普通卷积相同（kernel_size, stride, padding），但计算方向相反。
+</GlossaryItem>
+
+<GlossaryItem term="步长卷积（Strided Convolution）">
+用 stride>1 的卷积替代池化进行下采样。DCGAN 判别器用 stride=2 的卷积将 64x64 图像逐步缩小到 4x4。优势：比池化更灵活（卷积权重可学习），且不丢失空间信息（池化是固定的最大/平均操作）。步长卷积是现代 CNN 下采样的标准做法。
+</GlossaryItem>
+
+<GlossaryItem term="BatchNorm 在 GAN 中的作用">
+DCGAN 中 BatchNorm 的三个作用：①稳定训练——对每层输入归一化，缓解内部协变量偏移。②缓解模式崩溃——小批量统计量使生成器不能只针对单个样本优化。③梯度传播——使梯度更平滑。生成器输出层不用 BN（保持生成精确性），判别器输入层不用 BN（保持判别敏感性）。这一设计经验被后续 GAN 变体广泛采用。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+DCGAN 与原始 GAN 的主要区别是什么？为什么用卷积替代全连接层？
+
+<Answer>
+
+DCGAN 是将卷积神经网络引入 GAN 的架构。与原始 GAN 的主要区别：①生成器用转置卷积逐步上采样——从 4x4 特征图逐步放大到目标分辨率，而非全连接层映射。②判别器用步长卷积替代池化下采样。③使用 BatchNorm 稳定训练。④激活函数——生成器用 ReLU（输出层用 Tanh），判别器用 LeakyReLU（斜率 0.2）。用卷积替代全连接的原因：①参数效率——卷积共享权重，参数量远少于全连接，适合高维图像。②空间结构——卷积保留图像的空间局部性，能学习边缘、纹理等层次化特征。③训练效果——卷积架构使 GAN 训练更稳定，生成质量显著提升。
+</Answer>
+
+### 问题 2
+
+DCGAN 生成器的架构是怎样的？数据从噪声到图像的维度变化过程是什么？
+
+<Answer>
+
+DCGAN 生成器架构（以 64x64x3 图像为例）：①输入——噪声 z（100 维向量）。②投影+Reshape——线性投影到 4x4x1024 的特征图。③转置卷积层 1——ConvTranspose2d(1024, 512, k=4, s=2, p=1) + BN + ReLU → 8x8x512。④转置卷积层 2——ConvTranspose2d(512, 256, ...) + BN + ReLU → 16x16x256。⑤转置卷积层 3——ConvTranspose2d(256, 128, ...) + BN + ReLU → 32x32x128。⑥转置卷积层 4——ConvTranspose2d(128, 3, ...) + Tanh → 64x64x3。维度变化：100 → 4x4x1024 → 8x8x512 → 16x16x256 → 32x32x128 → 64x64x3。每层 stride=2 的转置卷积使空间尺寸翻倍。Tanh 将输出归一化到 [-1, 1]。
+</Answer>
+
+### 问题 3
+
+DCGAN 的训练流程是怎样的？判别器和生成器如何交替训练？
+
+<Answer>
+
+DCGAN 训练流程（每个 iteration）：①训练判别器 D——a. 采样真实数据 x_real。b. 采样噪声 z，用 G 生成假数据 x_fake = G(z)。c. 计算 D 的损失：L_D = -[log D(x_real) + log(1 - D(x_fake))]。d. 对 D 的参数做一步梯度下降（冻结 G）。②训练生成器 G——a. 采样新噪声 z，生成 x_fake = G(z)。b. 计算 G 的损失（非饱和损失）：L_G = -log D(G(z))。c. 对 G 的参数做一步梯度下降（冻结 D）。优化器用 Adam（lr=0.0002, beta1=0.5）。交替训练的关键：保持 D 和 G 的能力大致均衡。
+</Answer>
+
+### 问题 4
+
+DCGAN 中 BatchNorm 的作用是什么？为什么生成器输出层和判别器输入层不用 BatchNorm？
+
+<Answer>
+
+BatchNorm 的作用：①稳定训练——BN 对每层输入做归一化，缓解内部协变量偏移，使每层输入分布稳定。②缓解模式崩溃——BN 引入的小批量统计量使生成器不能只针对单个样本优化，间接鼓励多样性。③梯度传播——BN 使梯度更平滑。生成器输出层不用 BN 的原因：输出层需要精确控制生成图像的像素值范围（Tanh 归一化到 [-1,1]）。BN 会引入批量统计噪声到最终输出，破坏生成图像的精确性。判别器输入层不用 BN 的原因：输入层直接接收原始图像像素，BN 会改变原始数据分布，可能丢失判别所需的关键信息。此外，判别器需要区分真实图像和生成图像的细微差异，输入层的 BN 可能使两种图像的统计特征趋同，降低判别能力。
+</Answer>
+
+</Exercises>

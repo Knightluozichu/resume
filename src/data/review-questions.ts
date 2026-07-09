@@ -2085,6 +2085,16 @@ import { dlrQLearningQuestions } from "./review/dlr-q-learning";
 import { dlrDeepQNetworkQuestions } from "./review/dlr-deep-q-network";
 import { dlrPolicyGradientQuestions } from "./review/dlr-policy-gradient";
 import { dlrFinalReviewQuestions } from "./review/dlr-final-review";
+import { dlgLearningMapQuestions } from "./review/dlg-learning-map";
+import { dlgGenerativeModelsBasicsQuestions } from "./review/dlg-generative-models-basics";
+import { dlgAutoencoderVaeQuestions } from "./review/dlg-autoencoder-vae";
+import { dlgFlowModelsQuestions } from "./review/dlg-flow-models";
+import { dlgGanBasicsQuestions } from "./review/dlg-gan-basics";
+import { DlgDcganQuestions } from "./review/dlg-dcgan";
+import { dlgDiffusionModelsQuestions } from "./review/dlg-diffusion-models";
+import { dlgTextToImageQuestions } from "./review/dlg-text-to-image";
+import { dlgEvaluationEthicsQuestions } from "./review/dlg-evaluation-ethics";
+import { dlgFinalReviewQuestions } from "./review/dlg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4205,6 +4215,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dlrDeepQNetworkQuestions,
   ...dlrPolicyGradientQuestions,
   ...dlrFinalReviewQuestions,
+  ...dlgLearningMapQuestions,
+  ...dlgGenerativeModelsBasicsQuestions,
+  ...dlgAutoencoderVaeQuestions,
+  ...dlgFlowModelsQuestions,
+  ...dlgGanBasicsQuestions,
+  ...DlgDcganQuestions,
+  ...dlgDiffusionModelsQuestions,
+  ...dlgTextToImageQuestions,
+  ...dlgEvaluationEthicsQuestions,
+  ...dlgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
