@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppGptArchitectureQuestions: ReviewQuestion[] = [
+export const cgptGptArchitectureQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-gpt-architecture-1",
-    chapter: "cpp-gpt-architecture",
+    id: "cgpt-gpt-architecture-1",
+    chapter: "cgpt-gpt-architecture",
     level: 1,
     question: "GPT 模型采用什么架构？它的核心组件有哪些？",
     answer:
@@ -11,8 +11,8 @@ export const cppGptArchitectureQuestions: ReviewQuestion[] = [
     tags: ["GPT架构", "解码器", "核心组件"],
   },
   {
-    id: "cpp-gpt-architecture-2",
-    chapter: "cpp-gpt-architecture",
+    id: "cgpt-gpt-architecture-2",
+    chapter: "cgpt-gpt-architecture",
     level: 2,
     question: "为什么 GPT 用「掩码」自注意力？它如何保证自回归生成？",
     answer:
@@ -20,8 +20,8 @@ export const cppGptArchitectureQuestions: ReviewQuestion[] = [
     tags: ["掩码注意力", "自回归", "因果掩码"],
   },
   {
-    id: "cpp-gpt-architecture-3",
-    chapter: "cpp-gpt-architecture",
+    id: "cgpt-gpt-architecture-3",
+    chapter: "cgpt-gpt-architecture",
     level: 2,
     question: "残差连接和层归一化在 GPT 中起什么作用？",
     answer:
@@ -29,8 +29,8 @@ export const cppGptArchitectureQuestions: ReviewQuestion[] = [
     tags: ["残差连接", "层归一化", "深层训练"],
   },
   {
-    id: "cpp-gpt-architecture-4",
-    chapter: "cpp-gpt-architecture",
+    id: "cgpt-gpt-architecture-4",
+    chapter: "cgpt-gpt-architecture",
     level: 3,
     question: "GPT 的「自回归生成」具体是如何工作的？它和编码器架构有什么本质区别？",
     answer:

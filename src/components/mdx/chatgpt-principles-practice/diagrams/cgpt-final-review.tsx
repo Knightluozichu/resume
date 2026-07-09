@@ -1,6 +1,6 @@
 "use client";
 
-export function CppFinalReviewDiagram() {
+export function CgptFinalReviewDiagram() {
   return (
     <svg viewBox="0 0 800 580" className="w-full h-auto" role="img" aria-label="全书复习 ChatGPT原理与实战知识整合与能力闭环">
       <defs>

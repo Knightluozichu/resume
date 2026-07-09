@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppInferenceServingQuestions: ReviewQuestion[] = [
+export const cgptInferenceServingQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-inference-serving-1",
-    chapter: "cpp-inference-serving",
+    id: "cgpt-inference-serving-1",
+    chapter: "cgpt-inference-serving",
     level: 1,
     question: "大模型推理有哪两大瓶颈？它们分别发生在什么阶段？",
     answer:
@@ -11,8 +11,8 @@ export const cppInferenceServingQuestions: ReviewQuestion[] = [
     tags: ["推理瓶颈", "Prefill", "Decode", "访存瓶颈"],
   },
   {
-    id: "cpp-inference-serving-2",
-    chapter: "cpp-inference-serving",
+    id: "cgpt-inference-serving-2",
+    chapter: "cgpt-inference-serving",
     level: 2,
     question: "KV Cache 的原理是什么？为什么它是推理加速的头号功臣？",
     answer:
@@ -20,8 +20,8 @@ export const cppInferenceServingQuestions: ReviewQuestion[] = [
     tags: ["KV Cache", "推理加速", "缓存原理"],
   },
   {
-    id: "cpp-inference-serving-3",
-    chapter: "cpp-inference-serving",
+    id: "cgpt-inference-serving-3",
+    chapter: "cgpt-inference-serving",
     level: 2,
     question: "量化、连续批处理、PagedAttention 分别解决什么问题？",
     answer:
@@ -29,12 +29,12 @@ export const cppInferenceServingQuestions: ReviewQuestion[] = [
     tags: ["量化", "连续批处理", "PagedAttention"],
   },
   {
-    id: "cpp-inference-serving-4",
-    chapter: "cpp-inference-serving",
+    id: "cgpt-inference-serving-4",
+    chapter: "cgpt-inference-serving",
     level: 3,
-    question: "选型推理框架时需权衡哪些维度？vLLM、TGI、llama.cpp 各适合什么场景？",
+    question: "选型推理框架时需权衡哪些维度？vLLM、TGI、llama.cgpt 各适合什么场景？",
     answer:
-      "权衡维度：延迟（首 token 延迟 TTFT、每 token 延迟）、吞吐量（QPS）、显存效率、模型支持度、部署复杂度、量化灵活性。①vLLM——PagedAttention + 连续批处理，吞吐量王者，适合高并发生产服务，对主流模型支持好。②TGI（Text Generation Inference）——HuggingFace 出品，生态好易集成，适合已用 HF 体系的团队。③llama.cpp——CPU/GPU 混合，GGUF 量化极致轻量，适合消费级硬件、边缘部署、本地推理。选型原则：云端高并发选 vLLM，HF 生态选 TGI，本地/边缘/低配选 llama.cpp。",
-    tags: ["推理框架", "vLLM", "选型权衡", "llama.cpp"],
+      "权衡维度：延迟（首 token 延迟 TTFT、每 token 延迟）、吞吐量（QPS）、显存效率、模型支持度、部署复杂度、量化灵活性。①vLLM——PagedAttention + 连续批处理，吞吐量王者，适合高并发生产服务，对主流模型支持好。②TGI（Text Generation Inference）——HuggingFace 出品，生态好易集成，适合已用 HF 体系的团队。③llama.cgpt——CPU/GPU 混合，GGUF 量化极致轻量，适合消费级硬件、边缘部署、本地推理。选型原则：云端高并发选 vLLM，HF 生态选 TGI，本地/边缘/低配选 llama.cgpt。",
+    tags: ["推理框架", "vLLM", "选型权衡", "llama.cgpt"],
   },
 ];

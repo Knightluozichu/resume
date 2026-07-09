@@ -2165,16 +2165,16 @@ import { lcpRagImplementationQuestions } from "./review/lcp-rag-implementation";
 import { lcpAdvancedChainsQuestions } from "./review/lcp-advanced-chains";
 import { lcpProductionDeploymentQuestions } from "./review/lcp-production-deployment";
 import { lcpFinalReviewQuestions } from "./review/lcp-final-review";
-import { cppLearningMapQuestions } from "./review/cpp-learning-map";
-import { cppGptArchitectureQuestions } from "./review/cpp-gpt-architecture";
-import { cppPretrainingQuestions } from "./review/cpp-pretraining";
-import { cppAlignmentRlhfQuestions } from "./review/cpp-alignment-rlhf";
-import { cppInferenceServingQuestions } from "./review/cpp-inference-serving";
-import { cppPromptTechniquesQuestions } from "./review/cpp-prompt-techniques";
-import { cppPluginToolsQuestions } from "./review/cpp-plugin-tools";
-import { cppFinetuningPracticeQuestions } from "./review/cpp-finetuning-practice";
-import { cppEcosystemFutureQuestions } from "./review/cpp-ecosystem-future";
-import { cppFinalReviewQuestions } from "./review/cpp-final-review";
+import { cgptLearningMapQuestions } from "./review/cgpt-learning-map";
+import { cgptGptArchitectureQuestions } from "./review/cgpt-gpt-architecture";
+import { cgptPretrainingQuestions } from "./review/cgpt-pretraining";
+import { cgptAlignmentRlhfQuestions } from "./review/cgpt-alignment-rlhf";
+import { cgptInferenceServingQuestions } from "./review/cgpt-inference-serving";
+import { cgptPromptTechniquesQuestions } from "./review/cgpt-prompt-techniques";
+import { cgptPluginToolsQuestions } from "./review/cgpt-plugin-tools";
+import { cgptFinetuningPracticeQuestions } from "./review/cgpt-finetuning-practice";
+import { cgptEcosystemFutureQuestions } from "./review/cgpt-ecosystem-future";
+import { cgptFinalReviewQuestions } from "./review/cgpt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4375,16 +4375,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lcpAdvancedChainsQuestions,
   ...lcpProductionDeploymentQuestions,
   ...lcpFinalReviewQuestions,
-  ...cppLearningMapQuestions,
-  ...cppGptArchitectureQuestions,
-  ...cppPretrainingQuestions,
-  ...cppAlignmentRlhfQuestions,
-  ...cppInferenceServingQuestions,
-  ...cppPromptTechniquesQuestions,
-  ...cppPluginToolsQuestions,
-  ...cppFinetuningPracticeQuestions,
-  ...cppEcosystemFutureQuestions,
-  ...cppFinalReviewQuestions,
+  ...cgptLearningMapQuestions,
+  ...cgptGptArchitectureQuestions,
+  ...cgptPretrainingQuestions,
+  ...cgptAlignmentRlhfQuestions,
+  ...cgptInferenceServingQuestions,
+  ...cgptPromptTechniquesQuestions,
+  ...cgptPluginToolsQuestions,
+  ...cgptFinetuningPracticeQuestions,
+  ...cgptEcosystemFutureQuestions,
+  ...cgptFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

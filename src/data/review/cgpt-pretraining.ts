@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppPretrainingQuestions: ReviewQuestion[] = [
+export const cgptPretrainingQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-pretraining-1",
-    chapter: "cpp-pretraining",
+    id: "cgpt-pretraining-1",
+    chapter: "cgpt-pretraining",
     level: 1,
     question: "大模型预训练的目标是什么？它如何学习语言能力？",
     answer:
@@ -11,8 +11,8 @@ export const cppPretrainingQuestions: ReviewQuestion[] = [
     tags: ["预训练目标", "自回归", "基座模型"],
   },
   {
-    id: "cpp-pretraining-2",
-    chapter: "cpp-pretraining",
+    id: "cgpt-pretraining-2",
+    chapter: "cgpt-pretraining",
     level: 2,
     question: "什么是缩放律（Scaling Laws）？它对大模型发展有什么指导意义？",
     answer:
@@ -20,8 +20,8 @@ export const cppPretrainingQuestions: ReviewQuestion[] = [
     tags: ["缩放律", "幂律", "Chinchilla"],
   },
   {
-    id: "cpp-pretraining-3",
-    chapter: "cpp-pretraining",
+    id: "cgpt-pretraining-3",
+    chapter: "cgpt-pretraining",
     level: 2,
     question: "预训练的数据管线包含哪些步骤？为什么数据质量如此重要？",
     answer:
@@ -29,8 +29,8 @@ export const cppPretrainingQuestions: ReviewQuestion[] = [
     tags: ["数据管线", "数据质量", "BPE分词"],
   },
   {
-    id: "cpp-pretraining-4",
-    chapter: "cpp-pretraining",
+    id: "cgpt-pretraining-4",
+    chapter: "cgpt-pretraining",
     level: 3,
     question: "什么是涌现能力？它与缩放律是什么关系？这对实践有什么启示？",
     answer:

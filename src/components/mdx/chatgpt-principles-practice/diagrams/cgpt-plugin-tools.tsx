@@ -1,6 +1,6 @@
 "use client";
 
-export function CppPluginToolsDiagram() {
+export function CgptPluginToolsDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="插件与工具调用 Function Calling工具循环">
       <defs>

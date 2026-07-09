@@ -1,6 +1,6 @@
 "use client";
 
-export function CppAlignmentRlhfDiagram() {
+export function CgptAlignmentRlhfDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="对齐与RLHF三阶段 SFT奖励模型PPO">
       <defs>

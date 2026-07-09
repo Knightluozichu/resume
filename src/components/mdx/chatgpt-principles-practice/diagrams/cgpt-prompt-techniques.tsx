@@ -1,6 +1,6 @@
 "use client";
 
-export function CppPromptTechniquesDiagram() {
+export function CgptPromptTechniquesDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="高级提示技巧 Zero-shot Few-shot CoT ToT ReAct 自洽">
       <defs>

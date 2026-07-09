@@ -1,6 +1,6 @@
 "use client";
 
-export function CppPretrainingDiagram() {
+export function CgptPretrainingDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="预训练与规模化 数据处理自回归训练缩放律">
       <defs>

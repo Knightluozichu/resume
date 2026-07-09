@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppAlignmentRlhfQuestions: ReviewQuestion[] = [
+export const cgptAlignmentRlhfQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-alignment-rlhf-1",
-    chapter: "cpp-alignment-rlhf",
+    id: "cgpt-alignment-rlhf-1",
+    chapter: "cgpt-alignment-rlhf",
     level: 1,
     question: "什么是「对齐」？为什么预训练模型需要对齐才能服务用户？",
     answer:
@@ -11,8 +11,8 @@ export const cppAlignmentRlhfQuestions: ReviewQuestion[] = [
     tags: ["对齐", "预训练局限", "3H目标"],
   },
   {
-    id: "cpp-alignment-rlhf-2",
-    chapter: "cpp-alignment-rlhf",
+    id: "cgpt-alignment-rlhf-2",
+    chapter: "cgpt-alignment-rlhf",
     level: 2,
     question: "RLHF 的三个阶段分别做什么？它们如何衔接？",
     answer:
@@ -20,8 +20,8 @@ export const cppAlignmentRlhfQuestions: ReviewQuestion[] = [
     tags: ["RLHF", "SFT", "RM", "PPO"],
   },
   {
-    id: "cpp-alignment-rlhf-3",
-    chapter: "cpp-alignment-rlhf",
+    id: "cgpt-alignment-rlhf-3",
+    chapter: "cgpt-alignment-rlhf",
     level: 2,
     question: "对齐的 3H 目标是什么？它们之间可能有什么冲突？",
     answer:
@@ -29,8 +29,8 @@ export const cppAlignmentRlhfQuestions: ReviewQuestion[] = [
     tags: ["3H目标", "目标冲突", "对齐权衡"],
   },
   {
-    id: "cpp-alignment-rlhf-4",
-    chapter: "cpp-alignment-rlhf",
+    id: "cgpt-alignment-rlhf-4",
+    chapter: "cgpt-alignment-rlhf",
     level: 3,
     question: "DPO 相比 RLHF 有什么改进？为什么说它「更简单又更稳定」？",
     answer:

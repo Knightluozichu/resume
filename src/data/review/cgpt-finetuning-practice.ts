@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppFinetuningPracticeQuestions: ReviewQuestion[] = [
+export const cgptFinetuningPracticeQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-finetuning-practice-1",
-    chapter: "cpp-finetuning-practice",
+    id: "cgpt-finetuning-practice-1",
+    chapter: "cgpt-finetuning-practice",
     level: 1,
     question: "LoRA 的原理是什么？为什么它只需训练 1% 参数就能接近全参微调效果？",
     answer:
@@ -11,8 +11,8 @@ export const cppFinetuningPracticeQuestions: ReviewQuestion[] = [
     tags: ["LoRA", "低秩适配", "PEFT"],
   },
   {
-    id: "cpp-finetuning-practice-2",
-    chapter: "cpp-finetuning-practice",
+    id: "cgpt-finetuning-practice-2",
+    chapter: "cgpt-finetuning-practice",
     level: 2,
     question: "QLoRA 在 LoRA 基础上做了什么改进？它如何让单卡微调 70B 模型成为可能？",
     answer:
@@ -20,8 +20,8 @@ export const cppFinetuningPracticeQuestions: ReviewQuestion[] = [
     tags: ["QLoRA", "4bit量化", "单卡微调"],
   },
   {
-    id: "cpp-finetuning-practice-3",
-    chapter: "cpp-finetuning-practice",
+    id: "cgpt-finetuning-practice-3",
+    chapter: "cgpt-finetuning-practice",
     level: 2,
     question: "什么场景该用提示工程、什么场景该用 RAG、什么场景该用微调？",
     answer:
@@ -29,8 +29,8 @@ export const cppFinetuningPracticeQuestions: ReviewQuestion[] = [
     tags: ["提示工程", "RAG", "微调", "选型决策"],
   },
   {
-    id: "cpp-finetuning-practice-4",
-    chapter: "cpp-finetuning-practice",
+    id: "cgpt-finetuning-practice-4",
+    chapter: "cgpt-finetuning-practice",
     level: 3,
     question: "微调的数据准备有哪些要点？为什么「1000 条精标数据胜过 10 万条噪声数据」？",
     answer:

@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppPromptTechniquesQuestions: ReviewQuestion[] = [
+export const cgptPromptTechniquesQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-prompt-techniques-1",
-    chapter: "cpp-prompt-techniques",
+    id: "cgpt-prompt-techniques-1",
+    chapter: "cgpt-prompt-techniques",
     level: 1,
     question: "Zero-shot、Few-shot、CoT 三种提示技巧有什么区别？分别适合什么场景？",
     answer:
@@ -11,8 +11,8 @@ export const cppPromptTechniquesQuestions: ReviewQuestion[] = [
     tags: ["Zero-shot", "Few-shot", "CoT", "提示技巧"],
   },
   {
-    id: "cpp-prompt-techniques-2",
-    chapter: "cpp-prompt-techniques",
+    id: "cgpt-prompt-techniques-2",
+    chapter: "cgpt-prompt-techniques",
     level: 2,
     question: "ReAct 模式是如何工作的？它解决了什么问题？",
     answer:
@@ -20,8 +20,8 @@ export const cppPromptTechniquesQuestions: ReviewQuestion[] = [
     tags: ["ReAct", "推理行动", "工具调用", "Agent"],
   },
   {
-    id: "cpp-prompt-techniques-3",
-    chapter: "cpp-prompt-techniques",
+    id: "cgpt-prompt-techniques-3",
+    chapter: "cgpt-prompt-techniques",
     level: 2,
     question: "自洽（Self-Consistency）的原理是什么？它以什么换什么？",
     answer:
@@ -29,8 +29,8 @@ export const cppPromptTechniquesQuestions: ReviewQuestion[] = [
     tags: ["自洽", "Self-Consistency", "多采样投票"],
   },
   {
-    id: "cpp-prompt-techniques-4",
-    chapter: "cpp-prompt-techniques",
+    id: "cgpt-prompt-techniques-4",
+    chapter: "cgpt-prompt-techniques",
     level: 3,
     question: "提示工程的四原则是什么？如何系统性地优化一个提示？",
     answer:

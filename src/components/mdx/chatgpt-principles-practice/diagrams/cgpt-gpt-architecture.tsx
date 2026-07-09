@@ -1,6 +1,6 @@
 "use client";
 
-export function CppGptArchitectureDiagram() {
+export function CgptGptArchitectureDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="GPT模型架构 Transformer解码器堆叠">
       <defs>

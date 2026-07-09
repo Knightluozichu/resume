@@ -1,6 +1,6 @@
 "use client";
 
-export function CppLearningMapDiagram() {
+export function CgptLearningMapDiagram() {
   return (
     <svg viewBox="0 0 800 580" className="w-full h-auto" role="img" aria-label="ChatGPT原理与实战知识全景图与十章学习路径">
       <defs>

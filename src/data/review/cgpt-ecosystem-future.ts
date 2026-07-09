@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppEcosystemFutureQuestions: ReviewQuestion[] = [
+export const cgptEcosystemFutureQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-ecosystem-future-1",
-    chapter: "cpp-ecosystem-future",
+    id: "cgpt-ecosystem-future-1",
+    chapter: "cgpt-ecosystem-future",
     level: 1,
     question: "大模型未来演进的五大方向是什么？它们各自的核心内涵是什么？",
     answer:
@@ -11,8 +11,8 @@ export const cppEcosystemFutureQuestions: ReviewQuestion[] = [
     tags: ["未来方向", "多模态", "Agent", "开源", "安全", "AGI"],
   },
   {
-    id: "cpp-ecosystem-future-2",
-    chapter: "cpp-ecosystem-future",
+    id: "cgpt-ecosystem-future-2",
+    chapter: "cgpt-ecosystem-future",
     level: 2,
     question: "为什么说大模型正从「能聊天的模型」走向「能做事的智能体」？",
     answer:
@@ -20,8 +20,8 @@ export const cppEcosystemFutureQuestions: ReviewQuestion[] = [
     tags: ["Agent演进", "能力跃迁", "自主智能体"],
   },
   {
-    id: "cpp-ecosystem-future-3",
-    chapter: "cpp-ecosystem-future",
+    id: "cgpt-ecosystem-future-3",
+    chapter: "cgpt-ecosystem-future",
     level: 2,
     question: "开源大模型生态的崛起对行业有什么影响？开源和闭源会怎样竞速？",
     answer:
@@ -29,8 +29,8 @@ export const cppEcosystemFutureQuestions: ReviewQuestion[] = [
     tags: ["开源生态", "Llama", "闭源竞速", "普惠化"],
   },
   {
-    id: "cpp-ecosystem-future-4",
-    chapter: "cpp-ecosystem-future",
+    id: "cgpt-ecosystem-future-4",
+    chapter: "cgpt-ecosystem-future",
     level: 3,
     question: "大模型走向 AGI 的道路上，能力挑战和治理挑战分别有哪些？如何平衡发展与安全？",
     answer:

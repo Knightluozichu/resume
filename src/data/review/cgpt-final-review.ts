@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppFinalReviewQuestions: ReviewQuestion[] = [
+export const cgptFinalReviewQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-final-review-1",
-    chapter: "cpp-final-review",
+    id: "cgpt-final-review-1",
+    chapter: "cgpt-final-review",
     level: 1,
     question: "用一句话概括 ChatGPT 从原理到落地的全流程，然后展开解释四个层次。",
     answer:
@@ -11,8 +11,8 @@ export const cppFinalReviewQuestions: ReviewQuestion[] = [
     tags: ["全流程", "四层视角", "统一概括"],
   },
   {
-    id: "cpp-final-review-2",
-    chapter: "cpp-final-review",
+    id: "cgpt-final-review-2",
+    chapter: "cgpt-final-review",
     level: 2,
     question: "预训练、对齐、提示、工具、微调五种手段各自解决什么问题？如何组合使用？",
     answer:
@@ -20,17 +20,17 @@ export const cppFinalReviewQuestions: ReviewQuestion[] = [
     tags: ["五种手段", "组合使用", "技术选型"],
   },
   {
-    id: "cpp-final-review-3",
-    chapter: "cpp-final-review",
+    id: "cgpt-final-review-3",
+    chapter: "cgpt-final-review",
     level: 2,
     question: "从选模型到上生产，ChatGPT 类应用开发的核心决策链是怎样的？",
     answer:
-      "决策链：①架构理解——选基座（闭源 API vs 开源自部署），按能力/成本/隐私权衡。②预训练（通常跳过，直接用现成基座）——理解模型能力边界。③对齐——用现成对齐模型或自己做 SFT/DPO。④推理优化——KV 缓存、量化、连续批处理降本提速，选 vLLM/llama.cpp 等框架。⑤提示与工具——先提示工程调行为，需外部能力加 Function Calling，复杂任务用 Agent 循环。⑥微调——提示不够再微调，LoRA 起步，数据精标优先。⑦评估——指标 + 人工 + LLM-Judge。⑧部署——服务化、限流、监控、容错。⑨迭代——上线后持续收集反馈优化。核心：按需递进，能用轻的不上重的。",
+      "决策链：①架构理解——选基座（闭源 API vs 开源自部署），按能力/成本/隐私权衡。②预训练（通常跳过，直接用现成基座）——理解模型能力边界。③对齐——用现成对齐模型或自己做 SFT/DPO。④推理优化——KV 缓存、量化、连续批处理降本提速，选 vLLM/llama.cgpt 等框架。⑤提示与工具——先提示工程调行为，需外部能力加 Function Calling，复杂任务用 Agent 循环。⑥微调——提示不够再微调，LoRA 起步，数据精标优先。⑦评估——指标 + 人工 + LLM-Judge。⑧部署——服务化、限流、监控、容错。⑨迭代——上线后持续收集反馈优化。核心：按需递进，能用轻的不上重的。",
     tags: ["决策链", "模型选型", "生产上线", "综合应用"],
   },
   {
-    id: "cpp-final-review-4",
-    chapter: "cpp-final-review",
+    id: "cgpt-final-review-4",
+    chapter: "cgpt-final-review",
     level: 3,
     question: "设计一个企业智能客服系统的完整方案，涵盖推理优化、RAG、工具调用和微调。",
     answer:

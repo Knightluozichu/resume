@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppPluginToolsQuestions: ReviewQuestion[] = [
+export const cgptPluginToolsQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-plugin-tools-1",
-    chapter: "cpp-plugin-tools",
+    id: "cgpt-plugin-tools-1",
+    chapter: "cgpt-plugin-tools",
     level: 1,
     question: "Function Calling 的工作流程是怎样的？它比让模型自己输出文本有什么优势？",
     answer:
@@ -11,8 +11,8 @@ export const cppPluginToolsQuestions: ReviewQuestion[] = [
     tags: ["Function Calling", "工具调用", "结构化输出"],
   },
   {
-    id: "cpp-plugin-tools-2",
-    chapter: "cpp-plugin-tools",
+    id: "cgpt-plugin-tools-2",
+    chapter: "cgpt-plugin-tools",
     level: 2,
     question: "工具调用循环（Thought-Action-Observation）是如何终止的？如何防止无限循环？",
     answer:
@@ -20,8 +20,8 @@ export const cppPluginToolsQuestions: ReviewQuestion[] = [
     tags: ["工具循环", "终止条件", "max_iterations"],
   },
   {
-    id: "cpp-plugin-tools-3",
-    chapter: "cpp-plugin-tools",
+    id: "cgpt-plugin-tools-3",
+    chapter: "cgpt-plugin-tools",
     level: 2,
     question: "设计工具时，工具的 description 和 parameters 为什么至关重要？",
     answer:
@@ -29,8 +29,8 @@ export const cppPluginToolsQuestions: ReviewQuestion[] = [
     tags: ["工具设计", "description", "parameters", "JSON Schema"],
   },
   {
-    id: "cpp-plugin-tools-4",
-    chapter: "cpp-plugin-tools",
+    id: "cgpt-plugin-tools-4",
+    chapter: "cgpt-plugin-tools",
     level: 3,
     question: "构建一个能查天气、订机票、发邮件的助手，工具调用系统如何设计？安全如何保障？",
     answer:

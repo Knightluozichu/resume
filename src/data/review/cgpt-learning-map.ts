@@ -1,9 +1,9 @@
 import type { ReviewQuestion } from "./types";
 
-export const cppLearningMapQuestions: ReviewQuestion[] = [
+export const cgptLearningMapQuestions: ReviewQuestion[] = [
   {
-    id: "cpp-learning-map-1",
-    chapter: "cpp-learning-map",
+    id: "cgpt-learning-map-1",
+    chapter: "cgpt-learning-map",
     level: 1,
     question: "《ChatGPT 原理与实战》全书的核心主题是什么？它解决什么问题？",
     answer:
@@ -11,8 +11,8 @@ export const cppLearningMapQuestions: ReviewQuestion[] = [
     tags: ["核心主题", "全书概览", "知识闭环"],
   },
   {
-    id: "cpp-learning-map-2",
-    chapter: "cpp-learning-map",
+    id: "cgpt-learning-map-2",
+    chapter: "cgpt-learning-map",
     level: 2,
     question: "全书十章如何组织？分为哪几个学习阶段？",
     answer:
@@ -20,8 +20,8 @@ export const cppLearningMapQuestions: ReviewQuestion[] = [
     tags: ["章节组织", "四阶段", "学习路径"],
   },
   {
-    id: "cpp-learning-map-3",
-    chapter: "cpp-learning-map",
+    id: "cgpt-learning-map-3",
+    chapter: "cgpt-learning-map",
     level: 2,
     question: "ChatGPT 的技术链路包含哪些核心环节？它们之间是什么关系？",
     answer:
@@ -29,8 +29,8 @@ export const cppLearningMapQuestions: ReviewQuestion[] = [
     tags: ["技术链路", "核心环节", "环节关系"],
   },
   {
-    id: "cpp-learning-map-4",
-    chapter: "cpp-learning-map",
+    id: "cgpt-learning-map-4",
+    chapter: "cgpt-learning-map",
     level: 3,
     question: "全书如何形成一个从原理理解到工程落地的完整知识闭环？",
     answer:

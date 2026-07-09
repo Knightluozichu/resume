@@ -1,6 +1,6 @@
 "use client";
 
-export function CppInferenceServingDiagram() {
+export function CgptInferenceServingDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="推理与服务化 KV缓存量化连续批处理">
       <defs>

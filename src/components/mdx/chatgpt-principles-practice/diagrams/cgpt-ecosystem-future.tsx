@@ -1,6 +1,6 @@
 "use client";
 
-export function CppEcosystemFutureDiagram() {
+export function CgptEcosystemFutureDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="生态与未来展望 多模态Agent开源安全AGI">
       <defs>

@@ -1,6 +1,6 @@
 "use client";
 
-export function CppFinetuningPracticeDiagram() {
+export function CgptFinetuningPracticeDiagram() {
   return (
     <svg viewBox="0 0 800 560" className="w-full h-auto" role="img" aria-label="微调实战 全参LoRA QLoRA Prefix对比与流程">
       <defs>
