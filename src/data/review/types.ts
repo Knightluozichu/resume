@@ -2338,7 +2338,17 @@ export type ReviewChapterSlug =
   | "mas-coordination-cooperation"
   | "mas-distributed-problem-solving"
   | "mas-applications-future"
-  | "mas-final-review";
+  | "mas-final-review"
+  | "bp-learning-map"
+  | "bp-blockchain-basics"
+  | "bp-cryptography"
+  | "bp-consensus-mechanisms"
+  | "bp-transactions-blocks"
+  | "bp-smart-contracts"
+  | "bp-wallets-accounts"
+  | "bp-public-private-chains"
+  | "bp-applications-future"
+  | "bp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4681,6 +4691,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mas-distributed-problem-solving": "分布式问题求解",
   "mas-applications-future": "应用与未来展望",
   "mas-final-review": "全书复习与知识整合",
+  "bp-learning-map": "白话区块链·知识全景图",
+  "bp-blockchain-basics": "区块链基础概念",
+  "bp-cryptography": "密码学基础",
+  "bp-consensus-mechanisms": "共识机制",
+  "bp-transactions-blocks": "交易与区块",
+  "bp-smart-contracts": "智能合约",
+  "bp-wallets-accounts": "钱包与账户体系",
+  "bp-public-private-chains": "公链私链与联盟链",
+  "bp-applications-future": "应用场景与未来展望",
+  "bp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

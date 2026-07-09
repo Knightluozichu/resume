@@ -269,6 +269,7 @@ export const BOOK_ORDER = [
   "large-scale-llm-practice",
   "building-llm-applications",
   "multiagent-systems",
+  "blockchain-plain",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -478,6 +479,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "large-scale-llm-practice": "大规模语言模型：从理论到实践",
   "building-llm-applications": "Building LLM Powered Applications",
   "multiagent-systems": "多智能体系统",
+  "blockchain-plain": "白话区块链",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1111,6 +1113,7 @@ export const SECTION_ORDER = [
   "编译原理",
   "人工智能与机器学习",
   "AI Agent与大模型应用",
+  "区块链",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

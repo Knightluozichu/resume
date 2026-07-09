@@ -2215,6 +2215,16 @@ import { masCoordinationCooperationQuestions } from "./review/mas-coordination-c
 import { masDistributedProblemSolvingQuestions } from "./review/mas-distributed-problem-solving";
 import { masApplicationsFutureQuestions } from "./review/mas-applications-future";
 import { masFinalReviewQuestions } from "./review/mas-final-review";
+import { bpLearningMapQuestions } from "./review/bp-learning-map";
+import { bpBlockchainBasicsQuestions } from "./review/bp-blockchain-basics";
+import { bpCryptographyQuestions } from "./review/bp-cryptography";
+import { bpConsensusMechanismsQuestions } from "./review/bp-consensus-mechanisms";
+import { bpTransactionsBlocksQuestions } from "./review/bp-transactions-blocks";
+import { bpSmartContractsQuestions } from "./review/bp-smart-contracts";
+import { bpWalletsAccountsQuestions } from "./review/bp-wallets-accounts";
+import { bpPublicPrivateChainsQuestions } from "./review/bp-public-private-chains";
+import { bpApplicationsFutureQuestions } from "./review/bp-applications-future";
+import { bpFinalReviewQuestions } from "./review/bp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4465,6 +4475,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...masDistributedProblemSolvingQuestions,
   ...masApplicationsFutureQuestions,
   ...masFinalReviewQuestions,
+  ...bpLearningMapQuestions,
+  ...bpBlockchainBasicsQuestions,
+  ...bpCryptographyQuestions,
+  ...bpConsensusMechanismsQuestions,
+  ...bpTransactionsBlocksQuestions,
+  ...bpSmartContractsQuestions,
+  ...bpWalletsAccountsQuestions,
+  ...bpPublicPrivateChainsQuestions,
+  ...bpApplicationsFutureQuestions,
+  ...bpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
