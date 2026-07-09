@@ -1798,7 +1798,17 @@ export type ReviewChapterSlug =
   | "kdg-dsl"
   | "kdg-kotlin-android"
   | "kdg-testing"
-  | "kdg-final-review";
+  | "kdg-final-review"
+  | "adae-learning-map"
+  | "adae-activity-lifecycle"
+  | "adae-ipc-binder"
+  | "adae-view-system"
+  | "adae-remote-views"
+  | "adae-drawable-anim"
+  | "adae-handler-message"
+  | "adae-thread-async"
+  | "adae-performance-optimize"
+  | "adae-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3601,6 +3611,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "kdg-kotlin-android": "Kotlin Android开发",
   "kdg-testing": "测试与最佳实践",
   "kdg-final-review": "全书复习",
+  "adae-learning-map": "全书学习地图",
+  "adae-activity-lifecycle": "Activity生命周期与启动模式",
+  "adae-ipc-binder": "IPC机制与Binder",
+  "adae-view-system": "View工作原理",
+  "adae-remote-views": "RemoteViews与通知",
+  "adae-drawable-anim": "Drawable与动画",
+  "adae-handler-message": "Handler消息机制",
+  "adae-thread-async": "线程与AsyncTask",
+  "adae-performance-optimize": "性能优化",
+  "adae-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

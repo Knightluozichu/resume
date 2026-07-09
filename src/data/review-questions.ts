@@ -1675,6 +1675,16 @@ import { kdgDslQuestions } from "./review/kdg-dsl";
 import { kdgKotlinAndroidQuestions } from "./review/kdg-kotlin-android";
 import { kdgTestingQuestions } from "./review/kdg-testing";
 import { kdgFinalReviewQuestions } from "./review/kdg-final-review";
+import { adaeLearningMapQuestions } from "./review/adae-learning-map";
+import { adaeActivityLifecycleQuestions } from "./review/adae-activity-lifecycle";
+import { adaeIpcBinderQuestions } from "./review/adae-ipc-binder";
+import { adaeViewSystemQuestions } from "./review/adae-view-system";
+import { adaeRemoteViewsQuestions } from "./review/adae-remote-views";
+import { adaeDrawableAnimQuestions } from "./review/adae-drawable-anim";
+import { adaeHandlerMessageQuestions } from "./review/adae-handler-message";
+import { adaeThreadAsyncQuestions } from "./review/adae-thread-async";
+import { adaePerformanceOptimizeQuestions } from "./review/adae-performance-optimize";
+import { adaeFinalReviewQuestions } from "./review/adae-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3385,6 +3395,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...kdgKotlinAndroidQuestions,
   ...kdgTestingQuestions,
   ...kdgFinalReviewQuestions,
+  ...adaeLearningMapQuestions,
+  ...adaeActivityLifecycleQuestions,
+  ...adaeIpcBinderQuestions,
+  ...adaeViewSystemQuestions,
+  ...adaeRemoteViewsQuestions,
+  ...adaeDrawableAnimQuestions,
+  ...adaeHandlerMessageQuestions,
+  ...adaeThreadAsyncQuestions,
+  ...adaePerformanceOptimizeQuestions,
+  ...adaeFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

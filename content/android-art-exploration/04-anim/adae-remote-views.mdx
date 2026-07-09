@@ -1,0 +1,120 @@
+---
+title: "RemoteViews与通知"
+type: C
+section: "Android开发"
+order: 4
+description: "RemoteViews跨进程UI更新机制、通知栏Notification与桌面AppWidget、PendingIntent点击处理"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { AdaeRemoteViewsDiagram } from "@/components/mdx/android-art-exploration/diagrams/adae-remote-views";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解RemoteViews「操作序列化」跨进程更新UI的本质
+- 掌握通知栏Notification的构建与NotificationChannel
+- 理解桌面AppWidget的工作机制与复杂列表实现
+- 明白PendingIntent为何是跨进程点击的关键
+</Objectives>
+
+## 直觉引入
+
+通知栏和桌面Widget运行在系统的进程里（SystemServer/Launcher），不在你的App进程。你的App没法直接操作那些View实例。RemoteViews就是为这种「跨进程更新UI」设计的——它把你要对布局做的操作（设文字、设图片）记录成一串Action，跨进程传过去，由目标进程「回放」到真实View上。
+
+<AdaeRemoteViewsDiagram />
+
+## RemoteViews工作流程
+
+```text
+1. 构造（App进程）
+   RemoteViews(packageName, layoutId)
+   setTextViewText / setImageViewResource   ← 记录为 Action 对象
+
+2. 跨进程传递
+   NotificationManager.notify / AppWidgetManager.updateAppWidget
+   → 进入 SystemServer 进程
+
+3. 回放（目标进程）
+   LayoutInflater 真正 inflate 布局
+   遍历 Action 列表，反射调用 View 方法 apply
+```
+
+<Callout type="trap">
+**限制**：RemoteViews不支持自定义View，仅支持系统内置View（TextView/ImageView/Button等白名单）。因为回放发生在SystemServer进程，无法加载App的自定义类（类加载器隔离、安全限制）。`setXxx` 也只暴露有限的系统View方法，本质是反射在白名单内操作。
+</Callout>
+
+## 通知栏 Notification
+
+```text
+NotificationChannel (Android 8.0+ 必需)
+  ↓ createNotificationChannel
+NotificationCompat.Builder(context, channelId)
+  .setSmallIcon(必需)      状态栏小图标
+  .setContentTitle(标题)
+  .setContentText(内容)
+  .setContentIntent(pendingIntent)   点击跳转
+  .setAutoCancel(true)     点击后消失
+  .build()
+  ↓ notify(id, notification)
+```
+
+点击事件必须用 `PendingIntent`——因为通知运行在SystemServer进程，点击要在App进程执行，PendingIntent是跨进程的「延迟Intent」，系统在点击时代替App启动。
+
+## 桌面 AppWidget
+
+```text
+AppWidgetProvider (继承 BroadcastReceiver)
+  ├─ onUpdate        定时刷新回调
+  ├─ onEnabled       第一个实例添加
+  ├─ onDisabled      最后一个实例移除
+  └─ onDeleted       实例被删除
+
+AppWidgetProviderInfo (XML)
+  ├─ initialLayout   布局
+  ├─ updatePeriodMillis  最小30分钟
+  └─ minWidth/minHeight  尺寸
+
+复杂列表: RemoteViewsService + RemoteViewsFactory
+  setRemoteAdapter 绑定到 ListView/GridView
+```
+
+<Callout type="insight">
+**核心理念**：RemoteViews的本质是「View操作的序列化」——不直接持View实例，而是记录操作跨进程传递后回放。它统一了通知栏和桌面Widget两种「跨进程UI」场景，用受限（仅系统View）换跨进程安全可控。
+</Callout>
+
+<Exercises>
+**问题 1**：RemoteViews的工作原理是什么？为什么它不支持自定义View？
+
+<Answer>
+RemoteViews的本质是「View操作的序列化」，用于跨进程更新UI（通知栏、桌面Widget运行在SystemServer进程而非App进程）：①构造——RemoteViews(packageName, layoutId)并不真正加载布局，而是记录布局id和一系列setXxx操作（如setTextViewText），每个操作封装成一个Action对象。②跨进程传递——通过NotificationManager.notify或AppWidgetManager.updateAppWidget，RemoteViews作为Parcelable跨进程传到SystemServer（NotificationManagerService/AppWidgetService所在进程）。③回放——目标进程用LayoutInflater真正inflate布局id得到真实View，然后遍历Action列表逐个apply：用反射调用对应View的方法（如TextView.setText）把值设上去。④为什么不支持自定义View——回放发生在SystemServer进程，该进程无法加载App的自定义View类（类加载器隔离、安全限制），所以RemoteViews只能用系统内置View（TextView/ImageView/Button等）。setXxx也只暴露有限的系统View方法，本质是通过反射在固定白名单内操作，保证跨进程安全可控。
+</Answer>
+
+**问题 2**：如何使用NotificationCompat.Builder发送一条带点击事件的通知？
+
+<Answer>
+发送通知步骤：①创建通知渠道（Android 8.0+必需）——NotificationChannel channel = new NotificationChannel(id, name, importance)；channel.setDescription(...); manager.createNotificationChannel(channel)。②构建通知——NotificationCompat.Builder(context, channelId).setSmallIcon(R.mipmap.ic_launcher)（必需，状态栏小图标）.setContentTitle(标题).setContentText(内容).setContentIntent(pendingIntent)（点击跳转）.setAutoCancel(true)（点击后消失）.build()。③PendingIntent处理点击——因为通知运行在SystemServer进程，点击要在App进程执行，必须用PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)封装Intent，系统会在点击时代替App启动。④发送——manager.notify(notificationId, notification)，notificationId用于后续更新或取消（manager.cancel(id)）。⑤注意：setContentIntent的PendingIntent是跨进程的「延迟Intent」，这是RemoteViews机制的关键，普通Intent无法跨进程触发。
+</Answer>
+
+**问题 3**：AppWidget桌面小部件的工作机制是怎样的？如何实现复杂列表Widget？
+
+<Answer>
+AppWidget运行在桌面Launcher进程（非App进程），用RemoteViews更新：①核心组件——AppWidgetProvider（继承BroadcastReceiver，接收 onUpdate/onEnabled/onDisabled/onDeleted 等广播）、AppWidgetProviderInfo（XML声明Widget的布局/更新周期/尺寸/minWidth等）。②注册——在manifest的receiver声明AppWidgetProvider，meta-data指向xml/appwidget_info。③更新流程——系统按updatePeriodMillis定时（最小30分钟）或手动调AppWidgetManager.updateAppWidget发送RemoteViews，RemoteViews跨进程到Launcher进程回放刷新。④onUpdate在每次刷新时被调用，在里面构造RemoteViews并setXxx设置各控件。⑤复杂列表Widget——普通RemoteViews不支持ListView/GridView的可滚动列表（因为列表数据也要跨进程），需用RemoteViewsService+RemoteViewsFactory：RemoteViewsFactory提供列表数据（getCount/getViewAt），RemoteViewsService包装Factory，通过setRemoteAdapter把Service绑定到RemoteViews的ListView，系统跨进程拉取每项数据。点击用setOnClickFillInIntent设模板Intent。这套机制让Widget能展示可滚动的列表。
+</Answer>
+
+**问题 4**：RemoteViews和普通View的区别是什么？它的应用场景有哪些局限？
+
+<Answer>
+RemoteViews与普通View的区别：①运行进程——普通View运行在App自己的进程，RemoteViews「构造」在App进程但「显示/回放」在SystemServer或Launcher进程。②操作方式——普通View直接持引用调方法（textView.setText），RemoteViews通过setXxx记录操作再跨进程反射回放，不能直接操作View实例。③支持的View——普通View支持任意自定义View，RemoteViews仅支持系统内置View（TextView/ImageView/ProgressBar等白名单）。④交互——普通View用OnClickListener，RemoteViews用PendingIntent（因为点击需跨进程回到App执行）。应用场景局限：①只能展示简单UI，复杂自定义绘制做不了。②不支持实时频繁更新（Widget最小30分钟周期，通知也有限流）。③数据传递受Parcelable限制，大对象难传。④事件只能用PendingIntent启动组件，无法做精细的实时回调。本质是「用受限换跨进程安全」，适合通知栏、桌面Widget这类系统级UI场景。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="RemoteViews">「View操作的序列化」，不直接持View，记录setXxx操作跨进程传递后由目标进程反射回放，用于通知栏与桌面Widget。</GlossaryItem>
+<GlossaryItem term="NotificationChannel">Android 8.0+必需的通知渠道，按重要级别管理通知行为。</GlossaryItem>
+<GlossaryItem term="PendingIntent">跨进程的「延迟Intent」，由系统在目标进程代替App执行，是RemoteViews点击事件的关键。</GlossaryItem>
+<GlossaryItem term="AppWidgetProvider">继承BroadcastReceiver的桌面Widget组件，接收onUpdate等广播刷新RemoteViews。</GlossaryItem>
+<GlossaryItem term="RemoteViewsService">为Widget提供列表数据的服务，配合RemoteViewsFactory实现可滚动列表Widget。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,122 @@
+---
+title: "Activity生命周期与启动模式"
+type: A
+section: "Android开发"
+order: 1
+description: "Activity七大生命周期回调、四种启动模式、任务栈与Intent Flags——掌握Activity的核心调度机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { AdaeActivityLifecycleDiagram } from "@/components/mdx/android-art-exploration/diagrams/adae-activity-lifecycle";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握Activity七个生命周期回调的调用时机与完整流转
+- 理解四种启动模式（standard/singleTop/singleTask/singleInstance）的差异与适用场景
+- 学会用Intent Flags动态控制任务栈行为
+- 掌握Activity被回收后的状态保存与恢复机制
+</Objectives>
+
+## 直觉引入
+
+Activity是Android四大组件之首，理解它就像理解一栋楼里每个房间的「开关灯」规则。一个Activity从创建到销毁，要经历一系列状态切换（不可见→可见→可交互→半遮挡→不可见→销毁），每个状态切换都有一个回调通知你，让你在恰当时机做初始化、释放、恢复。而启动模式则决定了「同一个Activity在任务栈里有几个实例、怎么复用」，是控制页面栈结构的关键。
+
+<AdaeActivityLifecycleDiagram />
+
+## 七个生命周期回调
+
+```text
+首次启动:     onCreate → onStart → onResume
+弹半透明页:    onResume → onPause → (回) onResume
+跳转全覆盖页:  onResume → onPause → onStop → (回) onRestart → onStart → onResume
+退出销毁:     onResume → onPause → onStop → onDestroy
+```
+
+| 回调 | 时机 | 典型操作 |
+|------|------|---------|
+| `onCreate` | 正在创建 | setContentView、初始化数据 |
+| `onStart` | 即将可见 | 注册广播、开始动画 |
+| `onResume` | 可见可交互 | 恢复播放、开始传感器 |
+| `onPause` | 部分遮挡 | 暂停动画、释放相机 |
+| `onStop` | 完全不可见 | 停网络请求、写数据库 |
+| `onDestroy` | 正在销毁 | 注销监听、释放资源 |
+| `onRestart` | 停止态重启 | onRestart → onStart |
+
+<Callout type="trap">
+**误区**：在 `onPause` 里做耗时操作。新Activity的 `onResume` 要等旧Activity的 `onPause` 执行完才调用，`onPause` 耗时会拖延新页面显示造成卡顿，严重时ANR。耗时操作应放到 `onStop` 或 `onSaveInstanceState` 之后。
+</Callout>
+
+## 四种启动模式
+
+```text
+standard       每次 startActivity 都新建实例，默认
+singleTop      栈顶复用：已在栈顶 → onNewIntent，不在栈顶 → 仍新建
+singleTask     栈内单例：已存在 → 清其上方 + onNewIntent
+singleInstance 独占任务栈，整个系统唯一
+```
+
+| 模式 | 特点 | 适用场景 |
+|------|------|---------|
+| `standard` | 每次新建 | 普通页面 |
+| `singleTop` | 栈顶复用 | 推送点击页、详情页防重复 |
+| `singleTask` | 栈内单例 | 主界面、浏览器首页 |
+| `singleInstance` | 独占栈 | 系统级通话页、闹钟页 |
+
+## Intent Flags 动态控制
+
+```text
+FLAG_ACTIVITY_NEW_TASK          新任务栈启动（配合 taskAffinity）
+FLAG_ACTIVITY_CLEAR_TOP          清掉目标及上方 Activity 再启动
+FLAG_ACTIVITY_REORDER_TO_FRONT   已存在则移到栈顶不新建
+FLAG_ACTIVITY_NO_HISTORY         启动后不留栈（如登录页）
+```
+
+<Callout type="insight">
+**核心理念**：静态行为用 `launchMode`（清单声明，固定不变），运行时动态决策用 Intent Flags（代码设置，更灵活）。组合 `CLEAR_TOP + NEW_TASK + singleTop` 能实现「回到唯一首页并清栈」的常见需求。
+</Callout>
+
+## 状态保存与恢复
+
+```text
+回收/旋转:  onSaveInstanceState(Bundle) → 进程被杀 → 重建
+重建时:     onCreate(Bundle) 或 onRestoreInstanceState(Bundle) 读回
+```
+
+系统默认保存View层级状态（如EditText文本，前提View有id）。重要数据应持久化到数据库/文件，Bundle只适合轻量临时状态。
+
+<Exercises>
+**问题 1**：Activity的生命周期有哪七个回调？分别在什么时机被调用？
+
+<Answer>
+Activity七个生命周期回调：①onCreate——Activity正在被创建，做初始化（setContentView、初始化数据），此时不可见。②onStart——Activity正在被启动，即将变为可见，但还不能交互。③onResume——Activity变为可见且可与用户交互，位于前台。④onPause——Activity正在停止，部分被遮挡，部分可见但失去焦点不能交互，可做轻量存储但忌讳耗时。⑤onStop——Activity完全不可见（被新Activity完全覆盖或切到后台），可做较重的资源释放。⑥onDestroy——Activity正在被销毁，做最终回收、注销广播等。⑦onRestart——Activity从停止态重新启动前调用，随后接onStart。完整流程：首次启动 onCreate→onStart→onResume；切到半透明Activity onPause→（回来）onResume；切到完全覆盖Activity onPause→onStop→（回来）onRestart→onStart→onResume；销毁 onPause→onStop→onDestroy。
+</Answer>
+
+**问题 2**：Activity的四种启动模式各有什么特点？分别适合什么场景？
+
+<Answer>
+四种launchMode：①standard标准模式——每次startActivity都新建实例并入栈，谁启动就入谁的栈，默认模式，栈内可重复，适合普通页面。②singleTop栈顶复用——若目标Activity已在任务栈顶则复用并回调onNewIntent，否则新建实例；不在栈顶仍会新建。适合推送通知点击页、消息详情页（避免连续点击产生多个实例）。③singleTask栈内单例——整个系统只有一个实例，启动时若已存在则清掉它上方的所有Activity并回调onNewIntent，常配合taskAffinity用。适合主界面、浏览器主界面（保证回到唯一的首页）。④singleInstance单实例——Activity独占一个任务栈，整个系统唯一且独立Back栈，其他Activity不能进入它的栈。适合系统级通话页、闹钟响铃页。补充：Intent Flags（如FLAG_ACTIVITY_NEW_TASK、FLAG_ACTIVITY_CLEAR_TOP）可在代码里动态覆盖launchMode，比清单声明更灵活。
+</Answer>
+
+**问题 3**：Activity被系统回收后如何恢复状态？onSaveInstanceState与onRestoreInstanceState如何配合？
+
+<Answer>
+当系统内存不足时，处于onStop态的Activity可能被回收，恢复时需保存与恢复状态：①保存——onSaveInstanceState在onStop之前（API 28+在onStop后）调用，系统默认保存View的层级状态（如EditText文本、ScrollView位置，前提是View有id）。开发者可重写它存入key-value Bundle。②恢复——有两种途径：onCreate的Bundle参数（非null表示是恢复重建），或onRestoreInstanceState（仅在重建时调用，Bundle一定非null，比onCreate里判空更清晰）。③流程：正常旋转或回收重建 → onSaveInstanceState存Bundle → 进程被杀 → 重建时onCreate(Bundle)/onRestoreInstanceState(Bundle)读回。④配置变更（如屏幕旋转）默认会重建Activity，可在manifest用android:configChanges声明自行处理避免重建，但复杂场景仍建议让系统重建。⑤防丢失：重要数据应持久化（数据库/文件），Bundle只适合轻量临时状态，因为进程被杀Bundle也可能丢。
+</Answer>
+
+**问题 4**：onPause和onStop有什么区别？为什么onPause里不能做耗时操作？
+
+<Answer>
+onPause与onStop的区别：①可见性——onPause时Activity部分可见（被透明/半透明Activity遮挡）但失去焦点不能交互；onStop时Activity完全不可见（被完全不透明Activity覆盖或切到后台）。②调用条件——弹半透明对话框只触发onPause不触发onStop；完全跳转新Activity才触发onStop。③资源释放程度——onPause适合做轻量操作（停动画、释放独占资源如相机），onStop可做较重释放（停网络请求、写数据库、注销广播）。④为什么不耗时——新Activity的onResume要等旧Activity的onPause执行完才调用（onPause→新onCreate→…→新onResume→旧onStop），若onPause耗时会拖延新Activity显示造成卡顿，严重时ANR。正确做法：耗时操作放到onStop或onSaveInstanceState之后，onPause只做最必要的快速释放。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="七回调">onCreate/onStart/onResume/onPause/onStop/onDestroy/onRestart，覆盖Activity从创建到销毁的完整状态流转。</GlossaryItem>
+<GlossaryItem term="launchMode">standard/singleTop/singleTask/singleInstance四种启动模式，决定Activity实例在任务栈中的创建与复用规则。</GlossaryItem>
+<GlossaryItem term="任务栈">Back Stack，管理Activity实例的回退栈，启动模式控制实例如何入栈与复用。</GlossaryItem>
+<GlossaryItem term="onNewIntent">启动模式复用已存在实例时回调，用于接收新的Intent数据。</GlossaryItem>
+<GlossaryItem term="onSaveInstanceState">Activity被回收/配置变更前调用，保存轻量临时状态到Bundle，重建时恢复。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,126 @@
+---
+title: "性能优化"
+type: C
+section: "Android开发"
+order: 8
+description: "布局优化（层级/过度绘制）、内存优化（泄漏/OOM/Bitmap）、卡顿ANR、耗电与稳定性"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { AdaePerformanceOptimizeDiagram } from "@/components/mdx/android-art-exploration/diagrams/adae-performance-optimize";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握布局优化手段（include/merge/ViewStub/ConstraintLayout）
+- 理解内存泄漏原因与排查（LeakCanary/Profiler）
+- 掌握Bitmap采样避免OOM
+- 理解ANR类型、阈值与避免方法
+</Objectives>
+
+## 直觉引入
+
+性能优化是Android开发的「体检」环节——前三维度（组件/View/消息）用错或用坏，最终都转化为性能问题：布局层级深→掉帧，内存泄漏→OOM，主线程阻塞→ANR。性能优化就是从布局、内存、卡顿、耗电四个维度做系统化调优。
+
+<AdaePerformanceOptimizeDiagram />
+
+## 布局优化
+
+```text
+目标: 减少层级（measure/layout递归深度，每多一层耗时翻倍）
+
+手段:
+  ConstraintLayout   扁平化复杂布局，替代多层嵌套
+  include            复用布局片段（标题栏）
+  merge              消除 include 的多余一层根 ViewGroup
+  ViewStub           延迟加载（0尺寸不参与measure），需要时 inflate
+  移除冗余 background 避免过度绘制（同位置多层不透明背景）
+  检测: 开发者选项「调试GPU过度绘制」目标 ≤ 2x
+```
+
+<Callout type="trap">
+**误区**：RelativeLayout比LinearLayout好。RelativeLayout本身measure两次（横向一次纵向一次），简单横向排列用LinearLayout（带weight也measure两次）可能更优。选型看场景，能用ConstraintLayout扁平化最佳。
+</Callout>
+
+## 内存优化
+
+```text
+内存泄漏（长生命周期对象持有短生命周期对象）:
+  ① static 持 Context/View
+  ② 非静态内部类（Handler/Runnable/AsyncTask）隐式持外部Activity
+  ③ 未注销 BroadcastReceiver/EventBus/监听
+  ④ 属性动画无限循环未 cancel
+
+排查: LeakCanary（自动监控）→ Profiler Heap Dump → MAT 找 GC Root 引用链
+预防: 弱/软引用、onDestroy 清回调/动画/监听、单例用 Application Context
+```
+
+## Bitmap 与 OOM
+
+```text
+大Bitmap避免OOM（采样压缩）:
+  ① inJustDecodeBounds=true 读尺寸不分配像素
+  ② 算 inSampleSize = 2的幂（原图/目标）
+  ③ inJustDecodeBounds=false 用 inSampleSize decode
+  ④ inPreferredConfig=RGB_565（2字节）省一半
+  ⑤ LruCache 内存 + 磁盘缓存，避免重复 decode
+  → 这是 Glide/Picasso 的底层原理
+```
+
+<Callout type="insight">
+**核心理念**：OOM的本质是「需要的内存超过可用堆」。Bitmap采样压缩的核心是「只解码显示需要的尺寸」——先读尺寸（不分配像素），算采样率，再按采样率解码。配合LruCache避免重复解码，是图片加载库的基础。
+</Callout>
+
+## 卡顿 / ANR / 耗电
+
+```text
+卡顿: 主线程 16ms 内未完成一帧 → 掉帧
+  原因: 主线程 IO/计算、布局层级深、过度绘制
+  检测: Systrace 定位掉帧、GPU 呈现模式分析
+
+ANR 阈值:
+  输入事件 5s 未处理
+  前台广播 10s / 后台广播 60s 未完成
+  前台 Service 20s / 后台 Service 200s
+  排查: traces.txt 看各线程栈、BlockCanary 监控
+
+耗电: 后台/定位/唤醒
+  JobScheduler / WorkManager 合并任务、约束调度
+  电量 Profiler 分析
+```
+
+<Exercises>
+**问题 1**：如何优化布局层级？include/merge/ViewStub各起什么作用？
+
+<Answer>
+布局优化目标：减少层级（降低measure/layout递归深度，每多一层measure/layout时间翻倍）。手段：①减少嵌套——用ConstraintLayout（约束布局，可扁平化复杂布局）替代多层嵌套的LinearLayout/RelativeLayout，RelativeLayout本身measure两次也要慎用。②include——复用布局片段，把公共部分（如标题栏）抽成独立XML用<include layout/>引入，减少重复。但include会多一层根ViewGroup。③merge——作为include的根标签，消除include带来的多余一层ViewGroup，<merge>本身不生成View，其子View直接加到父容器。④ViewStub——延迟加载，ViewStub是一个轻量占位（0尺寸不参与measure/layout），需要时调setVisibility(VISIBLE)或inflate()才真正加载布局，适合「不常用」的UI（如错误页、加载更多），避免一开始就inflate浪费。⑤其他：避免过度绘制（同位置多层不透明背景叠加，用开发者选项「调试GPU过度绘制」检测，目标≤2x），用<Space>代替空Margin占位。原则：层级越浅越快，能用扁平约束就别套娃。
+</Answer>
+
+**问题 2**：Android内存泄漏的常见原因有哪些？如何排查和预防？
+
+<Answer>
+常见内存泄漏原因（长生命周期对象持有短生命周期对象导致无法回收）：①静态持有Context/View——static变量或单例持有Activity/View，Activity销毁后仍被引用无法回收。②内部类隐式引用——非静态内部类（含匿名内部类如Handler、Runnable、AsyncTask）隐式持有外部Activity引用，若任务未完成（如延迟Handler消息未移除）则Activity泄漏。应改静态内部类+WeakReference，或onDestroy调removeCallbacksAndMessages。③未注销资源——BroadcastReceiver/EventBus/ContentObserver注册后未unregister，传感器/监听未释放。④动画未取消——属性动画无限循环未cancel，持View导致泄漏。⑤静态集合累积——static Map/List只加不清。排查：①LeakCanary——自动监控Activity/Fragment销毁后是否被引用，dump heap分析引用链，开发期必备。②Android Studio Profiler——Heap Dump查看对象持有链，Memory Monitor看内存曲线。③MAT——分析hprof找GC Root引用链。预防：短生命周期对象用弱/软引用，onDestroy清理回调/动画/监听，单例用Application Context，用WeakReference包装Handler持有的Activity。onTrimMemory响应系统内存压力主动释放缓存。
+</Answer>
+
+**问题 3**：OOM（OutOfMemoryError）常见于什么场景？如何加载大Bitmap避免OOM？
+
+<Answer>
+OOM常见场景：①加载大Bitmap——一张图解码到内存=宽×高×每个像素字节数（ARGB_8888=4字节），高分辨率原图直接decode易超内存。②长列表累积——ListView/RecyclerView缓存大量Bitmap。③内存泄漏长期累积——泄漏导致可用堆越来越少最终OOM。加载大Bitmap避免OOM的核心是「采样压缩」：①先读尺寸不读像素——BitmapFactory.Options设inJustDecodeBounds=true，decode后只拿到outWidth/outHeight不分配像素内存。②计算采样率——根据目标显示尺寸（ImageView的宽高）算inSampleSize = 2的幂（原图/目标取对数），如原图4000×3000显示200×150则inSampleSize=16。③真正解码——inJustDecodeBounds=false，用inSampleSize decode得到压缩后的Bitmap。④像素格式——inPreferredConfig=RGB_565（2字节/像素）比ARGB_8888（4字节）省一半，无透明通道时可用。⑤缓存——LruCache内存缓存+磁盘缓存（DiskLruCache），避免重复decode。⑥及时回收——旧Bitmap用recycle()（旧版本），页面销毁清缓存。⑦大图区域显示用BitmapRegionDecoder。这套 BitmapFactory采样+LruCache是图片加载库（Glide/Picasso）的底层原理。
+</Answer>
+
+**问题 4**：什么是ANR？常见的ANR类型和阈值是什么？如何避免？
+
+<Answer>
+ANR（Application Not Responding）应用无响应：系统在主线程长时间无法响应用户输入或系统消息时弹出强制关闭/等待对话框。类型与阈值：①输入事件超时——主线程5秒内未处理完输入事件（触摸/按键）。②BroadcastReceiver超时——前台广播10秒、后台广播60秒未onReceive完成。③Service超时——前台Service 20秒、后台Service 200秒未执行完。④ContentProvider超时——publish 10秒。常见原因：①主线程做耗时操作——IO（文件/数据库读写）、网络请求、CPU密集计算（JSON解析/大Bitmap解码）放主线程。②主线程被锁阻塞——synchronized等锁、sleep/wait。③Binder调用阻塞——主线程同步调跨进程方法对方慢。避免：①耗时操作切子线程——用协程/线程池/AsyncTask，主线程只做UI。②StrictMode——开发期开启检测主线程的磁盘/网络违规（detectDiskReads/detectNetwork）。③异步Binder——跨进程调用用oneway或异步。④优化布局——避免主线程measure/layout耗时。⑤避免主线程持锁。排查：ANR时系统生成traces.txt（/data/anr/），可看各线程栈定位卡在哪个方法；用BlockCanary监控主线程卡顿。本质：保证主线程消息链路顺畅，任何阻塞超阈值都触发ANR。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="布局优化">减少层级与过度绘制，手段含include/merge/ViewStub/ConstraintLayout，目标层级浅、过度绘制≤2x。</GlossaryItem>
+<GlossaryItem term="内存泄漏">长生命周期对象持有短生命周期对象导致无法回收，常见于static引用、内部类、未注销监听。</GlossaryItem>
+<GlossaryItem term="LeakCanary">自动监控Activity/Fragment销毁后是否被引用的内存泄漏检测库，开发期必备。</GlossaryItem>
+<GlossaryItem term="inSampleSize">Bitmap采样率，先读尺寸算2的幂采样率再解码，避免大图OOM，是图片库底层原理。</GlossaryItem>
+<GlossaryItem term="ANR">主线程长时间无法响应导致的应用无响应，阈值输入5s/前台广播10s/前台Service 20s。</GlossaryItem>
+</Glossary>
