@@ -2135,6 +2135,16 @@ import { drlExplorationQuestions } from "./review/drl-exploration";
 import { drlRewardDesignQuestions } from "./review/drl-reward-design";
 import { drlApplicationsQuestions } from "./review/drl-applications";
 import { drlFinalReviewQuestions } from "./review/drl-final-review";
+import { tcgLearningMapQuestions } from "./review/tcg-learning-map";
+import { tcgLanguageFoundationsQuestions } from "./review/tcg-language-foundations";
+import { tcgNeuralNetworksQuestions } from "./review/tcg-neural-networks";
+import { tcgEmbeddingsQuestions } from "./review/tcg-embeddings";
+import { tcgTransformersQuestions } from "./review/tcg-transformers";
+import { tcgTrainingProcessQuestions } from "./review/tcg-training-process";
+import { tcgPredictionGenerationQuestions } from "./review/tcg-prediction-generation";
+import { tcgContextAttentionQuestions } from "./review/tcg-context-attention";
+import { tcgFutureImplicationsQuestions } from "./review/tcg-future-implications";
+import { tcgFinalReviewQuestions } from "./review/tcg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4305,6 +4315,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...drlRewardDesignQuestions,
   ...drlApplicationsQuestions,
   ...drlFinalReviewQuestions,
+  ...tcgLearningMapQuestions,
+  ...tcgLanguageFoundationsQuestions,
+  ...tcgNeuralNetworksQuestions,
+  ...tcgEmbeddingsQuestions,
+  ...tcgTransformersQuestions,
+  ...tcgTrainingProcessQuestions,
+  ...tcgPredictionGenerationQuestions,
+  ...tcgContextAttentionQuestions,
+  ...tcgFutureImplicationsQuestions,
+  ...tcgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

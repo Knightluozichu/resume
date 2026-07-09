@@ -261,6 +261,7 @@ export const BOOK_ORDER = [
   "pattern-recognition-ml",
   "rl-deep-learning-c",
   "deep-reinforcement-learning",
+  "this-is-chatgpt",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -462,6 +463,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "pattern-recognition-ml": "模式识别与机器学习（PRML）",
   "rl-deep-learning-c": "强化学习与深度学习：通过C语言模拟",
   "deep-reinforcement-learning": "深度强化学习",
+  "this-is-chatgpt": "这就是 ChatGPT",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1094,6 +1096,7 @@ export const SECTION_ORDER = [
   "网络",
   "编译原理",
   "人工智能与机器学习",
+  "AI Agent与大模型应用",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

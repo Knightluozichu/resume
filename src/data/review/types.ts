@@ -2258,7 +2258,17 @@ export type ReviewChapterSlug =
   | "drl-exploration"
   | "drl-reward-design"
   | "drl-applications"
-  | "drl-final-review";
+  | "drl-final-review"
+  | "tcg-learning-map"
+  | "tcg-language-foundations"
+  | "tcg-neural-networks"
+  | "tcg-embeddings"
+  | "tcg-transformers"
+  | "tcg-training-process"
+  | "tcg-prediction-generation"
+  | "tcg-context-attention"
+  | "tcg-future-implications"
+  | "tcg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4521,6 +4531,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "drl-reward-design": "奖励设计与环境工程",
   "drl-applications": "实战应用：游戏/机器人/自动驾驶",
   "drl-final-review": "全书复习与知识整合",
+  "tcg-learning-map": "这就是ChatGPT·知识全景图",
+  "tcg-language-foundations": "语言与意义的基础",
+  "tcg-neural-networks": "神经网络与机器学习",
+  "tcg-embeddings": "词嵌入与语义空间",
+  "tcg-transformers": "Transformer架构",
+  "tcg-training-process": "ChatGPT的训练过程",
+  "tcg-prediction-generation": "预测与文本生成",
+  "tcg-context-attention": "上下文与注意力机制",
+  "tcg-future-implications": "AI的未来与影响",
+  "tcg-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
