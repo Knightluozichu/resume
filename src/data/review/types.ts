@@ -1918,7 +1918,17 @@ export type ReviewChapterSlug =
   | "hpm-scaling-ha"
   | "hpm-os-tuning"
   | "hpm-monitoring"
-  | "hpm-final-review";
+  | "hpm-final-review"
+  | "ddi-learning-map"
+  | "ddi-foundations"
+  | "ddi-replication"
+  | "ddi-partitioning"
+  | "ddi-transactions"
+  | "ddi-consistency-consensus"
+  | "ddi-derived-data"
+  | "ddi-batch-stream"
+  | "ddi-future-directions"
+  | "ddi-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3841,6 +3851,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "hpm-os-tuning": "操作系统与硬件调优",
   "hpm-monitoring": "监控与诊断",
   "hpm-final-review": "全书复习",
+  "ddi-learning-map": "全书学习地图",
+  "ddi-foundations": "数据系统基础",
+  "ddi-replication": "复制",
+  "ddi-partitioning": "分区",
+  "ddi-transactions": "事务",
+  "ddi-consistency-consensus": "一致性与共识",
+  "ddi-derived-data": "衍生数据",
+  "ddi-batch-stream": "批处理与流处理",
+  "ddi-future-directions": "未来方向",
+  "ddi-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

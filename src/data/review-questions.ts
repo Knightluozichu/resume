@@ -1795,6 +1795,16 @@ import { hpmScalingHaQuestions } from "./review/hpm-scaling-ha";
 import { hpmOsTuningQuestions } from "./review/hpm-os-tuning";
 import { hpmMonitoringQuestions } from "./review/hpm-monitoring";
 import { hpmFinalReviewQuestions } from "./review/hpm-final-review";
+import { ddiLearningMapQuestions } from "./review/ddi-learning-map";
+import { ddiFoundationsQuestions } from "./review/ddi-foundations";
+import { ddiReplicationQuestions } from "./review/ddi-replication";
+import { ddiPartitioningQuestions } from "./review/ddi-partitioning";
+import { ddiTransactionsQuestions } from "./review/ddi-transactions";
+import { ddiConsistencyConsensusQuestions } from "./review/ddi-consistency-consensus";
+import { ddiDerivedDataQuestions } from "./review/ddi-derived-data";
+import { ddiBatchStreamQuestions } from "./review/ddi-batch-stream";
+import { ddiFutureDirectionsQuestions } from "./review/ddi-future-directions";
+import { ddiFinalReviewQuestions } from "./review/ddi-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3625,6 +3635,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...hpmOsTuningQuestions,
   ...hpmMonitoringQuestions,
   ...hpmFinalReviewQuestions,
+  ...ddiLearningMapQuestions,
+  ...ddiFoundationsQuestions,
+  ...ddiReplicationQuestions,
+  ...ddiPartitioningQuestions,
+  ...ddiTransactionsQuestions,
+  ...ddiConsistencyConsensusQuestions,
+  ...ddiDerivedDataQuestions,
+  ...ddiBatchStreamQuestions,
+  ...ddiFutureDirectionsQuestions,
+  ...ddiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
