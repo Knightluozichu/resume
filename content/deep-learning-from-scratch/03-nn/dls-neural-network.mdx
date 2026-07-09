@@ -1,0 +1,188 @@
+---
+title: "神经网络"
+type: B
+section: "人工智能与机器学习"
+order: 3
+description: "激活函数、前向传播的矩阵实现与 softmax 输出层"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DlsNeuralNetworkDiagram } from "@/components/mdx/deep-learning-from-scratch/diagrams/dls-neural-network";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解从感知机到神经网络的关键转变：可导激活函数
+- 掌握 sigmoid、ReLU、softmax 等激活函数的特点和适用场景
+- 掌握用矩阵运算实现三层神经网络前向传播的方法
+- 理解 softmax 函数及其数值稳定实现
+
+</Objectives>
+
+## 神经网络概述
+
+神经网络将感知机的阶跃函数替换为连续可导的激活函数，使权重可以通过梯度下降自动学习。本章聚焦前向传播——数据从输入层经隐藏层流向输出层的过程。
+
+<DlsNeuralNetworkDiagram />
+
+## 激活函数
+
+激活函数引入非线性，是神经网络区别于线性回归的关键。
+
+### 阶跃函数 vs sigmoid
+
+```python
+def step_function(x):
+    return np.array(x > 0, dtype=np.int)
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+```
+
+阶跃函数输出只有 0 和 1，sigmoid 输出 `(0, 1)` 区间的连续值，且处处可导。
+
+### ReLU
+
+```python
+def relu(x):
+    return np.maximum(0, x)
+```
+
+ReLU 在正区间梯度恒为 1，缓解梯度消失，是当前深度学习隐藏层的默认选择。
+
+<Callout type="info">
+
+**选择建议**：隐藏层用 ReLU（计算简单、缓解梯度消失），输出层用 softmax（多分类）或 sigmoid（二分类）或恒等函数（回归）。
+
+</Callout>
+
+## 前向传播的矩阵实现
+
+三层神经网络（输入层→隐藏层→输出层）的前向传播：
+
+```python
+def init_network():
+    network = {}
+    network['W1'] = np.random.randn(784, 100)  # 输入层→隐藏层
+    network['b1'] = np.random.randn(100)
+    network['W2'] = np.random.randn(100, 10)   # 隐藏层→输出层
+    network['b2'] = np.random.randn(10)
+    return network
+
+def forward(network, x):
+    W1, b1 = network['W1'], network['b1']
+    W2, b2 = network['W2'], network['b2']
+    a1 = np.dot(x, W1) + b1    # 隐藏层加权求和
+    z1 = sigmoid(a1)            # 隐藏层激活
+    a2 = np.dot(z1, W2) + b2   # 输出层加权求和
+    y = softmax(a2)             # 输出层激活
+    return y
+```
+
+关键点：
+
+- 偏置 `b` 通过广播加到每行
+- 激活函数对矩阵逐元素操作
+- 整个 mini-batch 一次性处理
+
+## softmax 函数
+
+softmax 将输出转为概率分布：
+
+```text
+yk = exp(ak) / Σ exp(ai)
+```
+
+```python
+def softmax(a):
+    c = np.max(a, axis=0)       # 数值稳定：减最大值
+    exp_a = np.exp(a - c)
+    sum_exp_a = np.sum(exp_a)
+    y = exp_a / sum_exp_a
+    return y
+```
+
+<Callout type="warning">
+
+**数值稳定性**：当 `ak` 很大时，`exp(ak)` 可能溢出。由于 softmax 有平移不变性，减去最大值不影响结果但避免溢出。这是工程实现中必须注意的细节。
+
+</Callout>
+
+## 输出层设计
+
+| 任务类型 | 输出层激活 | 损失函数 |
+|---------|-----------|---------|
+| 二分类 | sigmoid | 交叉熵 |
+| 多分类 | softmax | 交叉熵 |
+| 回归 | 恒等函数 | 均方误差 |
+
+<Glossary>
+
+<GlossaryItem term="激活函数">
+对神经网络层的加权求和结果做非线性变换的函数。常用：sigmoid（输出0-1，可导但易梯度消失）、ReLU（正区间梯度恒1，缓解消失，隐藏层默认）、tanh（输出-1到1）。激活函数引入非线性，是神经网络拟合复杂函数的关键。
+</GlossaryItem>
+
+<GlossaryItem term="sigmoid 函数">
+h(x) = 1/(1+e^(-x))，输出 (0,1) 区间连续值，处处可导。优点：输出可解释为概率。缺点：输入很大/很小时梯度接近0（梯度消失），输出不以0为中心。适用于二分类输出层。
+</GlossaryItem>
+
+<GlossaryItem term="ReLU（Rectified Linear Unit）">
+h(x) = max(0, x)，x>0 时输出 x，x≤0 时输出 0。优点：计算简单、正区间梯度恒为1（缓解梯度消失）、产生稀疏激活。缺点：负区间梯度为0（神经元死亡）。是深度学习隐藏层的默认激活函数。
+</GlossaryItem>
+
+<GlossaryItem term="softmax 函数">
+将任意实数向量转为概率分布：yk = exp(ak)/Σexp(ai)，输出满足非负且和为1。适用于多分类输出层。实现时需减去最大值保证数值稳定性。与交叉熵损失结合时反向传播梯度有简洁形式（y-t）。
+</GlossaryItem>
+
+<GlossaryItem term="前向传播">
+数据从输入层经隐藏层流向输出层的过程。每层执行 Affine（矩阵乘法+偏置）和激活函数。矩阵形式：a(1)=h(X·W1+B1) → a(2)=softmax(a(1)·W2+B2)。用 NumPy 向量化实现可一次性处理整个 mini-batch。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+神经网络中常用的激活函数有哪些？各有什么特点和适用场景？
+
+<Answer>
+
+常用激活函数：①阶跃函数——最简单但不可导，仅用于感知机。②sigmoid h(x)=1/(1+e^(-x))——输出(0,1)区间，平滑可导，适用于二分类输出层。缺点是梯度消失和输出不以0为中心。③tanh——输出(-1,1)区间，以0为中心，但仍有梯度消失。④ReLU h(x)=max(0,x)——计算简单，正区间梯度恒为1缓解梯度消失，产生稀疏激活，是隐藏层默认选择。缺点是负区间梯度为0（神经元死亡）。全书手写实现中，隐藏层用 ReLU，输出层用 softmax（多分类）或 sigmoid（二分类）。
+
+</Answer>
+
+### 问题 2
+
+如何用矩阵运算实现三层神经网络的前向传播？请写出关键公式和代码。
+
+<Answer>
+
+设输入 X(shape=(N,D))，权重 W1(shape=(D,H))、W2(shape=(H,O))，偏置 b1(shape=(H,))、b2(shape=(O,))。公式：①隐藏层 A1=np.dot(X,W1)+b1，Z1=sigmoid(A1)。②输出层 A2=np.dot(Z1,W2)+b2，Z2=softmax(A2)。关键点：①偏置加法利用广播——b1 形状(H,)自动广播到(N,H)。②激活函数对矩阵逐元素操作。③整个 mini-batch 一次性处理，无需 for 循环。④权重 W1 的行数等于输入维度，列数等于隐藏层神经元数。这种矩阵化实现是全书神经网络代码的基础模式。
+
+</Answer>
+
+### 问题 3
+
+softmax 函数的作用是什么？实现时为什么要减去最大值？写出代码。
+
+<Answer>
+
+softmax 将任意实数向量转换为概率分布：yk=exp(ak)/Σexp(ai)，输出满足非负且和为1，适用于多分类输出层。实现时减去最大值的原因：数值稳定性——当 ak 很大时 exp(ak) 可能溢出。由于 softmax 有平移不变性（分子分母同除以 exp(max) 后结果不变），减去最大值不影响输出但避免溢出。代码：`def softmax(a): c=np.max(a); exp_a=np.exp(a-c); return exp_a/np.sum(exp_a)`。对于批量输入需沿类别轴：`c=np.max(a,axis=1,keepdims=True)`，`y=exp_a/np.sum(exp_a,axis=1,keepdims=True)`，keepdims=True 保持形状以便广播。
+
+</Answer>
+
+### 问题 4
+
+神经网络的损失函数（交叉熵误差）如何定义？为什么用交叉熵而非均方误差做分类？
+
+<Answer>
+
+交叉熵误差定义：L=-Σtk·log(yk)，其中 tk 是标签的 one-hot 编码，yk 是 softmax 输出。mini-batch 版本除以 N。为什么用交叉熵而非 MSE 做分类：①梯度形式——交叉熵+softmax 的反向传播梯度为 yk-tk，简洁且与预测误差成正比，学习效率高。MSE+softmax 的梯度含 softmax 导数项，形式复杂且预测值接近0或1时梯度趋近0（学习停滞）。②概率视角——交叉熵衡量两个概率分布的距离，与分类任务的概率输出语义一致。MSE 假设高斯噪声，适用于回归。③收敛速度——交叉熵梯度始终与误差成正比，即使预测很自信但错误时梯度仍然大，能快速纠正。代码中加 delta=1e-7 防止 log(0)。
+
+</Answer>
+
+</Exercises>

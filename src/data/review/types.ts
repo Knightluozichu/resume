@@ -2168,7 +2168,17 @@ export type ReviewChapterSlug =
   | "slm-svm"
   | "slm-boosting"
   | "slm-em-hmm"
-  | "slm-final-review";
+  | "slm-final-review"
+  | "dls-learning-map"
+  | "dls-python-numpy"
+  | "dls-perceptron"
+  | "dls-neural-network"
+  | "dls-backpropagation"
+  | "dls-learning-techniques"
+  | "dls-cnn"
+  | "dls-deep-learning"
+  | "dls-applications"
+  | "dls-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4341,6 +4351,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "slm-boosting": "提升方法",
   "slm-em-hmm": "EM算法与隐马尔可夫模型",
   "slm-final-review": "全书复习与知识整合",
+  "dls-learning-map": "全书学习地图",
+  "dls-python-numpy": "Python与NumPy基础",
+  "dls-perceptron": "感知机",
+  "dls-neural-network": "神经网络",
+  "dls-backpropagation": "反向传播实现",
+  "dls-learning-techniques": "学习技巧",
+  "dls-cnn": "卷积神经网络",
+  "dls-deep-learning": "深度学习实践",
+  "dls-applications": "深度学习应用",
+  "dls-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

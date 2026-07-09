@@ -252,6 +252,7 @@ export const BOOK_ORDER = [
   "illustrated-dl",
   "machine-learning-watermelon",
   "statistical-learning-methods",
+  "deep-learning-from-scratch",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -444,6 +445,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "illustrated-dl": "图解深度学习",
   "machine-learning-watermelon": "机器学习（西瓜书）",
   "statistical-learning-methods": "统计学习方法",
+  "deep-learning-from-scratch": "深度学习入门：基于Python的理论与实现",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

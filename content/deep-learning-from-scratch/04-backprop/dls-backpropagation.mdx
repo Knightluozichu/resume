@@ -1,0 +1,199 @@
+---
+title: "反向传播实现"
+type: B
+section: "人工智能与机器学习"
+order: 4
+description: "计算图、链式法则与梯度的高效计算"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DlsBackpropagationDiagram } from "@/components/mdx/deep-learning-from-scratch/diagrams/dls-backpropagation";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解计算图的概念及其在反向传播中的优势
+- 掌握加法节点和乘法节点的反向传播规则
+- 掌握链式法则在复合函数梯度计算中的应用
+- 能够用 NumPy 实现全连接层（Affine 层）的前向和反向传播
+
+</Objectives>
+
+## 反向传播概述
+
+反向传播是神经网络自动学习权重的核心算法。它通过计算图和链式法则，高效地计算损失函数对每个参数的梯度。本章从最简单的计算图开始，逐步推广到神经网络层。
+
+<DlsBackpropagationDiagram />
+
+## 计算图
+
+计算图用节点表示运算、用边表示数据流动。例如 `z = (x + y)²` 的计算图为：
+
+```text
+x ──┐
+    ├── (+) ── a ── (²) ── z
+y ──┘
+```
+
+<Callout type="info">
+
+**计算图的优势**：①将复杂计算分解为简单运算的组合；②每个节点只需关心自己的局部导数；③是自动微分（autograd）的数据结构基础；④反向传播复用前向计算的中间结果。
+
+</Callout>
+
+## 加法节点和乘法节点
+
+### 加法节点：梯度原样传递
+
+`z = x + y`，则 `∂z/∂x = 1, ∂z/∂y = 1`，上游梯度直接传给两个输入：
+
+```python
+class AddLayer:
+    def forward(self, x, y):
+        return x + y
+    def backward(self, dout):
+        return dout, dout
+```
+
+### 乘法节点：梯度翻转相乘
+
+`z = x · y`，则 `∂z/∂x = y, ∂z/∂y = x`，上游梯度乘以另一个输入：
+
+```python
+class MulLayer:
+    def forward(self, x, y):
+        self.x = x
+        self.y = y
+        return x * y
+    def backward(self, dout):
+        dx = dout * self.y  # 翻转：乘以 y
+        dy = dout * self.x  # 翻转：乘以 x
+        return dx, dy
+```
+
+## 链式法则
+
+复合函数的导数等于各层导数的乘积。在反向传播中，梯度沿计算图逐层传递，每层用链式法则将上游梯度乘以本层局部导数。
+
+以 `z = (x + y)²` 为例：
+
+```text
+前向：a = x + y → z = a²
+反向：∂L/∂a = ∂L/∂z · 2a
+      ∂L/∂x = ∂L/∂a · 1 = 2(x+y)
+      ∂L/∂y = ∂L/∂a · 1 = 2(x+y)
+```
+
+<Callout type="tip">
+
+**关键**：每个节点只需知道自己的局部导数和上游传来的梯度，就能计算传给下游的梯度。这种「局部计算」使得即使计算图有数百层也能系统性地计算所有参数的梯度。
+
+</Callout>
+
+## 全连接层（Affine 层）实现
+
+全连接层是神经网络的基本构建块：`Y = X·W + B`
+
+```python
+class Affine:
+    def forward(self, X):
+        self.X = X
+        return np.dot(X, self.W) + self.B
+
+    def backward(self, dY):
+        dW = np.dot(self.X.T, dY)       # (D,N)×(N,H) = (D,H)
+        dX = np.dot(dY, self.W.T)       # (N,H)×(H,D) = (N,D)
+        dB = np.sum(dY, axis=0)         # 沿 batch 求和
+        return dX
+```
+
+| 梯度 | 公式 | 解释 |
+|------|------|------|
+| dW | `np.dot(X.T, dY)` | 乘法节点翻转：X 转置乘以上游梯度 |
+| dX | `np.dot(dY, W.T)` | 乘法节点翻转：上游梯度乘 W 转置 |
+| dB | `np.sum(dY, axis=0)` | 加法节点：偏置对每个样本都加了，梯度沿 batch 累加 |
+
+## Softmax-with-Loss 层
+
+将 softmax 和交叉熵合并为一个层，简化反向传播——梯度直接为 `y - t`：
+
+```text
+反向传播梯度 = softmax 输出 - 标签
+```
+
+这是 softmax + 交叉熵组合的数学优势：梯度形式简洁，与预测误差成正比。
+
+<Glossary>
+
+<GlossaryItem term="计算图">
+用节点表示运算、用边表示数据流动的图结构。是反向传播和自动微分的基础。优势：将复杂计算分解为简单运算、每个节点只需局部导数、复用前向计算结果。现代深度学习框架的 autograd 都基于计算图。
+</GlossaryItem>
+
+<GlossaryItem term="链式法则">
+复合函数导数等于各层导数之积：∂L/∂x = ∂L/∂y · ∂y/∂x。在反向传播中梯度沿计算图逐层传递，每层将上游梯度乘以本层局部导数。是神经网络能高效计算数百层梯度的数学基础。
+</GlossaryItem>
+
+<GlossaryItem term="加法节点">
+计算图中执行加法运算的节点。反向传播规则：梯度原样传递。z=x+y 则 ∂z/∂x=1, ∂z/∂y=1，上游梯度直接传给两个输入。在 Affine 层中偏置的反向传播遵循此规则（沿 batch 求和）。
+</GlossaryItem>
+
+<GlossaryItem term="乘法节点">
+计算图中执行乘法运算的节点。反向传播规则：梯度翻转相乘。z=x·y 则 ∂z/∂x=y, ∂z/∂y=x，上游梯度乘以另一个输入值。在 Affine 层中权重的反向传播遵循此规则。
+</GlossaryItem>
+
+<GlossaryItem term="Affine 层">
+全连接层，执行 Y=X·W+B。前向用 np.dot 矩阵乘法+广播偏置。反向：dW=np.dot(X.T,dY)、dX=np.dot(dY,W.T)、dB=np.sum(dY,axis=0)。是神经网络的基本构建块。
+</GlossaryItem>
+
+<GlossaryItem term="Softmax-with-Loss">
+将 softmax 和交叉熵误差合并为一个层。反向传播梯度直接为 y-t（softmax输出减标签），形式简洁且与预测误差成正比。这是 softmax+交叉熵组合用于分类任务的数学优势。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+什么是计算图？用计算图表示反向传播有什么优势？
+
+<Answer>
+
+计算图是一种用节点和边表示数学运算的图结构：节点表示运算（加法、乘法、平方等），边表示数据流动。优势：①直观可视化——复杂计算被分解为简单运算的组合，每一步清晰可见。②局部计算——每个节点只需关心自己的输入输出和局部导数，不需要了解全局计算，大幅简化梯度推导。③自动微分基础——计算图是自动微分的数据结构基础，现代深度学习框架都基于它实现自动求导。④复用前向计算——反向传播沿着前向传播的计算图反向传递梯度，复用已计算的中间结果。本书通过构建计算图的加法层和乘法层等模块，从最简单的例子开始理解反向传播。
+
+</Answer>
+
+### 问题 2
+
+在计算图中，加法节点和乘法节点的反向传播规则分别是什么？
+
+<Answer>
+
+加法节点的反向传播规则：梯度原样传递。z=x+y，则 ∂z/∂x=1, ∂z/∂y=1，所以上游传来的梯度 dz 直接传给 x 和 y：dx=dz, dy=dz。直觉：加法只是把两个值合并，对各自的贡献是 1:1 的。乘法节点的反向传播规则：梯度翻转相乘。z=x·y，则 ∂z/∂x=y, ∂z/∂y=x，所以上游传来的梯度 dz 乘以另一个输入值：dx=dz·y, dy=dz·x。直觉：乘法中一个变量对结果的贡献取决于另一个变量的值。这两种基本节点的规则是构建所有复杂运算反向传播的基础。神经网络的全连接层本质上就是矩阵乘法加偏置，其反向传播遵循乘法和加法的组合规则。
+
+</Answer>
+
+### 问题 3
+
+链式法则（Chain Rule）在反向传播中如何应用？以 z = (x + y)² 为例说明。
+
+<Answer>
+
+链式法则：如果 y=f(g(x))，则 ∂y/∂x = ∂y/∂g · ∂g/∂x，即复合函数的导数等于各层导数的乘积。以 z=(x+y)² 为例，计算图：x,y→加法→a(=x+y)→平方→z。前向：a=x+y, z=a²。反向：①从 z 开始，∂L/∂z=1。②平方层局部导数 ∂z/∂a=2a，所以 ∂L/∂a=∂L/∂z·2a=2a=2(x+y)。③加法层局部导数 ∂a/∂x=1, ∂a/∂y=1，所以 ∂L/∂x=∂L/∂a·1=2(x+y)，∂L/∂y=∂L/∂a·1=2(x+y)。关键：每个节点只需知道自己的局部导数和上游传来的梯度，就能计算传给下游的梯度。这种局部计算使得即使计算图有数百层也能系统性计算所有参数梯度。
+
+</Answer>
+
+### 问题 4
+
+如何用 NumPy 实现全连接层（Affine 层）的前向和反向传播？写出关键代码并解释。
+
+<Answer>
+
+前向传播：`Y = np.dot(X, self.W) + self.B`，其中 X(N,D)、W(D,H)、B(H)，输出 Y(N,H)，偏置通过广播加到每行。反向传播：已知上游梯度 dY(N,H)。①dW=np.dot(X.T,dY)——X转置后与dY相乘，shape=(D,N)×(N,H)=(D,H)。②dB=np.sum(dY,axis=0)——对batch维度求和，因为偏置对每个样本都加了相同的B，梯度累加，shape=(H,)。③dX=np.dot(dY,W.T)——dY与W转置相乘，shape=(N,H)×(H,D)=(N,D)。解释：dW和dX分别遵循乘法节点的翻转规则（dW=X·dY对应∂Y/∂W=X，dX=dY·W对应∂Y/∂X=W），dB遵循加法节点的原样传递再沿batch求和。将多个Affine层与激活函数层串联即可构建完整神经网络反向传播。
+
+</Answer>
+
+</Exercises>

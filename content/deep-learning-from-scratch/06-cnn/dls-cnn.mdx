@@ -1,0 +1,179 @@
+---
+title: "卷积神经网络"
+type: A
+section: "人工智能与机器学习"
+order: 6
+description: "卷积运算、池化层与 im2col 优化"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DlsCnnDiagram } from "@/components/mdx/deep-learning-from-scratch/diagrams/dls-cnn";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解 CNN 相比全连接网络在图像处理上的三大优势
+- 掌握卷积运算的输出尺寸计算、填充和步幅的作用
+- 理解 im2col 优化技术将卷积转为矩阵乘法的原理
+- 掌握池化层的特点和 Max Pooling 的反向传播
+
+</Objectives>
+
+## CNN 概述
+
+卷积神经网络（CNN）是专为处理图像数据设计的网络架构。它通过卷积层和池化层替代全连接层，利用图像的局部相关性和空间不变性，大幅减少参数量并保留空间结构。
+
+<DlsCnnDiagram />
+
+## CNN vs 全连接网络
+
+| 特性 | 全连接网络 | CNN |
+|------|-----------|-----|
+| 参数量 | 巨大（每个连接独立权重） | 少（参数共享） |
+| 空间结构 | 展平破坏 | 保留 H×W 结构 |
+| 平移不变性 | 无 | 有（同一核在整图滑动） |
+| 适合数据 | 表格数据 | 图像数据 |
+
+<Callout type="info">
+
+**三大优势**：①参数共享——同一卷积核在所有位置使用相同权重；②平移不变性——特征无论出现在哪个位置都能被检测到；③保留空间结构——保持二维 H×W 结构，捕获局部模式。
+
+</Callout>
+
+## 卷积运算
+
+卷积运算是滤波器在输入图像上滑动，逐位置做逐元素乘加：
+
+```text
+输入 (C, H, W) ⊗ 滤波器 (FN, C, FH, FW) → 输出 (FN, OH, OW)
+```
+
+### 输出尺寸计算
+
+```text
+OH = (H + 2P - FH) / S + 1
+OW = (W + 2P - FW) / S + 1
+```
+
+其中 P 是填充量，S 是步幅。
+
+### 填充（Padding）
+
+在输入周围补 0，控制输出尺寸。当 `P = (FH-1)/2` 时输出尺寸 = 输入尺寸（same padding）。
+
+### 步幅（Stride）
+
+滤波器滑动间隔。`S=1` 逐像素滑动，`S=2` 每隔一个像素滑动，输出尺寸减半。
+
+## 池化层
+
+池化层缩小空间尺寸，减少计算量：
+
+| 特性 | 说明 |
+|------|------|
+| 类型 | Max Pooling（取最大值）/ Average Pooling（取平均值） |
+| 参数 | 无可学习参数 |
+| 通道 | 不改变通道数 |
+| 效果 | 缩小空间尺寸 + 平移鲁棒性 |
+
+## im2col 优化
+
+<Callout type="tip">
+
+**核心优化**：原始卷积运算是嵌套 for 循环，Python 极慢。im2col 将卷积运算转换为一次矩阵乘法，利用 NumPy/BLAS 高速计算。
+
+</Callout>
+
+im2col 工作原理：
+
+```text
+1. 将每个滑动窗口展平为一行 → 展开矩阵 (N×OH×OW, C×FH×FW)
+2. 滤波器展平为矩阵 (C×FH×FW, FN)
+3. 卷积 = np.dot(展开矩阵, 滤波器矩阵) → (N×OH×OW, FN)
+4. reshape 回 (N, FN, OH, OW)
+```
+
+代价是消耗更多内存，但矩阵乘法的速度优势远超内存开销。
+
+## 典型 CNN 结构
+
+```text
+输入(1,28,28) → Conv(16,5×5) → ReLU → Pool(2×2) → Conv(32,5×5) → ReLU → Pool(2×2) → Affine → softmax
+```
+
+前面的卷积层提取低级特征（边缘、纹理），后面的层组合出高级特征（物体部件）。
+
+<Glossary>
+
+<GlossaryItem term="卷积运算">
+滤波器在输入图像上滑动，逐位置做逐元素乘加的运算。输入 (C,H,W) 与滤波器 (FN,C,FH,FW) 卷积得到输出 (FN,OH,OW)。参数共享使参数量与输入尺寸无关，大幅少于全连接层。
+</GlossaryItem>
+
+<GlossaryItem term="参数共享">
+CNN 的核心优势之一。同一个卷积核在图像的所有位置使用相同的权重，使参数量 = FN×C×FH×FW（与输入尺寸无关），远少于全连接层。同时赋予网络平移不变性。
+</GlossaryItem>
+
+<GlossaryItem term="填充（Padding）">
+在输入周围补零以控制输出尺寸。当 P=(FH-1)/2（奇数滤波器）时输出尺寸=输入尺寸（same padding），保持空间大小不缩小。填充还能让边缘像素被充分处理。
+</GlossaryItem>
+
+<GlossaryItem term="步幅（Stride）">
+滤波器滑动的间隔。S=1 逐像素滑动，S=2 每隔一个像素滑动使输出尺寸减半。步幅用于下采样（替代池化），减少计算量。输出尺寸 OH=(H+2P-FH)/S+1。
+</GlossaryItem>
+
+<GlossaryItem term="im2col">
+将卷积运算转换为矩阵乘法的优化技术。将每个滑动窗口展平为矩阵的一行，滤波器展平为另一矩阵，卷积变为 np.dot 一次矩阵乘法。利用 NumPy/BLAS 高速计算，代价是消耗更多内存。
+</GlossaryItem>
+
+<GlossaryItem term="池化层">
+缩小空间尺寸的层。Max Pooling 取窗口最大值，Average Pooling 取平均值。特点：无参数、不改变通道数、缩小空间尺寸、增加平移鲁棒性。反向传播时 Max Pooling 将梯度只传给最大值位置。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+卷积神经网络（CNN）相比全连接网络在处理图像时有哪些优势？为什么？
+
+<Answer>
+
+三大优势：①参数共享——同一卷积核在所有位置使用相同权重，大幅减少参数量。全连接层每个输入位置有独立权重，参数量随输入尺寸爆炸。②平移不变性——卷积核在整幅图上滑动，特征无论出现在哪个位置都能被同一核检测到。全连接层无法感知空间平移。③保留空间结构——卷积层保持输入的二维(H×W)结构，捕获局部空间模式。全连接层将图像展平为一维向量，破坏空间邻接关系。原因：图像数据具有局部相关性（相邻像素关系密切）和空间不变性，CNN的卷积+池化设计正是为利用这两点而生。
+
+</Answer>
+
+### 问题 2
+
+卷积运算的输出尺寸如何计算？填充（padding）和步幅（stride）各有什么作用？
+
+<Answer>
+
+输出尺寸公式：OH=(H+2P-FH)/S+1，OW=(W+2P-FW)/S+1。其中H/W是输入高/宽，P是填充量，FH/FW是滤波器高/宽，S是步幅。填充的作用：在输入周围补0控制输出尺寸。当P=(FH-1)/2时输出尺寸=输入尺寸（same padding），保持空间大小不逐层缩小。填充还能让边缘像素被滤波器充分处理。步幅的作用：控制滤波器滑动间隔。S=1逐像素滑动，S=2每隔一个像素滑动使输出尺寸减半，用于下采样。实际使用：通常卷积层用stride=1+padding=same保持尺寸，池化层用stride=2做下采样。
+
+</Answer>
+
+### 问题 3
+
+什么是 im2col？为什么用它优化卷积运算？它是如何工作的？
+
+<Answer>
+
+im2col（image to column）是将卷积运算转换为矩阵乘法的技术。为什么需要：原始卷积运算是嵌套for循环，Python极慢。im2col将卷积变为一次np.dot矩阵乘法，利用NumPy/BLAS的高效矩阵运算。工作原理：①对于输入(N,C,H,W)和滤波器(FN,C,FH,FW)，im2col将每个滑动窗口位置的C×FH×FW个元素展平为一行，所有输出位置排列为矩阵的行，得到展开矩阵(N×OH×OW, C×FH×FW)。②滤波器也展平为(C×FH×FW, FN)。③卷积变为output=np.dot(im2col_input, filter_col)，结果reshape回(N,FN,OH,OW)。代价是消耗更多内存，但矩阵乘法速度优势远超内存开销。
+
+</Answer>
+
+### 问题 4
+
+池化层的作用和特点是什么？Max Pooling 的反向传播如何实现？
+
+<Answer>
+
+池化层的作用：①缩小空间尺寸——通常用2×2池化将H×W缩小为H/2×W/2。②无参数——没有可学习参数。③无通道变化——池化在通道维度独立操作。④平移鲁棒性——微小平移后max值可能不变。Max Pooling的反向传播：前向传播时记录最大值的位置，反向传播时将上游梯度只传给最大值位置，其余位置梯度为0。直觉：max操作的局部导数——对最大值位置导数为1，其余为0。池化层的反向传播比卷积层简单，因为每个窗口只有一个值被传递。
+
+</Answer>
+
+</Exercises>

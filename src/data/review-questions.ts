@@ -2045,6 +2045,16 @@ import { slmSvmQuestions } from "./review/slm-svm";
 import { slmBoostingQuestions } from "./review/slm-boosting";
 import { slmEmHmmQuestions } from "./review/slm-em-hmm";
 import { slmFinalReviewQuestions } from "./review/slm-final-review";
+import { dlsLearningMapQuestions } from "./review/dls-learning-map";
+import { dlsPythonNumpyQuestions } from "./review/dls-python-numpy";
+import { dlsPerceptronQuestions } from "./review/dls-perceptron";
+import { dlsNeuralNetworkQuestions } from "./review/dls-neural-network";
+import { dlsBackpropagationQuestions } from "./review/dls-backpropagation";
+import { dlsLearningTechniquesQuestions } from "./review/dls-learning-techniques";
+import { dlsCnnQuestions } from "./review/dls-cnn";
+import { dlsDeepLearningQuestions } from "./review/dls-deep-learning";
+import { dlsApplicationsQuestions } from "./review/dls-applications";
+import { dlsFinalReviewQuestions } from "./review/dls-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4125,6 +4135,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...slmBoostingQuestions,
   ...slmEmHmmQuestions,
   ...slmFinalReviewQuestions,
+  ...dlsLearningMapQuestions,
+  ...dlsPythonNumpyQuestions,
+  ...dlsPerceptronQuestions,
+  ...dlsNeuralNetworkQuestions,
+  ...dlsBackpropagationQuestions,
+  ...dlsLearningTechniquesQuestions,
+  ...dlsCnnQuestions,
+  ...dlsDeepLearningQuestions,
+  ...dlsApplicationsQuestions,
+  ...dlsFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
