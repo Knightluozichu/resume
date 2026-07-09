@@ -1,0 +1,277 @@
+---
+title: "Java Framework层"
+type: A
+section: "Android开发"
+order: 1
+description: "Zygote Java层、ClassLoader与插件化原理、Binder Java封装、Context机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DavJavaFrameworkDiagram } from "@/components/mdx/deep-android-volumes/diagrams/dav-java-framework";
+
+<Objectives>
+
+- 理解ZygoteInit在Java层的预加载与fork system_server流程
+- 掌握ClassLoader体系（BootClassLoader/PathClassLoader/DexClassLoader）与双亲委派模型
+- 理解插件化原理：Activity生命周期欺骗与LoadedApk动态加载
+- 掌握Binder Java层封装（IBinder/Binder/ServiceManager Java）与Context全局上下文
+
+</Objectives>
+
+## Java Framework层全景
+
+<DavJavaFrameworkDiagram />
+
+卷I从Java Framework层切入Android系统。核心包括：Zygote的Java层入口ZygoteInit如何预加载类和资源、fork出system_server；ClassLoader如何加载dex文件并支撑插件化；Binder Java层如何封装Native层能力；Context如何作为全局上下文桥接系统服务。
+
+## Zygote Java层
+
+```
+// ZygoteInit.java —— 卷I分析的核心入口类
+// frameworks/base/core/java/com/android/internal/os/ZygoteInit.java
+
+// 1. main()入口
+public static void main(String argv[]) {
+    // 预加载类和资源（preloadClasses/preloadResources）
+    preload();          // 预加载数千个系统类、资源、OpenGL
+    // 初始化GC
+    gcAndFinalize();
+    // 启动system_server（forkSystemServer）
+    if (startSystemServer) {
+        startSystemServer(abiList, socketName, zygoteServer);
+    }
+    // 等待AMS请求fork新应用进程
+    zygoteServer.runSelectLoop(abiList);
+}
+
+// 2. forkSystemServer()——fork出system_server进程
+private static Runnable forkSystemServer(String abiList, String socketName,
+        ZygoteServer zygoteServer) {
+    // 构造fork参数
+    ZygoteArguments args = new ZygoteArguments(...);
+    // 调用native fork
+    pid = Zygote.forkSystemServer(...);
+    if (pid == 0) {
+        // 子进程（system_server）执行
+        zygoteServer.closeServerSocket();
+        return handleSystemServerProcess(parsedArgs);
+    }
+    return null;
+}
+```
+
+<Callout type="info" title="ZygoteInit核心逻辑">
+ZygoteInit做三件事：①preload()预加载数千个系统类（classes.txt）、资源和主题，这些预加载内容通过fork的COW机制被所有应用进程共享，避免每个进程重复加载；②forkSystemServer()创建system_server进程，承载AMS/WMS/PMS等核心服务；③runSelectLoop()进入循环，监听Socket等待AMS发来fork新进程的请求。
+</Callout>
+
+## ClassLoader体系
+
+```
+// Android ClassLoader继承体系（卷I核心知识点）
+//
+//         ClassLoader（抽象基类）
+//              │
+//     ┌────────┴────────┐
+// BootClassLoader        BaseDexClassLoader
+// (加载核心库)                │
+//                  ┌─────────┼──────────┐
+//          PathClassLoader  DexClassLoader  InMemoryDexClassLoader
+//          (加载已安装App)   (加载外部dex)   (内存dex)
+//
+// 关键源码：BaseDexClassLoader → DexPathList → Element[] → DexFile
+//
+// BaseDexClassLoader.java:
+//   private final DexPathList pathList;
+//   Class&lt;?&gt; findClass(String name) {
+//       return pathList.findClass(name, suppressedExceptions);
+//   }
+//
+// DexPathList.java:
+//   private Element[] dexElements;  // 每个dex文件对应一个Element
+//   Class findClass(String name) {
+//       for (Element element : dexElements) {
+//           Class cls = element.findClass(name);
+//           if (cls != null) return cls;
+//       }
+//       return null;
+//   }
+```
+
+### 双亲委派模型
+
+```
+// 双亲委派：子ClassLoader先委托parent加载，parent加载不了才自己加载
+// loadClass()源码逻辑：
+//   protected Class&lt;?&gt; loadClass(String name) {
+//       // 1. 检查是否已加载
+//       Class cls = findLoadedClass(name);
+//       if (cls != null) return cls;
+//       // 2. 委托parent加载
+//       cls = parent.loadClass(name);
+//       if (cls != null) return cls;
+//       // 3. 自己加载
+//       return findClass(name);
+//   }
+//
+// 插件化突破双亲委派：反射替换dexElements数组
+//   1. 获取插件APK的DexClassLoader的dexElements
+//   2. 获取宿主PathClassLoader的dexElements
+//   3. 合并两个数组（插件在前或后）
+//   4. 反射设置回宿主的pathList.dexElements
+//   → 宿主ClassLoader就能加载插件中的类了
+```
+
+## 插件化原理
+
+```
+// 插件化核心难题：Activity生命周期由AMS管理，AMS不认识插件中的Activity
+// 解决方案：预注册Stub Activity欺骗AMS，真正启动插件Activity
+//
+// 步骤1：宿主AndroidManifest.xml预注册Stub Activity
+//   &lt;activity android:name=".StubActivity"/&gt;
+//
+// 步骤2：hook AMS的startActivity，替换Intent
+//   原始Intent: 启动插件PluginActivity
+//   替换Intent: 启动StubActivity（AMS认识）
+//   // 通过动态代理hook IActivityManager
+//   InvocationHandler handler = (proxy, method, args) -> {
+//       if (method.getName().equals("startActivity")) {
+//           Intent raw = (Intent) args[index];
+//           Intent stub = new Intent(context, StubActivity.class);
+//           stub.putExtra("raw_intent", raw); // 保存原始Intent
+//           args[index] = stub;  // 替换
+//       }
+//       return method.invoke(ams, args);
+//   };
+//
+// 步骤3：hook ActivityThread的Handler，还原Intent
+//   // AMS创建StubActivity后，回调到ActivityThread
+//   // 在Handler的Callback中拦截，把StubActivity还原为PluginActivity
+//   Callback callback = msg -> {
+//       if (msg.what == LAUNCH_ACTIVITY) {
+//           Intent stub = (Intent) msg.obj;
+//           Intent raw = stub.getParcelableExtra("raw_intent");
+//           stub.setComponent(raw.getComponent()); // 还原
+//       }
+//       return false;
+//   };
+```
+
+<Callout type="warning" title="插件化关键点">
+插件化的本质是"欺骗AMS"：AMS只能启动在AndroidManifest中注册的Activity，所以用预注册的StubActivity骗过AMS的检查，然后在ActivityThread创建Activity实例时偷梁换柱，替换为真正的插件Activity。这要求深入理解Activity启动流程（AMS→ActivityThread→Instrumentation→newActivity）和Handler消息机制。
+</Callout>
+
+## Binder Java层
+
+```
+// Binder Java层封装（卷I分析）
+// IBinder接口 → Binder抽象类 → BinderProxy(客户端代理)
+//
+// ServiceManager.java（Java层服务管理）:
+//   public static IBinder getService(String name) {
+//       // 通过JNI调用native ServiceManager
+//       return getIServiceManager().getService(name);
+//   }
+//   public static void addService(String name, IBinder service) {
+//       getIServiceManager().addService(name, service, false);
+//   }
+//
+// Binder.java核心:
+//   // transact由native实现
+//   public boolean transact(int code, Parcel data, Parcel reply, int flags) {
+//       return execTransact(this, code, data, reply, flags); // native方法
+//   }
+//   // onTransact由子类重写（Stub实现）
+//   protected boolean onTransact(int code, Parcel data, Parcel reply, int flags) {
+//       // AIDL生成的Stub重写此方法处理请求
+//   }
+//
+// Parcel.java:
+//   // writeInterfaceToken / writeInt / writeString ...
+//   // readInt / readString ...
+//   // 底层通过native writeTo / readFrom与Binder驱动交互
+```
+
+## Context机制
+
+```
+// Context族——全局上下文（卷I分析）
+//
+//          Context（抽象类）
+//              │
+//      ContextImpl（实现类）
+//          │
+//  ┌───────┼────────┐
+// Application  Activity  Service
+//
+// ContextImpl关键字段:
+//   private ActivityThread mMainThread;
+//   private LoadedApk mPackageInfo;  // 指向APK信息
+//   private PackageManager mPackageManager;
+//   private AudioManager mAudioManager;
+//   // 系统服务的本地缓存
+//   private final Object[] mServiceCache = new Object[sServiceConnectionCount];
+//
+// getSystemService()源码:
+//   public Object getSystemService(String name) {
+//       return SystemServiceRegistry.getSystemService(this, name);
+//   }
+//   // SystemServiceRegistry维护所有系统服务的fetcher
+//   // 首次get时通过IBinder获取Binder代理，包装成Manager类
+```
+
+<Glossary>
+
+<GlossaryItem term="ZygoteInit">
+Zygote进程的Java层入口类。main()方法执行三步：preload()预加载系统类和资源（通过fork的COW机制被所有应用进程共享）、forkSystemServer()创建system_server进程、runSelectLoop()循环等待AMS请求fork新应用进程。是卷I分析Zygote的核心源码。
+</GlossaryItem>
+
+<GlossaryItem term="BaseDexClassLoader">
+Android ClassLoader体系核心。内部维护DexPathList，DexPathList持有Element[]数组，每个Element对应一个dex文件。findClass()遍历dexElements数组查找类。插件化通过反射合并宿主和插件的dexElements数组，使宿主ClassLoader能加载插件类。
+</GlossaryItem>
+
+<GlossaryItem term="双亲委派">
+ClassLoader加载类的委托机制。loadClass()先检查已加载，再委托parent加载，parent加载不了才自己findClass()。保证核心类不被篡改（如java.lang.String只能由BootClassLoader加载）。插件化需要突破双亲委派，通过反射操作dexElements数组实现类加载扩展。
+</GlossaryItem>
+
+<GlossaryItem term="Stub Activity欺骗">
+插件化核心技术。AMS只能启动在AndroidManifest中注册的Activity，插件Activity未注册。方案：预注册Stub Activity骗过AMS检查（hook IActivityManager替换Intent），在ActivityThread创建Activity时还原为真实插件Activity（hook Handler的Callback）。需深入理解Activity启动流程和Handler机制。
+</GlossaryItem>
+
+<GlossaryItem term="ServiceManager(Java)">
+Binder Java层的服务管理器。getService()/addService()通过JNI调用native层ServiceManager。App通过ServiceManager.getService("activity")获取AMS的Binder代理，再包装成ActivityManagerService供开发者使用。是Java层访问系统服务的入口。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：ZygoteInit的main()方法做了哪些核心工作？为什么Zygote要预加载资源？
+
+<Answer>
+ZygoteInit.main()执行三个核心步骤：①preload()——预加载classes.txt中的数千个系统类（通过Class.forName()触发类加载和初始化）、预加载资源（resources.arsc中的drawable/string等）、预加载OpenGL和共享库。这些预加载内容在内存中只存在一份。②forkSystemServer()——调用Zygote.forkSystemServer()创建system_server进程，system_server承载AMS/WMS/PMS等核心服务，fork后子进程执行handleSystemServerProcess()启动服务。③runSelectLoop()——进入无限循环，监听Zygote Socket，等待AMS发来fork新应用进程的请求，收到请求后调用forkAndSpecialize()创建新进程。预加载资源的原因：Zygote是所有应用进程的父进程，应用进程通过fork创建。fork采用COW（写时复制）机制，子进程共享父进程的物理内存页，只有写入时才复制。因此Zygote预加载的类和资源被所有应用进程共享，每个应用进程无需重复加载，显著提升应用启动速度并降低内存占用。
+</Answer>
+
+**问题 2**：详细解释ClassLoader的双亲委派模型及插件化如何突破它。
+
+<Answer>
+双亲委派模型：ClassLoader.loadClass()的执行逻辑——①调用findLoadedClass()检查该类是否已被当前ClassLoader加载过，已加载则直接返回；②委托parent ClassLoader加载（parent.loadClass()），parent加载成功则返回；③parent加载失败（抛出ClassNotFoundException），才调用findClass()自己加载。Android的ClassLoader体系：BootClassLoader加载核心库（java.lang.*等）→ PathClassLoader的parent是BootClassLoader。双亲委派保证核心类（如java.lang.String）只能由BootClassLoader加载，防止应用篡改。插件化突破双亲委派：插件APK不在宿主的dexElements中，直接loadClass会找不到。方案——反射合并dexElements数组：①获取插件APK的DexClassLoader的pathList.dexElements（通过反射获取BaseDexClassLoader.pathList字段）；②获取宿主PathClassLoader的pathList.dexElements；③将两个数组合并为一个新数组（插件dex在前则优先加载插件类）；④反射设置回宿主pathList.dexElements字段。这样宿主ClassLoader.findClass()遍历dexElements时就能找到插件中的类，绕过了双亲委派（因为findClass直接在dexElements中查找，不再委托parent）。
+</Answer>
+
+**问题 3**：插件化如何欺骗AMS启动未注册的Activity？详细描述hook流程。
+
+<Answer>
+插件化欺骗AMS的流程分为两步hook：①hook IActivityManager替换Intent——AMS的startActivity会检查目标Activity是否在AndroidManifest中注册，插件Activity未注册会报错。方案：通过Proxy.newProxyInstance()动态代理IActivityManager接口，在InvocationHandler中拦截startActivity方法，将原始Intent（目标为PluginActivity）替换为StubActivity的Intent（在Manifest中预注册），同时将原始Intent存入extra。AMS检查通过后创建StubActivity。②hook ActivityThread的Handler还原Intent——AMS创建StubActivity后，通过ApplicationThread.scheduleLaunchActivity()发送消息到ActivityThread的mH（Handler）。方案：反射获取mH的mCallback字段（Handler.Callback接口），设置自定义Callback。在Callback中拦截LAUNCH_ACTIVITY消息，从Intent的extra中取出原始Intent，将msg.obj的intent还原为PluginActivity的Intent。这样Instrumentation.newActivity()创建的就是真正的PluginActivity实例，而非StubActivity。关键点：AMS运行在system_server进程，只能看到StubActivity；ActivityThread运行在应用进程，hook发生在应用进程内，把StubActivity替换为PluginActivity。这要求深入理解Activity启动流程（Activity.startActivity→AMS.startActivity→ApplicationThread.scheduleLaunchActivity→Handler→Instrumentation.newActivity）。
+</Answer>
+
+**问题 4**：Binder Java层如何封装Native层能力？ServiceManager(Java)的作用是什么？
+
+<Answer>
+Binder Java层封装：①IBinder接口——定义transact()方法和描述符接口，是跨进程调用的抽象。②Binder类——服务端基类，transact()由native方法execTransact()实现，onTransact()由子类（AIDL生成的Stub）重写处理请求。③BinderProxy类——客户端代理，内部持有native层的BpBinder指针，transact()通过native方法调用BpBinder.transact()，最终通过ioctl与Binder驱动交互。④Parcel类——数据容器，writeInt()/readInt()等方法的底层通过native writeTo/readFrom与Binder驱动交互。Java层与Native层通过JNI桥接：Java的transact()→native execTransact()→BpBinder.transact()→ioctl(BC_TRANSACTION)→Binder驱动→BbBinder.transact()→Java Binder的execTransact()→onTransact()。ServiceManager(Java)的作用：是Java层访问系统服务的入口。getService(name)通过JNI调用native ServiceManager的getService()，返回IBinder代理对象。addService(name, service)将Java Binder服务注册到native ServiceManager。App获取系统服务的流程：ServiceManager.getService("activity")→返回AMS的IBinder代理→IActivityManager.Stub.asInterface(binder)→包装为ActivityManagerService供开发者使用。
+</Answer>
+
+</Exercises>

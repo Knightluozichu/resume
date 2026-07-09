@@ -1868,7 +1868,17 @@ export type ReviewChapterSlug =
   | "dak-wms-view"
   | "dak-pms-package"
   | "dak-audio-camera"
-  | "dak-final-review";
+  | "dak-final-review"
+  | "dav-learning-map"
+  | "dav-java-framework"
+  | "dav-native-layer"
+  | "dav-init-zygote"
+  | "dav-binder-deep"
+  | "dav-ams-deep"
+  | "dav-wms-deep"
+  | "dav-pms-deep"
+  | "dav-media-audio"
+  | "dav-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3741,6 +3751,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dak-pms-package": "PMS与包管理",
   "dak-audio-camera": "音频与摄像头服务",
   "dak-final-review": "全书复习",
+  "dav-learning-map": "全书学习地图",
+  "dav-java-framework": "Java Framework层",
+  "dav-native-layer": "Native层与JNI",
+  "dav-init-zygote": "Init与Zygote",
+  "dav-binder-deep": "Binder深度解析",
+  "dav-ams-deep": "AMS深度解析",
+  "dav-wms-deep": "WMS深度解析",
+  "dav-pms-deep": "PMS深度解析",
+  "dav-media-audio": "媒体与音频框架",
+  "dav-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

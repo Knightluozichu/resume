@@ -1745,6 +1745,16 @@ import { dakWmsViewQuestions } from "./review/dak-wms-view";
 import { dakPmsPackageQuestions } from "./review/dak-pms-package";
 import { dakAudioCameraQuestions } from "./review/dak-audio-camera";
 import { dakFinalReviewQuestions } from "./review/dak-final-review";
+import { davLearningMapQuestions } from "./review/dav-learning-map";
+import { davJavaFrameworkQuestions } from "./review/dav-java-framework";
+import { davNativeLayerQuestions } from "./review/dav-native-layer";
+import { davInitZygoteQuestions } from "./review/dav-init-zygote";
+import { davBinderDeepQuestions } from "./review/dav-binder-deep";
+import { davAmsDeepQuestions } from "./review/dav-ams-deep";
+import { davWmsDeepQuestions } from "./review/dav-wms-deep";
+import { davPmsDeepQuestions } from "./review/dav-pms-deep";
+import { davMediaAudioQuestions } from "./review/dav-media-audio";
+import { davFinalReviewQuestions } from "./review/dav-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3525,6 +3535,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dakPmsPackageQuestions,
   ...dakAudioCameraQuestions,
   ...dakFinalReviewQuestions,
+  ...davLearningMapQuestions,
+  ...davJavaFrameworkQuestions,
+  ...davNativeLayerQuestions,
+  ...davInitZygoteQuestions,
+  ...davBinderDeepQuestions,
+  ...davAmsDeepQuestions,
+  ...davWmsDeepQuestions,
+  ...davPmsDeepQuestions,
+  ...davMediaAudioQuestions,
+  ...davFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

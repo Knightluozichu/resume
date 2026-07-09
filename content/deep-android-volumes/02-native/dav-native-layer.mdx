@@ -1,0 +1,260 @@
+---
+title: "Native层与JNI"
+type: C
+section: "Android开发"
+order: 2
+description: "JNI注册机制、MediaScanner案例、Java与C++交互、NDK开发实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DavNativeLayerDiagram } from "@/components/mdx/deep-android-volumes/diagrams/dav-native-layer";
+
+<Objectives>
+
+- 掌握JNI的两种注册方式（静态注册与动态注册）及其源码实现
+- 通过MediaScanner案例理解Java与C++的完整交互流程
+- 理解JNIEnv的作用域与线程安全机制
+- 掌握NDK开发中JNI签名、引用类型、异常处理的实战技巧
+
+</Objectives>
+
+## JNI全景
+
+<DavNativeLayerDiagram />
+
+JNI（Java Native Interface）是Java与C/C++代码交互的桥梁。卷I以MediaScanner为案例，从Java层到Native层完整剖析JNI的注册机制、方法调用、数据传递和异常处理。理解JNI是阅读卷II Native层源码（Binder、Zygote等）的前提。
+
+## JNI两种注册方式
+
+### 静态注册
+
+```
+// 静态注册：按命名规则自动关联Java native方法与C函数
+// 命名规则：Java_<包名>_<类名>_<方法名>
+//
+// Java层声明:
+//   package android.media;
+//   public class MediaScanner {
+//       native void native_init();
+//       native void processDirectory(String path, String mimeType);
+//   }
+//
+// C层实现（自动按命名规则关联）:
+//   // android_media_MediaScanner.cpp
+//   static void
+//   android_media_MediaScanner_native_init(JNIEnv *env, jobject thiz) {
+//       // 实现
+//   }
+//
+//   static void
+//   android_media_MediaScanner_processDirectory(
+//       JNIEnv *env, jobject thiz,
+//       jstring path, jstring mimeType) {
+//       // 实现
+//   }
+//
+// 优点：简单，javah自动生成头文件
+// 缺点：方法名固定长，不够灵活；虚拟机需要遍历查找
+```
+
+### 动态注册
+
+```
+// 动态注册：通过JNI_OnLoad手动注册，方法名可自定义
+// MediaScanner使用动态注册
+//
+// android_media_MediaScanner.cpp:
+//
+// 1. 定义方法数组
+static JNINativeMethod gMethods[] = {
+    {"processDirectory",  // Java层方法名
+     "(Ljava/lang/String;Ljava/lang/String;)V",  // JNI签名
+     (void *)android_media_MediaScanner_processDirectory},  // Native函数指针
+    {"native_init",       "()V",
+     (void *)android_media_MediaScanner_native_init},
+    {"native_setup",      "()V",
+     (void *)android_media_MediaScanner_native_setup},
+};
+
+// 2. JNI_OnLoad中注册
+jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv* env = NULL;
+    if (vm-&gt;GetEnv((void**) &amp;env, JNI_VERSION_1_4) != JNI_OK) {
+        return -1;
+    }
+    // 找到Java类
+    jclass clazz = env-&gt;FindClass("android/media/MediaScanner");
+    // 注册native方法
+    env-&gt;RegisterNatives(clazz, gMethods, NELEM(gMethods));
+    return JNI_VERSION_1_4;
+}
+```
+
+<Callout type="info" title="动态注册的优势">
+Android系统服务大量使用动态注册（如MediaScanner、AudioRecord等）。优势：①Native函数名不限于Java_前缀规则，可自定义；②注册时即建立映射，查找效率高；③可在JNI_OnLoad中做版本检查和初始化。RegisterNatives将JNINativeMethod数组注册到虚拟机的方法表中，Java调用native方法时直接查表跳转。
+</Callout>
+
+## JNI签名规则
+
+```
+// JNI类型签名——描述Java方法的参数和返回值类型
+//
+// 基本类型签名:
+//   V = void    Z = boolean   B = byte     C = char
+//   S = short   I = int       J = long     F = float    D = double
+//
+// 引用类型签名: L<全限定名>; （用/分隔包）
+//   String  → Ljava/lang/String;
+//   int[]   → [I
+//   String[] → [Ljava/lang/String;
+//
+// 方法签名: (参数类型签名)返回类型签名
+//   void processDirectory(String, String)
+//     → (Ljava/lang/String;Ljava/lang/String;)V
+//   int native_init()
+//     → ()I
+//   void setDataSource(String, long, long)
+//     → (Ljava/lang/String;JJ)V
+```
+
+## MediaScanner完整交互流程
+
+```
+// MediaScanner案例——卷I经典分析
+// Java层 → JNI → Native层 MyMediaScanner
+//
+// ┌─────────────────────┐     ┌──────────────────────────┐
+// │  Java MediaScanner   │     │  Native MyMediaScanne    │
+// │                     │     │                          │
+// │  native_init()      │──JNI──→  native_init()        │
+// │  native_setup()     │──JNI──→  new MyMediaScanner() │
+// │  processDirectory() │──JNI──→  processDirectory()   │
+// │                     │     │     │                    │
+// │  ← scanFile() ─────│←─回调───  callScanFile()       │
+// │     onScanFile()   │     │                          │
+// └─────────────────────┘     └──────────────────────────┘
+//
+// C++回调Java方法的源码:
+//   static void android_media_MediaScanner_processDirectory(
+//       JNIEnv* env, jobject thiz, jstring path, jstring mimeType) {
+//       // 1. 获取Java类和方法ID
+//       jclass clazz = env-&gt;GetObjectClass(thiz);
+//       jmethodID scanFileMid = env-&gt;GetMethodID(clazz,
+//           "scanFile", "(Ljava/lang/String;J)V");
+//       // 2. 调用Java方法
+//       env-&gt;CallVoidMethod(thiz, scanFileMid, jstr, 0);
+//   }
+```
+
+## JNIEnv与线程安全
+
+```
+// JNIEnv——JNI环境指针，线程相关
+//
+// 关键规则:
+//   1. JNIEnv只在当前线程有效，不能跨线程传递
+//   2. JavaVM是进程级单例，可跨线程共享
+//   3. 子线程需通过JavaVM.AttachCurrentThread()获取JNIEnv
+//
+// // Native层保存JavaVM
+// JavaVM* gJavaVM = NULL;
+// jint JNI_OnLoad(JavaVM* vm, void* reserved) {
+//     gJavaVM = vm;  // 保存JavaVM供子线程使用
+// }
+//
+// // 子线程中使用JNI
+// void* threadFunc(void* arg) {
+//     JNIEnv* env;
+//     gJavaVM-&gt;AttachCurrentThread(&amp;env, NULL);  // attach获取JNIEnv
+//     // 使用env调用Java方法...
+//     gJavaVM-&gt;DetachCurrentThread();  // 用完detach
+//     return NULL;
+// }
+```
+
+## JNI引用类型
+
+```
+// JNI三种引用类型——内存管理关键
+//
+// 1. 局部引用（Local Reference）:
+//    - 默认创建的引用，函数返回后自动释放
+//    - FindClass / NewObject / GetObjectClass 返回局部引用
+//    - 可手动 DeleteLocalRef() 提前释放
+//    - 局部引用表有上限（默认512个），循环中需手动释放
+//
+// 2. 全局引用（Global Reference）:
+//    - 跨方法、跨线程有效，需手动创建和释放
+//    - NewGlobalRef() 创建，DeleteGlobalRef() 释放
+//    // jclass缓存为全局引用
+//    static jclass gMediaScannerClass;
+//    JNI_OnLoad() {
+//        jclass local = env-&gt;FindClass("android/media/MediaScanner");
+//        gMediaScannerClass = (jclass)env-&gt;NewGlobalRef(local);
+//        env-&gt;DeleteLocalRef(local);
+//    }
+//
+// 3. 弱全局引用（Weak Global Reference）:
+//    - 不阻止GC回收，可能随时变为NULL
+//    - NewWeakGlobalRef() 创建，使用前需 IsSameObject(env, ref, NULL) 检查
+```
+
+<Callout type="warning" title="JNI实战避坑">
+①局部引用泄漏：循环中创建的局部引用（如FindClass返回值）必须手动DeleteLocalRef，否则局部引用表溢出崩溃；②线程安全：JNIEnv不可跨线程，子线程必须AttachCurrentThread获取独立JNIEnv；③全局引用泄漏：NewGlobalRef必须配对DeleteGlobalRef，否则Java对象永远无法被GC回收；④异常处理：JNI异常不会自动抛回Java层，需ExceptionCheck/ExceptionClear检查后手动ThrowNew。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="JNI动态注册">
+通过JNI_OnLoad()中的RegisterNatives()手动注册Java native方法与C函数的映射。相比静态注册（按Java_包名_类名_方法名命名规则自动关联），动态注册函数名可自定义、查找效率高、可在加载时做初始化。Android系统服务（MediaScanner等）大量使用动态注册。JNINativeMethod结构体包含{方法名, 签名, 函数指针}三元组。
+</GlossaryItem>
+
+<GlossaryItem term="JNIEnv">
+JNI环境指针，提供JNI函数表（FindClass/GetMethodID/CallVoidMethod等）。关键特性：只在当前线程有效，不可跨线程传递。子线程通过JavaVM.AttachCurrentThread()获取独立的JNIEnv。JavaVM是进程级单例，可跨线程共享。JNIEnv是Native代码访问Java对象和方法的唯一入口。
+</GlossaryItem>
+
+<GlossaryItem term="JNI签名">
+描述Java方法参数和返回值类型的字符串。基本类型用单字母（I=int, J=long, Z=boolean等），引用类型用L全限定名;格式，数组用[前缀。方法签名格式为(参数签名)返回签名。如processDirectory(String,String)的签名为(Ljava/lang/String;Ljava/lang/String;)V。动态注册时必须正确填写签名。
+</GlossaryItem>
+
+<GlossaryItem term="局部引用泄漏">
+JNI编程常见陷阱。局部引用（Local Reference）默认在native方法返回后自动释放，但局部引用表有上限（默认512个）。在循环中创建局部引用（如循环FindClass/GetObjectClass）若不手动DeleteLocalRef()，会导致局部引用表溢出崩溃。正确做法：循环中用完立即DeleteLocalRef，或使用PushLocalFrame/PopLocalFrame管理。
+</GlossaryItem>
+
+<GlossaryItem term="MediaScanner案例">
+卷I经典JNI案例。MediaScanner的Java层声明native方法（processDirectory等），通过动态注册关联到Native层的MyMediaScanner。Native层扫描文件后通过JNI回调Java层的scanFile方法。完整展示了Java→JNI→C++→JNI回调Java的双向交互流程，是理解JNI机制的最佳入口。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：JNI的静态注册和动态注册有什么区别？动态注册的源码流程是什么？
+
+<Answer>
+静态注册：按命名规则Java_<包名>_<类名>_<方法名>自动关联Java native方法与C函数。优点是简单（javah生成头文件），缺点是函数名固定长、虚拟机需遍历查找、不够灵活。动态注册：在JNI_OnLoad()中通过RegisterNatives()手动注册。流程（以MediaScanner为例）：①定义JNINativeMethod数组gMethods[]，每个元素是{Java方法名, JNI签名, Native函数指针}三元组，如{"processDirectory", "(Ljava/lang/String;Ljava/lang/String;)V", (void*)android_media_MediaScanner_processDirectory}；②实现JNI_OnLoad(JavaVM* vm)，调用vm->GetEnv()获取JNIEnv；③调用env->FindClass("android/media/MediaScanner")获取jclass；④调用env->RegisterNatives(clazz, gMethods, NELEM(gMethods))将方法注册到虚拟机方法表；⑤返回JNI_VERSION_1_4。动态注册的优势：函数名可自定义（不限于Java_前缀规则）、注册时即建立映射查找效率高、可在JNI_OnLoad中做版本检查和初始化。Java调用native方法时虚拟机直接查方法表跳转，无需按命名规则搜索。
+</Answer>
+
+**问题 2**：详细描述MediaScanner案例中Java与C++的完整交互流程。
+
+<Answer>
+MediaScanner交互流程分两条路径：①Java→Native路径——Java层MediaScanner声明native方法native_init()/native_setup()/processDirectory()。Native层android_media_MediaScanner.cpp通过动态注册关联。当Java调用processDirectory(path, mimeType)时，虚拟机查方法表跳转到android_media_MediaScanner_processDirectory()。该函数：通过env->GetStringUTFChars()将jstring转为C字符串；创建MyMediaScannerClient（实现Native层扫描回调接口）；调用MyMediaScanner的processDirectory()执行实际扫描。②Native→Java回调路径——MyMediaScanner扫描到文件后，通过MyMediaScannerClient回调。MyMediaScannerClient的scanFile()方法：通过env->GetObjectClass()获取Java MediaScanner的jclass；通过env->GetMethodID(clazz, "scanFile", "(Ljava/lang/String;J)V")获取scanFile方法的jmethodID；调用env->CallVoidMethod(thiz, scanFileMid, jstr, 0)回调Java层的scanFile方法。Java层scanFile被调用后执行业务逻辑。完整流程：Java processDirectory → JNI → C++ processDirectory → 扫描文件 → C++ callScanFile → JNI CallVoidMethod → Java scanFile。展示了Java→JNI→C++→JNI→Java的双向交互闭环。
+</Answer>
+
+**问题 3**：JNIEnv的线程安全规则是什么？子线程如何使用JNI？
+
+<Answer>
+JNIEnv线程安全规则：①JNIEnv只在创建它的线程中有效，不能跨线程传递和缓存使用。每个线程有独立的JNIEnv，内部维护该线程的局部引用表和异常状态。②JavaVM是进程级单例，可跨线程安全共享。一个进程只有一个JavaVM实例，所有线程通过JavaVM获取各自的JNIEnv。子线程使用JNI的流程：①在JNI_OnLoad或主线程中保存JavaVM指针（jint JNI_OnLoad(JavaVM* vm)中的vm参数，存入全局变量gJavaVM）；②子线程函数中调用gJavaVM->AttachCurrentThread(&env, NULL)，将当前线程attach到JavaVM，获取该线程专属的JNIEnv；③使用env调用JNI函数（FindClass/GetMethodID/CallVoidMethod等）操作Java对象；④使用完毕后调用gJavaVM->DetachCurrentThread()释放资源。注意事项：AttachCurrentThread会为线程创建JNIEnv和局部引用表；忘记Detach会导致线程资源泄漏；已在Java中创建的线程（如Java层Thread）不需要手动Attach（虚拟机已自动处理），但仍可通过JavaVM获取JNIEnv。
+</Answer>
+
+**问题 4**：JNI的三种引用类型分别是什么？编程中如何避免引用泄漏？
+
+<Answer>
+JNI三种引用类型：①局部引用（Local Reference）——默认创建的引用，由FindClass/NewObject/GetObjectClass等返回，在native方法返回后自动释放。局部引用表有上限（默认512个），循环中创建必须手动DeleteLocalRef。②全局引用（Global Reference）——通过NewGlobalRef()从局部引用创建，跨方法、跨线程有效，需手动DeleteGlobalRef释放。常用于缓存jclass、jmethodID等（jmethodID本身不需要全局引用，它是整数ID不是引用）。③弱全局引用（Weak Global Reference）——通过NewWeakGlobalRef()创建，不阻止GC回收对象，使用前需env->IsSameObject(env, ref, NULL)检查是否已回收。避免引用泄漏的实践：①循环中的局部引用——每次循环用完立即env->DeleteLocalRef(localRef)，或使用PushLocalFrame(N)/PopLocalFrame(NULL)批量管理；②缓存jclass用全局引用——JNI_OnLoad中FindClass获取局部引用→NewGlobalRef转全局引用→DeleteLocalRef释放局部引用；③全局引用配对释放——类销毁时DeleteGlobalRef释放，或注册JNI_OnUnload处理；④线程退出前DetachCurrentThread——否则局部引用表不释放。
+</Answer>
+
+</Exercises>
