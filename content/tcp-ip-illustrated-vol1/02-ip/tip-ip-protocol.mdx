@@ -1,0 +1,170 @@
+---
+title: "IP协议与路由"
+type: B
+section: "网络"
+order: 2
+description: "IPv4包头结构、子网掩码与CIDR、路由表最长前缀匹配与转发流程"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { TipIpProtocolDiagram } from "@/components/mdx/tcp-ip-illustrated-vol1/diagrams/tip-ip-protocol";
+
+<Objectives>
+
+- 掌握 IPv4 包头各字段的作用与位宽
+- 理解子网掩码、CIDR 表示法与子网划分
+- 掌握路由表的最长前缀匹配规则
+- 理解 IP 包的完整路由转发流程
+
+</Objectives>
+
+## IPv4 包头与路由
+
+<TipIpProtocolDiagram />
+
+## IPv4 包头结构
+
+IPv4 包头固定 20 字节（IHL=5），可选字段最多扩展到 60 字节：
+
+| 字段 | 位数 | 作用 |
+|------|------|------|
+| Version | 4 | 版本号（IPv4=4） |
+| IHL | 4 | 首部长度（单位 4 字节，最小 5=20B） |
+| TOS/DSCP | 8 | 服务类型/差分服务码点 |
+| Total Length | 16 | 整个包总长度（包头+数据） |
+| Identification | 16 | 分片重组标识 |
+| Flags | 3 | DF/MF/Reserved |
+| Fragment Offset | 13 | 分片偏移（单位 8 字节） |
+| TTL | 8 | 生存时间（每跳减 1） |
+| Protocol | 8 | 上层协议号 |
+| Header Checksum | 16 | 首部校验和 |
+| Source IP | 32 | 源 IP 地址 |
+| Destination IP | 32 | 目的 IP 地址 |
+
+### Protocol 字段常见值
+
+| 值 | 协议 | 用途 |
+|----|------|------|
+| 1 | ICMP | ping/差错报告 |
+| 2 | IGMP | 组播管理 |
+| 6 | TCP | 可靠传输 |
+| 17 | UDP | 无连接传输 |
+| 89 | OSPF | 路由协议 |
+
+## 子网掩码与 CIDR
+
+### 子网划分
+
+子网掩码区分 IP 地址中的网络位和主机位：
+
+```text
+IP 地址：     192.168.1.10
+子网掩码：    255.255.255.0  (= /24)
+网络地址：    192.168.1.0    （IP & 掩码）
+广播地址：    192.168.1.255  （网络位不变，主机位全1）
+可用主机：    192.168.1.1 ~ 192.168.1.254（254台）
+```
+
+### CIDR 表示法
+
+CIDR（无类别域间路由）用 `/n` 表示前 n 位为网络位：
+
+```text
+/8  = 255.0.0.0       → 16,777,214 台主机
+/16 = 255.255.0.0     → 65,534 台主机
+/24 = 255.255.255.0   → 254 台主机
+/30 = 255.255.255.252 → 2 台主机（点对点链路）
+```
+
+主机数计算：$可用主机数 = 2^{32-n} - 2$（减去网络地址和广播地址）
+
+<Callout type="info" title="子网掩码的数学本质">
+
+子网掩码是一个 32 位二进制数，网络位全为 1，主机位全为 0。IP 地址与子网掩码做按位与（AND）运算即得网络地址。例如 `192.168.1.10 & 255.255.255.0 = 192.168.1.0`。CIDR `/n` 就是掩码前 n 位为 1。
+
+</Callout>
+
+## IP 路由与转发
+
+### 路由表匹配规则
+
+路由器使用**最长前缀匹配**规则查找路由表：
+
+```text
+路由表示例：
+  目的网络          掩码     下一跳          接口
+  192.168.1.0      /24      0.0.0.0(直连)   eth0
+  10.0.0.0         /8       192.168.1.1     eth0
+  0.0.0.0          /0       192.168.1.1     eth0  ← 默认路由
+
+匹配规则：选择与目的 IP 匹配前缀最长的路由
+  目的 192.168.1.5 → 匹配 /24（最精确）
+  目的 10.1.2.3    → 匹配 /8
+  目的 8.8.8.8     → 都不匹配 → 用默认路由 /0
+```
+
+### IP 转发流程
+
+```text
+1. 路由器收到 IP 包
+2. 检查目的 IP，查路由表（最长前缀匹配）
+3. TTL 减 1（到 0 则丢弃，返回 ICMP 超时）
+4. 重新计算首部校验和
+5. ARP 查下一跳 MAC 地址
+6. 封装为以太网帧，从对应接口转发
+```
+
+### TTL 与 traceroute
+
+```text
+TTL（Time To Live）：每经过一个路由器减 1，到 0 丢弃并返回 ICMP Type 11（超时）
+
+traceroute 原理：
+  发 TTL=1 的包 → 第一跳路由器返回 ICMP 超时 → 记录第一跳
+  发 TTL=2 的包 → 第二跳路由器返回 ICMP 超时 → 记录第二跳
+  ...直到到达目的主机
+```
+
+<Glossary>
+
+<GlossaryItem term="IPv4 包头（IPv4 Header）">
+IPv4 包头固定 20 字节（IHL=5），可扩展至 60 字节。关键字段：Version=4、IHL（首部长度，单位4字节）、TTL（生存时间，每经路由器减1）、Protocol（上层协议号：1=ICMP、6=TCP、17=UDP）、Source/Destination IP（32位地址）、Flags（DF=禁止分片、MF=后面还有分片）、Fragment Offset（分片偏移）、Header Checksum（首部校验和，每跳需重算因TTL变化）。
+</GlossaryItem>
+
+<GlossaryItem term="最长前缀匹配（Longest Prefix Match）">
+路由器查找路由表时，选择与目的 IP 地址匹配的网络前缀最长的路由条目。前缀越长匹配越精确。例如目的 IP 10.1.1.5，路由表有 10.0.0.0/8 和 10.1.0.0/16 两条路由，选择 /16 那条（更精确）。默认路由 0.0.0.0/0 前缀最短，只在其他路由都不匹配时使用。此规则确保数据包走最精确的路径。
+</GlossaryItem>
+
+<GlossaryItem term="CIDR（Classless Inter-Domain Routing）">
+CIDR 是无类别域间路由，用 `/n` 表示 IP 地址前 n 位为网络位，取代了传统 A/B/C 类地址的固定分类。例如 192.168.1.0/24 表示前 24 位为网络位。CIDR 使地址分配更灵活，支持路由聚合（将多个小网络合并为一个大网络通告），减少路由表规模。可用主机数 = $2^{32-n} - 2$（减去网络地址和广播地址）。
+</GlossaryItem>
+
+<GlossaryItem term="TTL（Time To Live）">
+TTL 是 IP 包头中 8 位字段，表示数据包的生存时间。每经过一个路由器 TTL 减 1，到 0 时路由器丢弃该包并返回 ICMP Type 11（Time Exceeded）超时报文。TTL 防止路由环路中数据包无限循环。traceroute 利用 TTL 递增发送探测包，通过收集各跳路由器返回的 ICMP 超时报文推断完整路径。典型初始值 64 或 128。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** IPv4 包头中 TTL、Protocol、Flags 字段的作用分别是什么？
+
+<Answer>
+
+TTL（8 位）：生存时间，每经过一个路由器减 1，到 0 则丢弃并返回 ICMP 超时，防止路由环路。Protocol（8 位）：标识上层协议号，1=ICMP、6=TCP、17=UDP。Flags（3 位）：DF=禁止分片、MF=后面还有分片。与 Fragment Offset 配合实现分片与重组。
+
+</Answer>
+
+**问题 2：** IP 路由表的最长前缀匹配规则是什么？举例说明。
+
+<Answer>
+
+最长前缀匹配：路由器查找路由表时，选择与目的 IP 匹配的前缀最长的那条路由。例如目的 IP 10.1.1.5，路由表中有 10.0.0.0/8（下一跳 A）和 10.1.0.0/16（下一跳 B），路由器选择 /16 那条（下一跳 B），因为 16 位前缀比 8 位更精确。默认路由 0.0.0.0/0 的前缀最短，只有其他路由都不匹配时才使用。
+
+</Answer>
+
+</Exercises>

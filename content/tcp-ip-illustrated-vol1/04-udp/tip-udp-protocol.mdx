@@ -1,0 +1,159 @@
+---
+title: "UDP协议"
+type: A
+section: "网络"
+order: 4
+description: "UDP报文头结构、伪首部与校验和、无连接传输特点与典型应用"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { TipUdpProtocolDiagram } from "@/components/mdx/tcp-ip-illustrated-vol1/diagrams/tip-udp-protocol";
+
+<Objectives>
+
+- 掌握 UDP 报文头的结构与各字段作用
+- 理解伪首部在校验和计算中的作用
+- 理解 UDP 无连接、不可靠的设计特点
+- 明确 UDP 的典型应用场景及选择原因
+
+</Objectives>
+
+## UDP 协议：无连接传输
+
+<TipUdpProtocolDiagram />
+
+## UDP 报文头
+
+UDP 报文头固定 8 字节，是所有传输层协议中最简洁的：
+
+| 字段 | 位数 | 作用 |
+|------|------|------|
+| Source Port | 16 | 源端口号 |
+| Destination Port | 16 | 目的端口号 |
+| Length | 16 | UDP 头+数据总长（最小 8） |
+| Checksum | 16 | 校验和（可选但建议启用） |
+
+```text
+UDP 报文 = UDP头(8B) + 数据(0+字节)
+
+Length = 8 + 数据长度
+最小 Length = 8（无数据，仅头部）
+```
+
+## 伪首部与校验和
+
+### 伪首部结构
+
+UDP 校验和计算时需要在 UDP 头前附加一个**伪首部**（Pseudo Header）：
+
+| 字段 | 位数 | 内容 |
+|------|------|------|
+| Source IP | 32 | 源 IP 地址 |
+| Destination IP | 32 | 目的 IP 地址 |
+| Zero | 8 | 固定为 0 |
+| Protocol | 8 | 固定为 17（UDP） |
+| UDP Length | 16 | UDP 头+数据总长 |
+
+### 为什么需要伪首部
+
+<Callout type="info" title="伪首部的意义">
+
+伪首部**不在网络中传输**，仅参与校验和计算。它的作用是验证数据不仅到达了正确的端口，还到达了**正确的主机**（IP 地址验证）和**正确的协议**（Protocol=17 验证）。如果没有伪首部，UDP 只校验数据和端口，无法防止 IP 层将包误投到错误的主机。这是 UDP 端到端校验的关键设计。
+
+</Callout>
+
+校验和计算：将伪首部 + UDP 头 + 数据视为 16 位整数序列，求和后取反码。接收方重新计算并验证。
+
+## UDP 的特点
+
+### 无连接
+
+```text
+发送前：无需建立连接（不需要 TCP 的三次握手）
+发送时：直接构造 UDP 报文，交给 IP 层发送
+状态：不维护连接状态表
+```
+
+### 不可靠
+
+```text
+不保证交付：可能丢包，无重传机制
+不保证顺序：可能乱序，无序号重组
+不保证唯一：可能重复，无去重机制
+```
+
+### 无流控
+
+```text
+无滑动窗口：不根据接收方能力调整发送速率
+无拥塞控制：不根据网络状况调整发送速率
+→ 发送方可以任意速率发送
+```
+
+## UDP 与 TCP 对比
+
+| 特性 | UDP | TCP |
+|------|-----|-----|
+| 连接 | 无连接 | 面向连接（三次握手） |
+| 可靠性 | 不保证 | 保证（序号/确认/重传） |
+| 有序性 | 不保证 | 保证（序号重组） |
+| 流控 | 无 | 滑动窗口 |
+| 拥塞控制 | 无 | 慢启动/快重传/快恢复 |
+| 头部开销 | 8 字节 | 至少 20 字节 |
+| 广播/组播 | 支持 | 不支持（仅点对点） |
+| 实时性 | 好 | 较差（重传延迟） |
+
+## UDP 典型应用
+
+| 应用 | 端口 | 选择 UDP 的原因 |
+|------|------|----------------|
+| DNS | 53 | 查询小、响应快，省握手开销 |
+| DHCP | 67/68 | 无 IP 时需广播，TCP 不支持广播 |
+| SNMP | 161/162 | 网管轮询，简单高效 |
+| TFTP | 69 | 简单文件传输，应用层自行保证可靠 |
+| NTP | 123 | 时间同步，少量丢包可容忍 |
+| RTP | 动态 | 实时音视频，延迟敏感 |
+
+<Glossary>
+
+<GlossaryItem term="UDP（User Datagram Protocol）">
+UDP 用户数据报协议是传输层无连接协议。报文头固定 8 字节：Source Port(16) + Destination Port(16) + Length(16) + Checksum(16)。特点：无连接（不需握手）、不可靠（不保证交付/顺序/唯一）、无流控和拥塞控制、头部开销小（8B vs TCP 20B+）、支持广播和组播。适合 DNS/DHCP/SNMP/TFTP/NTP/RTP 等查询响应型或实时型应用。UDP 的简洁性使应用层可自行实现可靠性机制。
+</GlossaryItem>
+
+<GlossaryItem term="伪首部（Pseudo Header）">
+UDP（和 TCP）校验和计算时附加在头部前的虚拟数据，不在网络中传输。包含 Source IP(32) + Destination IP(32) + Zero(8) + Protocol(8=17) + UDP Length(16)。作用：验证数据到达正确主机（IP地址）和正确协议（Protocol=17），而不仅仅是正确端口。没有伪首部则只校验端口和数据，无法防止 IP 层误投。伪首部体现了传输层对网络层的端到端校验设计。
+</GlossaryItem>
+
+<GlossaryItem term="UDP 校验和（Checksum）">
+UDP 校验和对伪首部 + UDP 头 + 数据进行校验。计算方法：将数据视为 16 位整数序列求和，取反码。如果数据长度为奇数，末尾补 0 字节对齐。接收方重新计算并验证，不一致则丢弃。校验和在 IPv4 中可选（全 0 表示不校验），但建议启用。UDP 校验和是 UDP 唯一的差错检测手段，覆盖了头部、数据和伪首部（IP 地址）。
+</GlossaryItem>
+
+<GlossaryItem term="无连接传输（Connectionless Transmission）">
+无连接传输指发送数据前不需要建立连接，直接发送数据报文。UDP 是典型的无连接协议：无需握手、不维护连接状态、每个报文独立传输。优点：低延迟（无握手开销）、低开销（无连接状态表）、简单灵活。缺点：不保证可靠交付、不保证顺序、需应用层自行处理丢包。适合查询响应型（DNS）、实时型（RTP）和广播/组播场景。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** UDP 报文头的结构是什么？为什么说 UDP 是无连接的？
+
+<Answer>
+
+UDP 报文头固定 8 字节：Source Port（16位）+ Destination Port（16位）+ Length（16位）+ Checksum（16位）。UDP 是无连接的：发送数据前不需要建立连接（不像 TCP 三次握手），直接发送数据报文；不维护连接状态、不保证可靠交付、不进行流控和拥塞控制。每个 UDP 报文独立传输，互不依赖。
+
+</Answer>
+
+**问题 2：** UDP 校验和计算中的伪首部是什么？为什么需要它？
+
+<Answer>
+
+伪首部包含：Source IP(32位) + Destination IP(32位) + Zero(8位) + Protocol(8位=17) + UDP Length(16位)。伪首部不在网络中传输，仅参与校验和计算。需要它的原因：验证数据不仅到达了正确端口，还到达了正确主机（IP地址验证）和正确协议（Protocol=17 验证）。如果没有伪首部，UDP 只校验数据和端口，无法防止 IP 层误投。
+
+</Answer>
+
+</Exercises>

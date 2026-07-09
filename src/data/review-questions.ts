@@ -1925,6 +1925,16 @@ import { wpaHttpAnalysisQuestions } from "./review/wpa-http-analysis";
 import { wpaDnsDhcpQuestions } from "./review/wpa-dns-dhcp";
 import { wpaNetworkSecurityQuestions } from "./review/wpa-network-security";
 import { wpaFinalReviewQuestions } from "./review/wpa-final-review";
+import { tipLearningMapQuestions } from "./review/tip-learning-map";
+import { tipLinkLayerQuestions } from "./review/tip-link-layer";
+import { tipIpProtocolQuestions } from "./review/tip-ip-protocol";
+import { tipIcmpIgmpQuestions } from "./review/tip-icmp-igmp";
+import { tipUdpProtocolQuestions } from "./review/tip-udp-protocol";
+import { tipTcpProtocolQuestions } from "./review/tip-tcp-protocol";
+import { tipTcpTimersQuestions } from "./review/tip-tcp-timers";
+import { tipRoutingProtocolsQuestions } from "./review/tip-routing-protocols";
+import { tipApplicationProtocolsQuestions } from "./review/tip-application-protocols";
+import { tipFinalReviewQuestions } from "./review/tip-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3885,6 +3895,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...wpaDnsDhcpQuestions,
   ...wpaNetworkSecurityQuestions,
   ...wpaFinalReviewQuestions,
+  ...tipLearningMapQuestions,
+  ...tipLinkLayerQuestions,
+  ...tipIpProtocolQuestions,
+  ...tipIcmpIgmpQuestions,
+  ...tipUdpProtocolQuestions,
+  ...tipTcpProtocolQuestions,
+  ...tipTcpTimersQuestions,
+  ...tipRoutingProtocolsQuestions,
+  ...tipApplicationProtocolsQuestions,
+  ...tipFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

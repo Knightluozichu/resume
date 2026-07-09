@@ -1,0 +1,186 @@
+---
+title: "TCP可靠传输"
+type: B
+section: "网络"
+order: 5
+description: "TCP包头结构、三次握手四次挥手、状态机、滑动窗口流量控制"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { TipTcpProtocolDiagram } from "@/components/mdx/tcp-ip-illustrated-vol1/diagrams/tip-tcp-protocol";
+
+<Objectives>
+
+- 掌握 TCP 包头结构与关键字段（序号/确认号/Flags/Window）
+- 理解三次握手建立连接与四次挥手关闭连接的过程
+- 掌握 TCP 状态机与 TIME_WAIT 状态的意义
+- 理解滑动窗口流量控制机制
+
+</Objectives>
+
+## TCP 包头与连接管理
+
+<TipTcpProtocolDiagram />
+
+## TCP 包头结构
+
+TCP 包头固定 20 字节（Offset=5），可扩展至 60 字节：
+
+| 字段 | 位数 | 作用 |
+|------|------|------|
+| Source Port | 16 | 源端口号 |
+| Destination Port | 16 | 目的端口号 |
+| Sequence Number | 32 | 数据段第一个字节的序号 |
+| Acknowledgment Number | 32 | 期望收到的下一个字节序号 |
+| Offset | 4 | 首部长度（单位 4 字节） |
+| Flags | 6 | URG/ACK/PSH/RST/SYN/FIN |
+| Window | 16 | 接收窗口大小（流控） |
+| Checksum | 16 | 校验和（含伪首部） |
+| Urgent Pointer | 16 | 紧急数据指针（URG=1时有效） |
+
+### Flags 标志位
+
+```text
+SYN = 同步序号（建立连接）
+ACK = 确认号有效
+FIN = 发送方完成（关闭连接）
+RST = 重置连接
+PSH = 推送（接收方应立即交给应用）
+URG = 紧急指针有效
+```
+
+## 三次握手（建立连接）
+
+```text
+客户端                           服务端
+  |                                |
+  |  ① SYN, seq=x                  |
+  |  ----------------------------→ |  服务端: SYN_RCVD
+  |                                |
+  |  ② SYN+ACK, seq=y, ack=x+1     |
+  |  ←---------------------------- |  
+  |  客户端: ESTABLISHED            |
+  |                                |
+  |  ③ ACK, seq=x+1, ack=y+1       |
+  |  ----------------------------→ |  服务端: ESTABLISHED
+  |                                |
+  连接建立，可双向传输数据
+```
+
+<Callout type="info" title="为什么需要三次而非两次握手">
+
+两次握手存在历史连接问题：如果客户端的 SYN 延迟到达，服务端回 SYN+ACK 后就认为连接建立，但客户端并未发起连接，导致服务端资源浪费。三次握手让客户端通过最后的 ACK 确认是否真的要建立连接。同时三次握手确保双方都确认了对方的发送和接收能力正常。
+
+</Callout>
+
+## 四次挥手（关闭连接）
+
+```text
+主动方                            被动方
+  |                                |
+  |  ① FIN, seq=m                  |
+  |  ----------------------------→ |  被动方: CLOSE_WAIT
+  |                                |
+  |  ② ACK, ack=m+1                |
+  |  ←---------------------------- |  （被动方可继续发剩余数据）
+  |                                |
+  |  ③ FIN, seq=n                  |
+  |  ←---------------------------- |  被动方: LAST_ACK
+  |                                |
+  |  ④ ACK, ack=n+1                |
+  |  ----------------------------→ |  被动方: CLOSED
+  |  主动方: TIME_WAIT              |
+  |  等待 2MSL 后 → CLOSED          |
+```
+
+### TIME_WAIT 状态
+
+```text
+TIME_WAIT 持续 2×MSL（最大报文段生存时间），原因：
+  ①确保最后的 ACK 能到达被动方
+    → 若 ACK 丢失，被动方重发 FIN，主动方还能重发 ACK
+  ②等待本次连接的所有报文在网络中消亡
+    → 防止延迟报文干扰新连接
+```
+
+## 滑动窗口流量控制
+
+### 窗口机制
+
+```text
+接收方在 ACK 中携带 Window 字段，告知发送方：
+  "我的接收缓存还能容纳 Window 字节数据"
+
+发送方根据 Window 控制发送量：
+  已发送未确认的数据量 ≤ Window
+
+窗口滑动：
+  收到 ACK → 窗口左边界右移（确认了的数据滑出窗口）
+  接收方读取数据 → 缓存空出 → Window 增大
+```
+
+### 窗口为 0 时的处理
+
+```text
+接收方 Window=0 → 发送方停止发送
+发送方启动坚持定时器，周期性发送窗口探测包
+接收方缓存空出后，回复更新后的 Window 大小
+```
+
+## TCP 可靠性机制总览
+
+| 机制 | 作用 |
+|------|------|
+| 序号/确认 | 每字节编号，ACK 确认已收数据 |
+| 超时重传 | RTO 内未确认则重传 |
+| 快速重传 | 3 个重复 ACK 触发立即重传 |
+| 滑动窗口 | 接收方控制发送方速率（流控） |
+| 拥塞控制 | 感知网络状况调整发送速率 |
+
+<Glossary>
+
+<GlossaryItem term="TCP（Transmission Control Protocol）">
+TCP 传输控制协议是面向连接的可靠传输协议。包头至少 20 字节：端口(各16) + 序号(32) + 确认号(32) + Offset(4) + Flags(6) + Window(16) + Checksum(16) + Urgent(16)。核心机制：①序号/确认——每字节编号，接收方确认 ②超时重传——RTO 内未确认则重传 ③滑动窗口——接收方通过 Window 字段控制发送方速率 ④拥塞控制——慢启动/拥塞避免/快重传/快恢复。通过三次握手建立连接，四次挥手关闭连接。
+</GlossaryItem>
+
+<GlossaryItem term="三次握手（Three-Way Handshake）">
+TCP 建立连接的过程：①客户端发 SYN, seq=x ②服务端回 SYN+ACK, seq=y, ack=x+1 ③客户端发 ACK, ack=y+1。三次而非两次的原因：防止历史连接问题（延迟的 SYN 导致服务端误建连接），同时确保双方都确认了对方的发送和接收能力。SYN 标志位表示同步序号，连接建立后序号从 ISN+1 开始。
+</GlossaryItem>
+
+<GlossaryItem term="四次挥手（Four-Way Handshake）">
+TCP 关闭连接的过程：①主动方发 FIN, seq=m ②被动方回 ACK, ack=m+1（被动方进入 CLOSE_WAIT，可继续发数据）③被动方发 FIN, seq=n ④主动方回 ACK, ack=n+1（主动方进入 TIME_WAIT）。需要四次而非三次是因为 TCP 是全双工——关闭方向独立，被动方收到 FIN 后可能还有剩余数据要发，所以 ACK 和 FIN 分开发送。
+</GlossaryItem>
+
+<GlossaryItem term="滑动窗口（Sliding Window）">
+TCP 流量控制机制。接收方在 ACK 中携带 Window 字段，告知发送方自己还能接收多少数据（接收缓存剩余空间）。发送方确保已发送未确认的数据量不超过 Window。窗口随确认向前滑动：收到 ACK 左边界右移，接收方读取数据后 Window 增大。Window=0 时发送方暂停发送并启动坚持定时器探测窗口。滑动窗口使发送速率匹配接收方处理能力，防止缓存溢出。
+</GlossaryItem>
+
+<GlossaryItem term="TIME_WAIT 状态">
+TCP 主动关闭方在四次挥手的最后一个 ACK 后进入 TIME_WAIT 状态，持续 2×MSL（最大报文段生存时间，通常 60-120 秒）。原因：①确保最后的 ACK 能到达被动方——若丢失，被动方会重发 FIN，主动方还能重发 ACK ②等待 2MSL 让本次连接的所有报文在网络中消亡，防止干扰可能复用相同端口的新连接。TIME_WAIT 是 TCP 可靠性的最后一道保险。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** TCP 三次握手的过程是什么？为什么需要三次而不是两次？
+
+<Answer>
+
+三次握手：①客户端发 SYN, seq=x ②服务端回 SYN+ACK, seq=y, ack=x+1 ③客户端发 ACK, seq=x+1, ack=y+1。需要三次而非两次的原因：两次握手时，如果客户端的 SYN 延迟到达，服务端回 SYN+ACK 后就认为连接建立，但客户端并未发起连接，导致服务端资源浪费（历史连接问题）。三次握手让客户端通过 ACK 确认是否真的要建立连接。
+
+</Answer>
+
+**问题 2：** TCP 四次挥手的过程是什么？为什么需要 TIME_WAIT 状态？
+
+<Answer>
+
+四次挥手：①主动方发 FIN ②被动方回 ACK（进入 CLOSE_WAIT，可继续发数据）③被动方发 FIN ④主动方回 ACK，进入 TIME_WAIT 等待 2MSL 后关闭。TIME_WAIT 的原因：①确保最后的 ACK 能到达被动方——如果丢失，被动方会重发 FIN，主动方还能重发 ACK ②等待 2MSL 让本次连接的所有报文消亡，防止干扰新连接。
+
+</Answer>
+
+</Exercises>

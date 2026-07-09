@@ -2048,7 +2048,17 @@ export type ReviewChapterSlug =
   | "wpa-http-analysis"
   | "wpa-dns-dhcp"
   | "wpa-network-security"
-  | "wpa-final-review";
+  | "wpa-final-review"
+  | "tip-learning-map"
+  | "tip-link-layer"
+  | "tip-ip-protocol"
+  | "tip-icmp-igmp"
+  | "tip-udp-protocol"
+  | "tip-tcp-protocol"
+  | "tip-tcp-timers"
+  | "tip-routing-protocols"
+  | "tip-application-protocols"
+  | "tip-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4101,6 +4111,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "wpa-dns-dhcp": "DNS与DHCP分析",
   "wpa-network-security": "网络安全与异常检测",
   "wpa-final-review": "全书复习与知识整合",
+  "tip-learning-map": "全书学习地图",
+  "tip-link-layer": "链路层：以太网与ARP",
+  "tip-ip-protocol": "IP协议与路由",
+  "tip-icmp-igmp": "ICMP与IGMP",
+  "tip-udp-protocol": "UDP协议",
+  "tip-tcp-protocol": "TCP可靠传输",
+  "tip-tcp-timers": "TCP超时与重传",
+  "tip-routing-protocols": "路由协议",
+  "tip-application-protocols": "应用层协议实战",
+  "tip-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

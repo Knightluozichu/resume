@@ -240,6 +240,7 @@ export const BOOK_ORDER = [
   "computer-networks-top-down",
   "http-definitive-guide",
   "wireshark-packet-analysis",
+  "tcp-ip-illustrated-vol1",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -420,6 +421,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "computer-networks-top-down": "计算机网络：自顶向下方法",
   "http-definitive-guide": "HTTP权威指南",
   "wireshark-packet-analysis": "Wireshark数据包分析实战",
+  "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
