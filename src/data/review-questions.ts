@@ -2065,6 +2065,16 @@ import { dl2LayersModulesQuestions } from "./review/dl2-layers-modules";
 import { dl2ModelArchitectureQuestions } from "./review/dl2-model-architecture";
 import { dl2TrainingEvaluationQuestions } from "./review/dl2-training-evaluation";
 import { dl2FinalReviewQuestions } from "./review/dl2-final-review";
+import { dnaLearningMapQuestions } from "./review/dna-learning-map";
+import { dnaNlpBasicsQuestions } from "./review/dna-nlp-basics";
+import { dnaWordEmbeddingsQuestions } from "./review/dna-word-embeddings";
+import { dnaWord2vecCbowQuestions } from "./review/dna-word2vec-cbow";
+import { dnaRnnLstmQuestions } from "./review/dna-rnn-lstm";
+import { dnaSeq2seqQuestions } from "./review/dna-seq2seq";
+import { dnaAttentionQuestions } from "./review/dna-attention";
+import { dnaTransformerQuestions } from "./review/dna-transformer";
+import { dnaTextGenerationQuestions } from "./review/dna-text-generation";
+import { dnaFinalReviewQuestions } from "./review/dna-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4165,6 +4175,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dl2ModelArchitectureQuestions,
   ...dl2TrainingEvaluationQuestions,
   ...dl2FinalReviewQuestions,
+  ...dnaLearningMapQuestions,
+  ...dnaNlpBasicsQuestions,
+  ...dnaWordEmbeddingsQuestions,
+  ...dnaWord2vecCbowQuestions,
+  ...dnaRnnLstmQuestions,
+  ...dnaSeq2seqQuestions,
+  ...dnaAttentionQuestions,
+  ...dnaTransformerQuestions,
+  ...dnaTextGenerationQuestions,
+  ...dnaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

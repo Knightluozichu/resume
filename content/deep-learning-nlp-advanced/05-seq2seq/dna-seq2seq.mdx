@@ -1,0 +1,211 @@
+---
+title: "序列到序列模型"
+type: A
+section: "人工智能与机器学习"
+order: 5
+description: "编码器-解码器架构与机器翻译实现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnaSeq2seqDiagram } from "@/components/mdx/deep-learning-nlp-advanced/diagrams/dna-seq2seq";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解 seq2seq 的编码器-解码器架构
+- 掌握上下文向量在编码器与解码器之间的桥梁作用
+- 理解 Teacher Forcing 训练策略与自回归推理的区别
+- 明确固定长度上下文瓶颈及其对注意力机制的启发
+
+</Objectives>
+
+## seq2seq：序列到序列的映射
+
+有了 LSTM 后，我们可以处理变长序列。但很多 NLP 任务需要**将一个序列映射为另一个序列**——如机器翻译（英文→中文）、文本摘要（长文→短文）、对话（问题→回答）。seq2seq（Sequence to Sequence）模型正是为此设计。
+
+<DnaSeq2seqDiagram />
+
+## 编码器-解码器架构
+
+seq2seq 由两个 LSTM 组成：
+
+### 编码器（Encoder）
+
+逐步读入源语言序列，将完整序列压缩为一个**固定长度的上下文向量**（编码器最终隐状态）。
+
+```python
+# 编码器：逐词处理源序列
+encoder_lstm = LSTM(input_size, hidden_size)
+h, c = (zeros, zeros)  # 初始状态
+for word in source_sequence:
+    h, c = encoder_lstm(word_embedding[word], h, c)
+# h 是最终隐状态 = 上下文向量
+context = h
+```
+
+### 解码器（Decoder）
+
+以上下文向量为初始隐状态，逐词生成目标语言序列。
+
+```python
+# 解码器：逐词生成目标序列
+decoder_lstm = LSTM(input_size, hidden_size)
+h, c = (context, zeros)  # 用上下文向量初始化
+
+# 第一步：输入 <BOS> 开始符
+output, h, c = decoder_lstm(bos_embedding, h, c)
+word1 = softmax(output_layer(output))
+
+# 后续：用上一步输出作为输入（自回归）
+output, h, c = decoder_lstm(word1_embedding, h, c)
+word2 = softmax(output_layer(output))
+# ... 直到生成 <EOS>
+```
+
+## 上下文向量：信息的瓶颈
+
+上下文向量是编码器和解码器之间的**唯一桥梁**——编码器的全部信息都压缩在这一个向量中。
+
+<Callout type="warning">
+
+**固定长度上下文瓶颈**：无论源句子多长，所有信息都要塞进一个固定维度的向量。长句子信息丢失严重，解码器每步只能访问同一个向量。这个瓶颈正是注意力机制（下一章）要解决的核心问题。
+
+</Callout>
+
+## Teacher Forcing 训练策略
+
+### 训练时：Teacher Forcing
+
+训练时解码器的每一步输入使用**正确答案**（ground truth），而非上一步自己的预测。
+
+```python
+# 训练：Teacher Forcing
+for t in range(len(target_sequence)):
+    # 用正确答案作为输入，而非上一步预测
+    input_word = target_sequence[t]  # 正确答案
+    output, h, c = decoder_lstm(embedding[input_word], h, c)
+    loss += cross_entropy(output, target_sequence[t+1])
+```
+
+### 推理时：自回归生成
+
+推理时没有正确答案，只能用模型上一步的预测作为下一步输入。
+
+```python
+# 推理：自回归
+input_word = <BOS>
+while input_word != <EOS>:
+    output, h, c = decoder_lstm(embedding[input_word], h, c)
+    input_word = argmax(output)  # 用自己的预测
+    generated.append(input_word)
+```
+
+<Callout type="info">
+
+**为什么训练用 Teacher Forcing**：如果训练时用模型自己的错误预测作为下一步输入，错误会累积（exposure bias），梯度信号混乱，训练极慢甚至不收敛。正确答案提供干净的训练信号，让模型专注学习「给定正确上文，如何预测下一个词」。
+
+</Callout>
+
+## 变长序列的处理
+
+### 填充（Padding）
+
+一个 batch 内不同长度的序列用 `<PAD>` 填充到相同长度：
+
+```text
+序列1: [I, am, a, student, <EOS>]          → [I, am, a, student, <EOS>, <PAD>, <PAD>]
+序列2: [Hello, world, <EOS>]               → [Hello, world, <EOS>, <PAD>, <PAD>, <PAD>, <PAD>]
+```
+
+### 掩码（Masking）
+
+计算损失时，`<PAD>` 位置不参与：
+
+```python
+def masked_loss(logits, targets, mask):
+    # mask: 真实token=1, PAD=0
+    losses = cross_entropy(logits, targets, reduction='none')
+    losses = losses * mask  # 屏蔽PAD位置
+    return losses.sum() / mask.sum()  # 只在真实token上平均
+```
+
+## seq2seq 的损失函数
+
+每步用交叉熵损失，整个序列取平均：
+
+```text
+L = (1/T) Σ_t -log P(target_t | context, target_{<t})
+```
+
+其中 T 是真实 token 数量（不含 PAD）。
+
+<Glossary>
+
+<GlossaryItem term="seq2seq（序列到序列）">
+将一个变长序列映射为另一个变长序列的模型架构。由编码器和解码器两个 LSTM 组成。编码器将源序列压缩为上下文向量，解码器以上下文为初始状态逐词生成目标序列。应用于机器翻译、文本摘要、对话等任务。
+</GlossaryItem>
+
+<GlossaryItem term="编码器（Encoder）">
+seq2seq 中负责「理解」源序列的部分。通常是 LSTM，逐词读入源序列，最终隐状态作为上下文向量。编码器的输出是一个固定长度的向量，包含了整个源序列的压缩信息。
+</GlossaryItem>
+
+<GlossaryItem term="解码器（Decoder）">
+seq2seq 中负责「生成」目标序列的部分。以编码器的上下文向量为初始隐状态，逐词生成目标序列。训练时用 Teacher Forcing（输入正确答案），推理时用自回归（输入上一步预测）。
+</GlossaryItem>
+
+<GlossaryItem term="Teacher Forcing">
+seq2seq 训练策略：解码器每步输入用正确答案而非上一步预测。加速收敛、稳定训练，但导致训练与推理的输入分布不一致（exposure bias）。实践中 Teacher Forcing 仍是最常用的训练策略。
+</GlossaryItem>
+
+<GlossaryItem term="固定长度上下文瓶颈">
+seq2seq 的核心缺陷：编码器将整个源序列压缩为一个固定长度的上下文向量，长句子信息丢失严重，解码器每步只能访问同一向量。这个瓶颈是注意力机制发明的直接动机。
+</GlossaryItem>
+
+<GlossaryItem term="填充与掩码（Padding & Masking）">
+处理变长序列的技术。填充：将 batch 内不同长度序列用 <PAD> 补齐到相同长度。掩码：标记真实 token（1）和填充位置（0），计算损失时只在真实 token 上累加，避免填充位置引入噪声。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+seq2seq 模型的编码器-解码器架构是什么？它如何实现机器翻译？
+
+<Answer>
+
+seq2seq 架构：编码器（Encoder）逐步读入源语言序列，将完整序列压缩为一个固定长度的上下文向量（通常是编码器最后一个时间步的隐状态）。解码器（Decoder）以上下文向量为初始隐状态，逐词生成目标语言序列。机器翻译流程：以英译中为例，编码器读入 "I am a student"，经过 LSTM 逐词处理后，最终隐状态 h 编码了整个句子的语义。解码器以 h 为初始状态，先输入开始符 <BOS>，输出「我」；再将「我」作为下一步输入，输出「是」；依此类推，直到输出结束符 <EOS>。编码器和解码器各自是 LSTM（或 GRU），参数独立。编码器负责「理解」源语言，解码器负责「生成」目标语言。
+</Answer>
+
+### 问题 2
+
+什么是 Teacher Forcing？为什么训练时用它而推理时不用？
+
+<Answer>
+
+Teacher Forcing（教师强制）：训练时解码器的每一步输入使用「正确答案」（ground truth）而非上一步自己的预测。例如训练翻译时，即使第一步预测错了（把「我」预测成了「你」），第二步仍用正确的「我」作为输入，而非错误的「你」。训练时用 Teacher Forcing 的原因：①加速收敛——如果用模型自己的错误预测作为下一步输入，错误会累积（exposure bias），梯度信号混乱，训练极慢甚至不收敛。②稳定训练——正确答案提供了干净的训练信号，让模型专注于学习「给定正确上文，如何预测下一个词」。推理时不用的原因：推理时没有正确答案可用，只能用模型上一步的预测作为下一步输入（自回归生成）。这导致训练和推理的输入分布不一致（exposure bias 问题），但实践中 Teacher Forcing 的训练效果仍然远优于不用。
+</Answer>
+
+### 问题 3
+
+seq2seq 的「固定长度上下文瓶颈」是什么？它带来了什么问题？
+
+<Answer>
+
+固定长度上下文瓶颈：seq2seq 的编码器将整个源序列压缩为一个固定长度的上下文向量（如256维），无论源句子多长，信息都要塞进这个固定向量中。带来的问题：①长句子信息丢失——当源句子很长时，一个固定向量无法充分编码所有信息，编码器「记住」前面的词就会「遗忘」后面的词，导致翻译质量随句子长度增加而急剧下降。②无选择性——解码器在生成每个目标词时，都只能访问同一个上下文向量，无法根据当前要生成的词「选择性关注」源句子中不同的部分。例如翻译 "I am a student" 到「我是学生」，生成「我」时应该关注 "I"，生成「学生」时应该关注 "student"，但固定瓶颈下解码器无法区分。这个瓶颈正是注意力机制（Attention）要解决的核心问题——让解码器每步动态访问编码器的所有隐状态，而非只看最终向量。
+</Answer>
+
+### 问题 4
+
+seq2seq 模型训练时的损失函数是什么？如何处理变长序列的损失计算？
+
+<Answer>
+
+损失函数：seq2seq 训练用交叉熵损失。解码器每一步输出一个词表上的概率分布，与正确目标词的 one-hot 计算交叉熵：L_t = -log P(target_t | context, target_{<t})。整个序列的损失是各步损失的平均：L = (1/T) Σ L_t。变长序列处理：①填充（Padding）——将一个 batch 内不同长度的序列用特殊符号 <PAD> 填充到相同长度，使能批量处理。②掩码（Masking）——计算损失时，<PAD> 位置不参与损失计算（损失只在真实 token 上累加），否则填充位置会引入噪声。具体做法是用一个 mask 矩阵标记真实 token 位置为1、填充位置为0，损失乘以 mask 后求和再除以真实 token 数量。③<EOS> 处理——解码器需要学会在合适的位置输出 <EOS>，<EOS> 本身也参与损失计算。这样模型既能处理变长输入，也能生成变长输出。
+</Answer>
+
+</Exercises>

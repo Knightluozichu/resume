@@ -1,0 +1,212 @@
+---
+title: "注意力机制"
+type: B
+section: "人工智能与机器学习"
+order: 6
+description: "动态上下文向量与Query-Key-Value检索框架"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DnaAttentionDiagram } from "@/components/mdx/deep-learning-nlp-advanced/diagrams/dna-attention";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解注意力机制如何打破 seq2seq 的固定上下文瓶颈
+- 掌握注意力权重的三步计算：打分、归一化、加权求和
+- 理解点积注意力与加性注意力的区别
+- 掌握 Query-Key-Value 检索框架及其统一性
+
+</Objectives>
+
+## 从固定瓶颈到动态关注
+
+seq2seq 的核心缺陷是**固定长度上下文瓶颈**——解码器每步只能访问同一个上下文向量。注意力机制让解码器在生成每个词时，**动态计算**对编码器各隐状态的关注程度，得到当前步专属的上下文向量。
+
+<DnaAttentionDiagram />
+
+## 注意力计算三步
+
+### 第一步：打分（Score）
+
+计算解码器当前状态 $s_t$ 与编码器每个隐状态 $h_i$ 的相关性分数。
+
+**点积注意力**（简单高效）：
+
+```text
+score(s_t, h_i) = s_t · h_i
+```
+
+**加性注意力**（Bahdanau，更灵活）：
+
+```text
+score(s_t, h_i) = v^T · tanh(W · s_t + U · h_i)
+```
+
+### 第二步：归一化（Softmax）
+
+将分数转为概率分布：
+
+```text
+α_i = exp(score_i) / Σ_j exp(score_j)
+```
+
+所有 $\alpha_i$ 之和为1，表示注意力在各编码器隐状态上的分配比例。
+
+### 第三步：加权求和
+
+用注意力权重对编码器隐状态加权求和：
+
+```text
+c_t = Σ_i α_i · h_i
+```
+
+得到当前步专属的上下文向量 $c_t$。
+
+<Callout type="info">
+
+**关键洞察**：不同时间步的 $c_t$ 不同——因为解码器状态 $s_t$ 不同，产生的注意力权重 $\alpha$ 不同。生成「我」时关注 \"I\"，生成「学生」时关注 \"student\"。这就是「动态关注」。
+
+</Callout>
+
+## NumPy 实现
+
+```python
+def attention(decoder_state, encoder_states):
+    """
+    decoder_state: (H,) 解码器当前状态 s_t
+    encoder_states: (N, H) 编码器所有隐状态 h_1...h_N
+    """
+    # 1. 打分（点积）
+    scores = np.dot(encoder_states, decoder_state)  # (N,)
+    
+    # 2. 归一化（Softmax）
+    scores = scores - np.max(scores)  # 数值稳定
+    exp_scores = np.exp(scores)
+    attention_weights = exp_scores / np.sum(exp_scores)  # (N,)
+    
+    # 3. 加权求和
+    context = np.dot(attention_weights, encoder_states)  # (H,)
+    
+    return context, attention_weights
+```
+
+## 点积 vs 加性注意力
+
+| 特性 | 点积注意力 | 加性注意力（Bahdanau） |
+|------|-----------|----------------------|
+| 公式 | $s_t \cdot h_i$ | $v^T \tanh(W s_t + U h_i)$ |
+| 参数 | 无额外参数 | W, U, v |
+| 计算 | 一次矩阵乘法 | 两次矩阵乘法+激活 |
+| 高维效果 | 需缩放（÷√d_k） | 无需缩放 |
+| 实践 | Transformer 系列 | 早期 RNN+Attention |
+
+<Callout type="tip">
+
+**实践选择**：Transformer 系列几乎全用缩放点积注意力（效率高，可利用 GPU 矩阵乘法优化）。Bahdanau 加性注意力主要用于早期 RNN+Attention 模型。
+
+</Callout>
+
+## Query-Key-Value 框架
+
+注意力可抽象为一个**检索**过程：
+
+| 角色 | 含义 | seq2seq 中的对应 |
+|------|------|-----------------|
+| Query（查询） | 想要检索信息的向量 | 解码器状态 $s_t$ |
+| Key（键） | 被检索项的「索引」 | 编码器隐状态 $h_i$ |
+| Value（值） | 被检索项的「内容」 | 编码器隐状态 $h_i$ |
+
+统一公式：
+
+```text
+Attention(Q, K, V) = softmax(score(Q, K)) · V
+```
+
+<Callout type="warning">
+
+**QKV 框架的统一性**：所有注意力变体的区别只在于 Q、K、V 的来源不同。seq2seq 注意力中 Q=$s_t$, K=V=$h_i$；Transformer 自注意力中 Q=K=V 都是同一序列的线性变换。理解 QKV 框架是从注意力理解 Transformer 的关键。
+
+</Callout>
+
+## 注意力解决了什么
+
+| 问题 | 无注意力 | 有注意力 |
+|------|---------|---------|
+| 上下文向量 | 固定不变 | 每步动态变化 |
+| 长句子 | 信息丢失严重 | 可访问所有源词 |
+| 选择性 | 无（统一向量） | 有（动态权重） |
+| 可解释性 | 低 | 高（可视化权重） |
+
+注意力权重还可以**可视化**——展示模型在生成每个词时关注源句子的哪个部分，这为模型行为提供了可解释性。
+
+<Glossary>
+
+<GlossaryItem term="注意力机制（Attention）">
+让解码器在生成每个词时，动态计算对编码器各隐状态的关注权重，加权求和得到当前步专属的上下文向量。打破了 seq2seq 的固定瓶颈，是 Transformer 自注意力的原型。核心是 Query-Key-Value 检索框架。
+</GlossaryItem>
+
+<GlossaryItem term="点积注意力">
+用查询向量与键向量的内积作为相关性分数：score(Q, K) = Q · K。计算简单高效（一次矩阵乘法），适合高维向量。当维度很高时需用 √d_k 缩放防止 Softmax 梯度消失。Transformer 系列的标准选择。
+</GlossaryItem>
+
+<GlossaryItem term="加性注意力（Bahdanau Attention）">
+通过一个小型前馈网络计算相关性分数：score(Q, K) = v^T · tanh(W·Q + U·K)。比点积更灵活（通过 W 和 U 学习如何组合 Q 和 K），在低维向量上可能效果更好。参数更多、计算量更大。主要用于早期 RNN+Attention 模型。
+</GlossaryItem>
+
+<GlossaryItem term="Query-Key-Value 框架">
+将注意力抽象为检索过程的统一框架。Query 是当前想要检索信息的向量，Key 是被检索项的索引，Value 是被检索项的内容。Attention(Q,K,V) = softmax(score(Q,K)) · V。统一了所有注意力变体——区别只在于 Q、K、V 来源不同。
+</GlossaryItem>
+
+<GlossaryItem term="注意力权重可视化">
+将注意力权重矩阵可视化为热力图，展示模型在生成每个目标词时关注源序列的哪个部分。为模型行为提供可解释性——例如翻译时可以看到「我」关注「I」、「学生」关注「student」。是注意力机制的重要优势。
+</GlossaryItem>
+
+<GlossaryItem term="动态上下文向量">
+有注意力机制后，解码器每步的上下文向量 c_t 不再固定不变，而是根据当前解码器状态动态计算。不同时间步关注不同的源词，实现了「选择性关注」。这是注意力机制打破固定瓶颈的核心。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+注意力机制解决了 seq2seq 的什么问题？它的核心思想是什么？
+
+<Answer>
+
+注意力机制解决的问题是 seq2seq 的「固定长度上下文瓶颈」——编码器将整个源序列压缩为一个固定向量，长句子信息丢失，解码器每步只能访问同一个向量。核心思想：解码器在生成每个目标词时，不再只依赖一个固定的上下文向量，而是「动态计算」对编码器每个隐状态的关注程度（注意力权重），然后对所有隐状态加权求和，得到当前步专属的上下文向量 c_t。不同时间步的 c_t 不同，因为解码器在生成不同词时需要关注源序列的不同部分。例如翻译时生成「我」关注 "I"，生成「学生」关注 "student"。注意力机制让解码器拥有了「选择性关注」的能力，彻底打破了固定瓶颈。
+</Answer>
+
+### 问题 2
+
+注意力权重的计算过程分哪几步？写出公式。
+
+<Answer>
+
+注意力权重计算三步：①打分（Score）——计算解码器当前状态 s_t 与编码器每个隐状态 h_i 的相关性分数。常用方法：点积 score(s_t, h_i) = s_t · h_i，或加性注意力 score(s_t, h_i) = v^T · tanh(W·s_t + U·h_i)。②归一化（Softmax）——将分数通过 Softmax 转化为概率分布：α_i = exp(score_i) / Σ_j exp(score_j)。所有 α_i 之和为1，表示注意力在各个编码器隐状态上的分配比例。③加权求和——用注意力权重对编码器隐状态加权求和，得到上下文向量：c_t = Σ_i α_i · h_i。得到 c_t 后，将其与解码器状态 s_t 拼接，用于预测当前目标词。整个过程中 α 是动态的——不同的 s_t 产生不同的 α，从而产生不同的 c_t。
+</Answer>
+
+### 问题 3
+
+点积注意力和加性注意力有什么区别？各有什么优缺点？
+
+<Answer>
+
+点积注意力：score(s_t, h_i) = s_t · h_i（直接计算解码器状态与编码器隐状态的内积）。优点：计算简单高效（一次矩阵乘法）、可利用高度优化的矩阵乘法库、适合高维向量。缺点：当向量维度很高时，点积值可能很大，导致 Softmax 梯度趋近于0（梯度消失）。Transformer 中的缩放点积注意力用 √d_k 缩放解决这个问题。加性注意力（Bahdanau 注意力）：score(s_t, h_i) = v^T · tanh(W·s_t + U·h_i）（通过一个小的前馈网络计算分数）。优点：更灵活（通过 W 和 U 学习如何组合 s_t 和 h_i）、在低维向量上效果可能更好。缺点：参数更多（W、U、v）、计算量更大（需要两次矩阵乘法+激活函数）。实践中：Transformer 系列几乎全用缩放点积注意力（效率高），Bahdanau 加性注意力主要用于早期 RNN+Attention 模型。
+</Answer>
+
+### 问题 4
+
+注意力机制中的「查询-键-值」（Query-Key-Value）框架是什么？它如何统一了不同的注意力变体？
+
+<Answer>
+
+Query-Key-Value 框架：将注意力抽象为一个「检索」过程。Query（查询）——当前想要检索信息的向量（seq2seq 中是解码器状态 s_t）。Key（键）——被检索项的「索引」向量（seq2seq 中是编码器隐状态 h_i，用于与 Query 计算相关性）。Value（值）——被检索项的「内容」向量（seq2seq 中也是 h_i，用于加权求和）。统一公式：Attention(Q, K, V) = softmax(score(Q, K)) · V。在 seq2seq 注意力中 Q=s_t, K=V=h_i；在 Transformer 自注意力中 Q=K=V 都是同一序列的变换（Q=W_q·x, K=W_k·x, V=W_v·x）；在交叉注意力中 Q 来自解码器，K=V 来自编码器。这个框架统一了所有注意力变体：区别只在于 Q、K、V 来源不同，计算方式（打分函数）可以通用。理解 QKV 框架是从注意力机制理解 Transformer 的关键——Transformer 的全部核心就是这个框架加上多头和位置编码。
+</Answer>
+
+</Exercises>

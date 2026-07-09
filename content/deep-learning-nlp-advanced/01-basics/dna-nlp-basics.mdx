@@ -1,0 +1,214 @@
+---
+title: "NLP基础与预处理"
+type: A
+section: "人工智能与机器学习"
+order: 1
+description: "文本分词、词表构建与从同现矩阵到词嵌入的演进"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DnaNlpBasicsDiagram } from "@/components/mdx/deep-learning-nlp-advanced/diagrams/dna-nlp-basics";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解 NLP 预处理的基本流程：分词、构建词表、转为 ID 序列
+- 掌握同现矩阵的构建方法与局限性
+- 理解分布式假设及其在词嵌入中的核心地位
+- 明确从 one-hot 到同现矩阵到词嵌入的表示演进
+
+</Objectives>
+
+## NLP 的根本问题
+
+自然语言处理（NLP）的根本问题是：**如何把离散的文本变成计算机可计算的数字**。
+
+神经网络只能处理数值数据，无法直接处理字符串。因此，NLP 的第一步永远是**预处理**——将文本转换为数值表示，才能输入模型。
+
+<DnaNlpBasicsDiagram />
+
+## 预处理流水线
+
+NLP 预处理的基本流程分四步：
+
+```text
+原始文本 → 分词（Tokenize） → 构建词表 → 转换为 ID 序列
+```
+
+### 第一步：分词
+
+将连续文本切分为单词列表。英文以空格分割较简单，中文需要分词工具。
+
+```python
+text = "I love natural language processing"
+tokens = text.lower().split()
+# ["i", "love", "natural", "language", "processing"]
+```
+
+### 第二步：构建词表
+
+为每个唯一词分配一个 ID，建立 word → ID 的映射表。
+
+```python
+word_to_id = {}
+id_to_word = {}
+for word in tokens:
+    if word not in word_to_id:
+        new_id = len(word_to_id)
+        word_to_id[word] = new_id
+        id_to_word[new_id] = word
+# {"i":0, "love":1, "natural":2, "language":3, "processing":4}
+```
+
+### 第三步：转为 ID 序列
+
+将文本中的每个词替换为对应的 ID。
+
+```python
+corpus = [word_to_id[w] for w in tokens]
+# [0, 1, 2, 3, 4]
+```
+
+## 从单词到向量：分布式表示
+
+ID 序列只是数字编号，不包含语义信息。我们需要将每个 ID 进一步映射为**向量**。
+
+### 同现矩阵
+
+统计每个词与上下文词的共现次数，构建 V×V 矩阵（V = 词表大小）。
+
+```python
+def create_co_matrix(corpus, vocab_size, window_size=1):
+    co_matrix = np.zeros((vocab_size, vocab_size), dtype=np.int32)
+    for idx, word_id in enumerate(corpus):
+        for i in range(1, window_size + 1):
+            left_idx = idx - i
+            right_idx = idx + i
+            if left_idx >= 0:
+                co_matrix[word_id, corpus[left_idx]] += 1
+            if right_idx < len(corpus):
+                co_matrix[word_id, corpus[right_idx]] += 1
+    return co_matrix
+```
+
+同现矩阵的局限：维度高（=词表大小）、稀疏（大部分为0）、无语义泛化。
+
+### 词嵌入
+
+将每个词映射为低维稠密向量（如100维），通过训练学习语义关系。
+
+<Callout type="info">
+
+**关键洞察**：同现矩阵是「被动统计」上下文共现，词嵌入是「主动学习」语义表示。这是本书从同现矩阵到 word2vec 的核心跃迁——从高维稀疏到低维稠密，从无语义到有语义。
+
+</Callout>
+
+## 分布式假设
+
+**分布式假设**（Distributional Hypothesis）：「一个词的含义由它的上下文决定」。
+
+- \"cat\" 和 \"dog\" 都常出现在 \"I have a ___\" 中 → 语义相近
+- \"king\" 和 \"queen\" 都常出现在类似的王室语境中 → 语义相近
+
+<Callout type="tip">
+
+**核心地位**：分布式假设是现代 NLP 的基石。word2vec 基于此学习词向量，RNN 基于此建模序列上下文，Transformer 基于此计算注意力。没有分布式假设，就无法从文本中自动学习词的含义。
+
+</Callout>
+
+## 表示方法的演进
+
+| 方法 | 维度 | 稀疏性 | 语义 | 泛化 |
+|------|------|--------|------|------|
+| one-hot | V（极高） | 稀疏 | 无 | 无 |
+| 同现矩阵 | V（极高） | 稀疏 | 有限（共现模式） | 弱 |
+| 词嵌入 | 低（如100） | 稠密 | 强（语义空间） | 强 |
+
+```text
+one-hot（身份编码） → 同现矩阵（统计编码） → 词嵌入（学习编码）
+    无语义              被动统计              主动学习语义
+```
+
+## 词相似度计算
+
+有了向量表示后，可以计算词与词之间的相似度。常用余弦相似度：
+
+```python
+def cos_similarity(x, y):
+    nx = x / np.sqrt(np.sum(x ** 2))  # 归一化
+    ny = y / np.sqrt(np.sum(y ** 2))
+    return np.dot(nx, ny)
+```
+
+余弦相似度衡量向量方向的接近程度，值域 `[-1, 1]`，越接近1表示越相似。
+
+<Glossary>
+
+<GlossaryItem term="分词（Tokenize）">
+将连续文本切分为单词列表的过程。英文以空格分割较简单，中文需要专门的分词工具（如 jieba）。分词是 NLP 预处理的第一步，分词质量直接影响后续所有处理。
+</GlossaryItem>
+
+<GlossaryItem term="词表（Vocabulary）">
+文本中所有唯一词的集合，每个词分配一个唯一 ID。词表大小 V 是 NLP 模型的重要参数——决定了 one-hot 维度、嵌入矩阵大小和输出层大小。大词表增加计算量但覆盖更多词，小词表将低频词映射为 <UNK>。
+</GlossaryItem>
+
+<GlossaryItem term="同现矩阵">
+统计每个词与上下文词共现次数的 V×V 矩阵。第 i 行第 j 列表示词 j 在词 i 的上下文窗口中出现的次数。维度等于词表大小（高维稀疏），是早期的词表示方法，被词嵌入取代。
+</GlossaryItem>
+
+<GlossaryItem term="分布式假设">
+「一个词的含义由它的上下文决定」——在相似上下文中出现的词具有相似含义。是现代 NLP 的基石，word2vec、RNN、Transformer 都隐含这一假设。由语言学家 J.R. Firth 提出：「You shall know a word by the company it keeps」。
+</GlossaryItem>
+
+<GlossaryItem term="余弦相似度">
+衡量两个向量方向接近程度的指标：cos(x, y) = x·y / (|x|·|y|)。值域 [-1, 1]，越接近1越相似。在词向量中用于衡量词义相似性。相比欧氏距离，余弦相似度不受向量长度影响，更适合比较语义方向。
+</GlossaryItem>
+
+<GlossaryItem term="词嵌入（Word Embedding）">
+将每个单词映射为低维稠密向量的表示方法。通过训练学习（如 word2vec），使语义相似的词在向量空间中距离近。维度通常为 50-300。词嵌入是 NLP 从符号操作走向连续数学的关键跃迁。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+NLP 预处理的基本流程是什么？为什么需要将文本转为数字？
+
+<Answer>
+
+NLP 预处理基本流程：①原始文本（如 "I love NLP"）→ ②分词（Tokenize，切分为单词列表 ["I", "love", "NLP"]）→ ③构建词表（为每个唯一词分配一个 ID，如 love→1）→ ④转换为 ID 序列（[0, 1, 2]）。需要将文本转为数字的原因：神经网络只能处理数值数据，无法直接处理字符串。将文本转为 ID 序列后，再通过嵌入层将 ID 映射为稠密向量，才能输入神经网络进行计算。ID 序列是文本与神经网络之间的桥梁。
+</Answer>
+
+### 问题 2
+
+同现矩阵和词嵌入各有什么特点？为什么词嵌入是更好的表示方法？
+
+<Answer>
+
+同现矩阵：统计每个词与上下文词的共现次数，构建一个 V×V 的矩阵（V=词表大小）。特点是维度高（等于词表大小，通常上万维）、稀疏（大部分元素为0）、无语义泛化（无法捕获词与词之间的相似性）。词嵌入：将每个词映射为一个低维稠密向量（如100维），特点是维度低、稠密、能捕获语义关系（相似含义的词在向量空间中距离近）。词嵌入更好的原因：①维度低，计算效率高；②稠密表示信息密度高；③语义泛化——通过分布式假设（上下文相似的词含义相似），词嵌入自动学习到语义关系，如 king-queen 的向量差与 man-woman 的向量差相似。这是本书从同现矩阵到 word2vec 的核心跃迁。
+</Answer>
+
+### 问题 3
+
+什么是分布式假设？它为什么是现代 NLP 的基石？
+
+<Answer>
+
+分布式假设（Distributional Hypothesis）：「一个词的含义由它的上下文决定」——在相似上下文中出现的词具有相似的含义。例如 "cat" 和 "dog" 都常出现在 "I have a ___" 这样的上下文中，因此它们语义相近。分布式假设是现代 NLP 的基石，原因：①它提供了将离散单词映射为连续向量的理论基础——通过统计或学习词的上下文分布，可以构建词的向量表示。②它是 word2vec（CBOW用上下文预测中心词、Skip-gram用中心词预测上下文）的指导思想。③它也是后续 RNN、Transformer 等模型隐含的前提——模型通过上下文理解词义。没有分布式假设，就无法从文本中自动学习词的含义，NLP 只能依赖手工特征工程。
+</Answer>
+
+### 问题 4
+
+从 one-hot 编码到词嵌入，表示方法经历了怎样的演进？每一步解决了什么问题？
+
+<Answer>
+
+表示方法的三步演进：①one-hot 编码——每个词表示为一个 V 维向量，只有对应位置为1其余为0。问题：维度等于词表大小（极高维）、所有词之间距离相同（无语义信息）、无法泛化。②同现矩阵——统计词与上下文词的共现次数，每个词的向量是其所在行的共现计数。解决了 one-hot 的语义缺失问题（共现模式相似的词向量相似），但仍是高维稀疏，且维度随词表增长。③词嵌入（word2vec）——通过神经网络学习低维稠密向量。解决了维度问题（降至100维左右）、稀疏问题（稠密）、语义泛化问题（相似词向量近）。核心思想变化：one-hot 是「身份编码」（每个词独立无关联），同现矩阵是「统计编码」（被动统计上下文），词嵌入是「学习编码」（通过预测任务主动学习语义）。这一演进是 NLP 从规则驱动到数据驱动的关键转折。
+</Answer>
+
+</Exercises>

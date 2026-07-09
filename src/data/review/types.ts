@@ -2188,7 +2188,17 @@ export type ReviewChapterSlug =
   | "dl2-layers-modules"
   | "dl2-model-architecture"
   | "dl2-training-evaluation"
-  | "dl2-final-review";
+  | "dl2-final-review"
+  | "dna-learning-map"
+  | "dna-nlp-basics"
+  | "dna-word-embeddings"
+  | "dna-word2vec-cbow"
+  | "dna-rnn-lstm"
+  | "dna-seq2seq"
+  | "dna-attention"
+  | "dna-transformer"
+  | "dna-text-generation"
+  | "dna-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4381,6 +4391,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dl2-model-architecture": "模型架构设计",
   "dl2-training-evaluation": "训练与评估",
   "dl2-final-review": "全书复习与知识整合",
+  "dna-learning-map": "全书学习地图",
+  "dna-nlp-basics": "NLP基础与预处理",
+  "dna-word-embeddings": "词嵌入与word2vec",
+  "dna-word2vec-cbow": "word2vec实现",
+  "dna-rnn-lstm": "RNN与LSTM",
+  "dna-seq2seq": "序列到序列模型",
+  "dna-attention": "注意力机制",
+  "dna-transformer": "Transformer架构",
+  "dna-text-generation": "文本生成实践",
+  "dna-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
