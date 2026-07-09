@@ -2138,7 +2138,17 @@ export type ReviewChapterSlug =
   | "iml-support-vector"
   | "iml-unsupervised"
   | "iml-model-evaluation"
-  | "iml-final-review";
+  | "iml-final-review"
+  | "idl-learning-map"
+  | "idl-nn-fundamentals"
+  | "idl-forward-propagation"
+  | "idl-backpropagation"
+  | "idl-cnn"
+  | "idl-rnn"
+  | "idl-regularization"
+  | "idl-generative-models"
+  | "idl-applications"
+  | "idl-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4281,6 +4291,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "iml-unsupervised": "无监督学习与聚类",
   "iml-model-evaluation": "模型评估与调优",
   "iml-final-review": "全书复习与知识整合",
+  "idl-learning-map": "全书学习地图",
+  "idl-nn-fundamentals": "神经网络基础",
+  "idl-forward-propagation": "前向传播与激活函数",
+  "idl-backpropagation": "反向传播算法",
+  "idl-cnn": "卷积神经网络",
+  "idl-rnn": "循环神经网络",
+  "idl-regularization": "正则化与优化",
+  "idl-generative-models": "生成模型与自编码器",
+  "idl-applications": "深度学习应用实践",
+  "idl-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

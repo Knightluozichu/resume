@@ -2015,6 +2015,16 @@ import { imlSupportVectorQuestions } from "./review/iml-support-vector";
 import { imlUnsupervisedQuestions } from "./review/iml-unsupervised";
 import { imlModelEvaluationQuestions } from "./review/iml-model-evaluation";
 import { imlFinalReviewQuestions } from "./review/iml-final-review";
+import { idlLearningMapQuestions } from "./review/idl-learning-map";
+import { idlNnFundamentalsQuestions } from "./review/idl-nn-fundamentals";
+import { idlForwardPropagationQuestions } from "./review/idl-forward-propagation";
+import { idlBackpropagationQuestions } from "./review/idl-backpropagation";
+import { idlCnnQuestions } from "./review/idl-cnn";
+import { idlRnnQuestions } from "./review/idl-rnn";
+import { idlRegularizationQuestions } from "./review/idl-regularization";
+import { idlGenerativeModelsQuestions } from "./review/idl-generative-models";
+import { idlApplicationsQuestions } from "./review/idl-applications";
+import { idlFinalReviewQuestions } from "./review/idl-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4065,6 +4075,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...imlUnsupervisedQuestions,
   ...imlModelEvaluationQuestions,
   ...imlFinalReviewQuestions,
+  ...idlLearningMapQuestions,
+  ...idlNnFundamentalsQuestions,
+  ...idlForwardPropagationQuestions,
+  ...idlBackpropagationQuestions,
+  ...idlCnnQuestions,
+  ...idlRnnQuestions,
+  ...idlRegularizationQuestions,
+  ...idlGenerativeModelsQuestions,
+  ...idlApplicationsQuestions,
+  ...idlFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
