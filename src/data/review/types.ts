@@ -2248,7 +2248,17 @@ export type ReviewChapterSlug =
   | "rlc-policy-gradient-c"
   | "rlc-environments"
   | "rlc-practical-applications"
-  | "rlc-final-review";
+  | "rlc-final-review"
+  | "drl-learning-map"
+  | "drl-rl-foundations"
+  | "drl-value-based"
+  | "drl-policy-gradient"
+  | "drl-actor-critic"
+  | "drl-advanced-algorithms"
+  | "drl-exploration"
+  | "drl-reward-design"
+  | "drl-applications"
+  | "drl-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4501,6 +4511,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "rlc-environments": "环境搭建与实验",
   "rlc-practical-applications": "实际应用与对比",
   "rlc-final-review": "全书复习与知识整合",
+  "drl-learning-map": "深度强化学习·知识全景图",
+  "drl-rl-foundations": "强化学习基础与MDP",
+  "drl-value-based": "基于价值的方法：DQN族",
+  "drl-policy-gradient": "策略梯度方法",
+  "drl-actor-critic": "Actor-Critic与A3C",
+  "drl-advanced-algorithms": "高级算法：PPO/SAC/TD3",
+  "drl-exploration": "探索与利用策略",
+  "drl-reward-design": "奖励设计与环境工程",
+  "drl-applications": "实战应用：游戏/机器人/自动驾驶",
+  "drl-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

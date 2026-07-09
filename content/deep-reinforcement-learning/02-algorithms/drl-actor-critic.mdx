@@ -1,0 +1,165 @@
+---
+title: "Actor-Critic与A3C"
+type: B
+section: "人工智能与机器学习"
+order: 4
+description: "Actor-Critic双网络架构、TD误差连接与A3C异步并行训练"
+demo: false
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DrlActorCriticDiagram } from "@/components/mdx/deep-reinforcement-learning/diagrams/drl-actor-critic";
+import { Objectives, Callout, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+## 学习目标
+
+<Objectives>
+
+- 理解Actor-Critic架构中Actor和Critic的分工与协作机制
+- 掌握TD误差如何连接两个网络的更新
+- 理解A3C异步并行训练的原理和优势
+- 能够对比Actor-Critic与纯策略梯度的优劣势
+
+</Objectives>
+
+## 核心概念
+
+### Actor-Critic双网络架构
+
+Actor-Critic融合了基于价值和基于策略两种范式：
+
+| 网络 | 角色 | 输入/输出 | 更新目标 |
+|------|------|-----------|----------|
+| Actor（策略网络） | 决策者 | s → pi(a\|s) | 最大化期望回报 |
+| Critic（价值网络） | 评估者 | s → V(s) | 最小化TD误差 |
+
+<DrlActorCriticDiagram />
+
+### TD误差连接双网络
+
+```
+delta = r + gamma * V(s') - V(s)     // TD误差
+Actor更新:  theta <- theta + alpha * delta * grad_log_pi(a|s)
+Critic更新: w <- w + beta * delta * grad_V(s)
+```
+
+<Callout type="info">
+
+delta 的含义是「实际比预期好多少」。delta为正说明动作比预期好，Actor增大该动作概率；delta为负说明比预期差，Actor降低概率。Critic用delta修正值估计。delta的期望等于优势函数 A(s,a) = Q(s,a) - V(s)。
+
+</Callout>
+
+### A3C异步并行训练
+
+A3C（Asynchronous Advantage Actor-Critic）的核心机制：
+
+| 组件 | 说明 |
+|------|------|
+| 全局网络 | 共享的 Actor + Critic 参数 |
+| Worker 1~N | 各持本地网络副本，独立与环境交互 |
+| 异步更新 | Worker算梯度后异步推送至全局网络 |
+| 定期同步 | Worker从全局网络拉取最新参数 |
+
+**A3C为何有效**：
+- 多Worker探索不同区域，天然打破数据相关性
+- 无需经验回放（on-policy）
+- CPU多线程即可，降低硬件门槛
+
+### Actor-Critic vs REINFORCE
+
+| 维度 | REINFORCE | Actor-Critic |
+|------|-----------|--------------|
+| 更新频率 | 回合结束才更新 | 每步可更新 |
+| 方差 | 大（蒙特卡洛G_t） | 小（TD误差delta） |
+| 偏差 | 无偏 | 有偏（Critic估计不完美） |
+| 适用 | 短回合 | 长回合/连续任务 |
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="Actor-Critic">
+
+融合基于价值和基于策略的RL架构。Actor学策略pi_theta，Critic学值函数V_w，用TD误差delta连接两者更新。偏差-方差的理想平衡。
+
+</GlossaryItem>
+
+<GlossaryItem term="Actor（策略网络）">
+
+Actor-Critic中的决策网络，输入状态s输出动作概率分布pi(a|s)。沿TD误差的正方向更新，增大好动作概率。
+
+</GlossaryItem>
+
+<GlossaryItem term="Critic（价值网络）">
+
+Actor-Critic中的评估网络，输入状态s输出状态值V(s)。最小化TD误差的平方，使V(s)逼近真实期望回报。
+
+</GlossaryItem>
+
+<GlossaryItem term="TD误差 delta">
+
+`delta = r + gamma * V(s') - V(s)`，实际回报加折扣未来值减当前估计，是「实际比预期好多少」的信号。连接Actor和Critic的核心。
+
+</GlossaryItem>
+
+<GlossaryItem term="A3C (Asynchronous Advantage Actor-Critic)">
+
+多个Worker线程异步并行训练，各自独立采样并异步更新全局网络。打破数据相关性，无需经验回放。
+
+</GlossaryItem>
+
+<GlossaryItem term="优势函数 A(s,a)">
+
+`A(s,a) = Q(s,a) - V(s)`，动作a相对平均值的好坏。TD误差delta的期望等于优势函数，是Actor更新的理想权重。
+
+</GlossaryItem>
+
+</Glossary>
+
+## 练习题
+
+<Exercises>
+
+### 问题 1
+
+Actor-Critic架构中Actor和Critic分别做什么？它们如何协作？
+
+<Answer>
+
+Actor（策略网络）参数化策略pi_theta(a|s)，输入状态输出动作，负责决策——决定每个状态下做什么。Critic（价值网络）参数化V_w(s)，输入状态输出状态值标量，负责评估——评价当前策略下状态好坏。协作方式：Critic计算TD误差delta = r + gamma*V(s') - V(s)，delta为正Actor增大概率，为负Actor降低概率。Critic用delta修正值估计。两者交替更新，Critic越来越准，Actor策略越来越好。
+
+</Answer>
+
+### 问题 2
+
+TD误差delta如何连接Actor和Critic的更新？写出两者的更新公式。
+
+<Answer>
+
+delta = r + gamma*V_w(s') - V_w(s)。Critic更新：w <- w + beta * delta * grad_V_w(s)，最小化TD误差平方，让V(s)逼近r + gamma*V(s')。Actor更新：theta <- theta + alpha * delta * grad_log_pi(a|s)，用delta代替REINFORCE中的G_t作为权重。delta为正增大动作概率，为负降低。delta的期望等于优势函数A(s,a) = Q(s,a) - V(s)。相比G_t，delta方差小得多但引入Critic估计偏差。
+
+</Answer>
+
+### 问题 3
+
+A3C的异步并行训练机制是什么？为什么有效？
+
+<Answer>
+
+多个Worker线程各自持有本地Actor-Critic网络副本，共享全局网络。每个Worker独立与环境交互采集转移计算梯度，异步推送更新到全局网络，定期从全局网络同步参数。有效原因：多Worker同时探索不同环境区域，数据天然不相关（相当于天然经验回放）；不同Worker探索不同区域覆盖更多状态空间；CPU多线程无需GPU同步降低门槛；并行采样和梯度更新吞吐量高。缺点：异步更新可能导致梯度覆盖，A2C同步版可解决。
+
+</Answer>
+
+### 问题 4
+
+Actor-Critic相比纯策略梯度（REINFORCE）有什么优势和劣势？
+
+<Answer>
+
+优势：方差小（用TD误差delta代替蒙特卡洛G_t，训练更稳定收敛更快）；在线更新（每步可更新，适合长回合或无尽任务）；偏差方差权衡好（用Critic小偏差换大幅方差缩减）。劣势：需额外训练Critic网络（增加计算和调参复杂度）；Critic估计不准时引入偏差（delta信号不可靠）；两网络耦合更新可能互相干扰。选择场景：回合短简单用REINFORCE够用，回合长或连续任务必须用Actor-Critic，大规模应用用进阶版PPO/SAC/TD3。
+
+</Answer>
+
+</Exercises>

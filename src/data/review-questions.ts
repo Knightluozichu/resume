@@ -2125,6 +2125,16 @@ import { rlcPolicyGradientCQuestions } from "./review/rlc-policy-gradient-c";
 import { rlcEnvironmentsQuestions } from "./review/rlc-environments";
 import { rlcPracticalApplicationsQuestions } from "./review/rlc-practical-applications";
 import { rlcFinalReviewQuestions } from "./review/rlc-final-review";
+import { drlLearningMapQuestions } from "./review/drl-learning-map";
+import { drlRlFoundationsQuestions } from "./review/drl-rl-foundations";
+import { drlValueBasedQuestions } from "./review/drl-value-based";
+import { drlPolicyGradientQuestions } from "./review/drl-policy-gradient";
+import { drlActorCriticQuestions } from "./review/drl-actor-critic";
+import { drlAdvancedAlgorithmsQuestions } from "./review/drl-advanced-algorithms";
+import { drlExplorationQuestions } from "./review/drl-exploration";
+import { drlRewardDesignQuestions } from "./review/drl-reward-design";
+import { drlApplicationsQuestions } from "./review/drl-applications";
+import { drlFinalReviewQuestions } from "./review/drl-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4285,6 +4295,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...rlcEnvironmentsQuestions,
   ...rlcPracticalApplicationsQuestions,
   ...rlcFinalReviewQuestions,
+  ...drlLearningMapQuestions,
+  ...drlRlFoundationsQuestions,
+  ...drlValueBasedQuestions,
+  ...drlPolicyGradientQuestions,
+  ...drlActorCriticQuestions,
+  ...drlAdvancedAlgorithmsQuestions,
+  ...drlExplorationQuestions,
+  ...drlRewardDesignQuestions,
+  ...drlApplicationsQuestions,
+  ...drlFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
