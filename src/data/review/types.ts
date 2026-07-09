@@ -2038,7 +2038,17 @@ export type ReviewChapterSlug =
   | "hdg-https-ssl"
   | "hdg-content-negotiation"
   | "hdg-web-hosting"
-  | "hdg-final-review";
+  | "hdg-final-review"
+  | "wpa-learning-map"
+  | "wpa-wireshark-basics"
+  | "wpa-capture-filters"
+  | "wpa-display-filters"
+  | "wpa-ethernet-ip"
+  | "wpa-tcp-udp"
+  | "wpa-http-analysis"
+  | "wpa-dns-dhcp"
+  | "wpa-network-security"
+  | "wpa-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4081,6 +4091,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "hdg-content-negotiation": "内容协商与转码",
   "hdg-web-hosting": "Web托管与部署",
   "hdg-final-review": "HTTP权威指南全书复习与知识整合",
+  "wpa-learning-map": "全书学习地图",
+  "wpa-wireshark-basics": "Wireshark基础与界面",
+  "wpa-capture-filters": "捕获过滤器与技巧",
+  "wpa-display-filters": "显示过滤器与表达式",
+  "wpa-ethernet-ip": "以太网与IP分析",
+  "wpa-tcp-udp": "TCP与UDP深入分析",
+  "wpa-http-analysis": "HTTP流量分析",
+  "wpa-dns-dhcp": "DNS与DHCP分析",
+  "wpa-network-security": "网络安全与异常检测",
+  "wpa-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

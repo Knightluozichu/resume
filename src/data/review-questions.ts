@@ -1915,6 +1915,16 @@ import { hdgHttpsSslQuestions } from "./review/hdg-https-ssl";
 import { hdgContentNegotiationQuestions } from "./review/hdg-content-negotiation";
 import { hdgWebHostingQuestions } from "./review/hdg-web-hosting";
 import { hdgFinalReviewQuestions } from "./review/hdg-final-review";
+import { wpaLearningMapQuestions } from "./review/wpa-learning-map";
+import { wpaWiresharkBasicsQuestions } from "./review/wpa-wireshark-basics";
+import { wpaCaptureFiltersQuestions } from "./review/wpa-capture-filters";
+import { wpaDisplayFiltersQuestions } from "./review/wpa-display-filters";
+import { wpaEthernetIpQuestions } from "./review/wpa-ethernet-ip";
+import { wpaTcpUdpQuestions } from "./review/wpa-tcp-udp";
+import { wpaHttpAnalysisQuestions } from "./review/wpa-http-analysis";
+import { wpaDnsDhcpQuestions } from "./review/wpa-dns-dhcp";
+import { wpaNetworkSecurityQuestions } from "./review/wpa-network-security";
+import { wpaFinalReviewQuestions } from "./review/wpa-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3865,6 +3875,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...hdgContentNegotiationQuestions,
   ...hdgWebHostingQuestions,
   ...hdgFinalReviewQuestions,
+  ...wpaLearningMapQuestions,
+  ...wpaWiresharkBasicsQuestions,
+  ...wpaCaptureFiltersQuestions,
+  ...wpaDisplayFiltersQuestions,
+  ...wpaEthernetIpQuestions,
+  ...wpaTcpUdpQuestions,
+  ...wpaHttpAnalysisQuestions,
+  ...wpaDnsDhcpQuestions,
+  ...wpaNetworkSecurityQuestions,
+  ...wpaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

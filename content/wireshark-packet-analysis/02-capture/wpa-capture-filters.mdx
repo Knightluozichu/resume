@@ -1,0 +1,172 @@
+---
+title: "捕获过滤器与技巧"
+type: C
+section: "网络"
+order: 2
+description: "BPF捕获过滤语法、捕获策略、环形缓冲区与多文件轮转"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { WpaCaptureFiltersDiagram } from "@/components/mdx/wireshark-packet-analysis/diagrams/wpa-capture-filters";
+
+<Objectives>
+
+- 掌握捕获过滤器与显示过滤器的本质区别
+- 理解 BPF 语法结构和常用限定符
+- 掌握混合模式、监听模式等捕获技巧
+- 了解环形缓冲区和多文件轮转的使用场景
+
+</Objectives>
+
+## 捕获过滤器工作流
+
+<WpaCaptureFiltersDiagram />
+
+捕获过滤器在 **抓包时** 生效，使用 BPF（Berkeley Packet Filter）语法，在网卡层面过滤，只存储匹配的包到内存。
+
+### 捕获 vs 显示：时机对比
+
+| 维度 | 捕获过滤器 | 显示过滤器 |
+|------|-----------|-----------|
+| 生效时机 | 抓包时 | 抓包后 |
+| 语法 | BPF | Wireshark 表达式 |
+| 优势 | 减少抓包量，节省资源 | 可反复切换，数据不丢失 |
+| 劣势 | 过滤掉的包无法恢复 | 已抓全部流量，内存开销大 |
+
+<Callout type="warning" title="什么时候用捕获过滤器">
+
+高流量环境（如核心交换机镜像口）必须用捕获过滤器——否则 Wireshark 会因包太多而卡死或丢包。低流量环境（如个人电脑网卡）可不用捕获过滤器，全部抓取后再用显示过滤器分析。最佳实践：先用捕获过滤器减少数据量到可控范围，再用显示过滤器精细分析。
+
+</Callout>
+
+## BPF 语法结构
+
+```text
+BPF = [协议] [方向] [类型] [值] [逻辑运算符] ...
+```
+
+### 类型限定符
+
+| 限定符 | 含义 | 示例 |
+|--------|------|------|
+| host | 主机（IP） | `host 192.168.1.10` |
+| net | 网段 | `net 10.0.0.0/24` |
+| port | 端口 | `port 443` |
+| portrange | 端口范围 | `portrange 8000-9000` |
+
+### 传输方向
+
+| 方向 | 含义 | 示例 |
+|------|------|------|
+| src | 源 | `src host 192.168.1.10` |
+| dst | 目的 | `dst port 80` |
+| src or dst | 源或目的（默认） | `host 192.168.1.10` |
+| src and dst | 源和目的同时匹配 | `src host A and dst host B` |
+
+### 协议限定
+
+```text
+ether / ip / ip6 / tcp / udp / arp / icmp / http
+```
+
+### 逻辑运算
+
+```text
+and / or / not / 括号分组
+```
+
+## 常用捕获过滤器
+
+```text
+host 192.168.1.10              ← 只抓特定主机
+tcp port 443                   ← 只抓 HTTPS 流量
+not port 22                    ← 排除 SSH 干扰
+net 10.0.0.0/24                ← 抓整个网段
+icmp                           ← 只抓 ping 包
+tcp dst port 80 and src host 192.168.1.10  ← 组合条件
+not arp and not (port 53 or port 67)       ← 排除 ARP/DNS/DHCP
+```
+
+## 捕获技巧
+
+### 混合模式与监听模式
+
+```text
+混合模式（Promiscuous）：
+  - 有线网卡接收局域网所有帧
+  - 交换网络中只能收到广播 + 本端口流量
+  - 需要端口镜像（SPAN）才能抓其他端口
+
+监听模式（Monitor）：
+  - 无线网卡接收所有 802.11 帧
+  - 可抓其他设备之间的 Wi-Fi 通信
+  - Wireshark 抓包选项中切换
+```
+
+### 环形缓冲区与多文件轮转
+
+<Callout type="info" title="长时间抓包的两大问题">
+
+长时间抓包面临：①内存耗尽——Wireshark 把所有包存在内存中，时间长了内存不够 ②文件过大——单个 pcapng 文件太大，打开慢、占磁盘。解决方案：环形缓冲区限制内存使用，多文件轮转限制磁盘使用。
+
+</Callout>
+
+| 机制 | 作用 | 设置位置 |
+|------|------|---------|
+| 环形缓冲区 | 内存中固定大小缓冲区，满后覆盖最旧 | Capture → Options → Ring buffer size |
+| 多文件轮转 | 文件达到指定大小/数量后自动切分 | Capture → Options → Multiple files |
+
+```text
+自动停止条件（Capture → Options）：
+  Packets：抓到 N 个包后停止
+  File size：文件达到 N MB 后停止
+  Duration：抓包 N 秒/分钟后停止
+
+多文件轮转配置：
+  每个文件 100 MB，保留最近 10 个文件
+  → 自动覆盖最旧文件，总占用约 1 GB
+```
+
+<Glossary>
+
+<GlossaryItem term="BPF（Berkeley Packet Filter）">
+BPF 是 Unix/Linux 系统内核级的数据包过滤机制，也是 Wireshark 捕获过滤器的语法基础。BPF 在内核态运行，过滤效率极高——不匹配的包在内核中就被丢弃，不复制到用户空间。语法结构：[协议] [方向] [类型] [值] [逻辑运算符]。类型限定符有 host/net/port/portrange，方向有 src/dst，协议有 ether/ip/tcp/udp/arp/icmp。示例：`tcp dst port 443 and src host 10.0.0.1` 表示只抓源为 10.0.0.1 且目标端口 443 的 TCP 包。
+</GlossaryItem>
+
+<GlossaryItem term="环形缓冲区（Ring Buffer）">
+环形缓冲区是 Wireshark 的内存管理机制：在内存中维护一个固定大小的缓冲区（可设置大小和包数），当缓冲区满后，新数据覆盖最旧的数据。这样无论抓包多久，内存占用始终恒定。适用于长时间无人值守抓包——不会因内存耗尽崩溃。代价是最旧的数据会丢失，如果配合多文件轮转则旧数据已存到磁盘。设置位置：Capture → Options → Ring buffer size（单位 MB 或包数）。
+</GlossaryItem>
+
+<GlossaryItem term="多文件轮转（Multiple File Rotation）">
+多文件轮转是 Wireshark 的磁盘管理机制：当抓包文件达到指定大小（或包数/时长）后自动创建新文件继续存储，旧文件按配置保留或删除。配合环形缓冲区可实现「每 100MB 切一个文件，保留最近 10 个」的自动分割。解决了长时间抓包导致单个文件过大的问题。设置位置：Capture → Options → 勾选 Use multiple files → 设置每文件大小/时长/包数。也可设置自动停止条件（总包数/文件数/时长）。
+</GlossaryItem>
+
+<GlossaryItem term="捕获过滤器 vs 显示过滤器">
+两者本质区别在于生效时机和不可逆性。捕获过滤器在抓包时生效，用 BPF 语法在网卡层面过滤——不匹配的包直接丢弃、不存储，无法恢复。优势是大幅减少数据量和资源消耗。显示过滤器在抓包后生效，用 Wireshark 表达式对已存储的包做筛选——只控制显示，不删除数据，可反复切换条件。优势是数据完整、灵活。最佳实践：高流量环境先用捕获过滤减量，分析阶段用显示过滤精筛。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** BPF 语法的基本结构是什么？写出以下场景的捕获过滤器表达式。
+
+<Answer>
+
+BPF 语法 = [协议] [方向] [类型] [值] [逻辑运算符]。类型限定符：host/net/port/portrange；方向：src/dst；协议：ether/ip/tcp/udp/arp/icmp；逻辑：and/or/not。场景示例：①只抓特定主机：`host 192.168.1.10` ②只抓 HTTPS：`tcp port 443` ③排除 SSH 干扰：`not port 22` ④抓整个网段：`net 10.0.0.0/24` ⑤只抓 ping：`icmp` ⑥组合条件：`tcp dst port 80 and src host 192.168.1.10` ⑦排除 ARP/DNS/DHCP：`not arp and not (port 53 or port 67)`。
+
+</Answer>
+
+**问题 2：** 环形缓冲区和多文件轮转分别解决什么问题？如何配合使用实现长时间无人值守抓包？
+
+<Answer>
+
+环形缓冲区解决内存问题——在内存中维护固定大小缓冲区，满后新数据覆盖最旧，保证长时间抓包内存不耗尽。多文件轮转解决磁盘问题——文件达到指定大小后自动创建新文件，旧文件按配置保留或删除，保证磁盘不占满。配合使用：设置环形缓冲区为 50MB（限制内存），多文件轮转每文件 100MB、保留 10 个文件（限制磁盘约 1GB），可设置自动停止条件（如 24 小时后停止）。这样即可实现「24 小时无人值守抓包，总磁盘约 1GB，内存恒定 50MB」。
+
+</Answer>
+
+</Exercises>

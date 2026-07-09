@@ -1,0 +1,202 @@
+---
+title: "显示过滤器与表达式"
+type: C
+section: "网络"
+order: 3
+description: "Wireshark显示过滤器语法、运算符、常用表达式与构建技巧"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { WpaDisplayFiltersDiagram } from "@/components/mdx/wireshark-packet-analysis/diagrams/wpa-display-filters";
+
+<Objectives>
+
+- 掌握显示过滤器表达式的组成结构
+- 理解比较运算符和逻辑运算符的用法
+- 掌握常用显示过滤器表达式的编写
+- 学会使用右键菜单和表达式对话框快速构建过滤器
+
+</Objectives>
+
+## 显示过滤器表达式结构
+
+<WpaDisplayFiltersDiagram />
+
+显示过滤器在 **抓包后** 生效，使用 Wireshark 自有表达式语法，对已抓到的包做筛选显示，可反复切换条件。
+
+### 表达式组成
+
+```text
+字段名 + 比较运算符 + 值，多个条件用逻辑运算符连接
+
+示例：ip.addr == 192.168.1.10 && tcp.port == 443 && http
+      字段名     运算符    值        逻辑与    字段名    运算符  值   逻辑与  协议过滤
+```
+
+### 语法检查
+
+```text
+过滤器栏变绿 = 语法正确，可回车应用
+过滤器栏变红 = 语法错误，需修正
+```
+
+## 比较运算符
+
+| 运算符 | 含义 | 等价写法 | 示例 |
+|--------|------|---------|------|
+| `==` | 等于 | eq | `ip.addr == 10.0.0.1` |
+| `!=` | 不等于 | ne | `ip.src != 10.0.0.1` |
+| `>` | 大于 | gt | `frame.time_delta > 1` |
+| `<` | 小于 | lt | `ip.ttl < 10` |
+| `>=` | 大于等于 | ge | `http.response.code >= 400` |
+| `<=` | 小于等于 | le | `tcp.window_size <= 0` |
+| `contains` | 包含子串 | — | `http.host contains "google"` |
+| `matches` | 正则匹配 | — | `http.host matches "\\.com$"` |
+
+## 逻辑运算符
+
+| 运算符 | 含义 | 等价写法 |
+|--------|------|---------|
+| `&&` | 逻辑与 | and |
+| `||` | 逻辑或 | or |
+| `!` | 逻辑非 | not |
+
+```text
+组合示例：
+ip.src == 10.0.0.1 && ip.dst == 10.0.0.2     ← 源和目的同时匹配
+tcp.port == 80 || tcp.port == 443             ← HTTP 或 HTTPS
+!arp                                           ← 排除 ARP
+!(tcp.port == 22 || tcp.port == 3389)         ← 排除 SSH 和 RDP
+```
+
+## 常用显示过滤器
+
+### 按协议过滤
+
+```text
+http                      ← 所有 HTTP 流量
+dns                       ← 所有 DNS 流量
+tcp                       ← 所有 TCP 流量
+!arp && !icmp             ← 排除 ARP 和 ICMP
+```
+
+### 按地址过滤
+
+```text
+ip.addr == 10.0.0.1       ← 源或目的 IP（最常用）
+ip.src == 10.0.0.1        ← 只匹配源 IP
+ip.dst == 10.0.0.2        ← 只匹配目的 IP
+eth.src == 00:1a:2b:3c:4d:5e  ← 匹配源 MAC
+```
+
+### 按端口过滤
+
+```text
+tcp.port == 443           ← 源或目的端口 443
+tcp.srcport == 51000      ← 只匹配源端口
+udp.port == 53            ← DNS 端口
+```
+
+### HTTP 分析
+
+```text
+http.request                          ← 所有 HTTP 请求
+http.response                         ← 所有 HTTP 响应
+http.request.method == "POST"         ← POST 请求
+http.response.code == 404             ← 404 响应
+http.response.code >= 400             ← 4xx/5xx 错误
+http.host contains "google"           ← Host 含 google
+http.content_type contains "json"     ← JSON 格式
+http.time > 2                         ← 响应时间超过 2 秒
+```
+
+### TCP 分析
+
+```text
+tcp.flags.syn == 1 && tcp.flags.ack == 0   ← SYN 包（连接请求）
+tcp.flags.reset == 1                        ← RST 重置包
+tcp.analysis.retransmission                 ← TCP 重传
+tcp.analysis.out_of_order                   ← 乱序包
+tcp.analysis.duplicate_ack                  ← 重复确认
+tcp.analysis.flags                          ← 所有 TCP 异常
+```
+
+### TLS/HTTPS 分析
+
+```text
+tls.handshake.type == 1     ← TLS Client Hello
+tls.handshake.type == 2     ← TLS Server Hello
+tls.record.content_type == 23  ← TLS Application Data
+```
+
+<Callout type="info" title="contains vs matches">
+
+`contains` 是子串匹配（大小写敏感），简单快速：`http.request.uri contains "login"`。`matches` 是正则匹配，功能强大但语法复杂：`http.host matches "\\.com$"`. 优先用 contains，模式复杂时才用 matches。
+
+</Callout>
+
+## 快速构建过滤器
+
+### 右键菜单
+
+```text
+在包详情区右键某个字段：
+  Apply as Filter → 直接应用该字段为过滤条件
+  Prepare as Filter → 填入过滤器栏但不立即应用（方便编辑）
+  Apply as Column → 把该字段加为包列表区的新列
+```
+
+### 表达式对话框
+
+```text
+过滤器栏右侧 → Expression 按钮：
+  - 按协议层级浏览所有可用字段
+  - 搜索字段名
+  - 选择运算符
+  - 输入值
+  - 点击 OK 自动生成表达式
+```
+
+<Glossary>
+
+<GlossaryItem term="显示过滤器（Display Filter）">
+显示过滤器是 Wireshark 对已抓取数据包的筛选显示机制，在抓包后生效。使用 Wireshark 自有表达式语法：字段名 + 比较运算符 + 值，多个条件用逻辑运算符（&&/||/!）连接。字段名采用点分层级命名（如 ip.addr、tcp.port、http.request.method），反映协议栈层级。显示过滤器只控制显示——不匹配的包被隐藏但未删除，可随时切换条件。过滤器栏有即时语法检查：绿色=正确，红色=错误。
+</GlossaryItem>
+
+<GlossaryItem term="contains 运算符">
+contains 是 Wireshark 显示过滤器的子串包含运算符，大小写敏感。用于检查字段值是否包含指定子串。示例：`http.host contains "google"` 匹配 Host 首部值中含 google 的请求。与 matches（正则匹配）相比，contains 语法简单、性能更高，适合简单的字符串查找。不支持通配符和正则元字符。当匹配模式复杂（如需要正则表达式）时应改用 matches。
+</GlossaryItem>
+
+<GlossaryItem term="tcp.analysis 字段">
+tcp.analysis 是 Wireshark 对 TCP 流量做专家分析后附加的元数据字段，不是 TCP 协议本身的字段。常用子字段：tcp.analysis.retransmission（重传包）、tcp.analysis.out_of_order（乱序包）、tcp.analysis.duplicate_ack（重复确认）、tcp.analysis.fast_retransmission（快重传）、tcp.analysis.flags（所有 TCP 异常的汇总）。这些字段只需写字段名即为 true 条件，如 `tcp.analysis.retransmission` 等价于 `tcp.analysis.retransmission == 1`。是网络质量诊断的核心工具。
+</GlossaryItem>
+
+<GlossaryItem term="右键菜单过滤器构建">
+Wireshark 提供右键菜单快速构建显示过滤器：在包详情区右键某个字段 → Apply as Filter（直接应用）或 Prepare as Filter（填入栏中待编辑）。子菜单提供 Selected（等于当前值）、Not Selected（不等于）、and/or/and not/or not 等组合方式。这是最高效的过滤器构建方法——不需要记忆字段名，直接从实际包内容生成。配合手动编辑逻辑运算符可快速构建复杂表达式。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 显示过滤器表达式的基本组成是什么？过滤器栏变绿和变红分别表示什么？
+
+<Answer>
+
+基本组成：字段名 + 比较运算符 + 值，多个条件用逻辑运算符连接。例如 `ip.addr == 192.168.1.10 && tcp.port == 443`。比较运算符有 ==/!=/>/</>=/<=（或 eq/ne/gt/lt/ge/le）、contains（包含子串）、matches（正则匹配）。逻辑运算符有 &&（and）、||（or）、!（not）。过滤器栏变绿表示语法正确，可以回车应用；变红表示语法错误，需要修正。这是 Wireshark 的即时语法检查机制，输入时实时反馈。
+
+</Answer>
+
+**问题 2：** 写出以下需求的显示过滤器表达式，并说明右键菜单如何帮助构建过滤器。
+
+<Answer>
+
+①只看 HTTP POST 请求：`http.request.method == "POST"` ②只看 TCP 重传：`tcp.analysis.retransmission` ③只看 DNS 响应：`dns.flags.response == 1` ④HTTP 4xx/5xx 错误：`http.response.code >= 400` ⑤TCP RST：`tcp.flags.reset == 1` ⑥响应超 2 秒：`http.time > 2`。右键菜单帮助构建：在包详情区右键某个字段（如 http.request.method），选择 Apply as Filter → Selected，Wireshark 自动生成 `http.request.method == "POST"` 并应用。也可选 Prepare as Filter 先填入栏中再手动编辑组合条件。这是最高效的方式，不需记忆字段名。
+
+</Answer>
+
+</Exercises>

@@ -1,0 +1,186 @@
+---
+title: "以太网与IP分析"
+type: A
+section: "网络"
+order: 4
+description: "以太网帧结构、IPv4包头、ARP地址解析与IP分片分析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { WpaEthernetIpDiagram } from "@/components/mdx/wireshark-packet-analysis/diagrams/wpa-ethernet-ip";
+
+<Objectives>
+
+- 掌握以太网 II 帧的结构和 Type 字段的含义
+- 理解 IPv4 包头各字段的作用
+- 掌握 ARP 地址解析的工作流程
+- 学会在 Wireshark 中分析 IP 分片和 TTL 异常
+
+</Objectives>
+
+## 以太网帧与 IP 包结构
+
+<WpaEthernetIpDiagram />
+
+## 以太网 II 帧结构
+
+以太网 II 帧是链路层的数据封装格式：
+
+| 字段 | 大小 | 作用 |
+|------|------|------|
+| 前导码 | 8 字节 | 时钟同步（Wireshark 不显示） |
+| 目的 MAC | 6 字节 | 接收方硬件地址 |
+| 源 MAC | 6 字节 | 发送方硬件地址 |
+| 类型 Type | 2 字节 | 上层协议标识 |
+| 数据 Payload | 46-1500 字节 | 上层协议数据 |
+| FCS | 4 字节 | 帧校验序列（Wireshark 通常不显示） |
+
+### Type 字段常见值
+
+```text
+0x0800 = IPv4    ← 上层是 IP 协议
+0x0806 = ARP     ← 地址解析协议
+0x86DD = IPv6    ← IPv6 协议
+0x8100 = 802.1Q  ← VLAN 标签
+```
+
+<Callout type="info" title="Wireshark 中的以太网层">
+
+在 Wireshark 包详情区展开「Ethernet II」可看到源/目的 MAC 和 Type 字段。MAC 地址格式为 `00:1a:2b:3c:4d:5e`，前 3 字节是厂商 OUI（可查厂商），后 3 字节是设备唯一标识。通过 Type 字段 Wireshark 自动判断上层协议并解码。
+
+</Callout>
+
+## IPv4 包头结构
+
+IPv4 包头固定 20 字节，可选最多 60 字节：
+
+| 字段 | 位数 | 作用 |
+|------|------|------|
+| Version | 4 | 版本号（IPv4=4） |
+| IHL | 4 | 首部长度（单位 4 字节，最小 5=20B） |
+| TOS | 8 | 服务类型（DSCP/ECN） |
+| Total Length | 16 | 整个包总长度 |
+| Identification | 16 | 标识（分片重组用） |
+| Flags | 3 | DF/MF/Reserved |
+| Fragment Offset | 13 | 分片偏移 |
+| TTL | 8 | 生存时间（每跳减 1） |
+| Protocol | 8 | 上层协议号 |
+| Header Checksum | 16 | 首部校验和 |
+| Source IP | 32 | 源 IP 地址 |
+| Destination IP | 32 | 目的 IP 地址 |
+
+### Protocol 字段常见值
+
+| 值 | 协议 | 用途 |
+|----|------|------|
+| 1 | ICMP | ping/错误报告 |
+| 6 | TCP | 可靠传输 |
+| 17 | UDP | 快速传输 |
+| 47 | GRE | VPN 隧道 |
+| 89 | OSPF | 路由协议 |
+| 132 | SCTP | 流控制传输 |
+
+### Flags 与分片
+
+```text
+DF（Don't Fragment）：1=禁止分片
+MF（More Fragments）：1=后面还有分片
+Fragment Offset：当前分片在原包中的偏移
+
+分片场景：
+  包大小 > MTU（通常 1500 字节）时，路由器将包分片
+  DF=1 且包 > MTU → 路由器返回 ICMP 错误（需要 PMTUD）
+```
+
+## ARP 地址解析
+
+ARP 将 IP 地址解析为 MAC 地址：
+
+```text
+1. 主机 A 查 ARP 缓存，无 192.168.1.1 的 MAC
+2. 广播 ARP Request: 谁是 192.168.1.1?
+   （目标 MAC = FF:FF:FF:FF:FF:FF）
+3. 网关单播 ARP Reply: 我的 MAC 是 00:50:56:xx:xx:xx
+4. 主机 A 缓存 IP-MAC 映射，后续直接使用
+```
+
+<Callout type="warning" title="ARP 欺骗的 Wireshark 检测">
+
+ARP 欺骗：攻击者发送伪造 ARP Reply，将自己的 MAC 与网关 IP 绑定，劫持流量。检测方法：①用 `arp.duplicate-address-detected` 过滤 ARP 冲突 ②检查 ARP 响应的源 MAC 是否与预期网关 MAC 一致 ③同一 IP 对应多个 MAC 说明被欺骗。
+
+</Callout>
+
+## Wireshark 分析要点
+
+### 常用过滤器
+
+```text
+eth.src == 00:1a:2b:3c:4d:5e     ← 按源 MAC 过滤
+ip.addr == 192.168.1.10           ← 按 IP 过滤
+ip.ttl < 10                        ← TTL 过小（可能路由环路）
+ip.flags.mf == 1                   ← IP 分片（非最后一片）
+ip.flags.df == 0                   ← 允许分片
+arp                                 ← 所有 ARP 流量
+icmp                                ← 所有 ICMP 流量
+```
+
+### 统计工具
+
+```text
+Statistics → Endpoints：IP/MAC 维度的发包统计
+Statistics → Conversations：端到端会话统计
+Statistics → IO Graphs：流量趋势图
+```
+
+### 常见异常
+
+| 异常 | 可能原因 | 检测方法 |
+|------|---------|---------|
+| TTL=1 | 路由环路或 traceroute | `ip.ttl <= 1` |
+| Checksum 错误 | 网卡/驱动问题（或硬件卸载） | ip.checksum_bad |
+| 大量分片 | MTU 不匹配 | `ip.flags.mf == 1` |
+| ARP 冲突 | ARP 欺骗 | `arp.duplicate-address-detected` |
+
+<Glossary>
+
+<GlossaryItem term="以太网 II 帧（Ethernet II Frame）">
+以太网 II 帧是局域网中最常用的链路层帧格式，结构为：前导码（8B，同步用）+ 目的 MAC（6B）+ 源 MAC（6B）+ 类型 Type（2B）+ 数据 Payload（46-1500B）+ FCS（4B，校验用）。Type 字段标识上层协议：0x0800=IPv4、0x0806=ARP、0x86DD=IPv6。MAC 地址是 48 位硬件地址，前 24 位是厂商 OUI，后 24 位是设备唯一标识。Wireshark 不显示前导码和 FCS（网卡通常在硬件层处理）。最大 Payload 1500B 即 MTU。
+</GlossaryItem>
+
+<GlossaryItem term="IPv4 包头（IPv4 Header）">
+IPv4 包头固定 20 字节（IHL=5），可选字段最多扩展到 60 字节。关键字段：Version=4、IHL（首部长度，单位 4 字节）、TTL（生存时间，每经路由器减 1，到 0 丢弃）、Protocol（上层协议号：1=ICMP、6=TCP、17=UDP）、Source/Destination IP（32 位地址）、Flags（DF=禁止分片、MF=后面还有分片）、Fragment Offset（分片偏移）、Identification（分片重组标识）、Header Checksum（首部校验和）。Wireshark 在包详情区「Internet Protocol Version 4」节点逐字段解析。
+</GlossaryItem>
+
+<GlossaryItem term="ARP（Address Resolution Protocol）">
+ARP 地址解析协议：将 IP 地址解析为 MAC 地址，使 IP 包能在以太网上传输。流程：①主机查 ARP 缓存表 ②无匹配则广播 ARP Request（目标 MAC=FF:FF:FF:FF:FF:FF）③目标主机单播回复 ARP Reply 含自身 MAC ④发送方缓存 IP-MAC 映射。ARP 只在局域网内有效——跨网段时 ARP 解析的是网关的 MAC。ARP 缓存有生存时间（通常 20 分钟），过期后重新请求。ARP 欺骗攻击利用 ARP 无认证机制的弱点，伪造 ARP Reply 劫持流量。
+</GlossaryItem>
+
+<GlossaryItem term="IP 分片（IP Fragmentation）">
+当 IP 包大小超过链路 MTU（Maximum Transmission Unit，通常 1500 字节）时，路由器将包分片传输。分片机制：原包被拆成多个小片，每片有相同的 Identification 值，MF（More Fragments）标志标识是否为最后一片，Fragment Offset 标识当前片在原包中的位置。DF（Don't Fragment）=1 时禁止分片，包过大则路由器返回 ICMP 错误（用于 PMTUD 路径 MTU 发现）。目的主机负责重组分片。大量分片可能意味着 MTU 配置不匹配或 VPN 隧道封装导致超 MTU。Wireshark 中可用 `ip.flags.mf == 1` 或 `ip.frag_offset > 0` 过滤分片包。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** IPv4 包头中 Protocol、TTL、Flags 字段的作用是什么？
+
+<Answer>
+
+Protocol（8 位）：标识上层协议，常见值 1=ICMP、6=TCP、17=UDP、47=GRE、89=OSPF。Wireshark 据此解码上层协议。TTL（8 位）：生存时间，每经过一个路由器减 1，减到 0 则丢弃并返回 ICMP 超时，防止路由环路。traceroute 利用 TTL 递增探测路径。Flags（3 位）：DF（Don't Fragment，1=禁止分片）、MF（More Fragments，1=后面还有分片）、Reserved。分片时 MF=1 标识非最后一片，Fragment Offset 标记偏移位置。
+
+</Answer>
+
+**问题 2：** ARP 的工作流程是什么？如何在 Wireshark 中检测 ARP 欺骗？
+
+<Answer>
+
+ARP 工作流程：①主机 A 要发包给 192.168.1.1，先查 ARP 缓存表 ②缓存无匹配，发送 ARP Request 广播（目标 MAC=FF:FF:FF:FF:FF:FF），内容为「IP 192.168.1.1 的 MAC 是什么？」③网关/目标主机收到后单播回复 ARP Reply，告知自己的 MAC ④主机 A 缓存 IP-MAC 映射。ARP 欺骗检测：①用 `arp.duplicate-address-detected` 过滤 ARP 冲突 ②检查 ARP 响应的源 MAC 是否与预期网关 MAC 一致 ③同一 IP 对应多个 MAC 说明存在欺骗 ④大量 gratuitous ARP（免费 ARP）也可能是欺骗信号。
+
+</Answer>
+
+</Exercises>
