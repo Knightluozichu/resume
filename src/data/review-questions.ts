@@ -2025,6 +2025,16 @@ import { idlRegularizationQuestions } from "./review/idl-regularization";
 import { idlGenerativeModelsQuestions } from "./review/idl-generative-models";
 import { idlApplicationsQuestions } from "./review/idl-applications";
 import { idlFinalReviewQuestions } from "./review/idl-final-review";
+import { mlwLearningMapQuestions } from "./review/mlw-learning-map";
+import { mlwHypothesisSpaceQuestions } from "./review/mlw-hypothesis-space";
+import { mlwLinearModelsQuestions } from "./review/mlw-linear-models";
+import { mlwDecisionTreesQuestions } from "./review/mlw-decision-trees";
+import { mlwNeuralNetworksQuestions } from "./review/mlw-neural-networks";
+import { mlwSupportVectorQuestions } from "./review/mlw-support-vector";
+import { mlwBayesianQuestions } from "./review/mlw-bayesian";
+import { mlwEnsembleQuestions } from "./review/mlw-ensemble";
+import { mlwClusteringDimreductionQuestions } from "./review/mlw-clustering-dimreduction";
+import { mlwFinalReviewQuestions } from "./review/mlw-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4085,6 +4095,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...idlGenerativeModelsQuestions,
   ...idlApplicationsQuestions,
   ...idlFinalReviewQuestions,
+  ...mlwLearningMapQuestions,
+  ...mlwHypothesisSpaceQuestions,
+  ...mlwLinearModelsQuestions,
+  ...mlwDecisionTreesQuestions,
+  ...mlwNeuralNetworksQuestions,
+  ...mlwSupportVectorQuestions,
+  ...mlwBayesianQuestions,
+  ...mlwEnsembleQuestions,
+  ...mlwClusteringDimreductionQuestions,
+  ...mlwFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -2148,7 +2148,17 @@ export type ReviewChapterSlug =
   | "idl-regularization"
   | "idl-generative-models"
   | "idl-applications"
-  | "idl-final-review";
+  | "idl-final-review"
+  | "mlw-learning-map"
+  | "mlw-hypothesis-space"
+  | "mlw-linear-models"
+  | "mlw-decision-trees"
+  | "mlw-neural-networks"
+  | "mlw-support-vector"
+  | "mlw-bayesian"
+  | "mlw-ensemble"
+  | "mlw-clustering-dimreduction"
+  | "mlw-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4301,6 +4311,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "idl-generative-models": "生成模型与自编码器",
   "idl-applications": "深度学习应用实践",
   "idl-final-review": "全书复习与知识整合",
+  "mlw-learning-map": "全书学习地图",
+  "mlw-hypothesis-space": "假设空间与归纳偏好",
+  "mlw-linear-models": "线性模型",
+  "mlw-decision-trees": "决策树",
+  "mlw-neural-networks": "神经网络",
+  "mlw-support-vector": "支持向量机",
+  "mlw-bayesian": "贝叶斯分类",
+  "mlw-ensemble": "集成学习",
+  "mlw-clustering-dimreduction": "聚类与降维",
+  "mlw-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

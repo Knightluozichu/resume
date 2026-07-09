@@ -250,6 +250,7 @@ export const BOOK_ORDER = [
   "illustrated-ai",
   "illustrated-ml",
   "illustrated-dl",
+  "machine-learning-watermelon",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -440,6 +441,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "illustrated-ai": "图解人工智能",
   "illustrated-ml": "图解机器学习",
   "illustrated-dl": "图解深度学习",
+  "machine-learning-watermelon": "机器学习（西瓜书）",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
