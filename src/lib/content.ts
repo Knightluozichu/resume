@@ -264,6 +264,7 @@ export const BOOK_ORDER = [
   "this-is-chatgpt",
   "llm-app-dev-essentials",
   "langchain-programming",
+  "chatgpt-principles-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -468,6 +469,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "this-is-chatgpt": "这就是 ChatGPT",
   "llm-app-dev-essentials": "大模型应用开发极简入门",
   "langchain-programming": "LangChain 编程从入门到实践",
+  "chatgpt-principles-practice": "ChatGPT 原理与实战",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

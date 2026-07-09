@@ -1,0 +1,139 @@
+---
+title: "推理与服务化"
+type: C
+section: "AI Agent与大模型应用"
+order: 4
+description: "大模型推理的两大瓶颈与六大优化技术——KV缓存、量化、连续批处理、PagedAttention"
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CppInferenceServingDiagram } from "@/components/mdx/chatgpt-principles-practice/diagrams/cpp-inference-serving";
+import { Objectives, Callout, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+## 学习目标
+
+<Objectives>
+
+- 理解大模型推理的计算瓶颈与访存瓶颈及各自发生阶段
+- 掌握 KV Cache、量化、连续批处理、PagedAttention 的原理与作用
+- 了解投机解码与模型蒸馏两种加速思路
+- 掌握推理框架选型的权衡维度
+
+</Objectives>
+
+## 核心概念
+
+### 两大推理瓶颈
+
+| 瓶颈 | 阶段 | 受限资源 | 优化方向 |
+|------|------|----------|----------|
+| 计算瓶颈 | Prefill 处理输入 | GPU 算力 | 提高算力利用率 |
+| 访存瓶颈 | Decode 逐 token 生成 | 显存带宽 | 减少访存量 |
+
+<CppInferenceServingDiagram />
+
+### 六大优化技术
+
+| 技术 | 解决问题 | 核心原理 |
+|------|----------|----------|
+| KV Cache | 重复计算 | 缓存历史 K/V 避免重算 |
+| 连续批处理 | 吞吐量低 | 请求动态进出批次 |
+| 量化 | 显存带宽 | FP16 降到 INT8/INT4 |
+| PagedAttention | KV 缓存碎片 | 分页管理像操作系统 |
+| 投机解码 | 延迟高 | 小模型草拟大模型校验 |
+| 模型蒸馏 | 部署重 | 大模型教小模型 |
+
+### 服务化部署层
+
+推理框架：vLLM（吞吐王者）、TGI（HF 生态）、TensorRT-LLM（极致性能）、llama.cpp（轻量本地），按场景选型。服务层还需负载均衡、限流降级、鉴权、监控告警。
+
+<Callout type="info">
+
+核心矛盾是延迟 vs 吞吐 vs 成本的三方权衡：延迟低要小批少并发的算得快，吞吐高要大批多并发，成本低要量化降配。优化目标是单位算力下服务更多用户更快的请求，没有银弹，按业务场景定优先级。
+
+</Callout>
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="KV Cache">
+
+缓存历史 token 的 Key 和 Value 矩阵，生成新 token 时只需算新 Q 与缓存 K/V 的注意力，复杂度从 O(t²) 降到 O(t)，是推理加速头号功臣。
+
+</GlossaryItem>
+
+<GlossaryItem term="连续批处理">
+
+Continuous Batching，请求动态进出批次，短请求不被长请求拖累，GPU 利用率大增，吞吐量倍增。
+
+</GlossaryItem>
+
+<GlossaryItem term="量化">
+
+把权重和激活从 FP16 降到 INT8/INT4，显存和访存量减半再减半，Decode 阶段提速明显，GPTQ/AWQ/GGUF 是主流算法。
+
+</GlossaryItem>
+
+<GlossaryItem term="PagedAttention">
+
+像操作系统分页管理内存一样管理 KV 缓存，消除碎片，支持更长上下文和更高并发，是 vLLM 的核心技术。
+
+</GlossaryItem>
+
+<GlossaryItem term="投机解码">
+
+Speculative Decoding，小模型快速草拟多个 token，大模型一次性校验，命中则省时间，降低延迟。
+
+</GlossaryItem>
+
+</Glossary>
+
+## 练习题
+
+<Exercises>
+
+### 问题 1
+
+大模型推理有哪两大瓶颈？它们分别发生在什么阶段？
+
+<Answer>
+
+两大瓶颈：计算瓶颈发生在 Prefill 阶段（处理输入 prompt），需一次性算所有输入 token 注意力，受 GPU 算力限制；访存瓶颈发生在 Decode 阶段（逐 token 生成），每生成一个 token 都要读全部 KV 缓存，数据搬运量远大于计算量，受显存带宽限制。Prefill 优化靠算力，Decode 优化靠减访存。
+
+</Answer>
+
+### 问题 2
+
+KV Cache 的原理是什么？为什么它是推理加速的头号功臣？
+
+<Answer>
+
+KV Cache 缓存历史 token 的 K/V 矩阵。自注意力中每个新 token 要和所有历史 token 算注意力，历史 K/V 不变若不缓存每次重算。缓存后生成第 t 个 token 只需算新 Q 与缓存 K/V 做注意力，复杂度从 O(t²) 降到 O(t)。它是头号功臣因为避免重复计算降几个数量级，简单有效几乎标配。代价是占显存，于是有 PagedAttention 分页管理。
+
+</Answer>
+
+### 问题 3
+
+量化、连续批处理、PagedAttention 分别解决什么问题？
+
+<Answer>
+
+量化解决显存占用和带宽问题，FP16 降到 INT8/INT4 显存减半访存降低。连续批处理解决吞吐量问题，请求动态进出批次 GPU 利用率大增。PagedAttention 解决 KV 缓存碎片问题，分页管理按需分配消除碎片支持更长上下文更高并发，是 vLLM 核心。
+
+</Answer>
+
+### 问题 4
+
+选型推理框架时需权衡哪些维度？vLLM、TGI、llama.cpp 各适合什么场景？
+
+<Answer>
+
+权衡延迟（TTFT、每 token 延迟）、吞吐量（QPS）、显存效率、模型支持度、部署复杂度、量化灵活性。vLLM 吞吐量王者适合高并发生产服务；TGI HF 生态好易集成适合已用 HF 体系的团队；llama.cpp CPU/GPU 混合 GGUF 量化极致轻量适合消费级硬件边缘部署本地推理。云端高并发选 vLLM，HF 生态选 TGI，本地边缘低配选 llama.cpp。
+
+</Answer>
+
+</Exercises>

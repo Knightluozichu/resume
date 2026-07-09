@@ -1,0 +1,136 @@
+---
+title: "微调实战"
+type: C
+section: "AI Agent与大模型应用"
+order: 7
+description: "全参微调、LoRA、QLoRA、Prefix微调对比与微调vs提示vs RAG选型"
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CppFinetuningPracticeDiagram } from "@/components/mdx/chatgpt-principles-practice/diagrams/cpp-finetuning-practice";
+import { Objectives, Callout, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+## 学习目标
+
+<Objectives>
+
+- 理解 LoRA 低秩适配的原理与为何 1% 参数即可接近全参效果
+- 掌握 QLoRA 如何通过量化让单卡微调 70B 模型成为可能
+- 掌握微调 vs 提示工程 vs RAG 的选型决策
+- 理解微调数据准备要点与「质量胜数量」的原则
+
+</Objectives>
+
+## 核心概念
+
+### 微调让通用模型变领域专家
+
+预训练模型是通才，微调用领域数据让它成为专才。核心流程：数据准备 → 方法选择 → 训练 → 评估 → 部署。
+
+<CppFinetuningPracticeDiagram />
+
+### 四种微调方法对比
+
+| 方法 | 可训练参数 | 显存 | 适用场景 |
+|------|-----------|------|----------|
+| 全参微调 | 100% | 巨大 | 预算充足、性能优先 |
+| LoRA | 约 1% | 中 | 性价比之王、最主流 |
+| QLoRA | 约 1% + 4bit 基座 | 极低 | 单卡微调大模型 |
+| Prefix | 极小 | 低 | 多任务共享、低成本 |
+
+### 选型决策
+
+- **提示工程**：零成本试错，优先尝试
+- **RAG**：知识频繁更新、需溯源时用
+- **微调**：固化风格格式、注入领域深度、降本提效时用
+
+<Callout type="info">
+
+三者非互斥，实际项目常组合：RAG 提供事实 + 微调定型风格 + 提示调行为。决策顺序：先提示，不够加 RAG，还不够再微调。PEFT（参数高效微调）的价值：少量参数 + 冻结基座 = 低显存、防遗忘、可插拔多任务适配器。数据质量远比数量重要：1000 条精标数据胜过 10 万条噪声数据。
+
+</Callout>
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="LoRA">
+
+Low-Rank Adaptation，低秩适配。冻结原模型参数，在权重旁路注入两个低秩矩阵 A 和 B，只训练 A、B，约 1% 参数接近全参效果，推理时可合并无额外延迟。
+
+</GlossaryItem>
+
+<GlossaryItem term="QLoRA">
+
+量化 + LoRA。基座模型 4bit 量化存储，LoRA 适配器高精度训练，显存降到 1/4，让单卡微调 70B 模型成为可能。
+
+</GlossaryItem>
+
+<GlossaryItem term="PEFT">
+
+Parameter-Efficient Fine-Tuning，参数高效微调。只训练少量参数、冻结基座，包括 LoRA、Prefix-Tuning 等，低显存防遗忘可插拔。
+
+</GlossaryItem>
+
+<GlossaryItem term="灾难遗忘">
+
+微调新任务时模型遗忘旧知识的现象。冻结基座（如 LoRA）能缓解，因为预训练知识保存在未动的权重中。
+
+</GlossaryItem>
+
+<GlossaryItem term="内在维度">
+
+模型微调时参数变化是低秩的假说，解释了为何 LoRA 用低秩矩阵就能表达任务适配，是 LoRA 有效的理论基础。
+
+</GlossaryItem>
+
+</Glossary>
+
+## 练习题
+
+<Exercises>
+
+### 问题 1
+
+LoRA 的原理是什么？为什么它只需训练 1% 参数就能接近全参微调效果？
+
+<Answer>
+
+LoRA 冻结原模型参数，在每层权重旁路注入两个小矩阵 A 和 B（W' = W + B·A），只训练 A、B。有效因为「内在维度」假说——微调时参数变化是低秩的，低秩矩阵足以表达任务适配；原参数冻结保留预训练知识防灾难遗忘；可训练参数仅 1% 显存大降；推理时 B·A 可合并回原权重无额外延迟。是性价比之王最主流微调方法。
+
+</Answer>
+
+### 问题 2
+
+QLoRA 在 LoRA 基础上做了什么改进？它如何让单卡微调 70B 模型成为可能？
+
+<Answer>
+
+QLoRA 把冻结的基座模型权重量化到 4bit（NF4 量化），只对 LoRA 适配器高精度训练。基座 4bit 存储显存降到 1/4，70B 从多卡降到单卡约 40GB；训练时反量化高精度计算梯度保证稳定；LoRA 适配器仍可合并部署无额外开销。关键技巧：NF4 正态分布量化、双重量化、分页优化器防显存峰值。让消费级显卡也能微调大模型，是民主化微调的关键技术。
+
+</Answer>
+
+### 问题 3
+
+什么场景该用提示工程、什么场景该用 RAG、什么场景该用微调？
+
+<Answer>
+
+提示工程零成本试错任务简单或快速验证优先用；RAG 知识频繁更新需溯源知识量大时用，知识放外部库实时检索模型不动更新知识只需更新库；微调需固化输出风格格式注入领域深度知识降本提效时用，能力内化进权重适合稳定领域任务。三者非互斥常组合 RAG 提供事实+微调定型风格+提示调行为。决策顺序：先提示不够加 RAG 还不够再微调。
+
+</Answer>
+
+### 问题 4
+
+微调的数据准备有哪些要点？为什么「1000 条精标数据胜过 10 万条噪声数据」？
+
+<Answer>
+
+数据准备要点：任务对齐（格式与目标场景一致）、质量优先（标注准确回答规范无矛盾）、多样性（覆盖子场景和边界 case）、去重去噪、数量适度（LoRA 几千到几万条即可）。为什么质量胜数量：模型学的是数据分布，噪声数据教错规律，10 万条噪声让模型学到错误模式反而退化；1000 条精标教对规律模型能正确泛化。「垃圾进垃圾出」在大模型微调上尤为显著，数据质量是微调成败的第一决定因素。
+
+</Answer>
+
+</Exercises>

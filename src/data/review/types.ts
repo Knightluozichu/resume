@@ -2288,7 +2288,17 @@ export type ReviewChapterSlug =
   | "lcp-rag-implementation"
   | "lcp-advanced-chains"
   | "lcp-production-deployment"
-  | "lcp-final-review";
+  | "lcp-final-review"
+  | "cpp-learning-map"
+  | "cpp-gpt-architecture"
+  | "cpp-pretraining"
+  | "cpp-alignment-rlhf"
+  | "cpp-inference-serving"
+  | "cpp-prompt-techniques"
+  | "cpp-plugin-tools"
+  | "cpp-finetuning-practice"
+  | "cpp-ecosystem-future"
+  | "cpp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4581,6 +4591,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lcp-advanced-chains": "高级链与路由",
   "lcp-production-deployment": "生产部署与优化",
   "lcp-final-review": "全书复习与知识整合",
+  "cpp-learning-map": "ChatGPT原理与实战·知识全景图",
+  "cpp-gpt-architecture": "GPT模型架构",
+  "cpp-pretraining": "预训练与规模化",
+  "cpp-alignment-rlhf": "对齐与RLHF",
+  "cpp-inference-serving": "推理与服务化",
+  "cpp-prompt-techniques": "高级提示技巧",
+  "cpp-plugin-tools": "插件与工具调用",
+  "cpp-finetuning-practice": "微调实战",
+  "cpp-ecosystem-future": "生态与未来展望",
+  "cpp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
