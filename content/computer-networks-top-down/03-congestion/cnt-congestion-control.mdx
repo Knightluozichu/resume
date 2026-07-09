@@ -1,0 +1,234 @@
+---
+title: "拥塞控制原理"
+type: B
+section: "网络"
+order: 3
+description: "TCP拥塞控制：慢启动、拥塞避免、快速重传与快速恢复"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { CntCongestionControlDiagram } from "@/components/mdx/computer-networks-top-down/diagrams/cnt-congestion-control";
+
+<Objectives>
+
+- 理解拥塞的原因与代价（丢包、长延迟）
+- 掌握AIMD（加性增、乘性减）原理与公平性
+- 掌握TCP Reno四阶段：慢启动、拥塞避免、快速重传、快速恢复
+- 理解拥塞窗口与接收窗口的协同关系
+
+</Objectives>
+
+## 拥塞控制概述
+
+<CntCongestionControlDiagram />
+
+拥塞控制是传输层防止 **过多数据注入网络** 导致路由器队列溢出、丢包和延迟飙升的机制。与流量控制（保护接收方）不同，拥塞控制保护的是 **网络本身**。
+
+### 拥塞的原因与代价
+
+| 情况 | 现象 | 代价 |
+|------|------|------|
+| 轻度拥塞 | 队列开始增长 | 排队延迟增加 |
+| 中度拥塞 | 队列溢出 | 分组丢失，重传浪费带宽 |
+| 严重拥塞 | 大量重传 | 有效吞吐趋近于零（拥塞崩溃） |
+
+<Callout type="warning" title="拥塞崩溃的恶性循环">
+
+当网络拥塞时，路由器丢包增加 → 发送方超时重传 → 更多分组注入网络 → 拥塞加剧 → 更多丢包 → 更多重传。如果不加控制，有效吞吐量会骤降到接近零。这就是为什么TCP必须主动感知拥塞并降低发送速率。
+
+</Callout>
+
+## AIMD原则
+
+TCP拥塞控制的核心算法是 **AIMD（Additive Increase, Multiplicative Decrease）**。
+
+### 数学描述
+
+$$\text{加性增（AI）}: \quad cwnd \leftarrow cwnd + \frac{1}{cwnd} \quad \text{（每个ACK）}$$
+
+$$\text{乘性减（MD）}: \quad cwnd \leftarrow \frac{cwnd}{2} \quad \text{（检测到拥塞时）}$$
+
+等价地，每个RTT内：
+
+$$\text{AI}: \quad cwnd \leftarrow cwnd + 1 \quad \text{（每RTT增加1个MSS）}$$
+
+$$\text{MD}: \quad cwnd \leftarrow \frac{cwnd}{2} \quad \text{（减半）}$$
+
+### AIMD的公平性
+
+```text
+假设两个连接共享一条瓶颈链路（总带宽R）：
+
+连接A的速率      连接B的速率
+    ↑        B
+    │       /|
+    │      / |
+    │     /  |
+    │    /   |    公平线: A = B
+    │   /    |
+    │  /     |
+    │ /      |
+    │/       |
+    └────────┼──────→ 连接A的速率
+   0       R/2     R
+
+AIMD轨迹：两条连接交替增减，最终收敛到公平线与带宽线的交点(R/2, R/2)。
+```
+
+<Callout type="info" title="为什么是加性增乘性减而不是线性减">
+
+乘性减（减半）能快速从拥塞中恢复，避免拥塞持续。加性增（每RTT+1）能温和探测可用带宽。这种不对称设计使多个连接收敛到公平分享——如果某个连接占带宽多，拥塞时它减得也多；占带宽少，减得也少，最终趋于相等。线性减则收敛慢且在动态网络中无法达到公平。
+
+</Callout>
+
+## TCP Reno拥塞控制
+
+TCP Reno包含四个阶段，通过 **拥塞窗口（cwnd）** 控制发送速率。
+
+### 四阶段详解
+
+```text
+cwnd
+ ↑
+ │    ╱╲      ╱╲      慢启动（指数增长）
+ │   ╱  ╲    ╱  ╲     拥塞避免（线性增长）
+ │  ╱    ╲  ╱    ╲
+ │ ╱      ╲╱      ╲   乘性减（减半）
+ │╱                ╲
+ │                  ╲___ 拥塞避免
+ └──────────────────────→ 时间
+   SS  CA  SS CA  SS  CA
+```
+
+### 1. 慢启动（Slow Start）
+
+| 属性 | 值 |
+|------|-----|
+| 初始cwnd | 1 MSS |
+| 增长方式 | 每收到一个ACK，cwnd +1 MSS |
+| 等效增长 | 每RTT翻倍（指数增长） |
+| 退出条件 | cwnd达到ssthresh 或 检测到丢包 |
+
+```text
+cwnd: 1 → 2 → 4 → 8 → 16 → ... （每RTT翻倍）
+
+RTT 1: 发送1个 → 收到1个ACK → cwnd=2
+RTT 2: 发送2个 → 收到2个ACK → cwnd=4
+RTT 3: 发送4个 → 收到4个ACK → cwnd=8
+```
+
+### 2. 拥塞避免（Congestion Avoidance）
+
+| 属性 | 值 |
+|------|-----|
+| 进入条件 | cwnd达到ssthresh |
+| 增长方式 | 每RTT cwnd +1 MSS（线性增长） |
+| 退出条件 | 检测到丢包 |
+
+$$\text{每ACK增长}: \quad cwnd \leftarrow cwnd + \frac{1}{cwnd} \text{ MSS}$$
+
+### 3. 快速重传（Fast Retransmit）
+
+```text
+接收方收到乱序分组时发送重复ACK：
+发送方收到3个重复ACK → 判定该分组丢失 → 立即重传（不等超时）
+
+ssthresh ← cwnd / 2
+cwnd ← ssthresh + 3  （收到3个重复ACK说明3个分组已离开网络）
+```
+
+### 4. 快速恢复（Fast Recovery）
+
+```text
+快速重传后进入快速恢复（而非慢启动）：
+  cwnd ← ssthresh（直接降到一半，而非1）
+  继续拥塞避免的线性增长
+
+如果超时（而非3个重复ACK）：
+  ssthresh ← cwnd / 2
+  cwnd ← 1（回到慢启动）
+```
+
+### 拥塞控制状态转换
+
+```text
+                    3个重复ACK
+          ┌─────────────────────────┐
+          ↓                         │
+     慢启动 ──cwnd>=ssthresh──→ 拥塞避免
+          ↑                         │
+          │                         │ 超时
+          │     ssthresh=cwnd/2     │ ssthresh=cwnd/2
+          │     cwnd=1              ↓
+          └──────────────────── 超时事件
+                                    │
+                    3个重复ACK       │
+                    ssthresh=cwnd/2  │
+                    cwnd=ssthresh    │
+                    → 快速恢复 ──────┘
+                    → 拥塞避免
+```
+
+## 拥塞窗口与发送速率
+
+发送方的实际发送窗口受 **拥塞窗口和接收窗口** 共同约束：
+
+$$\text{发送窗口} = \min(\text{cwnd}, \text{rwnd})$$
+
+```text
+cwnd（拥塞窗口）：由发送方根据网络拥塞程度动态调整
+rwnd（接收窗口）：由接收方根据缓冲区空闲量通告
+
+实际发送窗口 = min(cwnd, rwnd)
+→ 既要保护网络（cwnd），又要保护接收方（rwnd）
+```
+
+### TCP吞吐量估算
+
+在稳态（拥塞避免阶段），吞吐量可近似为：
+
+$$\text{平均吞吐量} \approx \frac{3}{4} \cdot \frac{W}{RTT}$$
+
+其中W是丢包时的窗口大小。窗口从W/2线性增长到W，平均窗口为 3W/4。
+
+<Glossary>
+
+<GlossaryItem term="AIMD（加性增乘性减）">
+AIMD是TCP拥塞控制的核心算法。加性增（AI）：每个RTT拥塞窗口cwnd增加1个MSS，温和探测可用带宽。乘性减（MD）：检测到拥塞时cwnd减半，快速从拥塞中恢复。这种不对称设计使多个竞争连接收敛到公平分享带宽——占带宽多的连接减得也多，最终趋于相等。AIMD是TCP在互联网上稳定运行数十年的基础。
+</GlossaryItem>
+
+<GlossaryItem term="慢启动（Slow Start）">
+慢启动是TCP连接建立初期的拥塞控制阶段。初始cwnd=1 MSS，每收到一个ACK cwnd增加1 MSS，等效每RTT翻倍（指数增长）。名称中的「慢」是相对于一开始就发满窗口而言。退出条件：cwnd达到ssthresh（进入拥塞避免）或检测到丢包。慢启动使TCP快速探测网络容量，从1增长到可用带宽只需log(RTT)个RTT。
+</GlossaryItem>
+
+<GlossaryItem term="快速重传与快速恢复（Fast Retransmit / Fast Recovery）">
+快速重传：发送方收到3个重复ACK时判定分组丢失，立即重传而不等待超时定时器。3个重复ACK比超时更早出现，且说明后续分组已到达网络（因此网络并未严重拥塞）。快速恢复：快速重传后不回到慢启动，而是将cwnd设为ssthresh（减半），继续拥塞避免。只有超时事件才触发回到慢启动（cwnd=1），因为超时意味着严重拥塞。
+</GlossaryItem>
+
+<GlossaryItem term="ssthresh（慢启动阈值）">
+ssthresh是区分慢启动和拥塞避免的阈值。cwnd小于ssthresh时执行慢启动（指数增长），大于等于ssthresh时执行拥塞避免（线性增长）。初始值通常较大，检测到丢包时更新：3个重复ACK时ssthresh=cwnd/2，超时时也ssthresh=cwnd/2。ssthresh记录了「上次感知到拥塞时的窗口大小的一半」，作为本次谨慎增长的参考。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** TCP Reno的四个阶段是什么？慢启动和拥塞避免的增长方式有什么区别？
+
+<Answer>
+
+TCP Reno的四个阶段：①慢启动——初始cwnd=1 MSS，每收到一个ACK cwnd+1，等效每RTT翻倍（指数增长），用于连接初期快速探测网络容量 ②拥塞避免——cwnd达到ssthresh后进入，每RTT cwnd+1 MSS（线性增长），温和探测可用带宽 ③快速重传——收到3个重复ACK时判定分组丢失，立即重传而不等超时 ④快速恢复——快速重传后将ssthresh=cwnd/2、cwnd=ssthresh，继续拥塞避免（不回到慢启动）。慢启动是指数增长（每RTT翻倍），适合从低速率快速接近网络容量；拥塞避免是线性增长（每RTT+1 MSS），接近容量后谨慎探测。切换由ssthresh控制。
+</Answer>
+
+**问题 2：** AIMD的数学公式是什么？为什么乘性减而非线性减？
+
+<Answer>
+
+AIMD公式：加性增 cwnd = cwnd + 1/cwnd（每ACK），等效每RTT cwnd增加1 MSS（线性增长）；乘性减 cwnd = cwnd/2（检测到拥塞时减半）。选择乘性减而非线性减的原因：①乘性减能快速从拥塞中恢复——减半让网络队列迅速排空，而线性减太慢可能导致拥塞持续 ②AIMD保证公平性——多个竞争连接经过多次增减循环后收敛到公平分享（占带宽多的减得也多，最终趋于相等），数学上可证明AIMD轨迹收敛到公平线 ③线性减收敛慢且在动态网络中无法达到公平分享。加性增则是为了温和探测可用带宽，避免过快再次引发拥塞。
+</Answer>
+
+</Exercises>

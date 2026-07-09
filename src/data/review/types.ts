@@ -2018,7 +2018,17 @@ export type ReviewChapterSlug =
   | "isn-reverse-proxy"
   | "isn-microservice-network"
   | "isn-performance-tuning"
-  | "isn-final-review";
+  | "isn-final-review"
+  | "cnt-learning-map"
+  | "cnt-application-layer"
+  | "cnt-transport-layer"
+  | "cnt-congestion-control"
+  | "cnt-network-layer"
+  | "cnt-routing-algorithms"
+  | "cnt-link-layer"
+  | "cnt-wireless-mobile"
+  | "cnt-network-security"
+  | "cnt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4041,6 +4051,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "isn-microservice-network": "微服务网络：服务间通信与治理",
   "isn-performance-tuning": "性能调优：网络优化与监控",
   "isn-final-review": "图解服务端网络架构全书复习与知识整合",
+  "cnt-learning-map": "计算机网络自顶向下方法全书学习地图",
+  "cnt-application-layer": "应用层：HTTP与Web",
+  "cnt-transport-layer": "传输层：UDP与TCP",
+  "cnt-congestion-control": "拥塞控制原理",
+  "cnt-network-layer": "网络层：数据平面",
+  "cnt-routing-algorithms": "路由算法与协议",
+  "cnt-link-layer": "链路层与局域网",
+  "cnt-wireless-mobile": "无线网络与移动性",
+  "cnt-network-security": "网络安全实践",
+  "cnt-final-review": "计算机网络自顶向下方法全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

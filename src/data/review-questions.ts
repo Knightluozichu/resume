@@ -1895,6 +1895,16 @@ import { isnReverseProxyQuestions } from "./review/isn-reverse-proxy";
 import { isnMicroserviceNetworkQuestions } from "./review/isn-microservice-network";
 import { isnPerformanceTuningQuestions } from "./review/isn-performance-tuning";
 import { isnFinalReviewQuestions } from "./review/isn-final-review";
+import { cntLearningMapQuestions } from "./review/cnt-learning-map";
+import { cntApplicationLayerQuestions } from "./review/cnt-application-layer";
+import { cntTransportLayerQuestions } from "./review/cnt-transport-layer";
+import { cntCongestionControlQuestions } from "./review/cnt-congestion-control";
+import { cntNetworkLayerQuestions } from "./review/cnt-network-layer";
+import { cntRoutingAlgorithmsQuestions } from "./review/cnt-routing-algorithms";
+import { cntLinkLayerQuestions } from "./review/cnt-link-layer";
+import { cntWirelessMobileQuestions } from "./review/cnt-wireless-mobile";
+import { cntNetworkSecurityQuestions } from "./review/cnt-network-security";
+import { cntFinalReviewQuestions } from "./review/cnt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3825,6 +3835,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...isnMicroserviceNetworkQuestions,
   ...isnPerformanceTuningQuestions,
   ...isnFinalReviewQuestions,
+  ...cntLearningMapQuestions,
+  ...cntApplicationLayerQuestions,
+  ...cntTransportLayerQuestions,
+  ...cntCongestionControlQuestions,
+  ...cntNetworkLayerQuestions,
+  ...cntRoutingAlgorithmsQuestions,
+  ...cntLinkLayerQuestions,
+  ...cntWirelessMobileQuestions,
+  ...cntNetworkSecurityQuestions,
+  ...cntFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,216 @@
+---
+title: "传输层：UDP与TCP"
+type: B
+section: "网络"
+order: 2
+description: "多路复用、可靠数据传输、流量控制与TCP连接管理"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { CntTransportLayerDiagram } from "@/components/mdx/computer-networks-top-down/diagrams/cnt-transport-layer";
+
+<Objectives>
+
+- 理解传输层多路复用/多路分解机制
+- 掌握UDP无连接服务与TCP面向连接服务的核心差异
+- 掌握可靠数据传输（rdt）的流水线机制与滑动窗口
+- 理解流量控制、RTT估计与TCP三次握手/四次挥手
+
+</Objectives>
+
+## 传输层概述
+
+<CntTransportLayerDiagram />
+
+传输层为 **应用进程之间** 提供端到端通信服务。网络层（IP）只负责主机到主机的交付，传输层在此基础上实现 **进程到进程** 的交付（多路复用/分解）和可靠性保障。
+
+### UDP vs TCP
+
+| 特性 | UDP | TCP |
+|------|-----|-----|
+| 连接 | 无连接 | 面向连接（三次握手） |
+| 可靠性 | 不保证 | 保证送达、有序 |
+| 流量控制 | 无 | 有（滑动窗口） |
+| 拥塞控制 | 无 | 有（AIMD） |
+| 速度 | 快（无开销） | 较慢 |
+| 首部大小 | 8字节 | 20字节 |
+| 场景 | DNS/视频/游戏 | HTTP/SSH/邮件 |
+
+## 多路复用与多路分解
+
+传输层通过 **端口号** 区分同一主机上的不同进程。
+
+```text
+多路复用（发送方）：多个进程的数据 → 加端口号 → 复用到一个IP连接
+多路分解（接收方）：一个IP连接 → 按端口号 → 分发到不同进程
+
+UDP分解：仅根据（目标IP, 目标端口）二元组
+TCP分解：根据（源IP, 源端口, 目标IP, 目标端口）四元组
+```
+
+<Callout type="info" title="为什么TCP用四元组而UDP用二元组">
+
+TCP是面向连接的，一台服务器上的同一端口可以同时维护多个连接——每个连接由（源IP, 源端口, 目标IP, 目标端口）四元组唯一标识。比如Web服务器80端口同时处理来自不同客户端的数千个HTTP连接。UDP无连接，只需（目标IP, 目标端口）就能决定将报文交给哪个进程。
+
+</Callout>
+
+## 可靠数据传输（RDT）
+
+可靠数据传输是TCP的核心。从最简单到最复杂的演进：
+
+### RDT演进
+
+```text
+rdt1.0：完全可靠信道（不现实）
+  发送方：发送数据
+  接收方：接收数据
+
+rdt2.0：有比特差错的信道
+  发送方：发送 → 等待ACK/NAK
+  接收方：校验 → 正确发ACK，错误发NAK
+  发送方：收到NAK → 重传
+
+rdt3.0：有差错且会丢包的信道
+  发送方：发送 → 启动定时器 → 超时重传
+  停等协议：一次只发一个，收到ACK才发下一个
+
+流水线协议：允许一次发多个（滑动窗口）
+  GBN（回退N步）：窗口内连续发送，丢失则从丢失处全部重传
+  选择重传（SR）：只重传丢失的分组
+```
+
+### 滑动窗口机制
+
+```text
+发送窗口大小为N（GBN示例）：
+
+已确认      可发送（窗口内）     不可发送
+━━━━━━━━━│━━━━━━━━━━━━━━━━━━│━━━━━━━━━━
+base    nextseq          base+N
+ ←──────────→                  
+   窗口大小N
+```
+
+### 序号与ACK语义
+
+| 机制 | ACK语义 | 序号空间 |
+|------|---------|----------|
+| 停等协议 | 收到正确发ACK | 0/1交替 |
+| GBN | 累积ACK（收到N表示N之前全部正确） | 需 `>=` 窗口+1 |
+| 选择重传 | 独立ACK每个分组 | 需 `>=` 窗口*2 |
+
+## TCP可靠传输
+
+TCP结合GBN和SR的优点，使用 **累积ACK + 单个重传定时器 + 选择性确认（SACK）**。
+
+### TCP序号与确认
+
+```text
+TCP序号 = 数据字节流中的字节位置（非分组编号）
+TCP确认号 = 期望收到的下一个字节序号（累积确认）
+
+示例：
+发送方发送 1000字节，序号从0开始
+  分组1: 序号0,   数据0-999
+  分组2: 序号1000, 数据1000-1999
+接收方收到分组1 → ACK 1000（期望下一个是1000）
+接收方收到分组2 → ACK 2000
+```
+
+### RTT估计与超时
+
+TCP动态估计往返时间（RTT）来设置超时定时器。
+
+$$\text{EstimatedRTT} = (1 - \alpha) \cdot \text{EstimatedRTT} + \alpha \cdot \text{SampleRTT}$$
+
+$$\text{DevRTT} = (1 - \beta) \cdot \text{DevRTT} + \beta \cdot |\text{SampleRTT} - \text{EstimatedRTT}|$$
+
+$$\text{TimeoutInterval} = \text{EstimatedRTT} + 4 \cdot \text{DevRTT}$$
+
+其中 `alpha = 0.125`，`beta = 0.25`。EstimatedRTT是RTT的指数加权移动平均（EWMA），DevRTT衡量RTT波动程度。超时时间设为估计RTT加4倍偏差，平衡「太快重传（不必要的重传）」与「太慢重传（延迟恢复）」。
+
+<Callout type="warning" title="为什么TCP用字节序号而非分组序号">
+
+TCP是字节流协议，应用数据没有分组边界。用字节序号的好处：①接收方可以精确知道哪些字节已收到、哪些缺失 ②序号空间足够大（32位），不会回绕冲突 ③累积ACK简洁表达「序号N之前的所有字节已正确收到」 ④乱序到达时可以缓存正确部分，只需重传缺失部分。
+
+</Callout>
+
+## 流量控制
+
+流量控制防止发送方压垮接收方缓冲区。TCP通过 **接收窗口（rwnd）** 实现。
+
+```text
+接收方缓冲区：
+  已读        可读        空闲
+━━━━━━━━━━│━━━━━━━━━│━━━━━━━━━━
+            ←─rwnd──→
+接收方在ACK中携带 rwnd = 空闲缓冲区大小
+发送方保证：未确认数据量 <= rwnd
+
+rwnd = 0 时：发送方停止发送（但发零窗口探测报文，防止死锁）
+```
+
+## TCP连接管理
+
+### 三次握手与四次挥手
+
+```text
+三次握手（建立连接）：
+客户端 → SYN(seq=x) → 服务器        SYN_SENT → SYN_RCVD
+客户端 ← SYN(seq=y)+ACK(ack=x+1) ← 服务器
+客户端 → ACK(ack=y+1) → 服务器      ESTABLISHED → ESTABLISHED
+
+四次挥手（断开连接）：
+客户端 → FIN(seq=u) → 服务器        FIN_WAIT_1
+客户端 ← ACK(ack=u+1) ← 服务器      FIN_WAIT_2 → CLOSE_WAIT
+客户端 ← FIN(seq=v) ← 服务器        TIME_WAIT → LAST_ACK
+客户端 → ACK(ack=v+1) → 服务器      CLOSED → CLOSED
+```
+
+<Callout type="info" title="TIME_WAIT状态为什么要持续2MSL">
+
+主动关闭方进入TIME_WAIT状态持续2个MSL（Maximum Segment Lifetime）。原因：①保证最后的ACK能到达对方——如果ACK丢失，对方会重发FIN，主动方还能重发ACK ②防止旧连接的延迟报文干扰新连接——2MSL后旧报文必然从网络中消失。代价是高并发短连接场景下大量TIME_WAIT占用端口资源。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="多路复用与多路分解（Multiplexing / Demultiplexing）">
+多路复用是发送方从多个Socket收集数据，加上源端口号和目标端口号，传递给网络层。多路分解是接收方从网络层收到报文后，根据端口号将数据分发到对应Socket。UDP仅根据目标端口二元组分解，TCP根据四元组（源IP, 源端口, 目标IP, 目标端口）分解——这使得TCP服务器同一端口能同时维护多个客户端连接。
+</GlossaryItem>
+
+<GlossaryItem term="可靠数据传输（Reliable Data Transfer）">
+可靠数据传输确保数据无差错、无丢失、无重复、有序到达。演进路径：rdt1.0（完美信道）→ rdt2.0（加校验和ACK/NAK）→ rdt3.0（加超时重传，即停等协议）→ 流水线协议（GBN回退N步/SR选择重传）。TCP使用累积ACK+单个定时器+流水线，结合GBN和SR优点。核心机制包括序号、确认、重传、定时器和滑动窗口。
+</GlossaryItem>
+
+<GlossaryItem term="滑动窗口（Sliding Window）">
+滑动窗口是流水线可靠传输的核心机制。发送方维护一个大小为N的窗口，窗口内的分组可以连续发送而无需等待ACK。随着ACK到达，窗口向前滑动，新的分组进入窗口可被发送。GBN（回退N步）要求窗口大小不超过序号空间-1，丢失时从丢失处全部重传；SR（选择重传）要求窗口大小不超过序号空间/2，只重传丢失分组。TCP使用累积ACK的类GBN机制。
+</GlossaryItem>
+
+<GlossaryItem term="流量控制（Flow Control）">
+流量控制是接收方控制发送方发送速率的机制，防止发送方压垮接收方缓冲区。TCP通过接收窗口（rwnd）实现：接收方在ACK报文中携带rwnd=空闲缓冲区大小，发送方保证未确认数据量不超过rwnd。rwnd=0时发送方暂停发送（但定期发零窗口探测报文防止死锁）。流量控制是端到端的（保护接收方），区别于拥塞控制（保护网络）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** TCP的三次握手过程是什么？为什么需要三次而不是两次？
+
+<Answer>
+
+三次握手过程：①客户端发送SYN报文（seq=x）给服务器，进入SYN_SENT状态 ②服务器收到SYN后，发送SYN+ACK报文（seq=y, ack=x+1），进入SYN_RCVD状态 ③客户端收到SYN+ACK后，发送ACK报文（ack=y+1），双方进入ESTABLISHED状态。需要三次而非两次的原因：两次握手无法防止历史连接请求导致的错误。如果客户端的一个旧SYN延迟到达服务器，服务器回复SYN+ACK后直接建立连接（两次握手），但客户端不会响应这个SYN+ACK，服务器就浪费了资源等待一个永远不会来的连接。三次握手中，客户端收到意外的SYN+ACK后不会发ACK，服务器收不到ACK就不会真正建立连接。第三次ACK还确认了服务器的序号，确保双方都准备好。
+</Answer>
+
+**问题 2：** TCP如何动态估计RTT？写出EstimatedRTT和TimeoutInterval的计算公式。
+
+<Answer>
+
+TCP使用指数加权移动平均（EWMA）动态估计RTT。每次收到新的SampleRTT（实际测量的往返时间）后更新：EstimatedRTT = (1-alpha)*EstimatedRTT + alpha*SampleRTT（alpha=0.125），EstimatedRTT是RTT的平滑估计。同时计算偏差：DevRTT = (1-beta)*DevRTT + beta*|SampleRTT - EstimatedRTT|（beta=0.25），DevRTT衡量RTT的波动程度。超时时间设为：TimeoutInterval = EstimatedRTT + 4*DevRTT。加4倍偏差是为了在RTT波动较大时避免不必要的超时重传。注意：TCP只测量已发送但未重传的报文段的RTT（重传的报文段RTT不可靠，因为无法区分是第一次还是重传的ACK——这就是Karn算法）。
+</Answer>
+
+</Exercises>

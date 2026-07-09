@@ -237,6 +237,7 @@ export const BOOK_ORDER = [
   "microservices-patterns",
   "illustrated-http",
   "illustrated-server-network",
+  "computer-networks-top-down",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -414,6 +415,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "microservices-patterns": "微服务架构设计模式",
   "illustrated-http": "图解HTTP",
   "illustrated-server-network": "图解服务端网络架构",
+  "computer-networks-top-down": "计算机网络：自顶向下方法",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

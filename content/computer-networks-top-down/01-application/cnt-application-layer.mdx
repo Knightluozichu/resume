@@ -1,0 +1,223 @@
+---
+title: "应用层：HTTP与Web"
+type: A
+section: "网络"
+order: 1
+description: "HTTP协议、Web缓存、DNS域名解析与Socket编程基础"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { CntApplicationLayerDiagram } from "@/components/mdx/computer-networks-top-down/diagrams/cnt-application-layer";
+
+<Objectives>
+
+- 理解HTTP请求/响应模型与报文格式
+- 掌握Cookie、Web缓存的原理与作用
+- 理解DNS分层解析机制与递归/迭代查询
+- 了解Socket API的基本编程模型
+
+</Objectives>
+
+## 应用层概述
+
+<CntApplicationLayerDiagram />
+
+应用层是离用户最近的协议层。网络应用通过 **应用层协议** 定义报文格式和交互规则，底层由传输层（TCP/UDP）提供进程间通信服务。
+
+### 网络应用架构
+
+| 架构 | 特点 | 代表 |
+|------|------|------|
+| 客户-服务器（C/S） | 服务器始终在线，客户端主动请求 | Web, DNS, FTP |
+| P2P | 节点既是客户端又是服务器，直接通信 | BitTorrent, Skype |
+
+## HTTP协议
+
+HTTP（超文本传输协议）是Web的核心协议，基于TCP，采用 **请求-响应** 模型。
+
+### HTTP报文格式
+
+```text
+HTTP请求报文：
+GET /index.html HTTP/1.1        ← 请求行（方法 URL 版本）
+Host: www.example.com            ← 首部行
+User-Agent: Mozilla/5.0
+Accept: text/html
+                                 ← 空行（标志首部结束）
+（请求体，GET通常为空）
+
+HTTP响应报文：
+HTTP/1.1 200 OK                  ← 状态行（版本 状态码 短语）
+Content-Type: text/html
+Content-Length: 1024
+                                 ← 空行
+（响应体，即HTML内容）
+```
+
+### HTTP方法与状态码
+
+| 方法 | 含义 | 幂等 |
+|------|------|------|
+| GET | 获取资源 | 是 |
+| POST | 提交数据 | 否 |
+| PUT | 更新资源 | 是 |
+| DELETE | 删除资源 | 是 |
+
+| 状态码 | 含义 | 示例 |
+|--------|------|------|
+| 2xx | 成功 | 200 OK |
+| 3xx | 重定向 | 301 Moved Permanently |
+| 4xx | 客户端错误 | 404 Not Found |
+| 5xx | 服务器错误 | 500 Internal Server Error |
+
+### 持久连接与非持久连接
+
+```text
+非持久连接（HTTP/1.0默认）：
+  每个请求建立一次TCP连接 → 传输 → 关闭
+  1个HTML+10张图片 = 11次TCP连接
+
+持久连接（HTTP/1.1默认）：
+  TCP连接保持，多个请求串行或并行传输
+  1个HTML+10张图片 = 1次TCP连接（流水线模式）
+```
+
+<Callout type="info" title="RTT对HTTP延迟的影响">
+
+非持久连接下，每个对象需要 **2个RTT**（一个TCP握手 + 一个HTTP请求响应），加上传输时间。10个对象需要 20+ 个RTT。持久连接将此降至 1-2 个RTT，大幅降低延迟。这也是HTTP/2和HTTP/3进一步优化的方向——多路复用消除队头阻塞。
+
+</Callout>
+
+## Cookie与状态管理
+
+HTTP是 **无状态协议**——服务器不记录客户端历史请求。Cookie机制用于维持状态。
+
+```text
+Cookie工作流程：
+1. 客户端首次请求 → 服务器
+2. 服务器响应 + Set-Cookie: user=abc123
+3. 客户端保存Cookie
+4. 后续请求携带 Cookie: user=abc123 → 服务器识别用户
+```
+
+## Web缓存（代理服务器）
+
+Web缓存（Proxy Cache）存储近期请求过的资源副本，减少重复请求延迟和带宽消耗。
+
+### 缓存命中与条件请求
+
+```text
+客户端 → 代理缓存 → 原始服务器
+
+缓存命中（Hit）：代理有副本，直接返回，延迟低
+缓存未命中（Miss）：代理向服务器请求，存副本后返回
+
+条件GET（验证副本是否过期）：
+GET /page.html HTTP/1.1
+If-Modified-Since: Wed, 01 Jan 2025 00:00:00 GMT
+
+服务器响应（未修改）：HTTP/1.1 304 Not Modified（无响应体）
+服务器响应（已修改）：HTTP/1.1 200 OK + 新内容
+```
+
+<Callout type="warning" title="Web缓存为什么能降低延迟">
+
+Web缓存将请求响应时间从 `RTT客户端→服务器 + 传输时间` 降为 `RTT客户端→缓存`（通常缓存离客户端更近）。即使命中率只有40%，平均延迟也显著下降。CDN本质上是分布式Web缓存——将内容副本部署到全球边缘节点。
+
+</Callout>
+
+## DNS：域名解析系统
+
+DNS（Domain Name System）将人类可读的域名翻译为IP地址，是互联网的「电话簿」。
+
+### DNS分层结构
+
+```text
+根域名服务器（.）         ← 13组，全球部署
+  ├── 顶级域服务器（TLD）
+  │     .com  .org  .net  .cn  .edu
+  └── 权威域名服务器
+        example.com 的DNS记录
+```
+
+### 递归查询与迭代查询
+
+```text
+用户 → 本地DNS服务器：www.example.com 的IP？（递归查询）
+本地DNS → 根服务器：example.com在哪？（迭代查询）
+根服务器 → 本地DNS：去问 .com TLD服务器
+本地DNS → .com TLD：example.com在哪？
+TLD → 本地DNS：去问 example.com 权威服务器
+本地DNS → 权威服务器：www.example.com 的IP？
+权威服务器 → 本地DNS：93.184.216.34
+本地DNS → 用户：93.184.216.34（缓存结果）
+```
+
+### DNS记录类型
+
+| 类型 | 含义 | 示例 |
+|------|------|------|
+| A | 域名 → IPv4地址 | example.com → 93.184.216.34 |
+| AAAA | 域名 → IPv6地址 | example.com → 2606:2800:: |
+| CNAME | 域名别名 | www.example.com → example.com |
+| NS | 域名服务器 | example.com NS → ns1.example.com |
+| MX | 邮件服务器 | example.com MX → mail.example.com |
+
+## Socket编程
+
+Socket是应用层与传输层之间的API接口，应用程序通过Socket收发数据。
+
+### TCP Socket编程流程
+
+```text
+服务器端：                   客户端：
+socket()   创建套接字        socket()   创建套接字
+bind()     绑定IP:端口
+listen()   开始监听
+accept()   等待连接 ←──────── connect()  发起连接（三次握手）
+read()     ←──────────────── write()    发送请求
+write()    ────────────────→ read()     接收响应
+close()    关闭连接 ←──────── close()    关闭连接（四次挥手）
+```
+
+<Glossary>
+
+<GlossaryItem term="HTTP（超文本传输协议）">
+HTTP是Web的核心应用层协议，基于TCP，采用请求-响应模型。客户端（浏览器）发送HTTP请求（方法+URL+首部），服务器返回HTTP响应（状态码+首部+体）。HTTP是无状态协议——每个请求独立，服务器不记忆历史请求，状态通过Cookie维持。HTTP/1.1默认持久连接（Keep-Alive），HTTP/2引入多路复用，HTTP/3基于QUIC/UDP。
+</GlossaryItem>
+
+<GlossaryItem term="DNS（域名系统）">
+DNS是互联网的域名解析系统，将人类可读的域名（如www.example.com）翻译为IP地址（如93.184.216.34）。DNS采用分层结构：根域名服务器 → 顶级域服务器（.com/.org） → 权威域名服务器。查询方式：客户端向本地DNS服务器递归查询，本地DNS向各级服务器迭代查询。DNS基于UDP（端口53），因为查询报文小且要求低延迟。DNS还支持负载均衡（一个域名多个A记录）和CDN调度。
+</GlossaryItem>
+
+<GlossaryItem term="Web缓存（Web Cache / Proxy Server）">
+Web缓存是存储近期请求资源副本的代理服务器。客户端请求先到缓存：命中则直接返回（延迟低），未命中则向原始服务器请求并缓存结果。通过条件GET（If-Modified-Since / If-None-Match）验证缓存副本是否过期，未过期返回304 Not Modified。Web缓存降低用户感知延迟、减少服务器负载和骨干网带宽消耗。CDN本质是分布式Web缓存。
+</GlossaryItem>
+
+<GlossaryItem term="Socket API">
+Socket是操作系统提供的网络编程接口，是应用层与传输层之间的桥梁。TCP Socket编程流程：服务器端socket()→bind()→listen()→accept()→read/write→close()，客户端socket()→connect()→read/write→close()。每个Socket由（IP地址, 端口号）唯一标识，服务器通过监听端口等待客户端连接。Socket也可用于UDP（无connect，直接sendto/recvfrom）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** HTTP的请求报文和响应报文分别由哪些部分组成？HTTP为什么是无状态协议？
+
+<Answer>
+
+HTTP请求报文由三部分组成：①请求行（方法 URL HTTP版本，如 `GET /index.html HTTP/1.1`）②首部行（Host、User-Agent等键值对，以空行结束）③请求体（GET通常为空，POST携带数据）。HTTP响应报文由三部分组成：①状态行（HTTP版本 状态码 短语，如 `HTTP/1.1 200 OK`）②首部行（Content-Type、Content-Length等，以空行结束）③响应体（HTML等内容）。HTTP是无状态协议因为服务器处理每个请求时不参考之前的请求——每个请求独立处理，服务器不记录客户端历史。这样设计简化了服务器实现、提高了可扩展性（任何服务器都能处理任何请求），状态维持通过Cookie机制在应用层补充实现。
+</Answer>
+
+**问题 2：** DNS的分层结构是什么？递归查询和迭代查询的区别是什么？
+
+<Answer>
+
+DNS分层结构：①根域名服务器（13组，全球部署，管理顶级域）②顶级域服务器（TLD，如 .com/.org/.cn/.edu）③权威域名服务器（存储具体域名的DNS记录，如example.com的A记录）。递归查询和迭代查询的区别：递归查询是被查询方负责给出最终答案（用户向本地DNS查询，本地DNS负责找到最终IP返回给用户）；迭代查询是被查询方只给出下一步该问谁（本地DNS向根服务器查询，根服务器不直接查找而是告诉本地DNS去问TLD服务器，TLD再指向权威服务器）。实际流程中用户→本地DNS是递归，本地DNS→各级服务器是迭代。DNS基于UDP端口53，因为查询报文小且要求低延迟。
+</Answer>
+
+</Exercises>
