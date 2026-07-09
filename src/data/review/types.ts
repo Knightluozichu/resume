@@ -1758,7 +1758,17 @@ export type ReviewChapterSlug =
   | "jg1-mixed-gc"
   | "jg1-full-gc"
   | "jg1-g1-tuning-practice"
-  | "jg1-final-review";
+  | "jg1-final-review"
+  | "gch-learning-map"
+  | "gch-gc-overview"
+  | "gch-mark-sweep"
+  | "gch-copying-collection"
+  | "gch-mark-compact"
+  | "gch-generational"
+  | "gch-concurrent-gc"
+  | "gch-realtime-gc"
+  | "gch-modern-gc"
+  | "gch-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3521,6 +3531,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jg1-full-gc": "Full GC与退化",
   "jg1-g1-tuning-practice": "G1调优实践",
   "jg1-final-review": "全书复习",
+  "gch-learning-map": "全书学习地图",
+  "gch-gc-overview": "GC概述与历史",
+  "gch-mark-sweep": "标记-清除算法",
+  "gch-copying-collection": "复制式回收",
+  "gch-mark-compact": "标记-压缩算法",
+  "gch-generational": "分代回收",
+  "gch-concurrent-gc": "并发回收",
+  "gch-realtime-gc": "实时GC",
+  "gch-modern-gc": "现代GC对比",
+  "gch-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

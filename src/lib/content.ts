@@ -211,6 +211,7 @@ export const BOOK_ORDER = [
   "jvm-troubleshooting",
   "deep-understanding-jvm",
   "jvm-g1-tuning",
+  "gc-handbook",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -362,6 +363,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "jvm-troubleshooting": "JVM故障诊断与性能优化",
   "deep-understanding-jvm": "深入理解Java虚拟机",
   "jvm-g1-tuning": "JVM G1源码分析和调优",
+  "gc-handbook": "垃圾回收算法手册",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

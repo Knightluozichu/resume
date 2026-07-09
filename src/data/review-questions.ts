@@ -1635,6 +1635,16 @@ import { jg1MixedGcQuestions } from "./review/jg1-mixed-gc";
 import { jg1FullGcQuestions } from "./review/jg1-full-gc";
 import { jg1G1TuningPracticeQuestions } from "./review/jg1-g1-tuning-practice";
 import { jg1FinalReviewQuestions } from "./review/jg1-final-review";
+import { gchLearningMapQuestions } from "./review/gch-learning-map";
+import { gchGcOverviewQuestions } from "./review/gch-gc-overview";
+import { gchMarkSweepQuestions } from "./review/gch-mark-sweep";
+import { gchCopyingCollectionQuestions } from "./review/gch-copying-collection";
+import { gchMarkCompactQuestions } from "./review/gch-mark-compact";
+import { gchGenerationalQuestions } from "./review/gch-generational";
+import { gchConcurrentGcQuestions } from "./review/gch-concurrent-gc";
+import { gchRealtimeGcQuestions } from "./review/gch-realtime-gc";
+import { gchModernGcQuestions } from "./review/gch-modern-gc";
+import { gchFinalReviewQuestions } from "./review/gch-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3305,6 +3315,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jg1FullGcQuestions,
   ...jg1G1TuningPracticeQuestions,
   ...jg1FinalReviewQuestions,
+  ...gchLearningMapQuestions,
+  ...gchGcOverviewQuestions,
+  ...gchMarkSweepQuestions,
+  ...gchCopyingCollectionQuestions,
+  ...gchMarkCompactQuestions,
+  ...gchGenerationalQuestions,
+  ...gchConcurrentGcQuestions,
+  ...gchRealtimeGcQuestions,
+  ...gchModernGcQuestions,
+  ...gchFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
