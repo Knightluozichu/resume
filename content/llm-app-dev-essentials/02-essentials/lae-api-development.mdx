@@ -1,0 +1,145 @@
+---
+title: "API调用与开发"
+type: C
+section: "AI Agent与大模型应用"
+order: 3
+description: "大模型API全流程——从请求参数到流式响应到错误处理的开发实践"
+demo: false
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { LaeApiDevelopmentDiagram } from "@/components/mdx/llm-app-dev-essentials/diagrams/lae-api-development";
+import { Objectives, Callout, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+## 学习目标
+
+<Objectives>
+
+- 掌握大模型API调用的核心请求参数：model、messages、temperature、max_tokens
+- 理解messages参数的结构和多轮对话历史的实现方式
+- 掌握流式响应和非流式响应的区别与实现
+- 理解API调用中的错误类型和健壮的错误处理重试机制
+
+</Objectives>
+
+## 核心概念
+
+### API调用流程
+
+大模型API调用的完整流程从客户端到响应返回包含五个环节：
+
+- **客户端**：构造请求，设置API Key认证
+- **API网关**：鉴权、限流、路由分发
+- **LLM推理**：Token化处理、模型生成
+- **响应返回**：JSON或SSE格式返回结果
+- **客户端解析**：解析响应并展示结果
+
+<LaeApiDevelopmentDiagram />
+
+### 核心请求参数
+
+| 参数 | 类型 | 说明 | 是否必填 |
+|------|------|------|----------|
+| model | string | 选择模型，决定能力和成本 | 必填 |
+| messages | array | 消息列表，含对话历史 | 必填 |
+| temperature | float | 0.0-2.0，控制输出随机性 | 可选 |
+| max_tokens | int | 最大生成长度，控制成本 | 可选 |
+
+messages参数是消息数组，每个元素包含role（system/user/assistant）和content。系统消息设定模型行为，user是用户输入，assistant是模型回复，多轮对话通过累积历史实现。
+
+### 流式 vs 非流式
+
+| 模式 | 特点 | 优点 | 缺点 | 适合场景 |
+|------|------|------|------|----------|
+| 非流式 | 一次性返回 | 解析简单 | 首字延迟高 | 后台任务/批处理 |
+| 流式SSE | 逐Token推送 | 首字延迟低 | 解析复杂 | 聊天界面/实时交互 |
+
+<Callout type="info">
+
+API开发核心原则：认证安全优先，流式优化体验，错误必须重试。健壮的错误处理：4xx客户端错误检查参数不重试，5xx服务端错误和429速率限制用指数退避重试，超时设置timeout并降级。生产环境还需考虑缓存层和模型路由降低成本。
+
+</Callout>
+
+## 术语表
+
+<Glossary>
+
+<GlossaryItem term="API Key">
+
+调用大模型API的认证密钥，必须在请求头中携带，需安全存储永不暴露到客户端代码中。
+
+</GlossaryItem>
+
+<GlossaryItem term="messages参数">
+
+API请求中描述对话历史的核心参数，是包含role和content的消息数组，通过累积历史实现多轮对话。
+
+</GlossaryItem>
+
+<GlossaryItem term="流式响应 (SSE)">
+
+Server-Sent Events，模型每生成一个Token就推送给客户端，实现"打字效果"，首字延迟低，适合聊天界面。
+
+</GlossaryItem>
+
+<GlossaryItem term="指数退避重试">
+
+对临时性错误（5xx、429）的重试策略，等待时间按2的幂次递增加随机抖动，最多重试3-5次，避免惊群效应。
+
+</GlossaryItem>
+
+<GlossaryItem term="速率限制 (Rate Limit)">
+
+API提供商对单位时间请求数的限制，超过返回429状态码，需通过指数退避重试或升级配额解决。
+
+</GlossaryItem>
+
+</Glossary>
+
+## 练习题
+
+<Exercises>
+
+### 问题 1
+
+调用大模型API的核心请求参数有哪些？messages参数的结构是怎样的？
+
+<Answer>
+
+核心参数：model指定模型决定能力和成本（必填）；messages消息列表含对话历史（必填）；temperature控制随机性0-2（可选）；max_tokens最大生成长度（可选）。messages是数组，每个元素含role和content——role为system设定行为、user用户消息、assistant模型回复。多轮对话通过累积messages历史实现，系统消息通常放首位设定人设和约束。
+
+</Answer>
+
+### 问题 2
+
+流式响应和非流式响应有什么区别？各自适合什么场景？
+
+<Answer>
+
+非流式——生成完整结果后一次性返回，解析简单但首字延迟高，适合后台任务和批处理。流式SSE——每生成一个Token就推送，首字延迟低体验好但解析复杂，适合聊天界面和实时交互。实现：设置stream=true，逐行读取SSE事件，每个data字段含Token片段，拼接得完整文本，以DONE标记结束。
+
+</Answer>
+
+### 问题 3
+
+API调用中常见的错误类型有哪些？如何实现健壮的错误处理和重试机制？
+
+<Answer>
+
+常见错误：4xx客户端错误（参数错误400/鉴权失败401/速率限制429），5xx服务端错误（过载/超时），网络错误。健壮处理：指数退避重试——对5xx和429等待时间按2幂次递增加抖动，最多3-5次；超时控制——请求级和全局超时；降级策略——主模型失败切备用或返回缓存；4xx不重试（参数错误重试无用）；记录错误日志便于排查。
+
+</Answer>
+
+### 问题 4
+
+在实际开发中，如何设计一个大模型API调用的完整架构，兼顾可靠性、成本和用户体验？
+
+<Answer>
+
+完整架构：API网关层统一鉴权限流路由；请求处理层管理prompt模板和对话历史截断；调用层支持流式非流式、重试超时降级、多模型fallback链；缓存层语义缓存命中免调用；模型路由简单任务用小模型复杂用大模型；响应处理层内容过滤PII脱敏格式标准化；可观测层记录日志采集指标全链路追踪；异步队列处理长任务。核心原则：缓存优先、小模型优先、流式优先、降级兜底。
+
+</Answer>
+
+</Exercises>

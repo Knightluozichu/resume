@@ -2145,6 +2145,16 @@ import { tcgPredictionGenerationQuestions } from "./review/tcg-prediction-genera
 import { tcgContextAttentionQuestions } from "./review/tcg-context-attention";
 import { tcgFutureImplicationsQuestions } from "./review/tcg-future-implications";
 import { tcgFinalReviewQuestions } from "./review/tcg-final-review";
+import { laeLearningMapQuestions } from "./review/lae-learning-map";
+import { laeLlmFoundationsQuestions } from "./review/lae-llm-foundations";
+import { laePromptEngineeringQuestions } from "./review/lae-prompt-engineering";
+import { laeApiDevelopmentQuestions } from "./review/lae-api-development";
+import { laeRagSystemQuestions } from "./review/lae-rag-system";
+import { laeFineTuningQuestions } from "./review/lae-fine-tuning";
+import { laeAgentDevelopmentQuestions } from "./review/lae-agent-development";
+import { laeEvaluationDeploymentQuestions } from "./review/lae-evaluation-deployment";
+import { laeProductionPatternsQuestions } from "./review/lae-production-patterns";
+import { laeFinalReviewQuestions } from "./review/lae-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4325,6 +4335,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...tcgContextAttentionQuestions,
   ...tcgFutureImplicationsQuestions,
   ...tcgFinalReviewQuestions,
+  ...laeLearningMapQuestions,
+  ...laeLlmFoundationsQuestions,
+  ...laePromptEngineeringQuestions,
+  ...laeApiDevelopmentQuestions,
+  ...laeRagSystemQuestions,
+  ...laeFineTuningQuestions,
+  ...laeAgentDevelopmentQuestions,
+  ...laeEvaluationDeploymentQuestions,
+  ...laeProductionPatternsQuestions,
+  ...laeFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

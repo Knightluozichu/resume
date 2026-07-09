@@ -2268,7 +2268,17 @@ export type ReviewChapterSlug =
   | "tcg-prediction-generation"
   | "tcg-context-attention"
   | "tcg-future-implications"
-  | "tcg-final-review";
+  | "tcg-final-review"
+  | "lae-learning-map"
+  | "lae-llm-foundations"
+  | "lae-prompt-engineering"
+  | "lae-api-development"
+  | "lae-rag-system"
+  | "lae-fine-tuning"
+  | "lae-agent-development"
+  | "lae-evaluation-deployment"
+  | "lae-production-patterns"
+  | "lae-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4541,6 +4551,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "tcg-context-attention": "上下文与注意力机制",
   "tcg-future-implications": "AI的未来与影响",
   "tcg-final-review": "全书复习与知识整合",
+  "lae-learning-map": "大模型应用开发·知识全景图",
+  "lae-llm-foundations": "大语言模型基础",
+  "lae-prompt-engineering": "提示工程实战",
+  "lae-api-development": "API调用与开发",
+  "lae-rag-system": "RAG检索增强生成",
+  "lae-fine-tuning": "微调与领域适配",
+  "lae-agent-development": "Agent开发实践",
+  "lae-evaluation-deployment": "评估与部署",
+  "lae-production-patterns": "生产环境最佳实践",
+  "lae-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

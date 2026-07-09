@@ -262,6 +262,7 @@ export const BOOK_ORDER = [
   "rl-deep-learning-c",
   "deep-reinforcement-learning",
   "this-is-chatgpt",
+  "llm-app-dev-essentials",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -464,6 +465,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "rl-deep-learning-c": "强化学习与深度学习：通过C语言模拟",
   "deep-reinforcement-learning": "深度强化学习",
   "this-is-chatgpt": "这就是 ChatGPT",
+  "llm-app-dev-essentials": "大模型应用开发极简入门",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
