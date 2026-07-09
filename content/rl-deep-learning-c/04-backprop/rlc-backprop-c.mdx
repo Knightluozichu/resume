@@ -1,0 +1,269 @@
+---
+title: "反向传播C实现"
+type: B
+section: "人工智能与机器学习"
+order: 4
+description: "链式法则、梯度计算与梯度下降的C语言实现"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RlcBackpropCDiagram } from "@/components/mdx/rl-deep-learning-c/diagrams/rlc-backprop-c";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解反向传播与梯度下降的关系
+- 用链式法则推导各层权重的梯度公式
+- 用C语言实现反向传播的逐层误差回传
+- 掌握梯度消失、梯度爆炸等数值问题的解决方案
+
+</Objectives>
+
+## 反向传播：深度学习的训练引擎
+
+前向传播（ch3）让神经网络能「做出预测」，但预测可能不准。反向传播（Backpropagation）让神经网络能「从错误中学习」——它高效计算损失函数对每个参数的梯度，配合梯度下降更新权重，使网络逐步变准。反向传播是深度学习的训练引擎，也是ch5 DQN和ch6 Policy Gradient的共同组件。
+
+<RlcBackpropCDiagram />
+
+## 反向传播与梯度下降的关系
+
+<Callout type="info">
+
+**关键区分**：反向传播是「计算梯度的算法」，梯度下降是「用梯度更新参数的优化算法」。完整流程：①前向传播算预测值。②计算损失L。③反向传播算梯度 `∂L/∂W`。④梯度下降更新 `W ← W - η · ∂L/∂W`。反向传播的高效在于复用前向传播的中间值（z和a），避免重复计算。
+
+</Callout>
+
+## 链式法则推导
+
+设单隐层网络：`x → z1=W1·x+b1 → a1=f(z1) → z2=W2·a1+b2 → ŷ=f(z2) → L=½(ŷ-y)²`
+
+### 输出层梯度
+
+对输出层权重W2求梯度，链式法则分解：
+
+```text
+∂L/∂W2 = ∂L/∂ŷ · ∂ŷ/∂z2 · ∂z2/∂W2
+```
+
+逐项计算：
+
+- `∂L/∂ŷ = (ŷ - y)` — MSE损失的导数
+- `∂ŷ/∂z2 = f'(z2)` — 激活函数导数
+- `∂z2/∂W2 = a1` — 因为 `z2 = W2·a1 + b2`
+
+定义输出层误差 `δ2 = (ŷ - y) · f'(z2)`，则：
+
+```text
+∂L/∂W2 = δ2 · a1^T
+∂L/∂b2 = δ2
+```
+
+### 隐藏层梯度
+
+对隐藏层权重W1求梯度，误差通过W2回传：
+
+```text
+∂L/∂a1 = W2^T · δ2
+δ1 = (W2^T · δ2) ⊙ f'(z1)
+∂L/∂W1 = δ1 · x^T
+∂L/∂b1 = δ1
+```
+
+### 多层推广
+
+```text
+δ_l = (W_{l+1}^T · δ_{l+1}) ⊙ f'(z_l)
+∂L/∂W_l = δ_l · a_{l-1}^T
+∂L/∂b_l = δ_l
+```
+
+这就是「反向传播」——误差δ从输出层向输入层逐层回传。
+
+## C语言实现
+
+```c
+// 反向传播：从输出层向输入层逐层计算梯度并更新
+void backward(NeuralNetwork* net, double* target, double lr) {
+    int L = net->n_layers - 1;  // 最后一层索引
+    
+    // 1. 输出层误差
+    double delta[MAX_NEURONS];
+    double delta_prev[MAX_NEURONS];
+    
+    for (int j = 0; j < net->sizes[L]; j++) {
+        double error = net->a[L][j] - target[j];  // ∂L/∂ŷ
+        delta[j] = error * sigmoid_deriv_from_a(net->a[L][j]);  // δ_out
+    }
+    
+    // 2. 逐层反向传播
+    for (int l = L; l >= 1; l--) {
+        int n_out = net->sizes[l];
+        int n_in = net->sizes[l - 1];
+        
+        // 计算梯度并更新权重
+        for (int j = 0; j < n_out; j++) {
+            for (int i = 0; i < n_in; i++) {
+                double grad = delta[j] * net->a[l-1][i];  // ∂L/∂W = δ · a^T
+                net->W[l][j][i] -= lr * grad;             // 梯度下降
+            }
+            net->b[l][j] -= lr * delta[j];  // ∂L/∂b = δ
+        }
+        
+        // 计算上一层的delta（如果不是输入层）
+        if (l > 1) {
+            for (int i = 0; i < n_in; i++) {
+                double sum = 0.0;
+                for (int j = 0; j < n_out; j++) {
+                    sum += net->W[l][j][i] * delta[j];  // W^T · δ
+                }
+                delta_prev[i] = sum * sigmoid_deriv_from_a(net->a[l-1][i]);
+            }
+            // 交换delta
+            for (int i = 0; i < n_in; i++)
+                delta[i] = delta_prev[i];
+        }
+    }
+}
+```
+
+<Callout type="tip">
+
+**实现要点**：①先算输出层误差δ_out。②对每层：先算梯度并更新权重 `W -= lr * δ · a^T`，再用 `W^T · δ` 计算上一层误差。③需要前向传播保存的 `a`（激活值）和 `z`（加权和）。④C语言中注意delta和delta_prev的交换，避免覆盖。
+
+</Callout>
+
+## 完整训练循环
+
+```c
+for (int epoch = 0; epoch < MAX_EPOCHS; epoch++) {
+    double total_loss = 0.0;
+    
+    for (int sample = 0; sample < N_SAMPLES; sample++) {
+        // 前向传播
+        forward(&net, inputs[sample]);
+        
+        // 计算损失
+        double loss = 0.0;
+        for (int j = 0; j < net.sizes[net.n_layers-1]; j++) {
+            double diff = net.a[net.n_layers-1][j] - targets[sample][j];
+            loss += 0.5 * diff * diff;
+        }
+        total_loss += loss;
+        
+        // 反向传播+梯度下降
+        backward(&net, targets[sample], learning_rate);
+    }
+    
+    if (epoch % 100 == 0)
+        printf("Epoch %d, Loss: %.6f\n", epoch, total_loss / N_SAMPLES);
+}
+```
+
+## 常见数值问题与解决
+
+<Callout type="warning">
+
+**梯度消失**：深层网络中sigmoid/tanh导数小于1，连乘后梯度趋近0，前层不更新。解决：用ReLU（正区间梯度恒为1）、He初始化、BatchNorm。
+
+**梯度爆炸**：梯度连乘指数增长，参数震荡发散。解决：梯度裁剪 `if (|g| > max_norm) g = g * max_norm / |g|`。
+
+**数值溢出**：`exp()` 大输入溢出为inf。解决：sigmoid分段处理——`if (x >= 0) return 1/(1+exp(-x)); else return exp(x)/(1+exp(x));`
+
+</Callout>
+
+### 安全的Sigmoid实现
+
+```c
+double sigmoid_safe(double x) {
+    if (x >= 0.0)
+        return 1.0 / (1.0 + exp(-x));
+    else {
+        double e = exp(x);
+        return e / (1.0 + e);
+    }
+}
+```
+
+### 梯度裁剪
+
+```c
+void clip_gradients(double* grads, int n, double max_norm) {
+    double norm = 0.0;
+    for (int i = 0; i < n; i++)
+        norm += grads[i] * grads[i];
+    norm = sqrt(norm);
+    
+    if (norm > max_norm) {
+        double scale = max_norm / norm;
+        for (int i = 0; i < n; i++)
+            grads[i] *= scale;
+    }
+}
+```
+
+<Glossary>
+
+<GlossaryItem term="反向传播（Backpropagation）">
+高效计算神经网络损失函数对各层参数梯度的算法，基于链式法则逐层向后传播误差。核心公式：`δ_l = (W_{l+1}^T · δ_{l+1}) ⊙ f'(z_l)`，`∂L/∂W_l = δ_l · a_{l-1}^T`。反向传播复用前向传播的中间值（z和a），是深度学习训练引擎。
+</GlossaryItem>
+
+<GlossaryItem term="链式法则（Chain Rule）">
+微积分中复合函数求导的法则，`∂L/∂x = ∂L/∂y · ∂y/∂x`。反向传播将损失对参数的梯度分解为多个局部导数的乘积，每层只需计算自己的局部导数和误差回传。
+</GlossaryItem>
+
+<GlossaryItem term="梯度消失（Vanishing Gradient）">
+深层网络中梯度经多层连乘后趋近0的现象，导致前层参数几乎不更新。原因是sigmoid/tanh导数小于1。解决：ReLU激活、He初始化、BatchNorm、残差连接。
+</GlossaryItem>
+
+<GlossaryItem term="梯度裁剪（Gradient Clipping）">
+防止梯度爆炸的技术，当梯度范数超过阈值时按比例缩放：`g ← g · max_norm / ||g||`。在RNN和RL训练中常用。C语言实现需手动计算范数并缩放。
+</GlossaryItem>
+
+<GlossaryItem term="学习率（Learning Rate）">
+梯度下降的步长系数η，控制每次更新的幅度。过大导致震荡发散，过小导致收敛极慢。常用值1e-4到1e-2，可配合衰减策略 `lr = lr0 / (1 + decay * epoch)`。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+反向传播算法的目的是什么？它与梯度下降的关系是什么？
+
+<Answer>
+
+反向传播的目的是高效计算损失函数对每层每个参数的梯度 `∂L/∂W` 和 `∂L/∂b`。它是「计算梯度的算法」，不是优化算法。与梯度下降的关系：梯度下降用反向传播算出的梯度更新参数 `W ← W - η·∂L/∂W`。完整流程：前向传播算预测 → 计算损失 → 反向传播算梯度 → 梯度下降更新参数。反向传播高效在于复用前向传播的中间值（z和a）。C语言中本质是嵌套for循环做矩阵运算。
+</Answer>
+
+### 问题 2
+
+用链式法则推导单隐层网络的权重梯度，写出每一步的计算公式。
+
+<Answer>
+
+设 `x→z1=W1x+b1→a1=f(z1)→z2=W2a1+b2→ŷ=f(z2)→L=½(ŷ-y)²`。输出层：`∂L/∂W2 = ∂L/∂ŷ · ∂ŷ/∂z2 · ∂z2/∂W2 = (ŷ-y)·f'(z2)·a1`，定义 `δ2=(ŷ-y)·f'(z2)`，则 `∂L/∂W2=δ2·a1^T`。隐藏层：`∂L/∂a1=W2^T·δ2`，`δ1=(W2^T·δ2)⊙f'(z1)`，`∂L/∂W1=δ1·x^T`。多层推广：`δ_l=(W_{l+1}^T·δ_{l+1})⊙f'(z_l)`，`∂L/∂W_l=δ_l·a_{l-1}^T`。
+</Answer>
+
+### 问题 3
+
+用C语言实现反向传播时，需要保存前向传播的哪些中间值？为什么？
+
+<Answer>
+
+需要保存：①每层加权和 `z[l][j]`——计算激活函数导数 `f'(z)` 需要z（如ReLU导数 `z>0?1:0`）。②每层激活值 `a[l][j]`——计算权重梯度 `∂L/∂W_l=δ_l·a_{l-1}^T` 需要上一层的激活值作为输入。③权重 `W[l]`——反向传播误差 `δ_l=(W_{l+1}^T·δ_{l+1})⊙f'(z_l)` 需要下一层权重。原因：链式法则将梯度分解为「误差δ」和「前向输入a」的乘积，两者都来自前向传播。C语言struct需包含z和a字段。
+</Answer>
+
+### 问题 4
+
+反向传播中常见哪些数值问题？在C语言实现中如何解决？
+
+<Answer>
+
+①梯度消失——深层sigmoid/tanh导数小于1连乘趋0。解决：隐藏层用ReLU（`x>0?1:0`正区间梯度恒1）、He初始化、BatchNorm。②梯度爆炸——连乘指数增长。解决：梯度裁剪 `if(|g|>max_norm) g=g*max_norm/|g|`。③数值溢出——exp()大输入溢出。解决：sigmoid分段 `if(x>=0) return 1/(1+exp(-x)); else return exp(x)/(1+exp(x));`，softmax减最大值。④学习率过大——震荡发散。解决：学习率衰减 `lr=lr0/(1+decay*epoch)`。⑤死神经元——ReLU负区间梯度0。解决：LeakyReLU `x>0?x:0.01*x`。C语言需手动加这些保护。
+</Answer>
+
+</Exercises>

@@ -2238,7 +2238,17 @@ export type ReviewChapterSlug =
   | "prl-sparse-kernels"
   | "prl-graphical-models"
   | "prl-mixture-em"
-  | "prl-final-review";
+  | "prl-final-review"
+  | "rlc-learning-map"
+  | "rlc-rl-foundations"
+  | "rlc-q-learning-c"
+  | "rlc-neural-networks-c"
+  | "rlc-backprop-c"
+  | "rlc-dqn-c"
+  | "rlc-policy-gradient-c"
+  | "rlc-environments"
+  | "rlc-practical-applications"
+  | "rlc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4481,6 +4491,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "prl-graphical-models": "图模型",
   "prl-mixture-em": "混合模型与EM",
   "prl-final-review": "全书复习与知识整合",
+  "rlc-learning-map": "全书学习地图",
+  "rlc-rl-foundations": "强化学习基础",
+  "rlc-q-learning-c": "Q学习C语言实现",
+  "rlc-neural-networks-c": "神经网络C语言实现",
+  "rlc-backprop-c": "反向传播C实现",
+  "rlc-dqn-c": "深度Q网络C实现",
+  "rlc-policy-gradient-c": "策略梯度C实现",
+  "rlc-environments": "环境搭建与实验",
+  "rlc-practical-applications": "实际应用与对比",
+  "rlc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

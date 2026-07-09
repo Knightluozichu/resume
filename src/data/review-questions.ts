@@ -2115,6 +2115,16 @@ import { prlSparseKernelsQuestions } from "./review/prl-sparse-kernels";
 import { prlGraphicalModelsQuestions } from "./review/prl-graphical-models";
 import { prlMixtureEmQuestions } from "./review/prl-mixture-em";
 import { prlFinalReviewQuestions } from "./review/prl-final-review";
+import { rlcLearningMapQuestions } from "./review/rlc-learning-map";
+import { rlcRlFoundationsQuestions } from "./review/rlc-rl-foundations";
+import { rlcQLearningCQuestions } from "./review/rlc-q-learning-c";
+import { rlcNeuralNetworksCQuestions } from "./review/rlc-neural-networks-c";
+import { rlcBackpropCQuestions } from "./review/rlc-backprop-c";
+import { rlcDqnCQuestions } from "./review/rlc-dqn-c";
+import { rlcPolicyGradientCQuestions } from "./review/rlc-policy-gradient-c";
+import { rlcEnvironmentsQuestions } from "./review/rlc-environments";
+import { rlcPracticalApplicationsQuestions } from "./review/rlc-practical-applications";
+import { rlcFinalReviewQuestions } from "./review/rlc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4265,6 +4275,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...prlGraphicalModelsQuestions,
   ...prlMixtureEmQuestions,
   ...prlFinalReviewQuestions,
+  ...rlcLearningMapQuestions,
+  ...rlcRlFoundationsQuestions,
+  ...rlcQLearningCQuestions,
+  ...rlcNeuralNetworksCQuestions,
+  ...rlcBackpropCQuestions,
+  ...rlcDqnCQuestions,
+  ...rlcPolicyGradientCQuestions,
+  ...rlcEnvironmentsQuestions,
+  ...rlcPracticalApplicationsQuestions,
+  ...rlcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

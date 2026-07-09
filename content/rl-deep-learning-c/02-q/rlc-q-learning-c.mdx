@@ -1,0 +1,228 @@
+---
+title: "Q学习C语言实现"
+type: C
+section: "人工智能与机器学习"
+order: 2
+description: "Q表、贝尔曼更新与ε-贪心的C语言实现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RlcQLearningCDiagram } from "@/components/mdx/rl-deep-learning-c/diagrams/rlc-q-learning-c";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 掌握Q表的数据结构设计与C语言实现
+- 理解Q-Learning更新公式中每个符号的含义
+- 实现ε-贪心策略平衡探索与利用
+- 理解Q-Learning的off-policy特性与收敛条件
+
+</Objectives>
+
+## Q学习：最经典的RL算法
+
+Q-Learning是强化学习中最经典、最基础的算法。它的核心思想极为简洁：**用一张表格记录每个状态-动作对的价值（Q值），通过贝尔曼方程不断更新这张表，最终收敛到最优值函数**。在C语言中，Q表就是一个二维数组，更新就是数组赋值——没有比这更透明的RL实现了。
+
+<RlcQLearningCDiagram />
+
+## Q表的数据结构
+
+Q表是一个二维表，行是状态，列是动作，表项 `Q(s,a)` 表示在状态s下执行动作a的期望累积折扣回报。C语言中用二维数组表示：
+
+```c
+#define N_STATES 16    // 例如4x4网格世界
+#define N_ACTIONS 4    // 上/下/左/右
+
+double q_table[N_STATES][N_ACTIONS];
+```
+
+初始化通常全置零：
+
+```c
+for (int s = 0; s < N_STATES; s++)
+    for (int a = 0; a < N_ACTIONS; a++)
+        q_table[s][a] = 0.0;
+```
+
+<Callout type="info">
+
+**Q表的物理含义**：Q值越大说明该状态-动作对越「好」。智能体在状态s选择 `argmax_a Q(s,a)` 即贪心策略。Q表是Q-Learning的「记忆」，随着训练不断更新，最终收敛到最优Q值Q*。Q表的局限：只能处理离散且规模有限的状态空间，这正是DQN（ch5）用神经网络替代Q表的原因。
+
+</Callout>
+
+## Q-Learning更新公式
+
+```text
+Q(s,a) ← Q(s,a) + α [ r + γ · max_a' Q(s',a') - Q(s,a) ]
+```
+
+符号含义：
+
+| 符号 | 含义 |
+|------|------|
+| `Q(s,a)` | 当前Q值（待更新） |
+| `α` | 学习率 `∈ (0,1]`，控制更新步长 |
+| `r` | 执行动作a后的即时奖励 |
+| `γ` | 折扣因子 `∈ [0,1)` |
+| `max_a' Q(s',a')` | 下一状态s'中所有动作的最大Q值 |
+| `r + γ max Q(s',a') - Q(s,a)` | TD误差（时序差分误差） |
+
+### C语言实现
+
+```c
+double alpha = 0.1;    // 学习率
+double gamma = 0.95;   // 折扣因子
+double epsilon = 0.1;  // 探索率
+
+// 单步Q-Learning更新
+int a = epsilon_greedy(q_table, s, epsilon);
+EnvStep step = env_step(&env, a);  // 执行动作，获得r和s'
+
+double max_q = q_table[step.state][0];
+for (int a_prime = 1; a_prime < N_ACTIONS; a_prime++) {
+    if (q_table[step.state][a_prime] > max_q)
+        max_q = q_table[step.state][a_prime];
+}
+
+double td_target = step.reward + gamma * max_q;
+q_table[s][a] += alpha * (td_target - q_table[s][a]);
+
+s = step.state;  // 转移到下一状态
+```
+
+<Callout type="tip">
+
+**off-policy的关键**：注意更新公式中用的是 `max_a' Q(s',a')`——即假设下一步会采取**最优**动作，而实际行为用的是ε-贪心（可能随机）。这种「更新用最优策略，行为用探索策略」的解耦就是**off-policy**，使Q-Learning能收敛到最优Q*，也是DQN经验回放的理论基础。
+
+</Callout>
+
+## ε-贪心策略
+
+ε-贪心策略平衡探索与利用：以ε概率随机选择动作（探索），1-ε概率选Q值最大的动作（利用）。
+
+```c
+int epsilon_greedy(double q_table[][N_ACTIONS], int state, double epsilon) {
+    if ((double)rand() / RAND_MAX < epsilon) {
+        // 探索：随机选动作
+        return rand() % N_ACTIONS;
+    } else {
+        // 利用：选Q值最大的动作
+        int best = 0;
+        for (int a = 1; a < N_ACTIONS; a++) {
+            if (q_table[state][a] > q_table[state][best])
+                best = a;
+        }
+        return best;
+    }
+}
+```
+
+**ε值设置**：通常从较大值（0.3-1.0）开始鼓励早期探索，随训练逐渐衰减到较小值（0.01-0.05）转向利用。衰减方式：`epsilon = epsilon * decay`（每episode乘以衰减系数如0.995）。
+
+## 完整训练循环
+
+```c
+srand(time(NULL));  // 随机种子
+
+for (int ep = 0; ep < MAX_EPISODES; ep++) {
+    int s = env_reset(&env);
+    int done = 0;
+    double total_reward = 0.0;
+
+    while (!done) {
+        int a = epsilon_greedy(q_table, s, epsilon);
+        EnvStep step = env_step(&env, a);
+        
+        // Q-Learning更新
+        double max_q = max_action_value(q_table[step.state]);
+        double td_target = step.reward + gamma * max_q;
+        q_table[s][a] += alpha * (td_target - q_table[s][a]);
+        
+        total_reward += step.reward;
+        s = step.state;
+        done = step.done;
+    }
+    
+    // ε衰减
+    epsilon *= epsilon_decay;
+    
+    // 每100 episode打印
+    if (ep % 100 == 0)
+        printf("Episode %d, Reward: %.2f, Epsilon: %.3f\n", 
+               ep, total_reward, epsilon);
+}
+```
+
+## Q-Learning与SARSA对比
+
+| 特性 | Q-Learning | SARSA |
+|------|-----------|-------|
+| 策略类型 | off-policy | on-policy |
+| TD目标 | `r + γ max_a' Q(s',a')` | `r + γ Q(s',a')` |
+| 更新用的动作 | 最优动作（max） | 实际执行的下一动作 |
+| 风格 | 激进（学最优） | 保守（学当前策略） |
+
+在含陷阱的环境中（如Cliff Walking），Q-Learning学到贴崖边的最优路径（但ε探索时可能掉崖，训练期回报低），SARSA学到离崖远的安全路径（考虑了探索风险，训练期回报高）。
+
+<Glossary>
+
+<GlossaryItem term="Q表（Q-Table）">
+Q-Learning中存储状态-动作值的二维表 `Q[s][a]`，在C语言中用二维数组实现。Q值表示在状态s执行动作a后的期望累积折扣回报。Q表是Q-Learning的「记忆」，随训练收敛到最优Q值。局限：只能处理离散且小规模的状态空间。
+</GlossaryItem>
+
+<GlossaryItem term="ε-贪心策略（ε-Greedy Policy）">
+以ε概率随机选择动作（探索），1-ε概率选Q值最大的动作（利用）的平衡策略。ε通常从大值衰减到小值，早期多探索后期多利用。是RL中最常用的探索策略。
+</GlossaryItem>
+
+<GlossaryItem term="TD误差（Temporal Difference Error）">
+时序差分误差 `δ = r + γ max Q(s',a') - Q(s,a)`，即「TD目标 - 当前估计」。TD误差驱动Q值更新——正值增大Q值，负值减小。TD误差是RL中「学习信号」的核心载体。
+</GlossaryItem>
+
+<GlossaryItem term="off-policy">
+Q-Learning是off-policy算法：更新目标用最优策略（max），行为用探索策略（ε-贪心），两者解耦。off-policy支持经验回放（从旧经验中学习），是DQN的理论基础。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+Q-Learning中Q表的数据结构是什么？在C语言中如何表示？Q(s,a)的物理含义是什么？
+
+<Answer>
+
+Q表是二维表，行是状态s，列是动作a，Q(s,a)表示在状态s执行动作a后的期望累积折扣回报。C语言中用 `double q_table[N_STATES][N_ACTIONS]` 表示。物理含义：Q值越大该状态-动作对越好，智能体选 `argmax_a Q(s,a)` 即贪心策略。Q表局限：只能处理离散且小规模状态空间，状态空间大时维度灾难，这是DQN用神经网络替代Q表的原因。
+</Answer>
+
+### 问题 2
+
+写出Q-Learning的更新公式，解释每个符号的含义和更新流程。
+
+<Answer>
+
+更新公式：`Q(s,a) ← Q(s,a) + α [ r + γ · max_a' Q(s',a') - Q(s,a) ]`。α是学习率，r是即时奖励，γ是折扣因子，`max_a' Q(s',a')` 是下一状态最大Q值，中括号内是TD误差。流程：①观察状态s。②ε-贪心选动作a。③执行动作获得r和s'。④计算TD目标 = r + γ max Q(s',a')。⑤按公式更新Q(s,a)。⑥s ← s'，循环。Q-Learning是off-policy——更新用max（最优策略），行为用ε-贪心（探索策略）。
+</Answer>
+
+### 问题 3
+
+ε-贪心策略的作用是什么？为什么不直接用纯贪心策略？ε值应如何设置？
+
+<Answer>
+
+ε-贪心以ε概率随机探索，1-ε概率利用。作用是平衡探索与利用。不能纯贪心（ε=0）：初始Q值不准时只会反复选当前看似最好的动作，错过更优策略。ε设置：从较大值（0.3-1.0）开始鼓励探索，随训练衰减到较小值（0.01-0.05）转向利用，不能衰减到0以保留探索。C语言：`if ((double)rand()/RAND_MAX < epsilon) a = rand() % n_actions; else a = argmax(q_table[s]);`
+</Answer>
+
+### 问题 4
+
+Q-Learning是off-policy算法，这与on-policy（如SARSA）有什么区别？对收敛性有什么影响？
+
+<Answer>
+
+off-policy与on-policy区别在于「更新用的动作」与「实际执行的动作」是否一致。Q-Learning（off-policy）更新用 `max_a' Q(s',a')`（假设下一步最优），实际行为用ε-贪心；SARSA（on-policy）更新用实际执行的下一动作的Q值。影响：Q-Learning更激进学最优路径，SARSA更保守学安全路径。含陷阱环境中Q-Learning训练期回报低但学到最优，SARSA训练期回报高但次优。两者表格情况都收敛，Q-Learning到Q*，SARSA到Q^π。C语言差异仅在更新公式一行。
+</Answer>
+
+</Exercises>

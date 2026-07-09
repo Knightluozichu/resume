@@ -259,6 +259,7 @@ export const BOOK_ORDER = [
   "deep-learning-gen-models",
   "deep-learning-textbook",
   "pattern-recognition-ml",
+  "rl-deep-learning-c",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -458,6 +459,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "deep-learning-gen-models": "深度学习入门5：生成模型",
   "deep-learning-textbook": "深度学习（花书）",
   "pattern-recognition-ml": "模式识别与机器学习（PRML）",
+  "rl-deep-learning-c": "强化学习与深度学习：通过C语言模拟",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

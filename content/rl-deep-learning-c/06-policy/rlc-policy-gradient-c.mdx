@@ -1,0 +1,207 @@
+---
+title: "策略梯度C实现"
+type: B
+section: "人工智能与机器学习"
+order: 6
+description: "REINFORCE算法、策略梯度定理与优势函数"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { RlcPolicyGradientCDiagram } from "@/components/mdx/rl-deep-learning-c/diagrams/rlc-policy-gradient-c";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解策略梯度与基于价值方法的本质区别
+- 掌握策略梯度定理与对数导数技巧
+- 用C语言实现REINFORCE算法的完整流程
+- 理解基线与优势函数如何降低方差
+
+</Objectives>
+
+## 策略梯度：直接优化策略
+
+ch5的DQN是「基于价值」的方法——先学Q值再间接推导策略。本章的策略梯度（Policy Gradient）是「基于策略」的方法——**用神经网络直接参数化策略 `π_θ(a|s)`，通过梯度上升直接优化期望回报**。策略梯度的最大优势是天然支持连续动作空间（DQN无法处理），是机器人控制等任务的基础。
+
+<RlcPolicyGradientCDiagram />
+
+## 基于价值 vs 基于策略
+
+| 特性 | 基于价值（DQN） | 基于策略（PG） |
+|------|---------------|---------------|
+| 学习对象 | 值函数Q(s,a) | 策略π_θ(a\|s) |
+| 策略类型 | 确定性（argmax） | 随机（概率分布） |
+| 动作空间 | 离散 | 离散/连续均可 |
+| 训练方式 | off-policy+经验回放 | 通常on-policy |
+| 优势 | 样本效率高 | 连续动作友好 |
+| 缺点 | 无法连续动作 | 方差大收敛慢 |
+
+## 策略网络
+
+策略网络 `π_θ(a|s)` 输入状态s，输出动作的概率分布：
+
+- **离散动作**：输出层用softmax，`π(a_i|s) = e^{z_i} / Σ e^{z_j}`
+- **连续动作**：输出高斯分布的均值μ(s)和标准差σ(s)，`a ~ N(μ, σ²)`
+
+```c
+// softmax
+void softmax(double* z, double* probs, int n) {
+    double max_z = z[0];
+    for (int i = 1; i < n; i++)
+        if (z[i] > max_z) max_z = z[i];  // 减最大值防溢出
+    
+    double sum = 0.0;
+    for (int i = 0; i < n; i++) {
+        probs[i] = exp(z[i] - max_z);
+        sum += probs[i];
+    }
+    for (int i = 0; i < n; i++)
+        probs[i] /= sum;
+}
+```
+
+## 策略梯度定理
+
+```text
+∇θ J(θ) = E[ Σ_t ∇θ log π_θ(a_t|s_t) · G_t ]
+```
+
+其中 `J(θ)` 是期望累积回报，`G_t` 是t时刻的折扣回报 `G_t = Σ γ^k r_{t+k+1}`。
+
+<Callout type="info">
+
+**为什么用 `log π` 而非 `π`？** 这是**对数导数技巧**（score function trick）：`∇π_θ(τ) = π_θ(τ) · ∇log π_θ(τ)`，代入目标函数后梯度变为期望形式 `∇J = E[∇log π · R]`，可用蒙特卡洛采样估计。物理直觉：`∇log π` 是「增大动作概率的方向」，乘以G_t后——回报高的动作概率被增大，回报低的被减小，即「强化好行为」。
+
+</Callout>
+
+## REINFORCE算法
+
+REINFORCE是最基础的策略梯度算法，流程为：
+
+1. 用当前策略与环境交互，收集完整轨迹 `{(s_0,a_0,r_0), ..., (s_T,a_T,r_T)}`
+2. 从后向前计算每步折扣回报 `G_t = r_{t+1} + γ·G_{t+1}`
+3. 计算策略梯度 `∇θ J = Σ_t ∇θ log π(a_t|s_t) · G_t`
+4. 梯度上升更新 `θ ← θ + α · ∇θ J`
+
+### C语言实现
+
+```c
+void reinforce(NeuralNetwork* policy_net, double states[][STATE_DIM],
+               int* actions, double* rewards, int T, double gamma, double lr) {
+    
+    // 1. 从后向前计算折扣回报G_t
+    double G[MAX_TRAJECTORY_LEN];
+    double running_sum = 0.0;
+    for (int t = T - 1; t >= 0; t--) {
+        running_sum = running_sum * gamma + rewards[t];
+        G[t] = running_sum;  // G_t = r_{t+1} + γ·G_{t+1}
+    }
+    
+    // 2. 对每个时间步计算梯度并更新
+    for (int t = 0; t < T; t++) {
+        // 前向传播得到动作概率
+        forward(policy_net, states[t]);
+        double* probs = policy_net->a[policy_net->n_layers - 1];
+        
+        // 计算log π(a_t|s_t)
+        double log_prob = log(probs[actions[t]] + 1e-8);  // 加小常数防log(0)
+        
+        // 损失 = -log_prob * G_t （负号因为C库做梯度下降，我们要梯度上升）
+        // 构造目标向量使反向传播计算梯度
+        double target[N_ACTIONS];
+        for (int i = 0; i < N_ACTIONS; i++)
+            target[i] = probs[i];
+        target[actions[t]] = probs[actions[t]] + lr * G[t] / (probs[actions[t]] + 1e-8);
+        
+        backward(policy_net, target, lr);
+    }
+}
+```
+
+<Callout type="warning">
+
+**为什么用G_t而非r_t？** 信用分配——r_t只是即时奖励，无法体现动作对未来的影响。如下棋一步好棋可能几十步后才得分，只用r_t会忽略延迟回报。G_t累积了从t到结束的所有奖励，将「未来的成功」归因于「当前的决策」。
+
+</Callout>
+
+## 降低方差：基线与优势函数
+
+策略梯度的高方差问题：G_t是蒙特卡洛采样的单条轨迹回报，不同轨迹间差异巨大，梯度估计噪声极大。
+
+**解决方案**：引入基线b(s_t)，将梯度改为 `∇J = E[∇log π(a_t|s_t) · (G_t - b(s_t))]`。
+
+常用基线是状态值函数 `b(s_t) = V(s_t)`，定义**优势函数**：
+
+```text
+A_t = G_t - V(s_t)    （动作a_t比平均水平好多少）
+∇J = E[∇log π(a_t|s_t) · A_t]
+```
+
+优势函数的方差远小于G_t（去除了状态本身的「好坏」只保留动作的「相对优劣」），这就是**Actor-Critic**架构——Actor是策略网络π_θ，Critic是值网络V_φ。
+
+<Glossary>
+
+<GlossaryItem term="策略梯度（Policy Gradient）">
+直接参数化策略 `π_θ(a|s)` 并通过梯度上升优化期望回报的方法。策略梯度定理：`∇J(θ)=E[∇log π_θ(a|s)·G_t]`。优势：支持连续动作空间、能学随机策略。缺点：方差大、on-policy样本效率低。本书ch6用C语言实现REINFORCE算法。
+</GlossaryItem>
+
+<GlossaryItem term="REINFORCE">
+最基础的策略梯度算法，也称Monte Carlo Policy Gradient。流程：收集完整轨迹 → 计算折扣回报G_t → 按 `∇log π·G_t` 更新。缺点：需完整episode（蒙特卡洛）、方差大。改进：引入基线/优势函数（Actor-Critic）。
+</GlossaryItem>
+
+<GlossaryItem term="对数导数技巧（Log-Derivative Trick）">
+将 `∇π = π·∇log π` 代入目标函数梯度，将梯度从「概率加权」变为「期望」形式，可用蒙特卡洛采样估计。是策略梯度定理的数学基础。同时 `log π` 将乘法变加法，数值更稳定。
+</GlossaryItem>
+
+<GlossaryItem term="优势函数（Advantage Function）">
+`A(s,a) = Q(s,a) - V(s)`，表示动作a比平均水平好多少。用优势函数替代G_t可大幅降低策略梯度的方差。Actor-Critic用值网络V_φ估计V(s)计算优势函数。GAE（广义优势估计）进一步优化偏差-方差权衡。
+</GlossaryItem>
+
+<GlossaryItem term="Actor-Critic">
+策略梯度+值函数的混合架构。Actor（策略网络π_θ）输出动作，Critic（值网络V_φ）评估状态价值。Critic为Actor提供优势函数 `A_t=G_t-V(s_t)` 降低方差。代表算法：A2C、A3C、PPO。C语言需维护两个神经网络。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+策略梯度方法与基于价值的方法有什么本质区别？各自的优势是什么？
+
+<Answer>
+
+本质区别：基于价值方法学习值函数Q(s,a)，策略从Q值间接导出（argmax），是确定性的；策略梯度直接参数化策略π_θ(a|s)，网络输出动作概率分布，是随机的。基于价值优势：样本效率高（off-policy+经验回放）、训练稳定、适合离散动作。缺点：无法连续动作、只能确定性策略。策略梯度优势：天然支持连续动作、能学随机策略、端到端优化。缺点：方差大、on-policy样本效率低、收敛慢。
+</Answer>
+
+### 问题 2
+
+写出策略梯度定理的公式，并解释为什么用 `log π` 而不是 `π`。
+
+<Answer>
+
+策略梯度定理：`∇θ J(θ) = E[Σ_t ∇θ log π_θ(a_t|s_t) · G_t]`。用log π的原因：①数学推导——目标函数梯度 `∇J=∫∇π_θ(τ)R(τ)dτ`，用对数导数技巧 `∇π=π·∇log π` 变为 `∇J=E[∇log π·R]`，梯度变为期望形式可用蒙特卡洛采样。②数值稳定——π∈(0,1)直接用概率作权梯度极小，log π将乘法变加法范围更大。③物理直觉——`∇log π`是「增大动作概率方向」，乘G_t后高回报动作概率增大低回报减小，即「强化好行为」。
+</Answer>
+
+### 问题 3
+
+REINFORCE算法的完整流程是什么？为什么需要计算回报G_t而不是只用即时奖励r_t？
+
+<Answer>
+
+REINFORCE流程：①初始化策略网络θ。②每episode：用策略π_θ交互收集完整轨迹 `{(s,a,r)}`。③从后向前计算 `G_t=Σ γ^k r_{t+k+1}`（递推 `G_t=r_{t+1}+γ·G_{t+1}`）。④计算梯度 `∇J=Σ_t ∇log π(a_t|s_t)·G_t`。⑤梯度上升 `θ←θ+α·∇J`。用G_t而非r_t原因：信用分配——r_t只是即时奖励无法体现动作对未来的影响，如下棋好棋几十步后才得分。G_t累积从t到结束所有奖励，将未来成功归因于当前决策。缺点：需完整episode、方差大，Actor-Critic用V(s)降方差。
+</Answer>
+
+### 问题 4
+
+策略梯度的高方差问题如何缓解？基线和优势函数的作用是什么？
+
+<Answer>
+
+高方差原因：G_t是单条轨迹蒙特卡洛采样回报，轨迹间差异大梯度噪声大。缓解方法：①基线——引入与动作无关的b(s_t)，梯度改为 `∇J=E[∇log π·(G_t-b(s_t))]`，期望不变（因 `E_a[∇log π]=0`）但方差降低。常用基线 `b=V(s_t)`。②优势函数——`A_t=G_t-V(s_t)`表示「动作比平均好多少」，方差远小于G_t且无偏。这就是Actor-Critic：Actor是策略网络π_θ，Critic是值网络V_φ用TD学习更新。③GAE用λ权衡偏差方差。④PPO用clip限制更新。C语言需维护两个网络。
+</Answer>
+
+</Exercises>

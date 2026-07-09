@@ -1,0 +1,234 @@
+---
+title: "神经网络C语言实现"
+type: C
+section: "人工智能与机器学习"
+order: 3
+description: "前馈网络、激活函数与前向传播的C语言实现"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { RlcNeuralNetworksCDiagram } from "@/components/mdx/rl-deep-learning-c/diagrams/rlc-neural-networks-c";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 用C语言struct定义多层前馈神经网络的数据结构
+- 实现前向传播的逐层计算（矩阵乘法+激活函数）
+- 掌握Sigmoid、ReLU、Tanh三种激活函数的C语言实现
+- 理解非线性激活函数的必要性
+
+</Objectives>
+
+## 神经网络：用C语言揭开黑盒
+
+在PyTorch中，定义一个神经网络只需 `nn.Linear(2, 3)` 一行代码。但这行代码背后发生了什么？权重矩阵如何存储？前向传播如何计算？本章用C语言从零实现一个前馈神经网络，让你看清「神经网络本质就是一堆矩阵乘法和激活函数」。
+
+<RlcNeuralNetworksCDiagram />
+
+## 数据结构设计
+
+在C语言中用 `struct` 表示多层前馈神经网络：
+
+```c
+#define MAX_LAYERS 5
+#define MAX_NEURONS 100
+
+typedef struct {
+    int n_layers;                    // 层数（含输入输出层）
+    int sizes[MAX_LAYERS];           // 每层神经元数量，如 {2, 3, 2}
+    double W[MAX_LAYERS][MAX_NEURONS][MAX_NEURONS];  // 权重矩阵
+    double b[MAX_LAYERS][MAX_NEURONS];                // 偏置
+    double z[MAX_LAYERS][MAX_NEURONS];                // 加权和（激活前）
+    double a[MAX_LAYERS][MAX_NEURONS];                // 激活值（激活后）
+} NeuralNetwork;
+```
+
+各字段的作用：
+
+| 字段 | 作用 | 形状 |
+|------|------|------|
+| `W[l][j][i]` | 第l-1层第i个神经元到第l层第j个神经元的权重 | `[层][输出][输入]` |
+| `b[l][j]` | 第l层第j个神经元的偏置 | `[层][神经元]` |
+| `z[l][j]` | 第l层第j个神经元的加权和 | `[层][神经元]` |
+| `a[l][j]` | 第l层第j个神经元的激活值 | `[层][神经元]` |
+
+<Callout type="info">
+
+**为什么用固定大小数组？** 教学场景中网络规模小（几十个神经元），用编译时常量的固定数组比动态分配更简单——无需malloc/free、无内存泄漏、缓存友好。`z` 和 `a` 是前向传播的中间结果，反向传播（ch4）需要用到。
+
+</Callout>
+
+## 前向传播
+
+前向传播逐层计算：对每一层，先算加权和 `z`，再过激活函数 `a = f(z)`。
+
+```c
+// 激活函数
+double sigmoid(double x) {
+    return 1.0 / (1.0 + exp(-x));
+}
+
+double relu(double x) {
+    return x > 0.0 ? x : 0.0;
+}
+
+// 单层前向传播
+void forward_layer(NeuralNetwork* net, int layer) {
+    int n_in = net->sizes[layer - 1];
+    int n_out = net->sizes[layer];
+    
+    for (int j = 0; j < n_out; j++) {
+        double sum = net->b[layer][j];          // 加偏置
+        for (int i = 0; i < n_in; i++) {
+            sum += net->W[layer][j][i] * net->a[layer - 1][i];  // 加权求和
+        }
+        net->z[layer][j] = sum;                  // 保存加权和
+        net->a[layer][j] = sigmoid(sum);         // 保存激活值
+    }
+}
+
+// 整网前向传播
+void forward(NeuralNetwork* net, double* input) {
+    // 输入层：直接拷贝输入
+    for (int i = 0; i < net->sizes[0]; i++)
+        net->a[0][i] = input[i];
+    
+    // 逐层传播
+    for (int l = 1; l < net->n_layers; l++)
+        forward_layer(net, l);
+}
+```
+
+<Callout type="tip">
+
+**前向传播的本质**：`z = W·x + b`（矩阵乘法+偏置），`a = f(z)`（逐元素激活）。从输入层开始，逐层计算到输出层。C语言中就是两层嵌套for循环做点积。关键点：保存 `z` 和 `a` 供反向传播使用。
+
+</Callout>
+
+## 三种激活函数
+
+| 函数 | 公式 | 输出范围 | C语言实现 | 适用场景 |
+|------|------|---------|-----------|---------|
+| Sigmoid | `1/(1+e^{-x})` | (0, 1) | `1.0/(1.0+exp(-x))` | 二分类输出层 |
+| ReLU | `max(0, x)` | [0, +∞) | `x > 0.0 ? x : 0.0` | 隐藏层（默认选择） |
+| Tanh | `tanh(x)` | (-1, 1) | `tanh(x)` | 隐藏层（RNN常用） |
+
+### Sigmoid的导数
+
+反向传播需要激活函数的导数。Sigmoid的导数可以用激活值表示：
+
+```c
+double sigmoid_deriv_from_a(double a) {
+    return a * (1.0 - a);  // σ'(z) = σ(z)(1-σ(z)) = a(1-a)
+}
+```
+
+### ReLU的导数
+
+```c
+double relu_deriv_from_z(double z) {
+    return z > 0.0 ? 1.0 : 0.0;
+}
+```
+
+## 网络初始化
+
+权重不能全初始化为0（否则同层神经元完全对称，永远学不到不同特征），需要随机初始化：
+
+```c
+void init_network(NeuralNetwork* net, int* sizes, int n_layers) {
+    net->n_layers = n_layers;
+    for (int i = 0; i < n_layers; i++)
+        net->sizes[i] = sizes[i];
+    
+    for (int l = 1; l < n_layers; l++) {
+        for (int j = 0; j < sizes[l]; j++) {
+            net->b[l][j] = 0.0;  // 偏置初始化为0
+            for (int i = 0; i < sizes[l-1]; i++) {
+                // Xavier初始化：权重 ~ U(-1/sqrt(n_in), 1/sqrt(n_in))
+                double limit = 1.0 / sqrt((double)sizes[l-1]);
+                net->W[l][j][i] = ((double)rand() / RAND_MAX * 2.0 - 1.0) * limit;
+            }
+        }
+    }
+}
+```
+
+## 完整示例：XOR问题
+
+XOR是非线性可分问题，单层感知机无法解决，但两层网络可以：
+
+```c
+NeuralNetwork net;
+int sizes[] = {2, 3, 1};  // 输入2 → 隐藏3 → 输出1
+init_network(&net, sizes, 3);
+
+// 前向传播
+double input[] = {1.0, 0.0};  // XOR输入
+forward(&net, input);
+double output = net.a[2][0];  // 输出层的激活值
+printf("XOR(1, 0) = %.4f\n", output);  // 训练后应接近1.0
+```
+
+<Glossary>
+
+<GlossaryItem term="前馈神经网络（Feedforward Neural Network）">
+最基本的神经网络结构，信息从输入层单向传播到输出层，无循环连接。每层神经元接收上一层的加权输入，经激活函数变换后传给下一层。前向传播就是逐层计算 `z = W·a + b` 和 `a = f(z)`。本书用C语言struct实现，是ch5 DQN和ch6 Policy Gradient的基础组件。
+</GlossaryItem>
+
+<GlossaryItem term="激活函数（Activation Function）">
+对加和应用非线性的函数，是神经网络能学习非线性映射的关键。常用：Sigmoid（输出概率）、ReLU（隐藏层默认，计算简单且缓解梯度消失）、Tanh（零均值）。若用线性激活，多层网络会坍缩为单层，失去表达能力。
+</GlossaryItem>
+
+<GlossaryItem term="Xavier初始化（Xavier Initialization）">
+权重初始化方法，从均匀分布 `U(-1/√n, 1/√n)` 采样，n是输入神经元数量。目的是使每层输出的方差与输入相当，防止信号在前向传播中指数放大或消失。ReLU网络通常用He初始化（方差乘以2）。
+</GlossaryItem>
+
+<GlossaryItem term="万能逼近定理（Universal Approximation Theorem）">
+只要有一个足够大的隐藏层和非线性激活函数，前馈神经网络可以逼近任意连续函数到任意精度。这从理论上保证了神经网络的强大表达能力，是深度学习的理论基础。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+在C语言中如何用struct表示一个多层前馈神经网络？各字段的作用是什么？
+
+<Answer>
+
+用struct包含：n_layers（层数）、sizes（每层神经元数）、W[l][j][i]（权重矩阵，从l-1层i神经元到l层j神经元）、b[l][j]（偏置）、z[l][j]（加权和，激活前）、a[l][j]（激活值，激活后）。z和a是前向传播中间结果，反向传播需要。C语言用固定大小三维数组（如 `double W[MAX_LAYERS][MAX_NEURONS][MAX_NEURONS]`），比动态分配简单且缓存友好。
+</Answer>
+
+### 问题 2
+
+写出前向传播的计算过程，并用C语言实现单层的前向传播。
+
+<Answer>
+
+前向传播逐层计算：`z_l[j] = Σ_i W[l][j][i] * a_{l-1}[i] + b[l][j]`，再 `a_l[j] = f(z_l[j])`。C语言：`void forward_layer(NeuralNetwork* net, int layer) { for (int j = 0; j < n_out; j++) { double sum = net->b[layer][j]; for (int i = 0; i < n_in; i++) sum += net->W[layer][j][i] * net->a[layer-1][i]; net->z[layer][j] = sum; net->a[layer][j] = sigmoid(sum); } }`。整网前向就是从输入层循环调用该函数。
+</Answer>
+
+### 问题 3
+
+对比Sigmoid、ReLU、Tanh三种激活函数的公式、特点和适用场景。
+
+<Answer>
+
+①Sigmoid `1/(1+e^{-x})`，输出(0,1)，适合二分类输出层，缺点是梯度消失、非零均值。②ReLU `max(0,x)`，输出[0,+∞)，计算极简、缓解梯度消失、稀疏激活，是隐藏层默认选择，缺点是神经元死亡。③Tanh `tanh(x)`，输出(-1,1)，零均值优于sigmoid，RNN常用，仍存在梯度消失。选择原则：隐藏层优先ReLU，输出层按任务选（二分类sigmoid，回归线性，多分类softmax）。
+</Answer>
+
+### 问题 4
+
+为什么神经网络需要非线性激活函数？如果用线性激活函数会发生什么？
+
+<Answer>
+
+若所有层用线性激活 `f(x)=cx`，多层叠加等价于单层线性变换——`a2 = c2·W2·(c1·(W1·x+b1))+b2 = (c1c2·W2W1)·x + ...`，坍缩为 `W'·x + b'`。后果：①表达能力限于线性可分问题，无法拟合XOR等非线性任务。②增加层数无意义。非线性激活打破坍缩，万能逼近定理保证有足够大隐藏层+非线性激活可逼近任意连续函数。C语言中一行 `x>0?x:0` 就赋予网络非线性能力。
+</Answer>
+
+</Exercises>
