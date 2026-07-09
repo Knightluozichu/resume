@@ -1,0 +1,274 @@
+---
+title: "PackageManager"
+type: C
+section: "Android开发"
+order: 6
+description: "PackageManager实战——APK解析流程、PMS交互、组件扫描、签名校验"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AalPackagemanagerDiagram } from "@/components/mdx/android-advanced-light/diagrams/aal-packagemanager";
+
+<Objectives>
+
+- 掌握PackageManager API的使用方法和flags参数
+- 理解APK文件内部结构和AndroidManifest.xml的作用
+- 掌握PMS解析APK的完整流程和PackageParser的角色
+- 理解APK签名方案（v1/v2/v3）的区别和演进
+
+</Objectives>
+
+## APK解析与安装流程
+
+<AalPackagemanagerDiagram />
+
+PackageManager是App端访问PMS的客户端接口，通过Binder与运行在system_server的PMS通信。PMS负责解析APK、管理权限、校验签名、处理安装/卸载。
+
+## PackageManager常用API
+
+```
+// 获取PackageManager实例
+PackageManager pm = context.getPackageManager();
+
+// 1. 获取已安装应用的PackageInfo
+PackageInfo info = pm.getPackageInfo(
+    "com.example.app",
+    PackageManager.GET_ACTIVITIES | PackageManager.GET_SERVICES
+);
+// info.packageName     → "com.example.app"
+// info.versionName     → "1.0.0"
+// info.versionCode     → 1
+// info.activities      → ActivityInfo[]
+// info.services        → ServiceInfo[]
+
+// 2. 获取ApplicationInfo
+ApplicationInfo appInfo = pm.getApplicationInfo(
+    "com.example.app",
+    PackageManager.GET_META_DATA
+);
+
+// 3. 获取所有已安装应用
+List<PackageInfo> packages = pm.getInstalledPackages(
+    PackageManager.GET_ACTIVITIES
+);
+
+// 4. 查询匹配Intent的Activity（隐式Intent解析）
+Intent intent = new Intent(Intent.ACTION_VIEW);
+intent.setData(Uri.parse("https://example.com"));
+List<ResolveInfo> activities = pm.queryIntentActivities(
+    intent, PackageManager.MATCH_DEFAULT_ONLY
+);
+
+// 5. 解析最佳匹配Activity
+ResolveInfo best = pm.resolveActivity(intent, 0);
+
+// 6. 检查权限
+int result = pm.checkPermission(
+    "android.permission.INTERNET",
+    "com.example.app"
+);
+// 返回 PERMISSION_GRANTED 或 PERMISSION_DENIED
+
+// 7. 检查设备特性
+boolean hasCamera = pm.hasSystemFeature(
+    PackageManager.FEATURE_CAMERA
+);
+```
+
+<Callout type="info" title="flags参数控制返回信息">
+getPackageInfo的flags参数决定返回信息的详细程度：GET_ACTIVITIES返回Activity列表、GET_SERVICES返回Service列表、GET_PERMISSIONS返回权限列表、GET_RECEIVERS返回Receiver列表、GET_PROVIDERS返回Provider列表。不指定flags则只返回基本信息。
+</Callout>
+
+## APK文件结构
+
+```
+// APK本质是ZIP压缩文件
+example.apk
+├─ AndroidManifest.xml     // 应用清单（二进制XML格式）
+├─ classes.dex             // 应用代码（DEX字节码）
+├─ classes2.dex            // MultiDex（方法数超65535时）
+├─ res/                    // 编译后的资源
+│  ├─ layout/              // 布局文件（二进制XML）
+│  ├─ drawable/            // 图片资源
+│  └─ values/              // 字符串、颜色、尺寸
+├─ resources.arsc          // 编译后的资源索引表
+├─ assets/                 // 原始资源（不编译）
+│  ├─ fonts/               // 字体文件
+│  └─ data.json            // JSON数据
+├─ lib/                    // Native库
+│  ├─ armeabi-v7a/         // ARM 32位 .so
+│  └─ arm64-v8a/           // ARM 64位 .so
+└─ META-INF/               // 签名信息
+   ├─ MANIFEST.MF          // 文件摘要清单
+   ├─ CERT.SF              // 签名文件
+   └─ CERT.RSA             // 证书和签名
+```
+
+## AndroidManifest.xml的作用
+
+```xml
+<!-- AndroidManifest.xml 是PMS解析APK的入口 -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.app">
+
+    <!-- 声明所需权限 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- SDK版本 -->
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="33" />
+
+    <application android:name=".MyApp" android:icon="@mipmap/ic_launcher">
+
+        <!-- Activity声明 → PMS注册到组件表 -->
+        <activity android:name=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Service声明 -->
+        <service android:name=".MyService" />
+
+        <!-- BroadcastReceiver声明 -->
+        <receiver android:name=".MyReceiver">
+            <intent-filter>
+                <action android:name="com.example.MY_ACTION" />
+            </intent-filter>
+        </receiver>
+
+        <!-- ContentProvider声明 -->
+        <provider
+            android:name=".MyProvider"
+            android:authorities="com.example.provider" />
+    </application>
+</manifest>
+```
+
+## APK签名方案
+
+```
+// 三种APK签名方案的演进
+
+// v1签名（JAR签名，Android 7.0前）
+// 原理：对APK中每个文件单独计算摘要并签名
+// 存储：META-INF/MANIFEST.MF + CERT.SF + CERT.RSA
+// 缺点：
+//   1. 只签名文件内容，不保护ZIP元数据
+//   2. 攻击者可修改ZIP文件顺序绕过验证
+//   3. 安装时需验证所有文件，速度慢
+
+// v2签名（Android 7.0+）
+// 原理：对整个APK文件计算摘要并签名
+// 存储：签名数据嵌入ZIP的Signing Block
+// 优点：
+//   1. 覆盖整个APK（含ZIP元数据），安全性更高
+//   2. 安装时只验证一个签名块，速度快
+
+// v3签名（Android 9.0+）
+// 原理：在v2基础上支持密钥轮换
+// 新增：签名lineage（密钥历史链）
+// 优点：可用新密钥更新旧密钥签名的应用
+
+// 推荐做法：同时启用v2+v3（向后兼容v1）
+// 使用 apksigner 工具：
+// apksigner sign --ks release.keystore --v2-signing-enabled true app.apk
+```
+
+<Callout type="warning" title="v1签名的安全漏洞">
+v1签名只对文件内容签名，不保护ZIP元数据（如文件顺序、压缩方式）。攻击者可以在不破坏签名的情况下修改ZIP结构，可能导致恶意代码注入。v2/v3签名覆盖整个APK文件，杜绝了这一漏洞。
+</Callout>
+
+## PMS解析流程
+
+```
+// PMS解析APK的完整流程
+
+1. PackageParser初始化
+   └─ 创建PackageParser，设置APK文件路径
+
+2. 解析AndroidManifest.xml
+   └─ PackageParser.parsePackage()
+      └─ AssetManager + XmlResourceParser 解析二进制XML
+         ├─ 提取 packageName / versionCode / versionName
+         ├─ 提取 minSdkVersion / targetSdkVersion
+         └─ 提取 sharedUserId
+
+3. 解析组件标签
+   ├─ `<activity>` → ActivityInfo（类名、IntentFilter、启动模式）
+   ├─ `<service>` → ServiceInfo（类名、IntentFilter）
+   ├─ `<receiver>` → ActivityInfo（类名、IntentFilter）
+   └─ `<provider>` → ProviderInfo（类名、authorities、权限）
+
+4. 解析权限
+   ├─ `<uses-permission>` → 记录声明的权限
+   └─ `<permission>` → 记录自定义权限
+
+5. 签名校验
+   └─ 验证APK签名完整性（v1/v2/v3方案）
+
+6. 构建Package对象
+   └─ 封装所有信息为Package对象
+   └─ 存入PMS内存缓存
+
+7. 注册组件
+   └─ 组件信息注册到PMS全局组件表
+   └─ 供AMS查询Intent时使用
+```
+
+<Glossary>
+
+<GlossaryItem term="PackageManager">
+Android包管理的客户端接口，通过Context.getPackageManager()获取。内部通过Binder与system_server中的PMS通信。提供getPackageInfo、queryIntentActivities、getInstalledPackages等API查询包信息。
+</GlossaryItem>
+
+<GlossaryItem term="AndroidManifest.xml">
+APK的应用清单文件（编译为二进制XML格式），声明包名、版本号、四大组件、权限、SDK版本等核心信息。是PMS解析APK的入口，PMS据此构建组件注册表和权限表。
+</GlossaryItem>
+
+<GlossaryItem term="PackageParser">
+PMS的核心解析器，将APK文件转换为内存中的Package数据结构。解析AndroidManifest.xml的四大组件标签、权限声明，提取dex和资源，构建PackageInfo。
+</GlossaryItem>
+
+<GlossaryItem term="APK签名方案v2">
+Android 7.0引入的全文件签名方案。对整个APK文件（含ZIP元数据）计算摘要并签名，签名数据嵌入ZIP的Signing Block。相比v1只签文件内容，v2安全性更高、验证更快。
+</GlossaryItem>
+
+<GlossaryItem term="resources.arsc">
+APK中编译后的资源索引表，记录资源ID到资源值的映射。Resources类通过resources.arsc查找资源（如R.string.app_name → "MyApp"）。PMS安装时提取此文件建立资源索引。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：PackageManager和PMS的关系是什么？常用API有哪些？
+
+<Answer>
+PackageManager与PMS的关系：PMS运行在system_server进程，是包管理的服务端；PackageManager是客户端接口（通过Context.getPackageManager()获取），内部通过Binder与PMS通信。常用API：①getPackageInfo(name, flags)——获取PackageInfo，包含版本号、组件列表等；②getApplicationInfo(name, flags)——获取ApplicationInfo；③getInstalledPackages(flags)——获取所有已安装包的PackageInfo列表；④queryIntentActivities(intent, flags)——查询匹配Intent的所有Activity（用于隐式Intent）；⑤resolveActivity(intent, flags)——解析最佳匹配的Activity；⑥getInstalledApplications(flags)——获取所有ApplicationInfo；⑦hasSystemFeature(name)——检查设备是否支持某硬件/软件特性。flags参数控制返回信息的详细程度，如GET_ACTIVITIES、GET_SERVICES、GET_PERMISSIONS等。
+</Answer>
+
+**问题 2**：APK文件的内部结构是怎样的？AndroidManifest.xml起什么作用？
+
+<Answer>
+APK本质是ZIP压缩文件，内部结构：①AndroidManifest.xml——应用清单（编译为二进制XML），声明包名、组件、权限、SDK版本，是PMS解析入口；②classes.dex——应用代码的DEX字节码；③res/——编译后的资源（二进制XML + 图片）；④resources.arsc——编译后的资源索引表，记录资源ID到资源值的映射；⑤assets/——原始资源（不编译，原样打包）；⑥META-INF/——签名信息（MANIFEST.MF、CERT.SF、CERT.RSA）。AndroidManifest.xml的作用：①声明应用包名和版本号；②声明四大组件，PMS据此构建组件注册表；③声明所需权限和自定义权限；④指定最低SDK版本和目标SDK版本；⑤配置应用入口Activity和启动模式。PMS安装时首先解析AndroidManifest.xml提取这些信息。
+</Answer>
+
+**问题 3**：APK签名方案有哪些？v1、v2、v3的区别是什么？
+
+<Answer>
+三种APK签名方案：①v1签名（JAR签名，Android 7.0前）——基于JDK jarsigner，对APK中每个文件单独计算摘要并签名，记录在META-INF/中。缺点：只签名文件内容，不保护APK整体结构，攻击者可修改ZIP元数据绕过签名；安装时需验证所有文件，速度慢。②v2签名（Android 7.0+）——全文件签名，对整个APK文件计算摘要并签名，签名数据嵌入ZIP的Signing Block。优点：覆盖整个APK含ZIP元数据，安全性更高；安装时只验证一个签名块，速度快。③v3签名（Android 9.0+）——在v2基础上支持密钥轮换（Key Rotation），允许旧密钥签名新密钥，实现签名密钥的平滑升级。推荐使用apksigner工具同时启用v2+v3签名，兼顾安全性和兼容性。
+</Answer>
+
+**问题 4**：PMS解析APK的流程是怎样的？PackageParser做了什么？
+
+<Answer>
+PMS解析APK流程：①PackageParser初始化——创建PackageParser实例；②解析AndroidManifest.xml——PackageParser.parsePackage()读取二进制XML，使用AssetManager和XmlResourceParser解析；③提取包信息——从Manifest中提取packageName、versionCode、minSdkVersion等；④解析组件——解析所有activity/service/receiver/provider标签，创建ActivityInfo/ServiceInfo/ProviderInfo对象，记录类名、IntentFilter、权限等；⑤解析权限——解析uses-permission和permission标签；⑥签名校验——验证APK签名完整性；⑦构建Package对象——将所有信息封装为Package对象存入PMS内存缓存；⑧注册组件——将组件信息注册到PMS的全局组件表中，供AMS查询Intent时使用。PackageParser是PMS的核心解析器，将APK文件转换为内存中的Package数据结构。
+</Answer>
+
+</Exercises>

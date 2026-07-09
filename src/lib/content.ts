@@ -220,6 +220,7 @@ export const BOOK_ORDER = [
   "android-component-arch",
   "android-perf-optimization",
   "jetpack-compose",
+  "android-advanced-light",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -380,6 +381,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "android-component-arch": "Android组件化架构",
   "android-perf-optimization": "Android应用性能优化",
   "jetpack-compose": "Jetpack Compose从入门到实战",
+  "android-advanced-light": "Android进阶之光",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

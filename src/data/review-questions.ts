@@ -1725,6 +1725,16 @@ import { jpcNavigationQuestions } from "./review/jpc-navigation";
 import { jpcViewInteropQuestions } from "./review/jpc-view-interop";
 import { jpcAdvancedComposeQuestions } from "./review/jpc-advanced-compose";
 import { jpcFinalReviewQuestions } from "./review/jpc-final-review";
+import { aalLearningMapQuestions } from "./review/aal-learning-map";
+import { aalSystemArchitectureQuestions } from "./review/aal-system-architecture";
+import { aalDalvikArtQuestions } from "./review/aal-dalvik-art";
+import { aalBinderIpcQuestions } from "./review/aal-binder-ipc";
+import { aalAmsPmsQuestions } from "./review/aal-ams-pms";
+import { aalWmsWindowQuestions } from "./review/aal-wms-window";
+import { aalPackagemanagerQuestions } from "./review/aal-packagemanager";
+import { aalClassloaderQuestions } from "./review/aal-classloader";
+import { aalPerformanceAdvancedQuestions } from "./review/aal-performance-advanced";
+import { aalFinalReviewQuestions } from "./review/aal-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3485,6 +3495,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jpcViewInteropQuestions,
   ...jpcAdvancedComposeQuestions,
   ...jpcFinalReviewQuestions,
+  ...aalLearningMapQuestions,
+  ...aalSystemArchitectureQuestions,
+  ...aalDalvikArtQuestions,
+  ...aalBinderIpcQuestions,
+  ...aalAmsPmsQuestions,
+  ...aalWmsWindowQuestions,
+  ...aalPackagemanagerQuestions,
+  ...aalClassloaderQuestions,
+  ...aalPerformanceAdvancedQuestions,
+  ...aalFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,236 @@
+---
+title: "AMS与PMS"
+type: A
+section: "Android开发"
+order: 4
+description: "AMS与PMS核心职责——组件调度、进程管理、包解析、权限管理全解析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AalAmsPmsDiagram } from "@/components/mdx/android-advanced-light/diagrams/aal-ams-pms";
+
+<Objectives>
+
+- 理解AMS的核心职责：四大组件调度、Activity栈管理、进程管理
+- 掌握Activity启动流程和AMS在其中的角色
+- 理解PMS的核心职责：APK包解析、权限管理、安装流程
+- 掌握Android进程优先级（OOM Adj）和内存回收机制
+
+</Objectives>
+
+## AMS与PMS核心职责
+
+<AalAmsPmsDiagram />
+
+AMS（Activity Manager Service）和PMS（Package Manager Service）是Android系统最核心的两个服务，运行在system_server进程中。AMS负责调度四大组件和管理进程，PMS负责包解析和安装。
+
+## AMS核心职责
+
+### 1. 统一调度四大组件
+
+```
+// AMS是四大组件的「大管家」
+// 所有组件的创建、调度、销毁都由AMS控制
+
+// Activity → AMS管理生命周期和栈
+startActivity() → AMS检查 → 创建Activity → 生命周期回调
+
+// Service → AMS管理启动和绑定
+startService() → AMS调度 → onCreate/onStartCommand
+
+// BroadcastReceiver → AMS分发广播
+sendBroadcast() → AMS查找Receiver → onReceive回调
+
+// ContentProvider → AMS管理数据共享
+getContentResolver().query() → AMS查找Provider → 跨进程数据访问
+```
+
+### 2. Activity栈管理
+
+```
+// AMS维护Task和Back Stack
+// Task = 一组相关Activity的集合
+// Back Stack = 按入栈顺序排列的Activity
+
+// 启动模式：
+// standard    — 每次创建新实例
+// singleTop   — 栈顶有则复用（onNewIntent）
+// singleTask  — 栈中只有一个实例，清上方Activity
+// singleInstance — 独占一个Task
+
+// Task栈结构示例：
+Task A: [Activity1 → Activity2 → Activity3]
+Task B: [Activity4 → Activity5]
+
+// 按Back键：Activity3 → Activity2 → Activity1 → Activity5 → Activity4
+```
+
+### 3. 进程管理与OOM Adj
+
+```
+// AMS根据组件状态计算进程优先级（OOM Adj）
+// 数值越小，优先级越高，越不容易被杀
+
+// 进程优先级层级：
+前台进程 (adj ≈ 0)     — 正在交互的Activity / 前台Service
+  ↓
+可见进程 (adj ≈ 100)   — Activity可见但非前台
+  ↓
+服务进程 (adj ≈ 500)   — 后台Service运行中
+  ↓
+缓存进程 (adj ≈ 900)   — 无可见组件，缓存Activity
+
+// 内存不足时 LowMemoryKiller 按adj从高到低杀进程
+// 先杀缓存进程 → 服务进程 → 可见进程 → 前台进程
+```
+
+<Callout type="info" title="OOM Adj动态调整">
+AMS通过updateOomAdjLocked()动态调整进程的OOM Adj。当组件状态变化时（如Activity从可见变为不可见），AMS立即更新该进程的adj值。这就是为什么后台App容易被杀，前台App不容易被杀。
+</Callout>
+
+## Activity启动流程
+
+```
+// Activity启动完整链路（涉及3个进程）
+
+App进程                    AMS(system_server)         Zygote
+  │                            │                        │
+  ├─ startActivity() ────────→ │                        │
+  │  Instrumentation           │                        │
+  │  .execStartActivity()      │                        │
+  │                            ├─ 检查权限/Intent匹配     │
+  │                            ├─ 检查目标进程是否存在     │
+  │                            │  不存在 → ─────────────→ │
+  │                            │                        ├─ fork新进程
+  │                            │                        │  (COW复制资源)
+  │                            │  ←─────────────────────┤
+  │                            ├─ 发送scheduleLaunchActivity()
+  │  ←─────────────────────────┤  (Binder回调)           │
+  ├─ ActivityThread收到消息     │                        │
+  ├─ 创建Activity实例           │                        │
+  ├─ attach() → onCreate()     │                        │
+  ├─ onStart() → onResume()    │                        │
+  ├─ WindowManager添加窗口      │                        │
+  └─ ViewRootImpl绘制 → 显示    │                        │
+```
+
+## PMS核心职责
+
+### 1. APK包解析
+
+```
+// PMS安装APK时的解析流程
+APK文件
+  └─ PackageParser.parsePackage()
+     ├─ 解析 AndroidManifest.xml（二进制XML）
+     │  ├─ 提取 packageName / versionCode
+     │  ├─ 解析 `<activity>` 标签 → ActivityInfo
+     │  ├─ 解析 `<service>` 标签 → ServiceInfo
+     │  ├─ 解析 `<receiver>` 标签 → ActivityInfo
+     │  ├─ 解析 `<provider>` 标签 → ProviderInfo
+     │  └─ 解析 `<uses-permission>` → 权限列表
+     ├─ 提取 classes.dex
+     ├─ 提取 res/ 资源和 resources.arsc
+     └─ 构建 Package 对象存入PMS缓存
+```
+
+### 2. 权限管理
+
+```
+// PMS管理所有权限的声明、检查和授予
+
+// 应用声明权限（AndroidManifest.xml）：
+// <uses-permission android:name="android.permission.INTERNET" />
+// <uses-permission android:name="android.permission.CAMERA" />
+
+// 运行时动态权限（Android 6.0+）：
+// 危险权限需要运行时请求
+if (checkSelfPermission(Manifest.permission.CAMERA)
+        != PERMISSION_GRANTED) {
+    requestPermissions(new String[]{CAMERA}, REQUEST_CODE);
+}
+
+// PMS维护权限授予状态：
+// PackageManager.checkPermission() → PMS查询权限
+```
+
+### 3. 包安装流程
+
+```
+// APK安装完整流程
+1. 复制APK到 /data/app/目录
+2. PMS调用PackageParser解析APK
+   └─ 解析AndroidManifest.xml
+   └─ 提取dex和资源
+3. 签名校验
+   └─ 验证APK签名完整性（v1/v2/v3方案）
+4. dex2oat编译
+   └─ classes.dex → OAT机器码（AOT预编译）
+5. 更新PMS内部数据结构
+   └─ PackageInfo存入内存缓存
+   └─ 注册组件信息到全局表
+6. 创建数据目录
+   └─ /data/data/<packageName>/
+7. 发送安装完成广播
+   └─ ACTION_PACKAGE_ADDED
+```
+
+<Callout type="success" title="AMS与PMS协作">
+Activity启动时，AMS需要通过PMS查询目标Activity的组件信息（PackageInfo），确认权限和组件注册信息。AMS负责调度，PMS提供组件元数据，两者协作完成组件的启动和管理。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="AMS（Activity Manager Service）">
+Android核心调度服务，运行在system_server。负责统一调度四大组件（Activity/Service/BroadcastReceiver/ContentProvider）的生命周期、管理Activity栈和Task、维护进程优先级（OOM Adj）、响应内存压力。
+</GlossaryItem>
+
+<GlossaryItem term="PMS（Package Manager Service）">
+Android包管理服务，运行在system_server。负责APK包解析（解析AndroidManifest.xml提取组件信息）、权限管理、签名校验、包安装/卸载/更新，维护全局PackageInfo缓存。
+</GlossaryItem>
+
+<GlossaryItem term="OOM Adj">
+Android进程优先级数值，决定进程在内存不足时被回收的顺序。前台进程adj≈0，可见进程≈100，服务进程≈500，缓存进程≈900。数值越大越容易被LowMemoryKiller杀掉。AMS根据组件状态动态调整。
+</GlossaryItem>
+
+<GlossaryItem term="Task与Back Stack">
+Task是一组相关Activity的集合，Back Stack按入栈顺序排列Activity。AMS通过管理Task和Back Stack实现Activity的切换和返回。启动模式（standard/singleTop/singleTask/singleInstance）决定Activity在Task中的行为。
+</GlossaryItem>
+
+<GlossaryItem term="LowMemoryKiller">
+Linux内核的内存回收机制。当系统内存不足时，根据进程的OOM Adj值从高到低杀进程。AMS通过updateOomAdjLocked()动态调整进程的adj值，使重要进程（前台/可见）优先存活。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：AMS的核心职责有哪些？它在Android系统中扮演什么角色？
+
+<Answer>
+AMS是Android系统的核心调度服务，运行在system_server进程中，核心职责：①统一调度四大组件——管理Activity、Service、BroadcastReceiver、ContentProvider的生命周期和调度；②Activity栈管理——维护Task和Back Stack，管理Activity的启动、切换、销毁，处理启动模式；③进程管理——根据组件状态计算进程优先级（OOM Adj），决定进程在内存不足时被回收的顺序，配合LowMemoryKiller杀进程；④内存管理——响应系统内存压力，通过onTrimMemory通知应用释放资源，清理空进程和缓存进程；⑤Intent路由——解析Intent，匹配目标Activity/Service/Receiver。AMS扮演「大管家」角色，是App进程与系统之间的桥梁，所有组件的创建、调度、销毁都由AMS控制。
+</Answer>
+
+**问题 2**：Activity的启动流程是怎样的？
+
+<Answer>
+①App调用startActivity() → Instrumentation.execStartActivity()；②通过Binder向AMS发送startActivity请求（跨进程）；③AMS收到请求，进行权限检查和Intent匹配，找到目标Activity；④AMS检查目标进程是否存在——如果不存在，通过Socket通知Zygote fork新进程；⑤新进程创建后，在ActivityThread.main()中初始化Looper和Application，通过attachApplication()告知AMS；⑥AMS发送scheduleLaunchActivity()给目标进程的ApplicationThread（Binder回调）；⑦目标进程的ActivityThread收到消息，通过Handler切换到主线程；⑧创建Activity实例，调用attach()→onCreate()→onStart()→onResume()；⑨通过WindowManager添加窗口，ViewRootImpl开始measure/layout/draw，SurfaceFlinger合成显示。整个过程涉及App进程、AMS（system_server）、Zygote三个进程的协作。
+</Answer>
+
+**问题 3**：PMS的核心职责有哪些？APK安装的完整流程是什么？
+
+<Answer>
+PMS核心职责：①APK包解析——解析AndroidManifest.xml提取包名、组件信息、权限声明；②权限管理——检查权限声明、动态权限请求、权限授予状态维护；③组件信息维护——维护全局的Activity/Service/Receiver/Provider注册表；④签名校验——验证APK签名完整性（v1/v2/v3签名方案）；⑤包安装/卸载/更新。APK安装完整流程：①复制APK到/data/app/目录；②PMS调用PackageParser解析APK——解析AndroidManifest.xml、提取dex和资源；③签名校验——验证APK签名完整性；④dex2oat编译——将classes.dex编译为OAT/VDEX；⑤更新PMS内部数据结构——将PackageInfo存入内存缓存，注册组件信息；⑥创建数据目录——/data/data/packageName/；⑦通知安装完成——发送ACTION_PACKAGE_ADDED广播。
+</Answer>
+
+**问题 4**：Android的进程优先级（OOM Adj）是如何划分的？AMS如何利用它进行内存回收？
+
+<Answer>
+Android进程优先级从高到低：①前台进程（adj≈0）——包含正在交互的Activity、正在执行onReceive的BroadcastReceiver、前台Service；②可见进程（adj≈100）——Activity可见但非前台；③服务进程（adj≈500）——运行startService启动的后台Service；④缓存进程（adj≈900）——没有可见组件的进程。AMS内存回收机制：①系统内存不足时，LowMemoryKiller根据OOM Adj值从高到低杀进程，先杀cached进程，再杀service，最后才杀visible/foreground；②AMS通过updateOomAdjLocked()动态调整进程的OOM Adj——组件状态变化时立即更新；③onTrimMemory回调——AMS在内存压力时通过IApplicationThread回调onTrimMemory(level)，应用可主动释放资源避免被杀；④空进程清理——完全没有任何组件运行的进程会被优先清理。
+</Answer>
+
+</Exercises>

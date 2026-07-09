@@ -127,6 +127,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["aca-", "android-component-arch"],
   ["apo-", "android-perf-optimization"],
   ["jpc-", "jetpack-compose"],
+  ["aal-", "android-advanced-light"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

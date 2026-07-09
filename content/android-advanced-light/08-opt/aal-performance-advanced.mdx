@@ -1,0 +1,302 @@
+---
+title: "高级性能优化"
+type: C
+section: "Android开发"
+order: 8
+description: "Android高级性能优化——启动、内存、渲染、ANR、电量、稳定性六大维度实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AalPerformanceAdvancedDiagram } from "@/components/mdx/android-advanced-light/diagrams/aal-performance-advanced";
+
+<Objectives>
+
+- 掌握冷启动优化策略（异步初始化、延迟加载、多阶段初始化）
+- 理解内存泄漏的常见场景和检测修复方法（LeakCanary/MAT）
+- 掌握ANR的产生原因、触发条件和排查方法（traces.txt）
+- 理解渲染优化策略和60fps帧率保障原理
+
+</Objectives>
+
+## 性能优化全景
+
+<AalPerformanceAdvancedDiagram />
+
+Android性能优化涵盖六大维度：启动优化、内存优化、渲染优化、ANR与卡顿、电量优化、稳定性优化。每个维度都有对应的工具链和分析方法。
+
+## 启动优化
+
+### 冷启动/温启动/热启动
+
+```
+// 三种启动类型
+冷启动（Cold Start）
+  └─ 进程不存在 → Zygote fork → Application创建 → Activity创建 → 显示
+  └─ 耗时最长（通常 > 500ms）
+
+温启动（Warm Start）
+  └─ 进程存在 → Activity重建 → 显示
+  └─ 耗时中等
+
+热启动（Hot Start）
+  └─ Activity在内存中 → 直接恢复 → 显示
+  └─ 耗时最短（< 100ms）
+```
+
+### 异步初始化
+
+```java
+// 传统串行初始化（慢）
+public class MyApp extends Application {
+    public void onCreate() {
+        super.onCreate();
+        initSDK1();  // 50ms
+        initSDK2();  // 80ms
+        initSDK3();  // 100ms
+        // 总耗时：230ms（串行累加）
+    }
+}
+
+// 异步并行初始化（快）
+public class MyApp extends Application {
+    public void onCreate() {
+        super.onCreate();
+
+        // 有依赖关系的任务串行
+        // 无依赖关系的任务并行
+        TaskScheduler.init(this)
+            .add(new InitSDK1Task())  // 依赖无
+            .add(new InitSDK2Task())  // 依赖无 → 与SDK1并行
+            .add(new InitSDK3Task())  // 依赖SDK1 → SDK1完成后执行
+            .start();
+
+        // 总耗时：max(SDK1, SDK2) + SDK3 ≈ 150ms
+    }
+}
+
+// Task封装
+public class InitSDK1Task extends Task {
+    @Override
+    public void run() {
+        // 子线程执行
+        initSDK1();
+    }
+    @Override
+    public List<Class<? extends Task>> dependsOn() {
+        return Collections.emptyList(); // 无依赖
+    }
+    @Override
+    public boolean runOnMainThread() {
+        return false; // 子线程执行
+    }
+}
+```
+
+<Callout type="info" title="延迟初始化">
+非首屏必需的SDK延迟到首屏显示后初始化。使用Handler.postDelayed()或IdleHandler在主线程空闲时执行。避免在Application.onCreate()中做过多同步初始化。
+</Callout>
+
+## 内存优化
+
+### 常见内存泄漏场景
+
+```java
+// 1. 静态引用泄漏
+static Context sContext; // 静态变量持有Activity → 泄漏
+static View sView;       // 静态变量持有View → 泄漏
+
+// 2. 非静态内部类泄漏（隐式持有外部类）
+class MyActivity extends Activity {
+    // 非静态Handler持有Activity引用
+    private Handler handler = new Handler() {
+        public void handleMessage(Message msg) {
+            // 隐式持有 MyActivity.this → 泄漏
+        }
+    };
+}
+// 修复：静态内部类 + WeakReference
+static class SafeHandler extends Handler {
+    private final WeakReference<Activity> ref;
+    SafeHandler(Activity activity) {
+        ref = new WeakReference<>(activity);
+    }
+    public void handleMessage(Message msg) {
+        Activity activity = ref.get();
+        if (activity != null && !activity.isFinishing()) {
+            // 处理消息
+        }
+    }
+}
+
+// 3. 注册未注销
+registerReceiver(receiver, filter);
+// onDestroy中必须注销
+unregisterReceiver(receiver);
+
+// 4. 动画未取消
+ObjectAnimator animator = ObjectAnimator.ofFloat(view, "alpha", 0f);
+animator.start();
+// onDestroy中必须取消
+animator.cancel();
+```
+
+### 内存泄漏检测
+
+```
+// LeakCanary 自动检测
+// build.gradle: debugImplementation 'com.squareup.leakcanary:leakcanary-android:2.x'
+// 自动监控Activity/Fragment销毁后的引用链
+// 检测到泄漏时弹出通知，显示完整引用路径
+
+// MAT 分析 Hprof
+// 1. Android Profiler → Dump Java Heap → 导出 .hprof
+// 2. MAT打开 .hprof
+// 3. Histogram → 搜索泄漏对象类名
+// 4. Path to GC Roots → 查看引用链
+// 5. 定位泄漏源
+```
+
+## ANR与卡顿
+
+### ANR触发条件
+
+| 场景 | 超时时间 | 原因 |
+|------|----------|------|
+| Activity输入事件 | 5秒 | 主线程未响应触摸/按键 |
+| BroadcastReceiver | 10秒（前台） | onReceive()执行超时 |
+| Service | 20秒（前台） | onCreate/onStartCommand超时 |
+| ContentProvider | 10秒 | publish超时 |
+
+```
+// ANR分析流程
+1. 查看 /data/anr/traces.txt
+   adb pull /data/anr/traces.txt
+   → 查看主线程堆栈，定位阻塞位置
+
+2. 搜索 logcat
+   adb logcat | grep "ANR in"
+   → 查看ANR触发原因
+
+3. 常见原因：
+   - 主线程做I/O（文件/数据库/SharedPreferences.commit()）
+   - 主线程做网络请求
+   - 主线程做大量计算
+   - 主线程死锁
+
+4. StrictMode 开发期检测
+   StrictMode.setThreadPolicy(new StrictMode.ThreadPolicy.Builder()
+       .detectDiskReads()
+       .detectDiskWrites()
+       .detectNetwork()
+       .penaltyLog()
+       .build());
+```
+
+### 卡顿监控
+
+```java
+// BlockCanary 监控主线程卡顿
+// 原理：向主线程Looper的MessageQueue中定期post消息
+// 如果消息延迟超过阈值（如16ms），说明主线程卡顿
+
+// Choreographer 帧率监控
+Choreographer.getInstance().postFrameCallback(new Choreographer.FrameCallback() {
+    @Override
+    public void doFrame(long frameTimeNanos) {
+        long frameInterval = frameTimeNanos - lastFrameTime;
+        if (frameInterval > 16_666_666) { // 超过16.67ms = 掉帧
+            Log.w("Jank", "掉帧！耗时: " + (frameInterval / 1_000_000) + "ms");
+        }
+        lastFrameTime = frameTimeNanos;
+        Choreographer.getInstance().postFrameCallback(this);
+    }
+});
+```
+
+## 渲染优化
+
+```
+// 60fps = 每帧16.67ms
+// measure + layout + draw + 合成 + VSync 必须 < 16.67ms
+
+// 1. 减少过度绘制
+//    开发者选项 → GPU过度绘制 → 检查颜色
+//    蓝色（1x）可接受，红色（4x+）需优化
+//    移除不必要的背景：android:background="@null"
+
+// 2. 减少布局层级
+//    使用 ConstraintLayout 替代多层嵌套
+//    merge标签消除根布局冗余层级
+//    ViewStub 懒加载不可见View
+
+// 3. 避免onDraw创建对象
+//    onDraw()每帧调用，不要new对象
+//    Paint/Path/Rect 改为成员变量复用
+
+// 4. 硬件加速
+//    默认开启（HardwareRenderer）
+//    动画View设置hardware layer
+view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+//    动画结束后清除
+view.setLayerType(View.LAYER_TYPE_NONE, null);
+```
+
+<Callout type="success" title="性能优化工具链">
+Android Profiler（CPU/内存/网络实时分析）、Systrace/Perfetto（系统级帧/调度trace）、MAT（Hprof堆内存分析）、LeakCanary（内存泄漏检测）、BlockCanary（主线程卡顿监控）、Layout Inspector（布局层级检查）。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="冷启动（Cold Start）">
+进程不存在时的启动，需要Zygote fork新进程、创建Application、创建Activity、显示首帧。是耗时最长的启动类型，通常超过500ms。优化手段：异步初始化、延迟初始化、多阶段初始化。
+</GlossaryItem>
+
+<GlossaryItem term="内存泄漏（Memory Leak）">
+对象不再使用但无法被GC回收的现象。常见原因：静态引用持有Activity/View、非静态内部类隐式持有外部类、注册未注销、动画未取消。检测工具：LeakCanary（自动检测）、MAT（Hprof分析）。
+</GlossaryItem>
+
+<GlossaryItem term="ANR（Application Not Responding）">
+应用无响应。主线程在规定时间内未响应输入事件或组件回调时触发。触发条件：Activity输入事件5秒、BroadcastReceiver 10秒、Service 20秒。分析工具：traces.txt（线程堆栈）、StrictMode（开发期检测）。
+</GlossaryItem>
+
+<GlossaryItem term="过度绘制（Overdraw）">
+同一像素被多次绘制。开发者选项中GPU过度绘制查看颜色：蓝色（1x）可接受、绿色（2x）、红色（3x+）需优化。优化方法：移除不必要的背景、使用透明色。
+</GlossaryItem>
+
+<GlossaryItem term="Choreographer">
+Android帧率调度器，与VSync信号同步。通过postFrameCallback可以监控每帧耗时，超过16.67ms表示掉帧。是卡顿监控的核心API。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Android应用冷启动优化的核心策略有哪些？异步初始化如何实现？
+
+<Answer>
+冷启动优化核心策略：①异步初始化——将Application.onCreate()中的初始化任务按依赖关系拆分，无依赖的任务并行执行，有依赖的任务按拓扑排序串行执行。使用TaskScheduler框架将每个初始化任务封装为Task，声明依赖关系，框架自动调度线程池并行执行；②延迟初始化——非首屏必需的SDK延迟到首屏显示后初始化，使用Handler.postDelayed或IdleHandler在主线程空闲时执行；③多阶段初始化——首屏所需SDK在onCreate()中同步初始化，二级页面SDK在首页onResume()后初始化，三级SDK在首页空闲时初始化；④避免I/O阻塞——文件读取、数据库操作、网络请求放到子线程；⑤SplashScreen优化——使用WindowBackground设置启动主题，避免白屏闪现；⑥减少Application逻辑。关键指标：冷启动时间（从进程创建到首帧渲染），使用Systrace/Perfetto分析启动瓶颈。
+</Answer>
+
+**问题 2**：Android内存泄漏的常见场景有哪些？如何检测和修复？
+
+<Answer>
+常见内存泄漏场景：①静态引用——静态变量持有Activity/View/Context引用；②内部类——非静态内部类（如Handler、Runnable、AsyncTask）隐式持有外部类引用；③注册未注销——BroadcastReceiver、ContentObserver、EventBus注册后未注销；④动画——属性动画未cancel，Animator持有View引用；⑤单例——单例对象持有Context，应使用ApplicationContext；⑥资源未关闭——Cursor、InputStream等未close。检测方法：①LeakCanary——自动监控Activity/Fragment销毁后的引用链，显示完整引用路径；②Android Profiler Memory——实时查看内存分配和GC，dump Hprof分析；③MAT——分析Hprof文件，查找GC Root引用链定位泄漏对象。修复：弱引用替代强引用、使用静态内部类+WeakReference、确保onDestroy中注销和cancel。
+</Answer>
+
+**问题 3**：ANR的产生原因和触发条件是什么？如何分析和预防？
+
+<Answer>
+ANR产生原因：主线程做了耗时操作导致无法及时响应输入事件或组件生命周期回调。触发条件：①Activity——主线程5秒内未响应输入事件（KeyEvent/TouchEvent）；②BroadcastReceiver——onReceive()执行超过10秒（前台）或60秒（后台）；③Service——onCreate()/onStartCommand()执行超过20秒（前台）或200秒（后台）；④ContentProvider——publish超时10秒。常见耗时操作：数据库I/O、文件读写、网络请求、大量计算、SharedPreferences.commit()、JSON解析大文件。分析方法：①traces.txt——ANR发生时系统自动生成，包含所有线程堆栈，定位主线程阻塞位置；②logcat——搜索ANR关键字查看触发原因；③StrictMode——开发期检测主线程I/O和网络操作。预防：①所有耗时操作放到子线程；②使用AsyncTask/线程池/协程处理后台任务；③SharedPreferences用apply()替代commit()。
+</Answer>
+
+**问题 4**：Android渲染优化的策略有哪些？如何保证60fps？
+
+<Answer>
+渲染优化策略：①减少过度绘制——移除不必要的背景，使用transparent，开发者选项查看GPU过度绘制（蓝色可接受，红色需优化）；②减少布局层级——使用ConstraintLayout替代多层嵌套，用merge标签消除根布局冗余层级，include复用布局，ViewStub懒加载不可见View；③避免每帧创建对象——onDraw()中不要new对象（Paint/Path/Rect），改为成员变量复用，减少GC频率；④硬件加速——默认开启硬件加速，通过DisplayList批量提交GPU绘制命令；⑤Layer层优化——对复杂动画的View设置hardware layer，将绘制结果缓存为GPU纹理，动画时只需变换纹理；⑥Choreographer帧率监控——通过FrameCallback监控每帧耗时，超过16.67ms记录掉帧；⑦避免主线程阻塞。60fps保障：每帧16.67ms，measure+layout+draw+合成+VSync必须在16.67ms内完成，否则掉帧卡顿。
+</Answer>
+
+</Exercises>

@@ -1,0 +1,227 @@
+---
+title: "Dalvik与ART虚拟机"
+type: B
+section: "Android开发"
+order: 2
+description: "Dalvik与ART虚拟机对比——DEX格式、AOT/JIT编译、GC机制深度解析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AalDalvikArtDiagram } from "@/components/mdx/android-advanced-light/diagrams/aal-dalvik-art";
+
+<Objectives>
+
+- 理解Dalvik虚拟机的特点和DEX文件格式
+- 掌握ART虚拟机的AOT编译机制和混合编译策略
+- 理解Dalvik与ART在GC机制上的差异
+- 掌握dex2oat编译流程和OAT/VDEX/ART文件的关系
+
+</Objectives>
+
+## Dalvik与ART对比
+
+<AalDalvikArtDiagram />
+
+Dalvik是Android 4.4及以前的虚拟机，ART（Android Runtime）是Android 5.0+的虚拟机。两者在执行格式、编译策略、GC机制上存在显著差异。
+
+## DEX文件格式
+
+```
+// DEX（Dalvik Executable）文件生成流程
+// Java源码 → javac编译 → .class文件 → dx/d8工具 → .dex文件
+
+// .class文件特点：
+//   - 每个类一个.class文件
+//   - 每个文件有独立的常量池
+//   - 基于栈的指令集
+
+// .dex文件特点：
+//   - 多个.class合并为一个.dex
+//   - 共享常量池，去除冗余
+//   - 基于寄存器的指令集
+//   - 文件体积更小，适合移动设备
+
+// dx工具合并过程：
+// classes/A.class ─┐
+// classes/B.class ─┼─ dx → classes.dex
+// classes/C.class ─┘
+//   合并常量池、去除冗余、优化指令
+```
+
+<Callout type="info" title="寄存器 vs 栈">
+JVM基于栈（Stack-based），每条指令需要push/pop操作数栈，指令多但实现简单。Dalvik基于寄存器（Register-based），指令直接操作寄存器，指令更少、执行效率更高，适合移动设备。
+</Callout>
+
+## 编译策略对比
+
+### JIT即时编译（Dalvik）
+
+```
+// Dalvik JIT：运行时编译
+// 每次运行App时：
+App启动
+  └─ Dalvik加载classes.dex
+     └─ 运行时逐行解释执行字节码
+        └─ JIT检测热点代码
+           └─ 即时编译为机器码（缓存在内存）
+              └─ 下次执行该代码用机器码
+
+// 问题：
+// 1. 每次启动都要重新编译（机器码不持久化）
+// 2. 运行时编译消耗CPU和电量
+// 3. 启动时性能差（全靠解释执行）
+```
+
+### AOT预编译（ART）
+
+```
+// ART AOT：安装时编译
+// 应用安装时：
+APK安装
+  └─ dex2oat工具读取classes.dex
+     └─ AOT预编译全部字节码为机器码
+        └─ 生成OAT文件（ELF格式的机器码）
+           └─ 存储到 /data/app/.../oat/
+
+// 运行时：
+App启动
+  └─ ART直接加载OAT文件中的机器码
+     └─ 直接执行，无需运行时编译
+        └─ 启动快、运行流畅
+
+// 问题：
+// 1. 安装时间长（全量编译）
+// 2. OAT文件占用更多存储空间
+```
+
+### 混合编译（Android 7.0+）
+
+```
+// AOT + JIT + Profile 混合策略
+// 兼顾启动速度和存储空间
+
+首次启动：
+  └─ JIT即时编译运行（快速启动）
+     └─ Profile记录热点方法
+
+设备空闲时：
+  └─ 根据Profile对热点代码AOT编译
+     └─ 只编译热点，不全量编译
+
+下次启动：
+  └─ 热点代码直接用AOT机器码
+  └─ 非热点代码用JIT即时编译
+
+// 优势：启动快（JIT即时运行）+ 运行流畅（AOT热点预编译）+ 省空间（不全量AOT）
+```
+
+<Callout type="success" title="混合编译是最佳平衡">
+Android 7.0的混合编译策略在性能（AOT预编译热点）和空间（不全量AOT）之间取得了最佳平衡。首次启动用JIT快速运行，空闲时根据Profile只AOT编译热点代码，兼顾速度和存储。
+</Callout>
+
+## GC机制对比
+
+```
+// Dalvik GC：Mark-Sweep 标记清除
+// 缺点：全堆暂停（Stop-The-World）
+GC触发
+  └─ 暂停所有线程（STW）
+     └─ 标记所有可达对象（Mark）
+        └─ 清除不可达对象（Sweep）
+           └─ 恢复线程
+// 停顿：2~3次STW，每次几百毫秒 → 卡顿明显
+
+// ART GC：并发标记清除（Concurrent Mark-Sweep）
+// 优势：大部分工作在后台并发执行
+GC触发
+  └─ 短暂停顿，标记GC Root（~1ms）
+     └─ 后台线程并发标记（不暂停应用线程）
+        └─ 短暂停顿，处理引用变更（~1ms）
+           └─ 后台线程并发清除
+// 停顿：通常1次，每次几毫秒 → 几乎无卡顿
+```
+
+| 特性 | Dalvik GC | ART GC |
+|------|-----------|--------|
+| 回收算法 | Mark-Sweep | 并发CMS |
+| 暂停次数 | 2~3次STW | 通常1次 |
+| 暂停时长 | 几百毫秒 | 几毫秒 |
+| 并发回收 | 否（全堆暂停） | 是（后台并发） |
+| 内存碎片 | 无法整理 | 可Compact整理 |
+| 卡顿影响 | 明著 | 极小 |
+
+## dex2oat与OAT/VDEX/ART文件
+
+```
+// 安装APK时dex2oat的编译流程
+classes.dex
+  └─ dex2oat（AOT编译器）
+     ├─ → OAT文件（机器码，ELF格式）
+     ├─ → VDEX文件（验证后的DEX原始数据）
+     └─ → ART文件（类数据缓存）
+
+// 运行时优先级：
+// 1. OAT机器码 → 直接执行（最快）
+// 2. VDEX/DEX → JIT即时编译（回退）
+// 3. ART文件 → 快速类数据查找
+
+// VDEX的作用（Android 8.0+）：
+// 存储已验证的DEX，避免重复验证
+// 重装应用时无需重新验证DEX → 加快安装速度
+```
+
+<Glossary>
+
+<GlossaryItem term="DEX（Dalvik Executable）">
+Dalvik/ART虚拟机的可执行文件格式。由dx/d8工具将多个.class文件合并、去除冗余常量池、优化为基于寄存器的指令集生成。一个DEX文件可包含多个类，适合移动设备内存受限环境。
+</GlossaryItem>
+
+<GlossaryItem term="AOT编译（Ahead-Of-Time）">
+ART虚拟机的预编译策略。在应用安装时通过dex2oat将DEX字节码编译为机器码（OAT格式），运行时直接执行机器码。优点是启动快、运行流畅，缺点是安装时间长、占用存储多。
+</GlossaryItem>
+
+<GlossaryItem term="JIT编译（Just-In-Time）">
+Dalvik虚拟机的即时编译策略。运行时逐行将字节码翻译为机器码，每次启动都重新编译。优点是不占用额外存储，缺点是启动慢、运行时编译开销大。
+</GlossaryItem>
+
+<GlossaryItem term="dex2oat">
+ART虚拟机的编译工具，在应用安装时将DEX字节码编译为OAT机器码。同时生成VDEX（验证后的DEX）和ART文件（类数据缓存）。是AOT预编译的核心工具。
+</GlossaryItem>
+
+<GlossaryItem term="并发GC（Concurrent GC）">
+ART虚拟机的垃圾回收策略。大部分GC工作在后台线程并发执行，应用线程只需极短暂停。相比Dalvik的全堆暂停（Stop-The-World），大幅减少卡顿。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Dalvik虚拟机与JVM的主要区别是什么？DEX文件格式有什么特点？
+
+<Answer>
+Dalvik与JVM的主要区别：①执行架构——JVM基于栈（Stack-based），Dalvik基于寄存器（Register-based），寄存器架构指令更少、执行效率更高；②执行文件——JVM执行.class文件（每个类一个），Dalvik执行.dex文件（多个.class合并为一个.dex，去除冗余常量池）；③优化——Dalvik的DEX格式通过合并多个class文件，减少了常量池冗余，减小了文件体积。DEX文件特点：①全称Dalvik Executable，是Dalvik/ART虚拟机的可执行格式；②由dx工具将多个.class文件合并、去重、优化生成；③包含紧凑的指令集、共享的常量池、字符串池；④每个DEX文件可包含多个类，适合移动设备内存受限的环境。
+</Answer>
+
+**问题 2**：ART的AOT编译与Dalvik的JIT编译有什么区别？Android 7.0后的混合编译策略是什么？
+
+<Answer>
+AOT与JIT区别：①编译时机——JIT在运行时逐行将字节码翻译为机器码，每次启动都重新编译；AOT在应用安装时通过dex2oat预编译为机器码（OAT格式），运行时直接执行；②启动速度——JIT启动慢（需要运行时编译），AOT启动快（预编译完成）；③存储空间——JIT不占用额外存储，AOT生成的OAT文件占用更多存储。Android 7.0混合编译策略（AOT+JIT+Profile）：①首次启动用JIT快速运行，同时记录热点方法到Profile；②设备空闲时根据Profile对热点代码进行AOT编译；③兼顾启动速度（JIT即时运行）和运行性能（AOT预编译热点），同时避免全量AOT占用过多存储。这是ART在性能和空间之间的最佳平衡。
+</Answer>
+
+**问题 3**：ART的GC机制相比Dalvik有哪些改进？为什么能减少卡顿？
+
+<Answer>
+ART GC相比Dalvik的改进：①并发回收——Dalvik使用Mark-Sweep标记清除，需要全堆暂停（Stop-The-World），容易造成卡顿；ART使用并发标记清除（CMS），大部分GC工作在后台线程并发执行，只在工作线程需要极短暂停；②停顿次数——Dalvik一次GC需要2~3次停顿，ART通常只需1次，停顿时间从几百毫秒降到几毫秒；③内存碎片——ART的Compact GC可以整理内存碎片，Dalvik不行；④回收策略——ART支持不同的GC策略（前台并发、后台全量），前台用并发减少卡顿，后台用全量清理碎片。减少卡顿的核心原因：并发GC使应用线程和GC线程同时运行，只在标记阶段需要极短暂停，避免了Dalvik全堆暂停导致的帧丢失。
+</Answer>
+
+**问题 4**：dex2oat工具的作用是什么？OAT/VDEX/ART文件分别是什么？
+
+<Answer>
+dex2oat是ART虚拟机的编译工具，在应用安装时将DEX字节码编译为机器码。三种文件：①OAT（Optimized Android Executable）——dex2oat输出的ELF格式文件，包含编译后的机器码，是ART直接执行的格式；②VDEX（Verified DEX）——Android 8.0引入，存储经过验证的DEX原始数据，避免重复验证，加快安装和启动速度；③ART文件——存储OAT中的Class数据（方法指针、字段偏移等），供运行时快速查找。关系：安装APK时dex2oat读取classes.dex → 编译为OAT（机器码）→ 同时生成VDEX（验证后的DEX）和ART（类数据缓存）。运行时：ART虚拟机优先加载OAT中的机器码执行，如果OAT不存在则回退到JIT从VDEX/DEX中即时编译。
+</Answer>
+
+</Exercises>

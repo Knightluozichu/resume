@@ -1848,7 +1848,17 @@ export type ReviewChapterSlug =
   | "jpc-navigation"
   | "jpc-view-interop"
   | "jpc-advanced-compose"
-  | "jpc-final-review";
+  | "jpc-final-review"
+  | "aal-learning-map"
+  | "aal-system-architecture"
+  | "aal-dalvik-art"
+  | "aal-binder-ipc"
+  | "aal-ams-pms"
+  | "aal-wms-window"
+  | "aal-packagemanager"
+  | "aal-classloader"
+  | "aal-performance-advanced"
+  | "aal-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3701,6 +3711,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jpc-view-interop": "与View互操作",
   "jpc-advanced-compose": "高级Compose",
   "jpc-final-review": "全书复习",
+  "aal-learning-map": "全书学习地图",
+  "aal-system-architecture": "Android系统架构",
+  "aal-dalvik-art": "Dalvik与ART虚拟机",
+  "aal-binder-ipc": "Binder IPC原理",
+  "aal-ams-pms": "AMS与PMS",
+  "aal-wms-window": "WMS与窗口管理",
+  "aal-packagemanager": "PackageManager",
+  "aal-classloader": "类加载器与插件化",
+  "aal-performance-advanced": "高级性能优化",
+  "aal-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
