@@ -2105,6 +2105,16 @@ import { dltOptimizationQuestions } from "./review/dlt-optimization";
 import { dltConvRnnQuestions } from "./review/dlt-conv-rnn";
 import { dltResearchFrontiersQuestions } from "./review/dlt-research-frontiers";
 import { dltFinalReviewQuestions } from "./review/dlt-final-review";
+import { prlLearningMapQuestions } from "./review/prl-learning-map";
+import { prlProbabilityTheoryQuestions } from "./review/prl-probability-theory";
+import { prlLinearModelsRegressionQuestions } from "./review/prl-linear-models-regression";
+import { prlLinearClassificationQuestions } from "./review/prl-linear-classification";
+import { prlNeuralNetworksQuestions } from "./review/prl-neural-networks";
+import { prlKernelMethodsQuestions } from "./review/prl-kernel-methods";
+import { prlSparseKernelsQuestions } from "./review/prl-sparse-kernels";
+import { prlGraphicalModelsQuestions } from "./review/prl-graphical-models";
+import { prlMixtureEmQuestions } from "./review/prl-mixture-em";
+import { prlFinalReviewQuestions } from "./review/prl-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4245,6 +4255,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dltConvRnnQuestions,
   ...dltResearchFrontiersQuestions,
   ...dltFinalReviewQuestions,
+  ...prlLearningMapQuestions,
+  ...prlProbabilityTheoryQuestions,
+  ...prlLinearModelsRegressionQuestions,
+  ...prlLinearClassificationQuestions,
+  ...prlNeuralNetworksQuestions,
+  ...prlKernelMethodsQuestions,
+  ...prlSparseKernelsQuestions,
+  ...prlGraphicalModelsQuestions,
+  ...prlMixtureEmQuestions,
+  ...prlFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

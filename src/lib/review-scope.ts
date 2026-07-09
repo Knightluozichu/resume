@@ -165,6 +165,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["dlr-", "deep-learning-rl-from-scratch"],
   ["dlg-", "deep-learning-gen-models"],
   ["dlt-", "deep-learning-textbook"],
+  ["prl-", "pattern-recognition-ml"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

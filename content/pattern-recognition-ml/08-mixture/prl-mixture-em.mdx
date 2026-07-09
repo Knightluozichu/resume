@@ -1,0 +1,194 @@
+---
+title: "混合模型与EM"
+type: B
+section: "人工智能与机器学习"
+order: 8
+description: "混合高斯、EM算法与变分推断"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { PrlMixtureEmDiagram } from "@/components/mdx/pattern-recognition-ml/diagrams/prl-mixture-em";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解混合高斯模型（GMM）与隐变量的引入
+- 掌握 EM 算法的 E 步与 M 步及其收敛性
+- 理解 EM 作为变分推断特例的本质
+- 了解 EM 在聚类与贝叶斯推断中的应用
+
+</Objectives>
+
+## 混合模型与 EM：隐变量的迭代优化
+
+当模型含有不可观测的隐变量时（如混合模型的分量标签），直接最大似然无解析解。EM 算法通过交替推断隐变量和更新参数，使对数似然单调上升。EM 是变分推断的特例，是贝叶斯学习的通用框架。
+
+<PrlMixtureEmDiagram />
+
+## 混合高斯模型（GMM）
+
+混合高斯模型用 $K$ 个高斯分量的加权求和建模复杂分布：
+
+$$p(\mathbf{x}) = \sum_{k=1}^K \pi_k \mathcal{N}(\mathbf{x}|\boldsymbol{\mu}_k, \boldsymbol{\Sigma}_k)$$
+
+其中 $\pi_k$ 是混合系数（$\sum_k \pi_k = 1$），$\boldsymbol{\mu}_k, \boldsymbol{\Sigma}_k$ 是第 $k$ 个分量的均值和协方差。
+
+### 隐变量表示
+
+引入隐变量 $\mathbf{z}$（one-hot 编码），$z_k = 1$ 表示 $\mathbf{x}$ 属于第 $k$ 个分量：
+
+$$p(\mathbf{x}) = \sum_{\mathbf{z}} p(\mathbf{x}|\mathbf{z})p(\mathbf{z}) = \sum_k \pi_k \mathcal{N}(\mathbf{x}|\boldsymbol{\mu}_k, \boldsymbol{\Sigma}_k)$$
+
+<Callout type="info">
+
+**隐变量的意义**：$\mathbf{z}$ 表示「每个样本属于哪个分量」，但它是不可观测的。如果能知道 $\mathbf{z}$，最大似然很简单（每个分量独立拟合）。EM 的核心思想就是交替推断 $\mathbf{z}$ 和拟合参数。
+
+</Callout>
+
+### 直接最大似然的困难
+
+对数似然 $\ln p(\mathbf{X}|\boldsymbol{\pi},\boldsymbol{\mu},\boldsymbol{\Sigma}) = \sum_n \ln \sum_k \pi_k \mathcal{N}(\mathbf{x}_n|\boldsymbol{\mu}_k,\boldsymbol{\Sigma}_k)$ 中，对数内有求和 $\ln\sum_k$，无法分离各分量参数，没有解析解。
+
+## EM 算法
+
+EM（Expectation-Maximization）通过交替执行 E 步和 M 步解决隐变量模型的最大似然问题。
+
+### E 步：计算责任度
+
+给定当前参数，计算每个样本属于每个分量的后验概率（责任度）：
+
+$$\gamma(z_{nk}) = p(z_k=1|\mathbf{x}_n) = \frac{\pi_k \mathcal{N}(\mathbf{x}_n|\boldsymbol{\mu}_k,\boldsymbol{\Sigma}_k)}{\sum_j \pi_j \mathcal{N}(\mathbf{x}_n|\boldsymbol{\mu}_j,\boldsymbol{\Sigma}_j)}$$
+
+### M 步：更新参数
+
+用责任度作为「软标签」加权更新参数：
+
+$$N_k = \sum_n \gamma(z_{nk}), \quad \boldsymbol{\mu}_k = \frac{1}{N_k}\sum_n \gamma(z_{nk})\mathbf{x}_n$$
+
+$$\boldsymbol{\Sigma}_k = \frac{1}{N_k}\sum_n \gamma(z_{nk})(\mathbf{x}_n-\boldsymbol{\mu}_k)(\mathbf{x}_n-\boldsymbol{\mu}_k)^\top, \quad \pi_k = \frac{N_k}{N}$$
+
+<Callout type="tip">
+
+**EM 的直觉**：E 步用当前模型「猜测」每个样本的归属（责任度），M 步用这些猜测「重新拟合」各分量。类比 K-means：K-means 是硬分配（责任度 0/1），GMM-EM 是软分配（责任度为概率）。
+
+</Callout>
+
+### 收敛性
+
+EM 每轮使对数似然单调不减：$\ln p(\mathbf{X}|\theta^{(t+1)}) \geq \ln p(\mathbf{X}|\theta^{(t)})$。
+
+<Callout type="info">
+
+**收敛证明的核心**：E 步最大化的是对数似然的下界（ELBO），M 步最大化下界本身。由于下界在 $\theta^{(t)}$ 处与对数似然相切，最大化下界必然提升对数似然。
+
+</Callout>
+
+EM 收敛到**局部最优**（非全局），因此需要多次随机初始化取最优。
+
+## EM 的本质：变分推断的特例
+
+EM 可从**变分推断**推导。对数似然可分解为：
+
+$$\ln p(\mathbf{X}|\theta) = \mathcal{L}(q, \theta) + \text{KL}(q(\mathbf{Z}) \| p(\mathbf{Z}|\mathbf{X},\theta))$$
+
+其中 $\mathcal{L}(q,\theta) = \mathbb{E}_q[\ln p(\mathbf{X},\mathbf{Z}|\theta)] - \mathbb{E}_q[\ln q(\mathbf{Z})]$ 是**证据下界（ELBO）**，KL 项非负。
+
+- **E 步**：固定 $\theta$，关于 $q$ 最大化 $\mathcal{L}$ → 最小化 KL → $q(\mathbf{Z}) = p(\mathbf{Z}|\mathbf{X},\theta)$（后验可精确计算时 KL=0）
+- **M 步**：固定 $q$，关于 $\theta$ 最大化 $\mathcal{L}$ → 更新参数
+
+<Callout type="warning">
+
+**EM 的局限**：当后验 $p(\mathbf{Z}|\mathbf{X},\theta)$ 不可解析时（如隐变量维度高或模型复杂），E 步无法精确执行。此时需**变分 EM**——用简单分布 $q$ 近似后验，KL 不为零但 ELBO 仍可优化。这是变分自编码器（VAE）的基础。
+
+</Callout>
+
+## EM 的推广与应用
+
+### K-means 是 GMM-EM 的极限
+
+当 GMM 的所有分量共享各向同性协方差 $\boldsymbol{\Sigma}_k = \epsilon\mathbf{I}$ 且 $\epsilon \to 0$ 时，责任度退化为硬分配（0/1），GMM-EM 退化为 K-means。
+
+### 贝叶斯 EM / 证据框架
+
+对 GMM 的超参（如分量数 $K$）也可贝叶斯化。变分贝叶斯（VB）自动确定分量数（自动模型选择）——多余分量的混合系数 $\pi_k \to 0$。
+
+### 其他隐变量模型
+
+| 模型 | 隐变量 | EM 应用 |
+|------|--------|---------|
+| GMM | 分量标签 $z$ | 聚类 |
+| 隐马尔可夫（HMM） | 隐状态序列 | Baum-Welch 算法 |
+| 主题模型（LDA） | 主题分配 | 文本分析 |
+| 因子分析 | 隐因子 | 降维 |
+| VAE | 编码 | 深度生成模型 |
+
+<Glossary>
+
+<GlossaryItem term="混合高斯模型（GMM）">
+用 K 个高斯分量加权求和建模复杂分布的模型。p(x)=Σπ_k N(x|μ_k,Σ_k)，π_k 为混合系数（Σπ_k=1）。引入隐变量 z（one-hot）表示样本归属后，p(x)=Σ_z p(x|z)p(z)。GMM 可拟合任意连续分布（K 足够大时）。难点：对数似然 lnΣ_k π_k N(x|μ_k,Σ_k) 中对数内有求和，无法分离各分量参数，无解析解 → 需 EM 算法。GMM 的应用：聚类（软聚类，输出归属概率）、密度估计、异常检测。与 K-means 的关系：K-means 是 GMM 共享各向同性协方差且 ε→0 的极限（硬分配）。贝叶斯 GMM（变分贝叶斯）可自动确定分量数 K。
+</GlossaryItem>
+
+<GlossaryItem term="EM 算法（Expectation-Maximization）">
+隐变量模型的迭代优化算法。E 步：用当前参数计算隐变量后验（责任度）γ(z_nk)=π_k N(x_n|μ_k,Σ_k)/Σ_j π_j N(x_n|μ_j,Σ_j)。M 步：用责任度作为软标签加权更新参数 μ_k=(1/N_k)Σγ(z_nk)x_n，Σ_k 加权协方差，π_k=N_k/N。每轮使对数似然单调不减（ELBO 保证）。收敛到局部最优（需多次初始化）。EM 的本质：E 步最大化 ELBO 的 q 部分（推断隐变量分布），M 步最大化 ELBO 的 θ 部分（更新参数）。当后验可精确计算时 EM = 精确变分推断；后验不可解时需变分 EM（用 q 近似后验）。EM 是变分推断的特例，是 GMM、HMM、LDA、VAE 等隐变量模型的通用训练框架。
+</GlossaryItem>
+
+<GlossaryItem term="责任度（Responsibility）">
+GMM 中样本 n 属于分量 k 的后验概率 γ(z_nk)=p(z_k=1|x_n)。由贝叶斯定理计算：π_k N(x_n|μ_k,Σ_k) / Σ_j π_j N(x_n|μ_j,Σ_j)。责任度是 EM 的 E 步输出——「软标签」。与 K-means 的硬标签（0/1）不同，责任度是 [0,1] 的概率，表达归属的不确定性。责任度在 M 步中作为加权权重更新参数：μ_k 是责任度加权的样本均值，Σ_k 是责任度加权的协方差。当分量间重叠大时责任度接近 1/K（不确定）；当样本明确属于某分量时责任度接近 1。责任度也可用于聚类后的软分配——输出「样本 70% 属于类 A、30% 属于类 B」而非硬性分配。
+</GlossaryItem>
+
+<GlossaryItem term="证据下界（ELBO）">
+变分推断的核心目标函数。ln p(X|θ) = L(q,θ) + KL(q(Z)||p(Z|X,θ))，其中 L(q,θ)=E_q[ln p(X,Z|θ)] - E_q[ln q(Z)] 是 ELBO，KL 项非负。因此 ELBO 是对数似然的下界。最大化 ELBO 既提升数据拟合（E_q[ln p(X,Z)] 项）又使 q 接近后验（-E_q[ln q] 熵正则项 + KL 减小）。EM 的 E 步固定 θ 最大化 q（使 KL=0，ELBO=ln p(X)），M 步固定 q 最大化 θ。当后验不可精确计算时（KL≠0），变分 EM 仍最大化 ELBO 但 KL>0，ELBO < ln p(X)。VAE 的损失函数 = -ELBO = 重构误差 + KL(q||p)。ELBO 将推断（求后验）和参数学习统一为一个优化问题。
+</GlossaryItem>
+
+<GlossaryItem term="变分推断（Variational Inference）">
+用优化方法近似后验的通用框架。用简单分布 q(Z) 近似复杂后验 p(Z|X)，最小化 KL(q||p) 或等价地最大化 ELBO。平均场假设 q(Z)=Πq_i(Z_i)（完全分解）使优化可行但低估变量间相关性。变分推断的优势：①将推断转为优化（梯度下降可用）；②比 MCMC 快得多；③可扩展到大数据和深度学习（VAE）。EM 是变分推断的特例——后验可精确计算时 KL=0。变分 EM 用于后验不可解的场景。变分贝叶斯（VB）进一步对超参也做变分近似，实现自动模型选择（如 GMM 自动定 K）。现代变分推断（VI）是贝叶斯深度学习（VAE、贝叶斯神经网络）的主流推断方法。
+</GlossaryItem>
+
+<GlossaryItem term="K-means 与 GMM 的关系">
+K-means 是 GMM-EM 的极限情形。当 GMM 所有分量共享各向同性协方差 Σ_k=εI 且 ε→0 时：①责任度退化为硬分配——样本只归属于最近的分量（γ→0/1）；②M 步退化为 K-means 的质心更新 μ_k=(1/N_k)Σ_{x_n∈C_k} x_n；③损失函数退化为 SSE。因此 K-means 是「硬 GMM」，GMM 是「软 K-means」。GMM 的优势：①输出归属概率（软聚类）；②可处理椭圆形簇（任意协方差）；③概率框架可做模型选择（贝叶斯 GMM 自动定 K）。K-means 的优势：①简单快速；②无需分布假设。PRML 将 K-means 视为 GMM 的特例，体现了概率框架的统一性。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+混合高斯模型为什么要引入隐变量？直接最大似然有什么困难？
+
+<Answer>
+
+引入隐变量的原因：GMM 的 p(x)=Σπ_k N(x|μ_k,Σ_k) 可自然地用隐变量 z（one-hot）表示为 p(x)=Σ_z p(x|z)p(z)，其中 p(z_k=1)=π_k，p(x|z_k=1)=N(x|μ_k,Σ_k)。隐变量 z 表示「样本属于哪个分量」，它的物理含义清晰。如果能观测到 z，最大似然很简单——每个分量独立拟合（μ_k 是类内均值、Σ_k 是类内协方差、π_k 是类频率）。直接最大似然的困难：对数似然 ln p(X|π,μ,Σ)=Σ_n ln Σ_k π_k N(x_n|μ_k,Σ_k) 中，对数内有求和 ln Σ_k。对数和求和不可交换，无法将各分量参数分离——令梯度为零时，μ_k 的方程中耦合了所有分量的 π_j N(x_n|μ_j,Σ_j)（通过分母 Σ_j），无解析解。隐变量的价值：引入 z 后，完整数据对数似然 ln p(X,Z|θ)=Σ_n Σ_k z_nk [ln π_k + ln N(x_n|μ_k,Σ_k)] 中 z_nk 将各分量分离——若 z 已知，各分量独立优化有解析解。EM 算法正是利用这一结构：E 步推断 z 的分布（责任度），M 步在已知 z 分布下优化参数，交替进行。
+</Answer>
+
+### 问题 2
+
+EM 算法的 E 步和 M 步分别做什么？为什么它能保证对数似然单调上升？
+
+<Answer>
+
+E 步：用当前参数 θ^(t) 计算隐变量后验（责任度）γ(z_nk)=π_k N(x_n|μ_k,Σ_k)/Σ_j π_j N(x_n|μ_j,Σ_j)。这是「猜测」每个样本的归属概率。M 步：用责任度作为软标签加权更新参数：μ_k=(1/N_k)Σ γ(z_nk)x_n（责任度加权均值），Σ_k 责任度加权协方差，π_k=N_k/N。这是在已知归属分布下重新拟合各分量。单调上升的证明：对数似然可分解为 ln p(X|θ)=L(q,θ)+KL(q(Z)||p(Z|X,θ))，L 为 ELBO，KL≥0。①E 步固定 θ 最大化 L 关于 q → 最小化 KL → q(Z)=p(Z|X,θ)（后验精确计算时 KL=0），此时 L=ln p(X|θ)，下界紧贴对数似然。②M 步固定 q 最大化 L 关于 θ → 提升下界。由于下界在 θ^(t) 处与对数似然相切（KL=0），最大化下界必然使对数似然上升或持平：ln p(X|θ^(t+1)) ≥ L(θ^(t+1)) ≥ L(θ^(t)) = ln p(X|θ^(t))。关键洞察：E 步使下界紧贴（KL=0），M 步提升下界，下界提升带动对数似然提升。EM 收敛到局部最优（非全局），需多次初始化。
+</Answer>
+
+### 问题 3
+
+EM 与变分推断有什么关系？当后验不可解析时如何处理？
+
+<Answer>
+
+关系：EM 是变分推断的特例。对数似然分解 ln p(X|θ)=L(q,θ)+KL(q||p(Z|X,θ))，L 为 ELBO，KL≥0。EM：①E 步固定 θ 最大化 L 关于 q → 当后验 p(Z|X,θ) 可精确计算时，q=p(Z|X,θ) 使 KL=0，ELBO=ln p(X)（下界紧致）。②M 步固定 q 最大化 L 关于 θ。变分推断：当后验 p(Z|X,θ) 不可精确计算时（如高维隐变量、复杂模型），E 步无法使 KL=0。此时用简单分布 q（如平均场 q(Z)=Πq_i(Z_i)）近似后验，最小化 KL(q||p)（但 KL>0，ELBO<ln p(X)）。这称为变分 EM：①E 步用 q 近似后验（优化 q 的变分参数使 ELBO 最大）；②M 步更新模型参数 θ。两者交替直到收敛。当后验不可解析时的处理方法：①平均场变分推断——假设 q(Z)=Πq_i(Z_i) 完全分解，每个 q_i 独立优化，可行但低估变量间相关性。②随机梯度变分推断（SGVI/Reparameterization）——用重参数化技巧对 ELBO 做随机梯度下降，可扩展到大数据。③VAE——用神经网络参数化 q（编码器）和 p（解码器），变分 EM 训练，是深度生成模型的基础。④MCMC——不近似后验而是采样，渐近精确但计算昂贵。EM→变分 EM→VAE 体现了从精确到近似的渐进推广。
+</Answer>
+
+### 问题 4
+
+EM 算法在 PRML 中如何连接其他章节？举例说明其应用。
+
+<Answer>
+
+EM 是 PRML 的通用框架，连接多个章节：①与 ch1 概率论的联系——EM 基于贝叶斯定理计算隐变量后验（责任度 γ=p(z|x)=p(x|z)p(z)/p(x)），是贝叶斯推断在隐变量模型上的应用。②与 ch2 贝叶斯回归的联系——当回归模型有隐变量时（如贝叶斯混合回归），EM 可用于参数学习。证据框架（ch2 的超参学习）可视为 EM 的特例——E 步计算参数后验，M 步更新超参。③与 ch7 图模型的联系——GMM 的图模型是 π→z→x，EM 是图模型上的推断算法：E 步在图上做隐变量推断 p(z|x)，M 步更新图参数。和积算法（ch7）可用于 E 步的高效推断。变分推断（ch7）是 EM 的推广。④与聚类/无监督学习的联系——GMM-EM 是软聚类标准方法，K-means 是 GMM-EM 的极限（硬分配）。⑤应用举例：a) GMM 聚类——客户分群、图像分割；b) HMM（隐马尔可夫模型）——语音识别用 Baum-Welch（EM 的时序版本），隐状态是隐变量；c) LDA 主题模型——文档主题分析，主题分配是隐变量；d) 因子分析/PCA——隐因子是隐变量，EM 学习降维；e) VAE 深度生成模型——编码器的潜变量是隐变量，变分 EM 训练，生成图像/文本。总之，EM 是隐变量模型的通用训练框架，从经典聚类（GMM）到现代深度生成模型（VAE）都用 EM/变分 EM 的思想——交替推断隐变量和更新参数。
+</Answer>
+
+</Exercises>

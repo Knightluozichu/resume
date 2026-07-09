@@ -2228,7 +2228,17 @@ export type ReviewChapterSlug =
   | "dlt-optimization"
   | "dlt-conv-rnn"
   | "dlt-research-frontiers"
-  | "dlt-final-review";
+  | "dlt-final-review"
+  | "prl-learning-map"
+  | "prl-probability-theory"
+  | "prl-linear-models-regression"
+  | "prl-linear-classification"
+  | "prl-neural-networks"
+  | "prl-kernel-methods"
+  | "prl-sparse-kernels"
+  | "prl-graphical-models"
+  | "prl-mixture-em"
+  | "prl-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4461,6 +4471,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dlt-conv-rnn": "CNN与RNN",
   "dlt-research-frontiers": "研究前沿与挑战",
   "dlt-final-review": "全书复习与知识整合",
+  "prl-learning-map": "全书学习地图",
+  "prl-probability-theory": "概率论基础",
+  "prl-linear-models-regression": "线性回归模型",
+  "prl-linear-classification": "线性分类模型",
+  "prl-neural-networks": "神经网络",
+  "prl-kernel-methods": "核方法",
+  "prl-sparse-kernels": "稀疏核机",
+  "prl-graphical-models": "图模型",
+  "prl-mixture-em": "混合模型与EM",
+  "prl-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
