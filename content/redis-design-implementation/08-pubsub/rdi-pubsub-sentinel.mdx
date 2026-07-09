@@ -1,0 +1,262 @@
+---
+title: "发布订阅与哨兵"
+type: A
+section: "数据库"
+order: 8
+description: "PUBLISH/SUBSCRIBE发布订阅模型、模式订阅、Sentinel哨兵深入及其与Pub/Sub的关系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { RdiPubsubSentinelDiagram } from "@/components/mdx/redis-design-implementation/diagrams/rdi-pubsub-sentinel";
+
+<Objectives>
+
+- 掌握频道订阅与模式订阅的底层数据结构
+- 理解PUBLISH消息推送的执行流程
+- 掌握Sentinel哨兵的故障检测与转移全流程
+- 理解Pub/Sub在Sentinel中的核心应用
+
+</Objectives>
+
+## 发布订阅与哨兵
+
+<RdiPubsubSentinelDiagram />
+
+Redis的发布订阅（Pub/Sub）机制是消息通信的基础，Sentinel哨兵的高可用通知机制也建立在Pub/Sub之上。
+
+## 发布订阅
+
+### 频道订阅
+
+```c
+// 底层数据结构
+// pubsub_channels: dict<channel, list<client*>>
+//   频道名 → 订阅该频道的客户端列表
+//
+// pubsub_patterns: list<pattern, client*>
+//   模式 → 订阅该模式的客户端列表（链表）
+```
+
+```
+// 频道订阅操作
+//
+// SUBSCRIBE channel [channel...]
+//   → 客户端加入 pubsub_channels[channel] 的链表
+//   → 进入订阅模式（只能执行 SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT）
+//
+// UNSUBSCRIBE [channel...]
+//   → 从 pubsub_channels[channel] 链表移除
+//   → 无参数则退订所有频道
+//
+// PUBLISH channel message
+//   → 查 pubsub_channels[channel]
+//   → 遍历客户端列表，逐一发送消息
+//   → 再查 pubsub_patterns，匹配的逐一发送
+//
+// 消息格式：
+//   *3\r\n$9\r\nmessage\r\n$<len>\r\n<channel>\r\n$<len>\r\n<message>\r\n
+```
+
+### 模式订阅
+
+```
+// PSUBSCRIBE pattern [pattern...]
+//   → glob 风格通配符
+//   e.g. PSUBSCRIBE news.* → 匹配 news.tech / news.sport / news.business
+//
+// 底层：pubsub_patterns 链表
+//   每个节点：pattern + client*
+//   → 模式匹配是遍历链表逐一 stringmatchlen
+//   → 模式多时性能下降（O(N) 遍历）
+//
+// PUBLISH 时：
+//   先发频道订阅者 → 再发匹配的模式订阅者
+//   模式匹配的消息格式：
+//     *4\r\n$8\r\npmessage\r\n$<len>\r\n<pattern>\r\n$<len>\r\n<channel>\r\n$<len>\r\n<message>\r\n
+```
+
+### 内省命令
+
+```
+// PUBSUB CHANNELS [pattern]
+//   返回当前有订阅者的频道（至少一个订阅者）
+//   → 遍历 pubsub_channels 字典
+//   → 可选 pattern 过滤
+//
+// PUBSUB NUMSUB [channel...]
+//   返回指定频道的订阅者数量
+//
+// PUBSUB NUMPAT
+//   返回模式订阅的总数（非去重）
+```
+
+<Callout type="warning" title="Pub/Sub的限制">
+Pub/Sub的消息不持久化——如果发布时订阅者离线，消息直接丢弃。没有ACK机制——发布者不知道订阅者是否收到。这使Pub/Sub适合实时通知场景（如聊天室、实时仪表盘），不适合需要可靠投递的消息队列场景（应使用Stream或专业MQ）。
+</Callout>
+
+## Sentinel 哨兵深入
+
+### 发现机制
+
+```
+// Sentinel 发现其他 Sentinel 和从服务器
+//
+// ① 发现从服务器：
+//   Sentinel 连接主服务器
+//   → INFO 命令获取从服务器列表（ip + port）
+//   → 为每个从创建连接
+//   → 每 10 秒 INFO 从服务器更新状态
+//
+// ② 发现其他 Sentinel：
+//   Sentinel 订阅主服务器的 __sentinel__:hello 频道
+//   → 每个 Sentinel 每 2 秒 PUBLISH 自己的信息
+//   → 其他 Sentinel 通过订阅消息发现彼此
+//   → 消息包含：Sentinel IP/Port/Runid/纪元/主服务器状态
+//
+// ③ 从服务器也订阅 __sentinel__:hello
+//   → 用于故障转移时接收新主信息
+```
+
+### 故障检测全流程
+
+```
+// Sentinel 对主服务器和从服务器都发送 PING
+//
+// ① PING 探活（每秒）
+//   有效回复：+PONG / -LOADING / -MASTERDOWN
+//   无效回复：其他或超时
+//
+// ② 主观下线 SDOWN
+//   连续 down-after-milliseconds（默认30秒）无有效回复
+//   → 单个 Sentinel 标记主观下线
+//   → 仅对主服务器有意义（从下线不一定触发转移）
+//
+// ③ 询问其他 Sentinel
+//   Sentinel 发送 SENTINEL is-master-down-by-addr
+//   → 询问其他 Sentinel 是否也认为主下线
+//
+// ④ 客观下线 ODOWN
+//   超过 quorum 个 Sentinel 同意
+//   → 标记客观下线 → 确认故障
+//
+// ⑤ 选举 Leader
+//   Raft 变种：
+//   每个 Sentinel 请求其他 Sentinel 给自己投票
+//   先到先得，半数以上 → Leader
+//   epoch（纪元）递增防止旧投票
+```
+
+### 故障转移全流程
+
+```
+// Leader Sentinel 执行故障转移
+//
+// ① 选新主（挑选从服务器提升为主）
+//   过滤条件：
+//   a. 排除主观下线的从
+//   b. 排除最近5秒未回复 INFO 的从
+//   c. 排除与旧主断开过久的从（down-after * 10）
+//
+//   优先级排序：
+//   a. slave-priority 最小（0=永不被选）
+//   b. 复制偏移量最大（数据最新）
+//   c. runid 字典序最小
+//
+// ② 提升新主
+//   → 对新主发送 SLAVEOF NO ONE
+//   → 等待新主升级完成
+//
+// ③ 其他从复制新主
+//   → 向所有从发送 SLAVEOF newmaster:port
+//   → 从服务器开始复制新主
+//
+// ④ 旧主恢复
+//   → 旧主重新上线后，Sentinel 发送 SLAVEOF newmaster
+//   → 旧主变为新主的从
+//
+// ⑤ 通知客户端
+//   → PUBLISH +switch-master <oldmaster> <newmaster>
+//   → 客户端订阅该频道，感知切换
+//   → 客户端连接新主
+```
+
+### Pub/Sub 在 Sentinel 中的应用
+
+```
+// Sentinel 大量使用 Pub/Sub 进行通信
+//
+// ① __sentinel__:hello
+//   Sentinel 之间发现彼此（每2秒PUBLISH自身信息）
+//   从服务器也订阅，接收故障转移通知
+//
+// ② +switch-master
+//   故障转移完成后发布
+//   → 客户端订阅感知主切换 → 连接新主
+//
+// ③ +sdown / +odown / +reboot
+//   服务器状态变化通知
+//   → 运维监控告警
+//
+// ④ +failover-state-* / +slave-reconf-*
+//   故障转移过程事件
+//   → 调试和监控
+//
+// 客户端连接 Sentinel 的模式：
+//   ① 客户端连 Sentinel → SENTINEL get-master-addr-by-name <name>
+//   → 获取主地址 → 连主服务器
+//   ② 客户端订阅 +switch-master
+//   → 主切换时收到通知 → 更新连接
+//   ③ 连接断开 → 重新询问 Sentinel 获取新主
+```
+
+<Glossary>
+
+<GlossaryItem term="频道订阅">
+Redis Pub/Sub的基础机制。SUBSCRIBE channel将客户端加入pubsub_channels字典中该频道对应的客户端链表。PUBLISH channel message查pubsub_channels[channel]获取客户端列表，逐一推送消息。底层用字典（频道→客户端链表）存储，查找O(1)。订阅模式下客户端只能执行SUBSCRIBE/UNSUBSCRIBE/PSUBSCRIBE/PUNSUBSCRIBE/PING/QUIT。消息格式为RESP协议的message类型。
+</GlossaryItem>
+
+<GlossaryItem term="模式订阅">
+Redis Pub/Sub的通配符订阅机制。PSUBSCRIBE pattern使用glob风格通配符（如news.*匹配news.tech/news.sport）。底层用链表pubsub_patterns存储（pattern+client*），PUBLISH时遍历链表逐一匹配stringmatchlen。模式匹配是O(N)遍历，模式多时性能下降。PUBLISH先发频道订阅者，再发匹配的模式订阅者。消息格式为pmessage类型（包含pattern+channel+message）。
+</GlossaryItem>
+
+<GlossaryItem term="Sentinel故障转移">
+Sentinel的核心功能。流程：①选新主——过滤不健康从（主观下线/未回复INFO/断开过久），按slave-priority最小→复制偏移量最大→runid字典序最小排序选新主；②提升新主——SLAVEOF NO ONE；③其他从复制新主——SLAVEOF newmaster:port；④旧主恢复后变从；⑤通知客户端——PUBLISH +switch-master。Leader Sentinel通过Raart变种选举产生，半数以上投票。epoch纪元递增防止旧投票干扰。
+</GlossaryItem>
+
+<GlossaryItem term="Pub/Sub在Sentinel中的应用">
+Sentinel大量使用Pub/Sub进行通信：①__sentinel__:hello频道——Sentinel之间发现彼此（每2秒PUBLISH自身IP/Port/Runid/纪元/主状态），从服务器也订阅接收故障转移通知；②+switch-master频道——故障转移完成后发布，客户端订阅感知主切换并连接新主；③+sdown/+odown/+reboot——服务器状态变化通知，用于监控告警。客户端通过订阅+switch-master频道实现自动感知主切换。Pub/Sub是Sentinel自动发现和通知的核心通信机制。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：频道订阅和模式订阅的底层数据结构有什么区别？PUBLISH时如何处理？
+
+<Answer>
+频道订阅用字典pubsub_channels（channel→客户端链表），查找O(1)。模式订阅用链表pubsub_patterns（pattern+client*节点），匹配O(N)。PUBLISH channel message的处理流程：①查pubsub_channels[channel]获取频道订阅者列表，逐一推送message格式消息；②遍历pubsub_patterns链表，对每个pattern用stringmatchlen匹配channel，匹配的推送pmessage格式消息（包含pattern+channel+message）。频道订阅高效因为字典O(1)查找，模式订阅性能差因为链表O(N)遍历——模式多时需遍历整个链表逐一匹配。
+</Answer>
+
+**问题 2**：Sentinel如何发现其他Sentinel和从服务器？Pub/Sub在其中起什么作用？
+
+<Answer>
+发现从服务器：Sentinel连接主服务器，通过INFO命令获取从服务器列表（ip+port），为每个从创建命令连接和订阅连接，每10秒INFO从服务器更新状态。发现其他Sentinel：Sentinel订阅主服务器的__sentinel__:hello频道，每个Sentinel每2秒PUBLISH自身信息（IP/Port/Runid/纪元/主服务器状态）到该频道，其他Sentinel通过订阅消息发现彼此。Pub/Sub的作用：①Sentinel间发现——通过__sentinel__:hello频道P2P发现，无需中心化注册；②故障转移通知——从服务器也订阅__sentinel__:hello接收新主信息；③客户端通知——PUBLISH +switch-master通知客户端主切换。Pub/Sub是Sentinel去中心化自动发现和通知的核心通信机制。
+</Answer>
+
+**问题 3**：Sentinel故障转移中选新主的规则是什么？为什么需要这些规则？
+
+<Answer>
+选新主规则（按优先级排序）：①过滤不健康从——排除主观下线的从、最近5秒未回复INFO的从、与旧主断开超过down-after-milliseconds*10的从；②slave-priority最小优先——运维手动配置的优先级，值越小优先级越高，0表示永不被选为从；③复制偏移量最大优先——偏移量最大说明数据最新，丢失数据最少；④runid字典序最小——以上都相同时的兜底策略，保证确定性。需要这些规则的原因：①过滤不健康从——避免选到有问题的从服务器；②优先级——运维可根据从服务器硬件配置设置优先级，优先选高性能机器；③偏移量——数据最新意味着丢失最少，保证数据安全；④runid兜底——所有条件都相同时需要一个确定性排序，避免选举分歧。
+</Answer>
+
+**问题 4**：Pub/Sub有哪些限制？为什么不适合做消息队列？Redis Stream如何解决这些问题？
+
+<Answer>
+Pub/Sub限制：①消息不持久化——发布时订阅者离线则消息直接丢弃，无法补发；②无ACK机制——发布者不知道订阅者是否收到，无重试保障；③消息堆积风险——订阅者处理慢时，输出缓冲区溢出可能导致连接被断开（client-output-buffer-limit）。不适合做消息队列的原因：消息队列需要可靠投递（ACK+重试）、消息持久化（宕机不丢）、消费者组（多消费者负载均衡）、消息回溯（重新消费），Pub/Sub都不支持。Redis Stream（5.0+）解决了这些问题：①消息持久化——Stream是数据类型，写入即持久化；②消费者组——XGROUP创建消费者组，多消费者负载均衡；③ACK确认——XPENDING查看未确认、XACK确认消费；④消息回溯——XRANGE按ID范围读取历史消息。Stream是Redis内置的轻量级消息队列方案。
+</Answer>
+
+</Exercises>

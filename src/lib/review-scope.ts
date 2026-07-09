@@ -62,6 +62,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mxrw-", "mobile-xr-web-optimization"],
   ["pbr-", "learnopengl"],
   ["auto-", "auto-why-car-runs"],
+  ["rdi-", "redis-design-implementation"],
   // §6 游戏开发
   ["bl3-", "blender-3d"],
   ["gdf-", "game-design-fundamentals"],

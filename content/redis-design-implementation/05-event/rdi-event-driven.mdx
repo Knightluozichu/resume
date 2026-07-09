@@ -1,0 +1,238 @@
+---
+title: "事件驱动"
+type: B
+section: "数据库"
+order: 5
+description: "文件事件与时间事件的工作原理、事件循环调度机制及单线程模型分析"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { RdiEventDrivenDiagram } from "@/components/mdx/redis-design-implementation/diagrams/rdi-event-driven";
+
+<Objectives>
+
+- 掌握文件事件的I/O多路复用模型与事件处理器
+- 理解时间事件的定时机制与serverCron的职责
+- 掌握事件循环的调度流程和阻塞时间计算
+- 理解Redis单线程模型的性能来源与限制
+
+</Objectives>
+
+## 事件驱动模型
+
+<RdiEventDrivenDiagram />
+
+Redis服务器是一个事件驱动程序，通过事件循环（event loop）统一处理文件事件（网络I/O）和时间事件（定时任务）。单线程事件驱动是Redis高性能的核心架构。
+
+## 文件事件
+
+### I/O 多路复用
+
+```
+// Redis 使用 I/O 多路复用监听多个套接字
+//   通过封装不同平台的实现：
+//     Linux  → epoll
+//     macOS  → kqueue
+//     其他   → select / evport
+//
+// 工作流程：
+//   ① 将所有套接字注册到多路复用器
+//   ② 多路复用器阻塞等待 → 有套接字就绪时返回
+//   ③ 事件分派器根据就绪类型调用对应处理器
+//   ④ 处理器执行业务逻辑
+//
+// 事件类型：
+//   AE_READABLE → 套接字可读（客户端发来数据）
+//   AE_WRITABLE → 套接字可写（可发送回复）
+//   一个套接字可同时注册两种事件
+```
+
+### 事件处理器
+
+```
+// 三种核心文件事件处理器
+//
+// ① 连接应答处理器 (acceptTcpHandler)
+//   监听端口有新连接 → accept → 创建客户端状态
+//   → 注册读事件到命令请求处理器
+//
+// ② 命令请求处理器 (readQueryFromClient)
+//   客户端发来命令 → 读取到输入缓冲区
+//   → 解析命令 → 执行 → 将回复写入输出缓冲区
+//   → 注册写事件到命令回复处理器
+//
+// ③ 命令回复处理器 (sendReplyToClient)
+//   套接字可写 → 将输出缓冲区的回复发送给客户端
+//   → 发送完毕 → 删除写事件
+//
+// 单个客户端的完整流程：
+//   连接 → 读请求 → 执行 → 写回复 → 等待下一个请求
+//   ↑___________________________________________|
+```
+
+## 时间事件
+
+### 结构与调度
+
+```c
+// 时间事件结构
+typedef struct aeTimeEvent {
+    long long id;        // 唯一ID（递增）
+    monotime when;       // 到达时间（ms时间戳）
+    aeTimeProc *timeProc;// 回调函数
+    aeEventFinalizerProc *finalizerProc;
+    void *clientData;
+    struct aeTimeEvent *prev, *next; // 双向链表
+} aeTimeEvent;
+```
+
+```
+// 时间事件组织：
+//   无序双向链表（按 id 而非 when 排序）
+//   → 每次需遍历链表找最近到期的事件
+//   → 事件数量少时性能可接受
+//
+// 执行逻辑：
+//   遍历链表 → 当前时间 >= when → 执行 timeProc
+//   timeProc 返回值：
+//     AE_NOMORE (-1) → 事件执行后删除
+//     其他值 → 更新 when = 当前时间 + 返回值 → 周期执行
+//
+// serverCron 是最重要的事件：
+//   由 redisServer.hz 控制（默认 10，即每秒10次/每100ms一次）
+//   → 返回 1000/hz 实现周期执行
+```
+
+### serverCron 的职责
+
+```
+// serverCron 每秒执行 Hz 次（默认10次），负责：
+//
+// ① 更新服务器统计信息
+//   时间缓存 / 内存使用 / QPS 等
+//
+// ② 过期键清理
+//   activeExpireCycle() → 定期删除过期键
+//
+// ③ 持久化检查
+//   检查 save 配置 → 触发 BGSAVE
+//   检查 AOF 重写条件 → 触发 BGREWRITEAOF
+//   刷新 AOF 缓冲区（everysec 策略）
+//
+// ④ 数据库 resize
+//   如果 dict 正在 rehash → 推进一步
+//   如果 dict 应该收缩 → 触发 shrink
+//
+// ⑤ 复制健康检查
+//   主从心跳 / 超时检测
+//
+// ⑥ 集群心跳
+//   Cluster 节点通信 / 哨兵故障检测
+//
+// ⑦ 关闭异步客户端
+//   超时客户端清理
+```
+
+## 事件循环调度
+
+```c
+// aeProcessEvents() 主循环核心逻辑
+// 伪代码：
+
+int aeProcessEvents() {
+    // ① 找最近到期的时间事件
+    shortest = aeSearchNearestTimer();
+    
+    // ② 计算阻塞等待时间
+    if (shortest存在) {
+        timeval = shortest.when - 当前时间;
+        if (timeval < 0) timeval = 0; // 已过期 → 不阻塞
+    } else {
+        timeval = -1; // 无时间事件 → 永久阻塞
+    }
+    
+    // ③ 阻塞等待文件事件（最多等待 timeval）
+    //   epoll_wait(epfd, events, maxevents, timeval);
+    numevents = aeApiPoll(timeval);
+    
+    // ④ 处理所有就绪的文件事件
+    for (event in events) {
+        分派到对应处理器;
+    }
+    
+    // ⑤ 处理到期的时间事件
+    processTimeEvents();
+}
+```
+
+```
+// 关键设计：
+//   阻塞时间 = max(0, 最近时间事件到达时间 - 当前时间)
+//   → 有文件事件时立即返回（不阻塞）
+//   → 无文件事件时阻塞到最近时间事件到期
+//   → 无时间事件时永久阻塞（直到有文件事件）
+//
+//   优先处理文件事件（客户端请求）
+//   → 再处理时间事件（后台任务）
+//   → 保证客户端请求不被后台任务阻塞
+//
+//   单线程串行执行：
+//   → 无锁 · 无竞态 · 无上下文切换
+//   → 但一条命令阻塞 = 所有客户端等待
+```
+
+<Callout type="warning" title="单线程的性能限制">
+Redis单线程模型的代价：①单条命令执行时间过长会阻塞所有客户端——禁止使用KEYS、SORT大集合等O(N)命令；②单核CPU瓶颈——无法利用多核（可通过部署多实例解决）；③持久化fork开销——大内存实例fork时阻塞。4.0+将DEL、UNLINK等可后台执行的操作改为子进程/线程。6.0+引入I/O多线程（io-threads），将网络读写并行化，但命令执行仍单线程。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="文件事件">
+Redis处理网络I/O的事件类型。通过I/O多路复用（epoll/kqueue/select）监听所有客户端套接字，套接字就绪时触发对应的事件处理器。两种事件类型：AE_READABLE（可读，客户端发来数据）和AE_WRITABLE（可写，可发送回复）。三种核心处理器：连接应答处理器（acceptTcpHandler，处理新连接）、命令请求处理器（readQueryFromClient，读取和执行命令）、命令回复处理器（sendReplyToClient，发送回复）。
+</GlossaryItem>
+
+<GlossaryItem term="时间事件">
+Redis处理定时任务的事件类型。由无序双向链表组织，每个事件包含到达时间when和回调timeProc。事件循环每轮检查链表，当前时间>=when时执行回调。回调返回AE_NOMORE则删除事件，返回正值则更新when周期执行。最重要的事件是serverCron，由hz参数控制（默认10次/秒），负责过期清理、持久化触发、rehash推进、复制心跳、集群通信等。
+</GlossaryItem>
+
+<GlossaryItem term="事件循环aeProcessEvents">
+Redis事件驱动的核心调度逻辑。流程：①搜索最近到期的时间事件；②计算阻塞时间=max(0,最近事件到达时间-当前时间)；③调用aeApiPoll在阻塞时间内等待文件事件就绪；④处理所有就绪的文件事件（分派到处理器）；⑤处理到期的时间事件。优先处理文件事件保证客户端响应，时间事件在文件事件之后处理。阻塞等待设计使无请求时不浪费CPU，有请求时立即响应。
+</GlossaryItem>
+
+<GlossaryItem term="serverCron">
+Redis最重要的时间事件，每秒执行hz次（默认10次，即每100ms一次）。职责包括：①更新统计信息（时间缓存/内存/QPS）；②过期键清理（activeExpireCycle定期删除）；③持久化检查（触发BGSAVE/BGREWRITEAOF、刷新AOF缓冲区）；④数据库resize（推进rehash、触发shrink）；⑤复制健康检查（主从心跳）；⑥集群心跳（Cluster通信、哨兵故障检测）；⑦超时客户端清理。返回1000/hz实现周期执行。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Redis的文件事件处理器有哪些？一个客户端命令的完整处理流程是什么？
+
+<Answer>
+三种核心文件事件处理器：①连接应答处理器（acceptTcpHandler）——监听端口有新连接时accept创建客户端状态，注册读事件到命令请求处理器；②命令请求处理器（readQueryFromClient）——客户端发来命令时读取到输入缓冲区，解析执行，将回复写入输出缓冲区，注册写事件到命令回复处理器；③命令回复处理器（sendReplyToClient）——套接字可写时将输出缓冲区的回复发送给客户端，发送完毕删除写事件。完整流程：客户端连接→acceptTcpHandler创建客户端→readQueryFromClient读取并执行命令→sendReplyToClient发送回复→等待下一个请求。整个流程通过I/O多路复用统一管理，单线程串行执行。
+</Answer>
+
+**问题 2**：事件循环的阻塞时间是如何计算的？为什么这样设计？
+
+<Answer>
+阻塞时间计算：①搜索最近到期的时间事件，得到其到达时间when；②阻塞时间 = max(0, when - 当前时间)；③如果最近时间事件已过期（when < 当前时间），阻塞时间为0（不阻塞立即处理）；④如果没有时间事件，阻塞时间为-1（永久阻塞直到有文件事件）。设计原因：①有文件事件时——aeApiPoll立即返回（不阻塞），保证客户端请求即时响应；②无文件事件时——阻塞到最近时间事件到期，避免空转浪费CPU；③无时间事件时——永久阻塞，直到有客户端连接或数据，最大程度节省CPU。优先处理文件事件再处理时间事件，保证客户端请求不被后台任务阻塞。阻塞等待设计使Redis在空闲时几乎不消耗CPU，在繁忙时即时响应。
+</Answer>
+
+**问题 3**：serverCron的执行频率是如何控制的？它负责哪些核心任务？
+
+<Answer>
+执行频率由redisServer.hz参数控制（默认10，即每秒10次/每100ms一次）。serverCron时间事件创建后，回调函数返回1000/hz（毫秒），作为下次执行的间隔，实现周期执行。可通过配置hz参数调整频率（1-500），高hz提升后台任务精度但增加CPU开销。核心任务：①更新统计信息——时间缓存、内存使用、QPS；②过期键清理——activeExpireCycle定期删除过期键；③持久化检查——检查save配置触发BGSAVE、检查AOF重写条件触发BGREWRITEAOF、刷新AOF缓冲区（everysec策略）；④数据库resize——推进rehash进度、触发dict收缩；⑤复制健康检查——主从心跳、超时检测；⑥集群心跳——Cluster节点通信、哨兵故障检测；⑦超时客户端清理。
+</Answer>
+
+**问题 4**：Redis单线程模型为什么能达到10万+QPS？单线程有什么限制？
+
+<Answer>
+高性能来源：①纯内存操作——数据在内存中，读写微秒级延迟；②高效数据结构——SDS(O(1)取长度)、字典(O(1)查找)、跳跃表(O(logN)范围查询)等；③I/O多路复用——epoll O(1)就绪通知，单核处理大量并发连接；④无锁无竞态——单线程串行执行，无锁开销无上下文切换；⑤避免缓存伪共享——单线程无CPU缓存争用。限制：①单条命令阻塞所有客户端——禁止KEYS、SORT大集合等O(N)命令；②单核CPU瓶颈——无法利用多核（可通过多实例解决）；③fork开销——大内存实例fork子进程时阻塞主进程。优化措施：4.0+将DEL等操作改为异步（UNLINK）；6.0+引入I/O多线程（io-threads）将网络读写并行化，但命令执行仍单线程。
+</Answer>
+
+</Exercises>

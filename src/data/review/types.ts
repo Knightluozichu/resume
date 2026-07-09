@@ -1928,7 +1928,17 @@ export type ReviewChapterSlug =
   | "ddi-derived-data"
   | "ddi-batch-stream"
   | "ddi-future-directions"
-  | "ddi-final-review";
+  | "ddi-final-review"
+  | "rdi-learning-map"
+  | "rdi-data-structures"
+  | "rdi-object-system"
+  | "rdi-database-impl"
+  | "rdi-persistence"
+  | "rdi-event-driven"
+  | "rdi-replication-cluster"
+  | "rdi-transactions"
+  | "rdi-pubsub-sentinel"
+  | "rdi-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3861,6 +3871,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ddi-batch-stream": "批处理与流处理",
   "ddi-future-directions": "未来方向",
   "ddi-final-review": "全书复习",
+  "rdi-learning-map": "全书学习地图",
+  "rdi-data-structures": "数据结构底座",
+  "rdi-object-system": "对象系统与编码",
+  "rdi-database-impl": "数据库实现",
+  "rdi-persistence": "持久化（RDB/AOF）",
+  "rdi-event-driven": "事件驱动",
+  "rdi-replication-cluster": "复制与集群",
+  "rdi-transactions": "事务与Lua",
+  "rdi-pubsub-sentinel": "发布订阅与哨兵",
+  "rdi-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1805,6 +1805,16 @@ import { ddiDerivedDataQuestions } from "./review/ddi-derived-data";
 import { ddiBatchStreamQuestions } from "./review/ddi-batch-stream";
 import { ddiFutureDirectionsQuestions } from "./review/ddi-future-directions";
 import { ddiFinalReviewQuestions } from "./review/ddi-final-review";
+import { rdiLearningMapQuestions } from "./review/rdi-learning-map";
+import { rdiDataStructuresQuestions } from "./review/rdi-data-structures";
+import { rdiObjectSystemQuestions } from "./review/rdi-object-system";
+import { rdiDatabaseImplQuestions } from "./review/rdi-database-impl";
+import { rdiPersistenceQuestions } from "./review/rdi-persistence";
+import { rdiEventDrivenQuestions } from "./review/rdi-event-driven";
+import { rdiReplicationClusterQuestions } from "./review/rdi-replication-cluster";
+import { rdiTransactionsQuestions } from "./review/rdi-transactions";
+import { rdiPubsubSentinelQuestions } from "./review/rdi-pubsub-sentinel";
+import { rdiFinalReviewQuestions } from "./review/rdi-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3645,6 +3655,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ddiBatchStreamQuestions,
   ...ddiFutureDirectionsQuestions,
   ...ddiFinalReviewQuestions,
+  ...rdiLearningMapQuestions,
+  ...rdiDataStructuresQuestions,
+  ...rdiObjectSystemQuestions,
+  ...rdiDatabaseImplQuestions,
+  ...rdiPersistenceQuestions,
+  ...rdiEventDrivenQuestions,
+  ...rdiReplicationClusterQuestions,
+  ...rdiTransactionsQuestions,
+  ...rdiPubsubSentinelQuestions,
+  ...rdiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
