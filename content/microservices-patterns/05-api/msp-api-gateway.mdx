@@ -1,0 +1,174 @@
+---
+title: "API网关与BFF：外部API模式"
+type: C
+section: "分布式与中间件"
+order: 5
+description: "API网关职责、BFF模式、请求路由、聚合与边缘功能"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { MspApiGatewayDiagram } from "@/components/mdx/microservices-patterns/diagrams/msp-api-gateway";
+
+<Objectives>
+
+- 理解API网关在微服务架构中的角色和职责
+- 掌握BFF（Backend for Frontend）模式与普通API网关的区别
+- 理解请求路由、请求聚合、协议转换的实现
+- 掌握API网关的边缘功能：认证、限流、缓存
+
+</Objectives>
+
+## API网关架构全景
+
+<MspApiGatewayDiagram />
+
+## 为什么需要API网关
+
+### 没有网关的问题
+
+```
+客户端（Web/iOS/Android）
+  │        │        │
+  ↓        ↓        ↓  客户端直接调用各服务，需知地址、处理认证、拼装数据
+订单服务  用户服务  商品服务  物流服务
+```
+
+| 问题 | 影响 |
+|------|------|
+| 客户端耦合服务地址 | 服务地址变更需客户端更新 |
+| 客户端拼装数据 | 多次往返，移动端耗电耗流量 |
+| 认证逻辑分散 | 每个服务各自实现认证 |
+| 无法统一限流 | 缺少统一入口控制流量 |
+
+## API网关的核心职责
+
+| 职责 | 说明 |
+|------|------|
+| 请求路由 | 将外部请求路由到对应后端服务 |
+| 请求聚合 | 将多个服务调用结果合并为一个响应 |
+| 协议转换 | 外部HTTP ↔ 内部gRPC |
+| 认证授权 | 统一身份验证，传递用户身份给后端 |
+| 限流熔断 | 在边缘层保护后端服务 |
+| 缓存 | 缓存热点响应，减轻后端压力 |
+| 日志监控 | 统一记录请求日志和指标 |
+
+### 请求路由示例
+
+```
+api.example.com/orders/*    → 订单服务
+api.example.com/users/*     → 用户服务
+api.example.com/products/*  → 商品服务
+api.example.com/checkout    → API聚合层（调用订单+支付+库存）
+```
+
+### 请求聚合示例
+
+```
+GET /order-details/{id}
+
+网关内部：
+  ① 并行调用 → 订单服务 GET /orders/{id}
+  ② 并行调用 → 用户服务 GET /users/{userId}
+  ③ 并行调用 → 物流服务 GET /shipping/{orderId}
+  ④ 内存拼装 → 返回 { order, user, shipping }
+```
+
+## BFF模式（Backend for Frontend）
+
+### 普通API网关 vs BFF
+
+```
+普通API网关（一个网关服务所有客户端）：
+  Web / iOS / Android ──→ [ API网关 ] ──→ 各服务
+  问题：不同客户端需求不同，一个网关变臃肿
+
+BFF模式（每种客户端一个网关）：
+  Web     ──→ [ Web BFF     ] ──→ 各服务
+  iOS     ──→ [ iOS BFF     ] ──→ 各服务
+  Android ──→ [ Android BFF ] ──→ 各服务
+  每个 BFF 只为一种客户端定制，互不影响
+```
+
+| 维度 | 普通API网关 | BFF |
+|------|------------|-----|
+| 网关数量 | 1个 | 每种客户端1个 |
+| 定制化 | 通用 | 专为一类客户端优化 |
+| 耦合度 | 所有客户端共用 | 各客户端独立 |
+| 适合 | 客户端类型少 | 客户端类型多、差异大 |
+
+<Callout type="info" title="BFF的核心价值">
+
+BFF让每种客户端有一个专用的后端，可以精确裁剪返回数据（移动端返回精简数据省流量）、定制聚合逻辑（Web端需更多关联数据）、独立演进（改iOS不影响Android）。代价是网关数量增加，运维成本上升。适合客户端类型多、差异大的场景。
+
+</Callout>
+
+## API网关实现技术
+
+| 技术 | 类型 | 特点 |
+|------|------|------|
+| Nginx | 通用反向代理 | 轻量高性能，配置式路由 |
+| Kong | API网关 | 插件丰富，Lua扩展 |
+| Spring Cloud Gateway | Java网关 | 与Spring生态集成 |
+| Envoy | 服务代理 | 高性能，gRPC支持好 |
+| 自研BFF | 应用层网关 | 用Node.js/Go等实现聚合逻辑 |
+
+### 网关 vs 服务网格（Service Mesh）
+
+```
+API网关：              服务网格 Sidecar：
+  北南向（外部→内部）      东西向（服务↔服务）
+  客户端 ←→ 网关 ←→ 服务    服务+Sidecar ←→ 服务+Sidecar
+  认证/限流/聚合            负载均衡/熔断/可观测
+```
+
+## API网关的反模式
+
+| 反模式 | 问题 | 对策 |
+|--------|------|------|
+| 网关含业务逻辑 | 网关变成第二个单体 | 网关只做路由/聚合/边缘功能 |
+| 网关直连数据库 | 网关耦合数据模型 | 网关只调用服务API |
+| 单一网关做所有事 | 膨胀难维护 | 用BFF拆分 |
+
+<Glossary>
+
+<GlossaryItem term="API网关（API Gateway）">
+微服务架构中外部客户端与内部服务之间的统一入口。核心职责：请求路由（将请求转发到对应服务）、请求聚合（将多个服务调用结果合并为一个响应）、协议转换（外部HTTP转内部gRPC）、认证授权（统一身份验证）、限流熔断（保护后端）、缓存（减轻后端压力）。典型实现如Kong、Spring Cloud Gateway、Envoy。
+</GlossaryItem>
+
+<GlossaryItem term="BFF（Backend for Frontend）">
+为每种客户端提供专用后端的API网关模式。不同于一个通用网关服务所有客户端，BFF为Web、iOS、Android等各自部署一个专用网关。每个BFF只为一类客户端定制数据裁剪和聚合逻辑，互不影响。优点是客户端解耦、可定制化、独立演进；代价是网关数量增加。适合客户端类型多、差异大的场景。
+</GlossaryItem>
+
+<GlossaryItem term="请求聚合（Request Aggregation）">
+API网关将客户端的一个请求拆分为对多个后端服务的调用，并行执行后在内存中拼装结果合并为一个响应返回。减少客户端到服务端的往返次数，特别有利于移动端（省流量、省电）。注意聚合逻辑应简单（拼装而非业务处理），否则网关会退化为第二个单体。
+</GlossaryItem>
+
+<GlossaryItem term="边缘功能（Edge Function）">
+在API网关（网络边缘）统一处理、而非在每个后端服务中重复实现的功能。包括认证授权、限流熔断、缓存、日志监控、协议转换、CORS处理等。将这些功能上提至网关层，后端服务可专注于业务逻辑，避免基础设施代码重复。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** API网关有哪些核心职责？为什么微服务需要API网关？
+
+<Answer>
+
+API网关核心职责：①请求路由——将外部请求路由到对应后端服务；②请求聚合——将多个服务调用结果合并为一个响应，减少客户端往返；③协议转换——外部HTTP转内部gRPC；④认证授权——统一身份验证，传递用户身份给后端；⑤限流熔断——在边缘层保护后端服务；⑥缓存——缓存热点响应减轻后端压力；⑦日志监控——统一记录请求日志和指标。需要API网关的原因：没有网关时客户端直接调用各服务，存在以下问题：客户端耦合服务地址（服务地址变更需客户端更新）、客户端拼装数据（多次往返耗电耗流量）、认证逻辑分散（每个服务各自实现）、无法统一限流（缺少统一入口控制流量）。网关作为统一入口解决这些问题。
+
+</Answer>
+
+**问题 2：** 什么是BFF模式？它和普通API网关有什么区别？
+
+<Answer>
+
+BFF（Backend for Frontend）是为每种客户端提供专用后端的API网关模式。区别：普通API网关用一个网关服务所有客户端，不同客户端需求不同导致网关变臃肿；BFF为Web、iOS、Android等各自部署一个专用网关，每个BFF只为一类客户端定制。BFF的核心价值：①精确裁剪数据——移动端返回精简数据省流量；②定制聚合逻辑——Web端需更多关联数据；③独立演进——改iOS不影响Android。代价是网关数量增加、运维成本上升。适合客户端类型多、差异大的场景。普通网关适合客户端类型少、需求统一的场景。
+
+</Answer>
+
+</Exercises>

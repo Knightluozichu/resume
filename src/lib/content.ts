@@ -234,6 +234,7 @@ export const BOOK_ORDER = [
   "kong-gateway",
   "kubernetes-in-action",
   "phoenix-architecture",
+  "microservices-patterns",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -408,6 +409,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "kong-gateway": "Kong网关入门实战与进阶",
   "kubernetes-in-action": "Kubernetes in Action",
   "phoenix-architecture": "凤凰架构",
+  "microservices-patterns": "微服务架构设计模式",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,192 @@
+---
+title: "服务间通信：REST、gRPC与异步消息"
+type: A
+section: "分布式与中间件"
+order: 2
+description: "同步与异步通信模式、REST/gRPC选型、API设计与容错重试策略"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { MspInterServiceCommDiagram } from "@/components/mdx/microservices-patterns/diagrams/msp-inter-service-comm";
+
+<Objectives>
+
+- 掌握同步与异步通信的区别与选型依据
+- 理解REST、gRPC、异步消息三种通信方式的优劣
+- 掌握API设计原则与接口版本化策略
+- 理解容错模式：重试、超时、熔断、幂等
+
+</Objectives>
+
+## 进程间通信模式谱系
+
+<MspInterServiceCommDiagram />
+
+## 同步 vs 异步通信
+
+### 核心区别
+
+| 维度 | 同步通信 | 异步通信 |
+|------|----------|----------|
+| 模型 | 请求-响应 | 消息驱动 |
+| 协议 | HTTP/REST、gRPC | AMQP、Kafka |
+| 耦合 | 调用方需知被调方地址 | 通过Broker解耦 |
+| 可用性 | 被调方宕机则调用方失败 | Broker缓存消息，被调方恢复后消费 |
+| 响应延迟 | 即时返回 | 有延迟，不即时返回 |
+| 适用场景 | 需要即时结果 | 可异步处理、可削峰填谷 |
+
+<Callout type="info" title="选型原则">
+
+需要即时结果用同步（如查询库存），可异步处理用异步消息（如发通知、记日志）。核心链路尽量异步解耦，减少同步调用链长导致的级联故障风险。一个经验法则：**能异步就异步，必须同步才同步**。
+
+</Callout>
+
+## 三种通信方式详解
+
+### REST / HTTP
+
+```
+GET    /orders/{id}      → 查询订单
+POST   /orders            → 创建订单
+PUT    /orders/{id}      → 更新订单（整体）
+DELETE /orders/{id}       → 删除订单
+```
+
+| 优势 | 劣势 |
+|------|------|
+| 通用性强（HTTP标准） | 文本序列化，性能不如二进制 |
+| 浏览器友好 | 强类型需额外约束（OpenAPI） |
+| 易调试（curl/Postman） | 无双向流 |
+
+### gRPC
+
+```
+// Proto 定义
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (Order);
+  rpc CreateOrder(CreateOrderRequest) returns (Order);
+}
+```
+
+| 优势 | 劣势 |
+|------|------|
+| Protobuf二进制，性能高 | 浏览器不直接支持（需gRPC-Web） |
+| 强类型契约（.proto） | 调试不如HTTP直观 |
+| 支持双向流 | 需要IDL工具链 |
+
+### 异步消息
+
+```
+生产者 ──发布消息──> 消息Broker（Kafka/RabbitMQ） ──推送──> 消费者
+                        ↓
+                   解耦 + 削峰 + 广播
+```
+
+| 优势 | 劣势 |
+|------|------|
+| 解耦（不需知消费者地址） | 增加Broker运维复杂度 |
+| 削峰填谷（消息缓存） | 最终一致，有延迟 |
+| 广播（一对多） | 需处理消息重复/顺序 |
+
+## API设计原则
+
+### 接口设计
+
+| 原则 | 说明 | 示例 |
+|------|------|------|
+| 职责单一 | 一个API做一件事 | `POST /orders` 只创建订单 |
+| 幂等设计 | 重复调用效果相同 | 用 requestId 去重 |
+| 版本化 | 保留兼容性 | `/v1/orders`、`/v2/orders` |
+| 粗粒度 | 减少往返调用 | 批量接口 `/orders/batch` |
+
+### 接口版本化策略
+
+```
+策略一：URL路径版本    /v1/orders  /v2/orders     （简单，URL变化）
+策略二：Header版本     Accept: application/vnd.api.v2+json （URL不变）
+策略三：查询参数版本    /orders?version=2          （灵活，但易遗漏）
+```
+
+<Callout type="warning" title="幂等性是微服务通信的基石">
+
+微服务中消息可能重复投递、请求可能超时重发。所有写操作必须幂等——执行一次和执行多次效果完全相同。实现方式：①唯一ID去重表（记录已处理的requestId）；②Token机制（先获取Token，提交时校验并失效）；③乐观锁（version号校验）；④状态机（只允许合法状态转换）。
+
+</Callout>
+
+## 容错与韧性模式
+
+```
+调用方                                     被调方
+  │                                          │
+  ├─ 超时（防永久等待）  ────请求───→          │
+  ├─ 重试（恢瞬时故障）  ←──响应/超时──        │
+  ├─ 熔断（防级联故障）  ──快速失败──           │
+  └─ 降级（保核心功能）  ──返回兜底──          │
+```
+
+| 模式 | 作用 | 实现要点 |
+|------|------|----------|
+| 超时 | 防止永久等待耗尽线程 | 设合理超时值，连接超时+读超时 |
+| 重试 | 恢复瞬时故障 | 指数退避 + 最大重试次数 + 只重试幂等操作 |
+| 熔断 | 故障时快速失败防级联 | 断路器三态：Closed → Open → Half-Open |
+| 降级 | 非核心功能兜底 | 返回缓存/默认值/简化结果 |
+
+### 熔断器状态机
+
+```
+     Closed（正常）                Open（熔断）
+     ┌──────────┐  失败率超阈值  ┌──────────┐
+     │  正常调用  │ ──────────→ │ 快速失败   │
+     │  统计失败  │              │ 不发请求   │
+     └──────────┘              └────┬─────┘
+          ↑                         │ 等待冷却时间
+          │ 探测成功                 ↓
+     ┌──────────┐  探测请求     ┌──────────┐
+     │ Half-Open │ ←────────── │ 等待恢复   │
+     │ 限量试探  │              │          │
+     └──────────┘              └──────────┘
+```
+
+<Glossary>
+
+<GlossaryItem term="gRPC">
+Google开源的高性能RPC框架。基于HTTP/2传输，使用Protobuf二进制序列化，支持单向、服务端流、客户端流和双向流四种调用模式。相比REST，gRPC性能更高（二进制编码+HTTP/2多路复用）、类型更安全（.proto强类型契约）。适合内部服务间高频通信，但浏览器不直接支持（需gRPC-Web代理）。
+</GlossaryItem>
+
+<GlossaryItem term="幂等性（Idempotency）">
+对同一操作执行一次和执行多次效果完全相同的性质。微服务中因网络超时导致的重试、消息系统的重复投递，使幂等成为必需。实现方式：唯一ID去重表（记录已处理的requestId）、Token机制（先获取Token，提交时校验失效）、乐观锁（version号校验）、状态机（只允许合法状态转换）。
+</GlossaryItem>
+
+<GlossaryItem term="熔断器（Circuit Breaker）">
+一种容错模式，当下游服务故障率达到阈值时自动「熔断」（快速失败），不再实际调用下游，防止故障级联扩散。三态：Closed（正常调用，统计失败率）→ Open（熔断，快速失败，不发请求）→ Half-Open（冷却后限量试探，成功则恢复Closed，失败则回到Open）。典型实现如Netflix Hystrix、Resilience4j。
+</GlossaryItem>
+
+<GlossaryItem term="指数退避（Exponential Backoff）">
+重试策略：每次重试的等待时间按指数增长（如1s→2s→4s→8s），避免大量客户端同时重试导致的「惊群效应」。通常配合随机抖动（Jitter）进一步分散重试时间。只对幂等操作重试，非幂等操作重试可能导致重复执行。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 同步通信和异步通信的区别是什么？如何选型？
+
+<Answer>
+
+同步通信（请求-响应模型）：调用方发起请求并阻塞等待被调方响应，如REST、gRPC。耦合度高（需知被调方地址），被调方宕机则调用方失败，但能即时返回结果。异步通信（消息驱动模型）：调用方发布消息到Broker后立即返回，被调方从Broker消费消息，如Kafka、RabbitMQ。耦合度低（通过Broker解耦），被调方宕机时消息缓存在Broker中恢复后消费，但结果有延迟。选型原则：需要即时结果用同步（如查询库存、扣减余额），可异步处理用异步消息（如发通知、记日志、数据分析）。核心经验：能异步就异步，必须同步才同步——减少同步调用链长导致的级联故障风险。
+
+</Answer>
+
+**问题 2：** 熔断器的三个状态是什么？它是如何防止级联故障的？
+
+<Answer>
+
+熔断器三态：①Closed（正常）——正常调用下游服务，同时统计失败率，当失败率超过阈值时切换到Open；②Open（熔断）——快速失败，不再实际调用下游服务，直接返回错误或降级结果，防止故障级联扩散。等待冷却时间后切换到Half-Open；③Half-Open（半开）——限量放行少量探测请求试探下游是否恢复，探测成功则切回Closed恢复正常调用，探测失败则切回Open继续熔断。防级联原理：当下游服务故障时，如果调用方持续重试等待，会耗尽调用方线程池，导致调用方也不可用，进而向上扩散形成雪崩。熔断器在检测到下游故障后快速失败，让调用方保留资源处理其他请求，将故障隔离在局部范围内，防止扩散为全局雪崩。
+
+</Answer>
+
+</Exercises>

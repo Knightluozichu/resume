@@ -1865,6 +1865,16 @@ import { phaCachingPatternsQuestions } from "./review/pha-caching-patterns";
 import { phaReliableCommunicationQuestions } from "./review/pha-reliable-communication";
 import { phaFutureArchitectureQuestions } from "./review/pha-future-architecture";
 import { phaFinalReviewQuestions } from "./review/pha-final-review";
+import { mspLearningMapQuestions } from "./review/msp-learning-map";
+import { mspMonolithToMicroservicesQuestions } from "./review/msp-monolith-to-microservices";
+import { mspInterServiceCommQuestions } from "./review/msp-inter-service-comm";
+import { mspSagaPatternQuestions } from "./review/msp-saga-pattern";
+import { mspCqrsQuestions } from "./review/msp-cqrs";
+import { mspApiGatewayQuestions } from "./review/msp-api-gateway";
+import { mspEventSourcingQuestions } from "./review/msp-event-sourcing";
+import { mspServiceDiscoveryQuestions } from "./review/msp-service-discovery";
+import { mspDeploymentPatternsQuestions } from "./review/msp-deployment-patterns";
+import { mspFinalReviewQuestions } from "./review/msp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3765,6 +3775,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...phaReliableCommunicationQuestions,
   ...phaFutureArchitectureQuestions,
   ...phaFinalReviewQuestions,
+  ...mspLearningMapQuestions,
+  ...mspMonolithToMicroservicesQuestions,
+  ...mspInterServiceCommQuestions,
+  ...mspSagaPatternQuestions,
+  ...mspCqrsQuestions,
+  ...mspApiGatewayQuestions,
+  ...mspEventSourcingQuestions,
+  ...mspServiceDiscoveryQuestions,
+  ...mspDeploymentPatternsQuestions,
+  ...mspFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

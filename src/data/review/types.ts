@@ -1988,7 +1988,17 @@ export type ReviewChapterSlug =
   | "pha-caching-patterns"
   | "pha-reliable-communication"
   | "pha-future-architecture"
-  | "pha-final-review";
+  | "pha-final-review"
+  | "msp-learning-map"
+  | "msp-monolith-to-microservices"
+  | "msp-inter-service-comm"
+  | "msp-saga-pattern"
+  | "msp-cqrs"
+  | "msp-api-gateway"
+  | "msp-event-sourcing"
+  | "msp-service-discovery"
+  | "msp-deployment-patterns"
+  | "msp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3981,6 +3991,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pha-reliable-communication": "可靠通信",
   "pha-future-architecture": "未来架构方向",
   "pha-final-review": "全书复习",
+  "msp-learning-map": "微服务架构设计模式全书学习地图",
+  "msp-monolith-to-microservices": "从单体到微服务：拆分策略与陷阱",
+  "msp-inter-service-comm": "服务间通信：REST、gRPC与异步消息",
+  "msp-saga-pattern": "Saga事务模式：跨服务数据一致性",
+  "msp-cqrs": "CQRS与API组合：跨服务查询模式",
+  "msp-api-gateway": "API网关与BFF：外部API模式",
+  "msp-event-sourcing": "事件溯源：以事件为事实的架构",
+  "msp-service-discovery": "服务发现：客户端与服务端发现",
+  "msp-deployment-patterns": "部署模式：从虚拟机到Serverless",
+  "msp-final-review": "微服务架构设计模式全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
