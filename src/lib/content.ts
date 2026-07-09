@@ -232,6 +232,7 @@ export const BOOK_ORDER = [
   "kafka-definitive-guide",
   "rabbitmq-practice",
   "kong-gateway",
+  "kubernetes-in-action",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -404,6 +405,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "kafka-definitive-guide": "Kafka权威指南",
   "rabbitmq-practice": "RabbitMQ实战",
   "kong-gateway": "Kong网关入门实战与进阶",
+  "kubernetes-in-action": "Kubernetes in Action",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,249 @@
+---
+title: "Service与网络"
+type: A
+section: "分布式与中间件"
+order: 4
+description: "Service类型、Endpoints、CoreDNS、Ingress与集群网络模型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { K8sServicesNetworkingDiagram } from "@/components/mdx/kubernetes-in-action/diagrams/k8s-services-networking";
+
+<Objectives>
+
+- 掌握 Service 四种类型及其适用场景
+- 理解 Endpoints 与 label selector 的关联机制
+- 掌握 CoreDNS 服务发现原理
+- 理解 Ingress 七层路由与 Service 的关系
+
+</Objectives>
+
+## 为什么需要 Service
+
+<K8sServicesNetworkingDiagram />
+
+Pod 的 IP 是易变的——每次重建 Pod 都会获得新 IP。Service 提供稳定的访问入口：
+
+| 问题 | 无 Service | 有 Service |
+|------|------------|------------|
+| Pod 重建 | IP 变化，调用方需更新 | ClusterIP 不变 |
+| 负载均衡 | 需自行实现 | kube-proxy 自动分发 |
+| 服务发现 | 硬编码 IP | DNS 名称自动解析 |
+
+## Service 四种类型
+
+### ClusterIP（默认）
+
+集群内部访问的虚拟 IP。
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-svc
+spec:
+  type: ClusterIP          # 默认
+  selector:
+    app: web               # 选中带 app=web 标签的 Pod
+  ports:
+  - port: 80               # Service 端口
+    targetPort: 8080       # Pod 端口
+```
+
+### NodePort
+
+在每个节点开放端口（30000-32767），外部可访问。
+
+```yaml
+spec:
+  type: NodePort
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080        # 可选，不指定则随机分配
+```
+
+### LoadBalancer
+
+云厂商提供外部负载均衡器。
+
+```yaml
+spec:
+  type: LoadBalancer
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+```
+
+### ExternalName
+
+DNS CNAME 别名，指向外部服务。
+
+```yaml
+spec:
+  type: ExternalName
+  externalName: db.example.com
+```
+
+## Endpoints 与 Service 关联
+
+Service 通过 label selector 选中 Pod，自动创建 Endpoints：
+
+```
+Service (selector: app=web)
+  → Endpoints: [10.0.1.5:8080, 10.0.1.6:8080, 10.0.1.7:8080]
+    ← Pod-1 (app=web) 10.0.1.5
+    ← Pod-2 (app=web) 10.0.1.6
+    ← Pod-3 (app=web) 10.0.1.7
+```
+
+<Callout type="warning" title="readinessProbe 与 Endpoints">
+
+只有 readinessProbe 通过的 Pod 才会被加入 Endpoints。这是滚动更新零停机的关键——新 Pod 就绪后才接流量。
+
+</Callout>
+
+## kube-proxy 与负载均衡
+
+kube-proxy 在每个节点运行，维护 Service 到 Pod 的转发规则：
+
+| 模式 | 原理 | 特点 |
+|------|------|------|
+| **iptables**（默认） | iptables 规则随机 DNAT | 性能好，规则多时更新慢 |
+| **IPVS** | Linux 内核 IPVS | 大规模集群性能更优 |
+| **userspace**（旧） | 用户态代理 | 已弃用 |
+
+```
+请求 ClusterIP:80
+  → iptables DNAT
+  → 随机选一个 Endpoint (10.0.1.5:8080)
+  → 转发到 Pod
+```
+
+## CoreDNS 服务发现
+
+K8s 内置 CoreDNS，为 Service 自动创建 DNS 记录：
+
+| 记录格式 | 解析为 | 示例 |
+|----------|--------|------|
+| `<svc>.<ns>` | ClusterIP | `web-svc.default` |
+| `<svc>.<ns>.svc` | ClusterIP | `web-svc.default.svc` |
+| `<svc>.<ns>.svc.cluster.local` | ClusterIP | 完整 FQDN |
+| `_<port>._tcp.<svc>.<ns>.svc` | SRV 记录 | 端口发现 |
+
+<Callout type="tip" title="跨命名空间访问">
+
+同命名空间直接用 `web-svc` 即可；跨命名空间用 `web-svc.production`。DNS 解析顺序：搜索域（`default.svc.cluster.local` → `svc.cluster.local` → `cluster.local`）。
+
+</Callout>
+
+## Ingress 七层路由
+
+Service（NodePort/LoadBalancer）工作在四层（TCP/UDP），Ingress 工作在七层（HTTP/HTTPS）。
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+  - host: api.example.com
+    http:
+      paths:
+      - path: /users
+        pathType: Prefix
+        backend:
+          service:
+            name: user-svc
+            port:
+              number: 80
+      - path: /orders
+        pathType: Prefix
+        backend:
+          service:
+            name: order-svc
+            port:
+              number: 80
+```
+
+### Ingress vs Service
+
+| 维度 | Service (LoadBalancer) | Ingress |
+|------|------------------------|---------|
+| 层级 | 四层 TCP/UDP | 七层 HTTP/HTTPS |
+| 路由 | 仅端口 | host + path |
+| TLS | 需在 Pod 终止 | Ingress Controller 集中终止 |
+| 成本 | 每个 LB 付费 | 一个 LB 服务多个域 |
+
+<Callout type="info" title="Ingress Controller">
+
+Ingress 资源本身只是路由规则，需要 Ingress Controller（如 nginx-ingress、traefik）来实际执行。Controller 通常以 DaemonSet/Deployment 运行，通过 NodePort/LoadBalancer 暴露。
+
+</Callout>
+
+## CNI 网络模型
+
+K8s 网络遵循 CNI（Container Network Interface）规范：
+
+| 插件 | 模式 | 特点 |
+|------|------|------|
+| **Flannel** | Overlay (VXLAN) | 简单易用 |
+| **Calico** | BGP / Overlay | 支持 NetworkPolicy |
+| **Cilium** | eBPF | 高性能，可观测 |
+
+核心原则：每个 Pod 有唯一 IP，跨节点 Pod 间可直接通信。
+
+<Glossary>
+
+<GlossaryItem term="Service">
+Kubernetes 网络抽象，为一组 Pod 提供稳定的访问入口。通过 label selector 关联 Pod，自动维护 Endpoints。支持 ClusterIP/NodePort/LoadBalancer/ExternalName 四种类型。
+</GlossaryItem>
+
+<GlossaryItem term="Endpoints">
+Service 的后端 Pod 地址列表。由 Service 的 label selector 自动匹配 Pod 生成。只有 readinessProbe 通过的 Pod 才会被加入 Endpoints。
+</GlossaryItem>
+
+<GlossaryItem term="kube-proxy">
+运行在每个节点上的组件，维护 Service 到 Pod 的网络转发规则。默认使用 iptables 模式（DNAT 随机选 Endpoint），大规模集群可切换 IPVS 模式提升性能。
+</GlossaryItem>
+
+<GlossaryItem term="Ingress">
+K8s 七层（HTTP/HTTPS）路由资源。通过 host + path 规则将请求路由到不同 Service，支持 TLS 终止和虚拟主机。需要 Ingress Controller（如 nginx-ingress）实际执行规则。
+</GlossaryItem>
+
+<GlossaryItem term="CoreDNS">
+K8s 内置 DNS 服务器，为 Service 和 Pod 自动创建 DNS 记录。Service 格式为 `<svc>.<ns>.svc.cluster.local`，Pod 格式为 `<ip-dashed>.<ns>.pod.cluster.local`。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Service 的四种类型分别是什么？各自的使用场景是什么？
+
+<Answer>
+
+四种类型：①ClusterIP（默认）——分配集群内部虚拟 IP，仅集群内可访问。用于微服务间内部通信，如前端 Service 调用后端 Service。②NodePort——在每个节点开放端口（30000-32767），外部可通过 nodeIP:nodePort 访问。用于测试环境或需要 TCP 直接访问的场景，生产环境一般不直接用（端口有限、节点 IP 变化）。③LoadBalancer——在 NodePort 基础上自动创建云厂商外部负载均衡器（如 AWS ELB/ALB），分配外部 IP。用于生产环境对外暴露 HTTP/TCP 服务，每个 LB 有成本。④ExternalName——创建 DNS CNAME 记录指向外部域名，不创建 Endpoints 和 ClusterIP。用于将外部服务（如 RDS）以 K8s DNS 名称引用，方便后续迁移到集群内。从 ClusterIP 到 ExternalName，暴露范围从内到外，适用场景从简单到复杂。
+
+</Answer>
+
+**问题 2：** Service 是如何通过 label selector 关联 Pod 的？Endpoints 如何动态更新？
+
+<Answer>
+
+关联机制：Service 的 spec.selector 定义 label 匹配规则（如 app=web），Endpoints Controller 持续 Watch 集群中所有 Pod。当 Pod 的 labels 匹配 Service 的 selector 且 Pod 的 readinessProbe 通过时，将 Pod IP + targetPort 加入 Endpoints 列表；当 Pod 不再匹配（标签变更）或 readinessProbe 失败或 Pod 被删除时，从 Endpoints 移除。kube-proxy Watch Endpoints 变化，实时更新 iptables/IPVS 规则，保证请求转发到健康的 Pod。动态更新场景：①滚动更新——新 Pod 就绪加入 Endpoints，旧 Pod 终止移出 Endpoints，配合 maxUnavailable=0 实现零停机；②Pod 故障——readinessProbe 失败，Pod 被移出 Endpoints，流量不再打到故障 Pod；③扩缩容——HPA 扩容新 Pod 就绪后自动加入 Endpoints。核心：Service 是稳定的，Endpoints 是动态的，Pod 是易变的。
+
+</Answer>
+
+</Exercises>

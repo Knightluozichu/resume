@@ -1,0 +1,182 @@
+---
+title: "全书复习"
+type: D
+section: "分布式与中间件"
+order: 9
+description: "Kubernetes全书知识图谱串联、四主线交汇与生产架构设计"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { K8sFinalReviewDiagram } from "@/components/mdx/kubernetes-in-action/diagrams/k8s-final-review";
+
+<Objectives>
+
+- 串联全书四部分知识，形成完整的 K8s 知识体系
+- 深入理解四条核心主线的四个交汇点
+- 掌握 K8s 从 Pod 创建到流量访问的全链路流程
+- 能够综合运用全书知识设计生产级 K8s 架构
+
+</Objectives>
+
+## 全书知识图谱串联
+
+<K8sFinalReviewDiagram />
+
+## 四部分知识回顾
+
+### 基础入门 → 解决「为什么需要 K8s」
+
+- 容器编排定义：自动管理容器生命周期、扩缩容、故障恢复
+- K8s 架构：控制面（API Server/etcd/Scheduler/Controller Manager）+ 数据面（kubelet/kube-proxy/容器运行时）
+- 声明式 API：用户声明期望状态，控制器 Reconcile 收敛
+
+### 工作负载 → 解决「应用怎么跑」
+
+- Pod：最小调度单元，多容器共享网络和存储
+- 探针：liveness（重启）/ readiness（摘流）/ startup（慢启动保护）
+- Deployment：管理 ReplicaSet，滚动更新 + 回滚
+- HPA：根据 CPU/内存指标自动扩缩
+
+### 网络与存储 → 解决「怎么通信、怎么持久化」
+
+- Service：ClusterIP/NodePort/LoadBalancer/ExternalName
+- Endpoints：label selector 自动关联 Pod，readinessProbe 控制流量
+- Ingress：七层路由，host + path 分发
+- PV/PVC/StorageClass：静态供给 vs 动态供给
+- StatefulSet：有序 Pod + 独立 PVC，有状态应用首选
+- ConfigMap/Secret：配置注入，环境变量 vs Volume 挂载
+
+### 调度与运维 → 解决「怎么调度、怎么运维」
+
+- 调度两阶段：Filter（过滤）→ Score（打分）
+- 亲和性：nodeAffinity（节点选择）/ podAntiAffinity（Pod 分散）
+- Taint/Toleration：专用节点排斥与容忍
+- RBAC：Role/ClusterRole + RoleBinding/ClusterRoleBinding
+- NetworkPolicy：Pod 间网络隔离
+- 监控日志：Prometheus + Grafana + ELK + Jaeger
+
+## 四个交汇点
+
+<Callout type="info" title="四主线交汇形成闭环">
+
+| 交汇点 | 主线交汇 | 意义 |
+|--------|----------|------|
+| **Pod-Service-Endpoints** | 工作负载 ↔ 网络通信 | Pod 由标签被 Service 选中，readinessProbe 控制 Endpoints |
+| **Pod-Volume-PVC** | 工作负载 ↔ 存储配置 | Pod 通过 PVC 挂载 PV，StatefulSet 保证存储连续性 |
+| **Deployment-Scheduler-Node** | 工作负载 ↔ 调度运维 | Deployment 创建 Pod，Scheduler 按资源/亲和性分配节点 |
+| **Secret-RBAC-NetworkPolicy** | 存储配置 ↔ 调度运维 | Secret 管敏感数据，RBAC 控访问，NetworkPolicy 隔流量 |
+
+</Callout>
+
+## 全链路：从提交到访问
+
+### 资源创建全链路
+
+```
+用户 kubectl apply -f deployment.yaml
+  → API Server 认证/授权/准入
+  → 写入 etcd
+  → Deployment Controller Watch 到变化
+  → 创建 ReplicaSet
+  → ReplicaSet Controller 创建 Pod（nodeName 为空）
+  → Scheduler Watch 到新 Pod
+  → Filter（资源/亲和性/污点）→ Score（均衡/权重）
+  → 绑定 Pod 到节点 → 写入 etcd
+  → kubelet Watch 到分配到本节点的 Pod
+  → 调用 CRI 启动容器 → 调用 CNI 配置网络 → 调用 CSI 挂载存储
+  → Pod Running → readinessProbe 通过
+  → Endpoints Controller 加入 Endpoints
+  → kube-proxy 更新 iptables 规则
+  → Service 可接收流量
+```
+
+### 请求访问全链路
+
+```
+Client → DNS 解析 web-svc.default.svc.cluster.local
+  → CoreDNS 返回 ClusterIP
+  → Client → ClusterIP:80
+  → kube-proxy iptables DNAT
+  → 随机选 Endpoint (Pod IP:8080)
+  → Pod 容器处理请求
+  → 响应返回 Client
+```
+
+## K8s vs 其他编排方案
+
+| 编排方案 | 底层 | 生态 | 适合场景 |
+|----------|------|------|----------|
+| **Kubernetes** | Go | 最丰富 | 通用容器编排（事实标准） |
+| **Docker Swarm** | Go | 较小 | 小规模/简单场景 |
+| **Nomad** | Go | 中等 | HashiCorp 生态 |
+| **Mesos** | C++ | 较老 | 大数据 + 容器 |
+
+## 生产架构设计要点
+
+<Callout type="tip" title="大型电商 K8s 生产架构">
+
+1. **集群**：多可用区 + 多节点池（按工作负载分：CPU/GPU/内存型）
+2. **工作负载**：Deployment 无状态 + StatefulSet 有状态 + DaemonSet 日志/监控
+3. **网络**：Cilium CNI + NetworkPolicy 隔离 + Ingress 七层路由 + CoreDNS 服务发现
+4. **存储**：StorageClass 动态供给 + 按需选 EBS/NFS/EFS + StatefulSet 独立 PVC
+5. **配置**：ConfigMap 非敏感 + Vault 管理敏感 + GitOps 声明式
+6. **调度**：podAntiAffinity 跨可用区 + topologySpread 均匀分布 + Taint 专用节点
+7. **安全**：RBAC 最小权限 + SecurityContext 禁 root + NetworkPolicy 零信任
+8. **可观测**：Prometheus 指标 + Grafana 看板 + ELK 日志 + Jaeger 追踪
+9. **高可用**：多 Master + etcd 集群 + 跨可用区 Pod 分散 + HPA/VPA 自动扩缩
+10. **CI/CD**：GitOps（ArgoCD/Flux）+ 声明式配置 + 滚动更新 + 金丝雀发布
+
+</Callout>
+
+## K8s 核心公式
+
+```
+Kubernetes = 声明式API
+           + 控制器模式(Reconcile循环)
+           + Pod最小调度单元
+           + Service服务发现
+           + Deployment滚动更新
+           + PV/PVC存储抽象
+           + RBAC权限控制
+           + Scheduler智能调度
+           + NetworkPolicy网络隔离
+           + 多CNI/CRI/CSI插件化
+```
+
+**设计哲学**：以声明式 API 为核心，通过控制器模式将实际状态拉向期望状态，通过 Pod 抽象解耦容器与调度，通过分层架构（控制面/数据面）实现可扩展的容器编排平台。
+
+<Glossary>
+
+<GlossaryItem term="全链路创建流程">
+从 kubectl apply 到 Pod Running 的完整流程：API Server 认证授权 → 写入 etcd → Deployment Controller 创建 ReplicaSet → ReplicaSet 创建 Pod → Scheduler 调度 → kubelet 启动容器 → CNI/CSI 配置 → readinessProbe 通过 → 加入 Endpoints → kube-proxy 更新规则 → Service 可访问。
+</GlossaryItem>
+
+<GlossaryItem term="四主线交汇">
+K8s 四条核心主线的交汇点。Pod-Service-Endpoints（工作负载↔网络通信）是服务发现枢纽，Pod-Volume-PVC（工作负载↔存储配置）是数据持久化路径，Deployment-Scheduler-Node（工作负载↔调度运维）是调度决策链路，Secret-RBAC-NetworkPolicy（存储配置↔调度运维）是安全治理体系。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 请描述从 `kubectl apply` 到 Pod 可接收流量的完整全链路流程。
+
+<Answer>
+
+①用户执行 kubectl apply -f deployment.yaml → API Server 接收请求 → 认证（Token/证书）→ 授权（RBAC 检查）→ 准入控制（MutatingAdmissionWebhook 修改 → ValidatingAdmissionWebhook 校验）→ 写入 etcd。②Deployment Controller Watch 到 Deployment 变化 → 对比期望（replicas:3）与实际（0）→ 创建 ReplicaSet。③ReplicaSet Controller Watch 到 ReplicaSet → 创建 3 个 Pod（spec.nodeName 为空）。④Scheduler Watch 到 nodeName 为空的 Pod → Filter 阶段过滤不满足条件的节点（资源不足/端口冲突/污点不容忍/nodeSelector 不匹配）→ Score 阶段对候选节点打分（资源均衡/亲和性权重）→ 绑定 Pod 到最佳节点 → 写入 etcd。⑤kubelet Watch 到分配到本节点的 Pod → 调用 CRI（containerd）拉取镜像并启动容器 → 调用 CNI 配置 Pod 网络（分配 IP、设置路由）→ 调用 CSI 挂载存储卷。⑥kubelet 执行 startupProbe → 成功后执行 livenessProbe/readinessProbe → readinessProbe 通过。⑦Endpoints Controller Watch 到 Pod ready → 将 Pod IP 加入 Service Endpoints。⑧kube-proxy Watch 到 Endpoints 变化 → 更新 iptables/IPVS 规则 → ClusterIP 可路由到新 Pod。⑨Client 请求 ClusterIP → iptables DNAT → 转发到 Pod。
+
+</Answer>
+
+**问题 2：** 如果让你为一个大型电商平台设计基于 K8s 的生产架构，你会如何设计？
+
+<Answer>
+
+①集群：多可用区多 Master 高可用 + etcd 3-5 节点 Raft + 按工作负载分节点池（CPU 型跑 Web/API，内存型跑缓存，GPU 型跑推荐模型）+ Cilium CNI（eBPF 高性能 + NetworkPolicy）。②工作负载：前端 Deployment + HPA（CPU>70% 扩容）+ podAntiAffinity 跨可用区；订单 StatefulSet + 独立 PVC；日志 Fluent Bit DaemonSet 每节点采集。③网络：Ingress nginx-ingress 七层路由（api.example.com/users → user-svc）+ TLS 集中终止 + Service ClusterIP 内部通信 + NetworkPolicy 零信任（DB 只允许 backend 访问，backend 只允许 frontend+ingress 访问）。④存储：StorageClass 动态供给（SSD 跑数据库，HDD 跑日志）+ StatefulSet volumeClaimTemplates + WaitForFirstConsumer 同可用区。⑤配置：ConfigMap 注入非敏感配置（Volume 挂载支持热更新）+ Vault 管理敏感数据（CSI Secret Store Driver 注入）+ GitOps（ArgoCD 同步 Git 仓库 YAML）。⑥调度：topologySpreadConstraints maxSkew=1 跨可用区均匀分布 + Taint GPU 节点专用 + requests 基于 P95 流量 + limits=2x requests。⑦安全：每应用独立 ServiceAccount + RBAC 最小权限 + SecurityContext runAsNonRoot + readOnlyRootFilesystem + PodSecurity admission。⑧可观测：Prometheus 采集指标（kube-state-metrics + node-exporter）+ Grafana 看板 + AlertManager（Pod Failed/CPU>90%）+ ELK 日志检索 + Jaeger 分布式追踪。⑨高可用：多 Master + 跨可用区 Pod 分散 + PDB（PodDisruptionBudget）保证最少可用副本 + HPA 自动扩缩 + VPA 自动调资源 + Velero 备份。⑩CI/CD：GitOps ArgoCD 同步 Git → 滚动更新零停机 → 金丝雀发布（Argo Rollouts 10%→50%→100%）→ 自动回滚。
+
+</Answer>
+
+</Exercises>

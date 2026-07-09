@@ -1,0 +1,236 @@
+---
+title: "Deployment与副本管理"
+type: C
+section: "分布式与中间件"
+order: 3
+description: "Deployment控制器、ReplicaSet、滚动更新、回滚与水平自动扩缩"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { K8sDeploymentsDiagram } from "@/components/mdx/kubernetes-in-action/diagrams/k8s-deployments";
+
+<Objectives>
+
+- 掌握 Deployment 的 YAML 定义与 ReplicaSet 关系
+- 理解滚动更新与回滚的底层机制
+- 能够配置滚动更新策略参数
+- 掌握 HPA 水平自动扩缩的配置方法
+
+</Objectives>
+
+## Deployment 概述
+
+<K8sDeploymentsDiagram />
+
+Deployment 是最常用的工作负载控制器，管理无状态应用的副本：
+
+```
+Deployment (期望: 3 副本, image:v2)
+  └── ReplicaSet (v2, 维持 3 个 Pod)
+        ├── Pod-1 (v2)
+        ├── Pod-2 (v2)
+        └── Pod-3 (v2)
+```
+
+<Callout type="info" title="Deployment vs ReplicaSet vs Pod">
+
+- **Pod** — 实际运行的实例
+- **ReplicaSet** — 维持 Pod 副本数（不直接用，由 Deployment 管理）
+- **Deployment** — 管理 ReplicaSet，提供滚动更新和回滚
+
+生产环境始终用 Deployment，不直接创建 Pod 或 ReplicaSet。
+
+</Callout>
+
+## Deployment 定义
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-deploy
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:1.25
+        ports:
+        - containerPort: 80
+```
+
+<Callout type="warning" title="selector 与 template.labels 必须匹配">
+
+`spec.selector.matchLabels` 必须与 `spec.template.metadata.labels` 一致，否则 Deployment 无法关联到它创建的 Pod。这是最常见的 YAML 错误。
+
+</Callout>
+
+## 滚动更新
+
+### 更新过程
+
+当 `image` 变化时，Deployment 自动触发滚动更新：
+
+```
+旧 RS (v1): [Pod-A] [Pod-B] [Pod-C]     ← 3 个旧 Pod
+                    ↓ image 更新为 v2
+新 RS (v2):         [Pod-D]              ← maxSurge=1, 先建 1 个新
+旧 RS (v1): [Pod-A] [Pod-B] [Pod-C]      ← 4 个 Pod (3旧+1新)
+                    ↓ Pod-D 就绪
+旧 RS (v1): [Pod-A] [Pod-B]              ← maxUnavailable=0, 删 1 旧
+新 RS (v2):         [Pod-D]              ← 3 个 Pod (2旧+1新)
+                    ↓ 重复...
+新 RS (v2): [Pod-D] [Pod-E] [Pod-F]      ← 3 个新 Pod, 旧 RS 缩为 0
+```
+
+### 策略参数
+
+| 参数 | 默认值 | 含义 |
+|------|--------|------|
+| `maxSurge` | 25% | 滚动期间可超出 replicas 的最大数 |
+| `maxUnavailable` | 25% | 滚动期间允许不可用的最大数 |
+
+<Callout type="tip" title="零停机滚动更新">
+
+设置 `maxUnavailable: 0` + `maxSurge: 1` 可实现零停机更新：先加新 Pod 确认就绪后再删旧 Pod。配合 readinessProbe 效果最佳。
+
+</Callout>
+
+## 回滚
+
+### 自动回滚触发
+
+如果滚动更新失败（如镜像拉取失败、新 Pod 持续不就绪），Deployment 会停止更新但不会自动回滚，需要手动操作。
+
+### 手动回滚
+
+```bash
+# 查看历史版本
+kubectl rollout history deployment/web-deploy
+
+# 回滚到上一版本
+kubectl rollout undo deployment/web-deploy
+
+# 回滚到指定版本
+kubectl rollout undo deployment/web-deploy --to-revision=2
+
+# 查看回滚状态
+kubectl rollout status deployment/web-deploy
+```
+
+### revisionHistoryLimit
+
+```yaml
+spec:
+  revisionHistoryLimit: 10  # 保留 10 个旧 RS（默认 10）
+```
+
+## HPA 水平自动扩缩
+
+HPA（Horizontal Pod Autoscaler）根据指标自动调整副本数。
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web-deploy
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+```
+
+### 扩缩逻辑
+
+| 条件 | 动作 |
+|------|------|
+| CPU 使用率 > 70% | 扩容（增加副本） |
+| CPU 使用率 < 70% | 缩容（减少副本） |
+| 达到 maxReplicas | 停止扩容 |
+| 达到 minReplicas | 停止缩容 |
+
+<Callout type="warning" title="HPA 前提条件">
+
+HPA 依赖 metrics-server 采集 CPU/内存指标。Pod 必须设置 `resources.requests.cpu`，否则 HPA 无法计算使用率。自定义指标需要部署 Prometheus Adapter。
+
+</Callout>
+
+## 其他工作负载
+
+| 工作负载 | 控制器 | 适用场景 |
+|----------|--------|----------|
+| **Deployment** | ReplicaSet | 无状态服务（Web/API） |
+| **StatefulSet** | StatefulSet | 有状态服务（数据库） |
+| **DaemonSet** | DaemonSet | 每节点一个（日志/监控） |
+| **Job** | Job | 一次性任务 |
+| **CronJob** | CronJob | 定时任务 |
+
+<Glossary>
+
+<GlossaryItem term="Deployment">
+Kubernetes 最常用的工作负载控制器，管理无状态应用。通过管理 ReplicaSet 实现副本维持、滚动更新和回滚。每次更新 image 创建新 ReplicaSet，旧 ReplicaSet 保留用于回滚。
+</GlossaryItem>
+
+<GlossaryItem term="ReplicaSet">
+维持指定数量 Pod 副本的控制器。通过 label selector 关联 Pod，当 Pod 数量不足时创建，多余时删除。通常不直接使用，由 Deployment 管理。
+</GlossaryItem>
+
+<GlossaryItem term="滚动更新">
+Deployment 的默认更新策略。逐步创建新 Pod（maxSurge 控制）并删除旧 Pod（maxUnavailable 控制），保证更新期间服务不中断。配合 readinessProbe 实现零停机。
+</GlossaryItem>
+
+<GlossaryItem term="HPA">
+Horizontal Pod Autoscaler，根据 CPU/内存或自定义指标自动调整 Deployment 副本数。依赖 metrics-server 采集指标，需要 Pod 设置 resources.requests。
+</GlossaryItem>
+
+<GlossaryItem term="revisionHistoryLimit">
+Deployment 保留的旧 ReplicaSet 数量。旧 RS 用于回滚，默认保留 10 个。超出后最旧的 RS 被清理，无法再回滚到该版本。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Deployment、ReplicaSet、Pod 三者的关系是什么？为什么生产环境用 Deployment 而不直接用 ReplicaSet？
+
+<Answer>
+
+三者关系：Deployment 管理 ReplicaSet，ReplicaSet 管理 Pod。Deployment 每次更新 spec.template（如 image 变化）会创建一个新 ReplicaSet，旧 ReplicaSet 缩为 0 但保留（用于回滚）。ReplicaSet 通过 label selector 关联 Pod，当 Pod 副本数不等于期望值时创建或删除 Pod。生产环境用 Deployment 而非 ReplicaSet 的原因：①Deployment 提供声明式滚动更新——只需修改 image，自动按 maxSurge/maxUnavailable 策略逐步替换 Pod；②Deployment 支持回滚——保留历史 ReplicaSet，可 kubectl rollout undo 回滚到任意版本；③ReplicaSet 不支持滚动更新和回滚——修改 image 只会创建新 Pod 但不自动替换旧的。Deployment = ReplicaSet 管理 + 滚动更新 + 回滚。
+
+</Answer>
+
+**问题 2：** 如何实现零停机滚动更新？maxSurge 和 maxUnavailable 如何配合？
+
+<Answer>
+
+零停机滚动更新配置：strategy.type=RollingUpdate，rollingUpdate.maxSurge=1（最多多出 1 个 Pod），rollingUpdate.maxUnavailable=0（不允许任何 Pod 不可用）。更新过程：①Deployment 创建 1 个新 Pod（maxSurge=1，此时共 4 个 Pod：3旧+1新）；②新 Pod readinessProbe 通过后加入 Service Endpoints；③Deployment 删除 1 个旧 Pod（maxUnavailable=0 保证始终有 3 个就绪 Pod）；④重复直到全部替换。关键：maxUnavailable=0 保证始终有 replicas 个 Pod 就绪接收流量；maxSurge=1 保证先建新后删旧；配合 readinessProbe 确保新 Pod 真正就绪才接流量；配合 gracePeriodSeconds 让旧 Pod 优雅退出。如果只有 maxSurge 没有 readinessProbe，新 Pod 还没就绪就删旧 Pod，会导致请求失败。
+
+</Answer>
+
+</Exercises>

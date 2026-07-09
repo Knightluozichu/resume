@@ -1,0 +1,233 @@
+---
+title: "Pod基础"
+type: C
+section: "分布式与中间件"
+order: 2
+description: "Pod定义、容器共享机制、生命周期与探针实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { K8sPodsDiagram } from "@/components/mdx/kubernetes-in-action/diagrams/k8s-pods";
+
+<Objectives>
+
+- 掌握 Pod 的定义与 YAML 写法
+- 理解 Pod 内容器的网络与存储共享机制
+- 掌握 Pod 生命周期与重启策略
+- 能够配置 liveness/readiness 探针
+
+</Objectives>
+
+## Pod 是什么
+
+<K8sPodsDiagram />
+
+Pod 是 Kubernetes 最小调度单元。一个 Pod 可以包含一个或多个容器，这些容器：
+
+- **共享网络命名空间** — 同一 IP、同一端口空间
+- **共享存储卷** — 可挂载相同的 Volume
+- **始终调度到同一节点** — 不会被拆分
+
+## Pod 定义
+
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: web-app
+  labels:
+    app: web
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25
+    ports:
+    - containerPort: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 256Mi
+  - name: log-sidecar
+    image: busybox:1.36
+    command: ["sh", "-c", "tail -f /var/log/nginx/access.log"]
+    volumeMounts:
+    - name: log-volume
+      mountPath: /var/log/nginx
+  volumes:
+  - name: log-volume
+    emptyDir: {}
+```
+
+<Callout type="info" title="多容器 Pod 设计模式">
+
+常见三种 Sidecar 模式：
+
+1. **Sidecar** — 辅助容器（如日志收集、代理），与主容器共享存储
+2. **Adapter** — 适配输出格式（如 metrics 转换）
+3. **Ambassador** — 代理外部服务访问（如 Redis 代理）
+
+</Callout>
+
+## 容器共享机制
+
+### 网络共享
+
+同一 Pod 内所有容器共享 `pause` 容器的网络命名空间：
+
+```
+Pod (IP: 10.0.1.5)
+├── pause 容器 (持有网络命名空间)
+├── nginx 容器 → 监听 80
+└── log 容器  → 通过 localhost 访问 nginx
+```
+
+<Callout type="warning" title="端口冲突">
+
+同一 Pod 内容器不能监听相同端口！两个容器都监听 80 会导致启动失败。跨 Pod 不受此限制（不同 IP）。
+
+</Callout>
+
+### 存储共享
+
+通过 `emptyDir` 等 Volume 类型，同一 Pod 内容器可共享文件：
+
+| Volume 类型 | 生命周期 | 用途 |
+|-------------|----------|------|
+| `emptyDir` | 随 Pod 销毁 | 容器间共享临时文件 |
+| `hostPath` | 节点持久 | 访问节点文件系统（不推荐生产） |
+| `configMap` | 随 Pod | 注入配置文件 |
+| `persistentVolumeClaim` | 独立于 Pod | 持久化存储 |
+
+## Pod 生命周期
+
+### Pod 状态
+
+| 状态 | 含义 |
+|------|------|
+| `Pending` | 已创建，等待调度或拉取镜像 |
+| `Running` | 已调度到节点，容器运行中 |
+| `Succeeded` | 容器成功退出（Job） |
+| `Failed` | 容器失败退出 |
+| `Unknown` | 无法与节点通信 |
+
+### 重启策略
+
+```yaml
+spec:
+  restartPolicy: Always  # Always | OnFailure | Never
+```
+
+| 策略 | 行为 | 适用场景 |
+|------|------|----------|
+| `Always` | 总是重启 | 长期服务（默认） |
+| `OnFailure` | 失败时重启 | Job |
+| `Never` | 不重启 | 一次性任务 |
+
+## 容器探针
+
+探针让 K8s 自动判断容器健康状态。
+
+### 探针类型
+
+| 探针 | 作用 | 失败后果 |
+|------|------|----------|
+| **livenessProbe** | 容器是否存活 | 重启容器 |
+| **readinessProbe** | 容器是否就绪 | 从 Service Endpoints 移除 |
+| **startupProbe** | 容器是否启动完成 | 在成功前禁用其他探针 |
+
+### 探针配置
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 3
+```
+
+<Callout type="tip" title="liveness vs readiness 的关键区别">
+
+- **liveness 失败** → 容器被杀死并重启（修复无响应的进程）
+- **readiness 失败** → 容器不被重启，但从 Service 流量中移除（保护未就绪的容器）
+
+两者都要配：liveness 防死锁，readiness 防流量打到未就绪的实例。
+
+</Callout>
+
+## 资源请求与限制
+
+```yaml
+resources:
+  requests:    # 调度依据，保证最小资源
+    cpu: 100m    # 0.1 核
+    memory: 128Mi
+  limits:       # 运行时上限，超过被限制/OOM
+    cpu: 200m
+    memory: 256Mi
+```
+
+<Callout type="warning" title="CPU limit 与 throttling">
+
+CPU limit 超过时容器被限流（throttle），不会杀进程；Memory limit 超过时容器被 OOMKilled。生产环境务必设置 requests 和 limits。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="Pod">
+Kubernetes 最小调度单元，包含一个或多个紧密耦合的容器。同一 Pod 内容器共享网络命名空间（IP/端口）和存储卷，始终调度到同一节点。
+</GlossaryItem>
+
+<GlossaryItem term="pause 容器">
+每个 Pod 底层的基础设施容器，持有网络和 IPC 命名空间。Pod 内其他容器加入 pause 的命名空间实现网络共享。
+</GlossaryItem>
+
+<GlossaryItem term="livenessProbe">
+存活探针，检测容器是否处于健康状态。失败时 kubelet 重启容器。用于检测死锁、无限循环等无法自行恢复的故障。
+</GlossaryItem>
+
+<GlossaryItem term="readinessProbe">
+就绪探针，检测容器是否准备好接收流量。失败时 Pod 从 Service Endpoints 中移除，不重启容器。用于保护启动慢或临时不可用的实例。
+</GlossaryItem>
+
+<GlossaryItem term="资源限制">
+通过 resources.requests（调度依据）和 resources.limits（运行时上限）控制 Pod 资源使用。CPU 超限被 throttle，内存超限被 OOMKilled。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Pod 内多容器是如何共享网络和存储的？pause 容器的作用是什么？
+
+<Answer>
+
+网络共享：每个 Pod 底层有一个 pause 基础设施容器，它持有网络命名空间和 IPC 命名空间。Pod 内其他业务容器启动时加入 pause 的网络命名空间，因此所有容器共享同一个 IP 地址和端口空间，可通过 localhost 互相通信。pause 容器的作用是「持有」命名空间——即使业务容器崩溃重启，pause 仍在，命名空间不丢失，新容器直接加入即可。存储共享：Pod 级别定义 volumes（如 emptyDir），各容器通过 volumeMounts 挂载到各自路径，底层指向同一存储。同一 Pod 内容器可通过共享 Volume 交换文件，如 nginx 写日志到 emptyDir，sidecar 从同一路径读取并转发。
+
+</Answer>
+
+**问题 2：** livenessProbe 和 readinessProbe 的区别是什么？生产环境为什么要同时配置？
+
+<Answer>
+
+livenessProbe（存活探针）：检测容器是否健康，失败时 kubelet 杀死容器并按 restartPolicy 重启。用于发现死锁、无限循环等进程存活但无法工作的故障。readinessProbe（就绪探针）：检测容器是否准备好接收流量，失败时 Pod 从 Service Endpoints 移除但不重启。用于保护启动慢（如需要加载缓存）或临时过载的实例。区别：liveness 失败→重启容器（修复故障）；readiness 失败→摘除流量（保护未就绪实例）。生产环境同时配置的原因：①只有 liveness 无 readiness——启动时流量打到未就绪实例导致请求失败；②只有 readiness 无 liveness——死锁进程不被重启，永远不会自愈；③startup 探针保护慢启动应用——在 startup 成功前禁用 liveness 避免误杀。
+
+</Answer>
+
+</Exercises>

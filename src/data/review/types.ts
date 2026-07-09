@@ -1968,7 +1968,17 @@ export type ReviewChapterSlug =
   | "kga-traffic-control"
   | "kga-deployment-ha"
   | "kga-advanced-topics"
-  | "kga-final-review";
+  | "kga-final-review"
+  | "k8s-learning-map"
+  | "k8s-container-orchestration"
+  | "k8s-pods"
+  | "k8s-deployments"
+  | "k8s-services-networking"
+  | "k8s-volumes-storage"
+  | "k8s-config-secrets"
+  | "k8s-scheduling"
+  | "k8s-security-ops"
+  | "k8s-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3941,6 +3951,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "kga-deployment-ha": "部署与高可用",
   "kga-advanced-topics": "高级主题",
   "kga-final-review": "全书复习",
+  "k8s-learning-map": "Kubernetes全书学习地图",
+  "k8s-container-orchestration": "容器编排入门",
+  "k8s-pods": "Pod基础",
+  "k8s-deployments": "Deployment与副本管理",
+  "k8s-services-networking": "Service与网络",
+  "k8s-volumes-storage": "存储与Volume",
+  "k8s-config-secrets": "ConfigMap与Secret",
+  "k8s-scheduling": "调度与亲和性",
+  "k8s-security-ops": "安全与运维",
+  "k8s-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

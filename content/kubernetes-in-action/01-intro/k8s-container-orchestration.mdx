@@ -1,0 +1,163 @@
+---
+title: "容器编排入门"
+type: A
+section: "分布式与中间件"
+order: 1
+description: "容器编排定义、Kubernetes架构、控制面与数据面组件协作"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { K8sContainerOrchestrationDiagram } from "@/components/mdx/kubernetes-in-action/diagrams/k8s-container-orchestration";
+
+<Objectives>
+
+- 理解容器编排的核心问题与 Kubernetes 的定位
+- 掌握 K8s 控制面四大组件的职责与协作
+- 掌握数据面 kubelet/kube-proxy/容器运行时的角色
+- 理解声明式 API 与控制器模式的运作原理
+
+</Objectives>
+
+## 为什么需要容器编排
+
+<K8sContainerOrchestrationDiagram />
+
+当容器从单机走向集群，手动管理面临三大挑战：
+
+| 挑战 | 手动方案 | 编排方案 |
+|------|----------|----------|
+| 故障恢复 | 人工重启容器 | 自动重建 Pod |
+| 扩缩容 | 手动加机器启容器 | HPA 自动扩缩 |
+| 服务发现 | 手动维护 IP 列表 | Service + DNS 自动发现 |
+
+## Kubernetes 架构全景
+
+### 控制面（Control Plane）
+
+集群的大脑，负责全局决策和状态存储。
+
+| 组件 | 职责 | 关键点 |
+|------|------|--------|
+| **API Server** | 唯一入口，所有操作经此 | RESTful API，认证/授权/准入 |
+| **etcd** | 集群状态存储 | KV 数据库，Raft 一致性 |
+| **Scheduler** | Pod 调度决策 | 按资源/亲和性选节点 |
+| **Controller Manager** | 运行所有控制器 | Deployment/ReplicaSet/Node 等 |
+
+### 数据面（Data Plane / Worker Node）
+
+执行层，负责运行容器和维护网络。
+
+| 组件 | 职责 | 关键点 |
+|------|------|--------|
+| **kubelet** | 管理 Pod 生命周期 | 与 API Server 通信，调用容器运行时 |
+| **kube-proxy** | 维护网络规则 | iptables/IPVS，实现 Service 负载均衡 |
+| **容器运行时** | 运行容器 | containerd / CRI-O / Docker |
+
+## 声明式 API 与控制器模式
+
+<Callout type="info" title="声明式 vs 命令式">
+
+**命令式**：`docker run nginx`（告诉系统「做什么」）
+
+**声明式**：`replicas: 3`（告诉系统「期望什么状态」）
+
+K8s 选择声明式：用户提交 YAML 声明期望状态，控制器持续 Reconcile 把实际状态拉向期望状态。
+
+</Callout>
+
+### Reconcile 循环
+
+```
+用户提交: replicas: 3
+    ↓
+API Server 写入 etcd
+    ↓
+Deployment Controller Watch 到变化
+    ↓
+对比期望(3) vs 实际(1) → 创建 2 个 Pod
+    ↓
+Scheduler Watch 到新 Pod → 分配节点
+    ↓
+kubelet Watch 到分配到本节点的 Pod → 启动容器
+    ↓
+Pod 故障 → Controller 发现实际(2) ≠ 期望(3) → 重建
+```
+
+## 核心资源对象
+
+| 资源 | 层级 | 职责 |
+|------|------|------|
+| **Pod** | 最小调度单元 | 一个或多个容器共享网络和存储 |
+| **Deployment** | 工作负载 | 管理 ReplicaSet，支持滚动更新和回滚 |
+| **Service** | 网络 | 为一组 Pod 提供稳定的访问入口 |
+| **ConfigMap/Secret** | 配置 | 注入配置和敏感数据 |
+| **PV/PVC** | 存储 | 持久化卷的抽象与申请 |
+
+## kubectl 核心命令
+
+```bash
+# 创建资源
+kubectl apply -f deployment.yaml
+
+# 查看资源
+kubectl get pods -o wide
+kubectl describe pod nginx-pod
+
+# 更新与回滚
+kubectl rollout status deployment/nginx
+kubectl rollout undo deployment/nginx
+
+# 调试
+kubectl logs -f pod/nginx --tail=100
+kubectl exec -it pod/nginx -- /bin/sh
+```
+
+<Callout type="tip" title="kubectl apply vs create">
+
+`kubectl create` 是命令式，重复执行会报错；`kubectl apply` 是声明式，可重复执行（幂等），生产环境始终用 `apply`。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="控制面">
+K8s 集群的大脑，包含 API Server、etcd、Scheduler、Controller Manager。负责集群级决策、状态存储和资源调度，不直接运行用户容器。
+</GlossaryItem>
+
+<GlossaryItem term="kubelet">
+运行在每个节点上的代理，负责管理 Pod 生命周期。监听 API Server 分配到本节点的 Pod，调用容器运行时启动/停止容器，并定期汇报节点和 Pod 状态。
+</GlossaryItem>
+
+<GlossaryItem term="etcd">
+K8s 的状态存储后端，分布式键值数据库。存储集群所有配置和状态数据，使用 Raft 协议保证一致性。是集群的「单一事实来源」。
+</GlossaryItem>
+
+<GlossaryItem term="CRI">
+Container Runtime Interface，容器运行时接口。K8s 通过 CRI 标准接口与容器运行时通信，支持 containerd、CRI-O 等实现，解耦 K8s 与具体运行时。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Kubernetes 的控制面包含哪些组件？各自承担什么职责？
+
+<Answer>
+
+控制面四大组件：①API Server——集群唯一入口，所有组件和用户通过它交互，负责认证/授权/准入控制，将资源写入 etcd；②etcd——分布式键值数据库，存储集群所有状态和配置数据，使用 Raft 协议保证一致性，是集群的单一事实来源；③Scheduler——调度器，Watch 到新创建的 Pod（nodeName 为空）后，根据资源请求、亲和性、污点容忍等规则选择最合适的节点分配；④Controller Manager——运行所有内置控制器的进程，如 Deployment Controller（管理副本和滚动更新）、ReplicaSet Controller（维持副本数）、Node Controller（监控节点健康）等，通过 Reconcile 循环将实际状态拉向期望状态。
+
+</Answer>
+
+**问题 2：** 声明式 API 和命令式 API 有什么区别？为什么 K8s 选择声明式？
+
+<Answer>
+
+命令式 API 告诉系统「做什么」，如 docker run nginx——直接执行一个动作，不可重复执行。声明式 API 告诉系统「期望什么状态」，如 replicas: 3——系统持续保证实际状态等于期望状态，可重复执行（幂等）。K8s 选择声明式的原因：①自愈——Pod 故障后控制器自动重建，无需人工干预；②可重入——kubectl apply 可重复执行，适合 CI/CD；③可审计——YAML 即期望状态，可版本控制；④最终一致——控制器持续 Reconcile，即使中间失败也会重试直到达成期望状态。核心机制是 Watch + Reconcile 循环：控制器监听 API Server 资源变化，对比期望与实际状态，执行操作消除差异。
+
+</Answer>
+
+</Exercises>

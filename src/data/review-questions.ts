@@ -1845,6 +1845,16 @@ import { kgaTrafficControlQuestions } from "./review/kga-traffic-control";
 import { kgaDeploymentHaQuestions } from "./review/kga-deployment-ha";
 import { kgaAdvancedTopicsQuestions } from "./review/kga-advanced-topics";
 import { kgaFinalReviewQuestions } from "./review/kga-final-review";
+import { k8sLearningMapQuestions } from "./review/k8s-learning-map";
+import { k8sContainerOrchestrationQuestions } from "./review/k8s-container-orchestration";
+import { k8sPodsQuestions } from "./review/k8s-pods";
+import { k8sDeploymentsQuestions } from "./review/k8s-deployments";
+import { k8sServicesNetworkingQuestions } from "./review/k8s-services-networking";
+import { k8sVolumesStorageQuestions } from "./review/k8s-volumes-storage";
+import { k8sConfigSecretsQuestions } from "./review/k8s-config-secrets";
+import { k8sSchedulingQuestions } from "./review/k8s-scheduling";
+import { k8sSecurityOpsQuestions } from "./review/k8s-security-ops";
+import { k8sFinalReviewQuestions } from "./review/k8s-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3725,6 +3735,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...kgaDeploymentHaQuestions,
   ...kgaAdvancedTopicsQuestions,
   ...kgaFinalReviewQuestions,
+  ...k8sLearningMapQuestions,
+  ...k8sContainerOrchestrationQuestions,
+  ...k8sPodsQuestions,
+  ...k8sDeploymentsQuestions,
+  ...k8sServicesNetworkingQuestions,
+  ...k8sVolumesStorageQuestions,
+  ...k8sConfigSecretsQuestions,
+  ...k8sSchedulingQuestions,
+  ...k8sSecurityOpsQuestions,
+  ...k8sFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
