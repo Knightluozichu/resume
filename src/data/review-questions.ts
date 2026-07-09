@@ -2265,6 +2265,16 @@ import { ineBmsThermalQuestions } from "./review/ine-bms-thermal";
 import { ineChassisBodyQuestions } from "./review/ine-chassis-body";
 import { ineSafetyFutureQuestions } from "./review/ine-safety-future";
 import { ineFinalReviewQuestions } from "./review/ine-final-review";
+import { csiLearningMapQuestions } from "./review/csi-learning-map";
+import { csiEngineSystemQuestions } from "./review/csi-engine-system";
+import { csiTransmissionDrivetrainQuestions } from "./review/csi-transmission-drivetrain";
+import { csiChassisSuspensionQuestions } from "./review/csi-chassis-suspension";
+import { csiSteeringBrakingQuestions } from "./review/csi-steering-braking";
+import { csiBodyInteriorQuestions } from "./review/csi-body-interior";
+import { csiElectricalElectronicsQuestions } from "./review/csi-electrical-electronics";
+import { csiHvacComfortQuestions } from "./review/csi-hvac-comfort";
+import { csiSafetySystemsQuestions } from "./review/csi-safety-systems";
+import { csiFinalReviewQuestions } from "./review/csi-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4565,6 +4575,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ineChassisBodyQuestions,
   ...ineSafetyFutureQuestions,
   ...ineFinalReviewQuestions,
+  ...csiLearningMapQuestions,
+  ...csiEngineSystemQuestions,
+  ...csiTransmissionDrivetrainQuestions,
+  ...csiChassisSuspensionQuestions,
+  ...csiSteeringBrakingQuestions,
+  ...csiBodyInteriorQuestions,
+  ...csiElectricalElectronicsQuestions,
+  ...csiHvacComfortQuestions,
+  ...csiSafetySystemsQuestions,
+  ...csiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -488,6 +488,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "mastering-bitcoin": "精通比特币",
   "mastering-ethereum": "精通以太坊",
   "illustrated-nev": "图解新能源汽车原理与构造",
+  "car-structure-illustrated": "汽车构造与知识全图解",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

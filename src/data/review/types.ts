@@ -2388,7 +2388,17 @@ export type ReviewChapterSlug =
   | "ine-bms-thermal"
   | "ine-chassis-body"
   | "ine-safety-future"
-  | "ine-final-review";
+  | "ine-final-review"
+  | "csi-learning-map"
+  | "csi-engine-system"
+  | "csi-transmission-drivetrain"
+  | "csi-chassis-suspension"
+  | "csi-steering-braking"
+  | "csi-body-interior"
+  | "csi-electrical-electronics"
+  | "csi-hvac-comfort"
+  | "csi-safety-systems"
+  | "csi-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4781,6 +4791,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ine-chassis-body": "底盘与车身架构",
   "ine-safety-future": "安全技术与未来趋势",
   "ine-final-review": "全书复习与知识整合",
+  "csi-learning-map": "汽车构造全图解·知识全景图",
+  "csi-engine-system": "发动机系统",
+  "csi-transmission-drivetrain": "变速器与传动系统",
+  "csi-chassis-suspension": "底盘与悬架",
+  "csi-steering-braking": "转向与制动系统",
+  "csi-body-interior": "车身与内饰",
+  "csi-electrical-electronics": "电气与电子系统",
+  "csi-hvac-comfort": "空调与舒适性系统",
+  "csi-safety-systems": "安全系统",
+  "csi-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
