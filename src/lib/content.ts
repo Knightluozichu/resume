@@ -247,6 +247,7 @@ export const BOOK_ORDER = [
   "engineering-a-compiler",
   "dragon-book-compilers",
   "tiger-book-compiler",
+  "illustrated-ai",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -434,6 +435,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "engineering-a-compiler": "编译器设计",
   "dragon-book-compilers": "龙书（编译原理）",
   "tiger-book-compiler": "虎书（现代编译器实现）",
+  "illustrated-ai": "图解人工智能",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1065,6 +1067,7 @@ export const SECTION_ORDER = [
   "分布式与中间件",
   "网络",
   "编译原理",
+  "人工智能与机器学习",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

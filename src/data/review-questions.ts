@@ -1995,6 +1995,16 @@ import { tbcCanonicalizationQuestions } from "./review/tbc-canonicalization";
 import { tbcInstructionSelectionQuestions } from "./review/tbc-instruction-selection";
 import { tbcRegisterAllocationQuestions } from "./review/tbc-register-allocation";
 import { tbcFinalReviewQuestions } from "./review/tbc-final-review";
+import { iaiLearningMapQuestions } from "./review/iai-learning-map";
+import { iaiAiHistoryQuestions } from "./review/iai-ai-history";
+import { iaiSearchAlgorithmsQuestions } from "./review/iai-search-algorithms";
+import { iaiMachineLearningQuestions } from "./review/iai-machine-learning";
+import { iaiDeepLearningQuestions } from "./review/iai-deep-learning";
+import { iaiNlpQuestions } from "./review/iai-nlp";
+import { iaiComputerVisionQuestions } from "./review/iai-computer-vision";
+import { iaiReinforcementLearningQuestions } from "./review/iai-reinforcement-learning";
+import { iaiAiEthicsQuestions } from "./review/iai-ai-ethics";
+import { iaiFinalReviewQuestions } from "./review/iai-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4025,6 +4035,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...tbcInstructionSelectionQuestions,
   ...tbcRegisterAllocationQuestions,
   ...tbcFinalReviewQuestions,
+  ...iaiLearningMapQuestions,
+  ...iaiAiHistoryQuestions,
+  ...iaiSearchAlgorithmsQuestions,
+  ...iaiMachineLearningQuestions,
+  ...iaiDeepLearningQuestions,
+  ...iaiNlpQuestions,
+  ...iaiComputerVisionQuestions,
+  ...iaiReinforcementLearningQuestions,
+  ...iaiAiEthicsQuestions,
+  ...iaiFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

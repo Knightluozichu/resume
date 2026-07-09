@@ -2118,7 +2118,17 @@ export type ReviewChapterSlug =
   | "tbc-canonicalization"
   | "tbc-instruction-selection"
   | "tbc-register-allocation"
-  | "tbc-final-review";
+  | "tbc-final-review"
+  | "iai-learning-map"
+  | "iai-ai-history"
+  | "iai-search-algorithms"
+  | "iai-machine-learning"
+  | "iai-deep-learning"
+  | "iai-nlp"
+  | "iai-computer-vision"
+  | "iai-reinforcement-learning"
+  | "iai-ai-ethics"
+  | "iai-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4241,6 +4251,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "tbc-instruction-selection": "指令选择",
   "tbc-register-allocation": "寄存器分配与图着色",
   "tbc-final-review": "全书复习与知识整合",
+  "iai-learning-map": "全书学习地图",
+  "iai-ai-history": "AI发展史与定义",
+  "iai-search-algorithms": "搜索与优化",
+  "iai-machine-learning": "机器学习基础",
+  "iai-deep-learning": "深度学习入门",
+  "iai-nlp": "自然语言处理",
+  "iai-computer-vision": "计算机视觉",
+  "iai-reinforcement-learning": "强化学习",
+  "iai-ai-ethics": "AI伦理与未来",
+  "iai-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
