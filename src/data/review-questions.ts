@@ -1715,6 +1715,16 @@ import { apoNetworkOptimizationQuestions } from "./review/apo-network-optimizati
 import { apoStorageOptimizationQuestions } from "./review/apo-storage-optimization";
 import { apoStabilityMonitoringQuestions } from "./review/apo-stability-monitoring";
 import { apoFinalReviewQuestions } from "./review/apo-final-review";
+import { jpcLearningMapQuestions } from "./review/jpc-learning-map";
+import { jpcComposeBasicsQuestions } from "./review/jpc-compose-basics";
+import { jpcLayoutModifiersQuestions } from "./review/jpc-layout-modifiers";
+import { jpcStateManagementQuestions } from "./review/jpc-state-management";
+import { jpcAnimationsQuestions } from "./review/jpc-animations";
+import { jpcThemeStylingQuestions } from "./review/jpc-theme-styling";
+import { jpcNavigationQuestions } from "./review/jpc-navigation";
+import { jpcViewInteropQuestions } from "./review/jpc-view-interop";
+import { jpcAdvancedComposeQuestions } from "./review/jpc-advanced-compose";
+import { jpcFinalReviewQuestions } from "./review/jpc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3465,6 +3475,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...apoStorageOptimizationQuestions,
   ...apoStabilityMonitoringQuestions,
   ...apoFinalReviewQuestions,
+  ...jpcLearningMapQuestions,
+  ...jpcComposeBasicsQuestions,
+  ...jpcLayoutModifiersQuestions,
+  ...jpcStateManagementQuestions,
+  ...jpcAnimationsQuestions,
+  ...jpcThemeStylingQuestions,
+  ...jpcNavigationQuestions,
+  ...jpcViewInteropQuestions,
+  ...jpcAdvancedComposeQuestions,
+  ...jpcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

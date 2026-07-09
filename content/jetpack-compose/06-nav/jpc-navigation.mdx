@@ -1,0 +1,278 @@
+---
+title: "导航与路由"
+type: C
+section: "Android开发"
+order: 6
+description: "掌握NavHost导航图、NavController路由管理与类型安全导航"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { JpcNavigationDiagram } from "@/components/mdx/jetpack-compose/diagrams/jpc-navigation";
+
+<Objectives>
+
+- 理解 NavHost 导航图结构和 NavController 路由管理
+- 掌握带参数路由和类型安全路由（Navigation 2.8+）
+- 学会嵌套导航图和底部导航栏联动
+- 理解 BackStack 管理和深层链接
+
+</Objectives>
+
+## NavHost 导航图
+
+<JpcNavigationDiagram />
+
+Compose Navigation 的核心是 NavHost——一个声明式导航图容器，定义所有目的地（destination）和路由。
+
+```kotlin
+// 基本导航图
+@Composable
+fun AppNavHost() {
+    val navController = rememberNavController()
+    
+    NavHost(navController = navController, startDestination = "home") {
+        // 无参数路由
+        composable("home") {
+            HomeScreen(
+                onNavigateToDetail = { id ->
+                    navController.navigate("detail/$id")
+                }
+            )
+        }
+        
+        // 带参数路由
+        composable(
+            route = "detail/{id}",
+            arguments = listOf(navArgument("id") { type = NavType.LongType })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getLong("id") ?: 0L
+            DetailScreen(itemId = id)
+        }
+        
+        composable("settings") {
+            SettingsScreen()
+        }
+    }
+}
+```
+
+## NavController 路由管理
+
+```kotlin
+// navigate：跳转到目的地
+navController.navigate("detail/123")
+
+// 带转场动画
+navController.navigate("detail/123") {
+    // 进入动画
+    enterTransition = { slideInHorizontally() }
+    popExitTransition = { slideOutHorizontally() }
+}
+
+// popBackStack：返回上一页
+navController.popBackStack()
+
+// 带返回结果的跳转
+navController.currentBackStackEntry?.savedStateHandle?.get<String>("result")
+
+// navigate 选项
+navController.navigate("settings") {
+    popUpTo("home") { inclusive = false }  // 弹出到 home（不包含 home）
+    launchSingleTop = true                   // 如果栈顶已是目标，不重复创建
+    restoreState = true                      // 恢复之前保存的状态
+}
+
+// 返回结果
+@Composable
+fun HomeScreen(navController: NavController) {
+    val result = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<String>("result", "")
+        ?.collectAsStateWithLifecycle()
+    
+    LaunchedEffect(Unit) {
+        navController.currentBackStackEntry?.savedStateHandle
+            ?.getStateFlow<String>("result", "")
+            ?.collect { /* 处理返回结果 */ }
+    }
+}
+
+// 在目标页设置返回结果
+fun DetailScreen(navController: NavController) {
+    Button(onClick = {
+        navController.previousBackStackEntry
+            ?.savedStateHandle
+            ?.set("result", "selected_item")
+        navController.popBackStack()
+    }) { Text("选择并返回") }
+}
+```
+
+## 类型安全路由（Navigation 2.8+）
+
+```kotlin
+// 传统方式：字符串拼接路由（容易出错）
+navController.navigate("detail/$id?name=$name")
+
+// 类型安全方式：用 Serializable 对象/类定义路由
+@Serializable
+object Home
+
+@Serializable
+data class Detail(val id: Long, val name: String)
+
+@Serializable
+object Settings
+
+// NavHost 中用类型安全路由
+NavHost(navController, startDestination = Home) {
+    composable<Home> { HomeScreen() }
+    composable<Detail> { backStackEntry ->
+        val args: Detail = backStackEntry.toRoute()
+        DetailScreen(args.id, args.name)
+    }
+    composable<Settings> { SettingsScreen() }
+}
+
+// 导航时传参
+navController.navigate(Detail(id = 123, name = "张三"))
+```
+
+<Callout type="success" title="类型安全路由优势">
+①编译期检查——路由参数类型在编译期验证，不再有字符串拼接的运行时错误。②自动序列化——基本类型（Int/Long/String/Boolean/Float）自动序列化到 URL，复杂类型需自定义。③IDE 自动补全——路由对象有完整的类型信息，重构友好。
+</Callout>
+
+## 嵌套导航与底部导航
+
+```kotlin
+// 嵌套导航图
+NavHost(navController, startDestination = "main") {
+    navigation(startDestination = "home", route = "main") {
+        composable("home") { HomeScreen() }
+        composable("search") { SearchScreen() }
+        composable("profile") { ProfileScreen() }
+    }
+    navigation(startDestination = "login", route = "auth") {
+        composable("login") { LoginScreen() }
+        composable("register") { RegisterScreen() }
+    }
+}
+
+// 底部导航栏与 NavHost 联动
+@Composable
+fun MainScreen() {
+    val navController = rememberNavController()
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+    
+    Scaffold(
+        bottomBar = {
+            BottomNavigation {
+                val items = listOf(
+                    BottomItem("home", "首页", Icons.Default.Home),
+                    BottomItem("search", "搜索", Icons.Default.Search),
+                    BottomItem("profile", "我的", Icons.Default.Person)
+                )
+                items.forEach { item ->
+                    NavigationBarItem(
+                        selected = currentRoute == item.route,
+                        onClick = {
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
+                            }
+                        },
+                        icon = { Icon(item.icon, null) },
+                        label = { Text(item.label) }
+                    )
+                }
+            }
+        }
+    ) { padding ->
+        NavHost(navController, startDestination = "home", Modifier.padding(padding)) {
+            composable("home") { HomeScreen() }
+            composable("search") { SearchScreen() }
+            composable("profile") { ProfileScreen() }
+        }
+    }
+}
+```
+
+## 深层链接
+
+```kotlin
+// 在 composable 中声明深层链接
+composable(
+    route = "detail/{id}",
+    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+    deepLinks = listOf(navDeepLink {
+        uriPattern = "myapp://detail/{id}"
+        action = Intent.ACTION_VIEW
+    })
+) { backStackEntry ->
+    DetailScreen(backStackEntry.arguments?.getLong("id") ?: 0)
+}
+
+// AndroidManifest.xml 中配置 intent filter
+// <activity>
+//   <intent-filter>
+//     <action android:name="android.intent.action.VIEW" />
+//     <data android:scheme="myapp" android:host="detail" />
+//   </intent-filter>
+// </activity>
+```
+
+<Glossary>
+
+<GlossaryItem term="NavHost">
+导航图容器组件，声明所有目的地和路由。在 NavHost 的 content lambda 中用 composable() 定义每个目的地。是 Compose Navigation 的核心。
+</GlossaryItem>
+
+<GlossaryItem term="NavController">
+导航控制器，管理导航操作（navigate/popBackStack）和 BackStack。通过 rememberNavController() 创建，在 Composable 间传递。
+</GlossaryItem>
+
+<GlossaryItem term="类型安全路由">
+Navigation 2.8+ 引入的路由方式，用 Serializable 对象/类替代字符串定义路由。编译期类型检查，自动序列化参数，IDE 自动补全。
+</GlossaryItem>
+
+<GlossaryItem term="BackStack">
+导航回退栈，记录用户的导航历史。navigate 入栈，popBackStack 出栈。每个条目保存目的地的状态和参数。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：NavHost 和 NavController 各自的职责是什么？
+
+<Answer>
+NavHost职责：声明式导航图容器——在content lambda中用composable()定义所有目的地（destination）和路由（route）。它是UI的一部分，负责在当前目的地变化时显示对应的Composable内容。NavHost本身是一个@Composable，它在内部根据NavController的当前BackStackEntry选择对应的composable()来渲染。NavController职责：导航状态管理器——管理导航操作（navigate跳转、popBackStack返回）和BackStack（回退栈）。它不是Composable，而是一个持有导航状态的对象。通过rememberNavController()在Composable中创建。职责划分：NavHost负责「显示什么」（根据当前路由渲染对应的Screen），NavController负责「去哪里」（执行跳转、返回、管理栈）。关系：NavHost接收NavController作为参数，订阅其状态变化；当NavController.navigate()被调用时，NavController更新当前路由，NavHost检测到变化，渲染新目的地的Composable。NavController还可以在NavHost外部使用——如在BottomBar的onClick中调用navController.navigate()。
+</Answer>
+
+**问题 2**：类型安全路由相比字符串路由有什么优势？如何使用？
+
+<Answer>
+优势：①编译期类型检查——字符串路由`"detail/$id"`中id的类型（Long/String）在运行时才验证，拼错或类型不匹配只在运行时崩溃。类型安全路由用`@Serializable data class Detail(val id: Long)`定义，编译器检查参数类型。②重构友好——字符串路由改路由名需要全局搜索替换，容易遗漏。类型安全路由改类名/字段名，IDE自动重构所有引用。③自动序列化——基本类型（Int/Long/String/Boolean/Float/Double）自动序列化为URL参数，不需要手动拼字符串。④IDE补全——`navController.navigate(Detail(` IDE自动提示id和name参数。使用方法：①定义路由对象——`@Serializable object Home`（无参数路由）或 `@Serializable data class Detail(val id: Long, val name: String)`（带参数路由）。②NavHost中注册——`composable<Detail> { entry -> val args = entry.toRoute<Detail>(); DetailScreen(args.id, args.name) }`。③导航——`navController.navigate(Detail(id=123, name="张三"))`。④可选参数——`@Serializable data class Search(val query: String = "")`，query有默认值则为可选参数。⑤嵌套导航——`@Serializable object Main`，`navigation<Main>(startDestination=Home) { composable<Home>{...} }`。限制：复杂对象类型（如List、自定义类）不能自动序列化，需用String路径或自定义。
+</Answer>
+
+**问题 3**：底部导航栏如何与 NavHost 联动实现 tab 切换时保持状态？
+
+<Answer>
+关键在navigate选项的配置：```kotlin NavigationBarItem( selected = currentRoute == item.route, onClick = { navController.navigate(item.route) { popUpTo(navController.graph.findStartDestination().id) { saveState = true } launchSingleTop = true restoreState = true } })```三个关键选项：①popUpTo(startDestination){ saveState=true }——点击tab时弹出到起始目的地（不是popUpTo当前tab），但saveState=true让被弹出的tab状态保存到SavedStateHandle中。这样切换tab时之前tab的滚动位置、输入内容等不丢失。②launchSingleTop=true——如果目标tab已在栈顶，不重复创建新的BackStackEntry。避免连续点击同一tab创建多个实例。③restoreState=true——从SavedStateHandle恢复之前保存的tab状态。与saveState=true配合：saveState在离开时保存，restoreState在进入时恢复。效果：用户在Home tab滚动到列表中部→切到Search tab→切回Home tab→Home列表仍在中部位置。currentRoute获取：`val navBackStackEntry by navController.currentBackStackEntryAsState(); val currentRoute = navBackStackEntry?.destination?.route`——currentBackStackEntryAsState()返回State<NavBackStackEntry?>，路由变化时自动重组BottomBar更新选中态。
+</Answer>
+
+**问题 4**：如何在两个页面之间传递数据并获取返回结果？
+
+<Answer>
+正向传参（Home→Detail）：①类型安全路由——`navController.navigate(Detail(id=123))`，Detail页面用`entry.toRoute<Detail>().id`获取。②字符串路由——`navController.navigate("detail/123")`，Detail页面用`entry.arguments?.getLong("id")`获取。③可选参数——`composable("search?query={query}", arguments=listOf(navArgument("query"){type=NavType.StringType; defaultValue=""}))`，导航时`navigate("search?query=hello")`。返回结果（Detail→Home）：①通过SavedStateHandle传递——Detail页面设置结果：`navController.previousBackStackEntry?.savedStateHandle?.set("result", "selected_item"); navController.popBackStack()`。Home页面接收结果：`navController.currentBackStackEntry?.savedStateHandle?.getStateFlow<String>("result", "")?.collectAsStateWithLifecycle()`——用StateFlow监听，popBackStack回来后自动收到结果。②优势——比传统Activity的startActivityForResult+onActivityResult更简洁，且是响应式的（StateFlow自动触发重组）。注意：previousBackStackEntry是返回后将要显示的页面（即发起导航的页面）。如果是多级跳转，需要确保previousBackStackEntry是正确的页面。复杂场景可以用SharedViewModel——多个页面共享同一个ViewModel（绑定到NavGraph的route），通过StateFlow传递数据，不依赖BackStackEntry。
+</Answer>
+
+</Exercises>

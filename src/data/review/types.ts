@@ -1838,7 +1838,17 @@ export type ReviewChapterSlug =
   | "apo-network-optimization"
   | "apo-storage-optimization"
   | "apo-stability-monitoring"
-  | "apo-final-review";
+  | "apo-final-review"
+  | "jpc-learning-map"
+  | "jpc-compose-basics"
+  | "jpc-layout-modifiers"
+  | "jpc-state-management"
+  | "jpc-animations"
+  | "jpc-theme-styling"
+  | "jpc-navigation"
+  | "jpc-view-interop"
+  | "jpc-advanced-compose"
+  | "jpc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3681,6 +3691,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "apo-storage-optimization": "存储优化",
   "apo-stability-monitoring": "稳定性与监控",
   "apo-final-review": "全书复习",
+  "jpc-learning-map": "全书学习地图",
+  "jpc-compose-basics": "Compose基础",
+  "jpc-layout-modifiers": "布局与修饰符",
+  "jpc-state-management": "状态管理",
+  "jpc-animations": "动画",
+  "jpc-theme-styling": "主题与样式",
+  "jpc-navigation": "导航与路由",
+  "jpc-view-interop": "与View互操作",
+  "jpc-advanced-compose": "高级Compose",
+  "jpc-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

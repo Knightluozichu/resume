@@ -1,0 +1,263 @@
+---
+title: "动画"
+type: C
+section: "Android开发"
+order: 4
+description: "掌握animate*AsState、Animatable、AnimatedVisibility与updateTransition动画API"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { JpcAnimationsDiagram } from "@/components/mdx/jetpack-compose/diagrams/jpc-animations";
+
+<Objectives>
+
+- 理解 Compose 动画 API 的三层架构和选型决策
+- 掌握 animate*AsState 单属性动画和 updateTransition 多属性联动
+- 学会使用 AnimatedVisibility / AnimatedContent 声明式动画
+- 理解 Animatable 协程驱动动画与 AnimationSpec 曲线配置
+
+</Objectives>
+
+## 动画 API 层级
+
+<JpcAnimationsDiagram />
+
+Compose 动画 API 分三层：高层声明式（AnimatedVisibility 等）、中层状态驱动（animate*AsState 等）、底层精确控制（Animatable 等）。从高到低，灵活性递增，易用性递减。
+
+## 高层声明式动画
+
+```kotlin
+// AnimatedVisibility：显隐动画（fade + slide + expand 自动组合）
+@Composable
+fun VisibilityDemo() {
+    var visible by remember { mutableStateOf(true) }
+    
+    Column {
+        Button(onClick = { visible = !visible }) { Text("切换") }
+        
+        AnimatedVisibility(
+            visible = visible,
+            enter = fadeIn() + slideInVertically(),
+            exit = fadeOut() + slideOutVertically()
+        ) {
+            Card { Text("我会动画显隐") }
+        }
+    }
+}
+
+// AnimatedContent：内容切换动画（新旧内容过渡）
+@Composable
+fun ContentDemo() {
+    var count by remember { mutableStateOf(0) }
+    
+    AnimatedContent(
+        targetState = count,
+        transitionSpec = {
+            fadeIn(animationSpec = tween(300)) togetherWith
+            fadeOut(animationSpec = tween(300))
+        }
+    ) { target ->
+        Text("$target", fontSize = 48.sp)
+    }
+}
+
+// Crossfade：淡入淡出切换
+@Composable
+fun CrossfadeDemo() {
+    var tab by remember { mutableStateOf(0) }
+    Crossfade(targetState = tab) { tab ->
+        when (tab) {
+            0 -> HomeScreen()
+            1 -> ProfileScreen()
+        }
+    }
+}
+```
+
+## 中层状态驱动动画
+
+```kotlin
+// animate*AsState：单属性动画（一行搞定）
+@Composable
+fun ColorAnimation(selected: Boolean) {
+    // 颜色自动从 Gray 过渡到 Blue
+    val color by animateColorAsState(
+        targetValue = if (selected) Color.Blue else Color.Gray,
+        animationSpec = tween(durationMillis = 300)
+    )
+    Box(Modifier.background(color).size(100.dp))
+}
+
+// 其他 animate*AsState 变体
+val alpha by animateFloatAsState(if (visible) 1f else 0f)
+val offset by animateDpAsState(if (expanded) 200.dp else 0.dp)
+val size by animateSizeAsState(if (big) Size(200f, 200f) else Size(100f, 100f))
+
+// updateTransition：多属性同时动画
+@Composable
+fun MultiAnimation(selected: Boolean) {
+    val transition = updateTransition(selected, label = "selected")
+    
+    val color by transition.animateColor { state ->
+        if (state) Color.Blue else Color.Gray
+    }
+    val padding by transition.animateDp { state ->
+        if (state) 24.dp else 8.dp
+    }
+    val corner by transition.animateFloat { state ->
+        if (state) 32f else 8f
+    }
+    
+    // 三个属性同时动画，由同一个 selected 状态驱动
+    Box(Modifier
+        .background(color)
+        .padding(padding)
+        .clip(RoundedCornerShape(corner.dp))
+    )
+}
+
+// rememberInfiniteTransition：无限循环动画
+@Composable
+fun PulseAnimation() {
+    val transition = rememberInfiniteTransition(label = "pulse")
+    val scale by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+    Box(Modifier.scale(scale).size(100.dp).background(Color.Red))
+}
+```
+
+## 底层精确控制
+
+```kotlin
+// Animatable：协程驱动，可暂停/取消/精确控制
+@Composable
+fun DragAnimation() {
+    val animatable = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    
+    Box(
+        Modifier
+            .offset { IntOffset(animatable.value.toInt(), 0) }
+            .draggable(
+                orientation = Orientation.Horizontal,
+                onDragStopped = { velocity ->
+                    scope.launch {
+                        // 弹簧动画回到原位
+                        animatable.animateTo(
+                            targetValue = 0f,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        )
+                    }
+                }
+            )
+    )
+}
+
+// AnimationSpec：动画曲线配置
+tween(durationMillis = 300, delayMillis = 0, easing = FastOutSlowInEasing)
+spring(dampingRatio = 0.5f, stiffness = 200f)  // 弹簧物理
+keyframes {
+    durationMillis = 300
+    0f at 0 with FastOutSlowInEasing
+    0.5f at 150 with LinearEasing
+    1f at 300
+}
+repeatable(iterations = 3, animation = tween(200), repeatMode = RepeatMode.Restart)
+```
+
+<Callout type="info" title="Easing 曲线">
+Easing 控制动画的「速度变化曲线」。FastOutSlowInEasing（快出慢入）是最常用的 Material 动画曲线——开始快、结束慢，符合自然运动规律。LinearEasing（匀速）只适合进度条等机械动画。
+</Callout>
+
+## 动画选型决策
+
+```kotlin
+// 决策树：
+
+// 1. 显隐切换？→ AnimatedVisibility
+AnimatedVisibility(visible = show) { Content() }
+
+// 2. 内容切换？→ AnimatedContent / Crossfade
+AnimatedContent(targetState = page) { page -> PageContent(page) }
+
+// 3. 单属性变化？→ animate*AsState
+val color by animateColorAsState(if (sel) Blue else Gray)
+
+// 4. 多属性联动？→ updateTransition
+val t = updateTransition(state)
+val c by t.animateColor { ... }
+val s by t.animateDp { ... }
+
+// 5. 手势驱动/精确控制？→ Animatable + coroutine
+val a = remember { Animatable(0f) }
+scope.launch { a.animateTo(target, spring()) }
+
+// 6. 无限循环？→ rememberInfiniteTransition
+val t = rememberInfiniteTransition()
+val v by t.animateFloat(0f, 1f, infiniteRepeatable(tween(800)))
+```
+
+<Glossary>
+
+<GlossaryItem term="animate*AsState">
+一组单属性动画 API（animateColorAsState、animateDpAsState 等），传入目标值，自动从当前值动画到目标值。最简单的动画方式——一行代码搞定。
+</GlossaryItem>
+
+<GlossaryItem term="updateTransition">
+多属性联动动画 API。用同一个状态驱动多个属性的动画，保证所有属性同步变化。通过 animateColor/animateDp 等扩展函数定义各属性的起止值。
+</GlossaryItem>
+
+<GlossaryItem term="Animatable">
+底层协程驱动的动画 API。持有动画值，通过 animateTo/animateTo 在协程中执行动画。支持暂停、取消、snapTo（瞬间跳转）。适合手势驱动的动画。
+</GlossaryItem>
+
+<GlossaryItem term="AnimationSpec">
+动画规格，定义动画的持续时间和曲线。常用：tween（线性时间+缓动）、spring（弹簧物理）、keyframes（关键帧）、repeatable（重复）。
+</GlossaryItem>
+
+<GlossaryItem term="AnimatedVisibility">
+声明式显隐动画组件。传入 visible 参数，自动在显示/隐藏时播放 enter/exit 动画。支持 fadeIn/fadeOut、slideIn/slideOut、expandIn/shrinkOut 的组合。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Compose 动画 API 的三层架构是什么？如何选型？
+
+<Answer>
+三层架构：①高层声明式——AnimatedVisibility（显隐）、AnimatedContent（内容切换）、Crossfade（淡入淡出）。特点：声明式，只需描述「目标状态」，动画自动播放。适用：UI状态切换的视觉过渡。②中层状态驱动——animate*AsState（单属性）、updateTransition（多属性联动）、rememberInfiniteTransition（无限循环）。特点：用State驱动动画，值自动从当前过渡到目标。适用：属性值变化时的平滑过渡。③底层精确控制——Animatable（协程驱动）、AnimationSpec（曲线配置）。特点：协程可暂停/取消/seek，精确控制每一步。适用：手势驱动动画、物理动画、需要中途暂停的场景。选型决策树：显隐切换→AnimatedVisibility；内容切换→AnimatedContent/Crossfade；单属性变化→animate*AsState；多属性联动→updateTransition；无限循环→rememberInfiniteTransition；手势驱动/精确控制→Animatable+coroutine。原则：从高层开始选，高层满足不了再降层。高层API更声明式、更简洁、更不易出错；底层API更灵活但更复杂。
+</Answer>
+
+**问题 2**：updateTransition 和多个 animate*AsState 有什么区别？何时用哪个？
+
+<Answer>
+区别：①同步性——updateTransition保证多个属性同步开始和结束动画（由同一个状态驱动，同一帧内所有属性开始过渡）；多个animate*AsState各自独立，虽然通常也在同一帧开始，但理论上不保证完全同步（各自独立调度）。②代码组织——updateTransition将多个属性动画组织在一个transition对象下，代码结构更清晰；多个animate*AsState分散在不同变量中。③性能——updateTransition内部共享一个动画时钟，多个属性复用同一帧回调；多个animate*AsState各有独立的动画时钟。④灵活性——animate*AsState每个属性可以有不同的AnimationSpec；updateTransition中所有属性共享同一个transition的进度（但各自可以有不同Spec）。何时用updateTransition：多个属性需要严格同步变化（如按钮选中时颜色、大小、圆角同时变化），且由同一个状态触发。何时用多个animate*AsState：多个属性独立变化，触发条件不同（如颜色由selected驱动、大小由expanded驱动），或只需要单个属性动画。原则：同源多属性用updateTransition，异源单属性用animate*AsState。
+</Answer>
+
+**问题 3**：Animatable 相比 animate*AsState 有什么优势？如何实现一个手势拖拽后弹簧回弹的动画？
+
+<Answer>
+Animatable优势：①协程控制——animateTo在协程中执行，可以cancel()取消、job.join()等待完成、在协程中组合多个动画。②中途控制——snapTo()瞬间跳转到指定值（不动画），适合手势中实时更新位置。③可组合——可以在一个协程中串联多个动画（先动画到A再到B），或用launch并行动画。④手势集成——gesture检测中可以直接更新animatable.value或用animateDecay做惯性滑动。弹簧回弹实现：```kotlin @Composable fun DraggableBox() { val animatable = remember { Animatable(0f) } val scope = rememberCoroutineScope() Box(Modifier.offset { IntOffset(animatable.value.toInt(), 0) }.draggable(orientation = Orientation.Horizontal, onDrag = { delta -> scope.launch { animatable.snapTo(animatable.value + delta) } }, onDragStopped = { velocity -> scope.launch { animatable.animateTo(0f, spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) } })) }```关键点：①onDrag中用snapTo实时更新位置（不动画，跟手）。②onDragStopped中用animateTo+spring做弹簧回弹（松手后弹回原位）。③spring的dampingRatio控制弹跳程度（DampingRatioMediumBouncy=中等弹跳），stiffness控制弹簧硬度（越低越慢）。animate*AsState无法实现此效果因为它不支持在手势中实时更新值（snapTo），也不支持协程级别的控制。
+</Answer>
+
+**问题 4**：AnimationSpec 有哪些常用类型？各自适用什么场景？
+
+<Answer>
+四种常用AnimationSpec：①tween（补间动画）——`tween(durationMillis=300, easing=FastOutSlowInEasing)`。固定持续时间+缓动曲线。适用：UI状态切换、按钮选中、展开折叠等大多数场景。优点：可预测（知道何时结束）。缺点：不遵循物理规律。②spring（弹簧动画）——`spring(dampingRatio=0.5f, stiffness=200f)`。基于弹簧物理模型，模拟真实弹性运动。适用：手势释放后的回弹、拖拽列表项、需要自然弹跳效果的场景。优点：物理真实、手感好。缺点：持续时间不可预测（由物理参数决定）。dampingRatio：1.0=无弹跳（临界阻尼）、0.5=中等弹跳、0=永久振荡。stiffness：越大越硬（越快到位）、越小越软（越慢）。③keyframes（关键帧）——`keyframes { durationMillis=300; 0f at 0; 0.5f at 150 with LinearEasing; 1f at 300 }`。自定义多关键点的值和时间，可对每段指定不同Easing。适用：需要复杂多阶段动画（如先加速后减速、弹跳多次）。优点：精确控制每一步。缺点：配置复杂。④repeatable/infiniteRepeatable（重复动画）——`repeatable(iterations=3, animation=tween(200), repeatMode=RepeatMode.Restart)`。重复播放另一个Spec。RepeatMode.Restart=从头开始，RepeatMode.Reverse=反向播放。infiniteRepeatable=无限重复。适用：呼吸灯、脉冲、进度条循环。选择原则：默认用tween+FastOutSlowInEasing；需要弹跳手感用spring；多阶段用keyframes；循环用repeatable/infiniteRepeatable。
+</Answer>
+
+</Exercises>

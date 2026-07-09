@@ -1,0 +1,295 @@
+---
+title: "布局与修饰符"
+type: C
+section: "Android开发"
+order: 2
+description: "掌握Column/Row/Box布局容器、Modifier链式修饰符与LazyColumn懒加载列表"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { JpcLayoutModifiersDiagram } from "@/components/mdx/jetpack-compose/diagrams/jpc-layout-modifiers";
+
+<Objectives>
+
+- 掌握 Column、Row、Box 三大核心布局容器的使用
+- 理解 Modifier 链的工作原理和顺序敏感性
+- 学会使用 LazyColumn/LazyRow 实现高效懒加载列表
+- 理解 Compose 布局的测量流程（measure → place）
+
+</Objectives>
+
+## 布局体系总览
+
+<JpcLayoutModifiersDiagram />
+
+Compose 的布局系统由核心布局容器和 Modifier 修饰符两部分组成。容器负责组织子元素的空间关系，Modifier 负责修饰单个元素的外观和行为。
+
+## 三大核心布局容器
+
+### Column：垂直排列
+
+```kotlin
+// Column = 传统 LinearLayout(vertical)
+@Composable
+fun VerticalList() {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),  // 子元素间距
+        horizontalAlignment = Alignment.CenterHorizontally  // 水平对齐
+    ) {
+        Text("第一行")
+        Text("第二行")
+        Text("第三行")
+    }
+}
+```
+
+### Row：水平排列
+
+```kotlin
+// Row = 传统 LinearLayout(horizontal) 或 FlexboxLayout
+@Composable
+fun HorizontalBar() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,  // 两端对齐
+        verticalAlignment = Alignment.CenterVertically      // 垂直居中
+    ) {
+        Text("左")
+        Text("中")
+        Text("右")
+    }
+}
+```
+
+### Box：层叠排列
+
+```kotlin
+// Box = 传统 FrameLayout（Z 轴层叠）
+@Composable
+fun Overlay() {
+    Box(modifier = Modifier.size(200.dp)) {
+        Image(painterResource(R.drawable.bg), null,
+            modifier = Modifier.fillMaxSize())
+        Text("覆盖文字",
+            modifier = Modifier.align(Alignment.BottomEnd))  // 对齐方式
+    }
+}
+```
+
+<Callout type="info" title="Arrangement vs Alignment">
+Column 中 verticalArrangement 控制主轴（垂直）方向分布，horizontalAlignment 控制交叉轴（水平）对齐。Row 中正好相反。Arrangement 选项：Start / Center / End / SpaceBetween / SpaceEvenly / SpaceAround。
+</Callout>
+
+## Modifier 链
+
+```kotlin
+// Modifier 链式调用，顺序敏感！
+// 顺序不同 → 效果不同
+
+// 写法 A：先 padding 后 background
+Box(
+    Modifier
+        .padding(16.dp)        // 外边距
+        .background(Color.Blue) // 蓝色背景（含 padding 区域）
+        .size(100.dp)
+)
+// 蓝色区域 = 100dp + 16dp*2 = 132dp
+
+// 写法 B：先 background 后 padding
+Box(
+    Modifier
+        .background(Color.Blue) // 蓝色背景
+        .padding(16.dp)         // 内边距（背景被裁）
+        .size(100.dp)
+)
+// 蓝色区域 = 100dp，内容缩小到 68dp
+
+// 常用 Modifier
+Modifier
+    .fillMaxWidth()              // 填满宽度
+    .fillMaxHeight(0.5f)         // 填满 50% 高度
+    .wrapContentSize()           // 内容大小
+    .width(200.dp)               // 固定宽度
+    .height(IntrinsicSize.Min)   // 最小固有高度
+    .padding(16.dp)              // 内边距
+    .clip(CircleShape)           // 裁剪形状
+    .background(Color.Red)       // 背景
+    .border(1.dp, Color.Gray, RoundedCornerShape(8.dp))  // 边框
+    .clickable { /* 点击事件 */ }  // 点击
+    .alpha(0.5f)                 // 透明度
+```
+
+## LazyColumn：懒加载列表
+
+```kotlin
+// LazyColumn = RecyclerView 的替代品
+// 只组合可见项，自动回收不可见项
+
+@Composable
+fun UserList(users: List<User>) {
+    LazyColumn(
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        items(users, key = { it.id }) { user ->  // key 保障稳定
+            UserCard(user)
+        }
+        
+        itemsIndexed(users) { index, user ->      // 带索引
+            Text("$index: ${user.name}")
+        }
+        
+        item {                                      // 单个项
+            LoadMoreButton()
+        }
+        
+        // 分组：header + items
+        stickyHeader { Text("分组标题", fontWeight = Bold) }
+        items(groupItems) { ItemRow(it) }
+    }
+}
+
+// key 的作用：列表更新时，Compose 用 key 匹配新旧项
+// 有 key → 项的位置变化时保留状态和动画
+// 无 key → 项的位置变化时可能丢失状态
+```
+
+<Callout type="warning" title="LazyColumn 性能要点">
+①给 items 提供 key（如 `key = { it.id }`），让 Compose 精确追踪项的增删移。②避免在 item 内容中读取不必要的 State——只读取当前项需要的。③列表项高度尽量固定或用 Modifier.height 预估，避免滚动时反复测量。④避免在 LazyColumn 外层套 verticalScroll（冲突）。
+</Callout>
+
+## 布局测量流程
+
+```kotlin
+// Compose 布局分两阶段：measure → place
+
+// 1. measure（测量）：父 → 子传播约束
+//    Constraints(minWidth, maxWidth, minHeight, maxHeight)
+//    子元素根据约束返回自己的尺寸
+
+// 2. place（摆放）：子 → 父返回位置
+//    子元素在父坐标系中的位置（x, y）
+
+// 自定义布局示例：简单的垂直堆叠
+@Composable
+fun CustomColumn(
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit
+) {
+    Layout(modifier = modifier, content = content) { measurables, constraints ->
+        // measurables: 待测量的子元素
+        // constraints: 父元素给的约束
+        
+        val placeables = measurables.map { measurable ->
+            measurable.measure(constraints)  // 测量子元素，得到 Placeable
+        }
+        
+        // 计算总高度
+        val height = placeables.sumOf { it.height }
+        // 宽度取最大
+        val width = placeables.maxOf { it.width }
+        
+        // 返回 layout 结果
+        layout(width, height) {
+            var y = 0
+            placeables.forEach { placeable ->
+                placeable.placeRelative(0, y)  // 摆放
+                y += placeable.height
+            }
+        }
+    }
+}
+```
+
+<Glossary>
+
+<GlossaryItem term="Modifier">
+Compose 中修饰 Composable 外观和行为的不可变链式对象。每个 Modifier 方法返回新的 Modifier 实例。顺序决定效果——先 padding 后 background 与先 background 后 padding 视觉结果不同。
+</GlossaryItem>
+
+<GlossaryItem term="Constraints">
+布局测量阶段的约束条件，包含 minWidth/maxWidth/minHeight/maxHeight。父元素通过 Constraints 告诉子元素可用空间范围，子元素据此返回自己的尺寸。
+</GlossaryItem>
+
+<GlossaryItem term="LazyColumn/LazyRow">
+Compose 的懒加载列表组件，替代 RecyclerView。只组合当前可见的 item，滚动时自动回收和组合新 item。通过 items() DSL 添加列表项。
+</GlossaryItem>
+
+<GlossaryItem term="Arrangement">
+布局容器中子元素在主轴方向的分布方式。选项包括 Start、Center、End、SpaceBetween、SpaceEvenly、SpaceAround、spacedBy(dp)。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Modifier 链的顺序为什么敏感？举例说明。
+
+<Answer>
+Modifier链的顺序敏感是因为每个Modifier操作在链中的位置决定了它作用于「哪一层」。Compose的Modifier链本质上是「从外到内」的洋葱模型——链头是最外层，链尾是最内层。每个Modifier包裹后面的所有内容。举例：`.padding(16.dp).background(Color.Blue)`——padding在外层，background在内层。padding先「撑大」16dp的外边距区域，background填充的内容包括padding区域，所以蓝色背景覆盖整个区域（内容+padding）= 132dp。反过来`.background(Color.Blue).padding(16.dp)`——background在外层，padding在内层。background先定义蓝色背景区域=100dp，然后padding在蓝色区域内部撑出16dp内边距，把内容挤压到68dp，蓝色背景仍然是100dp。其他顺序敏感的例子：①clip后padding——padding区域不被裁剪；padding后clip——整个区域（含padding）被裁剪。②clickable后padding——点击区域不含padding；padding后clickable——点击区域含padding（更大）。规则：越靠前的Modifier越「外层」，越靠后的越「内层」。需要影响外观的Modifier（background/clip/border）放在padding之前则作用于整个区域（含padding），放在之后则作用于内容区域（不含padding）。
+</Answer>
+
+**问题 2**：LazyColumn 的 key 参数有什么作用？不提供 key 会有什么问题？
+
+<Answer>
+key参数为列表项提供唯一标识符，让Compose在列表更新时能精确追踪每个项的位置变化。有key时：当列表重新排序、插入、删除时，Compose通过key匹配新旧项，知道「项A从位置3移到了位置5」而不是「位置3的项被删除、位置5的项是新的」。不提供key的问题：①状态丢失——如果列表项内部有remember保存的状态（如展开/折叠状态），项的位置变化时Compose认为旧项被删除、新项被创建，remember状态丢失，所有项重置为初始状态。②动画异常——AnimatedItemScope的位移动画无法正确触发，项不会平滑移动而是闪烁重新出现。③性能下降——没有key时Compose无法做精确的diff，可能重组更多项。正确做法：`items(users, key = { it.id }) { user -> ... }`，用业务唯一ID作为key。注意：①key必须是稳定的——同一项的key在列表更新前后不变。②不能用index作为key——index会随列表变化而变，失去追踪意义。③key类型可以是任意可序列化对象，常用String/Long。
+</Answer>
+
+**问题 3**：实现一个自定义布局，让子元素沿对角线排列。
+
+<Answer>
+```kotlin
+@Composable
+fun DiagonalLayout(
+    modifier: Modifier = Modifier,
+    spacing: Dp = 16.dp,
+    content: @Composable () -> Unit
+) {
+    Layout(modifier = modifier, content = content) { measurables, constraints ->
+        val spacingPx = spacing.roundToPx()
+        // 测量所有子元素，用松散约束（不限制最大值）
+        val placeables = measurables.map { it.measure(constraints.copy(
+            minWidth = 0, maxWidth = constraints.maxWidth,
+            minHeight = 0, maxHeight = constraints.maxHeight
+        ))}
+        
+        // 计算总尺寸：x和y方向的累加
+        var totalWidth = 0
+        var totalHeight = 0
+        placeables.forEachIndexed { i, p ->
+            totalWidth += p.width + if (i > 0) spacingPx else 0
+            totalHeight += p.height + if (i > 0) spacingPx else 0
+        }
+        // 最终尺寸 = 最后一个元素的右下角
+        val lastPlaceable = placeables.lastOrNull()
+        val layoutWidth = minOf(totalWidth, constraints.maxWidth)
+        val layoutHeight = minOf(totalHeight, constraints.maxHeight)
+        
+        layout(layoutWidth, layoutHeight) {
+            var x = 0
+            var y = 0
+            placeables.forEachIndexed { i, placeable ->
+                if (i > 0) { x += spacingPx; y += spacingPx }
+                placeable.placeRelative(x, y)
+                x += placeable.width
+                y += placeable.height
+            }
+        }
+    }
+}
+```
+核心：①Layout()接收MeasurePolicy lambda，参数为measurables（子元素可测量对象）和constraints（父约束）。②measure(constraints)测量子元素得到Placeable（含width/height）。③layout(width,height)返回布局结果，在lambda中用placeRelative(x,y)摆放每个Placeable。④对角线排列：每个子元素的x和y都比前一个增加spacing+前一个元素尺寸。
+</Answer>
+
+**问题 4**：Column 的 Arrangement 和 Alignment 分别控制什么？如何在 Column 中让子元素两端对齐且水平居中？
+
+<Answer>
+Column中：①verticalArrangement控制主轴（垂直方向）的子元素分布——决定子元素之间及与容器边缘的垂直间距。选项：Start（顶部对齐）、Center（垂直居中）、End（底部对齐）、SpaceBetween（首尾贴边、中间均分）、SpaceEvenly（所有间距相等含边缘）、SpaceAround（边缘间距=中间间距的一半）、spacedBy(dp)（固定间距）。②horizontalAlignment控制交叉轴（水平方向）的子元素对齐——决定子元素在水平方向的相对位置。选项：Start（左对齐）、CenterHorizontally（水平居中）、End（右对齐）。两端对齐且水平居中：`Column(verticalArrangement = Arrangement.SpaceBetween, horizontalAlignment = Alignment.CenterHorizontally)`。注意Row中正好相反——horizontalArrangement控制主轴（水平）分布，verticalAlignment控制交叉轴（垂直）对齐。记忆方法：Arrangement控制「主轴分布」（子元素在排列方向上怎么分布），Alignment控制「交叉轴对齐」（子元素在垂直于排列方向上怎么对齐）。
+</Answer>
+
+</Exercises>

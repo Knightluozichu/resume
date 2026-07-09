@@ -1,0 +1,226 @@
+---
+title: "Compose基础"
+type: A
+section: "Android开发"
+order: 1
+description: "掌握@Composable注解、remember记忆、Slot API与声明式UI心智模型"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { JpcComposeBasicsDiagram } from "@/components/mdx/jetpack-compose/diagrams/jpc-compose-basics";
+
+<Objectives>
+
+- 理解声明式 UI 与命令式 View 的核心区别
+- 掌握 @Composable 注解和可组合函数的编写规则
+- 学会使用 remember 在组合中保持状态
+- 理解 Slot API 和组合优于继承的设计理念
+
+</Objectives>
+
+## 声明式 vs 命令式
+
+<JpcComposeBasicsDiagram />
+
+Compose 彻底改变了 Android UI 开发方式：从命令式（手动操作 View）到声明式（描述 UI = f(state)）。
+
+```kotlin
+// 命令式：你告诉系统「怎么做」
+// val tv = findViewById<TextView>(R.id.tv)
+// tv.text = "Hello"
+// tv.visibility = if (show) View.VISIBLE else View.GONE
+
+// 声明式：你告诉系统「是什么」
+@Composable
+fun Greeting(name: String, show: Boolean) {
+    if (show) {
+        Text(text = "Hello, $name!")
+    }
+    // name 或 show 变化 → Compose 自动重组此函数
+}
+```
+
+## @Composable 注解
+
+```kotlin
+// @Composable 标记的函数 = 可组合函数
+// 这是 Compose 一切的起点
+
+@Composable
+fun ProfileCard(name: String, avatar: Int) {
+    Row(
+        modifier = Modifier.padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Image(painter = painterResource(avatar), contentDescription = null)
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(text = name, style = MaterialTheme.typography.titleMedium)
+    }
+}
+
+// 可组合函数的规则：
+// 1. 必须用 @Composable 注解
+// 2. 只能从其他 @Composable 函数中调用
+// 3. 返回值只能是 Unit（描述 UI，不返回数据）
+// 4. 参数可以有默认值，但不能有 vararg
+// 5. 函数名用大驼峰（PascalCase），与普通函数区分
+```
+
+<Callout type="warning" title="可组合函数规则">
+@Composable 函数是「无副作用」的纯函数——它只描述 UI，不执行网络请求、不修改全局变量。副作用应放在 LaunchedEffect / SideEffect 中。这是因为 Compose 可能随时重组函数，副作用代码可能被重复执行。
+</Callout>
+
+## remember 与组合内记忆
+
+```kotlin
+// 问题：每次重组，普通变量都会重新初始化
+@Composable
+fun Counter() {
+    var count = 0  // 每次重组都变回 0！
+    Button(onClick = { count++ }) {
+        Text("Count: $count")  // 永远显示 0
+    }
+}
+
+// 解决：用 remember 在组合中记住值
+@Composable
+fun Counter() {
+    var count by remember { mutableStateOf(0) }  // 重组后保持
+    Button(onClick = { count++ }) {
+        Text("Count: $count")  // 正常递增
+    }
+}
+
+// remember 的变体
+val color = remember { Color.Red }                    // 记住常量
+val list = remember { mutableListOf<Item>() }          // 记住对象
+val state = remember { mutableStateOf("") }            // 记住可观察状态
+val saved = rememberSaveable { mutableStateOf("") }    // 跨配置变更存活
+```
+
+## Slot API
+
+```kotlin
+// Slot API：通过 @Composable lambda 让调用方决定内容
+
+// 定义带 Slot 的组件
+@Composable
+fun Card(
+    title: String,
+    content: @Composable () -> Unit  // content slot
+) {
+    Surface(shape = RoundedCornerShape(8.dp)) {
+        Column {
+            Text(title, style = MaterialTheme.typography.titleLarge)
+            content()  // 调用方填充的内容
+        }
+    }
+}
+
+// 调用时填充内容
+Card(title = "用户信息") {
+    // 这里可以是任何 @Composable
+    Column {
+        Text("姓名：张三")
+        Text("年龄：25")
+        Image(painterResource(R.drawable.avatar), null)
+    }
+}
+
+// Scaffold 是典型的 Slot API 组件
+Scaffold(
+    topBar = { TopAppBar(title = { Text("App") }) },
+    bottomBar = { BottomNavigation { /* tabs */ } },
+    floatingActionButton = { FloatingActionButton(onClick = {}) { Icon(Icons.Default.Add, null) } }
+) { padding ->
+    // 主内容区域
+    HomeScreen(modifier = Modifier.padding(padding))
+}
+```
+
+## Composition 生命周期
+
+```kotlin
+// Composable 的三个生命周期阶段：
+// 1. Composition（组合）—— 首次执行 @Composable，构建 UI 树
+// 2. Recomposition（重组）—— State 变化时重新执行，更新 UI 树
+// 3. Disposal（离开）—— Composable 离出组合，释放资源
+
+// DisposableEffect：在离开组合时清理资源
+@Composable
+fun Timer() {
+    DisposableEffect(Unit) {
+        val timer = Timer()
+        timer.schedule(task, 0, 1000)
+        onDispose {
+            timer.cancel()  // 离开组合时取消定时器
+        }
+    }
+}
+
+// LaunchedEffect：在进入组合时启动协程，离开时取消
+@Composable
+fun DataLoader(url: String) {
+    LaunchedEffect(url) {
+        // url 变化时重新执行
+        val data = fetchData(url)
+        // ...
+    }
+}
+```
+
+<Callout type="info" title="重组的特性">
+①智能跳过：Compose 编译器自动追踪 @Composable 函数的参数，只有参数变化时才重组。②并行执行：多个 @Composable 可以并行重组，因此函数必须无副作用。③可中断：重组可以被中断并在稍后恢复，不要依赖执行顺序。④幂等：同一输入产生同一输出，多次重组结果一致。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="@Composable">
+标记函数为「可组合函数」的注解。被标记的函数可以调用其他 @Composable 函数，描述 UI 的一部分。可组合函数只能从其他可组合函数中调用。
+</GlossaryItem>
+
+<GlossaryItem term="remember">
+在组合（Composition）中记住值的 API。被 remember 的值在重组时不会重新初始化，保持上一次的值。是 Compose 状态管理的基础。
+</GlossaryItem>
+
+<GlossaryItem term="Slot API">
+通过 @Composable 函数类型的参数（通常命名为 content）让调用方决定组件内部内容的 API 设计模式。Scaffold、Card、TopAppBar 等组件都使用 Slot API。
+</GlossaryItem>
+
+<GlossaryItem term="副作用（Side Effect）">
+在 @Composable 函数中改变外部状态的操作（如网络请求、文件读写、全局变量修改）。Compose 函数应尽量无副作用，副作用通过 LaunchedEffect / DisposableEffect 管理。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：@Composable 函数有哪些必须遵守的规则？为什么这些规则存在？
+
+<Answer>
+规则：①必须用@Composable注解标记——告诉编译器这是一个可组合函数，需要特殊编译处理（如追踪状态读取、生成跳过逻辑）；②只能从其他@Composable函数中调用——因为可组合函数依赖Composition上下文（如remember、LocalContext等CompositionLocal），非Composable环境无法提供；③返回值只能是Unit——可组合函数描述UI而非返回数据，UI通过函数调用本身的副作用（构建UI树节点）体现；④不能有vararg参数——编译器需要为每个参数生成相等性比较以决定是否跳过重组，vararg无法做确定性比较；⑤函数名用PascalCase（大驼峰）——与普通Kotlin函数（camelCase小驼峰）区分，编译器和Lint据此识别。这些规则存在的原因：Compose的重组机制要求函数是「纯函数+无副作用」——同一输入产生同一输出，编译器才能安全地跳过未变化的函数、并行执行多个函数、中断和恢复重组。有副作用的函数如果被跳过或重复执行会导致bug。
+</Answer>
+
+**问题 2**：remember 的作用是什么？不用 remember 会有什么问题？
+
+<Answer>
+remember的作用：在Composition（组合）中记住一个值，使其在重组时不会被重新初始化。本质是把值存储在Composition的节点中，与Composable在UI树中的位置绑定。不用remember的问题：每次重组时，普通局部变量都会重新初始化为默认值。例如 `var count = 0` 在重组时count会变回0，Button点击后count++变为1，但下一次重组（如父组件状态变化触发）count又变回0，导致计数器永远显示0。用 `var count by remember { mutableStateOf(0) }` 后：①remember保证count在重组后保持上一次的值；②mutableStateOf保证count变化时自动触发重组。两者配合才是完整的状态管理。注意：remember只在同一Composable的同一位置记住值——如果Composable在条件分支中进出组合（如if块内），remember的值会在离开时丢失、进入时重新初始化。跨配置变更（如屏幕旋转）需要用rememberSaveable。
+</Answer>
+
+**问题 3**：Slot API 解决了什么问题？举例说明其优势。
+
+<Answer>
+Slot API解决的核心问题：让组件的「骨架」与「内容」解耦——组件提供固定结构（如TopBar/BottomBar/Content区域），内容由调用方通过@Composable lambda填充。优势：①灵活性——同一组件可用于完全不同的内容场景。如Scaffold提供topBar/bottomBar/content/fab四个slot，调用方按需填充，一个Scaffold可用于首页、设置页、详情页等任意页面；②可组合性——slot内容本身也可以是带slot的组件，形成嵌套组合。如Scaffold的content slot里放TabRow+Pager，Pager的每个page又是一个Scaffold；③避免继承——传统View中要定制Toolbar内容需要继承BaseActivity，Compose中直接传不同的@Composable到topBar slot即可；④类型安全——slot参数是@Composable () -> Unit类型，编译器检查类型，不同于View体系的Object泛型。典型例子：`Card(title) { Text("内容") }` vs `Card(title) { Column { Image(...); Button(...) } }`——同一个Card组件，内容完全不同，无需继承或接口。
+</Answer>
+
+**问题 4**：Compose 重组有哪些特性？为什么 @Composable 函数应该无副作用？
+
+<Answer>
+重组特性：①智能跳过——Compose编译器为每个@Composable函数的参数生成相等性比较，只有参数变化时才重组，未变化的函数被跳过；②并行执行——独立的@Composable函数可以并行重组（多线程），提高效率；③可中断——重组过程可以被更高优先级的工作中断（如用户输入），稍后从断点恢复；④幂等——同一组参数无论重组多少次，产生的UI应该完全一致。为什么应该无副作用：因为以上特性意味着@Composable函数可能被①跳过不执行——如果函数内有网络请求，跳过意味着请求不发出；②重复执行——如果函数内有全局变量修改，重复执行导致变量被多次修改；③并行执行——如果函数内有非线程安全操作，并行执行导致竞态条件；④中断恢复——中断时执行的副作用可能不完整。正确做法：副作用放在LaunchedEffect（协程，key变化时重新执行）、DisposableEffect（带清理回调）、SideEffect（每次重组后执行）等Effect API中，这些API由Compose框架管理执行时机，保证副作用安全。
+</Answer>
+
+</Exercises>
