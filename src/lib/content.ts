@@ -273,6 +273,7 @@ export const BOOK_ORDER = [
   "blockchain-dev-practice",
   "mastering-bitcoin",
   "mastering-ethereum",
+  "illustrated-nev",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -486,6 +487,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "blockchain-dev-practice": "区块链开发实战",
   "mastering-bitcoin": "精通比特币",
   "mastering-ethereum": "精通以太坊",
+  "illustrated-nev": "图解新能源汽车原理与构造",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1120,6 +1122,7 @@ export const SECTION_ORDER = [
   "人工智能与机器学习",
   "AI Agent与大模型应用",
   "区块链",
+  "汽车与车机",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

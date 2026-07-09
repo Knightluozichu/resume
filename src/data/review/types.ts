@@ -2378,7 +2378,17 @@ export type ReviewChapterSlug =
   | "met-smart-contract-security"
   | "met-tokens-standards"
   | "met-dapps-oracles"
-  | "met-final-review";
+  | "met-final-review"
+  | "ine-learning-map"
+  | "ine-nev-overview"
+  | "ine-battery-system"
+  | "ine-motor-control"
+  | "ine-power-electronics"
+  | "ine-charging-system"
+  | "ine-bms-thermal"
+  | "ine-chassis-body"
+  | "ine-safety-future"
+  | "ine-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4761,6 +4771,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "met-tokens-standards": "代币与标准(ERC)",
   "met-dapps-oracles": "DApp与预言机",
   "met-final-review": "全书复习与知识整合",
+  "ine-learning-map": "图解新能源汽车·知识全景图",
+  "ine-nev-overview": "新能源汽车概览",
+  "ine-battery-system": "电池系统",
+  "ine-motor-control": "驱动电机与控制",
+  "ine-power-electronics": "电力电子与变换",
+  "ine-charging-system": "充电系统",
+  "ine-bms-thermal": "电池管理与热管理",
+  "ine-chassis-body": "底盘与车身架构",
+  "ine-safety-future": "安全技术与未来趋势",
+  "ine-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

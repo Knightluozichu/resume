@@ -2255,6 +2255,16 @@ import { metSmartContractSecurityQuestions } from "./review/met-smart-contract-s
 import { metTokensStandardsQuestions } from "./review/met-tokens-standards";
 import { metDappsOraclesQuestions } from "./review/met-dapps-oracles";
 import { metFinalReviewQuestions } from "./review/met-final-review";
+import { ineLearningMapQuestions } from "./review/ine-learning-map";
+import { ineNevOverviewQuestions } from "./review/ine-nev-overview";
+import { ineBatterySystemQuestions } from "./review/ine-battery-system";
+import { ineMotorControlQuestions } from "./review/ine-motor-control";
+import { inePowerElectronicsQuestions } from "./review/ine-power-electronics";
+import { ineChargingSystemQuestions } from "./review/ine-charging-system";
+import { ineBmsThermalQuestions } from "./review/ine-bms-thermal";
+import { ineChassisBodyQuestions } from "./review/ine-chassis-body";
+import { ineSafetyFutureQuestions } from "./review/ine-safety-future";
+import { ineFinalReviewQuestions } from "./review/ine-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4545,6 +4555,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...metTokensStandardsQuestions,
   ...metDappsOraclesQuestions,
   ...metFinalReviewQuestions,
+  ...ineLearningMapQuestions,
+  ...ineNevOverviewQuestions,
+  ...ineBatterySystemQuestions,
+  ...ineMotorControlQuestions,
+  ...inePowerElectronicsQuestions,
+  ...ineChargingSystemQuestions,
+  ...ineBmsThermalQuestions,
+  ...ineChassisBodyQuestions,
+  ...ineSafetyFutureQuestions,
+  ...ineFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
