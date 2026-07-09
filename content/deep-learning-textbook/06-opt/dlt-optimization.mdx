@@ -1,0 +1,224 @@
+---
+title: "优化算法"
+type: B
+section: "人工智能与机器学习"
+order: 6
+description: "SGD、动量、Adam与学习率调度"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DltOptimizationDiagram } from "@/components/mdx/deep-learning-textbook/diagrams/dlt-optimization";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解深度学习优化的挑战（非凸、鞍点、病态）
+- 掌握 SGD、动量、Nesterov、AdaGrad、RMSProp、Adam 的原理
+- 理解学习率调度与二阶方法的特点
+- 掌握批归一化对优化的影响
+
+</Objectives>
+
+## 深度学习优化：在非凸地貌中找路
+
+深度学习的训练本质上是一个优化问题：最小化损失函数 $\mathcal{L}(\boldsymbol{\theta})$。但与传统凸优化不同，深度网络的损失曲面是非凸、高维、充满鞍点的，传统优化理论不完全适用。花书第八章聚焦深度学习实践中有效的一阶优化方法。
+
+<DltOptimizationDiagram />
+
+## 优化挑战
+
+<Callout type="warning">
+
+**深度学习优化的特殊性**：深度网络损失函数是非凸的（有多个局部最小值）、高维的（参数可达亿级）、充满鞍点的（鞍点远多于局部最小值）。但实践中「足够好」的局部最小值通常就能达到很好的泛化——不需要全局最优。
+
+</Callout>
+
+| 挑战 | 描述 | 后果 |
+|------|------|------|
+| 病态 | Hessian 矩阵条件数大，梯度方向非最优方向 | 收敛缓慢 |
+| 鞍点 | 某些方向是极小、另一些方向是极大 | 梯度为零但非最优 |
+| 平坦区域 | 梯度接近零的大面积区域 | 训练停滞 |
+| 梯度爆炸/消失 | 梯度范数过大或过小 | 训练不稳定 |
+
+## 随机梯度下降（SGD）
+
+**SGD** 是深度学习最基础的优化算法。每次从训练集中抽取一个 mini-batch 估计梯度：
+
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t - \eta \frac{1}{m} \sum_{i=1}^{m} \nabla_{\boldsymbol{\theta}} \mathcal{L}(\boldsymbol{\theta}_t; \mathbf{x}_i, y_i)$$
+
+其中 $\eta$ 是学习率，$m$ 是 batch size。
+
+```text
+全批量梯度下降:  每步用全部数据 → 精确但慢
+SGD:            每步用 1 个样本 → 快但噪声大
+Mini-batch SGD: 每步用 m 个样本 → 平衡精度和速度（实际使用）
+```
+
+### SGD 的优势
+
+- **计算效率**：每步只需前向+反向一个 mini-batch，比全批量快 $N/m$ 倍
+- **噪声有益**：mini-batch 梯度的噪声帮助跳出鞍点和尖锐局部最小值
+- **可扩展**：天然支持分布式和 GPU 并行
+
+## 动量法
+
+**动量法**（Momentum）在 SGD 基础上累积历史梯度方向，加速收敛并减少振荡：
+
+$$\mathbf{v}_t = \mu \mathbf{v}_{t-1} - \eta \nabla \mathcal{L}(\boldsymbol{\theta}_t)$$
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t + \mathbf{v}_t$$
+
+其中 $\mu \in [0, 1)$ 是动量系数（通常 0.9）。动量项 $\mathbf{v}$ 是历史梯度的指数加权移动平均。
+
+<Callout type="info">
+
+**动量的直觉**：想象一个小球在曲面上滚动。SGD 是每步只看当前坡度（无惯性），动量法是小球有惯性（累积历史速度）。在一致梯度方向上加速，在振荡方向上抵消——像物理中的摩擦力一样平滑路径。
+
+</Callout>
+
+### Nesterov 动量
+
+**Nesterov 动量**（NAG）先沿动量方向「前瞻」一步，再在「前瞻」位置计算梯度：
+
+$$\mathbf{v}_t = \mu \mathbf{v}_{t-1} - \eta \nabla \mathcal{L}(\boldsymbol{\theta}_t + \mu \mathbf{v}_{t-1})$$
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t + \mathbf{v}_t$$
+
+Nesterov 动量在凸问题中有更好的理论收敛率，实践中效果与标准动量相近。
+
+## 自适应学习率方法
+
+### AdaGrad
+
+**AdaGrad** 为每个参数维护累积梯度平方和，自适应调节学习率：
+
+$$r_t = r_{t-1} + \nabla \mathcal{L} \odot \nabla \mathcal{L}$$
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t - \frac{\eta}{\sqrt{r_t} + \epsilon} \odot \nabla \mathcal{L}$$
+
+梯度大的参数学习率自动减小，梯度小的参数学习率自动增大。问题：累积梯度单调增长，学习率单调下降，后期可能过早停止。
+
+### RMSProp
+
+**RMSProp** 用指数衰减平均替代 AdaGrad 的累积和，解决学习率过早衰减问题：
+
+$$r_t = \rho r_{t-1} + (1 - \rho) \nabla \mathcal{L} \odot \nabla \mathcal{L}$$
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t - \frac{\eta}{\sqrt{r_t} + \epsilon} \odot \nabla \mathcal{L}$$
+
+其中 $\rho \approx 0.9$ 是衰减率。RMSProp 是深度学习最常用的自适应方法之一。
+
+### Adam
+
+**Adam**（Adaptive Moments）结合了动量和 RMSProp 的优点，同时维护梯度的一阶矩（均值）和二阶矩（方差）：
+
+$$\mathbf{s}_t = \beta_1 \mathbf{s}_{t-1} + (1 - \beta_1) \nabla \mathcal{L}$$
+$$\mathbf{r}_t = \beta_2 \mathbf{r}_{t-1} + (1 - \beta_2) \nabla \mathcal{L} \odot \nabla \mathcal{L}$$
+$$\hat{\mathbf{s}}_t = \frac{\mathbf{s}_t}{1 - \beta_1^t}, \quad \hat{\mathbf{r}}_t = \frac{\mathbf{r}_t}{1 - \beta_2^t}$$
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t - \eta \frac{\hat{\mathbf{s}}_t}{\sqrt{\hat{\mathbf{r}}_t} + \epsilon}$$
+
+偏差校正（$\hat{\mathbf{s}}, \hat{\mathbf{r}}$）补偿初始零矩的偏差。默认超参数 $\beta_1 = 0.9, \beta_2 = 0.999, \epsilon = 10^{-8}$。
+
+<Callout type="tip">
+
+**Adam 的地位**：Adam 是深度学习最常用的优化器——自适应学习率 + 动量的组合在大多数任务上表现良好，且对超参数不敏感。如果不确定用什么优化器，先用 Adam。
+
+</Callout>
+
+## 学习率调度
+
+| 调度策略 | 公式 | 特点 |
+|---------|------|------|
+| 阶梯衰减 | $\eta_t = \eta_0 \gamma^{\lfloor t/s \rfloor}$ | 每 s 步乘 $\gamma$ |
+| 指数衰减 | $\eta_t = \eta_0 \gamma^t$ | 连续指数下降 |
+| 余弦退火 | $\eta_t = \frac{\eta_{min}}{2}(\cos(\frac{\pi t}{T})+1)$ | 平滑衰减到零 |
+| Warmup | 前几步线性增长到 $\eta_0$ | 防止初期不稳定 |
+
+<Callout type="info">
+
+**学习率是最重要的超参数**：学习率太大训练发散，太小收敛缓慢。好的策略是先用较大的学习率快速下降，再逐步减小精细调整。Warmup + 余弦退火是现代大模型训练的标准组合。
+
+</Callout>
+
+## 二阶方法简介
+
+二阶方法利用 Hessian 矩阵（二阶导数）信息加速收敛：
+
+$$\boldsymbol{\theta}_{t+1} = \boldsymbol{\theta}_t - \eta \mathbf{H}^{-1} \nabla \mathcal{L}$$
+
+- **牛顿法**：$\eta = 1$，收敛快但需计算和求逆 Hessian（$O(N^3)$）
+- **BFGS/L-BFGS**：近似逆 Hessian，减少存储
+- **共轭梯度法**：不需要 Hessian，在共轭方向上搜索
+
+<Callout type="warning">
+
+**为什么深度学习用一阶方法**：深度网络参数量巨大（百万到千亿），计算/存储 Hessian 不可行。一阶方法（SGD/Adam）每步只需 O(N) 计算，配合 GPU 并行和 mini-batch 估计，是唯一可扩展的选择。二阶方法主要用于小规模问题或非深度学习场景。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="随机梯度下降（SGD）">
+深度学习最基础的优化算法。每次用 mini-batch 估计梯度更新参数：theta <- theta - eta * grad。相比全批量梯度下降，SGD 每步只需处理 m 个样本（而非全部 N 个），速度快 N/m 倍。mini-batch 梯度的噪声有益——帮助跳出鞍点和尖锐局部最小值。SGD 的超参数：学习率 eta（最重要）、batch size m（通常 32-256）。SGD + 动量是经典组合，在图像分类等任务中至今仍被广泛使用，有时比 Adam 泛化更好。
+</GlossaryItem>
+
+<GlossaryItem term="动量法（Momentum）">
+在 SGD 基础上累积历史梯度方向加速收敛。v = mu*v - eta*grad，theta = theta + v。动量系数 mu（通常 0.9）控制历史信息的保留比例。直觉：小球有惯性，在一致梯度方向上加速，在振荡方向上抵消。动量法在病态曲面上尤其有效——当梯度在某个方向反复振荡时，动量的累积平均使该方向有效步长减小，而在真正的下降方向上累积加速。Nesterov 动量是变体，先沿动量方向前瞻一步再计算梯度，在凸问题中有更好收敛率。
+</GlossaryItem>
+
+<GlossaryItem term="Adam（Adaptive Moment Estimation）">
+结合动量和 RMSProp 的自适应优化器。维护梯度的一阶矩 s（均值）和二阶矩 r（方差），用偏差校正后的矩自适应调节每个参数的学习率：theta <- theta - eta * s_hat / (sqrt(r_hat) + epsilon)。默认超参数 beta1=0.9, beta2=0.999, epsilon=1e-8。Adam 对超参数不敏感，在大多数任务上表现良好，是深度学习最常用的优化器。AdamW 是修正版，将权重衰减与自适应学习率正确解耦，在现代大模型训练中更常用。Adam 的缺点：有时泛化不如 SGD+动量（可能收敛到更尖锐的最小值）。
+</GlossaryItem>
+
+<GlossaryItem term="学习率调度（Learning Rate Schedule）">
+训练过程中动态调整学习率的策略。常见策略：阶梯衰减（每 s 步乘 gamma）、指数衰减（连续下降）、余弦退火（平滑降到零）、Warmup（前几步线性增长再按策略衰减）。学习率是最重要的超参数——太大发散，太小慢。好的策略是先用较大学习率快速下降，再逐步减小精细调整。Warmup 防止训练初期因初始随机参数导致梯度不稳定；余弦退火使学习率平滑下降，后期精细收敛。Warmup + 余弦退火是现代大模型（Transformer、扩散模型）训练的标准组合。
+</GlossaryItem>
+
+<GlossaryItem term="鞍点（Saddle Point）">
+梯度为零但既非局部最大也非局部最小的点。在某些方向是极小，在另一些方向是极大。高维空间中鞍点远多于局部最小值（高维中所有特征值同号的概率极低）。鞍点导致梯度为零但非最优，训练可能停滞。SGD 的 mini-batch 噪声有助于逃离鞍点——即使在精确鞍点，mini-batch 梯度估计的噪声也会给出非零方向。动量法也有助于逃离——累积的历史速度可能冲过鞍点。BatchNorm 和残差连接通过改善损失景观的平滑度间接减少鞍点的影响。
+</GlossaryItem>
+
+<GlossaryItem term="批归一化与优化（BatchNorm and Optimization）">
+BatchNorm 通过归一化激活值改善优化景观。作用：①减少内部协变量偏移——各层输入分布更稳定。②允许更大学习率——归一化后激活值在合理范围，大学习率不会导致不稳定。③平滑损失曲面——减少高曲率方向，使梯度方向更接近真实下降方向。④降低对初始化的敏感性。BatchNorm 使训练更快更稳定，是现代深度网络的标准组件。但 BatchNorm 的正则化效果（mini-batch 噪声）与优化加速是两个独立的作用——前者影响泛化，后者影响收敛速度。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+SGD 与全批量梯度下降的区别是什么？为什么深度学习用 mini-batch SGD？
+
+<Answer>
+
+区别：全批量梯度下降每步用全部 N 个训练样本计算精确梯度，方向准确但每步计算量大。SGD 每步用 1 个样本估计梯度，快但噪声极大。Mini-batch SGD 每步用 m 个样本（通常 32-256）估计梯度，在精度和速度间平衡。深度学习用 mini-batch SGD 的原因：①计算效率——每步只需处理 m 个样本而非全部 N 个，速度快 N/m 倍，且可利用 GPU 并行。②噪声有益——mini-batch 梯度是全梯度的噪声估计，这种噪声帮助跳出鞍点和尖锐局部最小值（尖锐最小值泛化差，平坦最小值泛化好，噪声帮助找到平坦最小值）。③内存效率——全批量需要将所有数据加载到内存/GPU，mini-batch 只需 m 个样本。④收敛性好——在凸问题中 SGD 有收敛保证，在非凸深度学习中实践中效果好。batch size 是重要超参数——太小噪声大收敛慢，太大噪声小可能陷入差解，通常 32-256。
+</Answer>
+
+### 问题 2
+
+动量法的原理是什么？它与普通 SGD 相比有什么优势？
+
+<Answer>
+
+动量法在 SGD 基础上累积历史梯度方向：v = mu*v - eta*grad，theta = theta + v。动量系数 mu（通常 0.9）控制历史信息的保留比例，v 是历史梯度的指数加权移动平均。与普通 SGD 的优势：①加速收敛——在一致梯度方向上，动量累积使有效步长增大（最多 1/(1-mu) = 10 倍），加速通过平坦区域。②减少振荡——在梯度反复振荡的方向（如病态曲面的窄沟方向），动量的累积平均使正负梯度部分抵消，有效步长减小。③更稳定的路径——动量平滑了梯度方向的剧烈变化，像物理中的惯性使小球滚动更平稳。直觉：普通 SGD 每步只看当前坡度（无记忆），动量法像有惯性的小球——在长坡上加速，在沟壑中振荡减弱。Nesterov 动量是变体，先沿动量方向前瞻一步再计算梯度（在前瞻位置而非当前位置计算梯度），在凸问题中有更好的理论收敛率。
+</Answer>
+
+### 问题 3
+
+Adam 优化器结合了哪些思想？它为什么成为最常用的优化器？
+
+<Answer>
+
+Adam 结合了动量法和 RMSProp 的思想：①动量——维护梯度的一阶矩 s = beta1*s + (1-beta1)*grad，累积历史梯度方向。②自适应学习率——维护梯度的二阶矩 r = beta2*r + (1-beta2)*grad^2，根据梯度大小自适应调节每个参数的学习率（梯度大的参数学习率小，梯度小的参数学习率大）。③偏差校正——s_hat = s/(1-beta1^t), r_hat = r/(1-beta2^t)，补偿初始零矩的偏差（初始几步 s 和 r 偏小，校正后更准确）。更新公式 theta <- theta - eta * s_hat / (sqrt(r_hat) + epsilon)。Adam 成为最常用优化器的原因：①效果好——在大多数任务上表现良好，自适应学习率 + 动量的组合兼顾速度和稳定性。②对超参数不敏感——默认 beta1=0.9, beta2=0.999, epsilon=1e-8 在大多数场景适用，只需调学习率。③可扩展——适用于从小模型到大模型的各种规模。AdamW 是修正版，正确解耦权重衰减和自适应学习率，在现代大模型训练中更常用。
+</Answer>
+
+### 问题 4
+
+为什么深度学习使用一阶方法而非二阶方法？学习率调度为什么重要？
+
+<Answer>
+
+用一阶方法而非二阶方法的原因：①计算不可行——二阶方法需要计算 Hessian 矩阵（N×N，N 是参数量），深度网络参数量百万到千亿级，Hessian 有 10^12 到 10^20 个元素，无法存储。②求逆不可行——牛顿法需要求逆 Hessian（O(N^3)），计算量天文数字。③非凸不适用——二阶方法的理论保证主要在凸优化中，深度学习损失非凸，二阶方法可能收敛到鞍点（Hessian 不正定）。④一阶已足够——SGD/Adam 每步只需 O(N) 计算，配合 GPU 并行和 mini-batch，在深度学习中效果很好。学习率调度重要的原因：学习率是最重要的超参数——太大训练发散（梯度爆炸），太小收敛缓慢。好的策略是先用较大学习率快速下降（穿越平坦区域和跳出鞍点），再逐步减小精细调整（在最小值附近精细收敛）。常见策略：Warmup（前几步线性增长防止初期不稳定）+ 余弦退火（平滑衰减到零）。Warmup + 余弦退火是现代大模型（Transformer、扩散模型）训练的标准组合，能显著提升训练稳定性和最终性能。
+</Answer>
+
+</Exercises>

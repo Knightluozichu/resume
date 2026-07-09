@@ -2095,6 +2095,16 @@ import { dlgDiffusionModelsQuestions } from "./review/dlg-diffusion-models";
 import { dlgTextToImageQuestions } from "./review/dlg-text-to-image";
 import { dlgEvaluationEthicsQuestions } from "./review/dlg-evaluation-ethics";
 import { dlgFinalReviewQuestions } from "./review/dlg-final-review";
+import { dltLearningMapQuestions } from "./review/dlt-learning-map";
+import { dltLinearAlgebraQuestions } from "./review/dlt-linear-algebra";
+import { dltProbabilityInfoQuestions } from "./review/dlt-probability-info";
+import { dltMlBasicsQuestions } from "./review/dlt-ml-basics";
+import { dltDeepNetworksQuestions } from "./review/dlt-deep-networks";
+import { dltRegularizationQuestions } from "./review/dlt-regularization";
+import { dltOptimizationQuestions } from "./review/dlt-optimization";
+import { dltConvRnnQuestions } from "./review/dlt-conv-rnn";
+import { dltResearchFrontiersQuestions } from "./review/dlt-research-frontiers";
+import { dltFinalReviewQuestions } from "./review/dlt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4225,6 +4235,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dlgTextToImageQuestions,
   ...dlgEvaluationEthicsQuestions,
   ...dlgFinalReviewQuestions,
+  ...dltLearningMapQuestions,
+  ...dltLinearAlgebraQuestions,
+  ...dltProbabilityInfoQuestions,
+  ...dltMlBasicsQuestions,
+  ...dltDeepNetworksQuestions,
+  ...dltRegularizationQuestions,
+  ...dltOptimizationQuestions,
+  ...dltConvRnnQuestions,
+  ...dltResearchFrontiersQuestions,
+  ...dltFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

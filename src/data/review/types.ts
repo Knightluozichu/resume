@@ -2218,7 +2218,17 @@ export type ReviewChapterSlug =
   | "dlg-diffusion-models"
   | "dlg-text-to-image"
   | "dlg-evaluation-ethics"
-  | "dlg-final-review";
+  | "dlg-final-review"
+  | "dlt-learning-map"
+  | "dlt-linear-algebra"
+  | "dlt-probability-info"
+  | "dlt-ml-basics"
+  | "dlt-deep-networks"
+  | "dlt-regularization"
+  | "dlt-optimization"
+  | "dlt-conv-rnn"
+  | "dlt-research-frontiers"
+  | "dlt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4441,6 +4451,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dlg-text-to-image": "文本到图像生成",
   "dlg-evaluation-ethics": "评估与伦理",
   "dlg-final-review": "全书复习与知识整合",
+  "dlt-learning-map": "全书学习地图",
+  "dlt-linear-algebra": "应用数学基础",
+  "dlt-probability-info": "概率论与信息论",
+  "dlt-ml-basics": "机器学习基础",
+  "dlt-deep-networks": "深度网络原理",
+  "dlt-regularization": "正则化策略",
+  "dlt-optimization": "优化算法",
+  "dlt-conv-rnn": "CNN与RNN",
+  "dlt-research-frontiers": "研究前沿与挑战",
+  "dlt-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
