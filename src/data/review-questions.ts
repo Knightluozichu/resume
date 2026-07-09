@@ -2175,6 +2175,16 @@ import { cgptPluginToolsQuestions } from "./review/cgpt-plugin-tools";
 import { cgptFinetuningPracticeQuestions } from "./review/cgpt-finetuning-practice";
 import { cgptEcosystemFutureQuestions } from "./review/cgpt-ecosystem-future";
 import { cgptFinalReviewQuestions } from "./review/cgpt-final-review";
+import { llmLearningMapQuestions } from "./review/llm-learning-map";
+import { llmFoundationsQuestions } from "./review/llm-foundations";
+import { llmArchitectureQuestions } from "./review/llm-architecture";
+import { llmScalingLawsQuestions } from "./review/llm-scaling-laws";
+import { llmPretrainingDataQuestions } from "./review/llm-pretraining-data";
+import { llmPosttrainingQuestions } from "./review/llm-posttraining";
+import { llmInferenceQuestions } from "./review/llm-inference";
+import { llmEvaluationQuestions } from "./review/llm-evaluation";
+import { llmFrontiersQuestions } from "./review/llm-frontiers";
+import { llmFinalReviewQuestions } from "./review/llm-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4385,6 +4395,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cgptFinetuningPracticeQuestions,
   ...cgptEcosystemFutureQuestions,
   ...cgptFinalReviewQuestions,
+  ...llmLearningMapQuestions,
+  ...llmFoundationsQuestions,
+  ...llmArchitectureQuestions,
+  ...llmScalingLawsQuestions,
+  ...llmPretrainingDataQuestions,
+  ...llmPosttrainingQuestions,
+  ...llmInferenceQuestions,
+  ...llmEvaluationQuestions,
+  ...llmFrontiersQuestions,
+  ...llmFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

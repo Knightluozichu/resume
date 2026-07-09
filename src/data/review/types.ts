@@ -2298,7 +2298,17 @@ export type ReviewChapterSlug =
   | "cgpt-plugin-tools"
   | "cgpt-finetuning-practice"
   | "cgpt-ecosystem-future"
-  | "cgpt-final-review";
+  | "cgpt-final-review"
+  | "llm-learning-map"
+  | "llm-foundations"
+  | "llm-architecture"
+  | "llm-scaling-laws"
+  | "llm-pretraining-data"
+  | "llm-posttraining"
+  | "llm-inference"
+  | "llm-evaluation"
+  | "llm-frontiers"
+  | "llm-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4601,6 +4611,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cgpt-finetuning-practice": "微调实战",
   "cgpt-ecosystem-future": "生态与未来展望",
   "cgpt-final-review": "全书复习与知识整合",
+  "llm-learning-map": "大语言模型·知识全景图",
+  "llm-foundations": "语言模型数学基础",
+  "llm-architecture": "Transformer与注意力机制",
+  "llm-scaling-laws": "缩放定律与涌现能力",
+  "llm-pretraining-data": "预训练数据工程",
+  "llm-posttraining": "后训练与对齐技术",
+  "llm-inference": "推理优化与部署",
+  "llm-evaluation": "评估方法与基准",
+  "llm-frontiers": "前沿研究方向",
+  "llm-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
