@@ -2035,6 +2035,16 @@ import { mlwBayesianQuestions } from "./review/mlw-bayesian";
 import { mlwEnsembleQuestions } from "./review/mlw-ensemble";
 import { mlwClusteringDimreductionQuestions } from "./review/mlw-clustering-dimreduction";
 import { mlwFinalReviewQuestions } from "./review/mlw-final-review";
+import { slmLearningMapQuestions } from "./review/slm-learning-map";
+import { slmPerceptronQuestions } from "./review/slm-perceptron";
+import { slmKnnQuestions } from "./review/slm-knn";
+import { slmNaiveBayesQuestions } from "./review/slm-naive-bayes";
+import { slmDecisionTreeQuestions } from "./review/slm-decision-tree";
+import { slmLogisticRegressionQuestions } from "./review/slm-logistic-regression";
+import { slmSvmQuestions } from "./review/slm-svm";
+import { slmBoostingQuestions } from "./review/slm-boosting";
+import { slmEmHmmQuestions } from "./review/slm-em-hmm";
+import { slmFinalReviewQuestions } from "./review/slm-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4105,6 +4115,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mlwEnsembleQuestions,
   ...mlwClusteringDimreductionQuestions,
   ...mlwFinalReviewQuestions,
+  ...slmLearningMapQuestions,
+  ...slmPerceptronQuestions,
+  ...slmKnnQuestions,
+  ...slmNaiveBayesQuestions,
+  ...slmDecisionTreeQuestions,
+  ...slmLogisticRegressionQuestions,
+  ...slmSvmQuestions,
+  ...slmBoostingQuestions,
+  ...slmEmHmmQuestions,
+  ...slmFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

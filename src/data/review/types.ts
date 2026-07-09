@@ -2158,7 +2158,17 @@ export type ReviewChapterSlug =
   | "mlw-bayesian"
   | "mlw-ensemble"
   | "mlw-clustering-dimreduction"
-  | "mlw-final-review";
+  | "mlw-final-review"
+  | "slm-learning-map"
+  | "slm-perceptron"
+  | "slm-knn"
+  | "slm-naive-bayes"
+  | "slm-decision-tree"
+  | "slm-logistic-regression"
+  | "slm-svm"
+  | "slm-boosting"
+  | "slm-em-hmm"
+  | "slm-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4321,6 +4331,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mlw-ensemble": "集成学习",
   "mlw-clustering-dimreduction": "聚类与降维",
   "mlw-final-review": "全书复习与知识整合",
+  "slm-learning-map": "全书学习地图",
+  "slm-perceptron": "感知机",
+  "slm-knn": "k近邻法",
+  "slm-naive-bayes": "朴素贝叶斯",
+  "slm-decision-tree": "决策树",
+  "slm-logistic-regression": "逻辑斯谛回归与最大熵",
+  "slm-svm": "支持向量机",
+  "slm-boosting": "提升方法",
+  "slm-em-hmm": "EM算法与隐马尔可夫模型",
+  "slm-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
