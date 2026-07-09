@@ -244,6 +244,7 @@ export const BOOK_ORDER = [
   "unix-network-programming-vol1",
   "two-week-scripting-language",
   "crafting-compiler",
+  "engineering-a-compiler",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -428,6 +429,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "unix-network-programming-vol1": "UNIX网络编程 卷1：套接字联网API",
   "two-week-scripting-language": "两周自制脚本语言",
   "crafting-compiler": "自制编译器",
+  "engineering-a-compiler": "编译器设计",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

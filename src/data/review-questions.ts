@@ -1965,6 +1965,16 @@ import { crcOptimizationQuestions } from "./review/crc-optimization";
 import { crcCodeGenerationQuestions } from "./review/crc-code-generation";
 import { crcLinkerLoaderQuestions } from "./review/crc-linker-loader";
 import { crcFinalReviewQuestions } from "./review/crc-final-review";
+import { eacLearningMapQuestions } from "./review/eac-learning-map";
+import { eacCompilerOverviewQuestions } from "./review/eac-compiler-overview";
+import { eacScanningQuestions } from "./review/eac-scanning";
+import { eacParsingQuestions } from "./review/eac-parsing";
+import { eacContextSensitiveQuestions } from "./review/eac-context-sensitive";
+import { eacIrGenerationQuestions } from "./review/eac-ir-generation";
+import { eacCodeOptimizationQuestions } from "./review/eac-code-optimization";
+import { eacInstructionSelectionQuestions } from "./review/eac-instruction-selection";
+import { eacRegisterAllocationQuestions } from "./review/eac-register-allocation";
+import { eacFinalReviewQuestions } from "./review/eac-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3965,6 +3975,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...crcCodeGenerationQuestions,
   ...crcLinkerLoaderQuestions,
   ...crcFinalReviewQuestions,
+  ...eacLearningMapQuestions,
+  ...eacCompilerOverviewQuestions,
+  ...eacScanningQuestions,
+  ...eacParsingQuestions,
+  ...eacContextSensitiveQuestions,
+  ...eacIrGenerationQuestions,
+  ...eacCodeOptimizationQuestions,
+  ...eacInstructionSelectionQuestions,
+  ...eacRegisterAllocationQuestions,
+  ...eacFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

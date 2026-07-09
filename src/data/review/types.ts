@@ -2088,7 +2088,17 @@ export type ReviewChapterSlug =
   | "crc-optimization"
   | "crc-code-generation"
   | "crc-linker-loader"
-  | "crc-final-review";
+  | "crc-final-review"
+  | "eac-learning-map"
+  | "eac-compiler-overview"
+  | "eac-scanning"
+  | "eac-parsing"
+  | "eac-context-sensitive"
+  | "eac-ir-generation"
+  | "eac-code-optimization"
+  | "eac-instruction-selection"
+  | "eac-register-allocation"
+  | "eac-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4181,6 +4191,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "crc-code-generation": "目标代码生成",
   "crc-linker-loader": "链接与加载",
   "crc-final-review": "全书复习与知识整合",
+  "eac-learning-map": "全书学习地图",
+  "eac-compiler-overview": "编译器概述与设计",
+  "eac-scanning": "词法扫描器",
+  "eac-parsing": "语法分析器",
+  "eac-context-sensitive": "上下文相关分析",
+  "eac-ir-generation": "中间表示生成",
+  "eac-code-optimization": "代码优化原理",
+  "eac-instruction-selection": "指令选择",
+  "eac-register-allocation": "寄存器分配",
+  "eac-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
