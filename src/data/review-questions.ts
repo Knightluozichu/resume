@@ -1875,6 +1875,16 @@ import { mspEventSourcingQuestions } from "./review/msp-event-sourcing";
 import { mspServiceDiscoveryQuestions } from "./review/msp-service-discovery";
 import { mspDeploymentPatternsQuestions } from "./review/msp-deployment-patterns";
 import { mspFinalReviewQuestions } from "./review/msp-final-review";
+import { ilhLearningMapQuestions } from "./review/ilh-learning-map";
+import { ilhHttpBasicsQuestions } from "./review/ilh-http-basics";
+import { ilhHttpMethodsQuestions } from "./review/ilh-http-methods";
+import { ilhStatusCodesQuestions } from "./review/ilh-status-codes";
+import { ilhHeadersQuestions } from "./review/ilh-headers";
+import { ilhHttpsSecurityQuestions } from "./review/ilh-https-security";
+import { ilhAuthenticationQuestions } from "./review/ilh-authentication";
+import { ilhCachingQuestions } from "./review/ilh-caching";
+import { ilhWebArchitectureQuestions } from "./review/ilh-web-architecture";
+import { ilhFinalReviewQuestions } from "./review/ilh-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3785,6 +3795,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mspServiceDiscoveryQuestions,
   ...mspDeploymentPatternsQuestions,
   ...mspFinalReviewQuestions,
+  ...ilhLearningMapQuestions,
+  ...ilhHttpBasicsQuestions,
+  ...ilhHttpMethodsQuestions,
+  ...ilhStatusCodesQuestions,
+  ...ilhHeadersQuestions,
+  ...ilhHttpsSecurityQuestions,
+  ...ilhAuthenticationQuestions,
+  ...ilhCachingQuestions,
+  ...ilhWebArchitectureQuestions,
+  ...ilhFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -1,0 +1,164 @@
+---
+title: "认证与授权：身份验证与权限控制"
+type: C
+section: "网络"
+order: 6
+description: "BASIC/Digest认证、Session+Cookie、Token/JWT认证方式对比"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { IlhAuthenticationDiagram } from "@/components/mdx/illustrated-http/diagrams/ilh-authentication";
+
+<Objectives>
+
+- 理解认证与授权的区别
+- 掌握BASIC认证和Digest认证的原理与缺陷
+- 掌握Session+Cookie认证的完整流程
+- 理解Token/JWT认证的优势与无状态特性
+
+</Objectives>
+
+## 认证与授权
+
+<IlhAuthenticationDiagram />
+
+<Callout type="warning" title="认证 ≠ 授权，先分清两个概念">
+
+- **认证（Authentication）** = 「你是谁？」 → 验证用户身份。手段：密码、验证码、生物识别。HTTP状态码：401 Unauthorized。
+- **授权（Authorization）** = 「你能做什么？」 → 控制资源访问权限。手段：角色、权限、ACL。HTTP状态码：403 Forbidden。
+
+先认证（你是谁），再授权（你能做什么）。
+
+</Callout>
+
+## HTTP认证方式
+
+### BASIC认证
+
+最简单的HTTP认证方式，但安全性很低。
+
+```
+① 客户端请求 → 服务器返回 401 + WWW-Authenticate: Basic realm="..."
+② 客户端发送 Authorization: Basic <Base64(用户名:密码)>
+③ 服务器验证 → 200 OK 或 401
+```
+
+<Callout type="warning" title="BASIC认证的安全问题">
+
+BASIC认证只是把 `用户名:密码` 做了Base64 **编码**（不是加密），解码即可还原明文密码。因此BASIC认证必须配合HTTPS使用，否则等于明文传输密码。实际上BASIC认证现在很少单独使用。
+
+</Callout>
+
+### Digest认证
+
+Digest认证是对BASIC认证的改进，密码不以明文传输。
+
+```
+① 服务器返回 401 + WWW-Authenticate: Digest + nonce（随机数）
+② 客户端计算 MD5(用户名:密码:nonce) → 发送摘要
+③ 服务器用同样的方式计算并比对
+```
+
+密码本身不传输，只传MD5摘要。但MD5算法已被认为不安全，Digest认证也较少使用。
+
+## Session + Cookie 认证
+
+最经典的Web认证方式，弥补HTTP无状态。
+
+```
+① 客户端 POST 用户名密码
+② 服务器验证通过 → 创建Session（保存用户信息）→ Set-Cookie: sid=xxx
+③ 客户端保存Cookie
+④ 后续请求自动携带 Cookie: sid=xxx
+⑤ 服务器根据 Session ID 查找 Session → 识别用户
+⑥ 返回用户数据
+```
+
+**优点**：服务器可主动注销Session、管理用户状态。
+
+**缺点**：
+- 有状态：服务器需存储Session，占用内存
+- 扩展性差：多服务器需共享Session（如Redis集中存储）
+- Cookie跨域问题：前后端分离时跨域携带Cookie复杂
+- CSRF风险：浏览器自动发送Cookie，可能被CSRF攻击利用
+
+## Token / JWT 认证
+
+无状态的认证方式，适合分布式和前后端分离架构。
+
+```
+① 客户端 POST 用户名密码
+② 服务器验证通过 → 生成JWT Token → 返回给客户端
+③ 客户端保存Token（localStorage或Cookie）
+④ 后续请求携带 Authorization: Bearer <token>
+⑤ 服务器验证Token签名 → 解析用户信息 → 无需查Session
+⑥ 返回用户数据
+```
+
+### JWT结构
+
+```
+JWT = Header.Payload.Signature
+
+Header:    {"alg": "HS256", "typ": "JWT"}        → Base64URL编码
+Payload:   {"sub": "123", "name": "张三", "exp": ...} → Base64URL编码
+Signature: HMAC-SHA256(Base64(Header) + "." + Base64(Payload), 密钥)
+```
+
+<Callout type="info" title="Token vs Session 对比">
+
+| 维度 | Session+Cookie | Token/JWT |
+|------|----------------|-----------|
+| 状态 | 有状态（服务器存储Session） | 无状态（服务器不存储） |
+| 存储 | 服务器内存/Redis | 客户端保存Token |
+| 传输 | Cookie自动携带 | Authorization首部手动携带 |
+| 扩展性 | 差（需共享Session） | 好（任意服务器可验证） |
+| 注销 | 服务器删Session即可 | 难（Token到期前一直有效） |
+| CSRF | 有风险（Cookie自动发送） | 无风险（不依赖Cookie） |
+| 适合场景 | 传统Web应用（浏览器渲染） | 前后端分离/API/移动端 |
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="BASIC认证">
+HTTP/1.0定义的最简单认证方式。流程：服务器返回401+WWW-Authenticate: Basic → 客户端将「用户名:密码」做Base64编码后放在Authorization首部发送。BASIC认证的核心问题是Base64只是编码不是加密，解码即可得到明文密码，因此必须配合HTTPS使用。现在BASIC认证主要用于内部系统或API的简单认证。
+</GlossaryItem>
+
+<GlossaryItem term="Session认证">
+服务器端保存用户状态的认证方式。流程：用户登录验证通过后，服务器创建一个Session对象（包含用户信息）并分配唯一的Session ID，通过Set-Cookie将Session ID发给客户端。后续请求中客户端通过Cookie携带Session ID，服务器据此查找对应Session识别用户。Session认证是有状态的——服务器需要存储Session数据，多服务器部署时需要共享Session（如用Redis集中存储），扩展性较差。
+</GlossaryItem>
+
+<GlossaryItem term="JWT（JSON Web Token）">
+一种无状态的认证令牌格式，由三部分组成：Header（头部，指定算法类型）、Payload（载荷，包含用户信息声明）、Signature（签名，用密钥对Header和Payload签名）。JWT的优势是自包含——服务器无需查Session，直接验证签名即可获取用户信息，天然适合分布式系统。缺点是Token签发后在过期前一直有效，无法主动注销（除非维护黑名单）。
+</GlossaryItem>
+
+<GlossaryItem term="CSRF（跨站请求伪造）">
+攻击者诱导已登录用户在不知情的情况下发送请求的攻击方式。原理：浏览器会自动携带Cookie，攻击者构造一个恶意页面，用户访问后浏览器自动带上Cookie发出请求（如转账）。防御手段：①Referer检查 ②CSRF Token（请求中携带服务器下发的随机Token，攻击者无法获取）③SameSite Cookie属性。Token认证不依赖Cookie，天然免疫CSRF。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 认证和授权有什么区别？Session认证和Token认证各有什么优缺点？
+
+<Answer>
+
+认证（Authentication）验证「你是谁」，如登录验证用户名密码，失败返回401。授权（Authorization）控制「你能做什么」，如检查用户角色是否有权限访问某资源，失败返回403。先认证再授权。Session认证的优点是服务器可主动注销Session、管理用户状态；缺点是有状态（服务器需存储Session占用内存）、扩展性差（多服务器需共享Session如用Redis）、有CSRF风险（Cookie自动发送）。Token/JWT认证的优点是无状态（服务器不存储，任意服务器可验证）、扩展性好（适合分布式）、无CSRF风险（不依赖Cookie自动发送）；缺点是Token签发后在过期前一直有效难以主动注销（需维护黑名单）、Token较大（每次请求都携带）。
+
+</Answer>
+
+**问题 2：** BASIC认证的工作原理是什么？它有什么安全问题？JWT的结构是什么？
+
+<Answer>
+
+BASIC认证的工作原理：①服务器返回401+WWW-Authenticate: Basic → ②客户端将「用户名:密码」做Base64编码后放在Authorization首部发送（`Authorization: Basic <Base64(user:pass)>`） → ③服务器解码验证返回200或401。安全问题：Base64只是编码不是加密，解码即可还原明文密码，因此BASIC认证必须配合HTTPS使用。JWT的结构由三部分组成：Header（头部，指定签名算法如HS256和类型JWT）+ Payload（载荷，包含用户信息声明如sub/name/exp）+ Signature（签名，用密钥对Base64(Header)+Base64(Payload)做HMAC签名）。三部分用点号连接。服务器验证签名即可信任Payload中的用户信息，无需查Session。
+
+</Answer>
+
+</Exercises>

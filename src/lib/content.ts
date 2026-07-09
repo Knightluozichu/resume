@@ -235,6 +235,7 @@ export const BOOK_ORDER = [
   "kubernetes-in-action",
   "phoenix-architecture",
   "microservices-patterns",
+  "illustrated-http",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -410,6 +411,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "kubernetes-in-action": "Kubernetes in Action",
   "phoenix-architecture": "凤凰架构",
   "microservices-patterns": "微服务架构设计模式",
+  "illustrated-http": "图解HTTP",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1039,6 +1041,7 @@ export const SECTION_ORDER = [
   "Android开发",
   "数据库",
   "分布式与中间件",
+  "网络",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

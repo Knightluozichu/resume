@@ -1998,7 +1998,17 @@ export type ReviewChapterSlug =
   | "msp-event-sourcing"
   | "msp-service-discovery"
   | "msp-deployment-patterns"
-  | "msp-final-review";
+  | "msp-final-review"
+  | "ilh-learning-map"
+  | "ilh-http-basics"
+  | "ilh-http-methods"
+  | "ilh-status-codes"
+  | "ilh-headers"
+  | "ilh-https-security"
+  | "ilh-authentication"
+  | "ilh-caching"
+  | "ilh-web-architecture"
+  | "ilh-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4001,6 +4011,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "msp-service-discovery": "服务发现：客户端与服务端发现",
   "msp-deployment-patterns": "部署模式：从虚拟机到Serverless",
   "msp-final-review": "微服务架构设计模式全书复习与知识整合",
+  "ilh-learning-map": "图解HTTP全书学习地图",
+  "ilh-http-basics": "HTTP基础：Web与网络协议栈",
+  "ilh-http-methods": "HTTP方法：操作资源的语义",
+  "ilh-status-codes": "HTTP状态码：服务器在说什么",
+  "ilh-headers": "HTTP首部：请求与响应的元信息",
+  "ilh-https-security": "HTTPS与安全：加密通信原理",
+  "ilh-authentication": "认证与授权：身份验证与权限控制",
+  "ilh-caching": "缓存机制：减少传输与加速访问",
+  "ilh-web-architecture": "Web架构与未来：HTTP演进与生态",
+  "ilh-final-review": "图解HTTP全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
