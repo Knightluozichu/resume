@@ -229,6 +229,7 @@ export const BOOK_ORDER = [
   "high-performance-mysql",
   "ddia",
   "redis-design-implementation",
+  "kafka-definitive-guide",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -398,6 +399,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "high-performance-mysql": "高性能MySQL",
   "ddia": "数据密集型应用系统设计",
   "redis-design-implementation": "Redis设计与实现",
+  "kafka-definitive-guide": "Kafka权威指南",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
@@ -1026,6 +1028,7 @@ export const SECTION_ORDER = [
   "JVM与Java生态",
   "Android开发",
   "数据库",
+  "分布式与中间件",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

@@ -1938,7 +1938,17 @@ export type ReviewChapterSlug =
   | "rdi-replication-cluster"
   | "rdi-transactions"
   | "rdi-pubsub-sentinel"
-  | "rdi-final-review";
+  | "rdi-final-review"
+  | "kfk-learning-map"
+  | "kfk-kafka-intro"
+  | "kfk-topics-partitions"
+  | "kfk-producers"
+  | "kfk-consumers"
+  | "kfk-kafka-internals"
+  | "kfk-reliability"
+  | "kfk-kafka-streams"
+  | "kfk-admin-ops"
+  | "kfk-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3881,6 +3891,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "rdi-transactions": "事务与Lua",
   "rdi-pubsub-sentinel": "发布订阅与哨兵",
   "rdi-final-review": "全书复习",
+  "kfk-learning-map": "全书学习地图",
+  "kfk-kafka-intro": "Kafka入门",
+  "kfk-topics-partitions": "Topic与分区",
+  "kfk-producers": "生产者",
+  "kfk-consumers": "消费者与消费者组",
+  "kfk-kafka-internals": "Kafka内部原理",
+  "kfk-reliability": "可靠性与ISR",
+  "kfk-kafka-streams": "Kafka Streams",
+  "kfk-admin-ops": "管理与运维",
+  "kfk-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

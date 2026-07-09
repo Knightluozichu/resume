@@ -1,0 +1,177 @@
+---
+title: "Kafka入门"
+type: A
+section: "分布式与中间件"
+order: 1
+description: "Kafka核心概念——发布订阅模型、四大API、典型使用场景与诞生背景"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KfkKafkaIntroDiagram } from "@/components/mdx/kafka-definitive-guide/diagrams/kfk-kafka-intro";
+
+<Objectives>
+
+- 理解Kafka的核心发布订阅模型与传统消息队列的区别
+- 掌握Kafka四大核心API的作用和典型使用场景
+- 了解Kafka的诞生背景和设计动机
+- 建立Kafka"分布式提交日志"的核心认知
+
+</Objectives>
+
+## 发布订阅模型与四大 API
+
+<KfkKafkaIntroDiagram />
+
+Kafka是一个分布式的流处理平台，核心是分布式提交日志（distributed commit log）。与传统消息队列不同，Kafka以追加写入日志为核心，消费者主动拉取（pull）而非推送（push），消息持久化在磁盘日志中且有保留期，可被多次重放。
+
+## Kafka vs 传统消息队列
+
+```
+// 传统消息队列（ActiveMQ / RabbitMQ）
+//   消息消费后即删除 → 临时队列
+//   推送模型（push）→ 消费者被动接收
+//   不可重放 → 消息消费一次即消失
+//   吞吐量受限 → 基于内存，不支持高吞吐持久化
+//
+// Kafka
+//   消息持久化在日志 → 有保留期（retention）
+//   拉取模型（pull）→ 消费者主动控制消费速率
+//   可重放 → 消费者通过Offset可重新消费历史数据
+//   高吞吐 → 顺序磁盘写 + 零拷贝 + 分区并行
+//
+// 消费者组模型
+//   同组负载均衡 → 每分区仅一个消费者消费
+//   跨组广播 → 不同组各自独立消费全量数据
+//   每个组维护自己的Offset → 互不干扰
+//
+// 本质：可持久化、可重放、高吞吐的分布式消息日志系统
+```
+
+## 四大核心 API
+
+```
+// ① Producer API（生产者）
+//   作用：发布消息到Kafka Topic
+//   场景：日志采集、事件发布、指标上报
+//   配置：bootstrap.servers / serializer / acks / retries
+//
+// ② Consumer API（消费者）
+//   作用：从Kafka Topic订阅消息
+//   场景：实时处理、数据落库、消息消费
+//   配置：group.id / auto.offset.reset / enable.auto.commit
+//
+// ③ Streams API（流处理）
+//   作用：将输入Topic流转为输出Topic流
+//   场景：实时ETL、聚合计算、事件处理
+//   特点：轻量级库（非集群），原生集成Kafka，支持Exactly-Once
+//
+// ④ Connect API（数据集成）
+//   作用：Kafka与其他系统间可靠导入导出数据
+//   场景：MySQL→Kafka（Source）、Kafka→HDFS（Sink）
+//   特点：Source/Sink Connector，内置容错和偏移量管理
+```
+
+## 典型使用场景
+
+```
+// 场景一：消息队列（应用解耦）
+//   生产者 → Kafka Topic → 消费者异步处理
+//   优势：削峰填谷、解耦、高吞吐持久化
+//
+// 场景二：行为追踪（点击流采集）
+//   用户点击/页面访问 → Kafka → 下游分析系统
+//   优势：高吞吐写入 + 多消费者并行消费
+//
+// 场景三：运营指标（监控告警）
+//   服务器CPU/内存/网络指标 → Kafka → 监控系统
+//   优势：低延迟 + 高可用 + 多系统订阅
+//
+// 场景四：日志聚合（多机日志统一收集）
+//   多机日志 → Kafka → HDFS/ES
+//   优势：顺序磁盘写性能优于传统日志收集
+//
+// 场景五：流处理（实时ETL）
+//   Kafka Streams → 实时聚合/转换 → 输出Topic
+//   优势：原生集成 + Exactly-Once + 低延迟
+//
+// 共同原因：持久化日志 + 分区并行 + 消费者组模型
+//           天然适配高吞吐、可重放、解耦的数据管道场景
+```
+
+## 诞生背景
+
+```
+// LinkedIn 的需求
+//   海量用户行为追踪数据 + 运营指标
+//   要求：高吞吐、低延迟、可持久化、可水平扩展
+//
+// 现有消息系统的不足
+//   ① 吞吐量不足 → 基于内存，不支持高吞吐持久化写入
+//   ② 缺乏消息重放 → 消费后即删除，无法回溯历史数据
+//   ③ 水平扩展困难 → 集群扩展能力有限
+//   ④ 运维复杂 → 大规模部署可靠性不足
+//
+// Kafka 的核心创新
+//   ① 追加写入磁盘日志 → 顺序写速度接近内存随机写
+//   ② 消费者Offset拉取 → 支持消息重放
+//   ③ 分区并行 → 水平扩展，吞吐随分区线性增长
+//   ④ 零拷贝技术 → 页缓存直通网卡，降低CPU开销
+//
+// 2011年开源 → Apache顶级项目 → 行业标准消息系统
+```
+
+<Callout type="info" title="核心认知">
+Kafka的本质是"分布式提交日志"：消息以追加方式写入分区日志，消费者通过Offset拉取读取。这个设计带来了三个关键特性——持久化（消息存在磁盘有保留期）、可重放（消费者可从任意Offset重新消费）、高吞吐（顺序写+零拷贝+分区并行）。理解"提交日志"这一核心抽象，是理解Kafka一切行为的基础。
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="分布式提交日志">
+Kafka的核心抽象。消息以追加方式写入分区的有序日志文件，每条消息有唯一的Offset。日志是不可变的（immutable），只能追加不能修改。消费者通过Offset拉取读取，可从任意位置重新消费（重放）。消息有保留期（retention），超过保留期才被删除。这个设计使Kafka同时具备持久化、可重放、高吞吐三个特性，区别于传统消息队列的"消费即删除"。
+</GlossaryItem>
+
+<GlossaryItem term="发布订阅模型">
+Kafka的通信模型。生产者将消息发布到Topic，消费者订阅Topic消费消息。与传统队列的"点对点"不同，Kafka的发布订阅支持多消费者组独立消费同一Topic——同一消费者组内分区唯一分配（负载均衡），不同消费者组各自独立消费全量数据（广播）。消费者通过group.id标识所属组，每组维护自己的消费Offset。
+</GlossaryItem>
+
+<GlossaryItem term="四大核心API">
+①Producer API——发布消息到Topic；②Consumer API——从Topic订阅消息；③Streams API——流处理（输入Topic流转输出Topic流）；④Connect API——数据集成（Source/Sink Connector在Kafka与其他系统间可靠导入导出）。四大API覆盖了消息生产、消费、流处理和数据集成的完整场景，是Kafka作为"流处理平台"而不仅仅是"消息队列"的体现。
+</GlossaryItem>
+
+<GlossaryItem term="拉取模型（pull）">
+Kafka消费者主动向Broker拉取（pull）消息，而非Broker推送（push）。优势：①消费者控制消费速率，不会被生产者速度压垮；②消费者可按需批量拉取，提高吞吐；③消费者可回溯Offset重放历史数据；④简化Broker设计（无需管理每个消费者的消费状态）。劣势：消费延迟取决于拉取间隔（可通过长轮询缓解）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Kafka是什么？它的核心发布订阅模型与传统消息队列有什么区别？
+
+<Answer>
+Kafka是一个分布式的流处理平台，核心是分布式提交日志（distributed commit log）。发布订阅模型区别：①传统消息队列（ActiveMQ/RabbitMQ）——消息被消费后即删除，队列是临时的，消息无持久化保证；Kafka——消息持久化在磁盘日志中，消费者通过Offset读取，消息有保留期（retention），可被多次重放。②传统队列——消息被一个消费者消费后消失；Kafka——同一Topic可被多个消费者组独立消费（广播），同组内每分区仅一个消费者消费（负载均衡）。③Kafka以追加写入日志为核心，消费者主动拉取（pull）而非推送（push），消费者控制消费速率。Kafka本质是一个可持久化、可重放、高吞吐的分布式消息日志系统。
+</Answer>
+
+**问题 2**：Kafka的四大核心API分别是什么？各自的作用和典型使用场景是什么？
+
+<Answer>
+四大核心API：①Producer API——发布消息到Kafka Topic，用于应用向Kafka写入数据（如日志采集、事件发布）；②Consumer API——从Kafka Topic订阅消息，用于应用消费Kafka数据（如实时处理、数据落库）；③Streams API——将一个或多个Topic的输入流转换为输出流，用于流处理（如实时聚合、ETL）；④Connect API——在Kafka与其他系统间可靠地导入导出数据，用于数据集成（如MySQL→Kafka、Kafka→HDFS）。Connect API通过Source Connector（写入Kafka）和Sink Connector（从Kafka读出）实现，内置容错和偏移量管理。四大API覆盖了消息生产、消费、流处理和数据集成的完整场景。
+</Answer>
+
+**问题 3**：Kafka的典型使用场景有哪些？为什么Kafka适合这些场景？
+
+<Answer>
+五大典型场景：①消息队列——应用解耦，生产者发消息消费者异步处理，削峰填谷。Kafka适合因为高吞吐、持久化、可重放；②行为追踪——用户点击流、页面访问日志实时采集到Kafka，供下游分析。Kafka适合因为高吞吐写入和多消费者并行消费；③运营指标——服务器CPU/内存/网络指标汇聚到Kafka，供监控和告警系统消费。Kafka适合因为低延迟和高可用；④日志聚合——多机日志统一收集到Kafka再落HDFS/ES。Kafka适合因为顺序磁盘写性能优于传统日志收集；⑤流处理——Kafka Streams直接在Kafka上做实时ETL/聚合。Kafka适合因为原生集成、Exactly-Once语义。共同原因：Kafka的持久化日志+分区并行+消费者组模型天然适配高吞吐、可重放、解耦的数据管道场景。
+</Answer>
+
+**问题 4**：Kafka最初的诞生背景是什么？LinkedIn为什么要开发Kafka而不是使用现有消息系统？
+
+<Answer>
+诞生背景：LinkedIn需要一个系统来处理海量的用户行为追踪数据和运营指标，要求高吞吐、低延迟、可持久化、可水平扩展。现有消息系统（ActiveMQ等）的不足：①吞吐量不足——传统消息队列基于内存，不支持高吞吐持久化写入，无法处理LinkedIn每秒百万级事件；②缺乏消息重放——传统队列消息消费后即删除，无法重新消费历史数据，而行为分析常需回溯；③水平扩展困难——传统队列的集群扩展能力有限，难以应对数据量增长；④运维复杂——传统消息队列在大规模部署下可靠性不足。LinkedIn开发了Kafka，核心创新：①以追加写入磁盘日志为存储模型（顺序写速度快于随机内存写）；②消费者以Offset主动拉取（支持重放）；③分区并行实现水平扩展；④零拷贝技术降低CPU开销。2011年开源后成为Apache顶级项目。
+</Answer>
+
+</Exercises>

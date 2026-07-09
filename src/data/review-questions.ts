@@ -1815,6 +1815,16 @@ import { rdiReplicationClusterQuestions } from "./review/rdi-replication-cluster
 import { rdiTransactionsQuestions } from "./review/rdi-transactions";
 import { rdiPubsubSentinelQuestions } from "./review/rdi-pubsub-sentinel";
 import { rdiFinalReviewQuestions } from "./review/rdi-final-review";
+import { kfkLearningMapQuestions } from "./review/kfk-learning-map";
+import { kfkKafkaIntroQuestions } from "./review/kfk-kafka-intro";
+import { kfkTopicsPartitionsQuestions } from "./review/kfk-topics-partitions";
+import { kfkProducersQuestions } from "./review/kfk-producers";
+import { kfkConsumersQuestions } from "./review/kfk-consumers";
+import { kfkKafkaInternalsQuestions } from "./review/kfk-kafka-internals";
+import { kfkReliabilityQuestions } from "./review/kfk-reliability";
+import { kfkKafkaStreamsQuestions } from "./review/kfk-kafka-streams";
+import { kfkAdminOpsQuestions } from "./review/kfk-admin-ops";
+import { kfkFinalReviewQuestions } from "./review/kfk-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3665,6 +3675,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...rdiTransactionsQuestions,
   ...rdiPubsubSentinelQuestions,
   ...rdiFinalReviewQuestions,
+  ...kfkLearningMapQuestions,
+  ...kfkKafkaIntroQuestions,
+  ...kfkTopicsPartitionsQuestions,
+  ...kfkProducersQuestions,
+  ...kfkConsumersQuestions,
+  ...kfkKafkaInternalsQuestions,
+  ...kfkReliabilityQuestions,
+  ...kfkKafkaStreamsQuestions,
+  ...kfkAdminOpsQuestions,
+  ...kfkFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
