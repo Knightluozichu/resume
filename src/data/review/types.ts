@@ -2328,7 +2328,17 @@ export type ReviewChapterSlug =
   | "bla-agent-applications"
   | "bla-multimodal-apps"
   | "bla-production-deployment"
-  | "bla-final-review";
+  | "bla-final-review"
+  | "mas-learning-map"
+  | "mas-agent-foundations"
+  | "mas-rational-agents"
+  | "mas-multiagent-interaction"
+  | "mas-game-theory"
+  | "mas-communication-negotiation"
+  | "mas-coordination-cooperation"
+  | "mas-distributed-problem-solving"
+  | "mas-applications-future"
+  | "mas-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4661,6 +4671,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "bla-multimodal-apps": "多模态应用",
   "bla-production-deployment": "生产部署与运维",
   "bla-final-review": "全书复习与知识整合",
+  "mas-learning-map": "多智能体系统·知识全景图",
+  "mas-agent-foundations": "智能体基础概念",
+  "mas-rational-agents": "理性智能体与决策",
+  "mas-multiagent-interaction": "多智能体交互",
+  "mas-game-theory": "博弈论与策略",
+  "mas-communication-negotiation": "通信与协商",
+  "mas-coordination-cooperation": "协调与合作机制",
+  "mas-distributed-problem-solving": "分布式问题求解",
+  "mas-applications-future": "应用与未来展望",
+  "mas-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

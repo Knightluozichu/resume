@@ -2205,6 +2205,16 @@ import { blaAgentApplicationsQuestions } from "./review/bla-agent-applications";
 import { blaMultimodalAppsQuestions } from "./review/bla-multimodal-apps";
 import { blaProductionDeploymentQuestions } from "./review/bla-production-deployment";
 import { blaFinalReviewQuestions } from "./review/bla-final-review";
+import { masLearningMapQuestions } from "./review/mas-learning-map";
+import { masAgentFoundationsQuestions } from "./review/mas-agent-foundations";
+import { masRationalAgentsQuestions } from "./review/mas-rational-agents";
+import { masMultiagentInteractionQuestions } from "./review/mas-multiagent-interaction";
+import { masGameTheoryQuestions } from "./review/mas-game-theory";
+import { masCommunicationNegotiationQuestions } from "./review/mas-communication-negotiation";
+import { masCoordinationCooperationQuestions } from "./review/mas-coordination-cooperation";
+import { masDistributedProblemSolvingQuestions } from "./review/mas-distributed-problem-solving";
+import { masApplicationsFutureQuestions } from "./review/mas-applications-future";
+import { masFinalReviewQuestions } from "./review/mas-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4445,6 +4455,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...blaMultimodalAppsQuestions,
   ...blaProductionDeploymentQuestions,
   ...blaFinalReviewQuestions,
+  ...masLearningMapQuestions,
+  ...masAgentFoundationsQuestions,
+  ...masRationalAgentsQuestions,
+  ...masMultiagentInteractionQuestions,
+  ...masGameTheoryQuestions,
+  ...masCommunicationNegotiationQuestions,
+  ...masCoordinationCooperationQuestions,
+  ...masDistributedProblemSolvingQuestions,
+  ...masApplicationsFutureQuestions,
+  ...masFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

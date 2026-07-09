@@ -268,6 +268,7 @@ export const BOOK_ORDER = [
   "large-language-models",
   "large-scale-llm-practice",
   "building-llm-applications",
+  "multiagent-systems",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -476,6 +477,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "large-language-models": "大语言模型：基础与前沿",
   "large-scale-llm-practice": "大规模语言模型：从理论到实践",
   "building-llm-applications": "Building LLM Powered Applications",
+  "multiagent-systems": "多智能体系统",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
