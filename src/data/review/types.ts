@@ -1908,7 +1908,17 @@ export type ReviewChapterSlug =
   | "dsc-transactions"
   | "dsc-concurrency-control"
   | "dsc-recovery-systems"
-  | "dsc-final-review";
+  | "dsc-final-review"
+  | "hpm-learning-map"
+  | "hpm-mysql-architecture"
+  | "hpm-index-design"
+  | "hpm-query-optimization"
+  | "hpm-schema-design"
+  | "hpm-replication"
+  | "hpm-scaling-ha"
+  | "hpm-os-tuning"
+  | "hpm-monitoring"
+  | "hpm-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3821,6 +3831,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dsc-concurrency-control": "并发控制",
   "dsc-recovery-systems": "恢复系统",
   "dsc-final-review": "全书复习",
+  "hpm-learning-map": "全书学习地图",
+  "hpm-mysql-architecture": "MySQL架构",
+  "hpm-index-design": "索引设计",
+  "hpm-query-optimization": "查询优化",
+  "hpm-schema-design": "Schema设计",
+  "hpm-replication": "复制",
+  "hpm-scaling-ha": "扩展与高可用",
+  "hpm-os-tuning": "操作系统与硬件调优",
+  "hpm-monitoring": "监控与诊断",
+  "hpm-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

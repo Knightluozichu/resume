@@ -1785,6 +1785,16 @@ import { dscTransactionsQuestions } from "./review/dsc-transactions";
 import { dscConcurrencyControlQuestions } from "./review/dsc-concurrency-control";
 import { dscRecoverySystemsQuestions } from "./review/dsc-recovery-systems";
 import { dscFinalReviewQuestions } from "./review/dsc-final-review";
+import { hpmLearningMapQuestions } from "./review/hpm-learning-map";
+import { hpmMysqlArchitectureQuestions } from "./review/hpm-mysql-architecture";
+import { hpmIndexDesignQuestions } from "./review/hpm-index-design";
+import { hpmQueryOptimizationQuestions } from "./review/hpm-query-optimization";
+import { hpmSchemaDesignQuestions } from "./review/hpm-schema-design";
+import { hpmReplicationQuestions } from "./review/hpm-replication";
+import { hpmScalingHaQuestions } from "./review/hpm-scaling-ha";
+import { hpmOsTuningQuestions } from "./review/hpm-os-tuning";
+import { hpmMonitoringQuestions } from "./review/hpm-monitoring";
+import { hpmFinalReviewQuestions } from "./review/hpm-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3605,6 +3615,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dscConcurrencyControlQuestions,
   ...dscRecoverySystemsQuestions,
   ...dscFinalReviewQuestions,
+  ...hpmLearningMapQuestions,
+  ...hpmMysqlArchitectureQuestions,
+  ...hpmIndexDesignQuestions,
+  ...hpmQueryOptimizationQuestions,
+  ...hpmSchemaDesignQuestions,
+  ...hpmReplicationQuestions,
+  ...hpmScalingHaQuestions,
+  ...hpmOsTuningQuestions,
+  ...hpmMonitoringQuestions,
+  ...hpmFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

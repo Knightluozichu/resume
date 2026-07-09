@@ -1,0 +1,165 @@
+---
+title: "MySQL架构"
+type: A
+section: "数据库"
+order: 1
+description: "MySQL三层架构与存储引擎体系——连接层/SQL层/可插拔存储引擎层及InnoDB核心机制"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { HpmMysqlArchitectureDiagram } from "@/components/mdx/high-performance-mysql/diagrams/hpm-mysql-architecture";
+
+<Objectives>
+
+- 理解MySQL三层架构：连接层、SQL层、存储引擎层
+- 掌握SQL执行流水线：解析→预处理→优化→执行
+- 区分InnoDB与MyISAM等存储引擎的特性与适用场景
+- 理解InnoDB的事务、行锁、MVCC与聚簇索引机制
+
+</Objectives>
+
+## MySQL架构分层
+
+<HpmMysqlArchitectureDiagram />
+
+MySQL采用经典的三层架构：连接层负责客户端连接与线程管理，SQL层负责解析优化执行，存储引擎层以插件方式提供数据的物理存储与访问。这种分层使MySQL能"一套SQL层，多种存储引擎"。
+
+## 三层职责
+
+| 层次 | 职责 | 关键组件 |
+|------|------|----------|
+| 连接层 | 连接管理/认证/线程 | 连接池/线程/权限 |
+| SQL层 | 解析/优化/执行 | 查询缓存/解析器/优化器/执行器 |
+| 存储引擎层 | 数据存取 | InnoDB/MyISAM/Memory等 |
+
+## SQL执行流水线
+
+```
+// 一条SQL的旅程
+// 客户端发送 SQL
+//   └── 连接层：认证授权，分配线程
+// SQL层
+//   └── 查询缓存（8.0已移除）：命中率低且易失效
+//   └── 解析器 Parser：词法/语法分析 → 解析树
+//   └── 预处理器：语义检查 + 权限校验
+//   └── 优化器 Optimizer：选执行计划，成本估算（核心）
+//   └── 执行器：调用存储引擎 API 读写
+// 存储引擎层
+//   └── InnoDB 等完成真正的数据操作
+//
+// binlog 在执行器层写入（引擎层提交后）
+```
+
+<Callout type="info" title="查询缓存为何被移除">
+查询缓存（Query Cache）在MySQL 8.0被移除：①命中率低——任何对表的写都使该表所有缓存失效；②并发开销大——加锁维护缓存成为瓶颈；③优化器进步使缓存收益更低。现代实践用应用层缓存（Redis）替代。
+</Callout>
+
+## 存储引擎对比
+
+| 引擎 | 事务 | 锁粒度 | 索引 | 适用 |
+|------|------|--------|------|------|
+| InnoDB | 支持 | 行锁 | 聚簇 | OLTP默认 |
+| MyISAM | 不支持 | 表锁 | 非聚簇 | 只读/归档 |
+| Memory | 不支持 | 表锁 | 哈希 | 临时/缓存 |
+| Archive | 不支持 | 行锁 | - | 归档压缩 |
+
+```
+// 选引擎口诀
+// InnoDB：要事务、要并发、要崩溃恢复 → 99% 场景
+// MyISAM：纯只读、归档、无事务需求（已不推荐）
+// Memory：临时表、中间结果、可丢失的缓存
+// 按表选引擎：CREATE TABLE ... ENGINE=InnoDB
+```
+
+## InnoDB 核心机制
+
+InnoDB是MySQL默认引擎（5.5+），高性能MySQL的性能讨论几乎都围绕InnoDB。
+
+```
+// InnoDB 四大特性
+// 1. 事务 ACID
+//    └── Redo Log 保证持久性（D）
+//    └── Undo Log 保证原子性与 MVCC（A）
+// 2. 行级锁
+//    └── 锁住索引项，非数据页
+//    └── 无索引则退化为表锁（陷阱）
+// 3. MVCC 多版本并发控制
+//    └── 读写不互斥：读快照，写新版本
+//    └── 每行有隐藏列记录版本号
+// 4. 聚簇索引
+//    └── 数据按主键组织存储
+//    └── 主键查询直接拿到整行
+```
+
+<Callout type="warning" title="InnoDB 行锁的陷阱">
+InnoDB是行锁，但锁的是索引而非数据行本身。如果UPDATE/DELETE的WHERE条件未命中任何索引，InnoDB不得不扫描全表，对每行加锁，效果等同于表锁。因此"为更新条件的列建索引"不仅是为了查询快，更是为了锁不升级。
+</Callout>
+
+## 事务隔离与MVCC
+
+```
+// 四种隔离级别（从低到高）
+// READ UNCOMMITTED 读未提交 → 脏读
+// READ COMMITTED   读已提交 → 不可重复读（Oracle默认）
+// REPEATABLE READ  可重复读 → 幻读（InnoDB用间隙锁解决，MySQL默认）
+// SERIALIZABLE     可串行化 → 性能差
+//
+// MVCC 实现：
+//   └── 每行隐藏列： trx_id（最近修改事务ID）/ roll_pointer（回滚段指针）
+//   └── Read View：事务开始时生成活跃事务快照
+//   └── 可见性判断：版本 trx_id 在 Read View 中是否可见
+//   └── RC：每条SELECT生成新Read View
+//   └── RR：事务首次SELECT生成Read View并复用
+```
+
+<Glossary>
+
+<GlossaryItem term="三层架构">
+MySQL分连接层（连接管理/认证/线程）、SQL层（解析/优化/执行）、存储引擎层（数据存取，插件式）。连接层为每个连接分配线程并复用连接池；SQL层把声明式SQL翻译成执行计划；存储引擎层以插件方式提供InnoDB/MyISAM等，使一套SQL层支持多种存储特性。
+</GlossaryItem>
+
+<GlossaryItem term="查询优化器">
+优化器是SQL层核心组件，负责在等价执行计划中选成本最低的方案。它基于统计信息（基数估计/直方图）估算IO与CPU成本，决定访问路径（索引扫描或全表扫）、连接顺序与算法。优化器质量直接决定查询性能，但并非万能——写法、索引、统计信息都会影响其决策，故需用EXPLAIN审视执行计划。
+</GlossaryItem>
+
+<GlossaryItem term="InnoDB核心特性">
+InnoDB是MySQL默认引擎，四大特性：①事务ACID——Redo Log保证持久性，Undo Log保证原子性；②行级锁——锁索引项，无索引退化为表锁；③MVCC——多版本并发控制，读写不互斥，读快照写新版本；④聚簇索引——数据按主键组织，主键查询直接拿整行。99%的OLTP场景应使用InnoDB。
+</GlossaryItem>
+
+<GlossaryItem term="MVCC与隔离级别">
+MVCC通过每行隐藏列（trx_id/roll_pointer）和Read View（活跃事务快照）实现读写不互斥。READ COMMITTED每条SELECT生成新Read View（不可重复读）；REPEATABLE READ事务首次SELECT生成Read View并复用（可重复读，InnoDB用间隙锁解决幻读）。MVCC使读不加锁、不阻塞写，是InnoDB高并发的基石。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：MySQL的三层架构是什么？每层各负什么职责？
+
+<Answer>
+三层架构：①连接层——负责客户端连接管理、认证授权、线程分配，每个连接对应一个线程，连接池复用线程避免频繁创建销毁。②SQL层——负责SQL的解析、优化、执行，包含查询缓存（8.0移除）、解析器（词法语法分析生成解析树）、预处理器（语义检查+权限校验）、优化器（选执行计划成本估算）、执行器（调用存储引擎API读写）。③存储引擎层——以插件方式提供数据的物理存储与访问，如InnoDB/MyISAM/Memory，可按表选择。分层使一套SQL层支持多种存储引擎特性。
+</Answer>
+
+**问题 2**：一条SELECT语句在MySQL中是如何执行的？
+
+<Answer>
+执行流程：①客户端发送SQL，连接层认证授权并分配线程；②查询缓存查找（8.0已移除，命中率低且易失效）；③解析器做词法/语法分析生成解析树；④预处理器做语义检查（表/列是否存在）和权限校验；⑤优化器基于统计信息估算成本，在等价执行计划中选最优方案（访问路径、连接顺序、算法）；⑥执行器调用存储引擎API完成数据读写；⑦结果集返回客户端。其中优化器是核心，决定查询性能，可用EXPLAIN审视其决策。
+</Answer>
+
+**问题 3**：InnoDB的四大核心特性是什么？为什么它是OLTP首选？
+
+<Answer>
+四大特性：①事务ACID——Redo Log保证持久性（崩溃后已提交事务不丢），Undo Log保证原子性（回滚未提交事务）；②行级锁——锁粒度细到索引项，并发度高，但WHERE未命中索引会退化为表锁；③MVCC——多版本并发控制，读操作看快照不加锁不阻塞写，解决读写互斥问题；④聚簇索引——数据按主键物理组织存储，主键查询直接拿整行，效率高。OLTP首选原因：需要事务保证一致性、高并发下行锁和MVCC吞吐高、崩溃恢复可靠、主键点查询快——这些正是OLTP的核心需求。
+</Answer>
+
+**问题 4**：为什么说"InnoDB是行锁，但WHERE条件没用索引时会退化成表锁"？
+
+<Answer>
+InnoDB的行锁是锁在索引项上，而非数据行本身。当UPDATE/DELETE的WHERE条件命中索引时，InnoDB通过索引定位行，只锁对应索引项，并发度高。但当WHERE条件未命中任何索引时，InnoDB不得不全表扫描，对扫描到的每一行都加锁，效果等同于锁住全表——此时并发更新会被严重阻塞。因此为更新条件的列建索引，不仅是为了查询快，更是为了锁不升级、保持行锁并发能力。这是InnoDB最经典的陷阱之一。
+</Answer>
+
+</Exercises>

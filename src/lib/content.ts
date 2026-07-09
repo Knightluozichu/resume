@@ -226,6 +226,7 @@ export const BOOK_ORDER = [
   "mysql-essentials",
   "sql-ten-minutes",
   "database-system-concepts",
+  "high-performance-mysql",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -392,6 +393,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "mysql-essentials": "MySQL数据库应用从入门到精通",
   "sql-ten-minutes": "SQL必知必会",
   "database-system-concepts": "数据库系统概念",
+  "high-performance-mysql": "高性能MySQL",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
