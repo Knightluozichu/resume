@@ -1978,7 +1978,17 @@ export type ReviewChapterSlug =
   | "k8s-config-secrets"
   | "k8s-scheduling"
   | "k8s-security-ops"
-  | "k8s-final-review";
+  | "k8s-final-review"
+  | "pha-learning-map"
+  | "pha-architecture-evolution"
+  | "pha-monolith-to-microservice"
+  | "pha-distributed-fundamentals"
+  | "pha-distributed-transactions"
+  | "pha-consensus-consistency"
+  | "pha-caching-patterns"
+  | "pha-reliable-communication"
+  | "pha-future-architecture"
+  | "pha-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3961,6 +3971,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "k8s-scheduling": "调度与亲和性",
   "k8s-security-ops": "安全与运维",
   "k8s-final-review": "全书复习",
+  "pha-learning-map": "凤凰架构全书学习地图",
+  "pha-architecture-evolution": "架构演进史",
+  "pha-monolith-to-microservice": "单体到微服务",
+  "pha-distributed-fundamentals": "分布式基础",
+  "pha-distributed-transactions": "分布式事务",
+  "pha-consensus-consistency": "共识与一致性",
+  "pha-caching-patterns": "缓存模式",
+  "pha-reliable-communication": "可靠通信",
+  "pha-future-architecture": "未来架构方向",
+  "pha-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

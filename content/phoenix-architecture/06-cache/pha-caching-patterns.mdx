@@ -1,0 +1,151 @@
+---
+title: "缓存模式：读写策略与一致性保障"
+type: C
+section: "分布式与中间件"
+order: 6
+description: "Cache-Aside/读写穿透、缓存一致性策略与穿透击穿雪崩"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { PhaCachingPatternsDiagram } from "@/components/mdx/phoenix-architecture/diagrams/pha-caching-patterns";
+
+<Objectives>
+
+- 掌握Cache-Aside旁路缓存的读写流程
+- 理解Read-Through/Write-Through/Write-Behind三种模式
+- 掌握缓存一致性策略（更新vs删除、延迟双删）
+- 理解缓存穿透、击穿、雪崩的区别与解决方案
+
+</Objectives>
+
+## 缓存读写模式
+
+<PhaCachingPatternsDiagram />
+
+## Cache-Aside 旁路缓存（最常用）
+
+### 读流程
+
+```
+① 读 Cache → 命中则返回
+② 未命中 → 读 DB → 写回 Cache → 返回
+```
+
+### 写流程
+
+```
+③ 更新 DB → 删除 Cache（而非更新）
+```
+
+<Callout type="info" title="为什么删除而不是更新缓存？">
+
+①并发安全性——「更新DB+更新Cache」在并发写+读场景下可能出现脏数据；删除是幂等的，下次读从DB重新加载。②避免无效更新——缓存值计算复杂时每次写都更新浪费；删除是懒加载策略。③一致性窗口更短——删除后下次读才重建，不一致窗口=下次读之前的时间。
+
+</Callout>
+
+### 风险与对策
+
+| 风险 | 原因 | 对策 |
+|------|------|------|
+| 首次未命中穿透 | 新数据未预热 | 缓存预热 |
+| 并发写致脏读 | 线程A更新DB→线程B读DB旧值→A删Cache→B写回旧值 | 延迟双删（删→等→再删） |
+| 删Cache失败 | 更新DB和删Cache非原子操作 | Canal监听binlog异步删Cache |
+
+## Read/Write-Through 与 Write-Behind
+
+| 模式 | 原理 | 特点 |
+|------|------|------|
+| Read-Through | 未命中由Cache服务自身回源DB | 应用无感知回源，代码简洁 |
+| Write-Through | 写Cache + 同步写DB | 强一致，写延迟高 |
+| Write-Behind | 写Cache → 异步批量刷DB | 写性能极高，宕机可能丢数据 |
+
+<Callout type="warning" title="Write-Behind 需要WAL保障">
+
+Write-Behind（异步写回）用数据安全性换写性能。宕机时Cache未刷到DB的数据会丢失。需配合WAL（Write-Ahead Log）日志或持久化队列保证可靠性。适合日志/计数器等可容忍少量丢数据的场景。
+
+</Callout>
+
+## 缓存一致性策略
+
+### 先更新DB → 再删除Cache（推荐）
+
+```
+更新DB → 删除Cache
+```
+问题：并发读回填脏数据。对策：**延迟双删**——删Cache→更新DB→等待→再删Cache。
+
+### 先删Cache → 再更新DB（不推荐）
+
+```
+删除Cache → 更新DB
+```
+问题：删Cache后并发读回填旧值，脏数据窗口=DB写入延迟。
+
+<Callout type="info" title="Canal/Debezium 监听 binlog">
+
+完全解耦方案：DB变更后binlog事件触发删Cache，不侵入业务代码。删Cache失败时发MQ重试，保证最终删除。
+
+</Callout>
+
+## 缓存三大经典问题
+
+| 问题 | 原因 | 对策 |
+|------|------|------|
+| 缓存穿透 | 查不存在的Key直达DB | 空值缓存 / 布隆过滤器 |
+| 缓存击穿 | 热点Key过期，并发回源 | 互斥锁 / 永不过期+异步刷新 |
+| 缓存雪崩 | 大量Key同时过期或Cache宕机 | 过期时间加随机 / 多级缓存 / 限流降级 |
+
+```
+穿透：Key根本不存在        击穿：单个热点Key过期      雪崩：大量Key同时过期
+  ↓                          ↓                          ↓
+  DB ←─── 恶意查询            DB ←─── 并发回源            DB ←─── 全部回源
+  （穿透过DB）                （击穿单点）                （雪崩压垮DB）
+```
+
+<Glossary>
+
+<GlossaryItem term="Cache-Aside（旁路缓存）">
+最常用的缓存模式。读时先查Cache未命中再查DB并回填；写时先更新DB再删除Cache。由应用控制读写流程，灵活但有侵入性。删除Cache而非更新，避免并发脏数据。
+</GlossaryItem>
+
+<GlossaryItem term="延迟双删">
+解决Cache-Aside并发写致脏读的策略。更新DB前删一次Cache，更新DB后等待一段时间（覆盖并发读回填的时间窗口）再删一次。确保最终Cache中不残留旧数据。
+</GlossaryItem>
+
+<GlossaryItem term="布隆过滤器（Bloom Filter）">
+一种空间效率极高的概率型数据结构，用于判断一个元素是否在集合中。可能有假阳性（判断存在但实际不存在）但不会有假阴性（判断不存在则一定不存在）。用于缓存穿透防护——前置过滤不存在的Key。
+</GlossaryItem>
+
+<GlossaryItem term="缓存穿透">
+查询一个在Cache和DB中都不存在的Key（如恶意攻击查询不存在的ID），每次请求都直达DB。与击穿（单个热点Key过期）和雪崩（大量Key同时过期）不同，穿透是Key根本不存在。
+</GlossaryItem>
+
+<GlossaryItem term="Write-Behind（异步写回）">
+写Cache后异步批量刷DB的缓存模式。写性能极高（只写内存），但宕机可能丢数据。需配合WAL日志保证可靠性。适合日志/计数器等可容忍少量丢数据的场景。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Cache-Aside的读写流程是什么？为什么写操作要删除缓存而不是更新缓存？
+
+<Answer>
+
+读流程：先读Cache命中则返回，未命中读DB并写回Cache。写流程：更新DB后删除Cache。删除而非更新的原因：①并发安全——更新Cache在并发写+读下可能脏数据，删除是幂等的；②避免无效更新——缓存值计算复杂时每次写都更新浪费，删除是懒加载；③一致性窗口更短——删除后下次读才重建。风险对策：延迟双删防并发脏读，Canal监听binlog异步删Cache防删失败。
+
+</Answer>
+
+**问题 2：** 缓存穿透、击穿、雪崩的区别和解决方案各是什么？
+
+<Answer>
+
+穿透：查不存在的Key直达DB（恶意攻击/数据不存在），对策是空值缓存/布隆过滤器。击穿：单个热点Key过期瞬间并发回源，对策是互斥锁（只让一个线程回源）/永不过期+异步刷新。雪崩：大量Key同时过期或Cache宕机全部回源压垮DB，对策是过期时间加随机偏移/多级缓存/限流降级。共同原则：Cache是加速层，必须做好DB的限流降级最后防线。
+
+</Answer>
+
+</Exercises>

@@ -1855,6 +1855,16 @@ import { k8sConfigSecretsQuestions } from "./review/k8s-config-secrets";
 import { k8sSchedulingQuestions } from "./review/k8s-scheduling";
 import { k8sSecurityOpsQuestions } from "./review/k8s-security-ops";
 import { k8sFinalReviewQuestions } from "./review/k8s-final-review";
+import { phaLearningMapQuestions } from "./review/pha-learning-map";
+import { phaArchitectureEvolutionQuestions } from "./review/pha-architecture-evolution";
+import { phaMonolithToMicroserviceQuestions } from "./review/pha-monolith-to-microservice";
+import { phaDistributedFundamentalsQuestions } from "./review/pha-distributed-fundamentals";
+import { phaDistributedTransactionsQuestions } from "./review/pha-distributed-transactions";
+import { phaConsensusConsistencyQuestions } from "./review/pha-consensus-consistency";
+import { phaCachingPatternsQuestions } from "./review/pha-caching-patterns";
+import { phaReliableCommunicationQuestions } from "./review/pha-reliable-communication";
+import { phaFutureArchitectureQuestions } from "./review/pha-future-architecture";
+import { phaFinalReviewQuestions } from "./review/pha-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3745,6 +3755,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...k8sSchedulingQuestions,
   ...k8sSecurityOpsQuestions,
   ...k8sFinalReviewQuestions,
+  ...phaLearningMapQuestions,
+  ...phaArchitectureEvolutionQuestions,
+  ...phaMonolithToMicroserviceQuestions,
+  ...phaDistributedFundamentalsQuestions,
+  ...phaDistributedTransactionsQuestions,
+  ...phaConsensusConsistencyQuestions,
+  ...phaCachingPatternsQuestions,
+  ...phaReliableCommunicationQuestions,
+  ...phaFutureArchitectureQuestions,
+  ...phaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
