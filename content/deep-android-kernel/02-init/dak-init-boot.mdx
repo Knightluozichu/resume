@@ -1,0 +1,236 @@
+---
+title: "Init进程与启动"
+type: C
+section: "Android开发"
+order: 2
+description: "Android系统启动全流程——init.rc解析、Zygote fork+COW、system_server启动"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DakInitBootDiagram } from "@/components/mdx/deep-android-kernel/diagrams/dak-init-boot";
+
+<Objectives>
+
+- 掌握Android系统从BootROM到Launcher的完整启动流程
+- 理解init进程的职责和init.rc配置文件解析机制
+- 深入Zygote的fork+COW（写时复制）进程孵化原理
+- 明确system_server启动核心服务并注册到ServiceManager的过程
+
+</Objectives>
+
+## 系统启动全流程
+
+<DakInitBootDiagram />
+
+Android系统启动经历七个关键阶段：BootROM → Bootloader → Linux Kernel → init → Zygote → system_server → Launcher。每个阶段完成特定初始化工作，最终将桌面呈现给用户。
+
+## 启动阶段详解
+
+### 阶段一：BootROM 与 Bootloader
+
+```
+// 上电后的第一阶段
+// BootROM（固化在芯片中）：
+// - 上电自检
+// - 加载Bootloader到RAM
+//
+// Bootloader（如aboot/lk）：
+// - 初始化硬件（CPU/内存/时钟）
+// - 加载Linux内核镜像和ramdisk到RAM
+// - 传递启动参数给内核
+// - 跳转执行内核入口
+```
+
+### 阶段二：Linux Kernel 启动
+
+```
+// 内核启动阶段
+// - 初始化各种驱动（Binder/Display/Audio等）
+// - 挂载根文件系统（ramdisk）
+// - 初始化设备文件（/dev/binder等）
+// - 启动init进程（PID=1，用户空间第一个进程）
+// - 之后内核进入空闲，由init驱动后续流程
+```
+
+### 阶段三：init 进程（PID=1）
+
+```
+// init是用户空间的第一个进程，PID=1
+// 核心职责：
+//
+// 1. 解析 init.rc 配置文件
+//    init.rc 使用Android Init Language
+//    定义需要启动的服务、动作、触发器
+//
+// service zygote /system/bin/app_process64 -Xzygote ...
+//     class main
+//     socket zygote stream 660 root system
+//     onrestart write /sys/android_power/request_state wake
+//
+// 2. 启动关键守护进程
+//    - ueventd（设备节点管理）
+//    - servicemanager（Binder服务管理，handle=0）
+//    - vold（存储管理）
+//    - netd（网络管理）
+//
+// 3. 启动 Zygote
+//    Zygote是所有Java进程的祖先
+//
+// 4. 监听子进程退出（property service + 重启策略）
+```
+
+### 阶段四：Zygote 进程孵化器
+
+```
+// Zygote = 所有应用进程的"母体"
+// 由init启动，核心优势：fork + COW
+//
+// Zygote启动时做的事：
+// 1. 创建Dalvik/ART虚拟机实例
+// 2. 预加载系统资源
+//    - preloadClasses()：加载常用Java类
+//    - preloadResources()：加载常用资源（图片/字符串）
+//    - preloadDrawables()：加载Drawable
+// 3. 注册Socket（监听创建新进程的请求）
+// 4. fork出 system_server 进程
+//
+// 之后Zygote进入循环，等待AMS通过Socket发来的fork请求
+//
+// 为什么用fork + COW？
+// - fork复制进程，COW（Copy-On-Write）使子进程共享父进程物理页
+// - Zygote已预加载资源，子进程直接共享，无需重复加载
+// - 只有写入时才真正复制物理页 → 极大提升应用启动速度
+// - 跳过JVM启动和类加载的开销（几十ms → 几ms）
+```
+
+<Callout type="info" title="Zygote为什么用Socket而不是Binder？">
+Zygote启动时Binder通信还未就绪（ServiceManager尚未注册Zygote服务），且fork子进程时不能持有Binder锁（会导致子进程状态不一致）。因此AMS通过Socket（LocalSocket）通知Zygote fork新进程，避免了Binder的线程安全问题。
+</Callout>
+
+### 阶段五：system_server 启动
+
+```
+// system_server 由 Zygote fork 创建
+// 启动后做以下事情：
+//
+// 1. 初始化运行时环境
+//    - 创建SystemServiceManager
+//    - 启动引导服务（Installer、AMS、PMS等）
+//
+// 2. 启动核心服务（三阶段）
+//    // 阶段1：BootstrapServices
+//    mSystemServiceManager.startService(Installer.class);
+//    mActivityManagerService = mSystemServiceManager
+//        .startService(ActivityManagerService.Lifecycle.class);
+//
+//    // 阶段2：CoreServices
+//    mSystemServiceManager.startService(BatteryService.class);
+//    mSystemServiceManager.startService(UsageStatsService.class);
+//
+//    // 阶段3：OtherServices
+//    mSystemServiceManager.startService(WindowManagerService.class);
+//    mPackageManagerService = PackageManagerService.main(...);
+//
+// 3. 将服务注册到 ServiceManager
+//    ServiceManager.addService("activity", mAMS);
+//    ServiceManager.addService("window", mWMS);
+//    ServiceManager.addService("package", mPMS);
+//
+// 4. 调用 AMS.systemReady() → 启动 Launcher
+```
+
+### 阶段六：Launcher 启动
+
+```
+// system_server 启动完成后，AMS启动Launcher
+//
+// 1. AMS.systemReady() → startHomeActivityLocked()
+// 2. 通过PMS查询带有 CATEGORY_HOME 的Activity
+// 3. 通过Socket通知Zygote fork Launcher进程
+// 4. Zygote fork出Launcher进程
+// 5. Launcher进程初始化 → 加载桌面 → 显示图标
+// 6. 系统启动完成！
+//
+// 至此系统进入待机状态，等待用户操作
+```
+
+## init.rc 语言要点
+
+```
+// Android Init Language 关键语法
+//
+// 1. Actions（动作）
+// on boot
+//     mkdir /data/local 0771
+//     chmod 0666 /dev/binder
+//
+// 2. Services（服务）
+// service servicemanager /system/bin/servicemanager
+//     class core
+//     user system
+//     group system
+//     critical
+//     onrestart restart healthd
+//     onrestart restart zygote
+//
+// 3. Triggers（触发器）
+// on property:vold.decrypt=trigger_restart_framework
+//     class_start main
+//
+// 4. 服务分类（class）
+// class core    → 核心服务（ueventd/servicemanager）
+// class main    → 主服务（zygote/system_server）
+// class late_start → 延迟启动服务
+```
+
+<Glossary>
+
+<GlossaryItem term="init进程">
+Android用户空间的第一个进程（PID=1），由Linux内核启动。职责包括解析init.rc配置文件、启动关键守护进程（servicemanager/vold/netd）、启动Zygote进程、监听子进程退出并按策略重启。init是Android系统启动的驱动者。
+</GlossaryItem>
+
+<GlossaryItem term="Zygote">
+Android进程孵化器，由init启动。Zygote启动时创建ART虚拟机实例并预加载系统资源和类库。后续所有Java应用进程（含system_server）都由Zygote通过fork创建，利用COW（写时复制）技术共享Zygote预加载的资源，避免每个进程重复加载，极大提升启动速度。
+</GlossaryItem>
+
+<GlossaryItem term="COW（Copy-On-Write）">
+写时复制技术。fork创建子进程时，子进程与父进程共享同一份物理内存页，只有当某一方写入时才真正复制该页。Zygote预加载了大量系统资源，fork出的应用进程直接共享这些资源（只读），大幅减少应用启动的内存占用和时间开销。
+</GlossaryItem>
+
+<GlossaryItem term="init.rc">
+Android Init Language编写的配置文件，定义init进程需要启动的服务、执行的动作和触发器。语法包括Actions（on触发器 + 命令）、Services（service名称 + 可执行路径 + 选项）和Imports（import其他rc文件）。位于/system/etc/init/和/vendor/etc/init/目录。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Android系统从上电到桌面显示的完整启动流程是什么？
+
+<Answer>
+完整启动流程七步：①BootROM——上电后固化在芯片中的代码执行自检，加载Bootloader到RAM；②Bootloader——初始化CPU/内存/时钟等硬件，加载Linux内核镜像和ramdisk到RAM，传递启动参数，跳转执行内核入口；③Linux Kernel——初始化各种驱动（Binder/Display/Audio），挂载根文件系统，初始化设备文件，启动init进程（PID=1，用户空间第一个进程），之后内核进入空闲；④init——解析init.rc配置文件，启动关键守护进程（ueventd/servicemanager/vold/netd），启动Zygote进程，进入监听循环；⑤Zygote——创建ART虚拟机实例，预加载系统类库和资源（preloadClasses/preloadResources），注册Socket监听，fork出system_server进程；⑥system_server——三阶段启动核心服务（BootstrapServices→CoreServices→OtherServices），启动AMS/PMS/WMS等，将服务注册到ServiceManager，调用AMS.systemReady()；⑦Launcher——AMS通过startHomeActivityLocked()，查询CATEGORY_HOME的Activity，通过Socket通知Zygote fork Launcher进程，Launcher加载桌面显示图标，系统启动完成。
+</Answer>
+
+**问题 2**：Zygote为什么使用fork + COW？为什么用Socket而不是Binder与AMS通信？
+
+<Answer>
+Zygote使用fork+COW的原因：①fork创建子进程时，子进程与父进程共享同一份物理内存页，只有写入时才真正复制（COW写时复制）；②Zygote在启动时预加载了大量系统资源（preloadClasses加载常用Java类、preloadResources加载图片和字符串），fork出的应用进程直接共享这些只读资源，无需重复加载；③避免了每个应用进程重新启动JVM和加载类的开销（从几十毫秒降到几毫秒），极大提升应用启动速度；④减少了内存占用，多个进程共享同一份预加载资源的物理页。Zygote使用Socket而不是Binder的原因：①Zygote启动时Binder通信尚未就绪——ServiceManager虽然已启动但Zygote本身未注册为Binder服务；②fork子进程时不能持有Binder锁——Binder是多线程的，fork时如果其他线程持有锁，子进程状态会不一致（fork只复制调用线程），而Socket是单线程的，fork前后状态可控；③Socket通信简单可靠，只传递fork请求参数，不涉及复杂IPC。
+</Answer>
+
+**问题 3**：system_server的启动过程是怎样的？它启动了哪些核心服务？
+
+<Answer>
+system_server由Zygote fork创建，启动过程分三个阶段（三段式启动）：①BootstrapServices（引导服务）——启动Installer（安装服务）、ActivityManagerService（AMS，组件调度）、PackageManagerService（PMS，包管理）、PowerManagerService等最基础的服务，这些服务是后续服务启动的前提；②CoreServices（核心服务）——启动BatteryService（电池）、UsageStatsService（使用统计）、WebViewUpdateService等；③OtherServices（其他服务）——启动WindowManagerService（WMS）、InputManagerService、DisplayManagerService、NotificationManagerService等更多服务。启动完成后将所有服务注册到ServiceManager（ServiceManager.addService("activity", mAMS)等），使App进程可以通过Binder查询和调用这些服务。最后调用AMS.systemReady()，AMS开始启动Launcher桌面，系统进入待机状态。system_server承载了所有Java层系统核心服务，是Android系统的中枢，崩溃会导致系统重启。
+</Answer>
+
+**问题 4**：init.rc配置文件的作用和语法是什么？
+
+<Answer>
+init.rc是Android Init Language编写的配置文件，定义init进程需要启动的服务、执行的动作和触发条件。主要语法：①Actions——由触发器（on）和一系列命令组成，如`on boot`后跟mkdir/chmod等命令，在指定事件发生时执行；②Services——定义需要启动的守护进程，格式为`service 服务名 可执行路径 选项`，如`service zygote /system/bin/app_process64`，可指定user/group/class/critical/onrestart等属性；③Triggers——触发器，如`on property:vold.decrypt=trigger_restart_framework`表示当属性满足条件时触发；④服务分类——class core（核心服务如servicemanager）、class main（主服务如zygote/system_server）、class late_start（延迟启动服务），init按类别批量启动；⑤Imports——import其他rc文件，如硬件厂商自定义的rc。init.rc位于/system/etc/init/和/vendor/etc/init/目录。init进程解析这些文件后，按依赖顺序启动所有服务并监听其状态，服务崩溃时按策略重启。
+</Answer>
+
+</Exercises>

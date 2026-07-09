@@ -1858,7 +1858,17 @@ export type ReviewChapterSlug =
   | "aal-packagemanager"
   | "aal-classloader"
   | "aal-performance-advanced"
-  | "aal-final-review";
+  | "aal-final-review"
+  | "dak-learning-map"
+  | "dak-android-architecture"
+  | "dak-init-boot"
+  | "dak-binder-system"
+  | "dak-handler-thread"
+  | "dak-ams-component"
+  | "dak-wms-view"
+  | "dak-pms-package"
+  | "dak-audio-camera"
+  | "dak-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3721,6 +3731,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "aal-classloader": "类加载器与插件化",
   "aal-performance-advanced": "高级性能优化",
   "aal-final-review": "全书复习",
+  "dak-learning-map": "全书学习地图",
+  "dak-android-architecture": "Android架构总览",
+  "dak-init-boot": "Init进程与启动",
+  "dak-binder-system": "Binder通信体系",
+  "dak-handler-thread": "Handler与线程模型",
+  "dak-ams-component": "AMS与四大组件",
+  "dak-wms-view": "WMS与View体系",
+  "dak-pms-package": "PMS与包管理",
+  "dak-audio-camera": "音频与摄像头服务",
+  "dak-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

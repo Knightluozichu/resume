@@ -1735,6 +1735,16 @@ import { aalPackagemanagerQuestions } from "./review/aal-packagemanager";
 import { aalClassloaderQuestions } from "./review/aal-classloader";
 import { aalPerformanceAdvancedQuestions } from "./review/aal-performance-advanced";
 import { aalFinalReviewQuestions } from "./review/aal-final-review";
+import { dakLearningMapQuestions } from "./review/dak-learning-map";
+import { dakAndroidArchitectureQuestions } from "./review/dak-android-architecture";
+import { dakInitBootQuestions } from "./review/dak-init-boot";
+import { dakBinderSystemQuestions } from "./review/dak-binder-system";
+import { dakHandlerThreadQuestions } from "./review/dak-handler-thread";
+import { dakAmsComponentQuestions } from "./review/dak-ams-component";
+import { dakWmsViewQuestions } from "./review/dak-wms-view";
+import { dakPmsPackageQuestions } from "./review/dak-pms-package";
+import { dakAudioCameraQuestions } from "./review/dak-audio-camera";
+import { dakFinalReviewQuestions } from "./review/dak-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3505,6 +3515,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aalClassloaderQuestions,
   ...aalPerformanceAdvancedQuestions,
   ...aalFinalReviewQuestions,
+  ...dakLearningMapQuestions,
+  ...dakAndroidArchitectureQuestions,
+  ...dakInitBootQuestions,
+  ...dakBinderSystemQuestions,
+  ...dakHandlerThreadQuestions,
+  ...dakAmsComponentQuestions,
+  ...dakWmsViewQuestions,
+  ...dakPmsPackageQuestions,
+  ...dakAudioCameraQuestions,
+  ...dakFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

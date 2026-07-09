@@ -1,0 +1,224 @@
+---
+title: "PMS与包管理"
+type: C
+section: "Android开发"
+order: 7
+description: "PMS包管理——APK解析、六步安装流程、权限管理、签名校验"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DakPmsPackageDiagram } from "@/components/mdx/deep-android-kernel/diagrams/dak-pms-package";
+
+<Objectives>
+
+- 掌握APK文件结构和PMS解析机制
+- 理解APK安装的六步完整流程
+- 掌握权限管理的声明、授予和校验机制
+- 理解APK签名校验的三代方案
+
+</Objectives>
+
+## APK结构与安装全景
+
+<DakPmsPackageDiagram />
+
+PackageManagerService（PMS）运行在system_server中，负责APK的解析、安装、卸载和权限管理。APK安装经历拷贝、解析Manifest、签名校验、权限处理、dex2oat编译、组件注册六步。
+
+## APK 文件结构
+
+```
+// APK本质是ZIP压缩包，包含以下核心文件
+//
+// myapp.apk
+// ├── AndroidManifest.xml     ← 二进制XML，组件/权限声明
+// ├── classes.dex             ← DEX字节码（可执行代码）
+// ├── classes2.dex            ← 多DEX（方法数超65535时）
+// ├── res/                    ← 资源文件（布局/图片/字符串）
+// │   ├── layout/
+// │   ├── drawable/
+// │   └── values/
+// ├── resources.arsc          ← 资源索引表（资源ID → 文件映射）
+// ├── lib/                    ← SO库（native代码）
+// │   ├── arm64-v8a/
+// │   └── armeabi-v7a/
+// ├── assets/                 ← 原始资源（不编译，直接读取）
+// └── META-INF/               ← 签名信息
+//     ├── MANIFEST.MF         ← 文件摘要清单
+//     ├── CERT.SF             ← 签名文件（摘要的签名）
+//     └── CERT.RSA            ← 证书和签名（公钥+签名值）
+//
+// AndroidManifest.xml在APK中是二进制格式（AXML）
+// → PMS使用PackageParser解析为Java对象
+```
+
+## APK 安装六步流程
+
+```
+// 安装流程（PMS.installPackage）
+//
+// Step 1: 拷贝APK
+//   源APK拷贝到 /data/app/包名/base.apk
+//   创建 /data/data/包名/ 数据目录
+//
+// Step 2: 解析 AndroidManifest.xml
+//   PackageParser.parsePackage(apkFile)
+//     → 解析AXML二进制格式
+//     → 提取 packageName / versionCode / sdkVersion
+//     → 解析 <activity>/<service>/<receiver>/<provider> 组件
+//     → 解析 <uses-permission> 权限声明
+//     → 解析 <application> 配置
+//   结果：Package对象（包含所有组件信息）
+//
+// Step 3: 签名校验
+//   PackageParser.collectCertificates(pkg)
+//     → 读取 META-INF/CERT.RSA 证书
+//     → 验证 MANIFEST.MF 中每个文件的摘要
+//     → 验证 CERT.SF 的签名
+//   → 确保APK未被篡改
+//   → 升级时校验新旧签名一致
+//
+// Step 4: 权限处理
+//   PermissionManager.grantPermissions(pkg)
+//     → 遍历 <uses-permission> 声明
+//     → 普通权限：自动授予
+//     → 危险权限：运行时请求用户授权
+//     → 签名权限：签名匹配才授予
+//   → 写入 /data/system/packages.xml
+//
+// Step 5: dex2oat 编译
+//   installd执行 dex2oat
+//     → DEX字节码 → OAT机器码（AOT预编译）
+//     → 生成 /data/dalvik-cache/ 包名/odex
+//   → 提升运行时启动速度
+//
+// Step 6: 组件注册
+//   PMS将Package信息写入 packages.xml
+//     → 包名 → Package信息映射
+//     → 组件信息注册（供AMS查询）
+//     → 权限授予状态
+//   → 发送 ACTION_PACKAGE_ADDED 广播
+//   → 安装完成！
+```
+
+## 权限管理
+
+```
+// Android权限分三级
+//
+// 1. 普通权限（Normal Permission）
+//    - INSTALL_TIME 权限
+//    - 安装时自动授予，无需用户确认
+//    - 例：INTERNET / VIBRATE / WAKE_LOCK
+//    - protectionLevel = "normal"
+//
+// 2. 危险权限（Dangerous Permission）
+//    - RUNTIME 权限
+//    - 运行时需动态请求用户授权
+//    - 例：CAMERA / RECORD_AUDIO / ACCESS_FINE_LOCATION
+//    - protectionLevel = "dangerous"
+//    - 分组管理（Permission Group）
+//
+// 3. 签名权限（Signature Permission）
+//    - 签名匹配才自动授予
+//    - 例：BIND_DEVICE_ADMIN
+//    - protectionLevel = "signature"
+//
+// 运行时权限请求流程：
+// if (ContextCompat.checkSelfPermission(this, permission) != GRANTED) {
+//     ActivityCompat.requestPermissions(this, permissions, requestCode);
+// }
+// // → 弹出权限对话框 → 用户授权/拒绝
+// // → onRequestPermissionsResult 回调
+//
+// PMS校验权限（系统服务中）：
+// int callingUid = Binder.getCallingUid();
+// if (mContext.checkPermission(permission, callingPid, callingUid) != GRANTED) {
+//     throw new SecurityException("Permission Denial");
+// }
+```
+
+## 签名校验
+
+```
+// APK签名三代方案
+//
+// v1签名（JAR签名）：
+// - 基于 META-INF 目录
+// - MANIFEST.MF：每个文件的SHA-1摘要
+// - CERT.SF：MANIFEST.MF的摘要 + 每个文件摘要的签名
+// - CERT.RSA：证书公钥 + 对CERT.SF的签名
+// - 缺点：只校验文件内容，不校验APK整体 → 可篡改META-INF外元数据
+//
+// v2签名（APK签名块）：
+// - Android 7.0引入
+// - 对整个APK文件按1MB分块签名
+// - 签名信息插入ZIP中央目录前（APK Signing Block）
+// - 优点：覆盖整个APK，防篡改更强，验证更快
+//
+// v3签名（支持密钥轮换）：
+// - Android 9.0引入
+// - 支持密钥轮换（key rotation）
+// - 签名块中包含历史密钥链 → 可证明密钥更替连续性
+// - 新版密钥签名，旧版密钥背书 → 支持升级更换签名密钥
+//
+// 升级校验：
+// - 新APK签名必须与已安装APK签名一致
+// - 签名不一致 → INSTALL_FAILED_UPDATE_INCOMPATIBLE
+// - 防止恶意应用冒充升级覆盖正版应用
+```
+
+<Glossary>
+
+<GlossaryItem term="PMS（PackageManagerService）">
+包管理服务，运行在system_server中。职责包括APK文件解析（PackageParser解析AndroidManifest）、安装（六步流程）、卸载、权限管理（声明/授予/校验）、签名校验（v1/v2/v3）、组件信息注册到packages.xml供AMS查询、dex2oat编译优化。系统启动时扫描/data/app和/system/app解析所有已安装APK。
+</GlossaryItem>
+
+<GlossaryItem term="PackageParser">
+PMS使用的APK解析器。将APK中的二进制AndroidManifest.xml（AXML格式）解析为Package Java对象，提取包名/版本号/SDK版本，解析四大组件（Activity/Service/Receiver/Provider）声明和uses-permission权限声明。解析结果供AMS组件调度和权限管理使用。
+</GlossaryItem>
+
+<GlossaryItem term="dex2oat">
+Android安装时执行的AOT编译工具。将DEX字节码编译为OAT（机器码），生成odex文件存放在/data/dalvik-cache/。运行时直接加载机器码，跳过JIT即时编译，提升应用启动速度。Android 7.0后采用AOT+JIT混合编译（Profile-guided），安装时部分编译，运行时JIT热点编译。
+</GlossaryItem>
+
+<GlossaryItem term="packages.xml">
+PMS维护的包信息持久化文件，位于/data/system/。记录所有已安装包的包名、版本号、组件信息、权限授予状态、签名证书、sharedUserId等。系统重启时PMS读取此文件恢复包管理状态，避免重新解析所有APK。
+</GlossaryItem>
+
+<GlossaryItem term="APK签名方案">
+三代签名方案：v1（JAR签名，基于META-INF文件摘要，只校验文件内容不校验整体）、v2（APK签名块，Android 7.0引入，对整个APK按1MB分块签名，覆盖全面验证快）、v3（支持密钥轮换，Android 9.0引入，签名块含历史密钥链支持升级更换签名密钥）。升级时校验新旧签名一致，防止恶意应用冒充覆盖。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：APK文件包含哪些核心文件？各有什么作用？
+
+<Answer>
+APK本质是ZIP压缩包，包含以下核心文件：①AndroidManifest.xml——应用的配置清单，在APK中是二进制XML格式（AXML），声明包名、版本号、SDK版本、四大组件（Activity/Service/Receiver/Provider）和权限声明（uses-permission），PMS使用PackageParser解析为Package对象；②classes.dex/classes2.dex——DEX（Dalvik Executable）字节码，是应用的可执行代码，方法数超65535时使用多DEX；③res/——资源文件目录，包含layout（布局XML）、drawable（图片）、values（字符串/颜色/尺寸）等，编译后的二进制格式；④resources.arsc——资源索引表，建立资源ID到实际文件的映射，运行时通过R.java中的ID查找资源；⑤lib/——SO库目录，按ABI分目录（arm64-v8a/armeabi-v7a），包含native C/C++编译的动态链接库；⑥assets/——原始资源目录，不经过编译，通过AssetManager直接读取；⑦META-INF/——签名信息目录，包含MANIFEST.MF（每个文件的SHA-1摘要清单）、CERT.SF（摘要的签名）、CERT.RSA（证书公钥和对CERT.SF的签名），用于签名校验确保APK未被篡改。
+</Answer>
+
+**问题 2**：APK安装的六步流程分别是什么？详细描述每一步。
+
+<Answer>
+APK安装六步流程（PMS.installPackage）：①拷贝APK——源APK文件拷贝到/data/app/包名/base.apk，创建/data/data/包名/应用数据目录；②解析AndroidManifest.xml——PackageParser.parsePackage()将二进制AXML格式解析为Package Java对象，提取包名/版本号/SDK版本，解析四大组件声明（activity/service/receiver/provider）和uses-permission权限声明；③签名校验——PackageParser.collectCertificates()读取META-INF/CERT.RSA证书，验证MANIFEST.MF中每个文件的摘要确保未被篡改，验证CERT.SF的签名，升级安装时额外校验新旧签名一致（防止冒充升级）；④权限处理——PermissionManager.grantPermissions()遍历uses-permission声明，普通权限自动授予、危险权限标记为运行时请求、签名权限签名匹配才授予，写入/data/system/packages.xml；⑤dex2oat编译——installd执行dex2oat将DEX字节码AOT编译为OAT机器码，生成/data/dalvik-cache/下的odex文件，提升运行时启动速度（Android 7.0后AOT+JIT混合编译）；⑥组件注册——PMS将Package信息（包名、组件信息、权限状态、签名证书）写入packages.xml持久化，组件信息供AMS运行时查询调度，发送ACTION_PACKAGE_ADDED广播通知其他应用，安装完成。
+</Answer>
+
+**问题 3**：Android权限分几级？运行时权限请求流程是什么？
+
+<Answer>
+Android权限分三级：①普通权限（Normal Permission）——protectionLevel="normal"，安装时自动授予无需用户确认，如INTERNET/VIBRATE/WAKE_LOCK，这些权限风险较低；②危险权限（Dangerous Permission）——protectionLevel="dangerous"，运行时需动态请求用户授权，如CAMERA/RECORD_AUDIO/ACCESS_FINE_LOCATION/READ_CONTACTS，这些权限涉及用户隐私或安全，按Permission Group分组管理（如LOCATION组包含ACCESS_FINE_LOCATION和ACCESS_COARSE_LOCATION）；③签名权限（Signature Permission）——protectionLevel="signature"，只有签名匹配的应用才能被授予，如BIND_DEVICE_ADMIN，用于系统级或同签名应用间通信。运行时权限请求流程：①检查权限——调用ContextCompat.checkSelfPermission(context, permission)检查是否已授权，返回PERMISSION_GRANTED或PERMISSION_DENIED；②请求权限——如果未授权，调用ActivityCompat.requestPermissions(activity, permissions, requestCode)弹出系统权限对话框；③用户操作——用户在对话框中授权或拒绝（同组权限一次授权后续自动通过）；④回调处理——onRequestPermissionsResult(requestCode, permissions, grantResults)回调返回授权结果，grantResults数组对应每个权限的授权状态；⑤权限校验——系统服务中通过Binder.getCallingUid()获取调用方UID，mContext.checkPermission(permission, pid, uid)校验权限，未授权抛出SecurityException。PMS在packages.xml中记录每个应用的权限授予状态。
+</Answer>
+
+**问题 4**：APK签名三代方案分别是什么？升级时如何校验？
+
+<Answer>
+APK签名三代方案：①v1签名（JAR签名）——基于META-INF目录，MANIFEST.MF记录APK中每个文件的SHA-1摘要，CERT.SF包含MANIFEST.MF的摘要和每个文件摘要的签名，CERT.RSA包含证书公钥和对CERT.SF的RSA签名。缺点是只校验文件内容不校验APK整体结构，可以篡改ZIP元数据（如文件名）而不破坏签名验证。②v2签名（APK签名块）——Android 7.0引入，对整个APK文件按1MB分块计算摘要并签名，签名信息插入ZIP中央目录前的APK Signing Block区域。优点是覆盖整个APK文件（包括ZIP元数据），防篡改更强，验证时只需读取签名块无需解压所有文件验证更快。③v3签名（支持密钥轮换）——Android 9.0引入，在v2签名块基础上增加密钥轮换支持。签名块中包含历史密钥链（lineage），新密钥签名，旧密钥背书证明密钥更替连续性。支持应用升级时更换签名密钥，无需重新安装。升级时的签名校验：PMS在安装升级包时校验新APK签名必须与已安装APK签名一致——如果签名不一致则返回INSTALL_FAILED_UPDATE_INCOMPATIBLE错误，拒绝安装。这个机制防止恶意应用冒充正版应用进行升级覆盖，确保只有原始开发者才能发布更新。v3签名下，只要新旧签名能通过密钥链证明连续性（即新密钥被旧密钥授权过），也允许升级。
+</Answer>
+
+</Exercises>

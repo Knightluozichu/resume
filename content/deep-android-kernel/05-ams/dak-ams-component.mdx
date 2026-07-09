@@ -1,0 +1,265 @@
+---
+title: "AMS与四大组件"
+type: A
+section: "Android开发"
+order: 5
+description: "AMS统一调度四大组件——Activity栈管理、Service绑定、Broadcast分发、OOM Adj进程回收"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DakAmsComponentDiagram } from "@/components/mdx/deep-android-kernel/diagrams/dak-ams-component";
+
+<Objectives>
+
+- 理解AMS作为四大组件统一调度中心的角色
+- 掌握Activity回退栈管理和生命周期调度
+- 理解Service绑定通信和Broadcast分发机制
+- 深入OOM Adj进程优先级和LowMemoryKiller回收策略
+
+</Objectives>
+
+## AMS调度全景
+
+<DakAmsComponentDiagram />
+
+ActivityManagerService（AMS）运行在system_server进程中，是Android四大组件（Activity/Service/BroadcastReceiver/ContentProvider）的统一调度中心。它管理组件的生命周期、进程优先级（OOM Adj）和内存回收。
+
+## 四大组件调度
+
+### Activity 栈管理
+
+```
+// AMS使用Activity栈（Task/Back Stack）管理Activity
+//
+// 回退栈结构：
+// ┌─────────────────────┐
+// │ Activity C（栈顶/Resumed）  │ ← 当前显示
+// ├─────────────────────┤
+// │ Activity B（Stopped）      │
+// ├─────────────────────┤
+// │ Activity A（Stopped）      │ ← 栈底
+// └─────────────────────┘
+//
+// 生命周期由AMS驱动：
+// startActivity() → AMS创建Activity → onCreate → onStart → onResume
+// 按back键 → onPause → onStop → onDestroy（出栈）
+// 按home键 → onPause → onStop（不出栈，保留在Task中）
+//
+// Task：一组关联的Activity集合，可有多Task
+// launchMode：
+// - standard：每次新建实例
+// - singleTop：栈顶有则复用（onNewIntent）
+// - singleTask：Task内唯一实例，清空上方Activity
+// - singleInstance：独占Task，全局唯一实例
+```
+
+### Service 绑定通信
+
+```
+// Service两种启动模式
+//
+// 1. startService（启动式）
+//    context.startService(intent);
+//    → onCreate → onStartCommand
+//    → 调用方与Service无直接通信
+//    → stopService/stopSelf停止
+//    → 适合后台音乐播放/下载
+//
+// 2. bindService（绑定式）
+//    context.bindService(intent, conn, BIND_AUTO_CREATE);
+//    → onCreate → onBind（返回IBinder）
+//    → 调用方获得IBinder，可直接调用Service方法
+//    → 所有绑定方unbindService后 → onUnbind → onDestroy
+//    → 适合组件间通信
+//
+// Service也可以同时被start和bind
+// → stopService + 所有unbindService 才会销毁
+//
+// 跨进程绑定（AIDL）：
+// Client端bindService → AMS查找Service → Service进程onBind返回Binder
+// → AMS将Binder传递给Client → Client通过Binder调用Service方法
+```
+
+### Broadcast 分发
+
+```
+// 广播的三种类型
+//
+// 1. 普通广播（Normal）
+//    sendBroadcast(intent);
+//    → 异步分发，所有匹配Receiver几乎同时收到
+//    → 无法控制顺序，无法中断
+//
+// 2. 有序广播（Ordered）
+//    sendOrderedBroadcast(intent, permission);
+//    → 按priority从高到低依次分发
+//    → 高优先级Receiver可修改结果或abortBroadcast()中断
+//    → 适合权限控制场景
+//
+// 3. 粘性广播（Sticky，已废弃）
+//    → 广播发出后一直存在，新注册Receiver立即收到
+//
+// 注册方式：
+// - 静态注册：AndroidManifest.xml中声明 <receiver>
+//   → App未启动也能接收（PMS解析时注册到AMS）
+// - 动态注册：registerReceiver(receiver, filter)
+//   → 运行时注册，随注册组件生命周期销毁
+//
+// AMS维护广播队列（BroadcastQueue）
+// → 按优先级排序，依次分发给目标Receiver所在进程
+```
+
+### ContentProvider 数据共享
+
+```
+// ContentProvider：跨进程数据共享
+//
+// 特点：
+// - 运行在发布它的进程中（不一定是调用方进程）
+// - 通过URI标识数据，提供增删改查接口
+// - 底层通过Binder通信
+//
+// 定义：
+// public class MyProvider extends ContentProvider {
+//     public Cursor query(Uri uri, ...) { /* 查询 */ }
+//     public Uri insert(Uri uri, ...) { /* 插入 */ }
+//     public int update(Uri uri, ...) { /* 更新 */ }
+//     public int delete(Uri uri, ...) { /* 删除 */ }
+//     public String getType(Uri uri) { /* MIME类型 */ }
+//     public boolean onCreate() { /* 初始化 */ }
+// }
+//
+// 访问：
+// Cursor cursor = getContentResolver().query(
+//     Uri.parse("content://com.example.provider/user"), ...);
+//
+// AMS的角色：
+// - PMS解析APK时发现 <provider> 声明 → 注册到AMS
+// - Client访问ContentProvider时AMS查找发布进程
+// - 如果发布进程未启动 → AMS fork新进程（通过Zygote）
+// - ContentProvider.publish()超时10s → ANR
+```
+
+<Callout type="info" title="四大组件的共同特征">
+四大组件都运行在各自所在的进程中（不一定是同一个进程），通过AMS统一调度。App进程通过Binder与AMS通信，AMS通过Binder或Socket（fork进程时）与App进程通信。所有组件信息在APK安装时由PMS解析并注册到AMS，运行时AMS根据这些信息进行调度。
+</Callout>
+
+## OOM Adj 进程优先级
+
+```
+// Android进程优先级（OOM Adj）—— 决定LowMemoryKiller回收顺序
+//
+// adj值越小，优先级越高，越不容易被杀
+//
+// ┌──────────────┬────────┬──────────────────────────────┐
+// │ 进程类型      │ adj值  │ 说明                          │
+// ├──────────────┼────────┼──────────────────────────────┤
+// │ 前台进程      │  ~0    │ 正在交互的Activity所在进程     │
+// │ 可见进程      │  ~100  │ 可见但非前台的Activity         │
+// │ 服务进程      │  ~500  │ 运行startService启动的Service  │
+// │ 缓存进程      │  ~900  │ 不可见的Activity（按LRU缓存）  │
+// │ 空进程        │  ~1000 │ 无任何组件运行的空进程          │
+// └──────────────┴────────┴──────────────────────────────┘
+//
+// 前台进程（adj=0）判定条件（满足任一）：
+// - 正运行与用户交互的Activity（onResume）
+// - 正运行 BroadcastReceiver.onReceive()
+// - 正执行 Service.onStartCommand() 等
+// - 绑定了前台Activity的Service
+//
+// AMS动态调整adj值：
+// - Activity进入前台 → 进程adj降为0
+// - Activity进入后台 → 进程adj升为缓存进程
+// - Service启动 → 进程adj升为服务进程
+//
+// LowMemoryKiller（内核机制）：
+// - 监听系统内存水位
+// - 内存不足时从adj最大的进程开始杀
+// - 保护前台进程优先级
+```
+
+## AMS 核心数据结构
+
+```
+// AMS维护的核心数据
+//
+// ProcessRecord：每个App进程对应一个
+//   ├─ pid / uid / processName
+//   ├─ adj（当前OOM Adj值）
+//   ├─ activities（该进程中的所有Activity）
+//   ├─ services（该进程中的所有Service）
+//   ├─ receivers（该进程中的所有Receiver）
+//   └─ thread（IApplicationThread Binder代理）
+//
+// ActivityRecord：每个Activity实例对应一个
+//   ├─ intent / identified
+//   ├─ state（ActivityState: RESUMED/PAUSED/STOPPED...）
+//   ├─ task（所属Task）
+//   └─ app（所属ProcessRecord）
+//
+// TaskRecord：一个Task（回退栈）
+//   ├─ stack（所属ActivityStack）
+//   └─ mActivities（Task中的Activity列表，栈结构）
+//
+// ActivityStack：管理所有Task
+//   ├─ mTaskHistory（所有Task列表）
+//   └─ mLastPausedActivity
+//
+// 调度流程：
+// startActivity → AMS查找/创建ProcessRecord
+//   → 通过Zygote fork新进程（如需）
+//   → 通过IApplicationThread.scheduleLaunchActivity通知App
+//   → App进程ActivityThread处理 → 创建Activity → 生命周期回调
+```
+
+<Glossary>
+
+<GlossaryItem term="AMS（ActivityManagerService）">
+Android四大组件统一调度中心，运行在system_server进程中。管理Activity生命周期和回退栈、Service启动和绑定、Broadcast分发、ContentProvider发布查询。同时负责进程管理——维护ProcessRecord、动态调整OOM Adj值、通过Zygote fork新进程。AMS是App与系统交互的中枢。
+</GlossaryItem>
+
+<GlossaryItem term="OOM Adj">
+Android进程优先级数值，决定LowMemoryKiller回收顺序。前台进程adj约0、可见进程约100、服务进程约500、缓存进程约900、空进程约1000。AMS根据组件状态动态调整：Activity进入前台adj降为0、进入后台升为缓存。内存不足时内核LowMemoryKiller从adj最大开始杀，保护前台体验。
+</GlossaryItem>
+
+<GlossaryItem term="Activity回退栈">
+AMS使用Task（回退栈）管理Activity。栈顶是当前显示的Activity，按back键依次出栈。launchMode控制实例创建策略：standard每次新建、singleTop栈顶复用、singleTask清空上方、singleInstance独占Task。AMS通过ActivityRecord记录每个Activity状态，ActivityStack管理所有Task。
+</GlossaryItem>
+
+<GlossaryItem term="LowMemoryKiller">
+Linux内核机制，Android用于内存回收。系统内存不足时按OOM Adj从大到小杀进程释放内存。AMS动态调整进程adj值，保证前台交互进程优先级最高（adj最小）不被杀，缓存进程（adj最大）最先被回收。这是一种主动的内存管理策略，比等OOM才被动回收更高效。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：AMS如何统一调度四大组件？各组件的调度机制分别是什么？
+
+<Answer>
+AMS运行在system_server进程中，是四大组件的统一调度中心。①Activity调度——AMS使用Task（回退栈）管理Activity，栈顶是当前显示的Activity。startActivity时AMS创建ActivityRecord，通过IApplicationThread.scheduleLaunchActivity通知App进程创建Activity并回调生命周期（onCreate→onStart→onResume）。launchMode控制实例创建策略：standard每次新建、singleTop栈顶复用、singleTask清空上方、singleInstance独占Task。按back键出栈（onDestroy），按home键保留在Task（onStop）。②Service调度——两种模式：startService启动式（onCreate→onStartCommand，调用方与Service无直接通信，需stopService停止）和bindService绑定式（onCreate→onBind返回IBinder，调用方通过Binder直接调用Service方法，所有绑定方unbind后销毁）。跨进程绑定通过AIDL，AMS查找Service并传递Binder。③Broadcast调度——AMS维护BroadcastQueue，普通广播异步分发所有Receiver，有序广播按priority从高到低依次分发（可中断）。静态注册在PMS解析APK时注册到AMS，动态注册运行时registerReceiver。④ContentProvider调度——PMS解析APK时发现provider声明注册到AMS，Client访问时AMS查找发布进程，未启动则fork新进程，publish超时10s触发ANR。四大组件信息在APK安装时由PMS解析注册到AMS。
+</Answer>
+
+**问题 2**：OOM Adj进程优先级机制是什么？LowMemoryKiller如何工作？
+
+<Answer>
+OOM Adj是Android进程优先级数值，决定LowMemoryKiller回收顺序，adj值越小优先级越高越不容易被杀。五级分类：①前台进程（adj约0）——正在运行与用户交互的Activity（onResume状态）、运行BroadcastReceiver.onReceive()、执行Service.onStartCommand()、绑定前台Activity的Service；②可见进程（adj约100）——可见但非前台的Activity；③服务进程（adj约500）——运行startService启动的Service；④缓存进程（adj约900）——不可见的Activity按LRU缓存；⑤空进程（adj约1000）——无任何组件运行的空进程。AMS动态调整adj值：Activity进入前台adj降为0、进入后台升为缓存进程、Service启动adj升为服务进程。LowMemoryKiller是Linux内核机制，工作原理：①监听系统内存水位（minfree/free阈值）；②内存不足时从adj最大的进程开始杀，释放内存；③保护adj最小的前台进程。这是一种主动的内存管理策略——不等OOM被动回收，而是在内存紧张时按优先级主动回收低优先级进程，保证前台交互体验。AMS通过ProcessRecord维护每个进程的adj值并动态更新。
+</Answer>
+
+**问题 3**：Service的startService和bindService两种模式有什么区别？
+
+<Answer>
+startService和bindService的区别：①启动式startService——调用context.startService(intent)触发Service的onCreate→onStartCommand生命周期。调用方与Service之间没有直接通信通道，Service独立运行。需要调用stopService或Service内部stopSelf停止，当所有startService对应的stopService调用后Service才销毁（onDestroy）。适合后台独立运行的任务，如音乐播放、文件下载。②绑定式bindService——调用context.bindService(intent, conn, BIND_AUTO_CREATE)触发Service的onCreate→onBind，onBind返回一个IBinder对象。调用方通过ServiceConnection.onServiceConnected回调获得IBinder，可直接调用Service暴露的方法（跨进程通过AIDL）。多个客户端可同时绑定，所有绑定方调用unbindService后Service销毁（onUnbind→onDestroy）。适合组件间通信场景。③混合模式——Service可同时被start和bind，此时需要stopService（或stopSelf）加上所有unbindService同时满足才销毁。AMS在调度时：startService时AMS查找目标Service所在进程，未启动则通过Zygote fork新进程；bindService时AMS同样查找进程并传递Binder给调用方。两种模式的Service都在AMS中注册管理（ProcessRecord.services列表）。
+</Answer>
+
+**问题 4**：AMS维护哪些核心数据结构？startActivity的调度流程是什么？
+
+<Answer>
+AMS维护的核心数据结构：①ProcessRecord——每个App进程对应一个，包含pid/uid/processName、adj（当前OOM Adj值）、activities（该进程所有Activity）、services（该进程所有Service）、receivers、thread（IApplicationThread Binder代理，用于与App进程通信）；②ActivityRecord——每个Activity实例对应一个，包含intent、state（ActivityState: RESUMED/PAUSED/STOPPED等）、task（所属TaskRecord）、app（所属ProcessRecord）；③TaskRecord——一个Task（回退栈），包含stack（所属ActivityStack）、mActivities（Task中的Activity列表，栈结构）；④ActivityStack——管理所有Task，包含mTaskHistory（所有Task列表）、mLastPausedActivity。startActivity的调度流程：①App调用startActivity→通过Binder调用AMS.startActivity；②AMS创建或查找ActivityRecord，检查launchMode决定是否新建实例；③AMS检查目标Activity所在进程是否存在——如果进程不存在，AMS通过Socket通知Zygote fork新进程，新进程启动后调用attachApplication注册到AMS（创建ProcessRecord）；④AMS通过ProcessRecord.thread（IApplicationThread）调用scheduleLaunchActivity，将Activity信息通过Binder传递给App进程；⑤App进程的ActivityThread收到消息后，通过Handler在主线程处理，创建Activity实例，依次回调onCreate→onStart→onResume；⑥AMS更新ActivityStack和TaskRecord，将新Activity压入栈顶。整个过程AMS是调度中枢，App进程是执行者。
+</Answer>
+
+</Exercises>
