@@ -2155,6 +2155,16 @@ import { laeAgentDevelopmentQuestions } from "./review/lae-agent-development";
 import { laeEvaluationDeploymentQuestions } from "./review/lae-evaluation-deployment";
 import { laeProductionPatternsQuestions } from "./review/lae-production-patterns";
 import { laeFinalReviewQuestions } from "./review/lae-final-review";
+import { lcpLearningMapQuestions } from "./review/lcp-learning-map";
+import { lcpLangchainOverviewQuestions } from "./review/lcp-langchain-overview";
+import { lcpModelsPromptsQuestions } from "./review/lcp-models-prompts";
+import { lcpChainsSequencesQuestions } from "./review/lcp-chains-sequences";
+import { lcpMemoryStateQuestions } from "./review/lcp-memory-state";
+import { lcpToolsAgentsQuestions } from "./review/lcp-tools-agents";
+import { lcpRagImplementationQuestions } from "./review/lcp-rag-implementation";
+import { lcpAdvancedChainsQuestions } from "./review/lcp-advanced-chains";
+import { lcpProductionDeploymentQuestions } from "./review/lcp-production-deployment";
+import { lcpFinalReviewQuestions } from "./review/lcp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4345,6 +4355,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...laeEvaluationDeploymentQuestions,
   ...laeProductionPatternsQuestions,
   ...laeFinalReviewQuestions,
+  ...lcpLearningMapQuestions,
+  ...lcpLangchainOverviewQuestions,
+  ...lcpModelsPromptsQuestions,
+  ...lcpChainsSequencesQuestions,
+  ...lcpMemoryStateQuestions,
+  ...lcpToolsAgentsQuestions,
+  ...lcpRagImplementationQuestions,
+  ...lcpAdvancedChainsQuestions,
+  ...lcpProductionDeploymentQuestions,
+  ...lcpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

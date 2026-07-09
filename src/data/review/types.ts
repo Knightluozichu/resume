@@ -2278,7 +2278,17 @@ export type ReviewChapterSlug =
   | "lae-agent-development"
   | "lae-evaluation-deployment"
   | "lae-production-patterns"
-  | "lae-final-review";
+  | "lae-final-review"
+  | "lcp-learning-map"
+  | "lcp-langchain-overview"
+  | "lcp-models-prompts"
+  | "lcp-chains-sequences"
+  | "lcp-memory-state"
+  | "lcp-tools-agents"
+  | "lcp-rag-implementation"
+  | "lcp-advanced-chains"
+  | "lcp-production-deployment"
+  | "lcp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4561,6 +4571,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lae-evaluation-deployment": "评估与部署",
   "lae-production-patterns": "生产环境最佳实践",
   "lae-final-review": "全书复习与知识整合",
+  "lcp-learning-map": "LangChain编程·知识全景图",
+  "lcp-langchain-overview": "LangChain框架概览",
+  "lcp-models-prompts": "模型与提示模板",
+  "lcp-chains-sequences": "链与序列操作",
+  "lcp-memory-state": "记忆与状态管理",
+  "lcp-tools-agents": "工具与智能体",
+  "lcp-rag-implementation": "RAG系统实现",
+  "lcp-advanced-chains": "高级链与路由",
+  "lcp-production-deployment": "生产部署与优化",
+  "lcp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
