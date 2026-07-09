@@ -1808,7 +1808,17 @@ export type ReviewChapterSlug =
   | "adae-handler-message"
   | "adae-thread-async"
   | "adae-performance-optimize"
-  | "adae-final-review";
+  | "adae-final-review"
+  | "kia-learning-map"
+  | "kia-kotlin-intro"
+  | "kia-kotlin-basics"
+  | "kia-functions"
+  | "kia-classes-interfaces"
+  | "kia-lambda-members"
+  | "kia-type-system"
+  | "kia-dsl-patterns"
+  | "kia-concurrency"
+  | "kia-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3621,6 +3631,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "adae-thread-async": "线程与AsyncTask",
   "adae-performance-optimize": "性能优化",
   "adae-final-review": "全书复习",
+  "kia-learning-map": "全书学习地图",
+  "kia-kotlin-intro": "Kotlin简介",
+  "kia-kotlin-basics": "Kotlin基础",
+  "kia-functions": "函数定义与调用",
+  "kia-classes-interfaces": "类、对象与接口",
+  "kia-lambda-members": "Lambda编程",
+  "kia-type-system": "类型系统与泛型",
+  "kia-dsl-patterns": "DSL与领域建模",
+  "kia-concurrency": "并发与协程",
+  "kia-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

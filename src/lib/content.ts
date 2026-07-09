@@ -216,6 +216,7 @@ export const BOOK_ORDER = [
   "crazy-android",
   "kotlin-definitive-guide",
   "android-art-exploration",
+  "kotlin-in-action",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -372,6 +373,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "crazy-android": "疯狂Android讲义",
   "kotlin-definitive-guide": "Kotlin编程权威指南",
   "android-art-exploration": "Android开发艺术探索",
+  "kotlin-in-action": "Kotlin实战",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

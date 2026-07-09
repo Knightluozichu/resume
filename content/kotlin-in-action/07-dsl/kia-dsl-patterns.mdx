@@ -1,0 +1,199 @@
+---
+title: "DSL与领域建模"
+type: C
+section: "Android开发"
+order: 7
+description: "带接收者Lambda、类型安全构建器与@DslMarker"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KiaDslPatternsDiagram } from "@/components/mdx/kotlin-in-action/diagrams/kia-dsl-patterns";
+
+<Objectives>
+
+- 理解带接收者 Lambda 与普通 Lambda 的区别
+- 掌握类型安全构建器的设计模式
+- 理解 @DslMarker 如何解决隐式接收者污染
+- 了解 infix 中缀调用和运算符重载对 DSL 的增强
+
+</Objectives>
+
+## DSL 核心机制
+
+<KiaDslPatternsDiagram />
+
+### 带接收者 Lambda
+
+```kotlin
+// 普通 Lambda——参数用 it 引用，需 it. 前缀
+list.forEach { println(it) }
+
+// 带接收者 Lambda——接收者成为 this，直接访问其成员
+// 类型写法：ReceiverType.() -> Unit
+val buildString: StringBuilder.() -> Unit = {
+    append("Hello")  // this.append("Hello")，this 是 StringBuilder
+    append(", Kotlin")
+}
+
+val sb = StringBuilder()
+sb.buildString()  // 在 sb 上执行 Lambda
+println(sb)       // Hello, Kotlin
+```
+
+<Callout type="info" title="关键区别">
+普通 Lambda 中接收者是参数（`it`，需 `it.` 前缀）；带接收者 Lambda 中接收者是 `this`（直接访问成员）。这是语法糖但表达力质的飞跃——让 Lambda 块看起来像在「配置」一个对象。
+</Callout>
+
+## 类型安全构建器
+
+```kotlin
+// 构建 HTML DSL
+
+// 1. 定义标签基类
+abstract class Tag(val name: String) {
+    private val children = mutableListOf<Tag>()
+    protected fun <T : Tag> initTag(tag: T, init: T.() -> Unit): T {
+        tag.init()
+        children.add(tag)
+        return tag
+    }
+    override fun toString() = "<$name>${`children.joinToString("")`}</$name>"
+}
+
+// 2. 定义具体标签
+class HTML : Tag("html") {
+    fun body(init: Body.() -> Unit) = initTag(Body(), init)
+}
+
+class Body : Tag("body") {
+    fun p(text: String) = initTag(TextTag("p", text)) {}
+    fun a(href: String, text: String) = initTag(TextTag("a", text)) {}
+}
+
+class TextTag(name: String, val text: String) : Tag(name) {
+    override fun toString() = "<$name>$text</$name>"
+}
+
+// 3. 入口函数
+fun html(init: HTML.() -> Unit): HTML {
+    val html = HTML()
+    html.init()
+    return html
+}
+
+// 4. 使用——看起来像 HTML 语法
+val page = html {
+    body {
+        p("Hello DSL")
+        a("https://kotlinlang.org", "Kotlin")
+    }
+}
+println(page)
+// <html><body><p>Hello DSL</p><a>Kotlin</a></body></html>
+```
+
+<Callout type="success" title="类型安全的含义">
+编译器保证 `body` 只能在 `html` 块内调用、`p` 只能在 `body` 块内调用。不会出现 `html` 中嵌套 `html` 等非法结构——这是类型安全构建器的核心价值。
+</Callout>
+
+## @DslMarker 作用域控制
+
+```kotlin
+// 问题：隐式接收者污染
+// html { body { body { } } } ——内层 body 可访问外层 html 的 this
+
+// 解决：@DslMarker
+@DslMarker
+annotation class HtmlDslMarker
+
+@HtmlDslMarker
+abstract class Tag(name: String)
+
+// 标记后，当多个接收者有相同 DslMarker 时
+// 编译器只允许访问最近（最内层）接收者的成员
+// html { body { body { } } }  // 编译错误！
+// 外层 body 和内层 body 都有 HtmlDslMarker 标记
+// 内层不能隐式访问外层 body 的成员
+
+// 如需显式访问外层，用 this@label
+html {
+    body {
+        // this@html 可以显式访问外层 html 接收者
+    }
+}
+```
+
+## infix 与运算符重载
+
+```kotlin
+// infix 中缀调用——省略点号和括号
+infix fun Int.times(str: String): String = str.repeat(this)
+val repeated = 3 times "abc"  // "abcabcabc"
+
+// 标准库 infix
+val pair = "key" to "value"      // to 是 infix
+val contains = "a" in listOf("a", "b")  // in 也是 infix
+
+// 运算符重载
+data class Vector(val x: Int, val y: Int) {
+    operator fun plus(other: Vector) = Vector(x + other.x, y + other.y)
+    operator fun times(scalar: Int) = Vector(x * scalar, y * scalar)
+}
+
+val v1 = Vector(1, 2)
+val v2 = Vector(3, 4)
+println(v1 + v2)        // Vector(x=4, y=6)
+println(v1 * 3)          // Vector(x=3, y=6)
+```
+
+<Glossary>
+
+<GlossaryItem term="带接收者 Lambda">
+Lambda 块内的 `this` 指向接收者对象的 Lambda。类型写法 `ReceiverType.() -> Unit`。是 Kotlin DSL 的核心机制。
+</GlossaryItem>
+
+<GlossaryItem term="类型安全构建器">
+利用带接收者 Lambda 构建的 API，让配置代码看起来像自然语言或标记语言。编译器通过类型系统保证结构合法性。
+</GlossaryItem>
+
+<GlossaryItem term="@DslMarker">
+注解类，标记 DSL 标签类。当多个嵌套接收者有相同 DslMarker 时，编译器只允许访问最近接收者的成员，防止隐式接收者污染。
+</GlossaryItem>
+
+<GlossaryItem term="infix 中缀调用">
+用 `infix` 标记的单参数函数可省略点号和括号，如 `3 times "abc"`。让 API 读起来像自然语言。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：带接收者 Lambda 和普通 Lambda 有什么区别？
+
+<Answer>
+普通 Lambda 中接收者是参数（it，需 it. 前缀）；带接收者 Lambda 中接收者是 this（直接访问成员）。如 `StringBuilder.() -> Unit` 中 this 是 StringBuilder。这是 DSL 的核心机制。
+</Answer>
+
+**问题 2**：如何构建类型安全的 HTML DSL？核心设计是什么？
+
+<Answer>
+定义标签类（基类 Tag + 具体 HTML/Body 等），每个子标签方法用带接收者 Lambda 定义。入口函数创建根标签并执行 init Lambda。类型系统保证结构合法——body 只能在 html 内调用。
+</Answer>
+
+**问题 3**：@DslMarker 解决什么问题？如何工作？
+
+<Answer>
+解决隐式接收者污染——嵌套 Lambda 可访问所有外层 this。@DslMarker 标记标签类后，相同标记的多个接收者只允许访问最近（最内层）的，外层需 this@label 显式访问。
+</Answer>
+
+**问题 4**：infix 和运算符重载如何增强 DSL 表达力？
+
+<Answer>
+infix 让 `3 times "abc"` 替代 `3.times("abc")`，读起来像自然语言。运算符重载让 `v1 + v2` 直接用 + 号。结合 DSL 让 API 更声明式，如测试框架 `result shouldEqual expected`。
+</Answer>
+
+</Exercises>

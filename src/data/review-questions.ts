@@ -1685,6 +1685,16 @@ import { adaeHandlerMessageQuestions } from "./review/adae-handler-message";
 import { adaeThreadAsyncQuestions } from "./review/adae-thread-async";
 import { adaePerformanceOptimizeQuestions } from "./review/adae-performance-optimize";
 import { adaeFinalReviewQuestions } from "./review/adae-final-review";
+import { kiaLearningMapQuestions } from "./review/kia-learning-map";
+import { kiaKotlinIntroQuestions } from "./review/kia-kotlin-intro";
+import { kiaKotlinBasicsQuestions } from "./review/kia-kotlin-basics";
+import { kiaFunctionsQuestions } from "./review/kia-functions";
+import { kiaClassesInterfacesQuestions } from "./review/kia-classes-interfaces";
+import { kiaLambdaMembersQuestions } from "./review/kia-lambda-members";
+import { kiaTypeSystemQuestions } from "./review/kia-type-system";
+import { kiaDslPatternsQuestions } from "./review/kia-dsl-patterns";
+import { kiaConcurrencyQuestions } from "./review/kia-concurrency";
+import { kiaFinalReviewQuestions } from "./review/kia-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3405,6 +3415,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...adaeThreadAsyncQuestions,
   ...adaePerformanceOptimizeQuestions,
   ...adaeFinalReviewQuestions,
+  ...kiaLearningMapQuestions,
+  ...kiaKotlinIntroQuestions,
+  ...kiaKotlinBasicsQuestions,
+  ...kiaFunctionsQuestions,
+  ...kiaClassesInterfacesQuestions,
+  ...kiaLambdaMembersQuestions,
+  ...kiaTypeSystemQuestions,
+  ...kiaDslPatternsQuestions,
+  ...kiaConcurrencyQuestions,
+  ...kiaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

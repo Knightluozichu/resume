@@ -1,0 +1,225 @@
+---
+title: "函数定义与调用"
+type: C
+section: "Android开发"
+order: 3
+description: "默认参数、命名参数、扩展函数与顶层函数"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KiaFunctionsDiagram } from "@/components/mdx/kotlin-in-action/diagrams/kia-functions";
+
+<Objectives>
+
+- 掌握 Kotlin 函数声明的两种形式：块体函数与表达式体函数
+- 理解默认参数和命名参数如何替代 Java 方法重载
+- 掌握扩展函数的定义、原理和使用场景
+- 理解顶层函数和顶层属性如何消除工具类反模式
+
+</Objectives>
+
+## 函数声明
+
+<KiaFunctionsDiagram />
+
+### 块体函数与表达式体函数
+
+```kotlin
+// 块体函数——标准写法，需显式 return
+fun add(a: Int, b: Int): Int {
+    return a + b
+}
+
+// 表达式体函数——单行简写，返回类型可省略
+fun double(x: Int) = x * 2
+fun greet(name: String) = "Hello, $name!"
+
+// 选择标准：单行用表达式体，多行用块体
+fun complexCalc(x: Int): Int {
+    val step1 = x * 2
+    val step2 = step1 + 1
+    return step2
+}
+```
+
+### 默认参数与命名参数
+
+```kotlin
+// 一个函数替代 Java 多个重载方法
+fun greet(
+    name: String = "World",
+    greeting: String = "Hello",
+    punctuation: Char = '!'
+) = "$greeting, $name$punctuation"
+
+greet()                                    // Hello, World!
+greet("Kotlin")                            // Hello, Kotlin!
+greet(greeting = "Hi")                     // Hi, World!
+greet(name = "Kotlin", greeting = "Hi")    // Hi, Kotlin!
+greet("Kotlin", "Hi", '?')                 // Hi, Kotlin?
+```
+
+<Callout type="info" title="@JvmOverloads">
+Java 调用 Kotlin 带默认参数的函数时，需加 `@JvmOverloads` 注解，编译器会生成对应的重载方法。
+</Callout>
+
+## 扩展函数
+
+### 基本用法
+
+```kotlin
+// 给 String 添加 lastChar() 方法，不修改 String 源码
+fun String.lastChar(): Char = this[length - 1]
+
+// 调用——看起来像成员方法
+println("Kotlin".lastChar())  // 'n'
+
+// this 可省略
+fun String.lastChar(): Char = get(length - 1)
+
+// 扩展属性
+val String.lastChar: Char
+    get() = get(length - 1)
+
+println("Kotlin".lastChar)  // 'n'（属性访问，不加括号）
+```
+
+### 扩展函数原理
+
+```kotlin
+// 扩展函数声明
+fun String.lastChar(): Char = this[length - 1]
+
+// 编译后等价于（以接收者为参数的静态方法）
+// LastCharKt.lastChar("Kotlin")
+
+// 关键特性：
+// 1. 静态解析——不参与运行时多态
+open class Parent
+class Child : Parent()
+
+fun Parent.foo() = "parent"
+fun Child.foo() = "child"
+
+val obj: Parent = Child()
+println(obj.foo())  // "parent"——按静态类型解析
+
+// 2. 不能访问私有成员
+// 3. 成员函数优先于同名扩展函数
+```
+
+<Callout type="warning" title="扩展函数不是真修改类">
+扩展函数不修改原始类，编译为以接收者为参数的静态方法。它是语法糖，不是真正的类成员。因此不能访问私有成员，不参与运行时多态。
+</Callout>
+
+## 顶层函数与顶层属性
+
+```kotlin
+// strings.kt 文件——直接在包级别定义函数，不需类
+fun joinToString(
+    collection: Collection<String>,
+    separator: String = ", ",
+    prefix: String = "",
+    postfix: String = ""
+): String {
+    val result = StringBuilder(prefix)
+    for ((index, element) in collection.withIndex()) {
+        if (index > 0) result.append(separator)
+        result.append(element)
+    }
+    result.append(postfix)
+    return result.toString()
+}
+
+// 顶层属性
+val UNIX_LINE_SEPARATOR = "\n"
+
+// 编译后：
+// JoinToStringKt.joinToString(...)
+// JoinToStringKt.UNIX_LINE_SEPARATOR
+```
+
+```kotlin
+// 调用时直接用函数名（import 后）
+val list = listOf("a", "b", "c")
+println(joinToString(list))               // a, b, c
+println(joinToString(list, "; "))          // a; b; c
+println(joinToString(list, ", ", "[", "]")) // [a, b, c]
+```
+
+## 综合应用
+
+```kotlin
+// 扩展函数 + 默认参数 + 命名参数
+fun <T> Collection<T>.joinToStringCustom(
+    separator: String = ", ",
+    prefix: String = "",
+    postfix: String = "",
+    transform: (T) -> String = { it.toString() }
+): String {
+    return joinToString(separator, prefix, postfix) { transform(it) }
+}
+
+val names = listOf("Alice", "Bob", "Charlie")
+println(names.joinToStringCustom(prefix = "[", postfix = "]"))
+// [Alice, Bob, Charlie]
+
+println(names.joinToStringCustom(transform = { it.uppercase() }))
+// ALICE, BOB, CHARLIE
+```
+
+<Glossary>
+
+<GlossaryItem term="表达式体函数">
+用等号 `=` 简写的单行函数，返回类型可由编译器推断。适用于 getter、数学运算等简单函数。
+</GlossaryItem>
+
+<GlossaryItem term="默认参数">
+函数参数指定默认值，调用时可省略。一个函数替代 Java 多个重载方法。Java 调用需加 `@JvmOverloads`。
+</GlossaryItem>
+
+<GlossaryItem term="命名参数">
+调用函数时用 `参数名 = 值` 指定参数，顺序无关。提升可读性，特别适合布尔参数和多参数函数。
+</GlossaryItem>
+
+<GlossaryItem term="扩展函数">
+给已有类添加方法而不修改源码。语法 `fun ReceiverType.method()`，编译为静态方法。静态解析，不参与多态。
+</GlossaryItem>
+
+<GlossaryItem term="顶层函数">
+在文件顶层（类外）定义的函数，编译为「文件名Kt」类的静态方法。消除 Java 工具类反模式。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：默认参数和命名参数如何替代 Java 方法重载？
+
+<Answer>
+默认参数在声明时指定默认值，调用时可省略。命名参数用参数名指定，顺序无关。一个函数 `fun greet(name = "World", greeting = "Hello")` 替代 Java 三个重载方法。Java 调用需加 @JvmOverloads。
+</Answer>
+
+**问题 2**：扩展函数的底层原理是什么？
+
+<Answer>
+扩展函数不修改原始类，编译为以接收者为参数的静态方法（如 `String.lastChar()` → `LastCharKt.lastChar("abc")`）。静态解析不参与多态，不能访问私有成员，成员函数优先于同名扩展函数。
+</Answer>
+
+**问题 3**：顶层函数如何消除 Java 的「工具类满地」反模式？
+
+<Answer>
+Kotlin 允许在文件顶层直接定义函数（不需类），编译为「文件名Kt」类的静态方法。Java 的 StringUtil/CollectionUtil 工具类可用顶层函数+扩展函数替代，调用更自然。
+</Answer>
+
+**问题 4**：表达式体函数和块体函数有什么区别？何时选择哪个？
+
+<Answer>
+表达式体用 `=` 简写，单行，返回类型可推断。块体用花括号，多行，需显式 return。选择：单行简单函数用表达式体，多行复杂逻辑用块体。优先表达式体保持简洁。
+</Answer>
+
+</Exercises>

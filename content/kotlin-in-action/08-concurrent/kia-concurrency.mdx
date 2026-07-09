@@ -1,0 +1,247 @@
+---
+title: "并发与协程"
+type: B
+section: "Android开发"
+order: 8
+description: "suspend挂起函数、launch/async、结构化并发与Flow"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KiaConcurrencyDiagram } from "@/components/mdx/kotlin-in-action/diagrams/kia-concurrency";
+
+<Objectives>
+
+- 理解 suspend 挂起函数的原理和不阻塞线程的机制
+- 掌握 launch 和 async 的区别及结构化并发
+- 理解协程与线程/回调的对比优势
+- 掌握 Flow 异步流的使用和操作链
+
+</Objectives>
+
+## 协程核心概念
+
+<KiaConcurrencyDiagram />
+
+### suspend 挂起函数
+
+```kotlin
+// suspend 关键字——可在协程中暂停执行不阻塞线程
+suspend fun fetchData(): String {
+    delay(1000)           // 挂起 1 秒，不阻塞线程
+    return "Data loaded"  // 恢复后继续执行
+}
+
+// suspend 函数只能在协程或其他 suspend 函数中调用
+// runBlocking 创建协程（仅用于测试/main函数）
+fun main() = runBlocking {
+    val data = fetchData()  // OK
+    println(data)
+}
+```
+
+<Callout type="info" title="不阻塞线程的原理">
+suspend 函数编译时转为状态机（CPS 变换）。执行到挂起点时保存状态返回控制权，线程可执行其他协程。条件满足时调度器恢复状态继续执行。
+</Callout>
+
+### launch 与 async
+
+```kotlin
+import kotlinx.coroutines.*
+
+// launch——发后即忘，返回 Job，不携带结果
+fun main() = runBlocking {
+    launch {
+        delay(1000)
+        println("Task done")
+    }
+    println("Waiting...")
+    // 输出：Waiting... -> (1秒后) -> Task done
+}
+
+// async——携带结果，返回 Deferred，await 获取结果
+fun main() = runBlocking {
+    val deferred = async {
+        delay(1000)
+        42
+    }
+    println("Waiting...")
+    val result = deferred.await()  // 等待结果
+    println("Result: $result")     // Result: 42
+}
+```
+
+## 结构化并发
+
+```kotlin
+// 父子关系——子协程必须在父作用域内启动
+// 父协程等待所有子协程完成才完成
+// 父协程取消时所有子协程自动取消
+
+suspend fun loadProfile(): Profile = coroutineScope {
+    // 两个请求并发执行
+    val user = async { fetchUser() }      // 子协程 1
+    val posts = async { fetchPosts() }    // 子协程 2
+    Profile(user.await(), posts.await())  // 等待两者完成
+}
+
+// 超时控制
+suspend fun fetchWithTimeout(): String? {
+    return withTimeoutOrNull(5000) {
+        fetchData()  // 5 秒内未完成返回 null
+    }
+}
+
+// 异常传播——子协程异常会取消父协程和所有兄弟
+suspend fun loadAll() = coroutineScope {
+    launch { fetchCritical() }  // 如果失败，取消整个 scope
+    launch { fetchNonCritical() }
+}
+```
+
+<Callout type="warning" title="结构化并发的价值">
+父取消时所有子自动取消——避免泄漏。子异常传播到父——统一错误处理。无需手动管理生命周期。
+</Callout>
+
+## Dispatcher 调度器
+
+```kotlin
+// Dispatchers.Main——UI 线程（Android 主线程）
+// Dispatchers.IO——IO 密集型（网络/文件）
+// Dispatchers.Default——CPU 密集型（排序/解析）
+// Dispatchers.Unconfined——不限定线程
+
+suspend fun fetchAndShow() {
+    // 切换到 IO 线程执行网络请求
+    val data = withContext(Dispatchers.IO) {
+        api.fetchData()
+    }
+    // 回到 Main 线程更新 UI
+    withContext(Dispatchers.Main) {
+        textView.text = data
+    }
+}
+```
+
+## Flow 异步流
+
+```kotlin
+// Flow——冷流，每次 collect 才执行
+fun numbers(): Flow<Int> = flow {
+    for (i in 1..3) {
+        delay(500)
+        emit(i)  // 发射值
+    }
+}
+
+// collect 收集值
+fun main() = runBlocking {
+    numbers().collect { println(it) }
+    // (500ms后) 1 -> (500ms后) 2 -> (500ms后) 3
+}
+
+// Flow 操作链
+fun main() = runBlocking {
+    numbers()
+        .map { it * 10 }           // 变换：10, 20, 30
+        .filter { it > 15 }        // 过滤：20, 30
+        .collect { println(it) }   // 20, 30
+}
+
+// 实际场景——搜索框实时搜索
+fun searchFlow(query: Flow<String>): Flow<List<Result>> = query
+    .debounce(300)                    // 防抖 300ms
+    .distinctUntilChanged()           // 去重
+    .flatMapLatest { q ->             // 取消旧请求
+        flow { emit(api.search(q)) }
+    }
+```
+
+<Callout type="success" title="Flow vs RxJava vs LiveData">
+Flow 是冷流（每次 collect 才执行），天然支持背压和结构化取消。RxJava 操作符更多但更重。LiveData 是热流有状态，Android 生命周期感知。纯 Kotlin 项目首选 Flow，UI 状态用 StateFlow。
+</Callout>
+
+## 协程实战
+
+```kotlin
+// 综合示例——网络请求模块
+class UserRepository(
+    private val api: UserApi,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
+) {
+    // suspend + withContext 封装网络请求
+    suspend fun fetchUser(id: String): User = withContext(dispatcher) {
+        api.getUser(id).toDomain()
+    }
+
+    // async 并发请求
+    suspend fun loadProfile(id: String): Profile = coroutineScope {
+        val user = async { fetchUser(id) }
+        val friends = async { api.getFriends(id) }
+        val posts = async { api.getPosts(id) }
+        Profile(user.await(), friends.await(), posts.await())
+    }
+
+    // Flow + 超时 + 重试
+    fun search(query: Flow<String>): Flow<Result> = query
+        .debounce(300)
+        .distinctUntilChanged()
+        .flatMapLatest { q ->
+            flow {
+                emit(api.search(q))
+            }.retry(3) { it is IOException }
+        }
+        .flowOn(dispatcher)  // 上游切换线程
+}
+```
+
+<Glossary>
+
+<GlossaryItem term="suspend 挂起函数">
+用 `suspend` 标记的函数，可在协程中暂停执行不阻塞线程。编译为状态机，挂起时保存状态返回控制权，恢复时继续执行。
+</GlossaryItem>
+
+<GlossaryItem term="launch / async">
+协程构建器。launch 启动发后即忘协程返回 Job；async 启动携带结果的协程返回 Deferred，await 获取结果。
+</GlossaryItem>
+
+<GlossaryItem term="结构化并发">
+协程有父子关系，父等待所有子完成，父取消时所有子自动取消，子异常传播到父。避免泄漏，统一错误处理。
+</GlossaryItem>
+
+<GlossaryItem term="Flow">
+协程的异步流 API，冷流每次 collect 才执行。支持背压、取消、操作链（map/filter/flatMapLatest）。StateFlow/SharedFlow 是热流变体。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：suspend 挂起函数如何实现不阻塞线程？
+
+<Answer>
+suspend 函数编译为状态机（CPS 变换），执行到挂起点时保存状态（局部变量、执行位置）到 Continuation，返回控制权给调用者。线程可执行其他协程。条件满足时调度器恢复状态继续执行。
+</Answer>
+
+**问题 2**：launch 和 async 的区别？什么是结构化并发？
+
+<Answer>
+launch 返回 Job 不携带结果（发后即忘）；async 返回 Deferred 携带结果（await 获取）。结构化并发：父子关系，父等待子完成，父取消子自动取消，子异常传播到父。coroutineScope 创建结构化作用域。
+</Answer>
+
+**问题 3**：Flow 和 RxJava/LiveData 有什么区别？
+
+<Answer>
+Flow 是冷流（每次 collect 才执行），天然背压和结构化取消。RxJava 操作符更多但更重。LiveData 是热流有状态，Android 生命周期感知。纯 Kotlin 首选 Flow，UI 状态用 StateFlow。
+</Answer>
+
+**问题 4**：如何实现支持取消、超时和并发的网络请求模块？
+
+<Answer>
+suspend + withContext(Dispatchers.IO) 封装请求；withTimeoutOrNull 控制超时；coroutineScope + async 并发多请求；retry 重试；Flow + debounce + flatMapLatest 实现搜索；结构化并发保证取消传播。
+</Answer>
+
+</Exercises>
