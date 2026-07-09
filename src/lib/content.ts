@@ -213,6 +213,7 @@ export const BOOK_ORDER = [
   "jvm-g1-tuning",
   "gc-handbook",
   "first-line-android",
+  "crazy-android",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -366,6 +367,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "jvm-g1-tuning": "JVM G1源码分析和调优",
   "gc-handbook": "垃圾回收算法手册",
   "first-line-android": "第一行代码Android",
+  "crazy-android": "疯狂Android讲义",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

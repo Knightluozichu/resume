@@ -1,0 +1,196 @@
+---
+title: "多媒体与图形"
+type: C
+section: "Android开发"
+order: 7
+description: "掌握MediaPlayer/SoundPool音频播放、VideoView视频、Canvas 2D绘图、三种动画与传感器——多媒体开发核心"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CraMultimediaDiagram } from "@/components/mdx/crazy-android/diagrams/cra-multimedia";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握MediaPlayer和SoundPool音频播放的区别与API
+- 掌握Canvas 2D绘图（drawRect/drawCircle/drawText + Paint/Path）
+- 掌握三种动画（补间动画/帧动画/属性动画）的原理与区别
+- 掌握传感器使用（SensorManager + registerListener + 省电注意事项）
+</Objectives>
+
+## 直觉引入
+
+多媒体开发像「搭一个多媒体工作室」。MediaPlayer是「音响系统」——播放长音乐和视频，功能全面但有启动延迟。SoundPool是「音效按钮」——按下立刻响，支持多路同时混音，适合游戏音效。Canvas是「画布」——用Paint画笔在上面画矩形、圆、文字、路径。动画是「翻页动画书」——补间动画是自动计算中间帧，帧动画是逐帧播放图片，属性动画是真正改变对象属性。传感器是「设备的感觉器官」——加速度计感知摇晃，方向传感器感知旋转。
+
+<CraMultimediaDiagram />
+
+## 音频播放
+
+```text
+MediaPlayer vs SoundPool
+─────────────────────────────────────────────────────────
+MediaPlayer       长音频/视频     有延迟    有限并发    背景音乐
+SoundPool         短音效         极低延迟  多路混音    游戏音效
+```
+
+```java
+// MediaPlayer播放音频
+MediaPlayer player = MediaPlayer.create(this, R.raw.music);
+player.setLooping(true);      // 循环
+player.setVolume(1.0f, 1.0f); // 左右音量
+player.start();
+player.setOnCompletionListener(mp -> { /* 播放完成 */ });
+
+// SoundPool播放短音效
+SoundPool soundPool = new SoundPool.Builder()
+    .setMaxStreams(5).build();
+int soundId = soundPool.load(this, R.raw.beep, 1);
+soundPool.setOnLoadCompleteListener((pool, id, status) -> {
+    if (status == 0) {
+        soundPool.play(soundId, 1.0f, 1.0f, 1, 0, 1.0f);
+    }
+});
+```
+
+## 2D绘图 Canvas
+
+```java
+public class MyView extends View {
+    private Paint paint;
+
+    public MyView(Context context) {
+        super(context);
+        paint = new Paint();
+        paint.setColor(Color.RED);
+        paint.setAntiAlias(true);       // 抗锯齿
+        paint.setTextSize(40);
+        paint.setStyle(Paint.Style.FILL); // FILL / STROKE
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        canvas.drawRect(50, 50, 200, 150, paint);   // 矩形
+        canvas.drawCircle(300, 100, 50, paint);       // 圆
+        canvas.drawLine(50, 200, 300, 200, paint);   // 线
+        canvas.drawText("Hello", 50, 300, paint);     // 文字
+        canvas.drawBitmap(bitmap, 50, 350, paint);   // 位图
+
+        // Path自定义路径
+        Path path = new Path();
+        path.moveTo(100, 400);
+        path.lineTo(200, 450);
+        path.cubicTo(...);  // 贝塞尔曲线
+        canvas.drawPath(path, paint);
+    }
+}
+```
+
+<Callout type="trap">
+**性能坑**：onDraw中不要创建对象（Paint/Path等应在构造函数初始化）。onDraw每帧调用，创建对象导致频繁GC卡顿。
+</Callout>
+
+## 三种动画
+
+```text
+Tween（补间动画）     视觉变换不改变属性值    AlphaAnimation/Translate/Rotate/Scale
+Frame（帧动画）       逐帧播放图片序列        AnimationDrawable
+Property（属性动画）  真正改变属性值（推荐）   ObjectAnimator/ValueAnimator
+```
+
+```java
+// 补间动画（XML: res/anim/）
+AlphaAnimation alpha = new AlphaAnimation(0, 1);
+alpha.setDuration(1000);
+view.startAnimation(alpha);
+
+// 帧动画（XML: res/drawable/ animation-list）
+AnimationDrawable ad = (AnimationDrawable) imageView.getBackground();
+ad.start();
+
+// 属性动画（推荐）
+ObjectAnimator anim = ObjectAnimator.ofFloat(view, "translationX", 0f, 200f);
+anim.setDuration(1000);
+anim.start();
+
+// 组合动画
+AnimatorSet set = new AnimatorSet();
+set.playTogether(
+    ObjectAnimator.ofFloat(view, "alpha", 0, 1),
+    ObjectAnimator.ofFloat(view, "translationY", 100, 0)
+);
+set.start();
+```
+
+<Callout type="insight">
+**属性动画推荐原因**：补间动画只改变显示效果（视觉位置变了但触摸区域不变），属性动画真正改变View属性值（translationX/alpha/scaleX/rotation），动画结束后属性保持，与交互逻辑一致。
+</Callout>
+
+## 传感器
+
+```java
+SensorManager sm = (SensorManager) getSystemService(SENSOR_SERVICE);
+Sensor accelerometer = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+
+SensorEventListener listener = new SensorEventListener() {
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        // event.values[0] = X轴加速度
+        // event.values[1] = Y轴加速度
+        // event.values[2] = Z轴加速度
+        float x = event.values[0];
+        float y = event.values[1];
+        float z = event.values[2];
+        // 摇一摇检测：三轴合力超阈值
+        double force = Math.sqrt(x*x + y*y + z*z);
+        if (force > 20) { /* 摇一摇 */ }
+    }
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) { }
+};
+
+// 注册（onResume）
+sm.registerListener(listener, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+// 注销（onPause）—— 必须注销，避免耗电
+sm.unregisterListener(listener);
+```
+
+<Callout type="trap">
+**省电关键**：传感器持续工作耗电大，必须在onPause中unregisterListener释放，onResume中重新注册。否则后台持续耗电。
+</Callout>
+
+<Exercises>
+**问题 1**：MediaPlayer和SoundPool有什么区别？各自适合什么场景？
+
+<Answer>
+MediaPlayer：功能全面，支持音频（MP3/AAC/WAV）和视频（MP4/3GP），从本地/资源/网络加载。API：create/setDataSource→prepare→start→pause→stop→seekTo→release。支持setLooping/setVolume/setOnCompletionListener。适合较长音频/视频。缺点：prepare有缓冲延迟，不适合频繁短音效。SoundPool：专为短音效设计，支持多路同时混音。load加载返回soundId，play播放。预加载到内存，延迟极低，适合游戏音效（枪声/爆炸）。缺点：只适合短音频。场景选择：背景音乐用MediaPlayer，游戏音效用SoundPool。
+</Answer>
+
+**问题 2**：如何在Android中进行2D绘图？Canvas和Paint各自的作用是什么？
+
+<Answer>
+通过自定义View + Canvas + Paint：①继承View重写onDraw(Canvas)。②Canvas（画布）提供drawRect/drawCircle/drawLine/drawText/drawBitmap/drawPath/drawArc/drawOval。还支持save/restore、translate/rotate/scale变换、clipRect裁剪。③Paint（画笔）定义样式：setColor/setAntiAlias/setStrokeWidth/setStyle（FILL/STROKE）/setTextSize/setShader渐变。④在onDraw中先设Paint再调Canvas.drawXXX。⑤性能优化：onDraw中不创建对象（Paint等在构造函数初始化）。典型应用：绘图板、游戏画面、自定义图表、进度环。
+</Answer>
+
+**问题 3**：Android三种动画（补间动画、帧动画、属性动画）的原理和区别是什么？
+
+<Answer>
+①Tween（补间动画）— 定义起止状态自动计算中间帧。四种：Alpha/Translate/Rotate/Scale。res/anim/ XML定义。只改变显示效果不改变属性值，动画结束回到原始状态。②Frame（帧动画）— 逐帧播放图片序列（类似GIF）。res/drawable/ animation-list XML定义，AnimationDrawable.start()。适合复杂效果但图片占用大。③Property（属性动画）— ObjectAnimator/ValueAnimator真正改变View属性值（translationX/alpha/scaleX/rotation），动画结束属性保持。推荐使用——效果真实、灵活性强、与交互一致。支持AnimatorSet组合和AnimatorListener监听。
+</Answer>
+
+**问题 4**：如何使用Android传感器？SensorManager的注册/注销流程和注意事项是什么？
+
+<Answer>
+流程：①获取SensorManager = getSystemService(SENSOR_SERVICE)。②获取Sensor = getDefaultSensor(TYPE_ACCELEROMETER)（加速度/方向/光线/距离/陀螺仪等）。③注册registerListener(listener, sensor, rate)，listener实现SensorEventListener重写onSensorChanged（event.values数组含各轴数据）和onAccuracyChanged。rate指定采样频率（FASTEST/GAME/UI/NORMAL）。④onPause中unregisterListener释放。注意事项：①持续工作耗电大，必须onPause注销onResume注册。②不同设备传感器不同，使用前判断getDefaultSensor返回是否null。③onSensorChanged在传感器线程回调，更新UI需Handler切主线程。④加速度三轴values[0]=X/1=Y/2=Z，摇一摇计算合力是否超阈值。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="MediaPlayer">功能全面的音频/视频播放器。create/setDataSource→prepare→start→pause→stop→release。适合背景音乐和视频。有缓冲延迟。</GlossaryItem>
+<GlossaryItem term="SoundPool">短音效播放器，支持多路混音。预加载到内存延迟极低。load返回soundId，play播放。适合游戏音效。</GlossaryItem>
+<GlossaryItem term="Canvas">2D绘图画布，提供drawRect/drawCircle/drawText/drawBitmap/drawPath等方法。配合Paint定义样式。在自定义View的onDraw中使用。</GlossaryItem>
+<GlossaryItem term="属性动画">ObjectAnimator/ValueAnimator，真正改变View属性值。推荐使用——效果真实、与交互一致。补间动画只改视觉不改属性。</GlossaryItem>
+<GlossaryItem term="SensorManager">传感器管理器。getDefaultSensor获取传感器，registerListener注册监听。onSensorChanged处理数据。onPause必须unregisterListener省电。</GlossaryItem>
+</Glossary>

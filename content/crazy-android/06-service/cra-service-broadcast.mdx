@@ -1,0 +1,214 @@
+---
+title: "Service与Broadcast"
+type: A
+section: "Android开发"
+order: 6
+description: "掌握Service两种启动模式生命周期、Broadcast广播机制、电话短信API——Android后台与通信核心"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CraServiceBroadcastDiagram } from "@/components/mdx/crazy-android/diagrams/cra-service-broadcast";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解Service两种启动模式（startService/bindService）的生命周期区别
+- 掌握BroadcastReceiver广播机制（标准/有序广播、动态/静态注册）
+- 掌握前台Service（Android 8.0+）与通知栏结合
+- 掌握电话（TelephonyManager）与短信（SmsManager）API及权限
+</Objectives>
+
+## 直觉引入
+
+Service像「后台运转的电梯」——你按了楼层（startService）它就自己运行，你不需要在旁边盯着。绑定式Service像「对讲机」——你通过它和电梯通话（bindService返回IBinder），可以控制楼层和查询状态。Broadcast像「大楼广播系统」——发送方对着话筒喊（sendBroadcast），所有装了接收器的人都能听到。
+
+<CraServiceBroadcastDiagram />
+
+## Service两种启动模式
+
+```text
+启动式 Service（startService）          绑定式 Service（bindService）
+─────────────────────────────────────  ─────────────────────────────────
+startService(intent)                    bindService(intent, conn, flags)
+  → onCreate → onStartCommand            → onCreate → onBind(返回IBinder)
+调用方退出后继续运行                      调用方通过IBinder与Service交互
+需手动stopSelf/stopService停止           所有绑定者unbind后自动销毁
+适合独立后台任务（音乐/下载）             需与调用方交互的服务
+
+前台Service（Android 8.0+）：
+  startForeground(id, Notification)
+  显示通知栏，避免被系统杀掉
+```
+
+## 启动式Service示例
+
+```java
+public class MusicService extends Service {
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        // 初始化MediaPlayer
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent.getAction();
+        if ("PLAY".equals(action)) {
+            // 播放
+            // Android 8.0+ 前台Service
+            startForeground(1, buildNotification());
+        }
+        return START_NOT_STICKY;
+    }
+
+    @Override
+    public void onDestroy() {
+        // 释放MediaPlayer
+        super.onDestroy();
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) { return null; }  // 启动式返回null
+}
+```
+
+## 绑定式Service示例
+
+```java
+public class MusicService extends Service {
+    private MediaPlayer player;
+
+    // Binder供调用方与Service交互
+    public class MusicBinder extends Binder {
+        public MusicService getService() { return MusicService.this; }
+    }
+
+    @Override
+    public IBinder onBind(Intent intent) {
+        return new MusicBinder();
+    }
+
+    // 暴露给调用方的方法
+    public int getCurrentPosition() { return player.getCurrentPosition(); }
+    public void seekTo(int pos) { player.seekTo(pos); }
+}
+
+// Activity绑定
+ServiceConnection conn = new ServiceConnection() {
+    @Override
+    public void onServiceConnected(ComponentName name, IBinder service) {
+        MusicService.MusicBinder binder = (MusicService.MusicBinder) service;
+        MusicService musicService = binder.getService();
+        // 调用Service方法
+        int pos = musicService.getCurrentPosition();
+    }
+    @Override
+    public void onServiceDisconnected(ComponentName name) { }
+};
+bindService(intent, conn, BIND_AUTO_CREATE);
+```
+
+## Broadcast广播机制
+
+```text
+两种广播类型：
+  标准广播（sendBroadcast）— 异步同时送达所有接收者，不可截断
+  有序广播（sendOrderedBroadcast）— 按优先级链式传递，可截断
+
+两种注册方式：
+  动态注册（registerReceiver）— 跟随组件生命周期，onDestroy注销
+  静态注册（AndroidManifest <receiver>）— App未启动也能收
+  ※ Android 8.0+ 大部分系统广播只能动态注册（省电）
+```
+
+```java
+// 动态注册
+BroadcastReceiver receiver = new BroadcastReceiver() {
+    @Override
+    public void onReceive(Context context, Intent intent) {
+        if (intent.getAction().equals("CUSTOM_ACTION")) {
+            String data = intent.getStringExtra("key");
+            // 处理广播
+        }
+    }
+};
+registerReceiver(receiver, new IntentFilter("CUSTOM_ACTION"));
+// onDestroy中注销
+unregisterReceiver(receiver);
+
+// 发送广播
+Intent intent = new Intent("CUSTOM_ACTION");
+intent.putExtra("key", "value");
+sendBroadcast(intent);           // 标准广播
+sendOrderedBroadcast(intent, null); // 有序广播
+```
+
+<Callout type="insight">
+**系统广播**：BOOT_COMPLETED（开机完成）、BATTERY_CHANGED（电量变化）、CONNECTIVITY_CHANGE（网络变化）、SMS_RECEIVED（收到短信）。大部分在Android 8.0+只能动态注册，少数（BOOT_COMPLETED）可静态注册。
+</Callout>
+
+## 电话与短信
+
+```java
+// 电话
+TelephonyManager tm = (TelephonyManager) getSystemService(TELEPHONY_SERVICE);
+String deviceId = tm.getDeviceId();     // 需 READ_PHONE_STATE
+tm.listen(new PhoneStateListener() {
+    @Override
+    public void onCallStateChanged(int state, String number) {
+        // RINGING / OFFHOOK / IDLE
+    }
+}, PhoneStateListener.LISTEN_CALL_STATE);
+
+// 拨打电话（需 CALL_PHONE）
+Intent intent = new Intent(Intent.ACTION_CALL, Uri.parse("tel:10086"));
+startActivity(intent);
+
+// 发送短信（需 SEND_SMS）
+SmsManager sm = SmsManager.getDefault();
+sm.sendTextMessage("10086", null, "Hello", null, null);
+
+// 接收短信（需 RECEIVE_SMS + 广播 SMS_RECEIVED）
+// 在BroadcastReceiver中解析pdu
+```
+
+<Callout type="trap">
+**权限声明**：电话需READ_PHONE_STATE/CALL_PHONE，短信需SEND_SMS/RECEIVE_SMS。Android 6.0+需运行时动态申请危险权限。
+</Callout>
+
+<Exercises>
+**问题 1**：Service的两种启动模式（startService和bindService）有什么区别？各自的生命周期是什么？
+
+<Answer>
+启动式（startService）：onCreate → onStartCommand（每次startService触发）。调用方退出后继续运行，需手动stopSelf/stopService停止。适合独立后台任务。绑定式（bindService）：onCreate → onBind（返回IBinder）。调用方通过IBinder交互，所有绑定者unbind后自动onUnbind→onDestroy销毁。适合需与Activity交互的服务。混合模式可同时start+bind，需都完成才销毁。前台Service：Android 8.0+需startForeground(id, Notification)显示通知避免被杀。
+</Answer>
+
+**问题 2**：Android广播机制有哪两种类型？动态注册和静态注册有什么区别？
+
+<Answer>
+两种类型：①标准广播（sendBroadcast）— 异步同时送达所有接收者，不可截断。②有序广播（sendOrderedBroadcast）— 按优先级（intent-filter的priority）链式传递，高优先级可abortBroadcast截断、setResultData修改数据。两种注册：①动态注册— 代码中registerReceiver，跟随组件生命周期，onDestroy注销否则内存泄漏。②静态注册— AndroidManifest `<receiver>`声明，App未启动也能收。Android 8.0+大部分系统广播不允许静态注册（省电），只能动态。
+</Answer>
+
+**问题 3**：如何实现一个后台音乐播放Service？如何与Activity交互控制播放？
+
+<Answer>
+①MusicService继承Service，onCreate初始化MediaPlayer，onStartCommand根据action控制播放。②前台Service：onStartCommand中startForeground(id, notification)显示通知栏避免被杀。③与Activity交互用bindService：onBind返回自定义Binder（持有Service引用，暴露getCurrentPosition/seekTo等方法）。④Activity通过ServiceConnection.onServiceConnected获取IBinder，强转为自定义Binder调用Service方法。⑤Activity通过Handler定时调用binder.getCurrentPosition()更新进度条。⑥AndroidManifest注册Service，声明FOREGROUND_SERVICE权限（Android 9.0+）。⑦销毁时release()释放MediaPlayer。
+</Answer>
+
+**问题 4**：如何使用Android电话和短信API？需要哪些权限？如何接收短信？
+
+<Answer>
+电话：①TelephonyManager = getSystemService(TELEPHONY_SERVICE)，getDeviceId/getNetworkOperatorName/getCallState，需READ_PHONE_STATE。②监听来电：telephonyManager.listen(PhoneStateListener.onCallStateChanged(state, number))，RINGING/OFFHOOK/IDLE。③拨打电话：Intent.ACTION_CALL + Uri.parse("tel:号码")，需CALL_PHONE。短信：①发送：SmsManager.getDefault().sendTextMessage(destAddr, scAddr, text, sentIntent, deliverIntent)，需SEND_SMS。②接收：BroadcastReceiver监听SMS_RECEIVED广播，onReceive中从intent.getExtras()取Object[] pdus数组，SmsMessage.createFromPdu((byte[])pdu)解析，getOriginatingAddress/getMessageBody取号码和内容，需RECEIVE_SMS。Android 6.0+运行时动态申请危险权限。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="启动式Service">startService启动，onCreate→onStartCommand。调用方退出后继续运行，需手动停止。适合独立后台任务。</GlossaryItem>
+<GlossaryItem term="绑定式Service">bindService绑定，onCreate→onBind返回IBinder。调用方通过IBinder与Service交互，所有绑定者unbind后自动销毁。适合需交互的服务。</GlossaryItem>
+<GlossaryItem term="前台Service">startForeground(id, Notification)显示通知栏，Android 8.0+后台Service受限时避免被系统杀掉。</GlossaryItem>
+<GlossaryItem term="标准广播">sendBroadcast发送，异步同时送达所有接收者，不可截断。效率高但不可控。</GlossaryItem>
+<GlossaryItem term="有序广播">sendOrderedBroadcast发送，按优先级链式传递，高优先级可abortBroadcast截断。适合需权限控制的广播链。</GlossaryItem>
+<GlossaryItem term="动态注册/静态注册">动态注册registerReceiver跟随组件生命周期需注销。静态注册AndroidManifest `<receiver>`App未启动也能收。Android 8.0+大部分系统广播只能动态注册。</GlossaryItem>
+</Glossary>

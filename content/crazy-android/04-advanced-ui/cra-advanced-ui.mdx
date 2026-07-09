@@ -1,0 +1,187 @@
+---
+title: "高级UI（对话框/菜单/滚动）"
+type: C
+section: "Android开发"
+order: 4
+description: "掌握AlertDialog对话框、三种菜单、Notification通知、滚动视图与ActionBar——提升应用交互体验"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { CraAdvancedUiDiagram } from "@/components/mdx/crazy-android/diagrams/cra-advanced-ui";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握AlertDialog/DatePickerDialog对话框与DialogFragment推荐用法
+- 掌握三种菜单（选项菜单/上下文菜单/子菜单）与XML定义
+- 掌握Notification通知构建与NotificationChannel（Android 8.0+）
+- 掌握ScrollView/ListView滚动视图与ActionBar/Toolbar
+</Objectives>
+
+## 直觉引入
+
+高级UI是应用的「装修标准」。对话框是「弹窗提醒」（AlertDialog确认框、DatePickerDialog日期选择）。菜单是「操作面板」（选项菜单像工具栏、上下文菜单像右键菜单）。通知是「门口的留言条」（Notification在通知栏提醒用户）。滚动视图是「可滚动的长卷轴」（ScrollView通用滚动、ListView列表滚动）。ActionBar是「顶部操作栏」（应用标题+按钮+导航）。
+
+<CraAdvancedUiDiagram />
+
+## 对话框体系
+
+```text
+AlertDialog              — 通用对话框（标题/内容/按钮/列表/自定义布局）
+DatePickerDialog         — 日期选择
+TimePickerDialog         — 时间选择
+ProgressDialog           — 进度对话框（已废弃，用ProgressBar替代）
+自定义Dialog             — setView载入自定义布局
+DialogFragment（推荐）    — Fragment管理Dialog生命周期，旋转不丢失
+```
+
+## AlertDialog代码示例
+
+```java
+new AlertDialog.Builder(this)
+    .setTitle("确认")
+    .setMessage("确定要删除吗？")
+    .setPositiveButton("确定", (dialog, which) -> {
+        // 删除操作
+    })
+    .setNegativeButton("取消", null)
+    .setItems(new String[]{"选项1", "选项2"}, (dialog, which) -> {
+        // 列表选择
+    })
+    .setMultiChoiceItems(items, checkedItems, (dialog, which, isChecked) -> {
+        // 多选
+    })
+    .setView(customView)      // 自定义布局
+    .setCancelable(false)     // 不可取消
+    .show();
+```
+
+## 三种菜单
+
+```text
+OptionsMenu（选项菜单）   菜单键/ActionBar溢出触发
+  onCreateOptionsMenu     — 创建菜单（只调一次）
+  onPrepareOptionsMenu    — 每次显示前调用（动态修改）
+  onOptionsItemSelected   — 处理菜单项点击
+
+ContextMenu（上下文菜单）  长按View触发
+  registerForContextMenu(view) — 注册
+  onCreateContextMenu     — 创建菜单
+  onContextItemSelected   — 处理点击
+
+SubMenu（子菜单）         在选项/上下文菜单中嵌套
+  menu.addSubMenu()       — 添加子菜单
+```
+
+## XML定义菜单（推荐）
+
+```xml
+<!-- res/menu/main.xml -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_settings"
+        android:title="设置"
+        android:icon="@drawable/ic_settings"
+        android:showAsAction="ifRoom" />   <!-- ifRoom/always/never -->
+    <item
+        android:id="@+id/action_share"
+        android:title="分享" />
+</menu>
+```
+
+```java
+@Override
+public boolean onCreateOptionsMenu(Menu menu) {
+    getMenuInflater().inflate(R.menu.main, menu);
+    return true;
+}
+
+@Override
+public boolean onOptionsItemSelected(MenuItem item) {
+    if (item.getItemId() == R.id.action_settings) {
+        // 处理设置
+        return true;
+    }
+    return super.onOptionsItemSelected(item);
+}
+```
+
+## Notification通知
+
+```java
+// Android 8.0+ 必须创建NotificationChannel
+if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    NotificationChannel channel = new NotificationChannel(
+        "channel_id", "频道名", NotificationManager.IMPORTANCE_DEFAULT);
+    notificationManager.createNotificationChannel(channel);
+}
+
+Notification notification = new NotificationCompat.Builder(this, "channel_id")
+    .setSmallIcon(R.drawable.ic_notification)   // 必须
+    .setContentTitle("标题")
+    .setContentText("内容")
+    .setAutoCancel(true)                        // 点击后自动取消
+    .setContentIntent(pendingIntent)             // 点击跳转
+    .setSound(Uri.parse("path"))                // 声音
+    .setVibrate(new long[]{0, 1000, 1000})      // 震动
+    .build();
+
+notificationManager.notify(1, notification);
+```
+
+<Callout type="insight">
+**Android 8.0+ NotificationChannel**：必须先创建通知渠道（指定channelId/名称/重要性级别），否则通知不显示。渠道允许用户在系统设置中按渠道单独控制通知行为（声音/震动/重要性）。
+</Callout>
+
+## 滚动视图与View复用
+
+```text
+ScrollView              — 通用垂直滚动（一个子View，全部inflate，不适合大数据）
+HorizontalScrollView    — 水平滚动
+ListView/GridView       — 列表滚动（Adapter按需创建item，View复用）
+
+View复用核心：
+  滑出屏幕的item → RecycleBin回收池 → convertView
+  新进入的item → 复用convertView → 只调onBind不重新inflate
+  → View对象数量恒定，无论数据量多大都高效
+```
+
+<Callout type="trap">
+**性能误区**：ScrollView包裹大量内容 → 全部一次性inflate → 内存爆炸。正确做法：大量同构数据用ListView/RecyclerView + Adapter，利用View复用机制。
+</Callout>
+
+<Exercises>
+**问题 1**：Android的对话框体系有哪些类型？AlertDialog的核心API是什么？
+
+<Answer>
+类型：①AlertDialog——最通用，通过Builder构建，setTitle/setMessage/setItems/setMultiChoiceItems/setSingleChoiceItems/setPositiveButton/setNegativeButton/setNeutralButton/setView。②DatePickerDialog/TimePickerDialog——日期/时间选择，OnDateSetListener/OnTimeSetListener回调。③ProgressDialog——进度对话框（已废弃）。④自定义Dialog——setView载入自定义布局。推荐DialogFragment包裹——旋转时Fragment自动管理生命周期，避免Activity重建导致Dialog丢失。show()显示，dismiss()关闭。
+</Answer>
+
+**问题 2**：Android三种菜单的触发方式和生命周期回调是什么？推荐用什么方式定义菜单？
+
+<Answer>
+①OptionsMenu——菜单键或ActionBar溢出触发。onCreateOptionsMenu创建（只调一次），onPrepareOptionsMenu每次显示前动态修改，onOptionsItemSelected处理点击。②ContextMenu——长按View触发。registerForContextMenu注册，onCreateContextMenu创建，onContextItemSelected处理。③SubMenu——addSubMenu嵌套子菜单。推荐XML定义：res/menu/下创建XML，用`<item>`定义（id/title/icon/showAsAction），MenuInflater.inflate加载。showAsAction控制显示在ActionBar还是溢出（ifRoom/withText/always/never）。
+</Answer>
+
+**问题 3**：Android Notification通知的构建流程是什么？Android 8.0后有什么重要变化？
+
+<Answer>
+流程：①获取NotificationManager。②NotificationCompat.Builder设置setSmallIcon（必须）、setContentTitle/ContentText、setContentIntent(PendingIntent点击跳转)、setAutoCancel、setSound/setVibrate/setLights提醒方式。③notify(id, notification)发送。④cancel(id)取消。Android 8.0+重要变化：必须先创建NotificationChannel（channelId/channelName/重要性级别），否则通知不显示。渠道允许用户在系统设置中按渠道单独控制通知行为。自定义布局用RemoteViews。
+</Answer>
+
+**问题 4**：ScrollView、ListView和RecyclerView三种滚动容器的区别是什么？为什么View复用是性能关键？
+
+<Answer>
+①ScrollView——通用垂直滚动，只能含一个直接子View，全部内容一次性inflate，数据量大时内存高性能差。适合内容不多的表单页。②ListView/GridView——列表型，自带滚动，通过Adapter按需创建item View，只有可见item被inflate，滑出后回收复用（convertView）。适合大量同构数据。③RecyclerView——更先进（多种LayoutManager/强制ViewHolder/DiffUtil局部刷新/ItemDecoration/ItemAnimator）。View复用是性能关键：inflate布局（XML解析+View创建）和findViewById（遍历View树）都是耗时操作。不复用时大数据量产生大量临时View导致频繁GC甚至OOM。复用机制使View对象数量恒定。RecyclerView强制ViewHolder进一步规范复用模式。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="AlertDialog">通用对话框，通过Builder模式构建。支持标题/内容/按钮/列表/多选/单选/自定义布局。推荐用DialogFragment包裹管理生命周期。</GlossaryItem>
+<GlossaryItem term="三种菜单">OptionsMenu（选项菜单，菜单键/溢出触发）/ ContextMenu（上下文菜单，长按触发）/ SubMenu（子菜单，嵌套）。推荐XML定义+MenuInflater加载。</GlossaryItem>
+<GlossaryItem term="NotificationChannel">Android 8.0+必须创建的通知渠道。指定channelId/名称/重要性，允许用户按渠道控制通知行为。不创建则通知不显示。</GlossaryItem>
+<GlossaryItem term="View复用">列表滚动时滑出的View回收为convertView，新item复用只重新绑定数据。View对象数量恒定，避免OOM和频繁GC。convertView+ViewHolder是标准优化模式。</GlossaryItem>
+<GlossaryItem term="ActionBar">顶部操作栏，提供应用图标/标题+Action按钮+溢出菜单+Tab导航+SearchView。Android 5.0+推荐用Toolbar替代（更灵活）。</GlossaryItem>
+</Glossary>

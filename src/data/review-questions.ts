@@ -1655,6 +1655,16 @@ import { flaServiceQuestions } from "./review/fla-service";
 import { flaNetworkQuestions } from "./review/fla-network";
 import { flaAdvancedFeaturesQuestions } from "./review/fla-advanced-features";
 import { flaFinalReviewQuestions } from "./review/fla-final-review";
+import { craLearningMapQuestions } from "./review/cra-learning-map";
+import { craAndroidQuickstartQuestions } from "./review/cra-android-quickstart";
+import { craUiComponentsQuestions } from "./review/cra-ui-components";
+import { craEventHandlingQuestions } from "./review/cra-event-handling";
+import { craAdvancedUiQuestions } from "./review/cra-advanced-ui";
+import { craDataPersistenceQuestions } from "./review/cra-data-persistence";
+import { craServiceBroadcastQuestions } from "./review/cra-service-broadcast";
+import { craMultimediaQuestions } from "./review/cra-multimedia";
+import { craWebNetworkQuestions } from "./review/cra-web-network";
+import { craFinalReviewQuestions } from "./review/cra-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3345,6 +3355,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...flaNetworkQuestions,
   ...flaAdvancedFeaturesQuestions,
   ...flaFinalReviewQuestions,
+  ...craLearningMapQuestions,
+  ...craAndroidQuickstartQuestions,
+  ...craUiComponentsQuestions,
+  ...craEventHandlingQuestions,
+  ...craAdvancedUiQuestions,
+  ...craDataPersistenceQuestions,
+  ...craServiceBroadcastQuestions,
+  ...craMultimediaQuestions,
+  ...craWebNetworkQuestions,
+  ...craFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

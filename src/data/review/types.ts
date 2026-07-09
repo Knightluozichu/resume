@@ -1778,7 +1778,17 @@ export type ReviewChapterSlug =
   | "fla-service"
   | "fla-network"
   | "fla-advanced-features"
-  | "fla-final-review";
+  | "fla-final-review"
+  | "cra-learning-map"
+  | "cra-android-quickstart"
+  | "cra-ui-components"
+  | "cra-event-handling"
+  | "cra-advanced-ui"
+  | "cra-data-persistence"
+  | "cra-service-broadcast"
+  | "cra-multimedia"
+  | "cra-web-network"
+  | "cra-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3561,6 +3571,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "fla-network": "网络编程",
   "fla-advanced-features": "高级特性（Material Design/Jetpack）",
   "fla-final-review": "全书复习",
+  "cra-learning-map": "全书学习地图",
+  "cra-android-quickstart": "Android快速入门",
+  "cra-ui-components": "UI组件与布局",
+  "cra-event-handling": "事件处理",
+  "cra-advanced-ui": "高级UI（对话框/菜单/滚动）",
+  "cra-data-persistence": "数据持久化",
+  "cra-service-broadcast": "Service与Broadcast",
+  "cra-multimedia": "多媒体与图形",
+  "cra-web-network": "Web与网络通信",
+  "cra-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
