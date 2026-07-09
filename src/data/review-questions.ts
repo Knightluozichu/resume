@@ -1765,6 +1765,16 @@ import { mseTransactionsQuestions } from "./review/mse-transactions";
 import { mseSecurityBackupQuestions } from "./review/mse-security-backup";
 import { mseDbAdministrationQuestions } from "./review/mse-db-administration";
 import { mseFinalReviewQuestions } from "./review/mse-final-review";
+import { sqtLearningMapQuestions } from "./review/sqt-learning-map";
+import { sqtSqlBasicsQuestions } from "./review/sqt-sql-basics";
+import { sqtFilteringDataQuestions } from "./review/sqt-filtering-data";
+import { sqtSortingFilteringQuestions } from "./review/sqt-sorting-filtering";
+import { sqtFunctionsQuestions } from "./review/sqt-functions";
+import { sqtAggregationQuestions } from "./review/sqt-aggregation";
+import { sqtJoinsQuestions } from "./review/sqt-joins";
+import { sqtSubqueriesQuestions } from "./review/sqt-subqueries";
+import { sqtAdvancedSqlQuestions } from "./review/sqt-advanced-sql";
+import { sqtFinalReviewQuestions } from "./review/sqt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3565,6 +3575,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mseSecurityBackupQuestions,
   ...mseDbAdministrationQuestions,
   ...mseFinalReviewQuestions,
+  ...sqtLearningMapQuestions,
+  ...sqtSqlBasicsQuestions,
+  ...sqtFilteringDataQuestions,
+  ...sqtSortingFilteringQuestions,
+  ...sqtFunctionsQuestions,
+  ...sqtAggregationQuestions,
+  ...sqtJoinsQuestions,
+  ...sqtSubqueriesQuestions,
+  ...sqtAdvancedSqlQuestions,
+  ...sqtFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

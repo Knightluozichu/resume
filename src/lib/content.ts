@@ -224,6 +224,7 @@ export const BOOK_ORDER = [
   "deep-android-kernel",
   "deep-android-volumes",
   "mysql-essentials",
+  "sql-ten-minutes",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -388,6 +389,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "deep-android-kernel": "深入理解Android内核设计思想",
   "deep-android-volumes": "深入理解Android（卷I/II/III）",
   "mysql-essentials": "MySQL数据库应用从入门到精通",
+  "sql-ten-minutes": "SQL必知必会",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

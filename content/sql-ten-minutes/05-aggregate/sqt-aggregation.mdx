@@ -1,0 +1,176 @@
+---
+title: "聚合与分组"
+type: B
+section: "数据库"
+order: 5
+description: "聚合函数与GROUP BY/HAVING——掌握数据汇总统计的核心能力"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { SqtAggregationDiagram } from "@/components/mdx/sql-ten-minutes/diagrams/sqt-aggregation";
+
+<Objectives>
+
+- 掌握五大聚合函数（COUNT/SUM/AVG/MAX/MIN）的用法和区别
+- 理解GROUP BY分组机制和聚合查询的执行流水线
+- 掌握HAVING组级过滤与WHERE行级过滤的区别
+- 理解SELECT中非聚合列必须出现在GROUP BY中的规则
+
+</Objectives>
+
+## 聚合函数与GROUP BY分组
+
+<SqtAggregationDiagram />
+
+聚合函数将多行数据汇总为一个值，配合GROUP BY可以实现分组统计。这是SQL从"行级查询"跃迁到"组级分析"的关键能力。
+
+## 五大聚合函数
+
+```
+-- COUNT：统计行数
+SELECT COUNT(*) AS total_products FROM products;        -- 统计所有行（含NULL）
+SELECT COUNT(prod_price) AS priced FROM products;       -- 统计非NULL行
+SELECT COUNT(DISTINCT vend_id) AS vendors FROM products; -- 统计去重后的供应商数
+
+-- SUM：求和（只对数值列）
+SELECT SUM(quantity) AS total_qty FROM orderitems WHERE order_num = 20005;
+
+-- AVG：平均值（只对数值列，自动忽略NULL）
+SELECT AVG(prod_price) AS avg_price FROM products;
+SELECT AVG(prod_price) AS avg_price FROM products WHERE vend_id = 'DLL01';
+
+-- MAX / MIN：最大值/最小值（可用于文本和日期）
+SELECT MAX(prod_price) AS max_price, MIN(prod_price) AS min_price FROM products;
+SELECT MAX(order_date) AS latest_order FROM orders;
+```
+
+<Callout type="warning" title="COUNT(*) vs COUNT(列名)">
+`COUNT(*)` 统计所有行（包括NULL行），`COUNT(列名)` 只统计该列非NULL的行。如果需要统计总行数用 `COUNT(*)`，如果需要统计某列有值的行数用 `COUNT(列名)`。`COUNT(DISTINCT 列名)` 统计去重后的非NULL值数量。
+</Callout>
+
+<Callout type="info" title="聚合函数与NULL">
+除COUNT(*)外，所有聚合函数都自动忽略NULL值。`AVG(col)` 只对非NULL值求平均，NULL行不计入分母。如果需要把NULL当作0参与计算，用 `AVG(COALESCE(col, 0))`。
+</Callout>
+
+## GROUP BY 分组
+
+```
+-- 按单列分组统计
+SELECT vend_id, COUNT(*) AS prod_count
+FROM products
+GROUP BY vend_id;
+-- 每个供应商有多少种产品
+
+-- 按多列分组
+SELECT vend_id, COUNT(*) AS prod_count, AVG(prod_price) AS avg_price
+FROM products
+GROUP BY vend_id;
+-- 每个供应商的产品数和平均价格
+
+-- 按多列分组（先按第一列，再按第二列细分）
+SELECT vend_id, prod_price, COUNT(*) AS cnt
+FROM products
+GROUP BY vend_id, prod_price
+ORDER BY vend_id, prod_price;
+```
+
+<Callout type="danger" title="GROUP BY 核心规则">
+SELECT中的非聚合列（不在聚合函数中的列）**必须**出现在GROUP BY子句中。例如 `SELECT vend_id, prod_name, COUNT(*) FROM products GROUP BY vend_id` 是错误的——prod_name不在GROUP BY中且不是聚合函数。因为每个vend_id组可能有多行prod_name，数据库不知道该显示哪个值（MySQL旧版会随机选一个，这是不规范的）。
+</Callout>
+
+## HAVING 组级过滤
+
+```
+-- WHERE 过滤行，HAVING 过滤组
+-- 统计每个供应商的产品数，只显示产品数 >= 3 的供应商
+SELECT vend_id, COUNT(*) AS prod_count
+FROM products
+GROUP BY vend_id
+HAVING COUNT(*) >= 3;
+
+-- WHERE 和 HAVING 配合使用
+-- 先用WHERE过滤出价格>=4的产品，再按供应商分组，最后用HAVING过滤组
+SELECT vend_id, COUNT(*) AS prod_count, AVG(prod_price) AS avg_price
+FROM products
+WHERE prod_price >= 4
+GROUP BY vend_id
+HAVING COUNT(*) >= 2;
+```
+
+<Callout type="success" title="WHERE vs HAVING">
+WHERE在分组前过滤行，HAVING在分组后过滤组。关键区别：①WHERE不能用聚合函数，HAVING可以；②WHERE过滤的是原始行，HAVING过滤的是分组后的结果；③两者可以同时使用——WHERE先过滤行，GROUP BY分组，HAVING再过滤组。
+</Callout>
+
+## 聚合查询完整流程
+
+```
+-- 完整示例：查询2024年每个客户订单总金额超过1000的客户
+SELECT cust_id, COUNT(*) AS order_count, SUM(total_price) AS total_amount
+FROM orders
+WHERE YEAR(order_date) = 2024       -- ① WHERE 先过滤行
+GROUP BY cust_id                     -- ② GROUP BY 分组
+HAVING SUM(total_price) > 1000       -- ③ HAVING 过滤组
+ORDER BY total_amount DESC           -- ④ ORDER BY 排序
+LIMIT 10;                            -- ⑤ LIMIT 限制
+
+-- 执行顺序：
+// FROM orders
+// → WHERE 过滤2024年订单
+// → GROUP BY 按 cust_id 分组
+// → HAVING 过滤总金额>1000的组
+// → SELECT 计算列
+// → ORDER BY 按金额降序
+// → LIMIT 取前10
+```
+
+<Glossary>
+
+<GlossaryItem term="聚合函数">
+将多行数据汇总为一个值的函数，包括COUNT（计数）、SUM（求和）、AVG（平均）、MAX（最大）、MIN（最小）。除COUNT(*)外，所有聚合函数都自动忽略NULL值。聚合函数通常与GROUP BY配合使用。
+</GlossaryItem>
+
+<GlossaryItem term="GROUP BY">
+按指定列将行分组，每组输出一行聚合结果。SELECT中的非聚合列必须出现在GROUP BY中。可按多列分组——先按第一列分，再在组内按第二列细分。GROUP BY在WHERE之后、HAVING之前执行。
+</GlossaryItem>
+
+<GlossaryItem term="HAVING">
+组级过滤子句，在GROUP BY之后执行。与WHERE的关键区别：HAVING可以使用聚合函数（如 `HAVING COUNT(*) > 5`），WHERE不行。HAVING过滤的是分组后的结果，WHERE过滤的是分组前的原始行。
+</GlossaryItem>
+
+<GlossaryItem term="COUNT(*) vs COUNT(列名)">
+COUNT(*) 统计所有行（包括含NULL的行），COUNT(列名) 只统计该列非NULL的行数。COUNT(DISTINCT 列名) 统计去重后的非NULL值数量。需要统计总行数时用COUNT(*)，需要统计某列有值的行数时用COUNT(列名)。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：`COUNT(*)` 和 `COUNT(列名)` 有什么区别？在什么场景下应该用哪个？
+
+<Answer>
+`COUNT(*)` 统计所有行，包括含NULL值的行；`COUNT(列名)` 只统计该列非NULL的行数。使用场景：①统计总行数（不管任何列是否有NULL）用 `COUNT(*)`；②统计某列有值的行数用 `COUNT(列名)`；③统计某列有多少个不同的值用 `COUNT(DISTINCT 列名)`。例如 `SELECT COUNT(*) FROM users` 统计总用户数，`SELECT COUNT(email) FROM users` 统计有邮箱的用户数，`SELECT COUNT(DISTINCT dept) FROM employees` 统计部门数。
+</Answer>
+
+**问题 2**：WHERE和HAVING有什么区别？它们在执行流程中的位置分别是什么？
+
+<Answer>
+三个核心区别：①过滤对象——WHERE过滤行（原始数据），HAVING过滤组（分组后的结果）；②聚合函数——WHERE不能使用聚合函数，HAVING可以（如HAVING COUNT(*) > 5）；③执行位置——WHERE在GROUP BY之前执行，HAVING在GROUP BY之后执行。执行流程：FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY。典型用法：WHERE先过滤不需要的行，GROUP BY分组，HAVING再过滤不符合条件的组。例如 `WHERE price >= 4 GROUP BY vend_id HAVING COUNT(*) >= 2`。
+</Answer>
+
+**问题 3**：SELECT中的非聚合列为什么必须出现在GROUP BY中？
+
+<Answer>
+因为GROUP BY将多行分组为一行，对于非聚合列，每组有多行的值，数据库不知道该显示哪个值。例如 `SELECT vend_id, prod_name, COUNT(*) FROM products GROUP BY vend_id` 中，一个vend_id可能对应多行不同的prod_name，数据库无法决定显示哪个prod_name。规则：SELECT中不在聚合函数中的列必须出现在GROUP BY中，这样每组内该列的值是相同的（因为按它分组的），可以安全显示。MySQL旧版本（only_full_group_by=OFF）会随机选一个值，但这不规范且可能导致错误结果。
+</Answer>
+
+**问题 4**：聚合函数如何处理NULL值？如果需要把NULL当作0参与计算怎么做？
+
+<Answer>
+除COUNT(*)外，所有聚合函数（COUNT(列名)、SUM、AVG、MAX、MIN）都自动忽略NULL值。影响：①AVG——NULL不计入分母，`AVG(col)` 只对非NULL值求平均，如果3行中有1行NULL，AVG是另外2行的平均值（除以2不是3）；②COUNT(列名)——NULL行不计入计数；③SUM——NULL行被忽略，不影响总和。如果需要把NULL当作0参与计算：用 `AVG(COALESCE(col, 0))` 或 `SUM(COALESCE(col, 0))`，COALESCE将NULL替换为0，这样NULL行也会被纳入计算。注意COUNT(*)仍然统计所有行，不忽略NULL。
+</Answer>
+
+</Exercises>

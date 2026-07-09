@@ -1888,7 +1888,17 @@ export type ReviewChapterSlug =
   | "mse-transactions"
   | "mse-security-backup"
   | "mse-db-administration"
-  | "mse-final-review";
+  | "mse-final-review"
+  | "sqt-learning-map"
+  | "sqt-sql-basics"
+  | "sqt-filtering-data"
+  | "sqt-sorting-filtering"
+  | "sqt-functions"
+  | "sqt-aggregation"
+  | "sqt-joins"
+  | "sqt-subqueries"
+  | "sqt-advanced-sql"
+  | "sqt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3781,6 +3791,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mse-security-backup": "安全与备份",
   "mse-db-administration": "数据库管理",
   "mse-final-review": "全书复习",
+  "sqt-learning-map": "全书学习地图",
+  "sqt-sql-basics": "SQL基础与SELECT",
+  "sqt-filtering-data": "数据过滤",
+  "sqt-sorting-filtering": "排序与计算字段",
+  "sqt-functions": "函数与数据处理",
+  "sqt-aggregation": "聚合与分组",
+  "sqt-joins": "联结查询",
+  "sqt-subqueries": "子查询与组合查询",
+  "sqt-advanced-sql": "高级SQL",
+  "sqt-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

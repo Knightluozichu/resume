@@ -1,0 +1,185 @@
+---
+title: "排序与计算字段"
+type: C
+section: "数据库"
+order: 3
+description: "ORDER BY排序与计算字段——掌握数据排序与运行时计算的技巧"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { SqtSortingFilteringDiagram } from "@/components/mdx/sql-ten-minutes/diagrams/sqt-sorting-filtering";
+
+<Objectives>
+
+- 掌握ORDER BY子句的单列排序和多列排序
+- 理解ASC/DESC排序方向及其在多列排序中的独立指定
+- 掌握计算字段（拼接、算术运算）和别名的使用
+- 理解计算字段在SQL执行流程中的位置及常见陷阱
+
+</Objectives>
+
+## 排序与计算字段
+
+<SqtSortingFilteringDiagram />
+
+ORDER BY是SELECT语句的最后一条子句（在LIMIT之前），用于对查询结果排序。计算字段是在SELECT阶段实时生成的派生数据，不实际存储在表中。
+
+## ORDER BY 排序
+
+```
+-- 单列排序（默认升序 ASC）
+SELECT prod_name, prod_price FROM products ORDER BY prod_name;
+SELECT prod_name, prod_price FROM products ORDER BY prod_price ASC;
+
+-- 降序排序（DESC）
+SELECT prod_name, prod_price FROM products ORDER BY prod_price DESC;
+
+-- 多列排序（先按第一列，相同再按第二列）
+SELECT prod_id, prod_name, prod_price FROM products
+ORDER BY prod_price, prod_name;
+
+-- 多列各自指定方向
+SELECT prod_id, prod_price, prod_name FROM products
+ORDER BY prod_price DESC, prod_name ASC;
+-- 先按价格降序，价格相同的再按名称升序
+
+-- 按列位置排序（不推荐，可读性差）
+SELECT prod_name, prod_price FROM products ORDER BY 2;
+-- 2 表示第二列（prod_price）
+```
+
+<Callout type="warning" title="多列排序方向">
+`ORDER BY col1, col2 DESC` 中 DESC 只作用于 col2！如果需要两列都降序，必须写成 `ORDER BY col1 DESC, col2 DESC`。DESC关键字只修饰紧邻其前的列名。
+</Callout>
+
+<Callout type="info" title="ORDER BY 的位置">
+ORDER BY 必须是 SELECT 语句的最后一条子句（LIMIT除外）。放在 WHERE、GROUP BY、HAVING 之后。如果不使用ORDER BY，查询结果的顺序是不确定的（不能依赖插入顺序）。
+</Callout>
+
+## 计算字段
+
+### 拼接字段
+
+```
+-- MySQL 使用 CONCAT 函数拼接
+SELECT CONCAT(vend_name, ' (', vend_country, ')') AS vend_title
+FROM vendors
+ORDER BY vend_name;
+
+-- 输出示例：ACME (USA)
+
+-- 使用别名让结果更清晰
+SELECT CONCAT(RTRIM(vend_name), ' (', RTRIM(vend_country), ')') AS vend_title
+FROM vendors;
+```
+
+### 算术运算
+
+```
+-- 基本算术运算：+ - * /
+SELECT prod_id, quantity, item_price, quantity * item_price AS total_price
+FROM orderitems
+WHERE order_num = 20008;
+
+-- 算术运算符优先级：先乘除后加减，可用括号改变
+SELECT prod_price, prod_price * 1.1 AS new_price FROM products;
+SELECT 100 / 3;           -- 整数除法可能截断
+SELECT 100.0 / 3;         -- 浮点除法更精确
+SELECT CAST(100 AS DECIMAL(10,2)) / 3;  -- 显式转换避免整数除法
+```
+
+### 别名（AS）
+
+```
+-- 给列起别名（AS 可省略但不推荐）
+SELECT prod_name AS product_name FROM products;
+SELECT prod_name product_name FROM products;  -- 省略AS，不推荐
+
+-- 给计算字段起别名（必须！否则列名不可预测）
+SELECT quantity * item_price AS total_price FROM orderitems;
+
+-- 给表起别名（JOIN 中常用）
+SELECT v.vend_name, p.prod_name
+FROM vendors AS v
+INNER JOIN products AS p ON v.vend_id = p.vend_id;
+```
+
+<Callout type="success" title="别名的核心价值">
+①给计算字段命名——前端可直接用列名引用，否则列名可能是一个无法预测的表达式字符串；②简化长表名/列名——SQL更简洁可读；③区分自联结中的同一张表——用不同别名把一张表当两份用。
+</Callout>
+
+## 常见陷阱
+
+```
+-- 陷阱1：WHERE 中不能用列别名
+SELECT prod_price * 1.1 AS new_price FROM products
+WHERE new_price > 10;        -- 错误！WHERE在SELECT前执行
+-- 正确写法：
+SELECT prod_price * 1.1 AS new_price FROM products
+WHERE prod_price * 1.1 > 10;  -- 直接用表达式
+
+-- 陷阱2：ORDER BY 可以用列别名（最后执行）
+SELECT prod_price * 1.1 AS new_price FROM products
+ORDER BY new_price DESC;      -- 正确！ORDER BY 在 SELECT 之后执行
+
+-- 陷阱3：整数除法截断
+SELECT 7 / 2;                 -- 结果可能是 3（整数除法）
+SELECT 7.0 / 2;               -- 结果是 3.5（浮点除法）
+SELECT CAST(7 AS DECIMAL(10,2)) / 2;  -- 3.50
+
+-- 陷阱4：多列 DESC 只修饰相邻列
+ORDER BY price DESC, name;    -- name 仍然是 ASC！
+ORDER BY price DESC, name DESC;  -- 两个都降序
+```
+
+<Glossary>
+
+<GlossaryItem term="ORDER BY">
+SELECT语句中用于排序的子句，必须是最后一条子句（LIMIT除外）。支持单列/多列排序，ASC升序（默认）、DESC降序。多列排序时先按第一列排序，相同时按第二列。DESC只修饰紧邻其前的列。
+</GlossaryItem>
+
+<GlossaryItem term="计算字段">
+在SELECT阶段实时生成的派生数据，不实际存储在表中。包括拼接字段（CONCAT）、算术运算（加减乘除）和类型转换（CAST）。计算字段必须用AS指定别名，否则列名不可预测。
+</GlossaryItem>
+
+<GlossaryItem term="别名（AS）">
+给列或表起临时名字。列别名让计算字段有可引用的名字，表别名简化JOIN中的表名引用。WHERE中不能用列别名（执行顺序决定），ORDER BY中可以。AS关键字可省略但不推荐。
+</GlossaryItem>
+
+<GlossaryItem term="整数除法">
+两个整数相除时，某些数据库会截断小数部分（如7/2=3而非3.5）。避免方法：将操作数转为浮点数或DECIMAL，如 `CAST(7 AS DECIMAL)/2` 或 `7.0/2`。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：`ORDER BY price DESC, name` 中 name 是升序还是降序？如何让两列都降序？
+
+<Answer>
+name 是升序（ASC）。因为DESC关键字只修饰紧邻其前的列名，`ORDER BY price DESC, name` 等价于 `ORDER BY price DESC, name ASC`。如果需要两列都降序，必须写成 `ORDER BY price DESC, name DESC`，每个需要降序的列后面都要单独跟DESC关键字。这是多列排序中最常见的陷阱。
+</Answer>
+
+**问题 2**：为什么WHERE中不能使用SELECT定义的列别名，而ORDER BY中可以？
+
+<Answer>
+因为执行顺序：FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY。WHERE在SELECT之前执行，此时别名还未定义，所以不能用。ORDER BY在SELECT之后执行，别名已经定义好了，所以可以用。例如 `SELECT price*1.1 AS np FROM t WHERE np > 10` 是错误的，应改为 `WHERE price*1.1 > 10`；但 `ORDER BY np` 是正确的。理解执行顺序是写对SQL的关键。
+</Answer>
+
+**问题 3**：计算字段是什么？为什么计算字段需要用AS指定别名？
+
+<Answer>
+计算字段是在SELECT阶段实时生成的派生数据，不实际存储在表中，包括拼接字段（如CONCAT）、算术运算（如price*quantity）和类型转换（如CAST）。需要用AS指定别名的原因：①不指定别名时，列名可能是整个表达式字符串（如"price*quantity"），前端无法稳定引用；②别名让结果集有语义化的列名，更易理解和使用；③在应用代码中通过别名引用列名更安全，不受表达式变化影响。
+</Answer>
+
+**问题 4**：整数除法在SQL中可能产生什么问题？如何避免？
+
+<Answer>
+两个整数相除时，某些数据库会执行整数除法，截断小数部分。例如 `7/2` 结果可能是3而非3.5，导致计算精度丢失。避免方法：①将至少一个操作数转为浮点数或DECIMAL，如 `7.0/2`；②使用CAST显式转换类型，如 `CAST(7 AS DECIMAL(10,2))/2`；③在聚合计算中用AVG时注意数据类型，确保不会截断。最佳实践是涉及金额、比例等需要精度的计算时，始终确保使用浮点或DECIMAL类型。
+</Answer>
+
+</Exercises>

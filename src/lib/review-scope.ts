@@ -131,6 +131,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["dak-", "deep-android-kernel"],
   ["dav-", "deep-android-volumes"],
   ["mse-", "mysql-essentials"],
+  ["sqt-", "sql-ten-minutes"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

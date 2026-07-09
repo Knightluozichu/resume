@@ -1,0 +1,185 @@
+---
+title: "联结查询"
+type: C
+section: "数据库"
+order: 6
+description: "JOIN联结查询——掌握多表关联查询的核心能力"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { SqtJoinsDiagram } from "@/components/mdx/sql-ten-minutes/diagrams/sqt-joins";
+
+<Objectives>
+
+- 理解为什么需要JOIN以及关系型数据库的表间关联
+- 掌握INNER JOIN、LEFT JOIN、RIGHT JOIN的区别和用法
+- 理解自联结（Self-Join）的原理和使用场景
+- 掌握JOIN的标准语法和表别名在JOIN中的使用
+
+</Objectives>
+
+## JOIN联结类型与原理
+
+<SqtJoinsDiagram />
+
+JOIN是关系型数据库的核心能力——数据分散在多张表中，JOIN按关联列将不同表的行拼接在一起，实现跨表查询。
+
+## 为什么需要JOIN
+
+```
+// 关系型数据库的设计原则：数据分散存储，避免冗余
+// customers 表：cust_id, cust_name, cust_email ...
+// orders 表：order_num, cust_id, order_date ...（cust_id 引用 customers）
+// orderitems 表：order_item, order_num, prod_id, quantity ...（order_num 引用 orders）
+//
+// 问题：想查询"Alice的订单包含哪些产品？"
+// 答案：需要 JOIN 三张表
+//   customers (谁) → orders (下了什么单) → orderitems (单里有什么) → products (产品叫什么)
+```
+
+## INNER JOIN（内联结）
+
+```
+-- 最常用的JOIN：只返回两表匹配的行
+SELECT prod_name, vend_name, prod_price
+FROM products
+INNER JOIN vendors ON products.vend_id = vendors.vend_id;
+
+-- 使用表别名简化（JOIN中几乎总是用别名）
+SELECT p.prod_name, v.vend_name, p.prod_price
+FROM products AS p
+INNER JOIN vendors AS v ON p.vend_id = v.vend_id;
+
+-- 多表JOIN
+SELECT c.cust_name, o.order_num, oi.prod_id, oi.quantity
+FROM customers AS c
+INNER JOIN orders AS o ON c.cust_id = o.cust_id
+INNER JOIN orderitems AS oi ON o.order_num = oi.order_num
+WHERE c.cust_id = 10001;
+```
+
+<Callout type="info" title="INNER JOIN 的行为">
+INNER JOIN只返回两表中在关联列上匹配的行。如果左表某行在右表没有匹配，该行不出现在结果中。反之亦然。可以理解为取两表的"交集"。
+</Callout>
+
+## LEFT JOIN（左外联结）
+
+```
+-- LEFT JOIN：返回左表全部行，右表无匹配填NULL
+-- 查询所有客户及其订单（包括没有订单的客户）
+SELECT c.cust_name, o.order_num
+FROM customers AS c
+LEFT JOIN orders AS o ON c.cust_id = o.cust_id;
+
+-- 没有下过订单的客户
+SELECT c.cust_name
+FROM customers AS c
+LEFT JOIN orders AS o ON c.cust_id = o.cust_id
+WHERE o.order_num IS NULL;
+-- 右表列为NULL说明没有匹配 = 没有订单
+```
+
+## RIGHT JOIN（右外联结）
+
+```
+-- RIGHT JOIN：返回右表全部行，左表无匹配填NULL
+-- 与LEFT JOIN对称，只是方向相反
+SELECT c.cust_name, o.order_num
+FROM orders AS o
+RIGHT JOIN customers AS c ON c.cust_id = o.cust_id;
+-- 等价于上面的 LEFT JOIN（交换了表的位置）
+
+-- 实践中更推荐统一使用LEFT JOIN，思维更一致
+```
+
+## 自联结（Self-Join）
+
+```
+-- 自联结：同一张表当作两份，用不同别名区分
+-- 场景：查询与产品ID为 DTNTR 同一供应商的其他产品
+
+-- 方法1：子查询
+SELECT prod_id, prod_name
+FROM products
+WHERE vend_id = (SELECT vend_id FROM products WHERE prod_id = 'DTNTR');
+
+-- 方法2：自联结（通常更快）
+SELECT p1.prod_id, p1.prod_name
+FROM products AS p1
+INNER JOIN products AS p2 ON p1.vend_id = p2.vend_id
+WHERE p2.prod_id = 'DTNTR' AND p1.prod_id != 'DTNTR';
+
+-- 自联结经典场景：员工与经理（同一张员工表）
+SELECT e.name AS employee, m.name AS manager
+FROM employees AS e
+LEFT JOIN employees AS m ON e.manager_id = m.emp_id;
+```
+
+<Callout type="success" title="自联结 vs 子查询">
+自联结和子查询经常可以互相替代。自联结的优势：①性能通常更好（数据库优化器更擅长优化JOIN）；②语法更灵活。子查询的优势：①语义更直观；②某些场景下更简洁。对于"查找与X相关联的同类记录"这类问题，推荐优先用自联结。
+</Callout>
+
+## JOIN使用要点
+
+```
+-- ① ON 指定关联条件（不要用WHERE做关联条件，虽然MySQL允许）
+SELECT * FROM a INNER JOIN b ON a.id = b.a_id;  -- 推荐
+SELECT * FROM a, b WHERE a.id = b.a_id;          -- 旧语法，不推荐
+
+-- ② 多表JOIN注意性能：表越多越慢
+-- ③ JOIN条件列应有索引（通常是外键列）
+-- ④ LEFT JOIN 注意 NULL 行的后续处理
+-- ⑤ 表别名是JOIN的标配——让SQL简洁可读
+```
+
+<Glossary>
+
+<GlossaryItem term="INNER JOIN">
+内联结，最常用的JOIN类型。只返回两表中在关联列（ON条件）上匹配的行。左表或右表中没有匹配的行不会出现在结果中。可以理解为取两表的"交集"。
+</GlossaryItem>
+
+<GlossaryItem term="LEFT JOIN">
+左外联结，返回左表的全部行。如果右表有匹配则拼接右表列，没有匹配则右表列为NULL。常用于"查询所有A及其关联的B（包括没有关联B的A）"。配合 `WHERE b.id IS NULL` 可以实现"反连接"——查询没有关联B的A。
+</GlossaryItem>
+
+<GlossaryItem term="自联结（Self-Join）">
+同一张表通过不同别名当作两份来JOIN。经典场景：①查找同一分组的其他记录（同一供应商的其他产品）；②层级关系（员工与经理在同一张表）。自联结通常比相关子查询性能更好。
+</GlossaryItem>
+
+<GlossaryItem term="ON子句">
+JOIN中指定关联条件的子句。`JOIN 表B ON 表A.列 = 表B.列`。ON条件定义了两表如何关联。虽然MySQL允许用WHERE替代ON做关联条件，但ON更符合SQL标准，也让关联条件和过滤条件分离，语义更清晰。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：INNER JOIN和LEFT JOIN的区别是什么？分别适合什么场景？
+
+<Answer>
+INNER JOIN只返回两表在关联列上匹配的行，不匹配的行被排除。LEFT JOIN返回左表的全部行，右表无匹配时右表列填NULL。场景：①INNER JOIN适合"只关心有关联的数据"——如查询有订单的客户的产品信息；②LEFT JOIN适合"需要保留左表全部数据"——如查询所有客户及其订单（包括没下过单的客户）。LEFT JOIN配合 `WHERE 右表.列 IS NULL` 还可实现"反连接"——查询没有关联记录的行，如"没有下过单的客户"。
+</Answer>
+
+**问题 2**：什么是自联结？举一个实际使用场景，并说明它与子查询相比的优势。
+
+<Answer>
+自联结是同一张表通过不同别名当作两份来JOIN。实际场景：查询与产品DTNTR同一供应商的其他产品。SQL：`SELECT p1.prod_id FROM products AS p1 JOIN products AS p2 ON p1.vend_id = p2.vend_id WHERE p2.prod_id = 'DTNTR' AND p1.prod_id != 'DTNTR'`。与子查询（`WHERE vend_id = (SELECT vend_id FROM products WHERE prod_id = 'DTNTR')`）相比的优势：①性能通常更好——数据库优化器更擅长优化JOIN而非子查询；②语法更灵活——可以在SELECT中同时引用p1和p2的列；③可以处理更复杂的多列关联条件。
+</Answer>
+
+**问题 3**：为什么在JOIN中推荐使用ON子句而不是WHERE来指定关联条件？
+
+<Answer>
+推荐用ON指定关联条件的原因：①符合SQL标准——ON是JOIN的标准语法，WHERE是旧式逗号连接语法的遗留写法；②语义清晰——ON表示"两表如何关联"，WHERE表示"如何过滤结果"，职责分离让SQL更易读；③对外联结有意义——在LEFT JOIN中，ON条件决定如何匹配（不影响左表全部行返回），WHERE条件决定最终过滤（会过滤掉NULL行），两者行为不同；④可维护性——修改过滤条件时只需改WHERE，不影响关联逻辑。
+</Answer>
+
+**问题 4**：如何用LEFT JOIN实现"查询没有下过订单的客户"？
+
+<Answer>
+使用LEFT JOIN配合IS NULL过滤：`SELECT c.cust_name FROM customers AS c LEFT JOIN orders AS o ON c.cust_id = o.cust_id WHERE o.order_num IS NULL`。原理：LEFT JOIN返回所有客户，没有订单的客户其orders表列为NULL。通过 `WHERE o.order_num IS NULL` 过滤出这些NULL行，就是没有订单的客户。这被称为"反连接"（Anti-Join），比用NOT IN子查询更安全（不会受NULL影响）也更高效。注意必须用LEFT JOIN不能是INNER JOIN，否则没有订单的客户一开始就被排除了。
+</Answer>
+
+</Exercises>
