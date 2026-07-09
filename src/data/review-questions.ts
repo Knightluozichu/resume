@@ -1775,6 +1775,16 @@ import { sqtJoinsQuestions } from "./review/sqt-joins";
 import { sqtSubqueriesQuestions } from "./review/sqt-subqueries";
 import { sqtAdvancedSqlQuestions } from "./review/sqt-advanced-sql";
 import { sqtFinalReviewQuestions } from "./review/sqt-final-review";
+import { dscLearningMapQuestions } from "./review/dsc-learning-map";
+import { dscRelationalModelQuestions } from "./review/dsc-relational-model";
+import { dscSqlRelationalAlgebraQuestions } from "./review/dsc-sql-relational-algebra";
+import { dscDatabaseDesignQuestions } from "./review/dsc-database-design";
+import { dscStorageIndexingQuestions } from "./review/dsc-storage-indexing";
+import { dscQueryProcessingQuestions } from "./review/dsc-query-processing";
+import { dscTransactionsQuestions } from "./review/dsc-transactions";
+import { dscConcurrencyControlQuestions } from "./review/dsc-concurrency-control";
+import { dscRecoverySystemsQuestions } from "./review/dsc-recovery-systems";
+import { dscFinalReviewQuestions } from "./review/dsc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3585,6 +3595,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...sqtSubqueriesQuestions,
   ...sqtAdvancedSqlQuestions,
   ...sqtFinalReviewQuestions,
+  ...dscLearningMapQuestions,
+  ...dscRelationalModelQuestions,
+  ...dscSqlRelationalAlgebraQuestions,
+  ...dscDatabaseDesignQuestions,
+  ...dscStorageIndexingQuestions,
+  ...dscQueryProcessingQuestions,
+  ...dscTransactionsQuestions,
+  ...dscConcurrencyControlQuestions,
+  ...dscRecoverySystemsQuestions,
+  ...dscFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

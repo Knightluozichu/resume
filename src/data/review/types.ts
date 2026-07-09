@@ -1898,7 +1898,17 @@ export type ReviewChapterSlug =
   | "sqt-joins"
   | "sqt-subqueries"
   | "sqt-advanced-sql"
-  | "sqt-final-review";
+  | "sqt-final-review"
+  | "dsc-learning-map"
+  | "dsc-relational-model"
+  | "dsc-sql-relational-algebra"
+  | "dsc-database-design"
+  | "dsc-storage-indexing"
+  | "dsc-query-processing"
+  | "dsc-transactions"
+  | "dsc-concurrency-control"
+  | "dsc-recovery-systems"
+  | "dsc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3801,6 +3811,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "sqt-subqueries": "子查询与组合查询",
   "sqt-advanced-sql": "高级SQL",
   "sqt-final-review": "全书复习",
+  "dsc-learning-map": "全书学习地图",
+  "dsc-relational-model": "关系模型",
+  "dsc-sql-relational-algebra": "SQL与关系代数",
+  "dsc-database-design": "数据库设计与ER模型",
+  "dsc-storage-indexing": "存储与索引",
+  "dsc-query-processing": "查询处理与优化",
+  "dsc-transactions": "事务管理",
+  "dsc-concurrency-control": "并发控制",
+  "dsc-recovery-systems": "恢复系统",
+  "dsc-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

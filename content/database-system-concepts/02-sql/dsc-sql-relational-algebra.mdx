@@ -1,0 +1,190 @@
+---
+title: "SQL与关系代数"
+type: B
+section: "数据库"
+order: 2
+description: "SQL语言分类与关系代数运算——从声明式SQL到过程化代数的完整对应"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { DscSqlRelationalAlgebraDiagram } from "@/components/mdx/database-system-concepts/diagrams/dsc-sql-relational-algebra";
+
+<Objectives>
+
+- 掌握 SQL 的三类语言：DDL、DML、DCL
+- 理解关系代数的基本运算：选择、投影、连接、并、差、笛卡尔积、重命名
+- 建立 SQL 子句与关系代数运算的对应关系
+- 理解关系代数作为过程化查询语言与 SQL 作为声明式语言的区别
+
+</Objectives>
+
+## SQL 与关系代数的对应
+
+<DscSqlRelationalAlgebraDiagram />
+
+SQL 是关系模型的声明式查询语言——你写"要什么"，数据库决定"怎么取"。关系代数是关系模型的过程化查询语言——你写"怎么取"，用运算组合表达查询。查询优化器的工作，就是把 SQL 翻译成关系代数，再在等价代数式中选最低成本的执行方案。
+
+## SQL 语言分类
+
+```
+// SQL 三类语言
+// DDL 数据定义语言：定义和修改结构
+//   └── CREATE / ALTER / DROP
+// DML 数据操作语言：操作数据
+//   └── SELECT / INSERT / UPDATE / DELETE
+// DCL 数据控制语言：控制权限
+//   └── GRANT / REVOKE
+```
+
+| 分类 | 全称 | 语句 | 作用 |
+|------|------|------|------|
+| DDL | 数据定义 | `CREATE/ALTER/DROP` | 定义和修改表结构 |
+| DML | 数据操作 | `SELECT/INSERT/UPDATE/DELETE` | 查询和修改数据 |
+| DCL | 数据控制 | `GRANT/REVOKE` | 控制访问权限 |
+
+```
+-- DDL：建表
+CREATE TABLE course (
+  course_id   VARCHAR(10) PRIMARY KEY,
+  title       VARCHAR(100) NOT NULL,
+  credits     INT CHECK (credits > 0)
+);
+
+-- DML：查询与修改
+SELECT title FROM course WHERE credits > 3;
+INSERT INTO course VALUES ('CS101', '数据库', 4);
+UPDATE course SET credits = 3 WHERE course_id = 'CS101';
+DELETE FROM course WHERE course_id = 'CS101';
+
+-- DCL：授权
+GRANT SELECT ON course TO student_user;
+```
+
+## 关系代数基本运算
+
+关系代数用一组运算符对关系进行操作，结果是新的关系（封闭性）：
+
+| 运算 | 符号 | 对应 SQL | 含义 |
+|------|------|----------|------|
+| 选择 Select | `σ` | `WHERE` | 按条件选行（水平过滤） |
+| 投影 Project | `π` | `SELECT 列` | 选列并去重（垂直过滤） |
+| 笛卡尔积 | `×` | `FROM A, B` | 两表所有行的组合 |
+| 连接 Join | `⋈` | `JOIN ... ON` | 按条件连接两表 |
+| 自然连接 | `⋈` | `JOIN`（同名属性） | 按相同列名等值连接并去重复列 |
+| 并 Union | `∪` | `UNION` | 合并两表并去重 |
+| 差 Difference | `−` | `EXCEPT` | A 有但 B 没有的行 |
+| 交 Intersection | `∩` | `INTERSECT` | 两表共有的行 |
+| 重命名 Rename | `ρ` | `AS 别名` | 改关系或属性名 |
+
+```
+// 关系代数是过程化的：明确写出运算顺序
+// 查询"计算机系的学生姓名"
+//
+// SQL（声明式）：
+//   SELECT name FROM student WHERE dept_id = 'CS';
+//
+// 关系代数（过程化）：
+//   π_name( σ_dept_id='CS'(student) )
+//
+// 执行顺序（从内到外）：
+//   1. σ_dept_id='CS'(student)  → 从 student 选出 dept_id='CS' 的行
+//   2. π_name(...)              → 从结果投影 name 列
+```
+
+<Callout type="info" title="选择与投影的区别">
+选择 `σ` 是"选行"（水平过滤，保留满足条件的元组），对应 SQL 的 `WHERE`。投影 `π` 是"选列"（垂直过滤，保留指定属性并自动去重），对应 SQL 的 `SELECT 列表`。两者常组合使用：先选行再选列。
+</Callout>
+
+## 连接运算
+
+连接是关系代数最重要的运算之一，用于组合多表数据：
+
+```
+// θ 连接：按任意条件 θ 连接
+//   A ⋈_θ B = σ_θ(A × B)
+//
+// 等值连接：θ 为相等条件
+//   A ⋈_A.id=B.aid B
+//
+// 自然连接：按所有同名属性等值连接，并去重复列
+//   A ⋈ B
+//
+// SQL 对应：
+//   SELECT * FROM A JOIN B ON A.id = B.aid;   -- 等值连接
+//   SELECT * FROM A NATURAL JOIN B;            -- 自然连接
+```
+
+<Callout type="warning" title="笛卡尔积的代价">
+笛卡尔积 `A × B` 产生 `|A| × |B|` 行，规模可能爆炸。实际查询几乎总用连接（带条件）而非裸笛卡尔积。查询优化器的一项重要工作就是消除无意义的笛卡尔积。
+</Callout>
+
+## 运算的组合与等价
+
+关系代数运算可以组合成复杂的表达式树，且存在等价变换规则：
+
+```
+// 等价规则（查询优化的基础）
+// 1. 选择级联：σ_c1(σ_c2(R)) ≡ σ_c1∧c2(R)
+// 2. 选择下推：σ_c(R × S) ≡ σ_c(R) × S   （尽早过滤减数据量）
+// 3. 投影下推：π_L(R × S) ≡ π_L1(R) × π_L2(S)
+// 4. 连接交换：R ⋈ S ≡ S ⋈ R
+// 5. 选择与投影交换：σ_c(π_L(R)) ≡ π_L(σ_c(R))（当 c 只涉及 L 中属性）
+```
+
+这些等价规则是查询优化器做"代数优化"的理论基础——通过把选择和投影"下推"到表达式树底部（尽早执行），减少中间结果规模，降低查询代价。
+
+<Glossary>
+
+<GlossaryItem term="SQL三类语言">
+DDL（数据定义语言）用于定义和修改结构：CREATE/ALTER/DROP。DML（数据操作语言）用于查询和修改数据：SELECT/INSERT/UPDATE/DELETE。DCL（数据控制语言）用于控制访问权限：GRANT/REVOKE。三者分别对应"建结构""操作数据""管权限"。
+</GlossaryItem>
+
+<GlossaryItem term="关系代数">
+关系代数是关系模型的过程化查询语言，用一组运算符（选择σ、投影π、连接⋈、笛卡尔积×、并∪、差−、交∩、重命名ρ）对关系进行操作。运算结果是新关系（封闭性），可继续参与运算组合成复杂查询。它是 SQL 的理论基础，也是查询优化的数学工具。
+</GlossaryItem>
+
+<GlossaryItem term="选择σ与投影π">
+选择 σ 是水平过滤——按条件选出满足的元组（行），对应 SQL 的 WHERE。投影 π 是垂直过滤——选出指定属性并自动去重（列），对应 SQL 的 SELECT 列表。两者常组合：π_name(σ_dept='CS'(student)) 表示"先选出计算机系的学生，再取姓名列"。
+</GlossaryItem>
+
+<GlossaryItem term="声明式与过程化">
+SQL 是声明式语言——你写"要什么数据"，数据库决定"怎么取"，由查询优化器选执行方案。关系代数是过程化语言——你写"怎么取"，用运算顺序明确表达查询步骤。SQL 翻译为关系代数表达式树后，优化器用等价规则变换它，选最低代价的执行计划。
+</GlossaryItem>
+
+<GlossaryItem term="代数等价规则">
+关系代数表达式可等价变换，如选择级联（σ_c1(σ_c2(R))=σ_c1∧c2(R)）、选择下推（尽早过滤减数据）、连接交换（R⋈S=S⋈R）。这些规则是查询优化的理论基础——优化器在等价表达式集合中搜索代价最低的方案，核心策略是把选择和投影下推到树底部以减小中间结果。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：SQL 分为哪三类语言？各有什么作用并举例。
+
+<Answer>
+①DDL 数据定义语言：定义和修改表结构，语句 CREATE/ALTER/DROP，如 `CREATE TABLE course(...)`。②DML 数据操作语言：查询和修改数据，语句 SELECT/INSERT/UPDATE/DELETE，如 `SELECT title FROM course WHERE credits>3`。③DCL 数据控制语言：控制访问权限，语句 GRANT/REVOKE，如 `GRANT SELECT ON course TO user`。三者分别对应"建结构""操作数据""管权限"。
+</Answer>
+
+**问题 2**：将 SQL 语句 `SELECT name FROM student WHERE dept_id='CS'` 翻译为关系代数，并说明执行顺序。
+
+<Answer>
+关系代数：`π_name( σ_dept_id='CS'(student) )`。执行顺序（从内到外）：①先执行选择 `σ_dept_id='CS'(student)`，从 student 关系中选出 dept_id='CS' 的所有元组（行），得到中间结果；②再执行投影 `π_name(...)`，从中间结果中取 name 列并去重，得到最终结果。这体现了关系代数的封闭性——每步运算结果是关系，可继续参与下一步运算。
+</Answer>
+
+**问题 3**：选择 σ 和投影 π 有什么区别？它们分别对应 SQL 的什么子句？
+
+<Answer>
+选择 σ 是"水平过滤"——按条件选出满足条件的元组（行），保留行不变列，对应 SQL 的 WHERE 子句。投影 π 是"垂直过滤"——选出指定属性（列）并自动去重，保留列不变行数（可能因去重减少），对应 SQL 的 SELECT 列表。区别：σ 作用于行，π 作用于列；σ 用条件筛选，π 用列名选取。两者常组合使用，如 `π_name(σ_c(student))` 表示先选行再选列。
+</Answer>
+
+**问题 4**：什么是关系代数的等价规则？为什么它对查询优化很重要？
+
+<Answer>
+等价规则指关系代数表达式可以变换为语义相同的不同形式，如选择级联 `σ_c1(σ_c2(R))=σ_c1∧c2(R)`、选择下推 `σ_c(R×S)=σ_c(R)×S`、连接交换 `R⋈S=S⋈R`。重要性：查询优化器把 SQL 翻译成关系代数表达式树后，用等价规则生成所有等价表达式，在其中搜索代价最低的执行计划。核心策略是把选择和投影"下推"到树底部（尽早执行），减小中间结果规模，从而降低 IO 和计算代价。没有等价规则，优化器就无法安全地重排查询。
+</Answer>
+
+</Exercises>
