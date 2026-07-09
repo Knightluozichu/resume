@@ -238,6 +238,7 @@ export const BOOK_ORDER = [
   "illustrated-http",
   "illustrated-server-network",
   "computer-networks-top-down",
+  "http-definitive-guide",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -416,6 +417,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "illustrated-http": "图解HTTP",
   "illustrated-server-network": "图解服务端网络架构",
   "computer-networks-top-down": "计算机网络：自顶向下方法",
+  "http-definitive-guide": "HTTP权威指南",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1905,6 +1905,16 @@ import { cntLinkLayerQuestions } from "./review/cnt-link-layer";
 import { cntWirelessMobileQuestions } from "./review/cnt-wireless-mobile";
 import { cntNetworkSecurityQuestions } from "./review/cnt-network-security";
 import { cntFinalReviewQuestions } from "./review/cnt-final-review";
+import { hdgLearningMapQuestions } from "./review/hdg-learning-map";
+import { hdgHttpMessagesQuestions } from "./review/hdg-http-messages";
+import { hdgUrlResourceQuestions } from "./review/hdg-url-resource";
+import { hdgProxyGatewayQuestions } from "./review/hdg-proxy-gateway";
+import { hdgCachingQuestions } from "./review/hdg-caching";
+import { hdgAuthenticationQuestions } from "./review/hdg-authentication";
+import { hdgHttpsSslQuestions } from "./review/hdg-https-ssl";
+import { hdgContentNegotiationQuestions } from "./review/hdg-content-negotiation";
+import { hdgWebHostingQuestions } from "./review/hdg-web-hosting";
+import { hdgFinalReviewQuestions } from "./review/hdg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3845,6 +3855,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cntWirelessMobileQuestions,
   ...cntNetworkSecurityQuestions,
   ...cntFinalReviewQuestions,
+  ...hdgLearningMapQuestions,
+  ...hdgHttpMessagesQuestions,
+  ...hdgUrlResourceQuestions,
+  ...hdgProxyGatewayQuestions,
+  ...hdgCachingQuestions,
+  ...hdgAuthenticationQuestions,
+  ...hdgHttpsSslQuestions,
+  ...hdgContentNegotiationQuestions,
+  ...hdgWebHostingQuestions,
+  ...hdgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

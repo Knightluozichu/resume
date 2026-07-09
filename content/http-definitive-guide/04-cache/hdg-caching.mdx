@@ -1,0 +1,176 @@
+---
+title: "缓存体系"
+type: A
+section: "网络"
+order: 4
+description: "HTTP缓存命中/未命中、条件请求验证与Cache-Control指令体系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { HdgCachingDiagram } from "@/components/mdx/http-definitive-guide/diagrams/hdg-caching";
+
+<Objectives>
+
+- 掌握缓存命中与未命中的流程及缓存层次结构
+- 理解条件请求（If-Modified-Since / If-None-Match）的验证机制
+- 掌握 Cache-Control 核心指令的语义与使用场景
+- 了解缓存新鲜度模型与启发式过期计算
+
+</Objectives>
+
+## 缓存基础
+
+<HdgCachingDiagram />
+
+HTTP 缓存是存储响应副本的机制，目的是减少网络延迟和服务器负载。缓存可部署在浏览器、代理、CDN 等多个层次。
+
+### 命中与未命中
+
+```text
+缓存命中（Cache Hit）：缓存有有效副本 → 直接返回（零延迟）
+缓存未命中（Cache Miss）：缓存无副本或已过期 → 转发到源服务器
+缓存验证：副本过期但可能仍有效 → 条件请求验证 → 304 或 200
+```
+
+## 缓存验证（条件请求）
+
+当缓存副本过期后，缓存向源服务器发送 **条件请求** 验证副本是否仍有效：
+
+### 基于 Last-Modified 的验证
+
+```text
+首次响应：
+  Last-Modified: Wed, 08 Jul 2026 10:00:00 GMT
+  Cache-Control: max-age=3600
+
+1小时后（过期），缓存验证请求：
+  If-Modified-Since: Wed, 08 Jul 2026 10:00:00 GMT
+
+服务器响应：
+  304 Not Modified（未修改，用缓存副本）
+  或
+  200 OK + 新内容（已修改，用新副本）
+```
+
+### 基于 ETag 的验证
+
+```text
+首次响应：
+  ETag: "abc123"
+  Cache-Control: max-age=3600
+
+1小时后（过期），缓存验证请求：
+  If-None-Match: "abc123"
+
+服务器响应：
+  304 Not Modified（ETag 一致，用缓存副本）
+  或
+  200 OK + 新 ETag + 新内容（不一致，用新副本）
+```
+
+<Callout type="warning" title="ETag vs Last-Modified">
+
+ETag 比 Last-Modified 更精确：Last-Modified 的精度为秒，1 秒内多次修改无法检测；ETag 是内容哈希，任何修改都能检测。但 ETag 计算有服务器开销。两者可共存——服务器优先检查 If-None-Match，再检查 If-Modified-Since。
+
+</Callout>
+
+## Cache-Control 指令
+
+| 指令 | 作用 | 示例 |
+|------|------|------|
+| `max-age=N` | 缓存新鲜期 N 秒 | `max-age=3600` |
+| `no-cache` | 不能直接用，必须先验证 | `no-cache` |
+| `no-store` | 禁止缓存存储 | `no-store` |
+| `public` | 可被共享缓存（代理/CDN） | `public` |
+| `private` | 仅浏览器缓存 | `private` |
+| `must-revalidate` | 过期后必须验证 | `must-revalidate` |
+| `s-maxage=N` | 共享缓存新鲜期 | `s-maxage=7200` |
+
+```text
+Cache-Control 策略决策树：
+  敏感数据？         → no-store（完全不缓存）
+  每次需最新？       → no-cache（每次验证）
+  可缓存但限时？     → max-age=N（N秒后验证）
+  个人化内容？       → private（仅浏览器缓存）
+  可被 CDN 缓存？    → public + s-maxage
+```
+
+## 缓存新鲜度模型
+
+### 文档新鲜度
+
+```text
+新鲜期 = max-age（或 Expires - Date）
+使用期 = now - Date（自服务器生成以来的时间）
+剩余新鲜期 = 新鲜期 - 使用期
+
+剩余 > 0 → 新鲜，直接用缓存（命中）
+剩余 ≤ 0 → 过期，发条件请求验证
+```
+
+### 启发式过期（LM-Factor）
+
+当响应没有 max-age/Expires 时，缓存可使用启发式估算过期时间：
+
+```text
+启发式过期时间 = (Date - Last-Modified) × 因子
+因子通常为 0.1（10%）
+
+示例：
+  Date: 10:00, Last-Modified: 09:00
+  差值 = 3600秒
+  启发式过期 = 3600 × 0.1 = 360秒
+```
+
+## 缓存层次
+
+```text
+浏览器缓存 → 代理缓存 → CDN 边缘缓存 → 源服务器
+   ↑            ↑            ↑
+  最近         中间         全球
+  容量小       共享         分布式
+```
+
+每一层都检查是否有有效缓存副本，命中则返回，未命中则转发到下一层。层级越靠用户命中延迟越低。
+
+<Glossary>
+
+<GlossaryItem term="缓存命中（Cache Hit）">
+缓存命中指缓存中有请求资源的有效副本，可以直接返回而无需向源服务器发起请求。有效副本指处于新鲜期内（max-age 未过期）的副本。命中时响应延迟接近零（本地内存读取），是最优情况。命中率 = 命中次数 / 总请求次数，是衡量缓存效果的核心指标。提高命中率的方法：合理设置 max-age、使用 ETag 支持验证、部署多层缓存（浏览器+代理+CDN）。
+</GlossaryItem>
+
+<GlossaryItem term="条件请求（Conditional Request）">
+条件请求是缓存副本过期后向源服务器验证副本是否仍有效的机制。客户端在请求中携带 If-Modified-Since（上次修改时间）或 If-None-Match（ETag 值）首部。服务器检查资源是否变化：未变化返回 304 Not Modified（无响应体，客户端继续用缓存副本）；已变化返回 200 OK + 新内容。条件请求的优势：304 响应无响应体，带宽消耗极小；即使需要网络往返，也比完整传输资源高效。这是缓存「过期≠无效」的核心——过期只是触发验证，不代表副本不可用。
+</GlossaryItem>
+
+<GlossaryItem term="ETag（实体标签）">
+ETag 是资源的唯一标识符（通常是内容哈希），由服务器在响应中返回。资源内容变化时 ETag 变化。缓存验证时，客户端发送 If-None-Match 携带上次的 ETag，服务器比较当前 ETag——一致则 304（未修改），不一致则 200（新内容）。ETag 比 Last-Modified 更精确：Last-Modified 精度为秒，1 秒内的多次修改无法检测；ETag 基于内容，任何修改都能识别。但 ETag 计算有服务器开销，且分布式部署时需保证不同服务器对同一资源生成相同 ETag（否则导致不必要的不命中）。
+</GlossaryItem>
+
+<GlossaryItem term="Cache-Control 指令">
+Cache-Control 是 HTTP/1.1 的缓存控制首部，核心指令：①max-age=N——缓存新鲜期 N 秒，期内直接用 ②no-cache——不能直接用缓存，每次必须向源服务器验证（不是不缓存）③no-store——完全禁止缓存存储（敏感数据）④public/private——是否可被共享缓存（代理/CDN）缓存 ⑤must-revalidate——过期后必须验证，不能用过期副本 ⑥s-maxage=N——共享缓存的新鲜期（覆盖 max-age）。策略选择：敏感数据用 no-store，需实时数据用 no-cache，可缓存数据用 max-age，个人内容用 private。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 缓存命中和未命中分别是什么？条件请求的作用是什么？
+
+<Answer>
+
+缓存命中：缓存中有请求资源的有效副本（在 max-age 新鲜期内），直接返回无需请求源服务器，延迟接近零。缓存未命中：缓存中没有副本或副本已过期，需要向源服务器请求资源。条件请求的作用：当缓存副本过期后，不直接丢弃，而是向源服务器发送条件请求验证副本是否仍有效——客户端携带 If-Modified-Since（上次修改时间）或 If-None-Match（ETag），服务器检查资源是否变化：未变化返回 304 Not Modified（无响应体，继续用缓存副本）；已变化返回 200 OK + 新内容。条件请求的优势是即使需要网络往返，304 响应无响应体，带宽消耗极小，远比完整传输资源高效。它体现了「过期不等于无效」的核心思想。
+</Answer>
+
+**问题 2：** Cache-Control 的 no-cache 和 no-store 有什么区别？max-age 和 s-maxage 有什么区别？
+
+<Answer>
+
+no-cache 和 no-store 的区别：①no-cache 不是不缓存——缓存可以存储副本，但每次使用前必须向源服务器发送条件请求验证，验证通过（304）才能用缓存副本。适用于需要实时性但可减少带宽的场景②no-store 是完全禁止缓存——任何缓存（浏览器/代理/CDN）都不得存储该响应的任何部分。适用于密码、银行数据等敏感信息。max-age 和 s-maxage 的区别：①max-age=N 对所有缓存（浏览器和共享缓存）生效，定义新鲜期 N 秒②s-maxage=N 只对共享缓存（代理/CDN）生效，覆盖 max-age。应用场景：浏览器缓存 1 小时（max-age=3600），CDN 缓存 2 小时（s-maxage=7200），实现不同层级差异化缓存策略。
+</Answer>
+
+</Exercises>

@@ -2028,7 +2028,17 @@ export type ReviewChapterSlug =
   | "cnt-link-layer"
   | "cnt-wireless-mobile"
   | "cnt-network-security"
-  | "cnt-final-review";
+  | "cnt-final-review"
+  | "hdg-learning-map"
+  | "hdg-http-messages"
+  | "hdg-url-resource"
+  | "hdg-proxy-gateway"
+  | "hdg-caching"
+  | "hdg-authentication"
+  | "hdg-https-ssl"
+  | "hdg-content-negotiation"
+  | "hdg-web-hosting"
+  | "hdg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4061,6 +4071,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cnt-wireless-mobile": "无线网络与移动性",
   "cnt-network-security": "网络安全实践",
   "cnt-final-review": "计算机网络自顶向下方法全书复习与知识整合",
+  "hdg-learning-map": "HTTP权威指南全书学习地图",
+  "hdg-http-messages": "HTTP报文与连接",
+  "hdg-url-resource": "URL与资源定位",
+  "hdg-proxy-gateway": "代理与网关",
+  "hdg-caching": "缓存体系",
+  "hdg-authentication": "认证与安全",
+  "hdg-https-ssl": "HTTPS与SSL/TLS",
+  "hdg-content-negotiation": "内容协商与转码",
+  "hdg-web-hosting": "Web托管与部署",
+  "hdg-final-review": "HTTP权威指南全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

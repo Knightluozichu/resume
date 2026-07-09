@@ -1,0 +1,181 @@
+---
+title: "Web托管与部署"
+type: C
+section: "网络"
+order: 8
+description: "虚拟主机、HTTP重定向与负载均衡架构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { HdgWebHostingDiagram } from "@/components/mdx/http-definitive-guide/diagrams/hdg-web-hosting";
+
+<Objectives>
+
+- 掌握基于 IP 和基于名字的虚拟主机原理
+- 理解 HTTP 重定向的类型、用途与代价
+- 掌握负载均衡的架构与常见调度策略
+- 了解 Web 托管的典型部署模式
+
+</Objectives>
+
+## 虚拟主机
+
+<HdgWebHostingDiagram />
+
+虚拟主机允许 **一台物理服务器** 托管多个 Web 站点。
+
+### 基于 IP 的虚拟主机
+
+每个站点绑定不同 IP 地址，服务器根据目标 IP 区分站点。
+
+```text
+IP 192.168.1.10 → 站点 A（www.site-a.com）
+IP 192.168.1.11 → 站点 B（www.site-b.com）
+IP 192.168.1.12 → 站点 C（www.site-c.com）
+
+服务器根据接收到的 TCP 连接的目标 IP 判断是哪个站点
+```
+
+### 基于名字的虚拟主机
+
+多个站点共享同一 IP，通过 **Host 首部** 区分。
+
+```text
+客户端请求：
+  GET /index.html HTTP/1.1
+  Host: www.site-a.com    ← 通过 Host 首部区分站点
+
+同一 IP 192.168.1.10：
+  Host: www.site-a.com → 站点 A
+  Host: www.site-b.com → 站点 B
+  Host: www.site-c.com → 站点 C
+```
+
+| 特性 | 基于 IP | 基于名字 |
+|------|---------|----------|
+| IP 消耗 | 每站一 IP（消耗大） | 共享 IP（节省） |
+| 区分依据 | 目标 IP | Host 首部 |
+| SSL 支持 | 简单（每 IP 独立证书） | 需 SNI（多证书共享 443） |
+| 兼容性 | 好（HTTP/1.0 也支持） | 需 HTTP/1.1 |
+
+<Callout type="info" title="Host 首部为什么重要">
+
+HTTP/1.1 强制要求 Host 首部——它使得基于名字的虚拟主机成为可能，一台服务器一个 IP 就能托管无数站点。没有 Host 首部，服务器无法区分同一 IP 上的不同站点。这也是为什么 CDN 和共享主机能以极低成本服务大量网站。
+
+</Callout>
+
+## HTTP 重定向
+
+服务器通过 3xx 状态码告诉客户端去访问另一个 URL。
+
+### 重定向类型
+
+```text
+301 Moved Permanently  — 永久重定向，浏览器缓存，下次直接跳新 URL
+302 Found              — 临时重定向，不缓存，每次都经旧 URL
+303 See Other          — POST 完成后用 GET 跳转（PRG 模式）
+307 Temporary Redirect — 临时重定向，保持原请求方法
+308 Permanent Redirect — 永久重定向，保持原请求方法
+```
+
+### 重定向流程
+
+```text
+1. 客户端 → 服务器：GET /old-page HTTP/1.1
+2. 服务器 → 客户端：
+   HTTP/1.1 301 Moved Permanently
+   Location: https://www.example.com/new-page
+3. 客户端 → 服务器：GET /new-page HTTP/1.1
+4. 服务器 → 客户端：200 OK + 页面内容
+```
+
+### 重定向用途
+
+```text
+URL 规范化    — example.com → www.example.com
+HTTP→HTTPS   — http:// → https://（安全升级）
+域名迁移      — old.com → new.com（301 保持 SEO）
+A/B 测试     — 随机重定向到不同版本
+负载均衡      — 重定向到负载较低的服务器
+PRG 模式      — POST 后 303 跳转 GET（防重复提交）
+```
+
+<Callout type="warning" title="重定向的代价">
+
+每次重定向增加一个 RTT（客户端→服务器→重定向→新服务器）。重定向链（A→B→C→D）会导致显著延迟。应尽量减少重定向跳数，301 可被浏览器缓存避免后续跳转。
+
+</Callout>
+
+## 负载均衡
+
+将请求分发到多台后端服务器，提高吞吐和可用性。
+
+### 架构
+
+```text
+客户端 → 负载均衡器（LB / 反向代理）→ 服务器集群
+                                    ├── 服务器 1
+                                    ├── 服务器 2
+                                    └── 服务器 3
+```
+
+### 调度策略
+
+| 策略 | 原理 | 适用场景 |
+|------|------|----------|
+| 轮询 | 依次分配请求 | 服务器性能均等 |
+| 加权轮询 | 按权重比例分配 | 服务器性能不均 |
+| 最少连接 | 分配给连接最少的 | 请求处理时间差异大 |
+| IP 哈希 | 同 IP 固定到同一服务器 | 需要会话保持 |
+| URL 哈希 | 同 URL 固定到同一服务器 | 提高缓存命中率 |
+| 响应时间 | 分配给响应最快的 | 追求最低延迟 |
+
+### 负载均衡层次
+
+```text
+DNS 轮询   — DNS 返回多个 IP，客户端随机选一个（简单但粒度粗）
+四层 LB    — 基于 TCP/UDP 转发（LVS，性能高，不解析 HTTP）
+七层 LB    — 基于 HTTP 转发（Nginx/HAProxy，可基于 URL/Header 路由）
+```
+
+<Glossary>
+
+<GlossaryItem term="虚拟主机（Virtual Hosting）">
+虚拟主机是一台物理服务器托管多个 Web 站点的技术。两种实现：①基于 IP 的虚拟主机——每个站点绑定不同 IP 地址，服务器根据 TCP 连接的目标 IP 区分站点。优点：兼容 HTTP/1.0、SSL 证书独立简单。缺点：IP 地址消耗大②基于名字的虚拟主机——多个站点共享同一 IP，通过 HTTP Host 首部区分。HTTP/1.1 强制要求 Host 首部正是为了支持此模式。优点：节省 IP 地址、一台服务器可托管无数站点。缺点：需 HTTP/1.1+、HTTPS 需 SNI 支持。基于名字的虚拟主机是现代共享主机和 CDN 的基础。
+</GlossaryItem>
+
+<GlossaryItem term="HTTP 重定向（HTTP Redirection）">
+HTTP 重定向是服务器通过 3xx 状态码指示客户端去访问另一个 URL 的机制。类型：①301 永久重定向——浏览器缓存，下次直接跳新 URL，用于域名迁移/URL 规范化②302 临时重定向——不缓存，每次经旧 URL，用于临时跳转③303 See Other——POST 完成后用 GET 跳转（PRG 模式防重复提交）④307/308——保持原请求方法的临时/永久重定向。重定向通过 Location 首部指定目标 URL。用途：URL 规范化、HTTP→HTTPS 升级、域名迁移、A/B 测试、负载均衡。代价：每次重定向增加一个 RTT，重定向链导致延迟累积。
+</GlossaryItem>
+
+<GlossaryItem term="负载均衡（Load Balancing）">
+负载均衡是将请求分发到多台后端服务器以提高吞吐量和可用性的技术。架构：客户端→负载均衡器（LB/反向代理）→服务器集群。调度策略：①轮询——依次分配，适合性能均等②加权轮询——按权重分配，适合性能不均③最少连接——分配给连接最少的，适合请求耗时差异大④IP 哈希——同 IP 固定到同一服务器，用于会话保持⑤URL 哈希——同 URL 固定，提高缓存命中。层次：DNS 轮询（粗粒度）、四层 LB（TCP 转发，高性能）、七层 LB（HTTP 转发，可基于 URL/Header 路由）。负载均衡还提供健康检查（自动剔除故障服务器）和 SSL 终止（LB 解密 HTTPS）。
+</GlossaryItem>
+
+<GlossaryItem term="Host 首部（Host Header）">
+Host 首部是 HTTP/1.1 强制要求的请求首部，指定请求的目标主机名和端口（如 Host: www.example.com:443）。核心作用：支持基于名字的虚拟主机——多个站点共享同一 IP 地址时，服务器通过 Host 首部区分客户端要访问哪个站点。没有 Host 首部，服务器无法区分同一 IP 上的不同站点。Host 首部使得一台服务器一个 IP 托管无数网站成为可能，是现代 Web 托管的基础。HTTP/2 和 HTTP/3 保留了 Host 的语义（以 :authority 伪首部形式）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 基于 IP 的虚拟主机和基于名字的虚拟主机有什么区别？为什么 HTTP/1.1 强制要求 Host 首部？
+
+<Answer>
+
+区别：①基于 IP 的虚拟主机——每个站点绑定不同 IP 地址，服务器根据 TCP 连接的目标 IP 区分站点。优点：兼容 HTTP/1.0、SSL 独立简单。缺点：IP 地址消耗大②基于名字的虚拟主机——多个站点共享同一 IP，通过 HTTP Host 首部区分。优点：节省 IP、一台服务器托管无数站点。缺点：需 HTTP/1.1+、HTTPS 需 SNI。HTTP/1.1 强制要求 Host 首部的原因：没有 Host 首部，服务器无法知道客户端要访问同一 IP 上的哪个站点——请求行中的 URL 只有路径（如 GET /index.html），不含主机名。Host 首部提供了主机名信息（如 Host: www.site-a.com），服务器据此路由到对应站点。这使得基于名字的虚拟主机成为可能，一台服务器一个 IP 就能服务大量网站，大幅降低了 Web 托管成本。
+</Answer>
+
+**问题 2：** HTTP 重定向的 301 和 302 有什么区别？重定向有什么代价？
+
+<Answer>
+
+301 和 302 的区别：①301 Moved Permanently 是永久重定向——表示资源已永久移动到新 URL，浏览器会缓存这个重定向，后续访问旧 URL 时直接跳转到新 URL，不再请求旧服务器（减少 RTT）。用于域名迁移、URL 规范化、HTTP→HTTPS 升级等永久性变更②302 Found 是临时重定向——表示资源临时在另一 URL，浏览器不缓存，每次都先请求旧 URL 再跳转。用于临时维护、A/B 测试等临时性跳转。重定向的代价：①每次重定向增加一个完整的 RTT——客户端先请求旧 URL，服务器返回 3xx+Location，客户端再请求新 URL②重定向链（A→B→C→D）导致延迟累积，每多一跳多一个 RTT③搜索引擎爬虫遇到重定向链可能降低页面权重④移动端网络下重定向延迟更显著。优化方法：用 301 让浏览器缓存永久重定向、避免重定向链、DNS 级别做重定向（省去 HTTP 往返）。
+</Answer>
+
+</Exercises>
