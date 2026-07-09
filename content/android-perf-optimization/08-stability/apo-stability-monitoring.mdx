@@ -1,0 +1,289 @@
+---
+title: "稳定性与监控"
+type: A
+section: "Android开发"
+order: 8
+description: "掌握 ANR/Crash/OOM 三大稳定性问题的防护策略与线上监控体系建设"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { ApoStabilityMonitoringDiagram } from "@/components/mdx/android-perf-optimization/diagrams/apo-stability-monitoring";
+
+<Objectives>
+
+- 理解 ANR、Crash、OOM 三大稳定性问题的成因和防护策略
+- 掌握全局异常捕获（UncaughtExceptionHandler）和 Native Crash 处理
+- 学会用 Crashlytics 收集崩溃日志和线上性能监控
+- 建立「采集 → 上报 → 分析 → 修复」的稳定性监控闭环
+
+</Objectives>
+
+## 稳定性与监控全景
+
+<ApoStabilityMonitoringDiagram />
+
+稳定性是性能优化的最终保障：即使性能再好，崩溃率高、ANR 频发的 App 也无法留住用户。
+
+## 三大稳定性问题
+
+### ANR（Application Not Responding）
+
+```kotlin
+// ANR 触发条件：
+// Activity——主线程 5 秒内未响应输入事件
+// Service——onCreate/onStartCommand 执行超 20 秒
+// BroadcastReceiver——onReceive 执行超 10 秒（前台）
+
+// 常见原因：
+// 1. 主线程做 IO/DB/网络操作
+// 2. 主线程锁竞争（等待锁释放）
+// 3. Binder 调用阻塞（跨进程通信对方未响应）
+// 4. 主线程做大量计算（JSON 解析/排序）
+
+// ANR 日志分析：
+// /data/anr/traces.txt 记录 ANR 时所有线程的调用栈
+adb pull /data/anr/traces.txt
+// 关键信息：main 线程的 stack trace → 定位阻塞位置
+
+// 预防：
+// 1. StrictMode 检测主线程违规
+StrictMode.setThreadPolicy(
+    ThreadPolicy.Builder()
+        .detectDiskReads().detectDiskWrites()
+        .detectNetwork().detectCustomSlowCalls()
+        .penaltyLog().penaltyDeath().build()
+)
+// 2. 主线程只做 UI 操作，耗时操作异步
+// 3. 避免主线程持有锁
+```
+
+<Callout type="warning" title="ANR vs Crash">
+ANR 是系统弹窗让用户选择「等待」或「关闭」，不一定会杀进程。但如果用户选择关闭或系统自动杀，就等同于 Crash。ANR 率是稳定性核心指标。
+</Callout>
+
+### Crash
+
+```kotlin
+// Crash 分两类：
+// 1. Java Crash——未捕获的 RuntimeException
+//    常见：NullPointerException/ClassCastException/IndexOutOfBoundsException
+// 2. Native Crash——C/C++ 层信号错误
+//    常见：SIGSEGV(段错误)/SIGABRT(abort)/SIGBUS
+
+// Java Crash 全局捕获
+class CrashHandler : Thread.UncaughtExceptionHandler {
+    private val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
+
+    fun init() {
+        Thread.setDefaultUncaughtExceptionHandler(this)
+    }
+
+    override fun uncaughtException(t: Thread, e: Throwable) {
+        // 1. 收集崩溃信息
+        val crashInfo = collectCrashInfo(e)
+        // 2. 写入文件
+        saveToFile(crashInfo)
+        // 3. 上报到服务器
+        uploadCrash(crashInfo)
+        // 4. 交给默认处理器（终止进程）
+        defaultHandler?.uncaughtException(t, e)
+    }
+}
+
+// Native Crash 捕获（Breakpad/Crashpad）
+// Google Breakpad 是跨平台崩溃捕获库
+// 捕获信号 → 生成 minidump → 上传解析
+```
+
+### OOM（OutOfMemoryError）
+
+```kotlin
+// OOM 场景：
+// 1. Bitmap 过大未压缩——一张 4000x3000 ARGB_8888 = 48MB
+// 2. 内存泄漏——Activity 无法回收，累积导致堆满
+// 3. 短时间大量对象创建——如加载大列表全部数据
+
+// 预防 OOM：
+// 1. onTrimMemory 主动释放内存
+override fun onTrimMemory(level: Int) {
+    when (level) {
+        TRIM_MEMORY_RUNNING_LOW -> {
+            // 系统内存紧张，清空图片缓存
+            imageCache.evictAll()
+        }
+        TRIM_MEMORY_UI_HIDDEN -> {
+            // App 进入后台，释放 UI 相关资源
+        }
+    }
+}
+
+// 2. 大内存检测
+val maxMemory = Runtime.getRuntime().maxMemory() / 1024 / 1024 // MB
+val usedMemory = Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()
+if (usedMemory > maxMemory * 0.8) {
+    // 内存使用超 80%，主动释放
+    triggerMemoryRelease()
+}
+
+// 3. Bitmap 内存回收
+if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+    bitmap.recycle() // 主动回收（API 28+ 自动管理）
+}
+```
+
+## 线上监控体系
+
+### Crashlytics 崩溃收集
+
+```kotlin
+// Firebase Crashlytics——Google 官方崩溃收集
+// build.gradle:
+// implementation platform('com.google.firebase:firebase-bom:32.x')
+// implementation 'com.google.firebase:firebase-crashlytics'
+
+// 自动收集 Java Crash 和 Native Crash
+// 在 Firebase 控制台查看：
+// - 崩溃堆栈和设备信息
+// - 崩溃趋势（版本/设备/Android 版本）
+// - 影响用户数和崩溃率
+
+// 自定义日志（崩溃时附带）
+Crashlytics.log("User clicked button at $timestamp")
+Crashlytics.setUserIdentifier("user_123")
+
+// 自定义键值对
+Crashlytics.setCustomKey("session_id", sessionId)
+Crashlytics.setCustomKey("network_type", "wifi")
+
+// 手动上报非致命异常
+try {
+    riskyOperation()
+} catch (e: Exception) {
+    Crashlytics.recordException(e) // 不杀进程，只记录
+}
+```
+
+### 性能监控
+
+```kotlin
+// Firebase Performance——性能监控
+// 自动收集：App 启动时间、HTTP 请求耗时
+// 自定义指标：
+
+val trace = Firebase.performance.newTrace("load_user_data")
+trace.start()
+// ... 业务代码
+trace.stop()
+trace.putMetric("items_count", items.size.toLong())
+
+// 自定义帧率监控（Choreographer）
+class FrameRateMonitor : Choreographer.FrameCallback {
+    private var frameCount = 0
+    private var lastTime = System.currentTimeMillis()
+
+    override fun doFrame(frameTimeNanos: Long) {
+        frameCount++
+        val now = System.currentTimeMillis()
+        if (now - lastTime >= 1000) {
+            val fps = frameCount * 1000 / (now - lastTime)
+            if (fps < 50) {
+                // 帧率低于 50，上报
+                Crashlytics.log("Low FPS: $fps on ${currentActivity}")
+            }
+            frameCount = 0
+            lastTime = now
+        }
+        Choreographer.getInstance().postFrameCallback(this)
+    }
+}
+```
+
+### ANR 监控
+
+```kotlin
+// ANR 线上监控方案：
+// 1. WatchDog——定时检测主线程是否阻塞
+class ANRWatchDog : Thread() {
+    private val handler = Handler(Looper.getMainLooper())
+    @Volatile private var tick = 0
+    private val TIMEOUT = 5000L // 5 秒
+
+    override fun run() {
+        while (true) {
+            tick = 0
+            handler.post { tick = 1 }
+            Thread.sleep(TIMEOUT)
+            if (tick == 0) {
+                // 主线程 5 秒未响应 → 疑似 ANR
+                val stackTrace = mainLooper.thread.stackTrace
+                reportANR(stackTrace)
+            }
+        }
+    }
+}
+
+// 2. FileObserver 监听 /data/anr/traces.txt
+// 3. Crashlytics 自动收集 ANR（需开启）
+```
+
+## 稳定性指标
+
+| 指标 | 定义 | 目标值 |
+|------|------|--------|
+| Crash Rate | 日活用户中崩溃用户占比 | < 0.1% |
+| ANR Rate | 日活用户中 ANR 用户占比 | < 0.47% |
+| OOM Rate | 崩溃中 OOM 占比 | < 5% |
+| 无崩溃用户率 | 24h 无崩溃的日活占比 | > 99.9% |
+| 启动崩溃率 | 冷启动崩溃占比 | < 0.05% |
+
+<Glossary>
+
+<GlossaryItem term="UncaughtExceptionHandler">
+Java 全局未捕获异常处理器接口。通过 Thread.setDefaultUncaughtExceptionHandler() 设置自定义处理器，在未捕获异常导致线程终止前执行，用于收集崩溃堆栈、保存日志、上报服务器。
+</GlossaryItem>
+
+<GlossaryItem term="Breakpad">
+Google 开源的跨平台崩溃捕获库，用于捕获 Native Crash（C/C++ 层信号错误如 SIGSEGV）。生成 minidump 文件，包含崩溃时的内存状态和调用栈，上传到服务器用符号表解析。
+</GlossaryItem>
+
+<GlossaryItem term="onTrimMemory">
+Android 系统内存紧张时的回调接口。level 分为 UI 隐藏、内存紧张、运行中内存低、严重等不同级别。App 应根据级别释放不同优先级的资源（如缓存、非可见图片），避免被系统杀进程。
+</GlossaryItem>
+
+<GlossaryItem term="WatchDog 机制">
+看门狗机制，定时检测目标线程是否响应。ANR WatchDog 向主线程 post 任务并设置超时，如果超时后任务未执行说明主线程阻塞，疑似 ANR，此时抓取主线程调用栈并上报。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：ANR 的触发条件和常见原因是什么？如何预防和分析？
+
+<Answer>
+触发条件：①Activity——主线程 5 秒内未响应输入事件（如触摸、按键） ②Service——前台 Service onCreate/onStartCommand 执行超 20 秒，后台 Service 超 200 秒 ③BroadcastReceiver——前台 onReceive 超 10 秒，后台超 60 秒 ④ContentProvider——publish 超 10 秒。常见原因：①主线程做文件 IO/数据库操作/网络请求 ②主线程锁竞争——等待其他线程释放锁 ③Binder 调用阻塞——跨进程通信对方进程未及时响应 ④主线程做大量计算——JSON 解析、排序、正则匹配 ⑤主线程频繁 GC——内存抖动导致 Stop-The-World。预防：①StrictMode 检测主线程磁盘 IO/网络违规 ②所有耗时操作用协程/线程池异步 ③避免主线程持有锁，用 CAS 或细粒度锁 ④Binder 调用设超时和异步 ⑤减少内存抖动避免 GC。分析：ANR 后系统生成 /data/anr/traces.txt，用 `adb pull /data/anr/traces.txt` 导出，查看 main 线程的调用栈定位阻塞位置。线上用 WatchDog 机制监控主线程响应，超时后抓取调用栈上报。
+</Answer>
+
+**问题 2**：Java Crash 和 Native Crash 有什么区别？如何分别捕获？
+
+<Answer>
+区别：①Java Crash——JVM 层面的未捕获异常（NullPointerException、OutOfMemoryError 等），有完整的 Java 堆栈，可通过 try-catch 捕获 ②Native Crash——C/C++ 层面的信号错误（SIGSEGV 段错误、SIGABRT abort、SIGBUS 总线错误），发生在 JNI 层或底层库，Java try-catch 无法捕获，进程直接终止 ③Java Crash 堆栈可读性好（类名+方法名+行号），Native Crash 需要符号表解析 ④Java Crash 可恢复（UncaughtExceptionHandler 后可选择不退出），Native Crash 不可恢复（信号已导致内存损坏）。Java Crash 捕获：实现 Thread.UncaughtExceptionHandler 接口，用 Thread.setDefaultUncaughtExceptionHandler() 注册全局处理器，在 uncaughtException() 回调中收集堆栈、设备信息、自定义日志，写入文件并上传服务器，最后交给默认处理器终止进程。Native Crash 捕获：用 Google Breakpad 或 Crashpad 库——注册信号处理器（sigaction），在信号回调中安全的生成 minidump（避免在崩溃进程中做复杂操作），minidump 包含寄存器、栈内存、加载的共享库信息，上传到服务器后用符号表（.so 文件）解析出 C++ 函数名和行号。Crashlytics 自动集成了两者的捕获。
+</Answer>
+
+**问题 3**：设计一个线上性能监控方案，覆盖启动时间、帧率、内存三个维度。
+
+<Answer>
+三维度监控方案：①启动时间监控——在 Application.attachBaseContext() 记录冷启动开始时间，在第一个 Activity 的 onWindowFocusChanged() 记录结束时间，差值为冷启动时间。分段上报：Application.onCreate 时间、首个 Activity 创建时间。用 Firebase Performance Trace 或自定义上报。按版本/设备/渠道聚合统计 P50/P90/P99 ②帧率监控——用 Choreographer.postFrameCallback 注册 FrameCallback，doFrame() 中计算两次 frameTimeNanos 差值，差值/16ms - 1 = 丢帧数。每秒统计一次 FPS，低于 50 时记录当前 Activity 名和操作上下文并上报。也可统计「严重卡顿」（连续丢帧 > 3 帧的次数）③内存监控——每 30 秒采样一次 Runtime.totalMemory() - freeMemory()（已用堆内存）和 Debug.getNativeHeapAllocatedSize()（Native 内存）。内存使用率超过 80% 时触发预警。OOM 前最后一次采样上报。结合 LeakCanary 在 Debug 构建检测泄漏，Release 构建上报内存趋势。上报策略：批量上报（每 60 秒或满 50 条），使用 WorkManager 在 WiFi 时上传，避免监控本身影响性能。聚合维度：版本/设备型号/Android 版本/渠道，P50/P90/P99 分位值。告警阈值：启动 P90 > 3s、帧率低于 50 超过 10% 会话、内存 P90 > maxMemory*80%。
+</Answer>
+
+**问题 4**：稳定性优化的优先级和闭环是什么？如何持续降低 Crash 率？
+
+<Answer>
+优先级：①启动 Crash——用户根本进不去 App，最高优先级 ②主流程 Crash——首页/核心功能崩溃，影响所有用户 ③边缘场景 Crash——特定设备/特定操作触发 ④ANR——影响体验但不一定杀进程 ⑤OOM——可预防和降级。闭环：采集（Crashlytics 自动收集+自定义监控）→ 上报（批量+WiFi+压缩）→ 分析（堆栈聚类归因+设备/版本分布+复现路径）→ 修复（热修复紧急+版本迭代常规）→ 验证（监控 Crash 率变化）→ 预防（Lint+CI+测试）。持续降低 Crash 率方法：①每日查看 Crashlytics 新增 Crash，按影响用户数排序 ②Top 10 Crash 优先修复 ③热修复框架（Tinker/Robust）紧急修复不用等发版 ④Crash 归因到代码行+修复+回归测试 ⑤灰度发布——先 5% 用户灰度，监控 Crash 率无异常后全量 ⑥新增功能加 try-catch 兜底 ⑦Null Safety——Kotlin 的 ? 和 ?: 语法减少 NPE ⑧CI 集成 Lint+静态分析+单元测试 ⑨Monkey/Fuzz 测试发现边缘场景 ⑩设备矩阵测试——覆盖主流机型和 Android 版本。
+</Answer>
+
+</Exercises>

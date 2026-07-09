@@ -1828,7 +1828,17 @@ export type ReviewChapterSlug =
   | "aca-lifecycle-management"
   | "aca-build-deploy"
   | "aca-practice-case"
-  | "aca-final-review";
+  | "aca-final-review"
+  | "apo-learning-map"
+  | "apo-perf-tools"
+  | "apo-layout-optimization"
+  | "apo-memory-optimization"
+  | "apo-cpu-power"
+  | "apo-rendering-optimization"
+  | "apo-network-optimization"
+  | "apo-storage-optimization"
+  | "apo-stability-monitoring"
+  | "apo-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3661,6 +3671,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "aca-build-deploy": "构建与部署",
   "aca-practice-case": "实战案例",
   "aca-final-review": "全书复习",
+  "apo-learning-map": "全书学习地图",
+  "apo-perf-tools": "性能分析工具",
+  "apo-layout-optimization": "布局优化",
+  "apo-memory-optimization": "内存优化",
+  "apo-cpu-power": "CPU与功耗优化",
+  "apo-rendering-optimization": "渲染与UI优化",
+  "apo-network-optimization": "网络优化",
+  "apo-storage-optimization": "存储优化",
+  "apo-stability-monitoring": "稳定性与监控",
+  "apo-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

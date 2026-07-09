@@ -1705,6 +1705,16 @@ import { acaLifecycleManagementQuestions } from "./review/aca-lifecycle-manageme
 import { acaBuildDeployQuestions } from "./review/aca-build-deploy";
 import { acaPracticeCaseQuestions } from "./review/aca-practice-case";
 import { acaFinalReviewQuestions } from "./review/aca-final-review";
+import { apoLearningMapQuestions } from "./review/apo-learning-map";
+import { apoPerfToolsQuestions } from "./review/apo-perf-tools";
+import { apoLayoutOptimizationQuestions } from "./review/apo-layout-optimization";
+import { apoMemoryOptimizationQuestions } from "./review/apo-memory-optimization";
+import { apoCpuPowerQuestions } from "./review/apo-cpu-power";
+import { apoRenderingOptimizationQuestions } from "./review/apo-rendering-optimization";
+import { apoNetworkOptimizationQuestions } from "./review/apo-network-optimization";
+import { apoStorageOptimizationQuestions } from "./review/apo-storage-optimization";
+import { apoStabilityMonitoringQuestions } from "./review/apo-stability-monitoring";
+import { apoFinalReviewQuestions } from "./review/apo-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3445,6 +3455,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...acaBuildDeployQuestions,
   ...acaPracticeCaseQuestions,
   ...acaFinalReviewQuestions,
+  ...apoLearningMapQuestions,
+  ...apoPerfToolsQuestions,
+  ...apoLayoutOptimizationQuestions,
+  ...apoMemoryOptimizationQuestions,
+  ...apoCpuPowerQuestions,
+  ...apoRenderingOptimizationQuestions,
+  ...apoNetworkOptimizationQuestions,
+  ...apoStorageOptimizationQuestions,
+  ...apoStabilityMonitoringQuestions,
+  ...apoFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

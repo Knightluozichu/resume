@@ -218,6 +218,7 @@ export const BOOK_ORDER = [
   "android-art-exploration",
   "kotlin-in-action",
   "android-component-arch",
+  "android-perf-optimization",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -376,6 +377,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "android-art-exploration": "Android开发艺术探索",
   "kotlin-in-action": "Kotlin实战",
   "android-component-arch": "Android组件化架构",
+  "android-perf-optimization": "Android应用性能优化",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

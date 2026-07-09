@@ -1,0 +1,211 @@
+---
+title: "布局优化"
+type: C
+section: "Android开发"
+order: 2
+description: "掌握布局层级扁平化、过度绘制消除、ViewStub懒加载等布局优化核心技术"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { ApoLayoutOptimizationDiagram } from "@/components/mdx/android-perf-optimization/diagrams/apo-layout-optimization";
+
+<Objectives>
+
+- 理解布局层级深度对 measure/layout 性能的影响
+- 掌握 ConstraintLayout 扁平化、include+merge 复用、ViewStub 懒加载三大手段
+- 学会检测和消除过度绘制
+- 建立「层级浅、绘制少、懒加载」的布局优化思维
+
+</Objectives>
+
+## 优化对比
+
+<ApoLayoutOptimizationDiagram />
+
+布局优化的核心目标：减少 View 层级深度（降低 measure/layout 递归次数）、消除过度绘制（减少 GPU 绘制次数）、延迟加载不可见 View（节省内存和初始化时间）。
+
+## 层级扁平化
+
+### 为什么层级深会慢
+
+```kotlin
+// View 树的渲染流程：measure → layout → draw
+// 每层 View 都会对子 View 递归执行这三个阶段
+// 层级越深，递归次数指数增长
+
+// 7层嵌套：measure/layout 递归约 2^7 = 128 次
+// 3层扁平：measure/layout 递归约 2^3 = 8 次
+// 性能差距：16倍
+
+// 特别慢的场景：LinearLayout + layout_weight
+// weight 会导致二次 measure（先测一遍算权重，再测一遍定大小）
+```
+
+### ConstraintLayout 替代嵌套
+
+```xml
+<!-- 优化前：7层嵌套 -->
+<LinearLayout orientation="vertical">
+    <LinearLayout orientation="horizontal">
+        <RelativeLayout>
+            <FrameLayout>
+                <ImageView />
+            </FrameLayout>
+        </RelativeLayout>
+    </LinearLayout>
+    <TextView />  <!-- 背景与父布局重叠 -->
+</LinearLayout>
+
+<!-- 优化后：3层扁平 -->
+<androidx.constraintlayout.widget.ConstraintLayout>
+    <ImageView
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+    <TextView
+        app:layout_constraintTop_toBottomOf="@id/image"
+        app:layout_constraintStart_toStartOf="parent" />
+    <ViewStub
+        android:id="@+id/stub_loading"
+        android:layout="@layout/loading_view"
+        app:layout_constraintTop_toTopOf="parent" />
+</androidx.constraintlayout.widget.ConstraintLayout>
+```
+
+<Callout type="info" title="ConstraintLayout 原理">
+ConstraintLayout 用约束（Constraint）描述 View 之间的相对位置，内部用 Cassowary 算法求解线性约束系统，一次遍历完成 measure/layout，避免了多层嵌套的递归开销。
+</Callout>
+
+## include + merge 复用
+
+```xml
+<!-- res/layout/item_header.xml -->
+<!-- 用 merge 替代根布局，避免 include 时多加一层 -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android">
+    <TextView android:id="@+id/title" />
+    <ImageView android:id="@+id/icon" />
+</merge>
+
+<!-- 使用时 -->
+<LinearLayout orientation="vertical">
+    <include layout="@layout/item_header" />
+    <!-- include 后不会多加一层 ViewGroup -->
+</LinearLayout>
+```
+
+## ViewStub 懒加载
+
+```kotlin
+// ViewStub 是轻量级占位符（宽高为0，不绘制不参与 layout）
+// 只有调用 inflate() 或 setVisibility(VISIBLE) 时才真正加载布局
+
+// 适用于：错误页、空状态、加载动画等不一定显示的布局
+val stub = findViewById&lt;ViewStub&gt;(R.id.stub_error)
+// 需要显示时才加载
+val errorView = stub.inflate() // 返回加载的根 View
+// 注意：inflate() 只能调一次，之后 ViewStub 从视图树移除
+
+// 错误用法：直接在布局中写错误页（即使隐藏也占内存和初始化时间）
+```
+
+## 过度绘制检测与消除
+
+```kotlin
+// 过度绘制：同一像素被多次绘制
+// 检测：开发者选项 → 调试 GPU 过度绘制
+
+// 常见原因：
+// 1. Activity 背景 + DecorView 背景 + Fragment 背景 + View 背景 多层叠加
+// 2. 父布局有背景，子 View 也有不透明背景
+// 3. 列表项背景与 ListView/RecyclerView 背景重叠
+
+// 消除方法：
+// 1. 移除不必要的背景——theme 中 windowBackground 已设背景，布局不需要再设
+// 2. 从根布局开始裁剪——只有最底层设背景
+// 3. 使用 @null 透明背景
+
+// 代码示例：
+// 1. 移除 Activity 默认背景（theme）
+&lt;style name="AppTheme" parent="Theme.AppCompat"&gt;
+    &lt;item name="android:windowBackground"&gt;@null&lt;/item&gt;
+&lt;/style&gt;
+
+// 2. 自定义 View 用 canvas.clipRect 限制绘制区域
+override fun onDraw(canvas: Canvas) {
+    canvas.clipRect(0, 0, width, height) // 只绘制可见区域
+    super.onDraw(canvas)
+}
+```
+
+## Lint 静态检查
+
+```kotlin
+// Android Lint 可检测的布局问题：
+// - 使用权重嵌套在另一个权重中（二次 measure）
+// - 不必要的嵌套（如 LinearLayout 只有一个子 View）
+// - 硬编码文本（应使用 string 资源）
+// - 深层嵌套（超过 10 层警告）
+
+// 命令行：
+// ./gradlew lint
+// 或 Android Studio → Analyze → Inspect Code
+```
+
+## 布局优化检查清单
+
+| 检查项 | 目标 | 工具 |
+|--------|------|------|
+| View 层级深度 | 核心页面 ≤ 5 层 | Layout Inspector |
+| 过度绘制 | 核心区域 ≤ 1 次蓝色 | GPU 过度绘制 |
+| 权重嵌套 | 禁止 weight 嵌套 weight | Lint |
+| ViewStub 使用 | 非首屏 View 用 ViewStub | 代码审查 |
+| include+merge | 公共布局用 merge 根 | 代码审查 |
+| 背景层级 | 只有最底层设背景 | GPU 过度绘制 |
+| 空布局 | 移除只有一个子 View 的 ViewGroup | Lint |
+
+<Glossary>
+
+<GlossaryItem term="measure/layout/draw 三阶段">
+View 渲染的三个阶段：measure（测量宽高）→ layout（确定位置）→ draw（绘制内容）。每个阶段递归遍历整个 View 树，层级越深开销越大。
+</GlossaryItem>
+
+<GlossaryItem term="Cassowary 算法">
+ConstraintLayout 内部使用的线性约束求解算法，能在一次遍历中求解所有约束条件，避免了嵌套布局的多次 measure 递归。
+</GlossaryItem>
+
+<GlossaryItem term="二次 measure">
+某些布局属性（如 LinearLayout 的 layout_weight）会导致 View 被测量两次：第一次测量原始大小用于计算权重比例，第二次按权重分配的最终大小测量。这是性能损耗的常见来源。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：为什么 View 层级深会导致卡顿？measure/layout/draw 的递归机制是什么？
+
+<Answer>
+View 树的渲染流程是 measure → layout → draw 三个阶段，每个阶段都是递归遍历。measure 阶段：父 View 调用每个子 View 的 measure()，子 View 再递归调用自己的子 View，自上而下传递 MeasureSpec，自下而上返回测量结果。layout 阶段：父 View 调用每个子 View 的 layout() 确定位置，子 View 递归 layout 自己的子 View。draw 阶段：从根 View 开始递归 draw，每个 View 先画自己再画子 View。层级越深，递归次数越多：7 层嵌套的递归次数约 2^7=128 次，3 层约 2^3=8 次，差距 16 倍。特别是 LinearLayout 的 weight 会导致二次 measure：第一遍测量原始大小算权重，第二遍按权重结果再测一次。深层嵌套 + weight 叠加是卡顿的常见原因。
+</Answer>
+
+**问题 2**：ViewStub 和 View.GONE 有什么区别？为什么 ViewStub 更好？
+
+<Answer>
+区别：①View.GONE 是 View 已存在于视图树中但不可见，仍然占内存、已完成 inflate 和初始化，只是不参与 measure/layout/draw；ViewStub 是一个宽高为 0 的占位符，目标布局尚未 inflate，不占内存、不初始化。②View.GONE 切换为 VISIBLE 时只需改变可见性标志；ViewStub 调用 inflate() 时才会真正解析 XML 布局并创建 View 对象。③ViewStub inflate 后自身从视图树移除，被加载的布局替代，只能 inflate 一次。ViewStub 更好的原因：错误页、空状态、加载动画等不一定显示的布局，如果用 View.GONE 会在页面初始化时就创建所有 View 对象（即使永远不会显示），浪费内存和初始化时间。用 ViewStub 则只在真正需要显示时才加载，实现了「按需加载」。
+</Answer>
+
+**问题 3**：如何检测和消除过度绘制？给出一个完整的优化流程。
+
+<Answer>
+检测：①开发者选项 → 调试 GPU 过度绘制 ②屏幕上用颜色表示过度绘制次数：原色=0 次（理想）、蓝色=1 次（可接受）、绿色=2 次（需关注）、粉色=3 次（需优化）、红色=4 次以上（严重） ③查看核心页面是否大面积红色。消除流程：①分析红色区域的原因——通常是因为多层背景叠加 ②移除 Activity theme 的 windowBackground（如果布局根 View 设了背景）或反过来 ③移除 DecorView 默认背景：theme 中设 `windowBackground` 为 @null ④移除中间层 ViewGroup 的背景，只保留最底层 View 的背景 ⑤自定义 View 用 `canvas.clipRect()` 限制绘制区域，只画可见部分 ⑥RecyclerView/ListView 移除背景（列表项已有背景时不需要容器背景） ⑦用 `android:background="@null"` 显式移除不需要的背景 ⑧优化后重新检测，确认核心区域降到蓝色或原色。
+</Answer>
+
+**问题 4**：include+merge 的工作原理是什么？为什么 merge 能减少层级？
+
+<Answer>
+原理：include 标签用于在当前布局中插入另一个布局文件，插入时被引用布局的根 View 会直接放到 include 的位置。如果被引用布局的根是一个 ViewGroup（如 LinearLayout），那么 include 后当前布局就会多一层 ViewGroup——这层可能是不必要的。merge 标签的作用是作为被引用布局的根标签，它本身不对应任何 View 对象，inflate 时会被「透明」地替换为其子 View 列表。因此用 merge 作为公共布局的根标签，include 后这些子 View 直接放到 include 所在的父 ViewGroup 中，不增加额外层级。典型场景：公共头部布局有标题和图标两个 View，如果用 LinearLayout 包裹，include 后多一层；用 merge 包裹，include 后标题和图标直接放到父布局中，层级不变。注意：merge 的子 View 的 layout 属性需要在使用 include 时通过覆盖来设置。
+</Answer>
+
+</Exercises>
