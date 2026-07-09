@@ -2348,7 +2348,17 @@ export type ReviewChapterSlug =
   | "bp-wallets-accounts"
   | "bp-public-private-chains"
   | "bp-applications-future"
-  | "bp-final-review";
+  | "bp-final-review"
+  | "bdp-learning-map"
+  | "bdp-dev-environment"
+  | "bdp-solidity-basics"
+  | "bdp-contract-patterns"
+  | "bdp-web3-integration"
+  | "bdp-dapp-architecture"
+  | "bdp-testing-security"
+  | "bdp-deployment-mainnet"
+  | "bdp-defi-nft-practice"
+  | "bdp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4701,6 +4711,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "bp-public-private-chains": "公链私链与联盟链",
   "bp-applications-future": "应用场景与未来展望",
   "bp-final-review": "全书复习与知识整合",
+  "bdp-learning-map": "区块链开发实战·知识全景图",
+  "bdp-dev-environment": "开发环境搭建",
+  "bdp-solidity-basics": "Solidity智能合约基础",
+  "bdp-contract-patterns": "合约设计模式",
+  "bdp-web3-integration": "Web3集成开发",
+  "bdp-dapp-architecture": "DApp架构设计",
+  "bdp-testing-security": "测试与安全审计",
+  "bdp-deployment-mainnet": "部署与主网上线",
+  "bdp-defi-nft-practice": "DeFi与NFT实战",
+  "bdp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

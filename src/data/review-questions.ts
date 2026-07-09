@@ -2225,6 +2225,16 @@ import { bpWalletsAccountsQuestions } from "./review/bp-wallets-accounts";
 import { bpPublicPrivateChainsQuestions } from "./review/bp-public-private-chains";
 import { bpApplicationsFutureQuestions } from "./review/bp-applications-future";
 import { bpFinalReviewQuestions } from "./review/bp-final-review";
+import { bdpLearningMapQuestions } from "./review/bdp-learning-map";
+import { bdpDevEnvironmentQuestions } from "./review/bdp-dev-environment";
+import { bdpSolidityBasicsQuestions } from "./review/bdp-solidity-basics";
+import { bdpContractPatternsQuestions } from "./review/bdp-contract-patterns";
+import { bdpWeb3IntegrationQuestions } from "./review/bdp-web3-integration";
+import { bdpDappArchitectureQuestions } from "./review/bdp-dapp-architecture";
+import { bdpTestingSecurityQuestions } from "./review/bdp-testing-security";
+import { bdpDeploymentMainnetQuestions } from "./review/bdp-deployment-mainnet";
+import { bdpDefiNftPracticeQuestions } from "./review/bdp-defi-nft-practice";
+import { bdpFinalReviewQuestions } from "./review/bdp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4485,6 +4495,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...bpPublicPrivateChainsQuestions,
   ...bpApplicationsFutureQuestions,
   ...bpFinalReviewQuestions,
+  ...bdpLearningMapQuestions,
+  ...bdpDevEnvironmentQuestions,
+  ...bdpSolidityBasicsQuestions,
+  ...bdpContractPatternsQuestions,
+  ...bdpWeb3IntegrationQuestions,
+  ...bdpDappArchitectureQuestions,
+  ...bdpTestingSecurityQuestions,
+  ...bdpDeploymentMainnetQuestions,
+  ...bdpDefiNftPracticeQuestions,
+  ...bdpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -270,6 +270,7 @@ export const BOOK_ORDER = [
   "building-llm-applications",
   "multiagent-systems",
   "blockchain-plain",
+  "blockchain-dev-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -480,6 +481,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "building-llm-applications": "Building LLM Powered Applications",
   "multiagent-systems": "多智能体系统",
   "blockchain-plain": "白话区块链",
+  "blockchain-dev-practice": "区块链开发实战",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
