@@ -1,0 +1,189 @@
+---
+title: "反向代理与网关：请求路由与过滤"
+type: C
+section: "网络"
+order: 6
+description: "Nginx反向代理配置、API网关功能、请求路由与限流过滤实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { IsnReverseProxyDiagram } from "@/components/mdx/illustrated-server-network/diagrams/isn-reverse-proxy";
+
+<Objectives>
+
+- 理解反向代理的工作原理与核心功能
+- 掌握Nginx反向代理的配置方法与路由规则
+- 认识API网关的六大核心功能
+- 实践请求限流、过滤、SSL终结等网关能力
+
+</Objectives>
+
+## 反向代理原理
+
+<IsnReverseProxyDiagram />
+
+反向代理位于客户端和后端服务器之间，客户端只看到代理地址，后端对客户端透明。反向代理是服务端网络的「万能中间人」。
+
+### 反向代理 vs 正向代理
+
+| 维度 | 正向代理 | 反向代理 |
+|------|---------|---------|
+| 代理谁 | 代理客户端 | 代理服务端 |
+| 谁知道它 | 客户端知道 | 服务端知道 |
+| 客户端感知 | 有感知（需配置） | 无感知 |
+| 典型场景 | VPN/翻墙/缓存 | Nginx/负载均衡/网关 |
+
+<Callout type="info" title="反向代理为什么是万能中间人">
+
+反向代理可以同时做：负载均衡（分发请求）、SSL终结（解密HTTPS）、缓存（缓存响应）、安全过滤（WAF）、限流（控制速率）、请求路由（按URL分发）、协议转换（HTTP转gRPC）。这就是为什么Nginx几乎是所有生产环境的标配。
+
+</Callout>
+
+## Nginx反向代理配置
+
+Nginx是最流行的反向代理服务器，通过配置文件定义路由规则。
+
+### 基本反向代理配置
+
+```text
+# Nginx反向代理配置示例
+server {
+    listen 80;
+    server_name api.example.com;
+
+    # 路径路由：/api 到后端API集群
+    location /api/ {
+        proxy_pass http://backend_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # 路径路由：/static 到CDN
+    location /static/ {
+        proxy_pass https://cdn.example.com;
+    }
+
+    # 负载均衡上游集群
+    upstream backend_api {
+        server 10.0.0.1:8080 weight=3;
+        server 10.0.0.2:8080 weight=1;
+        server 10.0.0.3:8080 backup;
+    }
+}
+```
+
+### SSL终结配置
+
+```text
+# Nginx SSL终结：客户端→Nginx加密，Nginx→后端明文
+server {
+    listen 443 ssl;
+    server_name api.example.com;
+
+    ssl_certificate     /etc/ssl/cert.pem;
+    ssl_certificate_key /etc/ssl/key.pem;
+
+    location / {
+        proxy_pass http://backend;  # 后端用HTTP，无需配SSL
+    }
+}
+```
+
+<Callout type="warning" title="SSL终结的利弊">
+
+SSL终结让Nginx负责解密HTTPS，后端用明文HTTP通信。好处：①后端无需配SSL证书，简化部署 ②Nginx可查看HTTP内容做路由/WAF ③集中管理证书。风险：Nginx到后端是明文传输，如果同机房内网可接受，跨机房需加 IPSec 或让后端也启用HTTPS。
+
+</Callout>
+
+## API网关
+
+API网关是反向代理的升级版——除了转发请求，还承担认证、限流、监控、协议转换等职责。
+
+### API网关六大核心功能
+
+| 功能 | 说明 | 示例 |
+|------|------|------|
+| 请求路由 | 按URL/域名分发到不同后端 | /user→用户服务，/order→订单服务 |
+| 认证鉴权 | 统一校验Token/API Key | JWT验证、OAuth2 |
+| 限流熔断 | 控制请求速率，防止雪崩 | 100次/秒，超限返回429 |
+| 协议转换 | HTTP↔gRPC/HTTP↔WebSocket | 客户端HTTP→后端gRPC |
+| 日志监控 | 记录请求日志、指标上报 | 请求量/延迟/错误率 |
+| 响应聚合 | 一个请求聚合多个后端 | BFF模式 |
+
+```text
+API网关工作流程：
+  客户端请求 → 网关
+    ① 认证：校验JWT Token → 无效则返回401
+    ② 限流：检查请求频率 → 超限返回429
+    ③ 路由：按URL匹配后端服务 → /user → 用户服务
+    ④ 协议转换：HTTP → gRPC（如需）
+    ⑤ 转发请求 → 后端服务
+    ⑥ 响应：记录日志/指标 → 返回客户端
+```
+
+### 限流算法
+
+| 算法 | 原理 | 特点 |
+|------|------|------|
+| 计数器 | 固定窗口内计数 | 简单，边界突刺 |
+| 滑动窗口 | 细分窗口平滑计数 | 平滑，无突刺 |
+| 令牌桶 | 按速率发令牌，有令牌才放行 | 允许突发 |
+| 漏桶 | 固定速率漏出请求 | 平滑输出 |
+
+```text
+令牌桶算法：
+  桶容量100，每秒补充10个令牌
+  请求来 → 取令牌 → 有令牌则放行，无则拒绝
+  → 允许短时突发（桶满时100个请求瞬间通过）
+  → 长期平均速率受补充速率限制（10次/秒）
+
+漏桶算法：
+  桶容量100，每秒漏出10个请求
+  请求来 → 入桶 → 桶满则拒绝
+  → 无论来多少请求，输出恒定10次/秒
+  → 不允许突发
+```
+
+<Glossary>
+
+<GlossaryItem term="反向代理（Reverse Proxy）">
+反向代理位于客户端和后端服务器之间，客户端只看到代理地址，后端服务器对客户端完全透明。反向代理可同时承担负载均衡、SSL终结、缓存、安全过滤、限流、请求路由、协议转换等职责。Nginx是最常见的反向代理实现。与正向代理（代理客户端，如VPN）不同，反向代理代理的是服务端——客户端不需要任何配置，甚至不知道代理的存在。
+</GlossaryItem>
+
+<GlossaryItem term="API网关">
+API网关是反向代理的升级版，是微服务架构的统一入口。除了基本的请求转发，API网关还承担认证鉴权（JWT/OAuth2校验）、限流熔断（令牌桶/漏桶控制速率）、协议转换（HTTP↔gRPC）、请求路由（按URL分发到微服务）、日志监控（请求量/延迟/错误率上报）、响应聚合（BFF模式一个请求聚合多个后端）等职责。代表实现：Kong、Spring Cloud Gateway、APISIX。
+</GlossaryItem>
+
+<GlossaryItem term="SSL终结（SSL Termination）">
+SSL终结是指反向代理（如Nginx）负责解密HTTPS流量，与客户端用HTTPS加密通信，与后端服务器用明文HTTP通信。好处：后端无需配置SSL证书简化部署、Nginx可查看HTTP内容做路由和WAF、证书集中管理。风险是Nginx到后端的明文传输——同机房内网通常可接受，跨机房需加IPSec或让后端也启用HTTPS（端到端加密）。
+</GlossaryItem>
+
+<GlossaryItem term="令牌桶限流（Token Bucket）">
+令牌桶是最常用的限流算法。桶以固定速率补充令牌（如10个/秒），桶有最大容量（如100）。每个请求消耗一个令牌——有令牌则放行，无则拒绝。令牌桶允许短时突发流量（桶满时大量请求可瞬间通过），但长期平均速率受补充速率限制。相比漏桶（恒定速率输出不允许突发），令牌桶更适合实际业务场景。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 反向代理和正向代理的区别是什么？反向代理能承担哪些职责？
+
+<Answer>
+
+反向代理和正向代理的区别：①代理对象——正向代理代理客户端，反向代理代理服务端 ②客户端感知——正向代理客户端知道需配置（如VPN），反向代理客户端无感知 ③典型场景——正向代理用于VPN/翻墙/客户端缓存，反向代理用于Nginx/负载均衡/网关。反向代理能承担的职责：负载均衡（分发请求）、SSL终结（解密HTTPS后端用明文）、缓存（缓存响应减少后端压力）、安全过滤（WAF拦截攻击）、限流（控制请求速率）、请求路由（按URL/域名分发到不同后端）、协议转换（HTTP转gRPC）。反向代理是服务端网络的「万能中间人」，Nginx几乎是所有生产环境的标配。
+
+</Answer>
+
+**问题 2：** API网关的六大核心功能是什么？令牌桶和漏桶限流算法有什么区别？
+
+<Answer>
+
+API网关六大核心功能：①请求路由——按URL/域名分发到不同后端微服务 ②认证鉴权——统一校验JWT Token/OAuth2，无效返回401 ③限流熔断——控制请求速率防止雪崩，超限返回429 ④协议转换——HTTP↔gRPC/HTTP↔WebSocket ⑤日志监控——记录请求日志和指标（请求量/延迟/错误率） ⑥响应聚合——BFF模式一个请求聚合多个后端响应。令牌桶和漏桶限流区别：令牌桶以固定速率补充令牌，有令牌则放行无则拒绝，允许短时突发（桶满时大量请求瞬间通过），长期平均速率受补充速率限制。漏桶以固定速率漏出请求，桶满则拒绝，无论来多少请求输出恒定，不允许突发。令牌桶更适合实际业务场景。
+
+</Answer>
+
+</Exercises>

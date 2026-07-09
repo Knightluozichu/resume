@@ -1885,6 +1885,16 @@ import { ilhAuthenticationQuestions } from "./review/ilh-authentication";
 import { ilhCachingQuestions } from "./review/ilh-caching";
 import { ilhWebArchitectureQuestions } from "./review/ilh-web-architecture";
 import { ilhFinalReviewQuestions } from "./review/ilh-final-review";
+import { isnLearningMapQuestions } from "./review/isn-learning-map";
+import { isnServerBasicsQuestions } from "./review/isn-server-basics";
+import { isnLoadBalancingQuestions } from "./review/isn-load-balancing";
+import { isnHighAvailabilityQuestions } from "./review/isn-high-availability";
+import { isnDnsCdnQuestions } from "./review/isn-dns-cdn";
+import { isnFirewallSecurityQuestions } from "./review/isn-firewall-security";
+import { isnReverseProxyQuestions } from "./review/isn-reverse-proxy";
+import { isnMicroserviceNetworkQuestions } from "./review/isn-microservice-network";
+import { isnPerformanceTuningQuestions } from "./review/isn-performance-tuning";
+import { isnFinalReviewQuestions } from "./review/isn-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3805,6 +3815,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ilhCachingQuestions,
   ...ilhWebArchitectureQuestions,
   ...ilhFinalReviewQuestions,
+  ...isnLearningMapQuestions,
+  ...isnServerBasicsQuestions,
+  ...isnLoadBalancingQuestions,
+  ...isnHighAvailabilityQuestions,
+  ...isnDnsCdnQuestions,
+  ...isnFirewallSecurityQuestions,
+  ...isnReverseProxyQuestions,
+  ...isnMicroserviceNetworkQuestions,
+  ...isnPerformanceTuningQuestions,
+  ...isnFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

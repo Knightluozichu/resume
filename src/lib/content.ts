@@ -236,6 +236,7 @@ export const BOOK_ORDER = [
   "phoenix-architecture",
   "microservices-patterns",
   "illustrated-http",
+  "illustrated-server-network",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -412,6 +413,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "phoenix-architecture": "凤凰架构",
   "microservices-patterns": "微服务架构设计模式",
   "illustrated-http": "图解HTTP",
+  "illustrated-server-network": "图解服务端网络架构",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

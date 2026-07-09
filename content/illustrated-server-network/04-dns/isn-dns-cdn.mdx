@@ -1,0 +1,166 @@
+---
+title: "DNS与CDN：域名解析与内容分发"
+type: A
+section: "网络"
+order: 4
+description: "DNS解析流程、DNS负载均衡、CDN缓存回源与边缘节点加速"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { IsnDnsCdnDiagram } from "@/components/mdx/illustrated-server-network/diagrams/isn-dns-cdn";
+
+<Objectives>
+
+- 理解DNS分层解析流程与记录类型
+- 掌握DNS负载均衡的原理与局限
+- 理解CDN缓存、回源、边缘节点的工作机制
+- 认识CDN对动态内容和静态内容的加速差异
+
+</Objectives>
+
+## DNS域名解析
+
+<IsnDnsCdnDiagram />
+
+DNS（Domain Name System）负责把人类可读的域名翻译成机器可读的IP地址。它是用户访问服务端的第一步。
+
+### DNS解析流程
+
+```text
+用户输入 www.example.com
+  │
+  ① 浏览器DNS缓存 → 未命中
+  ② 操作系统DNS缓存 → 未命中
+  ③ 本地DNS服务器（递归解析）→ 未命中
+  ④ 根DNS服务器 → 返回 .com 顶级域服务器地址
+  ⑤ .com顶级域服务器 → 返回 example.com 权威DNS地址
+  ⑥ 权威DNS服务器 → 返回 www.example.com 的A记录(IP)
+  ⑦ 本地DNS缓存结果 → 返回给浏览器
+```
+
+### 常见DNS记录类型
+
+| 记录类型 | 含义 | 示例 |
+|---------|------|------|
+| A | 域名 → IPv4地址 | example.com → 93.184.216.34 |
+| AAAA | 域名 → IPv6地址 | example.com → 2606:2800:220:1:: |
+| CNAME | 域名别名 | www.example.com → examplecdn.net |
+| MX | 邮件服务器 | example.com → mail.example.com |
+| TXT | 文本记录（验证/SPF） | example.com → "v=spf1..." |
+| NS | 权威DNS服务器 | example.com → ns1.dnsprovider.com |
+
+<Callout type="info" title="DNS缓存分层">
+
+DNS解析结果会在多个层级缓存：浏览器缓存（约60秒）→ 操作系统缓存（按TTL）→ 本地DNS服务器缓存（按TTL）→ 权威DNS。缓存的过期时间由TTL（Time To Live）控制。TTL太短——每次都走完整解析链路，慢；TTL太长——DNS变更后旧IP生效慢。通常设为300秒（5分钟）到3600秒（1小时）。
+
+</Callout>
+
+## DNS负载均衡
+
+DNS可以返回多个IP地址，客户端随机选一个，实现最简单的负载均衡。
+
+### DNS负载均衡的原理与局限
+
+```text
+DNS负载均衡：
+  www.example.com → A记录返回多个IP
+    93.184.216.34  (服务器A)
+    93.184.216.35  (服务器B)
+    93.184.216.36  (服务器C)
+  客户端随机选一个IP连接
+
+局限：
+  ✗ 不感知服务器健康状态（挂了还可能返回）
+  ✗ 不感知服务器负载（可能不均匀）
+  ✗ DNS缓存导致切换慢（TTL内无法更新）
+  ✓ 适合全局负载均衡（GSLB）——按地域返回最近机房
+```
+
+<Callout type="warning" title="DNS负载均衡 vs LVS/Nginx负载均衡">
+
+DNS负载均衡是「粗粒度」的——按地域把流量分到不同机房（GSLB），但不感知服务器健康和负载。LVS/Nginx是「细粒度」的——实时健康检查、智能调度。生产环境两者配合：DNS做全局地域调度 → 机房内LVS/Nginx做精细分发。
+
+</Callout>
+
+## CDN内容分发网络
+
+CDN（Content Delivery Network）通过在全球部署边缘节点，让用户就近获取内容，加速访问。
+
+### CDN工作原理
+
+```text
+没有CDN：
+  北京用户 → 请求 → 美国源站 → 跨太平洋传输 → 慢（200ms+）
+
+有CDN：
+  北京用户 → 请求 → 北京CDN边缘节点 → 命中缓存 → 快（10ms）
+                              ↓ 未命中
+                          回源 → 美国源站 → 拉取内容 → 缓存到北京节点
+                          → 后续北京用户都命中缓存
+```
+
+### CDN缓存机制
+
+| 机制 | 原理 | 场景 |
+|------|------|------|
+| 缓存命中 | 边缘节点有缓存，直接返回 | 静态资源（图片/CSS/JS） |
+| 回源 | 边缘节点无缓存，向源站拉取 | 首次访问/缓存过期 |
+| 缓存预热 | 提前把内容推送到边缘节点 | 发布新版本 |
+| 缓存刷新 | 主动清除边缘节点缓存 | 内容更新后 |
+
+<Callout type="info" title="CDN如何决定缓存多久">
+
+CDN边缘节点按HTTP响应头中的 `Cache-Control` 和 `Expires` 决定缓存时间。例如 `Cache-Control: max-age=86400` 表示缓存24小时。过期后下次请求触发回源。对于频繁更新的内容，可通过API主动刷新CDN缓存。
+
+</Callout>
+
+## 静态加速 vs 动态加速
+
+| 类型 | 原理 | 适用内容 |
+|------|------|---------|
+| 静态加速 | 边缘节点缓存，就近返回 | 图片/CSS/JS/视频 |
+| 动态加速 | 优化回源链路（智能路由/TCP优化） | API/动态页面 |
+
+<Glossary>
+
+<GlossaryItem term="DNS（域名系统）">
+DNS是互联网的「电话簿」，负责将人类可读的域名（如 www.example.com）翻译成机器可读的IP地址（如 93.184.216.34）。DNS采用分层架构：根域名服务器 → 顶级域服务器（.com/.org）→ 权威DNS服务器。解析过程涉及递归查询和迭代查询，结果在各层级缓存（TTL控制过期）。DNS运行在UDP之上，默认端口53。
+</GlossaryItem>
+
+<GlossaryItem term="CDN（内容分发网络）">
+CDN是在全球多地部署边缘节点的分布式网络。用户请求时，DNS将域名解析到最近的CDN边缘节点而非源站。边缘节点缓存静态内容（图片/CSS/JS/视频），命中缓存时直接就近返回，大幅降低延迟和源站压力。未命中时回源拉取并缓存。CDN是Web加速的标准配置，典型可减少50%-80%的源站流量。
+</GlossaryItem>
+
+<GlossaryItem term="回源（Origin Pull）">
+回源是CDN边缘节点缓存未命中时，向源站（Origin Server）请求原始内容的过程。回源是CDN中「最慢」的路径——边缘节点到源站可能跨越大洋。优化回源的方法：①缓存预热——发布时提前推送内容到边缘节点 ②设置合理的Cache-Control——减少回源频率 ③多级缓存——边缘节点→区域中心→源站，层层拦截。
+</GlossaryItem>
+
+<GlossaryItem term="GSLB（全局服务器负载均衡）">
+GSLB是基于DNS的全局负载均衡。它根据用户的地域、运营商、源站健康状态，智能返回最佳机房的IP。例如：北京用户解析到北京机房IP、上海用户解析到上海机房IP。GSLB是异地多活和CDN调度的底层机制，解决了单机房无法覆盖全国/全球用户的延迟问题。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** DNS解析的完整流程是什么？常见的DNS记录类型有哪些？
+
+<Answer>
+
+DNS解析完整流程：①浏览器DNS缓存查找未命中 ②操作系统DNS缓存查找未命中 ③本地DNS服务器（递归解析器）查找未命中 ④向根DNS服务器查询，返回.com顶级域服务器地址 ⑤向.com顶级域服务器查询，返回example.com权威DNS地址 ⑥向权威DNS服务器查询，返回www.example.com的A记录（IP地址）⑦本地DNS缓存结果并返回给浏览器。常见DNS记录类型：A（域名→IPv4）、AAAA（域名→IPv6）、CNAME（域名别名）、MX（邮件服务器）、TXT（文本记录/验证）、NS（权威DNS服务器）。
+
+</Answer>
+
+**问题 2：** CDN的工作原理是什么？静态加速和动态加速有什么区别？
+
+<Answer>
+
+CDN工作原理：在全球多地部署边缘节点。用户请求时DNS将域名解析到最近的CDN边缘节点。边缘节点缓存静态内容，命中缓存时直接就近返回（快）；未命中时回源向源站拉取内容并缓存到边缘节点，后续请求都命中缓存。CDN缓存时间由HTTP响应头的Cache-Control/Expires控制。静态加速和动态加速的区别：①静态加速——边缘节点缓存静态资源（图片/CSS/JS/视频），命中缓存直接返回，大幅降低延迟和源站压力 ②动态加速——针对API/动态页面等不可缓存的内容，通过优化回源链路（智能路由选择最优路径、TCP连接复用/优化）来加速，不缓存内容。
+
+</Answer>
+
+</Exercises>

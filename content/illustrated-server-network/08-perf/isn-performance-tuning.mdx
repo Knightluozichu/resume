@@ -1,0 +1,196 @@
+---
+title: "性能调优：网络优化与监控"
+type: C
+section: "网络"
+order: 8
+description: "TCP参数调优、零拷贝、连接池与全链路监控追踪实战"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { IsnPerformanceTuningDiagram } from "@/components/mdx/illustrated-server-network/diagrams/isn-performance-tuning";
+
+<Objectives>
+
+- 掌握TCP核心参数调优（缓冲区/复用/保活）
+- 理解零拷贝技术（sendfile/mmap）的原理与场景
+- 认识连接池复用机制与池化思想
+- 实践全链路监控与分布式追踪
+
+</Objectives>
+
+## 网络性能瓶颈
+
+<IsnPerformanceTuningDiagram />
+
+服务端网络性能调优围绕「降低延迟、提升吞吐」展开。先定位瓶颈，再针对性优化。
+
+### 性能瓶颈定位
+
+| 瓶颈层 | 症状 | 优化方向 |
+|--------|------|---------|
+| CPU | CPU 100%、请求排队 | 优化算法/减少序列化 |
+| 内存 | 频繁GC/OOM | 减少对象创建/连接池 |
+| 网络 | 带宽跑满/高延迟 | 压缩/CDN/TCP调优 |
+| 连接 | TIME_WAIT堆积 | 长连接/连接池/复用 |
+| IO | 磁盘IO等待 | 零拷贝/异步IO/缓存 |
+
+<Callout type="info" title="性能优化三原则">
+
+①先测量再优化——用监控数据定位瓶颈，不要猜 ②优化瓶颈点——提升非瓶颈资源是浪费 ③一次只改一个变量——否则不知道哪个优化生效。性能优化是迭代过程：测量→定位→优化→验证→重复。
+
+</Callout>
+
+## TCP参数调优
+
+Linux内核提供大量TCP参数，调优可显著提升网络性能。
+
+### 核心TCP参数
+
+```text
+# 连接复用（解决TIME_WAIT堆积）
+net.ipv4.tcp_tw_reuse = 1        # 允许复用TIME_WAIT连接
+net.ipv4.tcp_max_tw_buckets = 5000  # TIME_WAIT最大数量
+
+# TCP保活（检测死连接）
+net.ipv4.tcp_keepalive_time = 600   # 600秒无数据后发探测包
+net.ipv4.tcp_keepalive_intvl = 30   # 探测间隔30秒
+net.ipv4.tcp_keepalive_probes = 3   # 3次探测失败判定断开
+
+# 缓冲区（提升吞吐）
+net.ipv4.tcp_rmem = 4096 87380 6291456   # 接收缓冲区min/default/max
+net.ipv4.tcp_wmem = 4096 65536 4194304   # 发送缓冲区min/default/max
+
+# 连接队列（应对突发连接）
+net.ipv4.tcp_max_syn_backlog = 8192      # SYN队列长度
+net.core.somaxconn = 8192                 # accept队列长度
+```
+
+<Callout type="warning" title="tcp_tw_reuse vs tcp_tw_recycle">
+
+`tcp_tw_recycle`（已废弃）在NAT环境下会导致丢包——多个客户端经同一NAT出口，时间戳不一致被服务器丢弃。`tcp_tw_reuse`只复用出方向（客户端）的TIME_WAIT连接，安全可靠。Linux 4.12+已移除tcp_tw_recycle，只保留tcp_tw_reuse。
+
+</Callout>
+
+## 零拷贝技术
+
+传统数据传输需要4次上下文切换+4次数据拷贝。零拷贝技术减少拷贝次数，大幅提升IO性能。
+
+### 传统拷贝 vs 零拷贝
+
+```text
+传统文件传输（read + write）：
+  磁盘 → 内核缓冲区 → 用户缓冲区 → Socket缓冲区 → 网卡
+  4次拷贝 + 4次上下文切换
+
+sendfile零拷贝：
+  磁盘 → 内核缓冲区 → 网卡（DMA直传）
+  2次拷贝 + 2次上下文切换
+
+mmap + write：
+  磁盘 → 内核缓冲区(=用户空间映射) → Socket缓冲区 → 网卡
+  3次拷贝 + 4次上下文切换（但省了内核→用户的拷贝）
+```
+
+| 技术 | 拷贝次数 | 上下文切换 | 场景 |
+|------|---------|-----------|------|
+| 传统 read+write | 4 | 4 | 不推荐 |
+| sendfile | 2 | 2 | 静态文件传输 |
+| mmap+write | 3 | 4 | 需修改数据 |
+| splice | 2 | 2 | 管道传输 |
+
+<Callout type="info" title="Nginx的零拷贝实践">
+
+Nginx默认开启 `sendfile on`，静态文件（图片/CSS/JS）传输直接用sendfile零拷贝，性能提升显著。这是Nginx静态文件处理比Tomcat快的原因之一——Tomcat默认走传统read+write。
+
+</Callout>
+
+## 连接池
+
+每次新建TCP连接需要三次握手，开销大。连接池通过复用连接避免重复握手。
+
+### 连接池工作原理
+
+```text
+无连接池：
+  请求1 → 建连接(握手) → 处理 → 断开(挥手)
+  请求2 → 建连接(握手) → 处理 → 断开(挥手)  ← 重复握手开销
+  请求3 → 建连接(握手) → 处理 → 断开(挥手)
+
+有连接池：
+  请求1 → 从池取连接 → 处理 → 归还到池（不断开）
+  请求2 → 从池取连接（复用） → 处理 → 归还到池  ← 无握手开销
+  请求3 → 从池取连接（复用） → 处理 → 归还到池
+```
+
+| 连接池参数 | 说明 | 调优建议 |
+|-----------|------|---------|
+| 最小空闲 | 池中保持的最少连接数 | 按低谷QPS设 |
+| 最大连接 | 池中最多连接数 | 按高峰QPS设 |
+| 空闲超时 | 空闲多久后回收 | 5-10分钟 |
+| 连接超时 | 获取连接的等待时间 | 1-3秒 |
+
+## 全链路监控
+
+微服务架构下，一个请求经过多个服务，需要全链路追踪定位延迟瓶颈。
+
+### 分布式追踪
+
+```text
+请求追踪示例：
+  用户请求 → [网关 5ms] → [用户服务 20ms] → [订单服务 50ms] → [数据库 30ms]
+                                                     ↓
+                                              [库存服务 15ms]
+
+全链路耗时：5 + 20 + 50 + 30 = 105ms
+瓶颈定位：订单服务(50ms)是最慢环节 → 优化订单服务
+```
+
+| 监控维度 | 工具 | 指标 |
+|---------|------|------|
+| 指标监控 | Prometheus + Grafana | QPS/延迟/错误率 |
+| 链路追踪 | Jaeger / Zipkin | 调用链/耗时分布 |
+| 日志聚合 | ELK / Loki | 请求日志/错误日志 |
+
+<Glossary>
+
+<GlossaryItem term="零拷贝（Zero-Copy）">
+零拷贝是减少数据传输中内存拷贝次数的技术。传统文件传输（read+write）需4次拷贝+4次上下文切换：磁盘→内核缓冲区→用户缓冲区→Socket缓冲区→网卡。sendfile零拷贝只需2次拷贝+2次上下文切换：磁盘→内核缓冲区→网卡（DMA直传）。Nginx默认开启sendfile处理静态文件，性能显著提升。零拷贝是高性能服务器的标配技术。
+</GlossaryItem>
+
+<GlossaryItem term="连接池（Connection Pool）">
+连接池是预先创建并复用网络连接的机制。每次新建TCP连接需三次握手（约1-10ms），高并发下重复握手是巨大开销。连接池预先建好连接放入池中，请求时从池取连接用完归还（不断开），避免重复握手。核心参数：最小空闲连接、最大连接数、空闲超时、连接超时。数据库连接池（如HikariCP）、HTTP连接池（如OkHttp）都是这个原理。
+</GlossaryItem>
+
+<GlossaryItem term="全链路追踪（Distributed Tracing）">
+全链路追踪是微服务架构下追踪一个请求经过所有服务调用的技术。通过TraceID关联整个调用链，每个服务节点记录Span（耗时/状态/标签）。常见实现：Jaeger、Zipkin、SkyWalking。追踪数据用于定位延迟瓶颈——「哪个服务最慢」「哪个调用失败」。通常配合指标监控（Prometheus）和日志聚合（ELK）形成完整可观测性体系。
+</GlossaryItem>
+
+<GlossaryItem term="TCP缓冲区调优">
+TCP发送/接收缓冲区大小直接影响网络吞吐。Linux通过tcp_rmem/tcp_wmem参数控制缓冲区min/default/max。缓冲区太小——高延迟高带宽链路无法充分利用（BDP瓶颈）；缓冲区太大——内存浪费。最优值约等于BDP（带宽×延迟）。例如1Gbps带宽×10ms延迟=1.25MB，缓冲区应设为1-2MB。Linux还支持TCP自动调优（tcp_window_scaling），可根据链路状况动态调整。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 零拷贝技术的原理是什么？sendfile和传统read+write的区别？
+
+<Answer>
+
+零拷贝是减少数据传输中内存拷贝次数的技术。传统文件传输（read+write）需4次拷贝+4次上下文切换：磁盘→内核缓冲区→用户缓冲区→Socket缓冲区→网卡。数据从内核空间拷贝到用户空间再拷回内核空间，浪费且低效。sendfile零拷贝只需2次拷贝+2次上下文切换：磁盘→内核缓冲区→网卡（通过DMA直传），完全绕过用户空间。Nginx默认开启sendfile处理静态文件，是Nginx静态文件处理比Tomcat快的原因之一——Tomcat默认走传统read+write。零拷贝是高性能服务器的标配技术。
+
+</Answer>
+
+**问题 2：** 连接池的工作原理是什么？全链路追踪如何定位性能瓶颈？
+
+<Answer>
+
+连接池工作原理：预先创建TCP连接放入池中。请求时从池取连接使用，用完归还到池（不断开），避免每次请求都三次握手建连接。无连接池每次请求都建连接(握手)+断开(挥手)，有连接池只在池空时建连接、空闲超时时断开。核心参数：最小空闲连接（按低谷QPS设）、最大连接数（按高峰QPS设）、空闲超时（5-10分钟回收）、连接超时（1-3秒等待）。全链路追踪通过TraceID关联一个请求经过所有服务调用的完整链路，每个服务节点记录Span（耗时/状态）。追踪数据用于定位延迟瓶颈——找出调用链中最慢的服务节点进行优化。常见实现：Jaeger/Zipkin/SkyWalking，配合Prometheus指标监控和ELK日志聚合形成完整可观测性体系。
+
+</Answer>
+
+</Exercises>

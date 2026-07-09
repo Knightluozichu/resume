@@ -2008,7 +2008,17 @@ export type ReviewChapterSlug =
   | "ilh-authentication"
   | "ilh-caching"
   | "ilh-web-architecture"
-  | "ilh-final-review";
+  | "ilh-final-review"
+  | "isn-learning-map"
+  | "isn-server-basics"
+  | "isn-load-balancing"
+  | "isn-high-availability"
+  | "isn-dns-cdn"
+  | "isn-firewall-security"
+  | "isn-reverse-proxy"
+  | "isn-microservice-network"
+  | "isn-performance-tuning"
+  | "isn-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4021,6 +4031,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ilh-caching": "缓存机制：减少传输与加速访问",
   "ilh-web-architecture": "Web架构与未来：HTTP演进与生态",
   "ilh-final-review": "图解HTTP全书复习与知识整合",
+  "isn-learning-map": "图解服务端网络架构全书学习地图",
+  "isn-server-basics": "服务器网络基础：协议栈与架构",
+  "isn-load-balancing": "负载均衡机制：分发策略与算法",
+  "isn-high-availability": "高可用架构：冗余与故障转移",
+  "isn-dns-cdn": "DNS与CDN：域名解析与内容分发",
+  "isn-firewall-security": "防火墙与网络安全：访问控制与防御",
+  "isn-reverse-proxy": "反向代理与网关：请求路由与过滤",
+  "isn-microservice-network": "微服务网络：服务间通信与治理",
+  "isn-performance-tuning": "性能调优：网络优化与监控",
+  "isn-final-review": "图解服务端网络架构全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
