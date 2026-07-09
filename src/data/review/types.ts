@@ -2318,7 +2318,17 @@ export type ReviewChapterSlug =
   | "lsl-serving-inference"
   | "lsl-evaluation-testing"
   | "lsl-deployment-case"
-  | "lsl-final-review";
+  | "lsl-final-review"
+  | "bla-learning-map"
+  | "bla-llm-landscape"
+  | "bla-prompt-engineering"
+  | "bla-rag-applications"
+  | "bla-orchestration-frameworks"
+  | "bla-fine-tuning-apps"
+  | "bla-agent-applications"
+  | "bla-multimodal-apps"
+  | "bla-production-deployment"
+  | "bla-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4641,6 +4651,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "lsl-evaluation-testing": "评测与测试",
   "lsl-deployment-case": "部署实践与案例分析",
   "lsl-final-review": "全书复习与知识整合",
+  "bla-learning-map": "LLM应用构建·知识全景图",
+  "bla-llm-landscape": "LLM应用生态全景",
+  "bla-prompt-engineering": "提示工程实践",
+  "bla-rag-applications": "RAG应用开发",
+  "bla-orchestration-frameworks": "编排框架与LangChain",
+  "bla-fine-tuning-apps": "微调应用开发",
+  "bla-agent-applications": "Agent应用构建",
+  "bla-multimodal-apps": "多模态应用",
+  "bla-production-deployment": "生产部署与运维",
+  "bla-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

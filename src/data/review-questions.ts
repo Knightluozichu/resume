@@ -2195,6 +2195,16 @@ import { lslServingInferenceQuestions } from "./review/lsl-serving-inference";
 import { lslEvaluationTestingQuestions } from "./review/lsl-evaluation-testing";
 import { lslDeploymentCaseQuestions } from "./review/lsl-deployment-case";
 import { lslFinalReviewQuestions } from "./review/lsl-final-review";
+import { blaLearningMapQuestions } from "./review/bla-learning-map";
+import { blaLlmLandscapeQuestions } from "./review/bla-llm-landscape";
+import { blaPromptEngineeringQuestions } from "./review/bla-prompt-engineering";
+import { blaRagApplicationsQuestions } from "./review/bla-rag-applications";
+import { blaOrchestrationFrameworksQuestions } from "./review/bla-orchestration-frameworks";
+import { blaFineTuningAppsQuestions } from "./review/bla-fine-tuning-apps";
+import { blaAgentApplicationsQuestions } from "./review/bla-agent-applications";
+import { blaMultimodalAppsQuestions } from "./review/bla-multimodal-apps";
+import { blaProductionDeploymentQuestions } from "./review/bla-production-deployment";
+import { blaFinalReviewQuestions } from "./review/bla-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4425,6 +4435,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...lslEvaluationTestingQuestions,
   ...lslDeploymentCaseQuestions,
   ...lslFinalReviewQuestions,
+  ...blaLearningMapQuestions,
+  ...blaLlmLandscapeQuestions,
+  ...blaPromptEngineeringQuestions,
+  ...blaRagApplicationsQuestions,
+  ...blaOrchestrationFrameworksQuestions,
+  ...blaFineTuningAppsQuestions,
+  ...blaAgentApplicationsQuestions,
+  ...blaMultimodalAppsQuestions,
+  ...blaProductionDeploymentQuestions,
+  ...blaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
