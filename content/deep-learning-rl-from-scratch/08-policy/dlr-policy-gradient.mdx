@@ -1,0 +1,220 @@
+---
+title: "策略梯度方法"
+type: B
+section: "人工智能与机器学习"
+order: 8
+description: "策略梯度定理、REINFORCE与Actor-Critic"
+demo: true
+math: true
+sourceUrl: ""
+draft: true
+---
+
+import { DlrPolicyGradientDiagram } from "@/components/mdx/deep-learning-rl-from-scratch/diagrams/dlr-policy-gradient";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解策略梯度方法与值函数方法的核心区别
+- 掌握策略梯度定理及其直觉含义
+- 掌握 REINFORCE 算法及其高方差缺点
+- 理解 Actor-Critic 架构作为现代深度RL的基石
+
+</Objectives>
+
+## 从值方法到策略方法
+
+值函数方法（Q学习/DQN）先学 $Q(s,a)$ 再通过 argmax 间接得到策略，无法处理连续动作空间。**策略梯度方法**直接参数化并优化策略 $\pi_\theta(a|s)$。
+
+<DlrPolicyGradientDiagram />
+
+### 值方法 vs 策略方法
+
+| 特性 | 值方法（DQN） | 策略方法（Policy Gradient） |
+|------|-------------|------------------------|
+| 学习对象 | $Q(s,a)$ → argmax | $\pi_\theta(a\|s)$ |
+| 动作空间 | 离散 | 离散 + 连续 |
+| 策略类型 | 确定性 | 随机（可探索） |
+| 优化方式 | TD 回归 | 目标函数梯度上升 |
+
+## 策略梯度定理
+
+```text
+grad_theta J(theta) = E_pi [ grad_theta log pi_theta(a|s) * Q_pi(s,a) ]
+```
+
+### 直觉含义
+
+- `grad_theta log pi_theta(a|s)` 指向「增大在状态 $s$ 选动作 $a$ 的概率」的方向
+- $Q_\pi(s,a)$ 加权：好动作（Q 大）的梯度被放大，差动作（Q 小）被缩小
+- 整体效果：增大好动作概率，减小差动作概率
+
+<Callout type="info">
+
+**为什么用 log**：直接对 $\pi$ 求梯度需处理归一化常数（概率和为1）。对 $\log \pi$ 求梯度利用链式法则 $\nabla \log \pi = \nabla \pi / \pi$，与采样估计的 $1/\pi$ 权重抵消，得到简洁的无偏估计。
+
+</Callout>
+
+## REINFORCE 算法
+
+用 MC 回报 $G_t$ 近似 $Q_\pi(s,a)$：
+
+```text
+theta ← theta + alpha * grad_theta log pi_theta(a|s) * G_t
+```
+
+### 主要缺点
+
+1. **高方差**——$G_t$ 是完整 episode 的随机回报，方差大
+2. **必须等 episode 结束**——MC 需完整回报，无法在线更新
+3. **样本效率低**——每个 episode 只产生一次更新
+
+## 基线与优势函数
+
+引入基线 $b(s)$（通常用 $V(s)$）降低方差：
+
+```text
+theta ← theta + alpha * grad log pi(a|s) * (G_t - b(s))
+```
+
+- 基线不改变梯度期望（$\mathbb{E}[\nabla \log \pi \cdot b] = 0$）
+- 但大幅降低方差
+
+**优势函数** $A(s,a) = Q(s,a) - V(s)$ 进一步降方差。
+
+## Actor-Critic 架构
+
+将策略方法与值函数方法结合：
+
+- **Actor**（策略网络 $\pi_\theta$）——决策，根据状态输出动作概率
+- **Critic**（值网络 $V_w$）——评估，给 Actor 反馈
+
+```text
+Critic 更新：w ← w + beta * delta * grad_w V(s)
+Actor 更新：theta ← theta + alpha * grad log pi(a|s) * delta
+```
+
+其中 TD 误差 $\delta = r + \gamma V(s') - V(s)$ 作为优势信号。
+
+<Callout type="tip">
+
+**Actor-Critic 是现代深度RL的基石**：A3C（异步分布式）、PPO（裁剪目标函数）、SAC（最大熵正则化）都是 Actor-Critic 的变体。Actor 直接优化策略（支持连续动作），Critic 提供低方差梯度（借用值函数自举优势）。
+
+</Callout>
+
+## Python 示例：简单策略梯度
+
+```python
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class PolicyNetwork(nn.Module):
+    def __init__(self, state_dim, n_actions):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(state_dim, 128),
+            nn.ReLU(),
+            nn.Linear(128, n_actions),
+            nn.Softmax(dim=-1)  # 输出动作概率
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+def reinforce(policy_net, optimizer, trajectories, gamma=0.99):
+    """REINFORCE 策略梯度"""
+    for trajectory in trajectories:
+        # 计算每步的折扣回报 G_t
+        returns = []
+        G = 0
+        for r in reversed(trajectory['rewards']):
+            G = r + gamma * G
+            returns.insert(0, G)
+        returns = torch.tensor(returns)
+
+        # 标准化（降低方差）
+        returns = (returns - returns.mean()) / (returns.std() + 1e-8)
+
+        # 计算策略梯度损失
+        states = torch.FloatTensor(trajectory['states'])
+        actions = torch.LongTensor(trajectory['actions'])
+
+        probs = policy_net(states)
+        log_probs = torch.log(probs.gather(1, actions.unsqueeze(1)).squeeze())
+
+        # 损失 = -E[log pi(a|s) * G_t]（梯度上升 = 最小化负损失）
+        loss = -(log_probs * returns).mean()
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+```
+
+<Glossary>
+
+<GlossaryItem term="策略梯度方法">
+直接参数化和优化策略 pi_theta(a|s) 的 RL 方法。策略梯度定理：grad J(theta) = E[grad log pi(a|s) * Q(s,a)]，增大好动作概率、减小差动作概率。与值方法的区别：优化对象不同（策略 vs 值函数）。优势：支持连续动作、随机策略、多模态策略。缺点：高方差（需基线/Actor-Critic 降方差）、样本效率低（在策略）。是 PPO/SAC 等现代算法的基础。
+</GlossaryItem>
+
+<GlossaryItem term="策略梯度定理">
+RL 策略方法的核心数学定理：grad_theta J(theta) = E_pi[grad_theta log pi_theta(a|s) * Q_pi(s,a)]。对数策略梯度指向增大动作概率的方向，Q 加权使好动作概率增大、差动作减小。用 log 而非 pi 是为了消除归一化常数的影响（链式法则与采样权重抵消）。是 REINFORCE、Actor-Critic、PPO 等所有策略方法的数学基础。
+</GlossaryItem>
+
+<GlossaryItem term="REINFORCE">
+最简单的策略梯度算法（蒙特卡洛策略梯度）。用完整 episode 的回报 G_t 近似 Q：theta ← theta + alpha * grad log pi(a|s) * G_t。无偏但高方差（完整 episode 累积噪声），必须等 episode 结束。改进：引入基线 b(s)（通常 V(s)）降方差；用 Actor-Critic 的 TD 误差替代 G_t 降方差且在线学习。
+</GlossaryItem>
+
+<GlossaryItem term="Actor-Critic">
+策略梯度与值函数结合的架构。Actor（策略网络 pi_theta）负责决策，Critic（值网络 V_w）负责评估。Critic 用 TD 学习更新，Actor 用 Critic 的 TD 误差作为优势信号更新。降低方差（TD 误差替代 MC 回报）且在线学习。是现代深度 RL 的基石——A3C、PPO、SAC 都是 Actor-Critic 的变体。
+</GlossaryItem>
+
+<GlossaryItem term="基线（Baseline）">
+策略梯度中降低方差的技巧。减去与动作无关的基线 b(s)：theta ← theta + alpha * grad log pi(a|s) * (G_t - b(s))。基线不改变梯度期望（E[grad log pi * b] = 0，因为 grad log pi 对动作的期望为0），但减少梯度的波动范围，大幅降低方差。常用基线是 V(s)——此时 G_t - V(s) 就是优势函数 A(s,a) 的估计。
+</GlossaryItem>
+
+<GlossaryItem term="优势函数 A(s,a)">
+A(s,a) = Q(s,a) - V(s)，衡量动作 a 相对于平均水平的优势。A > 0 表示动作 a 比平均好（应增大概率），A < 0 表示比平均差（应减小概率）。用优势函数替代 Q 作为策略梯度权重，消除与动作无关的状态价值分量，降低方差。实践中用 TD 误差 delta = r + gamma*V(s') - V(s) 作为优势函数的在线估计（Actor-Critic 的核心）。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+策略梯度方法与值函数方法（如 Q学习/DQN）的核心区别是什么？
+
+<Answer>
+
+核心区别：①学习对象——值函数方法学 Q(s,a) 或 V(s)，再通过 argmax 间接得到策略；策略梯度方法直接参数化并学习策略 pi_theta(a|s)，输出动作的概率分布。②动作空间——值函数方法需对每个离散动作计算 Q 再 argmax，无法处理连续动作空间（max 在连续空间无解析解）；策略梯度直接从概率分布采样，天然支持连续动作。③策略类型——值方法产生确定性策略（argmax 选单一动作）；策略梯度产生随机策略（输出概率分布），有利于探索。④优化方式——值方法用 TD 误差更新 Q（回归问题）；策略梯度用目标函数 J(theta) 对 theta 的梯度上升（直接优化策略性能）。⑤理论基础——值方法基于贝尔曼方程；策略梯度基于策略梯度定理。⑥方差与偏差——值方法通过自举有偏但低方差；策略梯度用 MC 回报无偏但高方差（需基线减方差）。⑦适用场景——值方法适合离散动作、小状态空间；策略梯度适合连续动作、需要随机策略、或多模态最优策略的任务。两者并非对立——Actor-Critic 将两者结合，是现代深度 RL（A3C/PPO/SAC）的基础。
+</Answer>
+
+### 问题 2
+
+策略梯度定理是什么？它的直觉含义是什么？
+
+<Answer>
+
+策略梯度定理：grad_theta J(theta) = E_pi [ grad_theta log pi_theta(a|s) * Q_pi(s,a) ]。其中 J(theta) 是策略 pi_theta 的期望累计回报（性能指标），grad_theta log pi_theta(a|s) 是对数策略梯度，Q_pi(s,a) 是动作值函数。直觉含义：①梯度方向——grad_theta log pi_theta(a|s) 指向「增大在状态 s 选动作 a 的概率」的方向。②加权——用 Q_pi(s,a) 加权：Q 大（好动作）的梯度被放大，增大其概率；Q 小（差动作）的梯度被缩小甚至反向，减小其概率。③期望——对所有 (s,a) 按 pi_theta 的概率求期望，即按「实际发生的频率」加权。整体效果：增大好动作概率，减小差动作概率，使策略逐步优化。为什么用 log——直接对 pi 求梯度需处理归一化常数（概率和为1），对 log pi 求梯度利用了 log 的链式法则：grad log pi = grad pi / pi，与采样估计的 1/pi 权重抵消，得到简洁的无偏估计。实践：用 MC 回报 G_t 近似 Q_pi(s,a)，得 REINFORCE 算法：theta ← theta + alpha * grad_theta log pi_theta(a|s) * G_t。策略梯度定理是所有策略方法的数学基础。
+</Answer>
+
+### 问题 3
+
+REINFORCE 算法的流程是什么？它有什么主要缺点？如何改进？
+
+<Answer>
+
+REINFORCE（蒙特卡洛策略梯度）流程：①用当前策略 pi_theta 采样一个完整 episode：s_0, a_0, r_1, s_1, a_1, r_2, ..., s_T。②对每步 t 计算回报 G_t = sum_{k=t}^{T} gamma^(k-t) * r_{k+1}。③对每步 t 计算梯度并更新：theta ← theta + alpha * grad_theta log pi_theta(a_t|s_t) * G_t。④重复。主要缺点：①高方差——G_t 是完整 episode 的随机回报，方差很大（尤其在长 episode 中），导致梯度估计噪声大、学习慢。②必须等 episode 结束——MC 需完整回报，无法在线更新，在连续任务中不可用。③样本效率低——每个 episode 只产生一次更新，且无法复用旧数据（在策略）。④无基线——梯度中含大量与策略无关的常数项（如所有动作都增大），增加方差但无益。改进方法：①引入基线——减去一个与动作无关的基线 b(s)（通常用 V(s)）：theta ← theta + alpha * grad log pi(a|s) * (G_t - b(s))。基线不改变梯度期望（E[grad log pi * b] = 0），但大幅降低方差。②Actor-Critic——用 TD 误差替代 G_t：用 Critic 网络学 V(s)，TD 误差 delta = r + gamma*V(s') - V(s) 作为优势函数 A(s,a) 的估计，theta ← theta + alpha * grad log pi(a|s) * delta。降低方差且可在线学习。③优势函数——用 A(s,a) = Q(s,a) - V(s) 替代 Q，进一步降方差。这些改进是 PPO/A3C 等现代算法的基础。
+</Answer>
+
+### 问题 4
+
+Actor-Critic 架构是什么？为什么它是现代深度强化学习的基石？
+
+<Answer>
+
+Actor-Critic 架构：包含两个组件——①Actor（策略网络 pi_theta(a|s)）——根据当前状态输出动作概率，负责决策。②Critic（值网络 V_w(s) 或 Q_w(s,a)）——评估当前策略的好坏，负责给 Actor 反馈。两者交替更新：Critic 用 TD 学习更新值函数（w ← w + beta * delta * grad_w V(s)），Actor 用 Critic 的 TD 误差作为优势信号更新策略（theta ← theta + alpha * grad log pi(a|s) * delta）。这就是 GPI 的实例——Actor 是策略改进，Critic 是策略评估。为什么是现代深度 RL 基石：①降方差——用 Critic 的 TD 误差替代 MC 回报，方差大幅降低（只一步随机性），训练更稳定。②在线学习——TD 误差每步可算，无需等 episode 结束。③统一框架——值方法和策略方法的优点结合：Actor 直接优化策略（支持连续动作），Critic 提供低方差梯度（借用值函数的自举优势）。④扩展性——所有主流深度 RL 算法都是 Actor-Critic 的变体：A3C（异步分布式）、A2C（同步）、PPO（裁剪目标函数防止更新过大）、SAC（最大熵正则化鼓励探索）、DDPG/TD3（确定性策略梯度处理连续动作）。这些算法在机器人控制、游戏 AI、大模型 RLHF 等领域取得突破，Actor-Critic 架构是它们共同的骨架。
+</Answer>
+
+</Exercises>

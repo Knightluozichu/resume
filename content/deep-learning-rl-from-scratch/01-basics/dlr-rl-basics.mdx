@@ -1,0 +1,207 @@
+---
+title: "强化学习基础"
+type: A
+section: "人工智能与机器学习"
+order: 1
+description: "智能体、环境、奖励与探索利用的基本概念"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DlrRlBasicsDiagram } from "@/components/mdx/deep-learning-rl-from-scratch/diagrams/dlr-rl-basics";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 理解强化学习与监督学习的本质区别
+- 掌握智能体-环境交互闭环的核心要素
+- 理解探索与利用困境及其解决方案
+- 掌握延迟奖励与信用分配问题的挑战
+
+</Objectives>
+
+## 强化学习是什么
+
+强化学习（Reinforcement Learning, RL）研究的是**智能体（Agent）在与环境（Environment）的交互中，通过试错和延迟奖励来学习最优决策策略**的问题。
+
+<DlrRlBasicsDiagram />
+
+### 与监督学习的区别
+
+| 特性 | 监督学习 | 强化学习 |
+|------|---------|---------|
+| 数据 | 静态标注数据集 | 动态交互产生 |
+| 反馈 | 即时（每个输入有正确答案） | 延迟（回报可能在未来才出现） |
+| 决策 | 独立预测 | 序贯决策（当前决策影响未来） |
+| 目标 | 最小化预测误差 | 最大化累计期望回报 |
+
+<Callout type="warning">
+
+**RL 的核心挑战**：没有标签告诉智能体「在状态 s 做动作 a 是对的还是错的」。智能体只能通过尝试和观察回报来推断。而且回报往往是延迟的——下棋赢了一局，是第3步走得好还是第30步？这就是信用分配问题。
+
+</Callout>
+
+## 智能体-环境交互闭环
+
+在每个时间步 t：
+
+```text
+智能体观测状态 s_t → 选择动作 a_t → 环境转移到 s_{t+1} → 返回奖励 r_{t+1}
+     ↑                                                           │
+     └───────────────────────────────────────────────────────────┘
+```
+
+### 核心要素
+
+- **状态 s**：对环境的描述，包含决策所需的信息
+- **动作 a**：智能体可执行的操作
+- **奖励 r**：环境对动作的即时反馈标量
+- **策略 pi**：从状态到动作的映射（智能体的行为准则）
+- **值函数**：对长期累计回报的估计
+- **模型（可选）**：对环境动态（转移和奖励）的建模
+
+## 探索与利用困境
+
+智能体在决策时面临两难：
+
+- **利用（Exploitation）**：选择当前已知最优的动作，最大化短期回报
+- **探索（Exploration）**：尝试未知或较少尝试的动作，可能发现更好的长期策略
+
+<Callout type="info">
+
+**为什么不可避免**：RL 没有标签，智能体必须自己通过尝试收集信息。只利用可能陷入局部最优（从未尝试的动作可能更好）；只探索无法利用已学知识获取回报。每个决策时刻都必须权衡。
+
+</Callout>
+
+### 常见探索策略
+
+| 策略 | 机制 | 特点 |
+|------|------|------|
+| epsilon-贪心 | 以 epsilon 概率随机，1-epsilon 选最优 | 简单有效，最常用 |
+| softmax 采样 | 按 Q 值的 softmax 概率选择 | 温度参数控制探索强度 |
+| UCB | 按不确定性加权 | 自动平衡探索利用 |
+
+## 延迟奖励与信用分配
+
+**信用分配问题**：当一个 episode 结束后获得回报（或失败），智能体需要判断「这个结果应该归因于序列中的哪一步动作」。
+
+延迟奖励使学习困难的原因：
+
+1. **反馈稀疏**——很多任务只在 episode 结束时给奖励（如围棋的胜负），中间步骤无反馈
+2. **时间跨度长**——一个动作的影响可能跨越数十上百步，梯度信号严重衰减
+3. **噪声干扰**——环境随机性和后续动作叠加，难以隔离单个动作的贡献
+
+### 解决思路
+
+- **折扣回报**：用 gamma 衰减让近期奖励权重更大
+- **值函数**：通过贝尔曼方程递归传播未来回报到当前状态
+- **资格迹**：记录近期访问过的状态-动作，将 TD 误差分配给它们
+
+## Python 示例：简单的 RL 交互框架
+
+```python
+import numpy as np
+
+class Agent:
+    def __init__(self, n_actions, epsilon=0.1):
+        self.n_actions = n_actions
+        self.epsilon = epsilon
+        self.Q = {}  # 状态-动作值表
+
+    def select_action(self, state):
+        # epsilon-贪心策略
+        if np.random.random() < self.epsilon:
+            return np.random.randint(self.n_actions)  # 探索
+        # 利用：选 Q 值最大的动作
+        q_values = self.Q.get(state, np.zeros(self.n_actions))
+        return np.argmax(q_values)
+
+    def update(self, state, action, reward, next_state, alpha=0.1, gamma=0.9):
+        # Q 学习更新
+        q_values = self.Q.get(state, np.zeros(self.n_actions))
+        next_q_values = self.Q.get(next_state, np.zeros(self.n_actions))
+        td_target = reward + gamma * np.max(next_q_values)
+        q_values[action] += alpha * (td_target - q_values[action])
+        self.Q[state] = q_values
+
+# 简单交互循环
+agent = Agent(n_actions=4, epsilon=0.1)
+state = env.reset()
+for step in range(1000):
+    action = agent.select_action(state)
+    next_state, reward, done = env.step(action)
+    agent.update(state, action, reward, next_state)
+    state = next_state
+    if done:
+        state = env.reset()
+```
+
+<Glossary>
+
+<GlossaryItem term="强化学习（RL）">
+智能体在与环境的交互中，通过试错和延迟奖励学习最优决策策略的机器学习范式。与监督学习的区别：无标签、延迟反馈、序贯决策。核心要素包括状态、动作、奖励、策略、值函数和可选的模型。目标是最大化累计期望回报。三大独特挑战：探索-利用困境、延迟奖励与信用分配、序贯决策的时间跨度。
+</GlossaryItem>
+
+<GlossaryItem term="智能体-环境交互闭环">
+RL 的基本框架。智能体观测状态 s_t，根据策略 pi 选择动作 a_t；环境接收动作后转移到新状态 s_{t+1} 并返回奖励 r_{t+1}；智能体据此更新策略。这个循环持续到终止状态或无限进行。智能体和环境之间的边界是信息流动的关口——智能体控制动作，环境控制状态转移和奖励。
+</GlossaryItem>
+
+<GlossaryItem term="探索与利用困境">
+RL 智能体在决策时面临的核心两难。利用（exploitation）选择当前已知最优动作以最大化短期回报；探索（exploration）尝试未知动作以发现可能更优的长期策略。两者不可兼得。常见解决策略：epsilon-贪心（以 epsilon 概率随机探索）、softmax 采样（按值函数概率选择）、UCB（按不确定性加权）。没有免费午餐——每个策略都在探索效率与利用收益间权衡。
+</GlossaryItem>
+
+<GlossaryItem term="延迟奖励与信用分配">
+RL 的核心挑战。奖励往往是延迟的（当前动作的好坏要到未来才体现），智能体需要将最终的回报归因到序列中的具体动作——这就是信用分配问题。导致困难的原因：反馈稀疏（只在 episode 结束给奖励）、时间跨度长（影响跨越多步）、噪声干扰（环境随机性）。解决方法：折扣回报（gamma 衰减）、值函数（贝尔曼递归传播）、资格迹（TD 误差分配）。
+</GlossaryItem>
+
+<GlossaryItem term="序贯决策">
+RL 与监督学习的核心区别之一。监督学习每个样本独立预测，RL 的当前决策影响后续状态和未来所有奖励——动作的效果在时间维度上传播。这使得 RL 不能只看即时奖励，必须考虑长期累计回报。值函数通过折扣回报 G_t = sum gamma^k * r_{t+k+1} 将长期影响压缩到当前状态的评估中。
+</GlossaryItem>
+
+<GlossaryItem term="策略（Policy）">
+智能体的行为准则，从状态到动作的映射。分为确定性策略 a = pi(s) 和随机策略 pi(a|s)（输出动作概率分布）。策略是 RL 的最终产物——学到的策略决定了智能体在环境中的行为。值方法（Q学习/DQN）通过 argmax Q 间接得到确定性策略；策略梯度方法直接参数化 pi_theta(a|s) 学习随机策略。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+### 问题 1
+
+强化学习与监督学习的核心区别是什么？
+
+<Answer>
+
+核心区别：①数据来源——监督学习有静态的标注数据集（输入-标签对），强化学习没有标签，通过智能体与环境交互动态产生数据（状态-动作-奖励序列）。②反馈类型——监督学习的反馈是即时的（每个输入对应正确答案），强化学习的反馈是延迟的（当前动作的好坏可能要到未来很多步后才体现，称为延迟奖励问题）。③决策性质——监督学习是独立预测（每个样本独立），强化学习是序贯决策（当前决策影响后续状态和未来的所有奖励）。④目标——监督学习最小化预测误差，强化学习最大化累计期望回报。这些区别决定了 RL 需要探索-利用权衡、信用分配等监督学习不需要的独特机制。
+</Answer>
+
+### 问题 2
+
+强化学习中智能体与环境的交互闭环是怎样的？包含哪些核心要素？
+
+<Answer>
+
+交互闭环：在每个时间步 t，智能体观测当前状态 s_t，根据策略 pi 选择动作 a_t；环境接收动作 a_t，转移到新状态 s_{t+1}（按转移概率 P），并返回奖励 r_{t+1}；智能体根据新状态和奖励更新策略。这个循环持续到终止状态或无限进行。核心要素：①状态 s——对环境的描述，包含决策所需的信息。②动作 a——智能体可执行的操作。③奖励 r——环境对动作的即时反馈标量。④策略 pi——从状态到动作的映射（智能体的行为准则）。⑤值函数——对长期累计回报的估计。⑥模型（可选）——对环境动态（转移和奖励）的建模。目标是在这个闭环中学习一个策略，使累计期望回报最大化。
+</Answer>
+
+### 问题 3
+
+什么是探索与利用困境？为什么它在强化学习中不可避免？
+
+<Answer>
+
+探索与利用困境（Exploration vs Exploitation）：智能体在决策时面临两难——利用（exploitation）选择当前已知最优的动作，可以最大化短期回报；探索（exploration）尝试未知或较少尝试的动作，可能发现更好的长期策略。两者不可兼得，每个决策时刻都必须权衡。为什么不可避免：①RL 没有标签，智能体必须自己通过尝试收集信息。②如果只利用，可能陷入局部最优（从未尝试过的动作可能更好）。③如果只探索，无法利用已学知识获取回报。④探索有代价（可能选择已知较差的动作），但不探索永远无法学到最优策略。常见策略：epsilon-贪心（以 epsilon 概率随机探索，1-epsilon 利用）、softmax 采样（按值函数的 softmax 概率选择）、UCB（置信上界，按不确定性加权）。这是 RL 区别于监督学习的核心难题之一。
+</Answer>
+
+### 问题 4
+
+强化学习中的「信用分配问题」是什么？延迟奖励为什么使学习变得困难？
+
+<Answer>
+
+信用分配问题（Credit Assignment Problem）：当一个 episode 结束后获得回报（或失败），智能体需要判断「这个结果应该归因于序列中的哪一步动作」。例如下棋输了，是第3步走错了还是第30步走错了？延迟奖励使学习困难的原因：①反馈稀疏——很多任务只在 episode 结束时给奖励（如围棋的胜负），中间步骤无反馈，智能体不知道哪些动作导致了最终结果。②时间跨度长——一个动作的影响可能跨越数十上百步，梯度信号在时间维度上严重衰减。③噪声干扰——环境的随机性和后续动作的效果叠加，难以隔离单个动作的贡献。解决方法：①折扣回报——用 gamma 衰减让近期奖励权重更大。②值函数——通过贝尔曼方程递归地传播未来回报到当前状态。③资格迹（Eligibility Traces）——记录近期访问过的状态-动作，将 TD 误差分配给它们。④注意力机制和分层 RL——在深度 RL 中进一步缓解长程信用分配。信用分配是 RL 的核心难题，贯穿全书所有算法。
+</Answer>
+
+</Exercises>

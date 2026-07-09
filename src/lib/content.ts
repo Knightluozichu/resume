@@ -255,6 +255,7 @@ export const BOOK_ORDER = [
   "deep-learning-from-scratch",
   "deep-learning-from-scratch-2",
   "deep-learning-nlp-advanced",
+  "deep-learning-rl-from-scratch",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -450,6 +451,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "deep-learning-from-scratch": "深度学习入门：基于Python的理论与实现",
   "deep-learning-from-scratch-2": "深度学习入门2：自制框架",
   "deep-learning-nlp-advanced": "深度学习进阶：自然语言处理",
+  "deep-learning-rl-from-scratch": "深度学习入门4：强化学习",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

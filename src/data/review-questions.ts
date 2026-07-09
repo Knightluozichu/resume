@@ -2075,6 +2075,16 @@ import { dnaAttentionQuestions } from "./review/dna-attention";
 import { dnaTransformerQuestions } from "./review/dna-transformer";
 import { dnaTextGenerationQuestions } from "./review/dna-text-generation";
 import { dnaFinalReviewQuestions } from "./review/dna-final-review";
+import { dlrLearningMapQuestions } from "./review/dlr-learning-map";
+import { dlrRlBasicsQuestions } from "./review/dlr-rl-basics";
+import { dlrMdpQuestions } from "./review/dlr-mdp";
+import { dlrValueFunctionsQuestions } from "./review/dlr-value-functions";
+import { dlrDynamicProgrammingQuestions } from "./review/dlr-dynamic-programming";
+import { dlrMonteCarloTdQuestions } from "./review/dlr-monte-carlo-td";
+import { dlrQLearningQuestions } from "./review/dlr-q-learning";
+import { dlrDeepQNetworkQuestions } from "./review/dlr-deep-q-network";
+import { dlrPolicyGradientQuestions } from "./review/dlr-policy-gradient";
+import { dlrFinalReviewQuestions } from "./review/dlr-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4185,6 +4195,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dnaTransformerQuestions,
   ...dnaTextGenerationQuestions,
   ...dnaFinalReviewQuestions,
+  ...dlrLearningMapQuestions,
+  ...dlrRlBasicsQuestions,
+  ...dlrMdpQuestions,
+  ...dlrValueFunctionsQuestions,
+  ...dlrDynamicProgrammingQuestions,
+  ...dlrMonteCarloTdQuestions,
+  ...dlrQLearningQuestions,
+  ...dlrDeepQNetworkQuestions,
+  ...dlrPolicyGradientQuestions,
+  ...dlrFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

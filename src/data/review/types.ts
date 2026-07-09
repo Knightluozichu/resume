@@ -2198,7 +2198,17 @@ export type ReviewChapterSlug =
   | "dna-attention"
   | "dna-transformer"
   | "dna-text-generation"
-  | "dna-final-review";
+  | "dna-final-review"
+  | "dlr-learning-map"
+  | "dlr-rl-basics"
+  | "dlr-mdp"
+  | "dlr-value-functions"
+  | "dlr-dynamic-programming"
+  | "dlr-monte-carlo-td"
+  | "dlr-q-learning"
+  | "dlr-deep-q-network"
+  | "dlr-policy-gradient"
+  | "dlr-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4401,6 +4411,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dna-transformer": "Transformer架构",
   "dna-text-generation": "文本生成实践",
   "dna-final-review": "全书复习与知识整合",
+  "dlr-learning-map": "全书学习地图",
+  "dlr-rl-basics": "强化学习基础",
+  "dlr-mdp": "马尔可夫决策过程",
+  "dlr-value-functions": "值函数与贝尔曼方程",
+  "dlr-dynamic-programming": "动态规划",
+  "dlr-monte-carlo-td": "蒙特卡洛与时序差分",
+  "dlr-q-learning": "Q学习与SARSA",
+  "dlr-deep-q-network": "深度Q网络",
+  "dlr-policy-gradient": "策略梯度方法",
+  "dlr-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
