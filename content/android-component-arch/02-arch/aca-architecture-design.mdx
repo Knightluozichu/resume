@@ -1,0 +1,202 @@
+---
+title: "架构设计"
+type: A
+section: "Android开发"
+order: 2
+description: "组件化五层分层架构——壳工程、业务组件、公共业务、基础架构、SDK"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AcaArchitectureDesignDiagram } from "@/components/mdx/android-component-arch/diagrams/aca-architecture-design";
+
+<Objectives>
+
+- 掌握组件化五层分层架构的设计原理
+- 理解壳工程、业务组件、公共业务、基础架构的职责边界
+- 学会组件间依赖方向规则与禁止反向依赖的原因
+- 能够为真实项目设计组件化分层方案
+
+</Objectives>
+
+## 五层分层架构
+
+<AcaArchitectureDesignDiagram />
+
+## 第1层：壳工程
+
+壳工程是组件化架构的顶层入口，职责极简——集成组件、初始化框架，不写业务逻辑：
+
+```kotlin
+// app/build.gradle.kts
+dependencies {
+    implementation(project(":module-home"))
+    implementation(project(":module-login"))
+    implementation(project(":module-order"))
+    implementation(project(":common-biz"))
+    implementation(project(":common-core"))
+}
+
+// App.kt——壳工程只做初始化
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // 初始化路由
+        ARouter.init(this)
+        // 初始化DI
+        DaggerAppComponent.create().inject(this)
+        // 初始化公共组件
+        ComponentManager.init(this)
+    }
+}
+```
+
+<Callout type="warning" title="红线">
+壳工程禁止包含任何业务逻辑代码。如果壳工程里有 Activity/Fragment/Repository，说明分层出了问题。
+</Callout>
+
+## 第2层：业务组件层
+
+业务组件是按业务边界拆分的独立 module，每个组件包含自己的 UI、逻辑、数据：
+
+```kotlin
+// module-order/build.gradle.kts
+// 根据isRunAlone切换插件
+if (isRunAlone.toBoolean()) {
+    apply(plugin: "com.android.application")  // 独立运行
+} else {
+    apply(plugin: "com.android.library")       // 作为依赖
+}
+
+dependencies {
+    implementation(project(":common-core"))
+    implementation(project(":common-biz"))
+    // 禁止 implementation(project(":module-home"))
+    // 业务组件之间禁止直接依赖！
+}
+
+// module-order 内部结构
+// src/main/java/com/example/order/
+//   ui/OrderDetailActivity.kt
+//   ui/OrderListFragment.kt
+//   domain/OrderRepository.kt
+//   data/OrderApi.kt
+//   service/OrderServiceImpl.kt  // 实现 common 层接口
+```
+
+## 第3层：公共业务层
+
+公共业务层存放多组件共享的业务能力：
+
+```kotlin
+// common-biz/——多个业务组件共享的业务逻辑
+// share/ShareManager.kt    -> 分享能力
+// pay/PayManager.kt        -> 支付能力
+// push/PushManager.kt      -> 推送能力
+// stat/StatManager.kt      -> 统计上报
+
+// common-biz 依赖 common-core，不依赖任何业务组件
+dependencies {
+    implementation(project(":common-core"))
+}
+```
+
+## 第4层：基础架构层
+
+基础架构层是全App的基础设施，提供网络、存储、路由、DI等能力：
+
+```kotlin
+// common-core/——基础架构
+// net/RetrofitClient.kt     -> 网络请求
+// db/RoomHelper.kt          -> 本地存储
+// router/RouterPaths.kt     -> 路由路径常量
+// di/AppModule.kt           -> DI模块
+// base/BaseActivity.kt      -> Base类
+// utils/                    -> 工具类
+
+// common-core 不依赖任何上层模块
+// 它是最底层的基础设施
+```
+
+## 依赖方向规则
+
+<Callout type="danger" title="铁律：上层依赖下层，禁止反向">
+依赖方向只能从上到下：壳工程 → 业务组件 → 公共业务 → 基础架构 → SDK。禁止反向依赖（common-core 不能 import module-home），禁止同层依赖（module-home 不能 import module-order）。
+</Callout>
+
+```kotlin
+// 正确：module-home 依赖 common-core
+// module-home/build.gradle.kts
+implementation(project(":common-core"))
+
+// 错误：module-home 依赖 module-order（同层依赖）
+// implementation(project(":module-order"))  // 编译报错或违反架构
+
+// 正确：module-home 需要跳转 module-order 时用路由
+ARouter.getInstance().build("/order/detail").navigation()
+
+// 正确：module-home 需要调用 module-order 的能力时用接口下沉
+// common-core 定义接口
+interface IOrderService : IProvider {
+    fun getOrderCount(): Int
+}
+// module-order 实现接口
+@Route(path = "/order/service")
+class OrderServiceImpl : IOrderService {
+    override fun getOrderCount(): Int = repository.getCount()
+}
+// module-home 通过ARouter获取实现
+val service = ARouter.getInstance().build("/order/service")
+    .navigation() as IOrderService
+```
+
+<Glossary>
+
+<GlossaryItem term="壳工程">
+组件化架构顶层的 Application 模块。不含业务逻辑，只负责集成各业务组件和初始化全局框架（路由、DI、推送等）。
+</GlossaryItem>
+
+<GlossaryItem term="业务组件">
+按业务边界拆分的独立 Gradle module，包含该业务的完整 UI、逻辑和数据层。可独立编译运行，通过路由与其他组件交互。
+</GlossaryItem>
+
+<GlossaryItem term="公共业务层">
+存放多个业务组件共享的业务能力（如分享、支付、推送）的模块。依赖基础架构层，不依赖任何业务组件。
+</GlossaryItem>
+
+<GlossaryItem term="反向依赖">
+下层模块依赖上层模块的违规行为。如 common-core 依赖 module-home。反向依赖会打破分层架构，导致循环依赖和架构腐化。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：五层分层架构的每一层职责是什么？
+
+<Answer>
+①壳工程（app）——集成各业务组件、初始化全局框架（路由/DI），不含业务逻辑 ②业务组件层——按业务边界拆分的独立module，包含该业务的UI/逻辑/数据，可独立编译运行 ③公共业务层（common-biz）——多组件共享的业务能力（分享/支付/推送/统计） ④基础架构层（common-core）——全App基础设施（网络/存储/路由/DI/Base类/工具类） ⑤第三方SDK层——AndroidX/OkHttp/Retrofit/Glide/ARouter/Dagger2等外部依赖。
+</Answer>
+
+**问题 2**：为什么禁止反向依赖和同层依赖？如何解决组件间交互需求？
+
+<Answer>
+反向依赖（下层依赖上层）会打破分层架构导致循环依赖，编译报错。同层依赖（业务组件间互相依赖）会让组件不再独立，失去组件化意义。解决方式：①页面跳转用路由——ARouter.build(path).navigation()，编译期注解运行期查表 ②数据交互用接口下沉——接口定义在common层，提供方组件实现，调用方通过ARouter Provider获取实现 ③事件通知用事件总线——EventBus发布订阅。
+</Answer>
+
+**问题 3**：isRunAlone 的作用是什么？如何实现？
+
+<Answer>
+isRunAlone是组件化的开关标志。true时组件作为application独立运行（debug调试），false时作为library被壳工程集成（release发布）。实现方式：在gradle.properties中设置isRunAlone=false，在组件build.gradle中根据isRunAlone值切换插件——true用com.android.application，false用com.android.library。独立运行时组件需要自己的Application和启动Activity，集成时这些代码用debug sourceSet隔离。
+</Answer>
+
+**问题 4**：壳工程为什么不能包含业务逻辑？
+
+<Answer>
+壳工程是组件集成的容器，如果包含业务逻辑会导致：①该业务无法独立测试和复用——它被锁死在壳工程里 ②违反单一职责——壳工程既要集成又要处理业务 ③编译耦合——壳工程改动会触发全量编译 ④团队冲突——壳工程成为所有人的修改热点。正确做法是所有业务逻辑都拆到对应业务组件中，壳工程只做集成和初始化。
+</Answer>
+
+</Exercises>

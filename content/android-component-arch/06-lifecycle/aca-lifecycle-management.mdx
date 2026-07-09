@@ -1,0 +1,231 @@
+---
+title: "生命周期管理"
+type: A
+section: "Android开发"
+order: 6
+description: "组件生命周期——Activity计数判断前后台，SPI分发至各组件"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AcaLifecycleManagementDiagram } from "@/components/mdx/android-component-arch/diagrams/aca-lifecycle-management";
+
+<Objectives>
+
+- 掌握组件化中 App 全局生命周期的管理方式
+- 理解 Activity 计数法判断前后台的原理
+- 学会通过 SPI 机制将生命周期事件分发给各组件
+- 能够实现组件级别的懒加载与资源回收
+
+</Objectives>
+
+## 组件化生命周期
+
+<AcaLifecycleManagementDiagram />
+
+## App 全局生命周期
+
+组件化中，各业务组件需要感知 App 的前后台状态（如推送暂停、统计上报），但组件不能直接访问 Application。解决方案：通过 ActivityLifecycleCallbacks 监听全局 Activity 数量，判断前后台。
+
+```kotlin
+// 1. common-core 定义生命周期接口
+interface IAppLifecycle {
+    fun onForeground()   // 进入前台
+    fun onBackground()   // 进入后台
+    fun onLowMemory()    // 低内存
+    fun onTerminate()    // App 退出
+}
+
+// 2. 壳工程注册监听
+class App : Application() {
+    private var activityCount = 0
+
+    override fun onCreate() {
+        super.onCreate()
+        registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
+            override fun onActivityStarted(activity: Activity) {
+                activityCount++
+                if (activityCount == 1) {
+                    // 从后台进入前台
+                    LifecycleDispatcher.dispatchForeground()
+                }
+            }
+            override fun onActivityStopped(activity: Activity) {
+                activityCount--
+                if (activityCount == 0) {
+                    // 从前台进入后台
+                    LifecycleDispatcher.dispatchBackground()
+                }
+            }
+        })
+    }
+}
+```
+
+<Callout type="info" title="Activity 计数原理">
+onActivityStarted 时 count++，onActivityStopped 时 count--。count == 0 表示所有 Activity 都不可见（后台），count == 1 表示从后台恢复到前台。这是判断 App 前后台的标准方案。
+</Callout>
+
+## SPI 机制分发
+
+```kotlin
+// 1. 生命周期分发器——common-core
+object LifecycleDispatcher {
+    private val listeners = mutableListOf<IAppLifecycle>()
+
+    // 组件注册监听
+    fun register(listener: IAppLifecycle) {
+        listeners.add(listener)
+    }
+
+    fun unregister(listener: IAppLifecycle) {
+        listeners.remove(listener)
+    }
+
+    fun dispatchForeground() {
+        listeners.forEach { it.onForeground() }
+    }
+
+    fun dispatchBackground() {
+        listeners.forEach { it.onBackground() }
+    }
+}
+
+// 2. 各组件注册监听
+class OrderComponent : IAppLifecycle {
+    fun init() {
+        LifecycleDispatcher.register(this)
+    }
+
+    override fun onForeground() {
+        // 前台：开始轮询订单状态
+        startOrderPolling()
+    }
+
+    override fun onBackground() {
+        // 后台：停止轮询，省电
+        stopOrderPolling()
+    }
+}
+```
+
+## 组件初始化
+
+```kotlin
+// 1. 组件初始化接口——common-core
+interface IComponent {
+    fun init(application: Application)
+}
+
+// 2. 组件管理器——收集并初始化所有组件
+object ComponentManager {
+    private val components = listOf<IComponent>(
+        HomeComponent(),
+        LoginComponent(),
+        OrderComponent(),
+        ProductComponent()
+    )
+
+    fun init(app: Application) {
+        components.forEach { it.init(app) }
+    }
+}
+
+// 3. 壳工程调用
+class App : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        ComponentManager.init(this)  // 初始化所有组件
+    }
+}
+```
+
+<Callout type="warning" title="懒加载优化">
+不要在 App.onCreate 中初始化所有组件。按优先级分批：核心组件（路由、网络、DI）在 onCreate 初始化；业务组件在首次进入时懒加载。
+</Callout>
+
+## 组件生命周期任务
+
+```kotlin
+class HomeComponent : IComponent, IAppLifecycle {
+    private var isInitialized = false
+
+    override fun init(application: Application) {
+        // 注册路由
+        ARouter.getInstance().inject(this)
+        // 注册生命周期监听
+        LifecycleDispatcher.register(this)
+    }
+
+    // 懒加载——首次进入才初始化
+    fun ensureInitialized() {
+        if (!isInitialized) {
+            // 初始化首页数据
+            loadHomeData()
+            isInitialized = true
+        }
+    }
+
+    override fun onForeground() {
+        if (isInitialized) {
+            refreshHomeData()  // 前台刷新
+        }
+    }
+
+    override fun onBackground() {
+        // 后台释放图片缓存
+        Glide.get(app).clearMemory()
+    }
+}
+```
+
+<Glossary>
+
+<GlossaryItem term="ActivityLifecycleCallbacks">
+Application 提供的全局 Activity 生命周期回调接口。可监听所有 Activity 的创建、启动、暂停、停止、销毁事件，用于全局行为监听。
+</GlossaryItem>
+
+<GlossaryItem term="Activity 计数法">
+通过统计 onActivityStarted（++）和 onActivityStopped（--）的数量判断 App 前后台。count==0 为后台，count==1 为从前台恢复。
+</GlossaryItem>
+
+<GlossaryItem term="SPI">
+Service Provider Interface，服务发现机制。定义接口在 common 层，各组件实现并注册，由分发器统一调用。用于组件化中跨组件的生命周期分发。
+</GlossaryItem>
+
+<GlossaryItem term="懒加载">
+组件不在 App 启动时立即初始化，而是在首次使用时才初始化。减少启动时间，按需加载。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：Activity 计数法判断前后台的原理是什么？
+
+<Answer>
+通过Application.registerActivityLifecycleCallbacks注册全局监听。onActivityStarted时count++，onActivityStopped时count--。count==0表示所有Activity都不可见（App在后台），count从0变1表示从后台进入前台，count从1变0表示从前台进入后台。原理：Activity可见时一定处于Started状态，全部Stopped则App在后台。
+</Answer>
+
+**问题 2**：组件化中如何把前后台事件分发给各组件？
+
+<Answer>
+用SPI机制。①common-core定义IAppLifecycle接口（onForeground/onBackground等方法）和LifecycleDispatcher分发器 ②壳工程通过Activity计数法判断前后台变化，调用LifecycleDispatcher.dispatchForeground()/dispatchBackground() ③各业务组件实现IAppLifecycle接口并注册到LifecycleDispatcher ④分发器遍历所有注册的监听器调用对应方法。组件不直接访问Application，通过SPI间接接收事件。
+</Answer>
+
+**问题 3**：组件初始化的懒加载策略是什么？为什么需要？
+
+<Answer>
+懒加载策略：核心组件（路由、网络、DI）在App.onCreate中立即初始化；业务组件在首次进入时才初始化。原因：①减少App启动时间——如果10个组件都在onCreate初始化，启动时间叠加 ②按需加载——用户可能只用首页，不需要初始化订单组件 ③节省内存——未使用的组件不占用内存。实现：用isInitialized标志位控制，首次调用ensureInitialized()时才执行初始化逻辑。
+</Answer>
+
+**问题 4**：组件在前后台切换时应该做哪些操作？
+
+<Answer>
+前台（onForeground）：①刷新数据——拉取最新数据 ②恢复动画/轮询——如订单状态轮询 ③恢复推送展示。后台（onBackground）：①暂停轮询——省电省流量 ②释放资源——如图片内存缓存clearMemory ③暂停动画——避免后台耗电。低内存（onLowMemory）：清理非必要缓存。退出（onTerminate）：注销注册、释放连接。关键是前台活跃、后台省资源。
+</Answer>
+
+</Exercises>

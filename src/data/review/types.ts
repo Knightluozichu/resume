@@ -1818,7 +1818,17 @@ export type ReviewChapterSlug =
   | "kia-type-system"
   | "kia-dsl-patterns"
   | "kia-concurrency"
-  | "kia-final-review";
+  | "kia-final-review"
+  | "aca-learning-map"
+  | "aca-component-intro"
+  | "aca-architecture-design"
+  | "aca-router-navigation"
+  | "aca-component-communication"
+  | "aca-dependency-injection"
+  | "aca-lifecycle-management"
+  | "aca-build-deploy"
+  | "aca-practice-case"
+  | "aca-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3641,6 +3651,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "kia-dsl-patterns": "DSL与领域建模",
   "kia-concurrency": "并发与协程",
   "kia-final-review": "全书复习",
+  "aca-learning-map": "全书学习地图",
+  "aca-component-intro": "组件化概述",
+  "aca-architecture-design": "架构设计",
+  "aca-router-navigation": "路由与导航",
+  "aca-component-communication": "组件通信",
+  "aca-dependency-injection": "依赖注入",
+  "aca-lifecycle-management": "生命周期管理",
+  "aca-build-deploy": "构建与部署",
+  "aca-practice-case": "实战案例",
+  "aca-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

@@ -1695,6 +1695,16 @@ import { kiaTypeSystemQuestions } from "./review/kia-type-system";
 import { kiaDslPatternsQuestions } from "./review/kia-dsl-patterns";
 import { kiaConcurrencyQuestions } from "./review/kia-concurrency";
 import { kiaFinalReviewQuestions } from "./review/kia-final-review";
+import { acaLearningMapQuestions } from "./review/aca-learning-map";
+import { acaComponentIntroQuestions } from "./review/aca-component-intro";
+import { acaArchitectureDesignQuestions } from "./review/aca-architecture-design";
+import { acaRouterNavigationQuestions } from "./review/aca-router-navigation";
+import { acaComponentCommunicationQuestions } from "./review/aca-component-communication";
+import { acaDependencyInjectionQuestions } from "./review/aca-dependency-injection";
+import { acaLifecycleManagementQuestions } from "./review/aca-lifecycle-management";
+import { acaBuildDeployQuestions } from "./review/aca-build-deploy";
+import { acaPracticeCaseQuestions } from "./review/aca-practice-case";
+import { acaFinalReviewQuestions } from "./review/aca-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3425,6 +3435,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...kiaDslPatternsQuestions,
   ...kiaConcurrencyQuestions,
   ...kiaFinalReviewQuestions,
+  ...acaLearningMapQuestions,
+  ...acaComponentIntroQuestions,
+  ...acaArchitectureDesignQuestions,
+  ...acaRouterNavigationQuestions,
+  ...acaComponentCommunicationQuestions,
+  ...acaDependencyInjectionQuestions,
+  ...acaLifecycleManagementQuestions,
+  ...acaBuildDeployQuestions,
+  ...acaPracticeCaseQuestions,
+  ...acaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

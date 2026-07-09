@@ -1,0 +1,227 @@
+---
+title: "构建与部署"
+type: C
+section: "Android开发"
+order: 7
+description: "Gradle多模块构建——变体管理、集成/独立模式切换、多渠道打包"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AcaBuildDeployDiagram } from "@/components/mdx/android-component-arch/diagrams/aca-build-deploy";
+
+<Objectives>
+
+- 掌握 Gradle 多模块构建配置与依赖管理
+- 理解 isRunAlone 切换集成/独立模式的实现原理
+- 学会 buildTypes 和 productFlavors 的多渠道打包
+- 能够设计组件化项目的构建发布流程
+
+</Objectives>
+
+## 多模块构建流程
+
+<AcaBuildDeployDiagram />
+
+## Gradle 多模块结构
+
+```gradle
+// settings.gradle.kts
+include(":app")
+include(":module-home")
+include(":module-login")
+include(":module-order")
+include(":common-biz")
+include(":common-core")
+
+// gradle.properties
+isRunAlone=false  // 全局开关：false=集成模式，true=独立模式
+```
+
+## isRunAlone 切换模式
+
+```gradle
+// module-home/build.gradle.kts
+val isRunAlone = project.properties["isRunAlone"].toString().toBoolean()
+
+if (isRunAlone) {
+    // 独立模式——作为 App 运行（debug 调试）
+    apply(plugin = "com.android.application")
+} else {
+    // 集成模式——作为 Library 被壳工程依赖（release 发布）
+    apply(plugin = "com.android.library")
+}
+
+android {
+    // 独立模式需要 applicationId
+    if (isRunAlone) {
+        applicationId = "com.example.module_home"
+    }
+
+    defaultConfig {
+        if (isRunAlone) {
+            // 独立模式的 Application 和启动 Activity
+            manifestPlaceholders["app_name"] = "首页组件"
+        }
+    }
+
+    sourceSets {
+        getByName("main") {
+            // 独立模式有额外的 AndroidManifest（声明启动Activity）
+            if (isRunAlone) {
+                manifest.srcFile("src/main/alone/AndroidManifest.xml")
+            } else {
+                manifest.srcFile("src/main/AndroidManifest.xml")
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation(project(":common-core"))
+    // 独立模式需要引入其他组件的 stub
+    if (!isRunAlone) {
+        // 集成模式不需要额外依赖
+    }
+}
+```
+
+<Callout type="info" title="独立模式的 Manifest">
+独立模式需要自己的 AndroidManifest.xml 声明 Application 和启动 Activity，让组件可独立启动。集成模式时这些声明会被壳工程的 Manifest 覆盖。
+</Callout>
+
+## buildTypes 与变体
+
+```gradle
+android {
+    buildTypes {
+        getByName("debug") {
+            isMinifyEnabled = false
+            // debug 模式下允许独立运行
+            buildConfigField("boolean", "IS_RUN_ALONE", "true")
+        }
+        getByName("release") {
+            isMinifyEnabled = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            buildConfigField("boolean", "IS_RUN_ALONE", "false")
+        }
+    }
+
+    // 多渠道打包
+    flavorDimensions("channel")
+    productFlavors {
+        create("dev") {
+            dimension = "channel"
+            buildConfigField("String", "BASE_URL", "\"https://dev-api.example.com\"")
+        }
+        create("staging") {
+            dimension = "channel"
+            buildConfigField("String", "BASE_URL", "\"https://staging-api.example.com\"")
+        }
+        create("prod") {
+            dimension = "channel"
+            buildConfigField("String", "BASE_URL", "\"https://api.example.com\"")
+        }
+    }
+}
+
+// 变体组合：dev-debug / dev-release / staging-debug / ... / prod-release
+```
+
+## 组件间通信的 Manifest 合并
+
+```xml
+<!-- module-home/src/main/AndroidManifest.xml -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.home">
+
+    <application>
+        <activity android:name=".HomeActivity" />
+    </application>
+</manifest>
+
+<!-- module-home/src/main/alone/AndroidManifest.xml（独立模式） -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.home">
+
+    <application
+        android:name=".HomeApp"
+        android:label="@string/app_name">
+        <activity android:name=".HomeActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+```
+
+## 构建命令
+
+```bash
+# 编译单个组件（独立模式）
+./gradlew :module-home:assembleDebug
+
+# 编译整个 App（集成模式）
+./gradlew :app:assembleDebug
+
+# 多渠道打包
+./gradlew :app:assembleDevRelease
+./gradlew :app:assembleProdRelease
+
+# 所有渠道全量打包
+./gradlew :app:assembleRelease
+```
+
+<Glossary>
+
+<GlossaryItem term="isRunAlone">
+组件化构建开关。true时组件作为application独立运行（debug调试），false时作为library被壳工程集成（release发布）。通过gradle.properties配置，build.gradle中动态切换插件。
+</GlossaryItem>
+
+<GlossaryItem term="buildTypes">
+Gradle 构建类型，如 debug 和 release。控制是否混淆、是否调试、BuildConfig 字段等。
+</GlossaryItem>
+
+<GlossaryItem term="productFlavors">
+Gradle 多渠道配置。定义 dev/staging/prod 等变体，每个变体可有不同的 BASE_URL、应用ID后缀等。与 buildTypes 组合生成变体矩阵。
+</GlossaryItem>
+
+<GlossaryItem term="Manifest 合并">
+Gradle 构建时将各 module 的 AndroidManifest.xml 合并为最终 Manifest。集成模式时组件的 Manifest 被合并到壳工程；独立模式使用组件自己的 Manifest。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：isRunAlone 的实现原理和两种模式的区别？
+
+<Answer>
+isRunAlone是gradle.properties中的布尔开关。build.gradle根据值动态切换插件——true用com.android.application（独立App，有applicationId和启动Activity），false用com.android.library（被壳工程依赖的库）。独立模式用于开发期单组件调试（快速编译运行），集成模式用于最终发布（壳工程整合所有组件）。独立模式需要额外的AndroidManifest和Application类，通过sourceSet区分。
+</Answer>
+
+**问题 2**：buildTypes 和 productFlavors 如何组合？生成哪些变体？
+
+<Answer>
+buildTypes定义构建类型（debug/release），productFlavors定义渠道（dev/staging/prod）。组合生成变体矩阵：dev-debug、dev-release、staging-debug、staging-release、prod-debug、prod-release。每个变体可有不同的配置：debug不混淆可调试，release混淆签名；dev用测试服务器URL，prod用生产URL。用./gradlew :app:assembleDevRelease指定构建特定变体。
+</Answer>
+
+**问题 3**：组件独立运行时如何解决对其他组件的依赖？
+
+<Answer>
+独立运行时组件不能依赖其他业务组件（它们不在编译路径），解决方案：①接口下沉——定义在common层的接口，独立运行时提供Mock实现 ②路由桩——为跳转路径提供占位Activity ③debug sourceSet——在src/debug下放独立运行所需的Mock类和桩Activity。核心思路是：独立运行时用Mock/桩替代其他组件，保证编译通过；集成运行时由真实组件提供实现。
+</Answer>
+
+**问题 4**：如何优化组件化项目的编译速度？
+
+<Answer>
+①独立模式调试——只编译单个组件，秒级启动 ②按需编译——./gradlew :module-home:assembleDebug只编译首页 ③增量编译——开启Gradle增量编译和配置缓存 ④并行编译——org.gradle.parallel=true，多module并行编译 ⑤依赖隔离——common-core不频繁改动，编译结果可缓存 ⑥避免过度抽象——每多一层module就多一次编译开销。从单体8分钟降到单组件2分钟是组件化编译加速的核心价值。
+</Answer>
+
+</Exercises>

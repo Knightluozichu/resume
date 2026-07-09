@@ -1,0 +1,200 @@
+---
+title: "组件通信"
+type: C
+section: "Android开发"
+order: 4
+description: "跨组件通信——接口下沉、事件总线、SharedPreferences、ARouter Provider"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { AcaComponentCommunicationDiagram } from "@/components/mdx/android-component-arch/diagrams/aca-component-communication";
+
+<Objectives>
+
+- 掌握四种跨组件通信方式的原理与实现
+- 理解接口下沉、事件总线、SP、ARouter Provider 的适用场景
+- 学会在不同场景下选择合适的通信方式
+- 能够设计组件间的数据交互协议
+
+</Objectives>
+
+## 四种通信方式对比
+
+<AcaComponentCommunicationDiagram />
+
+## 方式一：接口下沉
+
+接口下沉是最推荐的同步通信方式——接口定义在 common 层，提供方实现，调用方通过 ARouter 获取实现：
+
+```kotlin
+// 1. common-core 层定义接口
+interface IUserService : IProvider {
+    fun getUserName(): String
+    fun getUserAvatar(): String
+    fun isLogin(): Boolean
+}
+
+// 2. module-user 实现接口
+@Route(path = "/user/service")
+class UserServiceImpl : IUserService {
+    override fun getUserName(): String = userManager.name
+    override fun getUserAvatar(): String = userManager.avatar
+    override fun isLogin(): Boolean = userManager.isLoggedIn
+}
+
+// 3. module-home 通过 ARouter 调用
+val userService = ARouter.getInstance()
+    .build("/user/service")
+    .navigation() as IUserService
+val name = userService.getUserName()
+```
+
+<Callout type="success" title="推荐方式">
+接口下沉是同步调用的首选：类型安全、编译期检查、无性能损耗。适合组件间需要获取数据的场景。
+</Callout>
+
+## 方式二：事件总线
+
+事件总线适合一对多的异步通知场景：
+
+```kotlin
+// 1. common 层定义事件
+data class LoginEvent(val userId: String, val timestamp: Long)
+data class LogoutEvent(val reason: String)
+
+// 2. module-home 订阅事件
+@Subscribe(threadMode = ThreadMode.MAIN)
+fun onLoginEvent(event: LoginEvent) {
+    // 登录后刷新首页
+    refreshHomePage()
+}
+
+@Subscribe(threadMode = ThreadMode.MAIN)
+fun onLogoutEvent(event: LogoutEvent) {
+    // 登出后清空数据
+    clearUserData()
+}
+
+// 3. module-login 发布事件
+fun onLoginSuccess(userId: String) {
+    EventBus.getDefault().post(LoginEvent(userId, System.currentTimeMillis()))
+}
+```
+
+<Callout type="warning" title="使用注意">
+事件总线是「隐式依赖」——发布者不知道谁在监听。适合一对多广播（如登录状态变化），不适合需要返回值的同步调用。滥用会导致事件满天飞，难以追踪数据流。
+</Callout>
+
+## 方式三：SharedPreferences
+
+适合少量简单数据的跨组件共享（如配置、状态）：
+
+```kotlin
+// 1. 组件A 写入数据
+val sp = context.getSharedPreferences("global_config", Context.MODE_PRIVATE)
+sp.edit().putString("current_theme", "dark").apply()
+
+// 2. 组件B 读取数据
+val sp = context.getSharedPreferences("global_config", Context.MODE_PRIVATE)
+val theme = sp.getString("current_theme", "light")
+
+// 3. 组件B 监听变化
+sp.registerOnSharedPreferenceChangeListener { sp, key ->
+    if (key == "current_theme") {
+        updateTheme(sp.getString(key, "light"))
+    }
+}
+```
+
+## 方式四：ARouter Provider
+
+ARouter Provider 是接口下沉的轻量替代——利用 ARouter 的 IProvider 机制直接注入：
+
+```kotlin
+// 1. 定义 Provider 接口
+interface IOrderService : IProvider {
+    fun createOrder(productId: String): String  // 返回订单号
+    fun queryOrder(orderId: String): OrderInfo?
+}
+
+// 2. module-order 实现并注册
+@Route(path = "/order/service")
+class OrderServiceProvider : IOrderService {
+    override fun init(context: Context) { /* 初始化 */ }
+
+    override fun createOrder(productId: String): String {
+        return orderRepository.create(productId).id
+    }
+
+    override fun queryOrder(orderId: String): OrderInfo? {
+        return orderRepository.findById(orderId)
+    }
+}
+
+// 3. module-home 调用
+val orderService = ARouter.getInstance()
+    .build("/order/service")
+    .navigation() as IOrderService
+val orderId = orderService.createOrder("p_001")
+```
+
+## 通信方式选型
+
+| 场景 | 推荐方式 | 理由 |
+|------|----------|------|
+| 获取数据/调用方法 | 接口下沉 / Provider | 同步、类型安全 |
+| 状态变化通知（一对多） | 事件总线 | 解耦、广播 |
+| 少量配置共享 | SharedPreferences | 简单、持久化 |
+| 页面跳转传参 | ARouter 路由 | 框架内置 |
+
+<Glossary>
+
+<GlossaryItem term="接口下沉">
+将跨组件通信接口定义在 common 公共层，提供方组件实现接口并通过 @Route 注册，调用方通过 ARouter 获取实现。同步、类型安全。
+</GlossaryItem>
+
+<GlossaryItem term="事件总线">
+发布-订阅模式的通信方式。发布者 post 事件，订阅者 @Subscribe 接收。适合一对多异步通知，无类型安全，是隐式依赖。
+</GlossaryItem>
+
+<GlossaryItem term="IProvider">
+ARouter 的服务发现接口。实现 IProvider 并用 @Route 注册后，可通过 navigation() 获取实例。是接口下沉的框架级实现。
+</GlossaryItem>
+
+<GlossaryItem term="隐式依赖">
+调用方不直接引用被调用方，而是通过中间媒介（如事件总线）间接交互。降低了直接耦合，但增加了追踪数据流的难度。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1**：四种跨组件通信方式的原理和适用场景分别是什么？
+
+<Answer>
+①接口下沉——接口定义在common层，提供方实现，调用方通过ARouter获取实现。同步、类型安全，适合获取数据/调用方法。②事件总线——发布-订阅模式，post事件后订阅者接收。异步、一对多，适合状态变化通知（如登录状态）。③SharedPreferences——key-value共享存储，适合少量配置/状态共享，可监听变化。④ARouter Provider——利用IProvider机制，实现接口并@Route注册，navigation()获取实例。是接口下沉的框架级轻量实现。
+</Answer>
+
+**问题 2**：接口下沉的完整实现步骤是什么？
+
+<Answer>
+①common-core层定义接口（如IUserService extends IProvider）②提供方组件（module-user）实现接口，用@Route(path="/user/service")注册实现类③调用方组件（module-home）通过ARouter.getInstance().build("/user/service").navigation()获取实例，as IUserService后调用方法。关键：接口定义在common层使双方都能编译，ARouter做运行期发现，组件间无直接依赖。
+</Answer>
+
+**问题 3**：事件总线为什么是「隐式依赖」？如何正确使用？
+
+<Answer>
+事件总线中发布者post事件后不知道谁在监听，订阅者@Subscribe也不知道事件从哪来——双方通过EventBus间接交互，不直接引用对方代码，故称隐式依赖。正确使用：①只用于一对多广播（如登录状态变化通知多个组件刷新）②不用于需要返回值的同步调用（用接口下沉代替）③事件定义在common层 ④及时注销订阅防止内存泄漏 ⑤避免事件链（A触发B，B触发C）导致难以追踪。
+</Answer>
+
+**问题 4**：首页需要获取用户信息并监听登录状态变化，如何组合使用通信方式？
+
+<Answer>
+组合使用接口下沉+事件总线。①获取用户信息用接口下沉——common层定义IUserService接口，module-user实现并@Route注册，首页通过ARouter获取实例调用getUserName()。②监听登录状态用事件总线——module-login在登录/登出时post LoginEvent/LogoutEvent，首页@Subscribe接收事件后刷新UI。接口下沉解决同步数据获取（类型安全），事件总线解决异步状态通知（一对多解耦），各取所长。
+</Answer>
+
+</Exercises>
