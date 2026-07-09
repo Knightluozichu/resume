@@ -2178,7 +2178,17 @@ export type ReviewChapterSlug =
   | "dls-cnn"
   | "dls-deep-learning"
   | "dls-applications"
-  | "dls-final-review";
+  | "dls-final-review"
+  | "dl2-learning-map"
+  | "dl2-neural-net-framework"
+  | "dl2-automatic-differentiation"
+  | "dl2-variable-functions"
+  | "dl2-gradient-backprop"
+  | "dl2-optimizers"
+  | "dl2-layers-modules"
+  | "dl2-model-architecture"
+  | "dl2-training-evaluation"
+  | "dl2-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4361,6 +4371,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "dls-deep-learning": "深度学习实践",
   "dls-applications": "深度学习应用",
   "dls-final-review": "全书复习与知识整合",
+  "dl2-learning-map": "全书学习地图",
+  "dl2-neural-net-framework": "神经网络框架设计",
+  "dl2-automatic-differentiation": "自动微分",
+  "dl2-variable-functions": "Variable与Function实现",
+  "dl2-gradient-backprop": "梯度与反向传播",
+  "dl2-optimizers": "优化器实现",
+  "dl2-layers-modules": "层与模块化",
+  "dl2-model-architecture": "模型架构设计",
+  "dl2-training-evaluation": "训练与评估",
+  "dl2-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

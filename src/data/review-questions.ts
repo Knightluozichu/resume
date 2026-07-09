@@ -2055,6 +2055,16 @@ import { dlsCnnQuestions } from "./review/dls-cnn";
 import { dlsDeepLearningQuestions } from "./review/dls-deep-learning";
 import { dlsApplicationsQuestions } from "./review/dls-applications";
 import { dlsFinalReviewQuestions } from "./review/dls-final-review";
+import { dl2LearningMapQuestions } from "./review/dl2-learning-map";
+import { dl2NeuralNetFrameworkQuestions } from "./review/dl2-neural-net-framework";
+import { dl2AutomaticDifferentiationQuestions } from "./review/dl2-automatic-differentiation";
+import { dl2VariableFunctionsQuestions } from "./review/dl2-variable-functions";
+import { dl2GradientBackpropQuestions } from "./review/dl2-gradient-backprop";
+import { dl2OptimizersQuestions } from "./review/dl2-optimizers";
+import { dl2LayersModulesQuestions } from "./review/dl2-layers-modules";
+import { dl2ModelArchitectureQuestions } from "./review/dl2-model-architecture";
+import { dl2TrainingEvaluationQuestions } from "./review/dl2-training-evaluation";
+import { dl2FinalReviewQuestions } from "./review/dl2-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4145,6 +4155,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...dlsDeepLearningQuestions,
   ...dlsApplicationsQuestions,
   ...dlsFinalReviewQuestions,
+  ...dl2LearningMapQuestions,
+  ...dl2NeuralNetFrameworkQuestions,
+  ...dl2AutomaticDifferentiationQuestions,
+  ...dl2VariableFunctionsQuestions,
+  ...dl2GradientBackpropQuestions,
+  ...dl2OptimizersQuestions,
+  ...dl2LayersModulesQuestions,
+  ...dl2ModelArchitectureQuestions,
+  ...dl2TrainingEvaluationQuestions,
+  ...dl2FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
