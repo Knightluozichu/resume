@@ -1,0 +1,190 @@
+---
+title: "实战调优"
+type: C
+section: "JVM与Java生态"
+order: 8
+description: "JVM实战调优方法论——监控分析调整验证四步法、GC调优参数、OOM排查流程、常用工具链"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DujPracticeTuningDiagram } from "@/components/mdx/deep-understanding-jvm/diagrams/duj-practice-tuning";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握 JVM 调优的四步法：监控→分析→调整→验证
+- 理解常见调优场景的关键参数与排查思路
+- 掌握 jps/jstat/jmap/jstack/jcmd 工具链使用
+- 理解调优原则：先量化再调优、一次只改一个参数
+</Objectives>
+
+## 直觉引入
+
+JVM 调优就像「医生看病」。先「量体温测血压」（监控——jstat 看 GC 统计、GC 日志看停顿时间）；再「做检查找病因」（分析——jmap dump 堆用 MAT 分析、jstack 看线程状态）；然后「对症下药」（调整——调 JVM 参数或改代码）；最后「复查验证」（验证——压测对比指标是否改善）。核心原则是「先量化再调优」——没有基线数据就不知道调好了还是调坏了。
+
+<DujPracticeTuningDiagram />
+
+## 调优四步法
+
+```text
+1. 监控（Monitor）
+   工具：jstat -gcutil / GC 日志 / JMX / Prometheus + Grafana
+   指标：GC 频率/停顿时间/堆使用率/线程数/CPU使用率
+   目标：建立基线，发现异常
+
+2. 分析（Analyze）
+   工具：jmap dump + MAT / jstack / jcmd / Arthas
+   方法：dump 堆分析对象分布、线程 dump 分析锁竞争
+   目标：定位根因
+
+3. 调整（Adjust）
+   手段：JVM 参数调优 / 代码优化 / 架构优化
+   原则：一次只改一个变量
+   目标：针对性修复
+
+4. 验证（Verify）
+   方法：压测对比 / 指标回归 / 长时间观察
+   原则：有基线才能对比
+   目标：确认改善且无副作用
+```
+
+<Callout type="trap">
+**陷阱**：最常见的调优错误是「拍脑袋调参数」——不分析根因直接加大 -Xmx 或换收集器。正确做法是先监控发现问题、分析定位根因、针对性调整、验证效果。调优不是猜参数，是证据驱动的工程方法。
+</Callout>
+
+## 常用工具链
+
+```text
+命令行工具：
+  jps          查看 Java 进程
+  jstat        GC 统计信息
+    jstat -gcutil <pid> 1000  — 每秒打印GC统计
+    jstat -gccause <pid>      — 查看GC原因
+  jmap         堆内存分析
+    jmap -histo <pid>          — 对象直方图
+    jmap -histo:live <pid>     — 只统计存活对象
+    jmap -dump:format=b,file=heap.hprof <pid>  — dump 堆
+  jstack       线程栈分析
+    jstack <pid>               — 打印线程栈
+    jstack -l <pid>            — 含锁信息
+  jcmd         JDK 8+ 万能工具
+    jcmd <pid> GC.heap_info    — 堆信息
+    jcmd <pid> Thread.print    — 线程栈
+    jcmd <pid> VM.flags         — JVM 参数
+
+可视化工具：
+  MAT          Eclipse Memory Analyzer（堆 dump 分析）
+  JProfiler    商业性能分析工具
+  Arthas       阿里开源在线诊断工具
+  GCViewer     GC 日志可视化
+  VisualVM     JDK 自带监控工具
+```
+
+## 关键 JVM 参数
+
+```text
+堆内存：
+  -Xms4g              初始堆大小（建议与Xmx相同，避免动态扩容）
+  -Xmx4g              最大堆大小
+  -Xmn2g              新生代大小
+  -XX:NewRatio=2      老年代:新生代 = 2:1
+  -XX:SurvivorRatio=8 Eden:Survivor = 8:1
+
+GC 收集器：
+  -XX:+UseG1GC              使用 G1
+  -XX:MaxGCPauseMillis=200  G1 停顿目标
+  -XX:G1HeapRegionSize=16m  G1 Region 大小
+  -XX:+UseZGC               使用 ZGC（JDK 11+）
+
+GC 日志：
+  JDK 8:  -XX:+PrintGCDetails -XX:+PrintGCDateStamps -Xloggc:gc.log
+  JDK 9+: -Xlog:gc*:file=gc.log:time,uptime,level,tags
+
+OOM 处理：
+  -XX:+HeapDumpOnOutOfMemoryError    OOM 时自动 dump
+  -XX:HeapDumpPath=/path/to/dump     dump 文件路径
+
+元空间：
+  -XX:MaxMetaspaceSize=256m          元空间上限
+
+直接内存：
+  -XX:MaxDirectMemorySize=1g         直接内存上限
+```
+
+## 常见调优场景
+
+```text
+场景1：频繁 Full GC
+  现象：Full GC 频率高，停顿长
+  排查：
+    jstat -gcutil → 看 FGC 列和 O 区使用率
+    jmap -histo:live → 看存活对象分布
+    GC 日志 → 看 Full GC 原因
+  常见根因：内存泄漏 / 大对象进老年代 / 晋升过快
+  解决：
+    MAT 分析 dump 找泄漏对象
+    调大 -Xmn 或 -XX:MaxTenuringThreshold
+    设置 -XX:PretenureSizeThreshold 防大对象进老年代
+
+场景2：OOM 排查
+  现象：OutOfMemoryError
+  排查：
+    看异常信息区分类型：heap space / Metaspace / Direct buffer
+    -XX:+HeapDumpOnOutOfMemoryError 自动 dump
+    MAT 分析 Retained Heap
+  解决：修复泄漏 / 调大对应区域 / 限制资源使用
+
+场景3：GC 停顿过长
+  现象：STW 时间长，响应延迟
+  排查：GC 日志看停顿分布
+  解决：
+    CMS → G1 迁移（可预测停顿）
+    调 -XX:MaxGCPauseMillis
+    G1 调 -XX:InitiatingHeapOccupancyPercent（默认45%）
+
+场景4：吞吐量优化
+  现象：GC 时间占比高
+  解决：
+    -XX:GCTimeRatio=99（GC 时间占比 1%）
+    -XX:+UseParallelGC / -XX:+UseParallelOldGC
+    增大堆减少 GC 频率
+```
+
+<Callout type="insight">
+**原则**：调优三原则——①先量化再调优（有基线数据才能判断效果）②一次只改一个参数（否则不知道哪个参数有效）③有回退方案（调整可能让情况更糟，需能快速回退）。
+</Callout>
+
+<Exercises>
+**问题 1**：JVM 调优的四步法是什么？为什么「先量化再调优」是第一原则？
+
+<Answer>
+四步法：①监控——使用 jstat/GC日志/JMX/Prometheus 等工具持续监控 GC 频率、停顿时间、堆使用率、线程数、CPU 使用率等指标，建立性能基线，发现异常。②分析——使用 jmap dump 堆+MAT 分析对象分布和引用链、jstack 分析线程状态和锁竞争、jcmd 获取 JVM 运行时信息、Arthas 在线诊断，定位问题根因。③调整——针对根因进行 JVM 参数调优（如调整堆大小/收集器/停顿目标）、代码优化（如修复内存泄漏/减少对象创建）、架构优化（如引入缓存/异步化）。原则是一次只改一个变量。④验证——通过压测对比调整前后的指标、长时间观察线上表现，确认改善且无副作用。「先量化再调优」是第一原则的原因：没有基线数据就无法判断调优是否有效——如果不知道调整前的 GC 频率和停顿时间，调整后看到 Full GC 减少了也不知道是参数有效还是只是流量下降了。量化的核心是可比较——调整前后的数据必须在相同负载下对比才有意义。常见反模式：「调大 -Xmx 应该能减少 Full GC」——这是猜测而非证据驱动。正确做法：先看 jstat 确认 Full GC 频率和老年代使用率，分析 dump 找到是内存泄漏还是堆太小，针对性调整后用压测对比 Full GC 频率是否下降。调优是工程方法不是玄学。
+</Answer>
+
+**问题 2**：频繁 Full GC 的常见原因有哪些？如何排查和解决？
+
+<Answer>
+频繁 Full GC 的常见原因：①内存泄漏——static 集合持续添加对象不释放，导致老年代不断增长、GC 回收不掉，最终频繁 Full GC。排查：jmap -histo:live 看存活对象分布，MAT 分析 dump 的 Retained Heap 找到泄漏对象和 GC Roots 引用链。解决：修复代码（如使用 WeakHashMap 或定期清理）。②大对象直接进老年代——大数组/大字符串超过 -XX:PretenureSizeThreshold 直接分配在老年代，导致老年代快速填满。排查：jmap -histo 看是否有大量大对象。解决：调整 -XX:PretenureSizeThreshold 或优化代码减少大对象创建。③对象晋升过快——Survivor 区太小，Minor GC 后存活对象放不下直接进老年代。排查：jstat -gcutil 看 S0/S1 使用率和 YGC/FGC 频率，如果 YGC 后大量对象进老年代说明 Survivor 不够。解决：增大 -Xmn（新生代）或调整 -XX:SurvivorRatio 或 -XX:MaxTenuringThreshold。④老年代空间不足——堆太小或 NewRatio 不合理导致老年代空间不足。排查：jstat -gcutil 看 O 区使用率。解决：调大 -Xmx 或调整 -XX:NewRatio。⑤元空间不足——大量动态类加载（CGLIB/JSP）导致 Metaspace 持续增长触发 Full GC。排查：jcmd VM.flags 看 MaxMetaspaceSize，jcmd ClassLoader_stats 看类加载统计。解决：调大 -XX:MaxMetaspaceSize 或排查动态类生成源。⑥CMS Concurrent Mode Failure——CMS 并发阶段老年代满了退化为 Serial Old。排查：GC 日志看 Concurrent Mode Failure。解决：降低 -XX:CMSInitiatingOccupancyFraction 或升级到 G1。排查流程：jstat -gcutil 确认 Full GC 频率和各区域使用率 → jmap -histo:live 看对象分布 → dump+MAT 分析 → 定位根因 → 针对性调整 → 压测验证。
+</Answer>
+
+**问题 3**：如何排查 OOM？不同类型的 OOM 分别指向什么问题？
+
+<Answer>
+OOM 排查流程：①开启自动 dump——-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/path/to/dump，OOM 时自动生成堆 dump。②看异常信息区分类型——异常消息中会指明溢出区域。③MAT 分析 dump——打开 dump 文件，看 Leak Suspects 报告，找到 Retained Heap 最大的对象及其 GC Roots 引用链。④jcmd 补充信息——jcmd GC.heap_info 看各区域使用情况。不同类型 OOM 及对应问题：①OOM: Java heap space——堆内存溢出。原因：对象太多（内存泄漏/大对象/瞬时高并发创建）。解决：MAT 找泄漏对象、调大 -Xmx、优化代码减少对象创建。②OOM: Metaspace（JDK 8+）——元空间溢出。原因：加载类太多（CGLIB/ByteBuddy 动态代理、大量 JSP、OSGi 模块、频繁热部署）。解决：调大 -XX:MaxMetaspaceSize、排查动态类生成源（如检查是否有 ClassLoader 泄漏——自定义 ClassLoader 未被回收导致其加载的类无法卸载）。③OOM: PermGen space（JDK 7-）——永久代溢出，同 Metaspace。④OOM: Direct buffer memory——直接内存溢出。原因：NIO 的 ByteBuffer.allocateDirect 分配的堆外内存超限。解决：调大 -XX:MaxDirectMemorySize、检查 NIO 使用是否有未释放的 Buffer（如 Netty 的 ByteBuf 未 release）。⑤OOM: unable to create new native thread——线程数溢出。原因：创建线程太多（线程池配置不当/线程泄漏）。解决：排查线程创建源、调整线程池参数、检查 OS 线程数限制（ulimit -u）。⑥OOM: StackOverflowError——栈溢出。原因：递归过深或 -Xss 太小。解决：修复递归逻辑或调大 -Xss（注意线程数 = (总内存-堆-方法区)/Xss，调大 Xss 会减少可创建线程数）。⑦OOM: GC overhead limit exceeded——GC 花费超过 98% 时间但回收不到 2% 堆。原因：堆几乎满了但 GC 回收效率极低（通常是内存泄漏的晚期表现）。解决：同 Java heap space。
+</Answer>
+
+**问题 4**：从 CMS 迁移到 G1 需要调整哪些参数？G1 的核心参数有哪些？
+
+<Answer>
+从 CMS 迁移到 G1 的参数调整：①启用 G1——-XX:+UseG1GC（替代 -XX:+UseConcMarkSweepGC）。②移除 CMS 特有参数——-XX:CMSInitiatingOccupancyFraction、-XX:+UseCMSCompactAtFullCollection、-XX:CMSFullGCsBeforeCompaction 等 CMS 参数移除（G1 不需要这些）。③Region 大小——-XX:G1HeapRegionSize=16m（G1 把堆分成等大 Region，默认按堆大小自动计算 1-32MB，大对象超过 Region 一半时进 Humongous Region）。④停顿目标——-XX:MaxGCPauseMillis=200（G1 的核心参数，设定期望的最大 GC 停顿时间，G1 会根据这个目标选择回收哪些 Region，默认 200ms。不是越小越好——太小会导致 GC 频率升高降低吞吐量）。⑤触发并发标记的堆占用率——-XX:InitiatingHeapOccupancyPercent=45（默认 45%，堆使用率超过此值时触发并发标记周期。调低可让 G1 更早开始回收，调高则减少不必要的并发标记开销）。⑥G1 核心参数汇总：-XX:+UseG1GC（启用）、-XX:MaxGCPauseMillis=200（停顿目标）、-XX:G1HeapRegionSize=16m（Region 大小）、-XX:InitiatingHeapOccupancyPercent=45（并发标记触发阈值）、-XX:G1NewSizePercent=5（新生代最小占比）、-XX:G1MaxNewSizePercent=60（新生代最大占比）、-XX:G1MixedGCCountTarget=8（Mixed GC 分多少次完成）、-XX:G1MixedGCLiveThresholdPercent=85（Region 存活率超此值不参与 Mixed GC 回收）。⑦GC 日志——JDK 9+ 使用 -Xlog:gc*:file=gc.log:time,uptime,level,tags 替代 JDK 8 的 -XX:+PrintGCDetails。⑧迁移注意事项：G1 不需要设置 -Xmn（新生代大小由 G1 动态调整），设置 -Xmn 会禁用 G1 的自适应新生代调整；G1 适合 6GB 以上堆，小堆（<4GB）CMS 可能更好；迁移后需要压测验证停顿时间和吞吐量是否满足要求。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="调优四步法">监控（jstat/GC日志建基线）→ 分析（jmap/jstack/MAT定位根因）→ 调整（参数/代码/架构针对性修复）→ 验证（压测对比/指标回归）。证据驱动而非猜测。</GlossaryItem>
+<GlossaryItem term="jstat">JVM 统计监控工具，-gcutil 查看各区域使用率和 GC 次数/时间，-gccause 查看 GC 原因。排查 Full GC 频率的第一工具。</GlossaryItem>
+<GlossaryItem term="HeapDumpOnOutOfMemoryError">OOM 时自动 dump 堆的 JVM 参数，配合 MAT 分析定位内存泄漏。生产环境必开的参数，确保 OOM 时有 dump 可分析。</GlossaryItem>
+<GlossaryItem term="MaxGCPauseMillis">G1 的核心参数，设定期望的最大 GC 停顿时间。G1 根据此目标选择性回收垃圾最多的 Region。不是越小越好——太小会增加 GC 频率降低吞吐量。</GlossaryItem>
+</Glossary>

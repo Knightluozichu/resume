@@ -1,0 +1,154 @@
+---
+title: "锁优化"
+type: C
+section: "JVM与Java生态"
+order: 7
+description: "深入理解synchronized锁升级——偏向锁到轻量级锁到重量级锁的演进、Mark Word锁状态、自旋锁与锁消除"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DujLockOptimizeDiagram } from "@/components/mdx/deep-understanding-jvm/diagrams/duj-lock-optimize";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 synchronized 锁升级：偏向锁→轻量级锁→重量级锁
+- 掌握 Mark Word 在不同锁状态下的布局
+- 理解自旋锁、锁消除、锁粗化等优化技术
+- 了解 JDK 15 后偏向锁废弃的背景与影响
+</Objectives>
+
+## 直觉引入
+
+synchronized 锁优化就像「停车场管理」。没有竞争时「直接进」（偏向锁——只记录车牌号，连门禁卡都不刷）；偶尔有竞争时「自助刷卡进」（轻量级锁——CAS 自旋尝试，不需找保安）；竞争激烈时「找保安指挥」（重量级锁——OS 互斥量，线程进入内核态排队阻塞）。锁的状态记录在「车牌识别系统」里（Mark Word——对象头中记录锁状态）。升级不可降级——一旦升级到重量级锁就不会回到轻量级锁。
+
+<DujLockOptimizeDiagram />
+
+## 锁升级路径
+
+```text
+无锁 → 偏向锁 → 轻量级锁 → 重量级锁
+
+偏向锁（Biased Locking）
+  首次获取：Mark Word 记录线程 ID
+  再次获取：比对线程 ID，相同则直接进入（无 CAS）
+  竞争出现：撤销偏向，升级为轻量级锁
+  适用：单线程反复进入同步块
+  注意：JDK 15 后废弃（-XX:+UseBiasedLocking 需手动开启）
+
+轻量级锁（Thin Lock）
+  获取：CAS 把 Mark Word 复制到栈帧锁记录，成功则获取锁
+  竞争：自旋等待（适应性自旋——根据历史成功率决定自旋次数）
+  自旋失败：升级为重量级锁
+  适用：短时间内有少量竞争
+
+重量级锁（Fat Lock）
+  获取：OS 互斥量（mutex），竞争失败的线程进入内核态阻塞
+  等待：ObjectWaiter 队列（EntryList + WaitSet）
+  唤醒：锁释放后唤醒队首线程
+  适用：竞争激烈或持锁时间长
+  开销：用户态→内核态切换，上下文切换
+```
+
+<Callout type="insight">
+**核心**：锁升级是不可逆的——偏向锁可以升级到轻量级锁，轻量级锁可以升级到重量级锁，但不能降级。JVM 根据竞争程度自动选择最优锁状态，开发者无需手动干预。
+</Callout>
+
+## Mark Word 锁状态（64位 JVM）
+
+```text
+锁状态     Mark Word 布局（64 bit）                    标志位
+无锁       hashcode(31) + unused(1) + age(4) + 0(1) + 01  01
+偏向锁     threadId(54) + epoch(2) + age(4) + 1(1) + 01  01
+轻量级锁   指向栈中锁记录的指针(62) + 00                 00
+重量级锁   指向 Monitor 对象的指针(62) + 10              10
+GC 标记    空(62) + 11                                  11
+
+关键：
+  最后 2 bit 是锁标志位
+  倒数第 3 bit 是偏向锁标志（1=可偏向）
+  轻量级锁和重量级锁通过最后 2 bit 区分
+```
+
+<Callout type="trap">
+**陷阱**：一个对象调用了 hashCode() 后无法进入偏向锁状态——因为 hashCode 存在 Mark Word 中，与偏向锁的 threadId 占用同一位置。调用 hashCode() 会撤销偏向锁。
+</Callout>
+
+## 其他锁优化
+
+```text
+自旋锁 / 适应性自旋
+  轻量级锁竞争失败时不立即升级，先自旋等待
+  适应性自旋：根据上次自旋是否成功动态调整自旋次数
+  成功 → 避免了内核态切换开销
+  失败 → 浪费了 CPU，仍需升级为重量级锁
+
+锁消除（Lock Elision）
+  JIT 逃逸分析发现锁对象不可能被其他线程访问
+  → 消除 synchronized（不执行 monitorenter/monitorexit）
+  示例：
+    StringBuffer sb = new StringBuffer(); // 局部变量，不逃逸
+    sb.append("a").append("b"); // 内部 synchronized 被消除
+
+锁粗化（Lock Coarsening）
+  连续对同一对象加锁解锁 → 合并为一次更大的锁
+  示例：
+    for (int i=0; i<1000; i++) {
+        synchronized(lock) { ... }  // 每次循环都加锁解锁
+    }
+    → 优化为
+    synchronized(lock) {
+        for (int i=0; i<1000; i++) { ... }  // 一次加锁
+    }
+```
+
+## JDK 15 偏向锁废弃
+
+```text
+原因：
+  ① 偏向锁维护成本高——需要维护撤销/重偏向逻辑，增加 JVM 复杂度
+  ② 收益下降——现代应用大量使用并发框架（HashMap/ConcurrentHashMap
+     等），无锁数据结构替代 synchronized 场景
+  ③ CAS 开销降低——现代 CPU 的 CAS 指令很快，轻量级锁的开销已很小
+  ④ 影响 GC——偏向锁撤销需要在 safepoint 执行，增加 STW 开销
+
+影响：
+  JDK 15+ 需手动开启 -XX:+UseBiasedLocking
+  对旧代码透明——JVM 自动使用轻量级锁替代
+  synchronized 无竞争时开销略增（多一次 CAS）
+```
+
+<Exercises>
+**问题 1**：synchronized 锁升级的完整路径是什么？每一级的工作原理是什么？
+
+<Answer>
+锁升级路径：无锁 → 偏向锁 → 轻量级锁 → 重量级锁，升级不可逆。①偏向锁——首次获取锁时，JVM 用 CAS 将线程 ID 写入对象头的 Mark Word。之后同一线程再次进入同步块时，只需比对 Mark Word 中的线程 ID 是否匹配，匹配则直接进入（连 CAS 都不需要）。当出现其他线程竞争时，偏向锁被撤销（需等到全局安全点 safepoint），升级为轻量级锁。适用于单线程反复进入同步块的场景——绝大多数 synchronized 在无竞争时几乎零开销。②轻量级锁——获取锁时，在线程栈帧中创建锁记录（Lock Record），用 CAS 把对象头的 Mark Word 复制到锁记录中，再将锁记录的指针写入对象头。CAS 成功则获取锁。如果 CAS 失败（有竞争），先自旋（适应性自旋——根据历史成功率决定自旋次数）尝试获取。自旋成功则获取锁，自旋失败则升级为重量级锁。适用于短时间内的少量竞争——自旋避免了内核态切换开销。③重量级锁——使用 OS 互斥量（Mutex），竞争失败的线程进入内核态阻塞，放入 ObjectWaiter 队列等待。锁释放时唤醒队首线程。适用于竞争激烈或持锁时间长的场景。开销主要来自用户态到内核态的上下文切换。升级不可逆的原因：锁状态记录在 Mark Word 中，一旦升级到重量级锁（Mark Word 指向 Monitor 对象），对象头的布局已改变，回退成本高且没有必要——如果竞争消失了，重量级锁的开销也主要在获取/释放时，持锁时的开销与轻量级锁差不多。
+</Answer>
+
+**问题 2**：Mark Word 在不同锁状态下如何布局？为什么调用 hashCode() 会影响偏向锁？
+
+<Answer>
+Mark Word 是 64 位 JVM 对象头的一部分（占 8 字节），在不同锁状态下布局不同：①无锁——hashcode(31bit) + unused(1bit) + 分代年龄age(4bit) + 偏向标志0(1bit) + 锁标志01(2bit)，最后2位为01表示无锁。②偏向锁——线程ID(54bit) + epoch(2bit) + age(4bit) + 偏向标志1(1bit) + 锁标志01(2bit)，最后2位仍为01但倒数第3位为1表示可偏向。③轻量级锁——指向栈中锁记录的指针(62bit) + 锁标志00(2bit)，最后2位为00。④重量级锁——指向 Monitor 对象的指针(62bit) + 锁标志10(2bit)，最后2位为10。⑤GC 标记——空(62bit) + 锁标志11(2bit)，最后2位为11，用于 GC 标记。调用 hashCode() 影响偏向锁的原因：对象的 hashCode 存储在 Mark Word 的 hashcode 区域（31 bit），这与偏向锁的线程 ID 区域（54 bit）重叠。无锁状态下调用 hashCode()，JVM 会计算并缓存 hashCode 到 Mark Word。一旦 hashCode 被写入 Mark Word，该对象就无法再进入偏向锁状态——因为偏向锁需要用 threadId 覆盖 hashcode 区域，但这会丢失已缓存的 hashCode。所以如果对象调用了 hashCode()（或 System.identityHashCode()），JVM 不会为该对象启用偏向锁。同样，对象在偏向锁状态下调用 hashCode() 会撤销偏向锁（在 safepoint 将偏向锁升级为轻量级锁或无锁，释放 threadId 区域给 hashCode）。这是为什么有些场景下偏向锁「不生效」的原因之一。
+</Answer>
+
+**问题 3**：锁消除和锁粗化分别是什么？它们在什么场景下生效？
+
+<Answer>
+锁消除（Lock Elision）：JIT 编译器通过逃逸分析发现某个 synchronized 块的锁对象不可能被其他线程访问（未逃逸出当前线程），直接消除 synchronized（不生成 monitorenter/monitorexit 指令）。典型场景：①StringBuffer/StringBuilder 的 append 方法内部是 synchronized 的（StringBuffer），如果 StringBuffer 是局部变量（不逃逸），JIT 会消除所有 append 的锁。②Vector/Hashtable 等旧并发集合在单线程使用时，内部 synchronized 会被消除。③方法内创建的锁对象：`Object lock = new Object(); synchronized(lock) { ... }` 如果 lock 不逃逸，锁被消除。锁消除的前提是逃逸分析（-XX:+DoEscapeAnalysis，JDK 8 默认开启）能够证明锁对象不逃逸。锁粗化（Lock Coarsening）：JIT 编译器发现连续对同一对象加锁解锁的操作，将其合并为一次更大的锁块，减少 monitorenter/monitorexit 指令的执行次数。典型场景：①循环内加锁：`for (int i=0; i<1000; i++) { synchronized(lock) { list.add(i); } }` 被粗化为 `synchronized(lock) { for (int i=0; i<1000; i++) { list.add(i); } }`。②连续同步方法调用：`sb.append("a"); sb.append("b"); sb.append("c");` 如果 sb 是 StringBuffer，三次 synchronized 被粗化为一次。锁粗化的条件：锁对象相同且连续加锁解锁之间没有其他需要无锁执行的代码（如果有长时间不需要锁的操作，粗化反而延长了持锁时间）。两者都是 JIT 的自动优化，开发者无需手动干预，但理解这些优化有助于写出更好的并发代码——例如不要在循环内加锁、优先使用局部变量让锁消除生效。
+</Answer>
+
+**问题 4**：JDK 15 为什么要废弃偏向锁？对现有代码有什么影响？
+
+<Answer>
+JDK 15 废弃偏向锁（JEP 374）的原因：①维护成本高——偏向锁的撤销/重偏向逻辑复杂，需要维护 epoch 机制、批量撤销/批量重偏向逻辑，增加了 JVM 代码的复杂度和维护成本。尤其在添加新特性（如Valhalla项目）时，偏向锁的代码需要额外适配。②收益下降——偏向锁设计于 2005 年左右，当时 CAS 操作开销较大（原子指令在早期 CPU 上较慢），偏向锁通过避免 CAS 显著提升无竞争场景性能。但现代 CPU 的 CAS 指令（如 x86 的 lock cmpxchg）已经非常快，轻量级锁的 CAS 开销接近于偏向锁的线程 ID 比对。③影响 GC——偏向锁的撤销需要在全局安全点（safepoint）执行，如果大量对象需要撤销偏向，会增加 STW 时间。④现代应用并发模式变化——大量使用并发框架（ConcurrentHashMap/AtomicXxx/LongAdder 等无锁数据结构），synchronized 的使用场景减少；且现代应用多为多线程环境，无竞争场景比 2005 年时少。对现有代码的影响：①透明——JVM 自动使用轻量级锁替代偏向锁，synchronized 的语义不变，现有代码无需修改。②性能略降——在无竞争场景下，synchronized 从偏向锁（无 CAS，只比对 threadId）变为轻量级锁（一次 CAS），开销略增。但差距很小（现代 CPU CAS 约 10-20 纳秒），大多数应用感知不到。③-XX:+UseBiasedLocking 仍可手动开启（JDK 15-17），但 JDK 18+ 完全移除。④建议——如果对无竞争锁性能敏感，可考虑使用 java.util.concurrent.atomic 或 VarHandle 的 CAS 操作替代 synchronized。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="锁升级">synchronized 从偏向锁→轻量级锁→重量级锁的单向升级。JVM 根据竞争程度自动选择最优锁状态，不可降级。偏向锁无 CAS、轻量级锁 CAS 自旋、重量级锁内核态阻塞。</GlossaryItem>
+<GlossaryItem term="Mark Word">对象头中 8 字节的数据，存储锁状态、hashCode、GC 分代年龄。不同锁状态布局不同，通过最后 2-3 bit 区分。调用 hashCode() 会阻止偏向锁。</GlossaryItem>
+<GlossaryItem term="锁消除">JIT 逃逸分析证明锁对象不逃逸（不可能被其他线程访问）时，消除 synchronized。典型场景：局部 StringBuffer 的 append 方法。需 -XX:+DoEscapeAnalysis。</GlossaryItem>
+<GlossaryItem term="锁粗化">JIT 将连续对同一对象的加锁解锁合并为一次更大的锁块，减少 monitorenter/monitorexit 执行次数。典型场景：循环内加锁、连续同步方法调用。</GlossaryItem>
+</Glossary>

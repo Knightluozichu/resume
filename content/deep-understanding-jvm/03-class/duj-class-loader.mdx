@@ -1,0 +1,156 @@
+---
+title: "类加载机制"
+type: A
+section: "JVM与Java生态"
+order: 3
+description: "深入理解类加载七阶段生命周期、双亲委派模型及其打破场景，掌握类加载器层次结构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DujClassLoaderDiagram } from "@/components/mdx/deep-understanding-jvm/diagrams/duj-class-loader";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解类加载的七阶段生命周期及各阶段职责
+- 掌握双亲委派模型的工作原理与设计意图
+- 理解打破双亲委派的场景与方式（SPI/OSGi/Tomcat）
+- 区分类的加载、链接、初始化三个大阶段
+</Objectives>
+
+## 直觉引入
+
+类加载就像「新员工入职流程」。先「办理入职」（加载——通过全限定名获取类的二进制字节流）；然后「背景调查」（验证——检查格式/元数据/字节码/符号引用）；接着「分配工位」（准备——为静态变量分配内存并设默认零值）；再「录入系统」（解析——符号引用替换为直接引用）；最后「岗前培训」（初始化——执行类构造器 `<clinit>` 方法，给静态变量赋真实值）。双亲委派就像「入职审批」——你的入职申请先提交给上级（父加载器），上级处理不了才轮到你处理，保证公司核心岗位（核心类）的安全性和唯一性。
+
+<DujClassLoaderDiagram />
+
+## 类加载七阶段
+
+```text
+加载（Loading）
+  ├─ 通过全限定名获取类的二进制字节流
+  ├─ 转为方法区的运行时数据结构
+  └─ 生成 java.lang.Class 对象（堆中）
+       ↓
+验证（Verification）────┐
+  ├─ 文件格式验证       │
+  ├─ 元数据验证         │ 连接(Linking)
+  ├─ 字节码验证         │
+  └─ 符号引用验证       │
+       ↓               │
+准备（Preparation）     │
+  ├─ 静态变量分配内存   │
+  └─ 设默认零值（非真实值）│
+       ↓               │
+解析（Resolution）─────┘
+  └─ 符号引用 → 直接引用
+       ↓
+初始化（Initialization）
+  ├─ 执行 <clinit> 方法
+  │   = 静态变量赋值 + static 块
+  └─ JVM 保证 <clinit> 线程安全
+       ↓
+使用（Using）→ 卸载（Unloading）
+```
+
+<Callout type="trap">
+**陷阱**：准备阶段赋的是默认零值，不是代码中写的值。`static int a = 123;` 在准备阶段 a=0，在初始化阶段才 a=123。但 `static final int a = 123;`（ConstantValue 属性）在准备阶段就赋值 123。
+</Callout>
+
+## 双亲委派模型
+
+```text
+自底向上委派检查，自顶向下尝试加载
+
+自定义加载器
+    ↓ "爸爸，你能加载这个类吗？"
+应用程序加载器（AppClassLoader）
+    ↓ "爸爸，你能加载这个类吗？"
+扩展加载器（ExtClassLoader / PlatformClassLoader）
+    ↓ "爸爸，你能加载这个类吗？"
+启动类加载器（BootstrapClassLoader）
+    ↓ rt.jar / java.lang.*
+    ↓ 找到了 → 加载
+    ↓ 找不到 → 返回给子加载器
+扩展加载器 → 尝试加载 → 找到 → 加载 / 找不到 → 返回
+应用程序加载器 → 尝试加载 → 找到 → 加载 / 找不到 → 返回
+自定义加载器 → 尝试加载 → 找到 → 加载 / 找不到 → ClassNotFoundException
+```
+
+<Callout type="insight">
+**设计意图**：双亲委派保证核心类（如 java.lang.Object）只被 Bootstrap 加载，用户无法伪造。如果自己写一个 java.lang.String，双亲委派会让 Bootstrap 先加载 rt.jar 中的 String，你的版本永远加载不了。这就是安全性保证。
+</Callout>
+
+## 打破双亲委派的场景
+
+```text
+场景1：SPI 机制（JDBC）
+  问题：接口在 rt.jar（Bootstrap加载），实现在 classpath（App加载）
+        Bootstrap 看不到 App 的实现类
+  解决：线程上下文类加载器（TCCL）
+        Bootstrap 通过 TCCL 委派 App 加载实现类
+
+场景2：OSGi 热部署
+  问题：每个模块需要独立加载同名类的不同版本
+  解决：网状委派（非树状），模块间平级委派
+
+场景3：Tomcat Web 应用隔离
+  问题：两个 Web 应用依赖同一个库的不同版本
+  解决：每个 WebApp 有独立 ClassLoader
+        打破双亲委派——先自己加载再委派父
+
+场景4：自定义类加载器
+  重写 loadClass() → 打破双亲委派
+  重写 findClass() → 保持双亲委派（推荐）
+```
+
+## 类初始化触发条件
+
+```text
+主动引用（触发初始化）：
+  ① new / getstatic / putstatic / invokestatic 四条字节码指令
+  ② 反射调用（Class.forName）
+  ③ 初始化子类时父类未初始化（先初始化父类）
+  ④ JVM 启动时的主类（含 main 的类）
+  ⑤ MethodHandle 句柄对应的类
+
+被动引用（不触发初始化）：
+  ① 通过子类访问父类静态字段 → 只初始化父类
+  ② 通过数组定义引用类 → 不初始化
+  ③ 访问常量（static final，ConstantValue）→ 不初始化
+```
+
+<Exercises>
+**问题 1**：类加载的七阶段生命周期是什么？各阶段做了什么？
+
+<Answer>
+类加载七阶段：加载、验证、准备、解析、初始化、使用、卸载。其中验证+准备+解析合称连接（Linking）。①加载——通过类的全限定名获取定义此类的二进制字节流（可从 jar/网络/动态生成/JSP 等来源），将字节流转化为方法区的运行时数据结构，在堆中生成一个代表该类的 java.lang.Class 对象作为方法区数据的访问入口。②验证——确保 Class 文件字节流包含的信息符合 JVM 规范，包括文件格式验证（魔数/版本号）、元数据验证（语义合法）、字节码验证（方法体逻辑合法）、符号引用验证（解析前确保引用可正确解析）。③准备——为类变量（static）分配内存并设置默认零值（int→0、boolean→false、引用→null），注意不是代码中赋的值。但 static final 修饰的常量（ConstantValue 属性）在此阶段就赋真实值。④解析——将常量池内的符号引用替换为直接引用（内存地址/偏移量/句柄），可在初始化前或首次使用时进行（延迟解析）。⑤初始化——执行类构造器 `<clinit>` 方法，它是编译器自动收集所有 static 变量赋值和 static 块合并产生的方法，JVM 保证 `<clinit>` 线程安全（多线程同时触发初始化时只有一个线程执行，其余阻塞）。⑥使用——正常使用类。⑦卸载——满足三个条件（该类所有实例被回收、加载该类的 ClassLoader 被回收、Class 对象无引用）时由 GC 回收。
+</Answer>
+
+**问题 2**：双亲委派模型的工作原理是什么？为什么需要双亲委派？
+
+<Answer>
+工作原理：当一个类加载器收到类加载请求时，首先不会自己去尝试加载，而是把请求委派给父类加载器去完成，每一个层次的类加载器都是如此，因此所有的加载请求最终都应该传送到顶层的启动类加载器中。只有当父加载器反馈自己无法完成这个加载请求（它的搜索范围中没有找到所需的类）时，子加载器才会尝试自己去加载。层次结构：启动类加载器（BootstrapClassLoader，C++实现，加载 rt.jar 等核心库）→ 扩展类加载器（ExtClassLoader/PlatformClassLoader，加载 ext 目录）→ 应用程序类加载器（AppClassLoader，加载 classpath）→ 自定义类加载器。需要双亲委派的原因：①安全性——保证核心类（如 java.lang.Object、java.lang.String）只被 Bootstrap 加载，防止用户伪造核心类。如果用户写了一个 java.lang.String，双亲委派会让 Bootstrap 先加载 rt.jar 中的 String，用户版本永远加载不了。②唯一性——保证同一个类在 JVM 中只有一份（由同一个加载器加载），避免类的重复加载。例如 java.lang.Object 在所有引用它的类中都应该是同一个 Class 对象。③层次清晰——各级加载器各司其职，Bootstrap 加载核心类、Ext 加载扩展类、App 加载应用类，职责边界清晰。
+</Answer>
+
+**问题 3**：SPI 机制如何打破双亲委派？线程上下文类加载器的作用是什么？
+
+<Answer>
+SPI（Service Provider Interface）的问题：以 JDBC 为例，接口 java.sql.Driver 定义在 rt.jar 中，由 Bootstrap 类加载器加载。但 JDBC 的实现（如 MySQL Driver）在 classpath 中，由 App 类加载器加载。Bootstrap 类加载器看不到 App 类加载器的类（子加载器对父加载器可见，但父加载器看不到子加载器的类），所以 Bootstrap 无法用常规方式加载 JDBC 实现。解决方案——线程上下文类加载器（Thread Context ClassLoader, TCCL）：TCCL 存在于每个线程中，默认值是 AppClassLoader。java.sql.DriverManager（Bootstrap 加载的类）在加载 JDBC 实现时，不使用自己的 Bootstrap 类加载器，而是通过 TCCL 获取当前线程的类加载器（AppClassLoader），再用它来加载 classpath 中的 JDBC 实现类。这样就实现了「父加载器委托子加载器加载类」的逆向委派，打破了双亲委派「自底向上」的单向规则。核心代码逻辑：`Thread.currentThread().getContextClassLoader().loadClass("com.mysql.cj.jdbc.Driver")`。TCCL 的本质：它是双亲委派的一个「逃生口」，在需要逆向委派的场景（父加载器需要加载子加载器的类）中，通过线程上下文绕过双亲委派。其他打破双亲委派的场景：OSGi（网状委派，模块间平级）、Tomcat（每个 WebApp 独立 ClassLoader，先自己加载再委派父，实现应用间类隔离）。
+</Answer>
+
+**问题 4**：什么情况下会触发类的初始化？什么情况下不会？
+
+<Answer>
+触发初始化（主动引用）：①遇到 new、getstatic、putstatic、invokestatic 四条字节码指令时——new 创建对象实例、getstatic/putstatic 读写静态字段（非 final 常量）、invokestatic 调用静态方法。②使用 java.lang.reflect 包的方法对类进行反射调用时（如 Class.forName）。③初始化一个类时，如果其父类还未初始化，则先触发父类初始化（但接口除外，接口初始化不要求父接口先初始化）。④JVM 启动时，用户指定的主类（包含 main 方法的类）会被初始化。⑤JDK 7+ 的动态语言支持：一个 java.lang.invoke.MethodHandle 实例最后的解析结果为 REF_getStatic/REF_putStatic/REF_invokeStatic/REF_newInvokeSpecial 的方法句柄时。不触发初始化（被动引用）：①通过子类引用父类的静态字段，不会导致子类初始化——如 `class Sub extends Super; Sub.value`（value 是 Super 的 static 字段），只会初始化 Super 不会初始化 Sub。②通过数组定义引用类，不会触发初始化——如 `Super[] arr = new Super[10]`，不会初始化 Super（但会初始化一个 `[LSuper;` 的数组类）。③访问 static final 修饰的常量（编译期常量，ConstantValue 属性），不会触发初始化——因为常量在编译期就存入调用方的常量池中，运行时不需要访问定义类。区分的意义：理解哪些操作真正触发 `<clinit>` 执行，避免意外的类初始化开销或初始化顺序错误。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="类加载七阶段">加载→验证→准备→解析→初始化→使用→卸载。其中验证+准备+解析=连接。加载获取字节流，连接做格式验证和内存准备，初始化执行 static 赋值和 static 块。</GlossaryItem>
+<GlossaryItem term="双亲委派">类加载请求先委派给父加载器，父加载器无法完成时子加载器才尝试。保证核心类安全唯一——用户无法伪造 java.lang.String。自底向上委派检查，自顶向下尝试加载。</GlossaryItem>
+<GlossaryItem term="线程上下文类加载器">每个线程持有的类加载器引用（默认 AppClassLoader），用于 SPI 等场景中父加载器逆向委派子加载器加载实现类。是双亲委派的「逃生口」。</GlossaryItem>
+<GlossaryItem term="<clinit>">类构造器方法，由编译器自动收集所有 static 变量赋值和 static 块合并产生。JVM 保证其线程安全（多线程同时触发初始化时只执行一次）。执行 <clinit> 是初始化阶段的核心。</GlossaryItem>
+</Glossary>

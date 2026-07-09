@@ -1738,7 +1738,17 @@ export type ReviewChapterSlug =
   | "jvt-thread-analysis"
   | "jvt-memory-leak"
   | "jvt-cpu-performance"
-  | "jvt-final-review";
+  | "jvt-final-review"
+  | "duj-learning-map"
+  | "duj-memory-region"
+  | "duj-gc-algorithms"
+  | "duj-class-loader"
+  | "duj-execution-engine"
+  | "duj-compile-optimize"
+  | "duj-memory-model"
+  | "duj-lock-optimize"
+  | "duj-practice-tuning"
+  | "duj-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3481,6 +3491,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "jvt-memory-leak": "内存泄漏排查",
   "jvt-cpu-performance": "CPU性能分析",
   "jvt-final-review": "全书复习",
+  "duj-learning-map": "全书学习地图",
+  "duj-memory-region": "JVM内存区域",
+  "duj-gc-algorithms": "垃圾收集器与算法",
+  "duj-class-loader": "类加载机制",
+  "duj-execution-engine": "执行引擎",
+  "duj-compile-optimize": "编译优化与逃逸分析",
+  "duj-memory-model": "Java内存模型与线程",
+  "duj-lock-optimize": "锁优化",
+  "duj-practice-tuning": "实战调优",
+  "duj-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

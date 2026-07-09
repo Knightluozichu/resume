@@ -1,0 +1,139 @@
+---
+title: "JVM内存区域"
+type: A
+section: "JVM与Java生态"
+order: 1
+description: "深入理解JVM运行时数据区——程序计数器、虚拟机栈、本地方法栈、堆、方法区的结构与作用，掌握OOM诊断能力"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DujMemoryRegionDiagram } from "@/components/mdx/deep-understanding-jvm/diagrams/duj-memory-region";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 JVM 运行时数据区的五大区域及其作用
+- 区分线程私有与线程共享区域的本质差异
+- 掌握各区域可能抛出的异常类型及触发条件
+- 理解 JDK 7 到 JDK 8 永久代到元空间的演进原因
+</Objectives>
+
+## 直觉引入
+
+JVM 内存就像一栋办公楼。每个员工（线程）有自己的「工位」（程序计数器——记录当前工作到哪一步）和「桌面」（虚拟机栈——放正在处理的方法文件）；处理 Native 代码时有专门的「外协桌面」（本地方法栈）。整栋楼共享「大仓库」（堆——放所有对象实例）和「档案室」（方法区——放类信息、常量池、静态变量）。还有楼外的「临时仓库」（直接内存——NIO 堆外分配）。
+
+<DujMemoryRegionDiagram />
+
+## 五大区域详解
+
+```text
+线程私有                          线程共享
+┌─────────────────────┐         ┌─────────────────────┐
+│ 程序计数器（PC）      │         │ 堆（Heap）            │
+│  记录字节码行号        │         │  对象实例 + 数组       │
+│  唯一不 OOM           │         │  GC 主战场             │
+├─────────────────────┤         │  新生代 + 老年代       │
+│ 虚拟机栈（VM Stack）  │         ├─────────────────────┤
+│  栈帧 = 方法调用       │         │ 方法区（Method Area）  │
+│  局部变量表/操作数栈   │         │  类信息/常量池/静态变量 │
+│  动态链接/返回地址     │         │  JDK8: 元空间(Metaspace)│
+├─────────────────────┤         ├─────────────────────┤
+│ 本地方法栈            │         │ 直接内存              │
+│  Native 方法服务      │         │  NIO/堆外分配          │
+└─────────────────────┘         └─────────────────────┘
+```
+
+## 各区域 OOM 类型
+
+```text
+程序计数器      无 OOM（唯一不会溢出的区域）
+
+虚拟机栈        StackOverflowError — 栈深度超过限制（递归过深）
+               OutOfMemoryError   — 栈无法扩展（-Xss 太小或线程太多）
+
+堆              OutOfMemoryError: Java heap space
+               — 对象太多无法分配，GC 后仍不够
+
+方法区           OutOfMemoryError: Metaspace（JDK 8+）
+               OutOfMemoryError: PermGen space（JDK 7-）
+               — 加载类太多（动态代理/CGLIB/大量 JSP）
+
+直接内存         OutOfMemoryError: Direct buffer memory
+               — NIO Buffer 堆外分配超限
+```
+
+<Callout type="trap">
+**陷阱**：栈溢出不一定是递归。虽然递归是最常见原因，但 -Xss 设置过小、线程数过多（每个线程分配栈空间）也会导致 OOM。线程数公式：`可创建线程数 = (总内存 - 堆 - 方法区) / Xss`。
+</Callout>
+
+## 永久代到元空间的演进
+
+```text
+JDK 7 之前              JDK 8+
+┌───────────────┐       ┌───────────────┐
+│ 永久代 PermGen  │       │ 元空间 Metaspace │
+│  -XX:MaxPermSize│      │  -XX:MaxMetaspaceSize│
+│  堆内分配        │      │  堆外（本地内存）分配 │
+│  容易 OOM        │      │  受限于机器内存     │
+│  字符串常量池在堆 │      │  字符串常量池在堆   │
+└───────────────┘       └───────────────┘
+
+原因：永久代大小固定且难以调优，容易因动态类加载而 OOM
+      元空间使用本地内存，只受机器限制，减少了 OOM 风险
+```
+
+## 对象的内存布局
+
+```text
+一个 Java 对象在堆中的布局：
+┌───────────────────────────────────┐
+│ 对象头（Object Header）             │
+│  ├─ Mark Word（8B）— 锁状态/hashCode/GC年龄 │
+│  └─ 类型指针（4-8B）— 指向类元数据     │
+├───────────────────────────────────┤
+│ 实例数据（Instance Data）            │
+│  各字段的值（按类型对齐排列）          │
+├───────────────────────────────────┤
+│ 对齐填充（Padding）                 │
+│  补齐到 8 字节整数倍                 │
+└───────────────────────────────────┘
+```
+
+<Callout type="insight">
+**关键**：Mark Word 是锁优化的基础——偏向锁、轻量级锁、重量级锁的状态都记录在 Mark Word 中。理解对象布局是理解 synchronized 锁升级的前提。
+</Callout>
+
+<Exercises>
+**问题 1**：JVM 运行时数据区有哪五大区域？哪些是线程私有的，哪些是线程共享的？
+
+<Answer>
+五大区域：①程序计数器（PC Register）——线程私有，记录当前线程执行字节码的行号，是唯一不会 OOM 的区域；②虚拟机栈（VM Stack）——线程私有，每个方法调用创建一个栈帧，含局部变量表、操作数栈、动态链接、方法返回地址；③本地方法栈（Native Method Stack）——线程私有，为 Native 方法服务，HotSpot 中与虚拟机栈合二为一；④堆（Heap）——线程共享，存放对象实例和数组，GC 的主战场，分为新生代（Eden + S0 + S1）和老年代；⑤方法区（Method Area）——线程共享，存放类信息、常量池、静态变量、JIT 编译后的代码，JDK 8 后由元空间（Metaspace）实现，使用本地内存。此外还有直接内存（Direct Memory），虽不是 JVM 运行时数据区的一部分，但 NIO 会使用，受 -XX:MaxDirectMemorySize 控制。线程私有区域随线程创建而生、随线程消亡而灭，无需 GC 干预；线程共享区域需要 GC 回收。
+</Answer>
+
+**问题 2**：堆溢出和元空间溢出的原因分别是什么？如何区分和诊断？
+
+<Answer>
+堆溢出（OOM: Java heap space）：原因是对象实例太多无法在堆中分配，且 GC 后仍无法满足需求。常见场景：内存泄漏（static 集合持续添加对象不释放）、大对象分配（大数组/大字符串）、瞬时高并发创建大量对象。诊断：用 -XX:+HeapDumpOnOutOfMemoryError 在 OOM 时自动 dump，用 MAT 分析 Retained Heap 找到占用最大的对象及其 GC Roots 引用链。元空间溢出（OOM: Metaspace）：原因是加载的类太多，元空间（JDK 8+ 使用本地内存）无法容纳。常见场景：大量动态代理（CGLIB/ByteBuddy）、JSP 预编译、OSGi 模块化、频繁热部署。诊断：用 jcmd 打印类加载统计，检查是否有异常的类加载器持续创建新类。区分方法：堆溢出是对象实例太多，dump 文件中可见大量重复对象；元空间溢出是类元数据太多，jcmd 中可见类数量持续增长。解决：堆溢出调大 -Xmx 或修复泄漏；元空间溢出调大 -XX:MaxMetaspaceSize 或排查动态类生成源。
+</Answer>
+
+**问题 3**：JDK 7 到 JDK 8 为什么把永久代改成元空间？有什么实际影响？
+
+<Answer>
+永久代（PermGen）的问题：①大小固定，由 -XX:MaxPermSize 指定，难以预估——动态类加载（CGLIB/JSP/热部署）容易导致 OOM: PermGen space；②永久代在堆内分配，与堆争用内存空间；③GC 效率低，永久代的回收条件苛刻（类卸载需要满足三个条件：该类所有实例被回收、加载该类的 ClassLoader 被回收、该类 java.lang.Class 对象无引用），实际很少回收；④调优困难， PermSize 和 MaxPermSize 需要精确设置，太小容易 OOM、太大浪费堆空间。元空间（Metaspace）的改进：①使用本地内存（Native Memory），不受 JVM 堆大小限制，只受机器物理内存限制，大幅减少 OOM 风险；②-XX:MaxMetaspaceSize 可不设（默认无上限），也可以设上限防止无限增长；③字符串常量池从永久代移到堆（JDK 7 开始），避免了 intern 字符串导致的永久代溢出。实际影响：JDK 8 后 CGLIB/动态代理/热部署场景的 PermGen OOM 基本消失；但需要注意元空间使用的是本地内存，不设上限时可能耗尽机器内存导致进程被 OOM Killer 杀死。
+</Answer>
+
+**问题 4**：一个 Java 对象在堆中占多少内存？如何计算？
+
+<Answer>
+一个 Java 对象在堆中由三部分组成：①对象头（Object Header）——Mark Word 占 8 字节（64 位 JVM 开启指针压缩时），存储 hashCode、GC 分代年龄、锁状态标志；类型指针占 4 字节（开启指针压缩 -XX:+UseCompressedOops）或 8 字节（关闭），指向类元数据；数组对象额外有 4 字节数组长度。②实例数据（Instance Data）——各字段的值，按类型大小排列（long/double 8B、int/float 4B、short/char 2B、byte/boolean 1B、引用 4B 压缩/8B 非压缩），字段之间会有对齐填充。③对齐填充（Padding）——补齐到 8 字节整数倍。示例计算：一个只含两个 int 字段的对象，开启指针压缩时 = 对象头(8+4=12B) + 实例数据(4+4=8B) = 20B → 对齐到 24B。一个空 String 对象约 40B（对象头 12B + hash 4B + value 引用 4B + coder 1B + byte1 + 对齐 = ~24B，但实际 String 还有其他字段）。可用 jol（Java Object Layout）库精确测量：`GraphLayout.parseInstance(obj).toPrintable()`。理解对象布局对内存敏感场景（缓存设计、大批量小对象）很重要。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="运行时数据区">JVM 在执行 Java 程序时管理的内存区域，分为线程私有（程序计数器/虚拟机栈/本地方法栈）和线程共享（堆/方法区）两类。各区域有不同的生命周期和回收策略。</GlossaryItem>
+<GlossaryItem term="栈帧">虚拟机栈中的元素，每个方法调用对应一个栈帧，含局部变量表、操作数栈、动态链接、方法返回地址四部分。方法返回时栈帧出栈。</GlossaryItem>
+<GlossaryItem term="元空间">JDK 8 取代永久代的实现，使用本地内存存储类元数据。避免了永久代大小固定容易 OOM 的问题，但需注意不设上限可能耗尽机器内存。</GlossaryItem>
+<GlossaryItem term="对象头">每个 Java 对象的对象头包含 Mark Word（存储锁状态/hashCode/GC年龄）和类型指针（指向类元数据）。Mark Word 是 synchronized 锁优化的基础。</GlossaryItem>
+</Glossary>

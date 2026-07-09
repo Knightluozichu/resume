@@ -1275,6 +1275,16 @@ import { jvtThreadAnalysisQuestions } from "./review/jvt-thread-analysis";
 import { jvtMemoryLeakQuestions } from "./review/jvt-memory-leak";
 import { jvtCpuPerformanceQuestions } from "./review/jvt-cpu-performance";
 import { jvtFinalReviewQuestions } from "./review/jvt-final-review";
+import { dujLearningMapQuestions } from "./review/duj-learning-map";
+import { dujMemoryRegionQuestions } from "./review/duj-memory-region";
+import { dujGcAlgorithmsQuestions } from "./review/duj-gc-algorithms";
+import { dujClassLoaderQuestions } from "./review/duj-class-loader";
+import { dujExecutionEngineQuestions } from "./review/duj-execution-engine";
+import { dujCompileOptimizeQuestions } from "./review/duj-compile-optimize";
+import { dujMemoryModelQuestions } from "./review/duj-memory-model";
+import { dujLockOptimizeQuestions } from "./review/duj-lock-optimize";
+import { dujPracticeTuningQuestions } from "./review/duj-practice-tuning";
+import { dujFinalReviewQuestions } from "./review/duj-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3265,6 +3275,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...jvtMemoryLeakQuestions,
   ...jvtCpuPerformanceQuestions,
   ...jvtFinalReviewQuestions,
+  ...dujLearningMapQuestions,
+  ...dujMemoryRegionQuestions,
+  ...dujGcAlgorithmsQuestions,
+  ...dujClassLoaderQuestions,
+  ...dujExecutionEngineQuestions,
+  ...dujCompileOptimizeQuestions,
+  ...dujMemoryModelQuestions,
+  ...dujLockOptimizeQuestions,
+  ...dujPracticeTuningQuestions,
+  ...dujFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

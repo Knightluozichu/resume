@@ -1,0 +1,144 @@
+---
+title: "垃圾收集器与算法"
+type: B
+section: "JVM与Java生态"
+order: 2
+description: "深入理解GC Roots可达性分析、三种基础GC算法、分代收集策略与HotSpot收集器从Serial到ZGC的演进"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { DujGcAlgorithmsDiagram } from "@/components/mdx/deep-understanding-jvm/diagrams/duj-gc-algorithms";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 GC Roots 可达性分析判定对象存活的原理
+- 掌握标记-清除、复制、标记-整理三种基础算法的优缺点
+- 理解分代收集策略——为什么新生代用复制、老年代用标记-整理
+- 了解从 Serial 到 ZGC 的收集器演进路径与核心设计取舍
+</Objectives>
+
+## 直觉引入
+
+垃圾收集就像「仓库清运」。首先要判断哪些货物还在用（可达性分析——从 GC Roots 出发，能追溯到的对象是存活的，追溯不到的是垃圾）；然后决定清运方式（标记-清除——标记垃圾直接清走，但会留碎片；复制——把存货搬到另一半，清空原来的一半，无碎片但浪费空间；标记-整理——把存货推到一端，清掉另一端，无碎片不浪费但搬运慢）。不同仓库用不同策略（分代收集——新生代货物周转快用复制，老年代货物存活久用标记-整理）。
+
+<DujGcAlgorithmsDiagram />
+
+## GC Roots 可达性分析
+
+```text
+判断对象存活的方法：从 GC Roots 出发，沿引用链搜索
+  能到达的对象 = 存活
+  不能到达的对象 = 可回收
+
+GC Roots 包括：
+  ① 虚拟机栈中引用的对象（方法局部变量）
+  ② 方法区静态属性引用的对象
+  ③ 方法区常量引用的对象
+  ④ 本地方法栈 JNI 引用
+  ⑤ synchronized 持有的对象
+  ⑥ JVM 内部引用（基本类型对象、异常对象、类加载器）
+
+注意：引用计数法不能解决循环引用问题，已被废弃
+```
+
+<Callout type="trap">
+**陷阱**：强引用、软引用、弱引用、虚引用的回收时机不同。强引用（默认）永不回收；软引用（SoftReference）内存不足时回收；弱引用（WeakReference）下次 GC 就回收；虚引用（PhantomReference）仅用于跟踪对象被回收的通知。
+</Callout>
+
+## 三种基础算法对比
+
+```text
+算法           原理              优点           缺点           适用场景
+标记-清除      标记存活→清除死亡  简单直接       内存碎片       老年代(CMS)
+               两遍扫描          不移动对象     效率不稳定
+                                                    
+复制           存活对象复制到     无碎片         浪费一半空间   新生代
+               另一半→清空原来    高效           需要额外空间   
+                                                    
+标记-整理      标记存活→整理到    无碎片         移动开销大     老年代
+               一端→清除边界外    不浪费空间     STW时间长     
+```
+
+## 分代收集策略
+
+```text
+为什么分代？
+  不同生命周期对象用不同算法 → 整体效率最优
+
+新生代（Young Generation）
+  Eden : S0 : S1 = 8 : 1 : 1
+  对象朝生夕灭 → 复制算法最高效
+  Minor GC 频繁但快（大部分对象直接回收）
+  晋升老年代条件：
+    ① 年龄达到 -XX:MaxTenuringThreshold（默认15）
+    ② 大对象直接进老年代（-XX:PretenureSizeThreshold）
+    ③ Survivor 空间不够
+
+老年代（Old Generation）
+  存活率高 → 标记-清除/标记-整理
+  Major GC / Full GC 不频繁但慢
+  触发条件：
+    ① 老年代空间不足
+    ② 空间分配担保失败
+    ③ CMS Concurrent Mode Failure
+```
+
+## 收集器演进
+
+```text
+Serial / Serial Old     单线程，STW，客户端模式
+        ↓
+ParNew / Parallel Old   多线程并行STW，吞吐量优先
+        ↓
+CMS                     并发标记-清除，低停顿优先
+  四阶段：初始标记(STW)→并发标记→预清理→重新标记(STW)→并发清除
+  缺点：碎片化、Concurrent Mode Failure、浮动垃圾
+        ↓
+G1                      Region化分代，可预测停顿
+  -XX:MaxGCPauseMillis 设停顿目标
+  -XX:G1HeapRegionSize 设Region大小
+  Mixed GC：选择性回收垃圾最多的Region
+        ↓
+ZGC / Shenandoah        染色指针/读屏障，<10ms停顿
+  几乎全并发，适合大堆（TB级）
+```
+
+<Callout type="insight">
+**核心取舍**：吞吐量 vs 停顿时间。Parallel Scavenge 追求最大吞吐量（GC时间占比最小）；CMS/G1/ZGC 追求最小停顿时间（STW最短）。两者不可兼得——停顿越短，并发开销越大，吞吐量越低。
+</Callout>
+
+<Exercises>
+**问题 1**：GC Roots 可达性分析如何判断对象是否存活？GC Roots 包括哪些？
+
+<Answer>
+可达性分析的基本思路：从 GC Roots 出发，沿着引用链（Reference Chain）向下搜索，搜索走过的路径称为引用链。如果一个对象到 GC Roots 没有任何引用链相连（即从 GC Roots 不可达），则该对象是可回收的。GC Roots 包括以下几类：①虚拟机栈中引用的对象——方法执行时局部变量表中的引用，如方法参数、局部变量；②方法区中类静态属性引用的对象——如 static 变量指向的对象；③方法区中常量引用的对象——如字符串常量池中的引用；④本地方法栈中 JNI 引用的对象——Native 方法中引用的 Java 对象；⑤同步锁 synchronized 持有的对象——被 synchronized 锁住的对象不能回收；⑥JVM 内部引用——如基本类型对应的 Class 对象、常驻异常对象（NullPointerException 等）、系统类加载器。此外还有跨代引用（通过 Remembered Set / Card Table 跟踪，避免全堆扫描可达性分析）。注意：引用计数法因为无法解决循环引用（A 引用 B、B 引用 A 但都不再被外部引用）的问题，已被主流 JVM 废弃。可达性分析配合四种引用强度（强/软/弱/虚）还能实现灵活的回收策略。
+</Answer>
+
+**问题 2**：三种基础 GC 算法的原理和优缺点分别是什么？为什么新生代用复制算法、老年代用标记-整理？
+
+<Answer>
+三种基础算法：①标记-清除（Mark-Sweep）——分两阶段：标记阶段从 GC Roots 遍历标记所有存活对象，清除阶段清除未标记对象。优点：简单直接，不移动对象。缺点：产生内存碎片（清除后空间不连续），效率不稳定（对象多时标记和清除都慢）。②复制（Copying）——将内存分两块，每次只用一块，GC 时把存活对象复制到另一块，然后清空当前块。优点：无碎片、简单高效（只需复制存活对象，死亡对象不用管）。缺点：浪费一半空间，存活对象多时复制开销大。③标记-整理（Mark-Compact）——标记阶段同标记-清除，整理阶段把存活对象向一端移动，清除边界外的空间。优点：无碎片、不浪费空间。缺点：移动对象开销大，STW 时间长（移动对象需要更新所有引用）。分代策略原因：新生代对象朝生夕灭（98% 的对象在一次 Minor GC 中死亡），存活对象极少，复制算法只需复制少量存活对象，效率极高；且新生代不需要 50% 的空间浪费——HotSpot 用 Eden:S0:S1 = 8:1:1，实际只浪费 10%。老年代存活率高，复制算法需复制大量对象且没有额外空间，所以用标记-清除（CMS）或标记-整理（Serial Old/Parallel Old）。CMS 选择标记-清除是为了避免移动对象带来的 STW，代价是碎片化。
+</Answer>
+
+**问题 3**：从 Serial 到 ZGC，收集器演进的核心思路是什么？每一步解决了什么问题？
+
+<Answer>
+演进路径：Serial → ParNew/Parallel Scavenge → CMS → G1 → ZGC。核心思路从「单线程STW」到「多线程并行STW」到「并发减少STW」到「Region化可预测停顿」到「几乎全并发超低停顿」。①Serial/Serial Old——单线程收集，STW 时所有工作线程暂停，适合客户端模式或小堆。问题：STW 时间长。②ParNew/Parallel Scavenge——多线程并行收集，利用多核 CPU 缩短 STW。Parallel Scavenge 追求吞吐量（GC时间占比最小），ParNew 配合 CMS 追求低停顿。问题：仍是完全 STW。③CMS（Concurrent Mark Sweep）——首次引入并发，四阶段：初始标记(STW)→并发标记→重新标记(STW)→并发清除。只有两个短 STW 阶段，大幅降低停顿。问题：碎片化（标记-清除不整理）、Concurrent Mode Failure（并发阶段老年代满了退化为 Serial Old）、浮动垃圾（并发标记后新产生的垃圾本轮不回收）。④G1——Region 化设计，把堆分成 2048 个 Region，每个 Region 可以动态扮演 Eden/Survivor/Old/Humongous。Mixed GC 选择性回收垃圾最多的 Region，实现可预测停顿（-XX:MaxGCPauseMillis）。解决了 CMS 的碎片化问题（Region 化天然无碎片）。⑤ZGC——染色指针+读屏障，标记、转移、重定位几乎全部并发执行，停顿 <10ms 且不随堆大小增长。解决了 G1 在大堆（GB-TB级）停顿随堆增长的问题。每一步的核心取舍：吞吐量 vs 停顿时间 vs 内存开销，越追求低停顿，并发开销和内存开销越大。
+</Answer>
+
+**问题 4**：CMS 的 Concurrent Mode Failure 是什么？如何避免？
+
+<Answer>
+CMS 的 Concurrent Mode Failure：CMS 在并发清除阶段，用户线程还在运行并产生新对象，如果此时老年代空间不足以容纳新晋升的对象，就会触发 Concurrent Mode Failure。此时 CMS 被迫退化为 Serial Old（单线程 Full GC，完全 STW），停顿时间非常长。触发原因：①老年代空间预留不足——CMS 在并发阶段需要留空间给用户线程新产生的对象，如果 -XX:CMSInitiatingOccupancyFraction 设得太高（老年代占用率阈值），并发 GC 启动太晚，空间不够用；②浮动垃圾——并发标记后新产生的垃圾本轮不回收，占用空间；③碎片化——标记-清除产生碎片，虽然总空间够但连续空间不够分配大对象。避免方法：①降低 -XX:CMSInitiatingOccupancyFraction（默认 92%，可降到 70-80%），让 CMS 更早启动并发收集；②增大 -XX:CMSFullGCsBeforeCompaction（默认 0），定期触发 Full GC 做压缩整理（但会 STW）；③增大老年代空间（调大堆或调整 NewRatio）；④升级到 G1——G1 的 Region 化设计天然避免了碎片化问题，且 Mixed GC 可以预测停顿时间，CMS 已在 JDK 9 被标记废弃、JDK 14 被移除。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="GC Roots">可达性分析的起点对象集合，包括虚拟机栈引用、静态属性引用、常量引用、JNI 引用、同步锁持有对象等。从 GC Roots 不可达的对象判定为可回收。</GlossaryItem>
+<GlossaryItem term="分代收集">根据对象生命周期将堆分为新生代和老年代，分别使用不同算法——新生代用复制（存活少效率高）、老年代用标记-清除/整理（存活多不移动）。整体效率最优。</GlossaryItem>
+<GlossaryItem term="STW">Stop-The-World，GC 时暂停所有用户工作线程。停顿时间是 GC 调优的核心指标，从 Serial 的完全 STW 到 ZGC 的 <10ms，收集器演进的核心目标就是减少 STW。</GlossaryItem>
+<GlossaryItem term="Mixed GC">G1 特有的回收模式，不只回收新生代，还选择性回收垃圾最多的老年代 Region，在可控停顿时间内最大化回收量。</GlossaryItem>
+</Glossary>
