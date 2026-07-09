@@ -121,6 +121,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["gch-", "gc-handbook"],
   ["fla-", "first-line-android"],
   ["cra-", "crazy-android"],
+  ["kdg-", "kotlin-definitive-guide"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

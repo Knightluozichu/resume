@@ -1788,7 +1788,17 @@ export type ReviewChapterSlug =
   | "cra-service-broadcast"
   | "cra-multimedia"
   | "cra-web-network"
-  | "cra-final-review";
+  | "cra-final-review"
+  | "kdg-learning-map"
+  | "kdg-kotlin-basics"
+  | "kdg-functions"
+  | "kdg-classes-objects"
+  | "kdg-advanced-types"
+  | "kdg-coroutines"
+  | "kdg-dsl"
+  | "kdg-kotlin-android"
+  | "kdg-testing"
+  | "kdg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3581,6 +3591,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cra-multimedia": "多媒体与图形",
   "cra-web-network": "Web与网络通信",
   "cra-final-review": "全书复习",
+  "kdg-learning-map": "全书学习地图",
+  "kdg-kotlin-basics": "Kotlin基础语法",
+  "kdg-functions": "函数与类型系统",
+  "kdg-classes-objects": "类与对象",
+  "kdg-advanced-types": "高级类型（泛型/协变）",
+  "kdg-coroutines": "协程",
+  "kdg-dsl": "DSL构建",
+  "kdg-kotlin-android": "Kotlin Android开发",
+  "kdg-testing": "测试与最佳实践",
+  "kdg-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

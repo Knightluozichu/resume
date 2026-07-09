@@ -1665,6 +1665,16 @@ import { craServiceBroadcastQuestions } from "./review/cra-service-broadcast";
 import { craMultimediaQuestions } from "./review/cra-multimedia";
 import { craWebNetworkQuestions } from "./review/cra-web-network";
 import { craFinalReviewQuestions } from "./review/cra-final-review";
+import { kdgLearningMapQuestions } from "./review/kdg-learning-map";
+import { kdgKotlinBasicsQuestions } from "./review/kdg-kotlin-basics";
+import { kdgFunctionsQuestions } from "./review/kdg-functions";
+import { kdgClassesObjectsQuestions } from "./review/kdg-classes-objects";
+import { kdgAdvancedTypesQuestions } from "./review/kdg-advanced-types";
+import { kdgCoroutinesQuestions } from "./review/kdg-coroutines";
+import { kdgDslQuestions } from "./review/kdg-dsl";
+import { kdgKotlinAndroidQuestions } from "./review/kdg-kotlin-android";
+import { kdgTestingQuestions } from "./review/kdg-testing";
+import { kdgFinalReviewQuestions } from "./review/kdg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3365,6 +3375,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...craMultimediaQuestions,
   ...craWebNetworkQuestions,
   ...craFinalReviewQuestions,
+  ...kdgLearningMapQuestions,
+  ...kdgKotlinBasicsQuestions,
+  ...kdgFunctionsQuestions,
+  ...kdgClassesObjectsQuestions,
+  ...kdgAdvancedTypesQuestions,
+  ...kdgCoroutinesQuestions,
+  ...kdgDslQuestions,
+  ...kdgKotlinAndroidQuestions,
+  ...kdgTestingQuestions,
+  ...kdgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

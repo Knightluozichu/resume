@@ -1,0 +1,234 @@
+---
+title: "测试与最佳实践"
+type: A
+section: "Android开发"
+order: 8
+description: "掌握Kotlin测试体系——JUnit单元测试、MockK模拟框架、协程测试runTest与代码规范最佳实践"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { KdgTestingDiagram } from "@/components/mdx/kotlin-definitive-guide/diagrams/kdg-testing";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 掌握JUnit在Kotlin中的单元测试写法，理解反引号方法名约定
+- 熟练使用MockK模拟框架的`every`/`verify`/`coEvery` DSL
+- 掌握协程测试——`runTest`虚拟时间与`TestDispatcher`
+- 理解Kotlin代码规范最佳实践（val优先、data class、sealed+when）
+- 掌握测试金字塔原则在Kotlin项目中的应用
+</Objectives>
+
+## JUnit单元测试
+
+Kotlin的JUnit测试与Java类似，但支持反引号方法名让测试名更可读：
+
+```kotlin
+class CalculatorTest {
+    @Test
+    fun `add two positive numbers`() {
+        val result = Calculator.add(2, 3)
+        assertEquals(5, result)
+    }
+
+    @Test
+    fun `should return zero for empty list`() {
+        val result = Calculator.sum(emptyList())
+        assertEquals(0, result)
+    }
+
+    @Test
+    fun `throw exception for negative input`() {
+        assertThrows<IllegalArgumentException> {
+            Calculator.sqrt(-1)
+        }
+    }
+}
+```
+
+<Callout type="insight">
+**核心理念**：Kotlin测试代码也应该用惯用Kotlin写法——用反引号方法名描述测试意图（`` fun `add two positive numbers`() ``），用`assertThrows<T>`替代JUnit的`@Test(expected=...)`，用Kotlin的集合操作准备测试数据。测试代码的可读性同样重要。
+</Callout>
+
+<KdgTestingDiagram />
+
+## MockK模拟框架
+
+MockK是Kotlin专用的模拟框架，用DSL式API替代Mockito：
+
+```kotlin
+class UserServiceTest {
+    val repo = mockk<UserRepository>()
+    val service = UserService(repo)
+
+    @Test
+    fun `find user by id`() {
+        // every —— 设置mock行为
+        every { repo.findById(1) } returns User("Alice")
+
+        val result = service.getUser(1)
+
+        assertEquals("Alice", result.name)
+        // verify —— 验证调用
+        verify(exactly = 1) { repo.findById(1) }
+    }
+
+    @Test
+    fun `return null for missing user`() {
+        every { repo.findById(99) } returns null
+
+        val result = service.getUser(99)
+
+        assertNull(result)
+        verify { repo.findById(99) }
+    }
+
+    @Test
+    fun `throw on database error`() {
+        every { repo.findById(any()) } throws DatabaseException("timeout")
+
+        assertThrows<DatabaseException> {
+            service.getUser(1)
+        }
+    }
+}
+
+// 协程mock——用coEvery/coVerify
+class ViewModelTest {
+    val api = mockk<ApiService>()
+    val vm = UserViewModel(api)
+
+    @Test
+    fun `load user success`() = runTest {
+        coEvery { api.getUser() } returns User("Bob")
+
+        vm.load()
+
+        assertEquals("Bob", vm.state.value?.name)
+        coVerify { api.getUser() }
+    }
+}
+```
+
+## 协程测试
+
+协程测试用`runTest`提供虚拟时间，跳过`delay`：
+
+```kotlin
+class CoroutineTest {
+    @Test
+    fun `test with virtual time`() = runTest {
+        // runTest自动跳过delay，测试瞬间完成
+        val result = delayAndReturn(1000)  // suspend fun, delay(1000)
+        assertEquals(42, result)
+        // 真实时间只有几毫秒，不是1秒
+    }
+
+    @Test
+    fun `test flow emission`() = runTest {
+        val emissions = mutableListOf<Int>()
+
+        countdown().collect { emissions.add(it) }
+
+        assertEquals(listOf(5, 4, 3, 2, 1), emissions)
+    }
+
+    @Test
+    fun `test with TestDispatcher`() = runTest {
+        val dispatcher = UnconfinedTestDispatcher(testScheduler)
+        val scope = CoroutineScope(dispatcher)
+
+        scope.launch { delay(100); println("done") }
+
+        advanceTimeBy(100)  // 手动推进虚拟时间
+        // 验证协程已执行
+    }
+}
+```
+
+<Callout type="trap">
+**误区**：在协程测试中用`runBlocking`。`runBlocking`用真实时间，`delay(1000)`真的等1秒，测试很慢。应该用`runTest`，它用虚拟时间跳过delay，让测试瞬间完成。同时`runTest`提供`TestScheduler`手动控制时间推进。
+</Callout>
+
+## Kotlin代码规范最佳实践
+
+```kotlin
+// 1. 优先val，避免可变状态
+val users = listOf(User("Alice"), User("Bob"))  // 好
+// var users = mutableListOf<User>()  // 避免
+
+// 2. 用data class代替POJO
+data class User(val name: String, val age: Int)  // 好
+// class User { String name; int age; ... }  // 避免
+
+// 3. 善用when + sealed 穷尽分支
+sealed class Result
+data class Success(val data: String) : Result()
+data class Error(val msg: String) : Result()
+
+fun handle(r: Result) = when (r) {
+    is Success -> r.data      // 智能转换
+    is Error -> r.msg
+    // 无需else——编译器保证穷尽
+}
+
+// 4. 用扩展函数替代工具类
+fun String.isEmail() = matches(Regex("..."))  // 好
+// class EmailValidator { static boolean isEmail(String s) }  // 避免
+
+// 5. 用协程替代回调
+suspend fun fetch(): Data = ...  // 好
+// fun fetch(callback: (Data) -> Unit)  // 避免
+
+// 6. 善用作用域函数
+val user = User("Alice", 30).apply { age = 31 }  // 配置对象
+val name = user?.let { it.name } ?: "unknown"    // null处理
+```
+
+## 测试金字塔
+
+```text
+          /\
+         /UI\         10% —— Espresso/Compose Test，端到端验证
+        /    \
+       /集成测试\      20% —— 协程+Repository，验证组件协作
+      /        \
+     /  单元测试  \    70% —— JUnit+MockK，快、多、隔离
+    /____________\
+```
+
+<Exercises>
+**问题 1**：Kotlin中使用MockK进行模拟测试的基本步骤是什么？与Mockito有什么区别？
+
+<Answer>
+MockK模拟测试的基本步骤：①创建mock——`val repo = mockk<UserRepository>()`创建模拟对象。②设置行为——`every { repo.findById(1) } returns User("Alice")`设置mock方法返回值。对于suspend函数用`coEvery { api.fetch() } returns Data()`。③执行测试——调用被测代码，mock方法返回预设值。④验证——`verify(exactly = 1) { repo.findById(1) }`验证方法被调用。suspend函数用`coVerify { api.fetch() }`。其他功能：`returnsMany(listOf(a, b))`多次调用返回不同值；`throws Exception()`抛异常；`answers { firstArg() }`动态返回；`verifyAll`验证所有调用；`confirmVerified`确认无未验证调用。与Mockito的区别：①MockK专为Kotlin设计——支持final类/method的mock（Mockito需要mockito-inline或instrumentation），支持扩展函数mock，支持suspend函数mock（coEvery/coVerify）。②DSL式API——MockK用`every { } returns`/`verify { }`的DSL语法，Mockito用`when().thenReturn()`（when在Kotlin是关键字需反引号）。③对象mock——MockK支持mockk<Object>单例，Mockito需要PowerMock。④Kotlin原生——MockK的API与Kotlin语言特性（协程、扩展、object）无缝集成，Mockito需要额外配置。选择：Kotlin项目优先MockK，Java项目用Mockito。
+</Answer>
+
+**问题 2**：`runTest`如何工作？它解决了协程测试的什么问题？
+
+<Answer>
+`runTest`是kotlinx-coroutines-test提供的协程测试工具，用虚拟时间替代真实时间。工作原理：①虚拟时间——runTest创建一个TestScope，其中的delay不真实等待，而是在虚拟时间线上跳过。`delay(1000)`在测试中几乎瞬间完成。②TestScheduler——runTest提供TestScheduler，可以手动控制时间推进：`advanceTimeBy(100)`推进100ms虚拟时间，`advanceUntilIdle()`推进到所有协程完成。③TestDispatcher——runTest默认用StandardTestDispatcher，可用`UnconfinedTestDispatcher(testScheduler)`让协程立即执行。④协程隔离——runTest内的协程在其作用域内执行，测试结束时自动等待所有协程完成。解决的问题：①测试速度——普通`runBlocking`中`delay(1000)`真的等1秒，测试慢。runTest跳过delay，测试瞬间完成。②时间控制——测试超时逻辑时，runTest可以手动推进时间，不需要真实等待。③确定性——真实时间是不可控的（线程调度、GC等），虚拟时间是确定的，测试结果稳定。④Flow测试——runTest可以收集Flow的发射，用虚拟时间验证间隔发射的正确性。示例：`@Test fun test() = runTest { val result = delayAndReturn(5000); assertEquals(42, result) }`——真实耗时几毫秒，不是5秒。注意：runTest内不能启动GlobalScope协程（不在虚拟时间控制内），应在testScope内启动。
+</Answer>
+
+**问题 3**：Kotlin代码规范有哪些核心最佳实践？为什么要「用惯用Kotlin而非翻译Java」？
+
+<Answer>
+Kotlin代码规范核心最佳实践：①优先val——用val替代var，减少可变状态，代码更安全、更易推理。②用data class替代POJO——一行声明替代Java的样板代码，自动生成equals/hashCode/copy。③用when+sealed穷尽分支——sealed class限定子类，when表达式编译器强制覆盖所有分支，新增子类时编译器报错提醒。④用扩展函数替代工具类——`String.isEmail()`替代`EmailValidator.isEmail(str)`，更自然、更可读。⑤用协程替代回调——suspend函数顺序写法替代嵌套回调。⑥用作用域函数——apply配置对象、let处理null、run执行块、also副作用。⑦用空安全而非null检查——String?+?.+?:替代手动null判断。⑧用不可变集合——listOf替代mutableListOf，mapOf替代mutableMapOf。⑨用字符串模板替代拼接——`"$name is $age"`替代`name + " is " + age`。⑩用区间和步长——`1..10`/`1 until 10`/`1..10 step 2`替代for循环。为什么要「用惯用Kotlin而非翻译Java」：Java代码直译到Kotlin会丢失Kotlin的安全性和简洁性优势——不用val就失去了不可变保护，不用data class就还有样板代码，不用空安全就还有NPE风险，不用协程就还有回调地狱。惯用Kotlin利用了语言的全部能力，代码更安全、更简洁、更可维护。判断标准：如果代码看起来像Java，说明没用好Kotlin。
+</Answer>
+
+**问题 4**：在Kotlin Android项目中，测试金字塔各层应该怎么设计？
+
+<Answer>
+Kotlin Android项目的测试金字塔设计：①单元测试（70%）——范围：ViewModel、Repository、UseCase、工具类等纯Kotlin逻辑。工具：JUnit 5 + MockK。特点：不依赖Android框架，跑在JVM上，速度快（毫秒级），数量多。示例：测试ViewModel的`fun loadData()`——mock Repository，验证StateFlow的状态变化。用`runTest`测试协程逻辑，用MockK的`coEvery`模拟suspend函数。每个类/函数的每个分支都应有测试。②集成测试（20%）——范围：Repository+Room DAO、ViewModel+真实Repository、多个组件协作。工具：Robolectric（本地JVM跑Android代码）或AndroidX Test。特点：验证组件间协作正确性，需要少量Android上下文。示例：测试Room数据库的真实CRUD——用内存数据库，验证SQL查询正确。测试ViewModel+真实Repository+mock API，验证数据流端到端。③UI测试（10%）——范围：Activity/Fragment/Compose UI交互。工具：Espresso（传统View）或Compose Test（Compose UI）。特点：在模拟器/真机上跑，速度慢，数量少。示例：测试登录流程——输入邮箱密码、点击按钮、验证跳转到主页。Compose Test用`createAndroidComposeRule`，`onNodeWithText("Login").performClick()`。设计原则：①金字塔比例——单元多、集成中、UI少。越上层测试越慢越脆弱。②隔离性——单元测试不依赖Android框架，用MockK隔离依赖。③可重复——测试结果确定性，不依赖网络/时间等外部状态。④命名——用反引号描述测试意图：`fun `should return error when api fails`()`。⑤AAA模式——Arrange（准备）/Act（执行）/Assert（断言）结构清晰。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="JUnit测试">Kotlin中的单元测试框架。用@Test标记，支持反引号方法名（fun `test name`()）让测试名可读。</GlossaryItem>
+<GlossaryItem term="MockK">Kotlin专用模拟框架。用every/returns设置行为，verify验证调用，coEvery/coVerify处理suspend函数。</GlossaryItem>
+<GlossaryItem term="runTest">协程测试工具，用虚拟时间跳过delay，提供TestScheduler手动控制时间。替代runBlocking做快速协程测试。</GlossaryItem>
+<GlossaryItem term="测试金字塔">70%单元测试（JUnit+MockK，快多隔离）+20%集成测试（组件协作）+10%UI测试（Espresso/Compose Test，端到端）。</GlossaryItem>
+<GlossaryItem term="惯用Kotlin">用val/data class/sealed+when/扩展函数/协程等Kotlin特性写代码，而非直译Java。代码更安全、简洁、可维护。</GlossaryItem>
+</Glossary>
