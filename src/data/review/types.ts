@@ -1728,7 +1728,17 @@ export type ReviewChapterSlug =
   | "sia-spring-security"
   | "sia-spring-boot"
   | "sia-spring-cloud"
-  | "sia-final-review";
+  | "sia-final-review"
+  | "jvt-learning-map"
+  | "jvt-jvm-architecture"
+  | "jvt-memory-model"
+  | "jvt-garbage-collection"
+  | "jvt-gc-tuning"
+  | "jvt-jvm-tools"
+  | "jvt-thread-analysis"
+  | "jvt-memory-leak"
+  | "jvt-cpu-performance"
+  | "jvt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3461,6 +3471,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "sia-spring-boot": "Spring Boot",
   "sia-spring-cloud": "Spring Cloud微服务",
   "sia-final-review": "全书复习",
+  "jvt-learning-map": "全书学习地图",
+  "jvt-jvm-architecture": "JVM架构与类加载",
+  "jvt-memory-model": "JVM内存模型",
+  "jvt-garbage-collection": "垃圾回收机制",
+  "jvt-gc-tuning": "GC调优实践",
+  "jvt-jvm-tools": "JVM诊断工具",
+  "jvt-thread-analysis": "线程分析与死锁",
+  "jvt-memory-leak": "内存泄漏排查",
+  "jvt-cpu-performance": "CPU性能分析",
+  "jvt-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

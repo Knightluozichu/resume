@@ -1,0 +1,143 @@
+---
+title: "垃圾回收机制"
+type: A
+section: "JVM与Java生态"
+order: 3
+description: "GC Roots可达性分析判定对象存活、标记清除/复制/标记整理三种GC算法、Serial/Parallel/CMS/G1/ZGC收集器演进与Minor/Major/Full GC区别"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JvtGarbageCollectionDiagram } from "@/components/mdx/jvm-troubleshooting/diagrams/jvt-garbage-collection";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解可达性分析算法及 GC Roots 的种类，能解释为何能解决循环引用
+- 对比标记-清除、复制、标记-整理三种 GC 算法的优缺点及适用场景
+- 掌握 Minor GC、Major GC、Full GC 的区别及 Full GC 的触发场景
+- 能够对比 Serial、Parallel、CMS、G1、ZGC 五种收集器的核心思想与适用场景
+</Objectives>
+
+## 直觉引入
+
+把垃圾回收想象成「仓库清点」。要判断哪些货该清掉，有两种思路：①「数引用次数」（引用计数法）——每个货被引用一次记一笔，引用没了减一笔，归零就清。问题是两个货互相引用（循环引用），谁都不归零但其实都没人要了，清不掉。②「从源头追」（可达性分析）——从「必定还在用的货」（GC Roots）出发顺藤摸瓜，能追到的货保留，追不到的清掉。循环引用的货如果没人从源头追到它们，一起清掉，完美解决。清点策略（算法）有三种：标记后扫除（有碎片）、复制到另一半（无碎片但费空间）、标记后往一头挪（无碎片但慢）。不同仓库区域用不同策略——快流转区（新生代）货少用复制，慢流转区（老年代）货多用整理。
+
+<JvtGarbageCollectionDiagram />
+
+## 可达性分析
+
+```text
+判断对象存活两种算法：
+① 引用计数法    被引用+1，失效-1，为0回收。缺点：循环引用无法解决，JVM 不用
+② 可达性分析    从 GC Roots 出发沿引用链遍历，能到达=存活，到达不了=回收
+
+GC Roots 包括：
+- 虚拟机栈中局部变量表引用的对象（方法内局部变量）
+- 方法区中类静态属性引用的对象
+- 方法区中常量引用的对象
+- 本地方法栈中 JNI 引用的对象
+- 同步锁(synchronized)持有的对象
+- JVM 内部引用（基本类型Class、异常对象、类加载器）
+```
+
+<Callout type="insight">
+**为什么用可达性分析**：它解决了引用计数法的循环引用问题——循环引用的对象若没有 GC Roots 引用链到达，都会被回收。HotSpot JVM 使用可达性分析。
+</Callout>
+
+## 三种 GC 算法对比
+
+```text
+标记-清除 Mark-Sweep     先标记存活再清除未标记
+  优点：实现简单
+  缺点：内存碎片（清除后空间不连续），大对象可能找不到连续空间
+  适用：老年代（CMS）
+
+复制 Copying            内存分两块，存活对象复制到另一块，清空当前块
+  优点：无碎片、分配快（指针碰撞）
+  缺点：可用内存减半，存活对象多时复制开销大
+  适用：新生代（HotSpot 用 Eden+2Survivor 优化为8:1:1，浪费仅10%）
+
+标记-整理 Mark-Compact   标记后存活对象向一端移动，清除边界外
+  优点：无碎片、不浪费空间
+  缺点：移动对象需更新引用，STW 时间长
+  适用：老年代（Parallel Old、Serial Old）
+```
+
+## Minor / Major / Full GC
+
+```text
+Minor GC（Young GC）  只回收新生代，Eden 满触发，STW 短（几ms到几十ms）
+Major GC              回收老年代，常与 Full GC 混用
+Full GC               回收整个堆+方法区，STW 长（数秒），应尽量避免
+
+Full GC 触发场景：
+① 老年代空间不足（对象晋升过快/大对象撑满）
+② 元空间不足（加载类过多）
+③ System.gc()（显式建议，可用 -XX:+DisableExplicitGC 禁用）
+④ 空间分配担保失败（Minor GC 前老年代连续空间不够）
+⑤ CMS 并发模式失败（退化为 Serial Old 单线程 Full GC，停顿剧增）
+```
+
+<Callout type="trap">
+**误区**：认为 GC 越多越勤越好。实际上 Full GC 的 STW 远长于 Minor GC（数秒 vs 几毫秒），频繁 Full GC 会导致应用卡顿。优化核心是减少 Full GC 频率，让 GC 在新生代用复制算法快速完成。
+</Callout>
+
+## 五种收集器演进
+
+```text
+Serial        单线程，STW 时其他线程全停。客户端/小堆，简单低开销
+    ↓
+Parallel      多线程并行，追求吞吐量。批处理/后台计算
+    ↓
+CMS           以低停顿为目标，标记清除，分阶段并发。JDK9废弃JDK14移除
+    ↓
+G1（默认）    堆分Region，优先回收垃圾最多的Region，停顿可预测。大堆6G+
+    ↓
+ZGC           着色指针+读屏障，停顿<10ms不随堆增大增长，支持TB级堆
+
+选择：
+小堆 → Serial/Parallel
+吞吐优先 → Parallel
+低停顿大堆 → G1
+超低停顿超大堆 → ZGC
+```
+
+<Callout type="insight">
+**G1 的核心创新**：把堆分成多个 Region（默认2048个），每个 Region 可动态扮演 Eden/Survivor/Old/Humongous。GC 时优先回收垃圾最多的 Region（Garbage First），从而在有限停顿时间内回收最多垃圾，实现停顿可预测。
+</Callout>
+
+<Exercises>
+**问题 1**：JVM 如何判断对象是否可以回收？可达性分析算法是什么？哪些是 GC Roots？
+
+<Answer>
+JVM 用可达性分析算法——从 GC Roots 出发沿引用链遍历，能到达的对象存活，到达不了的对象可回收。GC Roots 包括：①虚拟机栈中局部变量表引用的对象；②方法区中类静态属性引用的对象；③方法区中常量引用的对象；④本地方法栈中 JNI 引用的对象；⑤同步锁持有的对象；⑥JVM 内部引用。可达性分析解决了引用计数法的循环引用问题——循环引用的对象若没有 GC Roots 引用链到达，都会被回收。
+</Answer>
+
+**问题 2**：对比标记-清除、复制、标记-整理三种 GC 算法的优缺点及适用场景。
+
+<Answer>
+①标记-清除——先标记存活再清除未标记，优点简单，缺点有内存碎片，适用老年代（CMS）；②复制——内存分两块存活对象复制到另一块，优点无碎片分配快，缺点内存减半存活多时复制开销大，适用新生代（HotSpot 用 8:1:1 优化浪费仅10%）；③标记-整理——标记后向一端移动整理，优点无碎片不浪费，缺点移动需更新引用 STW 长，适用老年代。选择依据：新生代存活少用复制最高效，老年代存活多用标记清除或标记整理。分代收集就是组合使用。
+</Answer>
+
+**问题 3**：Minor GC、Major GC、Full GC 的区别是什么？什么时候触发 Full GC？
+
+<Answer>
+①Minor GC——只回收新生代，Eden 满触发，STW 短（几ms到几十ms）；②Major GC——回收老年代，常与 Full GC 混用；③Full GC——回收整个堆+方法区，STW 长（数秒）应尽量避免。触发 Full GC 的场景：①老年代空间不足；②元空间不足；③System.gc()；④空间分配担保失败；⑤CMS 并发模式失败退化为 Serial Old。优化核心是减少 Full GC 频率，因为它的 STW 远长于 Minor GC。
+</Answer>
+
+**问题 4**：对比 Serial、Parallel、CMS、G1、ZGC 五种收集器的核心思想和适用场景。
+
+<Answer>
+①Serial——单线程，客户端/小堆；②Parallel——多线程追求吞吐量，批处理；③CMS——低停顿，标记清除有碎片，JDK14移除；④G1——堆分 Region 优先回收垃圾最多的（Garbage First），停顿可预测，大堆6G+，JDK9+默认；⑤ZGC——着色指针+读屏障，停顿<10ms 不随堆增大增长，支持 TB 级堆。选择：小堆 Serial/Parallel，吞吐优先 Parallel，低停顿大堆 G1，超低停顿超大堆 ZGC。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="可达性分析">从 GC Roots 出发沿引用链遍历，能到达的对象存活，到达不了的可回收。解决了引用计数法的循环引用问题。HotSpot JVM 使用此算法。</GlossaryItem>
+<GlossaryItem term="GC Roots">可达性分析的起点，包括栈局部变量、静态属性、常量、JNI引用、同步锁持有的对象、JVM内部引用。</GlossaryItem>
+<GlossaryItem term="分代收集">新生代用复制算法（存活少复制开销小），老年代用标记清除/标记整理（存活多避免复制）。基于弱代假说的组合策略。</GlossaryItem>
+<GlossaryItem term="G1收集器">堆分 Region（默认2048个），每个 Region 动态扮演 Eden/Survivor/Old，GC 时优先回收垃圾最多的 Region（Garbage First），实现停顿可预测。JDK9+ 默认收集器。</GlossaryItem>
+<GlossaryItem term="Full GC">回收整个堆+方法区，STW 长（数秒），应尽量避免。触发：老年代满、元空间满、System.gc()、担保失败、CMS并发失败。</GlossaryItem>
+</Glossary>

@@ -1,0 +1,132 @@
+---
+title: "JVM架构与类加载"
+type: A
+section: "JVM与Java生态"
+order: 1
+description: "JVM运行时数据区（线程私有PC/栈/本地栈 vs 线程共享堆/方法区）、类加载五阶段与双亲委派模型、执行引擎解释器与JIT协作"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JvtJvmArchitectureDiagram } from "@/components/mdx/jvm-troubleshooting/diagrams/jvt-jvm-architecture";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 JVM 运行时数据区的划分：线程私有（PC/虚拟机栈/本地方法栈）与线程共享（堆/方法区）
+- 掌握类加载的五个阶段（加载/验证/准备/解析/初始化）及双亲委派模型的设计目的
+- 理解执行引擎的「解释器 + JIT」混合模式与分层编译机制
+- 能够用双亲委派模型解释类加载冲突和打破双亲委派的场景
+</Objectives>
+
+## 直觉引入
+
+把 JVM 想象成「一座工厂」。工厂有「车间」（运行时数据区）——每个工人有自己的「工位笔记本」（程序计数器，记录干到哪了）和「操作台」（虚拟机栈，方法调用一层层摞起来）；所有工人共享「原材料仓库」（堆，存对象）和「工艺手册室」（方法区，存类信息）。新零件要「按图纸投产」（类加载——加载/验证/准备/解析/初始化），图纸要「逐级审批」（双亲委派——先问上级加载器有没有）。机器有两种运转模式：「人工逐条执行」（解释器）和「批量编译成机器码」（JIT编译器），先用人工快速跑起来，发现哪道工序反复执行就编译成自动线提速。
+
+<JvtJvmArchitectureDiagram />
+
+## 运行时数据区
+
+JVM 运行时数据区分为线程私有和线程共享两类：
+
+```text
+线程私有（随线程生灭，无 GC 问题）
+├── 程序计数器 PC Register    记录当前字节码行号，线程切换可恢复
+├── 虚拟机栈 VM Stack         方法调用=栈帧压栈，存局部变量表/操作数栈
+└── 本地方法栈                为 native 方法服务，与 VM Stack 类似
+
+线程共享（GC 与 OOM 主战场）
+├── 堆 Heap                   存对象实例和数组，分新生代(Eden+S0+S1)/老年代
+└── 方法区 Method Area        存类信息/常量/静态变量，JDK8+ 用元空间(Metaspace)
+```
+
+<Callout type="insight">
+**关键区别**：线程私有的区域随线程生灭，不需要 GC；线程共享的堆是 GC 和 OOM 的核心战场。栈溢出是 `StackOverflowError`（递归过深），堆溢出是 `OutOfMemoryError: Java heap space`。
+</Callout>
+
+## 类加载五阶段
+
+类加载包含加载、验证、准备、解析、初始化五个阶段：
+
+```text
+加载      获取字节流 → 方法区数据结构 → 堆生成 Class 对象
+验证      文件格式(魔数0xCAFEBABE) / 元数据 / 字节码 / 符号引用
+准备      类变量(static)赋零值，static final 常量赋最终值
+解析      符号引用 → 直接引用（延迟解析，按需进行）
+初始化    执行 <clinit>：static 赋值 + static 块，JVM 保证线程安全
+```
+
+触发初始化的场景：`new` 对象、访问静态字段、调用静态方法、反射、子类初始化触发父类初始化、主类启动。
+
+## 双亲委派模型
+
+```text
+类加载请求自顶向下委派：
+自定义加载器 → AppClassLoader → ExtClassLoader → BootstrapClassLoader
+   ↓(找不到才自己加载)        ↓                  ↓
+启动类加载器先尝试 → 扩展类加载器 → 应用类加载器 → 自定义加载器
+```
+
+<Callout type="insight">
+**设计目的**：①安全——防止核心类被篡改（用户写的 `java.lang.String` 会被启动加载器先加载到真正的 String）；②唯一性——同一个类只加载一次；③层次清晰——各级加载器各司其职。
+</Callout>
+
+打破双亲委派的场景：
+
+```text
+JDBC      DriverManager 在 rt.jar 由启动加载器加载，驱动实现在 classpath
+          用 Thread.contextClassLoader 反向加载（父看不到子的类）
+Tomcat    每个 webapp 独立 WebappClassLoader 先自己加载，实现 webapp 间类隔离
+OSGi      模块化按网状加载
+热部署    重新加载已修改的类
+```
+
+## 执行引擎：解释器 + JIT
+
+```text
+启动时     解释器逐条执行字节码（启动快，运行慢）
+           ↓ 方法/循环调用次数超阈值(-XX:CompileThreshold 默认10000)
+热点探测   ──→ JIT 编译为机器码缓存到 CodeCache（编译慢，后续快）
+           ↓
+分层编译   C1 快速编译简单优化 → 热点升级 C2 激进优化(逃逸分析/锁消除/内联)
+(JDK8默认开启)
+```
+
+<Callout type="trap">
+**误区**：认为 JIT 一定让代码越跑越快。实际上 JIT 编译有开销，且基于类型 profile 优化——若新类型出现导致推测失效会「逆优化」回解释执行，性能突降。刚启动的应用慢是因为 JIT 未热（预热期），可用 `-XX:+PrintCompilation` 看编译事件。
+</Callout>
+
+<Exercises>
+**问题 1**：JVM 的运行时数据区有哪些？哪些是线程私有，哪些是线程共享？
+
+<Answer>
+线程私有：①程序计数器（PC Register）——记录当前线程执行的字节码行号；②虚拟机栈（VM Stack）——每个方法调用创建一个栈帧，存局部变量表、操作数栈、动态链接、方法出口；③本地方法栈——为 native 方法服务。线程共享：①堆（Heap）——存放几乎所有对象实例和数组，GC 主战场，分新生代（Eden + 2个 Survivor）和老年代；②方法区——存类信息、常量、静态变量、JIT 编译后的代码，JDK8+ 用元空间（Metaspace）移到本地内存。线程私有的区域随线程生灭无 GC 问题；线程共享的堆是 OOM 和 GC 的核心战场。
+</Answer>
+
+**问题 2**：双亲委派模型是什么？为什么 Java 要这样设计？打破双亲委派的场景有哪些？
+
+<Answer>
+双亲委派模型：类加载请求先委派给父加载器，父加载器找不到再由当前加载器加载。层级：自定义 → 应用类加载器 → 扩展类加载器 → 启动类加载器。设计目的：①安全——防止核心类被篡改，用户写一个 `java.lang.String` 会被启动加载器先加载到真正的 String；②唯一性——同一个类只会被加载一次；③层次清晰。打破场景：①JDBC——DriverManager 在 rt.jar 中由启动加载器加载，但驱动实现在 classpath，用 Thread.contextClassLoader 反向加载；②Tomcat——每个 webapp 独立 WebappClassLoader 先自己加载实现类隔离；③OSGi 模块化网状加载；④热部署重新加载类。
+</Answer>
+
+**问题 3**：类加载的过程是什么？每个阶段做什么？
+
+<Answer>
+类加载包含加载、验证、准备、解析、初始化五个阶段。①加载——通过全限定名获取二进制字节流，转为方法区数据结构，在堆生成 Class 对象；②验证——确保 Class 文件符合 JVM 规范（文件格式/元数据/字节码/符号引用验证）；③准备——为类变量（static）分配内存并赋零值，static final 常量赋最终值；④解析——将符号引用替换为直接引用（可延迟）；⑤初始化——执行类构造器 `<clinit>`，即 static 变量赋值和 static 块按源码顺序执行，JVM 保证线程安全。触发初始化：new、访问静态字段、调用静态方法、反射、子类初始化触发父类初始化、主类启动。
+</Answer>
+
+**问题 4**：JVM 的执行引擎如何工作？解释器和 JIT 编译器如何协作？
+
+<Answer>
+JVM 执行引擎是解释执行 + JIT 编译执行的混合模式。①解释器逐条解释字节码，启动快但运行慢；②JIT 编译器（C1/C2）将热点代码（被多次执行的方法或循环）编译成本地机器码缓存，编译耗时但后续快；③协作机制——启动时用解释器快速跑起来，用计数器探测热点，超阈值触发 JIT 编译，编译后直接执行机器码；④分层编译（JDK8默认）——先 C1 快速编译带简单优化，热点再升级 C2 做激进优化（逃逸分析、锁消除、内联）。混合模式兼得启动速度和峰值性能。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="运行时数据区">JVM 运行时的内存划分：线程私有（程序计数器/虚拟机栈/本地方法栈）与线程共享（堆/方法区）。线程私有随线程生灭，线程共享是 GC 与 OOM 主战场。</GlossaryItem>
+<GlossaryItem term="双亲委派模型">类加载请求先委派给父加载器，父加载器找不到才自己加载。保证核心类安全、类唯一性、层次清晰。可被 JDBC/Tomcat/OSGi/热部署打破。</GlossaryItem>
+<GlossaryItem term="类加载五阶段">加载（获取字节流）→ 验证（合规检查）→ 准备（static赋零值）→ 解析（符号引用转直接引用）→ 初始化（执行 <clinit>）。</GlossaryItem>
+<GlossaryItem term="JIT编译">即时编译器将热点代码（超 -XX:CompileThreshold 阈值）编译为机器码缓存，配合解释器形成混合模式。分层编译用 C1 快速优化、C2 激进优化平衡启动与峰值性能。</GlossaryItem>
+<GlossaryItem term="元空间Metaspace">JDK8 替换永久代的方法区实现，使用本地内存，大小动态扩展，解决 PermGen 易溢出问题。用 -XX:MaxMetaspaceSize 设上限防吃光内存。</GlossaryItem>
+</Glossary>

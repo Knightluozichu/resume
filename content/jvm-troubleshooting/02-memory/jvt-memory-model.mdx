@@ -1,0 +1,130 @@
+---
+title: "JVM内存模型"
+type: B
+section: "JVM与Java生态"
+order: 2
+description: "JVM堆分代结构（Eden/Survivor/Old）、对象内存布局（对象头/实例数据/对齐）、各区域OOM报错信息与元空间替代永久代的原因"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JvtMemoryModelDiagram } from "@/components/mdx/jvm-troubleshooting/diagrams/jvt-memory-model";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解堆的分代结构（新生代 Eden+S0+S1，老年代）及弱代假说
+- 掌握对象内存布局（对象头/实例数据/对齐填充）及内存占用计算
+- 能够根据 OOM 报错信息判断溢出区域并定位原因
+- 理解 JDK8 用元空间替换永久代的原因与影响
+</Objectives>
+
+## 直觉引入
+
+把堆想象成「一个分仓管理的仓库」。仓库分「快流转区」（新生代）和「慢流转区」（老年代）。快流转区又分「进货区」（Eden，新对象都堆这里）和两个「暂存区」（Survivor S0/S1，熬过一次清点的货挪过去）。大部分货朝生夕灭（新对象很快不用了），所以快流转区频繁清点但每次清掉大部分；熬过多次清点的货大概率长期要用，挪到慢流转区不常清点。这样分仓让清点策略针对性更强——快区用「复制法」（搬到另一半），慢区用「整理法」（往一头挪）。
+
+<JvtMemoryModelDiagram />
+
+## 堆分代结构
+
+```text
+堆 Heap
+├── 新生代 Young（默认 1/3 堆，-XX:NewRatio=2）
+│   ├── Eden（8份）         新对象分配区
+│   ├── Survivor S0（1份）   GC 后存活对象暂存
+│   └── Survivor S1（1份）   GC 时复制目标，与 S0 角色互换
+└── 老年代 Old（默认 2/3 堆）长期存活对象 / 大对象直接分配
+
+Eden:S0:S1 = 8:1:1（-XX:SurvivorRatio=8）
+对象流转：Eden → Minor GC → Survivor(年龄+1) → 年龄达阈值(默认15) → 老年代
+大对象（超 -XX:PretenureSizeThreshold）直接进老年代，避免新生代复制
+```
+
+<Callout type="insight">
+**弱代假说**：①绝大多数对象朝生夕灭——新生代用复制算法高效；②熬过多次 GC 的对象更可能长期存活——老年代用标记整理避免碎片。分代让 GC 针对不同生命周期对象用不同算法。
+</Callout>
+
+## 对象内存布局
+
+64 位 JVM（指针压缩开启）的对象布局：
+
+```text
+对象 Object
+├── 对象头 Header（12字节）
+│   ├── Mark Word（8字节）    哈希码/GC年龄/锁状态/偏向线程ID
+│   └── Klass Pointer（4字节）指向方法区的类元数据（压缩后4字节）
+├── 实例数据 Instance Data    字段值，字段重排序优化（同类型聚在一起）
+└── 对齐填充 Padding          补齐到 8 字节整数倍
+
+计算示例：2个int字段的对象 = 头12 + 数据8 = 20字节 → padding到24字节
+数组对象头多4字节存数组长度 = 16字节
+开启指针压缩(-XX:+UseCompressedOops，堆<32G默认) Klass 4字节而非8字节
+```
+
+## OOM 报错信息对照
+
+不同区域 OOM 报错信息不同，便于定位：
+
+```text
+Java heap space              堆溢出：内存泄漏/大对象/堆太小 → -Xmx 增大或 dump 分析
+Metaspace                    元空间溢出：动态生成类过多(CGLIB/反射) → -XX:MaxMetaspaceSize
+StackOverflowError           栈溢出：递归过深 → 检查递归终止条件
+unable to create new native thread  线程数过多，每线程栈默认1MB → 减线程数或 -Xss
+Direct buffer memory         NIO 直接内存耗尽 → -XX:MaxDirectMemorySize
+GC overhead limit exceeded   98%时间GC且只回收2%，堆基本被无法回收对象占满（堆溢出前兆）
+```
+
+<Callout type="trap">
+**误区**：看到 OOM 就无脑 `-Xmx` 调大堆。若是内存泄漏，调大堆只是延缓崩溃，根因未除。正确做法：先看报错信息确定区域，再 dump 分析找泄漏对象，针对性修复。
+</Callout>
+
+## 元空间 vs 永久代
+
+```text
+JDK7 前：永久代 PermGen（-XX:MaxPermSize，固定大小易溢出）
+JDK8+ ：元空间 Metaspace（本地内存，动态扩展，-XX:MaxMetaspaceSize 兜底）
+
+替换原因：
+① 永久代固定大小，动态生成类多(Spring AOP/CGLIB)常踩 PermGen OOM
+② 元空间用本地内存动态扩展，不易溢出
+③ JRockit 与 HotSpot 融合，统一架构
+④ 类卸载逻辑更清晰
+
+新风险：元空间无上限可能吃光本地内存被 OS OOM Killer 杀死
+建议：生产设 -XX:MaxMetaspaceSize 兜底
+```
+
+<Exercises>
+**问题 1**：JVM 堆的分代结构是什么？为什么要分代？
+
+<Answer>
+堆分为新生代（Eden + S0 + S1，比例 8:1:1）和老年代，新生代:老年代默认 1:2。分代基于「弱代假说」：①绝大多数对象朝生夕灭——新生代回收频繁但每次回收大部分对象，用复制算法高效；②熬过多次 GC 的对象更可能长期存活——老年代回收不频繁，用标记整理算法避免碎片。对象流转：新对象先分配在 Eden；Minor GC 后存活对象进入 Survivor，年龄+1；年龄达阈值（默认15）晋升老年代；大对象直接进老年代避免复制。分代让 GC 针对不同生命周期的对象用不同算法，提升整体回收效率。
+</Answer>
+
+**问题 2**：对象在 JVM 中的内存布局是怎样的？如何计算一个对象占多少内存？
+
+<Answer>
+对象内存布局分三部分：①对象头——64位 JVM 中普通对象头 12 字节（Mark Word 8字节 + Klass Pointer 4字节，开启指针压缩），数组对象头 16 字节（额外4字节存数组长度）；②实例数据——对象字段值，按类型对齐，字段重排序优化；③对齐填充——对象大小必须是 8 字节整数倍。计算示例：只有 2 个 int 字段的对象 = 头12 + 数据8 = 20 字节，padding 到 24 字节。开启指针压缩（堆<32G默认开启）Klass Pointer 4字节而非8字节省内存。可用 JOL（Java Object Layout）工具打印对象布局验证。
+</Answer>
+
+**问题 3**：OOM 可能发生在哪些内存区域？各区域 OOM 的原因和报错信息是什么？
+
+<Answer>
+①堆溢出——`OutOfMemoryError: Java heap space`，原因内存泄漏或大对象/堆太小；②元空间溢出——`OutOfMemoryError: Metaspace`（JDK8+），原因动态生成大量类，JDK7前是 PermGen space；③栈溢出——`StackOverflowError`（递归过深）或 `OOM: unable to create new native thread`（线程数过多）；④直接内存溢出——`OutOfMemoryError: Direct buffer memory`，NIO 的 ByteBuffer.allocateDirect 用尽直接内存；⑤GC 开销超限——`OutOfMemoryError: GC overhead limit exceeded`，98% 时间 GC 且只回收 2% 内存，是堆溢出前兆。诊断：先看报错信息确定区域，再针对性 dump 或调参。
+</Answer>
+
+**问题 4**：为什么 JDK8 用元空间（Metaspace）替换永久代（PermGen）？这个改动带来了什么影响？
+
+<Answer>
+替换原因：①永久代大小固定（-XX:MaxPermSize）易溢出——动态生成类多的场景常踩 PermGen OOM，调参困难；②元空间用本地内存动态扩展（仅受 -XX:MaxMetaspaceSize 限制，默认无上限），不易溢出；③JRockit 和 HotSpot 融合统一架构；④类卸载逻辑更清晰。影响：①好处——PermGen OOM 基本消失，动态类生成场景更稳定；②新风险——元空间无上限可能吃光本地内存被 OS OOM Killer 杀死，生产建议设 -XX:MaxMetaspaceSize 兜底；③监控变化——jstat 的 Perm 区列变 Metaspace；④调参变化——-XX:PermSize/-XX:MaxPermSize 失效，改用 -XX:MetaspaceSize 和 -XX:MaxMetaspaceSize。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="堆分代">堆分为新生代（Eden+S0+S1，8:1:1）和老年代（2:3 比例），基于弱代假说让不同生命周期对象用不同 GC 算法。</GlossaryItem>
+<GlossaryItem term="对象内存布局">对象头（MarkWord+KlassPointer）+ 实例数据（字段值）+ 对齐填充（8字节整数倍）。指针压缩（堆<32G）让 KlassPointer 4字节省内存。</GlossaryItem>
+<GlossaryItem term="弱代假说">①绝大多数对象朝生夕灭；②熬过多次 GC 的对象更可能长期存活。这是堆分代的理论基础。</GlossaryItem>
+<GlossaryItem term="元空间Metaspace">JDK8 替换永久代的方法区实现，使用本地内存动态扩展。解决 PermGen 易溢出问题，但需设 -XX:MaxMetaspaceSize 防吃光内存。</GlossaryItem>
+<GlossaryItem term="OOM报错对照">heap space=堆溢出、Metaspace=元空间溢出、StackOverflow=栈溢出、Direct buffer=直接内存、GC overhead=堆溢出前兆。不同报错指向不同区域和根因。</GlossaryItem>
+</Glossary>

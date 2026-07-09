@@ -1,0 +1,160 @@
+---
+title: "内存泄漏排查"
+type: C
+section: "JVM与Java生态"
+order: 7
+description: "Shallow Heap与Retained Heap区别、MAT五步定位泄漏流程、静态集合/ThreadLocal/监听器/资源未关闭四大泄漏场景"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JvtMemoryLeakDiagram } from "@/components/mdx/jvm-troubleshooting/diagrams/jvt-memory-leak";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 Java 内存泄漏的本质：对象不再使用但仍被引用无法被 GC 回收
+- 区分 Shallow Heap 与 Retained Heap，理解为何排查泄漏要看 Retained
+- 掌握用 MAT 分析堆 dump 定位内存泄漏的五步流程
+- 理解 ThreadLocal 内存泄漏机制及正确使用方法
+</Objectives>
+
+## 直觉引入
+
+把内存泄漏想象成「仓库里堆满没人要却搬不走的货」。Java 有 GC 自动清运，但 GC 只清「没人引用的货」（不可达）。问题是：一个货业务上已经不用了，但某个长期管理员（静态集合、缓存、单例）的账本上还记着它（持有引用），GC 看账本以为它「还在用」就不清。这就是 Java 内存泄漏——不是「忘记释放」（C/C++ 的问题），而是「引用管理不当」。货越堆越多，直到仓库爆满（OOM）。排查要找「哪个管理员账本记了太多废货」——这就是 Retained Heap 的作用。
+
+<JvtMemoryLeakDiagram />
+
+## 什么是内存泄漏
+
+```text
+内存泄漏：对象不再被使用但仍被引用，无法被 GC 回收，内存逐渐耗尽
+
+为什么 Java 有 GC 还会泄漏：
+  「对象不再被使用」是业务语义
+  「不可达」是 GC 语义
+  两者不等价 —— 长生命周期对象持有引用，GC 认为可达就不回收
+
+典型场景：
+① 静态集合只 put 不 remove（static Map 当缓存）
+② 监听器/回调未注销（事件源一直持有监听器引用）
+③ ThreadLocal 未 remove（线程池线程复用）
+④ 内部类持有外部类（非静态内部类隐式持有外部类引用）
+⑤ 资源未关闭（连接/流/文件句柄持有 native 资源）
+
+危害：缓慢累积直到 OOM 崩溃，且重启才恢复
+```
+
+<Callout type="insight">
+**与 C/C++ 的区别**：C/C++ 内存泄漏是「忘记 free」，Java 泄漏是「引用管理不当」。Java 的 GC 解决了大部分内存管理问题，但无法解决「逻辑上该释放但引用还在」的泄漏。
+</Callout>
+
+## Shallow vs Retained Heap
+
+```text
+Shallow Heap（浅堆）
+  对象自身占用的内存（对象头 + 实例数据 + 对齐）
+  不含其引用的对象
+  例：ArrayList 对象 Shallow 只有几十字节（不含数组元素）
+
+Retained Heap（深堆/保留堆）
+  对象被回收后能释放的总内存
+  = 对象 Shallow + 所有「只能通过该对象到达」的对象 Shallow
+  关键：被其他对象引用（不独占）的部分不计入
+  例：static Map 持有10万条目，Shallow 几十字节，Retained 几百MB
+
+为什么排查泄漏看 Retained：
+  泄漏对象往往是「根持有者」（如大缓存）
+  Shallow 很小（就是个 Map），但 Retained 巨大（Map里成千上万对象）
+  MAT Dominator Tree 按 Retained 排序，最大的就是内存大户
+  看 Shallow 会漏掉「小自身大引用」的泄漏
+```
+
+## MAT 定位泄漏五步
+
+```text
+1. 获取 dump
+   jmap -dump:format=b,file=dump.hprof <pid>
+   jcmd <pid> GC.heap_dump dump.hprof
+   或 OOM 自动 dump：-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=dump.hprof
+
+2. MAT 打开 dump → 自动生成 Leak Suspects 报告
+   Problem Suspect 列出可疑对象、占用大小、引用链，直接定位泄漏点
+
+3. Dominator Tree
+   按 Retained Heap 降序，最大的对象是内存占用大户，展开看引用了什么
+
+4. Histogram
+   按类统计实例数和内存，某类实例数异常多可疑，可按 Retained 排序
+
+5. GC Roots 路径
+   右键对象 → Merge Shortest Paths to GC Roots → exclude weak/soft references
+   看是谁持有它（静态变量/线程栈），找到泄漏源头
+
+典型发现：static HashMap 持有几十万 Entry 不释放
+          引用链：Class.static field → HashMap → Entry[]
+修复：限制大小（Caffeine maxSize）/ 弱引用软引用 / 定期清理
+```
+
+## ThreadLocal 泄漏机制
+
+```text
+Thread 持有 ThreadLocalMap：
+  key   = ThreadLocal 的弱引用（ThreadLocal 回收后 key 变 null）
+  value = 强引用（永不释放）
+
+泄漏过程：
+  ① ThreadLocal 实例无外部强引用被回收 → key 变 null
+  ② 但 value 仍被 ThreadLocalMap 强引用无法回收
+  ③ 线程池线程复用不销毁 → value 永不释放形成泄漏
+
+正确使用避免泄漏：
+  ① 用完必 remove：finally 块中 threadLocal.remove()（最根本防御）
+  ② ThreadLocal 用 static final 修饰（保证实例不被回收，但remove仍必须）
+  ③ 线程池场景尤其注意（线程复用不销毁，ThreadLocalMap持续累积）
+  ④ 优先用 try-with-resources 或工具封装自动清理
+
+深层原因：弱引用 key 是为了 ThreadLocal 回收后能清理 entry
+          但 value 强引用导致 value 泄漏
+          ThreadLocalMap 在 get/set 时会顺带清理 key=null 的 entry（启发式）
+          但不能保证及时，故手动 remove 是唯一可靠方案
+```
+
+<Callout type="trap">
+**误区**：认为 ThreadLocal 用 static final 就不会泄漏。static final 只保证 ThreadLocal 实例不被回收（key 不变 null），但不解决 value 泄漏。线程池场景下每次用完必须 `finally { threadLocal.remove(); }`，这是唯一可靠的防御。
+</Callout>
+
+<Exercises>
+**问题 1**：什么是内存泄漏？Java 有 GC 为什么还会内存泄漏？
+
+<Answer>
+内存泄漏指对象不再被使用但仍被引用无法被 GC 回收，导致内存逐渐耗尽。Java 虽有 GC，但 GC 只能回收「不可达」对象。「对象不再被使用」是业务语义，「不可达」是 GC 语义，两者不等价——若对象业务上不再需要但长生命周期对象（静态集合、缓存、单例）仍持有其引用，GC 认为它「可达」就不回收。典型场景：静态集合只 put 不 remove、监听器未注销、ThreadLocal 未 remove、内部类持有外部类、资源未关闭。与 C/C++ 不同，Java 泄漏是「引用管理不当」而非「忘记释放」。
+</Answer>
+
+**问题 2**：Shallow Heap 和 Retained Heap 的区别是什么？为什么排查泄漏要看 Retained Heap？
+
+<Answer>
+①Shallow Heap——对象自身占用内存（对象头+实例数据+对齐），不含引用对象。例如 ArrayList Shallow 只有几十字节。②Retained Heap——对象被回收后能释放的总内存，即 Shallow 加上所有「只能通过该对象到达」的对象 Shallow。若对象还被其他对象引用（不独占），那部分不计入。排查泄漏看 Retained 因为泄漏对象往往是「根持有者」（如大缓存），Shallow 很小但 Retained 巨大。MAT Dominator Tree 按 Retained 排序，最大的就是内存大户。看 Shallow 会漏掉「小自身大引用」的泄漏。
+</Answer>
+
+**问题 3**：如何用 MAT 分析堆 dump 文件定位内存泄漏？
+
+<Answer>
+①获取 dump——jmap -dump 或 jcmd GC.heap_dump 或 OOM 自动 dump；②MAT 打开自动生成 Leak Suspects 报告，列出泄漏嫌疑对象、占用大小、引用链；③Dominator Tree 按 Retained 降序，最大对象是内存大户；④Histogram 按类统计实例数，某类异常多可疑；⑤GC Roots 路径——右键 Merge Shortest Paths to GC Roots exclude weak/soft references 看谁持有泄漏对象（静态变量/线程栈）；⑥OQL 查询类似 SQL 查对象。典型发现：static HashMap 持有几十万 Entry，修复用 Caffeine maxSize 或弱引用或定期清理。
+</Answer>
+
+**问题 4**：ThreadLocal 为什么会导致内存泄漏？如何正确使用避免泄漏？
+
+<Answer>
+ThreadLocal 泄漏机制：Thread 持有 ThreadLocalMap，key 是 ThreadLocal 弱引用，value 是强引用。ThreadLocal 实例被回收后 key 变 null，但 value 仍被强引用无法回收——线程池线程复用不销毁，这些 value 永不释放形成泄漏。正确使用：①用完必 remove——finally 块中 threadLocal.remove() 是最根本防御；②ThreadLocal 用 static final 修饰（但不解决 value 泄漏，remove 仍必须）；③线程池场景尤其注意每次用完 remove；④优先用 try-with-resources 或 TransmittableThreadLocal 配合框架自动清理。手动 remove 是唯一可靠方案。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="Java内存泄漏">对象不再被使用但仍被引用无法被 GC 回收。本质是「引用管理不当」而非「忘记释放」。长生命周期对象（静态集合/缓存/单例）持有短生命周期对象引用导致无法回收。</GlossaryItem>
+<GlossaryItem term="Retained Heap">对象被回收后能释放的总内存（Shallow + 独占引用链）。排查泄漏看 Retained 因为泄漏对象 Shallow 小但 Retained 巨大。MAT Dominator Tree 按 Retained 排序找内存大户。</GlossaryItem>
+<GlossaryItem term="MAT五步定位">dump堆 → Leak Suspects自动报告 → Dominator Tree按Retained降序 → Histogram按类统计 → GC Roots路径找持有者。典型发现 static HashMap 持有大量 Entry。</GlossaryItem>
+<GlossaryItem term="ThreadLocal泄漏">ThreadLocalMap 的 key 弱引用（回收后变null）、value 强引用（永不释放），线程池复用导致 value 累积泄漏。修复：finally 中 remove()。</GlossaryItem>
+<GlossaryItem term="四大泄漏场景">静态集合只put不remove、监听器未注销、ThreadLocal未remove、资源未关闭。分别用 Caffeine maxSize、及时注销、finally remove、try-with-resources 修复。</GlossaryItem>
+</Glossary>

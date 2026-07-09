@@ -208,6 +208,7 @@ export const BOOK_ORDER = [
   "java-core-tech",
   "effective-java",
   "spring-in-action",
+  "jvm-troubleshooting",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -356,6 +357,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "java-core-tech": "Java核心技术",
   "effective-java": "Effective Java",
   "spring-in-action": "Spring in Action",
+  "jvm-troubleshooting": "JVM故障诊断与性能优化",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

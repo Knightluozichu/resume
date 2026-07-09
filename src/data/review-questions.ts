@@ -1265,6 +1265,16 @@ import { siaSpringSecurityQuestions } from "./review/sia-spring-security";
 import { siaSpringBootQuestions } from "./review/sia-spring-boot";
 import { siaSpringCloudQuestions } from "./review/sia-spring-cloud";
 import { siaFinalReviewQuestions } from "./review/sia-final-review";
+import { jvtLearningMapQuestions } from "./review/jvt-learning-map";
+import { jvtJvmArchitectureQuestions } from "./review/jvt-jvm-architecture";
+import { jvtMemoryModelQuestions } from "./review/jvt-memory-model";
+import { jvtGarbageCollectionQuestions } from "./review/jvt-garbage-collection";
+import { jvtGcTuningQuestions } from "./review/jvt-gc-tuning";
+import { jvtJvmToolsQuestions } from "./review/jvt-jvm-tools";
+import { jvtThreadAnalysisQuestions } from "./review/jvt-thread-analysis";
+import { jvtMemoryLeakQuestions } from "./review/jvt-memory-leak";
+import { jvtCpuPerformanceQuestions } from "./review/jvt-cpu-performance";
+import { jvtFinalReviewQuestions } from "./review/jvt-final-review";
 import { gep1LearningMapQuestions } from "./review/gep1-learning-map";
 import { gep1EngineArchitectureQuestions } from "./review/gep1-engine-architecture";
 import { gep1MemorySystemQuestions } from "./review/gep1-memory-system";
@@ -3245,6 +3255,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...siaSpringBootQuestions,
   ...siaSpringCloudQuestions,
   ...siaFinalReviewQuestions,
+  ...jvtLearningMapQuestions,
+  ...jvtJvmArchitectureQuestions,
+  ...jvtMemoryModelQuestions,
+  ...jvtGarbageCollectionQuestions,
+  ...jvtGcTuningQuestions,
+  ...jvtJvmToolsQuestions,
+  ...jvtThreadAnalysisQuestions,
+  ...jvtMemoryLeakQuestions,
+  ...jvtCpuPerformanceQuestions,
+  ...jvtFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

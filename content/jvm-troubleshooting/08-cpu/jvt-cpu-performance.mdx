@@ -1,0 +1,170 @@
+---
+title: "CPU性能分析"
+type: B
+section: "JVM与Java生态"
+order: 8
+description: "CPU使用率高的四类原因（计算/GC/锁/切换）、火焰图定位热点方法、JIT编译影响、响应慢但CPU低的阻塞排查"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { JvtCpuPerformanceDiagram } from "@/components/mdx/jvm-troubleshooting/diagrams/jvt-cpu-performance";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+
+<Objectives>
+- 理解 CPU 使用率高的四类原因，能区分计算密集与资源浪费
+- 掌握火焰图的阅读方法，能用火焰图定位 CPU 热点方法
+- 理解 JIT 编译对 CPU 性能的影响及判断方法
+- 掌握「响应慢但 CPU 不高」的阻塞排查思路
+</Objectives>
+
+## 直觉引入
+
+把 CPU 性能分析想象成「体检看体温」。体温高（CPU高）不一定是「在干正事发烧」（计算密集），可能是「免疫系统打架」（GC 频繁——垃圾回收线程疯狂运转）、可能是「肌肉紧绷空转」（锁竞争自旋——多个线程抢一把锁谁也动不了却消耗 CPU）、可能是「频繁换班」（上下文切换——线程太多调度开销大）。只有「计算密集」是业务真忙，其余都是资源浪费。反过来，体温不高却浑身没劲（响应慢但 CPU 不高），说明在「等」——等数据库（IO阻塞）、等锁（BLOCKED）、等连接池、等 GC 偶发停顿。
+
+<JvtCpuPerformanceDiagram />
+
+## CPU 高的四类原因
+
+```text
+① 计算密集     复杂算法/正则回溯/序列化大对象
+              栈顶在业务方法 = 业务真忙
+② GC 频繁      堆不足/内存泄漏，GC线程疯狂回收
+              栈顶在 GC 线程，看 jstat -gc
+③ 锁竞争自旋   多线程抢同一把锁，CPU空转
+              jstack 看多个线程 BLOCKED 在同一锁
+④ 上下文切换   线程数过多频繁切换，CPU花在调度
+              vmstat 看 cs（上下文切换次数）
+
+判断方法：
+top -Hp 找高CPU线程 → jstack 看栈顶
+  栈顶在业务方法 = 计算密集
+  栈顶在 GC 线程 = GC 问题
+  栈顶在 synchronized 等锁 = 锁竞争
+jstat -gc 看 GC 是否频繁
+vmstat 1 看 cs 和 us/sy
+```
+
+<Callout type="insight">
+**核心理念**：只有计算密集才是「业务真忙」，GC/锁/切换都是「资源浪费」。CPU 高先判断是哪类原因，再对症下药：GC 问题调堆或修泄漏，锁竞争优化锁，线程多减并发。
+</Callout>
+
+## 火焰图定位热点
+
+```text
+火焰图（Flame Graph）—— Brendan Gregg 发明的 CPU 采样可视化
+
+结构：
+  横轴 = 方法调用栈，宽度代表 CPU 采样比例，越宽越耗 CPU
+  纵轴 = 调用深度，底部是入口，顶部是当前执行方法
+  颜色 = 随机暖色便于区分（无性能含义）
+
+定位热点：
+  ① 找最宽的「平台」——横向最宽方法是CPU占用最高的
+  ② 关注栈顶（最上层）的宽块——那是真正执行的耗时代码
+  ③ 看调用链——从底部入口追到顶部热点，理解谁调用了热点方法
+  ④ 对比——优化前后对比火焰图宽度变化验证效果
+
+生成方式：
+  Arthas        profiler start 采样，profiler stop 生成 SVG 火焰图
+  async-profiler ./profiler.sh -d 30 -f flame.html <pid> 采样30秒
+  JFR           jcmd <pid> JFR.start duration=30s，用 JMC 打开
+
+火焰图优于纯 jstack：
+  jstack 是单点快照，火焰图是统计聚合
+  宽方法在多次采样中都出现 = 真热点而非偶发
+```
+
+## JIT 编译的影响
+
+```text
+JIT（即时编译）将热点代码编译为机器码缓存，大幅提升运行速度
+
+对性能的影响：
+① 未编译时解释执行慢    方法首次执行和未达编译阈值走解释器
+② 编译提升              达阈值(-XX:CompileThreshold 默认10000)触发JIT
+                         后续快几倍到几十倍
+③ C1/C2 分层            C1快速编译简单优化，C2激进优化(内联/逃逸分析/锁消除)
+④ 逆优化                C2 基于类型 profile，新类型出现推测失效会逆优化回解释
+
+JIT 未生效导致性能问题的迹象：
+① 应用刚启动慢          JIT 未热，预热期性能低
+② 方法从未被编译        -XX:+PrintCompilation 输出中没有该方法
+③ 频繁逆优化            PrintCompilation 出现 made not entrant 频繁
+
+判断方法：
+  -XX:+PrintCompilation -XX:+UnlockDiagnosticVMOptions -XX:+PrintInlining
+  Arthas jvm 命令看 JIT 编译统计
+  jstat -compiler 看编译次数
+
+优化：预热(启动后压测触发编译) / 调 CompileThreshold / 避免超大方法 / AOT 编译
+```
+
+## 慢但 CPU 低的排查
+
+```text
+CPU 不高却慢 = 线程没在「忙计算」而在「等」
+
+常见根因：
+① IO 阻塞        数据库慢查询/网络慢/磁盘IO高
+                 jstack 大量线程在 java.net.SocketInputStream.socketRead0
+② 锁竞争         多线程等锁，线程 BLOCKED，CPU不高但吞吐低
+③ GC 频繁但非CPU密集  大量 Young GC 频繁 STW 但每次短
+                     CPU总和不显高但延迟累积，看 jstat -gc
+④ 线程池耗尽     任务排队等待执行，新请求被拒或超时
+⑤ 连接池耗尽     获取连接等待，jstack 看线程 WAITING 在 getConnection
+⑥ 外部依赖慢     下游服务/Redis/MQ慢，线程阻塞等待响应
+⑦ Full GC STW    偶发长停顿，平均CPU不高但单次卡顿明显
+
+排查步骤：
+① jstack 看线程状态分布
+   大量 BLOCKED/WAITING = 在等，RUNNABLE 少 = 没在算
+② 看等待的具体资源
+   栈顶 socketRead = 网络IO / getConnection = 连接池
+   synchronized = 锁 / Unsafe.park = JUC锁条件
+③ 看 GC              jstat -gc 或 GC 日志确认是否 STW 频繁
+④ 看外部依赖          数据库慢查询日志、下游响应时间、网络延迟
+⑤ 看连接池/线程池     监控池使用率和等待时间
+
+核心：慢且 CPU 低的本质是「阻塞」，jstack 是定位阻塞点的关键
+```
+
+<Callout type="trap">
+**误区**：CPU 不高就不查 CPU。实际上「响应慢但 CPU 不高」往往是阻塞问题——线程在等 IO/锁/连接池/GC。jstack 看线程在等什么，比看 CPU 高低更重要。
+</Callout>
+
+<Exercises>
+**问题 1**：CPU 使用率高就一定是计算密集型问题吗？可能有哪些原因？
+
+<Answer>
+不一定。四类原因：①计算密集——复杂算法/正则回溯，栈顶在业务方法，业务真忙；②GC频繁——堆不足/内存泄漏，栈顶在GC线程，看jstat；③锁竞争自旋——多线程抢同一锁CPU空转，jstack看多线程BLOCKED；④上下文切换——线程过多频繁切换，vmstat看cs。判断方法：top -Hp找高CPU线程，jstack看栈顶——栈顶在业务方法=计算密集，在GC线程=GC问题，在synchronized=锁竞争。只有计算密集是业务真忙，其余都是资源浪费。
+</Answer>
+
+**问题 2**：什么是火焰图？如何用火焰图定位 CPU 热点方法？
+
+<Answer>
+火焰图是 Brendan Gregg 发明的 CPU 采样可视化工具。结构：横轴=方法调用栈，宽度代表 CPU 采样比例，越宽越耗 CPU；纵轴=调用深度，底部入口顶部当前方法；颜色随机暖色无性能含义。定位热点：①找最宽的「平台」——横向最宽方法CPU占用最高，关注栈顶宽块是真正执行的耗时代码；②看调用链从底部追到顶部热点；③对比优化前后宽度变化。生成：Arthas profiler start/stop、async-profiler ./profiler.sh -d 30、JFR 用 JMC 打开。火焰图优于纯 jstack——jstack 是单点快照，火焰图是统计聚合，宽方法在多次采样中都出现是真热点。
+</Answer>
+
+**问题 3**：JIT 编译对 CPU 性能有什么影响？如何判断是 JIT 未生效导致的性能问题？
+
+<Answer>
+JIT 将热点代码编译为机器码缓存提升速度。影响：①未编译时解释执行慢；②达阈值(-XX:CompileThreshold 默认10000)触发JIT编译后续快几倍；③C1/C2分层——C1快速编译简单优化，C2激进优化(内联/逃逸分析/锁消除)；④逆优化——C2基于类型profile，新类型出现推测失效会逆优化回解释性能突降。JIT未生效迹象：①应用刚启动慢(JIT未热)；②方法从未被编译(PrintCompilation输出中没有)；③频繁逆优化(made not entrant)。判断：-XX:+PrintCompilation打印编译日志、Arthas jvm看JIT统计、jstat -compiler看编译次数。优化：预热、调CompileThreshold、避免超大方法、AOT编译。
+</Answer>
+
+**问题 4**：一个 Java 应用响应变慢但 CPU 不高，可能的根因有哪些？如何排查？
+
+<Answer>
+CPU不高却慢说明线程在「等」而非「忙」。根因：①IO阻塞——数据库慢查询/网络慢，jstack看socketRead；②锁竞争——多线程等锁BLOCKED；③GC频繁但非CPU密集——大量Young GC频繁STW每次短，看jstat；④线程池耗尽——任务排队；⑤连接池耗尽——等getConnection；⑥外部依赖慢——下游/Redis/MQ慢；⑦Full GC偶发STW。排查：①jstack看线程状态分布——大量BLOCKED/WAITING说明在等；②看等待资源——栈顶socketRead=网络IO、getConnection=连接池、synchronized=锁、Unsafe.park=JUC锁；③看GC——jstat或GC日志；④看外部依赖响应时间；⑤看连接池/线程池使用率。核心：慢且CPU低本质是「阻塞」，jstack是定位阻塞点的关键。
+</Answer>
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="CPU高四类原因">计算密集（业务真忙）、GC频繁（栈顶在GC线程）、锁竞争自旋（多线程BLOCKED）、上下文切换（线程过多）。只有计算密集是业务真忙，其余是资源浪费。</GlossaryItem>
+<GlossaryItem term="火焰图">Brendan Gregg 发明的 CPU 采样可视化，横轴宽度代表 CPU 占比，找最宽的栈顶=热点。优于 jstack 单点快照，是统计聚合。用 Arthas/async-profiler/JFR 生成。</GlossaryItem>
+<GlossaryItem term="JIT编译">即时编译器将热点代码（超CompileThreshold阈值）编译为机器码。C1快速优化、C2激进优化。逆优化基于类型profile失效会回退。未生效导致启动慢。</GlossaryItem>
+<GlossaryItem term="慢但CPU低">线程在「等」非「忙」：IO阻塞、锁竞争、GC频繁STW、线程池/连接池耗尽、外部依赖慢。jstack看线程在等什么是定位关键。</GlossaryItem>
+<GlossaryItem term="排查口诀">CPU高看栈顶（业务/GC/锁/切换），CPU低看等待（IO/锁/池/STW）。</GlossaryItem>
+</Glossary>
