@@ -1835,6 +1835,16 @@ import { rmqHighAvailabilityQuestions } from "./review/rmq-high-availability";
 import { rmqPerformanceTuningQuestions } from "./review/rmq-performance-tuning";
 import { rmqMonitoringOpsQuestions } from "./review/rmq-monitoring-ops";
 import { rmqFinalReviewQuestions } from "./review/rmq-final-review";
+import { kgaLearningMapQuestions } from "./review/kga-learning-map";
+import { kgaApiGatewayIntroQuestions } from "./review/kga-api-gateway-intro";
+import { kgaKongArchitectureQuestions } from "./review/kga-kong-architecture";
+import { kgaRoutingPluginsQuestions } from "./review/kga-routing-plugins";
+import { kgaAuthenticationQuestions } from "./review/kga-authentication";
+import { kgaSecurityPluginsQuestions } from "./review/kga-security-plugins";
+import { kgaTrafficControlQuestions } from "./review/kga-traffic-control";
+import { kgaDeploymentHaQuestions } from "./review/kga-deployment-ha";
+import { kgaAdvancedTopicsQuestions } from "./review/kga-advanced-topics";
+import { kgaFinalReviewQuestions } from "./review/kga-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3705,6 +3715,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...rmqPerformanceTuningQuestions,
   ...rmqMonitoringOpsQuestions,
   ...rmqFinalReviewQuestions,
+  ...kgaLearningMapQuestions,
+  ...kgaApiGatewayIntroQuestions,
+  ...kgaKongArchitectureQuestions,
+  ...kgaRoutingPluginsQuestions,
+  ...kgaAuthenticationQuestions,
+  ...kgaSecurityPluginsQuestions,
+  ...kgaTrafficControlQuestions,
+  ...kgaDeploymentHaQuestions,
+  ...kgaAdvancedTopicsQuestions,
+  ...kgaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

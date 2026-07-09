@@ -1,0 +1,246 @@
+---
+title: "高级主题（自定义插件/Service Mesh）"
+type: A
+section: "分布式与中间件"
+order: 8
+description: "自定义Lua插件开发、PDK工具包、Kong Mesh与Serverless架构"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KgaAdvancedTopicsDiagram } from "@/components/mdx/kong-gateway/diagrams/kga-advanced-topics";
+
+<Objectives>
+
+- 掌握 Kong 自定义插件的开发流程与结构
+- 理解 PDK 插件开发工具包的常用 API
+- 了解 Kong Mesh 与 Service Mesh 的概念
+- 理解 Serverless 插件带来的架构变革
+
+</Objectives>
+
+## 高级主题全景
+
+<KgaAdvancedTopicsDiagram />
+
+Kong 的进阶能力涵盖三个方向：自定义插件（扩展网关逻辑）、Kong Mesh（从南北向到东西向全栈治理）、Serverless（API 网关 + 云函数）。
+
+## 自定义 Lua 插件开发
+
+### 插件结构
+
+```
+kong/plugins/my-plugin/
+  ├── handler.lua    # 执行逻辑（各阶段 handler）
+  └── schema.lua     # 配置模式（字段类型/默认值/校验）
+```
+
+### handler.lua
+
+```lua
+local MyPlugin = {
+  PRIORITY = 1000,      -- 执行优先级（数值越大越先执行）
+  VERSION = "1.0.0"     -- 插件版本
+}
+
+-- access 阶段：认证/限流/请求改写/终止请求
+function MyPlugin:access(conf)
+  kong.log.info("access phase")
+  kong.service.request.set_header("X-My-Plugin", "true")
+  
+  -- 可直接返回响应终止请求
+  -- kong.response.exit(403, {message = "forbidden"})
+end
+
+-- header_filter 阶段：修改响应头
+function MyPlugin:header_filter(conf)
+  kong.response.set_header("X-Custom-Header", conf.header_value)
+end
+
+-- log 阶段：日志/指标
+function MyPlugin:log(conf)
+  kong.log.info("request completed")
+end
+
+return MyPlugin
+```
+
+### schema.lua
+
+```lua
+local typedefs = require "kong.db.schema.typedefs"
+
+return {
+  name = "my-plugin",
+  fields = {
+    {
+      config = {
+        type = "record",
+        fields = {
+          { header_name = { type = "string", default = "X-Custom" } },
+          { header_value = { type = "string", required = true } }
+        }
+      }
+    }
+  }
+}
+```
+
+### 开发流程
+
+```bash
+# 1. 创建插件目录
+mkdir -p /usr/local/share/lua/5.1/kong/plugins/my-plugin/
+
+# 2. 编写 handler.lua + schema.lua
+
+# 3. 注册插件 (kong.conf)
+# plugins = bundled,my-plugin
+# 或环境变量 KONG_PLUGINS=bundled,my-plugin
+
+# 4. 重启 Kong
+kong restart
+
+# 5. 通过 Admin API 配置使用
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{"name":"my-plugin","config":{"header_value":"hello"}}'
+```
+
+<Callout type="info" title="选择实现哪些阶段">
+
+只实现需要的阶段 handler，不必全部实现：
+
+- 认证/限流/终止 → `access`
+- URI 重写 → `rewrite`（路由匹配前）
+- 响应头修改 → `header_filter`
+- 响应体修改 → `body_filter`
+- 日志/监控 → `log`
+
+</Callout>
+
+## PDK 插件开发工具包
+
+PDK 是 Kong 提供的 Lua API 集合，让插件安全地操作请求/响应。
+
+| PDK 模块 | 常用 API | 用途 |
+|----------|----------|------|
+| `kong.request` | `get_header()`, `get_query()`, `get_body()` | 读取客户端请求 |
+| `kong.service.request` | `set_header()`, `get_header()` | 操作转发后端的请求 |
+| `kong.service.response` | `get_header()`, `get_status()` | 读取后端响应 |
+| `kong.response` | `set_header()`, `exit()` | 操作返回客户端的响应/终止 |
+| `kong.client` | `get_ip()` | 获取客户端信息 |
+| `kong.log` | `info()`, `debug()`, `err()` | 日志记录 |
+| `kong.node` | `get_memory()` | 获取节点信息 |
+
+## Kong Mesh
+
+Kong Mesh 基于 Kuma，将 API 网关能力扩展到 **服务间通信（东西向流量）**。
+
+### API 网关 vs Service Mesh
+
+| 维度 | API 网关 | Service Mesh |
+|------|----------|-------------|
+| 流量方向 | 南北向（外部→内部） | 东西向（内部↔内部） |
+| 部署位置 | 集中式代理 | Sidecar 分布式代理 |
+| 治理范围 | 入口层（认证/限流/路由） | 全链路（mTLS/服务发现/熔断/流量拆分） |
+
+### Kong Mesh 核心能力
+
+```
+                    ┌─── Kong API 网关 ───┐
+                    │  南北向流量治理       │
+                    │  认证/限流/路由/监控  │
+                    └──────────┬──────────┘
+                               ↓
+    ┌─── Service Mesh (Sidecar) ───────────────┐
+    │  ┌─── Service A ───┐     ┌─── Service B ───┐
+    │  │  App  | Sidecar │ ←→ │  App  | Sidecar │
+    │  └─────────────────┘     └─────────────────┘
+    │  mTLS / 流量拆分 / 熔断 / 全链路追踪       │
+    └──────────────────────────────────────────┘
+```
+
+| 策略 | 作用 |
+|------|------|
+| TrafficPermission | mTLS 访问控制 |
+| TrafficRoute | 流量路由/拆分（金丝雀发布） |
+| CircuitBreaker | 熔断 |
+| Retry | 重试 |
+| Timeout | 超时 |
+| HealthCheck | 健康检查 |
+| Trace | 分布式追踪 |
+
+## Serverless 插件
+
+Serverless 插件让 Kong 直接调用云函数（AWS Lambda / Azure Functions / OpenWhisk），不转发后端 Service。
+
+```bash
+# 配置 AWS Lambda 插件
+curl -X POST http://localhost:8001/routes/webhook-route/plugins \
+  -d '{
+    "name": "aws-lambda",
+    "config": {
+      "aws_key": "AKIAxxx",
+      "aws_secret": "secretxxx",
+      "aws_region": "us-east-1",
+      "function_name": "my-function",
+      "forward_request_body": true,
+      "forward_request_headers": true,
+      "is_proxy_integration": true
+    }
+  }'
+```
+
+<Callout type="tip" title="API Gateway + Function = Serverless">
+
+```
+Client → Kong API 网关 → AWS Lambda 云函数 → 返回结果
+         (HTTP入口)        (计算后端, 无服务器)
+```
+
+适合：Webhook 处理、低频 API、快速原型验证。不适合：高频/低延迟 API（冷启动延迟）。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="PDK (Plugin Development Kit)">
+Kong 提供的 Lua API 集合，让插件开发者安全地操作请求/响应，无需直接操作 Nginx 内部数据结构。包括 kong.request/kong.service/kong.response/kong.client/kong.log 等模块。
+</GlossaryItem>
+
+<GlossaryItem term="handler.lua">
+自定义插件的执行逻辑文件。定义 PRIORITY（优先级）、VERSION（版本）和各生命周期阶段的 handler 函数（rewrite/access/header_filter/body_filter/log）。
+</GlossaryItem>
+
+<GlossaryItem term="Sidecar">
+Service Mesh 中的分布式代理。每个服务 Pod 旁部署一个代理，拦截所有进出流量，实现 mTLS/流量控制/可观测性。
+</GlossaryItem>
+
+<GlossaryItem term="东西向流量">
+服务之间的内部调用流量（从内到内）。Service Mesh 管理东西向流量，API 网关管理南北向流量。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 如何开发一个 Kong 自定义插件？请描述插件的结构、PDK 的使用和开发流程。
+
+<Answer>
+
+插件结构：handler.lua(执行逻辑) + schema.lua(配置模式)。handler定义PRIORITY+VERSION+各阶段handler(rewrite/access/header_filter/body_filter/log)。schema定义config字段类型/默认值/校验。PDK是Kong提供的Lua API(kong.request/kong.service/kong.response/kong.client/kong.log)安全操作请求响应。流程：创建插件目录→编写handler+schema→kong.conf注册plugins=bundled,my-plugin→重启Kong→Admin API配置使用。
+
+</Answer>
+
+**问题 2：** Kong Mesh 是什么？它与传统 API 网关有什么区别？
+
+<Answer>
+
+Kong Mesh是基于Kuma的Service Mesh，将API网关能力扩展到服务间通信(东西向流量)。区别：API网关管理南北向流量(外部→内部)集中式代理，Service Mesh管理东西向流量(服务间)分布式Sidecar代理。Mesh通过Sidecar拦截所有进出流量实现mTLS/服务发现/熔断/流量拆分/全链路追踪。Kong API网关+Kong Mesh=南北向+东西向全栈API治理。
+
+</Answer>
+
+</Exercises>

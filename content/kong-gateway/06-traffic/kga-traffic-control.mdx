@@ -1,0 +1,215 @@
+---
+title: "流量控制"
+type: B
+section: "分布式与中间件"
+order: 6
+description: "Rate Limiting限流、Proxy Cache缓存、Transformer转换与熔断降级"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KgaTrafficControlDiagram } from "@/components/mdx/kong-gateway/diagrams/kga-traffic-control";
+
+<Objectives>
+
+- 掌握 Rate Limiting 限流算法与策略配置
+- 理解 Proxy Cache 缓存机制与缓存 key 生成
+- 掌握 Request/Response Transformer 的应用场景
+- 了解熔断与请求终止的实现方式
+
+</Objectives>
+
+## 流量控制全景
+
+<KgaTrafficControlDiagram />
+
+Kong 流量控制四大能力：限流、缓存、转换、熔断，形成从预防到自动到手动的完整流量治理链。
+
+## Rate Limiting 限流
+
+### 限流算法
+
+| 算法 | 原理 | 优缺点 |
+|------|------|--------|
+| **计数器** | 固定窗口内累计请求数 | 简单高效，有临界突发问题 |
+| **漏桶** | 固定速率处理请求 | 平滑输出，无法应对突发 |
+| **令牌桶** | 固定速率放令牌，请求消耗令牌 | 允许突发，平滑+突发兼顾 |
+
+### 配置
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{
+    "name": "rate-limiting",
+    "config": {
+      "minute": 100,
+      "policy": "redis",
+      "limit_by": "consumer",
+      "hide_client_headers": false,
+      "error_code": 429
+    }
+  }'
+```
+
+| 配置项 | 说明 |
+|--------|------|
+| `minute` / `hour` | 时间窗口内请求数阈值 |
+| `policy` | `local`(单机) / `cluster`(DB) / `redis`(分布式) |
+| `limit_by` | `consumer` / `ip` / `credential` / `service` |
+| `hide_client_headers` | 是否隐藏 `X-RateLimit-*` 响应头 |
+| `error_code` | 超限返回状态码（默认 429） |
+
+<Callout type="tip" title="policy 选型">
+
+- `local`：单机限流，性能最高，不保证全局一致
+- `cluster`：通过数据库同步，有 DB 延迟
+- `redis`：通过 Redis 同步，高性能分布式限流（推荐生产环境）
+
+</Callout>
+
+## Proxy Cache 缓存
+
+Kong 在转发请求前检查缓存，命中则直接返回缓存响应，未命中则转发后端并缓存响应。
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{
+    "name": "proxy-cache",
+    "config": {
+      "response_code": [200, 301],
+      "request_method": ["GET", "HEAD"],
+      "content_type": ["application/json"],
+      "cache_ttl": 300,
+      "cache_size": 128,
+      "strategy": "memory"
+    }
+  }'
+```
+
+### 缓存 key 生成
+
+```
+key = 请求方法 + URI路径 + 查询参数
+例: GET /api/users?page=1 → "GET|/api/users|page=1"
+```
+
+### 缓存状态
+
+| X-Cache-Status | 含义 |
+|----------------|------|
+| `Hit` | 缓存命中，直接返回缓存 |
+| `Miss` | 缓存未命中，转发后端 |
+| `Refresh` | 缓存过期，重新获取 |
+| `Bypass` | 不缓存（如 Cache-Control: no-store） |
+
+## Request / Response Transformer
+
+### Request Transformer
+
+在请求转发前修改请求：
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{
+    "name": "request-transformer",
+    "config": {
+      "add": {"headers": ["X-Forwarded-By:Kong"]},
+      "remove": {"headers": ["X-Sensitive-Data"]},
+      "rename": {"headers": ["X-Old-Name:X-New-Name"]},
+      "replace": {"uri": "/api/v2/users"}
+    }
+  }'
+```
+
+### Response Transformer
+
+在后端响应返回前修改响应：
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{
+    "name": "response-transformer",
+    "config": {
+      "add": {"headers": ["X-Powered-By:Kong-Gateway"]},
+      "remove": {"headers": ["X-Internal-Debug"]}
+    }
+  }'
+```
+
+### 典型场景
+
+| 场景 | 操作 |
+|------|------|
+| 注入 Consumer 信息 | `add` headers `X-Consumer-Id` |
+| 移除敏感头 | `remove` headers |
+| API 版本迁移 | `replace` uri `/v1/` → `/v2/` |
+| 响应标准化 | `add` headers `X-Powered-By` |
+| 字段重命名 | `rename` headers/json |
+
+## 熔断与请求终止
+
+### Request Termination
+
+直接终止请求返回指定响应，不转发后端：
+
+```bash
+curl -X POST http://localhost:8001/routes/payment-route/plugins \
+  -d '{"name":"request-termination","config":{"status_code":503,"message":"Service under maintenance"}}'
+```
+
+### 自动熔断
+
+Kong 开源版通过 Upstream 健康检查实现自动熔断：
+
+- **被动健康检查**：连续 N 次 5xx/超时 → Target 标记 unhealthy → 自动停止转发
+- **主动健康检查**：周期性探测 → 恢复后自动重新加入
+
+<Callout type="info" title="流量治理策略">
+
+```
+正常流量：限流(防过载) + 缓存(减压力) + 转换(适配)
+后端故障：健康检查自动剔除故障Target + 剩余节点继续服务
+全部故障：Request Termination返回503 + 降级响应
+紧急维护：Request Termination直接下线API
+```
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="令牌桶算法">
+以固定速率向桶中放令牌，请求消耗令牌，桶空则拒绝。允许一定突发（桶中令牌可累积），平滑限流同时保留突发能力。
+</GlossaryItem>
+
+<GlossaryItem term="X-Cache-Status">
+Proxy Cache 插件添加的响应头，标识缓存状态。Hit(命中)/Miss(未命中)/Refresh(过期重新获取)/Bypass(不缓存)。
+</GlossaryItem>
+
+<GlossaryItem term="Request Termination">
+直接终止请求返回指定响应的插件。用于服务维护期间临时下线API、紧急故障时快速切断流量。配置即时生效无需修改后端。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Kong 的 Rate Limiting 插件支持哪些限流算法？policy 策略有哪些？
+
+<Answer>
+
+三种算法：计数器(固定窗口)、漏桶(平滑输出)、令牌桶(允许突发)。policy策略：local(单机,性能最高不保证全局一致)、shared_dict(跨worker共享)、cluster(通过数据库同步,有DB延迟)、redis(通过Redis同步,高性能分布式限流,推荐生产)。limit_by可按consumer/ip/credential/service限流。超限返回429。
+
+</Answer>
+
+**问题 2：** 在 Kong 中如何实现熔断和请求终止？
+
+<Answer>
+
+Request Termination插件直接终止请求返回503/自定义响应，适合服务维护/紧急下线。自动熔断通过Upstream健康检查实现：被动健康检查(连续5xx/超时自动剔除Target) + 主动健康检查(周期探测恢复)。流量治理策略：限流防过载 + 缓存减压力 + 健康检查自动剔除 + Request Termination手动熔断 = 从预防到自动到手的完整链。
+
+</Answer>
+
+</Exercises>

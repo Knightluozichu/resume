@@ -1,0 +1,186 @@
+---
+title: "认证与授权"
+type: C
+section: "分布式与中间件"
+order: 4
+description: "JWT/Key Auth/OAuth2认证插件、Consumer-Credential关联与多认证组合"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KgaAuthenticationDiagram } from "@/components/mdx/kong-gateway/diagrams/kga-authentication";
+
+<Objectives>
+
+- 掌握 JWT 认证插件的完整配置流程
+- 理解 Key Auth 和 Basic Auth 的使用与区别
+- 了解 OAuth2 授权码流程
+- 掌握多认证插件组合策略与 Consumer 识别机制
+
+</Objectives>
+
+## Consumer → Credential → Plugin
+
+<KgaAuthenticationDiagram />
+
+Kong 的认证体系围绕三个实体展开：
+
+- **Consumer**：API 调用者（谁在调用）
+- **Credential**：认证凭证（怎么证明身份）
+- **Plugin**：认证插件（怎么验证凭证）
+
+```
+Client 请求(携带Credential) → 认证插件验证 → 识别Consumer → 注入X-Consumer-Id → ACL授权
+```
+
+## JWT 认证插件
+
+JWT 插件在 access 阶段验证 `Authorization: Bearer <jwt>` 中的令牌签名和有效期。
+
+### 完整配置流程
+
+```bash
+# 1. 创建 Consumer
+curl -X POST http://localhost:8001/consumers -d '{"username":"alice"}'
+
+# 2. 为 Consumer 创建 JWT 凭证
+curl -X POST http://localhost:8001/consumers/alice/jwt \
+  -d '{"algorithm":"HS256","key":"alice-key","secret":"alice-secret"}'
+# key = JWT 的 iss 声明, secret = HS256 签名密钥
+
+# 3. 配置 JWT 插件
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{"name":"jwt","config":{"claims_to_verify":["exp"]}}'
+
+# 4. 客户端生成 JWT (iss=alice-key, 用secret签名) 并请求
+curl http://localhost:8000/users/123 -H "Authorization: Bearer eyJhbGc..."
+```
+
+<Callout type="info" title="Kong JWT 验证流程">
+
+1. 解析 JWT，取出 `iss` 声明（如 `alice-key`）
+2. 用 `iss` 查找 Consumer 的 `secret`
+3. 用 `secret` 验证签名（HS256）
+4. 检查 `exp` 是否过期
+5. 验证通过 → 注入 `X-Consumer-Id` / `X-Consumer-Username` 头
+6. 转发给后端，后端无需再验证 JWT
+
+</Callout>
+
+### RS256 非对称算法
+
+需配置 `rsa_public_key` 字段，Kong 用公钥验签，客户端用私钥签名，适合微服务间认证。
+
+## Key Auth 与 Basic Auth
+
+### Key Auth
+
+```bash
+# 配置插件
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{"name":"key-auth","config":{"key_names":["apikey"],"hide_credentials":true}}'
+
+# 创建凭证
+curl -X POST http://localhost:8001/consumers/alice/key-auth -d '{"key":"alice-api-key-123"}'
+
+# 客户端调用 (查询参数或请求头)
+curl http://localhost:8000/users?apikey=alice-api-key-123
+curl http://localhost:8000/users -H "apikey: alice-api-key-123"
+```
+
+### Basic Auth
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins -d '{"name":"basic-auth","config":{"hide_credentials":true}}'
+curl -X POST http://localhost:8001/consumers/alice/basic-auth -d '{"username":"alice","password":"secret123"}'
+
+# 客户端调用 (Base64 编码 alice:secret123)
+curl http://localhost:8000/users -H "Authorization: Basic YWxpY2U6c2VjcmV0MTIz"
+```
+
+| 对比 | Key Auth | Basic Auth |
+|------|----------|------------|
+| 凭证 | 单个 API Key | 用户名 + 密码 |
+| 传递 | 查询参数/自定义头 | 标准 Authorization 头 |
+| 过期 | 无过期机制 | 可配合外部系统 |
+| 安全 | 较低 | 较低 |
+
+<Callout type="warning" title="生产环境推荐">
+
+Key Auth 和 Basic Auth 安全级别较低，生产环境推荐 **JWT**（有过期机制）或 **OAuth2**（标准授权流程）。
+
+</Callout>
+
+## OAuth2 认证插件
+
+### 四种授权类型
+
+| 类型 | 说明 | 适用场景 |
+|------|------|----------|
+| authorization_code | 授权码（最安全） | Web 应用 |
+| implicit | 简化模式 | SPA 单页应用 |
+| password | 密码模式 | 高信任客户端 |
+| client_credentials | 客户端凭证 | 服务间调用 |
+
+### 授权码流程
+
+```
+① 用户访问授权页 → GET /oauth2/authorize?client_id=xxx&response_type=code&scope=read
+② Kong 返回授权码 code
+③ 用 code 换 token → POST /oauth2/token grant_type=authorization_code&code=xxx
+④ 携带 token 访问 API → GET /api/users Authorization: Bearer {access_token}
+⑤ token 过期刷新 → POST /oauth2/token grant_type=refresh_token&refresh_token=xxx
+```
+
+## 多认证插件组合
+
+同一 Route 同时启用 JWT + Key Auth，客户端可用任一方式认证：
+
+- 按 priority 排序：JWT(1450) 先于 Key Auth(1250) 执行
+- **任一通过即可**（默认行为）：第一个认证成功后 Consumer 已设置，后续认证插件跳过
+- 第一个认证失败（返回 401）则请求终止
+
+<Callout type="tip" title="anonymous 机制">
+
+认证插件配置 `anonymous=某个Consumer ID`，认证失败时不返回 401 而是关联到匿名 Consumer。后续可用 ACL 插件限制匿名 Consumer 的访问范围，实现「认证可选但未认证有不同权限」的效果。
+
+</Callout>
+
+<Glossary>
+
+<GlossaryItem term="Credential">
+认证凭证。Consumer 关联的认证信息，如 JWT 的 key/secret、Key Auth 的 apikey、Basic Auth 的 username/password。
+</GlossaryItem>
+
+<GlossaryItem term="claims_to_verify">
+JWT 插件配置项。指定要验证的 JWT 声明，如 exp(过期时间)、nbf(生效时间)。
+</GlossaryItem>
+
+<GlossaryItem term="provision_key">
+OAuth2 插件的管理密钥，用于 /authorize 和 /token 接口认证，防止未授权的授权请求。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Kong 的 JWT 认证插件如何工作？请描述完整的配置和使用流程。
+
+<Answer>
+
+流程：①创建Consumer ②为Consumer创建JWT凭证(key=iss声明, secret=签名密钥) ③配置JWT插件(claims_to_verify:[exp]) ④客户端用key作iss、secret签名生成JWT ⑤请求携带Authorization: Bearer jwt ⑥Kong解析JWT→用iss查找Consumer的secret→验签→检查exp→注入X-Consumer-Id→转发后端。验证失败返回401。
+
+</Answer>
+
+**问题 2：** Kong 中如何组合多种认证插件？多认证插件的执行顺序和 Consumer 识别机制是怎样的？
+
+<Answer>
+
+同一Route同时启用jwt+key-auth，按priority排序JWT(1450)先于Key Auth(1250)。默认「任一通过即可」：第一个认证成功后Consumer已设置，后续认证插件跳过；第一个失败返回401则终止。认证插件在access阶段验证凭证→查找Credential关联的Consumer→注入X-Consumer-Id/X-Consumer-Username头→后续ACL插件和后端可识别调用者。anonymous机制可实现认证可选。
+
+</Answer>
+
+</Exercises>

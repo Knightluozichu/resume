@@ -1958,7 +1958,17 @@ export type ReviewChapterSlug =
   | "rmq-high-availability"
   | "rmq-performance-tuning"
   | "rmq-monitoring-ops"
-  | "rmq-final-review";
+  | "rmq-final-review"
+  | "kga-learning-map"
+  | "kga-api-gateway-intro"
+  | "kga-kong-architecture"
+  | "kga-routing-plugins"
+  | "kga-authentication"
+  | "kga-security-plugins"
+  | "kga-traffic-control"
+  | "kga-deployment-ha"
+  | "kga-advanced-topics"
+  | "kga-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -3921,6 +3931,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "rmq-performance-tuning": "性能调优",
   "rmq-monitoring-ops": "监控与运维",
   "rmq-final-review": "全书复习",
+  "kga-learning-map": "Kong网关全书学习地图",
+  "kga-api-gateway-intro": "API网关基础",
+  "kga-kong-architecture": "Kong架构",
+  "kga-routing-plugins": "路由与插件",
+  "kga-authentication": "认证与授权",
+  "kga-security-plugins": "安全插件",
+  "kga-traffic-control": "流量控制",
+  "kga-deployment-ha": "部署与高可用",
+  "kga-advanced-topics": "高级主题",
+  "kga-final-review": "全书复习",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

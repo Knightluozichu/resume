@@ -1,0 +1,181 @@
+---
+title: "安全插件"
+type: C
+section: "分布式与中间件"
+order: 5
+description: "CORS跨域、ACL访问控制、IP Restriction黑白名单与多层安全防护体系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { KgaSecurityPluginsDiagram } from "@/components/mdx/kong-gateway/diagrams/kga-security-plugins";
+
+<Objectives>
+
+- 掌握 CORS 插件配置与预检请求处理
+- 理解 ACL 插件与认证插件的配合机制
+- 掌握 IP Restriction 黑白名单配置
+- 能够设计多层安全防护体系
+
+</Objectives>
+
+## 多层安全防护体系
+
+<KgaSecurityPluginsDiagram />
+
+Kong 的安全插件按 priority 从高到低自然形成安全过滤链：
+
+```
+IP Restriction(3000) → Bot Detection(2500) → CORS(2000)
+→ JWT(1450) → Key Auth(1250) → ACL(950) → Rate Limiting(910)
+```
+
+从网络层到应用层逐层过滤，形成纵深防御。
+
+## CORS 跨域控制
+
+浏览器同源策略限制 Web 页面跨域请求 API。CORS 插件自动在响应中添加 CORS 头。
+
+```bash
+curl -X POST http://localhost:8001/routes/user-route/plugins \
+  -d '{
+    "name": "cors",
+    "config": {
+      "origins": ["https://app.example.com", "https://admin.example.com"],
+      "methods": ["GET", "POST", "PUT", "DELETE"],
+      "headers": ["Content-Type", "Authorization"],
+      "exposed_headers": ["X-Custom-Header"],
+      "credentials": true,
+      "max_age": 3600,
+      "preflight_continue": false
+    }
+  }'
+```
+
+<Callout type="info" title="预检请求 (OPTIONS)">
+
+浏览器对「非简单请求」（如 POST + Content-Type: application/json）会先发送 OPTIONS 预检请求。
+
+- `preflight_continue: false`（默认）→ Kong 直接返回预检响应，**不转发后端**
+- `preflight_continue: true` → Kong 将 OPTIONS 转发给后端处理
+
+</Callout>
+
+## ACL 访问控制
+
+ACL 基于 Consumer 的 group 归属控制对 Route/Service 的访问权限。
+
+```bash
+# 1. 为 Consumer 分配 group
+curl -X POST http://localhost:8001/consumers/alice/acls -d '{"group":"admin-group"}'
+
+# 2. 配置认证插件 (JWT, 识别 Consumer)
+curl -X POST http://localhost:8001/routes/admin-route/plugins -d '{"name":"jwt"}'
+
+# 3. 配置 ACL 插件 (只允许 admin-group)
+curl -X POST http://localhost:8001/routes/admin-route/plugins \
+  -d '{"name":"acl","config":{"allow":["admin-group"],"hide_groups_header":true}}'
+```
+
+### 工作流程
+
+```
+Client 请求 → JWT 验证令牌 → 识别 Consumer(alice) → ACL 检查 group
+  → alice 属于 admin-group → 放行
+  → bob 不属于 admin-group → 403 Forbidden
+```
+
+<Callout type="warning" title="ACL 依赖认证插件">
+
+ACL 插件 priority=950，在认证插件（JWT 1450 / Key Auth 1250）之后执行。它依赖认证插件设置的 Consumer 身份。如果请求未通过认证，Consumer 为 nil，ACL 会返回 403。
+
+</Callout>
+
+## IP Restriction
+
+根据客户端 IP 控制访问，支持黑名单和白名单。
+
+```bash
+# 白名单：只允许内网 IP
+curl -X POST http://localhost:8001/routes/admin-route/plugins \
+  -d '{"name":"ip-restriction","config":{"allow":["192.168.1.0/24","10.0.0.5"]}}'
+
+# 黑名单：封禁恶意 IP
+curl -X POST http://localhost:8001/plugins \
+  -d '{"name":"ip-restriction","config":{"deny":["1.2.3.4","5.6.7.0/24"]}}'
+```
+
+| 特性 | 说明 |
+|------|------|
+| IP 格式 | IPv4、IPv6、CIDR 网段（`192.168.1.0/24`） |
+| 模式 | `allow`（白名单）或 `deny`（黑名单），不能同时配置 |
+| priority | 3000，在认证之前执行，第一时间拒绝恶意流量 |
+| 客户端 IP | 直连取 remote_addr，经代理需配置 real_ip_header |
+
+## 多层安全防护设计
+
+<Callout type="tip" title="/admin API 安全配置示例">
+
+针对管理 API 的多层防护：
+
+```
+Route 级配置：
+  ① ip-restriction  (allow 内网)          — 网络层
+  ② bot-detection                         — 机器人检测
+  ③ jwt             (认证)                — 身份验证
+  ④ acl             (allow admin-group)   — 访问控制
+  ⑤ rate-limiting   (100/min)             — 频率控制
+  ⑥ cors            (origins admin域名)   — 跨域控制
+```
+
+</Callout>
+
+### 设计原则
+
+1. **纵深防御** — 多层叠加，任一层被突破仍有后续防护
+2. **认证前过滤** — IP/Bot 在认证之前执行，节省后端资源
+3. **认证后授权** — ACL 在认证之后检查 Consumer group 权限
+4. **限流兜底** — Rate Limiting 防止暴力破解和 DDoS
+
+<Glossary>
+
+<GlossaryItem term="CORS">
+Cross-Origin Resource Sharing，跨域资源共享。浏览器安全机制，限制 Web 页面跨域请求 API。CORS 插件自动添加 Access-Control-Allow-* 响应头。
+</GlossaryItem>
+
+<GlossaryItem term="预检请求 (Preflight)">
+浏览器对非简单请求先发送 OPTIONS 请求询问服务器是否允许。CORS 插件可拦截预检请求不转发后端。
+</GlossaryItem>
+
+<GlossaryItem term="CIDR">
+无类别域间路由，网段表示法。如 192.168.1.0/24 表示 192.168.1.0~192.168.1.255 共 256 个 IP。IP Restriction 支持 CIDR。
+</GlossaryItem>
+
+<GlossaryItem term="纵深防御">
+安全设计原则，通过多层安全措施叠加，任一层被突破仍有后续防护。Kong 安全插件按 priority 从高到低自然形成多层过滤链。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** Kong 的 ACL 插件如何实现访问控制？它如何与认证插件配合工作？
+
+<Answer>
+
+ACL 基于 Consumer 的 group 归属控制访问。流程：认证插件(JWT/Key-Auth)验证凭证识别Consumer → ACL插件(priority=950,在认证后)检查Consumer的group是否在allow列表 → 属于则放行，不属于返回403。ACL依赖认证插件设置的Consumer身份。典型应用：admin-group访问管理API，premium-group访问付费API。
+
+</Answer>
+
+**问题 2：** 在 Kong 中如何构建完整的安全防护体系？
+
+<Answer>
+
+多层防护按priority从高到低：①IP Restriction(3000)网络层IP过滤 ②Bot Detection(2500)机器人检测 ③CORS(2000)跨域控制 ④JWT(1450)/Key Auth(1250)认证 ⑤ACL(950)授权 ⑥Rate Limiting(910)限流。设计原则：纵深防御多层叠加、认证前过滤节省资源、认证后授权精准控制、限流防暴力破解。示例：/admin API配置IP白名单+Bot检测+JWT认证+ACL(admin-group)+限流+CORS。
+
+</Answer>
+
+</Exercises>
