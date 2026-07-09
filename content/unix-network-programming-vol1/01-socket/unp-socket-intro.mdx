@@ -1,0 +1,179 @@
+---
+title: "套接字简介与API"
+type: A
+section: "网络"
+order: 1
+description: "socket/bind/listen/accept/connect核心API、套接字地址结构与字节序转换"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { UnpSocketIntroDiagram } from "@/components/mdx/unix-network-programming-vol1/diagrams/unp-socket-intro";
+
+<Objectives>
+
+- 掌握 socket/bind/listen/accept/connect 六大核心 API 的参数与调用顺序
+- 理解 sockaddr/sockaddr_in 地址结构及强制转换的原因
+- 掌握网络字节序与主机字节序的转换（htons/ntohs/htonl/ntohl）
+- 明确服务端与客户端的 API 调用流程差异
+
+</Objectives>
+
+## 套接字 API 核心流程
+
+<UnpSocketIntroDiagram />
+
+## 六大核心 API
+
+### API 调用顺序
+
+```text
+服务端：                        客户端：
+socket()  创建套接字            socket()  创建套接字
+  ↓                               ↓
+bind()    绑定地址端口           connect() 连接服务端
+  ↓                               ↓
+listen()  进入监听状态           （三次握手建立连接）
+  ↓
+accept()  等待并接受连接
+  ↓
+read()/write() 数据交互          write()/read() 数据交互
+  ↓                               ↓
+close()   关闭                   close()   关闭
+```
+
+### 各函数签名
+
+```c
+int socket(int family, int type, int protocol);
+// family: AF_INET / AF_INET6 / AF_LOCAL
+// type:   SOCK_STREAM(TCP) / SOCK_DGRAM(UDP)
+// 返回: 套接字描述符
+
+int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+// 将套接字绑定到本地地址和端口
+
+int listen(int sockfd, int backlog);
+// backlog: 未完成连接队列 + 已完成连接队列的最大值
+
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen);
+// 从已完成连接队列取出一个连接，返回新的已连接套接字 fd
+
+int connect(int sockfd, const struct sockaddr *addr, socklen_t addrlen);
+// 客户端向服务端发起连接（三次握手）
+```
+
+<Callout type="info" title="listen 的两个队列">
+
+listen 后内核维护两个队列：未完成连接队列（收到 SYN 但未完成握手的连接，SYN_RCVD 状态）和已完成连接队列（握手完成等待 accept 的连接，ESTABLISHED 状态）。backlog 是两个队列之和的上限。accept 从已完成队列取连接，如果队列为空则阻塞。
+
+</Callout>
+
+## 套接字地址结构
+
+### IPv4 地址结构
+
+```c
+struct sockaddr_in {
+    sa_family_t    sin_family;   // AF_INET
+    in_port_t      sin_port;     // 端口号（网络字节序）
+    struct in_addr sin_addr;     // IP地址（网络字节序）
+    char           sin_zero[8];  // 填充，与sockaddr对齐
+};
+```
+
+### 通用地址结构
+
+```c
+struct sockaddr {
+    sa_family_t sa_family;    // 地址族
+    char        sa_data[14];  // 协议地址
+};
+```
+
+所有套接字 API（bind/connect/accept）的地址参数类型都是 `sockaddr *`，因此使用时需要将 `sockaddr_in *` 强制转换为 `sockaddr *`：
+
+```c
+struct sockaddr_in addr;
+addr.sin_family = AF_INET;
+addr.sin_port   = htons(8080);
+addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+bind(sockfd, (struct sockaddr *)&addr, sizeof(addr));
+//              ↑ 强制转换为通用类型
+```
+
+## 字节序转换
+
+### 为什么需要转换
+
+```text
+主机字节序：CPU 本地字节序（x86 = 小端，网络 = 大端）
+网络字节序：规定为大端序（Big-Endian）
+
+端口号和 IP 地址在网络上传输时必须用网络字节序
+填入地址结构前 → 转为网络序
+从结构取出后 → 转回主机序
+```
+
+### 四个转换函数
+
+| 函数 | 含义 | 位宽 | 用途 |
+|------|------|------|------|
+| `htons` | host to network short | 16位 | 端口号填入 sin_port 前 |
+| `htonl` | host to network long | 32位 | IP 地址填入 sin_addr 前 |
+| `ntohs` | network to host short | 16位 | 从 sin_port 取出后 |
+| `ntohl` | network to host long | 32位 | 从 sin_addr 取出后 |
+
+```c
+// 服务端绑定 0.0.0.0:8080
+addr.sin_port      = htons(8080);        // 端口转网络序
+addr.sin_addr.s_addr = htonl(INADDR_ANY); // IP转网络序
+
+// 客户端连接 127.0.0.1:8080
+addr.sin_port = htons(8080);
+inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+```
+
+<Glossary>
+
+<GlossaryItem term="套接字描述符（Socket Descriptor）">
+套接字描述符是 socket() 返回的整数，与文件描述符同源——在 UNIX 中「一切皆文件」，套接字也是一种文件描述符。监听套接字（listening socket）由 socket+bind+listen 创建，负责接受连接；已连接套接字（connected socket）由 accept 返回，负责与具体客户端通信。一个服务端通常有一个监听套接字和多个已连接套接字。close() 关闭套接字并释放资源。
+</GlossaryItem>
+
+<GlossaryItem term="sockaddr 与 sockaddr_in 的关系">
+sockaddr 是通用的地址结构，只有 sa_family 和 sa_data[14] 两个字段。sockaddr_in 是 IPv4 专用结构，有 sin_family/sin_port/sin_addr/sin_zero 四个字段。两者大小相同（16字节），sockaddr_in 的 sin_zero[8] 就是为了与 sockaddr 对齐。套接字 API 统一使用 sockaddr* 作为参数类型，因此需要将 sockaddr_in* 强制转换。这是 C 语言没有泛型的妥协方案。
+</GlossaryItem>
+
+<GlossaryItem term="INADDR_ANY">
+INADDR_ANY（值为 0.0.0.0）是通配地址，表示绑定到本机所有网络接口。服务端通常用 INADDR_ANY 而非具体 IP，这样无论客户端连接哪个网卡都能接受。多宿主机（多个网卡）特别有用。使用前需 htonl 转为网络字节序：`addr.sin_addr.s_addr = htonl(INADDR_ANY);`。
+</GlossaryItem>
+
+<GlossaryItem term="inet_pton / inet_ntop">
+inet_pton（presentation to numeric）将文本 IP 地址转为二进制，inet_ntop（numeric to presentation）将二进制转为文本。它们取代了旧的 inet_addr/inet_ntoa，因为：支持 IPv6（通过 AF_INET/AF_INET6 参数区分）、线程安全（inet_ntoa 返回静态缓冲区）、能区分 255.255.255.255 和错误。是协议无关编程的推荐函数。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** 服务端的 socket/bind/listen/accept 四个函数各自的作用是什么？
+
+<Answer>
+
+socket() 创建套接字描述符，指定地址族（AF_INET）和类型（SOCK_STREAM）。bind() 将套接字绑定到本地地址和端口，让客户端能找到服务端。listen() 将套接字转为监听状态，内核开始维护连接队列。accept() 从已完成连接队列取出一个连接，返回新的已连接套接字描述符用于与客户端通信。四者按序调用，缺一不可。
+
+</Answer>
+
+**问题 2：** 为什么需要将 sockaddr_in 强制转换为 sockaddr？不转换会怎样？
+
+<Answer>
+
+套接字 API（bind/connect/accept）的参数类型是通用的 `struct sockaddr *`，编译器要求类型匹配。sockaddr_in 是 IPv4 专用结构，需要强制转换为 sockaddr* 才能传给 API。两种结构大小相同（16字节），转换是安全的内存重解释。不转换会导致编译错误（C 语言类型检查），用 `(struct sockaddr *)` 强转即可。这是 C 语言没有泛型的妥协方案。
+
+</Answer>
+
+</Exercises>

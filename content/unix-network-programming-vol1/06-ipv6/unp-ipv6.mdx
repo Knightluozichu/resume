@@ -1,0 +1,194 @@
+---
+title: "IPv6与协议无关"
+type: D
+section: "网络"
+order: 6
+description: "sockaddr_in6结构、getaddrinfo协议无关编程与IPv4映射地址双栈通信"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { UnpIpv6Diagram } from "@/components/mdx/unix-network-programming-vol1/diagrams/unp-ipv6";
+
+<Objectives>
+
+- 掌握 IPv4 与 IPv6 地址结构的区别（sockaddr_in vs sockaddr_in6）
+- 理解 getaddrinfo 实现协议无关编程的方法
+- 掌握 inet_pton/inet_ntop 地址转换函数
+- 理解 IPv4 映射的 IPv6 地址与双栈通信
+
+</Objectives>
+
+## 协议无关编程：IPv4 与 IPv6 统一
+
+<UnpIpv6Diagram />
+
+## 地址结构对比
+
+### IPv4：sockaddr_in（16 字节）
+
+```c
+struct sockaddr_in {
+    sa_family_t    sin_family;   // AF_INET (2字节)
+    in_port_t      sin_port;     // 端口号 (2字节)
+    struct in_addr sin_addr;     // 32位IPv4 (4字节)
+    char           sin_zero[8];  // 填充 (8字节)
+};
+// 文本表示：192.168.1.1
+```
+
+### IPv6：sockaddr_in6（28 字节）
+
+```c
+struct sockaddr_in6 {
+    sa_family_t     sin6_family;   // AF_INET6 (2字节)
+    in_port_t       sin6_port;     // 端口号 (2字节)
+    uint32_t        sin6_flowinfo; // 流标签 (4字节)
+    struct in6_addr sin6_addr;     // 128位IPv6 (16字节)
+    uint32_t        sin6_scope_id; // 范围ID (4字节)
+};
+// 文本表示：2001:db8::1
+```
+
+### 关键区别
+
+| 对比项 | sockaddr_in (IPv4) | sockaddr_in6 (IPv6) |
+|--------|--------------------|--------------------|
+| 地址族 | AF_INET | AF_INET6 |
+| 地址长度 | 32 位 | 128 位 |
+| 总大小 | 16 字节 | 28 字节 |
+| 特有字段 | sin_zero[8] 填充 | sin6_flowinfo, sin6_scope_id |
+| 文本表示 | 点分十进制 | 冒号十六进制 |
+
+## getaddrinfo 协议无关编程
+
+### 传统方式（硬编码 IPv4）
+
+```c
+// 问题：代码绑定 IPv4，无法支持 IPv6
+struct sockaddr_in addr;
+addr.sin_family = AF_INET;
+addr.sin_port   = htons(8080);
+inet_pton(AF_INET, "192.168.1.1", &addr.sin_addr);
+connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+```
+
+### 协议无关方式（推荐）
+
+```c
+struct addrinfo hints, *res;
+memset(&hints, 0, sizeof(hints));
+hints.ai_family   = AF_UNSPEC;  // 不指定 IPv4 或 IPv6
+hints.ai_socktype = SOCK_STREAM;
+
+int err = getaddrinfo("www.example.com", "8080", &hints, &res);
+if (err != 0) {
+    fprintf(stderr, "%s\n", gai_strerror(err));
+    exit(1);
+}
+
+// 遍历链表逐个尝试
+int sockfd;
+for (struct addrinfo *p = res; p != NULL; p = p->ai_next) {
+    sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
+    if (sockfd < 0) continue;
+
+    if (connect(sockfd, p->ai_addr, p->ai_addrlen) == 0)
+        break;  // 成功
+
+    close(sockfd);
+    sockfd = -1;
+}
+
+freeaddrinfo(res);  // 释放链表
+```
+
+<Callout type="info" title="getaddrinfo 的优势">
+
+getaddrinfo 相比 gethostbyname 的优势：①同时支持 IPv4 和 IPv6 ②线程安全 ③直接返回可用的 sockaddr 结构 ④支持服务名解析。设 hints.ai_family=AF_UNSPEC，返回的链表可能同时包含 IPv4 和 IPv6 地址，遍历尝试即可实现协议无关。
+
+</Callout>
+
+## 地址转换函数
+
+### inet_pton / inet_ntop
+
+```c
+// 文本 → 二进制
+inet_pton(AF_INET,  "192.168.1.1",   &addr4);  // IPv4
+inet_pton(AF_INET6, "2001:db8::1",   &addr6);  // IPv6
+
+// 二进制 → 文本
+char str[INET6_ADDRSTRLEN];
+inet_ntop(AF_INET,  &addr4, str, sizeof(str));  // → "192.168.1.1"
+inet_ntop(AF_INET6, &addr6, str, sizeof(str));  // → "2001:db8::1"
+```
+
+### 为什么取代旧函数
+
+| 对比项 | inet_pton/ntop | inet_addr/ntoa |
+|--------|---------------|----------------|
+| IPv6 支持 | 支持 | 不支持 |
+| 线程安全 | 安全 | 不安全（静态缓冲区） |
+| 错误处理 | 返回值区分 | 255.255.255.255 与错误混淆 |
+
+## IPv4 映射的 IPv6 地址
+
+### 双栈通信
+
+```text
+IPv4 映射地址格式：::ffff:IPv4
+  例如：::ffff:192.168.1.1
+
+双栈系统上，IPv6 套接字可以同时接收 IPv4 和 IPv6 连接：
+  1. 创建 IPv6 套接字
+  2. 设 IPV6_V6ONLY=0（默认，允许映射）
+  3. 内核将 IPv4 连接的源地址转为映射地址
+  4. 一个套接字服务两种协议
+
+→ 服务端只需一个 IPv6 套接字
+→ 代码无需区分 IPv4/IPv6 客户端
+```
+
+<Glossary>
+
+<GlossaryItem term="sockaddr_in6（IPv6 地址结构）">
+IPv6 专用地址结构，28 字节。包含 sin6_family（AF_INET6）、sin6_port（端口号）、sin6_flowinfo（流标签，用于流量分类）、sin6_addr（128 位 IPv6 地址）、sin6_scope_id（范围 ID，用于链路本地地址标识接口）。相比 sockaddr_in 多了 flowinfo 和 scope_id 字段，地址从 32 位扩展到 128 位。文本表示为冒号十六进制格式（如 2001:db8::1）。
+</GlossaryItem>
+
+<GlossaryItem term="getaddrinfo">
+协议无关的地址解析函数，取代 gethostbyname。传入主机名/服务名和 hints（提示信息），返回 addrinfo 链表，每个节点包含可直接用于 socket/connect/bind 的 sockaddr 结构。设 hints.ai_family=AF_UNSPEC 返回的链表可能同时包含 IPv4 和 IPv6 地址，遍历尝试即可实现协议无关编程。线程安全、支持 IPv6、支持服务名解析是用它取代旧函数的主要原因。用完需调 freeaddrinfo 释放。
+</GlossaryItem>
+
+<GlossaryItem term="IPv4 映射的 IPv6 地址">
+格式为 ::ffff:IPv4（如 ::ffff:192.168.1.1），将 32 位 IPv4 地址嵌入 128 位 IPv6 地址。在双栈系统上，创建 IPv6 套接字并设 IPV6_V6ONLY=0（默认），该套接字既能接收 IPv6 连接也能接收 IPv4 连接——内核将 IPv4 连接的源地址转为映射地址格式。这样服务端只需一个 IPv6 套接字即可同时服务 IPv4 和 IPv6 客户端，实现协议无关。
+</GlossaryItem>
+
+<GlossaryItem term="inet_pton / inet_ntop">
+协议无关的地址转换函数。inet_pton（presentation to numeric）将文本 IP 地址转为二进制，inet_ntop（numeric to presentation）将二进制转为文本。通过 af 参数（AF_INET/AF_INET6）区分协议族，同时支持 IPv4 和 IPv6。取代 inet_addr/inet_ntoa 的原因：支持 IPv6、线程安全（inet_ntoa 返回静态缓冲区）、能区分 255.255.255.255 和错误。是现代网络编程的推荐函数。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** getaddrinfo 相比 gethostbyname 有哪些优势？如何实现协议无关编程？
+
+<Answer>
+
+getaddrinfo 优势：①同时支持 IPv4 和 IPv6，gethostbyname 只支持 IPv4 ②线程安全，gethostbyname 返回静态缓冲区非线程安全 ③直接返回 sockaddr 结构可直接用于 socket/connect ④支持服务名解析。协议无关编程：设 hints.ai_family=AF_UNSPEC，getaddrinfo 返回 addrinfo 链表（可能同时含 IPv4 和 IPv6），遍历链表逐个 socket+connect 尝试，成功即用。
+
+</Answer>
+
+**问题 2：** 什么是 IPv4 映射的 IPv6 地址？它如何实现双栈通信？
+
+<Answer>
+
+IPv4 映射的 IPv6 地址格式为 ::ffff:IPv4（如 ::ffff:192.168.1.1），将 32 位 IPv4 地址嵌入 128 位 IPv6 地址。在双栈系统上，创建 IPv6 套接字并设 IPV6_V6ONLY=0（默认），该套接字既能接收 IPv6 连接也能接收 IPv4 连接——内核将 IPv4 连接的源地址转为映射地址格式。这样服务端只需一个 IPv6 套接字即可同时服务两种协议客户端。
+
+</Answer>
+
+</Exercises>

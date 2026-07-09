@@ -1,0 +1,230 @@
+---
+title: "高级I/O与信号"
+type: C
+section: "网络"
+order: 8
+description: "scatter-gather I/O、信号驱动I/O、recvmsg/sendmsg与fd传递"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { UnpAdvancedIoDiagram } from "@/components/mdx/unix-network-programming-vol1/diagrams/unp-advanced-io";
+
+<Objectives>
+
+- 掌握 readv/writev（scatter-gather I/O）的用法与优势
+- 理解信号驱动 I/O（SIGIO）的设置步骤
+- 掌握 recvmsg/sendmsg 的 msghdr 结构与全能特性
+- 理解 Unix 域套接字传递文件描述符（SCM_RIGHTS）的原理
+
+</Objectives>
+
+## 高级 I/O 与信号驱动编程
+
+<UnpAdvancedIoDiagram />
+
+## Scatter-Gather I/O
+
+### readv / writev
+
+```c
+struct iovec {
+    void  *iov_base;  // 缓冲区地址
+    size_t iov_len;   // 缓冲区大小
+};
+
+// readv：一次调用将数据分散读到多个缓冲区
+struct iovec iov[2];
+iov[0].iov_base = header;
+iov[0].iov_len  = 4;        // 先读 4 字节头部
+iov[1].iov_base = body;
+iov[1].iov_len  = 1024;     // 再读 1024 字节体
+
+ssize_t n = readv(fd, iov, 2);
+// 一次系统调用完成两次读取
+
+// writev：一次调用将多个缓冲区数据聚集写入
+ssize_t n = writev(fd, iov, 2);
+```
+
+### 优势
+
+```text
+传统方式（多次系统调用）：
+  read(fd, header, 4);      → 系统调用1
+  read(fd, body, 1024);     → 系统调用2
+
+scatter-gather（一次系统调用）：
+  readv(fd, iov, 2);        → 系统调用1（完成两次读取）
+
+优势：
+  ① 减少系统调用次数（用户态↔内核态切换开销）
+  ② 适合固定头部+变长体的协议
+  ③ 数据量大时性能提升明显
+```
+
+<Callout type="info" title="什么时候用 readv/writev">
+
+当一次 I/O 操作需要读写多个不连续的内存区域时，用 readv/writev 替代多次 read/write。典型场景：协议有固定头部 + 变长体，可以 iov[0] 放头部、iov[1] 放体，一次调用完成，避免手动拼接缓冲区。
+
+</Callout>
+
+## 信号驱动 I/O（SIGIO）
+
+### 设置步骤
+
+```c
+// 1. 设置接收 SIGIO 的进程（必须）
+fcntl(fd, F_SETOWN, getpid());
+
+// 2. 开启异步通知（O_ASYNC）
+int flags = fcntl(fd, F_GETFL);
+fcntl(fd, F_SETFL, flags | O_ASYNC);
+
+// 3. 注册信号处理函数
+void sigio_handler(int sig) {
+    // 数据就绪，读取数据
+    int n = read(fd, buf, sizeof(buf));
+    // 处理数据...
+}
+signal(SIGIO, sigio_handler);
+
+// 4. 主线程继续做其他工作
+//    数据就绪时内核发 SIGIO → 进入 handler
+```
+
+### 与 I/O 复用的区别
+
+| 对比项 | I/O 复用（select） | 信号驱动（SIGIO） |
+|--------|-------------------|------------------|
+| 等待方式 | 在 select 上阻塞 | 不阻塞，异步通知 |
+| 编程模型 | 同步循环 | 信号回调 |
+| 拷贝阶段 | 阻塞 | 阻塞 |
+| 复杂度 | 较简单 | 信号处理复杂 |
+| 实际使用 | 常用 | 较少用 |
+
+## recvmsg / sendmsg
+
+### msghdr 结构
+
+```c
+struct msghdr {
+    void         *msg_name;       // 对端地址（sockaddr）
+    socklen_t     msg_namelen;    // 地址长度
+    struct iovec *msg_iov;        // 数据缓冲区数组（scatter-gather）
+    size_t        msg_iovlen;     // iov 数量
+    void         *msg_control;    // 辅助数据缓冲区
+    size_t        msg_controllen; // 辅助数据长度
+    int           msg_flags;      // 操作标志
+};
+```
+
+### 全能函数
+
+```text
+recvmsg / sendmsg 是功能最全的套接字 I/O 函数：
+
+相比 read/write：     支持 scatter-gather（msg_iov 数组）
+相比 recvfrom/sendto：支持辅助数据（msg_control）
+                     支持标志位返回（msg_flags）
+
+辅助数据用途：
+  ① Unix域套接字传递 fd（SCM_RIGHTS）
+  ② 接收/发送 IP 选项
+  ③ 接收数据报的目的地址
+```
+
+## Unix 域套接字传递 fd
+
+### SCM_RIGHTS 传递文件描述符
+
+```c
+// 发送端：将 fd 放入辅助数据发送
+struct msghdr msg;
+struct iovec iov;
+char buf[1] = {0};
+iov.iov_base = buf;
+iov.iov_len  = 1;
+
+// 构造辅助数据
+char control[CMSG_SPACE(sizeof(int))];
+struct cmsghdr *cmsg;
+msg.msg_control    = control;
+msg.msg_controllen = sizeof(control);
+
+cmsg = CMSG_FIRSTHDR(&msg);
+cmsg->cmsg_level = SOL_SOCKET;
+cmsg->cmsg_type  = SCM_RIGHTS;        // fd 传递
+cmsg->cmsg_len   = CMSG_LEN(sizeof(int));
+*(int *)CMSG_DATA(cmsg) = fd_to_send; // 要传递的 fd
+
+msg.msg_iov    = &iov;
+msg.msg_iovlen = 1;
+
+sendmsg(sock, &msg, 0);  // 发送
+
+// 接收端：从辅助数据取出新 fd
+recvmsg(sock, &msg, 0);
+cmsg = CMSG_FIRSTHDR(&msg);
+int new_fd = *(int *)CMSG_DATA(cmsg); // 内核创建的新 fd
+```
+
+### 内核实现原理
+
+```text
+发送端 fd=5  ──→  内核  ──→  接收端 fd=8
+  指向文件表项A              指向文件表项A（同一个）
+
+内核不是传递 fd 数字，而是：
+  ① 在接收进程中创建新 fd
+  ② 新 fd 指向发送端同一文件表项
+  ③ 两个 fd 共享偏移量和状态
+
+用途：
+  ① 权限委托（父进程打开文件，传 fd 给子进程）
+  ② 服务进程代理 I/O
+  ③ Unix 域套接字连接复用
+```
+
+<Glossary>
+
+<GlossaryItem term="readv / writev（Scatter-Gather I/O）">
+readv(fd, iov, iovcnt) 一次系统调用将数据分散读到多个缓冲区，writev 一次调用将多个缓冲区数据聚集写入。iovec 结构包含 iov_base（缓冲区地址）和 iov_len（大小）。优势：减少系统调用次数，适合固定头部+变长体的协议（如 HTTP），避免手动拼接缓冲区。数据量大时系统调用开销的减少尤为明显。
+</GlossaryItem>
+
+<GlossaryItem term="信号驱动 I/O（SIGIO）">
+一种异步通知的 I/O 模型。设置步骤：fcntl(F_SETOWN) 设置接收进程、fcntl(O_ASYNC) 开启异步通知、sigaction(SIGIO) 注册处理函数。数据就绪时内核发 SIGIO，在 handler 中调用 recvfrom 读取。与 I/O 复用区别：不阻塞主流程而是异步通知。但信号处理较复杂（信号屏蔽、可重入性），且拷贝阶段仍阻塞，实际不如 epoll 常用。
+</GlossaryItem>
+
+<GlossaryItem term="recvmsg / sendmsg">
+功能最全的套接字 I/O 函数。通过 msghdr 结构支持：msg_name（对端地址）、msg_iov（scatter-gather 缓冲区数组）、msg_control（辅助数据）、msg_flags（操作标志）。相比 read/write 支持 scatter-gather，相比 recvfrom/sendto 支持辅助数据。辅助数据可用于 Unix 域套接字传递 fd（SCM_RIGHTS）、接收 IP 选项等高级功能。
+</GlossaryItem>
+
+<GlossaryItem term="SCM_RIGHTS（文件描述符传递）">
+Unix 域套接字独有的能力：通过辅助数据在进程间传递文件描述符。发送端将 fd 放入 sendmsg 的 msg_control（cmsg_type=SCM_RIGHTS），接收端从 recvmsg 的辅助数据取出新 fd。内核实现：不是传递 fd 数字，而是在接收进程中创建新 fd 指向同一文件表项，两个 fd 共享偏移量和状态。用途：权限委托、服务进程代理 I/O、连接复用。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** readv/writev（scatter-gather I/O）的作用是什么？相比多次 read/write 有什么优势？
+
+<Answer>
+
+readv 一次系统调用将数据分散读到多个缓冲区，writev 一次调用将多个缓冲区数据聚集写入。优势：①减少系统调用次数——多次 read/write 要多次陷入内核，readv/writev 只需一次 ②对于固定头部+变长体的协议（如 HTTP），可以 iov[0] 读头部、iov[1] 读体，避免手动拼接 ③提高性能，系统调用开销显著降低。
+
+</Answer>
+
+**问题 2：** 如何通过 Unix 域套接字传递文件描述符？内核是如何实现的？
+
+<Answer>
+
+发送端：构造 msghdr，在 msg_control 辅助数据中放入 SCM_RIGHTS 类型的 cmsg，cmsg_data 包含要传递的 fd，调 sendmsg。接收端：recvmsg 接收，从 msg_control 中解析 SCM_RIGHTS 取出新 fd。内核实现：发送端的 fd 不是直接传递数字，内核在接收进程中创建一个新的文件描述符，指向同一个文件表项（struct file）。两个 fd 不同但共享同一打开文件表项（偏移量、状态共享）。
+
+</Answer>
+
+</Exercises>

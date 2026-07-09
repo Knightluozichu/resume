@@ -2058,7 +2058,17 @@ export type ReviewChapterSlug =
   | "tip-tcp-timers"
   | "tip-routing-protocols"
   | "tip-application-protocols"
-  | "tip-final-review";
+  | "tip-final-review"
+  | "unp-learning-map"
+  | "unp-socket-intro"
+  | "unp-tcp-sockets"
+  | "unp-udp-sockets"
+  | "unp-io-models"
+  | "unp-advanced-sockets"
+  | "unp-ipv6"
+  | "unp-daemon-ipc"
+  | "unp-advanced-io"
+  | "unp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4121,6 +4131,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "tip-routing-protocols": "路由协议",
   "tip-application-protocols": "应用层协议实战",
   "tip-final-review": "全书复习与知识整合",
+  "unp-learning-map": "全书学习地图",
+  "unp-socket-intro": "套接字简介与API",
+  "unp-tcp-sockets": "TCP套接字编程",
+  "unp-udp-sockets": "UDP套接字编程",
+  "unp-io-models": "I/O复用模型",
+  "unp-advanced-sockets": "高级套接字选项",
+  "unp-ipv6": "IPv6与协议无关",
+  "unp-daemon-ipc": "守护进程与IPC",
+  "unp-advanced-io": "高级I/O与信号",
+  "unp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

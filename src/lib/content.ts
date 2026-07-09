@@ -241,6 +241,7 @@ export const BOOK_ORDER = [
   "http-definitive-guide",
   "wireshark-packet-analysis",
   "tcp-ip-illustrated-vol1",
+  "unix-network-programming-vol1",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -422,6 +423,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "http-definitive-guide": "HTTP权威指南",
   "wireshark-packet-analysis": "Wireshark数据包分析实战",
   "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议",
+  "unix-network-programming-vol1": "UNIX网络编程 卷1：套接字联网API",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

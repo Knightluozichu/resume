@@ -1,0 +1,189 @@
+---
+title: "高级套接字选项"
+type: A
+section: "网络"
+order: 5
+description: "getsockopt/setsockopt、SOL_SOCKET/IPPROTO_IP/IPPROTO_TCP三层选项体系"
+demo: true
+math: false
+sourceUrl: ""
+draft: true
+---
+
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { UnpAdvancedSocketsDiagram } from "@/components/mdx/unix-network-programming-vol1/diagrams/unp-advanced-sockets";
+
+<Objectives>
+
+- 掌握 getsockopt/setsockopt 的 API 与三层选项体系
+- 理解 SOL_SOCKET 层常用选项（SO_REUSEADDR/SO_KEEPALIVE/缓冲区）
+- 掌握 IPPROTO_TCP 层关键选项（TCP_NODELAY/TCP_MAXSEG）
+- 理解套接字选项在实际场景中的应用
+
+</Objectives>
+
+## 套接字选项层次与 API
+
+<UnpAdvancedSocketsDiagram />
+
+## getsockopt / setsockopt API
+
+### 函数签名
+
+```c
+int getsockopt(int sockfd, int level, int optname,
+               void *optval, socklen_t *optlen);
+
+int setsockopt(int sockfd, int level, int optname,
+               const void *optval, socklen_t optlen);
+
+// sockfd:   套接字描述符
+// level:    选项层次（SOL_SOCKET / IPPROTO_IP / IPPROTO_TCP）
+// optname:  选项名（如 SO_REUSEADDR）
+// optval:   选项值缓冲区
+// optlen:   选项值长度
+```
+
+### 三层选项体系
+
+```text
+SOL_SOCKET    → 通用套接字层（与协议无关）
+IPPROTO_IP    → IP 层（IPv4 协议选项）
+IPPROTO_TCP   → TCP 层（TCP 协议选项）
+
+层次越低越接近协议细节
+每层有各自的 optname 集合
+```
+
+## SOL_SOCKET 层选项
+
+### 常用通用选项
+
+| 选项名 | 类型 | 说明 |
+|--------|------|------|
+| `SO_REUSEADDR` | int | 地址重用（TIME_WAIT 状态端口可绑定） |
+| `SO_KEEPALIVE` | int | 开启 TCP 保活探测 |
+| `SO_RCVBUF` | int | 接收缓冲区大小 |
+| `SO_SNDBUF` | int | 发送缓冲区大小 |
+| `SO_RCVTIMEO` | timeval | 接收超时 |
+| `SO_SNDTIMEO` | timeval | 发送超时 |
+| `SO_BROADCAST` | int | 允许广播（UDP） |
+
+### SO_REUSEADDR 示例
+
+```c
+int listenfd = socket(AF_INET, SOCK_STREAM, 0);
+
+int reuse = 1;
+setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+// 必须在 bind 之前设置！
+
+struct sockaddr_in addr;
+addr.sin_family      = AF_INET;
+addr.sin_port        = htons(8080);
+addr.sin_addr.s_addr = htonl(INADDR_ANY);
+bind(listenfd, (struct sockaddr *)&addr, sizeof(addr));
+```
+
+<Callout type="info" title="为什么需要 SO_REUSEADDR">
+
+服务端重启时，之前连接的端口可能处于 TIME_WAIT 状态（持续 2MSL，约 60-120 秒）。不设 SO_REUSEADDR 则 bind 报 EADDRINUSE 错误，服务端无法立即重启。设了 SO_REUSEADDR 后，内核允许绑定处于 TIME_WAIT 的端口，服务端可秒级重启。注意它不允许两个活跃套接字同时绑定同一端口。
+
+</Callout>
+
+## IPPROTO_TCP 层选项
+
+### TCP 关键选项
+
+| 选项名 | 类型 | 说明 |
+|--------|------|------|
+| `TCP_NODELAY` | int | 禁用 Nagle 算法 |
+| `TCP_MAXSEG` | int | 最大分节大小（MSS） |
+| `TCP_KEEPIDLE` | int | 保活空闲时间（秒） |
+| `TCP_KEEPINTVL` | int | 保活探测间隔（秒） |
+| `TCP_KEEPCNT` | int | 保活探测次数 |
+
+### TCP_NODELAY 与 Nagle 算法
+
+```text
+Nagle 算法：
+  当有未确认的小包在途时 → 暂缓发送新的小包
+  → 等收到 ACK 或积攒到 MSS 再发
+  优点：减少网络小包数量，提高带宽利用率
+  缺点：增加延迟（交互式应用敏感）
+
+TCP_NODELAY = 1 → 禁用 Nagle
+  → 小包立即发送，降低延迟
+  → 适合 SSH/游戏等交互式场景
+  → 代价是小包增多，带宽利用率下降
+```
+
+### SO_KEEPALIVE 与 TCP 保活
+
+```c
+// 开启保活
+int keepalive = 1;
+setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &keepalive, sizeof(keepalive));
+
+// 设置保活参数（需配合 SO_KEEPALIVE）
+int idle = 60;     // 60秒无数据后开始探测
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+
+int intvl = 5;     // 每5秒探测一次
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &intvl, sizeof(intvl));
+
+int cnt = 3;       // 探测3次失败则判定死亡
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &cnt, sizeof(cnt));
+```
+
+## IPPROTO_IP 层选项
+
+### IP 层常用选项
+
+| 选项名 | 说明 |
+|--------|------|
+| `IP_TTL` | 生存时间（跳数限制） |
+| `IP_TOS` | 服务类型 |
+| `IP_MULTICAST_TTL` | 组播 TTL |
+| `IP_ADD_MEMBERSHIP` | 加入组播组 |
+| `IP_HDRINCL` | 自定义 IP 头（原始套接字） |
+
+<Glossary>
+
+<GlossaryItem term="getsockopt / setsockopt">
+套接字选项的读写接口。getsockopt 获取当前选项值，setsockopt 设置选项值。参数：sockfd（套接字）、level（选项层次：SOL_SOCKET/IPPROTO_IP/IPPROTO_TCP）、optname（选项名）、optval（值缓冲区）、optlen（值长度）。大部分选项需在 bind/connect 前设置才生效。选项控制套接字行为：地址重用、保活、缓冲区、Nagle 算法等，是网络编程精细控制的工具。
+</GlossaryItem>
+
+<GlossaryItem term="SO_REUSEADDR">
+SOL_SOCKET 层选项，允许套接字绑定处于 TIME_WAIT 状态的端口。场景：服务端重启时之前的连接可能还在 TIME_WAIT（持续 2MSL），不设此选项 bind 会报 EADDRINUSE。设了 SO_REUSEADDR 后 bind 成功，服务端可立即重启。注意：它不允许两个活跃套接字同时绑定同一端口（那是 SO_REUSEPORT 的功能），只允许绑定 TIME_WAIT 状态的端口。
+</GlossaryItem>
+
+<GlossaryItem term="TCP_NODELAY 与 Nagle 算法">
+TCP_NODELAY 是 IPPROTO_TCP 层选项，用于禁用 Nagle 算法。Nagle 算法：当有未确认的小包在途时，暂缓发送新的小包，等收到 ACK 或积攒到 MSS 再发。优点是减少网络小包数量提高带宽利用率，缺点是增加延迟。设 TCP_NODELAY=1 禁用 Nagle 可降低延迟，适合交互式应用（SSH、游戏、实时通信），代价是小包增多。
+</GlossaryItem>
+
+<GlossaryItem term="SO_KEEPALIVE 与 TCP 保活">
+SOL_SOCKET 层选项，开启 TCP 保活机制。连接空闲一段时间后，内核发送保活探测包检测对端是否存活。配合 IPPROTO_TCP 层的 TCP_KEEPIDLE（空闲多久开始探测，默认7200秒）、TCP_KEEPINTVL（探测间隔，默认75秒）、TCP_KEEPCNT（失败次数，默认9次）三个选项精细控制。作用：检测对端崩溃（非正常关闭）的死连接并释放资源，避免服务端永久挂住。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+**问题 1：** SO_REUSEADDR 选项的作用是什么？在什么场景下必须使用？
+
+<Answer>
+
+SO_REUSEADDR 允许套接字绑定到处于 TIME_WAIT 状态的地址端口。场景：服务端重启时，之前的连接可能还在 TIME_WAIT（持续 2MSL），不设此选项则 bind 失败报 EADDRINUSE。设了 SO_REUSEADDR 后 bind 成功，服务端可以立即重启。它不允许两个活跃套接字同时绑定同一端口，只允许绑定 TIME_WAIT 状态的端口。
+
+</Answer>
+
+**问题 2：** TCP_NODELAY 选项的作用是什么？Nagle 算法的优缺点是什么？
+
+<Answer>
+
+TCP_NODELAY 禁用 Nagle 算法。Nagle 算法：当有未确认的小包在途时，暂缓发送新的小包，等收到 ACK 或积攒到 MSS 再发。优点：减少网络上小包数量，提高带宽利用率。缺点：增加延迟——对于交互式应用（如 SSH、游戏），小请求需要等前一个 ACK 才能发出。设 TCP_NODELAY 禁用 Nagle 可降低延迟，适合交互式场景。
+
+</Answer>
+
+</Exercises>

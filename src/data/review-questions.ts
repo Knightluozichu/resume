@@ -1935,6 +1935,16 @@ import { tipTcpTimersQuestions } from "./review/tip-tcp-timers";
 import { tipRoutingProtocolsQuestions } from "./review/tip-routing-protocols";
 import { tipApplicationProtocolsQuestions } from "./review/tip-application-protocols";
 import { tipFinalReviewQuestions } from "./review/tip-final-review";
+import { unpLearningMapQuestions } from "./review/unp-learning-map";
+import { unpSocketIntroQuestions } from "./review/unp-socket-intro";
+import { unpTcpSocketsQuestions } from "./review/unp-tcp-sockets";
+import { unpUdpSocketsQuestions } from "./review/unp-udp-sockets";
+import { unpIoModelsQuestions } from "./review/unp-io-models";
+import { unpAdvancedSocketsQuestions } from "./review/unp-advanced-sockets";
+import { unpIpv6Questions } from "./review/unp-ipv6";
+import { unpDaemonIpcQuestions } from "./review/unp-daemon-ipc";
+import { unpAdvancedIoQuestions } from "./review/unp-advanced-io";
+import { unpFinalReviewQuestions } from "./review/unp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -3905,6 +3915,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...tipRoutingProtocolsQuestions,
   ...tipApplicationProtocolsQuestions,
   ...tipFinalReviewQuestions,
+  ...unpLearningMapQuestions,
+  ...unpSocketIntroQuestions,
+  ...unpTcpSocketsQuestions,
+  ...unpUdpSocketsQuestions,
+  ...unpIoModelsQuestions,
+  ...unpAdvancedSocketsQuestions,
+  ...unpIpv6Questions,
+  ...unpDaemonIpcQuestions,
+  ...unpAdvancedIoQuestions,
+  ...unpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
