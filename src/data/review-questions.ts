@@ -2345,6 +2345,16 @@ import { aupMinifaceQuestions } from "./review/aup-miniface";
 import { aupOptimizationQuestions } from "./review/aup-optimization";
 import { aupComplexityFutureQuestions } from "./review/aup-complexity-future";
 import { aupFinalReviewQuestions } from "./review/aup-final-review";
+import { crvLearningMapQuestions } from "./review/crv-learning-map";
+import { crvProgrammingWorldQuestions } from "./review/crv-programming-world";
+import { crvOopDataQuestions } from "./review/crv-oop-data";
+import { crvWebNetworkQuestions } from "./review/crv-web-network";
+import { crvDatabaseCacheQuestions } from "./review/crv-database-cache";
+import { crvDistributedQuestions } from "./review/crv-distributed";
+import { crvJvmLanguageQuestions } from "./review/crv-jvm-language";
+import { crvDevopsCloudQuestions } from "./review/crv-devops-cloud";
+import { crvCareerGrowthQuestions } from "./review/crv-career-growth";
+import { crvFinalReviewQuestions } from "./review/crv-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4725,6 +4735,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...aupOptimizationQuestions,
   ...aupComplexityFutureQuestions,
   ...aupFinalReviewQuestions,
+  ...crvLearningMapQuestions,
+  ...crvProgrammingWorldQuestions,
+  ...crvOopDataQuestions,
+  ...crvWebNetworkQuestions,
+  ...crvDatabaseCacheQuestions,
+  ...crvDistributedQuestions,
+  ...crvJvmLanguageQuestions,
+  ...crvDevopsCloudQuestions,
+  ...crvCareerGrowthQuestions,
+  ...crvFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

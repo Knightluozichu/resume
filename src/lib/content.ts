@@ -282,6 +282,7 @@ export const BOOK_ORDER = [
   "pragmatic-programmer",
   "poeaa-enterprise-patterns",
   "art-of-unix-programming",
+  "coder-revolution",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -504,6 +505,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "pragmatic-programmer": "程序员修炼之道",
   "poeaa-enterprise-patterns": "企业应用架构模式",
   "art-of-unix-programming": "UNIX编程艺术",
+  "coder-revolution": "码农翻身",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -2468,7 +2468,17 @@ export type ReviewChapterSlug =
   | "aup-miniface"
   | "aup-optimization"
   | "aup-complexity-future"
-  | "aup-final-review";
+  | "aup-final-review"
+  | "crv-learning-map"
+  | "crv-programming-world"
+  | "crv-oop-data"
+  | "crv-web-network"
+  | "crv-database-cache"
+  | "crv-distributed"
+  | "crv-jvm-language"
+  | "crv-devops-cloud"
+  | "crv-career-growth"
+  | "crv-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4941,6 +4951,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "aup-optimization": "优化与性能",
   "aup-complexity-future": "复杂性与未来",
   "aup-final-review": "全书复习与知识整合",
+  "crv-learning-map": "码农翻身·知识全景图",
+  "crv-programming-world": "编程世界初探",
+  "crv-oop-data": "面向对象与数据",
+  "crv-web-network": "Web与网络",
+  "crv-database-cache": "数据库与缓存",
+  "crv-distributed": "分布式与架构",
+  "crv-jvm-language": "JVM与编程语言",
+  "crv-devops-cloud": "DevOps与云计算",
+  "crv-career-growth": "职业成长与思考",
+  "crv-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
