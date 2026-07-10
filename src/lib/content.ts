@@ -277,6 +277,7 @@ export const BOOK_ORDER = [
   "car-structure-illustrated",
   "autosar-vehicle-controller",
   "soa-vehicle-architecture",
+  "mythical-man-month",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -494,6 +495,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "car-structure-illustrated": "汽车构造与知识全图解",
   "autosar-vehicle-controller": "AUTOSAR 规范与车用控制器软件开发",
   "soa-vehicle-architecture": "SOA 车载软件架构与开发",
+  "mythical-man-month": "人月神话",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

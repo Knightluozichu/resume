@@ -2418,7 +2418,17 @@ export type ReviewChapterSlug =
   | "soa-adaptive-platform"
   | "soa-methodology-tools"
   | "soa-case-study"
-  | "soa-final-review";
+  | "soa-final-review"
+  | "mmm-learning-map"
+  | "mmm-tar-pit"
+  | "mmm-man-month"
+  | "mmm-surgical-team"
+  | "mmm-communication"
+  | "mmm-second-system"
+  | "mmm-architecture-design"
+  | "mmm-no-silver-bullet"
+  | "mmm-lessons-future"
+  | "mmm-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4841,6 +4851,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "soa-methodology-tools": "方法论与开发工具链",
   "soa-case-study": "案例分析与未来趋势",
   "soa-final-review": "全书复习与知识整合",
+  "mmm-learning-map": "人月神话·知识全景图",
+  "mmm-tar-pit": "焦油坑与软件项目困境",
+  "mmm-man-month": "人月神话与团队规模",
+  "mmm-surgical-team": "外科手术队伍",
+  "mmm-communication": "沟通与文档",
+  "mmm-second-system": "第二系统效应",
+  "mmm-architecture-design": "概念完整性与架构",
+  "mmm-no-silver-bullet": "没有银弹",
+  "mmm-lessons-future": "经验总结与未来展望",
+  "mmm-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

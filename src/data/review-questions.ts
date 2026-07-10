@@ -2295,6 +2295,16 @@ import { soaAdaptivePlatformQuestions } from "./review/soa-adaptive-platform";
 import { soaMethodologyToolsQuestions } from "./review/soa-methodology-tools";
 import { soaCaseStudyQuestions } from "./review/soa-case-study";
 import { soaFinalReviewQuestions } from "./review/soa-final-review";
+import { mmmLearningMapQuestions } from "./review/mmm-learning-map";
+import { mmmTarPitQuestions } from "./review/mmm-tar-pit";
+import { mmmManMonthQuestions } from "./review/mmm-man-month";
+import { mmmSurgicalTeamQuestions } from "./review/mmm-surgical-team";
+import { mmmCommunicationQuestions } from "./review/mmm-communication";
+import { mmmSecondSystemQuestions } from "./review/mmm-second-system";
+import { mmmArchitectureDesignQuestions } from "./review/mmm-architecture-design";
+import { mmmNoSilverBulletQuestions } from "./review/mmm-no-silver-bullet";
+import { mmmLessonsFutureQuestions } from "./review/mmm-lessons-future";
+import { mmmFinalReviewQuestions } from "./review/mmm-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4625,6 +4635,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...soaMethodologyToolsQuestions,
   ...soaCaseStudyQuestions,
   ...soaFinalReviewQuestions,
+  ...mmmLearningMapQuestions,
+  ...mmmTarPitQuestions,
+  ...mmmManMonthQuestions,
+  ...mmmSurgicalTeamQuestions,
+  ...mmmCommunicationQuestions,
+  ...mmmSecondSystemQuestions,
+  ...mmmArchitectureDesignQuestions,
+  ...mmmNoSilverBulletQuestions,
+  ...mmmLessonsFutureQuestions,
+  ...mmmFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
