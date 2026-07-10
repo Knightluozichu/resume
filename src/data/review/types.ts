@@ -2438,7 +2438,17 @@ export type ReviewChapterSlug =
   | "cc2-refactoring-integration"
   | "cc2-debugging-tuning"
   | "cc2-team-craft"
-  | "cc2-final-review";
+  | "cc2-final-review"
+  | "pp-learning-map"
+  | "pp-pragmatic-philosophy"
+  | "pp-approach"
+  | "pp-basic-tools"
+  | "pp-defensive-programming"
+  | "pp-concurrency"
+  | "pp-metaprogramming"
+  | "pp-codecraft"
+  | "pp-team-delivery"
+  | "pp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4881,6 +4891,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "cc2-debugging-tuning": "调试与性能调优",
   "cc2-team-craft": "团队协作与工艺",
   "cc2-final-review": "全书复习与知识整合",
+  "pp-learning-map": "程序员修炼之道·知识全景图",
+  "pp-pragmatic-philosophy": "务实哲学",
+  "pp-approach": "务实方法",
+  "pp-basic-tools": "基本工具",
+  "pp-defensive-programming": "防御式编程",
+  "pp-concurrency": "并发与解耦",
+  "pp-metaprogramming": "元编程与代码生成",
+  "pp-codecraft": "代码工艺",
+  "pp-team-delivery": "团队与交付",
+  "pp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

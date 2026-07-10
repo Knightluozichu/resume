@@ -279,6 +279,7 @@ export const BOOK_ORDER = [
   "soa-vehicle-architecture",
   "mythical-man-month",
   "code-complete-2e",
+  "pragmatic-programmer",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -498,6 +499,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "soa-vehicle-architecture": "SOA 车载软件架构与开发",
   "mythical-man-month": "人月神话",
   "code-complete-2e": "代码大全（第2版）",
+  "pragmatic-programmer": "程序员修炼之道",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

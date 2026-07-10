@@ -2315,6 +2315,16 @@ import { cc2RefactoringIntegrationQuestions } from "./review/cc2-refactoring-int
 import { cc2DebuggingTuningQuestions } from "./review/cc2-debugging-tuning";
 import { cc2TeamCraftQuestions } from "./review/cc2-team-craft";
 import { cc2FinalReviewQuestions } from "./review/cc2-final-review";
+import { ppLearningMapQuestions } from "./review/pp-learning-map";
+import { ppPragmaticPhilosophyQuestions } from "./review/pp-pragmatic-philosophy";
+import { ppApproachQuestions } from "./review/pp-approach";
+import { ppBasicToolsQuestions } from "./review/pp-basic-tools";
+import { ppDefensiveProgrammingQuestions } from "./review/pp-defensive-programming";
+import { ppConcurrencyQuestions } from "./review/pp-concurrency";
+import { ppMetaprogrammingQuestions } from "./review/pp-metaprogramming";
+import { ppCodecraftQuestions } from "./review/pp-codecraft";
+import { ppTeamDeliveryQuestions } from "./review/pp-team-delivery";
+import { ppFinalReviewQuestions } from "./review/pp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4665,6 +4675,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cc2DebuggingTuningQuestions,
   ...cc2TeamCraftQuestions,
   ...cc2FinalReviewQuestions,
+  ...ppLearningMapQuestions,
+  ...ppPragmaticPhilosophyQuestions,
+  ...ppApproachQuestions,
+  ...ppBasicToolsQuestions,
+  ...ppDefensiveProgrammingQuestions,
+  ...ppConcurrencyQuestions,
+  ...ppMetaprogrammingQuestions,
+  ...ppCodecraftQuestions,
+  ...ppTeamDeliveryQuestions,
+  ...ppFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
