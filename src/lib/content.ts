@@ -274,6 +274,8 @@ export const BOOK_ORDER = [
   "mastering-bitcoin",
   "mastering-ethereum",
   "illustrated-nev",
+  "car-structure-illustrated",
+  "autosar-vehicle-controller",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -1125,6 +1127,8 @@ export const SECTION_ORDER = [
   "AI Agent与大模型应用",
   "区块链",
   "汽车与车机",
+  "软件工程与最佳实践",
+  "通识与个人成长",
 ] as const;
 
 /** sectionRank: index in SECTION_ORDER, or fallback past known sections */

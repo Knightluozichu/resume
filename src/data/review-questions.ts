@@ -2275,6 +2275,16 @@ import { csiElectricalElectronicsQuestions } from "./review/csi-electrical-elect
 import { csiHvacComfortQuestions } from "./review/csi-hvac-comfort";
 import { csiSafetySystemsQuestions } from "./review/csi-safety-systems";
 import { csiFinalReviewQuestions } from "./review/csi-final-review";
+import { avcLearningMapQuestions } from "./review/avc-learning-map";
+import { avcAutosarOverviewQuestions } from "./review/avc-autosar-overview";
+import { avcMethodologyRteQuestions } from "./review/avc-methodology-rte";
+import { avcBswStackQuestions } from "./review/avc-bsw-stack";
+import { avcMcalDriversQuestions } from "./review/avc-mcal-drivers";
+import { avcApplicationLayerQuestions } from "./review/avc-application-layer";
+import { avcCommunicationStackQuestions } from "./review/avc-communication-stack";
+import { avcDiagnosticSafetyQuestions } from "./review/avc-diagnostic-safety";
+import { avcToolchainPracticeQuestions } from "./review/avc-toolchain-practice";
+import { avcFinalReviewQuestions } from "./review/avc-final-review";
 
 export {
   CHAPTER_TITLES,
