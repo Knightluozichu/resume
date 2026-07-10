@@ -24,7 +24,7 @@ export function CmDiscreteProbDiagram() {
     <text x="384" y="92" fontSize="12" fontWeight="700" fill="var(--success)">概率生成函数 PGF</text>
     <text x="384" y="114" fontSize="11" fill="var(--text-primary)">G_X(z) = Σ Pr(X=k) z^k</text>
     <text x="384" y="131" fontSize="11" fill="var(--text-primary)">E[X] = G'_X(1), V[X]=G''(1)+G'(1)-G'(1)²</text>
-    <text x="384" y="148" fontSize="11" fill="var(--text-primary)">独立和：G_{X+Y} = G_X · G_Y</text>
+    <text x="384" y="148" fontSize="11" fill="var(--text-primary)">独立和：G_&#123;X+Y&#125; = G_X · G_Y</text>
     <text x="384" y="165" fontSize="11" fill="var(--text-primary)">硬币 PGF：(q+pz)^n</text>
     <rect x="40" y="240" width="640" height="75" rx="8" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1" strokeOpacity="0.4" />
     <text x="54" y="262" fontSize="12" fontWeight="700" fill="var(--warning)">应用场景</text>

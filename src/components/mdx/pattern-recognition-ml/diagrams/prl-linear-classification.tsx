@@ -54,7 +54,7 @@ export function PrlLinearClassificationDiagram() {
       <text x="400" y="214" textAnchor="middle" fontSize="13" fontWeight="700" fill="#334155">逻辑回归核心公式</text>
 
       <rect x="80" y="228" width="640" height="34" rx="8" fill="#d1fae5" stroke="#059669" strokeWidth="1.5" />
-      <text x="400" y="250" textAnchor="middle" fontSize="12" fontWeight="700" fill="#065f46">σ(a) = 1/(1+e^{-a})，  a = wᵀφ(x)，  p(C₁|x) = σ(wᵀφ(x))</text>
+      <text x="400" y="250" textAnchor="middle" fontSize="12" fontWeight="700" fill="#065f46">σ(a) = 1/(1+e^&#123;-a&#125;)，  a = wᵀφ(x)，  p(C₁|x) = σ(wᵀφ(x))</text>
 
       <rect x="80" y="268" width="640" height="34" rx="8" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />
       <text x="400" y="290" textAnchor="middle" fontSize="11" fill="#475569">交叉熵损失 = 负对数似然   E(w) = -Σ[t_n ln y_n + (1-t_n) ln(1-y_n)]</text>
@@ -77,7 +77,7 @@ export function PrlLinearClassificationDiagram() {
 
       <rect x="288" y="412" width="225" height="66" rx="8" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
       <text x="400" y="432" textAnchor="middle" fontSize="10" fontWeight="700" fill="#92400e">Hessian 矩阵</text>
-      <text x="400" y="450" textAnchor="middle" fontSize="9" fill="#92400e">A = -∇²ln p(w|D)|_{w_MAP}</text>
+      <text x="400" y="450" textAnchor="middle" fontSize="9" fill="#92400e">A = -∇²ln p(w|D)|_&#123;w_MAP&#125;</text>
       <text x="400" y="466" textAnchor="middle" fontSize="9" fill="#92400e">曲率信息</text>
 
       <path d="M513 445 L535 445" stroke="#64748b" strokeWidth="2" markerEnd="url(#prl-lc-arrow)" />

@@ -52,7 +52,7 @@ export function LupMetatablesDiagram() {
           <rect x={240} y={92} width={200} height={120} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.5" />
           <text x={340} y={112} textAnchor="middle" fontSize="12" fontWeight="700" fill={warning}>元表 metatable</text>
 
-          <text x={252} y={132} fontSize="11" fill={primary}>__index = {fallback}</text>
+          <text x={252} y={132} fontSize="11" fill={primary}>__index = &#123;fallback&#125;</text>
           <text x={252} y={150} fontSize="10" fill={secondary}>键不存在时查找</text>
 
           <text x={252} y={170} fontSize="11" fill={primary}>__newindex = func</text>

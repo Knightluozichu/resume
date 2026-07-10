@@ -17,7 +17,7 @@ export function HfsProbabilityDiagram() {
             <circle cx="56" cy="120" r="4" fill="var(--accent)" />
             <text x="68" y="125" fontSize="13" fontWeight="700" fill="var(--text-primary)">样本空间</text>
             <text x="56" y="148" fontSize="11" fill="var(--text-secondary)">所有可能结果</text>
-            <text x="56" y="166" fontSize="12" fontWeight="600" fill="var(--accent)">Ω={正,反}</text>
+            <text x="56" y="166" fontSize="12" fontWeight="600" fill="var(--accent)">Ω=&#123;正,反&#125;</text>
           </g>
           <g>
             <rect x="380" y="100" width="300" height="80" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.4" />

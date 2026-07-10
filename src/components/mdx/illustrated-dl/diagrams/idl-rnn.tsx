@@ -24,7 +24,7 @@ export function IdlRnnDiagram() {
 
       {/* 时间步 t-1 */}
       <rect x="40" y="80" width="60" height="30" rx="6" fill="#dbeafe" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="70" y="100" textAnchor="middle" fontSize="11" fill="#1e40af">x_{t-1}</text>
+      <text x="70" y="100" textAnchor="middle" fontSize="11" fill="#1e40af">x_&#123;t-1&#125;</text>
 
       <rect x="40" y="130" width="60" height="50" rx="8" fill="url(#idl-rnn-cell)" opacity="0.2" stroke="#2563eb" strokeWidth="2" />
       <text x="70" y="160" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">A</text>
@@ -32,13 +32,13 @@ export function IdlRnnDiagram() {
       <line x1="70" y1="110" x2="70" y2="130" stroke="#64748b" strokeWidth="2" markerEnd="url(#idl-rnn-arrow)" />
 
       <rect x="40" y="200" width="60" height="30" rx="6" fill="#dcfce7" stroke="#059669" strokeWidth="1.5" />
-      <text x="70" y="220" textAnchor="middle" fontSize="11" fill="#065f46">h_{t-1}</text>
+      <text x="70" y="220" textAnchor="middle" fontSize="11" fill="#065f46">h_&#123;t-1&#125;</text>
 
       <line x1="70" y1="180" x2="70" y2="200" stroke="#64748b" strokeWidth="2" markerEnd="url(#idl-rnn-arrow)" />
 
       {/* 隐藏状态传递 */}
       <line x1="100" y1="155" x2="240" y2="155" stroke="#7c3aed" strokeWidth="2.5" markerEnd="url(#idl-rnn-arrow)" />
-      <text x="170" y="148" textAnchor="middle" fontSize="9" fill="#7c3aed">h_{t-1}</text>
+      <text x="170" y="148" textAnchor="middle" fontSize="9" fill="#7c3aed">h_&#123;t-1&#125;</text>
 
       {/* 时间步 t */}
       <rect x="280" y="80" width="60" height="30" rx="6" fill="#dbeafe" stroke="#2563eb" strokeWidth="1.5" />
@@ -60,7 +60,7 @@ export function IdlRnnDiagram() {
 
       {/* 时间步 t+1 */}
       <rect x="520" y="80" width="60" height="30" rx="6" fill="#dbeafe" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="550" y="100" textAnchor="middle" fontSize="11" fill="#1e40af">x_{t+1}</text>
+      <text x="550" y="100" textAnchor="middle" fontSize="11" fill="#1e40af">x_&#123;t+1&#125;</text>
 
       <rect x="520" y="130" width="60" height="50" rx="8" fill="url(#idl-rnn-cell)" opacity="0.2" stroke="#2563eb" strokeWidth="2" />
       <text x="550" y="160" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">A</text>
@@ -68,7 +68,7 @@ export function IdlRnnDiagram() {
       <line x1="550" y1="110" x2="550" y2="130" stroke="#64748b" strokeWidth="2" markerEnd="url(#idl-rnn-arrow)" />
 
       <rect x="520" y="200" width="60" height="30" rx="6" fill="#dcfce7" stroke="#059669" strokeWidth="1.5" />
-      <text x="550" y="220" textAnchor="middle" fontSize="11" fill="#065f46">h_{t+1}</text>
+      <text x="550" y="220" textAnchor="middle" fontSize="11" fill="#065f46">h_&#123;t+1&#125;</text>
 
       <line x1="550" y1="180" x2="550" y2="200" stroke="#64748b" strokeWidth="2" markerEnd="url(#idl-rnn-arrow)" />
 
@@ -84,19 +84,19 @@ export function IdlRnnDiagram() {
       {/* 遗忘门 */}
       <rect x="40" y="340" width="220" height="80" rx="8" fill="url(#idl-rnn-lstm)" opacity="0.12" stroke="#7c3aed" strokeWidth="2" />
       <text x="150" y="365" textAnchor="middle" fontSize="13" fontWeight="700" fill="#5b21b6">遗忘门（Forget Gate）</text>
-      <text x="150" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">f = sigmoid(W_f * [h_{t-1}, x_t])</text>
+      <text x="150" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">f = sigmoid(W_f * [h_&#123;t-1&#125;, x_t])</text>
       <text x="150" y="405" textAnchor="middle" fontSize="10" fill="#64748b">决定丢弃多少旧信息</text>
 
       {/* 输入门 */}
       <rect x="290" y="340" width="220" height="80" rx="8" fill="url(#idl-rnn-lstm)" opacity="0.12" stroke="#7c3aed" strokeWidth="2" />
       <text x="400" y="365" textAnchor="middle" fontSize="13" fontWeight="700" fill="#5b21b6">输入门（Input Gate）</text>
-      <text x="400" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">i = sigmoid(W_i * [h_{t-1}, x_t])</text>
+      <text x="400" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">i = sigmoid(W_i * [h_&#123;t-1&#125;, x_t])</text>
       <text x="400" y="405" textAnchor="middle" fontSize="10" fill="#64748b">决定写入多少新信息</text>
 
       {/* 输出门 */}
       <rect x="540" y="340" width="220" height="80" rx="8" fill="url(#idl-rnn-lstm)" opacity="0.12" stroke="#7c3aed" strokeWidth="2" />
       <text x="650" y="365" textAnchor="middle" fontSize="13" fontWeight="700" fill="#5b21b6">输出门（Output Gate）</text>
-      <text x="650" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">o = sigmoid(W_o * [h_{t-1}, x_t])</text>
+      <text x="650" y="385" textAnchor="middle" fontSize="11" fill="#6d28d9">o = sigmoid(W_o * [h_&#123;t-1&#125;, x_t])</text>
       <text x="650" y="405" textAnchor="middle" fontSize="10" fill="#64748b">决定输出多少信息</text>
 
       {/* 底部对比 */}

@@ -26,7 +26,7 @@ import { CfpErrorHandlingFpDiagram } from "@/components/mdx/csharp-functional-pr
 
 想象你在寄快递。传统方式（try-catch）像你把包裹交给快递员，如果出了问题（地址错误、包裹丢失），快递员会「扔一个异常」——你可能不知道哪里出了问题，直到你打电话追问。函数的签名写着「返回 string」，但实际可能抛出 5 种异常——错误是隐式的，不体现在签名中。
 
-函数式方式（Result 类型）像快递单上写着「送达或退回原因」——结果要么是「送达成功（Ok）」，要么是「退回原因（Error: 地址错误）」。函数的签名写着「返回 Result<string, Error>」——明确告诉你「这个操作可能失败，失败时返回错误信息」。错误是显式的数据，不是隐式的控制流。
+函数式方式（Result 类型）像快递单上写着「送达或退回原因」——结果要么是「送达成功（Ok）」，要么是「退回原因（Error: 地址错误）」。函数的签名写着「返回 Result&lt;string, Error&gt;」——明确告诉你「这个操作可能失败，失败时返回错误信息」。错误是显式的数据，不是隐式的控制流。
 
 `Result<T, E>` 是一个联合类型：`Ok(T)` 表示成功携带值，`Error(E)` 表示失败携带错误信息。用 Bind 链式操作，Ok 继续传播，Error 自动短路——不需要 try-catch 嵌套。
 
@@ -34,51 +34,15 @@ import { CfpErrorHandlingFpDiagram } from "@/components/mdx/csharp-functional-pr
 
 ### try-catch 的问题
 
-<Term def="try-catch 是命令式错误处理机制，异常作为控制流中断程序。问题：1）错误是隐式的——函数签名不体现可能抛出的异常；2）异常是控制流——中断正常执行流，难以组合；3）错误信息丢失——catch 后需要手动包装传播；4）性能开销——异常抛出有栈展开成本。">
-
-```csharp
-// 签名说返回 int，但可能抛 3 种异常——调用者不知道
-int ParseAndDivide(string a, string b)
-{
-    int x = int.Parse(a);  // 可能抛 FormatException
-    int y = int.Parse(b);  // 可能抛 FormatException
-    return x / y;          // 可能抛 DivideByZeroException
-}
-```
-
-调用者必须看源码或文档才知道可能抛什么异常——编译器不强制处理。这是「隐式错误」的根本问题。
-
-</Term>
+<Term def="try-catch 是命令式错误处理机制，异常作为控制流中断程序。问题：1）错误是隐式的——函数签名不体现可能抛出的异常；2）异常是控制流——中断正常执行流，难以组合；3）错误信息丢失——catch 后需要手动包装传播；4）性能开销——异常抛出有栈展开成本。">```csharp // 签名说返回 int，但可能抛 3 种异常——调用者不知道 int ParseAndDivide(string a, string b) { int x = int.Parse(a);  // 可能抛 FormatException int y = int.Parse(b);  // 可能抛 FormatException return x / y;          // 可能抛 DivideByZeroException } ``` 调用者必须看源码或文档才知道可能抛什么异常——编译器不强制处理。这是「隐式错误」的根本问题。</Term>
 
 ### Result 类型
 
-<Term def="Result<T, E> 是函数式错误处理类型，表示「成功或失败」。Ok(T) 携带成功值，Error(E) 携带错误信息。签名 `Result<T, E>` 明确表示「这个操作可能失败，失败时返回 E 类型的错误」。错误是显式数据，不是隐式控制流。">
-
-```csharp
-public abstract record Result<T, E>;
-public sealed record Ok<T, E>(T Value) : Result<T, E>;
-public sealed record Err<T, E>(E Error) : Result<T, E>;
-
-Result<int, string> ParseInt(string s)
-    => int.TryParse(s, out var n) ? new Ok<int, string>(n) : new Err<int, string>($"Cannot parse '{s}'");
-```
-
-`Result<int, string>` 的签名明确告诉调用者：返回 int 或 string 类型的错误信息。调用者必须处理错误分支——编译器通过类型系统强制。
-
-</Term>
+<Term def="Result<T, E> 是函数式错误处理类型，表示「成功或失败」。Ok(T) 携带成功值，Error(E) 携带错误信息。签名 Result<T, E> 明确表示「这个操作可能失败，失败时返回 E 类型的错误」。错误是显式数据，不是隐式控制流。">```csharp public abstract record Result<T, E>; public sealed record Ok<T, E>(T Value) : Result<T, E>; public sealed record Err<T, E>(E Error) : Result<T, E>; Result&lt;int, string&gt; ParseInt(string s) => int.TryParse(s, out var n) ? new Ok&lt;int, string&gt;(n) : new Err&lt;int, string&gt;($"Cannot parse '{s}'"); ``` `Result<int, string>` 的签名明确告诉调用者：返回 int 或 string 类型的错误信息。调用者必须处理错误分支——编译器通过类型系统强制。</Term>
 
 ### Bind 链式与短路
 
-<Term def="Result 的 Bind 操作与 Option 的 Bind 类似：如果当前是 Ok，提取值传给函数继续；如果是 Error，短路传播错误。链式 Bind 让多个可能失败的操作串联，任一失败自动短路后续——不需要嵌套 try-catch。">
-
-```csharp
-Result<U, E> Bind<T, U, E>(Result<T, E> r, Func<T, Result<U, E>> f)
-    => r is Ok<T, E> ok ? f(ok.Value) : new Err<U, E>((r as Err<T, E>)!.Error);
-```
-
-`ParseInt("42").Bind(x => SafeDivide(100, x)).Map(x => x.ToString())` 链式操作：解析成功→除法成功→转字符串。如果解析失败，后续全部短路，错误信息传播到最终结果。
-
-</Term>
+<Term def="Result 的 Bind 操作与 Option 的 Bind 类似：如果当前是 Ok，提取值传给函数继续；如果是 Error，短路传播错误。链式 Bind 让多个可能失败的操作串联，任一失败自动短路后续——不需要嵌套 try-catch。">```csharp Result<U, E> Bind<T, U, E>(Result<T, E> r, Func<T, Result<U, E>> f) => r is Ok<T, E> ok ? f(ok.Value) : new Err<U, E>((r as Err<T, E>)!.Error); ``` `ParseInt("42").Bind(x => SafeDivide(100, x)).Map(x => x.ToString())` 链式操作：解析成功→除法成功→转字符串。如果解析失败，后续全部短路，错误信息传播到最终结果。</Term>
 
 ### Match 模式匹配
 
@@ -100,30 +64,13 @@ Match 强制处理 Ok 和 Err 两个分支——不会忘记处理错误。对�
 <CfpErrorHandlingFpDiagram />
 
 <Stepper>
+<Step title="try-catch：隐式控制流"> `try { var r = Parse(s); } catch (Exception e) { ... }` 中，Parse 的签名说返回 int，但实际可能抛异常。异常中断控制流——从 throw 点跳到 catch 点，跳过了中间代码。错误是隐式的：调用者不看源码不知道可能抛什么。嵌套 try-catch 可读性差，异常传播需要手动 rethrow。</Step>
 
-<Step title="try-catch：隐式控制流">
+<Step title="Result：显式数据流"> `Result<int, string> r = Parse(s)` 中，签名明确返回 Result——要么 Ok(int) 要么 Err(string)。错误是数据，不中断控制流。调用者必须处理 Err 分支——类型系统强制。Result 可以像普通值一样传递、存储、组合，不需要 try-catch 的控制流跳转。</Step>
 
-`try { var r = Parse(s); } catch (Exception e) { ... }` 中，Parse 的签名说返回 int，但实际可能抛异常。异常中断控制流——从 throw 点跳到 catch 点，跳过了中间代码。错误是隐式的：调用者不看源码不知道可能抛什么。嵌套 try-catch 可读性差，异常传播需要手动 rethrow。
+<Step title="Ok 链式传播"> `Ok("42").Bind(ParseInt).Bind(SafeDivide).Map(ToString)` 全链执行：Ok("42") → 解析为 Ok(42) → 除法 Ok(84) → 转字符串 Ok("84")。每步是 Ok，值传递到下一步。链式 Bind 让多个操作串联，无需嵌套 try-catch。</Step>
 
-</Step>
-
-<Step title="Result：显式数据流">
-
-`Result<int, string> r = Parse(s)` 中，签名明确返回 Result——要么 Ok(int) 要么 Err(string)。错误是数据，不中断控制流。调用者必须处理 Err 分支——类型系统强制。Result 可以像普通值一样传递、存储、组合，不需要 try-catch 的控制流跳转。
-
-</Step>
-
-<Step title="Ok 链式传播">
-
-`Ok("42").Bind(ParseInt).Bind(SafeDivide).Map(ToString)` 全链执行：Ok("42") → 解析为 Ok(42) → 除法 Ok(84) → 转字符串 Ok("84")。每步是 Ok，值传递到下一步。链式 Bind 让多个操作串联，无需嵌套 try-catch。
-
-</Step>
-
-<Step title="Error 短路传播">
-
-`Ok("ab").Bind(ParseInt).Bind(SafeDivide)...` 解析 "ab" 失败返回 Err("Cannot parse 'ab'")。后续所有 Bind 被跳过——Error 自动传播到最终结果。不需要手动检查每步是否失败——Bind 自动处理。错误信息一路传播，最终在 Match 中处理。
-
-</Step>
+<Step title="Error 短路传播"> `Ok("ab").Bind(ParseInt).Bind(SafeDivide)...` 解析 "ab" 失败返回 Err("Cannot parse 'ab'")。后续所有 Bind 被跳过——Error 自动传播到最终结果。不需要手动检查每步是否失败——Bind 自动处理。错误信息一路传播，最终在 Match 中处理。</Step>
 
 </Stepper>
 
@@ -166,11 +113,11 @@ public static class ResultExtensions
 }
 
 // === 实际应用 ===
-Result<int, string> ParseInt(string s)
-    => int.TryParse(s, out var n) ? new Ok<int, string>(n) : new Err<int, string>($"Cannot parse '{s}'");
+Result&lt;int, string&gt; ParseInt(string s)
+    => int.TryParse(s, out var n) ? new Ok&lt;int, string&gt;(n) : new Err&lt;int, string&gt;($"Cannot parse '{s}'");
 
-Result<int, string> SafeDivide(int a, int b)
-    => b == 0 ? new Err<int, string>("Division by zero") : new Ok<int, string>(a / b);
+Result&lt;int, string&gt; SafeDivide(int a, int b)
+    => b == 0 ? new Err&lt;int, string&gt;("Division by zero") : new Ok&lt;int, string&gt;(a / b);
 
 // 命令式 try-catch
 string TryCatchApproach(string a, string b)
@@ -187,10 +134,10 @@ string TryCatchApproach(string a, string b)
 
 // 函数式 Result 链式
 string FunctionalApproach(string a, string b)
-    => ParseInt(a)                              // Result<int, string>
-        .Bind(x => ParseInt(b).Map(y => (x, y))) // Result<(int,int), string>
-        .Bind(t => SafeDivide(t.Item1, t.Item2)) // Result<int, string>
-        .Map(v => v.ToString())                  // Result<string, string>
+    => ParseInt(a)                              // Result&lt;int, string&gt;
+        .Bind(x => ParseInt(b).Map(y => (x, y))) // Result&lt;(int,int), string&gt;
+        .Bind(t => SafeDivide(t.Item1, t.Item2)) // Result&lt;int, string&gt;
+        .Map(v => v.ToString())                  // Result&lt;string, string&gt;
         .Match(
             ok: s => s,
             err: e => e
@@ -206,7 +153,7 @@ Result<User, string> ValidateName(string name)
 
 Result<User, string> CreateUser(string name, int age, string email)
     => ParseInt(age.ToString())
-        .Ensure(a => a >= 0 && a <= 150, "Invalid age")
+        .Ensure(a => a >= 0 && a &lt;= 150, "Invalid age")
         .Bind(a => string.IsNullOrEmpty(email)
             ? new Err<User, string>("Email required")
             : new Ok<User, string>(new User(name, a, email)));
@@ -247,7 +194,7 @@ Result 适合「预期的、可恢复的」错误（解析失败、验证失败�
 
 **误区：Result 无法累积多个错误**
 
-基础的 Bind 链式在遇到第一个 Error 时短路——只报告第一个错误。如果需要累积所有验证错误（如表单验证：姓名、年龄、邮箱同时校验），需要「验证器组合」模式：用 `Result<T, List<E>>` 累积错误列表，或用 `Validation<T, E>` 类型（类似 Result 但 Error 累积而非短路）。C# 中可以用 `List<E>` 作为错误类型，在 Bind 中合并错误列表。这比 try-catch 一层一层 catch 更灵活。
+基础的 Bind 链式在遇到第一个 Error 时短路——只报告第一个错误。如果需要累积所有验证错误（如表单验证：姓名、年龄、邮箱同时校验），需要「验证器组合」模式：用 `Result<T, List&lt;E&gt;>` 累积错误列表，或用 `Validation<T, E>` 类型（类似 Result 但 Error 累积而非短路）。C# 中可以用 `List&lt;E&gt;` 作为错误类型，在 Bind 中合并错误列表。这比 try-catch 一层一层 catch 更灵活。
 
 </Callout>
 
@@ -258,23 +205,23 @@ Result 适合「预期的、可恢复的」错误（解析失败、验证失败�
 <Answer>
 
 ```csharp
-Result<string, string> ReadFileSafe(string path)
+Result&lt;string, string&gt; ReadFileSafe(string path)
 {
     try
     {
-        return new Ok<string, string>(File.ReadAllText(path));
+        return new Ok&lt;string, string&gt;(File.ReadAllText(path));
     }
     catch (FileNotFoundException)
     {
-        return new Err<string, string>($"File not found: {path}");
+        return new Err&lt;string, string&gt;($"File not found: {path}");
     }
     catch (UnauthorizedAccessException)
     {
-        return new Err<string, string>($"Access denied: {path}");
+        return new Err&lt;string, string&gt;($"Access denied: {path}");
     }
     catch (Exception ex)
     {
-        return new Err<string, string>($"Unexpected error: {ex.Message}");
+        return new Err&lt;string, string&gt;($"Unexpected error: {ex.Message}");
     }
 }
 
@@ -305,7 +252,7 @@ var content = ReadFileSafe("config.json")
 | 解析用户输入 | `int.Parse(s)` 抛异常，catch 处理。但用户输入错误是「预期的」 | `TryParse` 返回 bool，或 `ParseInt` 返回 Result。错误是预期的 | **Result**——解析失败是预期错误，不应该用异常处理 |
 | 数据库查询 | 连接失败、查询超时抛异常。catch 处理。但有些错误是预期的（记录不存在） | 连接失败用 try-catch 包装为 Result。记录不存在返回 Ok(null) 或 Err | **混合**——基础设施错误用 try-catch 转为 Result，业务逻辑（记录不存在）直接用 Result |
 | 除零运算 | `x / 0` 抛 DivideByZeroException。但除零是「可预防的」 | `SafeDivide(a, b)` 返回 Result，b=0 时返回 Err | **Result**——除零是可预防的逻辑错误，用前置检查 + Result 比异常更高效 |
-| 空引用防护 | `obj.Foo()` 抛 NullReferenceException。这是「程序错误」 | Option<T> 替代 null。但 NRE 不应该被「处理」 | **异常**——空引用是程序 bug（应该修复代码），不是预期错误。用 Option<T> 预防 null，不用 Result 处理 NRE |
+| 空引用防护 | `obj.Foo()` 抛 NullReferenceException。这是「程序错误」 | Option&lt;T&gt; 替代 null。但 NRE 不应该被「处理」 | **异常**——空引用是程序 bug（应该修复代码），不是预期错误。用 Option&lt;T&gt; 预防 null，不用 Result 处理 NRE |
 
 原则总结：
 1. **预期错误用 Result**——解析失败、验证失败、业务规则违反。这些是正常流程的一部分

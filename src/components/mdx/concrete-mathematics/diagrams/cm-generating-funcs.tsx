@@ -19,7 +19,7 @@ export function CmGeneratingFuncsDiagram() {
     <text x="54" y="114" fontSize="11" fill="var(--text-primary)">G(z) = Σ a_n z^n</text>
     <text x="54" y="131" fontSize="11" fill="var(--text-primary)">a_n+b_n → G_a+G_b</text>
     <text x="54" y="148" fontSize="11" fill="var(--text-primary)">a*b(卷积) → G_a·G_b</text>
-    <text x="54" y="165" fontSize="11" fill="var(--text-primary)">位移：a_{n+k} → (G - 前 k 项)/z^k</text>
+    <text x="54" y="165" fontSize="11" fill="var(--text-primary)">位移：a_&#123;n+k&#125; → (G - 前 k 项)/z^k</text>
     <rect x="370" y="70" width="310" height="150" rx="8" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1" strokeOpacity="0.4" />
     <text x="384" y="92" fontSize="12" fontWeight="700" fill="var(--success)">指数生成函数 EGF</text>
     <text x="384" y="114" fontSize="11" fill="var(--text-primary)">EG(z) = Σ a_n z^n/n!</text>

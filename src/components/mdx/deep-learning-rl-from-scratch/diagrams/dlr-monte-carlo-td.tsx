@@ -42,7 +42,7 @@ export function DlrMonteCarloTdDiagram() {
       {/* TD误差 */}
       <text x="400" y="250" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">TD 误差（TD Error）</text>
       <rect x="100" y="265" width="600" height="50" rx="10" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
-      <text x="400" y="288" textAnchor="middle" fontSize="13" fontWeight="600" fill="#92400e">delta_t = r_{t+1} + gamma * V(s_{t+1}) - V(s_t)</text>
+      <text x="400" y="288" textAnchor="middle" fontSize="13" fontWeight="600" fill="#92400e">delta_t = r_&#123;t+1&#125; + gamma * V(s_&#123;t+1&#125;) - V(s_t)</text>
       <text x="400" y="306" textAnchor="middle" fontSize="11" fill="#475569">TD 误差衡量当前估计与新观测的偏差，是 TD 学习的核心信号</text>
 
       {/* n步 TD */}

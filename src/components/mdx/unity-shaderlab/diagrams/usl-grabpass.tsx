@@ -31,12 +31,12 @@ export function UslGrabpassDiagram() {
           <line x1="610" y1="83" x2="640" y2="83" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#usl-grabpass-arrow)" />
 
           <rect x="30" y="130" width="310" height="70" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="185" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">GrabPass {}</text>
+          <text x="185" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">GrabPass &#123;&#125;</text>
           <text x="185" y="168" textAnchor="middle" fontSize="10" fill="var(--text-primary)">每对象每帧抓取一次</text>
           <text x="185" y="185" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">开销大，不推荐</text>
 
           <rect x="380" y="130" width="310" height="70" rx="8" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="535" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">GrabPass { "_GrabTex" }</text>
+          <text x="535" y="150" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">GrabPass &#123; "_GrabTex" &#125;</text>
           <text x="535" y="168" textAnchor="middle" fontSize="10" fill="var(--text-primary)">只抓取一次，所有对象共享</text>
           <text x="535" y="185" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">性能更好，推荐</text>
 

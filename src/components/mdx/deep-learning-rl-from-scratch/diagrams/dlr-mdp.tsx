@@ -54,11 +54,11 @@ export function DlrMdpDiagram() {
       {/* 马尔可夫性质 */}
       <rect x="60" y="310" width="680" height="60" rx="10" fill="#eff6ff" stroke="#2563eb" strokeWidth="1.5" />
       <text x="400" y="335" textAnchor="middle" fontSize="13" fontWeight="700" fill="#1e40af">马尔可夫性质</text>
-      <text x="400" y="356" textAnchor="middle" fontSize="11" fill="#475569">P(s_{t+1} | s_t, a_t, s_{t-1}, a_{t-1}, ...) = P(s_{t+1} | s_t, a_t)</text>
+      <text x="400" y="356" textAnchor="middle" fontSize="11" fill="#475569">P(s_&#123;t+1&#125; | s_t, a_t, s_&#123;t-1&#125;, a_&#123;t-1&#125;, ...) = P(s_&#123;t+1&#125; | s_t, a_t)</text>
 
       {/* 回报与折扣 */}
       <rect x="60" y="390" width="680" height="50" rx="10" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
-      <text x="400" y="412" textAnchor="middle" fontSize="13" fontWeight="700" fill="#92400e">折扣回报：G_t = r_{t+1} + gamma * r_{t+2} + gamma^2 * r_{t+3} + ...</text>
+      <text x="400" y="412" textAnchor="middle" fontSize="13" fontWeight="700" fill="#92400e">折扣回报：G_t = r_&#123;t+1&#125; + gamma * r_&#123;t+2&#125; + gamma^2 * r_&#123;t+3&#125; + ...</text>
       <text x="400" y="430" textAnchor="middle" fontSize="11" fill="#475569">gamma 在 (0,1) 越接近1越重视长远回报</text>
     </svg>
   );

@@ -37,7 +37,7 @@ export function NdgModuleSystemDiagram() {
           <rect x="50" y="178" width="290" height="50" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
           <text x="60" y="194" fontSize="9" fill="var(--text-tertiary)">导入</text>
           <text x="60" y="210" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">const fs = require("fs")</text>
-          <text x="60" y="222" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">const {x} = require("./m")</text>
+          <text x="60" y="222" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">const &#123;x&#125; = require("./m")</text>
 
           <rect x="50" y="238" width="290" height="68" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
           <text x="60" y="254" fontSize="9" fill="var(--text-tertiary)">require 机制</text>
@@ -65,7 +65,7 @@ export function NdgModuleSystemDiagram() {
           <rect x="400" y="178" width="290" height="50" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
           <text x="410" y="194" fontSize="9" fill="var(--text-tertiary)">导入</text>
           <text x="410" y="210" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">import fs from "fs"</text>
-          <text x="410" y="222" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">import {x} from "./m.js"</text>
+          <text x="410" y="222" fontSize="10" fontFamily="monospace" fill="var(--text-primary)">import &#123;x&#125; from "./m.js"</text>
 
           <rect x="400" y="238" width="290" height="68" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
           <text x="410" y="254" fontSize="9" fill="var(--text-tertiary)">加载机制</text>

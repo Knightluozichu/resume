@@ -51,8 +51,8 @@ export function RubFinalReviewDiagram() {
           <text x={60} y={168} fontSize="13" fontWeight="700" fill={success}>第2层：核心语法</text>
           <text x={60} y={186} fontSize="11" fill={primary}>字符串（可变/插值/freeze）· Symbol（不可变/唯一）</text>
           <text x={60} y={202} fontSize="11" fill={primary}>控制流（if/unless/case-when）· 迭代器（each/times/map）· 只有 nil 和 false 为假</text>
-          <text x={520} y={184} fontSize="11" fontWeight="600" fill={success}>"#{}"</text>
-          <text x={520} y={200} fontSize="11" fontWeight="600" fill={success}>each {}</text>
+          <text x={520} y={184} fontSize="11" fontWeight="600" fill={success}>"#&#123;&#125;"</text>
+          <text x={520} y={200} fontSize="11" fontWeight="600" fill={success}>each &#123;&#125;</text>
 
           {/* 箭头 */}
           <line x1={360} y1={214} x2={360} y2={228} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rub-fr-arrow)" />

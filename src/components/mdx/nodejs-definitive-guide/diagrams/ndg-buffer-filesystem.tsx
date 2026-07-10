@@ -68,7 +68,7 @@ export function NdgBufferFilesystemDiagram() {
           <rect x="400" y="204" width="290" height="52" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
           <text x="410" y="220" fontSize="9" fill="var(--text-tertiary)">Promise（推荐）</text>
           <text x="410" y="236" fontSize="9" fontFamily="monospace" fill="var(--text-secondary)">fs.promises.readFile(path)</text>
-          <text x="410" y="250" fontSize="8" fill="var(--text-tertiary)">const {readFile} = fs.promises; await</text>
+          <text x="410" y="250" fontSize="8" fill="var(--text-tertiary)">const &#123;readFile&#125; = fs.promises; await</text>
 
           {/* 底部：路径处理 */}
           <rect x="30" y="286" width="680" height="100" rx="12" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />

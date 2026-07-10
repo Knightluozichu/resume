@@ -31,7 +31,7 @@ export function SlmBoostingDiagram() {
       <text x="200" y="72" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">AdaBoost 算法</text>
 
       <rect x="40" y="84" width="320" height="44" rx="8" fill="url(#slm-bst-blue)" opacity="0.1" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="200" y="111" textAnchor="middle" fontSize="12" fill="#1e40af">1. 初始化样本权值 D1 = {1/N}</text>
+      <text x="200" y="111" textAnchor="middle" fontSize="12" fill="#1e40af">1. 初始化样本权值 D1 = &#123;1/N&#125;</text>
 
       <path d="M200 128 L200 136" stroke="#64748b" strokeWidth="2" markerEnd="url(#slm-bst-arrow)" />
 
@@ -58,7 +58,7 @@ export function SlmBoostingDiagram() {
 
       <rect x="420" y="84" width="280" height="56" rx="8" fill="url(#slm-bst-blue)" opacity="0.1" stroke="#2563eb" strokeWidth="1.5" />
       <text x="560" y="108" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">前向分步算法</text>
-      <text x="560" y="128" textAnchor="middle" fontSize="11" fill="#475569">f_m(x) = f_{m-1}(x) + αm Gm(x)</text>
+      <text x="560" y="128" textAnchor="middle" fontSize="11" fill="#475569">f_m(x) = f_&#123;m-1&#125;(x) + αm Gm(x)</text>
 
       <path d="M560 140 L560 148" stroke="#64748b" strokeWidth="2" markerEnd="url(#slm-bst-arrow)" />
 

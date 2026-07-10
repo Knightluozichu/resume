@@ -39,7 +39,7 @@ export function MlwHypothesisSpaceDiagram() {
       <rect x="60" y="184" width="280" height="44" rx="8" fill="url(#mlw-hs-purple)" opacity="0.12" stroke="#7c3aed" strokeWidth="1.5" />
       <text x="200" y="211" textAnchor="middle" fontSize="12" fill="#5b21b6">版本空间：与 D 一致的假设集合</text>
 
-      <path d="M200 228 L200 236" stroke="#64748b" strokeWidth="2" markerEnd="url(#mlw-lm-arrow)" markerEnd="url(#mlw-hs-arrow)" />
+      <path d="M200 228 L200 236" stroke="#64748b" strokeWidth="2" markerEnd="url(#mlw-hs-arrow)" />
 
       <rect x="60" y="238" width="280" height="44" rx="8" fill="url(#mlw-hs-amber)" opacity="0.12" stroke="#f59e0b" strokeWidth="1.5" />
       <text x="200" y="265" textAnchor="middle" fontSize="12" fill="#92400e">归纳偏好：从版本空间中选一个</text>

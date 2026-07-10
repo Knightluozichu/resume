@@ -43,7 +43,7 @@ export function CntRoutingAlgorithmsDiagram() {
       <line x1="430" y1="86" x2="750" y2="86" stroke="#f59e0b" strokeWidth="1" opacity="0.3" />
       <text x="430" y="106" fontSize="11" fill="#78350f">信息：仅邻居距离向量</text>
       <text x="430" y="126" fontSize="11" fill="#78350f">计算：Bellman-Ford方程迭代</text>
-      <text x="430" y="146" fontSize="11" fill="#78350f">公式：Dx(y) = min{c(x,v)+Dv(y)}</text>
+      <text x="430" y="146" fontSize="11" fill="#78350f">公式：Dx(y) = min&#123;c(x,v)+Dv(y)&#125;</text>
       <text x="430" y="166" fontSize="11" fill="#78350f">优点：消息开销小、存储低</text>
       <text x="430" y="186" fontSize="11" fill="#78350f">缺点：收敛慢、计数到无穷问题</text>
       <text x="430" y="206" fontSize="11" fontWeight="600" fill="#b45309">代表协议：RIP（毒性逆转解决环路）</text>

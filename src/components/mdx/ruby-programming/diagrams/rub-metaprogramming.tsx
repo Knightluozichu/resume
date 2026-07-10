@@ -48,7 +48,7 @@ export function RubMetaprogrammingDiagram() {
           <rect x={368} y={68} width={320} height={92} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
           <text x={380} y={88} fontSize="12" fontWeight="700" fill={success}>define_method（动态方法）</text>
           <text x={380} y={108} fontSize="11" fill={primary}>{`[:name, :age, :email].each do |m|`}</text>
-          <text x={380} y={124} fontSize="11" fill={primary}>  define_method(m) { instance_var_get("@#{m}") }</text>
+          <text x={380} y={124} fontSize="11" fill={primary}>  define_method(m) &#123; instance_var_get("@#&#123;m&#125;") &#125;</text>
           <text x={380} y={140} fontSize="11" fill={primary}>end</text>
           <text x={380} y={156} fontSize="10" fill={secondary}># 批量生成 getter，无需手写</text>
 

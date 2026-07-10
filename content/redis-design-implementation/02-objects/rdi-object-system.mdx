@@ -58,7 +58,7 @@ typedef struct redisObject {
 | 类型 | 编码 | 底层结构 | 适用场景 |
 |------|------|----------|----------|
 | string | int | long整数 | 值为整数 |
-| string | embstr | SDS（与Object连体） | 短字符串(<=44B) |
+| string | embstr | SDS（与Object连体） | 短字符串(&lt;=44B) |
 | string | raw | SDS（独立分配） | 长字符串(>44B) |
 | list | ziplist | 压缩列表 | 元素少且短 |
 | list | linkedlist | 双端链表 | 元素多或长 |
@@ -215,13 +215,13 @@ Redis在启动时预创建0-9999的整数字符串对象，多个键引用同一
 **问题 1**：Redis的五种对象类型各自支持哪些编码？编码转换的触发条件是什么？
 
 <Answer>
-五种类型与编码：①string——int（整数值）、embstr（短字符串<=44B，redisObject与SDS连体分配）、raw（长字符串>44B，分开分配）；②list——ziplist（元素少且短）、linkedlist（元素多或长）；③hash——ziplist（字段少且值短）、hashtable（字段多或值长）；④set——intset（全整数且少）、hashtable（含非整数或多）；⑤zset——ziplist（元素少且短）、skiplist+dict（元素多或长）。编码转换由配置阈值触发：hash-max-ziplist-entries(512)/value(64)、list-max-ziplist-entries(512)/value(64)、zset-max-ziplist-entries(128)/value(64)、set-max-intset-entries(512)。转换单向不可逆，小→大。
+五种类型与编码：①string——int（整数值）、embstr（短字符串&lt;=44B，redisObject与SDS连体分配）、raw（长字符串>44B，分开分配）；②list——ziplist（元素少且短）、linkedlist（元素多或长）；③hash——ziplist（字段少且值短）、hashtable（字段多或值长）；④set——intset（全整数且少）、hashtable（含非整数或多）；⑤zset——ziplist（元素少且短）、skiplist+dict（元素多或长）。编码转换由配置阈值触发：hash-max-ziplist-entries(512)/value(64)、list-max-ziplist-entries(512)/value(64)、zset-max-ziplist-entries(128)/value(64)、set-max-intset-entries(512)。转换单向不可逆，小→大。
 </Answer>
 
 **问题 2**：embstr和raw编码的区别是什么？为什么embstr是只读的？
 
 <Answer>
-embstr：redisObject结构体和SDS在一块连续内存中分配（1次malloc），缓存友好，适合短字符串（<=44字节）。raw：redisObject和SDS分别分配（2次malloc），适合长字符串。embstr只读的原因：embstr的redisObject和SDS在连续内存中，修改字符串内容需要realloc可能移动整块内存，还要更新redisObject的ptr指针。为了简化实现，Redis规定embstr是只读的——任何修改操作（如APPEND、SETRANGE）都会先将embstr转为raw再修改。44字节的由来：jemalloc的64字节分配块，减去redisObject(16B)+SDS header(3B)+'\0'(1B) = 44字节恰好放下。
+embstr：redisObject结构体和SDS在一块连续内存中分配（1次malloc），缓存友好，适合短字符串（&lt;=44字节）。raw：redisObject和SDS分别分配（2次malloc），适合长字符串。embstr只读的原因：embstr的redisObject和SDS在连续内存中，修改字符串内容需要realloc可能移动整块内存，还要更新redisObject的ptr指针。为了简化实现，Redis规定embstr是只读的——任何修改操作（如APPEND、SETRANGE）都会先将embstr转为raw再修改。44字节的由来：jemalloc的64字节分配块，减去redisObject(16B)+SDS header(3B)+'\0'(1B) = 44字节恰好放下。
 </Answer>
 
 **问题 3**：zset为什么同时使用跳跃表和字典？只用一种行不行？

@@ -28,40 +28,40 @@ export function RplConcurrencyDiagram() {
           aria-label="Rust 并发编程。Send/Sync 标记保证线程安全，Arc<Mutex<T>> 实现共享可变状态。所有权系统编译期消除数据竞争。"
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>并发编程：Send/Sync 与 Arc<Mutex></text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>所有权系统编译期消除数据竞争</text>
-          <rect x={115} y={76} width={150} height={160} rx="8" fill={elevated} stroke={var(--accent)} strokeWidth="1.2" />
-          <text x={190} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill={var(--accent)}>Send/Sync</text>
-          <text x={190} y={118} textAnchor="middle" fontSize="10" fill={secondary}>Send: 可转移</text>
-          <text x={190} y={136} textAnchor="middle" fontSize="10" fill={secondary}>Sync: 可共享&</text>
-          <text x={190} y={154} textAnchor="middle" fontSize="10" fill={secondary}>编译期验证</text>
-          <text x={190} y={172} textAnchor="middle" fontSize="10" fill={secondary}>大部分自动实现</text>
-          <line x1={265} y1={156} x2={285} y2={156} stroke={var(--accent)} strokeWidth="1.2" markerEnd="url(#fd-a-0)" />
-          <rect x={285} y={76} width={150} height={160} rx="8" fill={elevated} stroke={var(--success)} strokeWidth="1.2" />
-          <text x={360} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill={var(--success)}>Arc<T></text>
-          <text x={360} y={118} textAnchor="middle" fontSize="10" fill={secondary}>原子引用计数</text>
-          <text x={360} y={136} textAnchor="middle" fontSize="10" fill={secondary}>多线程共享所有权</text>
-          <text x={360} y={154} textAnchor="middle" fontSize="10" fill={secondary}>提供 &T 只读</text>
-          <text x={360} y={172} textAnchor="middle" fontSize="10" fill={secondary}>最后一个 drop 释放</text>
-          <line x1={435} y1={156} x2={455} y2={156} stroke={var(--success)} strokeWidth="1.2" markerEnd="url(#fd-a-1)" />
-          <rect x={455} y={76} width={150} height={160} rx="8" fill={elevated} stroke={var(--warning)} strokeWidth="1.2" />
-          <text x={530} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill={var(--warning)}>Mutex<T></text>
-          <text x={530} y={118} textAnchor="middle" fontSize="10" fill={secondary}>互斥锁保护</text>
-          <text x={530} y={136} textAnchor="middle" fontSize="10" fill={secondary}>lock() 返回 Guard</text>
-          <text x={530} y={154} textAnchor="middle" fontSize="10" fill={secondary}>RAII 自动解锁</text>
-          <text x={530} y={172} textAnchor="middle" fontSize="10" fill={secondary}>内部可变性</text>
+          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`并发编程：Send/Sync 与 Arc<Mutex>`}</text>
+          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>{`所有权系统编译期消除数据竞争`}</text>
+          <rect x={115} y={76} width={150} height={160} rx="8" fill={elevated} stroke="var(--accent)" strokeWidth="1.2" />
+          <text x={190} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">{`Send/Sync`}</text>
+          <text x={190} y={118} textAnchor="middle" fontSize="10" fill={secondary}>{`Send: 可转移`}</text>
+          <text x={190} y={136} textAnchor="middle" fontSize="10" fill={secondary}>{`Sync: 可共享&`}</text>
+          <text x={190} y={154} textAnchor="middle" fontSize="10" fill={secondary}>{`编译期验证`}</text>
+          <text x={190} y={172} textAnchor="middle" fontSize="10" fill={secondary}>{`大部分自动实现`}</text>
+          <line x1={265} y1={156} x2={285} y2={156} stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#fd-a-0)" />
+          <rect x={285} y={76} width={150} height={160} rx="8" fill={elevated} stroke="var(--success)" strokeWidth="1.2" />
+          <text x={360} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">{`Arc<T>`}</text>
+          <text x={360} y={118} textAnchor="middle" fontSize="10" fill={secondary}>{`原子引用计数`}</text>
+          <text x={360} y={136} textAnchor="middle" fontSize="10" fill={secondary}>{`多线程共享所有权`}</text>
+          <text x={360} y={154} textAnchor="middle" fontSize="10" fill={secondary}>{`提供 &T 只读`}</text>
+          <text x={360} y={172} textAnchor="middle" fontSize="10" fill={secondary}>{`最后一个 drop 释放`}</text>
+          <line x1={435} y1={156} x2={455} y2={156} stroke="var(--success)" strokeWidth="1.2" markerEnd="url(#fd-a-1)" />
+          <rect x={455} y={76} width={150} height={160} rx="8" fill={elevated} stroke="var(--warning)" strokeWidth="1.2" />
+          <text x={530} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">{`Mutex<T>`}</text>
+          <text x={530} y={118} textAnchor="middle" fontSize="10" fill={secondary}>{`互斥锁保护`}</text>
+          <text x={530} y={136} textAnchor="middle" fontSize="10" fill={secondary}>{`lock() 返回 Guard`}</text>
+          <text x={530} y={154} textAnchor="middle" fontSize="10" fill={secondary}>{`RAII 自动解锁`}</text>
+          <text x={530} y={172} textAnchor="middle" fontSize="10" fill={secondary}>{`内部可变性`}</text>
           <defs>
-            <marker id="fd-a-0" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill={var(--accent)} /></marker>
-            <marker id="fd-a-1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill={var(--success)} /></marker>
+            <marker id="fd-a-0" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="var(--accent)" /></marker>
+            <marker id="fd-a-1" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="var(--success)" /></marker>
           </defs>
           <line x1={32} y1={264} x2={VIEW_W - 32} y2={264} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={398} textAnchor="middle" fontSize="11" fill={secondary}>Arc<Mutex<T>> = 共享所有权 + 安全可变 = 线程安全共享可变状态</text>
-          <text x={VIEW_W / 2} y={414} textAnchor="middle" fontSize="11" fill={secondary}>避免死锁：固定锁顺序 · 缩短作用域 · channel 替代锁</text>
+          <text x={VIEW_W / 2} y={398} textAnchor="middle" fontSize="11" fill={secondary}>{`Arc<Mutex<T>> = 共享所有权 + 安全可变 = 线程安全共享可变状态`}</text>
+          <text x={VIEW_W / 2} y={414} textAnchor="middle" fontSize="11" fill={secondary}>{`避免死锁：固定锁顺序 · 缩短作用域 · channel 替代锁`}</text>
 
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        Send/Sync 编译期保证线程安全，Arc<Mutex<T>> 实现共享可变状态。
+        Send/Sync 编译期保证线程安全，Arc&lt;Mutex&lt;T&gt;&gt; 实现共享可变状态。
       </figcaption>
     </figure>
   );

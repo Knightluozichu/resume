@@ -46,7 +46,7 @@ export function DnaWordEmbeddingsDiagram() {
       <text x="200" y="243" textAnchor="middle" fontSize="11" fontWeight="600" fill="#1e40af">sat（目标词）</text>
 
       <text x="200" y="280" textAnchor="middle" fontSize="10" fill="#475569">原理：用上下文预测中心词</text>
-      <text x="200" y="296" textAnchor="middle" fontSize="10" fill="#475569">输入：{the, cat, on, mat}</text>
+      <text x="200" y="296" textAnchor="middle" fontSize="10" fill="#475569">输入：&#123;the, cat, on, mat&#125;</text>
       <text x="200" y="312" textAnchor="middle" fontSize="10" fill="#475569">输出：sat</text>
       <text x="200" y="344" textAnchor="middle" fontSize="10" fontWeight="600" fill="#1e40af">适合：高频词，小语料快</text>
 
@@ -78,7 +78,7 @@ export function DnaWordEmbeddingsDiagram() {
 
       <text x="600" y="280" textAnchor="middle" fontSize="10" fill="#475569">原理：用中心词预测上下文</text>
       <text x="600" y="296" textAnchor="middle" fontSize="10" fill="#475569">输入：sat</text>
-      <text x="600" y="312" textAnchor="middle" fontSize="10" fill="#475569">输出：{the, cat, on, mat}</text>
+      <text x="600" y="312" textAnchor="middle" fontSize="10" fill="#475569">输出：&#123;the, cat, on, mat&#125;</text>
       <text x="600" y="344" textAnchor="middle" fontSize="10" fontWeight="600" fill="#5b21b6">适合：低频词，大语料效果好</text>
 
       {/* 底部：分布式假设 */}

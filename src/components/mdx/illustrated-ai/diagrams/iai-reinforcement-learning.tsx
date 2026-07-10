@@ -54,7 +54,7 @@ export function IaiReinforcementLearningDiagram() {
 
       {/* State+Reward 箭头：Env → Agent */}
       <path d="M500 155 L300 155" stroke="#f59e0b" strokeWidth="2.5" markerEnd="url(#iai-rl-arrow-orange)" />
-      <text x="400" y="174" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">状态 s_{t+1} + 奖励 r_t</text>
+      <text x="400" y="174" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">状态 s_&#123;t+1&#125; + 奖励 r_t</text>
 
       {/* MDP 要素 */}
       <rect x="40" y="210" width="370" height="120" rx="10" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />

@@ -60,7 +60,7 @@ export function PccFunctionsDiagram() {
 
           {/* 函数体 */}
           <rect x={60} y={128} width={280} height={52} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={200} y={146} textAnchor="middle" fontSize="11" fill={primary}>message = f"{msg}, {name}!"</text>
+          <text x={200} y={146} textAnchor="middle" fontSize="11" fill={primary}>message = f"&#123;msg&#125;, &#123;name&#125;!"</text>
           <text x={200} y={166} textAnchor="middle" fontSize="11" fill={primary}>return message</text>
 
           <text x={200} y={198} textAnchor="middle" fontSize="10" fill={secondary}>缩进4格表示函数体</text>

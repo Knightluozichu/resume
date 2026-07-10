@@ -52,7 +52,7 @@ export function DlrRlBasicsDiagram() {
       {/* 观测+奖励箭头：环境 → 智能体 */}
       <path d="M500 210 L300 210" stroke="url(#dlr-rb-obs)" strokeWidth="3" markerEnd="url(#dlr-rb-arrow-l)" />
       <rect x="330" y="218" width="140" height="22" rx="6" fill="#f0fdf4" stroke="#059669" strokeWidth="1" />
-      <text x="400" y="233" textAnchor="middle" fontSize="12" fontWeight="600" fill="#065f46">状态 s_{t+1} + 奖励 r_{t+1}</text>
+      <text x="400" y="233" textAnchor="middle" fontSize="12" fontWeight="600" fill="#065f46">状态 s_&#123;t+1&#125; + 奖励 r_&#123;t+1&#125;</text>
 
       {/* 底部：RL三大要素 */}
       <text x="400" y="290" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">强化学习三大要素</text>

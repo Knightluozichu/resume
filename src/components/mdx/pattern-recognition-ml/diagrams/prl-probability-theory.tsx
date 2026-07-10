@@ -87,7 +87,7 @@ export function PrlProbabilityTheoryDiagram() {
 
       <rect x="580" y="382" width="180" height="60" rx="8" fill="#eff6ff" stroke="#2563eb" strokeWidth="1.5" />
       <text x="670" y="402" textAnchor="middle" fontSize="11" fontWeight="700" fill="#1e40af">指数族分布</text>
-      <text x="670" y="420" textAnchor="middle" fontSize="9" fill="#1e40af">统一框架 p(x|η)=h(x)g(η)e^{ηᵀu}</text>
+      <text x="670" y="420" textAnchor="middle" fontSize="9" fill="#1e40af">统一框架 p(x|η)=h(x)g(η)e^&#123;ηᵀu&#125;</text>
       <text x="670" y="434" textAnchor="middle" fontSize="9" fill="#1e40af">充分统计量 / 共轭</text>
 
       {/* 底部 */}

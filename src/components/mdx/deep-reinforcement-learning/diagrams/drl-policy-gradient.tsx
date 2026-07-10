@@ -71,7 +71,7 @@ export function DrlPolicyGradientDiagram() {
 
       <rect x="230" y="286" width="170" height="76" rx="8" fill="#faf5ff" stroke="#7c3aed" strokeWidth="1.5" />
       <text x="315" y="308" textAnchor="middle" fontSize="11" fontWeight="600" fill="#5b21b6">2. 计算回报</text>
-      <text x="315" y="326" textAnchor="middle" fontSize="10" fill="#475569">G_t = Σ γ^k r_{t+k+1}</text>
+      <text x="315" y="326" textAnchor="middle" fontSize="10" fill="#475569">G_t = Σ γ^k r_&#123;t+k+1&#125;</text>
       <text x="315" y="344" textAnchor="middle" fontSize="10" fill="#475569">折扣累积奖励</text>
 
       <path d="M400 324 L425 324" stroke="#64748b" strokeWidth="2" markerEnd="url(#drl-pg-arrow)" />

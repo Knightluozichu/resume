@@ -75,7 +75,7 @@ export function SlmLogisticRegressionDiagram() {
 
       <rect x="420" y="282" width="280" height="56" rx="8" fill="url(#slm-lr-green)" opacity="0.1" stroke="#059669" strokeWidth="1.5" />
       <text x="560" y="306" textAnchor="middle" fontSize="13" fontWeight="600" fill="#065f46">特征函数</text>
-      <text x="560" y="326" textAnchor="middle" fontSize="11" fill="#475569">fi(x,y) ∈ {0, 1}，约束经验期望=模型期望</text>
+      <text x="560" y="326" textAnchor="middle" fontSize="11" fill="#475569">fi(x,y) ∈ &#123;0, 1&#125;，约束经验期望=模型期望</text>
 
       {/* 底部：逻辑斯谛回归与最大熵的等价性 */}
       <rect x="40" y="358" width="720" height="56" rx="10" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />

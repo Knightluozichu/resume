@@ -21,33 +21,33 @@ export function RlcNeuralNetworksCDiagram() {
         </marker>
       </defs>
 
-      <text x="400" y="36" textAnchor="middle" fontSize="20" fontWeight="700" fill="#0f172a">神经网络C语言实现：前馈网络与前向传播</text>
+      <text x="400" y="36" textAnchor="middle" fontSize="20" fontWeight="700" fill="#0f172a">{`神经网络C语言实现：前馈网络与前向传播`}</text>
 
       {/* 网络结构 */}
-      <text x="200" y="72" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">网络结构 (输入2 → 隐藏3 → 输出2)</text>
+      <text x="200" y="72" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">{`网络结构 (输入2 → 隐藏3 → 输出2)`}</text>
 
       {/* 输入层 */}
-      <text x="120" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">输入层</text>
+      <text x="120" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">{`输入层`}</text>
       <circle cx="120" cy="140" r="20" fill="url(#rlc-nn-input)" opacity="0.85" />
-      <text x="120" y="145" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">x0</text>
+      <text x="120" y="145" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`x0`}</text>
       <circle cx="120" cy="220" r="20" fill="url(#rlc-nn-input)" opacity="0.85" />
-      <text x="120" y="225" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">x1</text>
+      <text x="120" y="225" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`x1`}</text>
 
       {/* 隐藏层 */}
-      <text x="340" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#5b21b6">隐藏层</text>
+      <text x="340" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#5b21b6">{`隐藏层`}</text>
       <circle cx="340" cy="110" r="20" fill="url(#rlc-nn-hidden)" opacity="0.85" />
-      <text x="340" y="115" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">h0</text>
+      <text x="340" y="115" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`h0`}</text>
       <circle cx="340" cy="180" r="20" fill="url(#rlc-nn-hidden)" opacity="0.85" />
-      <text x="340" y="185" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">h1</text>
+      <text x="340" y="185" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`h1`}</text>
       <circle cx="340" cy="250" r="20" fill="url(#rlc-nn-hidden)" opacity="0.85" />
-      <text x="340" y="255" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">h2</text>
+      <text x="340" y="255" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`h2`}</text>
 
       {/* 输出层 */}
-      <text x="560" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">输出层</text>
+      <text x="560" y="100" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">{`输出层`}</text>
       <circle cx="560" cy="140" r="20" fill="url(#rlc-nn-output)" opacity="0.85" />
-      <text x="560" y="145" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">y0</text>
+      <text x="560" y="145" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`y0`}</text>
       <circle cx="560" cy="220" r="20" fill="url(#rlc-nn-output)" opacity="0.85" />
-      <text x="560" y="225" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">y1</text>
+      <text x="560" y="225" textAnchor="middle" fontSize="11" fill="#fff" fontWeight="600">{`y1`}</text>
 
       {/* 连接线 */}
       <g stroke="#94a3b8" strokeWidth="1" opacity="0.6">
@@ -66,41 +66,41 @@ export function RlcNeuralNetworksCDiagram() {
       </g>
 
       {/* 前向传播公式 */}
-      <text x="200" y="310" textAnchor="middle" fontSize="13" fontWeight="600" fill="#334155">前向传播</text>
+      <text x="200" y="310" textAnchor="middle" fontSize="13" fontWeight="600" fill="#334155">{`前向传播`}</text>
       <rect x="60" y="322" width="280" height="100" rx="8" fill="#eff6ff" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="200" y="346" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">z = W·x + b</text>
-      <text x="200" y="368" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">a = sigmoid(z) 或 relu(z)</text>
-      <text x="200" y="390" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">逐层计算: h → h → ... → y</text>
-      <text x="200" y="412" textAnchor="middle" fontSize="10" fill="#64748b">C中用二维数组存储权重矩阵</text>
+      <text x="200" y="346" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">{`z = W·x + b`}</text>
+      <text x="200" y="368" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">{`a = sigmoid(z) 或 relu(z)`}</text>
+      <text x="200" y="390" textAnchor="middle" fontSize="11" fill="#1e40af" fontFamily="monospace">{`逐层计算: h → h → ... → y`}</text>
+      <text x="200" y="412" textAnchor="middle" fontSize="10" fill="#64748b">{`C中用二维数组存储权重矩阵`}</text>
 
       {/* C语言数据结构 */}
-      <text x="560" y="310" textAnchor="middle" fontSize="13" fontWeight="600" fill="#334155">C语言数据结构</text>
+      <text x="560" y="310" textAnchor="middle" fontSize="13" fontWeight="600" fill="#334155">{`C语言数据结构`}</text>
       <rect x="420" y="322" width="280" height="100" rx="8" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-      <text x="440" y="346" fontSize="11" fill="#475569" fontFamily="monospace">typedef struct {</text>
-      <text x="450" y="364" fontSize="11" fill="#1e40af" fontFamily="monospace">double W[LAYER][NEURON][NEURON];</text>
-      <text x="450" y="382" fontSize="11" fill="#1e40af" fontFamily="monospace">double b[LAYER][NEURON];</text>
-      <text x="450" y="400" fontSize="11" fill="#1e40af" fontFamily="monospace">double a[LAYER][NEURON];</text>
-      <text x="440" y="418" fontSize="11" fill="#475569" fontFamily="monospace">} NeuralNetwork;</text>
+      <text x="440" y="346" fontSize="11" fill="#475569" fontFamily="monospace">{`typedef struct {`}</text>
+      <text x="450" y="364" fontSize="11" fill="#1e40af" fontFamily="monospace">{`double W[LAYER][NEURON][NEURON];`}</text>
+      <text x="450" y="382" fontSize="11" fill="#1e40af" fontFamily="monospace">{`double b[LAYER][NEURON];`}</text>
+      <text x="450" y="400" fontSize="11" fill="#1e40af" fontFamily="monospace">{`double a[LAYER][NEURON];`}</text>
+      <text x="440" y="418" fontSize="11" fill="#475569" fontFamily="monospace">{`} NeuralNetwork;`}</text>
 
       {/* 激活函数 */}
-      <text x="400" y="456" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">常用激活函数（C语言实现）</text>
+      <text x="400" y="456" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">{`常用激活函数（C语言实现）`}</text>
 
       <rect x="60" y="470" width="220" height="56" rx="8" fill="url(#rlc-nn-input)" opacity="0.12" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="170" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">Sigmoid</text>
-      <text x="170" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">1.0 / (1.0 + exp(-x))</text>
+      <text x="170" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#1e40af">{`Sigmoid`}</text>
+      <text x="170" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">{`1.0 / (1.0 + exp(-x))`}</text>
 
       <rect x="290" y="470" width="220" height="56" rx="8" fill="url(#rlc-nn-hidden)" opacity="0.12" stroke="#7c3aed" strokeWidth="1.5" />
-      <text x="400" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#5b21b6">ReLU</text>
-      <text x="400" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">x &gt; 0 ? x : 0</text>
+      <text x="400" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#5b21b6">{`ReLU`}</text>
+      <text x="400" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">{`x &gt; 0 ? x : 0`}</text>
 
       <rect x="520" y="470" width="220" height="56" rx="8" fill="url(#rlc-nn-output)" opacity="0.12" stroke="#f59e0b" strokeWidth="1.5" />
-      <text x="630" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">Tanh</text>
-      <text x="630" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">tanh(x)</text>
+      <text x="630" y="492" textAnchor="middle" fontSize="12" fontWeight="600" fill="#92400e">{`Tanh`}</text>
+      <text x="630" y="512" textAnchor="middle" fontSize="10" fill="#475569" fontFamily="monospace">{`tanh(x)`}</text>
 
       {/* 前向传播代码 */}
       <rect x="60" y="540" width="680" height="44" rx="8" fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
-      <text x="80" y="562" fontSize="11" fill="#475569" fontFamily="monospace">for (int j = 0; j &lt; n_out; j++) {</text>
-      <text x="80" y="578" fontSize="11" fill="#475569" fontFamily="monospace">  z = b[j]; for (int i = 0; i &lt; n_in; i++) z += W[j][i] * a[i];  a_out[j] = sigmoid(z); }</text>
+      <text x="80" y="562" fontSize="11" fill="#475569" fontFamily="monospace">{`for (int j = 0; j &lt; n_out; j++) {`}</text>
+      <text x="80" y="578" fontSize="11" fill="#475569" fontFamily="monospace">{`  z = b[j]; for (int i = 0; i &lt; n_in; i++) z += W[j][i] * a[i];  a_out[j] = sigmoid(z); }`}</text>
     </svg>
   );
 }

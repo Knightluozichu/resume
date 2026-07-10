@@ -82,7 +82,7 @@ export function DavNativeLayerDiagram() {
       <rect x="410" y="280" width="360" height="100" rx="10" fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
       <text x="590" y="304" textAnchor="middle" fontSize="13" fontWeight="700" fill="#92400e">动态注册（推荐）</text>
       <text x="590" y="326" textAnchor="middle" fontSize="11" fill="#78350f">JNI_OnLoad → RegisterNatives</text>
-      <text x="590" y="346" textAnchor="middle" fontSize="11" fill="#78350f">JNINativeMethod{name,签名,指针}</text>
+      <text x="590" y="346" textAnchor="middle" fontSize="11" fill="#78350f">JNINativeMethod&#123;name,签名,指针&#125;</text>
       <text x="590" y="366" textAnchor="middle" fontSize="10" fill="#92400e">注册即映射 · 查找快 · 函数名自定义</text>
 
       {/* Reference types */}

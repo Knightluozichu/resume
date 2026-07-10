@@ -1215,7 +1215,6 @@ import { umsPerformanceProfilingQuestions } from "./review/ums-performance-profi
 import { umsAssetManagementQuestions } from "./review/ums-asset-management";
 import { umsTeamCollaborationQuestions } from "./review/ums-team-collaboration";
 import { umsFinalReviewQuestions } from "./review/ums-final-review";
-import { uapLearningMapQuestions } from "./review/uap-learning-map";
 import { uapArchDesignQuestions } from "./review/uap-arch-design";
 import { uapDesignPatternsQuestions } from "./review/uap-design-patterns";
 import { uapMemoryManagementQuestions } from "./review/uap-memory-management";
@@ -1224,7 +1223,6 @@ import { uapUiFrameworkQuestions } from "./review/uap-ui-framework";
 import { uapNetworkSyncQuestions } from "./review/uap-network-sync";
 import { uapHotUpdateQuestions } from "./review/uap-hot-update";
 import { uapCiCdQuestions } from "./review/uap-ci-cd";
-import { uapFinalReviewQuestions } from "./review/uap-final-review";
 import { hfjLearningMapQuestions } from "./review/hfj-learning-map";
 import { hfjJavaBasicsQuestions } from "./review/hfj-java-basics";
 import { hfjOopFundamentalsQuestions } from "./review/hfj-oop-fundamentals";
@@ -2315,7 +2313,6 @@ import { cc2RefactoringIntegrationQuestions } from "./review/cc2-refactoring-int
 import { cc2DebuggingTuningQuestions } from "./review/cc2-debugging-tuning";
 import { cc2TeamCraftQuestions } from "./review/cc2-team-craft";
 import { cc2FinalReviewQuestions } from "./review/cc2-final-review";
-import { ppLearningMapQuestions } from "./review/pp-learning-map";
 import { ppPragmaticPhilosophyQuestions } from "./review/pp-pragmatic-philosophy";
 import { ppApproachQuestions } from "./review/pp-approach";
 import { ppBasicToolsQuestions } from "./review/pp-basic-tools";
@@ -2324,7 +2321,6 @@ import { ppConcurrencyQuestions } from "./review/pp-concurrency";
 import { ppMetaprogrammingQuestions } from "./review/pp-metaprogramming";
 import { ppCodecraftQuestions } from "./review/pp-codecraft";
 import { ppTeamDeliveryQuestions } from "./review/pp-team-delivery";
-import { ppFinalReviewQuestions } from "./review/pp-final-review";
 import { poaLearningMapQuestions } from "./review/poa-learning-map";
 import { poaLayeredArchitectureQuestions } from "./review/poa-layered-architecture";
 import { poaDomainLogicQuestions } from "./review/poa-domain-logic";
@@ -3661,7 +3657,6 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...umsAssetManagementQuestions,
   ...umsTeamCollaborationQuestions,
   ...umsFinalReviewQuestions,
-  ...uapLearningMapQuestions,
   ...uapArchDesignQuestions,
   ...uapDesignPatternsQuestions,
   ...uapMemoryManagementQuestions,
@@ -3670,7 +3665,6 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...uapNetworkSyncQuestions,
   ...uapHotUpdateQuestions,
   ...uapCiCdQuestions,
-  ...uapFinalReviewQuestions,
   ...gep1LearningMapQuestions,
   ...gep1EngineArchitectureQuestions,
   ...gep1MemorySystemQuestions,
@@ -4765,7 +4759,6 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...cc2DebuggingTuningQuestions,
   ...cc2TeamCraftQuestions,
   ...cc2FinalReviewQuestions,
-  ...ppLearningMapQuestions,
   ...ppPragmaticPhilosophyQuestions,
   ...ppApproachQuestions,
   ...ppBasicToolsQuestions,
@@ -4774,7 +4767,6 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ppMetaprogrammingQuestions,
   ...ppCodecraftQuestions,
   ...ppTeamDeliveryQuestions,
-  ...ppFinalReviewQuestions,
   ...poaLearningMapQuestions,
   ...poaLayeredArchitectureQuestions,
   ...poaDomainLogicQuestions,

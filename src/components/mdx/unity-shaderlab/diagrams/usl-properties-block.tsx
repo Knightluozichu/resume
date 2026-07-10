@@ -37,7 +37,7 @@ export function UslPropertiesBlockDiagram() {
 
           <rect x="30" y="160" width="660" height="56" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
           <text x="360" y="180" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">_Color("Main Color", Color) = (1,1,1,1)</text>
-          <text x="360" y="198" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">_MainTex("Texture", 2D) = "white" {}</text>
+          <text x="360" y="198" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">_MainTex("Texture", 2D) = "white" &#123;&#125;</text>
           <text x="360" y="212" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">格式: _Name("Label", Type) = Default</text>
 
           <rect x="48" y="250" width="624" height="56" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />

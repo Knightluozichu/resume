@@ -64,7 +64,7 @@ export function PrlFinalReviewDiagram() {
       <text x="387" y="375" textAnchor="middle" fontSize="9" fill="#5b21b6">w_MAP=(ΦᵀΦ+λI)⁻¹Φᵀt (ch2)</text>
 
       <rect x="510" y="356" width="250" height="30" rx="6" fill="#faf5ff" stroke="#7c3aed" strokeWidth="1" />
-      <text x="635" y="375" textAnchor="middle" fontSize="9" fill="#5b21b6">σ(a)=1/(1+e^{-a}) (ch3 逻辑回归)</text>
+      <text x="635" y="375" textAnchor="middle" fontSize="9" fill="#5b21b6">σ(a)=1/(1+e^&#123;-a&#125;) (ch3 逻辑回归)</text>
 
       <rect x="40" y="392" width="225" height="30" rx="6" fill="#faf5ff" stroke="#7c3aed" strokeWidth="1" />
       <text x="152" y="411" textAnchor="middle" fontSize="9" fill="#5b21b6">δ_j=h'(a_j)Σw_kjδ_k (ch4 BP)</text>

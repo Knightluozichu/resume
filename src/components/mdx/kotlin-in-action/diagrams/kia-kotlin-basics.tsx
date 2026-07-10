@@ -92,8 +92,8 @@ export function KiaKotlinBasicsDiagram() {
 
           <rect x="400" y="270" width="290" height="60" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
           <text x="545" y="290" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">字符串模板</text>
-          <text x="545" y="308" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">$变量名 / ${表达式}</text>
-          <text x="545" y="322" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">"Hello, $name! Length is ${name.length}"</text>
+          <text x="545" y="308" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">$变量名 / $&#123;表达式&#125;</text>
+          <text x="545" y="322" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">"Hello, $name! Length is $&#123;name.length&#125;"</text>
 
           <rect x="400" y="340" width="290" height="60" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1" />
           <text x="545" y="360" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">三引号字符串</text>

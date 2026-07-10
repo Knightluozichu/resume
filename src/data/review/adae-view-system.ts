@@ -5,36 +5,36 @@ export const adaeViewSystemQuestions: ReviewQuestion[] = [
     id: "adae-vs-1",
     chapter: "adae-view-system",
     level: 2,
-    question: "View的三大工作流程measure/layout/draw是如何被触发和执行的？",
+    question: `View的三大工作流程measure/layout/draw是如何被触发和执行的？`,
     answer:
-      "View三大流程由ViewRootImpl.performTraversals触发：①performTraversals在UI线程被调用（由Choreographer的VSYNC信号驱动），依次调用performMeasure→performLayout→performDraw。②measure——ViewGroup调用measureChild测量每个子View，子View的onMeasure根据父给的MeasureSpec和自己内容算出自己尺寸，调setMeasuredDimension保存；ViewGroup在自己onMeasure里遍历所有子View后再定自己的尺寸。③layout——ViewGroup.layout确定自己的四角（setFrame），然后在onLayout里遍历子View调child.layout(l,t,r,b)确定每个子的位置；View的onLayout一般为空（叶子无子）。④draw——draw(canvas)按顺序：绘背景→onDraw绘自己内容→dispatchDraw绘子View（ViewGroup重写）→绘装饰（滚动条/前景）。⑤触发重绘：invalidate走onDraw（只重绘，不重新measure/layout）；requestLayout走完整performTraversals（重新measure/layout/draw）。invalidate和requestLayout都会经Handler排到下一个VSYNC执行，不是同步的。",
+      `View三大流程由ViewRootImpl.performTraversals触发：①performTraversals在UI线程被调用（由Choreographer的VSYNC信号驱动），依次调用performMeasure→performLayout→performDraw。②measure——ViewGroup调用measureChild测量每个子View，子View的onMeasure根据父给的MeasureSpec和自己内容算出自己尺寸，调setMeasuredDimension保存；ViewGroup在自己onMeasure里遍历所有子View后再定自己的尺寸。③layout——ViewGroup.layout确定自己的四角（setFrame），然后在onLayout里遍历子View调child.layout(l,t,r,b)确定每个子的位置；View的onLayout一般为空（叶子无子）。④draw——draw(canvas)按顺序：绘背景→onDraw绘自己内容→dispatchDraw绘子View（ViewGroup重写）→绘装饰（滚动条/前景）。⑤触发重绘：invalidate走onDraw（只重绘，不重新measure/layout）；requestLayout走完整performTraversals（重新measure/layout/draw）。invalidate和requestLayout都会经Handler排到下一个VSYNC执行，不是同步的。`,
     tags: ["measure", "layout", "draw", "performTraversals"],
   },
   {
     id: "adae-vs-2",
     chapter: "adae-view-system",
     level: 2,
-    question: "MeasureSpec的三种模式是什么？子View的MeasureSpec如何由父View决定？",
+    question: `MeasureSpec的三种模式是什么？子View的MeasureSpec如何由父View决定？`,
     answer:
-      "MeasureSpec = 模式（高2位）+ 尺寸（低30位），三种模式：①EXACTLY——父已确定子的精确尺寸（match_parent或具体dp），子就用这个尺寸。②AT_MOST——父给了上限，子不能超过但可自由决定具体值（wrap_content），子根据自己内容算出一个不超过上限的尺寸。③UNSPECIFIED——父对子无限制，子想要多大就多大（少见，如ScrollView对其子View）。子MeasureSpec由父MeasureSpec和子LayoutParams共同决定：当子是具体dp→EXACTLY；子是match_parent→继承父模式与尺寸（父EXACTLY则子EXACTLY，父AT_MOST则子AT_MOST且尺寸=父尺寸）；子是wrap_content→若父EXACTLY则子AT_MOST且尺寸=父尺寸，若父AT_MOST则子AT_MOST且尺寸=父尺寸（不能超父）。这套机制保证了子View尺寸最终被父约束链收敛，避免越界。",
+      `MeasureSpec = 模式（高2位）+ 尺寸（低30位），三种模式：①EXACTLY——父已确定子的精确尺寸（match_parent或具体dp），子就用这个尺寸。②AT_MOST——父给了上限，子不能超过但可自由决定具体值（wrap_content），子根据自己内容算出一个不超过上限的尺寸。③UNSPECIFIED——父对子无限制，子想要多大就多大（少见，如ScrollView对其子View）。子MeasureSpec由父MeasureSpec和子LayoutParams共同决定：当子是具体dp→EXACTLY；子是match_parent→继承父模式与尺寸（父EXACTLY则子EXACTLY，父AT_MOST则子AT_MOST且尺寸=父尺寸）；子是wrap_content→若父EXACTLY则子AT_MOST且尺寸=父尺寸，若父AT_MOST则子AT_MOST且尺寸=父尺寸（不能超父）。这套机制保证了子View尺寸最终被父约束链收敛，避免越界。`,
     tags: ["MeasureSpec", "EXACTLY", "AT_MOST", "wrap_content"],
   },
   {
     id: "adae-vs-3",
     chapter: "adae-view-system",
     level: 3,
-    question: "Android触摸事件分发机制是怎样的？dispatchTouchEvent/onInterceptTouchEvent/onTouchEvent如何协作？",
+    question: `Android触摸事件分发机制是怎样的？dispatchTouchEvent/onInterceptTouchEvent/onTouchEvent如何协作？`,
     answer:
-      "事件分发三方法协作：①dispatchTouchEvent——所有View/ViewGroup都有，事件先到这里。Activity.dispatchTouchEvent → Window → DecorView → 顶层ViewGroup逐层向下分发。返回true表示事件被消费。②onInterceptTouchEvent——只有ViewGroup有，在dispatchTouchEvent内部调用，判断是否拦截。返回true拦截（事件交给自己onTouchEvent处理不再传子），返回false不拦截（继续传给子View的dispatchTouchEvent）。View没有此方法（叶子直接onTouchEvent）。③onTouchEvent——所有View都有，真正处理事件。返回true消费，返回false不消费（事件回传给父View的onTouchEvent，层层回传直到Activity）。④流程示例：DOWN事件 ViewGroupA.dispatch → A.onIntercept(否) → ViewGroupB.dispatch → B.onIntercept(否) → ViewC.dispatch → C.onTouchEvent(否) → 回到B.onTouchEvent(否) → 回到A.onTouchEvent(消费)。⑤同一序列内父View一旦onIntercept拦截，后续MOVE/UP不再询问子（除非子调requestDisallowInterceptTouchEvent）。⑥消费策略：子不消费父才有机会，父拦截后子收不到。",
+      `事件分发三方法协作：①dispatchTouchEvent——所有View/ViewGroup都有，事件先到这里。Activity.dispatchTouchEvent → Window → DecorView → 顶层ViewGroup逐层向下分发。返回true表示事件被消费。②onInterceptTouchEvent——只有ViewGroup有，在dispatchTouchEvent内部调用，判断是否拦截。返回true拦截（事件交给自己onTouchEvent处理不再传子），返回false不拦截（继续传给子View的dispatchTouchEvent）。View没有此方法（叶子直接onTouchEvent）。③onTouchEvent——所有View都有，真正处理事件。返回true消费，返回false不消费（事件回传给父View的onTouchEvent，层层回传直到Activity）。④流程示例：DOWN事件 ViewGroupA.dispatch → A.onIntercept(否) → ViewGroupB.dispatch → B.onIntercept(否) → ViewC.dispatch → C.onTouchEvent(否) → 回到B.onTouchEvent(否) → 回到A.onTouchEvent(消费)。⑤同一序列内父View一旦onIntercept拦截，后续MOVE/UP不再询问子（除非子调requestDisallowInterceptTouchEvent）。⑥消费策略：子不消费父才有机会，父拦截后子收不到。`,
     tags: ["事件分发", "dispatchTouchEvent", "onInterceptTouchEvent", "onTouchEvent"],
   },
   {
     id: "adae-vs-4",
     chapter: "adae-view-system",
     level: 3,
-    question: "常见的滑动冲突（如ViewPager嵌套ListView）如何解决？外部拦截法和内部拦截法有什么区别？",
+    question: `常见的滑动冲突（如ViewPager嵌套ListView）如何解决？外部拦截法和内部拦截法有什么区别？`,
     answer:
-      "滑动冲突源于父View和子View都想消费同一滑动事件，解决分两种：①外部拦截法——在父ViewGroup的onInterceptTouchEvent里判断：DOWN不拦截（return false并记录起点），MOVE时根据滑动方向/距离判断该谁处理，若该父处理则return true拦截，否则return false放行；UP不拦截。优点是逻辑集中在父，简单清晰，是首选方案。典型：ViewPager重写onInterceptTouchEvent，水平滑动距离大于竖直时拦截。②内部拦截法——子View在dispatchTouchEvent里调parent.requestDisallowInterceptTouchEvent(true)禁止父拦截：DOWN时先请求不拦截，MOVE时判断该自己处理则继续请求不拦截，该父处理则请求允许拦截（传false），父的onInterceptTouchEvent需配合（DOWN不拦截，MOVE根据disallow决定）。优点是子主动控制，适合子View封装成独立组件不依赖父配合；缺点是父必须配合（onInterceptTouchEvent里要尊重requestDisallow），耦合更隐蔽。原则：能用外部拦截就用外部拦截，子组件黑盒无法改父时才用内部拦截。",
+      `滑动冲突源于父View和子View都想消费同一滑动事件，解决分两种：①外部拦截法——在父ViewGroup的onInterceptTouchEvent里判断：DOWN不拦截（return false并记录起点），MOVE时根据滑动方向/距离判断该谁处理，若该父处理则return true拦截，否则return false放行；UP不拦截。优点是逻辑集中在父，简单清晰，是首选方案。典型：ViewPager重写onInterceptTouchEvent，水平滑动距离大于竖直时拦截。②内部拦截法——子View在dispatchTouchEvent里调parent.requestDisallowInterceptTouchEvent(true)禁止父拦截：DOWN时先请求不拦截，MOVE时判断该自己处理则继续请求不拦截，该父处理则请求允许拦截（传false），父的onInterceptTouchEvent需配合（DOWN不拦截，MOVE根据disallow决定）。优点是子主动控制，适合子View封装成独立组件不依赖父配合；缺点是父必须配合（onInterceptTouchEvent里要尊重requestDisallow），耦合更隐蔽。原则：能用外部拦截就用外部拦截，子组件黑盒无法改父时才用内部拦截。`,
     tags: ["滑动冲突", "外部拦截法", "内部拦截法", "requestDisallowInterceptTouchEvent"],
   },
 ];

@@ -33,11 +33,7 @@ import { CvcGcMemoryDiagram } from "@/components/mdx/clr-via-csharp/diagrams/cvc
 
 ### 分代回收
 
-<Term def="分代回收（Generational GC）是 CLR 的核心 GC 策略，将堆分为 3 代（Gen0/Gen1/Gen2），新对象分配在 Gen0，存活后晋升到下一代。假设：越新的对象越快变成垃圾。">
-
-CLR 的 GC 堆分为三代。第 0 代（Gen0）存放新创建的小对象，GC 回收频率最高。Gen0 回收后存活的对象晋升到第 1 代（Gen1）。Gen1 回收后存活的对象晋升到第 2 代（Gen2）。Gen2 回收成本最高（需要扫描整个堆），称为 Full GC。分代的核心假设是"新对象死得快"——大部分临时对象在 Gen0 就被回收了，不需要扫描整个堆。
-
-</Term>
+<Term def="分代回收（Generational GC）是 CLR 的核心 GC 策略，将堆分为 3 代（Gen0/Gen1/Gen2），新对象分配在 Gen0，存活后晋升到下一代。假设：越新的对象越快变成垃圾。">CLR 的 GC 堆分为三代。第 0 代（Gen0）存放新创建的小对象，GC 回收频率最高。Gen0 回收后存活的对象晋升到第 1 代（Gen1）。Gen1 回收后存活的对象晋升到第 2 代（Gen2）。Gen2 回收成本最高（需要扫描整个堆），称为 Full GC。分代的核心假设是"新对象死得快"——大部分临时对象在 Gen0 就被回收了，不需要扫描整个堆。</Term>
 
 ### 大对象堆（LOH）
 
@@ -45,41 +41,28 @@ CLR 的 GC 堆分为三代。第 0 代（Gen0）存放新创建的小对象，GC
 
 大于等于 85000 字节的对象（如大数组、大字符串）直接分配在 LOH。LOH 的对象在 GC 视角下属于 Gen2——回收 LOH 等于 Full GC。LOH 不做内存压缩（移动对象整理碎片），因为大对象复制成本太高。这导致 LOH 容易产生内存碎片——分配和释放交替后，空闲空间被碎片化，新的大对象可能分配失败。
 
+</Term>
+
 ### Finalizer 与 Dispose
 
 <Term def="Finalizer（终结器）是 CLR 在回收对象前自动调用的清理方法（~ClassName()）。Dispose 模式是 IDisposable 接口的显式资源释放机制，由开发者主动调用。">
 
 Finalizer 由 GC 在回收对象前自动调用，但调用时机不确定——GC 可能在很久之后才回收对象。Finalizer 还有一个严重代价：有 Finalizer 的对象需要两次 GC 才能回收（第一次 GC 调用 Finalizer，第二次才回收内存）。`IDisposable.Dispose()` 是显式释放——开发者调用 `using` 块或手动调用时立即释放资源。
 
+</Term>
+
 ## 交互Demo
 
 <CvcGcMemoryDiagram />
 
 <Stepper>
+<Step title="对象分配与 Gen0 回收"> `new Dog()` 在 Gen0 分配。当 Gen0 预算用尽时，触发 Gen0 回收。GC 从根（栈变量、静态字段、CPU 寄存器）出发，遍历引用图，标记所有可达对象。不可达对象被回收。存活的对象晋升到 Gen1。Gen0 回收很快——只扫描 Gen0 中的少量对象。</Step>
 
-<Step title="对象分配与 Gen0 回收">
+<Step title="Gen1 回收与晋升"> Gen0 回收后 Gen1 可能也满了，触发 Gen1 回收。Gen1 回收同时扫描 Gen0 和 Gen1。Gen0 和 Gen1 存活的对象都晋升——Gen0 → Gen1，Gen1 → Gen2。Gen1 回收比 Gen0 慢，但比 Full GC 快。</Step>
 
-`new Dog()` 在 Gen0 分配。当 Gen0 预算用尽时，触发 Gen0 回收。GC 从根（栈变量、静态字段、CPU 寄存器）出发，遍历引用图，标记所有可达对象。不可达对象被回收。存活的对象晋升到 Gen1。Gen0 回收很快——只扫描 Gen0 中的少量对象。
+<Step title="Full GC（Gen2 + LOH）"> Gen2 回收扫描整个堆（Gen0 + Gen1 + Gen2 + LOH），成本最高。触发条件：Gen2 预算用尽、LOH 预算用尽、显式 `GC.Collect()`、内存不足。Full GC 会暂停所有线程（Stop-The-World），造成可感知的延迟。优化目标：减少 Full GC 频率——避免大对象、避免长生命周期对象的频繁创建销毁。</Step>
 
-</Step>
-
-<Step title="Gen1 回收与晋升">
-
-Gen0 回收后 Gen1 可能也满了，触发 Gen1 回收。Gen1 回收同时扫描 Gen0 和 Gen1。Gen0 和 Gen1 存活的对象都晋升——Gen0 → Gen1，Gen1 → Gen2。Gen1 回收比 Gen0 慢，但比 Full GC 快。
-
-</Step>
-
-<Step title="Full GC（Gen2 + LOH）">
-
-Gen2 回收扫描整个堆（Gen0 + Gen1 + Gen2 + LOH），成本最高。触发条件：Gen2 预算用尽、LOH 预算用尽、显式 `GC.Collect()`、内存不足。Full GC 会暂停所有线程（Stop-The-World），造成可感知的延迟。优化目标：减少 Full GC 频率——避免大对象、避免长生命周期对象的频繁创建销毁。
-
-</Step>
-
-<Step title="Dispose 模式 vs Finalizer">
-
-`using (var file = new FileStream(...))` 在 using 块结束时调用 `Dispose()`，立即释放文件句柄。如果忘了 using，文件句柄一直占用，直到 GC 回收对象时调用 Finalizer。Finalizer 时机不确定——可能几秒后，也可能几分钟后。关键资源（文件、数据库连接、网络套接字）必须用 Dispose 主动释放，不能依赖 Finalizer。Finalizer 是安全网，不是主要释放途径。
-
-</Step>
+<Step title="Dispose 模式 vs Finalizer"> `using (var file = new FileStream(...))` 在 using 块结束时调用 `Dispose()`，立即释放文件句柄。如果忘了 using，文件句柄一直占用，直到 GC 回收对象时调用 Finalizer。Finalizer 时机不确定——可能几秒后，也可能几分钟后。关键资源（文件、数据库连接、网络套接字）必须用 Dispose 主动释放，不能依赖 Finalizer。Finalizer 是安全网，不是主要释放途径。</Step>
 
 </Stepper>
 
@@ -152,7 +135,7 @@ using (var logger = new FileLogger("log.txt"))
 
 **现象：LOH 碎片导致 OutOfMemory → 原因：大对象交替分配释放 → 修法：对象池或 ArrayPool**
 
-LOH 不做压缩。如果反复分配和释放 85000+ 字节的数组，空闲空间被碎片化——总空闲空间够但连续空间不够，新的大对象分配失败。修法：使用 `ArrayPool<T>.Shared.Rent(size)` 租用数组，用完 `Return` 归还——避免反复分配大数组。或用对象池复用大对象。
+LOH 不做压缩。如果反复分配和释放 85000+ 字节的数组，空闲空间被碎片化——总空闲空间够但连续空间不够，新的大对象分配失败。修法：使用 `ArrayPool&lt;T&gt;.Shared.Rent(size)` 租用数组，用完 `Return` 归还——避免反复分配大数组。或用对象池复用大对象。
 
 </Callout>
 
@@ -160,7 +143,7 @@ LOH 不做压缩。如果反复分配和释放 85000+ 字节的数组，空闲�
 
 **现象：GC.Collect() 后内存没降 → 原因：Gen2 对象仍被引用 → 修法：检查静态字段和事件订阅**
 
-`GC.Collect()` 强制 Full GC，但如果对象仍被根引用（静态字段、事件订阅、长生命周期缓存），GC 无法回收。常见泄漏：1. 静态 `List<T>` 不断添加不删除。2. 事件订阅 `+=` 后没 `-=`，发布者持有订阅者引用。3. `Dictionary` 做缓存不设过期。修法：用 `WeakReference` 或 `ConditionalWeakTable` 做缓存，及时 `-=` 事件订阅。
+`GC.Collect()` 强制 Full GC，但如果对象仍被根引用（静态字段、事件订阅、长生命周期缓存），GC 无法回收。常见泄漏：1. 静态 `List&lt;T&gt;` 不断添加不删除。2. 事件订阅 `+=` 后没 `-=`，发布者持有订阅者引用。3. `Dictionary` 做缓存不设过期。修法：用 `WeakReference` 或 `ConditionalWeakTable` 做缓存，及时 `-=` 事件订阅。
 
 </Callout>
 
@@ -178,7 +161,7 @@ LOH 不做压缩。如果反复分配和释放 85000+ 字节的数组，空闲�
 
 <Answer>
 
-三个策略：\n\n1. **避免大对象**：>= 85000 字节的对象直接进 LOH（属于 Gen2），回收需要 Full GC。策略：用 `ArrayPool<T>` 租用大数组而非 new，用 `StringBuilder` 拼接大字符串而非 `+=`，用 `MemoryPool<T>` 管理大缓冲区。\n\n2. **减少 Gen2 晋升**：对象从 Gen0 → Gen1 → Gen2 每晋升一代就更难回收。策略：缩短对象生命周期——在方法内创建和使用临时对象，不让它们逃逸到长生命周期容器。避免在循环中创建长生命周期对象的引用。\n\n3. **控制 GC 触发条件**：设置 `GCSettings.LatencyMode` 为 `GCLatencyMode.SustainedLowLatency`（.NET 9+ 的动态适应模式），在关键路径减少 GC 暂停。在服务器模式（`GCServerMode`）下，GC 为每个 CPU 核心分配独立堆，减少锁竞争。`GC.TryStartNoGCRegion(size)` 在关键路径暂停 GC。
+三个策略：\n\n1. **避免大对象**：>= 85000 字节的对象直接进 LOH（属于 Gen2），回收需要 Full GC。策略：用 `ArrayPool&lt;T&gt;` 租用大数组而非 new，用 `StringBuilder` 拼接大字符串而非 `+=`，用 `MemoryPool&lt;T&gt;` 管理大缓冲区。\n\n2. **减少 Gen2 晋升**：对象从 Gen0 → Gen1 → Gen2 每晋升一代就更难回收。策略：缩短对象生命周期——在方法内创建和使用临时对象，不让它们逃逸到长生命周期容器。避免在循环中创建长生命周期对象的引用。\n\n3. **控制 GC 触发条件**：设置 `GCSettings.LatencyMode` 为 `GCLatencyMode.SustainedLowLatency`（.NET 9+ 的动态适应模式），在关键路径减少 GC 暂停。在服务器模式（`GCServerMode`）下，GC 为每个 CPU 核心分配独立堆，减少锁竞争。`GC.TryStartNoGCRegion(size)` 在关键路径暂停 GC。
 
 </Answer>
 

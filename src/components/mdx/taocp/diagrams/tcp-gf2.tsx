@@ -28,7 +28,7 @@ export function TcpGf2Diagram() {
             <rect x="40" y="100" width="300" height="80" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" />
             <circle cx="56" cy="120" r="4" fill="var(--accent)" />
             <text x="68" y="125" fontSize="13" fontWeight="700" fill="var(--text-primary)">GF(2) 域</text>
-            <text x="56" y="148" fontSize="11" fill="var(--text-secondary)">{0,1} 加=XOR</text>
+            <text x="56" y="148" fontSize="11" fill="var(--text-secondary)">&#123;0,1&#125; 加=XOR</text>
             <text x="56" y="166" fontSize="12" fontWeight="600" fill="var(--accent)">乘=AND</text>
           </g>
           <g>

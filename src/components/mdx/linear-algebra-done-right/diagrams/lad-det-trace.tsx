@@ -28,7 +28,7 @@ export function LadDetTraceDiagram() {
     <text x="394" y="165" fontSize="11" fill="var(--text-primary)">与基无关</text>
     <rect x="40" y="240" width="640" height="70" rx="8" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1" strokeOpacity="0.4" />
     <text x="54" y="262" fontSize="12" fontWeight="700" fill="var(--warning)">特征多项式再读</text>
-    <text x="54" y="284" fontSize="11" fill="var(--text-primary)">p(z) = z^n - (tr T)z^{n-1} + ... + (-1)^n det T</text>
+    <text x="54" y="284" fontSize="11" fill="var(--text-primary)">p(z) = z^n - (tr T)z^&#123;n-1&#125; + ... + (-1)^n det T</text>
     <text x="54" y="301" fontSize="11" fill="var(--text-primary)">系数由主子式决定（Vieta）</text>
     <rect x="48" y="342" width="624" height="42" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
     <text x="360.0" y="360" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">迹与行列式是全局不变量</text>

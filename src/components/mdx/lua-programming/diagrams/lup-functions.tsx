@@ -43,7 +43,7 @@ export function LupFunctionsDiagram() {
           <text x={52} y={110} fontSize="11" fill={primary}>local f = function(x) return x*2 end</text>
 
           <rect x={40} y={128} width={260} height={28} rx="4" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={52} y={146} fontSize="11" fill={primary}>local t = {fn = print}</text>
+          <text x={52} y={146} fontSize="11" fill={primary}>local t = &#123;fn = print&#125;</text>
           <text x={180} y={146} fontSize="11" fill={secondary}>table 字段</text>
 
           <rect x={40} y={164} width={260} height={28} rx="4" fill={elevated} stroke={border} strokeWidth="1" />

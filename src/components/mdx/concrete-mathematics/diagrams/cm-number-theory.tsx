@@ -24,7 +24,7 @@ export function CmNumberTheoryDiagram() {
     <text x="384" y="92" fontSize="12" fontWeight="700" fill="var(--success)">素数与 Euler φ</text>
     <text x="384" y="114" fontSize="11" fill="var(--text-primary)">φ(n) = n·∏(1-1/p)，p|n</text>
     <text x="384" y="131" fontSize="11" fill="var(--text-primary)">φ 为积性函数</text>
-    <text x="384" y="148" fontSize="11" fill="var(--text-primary)">Σ_{d|n} φ(d) = n</text>
+    <text x="384" y="148" fontSize="11" fill="var(--text-primary)">Σ_&#123;d|n&#125; φ(d) = n</text>
     <text x="384" y="165" fontSize="11" fill="var(--text-primary)">Fermat 小定理：a^p ≡ a mod p</text>
     <rect x="40" y="240" width="640" height="75" rx="8" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1" strokeOpacity="0.4" />
     <text x="54" y="262" fontSize="12" fontWeight="700" fill="var(--warning)">同余与中国剩余定理</text>

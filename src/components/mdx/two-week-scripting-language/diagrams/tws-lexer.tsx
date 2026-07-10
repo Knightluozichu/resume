@@ -73,7 +73,7 @@ export function TwsLexerDiagram() {
 
       <rect x="420" y="280" width="340" height="50" rx="8" fill="url(#tws-lx-token)" opacity="0.10" stroke="#2563eb" strokeWidth="1" />
       <text x="435" y="300" fontSize="12" fontWeight="600" fill="#1e40af">运算符 / 关键字</text>
-      <text x="435" y="318" fontSize="11" fill="#475569" fontFamily="monospace">== &lt;= &gt;= &amp;&amp; || | \p{Punct}</text>
+      <text x="435" y="318" fontSize="11" fill="#475569" fontFamily="monospace">== &lt;= &gt;= &amp;&amp; || | \p&#123;Punct&#125;</text>
 
       {/* 正则匹配流程 */}
       <text x="400" y="365" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">逐行扫描流程</text>

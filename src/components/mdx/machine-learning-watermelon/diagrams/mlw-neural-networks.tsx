@@ -92,11 +92,11 @@ export function MlwNeuralNetworksDiagram() {
 
       <rect x="40" y="332" width="170" height="56" rx="8" fill="url(#mlw-nn-blue)" opacity="0.12" stroke="#2563eb" strokeWidth="1.5" />
       <text x="125" y="354" textAnchor="middle" fontSize="11" fontWeight="600" fill="#1e40af">Sigmoid</text>
-      <text x="125" y="372" textAnchor="middle" fontSize="10" fill="#3b82f6">σ(z)=1/(1+e^{-z})</text>
+      <text x="125" y="372" textAnchor="middle" fontSize="10" fill="#3b82f6">σ(z)=1/(1+e^&#123;-z&#125;)</text>
 
       <rect x="225" y="332" width="170" height="56" rx="8" fill="url(#mlw-nn-purple)" opacity="0.12" stroke="#7c3aed" strokeWidth="1.5" />
       <text x="310" y="354" textAnchor="middle" fontSize="11" fontWeight="600" fill="#5b21b6">Tanh</text>
-      <text x="310" y="372" textAnchor="middle" fontSize="10" fill="#8b5cf6">tanh(z)=(e^z-e^{-z})/(e^z+e^{-z})</text>
+      <text x="310" y="372" textAnchor="middle" fontSize="10" fill="#8b5cf6">tanh(z)=(e^z-e^&#123;-z&#125;)/(e^z+e^&#123;-z&#125;)</text>
 
       <rect x="410" y="332" width="170" height="56" rx="8" fill="url(#mlw-nn-green)" opacity="0.12" stroke="#059669" strokeWidth="1.5" />
       <text x="495" y="354" textAnchor="middle" fontSize="11" fontWeight="600" fill="#065f46">ReLU</text>

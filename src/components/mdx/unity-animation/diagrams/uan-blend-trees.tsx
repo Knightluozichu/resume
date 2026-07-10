@@ -12,6 +12,7 @@ const elevated = "var(--bg-elevated)";
 const accent = "var(--accent)";
 const success = "var(--success)";
 const warning = "var(--warning)";
+const danger = "var(--danger)";
 
 export function UanBlendTreesDiagram() {
   return (

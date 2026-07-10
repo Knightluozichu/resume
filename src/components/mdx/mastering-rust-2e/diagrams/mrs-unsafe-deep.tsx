@@ -76,7 +76,7 @@ export function MrsUnsafeDeepDiagram() {
           {/* 封装步骤 */}
           <rect x={416} y={116} width={248} height={36} rx="6" fill={elevated} stroke={warning} strokeWidth="1" />
           <text x={540} y={130} textAnchor="middle" fontSize="11" fontWeight="600" fill={warning}>1. unsafe 操作集中在内部</text>
-          <text x={540} y={144} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">unsafe {{ /* raw ptr */ }}</text>
+          <text x={540} y={144} textAnchor="middle" fontSize="11" fill={secondary} fontFamily="monospace">unsafe &#123; /* raw ptr */ &#125;</text>
 
           <line x1={540} y1={152} x2={540} y2={162} stroke={secondary} strokeWidth="1" markerEnd="url(#mrs-ud-arrow)" />
 

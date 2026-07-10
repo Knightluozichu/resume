@@ -39,7 +39,7 @@ export function MlwLinearModelsDiagram() {
 
       <rect x="40" y="184" width="240" height="44" rx="8" fill="url(#mlw-lm-blue)" opacity="0.12" stroke="#2563eb" strokeWidth="1.5" />
       <text x="160" y="204" textAnchor="middle" fontSize="11" fill="#1e40af">闭式解</text>
-      <text x="160" y="220" textAnchor="middle" fontSize="10" fill="#3b82f6">w* = (X^T X)^{-1} X^T y</text>
+      <text x="160" y="220" textAnchor="middle" fontSize="10" fill="#3b82f6">w* = (X^T X)^&#123;-1&#125; X^T y</text>
 
       <path d="M160 228 L160 236" stroke="#64748b" strokeWidth="2" markerEnd="url(#mlw-lm2-arrow)" />
 
@@ -51,7 +51,7 @@ export function MlwLinearModelsDiagram() {
       <text x="400" y="64" textAnchor="middle" fontSize="14" fontWeight="700" fill="#334155">对数几率回归（逻辑回归）</text>
 
       <rect x="280" y="76" width="240" height="44" rx="8" fill="url(#mlw-lm-purple)" opacity="0.12" stroke="#7c3aed" strokeWidth="1.5" />
-      <text x="400" y="103" textAnchor="middle" fontSize="11" fill="#5b21b6">Sigmoid: σ(z) = 1 / (1 + e^{-z})</text>
+      <text x="400" y="103" textAnchor="middle" fontSize="11" fill="#5b21b6">Sigmoid: σ(z) = 1 / (1 + e^&#123;-z&#125;)</text>
 
       <path d="M400 120 L400 128" stroke="#64748b" strokeWidth="2" markerEnd="url(#mlw-lm2-arrow)" />
 

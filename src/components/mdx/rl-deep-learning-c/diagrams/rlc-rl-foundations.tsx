@@ -45,7 +45,7 @@ export function RlcRlFoundationsDiagram() {
       <text x="397" y="140" textAnchor="middle" fontSize="13" fontWeight="600" fill="#475569">动作 a_t</text>
 
       <path d="M500 180 L305 180" stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#rlc-rl-arrow-r)" />
-      <text x="397" y="198" textAnchor="middle" fontSize="13" fontWeight="600" fill="#dc2626">状态 s_{t+1} + 奖励 r_{t+1}</text>
+      <text x="397" y="198" textAnchor="middle" fontSize="13" fontWeight="600" fill="#dc2626">状态 s_&#123;t+1&#125; + 奖励 r_&#123;t+1&#125;</text>
 
       {/* MDP 五元组 */}
       <text x="400" y="266" textAnchor="middle" fontSize="15" fontWeight="700" fill="#334155">马尔可夫决策过程 MDP 五元组 (S, A, P, R, γ)</text>
@@ -98,7 +98,7 @@ export function RlcRlFoundationsDiagram() {
 
       {/* 底部说明 */}
       <rect x="40" y="568" width="720" height="22" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-      <text x="400" y="583" textAnchor="middle" fontSize="11" fill="#475569">目标：最大化期望累积折扣回报 G_t = Σ γ^k r_{t+k+1}</text>
+      <text x="400" y="583" textAnchor="middle" fontSize="11" fill="#475569">目标：最大化期望累积折扣回报 G_t = Σ γ^k r_&#123;t+k+1&#125;</text>
     </svg>
   );
 }

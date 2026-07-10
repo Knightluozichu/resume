@@ -37,11 +37,15 @@ import { CvcReflectionAttributesDiagram } from "@/components/mdx/clr-via-csharp/
 
 `Type` 是反射的入口。`typeof(Dog)` 在编译期获取，`obj.GetType()` 在运行时获取。从 `Type` 对象可以查询：`GetMethods()` 获取所有方法，`GetFields()` 获取字段，`GetProperties()` 获取属性，`GetCustomAttributes()` 获取特性，`BaseType` 获取基类，`GetInterfaces()` 获取接口。每个方法/字段/属性也有对应的元数据对象（`MethodInfo`、`FieldInfo`、`PropertyInfo`）。
 
+</Term>
+
 ### MethodInfo：动态调用
 
 <Term def="MethodInfo 是反射中表示方法信息的对象。通过 MethodInfo.Invoke(obj, args) 可以在运行时动态调用任意方法，无需编译期知道方法名。">
 
 `MethodInfo` 包含方法的全部信息：名称、参数类型、返回值类型、特性。`method.Invoke(obj, new object[] { arg1, arg2 })` 动态调用方法——`obj` 是实例（静态方法传 null），`args` 是参数数组。`Activator.CreateInstance(type)` 动态创建对象——调用无参构造函数。`Activator.CreateInstance(type, arg1, arg2)` 调用有参构造函数。这些是依赖注入容器的底层机制。
+
+</Term>
 
 ### 自定义特性
 
@@ -49,35 +53,20 @@ import { CvcReflectionAttributesDiagram } from "@/components/mdx/clr-via-csharp/
 
 定义特性：`class MyAttribute : Attribute { public string Description { get; set; } }`。应用特性：`[My(Description = "Hello")]`。`AttributeUsage` 特性控制特性可以标注的目标（类、方法、属性等）和是否允许多次标注。运行时读取：`type.GetCustomAttributes(typeof(MyAttribute), false)` 返回特性实例。特性本身不改变代码行为——它们只是元数据，需要反射代码读取并据此行动。
 
+</Term>
+
 ## 交互Demo
 
 <CvcReflectionAttributesDiagram />
 
 <Stepper>
+<Step title="Type 对象：元数据的入口"> `typeof(Dog)` 返回 Dog 的 Type 对象。从 Type 可以查询 Dog 的所有成员：`GetMethods()` 返回 MethodInfo 数组，`GetFields()` 返回 FieldInfo 数组，`GetProperties()` 返回 PropertyInfo 数组。这些 Info 对象包含成员的完整元数据——名称、类型、参数、特性。Type 对象是 CLR 在加载程序集时从元数据构建的，所有同类型的查询共享同一个 Type 对象。</Step>
 
-<Step title="Type 对象：元数据的入口">
+<Step title="动态创建与调用"> `Activator.CreateInstance(typeof(Dog))` 动态创建 Dog 实例——调用无参构造函数。`typeof(Dog).GetMethod("Bark").Invoke(dogInstance, null)` 动态调用 Bark 方法。这两步合起来实现了"在运行时才知道类型和方法名"的动态调用。依赖注入容器用这个机制创建服务实例——根据注册的类型信息，反射构造函数并创建对象。</Step>
 
-`typeof(Dog)` 返回 Dog 的 Type 对象。从 Type 可以查询 Dog 的所有成员：`GetMethods()` 返回 MethodInfo 数组，`GetFields()` 返回 FieldInfo 数组，`GetProperties()` 返回 PropertyInfo 数组。这些 Info 对象包含成员的完整元数据——名称、类型、参数、特性。Type 对象是 CLR 在加载程序集时从元数据构建的，所有同类型的查询共享同一个 Type 对象。
+<Step title="自定义特性：元数据便签"> 定义 `[ColumnName("user_name")]` 特性标注在属性上。ORM 读取这个特性生成 SQL——`SELECT user_name FROM Users`。序列化器读取 `[JsonPropertyName("name")]` 生成 JSON——`{"name": "Rex"}`。特性本身不执行任何代码——它只是写入元数据的标注。改变行为的是读取特性的反射代码。</Step>
 
-</Step>
-
-<Step title="动态创建与调用">
-
-`Activator.CreateInstance(typeof(Dog))` 动态创建 Dog 实例——调用无参构造函数。`typeof(Dog).GetMethod("Bark").Invoke(dogInstance, null)` 动态调用 Bark 方法。这两步合起来实现了"在运行时才知道类型和方法名"的动态调用。依赖注入容器用这个机制创建服务实例——根据注册的类型信息，反射构造函数并创建对象。
-
-</Step>
-
-<Step title="自定义特性：元数据便签">
-
-定义 `[ColumnName("user_name")]` 特性标注在属性上。ORM 读取这个特性生成 SQL——`SELECT user_name FROM Users`。序列化器读取 `[JsonPropertyName("name")]` 生成 JSON——`{"name": "Rex"}`。特性本身不执行任何代码——它只是写入元数据的标注。改变行为的是读取特性的反射代码。
-
-</Step>
-
-<Step title="反射的性能与取舍">
-
-反射比直接调用慢 100-1000 倍——每次反射调用都涉及元数据查找、参数装箱、安全检查。但反射的灵活性无可替代——框架（DI 容器、序列化器、ORM）必须用反射处理未知类型。优化策略：1. 缓存 MethodInfo/PropertyInfo，避免重复查找。2. 用表达式树（Expression）编译反射调用为委托，后续直接调用委托。3. 用源生成器（Source Generator）在编译期生成代码，避免运行时反射。
-
-</Step>
+<Step title="反射的性能与取舍"> 反射比直接调用慢 100-1000 倍——每次反射调用都涉及元数据查找、参数装箱、安全检查。但反射的灵活性无可替代——框架（DI 容器、序列化器、ORM）必须用反射处理未知类型。优化策略：1. 缓存 MethodInfo/PropertyInfo，避免重复查找。2. 用表达式树（Expression）编译反射调用为委托，后续直接调用委托。3. 用源生成器（Source Generator）在编译期生成代码，避免运行时反射。</Step>
 
 </Stepper>
 
@@ -114,7 +103,7 @@ public class SimpleOrm<T> where T : new()
     {
         var type = typeof(T);
         var tableName = type.Name + "s";  // Users
-        var columns = new List<string>();
+        var columns = new List&lt;string&gt;();
 
         foreach (var prop in type.GetProperties())
         {
@@ -128,7 +117,7 @@ public class SimpleOrm<T> where T : new()
     }
 
     // 反射创建实例并赋值
-    public T CreateFromReader(Dictionary<string, object> row)
+    public T CreateFromReader(Dictionary&lt;string, object&gt; row)
     {
         var instance = new T();
         var type = typeof(T);
@@ -158,7 +147,7 @@ var result = method?.Invoke(user, null);  // 动态调用
 // 生成的 SQL：SELECT user_id AS Id, user_name AS Name, created_at AS CreatedAt FROM Users
 ```
 
-`GetCustomAttribute<ColumnNameAttribute>()` 读取属性上的特性。`Activator.CreateInstance<T>()` 动态创建实例。`prop.SetValue(instance, value)` 动态设置属性。这些是所有框架（ORM、序列化器、DI 容器）的底层机制——在运行时通过元数据操作未知类型。
+`GetCustomAttribute&lt;ColumnNameAttribute&gt;()` 读取属性上的特性。`Activator.CreateInstance&lt;T&gt;()` 动态创建实例。`prop.SetValue(instance, value)` 动态设置属性。这些是所有框架（ORM、序列化器、DI 容器）的底层机制——在运行时通过元数据操作未知类型。
 
 ## 常见误区
 
@@ -174,7 +163,7 @@ var result = method?.Invoke(user, null);  // 动态调用
 
 **误区：反射性能可以忽略**
 
-反射比直接调用慢 100-1000 倍。`method.Invoke()` 每次都做参数类型检查、安全检查、参数装箱。在热路径上用反射是性能杀手。优化策略：1. 缓存 MethodInfo 避免重复 `GetMethod()` 查找。2. 用 `Delegate.CreateDelegate` 将 MethodInfo 转为委托，后续直接调用委托——接近直接调用速度。3. 用表达式树（`Expression<Func<T>>`）编译动态代码。4. .NET 6+ 用源生成器在编译期生成序列化代码，避免运行时反射。
+反射比直接调用慢 100-1000 倍。`method.Invoke()` 每次都做参数类型检查、安全检查、参数装箱。在热路径上用反射是性能杀手。优化策略：1. 缓存 MethodInfo 避免重复 `GetMethod()` 查找。2. 用 `Delegate.CreateDelegate` 将 MethodInfo 转为委托，后续直接调用委托——接近直接调用速度。3. 用表达式树（`Expression<Func&lt;T&gt;>`）编译动态代码。4. .NET 6+ 用源生成器在编译期生成序列化代码，避免运行时反射。
 
 </Callout>
 
@@ -192,7 +181,7 @@ var result = method?.Invoke(user, null);  // 动态调用
 
 <Answer>
 
-定义：继承 `System.Attribute`，用 `AttributeUsage` 控制标注目标。\n\n```csharp\n[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]\npublic class JsonFieldAttribute : Attribute\n{\n    public string Name { get; }\n    public bool Required { get; set; }\n    public JsonFieldAttribute(string name) { Name = name; }\n}\n```\n\n应用：用 `[AttributeName(构造参数)]` 语法标注在目标元素上。\n\n```csharp\npublic class Config\n{\n    [JsonField("api_key", Required = true)]\n    public string ApiKey { get; set; }\n\n    [JsonField("timeout")]\n    public int Timeout { get; set; } = 30;\n}\n```\n\n读取：通过反射的 `GetCustomAttribute<T>()` 方法。\n\n```csharp\nvar type = typeof(Config);\nforeach (var prop in type.GetProperties())\n{\n    var attr = prop.GetCustomAttribute<JsonFieldAttribute>();\n    if (attr != null)\n    {\n        Console.WriteLine($\"{prop.Name} → JSON: {attr.Name}, Required: {attr.Required}\");\n    }\n}\n// 输出：\n// ApiKey → JSON: api_key, Required: True\n// Timeout → JSON: timeout, Required: False\n```\n\n关键：特性本身不执行任何代码——它只是元数据标注。改变行为的是读取特性的反射代码。序列化器、ORM、验证框架都是先反射读取特性，再根据特性信息执行相应逻辑。
+定义：继承 `System.Attribute`，用 `AttributeUsage` 控制标注目标。\n\n```csharp\n[AttributeUsage(AttributeTargets.Property, AllowMultiple = false)]\npublic class JsonFieldAttribute : Attribute\n{\n    public string Name { get; }\n    public bool Required { get; set; }\n    public JsonFieldAttribute(string name) { Name = name; }\n}\n```\n\n应用：用 `[AttributeName(构造参数)]` 语法标注在目标元素上。\n\n```csharp\npublic class Config\n{\n    [JsonField("api_key", Required = true)]\n    public string ApiKey { get; set; }\n\n    [JsonField("timeout")]\n    public int Timeout { get; set; } = 30;\n}\n```\n\n读取：通过反射的 `GetCustomAttribute&lt;T&gt;()` 方法。\n\n```csharp\nvar type = typeof(Config);\nforeach (var prop in type.GetProperties())\n{\n    var attr = prop.GetCustomAttribute&lt;JsonFieldAttribute&gt;();\n    if (attr != null)\n    {\n        Console.WriteLine($\"{prop.Name} → JSON: {attr.Name}, Required: {attr.Required}\");\n    }\n}\n// 输出：\n// ApiKey → JSON: api_key, Required: True\n// Timeout → JSON: timeout, Required: False\n```\n\n关键：特性本身不执行任何代码——它只是元数据标注。改变行为的是读取特性的反射代码。序列化器、ORM、验证框架都是先反射读取特性，再根据特性信息执行相应逻辑。
 
 </Answer>
 
@@ -228,7 +217,7 @@ CLR 在运行时查询和操作类型元数据的能力。通过 `typeof(T)` 或
 
 <GlossaryItem term="自定义特性（Custom Attribute）">
 
-继承自 `System.Attribute` 的类，用 `[AttributeName]` 语法标注在代码元素上。编译器将特性写入元数据。`AttributeUsage` 控制标注目标（类、方法、属性等）和是否允许多次标注。运行时通过 `GetCustomAttribute<T>()` 读取。特性本身不执行代码——需要反射代码读取并据此行动。
+继承自 `System.Attribute` 的类，用 `[AttributeName]` 语法标注在代码元素上。编译器将特性写入元数据。`AttributeUsage` 控制标注目标（类、方法、属性等）和是否允许多次标注。运行时通过 `GetCustomAttribute&lt;T&gt;()` 读取。特性本身不执行代码——需要反射代码读取并据此行动。
 
 </GlossaryItem>
 

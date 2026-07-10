@@ -58,7 +58,7 @@ export function RubStringsDiagram() {
           <text x={200} y={234} fontSize="10" fill={secondary}># 大小写转换</text>
 
           <rect x={32} y={254} width={280} height={36} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={44} y={276} fontSize="11" fill={primary}>"#{s}!"</text>
+          <text x={44} y={276} fontSize="11" fill={primary}>"#&#123;s&#125;!"</text>
           <text x={120} y={276} fontSize="10" fill={secondary}># 插值 → "Hello!"</text>
 
           <rect x={32} y={296} width={280} height={36} rx="6" fill={elevated} stroke={border} strokeWidth="1" />

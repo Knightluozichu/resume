@@ -42,7 +42,7 @@ export function DlgDiffusionModelsDiagram() {
       <text x="365" y="106" textAnchor="middle" fontSize="14" fontWeight="700" fill="#475569">...</text>
 
       <path d="M390 110 L440 110" stroke="#dc2626" strokeWidth="2" markerEnd="url(#dlg-dm-arrow)" />
-      <text x="415" y="102" textAnchor="middle" fontSize="9" fill="#dc2626">q(x_t|x_{t-1})</text>
+      <text x="415" y="102" textAnchor="middle" fontSize="9" fill="#dc2626">q(x_t|x_&#123;t-1&#125;)</text>
 
       <rect x="440" y="80" width="100" height="60" rx="8" fill="#f59e0b" opacity="0.7" />
       <text x="490" y="106" textAnchor="middle" fontSize="11" fontWeight="600" fill="#fff">x_t</text>
@@ -63,15 +63,15 @@ export function DlgDiffusionModelsDiagram() {
 
       {/* 反向过程：逐步去噪 */}
       <path d="M660 200 L160 200" stroke="#2563eb" strokeWidth="2.5" strokeDasharray="6,3" markerEnd="url(#dlg-dm-arrow-r)" />
-      <text x="400" y="192" textAnchor="middle" fontSize="11" fill="#2563eb">p_theta(x_{t-1}|x_t) — 学习去噪</text>
+      <text x="400" y="192" textAnchor="middle" fontSize="11" fill="#2563eb">p_theta(x_&#123;t-1&#125;|x_t) — 学习去噪</text>
 
       {/* 核心公式 */}
       <rect x="40" y="222" width="340" height="56" rx="10" fill="#fef2f2" stroke="#dc2626" strokeWidth="1.5" />
-      <text x="210" y="244" textAnchor="middle" fontSize="12" fontWeight="700" fill="#991b1b">前向：q(x_t|x_{t-1}) = N(sqrt(1-beta_t)*x_{t-1}, beta_t*I)</text>
+      <text x="210" y="244" textAnchor="middle" fontSize="12" fontWeight="700" fill="#991b1b">前向：q(x_t|x_&#123;t-1&#125;) = N(sqrt(1-beta_t)*x_&#123;t-1&#125;, beta_t*I)</text>
       <text x="210" y="264" textAnchor="middle" fontSize="10" fill="#475569">beta_t 是预设的噪声调度，无需学习</text>
 
       <rect x="420" y="222" width="340" height="56" rx="10" fill="#eff6ff" stroke="#2563eb" strokeWidth="1.5" />
-      <text x="590" y="244" textAnchor="middle" fontSize="12" fontWeight="700" fill="#1e40af">反向：p_theta(x_{t-1}|x_t) = N(mu_theta, sigma_theta)</text>
+      <text x="590" y="244" textAnchor="middle" fontSize="12" fontWeight="700" fill="#1e40af">反向：p_theta(x_&#123;t-1&#125;|x_t) = N(mu_theta, sigma_theta)</text>
       <text x="590" y="264" textAnchor="middle" fontSize="10" fill="#475569">用神经网络参数化，学习去噪</text>
 
       {/* 训练目标 */}
