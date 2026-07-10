@@ -2428,7 +2428,17 @@ export type ReviewChapterSlug =
   | "mmm-architecture-design"
   | "mmm-no-silver-bullet"
   | "mmm-lessons-future"
-  | "mmm-final-review";
+  | "mmm-final-review"
+  | "cc2-learning-map"
+  | "cc2-software-construction"
+  | "cc2-design-principles"
+  | "cc2-variables-names"
+  | "cc2-control-flow"
+  | "cc2-code-quality"
+  | "cc2-refactoring-integration"
+  | "cc2-debugging-tuning"
+  | "cc2-team-craft"
+  | "cc2-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4861,6 +4871,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mmm-no-silver-bullet": "没有银弹",
   "mmm-lessons-future": "经验总结与未来展望",
   "mmm-final-review": "全书复习与知识整合",
+  "cc2-learning-map": "代码大全·知识全景图",
+  "cc2-software-construction": "软件构建基础",
+  "cc2-design-principles": "设计原则",
+  "cc2-variables-names": "变量与命名",
+  "cc2-control-flow": "控制流与语句",
+  "cc2-code-quality": "代码质量与测试",
+  "cc2-refactoring-integration": "重构与集成",
+  "cc2-debugging-tuning": "调试与性能调优",
+  "cc2-team-craft": "团队协作与工艺",
+  "cc2-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

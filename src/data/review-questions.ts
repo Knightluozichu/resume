@@ -2305,6 +2305,16 @@ import { mmmArchitectureDesignQuestions } from "./review/mmm-architecture-design
 import { mmmNoSilverBulletQuestions } from "./review/mmm-no-silver-bullet";
 import { mmmLessonsFutureQuestions } from "./review/mmm-lessons-future";
 import { mmmFinalReviewQuestions } from "./review/mmm-final-review";
+import { cc2LearningMapQuestions } from "./review/cc2-learning-map";
+import { cc2SoftwareConstructionQuestions } from "./review/cc2-software-construction";
+import { cc2DesignPrinciplesQuestions } from "./review/cc2-design-principles";
+import { cc2VariablesNamesQuestions } from "./review/cc2-variables-names";
+import { cc2ControlFlowQuestions } from "./review/cc2-control-flow";
+import { cc2CodeQualityQuestions } from "./review/cc2-code-quality";
+import { cc2RefactoringIntegrationQuestions } from "./review/cc2-refactoring-integration";
+import { cc2DebuggingTuningQuestions } from "./review/cc2-debugging-tuning";
+import { cc2TeamCraftQuestions } from "./review/cc2-team-craft";
+import { cc2FinalReviewQuestions } from "./review/cc2-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4645,6 +4655,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...mmmNoSilverBulletQuestions,
   ...mmmLessonsFutureQuestions,
   ...mmmFinalReviewQuestions,
+  ...cc2LearningMapQuestions,
+  ...cc2SoftwareConstructionQuestions,
+  ...cc2DesignPrinciplesQuestions,
+  ...cc2VariablesNamesQuestions,
+  ...cc2ControlFlowQuestions,
+  ...cc2CodeQualityQuestions,
+  ...cc2RefactoringIntegrationQuestions,
+  ...cc2DebuggingTuningQuestions,
+  ...cc2TeamCraftQuestions,
+  ...cc2FinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
