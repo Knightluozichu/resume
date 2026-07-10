@@ -2448,7 +2448,17 @@ export type ReviewChapterSlug =
   | "pp-metaprogramming"
   | "pp-codecraft"
   | "pp-team-delivery"
-  | "pp-final-review";
+  | "pp-final-review"
+  | "poa-learning-map"
+  | "poa-layered-architecture"
+  | "poa-domain-logic"
+  | "poa-data-source"
+  | "poa-object-relational"
+  | "poa-web-presentation"
+  | "poa-concurrency-session"
+  | "poa-distribution"
+  | "poa-special-patterns"
+  | "poa-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4901,6 +4911,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pp-codecraft": "代码工艺",
   "pp-team-delivery": "团队与交付",
   "pp-final-review": "全书复习与知识整合",
+  "poa-learning-map": "企业应用架构模式·知识全景图",
+  "poa-layered-architecture": "分层架构与领域逻辑",
+  "poa-domain-logic": "领域逻辑模式",
+  "poa-data-source": "数据源架构模式",
+  "poa-object-relational": "对象关系映射",
+  "poa-web-presentation": "Web表现模式",
+  "poa-concurrency-session": "并发与会话状态",
+  "poa-distribution": "分布式策略",
+  "poa-special-patterns": "特殊模式与离线",
+  "poa-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

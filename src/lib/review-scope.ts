@@ -187,6 +187,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["mmm-", "mythical-man-month"],
   ["cc2-", "code-complete-2e"],
   ["pp-", "pragmatic-programmer"],
+  ["poa-", "poeaa-enterprise-patterns"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */

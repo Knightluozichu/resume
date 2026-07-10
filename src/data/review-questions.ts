@@ -2325,6 +2325,16 @@ import { ppMetaprogrammingQuestions } from "./review/pp-metaprogramming";
 import { ppCodecraftQuestions } from "./review/pp-codecraft";
 import { ppTeamDeliveryQuestions } from "./review/pp-team-delivery";
 import { ppFinalReviewQuestions } from "./review/pp-final-review";
+import { poaLearningMapQuestions } from "./review/poa-learning-map";
+import { poaLayeredArchitectureQuestions } from "./review/poa-layered-architecture";
+import { poaDomainLogicQuestions } from "./review/poa-domain-logic";
+import { poaDataSourceQuestions } from "./review/poa-data-source";
+import { poaObjectRelationalQuestions } from "./review/poa-object-relational";
+import { poaWebPresentationQuestions } from "./review/poa-web-presentation";
+import { poaConcurrencySessionQuestions } from "./review/poa-concurrency-session";
+import { poaDistributionQuestions } from "./review/poa-distribution";
+import { poaSpecialPatternsQuestions } from "./review/poa-special-patterns";
+import { poaFinalReviewQuestions } from "./review/poa-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4685,6 +4695,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...ppCodecraftQuestions,
   ...ppTeamDeliveryQuestions,
   ...ppFinalReviewQuestions,
+  ...poaLearningMapQuestions,
+  ...poaLayeredArchitectureQuestions,
+  ...poaDomainLogicQuestions,
+  ...poaDataSourceQuestions,
+  ...poaObjectRelationalQuestions,
+  ...poaWebPresentationQuestions,
+  ...poaConcurrencySessionQuestions,
+  ...poaDistributionQuestions,
+  ...poaSpecialPatternsQuestions,
+  ...poaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
