@@ -6,15 +6,15 @@ import "katex/dist/katex.min.css";
 import { getLearningPathTree } from "@/lib/content";
 
 import { ChapterDrawer } from "./_components/chapter-drawer";
-import { ChapterNav } from "./_components/chapter-nav";
+import { LibraryNav } from "./_components/library-nav";
 
 /**
- * 教程区两栏外壳：左侧学习路径树 288px / 右侧（正文 max 72ch + 本页目录）。
+ * 教程区两栏外壳：左侧图书目录 288px / 右侧（正文 max 72ch + 本页目录）。
  * lg 以下：左栏折叠为抽屉（见 ChapterDrawer）。
  *
- * 学习路径树由 content.getLearningPathTree() 在 Server 端生成：先按方向分组，
- * 再按初/中/高级承载书籍和待补项；桌面侧栏与移动抽屉复用同一棵树（同源）。
- * 当前路径/阶段/书籍展开 + 当前章高亮在 ChapterNav（client，usePathname）内完成。
+ * 完整书库与学习路径树都在 Server 端生成；桌面侧栏与移动抽屉复用同一份数据。
+ * LibraryNav 默认展示全部图书，也可切回精选学习路径；当前书籍展开与章节高亮
+ * 在 client 端通过 usePathname 完成。
  *
  * 本页 TOC（右栏）与上/下一章依赖具体章节的正文标题/位次，由章节 page 渲染
  * （见 [...slug]/page.tsx）——layout 不掌握 slug，故不在此渲染右栏。
@@ -37,13 +37,13 @@ export default function LearnLayout({
         {/* top-12 与顶部导航高度 h-12 对齐；max-h 留出这 48px，内容超视口时
             侧栏内部纵向滚动（出现滚动条、可滚到最底篇章） */}
         <div className="sticky top-12 max-h-[calc(100vh-3rem)] overflow-y-auto px-4 py-8">
-          <ChapterNav paths={paths} />
+          <LibraryNav paths={paths} />
         </div>
       </aside>
 
       {/* lg 以下：汉堡按钮 + 抽屉（client 壳，章节树为 client 高亮组件） */}
       <ChapterDrawer>
-        <ChapterNav paths={paths} />
+        <LibraryNav paths={paths} />
       </ChapterDrawer>
 
       {/* 正文 + 本页目录区：由章节 page 自行排成「正文 72ch + 右栏 TOC」 */}

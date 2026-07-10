@@ -1,9 +1,33 @@
 #!/usr/bin/env bash
 # remuse 部署脚本：本地 build → 组装 standalone → rsync → pm2 reload
-# 用法：./deploy.sh
+# 用法：./deploy.sh [--skip-build]
+# --skip-build 仅用于当前工作树刚执行并通过 pnpm build 的场景，可避免部署时重复全量构建。
 # 连接参数从 local.env 读取（永不进 git）；SSH 走密钥认证，脚本不含任何明文密钥。
 set -euo pipefail
 cd "$(dirname "$0")"
+
+SKIP_BUILD=false
+case "${1:-}" in
+  "") ;;
+  --skip-build)
+    SKIP_BUILD=true
+    ;;
+  -h|--help)
+    echo "用法：./deploy.sh [--skip-build]"
+    exit 0
+    ;;
+  *)
+    echo "✗ 未知参数：$1" >&2
+    echo "用法：./deploy.sh [--skip-build]" >&2
+    exit 2
+    ;;
+esac
+
+if (( $# > 1 )); then
+  echo "✗ 参数过多" >&2
+  echo "用法：./deploy.sh [--skip-build]" >&2
+  exit 2
+fi
 
 # ---- 读取连接参数 ----
 if [[ ! -f local.env ]]; then
@@ -18,8 +42,24 @@ SSH_HOST="${SERVER_SSH_USERNAME:-root}@${SERVER_PUBLIC_IP:?local.env 缺少 SERV
 SSH_OPTS=(-i "$SSH_KEY" -p "$SSH_PORT" -o BatchMode=yes)
 APP_DIR="/var/www/remuse"
 
-echo "==> [1/6] 本地构建 (next build, standalone)"
-pnpm build
+if [[ "$SKIP_BUILD" == "true" ]]; then
+  REQUIRED_BUILD_ARTIFACTS=(
+    ".next/BUILD_ID"
+    ".next/server/app/learn.html"
+    ".next/standalone/server.js"
+    ".next/static"
+  )
+  for artifact in "${REQUIRED_BUILD_ARTIFACTS[@]}"; do
+    if [[ ! -e "$artifact" ]]; then
+      echo "✗ --skip-build 缺少构建产物：$artifact；请先执行 pnpm build" >&2
+      exit 1
+    fi
+  done
+  echo "==> [1/6] 复用已验证的本地构建产物 (--skip-build)"
+else
+  echo "==> [1/6] 本地构建 (next build, standalone)"
+  pnpm build
+fi
 
 echo "==> [2/6] 构建期生成 pagefind 站内搜索索引 → public/pagefind"
 # 必须在 build 之后（要吃 .next/server/app 的 SSG HTML）、组装 standalone 之前

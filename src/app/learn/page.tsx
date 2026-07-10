@@ -1,24 +1,38 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getLearningPathTree, type LearningPathStage } from "@/lib/content";
+import {
+  getLearningPathTree,
+  type LearningPathStage,
+} from "@/lib/content";
 
 import { ChapterShell } from "./_components/chapter-shell";
 
 export const metadata: Metadata = {
-  title: "学习路径 — remuse",
+  title: "图书馆 — remuse",
   description:
-    "按 Android、C/C++、Unity、图形渲染、AI Agent 组织的体系化学习路线。",
+    "浏览完整图书目录，或按 Android、C/C++、Unity、图形渲染、AI Agent 等学习路径阅读。",
 };
 
 export default function LearnPage() {
   const paths = getLearningPathTree();
+  const bookCount = paths.reduce(
+    (pathTotal, path) =>
+      pathTotal +
+      path.stages.reduce(
+        (stageTotal, stage) =>
+          stageTotal + stage.items.filter((item) => item.kind === "book").length,
+        0,
+      ),
+    0,
+  );
 
   return (
     <ChapterShell>
-      <h1 className="text-2xl font-semibold">学习路径</h1>
+      <h1 className="text-2xl font-semibold">图书馆</h1>
       <p className="mt-4 text-secondary">
-        先选方向，再按初级、中级、高级推进。每条路径都标出主线书、可选补充和当前缺口，避免在书单里来回猜下一步。
+        {paths.length} 个学习体系已覆盖全部 {bookCount}
+        本图书；左侧可按书名搜索，也可按体系和初、中、高阶段展开章节。
       </p>
 
       <div className="mt-10 flex flex-col gap-12">

@@ -1,10 +1,11 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { type LearningPathTree } from "@/lib/content";
+
+import { BookNavItem } from "./book-nav-item";
 
 function pathContainsBook(
   path: LearningPathTree[number],
@@ -31,6 +32,7 @@ function stageContainsBook(
 export function ChapterNav({ paths }: { paths: LearningPathTree }) {
   const pathname = usePathname();
   const currentBookSlug = pathname.split("/")[2] ?? null;
+  const instanceId = useId().replace(/:/g, "");
 
   const [pathExpanded, setPathExpanded] = useState<Record<string, boolean>>(
     () => {
@@ -86,19 +88,12 @@ export function ChapterNav({ paths }: { paths: LearningPathTree }) {
     "flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-lg font-semibold leading-7 transition-colors duration-(--duration-hover) ease-standard";
   const stageButtonClass =
     "flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-base font-semibold leading-6 text-primary transition-colors duration-(--duration-hover) ease-standard hover:text-accent";
-  const bookButtonBaseClass =
-    "flex w-full items-center gap-2 rounded-control px-2 py-1.5 text-left text-[15px] font-medium leading-6 transition-colors duration-(--duration-hover) ease-standard";
-  const sectionLabelClass =
-    "px-2 pt-1 text-sm font-semibold leading-5 text-primary/85";
-  const chapterLinkBaseClass =
-    "flex items-center gap-2 rounded-control px-2 py-1 text-[13px] leading-5 transition-colors duration-(--duration-hover) ease-standard";
-
   return (
     <nav aria-label="学习路径目录" className="flex flex-col gap-2.5">
       {paths.map((path) => {
         const isCurrentPath = pathContainsBook(path, currentBookSlug);
         const isPathOpen = pathExpanded[path.slug] ?? false;
-        const pathPanelId = `path-${path.slug}`;
+        const pathPanelId = `path-${instanceId}-${path.slug}`;
 
         return (
           <section key={path.slug}>
@@ -128,7 +123,7 @@ export function ChapterNav({ paths }: { paths: LearningPathTree }) {
                 {path.stages.map((stage) => {
                   const stageKey = `${path.slug}::${stage.level}`;
                   const isStageOpen = stageExpanded[stageKey] ?? false;
-                  const stagePanelId = `stage-${path.slug}-${stage.level}`;
+                  const stagePanelId = `stage-${instanceId}-${path.slug}-${stage.level}`;
 
                   return (
                     <div key={stage.level}>
@@ -175,87 +170,19 @@ export function ChapterNav({ paths }: { paths: LearningPathTree }) {
                               book.bookSlug === currentBookSlug;
                             const isBookOpen =
                               bookExpanded[book.bookSlug] ?? false;
-                            const bookPanelId = `book-${book.bookSlug}`;
+                            const bookPanelId = `book-${instanceId}-${book.bookSlug}`;
 
                             return (
-                              <div key={book.bookSlug}>
-                                <button
-                                  type="button"
-                                  aria-expanded={isBookOpen}
-                                  aria-controls={bookPanelId}
-                                  onClick={() => toggleBook(book.bookSlug)}
-                                  className={`${bookButtonBaseClass} ${
-                                    isCurrentBook
-                                      ? "bg-bg text-primary"
-                                      : "text-secondary hover:text-primary"
-                                  }`}
-                                >
-                                  <span
-                                    aria-hidden="true"
-                                    className="inline-block shrink-0 text-xs text-secondary transition-transform duration-(--duration-expand) ease-standard"
-                                    style={{
-                                      transform: isBookOpen
-                                        ? "rotate(0deg)"
-                                        : "rotate(-90deg)",
-                                    }}
-                                  >
-                                    ▾
-                                  </span>
-                                  <span className="min-w-0 truncate">
-                                    {book.bookTitle}
-                                  </span>
-                                  {item.optional && (
-                                    <span className="shrink-0 rounded-control border border-border px-1 text-[10px] leading-4 text-secondary">
-                                      可选
-                                    </span>
-                                  )}
-                                </button>
-
-                                {isBookOpen && (
-                                  <div
-                                    id={bookPanelId}
-                                    className="mt-2 flex flex-col gap-3 pl-5"
-                                  >
-                                    {book.sections.map((group) => (
-                                      <div key={group.section}>
-                                        <p className={sectionLabelClass}>
-                                          {group.section}
-                                        </p>
-                                        <ul className="mt-1 flex flex-col gap-1">
-                                          {group.chapters.map((chapter) => {
-                                            const active =
-                                              pathname === chapter.href;
-                                            return (
-                                              <li key={chapter.href}>
-                                                <Link
-                                                  href={chapter.href}
-                                                  aria-current={
-                                                    active ? "page" : undefined
-                                                  }
-                                                  className={`${chapterLinkBaseClass} ${
-                                                    active
-                                                      ? "bg-accent-glow font-medium text-accent"
-                                                      : "text-secondary hover:text-primary"
-                                                  }`}
-                                                >
-                                                  <span className="min-w-0 truncate">
-                                                    {chapter.title}
-                                                  </span>
-                                                  {chapter.draft && (
-                                                    <span className="shrink-0 rounded-control border border-border px-1 text-[10px] leading-4 text-secondary">
-                                                      草稿
-                                                    </span>
-                                                  )}
-                                                </Link>
-                                              </li>
-                                            );
-                                          })}
-                                        </ul>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
+                              <BookNavItem
+                                key={book.bookSlug}
+                                book={book}
+                                expanded={isBookOpen}
+                                isCurrentBook={isCurrentBook}
+                                onToggle={() => toggleBook(book.bookSlug)}
+                                panelId={bookPanelId}
+                                pathname={pathname}
+                                optional={item.optional}
+                              />
                             );
                           })}
                         </div>

@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
+import { availableParallelism } from "node:os";
 
 const nextConfig: NextConfig = {
   // 部署产物：.next/standalone（deploy.sh rsync 到服务器，pm2 托管 server.js）
   output: "standalone",
+  // 本站需要预渲染 2400+ 章节；按当前机器可用 CPU 并行生成静态页，避免 Next
+  // 默认只使用一部分核心。availableParallelism 会尊重容器/进程的 CPU 配额。
+  experimental: {
+    cpus: availableParallelism(),
+    staticGenerationMaxConcurrency: availableParallelism(),
+  },
   // 关闭 React StrictMode（HEL-38）：R3F / @react-three/postprocessing 的 WebGL 上下文
   // 生命周期与 React StrictMode 开发期「双挂载」（mount→unmount→remount）不兼容——
   // Canvas 第一次挂载创建 WebGL 上下文，StrictMode 立刻卸载时 R3F 清理会销毁/丢失该上下文，
