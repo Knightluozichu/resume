@@ -2335,6 +2335,16 @@ import { poaConcurrencySessionQuestions } from "./review/poa-concurrency-session
 import { poaDistributionQuestions } from "./review/poa-distribution";
 import { poaSpecialPatternsQuestions } from "./review/poa-special-patterns";
 import { poaFinalReviewQuestions } from "./review/poa-final-review";
+import { aupLearningMapQuestions } from "./review/aup-learning-map";
+import { aupUnixPhilosophyQuestions } from "./review/aup-unix-philosophy";
+import { aupHistoryCultureQuestions } from "./review/aup-history-culture";
+import { aupModularityQuestions } from "./review/aup-modularity";
+import { aupTextualityQuestions } from "./review/aup-textuality";
+import { aupTransparencyQuestions } from "./review/aup-transparency";
+import { aupMinifaceQuestions } from "./review/aup-miniface";
+import { aupOptimizationQuestions } from "./review/aup-optimization";
+import { aupComplexityFutureQuestions } from "./review/aup-complexity-future";
+import { aupFinalReviewQuestions } from "./review/aup-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4705,6 +4715,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...poaDistributionQuestions,
   ...poaSpecialPatternsQuestions,
   ...poaFinalReviewQuestions,
+  ...aupLearningMapQuestions,
+  ...aupUnixPhilosophyQuestions,
+  ...aupHistoryCultureQuestions,
+  ...aupModularityQuestions,
+  ...aupTextualityQuestions,
+  ...aupTransparencyQuestions,
+  ...aupMinifaceQuestions,
+  ...aupOptimizationQuestions,
+  ...aupComplexityFutureQuestions,
+  ...aupFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -2458,7 +2458,17 @@ export type ReviewChapterSlug =
   | "poa-concurrency-session"
   | "poa-distribution"
   | "poa-special-patterns"
-  | "poa-final-review";
+  | "poa-final-review"
+  | "aup-learning-map"
+  | "aup-unix-philosophy"
+  | "aup-history-culture"
+  | "aup-modularity"
+  | "aup-textuality"
+  | "aup-transparency"
+  | "aup-miniface"
+  | "aup-optimization"
+  | "aup-complexity-future"
+  | "aup-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4921,6 +4931,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "poa-distribution": "分布式策略",
   "poa-special-patterns": "特殊模式与离线",
   "poa-final-review": "全书复习与知识整合",
+  "aup-learning-map": "UNIX编程艺术·知识全景图",
+  "aup-unix-philosophy": "UNIX哲学",
+  "aup-history-culture": "历史与文化",
+  "aup-modularity": "模块性与组合",
+  "aup-textuality": "文本性与数据格式",
+  "aup-transparency": "透明性与可发现性",
+  "aup-miniface": "接口与最小化",
+  "aup-optimization": "优化与性能",
+  "aup-complexity-future": "复杂性与未来",
+  "aup-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
