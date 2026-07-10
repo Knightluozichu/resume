@@ -4585,6 +4585,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...csiHvacComfortQuestions,
   ...csiSafetySystemsQuestions,
   ...csiFinalReviewQuestions,
+  ...avcLearningMapQuestions,
+  ...avcAutosarOverviewQuestions,
+  ...avcMethodologyRteQuestions,
+  ...avcBswStackQuestions,
+  ...avcMcalDriversQuestions,
+  ...avcApplicationLayerQuestions,
+  ...avcCommunicationStackQuestions,
+  ...avcDiagnosticSafetyQuestions,
+  ...avcToolchainPracticeQuestions,
+  ...avcFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

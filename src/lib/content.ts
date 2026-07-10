@@ -489,6 +489,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "mastering-ethereum": "精通以太坊",
   "illustrated-nev": "图解新能源汽车原理与构造",
   "car-structure-illustrated": "汽车构造与知识全图解",
+  "autosar-vehicle-controller": "AUTOSAR 规范与车用控制器软件开发",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

@@ -1,0 +1,92 @@
+---
+title: "通信栈"
+type: "B"
+section: "汽车与车机"
+order: 6
+description: "解析AUTOSAR通信栈五层架构（SWC/RTE/通信服务/ECU抽象/MCAL），掌握信号与I-PDU的转换及PduR路由机制。"
+demo: false
+math: false
+draft: true
+sourceUrl: ""
+---
+
+import { AvcCommunicationStackDiagram } from "@/components/mdx/autosar-vehicle-controller/diagrams/avc-communication-stack";
+
+## 学习目标
+
+- 掌握AUTOSAR通信栈五层架构及各层核心模块
+- 理解信号（Signal）与I-PDU的关系及Com模块的打包解包机制
+- 了解PduR的PDU路由功能及网关场景
+- 能够描述车速信号从SWC到CAN总线的完整数据流
+
+## 核心概念
+
+### 通信栈五层架构
+
+AUTOSAR通信栈从上到下分为五层，每层封装一层抽象：
+
+1. **SWC层**：应用组件通过RTE收发信号
+2. **RTE层**：信号路由与Runnable调度
+3. **通信服务层**：Com（信号与I-PDU打包）、PduR（PDU路由网关）、CanTp（传输层分片重组）、Dcm（诊断通信管理）
+4. **ECU抽象层**：CanIf（CAN接口）、FrIf（FlexRay接口）、EthIf（Ethernet接口），统一不同总线接口
+5. **MCAL通信驱动**：Can（CAN驱动）、Fr（FlexRay驱动）、Eth（Ethernet驱动），直接操作硬件控制器
+
+### 通信栈分层架构
+
+<AvcCommunicationStackDiagram />
+
+### 信号与 I-PDU
+
+信号（Signal）是应用层的最小数据单元（如车速值、温度值）。I-PDU（Interaction Layer Protocol Data Unit）是通信层的数据包，一个I-PDU可包含多个信号。
+
+**Com模块处理**：
+- 发送方向：Com将多个SWC发出的信号打包成一个I-PDU（按配置的位偏移和长度排列），交给PduR路由
+- 接收方向：Com从PduR接收I-PDU，按配置拆解出各个信号，通过RTE分发给SWC
+
+这种打包机制提高了总线带宽利用率，多个小信号共用一个CAN帧传输。
+
+### PduR 路由机制
+
+PduR（PDU Router）是通信栈中的PDU路由网关：
+
+- **ECU内部路由**：将Com模块的I-PDU路由到对应总线接口模块（CanIf/FrIf/EthIf），或反向路由
+- **网关路由**：ECU作为网关时，PduR可将从一个总线接收的I-PDU直接转发到另一个总线（如CAN1到CAN2或CAN到Ethernet），无需经过Com层拆包
+- **诊断路由**：将Dcm的诊断I-PDU路由到CanTp（诊断传输层）或DoIP
+
+PduR通过静态路由表（ARXML配置）确定每个I-PDU的源和目标，运行时按表查找转发。
+
+### 完整数据流：车速信号发送
+
+以车速信号从SWC发送到CAN总线为例：
+
+1. SWC调用Rte_Write()将车速信号写入RTE
+2. RTE将信号传递给Com模块
+3. Com将信号与其他信号打包成I-PDU，调用PduR_Transmit()
+4. PduR根据路由表查找目标，调用CanIf_Transmit()
+5. CanIf添加CAN ID和DLC，调用Can_Write()将CAN帧交给Can驱动
+6. Can驱动将CAN帧写入CAN控制器发送邮箱，通过CAN总线物理发送
+
+接收方ECU逆向执行：CAN总线 → Can驱动 → CanIf → PduR → Com拆包 → RTE → SWC。
+
+## 术语表
+
+| 术语 | 含义 |
+|------|------|
+| 通信栈 | AUTOSAR通信功能的五层架构 |
+| Com | 通信服务模块，信号与I-PDU打包解包 |
+| PduR | PDU路由器，I-PDU路由网关 |
+| CanTp | CAN传输层，大数据分片重组 |
+| CanIf | CAN接口模块，ECU抽象层 |
+| Signal | 信号，应用层最小数据单元 |
+| I-PDU | 交互层协议数据单元，信号打包的数据包 |
+| Dcm | 诊断通信管理 |
+| 网关路由 | 跨总线I-PDU直接转发 |
+| Can驱动 | MCAL层CAN控制器驱动 |
+
+## 练习题
+
+1. AUTOSAR通信栈从上到下分为哪五层？每层的核心模块是什么？
+2. 信号和I-PDU的关系是什么？Com模块如何处理它们？
+3. PduR模块的作用是什么？它在网关场景中如何实现PDU路由？
+4. 描述一个车速信号从SWC发送到CAN总线的完整数据流。
+5. 通信栈中ECU抽象层的CanIf和MCAL层的Can驱动有什么区别？

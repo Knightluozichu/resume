@@ -2398,7 +2398,17 @@ export type ReviewChapterSlug =
   | "csi-electrical-electronics"
   | "csi-hvac-comfort"
   | "csi-safety-systems"
-  | "csi-final-review";
+  | "csi-final-review"
+  | "avc-learning-map"
+  | "avc-autosar-overview"
+  | "avc-methodology-rte"
+  | "avc-bsw-stack"
+  | "avc-mcal-drivers"
+  | "avc-application-layer"
+  | "avc-communication-stack"
+  | "avc-diagnostic-safety"
+  | "avc-toolchain-practice"
+  | "avc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4801,6 +4811,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "csi-hvac-comfort": "空调与舒适性系统",
   "csi-safety-systems": "安全系统",
   "csi-final-review": "全书复习与知识整合",
+  "avc-learning-map": "AUTOSAR规范·知识全景图",
+  "avc-autosar-overview": "AUTOSAR架构概览",
+  "avc-methodology-rte": "方法论与RTE",
+  "avc-bsw-stack": "基础软件层BSW",
+  "avc-mcal-drivers": "MCAL与驱动层",
+  "avc-application-layer": "应用层与SWC",
+  "avc-communication-stack": "通信栈",
+  "avc-diagnostic-safety": "诊断与功能安全",
+  "avc-toolchain-practice": "工具链与开发实践",
+  "avc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
