@@ -285,6 +285,7 @@ export const BOOK_ORDER = [
   "coder-revolution",
   "make-it-stick",
   "mindset-growth",
+  "peak-deliberate-practice",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -510,6 +511,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "coder-revolution": "码农翻身",
   "make-it-stick": "认知天性",
   "mindset-growth": "终身成长",
+  "peak-deliberate-practice": "刻意练习",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

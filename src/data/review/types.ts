@@ -2498,7 +2498,17 @@ export type ReviewChapterSlug =
   | "msg-business-leadership"
   | "msg-relationships"
   | "msg-parents-teachers"
-  | "msg-final-review";
+  | "msg-final-review"
+  | "pdp-learning-map"
+  | "pdp-what-is-practice"
+  | "pdp-mental-representations"
+  | "pdp-golden-standard"
+  | "pdp-deliberate-practice"
+  | "pdp-coaching-feedback"
+  | "pdp-crossing-plateaus"
+  | "pdp-expertise-life"
+  | "pdp-everyday-life"
+  | "pdp-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -5001,6 +5011,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "msg-relationships": "人际关系",
   "msg-parents-teachers": "父母与教师",
   "msg-final-review": "全书复习与知识整合",
+  "pdp-learning-map": "刻意练习·知识全景图",
+  "pdp-what-is-practice": "什么是练习",
+  "pdp-mental-representations": "心理表征",
+  "pdp-golden-standard": "黄金标准",
+  "pdp-deliberate-practice": "刻意练习原则",
+  "pdp-coaching-feedback": "导师与反馈",
+  "pdp-crossing-plateaus": "跨越瓶颈",
+  "pdp-expertise-life": "专家之路",
+  "pdp-everyday-life": "日常生活中的刻意练习",
+  "pdp-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

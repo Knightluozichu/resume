@@ -2375,6 +2375,16 @@ import { msgBusinessLeadershipQuestions } from "./review/msg-business-leadership
 import { msgRelationshipsQuestions } from "./review/msg-relationships";
 import { msgParentsTeachersQuestions } from "./review/msg-parents-teachers";
 import { msgFinalReviewQuestions } from "./review/msg-final-review";
+import { pdpLearningMapQuestions } from "./review/pdp-learning-map";
+import { pdpWhatIsPracticeQuestions } from "./review/pdp-what-is-practice";
+import { pdpMentalRepresentationsQuestions } from "./review/pdp-mental-representations";
+import { pdpGoldenStandardQuestions } from "./review/pdp-golden-standard";
+import { pdpDeliberatePracticeQuestions } from "./review/pdp-deliberate-practice";
+import { pdpCoachingFeedbackQuestions } from "./review/pdp-coaching-feedback";
+import { pdpCrossingPlateausQuestions } from "./review/pdp-crossing-plateaus";
+import { pdpExpertiseLifeQuestions } from "./review/pdp-expertise-life";
+import { pdpEverydayLifeQuestions } from "./review/pdp-everyday-life";
+import { pdpFinalReviewQuestions } from "./review/pdp-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4785,6 +4795,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...msgRelationshipsQuestions,
   ...msgParentsTeachersQuestions,
   ...msgFinalReviewQuestions,
+  ...pdpLearningMapQuestions,
+  ...pdpWhatIsPracticeQuestions,
+  ...pdpMentalRepresentationsQuestions,
+  ...pdpGoldenStandardQuestions,
+  ...pdpDeliberatePracticeQuestions,
+  ...pdpCoachingFeedbackQuestions,
+  ...pdpCrossingPlateausQuestions,
+  ...pdpExpertiseLifeQuestions,
+  ...pdpEverydayLifeQuestions,
+  ...pdpFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
