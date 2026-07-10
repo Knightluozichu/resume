@@ -2285,6 +2285,16 @@ import { avcCommunicationStackQuestions } from "./review/avc-communication-stack
 import { avcDiagnosticSafetyQuestions } from "./review/avc-diagnostic-safety";
 import { avcToolchainPracticeQuestions } from "./review/avc-toolchain-practice";
 import { avcFinalReviewQuestions } from "./review/avc-final-review";
+import { soaLearningMapQuestions } from "./review/soa-learning-map";
+import { soaSoaFundamentalsQuestions } from "./review/soa-soa-fundamentals";
+import { soaVehicleArchitectureQuestions } from "./review/soa-vehicle-architecture";
+import { soaServiceDesignQuestions } from "./review/soa-service-design";
+import { soaCommunicationProtocolsQuestions } from "./review/soa-communication-protocols";
+import { soaServiceDiscoveryQuestions } from "./review/soa-service-discovery";
+import { soaAdaptivePlatformQuestions } from "./review/soa-adaptive-platform";
+import { soaMethodologyToolsQuestions } from "./review/soa-methodology-tools";
+import { soaCaseStudyQuestions } from "./review/soa-case-study";
+import { soaFinalReviewQuestions } from "./review/soa-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4605,6 +4615,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...avcDiagnosticSafetyQuestions,
   ...avcToolchainPracticeQuestions,
   ...avcFinalReviewQuestions,
+  ...soaLearningMapQuestions,
+  ...soaSoaFundamentalsQuestions,
+  ...soaVehicleArchitectureQuestions,
+  ...soaServiceDesignQuestions,
+  ...soaCommunicationProtocolsQuestions,
+  ...soaServiceDiscoveryQuestions,
+  ...soaAdaptivePlatformQuestions,
+  ...soaMethodologyToolsQuestions,
+  ...soaCaseStudyQuestions,
+  ...soaFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

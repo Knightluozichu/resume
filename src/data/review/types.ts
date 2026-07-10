@@ -2408,7 +2408,17 @@ export type ReviewChapterSlug =
   | "avc-communication-stack"
   | "avc-diagnostic-safety"
   | "avc-toolchain-practice"
-  | "avc-final-review";
+  | "avc-final-review"
+  | "soa-learning-map"
+  | "soa-soa-fundamentals"
+  | "soa-vehicle-architecture"
+  | "soa-service-design"
+  | "soa-communication-protocols"
+  | "soa-service-discovery"
+  | "soa-adaptive-platform"
+  | "soa-methodology-tools"
+  | "soa-case-study"
+  | "soa-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4821,6 +4831,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "avc-diagnostic-safety": "诊断与功能安全",
   "avc-toolchain-practice": "工具链与开发实践",
   "avc-final-review": "全书复习与知识整合",
+  "soa-learning-map": "SOA车载软件架构·知识全景图",
+  "soa-soa-fundamentals": "SOA基础概念与原则",
+  "soa-vehicle-architecture": "车载软件架构演进",
+  "soa-service-design": "服务设计与接口定义",
+  "soa-communication-protocols": "通信协议SOME/IP与DDS",
+  "soa-service-discovery": "服务发现与中间件",
+  "soa-adaptive-platform": "自适应平台AP集成",
+  "soa-methodology-tools": "方法论与开发工具链",
+  "soa-case-study": "案例分析与未来趋势",
+  "soa-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
