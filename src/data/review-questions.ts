@@ -2355,6 +2355,16 @@ import { crvJvmLanguageQuestions } from "./review/crv-jvm-language";
 import { crvDevopsCloudQuestions } from "./review/crv-devops-cloud";
 import { crvCareerGrowthQuestions } from "./review/crv-career-growth";
 import { crvFinalReviewQuestions } from "./review/crv-final-review";
+import { misLearningMapQuestions } from "./review/mis-learning-map";
+import { misLearningMythsQuestions } from "./review/mis-learning-myths";
+import { misRetrievalPracticeQuestions } from "./review/mis-retrieval-practice";
+import { misSpacedInterleavingQuestions } from "./review/mis-spaced-interleaving";
+import { misElaborationQuestions } from "./review/mis-elaboration";
+import { misFeedbackReflectionQuestions } from "./review/mis-feedback-reflection";
+import { misMemoryModelsQuestions } from "./review/mis-memory-models";
+import { misBeyondBasicsQuestions } from "./review/mis-beyond-basics";
+import { misLifelongLearningQuestions } from "./review/mis-lifelong-learning";
+import { misFinalReviewQuestions } from "./review/mis-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4745,6 +4755,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...crvDevopsCloudQuestions,
   ...crvCareerGrowthQuestions,
   ...crvFinalReviewQuestions,
+  ...misLearningMapQuestions,
+  ...misLearningMythsQuestions,
+  ...misRetrievalPracticeQuestions,
+  ...misSpacedInterleavingQuestions,
+  ...misElaborationQuestions,
+  ...misFeedbackReflectionQuestions,
+  ...misMemoryModelsQuestions,
+  ...misBeyondBasicsQuestions,
+  ...misLifelongLearningQuestions,
+  ...misFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

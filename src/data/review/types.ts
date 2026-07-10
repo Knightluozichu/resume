@@ -2478,7 +2478,17 @@ export type ReviewChapterSlug =
   | "crv-jvm-language"
   | "crv-devops-cloud"
   | "crv-career-growth"
-  | "crv-final-review";
+  | "crv-final-review"
+  | "mis-learning-map"
+  | "mis-learning-myths"
+  | "mis-retrieval-practice"
+  | "mis-spaced-interleaving"
+  | "mis-elaboration"
+  | "mis-feedback-reflection"
+  | "mis-memory-models"
+  | "mis-beyond-basics"
+  | "mis-lifelong-learning"
+  | "mis-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4961,6 +4971,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "crv-devops-cloud": "DevOps与云计算",
   "crv-career-growth": "职业成长与思考",
   "crv-final-review": "全书复习与知识整合",
+  "mis-learning-map": "认知天性·知识全景图",
+  "mis-learning-myths": "学习的迷思",
+  "mis-retrieval-practice": "检索练习",
+  "mis-spaced-interleaving": "间隔练习与穿插练习",
+  "mis-elaboration": "精细化与生成",
+  "mis-feedback-reflection": "反馈与反思",
+  "mis-memory-models": "记忆模型与心智模型",
+  "mis-beyond-basics": "超越基础学习",
+  "mis-lifelong-learning": "终身学习策略",
+  "mis-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

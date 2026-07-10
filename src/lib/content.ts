@@ -283,6 +283,7 @@ export const BOOK_ORDER = [
   "poeaa-enterprise-patterns",
   "art-of-unix-programming",
   "coder-revolution",
+  "make-it-stick",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -506,6 +507,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "poeaa-enterprise-patterns": "企业应用架构模式",
   "art-of-unix-programming": "UNIX编程艺术",
   "coder-revolution": "码农翻身",
+  "make-it-stick": "认知天性",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

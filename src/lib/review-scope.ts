@@ -190,6 +190,7 @@ const PREFIX_TO_BOOK: Array<[string, string]> = [
   ["poa-", "poeaa-enterprise-patterns"],
   ["aup-", "art-of-unix-programming"],
   ["crv-", "coder-revolution"],
+  ["mis-", "make-it-stick"],
 ];
 
 /** 去掉中文/英文空白后比较标题，吸收「高级 GLSL」↔「高级GLSL」之类的空白差异。 */
