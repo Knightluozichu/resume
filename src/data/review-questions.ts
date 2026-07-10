@@ -2365,6 +2365,16 @@ import { misMemoryModelsQuestions } from "./review/mis-memory-models";
 import { misBeyondBasicsQuestions } from "./review/mis-beyond-basics";
 import { misLifelongLearningQuestions } from "./review/mis-lifelong-learning";
 import { misFinalReviewQuestions } from "./review/mis-final-review";
+import { msgLearningMapQuestions } from "./review/msg-learning-map";
+import { msgTwoMindsetsQuestions } from "./review/msg-two-mindsets";
+import { msgFixedMindsetQuestions } from "./review/msg-fixed-mindset";
+import { msgGrowthMindsetQuestions } from "./review/msg-growth-mindset";
+import { msgMindsetInActionQuestions } from "./review/msg-mindset-in-action";
+import { msgSportsChampionsQuestions } from "./review/msg-sports-champions";
+import { msgBusinessLeadershipQuestions } from "./review/msg-business-leadership";
+import { msgRelationshipsQuestions } from "./review/msg-relationships";
+import { msgParentsTeachersQuestions } from "./review/msg-parents-teachers";
+import { msgFinalReviewQuestions } from "./review/msg-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4765,6 +4775,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...misBeyondBasicsQuestions,
   ...misLifelongLearningQuestions,
   ...misFinalReviewQuestions,
+  ...msgLearningMapQuestions,
+  ...msgTwoMindsetsQuestions,
+  ...msgFixedMindsetQuestions,
+  ...msgGrowthMindsetQuestions,
+  ...msgMindsetInActionQuestions,
+  ...msgSportsChampionsQuestions,
+  ...msgBusinessLeadershipQuestions,
+  ...msgRelationshipsQuestions,
+  ...msgParentsTeachersQuestions,
+  ...msgFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

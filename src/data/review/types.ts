@@ -2488,7 +2488,17 @@ export type ReviewChapterSlug =
   | "mis-memory-models"
   | "mis-beyond-basics"
   | "mis-lifelong-learning"
-  | "mis-final-review";
+  | "mis-final-review"
+  | "msg-learning-map"
+  | "msg-two-mindsets"
+  | "msg-fixed-mindset"
+  | "msg-growth-mindset"
+  | "msg-mindset-in-action"
+  | "msg-sports-champions"
+  | "msg-business-leadership"
+  | "msg-relationships"
+  | "msg-parents-teachers"
+  | "msg-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -4981,6 +4991,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "mis-beyond-basics": "超越基础学习",
   "mis-lifelong-learning": "终身学习策略",
   "mis-final-review": "全书复习与知识整合",
+  "msg-learning-map": "终身成长·知识全景图",
+  "msg-two-mindsets": "两种思维模式",
+  "msg-fixed-mindset": "固定型思维",
+  "msg-growth-mindset": "成长型思维",
+  "msg-mindset-in-action": "思维模式在行动",
+  "msg-sports-champions": "体育与冠军",
+  "msg-business-leadership": "商业与领导力",
+  "msg-relationships": "人际关系",
+  "msg-parents-teachers": "父母与教师",
+  "msg-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
