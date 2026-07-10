@@ -288,6 +288,7 @@ export const BOOK_ORDER = [
   "peak-deliberate-practice",
   "out-of-control",
   "effective-executive",
+  "org-problem-tools",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -516,6 +517,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "peak-deliberate-practice": "刻意练习",
   "out-of-control": "失控",
   "effective-executive": "卓有成效的管理者",
+  "org-problem-tools": "解决组织问题的49个工具",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";

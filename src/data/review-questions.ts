@@ -2405,6 +2405,16 @@ import { eexDecisionProcessQuestions } from "./review/eex-decision-process";
 import { eexEffectiveDecisionsQuestions } from "./review/eex-effective-decisions";
 import { eexConclusionQuestions } from "./review/eex-conclusion";
 import { eexFinalReviewQuestions } from "./review/eex-final-review";
+import { optLearningMapQuestions } from "./review/opt-learning-map";
+import { optProblemAnalysisQuestions } from "./review/opt-problem-analysis";
+import { optRootCauseQuestions } from "./review/opt-root-cause";
+import { optStrategyPlanningQuestions } from "./review/opt-strategy-planning";
+import { optDecisionMakingQuestions } from "./review/opt-decision-making";
+import { optProcessImprovementQuestions } from "./review/opt-process-improvement";
+import { optTeamCollaborationQuestions } from "./review/opt-team-collaboration";
+import { optInnovationCreativityQuestions } from "./review/opt-innovation-creativity";
+import { optEvaluationMetricsQuestions } from "./review/opt-evaluation-metrics";
+import { optFinalReviewQuestions } from "./review/opt-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4845,6 +4855,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...eexEffectiveDecisionsQuestions,
   ...eexConclusionQuestions,
   ...eexFinalReviewQuestions,
+  ...optLearningMapQuestions,
+  ...optProblemAnalysisQuestions,
+  ...optRootCauseQuestions,
+  ...optStrategyPlanningQuestions,
+  ...optDecisionMakingQuestions,
+  ...optProcessImprovementQuestions,
+  ...optTeamCollaborationQuestions,
+  ...optInnovationCreativityQuestions,
+  ...optEvaluationMetricsQuestions,
+  ...optFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

@@ -2528,7 +2528,17 @@ export type ReviewChapterSlug =
   | "eex-decision-process"
   | "eex-effective-decisions"
   | "eex-conclusion"
-  | "eex-final-review";
+  | "eex-final-review"
+  | "opt-learning-map"
+  | "opt-problem-analysis"
+  | "opt-root-cause"
+  | "opt-strategy-planning"
+  | "opt-decision-making"
+  | "opt-process-improvement"
+  | "opt-team-collaboration"
+  | "opt-innovation-creativity"
+  | "opt-evaluation-metrics"
+  | "opt-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -5061,6 +5071,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "eex-effective-decisions": "有效的决策",
   "eex-conclusion": "结论与管理者之道",
   "eex-final-review": "全书复习与知识整合",
+  "opt-learning-map": "解决组织问题的49个工具·知识全景图",
+  "opt-problem-analysis": "问题分析工具",
+  "opt-root-cause": "根因分析工具",
+  "opt-strategy-planning": "战略规划工具",
+  "opt-decision-making": "决策制定工具",
+  "opt-process-improvement": "流程改善工具",
+  "opt-team-collaboration": "团队协作工具",
+  "opt-innovation-creativity": "创新思维工具",
+  "opt-evaluation-metrics": "评估与度量工具",
+  "opt-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */
