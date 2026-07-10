@@ -2518,7 +2518,17 @@ export type ReviewChapterSlug =
   | "ooc-swarm-intelligence"
   | "ooc-control-failures"
   | "ooc-future-trends"
-  | "ooc-final-review";
+  | "ooc-final-review"
+  | "eex-learning-map"
+  | "eex-effectiveness"
+  | "eex-time-management"
+  | "eex-contribution"
+  | "eex-strengths"
+  | "eex-priorities"
+  | "eex-decision-process"
+  | "eex-effective-decisions"
+  | "eex-conclusion"
+  | "eex-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -5041,6 +5051,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "ooc-control-failures": "控制的失败",
   "ooc-future-trends": "未来趋势与启示",
   "ooc-final-review": "全书复习与知识整合",
+  "eex-learning-map": "卓有成效的管理者·知识全景图",
+  "eex-effectiveness": "卓有成效是可以学会的",
+  "eex-time-management": "掌握自己的时间",
+  "eex-contribution": "我能贡献什么",
+  "eex-strengths": "发挥长处",
+  "eex-priorities": "要事优先",
+  "eex-decision-process": "决策的要素",
+  "eex-effective-decisions": "有效的决策",
+  "eex-conclusion": "结论与管理者之道",
+  "eex-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

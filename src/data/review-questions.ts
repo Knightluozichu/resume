@@ -2395,6 +2395,16 @@ import { oocSwarmIntelligenceQuestions } from "./review/ooc-swarm-intelligence";
 import { oocControlFailuresQuestions } from "./review/ooc-control-failures";
 import { oocFutureTrendsQuestions } from "./review/ooc-future-trends";
 import { oocFinalReviewQuestions } from "./review/ooc-final-review";
+import { eexLearningMapQuestions } from "./review/eex-learning-map";
+import { eexEffectivenessQuestions } from "./review/eex-effectiveness";
+import { eexTimeManagementQuestions } from "./review/eex-time-management";
+import { eexContributionQuestions } from "./review/eex-contribution";
+import { eexStrengthsQuestions } from "./review/eex-strengths";
+import { eexPrioritiesQuestions } from "./review/eex-priorities";
+import { eexDecisionProcessQuestions } from "./review/eex-decision-process";
+import { eexEffectiveDecisionsQuestions } from "./review/eex-effective-decisions";
+import { eexConclusionQuestions } from "./review/eex-conclusion";
+import { eexFinalReviewQuestions } from "./review/eex-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4825,6 +4835,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...oocControlFailuresQuestions,
   ...oocFutureTrendsQuestions,
   ...oocFinalReviewQuestions,
+  ...eexLearningMapQuestions,
+  ...eexEffectivenessQuestions,
+  ...eexTimeManagementQuestions,
+  ...eexContributionQuestions,
+  ...eexStrengthsQuestions,
+  ...eexPrioritiesQuestions,
+  ...eexDecisionProcessQuestions,
+  ...eexEffectiveDecisionsQuestions,
+  ...eexConclusionQuestions,
+  ...eexFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */
