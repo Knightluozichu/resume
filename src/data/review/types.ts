@@ -2508,7 +2508,17 @@ export type ReviewChapterSlug =
   | "pdp-crossing-plateaus"
   | "pdp-expertise-life"
   | "pdp-everyday-life"
-  | "pdp-final-review";
+  | "pdp-final-review"
+  | "ooc-learning-map"
+  | "ooc-bio-machines"
+  | "ooc-emergence"
+  | "ooc-coevolution"
+  | "ooc-ecosystems"
+  | "ooc-network-economy"
+  | "ooc-swarm-intelligence"
+  | "ooc-control-failures"
+  | "ooc-future-trends"
+  | "ooc-final-review";
 
 /** 认知层级：1 认记 / 2 理解 / 3 应用 / 4 综合。 */
 export type ReviewLevel = 1 | 2 | 3 | 4;
@@ -5021,6 +5031,16 @@ export const CHAPTER_TITLES: Record<ReviewChapterSlug, string> = {
   "pdp-expertise-life": "专家之路",
   "pdp-everyday-life": "日常生活中的刻意练习",
   "pdp-final-review": "全书复习与知识整合",
+  "ooc-learning-map": "失控·知识全景图",
+  "ooc-bio-machines": "生物与机器的融合",
+  "ooc-emergence": "涌现与自组织",
+  "ooc-coevolution": "共同进化",
+  "ooc-ecosystems": "生态系统",
+  "ooc-network-economy": "网络经济",
+  "ooc-swarm-intelligence": "群体智能",
+  "ooc-control-failures": "控制的失败",
+  "ooc-future-trends": "未来趋势与启示",
+  "ooc-final-review": "全书复习与知识整合",
 };
 
 /** 等级 → 短标签（卡片徽标文案）。 */

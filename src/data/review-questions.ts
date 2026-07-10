@@ -2385,6 +2385,16 @@ import { pdpCrossingPlateausQuestions } from "./review/pdp-crossing-plateaus";
 import { pdpExpertiseLifeQuestions } from "./review/pdp-expertise-life";
 import { pdpEverydayLifeQuestions } from "./review/pdp-everyday-life";
 import { pdpFinalReviewQuestions } from "./review/pdp-final-review";
+import { oocLearningMapQuestions } from "./review/ooc-learning-map";
+import { oocBioMachinesQuestions } from "./review/ooc-bio-machines";
+import { oocEmergenceQuestions } from "./review/ooc-emergence";
+import { oocCoevolutionQuestions } from "./review/ooc-coevolution";
+import { oocEcosystemsQuestions } from "./review/ooc-ecosystems";
+import { oocNetworkEconomyQuestions } from "./review/ooc-network-economy";
+import { oocSwarmIntelligenceQuestions } from "./review/ooc-swarm-intelligence";
+import { oocControlFailuresQuestions } from "./review/ooc-control-failures";
+import { oocFutureTrendsQuestions } from "./review/ooc-future-trends";
+import { oocFinalReviewQuestions } from "./review/ooc-final-review";
 
 export {
   CHAPTER_TITLES,
@@ -4805,6 +4815,16 @@ export const REVIEW_QUESTIONS: ReviewQuestion[] = [
   ...pdpExpertiseLifeQuestions,
   ...pdpEverydayLifeQuestions,
   ...pdpFinalReviewQuestions,
+  ...oocLearningMapQuestions,
+  ...oocBioMachinesQuestions,
+  ...oocEmergenceQuestions,
+  ...oocCoevolutionQuestions,
+  ...oocEcosystemsQuestions,
+  ...oocNetworkEconomyQuestions,
+  ...oocSwarmIntelligenceQuestions,
+  ...oocControlFailuresQuestions,
+  ...oocFutureTrendsQuestions,
+  ...oocFinalReviewQuestions,
 ];
 
 /** 题库总数（自检/小结展示用）。 */

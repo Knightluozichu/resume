@@ -286,6 +286,7 @@ export const BOOK_ORDER = [
   "make-it-stick",
   "mindset-growth",
   "peak-deliberate-practice",
+  "out-of-control",
 ] as const;
 
 /** book slug → 书显示名（侧边栏书头、列表页书标题）。 */
@@ -512,6 +513,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "make-it-stick": "认知天性",
   "mindset-growth": "终身成长",
   "peak-deliberate-practice": "刻意练习",
+  "out-of-control": "失控",
 };
 
 export type LearningStageLevel = "beginner" | "intermediate" | "advanced";
