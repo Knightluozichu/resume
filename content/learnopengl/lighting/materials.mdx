@@ -1,14 +1,20 @@
 ---
-title: 材质
+title: Material/Light 结构体与 Phong 材质预设
 type: C
 section: 光照
 order: 3
 description: 学会用一个「材质」结构体描述物体表面怎么反光——拆出环境/漫反射/镜面三种颜色加一个反光度，照抄一张材质数值表，就能把同一个物体调成金属、塑料或橡胶的质感。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/03%20Materials/
+sourceUrl: https://learnopengl.com/Lighting/Materials
 draft: false
 ---
+
+import {
+  MaterialLightPairDiagram,
+  MaterialPresetDiagram,
+  MaterialStagesDiagram,
+} from "@/components/mdx/learnopengl/diagrams/materials";
 
 {/* C 实战型章（HEL-52，M5 光照篇第 3 篇）：主题是材质——把 Phong 三项各自拆成「材质色 × 光强」，用一个 Material 结构体 + 一个 Light 结构体描述「物体表面怎么反光 / 光本身各项多强」，从而调出金属/塑料/橡胶等不同质感。承接「基础光照」（已会 Phong 三项：环境 ambient + 漫反射 diffuse + 镜面 specular，已知 reflect/pow/法线/视线方向）。C 型：代码对照为重心（§6 覆盖 GLSL 的 struct Material / struct Light、片元用 material.* 与 light.* 算 Phong、CPU 侧 setVec3/setFloat 灌 uniform、C++↔WebGL2 差异、材质预设表照抄），math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验好，勿改勿建）：它的环境强度/镜面强度/高光指数三个控件正好对应材质的 ambient/specular/shininess 三维，用来演示 shininess 与镜面对「光泽感」的影响（物体色固定，故「不同材质的颜色」维度靠 §6 材质预设表 + 文字讲，不依赖 Demo 改色）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +24,17 @@ draft: false
 
 <Objectives>
 
-- 能说清一个**材质**由哪几样东西描述：环境、漫反射、镜面三种颜色，外加一个「反光度」，以及为什么每一项都要乘上光的强度
-- 能在 Demo 里改出指定质感：把高光指数拉高、镜面拉满，调出**高反光的光滑金属感**；再把高光指数压低，调出**散开的哑光橡胶感**
-- 能回答：照抄材质数值表里「金」的那一行，把它的镜面颜色误填成 `(2, 2, 2)`，物体看上去会出什么毛病？
+- 能解释 Material 的 ambient、diffuse、specular、shininess 四个字段分别控制什么
+- 能区分 Material 表面反射属性与 Light 入射光强度，并逐项写出它们的配对关系
+- 能实现 GLSL 结构体 uniform 及 CPU 侧带点成员名的完整上传代码
+- 能修改材质预设与灯光强度，调出金、翡翠和哑光橡胶的不同主色与高光
+- 能判断镜面颜色越界、shininess 填错、漏传结构体成员或把 light/material 混用造成的画面问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库——同样的光照在不同表面上看着完全不同。 */}
 
-## 同样的光，金属和橡胶为什么差这么多
+## 为什么同样的光照在金属和橡胶上差这么多
 
 上一章你已经能给物体打一束光，让它有了明暗和一块高光。可现实里，把一束一模一样的光打在不同东西上，看着天差地别：一枚金戒指亮得晃眼、有一小块刺目的高光；旁边一块黑橡胶垫却闷闷的，高光糊成一大片、甚至看不太出来。光没变，变的是**表面本身**。
 
@@ -61,11 +69,35 @@ draft: false
 
 这么拆的好处是**两边都能单独调**：调光（比如把环境强度压低，免得整个场景发灰）只动 Light 那三项；调质感（金属还是橡胶）只动 Material 那四样。它俩相乘，才是最终弹进眼睛的颜色。这正是上一章 Phong 三项的「升级版」——把每一项里写死的颜色，换成了「材质色 × 光强」。
 
+<MaterialLightPairDiagram />
+
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。Phong 三项公式在上一章「基础光照」已建立；本章只把每项的颜色换成「材质色 × 光强」，用 §3 文字 + §6 片元代码逐行 + §5 Demo 的直觉代替，不再上公式。 */}
 
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验证，勿改勿建）。它的环境强度/镜面强度/高光指数三控件正好对应材质 ambient/specular/shininess 三维；物体色固定，故「不同材质颜色」维度交给 §6 预设表。猜一猜引导；控件 ≤5（含光源方位/环境/镜面/高光指数/重置）；自带骨架屏 + WebGL2 兜底。 */}
 
 ## 动手：把同一个物体调出金属感和橡胶感
+
+先按配置顺序逐项核对，避免看到最终画面异常时同时怀疑七个 uniform：
+
+<Stepper>
+  <Step title="选一整套材质参数">
+    同时设置 ambient、diffuse、specular 与 shininess。不要只改 diffuse 主色；高光颜色和指数不变时，物体往往只是换色而没有真正换质感。
+
+    <MaterialStagesDiagram step={1} />
+  </Step>
+  <Step title="独立配置光源三项强度">
+    设置 light.ambient、light.diffuse、light.specular。环境项通常弱于直接光，镜面项可保持完整光色；这三项描述灯，不应从材质表照抄。
+
+    <MaterialStagesDiagram step={2} />
+  </Step>
+  <Step title="逐项相乘并叠加">
+    在片段着色器里分别计算 `light.X * material.X`，再把 N·L 与 R·V 的几何强度乘入 diffuse/specular，最后相加输出。
+
+    <MaterialStagesDiagram step={3} />
+  </Step>
+</Stepper>
+
+<MaterialStagesDiagram />
 
 下面是本章的主 Demo（和上一章同一个 Phong 光照演示）。它的三个滑块——**环境强度、镜面强度、高光指数**——正好对应材质的三个维度：环境项、镜面项、反光度。我们就用它来感受**反光度和镜面对「光泽感」的影响**。
 
@@ -289,6 +321,25 @@ gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
 
 </Callout>
 
+### 官方示例：让 Light 属性随光色变化
+
+官方示例还让光源颜色随时间变化，并由它派生更弱的环境光与中等强度的漫反射光。这样能直观看出 Material 是稳定的表面属性，而 Light 会随灯光颜色和强度变化：
+
+```cpp
+vec3 lightColor;
+lightColor.x = sin(glfwGetTime() * 2.0f);
+lightColor.y = sin(glfwGetTime() * 0.7f);
+lightColor.z = sin(glfwGetTime() * 1.3f);
+
+vec3 diffuseColor = lightColor * vec3(0.5f);
+vec3 ambientColor = diffuseColor * vec3(0.2f);
+shader.setVec3("light.ambient", ambientColor);
+shader.setVec3("light.diffuse", diffuseColor);
+shader.setVec3("light.specular", 1.0f, 1.0f, 1.0f);
+```
+
+这里环境光最终约为 `lightColor × 0.1`，漫反射约为 `lightColor × 0.5`，镜面保持白色。三项强度来自同一盏灯但用途不同；若直接把三项都设成完整 `lightColor`，环境底光会过强，画面容易发灰。
+
 ### 照抄就能用：材质预设表
 
 「哪几个数配出金、哪几个配出橡胶」是门经验活——好在前人已经测好了一整张表，照抄即可。下面是几组常用 <Term def="前人测好的一批现成材质数值——每一行给出一种真实材料（翡翠、金、橡胶等）的 ambient / diffuse / specular 三色和 shininess 反光度。照抄整行灌进 uniform，物体立刻有了对应质感，不必自己一个个试。">材质预设</Term>（数值来自经典的 OpenGL 材质表，`shininess` 已乘成 0~256 区间，可直接填）。把任意一行的四样灌进上面第四步那几个 uniform，并把光的三项强度都设成 `(1,1,1)`（这样物体严格按预设显示），物体就有了对应质感：
@@ -303,6 +354,8 @@ gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
 ```
 
 横向看每一行是一种材质；纵向看四列正是着色器里 `material` 的四样。规律一眼可见：**金属类（金、翡翠、红宝石）反光度高**（51~77），高光小而锐、镜面色还带本色（金的镜面偏暖）；**橡胶类反光度低**（10），高光摊得开、显哑。改质感不用懂物理，照抄一行即可。
+
+<MaterialPresetDiagram />
 
 {/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含 1 个可在 §5 LightingDemo 亲手触发（高光指数=0/拉满）。 */}
 
@@ -342,7 +395,7 @@ gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
 
 <Exercises>
 
-**练习 1（改 Demo / 调材质型）** 在 §5 的 Demo 里调出两种质感：①**高反光的光滑金属感**（锐利小高光）；②**哑光橡胶感**（高光摊成一大片）。分别说出你怎么动那三个滑块、为什么。
+**问题 1（改 Demo / 调材质型）** 在 §5 的 Demo 里调出两种质感：①**高反光的光滑金属感**（锐利小高光）；②**哑光橡胶感**（高光摊成一大片）。分别说出你怎么动那三个滑块、为什么。
 
 <Answer>
 
@@ -352,7 +405,7 @@ gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
 
 </Answer>
 
-**练习 2（问答型）** 材质里有 `material.ambient/diffuse/specular`，光里也有 `light.ambient/diffuse/specular`，名字一模一样。它俩各自描述的是什么？为什么要分成两套、而不是合并成一套？
+**问题 2（问答型）** 材质里有 `material.ambient/diffuse/specular`，光里也有 `light.ambient/diffuse/specular`，名字一模一样。它俩各自描述的是什么？为什么要分成两套、而不是合并成一套？
 
 <Answer>
 
@@ -360,7 +413,7 @@ gl.uniform3f(p("light.specular"), 1.0, 1.0, 1.0);
 
 </Answer>
 
-**练习 3（独立实现题）** 不看上面的代码，写出片段着色器里**镜面项**那几行：从 `material` 和 `light` 出发，把镜面高光算出来。目标效果：反光度由 `material.shininess` 控制、高光颜色和强度由 `material.specular` 与 `light.specular` 决定。（已知 `norm`、`lightDir`、`viewDir` 都已算好。）
+**问题 3（独立实现题）** 不看上面的代码，写出片段着色器里**镜面项**那几行：从 `material` 和 `light` 出发，把镜面高光算出来。目标效果：反光度由 `material.shininess` 控制、高光颜色和强度由 `material.specular` 与 `light.specular` 决定。（已知 `norm`、`lightDir`、`viewDir` 都已算好。）
 
 <Answer>
 

@@ -29,6 +29,14 @@ function stageContainsBook(
   );
 }
 
+function pathBookCount(path: LearningPathTree[number]) {
+  return path.stages.reduce(
+    (total, stage) =>
+      total + stage.items.filter((item) => item.kind === "book").length,
+    0,
+  );
+}
+
 export function ChapterNav({ paths }: { paths: LearningPathTree }) {
   const pathname = usePathname();
   const currentBookSlug = pathname.split("/")[2] ?? null;
@@ -105,18 +113,21 @@ export function ChapterNav({ paths }: { paths: LearningPathTree }) {
               className={`${pathButtonClass} ${
                 isCurrentPath ? "text-accent" : "text-primary hover:text-accent"
               }`}
-            >
-              <span
+              >
+                <span
                 aria-hidden="true"
                 className="inline-block shrink-0 text-xs text-secondary transition-transform duration-(--duration-expand) ease-standard"
                 style={{
                   transform: isPathOpen ? "rotate(0deg)" : "rotate(-90deg)",
                 }}
-              >
-                ▾
-              </span>
-              <span className="min-w-0 truncate">{path.title}</span>
-            </button>
+                >
+                  ▾
+                </span>
+                <span className="min-w-0 truncate">{path.title}</span>
+                <span className="ml-auto shrink-0 font-mono text-xs font-normal tabular-nums text-secondary">
+                  {pathBookCount(path)} 本
+                </span>
+              </button>
 
             {isPathOpen && (
               <div id={pathPanelId} className="mt-2 flex flex-col gap-2.5 pl-4">

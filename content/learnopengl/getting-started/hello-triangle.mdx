@@ -1,14 +1,16 @@
 ---
-title: 你好，三角形
+title: 从顶点数据到第一个三角形
 type: C
 section: 入门
 order: 2
-description: 跑通从顶点数据到屏幕像素的最短链路——亲手把第一个三角形画出来，并能改出自己想要的形状与颜色。
+description: 用 shader program、VBO、VAO 与可选 EBO 建立顶点输入契约，跑通 draw call 到 framebuffer 的最短链路。
 demo: true
 math: true
-sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/04%20Hello%20Triangle/
+sourceUrl: https://learnopengl.com/Getting-started/Hello-Triangle
 draft: false
 ---
+
+import { HelloTriangleLifecycleDiagram, TriangleShaderLifecycleDiagram, TriangleVaoCaptureDiagram, TriangleRasterizationDiagram, VertexPipelineDiagram } from "@/components/mdx/learnopengl/diagrams/hello-triangle";
 
 {/* C 实战型样例章（HEL-22 起；HEL-30 集成 M4 真组件）：M3 内容系统端到端样例，九段式齐全，每知识点配一个 viz。主 Demo = editable ShaderDemo（改 GLSL/uniform 实时渲染）；§5 管线流程用 PipelineViz；§4 坐标变换预告用 MathViz；另有 CodeTabs / Figure / Callout / Stepper（仅 §10 光栅化词条内嵌）。内容为样例级，draft:false 由总监按 chapter-spec.md review 后定（硬规则 7）。 */}
 
@@ -16,9 +18,11 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话解释**顶点缓冲对象**与**顶点数组对象**各自负责什么
-- 能看懂创建三角形的代码，并改出一个不同形状或不同颜色的三角形
-- 能回答：一段顶点数据从内存到屏幕像素，中间经过了哪几个阶段？
+- 能解释 shader compile、program link 与 draw-time use 的对象生命周期
+- 能区分 VBO 存储、VAO 状态捕获和 EBO 索引复用的职责
+- 能计算 interleaved attributes 的 stride、offset、buffer bytes 与 primitive count
+- 能实现并调试从 vertex data、attribute layout 到 draw call 的完整三角形
+- 能比较 `drawArrays` 与 `drawElements`，改出不同形状和颜色并验证结果
 
 </Objectives>
 
@@ -31,6 +35,8 @@ draft: false
 你要做的不是「画」，而是**备料 + 排产**：先把三个角的坐标当原料送进车间，再告诉流水线每道工位怎么处理这批原料，最后按下开工按钮。
 
 没有这套流程会怎样？显卡收到一堆数字却不知道它们是坐标、该连成什么、用什么颜色填——于是什么都不会出现。这一章就是把这条流水线一道道走通。
+
+<HelloTriangleLifecycleDiagram />
 
 {/* 3. 概念讲解（spec §三）：C 型压缩「是什么」让篇幅给第六节；一节一概念（顶点/属性 → VBO → VAO+属性指针）；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线中位置。新核心概念：顶点/属性、VBO、VAO、属性指针、输入装配、NDC（NDC 与视口在 §4 用 Term，全章 ≤ 适度）。 */}
 
@@ -55,6 +61,15 @@ x0 y0 z0   |   x1 y1 z1   |   x2 y2 z2     ← 内存里就是连续的 9 个 fl
 
 它解决的问题：把顶点数据**一次性**从内存搬进显存，之后每帧绘制时显卡就近取料。没有它，每帧都要把这堆数字重新上传一遍，慢且浪费带宽。VBO 处在流水线最前端，是顶点数据进显卡的第一站。
 
+若每个顶点有 $k$ 个 attributes，第 $i$ 个 attribute 含 $c_i$ 个、每个分量占 $s_i$ bytes，interleaved layout 的步长与 $N_v$ 个顶点的最小 buffer bytes 为：
+
+$$
+stride=\sum_{i=1}^{k}c_i s_i,
+\qquad B_{vertex}=N_v\cdot stride
+$$
+
+本章只有 position：$c=3$、`GL_FLOAT` 为 4 bytes，所以 stride 是 12 bytes，三个顶点需要 36 bytes。代码中 `sizeof(vertices)` 或 `Float32Array.byteLength` 应与这个手算结果一致。
+
 ## 第三个角色：VAO 与属性指针，告诉显卡怎么读这堆字节
 
 数据进了显存，可显卡看到的还是一串裸字节，它不知道「每个顶点占几个字节、位置从第几字节开始读、一次读几个 `float`」。补上这份说明的，是 <Term def="一个告诉显卡怎么从 VBO 里切出顶点的设置：第几号属性、每次读几个值、什么类型、相邻两个顶点间隔多少字节（步长）、从第几字节起读（偏移）。">属性指针</Term>，它通过 `glVertexAttribPointer` / `gl.vertexAttribPointer` 配置：
@@ -69,6 +84,30 @@ x0 y0 z0   |   x1 y1 z1   |   x2 y2 z2     ← 内存里就是连续的 9 个 fl
 一句话记住三者关系：**VBO 是料（一串字节），属性指针是「怎么切这串字节」的规则，VAO 是把这套规则记下来的说明书。** 下面这张图把这条链路和「属性指针怎么切字节」画在一起：
 
 <VertexPipelineDiagram />
+
+<TriangleVaoCaptureDiagram />
+
+`glVertexAttribPointer` 不会把 bytes 复制进 VAO；它把 format、stride、offset 和**调用当时绑定的 VBO**记录进当前 attribute state。另一个容易漏掉的规则是 `GL_ELEMENT_ARRAY_BUFFER` binding 属于 VAO state，因此创建 indexed mesh 时应在目标 VAO 绑定期间绑定 EBO。
+
+## EBO：矩形为什么不必重复两个顶点
+
+两个三角形组成矩形时，`drawArrays` 可提交 6 个 vertices，但其中两个角重复。<Term def="Element Buffer Object，保存顶点索引并由drawElements按索引复用VBO顶点的缓冲对象">元素缓冲对象（EBO）</Term>存 `[0,1,2,0,2,3]`，让四个 unique vertices 组成两个 triangles。
+
+`GL_TRIANGLES` 下，非索引与索引绘制产生的 primitive counts 分别为：
+
+$$
+N_{tri}^{arrays}=\left\lfloor\frac{N_v}{3}\right\rfloor,
+\qquad N_{tri}^{indexed}=\left\lfloor\frac{N_i}{3}\right\rfloor
+$$
+
+是否节省 memory 取决于 vertex stride 与 index width。粗略 bytes 为：
+
+$$
+B_{arrays}=N_v\cdot stride,
+\qquad B_{indexed}=N_u\cdot stride+N_i\cdot s_{index}
+$$
+
+矩形中 $N_u=4$、$N_i=6$；真实 mesh 的 vertex attributes 越大、共享越多，索引复用越有价值。EBO 的 index type 必须与 `glDrawElements` 的 type 匹配，最大 index 也必须小于 unique vertex count。
 
 {/* 4. 数学推导（spec §四，math:true）：C 型数学为「选」；此处放一个轻量公式 NDC 到屏幕坐标的视口变换；公式后跟一句人话翻译，不跳步。 */}
 
@@ -101,6 +140,8 @@ $$
 渲染管线把顶点变成像素，中间这五道工位是固定流程。其中第三道 <Term def="把矢量图元（如三角形）切成一个个屏幕像素格子的过程，决定它盖住了哪些像素。">光栅化</Term> 会把矢量三角形切成一个个屏幕像素——每个被覆盖的像素产生一个 <Term def="光栅化后产生的、对应一个像素的待着色数据点，片段着色器会逐个处理它。">片段</Term>，交给后面的工位上色。
 
 下面这个分步可视化把同一份三角形数据走一遍：从三个孤立顶点，到连成三角形、铺到像素网格、逐片段上色、最后写入帧缓冲。可暂停、可单步、可拖进度：
+
+<TriangleRasterizationDiagram />
 
 <PipelineViz interval={2000} />
 
@@ -210,6 +251,8 @@ void main() {
 ### 第二步：编译、链接成一个着色器程序
 
 源码只是字符串，要先编译成显卡能跑的东西，再把两段链接成一个 <Term def="把编译好的顶点着色器和片段着色器链接到一起、可被显卡执行的整体；绘制前用 useProgram 启用它。">着色器程序</Term>。编译/链接失败时一定要查日志，否则后面只会得到一片黑。
+
+<TriangleShaderLifecycleDiagram />
 
 <CodeTabs>
   <Tab label="C++ / OpenGL 3.3">
@@ -401,7 +444,7 @@ gl.drawArrays(gl.TRIANGLES, 0, 3); // 从第 0 个顶点起画 3 个 → 一个�
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 在上面可编辑 Demo 里做两件事：①把片段着色器 `FragColor` 那行改成固定红色 `vec4(1.0, 0.0, 0.0, 1.0)`，看三角形变成纯红；②再把顶点着色器里 `vec2( 0.0, 0.5)` 这个顶点改成 `vec2( 0.0, 0.9)`，看形状怎么变。解释为什么改 frag 只换颜色、改 vert 才换形状。
+**问题 1：** 在上面可编辑 Demo 里做两件事：①把片段着色器 `FragColor` 那行改成固定红色 `vec4(1.0, 0.0, 0.0, 1.0)`，看三角形变成纯红；②再把顶点着色器里 `vec2( 0.0, 0.5)` 这个顶点改成 `vec2( 0.0, 0.9)`，看形状怎么变。解释为什么改 frag 只换颜色、改 vert 才换形状。
 
 <Answer>
 
@@ -417,7 +460,7 @@ FragColor = vec4(1.0, 0.0, 0.0, 1.0); // 整块三角形变纯红
 
 </Answer>
 
-**练习 2（独立实现题）** 不看上面的代码，自己从零写出「创建 VBO + VAO + 配置位置属性」三步，画出一个**矩形**（目标效果：屏幕中央一个正方形）。
+**问题 2：** 不看上面的代码，自己从零写出「创建 VBO + VAO + EBO + 配置位置属性」四步，画出一个**矩形**（目标效果：屏幕中央一个正方形）。
 
 <Answer>
 
@@ -434,11 +477,11 @@ const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
 </Answer>
 
-**练习 3（问答型）** 为什么要先绑定 VAO 再配置顶点属性，而不是反过来？
+**问题 3：** 为什么要先绑定 VAO 再配置顶点属性，而不是反过来？EBO binding 又为何应在目标 VAO 绑定期间设置？
 
 <Answer>
 
-`vertexAttribPointer` / `enableVertexAttribArray` 的状态会被「当前绑定的 VAO」记录。如果还没绑 VAO 就配置，这些状态无处归属（WebGL2 下甚至直接报错）。先绑 VAO，配置才会被它捕获，之后绘制只需绑回这张说明书。
+`vertexAttribPointer` / `enableVertexAttribArray` 的状态会被「当前绑定的 VAO」记录。如果还没绑 VAO 就配置，这些状态无处归属（WebGL2 下甚至直接报错）。先绑 VAO，配置才会被它捕获，之后绘制只需绑回这张说明书。`ELEMENT_ARRAY_BUFFER` binding 也是 VAO state；在目标 VAO 绑定时设置，后续 `drawElements` 才会取到正确 indices。
 
 </Answer>
 
@@ -494,15 +537,19 @@ const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
 
 <Stepper>
   <Step title="① 拿到三角形">
+    <TriangleRasterizationDiagram stage={1} />
     输入是三个顶点连成的矢量三角形，此刻它还没有任何「像素」概念，只是三个坐标。
   </Step>
   <Step title="② 铺上像素网格">
+    <TriangleRasterizationDiagram stage={2} />
     屏幕是一张方格纸（每格 = 一个像素）。把三角形盖在这张网格上。
   </Step>
   <Step title="③ 判定覆盖">
+    <TriangleRasterizationDiagram stage={3} />
     逐格判断「这个格子的中心点落在三角形内部吗？」落在内部的格子被选中。
   </Step>
   <Step title="④ 生成片段">
+    <TriangleRasterizationDiagram stage={4} />
     每个被选中的格子产出一个「片段」，交给片段着色器去决定它最终是什么颜色。
   </Step>
 </Stepper>
@@ -532,6 +579,10 @@ const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
   按 VAO 说明书从 VBO 取顶点、走完整条管线画出图形的那条命令。本章用
   `drawArrays(TRIANGLES, 0, 3)`：从第 0 个顶点起取 3
   个、组成一个三角形。详见本章「第五步」。
+</GlossaryItem>
+
+<GlossaryItem term="元素缓冲对象（EBO）">
+  保存 vertex indices 的缓冲。`drawElements` 按这些 indices 重用 VBO 中的 unique vertices；它的 binding 属于当前 VAO state。
 </GlossaryItem>
 
 </Glossary>

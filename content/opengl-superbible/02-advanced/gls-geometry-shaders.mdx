@@ -1,120 +1,314 @@
 ---
-title: "几何着色器与图元"
+title: "曲面细分、几何着色器与图元处理"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "几何着色器的图元增删与应用"
+description: "从 patch 细分域、边界因子到 geometry shader 条带发射与多路路由"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/opengl-superbible-comprehensive-tutorial-and-reference-9780134193137"
 draft: false
 ---
 
-import { GlsGeometryShadersDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-geometry-shaders";
+import { GlsGeometryShadersDiagram, GlsTessellationDomainsDiagram, GlsTessellationFactorsDiagram, GlsGeometryContractDiagram, GlsEmissionStateDiagram, GlsLayerViewportDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-geometry-shaders";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解几何着色器的输入输出模型
-- 掌握EmitVertex/EndPrimitive
-- 了解几何着色器的典型应用
-- 理解几何着色器的性能限制
+- 能解释 patch、TCS、固定 tessellator 与 TES 的完整曲面细分链
+- 能计算 triangles、quads、isolines 三种参数域的求值位置
+- 能设计相邻 patch 兼容的 outer tessellation levels，避免边界裂缝
+- 能写出 geometry shader 的输入拓扑、输出 strip 与 EmitVertex 状态机
+- 能分析 invocation、生成图元、layer/viewport 路由和 GPU 时间证据
 </Objectives>
 
-## 直觉引入
+## 为什么图元处理不能只讲 Geometry Shader
 
-几何着色器就像变形金刚——输入一个图元(如三角形)，可以输出0个(删除)、1个(不变)或多个(分裂)图元。它能在图元级别增删几何体，但并行度低性能差，是管线中「最灵活但最慢」的阶段。
+原书第 8 章 Primitive Processing 有两个同等重要部分：tessellation 用规则参数域生成大量新顶点，geometry shader（GS）按完整输入图元过滤、改写、放大或路由输出。旧章只保留 GS，不仅漏掉半章核心，还把“最慢”和“现代 API 不推荐”写成普遍定律。正确选择应由任务粒度、实现限制、生成量和 GPU 计时决定。
 
-## 概念讲解
-
-<Term def="逐图元执行的着色器，可增删图元">几何着色器</Term><Term def="发射一个顶点到输出图元">EmitVertex</Term><Term def="结束当前图元开始新图元">EndPrimitive</Term><Term def="几何着色器可输出0~N个图元(有上限)">图元增删</Term>
-
-### 输入输出
-输入:layout(points/lines/triangles) in，可选带邻接信息。输出:layout(points/line_strip/triangle_strip, max_vertices=N) out。
-
-### 核心API
-EmitVertex()发射顶点，EndPrimitive()结束图元。输入图元的顶点通过gl_in[i].gl_Position访问。
-
-### 应用
-法线可视化、毛发渲染、爆炸粒子、阴影体积、billboard生成。
-
-### 性能
-并行度低(逐图元)、输出不定(工作量不均)。现代API不推荐使用。
-
-## 交互Demo
-
-> 猜一猜：为什么几何着色器性能比顶点/片段着色器差？
+<Term def="顶点处理之后、光栅化之前对 patch 或完整图元执行细分、装配、改写与路由的阶段集合">图元处理</Term>的主链如下：
 
 <GlsGeometryShadersDiagram />
 
-<Stepper>
-<Step title="第一步：配置输入输出">
-layout(triangles) in; layout(triangle_strip, max_vertices=3) out。定义输入输出图元类型和最大顶点数。
-</Step>
-<Step title="第二步：处理图元">
-读取输入图元顶点(gl_in[i].gl_Position)，计算变换后用EmitVertex()发射。
-</Step>
-<Step title="第三步：结束图元">
-EndPrimitive()结束当前图元。可发射多个图元(如法线可视化:三角形+法线线段)。
-</Step>
-</Stepper>
+规则曲面 LOD、位移曲面和 Bézier patch 适合 tessellation；逐三角形剔除、法线调试、多 viewport 或 layered rendering 可考虑 GS。两者可以串联，但阶段越多并不自动更正确或更快。
 
-## 代码对照
+## Patch、TCS 与固定 Tessellator
+
+<Term def="由若干控制点组成、通过 GL_PATCHES 提交给曲面细分阶段的输入图元">Patch</Term>的输入控制点数由 `glPatchParameteri(GL_PATCH_VERTICES, n)` 设置，并受 `GL_MAX_PATCH_VERTICES` 限制。若 draw 提交 $V$ 个控制点且每 patch 有 $n$ 个点，完整 patch 数为：
+
+$$
+N_{patch}=\left\lfloor\frac{V}{n}\right\rfloor
+$$
+
+<Term def="按 patch 调度、输出新控制点与内外细分级别的可编程阶段">曲面细分控制着色器</Term>（TCS）用 `layout(vertices=m) out` 指定输出 patch 的控制点数；每个 invocation 通过 `gl_InvocationID` 处理一个输出控制点。输入点数 $n$ 与输出点数 $m$ 可以不同，不能假设二者相等。
+
+TCS 还写 `gl_TessLevelOuter[]` 与 `gl_TessLevelInner[]`。这些<Term def="决定 patch 边界分段与内部密度的浮点控制值">内外细分级别</Term>由固定<Term def="读取参数域和细分级别、生成 TES invocation 参数坐标的固定功能单元">Tessellator</Term>消费。TCS 是可选阶段；若省略它，应用可通过 patch default level 状态提供级别，但启用 tessellation 时<Term def="在 tessellator 生成的参数坐标上计算真实属性与 gl_Position 的可编程阶段">曲面细分求值着色器</Term>（TES）不可缺少。
 
 ```glsl
-// 几何着色器: 三角形法线可视化
-#version 330 core
-layout(triangles) in;
-layout(line_strip, max_vertices=2) out;
-in vec3 vNormal[];
-uniform mat4 mvp;
+// Tessellation control shader: 3 output control points
+layout(vertices = 3) out;
 void main() {
-    vec3 center = (gl_in[0].gl_Position.xyz + gl_in[1].gl_Position.xyz + gl_in[2].gl_Position.xyz) / 3.0;
-    vec3 normal = vNormal[0];
-    gl_Position = mvp * vec4(center, 1.0);
-    EmitVertex();
-    gl_Position = mvp * vec4(center + normal * 0.5, 1.0);
-    EmitVertex();
-    EndPrimitive(); // 输出法线线段
+    gl_out[gl_InvocationID].gl_Position =
+        gl_in[gl_InvocationID].gl_Position;
+    if (gl_InvocationID == 0) {
+        gl_TessLevelOuter[0] = 8.0;
+        gl_TessLevelOuter[1] = 8.0;
+        gl_TessLevelOuter[2] = 8.0;
+        gl_TessLevelInner[0] = 5.0;
+    }
+}
+
+// Tessellation evaluation shader: triangle domain
+layout(triangles, equal_spacing, ccw) in;
+void main() {
+    gl_Position = gl_TessCoord.x * gl_in[0].gl_Position
+                + gl_TessCoord.y * gl_in[1].gl_Position
+                + gl_TessCoord.z * gl_in[2].gl_Position;
 }
 ```
 
-几何着色器输入3个顶点(三角形)输出2个顶点(线段)表示法线方向。
+同一 patch 内的 TCS invocation 若相互读取输出，需要先写数据，再以 `barrier()` 建立执行同步；barrier 必须出现在所有 invocation 一致到达的控制流。官方 `tessellatedtri` 示例只让 invocation 0 写 tess levels，每个 invocation 复制自己的控制点，正好展示 per-patch 与 per-control-point 数据的区别。
+
+## Triangles、Quads 与 Isolines 参数域
+
+TES 的 input layout 选择<Term def="使用三个重心坐标表达三角形参数点的细分域">Triangles Domain</Term>、<Term def="使用二维 uv 坐标表达四边形参数点的细分域">Quads Domain</Term>或<Term def="以线编号和线内参数表达多条独立线段的细分域">Isolines Domain</Term>。它还声明 `equal_spacing`、`fractional_even_spacing` 或 `fractional_odd_spacing`，以及 triangles/quads 的 `cw`、`ccw` 和可选 `point_mode`。
+
+<GlsTessellationDomainsDiagram />
+
+三角形域的重心坐标满足：
+
+$$
+\mathbf p(u,v,w)=u\mathbf p_0+v\mathbf p_1+w\mathbf p_2,
+\qquad u+v+w=1
+$$
+
+四边形域可用双线性插值：
+
+$$
+\mathbf p(u,v)=(1-v)\operatorname{mix}(\mathbf p_0,\mathbf p_1,u)
++v\operatorname{mix}(\mathbf p_2,\mathbf p_3,u)
+$$
+
+Isolines 中 `gl_TessCoord.x` 通常表示线内位置，`gl_TessCoord.y` 标识生成线；应用可把它们映射成螺旋、等高线或毛发方向。官方 `tessmodes` 同时实现 triangles、quads、isolines，并用 `point_mode` 展示生成点本身，因此它比“细分只生成三角形”的简化说法更完整。
+
+对于近似均匀的二维域，细分级别 $L$ 墑长时生成量通常按面积量级上升：
+
+$$
+N_{generated}=\Theta(L^2)
+$$
+
+这不是所有 domain 的精确公式，isolines 和不同内外因子会改变计数；应通过 generated-primitives query 验证实际结果。
+
+## 共享边、Spacing 与无裂缝 LOD
+
+相邻 patch 共享边若使用不同 outer level，参数采样点可能不一致，产生 T-junction 或裂缝。正确策略是从共享边的同一几何标识、端点或边误差计算兼容 level，而不是各 patch 只按中心距离独立取值。
+
+<GlsTessellationFactorsDiagram />
+
+共享边 $e$ 的必要契约可以写成：
+
+$$
+L_A(e)=L_B(e)
+$$
+
+fractional spacing 允许 level 连续变化时更平滑地增加段数，但仍需让两侧使用兼容输入。inner level 控制 patch 内部，不能修复 outer 边界不匹配。相关 outer level 为非正值时 patch 可被剔除，这可用于 coarse culling，但错误符号会让整个 patch 消失。
+
+官方 `tesssubdivmodes` 对比 equal、fractional-even、fractional-odd；`tessellatedcube` 则根据视点计算 edge factors 并把共享边级别放入对应 outer slots。复刻时应画出每个 domain 的 outer 数组索引方向，否则“数值相同但边槽对应错误”仍会裂。
+
+## Geometry Shader 的输入输出契约
+
+<Term def="以一个完整输入图元为一次工作单元，可发射零到多个输出 strip 的可编程阶段">几何着色器</Term>位于最后一个顶点类阶段与光栅化之间。输入 `points`、`lines`、`lines_adjacency`、`triangles`、`triangles_adjacency` 分别决定 `gl_in[]` 长度；带<Term def="在主图元两侧附加相邻顶点、供轮廓与邻域算法使用的输入拓扑">邻接信息</Term>的 line/triangle 需要 draw mode 与 shader layout 同时匹配。
+
+<GlsGeometryContractDiagram />
+
+输出只允许 `points`、`line_strip` 或 `triangle_strip`。`layout(max_vertices=M) out` 声明一次 invocation 最多发射多少顶点，但合法 $M$ 还同时受 `GL_MAX_GEOMETRY_OUTPUT_VERTICES` 和 `GL_MAX_GEOMETRY_TOTAL_OUTPUT_COMPONENTS` 约束。若每顶点输出 $C$ 个 components：
+
+$$
+N_{out}\le
+\min\left(M,\left\lfloor\frac{C_{max,total}}{C}\right\rfloor\right)
+$$
+
+所以“通常上限 256”不是可靠契约，必须查询当前实现并考虑输出接口宽度。
+
+输入内建 `gl_PrimitiveIDIn` 标识输入图元；若 fragment stage 需要输出图元 ID，GS 应写 `gl_PrimitiveID`。对 triangle 输入，面法线可由一致坐标空间中的两条边求得：
+
+$$
+\mathbf n=\operatorname{normalize}
+\left((\mathbf p_1-\mathbf p_0)\times(\mathbf p_2-\mathbf p_0)\right)
+$$
+
+官方 `normalviewer` 为每个三角形发射两条 line strip：一条面法线、一条顶点法线；它的 `max_vertices=4` 正好对应两个两顶点 strip，而不是把四个顶点连成一条折线。
+
+## EmitVertex 与 EndPrimitive 是 Strip 状态机
+
+<Term def="把当前 geometry shader 输出变量快照追加为输出 strip 的一个顶点">EmitVertex</Term>不是“返回一个顶点”。调用后，输出变量值变为未定义，下一次发射前必须重写 `gl_Position`、用户 outputs、`gl_Layer` 或 `gl_ViewportIndex` 等所有需要值。<Term def="结束当前输出 strip，使下一次 EmitVertex 从新 strip 开始">EndPrimitive</Term>结束当前 strip；它不会结束 shader invocation，也不会自动发射顶点。
+
+<GlsEmissionStateDiagram />
+
+若一个 strip 有 $V$ 个顶点，产生图元数为：
+
+$$
+N_{line}=\max(0,V-1),\qquad
+N_{triangle}=\max(0,V-2)
+$$
+
+```glsl
+layout(triangles) in;
+layout(line_strip, max_vertices = 4) out;
+out vec3 debugColor;
+
+void emitLine(vec4 a, vec4 b, vec3 color) {
+    gl_Position = a; debugColor = color; EmitVertex();
+    gl_Position = b; debugColor = color; EmitVertex();
+    EndPrimitive();
+}
+
+void main() {
+    vec4 center = (gl_in[0].gl_Position + gl_in[1].gl_Position
+                 + gl_in[2].gl_Position) / 3.0;
+    emitLine(center, center + vec4(0.0, 0.2, 0.0, 0.0), vec3(1,0,0));
+    emitLine(gl_in[0].gl_Position,
+             gl_in[0].gl_Position + vec4(0.2,0,0,0), vec3(0,1,0));
+}
+```
+
+输出零个图元也是合法路径。官方 `gsculling` 根据三角形法线和视线点积决定是否执行三次 EmitVertex；若不发射，图元被过滤。这个示例说明 GS 适合小规模图元决策，但是否优于固定 face culling 或前置 compute culling必须测量。
+
+## Invocations、Layer 与 Viewport 路由
+
+`layout(triangles, invocations=N) in` 让每个输入图元执行 $N$ 次 geometry invocation，各次以 `gl_InvocationID` 区分。总 invocation 为：
+
+$$
+N_{GS}=N_{input\ primitives}\times N_{invocations}
+$$
+
+每个 invocation 可使用不同矩阵，并写<Term def="把输出图元选择到 viewport array 中某个视口的内建输出">gl_ViewportIndex</Term>或<Term def="把输出图元选择到 layered framebuffer 某个图层的内建输出">gl_Layer</Term>。同一输出图元的顶点应给出一致路由值，且每次 EmitVertex 前重写。
+
+<GlsLayerViewportDiagram />
+
+```glsl
+layout(triangles, invocations = 4) in;
+layout(triangle_strip, max_vertices = 3) out;
+layout(std140, binding = 0) uniform Views { mat4 mvp[4]; };
+
+void main() {
+    for (int i = 0; i < 3; ++i) {
+        gl_Position = mvp[gl_InvocationID] * gl_in[i].gl_Position;
+        gl_ViewportIndex = gl_InvocationID;
+        EmitVertex();
+    }
+    EndPrimitive();
+}
+```
+
+官方 `multiviewport` 正是四次 invocation、四个 MVP、四个 viewport。Layered rendering 可用于 cubemap 或 texture array，但需要 framebuffer attachment 和 shader stage 的 layer 规则同时成立。
+
+## 性能结论必须来自工作量与时间
+
+GS 可能因不规则放大、输出带宽和有限并行度成为瓶颈，tessellation 也可能因过高 level 引发二次增长；但“GS 永远最慢”无法从 API 推出。一次 draw 的几何输出上界可写为：
+
+$$
+N_{vertices,max}=N_{input\ primitives}\times
+N_{invocations}\times M
+$$
+
+实际分析要同时读取 `GL_GEOMETRY_SHADER_INVOCATIONS`、`GL_GEOMETRY_SHADER_PRIMITIVES_EMITTED`、clipping statistics（若实现支持）和 timer query。把 `max_vertices` 从 4 改 64 并不代表每次会发射 64 个；计数与时间必须一起看。
+
+先预测：法线可视化的 GS 在小模型调试时可能成本可接受，在百万三角形场景会把每个三角形扩成额外线段；同一 shader、不同输入量会得出完全不同的性能结论。
+
+## 按证据建立图元处理链
+
+<Stepper>
+<Step title="第一步：先闭合 Patch 与参数域">
+用一个 patch 验证输入控制点数、TCS 输出数、inner/outer slots、spacing 和 TES domain。先固定 level 并显示 point_mode，再引入距离 LOD。
+
+<GlsGeometryShadersDiagram step={1} />
+</Step>
+<Step title="第二步：按需求加入 Geometry Shader">
+声明与 draw 匹配的 input topology，查询 output limits；从“原样转发一个图元”开始，再加入过滤、法线或放大。每次 EmitVertex 前重写全部输出。
+
+<GlsGeometryShadersDiagram step={2} />
+</Step>
+<Step title="第三步：验证路由与生成量">
+逐个验证 EndPrimitive 边界、primitive ID、viewport/layer；记录 GS invocations、emitted primitives 和 GPU 时间，确认新增阶段解决的问题值得成本。
+
+<GlsGeometryShadersDiagram step={3} />
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 用几何着色器做大量细分。
-**原因 →** 几何着色器能输出多个图元。
-**修法 →** 几何着色器并行度低(max_vertices限制输出)。大量细分应用曲面细分管线(有Tessellator固定功能)。几何着色器适合少量图元变换。
+**现象 →** 所有 patch 独立按中心到相机距离计算 outer levels，接缝出现裂缝。
+
+**原因 →** 相邻 patch 对同一共享边得到不同分段点，inner level 又无法修复边界。
+
+**修法 →** 以共享边身份和端点误差生成一致 edge level，明确 domain 的 outer slot 对应方向，并用线框/point mode 检查边界采样。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 几何着色器输出无上限。
-**原因 →** 需要动态生成大量几何。
-**修法 →** max_vertices有上限(通常256)。大量几何应用曲面细分或预计算。几何着色器适合图元级别的少量变换。
+**现象 →** 第一个 GS 顶点颜色正确，后续顶点随机或继承错误 layer。
+
+**原因 →** 误以为 EmitVertex 后输出变量仍保留；规范把这些值视为未定义。
+
+**修法 →** 每次 EmitVertex 前完整写入 `gl_Position`、所有用户 outputs 和路由输出；用小型 strip 逐顶点编码颜色验证。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 文档断言 GS “现代 API 不推荐”或固定比其他阶段慢。
+
+**原因 →** 把某类大放大负载的经验泛化为 API 契约，忽略法线调试、多 viewport 和图层路由等实际用途。
+
+**修法 →** 查询实现上限，记录 invocation、emitted primitives 与 GPU timer；再比较固定功能、tessellation、compute/indirect 或离线生成方案。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：几何着色器为什么性能差？
+**问题 1：** TCS、固定 tessellator 与 TES 各自负责什么？TCS 能否省略？
 
 <Answer>
-1)并行度低(一个图元一个线程vs片段着色器大规模并行) 2)输出顶点数不定导致工作量不均 3)可能放大几何量增加光栅化负担。现代API不推荐使用。
+TCS 按 patch 输出控制点和内外细分级别；固定 tessellator 按 domain、spacing、winding 和 levels 生成参数坐标；TES 把每个参数坐标求值为属性与 gl_Position。TCS 可省略并使用 patch default levels，但启用 tessellation 时 TES 必须存在。
 </Answer>
 
-**问题**：几何着色器的典型应用？
+**问题 2：** 为什么相邻 patch 的 shared-edge outer level 必须兼容？
 
 <Answer>
-1)法线/线框可视化 2)毛发渲染 3)爆炸粒子 4)阴影体积 5)billboard生成。核心是图元级别的增删。
+Outer level 决定边上生成哪些参数点。两侧若分段不同，会形成 T-junction 或裂缝；inner level 只影响内部。应让两侧从同一共享边数据计算相同 level，并确认 outer array slot 方向对应正确。
+</Answer>
+
+**问题 3：** 用 GS 输出两条互不相连的线，需要怎样调用 EmitVertex 与 EndPrimitive？
+
+<Answer>
+为第一条线写端点 A 的全部输出并 Emit，再写 B 并 Emit，然后 EndPrimitive；第二条线重新写 C、Emit，写 D、Emit，再 EndPrimitive。每次 Emit 后输出未定义，不能依赖上次颜色、位置或 layer。
+</Answer>
+
+**问题 4：** 如何判断 geometry shader 是否是当前瓶颈？
+
+<Answer>
+记录 geometry shader invocations、primitives emitted 和 timer query，并对照输入图元、invocations 数、实际发射顶点及输出接口宽度。再用关闭 GS、降低放大或替代方案作同负载对比，不能仅凭 max_vertices 或阶段名称判断。
 </Answer>
 </Exercises>
 
+## 本章回顾
+
+完整 Primitive Processing 由 patch、TCS、固定 tessellator、TES、可选 geometry shader 和后续固定图元处理组成。Triangles、quads、isolines 定义参数域，outer levels 定义共享边契约；GS 的 input topology、output strip、EmitVertex 与 EndPrimitive 构成严格状态机，invocations、layer 和 viewport 提供多路路由。可复刻原书的标准，是能从 level 推导参数点、从发射顺序推导 strip、从查询和时间证明成本。
+
 <Glossary>
-<GlossaryItem term="几何着色器">逐图元执行的着色器，可增删图元。</GlossaryItem>
-<GlossaryItem term="EmitVertex">发射一个顶点到输出图元。</GlossaryItem>
-<GlossaryItem term="EndPrimitive">结束当前图元开始新图元。</GlossaryItem>
-<GlossaryItem term="图元增删">几何着色器可输出0~N个图元(有上限)。</GlossaryItem>
+<GlossaryItem term="图元处理">顶点处理之后、光栅化之前对 patch 或完整图元执行细分、装配、改写与路由的阶段集合。</GlossaryItem>
+<GlossaryItem term="Patch">由若干控制点组成、通过 GL_PATCHES 提交给曲面细分阶段的输入图元。</GlossaryItem>
+<GlossaryItem term="曲面细分控制着色器">按 patch 调度、输出新控制点与内外细分级别的可编程阶段。</GlossaryItem>
+<GlossaryItem term="内外细分级别">决定 patch 边界分段与内部密度的浮点控制值。</GlossaryItem>
+<GlossaryItem term="Tessellator">读取参数域和细分级别、生成 TES invocation 参数坐标的固定功能单元。</GlossaryItem>
+<GlossaryItem term="曲面细分求值着色器">在 tessellator 生成的参数坐标上计算真实属性与 gl_Position 的可编程阶段。</GlossaryItem>
+<GlossaryItem term="Triangles Domain">使用三个重心坐标表达三角形参数点的细分域。</GlossaryItem>
+<GlossaryItem term="Quads Domain">使用二维 uv 坐标表达四边形参数点的细分域。</GlossaryItem>
+<GlossaryItem term="Isolines Domain">以线编号和线内参数表达多条独立线段的细分域。</GlossaryItem>
+<GlossaryItem term="几何着色器">以一个完整输入图元为一次工作单元，可发射零到多个输出 strip 的可编程阶段。</GlossaryItem>
+<GlossaryItem term="邻接信息">在主图元两侧附加相邻顶点、供轮廓与邻域算法使用的输入拓扑。</GlossaryItem>
+<GlossaryItem term="EmitVertex">把当前 geometry shader 输出变量快照追加为输出 strip 的一个顶点。</GlossaryItem>
+<GlossaryItem term="EndPrimitive">结束当前输出 strip，使下一次 EmitVertex 从新 strip 开始。</GlossaryItem>
+<GlossaryItem term="gl_ViewportIndex">把输出图元选择到 viewport array 中某个视口的内建输出。</GlossaryItem>
+<GlossaryItem term="gl_Layer">把输出图元选择到 layered framebuffer 某个图层的内建输出。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapter 8; official sb7code examples tessellatedtri, tessmodes, tesssubdivmodes, tessellatedcube, normalviewer, gsculling, gstessellate, and multiviewport" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

@@ -1,108 +1,271 @@
 ---
-title: "BRDF 与 BxDF 模型"
+title: "反射模型与 BxDF"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "从 Lambert 到 Cook-Torrance——材料如何反射光线"
+description: "从 BSDF 接口与采样契约出发，建立漫反射、镜面、介质、导体、微表面、测量材质和毛发散射模型"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pbr-book.org/4ed/Reflection_Models"
 draft: false
 ---
 
-import { PbtBxdfDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-bxdf";
+import { PbtBxdfDiagram, PbtBxdfLobesDiagram, PbtFresnelMediaDiagram, PbtMicrofacetDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-bxdf";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能说出 BRDF 的定义和两条物理约束（互易性、能量守恒）
-- 能区分漫反射、镜面反射、光泽反射的 BRDF 特征
-- 能解释 Cook-Torrance 模型的三个组成部分
-- 能回答 Fresnel 效应是什么？为什么掠射角反射更强？
+- 能解释 BRDF、BTDF、BSDF、BxDF 与 BSDF wrapper 的职责边界
+- 能写出 f、Sample_f 和 PDF 的一致性要求并更新路径吞吐量
+- 能比较漫反射、完美镜面、介质与导体的散射和 Fresnel 行为
+- 能推导 Torrance–Sparrow 微表面模型中 D、F、G 的物理意义
+- 能判断测量型 BSDF 与 HairBxDF 何时比通用微表面模型更合适
 </Objectives>
 
-## 直觉引入
+## 直觉：材质不是一个“高光公式”，而是可采样的方向分布
 
-想象一面墙和一面镜子。墙把光均匀散射到四面八方（漫反射），镜子把光精确反射到特定方向（镜面反射）。同样是一束光打上来，为什么效果完全不同？因为它们的 BRDF（双向反射分布函数）不同。
+给定表面点和观察方向，路径追踪器需要回答两类问题：某个灯光方向的散射值是多少，以及如果主动从材质分布中抽一个方向，应该抽到哪里、概率是多少。只实现一个看起来像高光的 `f(wo, wi)`，却没有匹配的 `Sample_f()` 与 `PDF()`，直接光照、间接反弹和 MIS 会描述三套不同的材质。
 
-BRDF 就是材料反射特性的「身份证」——它告诉你「从方向 A 射入的光，会从方向 B 反射多少」。PBRT 用 BxDF 统称所有双向散射函数（反射+透射+次表面）。
-
-## 概念讲解
-
-### BxDF 模型体系
+先预测：完美镜子的 `f()` 为什么在任意给定方向都返回 0，却仍能得到明亮反射？因为镜面是方向域上的 Delta 分布，随机连续方向几乎不可能正好命中。只有 `Sample_f()` 能构造唯一镜面方向，并让散射 Delta 与采样 Delta 在估计器中相消。
 
 <PbtBxdfDiagram />
 
-<Term def="BRDF（双向反射分布函数）描述表面如何将入射光反射到出射方向，是反射的核心数学模型">BRDF</Term>定义为 f_r(ωi,ωo) = dLo / (Li·cosθi)。
+## 1. 第 9 章的边界与散射分类
 
-<Term def="Cook-Torrance 模型是用微表面理论建模的物理 BRDF，由 D（法线分布）、G（几何遮蔽）、F（菲涅尔）三项组成">Cook-Torrance</Term>是当前最常用的 PBR BRDF。
+<Term def="描述同一表面点上，入射微分辐照度被反射为指定出射方向辐亮度的分布函数">双向反射分布函数（BRDF）</Term>只覆盖同一点、同一侧半球的反射。<Term def="描述同一表面点上，光穿过界面后向另一侧方向传输的分布函数">双向透射分布函数（BTDF）</Term>覆盖相反半球的透射；二者统称<Term def="同时涵盖表面同一点反射与透射的双向散射分布函数">双向散射分布函数（BSDF）</Term>。
 
-<Term def="菲涅尔效应描述反射率随入射角增大而增大的物理现象，掠射角时几乎所有光都被反射">菲涅尔效应</Term>解释了为什么掠射角看水面时反射更强。
+这些抽象不包含从一个表面点进入、另一个点离开的次表面传输；那需要 BSSRDF 或体积传输。纹理和材质在第 10 章负责让参数随表面位置变化，本章只研究一个着色点上的方向与光谱散射。
 
-<Term def="能量守恒要求反射光总能量不超过入射光能量，是物理正确 BRDF 的必要条件">能量守恒</Term>是区分物理 BRDF 与经验模型的关键。
+PBRT 用四个外观类别描述散射瓣：diffuse、glossy specular、perfect specular 和 retroreflective。另一条独立分类轴是 reflection / transmission。各向同性模型绕法线旋转后不变，各向异性模型还依赖切线方向。
 
-## 交互Demo
+<PbtBxdfLobesDiagram />
 
-<Stepper>
-<Step title="第一步：Lambert 漫反射">最简单的 BRDF：f = ρ/π，常数。光均匀散射到所有方向。虽简单但至今仍用于粗糙表面。</Step>
-<Step title="第二步：微表面理论">
-真实表面布满微小镜面。Cook-Torrance 用 D（微面朝向分布）、G（遮蔽/阴影）、F（菲涅尔反射）三项建模这些微面的集体行为。
-<PbtBxdfDiagram />
-</Step>
-<Step title="第三步：Fresnel 与能量守恒">Fresnel 项让掠射角反射更强，Schlick 近似简化了计算。能量守恒约束确保反射+吸收+透射=1。</Step>
-</Stepper>
+## 2. 局部着色坐标与方向约定
 
-## 代码对照
+PBRT 在局部反射坐标系中计算 BxDF：切线 $s$、副切线 $t$、着色法线 $n$ 分别对齐 $x,y,z$ 轴。所有传给 BxDF 的方向都归一化，并从着色点向外指。`wi` 表示入射光来自哪个外向方向，不表示光子的传播箭头。
+
+因此，同半球测试是：
+
+$$
+\operatorname{SameHemisphere}(\omega_o,\omega_i)
+\Longleftrightarrow
+(\omega_o)_z(\omega_i)_z>0.
+$$
+
+表面几何法线始终指向物体外侧，PBRT 不会为了配合 `wo` 自动翻转它。这样可用 `wi` 与外侧法线是否同半球判断光正进入还是离开介质。凹凸映射可能改变着色坐标，但 BSDF wrapper 会负责 rendering space 与 shading space 的变换。
+
+## 3. BxDF 接口：评估、采样与概率必须一致
+
+<Term def="PBRT 中单个局部反射或透射模型的统一接口，提供分类、评估、方向采样、PDF 和反射率估计">BxDF</Term>实现 `Flags()`、`f()`、`Sample_f()`、`PDF()` 与 `rho()`。外层 `BSDF` 保存局部坐标框架并转入/转出 rendering space，而不是把多个任意 BxDF 简单相加。
+
+<Term def="把 diffuse、glossy、specular 与 reflection、transmission 正交组合的位掩码，用于筛选和解释采样结果">散射标志</Term>让积分器知道一次样本属于哪类事件。例如 `GlossyReflection` 同时包含 glossy 与 reflection；retroreflection 在接口里按 glossy 处理。
+
+一次成功的 `Sample_f(wo, uc, u)` 返回 `BSDFSample`：`wi`、光谱散射值 `f`、相对于固体角的 `pdf`、`flags`、相对折射率 `eta`，以及少数模拟型模型使用的 `pdfIsProportional`。其中 1D 样本 `uc` 适合选择反射或透射分支，2D 样本 `u` 适合生成方向。
+
+路径吞吐量更新为：
+
+$$
+\beta_{next}=\beta
+\frac{f(\omega_o,\omega_i)|\cos\theta_i|}
+{p(\omega_i\mid\omega_o)}.
+$$
 
 ```cpp
-// Cook-Torrance BRDF
-Spectrum CookTorrance(Vector3f wi, Vector3f wo, Vector3f n) {
-    Vector3f h = Normalize(wi + wo);
-    
-    // D: 法线分布函数 (GGX/Trowbridge-Reitz)
-    float D = GGX_D(h, n, alpha);
-    
-    // G: 几何遮蔽/阴影 (Smith)
-    float G = Smith_G(wi, wo, n, alpha);
-    
-    // F: 菲涅尔 (Schlick近似)
-    Spectrum F = SchlickFresnel(dot(wi, h), F0);
-    
-    // 组合
-    return D * G * F / (4 * dot(n,wi) * dot(n,wo));
-}
+auto bs = bsdf.Sample_f(wo, uc, u, mode, BxDFReflTransFlags::All);
+if (!bs || bs->pdf == 0 || !bs->f) return;
+
+beta *= bs->f * AbsCosTheta(bs->wi) / bs->pdf;
+ray = interaction.SpawnRay(bs->wi);
+specularBounce = bs->IsSpecular();
+etaScale *= bs->IsTransmission() ? Sqr(bs->eta) : 1;
 ```
 
-## 常见误区
+`PDF()` 还用于 MIS 比较材质采样与光源采样的概率。如果 `Sample_f()` 采用余弦分布，而 `PDF()` 却报告均匀半球密度，估计器会系统偏差；若 `f()` 与采样分布形状不匹配，可能仍无偏，但方差会很高。
+
+## 4. 漫反射：为什么 Lambert 要除以 π
+
+<Term def="出射方向上保持常数的理想漫反射模型，BRDF 等于反射率光谱除以 π">Lambert 漫反射</Term>用反射率 $R\in[0,1]$ 定义：
+
+$$
+f_r(\omega_o,\omega_i)=\frac{R}{\pi}.
+$$
+
+$1/\pi$ 来自能量归一化，而不是经验常数：
+
+$$
+\int_{\mathcal H^2}\frac{R}{\pi}\cos\theta\,\mathrm d\omega=R.
+$$
+
+最匹配的方向采样是余弦半球采样，$p(\omega_i)=|\cos\theta_i|/\pi$。代入吞吐量后，$f|\cos\theta|/p=R$，每个样本权重稳定。Lambert 近似适合纸张和哑光漆，但真实表面在掠射角常出现界面镜面反射，不能把所有非金属都当纯漫反射。
+
+## 5. 完美镜面：Delta 分布的实现约定
+
+<Term def="除指定方向外处处为零、但在整个定义域积分为 1 的广义分布，用于表示完美镜面事件">德尔塔分布</Term>不是普通有限函数。对于完美镜面，`f()` 和独立查询的 `PDF()` 对所有连续方向返回 0；`Sample_f()` 直接生成唯一方向，并按 PBRT 约定返回 PDF 1。估计器中的散射 Delta 与概率 Delta 成对抵消，代码从不需要表示无穷大。
+
+反射方向满足：
+
+$$
+\omega_i=-\omega_o+2(\omega_o\cdot n)n.
+$$
+
+折射方向由 Snell 定律决定：
+
+$$
+\eta_i\sin\theta_i=\eta_t\sin\theta_t.
+$$
+
+当从高折射率介质到低折射率介质且没有实数 $\theta_t$ 时发生全反射。此时传输分支不能返回一个伪造方向，而应把全部 Fresnel 权重给反射。
+
+## 6. Fresnel：介质与导体不是同一种“高光颜色”
+
+<Term def="界面反射比例随入射角、两侧折射率和波长变化的物理函数">菲涅尔反射率</Term> $F$ 决定界面能量分配。对于无偏振光，介质 Fresnel 是平行与垂直偏振反射率的平均：
+
+$$
+F=\frac{r_{\parallel}^2+r_{\perp}^2}{2}.
+$$
+
+<Term def="电绝缘材料，使用实数折射率并同时支持 Fresnel 反射与折射透射，例如玻璃和水">介质</Term>使用实数相对折射率 $\eta$。平滑介质以概率 $F$ 选择反射、以概率 $1-F$ 选择透射；用同一概率采样分支能让权重稳定。掠射角反射率通常接近 1，但“任何角度都几乎全反射”是错误表述。
+
+<Term def="自由电子使光在内部迅速吸收的材料，使用复折射率 η+iκ 描述波长相关的镜面反射，例如金属">导体</Term>使用光谱复折射率 $\eta+i\kappa$。它没有像透明介质那样可继续追踪的透射辐亮度；不同波长的 $\eta$ 与消光系数 $\kappa$ 产生有色反射。把金属颜色塞进介质的漫反射项，会制造不符合物理的双重能量。
+
+<PbtFresnelMediaDiagram />
+
+## 7. 微表面：从不可见几何到可采样分布
+
+<Term def="用统计法线分布描述大量不可分辨微小镜面片的模型，使粗糙镜面成为有限的方向分布">微表面分布</Term>避免显式存储微米级几何，也把完美镜面的 Delta 峰展开成可评估、可进行光源 MIS 的 glossy 分布。PBRT 使用 Trowbridge–Reitz 分布，并支持 $\alpha_x,\alpha_y$ 表示各向异性粗糙度。
+
+微面法线 $\omega_m$ 对反射是半向量：
+
+$$
+\omega_m=
+\frac{\omega_i+\omega_o}{\|\omega_i+\omega_o\|}.
+$$
+
+Torrance–Sparrow 反射 BRDF 为：
+
+$$
+f_r(\omega_o,\omega_i)=
+\frac{D(\omega_m)F(\omega_o\cdot\omega_m)G(\omega_o,\omega_i)}
+{4|\cos\theta_o\cos\theta_i|}.
+$$
+
+$D$ 是微面法线密度，决定高光宽度与各向异性；$F$ 是单个微面的界面反射；$G$ 是宏观方向上没有被其他微面遮蔽或阴影的比例。粗糙度不是简单亮度旋钮：改变 $D$ 还要求一致改变可见法线采样与 PDF。
+
+<PbtMicrofacetDiagram />
+
+PBRT 直接采样从 `wo` 可见的微面法线，再按镜面定律得到 `wi`。从 $\omega_m$ 变换到反射方向带来雅可比：
+
+$$
+p(\omega_i)=
+\frac{p(\omega_m)}{4|\omega_o\cdot\omega_m|}.
+$$
+
+<Term def="把可见微面法线采样、Fresnel 反射/折射和 masking 组合起来，同时产生 glossy 反射与透射的介质模型">粗糙介质</Term>还要根据 Fresnel 选择反射或折射，并为透射使用不同的半向量与雅可比。仅把导体 DFG 公式中的 $F$ 换成 $1-F$ 并不能得到正确玻璃。
+
+## 8. 测量材质与毛发：通用微表面不是终点
+
+<Term def="通过插值真实材料的方向和光谱测量数据来评估与采样反射，而不是由少量解析参数推导的模型">测量型 BSDF</Term>适合虹彩涂层、织物和非标准微结构。PBRT 的 `MeasuredBxDF` 保存测量数据与当前波长，提供与解析 BxDF 相同的 `f/Sample_f/PDF` 契约；数据驱动不意味着可以跳过重要性采样。
+
+<Term def="针对圆柱纤维几何，把纵向与方位散射以及表面反射、内部透射和吸收封装成可评估可采样模型">HairBxDF</Term>把毛发看作包围含色素半透明核心的粗糙介质界面。毛发颜色主要来自内部吸收的波长变化，散射则含表面反射 R、穿透 TT 和内部反射 TRT 等路径。用普通表面 BRDF 涂在细圆柱上，会漏掉透射与内部多路径形成的高光结构。
+
+## 9. 物理约束与数值验收
+
+互易 BRDF 满足：
+
+$$
+f_r(\omega_o,\omega_i)=f_r(\omega_i,\omega_o).
+$$
+
+能量守恒要求固定入射或出射方向后，半球加权积分不超过 1：
+
+$$
+\int_{\mathcal H^2}f_r(\omega_o,\omega_i)|\cos\theta_i|\,\mathrm d\omega_i\le1.
+$$
+
+单个 BRDF 数值可以大于 1，因为它是方向密度；真正受限的是积分。测试新 BxDF 时应分别验证：`f` 非负且有限、采样直方图与 `PDF` 一致、白炉测试不增能、交换方向满足互易性，以及反射/透射 flag 与半球关系一致。
+
+## 10. 分三步审计一次 BSDF 采样
+
+动手试：观察高亮从局部坐标和分支选择，推进到方向采样，再推进到路径权重与 MIS。
+
+<Stepper>
+<Step title="第一步：检查坐标与类别">
+把 `wo` 转到 shading space，确认法线不被隐式翻转；根据请求 flags 与 Fresnel 选择反射或透射分支。
+<PbtBxdfDiagram step={1} />
+</Step>
+<Step title="第二步：检查方向与密度">
+用同一分布生成 `wi` 并报告 `pdf`；若是微表面模型，核对可见法线采样、反射/折射映射和雅可比。
+<PbtBxdfDiagram step={2} />
+</Step>
+<Step title="第三步：检查吞吐量与 MIS">
+应用 `f * absCos / pdf`，保留 `eta` 与 specular flags；只有非 Delta 事件才能用普通方向 PDF 与光源策略做 MIS。
+<PbtBxdfDiagram step={3} />
+</Step>
+</Stepper>
+
+## 11. 常见误区与诊断
 
 <Callout type="trap">
-**误区：认为 BRDF 可以是任意函数。**
-物理正确的 BRDF 必须满足两条约束：1）互易性 f(ωi,ωo)=f(ωo,ωi)；2）能量守恒——对所有出射方向积分不超过1。Phong 模型违反能量守恒，不是物理正确的 BRDF。
+**现象 →** 镜子直接光照结果全黑，于是把 `f()` 改成一个巨大常数。**原因 →** 用普通函数近似 Delta 分布。**修法 →** 只通过 `Sample_f()` 生成唯一镜面方向；独立 `f()` 和 `PDF()` 保持 0，让匹配的 Delta 在估计器中相消。
 </Callout>
 
 <Callout type="trap">
-**误区：不理解微表面粗糙度参数的物理含义。**
-粗糙度 α 不是「表面有多粗糙」的直接度量，而是微表面法线分布的宽度。α=0 是完美镜面，α=1 是极粗糙。它控制高光的大小和锐度——α 越小高光越锐利越小，α 越大高光越弥散越暗。
+**现象 →** 粗糙度变化后高光位置正确，但画面亮度漂移或噪点暴涨。**原因 →** 只改 D 或经验高光宽度，没有同步更新可见法线采样与 PDF。**修法 →** 对 `Sample_f()` 生成的方向做直方图，与 `PDF()` 数值积分比较，并运行白炉测试。
 </Callout>
+
+<Callout type="trap">
+**现象 →** 金属出现彩色漫反射底和另一层白色高光。**原因 →** 把导体当“有颜色的介质”，同时保留 diffuse 与错误 Fresnel。**修法 →** 使用光谱复折射率 $\eta+i\kappa$ 的 conductor Fresnel；氧化层或涂层应作为明确的分层传输模型处理。
+</Callout>
+
+## 小结
+
+- BRDF 与 BTDF 只描述同一点散射，BSDF 统合反射和透射，BxDF 提供统一可采样接口
+- `f`、`Sample_f` 与 `PDF` 必须描述同一分布，路径更新使用 `f * absCos / pdf`
+- Lambert 的 $1/\pi$ 来自半球能量归一化，完美镜面则使用 Delta 采样约定
+- 介质在反射与折射间分配能量，导体使用复折射率产生光谱反射与吸收
+- 微表面 D、F、G 分别描述法线统计、界面 Fresnel 和几何遮蔽
+- 测量材质与毛发模型覆盖解析微表面难以表达的真实微结构
 
 <Exercises>
-**问题 1**：BRDF 的两条物理约束是什么？为什么它们重要？
+**问题 1**：为什么 Lambert BRDF 是 $R/\pi$？若误写成 $R$，白色 $R=1$ 的表面会发生什么？
 
 <Answer>
-1）互易性：f(ωi,ωo) = f(ωo,ωi)，交换入射和出射方向结果相同。这来自光路可逆性。2）能量守恒：对所有出射方向的反射能量积分不超过入射能量。这两条约束确保 BRDF 描述的是物理可能的材料，而非任意数学函数。违反能量守恒会导致渲染偏亮，违反互易性会导致双向路径追踪等算法失效。
+半球上的余弦积分是 $\int_{\mathcal H^2}\cos\theta\,d\omega=\pi$，因此常数 BRDF 必须除以 $\pi$ 才使总反射率等于 $R$。若写成 $R$，积分反射率变成 $\pi R$；白色表面会反射超过三倍入射能量，在多次反弹中不断增亮。
 </Answer>
 
-**问题 2**：Cook-Torrance 模型的 D、G、F 三项分别建模什么物理现象？
+**问题 2**：完美镜面采样时 `Sample_f()` 为什么可返回 PDF 1，而独立 `PDF(wo, wi)` 必须返回 0？
 
 <Answer>
-D（法线分布函数）：建模微表面法线与半角向量对齐的概率，决定高光的形状和大小。G（几何遮蔽/阴影）：建模微表面之间的相互遮挡，一个微面可能被另一个挡住（遮蔽）或投射阴影（阴影），在掠射角时效果显著。F（菲涅尔项）：建模光在介质界面的反射率随入射角变化，决定高光颜色和强度。三者乘积除以归一化因子 4(n·wi)(n·wo) 得到物理正确的 BRDF。
+镜面方向由 Delta 分布唯一确定。`Sample_f()` 的 1 表示已选择该离散事件，散射与概率中的 Delta 已按约定相消；独立连续方向查询命中该单点的概率为零，所以 `PDF()` 返回 0。把独立 PDF 也设为 1 会让其他采样策略误以为能连续命中镜面方向，破坏 MIS。
+</Answer>
+
+**问题 3**：给定粗糙导体的 `wo` 与采样微面法线 `wm`，写出生成 `wi` 后 PDF 的变换，并说明分母来源。
+
+<Answer>
+先按镜面反射得到 `wi = Reflect(wo, wm)`，再使用 $p(w_i)=p(w_m)/(4|w_o\cdot w_m|)$。分母是从微面半向量到反射方向的 Jacobian；若漏掉它，采样直方图与报告 PDF 不一致，估计会有偏。
+</Answer>
+
+**问题 4**：设计一个白炉测试，区分“BRDF 数值局部大于 1”和“模型违反能量守恒”。
+
+<Answer>
+用各方向均匀的单位入射辐亮度包围测试表面，对多个 `wo` 和粗糙度高样本估计 $\int f|\cos\theta|d\omega$。输出不得超过 1，但单个方向的 `f` 可大于 1。若积分超过 1，检查归一化、Fresnel、masking 和 PDF；若只有尖峰值大而积分合格，则不违反能量守恒。
 </Answer>
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="BRDF">双向反射分布函数，描述表面如何将入射光反射到出射方向，必须满足互易性和能量守恒。</GlossaryItem>
-<GlossaryItem term="Cook-Torrance模型">基于微表面理论的物理 BRDF，由法线分布D、几何遮蔽G、菲涅尔F三项组成。</GlossaryItem>
-<GlossaryItem term="菲涅尔效应">反射率随入射角增大而增大的现象，掠射角时几乎全反射，用 Schlick 近似高效计算。</GlossaryItem>
-<GlossaryItem term="微表面理论">将粗糙表面建模为大量微小镜面的统计模型，粗糙度参数控制微面法线分布宽度。</GlossaryItem>
+<GlossaryItem term="双向反射分布函数（BRDF）">描述同一表面点上入射辐照度到指定出射方向辐亮度的反射分布。</GlossaryItem>
+<GlossaryItem term="双向透射分布函数（BTDF）">描述光在同一表面点穿过界面后向另一侧方向散射的分布。</GlossaryItem>
+<GlossaryItem term="双向散射分布函数（BSDF）">统一表示同一点反射与透射的散射分布。</GlossaryItem>
+<GlossaryItem term="BxDF">PBRT 中单个局部散射模型的评估、采样、PDF 和分类接口。</GlossaryItem>
+<GlossaryItem term="散射标志">组合散射形状与反射/透射类别的位标志。</GlossaryItem>
+<GlossaryItem term="Lambert 漫反射">BRDF 为反射率除以 π 的理想均匀漫反射模型。</GlossaryItem>
+<GlossaryItem term="德尔塔分布">用于完美镜面离散方向的广义分布，只能通过匹配采样正确处理。</GlossaryItem>
+<GlossaryItem term="菲涅尔反射率">由角度、折射率和波长决定的界面反射比例。</GlossaryItem>
+<GlossaryItem term="介质">使用实数折射率、同时支持反射和折射的绝缘材料。</GlossaryItem>
+<GlossaryItem term="导体">使用复折射率描述波长相关反射和内部吸收的金属材料。</GlossaryItem>
+<GlossaryItem term="微表面分布">统计大量不可分辨微面法线以描述粗糙界面的模型。</GlossaryItem>
+<GlossaryItem term="粗糙介质">结合可见微面采样、Fresnel 和折射 Jacobian 的 glossy 反射透射模型。</GlossaryItem>
+<GlossaryItem term="测量型 BSDF">通过插值真实材料测量数据来评估与采样反射的模型。</GlossaryItem>
+<GlossaryItem term="HairBxDF">封装毛发纵向、方位、表面和内部散射路径的专用模型。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th edition, Chapter 9" adaptedUrl="https://www.pbr-book.org/4ed/Reflection_Models" />

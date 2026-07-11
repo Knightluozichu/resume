@@ -1,118 +1,339 @@
 ---
-title: "顶点处理与变换"
+title: "顶点处理与绘制命令"
 type: B
 section: "计算机图形学与渲染"
 order: 3
-description: "MVP变换、透视除法与裁剪"
+description: "从三维数学、顶点调用与绘制命令到变换反馈、裁剪和视口映射"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/opengl-superbible-comprehensive-tutorial-and-reference-9780134193137"
 draft: false
 ---
 
-import { GlsVertexProcessingDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-vertex-processing";
+import { GlsVertexProcessingDiagram, GlsMathTransformDiagram, GlsInterpolationCurveDiagram, GlsDrawCommandDiagram, GlsTransformFeedbackDiagram, GlsClipViewportDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-vertex-processing";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解顶点着色器的完整职责
-- 掌握MVP变换链与透视除法
-- 了解裁剪与背面剔除
-- 能在顶点着色器中实现骨骼动画
+- 能推导点、方向和法线从模型空间到裁剪空间的变换
+- 能区分数组、索引、实例化与间接绘制命令的调用语义
+- 能计算 `gl_VertexID`、实例属性和 base 参数如何选择顶点数据
+- 能实现 transform feedback 的声明、链接、捕获与乒乓缓冲流程
+- 能解释齐次裁剪、透视除法、视口映射和用户裁剪距离的顺序
 </Objectives>
 
-## 直觉引入
+## 为什么顶点处理不等于写一行 MVP
 
-顶点处理就像快递分拣——每个包裹(顶点)经过三道分拣(Model:确定发货地→World、View:转到快递公司视角、Projection:投影到地图平面)，最后裁掉地图外的包裹。每个顶点从局部坐标出发，最终到达屏幕。
-
-## 概念讲解
-
-<Term def="将顶点从模型局部空间变换到世界空间">Model矩阵</Term><Term def="将世界空间变换到摄像机空间">View矩阵</Term><Term def="将3D投影到2D裁剪空间">Projection矩阵</Term><Term def="裁剪坐标除以w得到NDC，产生近大远小效果">透视除法</Term>
-
-### MVP变换
-v_clip = P * V * M * v_local，从右向左作用。
-
-### 透视除法
-裁剪坐标(x,y,z,w)除以w得到NDC(x/w,y/w,z/w)。w与z相关使近大远小。在顶点着色器后由硬件自动执行。
-
-### 裁剪
-裁剪空间中视锥体对应立方体(-w~w)。完全在外丢弃，跨越边界的裁剪生成新顶点。
-
-## 交互Demo
-
-> 猜一猜：为什么透视除法要在顶点着色器之后而不是之前？
+原书第 4 章先建立向量、矩阵、变换、插值、曲线和样条的数学语言，第 7 章再用这些工具解释 vertex processing、drawing commands、storing transformed vertices 与 clipping。只写 `gl_Position = P * V * M * position` 会漏掉两个决定性问题：**哪些顶点 invocation 会执行**由 draw command 决定，**输出如何进入下一阶段或保存**由固定管线与 transform feedback 状态决定。
 
 <GlsVertexProcessingDiagram />
 
-<Stepper>
-<Step title="第一步：Model变换">
-Model=T*R*S将顶点从局部空间变换到世界空间。先缩放再旋转最后平移。
-</Step>
-<Step title="第二步：View变换">
-View矩阵将世界变换到摄像机空间，相当于摄像机变换的逆。
-</Step>
-<Step title="第三步：Projection+除法">
-Projection矩阵投影到裁剪空间，透视除法除以w得到NDC，最后映射到屏幕。
-</Step>
-</Stepper>
+一次绘制要闭合四个契约：VAO 描述属性如何取数，绘制命令描述调用范围与实例数，<Term def="逐顶点调用并输出 gl_Position 与后续阶段属性的可编程阶段">顶点处理</Term>产生裁剪坐标，固定阶段再执行装配、<Term def="在齐次裁剪空间把图元限制到可见体并生成必要新顶点的过程">裁剪</Term>、透视除法和视口映射。顶点 shader 不知道“模型”或“相机”是什么，这些语义来自应用选择的矩阵与数据布局。
 
-## 代码对照
+## 向量、矩阵与齐次坐标
+
+<Term def="具有方向和大小、可用于位移或属性运算的有序分量">向量</Term>的长度与归一化为：
+
+$$
+\lVert \mathbf v\rVert=\sqrt{\mathbf v\cdot\mathbf v},
+\qquad \widehat{\mathbf v}=\frac{\mathbf v}{\lVert\mathbf v\rVert}
+$$
+
+点积给出夹角与投影，叉积给出垂直方向：
+
+$$
+\mathbf a\cdot\mathbf b=\lVert\mathbf a\rVert\lVert\mathbf b\rVert\cos\theta,
+\qquad \mathbf n=\mathbf a\times\mathbf b
+$$
+
+<Term def="表示线性映射或齐次仿射变换、并按约定顺序复合的数表">矩阵</Term>并不天然带“模型”含义。OpenGL/GLSL 常用列向量写法，最右矩阵先作用：
+
+$$
+\mathbf p_{clip}=P\,V\,M\,\mathbf p_{local}
+$$
+
+齐次坐标让平移进入矩阵乘法：点使用 $(x,y,z,1)$，方向使用 $(x,y,z,0)$，所以平移列只影响点。<Term def="把模型局部坐标放到世界坐标的仿射变换">模型矩阵</Term>通常复合缩放、旋转和平移；<Term def="相机世界变换的逆，把世界坐标变到观察空间">观察矩阵</Term>是相机变换 $C$ 的逆：
+
+$$
+V=C^{-1}
+$$
+
+<GlsMathTransformDiagram />
+
+法线不是普通方向。若模型线性部分为 $A$，切线变为 $A\mathbf t$，要维持法线与所有切线正交，应使用<Term def="模型或模型观察矩阵线性部分的逆转置，用于正确变换法线">法线矩阵</Term>：
+
+$$
+\mathbf n'=\operatorname{normalize}\!\left((A^{-1})^{T}\mathbf n\right)
+$$
+
+只有纯旋转或均匀缩放时，直接用 $A$ 才可能与逆转置方向等价。官方 `spinnycube` 示例明确上传 `proj_matrix` 与 `mv_matrix`，shader 计算 `proj_matrix * mv_matrix * position`；这证明示例使用列向量顺序，也提醒宿主矩阵库和 `glUniformMatrix4fv` 的转置参数必须采用同一约定。
 
 ```glsl
-// 顶点着色器: MVP变换
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec2 aTexCoord;
-out vec2 TexCoord;
-uniform mat4 model, view, projection;
+#version 450 core
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+
+layout(location = 0) out VS_OUT {
+    vec3 eyePosition;
+    vec3 eyeNormal;
+} vsOut;
+
+uniform mat4 modelView;
+uniform mat4 projection;
+uniform mat3 normalMatrix;
+
 void main() {
-    gl_Position = projection * view * model * vec4(aPos, 1.0);
-    TexCoord = aTexCoord;
+    vec4 eye = modelView * vec4(position, 1.0);
+    vsOut.eyePosition = eye.xyz;
+    vsOut.eyeNormal = normalize(normalMatrix * normal);
+    gl_Position = projection * eye; // 保留 clip-space w，不手动除法
 }
-// 骨骼动画(扩展)
-// layout(location=2) in ivec4 boneIds;
-// layout(location=3) in vec4 weights;
-// uniform mat4 boneMatrices[100];
-// mat4 boneTransform = boneMatrices[boneIds[0]]*weights[0] + ...;
-// gl_Position = projection * view * model * boneTransform * vec4(aPos, 1.0);
 ```
 
-骨骼动画在顶点着色器中用骨骼矩阵加权混合变换顶点位置。weights和通常为1。
+## 投影、插值、曲线与样条
+
+<Term def="把观察空间映射到裁剪空间、建立正交或透视视体的矩阵">投影矩阵</Term>分正交与透视两类。正交投影不随深度缩小；透视投影让 $w_c$ 与观察深度相关，随后除以 $w_c$ 产生近大远小。以对称透视视锥为例，垂直视场角 $	heta$ 与宽高比 $a$ 给出缩放：
+
+$$
+s_y=\frac{1}{\tan(\theta/2)},\qquad s_x=\frac{s_y}{a}
+$$
+
+<Term def="按参数在已知样本之间构造中间值的过程">插值</Term>贯穿动画、顶点属性与曲线。两点线性插值是：
+
+$$
+\operatorname{lerp}(\mathbf p_0,\mathbf p_1,t)
+=(1-t)\mathbf p_0+t\mathbf p_1,qquad 0\le t\le 1
+$$
+
+三次 Bézier <Term def="由参数和控制点定义的连续几何轨迹">曲线</Term>使用四个 Bernstein 基函数：
+
+$$
+\mathbf B(t)=(1-t)^3\mathbf p_0
++3(1-t)^2t\mathbf p_1
++3(1-t)t^2\mathbf p_2
++t^3\mathbf p_3
+$$
+
+<Term def="用多段低次多项式及连续性条件构造长曲线的表示">样条</Term>把长路径拆成多个稳定区间；连接处可约束位置、切线甚至曲率连续。原书官方 `cubicbezier` 示例用 16 个控制点建立 Bézier patch，并允许显示控制点与控制网格，说明控制几何、求值与最终曲面是不同层次。
+
+<GlsInterpolationCurveDiagram />
+
+## 绘制命令决定 invocation
+
+<Term def="向 OpenGL 提交图元模式、顶点范围、索引、实例或间接参数的 API 调用">绘制命令</Term>不是“让 GPU 开始画”的单一按钮，它定义顶点 shader 的调用序列。`glDrawArrays(mode, first, count)` 产生从 `first` 开始的数组顶点；`glDrawElements` 从 VAO 中的 element array buffer 读取索引，允许多个图元复用顶点。官方 `singletri` 直接用 `gl_VertexID` 索引 shader 内三点数组，而 `indexedcube` 用 `glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, 0)` 复用立方体索引。
+
+<GlsDrawCommandDiagram />
+
+非索引绘制中，第 $i$ 次调用的内建<Term def="当前顶点调用的有效顶点编号，可用于生成或索引数据">gl_VertexID</Term>近似为：
+
+$$
+\mathrm{VertexID}_i=\mathrm{first}+i
+$$
+
+索引绘制时，它来自索引值，并在 base-vertex 变体中包含相应偏移。实例化绘制让同一网格执行多次；`gl_InstanceID` 对每个 draw 从零计数。设置 `glVertexAttribDivisor(location, d)` 后，该属性不是每顶点推进，而是按实例组推进：
+
+$$
+\mathrm{attributeIndex}=\left\lfloor\frac{\mathrm{instanceID}}{d}\right\rfloor
+$$
+
+官方 `instancedattribs` 示例对颜色和位置属性设置 divisor 1，再用 `glDrawArraysInstanced(..., 4)` 画四个不同位置、不同颜色的方块。
+
+```cpp
+// 同一 VAO 下的四种调用域
+glDrawArrays(GL_TRIANGLES, first, vertexCount);
+glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT,
+               reinterpret_cast<void*>(indexByteOffset));
+glDrawArraysInstanced(GL_TRIANGLE_FAN, 0, 4, instanceCount);
+
+struct DrawArraysIndirectCommand {
+    GLuint count;
+    GLuint instanceCount;
+    GLuint first;
+    GLuint baseInstance;
+};
+
+glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBuffer);
+glMultiDrawArraysIndirect(GL_TRIANGLES, nullptr, drawCount, 0);
+```
+
+<Term def="从 GL_DRAW_INDIRECT_BUFFER 读取参数、避免逐条由 CPU 传入参数的绘制方式">间接绘制</Term>把命令结构放入 buffer；multi-draw 一次提交多个命令。官方 `multidrawindirect` 为 50,000 个对象建立 `DrawArraysIndirectCommand`，并对比一次 `glMultiDrawArraysIndirect` 与 50,000 次独立 draw。它减少 CPU 提交次数，但不会自动减少 GPU 顶点或片段工作量；命令 buffer 的结构、对齐、边界和同步必须正确。
+
+## 保存变换后的顶点：Transform Feedback
+
+<Term def="在光栅化前把顶点管线输出直接写入缓冲对象的机制">变换反馈</Term>（transform feedback）适合保存粒子更新、蒙皮或几何预处理结果。核心顺序不能打乱：先在 program 链接前声明要捕获的 varyings，再链接；绑定 transform feedback buffer；开始捕获；执行匹配图元模式的 draw；结束捕获。`GL_RASTERIZER_DISCARD` 可跳过后续光栅化，但并不替代缓冲同步。
+
+<GlsTransformFeedbackDiagram />
+
+```cpp
+const char* outputs[] = { "tf_position", "tf_velocity" };
+glTransformFeedbackVaryings(updateProgram, 2, outputs,
+                            GL_SEPARATE_ATTRIBS);
+glLinkProgram(updateProgram); // 捕获布局是链接结果的一部分
+
+glEnable(GL_RASTERIZER_DISCARD);
+glBindVertexArray(readVao);
+glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 0, writePosition);
+glBindBufferBase(GL_TRANSFORM_FEEDBACK_BUFFER, 1, writeVelocity);
+glBeginTransformFeedback(GL_POINTS);
+glDrawArrays(GL_POINTS, 0, particleCount);
+glEndTransformFeedback();
+glDisable(GL_RASTERIZER_DISCARD);
+std::swap(readSet, writeSet); // 下一轮避免同一存储同时读写
+```
+
+官方 `springmass` 示例捕获 `tf_position_mass` 与 `tf_velocity`，启用 rasterizer discard，在两个位置/速度 buffer 集合间 ping-pong，并在模拟后用当前结果绘制点和连线。可复刻的关键不是“复制 API 名”，而是验证每轮读取集合、写入集合、捕获图元模式和字节容量都一致。
+
+若每个顶点捕获位置 `vec4` 与速度 `vec3`，忽略实现额外对齐时，最低数据量为：
+
+$$
+B_{min}=N\,(4+3)\,\mathrm{sizeof(float)}=28N\ \mathrm{bytes}
+$$
+
+实际应根据接口查询、buffer mode 与实现限制确认 stride，不能仅按 C++ 结构体直觉猜布局。
+
+## 齐次裁剪、透视除法与视口
+
+顶点 shader 必须输出裁剪空间 `gl_Position=(x_c,y_c,z_c,w_c)`。OpenGL 的规范裁剪体满足：
+
+$$
+-w_c\le x_c\le w_c,\qquad
+-w_c\le y_c\le w_c,\qquad
+-w_c\le z_c\le w_c
+$$
+
+完全在某个平面外的图元被拒绝；跨边界图元被裁剪并生成新顶点。之后才执行<Term def="把裁剪坐标各分量除以 w 得到标准化设备坐标的固定操作">透视除法</Term>：
+
+$$
+(x_n,y_n,z_n)=\left(\frac{x_c}{w_c},\frac{y_c}{w_c},\frac{z_c}{w_c}\right)
+$$
+
+默认 OpenGL NDC 的三个轴范围都是 $[-1,1]$。<Term def="把 NDC 的 x、y 映射到窗口矩形的固定功能变换">视口变换</Term>把宽高为 $W,H$、原点为 $(x_0,y_0)$ 的窗口坐标写成：
+
+$$
+x_w=x_0+\frac{x_n+1}{2}W,
+\qquad y_w=y_0+\frac{y_n+1}{2}H
+$$
+
+深度范围 $[n,f]$ 则映射 NDC 深度：
+
+$$
+z_w=\frac{f-n}{2}z_n+\frac{f+n}{2}
+$$
+
+<GlsClipViewportDiagram />
+
+应用还能让 shader 写 `gl_ClipDistance[i]` 定义用户裁剪半空间，并启用对应 `GL_CLIP_DISTANCEi`。官方 `clipdistance` 示例同时启用 0、1 两个裁剪距离，以动态平面和球体裁剪 dragon 模型。<Term def="shader 写出的带符号距离，用于定义额外用户裁剪半空间">用户裁剪距离</Term>小于零代表顶点在该半空间外，但最终判断仍按整个图元进行。
+
+```glsl
+uniform vec4 clipPlane; // eye-space plane (a,b,c,d)
+uniform mat4 modelView;
+uniform mat4 projection;
+
+void main() {
+    vec4 eye = modelView * vec4(position, 1.0);
+    gl_ClipDistance[0] = dot(clipPlane, eye);
+    gl_Position = projection * eye;
+}
+```
+
+## 按证据建立顶点链
+
+先预测：把 50,000 次独立 draw 改成一次 multi-draw indirect，GPU 要处理的顶点数可以完全不变，但 CPU 提交成本会明显改变。相反，把共享网格从 arrays 改为 elements，调用数、post-transform cache 命中和内存访问都可能变化。优化前必须区分 CPU command cost 与 GPU vertex work。
+
+<Stepper>
+<Step title="第一步：证明调用域与变换">
+从单个三角形开始，记录 `first/count` 或 index range，输出 `gl_VertexID` 映射色，确认 VAO 属性和列向量矩阵顺序，再检查 `gl_Position` 的 clip-space `w`。
+
+<GlsVertexProcessingDiagram step={1} />
+</Step>
+<Step title="第二步：批量调用或保存输出">
+只在语义明确后加入 instancing、base 参数或 indirect command。若需复用变换结果，先声明 transform feedback varyings，验证捕获容量，再用 ping-pong buffer 避免读写冲突。
+
+<GlsVertexProcessingDiagram step={2} />
+</Step>
+<Step title="第三步：验证可见范围与窗口">
+用简单图元逐个越过六个裁剪平面，检查用户 clip distance 的符号；随后验证 perspective divide、viewport 原点尺寸和 depth range，最后才判断屏幕结果。
+
+<GlsVertexProcessingDiagram step={3} />
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 在顶点着色器中做透视除法。
-**原因 →** 想提前得到NDC。
-**修法 →** 透视除法由硬件在顶点着色器后自动执行。手动除w会破坏裁剪(裁剪需要在裁剪空间做)。输出gl_Position是裁剪空间坐标。
+**现象 →** 在顶点 shader 中手动执行 `gl_Position /= gl_Position.w`。
+
+**原因 →** 把 NDC 当成 shader 必须输出的坐标，忽略齐次裁剪需要原始 $w_c$。
+
+**修法 →** shader 输出 clip-space `gl_Position`；让固定阶段先裁剪再透视除法。用越过近平面的三角形验证，不能只看完全位于视体内的点。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 法线用Model矩阵变换。
-**原因 →** 顶点和法线都用Model。
-**修法 →** 非均匀缩放时Model矩阵会扭曲法线。法线需用normalMatrix=transpose(inverse(mat3(model)))变换。
+**现象 →** `glDrawElements` 的最后参数被当成 CPU 指针。
+
+**原因 →** core profile 中绑定 EBO 后，该参数是 element buffer 内的字节偏移；错误指针会选择错误索引范围。
+
+**修法 →** 把 offset 明确命名为 `indexByteOffset`，检查 index type 对齐，并确认 EBO 是当前 VAO 状态的一部分。
+</Callout>
+
+<Callout type="trap">
+**现象 →** transform feedback 第二轮结果随机或全零。
+
+**原因 →** varyings 在链接后才声明、捕获模式不匹配、buffer 太小，或同一存储同时作为输入与输出。
+
+**修法 →** 固化“声明 → 链接 → 绑定 → begin/draw/end → 交换”顺序，查询链接和捕获状态，逐轮标记 read/write buffer 并校验字节容量。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：透视除法是什么？何时发生？
+**问题 1：** 一个点和一条方向都乘同一齐次变换，为什么平移只影响点？非均匀缩放时法线怎么办？
 
 <Answer>
-将裁剪坐标(x,y,z,w)除以w得到NDC。w与z相关(透视投影)使近大远小。在顶点着色器后、光栅化前由硬件自动执行。
+点的齐次分量为 1，方向为 0，因此矩阵平移列只进入点的结果。法线要保持与变换后切线正交，应乘模型或模型观察矩阵线性部分的逆转置，再归一化。
 </Answer>
 
-**问题**：如何在顶点着色器中实现骨骼动画？
+**问题 2：** 四种绘制命令家族分别解决什么问题？
 
 <Answer>
-1)上传骨骼矩阵数组(UBO) 2)每个顶点有骨骼索引和权重 3)最终矩阵=sum(weight[i]*boneMatrix[idx[i]]) 4)变换顶点位置和法线。
+Arrays 按连续顶点范围调用；Elements 用 EBO 索引复用顶点；Instanced 让同一几何执行多实例并可用 divisor 提供实例属性；Indirect/Multi 从命令 buffer 读取参数并批量提交多个 draw。它们改变调用和提交语义，不保证自动减少 GPU 工作量。
+</Answer>
+
+**问题 3：** 设计一个 10,000 粒子的 transform feedback 更新循环，需要哪些不可缺步骤？
+
+<Answer>
+链接前声明位置和速度输出；准备两套足够容量的输入/输出 buffer；绑定写目标；启用 rasterizer discard；begin、以匹配图元模式 draw、end；每轮交换读写集合。还要检查链接日志、捕获布局、容量和同步，不能在同一轮冲突读写同一存储。
+</Answer>
+
+**问题 4：** 一个三角形跨过近平面时，为什么不能先对三个顶点除以 $w$ 再简单丢弃越界点？
+
+<Answer>
+裁剪针对完整图元并发生在齐次 clip space。跨平面图元需要计算边与裁剪平面的交点并生成新顶点；先除 $w$ 会丢失适合齐次插值和近平面处理的信息，简单丢点还会破坏拓扑。正确顺序是齐次裁剪、透视除法、viewport/depth 映射。
 </Answer>
 </Exercises>
 
+## 本章回顾
+
+顶点处理由数学语义、绘制命令和固定阶段共同定义。向量与矩阵解释坐标和变换，插值、曲线与样条解释连续变化；arrays、elements、instancing 与 indirect draw 决定 invocation；transform feedback 保存光栅化前输出；齐次裁剪保留跨平面图元，随后才透视除法并映射到 viewport。复刻原书核心的标准，是能从参数推导调用、从矩阵推导坐标、从状态推导捕获与可见结果。
+
 <Glossary>
-<GlossaryItem term="Model矩阵">将顶点从模型局部空间变换到世界空间。</GlossaryItem>
-<GlossaryItem term="View矩阵">将世界空间变换到摄像机空间。</GlossaryItem>
-<GlossaryItem term="Projection矩阵">将3D投影到2D裁剪空间。</GlossaryItem>
-<GlossaryItem term="透视除法">裁剪坐标除以w得到NDC，产生近大远小效果。</GlossaryItem>
+<GlossaryItem term="顶点处理">逐顶点调用并输出 gl_Position 与后续阶段属性的可编程阶段。</GlossaryItem>
+<GlossaryItem term="裁剪">在齐次裁剪空间把图元限制到可见体并生成必要新顶点的过程。</GlossaryItem>
+<GlossaryItem term="向量">具有方向和大小、可用于位移或属性运算的有序分量。</GlossaryItem>
+<GlossaryItem term="矩阵">表示线性映射或齐次仿射变换、并按约定顺序复合的数表。</GlossaryItem>
+<GlossaryItem term="模型矩阵">把模型局部坐标放到世界坐标的仿射变换。</GlossaryItem>
+<GlossaryItem term="观察矩阵">相机世界变换的逆，把世界坐标变到观察空间。</GlossaryItem>
+<GlossaryItem term="法线矩阵">模型或模型观察矩阵线性部分的逆转置，用于正确变换法线。</GlossaryItem>
+<GlossaryItem term="投影矩阵">把观察空间映射到裁剪空间、建立正交或透视视体的矩阵。</GlossaryItem>
+<GlossaryItem term="插值">按参数在已知样本之间构造中间值的过程。</GlossaryItem>
+<GlossaryItem term="曲线">由参数和控制点定义的连续几何轨迹。</GlossaryItem>
+<GlossaryItem term="样条">用多段低次多项式及连续性条件构造长曲线的表示。</GlossaryItem>
+<GlossaryItem term="绘制命令">向 OpenGL 提交图元模式、顶点范围、索引、实例或间接参数的 API 调用。</GlossaryItem>
+<GlossaryItem term="gl_VertexID">当前顶点调用的有效顶点编号，可用于生成或索引数据。</GlossaryItem>
+<GlossaryItem term="间接绘制">从 GL_DRAW_INDIRECT_BUFFER 读取参数、避免逐条由 CPU 传入参数的绘制方式。</GlossaryItem>
+<GlossaryItem term="变换反馈">在光栅化前把顶点管线输出直接写入缓冲对象的机制。</GlossaryItem>
+<GlossaryItem term="透视除法">把裁剪坐标各分量除以 w 得到标准化设备坐标的固定操作。</GlossaryItem>
+<GlossaryItem term="视口变换">把 NDC 的 x、y 映射到窗口矩形的固定功能变换。</GlossaryItem>
+<GlossaryItem term="用户裁剪距离">shader 写出的带符号距离，用于定义额外用户裁剪半空间。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapters 4 and 7; official sb7code examples spinnycube, cubicbezier, singletri, indexedcube, instancedattribs, multidrawindirect, springmass, and clipdistance" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

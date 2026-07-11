@@ -1,14 +1,20 @@
 ---
-title: 多光源
+title: 多光源函数化、数组上传与贡献累加
 type: C
 section: 光照
 order: 6
 description: 把平行光、点光源、聚光各自的 Phong 计算封装成一个 GLSL 函数，main 里让每盏光各算各的贡献、再全部相加——一套代码就能让一个物体同时被多盏不同类型的光照亮，给光照篇收个完整的尾。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/06%20Multiple%20lights/
+sourceUrl: https://learnopengl.com/Lighting/Multiple-lights
 draft: false
 ---
+
+import {
+  LightAccumulationStagesDiagram,
+  MultipleLightsDiagram,
+  UniformLightArrayDiagram,
+} from "@/components/mdx/learnopengl/diagrams/multiple-lights";
 
 {/* C 实战型章（HEL-55，M5 光照篇第 6 篇 / 收官）：主题是多光源——前五章都只点一盏光，本章把多盏不同类型的光同时照在一个物体上。核心不是新数学，而是「代码组织」：把每一类光的 Phong 计算各封装成一个 GLSL 函数（CalcDirLight / CalcPointLight / CalcSpotLight，各返回该光对这块片段的颜色贡献），main 里 1 个平行光 + N 个点光源（uniform 数组 + for 循环）+ 1 个聚光，把各自结果相加得最终色。承接「基础光照」（Phong 三项 ambient/diffuse/specular，已会 N·L / reflect / pow）、「材质」（material/light 结构体 + struct uniform）、「投光物」（平行光/点光源/聚光三类 + 距离衰减 attenuation + 聚光切光角）。math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，已 GPU 验，勿改勿建）：单光 Phong 回顾 + 猜一猜（多盏光叠加时，被多盏同时照到的地方会更亮，甚至顶到纯白过曝）。新建 1 个静态图示 MultipleLightsDiagram（已注册）：每个光独立算贡献 → ∑ 相加 → 最终色，强调「每个光独立算、结果累加」。§6 代码为重心：三个 Calc 函数签名+主循环累加；C++↔WebGL2；块≤30、块间解说、API 差异 Callout（GLSL 数组/循环、uniform 数组逐元素灌）。误区≥2（光贡献忘相加只显最后一个 / uniform 数组索引越界或没传满 / 性能：片段里光太多）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +24,17 @@ draft: false
 
 <Objectives>
 
-- 能说清把多盏光照到同一个物体上的核心套路：每类光封成一个函数各算各的贡献，最后把所有贡献**相加**
-- 能改出「一个平行光 + 多个点光源 + 一个聚光」同时生效的片段着色器：照着写出三个 `Calc*` 函数的签名，并在 `main` 里用循环累加点光源
-- 能回答：如果在 `main` 里把某盏光的贡献**算了却忘了加进 `result`**，画面会出什么毛病？为什么 `pointLights` 要写成一个**定长数组**？
+- 能解释多光源为何等于每盏灯独立的 Phong 贡献之和
+- 能实现 CalcDirLight、CalcPointLight、CalcSpotLight 三个纯贡献函数
+- 能实现定长 pointLights 数组的 GLSL 循环与 CPU 逐元素逐字段上传
+- 能修改平行光、点光源数量和聚光开关而不破坏 result 累加结构
+- 能判断覆盖赋值、数组未灌满、贡献过曝或片段光源数过多造成的问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接全篇手电照墙体系，扩到「房间里好几盏灯」）。 */}
 
-## 一个房间里好几盏灯
+## 为什么一个房间里的多盏灯必须独立计算再累加
 
 前面几章你一直在跟**一盏**灯打交道——手电照墙、绕着立方体转的那个小亮点。可你现在所在的房间，多半不止一盏灯：头顶一盏吸顶灯把整屋照亮，桌上一盏台灯在桌面投下一小圈暖光，墙角也许还有一束射灯打在画上。
 
@@ -65,6 +73,28 @@ draft: false
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = 新建 <MultiLightDemo />（HEL-66）：一个立方体同时叠加 1 平行光 + 多盏点光源（可增删，≤4）+ 1 聚光，片元对每类光各算一份 Phong 后相加（不 clamp，可顶白过曝）——读者亲手增删/调灯，亲眼看到「多盏贡献相加、被多盏同照处更亮甚至过曝」。主从控件（≤5）：顶部灯管理（选灯/开关/点光源 ＋－）+ 下方只调选中那盏的颜色/方位/强度/衰减或切光角 + 重置；默认布灯开箱即核心效果。猜一猜（多盏叠加亮处会更亮、可能过曝顶白）；自带骨架屏 + WebGL2 兜底。 */}
 
 ## 动手：亲手加灯、看贡献叠加
+
+先按 `main` 中的真实累加顺序逐步核对总颜色：
+
+<Stepper>
+  <Step title="平行光初始化 result">
+    先计算 `CalcDirLight`。它可以用 `=` 初始化 result；若场景没有平行光，则从 `vec3(0.0)` 开始，不能留下未初始化值。
+
+    <LightAccumulationStagesDiagram step={1} />
+  </Step>
+  <Step title="循环累加点光源数组">
+    遍历 `0..NR_POINT_LIGHTS-1`，每次使用 `result += CalcPointLight(...)`。循环内写成 `=` 会让画面只保留最后一个点光源。
+
+    <LightAccumulationStagesDiagram step={2} />
+  </Step>
+  <Step title="追加聚光并输出">
+    最后 `+= CalcSpotLight(...)`，再把完整 result 写入 FragColor。若某类灯关闭，应跳过贡献或让其强度为零，而不是改变其他函数。
+
+    <LightAccumulationStagesDiagram step={3} />
+  </Step>
+</Stepper>
+
+<LightAccumulationStagesDiagram />
 
 前几章你只点过**一盏**光。这个 Demo 让你一次点好几盏：一个立方体，同时被**一盏平行光 + 若干点光源 + 一盏聚光**照亮，片段着色器对**每一类光各算一份** `环境 + 漫反射 + 镜面`，再把所有贡献**相加**——正是本章 §3 那张图说的事。顶部一行可以选灯、开关、给点光源 ＋/－ 增删；下方只显示你**当前选中那一盏**的参数（颜色、方位、强度，外加点光源的衰减档或聚光的切光角）。
 
@@ -142,6 +172,8 @@ uniform SpotLight spotLight;
   ...)`，下标从 `0` 到 `NR_POINT_LIGHTS-1` 都得灌满（见第五步）。另外别忘了
   WebGL2 片段着色器开头那行 `precision highp float;`，桌面不需要。
 </Callout>
+
+<UniformLightArrayDiagram />
 
 ### 第二步：平行光函数 CalcDirLight
 
@@ -445,7 +477,7 @@ for (let i = 0; i < 4; i++) {
 
 <Exercises>
 
-**练习 1（改代码型）** 现在 `main` 里只有 1 个平行光 + 4 个点光源 + 1 个聚光。要求改成「**0 个平行光 + 8 个点光源 + 0 个聚光**」。说出你要改哪几处：着色器里改什么、`main` 里改什么、CPU 侧改什么？
+**问题 1（改代码型）** 现在 `main` 里只有 1 个平行光 + 4 个点光源 + 1 个聚光。要求改成「**0 个平行光 + 8 个点光源 + 0 个聚光**」。说出你要改哪几处：着色器里改什么、`main` 里改什么、CPU 侧改什么？
 
 <Answer>
 
@@ -459,7 +491,7 @@ for (let i = 0; i < 4; i++) {
 
 </Answer>
 
-**练习 2（独立实现题）** 不看上面的代码，写出 `CalcDirLight` 这个函数的**完整签名和函数体**。已知有全局 `material`（含 `ambient/diffuse/specular/shininess`）和传入的平行光 `light`（含 `direction` 和 `ambient/diffuse/specular`）。目标：返回这盏平行光对当前片段的 Phong 贡献。
+**问题 2（独立实现题）** 不看上面的代码，写出 `CalcDirLight` 这个函数的**完整签名和函数体**。已知有全局 `material`（含 `ambient/diffuse/specular/shininess`）和传入的平行光 `light`（含 `direction` 和 `ambient/diffuse/specular`）。目标：返回这盏平行光对当前片段的 Phong 贡献。
 
 <Answer>
 
@@ -480,7 +512,7 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
 
 </Answer>
 
-**练习 3（问答题）** 为什么点光源要声明成**定长数组** `pointLights[NR_POINT_LIGHTS]`、而不能像「灯有几盏就来几个」那样随用随加？这给 `main` 里的循环带来什么约束？
+**问题 3（问答题）** 为什么点光源要声明成**定长数组** `pointLights[NR_POINT_LIGHTS]`、而不能像「灯有几盏就来几个」那样随用随加？这给 `main` 里的循环带来什么约束？
 
 <Answer>
 

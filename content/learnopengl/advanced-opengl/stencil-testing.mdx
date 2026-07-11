@@ -1,14 +1,22 @@
 ---
-title: 模板测试
+title: 模板测试、位掩码与物体描边
 type: A
 section: 高级OpenGL
 order: 2
 description: 搞懂 GPU 怎么靠一张「镂空模板」逐片段决定留谁去谁——模板缓冲、模板测试、glStencilFunc/glStencilOp/glStencilMask 三件套，以及用「两遍法」给物体描一圈边。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/02%20Stencil%20testing/
+sourceUrl: https://learnopengl.com/Advanced-OpenGL/Stencil-testing
 draft: false
 ---
+
+import {
+  StencilBufferDiagram,
+  StencilMaskContractDiagram,
+  StencilOutlineStepDiagram,
+  StencilPassStateDiagram,
+  StencilTestFlowDiagram,
+} from "@/components/mdx/learnopengl/diagrams/stencil-testing";
 
 {/* A 概念型（HEL-68，高级OpenGL 篇第 2 篇）：原书「模板测试 Stencil testing」。重心是概念讲解(§3)：模板缓冲是什么（每像素存一个整数）、模板测试按 ref 与缓冲值比较决定片段去留、glStencilFunc(func,ref,mask)、glStencilOp(sfail,dpfail,dppass) 三情形怎么更新模板值、glStencilMask 写入掩码（0x00=只读）、模板测试在深度测试之前、物体描边两遍法。数学 math:false（整数比较无公式，§4 整节省略）。承接深度测试章（已知逐片段测试、深度缓冲、glClear 清缓冲、管线里片段着色器之后的测试阶段）。沿用工厂流水线类比库（模板测试是管线里又一道逐片段「掩模/盖章」工序）。主 viz 两个：Stepper 物体描边两遍法（每步带 SVG，<StencilOutlineStepDiagram step>）+ CompareSlider 无描边 vs 有描边。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +26,17 @@ draft: false
 
 <Objectives>
 
-- 能解释**模板测试**在渲染管线里处在什么位置（片段着色器之后、**深度测试之前**），以及它靠「一张镂空模板逐片段比一比」决定哪些片段留下、哪些丢弃
-- 能说清 `glStencilFunc`（怎样算通过）/ `glStencilOp`（通过或失败时怎么更新模板值）/ `glStencilMask`（能不能写模板）这三件套各管什么，并能用它们写出「物体描边」的两遍法
-- 能回答：物体描边的第一遍若忘了开模板写入（`glStencilMask` 还是 `0x00`），第二遍画出来的边框会变成什么样？为什么？
+- 能解释模板比较、深度比较与颜色写入的逻辑顺序，以及实现何时可提前执行逐片段测试
+- 能分别配置 `glStencilFunc` 的比较掩码、`glStencilOp` 的三种结果和 `glStencilMask` 的写入位
+- 能推导模板写回公式，并说明 `glStencilMask(0x00)` 为什么保持旧值而不是写入 0
+- 能实现“清除 → 正常物体盖章 → 放大物体描边 → 完整恢复”的多 pass 状态机
+- 能诊断清除失败、模板附件缺失、前后面状态不一致和描边穿透场景等问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用工厂流水线库（高级OpenGL 篇沿用：管线里又一道逐片段「掩模/盖章」工序）。 */}
 
-## 给流水线加一张「镂空模板」
+## 为什么深度之外还需要一张可编程镂空模板
 
 上一章那条往画布上贴色块的流水线，刚学会用「比远近」自动决定谁挡谁。这一章再给它加一道工序：在传送带末端架一张**镂空的蜡纸模板**——就像喷漆师傅在墙上贴一张刻好图案的纸板，朝整面墙喷漆，漆只能从镂空的地方落到墙上，其余被纸板挡住。
 
@@ -48,9 +58,9 @@ draft: false
 
 ## 模板测试：拿参考值和模板值比一比
 
-有了这块缓冲，那道「掩模」工序就能干活了。<Term def="GPU 在片段着色器算完颜色后做的一道检查（排在深度测试之前）：把一个由你指定的『参考值 ref』和模板缓冲里该像素已存的模板值按比较函数比一比——通过才让片段继续往下走，不通过就直接丢弃。它让你能按一张自定义形状的『镂空模板』逐片段放行或拦截。">模板测试</Term>（stencil test）做的事，一句话：**一个片段要继续往下走之前，先拿一个你指定的「参考值」和模板缓冲里该像素已存的模板值比一比，按规则判定通过还是丢弃**。
+有了这块缓冲，那道「掩模」工序就能干活了。<Term def="GPU 对候选片段执行的整数位比较：先把参考值 ref 与已存模板值分别和比较掩码按位与，再按 glStencilFunc 判断。逻辑上模板结果先于深度结果，用于选择 sfail/dpfail/dppass；实现可在结果不变时提前执行测试。">模板测试</Term>（stencil test）做的事，一句话：**参考值和已存模板值先按比较掩码筛位，再决定片段是否进入后续深度测试，并选择对应的模板更新操作**。
 
-它在管线里的位置很关键，也是 A 型必须答得出的：模板测试发生在**片段着色器之后**（要先算出片段才能测），并且排在**深度测试之前**——先过模板这一关，活下来的片段再去过深度那一关，两关都过才轮到写颜色。下面这张图把「一个片段的完整流转」连同三种「更新模板值」的时机一起画出来：
+从**结果依赖**看，先判断模板是否通过，再判断深度是否通过，才能在 `sfail`、`dpfail`、`dppass` 三个操作中选一个；两关都通过后颜色才有资格写入。但和上一章 Early-Z 一样，硬件不一定等片段着色器结束：只要不改变可见结果，模板/深度测试可提前执行。正确说法是“逻辑顺序为模板 → 深度 → 写入”，而不是把所有测试固定描述成 shader 之后的单一时间点。
 
 <StencilTestFlowDiagram />
 
@@ -86,12 +96,15 @@ draft: false
 
 ## glStencilMask：让模板缓冲变「只读」
 
-最后一件套件回答「能不能写模板」。<Term def="一个写入掩码：要写进模板缓冲的值会先和它做按位与（AND），再写入。glStencilMask(0xFF) 全 1，模板正常写入；glStencilMask(0x00) 全 0，等于把模板缓冲设成只读——任何写入都被与成 0、写不进去（但仍可参与比较）。">模板写入掩码</Term>（`glStencilMask`）是一个掩码，**任何要写进模板缓冲的值都会先和它做按位与，再写入**：
+最后一件套件回答「哪些 bit 可以改」。<Term def="模板写入位掩码。操作得到候选结果后，掩码为 1 的位采用新结果，掩码为 0 的位保留旧模板值：new=(old & ~mask)|(result & mask)。0xFF 允许全部 8 位更新，0x00 禁止任何位变化。它也会影响模板清除。">模板写入掩码</Term>（`glStencilMask`）控制候选操作结果怎样与旧值合并：
 
-- `glStencilMask(0xFF)`：掩码全 1，模板值**原样写入**（正常写）；
-- `glStencilMask(0x00)`：掩码全 0，任何要写的值都被与成 0、**一个 bit 都写不进去**——等于把模板缓冲设成**只读**。
+- `glStencilMask(0xFF)`：掩码全 1，8 个 bit 都允许采用操作结果；
+- `glStencilMask(0x00)`：掩码全 0，8 个 bit 都保留旧值，模板缓冲变成**只读**；
+- `glStencilMask(0x0F)`：只允许低 4 位变化，高 4 位继续保留旧值。
 
-它和 `glStencilOp` 的分工别搞混：`glStencilOp` 说「想写什么」，`glStencilMask` 说「准不准写」。哪怕 `glStencilOp` 让你 `GL_REPLACE` 成 1，只要 `glStencilMask` 是 `0x00`，这个 1 也写不进去。描边第二遍画放大物体时，我们不希望它再去改模板缓冲，就把掩码设成 `0x00` 让模板**只读**。这三件套怎么配合成一套完整的「物体描边」，下一节单步走一遍就清楚了。
+它和 `glStencilOp` 的分工别搞混：`glStencilOp` 产生候选结果，`glStencilMask` 决定候选结果的哪些位能覆盖旧值。`0x00` 不是写入数字 0，而是**完全不修改**。描边第二遍用它保护第一遍写好的形状；清除模板前则必须恢复 `0xFF`，因为 `glClear(GL_STENCIL_BUFFER_BIT)` 也受模板写掩码影响。
+
+<StencilMaskContractDiagram />
 
 {/* 4. 数学推导（spec §四，math:false）：模板测试是整数比较、无公式，整节按规范省略。 */}
 
@@ -170,8 +183,10 @@ draft: false
 ```cpp
 // 初始化时开一次：默认是关的
 glEnable(GL_STENCIL_TEST);
+glClearStencil(0);
 
 // 渲染循环每帧开头：颜色 + 深度 + 模板三个缓冲一起清
+glStencilMask(0xFF); // glClear 也受模板写掩码影响
 glClear(GL_COLOR_BUFFER_BIT
       | GL_DEPTH_BUFFER_BIT
       | GL_STENCIL_BUFFER_BIT);
@@ -183,8 +198,10 @@ glClear(GL_COLOR_BUFFER_BIT
 ```ts
 // 初始化时开一次：默认是关的
 gl.enable(gl.STENCIL_TEST);
+gl.clearStencil(0);
 
 // 渲染循环每帧开头：颜色 + 深度 + 模板三个缓冲一起清
+gl.stencilMask(0xff); // clear 也受模板写掩码影响
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 ```
 
@@ -198,7 +215,8 @@ gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
   `glEnable(GL_STENCIL_TEST)`；WebGL2 是上下文方法 +
   上下文常量 `gl.enable(gl.STENCIL_TEST)`。更关键的是 **WebGL2 默认画布不带模板缓冲**：必须在
   `canvas.getContext("webgl2", { stencil: true })` 时显式请求（模板通常和深度合在一块
-  depth-stencil 缓冲里）。漏了这一步，模板测试静悄悄不起作用、还不报错。
+  depth-stencil 缓冲里），并用 `gl.getContextAttributes()?.stencil` 验证。渲染到自建 FBO 时还要附加
+  `DEPTH24_STENCIL8` 等模板附件并检查 framebuffer complete；默认画布有模板不代表离屏 FBO 也有。
 </Callout>
 
 接着是描边两遍法的关键调用——把 §5 三步翻成代码。这段两端**完全一样**（纯状态设置，无 API 差异），故只列一份逻辑，桌面把 `gl.` 去掉、常量加 `GL_` 前缀即可：
@@ -215,9 +233,12 @@ DrawObject();                              // 物体所在像素模板值 → 1
 // —— 第二遍：放大物体，只在模板≠1 处画边框色 ——
 glStencilFunc(GL_NOTEQUAL, 1, 0xFF);       // 只在模板值≠1 处通过
 glStencilMask(0x00);                       // 模板只读，别再改它
+glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);    // 第二遍明确不产生模板修改
 glDisable(GL_DEPTH_TEST);                  // 关深度，边框不被遮挡
 DrawScaledUpObject();                      // 放大物体 → 只剩外圈一环上色
 // —— 恢复状态 ——
+glStencilFunc(GL_ALWAYS, 0, 0xFF);
+glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 glStencilMask(0xFF);
 glEnable(GL_DEPTH_TEST);
 ```
@@ -234,9 +255,12 @@ drawObject(); // 物体所在像素模板值 → 1
 // —— 第二遍：放大物体，只在模板≠1 处画边框色 ——
 gl.stencilFunc(gl.NOTEQUAL, 1, 0xff); // 只在模板值≠1 处通过
 gl.stencilMask(0x00); // 模板只读，别再改它
+gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP); // 第二遍明确不产生模板修改
 gl.disable(gl.DEPTH_TEST); // 关深度，边框不被遮挡
 drawScaledUpObject(); // 放大物体 → 只剩外圈一环上色
 // —— 恢复状态 ——
+gl.stencilFunc(gl.ALWAYS, 0, 0xff);
+gl.stencilOp(gl.KEEP, gl.KEEP, gl.KEEP);
 gl.stencilMask(0xff);
 gl.enable(gl.DEPTH_TEST);
 ```
@@ -244,18 +268,31 @@ gl.enable(gl.DEPTH_TEST);
   </Tab>
 </CodeTabs>
 
-逐行对着 §5：`glStencilOp(GL_KEEP, GL_KEEP, GL_REPLACE)` 让「两关都过时把模板写成 ref」；第一遍 `GL_ALWAYS` + 开写入，物体像素被盖章成 `1`；第二遍 `GL_NOTEQUAL` + 只读 + 关深度，放大物体只在模板还是 0 的外环上色。**两件最易漏的收尾**：第二遍后必须把 `glStencilMask` 恢复成 `0xFF`、把深度测试 `glEnable` 回来，否则会污染后面其他物体的绘制。完整可运行源码将在章末提供（高级 OpenGL 篇基建完成后）。
+逐行对着 §5：第一遍只在模板和深度都通过的可见像素写 `1`；第二遍使用 `NOTEQUAL` 与只读掩码，只让放大模型的外环上色。关闭深度会让轮廓始终可见、甚至透过前景物体；若目标是“只描可见部分”，应保留深度测试并根据几何膨胀处理深度偏差。代码必须恢复 `func/op/mask/depth` 全套状态；真实渲染器最好由 pass/state cache 保存调用前状态，而不是无条件假定深度原本开启。
+
+<StencilPassStateDiagram />
 
 {/* 7. 常见误区（spec §七，A 型 ≥2）：固定格式 现象 → 原因 → 修法；每个 ≤150 字；至少 1 个能让读者亲眼看翻车（联想 §5 Stepper / CompareSlider）。① glStencilMask(0x00) 时写不进模板（描边第一遍忘开写入）；② 描边被深度测试干扰 / 两遍法顺序错；③ ref/mask 设错。 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：描边时**整个屏幕**糊上了一层边框色，或者根本没有任何描边。**原因**：第一遍画物体前忘了把模板写入打开——`glStencilMask`
+  **现象**：第二遍的边框色覆盖了**整个放大模型**，把第一遍正常材质也盖住。**原因**：第一遍画物体前忘了把模板写入打开——`glStencilMask`
   还停在 `0x00`（只读）。于是物体那一遍**一个 1 都没写进模板**，模板缓冲全是
   `0`；第二遍 `GL_NOTEQUAL, 1`
-  一比，**满屏都满足「≠1」**，放大物体处处通过，边框色铺满全屏。**修法**：第一遍画物体前务必
+  一比，放大模型覆盖范围内处处满足「≠1」，整个模型都通过。**修法**：第一遍画物体前务必
   `glStencilMask(0xFF)` 打开写入；第二遍才设 `0x00` 只读。
+</Callout>
+
+<Callout type="trap">
+  **现象**：第一帧描边正常，之后轮廓残留、随机缺块。**原因**：上一 pass 留下
+  `glStencilMask(0x00)`，下一帧直接 `glClear(GL_STENCIL_BUFFER_BIT)`；清除也受写掩码影响，旧模板值未被清掉。**修法**：清除前先设
+  `glStencilMask(0xFF)` 与明确的 `glClearStencil(0)`。
+</Callout>
+
+<Callout type="trap">
+  **现象**：描边完成后，后续对象被莫名裁掉或继续写 1。**原因**：只恢复了 depth 和写掩码，却遗留
+  `GL_NOTEQUAL` 或 `GL_REPLACE`。**修法**：把模板 func/op/mask 与 depth 作为 pass 状态整体保存恢复，或通过渲染图/state cache 隔离。
 </Callout>
 
 <Callout type="trap">
@@ -278,34 +315,34 @@ gl.enable(gl.DEPTH_TEST);
 ## 小结
 
 - **模板缓冲**和颜色 / 深度缓冲一样大，为每个像素存一个**整数**（通常 8 位），像一张幕后的镂空模板
-- **模板测试**在片段着色器之后、**深度测试之前**：拿你给的 `ref` 和模板值按 `func` 比，通过才放行、否则丢弃
-- 三件套各管一摊：`glStencilFunc`（怎样算通过）/ `glStencilOp`（三种情形怎么更新模板值，默认全 `GL_KEEP`）/ `glStencilMask`（能不能写，`0x00`=只读）
+- 模板与深度的逻辑结果顺序决定 `sfail/dpfail/dppass`；实现可在不改变结果时提前执行逐片段测试
+- 三件套各管一层：`glStencilFunc` 负责比较与读掩码，`glStencilOp` 选择候选结果，`glStencilMask` 按位合并新旧值
 - **物体描边**用两遍法：第一遍正常画物体 + 把它模板值写成 1；第二遍画放大物体 + `GL_NOTEQUAL` 只在模板≠1 的外圈上描边色
-- 第二遍记得**关深度测试**（边框别被遮）、**模板设只读**，画完把 `glStencilMask(0xFF)` 和深度测试**恢复**回来
+- 清除前写掩码必须允许更新；描边结束要恢复模板 func/op/mask 与 depth，是否关闭深度取决于轮廓要不要穿透前景
 
 <Exercises>
 
-**练习 1（排错 / 改两遍法代码题）** 某人照着 §6 写物体描边，却发现运行后**整个画面糊满了边框色**，物体看不见了。检查发现他的两遍代码长这样：第一遍画物体前是 `glStencilMask(0x00)`，第二遍是 `glStencilFunc(GL_NOTEQUAL, 1, 0xFF)`、`glStencilMask(0x00)`。请指出哪一行错了、为什么会满屏、怎么改。
+**问题 1（排错 / 改两遍法代码题）** 某人照着 §6 写物体描边，却发现第二遍的边框色覆盖了**整个放大模型**，正常材质看不见了。检查发现第一遍画物体前是 `glStencilMask(0x00)`，第二遍是 `glStencilFunc(GL_NOTEQUAL, 1, 0xFF)`。请指出哪一行错了、为什么整个放大模型都会通过、怎么改。
 
 <Answer>
 
-错在**第一遍画物体前的 `glStencilMask(0x00)`**。`0x00` 是「模板只读」，于是第一遍画物体时一个 `1` 都没写进模板缓冲，整块模板缓冲还是清屏后的 `0`。第二遍 `glStencilFunc(GL_NOTEQUAL, 1, 0xFF)` 比的是「模板值 ≠ 1」——可现在模板缓冲处处是 0，**处处满足 ≠1**，放大物体的边框色就铺满了整个屏幕。
+错在**第一遍画物体前的 `glStencilMask(0x00)`**。`0x00` 是模板只读，于是第一遍一个 `1` 都没写入，模板仍是清除后的 `0`。第二遍比较“模板值 ≠ 1”时，放大模型覆盖到的每个像素都满足条件，所以中心和外环一起通过，边框材质覆盖正常物体；它只影响被放大模型覆盖的区域，不会凭空涂满屏幕。
 
 修法：第一遍画物体**前**把写入打开 `glStencilMask(0xFF)`（让物体像素能被 `GL_REPLACE` 写成 1），第二遍画放大物体时才设 `glStencilMask(0x00)` 只读。这样模板缓冲里物体区域才是 1，第二遍的 `GL_NOTEQUAL` 才只在物体外圈通过。
 
 </Answer>
 
-**练习 2（问答题）** 模板测试和深度测试，在管线里谁先谁后？如果一个片段没通过模板测试，它还会去做深度测试吗？这对 `glStencilOp` 的三个参数（`sfail` / `dpfail` / `dppass`）意味着什么？
+**问题 2（问答题）** 模板测试和深度测试的逻辑结果谁先谁后？如果模板比较失败，这对 `glStencilOp` 的三个参数（`sfail` / `dpfail` / `dppass`）意味着什么？硬件是否必须等片段着色器结束才执行比较？
 
 <Answer>
 
-**模板测试在前、深度测试在后**（都在片段着色器之后）。一个片段**没通过模板测试就直接被丢弃，根本不会再去做深度测试**。
+逻辑上模板结果在前、深度结果在后。模板失败就选择 `sfail`，不需要深度结果；模板通过后才根据深度失败或通过选择 `dpfail` / `dppass`。
 
-这正好解释了 `glStencilOp(sfail, dpfail, dppass)` 为什么这样分三种情形：`sfail` 是「模板测试就没过」（此时压根没走到深度测试）；只有模板**过了**才会进深度测试，所以才有 `dpfail`（模板过、深度没过）和 `dppass`（两个都过）这两种后续情形。换句话说，`dpfail` / `dppass` 的前提都是「模板已经通过」。
+硬件调度不必固定在片段着色器之后；只要不改变规范结果，驱动可提前做模板/深度测试并拒绝片段。`discard`、自定义深度和副作用可能限制提前执行，但不会改变三个操作参数代表的逻辑条件。
 
 </Answer>
 
-**练习 3（问答题）** 描边第二遍为什么要画一个**放大一圈**的物体、而不是原尺寸的？如果第二遍画的是原尺寸物体（用同样的 `GL_NOTEQUAL, 1`），画面会出现什么结果？
+**问题 3（问答题）** 描边第二遍为什么要画一个**放大一圈**的物体、而不是原尺寸的？如果第二遍画的是原尺寸物体（用同样的 `GL_NOTEQUAL, 1`），画面会出现什么结果？
 
 <Answer>
 
@@ -333,9 +370,8 @@ gl.enable(gl.DEPTH_TEST);
 </GlossaryItem>
 
 <GlossaryItem term="模板测试">
-  GPU
-  在片段着色器算完颜色后做的一道检查（排在**深度测试之前**）：把一个你指定的「参考值
-  ref」和模板缓冲里该像素已存的模板值按比较函数比一比——通过才让片段继续往下走，不通过就直接丢弃。它让你能按一张自定义形状的「镂空模板」逐片段放行或拦截。详见本章「模板测试」一节。
+  GPU 对参考值与已存模板整数做的逐片段位比较。逻辑上模板结果先于深度结果，用于选择
+  `sfail/dpfail/dppass`；实现可在结果不变时提前执行测试。它让程序按自定义形状逐片段放行或拦截。详见本章「模板测试」一节。
 </GlossaryItem>
 
 <GlossaryItem term="模板函数">
@@ -354,11 +390,9 @@ gl.enable(gl.DEPTH_TEST);
 </GlossaryItem>
 
 <GlossaryItem term="模板写入掩码">
-  一个写入掩码，原型
-  `glStencilMask(mask)`：要写进模板缓冲的值会先和它做按位与（AND）再写入。`glStencilMask(0xFF)`
-  全 1，模板正常写入；`glStencilMask(0x00)` 全
-  0，等于把模板缓冲设成**只读**——任何写入都被与成
-  0、写不进去（但仍可参与比较）。详见本章「glStencilMask」一节。
+  原型 `glStencilMask(mask)`。掩码为 1 的位允许采用模板操作结果，为 0 的位保留旧值：
+  `new=(old & ~mask)|(result & mask)`。`0xFF` 允许全部位更新，`0x00`
+  让全部位只读；模板清除同样受它影响。详见本章「glStencilMask」一节。
 </GlossaryItem>
 
 <GlossaryItem term="物体描边">

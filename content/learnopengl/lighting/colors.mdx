@@ -1,14 +1,20 @@
 ---
-title: 颜色
+title: 光源颜色、物体反射率与场景着色器
 type: A
 section: 光照
 order: 1
 description: 搞懂「我们看到的物体颜色，其实是光的颜色乘上物体反射的颜色」这条光照的第一性原理——为什么白光下物体显本色，有色光下却会变样。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/01%20Colors/
+sourceUrl: https://learnopengl.com/Lighting/Colors
 draft: false
 ---
+
+import {
+  ColorMultiplyStepsDiagram,
+  ColorReflectionDiagram,
+  LightingSceneContractDiagram,
+} from "@/components/mdx/learnopengl/diagrams/colors";
 
 {/* A 概念型章（HEL-50，M5 光照篇第 1 篇，新建 lighting/ section 目录）：光照篇开篇，核心是建立「物体颜色 = 光的颜色 × 物体反射的颜色（逐分量相乘）」这条认知——人眼看到的是物体「没吸收、反射回来」的那部分光。承接入门篇（已能画三角形、写着色器、调 uniform），本章不算真实光照（漫反射/镜面留给后续 Phong），只把「颜色从哪来」这条第一性原理讲透，为整篇光照打地基。A 型：概念讲解为重心（spec §3 重），math:false 整节省略（§4 省），代码对照选讲 1 段（§6 选），常见误区 ≥2（§7）。主 viz = editable ShaderDemo：把「物体色 × 光色 = 反射所见」做成可拖两个颜色控件的实时画布，左中右三栏直观对照。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +24,17 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话解释「我们看到的物体颜色」到底是什么——它是物体自带的，还是光给的？
-- 能解释「光的颜色 × 物体颜色」这条规则在整个光照模型里处在什么位置：它是后续所有光照计算的起点
-- 能回答：一个珊瑚红的物体，拿一束纯绿光去照它，看上去会偏成什么颜色？为什么？
+- 能解释「我们看到的物体颜色」是入射光与表面反射率共同作用的结果
+- 能计算两个 RGB 颜色逐通道相乘后的结果，并判断哪个通道因光源缺失而归零
+- 能解释「光的颜色 × 物体颜色」在后续光照模型中的位置与局限
+- 能区分被照物体着色器与灯源立方体着色器，并说明为什么两者可共享 VBO、需要各自 VAO
+- 能回答珊瑚色物体在纯绿光、白光和无光条件下分别呈现什么颜色及原因
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（光照/PBR 类）。 */}
 
-## 你看到的「红苹果」，红是谁给的？
+## 为什么你看到的「红苹果」会随灯光改变
 
 随手拿起一个红苹果，你会理所当然地觉得「它就是红的」。可把它端进伸手不见五指的暗房，红色去哪了？灯一关，苹果就成了一团黑。可见**颜色不是苹果自己揣在兜里的东西**——没有光，什么颜色都谈不上。
 
@@ -57,6 +65,38 @@ draft: false
 这种「对应分量各自相乘」的算法叫<Term def="把两个颜色（各有红/绿/蓝三个数）的对应分量分别相乘：红×红、绿×绿、蓝×蓝，得到一个新颜色。不是把六个数加在一起，而是三组各算各的。在 GLSL 里对两个 vec3 直接写 * 就是这个意思。">逐分量相乘</Term>：颜色都用 `(红, 绿, 蓝)` 三个 0~1 的数表示，相乘时红跟红乘、绿跟绿乘、蓝跟蓝乘，互不串门。直觉上它就是在问每个通道：「这种颜色的光（光色），物体愿意反射回多少比例（物色）？」两个一乘，就是真正弹回你眼里的量。
 
 为什么这条规则在整个<Term def="一套用来算「物体表面最终显什么颜色」的计算流程。本章是它最朴素的起点（只有光色×物色）；后续会逐步加入环境光、漫反射、镜面高光等项，让明暗和光泽更真实，但「光色×物色」这个内核始终在最里层。">光照模型</Term>里是地基？因为后面要学的环境光、漫反射、镜面高光，本质都是在**更精细地算出「这块表面到底被多少光照到、是什么色的光」**——也就是把上面那个「光源颜色」算得更讲究；而「乘上物体颜色得到反射所见」这一步，自始至终都在最里层。先把这条朴素规则攥牢，后面只是往里填料。下面的 Demo 就让你亲手乘一乘。
+
+<ColorReflectionDiagram />
+
+<Callout type="tip">
+  本章沿用 LearnOpenGL 的教学近似：把 `objectColor` 当作三个 RGB
+  通道的反射比例。真实材料按连续波长反射，显示器还涉及线性空间与 sRGB/gamma
+  编码；因此这条乘法是后续实时光照的入口，不是完整的光谱物理模型。
+</Callout>
+
+## 分三步核对颜色乘法
+
+先不要把 `lightColor * objectColor` 当成一句需要背的代码。按数据来源拆开：光源决定表面收到哪些通道，物体颜色决定每个通道保留多少比例，着色器才把两者逐通道相乘并输出。
+
+<Stepper>
+  <Step title="读取光源颜色">
+    先看 `lightColor`。某个通道是 0，表示表面根本没有收到该颜色的光，后续无论物体多愿意反射都只能得到 0。
+
+    <ColorMultiplyStepsDiagram step={1} />
+  </Step>
+  <Step title="读取物体反射率">
+    再看 `objectColor`。这里的 RGB 不是额外发光，而是各通道允许反射的比例；1 表示全部保留，0 表示全部吸收。
+
+    <ColorMultiplyStepsDiagram step={2} />
+  </Step>
+  <Step title="逐通道相乘并输出">
+    计算 `Rlight×Robject`、`Glight×Gobject`、`Blight×Bobject`，把结果写到 `FragColor`。任何一边为 0，该输出通道都会被掐灭。
+
+    <ColorMultiplyStepsDiagram step={3} />
+  </Step>
+</Stepper>
+
+<ColorMultiplyStepsDiagram />
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。「逐分量相乘」用第 3 节文字 + 第 5 节三栏 Demo 的直觉代替，不上公式，符合 A 型 + 小白友好。 */}
 
@@ -163,6 +203,35 @@ GLSL 里两个 `vec3` 直接写 `*`，做的就是逐分量相乘——`lightCol
 
 至于怎么把 `objectColor` / `lightColor` 的值从程序里传进这两个 uniform（`getUniformLocation` 问位置、`uniform3f` 写值、先 `useProgram`），和上一篇「着色器」章一模一样，这里不再重复。本章要你记住的，就是 `main` 里那一行乘法。
 
+## 官方示例的两个立方体与两个着色器
+
+为了让光源位置在场景中可见，官方示例还绘制一个缩小的灯源立方体。它和被照物体可以共享同一份立方体位置 VBO，但分别绑定 `objectVAO` 与 `lightVAO`：VAO 记录的是“怎样解释缓冲并启用哪些属性”，不是顶点数据本身。两次 draw call 也使用不同 shader program：物体程序输出 `lightColor * objectColor`，灯源程序直接输出灯光颜色。
+
+<LightingSceneContractDiagram />
+
+```cpp
+// 同一个 position VBO，分别配置两个 VAO
+glBindVertexArray(objectVAO);
+glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+glEnableVertexAttribArray(0);
+
+glBindVertexArray(lightVAO);
+glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), nullptr);
+glEnableVertexAttribArray(0);
+
+lightingShader.use();
+glBindVertexArray(objectVAO);
+glDrawArrays(GL_TRIANGLES, 0, 36);
+
+lightCubeShader.use();
+glBindVertexArray(lightVAO);
+glDrawArrays(GL_TRIANGLES, 0, 36);
+```
+
+这段代码的复刻要点不是“必须复制两份顶点”，而是**共享 VBO、分开 VAO、分开 program、分开 draw call**。后续加入法线时，物体 VAO 会多出法线属性，而灯源 VAO 仍只需位置，这种分离会更有价值。
+
 {/* 7. 常见误区（spec §七）：A 型 ≥2 个；固定格式 现象 到 原因 到 修法；含 1 个可在 §5 editable Demo 亲手触发的错误模式（把相乘改成相加）。 */}
 
 ## 容易踩的坑
@@ -202,7 +271,7 @@ GLSL 里两个 `vec3` 直接写 `*`，做的就是逐分量相乘——`lightCol
 
 <Exercises>
 
-**练习 1（问答型）** 一个纯蓝物体 `(0, 0, 1)`，分别在白光 `(1, 1, 1)` 和纯红光 `(1, 0, 0)` 下，看上去各是什么色？为什么？
+**问题 1（问答型）** 一个纯蓝物体 `(0, 0, 1)`，分别在白光 `(1, 1, 1)` 和纯红光 `(1, 0, 0)` 下，看上去各是什么色？为什么？
 
 <Answer>
 
@@ -211,7 +280,7 @@ GLSL 里两个 `vec3` 直接写 `*`，做的就是逐分量相乘——`lightCol
 
 </Answer>
 
-**练习 2（改 Demo 代码型）** 在上面的可编辑 Demo 里，把画布改成只显示**一整块「反射所见」**（去掉左中两栏的物体色/光色对照），整块都是 `光色 × 物色` 的结果。提示：删掉分栏的 `if`，让 `col` 直接等于 `reflected`。
+**问题 2（改 Demo 代码型）** 在上面的可编辑 Demo 里，把画布改成只显示**一整块「反射所见」**（去掉左中两栏的物体色/光色对照），整块都是 `光色 × 物色` 的结果。提示：删掉分栏的 `if`，让 `col` 直接等于 `reflected`。
 
 <Answer>
 
@@ -228,7 +297,7 @@ void main() {
 
 </Answer>
 
-**练习 3（问答型）** 后面要学的 Phong 光照里有「环境光、漫反射、镜面高光」三项。按本章的认知，这三项算的到底是「光色」那一半，还是「物色」那一半？
+**问题 3（问答型）** 后面要学的 Phong 光照里有「环境光、漫反射、镜面高光」三项。按本章的认知，这三项算的到底是「光色」那一半，还是「物色」那一半？
 
 <Answer>
 

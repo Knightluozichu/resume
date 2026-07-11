@@ -1,14 +1,16 @@
 ---
-title: 你好，窗口
+title: OpenGL 窗口、上下文与渲染循环
 type: A
 section: 入门
 order: 1
-description: 搞懂网页上一帧画面是怎么来的——从 canvas 拿到 WebGL2 这支画笔、开起渲染循环、把整块画布刷成你想要的颜色。
+description: 区分 OpenGL 规范、GLFW、GLAD 与 context，再把 viewport、输入、清屏和双缓冲接成完整帧循环。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/03%20Hello%20Window/
+sourceUrl: https://learnopengl.com/Getting-started/Hello-Window
 draft: false
 ---
+
+import { HelloWindowContractDiagram, SetupPipelineDiagram, FrameStageDiagram } from "@/components/mdx/learnopengl/diagrams/hello-window";
 
 {/* A 概念型首章（HEL-31）：原书「你好窗口」(GLFW 建窗 + GLAD 加载 + 渲染循环 + glClearColor 清屏) 映射到 Web/WebGL2：从 canvas 拿 WebGL2 上下文 + requestAnimationFrame 渲染循环 + gl.clearColor/gl.clear 清屏。重心是概念讲解(§3)，数学省略(math:false)，代码对照只放关键 1-2 段。draft:true 待总监 review。 */}
 
@@ -18,15 +20,17 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话解释**渲染循环**是什么、为什么画面要一帧一帧地反复重画
-- 能解释**画布（canvas）与 WebGL2 上下文**在整条渲染管线里处在什么位置——它们是「画到哪、用什么笔」
-- 能回答：每一帧开头为什么要先「清屏」？不清会发生什么？
+- 能解释 OpenGL specification、驱动实现、GLFW 与 GLAD 各自负责什么
+- 能描述窗口创建、context current、函数加载与 viewport 初始化的严格顺序
+- 能比较桌面 OpenGL 与 WebGL2 的画布、上下文和函数入口差异
+- 能解释渲染循环如何处理 input、clear、draw、swap buffers 与 poll events
+- 能判断窗口 resize、context 创建失败或 loader 失败时应在哪个边界诊断
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语（术语最早第 3 节）；回答「解决什么问题 / 没有它会怎样」；类比固定用③相机与摄影（电影一帧帧放）+ 画家与画布。 */}
 
-## 屏幕上的画面，其实是「画」出来的
+## 为什么屏幕上的画面需要一帧一帧重画
 
 想象一位画家面前摆着一张空白画布。他要展示一段动画，靠的不是魔法，而是**一张接一张地飞快重画**：擦掉旧画、画上新的一张、再擦掉、再画……快到你的眼睛看成了连续的动作。电影院的胶片、电视、游戏画面，背后都是这一套——一秒钟翻过几十张。
 
@@ -34,11 +38,56 @@ draft: false
 
 没有这套机制会怎样？你连「往哪画、用什么画」都没有，更别说让画面动起来——屏幕只会是一片什么都没发生的空白。所以在画三角形、打光、贴纹理之前，得先把这张画布支起来。
 
+## OpenGL、GLFW、GLAD 与 Context 不是同一个东西
+
+<Term def="只规定图形命令输入输出与行为、不负责窗口和操作系统集成的开放图形规范">OpenGL 规范</Term>描述函数应该产生什么结果，真正实现通常来自 GPU vendor driver。它本身不创建窗口、不读取键盘，也不保证应用已经拿到可调用的函数地址。
+
+<Term def="跨平台创建窗口管理输入并建立OpenGL上下文的轻量库">GLFW</Term>负责操作系统边界：初始化、声明 OpenGL 3.3 core profile hints、创建 window、注册 resize/input callbacks，并把某个<Term def="保存OpenGL对象状态与命令执行环境、必须先设为当前才能安全调用GL函数的实例">OpenGL 上下文</Term>设为 calling thread 的 current context。
+
+<Term def="根据当前OpenGL上下文查询并装载驱动函数地址的加载器">GLAD</Term>随后通过 `glfwGetProcAddress` 装载函数入口。顺序不能颠倒：没有 current context，loader 不知道应向哪个实现查询地址。
+
+<HelloWindowContractDiagram />
+
+```cpp
+glfwInit();
+glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+GLFWwindow* window = glfwCreateWindow(800, 600, "LearnOpenGL", nullptr, nullptr);
+if (!window) { glfwTerminate(); return -1; }
+glfwMakeContextCurrent(window);
+glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+
+if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) return -1;
+glViewport(0, 0, 800, 600);
+```
+
+窗口 resize callback 收到的是 framebuffer pixel size，不应假定永远等于逻辑窗口尺寸；HiDPI 环境两者可能不同。Callback 中以实际宽高更新 `glViewport(0,0,w,h)`，才把 normalized device coordinates 映射到完整 framebuffer。
+
+每帧还需处理 input、绘制、交换与事件：
+
+```cpp
+while (!glfwWindowShouldClose(window)) {
+    processInput(window);
+    glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    // draw calls are added in the next chapter
+    glfwSwapBuffers(window);
+    glfwPollEvents();
+}
+glfwTerminate();
+```
+
+<Term def="在不可见后缓冲完成一帧后交换到前台显示、避免用户看到逐步绘制的呈现方式">双缓冲</Term>让 draw commands 写 back buffer，`glfwSwapBuffers` 再把完成画面呈现。`glfwPollEvents` 推进窗口与 input 事件；它不是绘制调用，但缺失后窗口会失去响应。
+
+先预测：若只创建 window 却忘记 `glfwMakeContextCurrent`，GLAD 加载与后续 OpenGL calls 应在哪一步失败？若 resize 后不更新 viewport，画面会继续按旧 framebuffer 区域映射。把这两个故障分别注入，确认日志能指向 context 与 viewport 边界。
+
 {/* 3. 概念讲解（spec §三，A 型重心）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线中位置。全章新概念 5 个（canvas / 上下文 / 渲染循环 / 帧缓冲 / 清屏）≤5。 */}
 
 ## 画布：先在网页上钉一块板子
 
-要在网页上画图，第一步是有一块能画的地方。这块地方就是 <Term def="HTML 里一个专门用来画图的方块元素 <canvas>，本身只是一块空白画板，要配合画图接口才能往上画。">画布（canvas）</Term>——HTML 里一个叫 `<canvas>` 的元素。它本身就是一块钉在网页上的空白板子，规定了「能画的范围有多大」，但单凭它自己，板子上什么都不会出现。
+要在网页上画图，第一步是有一块能画的地方。这块地方就是 <Term def="HTML里专门承载绘图结果的canvas元素，本身需要配合图形上下文才能显示内容">画布（canvas）</Term>——HTML 里一个叫 `<canvas>` 的元素。它本身就是一块钉在网页上的空白板子，规定了「能画的范围有多大」，但单凭它自己，板子上什么都不会出现。
 
 为什么需要它？因为浏览器得知道你的画往**哪儿**放、画多大。`<canvas>` 就是这块预留好的地盘。它在整条流程的最前端，是后面一切的落脚点。
 
@@ -235,7 +284,7 @@ requestAnimationFrame(frame);
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 把上面 Demo 的清屏色控件默认值，从原书的青色 `[0.2, 0.3, 0.3]` 改成你喜欢的颜色（比如纯紫 `[0.49, 0.36, 1.0]`）。说说改的是哪个 OpenGL 函数的参数。
+**问题 1：** 把上面 Demo 的清屏色控件默认值，从原书的青色 `[0.2, 0.3, 0.3]` 改成你喜欢的颜色（比如纯紫 `[0.49, 0.36, 1.0]`）。说说改的是哪个 OpenGL 函数的参数。
 
 <Answer>
 
@@ -249,7 +298,7 @@ requestAnimationFrame(frame);
 
 </Answer>
 
-**练习 2（问答型）** 为什么渲染循环里要「每一帧」都清屏，而不是程序启动时清一次就够了？
+**问题 2：** 为什么渲染循环里要「每一帧」都清屏，而不是程序启动时清一次就够了？
 
 <Answer>
 
@@ -257,11 +306,11 @@ requestAnimationFrame(frame);
 
 </Answer>
 
-**练习 3（问答型）** 用一句话说出 `<canvas>`、WebGL2 上下文、渲染循环三者在「从数据到屏幕」的管线里各自的位置。
+**问题 3：** 用一句话说出 `<canvas>`、WebGL2 上下文、渲染循环三者在「从数据到屏幕」的管线里各自的位置；再说明桌面端 GLFW/GLAD 分别补上什么职责。
 
 <Answer>
 
-`<canvas>` 在最前端，是「画到哪」的那块板子；WebGL2 上下文紧跟其后，是从板子上拿到的「用什么笔」、所有命令都经它下达给 GPU；渲染循环在最外层，每一帧把「清屏 → 绘制」整套流程从头驱动一遍。
+`<canvas>` 在最前端，是「画到哪」的那块板子；WebGL2 上下文紧跟其后，是从板子上拿到的「用什么笔」、所有命令都经它下达给 GPU；渲染循环在最外层，每一帧把「清屏 → 绘制」整套流程从头驱动一遍。桌面端 GLFW 负责窗口、输入和 context，GLAD 在 current context 上加载驱动函数地址。
 
 </Answer>
 
@@ -270,6 +319,26 @@ requestAnimationFrame(frame);
 {/* 10. 名词解释（spec §十）：与正文 <Term> 高亮一一对应（5 个：画布 / WebGL2 上下文 / 渲染循环 / 帧 / 清屏 / 颜色缓冲）；释义零基础大白话。位置章末、出处声明之前。 */}
 
 <Glossary>
+
+<GlossaryItem term="OpenGL 规范">
+  规定图形 API 命令输入、输出与行为的 specification；驱动提供实现，规范本身不负责窗口和输入。
+</GlossaryItem>
+
+<GlossaryItem term="GLFW">
+  跨平台创建窗口、处理输入和建立 OpenGL context 的库。
+</GlossaryItem>
+
+<GlossaryItem term="OpenGL 上下文">
+  保存对象状态和命令环境的实例；桌面端必须先把它设为 calling thread 的 current context。
+</GlossaryItem>
+
+<GlossaryItem term="GLAD">
+  在 current context 建立后，通过平台查询接口加载 OpenGL 驱动函数地址的 loader。
+</GlossaryItem>
+
+<GlossaryItem term="双缓冲">
+  在 back buffer 画完整一帧，再交换到 front buffer 显示，避免用户看到半成品。
+</GlossaryItem>
 
 <GlossaryItem term="画布（canvas）">
   网页上一个叫 `<canvas>` 的方块元素，就是一块空白画板，规定了「能画的范围有多大」。光有它还画不出东西，得再配一支「画笔」（上下文）。详见本章「画布」一节。

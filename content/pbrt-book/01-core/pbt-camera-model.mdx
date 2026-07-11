@@ -1,107 +1,264 @@
 ---
-title: "相机模型与采样"
+title: "相机、镜头与成像"
 type: B
 section: "计算机图形学与渲染"
 order: 2
-description: "从针孔相机到薄透镜——光线如何从像素发出"
+description: "从 CameraSample、投影和薄透镜出发，连接光线微分、曝光、传感器响应与 Film 像素累积"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pbr-book.org/4ed/Cameras_and_Film"
 draft: false
 ---
 
-import { PbtCameraModelDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-camera-model";
+import { PbtCameraModelDiagram, PbtCameraSpacesDiagram, PbtDepthOfFieldDiagram, PbtFilmPipelineDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-camera-model";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解针孔相机模型与透视投影矩阵的关系
-- 能解释薄透镜模型如何产生景深效果
-- 能写出相机生成光线的步骤
-- 能回答为什么需要多重采样（anti-aliasing）来消除锯齿？
+- 能解释 CameraSample、CameraRay 与 Film 之间的数据契约
+- 能比较正交、透视和球面相机生成光线的差异
+- 能推导透视除法与薄透镜对焦关系
+- 能分析光圈、快门、传感器响应和滤波如何改变图像
+- 能写出带景深、时间和光线微分的相机生成流程
 </Objectives>
 
-## 直觉引入
+## 直觉：一个像素不是“一条从眼睛出发的线”
 
-想象你透过窗户看风景。你的眼睛是相机，窗户是视口，窗框限制了你能看到的范围。在 PBRT 中，相机不是「拍照」而是「发光线」——从每个像素发出光线，追踪它碰到什么，就是那个像素的颜色。
+光线追踪从相机向场景生成光线，是为了只计算能到达图像的路径；但“反向追踪”不等于把真实光学过程倒过来随便画一条线。一个像素样本还要选择 Film 上的连续位置、镜头孔径上的位置、快门开启期间的时刻以及携带的波长。相机模型把这些随机变量映射为一条带光谱权重的光线，Film 再把返回的辐亮度转换、滤波并累积成像素。
 
-真实的相机有镜头，镜头有光圈、焦距，会产生景深。PBRT 的相机模型把这些物理特性都建模了，所以能渲染出真实的光学效果。
-
-## 概念讲解
-
-### 相机模型与光线生成
+先预测：若保持 Film 采样点不变，只把 `pLens` 从透镜中心移到边缘，焦平面上的物体位置会不会变化？正确的薄透镜构造会让这些光线仍穿过同一个焦点；焦外物体才会因为不同孔径位置产生散布圆。
 
 <PbtCameraModelDiagram />
 
-<Term def="针孔相机模型是理想的透视投影，无畸变无景深，所有光线通过一个几何点">针孔相机</Term>是最简单的相机模型，通过一个点投影所有光线。
+## 1. Camera 接口：先定义一条样本包含什么
 
-<Term def="薄透镜模型用理想透镜替代针孔，引入焦距和光圈，能模拟景深和散景">薄透镜模型</Term>更接近真实相机，通过光圈大小控制景深范围。
-
-<Term def="光线生成是将像素坐标转换为3D光线方向的过程">光线生成</Term>是渲染的第一步：对每个像素采样，生成从相机出发的光线。
-
-<Term def="抗锯齿通过在像素内多次采样并平均来消除边缘锯齿">抗锯齿</Term>通过多重采样实现，每个像素发射多条光线并取平均。
-
-## 交互Demo
-
-<Stepper>
-<Step title="第一步：针孔相机">先理解最简单的针孔模型：所有光线通过一个点，形成完美的透视投影。这是理解相机模型的基础。</Step>
-<Step title="第二步：薄透镜与景深">
-真实相机用透镜而非针孔。透镜有光圈，光圈越大景深越浅。PBRT 在透镜上采样多个点来模拟景深。
-<PbtCameraModelDiagram />
-</Step>
-<Step title="第三步：像素采样">每个像素不是发射一条光线，而是在像素面积内随机采样多个点发射光线，取平均值消除锯齿。</Step>
-</Stepper>
-
-## 代码对照
+<Term def="一次相机路径所需的联合样本，包含 Film 位置、透镜位置、快门时间和滤波权重">相机样本</Term>对应 PBRT 的 `CameraSample`：`pFilm` 指定连续 Film 坐标，`pLens` 指定孔径样本，`time` 指定快门期间的时刻，`filterWeight` 记录重建滤波采样产生的权重。它不是整数像素编号，也不应在相机内部重新随机一次。
 
 ```cpp
-// PBRT 相机光线生成
-Ray GenerateRay(CameraSample cs) {
-    // 1. 像素坐标 → 相机空间方向
-    Point2f pFilm = cs.pFilm;
-    Vector3f dir = Normalize(
-        pFilm.x * cameraX + pFilm.y * cameraY + forward);
-    
-    // 2. 薄透镜采样（景深）
-    Point2f pLens = sampleDisk(cs.pLens, lensRadius);
-    Point3f pFocus = focalDistance / dir.z * dir;
-    
-    // 3. 从透镜上的采样点射向焦点
-    Ray ray(pLens, Normalize(pFocus - pLens));
-    return cameraToWorld(ray);
+struct CameraSample {
+    Point2f pFilm;
+    Point2f pLens;
+    Float time = 0;
+    Float filterWeight = 1;
+};
+
+struct CameraRay {
+    Ray ray;
+    SampledSpectrum weight = SampledSpectrum(1);
+};
+```
+
+`GenerateRay(sample, lambda)` 可能失败，也可能返回权重不为 1 的 `CameraRay`。简单投影相机通常使用单位权重；更真实的相机必须把孔径通过率和成像辐射度量纳入权重。调用方如果只取 `ray` 丢掉 `weight`，画面曝光和边缘衰减会出错。
+
+<Term def="主相机光线以及 Film 坐标分别沿 x、y 移动一个像素后对应的两条辅助光线">光线微分</Term>由 `GenerateRayDifferential()` 生成。主光线、`rx` 和 `ry` 在场景表面的交点差异可估计一个像素覆盖的几何足迹，纹理系统据此选择 MIP 层级。它解决的是纹理过滤尺度，不等于“多发两条光线提高采样数”。
+
+## 2. 坐标空间：精度与 BVH 性能同时受影响
+
+<Term def="以相机位置为原点、观察方向映射到正 z 轴、上方向映射到正 y 轴的局部坐标系">相机坐标空间</Term>便于生成光线，但 PBRT 4e 不要求所有相交计算都在这里完成。场景还涉及物体空间、世界空间、camera-world 空间和<Term def="实际执行相交与着色计算的坐标系，可配置为世界、相机或 camera-world 空间">渲染空间</Term>。
+
+世界坐标离原点很远时，浮点数间距增大，细小几何可能量化丢失。把相机平移到原点能改善附近精度；但若连相机旋转也施加到整个场景，原本轴对齐的建筑和地面会得到更松的包围盒，BVH 效率下降。默认 camera-world 空间只消除相机平移、保留世界轴方向，在精度与包围盒质量之间取得平衡。
+
+`CameraTransform` 因此维护两段变换：camera 到 render，以及 render 到 world。动画保留在前一段，避免静态场景因为移动相机而被错误视为整体动画。
+
+## 3. 从光栅坐标生成三类相机光线
+
+投影相机依次使用 raster、NDC、screen 和 camera 空间。光栅空间覆盖实际分辨率；NDC 把图像归一到 $[0,1]^2$；screen 空间定义可见窗口；`cameraFromRaster` 把连续 Film 样本送回相机空间。注意屏幕坐标向上而光栅 $y$ 通常向下，变换链必须包含一次 $y$ 翻转。
+
+### 3.1 正交与透视
+
+<Term def="所有相机光线方向相同、起点随 Film 位置变化，不产生近大远小的投影模型">正交相机</Term>保留平行线和相对距离。若相机朝 $+z$，光线可写为：
+
+$$
+o=\operatorname{cameraFromRaster}(p_{film}),
+\qquad d=(0,0,1).
+$$
+
+<Term def="所有光线从相机原点出发、方向由 Film 样本决定，会产生透视缩短的投影模型">透视相机</Term>先执行齐次投影除法：
+
+$$
+x'=\frac{x}{z},
+\qquad y'=\frac{y}{z}.
+$$
+
+像素样本反变换到近裁剪面得到 $p_{camera}$ 后，光线为：
+
+$$
+o=(0,0,0),
+\qquad d=\operatorname{normalize}(p_{camera}).
+$$
+
+在光线追踪器里，投影矩阵主要用来确定光线方向；近远平面不像光栅化那样负责裁剪可见几何。把光栅化裁剪语义照搬过来，会无故漏掉射线可以命中的对象。
+
+### 3.2 球面相机
+
+<Term def="把二维 Film 坐标映射到观察点周围球面方向，可生成全景图的非投影相机">球面相机</Term>说明光线追踪不受 4×4 投影矩阵限制。PBRT 支持等距矩形与等面积参数化：前者经纬线直观但两极像素对应的立体角变小，后者让相同 Film 面积对应相同球面面积，更适合需要均匀方向测度的任务。
+
+<PbtCameraSpacesDiagram />
+
+## 4. 薄透镜：景深是孔径积分的结果
+
+<Term def="用单个理想透镜和有限圆形孔径近似真实镜头系统，通过焦距与焦平面模拟景深">薄透镜模型</Term>比针孔多一个二维孔径样本。按 PBRT 的符号约定，物距 $z$ 位于镜头场景侧并取负值，像距 $z'$ 位于 Film 侧，焦距为 $f$。高斯透镜方程是：
+
+$$
+\frac{1}{z'}-\frac{1}{z}=\frac{1}{f},
+\qquad
+z'=\frac{fz}{f+z}.
+$$
+
+对简单投影相机，PBRT 先生成穿过透镜中心的针孔光线，在指定 `focalDistance` 平面求交点，再把光线起点移动到均匀圆盘采样的 `pLens`，方向改为指向同一焦点：
+
+```cpp
+Ray ApplyDepthOfField(Ray ray, Point2f uLens,
+                      Float lensRadius, Float focalDistance) {
+    Point2f pLens = lensRadius * SampleUniformDiskConcentric(uLens);
+    Float tFocus = focalDistance / ray.d.z;
+    Point3f pFocus = ray(tFocus);
+    ray.o = Point3f(pLens.x, pLens.y, 0);
+    ray.d = Normalize(pFocus - ray.o);
+    return ray;
 }
 ```
 
-## 常见误区
+焦平面上的场景点无论选择哪个孔径位置都映到同一 Film 点，因此清晰。焦外点从不同孔径位置投射到不同 Film 位置，形成散布圆。孔径越大，收集的光越多，散布圆也越大；简单 `PerspectiveCamera` 只模拟几何景深，不完整模拟真实曝光增益，不能仅凭 `lensRadius` 推断像素会物理变亮。
+
+<PbtDepthOfFieldDiagram />
+
+## 5. 快门时间与运动模糊
+
+`time` 是相机样本的另一个积分维度。`SampleTime(u)` 通常在线性区间 $[t_{open},t_{close}]$ 内插值：
+
+$$
+t=(1-u)t_{open}+u t_{close},
+\qquad u\in[0,1).
+$$
+
+光线携带这个时刻，动画变换据此求相机和物体位置。快门区间越长，运动路径在 Film 上覆盖越宽；若所有样本都复用同一个时间，结果只是冻结瞬间，不会出现运动模糊。PBRT 的默认模型是全局快门，不模拟逐行读取造成的 rolling-shutter 倾斜。
+
+## 6. 相机测量方程：Film 接收的是能量
+
+镜头后表面到 Film 点 $p$ 的辐照度，需要对有效后镜片区域 $A_e$ 积分。平行 Film 与镜片平面可化为带 $\cos^4\theta$ 的形式：
+
+$$
+E(p)=\frac{1}{z^2}
+\int_{A_e}L_i(p,p')|\cos^4\theta|\,\mathrm dA_e.
+$$
+
+边缘 Film 点的 $\theta$ 更大，$\cos^4\theta$ 会减小辐照度，是渐晕来源之一。把辐照度再对快门时间积分得到<Term def="单位面积在整个曝光时间内累计接收的辐射能量，单位 J/m²">辐射曝光量</Term>：
+
+$$
+H(p)=\int_{t_0}^{t_1}E(p,t)\,\mathrm dt.
+$$
+
+继续对单个传感器像素面积积分，才得到该像素接收的焦耳数。真实相机的曝光由入射辐亮度、有效孔径、像素面积和快门时间共同决定；大光圈换来更多光，也带来更浅景深，长快门换来更多光，也带来更强运动模糊。
+
+## 7. PixelSensor：光谱、ISO 与白平衡
+
+<Term def="用三条光谱响应曲线把入射光谱转换成相机 RGB，并应用曝光比例与白平衡的 PBRT 传感器模型">像素传感器</Term>不是简单地读取“光线颜色”。给定入射光谱 $s(\lambda)$ 和红色响应曲线 $\bar r(\lambda)$，红通道为：
+
+$$
+r=\int s(\lambda)\bar r(\lambda)\,\mathrm d\lambda,
+$$
+
+绿色、蓝色同理。真实传感器 RGB 空间与输出 sRGB 等空间不同，PBRT 用标准色卡光谱做最小二乘拟合，求出传感器 RGB 到 XYZ 的矩阵，再由 XYZ 转到目标颜色空间。白平衡使用场景照明体与目标白点之间的色适应变换。
+
+ISO 在 PBRT 中主要作为曝光比例；它没有伴随真实传感器的 shot noise、读出噪声、去马赛克、blooming 或 rolling shutter。因此把 ISO 调高得到干净亮图，只表示模型省略了噪声，不应据此推导现实摄影结论。
+
+## 8. Film：滤波、累积与输出
+
+<Term def="把连续位置上的图像样本按重建核加权并归一化到离散像素的过程">重建滤波</Term>决定一个样本影响哪些像素。抗锯齿不是“每像素随便多发几条光线”就完成：采样负责估计连续图像，滤波负责从这些样本重建离散像素，两者必须匹配。
+
+PBRT 4e 对像素采用加权重要性采样估计：
+
+$$
+r_f(x,y)\approx
+\frac{\sum_i w(x-x_i,y-y_i)r(x_i,y_i)}
+{\sum_i w(x-x_i,y-y_i)}.
+$$
+
+`Film::AddSample()` 接收像素位置、光谱辐亮度、波长、可选可见表面和滤波权重；不同线程不会同时写同一普通样本像素。`AddSplat()` 用于从光源侧路径向任意像素直接追加贡献，可能并发写同一点，因此需要原子操作，而且它不使用相同的加权平均语义。
+
+<PbtFilmPipelineDiagram />
+
+最终输出顺序是：波长 PDF 校正后的光谱值，经 `PixelSensor` 得到传感器 RGB，应用曝光和白平衡，再转换到目标 RGB 颜色空间，最后写入图像。若在转换前过早钳制负值或高动态范围，会破坏滤波与颜色变换。
+
+## 9. 分三步审计相机路径
+
+动手试：逐步检查样本契约、生成的光线以及 Film 写入，观察高亮阶段如何向右推进。
+
+<Stepper>
+<Step title="第一步：检查联合样本">
+确认 `pFilm`、`pLens`、`time` 和波长都来自上层采样器，坐标域和 PDF 正确；相机内部不得偷偷重采样。
+<PbtCameraModelDiagram step={1} />
+</Step>
+<Step title="第二步：检查光线与微分">
+确认 raster 到 camera 的变换、正交或透视起点和方向、薄透镜焦点以及 `rx/ry` 微分光线都在同一时刻和坐标空间。
+<PbtCameraModelDiagram step={2} />
+</Step>
+<Step title="第三步：检查权重与 Film">
+将 `CameraRay.weight`、光谱波长 PDF 和 `filterWeight` 保留到 `AddSample()`；核对普通样本与 splat 的归一化和并发语义。
+<PbtCameraModelDiagram step={3} />
+</Step>
+</Stepper>
+
+## 10. 常见误区与诊断
 
 <Callout type="trap">
-**误区：认为相机「接收」光线而非「发出」光线。**
-在光线追踪中，光线是从相机发出、射向场景的（backward tracing）。这与物理上光从光源发出相反。之所以反向追踪，是因为只有到达相机的光才对图像有贡献，正向追踪绝大多数光子会浪费在不到达相机的路径上。
+**现象 →** 纹理远处闪烁，增加像素样本仍改善有限。**原因 →** 只生成主光线，没有正确传播 `RayDifferential`，纹理系统无法估计像素足迹。**修法 →** 比较主光线与 x/y 偏移一像素的交点差分，核对变换和景深分支都设置了微分。
 </Callout>
 
 <Callout type="trap">
-**误区：以为景深只是简单的模糊滤镜。**
-景深是光学现象——焦平面上的点在透镜上所有采样点都汇聚到同一像素，清晰；焦外的点在不同透镜采样位置投影到不同像素，产生散布圆（circle of confusion），看起来模糊。PBRT 通过物理建模实现这一效果，而非后处理模糊。
+**现象 →** 开启有限孔径后焦平面也漂移或模糊。**原因 →** 每个 `pLens` 仍沿原针孔方向发射，没有重新指向共同的 `pFocus`。**修法 →** 先用中心光线求焦平面交点，再从采样孔径点连向该交点。
 </Callout>
+
+<Callout type="trap">
+**现象 →** 图像亮度随样本数增长，或重建核边缘异常变暗。**原因 →** 混淆求和与加权平均，漏掉 `weightSum` 归一化，或把 `AddSplat` 当普通样本。**修法 →** 分开审计普通样本和 splat 通道，并用常量图像验证滤波后仍保持常量。
+</Callout>
+
+## 小结
+
+- `CameraSample` 联合采样 Film、孔径与时间，`CameraRay` 还携带光谱权重
+- 正交、透视和球面相机的本质差异是二维 Film 坐标到光线起点与方向的映射
+- 薄透镜从孔径采样点指向共同焦点，焦外几何形成散布圆
+- 光线微分描述像素足迹，快门时间描述运动积分
+- Film 对曝光、传感器响应、白平衡、滤波和输出颜色空间承担明确责任
 
 <Exercises>
-**问题 1**：为什么光线追踪从相机发出光线而非从光源发出？
+**问题 1**：正交相机和透视相机的相邻两个 Film 样本分别改变光线的哪个部分？这会如何反映在 Ray Differential 中？
 
 <Answer>
-因为从光源正向追踪效率极低——光源发出的光子中只有极少量最终到达相机像素，绝大多数被浪费。从相机反向追踪保证每条光线都对最终图像有贡献，效率高出几个数量级。这虽然与物理方向相反，但由于光路可逆性，正反追踪得到的结果相同。
+正交相机的所有方向相同，相邻 Film 样本主要平移光线起点，因此 `rx/ry` 与主光线方向一致、起点偏移。透视相机的起点都在相机原点，相邻样本主要改变方向，因此 `rx/ry` 起点相同、方向偏移。有限孔径开启后，两者都要从同一透镜样本重新指向各自焦点。
 </Answer>
 
-**问题 2**：薄透镜模型如何产生景深效果？光圈大小如何影响景深？
+**问题 2**：焦距 $f=50$ mm，场景物距按本章符号为 $z=-2000$ mm。Film 到镜头的像距 $z'$ 是多少？
 
 <Answer>
-薄透镜模型在透镜光圈上采样多个点，每个点发射一条光线。焦平面上的物体，所有透镜采样点的光线都汇聚到同一像素，成像清晰。焦外的物体，不同采样点的光线打在不同位置，形成散布圆，成像模糊。光圈越大（透镜半径越大），散布圆越大，景深越浅（模糊区域更明显）；光圈越小，越接近针孔模型，景深越深。
+代入 $z'=fz/(f+z)$，得到 $z'=50\times(-2000)/(50-2000)\approx51.28$ mm。它略大于焦距，符合有限距离物体对焦时 Film 需要比无限远对焦位置稍远离镜头的直觉。
+</Answer>
+
+**问题 3**：为什么增大真实相机光圈、延长快门和提高 ISO 都能让图像更亮，但代价不同？PBRT 又省略了什么？
+
+<Answer>
+大光圈增加有效孔径面积，但减小景深；长快门增加曝光时间，但增加运动模糊；提高 ISO 放大传感器读数，也会放大噪声。PBRT 的 PixelSensor 不模拟 shot noise、读出噪声和去马赛克，简单投影相机也没有完整孔径辐射度量，因此模型中的 ISO 和光圈亮度不能完全类比真实相机。
+</Answer>
+
+**问题 4**：设计一个最小测试，验证 Film 的加权滤波没有随样本数改变常量图像亮度。
+
+<Answer>
+让积分器对所有 Film 样本返回同一个线性 RGB 或光谱值，分别用 1、4、16、64 个样本并覆盖像素中心和边缘。输出像素应在数值误差内保持同一常量；若随样本数增长，说明使用了求和而非除以 `weightSum`；若边缘变暗，检查样本边界和滤波核归一化。
 </Answer>
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="针孔相机">理想透视投影模型，所有光线通过一个几何点，无畸变无景深。</GlossaryItem>
-<GlossaryItem term="薄透镜模型">用理想透镜替代针孔，引入焦距和光圈，能模拟景深和散景效果。</GlossaryItem>
-<GlossaryItem term="景深">焦平面附近成像清晰的距离范围，由光圈大小和焦距决定。</GlossaryItem>
-<GlossaryItem term="抗锯齿">在像素内多次采样并平均，消除边缘锯齿，常用随机或分层采样。</GlossaryItem>
+<GlossaryItem term="相机样本">一次相机路径联合选择的 Film 位置、透镜位置、快门时间与滤波权重。</GlossaryItem>
+<GlossaryItem term="光线微分">主光线及 Film 坐标沿 x、y 偏移一像素对应的辅助光线。</GlossaryItem>
+<GlossaryItem term="相机坐标空间">以相机为原点并把观察方向映射到正 z 轴的局部坐标系。</GlossaryItem>
+<GlossaryItem term="渲染空间">PBRT 实际执行相交和着色的空间，可配置为 world、camera 或 camera-world。</GlossaryItem>
+<GlossaryItem term="正交相机">方向一致、起点随 Film 坐标变化且没有透视缩短的相机。</GlossaryItem>
+<GlossaryItem term="透视相机">起点一致、方向随 Film 坐标变化并产生近大远小的相机。</GlossaryItem>
+<GlossaryItem term="球面相机">将二维 Film 参数化映射到观察点周围球面方向的全景相机。</GlossaryItem>
+<GlossaryItem term="薄透镜模型">用单个理想透镜与有限孔径近似景深的模型。</GlossaryItem>
+<GlossaryItem term="辐射曝光量">辐照度在快门开启时间内的积分，单位 J/m²。</GlossaryItem>
+<GlossaryItem term="像素传感器">把入射光谱转换为相机 RGB，并处理曝光比例和白平衡的模型。</GlossaryItem>
+<GlossaryItem term="重建滤波">把连续图像样本按滤波核加权并归一化到离散像素。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th edition, Chapter 5" adaptedUrl="https://www.pbr-book.org/4ed/Cameras_and_Film" />

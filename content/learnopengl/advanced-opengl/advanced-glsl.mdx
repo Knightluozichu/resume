@@ -1,14 +1,22 @@
 ---
-title: 高级GLSL
+title: 高级 GLSL、UBO 与 std140 对齐
 type: C
 section: 高级OpenGL
 order: 8
-description: 认识 GLSL 流水线在每个工位免费发的「工牌 / 仪表」——内建变量 gl_FragCoord / gl_FrontFacing / gl_FragDepth 等，再学接口块把一组 in/out 打包整组传，以及用 Uniform 缓冲对象（UBO）让多个着色器共享同一块数据，并能算清 std140 对齐。
+description: 使用 GLSL 内建变量和接口块，建立可验证的 UBO 绑定链，并按 std140 的真实起始对齐、数组/矩阵步长和 CPU 范围约束组织共享数据。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/08%20Advanced%20GLSL/
+sourceUrl: https://learnopengl.com/Advanced-OpenGL/Advanced-GLSL
 draft: false
 ---
+
+import {
+  GlFragCoordDiagram,
+  InterfaceBlockDiagram,
+  ShaderDemo,
+  Std140PackingDiagram,
+  UboBindingDiagram,
+} from "@/components/mdx/learnopengl/diagrams/advanced-glsl";
 
 {/* C 实战型章（HEL-74，高级OpenGL 篇第 8 篇）：原书「高级GLSL Advanced GLSL」。重心是代码对照(§6 覆盖≥80% 关键代码)：①内建变量 gl_FragCoord（窗口像素坐标）+ gl_FrontFacing（正反面给不同色）②接口块 interface block（out VS_OUT{...}vs_out / in VS_OUT{...}fs_in）③UBO（GLSL 端 layout(std140) uniform Matrices{...} + CPU 端 createBuffer/bindBufferBase/uniformBlockBinding/getUniformBlockIndex/bindBufferRange）。math:false 整节省略§4。承接深度/混合/帧缓冲（同 section 工厂流水线类比库：GLSL 内建变量是流水线每个工位免费发的「工牌/仪表」，UBO 是一块「公告板」多个 shader 都来读）。主 viz 两个：ShaderDemo gl_FragCoord 分屏可视化（uSplit 分界线 + 两色）+ Stepper UBO 共享（每步带 UboBindingDiagram step）。新建 3 图：GlFragCoordDiagram / InterfaceBlockDiagram / UboBindingDiagram。误区 ≥3（gl_FragCoord 当 NDC / std140 对齐算错 / 绑定点不对齐）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +26,17 @@ draft: false
 
 <Objectives>
 
-- 能说清 `gl_FragCoord` 装的是片段在画布上的**窗口像素坐标**（不是 -1..1 的 NDC），并能用它在片段着色器里改出「按屏幕位置左右分屏上色」的效果
-- 能用接口块把一组 `in/out` 打包整组传，并能写出用 UBO 让两个着色器**共享同一份投影 / 视图矩阵**的 GLSL 与 CPU 两端代码
-- 能回答：往 UBO 里塞一个 `vec3`，它在 std140 布局下到底占几个字节？为什么 CPU 写下一个成员前要先「空一段」？
+- 能实现基于 `gl_FragCoord` 的分屏效果，且按 framebuffer 像素分辨率而非 NDC 归一化
+- 能实现接口块匹配、检查 UBO block index，并把多个 program 接到同一 binding point
+- 能计算 std140 的成员起始偏移，区分 vec3 后接 float 与后接 vec2/数组的不同结果
+- 能设计 `bindBufferRange` 的对齐范围，并检查 UBO 大小与 binding-point 上限
+- 能判断写 `gl_FragDepth` 是否会妨碍 early depth，并选择无深度写的替代路径
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库（承接高级OpenGL 篇同 section 同类比体系：管线/工位）。 */}
 
-## 流水线每个工位，都免费发一块「工牌」
+## 为什么 GLSL 不该靠重复 uniform 传递数据
 
 把渲染想成一条工厂流水线：顶点在前面的工位被摆好位置，到了后面的工位被一个个像素地上色。流水线很贴心——每到一个工位，它都顺手塞给你几块**免费的工牌和小仪表**：一块告诉你「你现在处理的这个像素，落在画布的哪个格子上」，一块告诉你「你看到的这一面，是物体的正面还是背面」。你不用自己费劲去算，低头看一眼工牌就知道。
 
@@ -67,9 +77,9 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 ## gl_FragDepth：自己改写片段的深度
 
-正常情况下，一个片段的深度是流水线自动算好的（就是 `gl_FragCoord.z`），你不用管。但有时你想**手动改它**——比如做某些特效要把深度往后推一点。这就用到 <Term def="片段着色器里的可写内建变量，让你手动指定这个片段的深度值（覆盖流水线自动算的那个）。代价不小：一旦在着色器里写了它，GPU 就没法在运行片段着色器之前提前做深度测试（提前深度测试 early depth test），性能会下降，所以非必要别写。">gl_FragDepth</Term>：往它写一个 0..1 的值，就覆盖了流水线默认的深度。
+正常情况下，一个片段的深度由流水线生成。确有特效需要时，可写 <Term def="片段着色器中可写的深度输出，会覆盖管线生成的片段深度。动态写入通常妨碍 early depth，因为最终值未知；某些保守深度限定可保留优化，但不能假定所有驱动都能提前测试。">gl_FragDepth</Term> 覆盖它。
 
-但它有个**代价**，得先说清楚：正常时 GPU 会在跑片段着色器**之前**就提前做深度测试（提前剔掉被挡住的片段、省得白算颜色，这叫提前深度测试）；可一旦你在着色器里**写了** `gl_FragDepth`，GPU 没法预知你要写成多少，只能**等片段着色器跑完**才能测深度——提前优化就泡汤了，性能下降。所以**非必要别碰它**，这点也进 §6 的提醒。
+写 `gl_FragDepth` 通常会妨碍 GPU 在片段着色器前进行 early depth，因为实现无法预知最终深度；某些保守深度声明或专用布局可保留部分优化，但不能默认指望它。无须改深度时，保留管线生成的深度值才是稳定的默认路径。
 
 ## 接口块：把一组 in/out 打包整组传
 
@@ -89,7 +99,9 @@ GLSL 里有一批你不用声明、拿来就能用的特殊变量，统称 <Term
 
 <UboBindingDiagram step={2} />
 
-还有一个绕不开的细节：UBO 这块缓冲里的数据，CPU 和 GPU 必须**对同一套摆放方式达成一致**，否则 CPU 写在这、GPU 读在那，全错位。这套约定最常用的叫 <Term def="UBO 缓冲里成员怎么摆放（每个成员从第几个字节开始）的一套对齐规则。核心：成员要按各自的「对齐量」对齐——标量（float/int）对齐到 4 字节，vec2 对齐到 8 字节，vec3 和 vec4 都对齐到 16 字节（所以 vec3 后面会留一段空白 padding），mat4 当成 4 个 vec4。CPU 往缓冲写数据时必须照这套偏移摆，GPU 才能读对。std140 是「显式、可预测」的布局，跨平台一致。">std140 布局</Term>：它规定每个成员从第几个字节开始。最坑的一条是——一个 `vec3` 明明只有 3 个数，却要**占满 16 字节**（后面补一段空白 padding）。这条规则下面 §6 和误区会反复出现，先记住这个直觉：**std140 里万物向 16 字节对齐看齐**。
+还有一个绕不开的细节：UBO 这块缓冲里的数据，CPU 和 GPU 必须遵守同一套摆放方式。这套约定最常用的叫 <Term def="uniform block 的标准内存布局。成员按基础对齐开始：标量 4B、vec2 8B、vec3/vec4 16B；数组和结构体的步长至少为 16B，矩阵按 vec4 列或行排列。vec3 的起始对齐是 16B，但紧随的 float 可使用第 4 个槽位，不能把所有 vec3 一律当 16B 数据大小。">std140 布局</Term>。关键是“**起始对齐**”：`vec3` 必须从 16 的倍数开始，但它后面若是 `float`，这个 float 可以放进同一个 16B 槽；若后面是 `vec2`、数组或矩阵，则按它们自己的更高规则向前跳。
+
+<Std140PackingDiagram />
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。std140 的字节偏移不当公式推，用 UboBindingDiagram step3 的「内存条 + padding」图示 + §6 代码对照里的偏移注释直观讲，符合 C 型 + 小白友好。 */}
 
@@ -160,26 +172,35 @@ void main() {
 
 <Stepper>
   <Step title="① 不用 UBO：每个程序各传一遍">
-    <UboBindingDiagram step={1} />
-    不用 UBO 时，每个<strong>着色器程序</strong>里都各自存一份{" "}
-    <code>projection</code> / <code>view</code> 的 uniform。想改一次相机，CPU
-    就得
-    <strong>挨个程序</strong>
-    各上传一遍——三个程序传三遍，五个传五遍，又冗余又容易漏掉某一个，漏了的那个画面就和别人对不上。
+    <div className="space-y-3">
+      <UboBindingDiagram step={1} />
+      <div className="text-sm leading-6">
+        不用 UBO 时，每个<strong>着色器程序</strong>里都各自存一份{" "}
+        <code>projection</code> / <code>view</code> 的 uniform。想改一次相机，CPU
+        就得<strong>挨个程序</strong>各上传一遍——三个程序传三遍，五个传五遍，又冗余又容易漏掉某一个，漏了的那个画面就和别人对不上。
+      </div>
+    </div>
   </Step>
   <Step title="② 用 UBO：一块缓冲经绑定点接到所有程序">
-    <UboBindingDiagram step={2} />用 UBO：把 <code>projection</code> /{" "}
-    <code>view</code> 放进
-    <strong>一块共享缓冲</strong>，让它插在 <strong>0 号绑定点</strong>
-    上；每个程序也都声明「我连 0 号绑定点」。于是 CPU 只往这块缓冲
-    <strong>写一次</strong>，三个程序立刻全都读到新值——改一次、全体生效。
+    <div className="space-y-3">
+      <UboBindingDiagram step={2} />
+      <div className="text-sm leading-6">
+        用 UBO：把 <code>projection</code> / <code>view</code> 放进
+        <strong>一块共享缓冲</strong>，让它插在 <strong>0 号绑定点</strong>
+        上；每个程序也都声明「我连 0 号绑定点」。于是 CPU 只往这块缓冲
+        <strong>写一次</strong>，三个程序立刻全都读到新值——改一次、全体生效。
+      </div>
+    </div>
   </Step>
-  <Step title="③ std140：成员按 16 字节对齐摆进缓冲">
-    <UboBindingDiagram step={3} />但 CPU 和 GPU 要对「数据怎么摆」达成一致。
-    <strong>std140</strong> 规定每个成员的起始字节：
-    <code>float</code> 占 4 字节、后面补到 16；<code>vec3</code> 虽只有 3 个数也
-    <strong>吃满 16 字节</strong>（第 4 格是 padding 空白）；<code>vec4</code>{" "}
-    正好占满 16。CPU 往缓冲写数据时必须照这套偏移摆，GPU 才读得对。
+  <Step title="③ std140：按成员起始对齐摆进缓冲">
+    <div className="space-y-3">
+      <UboBindingDiagram step={3} />
+      <div className="text-sm leading-6">
+        CPU 和 GPU 要对「数据怎么摆」达成一致。<strong>std140</strong>
+        规定成员的<strong>起始对齐</strong>：<code>vec3</code> 从 16 的倍数起，但紧随的
+        <code>float</code> 可以用第 4 个槽位；若紧随的是 <code>vec2</code>、数组或矩阵，则按它自己的对齐要求跳到下一处。CPU 必须照真实偏移写入。
+      </div>
+    </div>
   </Step>
 </Stepper>
 
@@ -240,7 +261,7 @@ void main() {
   且片段着色器多一行 `precision highp float;`。另外想看到 `gl_FrontFacing`
   的**背面**，得先在 CPU 侧关掉面剔除（`glDisable(GL_CULL_FACE)` /
   `gl.disable(gl.CULL_FACE)`），否则背面早被剔了根本不进片段着色器。**别在着色器里写
-  `gl_FragDepth`** 除非真有必要——一写就关掉了提前深度测试，性能下降。
+  `gl_FragDepth`** 除非真有必要——动态写入通常会妨碍提前深度测试；保守深度限定是特例，需按目标平台验证。
 </Callout>
 
 ### 接口块：把一组 out / in 打包
@@ -321,8 +342,9 @@ glBindBuffer(GL_UNIFORM_BUFFER, ubo);
 glBufferData(GL_UNIFORM_BUFFER, 2 * sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
 // 2) 把缓冲接到 0 号绑定点
 glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo);
-// 3) 把每个程序的 Matrices 块也指到 0 号绑定点
+// 3) 把每个程序的 Matrices 块也指到 0 号绑定点，并检查块存在
 unsigned int idx = glGetUniformBlockIndex(shaderA, "Matrices");
+if (idx == GL_INVALID_INDEX) throw std::runtime_error("Matrices missing");
 glUniformBlockBinding(shaderA, idx, 0);   // 对 shaderB 同样来一遍
 // 4) 按 std140 偏移填数据：projection 在 0、view 在 64
 glBindBuffer(GL_UNIFORM_BUFFER, ubo);
@@ -340,8 +362,9 @@ gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
 gl.bufferData(gl.UNIFORM_BUFFER, 2 * 64, gl.STATIC_DRAW);
 // 2) 把缓冲接到 0 号绑定点
 gl.bindBufferBase(gl.UNIFORM_BUFFER, 0, ubo);
-// 3) 把每个程序的 Matrices 块也指到 0 号绑定点
+// 3) 把每个程序的 Matrices 块也指到 0 号绑定点，并检查块存在
 const idx = gl.getUniformBlockIndex(programA, "Matrices");
+if (idx === gl.INVALID_INDEX) throw new Error("Matrices missing");
 gl.uniformBlockBinding(programA, idx, 0); // 对 programB 同样来一遍
 // 4) 按 std140 偏移填数据：projection 在 0、view 在 64
 gl.bindBuffer(gl.UNIFORM_BUFFER, ubo);
@@ -352,7 +375,7 @@ gl.bufferSubData(gl.UNIFORM_BUFFER, 64, view); // 偏移 64 字节
   </Tab>
 </CodeTabs>
 
-四步逻辑一一对应：建缓冲 → 缓冲接 0 号绑定点（`bindBufferBase`）→ 每个程序的块也指 0 号绑定点（`getUniformBlockIndex` + `uniformBlockBinding`）→ 按偏移填数据。WebGL2 完整支持 UBO，命名也几乎照搬 GL：
+四步逻辑一一对应：建缓冲 → 缓冲接 0 号绑定点（`bindBufferBase`）→ 每个程序的块也指 0 号绑定点（先检查 block index）→ 按偏移填数据。`bindBufferBase` 绑定整只 buffer；若要复用一只大 buffer 的子范围，使用 `bindBufferRange`，其 offset 必须满足 `UNIFORM_BUFFER_OFFSET_ALIGNMENT`。开始前也应查询 `MAX_UNIFORM_BLOCK_SIZE` 与 `MAX_UNIFORM_BUFFER_BINDINGS`，避免跨设备超限。
 
 <Callout type="warn">
   两个对齐必须扣死：① **绑定点编号要一致**——`bindBufferBase` 把缓冲接到的那个
@@ -381,11 +404,7 @@ gl.bufferSubData(gl.UNIFORM_BUFFER, 64, view); // 偏移 64 字节
 <Callout type="trap">
   **现象**：UBO
   里的矩阵全乱——物体扭曲、错位，或某个成员读出来是垃圾值。**原因**：**std140
-  对齐 / padding 算错**。最常见的是以为 `vec3` 占 12
-  字节，于是把下一个成员的偏移算少了 4——可 std140 里 `vec3` 要**吃满 16
-  字节**（后面有 padding）。**修法**：照 std140 规则重算偏移（vec3/vec4/mat4
-  列都对齐 16），`bufferSubData` 的 offset 按这套来；拿不准就把每个成员都当
-  `vec4` 倍数对齐，最稳。
+  对齐 / padding 算错**。常见错法是只按成员大小连续累加，忽略起始对齐；也有人反过来把每个 `vec3` 强行扩成 16B，浪费或排错。**修法**：按每个后继成员的 base alignment 计算偏移：`vec3` 后接 `float` 可在第 4 槽，后接 `vec2`/数组/矩阵则对齐到下一边界；复杂块可查询 `UNIFORM_OFFSET` 验证。
 </Callout>
 
 <Callout type="trap">
@@ -399,9 +418,7 @@ gl.bufferSubData(gl.UNIFORM_BUFFER, 64, view); // 偏移 64 字节
 
 <Callout type="trap">
   **现象**：在片段着色器里写了 `gl_FragDepth`
-  后，明明画面没变，帧率却掉了一截。**原因**：一旦你写 `gl_FragDepth`，GPU
-  就没法在跑片段着色器**之前**提前做深度测试（不知道你要把深度改成多少），只能等着色器跑完再测，**提前深度测试**优化失效。**修法**：**非必要别写**
-  `gl_FragDepth`；正常深度用流水线自动算的就好。真要写，也尽量把它放在能用深度条件优化的场景。
+  后，明明画面没变，帧率却掉了一截。**原因**：动态深度写通常让实现无法在片段着色器前安全地做 early depth。**修法**：非必要不写 `gl_FragDepth`；确有需求时研究 `depth_*` 保守深度限定并针对目标 GPU profile，不能把优化当作自动保证。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改 Demo 题（含目标效果）+ 1 道独立实现/问答题（C 型）；答案折叠。 */}
@@ -412,11 +429,11 @@ gl.bufferSubData(gl.UNIFORM_BUFFER, 64, view); // 偏移 64 字节
 - `gl_FragCoord.xy` 是**像素值不是 NDC**，要**除以 `uResolution`** 才归一化到 0..1——这是 §5 分屏 Demo 的关键
 - **接口块**把一组 `in/out` 打包成有名字的块整组传：块名两端一致、实例名可不同，传一大组数据时更整洁
 - **UBO** 是块共享「公告板」：一块缓冲经**绑定点**接到多个着色器程序，改一次全体生效，省掉逐个程序各传一遍
-- **std140** 规定 UBO 成员怎么对齐——`vec3` 也吃满 16 字节（留 padding）；绑定点编号、std140 偏移**两端必须扣死**
+- **std140** 按成员起始对齐排布：`vec3` 从 16B 边界开始，后接 `float` 可复用第 4 槽，数组/矩阵有至少 16B 步长；绑定点与范围偏移都要核对
 
 <Exercises>
 
-**练习 1（改 Demo 代码题）** 在上面的 `gl_FragCoord` 分屏 Demo 里，把「左右分屏」改成「**上下分屏**」：画面上半一色、下半另一色，分界线水平、可由 `uSplit` 控制高低。提示：换一个 `gl_FragCoord` 的分量、除以对应的分辨率分量。
+**问题 1（改 Demo 代码题）** 在上面的 `gl_FragCoord` 分屏 Demo 里，把「左右分屏」改成「**上下分屏**」：画面上半一色、下半另一色，分界线水平、可由 `uSplit` 控制高低。提示：换一个 `gl_FragCoord` 的分量、除以对应的分辨率分量。
 
 <Answer>
 
@@ -432,19 +449,19 @@ vec3 col = norm < uSplit ? uLeftColor : uRightColor;  // 下半 uLeftColor、上
 
 </Answer>
 
-**练习 2（std140 对齐题）** 一个 UBO 块按 std140 布局，依次有：`float a;` `vec3 b;` `vec2 c;`。写出 `a`、`b`、`c` 三个成员各自的**起始字节偏移**，并说明为什么 `b` 不是从偏移 4 开始。
+**问题 2（std140 对齐题）** 一个 UBO 块按 std140 布局，依次有：`float a;` `vec3 b;` `vec2 c;`。写出 `a`、`b`、`c` 三个成员各自的**起始字节偏移**，并说明为什么 `b` 不是从偏移 4 开始。
 
 <Answer>
 
 - `a`（float）：偏移 **0**，占 4 字节；
-- `b`（vec3）：偏移 **16**——不是 4！因为 std140 里 `vec3` 的对齐量是 16，必须从 16 的倍数处开始，于是 `a` 后面（偏移 4~15）那 12 字节是 padding 空着；`b` 本身又吃满到偏移 32（vec3 占满 16 字节）；
-- `c`（vec2）：偏移 **32**——vec2 对齐量是 8，而 32 已经是 8 的倍数，正好紧接 `b` 之后。
+- `b`（vec3）：偏移 **16**——不是 4！因为 vec3 的起始对齐量是 16，`a` 后的偏移 4~15 必须跳过；
+- `c`（vec2）：偏移 **32**——`b` 的数据结束在 28，但 vec2 需要 8B 对齐，28 向上对齐到 32。
 
-核心原因：std140 里万物向各自的对齐量看齐，`vec3`/`vec4`/`mat4` 列都对齐到 16，所以 `a` 这种小成员后面常常被迫留一段 padding，下一个成员要跳到下一个对齐位置开始。
+核心原因：std140 先按**下一个成员的对齐量**向上取整，而不是把 vec3 一律当成 16B 的数据大小。若 `b` 后接的是 `float`，它可从偏移 28 开始；本题的 `vec2` 对齐更高，所以才跳到 32。
 
 </Answer>
 
-**练习 3（问答题）** 某人用 UBO 共享投影 / 视图矩阵，CPU 侧写了 `glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo)`，又对着色器写了 `glUniformBlockBinding(shader, idx, 1)`。运行后画面里物体位置完全不对。问题出在哪？怎么改？
+**问题 3（问答题）** 某人用 UBO 共享投影 / 视图矩阵，CPU 侧写了 `glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo)`，又对着色器写了 `glUniformBlockBinding(shader, idx, 1)`。运行后画面里物体位置完全不对。问题出在哪？怎么改？
 
 <Answer>
 
@@ -480,8 +497,7 @@ vec3 col = norm < uSplit ? uLeftColor : uRightColor;  // 下半 uLeftColor、上
 </GlossaryItem>
 
 <GlossaryItem term="gl_FragDepth">
-  片段着色器里的可写内建变量，让你手动指定这个片段的深度值（覆盖流水线自动算的那个）。代价不小：一旦在着色器里写了它，GPU
-  就没法在跑片段着色器**之前**提前做深度测试（提前深度测试），性能会下降，所以**非必要别写**。详见本章「gl_FragDepth」一节。
+  片段着色器里的可写深度输出，覆盖管线生成的片段深度。动态写入通常会妨碍 early depth，因为实现无法预知最终值；某些保守深度限定是例外，但需在目标平台实测。详见本章「gl_FragDepth」一节。
 </GlossaryItem>
 
 <GlossaryItem term="接口块">
@@ -509,9 +525,8 @@ vec3 col = norm < uSplit ? uLeftColor : uRightColor;  // 下半 uLeftColor、上
 <GlossaryItem term="std140 布局">
   UBO
   缓冲里成员怎么摆放（每个成员从第几个字节开始）的一套对齐规则。核心：成员要按各自的「对齐量」对齐——标量（`float`/`int`）对齐
-  4 字节、`vec2` 对齐 8、`vec3` 和 `vec4` 都对齐 **16**（所以 `vec3`
-  后面会留一段空白 padding），`mat4` 当成 4 个 `vec4`。CPU
-  往缓冲写数据时必须照这套偏移摆，GPU 才能读对。详见本章「Uniform
+  4 字节、`vec2` 对齐 8、`vec3` 和 `vec4` 的**起始位置**对齐 16；数组和结构体的步长至少 16，`mat4` 当成 4 个 `vec4`。`vec3` 后接 `float` 时，该 float 可复用第 4 个槽；后接 `vec2`/数组/矩阵则按其对齐量向前跳。CPU
+  往缓冲写数据时必须照真实偏移摆，GPU 才能读对。详见本章「Uniform
   缓冲对象」一节与 §6。
 </GlossaryItem>
 

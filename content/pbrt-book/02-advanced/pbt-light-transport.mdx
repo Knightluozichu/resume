@@ -3,117 +3,347 @@ title: "光线传输方程"
 type: B
 section: "计算机图形学与渲染"
 order: 6
-description: "渲染方程的推导与求解——PBRT 的核心灵魂"
+description: "从能量平衡、路径积分到 PBRT PathIntegrator 的表面光传输主线"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection"
 draft: false
 ---
 
-import { PbtLightTransportDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-light-transport";
+import { PbtIntegratorStateDiagram, PbtLightTransportDiagram, PbtLteFormsDiagram, PbtMisDiagram, PbtPathContributionDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-light-transport";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出渲染方程（光传输方程）的完整形式
-- 能解释方程中每一项的物理含义
-- 能区分直接光照和间接光照的计算方式
-- 能回答为什么渲染方程是递归的？如何求解？
+- 能推导方向形式的光传输方程，并说明为什么当前章暂不包含参与介质
+- 能解释方向积分到面积积分的变量替换，并核对可见性、距离平方和两端余弦
+- 能计算一条给定路径的贡献、吞吐量、联合 PDF 与蒙特卡洛权重
+- 能描述 PathIntegrator 累加发光、估计直接光照、延伸路径和执行轮盘的顺序
+- 能分析 MIS、specularBounce、p_b 与 etaScale 错误造成的重复计光、偏差和高方差
 </Objectives>
 
-## 直觉引入
+## 为什么不能只背一条渲染方程
 
-想象一个房间。你看到每个点的颜色，是光从光源出发、经过多次弹射、最终到达你眼睛的结果。要精确计算这个过程，需要回答一个问题：每个点反射了多少光？
+PBRT 第 13 章 [Light Transport I: Surface Reflection](https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection) 不是只给出一条“渲染方程”。它先从能量平衡得到 <Term def="描述场景中表面辐亮度平衡分布的积分方程，出射辐亮度由自发光和散射入射辐亮度组成">光传输方程</Term>，再依次改写为方向形式、面积形式和路径积分，最后落到 `SimplePathIntegrator` 与 `PathIntegrator`。
 
-渲染方程就是回答这个问题的数学公式——它把「光的弹射」写成一个积分方程。每个点的亮度 = 自发光 + 反射的入射光。但入射光又是其他点的出射光……这就形成了递归。
-
-## 概念讲解
-
-### 渲染方程
+本章遵守原书的边界：假设射线段之间是真空，表面之间辐亮度不衰减。参与介质中的吸收、外散射、内散射和发射由第 14 章的 equation of transfer 处理；这里不会把体积步进伪装成表面 LTE 的一部分。
 
 <PbtLightTransportDiagram />
 
-<Term def="渲染方程是描述光在场景中平衡分布的积分方程，是所有基于物理的渲染的理论基础">渲染方程</Term>：L_o(p,ωo) = L_e(p,ωo) + ∫ f_r(ωi,ωo) L_i(p,ωi) cosθi dωi。
+## 2. 从能量守恒到方向形式 LTE
 
-<Term def="直接光照是光从光源直接射到表面（一次弹射）后反射到相机的光">直接光照</Term>只需要对光源面积积分，计算相对简单。
+在表面点 $p$，沿 $omega_o$ 离开的辐亮度必须等于表面自身发出的辐亮度，加上所有入射方向经 BSDF 散射到 $omega_o$ 的辐亮度：
 
-<Term def="间接光照是光经过场景中其他表面多次弹射后到达当前表面的光">间接光照</Term>需要对整个半球面积分，是渲染方程递归的根源。
+$$
+L_o(p,\omega_o)=L_e(p,\omega_o)+
+\int_{\mathcal S^2} f(p,\omega_o,\omega_i)
+L_i(p,\omega_i)\lvert\cos\theta_i\rvert\,\mathrm d\omega_i.
+$$
 
-<Term def="光路表示法用 L(S|D|G) 正则表达式描述光从光源到相机的弹射路径类型">光路表示法</Term>如 LS+E 表示光源经过多次镜面反射到相机。
+积分域写成整个球面 $\mathcal S^2$ 是因为 BSDF 可以包含反射与透射。若材质只有反射分量，背面方向的 $f$ 为零，公式自然退化为半球积分；不要在公式外再手工删一次透射方向。
 
-## 交互Demo
+在没有参与介质时，<Term def="没有介质吸收、发射或散射时，同一条射线上的辐亮度保持不变">自由空间辐亮度不变</Term>。定义 <Term def="从点 p 沿方向 omega 发射射线并返回最近表面交点的函数">射线投射函数</Term> $t(p,\omega)$，便有
+
+$$
+L_i(p,\omega_i)=L_o\!\left(t(p,\omega_i),-\omega_i\right).
+$$
+
+代回散射方程并省略 $o$ 下标，得到 PBRT 的递归 LTE：
+
+$$
+L(p,\omega_o)=L_e(p,\omega_o)+
+\int_{\mathcal S^2} f(p,\omega_o,\omega_i)
+L\!\left(t(p,\omega_i),-\omega_i\right)
+\lvert\cos\theta_i\rvert\,\mathrm d\omega_i.
+$$
+
+## 3. 递归不是“调用函数”，而是未知量出现在等式两侧
+
+把散射积分记作线性算子 $K$，方程可写为
+
+$$
+L=L_e+KL.
+$$
+
+连续代入右侧可得到 Neumann 展开：
+
+$$
+L=L_e+KL_e+K^2L_e+K^3L_e+\cdots
+=\sum_{k=0}^{\infty}K^kL_e.
+$$
+
+$K^0L_e$ 是直接看见发光体，$KL_e$ 是一次表面散射，$K^2L_e$ 是两次散射。路径追踪不是“用递归语法求方程”，而是随机抽取这些不同长度项的样本。
+
+原书还给出一个可用于验证积分器的解析场景：均匀发光、内壁为常量 Lambertian BRDF 的球腔。若半球反射率为 $\rho_{hh}$，空间对称性使所有点的 $L$ 相同：
+
+$$
+L=L_e+\rho_{hh}L,
+\qquad
+L=\frac{L_e}{1-\rho_{hh}}.
+$$
+
+当实现声称无偏且样本足够多时，球腔平均值应收敛到这个解；它比“看起来差不多”更适合作为回归基准。
+
+## 4. 从方向积分到面积积分：几何必须显式入账
+
+方向微元与另一个表面点 $p'$ 的面积微元之间满足立体角变换。PBRT 把变量替换、原有余弦和遮挡合并为 <Term def="连接两个表面点的可见性、两端余弦和距离平方衰减的乘积">几何耦合项</Term>：
+
+$$
+G(p\leftrightarrow p')=
+V(p\leftrightarrow p')
+\frac{\lvert\cos\theta\rvert\lvert\cos\theta'\rvert}
+{\lVert p-p'\rVert^2}.
+$$
+
+其中 <Term def="两个路径顶点互相可见时为 1，被场景几何遮挡时为 0 的二值函数">可见性函数</Term> $V$ 由阴影射线判断。用三点形式 $f(p''\to p'\to p)$ 表示在 $p'$ 处从 $p''$ 散射到 $p$，面积形式为
+
+$$
+L(p'\to p)=L_e(p'\to p)+
+\int_{\mathcal A}
+f(p''\to p'\to p)
+L(p''\to p')
+G(p''\leftrightarrow p')\,\mathrm dA(p'').
+$$
+
+<PbtLteFormsDiagram />
+
+三个常见漏项可以直接从 $G$ 检查：只除距离一次会让远处光源过亮；只保留接收端余弦会破坏面积测度变换；忘记 $V$ 会让光穿墙。方向形式和面积形式物理等价，但它们的 PDF 测度不同，不能把 $p_A$ 与 $p_\omega$ 直接放进同一个 MIS 权重。
+
+## 5. 路径积分：把无穷递归展开成可采样对象
+
+<Term def="由相机、若干散射顶点和光源顶点构成的高维积分域，每个元素是一条完整光路">路径空间</Term>把一条 $n$ 段路径写成 $\bar p_n=(p_0,p_1,\ldots,p_n)$，其中 $p_0$ 在胶片或镜头上，$p_n$ 在光源上。LTE 可写为不同路径长度贡献之和：
+
+$$
+L(p_1\to p_0)=\sum_{n=1}^{\infty}P(\bar p_n).
+$$
+
+固定路径长度时，贡献的被积函数由末端发光、内部顶点 BSDF 与相邻顶点的几何耦合相乘。省略积分符号后，一条具体路径的结构是
+
+$$
+P(\bar p_n)\propto
+L_e(p_n\to p_{n-1})
+\prod_{j=1}^{n-1}
+f(p_{j+1}\to p_j\to p_{j-1})
+G(p_{j+1}\leftrightarrow p_j).
+$$
+
+<Term def="一条路径上所有 BSDF 与几何耦合项的乘积，表示光源辐亮度到达相机前保留的比例">路径吞吐量</Term> $T(\bar p_n)$ 不含末端的 $L_e$。蒙特卡洛估计还要除以生成整条路径的联合 PDF：
+
+$$
+\widehat P(\bar p_n)=
+\frac{L_e(p_n\to p_{n-1})T(\bar p_n)}{p(\bar p_n)}.
+$$
+
+<PbtPathContributionDiagram />
+
+路径形式的重要价值不是要求实现保存全部顶点，而是证明：从相机、从光源、从两端或从中间生成路径都可以正确，只要贡献与路径 PDF 使用相同测度并覆盖所有非零路径。
+
+## 6. 增量路径追踪：用 BSDF 方向保证相邻顶点可连接
+
+若独立地在场景所有表面均匀抽顶点，大多数相邻点会被墙遮挡，或者落在 BSDF 为零的一侧，导致大量零贡献和高方差。<Term def="从相机开始，按每个顶点的 BSDF 分布采样方向并用最近交点增量构造光路的蒙特卡洛算法">路径追踪</Term>改为：在 $p_j$ 按 BSDF 抽方向 $omega_j$，追踪射线得到唯一的下一顶点 $p_{j+1}$。
+
+实现不必存整条路径。PBRT 用 `beta` 累乘此前顶点的 BSDF、余弦与方向 PDF：
+
+$$
+\beta_i=
+\prod_{j=1}^{i-1}
+\frac{f_j(\omega_{j-1},\omega_j)
+\lvert\cos\theta_j\rvert}
+{p_{\omega,j}(\omega_j)}.
+$$
+
+当前顶点取得的直接光照或发光贡献乘上 `beta` 后加入 `L`。因此 `L` 是已经闭合到光源的路径之和，`beta` 是尚未闭合的当前相机子路径权重；把两者混成一个变量，最容易造成重复乘 BSDF 或漏乘 PDF。
+
+## 7. 直接光照、两个采样策略与 MIS
+
+<Term def="在当前非镜面顶点选择光源并采样光源上的方向，通过阴影射线估计下一事件贡献">显式光源采样</Term>也称 next-event estimation。方向 PDF 必须包含选择光源的离散概率和光源内部采样的条件密度：
+
+$$
+p_l(\omega)=p_{\mathrm{select}}(L\mid p)\,
+p_{\mathrm{Li}}(\omega\mid L,p).
+$$
+
+只采光源适合小光源与宽 BSDF；只采 BSDF 适合大光源与窄光泽波瓣。PBRT 的 `PathIntegrator` 使用 <Term def="把多个无偏采样策略按各自 PDF 加权合并，以降低单一策略失配造成的方差">多重重要性采样</Term>，对同一直接光照被积函数分别取得光源样本与 BSDF 样本：
+
+$$
+\widehat L_d=
+w_l(\omega_l)\frac{F(\omega_l)}{p_l(\omega_l)}+
+w_b(\omega_b)\frac{F(\omega_b)}{p_b(\omega_b)},
+$$
+
+其中 $F(\omega)=f(\omega_o,\omega)L_i(\omega)\lvert\cos\theta\rvert V(\omega)$。PBRT 使用 <Term def="以各策略 PDF 的平方构造 MIS 权重，使高概率策略获得更大权重">幂启发式</Term>：
+
+$$
+w_l(\omega)=\frac{p_l(\omega)^2}{p_l(\omega)^2+p_b(\omega)^2},
+\qquad
+w_b(\omega)=1-w_l(\omega).
+$$
+
+<PbtMisDiagram />
+
+delta 光源只有一个离散方向，普通 BSDF 方向采样以连续概率命中它的概率为零，因此光源样本直接使用权重 1。完美镜面 BSDF 也没有普通的连续密度，`SampleLd()` 不在该顶点做光源方向估计，而让镜面延伸射线在下一次命中时计入发光。
+
+## 8. 发光命中为什么需要 `specularBounce` 与上一段 PDF
+
+直接光照已经通过光源采样估计一次；随后 BSDF 延伸的 ray 也可能命中同一面光源或环境光。如果两个贡献都不加权地累加，期望值会翻倍。PBRT 的处理分三种情况：
+
+1. 相机主射线直接看到发光体，完整加入 `beta * Le`。
+2. 上一顶点是 <Term def="只允许离散反射或透射方向、不能用普通连续方向 PDF 表示的理想散射事件">镜面弹射</Term>，光源采样没有覆盖该路径，也完整加入 `beta * Le`。
+3. 上一顶点是非镜面散射，使用保存的 `p_b` 与光源的 `p_l` 计算 BSDF 策略 MIS 权重，再加入 `beta * w_b * Le`。
+
+这也是为什么只看 `SampleLd()` 无法审计完整的直接光照：BSDF 策略的另一半估计器是在下一轮 ray 命中发光体时完成的。
+
+## 9. `PathIntegrator` 的状态与俄罗斯轮盘
+
+<PbtIntegratorStateDiagram />
+
+固定 `maxDepth` 会直接丢弃更长路径并引入截断偏差。PBRT 仍保留深度上限作为用户控制，同时用 <Term def="以概率终止低吞吐量路径，并对存活路径除以存活概率以保持期望不变的随机终止方法">俄罗斯轮盘</Term>提高效率。若终止概率为 $q$，存活路径必须重标定：
+
+$$
+\beta' = \frac{\beta}{1-q}.
+$$
+
+因为折射会暂时给辐亮度吞吐量带来 $1/\eta^2$ 或 $\eta^2$ 缩放，玻璃内部的 `beta` 可能看似很小，但出射时会抵消。PBRT 维护 `etaScale`，以
+
+$$
+\beta_{rr}=\beta\,\mathrm{etaScale},
+\qquad
+q=\max\left(0,1-\max_c \beta_{rr,c}\right)
+$$
+
+决定终止概率。轮盘本身会增加方差，但通常减少大量低贡献射线的成本，因此提高单位时间效率；“轮盘降噪”是错误表述。
+
+## 10. 分三步审计一条表面光路
+
+动手试：每一步只检查一组不变量。若任何一步的贡献、PDF 或状态不闭合，最终图片即使看似合理，也可能有偏。
 
 <Stepper>
-<Step title="第一步：方程推导">从能量守恒出发：出射光 = 自发光 + 反射光。反射光是所有入射光经BRDF反射的积分。这就是渲染方程。</Step>
-<Step title="第二步：直接与间接光照">
-把入射光分为直接（来自光源）和间接（来自其他表面）。直接光照可显式采样光源，间接光照需要递归追踪反射光线。
-<PbtLightTransportDiagram />
+<Step title="第一步：核对交点与 LTE 域">
+从相机 ray 得到最近表面点；确认当前章假设线段中无参与介质，`wo=-ray.d`，BSDF 的反射与透射方向域和法线约定一致。若未命中几何，只处理无限光并结束路径。
+<PbtLightTransportDiagram step={1} />
 </Step>
-<Step title="第三步：求解方法">渲染方程是第二类Fredholm积分方程，无法解析求解。用蒙特卡洛路径追踪递归采样：每交点选一个随机方向继续追踪，用俄罗斯轮盘赌截断。</Step>
+<Step title="第二步：核对直接光照与路径延伸">
+非镜面顶点调用 `SampleLd()`：检查 `p_l = light PMF * PDF_Li`、阴影射线、BSDF 值、余弦和 MIS。随后独立调用 `BSDF::Sample_f()`，用 `f * |cos| / p_b` 更新 `beta` 并生成下一条 ray。
+<PbtLightTransportDiagram step={2} />
+</Step>
+<Step title="第三步：核对发光命中与终止">
+若新 ray 命中发光体，按主射线、镜面弹射或非镜面 MIS 三种情况累加。更新折射 `etaScale`，再执行俄罗斯轮盘；存活时必须除以 `1-q`，否则图像会系统性变暗。
+<PbtLightTransportDiagram step={3} />
+</Step>
 </Stepper>
 
-## 代码对照
+## 11. 代码对照：PBRT 状态机而非教学版递归函数
+
+下面保留 `PathIntegrator::Li()` 的核心顺序。代码省略光谱波长、首交点 G-buffer 与 path regularization，但保留会影响无偏性的状态：
 
 ```cpp
-// 渲染方程的递归求解（路径追踪）
-Spectrum Li(Ray ray, int depth) {
-    SurfaceInteraction si;
-    if (!scene.Intersect(ray, &si)) 
-        return scene.Le(ray);
-    
-    Spectrum L(0);
-    
-    // 1. 自发光
-    L += si.Le;
-    
-    // 2. 直接光照：采样光源
-    for (auto &light : scene.lights) {
-        auto [wi, Li, pdf] = light.Sample_Li(si);
-        if (!scene.Occluded(si, light))
-            L += bsdf.f(wo, wi) * Li * abs(dot(n, wi)) / pdf;
+SampledSpectrum Li(Ray ray, Sampler sampler) {
+    SampledSpectrum L(0), beta(1);
+    Float p_b = 0, etaScale = 1;
+    bool specularBounce = true;
+    int depth = 0;
+
+    while (true) {
+        auto si = Intersect(ray);
+        if (!si) {
+            L += beta * EnvironmentLeWithMIS(ray, depth, specularBounce, p_b);
+            break;
+        }
+
+        SampledSpectrum Le = si->intr.Le(-ray.d);
+        if (Le) {
+            if (depth == 0 || specularBounce)
+                L += beta * Le;
+            else
+                L += beta * PowerHeuristic(p_b, LightPDF(si->intr)) * Le;
+        }
+
+        BSDF bsdf = si->intr.GetBSDF(ray);
+        if (!bsdf) { si->intr.SkipIntersection(&ray, si->tHit); continue; }
+        if (depth++ == maxDepth) break;
+
+        if (IsNonSpecular(bsdf.Flags()))
+            L += beta * SampleLd(si->intr, bsdf, sampler);
+
+        auto bs = bsdf.Sample_f(-ray.d, sampler.Get1D(), sampler.Get2D());
+        if (!bs || !bs->f || bs->pdf == 0) break;
+
+        beta *= bs->f * AbsDot(bs->wi, si->intr.shading.n) / bs->pdf;
+        p_b = bs->pdfIsProportional ? bsdf.PDF(-ray.d, bs->wi) : bs->pdf;
+        specularBounce = bs->IsSpecular();
+        if (bs->IsTransmission()) etaScale *= Sqr(bs->eta);
+        ray = si->intr.SpawnRay(bs->wi);
+
+        SampledSpectrum rrBeta = beta * etaScale;
+        if (depth > 1 && rrBeta.MaxComponentValue() < 1) {
+            Float q = max(0, 1 - rrBeta.MaxComponentValue());
+            if (sampler.Get1D() < q) break;
+            beta /= 1 - q;
+        }
     }
-    
-    // 3. 间接光照：递归追踪
-    if (depth < maxDepth) {
-        auto [wi, f, pdf] = bsdf.Sample_f(wo);
-        Ray newRay(si.p, wi);
-        L += f * Li(newRay, depth+1) * abs(dot(n,wi)) / pdf;
-    }
-    
     return L;
 }
 ```
 
-## 常见误区
+`SimplePathIntegrator` 仍然有价值：它可在均匀方向采样与 BSDF 采样之间切换，也可开关光源采样。不同无偏策略在高样本数下应收敛到同一结果，因此它是验证 BSDF 和 light sampler 的基准，不是生产效率的终点。
+
+## 12. 常见误区与诊断
 
 <Callout type="trap">
-**误区：认为渲染方程可以解析求解。**
-渲染方程是第二类Fredholm积分方程，被积函数中 L_i 又包含 L_o（递归），无法得到解析解。只能用蒙特卡洛等数值方法近似求解，这就是为什么路径追踪需要大量采样。
+**现象：** 开启 next-event estimation 后，面光源周围整体亮了一倍。**原因：** 光源采样贡献和后续 BSDF ray 命中发光体都以权重 1 累加。**修法：** 非镜面顶点保留上一段 `p_b`，命中发光体时用光源 PDF 计算 BSDF 策略 MIS 权重；主射线和镜面弹射才直接计入完整发光。
 </Callout>
 
 <Callout type="trap">
-**误区：忽略直接光照和间接光照的区分。**
-直接光照可以显式采样光源（效率高、噪声低），间接光照必须随机采样BRDF方向（效率低、噪声大）。不区分两者、统一用BRDF采样，会导致直接光照噪声极大——因为随机方向很难恰好命中小光源。
+**现象：** 灯离墙越远，照度只按距离一次方下降，斜放灯具也没有变暗。**原因：** 从方向域换到面积域时漏了距离平方或光源端余弦。**修法：** 把可见性、两端绝对余弦和距离平方统一审计为 $G(p\leftrightarrow p')$，并确认面积 PDF 已正确换成方向 PDF。
 </Callout>
+
+<Callout type="trap">
+**现象：** 使用俄罗斯轮盘后玻璃后方明显变暗，或者高饱和材质出现颜色偏移。**原因：** 存活路径没有除以 `1-q`，或直接用含折射缩放的平均 `beta` 决定终止。**修法：** 用 `beta * etaScale` 的最大光谱分量计算 $q$，存活时重标定 `beta`。
+</Callout>
+
+## 小结与自检
+
+表面 LTE 来自能量平衡；射线投射函数把另一个点的出射辐亮度接回当前入射项。面积形式用 $G$ 显式表达几何与可见性，路径形式把递归展开为不同长度路径的积分。`PathIntegrator` 再把理论压缩为两个核心累加器：已闭合路径进入 `L`，未闭合相机子路径进入 `beta`；MIS 和俄罗斯轮盘只改变采样效率与权重，不改变目标积分。
 
 <Exercises>
-**问题 1**：写出渲染方程并解释每一项的含义。
+**问题 1：** 已知两个表面点相距 $r=2$，两端法线与连线夹角余弦分别为 $0.5$ 和 $0.8$，互相可见。求几何耦合项 $G$；若被遮挡，结果如何变化？
 
 <Answer>
-L_o(p,ωo) = L_e(p,ωo) + ∫_Ω f_r(ωi,ωo) · L_i(p,ωi) · cosθi · dωi。L_o 是点 p 沿 ωo 方向的出射辐亮度。L_e 是自发光。积分项是反射光：f_r 是BRDF，L_i 是入射辐亮度，cosθi 是入射角余弦（投影因子），dωi 是立体角微元。物理含义：出射光 = 自发光 + 所有方向入射光经BRDF反射的贡献之和。
+$G=1\times(0.5\times0.8)/2^2=0.1$。若被遮挡，$V=0$，因此 $G=0$，其余 BSDF 与发光值再大也没有路径贡献。
 </Answer>
 
-**问题 2**：为什么渲染方程是递归的？路径追踪如何处理这种递归？
+**问题 2：** 某方向的光源 PDF 为 $p_l=0.2$，BSDF PDF 为 $p_b=0.6$。用幂启发式计算两个 MIS 权重。
 
 <Answer>
-递归性来自 L_i(p,ωi) = L_o(p',-ωi)，即入射光是另一个点 p' 的出射光。代入方程后 L_o 依赖于 L_o 自身，形成递归。路径追踪通过随机游走处理递归：从相机出发，每交点按BRDF采样一个方向继续追踪，直到命中光源或被俄罗斯轮盘赌终止。整条路径的贡献是各交点BRDF、cosθ、几何项的乘积。路径长度趋于无穷时收敛到方程的解。
+$w_l=0.2^2/(0.2^2+0.6^2)=0.1$，$w_b=0.9$。这个方向更符合 BSDF 分布，因此 BSDF 策略获得更高权重；权重之和为 1。
+</Answer>
+
+**问题 3：** 当前 `beta=0.25`，`etaScale=1`，深度大于 1。按 PBRT 规则得到的终止概率是多少？路径存活后 `beta` 应更新为多少？
+
+<Answer>
+$q=1-0.25=0.75$，存活概率为 $0.25$。路径若存活，必须令 $\beta'=0.25/(1-0.75)=1$，这样“低概率存活乘高权重”的期望仍为原来的 $0.25$。
+</Answer>
+
+**问题 4：** 为什么 `SampleLd()` 已经估计直接光照后，BSDF 延伸 ray 命中面光源时仍不能简单忽略发光？
+
+<Answer>
+因为光源采样和 BSDF 采样是两个互补估计器。窄 BSDF 波瓣下，BSDF 策略可能远优于光源策略；完全忽略会丢掉它的贡献。正确做法是用上一段 `p_b` 和该光源方向的 `p_l` 计算 $w_b$ 后累加。只有 delta 规则、主射线与镜面弹射需要特殊处理。
 </Answer>
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="渲染方程">描述光在场景中平衡分布的积分方程：出射光=自发光+反射光积分，是PBR的理论核心。</GlossaryItem>
-<GlossaryItem term="直接光照">从光源直接射到表面的光（一次弹射），可显式采样光源高效计算。</GlossaryItem>
-<GlossaryItem term="间接光照">经其他表面多次弹射后到达的光，是渲染方程递归的根源，需随机采样求解。</GlossaryItem>
-<GlossaryItem term="光路表示法">用L(光源)S(镜面)D(漫反射)G(光泽)E(相机)的正则表达式描述光线路径类型。</GlossaryItem>
+<GlossaryItem term="光传输方程">由表面能量平衡得到的积分方程，描述出射辐亮度等于自发光与散射入射辐亮度之和。</GlossaryItem>
+<GlossaryItem term="自由空间辐亮度不变">无参与介质时，同一条射线段上的辐亮度不随传播距离变化。</GlossaryItem>
+<GlossaryItem term="射线投射函数">从点和方向返回最近表面交点，使入射辐亮度可写成另一点的出射辐亮度。</GlossaryItem>
+<GlossaryItem term="几何耦合项">面积形式中由可见性、两个端点余弦和距离平方衰减组成的因子。</GlossaryItem>
+<GlossaryItem term="可见性函数">相邻路径顶点互相可见时为 1，被遮挡时为 0 的二值函数。</GlossaryItem>
+<GlossaryItem term="路径空间">以完整光路为元素的高维积分域，可统一表达不同长度和生成策略的光路。</GlossaryItem>
+<GlossaryItem term="路径吞吐量">路径内部所有 BSDF 与几何项的乘积，不包含末端发光。</GlossaryItem>
+<GlossaryItem term="路径追踪">从相机出发，按 BSDF 采样方向并增量构造路径的无偏蒙特卡洛算法。</GlossaryItem>
+<GlossaryItem term="显式光源采样">在当前顶点主动选择并采样光源，以低方差估计直接光照。</GlossaryItem>
+<GlossaryItem term="多重重要性采样">按 PDF 权重组合多个无偏估计器，避免单一采样策略在失配场景中产生高方差。</GlossaryItem>
+<GlossaryItem term="幂启发式">使用 PDF 平方构造 MIS 权重的启发式函数。</GlossaryItem>
+<GlossaryItem term="镜面弹射">只有离散反射或透射方向的理想散射事件，不能用普通连续方向密度处理。</GlossaryItem>
+<GlossaryItem term="俄罗斯轮盘">概率终止低贡献路径并重标定存活权重，以保持期望不变。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th ed., Chapter 13" adaptedUrl="https://www.pbr-book.org/4ed/Light_Transport_I_Surface_Reflection" />

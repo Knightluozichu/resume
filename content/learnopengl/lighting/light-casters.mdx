@@ -1,14 +1,21 @@
 ---
-title: 投光物
+title: 平行光、点光源与软边聚光
 type: C
 section: 光照
 order: 5
 description: 把同一套 Phong 光照接上三种「灯」——平行光（太阳）、点光源（灯泡，带距离衰减）、聚光（手电筒，带切光角），并能写出各自的 GLSL 算法差异。
 demo: true
 math: true
-sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/05%20Light%20casters/
+sourceUrl: https://learnopengl.com/Lighting/Light-casters
 draft: false
 ---
+
+import {
+  AttenuationCurveDiagram,
+  LightCasterContractDiagram,
+  LightCasterStagesDiagram,
+  LightCastersDiagram,
+} from "@/components/mdx/learnopengl/diagrams/light-casters";
 
 {/* C 实战型章（HEL-54，M5 光照篇第 5 篇）：主题是投光物 Light casters——同一套 Phong（ambient+diffuse+specular）接上三种不同「灯」：平行光 directional（只方向不衰减）、点光源 point（带 attenuation 距离衰减）、聚光 spotlight（带 cutoff 切光角 + 内外锥平滑）。承接「基础光照」「材质」「光照贴图」（已知 Phong 三块怎么算、lightDir、N·L、reflect、attenuation 乘在 diffuse/specular 上）。本章只换「光怎么来的」：方向 vs 位置 vs 锥形。C 型：代码对照为重心（§6 覆盖三类光的 GLSL 差异：directional 用 -light.direction；point 用 normalize(light.position-FragPos) + distance + attenuation；spot 用 dot(lightDir,-light.direction) 与 cutOff 比 + clamp 平滑），math:true 选讲（§4 衰减公式 1/(Kc+Kl·d+Kq·d²) 每式人话 + 聚光 cosine cutoff 直觉）。主 Demo = <LightingDemo />（点光源 Phong 参照，HEL-49 已 GPU 验，勿改勿建）+ 猜一猜（点光源离远=衰减）。新建 2 个静态图示：LightCastersDiagram（三类对照）+ AttenuationCurveDiagram（衰减曲线）。误区 ≥3（平行光误用 position / 衰减常数设错全黑或不衰减 / 聚光忘内外锥硬边突变）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +25,17 @@ draft: false
 
 <Objectives>
 
-- 能说清平行光、点光源、聚光各模拟现实里的哪种灯，以及它们在 GLSL 里到底差在哪一行（方向 / 位置+衰减 / 锥形+切光角）
-- 能在 Demo 里改出「点光源离远了变暗」的衰减效果，并说出是哪三个常数在控制它掉得多快
-- 能回答：聚光只用「内圆锥切光角」一刀切（不要外圆锥），画面边缘会出什么毛病？要怎么补救？
+- 能比较平行光、点光源、聚光的字段、lightDir 来源与额外强度系数
+- 能实现点光源的距离衰减并根据目标覆盖范围选择 Kc、Kl、Kq
+- 能实现硬边聚光和内外锥软边聚光，并解释余弦切光角的比较方向
+- 能修改 light.position/direction/cutOff，把相机绑定的手电改成固定舞台追光
+- 能判断方向取反、衰减常数、切光角单位或内外锥顺序错误造成的画面问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库（承接光照篇同 section 同类比体系：现实中的灯）。 */}
 
-## 太阳、灯泡和手电筒，是三种不一样的「灯」
+## 为什么太阳、灯泡和手电筒需要三种光源模型
 
 前几章里，照亮立方体的那束光来历很含糊——我们只给了它一个位置或一个颜色，就开算了。可现实里的「灯」分好多种：晴天的太阳，光铺天盖地地平行打下来，你走到院子哪个角落都一样亮；屋里一只灯泡，凑近了刺眼、走远了昏暗，光是从那个点向四面八方散开的；手里一支手电筒，只照亮正前方一个圆圈，圈外漆黑一片。
 
@@ -47,6 +56,8 @@ draft: false
 下面这张图把三者的几何差别并排画清楚——注意它们的箭头形态完全不同：
 
 <LightCastersDiagram />
+
+<LightCasterContractDiagram />
 
 要强调的是：这三种投光物**都不改动 Phong 三块的算法**。环境光、漫反射 `N·L`、镜面 `pow(R·V, n)` 全照旧；它们唯一动的，是「怎么得到那个指向光源的方向 `lightDir`」，以及「要不要再乘一个随距离 / 随角度变化的系数」。接下来三节，一种一种拆。
 
@@ -87,6 +98,14 @@ draft: false
 
 **点光源衰减**：
 
+点光源先由位置差同时得到未归一化方向、距离与单位光线方向：
+
+$$
+\vec{q}=\vec{p}_{light}-\vec{p}_{frag},\qquad d=\lVert\vec q\rVert,\qquad \hat L=\frac{\vec q}{d}
+$$
+
+这个式子在说：不要先把位置差归一化再求距离，否则长度已经变成 1。保留原始向量 `q` 求 `length(q)`，再 `normalize(q)` 得到只表达方向的 `lightDir`。
+
 $$
 \text{attenuation} = \frac{1}{K_c + K_l \cdot d + K_q \cdot d^2}
 $$
@@ -113,9 +132,39 @@ $$
 
 这个式子在说：在 0°~90° 这段里，余弦是**单调递减**的（角度越大、余弦越小），所以「夹角更小」完全等价于「余弦更大」。好处是：$\cos\theta$ 不用反三角函数现算——它正是「指向片段方向」与「聚光朝向」两个单位向量的**点乘**（基础光照章讲过，单位向量点乘 = 夹角余弦）；而 $\cos\phi$ 在 CPU 侧对切光角取一次 `cos` 预先算好传进来即可。于是片段着色器里只要一句点乘、一次比较，省掉了昂贵的 `acos`。这就是 §3 说的「比余弦不比角度」的来历。
 
+内外锥之间的软边强度为：
+
+$$
+I_{cone}=\operatorname{clamp}\!\left(\frac{\cos\theta-\cos\phi_{outer}}{\cos\phi_{inner}-\cos\phi_{outer}},0,1\right)
+$$
+
+这个式子在说：内锥余弦更大、外锥余弦更小；片段从外锥走向内锥时分子从 0 增到完整区间，强度平滑地从 0 变 1。若直接传角度或把内外顺序颠倒，分母符号就会错误。
+
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = <LightingDemo />（HEL-49 已 GPU 验，勿改勿建，本章作点光源 Phong 参照）；猜一猜引导（点光源离远=衰减）；控件已内置（光源方位/环境强度/镜面强度/高光指数 + 重置，≤5）；自带骨架屏 + WebGL2 兜底。 */}
 
 ## 动手：把点光源转远，看它暗下去
+
+在完整 Demo 前，先把三种光按“只换光的来路”的顺序逐项实现：
+
+<Stepper>
+  <Step title="平行光：只验证固定方向">
+    使用 `normalize(-light.direction)`，不访问 position，也不计算衰减。场景中所有片段共享同一个 lightDir。
+
+    <LightCasterStagesDiagram step={1} />
+  </Step>
+  <Step title="点光源：加入位置和距离衰减">
+    改用 `light.position - FragPos`，同时求距离并计算 attenuation，把它乘到环境、漫反射、镜面项。
+
+    <LightCasterStagesDiagram step={2} />
+  </Step>
+  <Step title="聚光：再加入锥形强度">
+    在点光源基础上比较 `theta` 与内外切光角余弦，把平滑 cone intensity 乘到 diffuse/specular；环境底光是否受锥形控制由场景需求决定。
+
+    <LightCasterStagesDiagram step={3} />
+  </Step>
+</Stepper>
+
+<LightCasterStagesDiagram />
 
 下面这个 Demo 你在光照篇里见过——一个带法线的立方体，被一个绕着它公转的**点光源**照亮（那个小亮块就是光源位置）。它正是本章三种投光物里的**点光源**：有位置、向四面八方发光。这一节就借它把「衰减」看个明白。
 
@@ -364,7 +413,7 @@ float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
 
 <Exercises>
 
-**练习 1（改 Demo 代码 / 观察题）** 在上面的点光源 Demo 里，把光源**转到离立方体最远的一侧**，观察朝你这面的明暗。然后回答：这个「越远越暗」的效果，在着色器里是哪一个量在起作用？如果想让它在同样距离下变得**更暗**（衰减更狠），该调大 §4 公式里的哪个常数？为什么是它？
+**问题 1（改 Demo 代码 / 观察题）** 在上面的点光源 Demo 里，把光源**转到离立方体最远的一侧**，观察朝你这面的明暗。然后回答：这个「越远越暗」的效果，在着色器里是哪一个量在起作用？如果想让它在同样距离下变得**更暗**（衰减更狠），该调大 §4 公式里的哪个常数？为什么是它？
 
 <Answer>
 
@@ -374,7 +423,7 @@ float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
 
 </Answer>
 
-**练习 2（独立实现题）** 不看上面的代码，写出**平行光**片段着色器里求 `lightDir` 的那一行，以及**点光源**多出来的「距离 + 衰减」那几行（已知结构体 `light` 含相应字段、`FragPos` 有）。说清两者关键差异。
+**问题 2（独立实现题）** 不看上面的代码，写出**平行光**片段着色器里求 `lightDir` 的那一行，以及**点光源**多出来的「距离 + 衰减」那几行（已知结构体 `light` 含相应字段、`FragPos` 有）。说清两者关键差异。
 
 <Answer>
 
@@ -399,7 +448,7 @@ float attenuation = 1.0 /
 
 </Answer>
 
-**练习 3（问答题）** 某人做聚光，只用了一个切光角 `cutOff`：`if (theta > light.cutOff) { 正常照亮 } else { 全黑 }`。画面里光圈边缘出现了什么毛病？为什么？正确做法是什么？
+**问题 3（问答题）** 某人做聚光，只用了一个切光角 `cutOff`：`if (theta > light.cutOff) { 正常照亮 } else { 全黑 }`。画面里光圈边缘出现了什么毛病？为什么？正确做法是什么？
 
 <Answer>
 

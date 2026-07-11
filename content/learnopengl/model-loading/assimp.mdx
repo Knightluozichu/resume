@@ -1,14 +1,21 @@
 ---
-title: Assimp
+title: Assimp 导入、场景图与资源所有权
 type: A
 section: 模型加载
 order: 1
 description: 搞懂为什么真实模型要用库加载，以及 Assimp 把各种模型格式统一成 aiScene→节点树→网格→材质 这套数据结构后，你该怎么把它读进来。
 demo: false
 math: false
-sourceUrl: https://learnopengl-cn.github.io/03%20Model%20Loading/01%20Assimp/
+sourceUrl: https://learnopengl.com/Model-Loading/Assimp
 draft: false
 ---
+
+import {
+  AssimpImportFlowDiagram,
+  AssimpImportStagesDiagram,
+  AssimpOwnershipDiagram,
+  AssimpSceneGraphDiagram,
+} from "@/components/mdx/learnopengl/diagrams/assimp";
 
 {/* A 概念型章（HEL-59，M5 模型加载篇第 1 篇，新建 model-loading/ section 目录）：模型加载篇开篇。承接光照篇（已能给手写的方块/容器打 Phong 光照），本章解决「怎么把别人在 Blender/Maya 里做好的真实模型读进来」这件事。本章不写渲染、不写真正的 Mesh 类（留给后续「网格」「模型」两篇），只把 Assimp 这个加载库「是什么、把模型整理成什么数据结构、你怎么把它读进内存」讲透——尤其是「节点树只存索引、数据集中存在 aiScene」这条最易误解的核心。A 型：概念讲解为重心（spec §3 重），math:false 整节省略（§4 省），代码对照选讲（§6 选，只贴 ReadFile + flags + 检查，不造 WebGL 端——Assimp 是 C++ 库浏览器跑不了），常见误区 ≥2（§7，本章给 3 个）。本章无交互 ShaderDemo（demo:false），用两个静态 SVG 图示组件 AssimpSceneGraphDiagram / AssimpImportFlowDiagram 替代「玩懂」——A 概念型靠图把数据结构掰碎即满足 §5 的可视化精神。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +25,17 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话解释：为什么真实模型要用 Assimp 这类库加载，而不是像之前那样把顶点一个个手写进数组
-- 能说出 Assimp 把模型导入后得到的数据结构长什么样——aiScene、节点树、网格、材质各是什么、谁存数据谁存索引，以及加载这一步处在「文件 → 内存 → 渲染」流程的哪个环节
-- 能回答：场景图里的一个节点（aiNode），它到底存不存网格数据本身？如果不存，它靠什么找到自己要画的网格？
+- 能解释 Assimp 在“模型文件 → 内存结构 → GPU 资源”流程中的职责边界
+- 能绘制 aiScene、aiNode、aiMesh、aiMaterial 的索引关系并定位真实数据所有者
+- 能实现 CMake 链接、ReadFile 后处理标志和三连错误检查
+- 能区分 Importer 管理的临时 scene 指针与应用持有的 Mesh/Model 数据
+- 能判断节点索引用错、法线/UV 后处理缺失、链接失败或 Importer 提前析构造成的问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库（流程/装配类，呼应 section「模型加载」= 把零件读进来装配）。 */}
 
-## 一辆车，你要一个螺丝一个螺丝地刻吗？
+## 为什么一辆车不能靠手写每一个顶点导入
 
 之前画方块、画容器，顶点就那么八个、几十个，手写进数组还扛得住。可一辆车、一个人物、一栋房子，动辄几万几十万个顶点，外加一堆贴图和材质——靠手敲坐标？敲到天荒地老也敲不完，还全是 bug。
 
@@ -60,6 +69,14 @@ draft: false
 
 为什么要绕这么一道「索引引用」而不让节点直接抱着数据？因为同一块网格、同一个材质可能被场景里多个地方用到（想想一棵树上几十片一模一样的叶子）。集中存一份、各处用下标引用，既省内存，又能表达「这些位置共用同一块网格」。这正是 `mNumMeshes` / `mMeshes` 在节点里是「一串下标」而不是「一堆网格」的原因。
 
+## Importer 所有权：scene 指针能活多久
+
+`ReadFile` 返回的 `const aiScene*` 指向 **Importer 内部拥有的内存**。只要 `Assimp::Importer importer` 仍然存活，scene、node、mesh、material 指针才有效；Importer 离开作用域析构后，这些指针都不能继续保存和访问。
+
+<AssimpOwnershipDiagram />
+
+因此常见 `Model::loadModel` 会在函数内创建 Importer，立即递归遍历 scene，把顶点、索引、纹理路径复制到应用自己的 `std::vector<Vertex>`、`std::vector<unsigned int>` 与 Mesh 对象中。函数返回后 Importer 可以销毁，因为渲染阶段使用的是已复制的数据，而不是 Assimp 的裸指针。
+
 ## 怎么把它读进来：ReadFile 加上后处理
 
 认清了产物，再看怎么触发这次导入。入口就是上面流水图中间那个框：你建一个 `Assimp::Importer`，调它的 `ReadFile`，传**文件路径**和一组 <Term def="调用 ReadFile 时传入的一组开关（用按位或 | 拼起来），让 Assimp 在加载的同时顺手「整理」数据。常用的有 aiProcess_Triangulate（把多边形面都拆成三角形）、aiProcess_FlipUVs（翻转纹理 y 轴以适配 OpenGL）、aiProcess_GenNormals（模型缺法线时自动生成）。">后处理选项</Term>（flags）。这些 flags 是一组开关，让 Assimp 在加载的同时顺手把数据**整理成 OpenGL 好用的样子**：
@@ -75,6 +92,43 @@ draft: false
 {/* 5. 交互 Demo（spec §五）：本章 demo:false。Assimp 是 C++ 库、浏览器跑不了，无 WebGL 等价交互可做；A 概念型的「可视化」由 §3 的两个静态 SVG 图示组件（AssimpImportFlowDiagram 流程图 + AssimpSceneGraphDiagram 数据结构图）承担——把最难「看懂」的数据结构与导入流程掰碎成图，满足 spec「每个知识点配 viz、难点用图掰碎」的核心要求。故本章不设交互 ShaderDemo，无「猜一猜」交互引导。 */}
 
 {/* 6. 代码对照（spec §六，A 型选讲，只贴最能说明概念的 1 段）：本篇无 WebGL2 等价物（Assimp 是 C++ 库），按任务卡不用 CodeTabs 双栏、不硬造 WebGL 端；只给 LearnOpenGL 原版风格的 cpp 代码块，说明 ReadFile + flags + 三连检查即可，代码量克制。 */}
+
+## 工程接入与三步导入契约
+
+Assimp 是编译期和运行期都要参与的 C++ 依赖。以提供 CMake package 的安装方式为例，目标应显式链接 Assimp；只让编辑器找到头文件并不能解决链接符号：
+
+```cmake
+find_package(assimp CONFIG REQUIRED)
+
+add_executable(model_viewer
+  src/main.cpp
+  src/model.cpp
+  src/mesh.cpp
+)
+target_link_libraries(model_viewer PRIVATE assimp::assimp)
+```
+
+不同包管理器可能导出 `assimp::assimp` 或 `assimp`，以实际安装包的 CMake config 为准。动态链接构建还要确保运行时能找到 Assimp 动态库。先预测三个阶段各失败时的现象：链接阶段会报未定义符号，ReadFile 阶段会返回错误字符串，Importer 生命周期错误则可能在稍后遍历时崩溃。
+
+<Stepper>
+  <Step title="先让构建系统找到并链接 Assimp">
+    用 `find_package` 找到配置，用 `target_link_libraries` 把库目标链接到实际可执行目标。编译通过但链接失败时，优先检查 target 与架构是否一致。
+
+    <AssimpImportStagesDiagram step={1} />
+  </Step>
+  <Step title="ReadFile 并验证完整场景">
+    传入路径和后处理 flags，随后同时检查空指针、`AI_SCENE_FLAGS_INCOMPLETE` 与根节点。失败时记录 `GetErrorString()` 并立即返回。
+
+    <AssimpImportStagesDiagram step={2} />
+  </Step>
+  <Step title="在 Importer 存活期间复制数据">
+    从根节点递归取 mesh 索引，再从 scene 数组读取 aiMesh/aiMaterial，把需要的数据复制到自己的对象；不要把 Assimp 裸指针作为长期成员保存。
+
+    <AssimpImportStagesDiagram step={3} />
+  </Step>
+</Stepper>
+
+<AssimpImportStagesDiagram />
 
 ## 代码：ReadFile 与那句不能省的检查
 
@@ -148,7 +202,7 @@ if (!scene
 
 <Exercises>
 
-**练习 1（问答型）** 场景图里的一个 `aiNode` 节点，它的 `mMeshes` 字段里装的是真正的网格数据，还是别的什么？如果你要拿到这个节点对应的第一块网格的顶点数据，该怎么取？
+**问题 1（问答型）** 场景图里的一个 `aiNode` 节点，它的 `mMeshes` 字段里装的是真正的网格数据，还是别的什么？如果你要拿到这个节点对应的第一块网格的顶点数据，该怎么取？
 
 <Answer>
 
@@ -158,7 +212,7 @@ if (!scene
 
 </Answer>
 
-**练习 2（概念应用型）** 你加载了一个 `.obj` 模型，发现它在场景里**一团漆黑**、完全不受光照影响，但确认光照代码本身没问题（其它手写的方块都正常受光）。结合本章，最可能漏了哪个后处理选项？为什么它会导致这个现象？
+**问题 2（概念应用型）** 你加载了一个 `.obj` 模型，发现它在场景里**一团漆黑**、完全不受光照影响，但确认光照代码本身没问题（其它手写的方块都正常受光）。结合本章，最可能漏了哪个后处理选项？为什么它会导致这个现象？
 
 <Answer>
 
@@ -167,6 +221,16 @@ if (!scene
 光照计算（漫反射、镜面）都依赖每个顶点的**法线**——之前学过，漫反射要算法线 N 和光线方向的夹角。如果这个 `.obj` 文件本身没有导出法线数据，而你又没让 Assimp 用 `aiProcess_GenNormals` 在加载时补算一份，那么这块网格的法线就是缺失或全零的，光照一算全是 0，模型自然一团黑。
 
 修法：`ReadFile` 时把它拼上，例如 `ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_GenNormals)`。（注意：很多正规模型自带法线，这时不必加；它是「缺法线时」的兜底。）
+
+</Answer>
+
+**问题 3（所有权排错题）** `loadScene()` 在局部作用域创建 `Assimp::Importer`，把 `const aiScene*` 保存到类成员后立刻返回；稍后渲染时再访问 `scene->mMeshes`。为什么这段代码不可靠？给出两种安全修法。
+
+<Answer>
+
+Importer 析构时会释放它拥有的 scene 数据，成员里的裸指针随即悬空；稍后访问属于未定义行为，可能偶尔能读、也可能直接崩溃。
+
+安全方案一：在 `loadScene()` 内、Importer 仍存活时，立即把顶点、索引、材质和纹理信息复制进应用自己的 Mesh/Model 容器，之后只使用这些自有数据。方案二：让 Importer 成为与 scene 指针同寿命的长期成员，并保证它晚于所有 scene 使用者销毁。实际渲染器通常优先使用复制方案，隔离第三方数据结构与生命周期。
 
 </Answer>
 

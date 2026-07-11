@@ -56,6 +56,13 @@ export interface ChapterMeta {
 
 const CONTENT_DIR = path.join(process.cwd(), "content");
 
+// A production build worker renders many chapter routes. Keep one immutable
+// index per draft policy so metadata, page rendering, sidebars, and adjacent
+// links do not rescan all 2,445 MDX files for every route. Development reads
+// from disk on every request because fs-discovered MDX files are not reliable
+// HMR dependencies and a process cache would serve stale chapter content.
+const chapterIndexCache = new Map<boolean, ChapterMeta[]>();
+
 /**
  * 书的教学顺序（总监指定，HEL-48）。
  *
@@ -1628,7 +1635,17 @@ function parseFrontmatter(
 export function getAllChapters({
   includeDraft = false,
 }: { includeDraft?: boolean } = {}): ChapterMeta[] {
-  if (!fs.existsSync(CONTENT_DIR)) return [];
+  const shouldCache = process.env.NODE_ENV === "production";
+  if (shouldCache) {
+    const cached = chapterIndexCache.get(includeDraft);
+    if (cached) return cached;
+  }
+
+  if (!fs.existsSync(CONTENT_DIR)) {
+    const empty: ChapterMeta[] = [];
+    if (shouldCache) chapterIndexCache.set(includeDraft, empty);
+    return empty;
+  }
 
   const chapters: ChapterMeta[] = [];
 
@@ -1662,7 +1679,7 @@ export function getAllChapters({
     }
   }
 
-  return chapters.sort((a, b) => {
+  const sorted = chapters.sort((a, b) => {
     const rb = bookRank(a.bookSlug) - bookRank(b.bookSlug);
     if (rb !== 0) return rb;
     // 同一书位次内（含两本未知书）按 bookSlug 稳定回退
@@ -1676,6 +1693,9 @@ export function getAllChapters({
     const s = a.frontmatter.section.localeCompare(b.frontmatter.section, "zh");
     return s !== 0 ? s : a.frontmatter.order - b.frontmatter.order;
   });
+
+  if (shouldCache) chapterIndexCache.set(includeDraft, sorted);
+  return sorted;
 }
 
 /** 取单章；不存在返回 null（路由层 notFound）。草稿章在开发期也可取到（includeDraft）。 */

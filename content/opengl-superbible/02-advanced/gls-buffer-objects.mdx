@@ -1,114 +1,309 @@
 ---
-title: "缓冲对象与数据管理"
+title: "缓冲对象与高级数据管理"
 type: B
 section: "计算机图形学与渲染"
 order: 6
-description: "VBO/UBO/SSBO/PBO与持久映射"
+description: "从无类型缓冲、block 布局和持久映射到 bindless、稀疏纹理、压缩与过滤"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-superbible-comprehensive-tutorial-and-reference-9780134193137"
 draft: false
 ---
 
-import { GlsBufferObjectsDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-buffer-objects";
+import { GlsBufferObjectsDiagram, GlsBufferRoleDiagram, GlsBlockLayoutDiagram, GlsPersistentRingDiagram, GlsShaderDataPathDiagram, GlsAdvancedTextureDataDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-buffer-objects";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解各种缓冲对象类型
-- 掌握VBO使用模式(STATIC/DYNAMIC/STREAM)
-- 学会持久映射零拷贝更新
-- 能选择合适的缓冲类型
+- 能解释 buffer object、存储分配、绑定目标和资源视图之间的关系
+- 能设计 UBO、SSBO、atomic counter 与 texture/image 的数据路径
+- 能计算 std140/std430 的 offset、alignment、stride 与缓冲区间
+- 能实现 persistent mapped ring buffer，并用 fence 证明区间所有权
+- 能比较 bindless、sparse texture、压缩、packed data 与纹理过滤的取舍
 </Objectives>
 
-## 直觉引入
+## 为什么“VBO、UBO、SSBO 是不同容器”会误导
 
-缓冲对象就像不同类型的容器——VBO是水桶(装顶点数据)、UBO是公告板(所有着色器都能看)、SSBO是仓库(可读写大量数据)、PBO是传送带(异步传输像素)。选择合适容器让数据在CPU和GPU间高效流动。
-
-## 概念讲解
-
-<Term def="顶点缓冲对象，STATIC/DYNAMIC/STREAM三种使用模式">VBO</Term><Term def="Uniform缓冲对象，多个着色器共享只读数据(64KB限制)">UBO</Term><Term def="Shader Storage缓冲，可读写随机访问无大小限制">SSBO</Term><Term def="持续有效的缓冲指针，CPU零拷贝更新GPU数据">持久映射</Term>
-
-### VBO使用模式
-STATIC_DRAW(一次上传反复用)、DYNAMIC_DRAW(频繁修改)、STREAM_DRAW(每次都改)
-
-### UBO vs SSBO
-UBO:只读、64KB限制、所有着色器共享(如VP矩阵)。SSBO:读写、无限制、适合计算着色器(如粒子)。
-
-### 持久映射
-OpenGL 4.4 glBufferStorage+GL_MAP_PERSISTENT_BIT。CPU指针持续有效，零拷贝更新。配合fence同步。
-
-## 交互Demo
-
-> 猜一猜：持久映射比glBufferSubData快多少？
+OpenGL 的<Term def="由名称标识、保存连续无类型字节并可被多种接口解释的资源对象">缓冲对象</Term>（buffer object）本质是无类型字节存储。所谓 VBO、EBO、UBO、SSBO、PBO 或 indirect buffer，通常只是同一类对象绑定到不同目标、indexed binding point 或 VAO 状态后获得的**使用角色**，不是六种互不兼容的内存对象。Direct State Access 甚至可以不先绑定目标就为对象分配和更新存储。
 
 <GlsBufferObjectsDiagram />
 
-<Stepper>
-<Step title="第一步：选择VBO模式">
-静态几何用STATIC_DRAW(场景网格)，动态数据用DYNAMIC_DRAW(变形网格)，每帧重建用STREAM_DRAW(粒子)。
-</Step>
-<Step title="第二步：共享数据用UBO">
-VP矩阵等共享只读数据放UBO，多个着色器通过binding point访问，避免重复设置。
-</Step>
-<Step title="第三步：大数据用SSBO+持久映射">
-粒子位置等大数据放SSBO，计算着色器更新。持久映射实现CPU零拷贝写入。
-</Step>
-</Stepper>
+完整数据链要同时回答四件事：存储是可变还是不可变，CPU/GPU 通过什么方式写入，消费者如何解释 byte range，以及前一个使用者何时释放所有权。任何读写区间都必须满足：
 
-## 代码对照
+$$
+0\le \mathrm{offset},\qquad
+\mathrm{offset}+\mathrm{size}\le \mathrm{bufferSize}
+$$
+
+仅凭变量名 `vertexBuffer` 无法证明它正被当作顶点输入；证据应来自 VAO attribute binding、indexed block binding、texture buffer view 或 draw/dispatch 的当前状态。
+
+## 存储、更新与“usage hint”
+
+`glBufferData` 建立可变<Term def="buffer object 背后的实际字节容量、属性和生命周期">数据存储</Term>，再次调用会替换整块 store；传入 `nullptr` 常用于丢弃旧内容并请求新 store，但具体分配位置由实现决定。`GL_STATIC_DRAW`、`GL_DYNAMIC_DRAW`、`GL_STREAM_DRAW` 是<Term def="向实现描述预计修改与使用模式、但不保证具体内存位置或性能的提示">使用提示</Term>，不是性能等级，也不能代替测量。
+
+`glBufferStorage` 建立<Term def="容量创建后不能用 BufferData 重新定义、但内容可按 flags 更新的存储">不可变存储</Term>。这里的“不可变”是大小和 storage flags 不可重定义，不是字节永远不能改变。可选择的更新路径包括 `glNamedBufferSubData`、映射、buffer-to-buffer copy，以及由 shader、transform feedback 或像素传输写入。
+
+更新一个范围的最低传输量为：
+
+$$
+B_{upload}=N\times \mathrm{stride}
+$$
+
+但耗时不只由字节数决定，还包括隐式等待、缓存路径、驱动提交和内存驻留。旧章声称 persistent mapping 固定提升 20–50%没有可复现实验条件，不能作为 OpenGL 结论。
 
 ```cpp
-// 持久映射: 零拷贝更新
-GLuint buf;
-glCreateBuffers(1, &buf);
-glNamedBufferStorage(buf, size, NULL,
-    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
-// CPU指针持续有效
-float* ptr = (float*)glMapNamedBufferRange(buf, 0, size,
-    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
-// 直接写入,无需glBufferSubData
-for(int i=0; i<count; i++)
-    ptr[i] = newValue; // 零拷贝
-// 配合fence同步防止CPU写太快覆盖GPU正在读的数据
+GLuint buffer = 0;
+glCreateBuffers(1, &buffer);
+glNamedBufferStorage(buffer, byteSize, initialData,
+                     GL_DYNAMIC_STORAGE_BIT | GL_MAP_WRITE_BIT);
+
+// 更新合法子区间；是否更快要用相同负载和同步条件测量。
+glNamedBufferSubData(buffer, byteOffset, byteCount, source);
+
+GLint64 actualSize = 0;
+glGetNamedBufferParameteri64v(buffer, GL_BUFFER_SIZE, &actualSize);
 ```
 
-持久映射避免每帧glBufferSubData的拷贝开销和同步等待。配合fence实现CPU-GPU同步。
+## 一个 buffer 如何成为 VBO、UBO、SSBO 或 PBO
+
+<GlsBufferRoleDiagram />
+
+顶点属性由 VAO 保存格式、相对 offset、stride 和来源 binding；element buffer binding 也是 VAO 状态。<Term def="通过 uniform block binding 为多个 shader invocation 提供只读常量数据的缓冲角色">UBO</Term>绑定到 `GL_UNIFORM_BUFFER` 的 indexed point，block 大小受 `GL_MAX_UNIFORM_BLOCK_SIZE` 限制。它不是规范固定 64KB，必须查询当前实现。
+
+<Term def="通过 shader storage block 暴露结构化可读写数据并支持原子操作的缓冲角色">SSBO</Term>可比 UBO 更大并允许 shader 写入，但仍受 `GL_MAX_SHADER_STORAGE_BLOCK_SIZE`、binding 数和 offset alignment 等限制，绝非“无限制”。写后被后续 draw/dispatch 或 indirect command 消费时，需要匹配消费者类型的 memory barrier。
+
+<Term def="保存有限原子计数操作所用无符号整数，并由专用 binding point 访问的缓冲角色">原子计数器</Term>（atomic counter）适合分配唯一索引或统计数量，操作集合和资源数量受实现限制。官方 `fragmentlist` 示例把 atomic counter、SSBO 和 image 组合成片段链表，并在不同 pass 之间使用 atomic、storage、image 对应的 barrier bits，说明一个算法经常需要多种数据路径共同工作。
+
+<Term def="用于异步纹理上传或 framebuffer 读回、绑定到 pixel unpack/pack 目标的缓冲角色">PBO</Term>并不会自动让传输异步；它只是把像素源或目的放入 buffer，是否重叠执行取决于后续命令、映射时机和同步。类似地，`GL_DRAW_INDIRECT_BUFFER` 让 buffer 字节被解释为命令结构，而不是顶点数据。
+
+## Uniform、SSBO、Atomic 与 Texture 的访问语义
+
+普通<Term def="由程序接口按名称或 location 更新、在一次 draw 中对 invocation 保持一致的只读值">uniform</Term>适合少量值；UBO 把多个 uniform 组织成 block；SSBO 面向结构化读写；atomic counter 面向受限原子计数；<Term def="具有维度、格式、mipmap 与采样规则，可由 sampler 过滤读取的数据资源">纹理</Term>通过 sampler 做格式转换与过滤；image 则提供按 texel 的显式读写与原子访问。
+
+<GlsShaderDataPathDiagram />
+
+官方 `prefixsum` 示例把两个 buffer range 绑定为 SSBO，在 compute pass 后使用 `GL_SHADER_STORAGE_BARRIER_BIT`，再交换输入输出。`fragmentlist` 则证明 barrier 必须描述“下一位消费者如何访问”，不是随手调用一个全能等待。
+
+假设每个元素为 $s$ 字节，block 有 $N$ 个元素且 array stride 为 $a$，所需范围至少为：
+
+$$
+B=(N-1)a+s
+$$
+
+shader 写入后，CPU 若要可靠读取，通常还需要 completion sync；`glMemoryBarrier` 解决 GPU 命令之间的内存可见性，不等价于等待 GPU 完成供 CPU 使用。
+
+## std140、std430 与宿主布局
+
+<Term def="uniform block 常用的标准布局，数组和结构体通常按 vec4 边界取整">std140</Term>与<Term def="shader storage block 常用的标准布局，允许标量和部分数组更紧凑排列">std430</Term>规定 block member 的 base alignment、offset、array stride 与 matrix stride。一般递推规则是：
+
+$$
+\mathrm{offset}_{i}=\operatorname{alignUp}
+\left(\mathrm{offset}_{i-1}+\mathrm{size}_{i-1},\mathrm{alignment}_{i}\right)
+$$
+
+<GlsBlockLayoutDiagram />
+
+`vec3` 是高风险成员：其 base alignment 常为 16 字节，不能因为三分量共 12 字节就假设下一个成员紧跟在 byte 12。std140 中标量数组的 stride 会按 vec4 边界取整，std430 的标量数组可以更紧凑。矩阵还涉及 row-major/column-major 和 matrix stride。
+
+```glsl
+layout(std140, binding = 0) uniform FrameBlock {
+    mat4 viewProjection;
+    vec3 cameraPosition;
+    float exposure;
+};
+
+layout(std430, binding = 1) buffer ParticleBlock {
+    vec4 position[];
+} particles;
+```
+
+宿主端不要把 `sizeof(CppStruct)` 当作证明。可通过 program interface 查询 `GL_OFFSET`、`GL_ARRAY_STRIDE`、`GL_MATRIX_STRIDE` 与 `GL_IS_ROW_MAJOR`，再用静态断言或序列化测试对齐 CPU 写入。range binding 的 offset 还必须满足 `GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT` 或 `GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT`。
+
+## Persistent Mapping：长期指针不等于零拷贝
+
+<Term def="映射跨多个命令保持有效、允许 CPU 长期持有地址的 buffer storage 模式">持久映射</Term>要求 storage 和 map 调用都包含 `GL_MAP_PERSISTENT_BIT`。若还有 `GL_MAP_COHERENT_BIT`，CPU 写入不需要显式 flush 才对 GPU 可见；非 coherent 映射则要为写入范围调用 flush。两者都没有自动解决 CPU 覆盖 GPU 正在读取的数据。
+
+<GlsPersistentRingDiagram />
+
+把总 buffer 划成 $K$ 个对齐 chunk，第 $i$ 帧选择：
+
+$$
+c_i=i\bmod K,\qquad
+\mathrm{offset}_i=c_i\times \mathrm{alignedChunkSize}
+$$
+
+复用 chunk 前等待它自己的<Term def="由 GPU 命令流插入、用于判断此前工作是否完成的同步对象">栅栏</Term>（fence），提交消费命令后为该 chunk 放置新 fence。官方 `pmbstreaming` 正是把 persistent coherent UBO 划成多个 chunk，对比无同步、`glFinish`、单 fence 与 ringed fences；可复刻的核心是观察 stall，而不是把指针长期有效误称“必然零拷贝”。
+
+```cpp
+const GLbitfield flags = GL_MAP_WRITE_BIT |
+                         GL_MAP_PERSISTENT_BIT |
+                         GL_MAP_COHERENT_BIT;
+glNamedBufferStorage(buffer, totalBytes, nullptr, flags);
+auto* mapped = static_cast<std::byte*>(
+    glMapNamedBufferRange(buffer, 0, totalBytes, flags));
+
+const GLuint chunk = frameIndex % chunkCount;
+if (fences[chunk]) {
+    glClientWaitSync(fences[chunk], GL_SYNC_FLUSH_COMMANDS_BIT,
+                     GL_TIMEOUT_IGNORED);
+    glDeleteSync(fences[chunk]);
+}
+writeFrameData(mapped + chunk * alignedChunkBytes);
+glBindBufferRange(GL_UNIFORM_BUFFER, 0, buffer,
+                  chunk * alignedChunkBytes, payloadBytes);
+drawScene();
+fences[chunk] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+```
+
+## 第 11 章：消除绑定、稀疏驻留与编码密度
+
+原书 Advanced Data Management 不只是“更快更新 buffer”，而是从绑定、虚拟驻留、压缩和采样质量四个方向处理超大数据集。
+
+<GlsAdvancedTextureDataDiagram />
+
+### Bindless：句柄、驻留与生命周期
+
+<Term def="通过可驻留 64 位资源句柄让 shader 访问纹理、减少传统 texture unit 重绑定的扩展机制">Bindless Texture</Term>来自 `GL_ARB_bindless_texture` 扩展，不是 OpenGL 4.5 自动拥有的能力。应用取得 texture/sampler handle，使其 resident，再把句柄传给 shader；销毁或修改资源前要遵守 handle 与 residency 规则。官方 `bindlesstex` 为多张纹理调用 `glGetTextureHandleARB`、`glMakeTextureHandleResidentARB`，把句柄数组放入 UBO 后实例化绘制。
+
+Bindless 减少绑定状态切换，但不会减少纹理采样本身的带宽，也不免除句柄有效性、驻留预算和扩展检查。
+
+### Sparse Texture：虚拟大小不等于物理驻留
+
+<Term def="先创建大的虚拟纹理地址空间，再按实现页粒度提交或释放物理存储的扩展机制">稀疏纹理</Term>来自 `GL_ARB_sparse_texture`。页尺寸由内部格式和实现决定，必须查询而非硬编码。若虚拟纹理有 $P$ 页、当前提交 $C$ 页，粗略驻留率为：
+
+$$
+R_{resident}=\frac{C}{P}
+$$
+
+官方 `sparsetexture` 先设置 `GL_TEXTURE_SPARSE_ARB` 并建立 immutable texture storage，再逐页 `glTexPageCommitmentARB(..., GL_TRUE/GL_FALSE)`。未提交区域的采样行为和 mip tail 规则必须按扩展契约处理；commit 之后还要上传对应页数据。
+
+### Texture Compression 与 Packed Data
+
+<Term def="用固定块编码 texel、降低存储和采样带宽但引入格式与质量约束">纹理压缩</Term>将若干 texel 编码为固定大小 block。若未压缩数据每 block 为 $B_u$ 字节，压缩后为 $B_c$：
+
+$$
+\rho=\frac{B_u}{B_c}
+$$
+
+官方 `compressrgtc` 用 compute shader 产生 RGTC block，经过 image barrier 后把 buffer 绑定为 pixel unpack source，并用 `glCompressedTexImage2D` 建立 `GL_COMPRESSED_RED_RGTC1` 纹理。格式适用性取决于通道语义：RGTC 适合一到两通道数据，不应拿它替代所有颜色纹理格式。
+
+<Term def="把多个低位宽字段编码进一个机器字、以量化精度换取带宽和容量的格式">打包数据</Term>例如 `GL_INT_2_10_10_10_REV` 可把四个分量放入 32 位。对映射到 $[0,1]$ 的 $b$ 位 UNORM，舍入量化最大绝对误差近似：
+
+$$
+\epsilon_{max}\le\frac{1}{2(2^b-1)}
+$$
+
+选择 packed format 要同时验证分量顺序、signed/unsigned、normalized 标志和 shader 解码，不能只比较 `sizeof`。
+
+### Mipmap 与高质量 Texture Filtering
+
+<Term def="根据采样 footprint 在 texel 与 mip 层之间重建纹理值的过程">纹理过滤</Term>处理放大、缩小和斜视表面的采样。完整二维 mip chain 的 texel 数约为基准层的：
+
+$$
+N_{mips}=N_0\left(1+\frac14+\frac1{16}+\cdots\right)\approx\frac43N_0
+$$
+
+双线性在单层内取样，三线性再在两层 mip 之间插值；各向异性过滤为细长 footprint 使用更多方向样本，能力和最大倍率要查询扩展。官方 `hqfilter` 使用自定义 shader 实现高质量重建，提醒“更高质量”意味着额外样本与 ALU，必须用目标画面和 GPU 时间比较。
+
+## 按证据构建数据路径
+
+先预测：persistent mapping 版本若每帧都等待唯一一个 fence，可能与 `glBufferSubData` 一样停顿；只有将容量、chunk 数和 GPU 延迟一起设计，才能形成 CPU/GPU overlap。类似地，bindless 降低的是绑定开销，不会让压缩率、稀疏驻留或过滤成本自动改善。
+
+<Stepper>
+<Step title="第一步：先证明字节与布局">
+查询 buffer size、block limits 和 offset alignment；为每个成员记录 offset/stride，验证写入区间。先用 subdata 建立正确基线，再讨论映射策略。
+
+<GlsBufferObjectsDiagram step={1} />
+</Step>
+<Step title="第二步：建立角色和更新所有权">
+把同一 store 绑定为明确的 VAO、UBO、SSBO、pixel 或 command 角色。若持续映射，则按 chunk 标记 CPU 可写、GPU 在用和 fence 完成三种状态。
+
+<GlsBufferObjectsDiagram step={2} />
+</Step>
+<Step title="第三步：验证消费者与高级能力">
+为 shader 写入选择准确 barrier；对 bindless/sparse/compression/filtering 先检查扩展和格式支持，再记录驻留页、传输字节、采样数与 GPU 时间。
+
+<GlsBufferObjectsDiagram step={3} />
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 所有数据都用持久映射。
-**原因 →** 持久映射看起来最高效。
-**修法 →** 持久映射适合频繁更新的大数据(粒子/动态网格)。静态数据用STATIC_DRAW一次上传即可。持久映射需要管理同步(fence)，增加复杂度。
+**现象 →** 文档把 UBO 写成固定 64KB，把 SSBO 写成无限大。
+
+**原因 →** 把某台机器的常见值和“通常更大”误写成规范上限。
+
+**修法 →** 运行时查询 block size、binding 数和 offset alignment；任务分块必须以当前 implementation 的限制为输入。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 用glBufferData更新数据。
-**原因 →** glBufferData能更新。
-**修法 →** glBufferData会重新分配内存(旧数据丢弃)。频繁更新应用glBufferSubData(原地更新)或持久映射。glBufferData适合一次性上传。
+**现象 →** coherent persistent pointer 写完立即覆盖下一帧同一区间。
+
+**原因 →** 把 coherent 的可见性保证误当成 GPU 已完成读取；映射 flags 不提供所有权。
+
+**修法 →** 使用多 chunk ring，每块在提交消费后放 fence，复用前只等待对应 fence。非 coherent 模式还要 flush 修改范围。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 开启 bindless 或 sparse 后就认为纹理系统已经优化。
+
+**原因 →** 忽略 resident handle 生命周期、页粒度、未提交区域、压缩格式和 filtering footprint 是独立问题。
+
+**修法 →** 分别记录绑定次数、resident handles、committed pages、实际字节、采样数和画质误差，用同一场景逐项对照。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：VBO的STATIC/DYNAMIC/STREAM怎么选？
+**问题 1：** 为什么不能仅凭对象名判断一个 buffer 是 VBO 还是 SSBO？
 
 <Answer>
-STATIC_DRAW:一次上传反复用(场景网格)。DYNAMIC_DRAW:频繁修改(变形网格)。STREAM_DRAW:每次都改(粒子)。正确选择让驱动优化内存布局。
+Buffer object 只保存无类型字节。VAO attribute/index 状态、indexed UBO/SSBO binding、pixel target、texture buffer view 或 indirect target才给它消费语义。同一对象可在合法同步和范围约束下承担不同角色。
 </Answer>
 
-**问题**：持久映射比glBufferSubData快多少？
+**问题 2：** 一个 std140 block 含 `mat4`、`vec3`、`float[4]`，宿主端应如何证明布局正确？
 
 <Answer>
-持久映射避免每帧glBufferSubData的拷贝开销和驱动同步等待。CPU直接写GPU内存(零拷贝)。配合fence同步。适合频繁更新的大数据，可提升20-50%更新性能。
+按 std140 base alignment 推导 offset 和 stride，但不只依赖手算；链接后查询每个成员的 offset、array stride、matrix stride 与 row-major 状态，再让宿主结构体用显式 padding/对齐匹配，并验证 range offset 满足 UBO alignment。
+</Answer>
+
+**问题 3：** 设计三块 persistent mapped ring 时，何时写、何时等待、何时放 fence？
+
+<Answer>
+第 i 帧选择 `i mod 3` 的 chunk；若该块有旧 fence，先等待并删除，确认 GPU 不再读取；CPU 写入并在非 coherent 时 flush；绑定该 range 并提交 draw；随后放置新 fence，标记该块重新归 GPU 使用。
+</Answer>
+
+**问题 4：** Bindless、sparse、compression、packed data、filtering 分别优化什么？
+
+<Answer>
+Bindless 减少传统 texture-unit 重绑定；sparse 分离虚拟尺寸与物理页驻留；compression 降低固定块的存储和采样带宽；packed data 用量化精度换字节密度；filtering 根据采样 footprint 改善重建质量。它们依赖不同能力且不能相互替代。
 </Answer>
 </Exercises>
 
+## 本章回顾
+
+数据管理的核心不是背诵 VBO/UBO/SSBO 缩写，而是证明 storage、layout、range、consumer 与 synchronization。原书第 5 章建立 buffer、uniform、shader storage block、atomic counter 和 texture 的基础，第 11 章继续处理 eliminating binding、sparse texture、texture compression、packed data formats 与 high-quality texture filtering。只有把容量、布局、所有权、扩展支持、字节量和画质成本放进同一条证据链，优化结论才可复现。
+
 <Glossary>
-<GlossaryItem term="VBO">顶点缓冲对象，STATIC/DYNAMIC/STREAM三种使用模式。</GlossaryItem>
-<GlossaryItem term="UBO">Uniform缓冲对象，多个着色器共享只读数据(64KB限制)。</GlossaryItem>
-<GlossaryItem term="SSBO">Shader Storage缓冲，可读写随机访问无大小限制。</GlossaryItem>
-<GlossaryItem term="持久映射">持续有效的缓冲指针，CPU零拷贝更新GPU数据。</GlossaryItem>
+<GlossaryItem term="缓冲对象">由名称标识、保存连续无类型字节并可被多种接口解释的资源对象。</GlossaryItem>
+<GlossaryItem term="数据存储">buffer object 背后的实际字节容量、属性和生命周期。</GlossaryItem>
+<GlossaryItem term="使用提示">向实现描述预计修改与使用模式、但不保证具体内存位置或性能的提示。</GlossaryItem>
+<GlossaryItem term="不可变存储">容量创建后不能用 BufferData 重新定义、但内容可按 flags 更新的存储。</GlossaryItem>
+<GlossaryItem term="UBO">通过 uniform block binding 为多个 shader invocation 提供只读常量数据的缓冲角色。</GlossaryItem>
+<GlossaryItem term="SSBO">通过 shader storage block 暴露结构化可读写数据并支持原子操作的缓冲角色。</GlossaryItem>
+<GlossaryItem term="原子计数器">保存有限原子计数操作所用无符号整数，并由专用 binding point 访问的缓冲角色。</GlossaryItem>
+<GlossaryItem term="PBO">用于异步纹理上传或 framebuffer 读回、绑定到 pixel unpack/pack 目标的缓冲角色。</GlossaryItem>
+<GlossaryItem term="uniform">由程序接口按名称或 location 更新、在一次 draw 中对 invocation 保持一致的只读值。</GlossaryItem>
+<GlossaryItem term="纹理">具有维度、格式、mipmap 与采样规则，可由 sampler 过滤读取的数据资源。</GlossaryItem>
+<GlossaryItem term="std140">uniform block 常用的标准布局，数组和结构体通常按 vec4 边界取整。</GlossaryItem>
+<GlossaryItem term="std430">shader storage block 常用的标准布局，允许标量和部分数组更紧凑排列。</GlossaryItem>
+<GlossaryItem term="持久映射">映射跨多个命令保持有效、允许 CPU 长期持有地址的 buffer storage 模式。</GlossaryItem>
+<GlossaryItem term="栅栏">由 GPU 命令流插入、用于判断此前工作是否完成的同步对象。</GlossaryItem>
+<GlossaryItem term="Bindless Texture">通过可驻留 64 位资源句柄让 shader 访问纹理、减少传统 texture unit 重绑定的扩展机制。</GlossaryItem>
+<GlossaryItem term="稀疏纹理">先创建大的虚拟纹理地址空间，再按实现页粒度提交或释放物理存储的扩展机制。</GlossaryItem>
+<GlossaryItem term="纹理压缩">用固定块编码 texel、降低存储和采样带宽但引入格式与质量约束。</GlossaryItem>
+<GlossaryItem term="打包数据">把多个低位宽字段编码进一个机器字、以量化精度换取带宽和容量的格式。</GlossaryItem>
+<GlossaryItem term="纹理过滤">根据采样 footprint 在 texel 与 mip 层之间重建纹理值的过程。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL SuperBible, 7th Edition, Chapters 5 and 11; official sb7code examples prefixsum, fragmentlist, pmbstreaming, bindlesstex, sparsetexture, compressrgtc, and hqfilter" adaptedUrl="https://github.com/openglsuperbible/sb7code" />

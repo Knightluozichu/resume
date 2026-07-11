@@ -38,6 +38,92 @@ import { HomogeneousTranslateDiagram } from "./diagrams/homogeneous-translate-di
 import { InterpolationDiagram } from "./diagrams/interpolation-diagram";
 import { MipmapPyramidDiagram } from "./diagrams/mipmap-pyramid-diagram";
 import { SetupPipelineDiagram } from "./diagrams/setup-pipeline-diagram";
+import { HelloWindowContractDiagram } from "./learnopengl/diagrams/hello-window";
+import {
+  HelloTriangleLifecycleDiagram,
+  TriangleRasterizationDiagram,
+  TriangleShaderLifecycleDiagram,
+  TriangleVaoCaptureDiagram,
+} from "./learnopengl/diagrams/hello-triangle";
+import {
+  ShaderClassLifecycleDiagram,
+  ShaderContractDiagram,
+  ShaderTypeSystemDiagram,
+} from "./learnopengl/diagrams/shaders";
+import {
+  TextureCompletenessDiagram,
+  TextureLifecycleDiagram,
+  TextureSamplingContractDiagram,
+  TextureUnitBindingDiagram,
+} from "./learnopengl/diagrams/textures";
+import {
+  MatrixConventionDiagram,
+  TransformSequenceDiagram,
+} from "./learnopengl/diagrams/transformations";
+import {
+  CameraStateContractDiagram,
+  CameraUpdateLoopDiagram,
+} from "./learnopengl/diagrams/camera";
+import {
+  ColorMultiplyStepsDiagram,
+  ColorReflectionDiagram,
+  LightingSceneContractDiagram,
+} from "./learnopengl/diagrams/colors";
+import {
+  PhongCompositionDiagram,
+  PhongGouraudDiagram,
+  PhongStagesDiagram,
+} from "./learnopengl/diagrams/basic-lighting";
+import {
+  MaterialLightPairDiagram,
+  MaterialPresetDiagram,
+  MaterialStagesDiagram,
+} from "./learnopengl/diagrams/materials";
+import {
+  EmissionMapDiagram,
+  LightingMapBindingDiagram,
+  LightingMapLayersDiagram,
+} from "./learnopengl/diagrams/lighting-maps";
+import {
+  LightCasterContractDiagram,
+  LightCasterStagesDiagram,
+} from "./learnopengl/diagrams/light-casters";
+import {
+  LightAccumulationStagesDiagram,
+  UniformLightArrayDiagram,
+} from "./learnopengl/diagrams/multiple-lights";
+import {
+  AssimpImportStagesDiagram,
+  AssimpOwnershipDiagram,
+} from "./learnopengl/diagrams/assimp";
+import {
+  MeshLifecycleDiagram,
+  MeshSetupStagesDiagram,
+} from "./learnopengl/diagrams/mesh";
+import {
+  ModelLoadStagesDiagram,
+  ModelNodeTransformDiagram,
+} from "./learnopengl/diagrams/model";
+import {
+  DepthPipelineTimingDiagram,
+  DepthStateContractDiagram,
+} from "./learnopengl/diagrams/depth-testing";
+import {
+  StencilMaskContractDiagram,
+  StencilPassStateDiagram,
+} from "./learnopengl/diagrams/stencil-testing";
+import {
+  BlendAlphaModeDiagram,
+  TransparencyPassDiagram,
+} from "./learnopengl/diagrams/blending";
+import {
+  CullingPipelineDiagram,
+  CullingTransformParityDiagram,
+} from "./learnopengl/diagrams/face-culling";
+import { FramebufferPassContractDiagram } from "./learnopengl/diagrams/framebuffers";
+import { CubemapCapabilityDiagram } from "./learnopengl/diagrams/cubemaps";
+import { BufferUpdateHazardDiagram } from "./learnopengl/diagrams/advanced-data";
+import { Std140PackingDiagram } from "./learnopengl/diagrams/advanced-glsl";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
 import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
@@ -2208,16 +2294,87 @@ import { GlrModernOpenglDiagram } from "./opengl-redbook/diagrams/glr-modern-ope
 import { GlrOpenglBasicsDiagram } from "./opengl-redbook/diagrams/glr-opengl-basics";
 import { GlrShadersDiagram } from "./opengl-redbook/diagrams/glr-shaders";
 import { GlrTexturesDiagram } from "./opengl-redbook/diagrams/glr-textures";
-import { GlsBufferObjectsDiagram } from "./opengl-superbible/diagrams/gls-buffer-objects";
-import { GlsFinalReviewDiagram } from "./opengl-superbible/diagrams/gls-final-review";
-import { GlsFirstProgramDiagram } from "./opengl-superbible/diagrams/gls-first-program";
-import { GlsFragmentShadingDiagram } from "./opengl-superbible/diagrams/gls-fragment-shading";
-import { GlsGeometryShadersDiagram } from "./opengl-superbible/diagrams/gls-geometry-shaders";
-import { GlsLearningMapDiagram } from "./opengl-superbible/diagrams/gls-learning-map";
-import { GlsPerformanceDiagram } from "./opengl-superbible/diagrams/gls-performance";
-import { GlsShaderPipelineDiagram } from "./opengl-superbible/diagrams/gls-shader-pipeline";
-import { GlsTextureMappingDiagram } from "./opengl-superbible/diagrams/gls-texture-mapping";
-import { GlsVertexProcessingDiagram } from "./opengl-superbible/diagrams/gls-vertex-processing";
+import {
+  GlsAdvancedTextureDataDiagram,
+  GlsBlockLayoutDiagram,
+  GlsBufferObjectsDiagram,
+  GlsBufferRoleDiagram,
+  GlsPersistentRingDiagram,
+  GlsShaderDataPathDiagram,
+} from "./opengl-superbible/diagrams/gls-buffer-objects";
+import {
+  GlsAcceptanceMatrixDiagram,
+  GlsBookIntegrationDiagram,
+  GlsComputeDispatchDiagram,
+  GlsComputeMemoryDiagram,
+  GlsComputePipelineDiagram,
+  GlsFinalReviewDiagram,
+  GlsWorkGroupDiagram,
+} from "./opengl-superbible/diagrams/gls-final-review";
+import {
+  GlsFirstProgramDiagram,
+  GlsFrameLoopDiagram,
+  GlsFrameworkBoundaryDiagram,
+  GlsShaderProgramDiagram,
+  GlsVertexIdDiagram,
+} from "./opengl-superbible/diagrams/gls-first-program";
+import {
+  GlsBlendEquationDiagram,
+  GlsFormatReadbackDiagram,
+  GlsFragmentInvocationDiagram,
+  GlsFragmentShadingDiagram,
+  GlsFramebufferDiagram,
+  GlsMultisampleDiagram,
+  GlsPerFragmentTestsDiagram,
+} from "./opengl-superbible/diagrams/gls-fragment-shading";
+import {
+  GlsEmissionStateDiagram,
+  GlsGeometryContractDiagram,
+  GlsGeometryShadersDiagram,
+  GlsLayerViewportDiagram,
+  GlsTessellationDomainsDiagram,
+  GlsTessellationFactorsDiagram,
+} from "./opengl-superbible/diagrams/gls-geometry-shaders";
+import {
+  GlsExecutionModelDiagram,
+  GlsLearningMapDiagram,
+  GlsMilestoneDiagram,
+  GlsOfficialTocDiagram,
+  GlsRouteSelectorDiagram,
+} from "./opengl-superbible/diagrams/gls-learning-map";
+import {
+  GlsAzdoDiagram,
+  GlsBottleneckExperimentDiagram,
+  GlsDebugOutputDiagram,
+  GlsPerformanceDiagram,
+  GlsQueryTimelineDiagram,
+  GlsRobustnessDiagram,
+  GlsSynchronizationDiagram,
+} from "./opengl-superbible/diagrams/gls-performance";
+import {
+  GlsInvocationEvidenceDiagram,
+  GlsProgramLifecycleDiagram,
+  GlsShaderPipelineDiagram,
+  GlsStageInterfaceDiagram,
+  GlsTessellationDiagram,
+} from "./opengl-superbible/diagrams/gls-shader-pipeline";
+import {
+  GlsAlternativeRenderingDiagram,
+  GlsMaterialLightingDiagram,
+  GlsNprDiagram,
+  GlsRenderingEvidenceDiagram,
+  GlsTextureFootprintDiagram,
+  GlsTextureMappingDiagram,
+  GlsTwoDGraphicsDiagram,
+} from "./opengl-superbible/diagrams/gls-texture-mapping";
+import {
+  GlsClipViewportDiagram,
+  GlsDrawCommandDiagram,
+  GlsInterpolationCurveDiagram,
+  GlsMathTransformDiagram,
+  GlsTransformFeedbackDiagram,
+  GlsVertexProcessingDiagram,
+} from "./opengl-superbible/diagrams/gls-vertex-processing";
 import { OptDecisionMakingDiagram } from "./org-problem-tools/diagrams/opt-decision-making";
 import { OptEvaluationMetricsDiagram } from "./org-problem-tools/diagrams/opt-evaluation-metrics";
 import { OptFinalReviewDiagram } from "./org-problem-tools/diagrams/opt-final-review";
@@ -2258,16 +2415,70 @@ import { PrlMixtureEmDiagram } from "./pattern-recognition-ml/diagrams/prl-mixtu
 import { PrlNeuralNetworksDiagram } from "./pattern-recognition-ml/diagrams/prl-neural-networks";
 import { PrlProbabilityTheoryDiagram } from "./pattern-recognition-ml/diagrams/prl-probability-theory";
 import { PrlSparseKernelsDiagram } from "./pattern-recognition-ml/diagrams/prl-sparse-kernels";
-import { PbtBxdfDiagram } from "./pbrt-book/diagrams/pbt-bxdf";
-import { PbtCameraModelDiagram } from "./pbrt-book/diagrams/pbt-camera-model";
-import { PbtFinalReviewDiagram } from "./pbrt-book/diagrams/pbt-final-review";
-import { PbtIntegratorsDiagram } from "./pbrt-book/diagrams/pbt-integrators";
-import { PbtLearningMapDiagram } from "./pbrt-book/diagrams/pbt-learning-map";
-import { PbtLightTransportDiagram } from "./pbrt-book/diagrams/pbt-light-transport";
-import { PbtMonteCarloDiagram } from "./pbrt-book/diagrams/pbt-monte-carlo";
-import { PbtRadiometryDiagram } from "./pbrt-book/diagrams/pbt-radiometry";
-import { PbtSystemArchitectureDiagram } from "./pbrt-book/diagrams/pbt-system-architecture";
-import { PbtVolumeScatteringDiagram } from "./pbrt-book/diagrams/pbt-volume-scattering";
+import {
+  PbtBxdfDiagram,
+  PbtBxdfLobesDiagram,
+  PbtFresnelMediaDiagram,
+  PbtMicrofacetDiagram,
+} from "./pbrt-book/diagrams/pbt-bxdf";
+import {
+  PbtCameraModelDiagram,
+  PbtCameraSpacesDiagram,
+  PbtDepthOfFieldDiagram,
+  PbtFilmPipelineDiagram,
+} from "./pbrt-book/diagrams/pbt-camera-model";
+import {
+  PbtBookSpineDiagram,
+  PbtFinalReviewDiagram,
+  PbtPathLedgerDiagram,
+  PbtRetrospectiveDiagram,
+  PbtShapeRobustnessDiagram,
+} from "./pbrt-book/diagrams/pbt-final-review";
+import {
+  PbtAdvancedStrategiesDiagram,
+  PbtIntegratorFamiliesDiagram,
+  PbtIntegratorHierarchyDiagram,
+  PbtIntegratorsDiagram,
+  PbtSamplerDimensionsDiagram,
+} from "./pbrt-book/diagrams/pbt-integrators";
+import {
+  PbtChapterDependencyDiagram,
+  PbtCodeReadingLoopDiagram,
+  PbtLearningMapDiagram,
+  PbtMilestoneDiagram,
+  PbtRouteSelectorDiagram,
+} from "./pbrt-book/diagrams/pbt-learning-map";
+import {
+  PbtIntegratorStateDiagram,
+  PbtLightTransportDiagram,
+  PbtLteFormsDiagram,
+  PbtMisDiagram,
+  PbtPathContributionDiagram,
+} from "./pbrt-book/diagrams/pbt-light-transport";
+import {
+  PbtConvergenceDiagram,
+  PbtMonteCarloDiagram,
+  PbtSamplingDistributionDiagram,
+} from "./pbrt-book/diagrams/pbt-monte-carlo";
+import {
+  PbtRadiometryDiagram,
+  PbtSpectrumColorDiagram,
+  PbtSurfaceScatteringDiagram,
+} from "./pbrt-book/diagrams/pbt-radiometry";
+import {
+  PbtBvhArchitectureDiagram,
+  PbtCpuParallelDiagram,
+  PbtSceneConstructionDiagram,
+  PbtSystemArchitectureDiagram,
+  PbtWavefrontArchitectureDiagram,
+} from "./pbrt-book/diagrams/pbt-system-architecture";
+import {
+  PbtMediumDiagram,
+  PbtPhaseFunctionDiagram,
+  PbtTransmittanceDiagram,
+  PbtVolumeProcessesDiagram,
+  PbtVolumeScatteringDiagram,
+} from "./pbrt-book/diagrams/pbt-volume-scattering";
 import { PdpCoachingFeedbackDiagram } from "./peak-deliberate-practice/diagrams/pdp-coaching-feedback";
 import { PdpCrossingPlateausDiagram } from "./peak-deliberate-practice/diagrams/pdp-crossing-plateaus";
 import { PdpDeliberatePracticeDiagram } from "./peak-deliberate-practice/diagrams/pdp-deliberate-practice";
@@ -2807,7 +3018,6 @@ import { YdkScopeClosuresDiagram } from "./you-dont-know-js/diagrams/ydk-scope-c
 import { YdkThisBindingDiagram } from "./you-dont-know-js/diagrams/ydk-this-binding";
 import { YdkTypeCoercionDiagram } from "./you-dont-know-js/diagrams/ydk-type-coercion";
 
-
 /**
  * MDX 结构教学组件 map（HEL-20）。
  *
@@ -3129,6 +3339,56 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CompareSlider,
   Figure,
   SetupPipelineDiagram,
+  HelloWindowContractDiagram,
+  HelloTriangleLifecycleDiagram,
+  TriangleRasterizationDiagram,
+  TriangleShaderLifecycleDiagram,
+  TriangleVaoCaptureDiagram,
+  ShaderClassLifecycleDiagram,
+  ShaderContractDiagram,
+  ShaderTypeSystemDiagram,
+  TextureCompletenessDiagram,
+  TextureLifecycleDiagram,
+  TextureSamplingContractDiagram,
+  TextureUnitBindingDiagram,
+  MatrixConventionDiagram,
+  TransformSequenceDiagram,
+  CameraStateContractDiagram,
+  CameraUpdateLoopDiagram,
+  ColorMultiplyStepsDiagram,
+  ColorReflectionDiagram,
+  LightingSceneContractDiagram,
+  PhongCompositionDiagram,
+  PhongGouraudDiagram,
+  PhongStagesDiagram,
+  MaterialLightPairDiagram,
+  MaterialPresetDiagram,
+  MaterialStagesDiagram,
+  EmissionMapDiagram,
+  LightingMapBindingDiagram,
+  LightingMapLayersDiagram,
+  LightCasterContractDiagram,
+  LightCasterStagesDiagram,
+  LightAccumulationStagesDiagram,
+  UniformLightArrayDiagram,
+  AssimpImportStagesDiagram,
+  AssimpOwnershipDiagram,
+  MeshLifecycleDiagram,
+  MeshSetupStagesDiagram,
+  ModelLoadStagesDiagram,
+  ModelNodeTransformDiagram,
+  DepthPipelineTimingDiagram,
+  DepthStateContractDiagram,
+  StencilMaskContractDiagram,
+  StencilPassStateDiagram,
+  BlendAlphaModeDiagram,
+  TransparencyPassDiagram,
+  CullingPipelineDiagram,
+  CullingTransformParityDiagram,
+  FramebufferPassContractDiagram,
+  CubemapCapabilityDiagram,
+  BufferUpdateHazardDiagram,
+  Std140PackingDiagram,
   FrameStageDiagram,
   VertexPipelineDiagram,
   ShaderIODiagram,
@@ -4684,15 +4944,66 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GlrOpenglBasicsDiagram,
   GlrShadersDiagram,
   GlrTexturesDiagram,
+  GlsAdvancedTextureDataDiagram,
+  GlsAcceptanceMatrixDiagram,
+  GlsAlternativeRenderingDiagram,
+  GlsAzdoDiagram,
+  GlsBlockLayoutDiagram,
+  GlsBookIntegrationDiagram,
+  GlsBottleneckExperimentDiagram,
   GlsBufferObjectsDiagram,
+  GlsBufferRoleDiagram,
+  GlsComputeDispatchDiagram,
+  GlsComputeMemoryDiagram,
+  GlsComputePipelineDiagram,
+  GlsDebugOutputDiagram,
   GlsFinalReviewDiagram,
   GlsFirstProgramDiagram,
+  GlsFrameLoopDiagram,
+  GlsFrameworkBoundaryDiagram,
+  GlsBlendEquationDiagram,
+  GlsFormatReadbackDiagram,
+  GlsFragmentInvocationDiagram,
   GlsFragmentShadingDiagram,
+  GlsFramebufferDiagram,
+  GlsEmissionStateDiagram,
+  GlsGeometryContractDiagram,
   GlsGeometryShadersDiagram,
+  GlsExecutionModelDiagram,
   GlsLearningMapDiagram,
+  GlsLayerViewportDiagram,
+  GlsMaterialLightingDiagram,
+  GlsMilestoneDiagram,
+  GlsMultisampleDiagram,
+  GlsNprDiagram,
+  GlsOfficialTocDiagram,
   GlsPerformanceDiagram,
+  GlsPerFragmentTestsDiagram,
+  GlsPersistentRingDiagram,
+  GlsQueryTimelineDiagram,
+  GlsRobustnessDiagram,
+  GlsRouteSelectorDiagram,
+  GlsRenderingEvidenceDiagram,
+  GlsInvocationEvidenceDiagram,
+  GlsProgramLifecycleDiagram,
   GlsShaderPipelineDiagram,
+  GlsSynchronizationDiagram,
+  GlsWorkGroupDiagram,
+  GlsShaderProgramDiagram,
+  GlsShaderDataPathDiagram,
+  GlsStageInterfaceDiagram,
+  GlsTessellationDiagram,
   GlsTextureMappingDiagram,
+  GlsTextureFootprintDiagram,
+  GlsTwoDGraphicsDiagram,
+  GlsTessellationDomainsDiagram,
+  GlsTessellationFactorsDiagram,
+  GlsVertexIdDiagram,
+  GlsClipViewportDiagram,
+  GlsDrawCommandDiagram,
+  GlsInterpolationCurveDiagram,
+  GlsMathTransformDiagram,
+  GlsTransformFeedbackDiagram,
   GlsVertexProcessingDiagram,
   GmaContinuousSimulationDiagram,
   GmaDiscreteSimulationDiagram,
@@ -5336,14 +5647,48 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   OscVirtualMemoryDiagram,
   PatternDiagramViewport,
   PbtBxdfDiagram,
+  PbtBxdfLobesDiagram,
+  PbtFresnelMediaDiagram,
+  PbtMicrofacetDiagram,
   PbtCameraModelDiagram,
+  PbtCameraSpacesDiagram,
+  PbtDepthOfFieldDiagram,
+  PbtBookSpineDiagram,
   PbtFinalReviewDiagram,
+  PbtFilmPipelineDiagram,
+  PbtPathLedgerDiagram,
+  PbtRetrospectiveDiagram,
+  PbtShapeRobustnessDiagram,
+  PbtAdvancedStrategiesDiagram,
+  PbtIntegratorFamiliesDiagram,
+  PbtIntegratorHierarchyDiagram,
   PbtIntegratorsDiagram,
+  PbtSamplerDimensionsDiagram,
+  PbtIntegratorStateDiagram,
+  PbtChapterDependencyDiagram,
+  PbtCodeReadingLoopDiagram,
   PbtLearningMapDiagram,
+  PbtMilestoneDiagram,
+  PbtRouteSelectorDiagram,
   PbtLightTransportDiagram,
+  PbtLteFormsDiagram,
+  PbtMisDiagram,
+  PbtPathContributionDiagram,
+  PbtConvergenceDiagram,
   PbtMonteCarloDiagram,
+  PbtSamplingDistributionDiagram,
   PbtRadiometryDiagram,
+  PbtSpectrumColorDiagram,
+  PbtSurfaceScatteringDiagram,
+  PbtBvhArchitectureDiagram,
+  PbtCpuParallelDiagram,
+  PbtSceneConstructionDiagram,
   PbtSystemArchitectureDiagram,
+  PbtWavefrontArchitectureDiagram,
+  PbtMediumDiagram,
+  PbtPhaseFunctionDiagram,
+  PbtTransmittanceDiagram,
+  PbtVolumeProcessesDiagram,
   PbtVolumeScatteringDiagram,
   PccClassesDiagram,
   PccDataVizDiagram,

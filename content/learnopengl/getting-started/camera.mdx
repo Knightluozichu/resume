@@ -1,14 +1,22 @@
 ---
-title: 摄像机
+title: 自由摄像机、欧拉角与帧率无关输入
 type: B
 section: 入门
 order: 7
 description: 用欧拉角 Pitch/Yaw 手推方向向量，实现 WASD 自由移动、鼠标视角控制与滚轮 FOV 缩放——把「钉死的 LookAt」变成可交互的摄像机系统。
 demo: true
 math: true
-sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/09%20Camera/
+sourceUrl: https://learnopengl.com/Getting-started/Camera
 draft: false
 ---
+
+import {
+  CameraMovementDiagram,
+  CameraStateContractDiagram,
+  CameraUpdateLoopDiagram,
+  EulerAnglesDiagram,
+  LookAtDiagram,
+} from "@/components/mdx/learnopengl/diagrams/camera";
 
 {/* B 数学型章：重心在欧拉角→方向向量三角推导、WASD + delta time、鼠标视角、滚轮 fov。LookAt 矩阵已在坐标系统章详推，本章一句回顾。主 Demo = <CameraDemo>；静态图 = EulerAnglesDiagram / CameraMovementDiagram；复用 LookAtDiagram。Term 8 个；draft:true。 */}
 
@@ -16,13 +24,15 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话解释 <Term def="用三个旋转角（Pitch/Yaw/Roll）描述物体朝向的表示法。本章只用 Pitch 和 Yaw 控制「抬头低头 / 左右看」，Roll 留给特殊场景。">欧拉角</Term> 里 Pitch、Yaw 分别控制什么，Roll 为什么本章不用
-- 能手推给定 pitch 和 yaw 时，摄像机的 <Term def="从摄像机位置出发、指向「看向哪里」的单位向量，通常记作 front。WASD 的前进后退沿它移动，View 矩阵也靠它和 up 构造。">方向向量</Term> 各分量公式（§4 三角推导）
-- 能回答：为什么 WASD 移动要乘 delta time？鼠标的 yoffset 为什么要取反？
+- 能解释 <Term def="用三个旋转角（Pitch/Yaw/Roll）描述物体朝向的表示法。本章只用 Pitch 和 Yaw 控制「抬头低头 / 左右看」，Roll 留给特殊场景。">欧拉角</Term> 里 Pitch、Yaw 分别控制什么，并说明 Roll 为什么在 FPS 相机中通常锁定
+- 能推导给定 pitch 和 yaw 时摄像机 <Term def="从摄像机位置出发、指向「看向哪里」的单位向量，通常记作 front。WASD 的前进后退沿它移动，View 矩阵也靠它和 up 构造。">方向向量</Term> 的三个分量
+- 能实现键盘、鼠标与滚轮输入到 position、front、fov 的完整状态更新链路
+- 能比较地面漫游与自由飞行对 front 向量的使用差异，并判断斜向移动为何需要归一化
+- 能回答 delta time、鼠标 yoffset 取反、firstMouse 初始化和 Pitch 限幅分别解决什么问题
 
 </Objectives>
 
-## 给摄像机装上手柄和云台
+## 为什么摄像机需要手柄、云台与独立状态
 
 上一章你已经会摆模型、会选摄像机位置看向目标——`lookAt(eye, center, up)` 一行搞定 View 矩阵。但真正的相机不是钉在架子上的：你要能**举着它四处走**、转身、抬头低头、拉近拉远。游戏里的第一人称视角、编辑器里的自由漫游，靠的都是同一套**可交互摄像机系统**。
 
@@ -48,6 +58,12 @@ Pitch、Yaw 变 → front 变 → 你看到的画面变。下面 §4 用三角�
 
 不同帧率下要走得一样远，靠 <Term def="两次渲染之间经过的真实时间（秒）。移动距离 = 速度 × deltaTime，保证 30fps 和 144fps 走一样远。">delta time</Term> —— 它是两次渲染之间经过的真实时间，§6 代码里每帧先算 `deltaTime`，再乘进位移。
 
+$$
+\Delta\vec{p}=v\,\Delta t\,\hat{d},\qquad \vec{p}_{\text{new}}=\vec{p}_{\text{old}}+\Delta\vec{p}
+$$
+
+这个式子在说：速度 $v$ 的单位是「世界单位/秒」，$\Delta t$ 是这一帧经过的秒数，$\hat d$ 是归一化移动方向；三者相乘才是本帧位移。帧率高时 $\Delta t$ 小、每帧走得少，帧率低时反之，但相同真实时间内累计距离一致。
+
 WASD 四键对应四个方向：W 沿 **front** 前进，S 沿 **-front** 后退，A 沿 **-right** 左移，D 沿 **+right** 右移。`right = normalize(cross(front, worldUp))`，永远水平于地面（只要 front 没完全朝天/朝地）。
 
 <CameraMovementDiagram />
@@ -59,6 +75,10 @@ WASD 四键对应四个方向：W 沿 **front** 前进，S 沿 **-front** 后退
 滚轮则调 <Term def="Field of View，视场角——镜头有多「广」。数值越大看得越宽（广角），越小越「长焦」。透视投影矩阵的 fovy 参数就是它。">FOV</Term>：滚轮向上通常**缩小** FOV（看得更窄、像长焦），向下**放大** FOV（广角）。浏览器里用 `wheel` 事件；GLFW 用 `scroll_callback`。
 
 真实 FPS 还会用 <Term def="Pointer Lock——把鼠标锁在画布内、隐藏光标，移动量用 movementX/Y 而不是绝对坐标，避免指针撞屏幕边缘。">光标捕获</Term>（Pointer Lock），这样转 360° 不会撞到屏幕边缘。教学 Demo 用滑块模拟 Pitch/Yaw，原理相同。
+
+鼠标第一次进入窗口时还要处理一次初始化：GLFW 教程用 `firstMouse` 把 `lastX/lastY` 设成当前坐标，然后把标记清掉；否则初始值通常是屏幕中心，第一帧会产生一个巨大的 offset，让视角突然跳转。Pointer Lock 的 `movementX/Y` 已经是相对位移，但锁定与解锁时仍应清空累计输入，避免旧偏移带进下一帧。
+
+<CameraStateContractDiagram />
 
 ## 数学推导：Pitch + Yaw → front
 
@@ -85,6 +105,30 @@ LearnOpenGL 约定：Yaw 0° 时 front 指向 **+X**，逆时针增加；Pitch �
   几乎平行于 worldUp，`front × worldUp` 接近零向量，**right
   算不出来**——视角突然翻转，俗称万向节死锁。FPS 里锁 Pitch 范围是标准做法。
 </Callout>
+
+## 每帧更新：输入、状态、正交基与矩阵
+
+输入回调不应该直接绘制场景。它只记录按键状态、鼠标偏移与滚轮增量；渲染循环在每帧开始时统一消费这些输入，并按固定顺序更新摄像机。这样键盘、鼠标、手柄都能汇入同一状态模型，录制与回放也只需要保存输入或最终状态。
+
+<Stepper>
+  <Step title="采样输入：先收集本帧意图">
+    保存当前按键集合、鼠标相对位移和滚轮增量。首次收到绝对鼠标坐标时只初始化 `lastX/lastY`，不更新 yaw/pitch，防止首帧视角跳变。
+
+    <CameraUpdateLoopDiagram step={1} />
+  </Step>
+  <Step title="更新状态：位移乘 delta time，角度做限幅">
+    用 `speed * deltaTime` 更新 position；用 offset × sensitivity 更新 yaw/pitch，并把 Pitch 限制在 `[-89°, 89°]`。若是地面漫游，应先把 front 的 y 清零再归一化，避免抬头时 W 键把人带离地面；自由飞行则保留 y。
+
+    <CameraUpdateLoopDiagram step={2} />
+  </Step>
+  <Step title="重算正交基并生成矩阵">
+    从 yaw/pitch 重算并归一化 front，再由 `right = normalize(cross(front, worldUp))`、`up = normalize(cross(right, front))` 得到正交基。最后构造 `lookAt(position, position + front, up)` 与透视矩阵。
+
+    <CameraUpdateLoopDiagram step={3} />
+  </Step>
+</Stepper>
+
+<CameraUpdateLoopDiagram />
 
 ## 交互 Demo：拖滑块当摄像机
 
@@ -224,7 +268,7 @@ canvas.addEventListener("wheel", (e) => {
 
 <Exercises>
 
-**练习 1（推导 / 手算题）** 给定 Pitch = 30°，Yaw = 45°（度）。① 手算 front 向量三个分量（保留三位小数）。② 说明 front 是否为单位向量（不必开方，用 $\sin^2+\cos^2$ 论证）。
+**问题 1（推导 / 手算题）** 给定 Pitch = 30°，Yaw = 45°（度）。① 手算 front 向量三个分量（保留三位小数）。② 说明 front 是否为单位向量（不必开方，用 $\sin^2+\cos^2$ 论证）。
 
 <Answer>
 
@@ -244,13 +288,23 @@ front $\approx (0.612,\ 0.5,\ 0.612)$。
 
 </Answer>
 
-**练习 2（改 Demo 题）** 在 `<CameraDemo>` 里：① 把 Pitch 从 -15° 慢慢拉到 89°，观察 right 感知的「水平」是否开始扭曲。② 把 FOV 固定 45°，只改 distance 从 2 拉到 20——这和滚轮调 FOV 的视觉效果有什么本质区别？
+**问题 2（改 Demo 题）** 在 `<CameraDemo>` 里：① 把 Pitch 从 -15° 慢慢拉到 89°，观察 right 感知的「水平」是否开始扭曲。② 把 FOV 固定 45°，只改 distance 从 2 拉到 20——这和滚轮调 FOV 的视觉效果有什么本质区别？
 
 <Answer>
 
 ① Pitch 接近 90° 时，视线几乎垂直向下/向上，水平 front 分量 $\cos\phi \to 0$，与 worldUp 近平行，叉乘不稳定——你会感到左右移动「不对劲」，这就是限幅 ±89° 的原因。
 
 ② **distance** 改变的是 LookAt 里 **eye 到 target 的距离**（人往后退/往前凑）；**FOV** 改变的是透视投影的张角（换镜头焦距）。同样「看得更全」：拉远 distance = 人后退；增大 FOV = 换广角镜头——近处物体透视变形不同。
+
+</Answer>
+
+**问题 3（实现排错题）** 一个相机在 30fps 时每秒走 75 个单位，在 144fps 时每秒走 360 个单位；鼠标首次进入窗口还会突然转头。分别指出移动和鼠标初始化中的错误，并写出修复原则。
+
+<Answer>
+
+移动代码把每帧位移固定成了 `2.5`，所以每秒距离等于 `2.5 × fps`。应把 `2.5` 解释为每秒速度，实际每帧位移写成 `2.5 * deltaTime`；30fps 与 144fps 在同一真实时间内累计距离才一致。
+
+首次转头是因为用默认 `lastX/lastY` 与第一份真实坐标做差。第一次鼠标回调只执行 `lastX=xpos; lastY=ypos; firstMouse=false; return;`，从第二次回调开始才计算 offset。Pointer Lock 重新锁定时也应丢弃旧的累计位移。
 
 </Answer>
 

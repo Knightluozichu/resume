@@ -1,113 +1,276 @@
 ---
-title: "体积散射"
+title: "参与介质与体积散射"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "吸收、散射、相函数——光在参与介质中的传播"
+description: "从吸收、发射和散射建立传输方程，再用透射率、null scattering、相函数与 Medium majorant 采样体积路径"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pbr-book.org/4ed/Volume_Scattering"
 draft: false
 ---
 
-import { PbtVolumeScatteringDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-volume-scattering";
+import { PbtVolumeScatteringDiagram, PbtVolumeProcessesDiagram, PbtTransmittanceDiagram, PbtPhaseFunctionDiagram, PbtMediumDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-volume-scattering";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分吸收、外散射、内散射三种体交互类型
-- 能解释 σa（吸收系数）和 σs（散射系数）的物理含义
-- 能说出相函数的作用和常见模型
-- 能回答为什么体积渲染比表面渲染计算量更大？
+- 能从吸收、发射、外散射与内散射推导体积源函数
+- 能计算均匀介质透射率并解释光学厚度、反照率和平均自由程
+- 能说明固定步长估计后取指数为何有偏，并构造 null scattering 采样
+- 能评估与采样 Henyey–Greenstein 相函数并正确解释 g 的方向
+- 能区分 Homogeneous、Grid、RGBGrid 与介质边界的接口职责
 </Objectives>
 
-## 直觉引入
+## 直觉：雾不是很多透明表面，也不是固定步长颜色叠加
 
-想象一束阳光穿过雾气。光被水滴打散（散射），部分被吸收变热（吸收），从其他方向也有光散射进来（内散射）。雾不是表面——它是「参与介质」，光在其中不断改变方向和强度。
+真空中，无遮挡射线上的辐亮度保持不变；在雾、烟、水和云中，微粒会吸收、发射或把光从一个方向重新分配到另一个方向。粒子数量太大，渲染器不会逐个建模，而是用“单位距离发生某事件的概率密度”描述连续介质，再用蒙特卡洛抽取离散散射事件。
 
-体积散射就是研究光如何在3D空间（而非表面）中传播。它解释了云、雾、天空蓝色、皮肤次表面散射等现象。PBRT 把这些物理过程都建模了。
-
-## 概念讲解
-
-### 体积散射三大过程
+先预测：在一段密度忽高忽低的烟雾中，随机取一个位置估计平均消光系数，再计算 `exp(-平均值 × 距离)`，长期平均是否等于真实透射率？不等。指数是非线性的，即使光学厚度估计无偏，取指数后也会产生 Jensen 偏差。PBRT 使用 majorant 与 null scattering 改写问题。
 
 <PbtVolumeScatteringDiagram />
 
-<Term def="吸收（Absorption）是光在介质中传播时能量被介质吸收转化为热能的过程">吸收</Term>用吸收系数 σa 描述，光强按指数衰减。
+## 1. 模型边界：本章定义介质，不负责完整体积照明
 
-<Term def="外散射（Out-scattering）是光在介质中被粒子偏转到其他方向的过程">外散射</Term>用散射系数 σs 描述，同样导致光强衰减。
+<Term def="大量微小粒子分布在三维区域中，会吸收、发射或散射经过光线的物质模型">参与介质</Term>解释雾中光束、云、烟、水下浑浊和大气散射。PBRT 第 11 章定义局部物理量、透射率、相函数与 `Medium` 表示；多次散射的体积积分器与完整光传输算法留到第 14 章。
 
-<Term def="内散射（In-scattering）是其他方向的光被散射到当前光线方向，增加光强的过程">内散射</Term>是外散射的逆过程，是体积渲染的主要光源。
+因此，本章不能用一个固定步长 `while` 循环冒充 PBRT 的最终体积渲染器。这里要建立的是后续积分器依赖的概率契约：介质在一点有什么系数、沿 ray 哪些区间有什么 majorant，以及真实散射后方向如何采样。
 
-<Term def="相函数（Phase Function）描述散射光的方向分布，类似于 BRDF 但用于体积">相函数</Term>决定了散射光往哪些方向偏转，常用 Henyey-Greenstein 模型。
+## 2. 四种局部过程与三个核心系数
 
-## 交互Demo
+PBRT 把体积中的基本物理过程分为吸收、发射和散射；散射又从当前方向看成外散射，从目标方向看成内散射。
 
-<Stepper>
-<Step title="第一步：吸收与外散射">光在介质中传播时，被吸收（σa）和被散射出去（σs）都会使光强衰减。总衰减系数 σt = σa + σs，光强按 e^(-σt·d) 指数衰减。</Step>
-<Step title="第二步：内散射与相函数">
-其他方向的光也会被散射进来（内散射），增加光强。相函数 p(ω,ω') 描述散射的方向分布，决定了雾看起来是均匀的还是向前散射的。
-<PbtVolumeScatteringDiagram />
-</Step>
-<Step title="第三步：体渲染方程">体积渲染方程把吸收、外散射、内散射组合成一个积分方程。沿光线步进，在每一点计算衰减和内散射贡献。</Step>
-</Stepper>
+<Term def="单位距离发生吸收事件的概率密度，单位为距离的倒数，可随位置和波长变化">吸收系数</Term> $\sigma_a\ge0$ 把辐射能转成热等其他能量。微分变化为：
 
-## 代码对照
+$$
+\frac{\mathrm dL}{\mathrm dt}=-\sigma_a(p)L(p).
+$$
+
+<Term def="单位距离发生真实散射事件的概率密度，既造成当前方向外散射，也控制其他方向内散射">散射系数</Term> $\sigma_s\ge0$ 重新分配方向。外散射同样降低当前束：
+
+$$
+\frac{\mathrm dL}{\mathrm dt}=-\sigma_s(p)L(p).
+$$
+
+<Term def="吸收系数与散射系数之和，表示单位距离从当前方向移除辐亮度的总概率密度">衰减系数</Term>也称 extinction coefficient：
+
+$$
+\sigma_t=\sigma_a+\sigma_s.
+$$
+
+体积发射向方向 $\omega$ 加入 $\sigma_a L_e$；这个 $\sigma_a$ 来自吸收与热发射的关系，并保证量纲正确。内散射则把球面其他方向的辐亮度按相函数加权后乘 $\sigma_s$。
+
+<PbtVolumeProcessesDiagram />
+
+两个派生量很实用。<Term def="一次真实介质事件发生后属于散射而不是吸收的比例，ρ=σs/σt，范围为 0 到 1">单次散射反照率</Term>为：
+
+$$
+\rho=\frac{\sigma_s}{\sigma_t}.
+$$
+
+<Term def="均匀介质中光线在下一次吸收或散射前行进距离的期望值，等于 1/σt">平均自由程</Term>是 $1/\sigma_t$。高 $\sigma_t$ 表示事件密集、自由程短；高反照率表示事件大多继续散射而非终止吸收。
+
+## 3. 相函数与体积源函数
+
+<Term def="在三维空间一点上，把某个入射方向的真实散射概率归一化分配到各出射方向的函数">相函数</Term> $p(\omega_o,\omega_i)$ 是 BSDF 的体积类比，但没有表面投影面积，因此球面积分没有 $\cos\theta$：
+
+$$
+\int_{\mathcal S^2}p(\omega_o,\omega_i)\,\mathrm d\omega_i=1.
+$$
+
+发射与内散射合成源函数：
+
+$$
+L_s(p,\omega)=
+\frac{\sigma_a}{\sigma_t}L_e(p,\omega)
++\frac{\sigma_s}{\sigma_t}
+\int_{\mathcal S^2}p(\omega,\omega_i)L_i(p,\omega_i)\,\mathrm d\omega_i.
+$$
+
+沿 ray 的传输可写成：起点辐亮度先乘整段透射率，再加上各位置源函数经过剩余路径衰减后的积分。这个式子是体积版本的“表面散射 + 可见性”，但介质事件位置本身也是随机变量。
+
+## 4. 透射率、光学厚度与 Beer–Lambert
+
+<Term def="光线从一点传播到另一点后，经过吸收和外散射仍保留在原方向的辐亮度比例">透射率</Term>为：
+
+$$
+T_r(p\rightarrow p')=
+\exp\left(-\int_0^d\sigma_t(p+t\omega)\,\mathrm dt\right).
+$$
+
+指数中的积分是<Term def="沿路径对衰减系数积分得到的无量纲总衰减量，记作 τ">光学厚度</Term>：
+
+$$
+\tau(p\rightarrow p')=\int_0^d\sigma_t(p+t\omega)\,\mathrm dt,
+\qquad T_r=e^{-\tau}.
+$$
+
+均匀介质的 $\sigma_t$ 为常数，直接得到 Beer–Lambert 定律：
+
+$$
+T_r(d)=e^{-\sigma_t d}.
+$$
+
+透射率具有乘法性：任取同一 ray 上的中间点 $p'$，都有 $T_r(p\to p'')=T_r(p\to p')T_r(p'\to p'')$。这使得算法可以逐段累计，也使介质阴影射线能与表面可见性组合。
+
+<PbtTransmittanceDiagram />
+
+## 5. 为什么“估计 τ 再取指数”会有偏
+
+在非均匀介质中，用随机样本得到无偏光学厚度估计 $\widehat\tau$，通常仍有：
+
+$$
+\mathbb E[e^{-\widehat\tau}]
+\quad\text{is not generally equal to}\quad
+e^{-\mathbb E[\widehat\tau]}.
+$$
+
+因为 $e^{-x}$ 是凸函数，这类估计通常低估透射率。固定步长 Riemann sum 再取指数只有在步长足够小后偏差才可能可接受；它不是 PBRT 4e 用来宣称无偏的办法。
+
+<Term def="加入不改变真实光路的虚构碰撞，使空间变化的介质能按统一指数过程进行无偏采样的数学形式">Null scattering</Term>引入一个处处覆盖真实衰减的<Term def="沿某段 ray 对所有位置真实衰减系数给出上界的采样系数，记作 σmaj">Majorant</Term> $\sigma_{maj}$，并定义：
+
+$$
+\sigma_n(p)=\sigma_{maj}-\sigma_t(p)\ge0.
+$$
+
+这样 $\sigma_a+\sigma_s+\sigma_n=\sigma_{maj}$ 为常数，可从指数分布抽候选距离：
+
+$$
+t=-\frac{\ln(1-u)}{\sigma_{maj}},
+\qquad u\sim U[0,1).
+$$
+
+候选点按 $\sigma_a/\sigma_{maj}$ 吸收、$\sigma_s/\sigma_{maj}$ 真实散射、$\sigma_n/\sigma_{maj}$ 发生 null 事件并继续。Null 粒子是估计器工具，不应产生颜色、改变方向或被计入真实散射次数。
 
 ```cpp
-// 体积光线步进
-Spectrum VolumeIntegrate(Ray ray, Scene scene) {
-    Spectrum L(0), T(1);  // 累积辐射度、透射率
-    float t = 0;
-    while (t < ray.tMax) {
-        float step = sampleStep();
-        t += step;
-        
-        // 衰减: T *= exp(-σt * step)
-        Density d = medium.Density(ray(t));
-        T *= exp(-(d.sigmaA + d.sigmaS) * step);
-        
-        // 内散射贡献
-        for (auto &light : scene.lights) {
-            Spectrum Li = light.L(ray(t));
-            float p = phaseFunction(ray.dir, light.dir);
-            L += T * d.sigmaS * p * Li * step;
-        }
-    }
-    return L;
+while (true) {
+    Float t = SampleExponential(u, sigmaMaj);
+    if (t >= segmentLength) return ReachedSegmentEnd;
+
+    MediumProperties mp = medium.SamplePoint(ray(t), lambda);
+    Spectrum sigmaT = mp.sigma_a + mp.sigma_s;
+    Spectrum sigmaN = sigmaMaj - sigmaT;
+    Event event = SampleEvent(mp.sigma_a, mp.sigma_s, sigmaN);
+    if (event == Event::Absorb) return Absorbed;
+    if (event == Event::Scatter) return MediumInteraction(ray(t), mp.phase);
+    // Null: same physical ray, continue sampling.
 }
 ```
 
-## 常见误区
+## 6. Henyey–Greenstein 与方向约定
+
+<Term def="用单个不对称参数 g 拟合前向或后向散射、且可直接评估与采样的归一化相函数">Henyey–Greenstein 相函数</Term>为：
+
+$$
+p_{HG}(\cos\theta)=
+\frac{1}{4\pi}
+\frac{1-g^2}{(1+g^2+2g\cos\theta)^{3/2}}.
+$$
+
+PBRT 与 BSDF 一样，让 `wi`、`wo` 都从散射点向外；物理入射传播方向是 $-\omega_i$。在这个公式与接口约定下，$g=0$ 各向同性，$g>0$ 表示光倾向沿原传播方向继续，$g<0$ 表示返回光源方向。正 $g$ 的峰值因此出现在 `wo` 接近 `-wi` 时，这不是符号错误。
+
+<PbtPhaseFunctionDiagram />
+
+`PhaseFunction` 提供 `p()`、`Sample_p()` 和 `PDF()`。HG 能从自身精确采样且已归一化，所以采样方向处 `p == pdf`。相函数也应满足互易性；单个 $g$ 只是平均余弦，不能唯一描述所有真实粒子分布。
+
+## 7. Medium、边界与 majorant iterator
+
+<Term def="PBRT 对三维区域散射属性的统一接口，能查询一点的介质属性并沿 ray 返回 majorant 区间">Medium</Term>提供 `SamplePoint(p, lambda)` 和 `SampleRay(ray, tMax, lambda)`。前者返回 $\sigma_a,\sigma_s,L_e$ 与相函数；后者返回按前到后排列、互不重叠的 `RayMajorantSegment`，允许跳过真空区间。
+
+<Term def="记录一个几何边界内外两侧 Medium 的结构，ray 穿过边界时根据方向与法线选择当前介质">MediumInterface</Term>挂在 primitive 上。Camera 与 Light 也可直接持有当前 Medium；`nullptr` 表示真空。边界 primitive 的 Material 可为 `nullptr`，表示表面不可见、没有 BSDF，只切换介质。
+
+<PbtMediumDiagram />
+
+局部 majorant 越紧，null 事件越少、性能越好。若 majorant 小于真实 $\sigma_t$，则 $\sigma_n$ 变负，概率模型失效并造成偏差；上界正确性是介质实现的关键不变量。
+
+## 8. 均匀、网格与稀疏介质
+
+`HomogeneousMedium` 在区域内使用常数 $\sigma_a,\sigma_s,L_e,g$，只需一个 majorant 区间。`GridMedium` 用标量密度网格缩放光谱系数，并以 3D DDA 遍历局部 majorant 网格；`RGBGridMedium` 可让散射属性颜色随位置变化。
+
+PBRT 还包含程序化 `CloudMedium` 与读取稀疏体数据的 `NanoVDBMedium`。网格发射可由温度网格驱动黑体光谱，或用固定光谱乘空间尺度。无论存储形式如何，积分器只依赖统一的 point properties 与 majorant iterator 契约。
+
+## 9. 分三步审计一条体积路径
+
+动手试：观察高亮从介质区间和自由飞行，推进到事件分类，再推进到相函数与后续路径。
+
+<Stepper>
+<Step title="第一步：检查区间与上界">
+确认 ray 当前 Medium、边界内外关系、每段 `t` 范围以及 `sigmaMaj >= sigmaA + sigmaS`；空区间应跳过。
+<PbtVolumeScatteringDiagram step={1} />
+</Step>
+<Step title="第二步：检查候选事件">
+按 `Exp(sigmaMaj)` 生成距离，并用局部 `sigmaA/sigmaS/sigmaN` 分类；null 事件不改变物理方向和辐亮度。
+<PbtVolumeScatteringDiagram step={2} />
+</Step>
+<Step title="第三步：检查相函数与路径">
+真实散射才调用 `PhaseFunction::Sample_p()`，保留 `p/pdf` 权重并生成新方向；吸收终止，越过终点继续表面路径。
+<PbtVolumeScatteringDiagram step={3} />
+</Step>
+</Stepper>
+
+## 10. 常见误区与诊断
 
 <Callout type="trap">
-**误区：混淆外散射和内散射。**
-外散射是光被偏转走，减少光强（衰减）；内散射是其他方向的光偏转进来，增加光强（光源）。两者用同一个 σs 但方向相反。体积渲染的颜色主要来自内散射。
+**现象 →** 增大 ray-march 步长后云明显变暗，减小步长又缓慢漂移。**原因 →** 先随机估计光学厚度再取指数，或把 Riemann sum 当成无偏估计。**修法 →** 对均匀介质使用解析 Beer 定律；非均匀介质使用合法 majorant 下的 null-scattering 估计。
 </Callout>
 
 <Callout type="trap">
-**误区：用表面渲染思路理解体积。**
-表面渲染在交点计算一次 BRDF，体积渲染需要沿光线连续采样多个点，每点计算衰减和内散射。计算量是表面渲染的数十倍。
+**现象 →** `g=0.8` 的雾把光强烈反弹回光源。**原因 →** 忽略 PBRT 中 `wi/wo` 都向外的方向约定，错误翻转 HG 的角度或符号。**修法 →** 用一束定向光做极坐标直方图：正 g 应沿物理原传播方向形成峰值。
 </Callout>
+
+<Callout type="trap">
+**现象 →** 某些高密度体素出现负权重、亮点或漏光。**原因 →** 局部 `sigmaMaj` 低于真实 `sigmaT`，导致 `sigmaN` 为负。**修法 →** 对每个 DDA 区间验证上界，考虑插值支持范围和光谱最大通道，并统计 null 接受率定位过松区间。
+</Callout>
+
+## 小结
+
+- 吸收、发射和散射是基本过程；外散射与内散射是同一散射的两个方向视角
+- $\sigma_t=\sigma_a+\sigma_s$，反照率给出散射比例，平均自由程给出事件间平均距离
+- 透射率是光学厚度的指数，并沿 ray 具有乘法性
+- 非均匀介质中“估计 τ 再取指数”通常有偏，null scattering 用 majorant 构造无偏采样
+- 相函数是归一化方向概率分布，没有表面余弦项；HG 正 g 表示前向散射
+- Medium 查询局部属性并返回 majorant 区间，MediumInterface 管理几何边界的介质切换
 
 <Exercises>
-**问题 1**：σa 和 σs 分别描述什么？它们如何组合形成总衰减系数？
+**问题 1**：均匀介质中 $\sigma_a=0.2\,m^{-1}$、$\sigma_s=0.8\,m^{-1}$。求衰减系数、单次散射反照率、平均自由程和传播 3 m 的透射率。
 
 <Answer>
-σa（吸收系数）描述光被介质吸收转化为热能的速率，σs（散射系数）描述光被粒子偏转到其他方向的速率。总衰减系数 σt = σa + σs，描述光强在单位距离内的总衰减率。光穿过距离 d 后透射率 T = e^(-σt·d)。
+$\sigma_t=1.0\,m^{-1}$，反照率 $\rho=0.8/1.0=0.8$，平均自由程 $1/\sigma_t=1$ m。透射率 $T_r=e^{-\sigma_t d}=e^{-3}\approx0.0498$。透过原方向的辐亮度只剩约 5%，但被移除的部分中 80% 属于散射而非吸收。
 </Answer>
 
-**问题 2**：相函数在体积散射中扮演什么角色？Henyey-Greenstein 模型的 g 参数有什么含义？
+**问题 2**：为什么无偏估计 $\widehat\tau$ 不能保证 $e^{-\widehat\tau}$ 无偏？Null scattering 如何改变问题？
 
 <Answer>
-相函数 p(ω→ω') 类似于 BRDF 但用于体积，描述散射光从方向 ω 偏转到 ω' 的概率分布。它决定了介质的视觉特征——各向同性（均匀雾）还是各向异性（向前散射的烟尘）。Henyey-Greenstein 模型的 g 参数控制散射方向性：g=0 是各向同性（均匀散射），g>0 是前向散射（光倾向于继续前进），g&lt;0 是后向散射（光被反弹回来）。g 的绝对值越大各向异性越强。
+指数是非线性凸函数，一般有 $E[e^{-\widehat\tau}]$ 不等于 $e^{-E[\widehat\tau]}$，所以无偏光学厚度经过指数后通常低估透射率。Null scattering 用上界 $\sigma_{maj}$ 补入 $\sigma_n=\sigma_{maj}-\sigma_t$，把非均匀介质表示为统一指数候选过程，从可递归积分形式直接估计透射率。
+</Answer>
+
+**问题 3**：在 PBRT 方向约定下，为什么 $g>0$ 的 HG 公式在 `dot(wo,wi)` 接近 -1 时达到峰值，却仍叫前向散射？
+
+<Answer>
+`wi` 和 `wo` 都从散射点向外，而物理入射传播方向是 `-wi`。前向散射表示出射传播方向 `wo` 接近原传播方向 `-wi`，因此 `dot(wo,wi)` 接近 -1。公式中的正 g 与 `+2g cosTheta` 正好在这个位置产生峰值。
+</Answer>
+
+**问题 4**：如何验证 GridMedium 的 majorant 网格既正确又不过分保守？
+
+<Answer>
+对每个 majorant cell 在包含插值支持的范围内密集采样或使用可靠最大值算法，验证所有波长通道都满足 `sigmaMaj >= sigmaA + sigmaS`。运行时断言 `sigmaN >= 0` 并记录每段真实、null、越过事件比例。出现负值说明上界错误；null 比例长期接近 1 说明上界过松，应提高网格局部性。
 </Answer>
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="吸收系数(σa)">描述光在介质中被吸收衰减的速率，单位 1/m，导致光强指数衰减。</GlossaryItem>
-<GlossaryItem term="散射系数(σs)">描述光被介质粒子偏转到其他方向的速率，导致外散射衰减。</GlossaryItem>
-<GlossaryItem term="相函数">描述散射光方向分布的函数，类似BRDF但用于体积，常用Henyey-Greenstein模型。</GlossaryItem>
-<GlossaryItem term="透射率">光穿过介质后的剩余光强比例，T = exp(-σt·d)，σt=σa+σs。</GlossaryItem>
+<GlossaryItem term="参与介质">在三维区域内吸收、发射或散射光的大量微粒统计模型。</GlossaryItem>
+<GlossaryItem term="吸收系数">单位距离发生吸收的概率密度，单位为距离倒数。</GlossaryItem>
+<GlossaryItem term="散射系数">单位距离发生真实散射的概率密度。</GlossaryItem>
+<GlossaryItem term="衰减系数">吸收与散射系数之和，表示从当前方向移除光的总密度。</GlossaryItem>
+<GlossaryItem term="单次散射反照率">一次真实事件是散射而不是吸收的比例 σs/σt。</GlossaryItem>
+<GlossaryItem term="平均自由程">均匀介质中相邻真实事件之间的平均距离 1/σt。</GlossaryItem>
+<GlossaryItem term="相函数">归一化描述一点上真实散射方向分布的概率函数。</GlossaryItem>
+<GlossaryItem term="透射率">经过吸收与外散射后仍留在原方向的辐亮度比例。</GlossaryItem>
+<GlossaryItem term="光学厚度">沿路径对衰减系数的积分，透射率等于其负指数。</GlossaryItem>
+<GlossaryItem term="Null scattering">加入不改变真实光路的虚构事件以采样非均匀介质的数学方法。</GlossaryItem>
+<GlossaryItem term="Majorant">某段 ray 上真实衰减系数的有效上界。</GlossaryItem>
+<GlossaryItem term="Henyey–Greenstein 相函数">由 g 控制前后向性的可评估、可精确采样相函数。</GlossaryItem>
+<GlossaryItem term="Medium">查询介质点属性并返回沿 ray majorant 区间的统一接口。</GlossaryItem>
+<GlossaryItem term="MediumInterface">记录几何边界内外 Medium 并用于 ray 介质切换的结构。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th edition, Chapter 11" adaptedUrl="https://www.pbr-book.org/4ed/Volume_Scattering" />

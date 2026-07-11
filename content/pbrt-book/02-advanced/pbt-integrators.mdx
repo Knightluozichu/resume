@@ -3,115 +3,298 @@ title: "积分器与采样器"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "路径追踪、双向路径追踪、MLM——求解渲染方程的算法"
+description: "从像素样本契约到 PBRT CPU、体积、GPU 与双向光传输积分器"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pbr-book.org/4ed/Introduction/pbrt_System_Overview"
 draft: false
 ---
 
-import { PbtIntegratorsDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-integrators";
+import { PbtAdvancedStrategiesDiagram, PbtIntegratorFamiliesDiagram, PbtIntegratorHierarchyDiagram, PbtIntegratorsDiagram, PbtSamplerDimensionsDiagram } from "@/components/mdx/pbrt-book/diagrams/pbt-integrators";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释路径追踪的基本算法流程
-- 能说出双向路径追踪(BDPT)的优势
-- 能描述 Metropolis 光线传输(MLT)的原理
-- 能回答为什么不同场景需要不同积分器？
+- 能区分积分器、采样器、光源采样器和 Film 的职责，并追踪一个像素样本的完整生命周期
+- 能解释 Integrator、ImageTileIntegrator 与 RayIntegrator 三层接口为何这样拆分
+- 能分析 StartPixelSample、Get1D、Get2D 与 Clone 的状态契约，定位条件分支造成的维度漂移
+- 能比较 PathIntegrator、VolPathIntegrator、WavefrontPathIntegrator、BDPT 与 MLT 的目标积分和适用边界
+- 能计算独立蒙特卡洛方差、BDPT 的 MIS 权重与 MLT 接受率，并据此选择验证方案
 </Objectives>
 
-## 直觉引入
+## 为什么 Integrator 和 Sampler 不能混为一谈
 
-想象你在黑暗的迷宫中找出口。路径追踪像随机走——每到一个路口随机选方向。BDPT 像从入口和出口同时出发，看哪两条路能接上。MLT 像「找到一个出口后，在附近探索更多出口」。
+<Term def="组织像素循环、生成光路并估计光传输积分，最终把样本贡献提交给 Film 的渲染算法对象">积分器</Term>决定“估计哪个积分、怎样构造光路、何时累加贡献”；<Term def="为每个像素样本按需提供可重复的一维和二维均匀样本坐标的状态对象">采样器</Term>决定“用高维单位超立方中的哪些点来估计”。Sampler 不知道 BSDF、光源或可见性，Integrator 也不应自己随意调用全局随机数绕过样本序列。
 
-积分器就是求解渲染方程的不同策略。不同场景的难点不同——焦散适合BDPT，难以采样的间接光适合MLT。PBRT 提供多种积分器让你按需选择。
-
-## 概念讲解
-
-### 积分器算法对比
+当前旧章把 PT、BDPT、MLT 排成三个平级选项，却漏掉 PBRT 4e 的实现骨架。官方第 1 章 [pbrt: System Overview](https://www.pbr-book.org/4ed/Introduction/pbrt_System_Overview) 先建立 CPU 积分器接口，第 8 章 [Sampling Interface](https://pbr-book.org/4ed/Sampling_and_Reconstruction/Sampling_Interface) 定义样本状态契约，第 13、14 章实现表面和体积路径积分器，第 15 章再把同一体积路径追踪算法映射到 GPU wavefront 架构。BDPT 与 MLT 仍值得学习，但它们属于在线补充或上一版的双向方法，不是 4e 印刷主线中替代 `VolPathIntegrator` 的默认配置。
 
 <PbtIntegratorsDiagram />
 
-<Term def="路径追踪(PT)从相机出发单向随机游走，是简单通用的积分器">路径追踪</Term>适合大多数场景，但对焦散等困难光路效率低。
+## 1. 共同数学契约：算法和样本序列共同决定估计器
 
-<Term def="双向路径追踪(BDPT)同时从光源和相机出发生成两条子路径，再连接它们">BDPT</Term>对焦散和小光源场景效率远超PT。
+设目标积分为
 
-<Term def="Metropolis光线传输(MLT)用马尔可夫链在路径空间中探索，找到一条好路径后在附近变异">MLT</Term>擅长难以采样的间接光路径。
+$$
+I=\int_{\mathcal X} f(x)\,\mathrm dx.
+$$
 
-<Term def="多重重要性采样(MIS)组合多种采样策略的估计，取各自最优部分，避免方差爆炸">MIS</Term>是现代积分器的核心组件。
+若 $X_i\sim p(x)$ 且 $p(x)>0$ 覆盖所有 $f(x)\ne0$ 的区域，独立蒙特卡洛估计为
 
-## 交互Demo
+$$
+\widehat I_N=\frac{1}{N}\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)},
+\qquad
+\mathbb E[\widehat I_N]=I.
+$$
 
-<Stepper>
-<Step title="第一步：路径追踪">最基础的积分器：从相机发射光线，每次交点随机选一个方向继续，直到命中光源。简单但某些光路效率极低。</Step>
-<Step title="第二步：双向路径追踪">
-BDPT 同时从光源和相机发射子路径，然后尝试连接两段子路径上的点。对焦散等困难光路效率大幅提升。
+Integrator 定义 $f/p$：路径贡献、可见性、BSDF、相函数、透射率与联合 PDF。Sampler 产生用于构造 $X_i$ 的单位区间坐标。只替换一个正确的 Sampler 通常不改变期望，但会改变方差、频谱和可复现性；漏除 PDF、样本不覆盖非零区域或把相关样本当独立样本分析，则会直接破坏推导。
+
+独立样本下，估计方差为
+
+$$
+\operatorname{Var}[\widehat I_N]
+=\frac{1}{N}\operatorname{Var}\!\left[\frac{f(X)}{p(X)}\right],
+$$
+
+因此标准误差通常按 $N^{-1/2}$ 下降。把噪声标准差减半约需四倍样本；“换成更好的采样器后每翻倍 spp 就保证误差减半”不是通用结论。
+
+## 2. 端到端像素样本生命周期
+
+`ImageTileIntegrator::Render()` 把图像分成 tile，在多轮 progressive waves 中逐步增加每像素样本数。每个 worker 克隆自己的 Sampler；每个像素样本调用 `StartPixelSample(pPixel, sampleIndex)`，构造 `CameraSample` 和波长，生成相机 ray，再调用具体 `Li()`，最后把相机权重与辐亮度交给 Film。
+
 <PbtIntegratorsDiagram />
-</Step>
-<Step title="第三步：MLT 与 MIS">MLT 找到一条贡献大的路径后，在其附近做局部变异探索更多类似路径。MIS 组合多种采样策略，自动选择最优权重。</Step>
-</Stepper>
 
-## 代码对照
+对第 $i$ 个相机样本，可把提交 Film 前的核心量概括为
+
+$$
+C_i=w_{c,i}\,L_i(r_i,\lambda_i),
+$$
+
+其中 $w_{c,i}$ 是相机射线权重，$L_i$ 是积分器沿 ray 返回的光谱辐亮度估计。Film 还会执行重建滤波、传感器颜色空间转换和样本累积；Integrator 不应提前把显示变换后的 RGB 当作辐亮度返回。
+
+## 3. 三层积分器接口：只让变化的部分变化
+
+<PbtIntegratorHierarchyDiagram />
+
+基础 <Term def="PBRT 中保存场景 aggregate 与 lights，并提供 Render、Intersect 和 IntersectP 等通用能力的积分器基类">Integrator基类</Term>拥有场景加速结构和光源列表。`Intersect()` 返回最近交点；`IntersectP()` 只回答是否遮挡，适合阴影 ray，通常不必构造完整交互数据。
+
+<Term def="在 Integrator 之上统一实现图块并行、渐进样本波次、相机与 Sampler 原型管理的 CPU 积分器层">图像分块积分器</Term> `ImageTileIntegrator` 管理 camera、Film、sampler prototype 和 tile 主循环，并把单个像素样本交给 `EvaluatePixelSample()`。
+
+<Term def="在 ImageTileIntegrator 之上把像素样本转成相机 ray，并要求子类实现 Li 的路径积分器接口">射线积分器</Term> `RayIntegrator` 实现 `EvaluatePixelSample()`，具体子类只实现
 
 ```cpp
-// 路径追踪核心循环
-Spectrum PathTracer::Li(Ray ray) {
-    Spectrum L(0), beta(1);
-    for (int bounces = 0; ; bounces++) {
-        SurfaceInteraction si;
-        if (!scene.Intersect(ray, &si)) {
-            L += beta * scene.Le(ray);
-            break;
-        }
-        
-        // 直接光照（MIS）
-        for (auto &light : scene.lights)
-            L += beta * EstimateDirect(si, light, sampler);
-        
-        // 间接光照：BRDF采样
-        auto [wi, f, pdf] = si.bsdf->Sample_f(ray.d, sampler);
-        beta *= f * abs(dot(n, wi)) / pdf;
-        
-        // 俄罗斯轮盘赌
-        if (bounces > 3 && beta.MaxComponent() < 0.1)
-            if (sampler.Get1D() < 0.5) break;
-            else beta /= 0.5;
+virtual SampledSpectrum Li(
+    RayDifferential ray,
+    SampledWavelengths &lambda,
+    Sampler sampler,
+    ScratchBuffer &scratch,
+    VisibleSurface *visibleSurface) const = 0;
+```
+
+这个边界让 `RandomWalkIntegrator`、`SimplePathIntegrator`、`PathIntegrator`、`SimpleVolPathIntegrator` 和 `VolPathIntegrator` 共享线程调度、相机采样与 Film 写回。算法实验可以集中在 `Li()`，不用复制一套容易出错的渲染主循环。
+
+## 4. Sampler 是有状态的高维坐标流
+
+每个像素样本可看作高维向量
+
+$$
+u=(u_0,u_1,\ldots,u_{d-1})\in[0,1)^d.
+$$
+
+前两维通常给像素内偏移，接下来的相机维度决定镜头位置和时间；后续维度按实际路径长度用于波长、光源选择、光源位置、BSDF 或相函数方向、介质距离和俄罗斯轮盘。路径越长，按需消费的维度越多，所以总维数不能在渲染开始前固定。
+
+<PbtSamplerDimensionsDiagram />
+
+<Term def="高维样本中具有固定序号和教学语义的单个一维坐标或一组二维坐标">样本维度</Term>不是“随便取下一个随机数”。`Get2D()` 不能总由两次 `Get1D()` 替代，因为部分低差异 Sampler 会专门优化二维投影。更重要的是，条件分支必须保持后续语义和维度的一致关系：
+
+```cpp
+sampler.StartPixelSample(pixel, sampleIndex);
+Point2f uLight = sampler.Get2D();  // 始终保留给光源位置
+Point2f uBSDF  = sampler.Get2D();  // 始终保留给 BSDF 方向
+Float uRR      = sampler.Get1D();  // 始终保留给俄罗斯轮盘
+
+if (canSampleLight)
+    EstimateDirect(uLight);
+if (canScatter)
+    ContinuePath(uBSDF);
+PossiblyTerminate(uRR);
+```
+
+若 `uLight` 只在某个分支内才消费，后面的 `uBSDF` 有时读取第 0、1 维，有时读取第 2、3 维，Sampler 精心构造的投影关系会被打乱。对于独立随机采样，这种错误可能不改变期望，所以更难通过肉眼发现；对低差异序列，它会显著损害收敛。
+
+## 5. 可复现性、Clone 与并行安全
+
+`StartPixelSample(pixel, sampleIndex, dimension)` 必须把 Sampler 重置到确定状态。相同场景、像素、样本序号和维度应生成相同坐标，这种 <Term def="使用像素、样本索引和维度重新生成完全相同样本序列的调试能力">确定性重放</Term>使崩溃可以从指定 pixel/sample 直接复现，而不必先重渲染前面的所有样本。
+
+Sampler 保存当前 pixel、sample index 和 dimension，因此不能让多个线程共享同一个可变实例。`ImageTileIntegrator` 从 prototype 调用 `Clone()`，为 worker 创建独立状态。Clone 需要复制配置与 seed 规则，但不应让多个副本意外共享维度游标。
+
+PBRT 4e 的常见 Sampler 各有明确用途。
+
+<Term def="返回独立均匀随机坐标、适合作为正确性和方差基线但不适合追求图像质量的简单 Sampler">独立采样器</Term>容易验证，却包含白噪声的全部频率。
+
+<Term def="把采样域划分为互不重叠区域并在每个区域内抖动取样，以改善覆盖的技术">分层采样</Term>保证每个 strata 有样本，减少聚团与空洞。
+
+<Term def="用 Halton 或 Sobol 等构造低 discrepancy 点集，使有限样本更均匀覆盖积分域的序列">低差异序列</Term>在平滑被积函数上往往收敛更快，但投影质量和随机化方式仍会影响结果。
+
+`ZSobolSampler` 通过 blue-noise 排布把误差推向较高频率，是 PBRT 4e 默认 Sampler；它与 `PaddedSobolSampler` 可能有接近的 MSE，但视觉误差结构不同。
+
+## 6. 4e 积分器家族：目标积分与执行架构必须分开比较
+
+<PbtIntegratorFamiliesDiagram />
+
+<Term def="从相机出发，在表面顶点执行显式光源采样、BSDF 采样、MIS 与俄罗斯轮盘的生产级表面积分器">路径追踪积分器</Term> `PathIntegrator` 求解无参与介质时的表面 LTE。`SimplePathIntegrator` 不是低质量替代品，而是结构简单、适合对照 BSDF 与 light sampling 是否收敛到同一答案的验证实现。
+
+<Term def="同时采样表面与参与介质散射，并处理透射率、相函数、光源采样和 MIS 的路径积分算法">体积路径追踪</Term>由 `VolPathIntegrator` 实现。官方 [Volume Scattering Integrators](https://pbr-book.org/4ed/Light_Transport_II_Volume_Rendering/Volume_Scattering_Integrators) 明确把它作为 PBRT 4e 默认积分器：它支持表面和介质、光谱变化介质以及带 MIS 的直接光照。`SimpleVolPathIntegrator` 不直接采光源，也不处理非零 BSDF 表面，主要用于验证 delta tracking 的 ground truth。
+
+<Term def="把逐路径传输算法拆成按工作类型分组的队列和 GPU kernel，以提高并行吞吐量的积分器架构">波前积分器</Term> `WavefrontPathIntegrator` 没有发明新的光传输方程；它重排 `VolPathIntegrator` 的语义。相机 ray、求交、介质、发光命中、不同材质和阴影 ray 被放入队列，由同类 kernel 批处理。GPU 因分支收敛和高吞吐获益，但同一 wavefront 组织在 CPU 上通常更慢。
+
+因此“积分器算法”和“执行架构”是两个轴：Path 与 VolPath 改变目标传输域；megakernel 与 wavefront 改变工作调度。仅因 GPU 更快就声称 Wavefront 具有不同物理解，是概念错误。
+
+## 7. BDPT 与 MLT：补充路径策略，而不是万能高阶按钮
+
+<PbtAdvancedStrategiesDiagram />
+
+<Term def="分别从光源与相机生成子路径，再枚举可连接顶点对并用 MIS 合并连接策略的无偏算法">双向路径追踪</Term>用 $(s,t)$ 表示一条完整路径中来自光源子路径和相机子路径的顶点数量。不同 $(s,t)$ 可能生成同一条几何路径，必须用 <Term def="按照各路径生成策略的概率密度加权组合多个无偏估计器的方差降低方法">多重重要性采样</Term>避免重复计光：
+
+$$
+\widehat I_{\mathrm{BDPT}}
+=\sum_{s,t}w_{s,t}(\bar x)
+\frac{C_{s,t}(\bar x)}{p_{s,t}(\bar x)},
+\qquad
+\sum_{s,t}w_{s,t}(\bar x)=1.
+$$
+
+BDPT 对“光源一侧容易生成、相机一侧难以偶遇”的路径有优势，例如部分间接照明与镜面链。但连接 delta 顶点没有普通面积密度，介质和 BSSRDF 也需要额外测度处理；“BDPT 自动解决所有焦散”不成立。
+
+<Term def="把路径生成所用的 primary sample vector 作为马尔可夫链状态，通过接受或拒绝变异使采样密度正比于路径贡献的算法">Metropolis光线传输</Term>使用相关样本。若当前状态为 $X$、候选为 $Y$、贡献标量为 $C$、提议密度为 $T$，Metropolis-Hastings 接受率为
+
+$$
+a(X\to Y)=\min\!\left(
+1,
+\frac{C(Y)T(Y\to X)}{C(X)T(X\to Y)}
+\right).
+$$
+
+<Term def="重新随机化大部分 primary sample vector，使马尔可夫链跳到路径空间远处并保持遍历性的 MLT 变异">大步变异</Term>负责离开当前模态；<Term def="只扰动 primary sample vector 的局部坐标，在高贡献路径附近细致探索的 MLT 变异">小步变异</Term>提高困难路径附近的样本密度。只有小步会让链困在局部区域；只有大步则退化为低效的独立探索。MLT 还会产生空间相关的斑块噪声，并非所有场景都优于 PT。
+
+## 8. 场景选择不是按“算法等级”，而是按证据
+
+1. 无介质、CPU、需要生产结果：先用 PathIntegrator，检查 light sampler、MIS 和 spp。
+2. 有雾、烟、云或非真空 shadow ray：使用默认 VolPathIntegrator，不要用 surface-only PathIntegrator 假装透射率为 1。
+3. 支持的 GPU 且追求吞吐：使用 WavefrontPathIntegrator；用同场景 CPU VolPath 交叉验证数值和功能覆盖。
+4. 调试 BSDF、相函数或采样器：使用 SimplePathIntegrator、SimpleVolPathIntegrator 或独立 Sampler 建立低复杂度参考。
+5. 常规 PT 在某类路径上反复出现高方差，且渲染器确实提供双向在线实现：再比较 BDPT/MLT 的等时间 MSE，不凭“焦散”两个字直接切算法。
+
+选择必须同时记录 target integral、执行设备、最大深度、spp、Sampler、light sampler、随机 seed、时间和误差指标。只比较相同 spp 而忽略每样本成本，会把慢但低方差与快但高方差比较错。
+
+## 9. 分三步审计一个像素样本
+
+动手试：把断点固定在同一 pixel 和 sample index，逐步核对每层契约，而不是从最终噪声图反推所有可能原因。
+
+<Stepper>
+<Step title="第一步：固定样本与相机状态">
+调用 `StartPixelSample`，记录 pixel、sample index、起始 dimension、波长和 CameraSample。确认 worker 使用独立 Clone，相同输入能确定性重放；相机 ray 无效时也要让样本生命周期正常结束。
+<PbtIntegratorsDiagram step={1} />
+</Step>
+<Step title="第二步：核对目标积分与维度消费">
+确认当前是 surface Path、VolPath 还是 wavefront 等价实现；跟踪每次 `Get1D/Get2D` 的语义、联合 PDF、MIS 与 `beta`。条件分支不能让后续维度含义漂移，也不能把 surface-only 结果冒充体积解。
+<PbtIntegratorsDiagram step={2} />
+</Step>
+<Step title="第三步：核对 Film 写回与统计证据">
+检查 `Li` 返回的是光谱辐亮度估计，相机权重和 Film filter 只应用一次。用固定 seed 复现单样本，再用不同 seed 的多次渲染估计均值、方差和等时间 MSE；不要只凭一张图判断无偏。
+<PbtIntegratorsDiagram step={3} />
+</Step>
+</Stepper>
+
+## 10. 代码对照：主循环与 Li 的所有权边界
+
+下面的缩略结构保留 PBRT 的关键所有权。`Render()` 管并行与 samples，`EvaluatePixelSample()` 管 Camera/Film 桥接，具体 `Li()` 管光传输：
+
+```cpp
+void RayIntegrator::EvaluatePixelSample(Point2i pixel, int sampleIndex,
+                                        Sampler sampler, ScratchBuffer &scratch) {
+    // Render() 已为当前 pixel/sample 调用 StartPixelSample。
+    SampledWavelengths lambda = film.SampleWavelengths(sampler.Get1D());
+    CameraSample cameraSample = GetCameraSample(sampler, pixel, filter);
+    auto cameraRay = camera.GenerateRayDifferential(cameraSample, lambda);
+
+    SampledSpectrum L(0);
+    VisibleSurface visibleSurface;
+    if (cameraRay) {
+        cameraRay->ray.ScaleDifferentials(
+            max(0.125f, 1 / sqrt(Float(sampler.SamplesPerPixel()))));
+        L = cameraRay->weight * Li(
+            cameraRay->ray, lambda, sampler, scratch,
+            film.UsesVisibleSurface() ? &visibleSurface : nullptr);
     }
-    return L;
+
+    film.AddSample(pixel, L, lambda, &visibleSurface, cameraSample.filterWeight);
 }
 ```
 
-## 常见误区
+实际实现还处理 ray differential 缩放、坏值诊断与相机权重细节。审计时要关注职责，而不是逐字符照抄：具体 Path/VolPath 子类不应重新实现 tile 并行；Sampler 不应读取场景；Film 不应反向决定路径采样策略。
+
+## 11. 常见误区与诊断
 
 <Callout type="trap">
-**误区：认为一种积分器可以通吃所有场景。**
-不同积分器各有擅长：PT 通用但对焦散差，BDPT 对焦散强但对大场景内存开销大，MLT 对困难间接光强但有局部收敛不均的问题。实际中应根据场景特征选择，甚至混合使用。
+**现象：** 同一 seed 下某个像素偶尔无法复现，换成 Sobol 后噪声反而更乱。**原因：** 条件分支只在命中光源时消费样本，后续 BSDF 与轮盘读取的维度发生漂移，或多个线程共享同一 Sampler 状态。**修法：** 固定每类语义的维度消费，按 worker Clone，并用 pixel/sample/dimension 三元组记录重放。
 </Callout>
 
 <Callout type="trap">
-**误区：不理解 MIS 的重要性。**
-没有 MIS，当光源采样和BRDF采样一个有效一个无效时，方差会爆炸。MIS 通过加权组合两者，在各自擅长的区域取最优，使方差始终可控。现代渲染器几乎都默认使用 MIS。
+**现象：** 有均匀雾的场景用 PathIntegrator 看起来更亮、更干净。**原因：** surface-only 积分器根本没有估计介质吸收与散射，低噪声来自漏算目标积分。**修法：** 使用 VolPathIntegrator，并与简单体积积分器或解析 Beer 定律交叉验证，而不是拿错误目标的低方差当优势。
 </Callout>
+
+<Callout type="trap">
+**现象：** BDPT 或 MLT 在普通室内场景比 PT 更慢，便认定实现错误。**原因：** 高级策略有连接、PDF、链初始化和相关样本开销，优势只在目标路径分布困难时出现。**修法：** 固定时间、设备和 seed 集合比较 MSE；同时检查哪些路径策略实际贡献，而不是只比较 spp。
+</Callout>
+
+## 小结与自检
+
+PBRT 把积分器拆成调度、像素样本和传输算法三层，把 Sampler 设计成可克隆、可重放的高维坐标流。4e 的默认 CPU 解法是支持表面与介质的 `VolPathIntegrator`；GPU `WavefrontPathIntegrator` 重排同一算法而不改变物理目标。BDPT 与 MLT 改变路径生成概率，能在特定困难分布上提高效率，但必须承担更复杂的 MIS、测度和统计验证。
 
 <Exercises>
-**问题 1**：路径追踪的基本流程是什么？它的主要缺点是什么？
+**问题 1：** 独立采样下，64 spp 的像素噪声标准差为 0.08。若其他条件不变，目标标准差为 0.02，理论上约需多少 spp？
 
 <Answer>
-流程：从相机发射光线→求交→计算直接光照（采样光源）→按BRDF采样新方向→递归追踪间接光照→俄罗斯轮盘赌终止。主要缺点是对焦散（光经镜面反射到漫反射面）效率极低——从漫反射面按BRDF随机采样几乎不可能恰好命中镜面再到光源，导致大量光线浪费。
+标准差按 $N^{-1/2}$ 缩放。目标缩小到原来的 $0.02/0.08=1/4$，样本数需扩大 $4^2=16$ 倍，因此约需 $64\times16=1024$ spp。这只是独立样本和相同单样本方差下的估算。
 </Answer>
 
-**问题 2**：BDPT 相比 PT 有什么优势？它如何解决焦散问题？
+**问题 2：** 某路径在“命中面光源”时才调用一次 `Get2D()`，之后总是调用 `Get2D()` 采样 BSDF。为什么 IndependentSampler 下可能不易发现问题，而 Sobol 下会明显恶化？
 
 <Answer>
-BDPT 同时从光源（光子路径）和相机（相机路径）生成两条子路径，然后尝试连接两段子路径上的每对点。对于焦散光路 L(S)D E，PT 需要从漫反射面随机采样到镜面再到光源（极低概率），BDPT 则从光源出发经镜面到达漫反射面（光子路径），再从相机到达漫反射面（相机路径），连接两者即可。这把「难以采样的单向路径」变成「两条容易采样的子路径的连接」，效率大幅提升。
+IndependentSampler 的各维都是独立均匀随机数，BSDF 偶尔换到另一组维度通常仍保持边缘均匀，因此期望可能不变。Sobol 等低差异 Sampler 依赖固定维度投影的均匀结构；条件消费让同一 BSDF 语义在不同路径读取不同维度，破坏二维投影与跨样本一致性，方差和结构化伪影都会恶化。
+</Answer>
+
+**问题 3：** 场景包含彩色烟雾、玻璃和面光源，需要在 PBRT 4e 的 CPU 默认路径上得到生产结果。应先选哪个积分器，哪两个简单实现适合做局部验证？
+
+<Answer>
+应先选 `VolPathIntegrator`，因为它同时处理表面、参与介质、光谱变化属性和带 MIS 的直接光照。`SimpleVolPathIntegrator` 可验证介质距离与 null-scattering 主线，但它不支持正常表面散射和显式光源采样；`SimplePathIntegrator` 可在去掉介质后验证表面 BSDF/light sampling。二者都不是该完整场景的最终解。
+</Answer>
+
+**问题 4：** MLT 当前路径贡献 $C(X)=4$，候选贡献 $C(Y)=10$，提议密度满足 $T(X\to Y)=0.5$、$T(Y\to X)=0.1$。接受候选的概率是多少？
+
+<Answer>
+$a=\min(1,10\times0.1/(4\times0.5))=\min(1,0.5)=0.5$。贡献更高并不保证接受率为 1，因为非对称提议密度必须通过正反向概率比修正。
 </Answer>
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="路径追踪(PT)">从相机出发单向随机游走求解渲染方程的积分器，简单通用但对焦散效率低。</GlossaryItem>
-<GlossaryItem term="双向路径追踪(BDPT)">从光源和相机同时生成子路径再连接，对焦散和小光源场景效率高。</GlossaryItem>
-<GlossaryItem term="Metropolis光线传输(MLT)">用马尔可夫链在路径空间局部变异探索，擅长困难间接光路径。</GlossaryItem>
-<GlossaryItem term="多重重要性采样(MIS)">加权组合多种采样策略，取各自最优部分，避免方差爆炸的核心技术。</GlossaryItem>
+<GlossaryItem term="积分器">组织像素循环和光路构造，估计目标光传输积分并把贡献提交给 Film 的算法对象。</GlossaryItem>
+<GlossaryItem term="采样器">按像素和样本序号提供一维、二维均匀坐标的可重置状态对象。</GlossaryItem>
+<GlossaryItem term="Integrator基类">保存场景 aggregate 与 lights，并提供 Render、Intersect 和 IntersectP 的基础接口。</GlossaryItem>
+<GlossaryItem term="图像分块积分器">统一处理 CPU 图块并行、渐进采样波次、Camera 与 Sampler prototype 的积分器层。</GlossaryItem>
+<GlossaryItem term="射线积分器">把像素样本转换为相机 ray，并通过虚函数 Li 交给具体传输算法的接口。</GlossaryItem>
+<GlossaryItem term="样本维度">高维单位样本向量中与像素、镜头、光源或散射等语义绑定的坐标。</GlossaryItem>
+<GlossaryItem term="确定性重放">通过 pixel、sample index 和 dimension 重新生成完全一致样本的调试能力。</GlossaryItem>
+<GlossaryItem term="独立采样器">返回独立均匀随机坐标的基线 Sampler，正确简单但覆盖和误差频谱较差。</GlossaryItem>
+<GlossaryItem term="分层采样">划分采样域并在每个 strata 中取样，以减少聚团和空洞。</GlossaryItem>
+<GlossaryItem term="低差异序列">让有限点集均匀覆盖积分域的 Halton、Sobol 等确定性序列及其随机化版本。</GlossaryItem>
+<GlossaryItem term="路径追踪积分器">从相机增长表面路径并结合光源采样、BSDF 采样、MIS 和轮盘的生产算法。</GlossaryItem>
+<GlossaryItem term="体积路径追踪">同时处理表面和参与介质顶点、透射率、相函数及光谱权重的路径算法。</GlossaryItem>
+<GlossaryItem term="波前积分器">把路径阶段拆成同类工作队列和批量 kernel，以适配 GPU 吞吐执行的架构。</GlossaryItem>
+<GlossaryItem term="双向路径追踪">连接光源与相机子路径，并用 MIS 合并多种连接策略的无偏算法。</GlossaryItem>
+<GlossaryItem term="多重重要性采样">用各策略 PDF 对多个覆盖同一积分的估计器加权，降低失配方差。</GlossaryItem>
+<GlossaryItem term="Metropolis光线传输">在 primary sample space 中构造路径马尔可夫链，使访问密度跟随路径贡献。</GlossaryItem>
+<GlossaryItem term="大步变异">把 MLT 链提议到路径空间远处、避免长期困在局部模态的全局变异。</GlossaryItem>
+<GlossaryItem term="小步变异">在当前 primary sample vector 附近扰动、密集探索高贡献路径邻域的局部变异。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation" adaptedUrl="https://www.pbr-book.org/" />
+<Attribution adaptedFrom="Physically Based Rendering: From Theory to Implementation, 4th ed., Chapters 1, 8, 13-15; online bidirectional methods" adaptedUrl="https://www.pbr-book.org/4ed/contents" />

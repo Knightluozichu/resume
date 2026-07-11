@@ -21,7 +21,7 @@ type UboStep = 1 | 2 | 3;
 const ARIA: Record<UboStep, string> = {
   1: "不用 Uniform 缓冲对象的情况。场景里有三个着色器程序，每个程序里都各自存了一份投影矩阵和观察矩阵的 uniform。想改一次这两个矩阵，就得用 CPU 分别往三个程序各传一遍，画出三根独立的箭头，冗余而且容易漏掉某一个。",
   2: "使用 Uniform 缓冲对象的情况。CPU 只把投影矩阵和观察矩阵写进一块共享的缓冲，这块缓冲经过一个编号为 0 的绑定点，同时接到三个着色器程序上。改一次这块缓冲，三个程序立刻都读到新值，只需设置一次。",
-  3: "std140 内存布局示意。Uniform 缓冲对象里的成员要按规则对齐：一个 float 占 4 字节，一个 vec3 虽然只有 3 个数，却要补齐占满 16 字节、后面留一段空白填充 padding，一个 mat4 按 4 列、每列各占 16 字节排列。CPU 往缓冲里写数据时必须照这套偏移量摆放，否则着色器会读错位。",
+  3: "std140 内存布局示意。图中字段顺序为 float、vec3、vec4：每个成员从自己的对齐边界开始，因此 float 后的 vec3 跳到 16 字节，vec3 后的 vec4 跳到 32 字节。若 vec3 后接的是 float，则该 float 可以复用第 4 个槽位。CPU 写入须按实际字段序列计算偏移。",
 };
 
 export function UboBindingDiagram({ step = 2 }: { step?: UboStep }) {
@@ -55,9 +55,8 @@ export function UboBindingDiagram({ step = 2 }: { step?: UboStep }) {
         )}
         {step === 3 && (
           <>
-            <strong>std140 对齐</strong>：成员按规则对齐——
-            <span className="font-mono">vec3</span> 要补齐到 16 字节、留{" "}
-            <strong>padding</strong>，CPU 写入须照这套偏移。
+            <strong>std140 对齐</strong>：图中是 float → vec3 → vec4 的字段序列，
+            所以需要 <strong>padding</strong>；vec3 后接 float 则可以复用第 4 槽。
           </>
         )}
       </figcaption>
@@ -331,7 +330,7 @@ function WithUbo() {
   );
 }
 
-/* ============ step 3：std140 内存布局（带 padding 的内存条） ============ */
+/* ============ step 3：std140 的 float → vec3 → vec4 示例 ============ */
 // 内存条几何常量（模块级，避免 render 内重建）。
 const STD140_CELL_W = 56;
 const STD140_X0 = 40;
@@ -344,7 +343,7 @@ type Std140Cell = {
   kind: "data" | "pad";
 };
 
-// 三行内存条：float（+3 padding）/ vec3（+1 padding）/ vec4（占满）。
+// 图示字段顺序为 float / vec3 / vec4，故两个过渡都需要 padding。
 const STD140_CELLS: readonly Std140Cell[] = [
   { col: 0, row: 0, label: "float", kind: "data" },
   { col: 1, row: 0, label: "pad", kind: "pad" },
@@ -365,13 +364,13 @@ const STD140_ROW_NOTES: readonly {
   text: string;
   warn: boolean;
 }[] = [
-  { row: 0, text: "偏移 0：float 占 4 字节，padding 补到 16", warn: false },
+  { row: 0, text: "偏移 0：float 后的 vec3 需从 16B 边界开始", warn: false },
   {
     row: 1,
-    text: "偏移 16：vec3 也吃满 16 字节！（第 4 格是 padding）",
+    text: "偏移 16：vec3 后接 vec4，后继字段需从 32B 开始",
     warn: true,
   },
-  { row: 2, text: "偏移 32：vec4 正好占满，无 padding", warn: false },
+  { row: 2, text: "偏移 32：vec4 正好占满；vec3 后接 float 是另一种情况", warn: false },
 ];
 
 function Std140() {
@@ -385,7 +384,7 @@ function Std140() {
         fontWeight="600"
         fill="var(--text-primary)"
       >
-        std140：成员按 16 字节对齐摆进缓冲（每格 = 4 字节）
+        std140 示例：float → vec3 → vec4（每格 = 4 字节）
       </text>
 
       {/* 三行内存条：每格 4 字节，data 实色、pad 虚线空格 */}

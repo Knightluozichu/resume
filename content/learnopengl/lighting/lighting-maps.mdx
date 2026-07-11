@@ -1,14 +1,22 @@
 ---
-title: 光照贴图
+title: 漫反射、镜面与自发光贴图
 type: C
 section: 光照
 order: 4
 description: 把材质里常量的漫反射色和镜面色换成从贴图采样的逐片段值——用一张漫反射贴图给物体各处不同底色，用一张灰度镜面光贴图当遮罩，让木箱的钢边发亮、木头部位发哑。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/02%20Lighting/04%20Lighting%20maps/
+sourceUrl: https://learnopengl.com/Lighting/Lighting-maps
 draft: false
 ---
+
+import {
+  DiffuseMapDiagram,
+  EmissionMapDiagram,
+  LightingMapBindingDiagram,
+  LightingMapLayersDiagram,
+  SpecularMapDiagram,
+} from "@/components/mdx/learnopengl/diagrams/lighting-maps";
 
 {/* C 实战型章（HEL-53，M5 光照篇第 4 篇）：主题是光照贴图——把上一章材质里「常量的」diffuse / specular 换成「从纹理采样的逐片段值」。承接两条线：①「材质」章（已会 Material 结构体 ambient/diffuse/specular + shininess、Phong 三项「材质色 × 光强」）；②「纹理」章（已会 sampler2D / texture() / UV / activeTexture / uniform1i / 纹理单元）。本章把这两者合流：material.diffuse / material.specular 由 vec3 改成 sampler2D，片元用 texture(material.diffuse, TexCoords).rgb / texture(material.specular, TexCoords).rgb 取代常量；CPU 侧绑两张贴图到 0/1 号单元、uniform1i 设采样器。C 型：代码=重心（§6 覆盖 GLSL struct 改 sampler2D、顶点传 TexCoords、片元三项采样、CPU 绑两图），math:false 整节省略。主 Demo = 复用 <LightingDemo />（HEL-49，Phong 参照，勿改勿建）+「猜一猜」（材质 specular 常量时整块一样亮，换贴图遮罩会怎样）。新建 2 个静态图示：<DiffuseMapDiagram />（漫反射贴图：纹理→逐片段底色）、<SpecularMapDiagram />（镜面贴图：灰度遮罩→哪些部位反光）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,15 +26,17 @@ draft: false
 
 <Objectives>
 
-- 能说清**漫反射贴图**和**镜面光贴图**各自替换了材质里的哪一项，以及镜面光贴图为什么是一张灰度图
-- 能把片元着色器里常量的 `material.diffuse` / `material.specular` 改成从 `sampler2D` 采样，并在 CPU 侧把两张贴图绑到不同纹理单元，改出「木箱钢边发亮、木头部位发哑」的效果
-- 能回答：镜面光贴图里某个部位被画成纯黑，那一片在画面上会是什么样？画成纯白又会怎样？
+- 能解释漫反射、镜面与自发光贴图分别控制材质的哪个输出通道
+- 能实现位置、法线、UV 顶点布局以及三个 sampler2D 的片段采样代码
+- 能实现三个纹理单元的绑定链，使 sampler uniform、active unit 与 texture binding 一一对应
+- 能修改镜面贴图颜色与自发光强度，得到暖色高光和不受灯光影响的发光图案
+- 能判断 UV 未传递、贴图绑错单元、镜面遮罩取反或把 emission 当真实光源造成的错误
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库——同一束光打在同一个物体的不同部位，反光各不相同。 */}
 
-## 一个木箱，木头发哑、铁边发亮
+## 为什么一个木箱能同时木头发哑、铁边发亮
 
 上一章你已经能给整个物体配一套「反光说明书」，让它看着像金属或像橡胶。可现实里的东西很少是「纯一种材质」：一个带铁皮包角的木箱，木头部分灰扑扑、几乎不反光，可四角那圈钢边一见光就亮得晃眼。用上一章的办法，整个箱子只能共用同一套反光参数——要么整块都哑、要么整块都亮，没法让「同一个箱子上，这块木头哑、那条铁边亮」。
 
@@ -66,11 +76,41 @@ draft: false
 
 有一点要特别记住：`sampler2D` 是一种**特殊类型**，不能像普通变量那样赋值或在函数里临时造一个，**只能用 `uniform` 声明**。所以它一定出现在 `uniform Material material;` 这种从 CPU 传进来的结构体里。具体怎么声明、怎么采样、CPU 侧怎么把两张图喂进去，是下面 §6 的重头戏。
 
+## 自发光贴图：不经过灯光方向，直接增加颜色
+
+官方章节还加入第三张 <Term def="标记表面哪些区域应直接增加亮色的纹理。采样结果不经过漫反射或镜面角度计算，而是乘强度后直接加到最终片段颜色；它只让当前表面看似发亮，不会自动照亮周围物体。">自发光贴图</Term>（emission map）。它标记物体表面哪些区域看起来自己在发亮，例如设备屏幕、霓虹字或箱子上的电子图案。每个片段采样后把结果直接加到环境、漫反射、镜面三项之后，因此即使该表面背对灯光，自发光图案仍然可见。
+
+<EmissionMapDiagram />
+
+自发光贴图不会参与 `N·L`、`R·V`，但它也**不会真的照亮周围物体**。这只是让当前表面输出额外颜色；要让附近墙面也被照亮，需要额外光源、全局光照或后处理 bloom 等机制。官方练习还可让 UV 随时间偏移，使发光图案在表面滚动，本质仍是改变 `texture(material.emission, uv + offset)` 的采样位置。
+
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。Phong 三项公式在「基础光照」「材质」两章已建立；本章只把每项里的「材质常量色」换成「一次纹理采样」，不引入新数学，用 §3 文字 + 两张图示 + §6 片元代码逐行 + §5 Demo 直觉代替。 */}
 
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = 专用 <LightingMapsDemo />（HEL-65，渐进三步：常量材质→+漫反射贴图→+镜面光贴图遮罩）。贴图立方体（程序化木箱风 diffuse + 配套灰度 specular 遮罩，零外部资源，UV 对齐）+ 公转点光源；步进 transport 复用 HEL-64 气质，本组件自带实现（不改 lighting-canvas）。猜一猜引导（常量 specular 整块一样亮，第 3 步换灰度遮罩后只剩钢边亮）；控件 ≤5（步进 transport / 光源方位 / 自转开关 / 重置）；自带骨架屏 + WebGL2 兜底。 */}
 
 ## 动手：从「常量材质」一步步换成贴图
+
+先按材质通道逐层核对三张图各自进入哪条计算路径：
+
+<Stepper>
+  <Step title="漫反射贴图：替换逐片段底色">
+    用 `TexCoords` 采样 `material.diffuse`，同一份 `baseColor` 同时进入 ambient 与 diffuse。此时木纹和钢边颜色出现，但镜面仍可保持常量。
+
+    <LightingMapLayersDiagram step={1} />
+  </Step>
+  <Step title="镜面贴图：限制高光区域">
+    采样 `material.specular` 并乘入 specular。黑色区域高光为 0，白色区域完整保留；彩色值还可给高光染色。
+
+    <LightingMapLayersDiagram step={2} />
+  </Step>
+  <Step title="自发光贴图：直接增加输出">
+    采样 `material.emission`，乘强度后直接加到 Phong 三项。它不依赖光线和视线方向，只影响当前表面的输出颜色。
+
+    <LightingMapLayersDiagram step={3} />
+  </Step>
+</Stepper>
+
+<LightingMapLayersDiagram />
 
 下面这个 Demo 渲染的是一个**贴了图的木箱**（程序化生成，木纹箱体 + 四周钢边铆钉），被一个绕它公转的点光源照亮（画面里那个小亮块就是光源）。最关键的是底部的**步进条**，把「贴图」这件事拆成三步累积给你看：
 
@@ -283,7 +323,37 @@ gl.bindTexture(gl.TEXTURE_2D, specularMap); // 镜面光贴图 → 1 号
   `"material.diffuse"`，这点一致。完整可运行源码将在章末提供（M5）。
 </Callout>
 
-到这里改造完成：同一份 Phong 代码，diffuse / specular 两项由常量换成了两张贴图，木箱就有了「木头哑、钢边亮」的逐部位质感。
+<LightingMapBindingDiagram />
+
+### 第五步：接入自发光贴图与第 2 号纹理单元
+
+在 Material 中再加入一个采样器，并把自发光采样值直接加到最终颜色。它不乘 `diff` 或 `spec`：
+
+```glsl
+struct Material {
+  sampler2D diffuse;
+  sampler2D specular;
+  sampler2D emission;
+  float shininess;
+};
+
+vec3 emission = texture(material.emission, TexCoords).rgb
+              * emissionStrength;
+FragColor = vec4(ambient + diffuse + specular + emission, 1.0);
+```
+
+CPU 侧把它接到第三个纹理单元：
+
+```cpp
+shader.setInt("material.emission", 2);
+glActiveTexture(GL_TEXTURE2);
+glBindTexture(GL_TEXTURE_2D, emissionMap);
+shader.setFloat("emissionStrength", 1.0f);
+```
+
+WebGL2 对应 `gl.uniform1i(location, 2)`、`gl.activeTexture(gl.TEXTURE2)` 与 `gl.bindTexture(...)`。如果要滚动发光图案，可传入 `time`，在采样时写 `texture(material.emission, TexCoords + vec2(0.0, time * 0.1))`；注意 wrap 模式需允许重复，否则 UV 超出后会停在边缘色。
+
+到这里改造完成：同一份 Phong 代码，diffuse / specular 两项由常量换成逐片段贴图，再叠加 emission，木箱既能「木头哑、钢边亮」，也能让指定图案在背光面继续发亮。
 
 {/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；三个坑分别覆盖任务卡点名的三类（贴图没绑对单元 / specular 贴图当颜色用错 / TexCoords 没传）。 */}
 
@@ -318,12 +388,13 @@ gl.bindTexture(gl.TEXTURE_2D, specularMap); // 镜面光贴图 → 1 号
 - **光照贴图**把材质里写死的常量换成「逐片段从图采样的值」，让同一物体内部能分区控制反光
 - **漫反射贴图**替换 `material.diffuse`：每个片段采样取自己那个部位的底色（木纹 / 铁边各不同）
 - **镜面光贴图**是一张**灰度遮罩**：白处反光强、黑处不反光，采样值直接当镜面强度乘数——木箱钢边亮、木头哑
+- **自发光贴图**直接加到最终片段颜色，不经过 N·L 或 R·V；它让表面看似发亮，但不会真正照亮邻近物体
 - 着色器里把两项类型由 `vec3` 改成 **`sampler2D`**（只能用 `uniform` 声明）；片元用 `texture(material.diffuse/specular, TexCoords).rgb` 取代常量，**环境项跟随漫反射贴图**
-- CPU 侧把两张图绑到不同**纹理单元**（0 / 1 号），再用 `uniform1i` 告诉每个采样器去几号取图
+- CPU 侧把三张图绑到不同**纹理单元**（0 / 1 / 2 号），再用 `uniform1i` 告诉每个采样器去几号取图
 
 <Exercises>
 
-**练习 1（改代码型）** 你想让木箱的**钢边变成「反光带一点暖金色调」**，而不是纯白高光。手里的镜面光贴图是灰度的。在不换贴图的前提下，怎么改片元那一行 `specular`，让钢边的高光偏暖？写出改法并说明原理。
+**问题 1（改代码型）** 你想让木箱的**钢边变成「反光带一点暖金色调」**，而不是纯白高光。手里的镜面光贴图是灰度的。在不换贴图的前提下，怎么改片元那一行 `specular`，让钢边的高光偏暖？写出改法并说明原理。
 
 <Answer>
 
@@ -339,7 +410,7 @@ vec3 specular = light.specular * spec * specMask * warmTint;
 
 </Answer>
 
-**练习 2（问答型）** 镜面光贴图里，把某个部位画成**纯黑**，那一片在最终画面上会是什么样？画成**纯白**又会怎样？为什么漫反射贴图反而几乎不用纯黑那样的「遮罩」思路？
+**问题 2（问答型）** 镜面光贴图里，把某个部位画成**纯黑**，那一片在最终画面上会是什么样？画成**纯白**又会怎样？为什么漫反射贴图反而几乎不用纯黑那样的「遮罩」思路？
 
 <Answer>
 
@@ -349,7 +420,7 @@ vec3 specular = light.specular * spec * specMask * warmTint;
 
 </Answer>
 
-**练习 3（独立实现题）** 不看上面的代码，写出把上一章「常量材质」片元改成「漫反射贴图 + 镜面光贴图」需要改的关键几处：①结构体类型怎么变；②片元三项分别怎么取色；③CPU 侧两张图怎么喂进去。目标效果：木箱木头哑、钢边亮。
+**问题 3（独立实现题）** 不看上面的代码，写出把上一章「常量材质」片元改成「漫反射贴图 + 镜面光贴图」需要改的关键几处：①结构体类型怎么变；②片元三项分别怎么取色；③CPU 侧两张图怎么喂进去。目标效果：木箱木头哑、钢边亮。
 
 <Answer>
 
@@ -366,6 +437,20 @@ vec3 specular = light.specular * spec
 ```
 
 ③CPU 侧：`uniform1i(loc("material.diffuse"), 0)`、`uniform1i(loc("material.specular"), 1)`；绘制前 `activeTexture(TEXTURE0); bindTexture(..., diffuseMap)`、`activeTexture(TEXTURE1); bindTexture(..., specularMap)`。要点：顶点着色器记得 `out vec2 TexCoords; TexCoords = aTexCoords;` 并配好 UV 属性，否则采样全糊成一色。
+
+</Answer>
+
+**问题 4（自发光扩展题）** 给木箱增加一张电子图案自发光贴图：要求背光面仍能看见图案，但图案不能改变附近物体的明暗。写出片段输出公式，并说明为什么这不等于添加了一盏灯。
+
+<Answer>
+
+```glsl
+vec3 emission = texture(material.emission, TexCoords).rgb * emissionStrength;
+vec3 lit = ambient + diffuse + specular;
+FragColor = vec4(lit + emission, 1.0);
+```
+
+emission 直接加入当前片段，不依赖法线、光源方向或观察方向，所以背光面仍可见。但它只修改当前物体的 `FragColor`，没有进入其他物体的光照计算，也没有产生阴影、衰减或间接光，因此不是真实光源。
 
 </Answer>
 
@@ -401,6 +486,11 @@ vec3 specular = light.specular * spec
   `texture()` 去采样取色。它是一种不能当普通变量赋值、只能用 `uniform`
   声明的特殊类型，所以总藏在 `uniform Material material;`
   这种结构体里。详见本章「sampler2D」一节。
+</GlossaryItem>
+
+<GlossaryItem term="自发光贴图">
+  标记表面哪些区域应直接增加亮色的纹理。采样结果通常乘一个强度后直接加到最终片段颜色，
+  不经过漫反射或镜面角度计算。它只让当前表面看起来发亮，不会自动照亮周围物体。
 </GlossaryItem>
 
 </Glossary>

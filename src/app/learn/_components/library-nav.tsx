@@ -18,7 +18,7 @@ export function LibraryNav({
   const pathname = usePathname();
   const currentBookSlug = pathname.split("/")[2] ?? null;
   const instanceId = useId().replace(/:/g, "");
-  const [mode, setMode] = useState<NavMode>("books");
+  const [mode, setMode] = useState<NavMode>("paths");
   const [query, setQuery] = useState("");
   const [bookExpanded, setBookExpanded] = useState<Record<string, boolean>>({});
 

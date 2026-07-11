@@ -1,127 +1,472 @@
 ---
-title: "性能优化与调试"
+title: "OpenGL 性能、管线监控与稳定性"
 type: B
 section: "计算机图形学与渲染"
 order: 8
-description: "Draw Call/带宽/着色器/并行的系统优化"
+description: "从异步查询、同步语义和低开销提交到调试输出与上下文恢复"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-superbible-comprehensive-tutorial-and-reference-9780134193137"
 draft: false
 ---
 
-import { GlsPerformanceDiagram } from "@/components/mdx/opengl-superbible/diagrams/gls-performance";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  GlsPerformanceDiagram,
+  GlsQueryTimelineDiagram,
+  GlsSynchronizationDiagram,
+  GlsAzdoDiagram,
+  GlsBottleneckExperimentDiagram,
+  GlsDebugOutputDiagram,
+  GlsRobustnessDiagram,
+} from "@/components/mdx/opengl-superbible/diagrams/gls-performance";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 掌握渲染瓶颈定位方法
-- 学会减少Draw Call的策略
-- 理解GPU带宽优化
-- 了解Compute Shader并行计算
+- 能区分 CPU 时间、GPU query 时间、排队与同步等待，并设计无阻塞测量
+- 能解释 ordering、visibility、completion 和 ownership，选择 memory barrier 或 fence
+- 能设计 persistent map、Multi-Draw Indirect 与资源驻留组成的低开销提交路径
+- 能用受控实验分析 CPU、几何、片段和带宽瓶颈，不虚构加速倍数
+- 能实现 debug output、错误处理、输入安全与 context reset 恢复状态机
 </Objectives>
 
-## 直觉引入
+## 为什么性能优化必须从异步时间线开始
 
-性能优化就像医生看病——先诊断(定位瓶颈)再治疗(针对性优化)。瓶颈可能在CPU(Draw Call太多)、GPU着色(着色器太复杂)或GPU带宽(纹理/顶点数据太大)。盲目优化不解决问题反而增加复杂度。
-
-## 概念讲解
-
-<Term def="用GPU时间查询和简化法定位CPU/着色/带宽瓶颈">瓶颈定位</Term><Term def="减少绘制命令数量:实例化/合批/间接绘制">Draw Call</Term><Term def="减少GPU数据读取:纹理压缩/Mipmap/顶点压缩">带宽优化</Term><Term def="独立于管线的GPU通用计算，用于GPU剔除/粒子">Compute Shader</Term>
-
-### 瓶颈定位
-1)GPU时间查询(GL_TIME_ELAPPED) 2)简化法:去掉着色器看几何瓶颈，去掉几何看着色器瓶颈
-
-### 减少Draw Call
-实例化(相同网格一次Draw Call)、合批(合并网格)、间接绘制(参数在GPU)、Multi-Draw
-
-### 带宽优化
-纹理压缩(BC/ASTC)、顶点格式压缩(UNORM16)、Mipmap、Z-Prepass
-
-### Compute Shader
-独立于管线，用于GPU剔除(写入Indirect Draw参数)、粒子更新、图像处理。
-
-## 交互Demo
-
-> 猜一猜：渲染10000棵树，用实例化和不用实例化差多少帧率？
+OpenGL 是异步命令系统。CPU 调用通常只是把工作写入驱动队列，GPU 稍后才执行；CPU frame time、GPU execution time 与显示帧时间因此不是同一个量。原书第 12 章把查询对象、管线监控和同步放在一起，第 14 章讨论 CPU performance、low-overhead OpenGL 与 performance analysis，第 15 章再用 debugging、security 和 robustness 约束优化后的系统。三章共同给出一条可证伪的工程闭环：测量、分类、只改一个原因、验证并设置稳定性护栏。
 
 <GlsPerformanceDiagram />
 
+稳定状态下，CPU 与 GPU 可以重叠，帧时间可先用下式理解：
+
+$$
+T_{frame}\approx\max(T_{CPU},T_{GPU})+T_{stall}+T_{queue}
+$$
+
+其中 $T_{stall}$ 是显式等待或隐式同步，$T_{queue}$ 是排队和节奏误差。若 CPU 在本帧立刻读取尚未完成的 GPU query，原本隐藏在异步流水线里的等待会被计入 CPU，测量动作本身就改变被测系统。
+
+本章中的<Term def="从提出假设、采集信号、受控修改到复测回归的一组可重复性能步骤">测量闭环</Term>不承诺“某技术必然提升 6 倍”。硬件、驱动、场景、状态排序和画质约束都会改变结果；可信结论必须保留固定工作负载、预热区间、统计分布、reference image 与错误日志。
+
+## Query Objects：测量管线，而不是等待管线
+
+<Term def="由OpenGL记录异步管线计数或时间结果、稍后由应用读取的对象">
+  查询对象
+</Term>
+（query object）包住一段命令或标记一个 GPU 时间点。常见类别包括：
+
+- Occlusion query：`GL_SAMPLES_PASSED` 返回通过测试的样本数，`GL_ANY_SAMPLES_PASSED` 只回答是否存在样本；结果也可驱动 conditional rendering。
+- Timer query：`GL_TIME_ELAPSED` 测一段 GPU 执行时间；`glQueryCounter(..., GL_TIMESTAMP)` 记录时间点。
+- Primitive 与 pipeline statistics query：记录生成、写出或处理的 primitives 等实现支持的管线统计，用于验证工作是否真的减少。
+
+<GlsQueryTimelineDiagram />
+
+时间戳区间为：
+
+$$
+\Delta t_{GPU}=t_{end}-t_{begin}
+$$
+
+但这个值只有在结果可用且时间域有效时才可消费。安全模式是为每帧分配 query slot，在第 $N$ 帧提交，在第 $N+K$ 帧先读 `GL_QUERY_RESULT_AVAILABLE`；若不可用就跳过，不把 profiling 变成等待。支持 query buffer object 时，也可让结果写入缓冲区后由后续流水线消费。
+
+```cpp
+// Frame N: enqueue timing work; do not read it immediately.
+const GLuint q = timerQueries[frameIndex % queryRingSize];
+glBeginQuery(GL_TIME_ELAPSED, q);
+renderMeasuredPass();
+glEndQuery(GL_TIME_ELAPSED);
+
+// Frame N + K: consume only an available result.
+const GLuint old = timerQueries[(frameIndex + 1) % queryRingSize];
+GLint available = GL_FALSE;
+glGetQueryObjectiv(old, GL_QUERY_RESULT_AVAILABLE, &available);
+if (available) {
+    GLuint64 nanoseconds = 0;
+    glGetQueryObjectui64v(old, GL_QUERY_RESULT, &nanoseconds);
+    gpuSamples.push_back(double(nanoseconds) * 1e-6); // milliseconds
+}
+```
+
+单帧最小值和平均值都容易误导。预热 shader、cache 与资源后，固定 camera、分辨率、draw count 和质量设置，至少报告 median 与 p95：
+
+$$
+T_{median}=P_{50}(T_1,\ldots,T_n),\qquad T_{p95}=P_{95}(T_1,\ldots,T_n)
+$$
+
+<Term def="通过timer、occlusion和统计query观察各阶段工作量与耗时的过程">
+  管线监控
+</Term>
+还要记录 CPU markers、query ID、pass name
+和帧号，否则驱动消息与时间样本无法回到具体工作。跨上下文、频率变化或扩展规定的
+disjoint 情况需要按实现能力检查；不可比较的样本应丢弃，而不是补成零。
+
+<Callout type="trap">
+  **现象 →** `glGetQueryObject(..., GL_QUERY_RESULT)` 紧跟 `glEndQuery`，CPU
+  profile 中出现长尾。 **原因 →** 结果尚未产生，读取调用等待 GPU 越过 query
+  末端。 **修法 →** 使用 query ring 延迟数帧，先检查
+  availability；统计系统允许缺样本，渲染线程不为 profiler 停车。
+</Callout>
+
+## 同步：Ordering、Visibility、Completion 与 Ownership
+
+“同步”至少包含四个问题。<Term def="定义命令或访问在某条时间线上的先后关系">命令排序</Term>说明谁先发生；<Term def="保证某类写入对指定后续消费者可观察的内存规则">内存可见性</Term>说明后续读能否看到写；<Term def="证明GPU执行已经越过某个命令边界的状态">执行完成</Term>说明工作是否真的结束；ownership 则说明 CPU 或 GPU 当前谁可以改写一段资源。
+
+<GlsSynchronizationDiagram />
+
+同一 context 的 OpenGL commands 保持规定的命令顺序，但 shader 写入 image、SSBO 或 indirect command buffer 后，下一消费者仍需合适的 `glMemoryBarrier` bits。它表达的是“前面的写对哪类后续访问可见”，不是“整个 GPU 已完成”。例如 GPU 生成 draw indirect commands 后，应在 draw 前使用：
+
+```cpp
+dispatchCullingThatWritesIndirectCommands();
+glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
+glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBuffer);
+glMultiDrawArraysIndirect(GL_TRIANGLES, nullptr, drawCount, 0);
+```
+
+<Term def="按后续消费者类型公布先前shader写入的OpenGL内存屏障">内存屏障</Term>
+应选择覆盖真实 next consumer 的最小正确 bit；若同一数据随后同时作为 command 与
+shader storage 读取，就需要组合对应 bits。过宽的 `GL_ALL_BARRIER_BITS`
+便于诊断，但不是理解依赖关系后的默认答案。
+
+<Term def="插入GPU时间线、可由CPU或另一服务器等待的同步对象">栅栏</Term>
+（fence）由 `glFenceSync` 创建。CPU 可用 `glClientWaitSync`
+查询或等待，服务器端可用 `glWaitSync` 建立跨 context 的执行依赖。timeout
+是等待上限，不是资源自动安全的保证；纳秒换算为：
+
+$$
+t_{ns}=10^6t_{ms}
+$$
+
+`glFinish` 等待该 context 之前的全部命令，适合隔离问题或一次性边界，不适合每帧资源协议。对持久映射 ring，第 $i$ 帧 slot 为：
+
+$$
+slot_i=i\bmod K,\qquad offset_i=slot_i\cdot align(chunkSize)
+$$
+
+CPU 只有在该 slot 对应 fence 已 signal 后才能重写；提交使用该 slot 的 GPU 工作后再放新 fence。这就是<Term def="用环形槽位和每槽栅栏明确CPU写入与GPU读取所有权的协议">环形所有权</Term>。Memory barrier 不等于 fence，coherent mapping 也不等于 CPU 可以覆盖 GPU 尚在读取的数据。
+
+<Callout type="trap">
+  **现象 →** 持久映射 buffer 偶发闪烁，加入 `GL_ALL_BARRIER_BITS` 仍无效。
+  **原因 →** 问题是 CPU 提前复用 GPU 正在读取的 ring slot，属于
+  completion/ownership，不是 shader visibility。 **修法 →** 每槽关联
+  fence，非阻塞检查后再复用；若槽位经常未就绪，增加 ring
+  深度或降低生产压力并记录等待率。
+</Callout>
+
+## CPU Performance：先量提交，再谈减少 Draw Calls
+
+CPU 侧成本来自状态验证、对象查找、资源分配、命令编码、线程同步和 driver submission，不只来自 draw call 数量。<Term def="CPU准备并把OpenGL工作写入驱动或命令队列的耗时与吞吐">CPU 性能</Term>应同时记录每帧 calls、每类状态变化、提交线程时间与等待。命令吞吐可写成：
+
+$$
+R_{submit}=\frac{N_{commands}}{T_{CPU}}
+$$
+
+如果 50,000 个对象仍逐个改变 program、VAO、textures 和 uniforms，单纯换成一个函数名不会自动降低验证成本。应先按 pipeline/material 排序，固定 VAO 和 immutable storage，合并相同状态，再判断 instancing、Multi-Draw 或 indirect 是否适合数据模型。
+
+CPU-only 诊断可保持 draw count 与状态序列不变，临时使用廉价 shader 或极小 viewport，并同时看 GPU query，避免把 GPU 减负误认成 CPU 优化。反过来，CPU 提交变快但 GPU 时间不变，只说明流水线的限制可能转移了，不代表最终 frame time 按相同比例缩短。
+
+## Low-Overhead OpenGL / AZDO：驻留数据与命令流
+
+<Term def="通过长寿命资源、批量命令与更少驱动往返降低CPU开销的一组OpenGL设计方式">
+  低开销 OpenGL
+</Term>
+常称 AZDO。它不是单个扩展，而是系统设计：immutable storage 减少运行时重分配，
+<Term def="长期保持CPU虚拟地址可访问并由显式协议管理复用的缓冲区映射">
+  持久映射
+</Term>
+把更新写入 ring，Multi-Draw Indirect 批量消费命令，multi-bind 或 bindless
+texture 减少资源切换，Direct State Access 让状态修改不依赖临时绑定。
+
+<GlsAzdoDiagram />
+
+官方 `pmbstreaming` 示例比较无同步、`glFinish`、单 fence 与 ringed fences，展示 persistent coherent UBO 的复用风险；`multidrawindirect` 构造 50,000 条 commands，对照一次 MDI 和逐条 draw；`cullindirect` 让 GPU 写 SSBO/command buffers，再以 `GL_COMMAND_BARRIER_BIT` 连接 indirect draw；`bindlesstex` 展示 texture handles 与 residency；`packetbuffer` 和 `multimaterial` 展示 command packet 与材质批次。
+
+```cpp
+// Persistent mapped ring: immutable allocation once, explicit ownership forever.
+glNamedBufferStorage(streamBuffer, totalBytes, nullptr,
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT);
+auto* mapped = static_cast<std::byte*>(glMapNamedBufferRange(
+    streamBuffer, 0, totalBytes,
+    GL_MAP_WRITE_BIT | GL_MAP_PERSISTENT_BIT | GL_MAP_COHERENT_BIT));
+
+RingSlot& slot = slots[frameIndex % slots.size()];
+if (slot.fence && glClientWaitSync(slot.fence, 0, 0) == GL_TIMEOUT_EXPIRED)
+    return; // apply back-pressure; never overwrite in-flight bytes
+if (slot.fence) glDeleteSync(slot.fence);
+
+std::memcpy(mapped + slot.offset, frameData.data(), frameData.size_bytes());
+submitIndirectBatch(slot.offset);
+slot.fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+```
+
+内存边界仍必须验证。若外部数据给出 `offset` 与 `size`，先用不会整数溢出的形式检查：
+
+$$
+0\le offset\le B,\qquad 0\le size\le B-offset
+$$
+
+批量提交前后的 API 数量比：
+
+$$
+R_{calls}=\frac{N_{before}}{N_{after}}
+$$
+
+只描述 CPU 接口工作减少，不能直接当作 FPS 加速比。Bindless 还要求检查 handle residency 与扩展/core 能力；Direct State Access、indirect count 等接口也必须按目标 OpenGL version 和 extension table 选择，不能在空 function pointer 上“乐观调用”。
+
+## Performance Analysis：用受控实验识别限制项
+
+<Term def="固定工作负载并只改变一种压力、结合CPU和GPU信号判断瓶颈的过程">
+  性能分析
+</Term>
+从假设开始。先预测：若 fragment 成本主导，把渲染分辨率降为原来的 $s$ 倍，shaded
+pixels 近似变为 $s^2$；若 GPU
+时间几乎不变，瓶颈更可能在提交、几何、同步或固定开销。
+
+<GlsBottleneckExperimentDiagram />
+
+可执行的四类实验如下：
+
+1. CPU submission：保持场景和 draw sequence，使用廉价 shader，比较 CPU markers、call count 和 GPU timer。
+2. Vertex/geometry：减少 primitive count 或实例数量，保持像素覆盖和材质尽量稳定，观察 geometry-related counters 与 GPU 时间。
+3. Fragment：降低 resolution、scissor 覆盖或替换为廉价 fragment shader，保存同一 reference frame 的差异图。
+4. Bandwidth：只更换 attachment/vertex/texture format 或压缩方式，记录真实 bytes、cache/profile counters 与画质误差。
+
+近似 GPU 模型可写成：
+
+$$
+T_{GPU}\approx\max(T_{geometry},T_{fragment},T_{bandwidth})+T_{fixed}
+$$
+
+它是实验假设，不表示硬件阶段完全不重叠。每帧传输字节与带宽下界可用：
+
+$$
+B_{frame}=\sum_j N_jb_j,\qquad BW_{effective}=\frac{B_{frame}}{T_{GPU}}
+$$
+
+优化局部只占总时间比例 $p$ 时，即使局部加速 $s$ 倍，Amdahl 上界仍为：
+
+$$
+S=\frac{1}{(1-p)+p/s}
+$$
+
+因此“shader 快一倍”不能推出“帧率快一倍”。性能工具可辅助定位，但 capture 本身可能改变 timing；外部 profiler、OpenGL queries 与应用 CPU markers 应相互校验。结果表至少保存硬件、driver、build、分辨率、场景种子、warmup frames、sample count、median、p95、错误消息和画质阈值。
+
+## Debug Output：让错误带上对象与 Pass 上下文
+
+<Term def="由驱动通过结构化消息报告OpenGL错误性能警告和未定义行为的机制">
+  调试输出
+</Term>
+比循环 `glGetError` 更有上下文。创建开发 context 时请求
+`GL_CONTEXT_FLAG_DEBUG_BIT`，启用 `GL_DEBUG_OUTPUT`；需要精确断点时可临时启用
+`GL_DEBUG_OUTPUT_SYNCHRONOUS`，但同步 callback 会改变时序，不应用作发布配置。
+
+<GlsDebugOutputDiagram />
+
+```cpp
+glEnable(GL_DEBUG_OUTPUT);
+glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // development diagnostics only
+glDebugMessageCallback(debugCallback, &debugLog);
+glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
+                      GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+
+glObjectLabel(GL_BUFFER, streamBuffer, -1, "FrameStreamRing");
+glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 7, -1, "ShadowPass");
+renderShadowPass();
+glPopDebugGroup();
+```
+
+<Term def="为OpenGL对象附加可读名称、让调试消息指向业务资源的机制">
+  对象标签
+</Term>
+和
+<Term def="给一段OpenGL命令压入可读作用域、把消息归到具体pass的机制">
+  调试组
+</Term>
+让匿名数字 object name 变成 `FrameStreamRing`，让错误回到 `ShadowPass`。Callback
+应只复制 source、type、id、severity 和 message 到预分配队列；不要在 callback
+中重入 OpenGL、分配大量内存、抛越线程异常或等待锁。
+
+<Term def="对API返回状态、着色器日志、framebuffer和资源创建结果进行系统检查的策略">
+  错误处理
+</Term>
+还包括 shader compile/program link logs、framebuffer completeness、map
+返回空指针、allocation failure、extension pointer 与 capability
+checks。`glGetError` 可用于没有 debug output
+的窄边界诊断，但它缺少对象、调用栈和 pass
+context，也容易在错误来源之后才被读取。
+
+<Callout type="trap">
+  **现象 →** 发布前删除所有检查，或直接使用 no-error
+  context，错误只表现为黑屏和随机设备差异。 **原因 →**
+  把诊断开销与输入验证、资源状态检查混为一谈。 **修法 →** 保留低成本
+  invariants、编译链接日志、FBO/资源检查和 reset
+  检测；只有经过验证的生产路径才评估 no-error
+  context，并用外部开关保留可复现诊断构建。
+</Callout>
+
+## Robustness 与 Security：从坏输入恢复，而不是继续提交
+
+<Term def="在GPU重置、上下文丢失或越界风险下检测限制并恢复服务的能力">
+  鲁棒性
+</Term>
+包括 robust context、reset notification 和 robust buffer access 等能力。发生
+device/context reset 后，`glGetGraphicsResetStatus` 可报告 guilty、innocent 或
+unknown context reset；应用随后应停止提交、隔离坏状态、销毁失效 context，并从
+CPU 侧权威描述重建 programs、buffers、textures、framebuffers 和 pipeline state。
+
+<GlsRobustnessDiagram />
+
+<Term def="验证不可信资产着色器尺寸偏移计数格式和能力边界以避免越界或资源滥用">
+  安全
+</Term>
+从输入边界开始：
+
+- 检查 image dimensions、mip count、compressed block size、vertex/index count 和 indirect draw count。
+- 检查 `offset + size` 的整数溢出，验证 buffer range、stride、alignment 与 format compatibility。
+- 限制不可信 shader source、include 深度、编译时间和日志大小；失败时不复用旧 program handle 作为“成功”。
+- 检查扩展字符串、core version 与 function pointer；未知格式和 capability 走明确 fallback。
+- 对 GPU 生成的 commands 限制最大 count，并在消费前建立正确 visibility barrier。
+
+<Term def="检测GPU或驱动重置并把渲染器从运行态切换到资源重建态的流程">
+  上下文恢复
+</Term>
+可建模为：`Running → ResetDetected → SubmissionStopped → ContextRecreated →
+ResourcesRestored → Running`。重建必须依赖 CPU asset/resource
+descriptors，而不是读取已失效 GPU objects。恢复完成前，窗口线程可以显示降级 UI
+或重新初始化状态，但不能继续向旧 context 提交。
+
+Robust buffer access 能限制部分越界访问的破坏范围，却不替代应用验证；debug context 能报告错误，也不构成安全边界。面对网络模型、用户 shader 或损坏缓存时，只有先验证尺寸、偏移、计数、格式和资源预算，才有可预测恢复路径。
+
+## 三步建立可回归的性能路径
+
 <Stepper>
-<Step title="第一步：定位瓶颈">
-用GPU时间查询和简化法确定瓶颈在CPU(Draw Call)还是GPU(着色/带宽)。
+<Step title="第一步：测量并分类">
+固定场景与画质，预热后同时采集 CPU markers、延迟 GPU queries、工作量 counters、median 和 p95。通过降低分辨率、几何或 shader 成本做单变量实验，先判断限制项。
+
+<GlsPerformanceDiagram step={1} />
 </Step>
-<Step title="第二步：CPU优化">
-减少Draw Call:实例化相同网格、合批同材质物体、间接绘制让GPU决定。
+<Step title="第二步：重构数据与命令流">
+针对已确认的 CPU 提交压力，建立 immutable storage、persistent mapped ring、状态排序、MDI 或资源驻留；为每个 write-consume 边建立 barrier，为每个 slot 建 fence ownership。
+
+<GlsPerformanceDiagram step={2} />
 </Step>
-<Step title="第三步：GPU优化">
-减少带宽:纹理压缩/Mipmap/Z-Prepass。简化着色器。Compute Shader做GPU剔除/粒子。
+<Step title="第三步：验证并设置稳定性护栏">
+在相同 workload 上复测分布和 reference image；开启 debug output、labels 与 groups，注入坏尺寸和 context reset，确认输入被拒绝且资源可从 CPU 描述重建。
+
+<GlsPerformanceDiagram step={3} />
 </Step>
 </Stepper>
 
-## 代码对照
+Compute Shader 的 dispatch、work group、shared memory 与完整同步语义属于原书第 10 章，将在最终复习章系统覆盖。本章只把官方 `cullindirect` 的“GPU 产生 indirect commands → command barrier → draw”作为低开销数据流案例，不用一句“compute 做剔除”替代完整章节。
 
-```cpp
-// 性能优化组合
-// 1. 实例化渲染
-glDrawElementsInstanced(GL_TRIANGLES, indexCount,
-    GL_UNSIGNED_INT, 0, 10000); // 1次Draw Call
-
-// 2. GPU时间查询
-GLuint query;
-glGenQueries(1, &query);
-glBeginQuery(GL_TIME_ELAPPED, query);
-renderScene();
-glEndQuery(GL_TIME_ELAPPED);
-// 获取GPU时间
-GLuint64 time;
-glGetQueryObjectui64v(query, GL_QUERY_RESULT, &time);
-
-// 3. Compute Shader GPU剔除
-// dispatch compute shader -> writes visibleCount
-// to SSBO -> use as indirect draw parameter
-glDispatchCompute(numGroups, 1, 1);
-glMemoryBarrier(GL_COMMAND_BARRIER_BIT);
-glBindBuffer(GL_DRAW_INDIRECT_BUFFER, ssbo);
-glDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT, 0);
-```
-
-GPU时间查询测量渲染耗时。实例化将10000个Draw Call减为1个。Compute Shader做GPU剔除后间接绘制。
-
-## 常见误区
-
-<Callout type="trap">
-**现象 →** 不做瓶颈定位直接优化。
-**原因 →** 觉得哪里慢就优化哪里。
-**修法 →** 不定位瓶颈盲目优化可能白费力气。如果瓶颈在CPU(Draw Call)，优化着色器无效。先用Profiler/查询定位再针对性优化。
-</Callout>
-
-<Callout type="trap">
-**现象 →** 过度优化简单场景。
-**原因 →** 追求最高性能。
-**修法 →** 简单场景瓶颈不在渲染(可能在逻辑/AI)。过度优化增加代码复杂度但帧率不提升。先测帧率再决定是否优化。
-</Callout>
-
-## 练习
+## 练习与检验
 
 <Exercises>
-**问题**：如何定位渲染瓶颈？
+**问题 1：** 为什么 timer query 结束后立即读取结果会污染 CPU 测量？请给出无阻塞协议。
 
 <Answer>
-1)GPU时间查询(GL_TIME_ELAPPED) 2)简化法:去掉着色器看几何瓶颈，去掉几何看着色器瓶颈 3)NVIDIA Nsight/AMD GPA分析。瓶颈在CPU还是GPU。
+  GPU 通常尚未执行到 query 末端，`GL_QUERY_RESULT` 会让 CPU 等待。使用至少数槽的
+  query ring：第 N 帧提交，第 N+K 帧读取；先查询
+  `GL_QUERY_RESULT_AVAILABLE`，不可用就跳过；样本带 frame/pass ID，预热后统计
+  median 与 p95。
 </Answer>
 
-**问题**：渲染10000棵树用实例化和不用差多少？
+**问题 2：** GPU shader 写 indirect command buffer，下一 draw 如何同步？若 CPU 还要复用这段 buffer，又缺什么？
 
 <Answer>
-不用实例化:10000个Draw Call，CPU瓶颈可能&lt;10fps。用实例化:1个Draw Call，GPU瓶颈可能60fps。差距可达6-10倍。实例化是场景渲染的关键优化。
+  draw 前用 `glMemoryBarrier(GL_COMMAND_BARRIER_BIT)` 建立 shader write 到
+  indirect-command read 的可见性。CPU 复用还需要 completion 与 ownership
+  协议：提交后插入 `glFenceSync`，只有对应 slot 的 fence signal 后 CPU
+  才能覆盖。Memory barrier 不能证明 GPU 已读完。
+</Answer>
+
+**问题 3：** 分辨率减半后 GPU 时间明显下降，能否直接判定带宽瓶颈？
+
+<Answer>
+  不能。分辨率实验同时减少 fragment invocations、texture sampling、blend、depth
+  和 attachment bytes，只说明像素相关工作敏感。继续用廉价 fragment shader、较小
+  attachment formats、固定 sample count、pipeline counters 与画质差异分别检验
+  fragment ALU、sampling 和 bandwidth 假设。
+</Answer>
+
+**问题 4：** 设计一次 context reset 演练的验收条件。
+
+<Answer>
+注入或检测 reset 后必须停止旧 context 提交，记录 reset status，不访问失效 objects；创建新 context 后从 CPU 侧 shader/asset/resource descriptors 重建 programs、buffers、textures 与 framebuffers；恢复同一场景并通过 debug log、reference image、资源预算和连续多帧 query 检查。
 </Answer>
 </Exercises>
 
+## 本章回顾
+
+性能不是 draw calls 的同义词。查询对象提供异步时间与工作量证据；同步要拆成 ordering、visibility、completion 和 ownership；低开销路径依赖长寿命数据、批量命令与正确资源协议；性能分析依赖受控实验和分布统计；调试输出、错误处理、安全验证与上下文恢复则保证优化后的系统仍可解释、可限制、可恢复。
+
 <Glossary>
-<GlossaryItem term="瓶颈定位">用GPU时间查询和简化法定位CPU/着色/带宽瓶颈。</GlossaryItem>
-<GlossaryItem term="Draw Call">减少绘制命令数量:实例化/合批/间接绘制。</GlossaryItem>
-<GlossaryItem term="带宽优化">减少GPU数据读取:纹理压缩/Mipmap/顶点压缩。</GlossaryItem>
-<GlossaryItem term="Compute Shader">独立于管线的GPU通用计算，用于GPU剔除/粒子。</GlossaryItem>
+  <GlossaryItem term="测量闭环">
+    从假设、采集、单变量修改到复测与回归的性能方法。
+  </GlossaryItem>
+  <GlossaryItem term="查询对象">
+    异步记录管线时间或计数并由应用稍后读取的 OpenGL object。
+  </GlossaryItem>
+  <GlossaryItem term="管线监控">
+    组合 queries、CPU markers 与帧标识观察耗时和工作量。
+  </GlossaryItem>
+  <GlossaryItem term="命令排序">定义命令或访问在时间线上的先后。</GlossaryItem>
+  <GlossaryItem term="内存可见性">
+    保证写入可被指定后续消费者观察。
+  </GlossaryItem>
+  <GlossaryItem term="执行完成">证明 GPU 已越过指定命令边界。</GlossaryItem>
+  <GlossaryItem term="内存屏障">
+    按后续访问类型公布先前 shader writes。
+  </GlossaryItem>
+  <GlossaryItem term="栅栏">
+    插入 GPU 时间线并可由 CPU 或 server wait 的 sync object。
+  </GlossaryItem>
+  <GlossaryItem term="环形所有权">
+    以 ring slots 和 per-slot fences 管理 CPU/GPU 复用。
+  </GlossaryItem>
+  <GlossaryItem term="CPU 性能">
+    CPU 准备、验证、编码与提交 OpenGL work 的成本。
+  </GlossaryItem>
+  <GlossaryItem term="低开销 OpenGL">
+    用长寿命资源、批量命令和较少往返降低 driver 开销。
+  </GlossaryItem>
+  <GlossaryItem term="持久映射">
+    长期保留 CPU address 并显式管理 buffer reuse 的映射。
+  </GlossaryItem>
+  <GlossaryItem term="性能分析">
+    固定 workload、改变单一压力并比较 CPU/GPU evidence。
+  </GlossaryItem>
+  <GlossaryItem term="调试输出">
+    驱动通过结构化 callback 报告错误、警告和未定义行为。
+  </GlossaryItem>
+  <GlossaryItem term="对象标签">
+    把业务可读名称附加到 OpenGL object。
+  </GlossaryItem>
+  <GlossaryItem term="调试组">
+    给一段 commands 建立可读 pass scope。
+  </GlossaryItem>
+  <GlossaryItem term="错误处理">
+    检查 API status、compile/link logs、FBO 与资源结果。
+  </GlossaryItem>
+  <GlossaryItem term="鲁棒性">
+    面对 reset、context loss 或越界风险时检测并恢复的能力。
+  </GlossaryItem>
+  <GlossaryItem term="安全">
+    验证不可信输入和资源边界以限制越界与滥用。
+  </GlossaryItem>
+  <GlossaryItem term="上下文恢复">
+    reset 后停止提交、重建 context 与全部 GPU resources 的状态机。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 超级宝典" adaptedUrl="" />
+<Attribution
+  adaptedFrom="OpenGL SuperBible, Seventh Edition, Chapters 12, 14 and 15; official sb7code examples; Khronos OpenGL Registry"
+  adaptedUrl="https://github.com/openglsuperbible/sb7code"
+/>

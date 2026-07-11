@@ -1,14 +1,21 @@
 ---
-title: 网格
+title: Mesh 数据布局、GPU 资源与纹理绑定
 type: C
 section: 模型加载
 order: 2
 description: 把一份「顶点+索引+纹理」打包成一个能自己设置 VAO/VBO/EBO、能自己绘制的 Mesh 类，搞懂 offsetof 怎么对应结构体字段、纹理为什么按命名约定绑。
 demo: false
 math: false
-sourceUrl: https://learnopengl-cn.github.io/03%20Model%20Loading/02%20Mesh/
+sourceUrl: https://learnopengl.com/Model-Loading/Mesh
 draft: false
 ---
+
+import {
+  MeshDataLayoutDiagram,
+  MeshLifecycleDiagram,
+  MeshSetupStagesDiagram,
+  MeshTextureBindingDiagram,
+} from "@/components/mdx/learnopengl/diagrams/mesh";
 
 {/* C 实战型章（HEL-60，M5 模型加载篇第 2 篇）：主题是 Mesh——把「一组顶点 + 一组索引 + 一组纹理」打包成一个能自己 setupMesh（建好 VAO/VBO/EBO）、能自己 Draw（按命名约定绑纹理后 glDrawElements）的 C++ 类。承接上一章（用 Assimp 把模型文件读进内存，得到一堆 aiMesh）、启下一章（Model 类把多个 Mesh 串起来）。C 型：代码对照为重心（§6 覆盖 Vertex/Texture 结构体、Mesh 成员+构造、setupMesh 用 offsetof 设顶点属性指针、Draw 按 type 拼 uniform 名绑纹理单元再 glDrawElements，≥80% 关键代码），math:false 整节省略。本篇 Mesh 类是 C++（OpenGL），无 WebGL2 等价物——不用 CodeTabs 双栏、不硬造 WebGL 端，§6 用带逐段讲解的 C++ 代码块覆盖。两个静态 SVG 图示：MeshDataLayoutDiagram（offsetof/stride 怎么对应结构体字段）、MeshTextureBindingDiagram（命名约定怎么自动绑纹理）。demo:false（无交互 Demo，C 型实战重代码而非可调 uniform）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -20,13 +27,15 @@ draft: false
 
 - 能说清一个**网格（Mesh）**由哪三样东西打包而成：一组顶点、一组索引、一组纹理，以及为什么一个模型要拆成多个 Mesh
 - 能看懂并独立写出 `setupMesh()`：用 `offsetof` 定位每个顶点属性在结构体里的字节偏移、用 `sizeof(Vertex)` 当步长，把 VAO/VBO/EBO 一次性配好
-- 能回答：`Draw()` 里如果把拼 uniform 名的序号从 `1` 起改成从 `0` 起，而着色器里仍写 `texture_diffuse1`，会出什么问题？
+- 能用 `.data()` 安全上传空或非空容器，并解释 VAO 为什么会记住 EBO 与属性布局
+- 能实现 Mesh 的 GPU 资源释放与移动所有权，避免复制句柄造成重复删除
+- 能定位采样器命名、纹理单元上限或索引类型不匹配导致的黑模型与缺面问题
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线」库——零件打包成可独立装配的部件。 */}
 
-## 一个模型不是一整块，而是一堆零件
+## 为什么一个模型不是一整块，而是一堆零件
 
 上一章我们用工具把一个模型文件读进了内存，结果不是「一整个物体」，而是**一堆零件**：一辆车被拆成车身、轮胎、玻璃、车灯……每个零件有自己的一批顶点、自己该用哪张贴图。问题来了：拿到这一堆散件，怎么把它们一个个画到屏幕上？
 
@@ -34,13 +43,15 @@ draft: false
 
 这一章就是造这本说明书——一个叫「网格」的小盒子。每个零件装进一个盒子，盒子自带「我怎么进显存」和「我怎么画自己」两套本领。配齐了，主程序只要对每个盒子喊一声「画」，整个模型就出来了；配不齐，你就得为每个零件手写一遍重复又易错的摆数据代码。
 
+<MeshLifecycleDiagram />
+
 {/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 §6 代码；顺序 是什么 → 为什么 → 在管线/模型组织中的位置。新核心概念克制（Mesh / Vertex 结构体 / Texture 结构体 / offsetof+interleaved / 命名约定，承接已学的 VAO/VBO/EBO、纹理单元，≤5 个核心新概念）。 */}
 
 ## 网格：一个能自己画自己的小盒子
 
 我们把「一个能独立绘制的零件」叫做一个 <Term def="一个能独立绘制的最小绘制单元，由一组顶点、一组索引、一组纹理三样东西打包而成。一个模型（比如一辆车）通常由多个网格组成（车身、轮胎、玻璃各是一个）。在代码里它是一个 Mesh 类，自带 setupMesh（配显存）和 Draw（画自己）两个本领。">网格</Term>（Mesh）。它装着三样东西：一组**顶点**（每个顶点带位置、法线、纹理坐标）、一组**索引**（用哪几个顶点、按什么顺序连成三角形）、一组**纹理**（这块零件该贴哪些图）。这三样凑齐，一个零件就能被完整地画出来。
 
-为什么要拆成多个网格、而不是把整辆车塞进一个？因为不同零件**用的纹理不同**：车身贴车漆、轮胎贴橡胶纹、玻璃贴反光图。一次绘制只能绑定一套纹理，所以「一套顶点 + 一套纹理」自然就是一个绘制单元。一个模型由多个网格组成——这正是下一章 `Model` 类要做的事：把上一章读出的那一堆零件，每个包成一个 Mesh，再统一管起来。本章只聚焦**单个**网格怎么自给自足。
+为什么要拆成多个网格、而不是把整辆车塞进一个？因为不同零件**用的材质与纹理集合不同**：车身贴车漆、轮胎贴橡胶纹、玻璃贴反光图。一次 draw call 通常采用同一套材质绑定，所以「一套顶点 + 一套材质纹理」自然就是一个绘制单元。一个模型由多个网格组成——这正是下一章 `Model` 类要做的事：把上一章读出的那一堆零件，每个包成一个 Mesh，再统一管起来。本章只聚焦**单个**网格怎么自给自足。
 
 ## 顶点：把位置、法线、纹理坐标打包成一个结构体
 
@@ -64,7 +75,27 @@ draft: false
 
 ## 代码逐段拆解
 
-下面把这个 Mesh 类从头搭一遍。和前几章不同，这章没有 WebGL2 对照——`Mesh` 是组织模型的 C++ 类，不是某段可移植的着色器逻辑，所以我们专心把这一版 C++ 看透。先定义两个数据结构体，再写类的成员和构造，最后是两个核心方法 `setupMesh` 和 `Draw`。
+下面把这个 Mesh 类从头搭一遍。和前几章不同，这章没有 WebGL2 对照——`Mesh` 是组织模型的 C++ 类，不是某段可移植的着色器逻辑，所以我们专心把这一版 C++ 看透。先预测三个阶段出错时的现象：上传空容器处理错误可能直接崩溃；布局记录错误会让法线或 UV 错位；纹理命名或单元绑定错误则通常几何正常但表面发黑。
+
+<Stepper>
+  <Step title="上传连续的顶点与索引字节">
+    先生成 VAO/VBO/EBO，再用 `vector.data()` 与实际字节数上传。空容器应传 `nullptr` 或 `.data()`，不能解引用不存在的第 0 个元素。
+
+    <MeshSetupStagesDiagram step={1} />
+  </Step>
+  <Step title="让 VAO 记录真实结构体布局">
+    在 VAO 绑定期间绑定 EBO，并用 `sizeof(Vertex)` 与 `offsetof` 描述属性。不要假设 GLM 类型在所有编译配置下都没有 padding。
+
+    <MeshSetupStagesDiagram step={2} />
+  </Step>
+  <Step title="绑定纹理单元并按索引绘制">
+    激活 shader，检查纹理单元容量，按 type 拼 sampler 名，最后绑定 VAO 调 `glDrawElements`。调用者与 Mesh 必须明确谁负责恢复 OpenGL 状态。
+
+    <MeshSetupStagesDiagram step={3} />
+  </Step>
+</Stepper>
+
+<MeshSetupStagesDiagram />
 
 ### 第一步：Vertex 结构体
 
@@ -79,7 +110,7 @@ struct Vertex {
 };
 ```
 
-字段的声明顺序就是它们在内存里的先后顺序。整个结构体大小 `sizeof(Vertex)` 是 32 字节（12+12+8）。注意我们**不手写**这些偏移数字（`@0`、`@12`、`@24`），它们只是注释帮你理解——真正取偏移要靠 `offsetof`，待会第四步见。想支持法线贴图时，往结构体里再加一个 `Tangent` 字段即可，下游代码改动很小。
+在常见的默认 GLM 配置下，这三个字段通常紧挨着，`sizeof(Vertex)` 是 32 字节（12+12+8）。但若工程启用了对齐类型，编译器可能插入 padding；因此 32 只能用来理解，不能写死在 OpenGL 调用里。真正的步长与偏移必须分别取 `sizeof(Vertex)` 和 `offsetof`，让当前编译配置给出权威布局。想支持法线贴图时，往结构体里再加一个 `Tangent` 字段即可，下游代码改动很小。
 
 ### 第二步：Texture 结构体
 
@@ -109,10 +140,10 @@ public:
 
   Mesh(std::vector<Vertex> vertices,
        std::vector<unsigned int> indices,
-       std::vector<Texture> textures) {
-    this->vertices = vertices;
-    this->indices  = indices;
-    this->textures = textures;
+       std::vector<Texture> textures)
+      : vertices(std::move(vertices)),
+        indices(std::move(indices)),
+        textures(std::move(textures)) {
     setupMesh();   // 一拿到数据就把 VAO/VBO/EBO 配好
   }
 
@@ -124,6 +155,31 @@ private:
 ```
 
 把 `VAO` 设为 public、`VBO`/`EBO` 设为 private，是因为绘制时外部只需要绑 `VAO`（它已经记住了 VBO/EBO 的配置），底下两个缓冲的句柄外部不必关心。构造里「一拿到数据就 `setupMesh()`」是这个类「自装配」的体现——使用者不用记得手动初始化。
+
+但句柄不是普通整数：它们代表 Mesh **独占**的 GPU 资源。若默认复制 Mesh，两个对象会拿着同一组句柄；一旦加入析构释放，就会重复删除。可复用实现至少应遵守 RAII：禁用复制、在移动时转交句柄、析构时释放，而且析构必须发生在 OpenGL context 仍有效的线程上。
+
+```cpp
+#include <utility>
+
+Mesh(const Mesh&) = delete;
+Mesh& operator=(const Mesh&) = delete;
+
+Mesh(Mesh&& other) noexcept
+    : vertices(std::move(other.vertices)),
+      indices(std::move(other.indices)),
+      textures(std::move(other.textures)),
+      VAO(std::exchange(other.VAO, 0)),
+      VBO(std::exchange(other.VBO, 0)),
+      EBO(std::exchange(other.EBO, 0)) {}
+
+~Mesh() {
+  if (EBO) glDeleteBuffers(1, &EBO);
+  if (VBO) glDeleteBuffers(1, &VBO);
+  if (VAO) glDeleteVertexArrays(1, &VAO);
+}
+```
+
+生产代码还要实现移动赋值：先释放当前资源，再 `std::exchange` 接走对方句柄。若 `std::vector<Mesh>` 只通过构造与移动扩容，上面的移动构造已经覆盖主要路径；需要赋值时不能依赖编译器默认实现。
 
 ### 第四步：setupMesh()——offsetof 是主角
 
@@ -140,17 +196,17 @@ void Mesh::setupMesh() {
   // 顶点数据：整个 vertices 一次性灌进 VBO（interleaved，连续一片）
   glBindBuffer(GL_ARRAY_BUFFER, VBO);
   glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex),
-               &vertices[0], GL_STATIC_DRAW);
+               vertices.empty() ? nullptr : vertices.data(), GL_STATIC_DRAW);
 
   // 索引数据：灌进 EBO
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
   glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int),
-               &indices[0], GL_STATIC_DRAW);
+               indices.empty() ? nullptr : indices.data(), GL_STATIC_DRAW);
   // …顶点属性指针见下方续 …
 }
 ```
 
-`glBufferData` 把整个 `vertices` 向量当成一片连续字节上传——因为它本来就是 interleaved 的，一次就够。`indices` 同理灌进 <Term def="Element Buffer Object，索引缓冲对象。它存的不是顶点本身，而是一串「用第几个顶点」的编号。靠它，被多个三角形共用的顶点（比如方块四个角）只需在 VBO 里存一份，绘制时按索引重复引用，省显存也省带宽。">索引缓冲（EBO）</Term>。下面接着配**顶点属性指针**——这才是 `offsetof` 登场的地方：
+`glBufferData` 把整个 `vertices` 向量当成一片连续字节上传——因为它本来就是 interleaved 的，一次就够。这里用 `.data()` 而不是 `&vertices[0]`：空向量没有第 0 个元素，后者会触发未定义行为；字节数为 0 时传 `nullptr` 是明确且安全的。`indices` 同理灌进 <Term def="Element Buffer Object，索引缓冲对象。它存的不是顶点本身，而是一串「用第几个顶点」的编号。靠它，被多个三角形共用的顶点（比如方块四个角）只需在 VBO 里存一份，绘制时按索引重复引用，省显存也省带宽。">索引缓冲（EBO）</Term>。下面接着配**顶点属性指针**——这才是 `offsetof` 登场的地方：
 
 ```cpp
   // 属性 0 = 位置：从结构体第 0 字节起，每跨 sizeof(Vertex) 是下一个顶点
@@ -172,7 +228,7 @@ void Mesh::setupMesh() {
 }
 ```
 
-这里每调一次 `glVertexAttribPointer`，就是为一个 <Term def="一个顶点身上携带的各项数据——位置、法线、纹理坐标等，每一项就是一个属性。glVertexAttribPointer 告诉 GPU 每个属性在那条 interleaved 内存里从哪个字节起、隔多远是下一个顶点的同名属性。">顶点属性</Term> 描述「它在内存里怎么取」，两个关键参数是**步长**（stride）和**偏移**（offset）。步长每个属性都填 `sizeof(Vertex)`（=32），意思是「从这个顶点的某属性跳到下一个顶点的同属性，要跨过整整一个结构体」——这正是 interleaved 排布的直接后果。偏移则用 <Term def="C/C++ 标准库的一个宏，offsetof(结构体, 字段) 返回该字段从结构体起始处算起的字节偏移。这里 offsetof(Vertex, Normal) 自动得到 12、offsetof(Vertex, TexCoords) 自动得到 24，省得手算，改了结构体也不会算错。">offsetof</Term> 自动算出：`offsetof(Vertex, Normal)` 得到 12、`offsetof(Vertex, TexCoords)` 得到 24。
+这里每调一次 `glVertexAttribPointer`，就是为一个 <Term def="一个顶点身上携带的各项数据——位置、法线、纹理坐标等，每一项就是一个属性。glVertexAttribPointer 告诉 GPU 每个属性在那条 interleaved 内存里从哪个字节起、隔多远是下一个顶点的同名属性。">顶点属性</Term> 描述「它在内存里怎么取」，两个关键参数是**步长**（stride）和**偏移**（offset）。步长每个属性都填 `sizeof(Vertex)`，意思是「从这个顶点的某属性跳到下一个顶点的同属性，要跨过整整一个结构体」——这正是 interleaved 排布的直接后果。偏移则用 <Term def="C/C++ 标准库的一个宏，offsetof(结构体, 字段) 返回该字段从结构体起始处算起的字节偏移。这里 offsetof(Vertex, Normal) 自动得到法线的真实偏移、offsetof(Vertex, TexCoords) 自动得到纹理坐标的真实偏移，省得手算，改了结构体或对齐配置也不易出错。">offsetof</Term> 自动计算，不依赖固定的 12 或 24。
 
 为什么非用 `offsetof` 不可？因为**结构体内存是连续 interleaved 的**，每个属性的起点就是它前面所有字段的字节数之和。手算固然能填 `12`、`24`，但一旦你往 `Vertex` 里加个字段、或调整顺序，所有手算的数字就全错了；`offsetof` 让编译器替你算，结构体怎么改都不会错。
 
@@ -190,6 +246,12 @@ void Mesh::setupMesh() {
 
 ```cpp
 void Mesh::Draw(Shader &shader) {
+  shader.use();
+  GLint maxTextureUnits = 0;
+  glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &maxTextureUnits);
+  if (textures.size() > static_cast<size_t>(maxTextureUnits))
+    throw std::runtime_error("Mesh exceeds fragment texture-unit limit");
+
   unsigned int diffuseN = 1, specularN = 1;   // 两类各自从 1 数
   for (unsigned int i = 0; i < textures.size(); i++) {
     glActiveTexture(GL_TEXTURE0 + i);          // 激活第 i 号纹理单元
@@ -209,6 +271,8 @@ void Mesh::Draw(Shader &shader) {
 }
 ```
 
+`setInt` 修改当前 program 的 uniform，所以这里先 `shader.use()`，把激活着色器写成 Mesh 的明确契约。随后查询片段着色器可用的 `GL_MAX_TEXTURE_IMAGE_UNITS`；若模型纹理数超过硬件上限，继续做 `GL_TEXTURE0 + i` 不会得到更多可用插槽，应在导入阶段合并材质、减少贴图，或改成纹理数组等方案。
+
 循环体每一轮干三件事：用 `glActiveTexture(GL_TEXTURE0 + i)` 激活第 `i` 号<Term def="GPU 里编了号的纹理插槽（GL_TEXTURE0、GL_TEXTURE1…）。先 glActiveTexture 选中第 i 号插槽，再 glBindTexture 把一张纹理插进去；着色器里则把对应 sampler 的值设成 i，它就去第 i 号插槽取图。多张纹理同时用，就靠不同编号的纹理单元区分。">纹理单元</Term>；按 `type` 给这一类的序号加一、拼出 `material.texture_diffuse1` 这样的字符串，用 `setInt` 把编号 `i` 设给同名的采样器 uniform；最后 `glBindTexture` 把这张图绑到刚激活的第 `i` 号单元。三步合起来，就把「第 `i` 张纹理」接到了「着色器里名字对得上的那个 sampler」。
 
 注意序号 `diffuseN`/`specularN` 都从 `1` 起、且各自独立计数——所以两张漫反射图会是 `texture_diffuse1`、`texture_diffuse2`，而镜面图是 `texture_specular1`。这必须和着色器里 sampler 的命名严格一致。绑完所有纹理，最后才真正画：
@@ -217,13 +281,13 @@ void Mesh::Draw(Shader &shader) {
   // 真正绘制：绑 VAO，按 EBO 里的索引画三角形
   glActiveTexture(GL_TEXTURE0);             // 收尾，重置回 0 号
   glBindVertexArray(VAO);
-  glDrawElements(GL_TRIANGLES, indices.size(),
+  glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(indices.size()),
                  GL_UNSIGNED_INT, 0);
   glBindVertexArray(0);
 }
 ```
 
-绑回 `VAO`（它记着第四步配好的所有属性指针和 EBO），调 `glDrawElements`——用 `GL_TRIANGLES` 模式、画 `indices.size()` 个索引、索引类型是 `GL_UNSIGNED_INT`。注意这里是 `glDrawElements` 而**不是** `glDrawArrays`，因为我们有索引、要按 EBO 复用顶点。着色器里与之配套的采样器声明长这样：
+绑回 `VAO`（它记着第四步配好的所有属性指针和 EBO），调 `glDrawElements`——用 `GL_TRIANGLES` 模式、画 `indices.size()` 个索引、索引类型是 `GL_UNSIGNED_INT`。接口的数量参数是 `GLsizei`，因此构造时应拒绝超过 `GLsizei` 上限的超大索引数组，再做显式转换。注意这里是 `glDrawElements` 而**不是** `glDrawArrays`，因为我们有索引、要按 EBO 复用顶点。着色器里与之配套的采样器声明长这样：
 
 ```glsl
 struct Material {
@@ -271,19 +335,30 @@ uniform Material material;
   Normal)`，每个偏移都加 `(void*)`。
 </Callout>
 
+<Callout type="trap">
+  **现象**：模型列表扩容或临时对象销毁后，后续绘制随机报错，退出时还可能重复释放。**原因**：多个
+  `Mesh` 默认复制了同一组 VAO/VBO/EBO 整数句柄，却都把自己当成所有者。**修法**：禁用复制、实现转交并清零源句柄的移动语义，在 OpenGL context 仍有效时统一析构。
+</Callout>
+
+<Callout type="trap">
+  **现象**：某些没有几何数据的节点在导入阶段偶发崩溃。**原因**：对空 `vector` 使用
+  `&vertices[0]` 或 `&indices[0]`，访问了不存在的元素。**修法**：上传用 `.data()`，空容器传
+  `nullptr`，并在构造阶段校验索引范围与绘制数量。
+</Callout>
+
 {/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习含 1 道改/扩代码题 + 1 道问答/推导题；答案折叠。 */}
 
 ## 小结
 
-- **网格（Mesh）**= 一组顶点 + 一组索引 + 一组纹理，打包成一个能自己 `setupMesh`、自己 `Draw` 的小盒子；一个模型由多个网格组成
-- 顶点用结构体把 Position/Normal/TexCoords **interleaved** 打包，整个 `vertices` 一次性灌进一个 VBO
-- `setupMesh` 里偏移用 **`offsetof`**、步长用 **`sizeof(Vertex)`**——结构体内存连续，让编译器算偏移，改字段也不出错
-- `Draw` 按纹理 `type` 拼出 `texture_diffuseN` 名字，用**纹理单元**把第 `i` 张图接到同名 sampler，这套**命名约定**让绑定全自动
-- 最后绑 `VAO` + `glDrawElements`（不是 `glDrawArrays`）按 EBO 索引画三角形
+- **Mesh** 把顶点、索引、纹理与 VAO/VBO/EBO 封成一个绘制单元；CPU 容器可移动，GPU 句柄要有唯一所有者
+- 上传使用 `.data()` 与真实字节数，空容器不解引用第 0 个元素；析构则在有效 context 上释放三个 GPU 对象
+- 顶点属性的步长用 **`sizeof(Vertex)`**、偏移用 **`offsetof`**，不能把默认 GLM 布局下的 32/12/24 写死
+- `Draw` 先激活 shader、检查纹理单元容量，再按 `type` 拼出 `texture_diffuseN` 并绑定同名 sampler
+- 最后绑定 VAO，用 `glDrawElements` 按 EBO 索引绘制，并保证数量能安全表示成 `GLsizei`
 
 <Exercises>
 
-**练习 1（扩代码型）** 要给 Mesh 支持**法线贴图**，需要：① 在 `Vertex` 结构体里加一个切线字段 `glm::vec3 Tangent;`；② 在 `setupMesh` 里为它再配一个顶点属性指针（属性位置 3）。写出这第 3 个 `glVertexAttribPointer` 调用，并说明步长和偏移各填什么、为什么不用改前三个属性的偏移。
+**问题 1（扩代码型）** 要给 Mesh 支持**法线贴图**，需要：① 在 `Vertex` 结构体里加一个切线字段 `glm::vec3 Tangent;`；② 在 `setupMesh` 里为它再配一个顶点属性指针（属性位置 3）。写出这第 3 个 `glVertexAttribPointer` 调用，并说明步长和偏移各填什么、为什么不用改前三个属性的偏移。
 
 <Answer>
 
@@ -298,13 +373,27 @@ glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
 
 </Answer>
 
-**练习 2（问答 / 推导题）** `Draw` 里如果把 `diffuseN`/`specularN` 的初值从 `1` 改成 `0`（于是拼出 `texture_diffuse0`），但着色器里 sampler 仍声明为 `texture_diffuse1`，会发生什么？为什么纹理单元的激活（`glActiveTexture`）不受这个改动影响、但纹理却照样贴不上？
+**问题 2（问答 / 推导题）** `Draw` 里如果把 `diffuseN`/`specularN` 的初值从 `1` 改成 `0`（于是拼出 `texture_diffuse0`），但着色器里 sampler 仍声明为 `texture_diffuse1`，会发生什么？为什么纹理单元的激活（`glActiveTexture`）不受这个改动影响、但纹理却照样贴不上？
 
 <Answer>
 
 会**贴不上纹理**：`Draw` 拼出的名字变成 `material.texture_diffuse0`，而着色器里根本没有这个 uniform，`setInt("material.texture_diffuse0", i)` 找不到目标、静默失败——着色器里真正的 `texture_diffuse1` 没被赋值，默认采样到 0 号纹理单元（或未定义），于是贴错或贴黑。
 
 而 `glActiveTexture(GL_TEXTURE0 + i)` 和 `glBindTexture` **照常执行**：纹理确实被绑到了第 `i` 号纹理单元上——这一步只跟循环下标 `i` 有关，跟拼出的字符串名字无关。问题纯粹出在「告诉 sampler 去几号单元取图」这一步对不上号：纹理被正确地放进了插槽，但着色器不知道去哪个插槽取。结论：序号是命名约定的一部分，CPU 拼名和 GLSL 声明必须用同一套（都从 `1` 起）。
+
+</Answer>
+
+**问题 3（资源所有权排错题）** 一个 `std::vector<Mesh>` 扩容后，旧 Mesh 被移动到新内存；随后旧对象析构。如果移动构造只是默认复制 VAO/VBO/EBO 句柄，会发生什么？写出移动时处理一个句柄的关键表达式，并说明为什么源对象必须归零。
+
+<Answer>
+
+新旧对象会暂时持有同一组 GPU 句柄。旧对象析构先删除资源后，新对象里的句柄已经失效；新对象再次析构还会重复删除。转交单个句柄可写成：
+
+```cpp
+VAO = std::exchange(other.VAO, 0);
+```
+
+`std::exchange` 同时取走旧值并把源对象设为 0。源对象随后析构时，`if (VAO)` 为假，不会删除已经交给新对象的资源。VBO/EBO 也要同样处理；移动赋值还必须先释放目标对象原来拥有的资源。
 
 </Answer>
 
@@ -335,9 +424,7 @@ glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE,
 
 <GlossaryItem term="offsetof">
   C/C++ 的一个宏，`offsetof(结构体, 字段)`
-  返回该字段从结构体开头算起的字节偏移。这里 `offsetof(Vertex, Normal)` 自动得
-  12、`offsetof(Vertex, TexCoords)` 自动得
-  24，省得手算，改了结构体字段也不会算错。详见本章「第四步」。
+  返回该字段从结构体开头算起的字节偏移。它会按当前编译器与对齐配置计算真实值，省得手算；改了结构体字段或 GLM 对齐选项，也不必同步维护魔法数字。详见本章「第四步」。
 </GlossaryItem>
 
 <GlossaryItem term="顶点属性">

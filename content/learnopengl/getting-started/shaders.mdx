@@ -1,14 +1,16 @@
 ---
-title: 着色器
+title: GLSL 数据接口、Uniform 与 Shader Class
 type: C
 section: 入门
 order: 3
-description: 看懂 GLSL 这门「写给 GPU 的小语言」——in/out 怎么在两段着色器之间传数据、uniform 怎么从你的程序传参进来，并能改出自己的颜色与动画效果。
+description: 掌握 GLSL 类型、阶段接口、插值与 uniform 上传，并把文件读取、编译链接、日志和释放封装为可复用 Shader class。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/01%20Getting%20started/05%20Shaders/
+sourceUrl: https://learnopengl.com/Getting-started/Shaders
 draft: false
 ---
+
+import { ShaderContractDiagram, ShaderTypeSystemDiagram, ShaderClassLifecycleDiagram, ShaderIODiagram, InterpolationDiagram } from "@/components/mdx/learnopengl/diagrams/shaders";
 
 {/* C 实战型章（HEL-33，M5 入门第 3 篇）：主题是 GLSL 着色器语言本身——in/out 阶段间传数据、uniform 从 CPU 传参、基本类型、顶点→片段插值、内建变量。承接「你好三角形」（已知两段着色器存在、能跑通三角形），本章把镜头拉近到「这两段小程序内部怎么写、数据怎么流」。C 型：代码对照为重心（§6 ≥80% 覆盖），math:false 整节省略。主 Demo = editable ShaderDemo（uniform + gl_FragCoord 位置插值，改 GLSL/调 uniform 实时看变化）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,21 +20,25 @@ draft: false
 
 <Objectives>
 
-- 能用自己的话说清 **in/out** 和 **uniform** 各自传的是什么数据、从哪来到哪去
-- 能看懂一对顶点 / 片段着色器，并改出自己想要的颜色与一个随时间变化的动画效果
-- 能回答：片段着色器里那片连续的渐变颜色，明明顶点只有 3 个，中间的颜色是哪来的？
+- 能解释 attributes、uniforms 与 stage `out/in` 三种数据通道的生命周期
+- 能判断 scalar、vector、matrix 与 sampler 类型对应的 GLSL 运算和 CPU 上传函数
+- 能推导三角形内部 varying 的插值来源并控制 `flat` 或平滑语义
+- 能实现颜色与时间 uniform，缓存 location 并在正确 program 上逐帧更新
+- 能设计 Shader class 的文件读取、compile/link 日志、use 与资源释放
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、零术语（术语最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用工厂流水线（承接「你好三角形」同 section 同类比体系）。 */}
 
-## 给 GPU 的两张「食谱」
+## 为什么 GPU 需要两张能对接的「食谱」
 
 上一章你已经把三角形画了出来，靠的是两段小程序：一段管「每个角摆在哪」，一段管「每个点染成什么色」。这一章我们把镜头拉近，看清这两段小程序**内部到底怎么写**。
 
 可以把它们想成给 GPU 的两张**食谱**：你不用亲手炒每一道菜（GPU 有成千上万个小厨师同时开火），你只负责把菜谱写清楚——「拿到这份原料，照这几步做，端出这个成品」。GPU 照着菜谱，对每一个顶点、每一个像素各跑一遍。
 
 写菜谱就有两个绕不开的问题：第一张菜谱做出的半成品，怎么**递**给第二张菜谱接着做？做菜时要用的盐和火候这类**全局调料**，又怎么从你（厨房外的采购）手里送进去？没有这两条「递料」的通道，两段程序就是两座孤岛，画面要么算不出、要么永远是死板的一个样。这一章讲的就是这两条通道。
+
+<ShaderContractDiagram />
 
 {/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。新核心概念克制：GLSL / in、out / uniform / 向量类型 / 插值（≤5 主概念，swizzle、内建变量、precision 作辅助术语随文带出）。 */}
 
@@ -70,6 +76,10 @@ GLSL 的类型也是为图形定制的。除了熟悉的 `float`（小数）、`
 
 向量取分量很灵活，这套写法叫 <Term def="GLSL 取向量分量的简写：用 .x/.y/.z/.w 或 .r/.g/.b/.a，还能一次取多个并重排，如 color.rgb 取前三个、pos.xy 取前两个、c.bgr 反序。">swizzle</Term>：`color.r` 取红分量，`color.rgb` 一次取前三个，`pos.xy` 取前两个。颜色用 `.rgba`、坐标用 `.xyzw`，指的是同一批分量，只是叫法不同。整组向量还能直接相加、相乘、和 `float` 混算，写起来很省事——这也是 GLSL 比普通语言「图形味」浓的地方。
 
+<ShaderTypeSystemDiagram />
+
+整数向量用 `ivec/uvec`，布尔向量用 `bvec`；matrix 与 vector 乘法有线性代数语义，不是逐分量乘。Sampler、image 等 opaque types 表示资源访问入口，不能像普通 struct 一样任意复制或作为所有表达式的操作数。CPU 侧 `uniform1f/3f/Matrix4fv` 必须与 active uniform 的类型、分量数和 array length 对应。
+
 ## 顶点只有 3 个角，中间的颜色哪来的？——插值
 
 这是小白最容易懵的一点。顶点着色器只对**那几个顶点**跑（三角形就 3 个角），可片段着色器要给三角形**铺满的每一个像素**算色——中间那些片段的 `in` 值是哪来的？
@@ -79,6 +89,8 @@ GLSL 的类型也是为图形定制的。除了熟悉的 `float`（小数）、`
 <InterpolationDiagram />
 
 记住这个直觉：**顶点着色器定「角上的值」，中间的值是光栅化插值「混」出来的**，到了片段着色器就是现成的 `in`。这正是本章主 Demo 里那片渐变的来历。
+
+默认 varying 会做透视正确插值；若数据必须保持 provoking vertex 的离散值（例如 material ID），两端都要使用 `flat out` / `flat in`。整数 varying 必须使用 `flat`，因为“材质编号 2.4”没有合法语义。Stage interface 是否匹配在 program link 时检查，而不是等到 draw 才猜。
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。插值的重心坐标公式不展开，用 InterpolationDiagram 的「按远近混合」直觉代替，符合 C 型 + 小白友好。 */}
 
@@ -318,6 +330,59 @@ requestAnimationFrame(frame);
 
 每帧 `uTime` 变一点，片段着色器里 `sin(uTime)` 跟着变，颜色就动了起来。本站的 `<ShaderDemo>` 已经替你做好了 `uTime` / `uResolution` / `uMouse` 的每帧上传，控件里的自定义 uniform（如 `uColor` / `uSpeed`）也是这套机制——你只管在 GLSL 里读。完整可运行源码将在章末提供（M5）。
 
+## Shader Class：封装生命周期，不能吞掉日志
+
+官方章节最后把重复流程收进<Term def="负责从文件读取源码、编译各阶段、链接program、设置uniform并释放资源的着色器封装">着色器封装</Term>。目标不是让错误消失，而是让每次失败都携带 stage、source path 与完整 info log。
+
+<ShaderClassLifecycleDiagram />
+
+```cpp
+class Shader {
+public:
+    GLuint ID = 0;
+    Shader(const char* vertexPath, const char* fragmentPath) {
+        std::string vs = readText(vertexPath);
+        std::string fs = readText(fragmentPath);
+        GLuint v = compile(GL_VERTEX_SHADER, vs, vertexPath);
+        GLuint f = compile(GL_FRAGMENT_SHADER, fs, fragmentPath);
+        ID = glCreateProgram();
+        glAttachShader(ID, v);
+        glAttachShader(ID, f);
+        glLinkProgram(ID);
+        checkProgramLog(ID);
+        glDeleteShader(v);
+        glDeleteShader(f);
+    }
+    ~Shader() { if (ID) glDeleteProgram(ID); }
+    void use() const { glUseProgram(ID); }
+    void setVec3(GLint location, const glm::vec3& v) const {
+        glUniform3fv(location, 1, &v.x);
+    }
+};
+```
+
+文件 I/O failure、shader compile status 和 program link status 是三类独立错误。成功 link 后 program 已持有 executable，临时 shader objects 可删除；program 本身应由 RAII destructor 或明确 `destroy()` 释放。Uniform location 在 link 后稳定，可初始化时查询并缓存；program relink 后旧 location 失效，不能跨 relink 复用。
+
+## 三步验证 Shader 数据契约
+
+<Stepper>
+<Step title="第一步：先闭合输入与阶段接口">
+核对 attribute location/type，逐字匹配 vertex `out` 与 fragment `in`；保存 compile 和 link status/log，不把黑屏当诊断结果。
+
+<ShaderContractDiagram step={1} />
+</Step>
+<Step title="第二步：上传并观察 varying 与 uniform">
+固定三个顶点的颜色验证插值，再缓存 active uniform locations；先 `useProgram`，按类型上传颜色与时间，记录静态和逐帧结果。
+
+<ShaderContractDiagram step={2} />
+</Step>
+<Step title="第三步：封装生命周期并注入失败">
+让 Shader class 读取文件、编译、链接、缓存位置和释放 program；分别注入坏路径、语法错误、接口类型不匹配与 inactive uniform，确认日志指向真实边界。
+
+<ShaderContractDiagram step={3} />
+</Step>
+</Stepper>
+
 {/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 到 原因 到 修法；每个 150 字内；含 1 个可在 editable demo 亲手触发的错误模式（删 precision 那行）。 */}
 
 ## 容易踩的坑
@@ -365,7 +430,7 @@ requestAnimationFrame(frame);
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 在上面的可编辑 Demo 里，做出「纯色呼吸灯」效果：整块画面是同一种颜色，亮度随时间一明一暗地呼吸（不要位置渐变）。提示：去掉 `uv` 的影响，让颜色只由 `uColor` 和 `pulse` 决定。
+**问题 1：** 在上面的可编辑 Demo 里，做出「纯色呼吸灯」效果：整块画面是同一种颜色，亮度随时间一明一暗地呼吸（不要位置渐变）。提示：去掉 `uv` 的影响，让颜色只由 `uColor` 和 `pulse` 决定。
 
 <Answer>
 
@@ -381,7 +446,7 @@ FragColor = vec4(col, 1.0);
 
 </Answer>
 
-**练习 2（问答型）** 顶点着色器里写 `out vec3 vColor;`，片段着色器里写 `in vec4 vColor;`，会发生什么？为什么？
+**问题 2：** 顶点着色器里写 `out vec3 vColor;`，片段着色器里写 `in vec4 vColor;`，会发生什么？为什么？
 
 <Answer>
 
@@ -389,7 +454,7 @@ FragColor = vec4(col, 1.0);
 
 </Answer>
 
-**练习 3（独立实现题）** 不看上面的代码，自己写出「从程序里把一个 `vec3` 颜色 uniform 传进片段着色器」的完整三步（着色器里声明、问位置、写值），目标效果：让三角形显示成你指定的纯色。
+**问题 3：** 不看上面的代码，自己写出「从程序里把一个 `vec3` 颜色 uniform 传进片段着色器」的完整三步（着色器里声明、问位置、写值），目标效果：让三角形显示成你指定的纯色。
 
 <Answer>
 
@@ -417,9 +482,7 @@ FragColor = vec4(col, 1.0);
 </GlossaryItem>
 
 <GlossaryItem term="uniform">
-  从你的程序（CPU）传进着色器的全局只读变量。一次绘制里，所有顶点和片段读到的它都是同一个值（uniform
-  =
-  统一的），适合放时间、整体颜色、变换矩阵等。着色器里只能读不能改。详见本章「uniform」一节。
+  从你的程序（CPU）传进着色器的全局只读变量。一次绘制里，所有顶点和片段读到的它都是同一个值；uniform 即“统一的”，适合放时间、整体颜色、变换矩阵等。着色器里只能读不能改。详见本章「uniform」一节。
 </GlossaryItem>
 
 <GlossaryItem term="向量类型">
@@ -457,6 +520,10 @@ FragColor = vec4(col, 1.0);
   把编译好的顶点着色器和片段着色器链接到一起、能被显卡执行的整体。上传
   uniform、绘制前都要先用 `useProgram`
   启用它，显卡才知道该用哪两段着色器、把值写进哪个程序。
+</GlossaryItem>
+
+<GlossaryItem term="着色器封装">
+  从文件读取 GLSL、逐阶段编译、链接 program、保留诊断日志、设置 uniform 并负责删除 program 的生命周期封装。
 </GlossaryItem>
 
 </Glossary>
