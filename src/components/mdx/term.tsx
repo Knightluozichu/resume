@@ -3,7 +3,9 @@
 import {
   Children,
   isValidElement,
+  useEffect,
   useId,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -63,11 +65,26 @@ export function Term({
 }) {
   const [open, setOpen] = useState(false);
   const tipId = useId();
+  const glossaryLinkRef = useRef<HTMLAnchorElement>(null);
 
   // 锚点目标：显式 id 优先（GlossaryItem 同样接受 id 覆盖），否则按术语文本生成。
   // 术语文本从 children 递归提取——prettier 多行重排后 children 含空白，不能只判 string。
   const termText = extractText(children);
   const anchor = id ? normalizeTermId(id) : termSlug(termText);
+
+  // 只为真实存在的词典项启用跳转，避免为未收录术语生成死锚点。
+  useEffect(() => {
+    const link = glossaryLinkRef.current;
+    if (!link) return;
+
+    if (document.getElementById(anchor)) {
+      link.href = `#${anchor}`;
+      link.hidden = false;
+    } else {
+      link.removeAttribute("href");
+      link.hidden = true;
+    }
+  }, [anchor]);
 
   return (
     <span className="mdx-term relative inline-block">
@@ -91,7 +108,8 @@ export function Term({
 
       {/* 章末词条锚链接：小箭头，跳到 Glossary 对应词条 */}
       <a
-        href={`#${anchor}`}
+        ref={glossaryLinkRef}
+        hidden
         aria-label={`跳到名词解释：${termText}`}
         className="ml-0.5 align-super text-[0.7em] text-secondary no-underline transition-colors duration-(--duration-hover) ease-standard hover:text-accent"
       >

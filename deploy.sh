@@ -51,7 +51,7 @@ if [[ "$SKIP_BUILD" == "true" ]]; then
   )
   for artifact in "${REQUIRED_BUILD_ARTIFACTS[@]}"; do
     if [[ ! -e "$artifact" ]]; then
-      echo "✗ --skip-build 缺少构建产物：$artifact；请先执行 pnpm build" >&2
+      echo "✗ --skip-build 缺少构建产物：${artifact}；请先执行 pnpm build" >&2
       exit 1
     fi
   done
