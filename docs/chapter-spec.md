@@ -3,6 +3,8 @@
 > 模板（chapter-template.mdx）是骨架，本文件是法律。
 > 总监 review 时逐节对照本规范打 pass / fail，任一节 fail，`draft` 不得置 `false`。
 > 量化约束（字数/条数/行数）未来由 lint 脚本机器检查——本规范即"章节 lint skill"的种子。
+>
+> 全库通用质量与来源门禁见 `docs/content-quality-sop-v2.md`。本文件中的“改 Demo 代码”只适用于 `practiceMode: code`；其他领域分别使用计算、模拟、诊断或设计任务回收目标。
 
 ## 〇、章节类型泛化（先定型，再写作）
 

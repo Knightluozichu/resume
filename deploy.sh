@@ -1,96 +1,162 @@
 #!/usr/bin/env bash
-# remuse 部署脚本：本地 build → 组装 standalone → rsync → pm2 reload
-# 用法：./deploy.sh [--skip-build]
-# --skip-build 仅用于当前工作树刚执行并通过 pnpm build 的场景，可避免部署时重复全量构建。
-# 连接参数从 local.env 读取（永不进 git）；SSH 走密钥认证，脚本不含任何明文密钥。
+# 原子发布：构建 → 独立 release → 候选端口冒烟 → 原子切换 → 公网复检 → 自动回滚。
 set -euo pipefail
 cd "$(dirname "$0")"
 
 SKIP_BUILD=false
-case "${1:-}" in
-  "") ;;
-  --skip-build)
-    SKIP_BUILD=true
-    ;;
-  -h|--help)
-    echo "用法：./deploy.sh [--skip-build]"
-    exit 0
-    ;;
-  *)
-    echo "✗ 未知参数：$1" >&2
-    echo "用法：./deploy.sh [--skip-build]" >&2
-    exit 2
-    ;;
-esac
+BOOK_SLUG=""
+while (( $# > 0 )); do
+  case "$1" in
+    --skip-build) SKIP_BUILD=true ;;
+    --book)
+      BOOK_SLUG="${2:-}"
+      shift
+      [[ -n "$BOOK_SLUG" ]] || { echo "✗ --book 缺少 slug" >&2; exit 2; }
+      ;;
+    -h|--help)
+      echo "用法：./deploy.sh [--skip-build] --book <book-slug>"
+      exit 0
+      ;;
+    *) echo "✗ 未知参数：$1" >&2; exit 2 ;;
+  esac
+  shift
+done
+[[ -n "$BOOK_SLUG" ]] || { echo "✗ 必须指定 --book" >&2; exit 2; }
+[[ "$BOOK_SLUG" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { echo "✗ 非法 book slug" >&2; exit 2; }
 
-if (( $# > 1 )); then
-  echo "✗ 参数过多" >&2
-  echo "用法：./deploy.sh [--skip-build]" >&2
-  exit 2
-fi
-
-# ---- 读取连接参数 ----
-if [[ ! -f local.env ]]; then
-  echo "✗ 缺少 local.env" >&2
-  exit 1
-fi
+[[ -f local.env ]] || { echo "✗ 缺少 local.env" >&2; exit 1; }
 # shellcheck disable=SC1091
 source local.env
-SSH_KEY="${DEPLOY_SSH_KEY:-$HOME/.ssh/id_rsa}"
+DEPLOY_KEY="${DEPLOY_SSH_KEY:-${HOME}/.ssh/id_rsa}"
 SSH_PORT="${SERVER_SSH_PORT:-22}"
 SSH_HOST="${SERVER_SSH_USERNAME:-root}@${SERVER_PUBLIC_IP:?local.env 缺少 SERVER_PUBLIC_IP}"
-SSH_OPTS=(-i "$SSH_KEY" -p "$SSH_PORT" -o BatchMode=yes)
+SSH_OPTS=(-i "$DEPLOY_KEY" -p "$SSH_PORT" -o BatchMode=yes)
 APP_DIR="/var/www/remuse"
+CANDIDATE_PORT="${DEPLOY_CANDIDATE_PORT:-3199}"
+PUBLIC_URL="${DEPLOY_PUBLIC_URL:-https://${SSL_CERT_DOMAIN:?local.env 缺少 SSL_CERT_DOMAIN 或 DEPLOY_PUBLIC_URL}}"
+COMMIT_SHA="$(git rev-parse HEAD)"
+RELEASE_ID="release-$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT_SHA:0:12}"
+RELEASE_DIR="${APP_DIR}/releases/${RELEASE_ID}"
+
+SMOKE_PATHS=("/")
+while IFS= read -r smoke_path; do
+  [[ -n "$smoke_path" ]] && SMOKE_PATHS+=("$smoke_path")
+done < <(node scripts/release-smoke-paths.mjs --book "$BOOK_SLUG")
 
 if [[ "$SKIP_BUILD" == "true" ]]; then
-  REQUIRED_BUILD_ARTIFACTS=(
-    ".next/BUILD_ID"
-    ".next/server/app/learn.html"
-    ".next/standalone/server.js"
-    ".next/static"
-  )
-  for artifact in "${REQUIRED_BUILD_ARTIFACTS[@]}"; do
-    if [[ ! -e "$artifact" ]]; then
-      echo "✗ --skip-build 缺少构建产物：${artifact}；请先执行 pnpm build" >&2
-      exit 1
-    fi
+  for artifact in .next/BUILD_ID .next/standalone/server.js .next/static; do
+    [[ -e "$artifact" ]] || { echo "✗ --skip-build 缺少构建产物：$artifact" >&2; exit 1; }
   done
-  echo "==> [1/6] 复用已验证的本地构建产物 (--skip-build)"
+  echo "==> [1/9] 复用已验证构建"
 else
-  echo "==> [1/6] 本地构建 (next build, standalone)"
+  echo "==> [1/9] 全量生产构建"
   pnpm build
 fi
 
-echo "==> [2/6] 构建期生成 pagefind 站内搜索索引 → public/pagefind"
-# 必须在 build 之后（要吃 .next/server/app 的 SSG HTML）、组装 standalone 之前
-# （索引落在 public/pagefind，由下一步的 `cp -r public` 一并带入 standalone）。
-# 脚本：扁平 SSG HTML → URL 树 staging → pagefind 索引（见 scripts/build-search-index.mjs）。
+echo "==> [2/9] 生成站内搜索索引"
 node scripts/build-search-index.mjs
 
-echo "==> [3/6] 组装 standalone 产物（并入 static 与 public，含 pagefind 索引）"
-# next build 每次重建 .next，standalone 为全新目录；静态资源与 public 需手动并入。
-# public/pagefind 即上一步生成的搜索索引，随 public 一起进 standalone → 上线后静态服务 /pagefind/*。
-cp -r .next/static .next/standalone/.next/
-if [[ -d public ]]; then
-  cp -r public .next/standalone/
-fi
+echo "==> [3/9] 组装 standalone release"
+mkdir -p .next/standalone/.next
+rm -rf .next/standalone/.next/static .next/standalone/public
+cp -R .next/static .next/standalone/.next/static
+[[ ! -d public ]] || cp -R public .next/standalone/public
 
-echo "==> [4/6] 同步 pm2 配置"
-rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "${SSH_HOST}:${APP_DIR}/"
+echo "==> [4/9] 上传独立 release：${RELEASE_ID}"
+ssh "${SSH_OPTS[@]}" "$SSH_HOST" "mkdir -p '$RELEASE_DIR' '$APP_DIR/releases'"
+rsync -az --delete -e "ssh ${SSH_OPTS[*]}" .next/standalone/ "$SSH_HOST:$RELEASE_DIR/"
+rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "$SSH_HOST:$APP_DIR/"
 
-echo "==> [5/6] 同步应用产物到 ${APP_DIR}/current/"
-rsync -az --delete -e "ssh ${SSH_OPTS[*]}" .next/standalone/ "${SSH_HOST}:${APP_DIR}/current/"
+CANDIDATE_PID="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+  "cd '$RELEASE_DIR' && PORT='$CANDIDATE_PORT' HOSTNAME=127.0.0.1 nohup node server.js > candidate.log 2>&1 & echo \$!")"
+cleanup_candidate() {
+  if [[ -n "${CANDIDATE_PID:-}" ]]; then
+    ssh "${SSH_OPTS[@]}" "$SSH_HOST" "kill '$CANDIDATE_PID' >/dev/null 2>&1 || true" || true
+    CANDIDATE_PID=""
+  fi
+}
+trap cleanup_candidate EXIT
 
-echo "==> [6/6] pm2 startOrReload（幂等：无则启，有则热重载）"
+check_remote_routes() {
+  local port="$1"
+  local route
+  for route in "${SMOKE_PATHS[@]}"; do
+    ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+      "curl -fsS -o /dev/null --max-time 15 'http://127.0.0.1:${port}${route}'" || return 1
+  done
+}
+
+wait_for_candidate() {
+  local attempt
+  for attempt in {1..20}; do
+    if ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+      "curl -fsS -o /dev/null --max-time 3 'http://127.0.0.1:${CANDIDATE_PORT}/'"; then
+      return 0
+    fi
+    sleep 1
+  done
+  return 1
+}
+
+echo "==> [5/9] 候选端口检查（首页、首/中/末章、静态资源）"
+wait_for_candidate
+check_remote_routes "$CANDIDATE_PORT"
+STATIC_ASSET="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+  "find '$RELEASE_DIR/.next/static' -type f | head -n 1")"
+[[ "$STATIC_ASSET" == "$RELEASE_DIR"/* ]] || { echo "✗ 候选 release 缺少静态资源" >&2; exit 1; }
+STATIC_ROUTE="/${STATIC_ASSET#"$RELEASE_DIR/"}"
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
-  "cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env && pm2 save --force >/dev/null"
+  "curl -fsS -o /dev/null --max-time 15 'http://127.0.0.1:${CANDIDATE_PORT}${STATIC_ROUTE}'"
+cleanup_candidate
 
-echo "==> 自检：内部端口健康检查"
-CODE=$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
-  "curl -fsS -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3100/ || echo FAIL")
-if [[ "$CODE" == "200" ]]; then
-  echo "✓ 部署成功 — http://127.0.0.1:3100/ 返回 200"
-else
-  echo "✗ 健康检查失败（返回 $CODE）。排查：ssh \$SSH_HOST 'pm2 logs remuse --lines 50'" >&2
+echo "==> [6/9] 原子切换 current"
+PREVIOUS_TARGET="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
+  set -eu
+  if [ -L '$APP_DIR/current' ]; then
+    readlink -f '$APP_DIR/current'
+  elif [ -d '$APP_DIR/current' ]; then
+    legacy='$APP_DIR/releases/legacy-$(date -u +%Y%m%dT%H%M%SZ)'
+    mv '$APP_DIR/current' \"\$legacy\"
+    printf '%s\\n' \"\$legacy\"
+  fi
+")"
+ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+  "rm -f '$APP_DIR/current.next' && ln -s '$RELEASE_DIR' '$APP_DIR/current.next' && mv -Tf '$APP_DIR/current.next' '$APP_DIR/current'"
+
+rollback() {
+  echo "✗ 发布复检失败，回滚到：${PREVIOUS_TARGET}" >&2
+  if [[ -n "$PREVIOUS_TARGET" ]]; then
+    ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+      "rm -f '$APP_DIR/current.rollback' && ln -s '$PREVIOUS_TARGET' '$APP_DIR/current.rollback' && mv -Tf '$APP_DIR/current.rollback' '$APP_DIR/current' && cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null"
+  fi
+  ssh "${SSH_OPTS[@]}" "$SSH_HOST" "rm -rf '$RELEASE_DIR'" || true
   exit 1
-fi
+}
+
+echo "==> [7/9] reload PM2 并检查内部端口"
+ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+  "cd '$APP_DIR' && pm2 startOrReload ecosystem.config.cjs --update-env >/dev/null && pm2 save --force >/dev/null"
+check_remote_routes 3100 || rollback
+
+echo "==> [8/9] 公网复检"
+for route in "${SMOKE_PATHS[@]}"; do
+  curl -fsS -o /dev/null --max-time 20 "${PUBLIC_URL%/}${route}" || rollback
+done
+curl -fsS -o /dev/null --max-time 20 "${PUBLIC_URL%/}${STATIC_ROUTE}" || rollback
+
+echo "==> [9/9] 标记成功并仅保留最近 3 个成功 release"
+ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
+  set -eu
+  touch '$RELEASE_DIR/.successful'
+  kept=0
+  for dir in \$(ls -1dt '$APP_DIR'/releases/release-* 2>/dev/null || true); do
+    [ -f \"\$dir/.successful\" ] || continue
+    kept=\$((kept + 1))
+    if [ \"\$kept\" -gt 3 ]; then
+      case \"\$dir\" in '$APP_DIR'/releases/release-*) rm -rf -- \"\$dir\" ;; esac
+    fi
+  done
+"
+node scripts/mark-book-published.mjs --book "$BOOK_SLUG" --release "$RELEASE_ID" --commit "$COMMIT_SHA"
+trap - EXIT
+echo "✓ 发布成功：book=${BOOK_SLUG} commit=${COMMIT_SHA} release=${RELEASE_ID} url=${PUBLIC_URL}"

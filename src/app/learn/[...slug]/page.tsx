@@ -13,7 +13,12 @@ import { Comments } from "@/components/chapter/comments";
 import { Attribution } from "@/components/mdx/attribution";
 import { getChapterMdxComponents } from "@/components/mdx/chapter-component-registry";
 import { mdxComponents } from "@/components/mdx/mdx-components";
-import { getAdjacentChapters, getAllChapters, getChapter } from "@/lib/content";
+import {
+  BOOK_TITLES,
+  getAdjacentChapters,
+  getAllChapters,
+  getChapter,
+} from "@/lib/content";
 import {
   rehypeCollectHeadings,
   type TocHeading,
@@ -116,7 +121,12 @@ export default async function ChapterPage({
       ...mdxComponents,
       ...chapterMdxComponents,
       Attribution: (props) => (
-        <Attribution sourceUrl={chapter.frontmatter.sourceUrl} {...props} />
+        <Attribution
+          sourceUrl={chapter.frontmatter.sourceUrl}
+          mode={chapter.frontmatter.sourceMode ?? undefined}
+          workTitle={BOOK_TITLES[chapter.bookSlug] ?? chapter.bookSlug}
+          {...props}
+        />
       ),
     },
     options: {

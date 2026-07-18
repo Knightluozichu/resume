@@ -18,6 +18,23 @@ import matter from "gray-matter";
 /** 章节类型：A 概念型 | B 数学型 | C 实战型 | D 对比型（见 docs/chapter-spec.md §〇） */
 export type ChapterType = "A" | "B" | "C" | "D";
 
+/** v2 章节必须声明读者实际完成的练习形态，避免跨领域硬塞代码题。 */
+export type ChapterPracticeMode =
+  | "code"
+  | "calculation"
+  | "simulation"
+  | "diagnosis"
+  | "design";
+
+/**
+ * licensed-adaptation 仅用于确有改编授权的来源；只有目录或参考资料时必须使用
+ * independent-rewrite，不能把“核对过目录”写成“复现了原书正文”。
+ */
+export type ChapterSourceMode =
+  | "licensed-adaptation"
+  | "independent-rewrite"
+  | "original";
+
 /** 章节 frontmatter（与 docs/chapter-template.mdx 字段一一对应） */
 export interface ChapterFrontmatter {
   /** 章节标题（与 LearnOpenGL-CN 对应章名一致） */
@@ -38,6 +55,12 @@ export interface ChapterFrontmatter {
   draft: boolean;
   /** 改编出处链接（LearnOpenGL-CN） */
   sourceUrl: string;
+  /** 旧章默认为 1；完成新 SOP 全套验收后才可标 2。 */
+  qualityVersion: 1 | 2;
+  /** v1 旧章为 null；v2 必填。 */
+  practiceMode: ChapterPracticeMode | null;
+  /** v1 旧章为 null；v2 必填。 */
+  sourceMode: ChapterSourceMode | null;
 }
 
 /** 章节元信息：frontmatter + 路由 slug + 原始正文（不含 frontmatter） */
@@ -2086,6 +2109,45 @@ function parseFrontmatter(
   if (typeof order !== "number" || !Number.isInteger(order))
     fail("字段 `order` 必须是整数");
 
+  const qualityVersion = raw.qualityVersion ?? 1;
+  if (qualityVersion !== 1 && qualityVersion !== 2)
+    fail("字段 `qualityVersion` 必须是 1 | 2");
+
+  const practiceMode = raw.practiceMode ?? null;
+  const practiceModes: readonly ChapterPracticeMode[] = [
+    "code",
+    "calculation",
+    "simulation",
+    "diagnosis",
+    "design",
+  ];
+  if (
+    practiceMode !== null &&
+    !practiceModes.includes(practiceMode as ChapterPracticeMode)
+  ) {
+    fail(
+      "字段 `practiceMode` 必须是 code | calculation | simulation | diagnosis | design",
+    );
+  }
+
+  const sourceMode = raw.sourceMode ?? null;
+  const sourceModes: readonly ChapterSourceMode[] = [
+    "licensed-adaptation",
+    "independent-rewrite",
+    "original",
+  ];
+  if (
+    sourceMode !== null &&
+    !sourceModes.includes(sourceMode as ChapterSourceMode)
+  ) {
+    fail(
+      "字段 `sourceMode` 必须是 licensed-adaptation | independent-rewrite | original",
+    );
+  }
+  if (qualityVersion === 2 && (practiceMode === null || sourceMode === null)) {
+    fail("qualityVersion: 2 的章节必须声明 practiceMode 与 sourceMode");
+  }
+
   return {
     title: str("title"),
     type: type as ChapterType,
@@ -2096,6 +2158,9 @@ function parseFrontmatter(
     math: bool("math"),
     draft: bool("draft"),
     sourceUrl: optStr("sourceUrl"),
+    qualityVersion: qualityVersion as 1 | 2,
+    practiceMode: practiceMode as ChapterPracticeMode | null,
+    sourceMode: sourceMode as ChapterSourceMode | null,
   };
 }
 

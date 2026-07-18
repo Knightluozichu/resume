@@ -46,14 +46,79 @@ export interface AttributionProps {
   adaptedFrom?: string;
   /** 原作链接（如 Packt 图书页） */
   adaptedUrl?: string;
+  /** v2 来源模式；旧章不传时按 URL 保守推断。 */
+  mode?: "licensed-adaptation" | "independent-rewrite" | "original";
+  /** independent-rewrite 模式下显示的参考书名。 */
+  workTitle?: string;
 }
 
 export function Attribution({
   sourceUrl = "",
   adaptedFrom,
   adaptedUrl,
+  mode,
+  workTitle,
 }: AttributionProps) {
   const cnUrl = sourceUrl?.trim();
+
+  const isLearnOpenGL = (() => {
+    if (!cnUrl) return false;
+    try {
+      const host = new URL(cnUrl).hostname;
+      return host === "learnopengl.com" || host === "learnopengl-cn.github.io";
+    } catch {
+      return false;
+    }
+  })();
+  const resolvedMode =
+    mode ??
+    (adaptedFrom?.trim() || (cnUrl && !isLearnOpenGL)
+      ? "independent-rewrite"
+      : isLearnOpenGL
+        ? "licensed-adaptation"
+        : "original");
+
+  if (resolvedMode === "independent-rewrite") {
+    const title =
+      adaptedFrom?.trim() || workTitle?.trim() || "本章所列参考资料";
+    const url = adaptedUrl?.trim() || cnUrl;
+    return (
+      <footer
+        aria-label="资料与写作方式声明"
+        className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
+      >
+        <p className="mb-2 font-semibold text-primary">资料与写作方式声明</p>
+        <p>
+          本章以
+          {url ? (
+            <a href={url} target="_blank" rel="noopener noreferrer nofollow">
+              {title}
+            </a>
+          ) : (
+            title
+          )}
+          的权威目录界定学习范围，并结合正文列出的技术资料独立重写；不宣称复现原书正文，也不沿用原作表述。
+        </p>
+        <p className="mt-2">
+          原作版权归作者与出版社所有；本站原创教学结构与表述仅供学习交流。
+        </p>
+      </footer>
+    );
+  }
+
+  if (resolvedMode === "original") {
+    return (
+      <footer
+        aria-label="原创声明"
+        className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
+      >
+        <p className="mb-2 font-semibold text-primary">原创声明</p>
+        <p>
+          本章为 remuse 原创教学内容；引用资料均在正文或参考链接中单独标明。
+        </p>
+      </footer>
+    );
+  }
 
   if (adaptedFrom?.trim()) {
     const title = adaptedFrom.trim();
@@ -82,7 +147,7 @@ export function Attribution({
     );
   }
 
-  // 原创内容（无出处 URL）：显示通用原创声明
+  // 兼容旧的 licensed-adaptation 数据：无 URL 时不能伪造授权来源。
   if (!cnUrl) {
     return (
       <footer
@@ -90,7 +155,7 @@ export function Attribution({
         className="mdx-attribution my-8 rounded-card border border-border bg-elevated p-6 text-xs text-secondary"
       >
         <p className="mb-2 font-semibold text-primary">原创声明</p>
-        <p>本章为 remuse 原创教学内容，未改编自外部来源。</p>
+        <p>本章缺少可核查的授权来源，不能按授权改编内容发布。</p>
       </footer>
     );
   }
