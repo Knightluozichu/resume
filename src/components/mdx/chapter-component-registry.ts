@@ -1830,171 +1830,101 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
   },
   "auto-why-car-runs/00-learning-map/learning-map": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/learning-map");
+      await import("@/components/mdx/auto-why-car-runs/labs/learning-map");
     return {
-      OfficialAutoWhyCarRunsLearningMapMapLab:
-        module0.OfficialAutoWhyCarRunsLearningMapMapLab,
-      OfficialAutoWhyCarRunsLearningMapExperimentLab:
-        module0.OfficialAutoWhyCarRunsLearningMapExperimentLab,
-      OfficialAutoWhyCarRunsLearningMapEvidenceLab:
-        module0.OfficialAutoWhyCarRunsLearningMapEvidenceLab,
+      AutoBookLearningMap: module0.AutoBookLearningMap,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/01-whole-car/whole-car-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/whole-car-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/whole-car-system");
     return {
-      OfficialAutoWhyCarRunsWholeCarSystemMapLab:
-        module0.OfficialAutoWhyCarRunsWholeCarSystemMapLab,
-      OfficialAutoWhyCarRunsWholeCarSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsWholeCarSystemExperimentLab,
-      OfficialAutoWhyCarRunsWholeCarSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsWholeCarSystemEvidenceLab,
+      WholeCarSystemsLab: module0.WholeCarSystemsLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/02-body/body-structure": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/body-structure");
+      await import("@/components/mdx/auto-why-car-runs/labs/body-structure");
     return {
-      OfficialAutoWhyCarRunsBodyStructureMapLab:
-        module0.OfficialAutoWhyCarRunsBodyStructureMapLab,
-      OfficialAutoWhyCarRunsBodyStructureExperimentLab:
-        module0.OfficialAutoWhyCarRunsBodyStructureExperimentLab,
-      OfficialAutoWhyCarRunsBodyStructureEvidenceLab:
-        module0.OfficialAutoWhyCarRunsBodyStructureEvidenceLab,
+      BodyStructureLab: module0.BodyStructureLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/03-engine/engine-principles": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/engine-principles");
+      await import("@/components/mdx/auto-why-car-runs/labs/engine-principles");
     return {
-      OfficialAutoWhyCarRunsEnginePrinciplesMapLab:
-        module0.OfficialAutoWhyCarRunsEnginePrinciplesMapLab,
-      OfficialAutoWhyCarRunsEnginePrinciplesExperimentLab:
-        module0.OfficialAutoWhyCarRunsEnginePrinciplesExperimentLab,
-      OfficialAutoWhyCarRunsEnginePrinciplesEvidenceLab:
-        module0.OfficialAutoWhyCarRunsEnginePrinciplesEvidenceLab,
+      EnginePrinciplesLab: module0.EnginePrinciplesLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/04-transmission/transmission-principles": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/transmission-principles");
+      await import("@/components/mdx/auto-why-car-runs/labs/transmission-principles");
     return {
-      OfficialAutoWhyCarRunsTransmissionPrinciplesMapLab:
-        module0.OfficialAutoWhyCarRunsTransmissionPrinciplesMapLab,
-      OfficialAutoWhyCarRunsTransmissionPrinciplesExperimentLab:
-        module0.OfficialAutoWhyCarRunsTransmissionPrinciplesExperimentLab,
-      OfficialAutoWhyCarRunsTransmissionPrinciplesEvidenceLab:
-        module0.OfficialAutoWhyCarRunsTransmissionPrinciplesEvidenceLab,
+      TransmissionLab: module0.TransmissionLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/05-drivetrain/drivetrain-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/drivetrain-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/drivetrain-system");
     return {
-      OfficialAutoWhyCarRunsDrivetrainSystemMapLab:
-        module0.OfficialAutoWhyCarRunsDrivetrainSystemMapLab,
-      OfficialAutoWhyCarRunsDrivetrainSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsDrivetrainSystemExperimentLab,
-      OfficialAutoWhyCarRunsDrivetrainSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsDrivetrainSystemEvidenceLab,
+      DrivetrainLab: module0.DrivetrainLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/06-suspension/suspension-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/suspension-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/suspension-system");
     return {
-      OfficialAutoWhyCarRunsSuspensionSystemMapLab:
-        module0.OfficialAutoWhyCarRunsSuspensionSystemMapLab,
-      OfficialAutoWhyCarRunsSuspensionSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsSuspensionSystemExperimentLab,
-      OfficialAutoWhyCarRunsSuspensionSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsSuspensionSystemEvidenceLab,
+      SuspensionLab: module0.SuspensionLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/07-steering/steering-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/steering-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/steering-system");
     return {
-      OfficialAutoWhyCarRunsSteeringSystemMapLab:
-        module0.OfficialAutoWhyCarRunsSteeringSystemMapLab,
-      OfficialAutoWhyCarRunsSteeringSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsSteeringSystemExperimentLab,
-      OfficialAutoWhyCarRunsSteeringSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsSteeringSystemEvidenceLab,
+      SteeringLab: module0.SteeringLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/08-brake/brake-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/brake-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/brake-system");
     return {
-      OfficialAutoWhyCarRunsBrakeSystemMapLab:
-        module0.OfficialAutoWhyCarRunsBrakeSystemMapLab,
-      OfficialAutoWhyCarRunsBrakeSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsBrakeSystemExperimentLab,
-      OfficialAutoWhyCarRunsBrakeSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsBrakeSystemEvidenceLab,
+      BrakeLab: module0.BrakeLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/09-electronics/electronics-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/electronics-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/electronics-system");
     return {
-      OfficialAutoWhyCarRunsElectronicsSystemMapLab:
-        module0.OfficialAutoWhyCarRunsElectronicsSystemMapLab,
-      OfficialAutoWhyCarRunsElectronicsSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsElectronicsSystemExperimentLab,
-      OfficialAutoWhyCarRunsElectronicsSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsElectronicsSystemEvidenceLab,
+      ElectronicsLab: module0.ElectronicsLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/10-tires/tire-wheel-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/tire-wheel-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/tire-wheel-system");
     return {
-      OfficialAutoWhyCarRunsTireWheelSystemMapLab:
-        module0.OfficialAutoWhyCarRunsTireWheelSystemMapLab,
-      OfficialAutoWhyCarRunsTireWheelSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsTireWheelSystemExperimentLab,
-      OfficialAutoWhyCarRunsTireWheelSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsTireWheelSystemEvidenceLab,
+      TireLab: module0.TireLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/11-electric-drive/electric-drive-system": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/electric-drive-system");
+      await import("@/components/mdx/auto-why-car-runs/labs/electric-drive-system");
     return {
-      OfficialAutoWhyCarRunsElectricDriveSystemMapLab:
-        module0.OfficialAutoWhyCarRunsElectricDriveSystemMapLab,
-      OfficialAutoWhyCarRunsElectricDriveSystemExperimentLab:
-        module0.OfficialAutoWhyCarRunsElectricDriveSystemExperimentLab,
-      OfficialAutoWhyCarRunsElectricDriveSystemEvidenceLab:
-        module0.OfficialAutoWhyCarRunsElectricDriveSystemEvidenceLab,
+      ElectricDriveLab: module0.ElectricDriveLab,
     } as ChapterMdxComponents;
   },
   "auto-why-car-runs/12-design-manufacturing/design-manufacturing":
     async () => {
       const module0 =
-        await import("@/components/mdx/auto-why-car-runs/diagrams/design-manufacturing");
+        await import("@/components/mdx/auto-why-car-runs/labs/design-manufacturing");
       return {
-        OfficialAutoWhyCarRunsDesignManufacturingMapLab:
-          module0.OfficialAutoWhyCarRunsDesignManufacturingMapLab,
-        OfficialAutoWhyCarRunsDesignManufacturingExperimentLab:
-          module0.OfficialAutoWhyCarRunsDesignManufacturingExperimentLab,
-        OfficialAutoWhyCarRunsDesignManufacturingEvidenceLab:
-          module0.OfficialAutoWhyCarRunsDesignManufacturingEvidenceLab,
+        ManufacturingLab: module0.ManufacturingLab,
       } as ChapterMdxComponents;
     },
   "auto-why-car-runs/13-final-review/final-review": async () => {
     const module0 =
-      await import("@/components/mdx/auto-why-car-runs/diagrams/final-review");
+      await import("@/components/mdx/auto-why-car-runs/labs/final-review");
     return {
-      OfficialAutoWhyCarRunsFinalReviewMapLab:
-        module0.OfficialAutoWhyCarRunsFinalReviewMapLab,
-      OfficialAutoWhyCarRunsFinalReviewExperimentLab:
-        module0.OfficialAutoWhyCarRunsFinalReviewExperimentLab,
-      OfficialAutoWhyCarRunsFinalReviewEvidenceLab:
-        module0.OfficialAutoWhyCarRunsFinalReviewEvidenceLab,
+      AutoFinalReviewLab: module0.AutoFinalReviewLab,
     } as ChapterMdxComponents;
   },
   "automotive-systems-specialization/00-intro/learning-map": async () => {

@@ -25,14 +25,27 @@ type SteeringAssist = "mechanical" | "hydraulic" | "electric";
 type FourWheelSteerMode = "frontOnly" | "lowSpeed" | "highSpeed";
 type BrakeType = "disc" | "drum";
 type BrakeScenario = "normal" | "wet" | "fade";
-type ElectronicsSensor = "camera" | "radar" | "ultrasonic" | "wheelSpeed" | "cabinTemp";
+type ElectronicsSensor =
+  | "camera"
+  | "radar"
+  | "ultrasonic"
+  | "wheelSpeed"
+  | "cabinTemp";
 type SafetyMode = "active" | "passive" | "comfort";
 type ElectronicsScenario = "cruise" | "emergencyBrake" | "airbag" | "cooling";
 type TireRoad = "dry" | "wet" | "snow";
 type TirePattern = "summer" | "allSeason" | "winter";
 type ElectricDriveType = "hev" | "phev" | "bev" | "fcev";
 type ElectricEnergyMode = "drive" | "regen" | "charge";
-type ManufacturingStage = "design" | "prototype" | "aero" | "stamping" | "welding" | "painting" | "assembly" | "quality";
+type ManufacturingStage =
+  | "design"
+  | "prototype"
+  | "aero"
+  | "stamping"
+  | "welding"
+  | "painting"
+  | "assembly"
+  | "quality";
 type BodyShape = "boxy" | "fastback" | "streamlined";
 type FinalReviewPath = "fuel" | "electric" | "stability";
 
@@ -367,7 +380,8 @@ const DIFFERENTIAL_MODES: Record<
   },
   locked: {
     label: "差速锁",
-    summary: "强制左右半轴同速，脱困能力强；铺装路转弯会憋劲，不适合长期高速使用。",
+    summary:
+      "强制左右半轴同速，脱困能力强；铺装路转弯会憋劲，不适合长期高速使用。",
     slipLoss: 12,
     bias: "左右轮硬连接",
   },
@@ -427,19 +441,22 @@ const STEERING_ASSISTS: Record<
 > = {
   mechanical: {
     label: "机械转向",
-    summary: "方向盘力矩直接通过转向柱、齿轮齿条和拉杆传到车轮，结构直观但低速较重。",
+    summary:
+      "方向盘力矩直接通过转向柱、齿轮齿条和拉杆传到车轮，结构直观但低速较重。",
     path: ["方向盘", "转向柱", "小齿轮", "齿条", "拉杆", "转向节"],
     effort: 86,
   },
   hydraulic: {
     label: "液压助力",
-    summary: "液压泵和助力阀帮驾驶者推动车轮，低速轻，但需要持续消耗发动机能量。",
+    summary:
+      "液压泵和助力阀帮驾驶者推动车轮，低速轻，但需要持续消耗发动机能量。",
     path: ["方向盘", "转向阀", "液压泵", "助力缸", "齿条", "车轮"],
     effort: 42,
   },
   electric: {
     label: "电动助力 EPS",
-    summary: "电机按车速和转角提供助力，低速轻、高速稳，也方便和驾驶辅助系统协同。",
+    summary:
+      "电机按车速和转角提供助力，低速轻、高速稳，也方便和驾驶辅助系统协同。",
     path: ["方向盘传感器", "ECU", "助力电机", "减速机构", "齿条", "车轮"],
     effort: 28,
   },
@@ -472,7 +489,8 @@ const BRAKE_TYPES: Record<
 > = {
   disc: {
     label: "盘式制动",
-    summary: "卡钳把刹车片夹紧刹车盘，散热好、响应直接，乘用车前轮和高性能车常见。",
+    summary:
+      "卡钳把刹车片夹紧刹车盘，散热好、响应直接，乘用车前轮和高性能车常见。",
     parts: ["制动盘", "卡钳", "刹车片", "活塞", "制动液"],
     cooling: 82,
   },
@@ -510,7 +528,14 @@ const BRAKE_SCENARIOS: Record<
 
 const ELECTRONICS_SENSORS: Record<
   ElectronicsSensor,
-  { label: string; role: string; x: number; y: number; range: number; color: string }
+  {
+    label: string;
+    role: string;
+    x: number;
+    y: number;
+    range: number;
+    color: string;
+  }
 > = {
   camera: {
     label: "摄像头",
@@ -554,10 +579,14 @@ const ELECTRONICS_SENSORS: Record<
   },
 };
 
-const SAFETY_MODES: Record<SafetyMode, { label: string; summary: string; nodes: string[] }> = {
+const SAFETY_MODES: Record<
+  SafetyMode,
+  { label: string; summary: string; nodes: string[] }
+> = {
   active: {
     label: "主动安全",
-    summary: "在事故发生前感知风险并提示或干预，例如 ABS、ESP、AEB 和车道保持。",
+    summary:
+      "在事故发生前感知风险并提示或干预，例如 ABS、ESP、AEB 和车道保持。",
     nodes: ["传感器", "控制器", "判断风险", "制动/转向/提示"],
   },
   passive: {
@@ -602,7 +631,10 @@ const ELECTRONICS_SCENARIOS: Record<
   },
 };
 
-const TIRE_ROADS: Record<TireRoad, { label: string; grip: number; summary: string }> = {
+const TIRE_ROADS: Record<
+  TireRoad,
+  { label: string; grip: number; summary: string }
+> = {
   dry: {
     label: "干地",
     grip: 1,
@@ -620,7 +652,10 @@ const TIRE_ROADS: Record<TireRoad, { label: string; grip: number; summary: strin
   },
 };
 
-const TIRE_PATTERNS: Record<TirePattern, { label: string; summary: string; wetBonus: number; snowBonus: number }> = {
+const TIRE_PATTERNS: Record<
+  TirePattern,
+  { label: string; summary: string; wetBonus: number; snowBonus: number }
+> = {
   summer: {
     label: "夏季胎",
     summary: "胎块刚性高，干地操控好，低温和雪地不是强项。",
@@ -654,7 +689,8 @@ const ELECTRIC_DRIVE_TYPES: Record<
 > = {
   hev: {
     label: "HEV 混合动力",
-    summary: "不能外接充电，发动机和电机协同工作，低速和起步常由电机减轻发动机负担。",
+    summary:
+      "不能外接充电，发动机和电机协同工作，低速和起步常由电机减轻发动机负担。",
     nodes: ["燃油箱", "发动机", "发电机/电机", "小电池", "车轮"],
     engineShare: 58,
     batteryShare: 42,
@@ -700,7 +736,8 @@ const ELECTRIC_ENERGY_MODES: Record<
   },
   charge: {
     label: "补能充电",
-    summary: "BEV/PHEV 通过充电口补能，FCEV 通过加氢，HEV 主要靠发动机和回收补电。",
+    summary:
+      "BEV/PHEV 通过充电口补能，FCEV 通过加氢，HEV 主要靠发动机和回收补电。",
   },
 };
 
@@ -760,7 +797,16 @@ const MANUFACTURING_STAGES: Array<{
   },
 ];
 
-const BODY_SHAPES: Record<BodyShape, { label: string; drag: number; stability: number; summary: string; path: string }> = {
+const BODY_SHAPES: Record<
+  BodyShape,
+  {
+    label: string;
+    drag: number;
+    stability: number;
+    summary: string;
+    path: string;
+  }
+> = {
   boxy: {
     label: "方正车身",
     drag: 0.36,
@@ -784,12 +830,15 @@ const BODY_SHAPES: Record<BodyShape, { label: string; drag: number; stability: n
   },
 };
 
-const FINAL_REVIEW_PATHS: Record<FinalReviewPath, {
-  label: string;
-  summary: string;
-  nodes: string[];
-  color: string;
-}> = {
+const FINAL_REVIEW_PATHS: Record<
+  FinalReviewPath,
+  {
+    label: string;
+    summary: string;
+    nodes: string[];
+    color: string;
+  }
+> = {
   fuel: {
     label: "燃油车动力链",
     summary: "燃油在发动机里变成曲轴扭矩，经变速器、传动系统和轮胎推动车身。",
@@ -1308,7 +1357,10 @@ export function BodyStructureLab() {
           </svg>
 
           <div className="mt-4">
-            <label className="text-xs font-medium text-secondary" htmlFor="wheelbase">
+            <label
+              className="text-xs font-medium text-secondary"
+              htmlFor="wheelbase"
+            >
               轴距：{wheelbase} mm
             </label>
             <input
@@ -1501,12 +1553,15 @@ export function EnginePrinciplesLab() {
 
   useEffect(() => {
     if (!playing) return;
-    const id = window.setInterval(() => {
-      setStroke((current) => {
-        const index = STROKE_ORDER.indexOf(current);
-        return STROKE_ORDER[(index + 1) % STROKE_ORDER.length];
-      });
-    }, Math.max(450, 1500 - rpm / 3));
+    const id = window.setInterval(
+      () => {
+        setStroke((current) => {
+          const index = STROKE_ORDER.indexOf(current);
+          return STROKE_ORDER[(index + 1) % STROKE_ORDER.length];
+        });
+      },
+      Math.max(450, 1500 - rpm / 3),
+    );
     return () => window.clearInterval(id);
   }, [playing, rpm]);
 
@@ -2018,11 +2073,7 @@ export function TransmissionLab() {
               输出轮
             </text>
 
-            <path
-              d="M92 318 H505"
-              stroke="var(--border)"
-              strokeWidth="2"
-            />
+            <path d="M92 318 H505" stroke="var(--border)" strokeWidth="2" />
             <path
               d={`M${activeX} 318 H${activeX + 66}`}
               stroke="var(--accent)"
@@ -2486,10 +2537,20 @@ export function DrivetrainLab() {
               />
               <circle cx="84" cy="90" r="14" fill="#60a5fa" />
               <circle cx="288" cy="90" r="14" fill="#22c55e" />
-              <text x="84" y="124" textAnchor="middle" className="fill-secondary text-[11px]">
+              <text
+                x="84"
+                y="124"
+                textAnchor="middle"
+                className="fill-secondary text-[11px]"
+              >
                 内侧 {wheelSpeed.inner}
               </text>
-              <text x="288" y="124" textAnchor="middle" className="fill-secondary text-[11px]">
+              <text
+                x="288"
+                y="124"
+                textAnchor="middle"
+                className="fill-secondary text-[11px]"
+              >
                 外侧 {wheelSpeed.outer}
               </text>
             </g>
@@ -2594,7 +2655,8 @@ export function DrivetrainLab() {
               className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
             />
             <p className="mt-2 text-sm leading-relaxed text-secondary">
-              轮速差：{wheelSpeed.spread}。半径越小，内外轮路线差越明显，差速器越重要。
+              轮速差：{wheelSpeed.spread}
+              。半径越小，内外轮路线差越明显，差速器越重要。
             </p>
             <button
               type="button"
@@ -2628,7 +2690,7 @@ export function DrivetrainLab() {
             <p className="mt-3 text-sm leading-relaxed text-secondary">
               {diffInfo.summary}
             </p>
-            <label className="mt-3 flex items-center gap-2 text-xs text-secondary">
+            <label className="mt-3 flex min-h-11 cursor-pointer items-center gap-2 text-xs text-secondary">
               <input
                 type="checkbox"
                 checked={slipping}
@@ -2651,7 +2713,9 @@ export function DrivetrainLab() {
             </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
-            <p className="text-sm font-medium text-primary">分动器 / 中央差速器</p>
+            <p className="text-sm font-medium text-primary">
+              分动器 / 中央差速器
+            </p>
             <p className="mt-2 text-xs leading-relaxed text-secondary">
               负责前后轴动力分配；全时四驱强调可差速，分时四驱强调硬连接脱困。
             </p>
@@ -2951,10 +3015,20 @@ export function SuspensionLab() {
                 fill="var(--card)"
                 stroke="var(--border)"
               />
-              <text x="56" y="48" textAnchor="middle" className="fill-primary text-[12px] font-semibold">
+              <text
+                x="56"
+                y="48"
+                textAnchor="middle"
+                className="fill-primary text-[12px] font-semibold"
+              >
                 {ROAD_MODES[roadMode].label}
               </text>
-              <text x="56" y="68" textAnchor="middle" className="fill-secondary text-[11px]">
+              <text
+                x="56"
+                y="68"
+                textAnchor="middle"
+                className="fill-secondary text-[11px]"
+              >
                 行程 {travel} mm
               </text>
             </g>
@@ -3173,11 +3247,17 @@ export function SteeringLab() {
   const rackOffset = Math.round(wheelAngle * 1.18);
   const turningRadius = Math.max(
     4.6,
-    Number((18 - Math.abs(frontAngle) * 0.55 - Math.abs(rearAngle) * 0.85).toFixed(1)),
+    Number(
+      (18 - Math.abs(frontAngle) * 0.55 - Math.abs(rearAngle) * 0.85).toFixed(
+        1,
+      ),
+    ),
   );
   const effort = Math.max(
     10,
-    Math.round(assistInfo.effort + (speed > 80 ? 10 : 0) - Math.abs(wheelAngle) * 0.18),
+    Math.round(
+      assistInfo.effort + (speed > 80 ? 10 : 0) - Math.abs(wheelAngle) * 0.18,
+    ),
   );
 
   return (
@@ -3252,7 +3332,12 @@ export function SteeringLab() {
                 strokeLinecap="round"
               />
             </g>
-            <text x="194" y="214" textAnchor="middle" className="fill-secondary text-[12px]">
+            <text
+              x="194"
+              y="214"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               方向盘 {wheelAngle}°
             </text>
 
@@ -3264,7 +3349,12 @@ export function SteeringLab() {
               strokeLinecap="round"
               markerEnd="url(#steering-arrow)"
             />
-            <text x="288" y="143" textAnchor="middle" className="fill-secondary text-[11px]">
+            <text
+              x="288"
+              y="143"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
               转向柱
             </text>
 
@@ -3282,7 +3372,12 @@ export function SteeringLab() {
               strokeWidth="3"
               strokeLinecap="round"
             />
-            <text x="350" y="269" textAnchor="middle" className="fill-primary text-[12px] font-semibold">
+            <text
+              x="350"
+              y="269"
+              textAnchor="middle"
+              className="fill-primary text-[12px] font-semibold"
+            >
               小齿轮
             </text>
 
@@ -3308,7 +3403,12 @@ export function SteeringLab() {
               strokeWidth="5"
               strokeLinecap="round"
             />
-            <text x="352" y="337" textAnchor="middle" className="fill-secondary text-[12px]">
+            <text
+              x="352"
+              y="337"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               齿条左右移动 {rackOffset}px
             </text>
 
@@ -3318,15 +3418,24 @@ export function SteeringLab() {
               [154, 116, rearAngle, "左后"],
               [500, 116, rearAngle, "右后"],
             ].map(([x, y, angle, label]) => (
-              <g key={`${label}`} transform={`translate(${x} ${y}) rotate(${angle})`}>
+              <g
+                key={`${label}`}
+                transform={`translate(${x} ${y}) rotate(${angle})`}
+              >
                 <rect
                   x="-30"
                   y="-16"
                   width="60"
                   height="32"
                   rx="8"
-                  fill={String(label).includes("前") ? "#22c55e" : "var(--card)"}
-                  opacity={String(label).includes("前") || mode !== "frontOnly" ? 1 : 0.45}
+                  fill={
+                    String(label).includes("前") ? "#22c55e" : "var(--card)"
+                  }
+                  opacity={
+                    String(label).includes("前") || mode !== "frontOnly"
+                      ? 1
+                      : 0.45
+                  }
                   stroke="var(--border)"
                   strokeWidth="2"
                 />
@@ -3343,8 +3452,17 @@ export function SteeringLab() {
             ))}
 
             <g transform="translate(72 354)">
-              <text className="fill-primary text-[13px] font-semibold">助力负担</text>
-              <rect x="0" y="18" width="160" height="16" rx="8" fill="var(--border)" />
+              <text className="fill-primary text-[13px] font-semibold">
+                助力负担
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="160"
+                height="16"
+                rx="8"
+                fill="var(--border)"
+              />
               <rect
                 x="0"
                 y="18"
@@ -3359,7 +3477,9 @@ export function SteeringLab() {
             </g>
 
             <g transform="translate(456 354)">
-              <text className="fill-primary text-[13px] font-semibold">转弯半径</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                转弯半径
+              </text>
               <circle
                 cx="56"
                 cy="42"
@@ -3369,7 +3489,12 @@ export function SteeringLab() {
                 strokeWidth="4"
                 strokeDasharray="8 8"
               />
-              <text x="56" y="48" textAnchor="middle" className="fill-primary text-[12px] font-semibold">
+              <text
+                x="56"
+                y="48"
+                textAnchor="middle"
+                className="fill-primary text-[12px] font-semibold"
+              >
                 {turningRadius}m
               </text>
             </g>
@@ -3460,22 +3585,22 @@ export function SteeringLab() {
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">四轮转向</p>
             <div className="mt-3 grid gap-2">
-              {(Object.keys(FOUR_WHEEL_STEER_MODES) as FourWheelSteerMode[]).map(
-                (key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setMode(key)}
-                    className={`rounded-control border px-3 py-2 text-left text-xs ${
-                      mode === key
-                        ? "border-accent text-accent"
-                        : "border-border text-secondary hover:text-primary"
-                    }`}
-                  >
-                    {FOUR_WHEEL_STEER_MODES[key].label}
-                  </button>
-                ),
-              )}
+              {(
+                Object.keys(FOUR_WHEEL_STEER_MODES) as FourWheelSteerMode[]
+              ).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMode(key)}
+                  className={`rounded-control border px-3 py-2 text-left text-xs ${
+                    mode === key
+                      ? "border-accent text-accent"
+                      : "border-border text-secondary hover:text-primary"
+                  }`}
+                >
+                  {FOUR_WHEEL_STEER_MODES[key].label}
+                </button>
+              ))}
             </div>
             <p className="mt-3 text-sm leading-relaxed text-secondary">
               {modeInfo.summary}
@@ -3573,7 +3698,10 @@ export function BrakeLab() {
     (speed * speed) / Math.max(55, brakeForce * effectiveGrip * 1.62),
   );
   const hydraulicPressure = Math.round(pedal * 1.35);
-  const fadeRisk = Math.min(98, Math.round((temperature / 560) * 100 + scenarioInfo.heat * 22));
+  const fadeRisk = Math.min(
+    98,
+    Math.round((temperature / 560) * 100 + scenarioInfo.heat * 22),
+  );
   const caliperGap = Math.max(4, 18 - Math.round(pedal / 8));
   const heatColor =
     temperature > 420 ? "#ef4444" : temperature > 300 ? "#f59e0b" : "#22c55e";
@@ -3639,9 +3767,21 @@ export function BrakeLab() {
                 stroke="#60a5fa"
                 strokeWidth="4"
               />
-              <rect x="-24" y="46" width="48" height="16" rx="6" fill="#60a5fa" />
+              <rect
+                x="-24"
+                y="46"
+                width="48"
+                height="16"
+                rx="6"
+                fill="#60a5fa"
+              />
             </g>
-            <text x="142" y="246" textAnchor="middle" className="fill-secondary text-[12px]">
+            <text
+              x="142"
+              y="246"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               踏板 {pedal}%
             </text>
 
@@ -3653,10 +3793,20 @@ export function BrakeLab() {
               stroke="#a855f7"
               strokeWidth="5"
             />
-            <text x="248" y="168" textAnchor="middle" className="fill-primary text-[12px] font-semibold">
+            <text
+              x="248"
+              y="168"
+              textAnchor="middle"
+              className="fill-primary text-[12px] font-semibold"
+            >
               助力器
             </text>
-            <text x="248" y="186" textAnchor="middle" className="fill-secondary text-[11px]">
+            <text
+              x="248"
+              y="186"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
               放大脚力
             </text>
 
@@ -3670,10 +3820,20 @@ export function BrakeLab() {
               stroke="#f97316"
               strokeWidth="4"
             />
-            <text x="369" y="168" textAnchor="middle" className="fill-primary text-[12px] font-semibold">
+            <text
+              x="369"
+              y="168"
+              textAnchor="middle"
+              className="fill-primary text-[12px] font-semibold"
+            >
               制动总泵
             </text>
-            <text x="369" y="186" textAnchor="middle" className="fill-secondary text-[11px]">
+            <text
+              x="369"
+              y="186"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
               {hydraulicPressure} bar
             </text>
 
@@ -3766,14 +3926,28 @@ export function BrakeLab() {
                   />
                 </g>
               )}
-              <text x="0" y="84" textAnchor="middle" className="fill-secondary text-[12px]">
+              <text
+                x="0"
+                y="84"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
                 {brakeInfo.label}
               </text>
             </g>
 
             <g transform="translate(90 350)">
-              <text className="fill-primary text-[13px] font-semibold">制动距离</text>
-              <rect x="0" y="20" width="250" height="18" rx="9" fill="var(--border)" />
+              <text className="fill-primary text-[13px] font-semibold">
+                制动距离
+              </text>
+              <rect
+                x="0"
+                y="20"
+                width="250"
+                height="18"
+                rx="9"
+                fill="var(--border)"
+              />
               <rect
                 x="0"
                 y="20"
@@ -3788,8 +3962,17 @@ export function BrakeLab() {
             </g>
 
             <g transform="translate(410 350)">
-              <text className="fill-primary text-[13px] font-semibold">热衰减风险</text>
-              <rect x="0" y="20" width="170" height="18" rx="9" fill="var(--border)" />
+              <text className="fill-primary text-[13px] font-semibold">
+                热衰减风险
+              </text>
+              <rect
+                x="0"
+                y="20"
+                width="170"
+                height="18"
+                rx="9"
+                fill="var(--border)"
+              />
               <rect
                 x="0"
                 y="20"
@@ -3807,7 +3990,10 @@ export function BrakeLab() {
 
         <div className="space-y-4 p-4">
           <div className="rounded-control border border-border bg-bg p-4">
-            <label className="text-xs font-medium text-secondary" htmlFor="brake-speed">
+            <label
+              className="text-xs font-medium text-secondary"
+              htmlFor="brake-speed"
+            >
               车速：{speed} km/h
             </label>
             <input
@@ -3820,7 +4006,10 @@ export function BrakeLab() {
               onChange={(event) => setSpeed(Number(event.target.value))}
               className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
             />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="brake-pedal">
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="brake-pedal"
+            >
               踏板力度：{pedal}%
             </label>
             <input
@@ -3833,7 +4022,10 @@ export function BrakeLab() {
               onChange={(event) => setPedal(Number(event.target.value))}
               className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
             />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="brake-temperature">
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="brake-temperature"
+            >
               制动温度：{temperature}°C
             </label>
             <input
@@ -3978,7 +4170,8 @@ export function BrakeLab() {
 export function ElectronicsLab() {
   const [sensor, setSensor] = useState<ElectronicsSensor>("radar");
   const [mode, setMode] = useState<SafetyMode>("active");
-  const [scenario, setScenario] = useState<ElectronicsScenario>("emergencyBrake");
+  const [scenario, setScenario] =
+    useState<ElectronicsScenario>("emergencyBrake");
   const [playStep, setPlayStep] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [answer, setAnswer] = useState<"active" | "passive" | null>(null);
@@ -4004,7 +4197,8 @@ export function ElectronicsLab() {
           现代汽车为什么像一台移动的电子系统？
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-secondary">
-          传感器负责看见和感知，控制器负责判断，执行器负责动作。灯光、仪表、空调、ABS、ESP、ADAS 和气囊，本质都是信号流和控制流的组合。
+          传感器负责看见和感知，控制器负责判断，执行器负责动作。灯光、仪表、空调、ABS、ESP、ADAS
+          和气囊，本质都是信号流和控制流的组合。
         </p>
       </div>
 
@@ -4074,10 +4268,20 @@ export function ElectronicsLab() {
               stroke="#f97316"
               strokeWidth="4"
             />
-            <text x="340" y="195" textAnchor="middle" className="fill-primary text-[13px] font-semibold">
+            <text
+              x="340"
+              y="195"
+              textAnchor="middle"
+              className="fill-primary text-[13px] font-semibold"
+            >
               中央控制器
             </text>
-            <text x="340" y="216" textAnchor="middle" className="fill-secondary text-[11px]">
+            <text
+              x="340"
+              y="216"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
               ECU / 域控
             </text>
 
@@ -4092,7 +4296,8 @@ export function ElectronicsLab() {
                     tabIndex={0}
                     onClick={() => setSensor(key)}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") setSensor(key);
+                      if (event.key === "Enter" || event.key === " ")
+                        setSensor(key);
                     }}
                     className="cursor-pointer"
                   >
@@ -4118,7 +4323,9 @@ export function ElectronicsLab() {
                       strokeWidth={selected ? 5 : 2}
                       strokeLinecap="round"
                       opacity={selected ? 1 : 0.45}
-                      markerEnd={selected ? "url(#electronics-arrow)" : undefined}
+                      markerEnd={
+                        selected ? "url(#electronics-arrow)" : undefined
+                      }
                     />
                   </g>
                 );
@@ -4162,8 +4369,17 @@ export function ElectronicsLab() {
             ))}
 
             <g transform="translate(70 342)">
-              <text className="fill-primary text-[13px] font-semibold">信号强度</text>
-              <rect x="0" y="18" width="160" height="16" rx="8" fill="var(--border)" />
+              <text className="fill-primary text-[13px] font-semibold">
+                信号强度
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="160"
+                height="16"
+                rx="8"
+                fill="var(--border)"
+              />
               <rect
                 x="0"
                 y="18"
@@ -4174,8 +4390,17 @@ export function ElectronicsLab() {
               />
             </g>
             <g transform="translate(450 342)">
-              <text className="fill-primary text-[13px] font-semibold">干预强度</text>
-              <rect x="0" y="18" width="160" height="16" rx="8" fill="var(--border)" />
+              <text className="fill-primary text-[13px] font-semibold">
+                干预强度
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="160"
+                height="16"
+                rx="8"
+                fill="var(--border)"
+              />
               <rect
                 x="0"
                 y="18"
@@ -4191,25 +4416,29 @@ export function ElectronicsLab() {
         <div className="space-y-4 p-4">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">当前传感器</p>
-            <p className="mt-2 text-base font-semibold text-primary">{sensorInfo.label}</p>
+            <p className="mt-2 text-base font-semibold text-primary">
+              {sensorInfo.label}
+            </p>
             <p className="mt-2 text-sm leading-relaxed text-secondary">
               {sensorInfo.role}
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              {(Object.keys(ELECTRONICS_SENSORS) as ElectronicsSensor[]).map((key) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setSensor(key)}
-                  className={`rounded-control border px-3 py-2 text-left text-xs ${
-                    sensor === key
-                      ? "border-accent text-accent"
-                      : "border-border text-secondary hover:text-primary"
-                  }`}
-                >
-                  {ELECTRONICS_SENSORS[key].label}
-                </button>
-              ))}
+              {(Object.keys(ELECTRONICS_SENSORS) as ElectronicsSensor[]).map(
+                (key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setSensor(key)}
+                    className={`rounded-control border px-3 py-2 text-left text-xs ${
+                      sensor === key
+                        ? "border-accent text-accent"
+                        : "border-border text-secondary hover:text-primary"
+                    }`}
+                  >
+                    {ELECTRONICS_SENSORS[key].label}
+                  </button>
+                ),
+              )}
             </div>
           </div>
 
@@ -4234,7 +4463,9 @@ export function ElectronicsLab() {
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{modeInfo.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {modeInfo.summary}
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {modeInfo.nodes.map((node, index) => (
                 <span
@@ -4249,7 +4480,9 @@ export function ElectronicsLab() {
                 </span>
               ))}
             </div>
-            <p className="mt-3 text-xs text-secondary">当前步骤：{activeNode}</p>
+            <p className="mt-3 text-xs text-secondary">
+              当前步骤：{activeNode}
+            </p>
             <button
               type="button"
               onClick={() => setPlaying((value) => !value)}
@@ -4262,7 +4495,9 @@ export function ElectronicsLab() {
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">场景模拟</p>
             <div className="mt-3 grid gap-2">
-              {(Object.keys(ELECTRONICS_SCENARIOS) as ElectronicsScenario[]).map((key) => (
+              {(
+                Object.keys(ELECTRONICS_SCENARIOS) as ElectronicsScenario[]
+              ).map((key) => (
                 <button
                   key={key}
                   type="button"
@@ -4359,7 +4594,9 @@ export function TireLab() {
   useEffect(() => {
     if (!playing) return;
     const timer = window.setInterval(() => {
-      setPressure((value) => (value >= 3.1 ? 1.8 : Number((value + 0.2).toFixed(1))));
+      setPressure((value) =>
+        value >= 3.1 ? 1.8 : Number((value + 0.2).toFixed(1)),
+      );
     }, 820);
     return () => window.clearInterval(timer);
   }, [playing]);
@@ -4369,13 +4606,23 @@ export function TireLab() {
   const contactPatch = Math.round((width / pressure) * 0.88);
   const sidewall = Math.round((width * aspect) / 100);
   const gripBonus =
-    road === "wet" ? patternInfo.wetBonus : road === "snow" ? patternInfo.snowBonus : 0;
+    road === "wet"
+      ? patternInfo.wetBonus
+      : road === "snow"
+        ? patternInfo.snowBonus
+        : 0;
   const pressurePenalty = Math.abs(pressure - 2.4) * 0.12;
   const gripScore = Math.max(
     18,
-    Math.min(98, Math.round((roadInfo.grip + gripBonus - pressurePenalty) * 92)),
+    Math.min(
+      98,
+      Math.round((roadInfo.grip + gripBonus - pressurePenalty) * 92),
+    ),
   );
-  const rollingResistance = Math.max(18, Math.min(95, Math.round(90 - pressure * 18 + width * 0.08)));
+  const rollingResistance = Math.max(
+    18,
+    Math.min(95, Math.round(90 - pressure * 18 + width * 0.08)),
+  );
   const tireSpec = `${width}/${aspect} R${rim}`;
   const treadLines =
     pattern === "summer"
@@ -4405,28 +4652,72 @@ export function TireLab() {
             className="h-auto w-full"
           >
             <defs>
-              <marker id="tire-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+              <marker
+                id="tire-arrow"
+                markerHeight="8"
+                markerWidth="8"
+                orient="auto"
+                refX="7"
+                refY="4"
+              >
                 <path d="M0 0 L8 4 L0 8 Z" fill="var(--accent)" />
               </marker>
             </defs>
 
             <g transform="translate(340 198)">
-              <circle cx="0" cy="0" r="132" fill="var(--card)" stroke="#64748b" strokeWidth="22" />
-              <circle cx="0" cy="0" r="74" fill="var(--bg)" stroke="var(--border)" strokeWidth="5" />
-              <circle cx="0" cy="0" r="38" fill="var(--card)" stroke="#60a5fa" strokeWidth="4" />
-              <g stroke="#22c55e" strokeWidth="5" strokeLinecap="round" opacity="0.9">
+              <circle
+                cx="0"
+                cy="0"
+                r="132"
+                fill="var(--card)"
+                stroke="#64748b"
+                strokeWidth="22"
+              />
+              <circle
+                cx="0"
+                cy="0"
+                r="74"
+                fill="var(--bg)"
+                stroke="var(--border)"
+                strokeWidth="5"
+              />
+              <circle
+                cx="0"
+                cy="0"
+                r="38"
+                fill="var(--card)"
+                stroke="#60a5fa"
+                strokeWidth="4"
+              />
+              <g
+                stroke="#22c55e"
+                strokeWidth="5"
+                strokeLinecap="round"
+                opacity="0.9"
+              >
                 {treadLines.map((path) => (
                   <path key={path} d={path} />
                 ))}
               </g>
-              <text x="0" y="7" textAnchor="middle" className="fill-primary text-[15px] font-semibold">
+              <text
+                x="0"
+                y="7"
+                textAnchor="middle"
+                className="fill-primary text-[15px] font-semibold"
+              >
                 {tireSpec}
               </text>
             </g>
 
             <path
               d="M118 350 H562"
-              stroke={road === "snow" ? "#dbeafe" : road === "wet" ? "#60a5fa" : "var(--border)"}
+              stroke={
+                road === "snow"
+                  ? "#dbeafe"
+                  : road === "wet"
+                    ? "#60a5fa"
+                    : "var(--border)"
+              }
               strokeWidth="8"
               strokeLinecap="round"
             />
@@ -4436,34 +4727,96 @@ export function TireLab() {
               width={contactPatch}
               height="28"
               rx="14"
-              fill={pressure < 2.1 ? "#f59e0b" : pressure > 2.8 ? "#ef4444" : "#22c55e"}
+              fill={
+                pressure < 2.1
+                  ? "#f59e0b"
+                  : pressure > 2.8
+                    ? "#ef4444"
+                    : "#22c55e"
+              }
               opacity="0.85"
             />
-            <text x="340" y="392" textAnchor="middle" className="fill-secondary text-[12px]">
+            <text
+              x="340"
+              y="392"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               接地印迹约 {contactPatch} mm，胎压 {pressure.toFixed(1)} bar
             </text>
 
-            <path d="M208 92 H472" stroke="var(--accent)" strokeWidth="3" markerEnd="url(#tire-arrow)" />
-            <text x="340" y="78" textAnchor="middle" className="fill-secondary text-[12px]">
+            <path
+              d="M208 92 H472"
+              stroke="var(--accent)"
+              strokeWidth="3"
+              markerEnd="url(#tire-arrow)"
+            />
+            <text
+              x="340"
+              y="78"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               胎宽 {width} mm
             </text>
-            <path d="M496 142 V254" stroke="#f59e0b" strokeWidth="3" markerEnd="url(#tire-arrow)" />
+            <path
+              d="M496 142 V254"
+              stroke="#f59e0b"
+              strokeWidth="3"
+              markerEnd="url(#tire-arrow)"
+            />
             <text x="536" y="202" className="fill-secondary text-[12px]">
               胎侧 {sidewall} mm
             </text>
 
             <g transform="translate(70 92)">
-              <text className="fill-primary text-[13px] font-semibold">抓地</text>
-              <rect x="0" y="18" width="156" height="16" rx="8" fill="var(--border)" />
-              <rect x="0" y="18" width={Math.round(gripScore * 1.56)} height="16" rx="8" fill="#22c55e" />
-              <text x="0" y="58" className="fill-secondary text-[11px]">{gripScore}%</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                抓地
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="156"
+                height="16"
+                rx="8"
+                fill="var(--border)"
+              />
+              <rect
+                x="0"
+                y="18"
+                width={Math.round(gripScore * 1.56)}
+                height="16"
+                rx="8"
+                fill="#22c55e"
+              />
+              <text x="0" y="58" className="fill-secondary text-[11px]">
+                {gripScore}%
+              </text>
             </g>
 
             <g transform="translate(454 92)">
-              <text className="fill-primary text-[13px] font-semibold">滚阻</text>
-              <rect x="0" y="18" width="156" height="16" rx="8" fill="var(--border)" />
-              <rect x="0" y="18" width={Math.round(rollingResistance * 1.56)} height="16" rx="8" fill="#f97316" />
-              <text x="0" y="58" className="fill-secondary text-[11px]">{rollingResistance}%</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                滚阻
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="156"
+                height="16"
+                rx="8"
+                fill="var(--border)"
+              />
+              <rect
+                x="0"
+                y="18"
+                width={Math.round(rollingResistance * 1.56)}
+                height="16"
+                rx="8"
+                fill="#f97316"
+              />
+              <text x="0" y="58" className="fill-secondary text-[11px]">
+                {rollingResistance}%
+              </text>
             </g>
           </svg>
         </div>
@@ -4471,19 +4824,57 @@ export function TireLab() {
         <div className="space-y-4 p-4">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">轮胎规格</p>
-            <p className="mt-2 text-xl font-semibold text-primary">{tireSpec}</p>
+            <p className="mt-2 text-xl font-semibold text-primary">
+              {tireSpec}
+            </p>
             <div className="mt-3 grid gap-3">
-              <label className="text-xs text-secondary" htmlFor="tire-width">胎宽：{width} mm</label>
-              <input id="tire-width" type="range" min="185" max="285" step="5" value={width} onChange={(event) => setWidth(Number(event.target.value))} className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-              <label className="text-xs text-secondary" htmlFor="tire-aspect">扁平比：{aspect}</label>
-              <input id="tire-aspect" type="range" min="35" max="70" step="5" value={aspect} onChange={(event) => setAspect(Number(event.target.value))} className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-              <label className="text-xs text-secondary" htmlFor="tire-rim">轮辋：R{rim}</label>
-              <input id="tire-rim" type="range" min="15" max="21" step="1" value={rim} onChange={(event) => setRim(Number(event.target.value))} className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
+              <label className="text-xs text-secondary" htmlFor="tire-width">
+                胎宽：{width} mm
+              </label>
+              <input
+                id="tire-width"
+                type="range"
+                min="185"
+                max="285"
+                step="5"
+                value={width}
+                onChange={(event) => setWidth(Number(event.target.value))}
+                className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+              />
+              <label className="text-xs text-secondary" htmlFor="tire-aspect">
+                扁平比：{aspect}
+              </label>
+              <input
+                id="tire-aspect"
+                type="range"
+                min="35"
+                max="70"
+                step="5"
+                value={aspect}
+                onChange={(event) => setAspect(Number(event.target.value))}
+                className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+              />
+              <label className="text-xs text-secondary" htmlFor="tire-rim">
+                轮辋：R{rim}
+              </label>
+              <input
+                id="tire-rim"
+                type="range"
+                min="15"
+                max="21"
+                step="1"
+                value={rim}
+                onChange={(event) => setRim(Number(event.target.value))}
+                className="mdx-range h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+              />
             </div>
           </div>
 
           <div className="rounded-control border border-border bg-bg p-4">
-            <label className="text-xs font-medium text-secondary" htmlFor="tire-pressure">
+            <label
+              className="text-xs font-medium text-secondary"
+              htmlFor="tire-pressure"
+            >
               胎压：{pressure.toFixed(1)} bar
             </label>
             <input
@@ -4512,20 +4903,34 @@ export function TireLab() {
             <p className="text-xs text-secondary">路面与花纹</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(Object.keys(TIRE_ROADS) as TireRoad[]).map((key) => (
-                <button key={key} type="button" onClick={() => setRoad(key)} className={`rounded-control border px-2 py-2 text-xs ${road === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setRoad(key)}
+                  className={`rounded-control border px-2 py-2 text-xs ${road === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                >
                   {TIRE_ROADS[key].label}
                 </button>
               ))}
             </div>
             <div className="mt-3 grid gap-2">
               {(Object.keys(TIRE_PATTERNS) as TirePattern[]).map((key) => (
-                <button key={key} type="button" onClick={() => setPattern(key)} className={`rounded-control border px-3 py-2 text-left text-xs ${pattern === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setPattern(key)}
+                  className={`rounded-control border px-3 py-2 text-left text-xs ${pattern === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                >
                   {TIRE_PATTERNS[key].label}
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{roadInfo.summary}</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">{patternInfo.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {roadInfo.summary}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              {patternInfo.summary}
+            </p>
           </div>
         </div>
       </div>
@@ -4534,15 +4939,21 @@ export function TireLab() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">胎面</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">负责接触地面，花纹影响排水、抓地和噪声。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              负责接触地面，花纹影响排水、抓地和噪声。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">胎侧</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">影响缓冲和支撑，扁平比越低通常侧向响应越直接。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              影响缓冲和支撑，扁平比越低通常侧向响应越直接。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">胎压</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">决定接地印迹形状，也影响滚阻、磨耗、舒适和安全。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              决定接地印迹形状，也影响滚阻、磨耗、舒适和安全。
+            </p>
           </div>
         </div>
       </div>
@@ -4553,15 +4964,25 @@ export function TireLab() {
           `225/55 R17` 里的 225 表示什么？
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => setAnswer("width")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("width")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             胎宽
           </button>
-          <button type="button" onClick={() => setAnswer("rim")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("rim")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             轮辋直径
           </button>
         </div>
         {answer && (
-          <p className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "width" ? "border-accent text-primary" : "border-warning text-primary"}`}>
+          <p
+            className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "width" ? "border-accent text-primary" : "border-warning text-primary"}`}
+          >
             {answer === "width"
               ? "正确。225 表示名义胎宽约 225 mm；55 是扁平比，R17 表示 17 英寸轮辋。"
               : "不对。轮辋直径看 R 后面的数字，R17 才表示 17 英寸轮辋。"}
@@ -4592,12 +5013,30 @@ export function ElectricDriveLab() {
 
   const driveInfo = ELECTRIC_DRIVE_TYPES[driveType];
   const modeInfo = ELECTRIC_ENERGY_MODES[mode];
-  const motorPower = mode === "regen" ? -Math.round(brake * 1.1) : Math.round(throttle * driveInfo.batteryShare / 70);
-  const regenPower = mode === "regen" ? Math.round(brake * (driveType === "hev" ? 0.42 : 0.72)) : 0;
-  const fuelUse = Math.round((driveInfo.engineShare * Math.max(0, throttle - 20)) / 100);
-  const electricShare = Math.min(100, Math.max(0, driveInfo.batteryShare + (mode === "regen" ? 8 : 0)));
-  const batteryFill = Math.max(8, Math.min(100, batterySoc + (mode === "regen" ? 8 : mode === "drive" ? -8 : 12)));
-  const flowColor = mode === "regen" ? "#22c55e" : mode === "charge" ? "#60a5fa" : "#f97316";
+  const motorPower =
+    mode === "regen"
+      ? -Math.round(brake * 1.1)
+      : Math.round((throttle * driveInfo.batteryShare) / 70);
+  const regenPower =
+    mode === "regen"
+      ? Math.round(brake * (driveType === "hev" ? 0.42 : 0.72))
+      : 0;
+  const fuelUse = Math.round(
+    (driveInfo.engineShare * Math.max(0, throttle - 20)) / 100,
+  );
+  const electricShare = Math.min(
+    100,
+    Math.max(0, driveInfo.batteryShare + (mode === "regen" ? 8 : 0)),
+  );
+  const batteryFill = Math.max(
+    8,
+    Math.min(
+      100,
+      batterySoc + (mode === "regen" ? 8 : mode === "drive" ? -8 : 12),
+    ),
+  );
+  const flowColor =
+    mode === "regen" ? "#22c55e" : mode === "charge" ? "#60a5fa" : "#f97316";
   const showEngine = driveInfo.engineShare > 0;
   const showHydrogen = driveType === "fcev";
 
@@ -4609,7 +5048,8 @@ export function ElectricDriveLab() {
           新能源车为什么可以少很多传统传动部件？
         </h2>
         <p className="mt-2 max-w-3xl text-sm leading-relaxed text-secondary">
-          电驱系统把能量链改成“电池/燃料电池 → 电控 → 电机 → 车轮”。电机低速就能输出大扭矩，很多纯电车只需要固定减速器，不再依赖复杂多挡变速器。
+          电驱系统把能量链改成“电池/燃料电池 → 电控 → 电机 →
+          车轮”。电机低速就能输出大扭矩，很多纯电车只需要固定减速器，不再依赖复杂多挡变速器。
         </p>
       </div>
 
@@ -4622,74 +5062,310 @@ export function ElectricDriveLab() {
             className="h-auto w-full"
           >
             <defs>
-              <marker id="electric-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+              <marker
+                id="electric-arrow"
+                markerHeight="8"
+                markerWidth="8"
+                orient="auto"
+                refX="7"
+                refY="4"
+              >
                 <path d="M0 0 L8 4 L0 8 Z" fill={flowColor} />
               </marker>
             </defs>
 
-            <rect x="88" y="74" width="504" height="242" rx="32" fill="var(--bg)" stroke="var(--border)" strokeWidth="3" />
-            <path d="M146 108 C246 48 434 48 534 108" fill="none" stroke="var(--border)" strokeWidth="2" />
-            <path d="M132 288 C248 334 432 334 552 288" fill="none" stroke="var(--border)" strokeWidth="2" />
+            <rect
+              x="88"
+              y="74"
+              width="504"
+              height="242"
+              rx="32"
+              fill="var(--bg)"
+              stroke="var(--border)"
+              strokeWidth="3"
+            />
+            <path
+              d="M146 108 C246 48 434 48 534 108"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="2"
+            />
+            <path
+              d="M132 288 C248 334 432 334 552 288"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="2"
+            />
 
-            <rect x="132" y="160" width="116" height="72" rx="14" fill="var(--card)" stroke="#60a5fa" strokeWidth="4" />
-            <rect x="146" y="182" width={Math.round(batteryFill * 0.88)} height="26" rx="6" fill="#60a5fa" />
-            <text x="190" y="150" textAnchor="middle" className="fill-primary text-[13px] font-semibold">
+            <rect
+              x="132"
+              y="160"
+              width="116"
+              height="72"
+              rx="14"
+              fill="var(--card)"
+              stroke="#60a5fa"
+              strokeWidth="4"
+            />
+            <rect
+              x="146"
+              y="182"
+              width={Math.round(batteryFill * 0.88)}
+              height="26"
+              rx="6"
+              fill="#60a5fa"
+            />
+            <text
+              x="190"
+              y="150"
+              textAnchor="middle"
+              className="fill-primary text-[13px] font-semibold"
+            >
               {showHydrogen ? "缓冲电池" : "动力电池"}
             </text>
-            <text x="190" y="258" textAnchor="middle" className="fill-secondary text-[12px]">
+            <text
+              x="190"
+              y="258"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
               SOC {batteryFill}%
             </text>
 
-            <rect x="282" y="164" width="104" height="64" rx="14" fill="var(--card)" stroke="#a855f7" strokeWidth="4" />
-            <text x="334" y="190" textAnchor="middle" className="fill-primary text-[13px] font-semibold">电控</text>
-            <text x="334" y="210" textAnchor="middle" className="fill-secondary text-[11px]">逆变器 / ECU</text>
+            <rect
+              x="282"
+              y="164"
+              width="104"
+              height="64"
+              rx="14"
+              fill="var(--card)"
+              stroke="#a855f7"
+              strokeWidth="4"
+            />
+            <text
+              x="334"
+              y="190"
+              textAnchor="middle"
+              className="fill-primary text-[13px] font-semibold"
+            >
+              电控
+            </text>
+            <text
+              x="334"
+              y="210"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
+              逆变器 / ECU
+            </text>
 
-            <circle cx="470" cy="196" r="42" fill="var(--card)" stroke="#22c55e" strokeWidth="5" />
-            <text x="470" y="192" textAnchor="middle" className="fill-primary text-[13px] font-semibold">电机</text>
-            <text x="470" y="212" textAnchor="middle" className="fill-secondary text-[11px]">{motorPower} kW</text>
+            <circle
+              cx="470"
+              cy="196"
+              r="42"
+              fill="var(--card)"
+              stroke="#22c55e"
+              strokeWidth="5"
+            />
+            <text
+              x="470"
+              y="192"
+              textAnchor="middle"
+              className="fill-primary text-[13px] font-semibold"
+            >
+              电机
+            </text>
+            <text
+              x="470"
+              y="212"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
+              {motorPower} kW
+            </text>
 
             <g transform="translate(548 196)">
-              <circle cx="0" cy="0" r="44" fill="var(--card)" stroke="#64748b" strokeWidth="8" />
-              <circle cx="0" cy="0" r="20" fill="var(--bg)" stroke="var(--border)" strokeWidth="3" />
-              <text x="0" y="72" textAnchor="middle" className="fill-secondary text-[12px]">车轮</text>
+              <circle
+                cx="0"
+                cy="0"
+                r="44"
+                fill="var(--card)"
+                stroke="#64748b"
+                strokeWidth="8"
+              />
+              <circle
+                cx="0"
+                cy="0"
+                r="20"
+                fill="var(--bg)"
+                stroke="var(--border)"
+                strokeWidth="3"
+              />
+              <text
+                x="0"
+                y="72"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                车轮
+              </text>
             </g>
 
             {showEngine && (
               <g>
-                <rect x="264" y="76" width="120" height="54" rx="12" fill="var(--card)" stroke="#f97316" strokeWidth="4" />
-                <text x="324" y="100" textAnchor="middle" className="fill-primary text-[12px] font-semibold">发动机</text>
-                <text x="324" y="118" textAnchor="middle" className="fill-secondary text-[11px]">燃油 {fuelUse}%</text>
-                <path d="M324 130 V164" stroke="#f97316" strokeWidth="5" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
+                <rect
+                  x="264"
+                  y="76"
+                  width="120"
+                  height="54"
+                  rx="12"
+                  fill="var(--card)"
+                  stroke="#f97316"
+                  strokeWidth="4"
+                />
+                <text
+                  x="324"
+                  y="100"
+                  textAnchor="middle"
+                  className="fill-primary text-[12px] font-semibold"
+                >
+                  发动机
+                </text>
+                <text
+                  x="324"
+                  y="118"
+                  textAnchor="middle"
+                  className="fill-secondary text-[11px]"
+                >
+                  燃油 {fuelUse}%
+                </text>
+                <path
+                  d="M324 130 V164"
+                  stroke="#f97316"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  markerEnd="url(#electric-arrow)"
+                />
               </g>
             )}
 
             {showHydrogen && (
               <g>
-                <rect x="106" y="82" width="116" height="52" rx="12" fill="var(--card)" stroke="#06b6d4" strokeWidth="4" />
-                <text x="164" y="104" textAnchor="middle" className="fill-primary text-[12px] font-semibold">储氢罐</text>
-                <text x="164" y="122" textAnchor="middle" className="fill-secondary text-[11px]">H₂ + O₂</text>
-                <path d="M222 108 H282" stroke="#06b6d4" strokeWidth="5" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
+                <rect
+                  x="106"
+                  y="82"
+                  width="116"
+                  height="52"
+                  rx="12"
+                  fill="var(--card)"
+                  stroke="#06b6d4"
+                  strokeWidth="4"
+                />
+                <text
+                  x="164"
+                  y="104"
+                  textAnchor="middle"
+                  className="fill-primary text-[12px] font-semibold"
+                >
+                  储氢罐
+                </text>
+                <text
+                  x="164"
+                  y="122"
+                  textAnchor="middle"
+                  className="fill-secondary text-[11px]"
+                >
+                  H₂ + O₂
+                </text>
+                <path
+                  d="M222 108 H282"
+                  stroke="#06b6d4"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  markerEnd="url(#electric-arrow)"
+                />
               </g>
             )}
 
-            <path d="M248 196 H282" stroke={flowColor} strokeWidth="7" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
-            <path d="M386 196 H428" stroke={flowColor} strokeWidth="7" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
-            <path d="M512 196 H542" stroke={flowColor} strokeWidth="7" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
+            <path
+              d="M248 196 H282"
+              stroke={flowColor}
+              strokeWidth="7"
+              strokeLinecap="round"
+              markerEnd="url(#electric-arrow)"
+            />
+            <path
+              d="M386 196 H428"
+              stroke={flowColor}
+              strokeWidth="7"
+              strokeLinecap="round"
+              markerEnd="url(#electric-arrow)"
+            />
+            <path
+              d="M512 196 H542"
+              stroke={flowColor}
+              strokeWidth="7"
+              strokeLinecap="round"
+              markerEnd="url(#electric-arrow)"
+            />
             {mode === "regen" && (
-              <path d="M540 234 C420 292 300 286 200 232" fill="none" stroke="#22c55e" strokeWidth="6" strokeLinecap="round" markerEnd="url(#electric-arrow)" />
+              <path
+                d="M540 234 C420 292 300 286 200 232"
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="6"
+                strokeLinecap="round"
+                markerEnd="url(#electric-arrow)"
+              />
             )}
 
             <g transform="translate(96 344)">
-              <text className="fill-primary text-[13px] font-semibold">电驱占比</text>
-              <rect x="0" y="18" width="180" height="18" rx="9" fill="var(--border)" />
-              <rect x="0" y="18" width={Math.round(electricShare * 1.8)} height="18" rx="9" fill="#60a5fa" />
-              <text x="0" y="62" className="fill-secondary text-[11px]">{electricShare}%</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                电驱占比
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="180"
+                height="18"
+                rx="9"
+                fill="var(--border)"
+              />
+              <rect
+                x="0"
+                y="18"
+                width={Math.round(electricShare * 1.8)}
+                height="18"
+                rx="9"
+                fill="#60a5fa"
+              />
+              <text x="0" y="62" className="fill-secondary text-[11px]">
+                {electricShare}%
+              </text>
             </g>
             <g transform="translate(404 344)">
-              <text className="fill-primary text-[13px] font-semibold">传动复杂度</text>
-              <rect x="0" y="18" width="180" height="18" rx="9" fill="var(--border)" />
-              <rect x="0" y="18" width={Math.round(driveInfo.transmissionComplexity * 1.8)} height="18" rx="9" fill="#f97316" />
-              <text x="0" y="62" className="fill-secondary text-[11px]">{driveInfo.transmissionComplexity}%</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                传动复杂度
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="180"
+                height="18"
+                rx="9"
+                fill="var(--border)"
+              />
+              <rect
+                x="0"
+                y="18"
+                width={Math.round(driveInfo.transmissionComplexity * 1.8)}
+                height="18"
+                rx="9"
+                fill="#f97316"
+              />
+              <text x="0" y="62" className="fill-secondary text-[11px]">
+                {driveInfo.transmissionComplexity}%
+              </text>
             </g>
           </svg>
         </div>
@@ -4698,16 +5374,28 @@ export function ElectricDriveLab() {
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">动力类型</p>
             <div className="mt-3 grid gap-2">
-              {(Object.keys(ELECTRIC_DRIVE_TYPES) as ElectricDriveType[]).map((key) => (
-                <button key={key} type="button" onClick={() => setDriveType(key)} className={`rounded-control border px-3 py-2 text-left text-xs ${driveType === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
-                  {ELECTRIC_DRIVE_TYPES[key].label}
-                </button>
-              ))}
+              {(Object.keys(ELECTRIC_DRIVE_TYPES) as ElectricDriveType[]).map(
+                (key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setDriveType(key)}
+                    className={`rounded-control border px-3 py-2 text-left text-xs ${driveType === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                  >
+                    {ELECTRIC_DRIVE_TYPES[key].label}
+                  </button>
+                ),
+              )}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{driveInfo.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {driveInfo.summary}
+            </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {driveInfo.nodes.map((node, index) => (
-                <span key={`${driveType}-${node}`} className="rounded-control border border-border px-2 py-1 text-xs text-secondary">
+                <span
+                  key={`${driveType}-${node}`}
+                  className="rounded-control border border-border px-2 py-1 text-xs text-secondary"
+                >
                   {index + 1}. {node}
                 </span>
               ))}
@@ -4717,24 +5405,81 @@ export function ElectricDriveLab() {
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">能量模式</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
-              {(Object.keys(ELECTRIC_ENERGY_MODES) as ElectricEnergyMode[]).map((key) => (
-                <button key={key} type="button" onClick={() => setMode(key)} className={`rounded-control border px-2 py-2 text-xs ${mode === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
-                  {ELECTRIC_ENERGY_MODES[key].label}
-                </button>
-              ))}
+              {(Object.keys(ELECTRIC_ENERGY_MODES) as ElectricEnergyMode[]).map(
+                (key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setMode(key)}
+                    className={`rounded-control border px-2 py-2 text-xs ${mode === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                  >
+                    {ELECTRIC_ENERGY_MODES[key].label}
+                  </button>
+                ),
+              )}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{modeInfo.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {modeInfo.summary}
+            </p>
           </div>
 
           <div className="rounded-control border border-border bg-bg p-4">
-            <label className="text-xs font-medium text-secondary" htmlFor="electric-throttle">油门：{throttle}%</label>
-            <input id="electric-throttle" type="range" min="0" max="100" step="5" value={throttle} onChange={(event) => setThrottle(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="electric-brake">刹车回收：{brake}%</label>
-            <input id="electric-brake" type="range" min="0" max="100" step="5" value={brake} onChange={(event) => setBrake(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="battery-soc">电池电量：{batterySoc}%</label>
-            <input id="battery-soc" type="range" min="10" max="100" step="5" value={batterySoc} onChange={(event) => setBatterySoc(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-            <p className="mt-3 text-xs text-secondary">回收功率约 {regenPower} kW。</p>
-            <button type="button" onClick={() => setPlaying((value) => !value)} className="mt-3 rounded-control border border-accent px-3 py-2 text-xs text-accent">
+            <label
+              className="text-xs font-medium text-secondary"
+              htmlFor="electric-throttle"
+            >
+              油门：{throttle}%
+            </label>
+            <input
+              id="electric-throttle"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={throttle}
+              onChange={(event) => setThrottle(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="electric-brake"
+            >
+              刹车回收：{brake}%
+            </label>
+            <input
+              id="electric-brake"
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={brake}
+              onChange={(event) => setBrake(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="battery-soc"
+            >
+              电池电量：{batterySoc}%
+            </label>
+            <input
+              id="battery-soc"
+              type="range"
+              min="10"
+              max="100"
+              step="5"
+              value={batterySoc}
+              onChange={(event) => setBatterySoc(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
+            <p className="mt-3 text-xs text-secondary">
+              回收功率约 {regenPower} kW。
+            </p>
+            <button
+              type="button"
+              onClick={() => setPlaying((value) => !value)}
+              className="mt-3 rounded-control border border-accent px-3 py-2 text-xs text-accent"
+            >
               {playing ? "暂停能量流" : "播放能量流"}
             </button>
           </div>
@@ -4745,15 +5490,21 @@ export function ElectricDriveLab() {
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">三电系统</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">动力电池、电机、电控共同决定电驱车的能量储存、转换和输出。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              动力电池、电机、电控共同决定电驱车的能量储存、转换和输出。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">能量回收</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">减速时电机变成发电机，把一部分动能回收到电池。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              减速时电机变成发电机，把一部分动能回收到电池。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">固定减速器</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">电机扭矩范围宽，纯电车常用简单减速器替代传统多挡变速器。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              电机扭矩范围宽，纯电车常用简单减速器替代传统多挡变速器。
+            </p>
           </div>
         </div>
       </div>
@@ -4764,15 +5515,25 @@ export function ElectricDriveLab() {
           如果一辆车完全没有发动机，主要靠动力电池和电机驱动，它属于哪类？
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => setAnswer("bev")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("bev")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             BEV 纯电动
           </button>
-          <button type="button" onClick={() => setAnswer("hev")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("hev")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             HEV 混合动力
           </button>
         </div>
         {answer && (
-          <p className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "bev" ? "border-accent text-primary" : "border-warning text-primary"}`}>
+          <p
+            className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "bev" ? "border-accent text-primary" : "border-warning text-primary"}`}
+          >
             {answer === "bev"
               ? "正确。BEV 纯电动车没有发动机，能量主要来自动力电池，电机通过减速器驱动车轮。"
               : "不对。HEV 仍然有发动机，不能外接充电，电机主要辅助发动机提升效率。"}
@@ -4801,12 +5562,24 @@ export function ManufacturingLab() {
     return () => window.clearInterval(timer);
   }, [playing]);
 
-  const currentStage = MANUFACTURING_STAGES.find((item) => item.id === stage) ?? MANUFACTURING_STAGES[0];
+  const currentStage =
+    MANUFACTURING_STAGES.find((item) => item.id === stage) ??
+    MANUFACTURING_STAGES[0];
   const shapeInfo = BODY_SHAPES[shape];
-  const qualityScore = Math.max(42, Math.min(99, 100 - defectRate * 4 + Math.round(testLoad / 8)));
-  const taktRisk = lineSpeed > 78 && defectRate > 10 ? "节拍过快且缺陷率偏高，需要减速排查。" : lineSpeed < 45 ? "节拍较慢，适合试制和问题确认。" : "节拍和质量处在可控区间。";
+  const qualityScore = Math.max(
+    42,
+    Math.min(99, 100 - defectRate * 4 + Math.round(testLoad / 8)),
+  );
+  const taktRisk =
+    lineSpeed > 78 && defectRate > 10
+      ? "节拍过快且缺陷率偏高，需要减速排查。"
+      : lineSpeed < 45
+        ? "节拍较慢，适合试制和问题确认。"
+        : "节拍和质量处在可控区间。";
   const windEnergy = Math.round(shapeInfo.drag * 100 + testLoad / 10);
-  const stageIndex = MANUFACTURING_STAGES.findIndex((item) => item.id === stage);
+  const stageIndex = MANUFACTURING_STAGES.findIndex(
+    (item) => item.id === stage,
+  );
 
   return (
     <section className="not-prose my-8 overflow-hidden rounded-card border border-border bg-elevated">
@@ -4828,54 +5601,200 @@ export function ManufacturingLab() {
             aria-label="汽车设计制造流程和风阻测试示意"
             className="h-auto w-full"
           >
-            <rect x="70" y="48" width="580" height="124" rx="24" fill="var(--bg)" stroke="var(--border)" strokeWidth="3" />
+            <rect
+              x="70"
+              y="48"
+              width="580"
+              height="124"
+              rx="24"
+              fill="var(--bg)"
+              stroke="var(--border)"
+              strokeWidth="3"
+            />
             {MANUFACTURING_STAGES.slice(0, 4).map((item, index) => {
               const x = 100 + index * 138;
               const active = item.id === stage;
               return (
                 <g key={item.id}>
-                  <rect x={x} y="78" width="96" height="58" rx="12" fill={active ? "var(--accent-soft)" : "var(--card)"} stroke={active ? "var(--accent)" : "var(--border)"} strokeWidth="3" />
-                  <text x={x + 48} y="104" textAnchor="middle" className="fill-primary text-[12px] font-semibold">{item.label}</text>
-                  <text x={x + 48} y="122" textAnchor="middle" className="fill-secondary text-[10px]">{index + 1}</text>
-                  {index < 3 && <path d={`M${x + 96} 107 H${x + 130}`} stroke="var(--border)" strokeWidth="4" strokeLinecap="round" />}
+                  <rect
+                    x={x}
+                    y="78"
+                    width="96"
+                    height="58"
+                    rx="12"
+                    fill={active ? "var(--accent-soft)" : "var(--card)"}
+                    stroke={active ? "var(--accent)" : "var(--border)"}
+                    strokeWidth="3"
+                  />
+                  <text
+                    x={x + 48}
+                    y="104"
+                    textAnchor="middle"
+                    className="fill-primary text-[12px] font-semibold"
+                  >
+                    {item.label}
+                  </text>
+                  <text
+                    x={x + 48}
+                    y="122"
+                    textAnchor="middle"
+                    className="fill-secondary text-[12px]"
+                  >
+                    {index + 1}
+                  </text>
+                  {index < 3 && (
+                    <path
+                      d={`M${x + 96} 107 H${x + 130}`}
+                      stroke="var(--border)"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                  )}
                 </g>
               );
             })}
 
-            <rect x="70" y="238" width="580" height="132" rx="24" fill="var(--bg)" stroke="var(--border)" strokeWidth="3" />
+            <rect
+              x="70"
+              y="238"
+              width="580"
+              height="132"
+              rx="24"
+              fill="var(--bg)"
+              stroke="var(--border)"
+              strokeWidth="3"
+            />
             {MANUFACTURING_STAGES.slice(4).map((item, index) => {
               const x = 100 + index * 138;
               const active = item.id === stage;
               return (
                 <g key={item.id}>
-                  <rect x={x} y="268" width="96" height="58" rx="12" fill={active ? "var(--accent-soft)" : "var(--card)"} stroke={active ? "var(--accent)" : "var(--border)"} strokeWidth="3" />
-                  <text x={x + 48} y="294" textAnchor="middle" className="fill-primary text-[12px] font-semibold">{item.label}</text>
-                  <text x={x + 48} y="312" textAnchor="middle" className="fill-secondary text-[10px]">{index + 5}</text>
-                  {index < 3 && <path d={`M${x + 96} 297 H${x + 130}`} stroke="var(--border)" strokeWidth="4" strokeLinecap="round" />}
+                  <rect
+                    x={x}
+                    y="268"
+                    width="96"
+                    height="58"
+                    rx="12"
+                    fill={active ? "var(--accent-soft)" : "var(--card)"}
+                    stroke={active ? "var(--accent)" : "var(--border)"}
+                    strokeWidth="3"
+                  />
+                  <text
+                    x={x + 48}
+                    y="294"
+                    textAnchor="middle"
+                    className="fill-primary text-[12px] font-semibold"
+                  >
+                    {item.label}
+                  </text>
+                  <text
+                    x={x + 48}
+                    y="312"
+                    textAnchor="middle"
+                    className="fill-secondary text-[12px]"
+                  >
+                    {index + 5}
+                  </text>
+                  {index < 3 && (
+                    <path
+                      d={`M${x + 96} 297 H${x + 130}`}
+                      stroke="var(--border)"
+                      strokeWidth="4"
+                      strokeLinecap="round"
+                    />
+                  )}
                 </g>
               );
             })}
 
-            <path d="M604 136 C666 174 666 220 604 268" fill="none" stroke="var(--border)" strokeWidth="4" strokeLinecap="round" strokeDasharray="8 8" />
-            <text x="642" y="206" textAnchor="middle" className="fill-secondary text-[11px]">进入产线</text>
+            <path
+              d="M604 136 C666 174 666 220 604 268"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="8 8"
+            />
+            <text
+              x="642"
+              y="206"
+              textAnchor="middle"
+              className="fill-secondary text-[11px]"
+            >
+              进入产线
+            </text>
 
             <g transform="translate(96 392)">
-              <path d={shapeInfo.path} fill="var(--card)" stroke="#60a5fa" strokeWidth="4" transform="translate(-70 -150) scale(.52)" />
-              <circle cx="16" cy="0" r="14" fill="var(--bg)" stroke="#64748b" strokeWidth="5" />
-              <circle cx="176" cy="0" r="14" fill="var(--bg)" stroke="#64748b" strokeWidth="5" />
-              <path d="M230 -18 C268 -44 306 -44 344 -18" fill="none" stroke="#22c55e" strokeWidth="5" strokeLinecap="round" />
-              <path d="M232 8 C278 32 312 32 352 8" fill="none" stroke="#22c55e" strokeWidth="5" strokeLinecap="round" />
-              <text x="0" y="52" className="fill-secondary text-[12px]">Cd {shapeInfo.drag.toFixed(2)} / 风阻能耗 {windEnergy}</text>
+              <path
+                d={shapeInfo.path}
+                fill="var(--card)"
+                stroke="#60a5fa"
+                strokeWidth="4"
+                transform="translate(-70 -150) scale(.52)"
+              />
+              <circle
+                cx="16"
+                cy="0"
+                r="14"
+                fill="var(--bg)"
+                stroke="#64748b"
+                strokeWidth="5"
+              />
+              <circle
+                cx="176"
+                cy="0"
+                r="14"
+                fill="var(--bg)"
+                stroke="#64748b"
+                strokeWidth="5"
+              />
+              <path
+                d="M230 -18 C268 -44 306 -44 344 -18"
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="5"
+                strokeLinecap="round"
+              />
+              <path
+                d="M232 8 C278 32 312 32 352 8"
+                fill="none"
+                stroke="#22c55e"
+                strokeWidth="5"
+                strokeLinecap="round"
+              />
+              <text x="0" y="52" className="fill-secondary text-[12px]">
+                Cd {shapeInfo.drag.toFixed(2)} / 风阻能耗 {windEnergy}
+              </text>
             </g>
 
             <g transform="translate(470 388)">
-              <text className="fill-primary text-[13px] font-semibold">质量通过率</text>
-              <rect x="0" y="18" width="170" height="18" rx="9" fill="var(--border)" />
-              <rect x="0" y="18" width={Math.round(qualityScore * 1.7)} height="18" rx="9" fill="#22c55e" />
-              <text x="0" y="58" className="fill-secondary text-[11px]">{qualityScore}%</text>
+              <text className="fill-primary text-[13px] font-semibold">
+                质量通过率
+              </text>
+              <rect
+                x="0"
+                y="18"
+                width="170"
+                height="18"
+                rx="9"
+                fill="var(--border)"
+              />
+              <rect
+                x="0"
+                y="18"
+                width={Math.round(qualityScore * 1.7)}
+                height="18"
+                rx="9"
+                fill="#22c55e"
+              />
+              <text x="0" y="58" className="fill-secondary text-[11px]">
+                {qualityScore}%
+              </text>
             </g>
 
-            <text x="70" y="28" className="fill-secondary text-[12px]">当前阶段：{stageIndex + 1} / 8</text>
+            <text x="70" y="28" className="fill-secondary text-[12px]">
+              当前阶段：{stageIndex + 1} / 8
+            </text>
           </svg>
         </div>
 
@@ -4884,36 +5803,98 @@ export function ManufacturingLab() {
             <p className="text-xs text-secondary">制造阶段</p>
             <div className="mt-3 grid grid-cols-2 gap-2">
               {MANUFACTURING_STAGES.map((item) => (
-                <button key={item.id} type="button" onClick={() => setStage(item.id)} className={`rounded-control border px-2 py-2 text-left text-xs ${stage === item.id ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setStage(item.id)}
+                  className={`rounded-control border px-2 py-2 text-left text-xs ${stage === item.id ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                >
                   {item.label}
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{currentStage.summary}</p>
-            <p className="mt-2 text-xs text-secondary">输出：{currentStage.output}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {currentStage.summary}
+            </p>
+            <p className="mt-2 text-xs text-secondary">
+              输出：{currentStage.output}
+            </p>
           </div>
 
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">车身形状</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               {(Object.keys(BODY_SHAPES) as BodyShape[]).map((key) => (
-                <button key={key} type="button" onClick={() => setShape(key)} className={`rounded-control border px-2 py-2 text-xs ${shape === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setShape(key)}
+                  className={`rounded-control border px-2 py-2 text-xs ${shape === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                >
                   {BODY_SHAPES[key].label}
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{shapeInfo.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {shapeInfo.summary}
+            </p>
           </div>
 
           <div className="rounded-control border border-border bg-bg p-4">
-            <label className="text-xs font-medium text-secondary" htmlFor="line-speed">产线节拍：{lineSpeed}%</label>
-            <input id="line-speed" type="range" min="25" max="100" step="5" value={lineSpeed} onChange={(event) => setLineSpeed(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="defect-rate">缺陷率：{defectRate}%</label>
-            <input id="defect-rate" type="range" min="0" max="20" step="1" value={defectRate} onChange={(event) => setDefectRate(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
-            <label className="mt-4 block text-xs font-medium text-secondary" htmlFor="test-load">测试强度：{testLoad}%</label>
-            <input id="test-load" type="range" min="30" max="100" step="5" value={testLoad} onChange={(event) => setTestLoad(Number(event.target.value))} className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent" />
+            <label
+              className="text-xs font-medium text-secondary"
+              htmlFor="line-speed"
+            >
+              产线节拍：{lineSpeed}%
+            </label>
+            <input
+              id="line-speed"
+              type="range"
+              min="25"
+              max="100"
+              step="5"
+              value={lineSpeed}
+              onChange={(event) => setLineSpeed(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="defect-rate"
+            >
+              缺陷率：{defectRate}%
+            </label>
+            <input
+              id="defect-rate"
+              type="range"
+              min="0"
+              max="20"
+              step="1"
+              value={defectRate}
+              onChange={(event) => setDefectRate(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
+            <label
+              className="mt-4 block text-xs font-medium text-secondary"
+              htmlFor="test-load"
+            >
+              测试强度：{testLoad}%
+            </label>
+            <input
+              id="test-load"
+              type="range"
+              min="30"
+              max="100"
+              step="5"
+              value={testLoad}
+              onChange={(event) => setTestLoad(Number(event.target.value))}
+              className="mdx-range mt-2 h-1 w-full cursor-pointer appearance-none rounded-control bg-border accent-accent"
+            />
             <p className="mt-3 text-xs text-secondary">{taktRisk}</p>
-            <button type="button" onClick={() => setPlaying((value) => !value)} className="mt-3 rounded-control border border-accent px-3 py-2 text-xs text-accent">
+            <button
+              type="button"
+              onClick={() => setPlaying((value) => !value)}
+              className="mt-3 rounded-control border border-accent px-3 py-2 text-xs text-accent"
+            >
               {playing ? "暂停产线" : "播放产线"}
             </button>
           </div>
@@ -4924,19 +5905,27 @@ export function ManufacturingLab() {
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">设计目标</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">把用户需求翻译成尺寸、成本、安全、能耗和性能指标。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              把用户需求翻译成尺寸、成本、安全、能耗和性能指标。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">样车验证</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">用测试暴露问题，再回到设计和工程方案修正。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              用测试暴露问题，再回到设计和工程方案修正。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">四大工艺</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">冲压、焊装、涂装、总装决定车辆批量制造质量。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              冲压、焊装、涂装、总装决定车辆批量制造质量。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">质量闭环</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">尺寸、密封、制动、路试和软件检查决定能否下线。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              尺寸、密封、制动、路试和软件检查决定能否下线。
+            </p>
           </div>
         </div>
       </div>
@@ -4947,15 +5936,25 @@ export function ManufacturingLab() {
           把大量钣金件定位并连接成白车身，主要属于哪道工艺？
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => setAnswer("welding")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("welding")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             焊装
           </button>
-          <button type="button" onClick={() => setAnswer("painting")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("painting")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             涂装
           </button>
         </div>
         {answer && (
-          <p className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "welding" ? "border-accent text-primary" : "border-warning text-primary"}`}>
+          <p
+            className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "welding" ? "border-accent text-primary" : "border-warning text-primary"}`}
+          >
             {answer === "welding"
               ? "正确。焊装把冲压出来的钣金件定位并连接成白车身，是车身结构成形的关键工序。"
               : "不对。涂装主要负责防腐、颜色和外观，白车身结构成形发生在焊装。"}
@@ -4969,7 +5968,9 @@ export function ManufacturingLab() {
 export function AutoFinalReviewLab() {
   const [path, setPath] = useState<FinalReviewPath>("fuel");
   const [answer, setAnswer] = useState<"transmission" | "body" | null>(null);
-  const [challenge, setChallenge] = useState<"brake" | "tire" | "electronics">("tire");
+  const [challenge, setChallenge] = useState<"brake" | "tire" | "electronics">(
+    "tire",
+  );
 
   const current = FINAL_REVIEW_PATHS[path];
   const challengeText =
@@ -5000,46 +6001,187 @@ export function AutoFinalReviewLab() {
             className="h-auto w-full"
           >
             <defs>
-              <marker id="final-review-arrow" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
+              <marker
+                id="final-review-arrow"
+                markerHeight="8"
+                markerWidth="8"
+                orient="auto"
+                refX="7"
+                refY="4"
+              >
                 <path d="M0 0 L8 4 L0 8 Z" fill={current.color} />
               </marker>
             </defs>
-            <rect x="78" y="56" width="604" height="140" rx="28" fill="var(--bg)" stroke="var(--border)" strokeWidth="3" />
+            <rect
+              x="78"
+              y="56"
+              width="604"
+              height="140"
+              rx="28"
+              fill="var(--bg)"
+              stroke="var(--border)"
+              strokeWidth="3"
+            />
             {current.nodes.map((node, index) => {
               const x = 110 + index * 102;
               return (
                 <g key={`${path}-${node}`}>
-                  <circle cx={x} cy="126" r="36" fill="var(--card)" stroke={current.color} strokeWidth="4" />
-                  <text x={x} y="122" textAnchor="middle" className="fill-primary text-[12px] font-semibold">{node}</text>
-                  <text x={x} y="140" textAnchor="middle" className="fill-secondary text-[10px]">{index + 1}</text>
+                  <circle
+                    cx={x}
+                    cy="126"
+                    r="36"
+                    fill="var(--card)"
+                    stroke={current.color}
+                    strokeWidth="4"
+                  />
+                  <text
+                    x={x}
+                    y="122"
+                    textAnchor="middle"
+                    className="fill-primary text-[12px] font-semibold"
+                  >
+                    {node}
+                  </text>
+                  <text
+                    x={x}
+                    y="140"
+                    textAnchor="middle"
+                    className="fill-secondary text-[12px]"
+                  >
+                    {index + 1}
+                  </text>
                   {index < current.nodes.length - 1 && (
-                    <path d={`M${x + 38} 126 H${x + 64}`} stroke={current.color} strokeWidth="5" strokeLinecap="round" markerEnd="url(#final-review-arrow)" />
+                    <path
+                      d={`M${x + 38} 126 H${x + 64}`}
+                      stroke={current.color}
+                      strokeWidth="5"
+                      strokeLinecap="round"
+                      markerEnd="url(#final-review-arrow)"
+                    />
                   )}
                 </g>
               );
             })}
 
             <g transform="translate(82 248)">
-              <rect width="176" height="112" rx="18" fill="var(--card)" stroke="#f97316" strokeWidth={path === "fuel" ? 5 : 2} />
-              <text x="88" y="34" textAnchor="middle" className="fill-primary text-[14px] font-semibold">为什么能跑</text>
-              <text x="88" y="62" textAnchor="middle" className="fill-secondary text-[12px]">发动机 / 变速器</text>
-              <text x="88" y="82" textAnchor="middle" className="fill-secondary text-[12px]">传动 / 轮胎</text>
+              <rect
+                width="176"
+                height="112"
+                rx="18"
+                fill="var(--card)"
+                stroke="#f97316"
+                strokeWidth={path === "fuel" ? 5 : 2}
+              />
+              <text
+                x="88"
+                y="34"
+                textAnchor="middle"
+                className="fill-primary text-[14px] font-semibold"
+              >
+                为什么能跑
+              </text>
+              <text
+                x="88"
+                y="62"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                发动机 / 变速器
+              </text>
+              <text
+                x="88"
+                y="82"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                传动 / 轮胎
+              </text>
             </g>
             <g transform="translate(292 248)">
-              <rect width="176" height="112" rx="18" fill="var(--card)" stroke="#22c55e" strokeWidth={path === "stability" ? 5 : 2} />
-              <text x="88" y="34" textAnchor="middle" className="fill-primary text-[14px] font-semibold">为什么能稳停</text>
-              <text x="88" y="62" textAnchor="middle" className="fill-secondary text-[12px]">车身 / 悬架 / 转向</text>
-              <text x="88" y="82" textAnchor="middle" className="fill-secondary text-[12px]">制动 / 电子安全</text>
+              <rect
+                width="176"
+                height="112"
+                rx="18"
+                fill="var(--card)"
+                stroke="#22c55e"
+                strokeWidth={path === "stability" ? 5 : 2}
+              />
+              <text
+                x="88"
+                y="34"
+                textAnchor="middle"
+                className="fill-primary text-[14px] font-semibold"
+              >
+                为什么能稳停
+              </text>
+              <text
+                x="88"
+                y="62"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                车身 / 悬架 / 转向
+              </text>
+              <text
+                x="88"
+                y="82"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                制动 / 电子安全
+              </text>
             </g>
             <g transform="translate(502 248)">
-              <rect width="176" height="112" rx="18" fill="var(--card)" stroke="#60a5fa" strokeWidth={path === "electric" ? 5 : 2} />
-              <text x="88" y="34" textAnchor="middle" className="fill-primary text-[14px] font-semibold">新能源差异</text>
-              <text x="88" y="62" textAnchor="middle" className="fill-secondary text-[12px]">电池 / 电控 / 电机</text>
-              <text x="88" y="82" textAnchor="middle" className="fill-secondary text-[12px]">回收 / 补能 / 制造</text>
+              <rect
+                width="176"
+                height="112"
+                rx="18"
+                fill="var(--card)"
+                stroke="#60a5fa"
+                strokeWidth={path === "electric" ? 5 : 2}
+              />
+              <text
+                x="88"
+                y="34"
+                textAnchor="middle"
+                className="fill-primary text-[14px] font-semibold"
+              >
+                新能源差异
+              </text>
+              <text
+                x="88"
+                y="62"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                电池 / 电控 / 电机
+              </text>
+              <text
+                x="88"
+                y="82"
+                textAnchor="middle"
+                className="fill-secondary text-[12px]"
+              >
+                回收 / 补能 / 制造
+              </text>
             </g>
 
-            <path d="M170 360 C250 420 508 420 590 360" fill="none" stroke="var(--border)" strokeWidth="4" strokeLinecap="round" strokeDasharray="8 8" />
-            <text x="380" y="430" textAnchor="middle" className="fill-secondary text-[12px]">所有系统最终都要回到车轮和路面</text>
+            <path
+              d="M170 360 C250 420 508 420 590 360"
+              fill="none"
+              stroke="var(--border)"
+              strokeWidth="4"
+              strokeLinecap="round"
+              strokeDasharray="8 8"
+            />
+            <text
+              x="380"
+              y="430"
+              textAnchor="middle"
+              className="fill-secondary text-[12px]"
+            >
+              所有系统最终都要回到车轮和路面
+            </text>
           </svg>
         </div>
 
@@ -5047,25 +6189,45 @@ export function AutoFinalReviewLab() {
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">复盘链路</p>
             <div className="mt-3 grid gap-2">
-              {(Object.keys(FINAL_REVIEW_PATHS) as FinalReviewPath[]).map((key) => (
-                <button key={key} type="button" onClick={() => setPath(key)} className={`rounded-control border px-3 py-2 text-left text-xs ${path === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
-                  {FINAL_REVIEW_PATHS[key].label}
-                </button>
-              ))}
+              {(Object.keys(FINAL_REVIEW_PATHS) as FinalReviewPath[]).map(
+                (key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setPath(key)}
+                    className={`rounded-control border px-3 py-2 text-left text-xs ${path === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                  >
+                    {FINAL_REVIEW_PATHS[key].label}
+                  </button>
+                ),
+              )}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{current.summary}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {current.summary}
+            </p>
           </div>
 
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-xs text-secondary">高频错误认知索引</p>
             <div className="mt-3 grid gap-2">
               {(["tire", "brake", "electronics"] as const).map((key) => (
-                <button key={key} type="button" onClick={() => setChallenge(key)} className={`rounded-control border px-3 py-2 text-left text-xs ${challenge === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}>
-                  {key === "tire" ? "只看发动机，不看轮胎" : key === "brake" ? "只看刹车，不看抓地" : "只看电子，不看执行"}
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setChallenge(key)}
+                  className={`rounded-control border px-3 py-2 text-left text-xs ${challenge === key ? "border-accent text-accent" : "border-border text-secondary hover:text-primary"}`}
+                >
+                  {key === "tire"
+                    ? "只看发动机，不看轮胎"
+                    : key === "brake"
+                      ? "只看刹车，不看抓地"
+                      : "只看电子，不看执行"}
                 </button>
               ))}
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-secondary">{challengeText}</p>
+            <p className="mt-3 text-sm leading-relaxed text-secondary">
+              {challengeText}
+            </p>
           </div>
         </div>
       </div>
@@ -5074,19 +6236,27 @@ export function AutoFinalReviewLab() {
         <div className="grid gap-3 sm:grid-cols-4">
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">燃油主线</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">发动机、变速器、传动、差速器和轮胎共同解释“为什么能跑”。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              发动机、变速器、传动、差速器和轮胎共同解释“为什么能跑”。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">底盘主线</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">车身、悬架、转向、制动让车能稳、能转、能停。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              车身、悬架、转向、制动让车能稳、能转、能停。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">电子主线</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">传感器、控制器和执行器让机械系统获得感知和干预能力。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              传感器、控制器和执行器让机械系统获得感知和干预能力。
+            </p>
           </div>
           <div className="rounded-control border border-border bg-bg p-4">
             <p className="text-sm font-medium text-primary">新能源主线</p>
-            <p className="mt-2 text-xs leading-relaxed text-secondary">电池、电控、电机和回收改变了能量来源和传动复杂度。</p>
+            <p className="mt-2 text-xs leading-relaxed text-secondary">
+              电池、电控、电机和回收改变了能量来源和传动复杂度。
+            </p>
           </div>
         </div>
       </div>
@@ -5097,15 +6267,25 @@ export function AutoFinalReviewLab() {
           发动机输出的扭矩要先经过哪个系统改变转速和扭矩，再继续传到车轮？
         </h3>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="button" onClick={() => setAnswer("transmission")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("transmission")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             变速器
           </button>
-          <button type="button" onClick={() => setAnswer("body")} className="rounded-control border border-border px-3 py-2 text-xs text-secondary">
+          <button
+            type="button"
+            onClick={() => setAnswer("body")}
+            className="rounded-control border border-border px-3 py-2 text-xs text-secondary"
+          >
             车身覆盖件
           </button>
         </div>
         {answer && (
-          <p className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "transmission" ? "border-accent text-primary" : "border-warning text-primary"}`}>
+          <p
+            className={`mt-3 rounded-control border p-3 text-sm leading-relaxed ${answer === "transmission" ? "border-accent text-primary" : "border-warning text-primary"}`}
+          >
             {answer === "transmission"
               ? "正确。变速器负责改变发动机输出的转速和扭矩，再由传动系统送到车轮。"
               : "不对。车身负责空间、安全和空气动力，动力链上的转速/扭矩转换主要发生在变速器。"}

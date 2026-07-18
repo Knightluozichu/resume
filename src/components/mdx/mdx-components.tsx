@@ -920,22 +920,6 @@ import { AacLifecycleStateDiagram } from "./diagrams/aac-lifecycle-state-diagram
 import { RefactorStranglerDiagram } from "./diagrams/refactor-strangler-diagram";
 import { KotlinUiStateDiagram } from "./diagrams/kotlin-ui-state-diagram";
 import { GameMathLab } from "./gamemath/game-math-lab";
-import {
-  AutoBookLearningMap,
-  AutoFinalReviewLab,
-  BodyStructureLab,
-  BrakeLab,
-  DrivetrainLab,
-  ElectronicsLab,
-  EnginePrinciplesLab,
-  ElectricDriveLab,
-  ManufacturingLab,
-  SteeringLab,
-  SuspensionLab,
-  TireLab,
-  TransmissionLab,
-  WholeCarSystemsLab,
-} from "./auto/why-car-runs-lab";
 // 设计模式
 import { PatternCategoryMap } from "./design-patterns/diagrams/pattern-category-map";
 import { SolidPrinciplesDiagram } from "./design-patterns/diagrams/solid-principles-diagram";
@@ -10396,20 +10380,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MvpFlowDiagram,
   MvvmFlowDiagram,
   GameMathLab,
-  AutoBookLearningMap,
-  AutoFinalReviewLab,
-  BodyStructureLab,
-  BrakeLab,
-  DrivetrainLab,
-  ElectronicsLab,
-  EnginePrinciplesLab,
-  ElectricDriveLab,
-  ManufacturingLab,
-  SteeringLab,
-  SuspensionLab,
-  TireLab,
-  TransmissionLab,
-  WholeCarSystemsLab,
   // 设计模式
   PatternCategoryMap,
   SolidPrinciplesDiagram,
