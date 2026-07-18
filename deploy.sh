@@ -33,7 +33,9 @@ SSH_HOST="${SERVER_SSH_USERNAME:-root}@${SERVER_PUBLIC_IP:?local.env 缺少 SERV
 SSH_OPTS=(-i "$DEPLOY_KEY" -p "$SSH_PORT" -o BatchMode=yes)
 APP_DIR="/var/www/remuse"
 CANDIDATE_PORT="${DEPLOY_CANDIDATE_PORT:-3199}"
-PUBLIC_URL="${DEPLOY_PUBLIC_URL:-https://${SSL_CERT_DOMAIN:?local.env 缺少 SSL_CERT_DOMAIN 或 DEPLOY_PUBLIC_URL}}"
+# remuse 由 blog 子域反代到 3100；SSL_CERT_DOMAIN 是同机其他服务的证书元数据，
+# 不能据此推断本站入口。需要覆盖时显式设置 DEPLOY_PUBLIC_URL。
+PUBLIC_URL="${DEPLOY_PUBLIC_URL:-https://blog.${DNS_DOMAIN:?local.env 缺少 DNS_DOMAIN 或 DEPLOY_PUBLIC_URL}}"
 COMMIT_SHA="$(git rev-parse HEAD)"
 RELEASE_ID="release-$(date -u +%Y%m%dT%H%M%SZ)-${COMMIT_SHA:0:12}"
 RELEASE_DIR="${APP_DIR}/releases/${RELEASE_ID}"
