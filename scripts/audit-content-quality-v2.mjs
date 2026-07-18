@@ -765,7 +765,7 @@ function changedFiles(base) {
     const output = execFileSync(
       "git",
       ["diff", "--name-only", `${base}...HEAD`],
-      { cwd: ROOT, encoding: "utf8" },
+      { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     return new Set(
       output
@@ -778,6 +778,7 @@ function changedFiles(base) {
     const output = execFileSync("git", ["diff", "--name-only"], {
       cwd: ROOT,
       encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
     });
     return new Set(
       output
@@ -794,7 +795,12 @@ function baselinePassedIds(base) {
     const raw = execFileSync(
       "git",
       ["show", `${base}:quality/remediation-ledger.json`],
-      { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 },
+      {
+        cwd: ROOT,
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ["ignore", "pipe", "pipe"],
+      },
     );
     const ledger = JSON.parse(raw);
     return new Set(
