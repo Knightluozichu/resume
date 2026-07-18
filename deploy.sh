@@ -66,15 +66,22 @@ echo "==> [4/9] 上传独立 release：${RELEASE_ID}"
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" "mkdir -p '$RELEASE_DIR' '$APP_DIR/releases'"
 # release 目录保持独立，但与 current 中未变化的大文件使用硬链接，避免每本书
 # 都重新上传数 GB 的 node_modules；后续原子切换不会修改旧 release 内容。
-rsync -az --delete --link-dest="$APP_DIR/current" -e "ssh ${SSH_OPTS[*]}" .next/standalone/ "$SSH_HOST:$RELEASE_DIR/"
+REMOTE_LINK_DEST="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
+  latest=\$(ls -1dt '$APP_DIR'/releases/release-* 2>/dev/null | grep -v '$RELEASE_DIR' | head -n 1 || true)
+  if [ -n \"\$latest\" ]; then printf '%s' \"\$latest\"; else printf '%s' '$APP_DIR/current'; fi
+")"
+rsync -az --delete --link-dest="$REMOTE_LINK_DEST" -e "ssh ${SSH_OPTS[*]}" .next/standalone/ "$SSH_HOST:$RELEASE_DIR/"
 rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "$SSH_HOST:$APP_DIR/"
 
-CANDIDATE_PID="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
-  "cd '$RELEASE_DIR' && PORT='$CANDIDATE_PORT' HOSTNAME=127.0.0.1 nohup node server.js </dev/null > candidate.log 2>&1 & echo \$!")"
+CANDIDATE_NAME="remuse-candidate-${COMMIT_SHA:0:12}"
+CANDIDATE_STARTED=false
+ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
+  "pm2 delete '$CANDIDATE_NAME' >/dev/null 2>&1 || true; cd '$RELEASE_DIR' && PORT='$CANDIDATE_PORT' HOSTNAME=127.0.0.1 pm2 start server.js --name '$CANDIDATE_NAME' --cwd '$RELEASE_DIR' --update-env >/dev/null"
+CANDIDATE_STARTED=true
 cleanup_candidate() {
-  if [[ -n "${CANDIDATE_PID:-}" ]]; then
-    ssh "${SSH_OPTS[@]}" "$SSH_HOST" "kill '$CANDIDATE_PID' >/dev/null 2>&1 || true" || true
-    CANDIDATE_PID=""
+  if [[ "${CANDIDATE_STARTED:-false}" == "true" ]]; then
+    ssh "${SSH_OPTS[@]}" "$SSH_HOST" "pm2 delete '$CANDIDATE_NAME' >/dev/null 2>&1 || true" || true
+    CANDIDATE_STARTED=false
   fi
 }
 trap cleanup_candidate EXIT
