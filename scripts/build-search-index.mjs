@@ -114,21 +114,23 @@ function main() {
     "--include-characters",
     "._-",
   ];
-  // 用 node_modules/.bin/pagefind 的绝对路径而非裸命令名：
-  //   裸 "pagefind" 依赖 PATH 上有 node_modules/.bin——`pnpm build:search` 由 pnpm
-  //   注入故能跑，但 deploy.sh 直接 `node scripts/build-search-index.mjs`（不经 pnpm）
-  //   时 PATH 无 .bin → ENOENT → set -e 致整个部署中止（HEL-42）。
-  //   解析绝对路径让两种启动方式都自洽，不依赖外部 PATH。
-  //   注：本站部署在 mac/linux，.bin/pagefind 是可直接执行的脚本；Windows 下应为
-  //   pagefind.cmd，本项目不涉及，故不做后缀兜底。
-  const pagefindBin = join(projectRoot, "node_modules", ".bin", "pagefind");
-  if (!existsSync(pagefindBin)) {
+  // 直接用当前 Node 执行 Pagefind 的官方 JS 入口，避开 .bin 下的平台 shell
+  // 包装器；部署脚本和包管理器启动时都不再依赖 PATH 或 shell 行为。
+  const pagefindEntry = join(
+    projectRoot,
+    "node_modules",
+    "pagefind",
+    "lib",
+    "runner",
+    "bin.cjs",
+  );
+  if (!existsSync(pagefindEntry)) {
     console.error(
-      `✗ 未找到 ${pagefindBin}，请先 \`pnpm install\`（pagefind 是 devDependency）`,
+      `✗ 未找到 ${pagefindEntry}，请先 \`pnpm install\`（pagefind 是 devDependency）`,
     );
     process.exit(1);
   }
-  execFileSync(pagefindBin, args, {
+  execFileSync(process.execPath, [pagefindEntry, ...args], {
     cwd: projectRoot,
     stdio: "inherit",
   });
